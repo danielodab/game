@@ -234,12 +234,13 @@ JOGO.DATA = JOGO.DATA || {};
       }
     ],
     lootTable: [
-      { itemId: 'gh-trellis-shield', weight: 30, minRoom: 0 },
-      { itemId: 'gh-firefly-dome', weight: 30, minRoom: 0 },
-      { itemId: 'gh-pruning-shears', weight: 30, minRoom: 0 },
-      { itemId: 'gh-garden-apron', weight: 12, minRoom: 0 },
-      { itemId: 'gh-thorn-whip', weight: 12, minRoom: 1 },
-      { itemId: 'gh-amber-sap', weight: 12, minRoom: 1 },
+      { itemId: 'gh-trellis-guard', weight: 30, minRoom: 0 },
+      { itemId: 'gh-moss-treads', weight: 30, minRoom: 0 },
+      { itemId: 'gh-firefly-crown', weight: 30, minRoom: 0 },
+      { itemId: 'gh-seed-pouch', weight: 30, minRoom: 0 },
+      { itemId: 'gh-sap-apron', weight: 12, minRoom: 0 },
+      { itemId: 'gh-vine-stirrups', weight: 12, minRoom: 1 },
+      { itemId: 'gh-briar-charm', weight: 12, minRoom: 1 },
       { itemId: 'gh-widow-shears', weight: 4, minRoom: 2 }
     ],
     cardDrops: [
@@ -273,15 +274,15 @@ JOGO.DATA = JOGO.DATA || {};
         sceneryTheme: 'cistern',
         layout: [
           '#############',
-          '#P...~.~...a#',
+          '#P...~.~..=a#',
           '#P..=~.~=...#',
-          '#P...~.~..a.#',
+          '#P..=~.~..a.#',
           '#....~.~.=..#',
-          '#..,.....,..#',
+          '#.=,.....,.=#',
           '#..=.~.~....#',
-          '#....~.~..b.#',
+          '#...=~.~..b.#',
           '#P..=~.~=...#',
-          '#....~.~...b#',
+          '#..=.~.~...b#',
           '#############'
         ],
         monsters: { a: 'drowned-porter', b: 'moray-piper' }
@@ -330,19 +331,429 @@ JOGO.DATA = JOGO.DATA || {};
       }
     ],
     lootTable: [
-      { itemId: 'ci-porter-coat', weight: 30, minRoom: 0 },
-      { itemId: 'ci-sunken-lantern', weight: 30, minRoom: 0 },
-      { itemId: 'ci-salt-rapier', weight: 30, minRoom: 0 },
-      { itemId: 'ci-brine-cuirass', weight: 12, minRoom: 0 },
-      { itemId: 'ci-moray-flute', weight: 12, minRoom: 1 },
-      { itemId: 'ci-tide-flask', weight: 12, minRoom: 1 },
-      { itemId: 'ci-pearl-choker', weight: 4, minRoom: 2 }
+      { itemId: 'ci-brine-cuirass', weight: 30, minRoom: 0 },
+      { itemId: 'ci-current-fins', weight: 30, minRoom: 0 },
+      { itemId: 'ci-lantern-fob', weight: 30, minRoom: 0 },
+      { itemId: 'ci-tide-flask', weight: 30, minRoom: 0 },
+      { itemId: 'ci-drowned-coat', weight: 12, minRoom: 0 },
+      { itemId: 'ci-harpoon-flute', weight: 12, minRoom: 1 },
+      { itemId: 'ci-jelly-vial', weight: 12, minRoom: 1 },
+      { itemId: 'ci-baroness-collar', weight: 4, minRoom: 2 }
     ],
     cardDrops: [
       { classId: 'arqueiro', weight: 18 },
       { classId: 'curandeira', weight: 20 },
       { classId: 'sumo', weight: 12 },
       { classId: 'espadachim', weight: 10 }
+    ]
+  });
+
+  // ==========================================================================
+  // 3) O FECHO DE BRASA — fogo · estiagem (com uma sala alagada no meio)
+  // ==========================================================================
+  addDungeon({
+    id: 'emberlock',
+    name: 'O Fecho de Brasa',
+    theme: 'forge',
+    description: 'O último Fecho, forjado ao redor da primeira chama do mundo. Corredores de bigornas frias, correntes penduradas do teto, luz que vem de baixo — das grelhas do piso. O calor sobe e fica: aqui a estiagem não é clima, é arquitetura. O maior portão já construído acordou com ciúme do próprio fogo.',
+    difficulty: 3,
+    order: 3,
+    palette: {
+      primary: '#c4502e', secondary: '#4a2a26', accent: '#ffb347',
+      floor1: '#3a2422', floor2: '#452a25', wall: '#241512', lowWall: '#5a3128', voidColor: '#180b08'
+    },
+    defaultWeather: 'estiagem',
+    weatherShiftEveryRounds: 0,
+    tileEventRate: 0.25,
+    rooms: [
+      {
+        name: 'O Corredor de Brasas',
+        weather: 'estiagem',
+        sceneryTheme: 'forge',
+        layout: [
+          '#############',
+          '#P..=....a..#',
+          '#P..=.==....#',
+          '#P..=..=..b.#',
+          '#...~..=....#',
+          '#..,...=.,..#',
+          '#...~..=....#',
+          '#P..=..=..a.#',
+          '#...=.==....#',
+          '#...=....c..#',
+          '#############'
+        ],
+        monsters: { a: 'ember-imp', b: 'ash-wraith', c: 'walking-anvil' }
+      },
+      {
+        // A sala alagada: os fossos de têmpera romperam e a CHUVA inverte a
+        // hierarquia — os monstros de fogo perdem 5 PV por turno aqui.
+        name: 'A Nave dos Malhos',
+        weather: 'chuva',
+        sceneryTheme: 'forge',
+        layout: [
+          '###############',
+          '#P....=...=..a#',
+          '#P.==.=.=....d#',
+          '#P....=...=.d.#',
+          '#..~....=.=...#',
+          '#.,...=...=.b.#',
+          '#..~..=.=.=...#',
+          '#.....=...=.c.#',
+          '#..~....=.....#',
+          '#.,...=...=.e.#',
+          '#P.==.=.=.=...#',
+          '#.....=...=.a.#',
+          '###############'
+        ],
+        monsters: {
+          a: 'ember-imp', b: 'slag-mound', c: 'walking-anvil',
+          d: 'quench-hound', e: 'faceless-smith'
+        }
+      },
+      {
+        name: 'A Câmara do Coração',
+        weather: 'estiagem',
+        sceneryTheme: 'forge',
+        layout: [
+          '###############',
+          '#.....,z,.....#',
+          '#....==.==....#',
+          '#.a.=.....=.a.#',
+          '#..~.......~..#',
+          '#.....===.....#',
+          '#=.,..=~=..,.=#',
+          '#.....===.....#',
+          '#..~.......~..#',
+          '#.b.=.....=.b.#',
+          '#....==.==....#',
+          '#.P.P.....P.P.#',
+          '###############'
+        ],
+        monsters: { z: 'boss-heartforge', a: 'ember-imp', b: 'chain-hauler' }
+      }
+    ],
+    lootTable: [
+      { itemId: 'em-riveted-plate', weight: 30, minRoom: 0 },
+      { itemId: 'em-bellows-valve', weight: 30, minRoom: 0 },
+      { itemId: 'em-soot-mantle', weight: 12, minRoom: 0 },
+      { itemId: 'em-cinder-treads', weight: 12, minRoom: 0 },
+      { itemId: 'em-chain-harness', weight: 12, minRoom: 1 },
+      { itemId: 'em-ember-flask', weight: 12, minRoom: 1 },
+      { itemId: 'em-brand-iron', weight: 12, minRoom: 1 },
+      { itemId: 'em-forge-grate', weight: 4, minRoom: 2 }
+    ],
+    cardDrops: [
+      { classId: 'espadachim', weight: 22 },
+      { classId: 'curandeira', weight: 14 },
+      { classId: 'bruxo', weight: 8 }
+    ]
+  });
+
+  // ==========================================================================
+  // 4) OS ANDAIMES DO VENTO — ar · vendaval · plataformas e vazios
+  // ==========================================================================
+  addDungeon({
+    id: 'windscaffold',
+    name: 'Os Andaimes do Vento',
+    theme: 'scaffold',
+    description: 'O poço de manutenção que os construtores nunca terminaram: quinze andares de andaime amarrado com corda, pendurados sobre um vazio que ninguém mediu. Os respiradouros do mundo enterrado desembocam todos aqui, e o vento sobe pelo poço a noite inteira fazendo as tábuas cantarem. Cair não é derrota tática. É o chão da sala não existir.',
+    difficulty: 4,
+    order: 4,
+    palette: {
+      primary: '#8f97b8', secondary: '#4a4636', accent: '#eef7f5',
+      floor1: '#3a3a44', floor2: '#45444f', wall: '#26262f', lowWall: '#5b5344', voidColor: '#0a0a10'
+    },
+    defaultWeather: 'vendaval',
+    weatherShiftEveryRounds: 0,
+    tileEventRate: 0.3,
+    rooms: [
+      {
+        name: 'A Passarela dos Guindastes',
+        weather: 'vendaval',
+        sceneryTheme: 'scaffold',
+        layout: [
+          '###############',
+          '#P..=.~~~.=..a#',
+          '#P..=.~~~.=...#',
+          '#P.,......,.b.#',
+          '#...=~~~~~=...#',
+          '#..........c..#',
+          '#...=~~~~~=...#',
+          '#P.,......,.b.#',
+          '#...=.~~~.=...#',
+          '#....=...=..a.#',
+          '###############'
+        ],
+        monsters: { a: 'plank-shrike', b: 'gust-gremlin', c: 'rope-hanger' }
+      },
+      {
+        // O sotavento: atrás do tapume o vento não entra (clima calmo) e o
+        // Golem de Lastro deixa de apanhar do próprio calabouço.
+        name: 'O Poço de Serviço',
+        weather: 'calmo',
+        sceneryTheme: 'scaffold',
+        layout: [
+          '#############',
+          '#P..=...=..a#',
+          '#P.,.....,.b#',
+          '#P..=...=...#',
+          '#..~~.=.~~..#',
+          '#..~~...~~..#',
+          '#...=.,.=...#',
+          '#..~~...~~..#',
+          '#..~~.=.~~..#',
+          '#...=...=..c#',
+          '#P.,.....,.d#',
+          '#...=...=...#',
+          '#..=.....=..#',
+          '#....,.,....#',
+          '#############'
+        ],
+        monsters: { a: 'kite-serpent', b: 'whistle-choir', c: 'ballast-golem', d: 'mote-swarm' }
+      },
+      {
+        name: 'A Ponte do Mestre-de-Obras',
+        weather: 'vendaval',
+        sceneryTheme: 'scaffold',
+        layout: [
+          '###############',
+          '#...~~.z.~~...#',
+          '#...~~,,,~~...#',
+          '#..=.......=..#',
+          '#.a.=.....=.a.#',
+          '#....=...=....#',
+          '#~~..=,.,=..~~#',
+          '#....=...=....#',
+          '#.b.=.....=.b.#',
+          '#..=.......=..#',
+          '#...~~...~~...#',
+          '#.P.P..c..P.P.#',
+          '###############'
+        ],
+        monsters: { z: 'boss-windwright', a: 'plank-shrike', b: 'kite-serpent', c: 'rope-hanger' }
+      }
+    ],
+    lootTable: [
+      { itemId: 'av-rope-vest', weight: 30, minRoom: 0 },
+      { itemId: 'av-kite-crest', weight: 12, minRoom: 0 },
+      { itemId: 'av-glider-cloak', weight: 12, minRoom: 0 },
+      { itemId: 'av-plank-gauntlet', weight: 12, minRoom: 1 },
+      { itemId: 'av-storm-harness', weight: 12, minRoom: 1 },
+      { itemId: 'av-wind-whistle', weight: 12, minRoom: 1 },
+      { itemId: 'av-lightning-coil', weight: 12, minRoom: 1 },
+      { itemId: 'av-updraft-boots', weight: 4, minRoom: 2 }
+    ],
+    cardDrops: [
+      { classId: 'espadachim', weight: 18 },
+      { classId: 'bruxo', weight: 16 },
+      { classId: 'invocador', weight: 8 }
+    ]
+  });
+
+  // ==========================================================================
+  // 5) A MINA TRÊMULA — terra · tremor · desabamentos
+  // ==========================================================================
+  addDungeon({
+    id: 'quakemine',
+    name: 'A Mina Trêmula',
+    theme: 'mine',
+    description: 'A mina que cavava para cima, tentando furar a Grande Lousa por baixo. Parou quando o turno da noite não subiu. Desde então a rocha bate sozinha, de tempos em tempos, e a poeira desce em cortinas: é a Lousa se acomodando mais um palmo. Os mineiros continuam trabalhando. Ninguém teve coragem de dizer a eles que o turno acabou.',
+    difficulty: 5,
+    order: 5,
+    palette: {
+      primary: '#8a7043', secondary: '#3b3228', accent: '#c9a227',
+      floor1: '#37302a', floor2: '#413931', wall: '#211c17', lowWall: '#4e4133', voidColor: '#120e0a'
+    },
+    defaultWeather: 'tremor',
+    weatherShiftEveryRounds: 0,
+    tileEventRate: 0.35,
+    rooms: [
+      {
+        name: 'A Galeria do Turno da Noite',
+        weather: 'tremor',
+        sceneryTheme: 'mine',
+        layout: [
+          '###############',
+          '#P..=..a..=...#',
+          '#P..=.....=.b.#',
+          '#P..==...==...#',
+          '#..,........,.#',
+          '#.====.~.====.#',
+          '#..,........,.#',
+          '#P..==...==.c.#',
+          '#...=.....=...#',
+          '#...=..a..=...#',
+          '###############'
+        ],
+        monsters: { a: 'pick-revenant', b: 'firedamp-wisp', c: 'ore-tumbler' }
+      },
+      {
+        // O respiradouro principal: aqui sopra VENDAVAL, e é a Terra da casa
+        // que perde 5 PV por turno. A sala vira aliada de quem escolheu Ar.
+        name: 'O Respiradouro',
+        weather: 'vendaval',
+        sceneryTheme: 'mine',
+        layout: [
+          '#############',
+          '#P..=.,.=..a#',
+          '#P..=...=...#',
+          '#P.,.....,.b#',
+          '#..==...==..#',
+          '#....~.~....#',
+          '#=.,.~.~.,.=#',
+          '#....~.~....#',
+          '#..==...==..#',
+          '#P.,.....,.c#',
+          '#...=...=...#',
+          '#...=.,.=..a#',
+          '#############'
+        ],
+        monsters: { a: 'shaft-bat', b: 'damp-seeper', c: 'cave-jaw' }
+      },
+      {
+        name: 'A Face de Batepedra',
+        weather: 'tremor',
+        sceneryTheme: 'mine',
+        layout: [
+          '#################',
+          '#.....,,z,,.....#',
+          '#....==...==....#',
+          '#..a...........a#',
+          '#..=..=====..=..#',
+          '#.....=~~~=.....#',
+          '#..,..=~~~=..,..#',
+          '#.....=====.....#',
+          '#..=.........=..#',
+          '#..b...===...b..#',
+          '#....=.....=....#',
+          '#..~.........~..#',
+          '#.....,...,.....#',
+          '#.P.P..c.c..P.P.#',
+          '#################'
+        ],
+        monsters: { z: 'boss-deepknock', a: 'crystal-chanter', b: 'sinkhole-worm', c: 'firedamp-wisp' }
+      }
+    ],
+    lootTable: [
+      { itemId: 'mt-slate-plate', weight: 14, minRoom: 0 },
+      { itemId: 'mt-ore-greaves', weight: 12, minRoom: 0 },
+      { itemId: 'mt-drill-bit', weight: 12, minRoom: 0 },
+      { itemId: 'mt-cart-wheels', weight: 12, minRoom: 1 },
+      { itemId: 'mt-bedrock-carapace', weight: 12, minRoom: 1 },
+      { itemId: 'mt-quake-nail', weight: 12, minRoom: 1 },
+      { itemId: 'mt-shoring-charm', weight: 12, minRoom: 1 },
+      { itemId: 'mt-quake-crown', weight: 4, minRoom: 2 }
+    ],
+    cardDrops: [
+      { classId: 'bruxo', weight: 20 },
+      { classId: 'invocador', weight: 14 },
+      { classId: 'espadachim', weight: 8 }
+    ]
+  });
+
+  // ==========================================================================
+  // 6) O CORAÇÃO PARTIDO — todos os elementos · CLIMA MUDA A CADA 3 RODADAS
+  // ==========================================================================
+  addDungeon({
+    id: 'brokenheart',
+    name: 'O Coração Partido',
+    theme: 'heart',
+    description: 'O Coração que sustentava o mundo inteiro, e não só um Fecho. Rachou em quatro quartos que batem fora de compasso — um de brasa, um d\'água, um de pedra, um de ar — e cada batida joga a sala para um clima diferente. Aqui não existe elemento seguro: o que curava você há três rodadas está te matando agora. É o fim da Descida, e a Lousa está ouvindo.',
+    difficulty: 6,
+    order: 6,
+    palette: {
+      primary: '#8f6ad0', secondary: '#2a2440', accent: '#ffd166',
+      floor1: '#2d2a3d', floor2: '#373248', wall: '#1a1726', lowWall: '#4a4160', voidColor: '#0b0812'
+    },
+    defaultWeather: 'calmo',
+    weatherShiftEveryRounds: 3,
+    tileEventRate: 0.45,
+    rooms: [
+      {
+        name: 'O Átrio das Quatro Estações',
+        weather: 'chuva',
+        sceneryTheme: 'heart',
+        layout: [
+          '###############',
+          '#P...=..a..=..#',
+          '#P..,..===..,.#',
+          '#P...=..b..=..#',
+          '#..~.........~#',
+          '#.,..=.,.=..,.#',
+          '#..=..===..=..#',
+          '#.,..=.,.=..,.#',
+          '#~.........~..#',
+          '#P...=..c..=..#',
+          '#..,..===..,..#',
+          '#....=..d..=..#',
+          '###############'
+        ],
+        monsters: { a: 'cinder-herald', b: 'tide-herald', c: 'gale-herald', d: 'stone-herald' }
+      },
+      {
+        name: 'A Sala dos Espelhos',
+        weather: 'estiagem',
+        sceneryTheme: 'heart',
+        layout: [
+          '###############',
+          '#P..=.a.=..b..#',
+          '#P..=...=.....#',
+          '#P.,.....,....#',
+          '#.==.~~~.==...#',
+          '#......,......#',
+          '#..=.~~~~~.=..#',
+          '#......,......#',
+          '#.==.~~~.==.c.#',
+          '#P.,.....,....#',
+          '#...=...=...d.#',
+          '#...=.a.=..b..#',
+          '###############'
+        ],
+        monsters: { a: 'mirror-twin', b: 'weather-mote', c: 'null-warden', d: 'heartroot' }
+      },
+      {
+        name: 'O Coração Partido',
+        weather: 'calmo',
+        sceneryTheme: 'heart',
+        layout: [
+          '#################',
+          '#......,z,......#',
+          '#....==,,,==....#',
+          '#..a...........a#',
+          '#.=..=======..=.#',
+          '#....=.~~~.=....#',
+          '#..,.=.~~~.=.,..#',
+          '#....=.~~~.=....#',
+          '#.=..=======..=.#',
+          '#..b....d....b..#',
+          '#....=.....=....#',
+          '#..~....e....~..#',
+          '#.....,...,.....#',
+          '#.P.P.......P.P.#',
+          '#################'
+        ],
+        monsters: {
+          z: 'boss-riftheart', a: 'stone-herald', b: 'gale-herald',
+          d: 'null-warden', e: 'weather-mote'
+        }
+      }
+    ],
+    lootTable: [
+      { itemId: 'cp-scar-plate', weight: 14, minRoom: 0 },
+      { itemId: 'cp-ashen-anklets', weight: 12, minRoom: 0 },
+      { itemId: 'cp-shard-ring', weight: 12, minRoom: 0 },
+      { itemId: 'cp-worldshell', weight: 4, minRoom: 2 },
+      { itemId: 'cp-quicksilver-boots', weight: 4, minRoom: 2 },
+      { itemId: 'cp-heart-crown', weight: 4, minRoom: 2 },
+      { itemId: 'cp-heart-horn', weight: 4, minRoom: 2 },
+      { itemId: 'cp-eclipse-lens', weight: 4, minRoom: 2 }
+    ],
+    cardDrops: [
+      { classId: 'invocador', weight: 24 },
+      { classId: 'bruxo', weight: 16 },
+      { classId: 'espadachim', weight: 10 },
+      { classId: 'curandeira', weight: 6 }
     ]
   });
 

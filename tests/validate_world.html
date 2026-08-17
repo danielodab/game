@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Validação do MUNDO — SOTERRA 2.0</title>
+<style>
+  body { background: #14181c; color: #d8dee4; font-family: Consolas, monospace; padding: 20px; }
+  h1 { font-size: 18px; color: #ffd76b; margin: 0 0 4px; }
+  h2 { font-size: 13px; color: #8ab4d8; margin: 16px 0 4px; }
+  .sub { color: #6b7684; font-size: 12px; margin-bottom: 12px; }
+  #summary { font-size: 16px; margin: 12px 0; padding: 10px; border-radius: 6px; }
+  #summary.ok { background: #15351b; color: #7be08a; }
+  #summary.bad { background: #3a1515; color: #ff8a8a; }
+  .fail { color: #ff8a8a; }
+  .pass { color: #6fae76; }
+  ul { list-style: none; padding: 0; margin: 0; font-size: 12px; }
+  li { padding: 1px 0; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: #8ab4d8; }
+  table { border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  td, th { border: 1px solid #2a323b; padding: 2px 8px; text-align: left; }
+  th { color: #ffd76b; }
+</style>
+</head>
+<body>
+<h1>Validação do MUNDO — SOTERRA 2.0</h1>
+<div class="sub">Elementos e climas · bestiário · 6 calabouços, cenário e eventos de terreno. (Criativo Mundo)</div>
+<div id="summary">Carregando…</div>
+<div id="failList"></div>
+<div id="stats"></div>
+<details><summary>Todas as checagens</summary><ul id="allList"></ul></details>
+
+<script>
+// Cache-buster: o servidor estático guarda os arquivos com unhas e dentes.
+(function () {
+  var v = '?v=' + Date.now();
+  var files = [
+    '../js/core/data/elements.js',
+    '../js/core/data/monsters.js',
+    '../js/core/data/dungeons.js',
+    '../js/core/data/items.js',   // dono: Criativo Fusão (só leitura, p/ cruzar lootTable)
+    '../js/core/data/spells.js'   // dono: Criativo Classes (só leitura, p/ cruzar summons)
+  ];
+  for (var i = 0; i < files.length; i++) {
+    document.write('<scr' + 'ipt src="' + files[i] + v + '"><\/scr' + 'ipt>');
+  }
+})();
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  var results = [];
+  function check(name, ok, detail) {
+    results.push({ name: name, ok: !!ok, detail: detail || '' });
+    if (!ok) { console.error('FAIL: ' + name + (detail ? ' — ' + detail : '')); }
+    return !!ok;
+  }
+
+  // ---------------------------------------------------------------- vocabulário
+  var ELEMENTS = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
+  var SHAPES = ['single', 'cross', 'circle', 'line', 'cone', 'ring'];
+  var AIS = ['melee', 'ranged', 'support', 'boss'];
+  var BUFF_STATS = ['pa', 'pp', 'power', 'initiative', 'dodge', 'lock'];
+  var SIDES = ['any', 'enemy', 'ally', 'self'];
+  var EVENT_KINDS = ['buff', 'mystery', 'portal', 'drain', 'fountain'];
+  var CLASS_IDS = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeira', 'invocador'];
+  var DUNGEON_IDS = ['greenhouse', 'cistern', 'emberlock', 'windscaffold', 'quakemine', 'brokenheart'];
+  var ITEM_PREFIX = {
+    greenhouse: 'gh-', cistern: 'ci-', emberlock: 'em-',
+    windscaffold: 'av-', quakemine: 'mt-', brokenheart: 'cp-'
+  };
+  var REQUIRED_SUMMONS = ['sum-familiar', 'sum-ember-hound', 'sum-magma-colossus', 'sum-tide-nymph',
+                          'sum-stone-sentinel', 'sum-mountain-golem', 'sum-storm-falcon'];
+  var HEX = /^#[0-9a-fA-F]{6}$/;
+
+  var EFFECT_REQ = {
+    damage: ['element', 'min', 'max'],
+    heal: ['min', 'max'],
+    shield: ['value', 'duration'],
+    buff: ['stat', 'value', 'duration'],
+    resist: ['element', 'value', 'duration'],
+    push: ['tiles'],
+    pull: ['tiles'],
+    teleport: [],
+    swap: [],
+    poison: ['element', 'min', 'max', 'duration'],
+    regen: ['min', 'max', 'duration'],
+    summon: ['monsterId'],
+    taunt: ['duration'],
+    invisible: ['duration'],
+    root: ['duration'],
+    mark: ['value', 'duration', 'max'],
+    detonateMarks: ['mult'],
+    trap: ['trapId', 'duration'],
+    weatherShift: ['weather'],
+    cleanse: ['kinds'],
+    reflect: ['pct', 'duration'],
+    dispelShield: [],
+    moveTo: ['maxTiles'],
+    chain: ['jumps', 'falloff', 'element', 'min', 'max']
+  };
+  var TRAIT_REQ = {
+    explodeOnDeath: ['element', 'damage', 'radius'],
+    split: ['monsterId', 'count'],
+    enrage: ['hpPct', 'power'],
+    pushImmune: [],
+    regenAura: ['value', 'radius']
+  };
+
+  function has(o, k) { return o && Object.prototype.hasOwnProperty.call(o, k) && o[k] !== undefined && o[k] !== null; }
+  function inList(v, list) { return list.indexOf(v) !== -1; }
+  function keys(o) { var r = []; for (var k in o) { if (o.hasOwnProperty(k)) { r.push(k); } } return r; }
+
+  var D = (typeof JOGO !== 'undefined') && JOGO.DATA;
+  if (!check('JOGO.DATA existe', !!D)) { render(); return; }
+
+  // =========================================================================
+  // 1. ELEMENTOS E RIVALIDADES
+  // =========================================================================
+  check('DATA.elements tem os 5 elementos exatos',
+    !!D.elements && D.elements.length === 5 && ELEMENTS.every(function (e) { return D.elements.indexOf(e) !== -1; }),
+    JSON.stringify(D.elements));
+
+  check('DATA.rivals existe', !!D.rivals);
+  if (D.rivals) {
+    check('rivals: fogo ⚔ agua', D.rivals.fogo === 'agua' && D.rivals.agua === 'fogo');
+    check('rivals: terra ⚔ ar', D.rivals.terra === 'ar' && D.rivals.ar === 'terra');
+    check('rivals: neutro sem rival', D.rivals.neutro === null);
+  }
+
+  // =========================================================================
+  // 2. CLIMAS — os 5 obrigatórios, com favors/harms coerentes com as rivalidades
+  // =========================================================================
+  var W = D.weathers || {};
+  var REQUIRED_WEATHERS = {
+    calmo: [null, null], chuva: ['agua', 'fogo'], estiagem: ['fogo', 'agua'],
+    vendaval: ['ar', 'terra'], tremor: ['terra', 'ar']
+  };
+  check('DATA.weathers tem exatamente 5 climas', keys(W).length === 5, 'tem ' + keys(W).length);
+  for (var wid in REQUIRED_WEATHERS) {
+    if (!REQUIRED_WEATHERS.hasOwnProperty(wid)) { continue; }
+    var w = W[wid];
+    if (!check('clima ' + wid + ' existe', !!w)) { continue; }
+    var exp = REQUIRED_WEATHERS[wid];
+    check('clima ' + wid + ': id bate com a chave', w.id === wid);
+    check('clima ' + wid + ': nome pt-BR', typeof w.name === 'string' && w.name.length > 0);
+    check('clima ' + wid + ': descrição saborosa (≥40 chars)', typeof w.description === 'string' && w.description.length >= 40);
+    check('clima ' + wid + ': fxKey', typeof w.fxKey === 'string' && w.fxKey.length > 0);
+    check('clima ' + wid + ': favors = ' + exp[0], w.favors === exp[0], String(w.favors));
+    check('clima ' + wid + ': harms = ' + exp[1], w.harms === exp[1], String(w.harms));
+    // coerência estrutural: quem é prejudicado é SEMPRE o rival do favorecido
+    check('clima ' + wid + ': harms é o rival de favors',
+      w.favors === null ? w.harms === null : (D.rivals[w.favors] === w.harms));
+    check('clima ' + wid + ': palette completa e em hex',
+      !!w.palette && ['tint', 'ambient', 'accent', 'particle'].every(function (k) { return HEX.test(w.palette[k]); }),
+      JSON.stringify(w.palette));
+  }
+
+  // =========================================================================
+  // 3. FEITIÇOS DE MONSTRO (DATA.monsterSpells)
+  // =========================================================================
+  var MS = D.monsterSpells || {};
+  var MON = D.monsters || {};
+  check('DATA.monsterSpells existe e não está vazio', keys(MS).length > 0, keys(MS).length + ' feitiços');
+  check('DATA.monsterSpells não colide com DATA.spells (prefixo m-/sum-)',
+    keys(MS).every(function (id) { return id.indexOf('m-') === 0; }),
+    keys(MS).filter(function (id) { return id.indexOf('m-') !== 0; }).join(', '));
+  if (D.spells) {
+    var collide = keys(MS).filter(function (id) { return has(D.spells, id); });
+    check('nenhum id de feitiço de monstro colide com DATA.spells (Criativo Classes)',
+      collide.length === 0, collide.join(', '));
+  }
+
+  function validateEffects(label, effects) {
+    if (!check(label + ': effects é array não-vazio', Array.isArray(effects) && effects.length > 0)) { return; }
+    effects.forEach(function (ef, i) {
+      var tag = label + ' efeito#' + i;
+      if (!check(tag + ': tipo do vocabulário fechado', has(EFFECT_REQ, ef.type), String(ef.type))) { return; }
+      EFFECT_REQ[ef.type].forEach(function (f) {
+        check(tag + ' (' + ef.type + '): campo ' + f, has(ef, f));
+      });
+      if (ef.type === 'damage' || ef.type === 'poison' || ef.type === 'resist' || ef.type === 'chain') {
+        check(tag + ': element válido', inList(ef.element, ELEMENTS), String(ef.element));
+      }
+      if (ef.type === 'buff') {
+        check(tag + ': stat válido (nada de pm)', inList(ef.stat, BUFF_STATS), String(ef.stat));
+      }
+      if (ef.type === 'weatherShift') {
+        check(tag + ': weather existe', has(W, ef.weather), String(ef.weather));
+      }
+      if (ef.type === 'summon') {
+        check(tag + ': monsterId existe em DATA.monsters', has(MON, ef.monsterId), String(ef.monsterId));
+      }
+      if (ef.type === 'trap') {
+        check(tag + ': trapId existe em DATA.monsterSpells', has(MS, ef.trapId), String(ef.trapId));
+      }
+      if (ef.type === 'cleanse') {
+        check(tag + ': kinds é array não-vazio', Array.isArray(ef.kinds) && ef.kinds.length > 0);
+      }
+    });
+  }
+
+  keys(MS).forEach(function (id) {
+    var s = MS[id];
+    var L = 'feitiço ' + id;
+    check(L + ': id bate com a chave', s.id === id);
+    check(L + ': nome pt-BR', typeof s.name === 'string' && s.name.length > 0);
+    check(L + ': element válido', inList(s.element, ELEMENTS), String(s.element));
+    check(L + ': classId null (é de monstro)', s.classId === null);
+    check(L + ': paCost numérico ≥ 0', typeof s.paCost === 'number' && s.paCost >= 0);
+    check(L + ': cooldown numérico ≥ 0', typeof s.cooldown === 'number' && s.cooldown >= 0);
+    check(L + ': castsPerTurn numérico ≥ 0', typeof s.castsPerTurn === 'number' && s.castsPerTurn >= 0);
+    check(L + ': range completo',
+      !!s.range && typeof s.range.min === 'number' && typeof s.range.max === 'number' &&
+      s.range.max >= s.range.min && typeof s.range.line === 'boolean' && typeof s.range.los === 'boolean');
+    check(L + ': aoe.shape válido', !!s.aoe && inList(s.aoe.shape, SHAPES), s.aoe && String(s.aoe.shape));
+    check(L + ': aoe.size numérico', !!s.aoe && typeof s.aoe.size === 'number');
+    check(L + ': needsEmptyTile booleano', typeof s.needsEmptyTile === 'boolean');
+    check(L + ': targetSide válido', inList(s.targetSide, SIDES), String(s.targetSide));
+    check(L + ': description', typeof s.description === 'string' && s.description.length > 10);
+    check(L + ': fxKey', typeof s.fxKey === 'string' && s.fxKey.length > 0);
+    validateEffects(L, s.effects);
+  });
+
+  // =========================================================================
+  // 4. MONSTROS
+  // =========================================================================
+  var monIds = keys(MON);
+  var bosses = monIds.filter(function (id) { return MON[id].boss; });
+  var commons = monIds.filter(function (id) { return !MON[id].boss; });
+  check('bestiário: ≥ 40 monstros comuns', commons.length >= 40, commons.length + ' comuns');
+  check('bestiário: exatamente 6 chefes', bosses.length === 6, bosses.length + ' — ' + bosses.join(', '));
+
+  monIds.forEach(function (id) {
+    var m = MON[id];
+    var L = 'monstro ' + id;
+    check(L + ': id bate com a chave', m.id === id);
+    check(L + ': nome pt-BR', typeof m.name === 'string' && m.name.length > 0);
+    check(L + ': family', typeof m.family === 'string' && m.family.length > 0);
+    check(L + ': element válido', inList(m.element, ELEMENTS), String(m.element));
+    check(L + ': description', typeof m.description === 'string' && m.description.length > 20);
+    check(L + ': xp numérico ≥ 0', typeof m.xp === 'number' && m.xp >= 0);
+    check(L + ': ai válida', inList(m.ai, AIS), String(m.ai));
+    check(L + ': boss booleano', typeof m.boss === 'boolean');
+    check(L + ': summonOnly booleano', typeof m.summonOnly === 'boolean');
+
+    var st = m.stats;
+    if (check(L + ': stats existe', !!st)) {
+      ['hp', 'pa', 'pp', 'initiative', 'power', 'dodge', 'lock'].forEach(function (f) {
+        check(L + ': stats.' + f + ' numérico', typeof st[f] === 'number');
+      });
+      check(L + ': stats.hp > 0', st.hp > 0);
+      check(L + ': stats.pa ≥ 1', st.pa >= 1);
+      check(L + ': stats.pp ≥ 0', st.pp >= 0);
+      check(L + ': sem campo pm nos stats', !has(st, 'pm'));
+      check(L + ': resists com as 5 chaves numéricas',
+        !!st.resists && ELEMENTS.every(function (e) { return typeof st.resists[e] === 'number'; }),
+        JSON.stringify(st.resists));
+      check(L + ': resists sem elemento fora do vocabulário',
+        !!st.resists && keys(st.resists).every(function (k) { return inList(k, ELEMENTS); }),
+        keys(st.resists || {}).join(','));
+    }
+
+    if (check(L + ': spells é array não-vazio', Array.isArray(m.spells) && m.spells.length > 0)) {
+      m.spells.forEach(function (sid) {
+        check(L + ': feitiço ' + sid + ' existe em DATA.monsterSpells', has(MS, sid));
+      });
+    }
+
+    if (check(L + ': traits é array', Array.isArray(m.traits))) {
+      m.traits.forEach(function (t, i) {
+        var tag = L + ' traço#' + i;
+        if (!check(tag + ': tipo do vocabulário fechado', has(TRAIT_REQ, t.type), String(t.type))) { return; }
+        TRAIT_REQ[t.type].forEach(function (f) { check(tag + ' (' + t.type + '): campo ' + f, has(t, f)); });
+        if (t.type === 'split') {
+          check(tag + ': monsterId ' + t.monsterId + ' existe', has(MON, t.monsterId));
+        }
+        if (t.type === 'explodeOnDeath') {
+          check(tag + ': element válido', inList(t.element, ELEMENTS), String(t.element));
+        }
+      });
+    }
+
+    if (m.boss) {
+      check(L + ' (chefe): hp entre 300 e 600', st && st.hp >= 300 && st.hp <= 600, st && String(st.hp));
+      check(L + ' (chefe): pa entre 7 e 10', st && st.pa >= 7 && st.pa <= 10, st && String(st.pa));
+    }
+    if (m.dungeonId !== null && m.dungeonId !== undefined) {
+      check(L + ': dungeonId conhecido', inList(m.dungeonId, DUNGEON_IDS), String(m.dungeonId));
+    }
+  });
+
+  // chefes com hp crescente por ordem de calabouço
+  // (verificado depois de ler DATA.dungeons, mais abaixo)
+
+  // --- as 7 invocações exigidas pelo Criativo Classes ----------------------
+  REQUIRED_SUMMONS.forEach(function (id) {
+    if (check('invocação obrigatória ' + id + ' existe em DATA.monsters', has(MON, id))) {
+      check('invocação ' + id + ': summonOnly = true', MON[id].summonOnly === true);
+      check('invocação ' + id + ': xp 0 (invocação do jogador não dá XP)', MON[id].xp === 0, String(MON[id].xp));
+    }
+  });
+
+  // --- todo summon referenciado por spells.js (Classes) precisa existir ----
+  if (D.spells) {
+    var missingFromClasses = [];
+    keys(D.spells).forEach(function (sid) {
+      var eff = D.spells[sid].effects || [];
+      eff.forEach(function (ef) {
+        if (ef.type === 'summon' && !has(MON, ef.monsterId)) { missingFromClasses.push(sid + '→' + ef.monsterId); }
+      });
+    });
+    check('todo summon de DATA.spells (Classes) existe em DATA.monsters',
+      missingFromClasses.length === 0, missingFromClasses.join(', '));
+  }
+
+  // =========================================================================
+  // 5. CALABOUÇOS
+  // =========================================================================
+  var DG = D.dungeons || [];
+  check('DATA.dungeons tem 6 calabouços', DG.length === 6, DG.length + '');
+  check('ids dos calabouços exatos e na ordem de dificuldade',
+    DG.map(function (d) { return d.id; }).join(',') === DUNGEON_IDS.join(','),
+    DG.map(function (d) { return d.id; }).join(','));
+
+  var seenOrders = {};
+  DG.forEach(function (d, di) {
+    var L = 'calabouço ' + d.id;
+    check(L + ': name', typeof d.name === 'string' && d.name.length > 0);
+    check(L + ': theme', typeof d.theme === 'string' && d.theme.length > 0);
+    check(L + ': description saborosa', typeof d.description === 'string' && d.description.length >= 60);
+    check(L + ': order = ' + (di + 1), d.order === di + 1, String(d.order));
+    check(L + ': order único', !seenOrders[d.order]); seenOrders[d.order] = true;
+    check(L + ': difficulty numérico crescente', d.difficulty === di + 1, String(d.difficulty));
+    check(L + ': palette em hex',
+      !!d.palette && ['primary', 'secondary', 'accent', 'floor1', 'floor2', 'wall'].every(function (k) { return HEX.test(d.palette[k]); }),
+      JSON.stringify(d.palette));
+    check(L + ': defaultWeather existe em DATA.weathers', has(W, d.defaultWeather), String(d.defaultWeather));
+    check(L + ': weatherShiftEveryRounds numérico ≥ 0',
+      typeof d.weatherShiftEveryRounds === 'number' && d.weatherShiftEveryRounds >= 0);
+    check(L + ': tileEventRate entre 0 e 1',
+      typeof d.tileEventRate === 'number' && d.tileEventRate > 0 && d.tileEventRate <= 1, String(d.tileEventRate));
+    check(L + ': theme existe em DATA.scenery', has(D.scenery || {}, d.theme), String(d.theme));
+
+    // ---- salas ----
+    if (!check(L + ': 3 salas (2 + chefe)', Array.isArray(d.rooms) && d.rooms.length === 3, d.rooms && d.rooms.length)) { return; }
+    d.rooms.forEach(function (r, ri) {
+      var RL = L + ' sala ' + ri + ' (' + r.name + ')';
+      check(RL + ': name', typeof r.name === 'string' && r.name.length > 0);
+      check(RL + ': weather existe em DATA.weathers', has(W, r.weather), String(r.weather));
+      check(RL + ': sceneryTheme existe em DATA.scenery', has(D.scenery || {}, r.sceneryTheme), String(r.sceneryTheme));
+
+      var lay = r.layout;
+      if (!check(RL + ': layout é array de strings', Array.isArray(lay) && lay.length > 0)) { return; }
+      var wdt = lay[0].length, hgt = lay.length;
+      check(RL + ': todas as linhas do mesmo comprimento',
+        lay.every(function (row) { return typeof row === 'string' && row.length === wdt; }),
+        'larguras: ' + lay.map(function (row) { return row.length; }).join(','));
+      check(RL + ': largura entre 13 e 17 (é ' + wdt + ')', wdt >= 13 && wdt <= 17);
+      check(RL + ': altura entre 11 e 15 (é ' + hgt + ')', hgt >= 11 && hgt <= 15);
+
+      var counts = {};
+      lay.forEach(function (row) {
+        for (var i = 0; i < row.length; i++) { counts[row[i]] = (counts[row[i]] || 0) + 1; }
+      });
+      check(RL + ': ≥ 3 spawns de herói (P)', (counts.P || 0) >= 3, 'P=' + (counts.P || 0));
+      check(RL + ': usa obstáculo BAIXO "=" (novidade tática)', (counts['='] || 0) >= 6, '= ' + (counts['='] || 0));
+      check(RL + ': só caracteres válidos',
+        keys(counts).every(function (c) { return '.,#=~P'.indexOf(c) !== -1 || /^[a-z]$/.test(c); }),
+        keys(counts).join(''));
+
+      var letters = keys(counts).filter(function (c) { return /^[a-z]$/.test(c); }).sort();
+      var mapped = keys(r.monsters || {}).sort();
+      check(RL + ': todas as letras do layout estão mapeadas em monsters',
+        letters.every(function (c) { return mapped.indexOf(c) !== -1; }),
+        'layout=[' + letters + '] mapeadas=[' + mapped + ']');
+      check(RL + ': todas as letras mapeadas aparecem no layout',
+        mapped.every(function (c) { return letters.indexOf(c) !== -1; }),
+        'layout=[' + letters + '] mapeadas=[' + mapped + ']');
+      mapped.forEach(function (c) {
+        check(RL + ': monsterId "' + r.monsters[c] + '" (letra ' + c + ') existe', has(MON, r.monsters[c]));
+        if (has(MON, r.monsters[c])) {
+          check(RL + ': "' + r.monsters[c] + '" não é summonOnly', MON[r.monsters[c]].summonOnly === false);
+        }
+      });
+
+      var roomBosses = mapped.filter(function (c) { return has(MON, r.monsters[c]) && MON[r.monsters[c]].boss; });
+      if (ri === 2) {
+        check(RL + ': sala 3 tem exatamente 1 chefe', roomBosses.length === 1, roomBosses.join(','));
+      } else {
+        check(RL + ': salas 1–2 sem chefe', roomBosses.length === 0, roomBosses.join(','));
+      }
+    });
+
+    // ---- lootTable ----
+    if (check(L + ': lootTable é array não-vazio', Array.isArray(d.lootTable) && d.lootTable.length > 0)) {
+      d.lootTable.forEach(function (e) {
+        var tag = L + ' loot ' + e.itemId;
+        check(tag + ': weight > 0', typeof e.weight === 'number' && e.weight > 0);
+        check(tag + ': minRoom entre 0 e 2', typeof e.minRoom === 'number' && e.minRoom >= 0 && e.minRoom <= 2);
+        check(tag + ': prefixo do item bate com o calabouço',
+          typeof e.itemId === 'string' && e.itemId.indexOf(ITEM_PREFIX[d.id]) === 0,
+          'esperado ' + ITEM_PREFIX[d.id]);
+        if (D.items) {
+          check(tag + ': item existe em DATA.items (Criativo Fusão)', has(D.items, e.itemId));
+          if (has(D.items, e.itemId)) {
+            check(tag + ': item pertence a este calabouço', D.items[e.itemId].dungeonId === d.id,
+              String(D.items[e.itemId].dungeonId));
+          }
+        }
+      });
+      var epics = d.lootTable.filter(function (e) { return D.items && has(D.items, e.itemId) && D.items[e.itemId].rarity === 'epico'; });
+      check(L + ': todo item épico só cai na sala do chefe (minRoom 2)',
+        epics.every(function (e) { return e.minRoom === 2; }),
+        epics.map(function (e) { return e.itemId + '@' + e.minRoom; }).join(', '));
+    }
+    if (D.items) {
+      var all = keys(D.items).filter(function (i) { return D.items[i].dungeonId === d.id; });
+      var listed = d.lootTable.map(function (e) { return e.itemId; });
+      check(L + ': lootTable cobre todos os itens do calabouço',
+        all.every(function (i) { return listed.indexOf(i) !== -1; }),
+        'faltando: ' + all.filter(function (i) { return listed.indexOf(i) === -1; }).join(', '));
+    }
+
+    // ---- cardDrops ----
+    if (check(L + ': cardDrops é array não-vazio', Array.isArray(d.cardDrops) && d.cardDrops.length > 0)) {
+      d.cardDrops.forEach(function (c) {
+        check(L + ' carta ' + c.classId + ': classId válido', inList(c.classId, CLASS_IDS), String(c.classId));
+        check(L + ' carta ' + c.classId + ': weight > 0', typeof c.weight === 'number' && c.weight > 0);
+        if (D.classes) {
+          check(L + ' carta ' + c.classId + ': classe existe em DATA.classes', has(D.classes, c.classId));
+        }
+      });
+    }
+  });
+
+  // chefes com vida crescente ao longo dos calabouços
+  (function () {
+    var hps = DG.map(function (d) {
+      var r = d.rooms && d.rooms[2];
+      if (!r) { return 0; }
+      var bid = keys(r.monsters || {}).map(function (c) { return r.monsters[c]; })
+        .filter(function (id) { return has(MON, id) && MON[id].boss; })[0];
+      return bid ? MON[bid].stats.hp : 0;
+    });
+    var growing = true;
+    for (var i = 1; i < hps.length; i++) { if (hps[i] <= hps[i - 1]) { growing = false; } }
+    check('chefes com vida crescendo por calabouço', growing, hps.join(' → '));
+  })();
+
+  // classes fortes só nos calabouços avançados
+  (function () {
+    var early = [];
+    DG.slice(0, 2).forEach(function (d) {
+      (d.cardDrops || []).forEach(function (c) {
+        if (c.classId === 'invocador' || c.classId === 'bruxo') { early.push(d.id + ':' + c.classId); }
+      });
+    });
+    check('cartas das classes mais fortes (bruxo/invocador) não caem nos 2 primeiros calabouços',
+      early.length === 0, early.join(', '));
+    var allCards = {};
+    DG.forEach(function (d) { (d.cardDrops || []).forEach(function (c) { allCards[c.classId] = true; }); });
+    check('as 6 classes têm carta em algum calabouço',
+      CLASS_IDS.every(function (c) { return allCards[c]; }),
+      CLASS_IDS.filter(function (c) { return !allCards[c]; }).join(', '));
+  })();
+
+  check('O Coração Partido muda de clima a cada 3 rodadas',
+    DG.length === 6 && DG[5].weatherShiftEveryRounds === 3, DG[5] && String(DG[5].weatherShiftEveryRounds));
+
+  // =========================================================================
+  // 6. CENÁRIO
+  // =========================================================================
+  var SC = D.scenery || {};
+  check('DATA.scenery existe com ≥ 6 temas', keys(SC).length >= 6, keys(SC).length + '');
+  keys(SC).forEach(function (t) {
+    ['high', 'low', 'floor', 'props'].forEach(function (k) {
+      check('cenário ' + t + ': ' + k + ' é array de nomes visuais',
+        Array.isArray(SC[t][k]) && SC[t][k].length >= 3 &&
+        SC[t][k].every(function (n) { return typeof n === 'string' && n.length > 2; }));
+    });
+  });
+
+  // =========================================================================
+  // 7. EVENTOS DE TERRENO
+  // =========================================================================
+  var TE = D.tileEvents || {};
+  var teIds = keys(TE);
+  check('DATA.tileEvents existe', teIds.length > 0, teIds.length + ' eventos');
+  var byKind = {};
+  teIds.forEach(function (id) {
+    var e = TE[id];
+    var L = 'evento ' + id;
+    check(L + ': id bate com a chave', e.id === id);
+    check(L + ': name pt-BR', typeof e.name === 'string' && e.name.length > 0);
+    check(L + ': kind válido', inList(e.kind, EVENT_KINDS), String(e.kind));
+    check(L + ': icon', typeof e.icon === 'string' && e.icon.length > 0);
+    check(L + ': weight > 0', typeof e.weight === 'number' && e.weight > 0);
+    check(L + ': duration > 0', typeof e.duration === 'number' && e.duration > 0);
+    check(L + ': description', typeof e.description === 'string' && e.description.length > 15);
+    byKind[e.kind] = (byKind[e.kind] || 0) + 1;
+
+    if (e.kind === 'mystery') {
+      if (check(L + ': mystery tem outcomes (≥5)', Array.isArray(e.outcomes) && e.outcomes.length >= 5,
+        e.outcomes && e.outcomes.length)) {
+        var sum = 0;
+        e.outcomes.forEach(function (o, i) {
+          check(L + ' outcome#' + i + ': weight > 0', typeof o.weight === 'number' && o.weight > 0);
+          check(L + ' outcome#' + i + ': text', typeof o.text === 'string' && o.text.length > 5);
+          sum += (o.weight || 0);
+          validateEffects(L + ' outcome#' + i, o.effects);
+        });
+        check(L + ': soma dos pesos dos outcomes > 0', sum > 0, 'soma=' + sum);
+        var good = e.outcomes.filter(function (o) {
+          return (o.effects || []).some(function (f) { return f.type === 'heal' || f.type === 'buff' || f.type === 'shield' || f.type === 'regen'; });
+        }).length;
+        var bad = e.outcomes.filter(function (o) {
+          return (o.effects || []).some(function (f) { return f.type === 'damage' || f.type === 'poison' || f.type === 'root'; });
+        }).length;
+        check(L + ': tem outcomes bons E ruins', good > 0 && bad > 0, 'bons=' + good + ' ruins=' + bad);
+      }
+    } else {
+      validateEffects(L, e.effects);
+    }
+  });
+  check('eventos: ≥ 3 do tipo buff', (byKind.buff || 0) >= 3, (byKind.buff || 0) + '');
+  check('eventos: ≥ 1 mystery', (byKind.mystery || 0) >= 1);
+  check('eventos: ≥ 1 portal', (byKind.portal || 0) >= 1);
+  check('eventos: ≥ 1 drain', (byKind.drain || 0) >= 1);
+  check('eventos: ≥ 1 fountain', (byKind.fountain || 0) >= 1);
+
+  // =========================================================================
+  // 8. NOMENCLATURA — o antigo "pm" não existe em lugar nenhum
+  // =========================================================================
+  (function () {
+    var blob = JSON.stringify({
+      elements: D.elements, rivals: D.rivals, weathers: D.weathers, elementInfo: D.elementInfo,
+      monsters: D.monsters, monsterSpells: D.monsterSpells,
+      dungeons: D.dungeons, scenery: D.scenery, tileEvents: D.tileEvents
+    });
+    check('dados do Mundo: nenhuma menção a "pm"', !/(^|[^a-zA-Z])pm([^a-zA-Z]|$)/i.test(blob),
+      (blob.match(/.{0,30}(^|[^a-zA-Z])pm([^a-zA-Z]|$).{0,30}/i) || [''])[0]);
+
+    var badKeys = [];
+    (function walk(o, path) {
+      if (!o || typeof o !== 'object') { return; }
+      for (var k in o) {
+        if (!o.hasOwnProperty(k)) { continue; }
+        if (k.toLowerCase() === 'pm') { badKeys.push(path + '.' + k); }
+        walk(o[k], path + '.' + k);
+      }
+    })({ m: D.monsters, s: D.monsterSpells, d: D.dungeons, w: D.weathers, t: D.tileEvents }, '');
+    check('nenhum campo chamado "pm" em nenhuma profundidade', badKeys.length === 0, badKeys.join(', '));
+
+    // varredura do CÓDIGO-FONTE (comentários inclusive), quando servido por http
+    var srcs = ['../js/core/data/elements.js', '../js/core/data/monsters.js', '../js/core/data/dungeons.js'];
+    var scanned = 0, hits = [];
+    srcs.forEach(function (u) {
+      try {
+        var x = new XMLHttpRequest();
+        x.open('GET', u + '?v=' + Date.now(), false); // síncrono de propósito: a página roda tudo no load
+        x.send(null);
+        if (x.status >= 200 && x.status < 400) {
+          scanned++;
+          if (/(^|[^a-zA-Z])pm([^a-zA-Z]|$)/i.test(x.responseText)) { hits.push(u); }
+        }
+      } catch (err) { /* file:// bloqueia XHR — a checagem de dados acima já cobre o essencial */ }
+    });
+    if (scanned === srcs.length) {
+      check('código-fonte dos 3 arquivos: nenhuma menção a "pm" (nem em comentário)', hits.length === 0, hits.join(', '));
+    } else {
+      check('código-fonte: varredura de "pm" (requer http://, ' + scanned + '/3 lidos)', scanned === srcs.length,
+        'abra a página pelo servidor para esta checagem');
+    }
+  })();
+
+  // =========================================================================
+  // RENDER
+  // =========================================================================
+  function render() {
+    var passed = 0, failed = 0, failures = [];
+    results.forEach(function (r) {
+      if (r.ok) { passed++; } else { failed++; failures.push(r.name + (r.detail ? ' — ' + r.detail : '')); }
+    });
+    window.TEST_RESULTS = { passed: passed, failed: failed, failures: failures };
+
+    var sum = document.getElementById('summary');
+    sum.className = failed === 0 ? 'ok' : 'bad';
+    sum.textContent = failed === 0
+      ? '✔ 100% PASS — ' + passed + ' checagens, 0 falhas.'
+      : '✘ ' + failed + ' FALHA(S) de ' + (passed + failed) + ' checagens.';
+
+    if (failed) {
+      var fl = document.getElementById('failList');
+      fl.innerHTML = '<h2>Falhas</h2><ul>' + failures.map(function (f) {
+        return '<li class="fail">✘ ' + f.replace(/</g, '&lt;') + '</li>';
+      }).join('') + '</ul>';
+    }
+
+    var all = document.getElementById('allList');
+    all.innerHTML = results.map(function (r) {
+      return '<li class="' + (r.ok ? 'pass' : 'fail') + '">' + (r.ok ? '✔' : '✘') + ' ' +
+        (r.name + (r.detail && !r.ok ? ' — ' + r.detail : '')).replace(/</g, '&lt;') + '</li>';
+    }).join('');
+
+    // painel de resumo do conteúdo (útil para o relatório)
+    if (D && D.monsters && D.dungeons) {
+      var rows = D.dungeons.map(function (d) {
+        var n = keys(D.monsters).filter(function (i) { return D.monsters[i].dungeonId === d.id; });
+        var b = n.filter(function (i) { return D.monsters[i].boss; })[0];
+        return '<tr><td>' + d.order + '</td><td>' + d.name + '</td><td>' + d.id + '</td><td>' + d.theme +
+          '</td><td>' + d.defaultWeather + '</td><td>' + d.rooms.map(function (r) { return r.weather; }).join(' / ') +
+          '</td><td>' + n.length + '</td><td>' + (b ? D.monsters[b].name + ' (' + D.monsters[b].stats.hp + ' PV)' : '—') + '</td></tr>';
+      }).join('');
+      document.getElementById('stats').innerHTML =
+        '<h2>Resumo do mundo</h2><table><tr><th>#</th><th>Calabouço</th><th>id</th><th>tema</th>' +
+        '<th>clima base</th><th>clima das salas</th><th>bichos</th><th>chefe</th></tr>' + rows + '</table>' +
+        '<div class="sub">' + keys(D.monsters).length + ' monstros (' +
+        keys(D.monsters).filter(function (i) { return !D.monsters[i].boss; }).length + ' comuns + ' +
+        keys(D.monsters).filter(function (i) { return D.monsters[i].boss; }).length + ' chefes) · ' +
+        keys(D.monsterSpells).length + ' feitiços de monstro · ' +
+        keys(D.tileEvents).length + ' eventos de terreno · ' + keys(D.scenery).length + ' temas de cenário</div>';
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

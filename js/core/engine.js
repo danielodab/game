@@ -288,6 +288,9 @@ var JOGO = (typeof window !== 'undefined')
     return spell || null;
   };
   // Resolve um id de feitiço em QUALQUER fonte de dados. Uso interno obrigatório.
+  // Fontes: registro em memória (fusões) · DATA.spells (classes) ·
+  // DATA.monsterSpells · DATA.petSpells · DATA.itemSpells · DATA.fusionSpells
+  // (payloads de armadilha e feitiços dos invocados de fusão).
   Engine.spell = function (id) {
     if (!id) return null;
     if (Engine._genSpells[id]) return Engine._genSpells[id];
@@ -299,6 +302,17 @@ var JOGO = (typeof window !== 'undefined')
     return null;
   };
   function spellDef(id) { return Engine.spell(id); }
+
+  // Idem para definições de monstro: DATA.monsters + DATA.fusionSummons (as
+  // criaturas que as formas de fusão invocam). Todo `summon{monsterId}` e o
+  // traço `split` passam por aqui.
+  Engine.monster = function (id) {
+    if (!id) return null;
+    var D = DATA();
+    if (D.monsters && D.monsters[id]) return D.monsters[id];
+    if (D.fusionSummons && D.fusionSummons[id]) return D.fusionSummons[id];
+    return null;
+  };
 
   // acessores tolerantes (os dados podem estar incompletos durante o desenvolvimento)
   function sRange(sp) { return sp.range || { min: 0, max: 1, line: false, los: false }; }
@@ -351,13 +365,23 @@ var JOGO = (typeof window !== 'undefined')
   }
   Engine.setWeather = setWeather;
 
+  // Ciclo automático de clima: `dungeon.weatherCycle` quando o dado o traz;
+  // senão os CINCO climas canônicos do contrato §2 que existirem em
+  // DATA.weathers (nunca "todas as chaves": um clima extra de teste ou de
+  // conteúdo experimental entraria no rodízio das salas reais); e só em último
+  // caso, todas as chaves.
+  var CANON_WEATHERS = ['calmo', 'chuva', 'estiagem', 'vendaval', 'tremor'];
   function weatherCycle(state) {
     var d = getDungeon(state.dungeonId);
     if (d && d.weatherCycle && d.weatherCycle.length) return d.weatherCycle;
-    var keys = [];
     var t = weatherTable();
-    for (var k in t) if (Object.prototype.hasOwnProperty.call(t, k)) keys.push(k);
-    return keys;
+    var out = [], i, k;
+    for (i = 0; i < CANON_WEATHERS.length; i++) {
+      if (t[CANON_WEATHERS[i]]) out.push(CANON_WEATHERS[i]);
+    }
+    if (out.length) return out;
+    for (k in t) if (Object.prototype.hasOwnProperty.call(t, k)) out.push(k);
+    return out;
   }
 
   function weatherTick(state, u) {
@@ -558,7 +582,7 @@ var JOGO = (typeof window !== 'undefined')
       var ms = monsterSpawns[i];
       var mid = room.monsters ? room.monsters[ms.letter] : null;
       if (!mid) throw new Error('Engine.createBattle: letra sem monstro: ' + ms.letter);
-      var md = (DATA().monsters || {})[mid];
+      var md = Engine.monster(mid);
       if (!md) throw new Error('Engine.createBattle: monstro desconhecido: ' + mid);
       state.units.push(makeUnit(state, md, 'monster', 'enemy', ms.x, ms.y, { element: md.element }));
     }
@@ -667,7 +691,9 @@ var JOGO = (typeof window !== 'undefined')
     var l = Engine.findUnit(state, lockerUid);
     if (!u || !l) return 1;
     var raw = 0.35 + (Engine.effDodge(u) - Engine.effLock(l)) * 0.02 + elementalDodgeBonus(u, l);
-    return clamp(0.10, 0.90, raw);
+    // arredonda a 4 casas: a soma de decimais em ponto flutuante produziria
+    // 0.6499999999999999 e a UI mostra esse número como porcentagem.
+    return Math.round(clamp(0.10, 0.90, raw) * 10000) / 10000;
   };
 
   // pior fixador: menor chance de sucesso. Empate = o primeiro encontrado.
@@ -988,7 +1014,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function spawnMonsterUnit(state, monsterId, x, y, kind, side, summonerUid) {
-    var def = (DATA().monsters || {})[monsterId];
+    var def = Engine.monster(monsterId);
     if (!def) return null;
     var u = makeUnit(state, def, kind, side, x, y, { element: def.element });
     u.summonerUid = summonerUid || null;

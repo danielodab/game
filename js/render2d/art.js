@@ -292,7 +292,7 @@ var JOGO = (typeof window !== 'undefined')
   // O elemento tinge a cor principal sem destruir a identidade da classe.
   // ==========================================================================
   var DEF_PAL = {
-    sumo:       { main: '#d4553f', dark: '#3a2b26', accent: '#ffd08a', skin: '#f0b98a', hair: '#2b1d18', cloth: '#4a2f3f' },
+    sumo:       { main: '#d4553f', dark: '#3a2b26', accent: '#ffd08a', skin: '#f0b98a', hair: '#2b1d18', cloth: '#9c2f3c' },
     arqueiro:   { main: '#4f9d6a', dark: '#26402f', accent: '#d8f0a0', skin: '#f5d7ae', hair: '#e8cf86', cloth: '#2f5a3e' },
     bruxo:      { main: '#7a5fa0', dark: '#241c33', accent: '#b98cff', skin: '#d8bc9c', hair: '#e6ded0', cloth: '#33285a' },
     espadachim: { main: '#2f6f8f', dark: '#1b2733', accent: '#9be8ff', skin: '#e8c49a', hair: '#22303c', cloth: '#25384a' },
@@ -316,9 +316,9 @@ var JOGO = (typeof window !== 'undefined')
     var i0 = elemInfo(e0);
     p.el = i0; p.elId = e0;
     if (e0 !== 'neutro') {
-      p.main = vivid(mx(p.main, i0.c, 0.38), 0.10);
+      p.main = vivid(mx(p.main, i0.c, 0.46), 0.10);
       p.accent = mx(p.accent, i0.glow, 0.55);
-      p.cloth = mx(p.cloth, i0.deep, 0.34);
+      p.cloth = mx(p.cloth, i0.deep, 0.40);
       p.metal = mx(p.metal, i0.c, 0.18);
     }
     var e1 = els[1] || null;
@@ -469,113 +469,161 @@ var JOGO = (typeof window !== 'undefined')
   var ACC = {};
 
   // ---------------------------------------------------------------- cabeça
+  // Cada peça tem duas metades: `behind` (atrás do crânio) e `front` (sobre
+  // ele). O ROSTO é sempre desenhado por último, então nada o encobre — o erro
+  // clássico de "herói sem cara" não acontece por construção.
   ACC.head = {
-    // Sumô — coque samurai e faixa
-    topknot: function (ctx, An, cfg) {
-      var h = An.head, r = h[2], p = cfg.pal;
-      part(ctx, Pblob([h[0] - r * 0.98, h[1] - r * 0.2, h[0] - r * 0.7, h[1] - r * 1.02,
-                       h[0], h[1] - r * 1.16, h[0] + r * 0.72, h[1] - r * 1.0,
-                       h[0] + r * 0.98, h[1] - r * 0.16]), p.hair, { k: 0.3 });
-      part(ctx, Pel(h[0] + r * 0.06, h[1] - r * 1.16, r * 0.34, r * 0.26), sh(p.hair, 0.1), { k: 0.3 });
-      part(ctx, Pcap(h[0] + r * 0.06, h[1] - r * 1.2, r * 0.19, h[0] + r * 0.5, h[1] - r * 1.55, r * 0.15), p.hair, { k: 0.24 });
-      stroke(ctx, [h[0] - r * 0.95, h[1] - r * 0.34, h[0], h[1] - r * 0.5, h[0] + r * 0.95, h[1] - r * 0.3],
-             p.accent, 1.5, true);
-    },
-    // Elfo — capuz leve, deixa as orelhas de fora
-    hood: function (ctx, An, cfg) {
-      var h = An.head, r = h[2], p = cfg.pal, c = mx(p.main, p.dark, 0.34);
-      part(ctx, Pblob([h[0] - r * 1.22, h[1] + r * 0.32, h[0] - r * 1.16, h[1] - r * 0.66,
-                       h[0] - r * 0.3, h[1] - r * 1.3, h[0] + r * 0.75, h[1] - r * 1.12,
-                       h[0] + r * 1.2, h[1] - r * 0.2, h[0] + r * 1.06, h[1] + r * 0.42]), c, { k: 0.26 });
-      // abertura do rosto: recorta o oval do rosto de volta
-      part(ctx, Pel(h[0] + r * 0.16, h[1] + r * 0.12, r * 0.82, r * 0.86), p.skin, { k: 0.2, lw: 0.8 });
-      part(ctx, Ppoly([h[0] - r * 1.2, h[1] - r * 0.1, h[0] - r * 1.75, h[1] + r * 0.5,
-                       h[0] - r * 0.86, h[1] + r * 0.62]), sh(c, -0.14), { k: 0.2 });
-    },
-    // Bruxo — chapéu pontudo com aba larga e ponta caída
-    wizhat: function (ctx, An, cfg) {
-      var h = An.head, r = h[2], p = cfg.pal;
-      var bx = h[0], by = h[1] - r * 0.72;
-      var c = mx(p.main, p.dark, 0.28), c2 = sh(c, -0.16);
-      // cone com queda para o lado
-      part(ctx, tag(function (g) {
-        g.beginPath();
-        g.moveTo(bx - r * 1.02, by + r * 0.12);
-        g.quadraticCurveTo(bx - r * 0.7, by - r * 1.5, bx + r * 0.35, by - r * 2.35);
-        g.quadraticCurveTo(bx + r * 1.5, by - r * 2.9, bx + r * 1.95, by - r * 2.2);
-        g.quadraticCurveTo(bx + r * 1.15, by - r * 2.05, bx + r * 0.86, by - r * 1.4);
-        g.quadraticCurveTo(bx + r * 0.6, by - r * 0.6, bx + r * 1.0, by + r * 0.12);
-        g.closePath();
-      }, bx, by - r, r * 1.6), c, { k: 0.26 });
-      // aba
-      part(ctx, Pel(bx + r * 0.05, by + r * 0.2, r * 1.72, r * 0.5), c2, { k: 0.2, hi: true });
-      // fita + fivela
-      part(ctx, Ppoly([bx - r * 1.0, by + r * 0.02, bx + r * 1.0, by + r * 0.02,
-                       bx + r * 0.92, by - r * 0.34, bx - r * 0.94, by - r * 0.34]), p.dark, { k: 0.2 });
-      part(ctx, Pstar(bx + r * 0.5, by - r * 0.16, r * 0.3, 4, 0.42), p.accent, { k: 0.2 });
-    },
-    // Espadachim — bandana e cabelo espetado
-    bandana: function (ctx, An, cfg) {
-      var h = An.head, r = h[2], p = cfg.pal;
-      part(ctx, Pblob([h[0] - r * 1.0, h[1] - r * 0.34, h[0] - r * 0.66, h[1] - r * 1.12,
-                       h[0] + r * 0.1, h[1] - r * 1.34, h[0] + r * 0.86, h[1] - r * 0.96,
-                       h[0] + r * 1.0, h[1] - r * 0.3]), p.hair, { k: 0.28 });
-      // espetos
-      part(ctx, Ppoly([h[0] - r * 0.9, h[1] - r * 0.72, h[0] - r * 1.6, h[1] - r * 1.1,
-                       h[0] - r * 0.5, h[1] - r * 1.12]), p.hair, { k: 0.28 });
-      part(ctx, Ppoly([h[0] + r * 0.1, h[1] - r * 1.2, h[0] + r * 0.26, h[1] - r * 1.9,
-                       h[0] + r * 0.7, h[1] - r * 1.05]), p.hair, { k: 0.28 });
-      // faixa
-      part(ctx, Ppoly([h[0] - r * 1.06, h[1] - r * 0.24, h[0] + r * 1.06, h[1] - r * 0.36,
-                       h[0] + r * 1.02, h[1] - r * 0.66, h[0] - r * 1.04, h[1] - r * 0.54]), p.main, { k: 0.24 });
-      // pontas ao vento (para trás = lado da câmera longe)
-      part(ctx, Pblob([h[0] - r * 1.0, h[1] - r * 0.44, h[0] - r * 2.0, h[1] - r * 0.66,
-                       h[0] - r * 2.5, h[1] - r * 0.1, h[0] - r * 1.7, h[1] - r * 0.1]), sh(p.main, -0.1), { k: 0.22 });
-    },
-    // Curandeira — cabelão com marias-chiquinhas e uma flor
-    buns: function (ctx, An, cfg) {
-      var h = An.head, r = h[2], p = cfg.pal;
-      part(ctx, Pblob([h[0] - r * 1.1, h[1] + r * 0.2, h[0] - r * 1.12, h[1] - r * 0.72,
-                       h[0] - r * 0.4, h[1] - r * 1.2, h[0] + r * 0.5, h[1] - r * 1.16,
-                       h[0] + r * 1.1, h[1] - r * 0.6, h[0] + r * 1.12, h[1] + r * 0.24]), p.hair, { k: 0.26 });
-      // franja
-      part(ctx, Pblob([h[0] - r * 1.02, h[1] - r * 0.26, h[0] - r * 0.4, h[1] - r * 0.62,
-                       h[0] + r * 0.34, h[1] - r * 0.44, h[0] + r * 1.0, h[1] - r * 0.66,
-                       h[0] + r * 0.94, h[1] - r * 0.14, h[0] - r * 0.5, h[1] - r * 0.02]), sh(p.hair, 0.08), { k: 0.24 });
-      // chiquinhas
-      part(ctx, Pel(h[0] - r * 1.26, h[1] + r * 0.14, r * 0.42, r * 0.5), p.hair, { k: 0.26, hi: true });
-      part(ctx, Pel(h[0] + r * 1.3, h[1] + r * 0.06, r * 0.44, r * 0.52), p.hair, { k: 0.26, hi: true });
-      // flor
-      var fx = h[0] + r * 0.92, fy = h[1] - r * 0.82, i;
-      for (i = 0; i < 5; i++) {
-        var a = i / 5 * TAU;
-        part(ctx, Pel(fx + Math.cos(a) * r * 0.22, fy + Math.sin(a) * r * 0.22, r * 0.19, r * 0.19),
-             p.accent, { k: 0.18, lw: 0.8 });
+    // Sumô — cabelo colado e coque samurai
+    topknot: {
+      front: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal;
+        part(ctx, tag(function (g) {
+          g.beginPath();
+          g.moveTo(h[0] - r * 1.0, h[1] - r * 0.16);
+          g.quadraticCurveTo(h[0] - r * 0.92, h[1] - r * 1.06, h[0] + r * 0.06, h[1] - r * 1.08);
+          g.quadraticCurveTo(h[0] + r * 1.0, h[1] - r * 1.02, h[0] + r * 1.02, h[1] - r * 0.12);
+          g.quadraticCurveTo(h[0] + r * 0.7, h[1] - r * 0.5, h[0] + r * 0.1, h[1] - r * 0.46);
+          g.quadraticCurveTo(h[0] - r * 0.6, h[1] - r * 0.48, h[0] - r * 1.0, h[1] - r * 0.16);
+          g.closePath();
+        }, h[0], h[1] - r * 0.6, r), p.hair, { k: 0.3 });
+        part(ctx, Pel(h[0] + r * 0.06, h[1] - r * 1.12, r * 0.32, r * 0.24), sh(p.hair, 0.12), { k: 0.3, lw: 0.85 });
+        part(ctx, Pcap(h[0] + r * 0.06, h[1] - r * 1.16, r * 0.18, h[0] + r * 0.52, h[1] - r * 1.5, r * 0.13),
+             p.hair, { k: 0.24, lw: 0.85 });
       }
-      part(ctx, Pel(fx, fy, r * 0.13, r * 0.13), '#ffe27a', { k: 0.2, lw: 0.8 });
     },
-    // Invocador — máscara chifruda de madeira sobre o capuz
-    mask: function (ctx, An, cfg) {
-      var h = An.head, r = h[2], p = cfg.pal;
-      var c = mx(p.dark, p.main, 0.42);
-      part(ctx, Pblob([h[0] - r * 1.16, h[1] + r * 0.1, h[0] - r * 1.06, h[1] - r * 0.86,
-                       h[0] + r * 0.1, h[1] - r * 1.24, h[0] + r * 1.1, h[1] - r * 0.8,
-                       h[0] + r * 1.16, h[1] + r * 0.16]), c, { k: 0.24 });
-      // máscara
-      var mkC = mx(p.wood, p.accent, 0.2);
-      part(ctx, Pblob([h[0] - r * 0.86, h[1] - r * 0.5, h[0] + r * 0.2, h[1] - r * 0.74,
-                       h[0] + r * 0.94, h[1] - r * 0.4, h[0] + r * 0.82, h[1] + r * 0.6,
-                       h[0] + r * 0.1, h[1] + r * 0.92, h[0] - r * 0.74, h[1] + r * 0.5]), mkC, { k: 0.24, hi: true });
-      // fendas brilhantes
-      part(ctx, Ppoly([h[0] - r * 0.56, h[1] - r * 0.16, h[0] - r * 0.06, h[1] - r * 0.28,
-                       h[0] - r * 0.08, h[1] + r * 0.02, h[0] - r * 0.58, h[1] + r * 0.08]), p.accent, { k: 0.1, lw: 0.7 });
-      part(ctx, Ppoly([h[0] + r * 0.26, h[1] - r * 0.28, h[0] + r * 0.72, h[1] - r * 0.16,
-                       h[0] + r * 0.7, h[1] + r * 0.1, h[0] + r * 0.24, h[1] + r * 0.02]), p.accent, { k: 0.1, lw: 0.7 });
-      glow(ctx, h[0] - r * 0.3, h[1] - r * 0.1, r * 0.7, p.accent, 0.45);
-      glow(ctx, h[0] + r * 0.48, h[1] - r * 0.08, r * 0.62, p.accent, 0.45);
-      // chifres
-      part(ctx, Pcap(h[0] - r * 0.9, h[1] - r * 0.72, r * 0.2, h[0] - r * 1.5, h[1] - r * 1.5, r * 0.08), p.wood, { k: 0.3 });
-      part(ctx, Pcap(h[0] + r * 0.94, h[1] - r * 0.66, r * 0.2, h[0] + r * 1.56, h[1] - r * 1.44, r * 0.08), p.wood, { k: 0.3 });
+    // Elfo — capuz curto que emoldura o rosto e deixa as orelhas de fora
+    hood: {
+      behind: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal, c = mx(p.main, p.dark, 0.3);
+        part(ctx, Pblob([h[0] - r * 1.3, h[1] + r * 0.5, h[0] - r * 1.26, h[1] - r * 0.5,
+                         h[0] - r * 0.4, h[1] - r * 1.34, h[0] + r * 0.66, h[1] - r * 1.22,
+                         h[0] + r * 1.3, h[1] - r * 0.4, h[0] + r * 1.24, h[1] + r * 0.52]), c, { k: 0.26 });
+        part(ctx, Ppoly([h[0] - r * 1.2, h[1] + r * 0.1, h[0] - r * 2.0, h[1] + r * 0.9,
+                         h[0] - r * 0.7, h[1] + r * 0.8]), sh(c, -0.18), { k: 0.2 });
+      },
+      front: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal, c = mx(p.main, p.dark, 0.3);
+        // só a testa: uma aba baixa, o rosto fica livre
+        part(ctx, tag(function (g) {
+          g.beginPath();
+          g.moveTo(h[0] - r * 1.12, h[1] - r * 0.14);
+          g.quadraticCurveTo(h[0] - r * 0.2, h[1] - r * 1.3, h[0] + r * 1.12, h[1] - r * 0.2);
+          g.quadraticCurveTo(h[0] + r * 0.9, h[1] - r * 0.62, h[0] + r * 0.1, h[1] - r * 0.72);
+          g.quadraticCurveTo(h[0] - r * 0.8, h[1] - r * 0.66, h[0] - r * 1.12, h[1] - r * 0.14);
+          g.closePath();
+        }, h[0], h[1] - r * 0.7, r), sh(c, 0.08), { k: 0.24 });
+        part(ctx, Pel(h[0] + r * 0.34, h[1] - r * 0.86, r * 0.2, r * 0.2), p.accent, { k: 0.18, lw: 0.75 });
+      }
+    },
+    // Bruxo — chapéu pontudo, aba larga acima dos olhos
+    wizhat: {
+      front: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal;
+        var bx = h[0], by = h[1] - r * 0.62;
+        var c = mx(p.main, p.dark, 0.24), c2 = sh(c, -0.18);
+        part(ctx, tag(function (g) {
+          g.beginPath();
+          g.moveTo(bx - r * 1.0, by + r * 0.1);
+          g.quadraticCurveTo(bx - r * 0.72, by - r * 1.5, bx + r * 0.3, by - r * 2.3);
+          g.quadraticCurveTo(bx + r * 1.45, by - r * 2.86, bx + r * 1.92, by - r * 2.1);
+          g.quadraticCurveTo(bx + r * 1.1, by - r * 1.98, bx + r * 0.84, by - r * 1.36);
+          g.quadraticCurveTo(bx + r * 0.58, by - r * 0.56, bx + r * 0.98, by + r * 0.1);
+          g.closePath();
+        }, bx, by - r, r * 1.6), c, { k: 0.26 });
+        part(ctx, Pel(bx + r * 0.05, by + r * 0.16, r * 1.78, r * 0.46), c2, { k: 0.2, hi: 0.2 });
+        part(ctx, Ppoly([bx - r * 1.0, by - r * 0.02, bx + r * 1.0, by - r * 0.02,
+                         bx + r * 0.9, by - r * 0.4, bx - r * 0.94, by - r * 0.4]), p.dark, { k: 0.2, lw: 0.85 });
+        part(ctx, Pstar(bx + r * 0.46, by - r * 0.2, r * 0.28, 4, 0.42), p.accent, { k: 0.2, lw: 0.8 });
+      }
+    },
+    // Espadachim — cabelo espetado + bandana na testa
+    bandana: {
+      behind: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal;
+        part(ctx, Pblob([h[0] - r * 1.06, h[1] - r * 0.2, h[0] - r * 0.7, h[1] - r * 1.16,
+                         h[0] + r * 0.12, h[1] - r * 1.36, h[0] + r * 0.9, h[1] - r * 1.0,
+                         h[0] + r * 1.06, h[1] - r * 0.16]), p.hair, { k: 0.28 });
+        part(ctx, Ppoly([h[0] - r * 0.94, h[1] - r * 0.76, h[0] - r * 1.72, h[1] - r * 1.16,
+                         h[0] - r * 0.5, h[1] - r * 1.16]), p.hair, { k: 0.28, lw: 0.9 });
+        part(ctx, Ppoly([h[0] + r * 0.14, h[1] - r * 1.2, h[0] + r * 0.3, h[1] - r * 1.94,
+                         h[0] + r * 0.74, h[1] - r * 1.06]), p.hair, { k: 0.28, lw: 0.9 });
+        part(ctx, Pblob([h[0] - r * 1.0, h[1] - r * 0.5, h[0] - r * 2.1, h[1] - r * 0.74,
+                         h[0] - r * 2.6, h[1] - r * 0.12, h[0] - r * 1.7, h[1] - r * 0.14]),
+             sh(p.main, -0.12), { k: 0.22 });
+      },
+      front: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal;
+        part(ctx, tag(function (g) {
+          g.beginPath();
+          g.moveTo(h[0] - r * 1.08, h[1] - r * 0.36);
+          g.quadraticCurveTo(h[0], h[1] - r * 0.62, h[0] + r * 1.08, h[1] - r * 0.46);
+          g.lineTo(h[0] + r * 1.04, h[1] - r * 0.78);
+          g.quadraticCurveTo(h[0], h[1] - r * 0.94, h[0] - r * 1.06, h[1] - r * 0.68);
+          g.closePath();
+        }, h[0], h[1] - r * 0.6, r), vivid(p.main, 0.14), { k: 0.24 });
+      }
+    },
+    // Curandeira — cabelão com chiquinhas; a franja NÃO cobre os olhos
+    buns: {
+      behind: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal;
+        part(ctx, Pblob([h[0] - r * 1.16, h[1] + r * 0.5, h[0] - r * 1.2, h[1] - r * 0.7,
+                         h[0] - r * 0.4, h[1] - r * 1.22, h[0] + r * 0.5, h[1] - r * 1.18,
+                         h[0] + r * 1.2, h[1] - r * 0.6, h[0] + r * 1.18, h[1] + r * 0.54]), p.hair, { k: 0.26 });
+        part(ctx, Pel(h[0] - r * 1.3, h[1] + r * 0.2, r * 0.44, r * 0.52), p.hair, { k: 0.26, hi: 0.2 });
+        part(ctx, Pel(h[0] + r * 1.34, h[1] + r * 0.12, r * 0.46, r * 0.54), p.hair, { k: 0.26, hi: 0.2 });
+      },
+      front: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal;
+        part(ctx, tag(function (g) {
+          g.beginPath();
+          g.moveTo(h[0] - r * 1.04, h[1] - r * 0.22);
+          g.quadraticCurveTo(h[0] - r * 0.9, h[1] - r * 1.1, h[0] + r * 0.06, h[1] - r * 1.1);
+          g.quadraticCurveTo(h[0] + r * 1.0, h[1] - r * 1.06, h[0] + r * 1.04, h[1] - r * 0.2);
+          g.quadraticCurveTo(h[0] + r * 0.62, h[1] - r * 0.52, h[0] + r * 0.2, h[1] - r * 0.42);
+          g.quadraticCurveTo(h[0] - r * 0.5, h[1] - r * 0.36, h[0] - r * 1.04, h[1] - r * 0.22);
+          g.closePath();
+        }, h[0], h[1] - r * 0.66, r), sh(p.hair, 0.1), { k: 0.24 });
+        var fx = h[0] + r * 0.96, fy = h[1] - r * 0.78, i;
+        for (i = 0; i < 5; i++) {
+          var a = i / 5 * TAU;
+          part(ctx, Pel(fx + Math.cos(a) * r * 0.2, fy + Math.sin(a) * r * 0.2, r * 0.17, r * 0.17),
+               p.accent, { k: 0.18, lw: 0.75 });
+        }
+        part(ctx, Pel(fx, fy, r * 0.12, r * 0.12), '#ffe27a', { k: 0.2, lw: 0.7 });
+      }
+    },
+    // Invocador — máscara chifruda de madeira (esconde o rosto de propósito)
+    mask: {
+      hideFace: true,
+      behind: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal, c = mx(p.dark, p.main, 0.4);
+        part(ctx, Pblob([h[0] - r * 1.24, h[1] + r * 0.4, h[0] - r * 1.14, h[1] - r * 0.8,
+                         h[0] + r * 0.1, h[1] - r * 1.3, h[0] + r * 1.18, h[1] - r * 0.76,
+                         h[0] + r * 1.24, h[1] + r * 0.44]), c, { k: 0.24 });
+      },
+      front: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal;
+        var mkC = mx(p.wood, p.accent, 0.18);
+        part(ctx, Pcap(h[0] - r * 0.86, h[1] - r * 0.68, r * 0.2, h[0] - r * 1.44, h[1] - r * 1.52, r * 0.07),
+             p.wood, { k: 0.3, lw: 0.9 });
+        part(ctx, Pcap(h[0] + r * 0.9, h[1] - r * 0.62, r * 0.2, h[0] + r * 1.5, h[1] - r * 1.46, r * 0.07),
+             p.wood, { k: 0.3, lw: 0.9 });
+        part(ctx, Pblob([h[0] - r * 0.88, h[1] - r * 0.56, h[0] + r * 0.2, h[1] - r * 0.82,
+                         h[0] + r * 0.98, h[1] - r * 0.44, h[0] + r * 0.86, h[1] + r * 0.62,
+                         h[0] + r * 0.12, h[1] + r * 0.98, h[0] - r * 0.78, h[1] + r * 0.52]),
+             mkC, { k: 0.24, hi: 0.18 });
+        glow(ctx, h[0] - r * 0.26, h[1] - r * 0.08, r * 0.66, p.accent, 0.55);
+        glow(ctx, h[0] + r * 0.5, h[1] - r * 0.06, r * 0.6, p.accent, 0.55);
+        part(ctx, Ppoly([h[0] - r * 0.6, h[1] - r * 0.22, h[0] - r * 0.02, h[1] - r * 0.34,
+                         h[0] - r * 0.04, h[1] + r * 0.04, h[0] - r * 0.62, h[1] + r * 0.1]),
+             sh(p.accent, 0.4), { flat: true, lw: 0.75, line: sh(p.accent, -0.3) });
+        part(ctx, Ppoly([h[0] + r * 0.26, h[1] - r * 0.34, h[0] + r * 0.76, h[1] - r * 0.2,
+                         h[0] + r * 0.74, h[1] + r * 0.1, h[0] + r * 0.24, h[1] + r * 0.02]),
+             sh(p.accent, 0.4), { flat: true, lw: 0.75, line: sh(p.accent, -0.3) });
+        stroke(ctx, [h[0] - r * 0.5, h[1] + r * 0.5, h[0] + r * 0.02, h[1] + r * 0.58,
+                     h[0] + r * 0.5, h[1] + r * 0.44], sh(p.wood, -0.42), 1, true);
+      }
     }
   };
 
@@ -642,22 +690,25 @@ var JOGO = (typeof window !== 'undefined')
   ACC.weapon = {
     fists: function () {},
     bow: function (ctx, An, cfg, hx0, hy0) {
-      var p = cfg.pal, R = 26;
-      var cx = hx0 + 2, cy = hy0 - 4;
+      var p = cfg.pal, R = 33;
+      var cx = hx0 + 7, cy = hy0 - 2;
       ctx.save();
-      ctx.translate(cx, cy); ctx.rotate(-0.22);
-      // corda
-      stroke(ctx, [0, -R, 3, 0, 0, R], rgba('#f4ecd8', 0.9), 0.7, true);
+      ctx.translate(cx, cy); ctx.rotate(-0.16);
       part(ctx, tag(function (g) {
         g.beginPath();
         g.moveTo(0, -R);
-        g.quadraticCurveTo(-13, -R * 0.5, -13, 0);
-        g.quadraticCurveTo(-13, R * 0.5, 0, R);
-        g.quadraticCurveTo(-8.4, R * 0.5, -8.4, 0);
-        g.quadraticCurveTo(-8.4, -R * 0.5, 0, -R);
+        g.quadraticCurveTo(16, -R * 0.52, 16, 0);
+        g.quadraticCurveTo(16, R * 0.52, 0, R);
+        g.quadraticCurveTo(10.6, R * 0.5, 10.6, 0);
+        g.quadraticCurveTo(10.6, -R * 0.5, 0, -R);
         g.closePath();
-      }, -8, 0, R), mx(p.wood, p.main, 0.34), { k: 0.26 });
-      part(ctx, Pel(-11.5, 0, 3.2, 5.4), p.accent, { k: 0.2, lw: 0.8 });
+      }, 10, 0, R), mx(p.wood, p.main, 0.34), { k: 0.26 });
+      // corda + flecha encaixada
+      stroke(ctx, [0, -R, -1.5, 0, 0, R], rgba('#f4ecd8', 0.92), 0.75, true);
+      stroke(ctx, [-14, 0, 12, 0], sh(p.wood, -0.24), 0.7);
+      part(ctx, Ppoly([-14, 0, -19, -3.4, -18, 0, -19, 3.4]), p.accent, { k: 0.18, lw: 0.7 });
+      part(ctx, Ppoly([12, 0, 8, -2.6, 8, 2.6]), sh(p.metal, -0.1), { k: 0.18, lw: 0.7 });
+      part(ctx, Pel(14, 0, 3.4, 5.6), p.accent, { k: 0.2, lw: 0.8 });
       ctx.restore();
     },
     staff: function (ctx, An, cfg, hx0, hy0) {
@@ -677,7 +728,7 @@ var JOGO = (typeof window !== 'undefined')
     sword: function (ctx, An, cfg, hx0, hy0) {
       var p = cfg.pal;
       ctx.save();
-      ctx.translate(hx0, hy0); ctx.rotate(-0.62);
+      ctx.translate(hx0, hy0); ctx.rotate(0.42);
       part(ctx, Ppoly([-1.6, 2, 1.6, 2, 2.2, -34, 0, -41, -2.2, -34]), mx(p.metal, p.accent, 0.28), { k: 0.2, hi: true });
       stroke(ctx, [0, -3, 0, -33], sh(p.metal, 0.4), 0.5);
       part(ctx, Prr(0, 3.4, 13, 3.4, 1.6), mx(p.main, p.dark, 0.3), { k: 0.24 });
@@ -749,7 +800,7 @@ var JOGO = (typeof window !== 'undefined')
         g.closePath();
       }, 0, y - 2, w), p.cloth, { k: 0.22, rot: LIGHT });
       for (i = -2; i <= 2; i++) {
-        part(ctx, Prr(i * w * 0.36, y + 12, w * 0.2, 20, 1.5), sh(p.cloth, i % 2 ? -0.1 : 0.06), { k: 0.2, lw: 0.75 });
+        part(ctx, Prr(i * w * 0.34, y + 9, w * 0.17, 15, 1.5), sh(p.cloth, i % 2 ? -0.1 : 0.06), { k: 0.2, lw: 0.75 });
       }
       part(ctx, Pel(0, y - 3, w * 0.2, 4), p.accent, { k: 0.2, lw: 0.8 });
     },
@@ -842,69 +893,79 @@ var JOGO = (typeof window !== 'undefined')
     part(ctx, Pel(x, y, rx, ry), col || '#2a2028', { k: 0.1, lw: 0.7 });
     flat(ctx, Pel(x + rx * (hiSide || 0.3), y - ry * 0.36, rx * 0.32, ry * 0.3), 'rgba(255,255,255,0.92)');
   }
+  // Rosto: traços GRANDES e poucos. Tudo aqui foi calibrado para continuar
+  // legível quando o herói ocupa ~90 px de altura na tela do celular.
+  var INK = '#2b2028';
   function drawFace(ctx, An, cfg, style) {
     if (cfg.back) return;
     var h = An.head, r = h[2], p = cfg.pal;
-    var cx = h[0] + r * 0.2, cy = h[1] + r * 0.08;   // rosto puxado p/ o lado da câmera
+    var cx = h[0] + r * 0.16, cy = h[1] + r * 0.14;   // rosto puxado p/ o lado da câmera
+    var ex = r * 0.4, ey = cy;                        // afastamento dos olhos
     if (style === 'mask') return;
+
     if (style === 'glow') {
-      // rosto na sombra do capuz: dois olhos acesos
-      flat(ctx, Pel(cx, cy + r * 0.05, r * 0.78, r * 0.72), 'rgba(24,16,30,0.86)');
-      glow(ctx, cx - r * 0.3, cy, r * 0.9, p.accent, 0.55);
-      glow(ctx, cx + r * 0.36, cy, r * 0.85, p.accent, 0.55);
-      part(ctx, Pel(cx - r * 0.3, cy, r * 0.19, r * 0.13, -0.25), p.accent, { flat: true, lw: 0.6, line: sh(p.accent, 0.4) });
-      part(ctx, Pel(cx + r * 0.36, cy - r * 0.03, r * 0.17, r * 0.12, -0.25), p.accent, { flat: true, lw: 0.6, line: sh(p.accent, 0.4) });
+      // sombra da aba do chapéu cobrindo os olhos + dois pontos acesos
+      ctx.save();
+      Pel(h[0], h[1], r * 1.02, r * 1.06)(ctx); ctx.clip();
+      flat(ctx, Prr(h[0], h[1] - r * 0.24, r * 2.4, r * 1.5, 0), 'rgba(26,16,32,0.82)');
+      ctx.restore();
+      glow(ctx, cx - ex, ey - r * 0.1, r * 0.66, p.accent, 0.7);
+      glow(ctx, cx + ex, ey - r * 0.14, r * 0.62, p.accent, 0.7);
+      part(ctx, Pel(cx - ex, ey - r * 0.1, r * 0.21, r * 0.11, -0.22), sh(p.accent, 0.55),
+           { flat: true, lw: 0.7, line: p.accent });
+      part(ctx, Pel(cx + ex, ey - r * 0.14, r * 0.2, r * 0.1, -0.22), sh(p.accent, 0.55),
+           { flat: true, lw: 0.7, line: p.accent });
+      stroke(ctx, [cx - r * 0.28, cy + r * 0.46, cx + r * 0.06, cy + r * 0.52, cx + r * 0.34, cy + r * 0.42], INK, 1.1, true);
       return;
     }
     if (style === 'cute') {
-      eye(ctx, cx - r * 0.34, cy, r * 0.19, r * 0.24, '#3a2430', 0.34);
-      eye(ctx, cx + r * 0.32, cy - r * 0.02, r * 0.19, r * 0.24, '#3a2430', 0.34);
-      flat(ctx, Pel(cx - r * 0.56, cy + r * 0.28, r * 0.16, r * 0.1), rgba('#ff8fa8', 0.55));
-      flat(ctx, Pel(cx + r * 0.56, cy + r * 0.26, r * 0.16, r * 0.1), rgba('#ff8fa8', 0.55));
-      stroke(ctx, [cx - r * 0.16, cy + r * 0.34, cx + r * 0.02, cy + r * 0.46, cx + r * 0.2, cy + r * 0.32], '#6b3a3a', 0.8, true);
+      eye(ctx, cx - ex, ey + r * 0.02, r * 0.22, r * 0.27, '#3a2430', 0.32);
+      eye(ctx, cx + ex, ey - r * 0.02, r * 0.22, r * 0.27, '#3a2430', 0.32);
+      flat(ctx, Pel(cx - ex * 1.7, cy + r * 0.32, r * 0.17, r * 0.11), rgba('#ff8fa8', 0.6));
+      flat(ctx, Pel(cx + ex * 1.7, cy + r * 0.3, r * 0.17, r * 0.11), rgba('#ff8fa8', 0.6));
+      stroke(ctx, [cx - r * 0.18, cy + r * 0.42, cx + r * 0.02, cy + r * 0.56, cx + r * 0.22, cy + r * 0.4], '#8a4a48', 1.1, true);
       return;
     }
     if (style === 'grim') {
-      part(ctx, Ppoly([cx - r * 0.58, cy - r * 0.3, cx - r * 0.16, cy - r * 0.16,
-                       cx - r * 0.16, cy - r * 0.02, cx - r * 0.58, cy - r * 0.12]), '#2a2028', { flat: true, lw: 0.7, line: '#2a2028' });
-      part(ctx, Ppoly([cx + r * 0.6, cy - r * 0.32, cx + r * 0.18, cy - r * 0.18,
-                       cx + r * 0.18, cy - r * 0.04, cx + r * 0.6, cy - r * 0.14]), '#2a2028', { flat: true, lw: 0.7, line: '#2a2028' });
-      eye(ctx, cx - r * 0.34, cy + r * 0.06, r * 0.12, r * 0.1, '#2a2028', 0.3);
-      eye(ctx, cx + r * 0.36, cy + r * 0.04, r * 0.12, r * 0.1, '#2a2028', 0.3);
-      stroke(ctx, [cx - r * 0.3, cy + r * 0.42, cx + r * 0.04, cy + r * 0.36, cx + r * 0.34, cy + r * 0.42], '#7a4a42', 1.1, true);
+      eye(ctx, cx - ex, ey + r * 0.04, r * 0.16, r * 0.15, INK, 0.28);
+      eye(ctx, cx + ex, ey + r * 0.02, r * 0.16, r * 0.15, INK, 0.28);
+      stroke(ctx, [cx - ex * 1.5, cy - r * 0.34, cx - ex * 0.4, cy - r * 0.14], INK, 1.5);
+      stroke(ctx, [cx + ex * 1.5, cy - r * 0.36, cx + ex * 0.4, cy - r * 0.16], INK, 1.5);
+      stroke(ctx, [cx - r * 0.34, cy + r * 0.5, cx + r * 0.04, cy + r * 0.44, cx + r * 0.38, cy + r * 0.5], '#8a4a42', 1.4, true);
       return;
     }
     if (style === 'grin') {
-      // meia-máscara cobrindo o queixo
+      // meia-máscara cobrindo o queixo (assassino)
       part(ctx, tag(function (g) {
         g.beginPath();
-        g.moveTo(cx - r * 0.8, cy + r * 0.1);
-        g.quadraticCurveTo(cx, cy + r * 0.06, cx + r * 0.82, cy + r * 0.06);
-        g.quadraticCurveTo(cx + r * 0.5, cy + r * 0.86, cx - r * 0.1, cy + r * 0.84);
-        g.quadraticCurveTo(cx - r * 0.68, cy + r * 0.66, cx - r * 0.8, cy + r * 0.1);
+        g.moveTo(cx - r * 0.86, cy + r * 0.16);
+        g.quadraticCurveTo(cx, cy + r * 0.1, cx + r * 0.86, cy + r * 0.1);
+        g.quadraticCurveTo(cx + r * 0.54, cy + r * 0.9, cx - r * 0.08, cy + r * 0.88);
+        g.quadraticCurveTo(cx - r * 0.72, cy + r * 0.7, cx - r * 0.86, cy + r * 0.16);
         g.closePath();
-      }, cx, cy + r * 0.4, r * 0.8), mx(p.cloth, p.dark, 0.4), { k: 0.22, lw: 0.8 });
-      part(ctx, Ppoly([cx - r * 0.62, cy - r * 0.24, cx - r * 0.14, cy - r * 0.14,
-                       cx - r * 0.16, cy - r * 0.02, cx - r * 0.62, cy - r * 0.08]), '#2a2028', { flat: true, lw: 0.6, line: '#2a2028' });
-      eye(ctx, cx - r * 0.34, cy - r * 0.1, r * 0.14, r * 0.11, '#2a2028', 0.3);
-      eye(ctx, cx + r * 0.38, cy - r * 0.14, r * 0.14, r * 0.11, '#2a2028', 0.3);
+      }, cx, cy + r * 0.45, r * 0.85), mx(p.cloth, p.dark, 0.45), { k: 0.22, lw: 0.85 });
+      eye(ctx, cx - ex, ey - r * 0.16, r * 0.18, r * 0.13, INK, 0.28);
+      eye(ctx, cx + ex, ey - r * 0.2, r * 0.18, r * 0.13, INK, 0.28);
+      stroke(ctx, [cx - ex * 1.5, cy - r * 0.5, cx - ex * 0.42, cy - r * 0.38], INK, 1.3);
+      stroke(ctx, [cx + ex * 1.5, cy - r * 0.54, cx + ex * 0.42, cy - r * 0.42], INK, 1.3);
       return;
     }
     // 'sharp' — padrão (elfo/atento)
-    stroke(ctx, [cx - r * 0.58, cy - r * 0.3, cx - r * 0.2, cy - r * 0.36], '#4a3038', 0.8);
-    stroke(ctx, [cx + r * 0.24, cy - r * 0.38, cx + r * 0.62, cy - r * 0.3], '#4a3038', 0.8);
-    eye(ctx, cx - r * 0.34, cy - r * 0.02, r * 0.15, r * 0.15, '#2f2430', 0.3);
-    eye(ctx, cx + r * 0.38, cy - r * 0.06, r * 0.15, r * 0.15, '#2f2430', 0.3);
-    stroke(ctx, [cx + r * 0.02, cy + r * 0.42, cx + r * 0.32, cy + r * 0.36], '#7a4a42', 0.9);
+    eye(ctx, cx - ex, ey - r * 0.02, r * 0.2, r * 0.19, '#2f2430', 0.3);
+    eye(ctx, cx + ex, ey - r * 0.06, r * 0.2, r * 0.19, '#2f2430', 0.3);
+    stroke(ctx, [cx - ex * 1.5, cy - r * 0.42, cx - ex * 0.34, cy - r * 0.32], '#4a3038', 1.2);
+    stroke(ctx, [cx + ex * 1.5, cy - r * 0.46, cx + ex * 0.34, cy - r * 0.36], '#4a3038', 1.2);
+    stroke(ctx, [cx - r * 0.06, cy + r * 0.46, cx + r * 0.3, cy + r * 0.4], '#8a4a42', 1.2);
   }
   // nuca (vista de costas): massa de cabelo + gola
   function drawNape(ctx, An, cfg) {
     var h = An.head, r = h[2], p = cfg.pal;
-    part(ctx, Pblob([h[0] - r * 0.92, h[1] + r * 0.5, h[0] - r * 1.0, h[1] - r * 0.5,
-                     h[0] - r * 0.3, h[1] - r * 1.02, h[0] + r * 0.56, h[1] - r * 0.96,
-                     h[0] + r * 1.0, h[1] - r * 0.3, h[0] + r * 0.9, h[1] + r * 0.56]), p.hair, { k: 0.26 });
-    stroke(ctx, [h[0] - r * 0.4, h[1] - r * 0.5, h[0] - r * 0.2, h[1] + r * 0.3], sh(p.hair, -0.26), 0.8);
-    stroke(ctx, [h[0] + r * 0.3, h[1] - r * 0.55, h[0] + r * 0.45, h[1] + r * 0.24], sh(p.hair, -0.26), 0.8);
+    var c = sh(p.hair, -0.22);
+    part(ctx, Pblob([h[0] - r * 0.84, h[1] + r * 0.38, h[0] - r * 0.9, h[1] - r * 0.42,
+                     h[0] - r * 0.26, h[1] - r * 0.92, h[0] + r * 0.5, h[1] - r * 0.88,
+                     h[0] + r * 0.9, h[1] - r * 0.26, h[0] + r * 0.82, h[1] + r * 0.44]), c, { k: 0.24 });
+    stroke(ctx, [h[0] - r * 0.34, h[1] - r * 0.42, h[0] - r * 0.16, h[1] + r * 0.24], sh(c, -0.3), 0.85);
+    stroke(ctx, [h[0] + r * 0.28, h[1] - r * 0.46, h[0] + r * 0.4, h[1] + r * 0.2], sh(c, -0.3), 0.85);
   }
   function elfEars(ctx, An, cfg) {
     var h = An.head, r = h[2], p = cfg.pal;
@@ -913,14 +974,14 @@ var JOGO = (typeof window !== 'undefined')
     part(ctx, Ppoly([h[0] + r * 0.88, h[1] - r * 0.06, h[0] + r * 1.7, h[1] - r * 0.82,
                      h[0] + r * 0.82, h[1] + r * 0.28]), An.skin, { k: 0.24, lw: 0.85 });
   }
-  // cabeça padrão (oval) — usada por quase todas as classes
-  function drawHead(ctx, An, cfg, faceStyle) {
+  // crânio padrão (oval). O rosto vem depois, em paintUnit.
+  function drawHead(ctx, An, cfg) {
     var h = An.head, r = h[2];
-    part(ctx, Pcap(An.neck[0], An.neck[1] + 3, r * 0.42, h[0], h[1] + r * 0.5, r * 0.5), sh(An.skin, -0.1), { k: 0.2, lw: 0.85 });
+    part(ctx, Pcap(An.neck[0], An.neck[1] + 3, r * 0.42, h[0], h[1] + r * 0.5, r * 0.5),
+         sh(An.skin, -0.1), { k: 0.2, lw: 0.85 });
     part(ctx, Pel(h[0], h[1], r, r * 1.04), An.skin, { k: 0.2, hi: 0.18 });
     if (cfg.acc.ears) elfEars(ctx, An, cfg);
     if (cfg.back) drawNape(ctx, An, cfg);
-    else drawFace(ctx, An, cfg, faceStyle);
   }
 
   // ==========================================================================
@@ -939,8 +1000,8 @@ var JOGO = (typeof window !== 'undefined')
       An.head = [3, -88, 14.5]; An.neck = [2, -76]; An.chest = [0, -64];
       An.hipY = -34; An.hipC = [0, -38]; An.backC = [-3, -60];
       An.shN = [24, -70]; An.shF = [-22, -70];
-      An.armN = { sh: [23, -70], el: [35, -56], hd: [34, -41], r0: 7.6, r1: 6.2, hr: 7.6 };
-      An.armF = { sh: [-21, -70], el: [-34, -57], hd: [-34, -43], r0: 7.2, r1: 5.9, hr: 7.2 };
+      An.armN = { sh: [23, -70], el: [37, -58], hd: [31, -42], r0: 7.6, r1: 6.2, hr: 7.8 };
+      An.armF = { sh: [-21, -70], el: [-35, -60], hd: [-30, -46], r0: 7.2, r1: 5.9, hr: 7.2 };
       An.legN = { hip: [14, -34], knee: [22, -17], ank: [18, -5], r0: 9.6, r1: 7.4, foot: [19, -1, 15, 5] };
       An.legF = { hip: [-14, -34], knee: [-23, -18], ank: [-20, -6], r0: 9.2, r1: 7.1, foot: [-21, -2, 14, 4.6] };
       An.armCol = An.skin; An.legCol = An.skin; An.handCol = An.skin;
@@ -964,7 +1025,7 @@ var JOGO = (typeof window !== 'undefined')
       part(ctx, Pel(h[0] - r * 0.78, h[1] + r * 0.34, r * 0.34, r * 0.28), sh(An.skin, -0.06), { k: 0.16, lw: 0.7 });
       part(ctx, Pel(h[0] + r * 0.82, h[1] + r * 0.3, r * 0.34, r * 0.28), sh(An.skin, -0.06), { k: 0.16, lw: 0.7 });
       if (cfg.acc.ears) elfEars(ctx, An, cfg);
-      if (cfg.back) drawNape(ctx, An, cfg); else drawFace(ctx, An, cfg, cfg.acc.face || 'grim');
+      if (cfg.back) drawNape(ctx, An, cfg);
     }
   };
 
@@ -977,8 +1038,8 @@ var JOGO = (typeof window !== 'undefined')
       An.head = [3, -92, 11]; An.neck = [2, -80]; An.chest = [0, -70];
       An.hipY = -50; An.hipC = [0, -52]; An.backC = [-2, -66];
       An.shN = [15, -76]; An.shF = [-13, -76];
-      An.armN = { sh: [14, -76], el: [21, -63], hd: [22, -50], r0: 4.4, r1: 3.6, hr: 4.6 };
-      An.armF = { sh: [-13, -76], el: [-21, -64], hd: [-22, -52], r0: 4.2, r1: 3.4, hr: 4.4 };
+      An.armN = { sh: [14, -76], el: [24, -66], hd: [19, -55], r0: 4.6, r1: 3.7, hr: 4.8 };
+      An.armF = { sh: [-13, -76], el: [-21, -66], hd: [-17, -54], r0: 4.3, r1: 3.5, hr: 4.5 };
       An.legN = { hip: [8, -50], knee: [11, -27], ank: [10, -5], r0: 5.6, r1: 4.2, foot: [11, -1, 13, 5] };
       An.legF = { hip: [-8, -50], knee: [-13, -28], ank: [-13, -6], r0: 5.4, r1: 4.0, foot: [-14, -2, 12, 4.6] };
       An.armCol = mx(p.main, p.cloth, 0.4); An.legCol = mx(p.dark, p.main, 0.24);
@@ -995,7 +1056,7 @@ var JOGO = (typeof window !== 'undefined')
       stroke(ctx, [0, -72, 0, -48], sh(p.main, -0.28), 0.8);
     },
     head: function (ctx, An, cfg) {
-      drawHead(ctx, An, cfg, cfg.acc.face || 'sharp');
+      drawHead(ctx, An, cfg);
     }
   };
 
@@ -1008,8 +1069,8 @@ var JOGO = (typeof window !== 'undefined')
       An.head = [2, -84, 11]; An.neck = [1, -73]; An.chest = [0, -66];
       An.hipY = -48; An.hipC = [0, -50]; An.backC = [-2, -62];
       An.shN = [15, -70]; An.shF = [-13, -70];
-      An.armN = { sh: [14, -70], el: [22, -58], hd: [23, -45], r0: 5.6, r1: 4.6, hr: 4.6 };
-      An.armF = { sh: [-13, -70], el: [-22, -59], hd: [-23, -47], r0: 5.4, r1: 4.4, hr: 4.4 };
+      An.armN = { sh: [14, -70], el: [24, -60], hd: [20, -50], r0: 5.8, r1: 4.6, hr: 4.8 };
+      An.armF = { sh: [-13, -70], el: [-22, -61], hd: [-18, -50], r0: 5.5, r1: 4.4, hr: 4.5 };
       An.legN = null; An.legF = null;    // manto até o chão
       An.armCol = mx(p.main, p.cloth, 0.5); An.handCol = An.skin;
       An.handN = An.armN.hd; An.handF = An.armF.hd;
@@ -1038,7 +1099,7 @@ var JOGO = (typeof window !== 'undefined')
       }, 0, -4, 25), p.accent, { k: 0.18, lw: 0.8 });
     },
     head: function (ctx, An, cfg) {
-      drawHead(ctx, An, cfg, cfg.acc.face || 'glow');
+      drawHead(ctx, An, cfg);
     }
   };
 
@@ -1051,8 +1112,8 @@ var JOGO = (typeof window !== 'undefined')
       An.head = [5, -90, 11]; An.neck = [4, -78]; An.chest = [2, -68];
       An.hipY = -48; An.hipC = [1, -50]; An.backC = [-1, -64];
       An.shN = [16, -74]; An.shF = [-11, -74];
-      An.armN = { sh: [15, -74], el: [24, -62], hd: [24, -49], r0: 4.6, r1: 3.8, hr: 4.6 };
-      An.armF = { sh: [-11, -74], el: [-20, -63], hd: [-19, -51], r0: 4.4, r1: 3.6, hr: 4.4 };
+      An.armN = { sh: [15, -74], el: [26, -66], hd: [24, -53], r0: 4.7, r1: 3.8, hr: 4.8 };
+      An.armF = { sh: [-11, -74], el: [-21, -64], hd: [-15, -52], r0: 4.4, r1: 3.6, hr: 4.5 };
       An.legN = { hip: [9, -48], knee: [16, -26], ank: [17, -5], r0: 5.6, r1: 4.2, foot: [18, -1, 14, 6] };
       An.legF = { hip: [-7, -48], knee: [-14, -28], ank: [-17, -6], r0: 5.4, r1: 4.0, foot: [-18, -2, 13, 5.4] };
       An.armCol = mx(p.cloth, p.dark, 0.3); An.legCol = mx(p.dark, p.main, 0.3);
@@ -1069,7 +1130,7 @@ var JOGO = (typeof window !== 'undefined')
       stroke(ctx, [-4, -74, 3, -68, 11, -74], p.accent, 0.8, true);
     },
     head: function (ctx, An, cfg) {
-      drawHead(ctx, An, cfg, cfg.acc.face || 'grin');
+      drawHead(ctx, An, cfg);
     }
   };
 
@@ -1082,8 +1143,8 @@ var JOGO = (typeof window !== 'undefined')
       An.head = [2, -58, 17]; An.neck = [2, -42]; An.chest = [0, -38];
       An.hipY = -26; An.hipC = [0, -28]; An.backC = [-2, -38];
       An.shN = [11, -40]; An.shF = [-9, -40];
-      An.armN = { sh: [10, -40], el: [16, -31], hd: [17, -21], r0: 3.8, r1: 3.2, hr: 4.0 };
-      An.armF = { sh: [-9, -40], el: [-15, -32], hd: [-16, -23], r0: 3.6, r1: 3.0, hr: 3.8 };
+      An.armN = { sh: [10, -40], el: [17, -34], hd: [15, -25], r0: 3.9, r1: 3.2, hr: 4.2 };
+      An.armF = { sh: [-9, -40], el: [-16, -33], hd: [-13, -25], r0: 3.7, r1: 3.0, hr: 3.9 };
       An.legN = { hip: [6, -18], knee: [8, -10], ank: [8, -4], r0: 3.8, r1: 3.2, foot: [8, -1, 10, 4.4] };
       An.legF = { hip: [-6, -18], knee: [-9, -11], ank: [-9, -5], r0: 3.6, r1: 3.0, foot: [-10, -2, 9, 4] };
       An.armCol = mx(p.cloth, p.main, 0.35); An.legCol = '#f4ead6';
@@ -1110,7 +1171,7 @@ var JOGO = (typeof window !== 'undefined')
       stroke(ctx, [-4, -40, -6, -22, -7, -6], sh(c, -0.24), 0.8, true);
     },
     head: function (ctx, An, cfg) {
-      drawHead(ctx, An, cfg, cfg.acc.face || 'cute');
+      drawHead(ctx, An, cfg);
     }
   };
 
@@ -1123,8 +1184,8 @@ var JOGO = (typeof window !== 'undefined')
       An.head = [2, -82, 12]; An.neck = [1, -71]; An.chest = [0, -64];
       An.hipY = -44; An.hipC = [0, -46]; An.backC = [-2, -62];
       An.shN = [16, -70]; An.shF = [-14, -70];
-      An.armN = { sh: [15, -70], el: [24, -60], hd: [25, -48], r0: 5.4, r1: 4.4, hr: 4.4 };
-      An.armF = { sh: [-14, -70], el: [-23, -61], hd: [-24, -50], r0: 5.2, r1: 4.2, hr: 4.2 };
+      An.armN = { sh: [15, -70], el: [26, -62], hd: [23, -51], r0: 5.6, r1: 4.4, hr: 4.6 };
+      An.armF = { sh: [-14, -70], el: [-24, -62], hd: [-19, -52], r0: 5.3, r1: 4.2, hr: 4.3 };
       An.legN = null; An.legF = null;
       An.armCol = mx(p.cloth, p.main, 0.28); An.handCol = An.skin;
       An.handN = An.armN.hd; An.handF = An.armF.hd;
@@ -1149,7 +1210,7 @@ var JOGO = (typeof window !== 'undefined')
       }
     },
     head: function (ctx, An, cfg) {
-      drawHead(ctx, An, cfg, cfg.acc.face || 'mask');
+      drawHead(ctx, An, cfg);
     }
   };
 
@@ -1196,7 +1257,8 @@ var JOGO = (typeof window !== 'undefined')
       base: PLANS[dom] ? dom : 'sumo',
       pal: pal,
       acc: {
-        head: kr.head || kd.head,
+        // a máscara do invocador esconde o rosto: só vale quando ELE é o corpo
+        head: (kr.head === 'mask' && dom !== 'invocador') ? kd.head : (kr.head || kd.head),
         torso: kd.torso,
         torso2: kr.torso !== kd.torso ? kr.torso : null,
         weapon: kr.weapon || kd.weapon,
@@ -1237,8 +1299,11 @@ var JOGO = (typeof window !== 'undefined')
     if (cfg.acc.torso && ACC.torso[cfg.acc.torso]) ACC.torso[cfg.acc.torso](ctx, An, cfg);
     if (cfg.acc.torso2 && ACC.torso[cfg.acc.torso2]) ACC.torso[cfg.acc.torso2](ctx, An, cfg);
 
+    var hg = (cfg.acc.head && ACC.head[cfg.acc.head]) || null;
+    if (hg && hg.behind) hg.behind(ctx, An, cfg);
     P.head(ctx, An, cfg);
-    if (cfg.acc.head && ACC.head[cfg.acc.head]) ACC.head[cfg.acc.head](ctx, An, cfg);
+    if (hg && hg.front) hg.front(ctx, An, cfg);
+    if (!cfg.back && !(hg && hg.hideFace)) drawFace(ctx, An, cfg, cfg.acc.face || P.face || 'sharp');
 
     drawArm(ctx, An.armN, An.armCol);
     if (!cfg.back && wp) wp(ctx, An, cfg, An.handN[0], An.handN[1]);

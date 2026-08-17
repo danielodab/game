@@ -335,7 +335,7 @@ JOGO.DATA = JOGO.DATA || {};
     'm-droplet-splash': {
       name: 'Pingo', element: 'agua', paCost: 3,
       effects: [{ type: 'damage', element: 'agua', min: 5, max: 8 }],
-      description: 'Plic.',
+      description: 'A gotinha se atira contra a canela do alvo com toda a indignação de que dispõe. Plic.',
       flavor: 'Pequena, redonda, indignada.'
     },
     'm-crab-pinch': {
@@ -843,7 +843,7 @@ JOGO.DATA = JOGO.DATA || {};
 
   addMonsters({
     'plank-shrike': {
-      name: 'Picanço-de-Tábua', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'aviary',
+      name: 'Picanço-de-Tábua', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'windscaffold',
       description: 'Um pássaro cinzento de bico curvo que empala o que caça nos pregos expostos das tábuas. Vive nos vãos, desce em queda livre e some antes de você virar a cabeça.',
       flavor: 'A despensa dele é o corrimão.',
       hp: 62, pa: 6, pp: 5, initiative: 80, dodge: 34, lock: 8,
@@ -851,7 +851,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-shrike-dive', 'm-shrike-peck'], ai: 'melee', traits: [], xp: 34
     },
     'gust-gremlin': {
-      name: 'Gremlin de Rajada', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'aviary',
+      name: 'Gremlin de Rajada', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'windscaffold',
       description: 'Um bichinho de orelhas enormes que usa as próprias orelhas como velas. Não bate para matar: bate para ver a pessoa cair. Tem um senso de humor documentadamente ruim.',
       flavor: 'Ele conta as quedas. Em voz alta.',
       hp: 55, pa: 5, pp: 5, initiative: 72, dodge: 32, lock: 10,
@@ -859,7 +859,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-gremlin-shove', 'm-gremlin-swap'], ai: 'melee', traits: [], xp: 30
     },
     'rope-hanger': {
-      name: 'Enforca-Corda', family: 'Coro dos Andaimes', element: 'neutro', dungeonId: 'aviary',
+      name: 'Enforca-Corda', family: 'Coro dos Andaimes', element: 'neutro', dungeonId: 'windscaffold',
       description: 'Um novelo de cordas de obra amarrado num nó que ninguém consegue desfazer, pendurado na roldana mestra. Não desce nunca. Lança laços e recolhe o que pegou como quem puxa material.',
       flavor: 'Preso à roldana: empurrão não move nó.',
       hp: 70, pa: 6, pp: 1, initiative: 28, dodge: 4, lock: 30,
@@ -868,7 +868,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'pushImmune' }], xp: 38
     },
     'kite-serpent': {
-      name: 'Serpe-Pipa', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'aviary',
+      name: 'Serpe-Pipa', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'windscaffold',
       description: 'Uma serpente chata e comprida feita de papel encerado e ripas, com uma cauda de fitas revestida de vidro moído. Sobe nas correntes de ar e desce riscando.',
       flavor: 'Uma pipa que aprendeu a puxar a própria linha.',
       hp: 66, pa: 6, pp: 3, initiative: 62, dodge: 24, lock: 10,
@@ -876,7 +876,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-kite-arc', 'm-kite-whip'], ai: 'ranged', traits: [], xp: 36
     },
     'ballast-golem': {
-      name: 'Golem de Lastro', family: 'Coro dos Andaimes', element: 'terra', dungeonId: 'aviary',
+      name: 'Golem de Lastro', family: 'Coro dos Andaimes', element: 'terra', dungeonId: 'windscaffold',
       description: 'Uma armação de vigas cheia de sacos de brita, feita para segurar o andaime no lugar quando o poço sopra. Segurou por mil anos. Agora anda — devagar, e sempre contra o vento.',
       flavor: 'O vendaval o mata 5 PV por turno. Não tenha pressa com ele.',
       hp: 120, pa: 4, pp: 2, initiative: 12, dodge: 0, lock: 40,
@@ -885,7 +885,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.5, power: 25 }], xp: 62
     },
     'whistle-choir': {
-      name: 'Coro-Assobio', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'aviary',
+      name: 'Coro-Assobio', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'windscaffold',
       description: 'Um feixe de tubos de respiradouro amarrado com arame, flutuando de lado. Cada tubo assobia uma nota; juntos, remendam os companheiros e limpam deles tudo o que gruda.',
       flavor: 'Apague a música antes de discutir com a banda.',
       hp: 58, pa: 6, pp: 3, initiative: 50, dodge: 20, lock: 6,
@@ -894,7 +894,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'regenAura', value: 7, radius: 2 }], xp: 34
     },
     'mote-swarm': {
-      name: 'Enxame de Motes', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'aviary',
+      name: 'Enxame de Motes', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'windscaffold',
       description: 'Uma nuvem compacta de bichinhos de poeira luminosa que se move como um corpo só. Bata forte o bastante e ela deixa de ser um corpo — vira dois.',
       flavor: 'Você não mata uma nuvem. Você a divide.',
       hp: 74, pa: 4, pp: 4, initiative: 58, dodge: 28, lock: 8,
@@ -903,7 +903,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'split', monsterId: 'mote-bit', count: 2 }], xp: 40
     },
     'mote-bit': {
-      name: 'Motinho', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'aviary',
+      name: 'Motinho', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'windscaffold',
       description: 'Metade de uma nuvem, com o dobro da pressa. Quando se desfaz, o pó pega fogo por um instante.',
       flavor: 'Poeira também explode. Pergunte a qualquer mineiro.',
       hp: 26, pa: 3, pp: 4, initiative: 66, dodge: 26, lock: 4,
@@ -913,7 +913,7 @@ JOGO.DATA = JOGO.DATA || {};
       summonOnly: true, xp: 4
     },
     'nail-sprite': {
-      name: 'Pregolim', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'aviary',
+      name: 'Pregolim', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'windscaffold',
       description: 'Um prego de quinze centímetros com dois olhinhos e muita convicção. Cambota os finca na armação e eles saem andando.',
       flavor: 'Nasce torto, entra reto.',
       hp: 24, pa: 3, pp: 4, initiative: 70, dodge: 22, lock: 6,
@@ -921,7 +921,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-nail-jab'], ai: 'melee', traits: [], summonOnly: true, xp: 4
     },
     'boss-windwright': {
-      name: 'Cambota, o Mestre-de-Obras', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'aviary',
+      name: 'Cambota, o Mestre-de-Obras', family: 'Coro dos Andaimes', element: 'ar', dungeonId: 'windscaffold',
       description: 'O capataz que jamais entregou a obra: um esqueleto de vigas e cordame com uma roldana no lugar da cabeça e um prumo eterno balançando do braço. Constrói o andaime enquanto luta em cima dele — e derruba a ala inteira se isso resolver mais rápido.',
       flavor: 'GIMMICK — A OBRA CONTINUA: rebites marcam você (até 5 pilhas), o Vento de Proa devolve o vendaval quando o clima esfria, e Desabar a Ala manda quem estiver marcado 3 células para dentro do vazio. Ele não precisa te matar: precisa te empurrar.',
       hp: 470, pa: 8, pp: 4, initiative: 66, dodge: 24, lock: 44,
@@ -1085,7 +1085,7 @@ JOGO.DATA = JOGO.DATA || {};
 
   addMonsters({
     'pick-revenant': {
-      name: 'Assombro de Picareta', family: 'Turno da Noite', element: 'terra', dungeonId: 'quarry',
+      name: 'Assombro de Picareta', family: 'Turno da Noite', element: 'terra', dungeonId: 'quakemine',
       description: 'O turno da noite nunca subiu. Restou o gesto: um mineiro de poeira compactada que ainda bate na mesma parede, no mesmo ritmo, há mil anos. Bate em você com a mesma técnica — procurando onde racha.',
       flavor: 'Marca primeiro. Cobra depois.',
       hp: 90, pa: 6, pp: 3, initiative: 42, dodge: 10, lock: 24,
@@ -1093,7 +1093,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-pick-swing', 'm-pick-verdict'], ai: 'melee', traits: [], xp: 46
     },
     'firedamp-wisp': {
-      name: 'Fogaréu de Grisu', family: 'Turno da Noite', element: 'fogo', dungeonId: 'quarry',
+      name: 'Fogaréu de Grisu', family: 'Turno da Noite', element: 'fogo', dungeonId: 'quakemine',
       description: 'Uma chama azul e silenciosa boiando à altura do peito, do tamanho de uma cabeça. É o gás da mina que ganhou vontade. Não persegue: espera você entrar na galeria errada.',
       flavor: 'Mate-o longe. Depois lembre disso de novo.',
       hp: 58, pa: 5, pp: 3, initiative: 58, dodge: 22, lock: 6,
@@ -1102,7 +1102,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'explodeOnDeath', element: 'fogo', damage: 26, radius: 1 }], xp: 36
     },
     'cave-jaw': {
-      name: 'Bocarra', family: 'Turno da Noite', element: 'terra', dungeonId: 'quarry',
+      name: 'Bocarra', family: 'Turno da Noite', element: 'terra', dungeonId: 'quakemine',
       description: 'Um trecho de galeria que virou bicho: dez metros de túnel com dentes de estalactite e um gosto adquirido por carne com capacete. Fica parada até você achar que é caminho.',
       flavor: 'O tanque da mina. E também a porta.',
       hp: 130, pa: 4, pp: 2, initiative: 14, dodge: 0, lock: 44,
@@ -1111,7 +1111,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.5, power: 30 }], xp: 68
     },
     'crystal-chanter': {
-      name: 'Cantor de Cristal', family: 'Turno da Noite', element: 'terra', dungeonId: 'quarry',
+      name: 'Cantor de Cristal', family: 'Turno da Noite', element: 'terra', dungeonId: 'quakemine',
       description: 'Um aglomerado de quartzo do tamanho de um homem, crescido dentro de um capacete abandonado. Vibra numa nota baixa e constante que costura a pedra dos companheiros de volta.',
       flavor: 'Bater nele é bater em você mesmo, com atraso.',
       hp: 76, pa: 6, pp: 2, initiative: 38, dodge: 6, lock: 14,
@@ -1120,7 +1120,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'regenAura', value: 9, radius: 2 }], xp: 42
     },
     'sinkhole-worm': {
-      name: 'Verme de Abatimento', family: 'Turno da Noite', element: 'terra', dungeonId: 'quarry',
+      name: 'Verme de Abatimento', family: 'Turno da Noite', element: 'terra', dungeonId: 'quakemine',
       description: 'Uma boca circular de anéis que vive sob o piso solto e só mostra o funil. Não anda: reorganiza o chão até que você chegue por gravidade.',
       flavor: 'Ancorado na rocha-mãe: nada o empurra.',
       hp: 84, pa: 6, pp: 1, initiative: 32, dodge: 4, lock: 34,
@@ -1129,7 +1129,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'pushImmune' }], xp: 44
     },
     'ore-tumbler': {
-      name: 'Rolo de Minério', family: 'Turno da Noite', element: 'terra', dungeonId: 'quarry',
+      name: 'Rolo de Minério', family: 'Turno da Noite', element: 'terra', dungeonId: 'quakemine',
       description: 'Uma bola de minério bruto do tamanho de um vagonete, lisa de tanto rolar pelos trilhos. Ganha embalo em linha reta e não tem nenhum plano para depois disso.',
       flavor: 'Quebre-o e ele vira duas ladeiras.',
       hp: 100, pa: 4, pp: 3, initiative: 24, dodge: 4, lock: 22,
@@ -1138,7 +1138,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'split', monsterId: 'ore-chip', count: 2 }], xp: 52
     },
     'ore-chip': {
-      name: 'Lasca de Veio', family: 'Turno da Noite', element: 'terra', dungeonId: 'quarry',
+      name: 'Lasca de Veio', family: 'Turno da Noite', element: 'terra', dungeonId: 'quakemine',
       description: 'Um caco de minério com uma veia de metal brilhando no meio, rolando com propósito.',
       flavor: 'Pequeno, denso e sem freio.',
       hp: 32, pa: 3, pp: 3, initiative: 30, dodge: 8, lock: 12,
@@ -1146,7 +1146,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-ore-chip-hit'], ai: 'melee', traits: [], summonOnly: true, xp: 5
     },
     'shaft-bat': {
-      name: 'Morcego-de-Poço', family: 'Turno da Noite', element: 'ar', dungeonId: 'quarry',
+      name: 'Morcego-de-Poço', family: 'Turno da Noite', element: 'ar', dungeonId: 'quakemine',
       description: 'Asas de couro fino esticadas em ossos longos demais, com um guincho que faz a poeira desenhar o formato do túnel. Mora no poço vertical e desce em espiral.',
       flavor: 'O único aqui que o tremor prejudica. Ele não entendeu isso ainda.',
       hp: 54, pa: 5, pp: 5, initiative: 78, dodge: 34, lock: 4,
@@ -1154,7 +1154,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-bat-screech', 'm-bat-swoop'], ai: 'melee', traits: [], xp: 30
     },
     'damp-seeper': {
-      name: 'Escorrência', family: 'Turno da Noite', element: 'agua', dungeonId: 'quarry',
+      name: 'Escorrência', family: 'Turno da Noite', element: 'agua', dungeonId: 'quakemine',
       description: 'Uma poça vertical que escorre pela parede contra a gravidade, carregada de mineral dissolvido. Dissolve escudos como dissolveu a rocha que atravessou.',
       flavor: 'Água de mina não mata a sede de ninguém.',
       hp: 68, pa: 5, pp: 3, initiative: 46, dodge: 16, lock: 16,
@@ -1162,7 +1162,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-seep-drip', 'm-seep-solvent'], ai: 'ranged', traits: [], xp: 38
     },
     'boss-deepknock': {
-      name: 'Batepedra, o Que Bate Embaixo', family: 'Turno da Noite', element: 'terra', dungeonId: 'quarry',
+      name: 'Batepedra, o Que Bate Embaixo', family: 'Turno da Noite', element: 'terra', dungeonId: 'quakemine',
       description: 'A coisa que os mineiros ouviam batendo do outro lado da parede e fingiam ser eco. É maior que a galeria em que está: um torso de rocha-mãe com dois punhos de estéril e nenhum rosto onde procurar intenção. Bate. O mundo responde.',
       flavor: 'GIMMICK — AS TRÊS BATIDAS: A Batida castiga o anel a 2 células (colado nele é seguro), o Desabamento pune quem se afasta, e a Postura de Tremor devolve o clima que o cura. Ou você o tira do tremor, ou aprende a lutar em cima dele.',
       hp: 530, pa: 9, pp: 2, initiative: 40, dodge: 6, lock: 52,
@@ -1372,35 +1372,88 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um caco se desprende do Coração e cai de pé, já com raiva.',
       flavor: 'Cada estilha lembra de ter sido inteira.', fxKey: 'summonFx'
     },
-    'm-familiar-ember': {
-      name: 'Bafo de Brasa', element: 'fogo', paCost: 3,
-      effects: [{ type: 'damage', element: 'fogo', min: 9, max: 13 }],
-      description: 'A cria de brasa cospe uma língua curta de fogo.',
-      flavor: 'Pequena, quente, obediente.', fxKey: 'burst'
+    'm-sum-familiar-bite': {
+      name: 'Dentada do Familiar', element: 'neutro', paCost: 3,
+      effects: [{ type: 'damage', element: 'neutro', min: 10, max: 14 }],
+      description: 'O familiar morde com a convicção de quem não tem nome a zelar.',
+      flavor: 'Nome é compromisso. Ele só tem dentes.'
     },
-    'm-familiar-tide': {
-      name: 'Borrifo Curativo', element: 'agua', paCost: 3, range: [0, 4], targetSide: 'ally',
-      effects: [{ type: 'heal', min: 10, max: 14 }],
-      description: 'A cria d\'água borrifa o aliado e fecha o que estava aberto.',
-      flavor: 'Vive num copo. Cabe em qualquer lugar.', fxKey: 'heal'
+    'm-sum-hound-bite': {
+      name: 'Mordida Quente', element: 'fogo', paCost: 3, castsPerTurn: 2,
+      effects: [{ type: 'damage', element: 'fogo', min: 13, max: 17 }],
+      description: 'O cão de brasa morde e deixa a marca do ferro em brasa.',
+      flavor: 'Abana o rabo. O rabo acende o chão.'
     },
-    'm-familiar-stone': {
-      name: 'Cabeçada de Seixo', element: 'terra', paCost: 3,
-      effects: [{ type: 'damage', element: 'terra', min: 11, max: 15 }],
-      description: 'A cria de pedra usa a única tática que conhece: a cabeça.',
-      flavor: 'Não é esperta. É suficiente.'
+    'm-sum-colossus-smash': {
+      name: 'Malho de Magma', element: 'fogo', paCost: 4,
+      effects: [{ type: 'damage', element: 'fogo', min: 26, max: 34 }],
+      description: 'O colosso desce o braço fundido como quem fecha um portão.',
+      flavor: 'Ninguém o convidava desde a Lousa.'
     },
-    'm-familiar-gale': {
-      name: 'Lufada', element: 'ar', paCost: 3,
-      effects: [{ type: 'damage', element: 'ar', min: 8, max: 11 }, { type: 'push', tiles: 1 }],
-      description: 'A cria de ar dá um sopro curto que desloca o alvo uma célula.',
-      flavor: 'Levíssima. Insuportavelmente convencida.', fxKey: 'gust'
+    'm-sum-colossus-eruption': {
+      name: 'Erupção', element: 'fogo', paCost: 4, cooldown: 2, range: [1, 4],
+      shape: 'circle', size: 1,
+      effects: [
+        { type: 'damage', element: 'fogo', min: 18, max: 24 },
+        { type: 'poison', element: 'fogo', min: 5, max: 8, duration: 2 }
+      ],
+      description: 'O chão abre num círculo de 1 célula e cospe magma que continua queimando.',
+      flavor: 'O calor dele é que muda o clima da sala.', fxKey: 'nova'
+    },
+    'm-sum-nymph-mend': {
+      name: 'Mão de Maré', element: 'agua', paCost: 3, castsPerTurn: 2, range: [0, 4], targetSide: 'ally',
+      effects: [{ type: 'heal', min: 14, max: 19 }],
+      description: 'A ninfa toca a ferida do aliado e a água decide fechá-la.',
+      flavor: 'Ela nunca fala. Só olha para quem está sangrando e resolve.', fxKey: 'heal'
+    },
+    'm-sum-nymph-veil': {
+      name: 'Véu de Água', element: 'agua', paCost: 2, cooldown: 1, range: [0, 4], targetSide: 'ally',
+      effects: [{ type: 'shield', value: 18, duration: 2 }],
+      description: 'Uma película de água parada envolve o aliado: 18 de escudo por 2 turnos.',
+      flavor: 'Água parada aguenta mais do que água brava.', fxKey: 'shieldFx'
+    },
+    'm-sum-sentinel-slam': {
+      name: 'Pancada de Sentinela', element: 'terra', paCost: 3,
+      effects: [{ type: 'damage', element: 'terra', min: 14, max: 18 }],
+      description: 'A sentinela bate uma vez, com o peso todo, sem sair do lugar.',
+      flavor: 'Fica onde foi posta.'
+    },
+    'm-sum-sentinel-guard': {
+      name: 'Postar-se', element: 'terra', paCost: 2, cooldown: 2, range: [0, 0], los: false, targetSide: 'self',
+      effects: [{ type: 'shield', value: 25, duration: 2 }, { type: 'taunt', duration: 2 }],
+      description: 'A sentinela crava os pés e chama o corredor inteiro para si: 25 de escudo e provocação.',
+      flavor: 'O tampão de corredor do invocador.', fxKey: 'shieldFx'
+    },
+    'm-sum-golem-fist': {
+      name: 'Punho da Montanha', element: 'terra', paCost: 4,
+      effects: [{ type: 'damage', element: 'terra', min: 28, max: 36 }],
+      description: 'Um punho do tamanho de uma porta desce com a paciência de uma encosta.',
+      flavor: 'Ele só perguntou se a montanha topava dar uns passos.'
+    },
+    'm-sum-golem-quake': {
+      name: 'Passo de Montanha', element: 'terra', paCost: 4, cooldown: 2, range: [1, 2],
+      shape: 'cross', size: 1,
+      effects: [{ type: 'damage', element: 'terra', min: 20, max: 26 }, { type: 'root', duration: 1 }],
+      description: 'Um passo só, e a cruz ao redor racha: dano em área e pés presos por 1 turno.',
+      flavor: 'A montanha não corre. A montanha chega.', fxKey: 'nova'
+    },
+    'm-sum-falcon-strike': {
+      name: 'Bicada de Tormenta', element: 'ar', paCost: 3, castsPerTurn: 2,
+      effects: [{ type: 'damage', element: 'ar', min: 12, max: 16 }, { type: 'push', tiles: 2 }],
+      description: 'O bico acerta com o vento junto e devolve o alvo 2 células.',
+      flavor: 'Não existe céu para ele voar. Voa assim mesmo, de raiva.'
+    },
+    'm-sum-falcon-dive': {
+      name: 'Mergulho', element: 'ar', paCost: 4, cooldown: 1, range: [1, 5],
+      effects: [{ type: 'moveTo', maxTiles: 5 }, { type: 'damage', element: 'ar', min: 10, max: 14 }],
+      description: 'O falcão fecha as asas, atravessa até 5 células e abre as garras no fim.',
+      flavor: 'Chega antes de todo mundo, inclusive do plano.', fxKey: 'gust'
     }
   });
 
   addMonsters({
     'cinder-herald': {
-      name: 'Arauto de Brasa', family: 'Guarda do Coração', element: 'fogo', dungeonId: 'heartbreak',
+      name: 'Arauto de Brasa', family: 'Guarda do Coração', element: 'fogo', dungeonId: 'brokenheart',
       description: 'Um dos quatro pedaços do Coração que ganharam corpo. Este é uma armadura vazia com uma fresta acesa no peito, que semeia brasas no chão como quem prepara a casa para visitas.',
       flavor: 'Ele não persegue. Ele prepara o terreno.',
       hp: 95, pa: 6, pp: 3, initiative: 55, dodge: 16, lock: 20,
@@ -1408,7 +1461,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-cinder-lash', 'm-cinder-brand'], ai: 'ranged', traits: [], xp: 50
     },
     'tide-herald': {
-      name: 'Arauto de Maré', family: 'Guarda do Coração', element: 'agua', dungeonId: 'heartbreak',
+      name: 'Arauto de Maré', family: 'Guarda do Coração', element: 'agua', dungeonId: 'brokenheart',
       description: 'A mesma armadura, cheia de água escura em movimento. Cura os irmãos e reorganiza o campo com ressacas curtas e certeiras.',
       flavor: 'Enquanto ela viver, os outros três não morrem direito.',
       hp: 95, pa: 6, pp: 3, initiative: 48, dodge: 16, lock: 18,
@@ -1417,7 +1470,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'regenAura', value: 9, radius: 2 }], xp: 52
     },
     'stone-herald': {
-      name: 'Arauto de Alicerce', family: 'Guarda do Coração', element: 'terra', dungeonId: 'heartbreak',
+      name: 'Arauto de Alicerce', family: 'Guarda do Coração', element: 'terra', dungeonId: 'brokenheart',
       description: 'A armadura preenchida por fundação: pedra, cal e uma teimosia de mil anos. Fica entre você e o resto da sala e considera isso um trabalho honesto.',
       flavor: 'Provoca, aguenta e não sai do lugar.',
       hp: 140, pa: 5, pp: 2, initiative: 22, dodge: 2, lock: 46,
@@ -1426,7 +1479,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.5, power: 30 }], xp: 70
     },
     'gale-herald': {
-      name: 'Arauto de Vendaval', family: 'Guarda do Coração', element: 'ar', dungeonId: 'heartbreak',
+      name: 'Arauto de Vendaval', family: 'Guarda do Coração', element: 'ar', dungeonId: 'brokenheart',
       description: 'A armadura vazia de verdade — só o vento dentro dela é que a mantém de pé, e o vento tem pressa. Chega, corta e já está em outro lugar.',
       flavor: 'Difícil de prender, pior de acertar.',
       hp: 90, pa: 6, pp: 5, initiative: 82, dodge: 36, lock: 12,
@@ -1434,7 +1487,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-gale-step', 'm-gale-cut'], ai: 'melee', traits: [], xp: 50
     },
     'null-warden': {
-      name: 'Zelador Nulo', family: 'Guarda do Coração', element: 'neutro', dungeonId: 'heartbreak',
+      name: 'Zelador Nulo', family: 'Guarda do Coração', element: 'neutro', dungeonId: 'brokenheart',
       description: 'O funcionário que sobrou: um vulto cinzento de avental, sem elemento nenhum, que apaga proteções alheias e remenda as dos irmãos. Nenhum clima o ajuda; nenhum clima o atrapalha.',
       flavor: 'A resposta do Coração para quem se escondeu atrás de escudos.',
       hp: 100, pa: 6, pp: 3, initiative: 44, dodge: 14, lock: 22,
@@ -1442,7 +1495,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-null-hush', 'm-null-mend'], ai: 'support', traits: [], xp: 54
     },
     'mirror-twin': {
-      name: 'Gêmeo-Espelho', family: 'Guarda do Coração', element: 'neutro', dungeonId: 'heartbreak',
+      name: 'Gêmeo-Espelho', family: 'Guarda do Coração', element: 'neutro', dungeonId: 'brokenheart',
       description: 'Um caco de espelho do tamanho de uma pessoa que anda de lado e mostra, com um turno de atraso, a sua própria silhueta batendo em você. Quebrá-lo só cria mais superfícies refletoras.',
       flavor: 'Bater com força é a pior ideia disponível.',
       hp: 110, pa: 5, pp: 3, initiative: 40, dodge: 18, lock: 20,
@@ -1451,7 +1504,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'split', monsterId: 'mirror-sliver', count: 2 }], xp: 58
     },
     'mirror-sliver': {
-      name: 'Estilha-Espelho', family: 'Guarda do Coração', element: 'neutro', dungeonId: 'heartbreak',
+      name: 'Estilha-Espelho', family: 'Guarda do Coração', element: 'neutro', dungeonId: 'brokenheart',
       description: 'Um caco menor, mais afiado, com metade do seu rosto ainda preso na superfície.',
       flavor: 'Ao se despedaçar, corta quem está perto.',
       hp: 36, pa: 3, pp: 3, initiative: 52, dodge: 16, lock: 10,
@@ -1461,7 +1514,7 @@ JOGO.DATA = JOGO.DATA || {};
       summonOnly: true, xp: 5
     },
     'weather-mote': {
-      name: 'Mote do Tempo', family: 'Guarda do Coração', element: 'ar', dungeonId: 'heartbreak',
+      name: 'Mote do Tempo', family: 'Guarda do Coração', element: 'ar', dungeonId: 'brokenheart',
       description: 'Uma bolinha de ar comprimido do tamanho de um punho, girando devagar, com um pedacinho de céu velho preso dentro. É o que sobrou do clima do mundo antigo — e ele brinca com isso.',
       flavor: 'GIMMICK: ele muda o clima da sala sozinho. Sua escolha elemental vira sorteio.',
       hp: 70, pa: 6, pp: 4, initiative: 74, dodge: 32, lock: 6,
@@ -1469,7 +1522,7 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-turn-rain', 'm-turn-drought', 'm-turn-gale'], ai: 'ranged', traits: [], xp: 46
     },
     'heartroot': {
-      name: 'Raiz-do-Coração', family: 'Guarda do Coração', element: 'terra', dungeonId: 'heartbreak',
+      name: 'Raiz-do-Coração', family: 'Guarda do Coração', element: 'terra', dungeonId: 'brokenheart',
       description: 'Uma raiz grossa que saiu da parede e atravessou o salão para abraçar o Coração e mantê-lo colado. Falhou. Continua tentando, e agarra qualquer coisa que passe perto.',
       flavor: 'Enraizada de verdade: não empurre, corte.',
       hp: 88, pa: 6, pp: 1, initiative: 26, dodge: 2, lock: 36,
@@ -1478,7 +1531,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'pushImmune' }], xp: 46
     },
     'boss-riftheart': {
-      name: 'O Coração Partido', family: 'Guarda do Coração', element: 'neutro', dungeonId: 'heartbreak',
+      name: 'O Coração Partido', family: 'Guarda do Coração', element: 'neutro', dungeonId: 'brokenheart',
       description: 'O último Coração do mundo enterrado, rachado em quatro quartos que ainda batem fora de compasso — um de brasa, um d\'água, um de pedra, um de ar. Cada batida joga a sala inteira para um clima diferente. Ele não guarda o Fecho: ele É o que sobrou do céu, e está morrendo alto.',
       flavor: 'GIMMICK — AS QUATRO ESTAÇÕES: cada turno ele bate um quarto diferente e TROCA O CLIMA junto com o golpe. O elemento que te curava passa a te matar de 5 em 5 PV. Vencer é jogar com o clima do inimigo — e cerzir a fenda dele antes que ele cerza.',
       hp: 600, pa: 10, pp: 3, initiative: 70, dodge: 18, lock: 55,
@@ -1507,38 +1560,69 @@ JOGO.DATA = JOGO.DATA || {};
       traits: [{ type: 'explodeOnDeath', element: 'terra', damage: 10, radius: 1 }],
       summonOnly: true, xp: 0
     },
-    'flame-familiar': {
-      name: 'Cria de Brasa', family: 'Rebanho do Invocador', element: 'fogo', dungeonId: null,
-      description: 'Um bichinho de carvão aceso que anda em círculos ao redor de quem o chamou, cuspindo fogo em quem chegar perto demais.',
-      flavor: 'Aquece as mãos e o inimigo.',
-      hp: 34, pa: 4, pp: 4, initiative: 62, dodge: 20, lock: 8,
-      resists: { fogo: 25, agua: -25 },
-      spells: ['m-familiar-ember'], ai: 'melee', traits: [], summonOnly: true, xp: 0
+    // --- Invocações do INVOCADOR (ids fixados pelo Criativo Classes) --------
+    'sum-familiar': {
+      name: 'Familiar', family: 'Rebanho do Invocador', element: 'neutro', dungeonId: null,
+      description: 'Um bicho pequeno e sem nome que o invocador chama desde o primeiro dia: quatro patas, dentes tortos e uma lealdade que ninguém pediu. Corpo a mais para morder, tancar e negar passagem.',
+      flavor: 'Ele nunca diz o nome do bicho. Diz que nome é compromisso.',
+      hp: 40, pa: 3, pp: 3, initiative: 50, dodge: 14, lock: 14,
+      resists: { neutro: 10 },
+      spells: ['m-sum-familiar-bite'], ai: 'melee', traits: [], summonOnly: true, xp: 0
     },
-    'tide-familiar': {
-      name: 'Cria de Maré', family: 'Rebanho do Invocador', element: 'agua', dungeonId: null,
-      description: 'Uma bolha d\'água com dois olhos calmos que flutua atrás do invocador e borrifa cura em quem sangra.',
-      flavor: 'Não bate em ninguém. Nunca precisou.',
-      hp: 32, pa: 4, pp: 3, initiative: 48, dodge: 18, lock: 6,
-      resists: { fogo: -10, agua: 25 },
-      spells: ['m-familiar-tide'], ai: 'support', traits: [], summonOnly: true, xp: 0
+    'sum-ember-hound': {
+      name: 'Cão de Brasa', family: 'Rebanho do Invocador', element: 'fogo', dungeonId: null,
+      description: 'Um cão de carvão aceso, magro e rápido, com uma costura de fogo correndo do focinho ao rabo. Morde quente e, quando cai, devolve a última brasa em quem estiver por perto.',
+      flavor: 'Abana o rabo. O rabo acende o chão.',
+      hp: 48, pa: 4, pp: 5, initiative: 72, dodge: 24, lock: 10,
+      resists: { fogo: 30, agua: -25 },
+      spells: ['m-sum-hound-bite'], ai: 'melee',
+      traits: [{ type: 'explodeOnDeath', element: 'fogo', damage: 20, radius: 1 }],
+      summonOnly: true, xp: 0
     },
-    'stone-familiar': {
-      name: 'Cria de Pedra', family: 'Rebanho do Invocador', element: 'terra', dungeonId: null,
-      description: 'Um seixo do tamanho de um cachorro, com dois olhinhos e uma testa muito dura. Fica entre o invocador e o problema.',
-      flavor: 'Ocupa a célula que você não quer que ninguém ocupe.',
-      hp: 46, pa: 3, pp: 2, initiative: 26, dodge: 4, lock: 24,
-      resists: { terra: 25, ar: -15 },
-      spells: ['m-familiar-stone'], ai: 'melee',
+    'sum-magma-colossus': {
+      name: 'Colosso de Magma', family: 'Rebanho do Invocador', element: 'fogo', dungeonId: null,
+      description: 'Quatro metros de rocha derretida presa numa forma que lembra vagamente um corpo. Anda devagar porque cada passo abre uma fissura, e o calor que ele emana seca a sala inteira.',
+      flavor: 'O Coração do Fecho de Brasa tem um irmão mais velho. (Invocação de nível 30.)',
+      hp: 160, pa: 5, pp: 2, initiative: 30, dodge: 0, lock: 44,
+      resists: { fogo: 45, agua: -30, terra: 20 },
+      spells: ['m-sum-colossus-smash', 'm-sum-colossus-eruption'], ai: 'melee',
+      traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.4, power: 30 }],
+      summonOnly: true, xp: 0
+    },
+    'sum-tide-nymph': {
+      name: 'Ninfa da Maré', family: 'Rebanho do Invocador', element: 'agua', dungeonId: null,
+      description: 'Uma silhueta de água limpa, do tamanho de uma criança, que flutua um palmo acima do chão e vai direto até quem está sangrando. Não ataca nunca; não é para isso que foi chamada.',
+      flavor: 'Ela nunca fala. Só olha para quem está sangrando e resolve.',
+      hp: 44, pa: 5, pp: 3, initiative: 56, dodge: 20, lock: 6,
+      resists: { fogo: -15, agua: 30 },
+      spells: ['m-sum-nymph-mend', 'm-sum-nymph-veil'], ai: 'support', traits: [], summonOnly: true, xp: 0
+    },
+    'sum-stone-sentinel': {
+      name: 'Sentinela de Pedra', family: 'Rebanho do Invocador', element: 'terra', dungeonId: null,
+      description: 'Um bloco de rocha vertical com dois sulcos por olhos, plantado onde o invocador mandar. Lenta, dura e teimosa: existe para que um corredor deixe de ser corredor.',
+      flavor: 'Fica onde foi posta. É a coisa mais confiável do mundo enterrado.',
+      hp: 90, pa: 3, pp: 1, initiative: 16, dodge: 0, lock: 38,
+      resists: { fogo: 10, terra: 35, ar: -15 },
+      spells: ['m-sum-sentinel-slam', 'm-sum-sentinel-guard'], ai: 'melee',
       traits: [{ type: 'pushImmune' }], summonOnly: true, xp: 0
     },
-    'gale-familiar': {
-      name: 'Cria de Vento', family: 'Rebanho do Invocador', element: 'ar', dungeonId: null,
-      description: 'Um redemoinho do tamanho de um gato que nunca encosta no chão e empurra tudo um pouquinho para o lado.',
-      flavor: 'Reorganiza a sala sem pedir licença.',
-      hp: 30, pa: 4, pp: 5, initiative: 72, dodge: 30, lock: 4,
-      resists: { terra: -15, ar: 25 },
-      spells: ['m-familiar-gale'], ai: 'melee', traits: [], summonOnly: true, xp: 0
+    'sum-mountain-golem': {
+      name: 'Golem da Montanha', family: 'Rebanho do Invocador', element: 'terra', dungeonId: null,
+      description: 'Uma encosta inteira que concordou em levantar e dar uns passos. Tem árvores mortas nas costas e um veio de água correndo pelo ombro. Nada no mundo enterrado é mais duro do que ele.',
+      flavor: 'Ele não invocou a montanha. Só perguntou se ela topava. (Invocação de nível 30.)',
+      hp: 220, pa: 5, pp: 2, initiative: 20, dodge: 0, lock: 50,
+      resists: { fogo: 20, agua: 15, terra: 50, ar: -15 },
+      spells: ['m-sum-golem-fist', 'm-sum-golem-quake'], ai: 'melee',
+      traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.4, power: 30 }],
+      summonOnly: true, xp: 0
+    },
+    'sum-storm-falcon': {
+      name: 'Falcão da Tormenta', family: 'Rebanho do Invocador', element: 'ar', dungeonId: null,
+      description: 'Um falcão de penas cinzentas com relâmpago velho preso entre elas. Voa em círculos apertados sobre a batalha e desce quando decide, não quando mandam.',
+      flavor: 'Não existe céu para ele voar. Voa assim mesmo, de raiva.',
+      hp: 40, pa: 4, pp: 6, initiative: 88, dodge: 34, lock: 6,
+      resists: { terra: -15, ar: 30 },
+      spells: ['m-sum-falcon-strike', 'm-sum-falcon-dive'], ai: 'melee', traits: [], summonOnly: true, xp: 0
     }
   });
 

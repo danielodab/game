@@ -63,16 +63,15 @@ var JOGO = (typeof window !== 'undefined')
   }
   Fusion.pairKey = pairKey;
 
+  // A chave de MISTURA respeita a ORDEM DOS DOIS FUNDIDOS (A, B) — nunca a
+  // ordem alfabética. `DATA.fusionBlends` traz as 15 chaves canônicas MAIS as
+  // 10 espelhadas (com `elements` invertido), justamente para que '@A' e '@B'
+  // resolvam no elemento certo qualquer que seja a ordem. Só a chave de CLASSES
+  // é alfabética (contrato §4).
   // "Se qualquer fundido tiver element === 'neutro', a mistura usada é a de
-  //  chave com neutro" (contrato §4).
+  //  chave com neutro": satisfeito automaticamente, pois o par carrega o neutro.
   function normalizeElemPair(eA, eB) {
-    eA = eA || 'neutro';
-    eB = eB || 'neutro';
-    if (eA === 'neutro' || eB === 'neutro') {
-      var other = (eA === 'neutro') ? eB : eA;
-      return ['neutro', other];
-    }
-    return [eA, eB];
+    return [eA || 'neutro', eB || 'neutro'];
   }
   Fusion.normalizeElemPair = normalizeElemPair;
 
@@ -138,8 +137,13 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   }
 
+  // "poder escala pelo tier e pelo nível da fusão" (contrato §4). Os números
+  // autorais de `mechanic` JÁ crescem com o tier, então o tier entra aqui só
+  // como um tempero (1%/tier) e o peso real fica com o nível da fusão (3%/nível)
+  // — é o que faz uma forma tier 0 valer a pena numa fusão de nível 30 sem
+  // contar o tier duas vezes.
   Fusion.powerFactor = function (tier, level) {
-    return (100 + (tier || 0) * 5 + (level || 0) * 3) / 100;
+    return (100 + (level || 0) * 3 + (tier || 0) * 1) / 100;
   };
 
   Fusion.spellsFor = function (classPair, elemPair, level) {
@@ -152,7 +156,7 @@ var JOGO = (typeof window !== 'undefined')
     var elements = blend.elements && blend.elements.length ? blend.elements : norm;
     var K = splitKey(classPair);
     var kKey = K.length > 1 ? pairKey(K[0], K[1]) : String(classPair);
-    var eKey = pairKey(norm[0], norm[1]);
+    var eKey = norm[0] + '+' + norm[1];      // ordem dos fundidos, não alfabética
     var lv = level || 0;
 
     var out = [];
@@ -167,7 +171,10 @@ var JOGO = (typeof window !== 'undefined')
       for (i = 0; i < mech.length; i++) {
         effects.push(scaleEffect(resolveTokens(mech[i], elements), factor));
       }
-      var rider = blend.rider || [];
+      // Formas de apoio (alvo aliado/próprio) usam `blend.riderSupport`: o rider
+      // ofensivo da mistura cairia sobre o próprio aliado curado.
+      var rider = (form.riderMode === 'support' && blend.riderSupport)
+        ? blend.riderSupport : (blend.rider || []);
       for (i = 0; i < rider.length; i++) {
         effects.push(scaleEffect(resolveTokens(rider[i], elements), factor));
       }
@@ -275,7 +282,7 @@ var JOGO = (typeof window !== 'undefined')
     var kKey = Fusion.pairKey(classA, classB);
     var elemPair = normalizeElemPair(
       (E().unitElements(a) || [])[0], (E().unitElements(b) || [])[0]);
-    var eKey = Fusion.pairKey(elemPair[0], elemPair[1]);
+    var eKey = elemPair[0] + '+' + elemPair[1];   // ordem A,B (chaves espelhadas)
     var level = Math.floor(((a.level || 1) + (b.level || 1)) / 2);
 
     // ---- feitiços compostos

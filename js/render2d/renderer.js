@@ -435,12 +435,6 @@ var JOGO = (typeof window !== 'undefined')
     vignetteLayer.addChild(weatherTint);
 
     vigGfx = new P.Graphics();
-    var steps = 16;
-    for (var i = 0; i < steps; i++) {
-      var k = i / steps;
-      vigGfx.beginFill(0x000000, 0.055 * k * k)
-        .drawRect(-W * 0.5 * k * 0.0 + (W * 0.5) * k * 0, 0, W, H).endFill();
-    }
     // moldura escura nas bordas (barato: 4 faixas em degradê discreto)
     var band = Math.max(48, Math.min(W, H) * 0.22);
     for (var j = 0; j < 10; j++) {
@@ -971,6 +965,7 @@ var JOGO = (typeof window !== 'undefined')
     sh.anchor.set(0.5, 0.5);
     sh.width = TW * 0.62 * (u.boss ? 1.5 : (u.kind === 'pet' ? 0.7 : 1));
     sh.height = TH * 0.62 * (u.boss ? 1.5 : (u.kind === 'pet' ? 0.7 : 1));
+    sh.__sx = sh.scale.x; sh.__sy = sh.scale.y;
     sh.alpha = 0.55;
     c.addChild(sh); c.__shadow = sh;
 
@@ -1057,9 +1052,11 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (c.__flash) c.__flash.alpha = Math.min(1, v.flash);
     if (c.__shadow) {
-      c.__shadow.alpha = 0.5 * alpha * (1 - Math.min(1, (v.z || 0) / 40));
-      c.__shadow.position.y = -(v.z || 0) * 0 ;
+      // o contêiner já subiu z px; a sombra desce de volta para o chão
+      c.__shadow.alpha = 0.5 * alpha * (1 - Math.min(0.7, (v.z || 0) / 50));
       c.__shadow.position.y = (v.z || 0);
+      var shrink = 1 - Math.min(0.35, (v.z || 0) / 90);
+      c.__shadow.scale.set(c.__shadow.__sx * shrink, c.__shadow.__sy * shrink);
     }
 
     // barra de vida + escudo + marcadores (só redesenha quando muda)
@@ -1215,17 +1212,18 @@ var JOGO = (typeof window !== 'undefined')
     g.lineStyle(0);
   }
 
-  function rebuildOverlays(st) {
-    ensureOverlayNodes();
-    var g = game(), en = engine();
-    ovBase.clear(); ovAoe.clear(); ovActive.clear();
+  // eventos de terreno: contêiner PRÓPRIO, reconstruído só quando a lista muda
+  // (não a cada hover) — PIXI.Text é caro de criar.
+  var evSig = '';
+  function rebuildTileEvents(st) {
+    var evs = st.tileEventsActive || st.tileEvents || [];
+    var sig = '';
+    for (var i = 0; i < evs.length; i++) sig += evs[i].x + ',' + evs[i].y + ':' + (evs[i].eventId || evs[i].id) + ';';
+    if (sig === evSig) return;
+    evSig = sig;
     for (var q = ovEventNodes.length - 1; q >= 0; q--) ovEventNodes[q].destroy({ children: true });
     ovEventNodes.length = 0;
     ovEventsBox.removeChildren();
-    ovPulse = null;
-
-    // 1) eventos de terreno no chão (sempre visíveis, mesmo em turno inimigo)
-    var evs = st.tileEventsActive || st.tileEvents || [];
     var D = DATA();
     for (var e = 0; e < evs.length; e++) {
       var ev = evs[e];
@@ -1237,6 +1235,17 @@ var JOGO = (typeof window !== 'undefined')
       ovEventsBox.addChild(node);
       ovEventNodes.push(node);
     }
+  }
+
+  var ppLabel = null;
+  function rebuildOverlays(st) {
+    ensureOverlayNodes();
+    var g = game(), en = engine();
+    ovBase.clear(); ovAoe.clear(); ovActive.clear();
+    ovPulse = null;
+    if (ppLabel) ppLabel.visible = false;
+    rebuildTileEvents(st);
+    var D = DATA();
 
     if (!st || st.phase !== 'playing') return;
     var active = safe(function () { return en && en.activeUnit ? en.activeUnit(st) : null; }, null);
@@ -1299,14 +1308,18 @@ var JOGO = (typeof window !== 'undefined')
           ovBase.beginFill(0x0e1218, 0.78);
           ovBase.drawRoundedRect(pend.x - 13, pend.y - 10, 26, 18, 6);
           ovBase.endFill();
-          var lbl = new P.Text(path.length + ' PP', {
-            fontFamily: 'Trebuchet MS, Verdana, sans-serif', fontSize: 11, fontWeight: '700',
-            fill: 0xfff2c8, stroke: 0x14100c, strokeThickness: 3
-          });
-          lbl.anchor.set(0.5); lbl.position.set(pend.x, pend.y - 1);
-          lbl.resolution = Math.min(2, DPR);
-          ovEventsBox.addChild(lbl);
-          ovEventNodes.push(lbl);
+          if (!ppLabel) {
+            ppLabel = new P.Text('', {
+              fontFamily: 'Trebuchet MS, Verdana, sans-serif', fontSize: 11, fontWeight: '700',
+              fill: 0xfff2c8, stroke: 0x14100c, strokeThickness: 3
+            });
+            ppLabel.anchor.set(0.5);
+            ppLabel.resolution = Math.min(2, DPR);
+            overlayLayer.addChild(ppLabel);
+          }
+          ppLabel.text = path.length + ' PP';
+          ppLabel.position.set(pend.x, pend.y - 1);
+          ppLabel.visible = true;
         }
       }
     } else {
@@ -1366,20 +1379,24 @@ var JOGO = (typeof window !== 'undefined')
     glow.tint = col; glow.alpha = 0.32; glow.blendMode = P.BLEND_MODES.ADD;
     c.addChild(glow); c.__glow = glow;
     var g = new P.Graphics();
-    g.lineStyle(2, col, 0.9);
-    var k = 0.34;
+    var k = 0.42;
     var a = iso(-k, -k), b = iso(k, -k), d = iso(k, k), e = iso(-k, k);
-    g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(d.x, d.y); g.lineTo(e.x, e.y); g.closePath();
-    g.beginFill(col, 0.18);
+    g.beginFill(col, 0.26);
     g.drawPolygon([a.x, a.y, b.x, b.y, d.x, d.y, e.x, e.y]);
     g.endFill();
+    g.lineStyle(2.4, col, 0.95);
+    g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(d.x, d.y); g.lineTo(e.x, e.y); g.closePath();
+    g.lineStyle(0);
+    // pedestal escuro atrás do ícone (legibilidade em qualquer chão)
+    g.beginFill(0x0d1016, 0.65); g.drawRoundedRect(-13, -32, 26, 26, 8); g.endFill();
+    g.lineStyle(1.6, col, 0.8); g.drawRoundedRect(-13, -32, 26, 26, 8); g.lineStyle(0);
     c.addChild(g);
     var icon = def.icon || ({ buff: '⚡', mystery: '?', portal: '@', drain: '×', fountain: '+' }[kind]);
     var tx = new P.Text(String(icon), {
-      fontFamily: 'Segoe UI Emoji, Verdana, Arial, sans-serif', fontSize: 18,
+      fontFamily: 'Segoe UI Emoji, Verdana, Arial, sans-serif', fontSize: 20,
       fontWeight: '700', fill: 0xffffff, stroke: 0x16101c, strokeThickness: 3
     });
-    tx.anchor.set(0.5, 0.5); tx.position.set(0, -13);
+    tx.anchor.set(0.5, 0.5); tx.position.set(0, -19);
     tx.resolution = Math.min(2, DPR);
     c.addChild(tx); c.__icon = tx;
     return c;
@@ -1406,7 +1423,7 @@ var JOGO = (typeof window !== 'undefined')
     var p = (def && def.palette) || {};
     var base = {
       calmo: { tint: '#ffffff', tintA: 0.0, fog: '#0a0d10' },
-      chuva: { tint: '#4a7cb0', tintA: 0.40, fog: '#0a1420' },
+      chuva: { tint: '#5a86b4', tintA: 0.34, fog: '#0a1420' },
       estiagem: { tint: '#ffb14a', tintA: 0.26, fog: '#2a1a08' },
       vendaval: { tint: '#9fd0c0', tintA: 0.18, fog: '#101a18' },
       tremor: { tint: '#b08a58', tintA: 0.26, fog: '#181208' }
@@ -1769,7 +1786,8 @@ var JOGO = (typeof window !== 'undefined')
       n.destroy({ children: true });
     }
     unitNodes = {};
-    boardKey = null; ovSig = '';
+    boardKey = null; ovSig = ''; evSig = '';
+    weather.id = '';
     if (st && st.grid) {
       buildBoard(st);
       boardKey = roomKey(st);
@@ -1987,7 +2005,7 @@ var JOGO = (typeof window !== 'undefined')
       for (var e = 0; e < ovEventNodes.length; e++) {
         var n = ovEventNodes[e];
         if (n.__glow) n.__glow.alpha = 0.20 + (0.5 + Math.sin(nowT * 3 + e) * 0.5) * 0.26;
-        if (n.__icon) n.__icon.position.y = -13 + Math.sin(nowT * 2.6 + e) * 2.4;
+        if (n.__icon) n.__icon.position.y = -19 + Math.sin(nowT * 2.6 + e) * 2.4;
       }
     }
 

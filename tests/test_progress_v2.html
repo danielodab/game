@@ -1054,12 +1054,13 @@
     ok(vistos['epico'] > vistos['raro'], 'épico dá mais XP que raro');
   });
 
-  t('calabouço sem cardDrops nem cartas elegíveis não derruba nada', function () {
+  t('cardDrops vazio e calabouço inexistente não derrubam nada', function () {
     fresh();
     var total = 0;
     for (var i = 0; i < 300; i++) total += P.rollCards('t-dung-vazio', 2, 1).length;
-    ok(total >= 0, 'não pode lançar exceção');
+    eq(total, 0, 'cardDrops: [] é decisão explícita de não derrubar carta');
     eq(P.rollCards('calabouço-fantasma', 2, 1).length, 0, 'calabouço inexistente');
+    eq(P.state.cards.length, 0, 'nada foi registrado no histórico');
   });
 
   // =========================================================================
@@ -1599,6 +1600,39 @@
     ok(G.isPlayerTurn(), 'a IA devolveu o turno ao herói em ' + voltas + ' atualizações');
   });
 
+  t('com Renderer ocupado a IA não age', function () {
+    fresh();
+    var ocupado = true;
+    JOGO.Renderer = { isBusy: function () { return ocupado; } };
+    try {
+      G.startRun([TANK], 't-dung-0');
+      G.endTurn();
+      E.calls.move = 0; E.calls.endTurn = 0;
+      G.update(1); G.update(1); G.update(1);
+      eq(E.calls.move, 0, 'nada aconteceu enquanto o Renderer estava ocupado');
+      eq(E.calls.endTurn, 0, 'nem o fim de turno');
+    } finally { delete JOGO.Renderer; }
+  });
+
+  t('com Renderer livre a IA executa 1 ação por atualização', function () {
+    fresh();
+    var planoAntigo = JOGO.AI.planTurn;
+    JOGO.AI.planTurn = function () { return [{ action: 'move', x: 7, y: 7 }, { action: 'end' }]; };
+    JOGO.Renderer = { isBusy: function () { return false; } };
+    try {
+      G.startRun([TANK], 't-dung-0');
+      G.endTurn();
+      E.calls.move = 0; E.calls.endTurn = 0;
+      G.update(1);
+      eq(E.calls.move, 0, 'a primeira atualização só busca o plano');
+      G.update(1);
+      eq(E.calls.move, 1, 'uma ação por atualização');
+      eq(E.calls.endTurn, 0, 'ainda não encerrou');
+      G.update(1);
+      eq(E.calls.endTurn, 1, 'encerrou o turno na atualização seguinte');
+    } finally { JOGO.AI.planTurn = planoAntigo; delete JOGO.Renderer; }
+  });
+
   t('erro dentro da UI não derruba o Game', function () {
     var backup = JOGO.UI;
     JOGO.UI = { showScreen: function () { throw new Error('UI explodiu'); } };
@@ -1626,6 +1660,45 @@
     var agora = localStorage.getItem(SAVE_KEY);
     eq(agora, realSave, 'save v2 idêntico ao original');
     eq(localStorage.getItem(LEGACY_KEY), realLegacy, 'save v1 idêntico ao original');
+  });
+
+  // =========================================================================
+  section('16 — Storage negado (file:// e janela privada)');
+
+  // roda DEPOIS da devolução do save real: se o navegador não deixar restaurar
+  // o acesso a localStorage, o save do jogador já está a salvo.
+  t('com localStorage negado tudo continua funcionando em memória', function () {
+    if (!window.localStorage) { ok(true, 'ambiente já é sem storage'); return; }
+    var negado = false;
+    var desc = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    try {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get: function () { throw new Error('acesso negado (teste)'); }
+      });
+      negado = true;
+    } catch (e) { /* navegador não deixa simular */ }
+    if (!negado) { ok(true, 'não foi possível simular a negação de storage'); return; }
+    try {
+      P.state = null;
+      P.load();
+      eq(P.state.unlockedClasses.length, 2, 'estado novo em memória');
+      eq(P.save(), false, 'save avisa que não gravou');
+      P.addXp(TANK, 200);
+      eq(P.hero(TANK).level, 3, 'progressão continua na memória (200 xp = nível 3)');
+      giveAndEquip(TANK, 't-peito-vida');
+      eq(P.hero(TANK).items.vida, 't-peito-vida', 'equipar funciona sem storage');
+      P.reset();
+      eq(P.hero(TANK).level, 1, 'reset funciona sem storage');
+    } finally {
+      // devolve o acesso nativo exatamente como estava
+      if (desc) Object.defineProperty(window, 'localStorage', desc);
+      else delete window.localStorage;
+    }
+    ok(!!window.localStorage, 'acesso a localStorage foi devolvido');
+    localStorage.setItem('soterra-teste-tmp', 'ok');
+    eq(localStorage.getItem('soterra-teste-tmp'), 'ok', 'storage voltou a funcionar');
+    localStorage.removeItem('soterra-teste-tmp');
   });
 
   // ------------------------------------------------------------------ resumo

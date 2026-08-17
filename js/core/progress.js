@@ -60,8 +60,10 @@ var JOGO = (typeof window !== 'undefined')
  * [D9] CARTAS DE PERSONAGEM. Só caem na sala do CHEFE (última sala do
  *      calabouço; sem dados, `roomIndex >= 2`). Piscina = `dungeon.cardDrops`
  *      cruzado com `DATA.cards` (respeita `minDungeon` contra a `order` do
- *      calabouço e descarta `dropWeight <= 0`); sem `cardDrops` usável, cai em
- *      todas as cartas elegíveis. Peso efetivo = `entry.weight *
+ *      calabouço e descarta `dropWeight <= 0`). Calabouço desconhecido não
+ *      derruba nada; `cardDrops` AUSENTE (dado ainda por escrever) cai na
+ *      piscina geral, `cardDrops: []` é decisão explícita de não derrubar
+ *      carta. Peso efetivo = `entry.weight *
  *      card.dropWeight` — classe mais forte tem `dropWeight` menor, logo carta
  *      mais rara, exatamente como o contrato pede.
  *      Chance de sair carta: 60% (solo) / 50% (dupla) / 42% (trio) — mesma
@@ -442,11 +444,14 @@ var JOGO = (typeof window !== 'undefined')
    * [{classId, name, rarity, duplicate, unlocked, xpBonus}] (0 ou 1 carta). */
   Progress.rollCards = function (dungeonId, roomIndex, partySize) {
     if (!Progress.state) Progress.load();
+    var dungeon = dungeonDef(dungeonId);
+    if (!dungeon) return [];                                    // calabouço desconhecido
     if (!isBossRoom(dungeonId, roomIndex)) return [];
 
     var order = dungeonOrder(dungeonId);
-    var dungeon = dungeonDef(dungeonId);
-    var entries = (dungeon && isArray(dungeon.cardDrops)) ? dungeon.cardDrops : null;
+    // `cardDrops` ausente = dado ainda não escrito (usa a piscina geral);
+    // `cardDrops: []` = decisão explícita de não derrubar carta nenhuma.
+    var entries = isArray(dungeon.cardDrops) ? dungeon.cardDrops : null;
     var pool = [], i, classId, card, w;
 
     if (entries) {
@@ -461,7 +466,7 @@ var JOGO = (typeof window !== 'undefined')
         if (w > 0) pool.push({ id: classId, w: w });
       }
     }
-    if (!pool.length) {  // sem cardDrops utilizável: todas as cartas elegíveis
+    if (!pool.length && entries === null) {  // sem `cardDrops`: todas as cartas elegíveis
       var all = D().cards || {};
       for (classId in all) {
         if (!all.hasOwnProperty(classId)) continue;
@@ -473,7 +478,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (!pool.length) return [];
 
-    var size = Math.max(1, Math.min(3, num(partySize, 3)));
+    var size = Math.max(1, Math.min(3, Math.round(num(partySize, 3))));
     if (Math.random() >= CARD_CHANCE[size]) return [];
 
     var chosen = pickWeighted(pool);

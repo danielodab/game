@@ -309,14 +309,9 @@
         mechanic: [{ type: 'damage', element: '@A', min: 40, max: 40 }],
         description: 'o fim', fxShape: 'nova' }
     ];
-    D.fusionBlends['agua+ar'] = { affix: 'Salgado', elements: ['ar', 'agua'],
-      rider: [{ type: 'poison', element: 'agua', min: 3, max: 3, duration: 2 }],
-      palette: {}, fxKey: 'fx-salgado' };
-    D.fusionBlends['neutro+neutro'] = { affix: 'Bruto', elements: ['neutro', 'neutro'],
-      rider: [{ type: 'buff', stat: 'power', value: 5, duration: 2 }],
-      palette: {}, fxKey: 'fx-bruto' };
-    D.fusionBlends['ar+neutro'] = { affix: 'Rascante', elements: ['ar', 'neutro'],
-      rider: [], palette: {}, fxKey: 'fx-rasc' };
+    // As misturas de teste NÃO são instaladas aqui: elas sombreariam as reais
+    // (as chaves são pares de elemento, compartilhados). São instaladas e
+    // restauradas em volta da seção de Fusão — ver useTestBlends/restoreBlends.
 
     // ---- calabouço de teste
     D.dungeons.push({
@@ -478,6 +473,42 @@
   }
   function manh(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
 
+  // Misturas de teste: instaladas só durante a seção de Fusão (as chaves são
+  // pares de ELEMENTO e colidiriam com as misturas reais do Criativo Fusão).
+  var BLEND_BACKUP = null;
+  function blend(affix, els, rider, riderSupport, fx) {
+    return { id: els[0] + '+' + els[1], affix: affix, elements: els.slice(),
+             description: 'teste', rider: rider, riderSupport: riderSupport,
+             palette: {}, fxKey: fx };
+  }
+  function useTestBlends() {
+    if (BLEND_BACKUP) return;
+    var poison = [{ type: 'poison', element: 'agua', min: 3, max: 3, duration: 2 }];
+    var mend = [{ type: 'regen', min: 3, max: 3, duration: 2 }];
+    var mine = {
+      'ar+agua': blend('Salgado', ['ar', 'agua'], poison, mend, 'fx-salgado'),
+      'agua+ar': blend('Salgado', ['agua', 'ar'], poison, mend, 'fx-salgado'),
+      'ar+neutro': blend('Rascante', ['ar', 'neutro'], [], [], 'fx-rasc'),
+      'neutro+ar': blend('Rascante', ['neutro', 'ar'], [], [], 'fx-rasc'),
+      'neutro+neutro': blend('Bruto', ['neutro', 'neutro'],
+        [{ type: 'buff', stat: 'power', value: 5, duration: 2 }],
+        [{ type: 'buff', stat: 'power', value: 5, duration: 2 }], 'fx-bruto')
+    };
+    BLEND_BACKUP = {};
+    for (var k in mine) {
+      BLEND_BACKUP[k] = D.fusionBlends[k];
+      D.fusionBlends[k] = mine[k];
+    }
+  }
+  function restoreBlends() {
+    if (!BLEND_BACKUP) return;
+    for (var k in BLEND_BACKUP) {
+      if (BLEND_BACKUP[k] === undefined) delete D.fusionBlends[k];
+      else D.fusionBlends[k] = BLEND_BACKUP[k];
+    }
+    BLEND_BACKUP = null;
+  }
+
   // ============================================================ SUITE
   function run() {
     installTestData();
@@ -507,7 +538,47 @@
       ok(!!E.spell('t-pet-bite'), 'DATA.petSpells');
       ok(!!E.spell('t-item-zap'), 'DATA.itemSpells');
       ok(E.spell('nao-existe-xyz') === null, 'id inexistente devolve null');
-      eq(E.spell('t-item-zap').element, 'ar', 'feitiço de item íntegro');
+      eq(E.spell('t-item-zap').effects[0].element, 'ar', 'feitiço de item íntegro');
+    });
+
+    t('Engine.spell: resolve também DATA.fusionSpells (payloads de fusão)', function () {
+      if (!D.fusionSpells) { notes.push('DATA.fusionSpells ausente: teste pulado.'); return; }
+      var ids = Object.keys(D.fusionSpells);
+      ok(ids.length > 0, 'há payloads de fusão');
+      for (var k = 0; k < ids.length; k++) {
+        ok(!!E.spell(ids[k]), 'resolve ' + ids[k]);
+      }
+      ok(!!E.spell('fus-turret-shot'), 'feitiço do invocado da fusão');
+    });
+
+    t('Engine.monster: resolve DATA.monsters e DATA.fusionSummons', function () {
+      ok(!!E.monster('t-dummy'), 'monstro de teste');
+      ok(E.monster('nao-existe-xyz') === null, 'id inexistente devolve null');
+      if (!D.fusionSummons) { notes.push('DATA.fusionSummons ausente: parte do teste pulada.'); return; }
+      var ids = ['fus-arrow-turret', 'fus-hex-effigy', 'fus-bloom-warden',
+                 'fus-shade-twin', 'fus-bulwark-idol'];
+      for (var k = 0; k < ids.length; k++) {
+        var m = E.monster(ids[k]);
+        ok(!!m, 'resolve ' + ids[k]);
+        ok(!!m.stats && typeof m.stats.pp === 'number', ids[k] + ' tem stats com pp');
+      }
+    });
+
+    t('efeito summon: aceita invocados de fusão (DATA.fusionSummons)', function () {
+      if (!D.fusionSummons) { return; }
+      sp('t-fus-summon', { range: { min: 1, max: 6, line: false, los: false },
+        needsEmptyTile: true, effects: [{ type: 'summon', monsterId: 'fus-arrow-turret' }] });
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.spells.push('t-fus-summon');
+      var n0 = st.units.length;
+      ok(E.cast(st, h.uid, 't-fus-summon', 2, 2) === true, 'invoca a torre');
+      eq(st.units.length, n0 + 1, 'unidade criada');
+      var su = st.units[st.units.length - 1];
+      eq(su.defId, 'fus-arrow-turret', 'defId do invocado');
+      eq(su.side, 'player', 'lado do invocador');
+      eq(su.kind, 'summon', 'kind summon');
+      ok(!!E.spell(su.spells[0]), 'feitiço do invocado é resolvível');
     });
 
     t('Engine.registerSpell: feitiço em memória é resolvido por Engine.spell', function () {
@@ -886,15 +957,19 @@
     t('efeito regen: cura no início do turno da vítima e expira', function () {
       var st = arena(0, { a: 't-dummy', b: 't-dummy' });
       var h = byHero(st, 't-h1');
-      h.hp = 100;
-      E.cast(st, h.uid, 't-regen5', h.x, h.y);
-      eq(h.hp, 100, 'não cura na aplicação');
-      nextRound(st);
-      eq(h.hp, 105, '1º tique');
-      nextRound(st);
-      eq(h.hp, 110, '2º tique');
-      nextRound(st);
-      eq(h.hp, 110, 'expirou');
+      var a = byDef(st, 't-dummy', 0);
+      a.hp = 900;
+      E.cast(st, h.uid, 't-regen5', a.x, a.y);
+      eq(a.hp, 900, 'não cura na aplicação');
+      E.endTurn(st);
+      eq(a.hp, 905, '1º tique');
+      toHero(st);
+      E.endTurn(st);
+      eq(a.hp, 910, '2º tique');
+      toHero(st);                 // encerra o 2º turno da vítima => expira
+      eq(a.effects.length, 0, 'expirou');
+      E.endTurn(st);
+      eq(a.hp, 910, 'sem 3º tique');
     });
 
     t('efeito summon: herda lado, entra na iniciativa logo após o invocador', function () {
@@ -1109,7 +1184,8 @@
       var h = byHero(st, 't-h1');
       h.hp = 3;
       drain();
-      E.endTurn(st);
+      // cicla até o próximo turno do herói: o tique de clima acontece lá
+      for (var g = 0; g < 10 && st.phase === 'playing'; g++) E.endTurn(st);
       var evs = drain();
       ok(!h.alive, 'morreu pelo clima');
       ok(!!findEv(evs, 'death', function (e) { return e.uid === h.uid; }), 'evento death');
@@ -1332,14 +1408,14 @@
       var st = arena(0, { a: 't-dummy', b: 't-dummy' });
       var h = byHero(st, 't-h1');
       var d = byDef(st, 't-dummy', 0);
-      d.x = 4; d.y = 4; d.pp = 6;
+      d.x = 4; d.y = 3; d.pp = 6;
       drain();
-      ok(E.cast(st, h.uid, 't-trap', 4, 5) === true, 'arma');
+      ok(E.cast(st, h.uid, 't-trap', 4, 4) === true, 'arma (distância 6 = alcance máximo)');
       eq(st.traps.length, 1, 'armadilha no estado');
       ok(!!findEv(drain(), 'trapSet'), 'evento trapSet');
-      eq(E.trapsAt(st, 4, 5).length, 1, 'trapsAt localiza');
+      eq(E.trapsAt(st, 4, 4).length, 1, 'trapsAt localiza');
       var hp0 = d.hp;
-      ok(E.move(st, d.uid, 4, 5) === true, 'inimigo pisa');
+      ok(E.move(st, d.uid, 4, 4) === true, 'inimigo pisa');
       var evs = drain();
       ok(!!findEv(evs, 'trapTriggered', function (e) { return e.uid === d.uid; }), 'trapTriggered');
       eq(hp0 - d.hp, 30, 'dano da armadilha');
@@ -1510,31 +1586,154 @@
       return st;
     }
 
+    useTestBlends();
+
     t('Fusion.spellsFor: compõe nome, resolve @A/@B e filtra por tier <= nível', function () {
-      var out = F.spellsFor('t-alfa+t-beta', 'agua+ar', 15);
+      var out = F.spellsFor('t-alfa+t-beta', 'ar+agua', 15);
       eq(out.length, 1, 'só a forma tier 0 (a tier 20 fica de fora)');
       var s = out[0];
       eq(s.name, 'Turbilhão Salgado', 'nome = forma + afixo');
-      eq(s.id, 'fus:t-alfa+t-beta:agua+ar:0', 'id do contrato');
+      eq(s.id, 'fus:t-alfa+t-beta:ar+agua:0', 'id do contrato');
       eq(s.effects.length, 3, 'mecânica (2) + rider (1)');
       eq(s.effects[0].element, 'ar', "'@A' => elements[0]");
       eq(s.effects[1].element, 'agua', "'@B' => elements[1]");
       eq(s.effects[2].type, 'poison', 'rider da mistura');
-      // escala: fator = (100 + tier*5 + nível*3)/100 = 1.45
+      // escala: fator = (100 + nível*3 + tier*1)/100 = 1.45
       eq(s.effects[0].min, 15, '10 * 1.45 => 15');
       eq(s.effects[1].min, 9, '6 * 1.45 => 9');
       eq(s.effects[2].min, 4, 'rider 3 * 1.45 => 4');
       eq(s.fxKey, 'fx-salgado', 'fx da mistura');
-      var out30 = F.spellsFor('t-alfa+t-beta', 'agua+ar', 30);
+      var out30 = F.spellsFor('t-alfa+t-beta', 'ar+agua', 30);
       eq(out30.length, 2, 'nível 30 libera a forma tier 20');
     });
 
-    t('Fusion.spellsFor: elemento neutro força a mistura com neutro', function () {
+    t('Fusion.spellsFor: o par de ELEMENTOS respeita a ordem dos fundidos (chaves espelhadas)', function () {
+      var ab = F.spellsFor('t-alfa+t-beta', 'ar+agua', 15)[0];
+      var ba = F.spellsFor('t-alfa+t-beta', 'agua+ar', 15)[0];
+      eq(ab.effects[0].element, 'ar', 'ar+agua: @A = ar');
+      eq(ab.effects[1].element, 'agua', 'ar+agua: @B = agua');
+      eq(ba.effects[0].element, 'agua', 'agua+ar: @A = agua');
+      eq(ba.effects[1].element, 'ar', 'agua+ar: @B = ar');
+      eq(ab.id, 'fus:t-alfa+t-beta:ar+agua:0', 'id na ordem A,B');
+      eq(ba.id, 'fus:t-alfa+t-beta:agua+ar:0', 'id espelhado é outro id');
+      ok(ab.id !== ba.id, 'ids distintos por ordem elemental');
+    });
+
+    t('Fusion.spellsFor: elemento neutro usa a mistura de chave com neutro', function () {
       var out = F.spellsFor('t-alfa+t-beta', 'ar+neutro', 10);
       eq(out.length, 1, 'uma forma');
       eq(out[0].name, 'Turbilhão Rascante', 'usa a mistura com neutro');
+      eq(out[0].effects[0].element, 'ar', '@A = ar');
+      eq(out[0].effects[1].element, 'neutro', '@B = neutro');
       var both = F.spellsFor('t-alfa+t-beta', 'neutro+neutro', 10);
       eq(both[0].name, 'Turbilhão Bruto', 'neutro + neutro');
+    });
+
+    t('Fusion.spellsFor: riderMode "support" usa blend.riderSupport (não fere o aliado)', function () {
+      // usa formas de apoio de teste, com uma mistura cujo rider ofensivo mata
+      var savedForms = D.fusionForms['t-alfa+t-beta'];
+      var savedBlend = D.fusionBlends['fogo+fogo'];
+      D.fusionBlends['fogo+fogo'] = blend('Ardente', ['fogo', 'fogo'],
+        [{ type: 'damage', element: 'fogo', min: 30, max: 30 }],
+        [{ type: 'shield', value: 10, duration: 2 }], 'fx-ard');
+      D.fusionForms['t-alfa+t-beta'] = [
+        { tier: 0, formName: 'Bálsamo', paCost: 3, cooldown: 0,
+          range: { min: 0, max: 4 }, aoe: { shape: 'single', size: 0 },
+          targetSide: 'ally', riderMode: 'support',
+          mechanic: [{ type: 'heal', min: 10, max: 10 }],
+          description: 'apoio', fxShape: 'heal' },
+        { tier: 0, formName: 'Golpe', paCost: 3, cooldown: 0,
+          range: { min: 1, max: 4 }, aoe: { shape: 'single', size: 0 },
+          targetSide: 'enemy', riderMode: 'offense',
+          mechanic: [{ type: 'damage', element: '@A', min: 10, max: 10 }],
+          description: 'ataque', fxShape: 'slam' }
+      ];
+      try {
+        var out = F.spellsFor('t-alfa+t-beta', 'fogo+fogo', 10);
+        eq(out.length, 2, 'duas formas');
+        var sup = out[0], off = out[1];
+        eq(sup.name, 'Bálsamo Ardente', 'nome da forma de apoio');
+        eq(sup.effects.length, 2, 'mecânica + riderSupport');
+        eq(sup.effects[1].type, 'shield', 'usou riderSupport');
+        for (var k = 0; k < sup.effects.length; k++) {
+          ok(sup.effects[k].type !== 'damage', 'forma de apoio não carrega dano');
+        }
+        eq(off.effects[1].type, 'damage', 'forma ofensiva usou o rider normal');
+      } finally {
+        D.fusionForms['t-alfa+t-beta'] = savedForms;
+        if (savedBlend === undefined) delete D.fusionBlends['fogo+fogo'];
+        else D.fusionBlends['fogo+fogo'] = savedBlend;
+      }
+    });
+
+    t('Fusion.spellsFor: dados REAIS — riderMode support nunca injeta dano do rider', function () {
+      if (!D.fusionForms || !D.fusionBlends || !D.fusionBlends['agua+agua']) {
+        notes.push('fusions.js real ausente: teste de riderMode real pulado.');
+        return;
+      }
+      restoreBlends();                    // volta às misturas reais
+      var pairs = [], k;
+      for (k in D.fusionForms) {
+        if (k.indexOf('t-alfa') === 0) continue;
+        pairs.push(k);
+      }
+      ok(pairs.length >= 15, '15 duplas de classe reais (obtido ' + pairs.length + ')');
+      var checkedSupport = 0, checkedOffense = 0;
+      for (var p = 0; p < pairs.length; p++) {
+        var forms = D.fusionForms[pairs[p]];
+        var spells = F.spellsFor(pairs[p], 'agua+agua', 30);
+        eq(spells.length, forms.length, pairs[p] + ': todas as formas no nível 30');
+        for (var f = 0; f < forms.length; f++) {
+          var mechDmg = 0, m;
+          for (m = 0; m < (forms[f].mechanic || []).length; m++) {
+            if (forms[f].mechanic[m].type === 'damage') mechDmg++;
+          }
+          var genDmg = 0;
+          for (m = 0; m < spells[f].effects.length; m++) {
+            if (spells[f].effects[m].type === 'damage') genDmg++;
+          }
+          if (forms[f].riderMode === 'support') {
+            // rider de 'agua+agua' tem 1 damage; riderSupport não tem nenhum
+            eq(genDmg, mechDmg, pairs[p] + '/' + forms[f].formName + ': sem dano do rider');
+            checkedSupport++;
+          } else {
+            eq(genDmg, mechDmg + 1, pairs[p] + '/' + forms[f].formName + ': dano do rider presente');
+            checkedOffense++;
+          }
+        }
+      }
+      ok(checkedSupport > 0, 'houve formas de apoio (' + checkedSupport + ')');
+      ok(checkedOffense > 0, 'houve formas ofensivas (' + checkedOffense + ')');
+      useTestBlends();                    // volta às misturas de teste
+    });
+
+    t('Fusion.spellsFor: dados REAIS — chaves de mistura existem nas duas ordens', function () {
+      if (!D.fusionBlends || !D.fusionBlends['agua+agua']) return;
+      restoreBlends();
+      var els = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
+      var missing = [];
+      for (var i2 = 0; i2 < els.length; i2++) {
+        for (var j2 = 0; j2 < els.length; j2++) {
+          var key = els[i2] + '+' + els[j2];
+          var b = D.fusionBlends[key];
+          if (!b) { missing.push(key); continue; }
+          eq(b.elements[0], els[i2], key + ': elements[0]');
+          eq(b.elements[1], els[j2], key + ': elements[1]');
+          ok(!!b.riderSupport, key + ': tem riderSupport');
+        }
+      }
+      eq(missing.length, 0, 'sem chaves faltando: ' + missing.join(','));
+      // e o par nas duas ordens realmente inverte @A/@B
+      var pk = null;
+      for (var k2 in D.fusionForms) { if (k2.indexOf('t-alfa') !== 0) { pk = k2; break; } }
+      var ab = F.spellsFor(pk, 'fogo+agua', 30);
+      var ba = F.spellsFor(pk, 'agua+fogo', 30);
+      var found = false;
+      for (var s2 = 0; s2 < ab.length; s2++) {
+        if (ab[s2].elements[0] === 'fogo' && ba[s2].elements[0] === 'agua') found = true;
+      }
+      ok(found, 'a ordem dos elementos inverte @A/@B nos dados reais');
+      useTestBlends();
     });
 
     t('Fusion.canFuse: exige aliados vivos, adjacentes e ainda não fundidos', function () {
@@ -1566,7 +1765,7 @@
       var st = fusionBattle('ar', 'agua', 10, 20);
       var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
       F.declare(st, a.uid, b.uid);
-      ok(E.move(st, a.uid, 4, 1) === true, 'A se afasta');
+      ok(E.move(st, a.uid, 1, 2) === true, 'A se afasta');
       ok(manh(a, b) > 1, 'não estão mais colados');
       drain();
       E.endTurn(st);
@@ -1587,6 +1786,7 @@
       var paMaxA = a.paMax, paMaxB = b.paMax;
       var ppMaxA = a.ppMax, ppMaxB = b.ppMax;
       var iniA = a.initiative, iniB = b.initiative;
+      var hpMaxSum = a.hpMax + b.hpMax;      // as classes escalam por nível
       var orderIdx = st.order.indexOf(a.uid);
       F.declare(st, a.uid, b.uid);
       drain();
@@ -1597,12 +1797,12 @@
       eq(ev.uid, a.uid, 'uid da fusão = uid de A');
       eq(ev.from.length, 2, 'from com os dois');
       eq(ev.classPair, 't-alfa+t-beta', 'classPair alfabético');
-      eq(ev.elemPair, 'agua+ar', 'elemPair alfabético');
+      eq(ev.elemPair, 'ar+agua', 'elemPair na ordem dos fundidos (A=ar, B=agua)');
       eq(ev.level, 15, 'nível = média (10+20)/2');
       eq(a.kind, 'fusion', 'kind fusion');
       eq(a.defId, 'fus:t-alfa+t-beta', 'defId do contrato');
       eq(a.hp, 210, 'PV = soma dos PV restantes');
-      eq(a.hpMax, 300, 'hpMax = soma');
+      eq(a.hpMax, hpMaxSum, 'hpMax = soma');
       eq(a.paMax, Math.max(paMaxA, paMaxB) + 2, '+2 PA');
       eq(a.ppMax, Math.max(ppMaxA, ppMaxB) + 1, '+1 PP');
       eq(a.shield, 50, '+50 de escudo');
@@ -1672,6 +1872,8 @@
         D.fusionForms['t-alfa+t-beta'] = saved;
       }
     });
+
+    restoreBlends();   // devolve as misturas reais para o restante da suíte
 
     // ================================================== 12. PETS
     section('12 — Pets');
@@ -2082,24 +2284,46 @@
     for (i = 0; i < D.dungeons.length; i++) {
       if (!TEST_IDS[D.dungeons[i].id]) realDungeons.push(D.dungeons[i]);
     }
-    var realParty = buildRealParty();
+    var realParty = buildRealParty(1, null, null);
+    // grupo veterano: nível 30, caminho elemental completo e pet — exercita os
+    // feitiços elementais reais (marcas, armadilhas, cadeias, clima, esquiva).
+    var vetParty = buildRealParty(30, ['fogo', 'agua', 'terra'], true);
 
-    function buildRealParty() {
-      if (!D.classes) return null;
+    function realClassIds() {
       var ids = [];
+      if (!D.classes) return ids;
       for (var k in D.classes) {
         if (!Object.prototype.hasOwnProperty.call(D.classes, k)) continue;
         if (k === 't-alfa' || k === 't-beta') continue;
         ids.push(k);
       }
-      if (ids.length < 1) return null;
       ids.sort();
+      return ids;
+    }
+    function buildRealParty(level, elements, withPet) {
+      var ids = realClassIds();
+      if (ids.length < 1) return null;
+      var petIds = [];
+      for (var pk in (D.pets || {})) {
+        if (pk.indexOf('t-pet') === 0) continue;
+        petIds.push(pk);
+      }
+      petIds.sort();
+      var tiers = (D.unlockTiers && D.unlockTiers.length)
+        ? D.unlockTiers : [5, 10, 12, 15, 20, 30];
       var party = [];
       for (var n = 0; n < Math.min(3, ids.length); n++) {
         var cls = D.classes[ids[n]];
+        var el = elements ? elements[n % elements.length] : 'neutro';
         var spells = (cls.baseSpells || []).slice();
-        party.push({ heroId: 'real-h' + n, classId: ids[n], element: 'neutro',
-                     level: 1, spells: spells, pet: null, items: {} });
+        var path = (cls.paths && cls.paths[el]) || [];
+        for (var s = 0; s < path.length; s++) {
+          if ((tiers[s] || 99) <= level) spells.push(path[s]);
+        }
+        party.push({ heroId: 'real-h' + n, classId: ids[n], element: el,
+                     level: level, spells: spells,
+                     pet: (withPet && petIds.length) ? petIds[n % petIds.length] : null,
+                     items: {} });
       }
       return party;
     }
@@ -2123,12 +2347,82 @@
         autoPlay('test-arena-v2', 5, [P({ pet: 't-pet-dog' })]);
       });
     } else {
-      notes.push('AUTO-PLAY: rodando em ' + realDungeons.length + ' calabouço(s) reais.');
+      var totalRooms = 0;
+      for (i = 0; i < realDungeons.length; i++) totalRooms += realDungeons[i].rooms.length;
+      notes.push('AUTO-PLAY: ' + realDungeons.length + ' calabouços reais, ' +
+        totalRooms + ' salas, dois grupos (nível 1 neutro e nível 30 elemental com pet).');
+
+      t('integração: todo feitiço referenciado por classe/monstro/pet resolve em Engine.spell', function () {
+        var missing = [], k, s, ids = realClassIds();
+        for (var c = 0; c < ids.length; c++) {
+          var cls = D.classes[ids[c]];
+          var list = (cls.baseSpells || []).slice();
+          for (k in (cls.paths || {})) list = list.concat(cls.paths[k]);
+          for (s = 0; s < list.length; s++) {
+            if (!E.spell(list[s])) missing.push(ids[c] + ' -> ' + list[s]);
+          }
+        }
+        for (k in (D.monsters || {})) {
+          if (k.indexOf('t-') === 0) continue;
+          var m = D.monsters[k];
+          for (s = 0; s < (m.spells || []).length; s++) {
+            if (!E.spell(m.spells[s])) missing.push(k + ' -> ' + m.spells[s]);
+          }
+        }
+        for (k in (D.pets || {})) {
+          if (k.indexOf('t-pet') === 0) continue;
+          var p2 = D.pets[k];
+          for (s = 0; s < (p2.spells || []).length; s++) {
+            if (!E.spell(p2.spells[s])) missing.push(k + ' -> ' + p2.spells[s]);
+          }
+        }
+        eq(missing.length, 0, 'referências quebradas: ' + missing.slice(0, 8).join(' | '));
+      });
+
+      t('integração: todo monstro de todas as salas reais resolve em Engine.monster', function () {
+        var missing = [];
+        for (var dd2 = 0; dd2 < realDungeons.length; dd2++) {
+          var rooms = realDungeons[dd2].rooms;
+          for (var rr2 = 0; rr2 < rooms.length; rr2++) {
+            var mm = rooms[rr2].monsters || {};
+            for (var letter in mm) {
+              if (!E.monster(mm[letter])) {
+                missing.push(realDungeons[dd2].id + '[' + rr2 + '] ' + letter + '=' + mm[letter]);
+              }
+            }
+          }
+        }
+        eq(missing.length, 0, 'monstros ausentes: ' + missing.slice(0, 8).join(' | '));
+      });
+
+      t('integração: o ciclo automático de clima só usa os climas canônicos', function () {
+        var shifting = null;
+        for (var dd3 = 0; dd3 < realDungeons.length; dd3++) {
+          if (realDungeons[dd3].weatherShiftEveryRounds > 0) shifting = realDungeons[dd3];
+        }
+        if (!shifting) { notes.push('nenhum calabouço com clima cíclico.'); return; }
+        E.events.length = 0;
+        var st = E.createBattle(shifting.id, 0, realParty);
+        var canon = { calmo: 1, chuva: 1, estiagem: 1, vendaval: 1, tremor: 1 };
+        var seen = {};
+        for (var g = 0; g < 400 && st.round < 14 && st.phase === 'playing'; g++) {
+          E.endTurn(st);
+          seen[st.weather] = true;
+        }
+        var bad = [];
+        for (var w in seen) if (!canon[w]) bad.push(w);
+        eq(bad.length, 0, 'clima fora do canônico no rodízio: ' + bad.join(','));
+        E.events.length = 0;
+      });
+
       for (var dd = 0; dd < realDungeons.length; dd++) {
         for (var rr = 0; rr < realDungeons[dd].rooms.length; rr++) {
           (function (dungeonId, roomIdx) {
-            t('AUTO-PLAY IA×IA: ' + dungeonId + ' sala ' + roomIdx, function () {
+            t('AUTO-PLAY IA×IA (nível 1): ' + dungeonId + ' sala ' + roomIdx, function () {
               autoPlay(dungeonId, roomIdx, realParty);
+            });
+            t('AUTO-PLAY IA×IA (nível 30 + pet): ' + dungeonId + ' sala ' + roomIdx, function () {
+              autoPlay(dungeonId, roomIdx, vetParty);
             });
           })(realDungeons[dd].id, rr);
         }
