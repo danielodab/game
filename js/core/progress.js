@@ -9,7 +9,7 @@ var JOGO = (typeof window !== 'undefined')
  * estrelas, conjuntos elementais e forja de itens.
  * LEI: docs/CONTRACT_V2.md §3, §5, §8, §9 e o ADENDO v2.1 (§9-B), que
  * SUBSTITUI o que o contrair.
- * Nomenclatura: pa = Pontos de Ataque, pp = Pontos de Passos. (`pm` não existe.)
+ * Nomenclatura obrigatória: pa = Pontos de Ataque, pp = Pontos de Passos.
  *
  * ---------------------------------------------------------------------------
  * DECISÕES DE DESIGN (onde o contrato é omisso — todas testadas):
@@ -89,7 +89,10 @@ var JOGO = (typeof window !== 'undefined')
  *       consome a de maior estoque) e sobe 1 nível, até `maxLevel` (10).
  *       Nunca quebra, nunca regride, nunca consome sem subir.
  *       `effectiveStats` aplica `1 + bonusPerLevel*level` (0,12 ⇒ +10 = 2,2×)
- *       sobre os bônus do item, arredondando por atributo.
+ *       sobre os bônus do item, arredondando por atributo — EXCETO os
+ *       atributos de `DATA.upgrade.nonScalingKeys` (pa/pp), que ficam no valor
+ *       base: são pontos de ação inteiros e escalá-los furaria o teto do §8
+ *       (+1 PA viraria +2 já no +5). A lista vem do DADO, não do código.
  *
  * [D12] SAQUE. `LUCK = 2.4` (solo) / `1.6` (dupla) — grupo agora é de 1 ou 2.
  *       Peso efetivo = `weight * LUCK^grau` (comum 0, raro 1, épico 2),
@@ -130,7 +133,8 @@ var JOGO = (typeof window !== 'undefined')
     tiers: [{ from: 0, to: 2, name: 'Comum' }, { from: 3, to: 5, name: 'Raro' },
             { from: 6, to: 9, name: 'Supremo' }, { from: 10, to: 10, name: 'Magnífico' }],
     bonusPerLevel: 0.12,
-    stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25]
+    stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25],
+    nonScalingKeys: ['pa', 'pp']
   };
 
   Progress.SAVE_KEY = KEY;
@@ -211,7 +215,9 @@ var JOGO = (typeof window !== 'undefined')
       maxLevel: num(u.maxLevel, u.stoneCost.length),
       tiers: isArray(u.tiers) ? u.tiers : UPGRADE_DEFAULT.tiers,
       bonusPerLevel: num(u.bonusPerLevel, UPGRADE_DEFAULT.bonusPerLevel),
-      stoneCost: u.stoneCost
+      stoneCost: u.stoneCost,
+      // atributos que NÃO escalam com o nível de forja (§9-B / items.js) [D11]
+      nonScalingKeys: isArray(u.nonScalingKeys) ? u.nonScalingKeys : UPGRADE_DEFAULT.nonScalingKeys
     };
   }
   function elements() {
@@ -958,19 +964,24 @@ var JOGO = (typeof window !== 'undefined')
     if (capPaPp && k === 'pp') v = Math.min(v, PP_ITEM_CAP);
     out[k] += v;
   }
+  /* Soma um bloco de bônus. `mult` é o multiplicador da forja: só vale para os
+   * atributos FORA de `nonScalingKeys` — pa/pp nunca escalam [D11]. */
   function applyBonuses(out, bonuses, capPaPp, mult) {
     if (!isObj(bonuses)) return;
     var m = (typeof mult === 'number' && isFinite(mult)) ? mult : 1;
+    var noScale = upgradeCfg().nonScalingKeys || [];
     for (var i = 0; i < STAT_KEYS.length; i++) {
       var k = STAT_KEYS[i];
       var v = num(bonuses[k], 0);
       if (!v) continue;
-      addStat(out, k, Math.round(v * m), capPaPp);
+      var val = (indexOf(noScale, k) >= 0) ? v : Math.round(v * m);
+      addStat(out, k, val, capPaPp);
     }
     if (isObj(bonuses.resists)) {
+      var mr = (indexOf(noScale, 'resists') >= 0) ? 1 : m;
       for (var e in bonuses.resists) {
         if (!bonuses.resists.hasOwnProperty(e)) continue;
-        out.resists[e] = num(out.resists[e], 0) + Math.round(num(bonuses.resists[e], 0) * m);
+        out.resists[e] = num(out.resists[e], 0) + Math.round(num(bonuses.resists[e], 0) * mr);
       }
     }
   }

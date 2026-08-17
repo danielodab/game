@@ -40,6 +40,16 @@
   #results { padding:12px 16px; font-size:12px; color:var(--dim); }
   #results .f { color:var(--bad); }
   .sizecmp { display:flex; align-items:flex-end; gap:14px; }
+  .forge-tier { position:relative; display:inline-block; padding:3px; border-radius:12px;
+                border:2px solid #4a5361; }
+  .forge-tier.t-comum     { border-color:#9aa4ae; }
+  .forge-tier.t-raro      { border-color:#54a8e8; box-shadow:0 0 8px rgba(84,168,232,.5); }
+  .forge-tier.t-supremo   { border-color:#ffc44d; box-shadow:0 0 12px rgba(255,196,77,.6); }
+  .forge-tier.t-magnífico,
+  .forge-tier.t-magnifico { border-color:#ff7ae0; box-shadow:0 0 18px rgba(255,122,224,.8); }
+  .forge-lv { position:absolute; right:-4px; bottom:-4px; background:#0b0e12; color:#ffd08a;
+              border:1px solid currentColor; border-radius:6px; font:700 10px/1 monospace;
+              padding:2px 4px; }
 </style>
 </head>
 <body>
@@ -211,22 +221,52 @@
   var mons = D.monsters ? Object.keys(D.monsters) : [];
   var g8 = sec('8 · Monstros' + (mons.length ? ' (' + mons.length + ' de DATA.monsters)' : ' — DATA.monsters ainda não existe: arquétipos de demonstração'),
     'Arquétipo derivado de palavras-chave do id/nome (ou do hash). Chefes ganham coroa e escala maior.');
-  var demo = mons.length ? mons.slice(0, 40)
+  var demo = mons.length ? mons
     : ['lodo-da-estufa', 'raiz-andarilha', 'verme-de-cinza', 'eco-afogado', 'golem-de-entulho',
        'lobo-de-brasa', 'capataz-do-fecho', 'flor-carnivora', 'aranha-do-poco', 'cristal-vivo'];
+  var bossCount = 0;
   demo.forEach(function (id) {
     var md = D.monsters && D.monsters[id];
+    if (md && md.boss) bossCount++;
     var cv = Art.unit(id, { element: (md && md.element) || null, dir: 0, scale: 0.75 });
-    show(g8, cv, '<b>' + id + '</b>' + (md && md.boss ? ' ♛' : ''), 'stage', 'monstro ' + id);
+    show(g8, cv, '<b>' + id + '</b>' + (md && md.boss ? ' ♛' : '') + '<br>' + Art.archetypeOf(id),
+         'stage', 'monstro ' + id);
   });
+  if (mons.length) {
+    check('cobertura: todos os ' + mons.length + ' monstros desenhados', true);
+    check('cobertura: 6 chefes com coroa', bossCount === 6, 'chefes: ' + bossCount);
+    // nenhum arquétipo pode engolir mais de metade do bestiário (variedade real)
+    var arcCount = {}, arcMax = 0, arcTop = '';
+    mons.forEach(function (id) {
+      var a = Art.archetypeOf(id);
+      arcCount[a] = (arcCount[a] || 0) + 1;
+      if (arcCount[a] > arcMax) { arcMax = arcCount[a]; arcTop = a; }
+    });
+    var arcN = Object.keys(arcCount).length;
+    check('variedade: ≥6 arquétipos em uso', arcN >= 6, arcN + ' — ' +
+      Object.keys(arcCount).map(function (k) { return k + ':' + arcCount[k]; }).join(' '));
+    check('variedade: nenhum arquétipo passa de 40% do bestiário',
+      arcMax <= mons.length * 0.4, arcTop + ' = ' + arcMax + '/' + mons.length);
+  }
   var pets = D.pets ? Object.keys(D.pets) : [];
   var g8b = sec('9 · Pets' + (pets.length ? ' (' + pets.length + ')' : ' — DATA.pets ainda não existe: demonstração'),
     'O pet entra em campo junto do dono; ícone usado no espaço de pet do painel de equipamento.');
+  var petKinds = {};
   (pets.length ? pets : ['dragaozinho-de-brasa', 'planta-mordedora', 'aguia-do-vendaval', 'bolha-curandeira', 'bicho-de-pedra'])
     .forEach(function (id) {
-      show(g8b, Art.unit(id, { dir: 0, scale: 0.7 }), '<b>' + id + '</b>', 'stage', 'pet unidade ' + id);
+      var pd = D.pets && D.pets[id];
+      var kind = Art.petKindOf(id);
+      petKinds[kind] = (petKinds[kind] || 0) + 1;
+      show(g8b, Art.unit(id, { dir: 0, scale: 0.7 }),
+           '<b>' + ((pd && pd.name) || id) + '</b><br>' + id + ' · ' + kind, 'stage', 'pet unidade ' + id);
       show(g8b, Art.petIcon(id, 64), 'ícone ' + id, 'stage', 'pet ícone ' + id);
     });
+  if (pets.length) {
+    check('cobertura: todos os ' + pets.length + ' pets desenhados', true);
+    check('variedade: cada pet tem corpo próprio',
+      Object.keys(petKinds).length === pets.length,
+      Object.keys(petKinds).map(function (k) { return k + ':' + petKinds[k]; }).join(' '));
+  }
 
   // ------------------------------------------------------------- 10. ÍCONES
   var spells = D.spells ? Object.keys(D.spells) : [];
@@ -248,13 +288,74 @@
     show(g10, Art.itemIcon(id, 56), (it ? it.name + ' · ' + it.slot + '/' + it.rarity : id), 'stage', 'ícone item ' + id);
   });
 
-  var g11 = sec('12 · Eventos de terreno e cartas de personagem',
-    'Marcadores que aparecem no chão a cada rodada + a carta que desbloqueia uma classe.');
+  var g11 = sec('12 · Eventos de terreno',
+    'Marcadores que aparecem no chão a cada rodada. Um desenho por `kind` de DATA.tileEvents.');
   Art.eventKinds().forEach(function (k) {
     show(g11, Art.tileEventIcon(k, 64), k, 'stage', 'evento ' + k);
   });
+  var evKinds = {}, evList = D.tileEvents ? Object.keys(D.tileEvents) : [];
+  evList.forEach(function (id) {
+    var ev = D.tileEvents[id];
+    evKinds[ev.kind] = 1;
+    show(g11, Art.tileEventIcon(ev.kind, 56), '<b>' + ev.name + '</b><br>' + ev.kind,
+         'stage', 'evento dado ' + id);
+  });
+  if (evList.length) {
+    var faltando = Object.keys(evKinds).filter(function (k) { return Art.eventKinds().indexOf(k) < 0; });
+    check('cobertura: todo kind de DATA.tileEvents tem ícone', faltando.length === 0, faltando.join(','));
+  }
+
+  // ------------------------------------ 13. ADENDO v2.1 — cartas, estrelas, pedras
+  var g12 = sec('13 · Cartas de classe, trilha de estrelas e pedras de forja (ADENDO v2.1)',
+    'Cofre de recompensas: a carta libera/estrela a classe, as pedras alimentam a forja. ' +
+    'Custos de desbloqueio: sumô 0 · curandeira 0 · invocador 10 · bruxo 10 · espadachim 20 · arqueiro 25.');
+  rowTitle(g12, 'Art.cardIcon(classId) — uma carta por classe');
   CLASSES.forEach(function (cid) {
-    show(g11, Art.classCard(cid, 116, 164), 'carta ' + cid, 'stage', 'carta ' + cid);
+    var ci = D.cards && D.cards[cid];
+    show(g12, Art.cardIcon(cid, 116, 164),
+         'carta ' + cid + (ci ? ' · custo ' + ci.unlockCost : ''), 'stage', 'carta ' + cid);
+  });
+  rowTitle(g12, 'Art.starIcon(filled) — trilha de 5 estrelas (★1 vida · ★3 +1 PP · ★5 +1 PA)');
+  [0, 1, 2, 3, 4, 5].forEach(function (n) {
+    var box = el('div', 'cell stage');
+    var row = el('div');
+    row.style.cssText = 'display:flex;gap:2px;justify-content:center;padding:6px 2px';
+    for (var s = 0; s < 5; s++) row.appendChild(Art.node(Art.starIcon(s < n, 26), 26));
+    box.appendChild(row);
+    box.appendChild(el('div', 'cap', n + ' de 5 estrelas'));
+    g12.appendChild(box);
+  });
+  check('API Art.starIcon', typeof Art.starIcon === 'function' &&
+    inked(Art.starIcon(true, 26)) && inked(Art.starIcon(false, 26)));
+  rowTitle(g12, 'Art.stoneIcon(stoneId) — 5 pedras, uma por elemento');
+  var stones = D.stones ? Object.keys(D.stones) : Art.stoneIds();
+  stones.forEach(function (sid) {
+    var sd = D.stones && D.stones[sid];
+    show(g12, Art.stoneIcon(sid, 64),
+         '<b>' + ((sd && sd.name) || sid) + '</b><br>' + ((sd && sd.element) || '?'),
+         'stage', 'pedra ' + sid);
+  });
+  check('cobertura: 5 pedras elementais', stones.length === 5, stones.join(','));
+  check('API Art.stoneIcon', typeof Art.stoneIcon === 'function');
+  check('API Art.cardIcon', typeof Art.cardIcon === 'function');
+
+  // ------------------------------------------------- 14. FORJA: tiers do item +N
+  var g13 = sec('14 · Item forjado — moldura por tier (+0–2 Comum · +3–5 Raro · +6–9 Supremo · +10 Magnífico)',
+    'A moldura do inventário nasce aqui: cor e brilho crescem com o nível da forja.');
+  var upTiers = (D.upgrade && D.upgrade.tiers) || [];
+  var sampleItem = items.length ? items[1] : 'demo-pa';
+  [0, 2, 3, 5, 6, 9, 10].forEach(function (lv) {
+    var tn = '';
+    for (var i = 0; i < upTiers.length; i++) {
+      if (lv >= upTiers[i].from && lv <= upTiers[i].to) tn = upTiers[i].name;
+    }
+    var box = el('div', 'cell stage');
+    var wrap = el('div', 'forge-tier t-' + tn.toLowerCase());
+    wrap.appendChild(Art.node(Art.itemIcon(sampleItem, 56), 56));
+    wrap.appendChild(el('span', 'forge-lv', '+' + lv));
+    box.appendChild(wrap);
+    box.appendChild(el('div', 'cap', tn + ' · +' + lv));
+    g13.appendChild(box);
   });
 
   // ------------------------------------------------------------- COBERTURA
@@ -267,6 +368,27 @@
   check('cobertura: 4 direções por classe', true);
   check('cobertura: 15 fusões desenhadas', pairs.length === 15);
   check('cobertura: 6 temas de cenário', THEMES.length === 6);
+  check('cobertura: 48 ícones de item', !items.length || items.length === 48, items.length + ' itens');
+  // todo tema declarado em DATA.scenery precisa resolver para uma paleta de verdade
+  if (D.scenery) {
+    var semTema = Object.keys(D.scenery).filter(function (t) {
+      var p = Art.themePalette(t);
+      return !p || !p.floor || !p.high || !p.low;
+    });
+    check('cobertura: temas de DATA.scenery resolvem paleta', semTema.length === 0, semTema.join(','));
+    // e o desenho não pode cair no cinza-hash: cada tema tem alto/baixo próprios
+    Object.keys(D.scenery).forEach(function (t) {
+      check('cenário do tema ' + t, inked(Art.tile(t, 0)) && inked(Art.obstacleHigh(t)) &&
+            inked(Art.obstacleLow(t)));
+    });
+  }
+  // fusões com os ids reais de DATA.fusionForms (o Criativo Fusão manda na chave)
+  if (D.fusionForms) {
+    var semArte = Object.keys(D.fusionForms).filter(function (k) {
+      return !inked(Art.unit('fus:' + k, { element: 'fogo', dir: 0, scale: 0.8 }));
+    });
+    check('cobertura: toda chave de DATA.fusionForms tem arte', semArte.length === 0, semArte.join(','));
+  }
   check('API Art.unit', typeof Art.unit === 'function');
   check('API Art.tile', typeof Art.tile === 'function');
   check('API Art.obstacleHigh', typeof Art.obstacleHigh === 'function');

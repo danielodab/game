@@ -504,6 +504,36 @@ var JOGO = (typeof window !== 'undefined')
     clampCam();
   };
   R.getCamera = function () { return { zoom: cam.zoom, panX: cam.panX, panY: cam.panY, fitZoom: cam.fitZoom }; };
+
+  // ---------- foco cinematográfico (usado pela FUSÃO) ----------
+  var camFocus = null;
+  function focusOn(gx, gy, inDur, holdDur, outDur, punch) {
+    var c0 = unproject(W / 2, H / 2);
+    camFocus = {
+      x: gx, y: gy, cx: c0.x, cy: c0.y, z0: cam.zoom,
+      t: 0, inD: inDur, holdD: holdDur, outD: outDur,
+      punch: punch == null ? 0.22 : punch
+    };
+  }
+  R.focusOn = focusOn;
+  function updateCamFocus(dt) {
+    if (!camFocus) return;
+    var f = camFocus;
+    f.t += dt;
+    var k;
+    if (f.t < f.inD) { k = f.t / f.inD; k = k * k * (3 - 2 * k); }
+    else if (f.t < f.inD + f.holdD) k = 1;
+    else if (f.t < f.inD + f.holdD + f.outD) {
+      k = 1 - (f.t - f.inD - f.holdD) / f.outD; k = k * k * (3 - 2 * k);
+    } else { camFocus = null; return; }
+    var z = clamp(f.z0 * (1 + f.punch * k), cam.minZoom, cam.maxZoom);
+    var cx = f.cx + (f.x - f.cx) * k, cy = f.cy + (f.y - f.cy) * k;
+    var p = iso(cx, cy, 24);
+    cam.zoom = z;
+    cam.panX = W / 2 - p.x * z;
+    cam.panY = H / 2 - p.y * z;
+    clampCam();
+  }
   function zoomAt(sx, sy, factor) {
     var z0 = cam.zoom;
     var z1 = clamp(z0 * factor, cam.minZoom, cam.maxZoom);
@@ -531,6 +561,7 @@ var JOGO = (typeof window !== 'undefined')
 
     view.addEventListener('pointerdown', function (e) {
       if (overUI(e)) return;
+      camFocus = null;                 // a mão do jogador manda mais que a câmera
       var p = localPos(e);
       ptrs[e.pointerId] = { x: p.x, y: p.y, sx: p.x, sy: p.y, t: (e.timeStamp || Date.now()), type: e.pointerType };
       ptrCount++;
@@ -1147,14 +1178,14 @@ var JOGO = (typeof window !== 'undefined')
     if (v.deathK > 0) { sx *= (1 + v.deathK * 0.35); sy *= Math.max(0.04, 1 - v.deathK * 0.85); }
     if (v.lungeK > 0) { sy *= (1 - v.lungeK * 0.05); }
     body.scale.set(sx, sy);
-    body.position.y = Math.sin(t) * 1.4 - 1.4;
+    body.position.y = Math.sin(t) * 2 - 2;
     body.rotation = Math.sin(t * 0.55) * 0.012 + (v.deathK > 0 ? v.deathK * 0.5 * v.face : 0);
-    if (v.castK > 0) body.position.y -= v.castK * 5;
+    if (v.castK > 0) body.position.y -= v.castK * 7;
     if (v.lungeK > 0 && v.castTx != null) {
       var tp = iso(v.castTx, v.castTy, 0), me = iso(v.x, v.y, 0);
       var dx = tp.x - me.x, dy = tp.y - me.y, l = Math.hypot(dx, dy) || 1;
-      c.position.x += (dx / l) * v.lungeK * 15;
-      c.position.y += (dy / l) * v.lungeK * 15;
+      c.position.x += (dx / l) * v.lungeK * 22;
+      c.position.y += (dy / l) * v.lungeK * 22;
     }
     if (c.__flash) c.__flash.alpha = Math.min(1, v.flash);
     if (c.__shadow) {
@@ -1173,14 +1204,14 @@ var JOGO = (typeof window !== 'undefined')
       var g = c.__bars;
       g.clear();
       if (v.deathK <= 0 && (u.hp < u.hpMax || (u.shield || 0) > 0)) {
-        var bw = (u.boss ? 54 : 34), by = -hgt - 12;
+        var bw = (u.boss ? 76 : 48), by = -hgt - 14;
         var hk = clamp(u.hp / Math.max(1, u.hpMax), 0, 1);
-        g.beginFill(0x0a0810, 0.78).drawRoundedRect(-bw / 2 - 1.5, by - 1.5, bw + 3, 8, 3).endFill();
+        g.beginFill(0x0a0810, 0.78).drawRoundedRect(-bw / 2 - 2, by - 2, bw + 4, 11, 4).endFill();
         g.beginFill(hk > 0.5 ? 0x7ac26a : hk > 0.25 ? 0xe0b04a : 0xe05a3c, 1)
-          .drawRoundedRect(-bw / 2, by, bw * hk, 5, 2).endFill();
+          .drawRoundedRect(-bw / 2, by, bw * hk, 7, 3).endFill();
         if ((u.shield || 0) > 0) {
           var sk = clamp(u.shield / Math.max(1, u.hpMax), 0, 1);
-          g.beginFill(0x8ad4f0, 0.95).drawRoundedRect(-bw / 2, by - 4.5, bw * sk, 3, 1.5).endFill();
+          g.beginFill(0x8ad4f0, 0.95).drawRoundedRect(-bw / 2, by - 6, bw * sk, 4, 2).endFill();
         }
       }
       buildMarks(c, u, stt, hgt);
@@ -1207,26 +1238,26 @@ var JOGO = (typeof window !== 'undefined')
     if (stt.invisible) icons.push({ c: 0xc0b8ff, s: 'eye' });
     if (stt.mark > 0) icons.push({ c: 0xff9ad0, s: 'mark', n: stt.mark });
     if (!icons.length) return;
-    var wTot = icons.length * 14;
+    var wTot = icons.length * 19;
     for (var k = 0; k < icons.length; k++) {
       var ic = icons[k];
       var g = new P.Graphics();
-      var x = -wTot / 2 + 7 + k * 14, y = -hgt - 22;
-      g.beginFill(0x120e16, 0.72).drawCircle(x, y, 6.6).endFill();
-      g.lineStyle(1.4, ic.c, 1);
+      var x = -wTot / 2 + 9.5 + k * 19, y = -hgt - 31;
+      g.beginFill(0x120e16, 0.72).drawCircle(x, y, 8.6).endFill();
+      g.lineStyle(1.7, ic.c, 1);
       g.beginFill(ic.c, 0.35);
-      if (ic.s === 'drop') { g.moveTo(x, y - 4); g.lineTo(x + 3, y + 1); g.lineTo(x, y + 4); g.lineTo(x - 3, y + 1); g.closePath(); }
-      else if (ic.s === 'ring') { g.drawCircle(x, y, 3.6); }
-      else if (ic.s === 'bang') { g.drawRect(x - 1.2, y - 4.2, 2.4, 5); g.drawRect(x - 1.2, y + 2, 2.4, 2.2); }
-      else if (ic.s === 'shield') { g.moveTo(x, y - 4.4); g.lineTo(x + 3.4, y - 1.6); g.lineTo(x, y + 4.4); g.lineTo(x - 3.4, y - 1.6); g.closePath(); }
-      else if (ic.s === 'cross') { g.drawRect(x - 1.3, y - 4, 2.6, 8); g.drawRect(x - 4, y - 1.3, 8, 2.6); }
-      else if (ic.s === 'eye') { g.drawEllipse(x, y, 4.4, 2.6); }
-      else { g.moveTo(x, y - 4.4); g.lineTo(x + 4, y); g.lineTo(x, y + 4.4); g.lineTo(x - 4, y); g.closePath(); }
+      if (ic.s === 'drop') { g.moveTo(x, y - 5.2); g.lineTo(x + 3.9, y + 1.3); g.lineTo(x, y + 5.2); g.lineTo(x - 3.9, y + 1.3); g.closePath(); }
+      else if (ic.s === 'ring') { g.drawCircle(x, y, 4.7); }
+      else if (ic.s === 'bang') { g.drawRect(x - 1.6, y - 5.5, 3.1, 6.5); g.drawRect(x - 1.6, y + 2.6, 3.1, 2.9); }
+      else if (ic.s === 'shield') { g.moveTo(x, y - 5.7); g.lineTo(x + 4.4, y - 2.1); g.lineTo(x, y + 5.7); g.lineTo(x - 4.4, y - 2.1); g.closePath(); }
+      else if (ic.s === 'cross') { g.drawRect(x - 1.7, y - 5.2, 3.4, 10.4); g.drawRect(x - 5.2, y - 1.7, 10.4, 3.4); }
+      else if (ic.s === 'eye') { g.drawEllipse(x, y, 5.7, 3.4); }
+      else { g.moveTo(x, y - 5.7); g.lineTo(x + 5.2, y); g.lineTo(x, y + 5.7); g.lineTo(x - 5.2, y); g.closePath(); }
       g.endFill();
       box.addChild(g);
       if (ic.s === 'mark' && ic.n > 1) {
-        var tx = new P.Text('' + ic.n, { fontFamily: 'Verdana, Arial, sans-serif', fontSize: 10, fontWeight: '700', fill: 0xffffff, stroke: 0x2a1020, strokeThickness: 3 });
-        tx.anchor.set(0.5); tx.position.set(x + 6, y + 5);
+        var tx = new P.Text('' + ic.n, { fontFamily: 'Verdana, Arial, sans-serif', fontSize: 12, fontWeight: '700', fill: 0xffffff, stroke: 0x2a1020, strokeThickness: 3 });
+        tx.anchor.set(0.5); tx.position.set(x + 8, y + 6);
         tx.resolution = Math.min(2, DPR);
         box.addChild(tx);
       }
@@ -1399,7 +1430,7 @@ var JOGO = (typeof window !== 'undefined')
             // triângulo de alerta: sair daqui pode falhar a esquiva
             var pc = iso(t.x, t.y, 1);
             ovBase.beginFill(0xffc06a, 0.85);
-            ovBase.moveTo(pc.x, pc.y - 7); ovBase.lineTo(pc.x + 5, pc.y + 2); ovBase.lineTo(pc.x - 5, pc.y + 2);
+            ovBase.moveTo(pc.x, pc.y - 10); ovBase.lineTo(pc.x + 7.5, pc.y + 3); ovBase.lineTo(pc.x - 7.5, pc.y + 3);
             ovBase.closePath(); ovBase.endFill();
           }
         }
@@ -1412,17 +1443,17 @@ var JOGO = (typeof window !== 'undefined')
             fillTile(ovBase, path[j].x, path[j].y, '#ffffff', 0.42, 0.14);
             var pp2 = iso(path[j].x, path[j].y, 3);
             ovBase.beginFill(0xfff6d0, j === path.length - 1 ? 0.98 : 0.8);
-            ovBase.drawCircle(pp2.x, pp2.y, j === path.length - 1 ? 5.5 : 3);
+            ovBase.drawCircle(pp2.x, pp2.y, j === path.length - 1 ? 8 : 4.4);
             ovBase.endFill();
           }
           // custo em passos (PP) no fim do caminho
-          var pend = iso(path[path.length - 1].x, path[path.length - 1].y, 20);
+          var pend = iso(path[path.length - 1].x, path[path.length - 1].y, 28);
           ovBase.beginFill(0x0e1218, 0.78);
-          ovBase.drawRoundedRect(pend.x - 13, pend.y - 10, 26, 18, 6);
+          ovBase.drawRoundedRect(pend.x - 19, pend.y - 13, 38, 25, 8);
           ovBase.endFill();
           if (!ppLabel) {
             ppLabel = new P.Text('', {
-              fontFamily: 'Trebuchet MS, Verdana, sans-serif', fontSize: 11, fontWeight: '700',
+              fontFamily: 'Trebuchet MS, Verdana, sans-serif', fontSize: 15, fontWeight: '700',
               fill: 0xfff2c8, stroke: 0x14100c, strokeThickness: 3
             });
             ppLabel.anchor.set(0.5);
@@ -1500,13 +1531,14 @@ var JOGO = (typeof window !== 'undefined')
     g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(d.x, d.y); g.lineTo(e.x, e.y); g.closePath();
     g.lineStyle(0);
     // pedestal escuro atrás do ícone (legibilidade em qualquer chão)
-    g.beginFill(0x0d1016, 0.65); g.drawRoundedRect(-13, -32, 26, 26, 8); g.endFill();
-    g.lineStyle(1.6, col, 0.8); g.drawRoundedRect(-13, -32, 26, 26, 8); g.lineStyle(0);
+    g.beginFill(0x0d1016, 0.65); g.drawRoundedRect(-19, -46, 38, 38, 11); g.endFill();
+    g.lineStyle(1.8, col, 0.8); g.drawRoundedRect(-19, -46, 38, 38, 11); g.lineStyle(0);
     c.addChild(g);
     // ícone: preferimos a arte (Art.tileEventIcon); sem ela, um glifo de texto
     var artIcon = artNode('tileEventIcon', [kind, 48], 0.5);
     if (artIcon) {
-      artIcon.position.set(0, -19);
+      artIcon.position.set(0, -27);
+      artIcon.__y0 = -27;
       c.addChild(artIcon); c.__icon = artIcon;
       return c;
     }
@@ -1515,7 +1547,8 @@ var JOGO = (typeof window !== 'undefined')
       fontFamily: 'Segoe UI Emoji, Verdana, Arial, sans-serif', fontSize: 20,
       fontWeight: '700', fill: 0xffffff, stroke: 0x16101c, strokeThickness: 3
     });
-    tx.anchor.set(0.5, 0.5); tx.position.set(0, -19);
+    tx.anchor.set(0.5, 0.5); tx.position.set(0, -27);
+    tx.__y0 = -27;
     tx.resolution = Math.min(2, DPR);
     c.addChild(tx); c.__icon = tx;
     return c;
@@ -1717,6 +1750,18 @@ var JOGO = (typeof window !== 'undefined')
       }
       g.lineStyle(0);
       c.addChild(g);
+    } else if (id === 'vendaval') {
+      // riscos de vento varrendo o chão, na diagonal do tabuleiro
+      g = new P.Graphics();
+      for (i = 0; i < 22; i++) {
+        x = rnd() * st.grid.w; y = rnd() * st.grid.h;
+        var s0 = iso(x, y, 0), s1 = iso(x + 1.2 + rnd(), y - 0.5 - rnd() * 0.6, 0);
+        g.lineStyle(1.6, 0xdfeaff, 0.10 + rnd() * 0.10);
+        g.moveTo(s0.x, s0.y);
+        g.quadraticCurveTo((s0.x + s1.x) / 2, (s0.y + s1.y) / 2 - 8, s1.x, s1.y);
+      }
+      g.lineStyle(0);
+      c.addChild(g);
     } else if (id === 'tremor') {
       g = new P.Graphics();
       for (i = 0; i < 18; i++) {
@@ -1724,6 +1769,19 @@ var JOGO = (typeof window !== 'undefined')
         p = iso(x, y, 0);
         g.beginFill(0xc8a066, 0.14).drawEllipse(p.x, p.y, 16 + rnd() * 14, 8 + rnd() * 6).endFill();
       }
+      // rachaduras longas: o chão está partindo
+      g.lineStyle(2.2, 0x1a1208, 0.32);
+      for (i = 0; i < 5; i++) {
+        x = rnd() * st.grid.w; y = rnd() * st.grid.h;
+        var cx0 = iso(x, y, 0);
+        g.moveTo(cx0.x, cx0.y);
+        for (k = 0; k < 4; k++) {
+          x += (rnd() - 0.5) * 2.4; y += (rnd() - 0.5) * 2.4;
+          var cn = iso(x, y, 0);
+          g.lineTo(cn.x, cn.y);
+        }
+      }
+      g.lineStyle(0);
       c.addChild(g);
     }
   }
@@ -1813,8 +1871,8 @@ var JOGO = (typeof window !== 'undefined')
             if (lastAtk && lastAtk.age < 2) {
               var pa = iso(lastAtk.x, lastAtk.y, 0), pu = iso(vv.x, vv.y, 0);
               var dx = pu.x - pa.x, dy = pu.y - pa.y, l = Math.hypot(dx, dy) || 1;
-              vv.knockX = (dx / l) * 9; vv.knockY = (dy / l) * 9 - 3;
-            } else { vv.knockX = (Math.random() * 2 - 1) * 6; vv.knockY = -5; }
+              vv.knockX = (dx / l) * 13; vv.knockY = (dy / l) * 13 - 4;
+            } else { vv.knockX = (Math.random() * 2 - 1) * 9; vv.knockY = -7; }
             delayed.push({ t: 0.06, fn: function () { var v3 = getVis(uid); if (v3) v3.squash = 0.0001; } });
           } });
         })(ev.uid);
@@ -1885,7 +1943,7 @@ var JOGO = (typeof window !== 'undefined')
         break;
 
       case 'battleEnd':
-        animQ.length = 0; delayed.length = 0;
+        animQ.length = 0; delayed.length = 0; camFocus = null;
         for (var uid in vis) {
           var vv2 = vis[uid];
           vv2.castK = 0; vv2.lungeK = 0; vv2.hideK = 0; vv2.squash = 0; vv2.flash = 0; vv2.flashHold = 0;
@@ -1897,7 +1955,7 @@ var JOGO = (typeof window !== 'undefined')
 
   function resetAll(st) {
     vis = {};
-    animQ.length = 0; delayed.length = 0;
+    animQ.length = 0; delayed.length = 0; camFocus = null;
     lastAtk = null; lastHitDelay = 0.26;
     for (var uid in unitNodes) {
       var n = unitNodes[uid];
@@ -1941,11 +1999,14 @@ var JOGO = (typeof window !== 'undefined')
       var nu = findUnit(ev.uid);
       mid = nu ? { x: nu.x, y: nu.y } : { x: va ? va.x : 0, y: va ? va.y : 0 };
     }
+    var T = R.FUSION_TIMING;
     animQ.push({
       kind: 'fusion', uid: ev.uid, a: a, b: b, mid: mid, t: 0,
-      dur: R.FUSION_TIMING.approach + R.FUSION_TIMING.flash + R.FUSION_TIMING.reveal, age: 0,
+      dur: T.approach + T.flash + T.reveal, age: 0,
       newVisReady: false
     });
+    // a câmera acompanha: aproxima na convergência, segura no clarão, volta depois
+    focusOn(mid.x, mid.y, T.approach, T.flash + T.reveal, 0.55, 0.26);
   }
 
   R.isBusy = function () {
@@ -2124,10 +2185,11 @@ var JOGO = (typeof window !== 'undefined')
       for (var e = 0; e < ovEventNodes.length; e++) {
         var n = ovEventNodes[e];
         if (n.__glow) n.__glow.alpha = 0.20 + (0.5 + Math.sin(nowT * 3 + e) * 0.5) * 0.26;
-        if (n.__icon) n.__icon.position.y = -19 + Math.sin(nowT * 2.6 + e) * 2.4;
+        if (n.__icon) n.__icon.position.y = n.__icon.__y0 + Math.sin(nowT * 2.6 + e) * 2.8;
       }
     }
 
+    updateCamFocus(dtv);
     world.position.set(cam.panX + shake.x, cam.panY + shake.y);
     world.scale.set(cam.zoom);
 

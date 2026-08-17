@@ -821,6 +821,30 @@
           '</td><td>' + d.defaultWeather + '</td><td>' + d.rooms.map(function (r) { return r.weather; }).join(' / ') +
           '</td><td>' + n.length + '</td><td>' + (b ? D.monsters[b].name + ' (' + D.monsters[b].stats.hp + ' PV)' : '—') + '</td></tr>';
       }).join('');
+      // --- economia: pedras por descida e cartas por chefe ------------------
+      var econ = D.dungeons.map(function (d) {
+        var y = {}, tot = 0;
+        (d.rooms || []).forEach(function (r) {
+          keys(r.monsters || {}).forEach(function (c) {
+            var m = D.monsters[r.monsters[c]];
+            if (!m || !m.stoneDrop) { return; }
+            var n = 0;
+            r.layout.forEach(function (row) { for (var i = 0; i < row.length; i++) { if (row[i] === c) { n++; } } });
+            var v = n * m.stoneDrop.chance * (m.stoneDrop.min + m.stoneDrop.max) / 2;
+            y[m.element] = (y[m.element] || 0) + v; tot += v;
+          });
+        });
+        var best = '', bestV = 0;
+        keys(y).forEach(function (e) { if (y[e] > bestV) { bestV = y[e]; best = e; } });
+        var bossId = keys(d.rooms[2].monsters).map(function (c) { return d.rooms[2].monsters[c]; })
+          .filter(function (i) { return D.monsters[i] && D.monsters[i].boss; })[0];
+        var bsd = bossId && D.monsters[bossId].stoneDrop;
+        return '<tr><td>' + d.order + '</td><td>' + d.name + '</td><td>' + Math.round(tot) +
+          '</td><td>' + best + ' ~' + Math.round(bestV) + '</td><td>' + Math.ceil(107 / (bestV || 1)) +
+          '</td><td>' + (bsd ? bsd.min + '–' + bsd.max : '—') + '</td><td>' +
+          d.cardDrops.map(function (c) { return c.classId + ' ' + c.weight + '%'; }).join(' · ') + '</td></tr>';
+      }).join('');
+
       document.getElementById('stats').innerHTML =
         '<h2>Resumo do mundo</h2><table><tr><th>#</th><th>Calabouço</th><th>id</th><th>tema</th>' +
         '<th>clima base</th><th>clima das salas</th><th>bichos</th><th>chefe</th></tr>' + rows + '</table>' +
@@ -828,7 +852,12 @@
         keys(D.monsters).filter(function (i) { return !D.monsters[i].boss; }).length + ' comuns + ' +
         keys(D.monsters).filter(function (i) { return D.monsters[i].boss; }).length + ' chefes) · ' +
         keys(D.monsterSpells).length + ' feitiços de monstro · ' +
-        keys(D.tileEvents).length + ' eventos de terreno · ' + keys(D.scenery).length + ' temas de cenário</div>';
+        keys(D.tileEvents).length + ' eventos de terreno · ' + keys(D.scenery).length + ' temas de cenário</div>' +
+        '<h2>Economia: pedras de forja e cartas</h2><table><tr><th>#</th><th>Calabouço</th>' +
+        '<th>pedras/descida</th><th>elemento principal</th><th>descidas p/ um +10 (107)</th>' +
+        '<th>chefe derruba</th><th>cartas do chefe</th></tr>' + econ + '</table>' +
+        '<div class="sub">Estimativa: soma de chance × média(min..max) de cada spawn das 3 salas. ' +
+        'Um item vai a +10 com 107 pedras do elemento dele (DATA.upgrade.stoneCost).</div>';
     }
   }
 

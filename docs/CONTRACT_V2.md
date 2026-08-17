@@ -324,6 +324,42 @@ Tela de **Coleção** (cartas por classe com progresso `n/custo` e trilha de 5 e
 (itens com raridade, nível `+N`, tier e conjunto; indicação de quem está usando cada peça), **Forja**
 (pedras por elemento, custo, prévia do ganho) e seleção de **1 ou 2 heróis**.
 
+## 9-C. ADENDO v2.2 — Espaços com identidade e ganho elemental por nível
+
+Esta seção **substitui** o que a contrariar nas anteriores.
+
+### Os 4 espaços de equipamento ganham nome próprio
+Os ids `pa`/`pp`/`vida`/`especial` são **substituídos** (nada de nomes de planilha, e nada que
+imite o Dofus). Novos ids de `slot`, em todo o projeto:
+
+| slot (id) | Nome exibido | O que é | Bônus que carrega |
+|---|---|---|---|
+| `punho` | **Punho** | o que golpeia: manopla, garra, empunhadura | PA (máx. +1, só épico) |
+| `passo` | **Passo** | o que anda: botas, esporas, grevas | PP (máx. +1) |
+| `casca` | **Casca** | o que protege: couraça, carapaça, manto | Vida (+10 a +60) e resistências |
+| `lume` | **Lume** | a relíquia acesa que se carrega no escuro | concede um feitiço (`grantsSpell`), sem PA/PP |
+
+Afeta: `DATA.items[*].slot`, `DATA.sets[*].pieces` (4 peças, uma por espaço),
+`Progress.state.heroes[*].items = {punho, passo, casca, lume}`, `Progress.equip/unequip`,
+`DATA.upgrade.nonScalingKeys` continua `['pa','pp']` (são nomes de **bônus**, não de espaço),
+e os rótulos da UI. O espaço de **pet** continua separado dos quatro.
+
+### Ganho por nível ligado ao elemento
+
+```js
+DATA.leveling.perLevel        = { hp: 5, power: 3 };        // níveis 1→4, antes de escolher
+DATA.leveling.perLevelElement = { hp: 5, elemPower: 3 };    // a partir da escolha (nível 5+)
+```
+- **Todo nível dá +5 PV.**
+- Antes de escolher o elemento: cada nível dá **+3 de poder genérico**.
+- A partir da escolha: cada nível dá **+3 de dano naquele elemento** (`elemPower`), acumulando.
+- `Progress.effectiveStats` devolve, além de `power`, o campo **`elemPower`** e o `element` do herói.
+- **Fórmula de dano (atualiza §3)**: o bônus elemental só entra quando o feitiço é do elemento
+  do conjurador —
+  `roll(min..max) * (100 + power + (spell.element === unit.element ? elemPower : 0))/100 * (100 − resist[element])/100 * (1 + marcas*0.05)`.
+- A unidade em batalha carrega `elemPower` (0 quando não há). Na **fusão**, `elemPower` é a média
+  dos dois e vale para os dois elementos da mistura.
+
 ## 10. Testes obrigatórios
 
 Cada dono entrega sua página em `tests/` (padrão v1: roda no load, resultado no DOM e em

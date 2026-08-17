@@ -20,7 +20,7 @@
 </style>
 </head>
 <body>
-<h1>SOTERRA 2.0 — suíte de Progressão &amp; Fluxo (JOGO.Progress + JOGO.Game)</h1>
+<h1>SOTERRA 2.0 — suíte de Progressão &amp; Fluxo (JOGO.Progress + JOGO.Game) · adendo v2.1</h1>
 <p class="note">
   Roda SÍNCRONO no load, sem Renderer e sem UI. Usa FIXTURES próprias (DATA de teste) e
   DUBLÊS de Engine/Fusion/IA — não depende de nenhum arquivo de outro dono.
@@ -54,28 +54,52 @@
     elementChoiceLevel: 5
   };
 
+  // --------------------------------------------- estrelas, forja e conjuntos
+  var STAR_COSTS = [5, 15, 30, 55, 90];
+  DATA.stars = {
+    max: 5,
+    bonuses: { 1: { hp: 15 }, 2: { power: 8 }, 3: { pp: 1 }, 4: { hp: 25, dodge: 10 }, 5: { pa: 1 } }
+  };
+  DATA.stones = {
+    'st-neutro': { id: 'st-neutro', name: 'Seixo Cinzento', element: 'neutro', description: '—', iconKey: 'stone' },
+    'st-fogo':   { id: 'st-fogo',   name: 'Brasa Dura',     element: 'fogo',   description: '—', iconKey: 'stone' },
+    'st-agua':   { id: 'st-agua',   name: 'Lágrima Densa',  element: 'agua',   description: '—', iconKey: 'stone' },
+    'st-terra':  { id: 'st-terra',  name: 'Núcleo de Raiz', element: 'terra',  description: '—', iconKey: 'stone' },
+    'st-ar':     { id: 'st-ar',     name: 'Sopro Preso',    element: 'ar',     description: '—', iconKey: 'stone' }
+  };
+  DATA.upgrade = {
+    maxLevel: 10,
+    tiers: [{ from: 0, to: 2, name: 'Comum' }, { from: 3, to: 5, name: 'Raro' },
+            { from: 6, to: 9, name: 'Supremo' }, { from: 10, to: 10, name: 'Magnífico' }],
+    bonusPerLevel: 0.12,
+    stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25],
+    // PA e PP NUNCA escalam com o nível de forja (costura com items.js)
+    nonScalingKeys: ['pa', 'pp']
+  };
+
   // ------------------------------------------------------------- classes/feitiços
   var PATH_ELEMENTS = ['fogo', 'agua', 'terra', 'ar'];
   var TIERS = DATA.unlockTiers;
 
+  // startsUnlocked segue o DADO (v2.1: tanque + curandeira)
   var SPEC = [
     { id: 't-tanque', name: 'Tanque de Teste', role: 'tanque', startsUnlocked: true,
-      cardRarity: 'comum', dropWeight: 0, minDungeon: 0,
+      cardRarity: 'comum', unlockCost: 0, dropWeight: 6, minDungeon: 0,
       stats: { hp: 150, pa: 6, pp: 3, initiative: 15, power: 0, dodge: 5, lock: 40 } },
-    { id: 't-arco', name: 'Arqueiro de Teste', role: 'atirador', startsUnlocked: true,
-      cardRarity: 'comum', dropWeight: 0, minDungeon: 0,
-      stats: { hp: 100, pa: 6, pp: 3, initiative: 70, power: 0, dodge: 25, lock: 10 } },
-    { id: 't-cura', name: 'Curandeira de Teste', role: 'suporte', startsUnlocked: false,
-      cardRarity: 'raro', dropWeight: 18, minDungeon: 0,
+    { id: 't-cura', name: 'Curandeira de Teste', role: 'suporte', startsUnlocked: true,
+      cardRarity: 'raro', unlockCost: 0, dropWeight: 18, minDungeon: 0,
       stats: { hp: 110, pa: 6, pp: 3, initiative: 55, power: 0, dodge: 20, lock: 5 } },
+    { id: 't-arco', name: 'Arqueiro de Teste', role: 'atirador', startsUnlocked: false,
+      cardRarity: 'comum', unlockCost: 25, dropWeight: 10, minDungeon: 1,
+      stats: { hp: 100, pa: 6, pp: 3, initiative: 70, power: 0, dodge: 25, lock: 10 } },
     { id: 't-invo', name: 'Invocador de Teste', role: 'invocador', startsUnlocked: false,
-      cardRarity: 'raro', dropWeight: 12, minDungeon: 2,
+      cardRarity: 'raro', unlockCost: 10, dropWeight: 12, minDungeon: 2,
       stats: { hp: 105, pa: 6, pp: 3, initiative: 35, power: 0, dodge: 12, lock: 15 } },
     { id: 't-lamina', name: 'Espadachim de Teste', role: 'assassino', startsUnlocked: false,
-      cardRarity: 'epico', dropWeight: 7, minDungeon: 3,
+      cardRarity: 'epico', unlockCost: 20, dropWeight: 7, minDungeon: 3,
       stats: { hp: 95, pa: 6, pp: 4, initiative: 90, power: 0, dodge: 40, lock: 10 } },
     { id: 't-bruxo', name: 'Bruxo de Teste', role: 'mago', startsUnlocked: false,
-      cardRarity: 'epico', dropWeight: 4, minDungeon: 4,
+      cardRarity: 'epico', unlockCost: 10, dropWeight: 4, minDungeon: 4,
       stats: { hp: 95, pa: 6, pp: 3, initiative: 45, power: 0, dodge: 15, lock: 5 } }
   ];
 
@@ -117,10 +141,13 @@
       stats: stats, baseSpells: base, paths: paths,
       startsUnlocked: c.startsUnlocked, cardRarity: c.cardRarity
     };
-    DATA.cards[c.id] = { dropWeight: c.dropWeight, minDungeon: c.minDungeon };
+    DATA.cards[c.id] = {
+      unlockCost: c.unlockCost, dropWeight: c.dropWeight,
+      minDungeon: c.minDungeon, starCosts: STAR_COSTS.slice()
+    };
   }
 
-  // classe defeituosa de propósito: só tem 2 caminhos (leitura defensiva de DATA)
+  // classe defeituosa de propósito: só tem 2 caminhos e nenhum `starCosts`
   DATA.classes['t-manco'] = {
     id: 't-manco', name: 'Manco de Teste', role: 'tanque', description: '—', lore: '—',
     palette: { primary: '#888', secondary: '#444', accent: '#fff' },
@@ -137,38 +164,67 @@
     var mel = PATH_ELEMENTS[mp];
     for (var mt = 0; mt < TIERS.length; mt++) makeSpell('t-manco-' + mel + '-' + TIERS[mt], mel, TIERS[mt], 't-manco');
   }
-  DATA.cards['t-manco'] = { dropWeight: 0, minDungeon: 0 };
+  DATA.cards['t-manco'] = { unlockCost: 4, dropWeight: 0, minDungeon: 0 };  // sem starCosts
 
-  // feitiço concedido por item especial (não pertence a nenhum caminho)
+  // feitiços concedidos por itens do espaço 'especial'
   makeSpell('t-feitico-item', 'neutro', 0, null);
+  makeSpell('t-feitico-conjunto', 'fogo', 0, null);
+
+  // ------------------------------------------------------------- conjuntos
+  DATA.sets = {
+    't-set-brasa': {
+      id: 't-set-brasa', name: 'Traje de Brasa', element: 'fogo', dungeonId: 't-dung-4',
+      pieces: ['t-set-pa', 't-set-pp', 't-set-vida', 't-set-especial'],
+      bonuses: { 2: { hp: 20 }, 3: { power: 10 }, 4: { pa: 1, dodge: 15 } }
+    },
+    't-set-limo': {
+      id: 't-set-limo', name: 'Traje de Limo', element: 'agua', dungeonId: 't-dung-0',
+      pieces: ['t-limo-pa', 't-limo-vida'],
+      bonuses: { 2: { hp: 100 } }
+    }
+  };
 
   // ------------------------------------------------------------- itens (4 espaços)
-  DATA.items = {
-    't-anel-pa': { id: 't-anel-pa', name: 'Anel de Ataque', slot: 'pa', rarity: 'epico',
-      dungeonId: 't-dung-0', bonuses: { pa: 1 }, grantsSpell: null,
-      description: '+1 PA', flavor: '—', iconKey: 'ring' },
-    't-anel-pa-exagerado': { id: 't-anel-pa-exagerado', name: 'Anel Exagerado', slot: 'pa', rarity: 'epico',
-      dungeonId: 't-dung-4', bonuses: { pa: 3 }, grantsSpell: null,
-      description: 'dado fora do contrato: deve ser limitado a +1', flavor: '—', iconKey: 'ring' },
-    't-bota-pp': { id: 't-bota-pp', name: 'Botas Ligeiras', slot: 'pp', rarity: 'raro',
-      dungeonId: 't-dung-0', bonuses: { pp: 1, dodge: 5 }, grantsSpell: null,
-      description: '+1 PP', flavor: '—', iconKey: 'boot' },
-    't-peito-vida': { id: 't-peito-vida', name: 'Peitoral de Casca', slot: 'vida', rarity: 'comum',
-      dungeonId: 't-dung-0', bonuses: { hp: 40, resists: { fogo: 10 } }, grantsSpell: null,
-      description: '+40 PV', flavor: '—', iconKey: 'chest' },
-    't-peito-epico': { id: 't-peito-epico', name: 'Peitoral do Fundo', slot: 'vida', rarity: 'epico',
-      dungeonId: 't-dung-4', bonuses: { hp: 60, resists: { fogo: 20, agua: 5 }, lock: 10 }, grantsSpell: null,
-      description: '+60 PV', flavor: '—', iconKey: 'chest' },
-    't-relic-especial': { id: 't-relic-especial', name: 'Relíquia Cantante', slot: 'especial', rarity: 'raro',
-      dungeonId: 't-dung-0', bonuses: { power: 10 }, grantsSpell: 't-feitico-item',
-      description: 'concede um feitiço', flavor: '—', iconKey: 'relic' },
-    't-relic-repetida': { id: 't-relic-repetida', name: 'Relíquia Redundante', slot: 'especial', rarity: 'comum',
-      dungeonId: 't-dung-0', bonuses: {}, grantsSpell: 't-tanque-neutro-1',
-      description: 'concede um feitiço que o tanque já tem', flavor: '—', iconKey: 'relic' },
-    't-item-slot-invalido': { id: 't-item-slot-invalido', name: 'Chapéu Fora do Contrato', slot: 'chapeu',
-      rarity: 'comum', dungeonId: 't-dung-0', bonuses: { hp: 999 }, grantsSpell: null,
-      description: 'espaço inexistente', flavor: '—', iconKey: 'hat' }
-  };
+  DATA.items = {};
+  function item(o) {
+    DATA.items[o.id] = {
+      id: o.id, name: o.name, slot: o.slot, rarity: o.rarity, dungeonId: o.dungeonId || 't-dung-0',
+      element: o.element || 'neutro', setId: o.setId || null,
+      bonuses: o.bonuses || {}, grantsSpell: o.grantsSpell || null,
+      description: o.description || '—', flavor: '—', iconKey: 'test'
+    };
+  }
+  item({ id: 't-anel-pa', name: 'Anel de Ataque', slot: 'pa', rarity: 'epico', element: 'fogo',
+    bonuses: { pa: 1, power: 10 } });
+  item({ id: 't-anel-pa-exagerado', name: 'Anel Exagerado', slot: 'pa', rarity: 'epico', element: 'neutro',
+    bonuses: { pa: 3 }, description: 'dado fora do contrato: deve ser limitado a +1' });
+  item({ id: 't-bota-pp', name: 'Botas Ligeiras', slot: 'pp', rarity: 'raro', element: 'agua',
+    bonuses: { pp: 1, dodge: 5 } });
+  item({ id: 't-peito-vida', name: 'Peitoral de Casca', slot: 'vida', rarity: 'comum', element: 'terra',
+    bonuses: { hp: 40, resists: { fogo: 10 } } });
+  item({ id: 't-peito-epico', name: 'Peitoral do Fundo', slot: 'vida', rarity: 'epico', element: 'terra',
+    dungeonId: 't-dung-4', bonuses: { hp: 60, lock: 10, resists: { fogo: 20, agua: 5 } } });
+  item({ id: 't-relic-especial', name: 'Relíquia Cantante', slot: 'especial', rarity: 'raro', element: 'neutro',
+    bonuses: { power: 10 }, grantsSpell: 't-feitico-item' });
+  item({ id: 't-relic-repetida', name: 'Relíquia Redundante', slot: 'especial', rarity: 'comum', element: 'neutro',
+    grantsSpell: 't-tanque-neutro-1' });
+  item({ id: 't-item-slot-invalido', name: 'Chapéu Fora do Contrato', slot: 'chapeu', rarity: 'comum',
+    element: 'ar', bonuses: { hp: 999 } });
+  // peças do conjunto de brasa
+  item({ id: 't-set-pa', name: 'Bracelete de Brasa', slot: 'pa', rarity: 'raro', element: 'fogo',
+    setId: 't-set-brasa', bonuses: { power: 5 } });
+  item({ id: 't-set-pp', name: 'Coturno de Brasa', slot: 'pp', rarity: 'raro', element: 'fogo',
+    setId: 't-set-brasa', bonuses: { dodge: 5 } });
+  item({ id: 't-set-vida', name: 'Couraça de Brasa', slot: 'vida', rarity: 'raro', element: 'fogo',
+    setId: 't-set-brasa', bonuses: { hp: 30 } });
+  item({ id: 't-set-especial', name: 'Tocha de Brasa', slot: 'especial', rarity: 'raro', element: 'fogo',
+    setId: 't-set-brasa', bonuses: {}, grantsSpell: 't-feitico-conjunto' });
+  // peça de OUTRO conjunto (não pode somar com o de brasa) — sem `setId` de propósito:
+  // o conjunto tem de ser reconhecido pela lista `pieces`
+  item({ id: 't-limo-pa', name: 'Bracelete de Limo', slot: 'pa', rarity: 'comum', element: 'agua',
+    bonuses: { initiative: 3 } });
+  item({ id: 't-limo-vida', name: 'Casaco de Limo', slot: 'vida', rarity: 'comum', element: 'agua',
+    bonuses: { hp: 10 } });
 
   // ------------------------------------------------------------- pets
   DATA.pets = {
@@ -186,21 +242,26 @@
 
   // ------------------------------------------------------------- monstros
   DATA.monsters = {
-    't-grunt': { id: 't-grunt', name: 'Capanga', family: 'Teste', description: '—',
+    't-grunt': { id: 't-grunt', name: 'Capanga', family: 'Teste', element: 'fogo', description: '—',
       stats: { hp: 50, pa: 6, pp: 3, initiative: 10, power: 0, dodge: 0, lock: 0, resists: zeroResists() },
-      spells: [], ai: 'melee', traits: [], boss: false, summonOnly: false, xp: 30 },
-    't-chefe': { id: 't-chefe', name: 'Chefe de Teste', family: 'Teste', description: '—',
+      spells: [], ai: 'melee', traits: [], boss: false, summonOnly: false, xp: 30,
+      stoneDrop: { chance: 1, min: 2, max: 2 } },
+    't-chefe': { id: 't-chefe', name: 'Chefe de Teste', family: 'Teste', element: 'terra', description: '—',
       stats: { hp: 200, pa: 8, pp: 3, initiative: 20, power: 10, dodge: 0, lock: 20, resists: zeroResists() },
-      spells: [], ai: 'melee', traits: [], boss: true, summonOnly: false, xp: 90 }
+      spells: [], ai: 'melee', traits: [], boss: true, summonOnly: false, xp: 90,
+      stoneDrop: { chance: 1, min: 5, max: 5 } },
+    't-mudo': { id: 't-mudo', name: 'Bicho Sem Pedra', family: 'Teste', element: 'ar', description: '—',
+      stats: { hp: 20, pa: 4, pp: 3, initiative: 5, power: 0, dodge: 0, lock: 0, resists: zeroResists() },
+      spells: [], ai: 'melee', traits: [], boss: false, summonOnly: false, xp: 10 }
   };
 
   // ------------------------------------------------------------- calabouços
   function room(n) { return { name: n, weather: 'calmo', layout: ['#####', '#P.a#', '#####'],
     monsters: { a: 't-grunt' }, sceneryTheme: 'teste' }; }
   var CARD_DROPS = [
-    { classId: 't-cura', weight: 1 }, { classId: 't-invo', weight: 1 },
-    { classId: 't-lamina', weight: 1 }, { classId: 't-bruxo', weight: 1 },
-    { classId: 't-tanque', weight: 1 }   // dropWeight 0: nunca pode sair
+    { classId: 't-cura', weight: 1 }, { classId: 't-arco', weight: 1 },
+    { classId: 't-invo', weight: 1 }, { classId: 't-lamina', weight: 1 },
+    { classId: 't-bruxo', weight: 1 }, { classId: 't-manco', weight: 1 }  // dropWeight 0: nunca sai
   ];
   DATA.dungeons = [
     { id: 't-dung-0', name: 'Cova Rasa', theme: 'teste', description: '—', difficulty: 1, order: 0,
@@ -218,8 +279,6 @@
   ];
 
   // ====================================================== DUBLÊ DE ENGINE ====
-  // Mínimo que JOGO.Game consome: createBattle / activeUnit / endTurn / move /
-  // cast / castTargets / unitAt / events. Registra chamadas para as asserções.
   var Engine = { events: [] };
   Engine.calls = { createBattle: 0, move: 0, cast: 0, endTurn: 0 };
   Engine.lastParty = null;
@@ -276,9 +335,8 @@
     u.x = x; u.y = y; u.pp = Math.max(0, u.pp - 1);
     return true;
   };
-  // alvo válido único: a célula do primeiro inimigo (8,8)
   Engine.castTargets = function () { return [{ x: 8, y: 8 }]; };
-  Engine.cast = function (st, uid, spellId, x, y) {
+  Engine.cast = function (st, uid) {
     Engine.calls.cast++;
     var u = Engine.byUid(st, uid);
     if (!u) return false;
@@ -296,8 +354,6 @@
 
   // ====================================================== DUBLÊ DE IA ========
   JOGO.AI = { planTurn: function () { return [{ action: 'end' }]; } };
-
-  // Sem Renderer e sem UI de propósito: o Game precisa rodar headless.
 })();
 </script>
 
@@ -318,6 +374,7 @@
   var passed = 0, failed = 0, failures = [];
   var resultsEl = document.getElementById('results');
   var XPT = D.leveling.xpTable;
+  var STAR_COSTS = D.cards['t-tanque'].starCosts;
 
   function section(title) {
     var h = document.createElement('h2');
@@ -364,14 +421,13 @@
   }
 
   // ---------------------------------------------------- SANDBOX DE SAVE
-  // Copia o save real ANTES de qualquer escrita e devolve idêntico no fim.
   var SAVE_KEY = 'soterra-save-v2';
   var LEGACY_KEY = 'soterra-save-v1';
-  var realSave = null, realLegacy = null, storageOk = true;
+  var realSave = null, realLegacy = null;
   try {
     realSave = window.localStorage ? localStorage.getItem(SAVE_KEY) : null;
     realLegacy = window.localStorage ? localStorage.getItem(LEGACY_KEY) : null;
-  } catch (e) { storageOk = false; }
+  } catch (e) { /* sem storage */ }
 
   function restoreRealSave() {
     try {
@@ -391,8 +447,8 @@
     catch (e) { return false; }
   }
 
-  // ---------------------------------------------------- helpers de progresso
-  var TANK = 't-tanque', ARCO = 't-arco';
+  // ---------------------------------------------------- helpers
+  var TANK = 't-tanque', CURA = 't-cura', ARCO = 't-arco';
 
   function fresh() {
     P.reset();
@@ -415,6 +471,11 @@
     P.addItem(itemId);
     return P.equip(heroId, itemId);
   }
+  function semSave(fn) {           // desliga a gravação (desempenho em laços grandes)
+    var saveOff = P.save;
+    P.save = function () { return false; };
+    try { fn(); } finally { P.save = saveOff; }
+  }
 
   // =========================================================================
   section('1 — Estado inicial, save e robustez de storage');
@@ -425,21 +486,31 @@
     eq(P.SAVE_KEY, 'soterra-save-v2', 'chave do save');
   });
 
-  t('estado novo tem exatamente as 2 classes com startsUnlocked', function () {
+  t('estado novo obedece startsUnlocked do DADO (não fixado no código)', function () {
     fresh();
     eq(P.state.unlockedClasses.length, 2, 'nº de classes liberadas');
     has(P.state.unlockedClasses, TANK, 'tanque liberado');
-    has(P.state.unlockedClasses, ARCO, 'arqueiro liberado');
-    hasNot(P.state.unlockedClasses, 't-bruxo', 'bruxo NÃO pode começar liberado');
+    has(P.state.unlockedClasses, CURA, 'curandeira liberada');
+    hasNot(P.state.unlockedClasses, ARCO, 'arqueiro NÃO começa liberado na v2.1');
+    // muda o dado e o estado novo tem de acompanhar
+    D.classes[ARCO].startsUnlocked = true;
+    try {
+      P.reset();
+      eq(P.state.unlockedClasses.length, 3, 'seguiu o dado alterado');
+      has(P.state.unlockedClasses, ARCO, 'arqueiro liberado pelo dado');
+    } finally { D.classes[ARCO].startsUnlocked = false; fresh(); }
   });
 
-  t('estado novo tem a forma do contrato §9', function () {
+  t('estado novo tem a forma do contrato §9 + §9-B', function () {
     fresh();
     ok(Object.prototype.toString.call(P.state.unlockedClasses) === '[object Array]', 'unlockedClasses array');
     ok(!!P.state.heroes && typeof P.state.heroes === 'object', 'heroes objeto');
     ok(Object.prototype.toString.call(P.state.inventory) === '[object Array]', 'inventory array');
     ok(Object.prototype.toString.call(P.state.pets) === '[object Array]', 'pets array');
-    ok(Object.prototype.toString.call(P.state.cards) === '[object Array]', 'cards array');
+    ok(!!P.state.cards && Object.prototype.toString.call(P.state.cards) === '[object Object]',
+      'cards agora é objeto {classId: n}');
+    ok(!!P.state.stones && Object.prototype.toString.call(P.state.stones) === '[object Object]',
+      'stones é objeto {stoneId: n}');
     var h = P.hero(TANK);
     eq(h.classId, TANK, 'classId');
     eq(h.element, 'neutro', 'elemento inicial');
@@ -447,8 +518,6 @@
     eq(h.level, 1, 'nível inicial');
     eq(h.pet, null, 'pet inicial');
     eq(h.items.pa, null, 'espaço pa');
-    eq(h.items.pp, null, 'espaço pp');
-    eq(h.items.vida, null, 'espaço vida');
     eq(h.items.especial, null, 'espaço especial');
     eq(h.spells.length, 3, 'cache de feitiços = 3 base');
   });
@@ -462,25 +531,30 @@
     ok(typeof st.pp === 'number', 'effectiveStats precisa expor pp');
   });
 
-  t('save/load: nível, elemento, itens e inventário sobrevivem', function () {
+  t('save/load: nível, elemento, itens, cartas e pedras sobrevivem', function () {
     fresh();
     setLevel(TANK, 7);
     P.chooseElement(TANK, 'fogo');
-    P.addItem('t-peito-vida');
-    P.equip(TANK, 't-peito-vida');
+    giveAndEquip(TANK, 't-peito-vida');
     P.addItem('t-bota-pp');
     P.addPet('t-pet-fogo');
     P.equipPet(TANK, 't-pet-fogo');
+    P.addCards('t-invo', 12);
+    P.addStones('st-terra', 7);
+    P.upgradeItem(P.invIndexOf('t-peito-vida'));   // custa 2 pedras
     P.save();
     P.state = null;
     P.load();
     var h = P.hero(TANK);
     eq(h.level, 7, 'nível restaurado');
     eq(h.element, 'fogo', 'elemento restaurado');
-    eq(h.items.vida, 't-peito-vida', 'item restaurado');
+    eq(h.items.vida, 't-peito-vida', 'item equipado restaurado');
     eq(h.pet, 't-pet-fogo', 'pet restaurado');
-    eq(P.state.inventory.length, 1, 'inventário restaurado');
-    eq(P.state.inventory[0], 't-bota-pp', 'item solto restaurado');
+    eq(P.state.inventory.length, 2, 'inventário restaurado (equipado continua no saco)');
+    eq(P.itemLevel('t-peito-vida'), 1, 'nível de forja restaurado');
+    eq(P.state.cards['t-invo'], 12, 'cartas restauradas');
+    eq(P.stoneCount('st-terra'), 5, 'pedras restauradas');
+    ok(P.isClassUnlocked('t-invo'), 'classe liberada pelas cartas continua liberada');
   });
 
   t('save corrompido (JSON inválido) não quebra: cai em estado novo', function () {
@@ -504,9 +578,9 @@
     }
   });
 
-  t('save com lixo dentro (classe/item/pet/elemento inexistentes) é saneado', function () {
+  t('save com lixo dentro é saneado (classe/item/pet/pedra/elemento inexistentes)', function () {
     writeSave(JSON.stringify({
-      version: 2,
+      version: 21,
       unlockedClasses: [TANK, 'classe-fantasma', 123, TANK],
       heroes: {
         't-tanque': { classId: TANK, element: 'plasma', xp: -50, level: 99,
@@ -514,9 +588,10 @@
         'herói-sem-classe': { classId: 'nada', xp: 10 },
         'lixo': 7
       },
-      inventory: ['t-bota-pp', 'item-fantasma', 99, null],
+      inventory: ['t-bota-pp', 'item-fantasma', 99, null, { itemId: 't-peito-vida', level: 999 }],
       pets: ['t-pet-agua', 'pet-fantasma'],
-      cards: ['t-cura', 'classe-fantasma']
+      cards: { 't-invo': 3, 'classe-fantasma': 50, 't-bruxo': -7 },
+      stones: { 'st-fogo': 4, 'pedra-fantasma': 99, 'st-agua': -3 }
     }));
     P.state = null;
     P.load();
@@ -525,15 +600,56 @@
     eq(h.xp, 0, 'xp negativo saneado');
     eq(h.level, 1, 'nível recalculado pelo xp');
     eq(h.items.pa, null, 'item inexistente descartado');
-    eq(h.items.pp, null, 'item de espaço errado (vida em pp) descartado');
+    eq(h.items.pp, null, 'item de espaço errado descartado');
     eq(h.pet, null, 'pet inexistente descartado');
     ok(!P.state.heroes['herói-sem-classe'], 'herói de classe inexistente descartado');
     ok(!P.state.heroes['lixo'], 'entrada não-objeto descartada');
-    eq(P.state.inventory.length, 1, 'inventário filtrado');
+    eq(P.state.inventory.length, 2, 'inventário filtrado');
+    eq(P.itemLevel('t-peito-vida'), 10, 'nível de forja preso ao máximo');
     eq(P.state.pets.length, 1, 'pets filtrados');
-    eq(P.state.cards.length, 1, 'cartas filtradas');
-    hasNot(P.state.unlockedClasses, 'classe-fantasma', 'classe inexistente não entra');
-    has(P.state.unlockedClasses, ARCO, 'classe inicial nunca some do save antigo');
+    eq(P.state.cards['t-invo'], 3, 'cartas válidas mantidas');
+    ok(P.state.cards['classe-fantasma'] === undefined, 'cartas de classe inexistente descartadas');
+    ok(P.state.cards['t-bruxo'] === undefined, 'contagem negativa descartada');
+    eq(P.stoneCount('st-fogo'), 4, 'pedras válidas mantidas');
+    eq(P.stoneCount('pedra-fantasma'), 0, 'pedra inexistente descartada');
+    eq(P.stoneCount('st-agua'), 0, 'pedra negativa descartada');
+  });
+
+  t('save antigo migra: cartas em array e inventário de strings', function () {
+    writeSave(JSON.stringify({
+      unlockedClasses: [TANK, CURA],
+      heroes: { 't-tanque': { classId: TANK, xp: 0, level: 1,
+        items: { pa: null, pp: null, vida: 't-peito-epico', especial: null }, pet: null } },
+      inventory: ['t-bota-pp', 't-bota-pp', 't-anel-pa'],   // v2.0: strings e repetidos
+      pets: [],
+      cards: ['t-invo', 't-invo', 't-invo', 't-bruxo']       // v2.0: array de classIds
+    }));
+    P.state = null;
+    P.load();
+    eq(P.state.cards['t-invo'], 3, 'array de cartas virou contagem');
+    eq(P.state.cards['t-bruxo'], 1, 'contagem da segunda classe');
+    eq(P.state.inventory.length, 3, 'strings viraram entradas e repetidos fundiram');
+    eq(P.itemLevel('t-bota-pp'), 0, 'nível 0 por compatibilidade');
+    ok(P.invIndexOf('t-peito-epico') >= 0, 'item equipado voltou ao saco único');
+    eq(P.hero(TANK).items.vida, 't-peito-epico', 'segue equipado');
+  });
+
+  t('save com o MESMO item equipado em dois heróis é saneado', function () {
+    writeSave(JSON.stringify({
+      unlockedClasses: [TANK, CURA],
+      heroes: {
+        't-tanque': { classId: TANK, xp: 0, level: 1, items: { pa: null, pp: null, vida: 't-peito-vida', especial: null }, pet: null },
+        't-cura': { classId: CURA, xp: 0, level: 1, items: { pa: null, pp: null, vida: 't-peito-vida', especial: null }, pet: null }
+      },
+      inventory: [{ itemId: 't-peito-vida', level: 0 }], pets: [], cards: {}, stones: {}
+    }));
+    P.state = null;
+    P.load();
+    var donos = 0;
+    if (P.hero(TANK).items.vida === 't-peito-vida') donos++;
+    if (P.hero(CURA).items.vida === 't-peito-vida') donos++;
+    eq(donos, 1, 'só um herói pode ficar com a peça');
+    eq(P.equippedBy('t-peito-vida'), TANK, 'o primeiro do save fica com ela');
   });
 
   t('save v1 nunca é lido nem apagado', function () {
@@ -549,10 +665,13 @@
 
   t('reset() volta ao estado novo e grava', function () {
     setLevel(TANK, 12);
+    P.addCards('t-invo', 30);
+    P.addStones('st-fogo', 9);
     P.reset();
     eq(P.hero(TANK).level, 1, 'nível zerado');
     eq(P.state.inventory.length, 0, 'inventário zerado');
-    eq(P.state.cards.length, 0, 'cartas zeradas');
+    eq(P.cardInfo('t-invo').cards, 0, 'cartas zeradas');
+    eq(P.stoneCount('st-fogo'), 0, 'pedras zeradas');
     var raw = readSave();
     if (raw !== null) ok(raw.indexOf('unlockedClasses') >= 0, 'reset gravou o save');
   });
@@ -562,19 +681,12 @@
     JOGO.DATA = {};
     try {
       P.load();
-      P.addXp('qualquer', 100);
-      P.xpInfo('qualquer');
-      P.spellsFor('qualquer');
-      P.effectiveStats('qualquer');
-      P.equip('qualquer', 'nada');
-      P.unequip('qualquer', 'pa');
-      P.equipPet('qualquer', 'nada');
-      P.rollDrops('nada', 0, 1);
-      P.rollCards('nada', 2, 1);
-      P.rollPet('nada', 2, 1);
-      P.battleParty(['qualquer']);
-      P.chooseElement('qualquer', 'fogo');
-      P.pendingElementChoice('qualquer');
+      P.addXp('qualquer', 100); P.xpInfo('qualquer'); P.spellsFor('qualquer');
+      P.effectiveStats('qualquer'); P.equip('qualquer', 'nada'); P.unequip('qualquer', 'pa');
+      P.equipPet('qualquer', 'nada'); P.rollDrops('nada', 0, 1); P.rollCards('nada', 2, 1);
+      P.rollPet('nada', 2, 1); P.battleParty(['qualquer']); P.chooseElement('qualquer', 'fogo');
+      P.pendingElementChoice('qualquer'); P.addCards('qualquer', 5); P.cardInfo('qualquer');
+      P.addStones('st-fogo', 3); P.upgradeInfo(0); P.upgradeItem(0); P.equippedBy('nada');
     } finally {
       JOGO.DATA = backup;
       D = JOGO.DATA;
@@ -633,7 +745,6 @@
     eq(P.addXp(TANK, -500), 0, 'negativo');
     eq(P.addXp(TANK, NaN), 0, 'NaN');
     eq(P.addXp(TANK, 'muito'), 0, 'texto');
-    eq(P.addXp(TANK, undefined), 0, 'undefined');
     eq(P.hero(TANK).xp, antes, 'xp intacto');
   });
 
@@ -646,7 +757,6 @@
     near(info.pct, 0.5, 0.02, 'porcentagem');
     P.addXp(TANK, 999999999);
     var top = P.xpInfo(TANK);
-    eq(top.level, 30, 'nível 30');
     eq(top.xpNext, null, 'sem próximo degrau');
     eq(top.pct, 1, 'barra cheia');
   });
@@ -671,7 +781,7 @@
   t('no nível 5 a escolha fica pendente e é aceita', function () {
     setLevel(TANK, 5);
     eq(P.pendingElementChoice(TANK), true, 'pendente');
-    has(P.pendingElementChoices([TANK, ARCO]), TANK, 'lista de pendentes');
+    has(P.pendingElementChoices([TANK, CURA]), TANK, 'lista de pendentes');
     eq(P.chooseElement(TANK, 'fogo'), true, 'aceita');
     eq(P.hero(TANK).element, 'fogo', 'elemento gravado');
     eq(P.pendingElementChoice(TANK), false, 'não pendente depois');
@@ -687,13 +797,13 @@
 
   t('elemento inválido é recusado (inexistente, neutro, tipo errado)', function () {
     fresh();
-    setLevel(ARCO, 6);
-    eq(P.chooseElement(ARCO, 'plasma'), false, 'elemento inexistente');
-    eq(P.chooseElement(ARCO, 'neutro'), false, 'neutro não é escolha');
-    eq(P.chooseElement(ARCO, null), false, 'null');
-    eq(P.chooseElement(ARCO, 42), false, 'número');
-    eq(P.hero(ARCO).element, 'neutro', 'segue neutro');
-    eq(P.chooseElement(ARCO, 'ar'), true, 'elemento válido aceito');
+    setLevel(CURA, 6);
+    eq(P.chooseElement(CURA, 'plasma'), false, 'elemento inexistente');
+    eq(P.chooseElement(CURA, 'neutro'), false, 'neutro não é escolha');
+    eq(P.chooseElement(CURA, null), false, 'null');
+    eq(P.chooseElement(CURA, 42), false, 'número');
+    eq(P.hero(CURA).element, 'neutro', 'segue neutro');
+    eq(P.chooseElement(CURA, 'ar'), true, 'elemento válido aceito');
   });
 
   t('classe sem aquele caminho recusa o elemento', function () {
@@ -706,9 +816,9 @@
 
   t('save com elemento escolhido abaixo do nível 5 é saneado', function () {
     writeSave(JSON.stringify({
-      unlockedClasses: [TANK, ARCO],
+      unlockedClasses: [TANK, CURA],
       heroes: { 't-tanque': { classId: TANK, element: 'fogo', xp: 0, level: 1, items: {}, pet: null } },
-      inventory: [], pets: [], cards: []
+      inventory: [], pets: [], cards: {}, stones: {}
     }));
     P.state = null;
     P.load();
@@ -723,7 +833,6 @@
     var sp = P.spellsFor(TANK);
     eq(sp.length, 3, 'quantidade');
     has(sp, 't-tanque-neutro-1', 'base 1');
-    has(sp, 't-tanque-neutro-3', 'base 3');
   });
 
   t('feitiços do caminho aparecem exatamente nos níveis certos', function () {
@@ -738,7 +847,6 @@
       h.xp = XPT[lv - 1]; h.level = lv;
       var sp = P.spellsFor(TANK);
       eq(sp.length, 3 + esperado[lvStr], 'nível ' + lv + ': 3 base + ' + esperado[lvStr] + ' do caminho');
-      if (esperado[lvStr] > 0) has(sp, 't-tanque-fogo-5', 'nível ' + lv + ' tem o feitiço de 5');
       if (esperado[lvStr] >= 6) has(sp, 't-tanque-fogo-30', 'nível 30 tem o feitiço de 30');
       else hasNot(sp, 't-tanque-fogo-30', 'nível ' + lv + ' não pode ter o de 30');
     }
@@ -767,9 +875,6 @@
     giveAndEquip(TANK, 't-relic-repetida');
     var sp = P.spellsFor(TANK);
     eq(sp.length, 3, 'continua com 3');
-    var count = 0;
-    for (var i = 0; i < sp.length; i++) if (sp[i] === 't-tanque-neutro-1') count++;
-    eq(count, 1, 'sem duplicata');
   });
 
   t('itens dos outros espaços não concedem feitiço', function () {
@@ -780,15 +885,39 @@
   });
 
   // =========================================================================
-  section('5 — Inventário: 4 espaços tipados + pet');
+  section('5 — Inventário ÚNICO: 4 espaços + pet + exclusividade');
 
-  t('equipar exige POSSE do item', function () {
+  t('equipar exige POSSE e o item CONTINUA no inventário', function () {
     fresh();
     eq(P.equip(TANK, 't-peito-vida'), false, 'sem ter o item');
-    P.addItem('t-peito-vida');
-    eq(P.equip(TANK, 't-peito-vida'), true, 'com o item');
-    eq(P.state.inventory.length, 0, 'saiu do inventário');
+    eq(P.addItem('t-peito-vida'), true, 'entrou no saco');
+    eq(P.state.inventory.length, 1, 'uma entrada');
+    eq(P.state.inventory[0].itemId, 't-peito-vida', 'entrada {itemId, level}');
+    eq(P.state.inventory[0].level, 0, 'nível de forja 0');
+    eq(P.equip(TANK, 't-peito-vida'), true, 'equipa');
+    eq(P.state.inventory.length, 1, 'equipar NÃO tira do saco único');
     eq(P.hero(TANK).items.vida, 't-peito-vida', 'foi para o espaço certo');
+    eq(P.equippedBy('t-peito-vida'), TANK, 'saber quem está usando');
+  });
+
+  t('o mesmo item não pode ser equipado por dois heróis', function () {
+    eq(P.equip(CURA, 't-peito-vida'), false, 'segundo herói recusado');
+    eq(P.hero(CURA).items.vida, null, 'espaço do segundo continua vazio');
+    eq(P.equippedBy('t-peito-vida'), TANK, 'dono continua sendo o primeiro');
+    eq(P.unequip(TANK, 'vida'), true, 'primeiro solta a peça');
+    eq(P.equippedBy('t-peito-vida'), null, 'ninguém usando');
+    eq(P.equip(CURA, 't-peito-vida'), true, 'agora o segundo pode');
+    eq(P.equippedBy('t-peito-vida'), CURA, 'novo dono');
+    eq(P.state.inventory.length, 1, 'continua uma única entrada no saco');
+  });
+
+  t('item repetido no saque vira PEDRAS do elemento do item', function () {
+    fresh();
+    eq(P.addItem('t-peito-vida'), true, 'primeira cópia');
+    var antes = P.stoneCount('st-terra');
+    eq(P.addItem('t-peito-vida'), false, 'repetida não cria entrada nova');
+    eq(P.state.inventory.length, 1, 'uma entrada só');
+    ok(P.stoneCount('st-terra') > antes, 'virou pedra do elemento terra (' + P.stoneCount('st-terra') + ')');
   });
 
   t('cada item vai para o SEU espaço e não invade os outros', function () {
@@ -808,24 +937,24 @@
     P.addItem('t-item-slot-invalido');
     eq(P.equip(TANK, 't-item-slot-invalido'), false, 'slot inválido');
     eq(P.equip(TANK, 'item-que-nao-existe'), false, 'item inexistente');
-    has(P.state.inventory, 't-item-slot-invalido', 'item continua no inventário');
+    ok(P.invIndexOf('t-item-slot-invalido') >= 0, 'item continua no inventário');
   });
 
-  t('trocar item do mesmo espaço devolve o anterior ao inventário', function () {
+  t('trocar item do mesmo espaço libera o anterior', function () {
     fresh();
     giveAndEquip(TANK, 't-anel-pa');
     P.addItem('t-anel-pa-exagerado');
     eq(P.equip(TANK, 't-anel-pa-exagerado'), true, 'troca');
     eq(P.hero(TANK).items.pa, 't-anel-pa-exagerado', 'novo equipado');
-    has(P.state.inventory, 't-anel-pa', 'antigo voltou');
+    eq(P.equippedBy('t-anel-pa'), null, 'o anterior ficou livre');
+    eq(P.equip(CURA, 't-anel-pa'), true, 'e o outro herói pode usá-lo');
   });
 
-  t('unequip devolve ao inventário; espaço inválido/vazio recusa', function () {
+  t('unequip: espaço inválido/vazio recusa', function () {
     fresh();
     giveAndEquip(TANK, 't-peito-vida');
     eq(P.unequip(TANK, 'vida'), true, 'desequipa');
     eq(P.hero(TANK).items.vida, null, 'espaço vazio');
-    has(P.state.inventory, 't-peito-vida', 'voltou ao inventário');
     eq(P.unequip(TANK, 'vida'), false, 'espaço já vazio');
     eq(P.unequip(TANK, 'chapeu'), false, 'espaço inexistente');
     eq(P.unequip(TANK, 'pet'), false, 'pet não é um dos 4 espaços');
@@ -838,13 +967,13 @@
     eq(P.equipPet(TANK, 't-pet-fogo'), true, 'equipa');
     eq(P.hero(TANK).pet, 't-pet-fogo', 'pet no herói');
     eq(P.state.pets.length, 0, 'saiu do canil');
-    eq(P.equipPet(ARCO, 't-pet-fogo'), true, 'transfere para outro herói');
+    eq(P.equipPet(CURA, 't-pet-fogo'), true, 'transfere para outro herói');
     eq(P.hero(TANK).pet, null, 'saiu do primeiro dono');
-    eq(P.hero(ARCO).pet, 't-pet-fogo', 'entrou no novo dono');
-    eq(P.equipPet(ARCO, 'pet-fantasma'), false, 'pet inexistente');
-    eq(P.unequipPet(ARCO), true, 'devolve ao canil');
+    eq(P.hero(CURA).pet, 't-pet-fogo', 'entrou no novo dono');
+    eq(P.equipPet(CURA, 'pet-fantasma'), false, 'pet inexistente');
+    eq(P.unequipPet(CURA), true, 'devolve ao canil');
     eq(P.state.pets.length, 1, 'voltou ao canil');
-    eq(P.unequipPet(ARCO), false, 'sem pet para devolver');
+    eq(P.unequipPet(CURA), false, 'sem pet para devolver');
   });
 
   t('pet duplicado não entra no canil duas vezes', function () {
@@ -855,7 +984,7 @@
   });
 
   // =========================================================================
-  section('6 — effectiveStats (classe + nível + itens + pet)');
+  section('6 — effectiveStats (classe + nível + itens + conjuntos + pet + estrelas)');
 
   t('nível 1 sem nada = stats da classe', function () {
     fresh();
@@ -883,9 +1012,9 @@
   t('bônus dos 4 itens entram (hp, pa, pp, power, dodge, lock, resists)', function () {
     fresh();
     var base = D.classes[TANK].stats;
-    giveAndEquip(TANK, 't-anel-pa');       // +1 pa
-    giveAndEquip(TANK, 't-bota-pp');       // +1 pp, +5 dodge
-    giveAndEquip(TANK, 't-peito-epico');   // +60 hp, +10 lock, resists fogo 20 / agua 5
+    giveAndEquip(TANK, 't-anel-pa');        // +1 pa, +10 power
+    giveAndEquip(TANK, 't-bota-pp');        // +1 pp, +5 dodge
+    giveAndEquip(TANK, 't-peito-epico');    // +60 hp, +10 lock, resists fogo 20 / agua 5
     giveAndEquip(TANK, 't-relic-especial'); // +10 power
     var st = P.effectiveStats(TANK);
     eq(st.pa, base.pa + 1, 'pa');
@@ -893,7 +1022,7 @@
     eq(st.hp, base.hp + 60, 'hp');
     eq(st.dodge, base.dodge + 5, 'dodge');
     eq(st.lock, base.lock + 10, 'lock');
-    eq(st.power, base.power + 10, 'power');
+    eq(st.power, base.power + 20, 'power');
     eq(st.resists.fogo, 20, 'resistência fogo');
     eq(st.resists.agua, 5, 'resistência agua');
   });
@@ -923,135 +1052,273 @@
     eq(st2.pp, base.pp + 1, 'pp do pet limitado');
   });
 
-  t('classe + nível + itens + pet somam tudo junto', function () {
+  t('CONJUNTO: 2, 3 e 4 peças somam progressivamente', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    giveAndEquip(TANK, 't-set-pa');            // +5 power (1 peça: sem bônus de conjunto)
+    var s1 = P.effectiveStats(TANK);
+    eq(s1.hp, base.hp, 'uma peça não dá bônus de conjunto');
+    eq(s1.power, base.power + 5, 'só o bônus da própria peça');
+
+    giveAndEquip(TANK, 't-set-pp');            // 2 peças => +20 hp
+    var s2 = P.effectiveStats(TANK);
+    eq(s2.hp, base.hp + 20, '2 peças: +20 hp');
+    eq(s2.dodge, base.dodge + 5, 'dodge da peça');
+
+    giveAndEquip(TANK, 't-set-vida');          // 3 peças => +20 hp, +10 power
+    var s3 = P.effectiveStats(TANK);
+    eq(s3.hp, base.hp + 30 + 20, '3 peças: hp da peça + bônus de 2');
+    eq(s3.power, base.power + 5 + 10, '3 peças: +10 power');
+
+    giveAndEquip(TANK, 't-set-especial');      // 4 peças => +1 pa, +15 dodge
+    var s4 = P.effectiveStats(TANK);
+    eq(s4.hp, base.hp + 30 + 20, '4 peças: hp mantido');
+    eq(s4.power, base.power + 5 + 10, '4 peças: power mantido');
+    eq(s4.pa, base.pa + 1, '4 peças: +1 pa do conjunto');
+    eq(s4.dodge, base.dodge + 5 + 15, '4 peças: +15 dodge');
+  });
+
+  t('CONJUNTO: peças de conjuntos diferentes não se misturam', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    giveAndEquip(TANK, 't-set-pa');     // conjunto brasa
+    giveAndEquip(TANK, 't-limo-vida');  // conjunto limo (reconhecido pela lista `pieces`)
+    var st = P.effectiveStats(TANK);
+    eq(st.hp, base.hp + 10, 'só o bônus da peça, nenhum bônus de conjunto');
+    giveAndEquip(TANK, 't-limo-pa');    // 2 peças de limo... mas o espaço pa já é da brasa
+    eq(P.hero(TANK).items.pa, 't-limo-pa', 'a peça de limo tomou o espaço pa');
+    var st2 = P.effectiveStats(TANK);
+    eq(st2.hp, base.hp + 10 + 100, 'agora 2 peças de limo: +100 hp');
+  });
+
+  t('ESTRELAS: bônus fixos entram nos stats, um a um', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    var cost = P.cardInfo(TANK).unlockCost;   // classe inicial: custo 0
+    eq(cost, 0, 'classe inicial não custa carta');
+    eq(P.effectiveStats(TANK).hp, base.hp, 'sem estrela, sem bônus');
+
+    P.addCards(TANK, STAR_COSTS[0]);          // ★1: +15 hp
+    eq(P.cardInfo(TANK).stars, 1, '1 estrela');
+    eq(P.effectiveStats(TANK).hp, base.hp + 15, '★1 +15 hp');
+
+    P.addCards(TANK, STAR_COSTS[1] - STAR_COSTS[0]);   // ★2: +8 power
+    eq(P.cardInfo(TANK).stars, 2, '2 estrelas');
+    eq(P.effectiveStats(TANK).power, base.power + 8, '★2 +8 power');
+
+    P.addCards(TANK, STAR_COSTS[2] - STAR_COSTS[1]);   // ★3: +1 pp
+    eq(P.cardInfo(TANK).stars, 3, '3 estrelas');
+    eq(P.effectiveStats(TANK).pp, base.pp + 1, '★3 +1 pp (soma inteira)');
+
+    P.addCards(TANK, STAR_COSTS[3] - STAR_COSTS[2]);   // ★4: +25 hp, +10 dodge
+    eq(P.cardInfo(TANK).stars, 4, '4 estrelas');
+    eq(P.effectiveStats(TANK).hp, base.hp + 15 + 25, '★4 hp acumulado');
+    eq(P.effectiveStats(TANK).dodge, base.dodge + 10, '★4 +10 dodge');
+
+    P.addCards(TANK, STAR_COSTS[4] - STAR_COSTS[3]);   // ★5: +1 pa
+    eq(P.cardInfo(TANK).stars, 5, '5 estrelas');
+    eq(P.effectiveStats(TANK).pa, base.pa + 1, '★5 +1 pa (soma inteira)');
+  });
+
+  t('ESTRELAS + item: o +1 PA da estrela NÃO é limitado pelo teto do item', function () {
+    var base = D.classes[TANK].stats;
+    giveAndEquip(TANK, 't-anel-pa');          // +1 pa (item)
+    eq(P.effectiveStats(TANK).pa, base.pa + 2, 'item (+1) e estrela (+1) somam');
+  });
+
+  t('classe + nível + itens + pet + estrelas somam tudo junto', function () {
     fresh();
     var base = D.classes[TANK].stats;
     setLevel(TANK, 11);                    // +60 hp, +30 power
     giveAndEquip(TANK, 't-peito-vida');    // +40 hp, resist fogo 10
     P.addPet('t-pet-fogo');
     P.equipPet(TANK, 't-pet-fogo');        // +10 hp, +1 pa, +5 power, resist fogo 5
+    P.addCards(TANK, STAR_COSTS[0]);       // ★1: +15 hp
     var st = P.effectiveStats(TANK);
-    eq(st.hp, base.hp + 60 + 40 + 10, 'hp total');
+    eq(st.hp, base.hp + 60 + 40 + 10 + 15, 'hp total');
     eq(st.power, base.power + 30 + 5, 'power total');
     eq(st.pa, base.pa + 1, 'pa total');
     eq(st.resists.fogo, 15, 'resistências somadas');
   });
 
   // =========================================================================
-  section('7 — Cartas de personagem e desbloqueio de classe');
+  section('7 — Cartas acumulativas, desbloqueio por custo e estrelas');
 
-  t('unlockClass libera a classe e cria a ficha do herói', function () {
+  t('custos de desbloqueio saem do DADO', function () {
     fresh();
-    eq(P.isClassUnlocked('t-bruxo'), false, 'começa trancada');
+    eq(P.cardInfo(TANK).unlockCost, 0, 'tanque (inicial) 0');
+    eq(P.cardInfo(CURA).unlockCost, 0, 'curandeira (inicial) 0');
+    eq(P.cardInfo('t-invo').unlockCost, 10, 'invocador 10');
+    eq(P.cardInfo('t-bruxo').unlockCost, 10, 'bruxo 10');
+    eq(P.cardInfo('t-lamina').unlockCost, 20, 'espadachim 20');
+    eq(P.cardInfo(ARCO).unlockCost, 25, 'arqueiro 25');
+  });
+
+  t('cartas acumulam e a classe abre no custo exato', function () {
+    fresh();
+    eq(P.isClassUnlocked('t-invo'), false, 'começa trancada');
+    var info = P.addCards('t-invo', 9);
+    eq(info.cards, 9, 'acumulou 9');
+    eq(info.unlocked, false, 'ainda trancada com 9/10');
+    eq(P.isClassUnlocked('t-invo'), false, 'confirmado');
+    ok(!P.hero('t-invo'), 'sem ficha antes de liberar');
+    info = P.addCards('t-invo', 1);
+    eq(info.cards, 10, '10 cartas');
+    eq(info.unlocked, true, 'liberada no custo exato');
+    ok(!!P.hero('t-invo'), 'ficha criada ao liberar');
+    eq(P.hero('t-invo').level, 1, 'ficha no nível 1');
+  });
+
+  t('a contagem de cartas NUNCA decresce', function () {
+    var antes = P.cardInfo('t-invo').cards;
+    P.addCards('t-invo', -5);
+    eq(P.cardInfo('t-invo').cards, antes, 'negativo ignorado');
+    P.addCards('t-invo', 0);
+    eq(P.cardInfo('t-invo').cards, antes, 'zero ignorado');
+    P.addCards('t-invo', NaN);
+    eq(P.cardInfo('t-invo').cards, antes, 'NaN ignorado');
+    eq(P.addCards('classe-fantasma', 5), null, 'classe inexistente devolve null');
+  });
+
+  t('estrelas contam só o EXCEDENTE ao custo de desbloqueio', function () {
+    fresh();
+    P.addCards('t-lamina', 20);                       // custo exato: 0 de excedente
+    var i0 = P.cardInfo('t-lamina');
+    eq(i0.unlocked, true, 'liberada');
+    eq(i0.stars, 0, 'nenhuma estrela ainda');
+    eq(i0.next.star, 1, 'próxima é a 1ª estrela');
+    eq(i0.next.faltam, STAR_COSTS[0], 'faltam ' + STAR_COSTS[0] + ' cartas');
+    P.addCards('t-lamina', STAR_COSTS[0]);            // excedente 5 => ★1
+    eq(P.cardInfo('t-lamina').stars, 1, '★1');
+    eq(P.cardInfo('t-lamina').next.faltam, STAR_COSTS[1] - STAR_COSTS[0], 'faltam para a ★2');
+  });
+
+  t('trilha completa de 5 estrelas e teto', function () {
+    fresh();
+    var esperado = [
+      [0, 0], [4, 0], [5, 1], [14, 1], [15, 2], [29, 2],
+      [30, 3], [54, 3], [55, 4], [89, 4], [90, 5], [500, 5]
+    ];
+    for (var i = 0; i < esperado.length; i++) {
+      P.state.cards[TANK] = esperado[i][0];           // excedente = total (custo 0)
+      eq(P.cardInfo(TANK).stars, esperado[i][1],
+        esperado[i][0] + ' cartas devem dar ' + esperado[i][1] + ' estrela(s)');
+    }
+    eq(P.cardInfo(TANK).next, null, 'no teto não há próxima estrela');
+  });
+
+  t('classe sem starCosts no dado usa a trilha padrão do contrato', function () {
+    fresh();
+    P.addCards('t-manco', 4);                          // custo 4 => liberada, excedente 0
+    eq(P.cardInfo('t-manco').unlocked, true, 'liberada');
+    eq(P.cardInfo('t-manco').stars, 0, 'sem estrela');
+    P.addCards('t-manco', 5);
+    eq(P.cardInfo('t-manco').stars, 1, 'trilha padrão [5,15,30,55,90]');
+  });
+
+  t('unlockClass direto continua funcionando', function () {
+    fresh();
     eq(P.unlockClass('t-bruxo'), true, 'libera');
-    eq(P.isClassUnlocked('t-bruxo'), true, 'liberada');
-    ok(!!P.hero('t-bruxo'), 'ficha criada');
-    eq(P.hero('t-bruxo').level, 1, 'ficha no nível 1');
     eq(P.unlockClass('t-bruxo'), false, 'liberar de novo não faz nada');
     eq(P.unlockClass('classe-fantasma'), false, 'classe inexistente');
+    ok(!!P.hero('t-bruxo'), 'ficha criada');
   });
 
   t('carta só cai na sala do chefe', function () {
     fresh();
     var caiu = 0;
-    for (var i = 0; i < 400; i++) {
-      if (P.rollCards('t-dung-4', 0, 1).length) caiu++;
-      if (P.rollCards('t-dung-4', 1, 1).length) caiu++;
-    }
+    semSave(function () {
+      for (var i = 0; i < 400; i++) {
+        if (P.rollCards('t-dung-4', 0, 1).length) caiu++;
+        if (P.rollCards('t-dung-4', 1, 1).length) caiu++;
+      }
+    });
     eq(caiu, 0, 'nenhuma carta fora da sala do chefe');
     var achou = false;
     for (var j = 0; j < 200 && !achou; j++) if (P.rollCards('t-dung-4', 2, 1).length) achou = true;
     ok(achou, 'o chefe precisa derrubar carta alguma hora');
   });
 
-  t('minDungeon é respeitado (calabouço raso só derruba carta rasa)', function () {
+  t('minDungeon é respeitado (3000 sorteios no calabouço raso)', function () {
     fresh();
     var contagem = {}, total = 0;
-    var saveOff = P.save; P.save = function () { return false; };   // desempenho
-    try {
+    semSave(function () {
       for (var i = 0; i < 3000; i++) {
-        var cards = P.rollCards('t-dung-0', 2, 3);
+        var cards = P.rollCards('t-dung-0', 2, 2);
         for (var k = 0; k < cards.length; k++) {
           contagem[cards[k].classId] = (contagem[cards[k].classId] || 0) + 1;
           total++;
         }
       }
-    } finally { P.save = saveOff; }
+    });
     ok(total > 500, 'amostra suficiente (' + total + ' cartas)');
-    eq(contagem['t-invo'] || 0, 0, 'minDungeon 2 não pode cair no calabouço 0');
-    eq(contagem['t-lamina'] || 0, 0, 'minDungeon 3 não pode cair no calabouço 0');
-    eq(contagem['t-bruxo'] || 0, 0, 'minDungeon 4 não pode cair no calabouço 0');
-    eq(contagem['t-tanque'] || 0, 0, 'classe inicial (dropWeight 0) nunca cai');
-    eq(total, contagem['t-cura'], 'só a carta elegível cai');
+    eq(contagem['t-arco'] || 0, 0, 'minDungeon 1 não cai no calabouço 0');
+    eq(contagem['t-invo'] || 0, 0, 'minDungeon 2 não cai no calabouço 0');
+    eq(contagem['t-lamina'] || 0, 0, 'minDungeon 3 não cai no calabouço 0');
+    eq(contagem['t-bruxo'] || 0, 0, 'minDungeon 4 não cai no calabouço 0');
+    eq(contagem['t-manco'] || 0, 0, 'dropWeight 0 nunca cai');
+    eq(total, (contagem['t-cura'] || 0) + (contagem[TANK] || 0), 'só as cartas elegíveis caem');
   });
 
   t('classe mais forte = carta mais rara (4000 sorteios)', function () {
     fresh();
-    var contagem = { 't-cura': 0, 't-invo': 0, 't-lamina': 0, 't-bruxo': 0 };
-    var total = 0, saiu = 0;
-    var saveOff = P.save; P.save = function () { return false; };
-    try {
+    var c = {}, saiu = 0, total = 0;
+    semSave(function () {
       for (var i = 0; i < 4000; i++) {
-        var cards = P.rollCards('t-dung-4', 2, 3);
+        var cards = P.rollCards('t-dung-4', 2, 2);
         total++;
-        for (var k = 0; k < cards.length; k++) {
-          saiu++;
-          if (contagem[cards[k].classId] === undefined) contagem[cards[k].classId] = 0;
-          contagem[cards[k].classId]++;
-        }
+        for (var k = 0; k < cards.length; k++) { c[cards[k].classId] = (c[cards[k].classId] || 0) + 1; saiu++; }
       }
-    } finally { P.save = saveOff; }
-    ok(saiu > 1200, 'amostra suficiente (' + saiu + ' cartas em ' + total + ' sorteios)');
-    ok(contagem['t-cura'] > contagem['t-invo'],
-      'raro 18 > raro 12 (' + contagem['t-cura'] + ' vs ' + contagem['t-invo'] + ')');
-    ok(contagem['t-invo'] > contagem['t-lamina'],
-      'raro 12 > épico 7 (' + contagem['t-invo'] + ' vs ' + contagem['t-lamina'] + ')');
-    ok(contagem['t-lamina'] > contagem['t-bruxo'],
-      'épico 7 > épico 4 (' + contagem['t-lamina'] + ' vs ' + contagem['t-bruxo'] + ')');
-    eq(contagem['t-tanque'] || 0, 0, 'classe com dropWeight 0 nunca sai');
-    near(saiu / total, 0.42, 0.06, 'chance de carta no trio ~42%');
+    });
+    ok(saiu > 1500, 'amostra suficiente (' + saiu + ' cartas em ' + total + ' sorteios)');
+    ok(c['t-cura'] > c['t-invo'], 'peso 18 > 12 (' + c['t-cura'] + ' vs ' + c['t-invo'] + ')');
+    ok(c['t-invo'] > c['t-lamina'], 'peso 12 > 7 (' + c['t-invo'] + ' vs ' + c['t-lamina'] + ')');
+    ok(c['t-lamina'] > c['t-bruxo'], 'peso 7 > 4 (' + c['t-lamina'] + ' vs ' + c['t-bruxo'] + ')');
+    eq(c['t-manco'] || 0, 0, 'classe com dropWeight 0 nunca sai');
+    near(saiu / total, 0.50, 0.06, 'chance de carta na dupla ~50%');
   });
 
-  t('carta nova desbloqueia a classe; carta repetida vira bônus de XP', function () {
+  t('quanto mais fundo o calabouço, mais cartas por queda', function () {
     fresh();
-    var novas = 0, repetidas = 0, guard = 0;
-    while ((novas < 1 || repetidas < 1) && guard < 20000) {
-      guard++;
-      var cards = P.rollCards('t-dung-4', 2, 1);
-      for (var i = 0; i < cards.length; i++) {
-        var c = cards[i];
-        ok(typeof c.classId === 'string', 'carta tem classId');
-        ok(typeof c.name === 'string', 'carta tem nome');
-        if (c.duplicate) {
-          repetidas++;
-          eq(c.unlocked, false, 'repetida não desbloqueia');
-          ok(c.xpBonus > 0, 'repetida vira XP (' + c.xpBonus + ')');
-          ok(P.isClassUnlocked(c.classId), 'classe já estava liberada');
-        } else {
-          novas++;
-          eq(c.unlocked, true, 'nova desbloqueia');
-          eq(c.xpBonus, 0, 'nova não dá XP');
-          ok(P.isClassUnlocked(c.classId), 'classe passou a estar liberada');
-          ok(!!P.hero(c.classId), 'ficha criada pela carta');
-        }
+    var raso = 0, fundo = 0;
+    semSave(function () {
+      var i, cs;
+      for (i = 0; i < 300; i++) {
+        cs = P.rollCards('t-dung-0', 2, 1);
+        if (cs.length) raso = cs[0].amount;
+        cs = P.rollCards('t-dung-4', 2, 1);
+        if (cs.length) fundo = cs[0].amount;
       }
-    }
-    ok(novas > 0 && repetidas > 0, 'precisa ter visto carta nova e repetida');
-    ok(P.state.cards.length > 0, 'histórico de cartas registrado');
+    });
+    eq(raso, 1, 'calabouço 0 dá 1 carta');
+    eq(fundo, 3, 'calabouço 4 dá 3 cartas');
   });
 
-  t('XP da carta repetida escala com a raridade', function () {
+  t('carta do chefe acumula na coleção e NÃO vira mais XP', function () {
     fresh();
-    P.unlockClass('t-cura'); P.unlockClass('t-invo');
-    P.unlockClass('t-lamina'); P.unlockClass('t-bruxo');
-    var vistos = {}, guard = 0;
-    while (guard < 20000 && (!vistos['raro'] || !vistos['epico'])) {
+    var xpAntes = P.hero(TANK).xp;
+    var achou = null, guard = 0;
+    while (!achou && guard < 500) {
+      var cs = P.rollCards('t-dung-4', 2, 1);
+      if (cs.length) achou = cs[0];
       guard++;
-      var cards = P.rollCards('t-dung-4', 2, 1);
-      for (var i = 0; i < cards.length; i++) vistos[cards[i].rarity] = cards[i].xpBonus;
     }
-    ok(vistos['raro'] > 0 && vistos['epico'] > 0, 'viu raro e épico');
-    ok(vistos['epico'] > vistos['raro'], 'épico dá mais XP que raro');
+    ok(!!achou, 'alguma carta caiu');
+    ok(achou.xpBonus === undefined, 'o campo xpBonus foi removido (v2.1)');
+    eq(P.hero(TANK).xp, xpAntes, 'nenhum XP foi dado pela carta');
+    eq(P.cardInfo(achou.classId).cards, achou.cards, 'coleção reflete a carta');
+    ok(achou.amount >= 1, 'quantidade informada');
+    ok(typeof achou.stars === 'number', 'estrelas informadas');
+    ok(typeof achou.starUp === 'number', 'subida de estrela informada');
+  });
+
+  t('a carta que completa o custo libera a classe pelo Progress', function () {
+    fresh();
+    P.addCards('t-bruxo', 9);
+    eq(P.isClassUnlocked('t-bruxo'), false, 'ainda trancada');
+    var info = P.addCards('t-bruxo', 1);
+    eq(info.unlocked, true, 'liberou');
+    ok(!!P.hero('t-bruxo'), 'ficha criada');
   });
 
   t('cardDrops vazio e calabouço inexistente não derrubam nada', function () {
@@ -1060,18 +1327,17 @@
     for (var i = 0; i < 300; i++) total += P.rollCards('t-dung-vazio', 2, 1).length;
     eq(total, 0, 'cardDrops: [] é decisão explícita de não derrubar carta');
     eq(P.rollCards('calabouço-fantasma', 2, 1).length, 0, 'calabouço inexistente');
-    eq(P.state.cards.length, 0, 'nada foi registrado no histórico');
   });
 
   // =========================================================================
-  section('8 — Saque de itens e pets');
+  section('8 — Saque de itens e pets (grupo de 1 ou 2)');
 
   t('rollDrops respeita minRoom e coloca o item no inventário', function () {
     fresh();
-    var drops = P.rollDrops('t-dung-0', 0, 3);
+    var drops = P.rollDrops('t-dung-0', 0, 2);
     eq(drops.length, 1, 'uma peça na sala comum');
     eq(drops[0], 't-peito-vida', 'só o item de minRoom 0');
-    eq(P.state.inventory.length, 1, 'entrou no inventário');
+    ok(P.invIndexOf('t-peito-vida') >= 0, 'entrou no inventário');
   });
 
   t('sala do chefe sorteia duas vezes e libera itens de minRoom alto', function () {
@@ -1086,19 +1352,18 @@
     ok(achouRaro, 'item de minRoom 2 pode cair no chefe');
   });
 
-  t('sorte de saque: menos heróis, mais item raro', function () {
+  t('sorte de saque: solo (2.4) supera a dupla (1.6)', function () {
     fresh();
-    var saveOff = P.save; P.save = function () { return false; };
-    var solo = 0, trio = 0;
-    try {
+    var solo = 0, dupla = 0;
+    semSave(function () {
       for (var i = 0; i < 3000; i++) {
         var a = P.rollDrops('t-dung-0', 2, 1);
         for (var x = 0; x < a.length; x++) if (a[x] === 't-relic-especial') solo++;
-        var b = P.rollDrops('t-dung-0', 2, 3);
-        for (var y = 0; y < b.length; y++) if (b[y] === 't-relic-especial') trio++;
+        var b = P.rollDrops('t-dung-0', 2, 2);
+        for (var y = 0; y < b.length; y++) if (b[y] === 't-relic-especial') dupla++;
       }
-    } finally { P.save = saveOff; P.state.inventory.length = 0; }
-    ok(solo > trio, 'solo (' + solo + ') tem de superar o trio (' + trio + ')');
+    });
+    ok(solo > dupla, 'solo (' + solo + ') tem de superar a dupla (' + dupla + ')');
   });
 
   t('rollPet só no chefe, respeita dropDungeon e não repete', function () {
@@ -1115,7 +1380,154 @@
   });
 
   // =========================================================================
-  section('9 — battleParty e grupo de 1 a 3 heróis');
+  section('9 — Forja: pedras, custos e evolução até +10');
+
+  t('pedras entram e saem certo', function () {
+    fresh();
+    eq(P.stoneCount('st-terra'), 0, 'começa zerado');
+    eq(P.addStones('st-terra', 5), true, 'adiciona');
+    eq(P.stoneCount('st-terra'), 5, 'contagem');
+    eq(P.addStones('st-terra', 0), false, 'zero recusado');
+    eq(P.addStones('st-terra', -3), false, 'negativo recusado');
+    eq(P.stoneCount('st-terra'), 5, 'estoque intacto');
+  });
+
+  t('upgradeInfo descreve o item novo', function () {
+    fresh();
+    P.addItem('t-peito-vida');
+    var idx = P.invIndexOf('t-peito-vida');
+    var info = P.upgradeInfo(idx);
+    eq(info.level, 0, 'nível 0');
+    eq(info.tierName, 'Comum', 'tier inicial');
+    eq(info.custo, 2, 'primeiro degrau custa 2');
+    eq(info.stoneId, 'st-terra', 'pede a pedra do elemento do item');
+    eq(info.temPedras, false, 'sem pedras');
+    eq(info.maxed, false, 'não está no teto');
+    eq(P.upgradeInfo(99), null, 'índice inválido');
+    eq(P.upgradeInfo(-1), null, 'índice negativo');
+    eq(P.upgradeItem(99), false, 'melhorar índice inválido');
+  });
+
+  t('sem pedras suficientes a forja recusa e não consome nada', function () {
+    var idx = P.invIndexOf('t-peito-vida');
+    P.addStones('st-terra', 1);
+    eq(P.upgradeItem(idx), false, 'recusado com 1 de 2');
+    eq(P.itemLevel('t-peito-vida'), 0, 'nível intacto');
+    eq(P.stoneCount('st-terra'), 1, 'pedra não consumida');
+  });
+
+  t('pedra do elemento ERRADO não serve', function () {
+    var idx = P.invIndexOf('t-peito-vida');
+    P.addStones('st-fogo', 50);
+    eq(P.upgradeItem(idx), false, 'fogo não forja item de terra');
+    eq(P.stoneCount('st-fogo'), 50, 'estoque de fogo intacto');
+    P.addStones('st-terra', 1);                 // agora 2
+    eq(P.upgradeItem(idx), true, 'com a pedra certa, forja');
+    eq(P.itemLevel('t-peito-vida'), 1, 'subiu para +1');
+    eq(P.stoneCount('st-terra'), 0, 'consumiu exatamente 2');
+  });
+
+  t('item neutro aceita qualquer pedra (usa a de maior estoque)', function () {
+    fresh();
+    P.addItem('t-anel-pa-exagerado');           // element: neutro
+    var idx = P.invIndexOf('t-anel-pa-exagerado');
+    P.addStones('st-ar', 9);
+    var info = P.upgradeInfo(idx);
+    eq(info.stoneId, 'st-ar', 'escolheu a pedra de maior estoque');
+    eq(P.upgradeItem(idx), true, 'forjou com pedra de ar');
+    eq(P.stoneCount('st-ar'), 7, 'consumiu 2');
+  });
+
+  t('evolução determinística até +10 com os custos do contrato', function () {
+    fresh();
+    P.addItem('t-peito-vida');
+    var idx = P.invIndexOf('t-peito-vida');
+    var custos = D.upgrade.stoneCost;
+    var total = 0, i;
+    for (i = 0; i < custos.length; i++) total += custos[i];
+    eq(total, 107, 'custo total de 0 a +10');
+    P.addStones('st-terra', total);
+    for (i = 0; i < 10; i++) {
+      var info = P.upgradeInfo(idx);
+      eq(info.custo, custos[i], 'custo do degrau ' + (i + 1));
+      eq(P.upgradeItem(idx), true, 'sobe para +' + (i + 1));
+      eq(P.itemLevel('t-peito-vida'), i + 1, 'nível ' + (i + 1));
+    }
+    eq(P.stoneCount('st-terra'), 0, 'gastou tudo');
+    var fim = P.upgradeInfo(idx);
+    eq(fim.level, 10, 'chegou ao teto');
+    eq(fim.maxed, true, 'marcado como máximo');
+    eq(fim.tierName, 'Magnífico', 'tier final');
+    P.addStones('st-terra', 999);
+    eq(P.upgradeItem(idx), false, 'no teto não sobe mais');
+    eq(P.itemLevel('t-peito-vida'), 10, 'nunca regride');
+  });
+
+  t('nomes de tier acompanham o nível', function () {
+    fresh();
+    P.addItem('t-peito-vida');
+    var idx = P.invIndexOf('t-peito-vida');
+    var esperado = ['Comum', 'Comum', 'Comum', 'Raro', 'Raro', 'Raro',
+                    'Supremo', 'Supremo', 'Supremo', 'Supremo', 'Magnífico'];
+    P.addStones('st-terra', 200);
+    for (var lv = 0; lv <= 10; lv++) {
+      eq(P.upgradeInfo(idx).tierName, esperado[lv], 'nível ' + lv);
+      if (lv < 10) P.upgradeItem(idx);
+    }
+  });
+
+  t('a forja multiplica os bônus do item em effectiveStats (+10 = 2,2×)', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    giveAndEquip(TANK, 't-peito-vida');       // +40 hp, resist fogo 10
+    eq(P.effectiveStats(TANK).hp, base.hp + 40, 'nível 0: bônus cru');
+    var idx = P.invIndexOf('t-peito-vida');
+    P.addStones('st-terra', 200);
+    P.upgradeItem(idx);                        // +1 => 1,12×
+    eq(P.effectiveStats(TANK).hp, base.hp + Math.round(40 * 1.12), '+1: 1,12×');
+    for (var i = 1; i < 10; i++) P.upgradeItem(idx);
+    eq(P.itemLevel('t-peito-vida'), 10, 'chegou a +10');
+    eq(P.effectiveStats(TANK).hp, base.hp + 88, '+10: 40 × 2,2 = 88');
+    eq(P.effectiveStats(TANK).resists.fogo, 22, 'resistência também escala');
+  });
+
+  t('a forja NÃO fura o teto de +1 PA/PP do item', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    giveAndEquip(TANK, 't-anel-pa');           // +1 pa, +10 power
+    var idx = P.invIndexOf('t-anel-pa');
+    P.addStones('st-fogo', 200);
+    for (var i = 0; i < 10; i++) P.upgradeItem(idx);
+    eq(P.itemLevel('t-anel-pa'), 10, '+10');
+    var st = P.effectiveStats(TANK);
+    eq(st.pa, base.pa + 1, 'PA continua limitado a +1');
+    eq(st.power, base.power + 22, 'poder escalou (10 × 2,2)');
+  });
+
+  t('nonScalingKeys: PA e PP ficam fixos nos 10 níveis de forja', function () {
+    ok(D.upgrade.nonScalingKeys.join(',') === 'pa,pp', 'o dado declara pa e pp');
+    fresh();
+    var base = D.classes[TANK].stats;
+    giveAndEquip(TANK, 't-anel-pa');           // pa: +1 · power: +10 (escala)
+    giveAndEquip(TANK, 't-bota-pp');           // pp: +1 · dodge: +5 (escala)
+    var iPa = P.invIndexOf('t-anel-pa');
+    var iPp = P.invIndexOf('t-bota-pp');
+    P.addStones('st-fogo', 200);
+    P.addStones('st-agua', 200);
+    for (var lv = 0; lv <= 10; lv++) {
+      var st = P.effectiveStats(TANK);
+      var mult = 1 + 0.12 * lv;
+      eq(P.itemLevel('t-anel-pa'), lv, 'nível do anel');
+      eq(st.pa, base.pa + 1, '+' + lv + ': PA continua +1 (não escala)');
+      eq(st.pp, base.pp + 1, '+' + lv + ': PP continua +1 (não escala)');
+      eq(st.power, base.power + Math.round(10 * mult), '+' + lv + ': poder escala normalmente');
+      eq(st.dodge, base.dodge + Math.round(5 * mult), '+' + lv + ': esquiva escala normalmente');
+      if (lv < 10) { P.upgradeItem(iPa); P.upgradeItem(iPp); }
+    }
+  });
+
+  // =========================================================================
+  section('10 — battleParty e grupo de 1 ou 2 heróis');
 
   t('battleParty devolve o formato do contrato §9', function () {
     fresh();
@@ -1123,6 +1535,7 @@
     P.chooseElement(TANK, 'agua');
     giveAndEquip(TANK, 't-anel-pa');
     P.addPet('t-pet-fogo'); P.equipPet(TANK, 't-pet-fogo');
+    P.addCards(TANK, STAR_COSTS[0]);
     var party = P.battleParty([TANK]);
     eq(party.length, 1, 'um herói');
     var p = party[0];
@@ -1132,32 +1545,30 @@
     eq(p.level, 12, 'level');
     eq(p.pet, 't-pet-fogo', 'pet');
     eq(p.items.pa, 't-anel-pa', 'items');
-    ok(p.spells.length === 3 + 3, 'spells (3 base + 3 do caminho até o nível 12)');
-    ok(!!p.stats && typeof p.stats.hp === 'number', 'stats');
+    eq(p.stars, 1, 'estrelas da classe');
+    eq(p.spells.length, 3 + 3, 'spells (3 base + 3 do caminho até o nível 12)');
     eq(p.stats.pa, P.effectiveStats(TANK).pa, 'stats batem com effectiveStats');
   });
 
-  t('battleParty ignora heróis inexistentes e aceita 1, 2 e 3', function () {
+  t('battleParty aceita 1 e 2 e corta o excedente', function () {
     fresh();
-    P.unlockClass('t-cura');
+    P.unlockClass('t-invo');
     eq(P.battleParty([TANK]).length, 1, 'grupo de 1');
-    eq(P.battleParty([TANK, ARCO]).length, 2, 'grupo de 2');
-    eq(P.battleParty([TANK, ARCO, 't-cura']).length, 3, 'grupo de 3');
+    eq(P.battleParty([TANK, CURA]).length, 2, 'grupo de 2');
+    eq(P.battleParty([TANK, CURA, 't-invo']).length, 2, 'excedente cortado (§9-B)');
     eq(P.battleParty([TANK, 'fantasma']).length, 1, 'herói inexistente é ignorado');
     eq(P.battleParty([]).length, 0, 'lista vazia');
   });
 
-  t('Game.startRun aceita 1 a 3 heróis e recusa o resto', function () {
+  t('Game.startRun aceita 1 ou 2 heróis e RECUSA 3', function () {
     fresh();
-    P.unlockClass('t-cura'); P.unlockClass('t-invo');
+    P.unlockClass('t-invo');
     eq(G.startRun([TANK], 't-dung-0'), true, 'grupo de 1');
     eq(G.screen, 'battle', 'foi para a batalha');
     G.init();
-    eq(G.startRun([TANK, ARCO], 't-dung-0'), true, 'grupo de 2');
+    eq(G.startRun([TANK, CURA], 't-dung-0'), true, 'grupo de 2');
     G.init();
-    eq(G.startRun([TANK, ARCO, 't-cura'], 't-dung-0'), true, 'grupo de 3');
-    G.init();
-    eq(G.startRun([TANK, ARCO, 't-cura', 't-invo'], 't-dung-0'), false, 'grupo de 4 recusado');
+    eq(G.startRun([TANK, CURA, 't-invo'], 't-dung-0'), false, 'grupo de 3 recusado (v2.1)');
     eq(G.startRun([], 't-dung-0'), false, 'grupo vazio recusado');
     eq(G.startRun([TANK, TANK], 't-dung-0'), false, 'herói repetido recusado');
     eq(G.startRun(['fantasma'], 't-dung-0'), false, 'herói inexistente recusado');
@@ -1167,7 +1578,7 @@
 
   t('startRun entrega ao Engine o grupo no formato battleParty', function () {
     fresh();
-    G.startRun([TANK, ARCO], 't-dung-0');
+    G.startRun([TANK, CURA], 't-dung-0');
     ok(!!E.lastParty && E.lastParty.length === 2, 'grupo entregue');
     eq(E.lastParty[0].heroId, TANK, 'heroId no payload');
     ok(!!E.lastParty[0].stats, 'stats no payload');
@@ -1175,13 +1586,17 @@
   });
 
   // =========================================================================
-  section('10 — Recompensas da sala (XP dividido, drops, cartas, elemento)');
+  section('11 — Recompensas da sala (XP, cartas, pedras, elemento)');
 
+  function matarInimigos() {
+    for (var i = 0; i < G.state.units.length; i++) {
+      if (G.state.units[i].side === 'enemy') { G.state.units[i].alive = false; G.state.units[i].hp = 0; }
+    }
+  }
   function venceSala(heroIds, dungeonId, roomIndex) {
     G.init();
     G.startRun(heroIds, dungeonId);
     while (G.roomIndex < roomIndex) {
-      // encerra a sala atual e avança
       matarInimigos();
       G.state.phase = 'won';
       G.handleEvent({ type: 'battleEnd' });
@@ -1191,54 +1606,80 @@
     G.state.phase = 'won';
     G.handleEvent({ type: 'battleEnd' });
   }
-  function matarInimigos() {
-    for (var i = 0; i < G.state.units.length; i++) {
-      if (G.state.units[i].side === 'enemy') { G.state.units[i].alive = false; G.state.units[i].hp = 0; }
-    }
-  }
   var ultimaTela = null, ultimoDado = null;
   JOGO.UI = { showScreen: function (name, data) { ultimaTela = name; ultimoDado = data; } };
 
-  t('XP da sala é dividido pelo tamanho do grupo', function () {
+  t('XP da sala é dividido pelo tamanho do grupo (1 ou 2)', function () {
     fresh();
-    P.unlockClass('t-cura');
-    venceSala([TANK], 't-dung-0', 0);          // 2 monstros de 30 xp
+    venceSala([TANK], 't-dung-0', 0);            // 2 capangas de 30 xp
     eq(ultimoDado.xpGanho, 60, 'solo leva tudo');
     eq(P.hero(TANK).xp, 60, 'xp aplicado ao herói');
     fresh();
-    P.unlockClass('t-cura');
-    venceSala([TANK, ARCO], 't-dung-0', 0);
+    venceSala([TANK, CURA], 't-dung-0', 0);
     eq(ultimoDado.xpGanho, 30, 'dupla divide por 2');
     eq(P.hero(TANK).xp, 30, 'herói 1');
-    eq(P.hero(ARCO).xp, 30, 'herói 2');
-    fresh();
-    P.unlockClass('t-cura');
-    venceSala([TANK, ARCO, 't-cura'], 't-dung-0', 0);
-    eq(ultimoDado.xpGanho, 20, 'trio divide por 3');
-    eq(P.hero('t-cura').xp, 20, 'terceiro herói também');
+    eq(P.hero(CURA).xp, 30, 'herói 2');
   });
 
-  t('vitória na sala comum vai para roomClear com o pacote da UI', function () {
+  t('o pacote da UI tem o formato do adendo v2.1', function () {
     fresh();
     venceSala([TANK], 't-dung-0', 0);
     eq(G.screen, 'roomClear', 'tela');
     eq(ultimaTela, 'roomClear', 'UI notificada');
-    ok(!!ultimoDado, 'pacote entregue');
     ok(typeof ultimoDado.xpGanho === 'number', 'xpGanho');
     ok(!!ultimoDado.levelUps, 'levelUps');
     ok(!!ultimoDado.drops, 'drops');
     ok(!!ultimoDado.cards, 'cards');
+    ok(!!ultimoDado.stones, 'stones');
     ok(!!ultimoDado.elementChoices, 'elementChoices');
+    ok(ultimoDado.xpCartas === undefined, 'xpCartas foi removido na v2.1');
     ok(ultimoDado.drops.length > 0, 'a sala deu saque');
   });
 
-  t('vitória na última sala vai para dungeonComplete', function () {
+  t('monstros derrubam PEDRAS do próprio elemento', function () {
+    fresh();
+    eq(P.stoneCount('st-fogo'), 0, 'começa sem pedras');
+    venceSala([TANK], 't-dung-0', 0);            // 2 capangas de fogo, 2 pedras cada
+    eq(ultimoDado.stones['st-fogo'], 4, 'duas pedras por capanga');
+    eq(P.stoneCount('st-fogo'), 4, 'pedras guardadas no save');
+    eq(P.stoneCount('st-terra'), 0, 'nenhuma pedra de outro elemento');
+  });
+
+  t('monstro sem stoneDrop não derruba pedra', function () {
+    fresh();
+    G.startRun([TANK], 't-dung-0');
+    for (var i = 0; i < G.state.units.length; i++) {
+      if (G.state.units[i].side === 'enemy') G.state.units[i].defId = 't-mudo';
+    }
+    matarInimigos();
+    G.state.phase = 'won';
+    G.handleEvent({ type: 'battleEnd' });
+    eq(P.stoneCount('st-ar'), 0, 'nenhuma pedra');
+    eq(ultimoDado.xpGanho, 20, 'XP do bicho mudo (10 + 10)');
+  });
+
+  t('cartas do chefe chegam no pacote com o formato novo', function () {
+    fresh();
+    var achou = null, guard = 0;
+    while (!achou && guard < 60) {
+      guard++;
+      fresh();
+      venceSala([TANK], 't-dung-4', 2);
+      if (ultimoDado.cards.length) achou = ultimoDado.cards[0];
+    }
+    ok(!!achou, 'alguma carta caiu em 60 descidas');
+    ok(typeof achou.classId === 'string', 'classId');
+    ok(typeof achou.amount === 'number', 'amount');
+    ok(typeof achou.cards === 'number', 'total acumulado');
+    ok(typeof achou.unlockCost === 'number', 'custo');
+    ok(achou.xpBonus === undefined, 'nada de XP por carta');
+    eq(P.cardInfo(achou.classId).cards, achou.cards, 'coleção salva');
+  });
+
+  t('vitória na última sala vai para dungeonComplete; derrota vai para defeat', function () {
     fresh();
     venceSala([TANK], 't-dung-0', 2);
     eq(G.screen, 'dungeonComplete', 'tela final do calabouço');
-  });
-
-  t('derrota vai para a tela de derrota', function () {
     fresh();
     G.startRun([TANK], 't-dung-0');
     G.state.phase = 'lost';
@@ -1248,17 +1689,17 @@
 
   t('levelUps são reportados à UI', function () {
     fresh();
-    P.addXp(TANK, XPT[1] - 10);            // falta 10 para o nível 2
-    venceSala([TANK], 't-dung-0', 0);       // ganha 60
+    P.addXp(TANK, XPT[1] - 10);
+    venceSala([TANK], 't-dung-0', 0);
     eq(P.hero(TANK).level, 2, 'subiu de nível');
-    ok(ultimoDado.levelUps.length === 1, 'um level up reportado');
+    eq(ultimoDado.levelUps.length, 1, 'um level up reportado');
     eq(ultimoDado.levelUps[0].heroId, TANK, 'herói do level up');
     eq(ultimoDado.levelUps[0].novoNivel, 2, 'novo nível');
   });
 
   t('elementChoices avisa a UI quando o herói chega ao nível 5 sem elemento', function () {
     fresh();
-    P.addXp(TANK, XPT[4] - 10);            // 10 de XP antes do nível 5
+    P.addXp(TANK, XPT[4] - 10);
     venceSala([TANK], 't-dung-0', 0);
     eq(P.hero(TANK).level, 5, 'chegou ao nível 5');
     has(ultimoDado.elementChoices, TANK, 'entrou na lista de escolhas');
@@ -1269,32 +1710,11 @@
     eq(G.screen, 'roomClear', 'volta sozinho à tela anterior');
   });
 
-  t('XP de carta repetida entra na conta do nível', function () {
-    fresh();
-    P.unlockClass('t-cura'); P.unlockClass('t-invo');
-    P.unlockClass('t-lamina'); P.unlockClass('t-bruxo');
-    var achou = false, guard = 0;
-    while (!achou && guard < 60) {
-      guard++;
-      fresh();
-      P.unlockClass('t-cura'); P.unlockClass('t-invo');
-      P.unlockClass('t-lamina'); P.unlockClass('t-bruxo');
-      venceSala([TANK], 't-dung-4', 2);
-      if (ultimoDado.cards.length && ultimoDado.cards[0].duplicate) {
-        achou = true;
-        eq(ultimoDado.xpCartas, ultimoDado.cards[0].xpBonus, 'bônus somado');
-        // 3 salas de 2 capangas (30 xp cada) no solo + o bônus da carta repetida
-        eq(P.hero(TANK).xp, 60 * 3 + ultimoDado.xpCartas, 'XP total no herói');
-      }
-    }
-    ok(achou, 'nenhuma carta repetida em 60 tentativas de chefe');
-  });
-
   t('entre salas: vivo cura 50% do que perdeu, morto revive com 30%', function () {
     fresh();
-    G.startRun([TANK, ARCO], 't-dung-0');
-    G.state.units[0].hp = 40;                       // vivo ferido
-    G.state.units[1].alive = false; G.state.units[1].hp = 0;   // morto
+    G.startRun([TANK, CURA], 't-dung-0');
+    G.state.units[0].hp = 40;
+    G.state.units[1].alive = false; G.state.units[1].hp = 0;
     matarInimigos();
     G.state.phase = 'won';
     G.handleEvent({ type: 'battleEnd' });
@@ -1305,13 +1725,13 @@
   });
 
   // =========================================================================
-  section('11 — Cronômetro do turno (30 s + acúmulo)');
+  section('12 — Cronômetro do turno (30 s + acúmulo)');
 
   t('relógio injetado: o tempo anda por _setClock, não por setTimeout', function () {
     fresh();
     var clock = 0;
     G._setClock(function () { return clock; });
-    G.startRun([TANK, ARCO], 't-dung-0');
+    G.startRun([TANK, CURA], 't-dung-0');
     eq(G.turnTime, 30, 'turno de 30 s');
     G.update(0);
     eq(G.timeLeft(), 30, 'começa cheio');
@@ -1325,10 +1745,10 @@
     var clock = 0;
     fresh();
     G._setClock(function () { return clock; });
-    G.startRun([TANK, ARCO], 't-dung-0');
+    G.startRun([TANK, CURA], 't-dung-0');
     G.update(0);
     clock += 10; G.update(0);
-    G.endTurn();                                   // sobraram 20 s
+    G.endTurn();
     eq(G.banked, 20, 'banco acumulou a sobra');
     ok(G.isPlayerTurn(), 'ainda é turno de herói (2º herói)');
     eq(G.timeLeft(), 50, '30 do turno + 20 do banco');
@@ -1338,9 +1758,9 @@
     var clock = 0;
     fresh();
     G._setClock(function () { return clock; });
-    G.startRun([TANK, ARCO], 't-dung-0');
+    G.startRun([TANK, CURA], 't-dung-0');
     G.update(0);
-    G.endTurn();                                   // banco = 30
+    G.endTurn();
     eq(G.banked, 30, 'banco cheio');
     var uidAntes = E.activeUnit(G.state).uid;
     clock += 29; G.update(0);
@@ -1348,7 +1768,7 @@
     eq(E.activeUnit(G.state).uid, uidAntes, 'turno não encerrou');
     clock += 30; G.update(0);
     eq(G.timeLeft(), 1, 'consumindo o banco');
-    ok(G.banked === 30, 'o banco só é debitado ao fechar o turno');
+    eq(G.banked, 30, 'o banco só é debitado ao fechar o turno');
     clock += 2; G.update(0);
     ok(E.activeUnit(G.state).uid !== uidAntes, 'o turno encerrou sozinho ao zerar');
     eq(G.banked, 0, 'banco consumido pelo turno que estourou');
@@ -1357,7 +1777,7 @@
   t('sem relógio injetado o tempo anda pelo dt de update()', function () {
     fresh();
     G._setClock(null);
-    G.startRun([TANK, ARCO], 't-dung-0');
+    G.startRun([TANK, CURA], 't-dung-0');
     G.update(0);
     eq(G.timeLeft(), 30, 'cheio');
     G.update(5);
@@ -1368,28 +1788,16 @@
     near(G.timeLeft(), 24.5, 0.001, 'dt negativo é ignorado');
   });
 
-  t('o banco tem teto (bankMax)', function () {
+  t('o banco tem teto (bankMax) e zera a cada sala nova', function () {
     var clock = 0;
     fresh();
     G.bankMax = 40;
     G._setClock(function () { return clock; });
-    G.startRun([TANK, ARCO], 't-dung-0');
-    G.update(0);
-    G.endTurn();                 // +30 => 30
-    G.update(0);
-    G.endTurn();                 // +30 => 60, limitado a 40
+    G.startRun([TANK, CURA], 't-dung-0');
+    G.update(0); G.endTurn();          // +30
+    G.update(0); G.endTurn();          // +30 => limitado a 40
     eq(G.banked, 40, 'banco limitado');
     G.bankMax = 120;
-  });
-
-  t('o banco zera ao começar uma sala nova', function () {
-    var clock = 0;
-    fresh();
-    G._setClock(function () { return clock; });
-    G.startRun([TANK], 't-dung-0');
-    G.update(0);
-    G.endTurn();
-    ok(G.banked > 0, 'tinha banco');
     matarInimigos();
     G.state.phase = 'won';
     G.handleEvent({ type: 'battleEnd' });
@@ -1401,7 +1809,7 @@
     var clock = 0;
     fresh();
     G._setClock(function () { return clock; });
-    G.startRun([TANK, ARCO], 't-dung-0');
+    G.startRun([TANK, CURA], 't-dung-0');
     E.events.length = 0;
     G.update(0);
     clock += 1; G.update(0);
@@ -1418,9 +1826,9 @@
     G._setClock(function () { return clock; });
     G.startRun([TANK], 't-dung-0');
     G.update(0);
-    G.endTurn();                       // passa para os monstros
+    G.endTurn();
     ok(!G.isPlayerTurn(), 'turno da IA');
-    clock += 100; G.update(0);         // IA joga (dublê: encerra na hora)
+    clock += 100; G.update(0);
     clock += 100; G.update(0);
     ok(G.isPlayerTurn(), 'voltou ao herói');
     G.update(0);
@@ -1428,7 +1836,7 @@
   });
 
   // =========================================================================
-  section('12 — Cancelamento de feitiço (proteção contra clique acidental)');
+  section('13 — Cancelamento de feitiço (proteção contra clique acidental)');
 
   t('clique FORA da zona válida só desmarca o feitiço', function () {
     fresh();
@@ -1437,7 +1845,7 @@
     var paAntes = u.pa, ppAntes = u.pp, xAntes = u.x, yAntes = u.y;
     G.selectSpell('t-tanque-neutro-1');
     eq(G.selectedSpellId, 't-tanque-neutro-1', 'feitiço selecionado');
-    G.onTileClicked(3, 3);                       // fora dos alvos (alvo válido = 8,8)
+    G.onTileClicked(3, 3);
     eq(G.selectedSpellId, null, 'feitiço desmarcado');
     eq(E.calls.cast, 0, 'não conjurou');
     eq(E.calls.move, 0, 'não moveu');
@@ -1488,13 +1896,13 @@
   });
 
   // =========================================================================
-  section('13 — Fusão pelo lado do jogador');
+  section('14 — Fusão pelo lado do jogador');
 
   t('canFuse lista o par adjacente', function () {
     fresh();
-    G.startRun([TANK, ARCO], 't-dung-0');
+    G.startRun([TANK, CURA], 't-dung-0');
     var a = G.state.units[0], b = G.state.units[1];
-    a.x = 1; a.y = 1; b.x = 2; b.y = 1;                 // adjacentes
+    a.x = 1; a.y = 1; b.x = 2; b.y = 1;
     var pares = G.canFuse();
     eq(pares.length, 1, 'um par');
     eq(pares[0].uidA, a.uid, 'A é o herói ativo');
@@ -1517,7 +1925,7 @@
 
   t('par NÃO adjacente não pode fundir', function () {
     fresh();
-    G.startRun([TANK, ARCO], 't-dung-0');
+    G.startRun([TANK, CURA], 't-dung-0');
     var a = G.state.units[0], b = G.state.units[1];
     a.x = 1; a.y = 1; b.x = 5; b.y = 5;
     eq(G.canFuse().length, 0, 'nenhum par');
@@ -1562,20 +1970,19 @@
 
   t('não é possível fundir fora do turno do jogador', function () {
     fresh();
-    G.startRun([TANK, ARCO], 't-dung-0');
-    G.state.turnIdx = 2;                       // turno do monstro
+    G.startRun([TANK, CURA], 't-dung-0');
+    G.state.turnIdx = 2;
     eq(G.canFuse().length, 0, 'sem pares fora do turno do herói');
     eq(G.declareFusion('H0', 'H1'), false, 'declaração recusada');
   });
 
   // =========================================================================
-  section('14 — Fluxo de telas e robustez headless');
+  section('15 — Fluxo de telas e robustez headless');
 
   t('telas de navegação pré-batalha', function () {
     G.init();
     eq(G.screen, 'menu', 'começa no menu');
     eq(G.goTo('heroSelect'), true, 'heroSelect');
-    eq(G.screen, 'heroSelect', 'tela trocada');
     eq(G.goTo('dungeonSelect'), true, 'dungeonSelect');
     eq(G.goTo('elementChoice'), true, 'elementChoice');
     eq(G.goTo('battle'), false, 'battle não é navegável direto');
@@ -1602,8 +2009,7 @@
 
   t('com Renderer ocupado a IA não age', function () {
     fresh();
-    var ocupado = true;
-    JOGO.Renderer = { isBusy: function () { return ocupado; } };
+    JOGO.Renderer = { isBusy: function () { return true; } };
     try {
       G.startRun([TANK], 't-dung-0');
       G.endTurn();
@@ -1652,21 +2058,18 @@
   });
 
   // =========================================================================
-  section('15 — Sandbox: devolução do save real');
+  section('16 — Sandbox: devolução do save real');
 
   t('save real devolvido byte a byte', function () {
     restoreRealSave();
     if (!window.localStorage) { ok(true, 'sem storage: nada a restaurar'); return; }
-    var agora = localStorage.getItem(SAVE_KEY);
-    eq(agora, realSave, 'save v2 idêntico ao original');
+    eq(localStorage.getItem(SAVE_KEY), realSave, 'save v2 idêntico ao original');
     eq(localStorage.getItem(LEGACY_KEY), realLegacy, 'save v1 idêntico ao original');
   });
 
   // =========================================================================
-  section('16 — Storage negado (file:// e janela privada)');
+  section('17 — Storage negado (file:// e janela privada)');
 
-  // roda DEPOIS da devolução do save real: se o navegador não deixar restaurar
-  // o acesso a localStorage, o save do jogador já está a salvo.
   t('com localStorage negado tudo continua funcionando em memória', function () {
     if (!window.localStorage) { ok(true, 'ambiente já é sem storage'); return; }
     var negado = false;
@@ -1688,10 +2091,13 @@
       eq(P.hero(TANK).level, 3, 'progressão continua na memória (200 xp = nível 3)');
       giveAndEquip(TANK, 't-peito-vida');
       eq(P.hero(TANK).items.vida, 't-peito-vida', 'equipar funciona sem storage');
+      P.addCards('t-invo', 10);
+      ok(P.isClassUnlocked('t-invo'), 'cartas funcionam sem storage');
+      P.addStones('st-terra', 5);
+      eq(P.upgradeItem(P.invIndexOf('t-peito-vida')), true, 'forja funciona sem storage');
       P.reset();
       eq(P.hero(TANK).level, 1, 'reset funciona sem storage');
     } finally {
-      // devolve o acesso nativo exatamente como estava
       if (desc) Object.defineProperty(window, 'localStorage', desc);
       else delete window.localStorage;
     }

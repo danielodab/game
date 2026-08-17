@@ -20,6 +20,9 @@ var JOGO = (typeof window !== 'undefined')
 //   Art.itemIcon(itemId, s)      -> canvas
 //   Art.petIcon(petId, s)        -> canvas
 //   Art.tileEventIcon(kind, s)   -> canvas
+//   Art.stoneIcon(stoneId, s)    -> canvas   pedra de forja (ADENDO v2.1)
+//   Art.cardIcon(classId, w, h)  -> canvas   carta de classe (= Art.classCard)
+//   Art.starIcon(filled, s)      -> canvas   estrela cheia/vazia da coleção
 //   Art.rarityColor(rarity)      -> '#hex'
 //   Art.elementColor(element)    -> '#hex'
 //   Art.texture(key)             -> canvas   ('unit:sumo:fogo:0', 'tile:estufa:1', …)
@@ -1328,9 +1331,9 @@ var JOGO = (typeof window !== 'undefined')
     ['planta', /raiz|planta|flor|cipo|cipó|vinha|broto|semente|fungo|cogumelo|espor|musgo|trepad|carrapich|verga|jardin|seiv|p[óo]len|thorn|root|vine|sprout|seed|bloom|spore|pollen|burr|leaf|garden|sap\b/i],
     ['blob', /lodo|limo|gosma|blob|slime|lama|geleia|gota|gotinha|escorr|monte de|[áa]gua-viva|jelly|ooze|sludge|slag|drop|droplet|goo|seep|mound|\bdamp/i],
     ['verme', /verme|lombriga|serpe|serpente|cobra|enguia|moreia|larva|worm|snake|eel|moray|slither/i],
-    ['ave', /p[aá]ssaro|falc[aã]o|[aá]guia|morcego|corvo|coruja|asa|penas|pican[çc]o|cantarol|coro\b|assobio|bird|falcon|hawk|eagle|bat\b|crow|owl|shrike|warbler|choir|whistle|piper|wing/i],
-    ['inseto', /inseto|besouro|aranha|escorpi|mosca|traca|traça|casulo|ferr[ãa]o|centop|vespa|formig|wasp|spider|beetle|mite|roach|moth|ant-/i],
-    ['espirito', /esp[ií]rito|alma|eco|fantasma|sopro|brilho|f[aá]tuo|nevoa|névoa|sombra|assombr|cinza|cinzent|espelho|g[êe]meo|estilha|mote|fogar[ée]u|familiar|cora[çc][ãa]o|ninfa|pregolim|wraith|wisp|ghost|spirit|revenant|phantom|shade|mirror|sliver|ash|firedamp|rift|heart|nymph|sprite/i],
+    ['ave', /p[aá]ssaro|falc[aã]o|[aá]guia|morcego|corvo|coruja|\basas?\b|\bpenas?\b|pican[çc]o|cantarol|\bcoro\b|assobio|bird|falcon|hawk|eagle|\bbat\b|crow|owl|shrike|warbler|choir|whistle|piper|\bwing/i],
+    ['inseto', /inseto|besouro|aranha|escorpi|mosca|traca|traça|casulo|ferr[ãa]o|centop|vespa|formig|caranguejo|wasp|spider|beetle|mite|roach|moth|\bcrab\b|ant-/i],
+    ['espirito', /esp[ií]rito|alma|\beco\b|fantasma|sopro|brilho|f[aá]tuo|nevoa|névoa|sombra|assombr|cinza|cinzent|espelho|g[êe]meo|estilha|\bmote|fogar[ée]u|familiar|cora[çc][ãa]o|ninfa|pregolim|wraith|wisp|ghost|spirit|revenant|phantom|shade|mirror|sliver|\bash|firedamp|rift(?!.*forge)|nymph|sprite/i],
     ['pedra', /pedra|rocha|golem|cristal|est[aá]tua|entulho|escombro|granito|mineral|laje|min[ée]rio|lasca|alicerce|bigorna|seixo|stone|rock|crystal|\bore\b|slate|boulder|anvil|lodestone|ballast/i],
     ['fera', /lobo|c[aã]o\b|cão|rato|fera|bicho|garra|presa|javali|peixe|caranguejo|bocarra|ti[çc][ãa]o|fagulha|gremlin|voraz|hound|wolf|beast|fang|claw|crab|jaw|imp\b|whelp|feral/i],
     ['bruto', /guarda|bruto|carrasco|gigante|capataz|soldado|mestre|senhor|rei|rainha|campe|ferreiro|zelador|colosso|sentinela|arauto|baron|xam[ãa]|enforca|puxa|bate|acendedor|smith|warden|colossus|sentinel|porter|hauler|herald|wright|forge|knock|shaman|hanger|revenant/i]
@@ -1372,16 +1375,24 @@ var JOGO = (typeof window !== 'undefined')
     var p = cfg.pal, a = cfg.arch, rd = rng(defId), i, ang;
     var big = cfg.boss ? 1.24 : 1;
     var H = (cfg.boss ? 92 : 62) * (md && md.scale ? md.scale : 1);
-    ctx.save(); ctx.scale(big, big);
+    // Variação por id: dois bichos do mesmo arquétipo nunca saem idênticos.
+    // vw/vh mexem na proporção (gordo/magro, alto/baixo) e vd escolhe o
+    // detalhe contável (nº de dentes, caudas, patas, pontas…).
+    var vr = rng(defId + '#var');
+    var vw = 0.86 + vr() * 0.34, vh = 0.88 + vr() * 0.3, vd = vr(), vd2 = vr();
+    var nd = 3 + Math.floor(vd * 4);          // 3..6 elementos repetidos
+    ctx.save(); ctx.scale(big * vw, big * vh);
     if (a === 'blob') {
+      var bt = 1 + vd2 * 0.34;                    // quão "alto" o pingo é
       part(ctx, Pel(0, -6, 30, 8), rgba(p.dark, 0.35), { flat: true, noline: true });
-      part(ctx, Pblob([-30, -14, -26, -38, -8, -48, 12, -46, 28, -34, 30, -12, 12, -3, -12, -3]),
+      part(ctx, Pblob([-30, -14, -26, -38 * bt, -8, -48 * bt, 12, -46 * bt,
+                       28, -34 * bt, 30, -12, 12, -3, -12, -3]),
            p.main, { k: 0.24, hi: 0.16 });
-      for (i = 0; i < 3; i++) {
-        part(ctx, Pel(-14 + i * 14, -3, 8 - i, 3.4), sh(p.main, -0.16), { k: 0.16, lw: 0.75 });
+      for (i = 0; i < nd; i++) {                  // pingos escorrendo
+        part(ctx, Pel(-16 + i * (32 / nd), -3, 8 - i * 1.2, 3.4), sh(p.main, -0.16), { k: 0.16, lw: 0.75 });
       }
-      critterEyes(ctx, 2, -32, 6.4, 2, 10);
-      stroke(ctx, [-6, -20, 2, -15, 11, -20], sh(p.main, -0.42), 1, true);
+      critterEyes(ctx, 2, -32 * bt, 6.4, vd2 > 0.72 ? 3 : 2, 10);
+      stroke(ctx, [-6, -20 * bt, 2, -15 * bt, 11, -20 * bt], sh(p.main, -0.42), 1, true);
     } else if (a === 'fera') {
       part(ctx, Pcap(-16, -26, 13, 18, -30, 11), p.main, { k: 0.24, hi: 0.12 });
       for (i = 0; i < 4; i++) {
@@ -1392,10 +1403,17 @@ var JOGO = (typeof window !== 'undefined')
       part(ctx, Pel(24, -38, 12.5, 11), p.main, { k: 0.22, hi: 0.14 });
       part(ctx, Pcap(28, -34, 7, 38, -30, 4.4), sh(p.main, 0.06), { k: 0.22, lw: 0.9 });
       part(ctx, Pel(39, -30, 2.6, 2.2), p.dark, { k: 0.16, lw: 0.7 });
-      part(ctx, Ppoly([18, -46, 14, -58, 26, -50]), sh(p.main, -0.1), { k: 0.24, lw: 0.9 });
-      part(ctx, Ppoly([30, -46, 34, -58, 38, -46]), sh(p.main, -0.1), { k: 0.24, lw: 0.9 });
+      var oe = 46 + vd2 * 16;                     // orelhas curtas ou compridas
+      part(ctx, Ppoly([18, -oe, 14, -oe - 12, 26, -oe - 4]), sh(p.main, -0.1), { k: 0.24, lw: 0.9 });
+      part(ctx, Ppoly([30, -oe, 34, -oe - 12, 38, -oe]), sh(p.main, -0.1), { k: 0.24, lw: 0.9 });
       critterEyes(ctx, 27, -40, 3.6, 2, 6);
-      part(ctx, Pcap(-28, -28, 4, -40, -40, 2), sh(p.main, -0.12), { k: 0.22, lw: 0.9 });
+      part(ctx, Pcap(-28, -28, 4, -40 - vd * 8, -40 + vd * 14, 2), sh(p.main, -0.12), { k: 0.22, lw: 0.9 });
+      if (vd2 > 0.55) {                           // metade das feras tem placas nas costas
+        for (i = 0; i < 3; i++) {
+          part(ctx, Ppoly([-10 + i * 11, -38, -6 + i * 11, -50 - i, -2 + i * 11, -38]),
+               sh(p.main, -0.2), { k: 0.2, lw: 0.8 });
+        }
+      }
     } else if (a === 'inseto') {
       for (i = 0; i < 6; i++) {
         ang = -0.5 + (i % 3) * 0.5;
@@ -1531,13 +1549,15 @@ var JOGO = (typeof window !== 'undefined')
   // Cada pet tem CORPO PRÓPRIO (não é o mesmo boneco repintado): o tipo sai de
   // palavras do id/nome/descrição. Todos ficam menores que um herói e com
   // cabeça grande — leitura de "bichinho" mesmo a 40 px.
+  // ORDEM = prioridade. Regexes com \b: 'brasa' contém 'asa', 'guia' contém-se
+  // em 'águia' — sem borda de palavra um pet cai no corpo errado.
   var PET_KIND = [
-    ['dragao', /drag[aã]o|dragonete|brasinha|emberling|drake|wyrm|lagart/i],
-    ['planta', /planta|vaso|vinha|bocarra|snapvine|carn[íi]vora|flor|raiz|broto/i],
-    ['ave', /[aá]guia|falc[aã]o|ave|p[aá]ssaro|hawk|falcon|rasga-ar|asa|pena/i],
-    ['gota', /gota|borbulha|bolha|dewling|orvalho|drop|bubble/i],
-    ['caco', /caco|estilha|cristal|shard|lasca|caco vivo|heartshard/i],
-    ['seixo', /seixo|pedr|stone|lodestone|rocha|guia/i]
+    ['dragao', /drag[ãa]o|dragonete|dragonzinho|brasinha|emberling|drake|wyrm|lagart/i],
+    ['planta', /\bplanta|vaso|vinha|bocarra|snapvine|carn[íi]vora|\bflor\b|raiz|broto/i],
+    ['caco', /\bcaco\b|estilha[çc]o|cristal|shard|\blasca\b|heartshard/i],
+    ['gota', /\bgota\b|borbulha|bolha|dewling|orvalho|\bdrop|bubble/i],
+    ['seixo', /seixo|pedrinha|pedregulh|\bstone\b|lodestone|rocha|magnetit/i],
+    ['ave', /[áa]guia|falc[ãa]o|\bave\b|p[áa]ssaro|hawk|falcon|rasga-ar|\basas?\b|\bpenas?\b|gavi[ãa]o/i]
   ];
   function petKindOf(petId, pd) {
     var s = petId + ' ' + ((pd && pd.name) || '') + ' ' + ((pd && pd.description) || '');
@@ -2681,6 +2701,8 @@ var JOGO = (typeof window !== 'undefined')
     });
   };
 
+  A.cardIcon = A.classCard;
+
   // chave genérica — 'unit:sumo:fogo:0' · 'tile:estufa:1' · 'spell:x' · …
   A.texture = function (key) {
     if (CACHE[key]) return CACHE[key];
@@ -2701,6 +2723,8 @@ var JOGO = (typeof window !== 'undefined')
       case 'pet': return A.petIcon(p[1], p[2] ? +p[2] : 56);
       case 'event': return A.tileEventIcon(p[1], p[2] ? +p[2] : 48);
       case 'card': return A.classCard(p[1]);
+      case 'stone': return A.stoneIcon(p[1], p[2] ? +p[2] : 56);
+      case 'star': return A.starIcon(p[1] === '1' || p[1] === 'on', p[2] ? +p[2] : 28);
       default: return A.unit(key, {});
     }
   };
@@ -2721,6 +2745,15 @@ var JOGO = (typeof window !== 'undefined')
     var out = [], i, j;
     for (i = 0; i < ids.length; i++) for (j = i + 1; j < ids.length; j++) out.push(ids[i] + '+' + ids[j]);
     return out;
+  };
+  // arquétipo escolhido para um monstro (galeria usa para medir variedade)
+  A.archetypeOf = function (defId) {
+    var md = (JOGO.DATA && JOGO.DATA.monsters && JOGO.DATA.monsters[defId]) || null;
+    return archOf(defId, md);
+  };
+  A.petKindOf = function (petId) {
+    var pd = (JOGO.DATA && JOGO.DATA.pets && JOGO.DATA.pets[petId]) || null;
+    return petKindOf(petId, pd);
   };
   A.themeIds = function () { var o = [], k; for (k in THEMES) o.push(k); return o; };
   A.propKeys = function () { var o = [], k; for (k in PROPS) o.push(k); return o; };

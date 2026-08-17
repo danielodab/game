@@ -40,6 +40,9 @@ var JOGO = (typeof window !== 'undefined')
   var flashSpr = null, flashA = 0, flashCol = 0xffffff;
   var nowT = 0;
   var MAX_PARTS = 900;
+  // escala do mundo: todos os tamanhos foram desenhados para um losango de 88px;
+  // o Renderer manda a métrica real (hoje 128, a mesma do Art) e tudo acompanha.
+  var SC = 1;
 
   // ---------- atlas ----------
   var A = {};   // nome -> PIXI.Texture
@@ -152,6 +155,7 @@ var JOGO = (typeof window !== 'undefined')
   FX._attach = function (ctx) {
     if (attached) return;
     P = ctx.PIXI; app = ctx.app; R = ctx.renderer;
+    SC = (R && R.TILE_W) ? (R.TILE_W / 88) : 1;
     buildAtlas();
     decalC = new P.Container();
     ctx.decal.addChild(decalC);
@@ -173,9 +177,11 @@ var JOGO = (typeof window !== 'undefined')
     if (queued.length) { var q = queued.slice(); queued.length = 0; for (var i = 0; i < q.length; i++) FX.handleEvent(q[i]); }
   };
 
+  // ATENÇÃO: `z` chega na métrica de referência (losango 88) e é convertido aqui.
   function world(gx, gy, z) {
-    if (R && R.iso) return R.iso(gx, gy, z || 0);
-    return { x: (gx - gy) * 44, y: (gx + gy) * 22 - (z || 0) };
+    var zz = (z || 0) * SC;
+    if (R && R.iso) return R.iso(gx, gy, zz);
+    return { x: (gx - gy) * 44, y: (gx + gy) * 22 - zz };
   }
   function unitPos(uid) {
     if (R && R.unitWorld) { var w = R.unitWorld(uid); if (w) return w; }
@@ -227,10 +233,10 @@ var JOGO = (typeof window !== 'undefined')
     var s = take(o.tex || 'hard', add);
     var p = {
       s: s, add: add, x: o.x, y: o.y, z: o.z || 0,
-      vx: o.vx || 0, vy: o.vy || 0, vz: o.vz || 0,
-      g: o.g == null ? 0 : o.g, drag: o.drag == null ? 0.06 : o.drag,
+      vx: (o.vx || 0) * SC, vy: (o.vy || 0) * SC, vz: o.vz || 0,
+      g: (o.g == null ? 0 : o.g) * SC, drag: o.drag == null ? 0.06 : o.drag,
       life: o.life || 0.6, age: 0,
-      s0: o.s0 == null ? 12 : o.s0, s1: o.s1 == null ? 0 : o.s1,
+      s0: (o.s0 == null ? 12 : o.s0) * SC, s1: (o.s1 == null ? 0 : o.s1) * SC,
       a0: o.a0 == null ? 1 : o.a0, a1: o.a1 == null ? 0 : o.a1,
       rot: o.rot || 0, spin: o.spin || 0, tint: hexInt(o.tint || '#ffffff'),
       tint1: o.tint1 != null ? hexInt(o.tint1) : null,
@@ -325,7 +331,7 @@ var JOGO = (typeof window !== 'undefined')
     var g = new P.Graphics();
     var w = world(gx, gy, 0);
     var rnd = Math.random;
-    var r = 26 * (0.8 + (power || 1) * 0.35);
+    var r = 26 * SC * (0.8 + (power || 1) * 0.35);
     g.position.set(w.x, w.y);
     if (element === 'fogo') {
       g.beginFill(0x1a0c06, 0.55); g.drawEllipse(0, 0, r, r * 0.5); g.endFill();
@@ -379,12 +385,12 @@ var JOGO = (typeof window !== 'undefined')
     var w = world(gx, gy, unitTop(gx, gy));
     var f = {
       t: t, x: w.x + (Math.random() - 0.5) * 12, y: w.y, age: 0, life: big ? 1.15 : 0.95,
-      vy: -46 - (big ? 16 : 0), base: size / 32, kind: kind || 'dmg', pop: 0
+      vy: (-46 - (big ? 16 : 0)) * SC, base: size / 32, kind: kind || 'dmg', pop: 0
     };
     floaters.push(f);
     return f;
   }
-  function unitTop() { return 78; }
+  function unitTop() { return 78; }   // em métrica de referência: world() escala
 
   // ---------- shake / hit-stop / timers ----------
   function addShake(mag, dur) {
@@ -431,10 +437,10 @@ var JOGO = (typeof window !== 'undefined')
       var z = 24 + Math.sin(k * Math.PI) * p.arc;
       var w = world(gx, gy, z);
       // ondulação lateral característica (água serpenteia, ar espirala)
-      var perp = Math.sin(k * Math.PI * (p.element === 'agua' ? 2.2 : 3.4)) * p.wob * 7;
+      var perp = Math.sin(k * Math.PI * (p.element === 'agua' ? 2.2 : 3.4)) * p.wob * 7 * SC;
       w.x += perp;
       var E = elemOf(p.element);
-      var sz = p.element === 'terra' ? 20 : 17;
+      var sz = (p.element === 'terra' ? 20 : 17) * SC;
       p.head.position.set(w.x, w.y);
       p.head.width = p.head.height = sz;
       p.head.rotation += (p.spin || 0) * dt * (p.element === 'terra' ? 1 : 0.4);
@@ -461,7 +467,7 @@ var JOGO = (typeof window !== 'undefined')
   // ---------- feixe / arco de golpe ----------
   function beam(fx, fy, tx, ty, col, life) {
     var a = world(fx, fy, 26), b = world(tx, ty, 26);
-    var n = Math.max(6, Math.round(Math.hypot(b.x - a.x, b.y - a.y) / 12));
+    var n = Math.max(6, Math.round(Math.hypot(b.x - a.x, b.y - a.y) / (12 * SC)));
     for (var i = 0; i <= n; i++) {
       var k = i / n;
       spawn({
@@ -479,7 +485,7 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < 12; i++) {
       var k = i / 11 - 0.5;
       spawn({
-        tex: 'streak', x: mx + Math.cos(ang + 1.57) * k * 44, y: my + Math.sin(ang + 1.57) * k * 44,
+        tex: 'streak', x: mx + Math.cos(ang + 1.57) * k * 44 * SC, y: my + Math.sin(ang + 1.57) * k * 44 * SC,
         life: 0.24, s0: 34 * (1 - Math.abs(k)), s1: 0, tint: col, rot: ang, drag: 1.2,
         vx: Math.cos(ang) * 90, vy: Math.sin(ang) * 90
       });
@@ -955,7 +961,7 @@ var JOGO = (typeof window !== 'undefined')
       // quique: sobe rápido, desacelera, cai um pouco no fim
       var pop = fk < 0.18 ? (1.55 - Math.cos(fk / 0.18 * Math.PI) * 0.55) : 1;
       f.y += f.vy * dt;
-      f.vy += 130 * dt;
+      f.vy += 130 * SC * dt;
       f.t.position.set(f.x, f.y);
       f.t.scale.set(cs * f.base * pop);
       f.t.alpha = fk > 0.7 ? 1 - (fk - 0.7) / 0.3 : 1;
