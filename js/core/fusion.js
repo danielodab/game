@@ -25,6 +25,8 @@ var JOGO = (typeof window !== 'undefined')
  *    o melhor corpo). Aplicado em paMax/ppMax; o turno seguinte já nasce cheio.
  *  - "+50 de escudo" entra como efeito shield permanente (duração 9999).
  *  - Resistências = média aritmética arredondada, elemento a elemento.
+ *  - `elemPower` (v2.2) = média arredondada dos dois, valendo para os DOIS
+ *    elementos da mistura (via `unit.elements`, lido por Engine.elementalBonus).
  *  - Escala de poder dos feitiços compostos:
  *        fator = (100 + tier*5 + nível*3) / 100
  *    aplicada a min/max de damage/heal/poison/chain e a shield.value. É a
@@ -309,6 +311,11 @@ var JOGO = (typeof window !== 'undefined')
     a.ppMax = Math.max(a.ppMax, b.ppMax) + Fusion.BONUS_PP;
     a.initiative = Math.max(a.initiative, b.initiative);
     a.power = Math.max(a.power, b.power);
+    // v2.2 (contrato §9-C): `elemPower` da fusão = MÉDIA dos dois, e vale para os
+    // DOIS elementos da mistura. A segunda metade da regra é resolvida por
+    // `a.elements` logo abaixo: `Engine.elementalBonus` compara o elemento do
+    // feitiço com `Engine.unitElements`, que devolve os dois da fusão.
+    a.elemPower = Math.round(((a.elemPower || 0) + (b.elemPower || 0)) / 2);
     a.dodge = Math.round(((a.dodge || 0) + (b.dodge || 0)) / 2);
     a.lock = Math.round(((a.lock || 0) + (b.lock || 0)) / 2);
     a.resists = avgResists(a, b);

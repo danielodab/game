@@ -372,8 +372,63 @@ document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__
   var L = D.leveling;
   check('leveling.maxLevel = 30', L.maxLevel === 30, L.maxLevel);
   check('leveling.elementChoiceLevel = 5', L.elementChoiceLevel === 5, L.elementChoiceLevel);
-  check('leveling.perLevel {hp:6, power:3}', L.perLevel && L.perLevel.hp === 6 && L.perLevel.power === 3,
-    JSON.stringify(L.perLevel));
+  /* adendo v2.2 — dois ganhos por nível: genérico antes da escolha, elemental depois */
+  check('leveling.perLevel {hp:5, power:3}',
+    !!L.perLevel && L.perLevel.hp === 5 && L.perLevel.power === 3, JSON.stringify(L.perLevel));
+  check('leveling.perLevelElement {hp:5, elemPower:3}',
+    !!L.perLevelElement && L.perLevelElement.hp === 5 && L.perLevelElement.elemPower === 3,
+    JSON.stringify(L.perLevelElement));
+  check('perLevel sem elemPower e perLevelElement sem power (papéis distintos)',
+    !!L.perLevel && !!L.perLevelElement &&
+    L.perLevel.elemPower === undefined && L.perLevelElement.power === undefined);
+  check('os dois ganhos dão o mesmo PV (+5 por nível, sempre)',
+    !!L.perLevel && !!L.perLevelElement && L.perLevel.hp === L.perLevelElement.hp);
+
+  /* simulação nível 1 → 30: níveis 2→5 usam perLevel; 6→30 usam perLevelElement */
+  var sim = [], accHp = 0, accPower = 0, accElem = 0;
+  for (var lv = 2; lv <= L.maxLevel; lv++) {
+    var gain = (lv <= L.elementChoiceLevel) ? L.perLevel : L.perLevelElement;
+    accHp += gain.hp || 0;
+    accPower += gain.power || 0;
+    accElem += gain.elemPower || 0;
+    sim.push({ level: lv, hp: accHp, power: accPower, elemPower: accElem, xp: L.xpTable[lv - 1] });
+  }
+  var last = sim[sim.length - 1];
+  check('simulação chega ao nível 30 com +145 PV', last.hp === 145, last.hp);
+  check('simulação chega ao nível 30 com +12 de poder genérico', last.power === 12, last.power);
+  check('simulação chega ao nível 30 com +75 de dano elemental', last.elemPower === 75, last.elemPower);
+  check('multiplicador de dano no próprio elemento no nível 30 é 1,87×',
+    Math.abs((100 + last.power + last.elemPower) / 100 - 1.87) < 0.001,
+    ((100 + last.power + last.elemPower) / 100).toFixed(2));
+  check('fora do elemento o nível 30 só ganha 1,12× (a escolha importa)',
+    Math.abs((100 + last.power) / 100 - 1.12) < 0.001, ((100 + last.power) / 100).toFixed(2));
+  check('nenhum nível da simulação perde PV ou dano', (function () {
+    for (var i4 = 1; i4 < sim.length; i4++) {
+      if (sim[i4].hp < sim[i4 - 1].hp || sim[i4].power < sim[i4 - 1].power ||
+          sim[i4].elemPower < sim[i4 - 1].elemPower) return false;
+    }
+    return true;
+  })());
+  /* saúde contra os chefes (300 → 600 PV, entregues pelo Criativo Mundo):
+   * o capstone mais forte, no nível 30 e no próprio elemento, não pode derrubar
+   * um chefe sozinho nem virar irrelevante. */
+  var bestCapstone = 0, bestCapstoneId = '';
+  CLASS_IDS.forEach(function (cid) {
+    PATH_ELEMENTS.forEach(function (el) {
+      var s30 = D.spells[D.classes[cid].paths[el][5]];
+      (s30.effects || []).forEach(function (e) {
+        if (e.type === 'damage' && (e.min + e.max) / 2 > bestCapstone) {
+          bestCapstone = (e.min + e.max) / 2; bestCapstoneId = s30.id;
+        }
+      });
+    });
+  });
+  var capstoneAt30 = bestCapstone * (100 + last.power + last.elemPower) / 100;
+  check('capstone mais forte no nível 30 fica entre 25% e 80% do chefe mais fraco (300 PV)',
+    capstoneAt30 >= 75 && capstoneAt30 <= 240,
+    bestCapstoneId + ' ≈ ' + Math.round(capstoneAt30) + ' de dano');
+  check('capstone mais forte no nível 30 não passa de 40% do chefe final (600 PV)',
+    capstoneAt30 <= 240, Math.round(capstoneAt30) + '/600');
   check('xpTable com 30 entradas', L.xpTable && L.xpTable.length === 30, L.xpTable && L.xpTable.length);
   check('xpTable[0] = 0', L.xpTable && L.xpTable[0] === 0, L.xpTable && L.xpTable[0]);
   var incOk = true, incBad = '';
@@ -548,6 +603,27 @@ document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__
       }
       html += '</ul>';
     }
+
+    html += '<h2>Progressão do nível 1 ao 30 (adendo v2.2)</h2>' +
+      '<div class="info">Níveis 2→5 usam <code>perLevel</code> (poder genérico); 6→30 usam ' +
+      '<code>perLevelElement</code> (dano no elemento escolhido). Multiplicador = (100 + poder + elemental)/100, ' +
+      'e o elemental só entra em feitiço do elemento do herói.</div>' +
+      '<table><tr><th>nível</th><th>XP acumulada</th><th>+PV</th><th>+poder</th><th>+elemental</th>' +
+      '<th>× no elemento</th><th>× fora dele</th></tr>';
+    html += '<tr><td>1</td><td>0</td><td>0</td><td>0</td><td>0</td><td>1.00×</td><td>1.00×</td></tr>';
+    sim.forEach(function (row) {
+      html += '<tr><td>' + row.level + '</td><td>' + row.xp + '</td><td>+' + row.hp + '</td><td>+' + row.power +
+        '</td><td>+' + row.elemPower + '</td><td>' + ((100 + row.power + row.elemPower) / 100).toFixed(2) + '×</td><td>' +
+        ((100 + row.power) / 100).toFixed(2) + '×</td></tr>';
+    });
+    html += '</table>';
+
+    html += '<h2>PV total por classe no nível 30 (base + ' + last.hp + ')</h2><ul class="info">';
+    CLASS_IDS.forEach(function (cid) {
+      html += '<li>' + cid + ': ' + D.classes[cid].stats.hp + ' → <b>' + (D.classes[cid].stats.hp + last.hp) +
+        ' PV</b> (com ★5: ' + (D.classes[cid].stats.hp + last.hp + 40) + ')</li>';
+    });
+    html += '</ul>';
 
     html += '<h2>Uso dos tipos de efeito (' + spellIds.length + ' entradas em DATA.spells)</h2><ul class="info">';
     Object.keys(byEffect).sort().forEach(function (k) { html += '<li>' + k + ': ' + byEffect[k] + '</li>'; });

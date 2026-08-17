@@ -70,8 +70,10 @@ var JOGO = (typeof window !== 'undefined')
  *      Carta repetida NÃO vira mais XP: agora ela é progresso de estrela.
  *      Só o CHEFE derruba carta, e de forma aleatória: chance 60% (solo) /
  *      50% (dupla); a classe sai da piscina `dungeon.cardDrops` × `dropWeight`
- *      (respeitando `minDungeon` contra a `order` do calabouço), e a
- *      QUANTIDADE cresce com a profundidade: `1 + floor(order/2)` cartas —
+ *      (respeitando `minDungeon` contra o ÍNDICE 0-based do calabouço em
+ *      DATA.dungeons — `order` é 1-based e compará-lo faria a carta cara vazar
+ *      um andar acima), e a QUANTIDADE cresce com a profundidade:
+ *      `1 + floor(índice/2)` cartas —
  *      calabouço fundo compensa o custo alto das classes caras.
  *      Sem `unlockCost` no dado (progression.js ainda por atualizar), usa-se
  *      0 para classe `startsUnlocked` e `UNLOCK_COST_FALLBACK` para as outras.
@@ -98,9 +100,21 @@ var JOGO = (typeof window !== 'undefined')
  *       Peso efetivo = `weight * LUCK^grau` (comum 0, raro 1, épico 2),
  *       1 sorteio por sala + 1 extra na sala do chefe. `rollPet` só no chefe.
  *
- * [D13] `effectiveStats` = base da classe + `perLevel*(nível-1)` (hp/power) +
- *       itens (com forja) + conjuntos + pet + estrelas da classe. Herói
- *       desconhecido devolve null (o Engine cai nos stats base).
+ * [D13] `effectiveStats` = base da classe + ganho por nível + itens (com forja)
+ *       + conjuntos + pet + estrelas da classe. Herói desconhecido devolve null
+ *       (o Engine cai nos stats base).
+ *
+ * [D14] GANHO POR NÍVEL ELEMENTAL (§9-C). Todo nível dá `perLevel.hp`. As
+ *       subidas ANTES da escolha do elemento (níveis 1→4, isto é
+ *       `elementChoiceLevel - 2` subidas) dão `perLevel.power` genérico; as
+ *       subidas a partir dali dão `perLevelElement.elemPower` — dano só nos
+ *       feitiços do elemento do herói, que o Engine aplica.
+ *       O contrato não diz o que fazer com quem passou do nível 5 SEM escolher:
+ *       decidimos que essas subidas continuam dando poder genérico (ninguém
+ *       perde progressão por adiar a escolha) e passam a valer como elementais
+ *       assim que o elemento é escolhido. Sem `perLevelElement` no dado, tudo
+ *       vira poder genérico (comportamento da v2.1).
+ *       `effectiveStats` devolve `elemPower` e `element`; `battleParty` repassa.
  * ==========================================================================*/
 
 (function () {
@@ -110,7 +124,11 @@ var JOGO = (typeof window !== 'undefined')
   JOGO.Progress = Progress;
 
   var KEY = 'soterra-save-v2';
-  var SLOTS = ['pa', 'pp', 'vida', 'especial'];
+  // §9-C: os 4 espaços ganharam nome próprio (nada de nomes de planilha)
+  var SLOTS = ['punho', 'passo', 'casca', 'lume'];
+  // saves antigos (v2.0/v2.1) guardavam os ids velhos — migração automática
+  var SLOT_ALIASES = { pa: 'punho', pp: 'passo', vida: 'casca', especial: 'lume' };
+  var SPELL_SLOT = 'lume';                 // o espaço que concede feitiço
   var STAT_KEYS = ['hp', 'pa', 'pp', 'power', 'initiative', 'dodge', 'lock'];
   var DEFAULT_ELEMENT = 'neutro';
 
@@ -188,6 +206,7 @@ var JOGO = (typeof window !== 'undefined')
       maxLevel: num(lv.maxLevel, lv.xpTable.length),
       xpTable: lv.xpTable,
       perLevel: lv.perLevel || { hp: 0, power: 0 },
+      perLevelElement: isObj(lv.perLevelElement) ? lv.perLevelElement : null,   // §9-C [D14]
       elementChoiceLevel: num(lv.elementChoiceLevel, 5)
     };
   }
@@ -230,14 +249,13 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < ds.length; i++) if (ds[i] && ds[i].id === dungeonId) return ds[i];
     return null;
   }
-  // índice de profundidade do calabouço (0 = o mais raso), para `minDungeon`
-  function dungeonOrder(dungeonId) {
+  /* Profundidade do calabouço como ÍNDICE 0-BASED (0 = o mais raso).
+   * ATENÇÃO: `DATA.cards[*].minDungeon` é 0-based ("0 = o primeiro"), enquanto
+   * `dungeon.order` é 1-BASED — comparar com `order` faria a carta cara vazar
+   * um andar acima do previsto. Aqui vale sempre a posição em DATA.dungeons. */
+  function dungeonIndex(dungeonId) {
     var ds = dungeonList();
-    for (var i = 0; i < ds.length; i++) {
-      if (ds[i] && ds[i].id === dungeonId) {
-        return typeof ds[i].order === 'number' ? ds[i].order : i;
-      }
-    }
+    for (var i = 0; i < ds.length; i++) if (ds[i] && ds[i].id === dungeonId) return i;
     return 0;
   }
   function isBossRoom(dungeonId, roomIndex) {
@@ -289,7 +307,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ============================================================ estado
-  function emptyItems() { return { pa: null, pp: null, vida: null, especial: null }; }
+  function emptyItems() { return { punho: null, passo: null, casca: null, lume: null }; }
 
   function newHero(classId) {
     return {
@@ -378,8 +396,11 @@ var JOGO = (typeof window !== 'undefined')
           }
         }
         if (isObj(src.items)) {
-          for (i = 0; i < SLOTS.length; i++) {
-            var slot = SLOTS[i], itId = src.items[slot];
+          for (var rawSlot in src.items) {
+            if (!src.items.hasOwnProperty(rawSlot)) continue;
+            var slot = SLOT_ALIASES[rawSlot] || rawSlot;   // migra pa/pp/vida/especial
+            if (indexOf(SLOTS, slot) < 0) continue;
+            var itId = src.items[rawSlot];
             if (typeof itId !== 'string') continue;
             var it = itemDef(itId);
             if (!it || it.slot !== slot) continue;
@@ -629,7 +650,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!dungeon) return [];
     if (!isBossRoom(dungeonId, roomIndex)) return [];
 
-    var order = dungeonOrder(dungeonId);
+    // profundidade 0-based: `minDungeon` é 0-based, `order` é 1-based
+    var depth = dungeonIndex(dungeonId);
     // `cardDrops` ausente = dado ainda não escrito (piscina geral);
     // `cardDrops: []` = decisão explícita de não derrubar carta nenhuma.
     var entries = isArray(dungeon.cardDrops) ? dungeon.cardDrops : null;
@@ -642,7 +664,7 @@ var JOGO = (typeof window !== 'undefined')
         classId = e.classId;
         card = cardDef(classId);
         if (!card || num(card.dropWeight, 0) <= 0) continue;
-        if (order < num(card.minDungeon, 0)) continue;
+        if (depth < num(card.minDungeon, 0)) continue;
         w = Math.max(0, num(e.weight, 1)) * num(card.dropWeight, 0);
         if (w > 0) pool.push({ id: classId, w: w });
       }
@@ -653,7 +675,7 @@ var JOGO = (typeof window !== 'undefined')
         if (!all.hasOwnProperty(classId)) continue;
         card = all[classId];
         if (!card || num(card.dropWeight, 0) <= 0) continue;
-        if (order < num(card.minDungeon, 0)) continue;
+        if (depth < num(card.minDungeon, 0)) continue;
         pool.push({ id: classId, w: num(card.dropWeight, 0) });
       }
     }
@@ -666,7 +688,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!chosen) return [];
 
     var antes = Progress.cardInfo(chosen);
-    var amount = 1 + Math.floor(Math.max(0, order) / 2);   // fundo dá mais cartas
+    var amount = 1 + Math.floor(Math.max(0, depth) / 2);   // fundo dá mais cartas
     var depois = Progress.addCards(chosen, amount);
     return [{
       classId: chosen,
@@ -760,9 +782,9 @@ var JOGO = (typeof window !== 'undefined')
         if (h.level >= pathUnlockLevel(path[i], i)) out.push(path[i]);
       }
     }
-    var special = h.items && h.items.especial;
-    if (special) {
-      var it = itemDef(special);
+    var lume = h.items && h.items[SPELL_SLOT];      // o espaço 'lume' concede feitiço
+    if (lume) {
+      var it = itemDef(lume);
       if (it && it.grantsSpell && indexOf(out, it.grantsSpell) < 0) out.push(it.grantsSpell);
     }
     return out;
@@ -992,19 +1014,32 @@ var JOGO = (typeof window !== 'undefined')
     var def = classDef(h.classId);
     if (!def || !isObj(def.stats)) return null;
     var base = def.stats;
-    var out = { hp: 0, pa: 0, pp: 0, power: 0, initiative: 0, dodge: 0, lock: 0, resists: {} };
+    var out = { hp: 0, pa: 0, pp: 0, power: 0, elemPower: 0, initiative: 0, dodge: 0, lock: 0,
+                element: h.element || DEFAULT_ELEMENT, resists: {} };
     var i, k;
     for (i = 0; i < STAT_KEYS.length; i++) { k = STAT_KEYS[i]; out[k] = num(base[k], 0); }
     if (isObj(base.resists)) {
       for (k in base.resists) if (base.resists.hasOwnProperty(k)) out.resists[k] = num(base.resists[k], 0);
     }
 
-    // ---- níveis
+    // ---- níveis [D14]: todo nível dá PV; o poder vira ELEMENTAL depois da escolha
     var lv = leveling();
-    var above = Math.max(0, h.level - 1);
-    if (above > 0 && lv.perLevel) {
-      out.hp += num(lv.perLevel.hp, 0) * above;
-      out.power += num(lv.perLevel.power, 0) * above;
+    var per = lv.perLevel || {};
+    var perEl = lv.perLevelElement || null;
+    var ups = Math.max(0, h.level - 1);
+    // subidas antes da escolha (níveis 1→4, ou seja `elementChoiceLevel - 2` subidas)
+    var genericUps = Math.min(ups, Math.max(0, num(lv.elementChoiceLevel, 5) - 2));
+    var elementalUps = ups - genericUps;
+    var hasElement = (h.element && h.element !== DEFAULT_ELEMENT);
+
+    out.hp += num(per.hp, 0) * genericUps +
+              num(perEl && perEl.hp, num(per.hp, 0)) * elementalUps;
+    out.power += num(per.power, 0) * genericUps;
+    if (hasElement && perEl) {
+      out.elemPower += num(perEl.elemPower, 0) * elementalUps;   // dano no elemento do herói
+    } else {
+      // sem elemento escolhido (ou dado antigo sem `perLevelElement`): poder genérico
+      out.power += num(per.power, 0) * elementalUps;
     }
 
     // ---- itens equipados (com o multiplicador da forja) e contagem de conjuntos
@@ -1045,6 +1080,7 @@ var JOGO = (typeof window !== 'undefined')
     out.hp = Math.max(1, Math.round(out.hp));
     out.pa = Math.max(0, Math.round(out.pa));
     out.pp = Math.max(0, Math.round(out.pp));
+    out.elemPower = Math.max(0, Math.round(out.elemPower));
     return out;
   };
 
@@ -1084,7 +1120,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!Progress.state) Progress.load();
     if (!isBossRoom(dungeonId, roomIndex)) return null;
     var all = D().pets || {};
-    var order = dungeonOrder(dungeonId);
+    var depth = dungeonIndex(dungeonId);
     var owned = {}, hid, id, i;
     for (i = 0; i < Progress.state.pets.length; i++) owned[Progress.state.pets[i]] = true;
     for (hid in Progress.state.heroes) {
@@ -1099,7 +1135,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!p || num(p.dropWeight, 0) <= 0) continue;
       var dd = p.dropDungeon;
       if (typeof dd === 'string' && dd !== dungeonId) continue;
-      if (typeof dd === 'number' && order < dd) continue;
+      if (typeof dd === 'number' && depth < dd) continue;
       pool.push({ id: id, w: num(p.dropWeight, 0) });
     }
     if (!pool.length) return null;
@@ -1120,6 +1156,7 @@ var JOGO = (typeof window !== 'undefined')
       var heroId = ids[i];
       var h = Progress.hero(heroId);
       if (!h) continue;
+      var stats = Progress.effectiveStats(heroId);
       out.push({
         heroId: heroId,
         classId: h.classId,
@@ -1129,7 +1166,8 @@ var JOGO = (typeof window !== 'undefined')
         pet: h.pet || null,
         items: clone(h.items),
         stars: Progress.cardInfo(h.classId).stars,
-        stats: Progress.effectiveStats(heroId)
+        elemPower: stats ? stats.elemPower : 0,   // §9-C: o motor consome na fórmula de dano
+        stats: stats
       });
     }
     return out;

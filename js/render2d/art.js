@@ -20,6 +20,8 @@ var JOGO = (typeof window !== 'undefined')
 //   Art.itemIcon(itemId, s)      -> canvas
 //   Art.petIcon(petId, s)        -> canvas
 //   Art.tileEventIcon(kind, s)   -> canvas
+//   Art.slotIcon(slot, s)        -> canvas   espaço VAZIO (punho/passo/casca/lume)
+//   Art.slotKey/slotName/slotColor(slot)     ids v2.2 (aceita os antigos)
 //   Art.stoneIcon(stoneId, s)    -> canvas   pedra de forja (ADENDO v2.1)
 //   Art.cardIcon(classId, w, h)  -> canvas   carta de classe (= Art.classCard)
 //   Art.starIcon(filled, s)      -> canvas   estrela cheia/vazia da coleção
@@ -1440,10 +1442,17 @@ var JOGO = (typeof window !== 'undefined')
         g.quadraticCurveTo(-18, -16, -20, -30);
         g.closePath();
       }, 0, -32, 24), mx(p.main, '#f2f6ff', 0.2), { k: 0.2, hi: 0.16 });
-      for (i = 0; i < 3; i++) {
-        stroke(ctx, [-14 + i * 13, -8, -12 + i * 13, 2, -16 + i * 13, 8], rgba(p.accent, 0.7), 1, true);
+      for (i = 0; i < nd; i++) {                  // franjas de névoa: 3 a 6
+        var fx0 = -15 + i * (30 / nd);
+        stroke(ctx, [fx0, -8, fx0 + 2, 2, fx0 - 2, 8 + vd2 * 5], rgba(p.accent, 0.7), 1, true);
       }
-      critterEyes(ctx, 1, -40, 5.2, 2, 8.5, p.dark);
+      critterEyes(ctx, 1, -40, 5.2, vd2 > 0.66 ? 3 : 2, 8.5, p.dark);
+      if (vd > 0.5) {                             // capuz/coroa de sombra
+        part(ctx, tag(function (g) {
+          g.beginPath(); g.moveTo(-18, -46); g.quadraticCurveTo(0, -70, 18, -46);
+          g.quadraticCurveTo(0, -56, -18, -46); g.closePath();
+        }, 0, -54, 18), sh(p.main, -0.34), { k: 0.2, lw: 0.9 });
+      }
     } else if (a === 'bruto') {
       part(ctx, Pcap(-14, -18, 9, -13, -3, 7), p.dark, { k: 0.22 });
       part(ctx, Pcap(14, -18, 9, 15, -3, 7), p.dark, { k: 0.22 });
@@ -2339,9 +2348,22 @@ var JOGO = (typeof window !== 'undefined')
     return c;
   }
 
+  // ADENDO v2.2 — os espaços têm nome próprio: punho · passo · casca · lume.
+  // Os ids antigos (pa/pp/vida/especial) continuam aceitos como apelido para o
+  // dia em que o `DATA.items` ainda não migrou.
+  var SLOT_ALIAS = { pa: 'punho', pp: 'passo', vida: 'casca', especial: 'lume',
+                     punho: 'punho', passo: 'passo', casca: 'casca', lume: 'lume', pet: 'pet' };
+  A.slotKey = function (slot) { return SLOT_ALIAS[slot] || 'casca'; };
+  A.slotName = function (slot) {
+    return { punho: 'Punho', passo: 'Passo', casca: 'Casca', lume: 'Lume', pet: 'Bicho' }[A.slotKey(slot)];
+  };
+  A.slotColor = function (slot) {
+    return { punho: '#e0674a', passo: '#5fc8a8', casca: '#e05a6a', lume: '#b98cff', pet: '#ffd166' }[A.slotKey(slot)];
+  };
+
   var SLOT_GLYPH = {
-    pa: function (g, x, y, r, col) {
-      // manopla: PA
+    punho: function (g, x, y, r, col) {
+      // manopla / punho fechado
       part(g, Pblob([x - r * 0.9, y + r * 0.2, x - r * 0.8, y - r * 0.5, x - r * 0.1, y - r * 0.86,
                      x + r * 0.7, y - r * 0.6, x + r * 0.9, y + r * 0.1, x + r * 0.4, y + r * 0.86,
                      x - r * 0.5, y + r * 0.86]), col, { k: 0.24, hi: 0.2 });
@@ -2350,8 +2372,8 @@ var JOGO = (typeof window !== 'undefined')
         part(g, Prr(x - r * 0.4 + i * r * 0.42, y - r * 0.34, r * 0.3, r * 0.42, 2), sh(col, 0.18), { k: 0.2, lw: 0.7 });
       }
     },
-    pp: function (g, x, y, r, col) {
-      // bota: PP
+    passo: function (g, x, y, r, col) {
+      // bota / grevas
       part(g, tag(function (c2) {
         c2.beginPath();
         c2.moveTo(x - r * 0.5, y - r * 0.9);
@@ -2363,28 +2385,37 @@ var JOGO = (typeof window !== 'undefined')
       }, x, y, r), col, { k: 0.24, hi: 0.2 });
       part(g, Prr(x - r * 0.16, y + r * 0.78, r * 1.6, r * 0.28, 2), sh(col, -0.34), { k: 0.2, lw: 0.75 });
     },
-    vida: function (g, x, y, r, col) {
+    casca: function (g, x, y, r, col) {
+      // couraça/carapaça: placa em escudo com nervura central
       part(g, tag(function (c2) {
         c2.beginPath();
-        c2.moveTo(x, y + r * 0.92);
-        c2.quadraticCurveTo(x - r * 1.05, y + r * 0.05, x - r * 0.52, y - r * 0.62);
-        c2.quadraticCurveTo(x - r * 0.08, y - r * 0.9, x, y - r * 0.34);
-        c2.quadraticCurveTo(x + r * 0.08, y - r * 0.9, x + r * 0.52, y - r * 0.62);
-        c2.quadraticCurveTo(x + r * 1.05, y + r * 0.05, x, y + r * 0.92);
+        c2.moveTo(x, y - r * 0.98);
+        c2.quadraticCurveTo(x + r * 0.94, y - r * 0.8, x + r * 0.9, y - r * 0.1);
+        c2.quadraticCurveTo(x + r * 0.82, y + r * 0.72, x, y + r * 1.0);
+        c2.quadraticCurveTo(x - r * 0.82, y + r * 0.72, x - r * 0.9, y - r * 0.1);
+        c2.quadraticCurveTo(x - r * 0.94, y - r * 0.8, x, y - r * 0.98);
         c2.closePath();
-      }, x, y, r), col, { k: 0.22, hi: 0.24 });
+      }, x, y, r), col, { k: 0.24, hi: 0.24 });
+      part(g, Prr(x, y - r * 0.06, r * 0.26, r * 1.5, r * 0.12), sh(col, 0.24), { k: 0.18, lw: 0.7 });
+      stroke(g, [x - r * 0.66, y - r * 0.3, x, y - r * 0.12, x + r * 0.66, y - r * 0.3], sh(col, -0.36), 0.9, true);
+      stroke(g, [x - r * 0.58, y + r * 0.3, x, y + r * 0.46, x + r * 0.58, y + r * 0.3], sh(col, -0.36), 0.9, true);
     },
-    especial: function (g, x, y, r, col) {
-      part(g, Pel(x, y, r * 0.72, r * 0.72), col, { k: 0.22, hi: 0.26 });
-      var i;
-      for (i = 0; i < 6; i++) {
-        var a = i / 6 * TAU;
-        part(g, Ppoly([x + Math.cos(a) * r * 0.76, y + Math.sin(a) * r * 0.76,
-                       x + Math.cos(a + 0.2) * r * 1.05, y + Math.sin(a + 0.2) * r * 1.05,
-                       x + Math.cos(a - 0.2) * r * 1.05, y + Math.sin(a - 0.2) * r * 1.05]),
-             sh(col, 0.34), { k: 0.18, lw: 0.7 });
-      }
-      glow(g, x, y, r * 1.5, sh(col, 0.4), 0.5);
+    lume: function (g, x, y, r, col) {
+      // lanterna: a chama contida que se carrega no escuro
+      glow(g, x, y + r * 0.1, r * 1.7, sh(col, 0.45), 0.55);
+      part(g, Prr(x, y - r * 1.0, r * 0.5, r * 0.24, r * 0.1), sh(col, -0.35), { k: 0.2, lw: 0.75 });
+      stroke(g, [x - r * 0.5, y - r * 0.9, x, y - r * 1.4, x + r * 0.5, y - r * 0.9], sh(col, -0.2), 1.1, true);
+      part(g, tag(function (c2) {                   // corpo do lampião
+        c2.beginPath();
+        c2.moveTo(x - r * 0.62, y - r * 0.78);
+        c2.lineTo(x + r * 0.62, y - r * 0.78);
+        c2.lineTo(x + r * 0.86, y + r * 0.72);
+        c2.lineTo(x - r * 0.86, y + r * 0.72);
+        c2.closePath();
+      }, x, y, r), mx(col, '#141a20', 0.45), { k: 0.24, hi: 0.14 });
+      part(g, Pflame(x, y + r * 0.5, r * 0.34, r * 1.05, 0.05), sh(col, 0.5),
+           { k: 0.16, lw: 0.8, line: sh(col, -0.3) });
+      part(g, Prr(x, y + r * 0.86, r * 1.9, r * 0.26, r * 0.1), sh(col, -0.4), { k: 0.2, lw: 0.75 });
     },
     pet: function (g, x, y, r, col) {
       part(g, Pel(x, y + r * 0.16, r * 0.8, r * 0.72), col, { k: 0.22, hi: 0.2 });
@@ -2397,20 +2428,37 @@ var JOGO = (typeof window !== 'undefined')
     var c = mkCanvas(size, size), g = c.getContext('2d');
     setScale(RES); g.save(); g.scale(RES, RES);
     var it = (JOGO.DATA && JOGO.DATA.items && JOGO.DATA.items[itemId]) || null;
-    var slot = (it && it.slot) || 'vida';
+    var slot = A.slotKey((it && it.slot) || 'casca');
     var rar = (it && it.rarity) || 'comum';
     var rc = A.rarityColor(rar);
-    var base = { pa: '#e0674a', pp: '#5fc8a8', vida: '#e05a6a', especial: '#b98cff' }[slot] || '#9aa4ae';
+    var base = A.slotColor(slot);
     if (it && it.element && ELEM[it.element]) base = mx(base, elemInfo(it.element).c, 0.4);
     iconFrame(g, size, base, rar);
     glow(g, size / 2, size / 2, size * 0.4, rc, rar === 'epico' ? 0.45 : 0.25);
-    (SLOT_GLYPH[slot] || SLOT_GLYPH.vida)(g, size / 2, size / 2, size * 0.26, base);
+    (SLOT_GLYPH[slot] || SLOT_GLYPH.casca)(g, size / 2, size / 2, size * 0.26, base);
     // pedrinhas de raridade
     var n = rar === 'epico' ? 3 : rar === 'raro' ? 2 : 1, i;
     for (i = 0; i < n; i++) {
       part(g, Pel(size * 0.5 + (i - (n - 1) / 2) * size * 0.13, size * 0.88, size * 0.038, size * 0.038),
            rc, { k: 0.2, lw: 0.6 });
     }
+    g.restore();
+    c.__anchor = [0.5, 0.5];
+    return c;
+  }
+
+  // espaço VAZIO do painel de equipamento (ADENDO v2.2): mesma silhueta do
+  // espaço, mas apagada — o jogador vê o buraco e reconhece o que cabe nele.
+  function slotIconCanvas(slot, size) {
+    var c = mkCanvas(size, size), g = c.getContext('2d');
+    var key = A.slotKey(slot);
+    var col = mx(A.slotColor(key), '#2a323c', 0.62);
+    setScale(RES); g.save(); g.scale(RES, RES);
+    part(g, Prr(size / 2, size / 2, size - 3, size - 3, size * 0.22), '#161b22',
+         { flat: true, lw: 1.2, line: '#333c49' });
+    g.save(); g.globalAlpha = 0.85;
+    (SLOT_GLYPH[key] || SLOT_GLYPH.casca)(g, size / 2, size / 2, size * 0.24, col);
+    g.restore();
     g.restore();
     c.__anchor = [0.5, 0.5];
     return c;
@@ -2648,6 +2696,11 @@ var JOGO = (typeof window !== 'undefined')
       return starIconCanvas(filled, size, col);
     });
   };
+  A.slotIcon = function (slot, size) {
+    size = size || 56;
+    return cached('slot:' + A.slotKey(slot) + ':' + size, function () { return slotIconCanvas(slot, size); });
+  };
+  A.slotIds = function () { return ['punho', 'passo', 'casca', 'lume']; };
   A.stoneIds = function () {
     var d = (JOGO.DATA && JOGO.DATA.stones) || null, o = [], k;
     if (d) { for (k in d) o.push(k); }

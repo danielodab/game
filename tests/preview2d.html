@@ -341,9 +341,9 @@ JOGO.DATA = {
       tileEventsActive: [], _uid: 0
     };
 
+    // ADENDO v2.1: o grupo é de 1 ou 2 heróis. Spawns 'P' sobrando são ignorados.
     var heroDefs = [
       { defId:'sumo', name:'Repique', element:'terra', hp:110, pa:6, pp:3 },
-      { defId:'bruxo', name:'Sibilo', element:'fogo', hp:78, pa:7, pp:3 },
       { defId:'curandeira', name:'Rosácea', element:'agua', hp:84, pa:6, pp:4 }
     ];
     for (var hi = 0; hi < heroDefs.length && hi < heroSpawns.length; hi++) {
@@ -375,6 +375,24 @@ JOGO.DATA = {
 
     // ordem de iniciativa
     for (var oi = 0; oi < st.units.length; oi++) if (st.units[oi].kind !== 'pet') st.order.push(st.units[oi].uid);
+
+    // lotação extra para medir 60 fps com ~40 unidades (?units=40)
+    var want = parseInt((/[?&]units=(\d+)/.exec(location.search) || [])[1] || '0', 10);
+    if (want > st.units.length) {
+      var pool = ['raiz-torta', 'bafo-quente', 'lodo'], n = 0;
+      for (var fy = 0; fy < h && st.units.length < want; fy++) {
+        for (var fx2 = 0; fx2 < w && st.units.length < want; fx2++) {
+          if (tiles[fy][fx2].type !== 'floor' || Engine.unitAt(st, fx2, fy)) continue;
+          if ((fx2 + fy) % 2) continue;
+          var mid2 = pool[n % pool.length], md2 = DATA.monsters[mid2];
+          st.units.push(mkUnit(st, mid2, 'monster', n % 3 ? 'enemy' : 'player', fx2, fy, {
+            name: md2.name + ' ' + (n + 1), element: md2.element, hp: md2.stats.hp, pa: 4, pp: 3, spells: ['aparo']
+          }));
+          st.order.push(st.units[st.units.length - 1].uid);
+          n++;
+        }
+      }
+    }
 
     // eventos de terreno já no chão
     st.tileEventsActive = [
@@ -448,10 +466,13 @@ JOGO.DATA = {
 })();
 </script>
 
-<!-- 2) módulos do renderizador (DEPOIS do stub) -->
+<!-- 2) módulos do renderizador (DEPOIS do stub).
+        art.js entra junto para exercitar a integração real com a arte;
+        `?art=0` derruba o Art de propósito e testa o placeholder geométrico. -->
 <script src="../vendor/pixi.min.js"></script>
-<script src="../js/render2d/fx.js?v=r2"></script>
-<script src="../js/render2d/renderer.js?v=r2"></script>
+<script src="../js/render2d/art.js?v=r3"></script>
+<script src="../js/render2d/fx.js?v=r3"></script>
+<script src="../js/render2d/renderer.js?v=r3"></script>
 
 <!-- 3) laço + botões + parâmetros de URL -->
 <script>
@@ -561,11 +582,14 @@ JOGO.DATA = {
       if (hs.length < 2) return;
       var A2 = hs[0], B = hs[1];
       B.x = A2.x + 1; B.y = A2.y;                     // adjacentes
+      // chave da dupla em ordem alfabética (CONTRACT_V2 §4)
+      var pairIds = [A2.classId, B.classId].sort();
       var fused = {
-        uid: 'fus1', defId: 'fus:' + A2.classId + '+' + B.classId, kind: 'hero', side: 'player',
+        uid: 'fus1', defId: 'fus:' + pairIds[0] + '+' + pairIds[1], kind: 'hero', side: 'player',
         name: A2.name + '-' + B.name, x: A2.x, y: A2.y,
         hp: A2.hp + B.hp, hpMax: A2.hpMax + B.hpMax, pa: 8, paMax: 8, pp: 4, ppMax: 4,
-        element: A2.element, resists: {}, spells: ['brasa'], cooldowns: {}, castsThisTurn: {},
+        element: A2.element, elemPair: [A2.element, B.element],
+        resists: {}, spells: ['brasa'], cooldowns: {}, castsThisTurn: {},
         effects: [], shield: 50, alive: true, boss: false, level: 15, initiative: 12, power: 14
       };
       st().units = st().units.filter(function (u) { return u.uid !== B.uid; });
@@ -702,6 +726,8 @@ JOGO.DATA = {
   function run() {
     if (qs.frames) maxFrames = parseInt(qs.frames, 10) || Infinity;
     if (qs.ui === '0') { var pn = document.getElementById('panel'); if (pn) pn.style.display = 'none'; }
+    // ?art=0 → sem Art: obriga o renderizador a usar o placeholder geométrico
+    if (qs.art === '0') { try { delete JOGO.Art; } catch (e) { JOGO.Art = null; } }
 
     var ok = JOGO.Renderer.init(document.getElementById('game-canvas'), { preserveDrawingBuffer: true });
     boot();

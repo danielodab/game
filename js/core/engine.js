@@ -94,6 +94,14 @@ var JOGO = (typeof window !== 'undefined')
  * 15. FUSÃO: a unidade fundida é a própria unidade A mutada — mantém o uid e a
  *     casa dela na ordem de iniciativa; B sai do tabuleiro com
  *     `alive:false, offBoard:true`, sem evento `death` e sem contar derrota.
+ * 17. GANHO ELEMENTAL (v2.2, contrato §9-C): `unit.elemPower` entra na conta de
+ *     dano como poder EXTRA, e só quando `spell.element` é um dos elementos do
+ *     conjurador. O gatilho é o elemento do FEITIÇO (literal do contrato), não o
+ *     de cada efeito: assim um feitiço de fusão premia as duas metades da
+ *     mistura de uma vez, como manda "vale para os dois elementos". Vale para
+ *     damage, chain e poison (neste, congelado em `sourcePower` no cast, como já
+ *     era o poder na v1). NÃO vale para detonateMarks, colisão de empurrão nem
+ *     explodeOnDeath — esses três são dano fixo, sem poder, desde a v1.
  * 16. STATS DO PET: o esquema do contrato (§5) descreve os BÔNUS que o pet dá
  *     ao dono, não o corpo dele. O corpo usa `DATA.pets[id].stats` quando o
  *     dado o fornecer e, senão, o padrão documentado
@@ -351,6 +359,27 @@ var JOGO = (typeof window !== 'undefined')
   }
   Engine.unitElements = unitElements;
 
+  // v2.2 (contrato §9-C): a partir da escolha, cada nível dá `elemPower` — dano
+  // extra que SÓ conta quando o feitiço conjurado é do elemento do conjurador:
+  //   (100 + power + (spell.element === unit.element ? elemPower : 0))/100
+  // O vocabulário de `buff` não tem 'elemPower', então não há buff a somar aqui.
+  Engine.effElemPower = function (unit) {
+    return (unit && unit.elemPower) || 0;
+  };
+  // A comparação é contra `unitElements`, não contra `unit.element` cru: a
+  // unidade FUNDIDA carrega DOIS elementos e o contrato manda o bônus (a média
+  // dos fundidos) valer para os dois elementos da mistura. Para quem tem um
+  // elemento só, `unitElements` devolve `[element]` e isto é exatamente a
+  // igualdade literal do contrato.
+  // O gatilho é o elemento do FEITIÇO (não o de cada efeito): é o que o
+  // contrato escreve, e é o que faz um feitiço de fusão premiar as duas metades
+  // da mistura de uma vez.
+  Engine.elementalBonus = function (unit, spell) {
+    var ep = Engine.effElemPower(unit);
+    if (!ep || !spell || !spell.element) return 0;
+    return unitElements(unit).indexOf(spell.element) >= 0 ? ep : 0;
+  };
+
   function setWeather(state, weatherId, silent) {
     if (!weatherId || state.weather === weatherId) return false;
     state.weather = weatherId;
@@ -430,6 +459,7 @@ var JOGO = (typeof window !== 'undefined')
       pp: st.pp, ppMax: st.pp,        // v2: PP (Pontos de Passos)
       initiative: st.initiative || 0,
       power: st.power || 0,
+      elemPower: st.elemPower || opts.elemPower || 0,  // v2.2: dano no próprio elemento
       dodge: st.dodge || 0,           // v2
       lock: st.lock || 0,             // v2
       element: opts.element || def.element || 'neutro',  // v2
@@ -472,13 +502,30 @@ var JOGO = (typeof window !== 'undefined')
     var base = cls && cls.stats;
     if (!base) return null;
     var out = { hp: base.hp, pa: base.pa, pp: base.pp, initiative: base.initiative,
-                power: base.power, dodge: base.dodge || 0, lock: base.lock || 0, resists: {} };
+                power: base.power, elemPower: 0,
+                dodge: base.dodge || 0, lock: base.lock || 0, resists: {} };
     for (var k in (base.resists || {})) out.resists[k] = base.resists[k];
+    // v2.2: todo nível dá PV; o ganho de DANO muda de genérico para elemental na
+    // escolha do elemento. Convenção do dado (progression.js): os níveis
+    // 2→`elementChoiceLevel` usam `perLevel` e os seguintes usam
+    // `perLevelElement`; quem nunca escolheu segue no genérico até o fim.
+    // Isto é a rede de segurança de quem chama `createBattle` sem `stats` —
+    // o caminho oficial é `Progress.battleParty()`, que já entrega tudo pronto.
     var lv = entry.level || 1;
-    var per = (DATA().leveling && DATA().leveling.perLevel) || null;
-    if (per && lv > 1) {
-      out.hp += (per.hp || 0) * (lv - 1);
-      out.power += (per.power || 0) * (lv - 1);
+    var L = DATA().leveling || {};
+    var per = L.perLevel || null;
+    var perEl = L.perLevelElement || null;
+    var choice = L.elementChoiceLevel || 5;
+    var chose = !!entry.element && entry.element !== 'neutro';
+    var genericSteps = Math.max(0, (chose ? Math.min(lv, choice) : lv) - 1);
+    var elementSteps = chose ? Math.max(0, lv - choice) : 0;
+    if (per) {
+      out.hp += (per.hp || 0) * genericSteps;
+      out.power += (per.power || 0) * genericSteps;
+    }
+    if (perEl) {
+      out.hp += (perEl.hp || 0) * elementSteps;
+      out.elemPower += (perEl.elemPower || 0) * elementSteps;
     }
     return out;
   }
@@ -1328,6 +1375,8 @@ var JOGO = (typeof window !== 'undefined')
     var cy = opts.casterY != null ? opts.casterY : caster.y;
     var tiles = Engine.aoeTiles(state, spell, cx, cy, x, y);
     var effects = sEffects(spell);
+    // v2.2: calculado UMA vez por conjuração — depende do feitiço, não do alvo.
+    var elemBonus = Engine.elementalBonus(caster, spell);
 
     function unitsInTiles(includeCaster) {
       var list = [];
@@ -1352,7 +1401,8 @@ var JOGO = (typeof window !== 'undefined')
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             var amt = rollDamageAmount(state, eff.min, eff.max,
-              Engine.effPower(caster), Engine.effResist(u, eff.element),
+              Engine.effPower(caster) + elemBonus,             // v2.2: bônus elemental
+              Engine.effResist(u, eff.element),
               Engine.markMultiplier(u));                       // v2: marcas
             var hpLoss = dealDamage(state, u, amt, eff.element, caster.uid);
             if (eff.lifesteal && hpLoss > 0 && caster.alive) {
@@ -1415,9 +1465,11 @@ var JOGO = (typeof window !== 'undefined')
           targets = hostileTargets();
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
+            // o veneno congela o poder do conjurador no cast (decisão v1) — e o
+            // bônus elemental v2.2 é parte desse poder, congelado junto.
             applied = { type: 'poison', element: eff.element, min: eff.min, max: eff.max,
                         duration: eff.duration, sourceUid: caster.uid,
-                        sourcePower: Engine.effPower(caster) };
+                        sourcePower: Engine.effPower(caster) + elemBonus };
             u.effects.push(applied);
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
           }
@@ -1592,7 +1644,7 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'chain':
-          chainDamage(state, caster, eff, spell, x, y);
+          chainDamage(state, caster, eff, spell, x, y, elemBonus);
           break;
       }
     }
@@ -1618,7 +1670,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // v2: raio em cadeia
-  function chainDamage(state, caster, eff, spell, x, y) {
+  function chainDamage(state, caster, eff, spell, x, y, elemBonus) {
     var cur = Engine.unitAt(state, x, y);
     if (!cur || !cur.alive || cur.side === caster.side) return;
     var hit = {};
@@ -1629,7 +1681,8 @@ var JOGO = (typeof window !== 'undefined')
     for (var j = 0; j <= jumps; j++) {
       if (!cur || !cur.alive) break;
       hit[cur.uid] = true;
-      var amt = rollDamageAmount(state, eff.min, eff.max, Engine.effPower(caster),
+      var amt = rollDamageAmount(state, eff.min, eff.max,
+        Engine.effPower(caster) + (elemBonus || 0),           // v2.2
         Engine.effResist(cur, element), Engine.markMultiplier(cur) * mult);
       emit({ type: 'chainHop', uid: cur.uid, index: j });
       dealDamage(state, cur, amt, element, caster.uid);

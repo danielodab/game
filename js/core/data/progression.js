@@ -27,8 +27,19 @@ JOGO.DATA.leveling = {
     70830, 80465, 90695, 101450, 112640
   ],
 
-  /* Ganho fixo por nível. No 30: +174 PV e +87 de poder sobre a base. */
-  perLevel: { hp: 6, power: 3 },
+  /* GANHO POR NÍVEL (adendo v2.2) — todo nível dá +5 PV; o que muda é o dano.
+   * Antes de escolher o elemento, o nível dá poder GENÉRICO; a partir da escolha,
+   * dá dano no ELEMENTO escolhido (`elemPower`), que só conta em feitiços daquele
+   * elemento: `(100 + power + (spell.element === unit.element ? elemPower : 0))/100`.
+   *
+   * Convenção de corte (para Progress aplicar igual ao que a validação simula):
+   * os níveis 2→5 usam `perLevel` (a escolha acontece AO chegar ao 5) e os níveis
+   * 6→30 usam `perLevelElement`. No nível 30, portanto:
+   *   +145 PV · +12 de poder genérico · +75 de dano no elemento escolhido.
+   * Quem sobe sem escolher (impossível hoje, mas o motor não deve quebrar) fica só
+   * com `perLevel` e acumula +87 de poder genérico. */
+  perLevel: { hp: 5, power: 3 },
+  perLevelElement: { hp: 5, elemPower: 3 },
 
   /* Nível em que o herói escolhe o elemento — escolha permanente. */
   elementChoiceLevel: 5

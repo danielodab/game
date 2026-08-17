@@ -137,9 +137,12 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   }
 
-  function expectDamage(unit, victim, eff) {
+  // v2.2: `elemBonus` é o `elemPower` do conjurador quando o feitiço é do
+  // elemento dele — o mesmo número que a engine soma ao poder. Sem ele a IA
+  // subestimaria justamente os feitiços do próprio caminho elemental.
+  function expectDamage(unit, victim, eff, elemBonus) {
     var avg = (eff.min + eff.max) / 2;
-    var power = E().effPower(unit);
+    var power = E().effPower(unit) + (elemBonus || 0);
     var resist = E().effResist(victim, eff.element);
     var marks = E().markMultiplier ? E().markMultiplier(victim) : 1;
     return Math.max(0, avg * (100 + power) / 100 * (100 - resist) / 100 * marks);

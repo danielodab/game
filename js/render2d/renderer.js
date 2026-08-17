@@ -251,6 +251,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!artOk(fnName)) return null;
     try {
       var r = JOGO.Art[fnName].apply(JOGO.Art, args);
+      artMode[fnName] = r ? 'ok' : 'empty';
       return r || null;
     } catch (e) {
       artMode[fnName] = 'fail';
@@ -2216,9 +2217,18 @@ var JOGO = (typeof window !== 'undefined')
     return {
       units: st && st.units ? st.units.length : 0,
       objects: objectLayer ? objectLayer.children.length : 0,
+      floor: floorLayer ? floorLayer.children.length : 0,
       fx: fxLayer ? fxLayer.children.length : 0,
-      zoom: cam.zoom, weather: weather.id, busy: R.isBusy()
+      zoom: cam.zoom, weather: weather.id, busy: R.isBusy(),
+      tileW: TW, art: R.artStatus()
     };
+  };
+  // quais funções do Art entraram de fato (o resto caiu no placeholder)
+  R.artStatus = function () {
+    var out = {}, k;
+    var names = ['unit', 'tile', 'obstacleHigh', 'obstacleLow', 'prop', 'tileEventIcon'];
+    for (k = 0; k < names.length; k++) out[names[k]] = artMode[names[k]] || (artOk(names[k]) ? 'idle' : 'ausente');
+    return out;
   };
 
   JOGO.Renderer = R;

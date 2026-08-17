@@ -281,11 +281,22 @@
   });
 
   var items = D.items ? Object.keys(D.items) : [];
-  var g10 = sec('11 · Ícones de item (4 espaços)' + (items.length ? ' (' + items.length + ')' : ' — DATA.items ainda não existe: 4 espaços de demonstração'),
-    'Espaços: PA (manopla) · PP (bota) · Vida (coração) · Especial (orbe). A borda mostra a raridade.');
+  var g10 = sec('11 · Ícones de item — os 4 espaços do ADENDO v2.2' + (items.length ? ' (' + items.length + ' itens)' : ' — DATA.items ainda não existe'),
+    'Punho (manopla, dá PA) · Passo (bota, dá PP) · Casca (couraça, dá vida/resistências) · ' +
+    'Lume (lanterna, concede feitiço). A borda mostra a raridade; o pet tem espaço à parte.');
+  rowTitle(g10, 'Espaço VAZIO — Art.slotIcon(slot)');
+  Art.slotIds().forEach(function (s) {
+    show(g10, Art.slotIcon(s, 60), '<b>' + Art.slotName(s) + '</b><br>vazio · ' + s, 'stage', 'espaço vazio ' + s);
+  });
+  check('API Art.slotIcon', typeof Art.slotIcon === 'function');
+  check('4 espaços nomeados (punho/passo/casca/lume)', Art.slotIds().join(',') === 'punho,passo,casca,lume');
+  check('ids antigos ainda resolvem', Art.slotKey('pa') === 'punho' && Art.slotKey('pp') === 'passo' &&
+        Art.slotKey('vida') === 'casca' && Art.slotKey('especial') === 'lume');
+  rowTitle(g10, 'Itens de DATA.items');
   (items.length ? items : ['demo-pa', 'demo-pp', 'demo-vida', 'demo-especial']).forEach(function (id) {
     var it = D.items && D.items[id];
-    show(g10, Art.itemIcon(id, 56), (it ? it.name + ' · ' + it.slot + '/' + it.rarity : id), 'stage', 'ícone item ' + id);
+    show(g10, Art.itemIcon(id, 56),
+         (it ? it.name + '<br>' + Art.slotName(it.slot) + ' · ' + it.rarity : id), 'stage', 'ícone item ' + id);
   });
 
   var g11 = sec('12 · Eventos de terreno',
