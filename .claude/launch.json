@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "jogo-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8137", "--directory", "C:\\Users\\danie\\Documents\\Jogo"],
+      "port": 8137
+    }
+  ]
+}

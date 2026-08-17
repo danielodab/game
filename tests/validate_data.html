@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Validação de JOGO.DATA — SOTERRA</title>
+<style>
+  body { background: #14181c; color: #d8dee4; font-family: Consolas, monospace; padding: 20px; }
+  h1 { font-size: 18px; color: #ffd76b; }
+  #summary { font-size: 16px; margin: 12px 0; padding: 10px; border-radius: 6px; }
+  #summary.ok { background: #15351b; color: #7be08a; }
+  #summary.bad { background: #3a1515; color: #ff8a8a; }
+  .fail { color: #ff8a8a; }
+  .pass { color: #6fae76; }
+  ul { list-style: none; padding: 0; margin: 0; font-size: 12px; }
+  li { padding: 1px 0; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: #8ab4d8; }
+</style>
+</head>
+<body>
+<h1>Validação de JOGO.DATA — SOTERRA: Ecos do Mundo Enterrado</h1>
+<div id="summary">Carregando…</div>
+<div id="failList"></div>
+<details><summary>Todas as checagens</summary><ul id="allList"></ul></details>
+
+<script src="../js/core/data.js"></script>
+<script>
+(function () {
+  'use strict';
+  var results = [];
+  function check(name, ok, detail) {
+    results.push({ name: name, ok: !!ok, detail: detail || '' });
+    if (!ok) console.error('FAIL: ' + name + (detail ? ' — ' + detail : ''));
+  }
+
+  var ELEMENTS = ['fire', 'water', 'earth', 'air', 'light', 'shadow', 'neutral'];
+  var SHAPES = ['single', 'cross', 'circle', 'line'];
+  var AIS = ['melee', 'ranged', 'support', 'boss'];
+  var BUFF_STATS = ['pa', 'pm', 'power', 'initiative'];
+  var HEX = /^#[0-9a-fA-F]{6}$/;
+  var EFFECT_REQ = {
+    damage: ['element', 'min', 'max'],
+    heal: ['min', 'max'],
+    shield: ['value', 'duration'],
+    buff: ['stat', 'value', 'duration'],
+    resist: ['element', 'value', 'duration'],
+    push: ['tiles'],
+    pull: ['tiles'],
+    teleport: [],
+    swap: [],
+    poison: ['element', 'min', 'max', 'duration'],
+    regen: ['min', 'max', 'duration'],
+    summon: ['monsterId'],
+    taunt: ['duration'],
+    invisible: ['duration']
+  };
+  var TRAIT_REQ = {
+    explodeOnDeath: ['element', 'damage', 'radius'],
+    split: ['monsterId', 'count'],
+    enrage: ['hpPct', 'power'],
+    pushImmune: [],
+    regenAura: ['value', 'radius']
+  };
+
+  var D = (typeof JOGO !== 'undefined') && JOGO.DATA;
+  check('JOGO.DATA existe', !!D);
+  if (!D) { render(); return; }
+
+  check('gameTitle', typeof D.gameTitle === 'string' && D.gameTitle.length > 0);
+  check('gameSubtitle', typeof D.gameSubtitle === 'string' && D.gameSubtitle.length > 0);
+
+  // ---- raças ----
+  check('5 raças', D.races.length === 5, 'tem ' + D.races.length);
+  var raceIds = {};
+  D.races.forEach(function (r) {
+    ['id', 'name', 'description', 'lore', 'palette', 'trait'].forEach(function (f) {
+      check('raça ' + r.id + ' campo ' + f, r[f] !== undefined && r[f] !== '');
+    });
+    ['primary', 'secondary', 'accent'].forEach(function (k) {
+      check('raça ' + r.id + ' palette.' + k, HEX.test(r.palette[k]));
+    });
+    raceIds[r.id] = true;
+  });
+  check('ids de raça únicos', Object.keys(raceIds).length === 5);
+
+  // ---- heróis ----
+  check('5 heróis', D.heroes.length === 5, 'tem ' + D.heroes.length);
+  var seenRace = {};
+  D.heroes.forEach(function (h) {
+    check('herói ' + h.id + ' raça ' + h.raceId + ' existe', !!raceIds[h.raceId]);
+    check('herói ' + h.id + ' raça única', !seenRace[h.raceId]);
+    seenRace[h.raceId] = true;
+    check('herói ' + h.id + ' 5 feitiços', h.spells.length === 5, 'tem ' + h.spells.length);
+    var st = h.stats;
+    check('herói ' + h.id + ' hp 90–140', st.hp >= 90 && st.hp <= 140, String(st.hp));
+    check('herói ' + h.id + ' pa=6', st.pa === 6);
+    check('herói ' + h.id + ' pm=3', st.pm === 3);
+    check('herói ' + h.id + ' init 10–90', st.initiative >= 10 && st.initiative <= 90);
+    check('herói ' + h.id + ' power=0', st.power === 0);
+    check('herói ' + h.id + ' resists completos',
+      ELEMENTS.every(function (e) { return typeof st.resists[e] === 'number'; }));
+    h.spells.forEach(function (sid) {
+      check('herói ' + h.id + ' feitiço ' + sid + ' existe', !!D.spells[sid]);
+    });
+  });
+
+  // ---- feitiços ----
+  Object.keys(D.spells).forEach(function (sid) {
+    var s = D.spells[sid];
+    check('spell ' + sid + ' id==chave', s.id === sid);
+    ['name', 'element', 'paCost', 'cooldown', 'castsPerTurn', 'range', 'aoe',
+     'needsEmptyTile', 'effects', 'description', 'fxKey'].forEach(function (f) {
+      check('spell ' + sid + ' campo ' + f, s[f] !== undefined);
+    });
+    check('spell ' + sid + ' elemento válido', ELEMENTS.indexOf(s.element) >= 0, s.element);
+    check('spell ' + sid + ' range campos',
+      typeof s.range.min === 'number' && typeof s.range.max === 'number' &&
+      typeof s.range.line === 'boolean' && typeof s.range.los === 'boolean');
+    check('spell ' + sid + ' range coerente', s.range.min >= 0 && s.range.min <= s.range.max);
+    check('spell ' + sid + ' aoe válido', SHAPES.indexOf(s.aoe.shape) >= 0 && typeof s.aoe.size === 'number');
+    check('spell ' + sid + ' effects não-vazio', s.effects.length > 0);
+    s.effects.forEach(function (e, i) {
+      var req = EFFECT_REQ[e.type];
+      check('spell ' + sid + ' effect[' + i + '] tipo válido', !!req, String(e.type));
+      if (!req) return;
+      req.forEach(function (f) {
+        check('spell ' + sid + ' effect[' + i + '] ' + e.type + '.' + f, e[f] !== undefined);
+      });
+      if (e.type === 'damage' || e.type === 'poison' || e.type === 'resist')
+        check('spell ' + sid + ' effect[' + i + '] elemento válido', ELEMENTS.indexOf(e.element) >= 0);
+      if (e.type === 'buff')
+        check('spell ' + sid + ' effect[' + i + '] stat válido', BUFF_STATS.indexOf(e.stat) >= 0, String(e.stat));
+      if (e.type === 'summon') {
+        check('spell ' + sid + ' summon ' + e.monsterId + ' existe', !!D.monsters[e.monsterId]);
+        if (D.monsters[e.monsterId])
+          check('spell ' + sid + ' summon ' + e.monsterId + ' é summonOnly', D.monsters[e.monsterId].summonOnly === true);
+        check('spell ' + sid + ' summon exige needsEmptyTile', s.needsEmptyTile === true);
+      }
+      if (e.type === 'teleport')
+        check('spell ' + sid + ' teleport exige needsEmptyTile', s.needsEmptyTile === true);
+    });
+  });
+
+  // ---- monstros ----
+  Object.keys(D.monsters).forEach(function (mid) {
+    var m = D.monsters[mid];
+    check('monstro ' + mid + ' id==chave', m.id === mid);
+    ['name', 'family', 'description', 'stats', 'spells', 'ai', 'traits'].forEach(function (f) {
+      check('monstro ' + mid + ' campo ' + f, m[f] !== undefined);
+    });
+    check('monstro ' + mid + ' boss é bool', typeof m.boss === 'boolean');
+    check('monstro ' + mid + ' summonOnly é bool', typeof m.summonOnly === 'boolean');
+    check('monstro ' + mid + ' ai válida', AIS.indexOf(m.ai) >= 0, m.ai);
+    check('monstro ' + mid + ' resists completos',
+      ELEMENTS.every(function (e) { return typeof m.stats.resists[e] === 'number'; }));
+    check('monstro ' + mid + ' tem feitiço', m.spells.length > 0);
+    check('monstro ' + mid + ' xp numérico ≥ 0', typeof m.xp === 'number' && m.xp >= 0, String(m.xp));
+    if (m.boss) check('monstro ' + mid + ' chefe: xp ~hp*1.5', m.xp >= m.stats.hp, m.xp + ' vs hp ' + m.stats.hp);
+    m.spells.forEach(function (sid) {
+      check('monstro ' + mid + ' feitiço ' + sid + ' existe', !!D.spells[sid]);
+    });
+    m.traits.forEach(function (t, i) {
+      var req = TRAIT_REQ[t.type];
+      check('monstro ' + mid + ' trait[' + i + '] tipo válido', !!req, String(t.type));
+      if (!req) return;
+      req.forEach(function (f) {
+        check('monstro ' + mid + ' trait[' + i + '] ' + t.type + '.' + f, t[f] !== undefined);
+      });
+      if (t.type === 'split') {
+        check('monstro ' + mid + ' split ' + t.monsterId + ' existe', !!D.monsters[t.monsterId]);
+        if (D.monsters[t.monsterId])
+          check('monstro ' + mid + ' split ' + t.monsterId + ' é summonOnly', D.monsters[t.monsterId].summonOnly === true);
+      }
+      if (t.type === 'explodeOnDeath')
+        check('monstro ' + mid + ' explode elemento válido', ELEMENTS.indexOf(t.element) >= 0);
+    });
+  });
+
+  // ---- itens (Adendo v2) ----
+  var SLOTS = ['weapon', 'armor', 'trinket'];
+  var RARITIES = ['common', 'rare', 'epic'];
+  var BONUS_KEYS = ['hp', 'pa', 'pm', 'power', 'initiative', 'resists'];
+  var dungeonIds = {};
+  D.dungeons.forEach(function (d) { dungeonIds[d.id] = true; });
+  check('items existe', !!D.items && typeof D.items === 'object');
+  var itemsByDungeon = {};
+  Object.keys(D.items || {}).forEach(function (iid) {
+    var it = D.items[iid];
+    check('item ' + iid + ' id==chave', it.id === iid);
+    ['name', 'slot', 'rarity', 'dungeonId', 'bonuses', 'description', 'flavor', 'iconKey'].forEach(function (f) {
+      check('item ' + iid + ' campo ' + f, it[f] !== undefined && it[f] !== '');
+    });
+    check('item ' + iid + ' slot válido', SLOTS.indexOf(it.slot) >= 0, String(it.slot));
+    check('item ' + iid + ' raridade válida', RARITIES.indexOf(it.rarity) >= 0, String(it.rarity));
+    check('item ' + iid + ' dungeonId existe', !!dungeonIds[it.dungeonId], String(it.dungeonId));
+    var bk = Object.keys(it.bonuses || {});
+    check('item ' + iid + ' tem bônus', bk.length > 0);
+    check('item ' + iid + ' chaves de bônus válidas',
+      bk.every(function (k) { return BONUS_KEYS.indexOf(k) >= 0; }), bk.join(','));
+    ['pa', 'pm'].forEach(function (k) {
+      if (it.bonuses[k] !== undefined) {
+        check('item ' + iid + ' ' + k + ' só em épico', it.rarity === 'epic');
+        check('item ' + iid + ' ' + k + ' == +1', it.bonuses[k] === 1, String(it.bonuses[k]));
+      }
+    });
+    check('item ' + iid + ' PA ou PM, nunca ambos', !(it.bonuses.pa !== undefined && it.bonuses.pm !== undefined));
+    if (it.bonuses.hp !== undefined)
+      check('item ' + iid + ' hp 5–35', typeof it.bonuses.hp === 'number' && it.bonuses.hp >= 5 && it.bonuses.hp <= 35, String(it.bonuses.hp));
+    if (it.bonuses.power !== undefined)
+      check('item ' + iid + ' power 3–20', typeof it.bonuses.power === 'number' && it.bonuses.power >= 3 && it.bonuses.power <= 20, String(it.bonuses.power));
+    if (it.bonuses.initiative !== undefined)
+      check('item ' + iid + ' initiative número > 0', typeof it.bonuses.initiative === 'number' && it.bonuses.initiative > 0, String(it.bonuses.initiative));
+    if (it.bonuses.resists !== undefined) {
+      var rk = Object.keys(it.bonuses.resists);
+      check('item ' + iid + ' resists válidos', rk.length > 0 && rk.every(function (e) {
+        return ELEMENTS.indexOf(e) >= 0 && typeof it.bonuses.resists[e] === 'number';
+      }), rk.join(','));
+    }
+    itemsByDungeon[it.dungeonId] = itemsByDungeon[it.dungeonId] || [];
+    itemsByDungeon[it.dungeonId].push(it);
+  });
+
+  // ---- calabouços ----
+  check('3 calabouços', D.dungeons.length === 3, 'tem ' + D.dungeons.length);
+  D.dungeons.forEach(function (d) {
+    ['name', 'theme', 'description', 'palette', 'rooms'].forEach(function (f) {
+      check('dungeon ' + d.id + ' campo ' + f, d[f] !== undefined);
+    });
+    ['primary', 'secondary', 'accent', 'floor1', 'floor2', 'wall'].forEach(function (k) {
+      check('dungeon ' + d.id + ' palette.' + k, HEX.test(d.palette[k]));
+    });
+    check('dungeon ' + d.id + ' 3 salas', d.rooms.length === 3, 'tem ' + d.rooms.length);
+    d.rooms.forEach(function (room, ri) {
+      var tag = d.id + ' sala ' + (ri + 1) + ' (' + room.name + ')';
+      var lay = room.layout;
+      var w = lay[0].length, h = lay.length;
+      check(tag + ' retangular', lay.every(function (row) { return row.length === w; }));
+      check(tag + ' dimensões 11–15', w >= 11 && w <= 15 && h >= 11 && h <= 15, w + 'x' + h);
+      var cells = lay.join('');
+      var bad = cells.replace(/[.#~,P a-z]/g, '');
+      check(tag + ' caracteres válidos', bad.length === 0, bad);
+      var pCount = (cells.match(/P/g) || []).length;
+      check(tag + ' ≥3 spawns P', pCount >= 3, 'tem ' + pCount);
+      var letters = {};
+      (cells.match(/[a-z]/g) || []).forEach(function (c) { letters[c] = (letters[c] || 0) + 1; });
+      var layoutLetters = Object.keys(letters).sort().join('');
+      var mapLetters = Object.keys(room.monsters).sort().join('');
+      check(tag + ' letras ↔ mapa de monstros', layoutLetters === mapLetters,
+        'layout=[' + layoutLetters + '] mapa=[' + mapLetters + ']');
+      Object.keys(room.monsters).forEach(function (letter) {
+        var mid = room.monsters[letter];
+        check(tag + ' monstro ' + mid + ' existe', !!D.monsters[mid]);
+        if (D.monsters[mid])
+          check(tag + ' monstro ' + mid + ' não é summonOnly', D.monsters[mid].summonOnly === false);
+      });
+      var nUnits = (cells.match(/[a-z]/g) || []).length;
+      if (ri === 0) check(tag + ' 3–4 monstros', nUnits >= 3 && nUnits <= 4, String(nUnits));
+      if (ri === 1) check(tag + ' 4–5 monstros', nUnits >= 4 && nUnits <= 5, String(nUnits));
+      if (ri === 2) {
+        var hasBoss = Object.keys(room.monsters).some(function (letter) {
+          var mo = D.monsters[room.monsters[letter]];
+          return mo && mo.boss === true;
+        });
+        check(tag + ' contém chefe', hasBoss);
+        check(tag + ' chefe + 2–3 lacaios', nUnits >= 3 && nUnits <= 4, String(nUnits));
+      }
+    });
+
+    // -- saque (Adendo v2) --
+    var lt = d.lootTable;
+    check('dungeon ' + d.id + ' lootTable é array não-vazio', Array.isArray(lt) && lt.length > 0);
+    var lootEntries = {};
+    (Array.isArray(lt) ? lt : []).forEach(function (en, i) {
+      var etag = 'dungeon ' + d.id + ' lootTable[' + i + '] (' + en.itemId + ')';
+      check(etag + ' item existe', !!(D.items && D.items[en.itemId]));
+      if (D.items && D.items[en.itemId])
+        check(etag + ' item do próprio calabouço', D.items[en.itemId].dungeonId === d.id, String(D.items[en.itemId].dungeonId));
+      check(etag + ' weight > 0', typeof en.weight === 'number' && en.weight > 0, String(en.weight));
+      check(etag + ' minRoom 0–2', en.minRoom === 0 || en.minRoom === 1 || en.minRoom === 2, String(en.minRoom));
+      lootEntries[en.itemId] = en;
+    });
+    var dItems = itemsByDungeon[d.id] || [];
+    check('dungeon ' + d.id + ' ≥6 itens', dItems.length >= 6, 'tem ' + dItems.length);
+    var epics = dItems.filter(function (it) { return it.rarity === 'epic'; });
+    check('dungeon ' + d.id + ' exatamente 1 épico', epics.length === 1, 'tem ' + epics.length);
+    if (epics.length === 1) {
+      var eEntry = lootEntries[epics[0].id];
+      check('dungeon ' + d.id + ' épico na lootTable', !!eEntry);
+      if (eEntry) check('dungeon ' + d.id + ' épico só no chefe (minRoom 2)', eEntry.minRoom === 2, String(eEntry.minRoom));
+    }
+    dItems.forEach(function (it) {
+      check('dungeon ' + d.id + ' item ' + it.id + ' presente na lootTable', !!lootEntries[it.id]);
+    });
+  });
+
+  // ---- leveling (Adendo v2) ----
+  var L = D.leveling;
+  check('leveling existe', !!L);
+  if (L) {
+    check('leveling maxLevel ≥ 2', typeof L.maxLevel === 'number' && L.maxLevel >= 2, String(L.maxLevel));
+    check('leveling xpTable é array', Array.isArray(L.xpTable));
+    if (Array.isArray(L.xpTable)) {
+      check('leveling xpTable tem maxLevel entradas', L.xpTable.length === L.maxLevel, L.xpTable.length + ' vs ' + L.maxLevel);
+      check('leveling xpTable[0] == 0 (nível 1)', L.xpTable[0] === 0, String(L.xpTable[0]));
+      var increasing = true;
+      for (var li = 1; li < L.xpTable.length; li++) {
+        if (typeof L.xpTable[li] !== 'number' || L.xpTable[li] <= L.xpTable[li - 1]) { increasing = false; break; }
+      }
+      check('leveling xpTable estritamente crescente', increasing);
+    }
+    check('leveling perLevel.hp > 0', !!L.perLevel && typeof L.perLevel.hp === 'number' && L.perLevel.hp > 0);
+    check('leveling perLevel.power > 0', !!L.perLevel && typeof L.perLevel.power === 'number' && L.perLevel.power > 0);
+  }
+
+  render();
+
+  function render() {
+    var failed = results.filter(function (r) { return !r.ok; });
+    var sum = document.getElementById('summary');
+    sum.className = failed.length ? 'bad' : 'ok';
+    sum.textContent = failed.length
+      ? 'FALHOU: ' + failed.length + ' de ' + results.length + ' checagens'
+      : 'TUDO PASSOU: ' + results.length + ' checagens OK';
+    console.log('[validate_data] ' + sum.textContent);
+
+    var failDiv = document.getElementById('failList');
+    if (failed.length) {
+      var ulf = document.createElement('ul');
+      failed.forEach(function (r) {
+        var li = document.createElement('li');
+        li.className = 'fail';
+        li.textContent = 'FAIL — ' + r.name + (r.detail ? ' (' + r.detail + ')' : '');
+        ulf.appendChild(li);
+      });
+      failDiv.appendChild(ulf);
+    }
+    var ula = document.getElementById('allList');
+    results.forEach(function (r) {
+      var li = document.createElement('li');
+      li.className = r.ok ? 'pass' : 'fail';
+      li.textContent = (r.ok ? 'PASS' : 'FAIL') + ' — ' + r.name + (r.detail ? ' (' + r.detail + ')' : '');
+      ula.appendChild(li);
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — Testes do Motor (Engine/AI/Game)</title>
+<style>
+  body { background: #14181c; color: #dde; font-family: Consolas, monospace; padding: 16px; }
+  h1 { font-size: 18px; }
+  #summary { font-size: 16px; font-weight: bold; margin: 12px 0; padding: 8px; border-radius: 4px; }
+  .allpass { background: #143d1e; color: #7f7; }
+  .somefail { background: #3d1414; color: #f77; }
+  .t { padding: 2px 6px; }
+  .pass::before { content: "PASS "; color: #6e6; font-weight: bold; }
+  .fail::before { content: "FAIL "; color: #f66; font-weight: bold; }
+  .fail { background: #2a1515; }
+  .msg { color: #fa8; margin-left: 60px; }
+</style>
+</head>
+<body>
+<h1>SOTERRA — suíte de testes do motor (headless: sem Renderer/UI)</h1>
+<div id="summary">rodando...</div>
+<div id="results"></div>
+
+<!-- ?v=adendo2: evita cache de scripts antigos no navegador de teste -->
+<script src="../js/core/data.js?v=adendo2"></script>
+<script src="../js/core/progress.js?v=adendo2"></script>
+<script src="../js/core/engine.js?v=adendo2"></script>
+<script src="../js/core/ai.js?v=adendo2"></script>
+<script src="../js/core/game.js?v=adendo2"></script>
+<script>
+(function () {
+  'use strict';
+  var E = JOGO.Engine, D = JOGO.DATA;
+  var passed = 0, failed = 0, failures = [];
+  var resultsEl = document.getElementById('results');
+
+  // ---- sandbox de save (ADENDO v2): a suíte roda com Progress zerado
+  // (nível 1, sem itens => stats efetivos == base). O save real do jogador é
+  // preservado e restaurado no fim.
+  var SAVE_KEY = 'soterra-save-v1';
+  var realSave = null;
+  try { realSave = window.localStorage ? localStorage.getItem(SAVE_KEY) : null; } catch (e) { realSave = null; }
+  function restoreRealSave() {
+    try {
+      if (window.localStorage) {
+        localStorage.removeItem(SAVE_KEY);
+        if (realSave !== null) localStorage.setItem(SAVE_KEY, realSave);
+      }
+    } catch (e) { /* sem storage */ }
+    if (JOGO.Progress) JOGO.Progress.load();
+  }
+
+  function report(name, ok, msg) {
+    var div = document.createElement('div');
+    div.className = 't ' + (ok ? 'pass' : 'fail');
+    div.textContent = name;
+    if (!ok && msg) {
+      var m = document.createElement('div');
+      m.className = 'msg';
+      m.textContent = msg;
+      div.appendChild(m);
+    }
+    resultsEl.appendChild(div);
+    if (ok) console.log('PASS: ' + name);
+    else console.error('FAIL: ' + name + ' — ' + msg);
+  }
+  function t(name, fn) {
+    try { fn(); passed++; report(name, true); }
+    catch (e) { failed++; failures.push(name + ' — ' + e.message); report(name, false, e.message + (e.stack ? ' | ' + String(e.stack).split('\n')[1] : '')); }
+  }
+  function ok(cond, msg) { if (!cond) throw new Error(msg || 'asserção falhou'); }
+  function eq(a, b, msg) { if (a !== b) throw new Error((msg || 'eq') + ' — esperado [' + b + '], obtido [' + a + ']'); }
+
+  // ------------------------------------------------------------ dados de teste
+  function zeroRes() { return { fire: 0, water: 0, earth: 0, air: 0, light: 0, shadow: 0, neutral: 0 }; }
+  function sp(id, over) {
+    var s = { id: id, name: id, element: 'neutral', paCost: 1, cooldown: 0, castsPerTurn: 0,
+      range: { min: 0, max: 20, line: false, los: false },
+      aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, effects: [],
+      description: 'teste', fxKey: 'slam' };
+    for (var k in over) s[k] = over[k];
+    D.spells[id] = s;
+    return s;
+  }
+  function mon(id, over) {
+    var m = { id: id, name: id, family: 'Teste',
+      description: 'teste',
+      stats: { hp: 100, pa: 6, pm: 3, initiative: 10, power: 0, resists: zeroRes() },
+      spells: [], ai: 'melee', traits: [], boss: false, summonOnly: false };
+    for (var k in over) {
+      if (k === 'stats') { for (var k2 in over.stats) m.stats[k2] = over.stats[k2]; }
+      else m[k] = over[k];
+    }
+    D.monsters[id] = m;
+    return m;
+  }
+
+  var T_SPELLS = ['t-nuke100', 't-nuke10', 't-fire20', 't-steal20', 't-heal20', 't-shield30',
+    't-buffpa', 't-snare', 't-resist-30', 't-push3', 't-pull3', 't-tp', 't-swap',
+    't-poison5', 't-regen5', 't-summon', 't-taunt', 't-invis', 't-line', 't-cd1',
+    't-twice', 't-cross'];
+
+  function installTestData() {
+    if (D.spells['t-nuke100']) return;
+    sp('t-nuke100', { effects: [{ type: 'damage', element: 'neutral', min: 100, max: 100 }] });
+    sp('t-nuke10', { effects: [{ type: 'damage', element: 'neutral', min: 10, max: 10 }] });
+    sp('t-fire20', { element: 'fire', effects: [{ type: 'damage', element: 'fire', min: 20, max: 20 }] });
+    sp('t-steal20', { effects: [{ type: 'damage', element: 'neutral', min: 20, max: 20, lifesteal: true }] });
+    sp('t-heal20', { effects: [{ type: 'heal', min: 20, max: 20 }] });
+    sp('t-shield30', { effects: [{ type: 'shield', value: 30, duration: 2 }] });
+    sp('t-buffpa', { range: { min: 0, max: 0, line: false, los: false }, effects: [{ type: 'buff', stat: 'pa', value: 2, duration: 1 }] });
+    sp('t-snare', { effects: [{ type: 'buff', stat: 'pm', value: -2, duration: 1 }] });
+    sp('t-resist-30', { effects: [{ type: 'resist', element: 'fire', value: -30, duration: 2 }] });
+    sp('t-push3', { range: { min: 1, max: 20, line: false, los: false }, effects: [{ type: 'push', tiles: 3 }] });
+    sp('t-pull3', { range: { min: 1, max: 20, line: false, los: false }, effects: [{ type: 'pull', tiles: 3 }] });
+    sp('t-tp', { range: { min: 1, max: 10, line: false, los: false }, needsEmptyTile: true, effects: [{ type: 'teleport' }] });
+    sp('t-swap', { range: { min: 1, max: 10, line: false, los: false }, effects: [{ type: 'swap' }] });
+    sp('t-poison5', { effects: [{ type: 'poison', element: 'neutral', min: 5, max: 5, duration: 2 }] });
+    sp('t-regen5', { effects: [{ type: 'regen', min: 5, max: 5, duration: 2 }] });
+    sp('t-summon', { range: { min: 1, max: 10, line: false, los: false }, needsEmptyTile: true, effects: [{ type: 'summon', monsterId: 'sporeling' }] });
+    sp('t-taunt', { range: { min: 0, max: 0, line: false, los: false }, effects: [{ type: 'taunt', duration: 2 }] });
+    sp('t-invis', { range: { min: 0, max: 5, line: false, los: false }, effects: [{ type: 'invisible', duration: 2 }] });
+    sp('t-line', { range: { min: 1, max: 8, line: true, los: true }, effects: [{ type: 'damage', element: 'neutral', min: 5, max: 5 }] });
+    sp('t-cd1', { cooldown: 1, effects: [{ type: 'damage', element: 'neutral', min: 1, max: 1 }] });
+    sp('t-twice', { castsPerTurn: 2, effects: [{ type: 'damage', element: 'neutral', min: 1, max: 1 }] });
+    sp('t-cross', { aoe: { shape: 'cross', size: 2 }, effects: [{ type: 'damage', element: 'neutral', min: 10, max: 10 }] });
+    sp('t-bite', { paCost: 3, range: { min: 1, max: 1, line: false, los: true }, effects: [{ type: 'damage', element: 'neutral', min: 5, max: 5 }] });
+    sp('t-shot', { paCost: 3, range: { min: 2, max: 6, line: false, los: true }, effects: [{ type: 'damage', element: 'neutral', min: 5, max: 5 }] });
+    sp('t-mend', { paCost: 3, range: { min: 0, max: 6, line: false, los: false }, effects: [{ type: 'heal', min: 10, max: 10 }] });
+
+    D.heroes.push({ id: 't-hero1', raceId: 'bellborn', name: 'Testa', title: 'a Cobaia', description: 'teste',
+      stats: { hp: 200, pa: 10, pm: 3, initiative: 100, power: 0, resists: zeroRes() }, spells: T_SPELLS.slice() });
+    D.heroes.push({ id: 't-hero2', raceId: 'waxkin', name: 'Testinha', title: 'a Frágil', description: 'teste',
+      stats: { hp: 100, pa: 6, pm: 3, initiative: 90, power: 0, resists: zeroRes() }, spells: ['t-nuke10'] });
+
+    mon('t-dummy', { stats: { hp: 1000, initiative: 10 } });
+    mon('t-rock', { stats: { hp: 1000, initiative: 5 }, traits: [{ type: 'pushImmune' }] });
+    mon('t-foe', { stats: { hp: 1000, pa: 10, initiative: 8 }, spells: ['t-nuke100', 't-nuke10', 't-summon'] });
+    mon('t-boom', { stats: { hp: 10, initiative: 7 }, traits: [{ type: 'explodeOnDeath', element: 'neutral', damage: 18, radius: 1 }] });
+    mon('t-split', { stats: { hp: 10, initiative: 6 }, traits: [{ type: 'split', monsterId: 'burrlet', count: 2 }] });
+    mon('t-berserk', { stats: { hp: 100, initiative: 4 }, traits: [{ type: 'enrage', hpPct: 0.5, power: 20 }] });
+    mon('t-aura', { stats: { hp: 500, initiative: 3 }, ai: 'support', traits: [{ type: 'regenAura', value: 8, radius: 2 }] });
+    mon('t-biter', { stats: { hp: 100, initiative: 9 }, spells: ['t-bite'] });
+    mon('t-shooter', { stats: { hp: 100, initiative: 9 }, spells: ['t-shot'], ai: 'ranged' });
+    mon('t-medic', { stats: { hp: 100, initiative: 9 }, spells: ['t-mend'], ai: 'support' });
+
+    D.dungeons.push({
+      id: 'test-arena', name: 'Arena de Teste', theme: 'teste', description: 'teste',
+      palette: { primary: '#888', secondary: '#444', accent: '#fff', floor1: '#222', floor2: '#333', wall: '#111' },
+      rooms: [
+        { name: 'arena', layout: [
+            '###########',
+            '#P...a....#',
+            '#.........#',
+            '#P...b....#',
+            '#.........#',
+            '#P........#',
+            '#.........#',
+            '###########'],
+          monsters: { a: 't-dummy', b: 't-dummy' } },
+        { name: 'labirinto', layout: [
+            '###########',
+            '#P..#....a#',
+            '#...#.....#',
+            '#...#.....#',
+            '#.~~......#',
+            '#.........#',
+            '#...b.....#',
+            '###########'],
+          monsters: { a: 't-dummy', b: 't-dummy' } },
+        { name: 'corredor', layout: [
+            '#######',
+            '#P.a..#',
+            '#######'],
+          monsters: { a: 't-dummy' } }
+      ]
+    });
+  }
+
+  // ------------------------------------------------------------ helpers
+  var TD = null;
+  function arena(roomIdx, monsters, heroes) {
+    if (monsters) TD.rooms[roomIdx].monsters = monsters;
+    E.events.length = 0;
+    return E.createBattle('test-arena', roomIdx, heroes || ['t-hero1']);
+  }
+  function byDef(state, defId, nth) {
+    var n = nth || 0;
+    for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].defId === defId) { if (n === 0) return state.units[i]; n--; }
+    }
+    return null;
+  }
+  function drain() { var evs = E.events.slice(); E.events.length = 0; return evs; }
+  function findEv(evs, type, pred) {
+    for (var i = 0; i < evs.length; i++) {
+      if (evs[i].type === type && (!pred || pred(evs[i]))) return evs[i];
+    }
+    return null;
+  }
+  function toHero(state) {
+    for (var g = 0; g < 30; g++) {
+      if (E.activeUnit(state) && E.activeUnit(state).defId === 't-hero1') return;
+      E.endTurn(state);
+    }
+    throw new Error('não voltou ao turno do herói de teste');
+  }
+  function nextRound(state) { // encerra o turno do herói e cicla até o herói de novo
+    E.endTurn(state);
+    toHero(state);
+  }
+
+  // ============================================================ SUITE
+  function run() {
+    if (JOGO.Progress) JOGO.Progress.reset(); // save zerado para toda a suíte
+    installTestData();
+    for (var i = 0; i < D.dungeons.length; i++) {
+      if (D.dungeons[i].id === 'test-arena') TD = D.dungeons[i];
+    }
+    var REAL_PARTY = ['hero-toll', 'hero-morel', 'hero-rose'];
+    var REAL_DUNGEONS = ['greenhouse', 'cistern', 'emberlock'];
+
+    // ---------------------------------------------------- criação de batalha
+    t('createBattle: as 9 salas reais criam sem erro e com contagens corretas', function () {
+      for (var d = 0; d < REAL_DUNGEONS.length; d++) {
+        for (var r = 0; r < 3; r++) {
+          E.events.length = 0;
+          var st = E.createBattle(REAL_DUNGEONS[d], r, REAL_PARTY);
+          eq(st.phase, 'playing', 'phase');
+          var dungeon = null;
+          for (var k = 0; k < D.dungeons.length; k++) if (D.dungeons[k].id === REAL_DUNGEONS[d]) dungeon = D.dungeons[k];
+          var layout = dungeon.rooms[r].layout;
+          var letters = 0;
+          for (var y = 0; y < layout.length; y++) {
+            for (var x = 0; x < layout[y].length; x++) {
+              var ch = layout[y].charAt(x);
+              if (ch >= 'a' && ch <= 'z') letters++;
+            }
+          }
+          eq(st.units.length, 3 + letters, REAL_DUNGEONS[d] + ' sala ' + r + ': unidades');
+          eq(st.order.length, st.units.length, 'ordem');
+          eq(st.grid.h, layout.length, 'altura');
+          eq(st.grid.w, layout[0].length, 'largura');
+          // heróis nos P (na ordem passada)
+          for (var h = 0; h < 3; h++) {
+            var u = st.units[h];
+            eq(u.defId, REAL_PARTY[h], 'ordem dos heróis');
+            eq(layout[u.y].charAt(u.x), 'P', 'herói em célula P');
+            eq(u.side, 'player', 'lado');
+            eq(u.kind, 'hero', 'kind');
+          }
+          // ordem decrescente de iniciativa
+          for (var o = 1; o < st.order.length; o++) {
+            var a = E.findUnit(st, st.order[o - 1]), b = E.findUnit(st, st.order[o]);
+            ok(a.initiative >= b.initiative, 'iniciativa decrescente');
+          }
+        }
+      }
+    });
+
+    t('createBattle: emite battleStart, roundStart e turnStart em ordem', function () {
+      E.events.length = 0;
+      E.createBattle('greenhouse', 0, REAL_PARTY);
+      var evs = drain();
+      var iB = -1, iR = -1, iT = -1;
+      for (var i = 0; i < evs.length; i++) {
+        if (evs[i].type === 'battleStart' && iB < 0) iB = i;
+        if (evs[i].type === 'roundStart' && iR < 0) iR = i;
+        if (evs[i].type === 'turnStart' && iT < 0) iT = i;
+      }
+      ok(iB >= 0 && iR >= 0 && iT >= 0, 'eventos presentes');
+      ok(iB < iR && iR < iT, 'ordem battleStart < roundStart < turnStart');
+    });
+
+    t('iniciativa: desempate estável pela ordem de criação', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var a = byDef(st, 't-dummy', 0), b = byDef(st, 't-dummy', 1);
+      ok(st.order.indexOf(a.uid) < st.order.indexOf(b.uid), 'a antes de b');
+      eq(E.activeUnit(st).defId, 't-hero1', 'herói (iniciativa 100) age primeiro');
+    });
+
+    // ---------------------------------------------------- movimento
+    t('reachable: respeita PM e bloqueio por unidade', function () {
+      var st = arena(2, { a: 't-dummy' }); // corredor 1 célula de largura
+      var h = byDef(st, 't-hero1');
+      var r = E.reachable(st, h.uid);
+      eq(r.length, 1, 'só (2,1) alcançável');
+      eq(r[0].x, 2, 'x'); eq(r[0].y, 1, 'y'); eq(r[0].cost, 1, 'custo');
+    });
+
+    t('path: contorna parede (caminho mais longo) e respeita adjacência ortogonal', function () {
+      var st = arena(1, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      h.pm = 30;
+      var p = E.path(st, h.uid, 5, 1);
+      ok(p !== null, 'caminho existe');
+      eq(p.length, 12, 'comprimento do desvio');
+      var px = h.x, py = h.y;
+      for (var i = 0; i < p.length; i++) {
+        eq(Math.abs(p[i].x - px) + Math.abs(p[i].y - py), 1, 'passo ortogonal');
+        px = p[i].x; py = p[i].y;
+      }
+      eq(px, 5, 'destino x'); eq(py, 1, 'destino y');
+    });
+
+    t('path: null para célula ocupada, buraco e rota totalmente bloqueada', function () {
+      var st = arena(2, { a: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      h.pm = 30;
+      ok(E.path(st, h.uid, 3, 1) === null, 'célula ocupada');
+      ok(E.path(st, h.uid, 5, 1) === null, 'rota bloqueada por unidade');
+      var st2 = arena(1, { a: 't-dummy', b: 't-dummy' });
+      var h2 = byDef(st2, 't-hero1');
+      h2.pm = 30;
+      ok(E.path(st2, h2.uid, 2, 4) === null, 'buraco não é destino');
+      var reach = E.reachable(st2, h2.uid);
+      for (var i = 0; i < reach.length; i++) {
+        var tt = st2.grid.tiles[reach[i].y][reach[i].x];
+        eq(tt.type, 'floor', 'alcançável só em chão');
+      }
+    });
+
+    t('move: gasta PM, emite evento com caminho; movimento inválido retorna false', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      drain();
+      ok(E.move(st, h.uid, 1, 3) === true, 'move válido');
+      eq(h.pm, 1, 'PM gasto (3-2)');
+      var ev = findEv(drain(), 'move');
+      ok(!!ev, 'evento move');
+      eq(ev.path.length, 2, 'caminho de 2 células');
+      ok(E.move(st, h.uid, 1, 6) === false, 'sem PM suficiente');
+      eq(h.pm, 1, 'PM inalterado após falha');
+    });
+
+    // ---------------------------------------------------- linha de visão
+    t('LoS: parede bloqueia; buraco NÃO bloqueia', function () {
+      var st = arena(1, { a: 't-dummy', b: 't-dummy' });
+      ok(E.los(st, 1, 1, 9, 1) === false, 'parede em (4,1) bloqueia');
+      ok(E.los(st, 1, 4, 4, 4) === true, 'buracos (2,4)(3,4) não bloqueiam');
+      ok(E.los(st, 1, 2, 3, 2) === true, 'linha livre');
+    });
+
+    t('range line: só células no mesmo eixo x ou y', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1'); // (1,1)
+      var targets = E.castTargets(st, h.uid, 't-line');
+      ok(targets.length > 0, 'há alvos');
+      for (var i = 0; i < targets.length; i++) {
+        ok(targets[i].x === h.x || targets[i].y === h.y, 'alvo em linha reta');
+        ok(!(targets[i].x === h.x && targets[i].y === h.y), 'min 1 exclui a própria célula');
+      }
+    });
+
+    // ---------------------------------------------------- validação de cast
+    t('castTargets: vazio sem PA; PA é gasto ao conjurar', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      h.pa = 1;
+      ok(E.castTargets(st, h.uid, 't-nuke10').length > 0, 'com 1 PA pode');
+      ok(E.cast(st, h.uid, 't-nuke10', a.x, a.y) === true, 'cast ok');
+      eq(h.pa, 0, 'PA gasto');
+      eq(E.castTargets(st, h.uid, 't-nuke10').length, 0, 'sem PA: sem alvos');
+      ok(E.cast(st, h.uid, 't-nuke10', a.x, a.y) === false, 'cast sem PA falha');
+    });
+
+    t('cooldown: recarga N bloqueia N turnos completos do dono', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      ok(E.cast(st, h.uid, 't-cd1', a.x, a.y) === true, 'primeiro cast');
+      eq(E.castTargets(st, h.uid, 't-cd1').length, 0, 'mesmo turno: bloqueado');
+      nextRound(st); // turno 2 do herói
+      eq(E.castTargets(st, h.uid, 't-cd1').length, 0, 'turno seguinte: ainda em recarga (cooldown 1)');
+      nextRound(st); // turno 3 do herói
+      ok(E.castTargets(st, h.uid, 't-cd1').length > 0, 'turno 3: disponível');
+      ok(E.cast(st, h.uid, 't-cd1', a.x, a.y) === true, 'relança');
+    });
+
+    t('castsPerTurn: limite por turno e renovação no turno seguinte', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      ok(E.cast(st, h.uid, 't-twice', a.x, a.y), '1º');
+      ok(E.cast(st, h.uid, 't-twice', a.x, a.y), '2º');
+      ok(E.cast(st, h.uid, 't-twice', a.x, a.y) === false, '3º bloqueado');
+      eq(E.castTargets(st, h.uid, 't-twice').length, 0, 'castTargets vazio');
+      nextRound(st);
+      ok(E.cast(st, h.uid, 't-twice', a.x, a.y), 'renova no turno seguinte');
+    });
+
+    t('needsEmptyTile: exclui células ocupadas', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var targets = E.castTargets(st, h.uid, 't-tp');
+      ok(targets.length > 0, 'há células vazias');
+      for (var i = 0; i < targets.length; i++) {
+        ok(E.unitAt(st, targets[i].x, targets[i].y) === null, 'alvo vazio');
+        eq(st.grid.tiles[targets[i].y][targets[i].x].type, 'floor', 'alvo é chão');
+      }
+    });
+
+    // ---------------------------------------------------- 15 efeitos
+    t('efeito damage: fórmula roll*(100+power)/100*(100-resist)/100 arredondada', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      h.power = 50;
+      a.resists.neutral = 20;
+      drain();
+      E.cast(st, h.uid, 't-nuke100', a.x, a.y);
+      var ev = findEv(drain(), 'damage', function (e) { return e.uid === a.uid; });
+      eq(ev.amount, 120, 'round(100*1.5*0.8)');
+      eq(a.hp, 880, 'HP');
+    });
+
+    t('efeito shield: absorve antes do HP; evento shield emitido', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      drain();
+      E.cast(st, h.uid, 't-shield30', a.x, a.y);
+      eq(a.shield, 30, 'escudo aplicado');
+      var evs = drain();
+      ok(!!findEv(evs, 'shield', function (e) { return e.uid === a.uid && e.amount === 30; }), 'evento shield');
+      ok(!!findEv(evs, 'effectApplied', function (e) { return e.uid === a.uid; }), 'effectApplied');
+      E.cast(st, h.uid, 't-nuke100', a.x, a.y);
+      var dm = findEv(drain(), 'damage', function (e) { return e.uid === a.uid; });
+      eq(dm.absorbed, 30, 'absorvido');
+      eq(dm.hpLoss, 70, 'perda de HP');
+      eq(a.hp, 930, 'HP 1000-70');
+      eq(a.shield, 0, 'escudo esgotado');
+    });
+
+    t('efeito damage lifesteal: cura metade do dano em HP', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      h.hp = 100;
+      E.cast(st, h.uid, 't-steal20', a.x, a.y);
+      eq(a.hp, 980, 'alvo perdeu 20');
+      eq(h.hp, 110, 'conjurador roubou 10');
+    });
+
+    t('efeito heal: não ultrapassa hpMax', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      a.hp = 990;
+      drain();
+      E.cast(st, h.uid, 't-heal20', a.x, a.y);
+      eq(a.hp, 1000, 'limitado ao máximo');
+      var ev = findEv(drain(), 'heal', function (e) { return e.uid === a.uid; });
+      eq(ev.amount, 10, 'evento com a cura efetiva');
+    });
+
+    t('efeito buff (pa): imediato no próprio turno e expira após 1 turno', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      E.cast(st, h.uid, 't-buffpa', h.x, h.y);
+      eq(h.pa, 11, '10 - 1 (custo) + 2 (buff)');
+      nextRound(st);
+      eq(h.pa, 10, 'renova no valor base (buff expirou)');
+      eq(h.effects.length, 0, 'efeito removido');
+    });
+
+    t('efeito buff (pm negativo): vale exatamente o turno seguinte da vítima', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      E.cast(st, h.uid, 't-snare', a.x, a.y);
+      E.endTurn(st);
+      eq(E.activeUnit(st).uid, a.uid, 'turno da vítima');
+      eq(a.pm, 1, 'pmMax 3 - 2');
+      toHero(st);
+      E.endTurn(st);
+      eq(E.activeUnit(st).uid, a.uid, 'turno seguinte da vítima');
+      eq(a.pm, 3, 'debuff expirou');
+    });
+
+    t('efeito resist (vulnerabilidade): altera o cálculo de dano', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      E.cast(st, h.uid, 't-resist-30', a.x, a.y);
+      eq(E.effResist(a, 'fire'), -30, 'resist efetiva');
+      E.cast(st, h.uid, 't-fire20', a.x, a.y);
+      eq(a.hp, 1000 - 26, 'round(20*1.3) = 26');
+    });
+
+    t('efeito push: empurra para longe; colisão dá 10/célula bloqueada', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');   // (1,1)
+      var a = byDef(st, 't-dummy', 0); // (5,1)
+      drain();
+      E.cast(st, h.uid, 't-push3', a.x, a.y);
+      eq(a.x, 8, 'empurrado 3 células'); eq(a.y, 1, 'mesma linha');
+      var ev1 = findEv(drain(), 'pushed', function (e) { return e.uid === a.uid; });
+      eq(ev1.collision, 0, 'sem colisão');
+      E.cast(st, h.uid, 't-push3', a.x, a.y);
+      eq(a.x, 9, 'parou na parede');
+      var ev2 = findEv(drain(), 'pushed', function (e) { return e.uid === a.uid; });
+      eq(ev2.collision, 20, '2 células bloqueadas x10');
+      eq(a.hp, 980, 'dano de colisão aplicado');
+    });
+
+    t('trait pushImmune: não é empurrado nem puxado, sem dano de colisão', function () {
+      var st = arena(0, { a: 't-rock', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var r = byDef(st, 't-rock');
+      var x0 = r.x, y0 = r.y, hp0 = r.hp;
+      E.cast(st, h.uid, 't-push3', r.x, r.y);
+      eq(r.x, x0, 'push: imóvel'); eq(r.y, y0, 'push: imóvel');
+      E.cast(st, h.uid, 't-pull3', r.x, r.y);
+      eq(r.x, x0, 'pull: imóvel');
+      eq(r.hp, hp0, 'sem dano de colisão');
+    });
+
+    t('efeito pull: puxa em direção ao conjurador, sem colisão no fim natural', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');   // (1,1)
+      var a = byDef(st, 't-dummy', 0); // (5,1) dist 4
+      E.cast(st, h.uid, 't-pull3', a.x, a.y);
+      eq(a.x, 2, 'puxado 3 células'); eq(a.y, 1, 'linha');
+      eq(a.hp, 1000, 'sem dano');
+      // já adjacente-1: puxão de novo para de forma natural (fica adjacente, sem colisão)
+      E.cast(st, h.uid, 't-pull3', a.x, a.y);
+      eq(Math.abs(a.x - h.x) + Math.abs(a.y - h.y), 1, 'parou adjacente');
+      eq(a.hp, 1000, 'fim natural sem colisão');
+      var b = byDef(st, 't-dummy', 1); // (5,3) dist 6: anda exatamente 3
+      E.cast(st, h.uid, 't-pull3', b.x, b.y);
+      eq(Math.abs(b.x - h.x) + Math.abs(b.y - h.y), 3, 'dist 6 - 3 células');
+      eq(b.hp, 1000, 'sem colisão');
+    });
+
+    t('efeito teleport: precisa de célula vazia; emite evento teleport', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      drain();
+      ok(E.cast(st, h.uid, 't-tp', 3, 5) === true, 'teleporta');
+      eq(h.x, 3, 'x'); eq(h.y, 5, 'y');
+      ok(!!findEv(drain(), 'teleport', function (e) { return e.uid === h.uid; }), 'evento');
+      ok(E.cast(st, h.uid, 't-tp', byDef(st, 't-dummy', 0).x, byDef(st, 't-dummy', 0).y) === false, 'célula ocupada recusa');
+    });
+
+    t('efeito swap: troca de lugar com a unidade alvo', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      var hx = h.x, hy = h.y, ax = a.x, ay = a.y;
+      drain();
+      ok(E.cast(st, h.uid, 't-swap', a.x, a.y) === true, 'swap');
+      eq(h.x, ax, 'herói no lugar do alvo'); eq(h.y, ay, 'y');
+      eq(a.x, hx, 'alvo no lugar do herói'); eq(a.y, hy, 'y');
+      var evs = drain();
+      var count = 0;
+      for (var i = 0; i < evs.length; i++) if (evs[i].type === 'teleport') count++;
+      eq(count, 2, 'dois eventos teleport');
+      ok(E.cast(st, h.uid, 't-swap', 3, 5) === false, 'swap exige unidade no alvo');
+    });
+
+    t('efeito poison: tica no INÍCIO do turno da vítima, X ticks para duração X', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      E.cast(st, h.uid, 't-poison5', a.x, a.y);
+      eq(a.effects.length, 1, 'efeito aplicado');
+      E.endTurn(st);
+      eq(E.activeUnit(st).uid, a.uid, 'turno da vítima');
+      eq(a.hp, 995, 'tick 1');
+      toHero(st);
+      E.endTurn(st);
+      eq(a.hp, 990, 'tick 2');
+      eq(a.effects.length, 1, 'ainda ativo durante o 2º turno da vítima');
+      toHero(st); // encerra o 2º turno da vítima no caminho -> expira
+      eq(a.effects.length, 0, 'expirou após 2 turnos completos');
+      E.endTurn(st);
+      eq(a.hp, 990, 'sem tick 3');
+    });
+
+    t('efeito regen: cura no início do turno da vítima e expira', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      a.hp = 900;
+      E.cast(st, h.uid, 't-regen5', a.x, a.y);
+      E.endTurn(st);
+      eq(a.hp, 905, 'tick 1');
+      toHero(st);
+      E.endTurn(st);
+      eq(a.hp, 910, 'tick 2');
+      toHero(st); // encerra o 2º turno da vítima -> expira
+      eq(a.effects.length, 0, 'expirou');
+      E.endTurn(st);
+      eq(a.hp, 910, 'sem tick 3');
+    });
+
+    t('efeito summon: herda lado, entra na iniciativa logo após o invocador', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      drain();
+      ok(E.cast(st, h.uid, 't-summon', 2, 2) === true, 'invoca');
+      var s = byDef(st, 'sporeling');
+      ok(!!s, 'esporinho existe');
+      eq(s.kind, 'summon', 'kind');
+      eq(s.side, 'player', 'herda o lado do conjurador');
+      eq(st.order.indexOf(s.uid), st.order.indexOf(h.uid) + 1, 'logo após o invocador');
+      ok(!!findEv(drain(), 'summon'), 'evento summon');
+      ok(E.cast(st, h.uid, 't-summon', s.x, s.y) === false, 'célula ocupada recusa');
+    });
+
+    t('efeito taunt: aplicado com evento effectApplied', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      drain();
+      E.cast(st, h.uid, 't-taunt', h.x, h.y);
+      ok(E.unitHasEffect(h, 'taunt'), 'herói tem taunt');
+      ok(!!findEv(drain(), 'effectApplied', function (e) { return e.uid === h.uid && e.effect.type === 'taunt'; }), 'evento');
+    });
+
+    t('efeito invisible: quebra ao conjurar dano', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0);
+      E.cast(st, h.uid, 't-invis', h.x, h.y);
+      ok(E.unitHasEffect(h, 'invisible'), 'invisível');
+      E.cast(st, h.uid, 't-heal20', h.x, h.y);
+      ok(E.unitHasEffect(h, 'invisible'), 'cura não quebra');
+      E.cast(st, h.uid, 't-nuke10', a.x, a.y);
+      ok(!E.unitHasEffect(h, 'invisible'), 'dano quebra a invisibilidade');
+    });
+
+    // ---------------------------------------------------- AoE
+    t('aoeTiles: cross e circle com contagens corretas; AoE não atinge o conjurador', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var cross = E.aoeTiles(st, 't-cross', h.x, h.y, 5, 4);
+      eq(cross.length, 9, 'cruz tamanho 2 em área aberta');
+      var circle = E.aoeTiles(st, 'spore-cloud', h.x, h.y, 5, 4);
+      eq(circle.length, 5, 'círculo raio 1');
+      // cruz centrada em (5,2) pega os dois dummies (5,1) e (5,3)
+      var a = byDef(st, 't-dummy', 0), b = byDef(st, 't-dummy', 1);
+      E.cast(st, h.uid, 't-cross', 5, 2);
+      eq(a.hp, 990, 'dummy a atingido');
+      eq(b.hp, 990, 'dummy b atingido');
+      // cruz centrada no próprio herói não o fere
+      var hp0 = h.hp;
+      E.cast(st, h.uid, 't-cross', h.x, h.y);
+      eq(h.hp, hp0, 'conjurador não se atinge');
+    });
+
+    // ---------------------------------------------------- traços
+    t('trait explodeOnDeath: dano em raio ao morrer', function () {
+      var st = arena(0, { a: 't-boom', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var boom = byDef(st, 't-boom');
+      var dummy = byDef(st, 't-dummy');
+      dummy.x = boom.x; dummy.y = boom.y + 1; // adjacente
+      drain();
+      E.cast(st, h.uid, 't-nuke100', boom.x, boom.y);
+      ok(!boom.alive, 'morreu');
+      ok(!!findEv(drain(), 'death', function (e) { return e.uid === boom.uid; }), 'evento death');
+      eq(dummy.hp, 982, 'explosão de 18 no vizinho');
+      eq(h.hp, 200, 'herói fora do raio ileso');
+    });
+
+    t('trait split: divide-se em cópias que CONTAM para a derrota do lado', function () {
+      var st = arena(0, { a: 't-split', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var dummy = byDef(st, 't-dummy');
+      dummy.hp = 50;
+      E.cast(st, h.uid, 't-nuke100', dummy.x, dummy.y); // mata o dummy primeiro
+      var split = byDef(st, 't-split');
+      drain();
+      E.cast(st, h.uid, 't-nuke100', split.x, split.y);
+      ok(!split.alive, 'mãe morta');
+      eq(st.phase, 'playing', 'batalha continua (cópias vivas)');
+      var lets = [];
+      for (var i = 0; i < st.units.length; i++) {
+        if (st.units[i].defId === 'burrlet' && st.units[i].alive) lets.push(st.units[i]);
+      }
+      eq(lets.length, 2, 'duas cópias');
+      for (var j = 0; j < lets.length; j++) {
+        eq(lets[j].kind, 'monster', 'cópia herda kind monster');
+        eq(lets[j].side, 'enemy', 'cópia herda o lado');
+        eq(Math.max(Math.abs(lets[j].x - split.x), Math.abs(lets[j].y - split.y)), 1, 'célula adjacente');
+        ok(st.order.indexOf(lets[j].uid) > st.order.indexOf(split.uid), 'na ordem após a original');
+      }
+      E.cast(st, h.uid, 't-nuke100', lets[0].x, lets[0].y);
+      E.cast(st, h.uid, 't-nuke100', lets[1].x, lets[1].y);
+      eq(st.phase, 'won', 'vitória só após matar as cópias');
+    });
+
+    t('trait enrage: ganha power ao cruzar o limiar (uma única vez)', function () {
+      var st = arena(0, { a: 't-berserk', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var brk = byDef(st, 't-berserk');
+      E.cast(st, h.uid, 't-nuke10', brk.x, brk.y); // 90
+      ok(!brk.enraged, 'acima do limiar');
+      eq(E.effPower(brk), 0, 'sem bônus');
+      for (var i = 0; i < 5; i++) E.cast(st, h.uid, 't-nuke10', brk.x, brk.y); // 40 < 50
+      ok(brk.enraged, 'enfureceu');
+      eq(E.effPower(brk), 20, '+20 de poder');
+      h.pa = 10;
+      E.cast(st, h.uid, 't-nuke10', brk.x, brk.y);
+      eq(E.effPower(brk), 20, 'não acumula de novo');
+    });
+
+    t('trait regenAura: cura aliados no raio no início do turno do portador (não a si)', function () {
+      var st = arena(0, { a: 't-aura', b: 't-dummy' });
+      var aura = byDef(st, 't-aura');   // (5,1)
+      var dummy = byDef(st, 't-dummy'); // (5,3), dist 2
+      aura.hp = 400;
+      dummy.hp = 900;
+      E.endTurn(st); // herói -> dummy (init 10)
+      E.endTurn(st); // dummy -> aura (init 3): aura cura o dummy
+      eq(E.activeUnit(st).uid, aura.uid, 'turno do portador');
+      eq(dummy.hp, 908, 'aliado curado em 8');
+      eq(aura.hp, 400, 'portador não se cura');
+    });
+
+    // ---------------------------------------------------- vitória/derrota
+    t('vitória: matar todos os monstros; phase won + battleEnd', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var a = byDef(st, 't-dummy', 0), b = byDef(st, 't-dummy', 1);
+      a.hp = 50; b.hp = 50;
+      drain();
+      E.cast(st, h.uid, 't-nuke100', a.x, a.y);
+      eq(st.phase, 'playing', 'ainda há inimigo');
+      E.cast(st, h.uid, 't-nuke100', b.x, b.y);
+      eq(st.phase, 'won', 'vitória');
+      var ev = findEv(drain(), 'battleEnd');
+      ok(!!ev && ev.winner === 'player', 'battleEnd player');
+      ok(E.cast(st, h.uid, 't-nuke10', 5, 5) === false, 'cast após o fim é recusado');
+      E.endTurn(st); // não deve lançar exceção nem mudar nada
+      eq(st.phase, 'won', 'endTurn após o fim é inerte');
+    });
+
+    t('derrota: heróis mortos; summon do jogador NÃO evita a derrota', function () {
+      var st = arena(0, { a: 't-foe', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var foe = byDef(st, 't-foe');
+      ok(E.cast(st, h.uid, 't-summon', 2, 2), 'herói invoca');
+      drain();
+      E.cast(st, foe.uid, 't-nuke100', h.x, h.y);
+      E.cast(st, foe.uid, 't-nuke100', h.x, h.y);
+      ok(!h.alive, 'herói morto');
+      ok(byDef(st, 'sporeling').alive, 'esporinho vivo');
+      eq(st.phase, 'lost', 'derrota mesmo com summon vivo');
+      var ev = findEv(drain(), 'battleEnd');
+      ok(!!ev && ev.winner === 'enemy', 'battleEnd enemy');
+    });
+
+    t('summons inimigos não impedem a vitória', function () {
+      var st = arena(0, { a: 't-foe', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var foe = byDef(st, 't-foe');
+      var dummy = byDef(st, 't-dummy');
+      ok(E.cast(st, foe.uid, 't-summon', foe.x + 1, foe.y), 'inimigo invoca');
+      var s = byDef(st, 'sporeling');
+      eq(s.side, 'enemy', 'summon inimigo');
+      foe.hp = 50; dummy.hp = 50;
+      E.cast(st, h.uid, 't-nuke100', foe.x, foe.y);
+      E.cast(st, h.uid, 't-nuke100', dummy.x, dummy.y);
+      eq(st.phase, 'won', 'vitória com summon inimigo vivo');
+      ok(s.alive, 'summon continua vivo');
+    });
+
+    // ---------------------------------------------------- IA
+    t('AI: planTurn é pura (não muta o state)', function () {
+      var st = arena(0, { a: 't-biter', b: 't-dummy' });
+      var biter = byDef(st, 't-biter');
+      E.events.length = 0;
+      var before = JSON.stringify(st);
+      JOGO.AI.planTurn(st, biter.uid);
+      JOGO.AI.planTurn(st, byDef(st, 't-hero1').uid);
+      eq(JSON.stringify(st), before, 'state idêntico');
+      eq(E.events.length, 0, 'nenhum evento emitido');
+    });
+
+    t('AI: planos sempre terminam com end e nunca excedem PA/PM', function () {
+      var states = [
+        arena(0, { a: 't-biter', b: 't-shooter' }),
+        E.createBattle('greenhouse', 0, REAL_PARTY),
+        E.createBattle('emberlock', 2, REAL_PARTY)
+      ];
+      for (var s = 0; s < states.length; s++) {
+        var st = states[s];
+        for (var i = 0; i < st.units.length; i++) {
+          var u = st.units[i];
+          if (!u.alive) continue;
+          var plan = JOGO.AI.planTurn(st, u.uid);
+          ok(plan.length >= 1, 'plano não-vazio');
+          eq(plan[plan.length - 1].action, 'end', 'termina com end');
+          var paSum = 0, moves = 0;
+          var reach = E.reachable(st, u.uid);
+          for (var p = 0; p < plan.length; p++) {
+            var act = plan[p];
+            if (act.action === 'cast') paSum += D.spells[act.spellId].paCost;
+            if (act.action === 'move') {
+              moves++;
+              var found = false;
+              for (var rr = 0; rr < reach.length; rr++) {
+                if (reach[rr].x === act.x && reach[rr].y === act.y) found = true;
+              }
+              ok(found, 'move dentro do alcançável (' + u.defId + ')');
+            }
+          }
+          ok(paSum <= u.pa, 'PA do plano (' + paSum + ') <= PA (' + u.pa + ') de ' + u.defId);
+          ok(moves <= 1, 'no máximo 1 movimento');
+        }
+      }
+    });
+
+    t('AI: taunt força feitiços hostis a mirar o provocador', function () {
+      var st = arena(0, { a: 't-foe', b: 't-dummy' }, ['t-hero1', 't-hero2']);
+      var h1 = byDef(st, 't-hero1'), h2 = byDef(st, 't-hero2');
+      var foe = byDef(st, 't-foe');
+      h2.hp = 10; // isca tentadora: sem taunt a IA iria nela
+      E.cast(st, h1.uid, 't-taunt', h1.x, h1.y);
+      var plan = JOGO.AI.planTurn(st, foe.uid);
+      var casts = 0;
+      for (var i = 0; i < plan.length; i++) {
+        var a = plan[i];
+        if (a.action !== 'cast') continue;
+        var spell = D.spells[a.spellId];
+        var hostile = false;
+        for (var e = 0; e < spell.effects.length; e++) {
+          var ef = spell.effects[e];
+          if (ef.type === 'damage' || ef.type === 'poison' || ef.type === 'push' || ef.type === 'pull') hostile = true;
+          if ((ef.type === 'buff' || ef.type === 'resist') && ef.value < 0) hostile = true;
+        }
+        if (hostile) {
+          casts++;
+          ok(a.x === h1.x && a.y === h1.y, 'hostil mira o provocador, não (' + a.x + ',' + a.y + ')');
+        }
+      }
+      ok(casts > 0, 'a IA atacou');
+    });
+
+    t('AI: nunca alveja unidades invisíveis', function () {
+      var st = arena(0, { a: 't-foe', b: 't-dummy' }, ['t-hero1', 't-hero2']);
+      var h1 = byDef(st, 't-hero1'), h2 = byDef(st, 't-hero2');
+      var foe = byDef(st, 't-foe');
+      h2.hp = 10; // alvo tentador — mas ficará invisível
+      E.cast(st, h1.uid, 't-invis', h2.x, h2.y);
+      ok(E.unitHasEffect(h2, 'invisible'), 'h2 invisível');
+      var plan = JOGO.AI.planTurn(st, foe.uid);
+      for (var i = 0; i < plan.length; i++) {
+        var a = plan[i];
+        if (a.action === 'cast') {
+          ok(!(a.x === h2.x && a.y === h2.y), 'nenhum cast mira o invisível');
+        }
+      }
+    });
+
+    t('AI melee: aproxima e ataca o herói', function () {
+      var st = arena(0, { a: 't-biter', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var biter = byDef(st, 't-biter');
+      var plan = JOGO.AI.planTurn(st, biter.uid);
+      var hit = false, movedTo = null;
+      for (var i = 0; i < plan.length; i++) {
+        if (plan[i].action === 'move') movedTo = plan[i];
+        if (plan[i].action === 'cast' && plan[i].spellId === 't-bite' &&
+            plan[i].x === h.x && plan[i].y === h.y) hit = true;
+      }
+      ok(!!movedTo, 'aproximou');
+      eq(Math.abs(movedTo.x - h.x) + Math.abs(movedTo.y - h.y), 1, 'ficou adjacente');
+      ok(hit, 'mordeu o herói');
+    });
+
+    t('AI ranged: recua quando colado e atira à distância', function () {
+      var st = arena(0, { a: 't-shooter', b: 't-dummy' });
+      var h = byDef(st, 't-hero1');
+      var sh = byDef(st, 't-shooter');
+      sh.x = 2; sh.y = 1; // colado no herói (1,1)
+      var plan = JOGO.AI.planTurn(st, sh.uid);
+      var movedTo = null, shot = false;
+      for (var i = 0; i < plan.length; i++) {
+        if (plan[i].action === 'move') movedTo = plan[i];
+        if (plan[i].action === 'cast' && plan[i].spellId === 't-shot') shot = true;
+      }
+      ok(!!movedTo, 'recuou');
+      ok(Math.abs(movedTo.x - h.x) + Math.abs(movedTo.y - h.y) >= 2, 'saiu do corpo-a-corpo');
+      ok(shot, 'atirou');
+    });
+
+    t('AI support: cura o aliado mais ferido', function () {
+      var st = arena(0, { a: 't-medic', b: 't-dummy' });
+      var medic = byDef(st, 't-medic');
+      var dummy = byDef(st, 't-dummy');
+      dummy.hp = 500;
+      var plan = JOGO.AI.planTurn(st, medic.uid);
+      var healed = false;
+      for (var i = 0; i < plan.length; i++) {
+        if (plan[i].action === 'cast' && plan[i].spellId === 't-mend' &&
+            plan[i].x === dummy.x && plan[i].y === dummy.y) healed = true;
+      }
+      ok(healed, 'curou o dummy ferido');
+    });
+
+    // ---------------------------------------------------- Game
+    t('Game: init/goTo/startRun com validação de 1 a 3 heróis (adendo v2)', function () {
+      JOGO.Game.init();
+      eq(JOGO.Game.screen, 'menu', 'começa no menu');
+      ok(JOGO.Game.goTo('heroSelect'), 'goTo heroSelect');
+      eq(JOGO.Game.screen, 'heroSelect', 'tela');
+      ok(!JOGO.Game.goTo('battle'), 'goTo não pula para battle');
+      ok(!JOGO.Game.startRun([], 'greenhouse'), '0 heróis recusado');
+      ok(!JOGO.Game.startRun(['hero-toll', 'hero-wick', 'hero-rose', 'hero-morel'], 'greenhouse'), '4 heróis recusado');
+      ok(!JOGO.Game.startRun(['hero-toll', 'hero-toll', 'hero-wick'], 'greenhouse'), 'duplicado recusado');
+      ok(!JOGO.Game.startRun(['hero-toll', 'hero-wick', 'hero-rose'], 'nao-existe'), 'dungeon inválido');
+      ok(JOGO.Game.startRun(['hero-toll'], 'greenhouse'), '1 herói aceito (adendo v2)');
+      var solos = 0;
+      for (var i = 0; i < JOGO.Game.state.units.length; i++) {
+        if (JOGO.Game.state.units[i].kind === 'hero') solos++;
+      }
+      eq(solos, 1, 'solo: exatamente 1 herói na batalha');
+      ok(JOGO.Game.startRun(['hero-wick', 'hero-toll', 'hero-rose'], 'greenhouse'), 'válido');
+      eq(JOGO.Game.screen, 'battle', 'em batalha');
+      ok(!!JOGO.Game.state, 'state existe');
+      eq(JOGO.Game.roomIndex, 0, 'sala 0');
+    });
+
+    t('Game: isPlayerTurn, endTurn só em turno de herói, clique-movimento', function () {
+      JOGO.Game.init();
+      JOGO.Game.startRun(['hero-wick', 'hero-toll', 'hero-rose'], 'greenhouse');
+      var st = JOGO.Game.state;
+      var wick = byDef(st, 'hero-wick');
+      eq(E.activeUnit(st).uid, wick.uid, 'Estopim (init 85) age primeiro');
+      ok(JOGO.Game.isPlayerTurn(), 'turno do jogador');
+      // clique em célula com unidade, sem feitiço: nada acontece
+      var toll = byDef(st, 'hero-toll');
+      JOGO.Game.onTileClicked(toll.x, toll.y);
+      eq(wick.pm, 3, 'PM intacto');
+      // clique em célula livre: move
+      JOGO.Game.onTileClicked(2, 1);
+      eq(wick.x, 2, 'moveu'); eq(wick.pm, 2, 'gastou 1 PM');
+      // hover
+      JOGO.Game.onTileHover(3, 3);
+      ok(JOGO.Game.hoverTile && JOGO.Game.hoverTile.x === 3, 'hover setado');
+      JOGO.Game.onTileHover(-1, 99);
+      ok(JOGO.Game.hoverTile === null, 'hover fora = null');
+      // encerra o turno do herói; no turno do monstro endTurn é inerte
+      JOGO.Game.endTurn();
+      var active = E.activeUnit(st);
+      ok(!JOGO.Game.isPlayerTurn(), 'turno de monstro (vespa)');
+      JOGO.Game.endTurn();
+      eq(E.activeUnit(st).uid, active.uid, 'endTurn de jogador não age no turno do monstro');
+    });
+
+    t('Game: selectSpell (toggle) e cast por clique', function () {
+      JOGO.Game.init();
+      JOGO.Game.startRun(['hero-wick', 'hero-toll', 'hero-rose'], 'greenhouse');
+      var st = JOGO.Game.state;
+      var wick = byDef(st, 'hero-wick');
+      JOGO.Game.selectSpell('wick-jump');
+      eq(JOGO.Game.selectedSpellId, 'wick-jump', 'selecionado');
+      JOGO.Game.selectSpell('wick-jump');
+      eq(JOGO.Game.selectedSpellId, null, 'toggle desmarca');
+      JOGO.Game.selectSpell('wick-jump');
+      var targets = E.castTargets(st, wick.uid, 'wick-jump');
+      ok(targets.length > 0, 'há alvos de teleporte');
+      var tgt = targets[0];
+      JOGO.Game.onTileClicked(tgt.x, tgt.y);
+      eq(wick.x, tgt.x, 'teleportou'); eq(wick.y, tgt.y, 'y');
+      eq(wick.pa, 4, 'PA gasto (6-2)');
+      eq(JOGO.Game.selectedSpellId, null, 'desmarcado após conjurar');
+    });
+
+    t('Game: update headless conduz o turno da IA sem Renderer/UI', function () {
+      JOGO.Game.init();
+      JOGO.Game.startRun(['hero-wick', 'hero-toll', 'hero-rose'], 'greenhouse');
+      JOGO.Game.endTurn(); // passa o turno de Estopim -> vespa (IA)
+      ok(!JOGO.Game.isPlayerTurn(), 'turno de IA');
+      var guard = 0;
+      while (!JOGO.Game.isPlayerTurn() && JOGO.Game.state.phase === 'playing' && guard < 60) {
+        JOGO.Game.update(0.1);
+        guard++;
+      }
+      ok(guard < 60, 'IA não travou');
+      ok(JOGO.Game.isPlayerTurn() || JOGO.Game.state.phase !== 'playing', 'voltou ao jogador');
+      E.events.length = 0;
+    });
+
+    t('Game: vitória de sala -> roomClear; nextRoom cura 50% e revive mortos com 30%', function () {
+      JOGO.Game.init();
+      JOGO.Game.startRun(['hero-wick', 'hero-toll', 'hero-rose'], 'greenhouse');
+      var st = JOGO.Game.state;
+      var wick = byDef(st, 'hero-wick'), toll = byDef(st, 'hero-toll'), rose = byDef(st, 'hero-rose');
+      toll.hp = 40;                 // ferido: 40/140
+      rose.hp = 0; rose.alive = false; // morta
+      wick.spells.push('t-nuke100');   // arma de teste só nesta unidade
+      for (var i = 0; i < st.units.length; i++) {
+        var u = st.units[i];
+        if (u.side === 'enemy' && u.alive) {
+          u.traits = []; // sem split/explosão para limpeza previsível
+          ok(E.cast(st, wick.uid, 't-nuke100', u.x, u.y), 'nuke ' + u.defId);
+        }
+      }
+      eq(st.phase, 'won', 'sala vencida');
+      JOGO.Game.update(0.1);
+      eq(JOGO.Game.screen, 'roomClear', 'tela roomClear');
+      ok(JOGO.Game.nextRoom(), 'nextRoom');
+      eq(JOGO.Game.screen, 'battle', 'batalha da sala 1');
+      eq(JOGO.Game.roomIndex, 1, 'sala 1');
+      var st2 = JOGO.Game.state;
+      eq(byDef(st2, 'hero-wick').hp, 95, 'Estopim intacta continua 95');
+      eq(byDef(st2, 'hero-toll').hp, 90, '40 + round(100*0.5) = 90');
+      var rose2 = byDef(st2, 'hero-rose');
+      ok(rose2.alive, 'morta revive entre salas');
+      eq(rose2.hp, 33, 'round(110*0.3) = 33 (decisão de design)');
+      E.events.length = 0;
+    });
+
+    t('Game: vencer a sala 2 (chefe) leva a dungeonComplete; restart volta ao menu', function () {
+      // continua a run do teste anterior (sala 1)
+      function clearRoom() {
+        var st = JOGO.Game.state;
+        var wick = byDef(st, 'hero-wick');
+        if (wick.spells.indexOf('t-nuke100') < 0) wick.spells.push('t-nuke100');
+        for (var round = 0; round < 5 && st.phase === 'playing'; round++) {
+          for (var i = 0; i < st.units.length; i++) {
+            var u = st.units[i];
+            if (u.side === 'enemy' && u.alive) {
+              u.traits = [];
+              while (u.alive && wick.pa >= 1) E.cast(st, wick.uid, 't-nuke100', u.x, u.y);
+            }
+          }
+          if (st.phase === 'playing') { // sem PA: cicla de volta ao Estopim
+            for (var g = 0; g < 30; g++) {
+              E.endTurn(st);
+              if (E.activeUnit(st) && E.activeUnit(st).uid === wick.uid) break;
+            }
+          }
+        }
+        eq(st.phase, 'won', 'sala limpa');
+        JOGO.Game.update(0.1);
+      }
+      eq(JOGO.Game.roomIndex, 1, 'estamos na sala 1');
+      clearRoom();
+      eq(JOGO.Game.screen, 'roomClear', 'sala 1 vencida');
+      JOGO.Game.nextRoom();
+      eq(JOGO.Game.roomIndex, 2, 'sala do chefe');
+      clearRoom();
+      eq(JOGO.Game.screen, 'dungeonComplete', 'calabouço completo');
+      JOGO.Game.restart();
+      eq(JOGO.Game.screen, 'menu', 'restart volta ao menu');
+      ok(JOGO.Game.state === null, 'state limpo');
+      E.events.length = 0;
+    });
+
+    t('Game: derrota leva à tela defeat', function () {
+      JOGO.Game.init();
+      JOGO.Game.startRun(['hero-wick', 'hero-toll', 'hero-rose'], 'greenhouse');
+      var st = JOGO.Game.state;
+      var wasp = byDef(st, 'lantern-wasp');
+      var heroes = [byDef(st, 'hero-wick'), byDef(st, 'hero-toll'), byDef(st, 'hero-rose')];
+      wasp.spells.push('t-nuke100');
+      for (var i = 0; i < heroes.length; i++) {
+        heroes[i].hp = Math.min(heroes[i].hp, 90);
+        ok(E.cast(st, wasp.uid, 't-nuke100', heroes[i].x, heroes[i].y), 'nuke no herói');
+      }
+      eq(st.phase, 'lost', 'derrota');
+      JOGO.Game.update(0.1);
+      eq(JOGO.Game.screen, 'defeat', 'tela defeat');
+      E.events.length = 0;
+    });
+
+    // ---------------------------------------------------- AUTO-PLAY (9 salas)
+    for (var dd = 0; dd < REAL_DUNGEONS.length; dd++) {
+      for (var rr2 = 0; rr2 < 3; rr2++) {
+        (function (dungeonId, roomIdx) {
+          t('AUTO-PLAY IA vs IA: ' + dungeonId + ' sala ' + roomIdx, function () {
+            E.events.length = 0;
+            var st = E.createBattle(dungeonId, roomIdx, REAL_PARTY);
+            var turns = 0;
+            while (st.phase === 'playing' && turns < 200) {
+              var u = E.activeUnit(st);
+              ok(!!u, 'sempre há unidade ativa');
+              var plan = JOGO.AI.planTurn(st, u.uid);
+              eq(plan[plan.length - 1].action, 'end', 'plano termina com end');
+              var paSum = 0;
+              for (var p = 0; p < plan.length; p++) {
+                if (plan[p].action === 'cast') paSum += D.spells[plan[p].spellId].paCost;
+              }
+              ok(paSum <= u.pa, 'plano dentro do PA (' + u.defId + ')');
+              for (var a = 0; a < plan.length && st.phase === 'playing'; a++) {
+                var act = plan[a];
+                if (act.action === 'move') E.move(st, u.uid, act.x, act.y);
+                else if (act.action === 'cast') E.cast(st, u.uid, act.spellId, act.x, act.y);
+                else break;
+              }
+              if (st.phase === 'playing') E.endTurn(st);
+              turns++;
+              E.events.length = 0;
+            }
+            ok(st.phase !== 'playing' || turns === 200, 'terminou ou atingiu o teto');
+            console.log('AUTO-PLAY ' + dungeonId + '[' + roomIdx + ']: ' +
+              (st.phase === 'playing' ? 'teto de 200 turnos' : st.phase + ' em ' + turns + ' turnos'));
+          });
+        })(REAL_DUNGEONS[dd], rr2);
+      }
+    }
+
+    // ---------------------------------------------------- fila de eventos
+    t('Engine.events: a engine nunca drena a própria fila', function () {
+      E.events.length = 0;
+      var st = E.createBattle('cistern', 0, REAL_PARTY);
+      ok(E.events.length > 0, 'eventos enfileirados');
+      var before = E.events.length;
+      var h = byDef(st, 'hero-toll');
+      E.move(st, h.uid, h.x + 1, h.y); // (2,1) é chão livre na Galeria das Goteiras
+      ok(E.events.length > before, 'push, nunca shift');
+      E.events.length = 0;
+    });
+  }
+
+  // ------------------------------------------------------------ executa
+  try {
+    run();
+  } catch (e) {
+    failed++;
+    failures.push('ERRO FATAL DA SUÍTE: ' + e.message);
+    report('ERRO FATAL DA SUÍTE', false, e.message + ' ' + (e.stack || ''));
+  }
+
+  restoreRealSave(); // não deixa o save da suíte persistido
+
+  var summary = document.getElementById('summary');
+  summary.textContent = passed + ' PASS / ' + failed + ' FAIL (' + (passed + failed) + ' testes)';
+  summary.className = failed === 0 ? 'allpass' : 'somefail';
+  window.TEST_RESULTS = { passed: passed, failed: failed, failures: failures };
+  console.log('TEST_RESULTS', JSON.stringify(window.TEST_RESULTS));
+})();
+</script>
+</body>
+</html>

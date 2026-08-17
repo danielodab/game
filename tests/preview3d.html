@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — Preview 3D (Three.js)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0e12; overflow: hidden; }
+  #app { position: absolute; inset: 0; }
+  #game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #ui-root { position: absolute; inset: 0; pointer-events: none; }
+  #test-status {
+    position: fixed; left: 10px; top: 8px; z-index: 100;
+    font: 12px monospace; color: #7ac26a; white-space: pre;
+  }
+  #test-controls {
+    position: fixed; right: 10px; top: 10px; z-index: 100;
+    display: flex; flex-direction: column; gap: 5px;
+    background: rgba(14,17,20,0.9); border: 1px solid rgba(176,133,67,0.4);
+    border-radius: 8px; padding: 8px; font-size: 11px; color: #e8e0d0;
+  }
+  #test-controls button, #test-controls select {
+    font-size: 11px; padding: 4px 8px; cursor: pointer;
+    background: #1a2026; color: #e8e0d0; border: 1px solid #3f8f7a; border-radius: 4px;
+  }
+  #test-controls button:hover { border-color: #ffd98a; }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+</div>
+<div id="test-status">carregando…</div>
+<div id="test-controls">
+  <b style="color:#ffd98a">PREVIEW 3D</b>
+  <select id="sel-dungeon">
+    <option value="greenhouse">Estufa</option>
+    <option value="cistern" selected>Cisterna</option>
+    <option value="emberlock">Fecho de Brasa</option>
+  </select>
+  <button id="bt-move">mover herói</button>
+  <button id="bt-cast">bolt + dano</button>
+  <button id="bt-slam">golpe + dano</button>
+  <button id="bt-nova">nova em área</button>
+  <button id="bt-beam">feixe + crítico</button>
+  <button id="bt-heal">cura + escudo</button>
+  <button id="bt-poison">nuvem de veneno</button>
+  <button id="bt-buff">buff + invisível</button>
+  <button id="bt-push">empurrão + colisão</button>
+  <button id="bt-tp">teleporte</button>
+  <button id="bt-summon">invocar esporinho</button>
+  <button id="bt-kill">matar monstro</button>
+  <button id="bt-bosskill">matar CHEFE</button>
+  <button id="bt-win">vitória de sala</button>
+  <button id="bt-spin">girar câmera (liga/desliga)</button>
+  <button id="bt-zin">zoom +</button>
+  <button id="bt-zout">zoom −</button>
+</div>
+
+<script>
+  // WebGL + screenshot headless: preserva o framebuffer quando vamos fotografar
+  (function () {
+    if (/[?&](snap|gallery)=/.test(location.search)) window.__preserve3d = true;
+    if (/[?&]nomerge=1/.test(location.search)) window.__nomerge = true;
+    if (/[?&]noout=1/.test(location.search)) window.__noOutlines = true;
+  })();
+</script>
+
+<!-- vendor (ordem: THREE antes de tudo; bloom p/ o FX) -->
+<script src="../vendor/three.min.js"></script>
+<script src="../vendor/GLTFLoader.js"></script>
+<script src="../vendor/CopyShader.js"></script>
+<script src="../vendor/LuminosityHighPassShader.js"></script>
+<script src="../vendor/EffectComposer.js"></script>
+<script src="../vendor/RenderPass.js"></script>
+<script src="../vendor/ShaderPass.js"></script>
+<script src="../vendor/UnrealBloomPass.js"></script>
+
+<!-- dados + assets embutidos -->
+<script src="../js/core/data.js?v=3d1"></script>
+<script>
+  // cache-buster dinâmico p/ os módulos em desenvolvimento (painel cacheia js!)
+  (function () {
+    var v = Date.now();
+    ['../assets/embedded/env-kit.js',
+     '../js/render3d/models3d.js',
+     '../js/render3d/fx3d.js',
+     '../js/render3d/renderer3d.js'].forEach(function (src) {
+      document.write('<script src="' + src + '?v=' + v + '"><\/script>');
+    });
+  })();
+</script>
+
+<!-- stub de Game + Engine no formato EXATO do contrato (sem js/core reais) -->
+<script>
+(function () {
+  var JOGO = window.JOGO = window.JOGO || {};
+
+  // ---------------- LINEUP: fileira de unidades no rig REAL da batalha ------
+  // (o caminho confiável p/ close-up em headless: Renderer/luzes/tema do jogo)
+  function buildLineup(dungeonId, defIds) {
+    var w = Math.max(defIds.length + 2, 7), h = 5;
+    var tiles = [], units = [], uidN = 1;
+    for (var y = 0; y < h; y++) {
+      tiles.push([]);
+      for (var x = 0; x < w; x++) {
+        var wall = (y === 0);                     // só o fundo — palco aberto
+        tiles[y].push({ type: wall ? 'wall' : 'floor', deco: !wall && ((x + y) % 3 === 0) });
+      }
+    }
+    defIds.forEach(function (id, i) {
+      var hd = JOGO.DATA.heroes.filter(function (q) { return q.id === id; })[0];
+      var md = JOGO.DATA.monsters[id];
+      var def = hd || md;
+      if (!def) return;
+      units.push(mkUnit('u' + (uidN++), id, hd ? 'hero' : 'monster', hd ? 'player' : 'enemy',
+        def.name || id, 1 + i, 2, def.stats, def.spells || [], !!(md && md.boss)));
+    });
+    return {
+      dungeonId: dungeonId, roomIndex: 0, round: 1, phase: 'playing',
+      grid: { w: w, h: h, tiles: tiles },
+      units: units,
+      order: units.map(function (u) { return u.uid; }),
+      activeIdx: 0
+    };
+  }
+
+  // ---------------- mock de sala 13×11 ----------------
+  function buildState(dungeonId) {
+    var layouts = {
+      greenhouse: [
+        "#############",
+        "#..,...a..~~#",
+        "#.A..##....~#",
+        "#....##..d..#",
+        "#.B,....,.b.#",
+        "#....##.....#",
+        "#.C..##..c..#",
+        "#..,....,...#",
+        "#....##...z.#",
+        "#.,.........#",
+        "#############"
+      ],
+      cistern: [
+        "#############",
+        "#..~.....~..#",
+        "#.A.,..a..b.#",
+        "#..~.....~..#",
+        "#.B...#.....#",
+        "#....,#,..d.#",
+        "#.C...#.....#",
+        "#..~.....~..#",
+        "#...,..c.z..#",
+        "#..~.....~..#",
+        "#############"
+      ],
+      emberlock: [
+        "#############",
+        "#.,...a...,.#",
+        "#.A..##..d..#",
+        "#....##.....#",
+        "#.B.~~...,b.#",
+        "#...~~..##..#",
+        "#.C.....##c.#",
+        "#..,........#",
+        "#......z....#",
+        "#.,.......,.#",
+        "#############"
+      ]
+    };
+    var heroes = ['hero-toll', 'hero-wick', 'hero-rose'];
+    var mobs = {
+      greenhouse: { a: 'lantern-wasp', b: 'thorn-lasher', c: 'sap-shaman', d: 'pollen-puff', z: 'boss-gardener' },
+      cistern: { a: 'drowned-porter', b: 'moray-piper', c: 'lantern-jelly', d: 'fat-drop', z: 'boss-baroness' },
+      emberlock: { a: 'ember-imp', b: 'ash-wraith', c: 'faceless-smith', d: 'walking-anvil', z: 'boss-heartforge' }
+    };
+    var lay = layouts[dungeonId], mm = mobs[dungeonId];
+    var h = lay.length, w = lay[0].length;
+    var tiles = [], units = [], uidN = 1;
+    var heroSlots = { A: 0, B: 1, C: 2 };
+    for (var y = 0; y < h; y++) {
+      tiles.push([]);
+      for (var x = 0; x < w; x++) {
+        var ch = lay[y][x];
+        var type = ch === '#' ? 'wall' : ch === '~' ? 'hole' : 'floor';
+        tiles[y].push({ type: type, deco: ch === ',' });
+        if (heroSlots[ch] != null) {
+          var hid = heroes[heroSlots[ch]];
+          var hd = JOGO.DATA.heroes.filter(function (q) { return q.id === hid; })[0];
+          units.push(mkUnit('u' + (uidN++), hid, 'hero', 'player', hd.name, x, y, hd.stats, hd.spells, false));
+        } else if (mm[ch]) {
+          var md = JOGO.DATA.monsters[mm[ch]];
+          units.push(mkUnit('u' + (uidN++), md.id, 'monster', 'enemy', md.name, x, y, md.stats, md.spells, md.boss));
+        }
+      }
+    }
+    units.forEach(function (u, i) { if (i % 2 === 0) u.hp = Math.round(u.hpMax * 0.7); });
+    units[0].shield = 20;
+    var order = units.map(function (u) { return u.uid; });
+    var firstHero = 0;
+    for (var fi = 0; fi < units.length; fi++) {
+      if (units[fi].side === 'player') { firstHero = fi; break; }
+    }
+    return {
+      dungeonId: dungeonId, roomIndex: 0, round: 1, phase: 'playing',
+      grid: { w: w, h: h, tiles: tiles },
+      units: units,
+      order: order,
+      activeIdx: firstHero
+    };
+  }
+  function mkUnit(uid, defId, kind, side, name, x, y, stats, spells, boss) {
+    return {
+      uid: uid, defId: defId, kind: kind, side: side, name: name,
+      x: x, y: y, hp: stats.hp, hpMax: stats.hp,
+      pa: stats.pa, paMax: stats.pa, pm: stats.pm, pmMax: stats.pm,
+      initiative: stats.initiative, power: stats.power,
+      resists: stats.resists, spells: spells.slice(),
+      cooldowns: {}, castsThisTurn: {}, effects: [], shield: 0,
+      alive: true, boss: !!boss
+    };
+  }
+
+  // ---------------- Engine stub ----------------
+  var Engine = {
+    events: [],
+    state: null,
+    activeUnit: function (st) {
+      if (!st) return null;
+      var uid = st.order[st.activeIdx % st.order.length];
+      return st.units.filter(function (u) { return u.uid === uid; })[0] || null;
+    },
+    unitAt: function (st, x, y) {
+      return st.units.filter(function (u) { return u.alive && u.x === x && u.y === y; })[0] || null;
+    },
+    _walkable: function (st, x, y) {
+      if (x < 0 || y < 0 || x >= st.grid.w || y >= st.grid.h) return false;
+      if (st.grid.tiles[y][x].type !== 'floor') return false;
+      if (Engine.unitAt(st, x, y)) return false;
+      return true;
+    },
+    _bfs: function (st, sx, sy, maxCost) {
+      var seen = {}, out = [], q = [{ x: sx, y: sy, cost: 0 }];
+      seen[sx + ',' + sy] = { cost: 0, prev: null };
+      while (q.length) {
+        var n = q.shift();
+        if (n.cost >= maxCost) continue;
+        var dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (var i = 0; i < 4; i++) {
+          var nx = n.x + dirs[i][0], ny = n.y + dirs[i][1], k = nx + ',' + ny;
+          if (seen[k] || !Engine._walkable(st, nx, ny)) continue;
+          seen[k] = { cost: n.cost + 1, prev: n.x + ',' + n.y };
+          out.push({ x: nx, y: ny, cost: n.cost + 1 });
+          q.push({ x: nx, y: ny, cost: n.cost + 1 });
+        }
+      }
+      return { list: out, seen: seen };
+    },
+    reachable: function (st, uid) {
+      var u = st.units.filter(function (q) { return q.uid === uid; })[0];
+      if (!u) return [];
+      return Engine._bfs(st, u.x, u.y, u.pm).list;
+    },
+    path: function (st, uid, x, y) {
+      var u = st.units.filter(function (q) { return q.uid === uid; })[0];
+      if (!u) return null;
+      var r = Engine._bfs(st, u.x, u.y, u.pm);
+      var k = x + ',' + y;
+      if (!r.seen[k]) return null;
+      var path = [];
+      while (k && k !== u.x + ',' + u.y) {
+        var parts = k.split(',');
+        path.unshift({ x: +parts[0], y: +parts[1] });
+        k = r.seen[k].prev;
+      }
+      return path;
+    },
+    castTargets: function (st, uid, spellId) {
+      var u = st.units.filter(function (q) { return q.uid === uid; })[0];
+      var sp = JOGO.DATA.spells[spellId];
+      if (!u || !sp) return [];
+      var out = [];
+      for (var y = 0; y < st.grid.h; y++) {
+        for (var x = 0; x < st.grid.w; x++) {
+          var d = Math.abs(x - u.x) + Math.abs(y - u.y);
+          if (d < sp.range.min || d > sp.range.max) continue;
+          if (sp.range.line && x !== u.x && y !== u.y) continue;
+          if (st.grid.tiles[y][x].type === 'wall') continue;
+          out.push({ x: x, y: y });
+        }
+      }
+      return out;
+    },
+    aoeTiles: function (st, spellId, cx, cy, tx, ty) {
+      var sp = JOGO.DATA.spells[spellId];
+      if (!sp) return [{ x: tx, y: ty }];
+      var out = [], s = sp.aoe.size || 0;
+      if (sp.aoe.shape === 'single') return [{ x: tx, y: ty }];
+      for (var y = ty - s; y <= ty + s; y++) {
+        for (var x = tx - s; x <= tx + s; x++) {
+          if (x < 0 || y < 0 || x >= st.grid.w || y >= st.grid.h) continue;
+          var d = Math.abs(x - tx) + Math.abs(y - ty);
+          if (sp.aoe.shape === 'cross' && (x !== tx && y !== ty)) continue;
+          if (d > s) continue;
+          out.push({ x: x, y: y });
+        }
+      }
+      return out;
+    }
+  };
+
+  // ---------------- Game stub ----------------
+  var Game = {
+    screen: 'battle',
+    state: null,
+    selectedSpellId: null,
+    hoverTile: null,
+    party: ['hero-toll', 'hero-wick', 'hero-rose'],
+    dungeonId: 'cistern',
+    roomIndex: 0,
+    init: function () {},
+    update: function () {},
+    isPlayerTurn: function () {
+      var a = Engine.activeUnit(Game.state);
+      return !!a && a.side === 'player';
+    },
+    selectSpell: function (id) {
+      Game.selectedSpellId = Game.selectedSpellId === id ? null : id;
+    },
+    onTileHover: function (x, y) {
+      var st = Game.state;
+      if (!st || x < 0 || y < 0 || x >= st.grid.w || y >= st.grid.h) { Game.hoverTile = null; return; }
+      Game.hoverTile = { x: x, y: y };
+    },
+    onTileClicked: function (x, y) {
+      var st = Game.state, a = Engine.activeUnit(st);
+      if (!a) return;
+      if (Game.selectedSpellId) {
+        var sp = JOGO.DATA.spells[Game.selectedSpellId];
+        Engine.events.push({ type: 'cast', uid: a.uid, spellId: sp.id, x: x, y: y, fxKey: sp.fxKey, element: sp.element });
+        var tgt = Engine.unitAt(st, x, y);
+        if (tgt && sp.effects.some(function (e) { return e.type === 'damage'; })) {
+          var dmg = 10 + Math.floor(Math.random() * 25);
+          tgt.hp = Math.max(0, tgt.hp - dmg);
+          Engine.events.push({ type: 'damage', uid: tgt.uid, amount: dmg, element: sp.element });
+          if (tgt.hp <= 0) { tgt.alive = false; Engine.events.push({ type: 'death', uid: tgt.uid }); }
+        }
+        a.pa = Math.max(0, a.pa - sp.paCost);
+        Game.selectedSpellId = null;
+      } else {
+        var path = Engine.path(st, a.uid, x, y);
+        if (path && path.length) {
+          Engine.events.push({ type: 'move', uid: a.uid, path: path });
+          var last = path[path.length - 1];
+          a.x = last.x; a.y = last.y;
+          a.pm = Math.max(0, a.pm - path.length);
+        }
+      }
+    },
+    endTurn: function () {
+      var st = Game.state;
+      var a = Engine.activeUnit(st);
+      if (a) { a.pa = a.paMax; a.pm = a.pmMax; }
+      do {
+        st.activeIdx = (st.activeIdx + 1) % st.order.length;
+        if (st.activeIdx === 0) st.round++;
+      } while (!Engine.activeUnit(st).alive);
+      Engine.events.push({ type: 'turnStart', uid: Engine.activeUnit(st).uid });
+    },
+    startRun: function () {}, nextRoom: function () {}, restart: function () {}
+  };
+
+  JOGO.Engine = Engine;
+  JOGO.Game = Game;
+
+  window.__resetMock = function (dungeonId, lineupIds) {
+    Game.dungeonId = dungeonId;
+    Game.state = Engine.state = lineupIds && lineupIds.length
+      ? buildLineup(dungeonId, lineupIds)
+      : buildState(dungeonId);
+    Game.selectedSpellId = null;
+    Engine.events.push({ type: 'battleStart', state: Game.state });
+    Engine.events.push({ type: 'turnStart', uid: Game.state.order[0] });
+  };
+  window.__resetMock('cistern');
+})();
+</script>
+
+<!-- loop idêntico ao main.js + controles + snap/galeria -->
+<script>
+(function () {
+  var qs = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { qs[k] = decodeURIComponent(v); });
+
+  var lastTime = 0, frameCount = 0;
+  var maxFrames = qs.frames ? (parseInt(qs.frames, 10) || Infinity) : Infinity;
+  var spin = false, spinAng = qs.ang != null ? parseFloat(qs.ang) : -0.62;
+
+  function pumpEvents() {
+    var engine = JOGO.Engine;
+    if (!engine || !engine.events) return;
+    while (engine.events.length > 0) {
+      var ev = engine.events.shift();
+      if (JOGO.Renderer && JOGO.Renderer.handleEvent) JOGO.Renderer.handleEvent(ev);
+      if (JOGO.FX && JOGO.FX.handleEvent) JOGO.FX.handleEvent(ev);
+      if (JOGO.UI && JOGO.UI.handleEvent) JOGO.UI.handleEvent(ev);
+    }
+  }
+  function frame(time) {
+    var dt = Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+    pumpEvents();
+    if (spin) {
+      spinAng += dt * 0.5;
+      JOGO.Renderer.setCamera({ ang: spinAng });
+    }
+    if (JOGO.Renderer && JOGO.Renderer.render) JOGO.Renderer.render(dt);
+    pumpEvents();
+    if (++frameCount < maxFrames) requestAnimationFrame(frame);
+  }
+
+  var jsErrors = 0;
+  window.addEventListener('error', function (e) {
+    jsErrors++;
+    console.error('ERRO JS:', e.message);
+    var el = document.getElementById('test-status');
+    if (el) {
+      el.style.color = '#e05a3c';
+      el.textContent = 'ERRO JS: ' + e.message + ' @ ' + (e.filename || '').split('/').pop() + ':' + e.lineno;
+    }
+  });
+
+  // ---------------- GALERIA 3D: os 29 modelos enfileirados girando ----------
+  function runGallery(renderer) {
+    var M = JOGO.Models3D;
+    var canvas = document.getElementById('game-canvas');
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.LinearToneMapping;   // igual ao jogo (toon)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    var W = window.innerWidth, H = window.innerHeight;
+    renderer.setSize(W, H, true);
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color('#11141a');
+    scene.fog = new THREE.Fog(new THREE.Color('#11141a'), 30, 90);
+    var camera = new THREE.PerspectiveCamera(40, W / H, 0.5, 300);
+
+    var ids = M.unitIds();
+    if (qs.only) ids = qs.only.split(',');
+    var from = qs.from ? parseInt(qs.from, 10) : 0;
+    var to = qs.to ? parseInt(qs.to, 10) : ids.length - 1;
+    ids = ids.slice(from, to + 1);
+
+    var hemi = new THREE.HemisphereLight(0x8a94a8, 0x1a1c22, 0.75);
+    scene.add(hemi);
+    var dir = new THREE.DirectionalLight(0xfff0dc, 0.95);
+    dir.position.set(-6, 12, 8);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(2048, 2048);
+    var ext = ids.length * 1.4 + 4;
+    dir.shadow.camera.left = -ext; dir.shadow.camera.right = ext;
+    dir.shadow.camera.top = 12; dir.shadow.camera.bottom = -8;
+    dir.shadow.bias = -0.0012;
+    scene.add(dir);
+
+    // tablado
+    var SPACING = 2.6;
+    var width = ids.length * SPACING;
+    var floor = new THREE.Mesh(
+      new THREE.BoxGeometry(width + 6, 0.3, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2e3138, roughness: 0.95 })
+    );
+    floor.position.set(0, -0.15, 0);
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    var unitObjs = [];
+    ids.forEach(function (id, i) {
+      var u = M.buildUnit(id);
+      u.group.position.set((i - (ids.length - 1) / 2) * SPACING, 0, 0);
+      scene.add(u.group);
+      unitObjs.push(u);
+      // etiqueta
+      var cv = document.createElement('canvas');
+      cv.width = 256; cv.height = 40;
+      var c2 = cv.getContext('2d');
+      c2.font = 'bold 22px monospace';
+      c2.textAlign = 'center';
+      c2.fillStyle = '#ffd98a';
+      c2.fillText(id, 128, 28);
+      var tex = new THREE.CanvasTexture(cv);
+      var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+      sp.scale.set(2.4, 0.38, 1);
+      sp.position.set(u.group.position.x, -0.55, 1.6);
+      scene.add(sp);
+    });
+
+    var dist = qs.zoom ? parseFloat(qs.zoom) : Math.max(width * 0.85, 9);
+    var tilt = qs.tilt ? parseFloat(qs.tilt) : 1.12;
+    var ang = qs.ang ? parseFloat(qs.ang) : 0;
+    camera.position.set(
+      Math.sin(ang) * dist * Math.sin(tilt),
+      Math.cos(tilt) * dist + 1,
+      Math.cos(ang) * dist * Math.sin(tilt)
+    );
+    camera.lookAt(0, 0.9, 0);
+
+    var t = 0;
+    var castPose = qs.cast === '1';
+    function galleryFrame(dt) {
+      t += dt;
+      for (var i = 0; i < unitObjs.length; i++) {
+        unitObjs[i].group.rotation.y = t * 0.6;
+        unitObjs[i].animate({
+          moving: qs.walk === '1',
+          castK: castPose ? (t * 0.5 % 1) : 0,
+          flash: 0, deathK: 0
+        }, t + i * 0.37, dt);
+      }
+      renderer.render(scene, camera);
+    }
+    if (qs.snap) {
+      setStatus('galeria: construiu ' + unitObjs.length + ' — renderizando…');
+      var n = parseInt(qs.snap, 10) || 40;
+      for (var i = 0; i < n; i++) {
+        galleryFrame(0.016);
+        if (i === 0) setStatus('galeria: frame 1 ok');
+      }
+      mirrorCanvas(canvas);
+      setStatus('GALERIA snap ok — ' + ids.length + ' modelos: ' + ids.join(', '));
+    } else {
+      var last = 0;
+      (function loop(time) {
+        var dt = Math.min((time - last) / 1000, 0.1) || 0.016;
+        last = time;
+        galleryFrame(dt);
+        requestAnimationFrame(loop);
+      })(0);
+      setStatus('GALERIA — ' + ids.length + ' modelos');
+    }
+  }
+
+  function setStatus(s) {
+    var el = document.getElementById('test-status');
+    if (el) el.textContent = s;
+  }
+  function mirrorCanvas(cv) {
+    try {
+      var im = document.createElement('img');
+      im.src = cv.toDataURL('image/png');
+      im.style.position = 'absolute'; im.style.left = '0'; im.style.top = '0';
+      im.style.width = '100%'; im.style.height = '100%';
+      cv.parentElement.insertBefore(im, cv.nextSibling);
+    } catch (e) {
+      setStatus('snap ERRO: ' + e.message);
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    if (qs.gallery) {
+      // galeria usa Models3D direto (valida a API sem Renderer)
+      var hide = document.getElementById('test-controls');
+      if (hide) hide.style.display = 'none';
+      // ANCORA o relógio virtual do headless: sem trabalho REAL por frame a
+      // página fica ociosa e o --virtual-time-budget esgota ANTES do parse
+      // real dos GLBs (decode de textura roda em thread própria). O pump
+      // LIMPA o canvas WebGL a cada rAF — composição real por frame virtual,
+      // exatamente o que o loop da batalha faz via Renderer.render.
+      var galleryUp = false;
+      var galCanvas = document.getElementById('game-canvas');
+      var galRenderer = new THREE.WebGLRenderer({ canvas: galCanvas, antialias: true, preserveDrawingBuffer: true });
+      galRenderer.setClearColor(0x11141a, 1);
+      (function pump() {
+        if (galleryUp) return;
+        galRenderer.clear(true, true, true);
+        requestAnimationFrame(pump);
+      })();
+      JOGO.Models3D.ready(function () {
+        setTimeout(function () {                 // 700 ms: decode termina (receita da batalha)
+          galleryUp = true;
+          try { runGallery(galRenderer); }
+          catch (e) {
+            var el = document.getElementById('test-status');
+            if (el) { el.style.color = '#e05a3c'; el.textContent = 'GALERIA ERRO: ' + e.message + '\n' + (e.stack || '').split('\n').slice(0, 4).join('\n'); }
+          }
+        }, 700);
+      });
+      return;
+    }
+
+    JOGO.Renderer.init(document.getElementById('game-canvas'));
+    requestAnimationFrame(frame);
+
+    setTimeout(function () {
+      var checks = {
+        'THREE': typeof THREE !== 'undefined',
+        'ASSETS': !!(JOGO.ASSETS && Object.keys(JOGO.ASSETS).length >= 30),
+        'Models3D.buildUnit': !!(JOGO.Models3D && JOGO.Models3D.buildUnit),
+        'Models3D pronto': !!(JOGO.Models3D && JOGO.Models3D.isReady()),
+        'FX.handleEvent': !!(JOGO.FX && JOGO.FX.handleEvent),
+        'Renderer.render': !!(JOGO.Renderer && JOGO.Renderer.render),
+        'Renderer.isBusy': !!(JOGO.Renderer && JOGO.Renderer.isBusy),
+        'Renderer.project': !!(JOGO.Renderer && JOGO.Renderer.project),
+        'sem erros JS': jsErrors === 0
+      };
+      var fails = Object.keys(checks).filter(function (k) { return !checks[k]; });
+      var stEl = document.getElementById('test-status');
+      if (fails.length) {
+        stEl.style.color = '#e05a3c';
+        stEl.textContent = 'FAIL: ' + fails.join(', ');
+        console.error('PREVIEW3D FAIL', fails);
+      } else {
+        stEl.textContent = 'PASS — módulos 3D ok, 0 erros';
+        console.log('PREVIEW3D PASS');
+      }
+    }, 1400);
+
+    if (qs.lineup) {
+      // fileira de unidades no rig real (close-ups confiáveis em headless)
+      window.__resetMock(qs.dungeon || 'greenhouse', qs.lineup.split(','));
+    } else if (qs.dungeon) {
+      window.__resetMock(qs.dungeon);
+      var sel = document.getElementById('sel-dungeon');
+      if (sel) sel.value = qs.dungeon;
+    }
+    if (qs.ang || qs.tilt || qs.zoom) {
+      setTimeout(function () {
+        JOGO.Renderer.setCamera({
+          ang: qs.ang != null ? parseFloat(qs.ang) : null,
+          tilt: qs.tilt != null ? parseFloat(qs.tilt) : null,
+          zoom: qs.zoom != null ? parseFloat(qs.zoom) : null
+        });
+      }, 120);
+    }
+    if (qs.spell) {
+      setTimeout(function () {
+        JOGO.Game.selectSpell(qs.spell);
+        if (qs.hover) {
+          var hv = qs.hover.split(',');
+          JOGO.Game.onTileHover(parseInt(hv[0], 10), parseInt(hv[1], 10));
+        }
+      }, 200);
+    } else if (qs.hover) {
+      setTimeout(function () {
+        var hv = qs.hover.split(',');
+        JOGO.Game.onTileHover(parseInt(hv[0], 10), parseInt(hv[1], 10));
+      }, 200);
+    }
+    if (qs.snap) {
+      // N renders SÍNCRONOS depois do setup (headless: rAF não dispara)
+      JOGO.Models3D.ready(function () {
+        setTimeout(function () {
+          var n = parseInt(qs.snap, 10) || 60;
+          pumpAll();
+          JOGO.Renderer.render(0.016);      // monta a cena ANTES dos cliques de FX
+          pumpAll();
+          if (qs.fx) {
+            qs.fx.split(',').forEach(function (id) {
+              var b = document.getElementById(id); if (b) b.click();
+            });
+            pumpAll();
+          }
+          if (qs.fxcast === '1') {          // todos conjuram (fases via &snap=N)
+            JOGO.Game.state.units.forEach(function (u) {
+              JOGO.Engine.events.push({ type: 'cast', uid: u.uid, spellId: 'x',
+                x: u.x, y: u.y + 1, fxKey: qs.fxkey || 'slam', element: qs.elem || 'fire' });
+            });
+            pumpAll();
+          }
+          if (qs.fxmove === '1') {          // 1ª unidade saltita (fases via &snap=N)
+            var mu = JOGO.Game.state.units[0];
+            if (mu) {
+              JOGO.Engine.events.push({ type: 'move', uid: mu.uid, path: [
+                { x: mu.x, y: mu.y + 1 }, { x: mu.x + 1, y: mu.y + 1 }, { x: mu.x + 1, y: mu.y }] });
+            }
+            pumpAll();
+          }
+          if (qs.ang || qs.tilt || qs.zoom) {
+            JOGO.Renderer.setCamera({
+              ang: qs.ang != null ? parseFloat(qs.ang) : null,
+              tilt: qs.tilt != null ? parseFloat(qs.tilt) : null,
+              zoom: qs.zoom != null ? parseFloat(qs.zoom) : null
+            });
+          }
+          for (var i = 0; i < n; i++) {
+            if (qs.dbg === 'greenlava') {         // sonda: lava deveria ficar VERDE
+              var dm = JOGO.Models3D.envMat('hole-lava');
+              if (dm) { dm.emissive.set(0, 1, 0); dm.color.set(0, 0.1, 0); }
+            }
+            if (qs.nofx === '1') JOGO.FX.render = function () { return false; };
+            JOGO.Renderer.render(0.016);
+            pumpAll();
+          }
+          var perfTxt = '';
+          if (qs.perf) {                     // medição determinística (headless)
+            perfTxt = ' | PERF ' + window.__perf(parseInt(qs.perf, 10) || 60) + ' ms/frame';
+          }
+          mirrorCanvas(document.getElementById('game-canvas'));
+          var stEl = document.getElementById('test-status');
+          if (stEl) stEl.textContent += ' | snap ' + n + ' frames ok' + perfTxt;
+          function pumpAll() {
+            var engine = JOGO.Engine;
+            while (engine && engine.events && engine.events.length > 0) {
+              var ev = engine.events.shift();
+              if (JOGO.Renderer && JOGO.Renderer.handleEvent) JOGO.Renderer.handleEvent(ev);
+              if (JOGO.FX && JOGO.FX.handleEvent) JOGO.FX.handleEvent(ev);
+            }
+          }
+        }, 700);
+      });
+    }
+
+    // ---------------- botões ----------------
+    var E = JOGO.Engine, G = JOGO.Game;
+    function st() { return G.state; }
+    function hero(i) { return st().units.filter(function (u) { return u.side === 'player' && u.alive; })[i || 0]; }
+    function mob(i) { return st().units.filter(function (u) { return u.side === 'enemy' && u.alive && !u.boss; })[i || 0]; }
+    function boss() { return st().units.filter(function (u) { return u.boss && u.alive; })[0]; }
+
+    document.getElementById('sel-dungeon').addEventListener('change', function (e) {
+      window.__resetMock(e.target.value);
+    });
+    document.getElementById('bt-move').addEventListener('click', function () {
+      var h = hero(0); if (!h) return;
+      var p = E.path(st(), h.uid, h.x + 2, h.y + 1) || E.path(st(), h.uid, h.x + 1, h.y) || E.path(st(), h.uid, h.x, h.y + 1);
+      if (p) { E.events.push({ type: 'move', uid: h.uid, path: p }); var l = p[p.length - 1]; h.x = l.x; h.y = l.y; }
+    });
+    document.getElementById('bt-cast').addEventListener('click', function () {
+      var h = hero(1) || hero(0), m = mob(0); if (!h || !m) return;
+      E.events.push({ type: 'cast', uid: h.uid, spellId: 'spark-spit', x: m.x, y: m.y, fxKey: 'bolt', element: 'fire' });
+      E.events.push({ type: 'damage', uid: m.uid, amount: 18, element: 'fire' });
+      m.hp = Math.max(1, m.hp - 18);
+    });
+    document.getElementById('bt-slam').addEventListener('click', function () {
+      var h = hero(0), m = mob(0); if (!h || !m) return;
+      E.events.push({ type: 'cast', uid: h.uid, spellId: 'bell-strike', x: m.x, y: m.y, fxKey: 'slam', element: 'earth' });
+      E.events.push({ type: 'damage', uid: m.uid, amount: 31, element: 'earth' });
+      m.hp = Math.max(1, m.hp - 31);
+    });
+    document.getElementById('bt-nova').addEventListener('click', function () {
+      var h = hero(0), m = mob(0); if (!h || !m) return;
+      E.events.push({ type: 'cast', uid: h.uid, spellId: 'chime-of-ruin', x: m.x, y: m.y, fxKey: 'nova', element: 'light' });
+      E.events.push({ type: 'damage', uid: m.uid, amount: 22, element: 'light' });
+      m.hp = Math.max(1, m.hp - 22);
+    });
+    document.getElementById('bt-beam').addEventListener('click', function () {
+      var h = hero(1) || hero(0), m = mob(1) || mob(0); if (!h || !m) return;
+      E.events.push({ type: 'cast', uid: h.uid, spellId: 'x-beam', x: m.x, y: m.y, fxKey: 'beam', element: 'shadow' });
+      E.events.push({ type: 'damage', uid: m.uid, amount: 47, element: 'shadow' });
+      m.hp = Math.max(1, m.hp - 47);
+    });
+    document.getElementById('bt-heal').addEventListener('click', function () {
+      var h = hero(0), h2 = hero(1) || h; if (!h) return;
+      E.events.push({ type: 'cast', uid: h2.uid, spellId: 'x-heal', x: h.x, y: h.y, fxKey: 'heal', element: 'light' });
+      E.events.push({ type: 'heal', uid: h.uid, amount: 24 });
+      E.events.push({ type: 'shield', uid: h.uid, amount: 15 });
+      h.hp = Math.min(h.hpMax, h.hp + 24); h.shield = 15;
+    });
+    document.getElementById('bt-poison').addEventListener('click', function () {
+      var h = hero(2) || hero(0), m = mob(0); if (!h || !m) return;
+      E.events.push({ type: 'cast', uid: h.uid, spellId: 'x-cloud', x: m.x, y: m.y, fxKey: 'poisonCloud', element: 'earth' });
+      E.events.push({ type: 'effectApplied', uid: m.uid, effect: { type: 'poison', duration: 3 } });
+    });
+    document.getElementById('bt-buff').addEventListener('click', function () {
+      var h = hero(0), h2 = hero(1); if (!h) return;
+      E.events.push({ type: 'cast', uid: h.uid, spellId: 'x-buff', x: h.x, y: h.y, fxKey: 'buff', element: 'light' });
+      E.events.push({ type: 'effectApplied', uid: h.uid, effect: { type: 'buff', stat: 'power', value: 20, duration: 2 } });
+      if (h2) {
+        h2.effects.push({ type: 'invisible', duration: 2 });
+        E.events.push({ type: 'effectApplied', uid: h2.uid, effect: { type: 'invisible', duration: 2 } });
+      }
+    });
+    document.getElementById('bt-push').addEventListener('click', function () {
+      var m = mob(0); if (!m) return;
+      var tx = m.x, ty = Math.max(1, m.y - 2);
+      E.events.push({ type: 'cast', uid: hero(0).uid, spellId: 'gale-push', x: m.x, y: m.y, fxKey: 'gust', element: 'air' });
+      E.events.push({ type: 'pushed', uid: m.uid, fromX: m.x, fromY: m.y, toX: tx, toY: ty, collision: true });
+      E.events.push({ type: 'damage', uid: m.uid, amount: 10, element: 'neutral' });
+      m.x = tx; m.y = ty;
+    });
+    document.getElementById('bt-tp').addEventListener('click', function () {
+      var h = hero(1) || hero(0); if (!h) return;
+      var nx = h.x + 3 <= st().grid.w - 2 ? h.x + 3 : h.x - 3;
+      E.events.push({ type: 'cast', uid: h.uid, spellId: 'wick-jump', x: nx, y: h.y, fxKey: 'blink', element: 'fire' });
+      E.events.push({ type: 'teleport', uid: h.uid, fromX: h.x, fromY: h.y, toX: nx, toY: h.y });
+      h.x = nx;
+    });
+    document.getElementById('bt-summon').addEventListener('click', function () {
+      var h = hero(0); if (!h) return;
+      var sx = h.x + 1, sy = h.y;
+      var md = JOGO.DATA.monsters['sporeling'];
+      var u = mk(md, sx, sy);
+      st().units.push(u); st().order.push(u.uid);
+      E.events.push({ type: 'cast', uid: h.uid, spellId: 'sporeling-call', x: sx, y: sy, fxKey: 'summonFx', element: 'earth' });
+      E.events.push({ type: 'summon', unit: u });
+      function mk(md2, x, y) {
+        return {
+          uid: 'summon' + Math.random().toString(36).slice(2, 6), defId: md2.id, kind: 'summon', side: 'player',
+          name: md2.name, x: x, y: y, hp: md2.stats.hp, hpMax: md2.stats.hp,
+          pa: md2.stats.pa, paMax: md2.stats.pa, pm: md2.stats.pm, pmMax: md2.stats.pm,
+          initiative: md2.stats.initiative, power: 0, resists: md2.stats.resists,
+          spells: md2.spells.slice(), cooldowns: {}, castsThisTurn: {}, effects: [],
+          shield: 0, alive: true, boss: false
+        };
+      }
+    });
+    document.getElementById('bt-kill').addEventListener('click', function () {
+      var m = mob(0); if (!m) return;
+      E.events.push({ type: 'damage', uid: m.uid, amount: m.hp, element: 'fire' });
+      m.hp = 0; m.alive = false;
+      E.events.push({ type: 'death', uid: m.uid });
+    });
+    document.getElementById('bt-bosskill').addEventListener('click', function () {
+      var b = boss(); if (!b) return;
+      E.events.push({ type: 'damage', uid: b.uid, amount: 64, element: 'light' });
+      b.hp = 0; b.alive = false;
+      E.events.push({ type: 'death', uid: b.uid });
+    });
+    document.getElementById('bt-win').addEventListener('click', function () {
+      E.events.push({ type: 'battleEnd', winner: 'player' });
+    });
+    document.getElementById('bt-spin').addEventListener('click', function () { spin = !spin; });
+    document.getElementById('bt-zin').addEventListener('click', function () { JOGO.Renderer.setCamera({ zoom: 14 }); });
+    document.getElementById('bt-zout').addEventListener('click', function () { JOGO.Renderer.setCamera({ zoom: 34 }); });
+
+    // sonda de performance: N renders síncronos com gl.finish() → ms/frame
+    window.__perf = function (n) {
+      n = n || 120;
+      var cv2 = document.getElementById('game-canvas');
+      var gl = cv2.getContext('webgl2') || cv2.getContext('webgl');
+      JOGO.Renderer.render(0.016);            // aquece
+      if (gl) gl.finish();
+      var t0 = performance.now();
+      for (var i = 0; i < n; i++) {
+        JOGO.Renderer.render(0.016);
+        if (gl) gl.finish();
+      }
+      var ms = (performance.now() - t0) / n;
+      return Math.round(ms * 100) / 100;
+    };
+  });
+})();
+</script>
+</body>
+</html>

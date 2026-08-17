@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — Galeria de Sprites (4 direções)</title>
+<style>
+  body { background: #0b0d10; color: #e8e0d0; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; }
+  h1 { font-family: Georgia, serif; color: #ffd98a; letter-spacing: 0.1em; font-size: 26px; }
+  h2 { font-family: Georgia, serif; color: #3f8f7a; margin-top: 28px; font-size: 19px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; }
+  .cell { text-align: center; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 6px; }
+  .cell canvas { border-radius: 8px; display: block; }
+  .cell .name { font-size: 11px; color: #9a917f; margin-top: 4px; }
+  .cell .name b { color: #e8e0d0; display: block; font-size: 13px; }
+  .cell .dirs { display: flex; justify-content: space-around; font-size: 9px; color: #6a8f7a; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2px; }
+  #status { position: fixed; right: 16px; top: 12px; font: 13px monospace; color: #7ac26a; z-index: 5; }
+  #status.fail { color: #e05a3c; }
+</style>
+</head>
+<body>
+<h1>SOTERRA — Galeria de Sprites · 4 direções discretas (SE / SW / NE / NW)</h1>
+<div id="status">…</div>
+<div id="content"></div>
+
+<script src="../js/core/data.js?v=g2"></script>
+<script src="../js/render/sprites.js?v=g2"></script>
+<script>
+(function () {
+  var content = document.getElementById('content');
+  var statusEl = document.getElementById('status');
+  var anims = [];
+  var errors = 0;
+
+  var THEME_BG = {
+    garden:  ['#131f10', '#1c3016'],
+    cistern: ['#0b1a26', '#102836'],
+    forge:   ['#1c0d09', '#33130a']
+  };
+  // 4 direções DISCRETAS: 2 vistas desenhadas (3/4 frontal + 3/4 traseira)
+  // espelhadas — exatamente o que o Renderer usa em jogo (Sprites.drawDir).
+  var VIEWS = [
+    { dir: 0, label: 'SE frente' },
+    { dir: 1, label: 'SW frente' },
+    { dir: 2, label: 'NE costas' },
+    { dir: 3, label: 'NW costas' }
+  ];
+  var LX = -0.62; // lado da luz do mundo (rim light dinâmico)
+
+  // célula com as 4 direções lado a lado
+  function makeCell(defId, label, sub, theme, big) {
+    var wrap = document.createElement('div');
+    wrap.className = 'cell';
+    var cw = big ? 180 : 92, chh = big ? 208 : 128;
+    var w = cw * 4, h = chh;
+    var c = document.createElement('canvas');
+    c.width = w * 2; c.height = h * 2;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    wrap.appendChild(c);
+    var dirs = document.createElement('div');
+    dirs.className = 'dirs';
+    VIEWS.forEach(function (v2) {
+      var s = document.createElement('span'); s.textContent = v2.label; dirs.appendChild(s);
+    });
+    wrap.appendChild(dirs);
+    var nm = document.createElement('div');
+    nm.className = 'name';
+    nm.innerHTML = '<b>' + label + '</b>' + (sub || '');
+    wrap.appendChild(nm);
+    var ctx = c.getContext('2d');
+    var bg = THEME_BG[theme] || ['#12141a', '#1c1f28'];
+    anims.push(function (t) {
+      ctx.save();
+      ctx.setTransform(2, 0, 0, 2, 0, 0);
+      var g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, bg[0]); g.addColorStop(1, bg[1]);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      for (var vi = 0; vi < 4; vi++) {
+        var cx = cw * vi + cw / 2;
+        // separador sutil
+        if (vi > 0) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(cw * vi, 8); ctx.lineTo(cw * vi, h - 8); ctx.stroke();
+        }
+        // sombra alongada na direção da luz (coerente com o renderer)
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath(); ctx.ellipse(cx - 4, h - 16, cw * 0.3, 8, 0.1, 0, Math.PI * 2); ctx.fill();
+        ctx.save();
+        ctx.translate(cx, h - 18);
+        var sc = big ? 0.92 : 1.12;
+        ctx.scale(sc, sc);
+        try {
+          // idle por transform (bob/respiração) + partículas sobre o cache —
+          // como no Renderer
+          var spec = JOGO.Sprites.idleSpec(defId);
+          var ph = Math.sin((t + vi * 0.7) * spec.speed);
+          ctx.translate(0, ph * spec.amp * 0.5 - spec.amp * 0.5);
+          ctx.scale(1 + ph * spec.breath * 0.35, 1 - ph * spec.breath);
+          JOGO.Sprites.drawDir(ctx, defId, VIEWS[vi].dir, { t: t + vi * 0.7, lightX: LX });
+        } catch (e) {
+          errors++;
+          ctx.fillStyle = '#e05a3c'; ctx.fillText('ERRO ' + defId, -34, -30);
+          if (errors < 6) console.error('Sprite falhou: ' + defId + ' dir=' + VIEWS[vi].dir, e);
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+    });
+    return wrap;
+  }
+
+  function section(title) {
+    var h = document.createElement('h2');
+    h.textContent = title;
+    content.appendChild(h);
+    var g = document.createElement('div');
+    g.className = 'grid';
+    content.appendChild(g);
+    return g;
+  }
+
+  var D = JOGO.DATA;
+
+  var gH = section('Heróis (5) — 4 direções');
+  D.heroes.forEach(function (h) {
+    var race = D.races.filter(function (r) { return r.id === h.raceId; })[0];
+    gH.appendChild(makeCell(h.id, h.name, race ? race.name : '', 'garden', false));
+  });
+
+  var fams = [
+    ['Estufa Soterrada', 'garden', ['thorn-lasher', 'pollen-puff', 'burr-mother', 'lantern-wasp', 'sap-shaman', 'sprout-feral', 'burrlet', 'sporeling']],
+    ['Cisterna dos Afogados', 'cistern', ['drowned-porter', 'moray-piper', 'lantern-jelly', 'brine-golem', 'fat-drop', 'droplet']],
+    ['Fecho de Brasa', 'forge', ['ember-imp', 'walking-anvil', 'ash-wraith', 'slag-mound', 'faceless-smith', 'spark-whelp', 'slag-bit']]
+  ];
+  fams.forEach(function (f) {
+    var g = section(f[0] + ' — 4 direções');
+    f[2].forEach(function (id) {
+      var m = D.monsters[id];
+      g.appendChild(makeCell(id, m ? m.name : id, m ? m.family : '', f[1], false));
+    });
+  });
+
+  var gB = section('Chefes — 4 direções');
+  [['boss-gardener', 'garden'], ['boss-baroness', 'cistern'], ['boss-heartforge', 'forge']].forEach(function (b) {
+    var m = D.monsters[b[0]];
+    gB.appendChild(makeCell(b[0], m ? m.name : b[0], 'CHEFE', b[1], true));
+  });
+
+  // cobertura
+  var missing = [];
+  Object.keys(D.monsters).forEach(function (id) {
+    if (!JOGO.Sprites.has(id)) missing.push(id);
+  });
+  D.heroes.forEach(function (h) { if (!JOGO.Sprites.has(h.id)) missing.push(h.id); });
+
+  // retratos (sempre de frente — usados pela HUD)
+  var gP = section('Retratos (timeline / cards — sempre de frente)');
+  D.heroes.map(function (h) { return h.id; })
+    .concat(['boss-gardener', 'boss-baroness', 'boss-heartforge', 'ember-imp', 'moray-piper'])
+    .forEach(function (id) {
+      var wrap = document.createElement('div');
+      wrap.className = 'cell';
+      var c = document.createElement('canvas');
+      c.width = 128; c.height = 128;
+      c.style.width = '64px'; c.style.height = '64px';
+      var ctx = c.getContext('2d');
+      ctx.save(); ctx.scale(2, 2);
+      try { JOGO.Sprites.portrait(ctx, id, 64, {}); } catch (e) { errors++; console.error('Retrato falhou: ' + id, e); }
+      ctx.restore();
+      wrap.appendChild(c);
+      var nm = document.createElement('div');
+      nm.className = 'name'; nm.textContent = id;
+      wrap.appendChild(nm);
+      gP.appendChild(wrap);
+    });
+
+  // ícones de feitiço
+  var gI = section('Ícones de Feitiço (todos os fxKey/elementos)');
+  Object.keys(D.spells).forEach(function (sid) {
+    var sp = D.spells[sid];
+    var wrap = document.createElement('div');
+    wrap.className = 'cell';
+    var c = document.createElement('canvas');
+    c.width = 92; c.height = 92;
+    c.style.width = '46px'; c.style.height = '46px';
+    var ctx = c.getContext('2d');
+    ctx.save(); ctx.scale(2, 2);
+    try { JOGO.Sprites.spellIcon(ctx, sp, 46); } catch (e) { errors++; console.error('Ícone falhou: ' + sid, e); }
+    ctx.restore();
+    wrap.appendChild(c);
+    var nm = document.createElement('div');
+    nm.className = 'name';
+    nm.innerHTML = '<b style="font-size:10px">' + sp.name + '</b>' + sp.fxKey;
+    wrap.appendChild(nm);
+    gI.appendChild(wrap);
+  });
+
+  // ícones de ITEM (21 — iconKey do GDD + moldura por raridade)
+  var gIt = section('Ícones de Item (21 espólios — comum bronze · raro azul · épico dourado)');
+  Object.keys(D.items || {}).forEach(function (iid) {
+    var it = D.items[iid];
+    var wrap = document.createElement('div');
+    wrap.className = 'cell';
+    try {
+      var c = JOGO.Sprites.itemIcon(iid, 56);
+      wrap.appendChild(c);
+    } catch (e) { errors++; console.error('Ícone de item falhou: ' + iid, e); }
+    var nm = document.createElement('div');
+    nm.className = 'name';
+    nm.innerHTML = '<b style="font-size:10px">' + it.name + '</b>' + it.iconKey + ' · ' + it.rarity;
+    wrap.appendChild(nm);
+    gIt.appendChild(wrap);
+  });
+
+  // tiles e paredes
+  var gT = section('Tiles & Paredes (3 temas)');
+  ['garden', 'cistern', 'forge'].forEach(function (theme) {
+    ['floor1', 'floor2', 'deco'].forEach(function (kind) {
+      var wrap = document.createElement('div');
+      wrap.className = 'cell';
+      var c = document.createElement('canvas');
+      c.width = 128; c.height = 128;
+      c.style.width = '64px'; c.style.height = '64px';
+      var ctx = c.getContext('2d');
+      ctx.save(); ctx.scale(128, 128);
+      try { JOGO.Sprites.tileTop(ctx, theme, kind, 3); } catch (e) { errors++; console.error('Tile falhou', theme, kind, e); }
+      ctx.restore();
+      wrap.appendChild(c);
+      var nm = document.createElement('div');
+      nm.className = 'name'; nm.textContent = theme + ' · ' + kind;
+      wrap.appendChild(nm);
+      gT.appendChild(wrap);
+    });
+    ['side', 'top'].forEach(function (face) {
+      var wrap = document.createElement('div');
+      wrap.className = 'cell';
+      var c = document.createElement('canvas');
+      c.width = 128; c.height = 128;
+      c.style.width = '64px'; c.style.height = '64px';
+      var ctx = c.getContext('2d');
+      ctx.save(); ctx.scale(128, 128);
+      try { JOGO.Sprites.wallFace(ctx, theme, face, 2, 0); } catch (e) { errors++; console.error('Parede falhou', theme, face, e); }
+      ctx.restore();
+      wrap.appendChild(c);
+      var nm = document.createElement('div');
+      nm.className = 'name'; nm.textContent = theme + ' · wall ' + face;
+      wrap.appendChild(nm);
+      gT.appendChild(wrap);
+    });
+  });
+
+  // loop de animação (?frames=N para em N frames p/ screenshot headless)
+  var qs = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { qs[k] = decodeURIComponent(v); });
+  var maxFrames = qs.frames ? (parseInt(qs.frames, 10) || Infinity) : Infinity;
+  var frameN = 0;
+  var t0 = performance.now();
+  function frame(now) {
+    var t = (now - t0) / 1000;
+    for (var i = 0; i < anims.length; i++) anims[i](t);
+    if (++frameN < maxFrames) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  // 1 frame síncrono para screenshots headless
+  for (var i = 0; i < anims.length; i++) anims[i](0.8);
+  // ?snap=1: espelha cada canvas num <img> (headless não compõe canvas 2D)
+  if (qs.snap) {
+    setTimeout(function () {
+      document.querySelectorAll('canvas').forEach(function (cv) {
+        try {
+          var im = document.createElement('img');
+          im.src = cv.toDataURL('image/png');
+          im.style.width = cv.style.width; im.style.height = cv.style.height;
+          im.style.display = 'block';
+          cv.parentElement.insertBefore(im, cv);
+          cv.style.display = 'none';
+        } catch (e) {}
+      });
+    }, 1000);
+  }
+
+  setTimeout(function () {
+    if (missing.length || errors) {
+      statusEl.className = 'fail';
+      statusEl.textContent = 'FAIL — faltando: [' + missing.join(', ') + '] erros: ' + errors;
+      console.error('FALTANDO PINTORES:', missing);
+    } else {
+      statusEl.textContent = 'PASS — ' + anims.length + ' fichas × 4 direções, 0 faltando, 0 erros';
+      console.log('PASS galeria');
+    }
+  }, 600);
+})();
+</script>
+</body>
+</html>

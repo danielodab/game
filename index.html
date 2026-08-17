@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOTERRA — Ecos do Mundo Enterrado</title>
+<link rel="stylesheet" href="css/style.css?v=6">
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+</div>
+<!-- ?v=N — bump a cada entrega para invalidar caches de script -->
+<!-- Camada 3D (Three.js): vendors primeiro, env-kit antes de models3d, fx3d antes de renderer3d -->
+<script src="vendor/three.min.js?v=7"></script>
+<script src="vendor/GLTFLoader.js?v=7"></script>
+<script src="vendor/CopyShader.js?v=7"></script>
+<script src="vendor/LuminosityHighPassShader.js?v=7"></script>
+<script src="vendor/EffectComposer.js?v=7"></script>
+<script src="vendor/RenderPass.js?v=7"></script>
+<script src="vendor/ShaderPass.js?v=7"></script>
+<script src="vendor/UnrealBloomPass.js?v=7"></script>
+<script src="js/core/data.js?v=7"></script>
+<script src="assets/embedded/env-kit.js?v=7"></script>
+<script src="js/core/engine.js?v=7"></script>
+<script src="js/core/ai.js?v=7"></script>
+<script src="js/core/progress.js?v=7"></script>
+<script src="js/core/game.js?v=7"></script>
+<script src="js/render3d/models3d.js?v=8"></script>
+<script src="js/render3d/fx3d.js?v=8"></script>
+<script src="js/render3d/renderer3d.js?v=8"></script>
+<!-- sprites.js (2D) continua fornecendo retratos/ícones da HUD (JOGO.Sprites) — não conflita com a camada 3D -->
+<script src="js/render/sprites.js?v=8"></script>
+<script src="js/ui/hud.js?v=8"></script>
+<script src="js/main.js?v=8"></script>
+</body>
+</html>

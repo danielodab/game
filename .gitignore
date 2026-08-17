@@ -1,0 +1,14 @@
+# Evidências de QA (screenshots grandes, regeneráveis pelos testes)
+tests/qa_shots/
+
+# Sistema / editores
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Temporários
+*.tmp
+*.log
