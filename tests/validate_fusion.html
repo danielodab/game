@@ -497,6 +497,21 @@
       it.dungeonId + ' != ' + PREFIX[px]);
     check('item ' + id + ' slot válido', has(SLOTS, it.slot), String(it.slot));
     check('item ' + id + ' rarity válida', has(RARITIES, it.rarity), String(it.rarity));
+    // --- adendo v2.1: elemento, conjunto e peso de saque ---
+    check('item ' + id + ' element válido', has(ELEMENTS, it.element), String(it.element));
+    check('item ' + id + ' setId existe em DATA.sets',
+      isStr(it.setId) && !!(D.sets && D.sets[it.setId]), String(it.setId));
+    if (isStr(it.setId) && D.sets && D.sets[it.setId]) {
+      check('item ' + id + ' element bate com o do conjunto',
+        it.element === D.sets[it.setId].element, it.element + ' != ' + D.sets[it.setId].element);
+      check('item ' + id + ' dungeonId bate com o do conjunto',
+        it.dungeonId === D.sets[it.setId].dungeonId);
+      check('item ' + id + ' está na lista de peças do conjunto',
+        has(D.sets[it.setId].pieces, id));
+    }
+    check('item ' + id + ' dropWeight bate com a raridade',
+      isNum(it.dropWeight) && D.lootWeights && it.dropWeight === D.lootWeights[it.rarity],
+      String(it.dropWeight));
     if (has(SLOTS, it.slot)) bySlot[it.slot]++;
     if (it.rarity === 'epico') epicByPrefix[px]++;
     check('item ' + id + ' name/description/flavor/iconKey',
@@ -571,12 +586,252 @@
   });
 
   // =========================================================================
-  // 7. NOMENCLATURA — nada de "pm" em lugar nenhum
+  // 7. ADENDO v2.1 — CONJUNTOS, PEDRAS E FORJA
+  // =========================================================================
+  var SETS = D.sets || {}, STONES = D.stones || {}, UP = D.upgrade || null, LW = D.lootWeights || null;
+  var setIds = Object.keys(SETS);
+
+  // ---- pesos de saque: raro/épico devem ser DIFÍCEIS ----
+  check('DATA.lootWeights presente', !!LW);
+  if (LW) {
+    check('lootWeights tem os 3 níveis de raridade',
+      isNum(LW.comum) && isNum(LW.raro) && isNum(LW.epico));
+    check('lootWeights: raro bem mais raro que comum (<= 1/3)',
+      LW.raro * 3 <= LW.comum, LW.comum + ' / ' + LW.raro);
+    check('lootWeights: épico bem mais raro que raro (<= 1/3)',
+      LW.epico * 3 <= LW.raro, LW.raro + ' / ' + LW.epico);
+    check('lootWeights: épico é pelo menos 10× mais difícil que comum',
+      LW.epico * 10 <= LW.comum, LW.comum + ' / ' + LW.epico);
+    // mesmo com a melhor Sorte de Saque (solo, LUCK 2.4) o épico continua raro
+    var luck = 2.4;
+    var wC = LW.comum, wR = LW.raro * luck, wE = LW.epico * luck * luck;
+    check('épico continua raro mesmo no solo (< 25% do peso total)',
+      wE / (wC + wR + wE) < 0.25, (100 * wE / (wC + wR + wE)).toFixed(1) + '%');
+  }
+
+  // ---- conjuntos ----
+  check('DATA.sets com 12 conjuntos (2 por calabouço)', setIds.length === 12, 'tem ' + setIds.length);
+  var setsByDungeon = {}, pieceOwner = {}, setElements = {};
+  setIds.forEach(function (sid) {
+    var st = SETS[sid];
+    check('conjunto ' + sid + ' id bate', st.id === sid);
+    check('conjunto ' + sid + ' name/description',
+      isStr(st.name) && isStr(st.description) && st.description.length > 30);
+    check('conjunto ' + sid + ' element válido', has(ELEMENTS, st.element), String(st.element));
+    setElements[st.element] = (setElements[st.element] || 0) + 1;
+    check('conjunto ' + sid + ' dungeonId', isStr(st.dungeonId));
+    if (isStr(st.dungeonId)) setsByDungeon[st.dungeonId] = (setsByDungeon[st.dungeonId] || 0) + 1;
+    check('conjunto ' + sid + ' prefixo do id bate com o das peças',
+      isArr(st.pieces) && st.pieces.length > 0 && sid.substring(0, 3) === st.pieces[0].substring(0, 3));
+
+    if (check('conjunto ' + sid + ' tem exatamente 4 peças', isArr(st.pieces) && st.pieces.length === 4,
+        isArr(st.pieces) ? 'tem ' + st.pieces.length : 'sem lista')) {
+      var slotsSeen = {};
+      st.pieces.forEach(function (pid) {
+        var pit = IT[pid];
+        if (!check('conjunto ' + sid + ' peça "' + pid + '" existe em DATA.items', !!pit)) return;
+        slotsSeen[pit.slot] = (slotsSeen[pit.slot] || 0) + 1;
+        check('peça ' + pid + ' não pertence a dois conjuntos',
+          !pieceOwner[pid], pieceOwner[pid] ? 'também em ' + pieceOwner[pid] : '');
+        pieceOwner[pid] = sid;
+        check('peça ' + pid + ' tem o elemento do conjunto ' + sid, pit.element === st.element);
+        check('peça ' + pid + ' tem o calabouço do conjunto ' + sid, pit.dungeonId === st.dungeonId);
+      });
+      var cobre4 = true;
+      SLOTS.forEach(function (s) { if (slotsSeen[s] !== 1) cobre4 = false; });
+      check('conjunto ' + sid + ' cobre os 4 espaços (pa/pp/vida/especial), um cada',
+        cobre4, JSON.stringify(slotsSeen));
+    }
+
+    // bônus progressivos em 2, 3 e 4
+    if (check('conjunto ' + sid + ' tem bônus para 2/3/4 peças',
+        !!st.bonuses && !!st.bonuses[2] && !!st.bonuses[3] && !!st.bonuses[4])) {
+      var prevTotal = 0;
+      [2, 3, 4].forEach(function (n) {
+        var bn = st.bonuses[n], total = 0, okKeys = true;
+        Object.keys(bn).forEach(function (k) {
+          if (k === 'resists') {
+            Object.keys(bn.resists).forEach(function (el) {
+              if (!has(ELEMENTS, el) || !isNum(bn.resists[el]) || bn.resists[el] < 0 || bn.resists[el] > 25) okKeys = false;
+              total += bn.resists[el];
+            });
+          } else if (!has(['hp', 'power', 'initiative', 'dodge', 'lock'], k) || !isNum(bn[k]) || bn[k] <= 0) {
+            okKeys = false;
+          } else {
+            total += bn[k];
+          }
+        });
+        check('conjunto ' + sid + ' bônus de ' + n + ' peças usa chaves válidas (sem pa/pp)', okKeys,
+          JSON.stringify(bn));
+        check('conjunto ' + sid + ' bônus de ' + n + ' peças é progressivo', total > prevTotal,
+          total + ' <= ' + prevTotal);
+        prevTotal = total;
+      });
+      // o conjunto deve premiar o próprio elemento
+      var b4 = st.bonuses[4];
+      check('conjunto ' + sid + ' premia o elemento ' + st.element + ' no bônus de 4 peças',
+        !!b4.resists && isNum(b4.resists[st.element]) && b4.resists[st.element] > 0,
+        JSON.stringify(b4.resists || {}));
+    }
+  });
+  Object.keys(PREFIX).forEach(function (px) {
+    check('calabouço ' + PREFIX[px] + ' tem 2 conjuntos', setsByDungeon[PREFIX[px]] === 2,
+      'tem ' + (setsByDungeon[PREFIX[px]] || 0));
+  });
+  check('todo item pertence a algum conjunto',
+    Object.keys(pieceOwner).length === itemIds.length,
+    Object.keys(pieceOwner).length + ' de ' + itemIds.length);
+  check('os 5 elementos aparecem em pelo menos 2 conjuntos cada', (function () {
+    for (var i = 0; i < ELEMENTS.length; i++) if (!(setElements[ELEMENTS[i]] >= 2)) return false;
+    return true;
+  })(), JSON.stringify(setElements));
+
+  // ---- pedras ----
+  var stoneIds = Object.keys(STONES);
+  check('DATA.stones com 5 pedras', stoneIds.length === 5, 'tem ' + stoneIds.length);
+  var stoneByElement = {};
+  stoneIds.forEach(function (sid) {
+    var st = STONES[sid];
+    check('pedra ' + sid + ' id bate', st.id === sid);
+    check('pedra ' + sid + ' name/description/iconKey',
+      isStr(st.name) && isStr(st.description) && st.description.length > 30 && isStr(st.iconKey));
+    check('pedra ' + sid + ' element válido', has(ELEMENTS, st.element), String(st.element));
+    if (has(ELEMENTS, st.element)) {
+      check('pedra ' + sid + ' é a única do elemento ' + st.element, !stoneByElement[st.element],
+        stoneByElement[st.element] || '');
+      stoneByElement[st.element] = sid;
+    }
+  });
+  ELEMENTS.forEach(function (el) {
+    check('existe pedra para o elemento ' + el, !!stoneByElement[el]);
+  });
+
+  // ---- forja ----
+  check('DATA.upgrade presente', !!UP);
+  if (UP) {
+    check('upgrade.maxLevel = 10', UP.maxLevel === 10, String(UP.maxLevel));
+    check('upgrade.bonusPerLevel = 0.12', UP.bonusPerLevel === 0.12, String(UP.bonusPerLevel));
+    check('upgrade.stoneCost tem 10 entradas', isArr(UP.stoneCost) && UP.stoneCost.length === 10,
+      isArr(UP.stoneCost) ? 'tem ' + UP.stoneCost.length : 'ausente');
+    if (isArr(UP.stoneCost)) {
+      var crescente = true, totalStones = 0;
+      for (var sc = 0; sc < UP.stoneCost.length; sc++) {
+        if (!isNum(UP.stoneCost[sc]) || UP.stoneCost[sc] <= 0) crescente = false;
+        if (sc > 0 && UP.stoneCost[sc] <= UP.stoneCost[sc - 1]) crescente = false;
+        totalStones += UP.stoneCost[sc];
+      }
+      check('upgrade.stoneCost é estritamente crescente', crescente, UP.stoneCost.join(','));
+      check('custo total do +0 ao +10 é substancial (>= 80 pedras)', totalStones >= 80,
+        totalStones + ' pedras');
+    }
+    // tiers contíguos cobrindo 0..10 com os nomes do contrato
+    var expectedTiers = [
+      { from: 0, to: 2, name: 'Comum' }, { from: 3, to: 5, name: 'Raro' },
+      { from: 6, to: 9, name: 'Supremo' }, { from: 10, to: 10, name: 'Magnífico' }
+    ];
+    if (check('upgrade.tiers tem 4 faixas', isArr(UP.tiers) && UP.tiers.length === 4,
+        isArr(UP.tiers) ? 'tem ' + UP.tiers.length : 'ausente')) {
+      var contiguo = UP.tiers[0].from === 0;
+      for (var ti = 0; ti < UP.tiers.length; ti++) {
+        var tr = UP.tiers[ti];
+        check('tier ' + ti + ' bate com o contrato (' + expectedTiers[ti].name + ')',
+          tr.from === expectedTiers[ti].from && tr.to === expectedTiers[ti].to &&
+          tr.name === expectedTiers[ti].name, JSON.stringify(tr));
+        if (tr.to < tr.from) contiguo = false;
+        if (ti > 0 && tr.from !== UP.tiers[ti - 1].to + 1) contiguo = false;
+      }
+      check('upgrade.tiers são contíguos e cobrem 0..10',
+        contiguo && UP.tiers[UP.tiers.length - 1].to === 10);
+      // toda nível de 0 a 10 cai em exatamente um tier
+      var semTier = [];
+      for (var lv = 0; lv <= 10; lv++) {
+        var achou = 0;
+        for (var tj = 0; tj < UP.tiers.length; tj++) {
+          if (lv >= UP.tiers[tj].from && lv <= UP.tiers[tj].to) achou++;
+        }
+        if (achou !== 1) semTier.push(lv);
+      }
+      check('todo nível 0..10 pertence a exatamente um tier', semTier.length === 0, semTier.join(','));
+    }
+
+    // ---- simulação do ganho da forja ----
+    function upgraded(bonuses, level) {
+      var mult = 1 + UP.bonusPerLevel * level, out = {}, k;
+      for (k in bonuses) if (Object.prototype.hasOwnProperty.call(bonuses, k)) {
+        if (k === 'resists') {
+          out.resists = {};
+          Object.keys(bonuses.resists).forEach(function (el) {
+            out.resists[el] = Math.round(bonuses.resists[el] * mult);
+          });
+        } else {
+          out[k] = Math.round(bonuses[k] * mult);
+        }
+      }
+      return out;
+    }
+    function totalOf(bn) {
+      var t = 0, k;
+      for (k in bn) if (Object.prototype.hasOwnProperty.call(bn, k)) {
+        if (k === 'resists') Object.keys(bn.resists).forEach(function (el) { t += bn.resists[el]; });
+        else t += bn[k];
+      }
+      return t;
+    }
+    function fieldsOf(bn) {
+      var n = 0, k;
+      for (k in bn) if (Object.prototype.hasOwnProperty.call(bn, k)) {
+        if (k === 'resists') n += Object.keys(bn.resists).length;
+        else n++;
+      }
+      return n;
+    }
+    var simulated = 0, badRatio = [], badExact = [], neverBreaks = true;
+    var expectedMult = 1 + UP.bonusPerLevel * UP.maxLevel;   // 2.2
+    itemIds.forEach(function (id) {
+      var base = IT[id].bonuses, baseTotal = totalOf(base);
+      if (baseTotal <= 0) return;
+      var prev = baseTotal;
+      for (var lv = 1; lv <= UP.maxLevel; lv++) {
+        var t = totalOf(upgraded(base, lv));
+        if (t < prev) neverBreaks = false;   // nunca regride
+        prev = t;
+      }
+      var atTen = totalOf(upgraded(base, 10)), ratio = atTen / baseTotal;
+      simulated++;
+      // exato: o desvio só pode vir do arredondamento (<= 0,5 por campo)
+      if (Math.abs(atTen - baseTotal * expectedMult) > 0.5 * fieldsOf(base) + 1e-9) {
+        badExact.push(id + ' ' + atTen + ' vs ' + (baseTotal * expectedMult).toFixed(1));
+      }
+      if (ratio < 2.0 || ratio > 2.4) badRatio.push(id + ' ' + ratio.toFixed(2) + '×');
+    });
+    check('forja simulada em todos os itens', simulated === itemIds.length,
+      simulated + ' de ' + itemIds.length);
+    check('item no +10 vale ~2,2× o base (só o arredondamento desvia) em todos os itens',
+      badExact.length === 0, badExact.slice(0, 5).join(' · '));
+    check('nenhum item foge da faixa 2,0–2,4× no +10',
+      badRatio.length === 0, badRatio.slice(0, 5).join(' · '));
+    check('evolução nunca regride nem quebra o item', neverBreaks);
+    // exemplo concreto, para o relatório
+    var ex = IT['cp-worldshell'] || IT[itemIds[0]];
+    check('exemplo de forja: ' + ex.id + ' +0 ' + JSON.stringify(ex.bonuses) +
+      ' → +10 ' + JSON.stringify(upgraded(ex.bonuses, 10)), true);
+
+    // pedras necessárias por item: elemento do item (neutro = qualquer)
+    itemIds.forEach(function (id) {
+      var el = IT[id].element;
+      check('item ' + id + ' tem pedra correspondente ao seu elemento',
+        el === 'neutro' ? stoneIds.length > 0 : !!stoneByElement[el]);
+    });
+  }
+
+  // =========================================================================
+  // 8. NOMENCLATURA — nada de "pm" em lugar nenhum
   // =========================================================================
   var blobs = {
     fusionForms: D.fusionForms, fusionBlends: D.fusionBlends, fusionIdentities: D.fusionIdentities,
     fusionSpells: D.fusionSpells, fusionSummons: D.fusionSummons,
-    pets: D.pets, petSpells: D.petSpells, items: D.items, itemSpells: D.itemSpells
+    pets: D.pets, petSpells: D.petSpells, items: D.items, itemSpells: D.itemSpells,
+    sets: D.sets, stones: D.stones, upgrade: D.upgrade
   };
   Object.keys(blobs).forEach(function (name) {
     var json = JSON.stringify(blobs[name] || {});

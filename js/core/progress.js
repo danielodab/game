@@ -4,15 +4,17 @@ var JOGO = (typeof window !== 'undefined')
 
 /* ============================================================================
  * SOTERRA 2.0 — js/core/progress.js   (dono: Lógica Meta)
- * Progressão persistente: classes desbloqueadas, heróis, XP/níveis, caminho
- * elemental, feitiços, inventário de 4 espaços + pet, cartas de personagem.
- * LEI: docs/CONTRACT_V2.md §3 (progressão), §5 (pets), §8 (itens), §9 (APIs).
+ * Progressão persistente: classes, heróis, XP/níveis, caminho elemental,
+ * feitiços, inventário ÚNICO de 4 espaços + pet, coleção de cartas com
+ * estrelas, conjuntos elementais e forja de itens.
+ * LEI: docs/CONTRACT_V2.md §3, §5, §8, §9 e o ADENDO v2.1 (§9-B), que
+ * SUBSTITUI o que o contrair.
  * Nomenclatura: pa = Pontos de Ataque, pp = Pontos de Passos. (`pm` não existe.)
  *
  * ---------------------------------------------------------------------------
  * DECISÕES DE DESIGN (onde o contrato é omisso — todas testadas):
  *
- * [D1] PERSISTÊNCIA. Chave nova `localStorage['soterra-save-v2']`. O save v1
+ * [D1] PERSISTÊNCIA. Chave `localStorage['soterra-save-v2']`. O save v1
  *      (`soterra-save-v1`) é IGNORADO — nunca lido, nunca migrado e nunca
  *      apagado (a v1 continua jogável). TODO acesso a storage vive em
  *      try/catch: `file://`, modo privado e headless podem negar. Sem storage
@@ -21,70 +23,81 @@ var JOGO = (typeof window !== 'undefined')
  *
  * [D2] SAVE CORROMPIDO NUNCA QUEBRA O JOGO. `load()` passa o JSON por um
  *      saneador (`sanitize`) que reconstrói campo a campo: tipo errado, classe
- *      inexistente, item/pet fora de DATA, elemento inválido, slot trocado, XP
- *      negativo — tudo é descartado e substituído pelo padrão. Se sobrar lixo
- *      irrecuperável, cai em `freshState()`.
+ *      inexistente, item/pet/pedra fora de DATA, elemento inválido, slot
+ *      trocado, XP negativo, nível de forja fora da faixa — tudo é descartado
+ *      ou corrigido. Sobrando lixo irrecuperável, cai em `freshState()`.
+ *      O saneador também MIGRA formatos antigos do próprio v2:
+ *      `inventory` de strings vira `[{itemId, level}]`; `cards` em array vira
+ *      `{classId: n}` (conta as repetições); item equipado que não estava no
+ *      inventário é devolvido a ele (modelo novo: equipar não tira do saco).
  *
  * [D3] HERÓI = UMA FICHA POR CLASSE. O contrato não diz de onde vem o
  *      `heroId`; adotamos `heroId === classId` para a ficha padrão, criada
- *      automaticamente quando a classe é desbloqueada (as 2 com
- *      `startsUnlocked` já nascem com ficha). `createHero(classId, heroId)`
- *      permite fichas extras da mesma classe ('bruxo#2') se a UI quiser.
+ *      quando a classe é liberada (as `startsUnlocked` de DATA.classes já
+ *      nascem com ficha — nada é fixado no código, o dado manda).
+ *      `createHero(classId, heroId)` permite fichas extras.
  *
  * [D4] `hero.spells` é CACHE. A fonte da verdade é `spellsFor(heroId)`
  *      (3 base + caminho liberado + `grantsSpell` do item especial); o cache é
  *      regravado a cada mutação para o save e a UI lerem sem recalcular.
  *
  * [D5] NÍVEL DO FEITIÇO DE CAMINHO. Usa `DATA.spells[id].unlockLevel` quando
- *      existir e for > 0; senão cai em `DATA.unlockTiers[i]` (posição do
- *      feitiço no caminho). Assim a progressão funciona mesmo com spells.js
- *      ainda incompleto (trabalho paralelo do Criativo).
+ *      existir e for > 0; senão cai em `DATA.unlockTiers[i]`.
  *
  * [D6] ELEMENTO. Todo herói nasce 'neutro'. `chooseElement` exige
- *      `level >= DATA.leveling.elementChoiceLevel` (5) e é IRREVERSÍVEL:
- *      com elemento !== 'neutro' qualquer nova escolha retorna false.
- *      `pendingElementChoice(heroId)` diz à UI que precisa perguntar.
+ *      `level >= DATA.leveling.elementChoiceLevel` (5) e é IRREVERSÍVEL.
  *
- * [D7] ITENS. `equip` exige POSSE (o item sai do inventário; o que estava no
- *      espaço volta para lá) e valida `item.slot === espaço`. Duplicatas são
- *      permitidas no inventário (remove uma cópia).
+ * [D7] INVENTÁRIO ÚNICO (§9-B). Um saco só para todo o grupo, com UMA entrada
+ *      por `itemId`: `{itemId, level}`. Equipar NÃO tira o item do saco (é
+ *      preciso vê-lo para forjar e para saber quem o usa); `hero.items[slot]`
+ *      guarda o `itemId`. Um item não pode estar em dois heróis ao mesmo
+ *      tempo: `equip` recusa e `equippedBy(itemId)` diz quem o está usando.
+ *      Item REPETIDO no saque não vira entrada nova — é fundido em PEDRAS DE
+ *      FORJA do elemento do item (`DUP_ITEM_STONES` = 2), decisão que
+ *      substitui o antigo descarte silencioso e alimenta a forja.
  *      Sanidade do contrato §8: a contribuição de um item de espaço `pa`/`pp`
- *      é limitada a +1 no cálculo de stats — dado exagerado de outro agente
- *      não quebra o equilíbrio. O mesmo teto defensivo vale para pets.
+ *      é limitada a +1 mesmo depois do multiplicador da forja — a forja
+ *      engorda vida, poder, resistências e esquiva, nunca a economia de ações.
  *
- * [D8] PETS. Vivem em `state.pets[]` (não equipados) e saem da lista ao serem
- *      equipados, igual aos itens — um pet só pode servir a um herói por vez.
- *      Bônus do pet entram em `effectiveStats`; o comportamento em batalha é
- *      do Engine.
+ * [D8] PETS. Vivem em `state.pets[]` e saem da lista ao serem equipados — um
+ *      pet só serve a um herói por vez. Bônus entram em `effectiveStats`
+ *      (com o mesmo teto de +1 em pa/pp).
  *
- * [D9] CARTAS DE PERSONAGEM. Só caem na sala do CHEFE (última sala do
- *      calabouço; sem dados, `roomIndex >= 2`). Piscina = `dungeon.cardDrops`
- *      cruzado com `DATA.cards` (respeita `minDungeon` contra a `order` do
- *      calabouço e descarta `dropWeight <= 0`). Calabouço desconhecido não
- *      derruba nada; `cardDrops` AUSENTE (dado ainda por escrever) cai na
- *      piscina geral, `cardDrops: []` é decisão explícita de não derrubar
- *      carta. Peso efetivo = `entry.weight *
- *      card.dropWeight` — classe mais forte tem `dropWeight` menor, logo carta
- *      mais rara, exatamente como o contrato pede.
- *      Chance de sair carta: 60% (solo) / 50% (dupla) / 42% (trio) — mesma
- *      lógica de "menos heróis, mais sorte" do saque.
- *      CARTA REPETIDA (classe já liberada) não é perdida: vira BÔNUS DE XP
- *      (`xpBonus`: comum 80, raro 200, épico 500, pela `cardRarity` da classe).
- *      `rollCards` já desbloqueia a classe nova e salva; quem aplica o XP da
- *      repetida é o `Game` (Progress não sabe quem está no grupo).
+ * [D9] CARTAS ACUMULATIVAS E ESTRELAS (§9-B — substitui o desbloqueio por
+ *      carta única da v2.0). `state.cards[classId] = n`, nunca decresce.
+ *      Classe liberada quando `n >= unlockCost`; as cartas EXCEDENTES ao
+ *      custo sobem estrelas conforme `starCosts` acumulados (máx. 5).
+ *      Carta repetida NÃO vira mais XP: agora ela é progresso de estrela.
+ *      Só o CHEFE derruba carta, e de forma aleatória: chance 60% (solo) /
+ *      50% (dupla); a classe sai da piscina `dungeon.cardDrops` × `dropWeight`
+ *      (respeitando `minDungeon` contra a `order` do calabouço), e a
+ *      QUANTIDADE cresce com a profundidade: `1 + floor(order/2)` cartas —
+ *      calabouço fundo compensa o custo alto das classes caras.
+ *      Sem `unlockCost` no dado (progression.js ainda por atualizar), usa-se
+ *      0 para classe `startsUnlocked` e `UNLOCK_COST_FALLBACK` para as outras.
  *
- * [D10] SAQUE. `rollDrops` (itens) mantém a regra aprovada da v1: peso
- *      efetivo = `weight * LUCK^grau`, LUCK 2.4 (solo) / 1.6 (dupla) / 1.0
- *      (trio), 1 sorteio por sala + 1 extra na sala do chefe.
- *      `rollPet` é extra e só no chefe: 25% base (×sorte), pesos de
- *      `DATA.pets[*].dropWeight`, filtrando por `dropDungeon` e ignorando pets
- *      que o jogador já tem (pet repetido não existe).
+ * [D10] CONJUNTOS (§9-B). `effectiveStats` soma `DATA.sets[setId].bonuses[k]`
+ *       de forma PROGRESSIVA e cumulativa: com 4 peças valem os bônus de 2, 3
+ *       e 4. A peça é reconhecida por `item.setId` ou, na falta dele, pela
+ *       lista `pieces` do próprio conjunto. Bônus de conjunto e de estrela não
+ *       sofrem o multiplicador da forja nem o teto de pa/pp (são fontes
+ *       distintas do item).
  *
- * [D11] `effectiveStats` = base da classe + `perLevel*(nível-1)` (hp/power) +
- *       bônus dos 4 itens + bônus do pet, em hp/pa/pp/power/initiative/
- *       dodge/lock/resists. Herói desconhecido devolve null (o Engine cai nos
- *       stats base). Com ficha zerada o resultado é idêntico aos stats da
- *       classe — invariante dos testes do motor.
+ * [D11] FORJA (§9-B). `state.stones = {stoneId: n}`. `upgradeItem(invIndex)`
+ *       é determinístico: consome `DATA.upgrade.stoneCost[level]` pedras do
+ *       ELEMENTO do item (item neutro/sem elemento aceita qualquer pedra —
+ *       consome a de maior estoque) e sobe 1 nível, até `maxLevel` (10).
+ *       Nunca quebra, nunca regride, nunca consome sem subir.
+ *       `effectiveStats` aplica `1 + bonusPerLevel*level` (0,12 ⇒ +10 = 2,2×)
+ *       sobre os bônus do item, arredondando por atributo.
+ *
+ * [D12] SAQUE. `LUCK = 2.4` (solo) / `1.6` (dupla) — grupo agora é de 1 ou 2.
+ *       Peso efetivo = `weight * LUCK^grau` (comum 0, raro 1, épico 2),
+ *       1 sorteio por sala + 1 extra na sala do chefe. `rollPet` só no chefe.
+ *
+ * [D13] `effectiveStats` = base da classe + `perLevel*(nível-1)` (hp/power) +
+ *       itens (com forja) + conjuntos + pet + estrelas da classe. Herói
+ *       desconhecido devolve null (o Engine cai nos stats base).
  * ==========================================================================*/
 
 (function () {
@@ -98,16 +111,27 @@ var JOGO = (typeof window !== 'undefined')
   var STAT_KEYS = ['hp', 'pa', 'pp', 'power', 'initiative', 'dodge', 'lock'];
   var DEFAULT_ELEMENT = 'neutro';
 
-  // grau de raridade (pt-BR do contrato v2 + en da v1, por segurança)
   var RARITY_DEGREE = { comum: 0, raro: 1, epico: 2, common: 0, rare: 1, epic: 2 };
-  // XP de consolo por carta repetida, pela raridade da classe [D9]
-  var CARD_DUP_XP = { comum: 80, raro: 200, epico: 500, common: 80, rare: 200, epic: 500 };
-  // chance de um chefe derrubar carta, por tamanho do grupo [D9]
-  var CARD_CHANCE = [0.60, 0.60, 0.50, 0.42];
-  // chance base de pet no chefe [D10]
-  var PET_CHANCE = 0.25;
-  // tetos defensivos do contrato §8 [D7]
-  var PA_ITEM_CAP = 1, PP_ITEM_CAP = 1;
+  // chance de o chefe derrubar carta, por tamanho do grupo (1 ou 2) [D9]
+  var CARD_CHANCE = [0.60, 0.60, 0.50];
+  var PET_CHANCE = 0.25;                 // chance base de pet no chefe [D12]
+  var PA_ITEM_CAP = 1, PP_ITEM_CAP = 1;  // sanidade do contrato §8 [D7]
+  var DUP_ITEM_STONES = 2;               // item repetido vira pedras [D7]
+  var UNLOCK_COST_FALLBACK = 10;         // dado ainda sem `unlockCost` [D9]
+
+  // Padrões do ADENDO v2.1, usados enquanto os arquivos de dados não chegam.
+  var STAR_COSTS_DEFAULT = [5, 15, 30, 55, 90];
+  var STARS_DEFAULT = {
+    max: 5,
+    bonuses: { 1: { hp: 15 }, 2: { power: 8 }, 3: { pp: 1 }, 4: { hp: 25, dodge: 10 }, 5: { pa: 1 } }
+  };
+  var UPGRADE_DEFAULT = {
+    maxLevel: 10,
+    tiers: [{ from: 0, to: 2, name: 'Comum' }, { from: 3, to: 5, name: 'Raro' },
+            { from: 6, to: 9, name: 'Supremo' }, { from: 10, to: 10, name: 'Magnífico' }],
+    bonusPerLevel: 0.12,
+    stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25]
+  };
 
   Progress.SAVE_KEY = KEY;
   Progress.SLOTS = SLOTS;
@@ -119,6 +143,32 @@ var JOGO = (typeof window !== 'undefined')
       if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
     } catch (e) { /* acesso negado (file://, modo privado, headless) */ }
     return null;
+  }
+
+  // ================================================================ utilidades
+  function isArray(v) { return Object.prototype.toString.call(v) === '[object Array]'; }
+  function isObj(v) { return !!v && typeof v === 'object' && !isArray(v); }
+  function num(v, def) { return (typeof v === 'number' && isFinite(v)) ? v : def; }
+  function clone(o) { var out = {}, k; for (k in o) if (o.hasOwnProperty(k)) out[k] = o[k]; return out; }
+  function indexOf(arr, v) {
+    for (var i = 0; i < arr.length; i++) if (arr[i] === v) return i;
+    return -1;
+  }
+  function keys(o) {
+    var out = [], k;
+    for (k in o) if (o.hasOwnProperty(k)) out.push(k);
+    return out;
+  }
+  function pickWeighted(pool) { // pool: [{id, w}]
+    var total = 0, i;
+    for (i = 0; i < pool.length; i++) total += pool[i].w;
+    if (total <= 0) return null;
+    var pick = Math.random() * total, acc = 0;
+    for (i = 0; i < pool.length; i++) {
+      acc += pool[i].w;
+      if (pick < acc) return pool[i].id;
+    }
+    return pool[pool.length - 1].id;
   }
 
   // ============================================================ leitura DATA
@@ -147,6 +197,23 @@ var JOGO = (typeof window !== 'undefined')
   function itemDef(id) { var i = D().items; return (i && i[id]) || null; }
   function petDef(id) { var p = D().pets; return (p && p[id]) || null; }
   function cardDef(classId) { var c = D().cards; return (c && c[classId]) || null; }
+  function setDefs() { return D().sets || {}; }
+  function stoneDefs() { return D().stones || {}; }
+  function starsCfg() {
+    var s = D().stars;
+    if (!isObj(s) || !isObj(s.bonuses)) return STARS_DEFAULT;
+    return { max: num(s.max, 5), bonuses: s.bonuses };
+  }
+  function upgradeCfg() {
+    var u = D().upgrade;
+    if (!isObj(u) || !isArray(u.stoneCost) || !u.stoneCost.length) return UPGRADE_DEFAULT;
+    return {
+      maxLevel: num(u.maxLevel, u.stoneCost.length),
+      tiers: isArray(u.tiers) ? u.tiers : UPGRADE_DEFAULT.tiers,
+      bonusPerLevel: num(u.bonusPerLevel, UPGRADE_DEFAULT.bonusPerLevel),
+      stoneCost: u.stoneCost
+    };
+  }
   function elements() {
     var e = D().elements;
     return isArray(e) && e.length ? e : ['neutro', 'fogo', 'agua', 'terra', 'ar'];
@@ -172,38 +239,38 @@ var JOGO = (typeof window !== 'undefined')
     var last = (d && isArray(d.rooms) && d.rooms.length) ? d.rooms.length - 1 : 2;
     return num(roomIndex, 0) >= last;
   }
-
-  // ================================================================ utilidades
-  function isArray(v) { return Object.prototype.toString.call(v) === '[object Array]'; }
-  function isObj(v) { return !!v && typeof v === 'object' && !isArray(v); }
-  function num(v, def) { return (typeof v === 'number' && isFinite(v)) ? v : def; }
-  function clone(o) { var out = {}, k; for (k in o) if (o.hasOwnProperty(k)) out[k] = o[k]; return out; }
-  function luckFor(partySize) {
-    var n = num(partySize, 3);
-    if (n <= 1) return 2.4;
-    if (n === 2) return 1.6;
-    return 1.0;
+  function luckFor(partySize) {          // [D12] grupo de 1 ou 2
+    return num(partySize, 2) <= 1 ? 2.4 : 1.6;
   }
-  function pickWeighted(pool) { // pool: [{id, w}]
-    var total = 0, i;
-    for (i = 0; i < pool.length; i++) total += pool[i].w;
-    if (total <= 0) return null;
-    var pick = Math.random() * total, acc = 0;
-    for (i = 0; i < pool.length; i++) {
-      acc += pool[i].w;
-      if (pick < acc) return pool[i].id;
+
+  // pedra do elemento pedido (fallback: o próprio nome do elemento como id)
+  function stoneIdForElement(element) {
+    var el = element || DEFAULT_ELEMENT;
+    var defs = stoneDefs();
+    for (var id in defs) {
+      if (defs.hasOwnProperty(id) && defs[id] && defs[id].element === el) return id;
     }
-    return pool[pool.length - 1].id;
+    return el;
   }
-
-  function emptyItems() { return { pa: null, pp: null, vida: null, especial: null }; }
+  // conjunto ao qual o item pertence (`setId` do item ou busca em DATA.sets)
+  function setIdOf(itemId) {
+    var it = itemDef(itemId);
+    if (it && it.setId) return it.setId;
+    var sets = setDefs();
+    for (var sid in sets) {
+      if (!sets.hasOwnProperty(sid)) continue;
+      var pieces = sets[sid] && sets[sid].pieces;
+      if (isArray(pieces) && indexOf(pieces, itemId) >= 0) return sid;
+    }
+    return null;
+  }
 
   // ============================================================ XP e níveis
   function levelForXp(xp) {
     var lv = leveling();
     var table = lv.xpTable;
-    var maxLevel = Math.min(lv.maxLevel, table.length);
-    for (var i = maxLevel - 1; i >= 0; i--) if (xp >= table[i]) return i + 1;
+    var top = Math.min(lv.maxLevel, table.length);
+    for (var i = top - 1; i >= 0; i--) if (xp >= table[i]) return i + 1;
     return 1;
   }
   function maxLevel() {
@@ -215,25 +282,22 @@ var JOGO = (typeof window !== 'undefined')
     return lv.xpTable[maxLevel() - 1];
   }
 
-  // ============================================================ estado / heróis
+  // ============================================================ estado
+  function emptyItems() { return { pa: null, pp: null, vida: null, especial: null }; }
+
   function newHero(classId) {
     return {
-      classId: classId,
-      element: DEFAULT_ELEMENT,
-      xp: 0,
-      level: 1,
-      spells: [],
-      items: emptyItems(),
-      pet: null
+      classId: classId, element: DEFAULT_ELEMENT, xp: 0, level: 1,
+      spells: [], items: emptyItems(), pet: null
     };
   }
 
   function freshState() {
-    var st = { version: 2, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: [] };
+    var st = { version: 21, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {} };
     var cs = classes(), id;
     for (id in cs) {
       if (!cs.hasOwnProperty(id)) continue;
-      if (cs[id] && cs[id].startsUnlocked) {
+      if (cs[id] && cs[id].startsUnlocked) {     // o DADO manda [D3]
         st.unlockedClasses.push(id);
         st.heroes[id] = newHero(id);
       }
@@ -241,19 +305,17 @@ var JOGO = (typeof window !== 'undefined')
     return st;
   }
 
-  // Saneamento total do save [D2]: nada aqui pode lançar exceção.
+  // ------------------------------------------------------ saneamento [D2]
   function sanitize(raw) {
     if (!isObj(raw)) return null;
-    var st = { version: 2, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: [] };
+    var st = { version: 21, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {} };
     var cs = classes(), i, id;
-    var hasClasses = false;
-    for (id in cs) { if (cs.hasOwnProperty(id)) { hasClasses = true; break; } }
+    var hasClasses = keys(cs).length > 0;
+    var up = upgradeCfg();
 
-    function classOk(cid) {
-      return typeof cid === 'string' && (!hasClasses || !!cs[cid]);
-    }
+    function classOk(cid) { return typeof cid === 'string' && (!hasClasses || !!cs[cid]); }
 
-    // classes desbloqueadas
+    // ---- classes liberadas
     var seenClass = {};
     if (isArray(raw.unlockedClasses)) {
       for (i = 0; i < raw.unlockedClasses.length; i++) {
@@ -261,15 +323,35 @@ var JOGO = (typeof window !== 'undefined')
         if (classOk(cid) && !seenClass[cid]) { seenClass[cid] = true; st.unlockedClasses.push(cid); }
       }
     }
-    // as que começam liberadas nunca somem de um save antigo
     for (id in cs) {
       if (cs.hasOwnProperty(id) && cs[id] && cs[id].startsUnlocked && !seenClass[id]) {
         seenClass[id] = true; st.unlockedClasses.push(id);
       }
     }
 
-    // heróis
+    // ---- inventário: aceita string (nível 0) e {itemId, level}; funde repetidos
+    function pushItem(itemId, level) {
+      if (typeof itemId !== 'string' || !itemDef(itemId)) return;
+      var lv = Math.max(0, Math.min(num(up.maxLevel, 10), Math.floor(num(level, 0))));
+      for (var k = 0; k < st.inventory.length; k++) {
+        if (st.inventory[k].itemId === itemId) {                  // uma entrada por item
+          if (lv > st.inventory[k].level) st.inventory[k].level = lv;
+          return;
+        }
+      }
+      st.inventory.push({ itemId: itemId, level: lv });
+    }
+    if (isArray(raw.inventory)) {
+      for (i = 0; i < raw.inventory.length; i++) {
+        var entry = raw.inventory[i];
+        if (typeof entry === 'string') pushItem(entry, 0);
+        else if (isObj(entry)) pushItem(entry.itemId, entry.level);
+      }
+    }
+
+    // ---- heróis
     var els = elements();
+    var equippedSeen = {};
     if (isObj(raw.heroes)) {
       for (var hid in raw.heroes) {
         if (!raw.heroes.hasOwnProperty(hid)) continue;
@@ -281,7 +363,6 @@ var JOGO = (typeof window !== 'undefined')
         h.xp = Math.max(0, Math.floor(num(src.xp, 0)));
         if (maxXp() > 0) h.xp = Math.min(h.xp, maxXp());
         h.level = levelForXp(h.xp);
-        // elemento: só vale se existir na lista e a classe tiver caminho
         if (typeof src.element === 'string' && src.element !== DEFAULT_ELEMENT) {
           var def = classDef(cls);
           var pathOk = !def || !def.paths || isArray(def.paths[src.element]);
@@ -290,13 +371,16 @@ var JOGO = (typeof window !== 'undefined')
             h.element = src.element;
           }
         }
-        // itens equipados: precisam existir em DATA e bater com o espaço
         if (isObj(src.items)) {
           for (i = 0; i < SLOTS.length; i++) {
             var slot = SLOTS[i], itId = src.items[slot];
             if (typeof itId !== 'string') continue;
             var it = itemDef(itId);
-            if (it && it.slot === slot) h.items[slot] = itId;
+            if (!it || it.slot !== slot) continue;
+            if (equippedSeen[itId]) continue;      // exclusividade do item [D7]
+            equippedSeen[itId] = true;
+            pushItem(itId, 0);                     // migração: volta ao saco único
+            h.items[slot] = itId;
           }
         }
         if (typeof src.pet === 'string' && petDef(src.pet)) h.pet = src.pet;
@@ -304,39 +388,47 @@ var JOGO = (typeof window !== 'undefined')
         if (!seenClass[cls]) { seenClass[cls] = true; st.unlockedClasses.push(cls); }
       }
     }
-    // toda classe liberada tem ficha padrão
     for (i = 0; i < st.unlockedClasses.length; i++) {
       var c2 = st.unlockedClasses[i];
       if (!st.heroes[c2]) st.heroes[c2] = newHero(c2);
     }
 
-    // inventário / pets / cartas
-    if (isArray(raw.inventory)) {
-      for (i = 0; i < raw.inventory.length; i++) {
-        if (typeof raw.inventory[i] === 'string' && itemDef(raw.inventory[i])) {
-          st.inventory.push(raw.inventory[i]);
-        }
-      }
-    }
+    // ---- pets soltos
     if (isArray(raw.pets)) {
       for (i = 0; i < raw.pets.length; i++) {
-        if (typeof raw.pets[i] === 'string' && petDef(raw.pets[i])) st.pets.push(raw.pets[i]);
+        if (typeof raw.pets[i] === 'string' && petDef(raw.pets[i]) &&
+            indexOf(st.pets, raw.pets[i]) < 0) st.pets.push(raw.pets[i]);
       }
     }
+
+    // ---- cartas: objeto {classId:n} ou array antiga (conta repetições)
     if (isArray(raw.cards)) {
       for (i = 0; i < raw.cards.length; i++) {
-        if (typeof raw.cards[i] === 'string' && classOk(raw.cards[i])) st.cards.push(raw.cards[i]);
+        var ci = raw.cards[i];
+        if (classOk(ci)) st.cards[ci] = (st.cards[ci] || 0) + 1;
+      }
+    } else if (isObj(raw.cards)) {
+      for (id in raw.cards) {
+        if (!raw.cards.hasOwnProperty(id) || !classOk(id)) continue;
+        var n = Math.floor(num(raw.cards[id], 0));
+        if (n > 0) st.cards[id] = n;
+      }
+    }
+
+    // ---- pedras de forja
+    if (isObj(raw.stones)) {
+      var sd = stoneDefs(), hasStones = keys(sd).length > 0;
+      for (id in raw.stones) {
+        if (!raw.stones.hasOwnProperty(id)) continue;
+        if (hasStones && !sd[id] && indexOf(elements(), id) < 0) continue;
+        var q = Math.floor(num(raw.stones[id], 0));
+        if (q > 0) st.stones[id] = q;
       }
     }
     return st;
   }
 
-  function indexOf(arr, v) {
-    for (var i = 0; i < arr.length; i++) if (arr[i] === v) return i;
-    return -1;
-  }
-
-  // ficha existente ou criada sob demanda (heróis de teste, save incompleto)
+  // ficha existente ou criada sob demanda
   function ensureHero(heroId) {
     var st = Progress.state;
     if (!st) return null;
@@ -349,7 +441,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!isArray(h.spells)) h.spells = [];
       return h;
     }
-    if (classDef(heroId) || !Object.keys(classes()).length) {
+    if (classDef(heroId) || !keys(classes()).length) {
       st.heroes[heroId] = newHero(heroId);
       syncSpells(heroId);
       return st.heroes[heroId];
@@ -365,12 +457,12 @@ var JOGO = (typeof window !== 'undefined')
       try {
         var rawText = s.getItem(KEY);
         if (rawText) st = sanitize(JSON.parse(rawText));
-      } catch (e) { st = null; }   // JSON quebrado, storage negado etc.
+      } catch (e) { st = null; }
     }
     if (!st || !isObj(st.heroes)) st = freshState();
     Progress.state = st;
-    // garante ficha + cache de feitiços de todo mundo
     for (var hid in st.heroes) if (st.heroes.hasOwnProperty(hid)) syncSpells(hid);
+    syncUnlocksFromCards();
     return Progress.state;
   };
 
@@ -380,7 +472,7 @@ var JOGO = (typeof window !== 'undefined')
     try {
       s.setItem(KEY, JSON.stringify(Progress.state));
       return true;
-    } catch (e) { return false; }   // cota cheia / modo privado
+    } catch (e) { return false; }
   };
 
   Progress.reset = function () {
@@ -397,23 +489,92 @@ var JOGO = (typeof window !== 'undefined')
     return (Progress.state && Progress.state.heroes[heroId]) || null;
   };
   Progress.heroIds = function () {
-    var out = [];
-    if (!Progress.state) return out;
-    for (var id in Progress.state.heroes) {
-      if (Progress.state.heroes.hasOwnProperty(id)) out.push(id);
-    }
-    return out;
+    return Progress.state ? keys(Progress.state.heroes) : [];
   };
   Progress.isClassUnlocked = function (classId) {
     return !!Progress.state && indexOf(Progress.state.unlockedClasses, classId) >= 0;
   };
 
-  // ==================================================== classes e cartas
+  // ============================================ cartas, desbloqueio e estrelas
+  function unlockCostFor(classId) {
+    var def = classDef(classId);
+    if (def && def.startsUnlocked) return 0;
+    var cfg = cardDef(classId);
+    var c = cfg ? num(cfg.unlockCost, null) : null;
+    if (c === null || c < 0) return UNLOCK_COST_FALLBACK;   // dado ainda por atualizar
+    return Math.floor(c);
+  }
+  function starCostsFor(classId) {
+    var cfg = cardDef(classId);
+    if (cfg && isArray(cfg.starCosts) && cfg.starCosts.length) return cfg.starCosts;
+    return STAR_COSTS_DEFAULT;
+  }
+  function cardsOwned(classId) {
+    if (!Progress.state || !isObj(Progress.state.cards)) return 0;
+    return Math.max(0, Math.floor(num(Progress.state.cards[classId], 0)));
+  }
+
+  Progress.cardInfo = function (classId) {
+    var def = classDef(classId);
+    var cost = unlockCostFor(classId);
+    var owned = cardsOwned(classId);
+    var costs = starCostsFor(classId);
+    var maxStars = num(starsCfg().max, 5);
+    var surplus = Math.max(0, owned - cost);
+    var stars = 0;
+    for (var i = 0; i < costs.length && i < maxStars; i++) {
+      if (surplus >= num(costs[i], Infinity)) stars = i + 1;
+    }
+    var next = null;
+    if (stars < Math.min(maxStars, costs.length)) {
+      next = { star: stars + 1, faltam: Math.max(0, num(costs[stars], 0) - surplus) };
+    }
+    return {
+      classId: classId,
+      name: (def && def.name) || classId,
+      cards: owned,
+      unlocked: Progress.isClassUnlocked(classId),
+      unlockCost: cost,
+      stars: stars,
+      next: next
+    };
+  };
+
+  // soma dos bônus fixos das estrelas conquistadas pela classe [D9]
+  function starBonuses(classId) {
+    var stars = Progress.cardInfo(classId).stars;
+    var cfg = starsCfg();
+    var out = null;
+    for (var s = 1; s <= stars; s++) {
+      var b = cfg.bonuses[s] || cfg.bonuses[String(s)];
+      if (!isObj(b)) continue;
+      if (!out) out = { resists: {} };
+      for (var k in b) {
+        if (!b.hasOwnProperty(k)) continue;
+        if (k === 'resists') {
+          for (var e in b.resists) {
+            if (b.resists.hasOwnProperty(e)) out.resists[e] = num(out.resists[e], 0) + num(b.resists[e], 0);
+          }
+        } else out[k] = num(out[k], 0) + num(b[k], 0);
+      }
+    }
+    return out;
+  }
+
+  function syncUnlocksFromCards() {
+    var st = Progress.state;
+    if (!st) return;
+    for (var classId in st.cards) {
+      if (!st.cards.hasOwnProperty(classId)) continue;
+      if (cardsOwned(classId) >= unlockCostFor(classId)) Progress.unlockClass(classId);
+    }
+  }
+
   Progress.unlockClass = function (classId) {
     var st = Progress.state;
     if (!st || typeof classId !== 'string') return false;
-    if (Object.keys(classes()).length && !classDef(classId)) return false;
-    if (indexOf(st.unlockedClasses, classId) >= 0) return false;   // já tinha
+    if (keys(classes()).length && !classDef(classId)) return false;
+    if (indexOf(st.unlockedClasses, classId) >= 0) return false;
     st.unlockedClasses.push(classId);
     if (!st.heroes[classId]) {
       st.heroes[classId] = newHero(classId);
@@ -423,7 +584,21 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
-  // ficha extra da mesma classe (a UI pode querer dois bruxos) [D3]
+  /* Soma cartas de uma classe (nunca decresce) e libera a classe ao atingir o
+   * custo. Devolve o `cardInfo` resultante. */
+  Progress.addCards = function (classId, n) {
+    var st = Progress.state;
+    if (!st || typeof classId !== 'string') return null;
+    if (keys(classes()).length && !classDef(classId)) return null;
+    var amount = Math.floor(num(n, 0));
+    if (amount > 0) {
+      st.cards[classId] = cardsOwned(classId) + amount;
+      if (st.cards[classId] >= unlockCostFor(classId)) Progress.unlockClass(classId);
+      Progress.save();
+    }
+    return Progress.cardInfo(classId);
+  };
+
   Progress.createHero = function (classId, heroId) {
     var st = Progress.state;
     if (!st || !classDef(classId)) return null;
@@ -440,16 +615,16 @@ var JOGO = (typeof window !== 'undefined')
     return id;
   };
 
-  /* Cartas de personagem [D9]. Só na sala do chefe. Devolve
-   * [{classId, name, rarity, duplicate, unlocked, xpBonus}] (0 ou 1 carta). */
+  /* Cartas do chefe [D9]. Devolve
+   * [{classId, name, amount, cards, unlocked, stars, starUp}] (0 ou 1 entrada). */
   Progress.rollCards = function (dungeonId, roomIndex, partySize) {
     if (!Progress.state) Progress.load();
     var dungeon = dungeonDef(dungeonId);
-    if (!dungeon) return [];                                    // calabouço desconhecido
+    if (!dungeon) return [];
     if (!isBossRoom(dungeonId, roomIndex)) return [];
 
     var order = dungeonOrder(dungeonId);
-    // `cardDrops` ausente = dado ainda não escrito (usa a piscina geral);
+    // `cardDrops` ausente = dado ainda não escrito (piscina geral);
     // `cardDrops: []` = decisão explícita de não derrubar carta nenhuma.
     var entries = isArray(dungeon.cardDrops) ? dungeon.cardDrops : null;
     var pool = [], i, classId, card, w;
@@ -460,13 +635,13 @@ var JOGO = (typeof window !== 'undefined')
         if (!isObj(e)) continue;
         classId = e.classId;
         card = cardDef(classId);
-        if (!card || num(card.dropWeight, 0) <= 0) continue;      // classe inicial: carta não existe
-        if (order < num(card.minDungeon, 0)) continue;            // respeita minDungeon
+        if (!card || num(card.dropWeight, 0) <= 0) continue;
+        if (order < num(card.minDungeon, 0)) continue;
         w = Math.max(0, num(e.weight, 1)) * num(card.dropWeight, 0);
         if (w > 0) pool.push({ id: classId, w: w });
       }
     }
-    if (!pool.length && entries === null) {  // sem `cardDrops`: todas as cartas elegíveis
+    if (!pool.length && entries === null) {
       var all = D().cards || {};
       for (classId in all) {
         if (!all.hasOwnProperty(classId)) continue;
@@ -478,31 +653,27 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (!pool.length) return [];
 
-    var size = Math.max(1, Math.min(3, Math.round(num(partySize, 3))));
+    var size = Math.max(1, Math.min(2, Math.round(num(partySize, 2))));
     if (Math.random() >= CARD_CHANCE[size]) return [];
 
     var chosen = pickWeighted(pool);
     if (!chosen) return [];
 
-    var def = classDef(chosen);
-    var rarity = (def && def.cardRarity) || 'comum';
-    var already = Progress.isClassUnlocked(chosen);
-    var out = {
+    var antes = Progress.cardInfo(chosen);
+    var amount = 1 + Math.floor(Math.max(0, order) / 2);   // fundo dá mais cartas
+    var depois = Progress.addCards(chosen, amount);
+    return [{
       classId: chosen,
-      name: (def && def.name) || chosen,
-      rarity: rarity,
-      duplicate: already,
-      unlocked: false,
-      xpBonus: 0
-    };
-    if (already) {
-      out.xpBonus = num(CARD_DUP_XP[rarity], 80);   // carta repetida vira XP [D9]
-    } else {
-      out.unlocked = Progress.unlockClass(chosen);
-    }
-    Progress.state.cards.push(chosen);
-    Progress.save();
-    return [out];
+      name: depois.name,
+      amount: amount,
+      cards: depois.cards,
+      unlockCost: depois.unlockCost,
+      unlocked: depois.unlocked,
+      novaClasse: !antes.unlocked && depois.unlocked,
+      stars: depois.stars,
+      starUp: depois.stars - antes.stars,
+      next: depois.next
+    }];
   };
 
   // ============================================================ XP / níveis
@@ -511,10 +682,9 @@ var JOGO = (typeof window !== 'undefined')
     if (!h) return 0;
     var amt = num(amount, 0);
     amt = isFinite(amt) ? Math.floor(amt) : 0;
-    if (amt <= 0) return 0;                       // XP nunca regride
+    if (amt <= 0) return 0;
     var before = h.level;
-    var cap = maxXp();
-    h.xp = Math.min(h.xp + amt, cap);
+    h.xp = Math.min(h.xp + amt, maxXp());
     h.level = levelForXp(h.xp);
     if (h.level !== before) syncSpells(heroId);
     Progress.save();
@@ -543,21 +713,19 @@ var JOGO = (typeof window !== 'undefined')
   Progress.pendingElementChoices = function (heroIds) {
     var ids = isArray(heroIds) ? heroIds : Progress.heroIds();
     var out = [];
-    for (var i = 0; i < ids.length; i++) {
-      if (Progress.pendingElementChoice(ids[i])) out.push(ids[i]);
-    }
+    for (var i = 0; i < ids.length; i++) if (Progress.pendingElementChoice(ids[i])) out.push(ids[i]);
     return out;
   };
 
   Progress.chooseElement = function (heroId, element) {
     var h = Progress.hero(heroId);
     if (!h) return false;
-    if (h.element !== DEFAULT_ELEMENT) return false;                 // irreversível
-    if (h.level < leveling().elementChoiceLevel) return false;        // só do nível 5 em diante
+    if (h.element !== DEFAULT_ELEMENT) return false;
+    if (h.level < leveling().elementChoiceLevel) return false;
     if (typeof element !== 'string' || element === DEFAULT_ELEMENT) return false;
-    if (indexOf(elements(), element) < 0) return false;               // elemento inexistente
+    if (indexOf(elements(), element) < 0) return false;
     var def = classDef(h.classId);
-    if (def && def.paths && !isArray(def.paths[element])) return false; // classe sem esse caminho
+    if (def && def.paths && !isArray(def.paths[element])) return false;
     h.element = element;
     syncSpells(heroId);
     Progress.save();
@@ -569,8 +737,7 @@ var JOGO = (typeof window !== 'undefined')
     var def = spellDef(spellId);
     var lvl = def ? num(def.unlockLevel, 0) : 0;
     if (lvl > 0) return lvl;
-    var tiers = unlockTiers();
-    return num(tiers[tierIndex], 99);
+    return num(unlockTiers()[tierIndex], 99);
   }
 
   Progress.spellsFor = function (heroId) {
@@ -578,7 +745,6 @@ var JOGO = (typeof window !== 'undefined')
     if (!h) return [];
     var def = classDef(h.classId);
     var out = [], i;
-
     if (def && isArray(def.baseSpells)) {
       for (i = 0; i < def.baseSpells.length; i++) out.push(def.baseSpells[i]);
     }
@@ -602,16 +768,52 @@ var JOGO = (typeof window !== 'undefined')
     return h ? h.spells : [];
   }
 
-  // ============================================================ inventário
+  // ================================================= inventário único [D7]
+  Progress.invIndexOf = function (itemId) {
+    if (!Progress.state) return -1;
+    var inv = Progress.state.inventory;
+    for (var i = 0; i < inv.length; i++) if (inv[i].itemId === itemId) return i;
+    return -1;
+  };
+  Progress.invEntry = function (itemId) {
+    var i = Progress.invIndexOf(itemId);
+    return i >= 0 ? Progress.state.inventory[i] : null;
+  };
+  Progress.itemLevel = function (itemId) {
+    var e = Progress.invEntry(itemId);
+    return e ? e.level : 0;
+  };
+  Progress.equippedBy = function (itemId) {
+    var st = Progress.state;
+    if (!st) return null;
+    for (var hid in st.heroes) {
+      if (!st.heroes.hasOwnProperty(hid)) continue;
+      var it = st.heroes[hid].items;
+      for (var i = 0; i < SLOTS.length; i++) if (it[SLOTS[i]] === itemId) return hid;
+    }
+    return null;
+  };
+
+  /* Entra no saco único. Item repetido vira pedras do elemento dele [D7]. */
   Progress.addItem = function (itemId) {
-    if (!Progress.state || typeof itemId !== 'string' || !itemDef(itemId)) return false;
-    Progress.state.inventory.push(itemId);
+    if (!Progress.state || typeof itemId !== 'string') return false;
+    var def = itemDef(itemId);
+    if (!def) return false;
+    if (Progress.invIndexOf(itemId) >= 0) {
+      Progress.addStones(stoneIdForElement(def.element), DUP_ITEM_STONES);
+      return false;                        // repetido: virou pedra
+    }
+    Progress.state.inventory.push({ itemId: itemId, level: 0 });
     Progress.save();
     return true;
   };
+
   Progress.addPet = function (petId) {
     if (!Progress.state || typeof petId !== 'string' || !petDef(petId)) return false;
-    if (indexOf(Progress.state.pets, petId) >= 0) return false;   // pet repetido não existe
+    if (indexOf(Progress.state.pets, petId) >= 0) return false;
+    for (var hid in Progress.state.heroes) {
+      if (Progress.state.heroes.hasOwnProperty(hid) && Progress.state.heroes[hid].pet === petId) return false;
+    }
     Progress.state.pets.push(petId);
     Progress.save();
     return true;
@@ -619,15 +821,14 @@ var JOGO = (typeof window !== 'undefined')
 
   Progress.equip = function (heroId, itemId) {
     var it = itemDef(itemId);
-    if (!it || indexOf(SLOTS, it.slot) < 0) return false;          // item ou espaço inválido
+    if (!it || indexOf(SLOTS, it.slot) < 0) return false;
     var h = ensureHero(heroId);
     if (!h) return false;
-    var inv = Progress.state.inventory;
-    var idx = indexOf(inv, itemId);
-    if (idx < 0) return false;                                     // precisa possuir [D7]
-    inv.splice(idx, 1);
-    if (h.items[it.slot]) inv.push(h.items[it.slot]);              // o anterior volta
-    h.items[it.slot] = itemId;
+    if (Progress.invIndexOf(itemId) < 0) return false;          // precisa possuir
+    var dono = Progress.equippedBy(itemId);
+    if (dono !== null && dono !== heroId) return false;          // já está em uso [D7]
+    if (h.items[it.slot] === itemId) return true;
+    h.items[it.slot] = itemId;                                   // o anterior fica livre
     syncSpells(heroId);
     Progress.save();
     return true;
@@ -637,8 +838,7 @@ var JOGO = (typeof window !== 'undefined')
     if (indexOf(SLOTS, slot) < 0) return false;
     var h = ensureHero(heroId);
     if (!h || !h.items[slot]) return false;
-    Progress.state.inventory.push(h.items[slot]);
-    h.items[slot] = null;
+    h.items[slot] = null;                                        // continua no saco
     syncSpells(heroId);
     Progress.save();
     return true;
@@ -651,20 +851,19 @@ var JOGO = (typeof window !== 'undefined')
     var pets = Progress.state.pets;
     var idx = indexOf(pets, petId);
     if (idx < 0) {
-      // pode estar com outro herói: transferir é permitido [D8]
       var owner = null;
       for (var hid in Progress.state.heroes) {
         if (Progress.state.heroes.hasOwnProperty(hid) && Progress.state.heroes[hid].pet === petId) {
           owner = hid; break;
         }
       }
-      if (owner === null) return false;                 // não possui o pet
-      if (owner === heroId) return true;                // já é dele
-      Progress.state.heroes[owner].pet = null;
+      if (owner === null) return false;
+      if (owner === heroId) return true;
+      Progress.state.heroes[owner].pet = null;                   // transferência [D8]
     } else {
       pets.splice(idx, 1);
     }
-    if (h.pet) pets.push(h.pet);                        // o anterior volta ao canil
+    if (h.pet) pets.push(h.pet);
     h.pet = petId;
     Progress.save();
     return true;
@@ -679,21 +878,99 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
-  // ======================================================== stats efetivos [D11]
-  function applyBonuses(out, bonuses, capPaPp) {
+  // ============================================================ forja [D11]
+  Progress.addStones = function (stoneId, n) {
+    var st = Progress.state;
+    if (!st || typeof stoneId !== 'string') return false;
+    var amount = Math.floor(num(n, 0));
+    if (amount <= 0) return false;
+    if (!isObj(st.stones)) st.stones = {};
+    st.stones[stoneId] = Math.max(0, Math.floor(num(st.stones[stoneId], 0))) + amount;
+    Progress.save();
+    return true;
+  };
+  Progress.stoneCount = function (stoneId) {
+    var st = Progress.state;
+    if (!st || !isObj(st.stones)) return 0;
+    return Math.max(0, Math.floor(num(st.stones[stoneId], 0)));
+  };
+
+  function tierNameFor(level) {
+    var tiers = upgradeCfg().tiers;
+    for (var i = 0; i < tiers.length; i++) {
+      var t = tiers[i];
+      if (level >= num(t.from, 0) && level <= num(t.to, 0)) return t.name;
+    }
+    return tiers.length ? tiers[tiers.length - 1].name : '';
+  }
+
+  // pedra usada por um item: a do elemento dele; neutro usa a de maior estoque
+  function stoneForItem(def) {
+    var el = (def && def.element) || DEFAULT_ELEMENT;
+    if (el !== DEFAULT_ELEMENT) return stoneIdForElement(el);
+    var st = Progress.state;
+    var best = stoneIdForElement(DEFAULT_ELEMENT), bestN = -1;
+    var pool = keys(stoneDefs());
+    if (!pool.length && st && isObj(st.stones)) pool = keys(st.stones);
+    for (var i = 0; i < pool.length; i++) {
+      var n = Progress.stoneCount(pool[i]);
+      if (n > bestN) { bestN = n; best = pool[i]; }
+    }
+    return best;
+  }
+
+  Progress.upgradeInfo = function (invIndex) {
+    var st = Progress.state;
+    if (!st) return null;
+    var entry = st.inventory[invIndex];
+    if (!isObj(entry)) return null;
+    var def = itemDef(entry.itemId);
+    var up = upgradeCfg();
+    var level = Math.max(0, Math.floor(num(entry.level, 0)));
+    var maxLv = num(up.maxLevel, 10);
+    var stoneId = stoneForItem(def);
+    if (level >= maxLv) {
+      return { itemId: entry.itemId, level: level, tierName: tierNameFor(level),
+               custo: 0, stoneId: stoneId, temPedras: false, maxed: true };
+    }
+    var custo = Math.max(0, Math.floor(num(up.stoneCost[level], 0)));
+    return {
+      itemId: entry.itemId, level: level, tierName: tierNameFor(level),
+      custo: custo, stoneId: stoneId,
+      temPedras: Progress.stoneCount(stoneId) >= custo, maxed: false
+    };
+  };
+
+  Progress.upgradeItem = function (invIndex) {
+    var info = Progress.upgradeInfo(invIndex);
+    if (!info || info.maxed || !info.temPedras) return false;
+    var st = Progress.state;
+    st.stones[info.stoneId] = Progress.stoneCount(info.stoneId) - info.custo;
+    st.inventory[invIndex].level = info.level + 1;              // determinístico
+    Progress.save();
+    return true;
+  };
+
+  // ======================================================== stats efetivos [D13]
+  function addStat(out, k, v, capPaPp) {
+    if (!v) return;
+    if (capPaPp && k === 'pa') v = Math.min(v, PA_ITEM_CAP);
+    if (capPaPp && k === 'pp') v = Math.min(v, PP_ITEM_CAP);
+    out[k] += v;
+  }
+  function applyBonuses(out, bonuses, capPaPp, mult) {
     if (!isObj(bonuses)) return;
+    var m = (typeof mult === 'number' && isFinite(mult)) ? mult : 1;
     for (var i = 0; i < STAT_KEYS.length; i++) {
       var k = STAT_KEYS[i];
       var v = num(bonuses[k], 0);
       if (!v) continue;
-      if (capPaPp && (k === 'pa')) v = Math.min(v, PA_ITEM_CAP);
-      if (capPaPp && (k === 'pp')) v = Math.min(v, PP_ITEM_CAP);
-      out[k] += v;
+      addStat(out, k, Math.round(v * m), capPaPp);
     }
     if (isObj(bonuses.resists)) {
       for (var e in bonuses.resists) {
         if (!bonuses.resists.hasOwnProperty(e)) continue;
-        out.resists[e] = num(out.resists[e], 0) + num(bonuses.resists[e], 0);
+        out.resists[e] = num(out.resists[e], 0) + Math.round(num(bonuses.resists[e], 0) * m);
       }
     }
   }
@@ -706,14 +983,12 @@ var JOGO = (typeof window !== 'undefined')
     var base = def.stats;
     var out = { hp: 0, pa: 0, pp: 0, power: 0, initiative: 0, dodge: 0, lock: 0, resists: {} };
     var i, k;
-    for (i = 0; i < STAT_KEYS.length; i++) {
-      k = STAT_KEYS[i];
-      out[k] = num(base[k], 0);
-    }
+    for (i = 0; i < STAT_KEYS.length; i++) { k = STAT_KEYS[i]; out[k] = num(base[k], 0); }
     if (isObj(base.resists)) {
       for (k in base.resists) if (base.resists.hasOwnProperty(k)) out.resists[k] = num(base.resists[k], 0);
     }
 
+    // ---- níveis
     var lv = leveling();
     var above = Math.max(0, h.level - 1);
     if (above > 0 && lv.perLevel) {
@@ -721,15 +996,40 @@ var JOGO = (typeof window !== 'undefined')
       out.power += num(lv.perLevel.power, 0) * above;
     }
 
+    // ---- itens equipados (com o multiplicador da forja) e contagem de conjuntos
+    var up = upgradeCfg();
+    var setCount = {};
     for (i = 0; i < SLOTS.length; i++) {
       var itId = h.items[SLOTS[i]];
-      var it = itId ? itemDef(itId) : null;
-      if (it) applyBonuses(out, it.bonuses, true);
+      if (!itId) continue;
+      var it = itemDef(itId);
+      if (!it) continue;
+      var mult = 1 + num(up.bonusPerLevel, 0.12) * Progress.itemLevel(itId);
+      applyBonuses(out, it.bonuses, true, mult);
+      var sid = setIdOf(itId);
+      if (sid) setCount[sid] = (setCount[sid] || 0) + 1;
     }
+
+    // ---- conjuntos: progressivo e cumulativo (4 peças valem 2+3+4) [D10]
+    var sets = setDefs();
+    for (var sid2 in setCount) {
+      if (!setCount.hasOwnProperty(sid2)) continue;
+      var sdef = sets[sid2];
+      if (!sdef || !isObj(sdef.bonuses)) continue;
+      for (var need = 2; need <= setCount[sid2]; need++) {
+        var b = sdef.bonuses[need] || sdef.bonuses[String(need)];
+        if (isObj(b)) applyBonuses(out, b, false, 1);
+      }
+    }
+
+    // ---- pet
     if (h.pet) {
       var pd = petDef(h.pet);
-      if (pd) applyBonuses(out, pd.bonuses, true);
+      if (pd) applyBonuses(out, pd.bonuses, true, 1);
     }
+
+    // ---- estrelas da classe (fixas e permanentes) [D9]
+    applyBonuses(out, starBonuses(h.classId), false, 1);
 
     out.hp = Math.max(1, Math.round(out.hp));
     out.pa = Math.max(0, Math.round(out.pa));
@@ -737,7 +1037,7 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   };
 
-  // ============================================================ saque [D10]
+  // ============================================================ saque [D12]
   Progress.rollDrops = function (dungeonId, roomIndex, partySize) {
     if (!Progress.state) Progress.load();
     var dungeon = dungeonDef(dungeonId);
@@ -757,13 +1057,13 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (!pool.length) return [];
 
-    var rolls = isBossRoom(dungeonId, roomIndex) ? 2 : 1;   // chefe: sorteio extra
+    var rolls = isBossRoom(dungeonId, roomIndex) ? 2 : 1;
     var drops = [];
     for (var r = 0; r < rolls; r++) {
       var chosen = pickWeighted(pool);
       if (!chosen) continue;
       drops.push(chosen);
-      Progress.state.inventory.push(chosen);
+      Progress.addItem(chosen);            // repetido vira pedras [D7]
     }
     Progress.save();
     return drops;
@@ -774,8 +1074,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!isBossRoom(dungeonId, roomIndex)) return null;
     var all = D().pets || {};
     var order = dungeonOrder(dungeonId);
-    var owned = {}, hid, id;
-    for (var i = 0; i < Progress.state.pets.length; i++) owned[Progress.state.pets[i]] = true;
+    var owned = {}, hid, id, i;
+    for (i = 0; i < Progress.state.pets.length; i++) owned[Progress.state.pets[i]] = true;
     for (hid in Progress.state.heroes) {
       if (Progress.state.heroes.hasOwnProperty(hid) && Progress.state.heroes[hid].pet) {
         owned[Progress.state.heroes[hid].pet] = true;
@@ -792,8 +1092,7 @@ var JOGO = (typeof window !== 'undefined')
       pool.push({ id: id, w: num(p.dropWeight, 0) });
     }
     if (!pool.length) return null;
-    var chance = Math.min(0.9, PET_CHANCE * luckFor(partySize));
-    if (Math.random() >= chance) return null;
+    if (Math.random() >= Math.min(0.9, PET_CHANCE * luckFor(partySize))) return null;
     var chosen = pickWeighted(pool);
     if (!chosen) return null;
     Progress.addPet(chosen);
@@ -801,11 +1100,12 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // ========================================================= grupo de batalha
-  /* Formato consumido por Engine.createBattle (contrato §9). */
+  /* Formato consumido por Engine.createBattle. Grupo de 1 ou 2 (§9-B):
+   * heróis inválidos são ignorados e o excedente é cortado. */
   Progress.battleParty = function (heroIds) {
     var ids = isArray(heroIds) ? heroIds : Progress.heroIds();
     var out = [];
-    for (var i = 0; i < ids.length; i++) {
+    for (var i = 0; i < ids.length && out.length < 2; i++) {
       var heroId = ids[i];
       var h = Progress.hero(heroId);
       if (!h) continue;
@@ -817,6 +1117,7 @@ var JOGO = (typeof window !== 'undefined')
         spells: Progress.spellsFor(heroId),
         pet: h.pet || null,
         items: clone(h.items),
+        stars: Progress.cardInfo(h.classId).stars,
         stats: Progress.effectiveStats(heroId)
       });
     }

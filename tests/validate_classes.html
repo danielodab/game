@@ -25,8 +25,8 @@
 </style>
 </head>
 <body>
-<h1>Validação — DATA.classes · DATA.spells · DATA.unlockTiers/leveling/cards</h1>
-<div class="sub">SOTERRA 2.0 · Criativo Classes · roda tudo de forma síncrona no load · resultado em <code>window.TEST_RESULTS</code></div>
+<h1>Validação — DATA.classes · DATA.spells · unlockTiers/leveling/cards/stars</h1>
+<div class="sub">SOTERRA 2.0 · Criativo Classes · adendo v2.1 (coleção de cartas e estrelas) · roda tudo de forma síncrona no load · resultado em <code>window.TEST_RESULTS</code></div>
 <div id="summary">Carregando…</div>
 <div id="failList"></div>
 <div id="report"></div>
@@ -53,6 +53,9 @@ document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__
 
   /* ------------------------------------------------------------- vocabulário */
   var CLASS_IDS = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeira', 'invocador'];
+  /* adendo v2.1: iniciais e custos de desbloqueio fixados pelo usuário */
+  var STARTERS = ['sumo', 'curandeira'];
+  var UNLOCK_COST = { sumo: 0, curandeira: 0, invocador: 10, bruxo: 10, espadachim: 20, arqueiro: 25 };
   var ELEMENTS = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
   var PATH_ELEMENTS = ['fogo', 'agua', 'terra', 'ar'];
   var SHAPES = ['single', 'cross', 'circle', 'line', 'cone', 'ring'];
@@ -101,6 +104,7 @@ document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__
   check('DATA.unlockTiers existe', !!D.unlockTiers);
   check('DATA.leveling existe', !!D.leveling);
   check('DATA.cards existe', !!D.cards);
+  check('DATA.stars existe (adendo v2.1)', !!D.stars);
   if (!D.classes || !D.spells || !D.unlockTiers || !D.leveling || !D.cards) { render(); return; }
 
   var classIds = Object.keys(D.classes);
@@ -187,6 +191,13 @@ document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__
   });
 
   check('exatamente 2 classes com startsUnlocked', unlockedCount === 2, 'tem ' + unlockedCount);
+  STARTERS.forEach(function (cid) {
+    check('classe inicial é ' + cid + ' (adendo v2.1)', !!D.classes[cid] && D.classes[cid].startsUnlocked === true);
+  });
+  CLASS_IDS.forEach(function (cid) {
+    if (STARTERS.indexOf(cid) >= 0) return;
+    check('classe ' + cid + ' começa travada', !!D.classes[cid] && D.classes[cid].startsUnlocked === false);
+  });
 
   /* =============================================== 3. contagem de feitiços = */
   var refCount = Object.keys(referenced).length;
@@ -377,22 +388,93 @@ document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__
   }
   check('degraus de XP não decrescem (curva suave)', stepsOk, stepsBad);
 
+  /* ---------------- coleção de cartas e estrelas (adendo v2.1) ------------- */
   var cardIds = Object.keys(D.cards);
   check('cards cobre as 6 classes', cardIds.length === 6 &&
     CLASS_IDS.every(function (c) { return !!D.cards[c]; }), cardIds.join(','));
   cardIds.forEach(function (cid) {
-    var cd = D.cards[cid];
-    check('card ' + cid + ' dropWeight ≥ 0', isNum(cd.dropWeight) && cd.dropWeight >= 0, cd.dropWeight);
-    check('card ' + cid + ' minDungeon 0–5', isNum(cd.minDungeon) && cd.minDungeon >= 0 && cd.minDungeon <= 5, cd.minDungeon);
-    var cls = D.classes[cid];
-    if (cls && cls.startsUnlocked) {
-      check('card ' + cid + ' (classe inicial) não cai', cd.dropWeight === 0, cd.dropWeight);
-    } else if (cls) {
-      check('card ' + cid + ' (classe travada) cai em algum lugar', cd.dropWeight > 0, cd.dropWeight);
-      check('card ' + cid + ' épico ⇒ calabouço fundo (minDungeon ≥ 3)',
-        cls.cardRarity !== 'epico' || cd.minDungeon >= 3, cd.minDungeon);
+    var cd = D.cards[cid], cls = D.classes[cid];
+    var p = 'card ' + cid + ' ';
+    check(p + 'unlockCost = ' + UNLOCK_COST[cid] + ' (fixado pelo usuário)', cd.unlockCost === UNLOCK_COST[cid], cd.unlockCost);
+    check(p + 'unlockCost 0 ⇔ classe inicial',
+      !!cls && (cd.unlockCost === 0) === (cls.startsUnlocked === true),
+      cd.unlockCost + '/' + (cls && cls.startsUnlocked));
+    check(p + 'dropWeight > 0 (excedente vira estrela, nenhuma carta é inútil)',
+      isNum(cd.dropWeight) && cd.dropWeight > 0, cd.dropWeight);
+    check(p + 'minDungeon 0–5', isNum(cd.minDungeon) && cd.minDungeon >= 0 && cd.minDungeon <= 5, cd.minDungeon);
+    check(p + 'starCosts com 5 entradas', !!cd.starCosts && cd.starCosts.length === 5, cd.starCosts && cd.starCosts.length);
+    check(p + 'starCosts = [5,15,30,55,90]', !!cd.starCosts && cd.starCosts.join(',') === '5,15,30,55,90',
+      cd.starCosts && cd.starCosts.join(','));
+    var scOk = true;
+    for (var k = 1; k < (cd.starCosts || []).length; k++) {
+      if (!(cd.starCosts[k] > cd.starCosts[k - 1])) scOk = false;
+    }
+    check(p + 'starCosts estritamente crescente', scOk, cd.starCosts && cd.starCosts.join(','));
+    check(p + 'starCosts com ' + (D.stars ? D.stars.max : '?') + ' degraus (= DATA.stars.max)',
+      !!D.stars && cd.starCosts.length === D.stars.max);
+    if (cls) {
+      check(p + 'raridade coerente com o custo',
+        (cd.unlockCost === 0 && cls.cardRarity === 'comum') ||
+        (cd.unlockCost > 0 && cd.unlockCost <= 10 && cls.cardRarity === 'raro') ||
+        (cd.unlockCost > 10 && cls.cardRarity === 'epico'),
+        cd.unlockCost + '/' + cls.cardRarity);
     }
   });
+  /* classe mais cara ⇒ nunca mais rasa nem mais leve que uma mais barata */
+  var ordered = cardIds.slice().sort(function (a, b) { return D.cards[a].unlockCost - D.cards[b].unlockCost; });
+  var monoDepth = true, monoWeight = true;
+  for (var oi = 1; oi < ordered.length; oi++) {
+    var prev = D.cards[ordered[oi - 1]], cur = D.cards[ordered[oi]];
+    if (cur.minDungeon < prev.minDungeon) monoDepth = false;
+    if (cur.dropWeight < prev.dropWeight) monoWeight = false;
+  }
+  check('quanto mais cara a classe, mais fundo o calabouço mínimo', monoDepth,
+    ordered.map(function (c) { return c + ':' + D.cards[c].minDungeon; }).join(' '));
+  check('quanto mais cara a classe, maior o peso de saque (evita moagem infinita)', monoWeight,
+    ordered.map(function (c) { return c + ':' + D.cards[c].dropWeight; }).join(' '));
+
+  /* ------------------------------- DATA.stars ----------------------------- */
+  check('DATA.stars existe', !!D.stars);
+  if (D.stars) {
+    check('stars.max = 5', D.stars.max === 5, D.stars.max);
+    check('stars.bonuses existe', !!D.stars.bonuses);
+    var STAR_FIELDS = ['hp', 'pa', 'pp', 'power', 'dodge', 'lock', 'initiative', 'resists'];
+    for (var s = 1; s <= 5; s++) {
+      var b = D.stars.bonuses && D.stars.bonuses[s];
+      var q = 'estrela ★' + s + ' ';
+      check(q + 'tem bônus definido', !!b && Object.keys(b).length > 0);
+      if (!b) continue;
+      Object.keys(b).forEach(function (f) {
+        check(q + 'campo ' + f + ' pertence ao vocabulário de stats', STAR_FIELDS.indexOf(f) >= 0, f);
+        if (f === 'resists') {
+          check(q + 'resists com elementos válidos', Object.keys(b[f]).every(function (e) {
+            return ELEMENTS.indexOf(e) >= 0 && isNum(b[f][e]);
+          }));
+        } else {
+          check(q + 'campo ' + f + ' numérico e positivo', isNum(b[f]) && b[f] > 0, b[f]);
+        }
+      });
+    }
+    var b3 = D.stars.bonuses[3] || {}, b5 = D.stars.bonuses[5] || {}, b1 = D.stars.bonuses[1] || {};
+    check('★1 dá bônus de vida (pedido do usuário)', b1.hp > 0, b1.hp);
+    check('★3 dá +1 PP fixo (pedido do usuário)', b3.pp === 1, b3.pp);
+    check('★5 dá +1 PA fixo (pedido do usuário)', b5.pa === 1, b5.pa);
+    check('★3 não dá PA nem ★5 dá PP (os dois prêmios são distintos)',
+      b3.pa === undefined && b5.pp === undefined);
+    check('nenhuma estrela concede mais de +1 PA ou +1 PP', (function () {
+      for (var i2 = 1; i2 <= 5; i2++) {
+        var bb = D.stars.bonuses[i2] || {};
+        if ((bb.pa || 0) > 1 || (bb.pp || 0) > 1) return false;
+      }
+      return true;
+    })());
+    var totalPa = 0, totalPp = 0;
+    for (var i3 = 1; i3 <= 5; i3++) {
+      var bb2 = D.stars.bonuses[i3] || {};
+      totalPa += bb2.pa || 0; totalPp += bb2.pp || 0;
+    }
+    check('trilha completa concede no máximo +1 PA e +1 PP', totalPa === 1 && totalPp === 1, totalPa + ' PA / ' + totalPp + ' PP');
+  }
 
   /* =================================================== 7. proibição de "pm"  */
   var pmHits = [];
@@ -446,6 +528,26 @@ document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__
         (c.startsUnlocked ? 'sim' : 'não') + '</td><td>' + c.cardRarity + '</td><td>' + perClassSpells[cid] + '</td></tr>';
     });
     html += '</table>';
+
+    html += '<h2>Coleção — cartas e estrelas</h2><table><tr><th>classe</th><th>libera com</th>' +
+      '<th>peso</th><th>calabouço mín.</th><th>★1</th><th>★2</th><th>★3</th><th>★4</th><th>★5</th><th>total ★5</th></tr>';
+    CLASS_IDS.slice().sort(function (a, b) { return D.cards[a].unlockCost - D.cards[b].unlockCost; }).forEach(function (cid) {
+      var cd = D.cards[cid];
+      html += '<tr><td>' + cid + '</td><td>' + (cd.unlockCost === 0 ? 'inicial' : cd.unlockCost + ' cartas') +
+        '</td><td>' + cd.dropWeight + '</td><td>' + cd.minDungeon + '</td>';
+      cd.starCosts.forEach(function (sc) { html += '<td>' + (cd.unlockCost + sc) + '</td>'; });
+      html += '<td>' + (cd.unlockCost + cd.starCosts[4]) + ' cartas</td></tr>';
+    });
+    html += '</table>';
+
+    if (D.stars) {
+      html += '<h2>Bônus de estrela (fixos e permanentes)</h2><ul class="info">';
+      for (var st2 = 1; st2 <= D.stars.max; st2++) {
+        var bb3 = D.stars.bonuses[st2] || {};
+        html += '<li>★' + st2 + ' · ' + Object.keys(bb3).map(function (k) { return '+' + bb3[k] + ' ' + k; }).join(', ') + '</li>';
+      }
+      html += '</ul>';
+    }
 
     html += '<h2>Uso dos tipos de efeito (' + spellIds.length + ' entradas em DATA.spells)</h2><ul class="info">';
     Object.keys(byEffect).sort().forEach(function (k) { html += '<li>' + k + ': ' + byEffect[k] + '</li>'; });

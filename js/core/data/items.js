@@ -20,6 +20,18 @@ var JOGO = (typeof window !== 'undefined')
 //
 // Um item ÉPICO por calabouço é o troféu do chefe (dois no Coração Partido, que
 // é o desafio final). Poder e raridade crescem com a ordem do calabouço.
+//
+// --- ADENDO v2.1 (CONTRACT_V2 §9-B) -----------------------------------------
+// CONJUNTOS (DATA.sets): 2 conjuntos por calabouço, 4 peças cada (uma por
+//   espaço: pa/pp/vida/especial) = 12 conjuntos cobrindo os 48 itens. O
+//   `element` do conjunto é o elemento dos MONSTROS que derrubam as peças, e
+//   cada item herda esse elemento (ver rodapé: os campos `element`, `setId` e
+//   `dropWeight` de cada item são preenchidos a partir do conjunto, para que
+//   item e conjunto nunca possam divergir).
+// FORJA (DATA.stones + DATA.upgrade): 5 pedras, uma por elemento. Melhorar um
+//   item consome pedras DO ELEMENTO DO ITEM (item neutro aceita qualquer pedra).
+// SAQUE (DATA.lootWeights): peso por raridade — raro e épico são MUITO mais
+//   difíceis que comum (30 / 7 / 2, antes de aplicar a Sorte de Saque).
 // ============================================================================
 
 JOGO.DATA = JOGO.DATA || {};
@@ -201,9 +213,12 @@ JOGO.DATA = JOGO.DATA || {};
   DATA.items = {};
   var I = DATA.items;
 
+  // `element`, `setId` e `dropWeight` são preenchidos no rodapé a partir de
+  // DATA.sets / DATA.lootWeights — nunca à mão, para não divergirem.
   function item(o) {
     I[o.id] = {
       id: o.id, name: o.name, slot: o.slot, rarity: o.rarity, dungeonId: o.dungeonId,
+      element: null, setId: null, dropWeight: 0,
       bonuses: o.bonuses || {}, grantsSpell: o.grantsSpell || null,
       description: o.description, flavor: o.flavor, iconKey: o.iconKey
     };
@@ -212,8 +227,8 @@ JOGO.DATA = JOGO.DATA || {};
   // ===== 1. A ESTUFA SOTERRADA (greenhouse) — gh- ==========================
   item({ id: 'gh-firefly-crown', name: 'Coroa de Vagalumes', slot: 'pa', rarity: 'comum',
     dungeonId: 'greenhouse', bonuses: { initiative: 8, power: 3 },
-    description: 'Aro de arame com três redomas minúsculas presas nele, cada uma com um vagalume vivo dentro. +8 de iniciativa, +3 de poder.',
-    flavor: 'Eles acordam meio segundo antes do perigo. Copie-os.',
+    description: 'Aro de arame com três redomas minúsculas presas nele, cada uma com um vagalume da goteira vivo dentro da própria poça. +8 de iniciativa, +3 de poder.',
+    flavor: 'Só acendem quando começa a pingar. Copie-os.',
     iconKey: 'firefly-crown' });
 
   item({ id: 'gh-widow-shears', name: 'Tesourão da Viúva', slot: 'pa', rarity: 'epico',
@@ -254,7 +269,7 @@ JOGO.DATA = JOGO.DATA || {};
 
   item({ id: 'gh-briar-charm', name: 'Amuleto de Sarça', slot: 'especial', rarity: 'raro',
     dungeonId: 'greenhouse', bonuses: { hp: 10 }, grantsSpell: 'is-thorn-ward',
-    description: 'Um nó de sarça seca que volta a florescer quando o dono se assusta. Concede o feitiço Redoma de Espinhos.',
+    description: 'Um nó de sarça da calha que volta a florescer sempre que se molha — e o dono costuma se molhar de suor. Concede o feitiço Redoma de Espinhos.',
     flavor: 'Floresce no susto. Você vai descobrir cedo.',
     iconKey: 'briar-charm' });
 
@@ -502,5 +517,227 @@ JOGO.DATA = JOGO.DATA || {};
     description: 'Disco de vidro fumê talhado no Coração Partido: olhando por ele, o clima da sala parece uma sugestão. Concede o feitiço Eclipse.',
     flavor: 'Por um segundo, ninguém tem elemento. Nem eles.',
     iconKey: 'eclipse-lens' });
+
+  // =========================================================================
+  // PESOS DE SAQUE — raro e épico são DIFÍCEIS.
+  // O sorteio ainda multiplica por LUCK (raro ×LUCK, épico ×LUCK²), com
+  // LUCK = 1.6 (dupla) e 2.4 (solo): mesmo solo, um épico continua raro.
+  // =========================================================================
+  DATA.lootWeights = { comum: 30, raro: 7, epico: 2 };
+
+  // =========================================================================
+  // CONJUNTOS ELEMENTAIS — 2 por calabouço, 4 peças (pa/pp/vida/especial).
+  // O elemento é o dos monstros que derrubam as peças.
+  // Bônus progressivos (2/3/4 peças) que premiam o elemento e crescem com a
+  // ordem do calabouço:
+  //   fogo  → poder e resistência a fogo (agressão pura)
+  //   agua  → vida, esquiva e resistência a água (durar mais)
+  //   terra → vida e fixação (ninguém passa, ninguém escapa)
+  //   ar    → iniciativa e esquiva (agir antes, apanhar menos)
+  //   neutro→ perfil misto (poder + iniciativa), sem fraqueza elemental
+  // =========================================================================
+  DATA.sets = {
+
+    // ---- 1. A ESTUFA SOTERRADA ------------------------------------------
+    'gh-set-flora': {
+      id: 'gh-set-flora', name: 'Traje da Flora Voraz', element: 'terra', dungeonId: 'greenhouse',
+      description: 'Arrancado peça por peça das plantas que aprenderam a caçar no escuro. Quem o veste cria raiz no lugar onde decidiu ficar.',
+      pieces: ['gh-widow-shears', 'gh-vine-stirrups', 'gh-trellis-guard', 'gh-seed-pouch'],
+      bonuses: {
+        2: { hp: 12, lock: 5 },
+        3: { hp: 20, lock: 8, resists: { terra: 5 } },
+        4: { hp: 30, lock: 12, power: 6, resists: { terra: 10 } }
+      }
+    },
+    'gh-set-dew': {
+      id: 'gh-set-dew', name: 'Traje da Goteira', element: 'agua', dungeonId: 'greenhouse',
+      description: 'A estufa chove por dentro há mil anos. O que vive nas calhas é feito de água parada — e escorre entre os dedos de quem tenta segurar.',
+      pieces: ['gh-firefly-crown', 'gh-moss-treads', 'gh-sap-apron', 'gh-briar-charm'],
+      bonuses: {
+        2: { hp: 10, dodge: 5 },
+        3: { hp: 16, dodge: 8, resists: { agua: 5 } },
+        4: { hp: 24, dodge: 12, power: 6, resists: { agua: 10 } }
+      }
+    },
+
+    // ---- 2. A CISTERNA DOS AFOGADOS -------------------------------------
+    'ci-set-drowned': {
+      id: 'ci-set-drowned', name: 'Traje da Corte Afogada', element: 'agua', dungeonId: 'cistern',
+      description: 'As roupas de baile da corte que a cisterna bebeu. Ainda escorrem, ainda pesam, ainda sabem dançar.',
+      pieces: ['ci-lantern-fob', 'ci-current-fins', 'ci-drowned-coat', 'ci-tide-flask'],
+      bonuses: {
+        2: { hp: 14, power: 4 },
+        3: { hp: 22, power: 7, resists: { agua: 8 } },
+        4: { hp: 34, power: 12, dodge: 10, resists: { agua: 15 } }
+      }
+    },
+    'ci-set-brine': {
+      id: 'ci-set-brine', name: 'Traje de Sal e Osso', element: 'neutro', dungeonId: 'cistern',
+      description: 'Sal cristalizado, osso polido e luz de água-viva: as criaturas que largaram estas peças não tinham elemento nenhum — só paciência.',
+      pieces: ['ci-harpoon-flute', 'ci-baroness-collar', 'ci-brine-cuirass', 'ci-jelly-vial'],
+      bonuses: {
+        2: { power: 5, initiative: 6 },
+        3: { power: 9, initiative: 10, resists: { neutro: 8 } },
+        4: { power: 14, initiative: 14, hp: 20, resists: { neutro: 15 } }
+      }
+    },
+
+    // ---- 3. O FECHO DE BRASA ---------------------------------------------
+    'em-set-forge': {
+      id: 'em-set-forge', name: 'Traje da Prole da Fornalha', element: 'fogo', dungeonId: 'emberlock',
+      description: 'Feito do que a primeira chama do mundo cuspiu fora. Não protege do fogo: convence o fogo de que você é da casa.',
+      pieces: ['em-forge-grate', 'em-cinder-treads', 'em-soot-mantle', 'em-ember-flask'],
+      bonuses: {
+        2: { power: 8 },
+        3: { power: 14, resists: { fogo: 10 } },
+        4: { power: 22, initiative: 10, resists: { fogo: 18 } }
+      }
+    },
+    'em-set-slag': {
+      id: 'em-set-slag', name: 'Traje de Escória', element: 'terra', dungeonId: 'emberlock',
+      description: 'Ferro frio, escória e corrente: o refugo da forja, endurecido por mil anos de nada acontecer. Pesa como um argumento definitivo.',
+      pieces: ['em-bellows-valve', 'em-chain-harness', 'em-riveted-plate', 'em-brand-iron'],
+      bonuses: {
+        2: { hp: 20, lock: 8 },
+        3: { hp: 32, lock: 12, resists: { terra: 10 } },
+        4: { hp: 48, lock: 18, power: 10, resists: { terra: 18 } }
+      }
+    },
+
+    // ---- 4. OS ANDAIMES DO VENTO -----------------------------------------
+    'av-set-gale': {
+      id: 'av-set-gale', name: 'Traje do Vendaval', element: 'ar', dungeonId: 'windscaffold',
+      description: 'Tudo o que vive nos vãos abertos é feito de pressa. Estas peças cantam na corrente e chegam meio passo antes do dono.',
+      pieces: ['av-kite-crest', 'av-updraft-boots', 'av-storm-harness', 'av-wind-whistle'],
+      bonuses: {
+        2: { initiative: 12, dodge: 8 },
+        3: { initiative: 18, dodge: 14, resists: { ar: 12 } },
+        4: { initiative: 26, dodge: 22, power: 12, resists: { ar: 20 } }
+      }
+    },
+    'av-set-rigging': {
+      id: 'av-set-rigging', name: 'Traje do Cordame', element: 'ar', dungeonId: 'windscaffold',
+      description: 'Tábua, corda e arame — o que sobrou dos que construíram as passarelas e continuaram andando nelas depois de mortos.',
+      pieces: ['av-plank-gauntlet', 'av-glider-cloak', 'av-rope-vest', 'av-lightning-coil'],
+      bonuses: {
+        2: { dodge: 10, hp: 16 },
+        3: { dodge: 16, hp: 26, resists: { ar: 12 } },
+        4: { dodge: 24, hp: 38, lock: 14, resists: { ar: 20 } }
+      }
+    },
+
+    // ---- 5. A MINA TRÊMULA ------------------------------------------------
+    'mt-set-bedrock': {
+      id: 'mt-set-bedrock', name: 'Traje da Rocha-Mãe', element: 'terra', dungeonId: 'quakemine',
+      description: 'Talhado no osso da montanha pelas coisas que moram embaixo dela. Enquanto a mina treme, isto aqui não.',
+      pieces: ['mt-quake-crown', 'mt-ore-greaves', 'mt-bedrock-carapace', 'mt-shoring-charm'],
+      bonuses: {
+        2: { hp: 26, lock: 10 },
+        3: { hp: 42, lock: 16, resists: { terra: 14 } },
+        4: { hp: 60, lock: 24, power: 14, resists: { terra: 22 } }
+      }
+    },
+    'mt-set-tools': {
+      id: 'mt-set-tools', name: 'Traje do Mineiro', element: 'neutro', dungeonId: 'quakemine',
+      description: 'Broca, roda, ardósia e prego: ferramenta de gente, sem elemento nenhum. Continuou trabalhando muito depois de a gente ter parado.',
+      pieces: ['mt-drill-bit', 'mt-cart-wheels', 'mt-slate-plate', 'mt-quake-nail'],
+      bonuses: {
+        2: { power: 10, initiative: 10 },
+        3: { power: 16, initiative: 16, resists: { neutro: 12 } },
+        4: { power: 24, initiative: 24, dodge: 14, resists: { neutro: 20 } }
+      }
+    },
+
+    // ---- 6. O CORAÇÃO PARTIDO --------------------------------------------
+    'cp-set-heart': {
+      id: 'cp-set-heart', name: 'Traje do Coração', element: 'neutro', dungeonId: 'brokenheart',
+      description: 'As quatro peças épicas do último Fecho, montadas em cima de um caco da própria Grande Lousa. Completar isto é o fim do jogo — e o começo do jogo de verdade.',
+      pieces: ['cp-heart-crown', 'cp-quicksilver-boots', 'cp-worldshell', 'cp-heart-horn'],
+      bonuses: {
+        2: { hp: 30, power: 12 },
+        3: { hp: 48, power: 20, initiative: 14, resists: { neutro: 15 } },
+        4: { hp: 70, power: 32, initiative: 20, dodge: 16, lock: 16,
+             resists: { fogo: 10, agua: 10, terra: 10, ar: 10, neutro: 20 } }
+      }
+    },
+    'cp-set-cinder': {
+      id: 'cp-set-cinder', name: 'Traje da Brasa Partida', element: 'fogo', dungeonId: 'brokenheart',
+      description: 'A metade do Coração que ainda queima. Não aquece nada: só quer terminar o que estava fazendo quando rachou.',
+      pieces: ['cp-shard-ring', 'cp-ashen-anklets', 'cp-scar-plate', 'cp-eclipse-lens'],
+      bonuses: {
+        2: { power: 14 },
+        3: { power: 24, initiative: 12, resists: { fogo: 15 } },
+        4: { power: 38, initiative: 20, hp: 30, resists: { fogo: 25 } }
+      }
+    }
+  };
+
+  // =========================================================================
+  // PEDRAS DE FORJA — uma por elemento. Monstros derrubam pedras do próprio
+  // elemento; melhorar um item consome pedras do elemento DO ITEM (item
+  // neutro aceita qualquer pedra).
+  // =========================================================================
+  DATA.stones = {
+    'stone-ember': {
+      id: 'stone-ember', name: 'Brasa Coagulada', element: 'fogo',
+      description: 'Um pingo de fogo que esfriou por fora e desistiu de esfriar por dentro. Fica morno na mão e mais quente perto da bigorna.',
+      iconKey: 'stone-ember'
+    },
+    'stone-tear': {
+      id: 'stone-tear', name: 'Lágrima de Cisterna', element: 'agua',
+      description: 'Gota de água parada que endureceu sem virar gelo. Ainda tem uma ondinha presa girando lá dentro, devagar.',
+      iconKey: 'stone-tear'
+    },
+    'stone-root': {
+      id: 'stone-root', name: 'Grão de Rocha-Mãe', element: 'terra',
+      description: 'Uma semente de pedra do fundo da mina, com veios claros correndo por dentro como raízes. Pesa mais do que deveria.',
+      iconKey: 'stone-root'
+    },
+    'stone-breath': {
+      id: 'stone-breath', name: 'Sopro Engarrafado', element: 'ar',
+      description: 'Uma bolha de vento comprimido até virar mineral. Assobia baixinho quando alguém passa correndo do lado.',
+      iconKey: 'stone-breath'
+    },
+    'stone-slate': {
+      id: 'stone-slate', name: 'Lasca da Lousa', element: 'neutro',
+      description: 'Um caco do céu que virou pedra. Não é de elemento nenhum porque é de tudo ao mesmo tempo — serve em qualquer forja.',
+      iconKey: 'stone-slate'
+    }
+  };
+
+  // =========================================================================
+  // FORJA — evolução determinística até +10 (nunca quebra, nunca regride).
+  // Cada nível soma 12% dos bônus BASE do item: +10 = 1 + 0,12*10 = 2,2× o item.
+  // Custo total do +0 ao +10: 107 pedras.
+  // =========================================================================
+  DATA.upgrade = {
+    maxLevel: 10,
+    tiers: [
+      { from: 0,  to: 2,  name: 'Comum' },
+      { from: 3,  to: 5,  name: 'Raro' },
+      { from: 6,  to: 9,  name: 'Supremo' },
+      { from: 10, to: 10, name: 'Magnífico' }
+    ],
+    bonusPerLevel: 0.12,
+    stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25]
+  };
+
+  // =========================================================================
+  // RODAPÉ — deriva `element`, `setId` e `dropWeight` de cada item a partir do
+  // conjunto a que ele pertence e da raridade. Nenhum item pode ficar fora de
+  // um conjunto: a validação acusa (element/setId nulos).
+  // =========================================================================
+  (function bindSets() {
+    Object.keys(DATA.sets).forEach(function (sid) {
+      var set = DATA.sets[sid];
+      set.pieces.forEach(function (iid) {
+        var it = I[iid];
+        if (!it) return;                       // acusado por tests/validate_fusion.html
+        it.setId = sid;
+        it.element = set.element;
+        it.dropWeight = DATA.lootWeights[it.rarity] || 0;
+      });
+    });
+  })();
 
 })();

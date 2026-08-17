@@ -48,10 +48,17 @@ var JOGO = (typeof window !== 'undefined')
  *
  * [G5] RECOMPENSAS DA SALA. XP = soma do `xp` dos monstros INIMIGOS mortos
  *      dividida (piso) pelo tamanho do grupo; cada herói do grupo recebe esse
- *      valor (vivo ou morto). Cartas são sorteadas ANTES de aplicar o XP, para
- *      que o bônus de carta repetida entre na mesma conta de níveis.
- *      A UI recebe `{xpGanho, xpCartas, levelUps, drops, pets, cards,
+ *      valor (vivo ou morto).
+ *      A UI recebe `{xpGanho, levelUps, drops, pets, cards, stones,
  *      elementChoices}`.
+ *      ADENDO v2.1: carta repetida NÃO vira mais XP (o campo `xpCartas` foi
+ *      removido) — agora ela acumula na coleção e vira estrela, e quem faz
+ *      essa conta é o `Progress`. As PEDRAS DE FORJA são colhidas aqui: cada
+ *      monstro inimigo morto com `stoneDrop {chance, min, max}` rende pedras
+ *      do PRÓPRIO elemento (`DATA.stones` dá o id da pedra daquele elemento).
+ *
+ * [G8] GRUPO DE 1 OU 2 HERÓIS (§9-B). `startRun` recusa 3 ou mais; com dois
+ *      heróis, a fusão vira a jogada de trocar economia de ações por poder.
  *
  * [G6] ESCOLHA DE ELEMENTO. Ao fim da sala, `elementChoices` lista os heróis
  *      que chegaram ao nível 5 sem elemento. A UI vai para a tela
@@ -178,7 +185,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function validParty(heroIds) {
-    if (!heroIds || heroIds.length < 1 || heroIds.length > 3) return false;  // grupo de 1 a 3
+    if (!heroIds || heroIds.length < 1 || heroIds.length > 2) return false;  // grupo de 1 ou 2 [G8]
     var seen = {};
     for (var i = 0; i < heroIds.length; i++) {
       var id = heroIds[i];
