@@ -97,8 +97,21 @@ var JOGO = (typeof window !== 'undefined')
  *       (+1 PA viraria +2 já no +5). A lista vem do DADO, não do código.
  *
  * [D12] SAQUE. `LUCK = 2.4` (solo) / `1.6` (dupla) — grupo agora é de 1 ou 2.
- *       Peso efetivo = `weight * LUCK^grau` (comum 0, raro 1, épico 2),
- *       1 sorteio por sala + 1 extra na sala do chefe. `rollPet` só no chefe.
+ *       A piscina é montada com os ITENS do calabouço (`DATA.items[*].dungeonId`,
+ *       `dropWeight`, `minRoom`), que é a escala em que o Criativo calibrou o
+ *       modelo; `dungeon.lootTable` fica como reserva para dados antigos.
+ *       Peso efetivo = `dropWeight * LUCK^expoente`, com o expoente vindo de
+ *       `DATA.lootWeights.luckExponent`. `minRoom` do item é respeitado
+ *       (comum 0 · raro 1 · épico/lendário 2 ⇒ só na sala do chefe).
+ *       PESO DE "NADA": `DATA.lootWeights.noDrop[dungeonId]` entra no MESMO
+ *       sorteio como resultado vazio e NÃO recebe a Sorte de Saque — é isso que
+ *       deixa ~50% dos sorteios secos (descida completa ≈ 2 peças) e que faz
+ *       grupo menor tirar mais e melhor. 1 sorteio por sala + 1 extra no chefe.
+ *       `rollPet` só no chefe.
+ *
+ * [D16] CONJUNTO QUE CONCEDE FEITIÇO. `spellsFor` inclui, além do `grantsSpell`
+ *       do Lume, qualquer `DATA.sets[*].bonuses[n].grantsSpell` quando o herói
+ *       tiver n peças daquele conjunto equipadas — genérico, sem id fixo.
  *
  * [D13] `effectiveStats` = base da classe + ganho por nível + itens (com forja)
  *       + conjuntos + pet + estrelas da classe. Herói desconhecido devolve null
@@ -139,7 +152,12 @@ var JOGO = (typeof window !== 'undefined')
   var STAT_KEYS = ['hp', 'pa', 'pp', 'power', 'initiative', 'dodge', 'lock'];
   var DEFAULT_ELEMENT = 'neutro';
 
-  var RARITY_DEGREE = { comum: 0, raro: 1, epico: 2, common: 0, rare: 1, epic: 2 };
+  // expoente da Sorte de Saque por raridade — só vale se o dado não trouxer
+  // `DATA.lootWeights.luckExponent` (lendário divide o expoente do épico: com
+  // ×LUCK³ o solo trivializaria o troféu)
+  var RARITY_DEGREE = { comum: 0, raro: 1, epico: 2, lendario: 2,
+                        common: 0, rare: 1, epic: 2, legendary: 2 };
+  var NO_DROP = ' nada';    // entrada virtual de "nenhum item" no sorteio
   // chance de o chefe derrubar carta, por tamanho do grupo (1 ou 2) [D9]
   var CARD_CHANCE = [0.60, 0.60, 0.50];
   var PET_CHANCE = 0.25;                 // chance base de pet no chefe [D12]
@@ -797,6 +815,20 @@ var JOGO = (typeof window !== 'undefined')
     return num(unlockTiers()[tierIndex], 99);
   }
 
+  /* Quantas peças de cada conjunto o herói está usando: {setId: n}.
+   * Usado tanto pelos bônus de conjunto quanto pelo feitiço de conjunto. */
+  function equippedSetCounts(h) {
+    var counts = {};
+    if (!h || !isObj(h.items)) return counts;
+    for (var i = 0; i < SLOTS.length; i++) {
+      var itId = h.items[SLOTS[i]];
+      if (!itId) continue;
+      var sid = setIdOf(itId);
+      if (sid) counts[sid] = (counts[sid] || 0) + 1;
+    }
+    return counts;
+  }
+
   Progress.spellsFor = function (heroId) {
     var h = Progress.hero(heroId);
     if (!h) return [];
@@ -815,6 +847,19 @@ var JOGO = (typeof window !== 'undefined')
     if (lume) {
       var it = itemDef(lume);
       if (it && it.grantsSpell && indexOf(out, it.grantsSpell) < 0) out.push(it.grantsSpell);
+    }
+    // CONJUNTO que concede feitiço [D16]: qualquer `bonuses[n].grantsSpell`
+    // vale quando o herói tem n peças daquele conjunto (genérico, sem id fixo).
+    var counts = equippedSetCounts(h);
+    var sets = setDefs();
+    for (var sid in counts) {
+      if (!counts.hasOwnProperty(sid)) continue;
+      var sdef = sets[sid];
+      if (!sdef || !isObj(sdef.bonuses)) continue;
+      for (var need = 2; need <= counts[sid]; need++) {
+        var b = sdef.bonuses[need] || sdef.bonuses[String(need)];
+        if (b && b.grantsSpell && indexOf(out, b.grantsSpell) < 0) out.push(b.grantsSpell);
+      }
     }
     return out;
   };
@@ -1073,7 +1118,7 @@ var JOGO = (typeof window !== 'undefined')
 
     // ---- itens equipados (com o multiplicador da forja) e contagem de conjuntos
     var up = upgradeCfg();
-    var setCount = {};
+    var setCount = equippedSetCounts(h);
     for (i = 0; i < SLOTS.length; i++) {
       var itId = h.items[SLOTS[i]];
       if (!itId) continue;
@@ -1081,8 +1126,6 @@ var JOGO = (typeof window !== 'undefined')
       if (!it) continue;
       var mult = 1 + num(up.bonusPerLevel, 0.12) * Progress.itemLevel(itId);
       applyBonuses(out, it.bonuses, true, mult);
-      var sid = setIdOf(itId);
-      if (sid) setCount[sid] = (setCount[sid] || 0) + 1;
     }
 
     // ---- conjuntos: progressivo e cumulativo (4 peças valem 2+3+4) [D10]
@@ -1114,30 +1157,70 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // ============================================================ saque [D12]
-  Progress.rollDrops = function (dungeonId, roomIndex, partySize) {
-    if (!Progress.state) Progress.load();
+  // expoente da Sorte de Saque para uma raridade (o DADO manda) [D12]
+  function luckExponent(rarity) {
+    var LW = D().lootWeights;
+    if (isObj(LW) && isObj(LW.luckExponent)) return num(LW.luckExponent[rarity], 0);
+    return num(RARITY_DEGREE[rarity], 0);
+  }
+
+  /* Piscina de saque de um calabouço [D12].
+   * Preferência: os próprios itens de `DATA.items` daquele calabouço, com
+   * `dropWeight` e `minRoom` calibrados pelo Criativo — é essa escala que o
+   * peso de "nada" (`lootWeights.noDrop`) acompanha. Só na ausência deles cai
+   * na `dungeon.lootTable` da v2.1 (e aí, sem "nada", para não desequilibrar). */
+  function lootPool(dungeonId, roomIndex, luck) {
+    var room = num(roomIndex, 0);
+    var items = D().items || {};
+    var pool = [], usouItens = false, id, it, w;
+    for (id in items) {
+      if (!items.hasOwnProperty(id)) continue;
+      it = items[id];
+      if (!it || it.dungeonId !== dungeonId) continue;
+      if (num(it.dropWeight, 0) <= 0) continue;
+      usouItens = true;
+      if (room < num(it.minRoom, 0)) continue;          // épico/lendário: só no chefe
+      w = num(it.dropWeight, 0) * Math.pow(luck, luckExponent(it.rarity));
+      if (w > 0) pool.push({ id: id, w: w });
+    }
+    if (usouItens) return { pool: pool, itemBased: true };
+
     var dungeon = dungeonDef(dungeonId);
     var table = dungeon && dungeon.lootTable;
-    if (!isArray(table) || !table.length) return [];
-
-    var luck = luckFor(partySize);
-    var pool = [];
+    if (!isArray(table)) return { pool: [], itemBased: false };
     for (var i = 0; i < table.length; i++) {
       var entry = table[i];
       if (!isObj(entry)) continue;
-      if (num(roomIndex, 0) < num(entry.minRoom, 0)) continue;
-      var it = itemDef(entry.itemId);
-      var degree = it ? num(RARITY_DEGREE[it.rarity], 0) : 0;
-      var w = Math.max(0, num(entry.weight, 0)) * Math.pow(luck, degree);
+      it = itemDef(entry.itemId);
+      var minRoom = Math.max(num(entry.minRoom, 0), num(it && it.minRoom, 0));
+      if (room < minRoom) continue;
+      w = Math.max(0, num(entry.weight, 0)) * Math.pow(luck, luckExponent(it && it.rarity));
       if (w > 0) pool.push({ id: entry.itemId, w: w });
     }
+    return { pool: pool, itemBased: false };
+  }
+
+  Progress.rollDrops = function (dungeonId, roomIndex, partySize) {
+    if (!Progress.state) Progress.load();
+    var luck = luckFor(partySize);
+    var built = lootPool(dungeonId, roomIndex, luck);
+    var pool = built.pool;
     if (!pool.length) return [];
+
+    // PESO DE "NADA": entra no mesmo sorteio das peças e é o que faz o saque
+    // doer (~50% dos sorteios saem vazios). Não recebe a Sorte de Saque — é
+    // justamente por isso que grupo menor tira mais e melhor. [D12]
+    if (built.itemBased) {
+      var LW = D().lootWeights;
+      var nd = (isObj(LW) && isObj(LW.noDrop)) ? num(LW.noDrop[dungeonId], 0) : 0;
+      if (nd > 0) pool = pool.concat([{ id: NO_DROP, w: nd }]);
+    }
 
     var rolls = isBossRoom(dungeonId, roomIndex) ? 2 : 1;
     var drops = [];
     for (var r = 0; r < rolls; r++) {
       var chosen = pickWeighted(pool);
-      if (!chosen) continue;
+      if (!chosen || chosen === NO_DROP) continue;      // saiu "nada"
       drops.push(chosen);
       Progress.addItem(chosen);            // repetido vira pedras [D7]
     }

@@ -1324,6 +1324,37 @@ var JOGO = (typeof window !== 'undefined')
     return s;
   }
 
+  // ANIMAÇÃO DO RIG — pernas alternadas no andar, plantadas no golpe.
+  // `v.walkK` mistura o ciclo (0 parado, 1 andando); `v.walkPh` é a fase.
+  function animateRig(c, v, t) {
+    var L = c.__legL, R2 = c.__legR;
+    if (!L || !R2) return;
+    var gait = c.__gait || 'walk';
+    var k = v.walkK || 0;
+    var ph = v.walkPh || 0;
+    var amp = gait === 'walk' ? 0.42 : (gait === 'hop' ? 0.16 : 0.26);
+    var swing = Math.sin(ph) * amp * k;
+    var lift = Math.abs(Math.cos(ph)) * (gait === 'walk' ? 3.2 : 1.6) * k;
+
+    // gesto de ataque: a perna da frente planta e a de trás empurra
+    var a = v.atkK || 0;
+    var plant = a > 0 ? Math.sin(Math.min(1, a) * Math.PI) : 0;
+
+    if (c.__phLegs) {
+      // placeholder: as pernas são Graphics com pivô no quadril (position já lá)
+      L.rotation = swing + plant * 0.30;
+      R2.rotation = -swing - plant * 0.18;
+    } else {
+      L.rotation = swing + plant * 0.22;
+      R2.rotation = -swing - plant * 0.14;
+    }
+    // o passo levanta o pé de trás: um leve deslocamento vertical alternado
+    var base = c.__legBaseY;
+    if (base == null) { base = c.__legBaseY = L.position.y; }
+    L.position.y = base - Math.max(0, Math.sin(ph)) * lift;
+    R2.position.y = base - Math.max(0, -Math.sin(ph)) * lift;
+  }
+
   function updateUnitNode(u, v, st) {
     var c = unitNodes[u.uid];
     if (!c) { c = unitNodes[u.uid] = makeUnitNode(u); objectLayer.addChild(c); }
@@ -1343,12 +1374,7 @@ var JOGO = (typeof window !== 'undefined')
     // direção: a arte tem 4 poses isométricas; o placeholder espelha em X
     if (c.__art && v.dir != null && v.dir !== c.__artDir) {
       var ncv = unitArtCanvas(u, v.dir);
-      if (ncv) {
-        var ntex = P.Texture.from(ncv);
-        c.__sprite.texture = ntex;
-        c.__flash.texture = ntex;
-        c.__artDir = v.dir;
-      }
+      if (ncv) { applyRig(c, ncv); c.__artDir = v.dir; }
     }
     // idle: respiração + bob; morte: achata e afunda; invocação: pop
     var t = nowT * 1.7 + v.bob;
@@ -1360,17 +1386,35 @@ var JOGO = (typeof window !== 'undefined')
     if (v.popK < 1) { sx *= (0.45 + v.popK * 0.55); sy *= (1.55 - v.popK * 0.55); }
     if (v.deathK > 0) { sx *= (1 + v.deathK * 0.35); sy *= Math.max(0.04, 1 - v.deathK * 0.85); }
     if (v.lungeK > 0) { sy *= (1 - v.lungeK * 0.05); }
+
+    // ---- CICLO DE PERNAS + GESTO DE ATAQUE (o que o jogador olha) ----
+    animateRig(c, v, t);
+
     body.scale.set(sx, sy);
     body.position.y = Math.sin(t) * 2 - 2;
     body.rotation = Math.sin(t * 0.55) * 0.012 + (v.deathK > 0 ? v.deathK * 0.5 * v.face : 0);
     if (v.castK > 0) body.position.y -= v.castK * 7;
+    // inclinação do tronco no ataque: recua, projeta, volta
+    if (v.atkK) {
+      var lean = (v.atkK < 0.5 ? -v.atkK * 0.9 : (v.atkK - 0.5) * 1.6) * 0.26;
+      body.rotation += lean * (v.face || 1);
+      body.position.y -= Math.abs(v.atkK - 0.5) * 3;
+    }
+    if (v.hitK > 0) body.rotation -= v.hitK * 0.22 * (v.face || 1);
     if (v.lungeK > 0 && v.castTx != null) {
       var tp = iso(v.castTx, v.castTy, 0), me = iso(v.x, v.y, 0);
       var dx = tp.x - me.x, dy = tp.y - me.y, l = Math.hypot(dx, dy) || 1;
-      c.position.x += (dx / l) * v.lungeK * 22;
-      c.position.y += (dy / l) * v.lungeK * 22;
+      var reach = v.atkMelee ? 34 : 12;
+      c.position.x += (dx / l) * v.lungeK * reach;
+      c.position.y += (dy / l) * v.lungeK * reach;
     }
-    if (c.__flash) c.__flash.alpha = Math.min(1, v.flash);
+    var fa = Math.min(1, v.flash);
+    if (c.__flash) c.__flash.alpha = fa;
+    if (c.__torso) {
+      if (c.__torso.__fl) c.__torso.__fl.alpha = fa;
+      if (c.__legL && c.__legL.__fl) c.__legL.__fl.alpha = fa;
+      if (c.__legR && c.__legR.__fl) c.__legR.__fl.alpha = fa;
+    }
     if (c.__shadow) {
       // o contêiner já subiu z px; a sombra desce de volta para o chão
       c.__shadow.alpha = 0.5 * alpha * (1 - Math.min(0.7, (v.z || 0) / 50));
@@ -2022,6 +2066,19 @@ var JOGO = (typeof window !== 'undefined')
     } else { weather.qx = 0; weather.qy = 0; }
   }
 
+  // corpo a corpo? define se o conjurador AVANÇA até o alvo ou só arma o gesto
+  function isMelee(ev, u) {
+    var D = DATA();
+    var sp = (D.spells && D.spells[ev.spellId]) || ev.spell || null;
+    var fk = (sp && sp.fxKey) || ev.fxKey;
+    if (fk === 'melee' || fk === 'slam') return true;
+    if (fk === 'bolt' || fk === 'arrow' || fk === 'chain' || fk === 'beam' ||
+        fk === 'nova' || fk === 'heal' || fk === 'gust') return false;
+    if (sp && sp.range && sp.range.max != null) return sp.range.max <= 1;
+    if (u && ev.x != null) return (Math.abs(u.x - ev.x) + Math.abs(u.y - ev.y)) <= 1;
+    return false;
+  }
+
   // ---------- eventos do contrato ----------
   R.handleEvent = function (ev) {
     if (!ev) return;
@@ -2044,17 +2101,23 @@ var JOGO = (typeof window !== 'undefined')
         break;
 
       case 'cast':
-        animQ.push({ kind: 'cast', uid: ev.uid, tx: ev.x, ty: ev.y, t: 0, dur: 0.5, age: 0 });
         u = findUnit(ev.uid);
+        var melee = isMelee(ev, u);
+        // o golpe cai junto com o dano; à distância o gesto é curto e o
+        // projétil é que viaja (FX usa o mesmo hitDelay)
+        lastHitDelay = melee ? 0.26 : 0.50;
+        animQ.push({
+          kind: 'cast', uid: ev.uid, tx: ev.x, ty: ev.y, t: 0,
+          hit: lastHitDelay, dur: lastHitDelay + 0.34, melee: melee, age: 0
+        });
         lastAtk = { x: u ? u.x : ev.x, y: u ? u.y : ev.y, age: 0 };
-        lastHitDelay = (ev.fxKey === 'bolt' || ev.fxKey === 'arrow' || ev.fxKey === 'chain') ? 0.50 : 0.26;
         break;
 
       case 'damage':
         (function (uid) {
           delayed.push({ t: animQ.length ? lastHitDelay : 0, fn: function () {
             var vv = getVis(uid); if (!vv) return;
-            vv.flash = 1; vv.flashHold = 0.06;
+            vv.flash = 1; vv.flashHold = 0.06; vv.hitK = 1;
             if (lastAtk && lastAtk.age < 2) {
               var pa = iso(lastAtk.x, lastAtk.y, 0), pu = iso(vv.x, vv.y, 0);
               var dx = pu.x - pa.x, dy = pu.y - pa.y, l = Math.hypot(dx, dy) || 1;
@@ -2241,6 +2304,8 @@ var JOGO = (typeof window !== 'undefined')
       var v = vis[uid];
       if (v.flashHold > 0) v.flashHold -= dt; else v.flash = Math.max(0, v.flash - dt * 6);
       if (v.squash > 0) { v.squash += dt / 0.24; if (v.squash >= 1) v.squash = 0; }
+      if (v.walkK > 0) v.walkK = Math.max(0, v.walkK - dt * 7);   // pernas voltam ao repouso
+      if (v.hitK > 0) v.hitK = Math.max(0, v.hitK - dt * 4);      // recuo do golpe recebido
       v.knockX *= Math.pow(0.0002, dt); v.knockY *= Math.pow(0.0002, dt);
       if (v.deathK > 0 && v.deathK < 1) v.deathK = Math.min(1, v.deathK + dt / 0.55);
       if (v.popK < 1) v.popK = Math.min(1, v.popK + dt / 0.4);
@@ -2253,7 +2318,8 @@ var JOGO = (typeof window !== 'undefined')
       case 'move':
         v2 = getVis(a.uid);
         if (!v2) { done = true; break; }
-        a.k += dt * 9.5;
+        // 4,4 células/s: rápido como no Dofus, mas devagar o bastante para ver o passo
+        a.k += dt * 4.4;
         while (a.k >= 1 && a.seg < a.path.length) { a.k -= 1; a.seg++; }
         var from;
         if (a.seg === 0) {
@@ -2269,7 +2335,10 @@ var JOGO = (typeof window !== 'undefined')
           var to = a.path[a.seg];
           v2.x = from.x + (to.x - from.x) * a.k;
           v2.y = from.y + (to.y - from.y) * a.k;
-          v2.z = Math.abs(Math.sin(a.k * Math.PI)) * 10;     // quique célula a célula
+          // PASSO: uma passada completa (esquerda+direita) por célula
+          v2.walkK = 1;
+          v2.walkPh = (a.seg + a.k) * Math.PI * 2;
+          v2.z = Math.abs(Math.sin(v2.walkPh)) * 5;          // sobe a cada passo
           if (to.x !== from.x || to.y !== from.y) faceUnit(v2, from.x, from.y, to.x, to.y);
         }
         break;
@@ -2292,16 +2361,28 @@ var JOGO = (typeof window !== 'undefined')
         if (k2 >= 1) { v2.hideK = 0; done = true; }
         break;
       case 'cast':
+        // ANTECIPAÇÃO → GOLPE (no instante do dano) → RETORNO
         v2 = getVis(a.uid);
         a.t += dt;
         var ck = Math.min(a.t / a.dur, 1);
         if (v2) {
-          v2.castK = 1 - ck;
-          v2.lungeK = ck > 0.52 ? Math.sin(Math.min((ck - 0.52) / 0.48, 1) * Math.PI) : 0;
+          var sAt = clamp(a.hit / a.dur, 0.15, 0.85);      // fração onde o golpe cai
+          var atk, lun, cst, w;
+          if (ck < sAt) {
+            w = ck / sAt;
+            atk = 0.5 * w; cst = w; lun = 0;
+          } else {
+            w = (ck - sAt) / (1 - sAt);
+            atk = w < 0.25 ? (0.5 + 0.5 * (w / 0.25)) : Math.max(0, 1 - (w - 0.25) / 0.75);
+            cst = Math.max(0, 1 - w / 0.3);
+            lun = w < 0.25 ? (w / 0.25) : Math.max(0, 1 - (w - 0.25) / 0.5);
+          }
+          v2.atkK = atk; v2.castK = cst; v2.lungeK = lun;
+          v2.atkMelee = a.melee ? 1 : 0;
           v2.castTx = a.tx; v2.castTy = a.ty;
           if (a.tx != null) faceUnit(v2, v2.x, v2.y, a.tx, a.ty);
         }
-        if (ck >= 1) { if (v2) { v2.castK = 0; v2.lungeK = 0; } done = true; }
+        if (ck >= 1) { if (v2) { v2.castK = 0; v2.lungeK = 0; v2.atkK = 0; } done = true; }
         break;
       case 'fusion':
         a.t += dt;

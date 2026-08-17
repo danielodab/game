@@ -686,6 +686,31 @@ JOGO.DATA = {
         if (e) Game.hoverTile = { x: e.x, y: e.y };
       }
     },
+    // --- ações desenhadas para as TIRAS de quadros (?strip=) ---
+    'bt-walk2': function () {                     // andar 2 células
+      var a = heroes()[0]; if (!a) return;
+      var path = [{ x: a.x + 1, y: a.y }, { x: a.x + 2, y: a.y }];
+      Engine.emit({ type: 'move', uid: a.uid, path: path });
+      window.__stripA = { x: a.x, y: a.y };
+      a.x = path[1].x; a.y = path[1].y;
+      window.__stripB = { x: a.x, y: a.y };
+    },
+    'bt-melee': function () {                     // golpe corpo a corpo
+      var a = heroes()[0], e = enemies()[0];
+      if (!a || !e) return;
+      a.x = e.x - 1; a.y = e.y;                   // encosta no alvo
+      window.__stripA = { x: a.x, y: a.y };
+      window.__stripB = { x: e.x, y: e.y };
+      JOGO.__castAt(a, 'aparo', e.x, e.y);
+    },
+    'bt-ranged': function () {                    // feitiço à distância
+      var a = heroes()[1] || heroes()[0], e = enemies()[0];
+      if (!a || !e) return;
+      a.x = e.x - 5; a.y = e.y;
+      window.__stripA = { x: a.x, y: a.y };
+      window.__stripB = { x: e.x, y: e.y };
+      JOGO.__castAt(a, 'brasa', e.x, e.y);
+    },
     'bt-reset': function () { boot(); }
   };
   ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (el) {
@@ -818,6 +843,53 @@ JOGO.DATA = {
         }
       }, parseInt(qs.snapdelay || '260', 10));
     }
+    // ---- TIRA DE QUADROS: uma ação, N recortes em sequência, tudo numa
+    //      única captura (o headless não filma; então a página monta o filme).
+    //      ?strip=bt-walk2&shots=8&step=4&crop=300,320&zoom=1.1&cols=4
+    if (qs.strip) {
+      setTimeout(function () { runStrip(); }, parseInt(qs.snapdelay || '260', 10));
+    }
+    function runStrip() {
+      var shots = parseInt(qs.shots || '8', 10);
+      var step = parseInt(qs.step || '4', 10);
+      var cr = (qs.crop || '300,320').split(',');
+      var cw = parseInt(cr[0], 10), ch = parseInt(cr[1], 10);
+      var cols = parseInt(qs.cols || '4', 10);
+      var cv = document.getElementById('game-canvas');
+      var R = JOGO.Renderer;
+      var box = document.createElement('div');
+      box.style.cssText = 'position:fixed;inset:0;z-index:30;background:#0b0e12;' +
+        'display:grid;grid-template-columns:repeat(' + cols + ',1fr);gap:3px;padding:3px;' +
+        'align-content:start';
+      document.body.appendChild(box);
+      pump();
+      if (acts[qs.strip]) { acts[qs.strip](); pump(); }
+      var A = window.__stripA || { x: 4, y: 4 }, B = window.__stripB || A;
+      var fx = (A.x + B.x) / 2, fy = (A.y + B.y) / 2;
+      var i, f;
+      for (i = 0; i < shots; i++) {
+        for (f = 0; f < step; f++) { R.render(0.016); pump(); }
+        box.appendChild(stripTile(cv, R, fx, fy, cw, ch, i, i * step * 16));
+      }
+      var stx = document.getElementById('test-status');
+      if (stx) stx.textContent += ' | tira ' + qs.strip + ' ' + shots + '×' + step + 'f';
+    }
+    function stripTile(cv, R, gx, gy, cw, ch, idx, ms) {
+      var p = R.project(gx, gy, 40);
+      var k = cv.width / cv.clientWidth;            // backing store por px de CSS
+      var out = document.createElement('canvas');
+      out.width = cw; out.height = ch;
+      var c2 = out.getContext('2d');
+      c2.fillStyle = '#0b0e12'; c2.fillRect(0, 0, cw, ch);
+      c2.drawImage(cv, p.x * k - cw / 2, p.y * k - ch * 0.62, cw, ch, 0, 0, cw, ch);
+      c2.fillStyle = 'rgba(8,10,14,.78)'; c2.fillRect(0, 0, 74, 20);
+      c2.fillStyle = '#ffd98a';
+      c2.font = 'bold 13px Verdana, sans-serif';
+      c2.fillText('#' + (idx + 1) + '  ' + ms + 'ms', 5, 14);
+      out.style.cssText = 'width:100%;display:block;image-rendering:auto';
+      return out;
+    }
+
     if (qs.perf) {
       setTimeout(function () {
         var r = JOGO.Renderer.perfProbe(parseInt(qs.perf, 10) || 120);

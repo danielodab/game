@@ -929,69 +929,105 @@ var JOGO = (typeof window !== 'undefined')
     flat(ctx, Pel(x + rx * look, y + ry * 0.08, rx * 0.44, ry * 0.56), col || '#2a2028');
     flat(ctx, Pel(x + rx * look - rx * 0.16, y - ry * 0.34, rx * 0.24, ry * 0.26), 'rgba(255,255,255,0.95)');
   }
-  // Rosto: traços GRANDES e poucos. Tudo aqui foi calibrado para continuar
-  // legível quando o herói ocupa ~90 px de altura na tela do celular.
+  // ------------------------------------------------------------------ ROSTO
+  // O rosto é o que faz o jogador GOSTAR do personagem, então é grande e
+  // legível: olhos ~1/4 da cabeça, sobrancelha marcando a emoção e boca clara.
+  // Cada classe recebe uma FICHA de expressão (EXPR) em vez de um estilo fixo.
   var INK = '#2b2028';
+  var EXPR = {
+    // eye: raio relativo · brow: [inclinação, altura] · mouth: forma · look: direção da pupila
+    grim:  { eyeR: 0.20, eyeH: 0.20, brow: [0.42, -0.44], browW: 1.9, mouth: 'grit',  iris: '#7a4a22' },
+    sharp: { eyeR: 0.20, eyeH: 0.22, brow: [0.22, -0.48], browW: 1.6, mouth: 'calm',  iris: '#4a8a52' },
+    glow:  { eyeR: 0, eyeH: 0, brow: [0, 0], mouth: 'sly', glowEyes: true },
+    grin:  { eyeR: 0.19, eyeH: 0.17, brow: [-0.2, -0.5], browW: 1.6, mouth: 'mask',   iris: '#4a7ab0' },
+    cute:  { eyeR: 0.26, eyeH: 0.30, brow: [-0.16, -0.62], browW: 1.3, mouth: 'smile', iris: '#8a5aa8', blush: true },
+    odd:   { eyeR: 0.22, eyeH: 0.24, brow: [-0.34, -0.5], browW: 1.5, mouth: 'open',  iris: '#3aa89a' }
+  };
+  function mouthShape(ctx, kind, cx, cy, r, p) {
+    var col = '#7a3a38';
+    if (kind === 'smile') {
+      stroke(ctx, [cx - r * 0.3, cy + r * 0.36, cx + r * 0.02, cy + r * 0.58, cx + r * 0.34, cy + r * 0.34], col, W_IN * 1.9, true);
+    } else if (kind === 'grit') {
+      // boca de esforço: retângulo com dentes — o Sumô concentrado
+      part(ctx, tag(function (g) {
+        g.beginPath();
+        g.moveTo(cx - r * 0.42, cy + r * 0.42);
+        g.quadraticCurveTo(cx, cy + r * 0.3, cx + r * 0.42, cy + r * 0.42);
+        g.quadraticCurveTo(cx, cy + r * 0.72, cx - r * 0.42, cy + r * 0.42);
+        g.closePath();
+      }, cx, cy + r * 0.5, r * 0.42), '#5e2a2c', { k: 0.14, lw: W_IN * 1.4, line: '#3a1a1c' });
+      stroke(ctx, [cx - r * 0.3, cy + r * 0.44, cx + r * 0.3, cy + r * 0.44], '#f4ecd8', W_IN * 1.2);
+    } else if (kind === 'open') {
+      part(ctx, Pel(cx + r * 0.06, cy + r * 0.48, r * 0.2, r * 0.16), '#5e2a2c', { k: 0.12, lw: W_IN * 1.2 });
+    } else if (kind === 'sly') {
+      stroke(ctx, [cx - r * 0.26, cy + r * 0.5, cx + r * 0.1, cy + r * 0.42, cx + r * 0.34, cy + r * 0.54], col, W_IN * 1.6, true);
+    } else if (kind === 'mask') {
+      /* coberta pela meia-máscara */
+    } else {
+      stroke(ctx, [cx - r * 0.1, cy + r * 0.46, cx + r * 0.32, cy + r * 0.4], col, W_IN * 1.6);
+    }
+  }
   function drawFace(ctx, An, cfg, style) {
     if (cfg.back) return;
     var h = An.head, r = h[2], p = cfg.pal;
-    var cx = h[0] + r * 0.16, cy = h[1] + r * 0.14;   // rosto puxado p/ o lado da câmera
-    var ex = r * 0.4, ey = cy;                        // afastamento dos olhos
+    var e = EXPR[style] || EXPR.sharp;
+    var mood = cfg.mood || null;          // a pose pode trocar a emoção
+    var cx = h[0] + r * 0.14, cy = h[1] + r * 0.16;
+    var ex = r * 0.38;
+    var browTilt = e.brow ? e.brow[0] : 0;
+    var browY = e.brow ? e.brow[1] : -0.45;
+    var mouth = e.mouth;
+    if (mood === 'grito') { browTilt += 0.3; mouth = 'open'; }
+    else if (mood === 'dor') { browTilt -= 0.42; mouth = 'open'; }
+    else if (mood === 'morto') { mouth = 'calm'; }
+
     if (style === 'mask') return;
 
-    if (style === 'glow') {
-      // sombra da aba do chapéu cobrindo os olhos + dois pontos acesos
+    // --- olhos acesos sob a aba do chapéu (bruxo)
+    if (e.glowEyes) {
       ctx.save();
       Pel(h[0], h[1], r * 1.02, r * 1.06)(ctx); ctx.clip();
-      flat(ctx, Prr(h[0], h[1] - r * 0.24, r * 2.4, r * 1.5, 0), 'rgba(26,16,32,0.82)');
+      flat(ctx, Prr(h[0], h[1] - r * 0.16, r * 2.6, r * 1.6, 0), 'rgba(22,12,28,0.88)');
       ctx.restore();
-      glow(ctx, cx - ex, ey - r * 0.1, r * 0.66, p.accent, 0.7);
-      glow(ctx, cx + ex, ey - r * 0.14, r * 0.62, p.accent, 0.7);
-      part(ctx, Pel(cx - ex, ey - r * 0.1, r * 0.21, r * 0.11, -0.22), sh(p.accent, 0.55),
-           { flat: true, lw: 0.7, line: p.accent });
-      part(ctx, Pel(cx + ex, ey - r * 0.14, r * 0.2, r * 0.1, -0.22), sh(p.accent, 0.55),
-           { flat: true, lw: 0.7, line: p.accent });
-      stroke(ctx, [cx - r * 0.28, cy + r * 0.46, cx + r * 0.06, cy + r * 0.52, cx + r * 0.34, cy + r * 0.42], INK, 1.1, true);
+      glow(ctx, cx - ex, cy - r * 0.06, r * 0.8, p.accent, 0.85);
+      glow(ctx, cx + ex, cy - r * 0.1, r * 0.76, p.accent, 0.85);
+      part(ctx, Pel(cx - ex, cy - r * 0.06, r * 0.26, r * 0.14, -0.22), sh(p.accent, 0.6),
+           { flat: true, lw: W_IN * 1.2, line: p.accent });
+      part(ctx, Pel(cx + ex, cy - r * 0.1, r * 0.25, r * 0.13, -0.22), sh(p.accent, 0.6),
+           { flat: true, lw: W_IN * 1.2, line: p.accent });
+      mouthShape(ctx, mouth, cx, cy, r, p);
       return;
     }
-    if (style === 'cute') {
-      eye(ctx, cx - ex, ey + r * 0.02, r * 0.22, r * 0.27, '#3a2430', 0.32);
-      eye(ctx, cx + ex, ey - r * 0.02, r * 0.22, r * 0.27, '#3a2430', 0.32);
-      flat(ctx, Pel(cx - ex * 1.7, cy + r * 0.32, r * 0.17, r * 0.11), rgba('#ff8fa8', 0.6));
-      flat(ctx, Pel(cx + ex * 1.7, cy + r * 0.3, r * 0.17, r * 0.11), rgba('#ff8fa8', 0.6));
-      stroke(ctx, [cx - r * 0.18, cy + r * 0.42, cx + r * 0.02, cy + r * 0.56, cx + r * 0.22, cy + r * 0.4], '#8a4a48', 1.1, true);
-      return;
-    }
-    if (style === 'grim') {
-      eye(ctx, cx - ex, ey + r * 0.04, r * 0.16, r * 0.15, INK, 0.28);
-      eye(ctx, cx + ex, ey + r * 0.02, r * 0.16, r * 0.15, INK, 0.28);
-      stroke(ctx, [cx - ex * 1.5, cy - r * 0.34, cx - ex * 0.4, cy - r * 0.14], INK, 1.5);
-      stroke(ctx, [cx + ex * 1.5, cy - r * 0.36, cx + ex * 0.4, cy - r * 0.16], INK, 1.5);
-      stroke(ctx, [cx - r * 0.34, cy + r * 0.5, cx + r * 0.04, cy + r * 0.44, cx + r * 0.38, cy + r * 0.5], '#8a4a42', 1.4, true);
-      return;
-    }
+
+    // --- meia-máscara do assassino (fica ATRÁS dos olhos)
     if (style === 'grin') {
-      // meia-máscara cobrindo o queixo (assassino)
       part(ctx, tag(function (g) {
         g.beginPath();
-        g.moveTo(cx - r * 0.86, cy + r * 0.16);
-        g.quadraticCurveTo(cx, cy + r * 0.1, cx + r * 0.86, cy + r * 0.1);
-        g.quadraticCurveTo(cx + r * 0.54, cy + r * 0.9, cx - r * 0.08, cy + r * 0.88);
-        g.quadraticCurveTo(cx - r * 0.72, cy + r * 0.7, cx - r * 0.86, cy + r * 0.16);
+        g.moveTo(cx - r * 0.9, cy + r * 0.1);
+        g.quadraticCurveTo(cx, cy + r * 0.02, cx + r * 0.9, cy + r * 0.04);
+        g.quadraticCurveTo(cx + r * 0.6, cy + r * 0.92, cx - r * 0.06, cy + r * 0.9);
+        g.quadraticCurveTo(cx - r * 0.76, cy + r * 0.72, cx - r * 0.9, cy + r * 0.1);
         g.closePath();
-      }, cx, cy + r * 0.45, r * 0.85), mx(p.cloth, p.dark, 0.45), { k: 0.22, lw: 0.85 });
-      eye(ctx, cx - ex, ey - r * 0.16, r * 0.18, r * 0.13, INK, 0.28);
-      eye(ctx, cx + ex, ey - r * 0.2, r * 0.18, r * 0.13, INK, 0.28);
-      stroke(ctx, [cx - ex * 1.5, cy - r * 0.5, cx - ex * 0.42, cy - r * 0.38], INK, 1.3);
-      stroke(ctx, [cx + ex * 1.5, cy - r * 0.54, cx + ex * 0.42, cy - r * 0.42], INK, 1.3);
-      return;
+      }, cx, cy + r * 0.45, r * 0.9), mx(p.cloth, p.dark, 0.5), { k: 0.28, hi: 0.12, lw: W_MID });
     }
-    // 'sharp' — padrão (elfo/atento)
-    eye(ctx, cx - ex, ey - r * 0.02, r * 0.2, r * 0.19, '#2f2430', 0.3);
-    eye(ctx, cx + ex, ey - r * 0.06, r * 0.2, r * 0.19, '#2f2430', 0.3);
-    stroke(ctx, [cx - ex * 1.5, cy - r * 0.42, cx - ex * 0.34, cy - r * 0.32], '#4a3038', 1.2);
-    stroke(ctx, [cx + ex * 1.5, cy - r * 0.46, cx + ex * 0.34, cy - r * 0.36], '#4a3038', 1.2);
-    stroke(ctx, [cx - r * 0.06, cy + r * 0.46, cx + r * 0.3, cy + r * 0.4], '#8a4a42', 1.2);
+
+    var eyY = cy - r * 0.04;
+    eye(ctx, cx - ex, eyY + r * 0.02, r * e.eyeR, r * e.eyeH, INK, 0.24, e.iris);
+    eye(ctx, cx + ex, eyY - r * 0.02, r * e.eyeR, r * e.eyeH, INK, 0.24, e.iris);
+
+    // sobrancelhas — o traço que carrega a emoção
+    var bw = (e.browW || 1.6) * r * 0.24;
+    var by = cy + r * browY;
+    stroke(ctx, [cx - ex - bw * 0.5, by - browTilt * r * 0.5,
+                 cx - ex + bw * 0.5, by + browTilt * r * 0.34], INK, W_IN * 2.4);
+    stroke(ctx, [cx + ex - bw * 0.5, by + browTilt * r * 0.34,
+                 cx + ex + bw * 0.5, by - browTilt * r * 0.5], INK, W_IN * 2.4);
+
+    if (e.blush) {
+      flat(ctx, Pel(cx - ex * 1.72, cy + r * 0.3, r * 0.19, r * 0.12), rgba('#ff8fa8', 0.62));
+      flat(ctx, Pel(cx + ex * 1.72, cy + r * 0.28, r * 0.19, r * 0.12), rgba('#ff8fa8', 0.62));
+    }
+    if (style !== 'grin' || mood) mouthShape(ctx, mouth, cx, cy, r, p);
   }
   // nuca (vista de costas): massa de cabelo + gola
   function drawNape(ctx, An, cfg) {
@@ -1025,42 +1061,119 @@ var JOGO = (typeof window !== 'undefined')
   // Cada plano devolve ÂNCORAS; o resto (acessórios, elemento, fusão) se apoia
   // nelas, o que permite montar qualquer combinação sem redesenhar nada.
   // ==========================================================================
+  // RIG — esqueleto paramétrico de 3 CABEÇAS.
+  // Todas as medidas saem de `h` (altura total, pés em y = 0) e do raio da
+  // cabeça (`h/6` ⇒ 3 cabeças). Mãos e pés vêm do raio da CABEÇA, não do braço:
+  // é o que os deixa grandes como em desenho animado.
+  // `o.attitude` desalinha ombros/quadril e joga o peso numa perna — nenhum
+  // herói fica em pose de manequim.
+  // ==========================================================================
+  function rig(cfg, o) {
+    var p = cfg.pal;
+    var H = o.h;
+    var hr = H * (o.headR || 0.168);            // ~3 cabeças
+    var An = { h: H, headR: hr, wide: o.wide };
+    An.skin = mx(p.skin, p.el.c, p.elId === 'neutro' ? 0 : (o.elSkin == null ? 0.1 : o.elSkin));
+
+    var lean = o.lean || 0;                     // inclinação do tronco (atitude)
+    var hx = (o.hx || 0) + lean * H * 0.06;
+    var hy = -(H - hr * 1.02);
+    An.head = [hx, hy, hr];
+    An.neck = [hx * 0.7, hy + hr * 0.92];
+    An.hipY = -H * (o.hip || 0.34);
+    An.hipC = [lean * H * 0.02, An.hipY - H * 0.02];
+    An.chest = [hx * 0.4, (An.neck[1] + An.hipY) * 0.5];
+    An.backC = [An.chest[0] - o.wide * 0.14, An.chest[1]];
+
+    // ombros: o de trás sobe um pouco (atitude), o da frente cai
+    var shY = An.neck[1] + hr * 0.28;
+    var tilt = (o.shTilt == null ? 0.12 : o.shTilt) * hr;
+    An.shN = [o.wide * 0.95 + hx * 0.3, shY - tilt];
+    An.shF = [-o.wide * 0.95 + hx * 0.3, shY + tilt];
+
+    var aL = H * (o.armLen || 0.30);            // braço curto e grosso
+    var aR = hr * (o.armR || 0.30);
+    var handR = hr * (o.handR || 0.46);         // MÃO GRANDE
+    An.armN = { sh: An.shN.slice(), r0: aR, r1: aR * 0.84, hr: handR,
+                el: [An.shN[0] + o.wide * 0.42, An.shN[1] + aL * 0.5],
+                hd: [An.shN[0] + o.wide * 0.28, An.shN[1] + aL] };
+    An.armF = { sh: An.shF.slice(), r0: aR * 0.94, r1: aR * 0.8, hr: handR * 0.94,
+                el: [An.shF[0] - o.wide * 0.4, An.shF[1] + aL * 0.5],
+                hd: [An.shF[0] - o.wide * 0.24, An.shF[1] + aL * 0.98] };
+
+    if (o.legs === false) { An.legN = null; An.legF = null; }
+    else {
+      var stance = o.stance == null ? 0.5 : o.stance;   // abertura das pernas
+      var lR = hr * (o.legR || 0.42);
+      var fw = hr * (o.footW || 1.15), fh = hr * (o.footH || 0.4);
+      var weight = o.weight == null ? 1 : o.weight;     // peso na perna de trás
+      An.legN = { hip: [o.wide * stance, An.hipY], r0: lR, r1: lR * 0.8,
+                  knee: [o.wide * (stance + 0.18), An.hipY * 0.46],
+                  ank: [o.wide * (stance + 0.12), -H * 0.045],
+                  foot: [o.wide * (stance + 0.2), -H * 0.006, fw, fh], footDir: 1 };
+      An.legF = { hip: [-o.wide * stance * 0.86, An.hipY], r0: lR * 0.94, r1: lR * 0.76,
+                  knee: [-o.wide * (stance + 0.22) * weight, An.hipY * 0.5],
+                  ank: [-o.wide * (stance + 0.3) * weight, -H * 0.05],
+                  foot: [-o.wide * (stance + 0.36) * weight, -H * 0.008, fw * 0.94, fh * 0.94], footDir: -1 };
+    }
+    An.handN = An.armN.hd; An.handF = An.armF.hd;
+    An.armCol = An.skin; An.legCol = An.skin; An.handCol = An.skin;
+    An.footCol = mx(p.dark, An.skin, 0.3);
+    return An;
+  }
+
+  // ==========================================================================
   var PLANS = {};
 
   // ------------------------------------------------------------------- SUMÔ
+  // ATITUDE: pés plantados largos, peso atrás, tronco enorme jogado à frente,
+  // um punho fechado erguido na altura do peito. Já se lê "tanque" na silhueta.
   PLANS.sumo = {
     face: 'grim',
     anchors: function (cfg) {
-      var p = cfg.pal;
-      var An = { h: 104, wide: 30, skin: mx(p.skin, p.el.c, p.elId === 'neutro' ? 0 : 0.1) };
-      An.head = [3, -88, 14.5]; An.neck = [2, -76]; An.chest = [0, -64];
-      An.hipY = -34; An.hipC = [0, -38]; An.backC = [-3, -60];
-      An.shN = [24, -70]; An.shF = [-22, -70];
-      An.armN = { sh: [23, -70], el: [37, -58], hd: [31, -42], r0: 7.6, r1: 6.2, hr: 7.8 };
-      An.armF = { sh: [-21, -70], el: [-35, -60], hd: [-30, -46], r0: 7.2, r1: 5.9, hr: 7.2 };
-      An.legN = { hip: [14, -34], knee: [22, -17], ank: [18, -5], r0: 9.6, r1: 7.4, foot: [19, -1, 15, 5] };
-      An.legF = { hip: [-14, -34], knee: [-23, -18], ank: [-20, -6], r0: 9.2, r1: 7.1, foot: [-21, -2, 14, 4.6] };
-      An.armCol = An.skin; An.legCol = An.skin; An.handCol = An.skin;
-      An.footCol = mx(p.dark, An.skin, 0.25);
-      An.handN = An.armN.hd; An.handF = An.armF.hd;
+      var An = rig(cfg, { h: 106, wide: 30, headR: 0.172, hip: 0.30, armLen: 0.26,
+                          armR: 0.42, handR: 0.52, legR: 0.62, footW: 1.35, footH: 0.44,
+                          stance: 0.72, weight: 1.06, shTilt: 0.2, lean: 0.1, elSkin: 0.12 });
+      // punho da frente erguido (guarda de lutador)
+      An.armF.el = [An.shF[0] - An.wide * 0.5, An.shF[1] + An.h * 0.1];
+      An.armF.hd = [An.shF[0] - An.wide * 0.16, An.shF[1] + An.h * 0.13];
+      An.handF = An.armF.hd;
+      // braço de trás caído, aberto para fora
+      An.armN.el = [An.shN[0] + An.wide * 0.5, An.shN[1] + An.h * 0.14];
+      An.armN.hd = [An.shN[0] + An.wide * 0.46, An.shN[1] + An.h * 0.27];
+      An.handN = An.armN.hd;
       return An;
     },
     torso: function (ctx, An, cfg) {
-      var s = An.skin;
-      part(ctx, Pblob([-30, -50, -27, -70, -14, -80, 0, -82, 15, -80, 27, -70,
-                       30, -50, 25, -32, 0, -27, -25, -32]), s, { k: 0.22, hi: 0.14, rot: LIGHT });
-      // barriga e peitoral: duas linhas soltas dão o volume sem sujar
-      stroke(ctx, [-19, -63, 0, -58, 20, -63], sh(s, -0.3), 0.9, true);
-      stroke(ctx, [-12, -44, 0, -40, 12, -45], sh(s, -0.26), 0.8, true);
-      part(ctx, Pel(-3, -44, 2.6, 2.0), sh(s, -0.3), { flat: true, lw: 0.6, line: sh(s, -0.34) });
+      var s = An.skin, W = An.wide, hipY = An.hipY, chY = An.neck[1] + 4;
+      // barrigão em pera: largo embaixo, ombros altos e redondos
+      part(ctx, Pblob([-W * 1.0, hipY - 4, -W * 0.98, chY + 12, -W * 0.62, chY - 6,
+                       0, chY - 11, W * 0.62, chY - 6, W * 1.0, chY + 12,
+                       W * 1.06, hipY - 2, W * 0.72, hipY + 10, 0, hipY + 14, -W * 0.74, hipY + 10]),
+           s, { k: 0.32, hi: 0.2, lw: W_OUT, rot: LIGHT });
+      // três tons chapados: dobra do peitoral e da barriga em sombra dura
+      part(ctx, tag(function (g) {
+        g.beginPath();
+        g.moveTo(-W * 0.82, chY + 16);
+        g.quadraticCurveTo(0, chY + 30, W * 0.82, chY + 16);
+        g.quadraticCurveTo(0, chY + 6, -W * 0.82, chY + 16);
+        g.closePath();
+      }, 0, chY + 18, W * 0.8), sh(s, -0.2), { flat: true, noline: true });
+      stroke(ctx, [-W * 0.6, chY + 14, 0, chY + 24, W * 0.6, chY + 14], sh(s, -0.42), W_IN * 1.8, true);
+      stroke(ctx, [-W * 0.42, hipY - 12, 0, hipY - 6, W * 0.42, hipY - 13], sh(s, -0.34), W_IN * 1.5, true);
+      part(ctx, Pel(-2, hipY - 8, An.headR * 0.16, An.headR * 0.12), sh(s, -0.4), { flat: true, noline: true });
     },
     head: function (ctx, An, cfg) {
-      var h = An.head, r = h[2];
-      // bochechas de lutador
-      part(ctx, Pel(h[0], h[1] + r * 0.12, r * 1.06, r * 0.98), An.skin, { k: 0.2, hi: 0.16 });
-      part(ctx, Pel(h[0] - r * 0.78, h[1] + r * 0.34, r * 0.34, r * 0.28), sh(An.skin, -0.06), { k: 0.16, lw: 0.7 });
-      part(ctx, Pel(h[0] + r * 0.82, h[1] + r * 0.3, r * 0.34, r * 0.28), sh(An.skin, -0.06), { k: 0.16, lw: 0.7 });
-      if (cfg.acc.ears) elfEars(ctx, An, cfg);
+      var h = An.head, r = h[2], s = An.skin;
+      // cabeça larga de lutador, com mandíbula e bochechas
+      part(ctx, Pblob([h[0] - r * 1.02, h[1] - r * 0.2, h[0] - r * 0.8, h[1] - r * 0.92,
+                       h[0], h[1] - r * 1.1, h[0] + r * 0.8, h[1] - r * 0.9,
+                       h[0] + r * 1.04, h[1] - r * 0.18, h[0] + r * 0.92, h[1] + r * 0.66,
+                       h[0], h[1] + r * 1.02, h[0] - r * 0.9, h[1] + r * 0.64]),
+           s, { k: 0.28, hi: 0.22, lw: W_OUT });
+      // orelhas grandes
+      part(ctx, Pel(h[0] - r * 0.98, h[1] + r * 0.16, r * 0.26, r * 0.34), sh(s, -0.06), { k: 0.2, lw: W_MID });
+      part(ctx, Pel(h[0] + r * 1.0, h[1] + r * 0.12, r * 0.26, r * 0.34), s, { k: 0.2, lw: W_MID });
       if (cfg.back) drawNape(ctx, An, cfg);
     }
   };
@@ -1315,10 +1428,275 @@ var JOGO = (typeof window !== 'undefined')
     if (cfg.acc.stow) drawStowed(ctx, An, cfg, cfg.acc.stow);
   }
 
+  // ==========================================================================
+  // POSE E ANIMAÇÃO — o esqueleto se move de verdade
+  //
+  // Entrega escolhida: QUADROS ASSADOS E CACHEADOS (`opts.pose`), não peças
+  // soltas. O Renderer pede `Art.unit(defId, {pose:{fase, frame}})` ou
+  // `Art.unitFrames(defId, opts, fase)` e monta um AnimatedSprite — uma textura
+  // por quadro, cacheada, sem custo de montagem por frame no celular.
+  //
+  // O movimento é CINEMÁTICO, não um desenho novo por quadro: cada quadro
+  // recalcula os ângulos das juntas (coxa/canela, ombro/cotovelo) e reposiciona
+  // as âncoras. Por isso a perna anda de verdade e a arma acompanha a mão.
+  // Poucos quadros e leitura clara, como no Dofus 1.29.
+  // ==========================================================================
+  var POSE = {
+    idle:     { frames: 8, loop: true,  fps: 6,  name: 'Parado' },
+    andar:    { frames: 8, loop: true,  fps: 11, name: 'Andar' },
+    atacar:   { frames: 8, loop: false, fps: 14, name: 'Atacar' },
+    conjurar: { frames: 8, loop: false, fps: 12, name: 'Conjurar' },
+    dano:     { frames: 5, loop: false, fps: 14, name: 'Levar dano' },
+    morte:    { frames: 7, loop: false, fps: 8,  name: 'Morrer' }
+  };
+  A.poseInfo = function () {
+    var o = {}, k;
+    for (k in POSE) o[k] = { frames: POSE[k].frames, loop: POSE[k].loop, fps: POSE[k].fps, name: POSE[k].name };
+    return o;
+  };
+  A.poseNames = function () { var o = [], k; for (k in POSE) o.push(k); return o; };
+
+  function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+  function segAng(a, b) { return Math.atan2(b[0] - a[0], b[1] - a[1]); }   // 0 = para baixo
+  function segLen(a, b) { var dx = b[0] - a[0], dy = b[1] - a[1]; return Math.sqrt(dx * dx + dy * dy); }
+  // gira a junta 1 em d0 e a junta 2 em d0+d1 (cadeia), preservando comprimentos
+  function bend(L, k0, k1, k2, d0, d1) {
+    if (!L) return;
+    var a = L[k0], b = L[k1], c = L[k2];
+    var l1 = segLen(a, b), l2 = segLen(b, c);
+    var a1 = segAng(a, b) + d0;
+    var nb = [a[0] + Math.sin(a1) * l1, a[1] + Math.cos(a1) * l1];
+    var a2 = segAng(b, c) + d0 + d1;
+    var nc = [nb[0] + Math.sin(a2) * l2, nb[1] + Math.cos(a2) * l2];
+    if (L.foot) L.foot = [L.foot[0] + (nc[0] - c[0]), L.foot[1] + (nc[1] - c[1]), L.foot[2], L.foot[3]];
+    L[k1] = nb; L[k2] = nc;
+  }
+  function moveJoint(L, k, dx, dy) { if (L && L[k]) L[k] = [L[k][0] + dx, L[k][1] + dy]; }
+
+  // gesto de ataque por classe — cada uma golpeia do seu jeito
+  var ATTACK = {
+    // Sumô: o BOTE. Recolhe o corpo todo e despeja o ombro para a frente.
+    sumo: function (k, R) {
+      if (k < 0.34) {                                   // antecipação: agacha e recua
+        var a = k / 0.34;
+        R.lean = -0.16 * a; R.sway = -6 * a; R.squash = 1 - 0.09 * a;
+        R.legN = [-0.24 * a, 0.5 * a]; R.legF = [0.2 * a, 0.42 * a];
+        R.armN = [-0.6 * a, -0.5 * a]; R.armF = [-0.5 * a, -0.7 * a];
+      } else if (k < 0.56) {                            // golpe: o corpo inteiro vai junto
+        var b = (k - 0.34) / 0.22;
+        R.lean = -0.16 + 0.62 * b; R.sway = -6 + 22 * b; R.squash = 0.91 + 0.14 * b;
+        R.legN = [-0.24 + 0.9 * b, 0.5 - 0.46 * b]; R.legF = [0.2 - 0.8 * b, 0.42 - 0.3 * b];
+        R.armN = [-0.6 + 2.1 * b, -0.5 + 0.5 * b]; R.armF = [-0.5 + 1.5 * b, -0.7 + 0.7 * b];
+        R.mood = 'grito';
+      } else {                                          // retorno
+        var c = (k - 0.56) / 0.44;
+        R.lean = 0.46 * (1 - c); R.sway = 16 * (1 - c); R.squash = 1.05 - 0.05 * c;
+        R.legN = [0.66 * (1 - c), 0.04]; R.legF = [-0.6 * (1 - c), 0.12];
+        R.armN = [1.5 * (1 - c), 0]; R.armF = [1.0 * (1 - c), 0];
+        if (c < 0.4) R.mood = 'grito';
+      }
+    },
+    // Arqueiro: puxa a corda até a orelha, segura e solta.
+    arqueiro: function (k, R) {
+      if (k < 0.45) {
+        var a = ease(k / 0.45);
+        R.lean = -0.1 * a; R.sway = -3 * a;
+        R.armF = [1.5 * a, -0.15 * a];                   // braço do arco esticado à frente
+        R.armN = [-1.5 * a, -1.5 * a];                   // mão da corda recuando
+        R.legN = [-0.12 * a, 0.18 * a]; R.legF = [0.16 * a, 0.1 * a];
+      } else if (k < 0.6) {
+        R.lean = -0.1; R.armF = [1.5, -0.15]; R.armN = [-1.55, -1.6]; R.sway = -3;
+        R.mood = 'grito';
+      } else {
+        var c = ease((k - 0.6) / 0.4);
+        R.lean = -0.1 + 0.2 * c; R.sway = -3 + 6 * c;
+        R.armF = [1.5 - 0.5 * c, -0.15];
+        R.armN = [-1.55 + 1.9 * c, -1.6 + 1.7 * c];
+        R.legN = [-0.12 + 0.12 * c, 0.18 - 0.18 * c]; R.legF = [0.16 - 0.16 * c, 0.1 - 0.1 * c];
+      }
+    },
+    // Bruxo: ergue o cajado bem alto e baixa cortando o ar.
+    bruxo: function (k, R) {
+      if (k < 0.45) {
+        var a = ease(k / 0.45);
+        R.lean = -0.14 * a; R.bob = -3 * a;
+        R.armN = [-2.5 * a, -0.4 * a]; R.armF = [-0.7 * a, -0.3 * a];
+        R.squash = 1 + 0.04 * a;
+      } else if (k < 0.68) {
+        var b = ease((k - 0.45) / 0.23);
+        R.lean = -0.14 + 0.44 * b; R.bob = -3 + 4 * b;
+        R.armN = [-2.5 + 3.0 * b, -0.4 + 0.4 * b]; R.armF = [-0.7 + 1.1 * b, -0.3];
+        R.mood = 'grito'; R.squash = 1.04 - 0.06 * b;
+      } else {
+        var c = ease((k - 0.68) / 0.32);
+        R.lean = 0.3 * (1 - c); R.armN = [0.5 * (1 - c), 0]; R.armF = [0.4 * (1 - c), 0];
+        R.bob = 1 * (1 - c);
+      }
+    },
+    // Espadachim: estocada baixa e rápida, corpo todo esticado na linha da lâmina.
+    espadachim: function (k, R) {
+      if (k < 0.3) {
+        var a = ease(k / 0.3);
+        R.lean = -0.24 * a; R.sway = -8 * a; R.squash = 1 - 0.06 * a;
+        R.armN = [-1.5 * a, -0.9 * a]; R.armF = [-0.5 * a, -0.4 * a];
+        R.legN = [-0.3 * a, 0.4 * a]; R.legF = [0.24 * a, 0.3 * a];
+      } else if (k < 0.5) {
+        var b = ease((k - 0.3) / 0.2);
+        R.lean = -0.24 + 0.66 * b; R.sway = -8 + 28 * b; R.squash = 0.94 + 0.1 * b;
+        R.armN = [-1.5 + 3.1 * b, -0.9 + 0.95 * b]; R.armF = [-0.5 - 0.6 * b, -0.4];
+        R.legN = [-0.3 + 1.2 * b, 0.4 - 0.4 * b]; R.legF = [0.24 - 1.0 * b, 0.3 - 0.2 * b];
+        R.mood = 'grito';
+      } else {
+        var c = ease((k - 0.5) / 0.5);
+        R.lean = 0.42 * (1 - c); R.sway = 20 * (1 - c);
+        R.armN = [1.6 * (1 - c), 0.05]; R.armF = [-1.1 * (1 - c), 0];
+        R.legN = [0.9 * (1 - c), 0]; R.legF = [-0.76 * (1 - c), 0.1];
+      }
+    },
+    // Curandeira: levanta as duas mãos e dá um pulinho.
+    curandeira: function (k, R) {
+      if (k < 0.5) {
+        var a = ease(k / 0.5);
+        R.armN = [-2.2 * a, -0.5 * a]; R.armF = [-2.1 * a, -0.5 * a];
+        R.bob = -6 * a; R.squash = 1 + 0.05 * a; R.lean = -0.04 * a;
+        R.legN = [0.1 * a, -0.2 * a]; R.legF = [-0.1 * a, -0.2 * a];
+      } else {
+        var c = ease((k - 0.5) / 0.5);
+        R.armN = [-2.2 + 1.4 * c, -0.5 + 0.4 * c]; R.armF = [-2.1 + 1.3 * c, -0.5 + 0.4 * c];
+        R.bob = -6 + 6 * c; R.squash = 1.05 - 0.05 * c;
+        R.legN = [0.1 - 0.1 * c, -0.2 + 0.2 * c]; R.legF = [-0.1 + 0.1 * c, -0.2 + 0.2 * c];
+      }
+    },
+    // Invocador: ergue o totem e BATE no chão — a batida é o gesto.
+    invocador: function (k, R) {
+      if (k < 0.4) {
+        var a = ease(k / 0.4);
+        R.armN = [-2.1 * a, -0.3 * a]; R.armF = [-0.8 * a, -0.2 * a];
+        R.bob = -4 * a; R.lean = -0.12 * a;
+        R.legN = [-0.1 * a, 0.1 * a]; R.legF = [0.1 * a, 0.1 * a];
+      } else if (k < 0.58) {
+        var b = ease((k - 0.4) / 0.18);
+        R.armN = [-2.1 + 2.5 * b, -0.3 + 0.3 * b]; R.armF = [-0.8 + 0.9 * b, -0.2];
+        R.bob = -4 + 7 * b; R.lean = -0.12 + 0.3 * b; R.squash = 1 - 0.1 * b;
+        R.legN = [-0.1 + 0.5 * b, 0.1 + 0.4 * b]; R.legF = [0.1 - 0.5 * b, 0.1 + 0.4 * b];
+        R.mood = 'grito';
+      } else {
+        var c = ease((k - 0.58) / 0.42);
+        R.armN = [0.4 * (1 - c), 0]; R.armF = [0.1 * (1 - c), 0];
+        R.bob = 3 * (1 - c); R.lean = 0.18 * (1 - c); R.squash = 0.9 + 0.1 * c;
+        R.legN = [0.4 * (1 - c), 0.5 * (1 - c)]; R.legF = [-0.4 * (1 - c), 0.5 * (1 - c)];
+      }
+    }
+  };
+
+  // personalidade do "parado": cada classe respira do seu jeito
+  var IDLE_STYLE = {
+    sumo:       { breath: 1.5, arm: 0.05, tilt: 0.006, knee: 0.03 },
+    arqueiro:   { breath: 1.0, arm: 0.09, tilt: 0.012, knee: 0.05 },
+    bruxo:      { breath: 1.2, arm: 0.07, tilt: 0.014, knee: 0 },
+    espadachim: { breath: 0.8, arm: 0.12, tilt: 0.016, knee: 0.07 },
+    curandeira: { breath: 1.1, arm: 0.11, tilt: 0.018, knee: 0.05 },
+    invocador:  { breath: 1.0, arm: 0.08, tilt: 0.01, knee: 0.04 }
+  };
+
+  // devolve o "delta de pose" para um quadro
+  function poseRig(base, fase, t) {
+    var R = { bob: 0, sway: 0, lean: 0, squash: 1, mood: null,
+              legN: [0, 0], legF: [0, 0], armN: [0, 0], armF: [0, 0], headDy: 0, alpha: 1 };
+    var ph = t * TAU;
+    if (fase === 'andar') {
+      // ciclo de passada: coxas em contrafase, joelho dobra na volta,
+      // corpo sobe duas vezes por ciclo e os braços contrabalançam.
+      var sN = Math.sin(ph), sF = Math.sin(ph + Math.PI);
+      R.legN = [sN * 0.62, -0.55 * Math.max(0, -sN) - 0.06];
+      R.legF = [sF * 0.62, -0.55 * Math.max(0, -sF) - 0.06];
+      R.armN = [sF * 0.5, -0.18 - 0.16 * Math.max(0, sF)];
+      R.armF = [sN * 0.5, -0.18 - 0.16 * Math.max(0, sN)];
+      R.bob = -Math.abs(Math.sin(ph)) * 3.4 + 1.2;
+      R.lean = 0.08 + Math.sin(ph * 2) * 0.02;
+      R.sway = Math.sin(ph * 2) * 1.4;
+      R.squash = 1 + Math.sin(ph * 2) * 0.015;
+    } else if (fase === 'atacar') {
+      (ATTACK[base] || ATTACK.sumo)(t, R);
+    } else if (fase === 'conjurar') {
+      // as duas mãos sobem, o corpo flutua e a energia se acumula
+      var e = t < 0.5 ? ease(t / 0.5) : 1 - ease((t - 0.5) / 0.5) * 0.35;
+      R.armN = [-1.7 * e, -0.5 * e];
+      R.armF = [-1.5 * e, -0.5 * e];
+      R.bob = -5 * e - Math.abs(Math.sin(ph * 2)) * 1.5;
+      R.lean = -0.08 * e;
+      R.squash = 1 + 0.05 * e;
+      R.legN = [0.06 * e, -0.1 * e]; R.legF = [-0.06 * e, -0.1 * e];
+      if (t > 0.35 && t < 0.8) R.mood = 'grito';
+    } else if (fase === 'dano') {
+      // recuo seco + tremida que decai
+      var d = 1 - t;
+      var shake = Math.sin(t * TAU * 2.4) * 3.2 * d;
+      R.sway = -9 * d + shake;
+      R.lean = -0.3 * d;
+      R.bob = -2 * d;
+      R.squash = 1 - 0.06 * d;
+      R.armN = [-0.8 * d, -0.4 * d]; R.armF = [-0.9 * d, -0.5 * d];
+      R.legN = [-0.3 * d, 0.2 * d]; R.legF = [0.24 * d, 0.16 * d];
+      R.mood = 'dor';
+    } else if (fase === 'morte') {
+      // joelhos cedem, tronco tomba para trás e a figura apaga
+      var m = ease(t);
+      R.lean = -0.9 * m;
+      R.bob = 6 * m;
+      R.sway = -10 * m;
+      R.squash = 1 - 0.42 * m;
+      R.legN = [-0.5 * m, 1.3 * m]; R.legF = [0.4 * m, 1.2 * m];
+      R.armN = [-1.3 * m, -0.4 * m]; R.armF = [-1.2 * m, -0.4 * m];
+      R.alpha = 1 - m * 0.55;
+      R.mood = t > 0.5 ? 'morto' : 'dor';
+    } else {
+      // idle: respiração + micro-balanço, com o tempero da classe
+      var S = IDLE_STYLE[base] || IDLE_STYLE.arqueiro;
+      var br = Math.sin(ph);
+      R.bob = -br * S.breath;
+      R.squash = 1 + br * 0.012;
+      R.lean = Math.sin(ph + 0.6) * S.tilt;
+      R.armN = [Math.sin(ph + 0.4) * S.arm, 0];
+      R.armF = [Math.sin(ph + 1.0) * S.arm, 0];
+      R.legN = [0, Math.sin(ph) * S.knee]; R.legF = [0, Math.sin(ph + 0.5) * S.knee];
+      R.sway = Math.sin(ph * 0.5) * 0.6;
+    }
+    return R;
+  }
+
+  function applyRig(An, R) {
+    bend(An.legN, 'hip', 'knee', 'ank', R.legN[0], R.legN[1]);
+    bend(An.legF, 'hip', 'knee', 'ank', R.legF[0], R.legF[1]);
+    bend(An.armN, 'sh', 'el', 'hd', R.armN[0], R.armN[1]);
+    bend(An.armF, 'sh', 'el', 'hd', R.armF[0], R.armF[1]);
+    An.handN = An.armN.hd; An.handF = An.armF.hd;
+    if (R.headDy) { An.head = [An.head[0], An.head[1] + R.headDy, An.head[2]]; }
+  }
+
   function paintUnit(ctx, cfg) {
     var P = PLANS[cfg.base] || PLANS.sumo;
     var An = P.anchors(cfg);
     An.cfg = cfg;
+
+    // --------------------------------------------------- pose deste quadro
+    var pose = cfg.pose;
+    if (pose && pose.fase && pose.fase !== 'estatico') {
+      var inf = POSE[pose.fase] || POSE.idle;
+      var n = inf.frames;
+      var t = (pose.t != null) ? pose.t
+            : (((pose.frame | 0) % n) + n) % n / (inf.loop ? n : Math.max(1, n - 1));
+      var R = poseRig(cfg.base, pose.fase, t);
+      applyRig(An, R);
+      cfg.mood = R.mood;
+      // tronco: sobe/desce, inclina (cisalhamento, pés plantados) e amassa
+      ctx.save();
+      ctx.translate(R.sway, R.bob);
+      if (R.lean) ctx.transform(1, 0, -R.lean, 1, 0, 0);
+      if (R.squash !== 1) ctx.scale(1, R.squash);
+      if (R.alpha < 1) ctx.globalAlpha = R.alpha;
+      An._posed = true;
+    }
     var wp = cfg.acc.weapon && ACC.weapon[cfg.acc.weapon] ? ACC.weapon[cfg.acc.weapon] : null;
 
     elemBack(ctx, An, cfg);
@@ -1347,6 +1725,7 @@ var JOGO = (typeof window !== 'undefined')
 
     if (cfg.back) drawBackItems(ctx, An, cfg);
     elemFront(ctx, An, cfg);
+    if (An._posed) ctx.restore();
     return An;
   }
 

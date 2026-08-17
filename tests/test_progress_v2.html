@@ -172,13 +172,17 @@
   // feitiços concedidos por itens do espaço 'especial'
   makeSpell('t-feitico-item', 'neutro', 0, null);
   makeSpell('t-feitico-conjunto', 'fogo', 0, null);
+  makeSpell('t-feitico-lendario', 'neutro', 0, null);   // concedido pelo CONJUNTO completo
 
   // ------------------------------------------------------------- conjuntos
   DATA.sets = {
+    // conjunto que CONCEDE FEITIÇO ao fechar as 4 peças (como o Traje do Coração)
     't-set-brasa': {
       id: 't-set-brasa', name: 'Traje de Brasa', element: 'fogo', dungeonId: 't-dung-4',
+      legendary: true,
       pieces: ['t-set-pa', 't-set-pp', 't-set-vida', 't-set-especial'],
-      bonuses: { 2: { hp: 20 }, 3: { power: 10 }, 4: { pa: 1, dodge: 15 } }
+      bonuses: { 2: { hp: 20 }, 3: { power: 10 },
+                 4: { pa: 1, dodge: 15, grantsSpell: 't-feitico-lendario' } }
     },
     't-set-limo': {
       id: 't-set-limo', name: 'Traje de Limo', element: 'agua', dungeonId: 't-dung-0',
@@ -188,29 +192,45 @@
   };
 
   // ------------------------------------------------------------- itens (4 espaços)
+  // Pesos de saque no mesmo desenho dos dados reais: peso por item + um peso
+  // virtual de "NADA" por calabouço (§ endurecimento do saque).
+  DATA.lootWeights = {
+    comum: 1000,
+    luckExponent: { comum: 0, raro: 1, epico: 2, lendario: 2 },
+    // t-dung-0: itens comuns somam 2000 ⇒ 3000 de "nada" = 60% de sorteios secos
+    noDrop: { 't-dung-0': 3000, 't-dung-4': 1000 }
+  };
+
   DATA.items = {};
   function item(o) {
+    // minRoom sugerido pela raridade, igual ao rodapé de items.js
+    var minRoom = (o.rarity === 'epico' || o.rarity === 'lendario') ? 2
+                : (o.rarity === 'raro' ? 1 : 0);
     DATA.items[o.id] = {
       id: o.id, name: o.name, slot: o.slot, rarity: o.rarity, dungeonId: o.dungeonId || 't-dung-0',
       element: o.element || 'neutro', setId: o.setId || null,
+      dropWeight: (o.dropWeight === undefined) ? 0 : o.dropWeight,
+      minRoom: (o.minRoom === undefined) ? minRoom : o.minRoom,
       bonuses: o.bonuses || {}, grantsSpell: o.grantsSpell || null,
       description: o.description || '—', flavor: '—', iconKey: 'test'
     };
   }
   item({ id: 't-anel-pa', name: 'Anel de Ataque', slot: 'punho', rarity: 'epico', element: 'fogo',
-    bonuses: { pa: 1, power: 10 } });
+    dropWeight: 10, bonuses: { pa: 1, power: 10 } });
   item({ id: 't-anel-pa-exagerado', name: 'Anel Exagerado', slot: 'punho', rarity: 'epico', element: 'neutro',
-    bonuses: { pa: 3 }, description: 'dado fora do contrato: deve ser limitado a +1' });
+    dungeonId: 't-dung-4', bonuses: { pa: 3 }, description: 'dado fora do contrato: limitado a +1' });
   item({ id: 't-bota-pp', name: 'Botas Ligeiras', slot: 'passo', rarity: 'raro', element: 'agua',
-    bonuses: { pp: 1, dodge: 5 } });
+    dropWeight: 100, bonuses: { pp: 1, dodge: 5 } });
   item({ id: 't-peito-vida', name: 'Peitoral de Casca', slot: 'casca', rarity: 'comum', element: 'terra',
-    bonuses: { hp: 40, resists: { fogo: 10 } } });
+    dropWeight: 1000, bonuses: { hp: 40, resists: { fogo: 10 } } });
   item({ id: 't-peito-epico', name: 'Peitoral do Fundo', slot: 'casca', rarity: 'epico', element: 'terra',
-    dungeonId: 't-dung-4', bonuses: { hp: 60, lock: 10, resists: { fogo: 20, agua: 5 } } });
+    dungeonId: 't-dung-4', dropWeight: 10, bonuses: { hp: 60, lock: 10, resists: { fogo: 20, agua: 5 } } });
+  item({ id: 't-coroa-lendaria', name: 'Coroa Lendária', slot: 'punho', rarity: 'lendario', element: 'fogo',
+    dungeonId: 't-dung-4', dropWeight: 5, bonuses: { power: 20 } });
   item({ id: 't-relic-especial', name: 'Relíquia Cantante', slot: 'lume', rarity: 'raro', element: 'neutro',
-    bonuses: { power: 10 }, grantsSpell: 't-feitico-item' });
+    dropWeight: 100, bonuses: { power: 10 }, grantsSpell: 't-feitico-item' });
   item({ id: 't-relic-repetida', name: 'Relíquia Redundante', slot: 'lume', rarity: 'comum', element: 'neutro',
-    grantsSpell: 't-tanque-neutro-1' });
+    dropWeight: 1000, grantsSpell: 't-tanque-neutro-1' });
   item({ id: 't-item-slot-invalido', name: 'Chapéu Fora do Contrato', slot: 'chapeu', rarity: 'comum',
     element: 'ar', bonuses: { hp: 999 } });
   // peças do conjunto de brasa

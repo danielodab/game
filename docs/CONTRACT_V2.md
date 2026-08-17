@@ -387,6 +387,25 @@ se aplica a itens, pedras nem cartas (essas seguem suas próprias regras de rari
 `Game` informa o multiplicador aplicado no pacote de recompensa (`xpMult`) para a UI poder
 explicar ao jogador por que ganhou menos.
 
+## 9-E. ADENDO v2.4 — Rotação de câmera em 90°
+
+O tabuleiro isométrico 2D ganha **rotação em quatro posições fixas** (0°, 90°, 180°, 270°) — não
+é órbita livre (impossível com arte 2D em 4 direções), e sim o giro de quarto de volta dos
+isométricos clássicos.
+
+- `Renderer.setCamera({ rot: 0|1|2|3, zoom, panX, panY })` e `Renderer.rotate(+1|-1)`.
+- Ao girar: a projeção de `(x,y)` roda o quarto de volta correspondente, a ordenação por
+  profundidade acompanha, e **a direção aparente de cada unidade muda** — a arte já entrega as 4
+  direções (SE/SW/NE/NW), então a vista mostrada é `(facingMundo + rot) mod 4`.
+- Transição **animada** (~250 ms) entre as posições, com a célula central preservada.
+- Controles: botão na HUD (dois: girar horário/anti-horário) e **gesto de dois dedos girando** no
+  celular. Nunca por arrasto simples — arrastar continua sendo pan.
+- **Valor tático**: obstáculos ALTOS escondem o que está atrás; girar revela. `Game.onTileClicked`
+  continua recebendo coordenadas do MUNDO — a conversão é interna ao renderizador (o raycast/hit
+  test precisa inverter a rotação atual).
+- A HUD indica a orientação atual (uma bússola simples ou marca no canto), para o jogador não se
+  perder.
+
 ## 10. Testes obrigatórios
 
 Cada dono entrega sua página em `tests/` (padrão v1: roda no load, resultado no DOM e em
