@@ -962,6 +962,38 @@
     eq(sp.length, 3, 'continua com 3');
   });
 
+  t('CONJUNTO completo concede feitiço (só com as 4 peças)', function () {
+    fresh();
+    var pecas = D.sets['t-set-brasa'].pieces;
+    eq(D.sets['t-set-brasa'].bonuses[4].grantsSpell, 't-feitico-lendario', 'o dado declara o feitiço');
+    giveAndEquip(TANK, pecas[0]);
+    hasNot(P.spellsFor(TANK), 't-feitico-lendario', '1 peça: nada');
+    giveAndEquip(TANK, pecas[1]);
+    hasNot(P.spellsFor(TANK), 't-feitico-lendario', '2 peças: nada');
+    giveAndEquip(TANK, pecas[2]);
+    hasNot(P.spellsFor(TANK), 't-feitico-lendario', '3 peças: ainda nada');
+    giveAndEquip(TANK, pecas[3]);
+    has(P.spellsFor(TANK), 't-feitico-lendario', '4 peças: o feitiço do conjunto aparece');
+    has(P.spellsFor(TANK), 't-feitico-conjunto', 'e o feitiço do Lume continua valendo');
+    eq(P.hero(TANK).spells.length, 3 + 2, 'cache atualizado (3 base + lume + conjunto)');
+  });
+
+  t('tirar UMA peça derruba o feitiço do conjunto', function () {
+    eq(P.unequip(TANK, 'casca'), true, 'tira a couraça');
+    hasNot(P.spellsFor(TANK), 't-feitico-lendario', 'o feitiço do conjunto some');
+    has(P.spellsFor(TANK), 't-feitico-conjunto', 'o do Lume permanece');
+    var pecas = D.sets['t-set-brasa'].pieces;
+    eq(P.equip(TANK, pecas[2]), true, 'recoloca a peça');
+    has(P.spellsFor(TANK), 't-feitico-lendario', 'e o feitiço volta');
+  });
+
+  t('conjunto SEM grantsSpell não inventa feitiço', function () {
+    fresh();
+    giveAndEquip(TANK, 't-limo-pa');
+    giveAndEquip(TANK, 't-limo-vida');
+    eq(P.spellsFor(TANK).length, 3, 'duas peças do limo: só os 3 base');
+  });
+
   t('itens dos outros espaços não concedem feitiço', function () {
     fresh();
     giveAndEquip(TANK, 't-peito-vida');
@@ -1491,38 +1523,134 @@
   // =========================================================================
   section('8 — Saque de itens e pets (grupo de 1 ou 2)');
 
-  t('rollDrops respeita minRoom e coloca o item no inventário', function () {
+  // PRNG determinístico: os testes de proporção não podem falhar por azar.
+  function comRandomFixo(seed, fn) {
+    var real = Math.random;
+    var s = seed >>> 0;
+    Math.random = function () {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+    try { fn(); } finally { Math.random = real; }
+  }
+  function comRandomConstante(valor, fn) {
+    var real = Math.random;
+    Math.random = function () { return valor; };
+    try { fn(); } finally { Math.random = real; }
+  }
+
+  t('o peso de "NADA" entra no sorteio e seca ~60% das tentativas', function () {
     fresh();
-    var drops = P.rollDrops('t-dung-0', 0, 2);
-    eq(drops.length, 1, 'uma peça na sala comum');
-    eq(drops[0], 't-peito-vida', 'só o item de minRoom 0');
-    ok(P.invIndexOf('t-peito-vida') >= 0, 'entrou no inventário');
+    // sala 0 de t-dung-0: só os comuns (1000 + 1000) contra 3000 de "nada"
+    var secos = 0, total = 20000;
+    semSave(function () {
+      comRandomFixo(20260817, function () {
+        for (var i = 0; i < total; i++) {
+          if (P.rollDrops('t-dung-0', 0, 2).length === 0) secos++;
+        }
+      });
+    });
+    var prop = secos / total;
+    near(prop, 3000 / 5000, 0.02, 'proporção de sorteios sem item (obtida: ' + prop.toFixed(3) + ')');
+    ok(secos > 0 && secos < total, 'nem tudo seco, nem tudo item');
   });
 
-  t('sala do chefe sorteia duas vezes e libera itens de minRoom alto', function () {
+  t('sem o peso de "NADA" no dado, todo sorteio dá item', function () {
     fresh();
-    var drops = P.rollDrops('t-dung-0', 2, 1);
-    eq(drops.length, 2, 'dois sorteios no chefe');
-    var achouRaro = false;
-    for (var i = 0; i < 400 && !achouRaro; i++) {
-      var d2 = P.rollDrops('t-dung-0', 2, 1);
-      for (var k = 0; k < d2.length; k++) if (d2[k] === 't-relic-especial') achouRaro = true;
-    }
-    ok(achouRaro, 'item de minRoom 2 pode cair no chefe');
+    var nd = D.lootWeights.noDrop;
+    D.lootWeights.noDrop = {};
+    try {
+      var secos = 0;
+      semSave(function () {
+        comRandomFixo(7, function () {
+          for (var i = 0; i < 500; i++) if (P.rollDrops('t-dung-0', 0, 2).length === 0) secos++;
+        });
+      });
+      eq(secos, 0, 'sem peso de nada, nunca sai vazio');
+    } finally { D.lootWeights.noDrop = nd; }
+  });
+
+  t('minRoom: raro só a partir da 2ª sala, épico/lendário só no chefe', function () {
+    fresh();
+    var vistos = { 0: {}, 1: {}, 2: {} };
+    semSave(function () {
+      comRandomFixo(99, function () {
+        for (var sala = 0; sala <= 2; sala++) {
+          for (var i = 0; i < 4000; i++) {
+            var d = P.rollDrops('t-dung-0', sala, 1);
+            for (var k = 0; k < d.length; k++) vistos[sala][D.items[d[k]].rarity] = true;
+          }
+        }
+      });
+    });
+    ok(vistos[0]['comum'], 'sala 0 dá comuns');
+    ok(!vistos[0]['raro'], 'sala 0 NÃO pode dar raro (minRoom 1)');
+    ok(!vistos[0]['epico'], 'sala 0 NÃO pode dar épico (minRoom 2)');
+    ok(vistos[1]['raro'], 'sala 1 libera o raro');
+    ok(!vistos[1]['epico'], 'sala 1 ainda NÃO dá épico');
+    ok(vistos[2]['epico'], 'o chefe libera o épico');
+  });
+
+  t('lendário também é exclusivo da sala do chefe', function () {
+    fresh();
+    var forasDoChefe = 0, noChefe = 0;
+    semSave(function () {
+      comRandomFixo(1234, function () {
+        for (var i = 0; i < 4000; i++) {
+          var a = P.rollDrops('t-dung-4', 1, 1);
+          for (var x = 0; x < a.length; x++) if (a[x] === 't-coroa-lendaria') forasDoChefe++;
+          var b = P.rollDrops('t-dung-4', 2, 1);
+          for (var y = 0; y < b.length; y++) if (b[y] === 't-coroa-lendaria') noChefe++;
+        }
+      });
+    });
+    eq(forasDoChefe, 0, 'lendário nunca cai fora do chefe');
+    ok(noChefe > 0, 'e cai no chefe (' + noChefe + ')');
+  });
+
+  t('a sala do chefe sorteia duas vezes (e as comuns, uma)', function () {
+    fresh();
+    var comum = null, chefe = null;
+    semSave(function () {
+      comRandomConstante(0, function () {          // sempre a primeira peça da piscina
+        comum = P.rollDrops('t-dung-0', 0, 2);
+        chefe = P.rollDrops('t-dung-0', 2, 2);
+      });
+    });
+    eq(comum.length, 1, 'um sorteio na sala comum');
+    eq(chefe.length, 2, 'dois sorteios na sala do chefe');
   });
 
   t('sorte de saque: solo (2.4) supera a dupla (1.6)', function () {
     fresh();
-    var solo = 0, dupla = 0;
+    var solo = 0, dupla = 0, itensSolo = 0, itensDupla = 0;
     semSave(function () {
-      for (var i = 0; i < 3000; i++) {
-        var a = P.rollDrops('t-dung-0', 2, 1);
-        for (var x = 0; x < a.length; x++) if (a[x] === 't-relic-especial') solo++;
-        var b = P.rollDrops('t-dung-0', 2, 2);
-        for (var y = 0; y < b.length; y++) if (b[y] === 't-relic-especial') dupla++;
-      }
+      comRandomFixo(4242, function () {
+        for (var i = 0; i < 6000; i++) {
+          var a = P.rollDrops('t-dung-0', 2, 1);
+          itensSolo += a.length;
+          for (var x = 0; x < a.length; x++) if (a[x] === 't-anel-pa') solo++;
+          var b = P.rollDrops('t-dung-0', 2, 2);
+          itensDupla += b.length;
+          for (var y = 0; y < b.length; y++) if (b[y] === 't-anel-pa') dupla++;
+        }
+      });
     });
-    ok(solo > dupla, 'solo (' + solo + ') tem de superar a dupla (' + dupla + ')');
+    ok(solo > dupla, 'épico: solo (' + solo + ') supera a dupla (' + dupla + ')');
+    ok(itensSolo > itensDupla,
+      'o "nada" não recebe sorte, então o solo também tira mais peças (' +
+      itensSolo + ' vs ' + itensDupla + ')');
+  });
+
+  t('o item sorteado entra no inventário único', function () {
+    fresh();
+    var d = [];
+    semSave(function () {
+      comRandomConstante(0, function () { d = P.rollDrops('t-dung-0', 0, 2); });
+    });
+    eq(d.length, 1, 'saiu uma peça');
+    P.addItem(d[0]);
+    ok(P.invIndexOf(d[0]) >= 0, 'está no saco único');
   });
 
   t('rollPet só no chefe, respeita dropDungeon e não repete', function () {
@@ -1855,21 +1983,23 @@
   t('§9-D: itens, pedras e cartas NÃO sofrem o corte de XP', function () {
     fresh();
     setLevel(TANK, 30);                          // multiplicador de XP no piso
-    var achouCarta = false, guard = 0;
-    while (!achouCarta && guard < 60) {
+    var achouCarta = false, achouItem = false, guard = 0;
+    while ((!achouCarta || !achouItem) && guard < 80) {
       guard++;
       fresh();
       setLevel(TANK, 30);
       venceSala([TANK], 't-dung-0', 2);          // sala do chefe
       eq(ultimoDado.xpMult[TANK], 0.10, 'a XP está no piso');
-      ok(ultimoDado.drops.length === 2, 'o chefe deu os 2 saques de sempre');
-      eq(ultimoDado.stones['st-fogo'], 4, 'as pedras vieram inteiras');
+      eq(ultimoDado.stones['st-fogo'], 4, 'as pedras vieram inteiras, sem corte');
+      ok(ultimoDado.drops.length <= 2, 'no máximo os 2 sorteios do chefe');
+      if (ultimoDado.drops.length) achouItem = true;
       if (ultimoDado.cards.length) {
         achouCarta = true;
-        ok(ultimoDado.cards[0].amount >= 1, 'a carta veio inteira');
+        ok(ultimoDado.cards[0].amount >= 1, 'a carta veio inteira, sem corte');
       }
     }
     ok(achouCarta, 'alguma carta caiu apesar do corte de XP');
+    ok(achouItem, 'algum item caiu apesar do corte de XP');
   });
 
   t('o pacote da UI tem o formato do adendo v2.1', function () {
@@ -1884,7 +2014,8 @@
     ok(!!ultimoDado.stones, 'stones');
     ok(!!ultimoDado.elementChoices, 'elementChoices');
     ok(ultimoDado.xpCartas === undefined, 'xpCartas foi removido na v2.1');
-    ok(ultimoDado.drops.length > 0, 'a sala deu saque');
+    ok(Object.prototype.toString.call(ultimoDado.drops) === '[object Array]',
+      'drops é lista (pode vir vazia: o saque agora seca com frequência)');
   });
 
   t('monstros derrubam PEDRAS do próprio elemento', function () {

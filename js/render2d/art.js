@@ -60,7 +60,9 @@ var JOGO = (typeof window !== 'undefined')
     tileW: 128, tileH: 64,
     unitW: 160, unitH: 200,
     anchorX: 0.5, anchorY: 0.88,
-    artUnit: 1.28,          // px de tela por unidade de arte (herói ~104 un.)
+    // px de tela por unidade de arte. O herói tem ~106 unidades ⇒ ~168 px de
+    // altura num quadro de 200: o boneco PREENCHE o quadro, com margem mínima.
+    artUnit: 1.58,
     res: RES,
     spriteScale: 1 / RES
   };
@@ -135,7 +137,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   var _lw = 2;              // espessura de contorno em unidades de arte (por desenho)
-  var LW = 2.5;             // espessura desejada em px de TELA
+  var LW = 3.2;             // espessura-base desejada em px de TELA (traço grosso)
   function setScale(k) { _lw = LW * RES / k; }
 
   // ------------------------------------------------------------ construtores
@@ -296,13 +298,15 @@ var JOGO = (typeof window !== 'undefined')
   // Puxa DATA.classes[id].palette quando existir; senão usa o padrão daqui.
   // O elemento tinge a cor principal sem destruir a identidade da classe.
   // ==========================================================================
+  // Cores SATURADAS e alegres — o Dofus 1.29 não tinha medo de cor. Nada de
+  // pastel lavado: cada classe tem um dominante que se reconhece de longe.
   var DEF_PAL = {
-    sumo:       { main: '#d4553f', dark: '#3a2b26', accent: '#ffd08a', skin: '#f0b98a', hair: '#2b1d18', cloth: '#9c2f3c' },
-    arqueiro:   { main: '#4f9d6a', dark: '#26402f', accent: '#d8f0a0', skin: '#f5d7ae', hair: '#e8cf86', cloth: '#2f5a3e' },
-    bruxo:      { main: '#7a5fa0', dark: '#241c33', accent: '#b98cff', skin: '#d8bc9c', hair: '#e6ded0', cloth: '#33285a' },
-    espadachim: { main: '#2f6f8f', dark: '#1b2733', accent: '#9be8ff', skin: '#e8c49a', hair: '#22303c', cloth: '#25384a' },
-    curandeira: { main: '#f0c05a', dark: '#6b4a2f', accent: '#fff2c2', skin: '#ffdcbc', hair: '#e07a3f', cloth: '#e88fa8' },
-    invocador:  { main: '#3f8f8a', dark: '#1e3330', accent: '#8ff0d8', skin: '#c9bb9c', hair: '#2b3a35', cloth: '#2c4a44' },
+    sumo:       { main: '#f0562f', dark: '#40241c', accent: '#ffd44a', skin: '#ffc493', hair: '#241410', cloth: '#c81f38' },
+    arqueiro:   { main: '#3fbf6a', dark: '#1c4a2b', accent: '#eaff8a', skin: '#ffdfb4', hair: '#ffd45c', cloth: '#1f7a45' },
+    bruxo:      { main: '#8f4fd4', dark: '#241338', accent: '#c88fff', skin: '#e2c2a4', hair: '#f2ece0', cloth: '#3d1f7a' },
+    espadachim: { main: '#1f8fd4', dark: '#12212e', accent: '#7fe8ff', skin: '#f2c79c', hair: '#1a2a38', cloth: '#1a3d5c' },
+    curandeira: { main: '#ffcf46', dark: '#7a4520', accent: '#fff6cc', skin: '#ffe0c0', hair: '#ff7a33', cloth: '#ff8fb0' },
+    invocador:  { main: '#22b39c', dark: '#123330', accent: '#7dffdd', skin: '#d8c8a4', hair: '#213c36', cloth: '#1d5c54' },
     _:          { main: '#8a8f96', dark: '#2a2f36', accent: '#e0e6ec', skin: '#e0c0a0', hair: '#33291f', cloth: '#3a4048' }
   };
 
@@ -2128,7 +2132,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   function isClass(id) { return !!PLANS[id]; }
 
-  function unitCanvas(defId, els, dir, scale) {
+  function unitCanvas(defId, els, dir, scale, pose) {
     var w = M.unitW * scale, h = M.unitH * scale;
     var c = mkCanvas(w, h), g = c.getContext('2d');
     var k = M.artUnit * scale * RES;
@@ -2143,10 +2147,12 @@ var JOGO = (typeof window !== 'undefined')
     if (fus && (isClass(fus[0]) || isClass(fus[1]))) {
       var cfg = fusionCfg(fus[0], fus[1], els);
       cfg.back = d.back;
+      cfg.pose = pose;
       paintUnit(g, cfg);
     } else if (isClass(defId)) {
       var cfg2 = baseCfg(defId, els);
       cfg2.back = d.back;
+      cfg2.pose = pose;
       paintUnit(g, cfg2);
     } else {
       var pets = (JOGO.DATA && JOGO.DATA.pets) || null;
@@ -3030,12 +3036,39 @@ var JOGO = (typeof window !== 'undefined')
     A.clearCache();
   };
 
+  // `opts.pose = {fase:'idle'|'andar'|'atacar'|'conjurar'|'dano'|'morte',
+  //               frame:0..n-1}` (ou `t` de 0..1). Cada quadro é cacheado.
+  function normPose(p) {
+    if (!p) return null;
+    if (typeof p === 'string') p = { fase: p, frame: 0 };
+    var fase = POSE[p.fase] ? p.fase : 'idle';
+    var n = POSE[fase].frames;
+    var fr;
+    if (p.t != null) fr = Math.round(p.t * (POSE[fase].loop ? n : n - 1));
+    else fr = p.frame | 0;
+    fr = ((fr % n) + n) % n;
+    return { fase: fase, frame: fr, t: fr / (POSE[fase].loop ? n : Math.max(1, n - 1)) };
+  }
   A.unit = function (defId, opts) {
     opts = opts || {};
     var els = normEls(opts), dir = normDir(opts.dir), scale = opts.scale || 1;
-    return cached('unit:' + defId + ':' + els.join('+') + ':' + dir + ':' + scale, function () {
-      return unitCanvas(defId, els, dir, scale);
+    var pose = normPose(opts.pose);
+    var pk = pose ? pose.fase + '#' + pose.frame : '-';
+    return cached('unit:' + defId + ':' + els.join('+') + ':' + dir + ':' + scale + ':' + pk, function () {
+      return unitCanvas(defId, els, dir, scale, pose);
     });
+  };
+  // ciclo inteiro pronto para virar AnimatedSprite no Pixi
+  A.unitFrames = function (defId, opts, fase) {
+    opts = opts || {};
+    fase = POSE[fase] ? fase : 'idle';
+    var n = POSE[fase].frames, out = [], i;
+    for (i = 0; i < n; i++) {
+      var o = { element: opts.element, elements: opts.elements, dir: opts.dir,
+                scale: opts.scale, pose: { fase: fase, frame: i } };
+      out.push(A.unit(defId, o));
+    }
+    return out;
   };
   A.portrait = function (defId, opts) {
     opts = opts || {};
