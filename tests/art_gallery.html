@@ -94,12 +94,12 @@
   }
   function show(grid, cv, caption, stageCls, testName, w) {
     var c = el('div', 'cell ' + (stageCls || 'stage'));
-    if (w) cv.style.width = w + 'px', cv.style.height = 'auto';
-    else { cv.style.width = (cv.__w || cv.width / (cv.__res || 1)) + 'px'; }
-    c.appendChild(cv);
+    if (testName) check(testName, inked(cv), 'canvas em branco');
+    // canvases do Art são CACHEADOS: sempre inserir uma cópia no DOM
+    var node = Art.node(cv, w || undefined);
+    c.appendChild(node);
     c.appendChild(el('div', 'cap', caption));
     grid.appendChild(c);
-    if (testName) check(testName, inked(cv), 'canvas em branco');
     return c;
   }
   function rowTitle(grid, t) { grid.appendChild(el('div', 'row-title', t)); }
@@ -164,17 +164,18 @@
     'Teste de legibilidade: é assim que o jogador vê. Silhueta deve ser reconhecível sem zoom.');
   var stage = el('div', 'cell stage sizecmp');
   stage.style.padding = '0 12px 6px';
-  (function () {
-    var tileCv = Art.tile('estufa', 0);
-    var t2 = tileCv.cloneNode(); t2.getContext('2d').drawImage(tileCv, 0, 0);
-    t2.style.width = '128px'; t2.style.position = 'absolute';
-  })();
-  CLASSES.concat(['fus:sumo+bruxo']).forEach(function (cid) {
-    var cv = Art.unit(cid, { element: cid === 'fus:sumo+bruxo' ? 'fogo' : 'neutro', dir: 0 });
+  CLASSES.concat(['fus:sumo+bruxo', 'fus:arqueiro+invocador']).forEach(function (cid) {
+    var cv = Art.unit(cid, { element: /^fus/.test(cid) ? 'fogo' : 'neutro', dir: 0 });
     var d = el('div');
     d.style.textAlign = 'center';
-    cv.style.width = '160px';
-    d.appendChild(cv);
+    d.style.position = 'relative';
+    var tl = Art.node(Art.tile('estufa', 0), 128);
+    tl.style.position = 'absolute';
+    tl.style.left = '16px'; tl.style.bottom = '18px';
+    d.appendChild(tl);
+    var n = Art.node(cv, 160);
+    n.style.position = 'relative';
+    d.appendChild(n);
     d.appendChild(el('div', 'cap', cid));
     stage.appendChild(d);
   });
@@ -304,6 +305,21 @@
                       : 'Todas as verificações passaram.';
   window.TEST_RESULTS = R;
   window.ART_READY = true;
+
+  // ?only=1,3 — isola seções para captura headless legível
+  var only = (location.search.match(/[?&]only=([^&]+)/) || [])[1];
+  if (only) {
+    var keep = only.split(',').map(function (n) { return parseInt(n, 10); });
+    var secs = document.querySelectorAll('section');
+    for (var i = 0; i < secs.length; i++) {
+      if (keep.indexOf(i + 1) < 0) secs[i].style.display = 'none';
+    }
+  }
+  if (/[?&]nobg=1/.test(location.search)) {
+    var st = document.createElement('style');
+    st.textContent = '.cell{background:#f0ece4 !important}.cap{color:#333}';
+    document.head.appendChild(st);
+  }
 })();
 </script>
 </body>

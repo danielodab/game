@@ -2269,6 +2269,20 @@ var JOGO = (typeof window !== 'undefined')
     return v;
   }
   A.clearCache = function () { CACHE = {}; MISSES = 0; };
+  // IMPORTANTE: os canvases devolvidos são CACHEADOS e compartilhados. Para
+  // colocar um no DOM (HUD, galeria) use SEMPRE uma cópia — inserir o original
+  // duas vezes o MOVE do primeiro lugar. O Pixi pode usar o original à vontade.
+  A.node = function (cv, cssW, cls) {
+    var c = document.createElement('canvas');
+    c.width = cv.width; c.height = cv.height;
+    c.getContext('2d').drawImage(cv, 0, 0);
+    var w = cssW || cv.__w || (cv.width / (cv.__res || 1));
+    c.style.width = w + 'px';
+    c.style.height = (w * cv.height / cv.width) + 'px';
+    if (cls) c.className = cls;
+    c.__res = cv.__res; c.__anchor = cv.__anchor;
+    return c;
+  };
   A.stats = function () {
     var n = 0, k, px = 0;
     for (k in CACHE) { n++; px += CACHE[k].width * CACHE[k].height; }

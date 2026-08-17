@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Validação de Fusões, Pets e Itens — SOTERRA 2.0</title>
+<style>
+  body { background: #14181c; color: #d8dee4; font-family: Consolas, monospace; padding: 20px; }
+  h1 { font-size: 18px; color: #ffd76b; }
+  h2 { font-size: 14px; color: #8ab4d8; margin: 18px 0 6px; }
+  #summary { font-size: 16px; margin: 12px 0; padding: 10px; border-radius: 6px; }
+  #summary.ok { background: #15351b; color: #7be08a; }
+  #summary.bad { background: #3a1515; color: #ff8a8a; }
+  .fail { color: #ff8a8a; }
+  .pass { color: #6fae76; }
+  ul { list-style: none; padding: 0; margin: 0; font-size: 12px; }
+  li { padding: 1px 0; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: #8ab4d8; }
+  table { border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  td, th { border: 1px solid #2a3138; padding: 2px 8px; text-align: left; }
+  th { color: #ffd76b; }
+</style>
+</head>
+<body>
+<h1>Validação — Fusões, Pets e Itens (SOTERRA 2.0)</h1>
+<div id="summary">Carregando…</div>
+<div id="failList"></div>
+<div id="samples"></div>
+<details><summary>Todas as checagens</summary><ul id="allList"></ul></details>
+
+<script src="../js/core/data/fusions.js?v=1"></script>
+<script src="../js/core/data/pets.js?v=1"></script>
+<script src="../js/core/data/items.js?v=1"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------- utilidades
+  var results = [];
+  function check(name, ok, detail) {
+    results.push({ name: name, ok: !!ok, detail: detail || '' });
+    if (!ok) { try { console.error('FAIL: ' + name + (detail ? ' — ' + detail : '')); } catch (e) {} }
+    return !!ok;
+  }
+  function isNum(v) { return typeof v === 'number' && isFinite(v); }
+  function isStr(v) { return typeof v === 'string' && v.length > 0; }
+  function isArr(v) { return Object.prototype.toString.call(v) === '[object Array]'; }
+  function has(list, v) { for (var i = 0; i < list.length; i++) if (list[i] === v) return true; return false; }
+
+  // ---------------------------------------------------------------- vocabulário
+  var ELEMENTS = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
+  var SYMBOLIC = ['@A', '@B'];
+  var BUFF_STATS = ['pa', 'pp', 'power', 'initiative', 'dodge', 'lock'];
+  var SHAPES = ['single', 'cross', 'circle', 'line', 'cone', 'ring'];
+  var SIDES = ['any', 'enemy', 'ally', 'self'];
+  var WEATHERS = ['calmo', 'chuva', 'estiagem', 'vendaval', 'tremor'];
+  var CLEANSE_KINDS = ['poison', 'root', 'mark', 'invisible', 'shield', 'buff', 'taunt', 'reflect', 'regen'];
+  var CLASSES = ['arqueiro', 'bruxo', 'curandeira', 'espadachim', 'invocador', 'sumo'];
+  var TIERS = [0, 5, 12, 20, 30];
+  var RARITIES = ['comum', 'raro', 'epico'];
+  var SLOTS = ['pa', 'pp', 'vida', 'especial'];
+  var BEHAVIORS = ['attack', 'support', 'guard'];
+
+  var EFFECT_REQ = {
+    damage: ['element', 'min', 'max'],
+    heal: ['min', 'max'],
+    shield: ['value', 'duration'],
+    buff: ['stat', 'value', 'duration'],
+    resist: ['element', 'value', 'duration'],
+    push: ['tiles'],
+    pull: ['tiles'],
+    teleport: [],
+    swap: [],
+    poison: ['element', 'min', 'max', 'duration'],
+    regen: ['min', 'max', 'duration'],
+    summon: ['monsterId'],
+    taunt: ['duration'],
+    invisible: ['duration'],
+    root: ['duration'],
+    mark: ['value', 'duration', 'max'],
+    detonateMarks: ['mult'],
+    trap: ['trapId', 'duration'],
+    weatherShift: ['weather'],
+    cleanse: ['kinds'],
+    reflect: ['pct', 'duration'],
+    dispelShield: [],
+    moveTo: ['maxTiles'],
+    chain: ['jumps', 'falloff', 'element', 'min', 'max']
+  };
+  var NUMERIC_FIELDS = ['min', 'max', 'value', 'duration', 'tiles', 'mult', 'pct', 'maxTiles',
+                        'jumps', 'falloff', 'max'];
+
+  // Valida um efeito. `allowSym` = pode usar '@A'/'@B' no campo element.
+  // Devolve string de erro ou '' se estiver correto.
+  function effectError(eff, allowSym) {
+    if (!eff || typeof eff !== 'object') return 'efeito não é objeto';
+    var req = EFFECT_REQ[eff.type];
+    if (!req) return 'tipo fora do vocabulário: ' + eff.type;
+    for (var i = 0; i < req.length; i++) {
+      var f = req[i];
+      if (eff[f] === undefined || eff[f] === null) return 'falta campo "' + f + '" em ' + eff.type;
+    }
+    // campos numéricos
+    for (var k = 0; k < NUMERIC_FIELDS.length; k++) {
+      var nf = NUMERIC_FIELDS[k];
+      if (has(req, nf) && !isNum(eff[nf])) return 'campo "' + nf + '" não é número em ' + eff.type;
+    }
+    if (eff.element !== undefined) {
+      if (has(SYMBOLIC, eff.element)) {
+        if (!allowSym) return 'elemento simbólico não resolvido: ' + eff.element;
+      } else if (!has(ELEMENTS, eff.element)) {
+        return 'elemento inválido: ' + eff.element;
+      }
+    }
+    if (eff.type === 'buff' && !has(BUFF_STATS, eff.stat)) return 'buff.stat inválido: ' + eff.stat;
+    if (eff.type === 'weatherShift' && !has(WEATHERS, eff.weather)) return 'clima inválido: ' + eff.weather;
+    if (eff.type === 'cleanse') {
+      if (!isArr(eff.kinds) || eff.kinds.length === 0) return 'cleanse.kinds vazio';
+      for (var c = 0; c < eff.kinds.length; c++) {
+        if (!has(CLEANSE_KINDS, eff.kinds[c])) return 'cleanse.kinds desconhecido: ' + eff.kinds[c];
+      }
+    }
+    if (eff.type === 'summon' && !isStr(eff.monsterId)) return 'summon.monsterId inválido';
+    if (eff.type === 'trap' && !isStr(eff.trapId)) return 'trap.trapId inválido';
+    if ((eff.type === 'damage' || eff.type === 'poison' || eff.type === 'heal' ||
+         eff.type === 'regen' || eff.type === 'chain') && eff.min > eff.max) {
+      return 'min > max em ' + eff.type;
+    }
+    if (eff.type === 'damage' && eff.lifesteal !== undefined && typeof eff.lifesteal !== 'boolean') {
+      return 'lifesteal deve ser booleano';
+    }
+    return '';
+  }
+
+  function rangeError(r) {
+    if (!r || typeof r !== 'object') return 'range ausente';
+    if (!isNum(r.min) || !isNum(r.max)) return 'range.min/max não numéricos';
+    if (r.min < 0 || r.max < r.min || r.max > 12) return 'range fora de escala (' + r.min + '–' + r.max + ')';
+    if (typeof r.line !== 'boolean') return 'range.line não booleano';
+    if (typeof r.los !== 'boolean') return 'range.los não booleano';
+    return '';
+  }
+  function aoeError(a) {
+    if (!a || typeof a !== 'object') return 'aoe ausente';
+    if (!has(SHAPES, a.shape)) return 'aoe.shape inválido: ' + a.shape;
+    if (!isNum(a.size) || a.size < 0 || a.size > 8) return 'aoe.size fora de escala';
+    if (a.shape === 'single' && a.size !== 0) return 'aoe single deve ter size 0';
+    return '';
+  }
+
+  var D = (typeof JOGO !== 'undefined') && JOGO.DATA;
+  if (!check('JOGO.DATA existe', !!D)) { render([]); return; }
+
+  // =========================================================================
+  // 1. FORMAS DE FUSÃO
+  // =========================================================================
+  var FF = D.fusionForms, FB = D.fusionBlends;
+  check('DATA.fusionForms existe', !!FF && typeof FF === 'object');
+  check('DATA.fusionBlends existe', !!FB && typeof FB === 'object');
+  if (!FF || !FB) { render([]); return; }
+
+  // as 15 duplas de classe esperadas, em ordem alfabética
+  var expectedPairs = [];
+  var sortedClasses = CLASSES.slice().sort();
+  for (var ci = 0; ci < sortedClasses.length; ci++) {
+    for (var cj = ci + 1; cj < sortedClasses.length; cj++) {
+      expectedPairs.push(sortedClasses[ci] + '+' + sortedClasses[cj]);
+    }
+  }
+  check('15 duplas de classe esperadas', expectedPairs.length === 15, 'tem ' + expectedPairs.length);
+  var formKeys = Object.keys(FF);
+  check('fusionForms tem exatamente 15 chaves', formKeys.length === 15, 'tem ' + formKeys.length);
+
+  var allFormNames = {}, dupFormNames = [];
+  for (var p = 0; p < expectedPairs.length; p++) {
+    var pk = expectedPairs[p];
+    var forms = FF[pk];
+    if (!check('dupla ' + pk + ' presente', isArr(forms))) continue;
+
+    var parts = pk.split('+');
+    check('dupla ' + pk + ' com chave em ordem alfabética',
+      parts.length === 2 && parts[0] < parts[1] && has(CLASSES, parts[0]) && has(CLASSES, parts[1]));
+    check('dupla ' + pk + ' tem 5 formas', forms.length === 5, 'tem ' + forms.length);
+
+    var seenTiers = [];
+    for (var f = 0; f < forms.length; f++) {
+      var form = forms[f], tag = pk + ' t' + form.tier;
+      seenTiers.push(form.tier);
+
+      check(tag + ' tier válido', has(TIERS, form.tier), String(form.tier));
+      check(tag + ' formName string', isStr(form.formName));
+      check(tag + ' formName é uma palavra só',
+        isStr(form.formName) && form.formName.indexOf(' ') === -1, form.formName);
+      if (isStr(form.formName)) {
+        if (allFormNames[form.formName]) dupFormNames.push(form.formName + ' (' + tag + ')');
+        allFormNames[form.formName] = true;
+      }
+      check(tag + ' paCost 1–6', isNum(form.paCost) && form.paCost >= 1 && form.paCost <= 6, String(form.paCost));
+      check(tag + ' cooldown 0–6', isNum(form.cooldown) && form.cooldown >= 0 && form.cooldown <= 6, String(form.cooldown));
+      check(tag + ' range válido', rangeError(form.range) === '', rangeError(form.range));
+      check(tag + ' aoe válida', aoeError(form.aoe) === '', aoeError(form.aoe));
+      check(tag + ' targetSide válido', has(SIDES, form.targetSide), String(form.targetSide));
+      check(tag + ' needsEmptyTile booleano', typeof form.needsEmptyTile === 'boolean');
+      check(tag + ' description', isStr(form.description) && form.description.length > 25);
+      check(tag + ' fxShape', isStr(form.fxShape));
+      check(tag + ' riderMode válido', form.riderMode === 'offense' || form.riderMode === 'support', String(form.riderMode));
+
+      // mechanic
+      if (check(tag + ' mechanic é lista não-vazia', isArr(form.mechanic) && form.mechanic.length > 0)) {
+        var usesSym = false;
+        for (var e = 0; e < form.mechanic.length; e++) {
+          var err = effectError(form.mechanic[e], true);
+          check(tag + ' efeito #' + (e + 1) + ' (' + (form.mechanic[e] || {}).type + ') válido', err === '', err);
+          if (has(SYMBOLIC, form.mechanic[e].element)) usesSym = true;
+          if (form.mechanic[e].type === 'summon') {
+            check(tag + ' summon "' + form.mechanic[e].monsterId + '" existe em DATA.fusionSummons',
+              !!(D.fusionSummons && D.fusionSummons[form.mechanic[e].monsterId]));
+          }
+          if (form.mechanic[e].type === 'trap') {
+            check(tag + ' trap "' + form.mechanic[e].trapId + '" existe em DATA.fusionSpells',
+              !!(D.fusionSpells && D.fusionSpells[form.mechanic[e].trapId]));
+          }
+        }
+        // formas ofensivas devem carregar o elemento da mistura
+        if (form.riderMode === 'offense') {
+          check(tag + ' usa elemento simbólico @A/@B na mecânica', usesSym);
+        }
+      }
+
+      // '@' só pode aparecer dentro de mechanic
+      var clone = {};
+      for (var kk in form) if (Object.prototype.hasOwnProperty.call(form, kk) && kk !== 'mechanic') clone[kk] = form[kk];
+      check(tag + " sem '@' fora de mechanic", JSON.stringify(clone).indexOf('@') === -1);
+    }
+    var tiersOk = seenTiers.length === 5;
+    for (var t = 0; t < TIERS.length; t++) if (!has(seenTiers, TIERS[t])) tiersOk = false;
+    check('dupla ' + pk + ' cobre os tiers 0/5/12/20/30', tiersOk, seenTiers.join(','));
+  }
+  check('75 formName únicos em todo o sistema',
+    Object.keys(allFormNames).length === 75 && dupFormNames.length === 0,
+    dupFormNames.length ? 'repetidos: ' + dupFormNames.join(', ') : 'tem ' + Object.keys(allFormNames).length);
+
+  // =========================================================================
+  // 2. MISTURAS ELEMENTAIS
+  // =========================================================================
+  var expectedBlends = [], sortedEl = ELEMENTS.slice().sort();
+  for (var a1 = 0; a1 < sortedEl.length; a1++) {
+    for (var a2 = a1; a2 < sortedEl.length; a2++) expectedBlends.push(sortedEl[a1] + '+' + sortedEl[a2]);
+  }
+  check('15 misturas elementais esperadas', expectedBlends.length === 15, 'tem ' + expectedBlends.length);
+
+  var affixes = {}, dupAffix = [];
+  for (var b = 0; b < expectedBlends.length; b++) {
+    var bk = expectedBlends[b], blend = FB[bk];
+    if (!check('mistura ' + bk + ' presente', !!blend)) continue;
+    check('mistura ' + bk + ' affix é uma palavra',
+      isStr(blend.affix) && blend.affix.indexOf(' ') === -1, String(blend.affix));
+    if (isStr(blend.affix)) {
+      if (affixes[blend.affix]) dupAffix.push(blend.affix);
+      affixes[blend.affix] = true;
+    }
+    check('mistura ' + bk + ' elements bate com a chave',
+      isArr(blend.elements) && blend.elements.length === 2 &&
+      blend.elements[0] + '+' + blend.elements[1] === bk, JSON.stringify(blend.elements));
+    check('mistura ' + bk + ' description', isStr(blend.description) && blend.description.length > 25);
+    check('mistura ' + bk + ' fxKey', isStr(blend.fxKey));
+    check('mistura ' + bk + ' palette hex',
+      !!blend.palette && /^#[0-9a-fA-F]{6}$/.test(blend.palette.primary) &&
+      /^#[0-9a-fA-F]{6}$/.test(blend.palette.secondary) && /^#[0-9a-fA-F]{6}$/.test(blend.palette.accent));
+
+    ['rider', 'riderSupport'].forEach(function (field) {
+      var list = blend[field];
+      if (!check('mistura ' + bk + '.' + field + ' é lista não-vazia', isArr(list) && list.length > 0)) return;
+      for (var r = 0; r < list.length; r++) {
+        var er = effectError(list[r], false);   // rider NÃO pode ter '@A'/'@B'
+        check('mistura ' + bk + '.' + field + ' efeito #' + (r + 1) + ' (' + (list[r] || {}).type + ') válido',
+          er === '', er);
+      }
+    });
+    check('mistura ' + bk + " sem '@' em nenhum campo", JSON.stringify(blend).indexOf('@') === -1);
+  }
+  check('15 affixes únicos', Object.keys(affixes).length === 15 && dupAffix.length === 0,
+    dupAffix.length ? 'repetidos: ' + dupAffix.join(', ') : 'tem ' + Object.keys(affixes).length);
+
+  // toda ordem de par elemental precisa resolver (a engine pode montar A+B ou B+A)
+  var missingOrder = [];
+  for (var o1 = 0; o1 < ELEMENTS.length; o1++) {
+    for (var o2 = 0; o2 < ELEMENTS.length; o2++) {
+      var ok2 = ELEMENTS[o1] + '+' + ELEMENTS[o2];
+      var bl = FB[ok2];
+      if (!bl || !isArr(bl.elements) || bl.elements[0] !== ELEMENTS[o1] || bl.elements[1] !== ELEMENTS[o2]) {
+        missingOrder.push(ok2);
+      }
+    }
+  }
+  check('as 25 ordens de par elemental resolvem com elements na ordem certa',
+    missingOrder.length === 0, missingOrder.join(', '));
+
+  // =========================================================================
+  // 3. PAYLOADS E INVOCADOS DE FUSÃO
+  // =========================================================================
+  var FS = D.fusionSpells || {}, FSUM = D.fusionSummons || {};
+  check('DATA.fusionSpells presente', Object.keys(FS).length > 0);
+  check('DATA.fusionSummons presente', Object.keys(FSUM).length > 0);
+  Object.keys(FS).forEach(function (id) {
+    var s = FS[id];
+    check('fusionSpell ' + id + ' id bate', s.id === id);
+    check('fusionSpell ' + id + ' element concreto', has(ELEMENTS, s.element), String(s.element));
+    check('fusionSpell ' + id + ' range válido', rangeError(s.range) === '', rangeError(s.range));
+    check('fusionSpell ' + id + ' aoe válida', aoeError(s.aoe) === '', aoeError(s.aoe));
+    check('fusionSpell ' + id + ' targetSide', has(SIDES, s.targetSide));
+    check('fusionSpell ' + id + ' effects válidos', (function () {
+      if (!isArr(s.effects) || !s.effects.length) return false;
+      for (var i = 0; i < s.effects.length; i++) if (effectError(s.effects[i], false) !== '') return false;
+      return true;
+    })());
+  });
+  Object.keys(FSUM).forEach(function (id) {
+    var m = FSUM[id];
+    check('invocado ' + id + ' id bate', m.id === id);
+    check('invocado ' + id + ' stats sãos',
+      !!m.stats && isNum(m.stats.hp) && m.stats.hp >= 20 && m.stats.hp <= 120 &&
+      isNum(m.stats.pa) && isNum(m.stats.pp) && !!m.stats.resists);
+    check('invocado ' + id + ' summonOnly + xp 0', m.summonOnly === true && m.xp === 0);
+    check('invocado ' + id + ' feitiços existem', (function () {
+      if (!isArr(m.spells) || !m.spells.length) return false;
+      for (var i = 0; i < m.spells.length; i++) if (!FS[m.spells[i]]) return false;
+      return true;
+    })());
+    check('invocado ' + id + ' descrição visual rica', isStr(m.description) && m.description.length > 40);
+  });
+
+  // =========================================================================
+  // 4. SIMULADOR DE COMPOSIÇÃO  (>= 1000 composições)
+  // =========================================================================
+  function resolveEffect(eff, elems) {
+    var out = {}, k;
+    for (k in eff) if (Object.prototype.hasOwnProperty.call(eff, k)) {
+      out[k] = isArr(eff[k]) ? eff[k].slice() : eff[k];
+    }
+    if (out.element === '@A') out.element = elems[0];
+    else if (out.element === '@B') out.element = elems[1];
+    return out;
+  }
+
+  function compose(pairKey, blendKey, form) {
+    var blend = FB[blendKey];
+    var effects = [], i;
+    for (i = 0; i < form.mechanic.length; i++) effects.push(resolveEffect(form.mechanic[i], blend.elements));
+    var rider = (form.riderMode === 'support' && isArr(blend.riderSupport)) ? blend.riderSupport : blend.rider;
+    for (i = 0; i < rider.length; i++) effects.push(resolveEffect(rider[i], blend.elements));
+    return {
+      id: 'fus:' + pairKey + ':' + blendKey + ':' + form.tier,
+      name: form.formName + ' ' + blend.affix,
+      element: blend.elements[0],
+      classId: null, unlockLevel: form.tier,
+      paCost: form.paCost, cooldown: form.cooldown, castsPerTurn: form.castsPerTurn || 1,
+      range: form.range, aoe: form.aoe, needsEmptyTile: form.needsEmptyTile,
+      targetSide: form.targetSide, effects: effects,
+      description: form.description, flavor: blend.description, fxKey: blend.fxKey
+    };
+  }
+
+  var composed = 0, badName = 0, badEffect = 0, badElement = 0, unresolved = 0, badIds = {};
+  var firstFailure = '';
+  var blendKeysAll = Object.keys(FB);
+  var sampleNames = [];
+
+  for (var pp2 = 0; pp2 < expectedPairs.length; pp2++) {
+    var pkey = expectedPairs[pp2], flist = FF[pkey];
+    if (!isArr(flist)) continue;
+    for (var bb = 0; bb < blendKeysAll.length; bb++) {
+      var bkey = blendKeysAll[bb];
+      for (var ff2 = 0; ff2 < flist.length; ff2++) {
+        var spell = compose(pkey, bkey, flist[ff2]);
+        composed++;
+
+        if (!isStr(spell.name) || spell.name.split(' ').length < 2 || spell.name.indexOf('undefined') !== -1) {
+          badName++; if (!firstFailure) firstFailure = 'nome inválido em ' + spell.id + ': "' + spell.name + '"';
+        }
+        if (!has(ELEMENTS, spell.element)) {
+          badElement++; if (!firstFailure) firstFailure = 'elemento não resolvido em ' + spell.id;
+        }
+        if (JSON.stringify(spell).indexOf('@') !== -1) {
+          unresolved++; if (!firstFailure) firstFailure = 'sobrou @ em ' + spell.id;
+        }
+        for (var se = 0; se < spell.effects.length; se++) {
+          var serr = effectError(spell.effects[se], false);
+          if (serr !== '') {
+            badEffect++;
+            if (!firstFailure) firstFailure = spell.id + ' efeito #' + (se + 1) + ': ' + serr;
+          }
+        }
+        if (badIds[spell.id]) {
+          if (!firstFailure) firstFailure = 'id repetido: ' + spell.id;
+        }
+        badIds[spell.id] = true;
+
+        if (flist[ff2].tier === 30 && sampleNames.length < 12 && (composed % 37 === 0)) {
+          sampleNames.push({ id: spell.id, name: spell.name, pair: pkey, blend: bkey,
+                             effects: spell.effects.map(function (x) { return x.type + (x.element ? ':' + x.element : ''); }).join(', ') });
+        }
+      }
+    }
+  }
+
+  check('simulador rodou >= 1000 composições', composed >= 1000, composed + ' composições');
+  check('nenhum nome composto vazio/inválido', badName === 0, badName + ' falhas');
+  check('nenhum elemento não resolvido', badElement === 0 && unresolved === 0,
+    (badElement + unresolved) + ' falhas');
+  check('nenhum efeito inválido nas composições', badEffect === 0, badEffect + ' falhas');
+  check('ids de fusão únicos', Object.keys(badIds).length === composed,
+    Object.keys(badIds).length + ' ids para ' + composed + ' composições');
+  if (firstFailure) check('primeira falha de composição', false, firstFailure);
+
+  // =========================================================================
+  // 5. PETS
+  // =========================================================================
+  var P = D.pets || {}, PS = D.petSpells || {};
+  var petIds = Object.keys(P);
+  check('DATA.pets com pelo menos 5 pets', petIds.length >= 5, 'tem ' + petIds.length);
+  check('DATA.petSpells presente', Object.keys(PS).length > 0);
+  var petElements = {};
+  petIds.forEach(function (id) {
+    var pet = P[id];
+    check('pet ' + id + ' id bate', pet.id === id);
+    check('pet ' + id + ' name/description', isStr(pet.name) && isStr(pet.description) && pet.description.length > 80);
+    check('pet ' + id + ' elemento válido', has(ELEMENTS, pet.element), String(pet.element));
+    petElements[pet.element] = true;
+    check('pet ' + id + ' behavior válido', has(BEHAVIORS, pet.behavior), String(pet.behavior));
+    check('pet ' + id + ' range 1–6', isNum(pet.range) && pet.range >= 1 && pet.range <= 6, String(pet.range));
+    check('pet ' + id + ' followDistance 1–4',
+      isNum(pet.followDistance) && pet.followDistance >= 1 && pet.followDistance <= 4, String(pet.followDistance));
+    check('pet ' + id + ' dropDungeon', isStr(pet.dropDungeon));
+    check('pet ' + id + ' dropWeight > 0', isNum(pet.dropWeight) && pet.dropWeight > 0);
+
+    var bn = pet.bonuses || {};
+    check('pet ' + id + ' bônus de PA <= 1', !bn.pa || (bn.pa >= 0 && bn.pa <= 1), String(bn.pa));
+    check('pet ' + id + ' bônus de PP <= 1', !bn.pp || (bn.pp >= 0 && bn.pp <= 1), String(bn.pp));
+    check('pet ' + id + ' bônus de PV <= 40', !bn.hp || (bn.hp > 0 && bn.hp <= 40), String(bn.hp));
+    check('pet ' + id + ' bônus de poder <= 20', !bn.power || (bn.power > 0 && bn.power <= 20), String(bn.power));
+    ['initiative', 'dodge', 'lock'].forEach(function (st) {
+      check('pet ' + id + ' bônus ' + st + ' <= 20', bn[st] === undefined || (isNum(bn[st]) && bn[st] <= 20));
+    });
+    if (bn.resists) {
+      Object.keys(bn.resists).forEach(function (el) {
+        check('pet ' + id + ' resist ' + el + ' válida',
+          has(ELEMENTS, el) && isNum(bn.resists[el]) && bn.resists[el] >= -20 && bn.resists[el] <= 20);
+      });
+    }
+    check('pet ' + id + ' tem feitiços próprios', isArr(pet.spells) && pet.spells.length >= 1);
+    (pet.spells || []).forEach(function (sid) {
+      var sp = PS[sid];
+      if (!check('pet ' + id + ' feitiço "' + sid + '" existe em DATA.petSpells', !!sp)) return;
+      check('petSpell ' + sid + ' element concreto', has(ELEMENTS, sp.element), String(sp.element));
+      check('petSpell ' + sid + ' paCost 1–6', isNum(sp.paCost) && sp.paCost >= 1 && sp.paCost <= 6);
+      check('petSpell ' + sid + ' range válido', rangeError(sp.range) === '', rangeError(sp.range));
+      check('petSpell ' + sid + ' aoe válida', aoeError(sp.aoe) === '', aoeError(sp.aoe));
+      check('petSpell ' + sid + ' targetSide', has(SIDES, sp.targetSide));
+      check('petSpell ' + sid + ' effects válidos', (function () {
+        if (!isArr(sp.effects) || !sp.effects.length) return false;
+        for (var i = 0; i < sp.effects.length; i++) if (effectError(sp.effects[i], false) !== '') return false;
+        return true;
+      })());
+      check('petSpell ' + sid + ' descrição', isStr(sp.description) && sp.description.length > 25);
+    });
+  });
+  check('pets cobrem pelo menos 4 elementos distintos', Object.keys(petElements).length >= 4,
+    Object.keys(petElements).join(','));
+  // nenhum feitiço de pet órfão
+  Object.keys(PS).forEach(function (sid) {
+    var used = false;
+    petIds.forEach(function (id) { if (has(P[id].spells || [], sid)) used = true; });
+    check('petSpell ' + sid + ' é usado por algum pet', used);
+  });
+
+  // =========================================================================
+  // 6. ITENS
+  // =========================================================================
+  var IT = D.items || {}, IS = D.itemSpells || {};
+  var itemIds = Object.keys(IT);
+  check('DATA.items com pelo menos 36 itens', itemIds.length >= 36, 'tem ' + itemIds.length);
+
+  var PREFIX = { 'gh-': 'greenhouse', 'ci-': 'cistern', 'em-': 'emberlock',
+                 'av-': 'windscaffold', 'mt-': 'quakemine', 'cp-': 'brokenheart' };
+  var byPrefix = {}, bySlot = {}, epicByPrefix = {};
+  Object.keys(PREFIX).forEach(function (px) { byPrefix[px] = 0; epicByPrefix[px] = 0; });
+  SLOTS.forEach(function (s) { bySlot[s] = 0; });
+
+  itemIds.forEach(function (id) {
+    var it = IT[id];
+    check('item ' + id + ' id bate', it.id === id);
+    var px = id.substring(0, 3);
+    if (!check('item ' + id + ' usa prefixo de calabouço válido', !!PREFIX[px], px)) return;
+    byPrefix[px]++;
+    check('item ' + id + ' dungeonId bate com o prefixo', it.dungeonId === PREFIX[px],
+      it.dungeonId + ' != ' + PREFIX[px]);
+    check('item ' + id + ' slot válido', has(SLOTS, it.slot), String(it.slot));
+    check('item ' + id + ' rarity válida', has(RARITIES, it.rarity), String(it.rarity));
+    if (has(SLOTS, it.slot)) bySlot[it.slot]++;
+    if (it.rarity === 'epico') epicByPrefix[px]++;
+    check('item ' + id + ' name/description/flavor/iconKey',
+      isStr(it.name) && isStr(it.description) && it.description.length > 30 &&
+      isStr(it.flavor) && isStr(it.iconKey));
+
+    var bn = it.bonuses || {};
+    check('item ' + id + ' bonuses é objeto', !!bn && typeof bn === 'object');
+    Object.keys(bn).forEach(function (k) {
+      if (k === 'resists') {
+        Object.keys(bn.resists).forEach(function (el) {
+          check('item ' + id + ' resist ' + el + ' válida',
+            has(ELEMENTS, el) && isNum(bn.resists[el]) && bn.resists[el] >= -20 && bn.resists[el] <= 25);
+        });
+      } else {
+        check('item ' + id + ' bônus "' + k + '" conhecido',
+          has(['hp', 'pa', 'pp', 'power', 'initiative', 'dodge', 'lock'], k) && isNum(bn[k]));
+      }
+    });
+
+    // sanidade por espaço
+    if (it.slot === 'pa') {
+      check('item ' + id + ' (pa) concede no máximo +1 PA', !bn.pa || bn.pa === 1, String(bn.pa));
+      check('item ' + id + ' (pa) +1 PA só em épico', !bn.pa || it.rarity === 'epico', it.rarity);
+      check('item ' + id + ' (pa) não concede PP', !bn.pp);
+    }
+    if (it.slot === 'pp') {
+      check('item ' + id + ' (pp) concede no máximo +1 PP', !bn.pp || bn.pp === 1, String(bn.pp));
+      check('item ' + id + ' (pp) não concede PA', !bn.pa);
+    }
+    if (it.slot === 'vida') {
+      check('item ' + id + ' (vida) PV entre 10 e 60', isNum(bn.hp) && bn.hp >= 10 && bn.hp <= 60, String(bn.hp));
+      check('item ' + id + ' (vida) sem PA/PP', !bn.pa && !bn.pp);
+    }
+    if (it.slot === 'especial') {
+      check('item ' + id + ' (especial) tem grantsSpell', isStr(it.grantsSpell));
+      check('item ' + id + ' (especial) sem bônus de PA/PP', !bn.pa && !bn.pp);
+    } else {
+      check('item ' + id + ' (não especial) não concede feitiço',
+        it.grantsSpell === null || it.grantsSpell === undefined);
+    }
+    if (isStr(it.grantsSpell)) {
+      check('item ' + id + ' grantsSpell "' + it.grantsSpell + '" existe em DATA.itemSpells', !!IS[it.grantsSpell]);
+    }
+  });
+
+  Object.keys(PREFIX).forEach(function (px) {
+    check('calabouço ' + PREFIX[px] + ' (' + px + ') tem >= 6 itens', byPrefix[px] >= 6, 'tem ' + byPrefix[px]);
+    check('calabouço ' + PREFIX[px] + ' tem pelo menos 1 item épico', epicByPrefix[px] >= 1, 'tem ' + epicByPrefix[px]);
+  });
+  SLOTS.forEach(function (s) {
+    check('espaço "' + s + '" tem itens em quantidade (>= 6)', bySlot[s] >= 6, 'tem ' + bySlot[s]);
+  });
+
+  Object.keys(IS).forEach(function (sid) {
+    var sp = IS[sid];
+    check('itemSpell ' + sid + ' id bate', sp.id === sid);
+    check('itemSpell ' + sid + ' element concreto', has(ELEMENTS, sp.element), String(sp.element));
+    check('itemSpell ' + sid + ' paCost 1–6', isNum(sp.paCost) && sp.paCost >= 1 && sp.paCost <= 6);
+    check('itemSpell ' + sid + ' cooldown 0–6', isNum(sp.cooldown) && sp.cooldown >= 0 && sp.cooldown <= 6);
+    check('itemSpell ' + sid + ' range válido', rangeError(sp.range) === '', rangeError(sp.range));
+    check('itemSpell ' + sid + ' aoe válida', aoeError(sp.aoe) === '', aoeError(sp.aoe));
+    check('itemSpell ' + sid + ' targetSide', has(SIDES, sp.targetSide));
+    check('itemSpell ' + sid + ' effects válidos', (function () {
+      if (!isArr(sp.effects) || !sp.effects.length) return false;
+      for (var i = 0; i < sp.effects.length; i++) if (effectError(sp.effects[i], false) !== '') return false;
+      return true;
+    })());
+    var used = false;
+    itemIds.forEach(function (id) { if (IT[id].grantsSpell === sid) used = true; });
+    check('itemSpell ' + sid + ' é concedido por algum item', used);
+  });
+
+  // =========================================================================
+  // 7. NOMENCLATURA — nada de "pm" em lugar nenhum
+  // =========================================================================
+  var blobs = {
+    fusionForms: D.fusionForms, fusionBlends: D.fusionBlends, fusionIdentities: D.fusionIdentities,
+    fusionSpells: D.fusionSpells, fusionSummons: D.fusionSummons,
+    pets: D.pets, petSpells: D.petSpells, items: D.items, itemSpells: D.itemSpells
+  };
+  Object.keys(blobs).forEach(function (name) {
+    var json = JSON.stringify(blobs[name] || {});
+    check('DATA.' + name + ' sem menção a "pm"', !/(^|[^0-9a-zA-ZÀ-ÿ])pm([^0-9a-zA-ZÀ-ÿ]|$)/i.test(json));
+    check('DATA.' + name + ' sem chave "pm"', json.indexOf('"pm"') === -1);
+  });
+  check('nomenclatura pa/pp usada nos bônus de item', (function () {
+    var seenPa = false, seenPp = false;
+    itemIds.forEach(function (id) {
+      if (IT[id].bonuses && IT[id].bonuses.pa) seenPa = true;
+      if (IT[id].bonuses && IT[id].bonuses.pp) seenPp = true;
+    });
+    return seenPa && seenPp;
+  })());
+
+  // =========================================================================
+  // RENDER
+  // =========================================================================
+  render(sampleNames);
+
+  function render(samples) {
+    var passed = 0, failed = 0, failures = [];
+    for (var i = 0; i < results.length; i++) {
+      if (results[i].ok) passed++;
+      else { failed++; failures.push(results[i].name + (results[i].detail ? ' — ' + results[i].detail : '')); }
+    }
+    window.TEST_RESULTS = { passed: passed, failed: failed, failures: failures, composed: composed };
+
+    var sum = document.getElementById('summary');
+    sum.className = failed === 0 ? 'ok' : 'bad';
+    sum.textContent = (failed === 0 ? 'PASS' : 'FAIL') + ' — ' + passed + ' checagens ok, ' +
+      failed + ' falhas · ' + composed + ' composições de fusão simuladas';
+
+    if (failed) {
+      var fl = document.getElementById('failList');
+      fl.innerHTML = '<h2>Falhas</h2><ul>' + failures.map(function (f) {
+        return '<li class="fail">✗ ' + f.replace(/</g, '&lt;') + '</li>';
+      }).join('') + '</ul>';
+    }
+
+    if (samples && samples.length) {
+      var rows = samples.map(function (s) {
+        return '<tr><td>' + s.name + '</td><td>' + s.pair + '</td><td>' + s.blend + '</td><td>' +
+          s.effects.replace(/</g, '&lt;') + '</td></tr>';
+      }).join('');
+      document.getElementById('samples').innerHTML =
+        '<h2>Amostra de feitiços compostos (tier 30)</h2><table>' +
+        '<tr><th>Nome</th><th>Dupla</th><th>Mistura</th><th>Efeitos resolvidos</th></tr>' + rows + '</table>';
+    }
+
+    document.getElementById('allList').innerHTML = results.map(function (r) {
+      return '<li class="' + (r.ok ? 'pass' : 'fail') + '">' + (r.ok ? '✓' : '✗') + ' ' +
+        r.name.replace(/</g, '&lt;') + (r.detail ? ' — ' + String(r.detail).replace(/</g, '&lt;') : '') + '</li>';
+    }).join('');
+  }
+})();
+</script>
+</body>
+</html>

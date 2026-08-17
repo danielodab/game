@@ -1,0 +1,2195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — Testes do Motor de Combate (Engine/Fusion/AI)</title>
+<style>
+  body { background: #14181c; color: #dde; font-family: Consolas, monospace; padding: 16px; }
+  h1 { font-size: 18px; }
+  h2 { font-size: 14px; color: #8ad; margin: 18px 0 4px; border-bottom: 1px solid #345; }
+  #summary { font-size: 16px; font-weight: bold; margin: 12px 0; padding: 8px; border-radius: 4px; }
+  .allpass { background: #143d1e; color: #7f7; }
+  .somefail { background: #3d1414; color: #f77; }
+  .t { padding: 2px 6px; }
+  .pass::before { content: "PASS "; color: #6e6; font-weight: bold; }
+  .fail::before { content: "FAIL "; color: #f66; font-weight: bold; }
+  .fail { background: #2a1515; }
+  .msg { color: #fa8; margin-left: 60px; }
+  #notes { margin: 10px 0; padding: 8px; background: #1d2530; border-left: 3px solid #8ad; color: #bcd; }
+</style>
+</head>
+<body>
+<h1>SOTERRA 2.0 — suíte do motor de combate (headless: sem Renderer/UI)</h1>
+<div id="summary">rodando...</div>
+<div id="notes"></div>
+<div id="results"></div>
+
+<script>
+// Cache-buster por timestamp: o painel do navegador cacheia js agressivamente.
+(function () {
+  var v = '?v=' + Date.now();
+  var files = [
+    // dados v2 (podem ainda NÃO existir: 404 é tolerado, a suíte usa fixtures)
+    '../js/core/data/elements.js', '../js/core/data/monsters.js',
+    '../js/core/data/dungeons.js', '../js/core/data/classes.js',
+    '../js/core/data/spells.js', '../js/core/data/progression.js',
+    '../js/core/data/fusions.js', '../js/core/data/pets.js',
+    '../js/core/data/items.js',
+    // motor
+    '../js/core/engine.js', '../js/core/fusion.js', '../js/core/ai.js'
+  ];
+  for (var i = 0; i < files.length; i++) {
+    document.write('<scr' + 'ipt src="' + files[i] + v + '"></scr' + 'ipt>');
+  }
+})();
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  var passed = 0, failed = 0, failures = [], notes = [];
+  var resultsEl = document.getElementById('results');
+
+  function report(name, ok, msg) {
+    var div = document.createElement('div');
+    div.className = 't ' + (ok ? 'pass' : 'fail');
+    div.textContent = name;
+    if (!ok && msg) {
+      var m = document.createElement('div');
+      m.className = 'msg';
+      m.textContent = msg;
+      div.appendChild(m);
+    }
+    resultsEl.appendChild(div);
+    if (ok) console.log('PASS: ' + name);
+    else console.error('FAIL: ' + name + ' — ' + msg);
+  }
+  function section(title) {
+    var h = document.createElement('h2');
+    h.textContent = title;
+    resultsEl.appendChild(h);
+  }
+  function t(name, fn) {
+    try { fn(); passed++; report(name, true); }
+    catch (e) {
+      failed++; failures.push(name + ' — ' + e.message);
+      report(name, false, e.message + (e.stack ? ' | ' + String(e.stack).split('\n')[1] : ''));
+    }
+  }
+  function ok(cond, msg) { if (!cond) throw new Error(msg || 'asserção falhou'); }
+  function eq(a, b, msg) {
+    if (a !== b) throw new Error((msg || 'eq') + ' — esperado [' + b + '], obtido [' + a + ']');
+  }
+
+  if (!window.JOGO || !JOGO.Engine) {
+    failed++;
+    failures.push('ERRO FATAL: JOGO.Engine não carregou');
+    report('ERRO FATAL: JOGO.Engine não carregou', false, 'verifique js/core/engine.js');
+    finish();
+    return;
+  }
+
+  var E = JOGO.Engine;
+  var F = JOGO.Fusion;
+  var D = JOGO.DATA = JOGO.DATA || {};
+
+  // ======================================================== RNG determinístico
+  // Reimplementa mulberry32 do motor para ESCOLHER a semente que produz os
+  // sorteios desejados — os testes de esquiva e de surpresa ficam exatos.
+  function draw(seed) {
+    var s = (seed + 0x6D2B79F5) >>> 0;
+    var x = s;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return { value: ((x ^ (x >>> 14)) >>> 0) / 4294967296, next: s };
+  }
+  // Ajusta state._rng para que os próximos sorteios satisfaçam `preds` (em ordem).
+  function setRolls(state, preds) {
+    for (var s = 1; s < 400000; s++) {
+      var cur = s, good = true;
+      for (var i = 0; i < preds.length; i++) {
+        var r = draw(cur);
+        cur = r.next;
+        if (!preds[i](r.value)) { good = false; break; }
+      }
+      if (good) { state._rng = s; return s; }
+    }
+    throw new Error('nenhuma semente satisfaz os sorteios pedidos');
+  }
+  function lt(x) { return function (v) { return v < x; }; }
+  function gte(x) { return function (v) { return v >= x; }; }
+
+  // ============================================================ FIXTURES v2
+  function zeroRes() { return { neutro: 0, fogo: 0, agua: 0, terra: 0, ar: 0 }; }
+
+  function baseStats(over) {
+    var s = { hp: 100, pa: 6, pp: 3, initiative: 10, power: 0, dodge: 0, lock: 0, resists: zeroRes() };
+    for (var k in over) { if (k === 'resists') { for (var r in over.resists) s.resists[r] = over.resists[r]; } else s[k] = over[k]; }
+    return s;
+  }
+  function sp(id, over, bucket) {
+    var s = {
+      id: id, name: id, element: 'neutro', classId: null, unlockLevel: 0,
+      paCost: 1, cooldown: 0, castsPerTurn: 0,
+      range: { min: 0, max: 20, line: false, los: false },
+      aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'any',
+      effects: [], description: 'teste', flavor: '', fxKey: 'slam'
+    };
+    for (var k in over) s[k] = over[k];
+    (bucket || D.spells)[id] = s;
+    return s;
+  }
+  function mon(id, over) {
+    var m = { id: id, name: id, family: 'Teste', element: 'neutro', description: 'teste',
+      stats: baseStats({ hp: 100, pa: 6, pp: 3, initiative: 10 }),
+      spells: [], ai: 'melee', traits: [], boss: false };
+    for (var k in over) {
+      if (k === 'stats') { for (var k2 in over.stats) m.stats[k2] = over.stats[k2]; }
+      else m[k] = over[k];
+    }
+    D.monsters[id] = m;
+    return m;
+  }
+
+  var T_SPELLS = ['t-nuke100', 't-nuke10', 't-fire20', 't-steal20', 't-heal20', 't-shield30',
+    't-buffpa', 't-snare', 't-resist-30', 't-push3', 't-pull3', 't-tp', 't-swap',
+    't-poison5', 't-regen5', 't-summon', 't-taunt', 't-invis', 't-line', 't-cd1',
+    't-twice', 't-cross', 't-circle',
+    // v2
+    't-root', 't-mark', 't-mark1', 't-detonate', 't-trap', 't-weather', 't-cleanse',
+    't-reflect', 't-dispel', 't-charge', 't-chain', 't-cone3', 't-ring2'];
+
+  var installed = false;
+  function installTestData() {
+    if (installed) return;
+    installed = true;
+
+    D.elements = D.elements || ['neutro', 'fogo', 'agua', 'terra', 'ar'];
+    D.rivals = D.rivals || { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
+    D.weathers = D.weathers || {};
+    D.spells = D.spells || {};
+    D.monsterSpells = D.monsterSpells || {};
+    D.petSpells = D.petSpells || {};
+    D.itemSpells = D.itemSpells || {};
+    D.monsters = D.monsters || {};
+    D.classes = D.classes || {};
+    D.pets = D.pets || {};
+    D.tileEvents = D.tileEvents || {};
+    D.dungeons = D.dungeons || [];
+    D.fusionForms = D.fusionForms || {};
+    D.fusionBlends = D.fusionBlends || {};
+
+    // ---- climas de teste (ids próprios: a suíte não depende do Criativo Mundo)
+    D.weathers['t-calmo'] = { id: 't-calmo', name: 'Calmo (teste)', favors: null, harms: null, description: '', fxKey: '', palette: {} };
+    D.weathers['t-chuva'] = { id: 't-chuva', name: 'Chuva (teste)', favors: 'agua', harms: 'fogo', description: '', fxKey: '', palette: {} };
+    D.weathers['t-estiagem'] = { id: 't-estiagem', name: 'Estiagem (teste)', favors: 'fogo', harms: 'agua', description: '', fxKey: '', palette: {} };
+
+    // ---- feitiços v1 (portados)
+    sp('t-nuke100', { effects: [{ type: 'damage', element: 'neutro', min: 100, max: 100 }] });
+    sp('t-nuke10', { effects: [{ type: 'damage', element: 'neutro', min: 10, max: 10 }] });
+    sp('t-fire20', { element: 'fogo', effects: [{ type: 'damage', element: 'fogo', min: 20, max: 20 }] });
+    sp('t-steal20', { effects: [{ type: 'damage', element: 'neutro', min: 20, max: 20, lifesteal: true }] });
+    sp('t-heal20', { effects: [{ type: 'heal', min: 20, max: 20 }] });
+    sp('t-shield30', { effects: [{ type: 'shield', value: 30, duration: 2 }] });
+    sp('t-buffpa', { range: { min: 0, max: 0, line: false, los: false }, effects: [{ type: 'buff', stat: 'pa', value: 2, duration: 1 }] });
+    sp('t-snare', { effects: [{ type: 'buff', stat: 'pp', value: -2, duration: 1 }] });
+    sp('t-resist-30', { effects: [{ type: 'resist', element: 'fogo', value: -30, duration: 2 }] });
+    sp('t-push3', { range: { min: 1, max: 20, line: false, los: false }, effects: [{ type: 'push', tiles: 3 }] });
+    sp('t-pull3', { range: { min: 1, max: 20, line: false, los: false }, effects: [{ type: 'pull', tiles: 3 }] });
+    sp('t-tp', { range: { min: 1, max: 10, line: false, los: false }, needsEmptyTile: true, effects: [{ type: 'teleport' }] });
+    sp('t-swap', { range: { min: 1, max: 10, line: false, los: false }, effects: [{ type: 'swap' }] });
+    sp('t-poison5', { effects: [{ type: 'poison', element: 'neutro', min: 5, max: 5, duration: 2 }] });
+    sp('t-regen5', { effects: [{ type: 'regen', min: 5, max: 5, duration: 2 }] });
+    sp('t-summon', { range: { min: 1, max: 10, line: false, los: false }, needsEmptyTile: true, effects: [{ type: 'summon', monsterId: 't-imp' }] });
+    sp('t-taunt', { range: { min: 0, max: 0, line: false, los: false }, effects: [{ type: 'taunt', duration: 2 }] });
+    sp('t-invis', { range: { min: 0, max: 5, line: false, los: false }, effects: [{ type: 'invisible', duration: 2 }] });
+    sp('t-line', { range: { min: 1, max: 8, line: true, los: true }, effects: [{ type: 'damage', element: 'neutro', min: 5, max: 5 }] });
+    sp('t-cd1', { cooldown: 1, effects: [{ type: 'damage', element: 'neutro', min: 1, max: 1 }] });
+    sp('t-twice', { castsPerTurn: 2, effects: [{ type: 'damage', element: 'neutro', min: 1, max: 1 }] });
+    sp('t-cross', { aoe: { shape: 'cross', size: 2 }, effects: [{ type: 'damage', element: 'neutro', min: 10, max: 10 }] });
+    sp('t-circle', { aoe: { shape: 'circle', size: 2 }, effects: [{ type: 'damage', element: 'neutro', min: 10, max: 10 }] });
+
+    // ---- feitiços v2 (10 efeitos novos + formas novas)
+    sp('t-root', { effects: [{ type: 'root', duration: 2 }] });
+    sp('t-mark', { effects: [{ type: 'mark', value: 5, duration: 5, max: 3 }] });
+    sp('t-mark1', { effects: [{ type: 'mark', value: 10, duration: 5, max: 1 }] });
+    sp('t-detonate', { effects: [{ type: 'detonateMarks', mult: 20 }] });
+    sp('t-trap', { range: { min: 1, max: 6, line: false, los: false }, needsEmptyTile: true,
+      effects: [{ type: 'trap', trapId: 't-trapdmg', duration: 3 }] });
+    sp('t-trapdmg', { effects: [{ type: 'damage', element: 'neutro', min: 30, max: 30 }] });
+    sp('t-weather', { range: { min: 0, max: 0, line: false, los: false },
+      effects: [{ type: 'weatherShift', weather: 't-estiagem' }] });
+    sp('t-cleanse', { effects: [{ type: 'cleanse', kinds: ['poison', 'root'] }] });
+    sp('t-reflect', { range: { min: 0, max: 6, line: false, los: false },
+      effects: [{ type: 'reflect', pct: 50, duration: 3 }] });
+    sp('t-dispel', { effects: [{ type: 'dispelShield' }] });
+    sp('t-charge', { range: { min: 1, max: 8, line: false, los: false },
+      needsEmptyTile: true, effects: [{ type: 'moveTo', maxTiles: 4 }] });
+    sp('t-chain', { effects: [{ type: 'chain', jumps: 2, falloff: 0.5, element: 'neutro', min: 40, max: 40 }] });
+    sp('t-cone3', { aoe: { shape: 'cone', size: 3 }, range: { min: 1, max: 8, line: false, los: false },
+      effects: [{ type: 'damage', element: 'neutro', min: 10, max: 10 }] });
+    sp('t-ring2', { aoe: { shape: 'ring', size: 2 }, range: { min: 0, max: 8, line: false, los: false },
+      effects: [{ type: 'damage', element: 'neutro', min: 10, max: 10 }] });
+
+    // ---- feitiços de outras fontes (teste do merge de Engine.spell)
+    sp('t-mon-bite', { paCost: 3, range: { min: 1, max: 1, line: false, los: true },
+      effects: [{ type: 'damage', element: 'neutro', min: 5, max: 5 }] }, D.monsterSpells);
+    sp('t-mon-shot', { paCost: 3, range: { min: 2, max: 6, line: false, los: true },
+      effects: [{ type: 'damage', element: 'neutro', min: 5, max: 5 }] }, D.monsterSpells);
+    sp('t-mon-mend', { paCost: 3, range: { min: 0, max: 6, line: false, los: false },
+      effects: [{ type: 'heal', min: 10, max: 10 }] }, D.monsterSpells);
+    sp('t-mon-nuke', { paCost: 3, effects: [{ type: 'damage', element: 'neutro', min: 100, max: 100 }] }, D.monsterSpells);
+    sp('t-mon-nuke10', { paCost: 3, effects: [{ type: 'damage', element: 'neutro', min: 10, max: 10 }] }, D.monsterSpells);
+    sp('t-mon-summon', { paCost: 3, range: { min: 1, max: 10, line: false, los: false }, needsEmptyTile: true,
+      effects: [{ type: 'summon', monsterId: 't-imp' }] }, D.monsterSpells);
+    sp('t-pet-bite', { paCost: 2, range: { min: 1, max: 1, line: false, los: false },
+      effects: [{ type: 'damage', element: 'neutro', min: 12, max: 12 }] }, D.petSpells);
+    sp('t-pet-mend', { paCost: 2, range: { min: 0, max: 3, line: false, los: false },
+      effects: [{ type: 'heal', min: 8, max: 8 }] }, D.petSpells);
+    sp('t-item-zap', { paCost: 2, effects: [{ type: 'damage', element: 'ar', min: 15, max: 15 }] }, D.itemSpells);
+
+    // ---- classes de teste
+    D.classes['t-alfa'] = { id: 't-alfa', name: 'Alfa', role: 'tank', description: 'teste', lore: '',
+      palette: { primary: '#888', secondary: '#444', accent: '#fff' },
+      stats: baseStats({ hp: 200, pa: 10, pp: 3, initiative: 100, dodge: 0, lock: 0 }),
+      baseSpells: T_SPELLS.slice(), paths: {}, startsUnlocked: true, cardRarity: 'comum' };
+    D.classes['t-beta'] = { id: 't-beta', name: 'Beta', role: 'support', description: 'teste', lore: '',
+      palette: { primary: '#888', secondary: '#444', accent: '#fff' },
+      stats: baseStats({ hp: 100, pa: 6, pp: 3, initiative: 90 }),
+      baseSpells: ['t-nuke10'], paths: {}, startsUnlocked: true, cardRarity: 'comum' };
+
+    // ---- monstros de teste
+    mon('t-dummy', { stats: { hp: 1000, initiative: 10 } });
+    mon('t-imp', { stats: { hp: 30, initiative: 11 } });
+    mon('t-rock', { stats: { hp: 1000, initiative: 5 }, traits: [{ type: 'pushImmune' }] });
+    mon('t-foe', { stats: { hp: 1000, pa: 10, initiative: 8 }, spells: ['t-mon-nuke', 't-mon-nuke10', 't-mon-summon'] });
+    mon('t-boom', { stats: { hp: 10, initiative: 7 }, traits: [{ type: 'explodeOnDeath', element: 'neutro', damage: 18, radius: 1 }] });
+    mon('t-split', { stats: { hp: 10, initiative: 6 }, traits: [{ type: 'split', monsterId: 't-imp', count: 2 }] });
+    mon('t-berserk', { stats: { hp: 100, initiative: 4 }, traits: [{ type: 'enrage', hpPct: 0.5, power: 20 }] });
+    mon('t-aura', { stats: { hp: 500, initiative: 3 }, ai: 'support', traits: [{ type: 'regenAura', value: 8, radius: 2 }] });
+    mon('t-biter', { stats: { hp: 100, initiative: 9 }, spells: ['t-mon-bite'] });
+    mon('t-shooter', { stats: { hp: 100, initiative: 9 }, spells: ['t-mon-shot'], ai: 'ranged' });
+    mon('t-medic', { stats: { hp: 100, initiative: 9 }, spells: ['t-mon-mend'], ai: 'support' });
+    mon('t-fogo', { element: 'fogo', stats: { hp: 1000, initiative: 9 } });
+    mon('t-agua', { element: 'agua', stats: { hp: 1000, initiative: 9 } });
+    mon('t-terra', { element: 'terra', stats: { hp: 1000, initiative: 9 } });
+
+    // ---- pets de teste
+    D.pets['t-pet-dog'] = { id: 't-pet-dog', name: 'Cãozito', element: 'fogo', description: 'teste',
+      bonuses: { hp: 10 }, behavior: 'attack', range: 1, spells: ['t-pet-bite'],
+      followDistance: 2, dropDungeon: null, dropWeight: 1,
+      stats: baseStats({ hp: 40, pa: 3, pp: 4, initiative: 50 }) };
+    D.pets['t-pet-nurse'] = { id: 't-pet-nurse', name: 'Enfermeira', element: 'agua', description: 'teste',
+      bonuses: { hp: 10 }, behavior: 'support', range: 3, spells: ['t-pet-mend'],
+      followDistance: 2, dropDungeon: null, dropWeight: 1,
+      stats: baseStats({ hp: 40, pa: 3, pp: 3, initiative: 50 }) };
+
+    // ---- eventos de terreno de teste
+    D.tileEvents['t-ev-buff'] = { id: 't-ev-buff', name: 'Runa de Fúria', kind: 'buff', icon: '⚡',
+      weight: 1, duration: 3, effects: [{ type: 'buff', stat: 'power', value: 10, duration: 2 }] };
+    D.tileEvents['t-ev-drain'] = { id: 't-ev-drain', name: 'Sanguessuga', kind: 'drain', icon: '🩸',
+      weight: 1, duration: 3, effects: [{ type: 'damage', element: 'neutro', min: 12, max: 12 }] };
+    D.tileEvents['t-ev-mystery'] = { id: 't-ev-mystery', name: 'Surpresa', kind: 'mystery', icon: '❓',
+      weight: 1, duration: 3, outcomes: [
+        { weight: 1, effects: [{ type: 'heal', min: 25, max: 25 }], text: 'A sorte sorri.' },
+        { weight: 1, effects: [{ type: 'damage', element: 'neutro', min: 25, max: 25 }], text: 'A sorte cobra.' } ] };
+
+    // ---- fusões de teste
+    D.fusionForms['t-alfa+t-beta'] = [
+      { tier: 0, formName: 'Turbilhão', paCost: 3, cooldown: 0,
+        range: { min: 1, max: 4, line: false, los: true }, aoe: { shape: 'single', size: 0 },
+        targetSide: 'any',
+        mechanic: [{ type: 'damage', element: '@A', min: 10, max: 10 },
+                   { type: 'damage', element: '@B', min: 6, max: 6 }],
+        description: 'gira e corta', fxShape: 'burst' },
+      { tier: 20, formName: 'Cataclismo', paCost: 6, cooldown: 3,
+        range: { min: 1, max: 6, line: false, los: true }, aoe: { shape: 'circle', size: 2 },
+        targetSide: 'any',
+        mechanic: [{ type: 'damage', element: '@A', min: 40, max: 40 }],
+        description: 'o fim', fxShape: 'nova' }
+    ];
+    D.fusionBlends['agua+ar'] = { affix: 'Salgado', elements: ['ar', 'agua'],
+      rider: [{ type: 'poison', element: 'agua', min: 3, max: 3, duration: 2 }],
+      palette: {}, fxKey: 'fx-salgado' };
+    D.fusionBlends['neutro+neutro'] = { affix: 'Bruto', elements: ['neutro', 'neutro'],
+      rider: [{ type: 'buff', stat: 'power', value: 5, duration: 2 }],
+      palette: {}, fxKey: 'fx-bruto' };
+    D.fusionBlends['ar+neutro'] = { affix: 'Rascante', elements: ['ar', 'neutro'],
+      rider: [], palette: {}, fxKey: 'fx-rasc' };
+
+    // ---- calabouço de teste
+    D.dungeons.push({
+      id: 'test-arena-v2', name: 'Arena de Teste v2', theme: 'teste', description: 'teste',
+      difficulty: 1, order: 99, palette: {}, defaultWeather: 't-calmo',
+      weatherShiftEveryRounds: 0, tileEventRate: 0, lootTable: [], cardDrops: [],
+      rooms: [
+        { name: 'arena', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '###########',
+            '#P...a....#',
+            '#.........#',
+            '#P...b....#',
+            '#.........#',
+            '#P........#',
+            '#.........#',
+            '###########'],
+          monsters: { a: 't-dummy', b: 't-dummy' } },
+        { name: 'labirinto', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '###########',
+            '#P..#....a#',
+            '#...#.....#',
+            '#...#.....#',
+            '#.~~......#',
+            '#.........#',
+            '#...b.....#',
+            '###########'],
+          monsters: { a: 't-dummy', b: 't-dummy' } },
+        { name: 'corredor', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '#######',
+            '#P.a..#',
+            '#######'],
+          monsters: { a: 't-dummy' } },
+        { name: 'fusao', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '###########',
+            '#PP.......#',
+            '#P........#',
+            '#.....a...#',
+            '#.........#',
+            '###########'],
+          monsters: { a: 't-dummy' } },
+        { name: 'cobertura', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '#########',
+            '#P.=..a.#',
+            '#.......#',
+            '#P......#',
+            '#########'],
+          monsters: { a: 't-dummy' } },
+        { name: 'campo', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '#############',
+            '#P..........#',
+            '#...........#',
+            '#P..........#',
+            '#...........#',
+            '#P.......a..#',
+            '#...........#',
+            '#...........#',
+            '#...........#',
+            '#...........#',
+            '#############'],
+          monsters: { a: 't-dummy' } }
+      ]
+    });
+
+    // calabouço com ciclo automático de clima
+    D.dungeons.push({
+      id: 'test-cycle-v2', name: 'Ciclo de Teste', theme: 'teste', description: 'teste',
+      difficulty: 1, order: 99, palette: {}, defaultWeather: 't-calmo',
+      weatherShiftEveryRounds: 2, weatherCycle: ['t-calmo', 't-chuva', 't-estiagem'],
+      tileEventRate: 0, lootTable: [], cardDrops: [],
+      rooms: [ { name: 'sala', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '#######',
+            '#P...a#',
+            '#P....#',
+            '#######'],
+          monsters: { a: 't-dummy' } } ]
+    });
+
+    // calabouço com eventos de terreno garantidos
+    D.dungeons.push({
+      id: 'test-events-v2', name: 'Eventos de Teste', theme: 'teste', description: 'teste',
+      difficulty: 1, order: 99, palette: {}, defaultWeather: 't-calmo',
+      weatherShiftEveryRounds: 0, tileEventRate: 1, tileEventSpawnPerRound: 2,
+      lootTable: [], cardDrops: [],
+      rooms: [ { name: 'sala', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '#########',
+            '#P.....a#',
+            '#.......#',
+            '#P......#',
+            '#########'],
+          monsters: { a: 't-dummy' } } ]
+    });
+  }
+
+  // ============================================================ helpers
+  var TD = null, TCYCLE = null, TEVENTS = null;
+  function P(over) {
+    var p = { heroId: 't-h1', classId: 't-alfa', element: 'neutro', level: 1,
+              spells: T_SPELLS.slice(), pet: null, items: {} };
+    for (var k in over) p[k] = over[k];
+    return p;
+  }
+  function P2(over) {
+    var p = { heroId: 't-h2', classId: 't-beta', element: 'neutro', level: 1,
+              spells: ['t-nuke10'], pet: null, items: {} };
+    for (var k in over) p[k] = over[k];
+    return p;
+  }
+  function arena(roomIdx, monsters, party) {
+    if (monsters) TD.rooms[roomIdx].monsters = monsters;
+    E.events.length = 0;
+    return E.createBattle('test-arena-v2', roomIdx, party || [P()]);
+  }
+  function byHero(state, heroId) {
+    for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].heroId === heroId) return state.units[i];
+    }
+    return null;
+  }
+  function byDef(state, defId, nth) {
+    var n = nth || 0;
+    for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].defId === defId) { if (n === 0) return state.units[i]; n--; }
+    }
+    return null;
+  }
+  function petOf(state, ownerUid) {
+    for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].kind === 'pet' && state.units[i].ownerUid === ownerUid) return state.units[i];
+    }
+    return null;
+  }
+  function drain() { var evs = E.events.slice(); E.events.length = 0; return evs; }
+  function findEv(evs, type, pred) {
+    for (var i = 0; i < evs.length; i++) {
+      if (evs[i].type === type && (!pred || pred(evs[i]))) return evs[i];
+    }
+    return null;
+  }
+  function countEv(evs, type, pred) {
+    var n = 0;
+    for (var i = 0; i < evs.length; i++) {
+      if (evs[i].type === type && (!pred || pred(evs[i]))) n++;
+    }
+    return n;
+  }
+  function toHero(state, heroId) {
+    var id = heroId || 't-h1';
+    for (var g = 0; g < 40; g++) {
+      var a = E.activeUnit(state);
+      if (a && a.heroId === id) return;
+      E.endTurn(state);
+      if (state.phase !== 'playing') return;
+    }
+    throw new Error('não voltou ao turno do herói de teste');
+  }
+  function nextRound(state, heroId) {
+    E.endTurn(state);
+    if (state.phase === 'playing') toHero(state, heroId);
+  }
+  function manh(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
+
+  // ============================================================ SUITE
+  function run() {
+    installTestData();
+    var i;
+    for (i = 0; i < D.dungeons.length; i++) {
+      if (D.dungeons[i].id === 'test-arena-v2') TD = D.dungeons[i];
+      if (D.dungeons[i].id === 'test-cycle-v2') TCYCLE = D.dungeons[i];
+      if (D.dungeons[i].id === 'test-events-v2') TEVENTS = D.dungeons[i];
+    }
+
+    // ================================================== 0. NOMENCLATURA pp
+    section('0 — Nomenclatura PA/PP e dados modulares');
+
+    t('renomeação: unidades expõem pp/ppMax e NENHUM campo pm', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      ok(typeof h.pp === 'number', 'pp existe');
+      ok(typeof h.ppMax === 'number', 'ppMax existe');
+      ok(h.pm === undefined, 'pm NÃO existe');
+      ok(h.pmMax === undefined, 'pmMax NÃO existe');
+      eq(h.pp, 3, 'pp inicial');
+    });
+
+    t('Engine.spell: resolve em spells, monsterSpells, petSpells e itemSpells', function () {
+      ok(!!E.spell('t-nuke100'), 'DATA.spells');
+      ok(!!E.spell('t-mon-bite'), 'DATA.monsterSpells');
+      ok(!!E.spell('t-pet-bite'), 'DATA.petSpells');
+      ok(!!E.spell('t-item-zap'), 'DATA.itemSpells');
+      ok(E.spell('nao-existe-xyz') === null, 'id inexistente devolve null');
+      eq(E.spell('t-item-zap').element, 'ar', 'feitiço de item íntegro');
+    });
+
+    t('Engine.registerSpell: feitiço em memória é resolvido por Engine.spell', function () {
+      E.registerSpell({ id: 't-gen-1', name: 'Gerado', element: 'terra', paCost: 1,
+        cooldown: 0, castsPerTurn: 0, range: { min: 0, max: 3 }, aoe: { shape: 'single', size: 0 },
+        effects: [{ type: 'damage', element: 'terra', min: 1, max: 1 }] });
+      ok(!!E.spell('t-gen-1'), 'registrado');
+      eq(E.spell('t-gen-1').name, 'Gerado', 'nome');
+    });
+
+    // ================================================== 1. CRIAÇÃO
+    section('1 — Criação de batalha, ordem e grade');
+
+    t('createBattle: grade, spawns, lados e contagem de unidades', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' }, [P(), P2()]);
+      eq(st.phase, 'playing', 'phase');
+      eq(st.units.length, 4, '2 heróis + 2 monstros');
+      eq(st.order.length, 4, 'ordem');
+      eq(st.grid.h, 8, 'altura'); eq(st.grid.w, 11, 'largura');
+      var h1 = byHero(st, 't-h1');
+      eq(h1.side, 'player', 'lado'); eq(h1.kind, 'hero', 'kind');
+      eq(h1.x, 1, 'x do 1º P'); eq(h1.y, 1, 'y do 1º P');
+      eq(byHero(st, 't-h2').y, 3, '2º herói no 2º P');
+      eq(st.weather, 't-calmo', 'clima da sala');
+      ok(st.tileEventsActive.length === 0, 'sem eventos de terreno');
+    });
+
+    t('createBattle: emite battleStart, roundStart e turnStart em ordem', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var evs = drain();
+      var iB = -1, iR = -1, iT = -1;
+      for (var k = 0; k < evs.length; k++) {
+        if (evs[k].type === 'battleStart' && iB < 0) iB = k;
+        if (evs[k].type === 'roundStart' && iR < 0) iR = k;
+        if (evs[k].type === 'turnStart' && iT < 0) iT = k;
+      }
+      ok(iB >= 0 && iR >= 0 && iT >= 0, 'eventos presentes');
+      ok(iB < iR && iR < iT, 'ordem battleStart < roundStart < turnStart');
+      ok(!!st, 'estado criado');
+    });
+
+    t('iniciativa: ordem decrescente e desempate estável pela ordem de criação', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var a = byDef(st, 't-dummy', 0), b = byDef(st, 't-dummy', 1);
+      ok(st.order.indexOf(a.uid) < st.order.indexOf(b.uid), 'a antes de b');
+      eq(E.activeUnit(st).heroId, 't-h1', 'herói (iniciativa 100) age primeiro');
+      for (var o = 1; o < st.order.length; o++) {
+        var x = E.findUnit(st, st.order[o - 1]), y = E.findUnit(st, st.order[o]);
+        ok(x.initiative >= y.initiative, 'iniciativa decrescente');
+      }
+    });
+
+    t('createBattle: erros de dado inválido são explícitos', function () {
+      var threw = 0;
+      try { E.createBattle('nao-existe', 0, [P()]); } catch (e) { threw++; }
+      try { E.createBattle('test-arena-v2', 99, [P()]); } catch (e) { threw++; }
+      try { E.createBattle('test-arena-v2', 0, []); } catch (e) { threw++; }
+      eq(threw, 3, '3 erros lançados');
+      E.events.length = 0;
+    });
+
+    // ================================================== 2. MOVIMENTO
+    section('2 — Movimento, caminho e visão');
+
+    t('reachable: respeita PP e bloqueio por unidade', function () {
+      var st = arena(2, { a: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var r = E.reachable(st, h.uid);
+      eq(r.length, 1, 'só (2,1) alcançável');
+      eq(r[0].x, 2, 'x'); eq(r[0].y, 1, 'y'); eq(r[0].cost, 1, 'custo');
+      eq(r[0].risky, false, 'sem fixador adjacente na partida');
+    });
+
+    t('path: contorna parede (caminho mais longo) e respeita adjacência ortogonal', function () {
+      var st = arena(1, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.pp = 30;
+      var p = E.path(st, h.uid, 5, 1);
+      ok(p !== null, 'caminho existe');
+      eq(p.length, 12, 'comprimento do desvio');
+      var px = h.x, py = h.y;
+      for (var k = 0; k < p.length; k++) {
+        eq(Math.abs(p[k].x - px) + Math.abs(p[k].y - py), 1, 'passo ortogonal');
+        px = p[k].x; py = p[k].y;
+      }
+      eq(px, 5, 'destino x'); eq(py, 1, 'destino y');
+    });
+
+    t('path: null para célula ocupada, buraco e rota totalmente bloqueada', function () {
+      var st = arena(2, { a: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.pp = 30;
+      ok(E.path(st, h.uid, 3, 1) === null, 'célula ocupada');
+      ok(E.path(st, h.uid, 5, 1) === null, 'rota bloqueada por unidade');
+      var st2 = arena(1, { a: 't-dummy', b: 't-dummy' });
+      var h2 = byHero(st2, 't-h1');
+      h2.pp = 30;
+      ok(E.path(st2, h2.uid, 2, 4) === null, 'buraco não é destino');
+      var reach = E.reachable(st2, h2.uid);
+      for (var k = 0; k < reach.length; k++) {
+        eq(st2.grid.tiles[reach[k].y][reach[k].x].type, 'floor', 'alcançável só em chão');
+      }
+    });
+
+    t('move: gasta PP, emite evento com caminho; movimento inválido devolve false', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      drain();
+      ok(E.move(st, h.uid, 1, 3) === true, 'move válido');
+      eq(h.pp, 1, 'PP gasto (3-2)');
+      var ev = findEv(drain(), 'move');
+      ok(!!ev, 'evento move');
+      eq(ev.path.length, 2, 'caminho de 2 células');
+      ok(E.move(st, h.uid, 1, 6) === false, 'sem PP suficiente');
+      eq(h.pp, 1, 'PP inalterado após falha');
+    });
+
+    t('LoS: parede alta bloqueia; buraco NÃO bloqueia', function () {
+      var st = arena(1, { a: 't-dummy', b: 't-dummy' });
+      ok(E.los(st, 1, 1, 9, 1) === false, 'parede em (4,1) bloqueia');
+      ok(E.los(st, 1, 4, 4, 4) === true, 'buracos (2,4)(3,4) não bloqueiam');
+    });
+
+    t('v2 terreno: "=" é obstáculo BAIXO — bloqueia passagem, não bloqueia visão', function () {
+      var st = arena(4, { a: 't-dummy' });
+      eq(st.grid.tiles[1][3].type, 'cover', 'tile cover');
+      ok(E.los(st, 1, 1, 6, 1) === true, 'cobertura não bloqueia visão');
+      var h = byHero(st, 't-h1');
+      h.pp = 10;
+      ok(E.path(st, h.uid, 3, 1) === null, 'não se anda sobre cobertura');
+      var p = E.path(st, h.uid, 4, 1);
+      ok(p !== null, 'existe desvio');
+      eq(p.length, 5, 'contorna a cobertura em 5 passos');
+      var tg = E.castTargets(st, h.uid, 't-nuke10');
+      var onCover = false;
+      for (var k = 0; k < tg.length; k++) if (tg[k].x === 3 && tg[k].y === 1) onCover = true;
+      ok(!onCover, 'cobertura não é célula-alvo válida');
+    });
+
+    t('range line: só células no mesmo eixo x ou y', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var tg = E.castTargets(st, h.uid, 't-line');
+      for (var k = 0; k < tg.length; k++) {
+        ok(tg[k].x === h.x || tg[k].y === h.y, 'alvo alinhado');
+      }
+      ok(tg.length > 0, 'há alvos');
+    });
+
+    // ================================================== 3. FEITIÇOS (base)
+    section('3 — Custos, recarga, limites e alvos');
+
+    t('castTargets: vazio sem PA; PA é gasto ao conjurar', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var pa0 = h.pa;
+      ok(E.cast(st, h.uid, 't-nuke10', 5, 1) === true, 'conjura');
+      eq(h.pa, pa0 - 1, 'PA gasto');
+      h.pa = 0;
+      eq(E.castTargets(st, h.uid, 't-nuke10').length, 0, 'sem PA, sem alvos');
+      ok(E.cast(st, h.uid, 't-nuke10', 5, 1) === false, 'cast bloqueado sem PA');
+    });
+
+    t('cooldown: recarga N bloqueia N turnos completos do dono', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      ok(E.cast(st, h.uid, 't-cd1', 5, 1) === true, '1º cast');
+      ok(E.cast(st, h.uid, 't-cd1', 5, 1) === false, 'bloqueado no mesmo turno');
+      nextRound(st);
+      ok(E.cast(st, h.uid, 't-cd1', 5, 1) === false, 'ainda bloqueado no turno seguinte');
+      nextRound(st);
+      ok(E.cast(st, h.uid, 't-cd1', 5, 1) === true, 'liberado no 2º turno após o cast');
+    });
+
+    t('castsPerTurn: limite por turno e renovação no turno seguinte', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      ok(E.cast(st, h.uid, 't-twice', 5, 1), '1');
+      ok(E.cast(st, h.uid, 't-twice', 5, 1), '2');
+      ok(E.cast(st, h.uid, 't-twice', 5, 1) === false, '3 bloqueado');
+      nextRound(st);
+      ok(E.cast(st, h.uid, 't-twice', 5, 1) === true, 'renovado');
+    });
+
+    t('needsEmptyTile: exclui células ocupadas', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var tg = E.castTargets(st, h.uid, 't-tp');
+      for (var k = 0; k < tg.length; k++) {
+        ok(!E.unitAt(st, tg[k].x, tg[k].y), 'célula livre');
+      }
+      ok(E.cast(st, h.uid, 't-tp', 5, 1) === false, 'não teleporta para cima de unidade');
+    });
+
+    t('v2 targetSide: enemy/ally/self validam o ocupante da célula-alvo', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' }, [P(), P2()]);
+      var h = byHero(st, 't-h1');
+      var ally = byHero(st, 't-h2');
+      var foe = byDef(st, 't-dummy', 0);
+      sp('t-only-enemy', { targetSide: 'enemy', effects: [{ type: 'damage', element: 'neutro', min: 1, max: 1 }] });
+      sp('t-only-ally', { targetSide: 'ally', effects: [{ type: 'heal', min: 1, max: 1 }] });
+      sp('t-only-self', { targetSide: 'self', range: { min: 0, max: 3, line: false, los: false }, effects: [{ type: 'heal', min: 1, max: 1 }] });
+      h.spells.push('t-only-enemy', 't-only-ally', 't-only-self');
+      ok(E.validTargetCell(st, h, E.spell('t-only-enemy'), foe.x, foe.y) === true, 'inimigo válido');
+      ok(E.validTargetCell(st, h, E.spell('t-only-enemy'), ally.x, ally.y) === false, 'aliado inválido');
+      ok(E.validTargetCell(st, h, E.spell('t-only-enemy'), 8, 6) === false, 'chão vazio inválido');
+      ok(E.validTargetCell(st, h, E.spell('t-only-ally'), ally.x, ally.y) === true, 'aliado válido');
+      ok(E.validTargetCell(st, h, E.spell('t-only-ally'), foe.x, foe.y) === false, 'inimigo inválido');
+      ok(E.validTargetCell(st, h, E.spell('t-only-self'), h.x, h.y) === true, 'próprio válido');
+      ok(E.validTargetCell(st, h, E.spell('t-only-self'), ally.x, ally.y) === false, 'outro inválido');
+    });
+
+    // ================================================== 4. EFEITOS v1
+    section('4 — Os 15 efeitos herdados da v1');
+
+    t('efeito damage: fórmula roll*(100+power)/100*(100-resist)/100 arredondada', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      h.power = 50;
+      d.resists.fogo = 20;
+      var hp0 = d.hp;
+      E.cast(st, h.uid, 't-fire20', d.x, d.y);
+      eq(hp0 - d.hp, 24, '20 * 1.5 * 0.8 = 24');
+    });
+
+    t('efeito shield: absorve antes do PV; evento shield emitido', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      drain();
+      E.cast(st, h.uid, 't-shield30', h.x, h.y);
+      eq(h.shield, 30, 'escudo aplicado');
+      ok(!!findEv(drain(), 'shield'), 'evento shield');
+      var d = byDef(st, 't-dummy', 0);
+      d.spells.push('t-nuke10');
+      d.pa = 10;
+      E.cast(st, d.uid, 't-nuke10', h.x, h.y);
+      eq(h.shield, 20, 'escudo absorveu 10');
+      eq(h.hp, h.hpMax, 'PV intacto');
+    });
+
+    t('efeito damage lifesteal: cura metade do dano em PV', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.hp = 100;
+      var d = byDef(st, 't-dummy', 0);
+      E.cast(st, h.uid, 't-steal20', d.x, d.y);
+      eq(h.hp, 110, '20 de dano => 10 de cura');
+    });
+
+    t('efeito heal: não ultrapassa hpMax', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.hp = h.hpMax - 5;
+      E.cast(st, h.uid, 't-heal20', h.x, h.y);
+      eq(h.hp, h.hpMax, 'cura limitada');
+    });
+
+    t('efeito buff (pa): imediato no próprio turno e expira após 1 turno', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var pa0 = h.pa;
+      E.cast(st, h.uid, 't-buffpa', h.x, h.y);
+      eq(h.pa, pa0 - 1 + 2, 'PA imediato (custo 1, bônus 2)');
+      nextRound(st);
+      eq(h.pa, h.paMax, 'buff expirou');
+    });
+
+    t('efeito buff (pp negativo): vale exatamente o turno seguinte da vítima', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      E.cast(st, h.uid, 't-snare', d.x, d.y);
+      eq(d.pp, 1, 'PP imediato (3-2)');
+      E.endTurn(st);
+      eq(E.activeUnit(st).uid, d.uid, 'turno da vítima');
+      eq(d.pp, 1, 'PP reduzido no turno seguinte');
+      E.endTurn(st);
+      toHero(st);
+      nextRound(st);
+      eq(d.pp, d.ppMax, 'PP normal depois');
+    });
+
+    t('efeito resist (vulnerabilidade): altera o cálculo de dano', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      E.cast(st, h.uid, 't-resist-30', d.x, d.y);
+      eq(E.effResist(d, 'fogo'), -30, 'resistência negativa');
+      var hp0 = d.hp;
+      E.cast(st, h.uid, 't-fire20', d.x, d.y);
+      eq(hp0 - d.hp, 26, '20 * 1.30 = 26');
+    });
+
+    t('efeito push: empurra para longe; colisão dá 10/célula bloqueada', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      d.x = 2; d.y = 1;
+      var hp0 = d.hp;
+      E.cast(st, h.uid, 't-push3', d.x, d.y);
+      eq(d.x, 5, 'empurrado 3 células');
+      eq(hp0 - d.hp, 0, 'sem colisão');
+      var d2 = byDef(st, 't-dummy', 1);
+      d2.x = 9; d2.y = 5;
+      h.x = 7; h.y = 5;
+      var hp1 = d2.hp;
+      E.cast(st, h.uid, 't-push3', d2.x, d2.y);
+      eq(d2.x, 9, 'parede impede');
+      eq(hp1 - d2.hp, 30, '3 células bloqueadas = 30');
+    });
+
+    t('trait pushImmune: não é empurrado nem puxado, sem dano de colisão', function () {
+      var st = arena(0, { a: 't-rock', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var r = byDef(st, 't-rock');
+      r.x = 3; r.y = 1;
+      var hp0 = r.hp;
+      E.cast(st, h.uid, 't-push3', r.x, r.y);
+      eq(r.x, 3, 'não se move');
+      E.cast(st, h.uid, 't-pull3', r.x, r.y);
+      eq(r.x, 3, 'não é puxado');
+      eq(r.hp, hp0, 'sem dano');
+    });
+
+    t('efeito pull: puxa em direção ao conjurador, sem colisão no fim natural', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      d.x = 6; d.y = 1;
+      var hp0 = d.hp;
+      E.cast(st, h.uid, 't-pull3', d.x, d.y);
+      eq(d.x, 3, 'puxado 3');
+      eq(d.hp, hp0, 'sem colisão');
+      E.cast(st, h.uid, 't-pull3', d.x, d.y);
+      eq(d.x, 2, 'para ao ficar adjacente');
+      eq(d.hp, hp0, 'fim natural não fere');
+    });
+
+    t('efeito teleport: precisa de célula vazia; emite evento teleport', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      drain();
+      ok(E.cast(st, h.uid, 't-tp', 4, 5) === true, 'teleporte válido');
+      eq(h.x, 4, 'x'); eq(h.y, 5, 'y');
+      ok(!!findEv(drain(), 'teleport'), 'evento teleport');
+    });
+
+    t('efeito swap: troca de lugar com a unidade alvo', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      var hx = h.x, hy = h.y, dx = d.x, dy = d.y;
+      ok(E.cast(st, h.uid, 't-swap', d.x, d.y) === true, 'swap');
+      eq(h.x, dx, 'herói na antiga do alvo'); eq(h.y, dy, 'y');
+      eq(d.x, hx, 'alvo na antiga do herói'); eq(d.y, hy, 'y');
+      ok(E.cast(st, h.uid, 't-swap', 8, 6) === false, 'swap exige unidade');
+    });
+
+    t('efeito poison: tica no INÍCIO do turno da vítima, X ticks para duração X', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      var hp0 = d.hp;
+      E.cast(st, h.uid, 't-poison5', d.x, d.y);
+      eq(d.hp, hp0, 'não tica na aplicação');
+      E.endTurn(st);
+      eq(d.hp, hp0 - 5, '1º tique');
+      E.endTurn(st); toHero(st); nextRound(st);
+      ok(d.hp <= hp0 - 10, '2º tique');
+      var hp2 = d.hp;
+      E.endTurn(st); toHero(st); nextRound(st);
+      eq(d.hp, hp2, 'sem 3º tique');
+    });
+
+    t('efeito regen: cura no início do turno da vítima e expira', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.hp = 100;
+      E.cast(st, h.uid, 't-regen5', h.x, h.y);
+      eq(h.hp, 100, 'não cura na aplicação');
+      nextRound(st);
+      eq(h.hp, 105, '1º tique');
+      nextRound(st);
+      eq(h.hp, 110, '2º tique');
+      nextRound(st);
+      eq(h.hp, 110, 'expirou');
+    });
+
+    t('efeito summon: herda lado, entra na iniciativa logo após o invocador', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var n0 = st.units.length;
+      ok(E.cast(st, h.uid, 't-summon', 2, 2) === true, 'invoca');
+      eq(st.units.length, n0 + 1, 'unidade criada');
+      var su = st.units[st.units.length - 1];
+      eq(su.side, 'player', 'lado do invocador');
+      eq(su.kind, 'summon', 'kind');
+      eq(st.order.indexOf(su.uid), st.order.indexOf(h.uid) + 1, 'logo após o invocador');
+    });
+
+    t('efeito taunt: aplicado com evento effectApplied', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      drain();
+      E.cast(st, h.uid, 't-taunt', h.x, h.y);
+      ok(E.unitHasEffect(h, 'taunt'), 'efeito presente');
+      ok(!!findEv(drain(), 'effectApplied', function (e) { return e.effect.type === 'taunt'; }), 'evento');
+    });
+
+    t('efeito invisible: quebra ao conjurar dano', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      E.cast(st, h.uid, 't-invis', h.x, h.y);
+      ok(E.unitHasEffect(h, 'invisible'), 'invisível');
+      E.cast(st, h.uid, 't-heal20', h.x, h.y);
+      ok(E.unitHasEffect(h, 'invisible'), 'cura não quebra');
+      E.cast(st, h.uid, 't-nuke10', 5, 1);
+      ok(!E.unitHasEffect(h, 'invisible'), 'dano quebra');
+    });
+
+    t('aoeTiles: cross e circle com contagens corretas; AoE não atinge o conjurador', function () {
+      var st = arena(5, { a: 't-dummy' });
+      var cross = E.aoeTiles(st, 't-cross', 5, 5, 5, 5);
+      eq(cross.length, 9, 'cruz tamanho 2 = 9 células');
+      var circle = E.aoeTiles(st, 't-circle', 5, 5, 5, 5);
+      eq(circle.length, 13, 'círculo tamanho 2 = 13 células');
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy');
+      d.x = h.x + 1; d.y = h.y;
+      var hp0 = h.hp, dhp0 = d.hp;
+      E.cast(st, h.uid, 't-cross', h.x, h.y);
+      eq(h.hp, hp0, 'conjurador ileso');
+      ok(d.hp < dhp0, 'alvo atingido');
+    });
+
+    // ================================================== 5. TRAÇOS
+    section('5 — Os 5 traços de monstro');
+
+    t('trait explodeOnDeath: dano em raio ao morrer', function () {
+      var st = arena(0, { a: 't-boom', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var boom = byDef(st, 't-boom');
+      var other = byDef(st, 't-dummy');
+      boom.x = 4; boom.y = 4;
+      other.x = 5; other.y = 4;
+      h.x = 3; h.y = 4;
+      var ohp = other.hp, hhp = h.hp;
+      E.cast(st, h.uid, 't-nuke100', boom.x, boom.y);
+      ok(!boom.alive, 'morreu');
+      eq(ohp - other.hp, 18, 'vizinho tomou 18');
+      eq(hhp - h.hp, 18, 'o próprio herói também');
+    });
+
+    t('trait split: divide-se em cópias que CONTAM para a derrota do lado', function () {
+      var st = arena(0, { a: 't-split', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var sp2 = byDef(st, 't-split');
+      var n0 = st.units.length;
+      E.cast(st, h.uid, 't-nuke100', sp2.x, sp2.y);
+      eq(st.units.length, n0 + 2, 'duas cópias');
+      eq(st.phase, 'playing', 'batalha continua (cópias contam)');
+    });
+
+    t('trait enrage: ganha power ao cruzar o limiar (uma única vez)', function () {
+      var st = arena(0, { a: 't-berserk', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var b = byDef(st, 't-berserk');
+      eq(E.effPower(b), 0, 'power inicial');
+      b.hp = 60;
+      E.cast(st, h.uid, 't-nuke10', b.x, b.y);
+      b.hp = 40;
+      E.cast(st, h.uid, 't-nuke10', b.x, b.y);
+      eq(E.effPower(b), 20, 'enfurecido');
+      E.cast(st, h.uid, 't-nuke10', b.x, b.y);
+      eq(E.effPower(b), 20, 'não acumula');
+    });
+
+    t('trait regenAura: cura aliados no raio no início do turno do portador (não a si)', function () {
+      var st = arena(0, { a: 't-aura', b: 't-dummy' });
+      var aura = byDef(st, 't-aura');
+      var d = byDef(st, 't-dummy');
+      aura.x = 4; aura.y = 4; aura.hp = 400;
+      d.x = 5; d.y = 4; d.hp = 500;
+      toHero(st);
+      E.endTurn(st);
+      for (var g = 0; g < 10; g++) {
+        if (E.activeUnit(st) && E.activeUnit(st).uid === aura.uid) break;
+        E.endTurn(st);
+      }
+      eq(d.hp, 508, 'aliado curado em 8');
+      eq(aura.hp, 400, 'portador não se cura');
+    });
+
+    // ================================================== 6. FIM DE BATALHA
+    section('6 — Vitória, derrota e fila de eventos');
+
+    t('vitória: matar todos os monstros; phase won + battleEnd', function () {
+      var st = arena(2, { a: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy');
+      d.hp = 10;
+      drain();
+      E.cast(st, h.uid, 't-nuke100', d.x, d.y);
+      eq(st.phase, 'won', 'vitória');
+      ok(!!findEv(drain(), 'battleEnd', function (e) { return e.winner === 'player'; }), 'evento');
+    });
+
+    t('derrota: heróis mortos; summon do jogador NÃO evita a derrota', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      E.cast(st, h.uid, 't-summon', 2, 2);
+      eq(st.phase, 'playing', 'ainda jogando');
+      h.hp = 1;
+      var d = byDef(st, 't-dummy', 0);
+      d.spells.push('t-nuke100'); d.pa = 10;
+      E.cast(st, d.uid, 't-nuke100', h.x, h.y);
+      eq(st.phase, 'lost', 'derrota mesmo com invocação viva');
+    });
+
+    t('summons inimigos não impedem a vitória', function () {
+      var st = arena(0, { a: 't-foe', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var foe = byDef(st, 't-foe');
+      var d = byDef(st, 't-dummy');
+      E.cast(st, foe.uid, 't-mon-summon', foe.x, foe.y + 1);
+      var n = st.units.length;
+      ok(n > 3, 'invocação criada');
+      foe.hp = 1; d.hp = 1;
+      E.cast(st, h.uid, 't-nuke100', foe.x, foe.y);
+      E.cast(st, h.uid, 't-nuke100', d.x, d.y);
+      eq(st.phase, 'won', 'vitória com invocação inimiga viva');
+    });
+
+    t('Engine.events: a engine nunca drena a própria fila', function () {
+      E.events.length = 0;
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      ok(E.events.length > 0, 'eventos enfileirados');
+      var before = E.events.length;
+      var h = byHero(st, 't-h1');
+      E.move(st, h.uid, h.x, h.y + 1);
+      ok(E.events.length > before, 'push, nunca shift');
+      E.events.length = 0;
+    });
+
+    // ================================================== 7. CLIMA
+    section('7 — Clima (tique, mudança, ciclo e morte)');
+
+    t('clima: FAVORECE o elemento => +5 PV no início do turno (evento weatherTick)', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' }, [P({ element: 'agua' })]);
+      st.weather = 't-chuva';
+      var h = byHero(st, 't-h1');
+      h.hp = 100;
+      drain();
+      nextRound(st);
+      eq(h.hp, 105, '+5 PV');
+      var ev = findEv(drain(), 'weatherTick', function (e) { return e.uid === h.uid; });
+      ok(!!ev, 'evento weatherTick');
+      eq(ev.amount, 5, 'amount +5');
+    });
+
+    t('clima: PREJUDICA o elemento => −5 PV (evento com amount negativo)', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' }, [P({ element: 'fogo' })]);
+      st.weather = 't-chuva';
+      var h = byHero(st, 't-h1');
+      h.hp = 100;
+      drain();
+      nextRound(st);
+      eq(h.hp, 95, '−5 PV');
+      var ev = findEv(drain(), 'weatherTick', function (e) { return e.uid === h.uid; });
+      eq(ev.amount, -5, 'amount −5');
+    });
+
+    t('clima: NEUTRO para o elemento => nada acontece e nenhum evento', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' }, [P({ element: 'terra' })]);
+      st.weather = 't-chuva';
+      var h = byHero(st, 't-h1');
+      h.hp = 100;
+      drain();
+      nextRound(st);
+      eq(h.hp, 100, 'PV inalterado');
+      ok(!findEv(drain(), 'weatherTick', function (e) { return e.uid === h.uid; }), 'sem evento');
+    });
+
+    t('clima: cura nunca ultrapassa hpMax', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' }, [P({ element: 'agua' })]);
+      st.weather = 't-chuva';
+      var h = byHero(st, 't-h1');
+      h.hp = h.hpMax - 2;
+      drain();
+      nextRound(st);
+      eq(h.hp, h.hpMax, 'limitado ao máximo');
+      eq(findEv(drain(), 'weatherTick', function (e) { return e.uid === h.uid; }).amount, 2, 'ganho real');
+    });
+
+    t('clima: o dano ambiental PODE MATAR (morte por clima)', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' }, [P({ element: 'fogo' })]);
+      st.weather = 't-chuva';
+      var h = byHero(st, 't-h1');
+      h.hp = 3;
+      drain();
+      E.endTurn(st);
+      var evs = drain();
+      ok(!h.alive, 'morreu pelo clima');
+      ok(!!findEv(evs, 'death', function (e) { return e.uid === h.uid; }), 'evento death');
+      eq(st.phase, 'lost', 'derrota');
+    });
+
+    t('clima: efeito weatherShift troca o clima e emite weatherShift', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      eq(st.weather, 't-calmo', 'clima inicial');
+      drain();
+      ok(E.cast(st, h.uid, 't-weather', h.x, h.y) === true, 'conjura');
+      eq(st.weather, 't-estiagem', 'clima trocado');
+      var ev = findEv(drain(), 'weatherShift');
+      ok(!!ev, 'evento weatherShift');
+      eq(ev.weather, 't-estiagem', 'novo clima no evento');
+    });
+
+    t('clima: weatherShiftEveryRounds roda um ciclo automático', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-cycle-v2', 0, [P()]);
+      eq(st.weather, 't-calmo', 'rodada 1');
+      var seen = [];
+      for (var g = 0; g < 40 && st.round < 5; g++) {
+        E.endTurn(st);
+        seen.push(st.round + ':' + st.weather);
+      }
+      ok(st.round >= 5, 'chegou à rodada 5');
+      var hist = {};
+      for (var k = 0; k < seen.length; k++) {
+        var parts = seen[k].split(':');
+        if (!hist[parts[0]]) hist[parts[0]] = parts[1];
+      }
+      eq(hist['2'], 't-calmo', 'rodada 2 ainda calmo');
+      eq(hist['3'], 't-chuva', 'rodada 3 muda para chuva');
+      eq(hist['5'], 't-estiagem', 'rodada 5 muda para estiagem');
+    });
+
+    // ================================================== 8. ESQUIVA / FIXAÇÃO
+    section('8 — Esquiva e Fixação');
+
+    function dodgeSetup(heroElement, lockerDefId) {
+      var st = arena(0, { a: lockerDefId, b: 't-dummy' }, [P({ element: heroElement })]);
+      var h = byHero(st, 't-h1');
+      var m = byDef(st, lockerDefId);
+      m.x = 2; m.y = 1;                  // colado no herói em (1,1)
+      var other = byDef(st, 't-dummy', lockerDefId === 't-dummy' ? 1 : 0);
+      if (other) { other.x = 9; other.y = 6; }
+      return { st: st, h: h, m: m };
+    }
+
+    t('esquiva: fórmula elemental — rival (+0.30), não relacionado (+0.10), mesmo (0)', function () {
+      var a = dodgeSetup('agua', 't-fogo');     // fogo é o rival de água
+      eq(E.dodgeChance(a.st, a.h.uid, a.m.uid), 0.65, 'rival: 0.35 + 0.30');
+      var b = dodgeSetup('agua', 't-terra');    // não relacionado
+      eq(E.dodgeChance(b.st, b.h.uid, b.m.uid), 0.45, 'não relacionado: 0.35 + 0.10');
+      var c = dodgeSetup('agua', 't-agua');     // mesmo elemento
+      eq(E.dodgeChance(c.st, c.h.uid, c.m.uid), 0.35, 'mesmo: 0.35 + 0');
+      var d = dodgeSetup('neutro', 't-fogo');   // neutro nunca tem rival
+      eq(E.dodgeChance(d.st, d.h.uid, d.m.uid), 0.45, 'neutro x fogo: não relacionado');
+      var e2 = dodgeSetup('neutro', 't-dummy'); // dummy é neutro
+      eq(E.dodgeChance(e2.st, e2.h.uid, e2.m.uid), 0.35, 'neutro x neutro: mesmo');
+    });
+
+    t('esquiva: (dodge − lock) * 0.02 e clamp em [0.10, 0.90]', function () {
+      var s = dodgeSetup('agua', 't-agua');     // base 0.35, sem bônus elemental
+      s.h.dodge = 10; s.m.lock = 0;
+      eq(E.dodgeChance(s.st, s.h.uid, s.m.uid), 0.55, '0.35 + 10*0.02');
+      s.h.dodge = 0; s.m.lock = 5;
+      eq(E.dodgeChance(s.st, s.h.uid, s.m.uid), 0.25, '0.35 − 5*0.02');
+      s.h.dodge = 500; s.m.lock = 0;
+      eq(E.dodgeChance(s.st, s.h.uid, s.m.uid), 0.90, 'teto');
+      s.h.dodge = 0; s.m.lock = 500;
+      eq(E.dodgeChance(s.st, s.h.uid, s.m.uid), 0.10, 'piso');
+    });
+
+    t('esquiva: reachable marca risky nas células que saem da fixação (sem bloquear)', function () {
+      var s = dodgeSetup('agua', 't-fogo');
+      var r = E.reachable(s.st, s.h.uid);
+      ok(r.length > 0, 'ainda é possível andar (não bloqueia)');
+      var byKey = {};
+      for (var k = 0; k < r.length; k++) byKey[r[k].x + ',' + r[k].y] = r[k];
+      ok(byKey['1,3'] && byKey['1,3'].risky === true, '(1,3) sai da fixação => risky');
+      ok(byKey['2,2'] && byKey['2,2'].risky === false, '(2,2) continua adjacente => seguro');
+    });
+
+    t('esquiva: SUCESSO emite dodgeOk e o movimento acontece', function () {
+      var s = dodgeSetup('agua', 't-fogo');
+      var chance = E.dodgeChance(s.st, s.h.uid, s.m.uid);
+      setRolls(s.st, [lt(chance)]);
+      drain();
+      ok(E.move(s.st, s.h.uid, 1, 3) === true, 'moveu');
+      eq(s.h.pp, 1, 'PP gasto normalmente');
+      var evs = drain();
+      ok(!!findEv(evs, 'dodgeOk', function (e) { return e.uid === s.h.uid; }), 'evento dodgeOk');
+      ok(!findEv(evs, 'dodgeFail'), 'sem dodgeFail');
+    });
+
+    t('esquiva: FALHA perde todo o PP restante, cancela o movimento e emite dodgeFail', function () {
+      var s = dodgeSetup('agua', 't-fogo');
+      var chance = E.dodgeChance(s.st, s.h.uid, s.m.uid);
+      var pa0 = s.h.pa;
+      setRolls(s.st, [gte(chance), gte(chance / 3)]);
+      drain();
+      ok(E.move(s.st, s.h.uid, 1, 3) === false, 'movimento cancelado');
+      eq(s.h.x, 1, 'x inalterado'); eq(s.h.y, 1, 'y inalterado');
+      eq(s.h.pp, 0, 'PP zerado');
+      eq(s.h.pa, pa0, 'PA intacto (falha comum)');
+      var ev = findEv(drain(), 'dodgeFail');
+      ok(!!ev, 'evento dodgeFail');
+      eq(ev.uid, s.h.uid, 'uid');
+      eq(ev.lockerUid, s.m.uid, 'lockerUid');
+      eq(ev.critical, false, 'não crítica');
+    });
+
+    t('esquiva: FALHA CRÍTICA (roll < chance/3) também tira 1 PA', function () {
+      var s = dodgeSetup('agua', 't-fogo');
+      var chance = E.dodgeChance(s.st, s.h.uid, s.m.uid);
+      var pa0 = s.h.pa;
+      setRolls(s.st, [gte(chance), lt(chance / 3)]);
+      ok(E.move(s.st, s.h.uid, 1, 3) === false, 'cancelado');
+      eq(s.h.pp, 0, 'PP zerado');
+      eq(s.h.pa, pa0 - 1, '1 PA perdido');
+      ok(findEv(drain(), 'dodgeFail').critical === true, 'marcada como crítica');
+    });
+
+    t('esquiva: não há teste ao continuar adjacente ao fixador', function () {
+      var s = dodgeSetup('agua', 't-fogo');
+      drain();
+      ok(E.move(s.st, s.h.uid, 2, 2) === true, 'moveu para célula ainda adjacente');
+      var evs = drain();
+      ok(!findEv(evs, 'dodgeOk') && !findEv(evs, 'dodgeFail'), 'nenhum teste');
+    });
+
+    t('esquiva: movimento forçado (push) NÃO faz teste de fixação', function () {
+      var s = dodgeSetup('agua', 't-fogo');
+      var d2 = byDef(s.st, 't-dummy');
+      d2.x = 1; d2.y = 2;                 // adjacente ao herói, para empurrá-lo
+      drain();
+      E.cast(s.st, s.h.uid, 't-push3', d2.x, d2.y);
+      var evs = drain();
+      ok(!findEv(evs, 'dodgeOk') && !findEv(evs, 'dodgeFail'), 'empurrão não testa esquiva');
+    });
+
+    // ================================================== 9. EFEITOS NOVOS
+    section('9 — Os 10 efeitos novos da v2');
+
+    t('efeito root: zera o PP, impede mover e NÃO impede conjurar', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      d.x = 3; d.y = 3;
+      E.cast(st, h.uid, 't-root', d.x, d.y);
+      ok(E.unitHasEffect(d, 'root'), 'efeito aplicado');
+      eq(d.pp, 0, 'PP zerado na hora');
+      ok(E.move(st, d.uid, 3, 4) === false, 'não anda');
+      eq(E.reachable(st, d.uid).length, 0, 'reachable vazio');
+      d.spells.push('t-mon-nuke10'); d.pa = 10;
+      ok(E.cast(st, d.uid, 't-mon-nuke10', h.x, h.y) === true, 'ainda conjura');
+      E.endTurn(st);            // turno da vítima começa: PP continua 0
+      eq(E.activeUnit(st).uid, d.uid, 'turno da vítima');
+      eq(d.pp, 0, 'preso também no turno seguinte');
+    });
+
+    t('efeito mark: acumula por pilhas e respeita `max`', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      drain();
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      eq(E.markStacks(d), 1, '1 pilha');
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      eq(E.markStacks(d), 3, '3 pilhas');
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      eq(E.markStacks(d), 3, 'max = 3 respeitado');
+      var evs = drain();
+      ok(countEv(evs, 'markStack') >= 4, 'eventos markStack');
+      var last = null;
+      for (var k = 0; k < evs.length; k++) if (evs[k].type === 'markStack') last = evs[k];
+      eq(last.stacks, 3, 'último evento com 3 pilhas');
+    });
+
+    t('efeito mark: multiplica o dano recebido em (1 + Σvalor/100)', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      var hp0 = d.hp;
+      E.cast(st, h.uid, 't-nuke100', d.x, d.y);
+      eq(hp0 - d.hp, 100, 'sem marcas: 100');
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      eq(E.markMultiplier(d), 1.15, '3 pilhas de 5% = 1.15');
+      var hp1 = d.hp;
+      E.cast(st, h.uid, 't-nuke100', d.x, d.y);
+      eq(hp1 - d.hp, 115, 'com 3 marcas: 115');
+    });
+
+    t('efeito detonateMarks: consome as pilhas e causa pilhas*mult', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      E.cast(st, h.uid, 't-mark', d.x, d.y);
+      var hp0 = d.hp;
+      drain();
+      E.cast(st, h.uid, 't-detonate', d.x, d.y);
+      eq(hp0 - d.hp, 60, '3 pilhas * mult 20 = 60');
+      eq(E.markStacks(d), 0, 'marcas consumidas');
+      var ev = findEv(drain(), 'markStack', function (e) { return e.stacks === 0; });
+      ok(!!ev, 'markStack zerado');
+      var hp1 = d.hp;
+      E.cast(st, h.uid, 't-detonate', d.x, d.y);
+      eq(d.hp, hp1, 'sem marcas, sem dano');
+    });
+
+    t('efeito trap: arma na célula e dispara ao inimigo pisar (Engine.triggerTrap)', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      d.x = 4; d.y = 4; d.pp = 6;
+      drain();
+      ok(E.cast(st, h.uid, 't-trap', 4, 5) === true, 'arma');
+      eq(st.traps.length, 1, 'armadilha no estado');
+      ok(!!findEv(drain(), 'trapSet'), 'evento trapSet');
+      eq(E.trapsAt(st, 4, 5).length, 1, 'trapsAt localiza');
+      var hp0 = d.hp;
+      ok(E.move(st, d.uid, 4, 5) === true, 'inimigo pisa');
+      var evs = drain();
+      ok(!!findEv(evs, 'trapTriggered', function (e) { return e.uid === d.uid; }), 'trapTriggered');
+      eq(hp0 - d.hp, 30, 'dano da armadilha');
+      eq(st.traps.length, 0, 'consumida');
+    });
+
+    t('efeito trap: NÃO dispara para o lado de quem armou', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      E.cast(st, h.uid, 't-trap', 1, 2);
+      var hp0 = h.hp;
+      drain();
+      ok(E.move(st, h.uid, 1, 2) === true, 'o próprio dono pisa');
+      ok(!findEv(drain(), 'trapTriggered'), 'nada disparou');
+      eq(h.hp, hp0, 'sem dano');
+      eq(st.traps.length, 1, 'armadilha permanece');
+    });
+
+    t('efeito cleanse: remove somente os tipos citados', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' }, [P(), P2()]);
+      var h = byHero(st, 't-h1');
+      var ally = byHero(st, 't-h2');
+      E.cast(st, h.uid, 't-poison5', ally.x, ally.y);
+      E.cast(st, h.uid, 't-root', ally.x, ally.y);
+      E.cast(st, h.uid, 't-shield30', ally.x, ally.y);
+      ok(E.unitHasEffect(ally, 'poison'), 'veneno aplicado');
+      ok(E.unitHasEffect(ally, 'root'), 'root aplicado');
+      drain();
+      E.cast(st, h.uid, 't-cleanse', ally.x, ally.y);
+      ok(!E.unitHasEffect(ally, 'poison'), 'veneno removido');
+      ok(!E.unitHasEffect(ally, 'root'), 'root removido');
+      ok(E.unitHasEffect(ally, 'shield'), 'escudo preservado');
+      ok(!!findEv(drain(), 'cleanse'), 'evento cleanse');
+    });
+
+    t('efeito reflect: devolve pct% do dano recebido ao agressor', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      E.cast(st, h.uid, 't-reflect', h.x, h.y);
+      ok(E.unitHasEffect(h, 'reflect'), 'reflect ativo');
+      d.spells.push('t-mon-nuke'); d.pa = 10;
+      var dhp0 = d.hp, hhp0 = h.hp;
+      drain();
+      E.cast(st, d.uid, 't-mon-nuke', h.x, h.y);
+      eq(hhp0 - h.hp, 100, 'herói tomou 100');
+      eq(dhp0 - d.hp, 50, 'agressor tomou 50% de volta');
+      ok(!!findEv(drain(), 'reflect'), 'evento reflect');
+    });
+
+    t('efeito dispelShield: remove o escudo do alvo', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      d.spells.push('t-shield30'); d.pa = 10;
+      E.cast(st, d.uid, 't-shield30', d.x, d.y);
+      eq(d.shield, 30, 'escudo presente');
+      drain();
+      E.cast(st, h.uid, 't-dispel', d.x, d.y);
+      eq(d.shield, 0, 'escudo removido');
+      ok(!E.unitHasEffect(d, 'shield'), 'efeito removido');
+      ok(!!findEv(drain(), 'dispelShield'), 'evento dispelShield');
+    });
+
+    t('efeito moveTo: investida desliza até maxTiles e para em obstáculo', function () {
+      var st = arena(5, { a: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.x = 1; h.y = 5;
+      drain();
+      ok(E.cast(st, h.uid, 't-charge', 5, 5) === true, 'investe');
+      eq(h.x, 5, 'chegou a 4 células de distância');
+      eq(h.y, 5, 'mesma linha');
+      var ev = findEv(drain(), 'move', function (e) { return e.forced === true; });
+      ok(!!ev, 'evento move forçado');
+      eq(ev.path.length, 4, 'quatro passos');
+      // bloqueio: monstro no caminho
+      var d = byDef(st, 't-dummy');
+      d.x = 7; d.y = 5;
+      ok(E.cast(st, h.uid, 't-charge', 9, 5) === true, 'investe de novo');
+      eq(h.x, 6, 'parou antes do monstro');
+    });
+
+    t('efeito chain: atinge o alvo e salta com falloff', function () {
+      var st = arena(5, { a: 't-dummy' }, [P()]);
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy');
+      h.x = 1; h.y = 5;
+      d.x = 4; d.y = 5;
+      // dois monstros extras a 2 células um do outro
+      var m2 = null, m3 = null;
+      st.units.push(JSON.parse(JSON.stringify(d)));
+      m2 = st.units[st.units.length - 1]; m2.uid = 'x2'; m2.x = 6; m2.y = 5; m2.hp = 1000;
+      st.order.push('x2');
+      st.units.push(JSON.parse(JSON.stringify(d)));
+      m3 = st.units[st.units.length - 1]; m3.uid = 'x3'; m3.x = 8; m3.y = 5; m3.hp = 1000;
+      st.order.push('x3');
+      var a0 = d.hp, b0 = m2.hp, c0 = m3.hp;
+      drain();
+      ok(E.cast(st, h.uid, 't-chain', d.x, d.y) === true, 'conjura');
+      eq(a0 - d.hp, 40, 'alvo: dano cheio');
+      eq(b0 - m2.hp, 20, '1º salto: 50%');
+      eq(c0 - m3.hp, 10, '2º salto: 25%');
+      eq(countEv(drain(), 'chainHop'), 3, 'três impactos');
+    });
+
+    t('efeito weatherShift coberto na seção de clima (referência cruzada)', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      E.cast(st, h.uid, 't-weather', h.x, h.y);
+      eq(st.weather, 't-estiagem', 'clima trocado pelo efeito');
+    });
+
+    // ================================================== 10. AoE NOVOS
+    section('10 — AoE novos: cone e ring');
+
+    t('aoeTiles cone: triângulo que se abre a partir do alvo (size² células)', function () {
+      var st = arena(5, { a: 't-dummy' });
+      var tiles = E.aoeTiles(st, 't-cone3', 2, 5, 5, 5);
+      eq(tiles.length, 9, 'cone 3 = 1+3+5');
+      var keys = {};
+      for (var k = 0; k < tiles.length; k++) keys[tiles[k].x + ',' + tiles[k].y] = true;
+      ok(keys['5,5'], 'ponta no alvo');
+      ok(keys['6,4'] && keys['6,5'] && keys['6,6'], 'segunda linha com 3');
+      ok(keys['7,3'] && keys['7,7'], 'terceira linha com 5');
+      ok(!keys['4,5'], 'não volta para trás');
+      // cone vertical
+      var v = E.aoeTiles(st, 't-cone3', 5, 2, 5, 5);
+      eq(v.length, 9, 'cone vertical');
+    });
+
+    t('aoeTiles ring: coroa de distância Manhattan exatamente `size`', function () {
+      var st = arena(5, { a: 't-dummy' });
+      var tiles = E.aoeTiles(st, 't-ring2', 1, 5, 5, 5);
+      eq(tiles.length, 8, 'anel 2 = 8 células');
+      for (var k = 0; k < tiles.length; k++) {
+        eq(Math.abs(tiles[k].x - 5) + Math.abs(tiles[k].y - 5), 2, 'distância exata 2');
+      }
+    });
+
+    t('AoE cone/ring aplicam dano só em quem está nas células', function () {
+      var st = arena(5, { a: 't-dummy' }, [P()]);
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy');
+      h.x = 2; h.y = 5;
+      d.x = 6; d.y = 4;                    // dentro do cone (2ª linha)
+      var hp0 = d.hp;
+      E.cast(st, h.uid, 't-cone3', 5, 5);
+      eq(hp0 - d.hp, 10, 'atingido pelo cone');
+      d.x = 5; d.y = 5;                    // centro do anel: FORA
+      var hp1 = d.hp;
+      E.cast(st, h.uid, 't-ring2', 5, 5);
+      eq(d.hp, hp1, 'centro do anel não é atingido');
+      d.x = 7; d.y = 5;                    // distância 2 do centro
+      var hp2 = d.hp;
+      E.cast(st, h.uid, 't-ring2', 5, 5);
+      eq(hp2 - d.hp, 10, 'atingido pelo anel');
+    });
+
+    // ================================================== 11. FUSÃO
+    section('11 — Fusão');
+
+    function fusionBattle(elA, elB, lvA, lvB) {
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 3, [
+        P({ heroId: 't-h1', classId: 't-alfa', element: elA, level: lvA }),
+        P2({ heroId: 't-h2', classId: 't-beta', element: elB, level: lvB })
+      ]);
+      return st;
+    }
+
+    t('Fusion.spellsFor: compõe nome, resolve @A/@B e filtra por tier <= nível', function () {
+      var out = F.spellsFor('t-alfa+t-beta', 'agua+ar', 15);
+      eq(out.length, 1, 'só a forma tier 0 (a tier 20 fica de fora)');
+      var s = out[0];
+      eq(s.name, 'Turbilhão Salgado', 'nome = forma + afixo');
+      eq(s.id, 'fus:t-alfa+t-beta:agua+ar:0', 'id do contrato');
+      eq(s.effects.length, 3, 'mecânica (2) + rider (1)');
+      eq(s.effects[0].element, 'ar', "'@A' => elements[0]");
+      eq(s.effects[1].element, 'agua', "'@B' => elements[1]");
+      eq(s.effects[2].type, 'poison', 'rider da mistura');
+      // escala: fator = (100 + tier*5 + nível*3)/100 = 1.45
+      eq(s.effects[0].min, 15, '10 * 1.45 => 15');
+      eq(s.effects[1].min, 9, '6 * 1.45 => 9');
+      eq(s.effects[2].min, 4, 'rider 3 * 1.45 => 4');
+      eq(s.fxKey, 'fx-salgado', 'fx da mistura');
+      var out30 = F.spellsFor('t-alfa+t-beta', 'agua+ar', 30);
+      eq(out30.length, 2, 'nível 30 libera a forma tier 20');
+    });
+
+    t('Fusion.spellsFor: elemento neutro força a mistura com neutro', function () {
+      var out = F.spellsFor('t-alfa+t-beta', 'ar+neutro', 10);
+      eq(out.length, 1, 'uma forma');
+      eq(out[0].name, 'Turbilhão Rascante', 'usa a mistura com neutro');
+      var both = F.spellsFor('t-alfa+t-beta', 'neutro+neutro', 10);
+      eq(both[0].name, 'Turbilhão Bruto', 'neutro + neutro');
+    });
+
+    t('Fusion.canFuse: exige aliados vivos, adjacentes e ainda não fundidos', function () {
+      var st = fusionBattle('ar', 'agua', 10, 20);
+      var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+      eq(manh(a, b), 1, 'nascem adjacentes');
+      ok(F.canFuse(st, a.uid, b.uid) === true, 'podem fundir');
+      var foe = byDef(st, 't-dummy');
+      ok(F.canFuse(st, a.uid, foe.uid) === false, 'inimigo não');
+      ok(F.canFuse(st, a.uid, a.uid) === false, 'consigo mesma não');
+      b.x = 5; b.y = 4;
+      ok(F.canFuse(st, a.uid, b.uid) === false, 'longe não');
+    });
+
+    t('Fusion.declare: gasta 2 PA e marca a intenção', function () {
+      var st = fusionBattle('ar', 'agua', 10, 20);
+      var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+      var pa0 = a.pa;
+      drain();
+      ok(F.declare(st, a.uid, b.uid) === true, 'declarou');
+      eq(a.pa, pa0 - 2, '2 PA gastos');
+      eq(a.fusionIntent, b.uid, 'intenção marcada');
+      ok(!!st.pendingFusion, 'pendência no estado');
+      ok(!!findEv(drain(), 'fusionDeclared'), 'evento fusionDeclared');
+      ok(F.declare(st, a.uid, b.uid) === false, 'não declara duas vezes');
+    });
+
+    t('Fusão: declarar e AFASTAR-SE faz a fusão FALHAR (fusionFailed)', function () {
+      var st = fusionBattle('ar', 'agua', 10, 20);
+      var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+      F.declare(st, a.uid, b.uid);
+      ok(E.move(st, a.uid, 4, 1) === true, 'A se afasta');
+      ok(manh(a, b) > 1, 'não estão mais colados');
+      drain();
+      E.endTurn(st);
+      var ev = findEv(drain(), 'fusionFailed');
+      ok(!!ev, 'evento fusionFailed');
+      eq(ev.reason, 'afastamento', 'motivo');
+      eq(a.kind, 'hero', 'A continua herói');
+      ok(b.alive && !b.offBoard, 'B continua em jogo');
+      ok(!st.pendingFusion, 'pendência limpa');
+    });
+
+    t('Fusão: mantendo-se colados, funde com TODOS os números corretos', function () {
+      var st = fusionBattle('ar', 'agua', 10, 20);
+      var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+      a.hp = 150; b.hp = 60;
+      a.resists.fogo = 20; b.resists.fogo = 0;
+      var ax = a.x, ay = a.y;
+      var paMaxA = a.paMax, paMaxB = b.paMax;
+      var ppMaxA = a.ppMax, ppMaxB = b.ppMax;
+      var iniA = a.initiative, iniB = b.initiative;
+      var orderIdx = st.order.indexOf(a.uid);
+      F.declare(st, a.uid, b.uid);
+      drain();
+      E.endTurn(st);
+      var evs = drain();
+      var ev = findEv(evs, 'fusion');
+      ok(!!ev, 'evento fusion');
+      eq(ev.uid, a.uid, 'uid da fusão = uid de A');
+      eq(ev.from.length, 2, 'from com os dois');
+      eq(ev.classPair, 't-alfa+t-beta', 'classPair alfabético');
+      eq(ev.elemPair, 'agua+ar', 'elemPair alfabético');
+      eq(ev.level, 15, 'nível = média (10+20)/2');
+      eq(a.kind, 'fusion', 'kind fusion');
+      eq(a.defId, 'fus:t-alfa+t-beta', 'defId do contrato');
+      eq(a.hp, 210, 'PV = soma dos PV restantes');
+      eq(a.hpMax, 300, 'hpMax = soma');
+      eq(a.paMax, Math.max(paMaxA, paMaxB) + 2, '+2 PA');
+      eq(a.ppMax, Math.max(ppMaxA, ppMaxB) + 1, '+1 PP');
+      eq(a.shield, 50, '+50 de escudo');
+      eq(a.initiative, Math.max(iniA, iniB), 'iniciativa = maior');
+      eq(a.resists.fogo, 10, 'resistências = média');
+      eq(a.level, 15, 'nível médio');
+      eq(a.x, ax, 'ocupa a célula de A (x)');
+      eq(a.y, ay, 'ocupa a célula de A (y)');
+      ok(!b.alive && b.offBoard, 'B saiu do tabuleiro');
+      ok(!findEv(evs, 'death', function (e) { return e.uid === b.uid; }), 'B não conta como morte');
+      eq(st.phase, 'playing', 'a batalha continua');
+      eq(st.order.indexOf(a.uid), orderIdx, 'mantém a casa na ordem');
+      // feitiços compostos
+      eq(a.spells.length, 1, 'só o feitiço de fusão do tier 0');
+      var s = E.spell(a.spells[0]);
+      ok(!!s, 'feitiço registrado e resolvível por Engine.spell');
+      eq(s.name, 'Turbilhão Salgado', 'nome composto');
+      eq(s.effects[0].element, 'ar', '@A resolvido');
+      eq(s.effects[1].element, 'agua', '@B resolvido');
+    });
+
+    t('Fusão: a unidade fundida conjura os feitiços compostos', function () {
+      var st = fusionBattle('ar', 'agua', 10, 20);
+      var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+      F.declare(st, a.uid, b.uid);
+      E.endTurn(st);
+      toHero(st, 't-h1');
+      var foe = byDef(st, 't-dummy');
+      foe.x = a.x + 1; foe.y = a.y;
+      var hp0 = foe.hp;
+      ok(E.cast(st, a.uid, a.spells[0], foe.x, foe.y) === true, 'conjura');
+      ok(foe.hp < hp0, 'causou dano');
+      ok(E.unitHasEffect(foe, 'poison'), 'rider da mistura aplicado');
+    });
+
+    t('Fusão: a morte da fusão NÃO devolve os dois fundidos', function () {
+      var st = fusionBattle('ar', 'agua', 10, 20);
+      var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+      F.declare(st, a.uid, b.uid);
+      E.endTurn(st);
+      eq(a.kind, 'fusion', 'fundiu');
+      a.hp = 1; a.effects.length = 0; a.shield = 0;
+      var foe = byDef(st, 't-dummy');
+      foe.spells.push('t-mon-nuke'); foe.pa = 10;
+      drain();
+      E.cast(st, foe.uid, 't-mon-nuke', a.x, a.y);
+      var evs = drain();
+      ok(!a.alive, 'fusão morreu');
+      ok(!!findEv(evs, 'fusionEnd'), 'evento fusionEnd');
+      ok(!b.alive && b.offBoard, 'B continua fora do tabuleiro');
+      eq(st.phase, 'lost', 'lado do jogador sem núcleo => derrota');
+    });
+
+    t('Fusão: sem DATA.fusionForms para a dupla, funde com a união dos feitiços', function () {
+      var saved = D.fusionForms['t-alfa+t-beta'];
+      delete D.fusionForms['t-alfa+t-beta'];
+      try {
+        var st = fusionBattle('ar', 'agua', 10, 20);
+        var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+        var nA = a.spells.length;
+        F.declare(st, a.uid, b.uid);
+        E.endTurn(st);
+        eq(a.kind, 'fusion', 'fundiu mesmo sem formas');
+        ok(a.spells.length >= nA, 'kit não ficou vazio');
+        ok(a.spells.indexOf('t-nuke10') >= 0, 'herdou o feitiço de B');
+      } finally {
+        D.fusionForms['t-alfa+t-beta'] = saved;
+      }
+    });
+
+    // ================================================== 12. PETS
+    section('12 — Pets');
+
+    t('pet: entra na batalha junto do dono, do mesmo lado e FORA da ordem', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 0, [P({ pet: 't-pet-dog' })]);
+      var h = byHero(st, 't-h1');
+      var pet = petOf(st, h.uid);
+      ok(!!pet, 'pet criado');
+      eq(pet.kind, 'pet', 'kind pet');
+      eq(pet.side, 'player', 'lado do dono');
+      eq(pet.element, 'fogo', 'elemento do pet');
+      eq(manh(pet, h), 1, 'nasce colado no dono');
+      eq(st.order.indexOf(pet.uid), -1, 'não entra na ordem de iniciativa');
+      eq(pet.followDistance, 2, 'followDistance do dado');
+    });
+
+    t('pet: age logo depois do dono encerrar o turno (petAct)', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 0, [P({ pet: 't-pet-dog' })]);
+      var h = byHero(st, 't-h1');
+      var pet = petOf(st, h.uid);
+      var d = byDef(st, 't-dummy', 0);
+      d.x = h.x + 1; d.y = h.y;            // inimigo colado no dono
+      drain();
+      var hp0 = d.hp;
+      E.endTurn(st);
+      var evs = drain();
+      var ev = findEv(evs, 'petAct', function (e) { return e.uid === pet.uid; });
+      ok(!!ev, 'evento petAct');
+      ok(hp0 - d.hp >= 12, 'pet atacou o inimigo ao alcance');
+      var iTurn = -1, iPet = -1;
+      for (var k = 0; k < evs.length; k++) {
+        if (evs[k].type === 'petAct' && iPet < 0) iPet = k;
+        if (evs[k].type === 'turnStart' && evs[k].uid === pet.uid && iTurn < 0) iTurn = k;
+      }
+      ok(iTurn >= 0 && iTurn < iPet, 'turno do pet antes da ação dele');
+    });
+
+    t('pet: nunca se afasta mais que followDistance do dono', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 5, [P({ pet: 't-pet-dog' })]);
+      var h = byHero(st, 't-h1');
+      var pet = petOf(st, h.uid);
+      var d = byDef(st, 't-dummy');
+      d.x = 10; d.y = 9;                    // inimigo bem longe: tentação de correr
+      for (var r = 0; r < 6 && st.phase === 'playing'; r++) {
+        E.endTurn(st);
+        ok(manh(pet, h) <= pet.followDistance, 'coleira respeitada (rodada ' + r + ')');
+        toHero(st);
+      }
+    });
+
+    t('pet: NÃO conta para vitória nem para derrota', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 0, [P({ pet: 't-pet-dog' })]);
+      var h = byHero(st, 't-h1');
+      var pet = petOf(st, h.uid);
+      var d1 = byDef(st, 't-dummy', 0), d2 = byDef(st, 't-dummy', 1);
+      d1.hp = 1; d2.hp = 1;
+      E.cast(st, h.uid, 't-nuke100', d1.x, d1.y);
+      E.cast(st, h.uid, 't-nuke100', d2.x, d2.y);
+      eq(st.phase, 'won', 'vitória');
+      // agora a derrota: pet vivo não sustenta o lado
+      E.events.length = 0;
+      var st2 = E.createBattle('test-arena-v2', 0, [P({ pet: 't-pet-dog' })]);
+      var h2 = byHero(st2, 't-h1');
+      var pet2 = petOf(st2, h2.uid);
+      var foe = byDef(st2, 't-dummy', 0);
+      foe.spells.push('t-mon-nuke'); foe.pa = 10;
+      h2.hp = 1;
+      E.cast(st2, foe.uid, 't-mon-nuke', h2.x, h2.y);
+      ok(pet2.alive, 'pet continua vivo');
+      eq(st2.phase, 'lost', 'derrota mesmo com o pet vivo');
+      ok(!!pet, 'pet da 1ª batalha existia');
+    });
+
+    t('pet de suporte: cura o aliado mais ferido dentro do alcance', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 0, [P({ pet: 't-pet-nurse' }), P2()]);
+      var h = byHero(st, 't-h1');
+      var ally = byHero(st, 't-h2');
+      var pet = petOf(st, h.uid);
+      ally.x = h.x; ally.y = h.y + 1;
+      ally.hp = 20;
+      drain();
+      E.endTurn(st);
+      ok(ally.hp > 20, 'aliado curado pelo pet');
+      ok(!!findEv(drain(), 'petAct', function (e) { return e.action === 'cast'; }), 'petAct de cast');
+      ok(!!pet, 'pet presente');
+    });
+
+    t('pet: recebe o tique de clima no próprio turno', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 0, [P({ pet: 't-pet-dog' })]);
+      st.weather = 't-chuva';               // prejudica fogo (o pet é de fogo)
+      var h = byHero(st, 't-h1');
+      var pet = petOf(st, h.uid);
+      pet.hp = 30;
+      drain();
+      E.endTurn(st);
+      var ev = findEv(drain(), 'weatherTick', function (e) { return e.uid === pet.uid; });
+      ok(!!ev, 'weatherTick do pet');
+      eq(ev.amount, -5, '−5 PV');
+      eq(pet.hp, 25, 'PV do pet');
+    });
+
+    // ================================================== 13. EVENTOS DE TERRENO
+    section('13 — Eventos de terreno');
+
+    t('evento de terreno: pisar dispara, aplica efeitos e consome', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      st.tileEventsActive.push({ x: 1, y: 2, eventId: 't-ev-buff', kind: 'buff', remaining: 3 });
+      drain();
+      ok(E.move(st, h.uid, 1, 2) === true, 'pisou');
+      var evs = drain();
+      var ev = findEv(evs, 'tileEvent', function (e) { return e.uid === h.uid; });
+      ok(!!ev, 'evento tileEvent');
+      eq(ev.eventId, 't-ev-buff', 'id do evento');
+      ok(ev.text.length > 0, 'texto presente');
+      eq(E.effPower(h), 10, 'buff aplicado');
+      eq(st.tileEventsActive.length, 0, 'consumido');
+    });
+
+    t('evento de terreno: dano (drain) atinge quem pisou', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      st.tileEventsActive.push({ x: 1, y: 2, eventId: 't-ev-drain', kind: 'drain', remaining: 3 });
+      var hp0 = h.hp;
+      E.move(st, h.uid, 1, 2);
+      eq(hp0 - h.hp, 12, 'quem pisou tomou o dano');
+    });
+
+    t('evento de terreno: mystery sorteia um dos outcomes', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.hp = 100;
+      st.tileEventsActive.push({ x: 1, y: 2, eventId: 't-ev-mystery', kind: 'mystery', remaining: 3 });
+      setRolls(st, [lt(0.4)]);              // 1º outcome (sorte): cura 25
+      drain();
+      E.move(st, h.uid, 1, 2);
+      var ev = findEv(drain(), 'tileEvent');
+      eq(ev.text, 'A sorte sorri.', 'texto do outcome sorteado');
+      eq(h.hp, 125, 'curou 25');
+
+      var st2 = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h2 = byHero(st2, 't-h1');
+      h2.hp = 100;
+      st2.tileEventsActive.push({ x: 1, y: 2, eventId: 't-ev-mystery', kind: 'mystery', remaining: 3 });
+      setRolls(st2, [gte(0.6)]);            // 2º outcome (azar): dano 25
+      drain();
+      E.move(st2, h2.uid, 1, 2);
+      eq(findEv(drain(), 'tileEvent').text, 'A sorte cobra.', 'outcome ruim');
+      eq(h2.hp, 75, 'tomou 25');
+    });
+
+    t('evento de terreno: sorteio por rodada respeita spawnPerRound e tileEventRate', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-events-v2', 0, [P()]);
+      eq(st.tileEventsActive.length, 0, 'rodada 1 começa limpa');
+      drain();
+      E.endTurn(st);                          // dummy
+      E.endTurn(st);                          // fecha a rodada => rodada 2
+      ok(st.round >= 2, 'rodada avançou');
+      eq(st.tileEventsActive.length, 2, 'spawnPerRound = 2 com rate 1');
+      ok(countEv(drain(), 'tileEventSpawn') === 2, 'dois eventos tileEventSpawn');
+      for (var k = 0; k < st.tileEventsActive.length; k++) {
+        var te = st.tileEventsActive[k];
+        eq(st.grid.tiles[te.y][te.x].type, 'floor', 'em célula de chão');
+        ok(!E.unitAt(st, te.x, te.y), 'em célula livre');
+      }
+    });
+
+    t('evento de terreno: expira depois de `duration` rodadas', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      st.tileEventsActive.push({ x: 8, y: 6, eventId: 't-ev-buff', kind: 'buff', remaining: 2 });
+      nextRound(st);
+      eq(st.tileEventsActive.length, 1, 'ainda ativo');
+      nextRound(st);
+      eq(st.tileEventsActive.length, 0, 'expirou');
+    });
+
+    t('armadilha: expira depois de `duration` rodadas', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      E.cast(st, h.uid, 't-trap', 1, 2);
+      eq(st.traps.length, 1, 'armada');
+      nextRound(st); nextRound(st);
+      eq(st.traps.length, 1, 'ainda ativa');
+      nextRound(st);
+      eq(st.traps.length, 0, 'expirou');
+    });
+
+    // ================================================== 14. IA
+    section('14 — IA v2');
+
+    t('AI: planTurn é pura (não muta o state)', function () {
+      var st = arena(0, { a: 't-foe', b: 't-dummy' });
+      var foe = byDef(st, 't-foe');
+      var snapshot = JSON.stringify(st.units.map(function (u) {
+        return [u.uid, u.x, u.y, u.hp, u.pa, u.pp, u.effects.length];
+      }));
+      JOGO.AI.planTurn(st, foe.uid);
+      eq(JSON.stringify(st.units.map(function (u) {
+        return [u.uid, u.x, u.y, u.hp, u.pa, u.pp, u.effects.length];
+      })), snapshot, 'estado intacto');
+    });
+
+    t('AI: planos sempre terminam com end e nunca excedem PA/PP', function () {
+      var st = arena(0, { a: 't-foe', b: 't-biter' });
+      for (var i2 = 0; i2 < st.units.length; i2++) {
+        var u = st.units[i2];
+        if (!u.alive) continue;
+        var plan = JOGO.AI.planTurn(st, u.uid);
+        eq(plan[plan.length - 1].action, 'end', 'termina com end (' + u.defId + ')');
+        var paSum = 0;
+        for (var p = 0; p < plan.length; p++) {
+          if (plan[p].action === 'cast') paSum += (E.spell(plan[p].spellId).paCost || 0);
+          if (plan[p].action === 'move') {
+            var pathLen = E.path(st, u.uid, plan[p].x, plan[p].y);
+            ok(pathLen !== null && pathLen.length <= u.pp, 'movimento dentro do PP');
+          }
+        }
+        ok(paSum <= u.pa, 'plano dentro do PA (' + u.defId + ')');
+      }
+    });
+
+    t('AI: taunt força feitiços hostis a mirar o provocador', function () {
+      var st = arena(0, { a: 't-foe', b: 't-dummy' }, [P(), P2()]);
+      var foe = byDef(st, 't-foe');
+      var h1 = byHero(st, 't-h1'), h2 = byHero(st, 't-h2');
+      h2.effects.push({ type: 'taunt', duration: 3, sourceUid: h2.uid });
+      foe.x = 5; foe.y = 2;
+      h1.x = 5; h1.y = 1;
+      h2.x = 6; h2.y = 2;
+      var plan = JOGO.AI.planTurn(st, foe.uid);
+      for (var k = 0; k < plan.length; k++) {
+        if (plan[k].action !== 'cast') continue;
+        var s = E.spell(plan[k].spellId);
+        var hostile = false;
+        for (var e2 = 0; e2 < s.effects.length; e2++) if (s.effects[e2].type === 'damage') hostile = true;
+        if (!hostile) continue;
+        ok(plan[k].x === h2.x && plan[k].y === h2.y, 'hostil mira o provocador');
+      }
+    });
+
+    t('AI: nunca alveja unidades invisíveis', function () {
+      var st = arena(0, { a: 't-foe', b: 't-dummy' });
+      var foe = byDef(st, 't-foe');
+      var h = byHero(st, 't-h1');
+      h.effects.push({ type: 'invisible', duration: 3, sourceUid: h.uid });
+      foe.x = 5; foe.y = 2; h.x = 5; h.y = 1;
+      var plan = JOGO.AI.planTurn(st, foe.uid);
+      for (var k = 0; k < plan.length; k++) {
+        if (plan[k].action === 'cast') {
+          ok(!(plan[k].x === h.x && plan[k].y === h.y), 'não mira o invisível');
+        }
+      }
+    });
+
+    t('AI melee: aproxima e ataca o herói', function () {
+      var st = arena(5, { a: 't-biter' });
+      var m = byDef(st, 't-biter');
+      var h = byHero(st, 't-h1');
+      m.x = 8; m.y = 5; m.pp = 4; m.pa = 6;
+      h.x = 4; h.y = 5;
+      var plan = JOGO.AI.planTurn(st, m.uid);
+      var mv = null;
+      for (var k = 0; k < plan.length; k++) if (plan[k].action === 'move') mv = plan[k];
+      ok(!!mv, 'planejou mover');
+      ok(Math.abs(mv.x - h.x) + Math.abs(mv.y - h.y) < 4, 'aproximou-se');
+    });
+
+    t('AI ranged: recua quando colado e atira à distância', function () {
+      var st = arena(5, { a: 't-shooter' });
+      var m = byDef(st, 't-shooter');
+      var h = byHero(st, 't-h1');
+      m.x = 5; m.y = 5; m.pp = 3; m.pa = 6;
+      h.x = 4; h.y = 5;
+      var plan = JOGO.AI.planTurn(st, m.uid);
+      var mv = null;
+      for (var k = 0; k < plan.length; k++) if (plan[k].action === 'move') mv = plan[k];
+      ok(!!mv, 'planejou mover');
+      ok(Math.abs(mv.x - h.x) + Math.abs(mv.y - h.y) > 1, 'saiu do corpo a corpo');
+    });
+
+    t('AI support: cura o aliado mais ferido', function () {
+      var st = arena(5, { a: 't-medic' }, [P()]);
+      var med = byDef(st, 't-medic');
+      med.x = 6; med.y = 5; med.pa = 6;
+      // aliado ferido do lado inimigo
+      st.units.push(JSON.parse(JSON.stringify(med)));
+      var hurt = st.units[st.units.length - 1];
+      hurt.uid = 'hurt1'; hurt.defId = 't-dummy'; hurt.spells = []; hurt.aiRole = 'melee';
+      hurt.x = 7; hurt.y = 5; hurt.hp = 10; hurt.hpMax = 100;
+      st.order.push('hurt1');
+      var plan = JOGO.AI.planTurn(st, med.uid);
+      var healed = false;
+      for (var k = 0; k < plan.length; k++) {
+        if (plan[k].action === 'cast' && plan[k].x === hurt.x && plan[k].y === hurt.y) healed = true;
+      }
+      ok(healed, 'planejou curar o ferido');
+    });
+
+    t('AI v2: detona marcas quando elas valem mais que o ataque comum', function () {
+      var st = arena(5, { a: 't-dummy' }, [P()]);
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy');
+      h.spells = ['t-nuke10', 't-mark', 't-detonate'];
+      h.aiRole = 'melee';
+      h.x = 4; h.y = 5; h.pa = 3; h.pp = 0;
+      d.x = 5; d.y = 5;
+      // sem marcas: detonar não deve ser escolhido
+      var plan0 = JOGO.AI.planTurn(st, h.uid);
+      var det0 = false;
+      for (var k = 0; k < plan0.length; k++) if (plan0[k].spellId === 't-detonate') det0 = true;
+      ok(!det0, 'sem marcas não detona');
+      // com 3 marcas (3*20 = 60 de dano) deve detonar
+      for (var m2 = 0; m2 < 3; m2++) {
+        d.effects.push({ type: 'mark', value: 5, duration: 9, max: 3, sourceUid: h.uid });
+      }
+      var plan1 = JOGO.AI.planTurn(st, h.uid);
+      var det1 = false;
+      for (var k2 = 0; k2 < plan1.length; k2++) if (plan1[k2].spellId === 't-detonate') det1 = true;
+      ok(det1, 'com 3 marcas, detona');
+    });
+
+    t('AI v2: evita terminar o movimento sobre armadilha inimiga visível', function () {
+      var st = arena(5, { a: 't-biter' });
+      var m = byDef(st, 't-biter');
+      var h = byHero(st, 't-h1');
+      m.x = 8; m.y = 5; m.pp = 4; m.pa = 6;
+      h.x = 4; h.y = 5;
+      // arma armadilhas em TODAS as células a que a IA gostaria de ir
+      var reach = E.reachable(st, m.uid);
+      var target = null, bestD = 999;
+      for (var k = 0; k < reach.length; k++) {
+        var dd = Math.abs(reach[k].x - h.x) + Math.abs(reach[k].y - h.y);
+        if (dd < bestD) { bestD = dd; target = reach[k]; }
+      }
+      ok(!!target, 'há célula preferida');
+      st.traps.push({ x: target.x, y: target.y, trapId: 't-trapdmg',
+                      ownerUid: h.uid, side: 'player', remaining: 3 });
+      var plan = JOGO.AI.planTurn(st, m.uid);
+      for (var k2 = 0; k2 < plan.length; k2++) {
+        if (plan[k2].action === 'move') {
+          ok(!(plan[k2].x === target.x && plan[k2].y === target.y), 'não pisa na armadilha');
+        }
+      }
+    });
+
+    t('AI v2: prefere terminar sobre evento de terreno benéfico no caminho', function () {
+      var st = arena(5, { a: 't-biter' });
+      var m = byDef(st, 't-biter');
+      var h = byHero(st, 't-h1');
+      m.x = 8; m.y = 5; m.pp = 2; m.pa = 0;
+      h.x = 4; h.y = 5;
+      var planA = JOGO.AI.planTurn(st, m.uid);
+      var mvA = null;
+      for (var k = 0; k < planA.length; k++) if (planA[k].action === 'move') mvA = planA[k];
+      ok(!!mvA, 'move sem evento');
+      // coloca um buff numa célula alcançável DIFERENTE da preferida
+      st.tileEventsActive.push({ x: 8, y: 3, eventId: 't-ev-buff', kind: 'buff', remaining: 3 });
+      var planB = JOGO.AI.planTurn(st, m.uid);
+      var mvB = null;
+      for (var k2 = 0; k2 < planB.length; k2++) if (planB[k2].action === 'move') mvB = planB[k2];
+      ok(!!mvB, 'ainda move');
+      ok(mvB.x === 8 && mvB.y === 3, 'desviou para pegar o bônus');
+    });
+
+    t('AI v2: penaliza recuo arriscado quando a chance de esquiva é baixa', function () {
+      var st = arena(5, { a: 't-shooter' }, [P({ element: 'agua' })]);
+      var m = byDef(st, 't-shooter');
+      var h = byHero(st, 't-h1');
+      m.x = 5; m.y = 5; m.pp = 3; m.pa = 6; m.element = 'agua';
+      h.x = 4; h.y = 5;
+      h.lock = 200;                          // fixação altíssima => chance no piso
+      var chance = E.dodgeChance(st, m.uid, h.uid);
+      eq(chance, 0.10, 'chance no piso');
+      var plan = JOGO.AI.planTurn(st, m.uid);
+      var mv = null;
+      for (var k = 0; k < plan.length; k++) if (plan[k].action === 'move') mv = plan[k];
+      ok(!mv || Math.abs(mv.x - h.x) + Math.abs(mv.y - h.y) <= 1,
+        'não arrisca fugir com 10% de chance');
+    });
+
+    t('AI v2: conhece os feitiços vindos de outras fontes (Engine.spell)', function () {
+      var st = arena(5, { a: 't-dummy' }, [P()]);
+      var h = byHero(st, 't-h1');
+      h.spells = ['t-item-zap'];
+      h.aiRole = 'ranged';
+      h.pa = 6;
+      var d = byDef(st, 't-dummy');
+      d.x = h.x + 2; d.y = h.y;
+      var plan = JOGO.AI.planTurn(st, h.uid);
+      var used = false;
+      for (var k = 0; k < plan.length; k++) if (plan[k].spellId === 't-item-zap') used = true;
+      ok(used, 'planejou usar o feitiço de item');
+    });
+
+    // ================================================== 15. AUTO-PLAY
+    section('15 — Auto-play IA × IA nas salas reais');
+
+    var TEST_IDS = { 'test-arena-v2': 1, 'test-cycle-v2': 1, 'test-events-v2': 1 };
+    var realDungeons = [];
+    for (i = 0; i < D.dungeons.length; i++) {
+      if (!TEST_IDS[D.dungeons[i].id]) realDungeons.push(D.dungeons[i]);
+    }
+    var realParty = buildRealParty();
+
+    function buildRealParty() {
+      if (!D.classes) return null;
+      var ids = [];
+      for (var k in D.classes) {
+        if (!Object.prototype.hasOwnProperty.call(D.classes, k)) continue;
+        if (k === 't-alfa' || k === 't-beta') continue;
+        ids.push(k);
+      }
+      if (ids.length < 1) return null;
+      ids.sort();
+      var party = [];
+      for (var n = 0; n < Math.min(3, ids.length); n++) {
+        var cls = D.classes[ids[n]];
+        var spells = (cls.baseSpells || []).slice();
+        party.push({ heroId: 'real-h' + n, classId: ids[n], element: 'neutro',
+                     level: 1, spells: spells, pet: null, items: {} });
+      }
+      return party;
+    }
+
+    if (!realDungeons.length || !realParty) {
+      notes.push('AUTO-PLAY CONDICIONAL: js/core/data/*.js ainda não existem (0 calabouços ' +
+        'reais, ' + (realParty ? realParty.length : 0) + ' classes reais). ' +
+        'O motor foi validado contra as fixtures do contrato; o auto-play IA×IA nas ' +
+        '18 salas dos 6 calabouços roda automaticamente assim que os Criativos entregarem os dados.');
+      t('AUTO-PLAY: pendente — dados reais ainda não publicados (condicional)', function () {
+        ok(true, 'condicional');
+      });
+      // substituto com fixtures: garante que o laço IA×IA fecha
+      t('AUTO-PLAY (fixture): arena de teste termina sozinha', function () {
+        autoPlay('test-arena-v2', 0, [P(), P2()]);
+      });
+      t('AUTO-PLAY (fixture): labirinto de teste termina sozinho', function () {
+        autoPlay('test-arena-v2', 1, [P()]);
+      });
+      t('AUTO-PLAY (fixture): campo aberto com pet termina sozinho', function () {
+        autoPlay('test-arena-v2', 5, [P({ pet: 't-pet-dog' })]);
+      });
+    } else {
+      notes.push('AUTO-PLAY: rodando em ' + realDungeons.length + ' calabouço(s) reais.');
+      for (var dd = 0; dd < realDungeons.length; dd++) {
+        for (var rr = 0; rr < realDungeons[dd].rooms.length; rr++) {
+          (function (dungeonId, roomIdx) {
+            t('AUTO-PLAY IA×IA: ' + dungeonId + ' sala ' + roomIdx, function () {
+              autoPlay(dungeonId, roomIdx, realParty);
+            });
+          })(realDungeons[dd].id, rr);
+        }
+      }
+    }
+
+    function autoPlay(dungeonId, roomIdx, party) {
+      E.events.length = 0;
+      var st = E.createBattle(dungeonId, roomIdx, party);
+      var turns = 0;
+      while (st.phase === 'playing' && turns < 300) {
+        var u = E.activeUnit(st);
+        ok(!!u, 'sempre há unidade ativa');
+        var plan = JOGO.AI.planTurn(st, u.uid);
+        eq(plan[plan.length - 1].action, 'end', 'plano termina com end');
+        var paSum = 0;
+        for (var p = 0; p < plan.length; p++) {
+          if (plan[p].action === 'cast') {
+            var sd = E.spell(plan[p].spellId);
+            ok(!!sd, 'feitiço do plano existe: ' + plan[p].spellId);
+            paSum += (sd.paCost || 0);
+          }
+        }
+        ok(paSum <= u.pa, 'plano dentro do PA (' + u.defId + ')');
+        for (var a = 0; a < plan.length && st.phase === 'playing'; a++) {
+          var act = plan[a];
+          if (act.action === 'move') E.move(st, u.uid, act.x, act.y);
+          else if (act.action === 'cast') E.cast(st, u.uid, act.spellId, act.x, act.y);
+          else break;
+        }
+        if (st.phase === 'playing') E.endTurn(st);
+        turns++;
+        E.events.length = 0;
+      }
+      ok(st.phase !== 'playing' || turns === 300, 'terminou ou atingiu o teto');
+      console.log('AUTO-PLAY ' + dungeonId + '[' + roomIdx + ']: ' +
+        (st.phase === 'playing' ? 'teto de 300 turnos' : st.phase + ' em ' + turns + ' turnos'));
+    }
+  }
+
+  // ------------------------------------------------------------ executa
+  try {
+    run();
+  } catch (e) {
+    failed++;
+    failures.push('ERRO FATAL DA SUÍTE: ' + e.message);
+    report('ERRO FATAL DA SUÍTE', false, e.message + ' ' + (e.stack || ''));
+  }
+  finish();
+
+  function finish() {
+    var notesEl = document.getElementById('notes');
+    if (notes.length) notesEl.textContent = notes.join(' | ');
+    else notesEl.style.display = 'none';
+    var summary = document.getElementById('summary');
+    summary.textContent = passed + ' PASS / ' + failed + ' FAIL (' + (passed + failed) + ' testes)';
+    summary.className = failed === 0 ? 'allpass' : 'somefail';
+    window.TEST_RESULTS = { passed: passed, failed: failed, failures: failures, notes: notes };
+    console.log('TEST_RESULTS', JSON.stringify(window.TEST_RESULTS));
+  }
+})();
+</script>
+</body>
+</html>

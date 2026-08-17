@@ -840,12 +840,25 @@ var JOGO = (typeof window !== 'undefined')
     g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(c.x, c.y); g.lineTo(d.x, d.y); g.lineTo(a.x, a.y);
   }
   function drawHole(g, x, y, pal) {
-    var deep = shadeHex(pal.secondary, -0.85);
+    // buraco: paredes internas descendo + fundo preto + borda quebrada iluminada
+    var wallC = shadeHex(pal.secondary, -0.55);
+    var deep = shadeHex(pal.secondary, -0.86);
+    var k = 0.5;
+    var bN = iso(x - k, y - k), bE = iso(x + k, y - k), bS = iso(x + k, y + k), bW = iso(x - k, y + k);
     g.beginFill(deep, 1); diamond(g, x, y, 0, 0); g.endFill();
-    g.beginFill(0x000000, 0.86); diamond(g, x, y, 0.10, -D_HOLE * 0.5); g.endFill();
-    g.beginFill(0x000000, 1); diamond(g, x, y, 0.24, -D_HOLE); g.endFill();
-    g.lineStyle(1.6, shadeHex(pal.primary, -0.2), 0.6);
-    diamondLine(g, x, y, 0.02, 0);
+    // paredes visíveis do buraco (norte/oeste ficam à vista na isométrica)
+    g.beginFill(wallC, 1);
+    g.drawPolygon([bN.x, bN.y, bE.x, bE.y, bE.x, bE.y + D_HOLE * 0.55, bN.x, bN.y + D_HOLE * 0.55]);
+    g.endFill();
+    g.beginFill(shadeHex(pal.secondary, -0.70), 1);
+    g.drawPolygon([bW.x, bW.y, bN.x, bN.y, bN.x, bN.y + D_HOLE * 0.55, bW.x, bW.y + D_HOLE * 0.55]);
+    g.endFill();
+    g.beginFill(0x000000, 1); diamond(g, x, y, 0.20, -D_HOLE * 0.55); g.endFill();
+    // lábio iluminado no lado da luz
+    g.lineStyle(2, shadeHex(pal.primary, 0.35), 0.75);
+    g.moveTo(bW.x, bW.y); g.lineTo(bN.x, bN.y); g.lineTo(bE.x, bE.y);
+    g.lineStyle(1.4, 0x000000, 0.7);
+    g.moveTo(bE.x, bE.y); g.lineTo(bS.x, bS.y); g.lineTo(bW.x, bW.y);
     g.lineStyle(0);
   }
 
@@ -1393,10 +1406,10 @@ var JOGO = (typeof window !== 'undefined')
     var p = (def && def.palette) || {};
     var base = {
       calmo: { tint: '#ffffff', tintA: 0.0, fog: '#0a0d10' },
-      chuva: { tint: '#2a5c8a', tintA: 0.26, fog: '#0a1420' },
-      estiagem: { tint: '#ffb14a', tintA: 0.20, fog: '#2a1a08' },
-      vendaval: { tint: '#9fd0c0', tintA: 0.13, fog: '#101a18' },
-      tremor: { tint: '#a08050', tintA: 0.19, fog: '#181208' }
+      chuva: { tint: '#4a7cb0', tintA: 0.40, fog: '#0a1420' },
+      estiagem: { tint: '#ffb14a', tintA: 0.26, fog: '#2a1a08' },
+      vendaval: { tint: '#9fd0c0', tintA: 0.18, fog: '#101a18' },
+      tremor: { tint: '#b08a58', tintA: 0.26, fog: '#181208' }
     }[id] || { tint: '#ffffff', tintA: 0, fog: '#0a0d10' };
     return {
       tint: p.tint || p.sky || p.primary || base.tint,
@@ -1410,11 +1423,14 @@ var JOGO = (typeof window !== 'undefined')
     if (!weatherLayer) return;
     weatherLayer.removeChildren();
     weather.drops = []; weather.motes = [];
+    if (weather.ground) { weather.ground.destroy({ children: true }); weather.ground = null; }
+    weather.puddleG = null;
     var id = weather.id;
     var box = new P.Container();
     weatherLayer.addChild(box);
     weather.box = box;
     var pal = weatherPalette(id);
+    buildWeatherGround(id);
 
     if (id === 'chuva') {
       var pc = new P.Container();
@@ -1529,7 +1545,55 @@ var JOGO = (typeof window !== 'undefined')
     box.alpha = 0;
   }
 
+  // efeitos do clima assentados no CHÃO (espaço de mundo, sob as unidades)
+  function buildWeatherGround(id) {
+    var st = state();
+    if (!st || !st.grid || !decalLayer) return;
+    var c = new P.Container();
+    decalLayer.addChildAt(c, 0);
+    weather.ground = c;
+    var rnd = srand(hashStr('wg' + id + st.grid.w + st.grid.h));
+    var i, x, y, k, p, g;
+    if (id === 'chuva') {
+      g = new P.Graphics();
+      for (i = 0; i < 26; i++) {
+        x = Math.floor(rnd() * st.grid.w); y = Math.floor(rnd() * st.grid.h);
+        if (tileKind(gridTile(st, x, y)) !== 'floor' && tileKind(gridTile(st, x, y)) !== 'deco') continue;
+        p = iso(x + (rnd() - 0.5) * 0.4, y + (rnd() - 0.5) * 0.4, 0);
+        var rw = 12 + rnd() * 16;
+        g.beginFill(0x8fd0f0, 0.16).drawEllipse(p.x, p.y, rw, rw * 0.44).endFill();
+        g.lineStyle(1.2, 0xbfeaff, 0.22).drawEllipse(p.x, p.y, rw * 0.72, rw * 0.32);
+        g.lineStyle(0);
+      }
+      c.addChild(g);
+      weather.puddleG = g;
+    } else if (id === 'estiagem') {
+      g = new P.Graphics();
+      for (i = 0; i < 30; i++) {
+        x = Math.floor(rnd() * st.grid.w); y = Math.floor(rnd() * st.grid.h);
+        p = iso(x + (rnd() - 0.5) * 0.5, y + (rnd() - 0.5) * 0.5, 0);
+        g.lineStyle(1.4, 0x6a3a12, 0.28);
+        var ax = p.x, ay = p.y;
+        for (k = 0; k < 3; k++) {
+          var nx = ax + (rnd() - 0.5) * 26, ny = ay + (rnd() - 0.5) * 12;
+          g.moveTo(ax, ay); g.lineTo(nx, ny); ax = nx; ay = ny;
+        }
+      }
+      g.lineStyle(0);
+      c.addChild(g);
+    } else if (id === 'tremor') {
+      g = new P.Graphics();
+      for (i = 0; i < 18; i++) {
+        x = Math.floor(rnd() * st.grid.w); y = Math.floor(rnd() * st.grid.h);
+        p = iso(x, y, 0);
+        g.beginFill(0xc8a066, 0.14).drawEllipse(p.x, p.y, 16 + rnd() * 14, 8 + rnd() * 6).endFill();
+      }
+      c.addChild(g);
+    }
+  }
+
   function updateWeather(dt) {
+    if (weather.puddleG) weather.puddleG.alpha = 0.75 + Math.sin(nowT * 2.2) * 0.25;
     if (!weather.box) return;
     weather.k = Math.min(1, weather.k + dt / 0.9);
     weather.box.alpha = weather.k;
