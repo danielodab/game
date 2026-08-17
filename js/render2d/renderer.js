@@ -1246,26 +1246,36 @@ var JOGO = (typeof window !== 'undefined')
 
     var body = new P.Container();
     var cv = unitArtCanvas(u, 0);
-    var sp, fl, tex;
     if (cv) {
-      // ARTE: sprite por direção isométrica (o Art já espelha internamente)
-      sp = artSprite(cv, 0.88);
-      body.addChild(sp);
-      fl = artSprite(cv, 0.88);
+      // ARTE ARTICULADA: pernas primeiro, tronco por cima (esconde a emenda)
+      var legL = new P.Sprite(P.Texture.EMPTY);
+      var legR = new P.Sprite(P.Texture.EMPTY);
+      var torso = new P.Sprite(P.Texture.EMPTY);
+      body.addChild(legL, legR, torso);
+      c.__legL = legL; c.__legR = legR; c.__torso = torso;
+      legL.__fl = addFlashChild(legL);
+      legR.__fl = addFlashChild(legR);
+      torso.__fl = addFlashChild(torso);
       c.__art = true; c.__artDir = 0;
+      applyRig(c, cv);
       c.__height = artTop(cv);
+      // criaturas sem pernas óbvias (pets, gosmas) balançam em vez de marchar
+      c.__gait = (DATA().classes && DATA().classes[u.defId]) || String(u.defId).indexOf('fus:') === 0
+        ? 'walk' : (u.kind === 'pet' ? 'hop' : 'waddle');
     } else {
-      tex = unitTexture(u);
-      sp = new P.Sprite(tex); sp.anchor.set(0.5, 1);
+      var tex = unitTexture(u);
+      var sp = new P.Sprite(tex); sp.anchor.set(0.5, 1);
       body.addChild(sp);
-      fl = new P.Sprite(tex); fl.anchor.set(0.5, 1);
+      var fl = new P.Sprite(tex); fl.anchor.set(0.5, 1);
+      fl.tint = 0xffffff; fl.blendMode = P.BLEND_MODES.ADD; fl.alpha = 0;
+      body.addChild(fl);
+      c.__flash = fl; c.__sprite = sp; c.__gait = 'waddle';
       c.__height = texCache['unit|' + u.defId + '|' + (u.boss ? 'b' : '') + (u.kind || '') + '|' + (u.element || '') + '|h'] || 76;
+      // placeholder: duas perninhas desenhadas à parte, para haver PASSO
+      var phl = placeholderLegs(u);
+      body.addChildAt(phl.left, 0); body.addChildAt(phl.right, 0);
+      c.__legL = phl.left; c.__legR = phl.right; c.__phLegs = true;
     }
-    fl.tint = 0xffffff;
-    fl.blendMode = P.BLEND_MODES.ADD;
-    fl.alpha = 0;
-    body.addChild(fl);
-    c.__flash = fl; c.__sprite = sp;
     c.addChild(body); c.__body = body;
 
     var bars = new P.Graphics();
@@ -1274,6 +1284,27 @@ var JOGO = (typeof window !== 'undefined')
     c.addChild(marks); c.__marks = marks;
     c.__markKey = '';
     return c;
+  }
+
+  // pernas do placeholder (sem Art): dois retângulos com pé, girando no quadril
+  function placeholderLegs(u) {
+    var pal = paletteFor(u);
+    var big = u.boss ? 1.42 : (u.kind === 'pet' ? 0.66 : 1);
+    var bw = TW * 0.52 * big, bh = TW * 0.84 * big;
+    var col = hexInt(shadeHex(pal.secondary, 0.05));
+    var line = hexInt(shadeHex(pal.secondary, -0.55));
+    function leg(sign) {
+      var g = new P.Graphics();
+      g.beginFill(col, 1).lineStyle(2, line, 1);
+      g.drawRoundedRect(-bw * 0.10, 0, bw * 0.20, bh * 0.30, bw * 0.07);
+      g.endFill();
+      g.beginFill(line, 1).lineStyle(0);
+      g.drawEllipse(sign * bw * 0.03, bh * 0.30, bw * 0.13, bh * 0.035);
+      g.endFill();
+      g.position.set(sign * bw * 0.16, -bh * 0.30);
+      return g;
+    }
+    return { left: leg(-1), right: leg(1) };
   }
 
   function unitStatus(u) {

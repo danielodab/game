@@ -871,32 +871,63 @@ var JOGO = (typeof window !== 'undefined')
 
   // ==========================================================================
   // CORPO — peças compartilhadas (braços, pernas, mãos, pés, rosto)
+  //
+  // PROPORÇÃO (reescrita v3): cartoon exagerado de ~3 CABEÇAS de altura, do
+  // jeito do Dofus 1.29 — cabeça grande, tronco compacto, pernas curtas e
+  // grossas, MÃOS E PÉS GRANDES. É o exagero que dá carisma e legibilidade em
+  // 96 px de tela. Nada de proporção realista.
+  //
+  // TRAÇO: peso variável. `LW_OUT` (silhueta externa) é bem mais grosso que
+  // `LW_IN` (detalhe interno) — é o que faz o desenho "fechar" longe da tela.
+  // SOMBRA: três tons CHAPADOS bem separados (base · sombra · luz), sem
+  // degradê. `part(..., {k, hi})` corta os três com borda dura.
   // ==========================================================================
+  var W_OUT = 1.75;   // multiplicador de contorno da silhueta
+  var W_MID = 1.15;   // peças internas grandes (braços, pernas)
+  var W_IN  = 0.7;    // detalhe fino
+
   function drawArm(ctx, a, col) {
-    part(ctx, Pcap(a.sh[0], a.sh[1], a.r0, a.el[0], a.el[1], a.r1), col, { k: 0.24 });
-    part(ctx, Pcap(a.el[0], a.el[1], a.r1, a.hd[0], a.hd[1], a.r1 * 0.9), col, { k: 0.24 });
+    part(ctx, Pcap(a.sh[0], a.sh[1], a.r0, a.el[0], a.el[1], a.r1), col, { k: 0.3, hi: 0.16, lw: W_MID });
+    part(ctx, Pcap(a.el[0], a.el[1], a.r1, a.hd[0], a.hd[1], a.r1 * 0.94), col, { k: 0.3, hi: 0.14, lw: W_MID });
   }
-  function drawHand(ctx, a, col) {
-    part(ctx, Pel(a.hd[0], a.hd[1], a.hr, a.hr * 0.95), col, { k: 0.22, hi: true });
-  }
-  function drawLeg(ctx, l, col, footCol) {
-    part(ctx, Pcap(l.hip[0], l.hip[1], l.r0, l.knee[0], l.knee[1], l.r1), col, { k: 0.24 });
-    part(ctx, Pcap(l.knee[0], l.knee[1], l.r1, l.ank[0], l.ank[1], l.r1 * 0.86), col, { k: 0.24 });
-    if (l.foot) {
-      part(ctx, tag(function (g) {
-        var f = l.foot;
-        g.beginPath();
-        g.moveTo(f[0] - f[2] * 0.5, f[1] - f[3]);
-        g.quadraticCurveTo(f[0] + f[2] * 0.62, f[1] - f[3] * 1.15, f[0] + f[2] * 0.62, f[1]);
-        g.quadraticCurveTo(f[0], f[1] + f[3] * 0.7, f[0] - f[2] * 0.5, f[1]);
-        g.closePath();
-      }, l.foot[0], l.foot[1] - l.foot[3] * 0.3, l.foot[2] * 0.6), footCol, { k: 0.26 });
+  // mão GRANDE, tipo luva de desenho — com o corte do polegar para ler o gesto
+  function drawHand(ctx, a, col, open) {
+    part(ctx, Pel(a.hd[0], a.hd[1], a.hr, a.hr * 0.96), col, { k: 0.28, hi: 0.24, lw: W_MID });
+    if (open) {
+      stroke(ctx, [a.hd[0] - a.hr * 0.5, a.hd[1] - a.hr * 0.1,
+                   a.hd[0] + a.hr * 0.1, a.hd[1] - a.hr * 0.45], sh(col, -0.4), W_IN);
+    } else {
+      stroke(ctx, [a.hd[0] - a.hr * 0.62, a.hd[1] - a.hr * 0.16,
+                   a.hd[0] + a.hr * 0.5, a.hd[1] - a.hr * 0.3], sh(col, -0.42), W_IN);
+      stroke(ctx, [a.hd[0] - a.hr * 0.5, a.hd[1] + a.hr * 0.3,
+                   a.hd[0] + a.hr * 0.44, a.hd[1] + a.hr * 0.2], sh(col, -0.34), W_IN * 0.8);
     }
   }
-  // olho estilo desenho: oval escuro + brilho
-  function eye(ctx, x, y, rx, ry, col, hiSide) {
-    part(ctx, Pel(x, y, rx, ry), col || '#2a2028', { k: 0.1, lw: 0.7 });
-    flat(ctx, Pel(x + rx * (hiSide || 0.3), y - ry * 0.36, rx * 0.32, ry * 0.3), 'rgba(255,255,255,0.92)');
+  function drawLeg(ctx, l, col, footCol) {
+    part(ctx, Pcap(l.hip[0], l.hip[1], l.r0, l.knee[0], l.knee[1], l.r1), col, { k: 0.3, hi: 0.14, lw: W_MID });
+    part(ctx, Pcap(l.knee[0], l.knee[1], l.r1, l.ank[0], l.ank[1], l.r1 * 0.9), col, { k: 0.3, hi: 0.12, lw: W_MID });
+    if (l.foot) {
+      // pé grande e chato: a base larga é o que "planta" o boneco no chão
+      part(ctx, tag(function (g) {
+        var f = l.foot, w = f[2], hgt = f[3], d = l.footDir == null ? 1 : l.footDir;
+        g.beginPath();
+        g.moveTo(f[0] - d * w * 0.42, f[1] - hgt);
+        g.quadraticCurveTo(f[0] + d * w * 0.72, f[1] - hgt * 1.25, f[0] + d * w * 0.7, f[1] - hgt * 0.16);
+        g.quadraticCurveTo(f[0] + d * w * 0.4, f[1] + hgt * 0.42, f[0] - d * w * 0.2, f[1] + hgt * 0.36);
+        g.quadraticCurveTo(f[0] - d * w * 0.56, f[1] + hgt * 0.2, f[0] - d * w * 0.42, f[1] - hgt);
+        g.closePath();
+      }, l.foot[0], l.foot[1] - l.foot[3] * 0.3, l.foot[2] * 0.6), footCol,
+        { k: 0.32, hi: 0.16, lw: W_MID });
+    }
+  }
+  // olho de desenho: branco grande, íris colorida, pupila e brilho — o que faz
+  // o jogador achar o personagem simpático.
+  function eye(ctx, x, y, rx, ry, col, look, iris) {
+    look = look == null ? 0.26 : look;
+    part(ctx, Pel(x, y, rx, ry), '#fdfaf2', { k: 0.06, lw: W_IN * 1.1, line: '#3a2a33' });
+    if (iris) flat(ctx, Pel(x + rx * look, y + ry * 0.06, rx * 0.62, ry * 0.72), iris);
+    flat(ctx, Pel(x + rx * look, y + ry * 0.08, rx * 0.44, ry * 0.56), col || '#2a2028');
+    flat(ctx, Pel(x + rx * look - rx * 0.16, y - ry * 0.34, rx * 0.24, ry * 0.26), 'rgba(255,255,255,0.95)');
   }
   // Rosto: traços GRANDES e poucos. Tudo aqui foi calibrado para continuar
   // legível quando o herói ocupa ~90 px de altura na tela do celular.
