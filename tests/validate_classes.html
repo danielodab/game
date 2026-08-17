@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Validação de Classes, Feitiços e Progressão — SOTERRA 2.0</title>
+<style>
+  body { background: #14181c; color: #d8dee4; font-family: Consolas, "Courier New", monospace; padding: 18px; margin: 0; }
+  h1 { font-size: 17px; color: #ffd76b; margin: 0 0 4px; }
+  h2 { font-size: 14px; color: #8ab4d8; margin: 18px 0 6px; }
+  .sub { font-size: 12px; color: #7f8b96; margin-bottom: 12px; }
+  #summary { font-size: 15px; margin: 12px 0; padding: 10px 12px; border-radius: 6px; font-weight: bold; }
+  #summary.ok { background: #15351b; color: #7be08a; }
+  #summary.bad { background: #3a1515; color: #ff8a8a; }
+  ul { list-style: none; padding: 0; margin: 0; font-size: 12px; }
+  li { padding: 1px 0; }
+  .fail { color: #ff8a8a; }
+  .pass { color: #6fae76; }
+  .info { color: #9aa7b2; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: #8ab4d8; font-size: 13px; }
+  table { border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  th, td { border: 1px solid #2a3138; padding: 3px 8px; text-align: left; }
+  th { color: #ffd76b; }
+</style>
+</head>
+<body>
+<h1>Validação — DATA.classes · DATA.spells · DATA.unlockTiers/leveling/cards</h1>
+<div class="sub">SOTERRA 2.0 · Criativo Classes · roda tudo de forma síncrona no load · resultado em <code>window.TEST_RESULTS</code></div>
+<div id="summary">Carregando…</div>
+<div id="failList"></div>
+<div id="report"></div>
+<details><summary>Todas as checagens</summary><ul id="allList"></ul></details>
+
+<script>window.__V = String(Date.now());
+document.write('<scr' + 'ipt src="../js/core/data/classes.js?v=' + window.__V + '"><\/scr' + 'ipt>');
+document.write('<scr' + 'ipt src="../js/core/data/spells.js?v=' + window.__V + '"><\/scr' + 'ipt>');
+document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__V + '"><\/scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ------------------------------------------------------------ utilidades */
+  var results = [];
+  function check(name, ok, detail) {
+    results.push({ name: name, ok: !!ok, detail: detail === undefined ? '' : String(detail) });
+  }
+  function isNum(v) { return typeof v === 'number' && isFinite(v); }
+  function isStr(v) { return typeof v === 'string' && v.length > 0; }
+  function has(o, k) { return o && Object.prototype.hasOwnProperty.call(o, k); }
+
+  /* ------------------------------------------------------------- vocabulário */
+  var CLASS_IDS = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeira', 'invocador'];
+  var ELEMENTS = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
+  var PATH_ELEMENTS = ['fogo', 'agua', 'terra', 'ar'];
+  var SHAPES = ['single', 'cross', 'circle', 'line', 'cone', 'ring'];
+  var SIDES = ['any', 'enemy', 'ally', 'self'];
+  var BUFF_STATS = ['pa', 'pp', 'power', 'initiative', 'dodge', 'lock'];
+  var WEATHERS = ['calmo', 'chuva', 'estiagem', 'vendaval', 'tremor'];
+  var RARITIES = ['comum', 'raro', 'epico'];
+  var HEX = /^#[0-9a-fA-F]{6}$/;
+  var PM_RE = /\bpm\b/i;
+
+  /* tipos de efeito FECHADOS (contrato v2: v1 + os 10 novos) e campos obrigatórios */
+  var EFFECT_REQ = {
+    damage:         ['element', 'min', 'max'],
+    heal:           ['min', 'max'],
+    shield:         ['value', 'duration'],
+    buff:           ['stat', 'value', 'duration'],
+    resist:         ['element', 'value', 'duration'],
+    push:           ['tiles'],
+    pull:           ['tiles'],
+    teleport:       [],
+    swap:           [],
+    poison:         ['element', 'min', 'max', 'duration'],
+    regen:          ['min', 'max', 'duration'],
+    summon:         ['monsterId'],
+    taunt:          ['duration'],
+    invisible:      ['duration'],
+    root:           ['duration'],
+    mark:           ['value', 'duration', 'max'],
+    detonateMarks:  ['mult'],
+    trap:           ['trapId', 'duration'],
+    weatherShift:   ['weather'],
+    cleanse:        ['kinds'],
+    reflect:        ['pct', 'duration'],
+    dispelShield:   [],
+    moveTo:         ['maxTiles'],
+    chain:          ['jumps', 'falloff', 'element', 'min', 'max']
+  };
+  var NUM_FIELDS = { min: 1, max: 1, value: 1, duration: 1, tiles: 1, mult: 1, pct: 1, maxTiles: 1, jumps: 1, falloff: 1 };
+
+  /* ------------------------------------------------------------------ dados */
+  var D = (typeof JOGO !== 'undefined') && JOGO.DATA;
+  check('JOGO.DATA existe', !!D);
+  if (!D) { render(); return; }
+  check('DATA.classes existe', !!D.classes);
+  check('DATA.spells existe', !!D.spells);
+  check('DATA.unlockTiers existe', !!D.unlockTiers);
+  check('DATA.leveling existe', !!D.leveling);
+  check('DATA.cards existe', !!D.cards);
+  if (!D.classes || !D.spells || !D.unlockTiers || !D.leveling || !D.cards) { render(); return; }
+
+  var classIds = Object.keys(D.classes);
+  var spellIds = Object.keys(D.spells);
+  var TIERS = D.unlockTiers;
+
+  /* ===================================================== 1. unlockTiers ==== */
+  check('unlockTiers = [5,10,12,15,20,30]',
+    TIERS.length === 6 && TIERS.join(',') === '5,10,12,15,20,30', TIERS.join(','));
+
+  /* ========================================================= 2. classes ==== */
+  check('exatamente 6 classes', classIds.length === 6, 'tem ' + classIds.length);
+  CLASS_IDS.forEach(function (cid) { check('classe ' + cid + ' existe', !!D.classes[cid]); });
+  classIds.forEach(function (cid) {
+    check('classe ' + cid + ' é um dos ids do contrato', CLASS_IDS.indexOf(cid) >= 0);
+  });
+
+  var unlockedCount = 0;
+  var referenced = {};        // spellId -> true (referenciado por baseSpells/paths)
+  var perClassSpells = {};
+
+  CLASS_IDS.forEach(function (cid) {
+    var c = D.classes[cid];
+    if (!c) return;
+    var p = 'classe ' + cid + ' ';
+    check(p + 'id == chave', c.id === cid, c.id);
+    ['name', 'role', 'description', 'lore'].forEach(function (f) {
+      check(p + 'campo ' + f, isStr(c[f]));
+    });
+    ['primary', 'secondary', 'accent'].forEach(function (k) {
+      check(p + 'palette.' + k + ' hex', c.palette && HEX.test(c.palette[k]), c.palette && c.palette[k]);
+    });
+    check(p + 'cardRarity válida', RARITIES.indexOf(c.cardRarity) >= 0, c.cardRarity);
+    check(p + 'startsUnlocked booleano', typeof c.startsUnlocked === 'boolean');
+    if (c.startsUnlocked) unlockedCount++;
+
+    /* stats */
+    var st = c.stats || {};
+    check(p + 'hp 90–150', isNum(st.hp) && st.hp >= 90 && st.hp <= 150, st.hp);
+    check(p + 'pa = 6', st.pa === 6, st.pa);
+    check(p + 'pp 3–4', st.pp === 3 || st.pp === 4, st.pp);
+    check(p + 'initiative 10–90', isNum(st.initiative) && st.initiative >= 10 && st.initiative <= 90, st.initiative);
+    check(p + 'power = 0', st.power === 0, st.power);
+    check(p + 'dodge 0–40', isNum(st.dodge) && st.dodge >= 0 && st.dodge <= 40, st.dodge);
+    check(p + 'lock 0–40', isNum(st.lock) && st.lock >= 0 && st.lock <= 40, st.lock);
+    check(p + 'resists com os 5 elementos',
+      !!st.resists && ELEMENTS.every(function (e) { return isNum(st.resists[e]); }));
+    check(p + 'sem campo pm em stats', !has(st, 'pm'));
+
+    /* baseSpells */
+    var bs = c.baseSpells || [];
+    check(p + 'exatamente 3 baseSpells', bs.length === 3, 'tem ' + bs.length);
+    bs.forEach(function (sid, i) {
+      var s = D.spells[sid];
+      check(p + 'baseSpell[' + i + '] ' + sid + ' existe', !!s);
+      if (!s) return;
+      referenced[sid] = true;
+      check(p + 'baseSpell ' + sid + ' é neutro', s.element === 'neutro', s.element);
+      check(p + 'baseSpell ' + sid + ' unlockLevel 0', s.unlockLevel === 0, s.unlockLevel);
+      check(p + 'baseSpell ' + sid + ' classId ' + cid, s.classId === cid, s.classId);
+    });
+
+    /* paths */
+    var paths = c.paths || {};
+    check(p + 'tem os 4 caminhos elementais',
+      PATH_ELEMENTS.every(function (e) { return !!paths[e]; }) && Object.keys(paths).length === 4,
+      Object.keys(paths).join(','));
+    PATH_ELEMENTS.forEach(function (el) {
+      var arr = paths[el] || [];
+      check(p + 'caminho ' + el + ' com 6 feitiços', arr.length === 6, 'tem ' + arr.length);
+      arr.forEach(function (sid, i) {
+        var s = D.spells[sid];
+        check(p + el + '[' + i + '] ' + sid + ' existe', !!s);
+        if (!s) return;
+        referenced[sid] = true;
+        check(p + el + ' ' + sid + ' element == ' + el, s.element === el, s.element);
+        check(p + el + ' ' + sid + ' classId == ' + cid, s.classId === cid, s.classId);
+        check(p + el + ' ' + sid + ' unlockLevel == ' + TIERS[i], s.unlockLevel === TIERS[i], s.unlockLevel);
+      });
+    });
+
+    perClassSpells[cid] = bs.length + PATH_ELEMENTS.reduce(function (n, e) { return n + (paths[e] || []).length; }, 0);
+    check(p + 'total de 27 feitiços (3 + 4×6)', perClassSpells[cid] === 27, perClassSpells[cid]);
+  });
+
+  check('exatamente 2 classes com startsUnlocked', unlockedCount === 2, 'tem ' + unlockedCount);
+
+  /* =============================================== 3. contagem de feitiços = */
+  var refCount = Object.keys(referenced).length;
+  check('162 feitiços jogáveis referenciados (18 neutros + 144 elementais)', refCount === 162, 'tem ' + refCount);
+
+  var trapPayloadIds = {};
+  spellIds.forEach(function (sid) {
+    var s = D.spells[sid];
+    (s.effects || []).forEach(function (ef) {
+      if (ef && ef.type === 'trap' && ef.trapId) trapPayloadIds[ef.trapId] = true;
+    });
+  });
+  var orphans = spellIds.filter(function (sid) { return !referenced[sid] && !trapPayloadIds[sid]; });
+  check('nenhum feitiço órfão (não referenciado por classe nem por armadilha)', orphans.length === 0, orphans.join(', '));
+
+  /* ================================================= 4. cada feitiço ======= */
+  var nameSeen = {}, dupNames = [];
+  spellIds.forEach(function (sid) {
+    var s = D.spells[sid];
+    var p = 'spell ' + sid + ' ';
+    var isTrapPayload = !!trapPayloadIds[sid] && !referenced[sid];
+
+    check(p + 'id == chave', s.id === sid, s.id);
+    ['name', 'description', 'flavor', 'fxKey'].forEach(function (f) { check(p + 'campo ' + f, isStr(s[f])); });
+    check(p + 'element válido', ELEMENTS.indexOf(s.element) >= 0, s.element);
+    check(p + 'classId de classe existente', s.classId === null || CLASS_IDS.indexOf(s.classId) >= 0, s.classId);
+    check(p + 'unlockLevel numérico', isNum(s.unlockLevel) && s.unlockLevel >= 0 && s.unlockLevel <= 30, s.unlockLevel);
+    if (!isTrapPayload && s.unlockLevel !== 0) {
+      check(p + 'unlockLevel é um tier', TIERS.indexOf(s.unlockLevel) >= 0, s.unlockLevel);
+    }
+
+    /* custos */
+    if (isTrapPayload) {
+      check(p + 'carga de armadilha custa 0 PA', s.paCost === 0, s.paCost);
+    } else {
+      check(p + 'paCost 2–6', isNum(s.paCost) && s.paCost >= 2 && s.paCost <= 6, s.paCost);
+    }
+    check(p + 'cooldown 0–5', isNum(s.cooldown) && s.cooldown >= 0 && s.cooldown <= 5, s.cooldown);
+    check(p + 'castsPerTurn 0–3', isNum(s.castsPerTurn) && s.castsPerTurn >= 0 && s.castsPerTurn <= 3, s.castsPerTurn);
+
+    /* alcance / área */
+    var r = s.range || {};
+    check(p + 'range completo',
+      isNum(r.min) && isNum(r.max) && typeof r.line === 'boolean' &&
+      typeof r.los === 'boolean' && typeof r.movable === 'boolean');
+    check(p + 'range coerente (0 ≤ min ≤ max ≤ 10)', r.min >= 0 && r.min <= r.max && r.max <= 10, r.min + '–' + r.max);
+    var a = s.aoe || {};
+    check(p + 'aoe válido', SHAPES.indexOf(a.shape) >= 0 && isNum(a.size) && a.size >= 0, a.shape + '/' + a.size);
+    check(p + 'aoe single ⇒ size 0', a.shape !== 'single' || a.size === 0, a.size);
+    check(p + 'needsEmptyTile booleano', typeof s.needsEmptyTile === 'boolean');
+    check(p + 'targetSide válido', SIDES.indexOf(s.targetSide) >= 0, s.targetSide);
+    check(p + 'targetSide self ⇒ alcance 0', s.targetSide !== 'self' || (r.min === 0 && r.max === 0), r.min + '–' + r.max);
+    check(p + 'aoe line ⇒ range.line', a.shape !== 'line' || r.line === true);
+
+    /* efeitos */
+    var effs = s.effects;
+    check(p + 'effects é lista não vazia', Object.prototype.toString.call(effs) === '[object Array]' && effs.length > 0);
+    (effs || []).forEach(function (ef, i) {
+      var q = p + 'efeito[' + i + '] ';
+      var req = EFFECT_REQ[ef && ef.type];
+      check(q + 'tipo do vocabulário fechado', !!req, ef && ef.type);
+      if (!req) return;
+      req.forEach(function (f) {
+        var ok = has(ef, f) && ef[f] !== null && ef[f] !== undefined;
+        if (ok && NUM_FIELDS[f]) ok = isNum(ef[f]);
+        check(q + ef.type + ' campo ' + f, ok, ef[f]);
+      });
+      if (has(ef, 'element')) check(q + 'element válido', ELEMENTS.indexOf(ef.element) >= 0, ef.element);
+      if (has(ef, 'min') && has(ef, 'max')) check(q + 'min ≤ max', ef.min <= ef.max, ef.min + '–' + ef.max);
+      if (ef.type === 'buff') check(q + 'stat válido', BUFF_STATS.indexOf(ef.stat) >= 0, ef.stat);
+      if (ef.type === 'weatherShift') check(q + 'weather válido', WEATHERS.indexOf(ef.weather) >= 0, ef.weather);
+      if (ef.type === 'cleanse') {
+        check(q + 'kinds é lista não vazia',
+          Object.prototype.toString.call(ef.kinds) === '[object Array]' && ef.kinds.length > 0);
+        (ef.kinds || []).forEach(function (k) {
+          check(q + 'kind "' + k + '" pertence ao vocabulário', !!EFFECT_REQ[k], k);
+        });
+      }
+      if (ef.type === 'trap') check(q + 'trapId ' + ef.trapId + ' existe em DATA.spells', !!D.spells[ef.trapId]);
+      if (ef.type === 'summon') check(q + 'monsterId é string', isStr(ef.monsterId), ef.monsterId);
+      if (ef.type === 'mark') check(q + 'mark value 5 / max ≤ 5', ef.value === 5 && ef.max <= 5, ef.value + '/' + ef.max);
+      if (ef.type === 'reflect') check(q + 'reflect pct 1–100', ef.pct > 0 && ef.pct <= 100, ef.pct);
+      if (ef.type === 'chain') check(q + 'chain falloff 0–1 e jumps 1–6', ef.falloff > 0 && ef.falloff < 1 && ef.jumps >= 1 && ef.jumps <= 6, ef.jumps + '/' + ef.falloff);
+      if (ef.type === 'push' || ef.type === 'pull') check(q + 'tiles 1–6', ef.tiles >= 1 && ef.tiles <= 6, ef.tiles);
+    });
+
+    /* nomes distintos entre feitiços jogáveis */
+    if (!isTrapPayload) {
+      if (nameSeen[s.name]) dupNames.push(s.name); else nameSeen[s.name] = true;
+    }
+  });
+  check('nomes de feitiços jogáveis são todos distintos', dupNames.length === 0, dupNames.join(', '));
+
+  /* ============================================ 5. sanidade de balanceamento */
+  var dmgOut = [], healOut = [];
+  spellIds.forEach(function (sid) {
+    var s = D.spells[sid];
+    if (!s.paCost) return;
+    var effs = s.effects || [];
+    var onlyDamage = effs.length >= 1 && effs.every(function (e) {
+      return e.type === 'damage' || e.type === 'push' || e.type === 'pull' || e.type === 'root' || e.type === 'mark';
+    });
+    var dmg = effs.filter(function (e) { return e.type === 'damage'; });
+    if (onlyDamage && dmg.length === 1 && s.aoe.shape === 'single') {
+      var perPa = ((dmg[0].min + dmg[0].max) / 2) / s.paCost;
+      if (perPa < 4 || perPa > 20) dmgOut.push(sid + ' (' + perPa.toFixed(1) + '/PA)');
+    }
+    var heals = effs.filter(function (e) { return e.type === 'heal'; });
+    if (heals.length === 1) {
+      var hPa = ((heals[0].min + heals[0].max) / 2) / s.paCost;
+      if (hPa < 6 || hPa > 16) healOut.push(sid + ' (' + hPa.toFixed(1) + '/PA)');
+    }
+  });
+  check('dano alvo único dentro de 4–20 por PA', dmgOut.length === 0, dmgOut.join(', '));
+  check('cura dentro de 6–16 por PA', healOut.length === 0, healOut.join(', '));
+
+  /* escala: o feitiço de nível 30 tem de valer MUITO mais que o de nível 5 do mesmo
+   * caminho (alvo ~2,2×; piso de 1,7×). Peso = soma dos efeitos × fator de área.
+   * Caminhos cujo topo ou base é uma INVOCAÇÃO ficam de fora: a força da criatura
+   * mora em DATA.monsters (outro dono) e não é mensurável aqui. */
+  function spellWeight(s, depth) {
+    var t = 0;
+    (s.effects || []).forEach(function (e) {
+      switch (e.type) {
+        case 'damage': case 'heal': t += (e.min + e.max) / 2; break;
+        case 'poison': case 'regen': t += (e.min + e.max) / 2 * e.duration; break;
+        case 'shield': t += e.value; break;
+        case 'chain': t += (e.min + e.max) / 2 * (1 + e.jumps * (1 - e.falloff)); break;
+        case 'detonateMarks': t += e.mult * 5; break;
+        case 'buff': t += Math.abs(e.value) * e.duration * 0.6; break;
+        case 'resist': t += e.value * e.duration * 0.6; break;
+        case 'reflect': t += e.pct * e.duration * 0.5; break;
+        case 'mark': t += 8; break;
+        case 'summon': t += 90; break;
+        case 'trap': t += (depth < 1 && D.spells[e.trapId]) ? spellWeight(D.spells[e.trapId], depth + 1) : 30; break;
+        default: t += 6; break;   // root, push, pull, taunt, cleanse, teleport, swap, moveTo, dispelShield, weatherShift
+      }
+    });
+    var shape = s.aoe.shape, size = s.aoe.size;
+    var af = shape === 'single' ? 1 : (shape === 'line' || shape === 'cone') ? 1.6 : (1 + 0.6 * Math.max(1, size));
+    return t * af;
+  }
+  var scaleOut = [], scaleSkipped = [], scaleSeen = [];
+  CLASS_IDS.forEach(function (cid) {
+    var c = D.classes[cid]; if (!c) return;
+    PATH_ELEMENTS.forEach(function (el) {
+      var arr = (c.paths || {})[el] || [];
+      var a5 = D.spells[arr[0]], a30 = D.spells[arr[5]];
+      if (!a5 || !a30) return;
+      var hasSummon = function (s) {
+        return (s.effects || []).some(function (e) { return e.type === 'summon'; });
+      };
+      if (hasSummon(a5) || hasSummon(a30)) { scaleSkipped.push(cid + '/' + el); return; }
+      var ratio = spellWeight(a30, 0) / Math.max(1, spellWeight(a5, 0));
+      scaleSeen.push(cid + '/' + el + ' ×' + ratio.toFixed(1));
+      if (ratio < 1.7) scaleOut.push(cid + '/' + el + ' ×' + ratio.toFixed(2));
+    });
+  });
+  check('nível 30 vale ≥ 1,7× o nível 5 em todos os caminhos mensuráveis', scaleOut.length === 0, scaleOut.join(', '));
+  check('caminhos com invocação no topo/base ficam fora da métrica (força vive em DATA.monsters)',
+    scaleSkipped.length <= 4, scaleSkipped.join(', '));
+  var capstoneBad = [];
+  CLASS_IDS.forEach(function (cid) {
+    PATH_ELEMENTS.forEach(function (el) {
+      var s = D.spells[D.classes[cid].paths[el][5]];
+      if (!s || s.paCost < 5) capstoneBad.push(cid + '/' + el + ' (' + (s && s.paCost) + ' PA)');
+    });
+  });
+  check('capstone de nível 30 custa 5–6 PA nos 24 caminhos', capstoneBad.length === 0, capstoneBad.join(', '));
+
+  /* ============================================== 6. leveling / cards ====== */
+  var L = D.leveling;
+  check('leveling.maxLevel = 30', L.maxLevel === 30, L.maxLevel);
+  check('leveling.elementChoiceLevel = 5', L.elementChoiceLevel === 5, L.elementChoiceLevel);
+  check('leveling.perLevel {hp:6, power:3}', L.perLevel && L.perLevel.hp === 6 && L.perLevel.power === 3,
+    JSON.stringify(L.perLevel));
+  check('xpTable com 30 entradas', L.xpTable && L.xpTable.length === 30, L.xpTable && L.xpTable.length);
+  check('xpTable[0] = 0', L.xpTable && L.xpTable[0] === 0, L.xpTable && L.xpTable[0]);
+  var incOk = true, incBad = '';
+  for (var i = 1; i < (L.xpTable || []).length; i++) {
+    if (!(L.xpTable[i] > L.xpTable[i - 1])) { incOk = false; incBad = 'índice ' + i; break; }
+  }
+  check('xpTable estritamente crescente', incOk, incBad);
+  var stepsOk = true, stepsBad = '';
+  for (var j = 2; j < (L.xpTable || []).length; j++) {
+    var s1 = L.xpTable[j] - L.xpTable[j - 1], s0 = L.xpTable[j - 1] - L.xpTable[j - 2];
+    if (s1 < s0) { stepsOk = false; stepsBad = 'nível ' + (j + 1); break; }
+  }
+  check('degraus de XP não decrescem (curva suave)', stepsOk, stepsBad);
+
+  var cardIds = Object.keys(D.cards);
+  check('cards cobre as 6 classes', cardIds.length === 6 &&
+    CLASS_IDS.every(function (c) { return !!D.cards[c]; }), cardIds.join(','));
+  cardIds.forEach(function (cid) {
+    var cd = D.cards[cid];
+    check('card ' + cid + ' dropWeight ≥ 0', isNum(cd.dropWeight) && cd.dropWeight >= 0, cd.dropWeight);
+    check('card ' + cid + ' minDungeon 0–5', isNum(cd.minDungeon) && cd.minDungeon >= 0 && cd.minDungeon <= 5, cd.minDungeon);
+    var cls = D.classes[cid];
+    if (cls && cls.startsUnlocked) {
+      check('card ' + cid + ' (classe inicial) não cai', cd.dropWeight === 0, cd.dropWeight);
+    } else if (cls) {
+      check('card ' + cid + ' (classe travada) cai em algum lugar', cd.dropWeight > 0, cd.dropWeight);
+      check('card ' + cid + ' épico ⇒ calabouço fundo (minDungeon ≥ 3)',
+        cls.cardRarity !== 'epico' || cd.minDungeon >= 3, cd.minDungeon);
+    }
+  });
+
+  /* =================================================== 7. proibição de "pm"  */
+  var pmHits = [];
+  (function walk(node, path) {
+    if (node === null || node === undefined) return;
+    if (typeof node === 'string') { if (PM_RE.test(node)) pmHits.push(path + ' = "' + node + '"'); return; }
+    if (typeof node !== 'object') return;
+    for (var k in node) {
+      if (!Object.prototype.hasOwnProperty.call(node, k)) continue;
+      if (/^pm$/i.test(k)) pmHits.push(path + '.' + k + ' (chave)');
+      walk(node[k], path + '.' + k);
+    }
+  })({ classes: D.classes, spells: D.spells, leveling: D.leveling, cards: D.cards, unlockTiers: D.unlockTiers }, 'DATA');
+  check('nenhuma menção a "pm" nos dados (só PA/PP)', pmHits.length === 0, pmHits.slice(0, 5).join(' | '));
+
+  /* varredura do código-fonte (só funciona por http; em file:// é pulada) */
+  var srcScan = { done: false, hits: [] };
+  ['../js/core/data/classes.js', '../js/core/data/spells.js', '../js/core/data/progression.js'].forEach(function (f) {
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', f + '?v=' + window.__V, false);
+      xhr.send(null);
+      if (xhr.status === 200 || xhr.status === 0 && xhr.responseText) {
+        srcScan.done = true;
+        var txt = xhr.responseText || '';
+        var m = txt.match(/\bpm\b/i);
+        if (m) srcScan.hits.push(f);
+      }
+    } catch (e) { /* file:// bloqueia XHR síncrono — checagem de dados acima já cobre */ }
+  });
+  if (srcScan.done) {
+    check('nenhuma menção a "pm" no código-fonte dos 3 arquivos', srcScan.hits.length === 0, srcScan.hits.join(', '));
+  } else {
+    check('varredura do código-fonte (pulada em file://) — dados já validados', true, 'skip');
+  }
+
+  /* ================================================= 8. inventário (info) == */
+  function buildReport() {
+    var html = '';
+    var byEffect = {};
+    spellIds.forEach(function (sid) {
+      (D.spells[sid].effects || []).forEach(function (e) { byEffect[e.type] = (byEffect[e.type] || 0) + 1; });
+    });
+
+    html += '<h2>Classes</h2><table><tr><th>id</th><th>papel</th><th>PV</th><th>PA</th><th>PP</th>' +
+      '<th>ini</th><th>esq</th><th>fix</th><th>inicial</th><th>carta</th><th>feitiços</th></tr>';
+    CLASS_IDS.forEach(function (cid) {
+      var c = D.classes[cid], s = c.stats;
+      html += '<tr><td>' + cid + '</td><td>' + c.role + '</td><td>' + s.hp + '</td><td>' + s.pa + '</td><td>' + s.pp +
+        '</td><td>' + s.initiative + '</td><td>' + s.dodge + '</td><td>' + s.lock + '</td><td>' +
+        (c.startsUnlocked ? 'sim' : 'não') + '</td><td>' + c.cardRarity + '</td><td>' + perClassSpells[cid] + '</td></tr>';
+    });
+    html += '</table>';
+
+    html += '<h2>Uso dos tipos de efeito (' + spellIds.length + ' entradas em DATA.spells)</h2><ul class="info">';
+    Object.keys(byEffect).sort().forEach(function (k) { html += '<li>' + k + ': ' + byEffect[k] + '</li>'; });
+    html += '</ul>';
+
+    var monsters = {};
+    spellIds.forEach(function (sid) {
+      (D.spells[sid].effects || []).forEach(function (e) { if (e.type === 'summon') monsters[e.monsterId] = true; });
+    });
+    html += '<h2>Dependência externa — ids de criatura esperados em DATA.monsters</h2><ul class="info"><li>' +
+      Object.keys(monsters).sort().join(' · ') + '</li></ul>';
+
+    html += '<h2>Feitiços de nível 30</h2><table><tr><th>classe</th><th>elemento</th><th>nome</th><th>PA</th><th>recarga</th></tr>';
+    CLASS_IDS.forEach(function (cid) {
+      PATH_ELEMENTS.forEach(function (el) {
+        var s = D.spells[D.classes[cid].paths[el][5]];
+        html += '<tr><td>' + cid + '</td><td>' + el + '</td><td>' + s.name + '</td><td>' + s.paCost + '</td><td>' + s.cooldown + '</td></tr>';
+      });
+    });
+    html += '</table>';
+    document.getElementById('report').innerHTML = html;
+  }
+
+  /* ==================================================== render dos testes == */
+  function render() {
+    var passed = 0, failed = 0, failures = [];
+    var allHtml = '', failHtml = '';
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      var line = r.name + (r.detail ? ' — ' + r.detail : '');
+      if (r.ok) {
+        passed++;
+        allHtml += '<li class="pass">PASS · ' + line + '</li>';
+      } else {
+        failed++;
+        failures.push(line);
+        allHtml += '<li class="fail">FAIL · ' + line + '</li>';
+        failHtml += '<li class="fail">FAIL · ' + line + '</li>';
+      }
+    }
+    var sum = document.getElementById('summary');
+    sum.className = failed === 0 ? 'ok' : 'bad';
+    sum.textContent = (failed === 0 ? '100% PASS · ' : 'FALHOU · ') + passed + ' checagens OK, ' + failed + ' falhas';
+    document.getElementById('failList').innerHTML = failed ? '<h2>Falhas</h2><ul>' + failHtml + '</ul>' : '';
+    document.getElementById('allList').innerHTML = allHtml;
+    window.TEST_RESULTS = { passed: passed, failed: failed, failures: failures };
+    if (failed) console.error('validate_classes: ' + failed + ' falhas', failures);
+    else console.log('validate_classes: 100% PASS (' + passed + ' checagens)');
+  }
+
+  try { buildReport(); } catch (e) { check('montagem do inventário', false, e.message); }
+  render();
+})();
+</script>
+</body>
+</html>

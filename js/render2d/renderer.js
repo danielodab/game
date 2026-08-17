@@ -913,12 +913,12 @@ var JOGO = (typeof window !== 'undefined')
     g.beginFill(top, 0.42);
     g.drawPolygon([bN.x, bN.y - hgt, bE.x, bE.y - hgt, bS.x, bS.y - hgt, bWt.x, bWt.y - hgt]);
     g.endFill();
-    // grade no topo (reforça "vazado")
-    g.lineStyle(1.3, hexInt(shadeHex(base, 0.55)), 0.75);
+    // grade no topo (reforça "vazado": dá para ver através)
+    g.lineStyle(1.3, hexInt(shadeHex(base, 0.55)), 0.7);
     for (var i = -1; i <= 1; i++) {
-      var a = iso(i * 0.22 - k, -k), b = iso(i * 0.22 + k, k);
+      var a = iso(i * 0.22, -k), b = iso(i * 0.22, k);
       g.moveTo(a.x, a.y - hgt); g.lineTo(b.x, b.y - hgt);
-      var a2 = iso(-k, i * 0.22 - k), b2 = iso(k, i * 0.22 + k);
+      var a2 = iso(-k, i * 0.22), b2 = iso(k, i * 0.22);
       g.moveTo(a2.x, a2.y - hgt); g.lineTo(b2.x, b2.y - hgt);
     }
     // pontas/estacas nos cantos: nunca confundir com o obstáculo alto
@@ -1259,8 +1259,8 @@ var JOGO = (typeof window !== 'undefined')
         for (var i = 0; i < reach.length; i++) {
           var t = reach[i];
           var risky = !!(t.risky || t.risk || t.dodgeRisk || t.locked);
-          fillTile(ovBase, t.x, t.y, risky ? '#ffb45a' : '#7fe0a0', risky ? 0.24 : 0.16);
-          strokeTile(ovBase, t.x, t.y, risky ? '#ffd07a' : '#8fe8b0', risky ? 0.55 : 0.30, 1.4);
+          fillTile(ovBase, t.x, t.y, risky ? '#ff9a3c' : '#3fd0ff', risky ? 0.38 : 0.30);
+          strokeTile(ovBase, t.x, t.y, risky ? '#ffd07a' : '#bff0ff', risky ? 0.85 : 0.60, 1.6);
           if (risky) {
             // triângulo de alerta: sair daqui pode falhar a esquiva
             var pc = iso(t.x, t.y, 1);
@@ -1275,12 +1275,25 @@ var JOGO = (typeof window !== 'undefined')
         var path = safe(function () { return en.path ? en.path(st, active.uid, hv.x, hv.y) : null; }, null);
         if (path && path.length) {
           for (var j = 0; j < path.length; j++) {
-            fillTile(ovBase, path[j].x, path[j].y, '#ddffdd', 0.30, 0.16);
+            fillTile(ovBase, path[j].x, path[j].y, '#ffffff', 0.42, 0.14);
             var pp2 = iso(path[j].x, path[j].y, 3);
-            ovBase.beginFill(0xf2fff0, j === path.length - 1 ? 0.95 : 0.7);
-            ovBase.drawCircle(pp2.x, pp2.y, j === path.length - 1 ? 5 : 3);
+            ovBase.beginFill(0xfff6d0, j === path.length - 1 ? 0.98 : 0.8);
+            ovBase.drawCircle(pp2.x, pp2.y, j === path.length - 1 ? 5.5 : 3);
             ovBase.endFill();
           }
+          // custo em passos (PP) no fim do caminho
+          var pend = iso(path[path.length - 1].x, path[path.length - 1].y, 20);
+          ovBase.beginFill(0x0e1218, 0.78);
+          ovBase.drawRoundedRect(pend.x - 13, pend.y - 10, 26, 18, 6);
+          ovBase.endFill();
+          var lbl = new P.Text(path.length + ' PP', {
+            fontFamily: 'Trebuchet MS, Verdana, sans-serif', fontSize: 11, fontWeight: '700',
+            fill: 0xfff2c8, stroke: 0x14100c, strokeThickness: 3
+          });
+          lbl.anchor.set(0.5); lbl.position.set(pend.x, pend.y - 1);
+          lbl.resolution = Math.min(2, DPR);
+          ovEventsBox.addChild(lbl);
+          ovEventNodes.push(lbl);
         }
       }
     } else {

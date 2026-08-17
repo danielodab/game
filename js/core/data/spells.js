@@ -347,7 +347,7 @@ JOGO.DATA.spells = {
     range: { min: 2, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'moveTo', maxTiles: 4 }, { type: 'damage', element: 'ar', min: 18, max: 24 } ],
-    description: 'Desliza até 4 células até o alvo e trombra nele: 18–24 de dano de ar. A entrada de graça do tanque.',
+    description: 'Desliza até 4 células até o alvo e tromba nele: 18–24 de dano de ar. A entrada de graça do tanque.',
     flavor: 'Cento e cinquenta quilos não correm. Chegam.',
     fxKey: 'dohyoCharge'
   },
@@ -975,6 +975,865 @@ JOGO.DATA.spells = {
     fxKey: 'stormEye'
   },
 
-  /*__NEXT__*/
+  /* ======================================================================
+   * ESPADACHIM — ASSASSINO
+   * Entrar, cortar duas vezes, sumir. Vive de escolher a hora.
+   * Fogo: queimar o próprio sangue por dano bruto · Água: beber o que corta
+   * Terra: apodrecer e prender · Ar: velocidade, teleporte e cortes em cadeia
+   * ====================================================================== */
+
+  'espadachim-neutro-1': {
+    id: 'espadachim-neutro-1', name: 'Estocada Rápida', element: 'neutro', classId: 'espadachim', unlockLevel: 0,
+    paCost: 2, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'neutro', min: 15, max: 20 } ],
+    description: '15–20 de dano neutro por 2 PA, duas vezes por turno. Barato, rápido, sem drama.',
+    flavor: 'A lâmina entra pelo vão entre a armadura e a distração.',
+    fxKey: 'quickThrust'
+  },
+  'espadachim-neutro-2': {
+    id: 'espadachim-neutro-2', name: 'Sombra Curta', element: 'neutro', classId: 'espadachim', unlockLevel: 0,
+    paCost: 2, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'invisible', duration: 1 }, { type: 'buff', stat: 'dodge', value: 20, duration: 2 } ],
+    description: 'Some no intervalo entre duas lanternas: invisível por 1 turno e +20 de esquiva por 2.',
+    flavor: 'Num mundo sem céu, a sombra é o único lugar com espaço sobrando.',
+    fxKey: 'shortShadow'
+  },
+  'espadachim-neutro-3': {
+    id: 'espadachim-neutro-3', name: 'Passo Lateral', element: 'neutro', classId: 'espadachim', unlockLevel: 0,
+    paCost: 2, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'moveTo', maxTiles: 4 } ],
+    description: 'Desliza até 4 células sem gastar PP — normalmente para as costas de alguém.',
+    flavor: 'Ele não anda em volta do inimigo. O inimigo é que fica virado para o lado errado.',
+    fxKey: 'sideStep'
+  },
+
+  /* --- ESPADACHIM · FOGO: ferver o próprio sangue --- */
+  'espadachim-fogo-5': {
+    id: 'espadachim-fogo-5', name: 'Lâmina de Brasa', element: 'fogo', classId: 'espadachim', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 22, max: 28 }, { type: 'poison', element: 'fogo', min: 5, max: 8, duration: 2 } ],
+    description: '22–28 de fogo e queimadura de 5–8 por 2 turnos. Duas vezes por turno.',
+    flavor: 'A lâmina fica vermelha sozinha desde que ele passou a dormir com ela.',
+    fxKey: 'emberBlade'
+  },
+  'espadachim-fogo-10': {
+    id: 'espadachim-fogo-10', name: 'Corte Duplo Ardente', element: 'fogo', classId: 'espadachim', unlockLevel: 10,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 36, max: 44 }, { type: 'poison', element: 'fogo', min: 6, max: 9, duration: 2 } ],
+    description: 'Dois cortes em X: 36–44 de fogo e 6–9 de queimadura por 2 turnos.',
+    flavor: 'O segundo corte serve só para o primeiro não esfriar.',
+    fxKey: 'burningCross'
+  },
+  'espadachim-fogo-12': {
+    id: 'espadachim-fogo-12', name: 'Veias em Chamas', element: 'fogo', classId: 'espadachim', unlockLevel: 12,
+    paCost: 2, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'buff', stat: 'power', value: 40, duration: 2 }, { type: 'poison', element: 'fogo', min: 6, max: 8, duration: 2 } ],
+    description: 'Aquece o próprio sangue: +40 de poder por 2 turnos, ao preço de 6–8 de queimadura própria por turno.',
+    flavor: 'Aposta velha: dói agora, mata primeiro.',
+    fxKey: 'boilingVeins'
+  },
+  'espadachim-fogo-15': {
+    id: 'espadachim-fogo-15', name: 'Dança das Fagulhas', element: 'fogo', classId: 'espadachim', unlockLevel: 15,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 30, max: 38 }, { type: 'poison', element: 'fogo', min: 8, max: 11, duration: 2 } ],
+    description: 'Gira com as duas lâminas acesas: 30–38 de fogo em raio 1 e queimadura de 8–11 por 2 turnos.',
+    flavor: 'Quem o cercou paga a entrada do espetáculo.',
+    fxKey: 'sparkDance'
+  },
+  'espadachim-fogo-20': {
+    id: 'espadachim-fogo-20', name: 'Estocada Escaldante', element: 'fogo', classId: 'espadachim', unlockLevel: 20,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 56, max: 66 }, { type: 'poison', element: 'fogo', min: 12, max: 16, duration: 2 } ],
+    description: 'A lâmina entra em brasa branca: 56–66 de fogo e 12–16 de queimadura por 2 turnos.',
+    flavor: 'Cauteriza no caminho de volta. É quase um favor.',
+    fxKey: 'scaldingThrust'
+  },
+  'espadachim-fogo-30': {
+    id: 'espadachim-fogo-30', name: 'Sete Cortes de Chama', element: 'fogo', classId: 'espadachim', unlockLevel: 30,
+    paCost: 6, cooldown: 3, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 92, max: 108 }, { type: 'poison', element: 'fogo', min: 20, max: 26, duration: 3 }, { type: 'dispelShield' } ],
+    description: 'Sete cortes numa respiração só: dissolve o escudo do alvo, 92–108 de fogo e queimadura de 20–26 por 3 turnos.',
+    flavor: 'Conta-se que o sétimo corte é dado depois de o alvo já ter caído. Por capricho.',
+    fxKey: 'sevenFlameCuts'
+  },
+
+  /* --- ESPADACHIM · ÁGUA: beber o que corta --- */
+  'espadachim-agua-5': {
+    id: 'espadachim-agua-5', name: 'Lâmina Sedenta', element: 'agua', classId: 'espadachim', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 22, max: 28, lifesteal: true } ],
+    description: '22–28 de água com roubo de vida, duas vezes por turno: o assassino que se sustenta sozinho.',
+    flavor: 'A lâmina não está molhada. Está com sede.',
+    fxKey: 'thirstyBlade'
+  },
+  'espadachim-agua-10': {
+    id: 'espadachim-agua-10', name: 'Névoa Salgada', element: 'agua', classId: 'espadachim', unlockLevel: 10,
+    paCost: 2, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'invisible', duration: 2 }, { type: 'cleanse', kinds: ['poison', 'root'] } ],
+    description: 'Some numa névoa de sal por 2 turnos e lava venenos e raízes de cima do corpo.',
+    flavor: 'Sal cura, sal esconde, sal conserva. Ele usa os três sentidos.',
+    fxKey: 'brineMist'
+  },
+  'espadachim-agua-12': {
+    id: 'espadachim-agua-12', name: 'Corte da Correnteza', element: 'agua', classId: 'espadachim', unlockLevel: 12,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 2, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 28, max: 35 }, { type: 'push', tiles: 2 } ],
+    description: '28–35 de água a até 2 células e 2 de empurrão: corta e afasta antes da resposta.',
+    flavor: 'Ele corta na ida e a correnteza faz o resto do serviço.',
+    fxKey: 'currentSlash'
+  },
+  'espadachim-agua-15': {
+    id: 'espadachim-agua-15', name: 'Passo de Lodo', element: 'agua', classId: 'espadachim', unlockLevel: 15,
+    paCost: 2, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'moveTo', maxTiles: 5 } ],
+    description: 'Escorrega até 5 células por qualquer superfície molhada, sem gastar PP.',
+    flavor: 'Aprendeu com os afogadiços. Só não aprendeu a parte de afundar.',
+    fxKey: 'slimeStep'
+  },
+  'espadachim-agua-20': {
+    id: 'espadachim-agua-20', name: 'Sanguessuga', element: 'agua', classId: 'espadachim', unlockLevel: 20,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 52, max: 62, lifesteal: true }, { type: 'poison', element: 'agua', min: 10, max: 14, duration: 2 } ],
+    description: '52–62 de água com roubo de vida e 10–14 de veneno por 2 turnos. Um golpe que paga a própria conta.',
+    flavor: 'Não é crueldade. É logística.',
+    fxKey: 'leechCut'
+  },
+  'espadachim-agua-30': {
+    id: 'espadachim-agua-30', name: 'Afogar em Sangue', element: 'agua', classId: 'espadachim', unlockLevel: 30,
+    paCost: 6, cooldown: 3, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 90, max: 106, lifesteal: true }, { type: 'poison', element: 'agua', min: 14, max: 18, duration: 3 }, { type: 'root', duration: 1 } ],
+    description: '90–106 de água com roubo de vida — metade volta como vida —, veneno de 14–18 por 3 turnos e 1 turno sem PP.',
+    flavor: 'A corte afogada aplaudiu. Foi a primeira vez em mil anos que alguém dançou direito.',
+    fxKey: 'drownInBlood'
+  },
+
+  /* --- ESPADACHIM · TERRA: apodrecer devagar --- */
+  'espadachim-terra-5': {
+    id: 'espadachim-terra-5', name: 'Lâmina Enferrujada', element: 'terra', classId: 'espadachim', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 20, max: 26 }, { type: 'poison', element: 'terra', min: 6, max: 9, duration: 3 } ],
+    description: '20–26 de terra e 6–9 de infecção por 3 turnos. O veneno do espadachim é paciente.',
+    flavor: 'Ele não afia a lâmina. Só a deixa suja o suficiente.',
+    fxKey: 'rustBlade'
+  },
+  'espadachim-terra-10': {
+    id: 'espadachim-terra-10', name: 'Corte do Tornozelo', element: 'terra', classId: 'espadachim', unlockLevel: 10,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 24, max: 30 }, { type: 'root', duration: 2 } ],
+    description: '24–30 de terra e 0 PP por 2 turnos: quem não anda não escapa do próximo golpe.',
+    flavor: 'Regra da faca: primeiro tire a fuga, depois tire o resto.',
+    fxKey: 'hamstring'
+  },
+  'espadachim-terra-12': {
+    id: 'espadachim-terra-12', name: 'Pele de Casca', element: 'terra', classId: 'espadachim', unlockLevel: 12,
+    paCost: 2, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'shield', value: 50, duration: 2 }, { type: 'resist', element: 'terra', value: 20, duration: 2 } ],
+    description: 'Cobre-se de casca seca: 50 de escudo e 20% de resistência a terra por 2 turnos. O assassino também precisa sobreviver ao contra-ataque.',
+    flavor: 'Casca de árvore que morreu no dia da Lousa e nunca aceitou apodrecer.',
+    fxKey: 'barkSkin'
+  },
+  'espadachim-terra-15': {
+    id: 'espadachim-terra-15', name: 'Punhal de Sílex', element: 'terra', classId: 'espadachim', unlockLevel: 15,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 46, max: 56 }, { type: 'poison', element: 'terra', min: 8, max: 12, duration: 3 } ],
+    description: '46–56 de terra e 8–12 de infecção por 3 turnos. A lasca fica dentro.',
+    flavor: 'Pedra lascada não enferruja nem perdoa.',
+    fxKey: 'flintDagger'
+  },
+  'espadachim-terra-20': {
+    id: 'espadachim-terra-20', name: 'Emboscada Enterrada', element: 'terra', classId: 'espadachim', unlockLevel: 20,
+    paCost: 4, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'invisible', duration: 2 }, { type: 'buff', stat: 'power', value: 45, duration: 2 }, { type: 'buff', stat: 'lock', value: 20, duration: 2 } ],
+    description: 'Enterra-se no pó e espera: invisível por 2 turnos, +45 de poder e +20 de fixação. O golpe seguinte é outro golpe.',
+    flavor: 'Paciência é uma arma que não faz barulho ao ser sacada.',
+    fxKey: 'buriedAmbush'
+  },
+  'espadachim-terra-30': {
+    id: 'espadachim-terra-30', name: 'Estocada do Menir', element: 'terra', classId: 'espadachim', unlockLevel: 30,
+    paCost: 6, cooldown: 3, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 96, max: 114 }, { type: 'root', duration: 3 }, { type: 'poison', element: 'terra', min: 14, max: 18, duration: 3 } ],
+    description: 'Crava a lâmina como quem finca um menir: 96–114 de terra, 3 turnos sem PP e 14–18 de infecção por turno.',
+    flavor: 'Fica de pé por educação. O corpo já entendeu que acabou.',
+    fxKey: 'menhirThrust'
+  },
+
+  /* --- ESPADACHIM · AR: rápido demais para ser respondido --- */
+  'espadachim-ar-5': {
+    id: 'espadachim-ar-5', name: 'Corte de Vento', element: 'ar', classId: 'espadachim', unlockLevel: 5,
+    paCost: 2, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 2, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 15, max: 20 } ],
+    description: '15–20 de ar a até 2 células por 2 PA, duas vezes por turno. Corta antes de encostar.',
+    flavor: 'O corte chega meio passo antes da lâmina. Ninguém sabe explicar; ele também não.',
+    fxKey: 'windCut'
+  },
+  'espadachim-ar-10': {
+    id: 'espadachim-ar-10', name: 'Passo do Vento', element: 'ar', classId: 'espadachim', unlockLevel: 10,
+    paCost: 2, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'teleport' } ],
+    description: 'Teleporta-se para qualquer célula vazia a até 6 de distância. Entrada, saída, ou as duas coisas.',
+    flavor: 'O ar do Fecho o deve por algum favor antigo.',
+    fxKey: 'windStep'
+  },
+  'espadachim-ar-12': {
+    id: 'espadachim-ar-12', name: 'Fôlego Roubado', element: 'ar', classId: 'espadachim', unlockLevel: 12,
+    paCost: 2, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'buff', stat: 'pp', value: 2, duration: 2 }, { type: 'buff', stat: 'dodge', value: 25, duration: 2 } ],
+    description: '+2 PP e +25 de esquiva por 2 turnos: atravessa a sala e escapa de qualquer fixação.',
+    flavor: 'Rouba fôlego dos respiradouros. Devolve em forma de problema.',
+    fxKey: 'stolenBreath'
+  },
+  'espadachim-ar-15': {
+    id: 'espadachim-ar-15', name: 'Corte em Cadeia', element: 'ar', classId: 'espadachim', unlockLevel: 15,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'chain', jumps: 3, falloff: 0.25, element: 'ar', min: 32, max: 40 } ],
+    description: '32–40 de ar que saltam para mais 3 inimigos próximos, perdendo 25% a cada salto.',
+    flavor: 'Um corte só. A repetição é problema do vento.',
+    fxKey: 'chainSlash'
+  },
+  'espadachim-ar-20': {
+    id: 'espadachim-ar-20', name: 'Troca de Sombras', element: 'ar', classId: 'espadachim', unlockLevel: 20,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'swap' }, { type: 'damage', element: 'ar', min: 30, max: 38 } ],
+    description: 'Troca de lugar com qualquer unidade e corta ao chegar: 30–38 de ar. Resgata um aliado ou entrega um inimigo.',
+    flavor: 'Ele acha que o tabuleiro está sempre um pouco errado.',
+    fxKey: 'shadowSwap'
+  },
+  'espadachim-ar-30': {
+    id: 'espadachim-ar-30', name: 'Mil Cortes de Vento', element: 'ar', classId: 'espadachim', unlockLevel: 30,
+    paCost: 6, cooldown: 3, castsPerTurn: 1,
+    range: { min: 1, max: 2, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'chain', jumps: 5, falloff: 0.15, element: 'ar', min: 62, max: 74 }, { type: 'push', tiles: 2 } ],
+    description: '62–74 de ar que percorrem até 6 corpos (5 saltos, apenas −15% cada) e empurram todos 2 células.',
+    flavor: 'Ele saca uma vez. O som chega depois, e em várias partes da sala.',
+    fxKey: 'thousandWindCuts'
+  },
+
+  /* ======================================================================
+   * CURANDEIRA — SUPORTE
+   * Cura, escuda, abençoa — e bate de cajado quando ninguém precisa dela.
+   * Fogo: cura agressiva e poder · Água: cura pura e limpeza
+   * Terra: escudos e raízes protetoras · Ar: mobilidade e resgate
+   * ====================================================================== */
+
+  'curandeira-neutro-1': {
+    id: 'curandeira-neutro-1', name: 'Mãozinha Quente', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 24, max: 30 } ],
+    description: 'Cura 24–30 de vida de um aliado (ou de si mesma), duas vezes por turno.',
+    flavor: 'Ela cospe na mão antes. Diz que ajuda. Ninguém tem coragem de discordar.',
+    fxKey: 'warmHand'
+  },
+  'curandeira-neutro-2': {
+    id: 'curandeira-neutro-2', name: 'Cajado Teimoso', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'neutro', min: 19, max: 25 } ],
+    description: '19–25 de dano neutro. A curandeira também ataca — e o cajado é mais alto que ela.',
+    flavor: 'Era da avó. A avó também batia com ele.',
+    fxKey: 'stubbornStaff'
+  },
+  'curandeira-neutro-3': {
+    id: 'curandeira-neutro-3', name: 'Bênção Miúda', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+    paCost: 2, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'buff', stat: 'power', value: 20, duration: 2 } ],
+    description: '+20 de poder num aliado por 2 turnos. Pequena, como ela, e faz uma diferença enorme.',
+    flavor: 'Fica na ponta dos pés para abençoar o sumô. Ele se agacha, por respeito.',
+    fxKey: 'littleBlessing'
+  },
+
+  /* --- CURANDEIRA · FOGO: curar com raiva --- */
+  'curandeira-fogo-5': {
+    id: 'curandeira-fogo-5', name: 'Compressa Escaldante', element: 'fogo', classId: 'curandeira', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 22, max: 28 }, { type: 'resist', element: 'fogo', value: 15, duration: 2 } ],
+    description: 'Cura 22–28 e deixa 15% de resistência a fogo por 2 turnos. Arde, mas fecha.',
+    flavor: '"Vai queimar um pouquinho." Sempre queima muito.',
+    fxKey: 'searingPoultice'
+  },
+  'curandeira-fogo-10': {
+    id: 'curandeira-fogo-10', name: 'Brasa Curativa', element: 'fogo', classId: 'curandeira', unlockLevel: 10,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 24, max: 30, lifesteal: true } ],
+    description: '24–30 de fogo num inimigo, e metade volta como vida para ela. Curar atacando é o caminho do fogo.',
+    flavor: 'A avó chamava isso de "reciclagem".',
+    fxKey: 'healingEmber'
+  },
+  'curandeira-fogo-12': {
+    id: 'curandeira-fogo-12', name: 'Fôlego de Forja', element: 'fogo', classId: 'curandeira', unlockLevel: 12,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'buff', stat: 'power', value: 35, duration: 2 }, { type: 'regen', min: 10, max: 14, duration: 2 } ],
+    description: '+35 de poder e regeneração de 10–14 por 2 turnos num aliado. Acende quem já estava quente.',
+    flavor: 'Ela sopra no aliado como quem sopra brasa de forja. Funciona igual.',
+    fxKey: 'forgeBreath'
+  },
+  'curandeira-fogo-15': {
+    id: 'curandeira-fogo-15', name: 'Sino de Cinzas', element: 'fogo', classId: 'curandeira', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 30, max: 38 }, { type: 'poison', element: 'fogo', min: 8, max: 11, duration: 2 } ],
+    description: 'Bate o cajado no chão e solta um anel de cinzas: 30–38 de fogo em raio 1 e 8–11 de queimadura por 2 turnos.',
+    flavor: 'Baixinha, mas o barulho chega ao teto.',
+    fxKey: 'ashBell'
+  },
+  'curandeira-fogo-20': {
+    id: 'curandeira-fogo-20', name: 'Coração de Brasa', element: 'fogo', classId: 'curandeira', unlockLevel: 20,
+    paCost: 4, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 46, max: 56 }, { type: 'buff', stat: 'power', value: 30, duration: 2 } ],
+    description: 'Cura 46–56 e dá +30 de poder por 2 turnos a todos os aliados em raio 2.',
+    flavor: 'Ela empresta o próprio coração de brasa. Devolve-se em vitória.',
+    fxKey: 'emberHeart'
+  },
+  'curandeira-fogo-30': {
+    id: 'curandeira-fogo-30', name: 'A Chama que Cuida', element: 'fogo', classId: 'curandeira', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 0, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 78, max: 92 }, { type: 'regen', min: 18, max: 24, duration: 3 }, { type: 'buff', stat: 'power', value: 45, duration: 3 }, { type: 'cleanse', kinds: ['poison', 'root'] } ],
+    description: 'Cura 78–92 em raio 2, regenera 18–24 por 3 turnos, dá +45 de poder e limpa venenos e raízes de todos os aliados.',
+    flavor: 'A lanterna da avó tinha um vagalume só. Ela descobriu como acender a sala inteira com ele.',
+    fxKey: 'tendingFlame'
+  },
+
+  /* --- CURANDEIRA · ÁGUA: a cura sem truques --- */
+  'curandeira-agua-5': {
+    id: 'curandeira-agua-5', name: 'Gota Boa', element: 'agua', classId: 'curandeira', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 0, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 27, max: 33 } ],
+    description: 'Cura 27–33 a até 6 células, duas vezes por turno. A cura mais eficiente do jogo.',
+    flavor: 'Uma gota. Ela promete que é só uma gota.',
+    fxKey: 'goodDrop'
+  },
+  'curandeira-agua-10': {
+    id: 'curandeira-agua-10', name: 'Fonte Miúda', element: 'agua', classId: 'curandeira', unlockLevel: 10,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'regen', min: 14, max: 18, duration: 3 }, { type: 'cleanse', kinds: ['poison'] } ],
+    description: 'Regeneração de 14–18 por 3 turnos e limpeza de todos os venenos do aliado.',
+    flavor: 'Ela cava com o dedo mínimo e sai água. Nunca explicou.',
+    fxKey: 'littleSpring'
+  },
+  'curandeira-agua-12': {
+    id: 'curandeira-agua-12', name: 'Puxão de Maré', element: 'agua', classId: 'curandeira', unlockLevel: 12,
+    paCost: 2, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'pull', tiles: 3 } ],
+    description: 'Puxa qualquer unidade 3 células: resgata o aliado ferido ou arranca o inimigo da linha de tiro dele.',
+    flavor: '"Vem cá." E vem.',
+    fxKey: 'tideTug'
+  },
+  'curandeira-agua-15': {
+    id: 'curandeira-agua-15', name: 'Onda Boa', element: 'agua', classId: 'curandeira', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 42, max: 50 } ],
+    description: 'Cura 42–50 em todos os aliados em raio 2.',
+    flavor: 'A maré que sobe levanta todos os barcos, inclusive os furados.',
+    fxKey: 'goodWave'
+  },
+  'curandeira-agua-20': {
+    id: 'curandeira-agua-20', name: 'Corrente Sanadora', element: 'agua', classId: 'curandeira', unlockLevel: 20,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 56, max: 68 }, { type: 'regen', min: 12, max: 16, duration: 2 } ],
+    description: 'Cura 56–68 imediatamente e mais 12–16 por turno durante 2 turnos. O botão de "não morra".',
+    flavor: 'Água corrente não junta poeira. Nem luto.',
+    fxKey: 'healingCurrent'
+  },
+  'curandeira-agua-30': {
+    id: 'curandeira-agua-30', name: 'A Cisterna Boa', element: 'agua', classId: 'curandeira', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 0, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 80, max: 95 }, { type: 'regen', min: 20, max: 26, duration: 3 }, { type: 'cleanse', kinds: ['poison', 'root'] }, { type: 'weatherShift', weather: 'chuva' } ],
+    description: 'Cura 80–95 em raio 3, regenera 20–26 por 3 turnos, limpa venenos e raízes — e faz chover dentro do Fecho.',
+    flavor: 'Existe uma cisterna que matou uma corte inteira. Ela pediu emprestada a mesma água, com melhores modos.',
+    fxKey: 'goodCistern'
+  },
+
+  /* --- CURANDEIRA · TERRA: guardar o grupo atrás de casca --- */
+  'curandeira-terra-5': {
+    id: 'curandeira-terra-5', name: 'Casca Amiga', element: 'terra', classId: 'curandeira', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 42, duration: 2 } ],
+    description: '42 de escudo num aliado por 2 turnos, duas vezes por turno. Escudo é cura que chega antes.',
+    flavor: 'Ela pede licença à árvore morta e a árvore empresta a casca.',
+    fxKey: 'friendlyBark'
+  },
+  'curandeira-terra-10': {
+    id: 'curandeira-terra-10', name: 'Emplastro de Barro', element: 'terra', classId: 'curandeira', unlockLevel: 10,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 26, max: 32 }, { type: 'resist', element: 'terra', value: 20, duration: 2 } ],
+    description: 'Cura 26–32 e dá 20% de resistência a terra por 2 turnos.',
+    flavor: 'Barro do canteiro fundo. Cheira mal, cura bem.',
+    fxKey: 'mudPoultice'
+  },
+  'curandeira-terra-12': {
+    id: 'curandeira-terra-12', name: 'Raiz Zelosa', element: 'terra', classId: 'curandeira', unlockLevel: 12,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'root', duration: 2 }, { type: 'damage', element: 'terra', min: 16, max: 22 } ],
+    description: 'Raízes prendem quem está incomodando: 0 PP por 2 turnos e 16–22 de terra em raio 1.',
+    flavor: '"Fica quietinho aí que eu já volto." Ninguém fica quietinho por vontade própria.',
+    fxKey: 'zealousRoot'
+  },
+  'curandeira-terra-15': {
+    id: 'curandeira-terra-15', name: 'Redoma de Raízes', element: 'terra', classId: 'curandeira', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 68, duration: 2 }, { type: 'regen', min: 10, max: 14, duration: 2 } ],
+    description: '68 de escudo e regeneração de 10–14 por 2 turnos em todos os aliados em raio 2.',
+    flavor: 'Uma estufa portátil, feita às pressas, com o que havia no bolso.',
+    fxKey: 'rootDome'
+  },
+  'curandeira-terra-20': {
+    id: 'curandeira-terra-20', name: 'Pedra Amparo', element: 'terra', classId: 'curandeira', unlockLevel: 20,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 50, max: 60 }, { type: 'shield', value: 65, duration: 2 }, { type: 'cleanse', kinds: ['root'] } ],
+    description: 'Cura 50–60, veste 65 de escudo por 2 turnos e arranca as raízes que prendiam o aliado.',
+    flavor: 'Ela chega, empurra a pedra e o mundo para de escorregar por um instante.',
+    fxKey: 'stoneSuccor'
+  },
+  'curandeira-terra-30': {
+    id: 'curandeira-terra-30', name: 'Jardim Fechado', element: 'terra', classId: 'curandeira', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 0, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 62, max: 74 }, { type: 'shield', value: 130, duration: 3 }, { type: 'resist', element: 'terra', value: 25, duration: 3 }, { type: 'regen', min: 16, max: 20, duration: 3 } ],
+    description: 'Fecha um jardim inteiro em volta do grupo: cura 62–74, 130 de escudo, 25% de resistência a terra e 16–20 de regeneração por 3 turnos, em raio 3.',
+    flavor: 'Foi assim que os construtores fizeram os Fechos. Ela só copiou a ideia, em tamanho de bolso.',
+    fxKey: 'sealedGarden'
+  },
+
+  /* --- CURANDEIRA · AR: chegar a tempo --- */
+  'curandeira-ar-5': {
+    id: 'curandeira-ar-5', name: 'Sopro Doce', element: 'ar', classId: 'curandeira', unlockLevel: 5,
+    paCost: 2, cooldown: 0, castsPerTurn: 2,
+    range: { min: 0, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 18, max: 23 } ],
+    description: 'Cura 18–23 por apenas 2 PA, duas vezes por turno. Cura pouco, cura sempre, sobra PA.',
+    flavor: 'Sopra no machucado. Cientificamente indefensável; funciona.',
+    fxKey: 'sweetBreath'
+  },
+  'curandeira-ar-10': {
+    id: 'curandeira-ar-10', name: 'Fôlego Emprestado', element: 'ar', classId: 'curandeira', unlockLevel: 10,
+    paCost: 2, cooldown: 1, castsPerTurn: 1,
+    range: { min: 0, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'buff', stat: 'pp', value: 2, duration: 1 }, { type: 'buff', stat: 'initiative', value: 20, duration: 2 } ],
+    description: '+2 PP por 1 turno e +20 de iniciativa por 2 num aliado: alcances que não existiam passam a existir.',
+    flavor: 'Guarda suspiros num vidrinho. Diz que são de gente que não precisava mais deles.',
+    fxKey: 'lentBreath'
+  },
+  'curandeira-ar-12': {
+    id: 'curandeira-ar-12', name: 'Troca de Lugar', element: 'ar', classId: 'curandeira', unlockLevel: 12,
+    paCost: 2, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'swap' } ],
+    description: 'Troca de posição com qualquer unidade a até 6 células. Tira o aliado do cerco — e assume o lugar dele.',
+    flavor: 'É baixinha, mas nunca foi de fugir.',
+    fxKey: 'placeSwap'
+  },
+  'curandeira-ar-15': {
+    id: 'curandeira-ar-15', name: 'Rajada Amiga', element: 'ar', classId: 'curandeira', unlockLevel: 15,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'cone', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 30, max: 38 }, { type: 'push', tiles: 3 } ],
+    description: 'Um sopro em leque: 30–38 de ar e 3 células de empurrão. Abre espaço em volta de quem está caindo.',
+    flavor: '"Licença!" — e meia sala recua.',
+    fxKey: 'friendlyGust'
+  },
+  'curandeira-ar-20': {
+    id: 'curandeira-ar-20', name: 'Brisa Restauradora', element: 'ar', classId: 'curandeira', unlockLevel: 20,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 44, max: 52 }, { type: 'buff', stat: 'pp', value: 1, duration: 2 } ],
+    description: 'Cura 44–52 e dá +1 PP por 2 turnos a todos os aliados em raio 2.',
+    flavor: 'Cura andando. O grupo inteiro aprende a andar junto.',
+    fxKey: 'restoringBreeze'
+  },
+  'curandeira-ar-30': {
+    id: 'curandeira-ar-30', name: 'Respiração do Fecho', element: 'ar', classId: 'curandeira', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 0, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'heal', min: 62, max: 74 }, { type: 'buff', stat: 'pp', value: 2, duration: 3 }, { type: 'buff', stat: 'initiative', value: 40, duration: 3 }, { type: 'cleanse', kinds: ['poison', 'root'] } ],
+    description: 'Abre todos os respiradouros da sala: cura 62–74 em raio 3, +2 PP e +40 de iniciativa por 3 turnos, e limpa venenos e raízes.',
+    flavor: 'Por três turnos, o Fecho inteiro respira no ritmo dela. Depois volta a sufocar, como sempre.',
+    fxKey: 'lockBreath'
+  },
+
+  /* ======================================================================
+   * INVOCADOR — INVOCADOR
+   * Enche o tabuleiro: criaturas, armadilhas (`trap`) e pactos que fortalecem.
+   * Fogo: matilha explosiva e brasa enterrada · Água: ninfa que cura e sucção
+   * Terra: paredes vivas e laços · Ar: bicho veloz, rajadas e vórtices
+   * Criaturas usadas (devem existir em DATA.monsters, dono Criativo Mundo):
+   *   sum-familiar · sum-ember-hound · sum-magma-colossus · sum-tide-nymph
+   *   sum-stone-sentinel · sum-mountain-golem · sum-storm-falcon
+   * ====================================================================== */
+
+  'invocador-neutro-1': {
+    id: 'invocador-neutro-1', name: 'Chamado Menor', element: 'neutro', classId: 'invocador', unlockLevel: 0,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'summon', monsterId: 'sum-familiar' } ],
+    description: 'Invoca um Familiar numa célula vazia: um corpo a mais para morder, tancar e negar passagem.',
+    flavor: 'Ele nunca diz o nome do bicho. Diz que nome é compromisso.',
+    fxKey: 'lesserCall'
+  },
+  'invocador-neutro-2': {
+    id: 'invocador-neutro-2', name: 'Cajado do Pacto', element: 'neutro', classId: 'invocador', unlockLevel: 0,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'neutro', min: 19, max: 25 } ],
+    description: '19–25 de dano neutro a até 6 células. Ele também bate, quando o rebanho está ocupado.',
+    flavor: 'O cajado é feito do osso de alguém que também chamava coisas.',
+    fxKey: 'pactStaff'
+  },
+  'invocador-neutro-3': {
+    id: 'invocador-neutro-3', name: 'Estaca-Alarme', element: 'neutro', classId: 'invocador', unlockLevel: 0,
+    paCost: 2, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'trap', trapId: 'trap-neutro-alarme', duration: 3 } ],
+    description: 'Arma uma estaca na célula escolhida por 3 rodadas: quem pisar leva 16–22 de dano e perde 1 PP.',
+    flavor: 'O mundo enterrado é cheio de corredores. Corredor é lugar de armadilha.',
+    fxKey: 'alarmStake'
+  },
+
+  /* --- INVOCADOR · FOGO: matilha e brasa enterrada --- */
+  'invocador-fogo-5': {
+    id: 'invocador-fogo-5', name: 'Armadilha de Brasa', element: 'fogo', classId: 'invocador', unlockLevel: 5,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'trap', trapId: 'trap-fogo-brasa', duration: 3 } ],
+    description: 'Enterra carvão vivo por 3 rodadas: quem pisar sofre 24–30 de fogo em raio 1 e queima por 2 turnos.',
+    flavor: 'Planta brasa em fila, como quem semeia cebola.',
+    fxKey: 'emberTrapSet'
+  },
+  'invocador-fogo-10': {
+    id: 'invocador-fogo-10', name: 'Cão de Brasa', element: 'fogo', classId: 'invocador', unlockLevel: 10,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'summon', monsterId: 'sum-ember-hound' } ],
+    description: 'Invoca um Cão de Brasa: rápido, mordida quente e explode ao morrer. Serve tanto vivo quanto morto.',
+    flavor: 'Abana o rabo. O rabo acende o chão.',
+    fxKey: 'emberHoundCall'
+  },
+  'invocador-fogo-12': {
+    id: 'invocador-fogo-12', name: 'Pacto Ardente', element: 'fogo', classId: 'invocador', unlockLevel: 12,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'buff', stat: 'power', value: 35, duration: 2 }, { type: 'resist', element: 'fogo', value: 15, duration: 2 } ],
+    description: '+35 de poder e 15% de resistência a fogo por 2 turnos — vale para aliados e para as próprias criaturas.',
+    flavor: 'Pacto não é bondade. É contrato com cláusula de desempenho.',
+    fxKey: 'burningPact'
+  },
+  'invocador-fogo-15': {
+    id: 'invocador-fogo-15', name: 'Sopro do Pacto', element: 'fogo', classId: 'invocador', unlockLevel: 15,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 32, max: 40 }, { type: 'poison', element: 'fogo', min: 8, max: 11, duration: 2 } ],
+    description: 'Alguma coisa sopra do outro lado do pacto: 32–40 de fogo em raio 1 e queimadura de 8–11 por 2 turnos.',
+    flavor: 'O sopro vem sempre da mesma direção. Ninguém quer saber qual.',
+    fxKey: 'pactBreath'
+  },
+  'invocador-fogo-20': {
+    id: 'invocador-fogo-20', name: 'Armadilha-Pira', element: 'fogo', classId: 'invocador', unlockLevel: 20,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'trap', trapId: 'trap-fogo-pira', duration: 3 } ],
+    description: 'Dobra uma pira inteira dentro de uma célula por 3 rodadas: 52–62 de fogo em raio 1 e queimadura de 12–16 em quem pisar.',
+    flavor: 'Ele avisa os aliados por onde não andar. Uma vez. Baixinho.',
+    fxKey: 'pyreTrapSet'
+  },
+  'invocador-fogo-30': {
+    id: 'invocador-fogo-30', name: 'Colosso de Magma', element: 'fogo', classId: 'invocador', unlockLevel: 30,
+    paCost: 6, cooldown: 5, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'summon', monsterId: 'sum-magma-colossus' }, { type: 'weatherShift', weather: 'estiagem' } ],
+    description: 'Abre o chão e chama um Colosso de Magma para o campo — e o calor dele coloca a sala inteira em estiagem.',
+    flavor: 'O Coração do Fecho de Brasa tem um irmão mais velho. Ninguém o convidava desde a Lousa.',
+    fxKey: 'magmaColossusCall'
+  },
+
+  /* --- INVOCADOR · ÁGUA: quem cuida do rebanho e quem o traga --- */
+  'invocador-agua-5': {
+    id: 'invocador-agua-5', name: 'Armadilha-Redemoinho', element: 'agua', classId: 'invocador', unlockLevel: 5,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'trap', trapId: 'trap-agua-redemoinho', duration: 3 } ],
+    description: 'Abre um funil de água por 3 rodadas: 20–26 de dano e 2 células de sucção em quem pisar.',
+    flavor: 'Um ralo com opinião própria sobre por onde as pessoas deviam andar.',
+    fxKey: 'whirlTrapSet'
+  },
+  'invocador-agua-10': {
+    id: 'invocador-agua-10', name: 'Ninfa da Maré', element: 'agua', classId: 'invocador', unlockLevel: 10,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'summon', monsterId: 'sum-tide-nymph' } ],
+    description: 'Invoca uma Ninfa da Maré: cura os aliados por conta própria enquanto o invocador cuida do resto.',
+    flavor: 'Ela nunca fala. Só olha para quem está sangrando e resolve.',
+    fxKey: 'tideNymphCall'
+  },
+  'invocador-agua-12': {
+    id: 'invocador-agua-12', name: 'Pacto da Fonte', element: 'agua', classId: 'invocador', unlockLevel: 12,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'regen', min: 14, max: 18, duration: 3 }, { type: 'cleanse', kinds: ['poison'] } ],
+    description: 'Regeneração de 14–18 por 3 turnos e limpeza de venenos num aliado ou numa criatura invocada.',
+    flavor: 'Assinado com água. É o tipo de contrato que se pode beber depois.',
+    fxKey: 'springPact'
+  },
+  'invocador-agua-15': {
+    id: 'invocador-agua-15', name: 'Chamado da Ressaca', element: 'agua', classId: 'invocador', unlockLevel: 15,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 30, max: 38, lifesteal: true }, { type: 'pull', tiles: 2 } ],
+    description: '30–38 de água com roubo de vida em raio 1 e 2 células de sucção: arrasta o inimigo para o meio do rebanho.',
+    flavor: 'Chama a ressaca do jeito que se chama um cachorro grande: com cuidado.',
+    fxKey: 'undertowCall'
+  },
+  'invocador-agua-20': {
+    id: 'invocador-agua-20', name: 'Armadilha-Sorvedouro', element: 'agua', classId: 'invocador', unlockLevel: 20,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'trap', trapId: 'trap-agua-sorvedouro', duration: 3 } ],
+    description: 'Um ralo do mundo antigo, armado por 3 rodadas: 46–56 de água em raio 1 e 3 células de sucção.',
+    flavor: 'Ele destampou uma coisa que os construtores tinham tampado de propósito.',
+    fxKey: 'maelstromTrapSet'
+  },
+  'invocador-agua-30': {
+    id: 'invocador-agua-30', name: 'O Sorvedouro', element: 'agua', classId: 'invocador', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'pull', tiles: 4 }, { type: 'damage', element: 'agua', min: 68, max: 80, lifesteal: true }, { type: 'root', duration: 2 } ],
+    description: 'Abre o ralo do mundo: puxa tudo em raio 3 por 4 células, causa 68–80 de água com roubo de vida e prende todos por 2 turnos.',
+    flavor: 'Não invocou nada. Só abriu a tampa e deixou o que estava embaixo fazer o serviço.',
+    fxKey: 'theMaelstrom'
+  },
+
+  /* --- INVOCADOR · TERRA: paredes que respiram --- */
+  'invocador-terra-5': {
+    id: 'invocador-terra-5', name: 'Armadilha-Laço', element: 'terra', classId: 'invocador', unlockLevel: 5,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'trap', trapId: 'trap-terra-laco', duration: 3 } ],
+    description: 'Esconde um laço de raízes por 3 rodadas: 18–24 de terra e 0 PP por 2 turnos em quem pisar.',
+    flavor: 'O micélio adora um pedido desses. Faz de graça.',
+    fxKey: 'snareTrapSet'
+  },
+  'invocador-terra-10': {
+    id: 'invocador-terra-10', name: 'Sentinela de Pedra', element: 'terra', classId: 'invocador', unlockLevel: 10,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'summon', monsterId: 'sum-stone-sentinel' } ],
+    description: 'Invoca uma Sentinela de Pedra: lenta, dura e teimosa — o tampão de corredor do invocador.',
+    flavor: 'Fica onde foi posta. É a coisa mais confiável do mundo enterrado.',
+    fxKey: 'stoneSentinelCall'
+  },
+  'invocador-terra-12': {
+    id: 'invocador-terra-12', name: 'Pacto de Casca', element: 'terra', classId: 'invocador', unlockLevel: 12,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 58, duration: 2 }, { type: 'resist', element: 'terra', value: 20, duration: 2 } ],
+    description: '58 de escudo e 20% de resistência a terra por 2 turnos num aliado ou numa criatura invocada.',
+    flavor: 'Casca emprestada da própria parede do Fecho. A parede não reclamou.',
+    fxKey: 'barkPact'
+  },
+  'invocador-terra-15': {
+    id: 'invocador-terra-15', name: 'Estacas do Pacto', element: 'terra', classId: 'invocador', unlockLevel: 15,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 30, max: 38 }, { type: 'root', duration: 2 } ],
+    description: 'Estacas sobem do chão em raio 1: 30–38 de terra e 0 PP por 2 turnos. Prepara a célula para a armadilha seguinte.',
+    flavor: 'Primeiro prende, depois arma, depois espera. Sempre nessa ordem.',
+    fxKey: 'pactStakes'
+  },
+  'invocador-terra-20': {
+    id: 'invocador-terra-20', name: 'Armadilha-Tremor', element: 'terra', classId: 'invocador', unlockLevel: 20,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'trap', trapId: 'trap-terra-tremor', duration: 3 } ],
+    description: 'Enfraquece a laje por 3 rodadas: quem pisar sofre 48–58 de terra em raio 1 e fica 2 turnos sem PP.',
+    flavor: 'A mina trêmula ensinou: nem todo chão é obrigado a continuar sendo chão.',
+    fxKey: 'quakeTrapSet'
+  },
+  'invocador-terra-30': {
+    id: 'invocador-terra-30', name: 'Golem da Montanha', element: 'terra', classId: 'invocador', unlockLevel: 30,
+    paCost: 6, cooldown: 5, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'summon', monsterId: 'sum-mountain-golem' } ],
+    description: 'Levanta um Golem da Montanha: a criatura mais dura que o mundo enterrado consegue emprestar. Um segundo tanque, de graça, todo turno.',
+    flavor: 'Ele não invocou a montanha. Só perguntou se ela topava dar uns passos.',
+    fxKey: 'mountainGolemCall'
+  },
+
+  /* --- INVOCADOR · AR: bicho veloz e vento armado --- */
+  'invocador-ar-5': {
+    id: 'invocador-ar-5', name: 'Armadilha-Rajada', element: 'ar', classId: 'invocador', unlockLevel: 5,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'trap', trapId: 'trap-ar-rajada', duration: 3 } ],
+    description: 'Tampa um respiradouro por 3 rodadas: quem pisar leva 16–22 de ar e voa 3 células.',
+    flavor: 'Ar velho, guardado com raiva. Vale por um chute.',
+    fxKey: 'gustTrapSet'
+  },
+  'invocador-ar-10': {
+    id: 'invocador-ar-10', name: 'Falcão da Tormenta', element: 'ar', classId: 'invocador', unlockLevel: 10,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'summon', monsterId: 'sum-storm-falcon' } ],
+    description: 'Invoca um Falcão da Tormenta: muitos PP, iniciativa alta e um bico que empurra. Chega antes de todo mundo.',
+    flavor: 'Não existe céu para ele voar. Voa assim mesmo, de raiva.',
+    fxKey: 'stormFalconCall'
+  },
+  'invocador-ar-12': {
+    id: 'invocador-ar-12', name: 'Pacto do Vento', element: 'ar', classId: 'invocador', unlockLevel: 12,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'buff', stat: 'pp', value: 2, duration: 2 }, { type: 'buff', stat: 'initiative', value: 25, duration: 2 } ],
+    description: '+2 PP e +25 de iniciativa por 2 turnos num aliado ou criatura: o rebanho inteiro chega mais cedo.',
+    flavor: 'Contrato curto, assinado no ar, sem testemunhas.',
+    fxKey: 'windPact'
+  },
+  'invocador-ar-15': {
+    id: 'invocador-ar-15', name: 'Sopro Cortante', element: 'ar', classId: 'invocador', unlockLevel: 15,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'cone', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 30, max: 38 }, { type: 'push', tiles: 3 } ],
+    description: 'Um leque de vento afiado: 30–38 de ar e 3 células de empurrão — direto para cima das armadilhas.',
+    flavor: 'Ele não empurra para longe. Empurra para onde já está armado.',
+    fxKey: 'cuttingBreath'
+  },
+  'invocador-ar-20': {
+    id: 'invocador-ar-20', name: 'Armadilha-Vórtice', element: 'ar', classId: 'invocador', unlockLevel: 20,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'trap', trapId: 'trap-ar-vortice', duration: 3 } ],
+    description: 'Ata um nó de vento na célula por 3 rodadas: 42–52 de ar em raio 1 e 4 células de arremesso em quem pisar.',
+    flavor: 'Desatar é fácil: basta pisar. É sempre fácil, do lado errado.',
+    fxKey: 'vortexTrapSet'
+  },
+  'invocador-ar-30': {
+    id: 'invocador-ar-30', name: 'Enxame de Falcões', element: 'ar', classId: 'invocador', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 3, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 58, max: 70 }, { type: 'push', tiles: 3 }, { type: 'chain', jumps: 3, falloff: 0.2, element: 'ar', min: 30, max: 38 } ],
+    description: 'Chama tudo que tem asa nos Fechos: 58–70 de ar em raio 2, 3 células de arremesso e bicadas de 30–38 que saltam por mais 3 inimigos.',
+    flavor: 'Vieram todos. Ele só precisava de dois, mas ninguém diz não a um enxame que já chegou.',
+    fxKey: 'falconSwarm'
+  }
 
 };

@@ -1,0 +1,506 @@
+var JOGO = (typeof window !== 'undefined')
+  ? (window.JOGO = window.JOGO || {})
+  : (globalThis.JOGO = globalThis.JOGO || {});
+
+// ============================================================================
+// SOTERRA 2.0 — ITENS (dono: Criativo Fusão)
+// Globais: DATA.items  ·  extra aditivo: DATA.itemSpells (mesclar em DATA.spells)
+//
+// Quatro espaços (CONTRACT_V2 §8):
+//   'pa'       — ponto de ataque extra. +1 PA SOMENTE em item épico; os demais
+//                pagam em iniciativa/poder/fixação.
+//   'pp'       — no máximo +1 PP.
+//   'vida'     — de +10 a +60 PV e resistências.
+//   'especial' — concede um feitiço novo (grantsSpell) e NENHUM bônus de PA/PP.
+//
+// Prefixo do id = calabouço (o Criativo Mundo referencia estes ids nas lootTables):
+//   gh- Estufa Soterrada (greenhouse) · ci- Cisterna dos Afogados (cistern)
+//   em- Fecho de Brasa (emberlock)    · av- Andaimes do Vento (windscaffold)
+//   mt- Mina Trêmula (quakemine)      · cp- Coração Partido (brokenheart)
+//
+// Um item ÉPICO por calabouço é o troféu do chefe (dois no Coração Partido, que
+// é o desafio final). Poder e raridade crescem com a ordem do calabouço.
+// ============================================================================
+
+JOGO.DATA = JOGO.DATA || {};
+
+(function () {
+  'use strict';
+
+  var DATA = JOGO.DATA;
+
+  function rng(min, max, line, los) {
+    return { min: min, max: max, line: line === true, los: los !== false, movable: false };
+  }
+  function aoe(shape, size) { return { shape: shape, size: size || 0 }; }
+
+  // -------------------------------------------------------------------------
+  // Feitiços concedidos pelos itens do espaço 'especial'
+  // -------------------------------------------------------------------------
+  function itemSpell(o) {
+    return {
+      id: o.id, name: o.name, element: o.element, classId: null, unlockLevel: 0,
+      paCost: o.paCost, cooldown: o.cooldown, castsPerTurn: o.castsPerTurn || 1,
+      range: o.range, aoe: o.aoe || aoe('single', 0),
+      needsEmptyTile: o.needsEmptyTile === true, targetSide: o.targetSide,
+      effects: o.effects, description: o.description, flavor: o.flavor, fxKey: o.fxKey
+    };
+  }
+
+  DATA.itemSpells = {
+
+    'is-seed-bomb': itemSpell({
+      id: 'is-seed-bomb', name: 'Bomba de Sementes', element: 'terra',
+      paCost: 3, cooldown: 3, range: rng(1, 4), aoe: aoe('circle', 1), targetSide: 'enemy',
+      effects: [
+        { type: 'damage', element: 'terra', min: 18, max: 24 },
+        { type: 'poison', element: 'terra', min: 5, max: 8, duration: 2 }
+      ],
+      description: 'Arremessa um punhado de sementes de vagem estourante: elas abrem no ar e brotam dentro de quem estiver na roda.',
+      flavor: 'A estufa continua semeando. Você só escolhe onde.',
+      fxKey: 'burst'
+    }),
+
+    'is-thorn-ward': itemSpell({
+      id: 'is-thorn-ward', name: 'Redoma de Espinhos', element: 'terra',
+      paCost: 2, cooldown: 4, range: rng(0, 0, false, false), targetSide: 'self',
+      effects: [
+        { type: 'shield', value: 30, duration: 2 },
+        { type: 'reflect', pct: 20, duration: 2 }
+      ],
+      description: 'Escudo de emergência: uma sebe de espinhos fecha em volta do corpo e devolve parte do que bater nela.',
+      flavor: 'Cresce rápido demais para ser educada.',
+      fxKey: 'shieldFx'
+    }),
+
+    'is-undertow': itemSpell({
+      id: 'is-undertow', name: 'Ressaca', element: 'agua',
+      paCost: 3, cooldown: 2, range: rng(2, 6), targetSide: 'enemy',
+      effects: [
+        { type: 'damage', element: 'agua', min: 14, max: 19 },
+        { type: 'pull', tiles: 3 }
+      ],
+      description: 'Abre no chão uma correnteza curta que arrasta o alvo três células na sua direção.',
+      flavor: 'A cisterna nunca devolveu nada de graça — mas devolve.',
+      fxKey: 'hook'
+    }),
+
+    'is-tide-mend': itemSpell({
+      id: 'is-tide-mend', name: 'Maré Mansa', element: 'agua',
+      paCost: 3, cooldown: 3, range: rng(0, 4), targetSide: 'ally',
+      effects: [
+        { type: 'heal', min: 22, max: 29 },
+        { type: 'cleanse', kinds: ['poison', 'root'] }
+      ],
+      description: 'Uma onda baixa passa pelo aliado, fecha o que estava aberto e leva embora veneno e raízes.',
+      flavor: 'Água parada há mil anos ainda sabe subir quando pedem.',
+      fxKey: 'heal'
+    }),
+
+    'is-cinder-leap': itemSpell({
+      id: 'is-cinder-leap', name: 'Salto de Brasa', element: 'fogo',
+      paCost: 2, cooldown: 3, range: rng(1, 5), aoe: aoe('circle', 1),
+      needsEmptyTile: true, targetSide: 'any',
+      effects: [
+        { type: 'teleport' },
+        { type: 'damage', element: 'fogo', min: 12, max: 17 }
+      ],
+      description: 'O corpo vira fagulha, atravessa o ar e se remonta na célula escolhida — o estouro da chegada queima a vizinhança.',
+      flavor: 'Chegar é fácil. O difícil é avisar.',
+      fxKey: 'blink'
+    }),
+
+    'is-forge-brand': itemSpell({
+      id: 'is-forge-brand', name: 'Ferro de Marcar', element: 'fogo',
+      paCost: 3, cooldown: 2, range: rng(1, 5), targetSide: 'enemy',
+      effects: [
+        { type: 'damage', element: 'fogo', min: 16, max: 21 },
+        { type: 'mark', value: 8, duration: 3, max: 4 }
+      ],
+      description: 'Grava no inimigo a marca da forja: tudo o que o atingir depois disso dói mais.',
+      flavor: 'O Fecho marca o gado dele. Agora você também.',
+      fxKey: 'debuff'
+    }),
+
+    'is-updraft': itemSpell({
+      id: 'is-updraft', name: 'Lufada', element: 'ar',
+      paCost: 2, cooldown: 2, range: rng(1, 4), targetSide: 'enemy',
+      effects: [
+        { type: 'damage', element: 'ar', min: 12, max: 17 },
+        { type: 'push', tiles: 3 }
+      ],
+      description: 'Uma coluna de ar sobe debaixo do inimigo e o joga três células para trás — em andaime, isso costuma resolver a discussão.',
+      flavor: 'O vento dos Andaimes não empurra: publica opinião.',
+      fxKey: 'gust'
+    }),
+
+    'is-storm-chain': itemSpell({
+      id: 'is-storm-chain', name: 'Corrente de Tormenta', element: 'ar',
+      paCost: 4, cooldown: 3, range: rng(1, 6), targetSide: 'enemy',
+      effects: [
+        { type: 'chain', jumps: 3, falloff: 0.65, element: 'ar', min: 16, max: 22 }
+      ],
+      description: 'Corrente elemental: o raio pula de inimigo em inimigo até três vezes, perdendo força a cada salto.',
+      flavor: 'Conta os corpos sozinha. Sempre conta certo.',
+      fxKey: 'beam'
+    }),
+
+    'is-quake-nail': itemSpell({
+      id: 'is-quake-nail', name: 'Prego de Tremor', element: 'terra',
+      paCost: 3, cooldown: 3, range: rng(1, 4), targetSide: 'enemy',
+      effects: [
+        { type: 'damage', element: 'terra', min: 15, max: 20 },
+        { type: 'root', duration: 2 }
+      ],
+      description: 'Um prego de minério é cravado no chão sob o alvo: ele fica dois turnos exatamente onde está.',
+      flavor: 'A mina prega tudo o que se mexe demais.',
+      fxKey: 'slam'
+    }),
+
+    'is-ore-bulwark': itemSpell({
+      id: 'is-ore-bulwark', name: 'Escora de Minério', element: 'terra',
+      paCost: 3, cooldown: 4, range: rng(0, 3), targetSide: 'ally',
+      effects: [
+        { type: 'shield', value: 45, duration: 2 },
+        { type: 'buff', stat: 'lock', value: 15, duration: 2 }
+      ],
+      description: 'Sobe do chão uma escora de minério bruto na frente do aliado: escudo grosso e ninguém escapa de perto dele.',
+      flavor: 'Escoraram o teto com isso por mil anos. O teto continua lá.',
+      fxKey: 'shieldFx'
+    }),
+
+    'is-heart-call': itemSpell({
+      id: 'is-heart-call', name: 'Chamado do Coração', element: 'neutro',
+      paCost: 4, cooldown: 3, range: rng(0, 0, false, false), aoe: aoe('circle', 3), targetSide: 'enemy',
+      effects: [
+        { type: 'pull', tiles: 3 },
+        { type: 'damage', element: 'neutro', min: 14, max: 19 }
+      ],
+      description: 'O caco toca uma nota que o Coração Partido reconhece: tudo que é hostil num raio de três células é arrastado para perto de você.',
+      flavor: 'Chamar todo mundo de uma vez é uma decisão. Boa sorte.',
+      fxKey: 'nova'
+    }),
+
+    'is-heart-eclipse': itemSpell({
+      id: 'is-heart-eclipse', name: 'Eclipse', element: 'neutro',
+      paCost: 5, cooldown: 4, range: rng(1, 6), aoe: aoe('circle', 2), targetSide: 'enemy',
+      effects: [
+        { type: 'weatherShift', weather: 'calmo' },
+        { type: 'damage', element: 'neutro', min: 24, max: 32 },
+        { type: 'dispelShield' }
+      ],
+      description: 'A lente apaga o clima da sala por um instante e o que sobra cai em cima do inimigo sem escudo e sem elemento para se apoiar.',
+      flavor: 'Por um segundo, ninguém tem vantagem nenhuma. Use o segundo.',
+      fxKey: 'nova'
+    })
+  };
+
+  // -------------------------------------------------------------------------
+  // Os itens
+  // -------------------------------------------------------------------------
+  DATA.items = {};
+  var I = DATA.items;
+
+  function item(o) {
+    I[o.id] = {
+      id: o.id, name: o.name, slot: o.slot, rarity: o.rarity, dungeonId: o.dungeonId,
+      bonuses: o.bonuses || {}, grantsSpell: o.grantsSpell || null,
+      description: o.description, flavor: o.flavor, iconKey: o.iconKey
+    };
+  }
+
+  // ===== 1. A ESTUFA SOTERRADA (greenhouse) — gh- ==========================
+  item({ id: 'gh-firefly-crown', name: 'Coroa de Vagalumes', slot: 'pa', rarity: 'comum',
+    dungeonId: 'greenhouse', bonuses: { initiative: 8, power: 3 },
+    description: 'Aro de arame com três redomas minúsculas presas nele, cada uma com um vagalume vivo dentro. +8 de iniciativa, +3 de poder.',
+    flavor: 'Eles acordam meio segundo antes do perigo. Copie-os.',
+    iconKey: 'firefly-crown' });
+
+  item({ id: 'gh-widow-shears', name: 'Tesourão da Viúva', slot: 'pa', rarity: 'epico',
+    dungeonId: 'greenhouse', bonuses: { pa: 1, power: 10 },
+    description: 'O tesourão de poda da Jardineira-Viúva, mais alto que uma criança e ainda pegajoso de seiva. +1 PA, +10 de poder.',
+    flavor: 'Ela podava o jardim. Agora você poda o mundo.',
+    iconKey: 'great-shears' });
+
+  item({ id: 'gh-moss-treads', name: 'Solados de Musgo', slot: 'pp', rarity: 'comum',
+    dungeonId: 'greenhouse', bonuses: { dodge: 8, initiative: 4 },
+    description: 'Sandálias forradas com musgo vivo que agarra o piso molhado e não faz barulho. +8 de esquiva, +4 de iniciativa.',
+    flavor: 'O musgo cresce de volta toda noite. Não pergunte do quê.',
+    iconKey: 'moss-boots' });
+
+  item({ id: 'gh-vine-stirrups', name: 'Estribos de Hera', slot: 'pp', rarity: 'raro',
+    dungeonId: 'greenhouse', bonuses: { pp: 1, dodge: 5 },
+    description: 'Duas heras vivas enroladas nas canelas que empurram o passo seguinte antes de você pedir. +1 PP, +5 de esquiva.',
+    flavor: 'Elas sabem para onde você vai. Discordam pouco.',
+    iconKey: 'vine-stirrup' });
+
+  item({ id: 'gh-trellis-guard', name: 'Guarda de Treliça', slot: 'vida', rarity: 'comum',
+    dungeonId: 'greenhouse', bonuses: { hp: 15, resists: { terra: 5 } },
+    description: 'Placa de treliça de madeira coberta de hera, amarrada ao peito com corda de estufa. +15 PV, +5% de resistência a terra.',
+    flavor: 'A hera que o cobre aperta o seu braço com carinho.',
+    iconKey: 'trellis-shield' });
+
+  item({ id: 'gh-sap-apron', name: 'Avental de Seiva', slot: 'vida', rarity: 'raro',
+    dungeonId: 'greenhouse', bonuses: { hp: 30, resists: { terra: 10, agua: 5 } },
+    description: 'Avental de jardineiro encharcado de seiva endurecida, duro como couro cozido. +30 PV, +10% terra, +5% água.',
+    flavor: 'Os bolsos ainda têm sementes. Não plante nenhuma.',
+    iconKey: 'apron' });
+
+  item({ id: 'gh-seed-pouch', name: 'Bolsa de Vagens', slot: 'especial', rarity: 'comum',
+    dungeonId: 'greenhouse', bonuses: { power: 3 }, grantsSpell: 'is-seed-bomb',
+    description: 'Bolsa de pano cheia de vagens estourantes colhidas verdes. Concede o feitiço Bomba de Sementes.',
+    flavor: 'Chacoalhar é desaconselhado. Todo mundo chacoalha.',
+    iconKey: 'seed-pouch' });
+
+  item({ id: 'gh-briar-charm', name: 'Amuleto de Sarça', slot: 'especial', rarity: 'raro',
+    dungeonId: 'greenhouse', bonuses: { hp: 10 }, grantsSpell: 'is-thorn-ward',
+    description: 'Um nó de sarça seca que volta a florescer quando o dono se assusta. Concede o feitiço Redoma de Espinhos.',
+    flavor: 'Floresce no susto. Você vai descobrir cedo.',
+    iconKey: 'briar-charm' });
+
+  // ===== 2. A CISTERNA DOS AFOGADOS (cistern) — ci- ========================
+  item({ id: 'ci-lantern-fob', name: 'Berloque de Lampião', slot: 'pa', rarity: 'comum',
+    dungeonId: 'cistern', bonuses: { initiative: 10 },
+    description: 'Lampião submerso do tamanho de um dedo, com a chama ainda acesa dentro da água. +10 de iniciativa.',
+    flavor: 'A chama não sabe que afogou. Ninguém teve coragem de contar.',
+    iconKey: 'oil-lantern' });
+
+  item({ id: 'ci-harpoon-flute', name: 'Flauta-Arpão', slot: 'pa', rarity: 'raro',
+    dungeonId: 'cistern', bonuses: { power: 10, initiative: 5 },
+    description: 'Osso longo com três furos de flauta e uma ponta farpada; assobia grave quando corta o ar. +10 de poder, +5 de iniciativa.',
+    flavor: 'Assobia a mesma nota grave a cada golpe: desça.',
+    iconKey: 'flute' });
+
+  item({ id: 'ci-current-fins', name: 'Membranas de Correnteza', slot: 'pp', rarity: 'comum',
+    dungeonId: 'cistern', bonuses: { dodge: 10, initiative: 4 },
+    description: 'Membranas finas costuradas entre os dedos, que empurram a água parada como se ela concordasse. +10 de esquiva, +4 de iniciativa.',
+    flavor: 'Servem em terra firme. Ninguém entende como.',
+    iconKey: 'fins' });
+
+  item({ id: 'ci-baroness-collar', name: 'Colar da Baronesa', slot: 'pp', rarity: 'epico',
+    dungeonId: 'cistern', bonuses: { pp: 1, hp: 15, initiative: 8 },
+    description: 'Cinco fileiras de pérolas de lodo que abrem caminho na água — e no resto. +1 PP, +15 PV, +8 de iniciativa.',
+    flavor: 'A maré abre caminho para quem o veste. Por respeito — ou por medo.',
+    iconKey: 'pearl' });
+
+  item({ id: 'ci-brine-cuirass', name: 'Couraça de Salmoura', slot: 'vida', rarity: 'comum',
+    dungeonId: 'cistern', bonuses: { hp: 20, resists: { agua: 8 } },
+    description: 'Peitoral de placas de sal cristalizado, leve e cortante nas bordas. +20 PV, +8% de resistência a água.',
+    flavor: 'Quanto mais quebra, mais afiada fica. Igual ao dono anterior.',
+    iconKey: 'salt-plate' });
+
+  item({ id: 'ci-drowned-coat', name: 'Casaca do Carregador', slot: 'vida', rarity: 'raro',
+    dungeonId: 'cistern', bonuses: { hp: 35, resists: { agua: 12, fogo: 5 } },
+    description: 'Casaca de gola alta que escorre água para sempre e pesa como um abraço. +35 PV, +12% água, +5% fogo.',
+    flavor: 'Quem a veste nunca larga o que carrega. Cuidado com o que carrega.',
+    iconKey: 'coat' });
+
+  item({ id: 'ci-tide-flask', name: 'Frasco de Maré Viva', slot: 'especial', rarity: 'comum',
+    dungeonId: 'cistern', bonuses: { power: 4 }, grantsSpell: 'is-undertow',
+    description: 'Frasco bojudo com uma linha d’água que fica inclinada mesmo na mesa. Concede o feitiço Ressaca.',
+    flavor: 'Duas vezes por dia, o frasco puxa. Ninguém sabe para onde.',
+    iconKey: 'tide-flask' });
+
+  item({ id: 'ci-jelly-vial', name: 'Ampola de Água-Viva', slot: 'especial', rarity: 'raro',
+    dungeonId: 'cistern', bonuses: { hp: 12 }, grantsSpell: 'is-tide-mend',
+    description: 'Ampola morna com uma água-viva-lustre viva lá dentro, pulsando devagar. Concede o feitiço Maré Mansa.',
+    flavor: 'Ela cura porque acha que você é o aquário.',
+    iconKey: 'jelly-vial' });
+
+  // ===== 3. O FECHO DE BRASA (emberlock) — em- =============================
+  item({ id: 'em-bellows-valve', name: 'Válvula de Fole', slot: 'pa', rarity: 'comum',
+    dungeonId: 'emberlock', bonuses: { initiative: 12 },
+    description: 'Válvula redonda de latão com alavanca, que assobia meio segundo antes de cada golpe seu. +12 de iniciativa.',
+    flavor: 'O assobio é meio segundo de vantagem. Nos Fechos, é uma vida.',
+    iconKey: 'valve' });
+
+  item({ id: 'em-forge-grate', name: 'Grelha do Primeiro Fogo', slot: 'pa', rarity: 'epico',
+    dungeonId: 'emberlock', bonuses: { pa: 1, power: 12, resists: { fogo: 10 } },
+    description: 'Peitoral de grelha arrancado da fornalha de Magno, com brasa viva presa entre as barras. +1 PA, +12 de poder, +10% fogo.',
+    flavor: 'O primeiro fogo do mundo agora bate atrás das suas costelas.',
+    iconKey: 'furnace-grate' });
+
+  item({ id: 'em-cinder-treads', name: 'Solados de Escória', slot: 'pp', rarity: 'raro',
+    dungeonId: 'emberlock', bonuses: { pp: 1, initiative: 6 },
+    description: 'Solas de escória fria que não queimam no piso da forja e ainda dão um empurrão em cada passada. +1 PP, +6 de iniciativa.',
+    flavor: 'Andar sobre brasa é questão de sola, dizem eles.',
+    iconKey: 'slag-boots' });
+
+  item({ id: 'em-chain-harness', name: 'Arreio de Correntes', slot: 'pp', rarity: 'raro',
+    dungeonId: 'emberlock', bonuses: { dodge: 12, lock: 8 },
+    description: 'Correntes do teto da forja cruzadas no peito: dão balanço para desviar e peso para segurar quem tentar fugir. +12 de esquiva, +8 de fixação.',
+    flavor: 'Ainda pendem do teto em algum lugar. Só que agora de você.',
+    iconKey: 'chain-harness' });
+
+  item({ id: 'em-riveted-plate', name: 'Chapa Rebitada', slot: 'vida', rarity: 'comum',
+    dungeonId: 'emberlock', bonuses: { hp: 25, resists: { fogo: 8 } },
+    description: 'Placa retangular arrancada do portão da forja, com quatro rebites nos cantos. +25 PV, +8% fogo.',
+    flavor: 'O portão não sente falta. Provavelmente.',
+    iconKey: 'riveted-plate' });
+
+  item({ id: 'em-soot-mantle', name: 'Manto de Fuligem', slot: 'vida', rarity: 'raro',
+    dungeonId: 'emberlock', bonuses: { hp: 40, resists: { fogo: 15, ar: 5 } },
+    description: 'Manto que esfarela em partículas na barra e se refaz sozinho enquanto houver fumaça na sala. +40 PV, +15% fogo, +5% ar.',
+    flavor: 'Às vezes ele lembra que já foi alguém — e te abraça.',
+    iconKey: 'soot-cloak' });
+
+  item({ id: 'em-ember-flask', name: 'Frasco de Fagulha', slot: 'especial', rarity: 'raro',
+    dungeonId: 'emberlock', bonuses: { initiative: 6 }, grantsSpell: 'is-cinder-leap',
+    description: 'Frasco lacrado com uma fagulha inquieta que sabe o caminho de volta ao dono. Concede o feitiço Salto de Brasa.',
+    flavor: 'Ela vai primeiro. Você vai junto. Combinem antes.',
+    iconKey: 'ember' });
+
+  item({ id: 'em-brand-iron', name: 'Ferro do Ferreiro', slot: 'especial', rarity: 'raro',
+    dungeonId: 'emberlock', bonuses: { power: 8 }, grantsSpell: 'is-forge-brand',
+    description: 'Ferro de marcar com o timbre do Fecho na ponta, quente há mil anos. Concede o feitiço Ferro de Marcar.',
+    flavor: 'O Ferreiro Sem-Rosto marcava tudo. Inclusive a si mesmo.',
+    iconKey: 'brand-iron' });
+
+  // ===== 4. OS ANDAIMES DO VENTO (windscaffold) — av- ======================
+  item({ id: 'av-kite-crest', name: 'Crista de Papagaio', slot: 'pa', rarity: 'raro',
+    dungeonId: 'windscaffold', bonuses: { initiative: 14, power: 8 },
+    description: 'Armação leve de varetas e pano esticado, presa nas costas, que canta na corrente de ar. +14 de iniciativa, +8 de poder.',
+    flavor: 'Puxa para cima o tempo todo. Você se acostuma a inclinar.',
+    iconKey: 'kite-crest' });
+
+  item({ id: 'av-plank-gauntlet', name: 'Manopla de Tábua', slot: 'pa', rarity: 'raro',
+    dungeonId: 'windscaffold', bonuses: { power: 14, lock: 6 },
+    description: 'Tábua de andaime amarrada ao antebraço com corda alcatroada: bate como remo e segura como corrimão. +14 de poder, +6 de fixação.',
+    flavor: 'Já foi piso. Prefere ser argumento.',
+    iconKey: 'plank-gauntlet' });
+
+  item({ id: 'av-glider-cloak', name: 'Capa Planadora', slot: 'pp', rarity: 'raro',
+    dungeonId: 'windscaffold', bonuses: { pp: 1, dodge: 10 },
+    description: 'Capa com varetas costuradas nas costuras: abre sozinha no vão e transforma a queda em passo. +1 PP, +10 de esquiva.',
+    flavor: 'Nos Andaimes, cair é só uma forma lenta de andar.',
+    iconKey: 'glider-cloak' });
+
+  item({ id: 'av-updraft-boots', name: 'Botas de Respiradouro', slot: 'pp', rarity: 'epico',
+    dungeonId: 'windscaffold', bonuses: { pp: 1, initiative: 12, dodge: 8 },
+    description: 'Botas com grelhas nos solados que aspiram o ar dos respiradouros e devolvem por baixo a cada passada. +1 PP, +12 de iniciativa, +8 de esquiva.',
+    flavor: 'Elas dão o passo. Você só decide a direção.',
+    iconKey: 'updraft-boots' });
+
+  item({ id: 'av-rope-vest', name: 'Colete de Cordame', slot: 'vida', rarity: 'comum',
+    dungeonId: 'windscaffold', bonuses: { hp: 30, resists: { ar: 8 } },
+    description: 'Colete trançado com o cordame dos andaimes, apertado no peito por nós de marinheiro. +30 PV, +8% ar.',
+    flavor: 'Cada nó tem nome. Aprenda dois, pelo menos.',
+    iconKey: 'rope-vest' });
+
+  item({ id: 'av-storm-harness', name: 'Arnês de Tormenta', slot: 'vida', rarity: 'raro',
+    dungeonId: 'windscaffold', bonuses: { hp: 45, resists: { ar: 15, terra: 6 } },
+    description: 'Arnês de couro com anéis de latão que zunem no vendaval e mantêm o corpo colado à passarela. +45 PV, +15% ar, +6% terra.',
+    flavor: 'Segura o corpo. A coragem é problema seu.',
+    iconKey: 'storm-harness' });
+
+  item({ id: 'av-wind-whistle', name: 'Apito de Vão', slot: 'especial', rarity: 'raro',
+    dungeonId: 'windscaffold', bonuses: { initiative: 8 }, grantsSpell: 'is-updraft',
+    description: 'Apito de osso que chama a corrente ascendente de qualquer respiradouro por perto. Concede o feitiço Lufada.',
+    flavor: 'Os Fôlegos usavam para limpar a poeira. Você usa para limpar a passarela.',
+    iconKey: 'whistle' });
+
+  item({ id: 'av-lightning-coil', name: 'Espiral de Raio', slot: 'especial', rarity: 'raro',
+    dungeonId: 'windscaffold', bonuses: { power: 10 }, grantsSpell: 'is-storm-chain',
+    description: 'Bobina de arame fino enrolada num prego de cobre, sempre eriçada. Concede o feitiço Corrente de Tormenta.',
+    flavor: 'Arrepia o braço inteiro antes de decidir por você.',
+    iconKey: 'coil' });
+
+  // ===== 5. A MINA TRÊMULA (quakemine) — mt- ===============================
+  item({ id: 'mt-drill-bit', name: 'Broca de Veio', slot: 'pa', rarity: 'raro',
+    dungeonId: 'quakemine', bonuses: { power: 16, lock: 8 },
+    description: 'Broca helicoidal de minério bruto, pesada demais para uma mão só e afiada por atrito. +16 de poder, +8 de fixação.',
+    flavor: 'Cavou fundo demais. É por isso que a mina treme.',
+    iconKey: 'drill-bit' });
+
+  item({ id: 'mt-quake-crown', name: 'Coroa de Falha', slot: 'pa', rarity: 'epico',
+    dungeonId: 'quakemine', bonuses: { pa: 1, hp: 20, resists: { terra: 10 } },
+    description: 'Aro de rocha rachada que continua tremendo baixinho na cabeça do dono, no ritmo da mina. +1 PA, +20 PV, +10% terra.',
+    flavor: 'O tremor não vem mais do chão. Vem de você.',
+    iconKey: 'quake-crown' });
+
+  item({ id: 'mt-ore-greaves', name: 'Grevas de Minério', slot: 'pp', rarity: 'raro',
+    dungeonId: 'quakemine', bonuses: { pp: 1, lock: 10 },
+    description: 'Caneleiras de minério que acham sozinhas a pedra firme no meio do desabamento. +1 PP, +10 de fixação.',
+    flavor: 'Sabem onde o chão ainda existe. Confie nelas.',
+    iconKey: 'ore-greaves' });
+
+  item({ id: 'mt-cart-wheels', name: 'Rodas de Vagoneta', slot: 'pp', rarity: 'raro',
+    dungeonId: 'quakemine', bonuses: { initiative: 14, dodge: 10 },
+    description: 'Duas rodinhas de vagoneta adaptadas aos calcanhares, boas em trilho e péssimas em escada. +14 de iniciativa, +10 de esquiva.',
+    flavor: 'Descer é rápido. Descer é sempre rápido.',
+    iconKey: 'cart-wheels' });
+
+  item({ id: 'mt-slate-plate', name: 'Peitoral de Ardósia', slot: 'vida', rarity: 'raro',
+    dungeonId: 'quakemine', bonuses: { hp: 45, resists: { terra: 12, agua: 6 } },
+    description: 'Lascas de ardósia sobrepostas como escamas, amarradas com fio de cobre. +45 PV, +12% terra, +6% água.',
+    flavor: 'Racha uma lasca por golpe. Vieram muitas lascas.',
+    iconKey: 'slate-plate' });
+
+  item({ id: 'mt-bedrock-carapace', name: 'Carapaça de Rocha-Mãe', slot: 'vida', rarity: 'raro',
+    dungeonId: 'quakemine', bonuses: { hp: 55, resists: { terra: 18, ar: 6 } },
+    description: 'Bloco escavado da rocha-mãe da mina, moldado às costas do dono e pesado como uma promessa. +55 PV, +18% terra, +6% ar.',
+    flavor: 'A mina emprestou. A mina cobra depois.',
+    iconKey: 'bedrock-carapace' });
+
+  item({ id: 'mt-quake-nail', name: 'Prego de Mina', slot: 'especial', rarity: 'raro',
+    dungeonId: 'quakemine', bonuses: { power: 8 }, grantsSpell: 'is-quake-nail',
+    description: 'Prego de escora do tamanho de um antebraço, entortado de tanto segurar teto. Concede o feitiço Prego de Tremor.',
+    flavor: 'Segurou uma galeria inteira por trinta anos. Aguenta um inimigo.',
+    iconKey: 'mine-nail' });
+
+  item({ id: 'mt-shoring-charm', name: 'Talismã de Escoramento', slot: 'especial', rarity: 'raro',
+    dungeonId: 'quakemine', bonuses: { hp: 15 }, grantsSpell: 'is-ore-bulwark',
+    description: 'Pequena viga entalhada que os mineiros penduravam no pescoço antes de descer. Concede o feitiço Escora de Minério.',
+    flavor: 'Quem descia sem um deles não subia com histórias.',
+    iconKey: 'shoring-charm' });
+
+  // ===== 6. O CORAÇÃO PARTIDO (brokenheart) — cp- ==========================
+  item({ id: 'cp-heart-crown', name: 'Coroa do Coração', slot: 'pa', rarity: 'epico',
+    dungeonId: 'brokenheart', bonuses: { pa: 1, power: 18, initiative: 10 },
+    description: 'Aro feito das quatro lascas maiores do Coração Partido, uma de cada elemento, que giram devagar sem se tocar. +1 PA, +18 de poder, +10 de iniciativa.',
+    flavor: 'Quatro elementos discutindo em cima da sua cabeça. Vença a discussão.',
+    iconKey: 'heart-crown' });
+
+  item({ id: 'cp-shard-ring', name: 'Anel de Estilhaço', slot: 'pa', rarity: 'raro',
+    dungeonId: 'brokenheart', bonuses: { power: 20, initiative: 8 },
+    description: 'Anel largo com um caco do Coração cravado, que esquenta quando o dono decide bater. +20 de poder, +8 de iniciativa.',
+    flavor: 'Aperta o dedo antes do golpe. É o jeito dele de concordar.',
+    iconKey: 'shard-ring' });
+
+  item({ id: 'cp-quicksilver-boots', name: 'Botas de Azougue', slot: 'pp', rarity: 'epico',
+    dungeonId: 'brokenheart', bonuses: { pp: 1, dodge: 14, initiative: 12 },
+    description: 'Botas com sola de metal líquido que se refaz a cada passo e nunca esfria. +1 PP, +14 de esquiva, +12 de iniciativa.',
+    flavor: 'Chegam meio passo antes de você resolver ir.',
+    iconKey: 'quicksilver-boots' });
+
+  item({ id: 'cp-ashen-anklets', name: 'Tornozeleiras de Cinza', slot: 'pp', rarity: 'raro',
+    dungeonId: 'brokenheart', bonuses: { pp: 1, dodge: 8, lock: 8 },
+    description: 'Duas argolas de cinza prensada que deixam um rastro curto no chão e confundem quem tenta segui-lo. +1 PP, +8 de esquiva, +8 de fixação.',
+    flavor: 'O rastro apaga sozinho. Sempre um pouco tarde demais.',
+    iconKey: 'ashen-anklets' });
+
+  item({ id: 'cp-scar-plate', name: 'Peitoral de Cicatriz', slot: 'vida', rarity: 'raro',
+    dungeonId: 'brokenheart', bonuses: { hp: 50, resists: { neutro: 15, fogo: 6, agua: 6 } },
+    description: 'Placa remendada com grampos grossos sobre uma rachadura que atravessa o metal de lado a lado. +50 PV, +15% neutro, +6% fogo, +6% água.',
+    flavor: 'Já falhou uma vez. Não pretende repetir.',
+    iconKey: 'scar-plate' });
+
+  item({ id: 'cp-worldshell', name: 'Casco do Mundo', slot: 'vida', rarity: 'epico',
+    dungeonId: 'brokenheart', bonuses: { hp: 60, resists: { fogo: 12, agua: 12, terra: 12, ar: 12, neutro: 12 } },
+    description: 'Um pedaço da própria Grande Lousa, fino como telha e frio como o céu que virou pedra. +60 PV e +12% de resistência a todos os elementos.',
+    flavor: 'O céu desceu sobre o mundo. Um naco dele agora desce sobre você — do lado certo.',
+    iconKey: 'worldshell' });
+
+  item({ id: 'cp-heart-horn', name: 'Corno do Coração', slot: 'especial', rarity: 'epico',
+    dungeonId: 'brokenheart', bonuses: { power: 10 }, grantsSpell: 'is-heart-call',
+    description: 'Trompa curta feita de um caco oco do Coração; toca uma nota que a sala inteira obedece. Concede o feitiço Chamado do Coração.',
+    flavor: 'Chama todo mundo. Todo mundo vem. Esse é o problema e a graça.',
+    iconKey: 'heart-horn' });
+
+  item({ id: 'cp-eclipse-lens', name: 'Lente de Eclipse', slot: 'especial', rarity: 'epico',
+    dungeonId: 'brokenheart', bonuses: { power: 12 }, grantsSpell: 'is-heart-eclipse',
+    description: 'Disco de vidro fumê talhado no Coração Partido: olhando por ele, o clima da sala parece uma sugestão. Concede o feitiço Eclipse.',
+    flavor: 'Por um segundo, ninguém tem elemento. Nem eles.',
+    iconKey: 'eclipse-lens' });
+
+})();

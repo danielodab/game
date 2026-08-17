@@ -93,6 +93,12 @@ var JOGO = (typeof window !== 'undefined')
  * 15. FUSÃO: a unidade fundida é a própria unidade A mutada — mantém o uid e a
  *     casa dela na ordem de iniciativa; B sai do tabuleiro com
  *     `alive:false, offBoard:true`, sem evento `death` e sem contar derrota.
+ * 16. STATS DO PET: o esquema do contrato (§5) descreve os BÔNUS que o pet dá
+ *     ao dono, não o corpo dele. O corpo usa `DATA.pets[id].stats` quando o
+ *     dado o fornecer e, senão, o padrão documentado
+ *     hp 40 · pa 3 · pp 3 · iniciativa do dono · power 0 · sem resistências.
+ *     Os BÔNUS ao dono são responsabilidade de `Progress.battleParty()`, que
+ *     entrega os stats já somados — a engine não os aplica duas vezes.
  * ==========================================================================*/
 
 (function () {
@@ -820,8 +826,10 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   };
 
-  Engine.aoeTiles = function (state, spellId, casterX, casterY, tx, ty) {
-    var spell = spellDef(spellId);
+  // Aceita id de feitiço OU o objeto do feitiço (armadilhas e eventos de
+  // terreno conjuram feitiços sintéticos que não existem em DATA).
+  Engine.aoeTiles = function (state, spellOrId, casterX, casterY, tx, ty) {
+    var spell = (spellOrId && typeof spellOrId === 'object') ? spellOrId : spellDef(spellOrId);
     if (!spell) return [];
     var aoe = sAoe(spell);
     var shape = aoe.shape, size = aoe.size || 0;
@@ -1291,8 +1299,7 @@ var JOGO = (typeof window !== 'undefined')
     opts = opts || {};
     var cx = opts.casterX != null ? opts.casterX : caster.x;
     var cy = opts.casterY != null ? opts.casterY : caster.y;
-    var tiles = Engine.aoeTiles(state, spell.id, cx, cy, x, y);
-    if (!tiles.length && spell.aoe === undefined) tiles = [{ x: x, y: y }];
+    var tiles = Engine.aoeTiles(state, spell, cx, cy, x, y);
     var effects = sEffects(spell);
 
     function unitsInTiles(includeCaster) {
