@@ -1326,13 +1326,13 @@ var JOGO = (typeof window !== 'undefined')
   var ARCH = ['blob', 'fera', 'inseto', 'espirito', 'bruto', 'planta', 'pedra', 'ave', 'verme'];
   var ARCH_WORDS = [
     ['planta', /raiz|planta|flor|cipo|cipó|vinha|broto|semente|fungo|cogumelo|espor|musgo|trepad|carrapich|verga|jardin|seiv|p[óo]len|thorn|root|vine|sprout|seed|bloom|spore|pollen|burr|leaf|garden|sap\b/i],
-    ['blob', /lodo|limo|gosma|blob|slime|lama|geleia|gota|gotinha|salmour|escorr|monte|[áa]gua-viva|jelly|ooze|sludge|slag|drop|droplet|goo|seep|mound|brine|damp/i],
+    ['blob', /lodo|limo|gosma|blob|slime|lama|geleia|gota|gotinha|escorr|monte de|[áa]gua-viva|jelly|ooze|sludge|slag|drop|droplet|goo|seep|mound|\bdamp/i],
     ['verme', /verme|lombriga|serpe|serpente|cobra|enguia|moreia|larva|worm|snake|eel|moray|slither/i],
     ['ave', /p[aá]ssaro|falc[aã]o|[aá]guia|morcego|corvo|coruja|asa|penas|pican[çc]o|cantarol|coro\b|assobio|bird|falcon|hawk|eagle|bat\b|crow|owl|shrike|warbler|choir|whistle|piper|wing/i],
     ['inseto', /inseto|besouro|aranha|escorpi|mosca|traca|traça|casulo|ferr[ãa]o|centop|vespa|formig|wasp|spider|beetle|mite|roach|moth|ant-/i],
-    ['espirito', /esp[ií]rito|alma|eco|fantasma|sopro|brilho|f[aá]tuo|nevoa|névoa|sombra|assombr|cinza|cinzent|espelho|g[êe]meo|estilha|mote|fogar[ée]u|familiar|cora[çc][ãa]o|wraith|wisp|ghost|spirit|revenant|phantom|shade|mirror|sliver|ash|firedamp|rift|heart/i],
+    ['espirito', /esp[ií]rito|alma|eco|fantasma|sopro|brilho|f[aá]tuo|nevoa|névoa|sombra|assombr|cinza|cinzent|espelho|g[êe]meo|estilha|mote|fogar[ée]u|familiar|cora[çc][ãa]o|ninfa|pregolim|wraith|wisp|ghost|spirit|revenant|phantom|shade|mirror|sliver|ash|firedamp|rift|heart|nymph|sprite/i],
     ['pedra', /pedra|rocha|golem|cristal|est[aá]tua|entulho|escombro|granito|mineral|laje|min[ée]rio|lasca|alicerce|bigorna|seixo|stone|rock|crystal|\bore\b|slate|boulder|anvil|lodestone|ballast/i],
-    ['fera', /lobo|c[aã]o\b|cão|rato|fera|bicho|garra|presa|javali|peixe|caranguejo|bocarra|ti[çc][ãa]o|fagulha|gremlin|ninfa|voraz|hound|wolf|beast|fang|claw|crab|jaw|imp\b|whelp|nymph|feral|sprite/i],
+    ['fera', /lobo|c[aã]o\b|cão|rato|fera|bicho|garra|presa|javali|peixe|caranguejo|bocarra|ti[çc][ãa]o|fagulha|gremlin|voraz|hound|wolf|beast|fang|claw|crab|jaw|imp\b|whelp|feral/i],
     ['bruto', /guarda|bruto|carrasco|gigante|capataz|soldado|mestre|senhor|rei|rainha|campe|ferreiro|zelador|colosso|sentinela|arauto|baron|xam[ãa]|enforca|puxa|bate|acendedor|smith|warden|colossus|sentinel|porter|hauler|herald|wright|forge|knock|shaman|hanger|revenant/i]
   ];
   function archOf(defId, md) {
@@ -1421,7 +1421,7 @@ var JOGO = (typeof window !== 'undefined')
         g.quadraticCurveTo(0, 2, -8, -8);
         g.quadraticCurveTo(-18, -16, -20, -30);
         g.closePath();
-      }, 0, -32, 24), rgba(p.main, 0.92), { k: 0.2, hi: 0.16 });
+      }, 0, -32, 24), mx(p.main, '#f2f6ff', 0.2), { k: 0.2, hi: 0.16 });
       for (i = 0; i < 3; i++) {
         stroke(ctx, [-14 + i * 13, -8, -12 + i * 13, 2, -16 + i * 13, 8], rgba(p.accent, 0.7), 1, true);
       }
@@ -1464,6 +1464,41 @@ var JOGO = (typeof window !== 'undefined')
       part(ctx, Pel(9, -66, 3.6, 3.8), p.accent, { k: 0.16, lw: 0.8 });
       part(ctx, Ppoly([-22, -18, -38, -26, -24, -8]), mx(p.main, '#4a7a32', 0.55), { k: 0.22, lw: 0.9 });
       part(ctx, Ppoly([24, -20, 40, -30, 26, -10]), mx(p.main, '#4a7a32', 0.4), { k: 0.22, lw: 0.9 });
+    } else if (a === 'ave') {
+      // pássaro roliço pousado: corpo oval, peito claro, bico triangular, cauda em leque
+      part(ctx, Pcap(-6, -2, 3.2, -9, -22, 2.6), p.dark, { k: 0.2, lw: 0.85 });
+      part(ctx, Pcap(8, -2, 3.2, 6, -22, 2.6), p.dark, { k: 0.2, lw: 0.85 });
+      for (i = 0; i < 4; i++) {                       // leque da cauda
+        part(ctx, Ppoly([-16, -34, -34 - i * 3, -40 - i * 7, -18, -28 + i * 2]),
+             i % 2 ? sh(p.main, -0.14) : p.main, { k: 0.22, lw: 0.9 });
+      }
+      part(ctx, Pel(-1, -34, 20, 22, -0.14), p.main, { k: 0.24, hi: 0.14 });
+      part(ctx, Pel(3, -30, 11, 13), sh(p.main, 0.34), { k: 0.16, lw: 0.9 });   // peito
+      part(ctx, Pel(-4, -38, 12.5, 10, -0.5), sh(p.main, -0.1), { k: 0.22 });   // asa dobrada
+      stroke(ctx, [-12, -42, -2, -36, 6, -34], p.dark, 1, true);
+      part(ctx, Pel(12, -52, 11, 10.5), p.main, { k: 0.22, hi: 0.16 });         // cabeça
+      part(ctx, Ppoly([20, -54, 34, -50, 20, -46]), mx(p.accent, '#e8a63c', 0.4), { k: 0.22, lw: 0.9 });
+      part(ctx, Ppoly([6, -60, 9, -70, 14, -60]), sh(p.main, -0.16), { k: 0.2, lw: 0.85 });  // topete
+      critterEyes(ctx, 13, -54, 4, 2, 5.4, p.dark);
+    } else if (a === 'verme') {
+      // serpe: corpo em S de anéis decrescentes, cabeça com boca e presas
+      var segN = 6;
+      for (i = segN - 1; i >= 0; i--) {
+        var t = i / (segN - 1);
+        var sxx = -26 + i * 10 + Math.sin(i * 1.15) * 5;
+        var syy = -6 - i * 8 - Math.cos(i * 0.9) * 5;
+        part(ctx, Pel(sxx, syy, 15 - t * 5.5, 11 - t * 3.6, -0.2 + Math.sin(i) * 0.3),
+             i % 2 ? sh(p.main, -0.12) : p.main, { k: 0.24, hi: 0.12 });
+      }
+      part(ctx, Pel(22, -50, 14, 11.5, -0.25), p.main, { k: 0.22, hi: 0.16 });
+      part(ctx, tag(function (g) {                    // boca aberta
+        g.beginPath(); g.moveTo(28, -48); g.quadraticCurveTo(40, -46, 38, -38);
+        g.quadraticCurveTo(30, -38, 26, -44); g.closePath();
+      }, 32, -44, 8), mx(p.dark, '#7a1e2a', 0.5), { k: 0.16, lw: 0.9 });
+      part(ctx, Ppoly([29, -47, 31, -40, 33, -47]), '#f4ecd8', { k: 0.12, lw: 0.7 });
+      part(ctx, Ppoly([35, -45, 36, -39, 38, -45]), '#f4ecd8', { k: 0.12, lw: 0.7 });
+      critterEyes(ctx, 20, -54, 3.8, 2, 5.6, p.dark);
+      stroke(ctx, [18, -62, 24, -72, 30, -66], p.accent, 1.1, true);   // antena
     } else { // pedra
       part(ctx, Pshard(0, -22, 26, defId + 'a'), p.main, { k: 0.28, hi: 0.12 });
       part(ctx, Pshard(-18, -44, 13, defId + 'b'), sh(p.main, 0.08), { k: 0.26 });
@@ -1493,39 +1528,132 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ------------------------------------------------------------------- PETS
+  // Cada pet tem CORPO PRÓPRIO (não é o mesmo boneco repintado): o tipo sai de
+  // palavras do id/nome/descrição. Todos ficam menores que um herói e com
+  // cabeça grande — leitura de "bichinho" mesmo a 40 px.
+  var PET_KIND = [
+    ['dragao', /drag[aã]o|dragonete|brasinha|emberling|drake|wyrm|lagart/i],
+    ['planta', /planta|vaso|vinha|bocarra|snapvine|carn[íi]vora|flor|raiz|broto/i],
+    ['ave', /[aá]guia|falc[aã]o|ave|p[aá]ssaro|hawk|falcon|rasga-ar|asa|pena/i],
+    ['gota', /gota|borbulha|bolha|dewling|orvalho|drop|bubble/i],
+    ['caco', /caco|estilha|cristal|shard|lasca|caco vivo|heartshard/i],
+    ['seixo', /seixo|pedr|stone|lodestone|rocha|guia/i]
+  ];
+  function petKindOf(petId, pd) {
+    var s = petId + ' ' + ((pd && pd.name) || '') + ' ' + ((pd && pd.description) || '');
+    for (var i = 0; i < PET_KIND.length; i++) if (PET_KIND[i][1].test(s)) return PET_KIND[i][0];
+    if (pd && pd.element === 'ar') return 'ave';
+    if (pd && pd.element === 'agua') return 'gota';
+    if (pd && pd.element === 'terra') return 'planta';
+    if (pd && pd.element === 'fogo') return 'dragao';
+    return 'seixo';
+  }
   function paintPet(ctx, petId, pd, cfg) {
-    var p = cfg.pal, rd = rng(petId), i;
-    var kind = (pd && pd.behavior) || '';
-    var s = petId + ' ' + ((pd && pd.name) || '');
-    ctx.save(); ctx.scale(0.72, 0.72);
-    // corpinho comum: bola fofa com patinhas
-    part(ctx, Pel(-9, -6, 5, 4), sh(p.main, -0.2), { k: 0.2, lw: 0.9 });
-    part(ctx, Pel(10, -6, 5, 4), sh(p.main, -0.1), { k: 0.2, lw: 0.9 });
-    part(ctx, Pblob([-19, -20, -14, -38, 0, -44, 15, -38, 20, -20, 12, -6, -12, -6]),
-         p.main, { k: 0.24, hi: 0.16 });
-    // asas / barbatanas conforme o tema
-    if (/drag|fogo|brasa|chama|asa|aguia|águia|ave|vento/i.test(s) || p.elId === 'fogo' || p.elId === 'ar') {
-      part(ctx, Ppoly([-16, -34, -34, -44, -30, -24]), sh(p.main, 0.1), { k: 0.22, lw: 0.9 });
-      part(ctx, Ppoly([16, -34, 34, -44, 30, -24]), sh(p.main, 0.16), { k: 0.22, lw: 0.9 });
-    } else if (/planta|raiz|flor|semente/i.test(s) || p.elId === 'terra') {
-      part(ctx, Ppoly([-4, -42, -12, -56, 2, -50]), mx(p.main, '#5a8a32', 0.6), { k: 0.22, lw: 0.9 });
-      part(ctx, Ppoly([4, -42, 14, -54, 4, -50]), mx(p.main, '#5a8a32', 0.4), { k: 0.22, lw: 0.9 });
-    } else {
-      part(ctx, Ppoly([-18, -26, -32, -22, -20, -14]), sh(p.main, 0.08), { k: 0.22, lw: 0.9 });
-      part(ctx, Ppoly([18, -26, 32, -22, 20, -14]), sh(p.main, 0.14), { k: 0.22, lw: 0.9 });
+    var p = cfg.pal, i;
+    var kind = petKindOf(petId, pd);
+    var belly = sh(p.main, 0.36);
+    ctx.save(); ctx.scale(0.74, 0.74);
+
+    if (kind === 'dragao') {
+      part(ctx, Pcap(-2, -14, 6, -26, -6, 4), sh(p.main, -0.16), { k: 0.2, lw: 0.9 });      // cauda
+      part(ctx, Ppoly([-26, -10, -38, -14, -30, -2]), sh(p.main, 0.14), { k: 0.2, lw: 0.85 });
+      part(ctx, Pel(-8, -5, 5, 4), sh(p.main, -0.2), { k: 0.2, lw: 0.9 });                  // pés
+      part(ctx, Pel(9, -5, 5, 4), sh(p.main, -0.08), { k: 0.2, lw: 0.9 });
+      part(ctx, Ppoly([-12, -30, -34, -46, -26, -20]), sh(p.main, 0.12), { k: 0.22, lw: 0.9 });  // asas
+      part(ctx, Ppoly([12, -30, 34, -46, 26, -20]), sh(p.main, 0.2), { k: 0.22, lw: 0.9 });
+      part(ctx, Pel(0, -20, 15, 14), p.main, { k: 0.24, hi: 0.14 });
+      part(ctx, Pel(1, -17, 8.5, 8), belly, { k: 0.14, lw: 0.85 });
+      for (i = 0; i < 3; i++) {                                                              // crista
+        part(ctx, Ppoly([-4 + i * 5, -32 - i, -2 + i * 5, -42 - i * 2, 2 + i * 5, -32 - i]),
+             sh(p.accent, -0.1), { k: 0.18, lw: 0.8 });
+      }
+      part(ctx, Pel(4, -38, 13, 12), p.main, { k: 0.22, hi: 0.16 });                         // cabeça
+      part(ctx, Pel(14, -35, 7, 5.5, 0.15), sh(p.main, 0.1), { k: 0.18, lw: 0.85 });         // focinho
+      part(ctx, Pel(18, -36, 1.4, 1.2), p.dark, { flat: true, noline: true });
+      part(ctx, Ppoly([-4, -46, -8, -58, 3, -49]), sh(p.main, -0.14), { k: 0.2, lw: 0.85 }); // chifres
+      part(ctx, Ppoly([7, -47, 11, -58, 12, -46]), sh(p.main, -0.08), { k: 0.2, lw: 0.85 });
+      critterEyes(ctx, 5, -40, 4.4, 2, 6);
+
+    } else if (kind === 'planta') {
+      part(ctx, tag(function (g) {                                                           // vaso rachado
+        g.beginPath(); g.moveTo(-17, -2); g.lineTo(-13, -22); g.lineTo(13, -22);
+        g.lineTo(17, -2); g.closePath();
+      }, 0, -12, 18), mx('#a4623c', p.dark, 0.24), { k: 0.24, hi: 0.1 });
+      part(ctx, Prr(0, -23, 34, 6, 2), mx('#b56f45', p.dark, 0.2), { k: 0.22, lw: 0.9 });
+      stroke(ctx, [-4, -20, -1, -12, -5, -4], sh('#7a4326', -0.2), 1.1, true);               // racho
+      part(ctx, Pcap(0, -22, 5.5, 2, -46, 4.6), mx(p.main, '#4f8a34', 0.55), { k: 0.24 });   // caule
+      part(ctx, Ppoly([-4, -34, -22, -42, -6, -28]), mx(p.main, '#4f8a34', 0.4), { k: 0.22, lw: 0.9 });
+      part(ctx, Ppoly([6, -38, 24, -44, 8, -32]), mx(p.main, '#4f8a34', 0.3), { k: 0.22, lw: 0.9 });
+      part(ctx, tag(function (g) {                                                           // cabeça-boca
+        g.beginPath(); g.moveTo(2, -46); g.quadraticCurveTo(-19, -54, -16, -66);
+        g.quadraticCurveTo(-6, -78, 6, -76); g.quadraticCurveTo(21, -70, 18, -55);
+        g.quadraticCurveTo(13, -46, 2, -46); g.closePath();
+      }, 1, -60, 19), p.main, { k: 0.24, hi: 0.14 });
+      for (i = 0; i < 4; i++) {
+        part(ctx, Ppoly([-13 + i * 8, -51, -10 + i * 8, -44, -6 + i * 8, -51]),
+             '#f6efdd', { k: 0.12, lw: 0.7 });
+      }
+      critterEyes(ctx, 1, -64, 4.6, 2, 7.4, p.dark);
+
+    } else if (kind === 'ave') {
+      part(ctx, Pcap(-4, -3, 2.6, -6, -18, 2.2), '#e8b23c', { k: 0.18, lw: 0.8 });
+      part(ctx, Pcap(6, -3, 2.6, 5, -18, 2.2), '#e8b23c', { k: 0.18, lw: 0.8 });
+      for (i = 0; i < 3; i++) {
+        part(ctx, Ppoly([-12, -26, -30 - i * 4, -30 - i * 6, -13, -21 + i * 2]),
+             i % 2 ? sh(p.main, -0.12) : p.main, { k: 0.22, lw: 0.9 });
+      }
+      part(ctx, Pel(0, -26, 16, 17, -0.12), p.main, { k: 0.24, hi: 0.14 });
+      part(ctx, Pel(4, -23, 9, 10), belly, { k: 0.14, lw: 0.85 });
+      part(ctx, Pel(-3, -30, 11, 8.5, -0.55), sh(p.main, -0.12), { k: 0.22 });               // asa
+      part(ctx, Pfeather(-14, -40, 13, -0.9), sh(p.main, 0.24), { k: 0.18, lw: 0.85 });
+      part(ctx, Pel(10, -42, 10, 9.4), p.main, { k: 0.22, hi: 0.16 });
+      part(ctx, Ppoly([17, -44, 30, -40, 17, -37]), '#e8b23c', { k: 0.22, lw: 0.9 });        // bico
+      critterEyes(ctx, 11, -44, 4, 2, 5.2, p.dark);
+
+    } else if (kind === 'gota') {
+      glow(ctx, 0, -24, 30, p.accent, 0.28);
+      part(ctx, Pel(0, -3, 17, 4.6), rgba(p.dark, 0.4), { flat: true, noline: true });
+      part(ctx, tag(function (g) {                                                           // gota grande
+        g.beginPath(); g.moveTo(0, -56); g.quadraticCurveTo(20, -34, 20, -20);
+        g.quadraticCurveTo(20, -3, 0, -3); g.quadraticCurveTo(-20, -3, -20, -20);
+        g.quadraticCurveTo(-20, -34, 0, -56); g.closePath();
+      }, 0, -24, 22), mx(p.main, '#ffffff', 0.14), { k: 0.2, hi: 0.2 });
+      part(ctx, Pel(-7, -32, 4.6, 7, -0.5), 'rgba(255,255,255,0.72)', { flat: true, noline: true });
+      part(ctx, Pel(11, -14, 3.4, 3, 0), rgba(p.accent, 0.6), { flat: true, noline: true });
+      critterEyes(ctx, 1, -26, 5.4, 2, 8, p.dark);
+      stroke(ctx, [-5, -15, 1, -11, 7, -15], sh(p.main, -0.4), 1, true);
+
+    } else if (kind === 'caco') {
+      glow(ctx, 0, -28, 32, p.accent, 0.34);
+      part(ctx, Pel(0, -3, 15, 4.4), rgba(p.dark, 0.38), { flat: true, noline: true });
+      part(ctx, Ppoly([-13, -8, -17, -34, -3, -56, 12, -36, 9, -8]), p.main, { k: 0.28, hi: 0.16 });
+      part(ctx, Ppoly([-3, -56, 12, -36, 9, -8, 2, -10]), sh(p.main, -0.16), { flat: true, lw: 0.9 });
+      part(ctx, Ppoly([-16, -22, -26, -32, -19, -14]), sh(p.main, 0.18), { k: 0.24, lw: 0.85 });
+      part(ctx, Ppoly([12, -28, 23, -38, 15, -18]), sh(p.main, 0.1), { k: 0.24, lw: 0.85 });
+      critterEyes(ctx, -1, -28, 4.8, 2, 7, p.dark);
+      part(ctx, Pel(-4, -46, 2.2, 3.2, 0.3), 'rgba(255,255,255,0.7)', { flat: true, noline: true });
+
+    } else {  // seixo — pedrinha redonda que flutua um pouco
+      part(ctx, Pel(0, -2, 15, 4.4), rgba(p.dark, 0.42), { flat: true, noline: true });
+      part(ctx, Pblob([-18, -18, -14, -34, 0, -40, 15, -33, 18, -17, 10, -8, -10, -8]),
+           p.main, { k: 0.26, hi: 0.14 });
+      part(ctx, Pel(-6, -30, 5.4, 3.4, -0.4), sh(p.main, 0.22), { k: 0.12, lw: 0.8 });
+      part(ctx, Pel(9, -14, 3.4, 2.4, 0.5), sh(p.main, -0.18), { k: 0.12, lw: 0.8 });
+      for (i = 0; i < 2; i++) {                                                              // pedrinhas orbitando
+        part(ctx, Pshard(-22 + i * 44, -30 - i * 8, 5, petId + i), sh(p.main, i ? 0.1 : -0.1),
+             { k: 0.24, lw: 0.85 });
+      }
+      critterEyes(ctx, 1, -24, 5, 2, 7.6, p.dark);
+      stroke(ctx, [-4, -14, 1, -11, 6, -14], sh(p.main, -0.42), 1, true);
     }
-    // orelhinhas
-    part(ctx, Ppoly([-11, -40, -15, -52, -3, -44]), sh(p.main, -0.06), { k: 0.22, lw: 0.9 });
-    part(ctx, Ppoly([11, -40, 16, -52, 4, -44]), sh(p.main, -0.02), { k: 0.22, lw: 0.9 });
-    critterEyes(ctx, 1, -28, 5.2, 2, 8);
-    stroke(ctx, [-4, -18, 1, -14, 7, -18], sh(p.main, -0.44), 1, true);
-    part(ctx, Pel(1, -20, 2.4, 1.8), sh(p.main, -0.4), { k: 0.14, lw: 0.7 });
+
+    // selo elemental — sempre acima da cabeça, mesmo lugar em todos os pets
     if (p.elId && p.elId !== 'neutro') {
       var ei = p.el;
-      if (p.elId === 'fogo') part(ctx, Pflame(0, -48, 4.4, 12, 0.1), ei.glow, { k: 0.14, lw: 0.8, line: lineOf(ei.c) });
-      else if (p.elId === 'agua') part(ctx, Pdrop(0, -50, 3.6), ei.glow, { k: 0.16, lw: 0.8, line: lineOf(ei.deep) });
-      else if (p.elId === 'terra') part(ctx, Pshard(0, -48, 5, 'pe'), mx(ei.c, '#8a7a52', 0.4), { k: 0.22, lw: 0.85 });
-      else if (p.elId === 'ar') part(ctx, Pfeather(0, -48, 10, -1.4), ei.glow, { k: 0.16, lw: 0.8, line: lineOf(ei.deep) });
+      if (p.elId === 'fogo') part(ctx, Pflame(-16, -56, 4.4, 12, 0.1), ei.glow, { k: 0.14, lw: 0.8, line: lineOf(ei.c) });
+      else if (p.elId === 'agua') part(ctx, Pdrop(-16, -58, 3.8), ei.glow, { k: 0.16, lw: 0.8, line: lineOf(ei.deep) });
+      else if (p.elId === 'terra') part(ctx, Pshard(-16, -56, 5, 'pe'), mx(ei.c, '#8a7a52', 0.4), { k: 0.22, lw: 0.85 });
+      else if (p.elId === 'ar') part(ctx, Pfeather(-16, -56, 10, -1.4), ei.glow, { k: 0.16, lw: 0.8, line: lineOf(ei.deep) });
     }
     ctx.restore();
   }
@@ -2325,6 +2453,66 @@ var JOGO = (typeof window !== 'undefined')
     return c;
   }
 
+  // ------------------------------------------------- PEDRAS DE FORJA (§9-B)
+  // Uma silhueta por elemento, para o jogador contar o estoque de relance:
+  // fogo = brasa em chama · água = lágrima · terra = grão de rocha ·
+  // ar = bolha assobiando · neutro = lasca de lousa (serve em qualquer forja).
+  function stoneIconCanvas(stoneId, size) {
+    var c = mkCanvas(size, size), g = c.getContext('2d');
+    var sd = (JOGO.DATA && JOGO.DATA.stones && JOGO.DATA.stones[stoneId]) || null;
+    var el = (sd && sd.element) || (/ember|fogo/.test(stoneId) ? 'fogo'
+            : /tear|agua/.test(stoneId) ? 'agua' : /root|terra/.test(stoneId) ? 'terra'
+            : /breath|\bar\b/.test(stoneId) ? 'ar' : 'neutro');
+    var ei = elemInfo(ELEM[el] ? el : 'neutro');
+    var cx = size / 2, cy = size / 2, r = size * 0.3;
+    setScale(RES); g.save(); g.scale(RES, RES);
+    iconFrame(g, size, ei.c, null);
+    glow(g, cx, cy, r * 1.7, ei.glow, 0.42);
+    // corpo mineral: cristal facetado, sempre a mesma leitura de "pedra"
+    part(g, Ppoly([cx - r * 0.9, cy + r * 0.5, cx - r * 0.66, cy - r * 0.55,
+                   cx, cy - r * 1.05, cx + r * 0.72, cy - r * 0.5,
+                   cx + r * 0.86, cy + r * 0.55, cx, cy + r * 1.02]),
+         ei.c, { k: 0.3, hi: 0.2, lw: 1.1, line: lineOf(ei.deep) });
+    part(g, Ppoly([cx, cy - r * 1.05, cx + r * 0.72, cy - r * 0.5,
+                   cx + r * 0.86, cy + r * 0.55, cx, cy + r * 1.02]),
+         sh(ei.deep, 0.12), { flat: true, lw: 0.8, line: rgba(ei.deep, 0.7) });
+    part(g, Ppoly([cx - r * 0.4, cy - r * 0.3, cx - r * 0.06, cy - r * 0.72,
+                   cx + r * 0.1, cy - r * 0.2, cx - r * 0.2, cy + r * 0.16]),
+         sh(ei.glow, 0.24), { flat: true, noline: true });
+    // marca do elemento flutuando sobre o cristal
+    if (el === 'fogo') part(g, Pflame(cx, cy - r * 0.35, r * 0.34, r * 1.0, 0), ei.glow, { k: 0.16, lw: 0.8, line: lineOf(ei.deep) });
+    else if (el === 'agua') part(g, Pdrop(cx, cy - r * 0.25, r * 0.36), ei.glow, { k: 0.18, lw: 0.8, line: lineOf(ei.deep) });
+    else if (el === 'terra') part(g, Pel(cx, cy + r * 0.05, r * 0.3, r * 0.26), sh(ei.glow, -0.05), { k: 0.2, lw: 0.8, line: lineOf(ei.deep) });
+    else if (el === 'ar') part(g, Pfeather(cx - r * 0.1, cy - r * 0.1, r * 0.9, -0.9), ei.glow, { k: 0.16, lw: 0.8, line: lineOf(ei.deep) });
+    else {
+      stroke(g, [cx - r * 0.42, cy + r * 0.2, cx + r * 0.06, cy - r * 0.34, cx + r * 0.44, cy + r * 0.14],
+             rgba('#ffffff', 0.8), 1.2, true);
+    }
+    g.restore();
+    c.__anchor = [0.5, 0.5];
+    return c;
+  }
+
+  // -------------------------------------------------- ESTRELAS DE CLASSE (§9-B)
+  // filled = conquistada (dourada e brilhando) · vazia = contorno apagado.
+  function starIconCanvas(filled, size, col) {
+    var c = mkCanvas(size, size), g = c.getContext('2d');
+    var on = !!filled;
+    var base = col || (on ? '#ffc44d' : '#4a5361');
+    var cx = size / 2, cy = size / 2, R = size * 0.42;
+    setScale(RES); g.save(); g.scale(RES, RES);
+    if (on) glow(g, cx, cy, R * 1.7, '#ffd98a', 0.5);
+    part(g, Pstar(cx, cy, R, 5, 0.44), base, { k: on ? 0.26 : 0.1, hi: on ? 0.3 : 0,
+                                               lw: 1.2, line: on ? '#7a4a10' : '#2b323c' });
+    if (on) {
+      part(g, Pel(cx - R * 0.24, cy - R * 0.3, R * 0.2, R * 0.14, -0.5),
+           'rgba(255,255,255,0.85)', { flat: true, noline: true });
+    }
+    g.restore();
+    c.__anchor = [0.5, 0.5];
+    return c;
+  }
+
   // ==========================================================================
   // CACHE + API PÚBLICA
   // ==========================================================================
@@ -2429,7 +2617,25 @@ var JOGO = (typeof window !== 'undefined')
     size = size || 48;
     return cached('event:' + kind + ':' + size, function () { return tileEventCanvas(kind, size); });
   };
-  // carta de personagem (recompensa de chefe)
+  // ---- ADENDO v2.1: pedras de forja, cartas de classe e estrelas
+  A.stoneIcon = function (stoneId, size) {
+    size = size || 56;
+    return cached('stone:' + stoneId + ':' + size, function () { return stoneIconCanvas(stoneId, size); });
+  };
+  A.starIcon = function (filled, size, col) {
+    size = size || 28;
+    return cached('star:' + (filled ? 1 : 0) + ':' + size + ':' + (col || '-'), function () {
+      return starIconCanvas(filled, size, col);
+    });
+  };
+  A.stoneIds = function () {
+    var d = (JOGO.DATA && JOGO.DATA.stones) || null, o = [], k;
+    if (d) { for (k in d) o.push(k); }
+    return o.length ? o : ['stone-ember', 'stone-tear', 'stone-root', 'stone-breath', 'stone-slate'];
+  };
+
+  // carta de personagem (recompensa de chefe). `Art.cardIcon` é o nome do
+  // adendo §9-B; `Art.classCard` continua valendo (mesma função).
   A.classCard = function (classId, w, h) {
     w = w || 132; h = h || 186;
     return cached('card:' + classId + ':' + w + ':' + h, function () {

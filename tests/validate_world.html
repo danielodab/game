@@ -292,7 +292,54 @@
     if (m.dungeonId !== null && m.dungeonId !== undefined) {
       check(L + ': dungeonId conhecido', inList(m.dungeonId, DUNGEON_IDS), String(m.dungeonId));
     }
+
+    // ---- PEDRAS DE FORJA (adendo v2.1) ------------------------------------
+    if (m.summonOnly) {
+      check(L + ' (invocação): stoneDrop null — invocação não vira minério',
+        m.stoneDrop === null, JSON.stringify(m.stoneDrop));
+    } else {
+      var sd = m.stoneDrop;
+      if (check(L + ': tem stoneDrop (objeto)', !!sd && typeof sd === 'object', String(sd))) {
+        check(L + ' stoneDrop: chance entre 0 e 1',
+          typeof sd.chance === 'number' && sd.chance > 0 && sd.chance <= 1, String(sd.chance));
+        check(L + ' stoneDrop: min inteiro ≥ 1',
+          typeof sd.min === 'number' && sd.min >= 1 && sd.min === Math.floor(sd.min), String(sd.min));
+        check(L + ' stoneDrop: max inteiro ≥ min',
+          typeof sd.max === 'number' && sd.max >= sd.min && sd.max === Math.floor(sd.max),
+          sd.min + '..' + sd.max);
+        check(L + ' stoneDrop: sem campo de elemento (sai do element do monstro)',
+          !has(sd, 'element') && !has(sd, 'stoneId'));
+        // a pedra derrubada é a do PRÓPRIO elemento: precisa existir em DATA.stones
+        if (D.stones) {
+          var sid = keys(D.stones).filter(function (s) { return D.stones[s].element === m.element; })[0];
+          check(L + ' stoneDrop: existe pedra de ' + m.element + ' em DATA.stones (Criativo Fusão)', !!sid, sid || '—');
+        }
+        if (m.boss) {
+          check(L + ' (chefe) stoneDrop: cai sempre (chance 1)', sd.chance === 1, String(sd.chance));
+          check(L + ' (chefe) stoneDrop: mínimo generoso (≥ 6)', sd.min >= 6, String(sd.min));
+        } else {
+          check(L + ' stoneDrop: comum não derruba mais que um chefe raso (max ≤ 6)', sd.max <= 6, String(sd.max));
+        }
+      }
+    }
   });
+
+  // --- as 5 pedras existem, uma por elemento, e todas têm de onde cair -------
+  (function () {
+    if (!check('DATA.stones existe (items.js, Criativo Fusão)', !!D.stones)) { return; }
+    var byEl = {};
+    keys(D.stones).forEach(function (s) { byEl[D.stones[s].element] = s; });
+    check('DATA.stones tem 5 pedras', keys(D.stones).length === 5, keys(D.stones).length + '');
+    ELEMENTS.forEach(function (e) {
+      check('DATA.stones: existe pedra de ' + e, !!byEl[e]);
+      var sources = monIds.filter(function (i) {
+        return MON[i].element === e && !MON[i].summonOnly && MON[i].stoneDrop;
+      });
+      check('pedra de ' + e + ': tem ≥ 2 monstros que a derrubam', sources.length >= 2, sources.length + ' fontes');
+      var bossSrc = sources.filter(function (i) { return MON[i].boss; });
+      check('pedra de ' + e + ': tem ≥ 1 CHEFE que a derruba (farm confiável)', bossSrc.length >= 1, bossSrc.join(', '));
+    });
+  })();
 
   // chefes com hp crescente por ordem de calabouço
   // (verificado depois de ler DATA.dungeons, mais abaixo)
@@ -367,7 +414,9 @@
       lay.forEach(function (row) {
         for (var i = 0; i < row.length; i++) { counts[row[i]] = (counts[row[i]] || 0) + 1; }
       });
-      check(RL + ': ≥ 3 spawns de herói (P)', (counts.P || 0) >= 3, 'P=' + (counts.P || 0));
+      // adendo v2.1: o grupo caiu para 1–2 heróis, então ≥ 2 spawns bastam
+      // (os layouts trazem 4; sobra é ignorada pela engine).
+      check(RL + ': ≥ 2 spawns de herói (P) — grupo de 1 a 2', (counts.P || 0) >= 2, 'P=' + (counts.P || 0));
       check(RL + ': usa obstáculo BAIXO "=" (novidade tática)', (counts['='] || 0) >= 6, '= ' + (counts['='] || 0));
       check(RL + ': só caracteres válidos',
         keys(counts).every(function (c) { return '.,#=~P'.indexOf(c) !== -1 || /^[a-z]$/.test(c); }),
@@ -452,39 +501,126 @@
     check('chefes com vida crescendo por calabouço', growing, hps.join(' → '));
   })();
 
-  // --- CARTAS: nenhuma entrada INERTE ------------------------------------
-  // Uma entrada é inerte se a classe tem dropWeight 0 (já começa liberada) ou
-  // se `minDungeon` é mais fundo que a `order` do calabouço: nesses casos a
-  // carta ocupa peso na tabela e nunca cai. Regras de DATA.cards (Classes).
+  // --- CARTAS ACUMULATIVAS (adendo v2.1): nenhuma entrada INERTE ------------
+  // Regras de DATA.cards (progression.js, Criativo Classes). Uma entrada de
+  // `cardDrops` é INERTE — ocupa peso na tabela e nunca cai — se:
+  //   · a classe não existe em DATA.classes/DATA.cards;
+  //   · o `dropWeight` da classe é 0;
+  //   · o `minDungeon` dela (ÍNDICE 0-based do calabouço mais raso) ainda não
+  //     alcançou este calabouço, isto é `minDungeon > order - 1`.
+  // Cartas repetidas nunca são lixo: o excedente ao `unlockCost` vira estrela,
+  // então as classes iniciais também têm peso — só não desbloqueiam nada.
   (function () {
     var CARDS = D.cards;
     check('DATA.cards existe (progression.js, Criativo Classes)', !!CARDS);
     if (!CARDS) { return; }
 
+    // esquema do adendo: custo acumulativo + trilha de estrelas
+    CLASS_IDS.forEach(function (c) {
+      if (!check('DATA.cards.' + c + ' existe', has(CARDS, c))) { return; }
+      var card = CARDS[c];
+      check('DATA.cards.' + c + ': unlockCost numérico ≥ 0',
+        typeof card.unlockCost === 'number' && card.unlockCost >= 0, String(card.unlockCost));
+      check('DATA.cards.' + c + ': dropWeight > 0 (nenhuma carta inútil)',
+        typeof card.dropWeight === 'number' && card.dropWeight > 0, String(card.dropWeight));
+      check('DATA.cards.' + c + ': minDungeon é índice válido (0..5)',
+        typeof card.minDungeon === 'number' && card.minDungeon >= 0 && card.minDungeon <= 5,
+        String(card.minDungeon));
+      check('DATA.cards.' + c + ': starCosts com 5 degraus crescentes',
+        Array.isArray(card.starCosts) && card.starCosts.length === 5 &&
+        card.starCosts.every(function (v, i) { return typeof v === 'number' && (i === 0 || v > card.starCosts[i - 1]); }),
+        JSON.stringify(card.starCosts));
+    });
+    // custos fixados pelo usuário no adendo 9-B
+    var EXPECTED_COST = { sumo: 0, curandeira: 0, invocador: 10, bruxo: 10, espadachim: 20, arqueiro: 25 };
+    for (var cid in EXPECTED_COST) {
+      if (!EXPECTED_COST.hasOwnProperty(cid)) { continue; }
+      check('custo de desbloqueio de ' + cid + ' = ' + EXPECTED_COST[cid],
+        has(CARDS, cid) && CARDS[cid].unlockCost === EXPECTED_COST[cid],
+        has(CARDS, cid) ? String(CARDS[cid].unlockCost) : 'ausente');
+    }
+    check('exatamente 2 classes iniciais (unlockCost 0): sumo e curandeira',
+      CLASS_IDS.filter(function (c) { return has(CARDS, c) && CARDS[c].unlockCost === 0; }).sort().join(',') ===
+      'curandeira,sumo');
+
+    // ---- nenhuma entrada inerte, calabouço a calabouço ----
     DG.forEach(function (d) {
-      var obtainable = 0;
+      var obtainable = 0, unlockers = 0, seen = {};
       (d.cardDrops || []).forEach(function (c) {
         var tag = 'calabouço ' + d.id + ' carta ' + c.classId;
+        check(tag + ': sem entrada duplicada', !seen[c.classId]); seen[c.classId] = true;
         if (!check(tag + ': existe em DATA.cards', has(CARDS, c.classId))) { return; }
         var card = CARDS[c.classId];
-        var wOk = check(tag + ': dropWeight > 0 (não é classe já liberada)', card.dropWeight > 0,
+        var wOk = check(tag + ': dropWeight > 0 em DATA.cards', card.dropWeight > 0,
           'dropWeight=' + card.dropWeight);
-        var mOk = check(tag + ': minDungeon (' + card.minDungeon + ') ≤ order (' + d.order + ')',
-          card.minDungeon <= d.order);
-        if (wOk && mOk) { obtainable++; }
+        var mOk = check(tag + ': minDungeon (' + card.minDungeon + ') alcança este calabouço (order ' + d.order + ')',
+          card.minDungeon <= d.order - 1);
+        if (wOk && mOk) {
+          obtainable++;
+          if (card.unlockCost > 0) { unlockers++; }
+        }
       });
       check('calabouço ' + d.id + ': o chefe tem ≥ 1 carta realmente obtenível', obtainable >= 1,
         obtainable + ' obteníveis');
+      // do 2º calabouço em diante sempre existe carta que LIBERA alguma classe
+      if (d.order >= 2) {
+        check('calabouço ' + d.id + ': ≥ 1 carta de classe ainda trancada', unlockers >= 1, unlockers + '');
+      }
+      var sum = (d.cardDrops || []).reduce(function (a, c) { return a + (c.weight || 0); }, 0);
+      check('calabouço ' + d.id + ': pesos de carta somam 100 (leem-se como %)', sum === 100, 'soma=' + sum);
     });
 
-    // escada: a classe mais rara (bruxo) só nos calabouços avançados
-    var badLadder = [];
+    // ---- escada: quanto mais cara a classe, mais fundo ela começa a cair ----
+    var firstSeen = {};
     DG.forEach(function (d) {
       (d.cardDrops || []).forEach(function (c) {
-        if (c.classId === 'bruxo' && d.order < 4) { badLadder.push(d.id); }
+        if (firstSeen[c.classId] === undefined) { firstSeen[c.classId] = d.order; }
       });
     });
-    check('carta de bruxo (a mais rara) só a partir do 4º calabouço', badLadder.length === 0, badLadder.join(', '));
+    check('arqueiro (25 cartas, o mais caro) só a partir do 5º calabouço',
+      firstSeen.arqueiro >= 5, 'estreia no ' + firstSeen.arqueiro);
+    check('espadachim (20 cartas) só a partir do 4º calabouço',
+      firstSeen.espadachim >= 4, 'estreia no ' + firstSeen.espadachim);
+    check('invocador (10 cartas) colecionável cedo (até o 2º calabouço)',
+      firstSeen.invocador <= 2, 'estreia no ' + firstSeen.invocador);
+    check('bruxo (10 cartas) colecionável no meio (até o 3º calabouço)',
+      firstSeen.bruxo <= 3, 'estreia no ' + firstSeen.bruxo);
+
+    // O troféu da coleção só fica mais provável quanto mais fundo se desce.
+    (function () {
+      var series = DG.map(function (d) {
+        var e = (d.cardDrops || []).filter(function (x) { return x.classId === 'arqueiro'; })[0];
+        return e ? e.weight : 0;
+      }).filter(function (w) { return w > 0; });
+      check('peso do arqueiro (o troféu) só cresce nos calabouços fundos',
+        series.every(function (w, i) { return i === 0 || w >= series[i - 1]; }), series.join(' → '));
+    })();
+    // Nos calabouços fundos, a carta MAIS provável é sempre de classe cara
+    // (unlockCost ≥ 20): é o que justifica repetir a descida.
+    DG.forEach(function (d) {
+      if (d.order < 4) { return; }
+      var top = 0;
+      (d.cardDrops || []).forEach(function (c) { if (c.weight > top) { top = c.weight; } });
+      var leaders = (d.cardDrops || []).filter(function (c) { return c.weight === top; });
+      check('calabouço ' + d.id + ': a carta mais provável é de classe cara (custo ≥ 20)',
+        leaders.every(function (c) { return has(CARDS, c.classId) && CARDS[c.classId].unlockCost >= 20; }),
+        leaders.map(function (c) { return c.classId + '=' + c.weight; }).join(', '));
+    });
+    // nenhuma entrada simbólica: peso mínimo de 5 em qualquer calabouço
+    DG.forEach(function (d) {
+      (d.cardDrops || []).forEach(function (c) {
+        check('calabouço ' + d.id + ' carta ' + c.classId + ': peso ≥ 5 (nada de entrada simbólica)',
+          c.weight >= 5, String(c.weight));
+      });
+    });
+    // o último calabouço espelha exatamente os dropWeight de DATA.cards
+    (function () {
+      var last = DG[DG.length - 1] || {};
+      var ok = (last.cardDrops || []).every(function (c) { return CARDS[c.classId].dropWeight === c.weight; }) &&
+               (last.cardDrops || []).length === CLASS_IDS.length;
+      check('último calabouço: cardDrops espelha os dropWeight de DATA.cards (todas as 6 classes)', ok,
+        (last.cardDrops || []).map(function (c) { return c.classId + '=' + c.weight; }).join(' '));
+    })();
 
     // toda classe sorteável precisa cair em algum lugar
     var listed = {};
@@ -493,9 +629,49 @@
     check('toda classe com dropWeight > 0 tem carta em algum calabouço',
       droppable.every(function (c) { return listed[c]; }),
       droppable.filter(function (c) { return !listed[c]; }).join(', '));
-    check('nenhuma classe de dropWeight 0 aparece em cardDrops',
-      CLASS_IDS.filter(function (c) { return has(CARDS, c) && CARDS[c].dropWeight === 0; })
-        .every(function (c) { return !listed[c]; }));
+    check('nenhuma classe fora do elenco aparece em cardDrops',
+      keys(listed).every(function (c) { return inList(c, CLASS_IDS); }), keys(listed).join(', '));
+
+    // ---- DATA.stars: a trilha de 5 estrelas do adendo ----
+    if (check('DATA.stars existe (progression.js)', !!D.stars)) {
+      check('DATA.stars.max = 5', D.stars.max === 5, String(D.stars.max));
+      check('DATA.stars: 5 degraus de bônus', keys(D.stars.bonuses || {}).length === 5);
+      keys(D.stars.bonuses || {}).forEach(function (k) {
+        check('estrela ' + k + ': só bônus de stat conhecido',
+          keys(D.stars.bonuses[k]).every(function (s) { return inList(s, BUFF_STATS) || s === 'hp' || s === 'resists'; }),
+          keys(D.stars.bonuses[k]).join(','));
+      });
+    }
+  })();
+
+  // --- ECONOMIA DAS PEDRAS: um +10 custa 107 pedras (DATA.upgrade) ----------
+  // Estima o rendimento de UMA descida completa (3 salas) por calabouço, em
+  // pedras de todos os elementos somados, e cobra a escada: quanto mais fundo,
+  // mais paga. Sem isso, nada impede a Estufa render igual ao Coração.
+  (function () {
+    if (D.upgrade && Array.isArray(D.upgrade.stoneCost)) {
+      var total = D.upgrade.stoneCost.reduce(function (a, b) { return a + b; }, 0);
+      check('DATA.upgrade: levar um item ao +10 custa 107 pedras', total === 107, 'soma=' + total);
+    }
+    var yields = DG.map(function (d) {
+      var y = 0;
+      (d.rooms || []).forEach(function (r) {
+        keys(r.monsters || {}).forEach(function (c) {
+          var m = MON[r.monsters[c]];
+          if (!m || !m.stoneDrop) { return; }
+          // cada letra do layout pode aparecer várias vezes na sala
+          var n = 0;
+          r.layout.forEach(function (row) { for (var i = 0; i < row.length; i++) { if (row[i] === c) { n++; } } });
+          y += n * m.stoneDrop.chance * (m.stoneDrop.min + m.stoneDrop.max) / 2;
+        });
+      });
+      return Math.round(y);
+    });
+    check('rendimento de pedras cresce a cada calabouço',
+      yields.every(function (v, i) { return i === 0 || v > yields[i - 1]; }), yields.join(' → '));
+    check('um +10 (107 pedras) exige várias descidas mesmo no calabouço mais fundo',
+      yields[yields.length - 1] < 107, 'descida mais rica rende ~' + yields[yields.length - 1]);
+    check('a descida mais rasa já rende alguma coisa (≥ 10 pedras)', yields[0] >= 10, yields[0] + '');
   })();
 
   check('O Coração Partido muda de clima a cada 3 rodadas',

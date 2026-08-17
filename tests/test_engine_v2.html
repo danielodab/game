@@ -1878,6 +1878,59 @@
       }
     });
 
+    // ADENDO v2.1: o grupo é de 1 ou 2 heróis. Com 2, a fusão pode transformar
+    // o TIME INTEIRO numa única unidade — que não pode ser lida como derrota.
+    t('ADENDO v2.1: time de DOIS vira UMA unidade e a batalha continua', function () {
+      var st = fusionBattle('ar', 'agua', 10, 20);
+      var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+      var players = 0, i2, u2;
+      for (i2 = 0; i2 < st.units.length; i2++) {
+        if (st.units[i2].side === 'player') players++;
+      }
+      eq(players, 2, 'o time do jogador é exatamente a dupla');
+      F.declare(st, a.uid, b.uid);
+      drain();
+      E.endTurn(st);
+      var evs = drain();
+      eq(a.kind, 'fusion', 'a dupla virou uma unidade só');
+      ok(!b.alive && b.offBoard, 'B saiu do tabuleiro');
+      ok(!findEv(evs, 'battleEnd'), 'nenhum fim de batalha foi declarado');
+      eq(st.phase, 'playing', 'time inteiro fundido NÃO é derrota');
+      var core = 0;
+      for (i2 = 0; i2 < st.units.length; i2++) {
+        u2 = st.units[i2];
+        if (u2.alive && !u2.offBoard && u2.side === 'player' &&
+            u2.kind !== 'pet' && u2.kind !== 'summon') core++;
+      }
+      eq(core, 1, 'sobrou uma única unidade sustentando o lado');
+      // a rodada segue normalmente: a fusão volta a jogar com PA/PP cheios
+      toHero(st, 't-h1');
+      eq(st.phase, 'playing', 'ainda jogando na rodada seguinte');
+      eq(E.activeUnit(st).uid, a.uid, 'a fusão recebe o turno');
+      eq(a.pa, a.paMax, 'PA cheio (paBase+2)');
+      eq(a.pp, a.ppMax, 'PP cheio (ppBase+1)');
+      // e vence sozinha
+      var foe = byDef(st, 't-dummy');
+      foe.hp = 1;
+      foe.x = a.x + 1; foe.y = a.y;
+      ok(E.cast(st, a.uid, a.spells[0], foe.x, foe.y) === true, 'a fusão conjura');
+      ok(!foe.alive, 'inimigo abatido');
+      eq(st.phase, 'won', 'vitória com o time reduzido a uma unidade');
+    });
+
+    t('ADENDO v2.1: grupo SOLO (um herói) é uma batalha válida', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 3, [P()]);
+      var heroes = 0;
+      for (var i3 = 0; i3 < st.units.length; i3++) {
+        if (st.units[i3].side === 'player') heroes++;
+      }
+      eq(heroes, 1, 'um herói só (spawns P sobrando ignorados)');
+      eq(st.phase, 'playing', 'batalha começa normalmente');
+      var h = byHero(st, 't-h1');
+      ok(F.candidates(st, h.uid).length === 0, 'sem par: nada com que fundir');
+    });
+
     restoreBlends();   // devolve as misturas reais para o restante da suíte
 
     // ================================================== 12. PETS
@@ -2289,10 +2342,16 @@
     for (i = 0; i < D.dungeons.length; i++) {
       if (!TEST_IDS[D.dungeons[i].id]) realDungeons.push(D.dungeons[i]);
     }
-    var realParty = buildRealParty(1, null, null);
+    // ADENDO v2.1: o grupo do jogador é de 1 ou 2 heróis (não mais 3). O
+    // auto-play roda DUPLAS (o caso normal, e o único em que a fusão pode
+    // engolir o time inteiro) e também SOLO. As classes e os elementos giram
+    // por calabouço para que as 6 classes e os 4 caminhos elementais reais
+    // entrem em campo ao longo das 18 salas.
+    var AUTO_ELEMENTS = ['fogo', 'agua', 'terra', 'ar'];
+    var realParty = buildRealParty(1, null, null, 2, 0);
     // grupo veterano: nível 30, caminho elemental completo e pet — exercita os
     // feitiços elementais reais (marcas, armadilhas, cadeias, clima, esquiva).
-    var vetParty = buildRealParty(30, ['fogo', 'agua', 'terra'], true);
+    var vetParty = buildRealParty(30, AUTO_ELEMENTS, true, 2, 0);
 
     function realClassIds() {
       var ids = [];
@@ -2305,7 +2364,9 @@
       ids.sort();
       return ids;
     }
-    function buildRealParty(level, elements, withPet) {
+    // `size` = 1 ou 2 heróis (adendo v2.1); `offset` gira quais classes e
+    // elementos o grupo recebe, para cobrir todo o elenco ao longo das salas.
+    function buildRealParty(level, elements, withPet, size, offset) {
       var ids = realClassIds();
       if (ids.length < 1) return null;
       var petIds = [];
@@ -2316,18 +2377,20 @@
       petIds.sort();
       var tiers = (D.unlockTiers && D.unlockTiers.length)
         ? D.unlockTiers : [5, 10, 12, 15, 20, 30];
+      var off = offset || 0;
+      var count = Math.min(size || 2, ids.length);
       var party = [];
-      for (var n = 0; n < Math.min(3, ids.length); n++) {
-        var cls = D.classes[ids[n]];
-        var el = elements ? elements[n % elements.length] : 'neutro';
+      for (var n = 0; n < count; n++) {
+        var cls = D.classes[ids[(off + n) % ids.length]];
+        var el = elements ? elements[(off + n) % elements.length] : 'neutro';
         var spells = (cls.baseSpells || []).slice();
         var path = (cls.paths && cls.paths[el]) || [];
         for (var s = 0; s < path.length; s++) {
           if ((tiers[s] || 99) <= level) spells.push(path[s]);
         }
-        party.push({ heroId: 'real-h' + n, classId: ids[n], element: el,
+        party.push({ heroId: 'real-h' + n, classId: cls.id, element: el,
                      level: level, spells: spells,
-                     pet: (withPet && petIds.length) ? petIds[n % petIds.length] : null,
+                     pet: (withPet && petIds.length) ? petIds[(off + n) % petIds.length] : null,
                      items: {} });
       }
       return party;
@@ -2355,7 +2418,9 @@
       var totalRooms = 0;
       for (i = 0; i < realDungeons.length; i++) totalRooms += realDungeons[i].rooms.length;
       notes.push('AUTO-PLAY: ' + realDungeons.length + ' calabouços reais, ' +
-        totalRooms + ' salas, dois grupos (nível 1 neutro e nível 30 elemental com pet).');
+        totalRooms + ' salas × 3 grupos do adendo v2.1 (dupla nível 1 neutra, ' +
+        'dupla nível 30 elemental com pets e herói SOLO nível 15), com classes e ' +
+        'elementos girando por calabouço. Toda batalha precisa fechar sozinha.');
 
       t('integração: todo feitiço referenciado por classe/monstro/pet resolve em Engine.spell', function () {
         var missing = [], k, s, ids = realClassIds();
@@ -2422,16 +2487,79 @@
 
       for (var dd = 0; dd < realDungeons.length; dd++) {
         for (var rr = 0; rr < realDungeons[dd].rooms.length; rr++) {
-          (function (dungeonId, roomIdx) {
-            t('AUTO-PLAY IA×IA (nível 1): ' + dungeonId + ' sala ' + roomIdx, function () {
-              autoPlay(dungeonId, roomIdx, realParty);
+          (function (dungeonId, roomIdx, off) {
+            t('AUTO-PLAY IA×IA (dupla nível 1): ' + dungeonId + ' sala ' + roomIdx, function () {
+              autoPlay(dungeonId, roomIdx, buildRealParty(1, null, null, 2, off));
             });
-            t('AUTO-PLAY IA×IA (nível 30 + pet): ' + dungeonId + ' sala ' + roomIdx, function () {
-              autoPlay(dungeonId, roomIdx, vetParty);
+            t('AUTO-PLAY IA×IA (dupla nível 30 + pets): ' + dungeonId + ' sala ' + roomIdx, function () {
+              autoPlay(dungeonId, roomIdx, buildRealParty(30, AUTO_ELEMENTS, true, 2, off));
             });
-          })(realDungeons[dd].id, rr);
+            t('AUTO-PLAY IA×IA (herói SOLO nível 15): ' + dungeonId + ' sala ' + roomIdx, function () {
+              autoPlay(dungeonId, roomIdx, buildRealParty(15, AUTO_ELEMENTS, false, 1, off + 3));
+            });
+          })(realDungeons[dd].id, rr, dd * 2);
         }
       }
+
+      // ADENDO v2.1: a dupla que se funde vira UMA unidade — e isso não pode
+      // ser lido como derrota. Com dados reais, roda a batalha inteira em que
+      // o time do jogador é uma fusão desde o primeiro turno.
+      t('ADENDO v2.1: dupla REAL que se funde continua jogando (não é derrota)', function () {
+        var duo = buildRealParty(20, ['fogo', 'agua'], false, 2, 0);
+        eq(duo.length, 2, 'grupo de dois heróis');
+        E.events.length = 0;
+        var st = E.createBattle(realDungeons[0].id, 0, duo);
+        var a = byHero(st, 'real-h0'), b = byHero(st, 'real-h1');
+        ok(!!a && !!b, 'os dois heróis entraram');
+        // cola B em A (os spawns 'P' da sala podem não ser vizinhos)
+        var spot = null, DD = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+        for (var k = 0; k < DD.length && !spot; k++) {
+          var nx = a.x + DD[k][0], ny = a.y + DD[k][1];
+          if (nx >= 0 && ny >= 0 && nx < st.grid.w && ny < st.grid.h &&
+              st.grid.tiles[ny][nx].type === 'floor' && !E.unitAt(st, nx, ny)) {
+            spot = { x: nx, y: ny };
+          }
+        }
+        ok(!!spot, 'há célula livre colada em A');
+        b.x = spot.x; b.y = spot.y;
+        toHero(st, 'real-h0');
+        a.pa = Math.max(a.pa, 2);
+        ok(F.declare(st, a.uid, b.uid) === true, 'declarou a fusão');
+        E.endTurn(st);
+        eq(a.kind, 'fusion', 'a dupla virou uma unidade só');
+        ok(!b.alive && b.offBoard, 'B saiu do tabuleiro');
+        eq(st.phase, 'playing', 'time inteiro fundido NÃO é derrota');
+        // conta as unidades do jogador que sustentam o lado
+        var core = 0;
+        for (var i2 = 0; i2 < st.units.length; i2++) {
+          var u2 = st.units[i2];
+          if (u2.alive && !u2.offBoard && u2.side === 'player' &&
+              u2.kind !== 'pet' && u2.kind !== 'summon') core++;
+        }
+        eq(core, 1, 'o time do jogador é uma única unidade');
+        ok(a.spells.length > 0, 'a fusão real tem feitiços');
+        for (var s2 = 0; s2 < a.spells.length; s2++) {
+          ok(!!E.spell(a.spells[s2]), 'feitiço da fusão resolve: ' + a.spells[s2]);
+        }
+        // a batalha segue normalmente até o fim, com a IA no comando da fusão
+        var turns = 0;
+        while (st.phase === 'playing' && turns < 300) {
+          var u = E.activeUnit(st);
+          ok(!!u && u.alive, 'sempre há unidade ativa viva');
+          var plan = JOGO.AI.planTurn(st, u.uid);
+          for (var p = 0; p < plan.length && st.phase === 'playing'; p++) {
+            if (plan[p].action === 'move') E.move(st, u.uid, plan[p].x, plan[p].y);
+            else if (plan[p].action === 'cast') E.cast(st, u.uid, plan[p].spellId, plan[p].x, plan[p].y);
+            else break;
+          }
+          if (st.phase === 'playing') E.endTurn(st);
+          turns++;
+          E.events.length = 0;
+        }
+        ok(st.phase !== 'playing' || turns === 300, 'a batalha da fusão fecha');
+        ok(st.phase !== 'lost' || !a.alive,
+           'só perde se a fusão morrer de fato (phase=' + st.phase + ')');
+      });
     }
 
     function autoPlay(dungeonId, roomIdx, party) {
@@ -2462,9 +2590,13 @@
         turns++;
         E.events.length = 0;
       }
-      ok(st.phase !== 'playing' || turns === 300, 'terminou ou atingiu o teto');
       console.log('AUTO-PLAY ' + dungeonId + '[' + roomIdx + ']: ' +
         (st.phase === 'playing' ? 'teto de 300 turnos' : st.phase + ' em ' + turns + ' turnos'));
+      // O teto é rede de segurança, não resultado aceitável: uma batalha que não
+      // fecha em 300 turnos é impasse da IA ou laço do motor — e isso é FALHA.
+      ok(st.phase !== 'playing',
+         'a batalha fecha sozinha (bateu o teto de 300 turnos em ' + dungeonId +
+         '[' + roomIdx + '])');
     }
   }
 

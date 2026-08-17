@@ -12,7 +12,12 @@ var JOGO = (typeof window !== 'undefined')
 //   '#'  obstáculo ALTO  — bloqueia passagem E visão
 //   '='  obstáculo BAIXO — bloqueia passagem, NÃO bloqueia visão (cobertura)
 //   '~'  vazio/buraco (empurre alguém para cá)
-//   'P'  spawn de herói (sempre ≥ 3)   ·   a–z  spawn de monstro (ver `monsters`)
+//   'P'  spawn de herói   ·   a–z  spawn de monstro (ver `monsters`)
+//
+// GRUPO DE 1 OU 2 (adendo v2.1): o time desceu de 3 para 2 heróis, então cada
+// sala precisa de ≥ 2 spawns 'P'. Os layouts continuam com 4 de propósito —
+// spawn sobrando é ignorado pela engine e dá margem para o pet e para a
+// unidade fundida, que ocupa uma célula só.
 //
 // O '=' é a novidade tática da v2: gargalos e coberturas onde o atirador
 // continua vendo o alvo mas ninguém consegue passar. Use as diagonais.
@@ -350,9 +355,12 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'ci-jelly-vial', weight: 12, minRoom: 1 },
       { itemId: 'ci-baroness-collar', weight: 4, minRoom: 2 }
     ],
+    // A Baronesa é a primeira carta que LIBERA alguém: o invocador (10 cartas)
+    // leva o peso maior, e o resto vira estrela para a dupla inicial.
     cardDrops: [
-      { classId: 'curandeira', weight: 24 },
-      { classId: 'invocador', weight: 14 }
+      { classId: 'invocador', weight: 40 },
+      { classId: 'sumo', weight: 30 },
+      { classId: 'curandeira', weight: 30 }
     ]
   });
 
@@ -451,10 +459,13 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'em-brand-iron', weight: 12, minRoom: 1 },
       { itemId: 'em-forge-grate', weight: 4, minRoom: 2 }
     ],
+    // O bruxo (10 cartas, minDungeon 2) entra aqui; o invocador ainda domina,
+    // então quem parou no meio do caminho termina a coleção dele de passagem.
     cardDrops: [
-      { classId: 'espadachim', weight: 20 },
-      { classId: 'invocador', weight: 16 },
-      { classId: 'curandeira', weight: 12 }
+      { classId: 'invocador', weight: 34 },
+      { classId: 'bruxo', weight: 30 },
+      { classId: 'sumo', weight: 18 },
+      { classId: 'curandeira', weight: 18 }
     ]
   });
 
@@ -552,11 +563,14 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'av-lightning-coil', weight: 12, minRoom: 1 },
       { itemId: 'av-updraft-boots', weight: 4, minRoom: 2 }
     ],
+    // Espadachim (20 cartas) estreia no Mestre-de-Obras: daqui para baixo a
+    // coleção deixa de ser souvenir e vira motivo para repetir o calabouço.
     cardDrops: [
-      { classId: 'espadachim', weight: 18 },
-      { classId: 'invocador', weight: 16 },
-      { classId: 'curandeira', weight: 10 },
-      { classId: 'bruxo', weight: 10 }
+      { classId: 'espadachim', weight: 30 },
+      { classId: 'bruxo', weight: 26 },
+      { classId: 'invocador', weight: 24 },
+      { classId: 'sumo', weight: 10 },
+      { classId: 'curandeira', weight: 10 }
     ]
   });
 
@@ -654,11 +668,16 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'mt-shoring-charm', weight: 12, minRoom: 1 },
       { itemId: 'mt-quake-crown', weight: 4, minRoom: 2 }
     ],
+    // Batepedra é o primeiro chefe que solta carta de ARQUEIRO (25 cartas, o
+    // desbloqueio mais caro do jogo). Espadachim empata em peso: as duas
+    // classes caras saem daqui e do Coração, e de mais lugar nenhum.
     cardDrops: [
-      { classId: 'bruxo', weight: 14 },
-      { classId: 'espadachim', weight: 16 },
+      { classId: 'arqueiro', weight: 28 },
+      { classId: 'espadachim', weight: 28 },
+      { classId: 'bruxo', weight: 20 },
       { classId: 'invocador', weight: 14 },
-      { classId: 'curandeira', weight: 8 }
+      { classId: 'sumo', weight: 5 },
+      { classId: 'curandeira', weight: 5 }
     ]
   });
 
@@ -759,11 +778,17 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'cp-heart-horn', weight: 4, minRoom: 2 },
       { itemId: 'cp-eclipse-lens', weight: 4, minRoom: 2 }
     ],
+    // O fundo do mundo espelha exatamente os `dropWeight` de DATA.cards:
+    // arqueiro 32 · espadachim 24 · bruxo 16 · invocador 16 · sumo 6 ·
+    // curandeira 6. Farmar aqui é sempre o caminho mais curto para qualquer
+    // carta — inclusive para as 5 estrelas de quem já liberou tudo.
     cardDrops: [
-      { classId: 'bruxo', weight: 20 },
+      { classId: 'arqueiro', weight: 32 },
+      { classId: 'espadachim', weight: 24 },
+      { classId: 'bruxo', weight: 16 },
       { classId: 'invocador', weight: 16 },
-      { classId: 'espadachim', weight: 12 },
-      { classId: 'curandeira', weight: 8 }
+      { classId: 'sumo', weight: 6 },
+      { classId: 'curandeira', weight: 6 }
     ]
   });
 

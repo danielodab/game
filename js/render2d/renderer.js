@@ -56,11 +56,13 @@ var JOGO = (typeof window !== 'undefined')
   var P = null;                    // referência a PIXI
 
   // ---------- constantes de projeção ----------
-  var TW = 88, TH = 44;            // losango 2:1 (metade-largura 44, metade-altura 22)
+  // 128×64 é a métrica do Art (Art.metrics.tileW/tileH): assim a arte entra 1:1,
+  // sem reamostragem, e o placeholder geométrico tem a mesma escala.
+  var TW = 128, TH = 64;           // losango 2:1 (metade-largura 64, metade-altura 32)
   var HW = TW / 2, HH = TH / 2;
-  var H_HIGH = 58;                 // altura do obstáculo ALTO (px de mundo)
-  var H_LOW = 20;                  // altura do obstáculo BAIXO (cobertura)
-  var D_HOLE = 26;                 // profundidade do buraco
+  var H_HIGH = 84;                 // altura do obstáculo ALTO (px de mundo)
+  var H_LOW = 30;                  // altura do obstáculo BAIXO (cobertura)
+  var D_HOLE = 38;                 // profundidade do buraco
   var ANIM_WATCHDOG = 3.0;         // §4: nenhuma animação vive mais que isto
   var TAP_PX = 8, TAP_MS = 250;    // toque curto = ação na célula
 
@@ -229,47 +231,50 @@ var JOGO = (typeof window !== 'undefined')
     return w.id || 'calmo';
   }
 
-  // ---------- adaptador de Arte ----------
-  function artCall(fnName, key, args, boxW, boxH) {
+  // ---------- adaptador de Arte (js/render2d/art.js, do Designer Arte) ----------
+  // Art.unit(defId,{element|elements,dir,scale}) · Art.tile(theme,variante)
+  // Art.obstacleHigh/obstacleLow(theme,chave) · Art.prop(theme,chave)
+  // Art.tileEventIcon(kind,size) · Art.portrait/spellIcon/itemIcon (uso da HUD)
+  // Cada uma devolve um <canvas> com __res (supersampling) e __anchor [ax,ay].
+  // Se o Art não existir — ou explodir — cai no placeholder geométrico: o jogo RODA.
+  function artOk(fnName) {
     var A = JOGO.Art;
-    if (!A || typeof A[fnName] !== 'function') return null;
-    var mode = artMode[fnName];
+    return !!(A && typeof A[fnName] === 'function' && artMode[fnName] !== 'fail');
+  }
+  // px de mundo por px de arte (1 quando as métricas batem, que é o caso)
+  function artK() {
+    var A = JOGO.Art, m = A && A.metrics;
+    var base = (m && m.tileW) ? m.tileW : TW;
+    return TW / base;
+  }
+  function artRaw(fnName, args) {
+    if (!artOk(fnName)) return null;
     try {
-      if (mode !== 'ctx') {
-        var r = A[fnName].apply(A, args);
-        if (r) { artMode[fnName] = 'value'; return toDisplay(r); }
-        if (mode === 'value') return null;
-      }
-      // fallback canvas2d: Art.fn(ctx, ...args)
-      var cv = document.createElement('canvas');
-      var res = Math.min(2, DPR || 1);
-      cv.width = Math.max(2, Math.round(boxW * res));
-      cv.height = Math.max(2, Math.round(boxH * res));
-      var c2 = cv.getContext('2d');
-      c2.scale(res, res);
-      c2.translate(boxW / 2, boxH);            // origem nos "pés", como no placeholder
-      var r2 = A[fnName].apply(A, [c2].concat(args));
-      if (r2) { artMode[fnName] = 'value'; return toDisplay(r2); }
-      artMode[fnName] = 'ctx';
-      var tex = P.Texture.from(cv);
-      var sp = new P.Sprite(tex);
-      sp.anchor.set(0.5, 1);
-      sp.scale.set(1 / res);
-      return sp;
+      var r = JOGO.Art[fnName].apply(JOGO.Art, args);
+      return r || null;
     } catch (e) {
       artMode[fnName] = 'fail';
+      if (typeof console !== 'undefined' && console.warn) console.warn('[Renderer] Art.' + fnName + ' falhou; usando placeholder.', e);
       return null;
     }
   }
-  function toDisplay(r) {
+  // <canvas>|Texture|Container -> DisplayObject pronto, já ancorado e escalado
+  function artSprite(r, dfltAnchorY) {
     if (!r) return null;
-    if (r instanceof P.Container) return r;
-    if (r instanceof P.Texture) { var s = new P.Sprite(r); s.anchor.set(0.5, 1); return s; }
-    if (r.getContext || r.tagName === 'IMG' || r.tagName === 'CANVAS') {
-      var s2 = new P.Sprite(P.Texture.from(r)); s2.anchor.set(0.5, 1); return s2;
+    if (P.Container && r instanceof P.Container) return r;
+    var tex = (r instanceof P.Texture) ? r : null;
+    if (!tex) {
+      if (!(r.getContext || r.tagName === 'IMG' || r.tagName === 'CANVAS')) return null;
+      tex = P.Texture.from(r);          // PIXI cacheia a baseTexture pelo canvas
     }
-    return null;
+    var sp = new P.Sprite(tex);
+    var an = r.__anchor || [0.5, dfltAnchorY == null ? 1 : dfltAnchorY];
+    sp.anchor.set(an[0], an[1]);
+    sp.scale.set(artK() / (r.__res || 1));
+    return sp;
   }
+  function artCanvas(fnName, args) { return artRaw(fnName, args); }
+  function artNode(fnName, args, dfltAnchorY) { return artSprite(artRaw(fnName, args), dfltAnchorY); }
 
   // ---------- texturas procedurais (partilhadas com o FX) ----------
   function canvasTex(key, w, h, draw) {
@@ -670,7 +675,7 @@ var JOGO = (typeof window !== 'undefined')
     var pal = paletteFor(u);
     var g = new P.Graphics();
     var big = u.boss ? 1.42 : (u.kind === 'pet' ? 0.66 : 1);
-    var bw = 46 * big, bh = 74 * big;
+    var bw = TW * 0.52 * big, bh = TW * 0.84 * big;
     var pri = hexInt(pal.primary), sec = hexInt(pal.secondary), acc = hexInt(pal.accent);
     var line = shadeHex(pal.secondary, -0.55);
     var elem = u.element || (DATA().monsters && DATA().monsters[u.defId] && DATA().monsters[u.defId].element) || 'neutro';
@@ -747,6 +752,25 @@ var JOGO = (typeof window !== 'undefined')
     return t;
   }
 
+  // elementos da unidade (a fusão pode ter dois: a arte mistura as silhuetas)
+  function unitElements(u) {
+    if (u.elemPair && u.elemPair.length) return u.elemPair.slice(0, 2);
+    if (u.elements && u.elements.length) return u.elements.slice(0, 2);
+    var D = DATA();
+    var e = u.element ||
+      (D.monsters && D.monsters[u.defId] && D.monsters[u.defId].element) ||
+      (D.pets && D.pets[u.defId] && D.pets[u.defId].element) || 'neutro';
+    return [e];
+  }
+  // 0=SE(+x) · 1=SW(+y) · 2=NW(−x) · 3=NE(−y)
+  function isoDir(dx, dy) {
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 0 : 2;
+    return dy >= 0 ? 1 : 3;
+  }
+  function unitArtCanvas(u, dir) {
+    return artCanvas('unit', [u.defId, { elements: unitElements(u), dir: dir }]);
+  }
+
   // ---------- tabuleiro ----------
   function clearBoard() {
     for (var i = 0; i < boardNodes.length; i++) {
@@ -757,19 +781,34 @@ var JOGO = (typeof window !== 'undefined')
     floorLayer.removeChildren();
   }
 
+  function sceneryOf(st) {
+    var D = DATA(), th = themeOf(st);
+    var s = (D.scenery && D.scenery[th]) || null;
+    return {
+      theme: th,
+      high: (s && s.high) || [], low: (s && s.low) || [],
+      floor: (s && s.floor) || [], props: (s && s.props) || []
+    };
+  }
+  function pick(list, seed) {
+    if (!list || !list.length) return null;
+    return list[hashStr(seed) % list.length];
+  }
+
   function buildBoard(st) {
     clearBoard();
     var theme = themeOf(st);
+    var sc = sceneryOf(st);
     var pal = dungeonPalette(st);
     var w = st.grid.w, h = st.grid.h;
     var rnd = srand(hashStr(String(st.dungeonId) + '|' + st.roomIndex + '|' + w + 'x' + h));
+    var useArtTile = artOk('tile') && !!artRaw('tile', [theme, 0]);
 
     var f1 = hexInt(pal.floor1), f2 = hexInt(pal.floor2);
     var edge = shadeHex(pal.secondary, -0.45);
     var g = new P.Graphics();
 
     // sombra da sala (assenta o tabuleiro no escuro do fundo)
-    var b = boardBounds(st);
     g.beginFill(0x000000, 0.35);
     g.drawPolygon([
       iso(-1.4, -1.4).x, iso(-1.4, -1.4).y, iso(w + 0.4, -1.4).x, iso(w + 0.4, -1.4).y,
@@ -777,14 +816,15 @@ var JOGO = (typeof window !== 'undefined')
     ]);
     g.endFill();
 
+    // buracos e o chão geométrico moram no mesmo Graphics (1 draw call)
     for (var y = 0; y < h; y++) {
       for (var x = 0; x < w; x++) {
         var k = tileKind(gridTile(st, x, y));
         if (k === 'hole') { drawHole(g, x, y, pal); continue; }
         if (k === 'high' || k === 'low') continue;   // desenhados como objetos
+        if (useArtTile) continue;                    // chão vem da arte
         var base = ((x + y) % 2) ? f1 : f2;
-        var jitter = (rnd() - 0.5) * 0.06;
-        var col = shadeHex(base, jitter);
+        var col = shadeHex(base, (rnd() - 0.5) * 0.06);
         g.beginFill(col, 1);
         diamond(g, x, y, 0, 0);
         g.endFill();
@@ -808,17 +848,59 @@ var JOGO = (typeof window !== 'undefined')
     floorLayer.addChild(g);
     boardNodes.push(g);
 
+    // chão de ARTE: sprites em ordem de linha (a espessura do losango cobre o
+    // vizinho ao sul/leste, que é desenhado depois). Poucas texturas ⇒ o batch
+    // do Pixi resolve a sala inteira em 1–2 draw calls.
+    if (useArtTile) {
+      for (var ay = 0; ay < h; ay++) {
+        for (var ax = 0; ax < w; ax++) {
+          var ak = tileKind(gridTile(st, ax, ay));
+          if (ak === 'hole' || ak === 'high' || ak === 'low') continue;
+          // 2 variações de chão + variação de decoração (','), mais uma rara
+          var variant = (ak === 'deco') ? 2 : (((ax + ay) % 2) ? 1 : 0);
+          if (ak !== 'deco' && (hashStr('v' + ax + '_' + ay + theme) % 11) === 0) variant = 3;
+          var sp = artNode('tile', [theme, variant], 0.5);
+          if (!sp) continue;
+          var tp = iso(ax, ay, 0);
+          sp.position.set(tp.x, tp.y);
+          floorLayer.addChild(sp);
+          boardNodes.push(sp);
+        }
+      }
+    }
+
     // obstáculos como objetos (entram no depth-sort com as unidades)
     for (var y2 = 0; y2 < h; y2++) {
       for (var x2 = 0; x2 < w; x2++) {
         var k2 = tileKind(gridTile(st, x2, y2));
         if (k2 !== 'high' && k2 !== 'low') continue;
-        var node = k2 === 'high' ? buildHigh(theme, pal, x2, y2, st) : buildLow(theme, pal, x2, y2, st);
+        var node = k2 === 'high' ? buildHigh(theme, sc, pal, x2, y2) : buildLow(theme, sc, pal, x2, y2);
         var p = iso(x2, y2, 0);
         node.position.set(p.x, p.y);
         node.zIndex = (x2 + y2) * 10 + (k2 === 'low' ? 1 : 2);
         objectLayer.addChild(node);
         boardNodes.push(node);
+      }
+    }
+
+    // props: decoração SEM colisão nas células de chão decorado (','),
+    // e de vez em quando num chão comum. Unidades podem pisar por cima.
+    if (artOk('prop')) {
+      for (var y3 = 0; y3 < h; y3++) {
+        for (var x3 = 0; x3 < w; x3++) {
+          var k3 = tileKind(gridTile(st, x3, y3));
+          if (k3 !== 'deco' && k3 !== 'floor') continue;
+          var hsh = hashStr('p' + x3 + '_' + y3 + theme);
+          if (k3 === 'deco' ? (hsh % 3 !== 0) : (hsh % 29 !== 0)) continue;
+          var pk = pick(sc.props, 'pk' + x3 + '_' + y3 + theme);
+          var pn = artNode('prop', [theme, pk], 0.86);
+          if (!pn) break;
+          var pp3 = iso(x3 + ((hsh >> 3) % 7 - 3) * 0.045, y3 + ((hsh >> 7) % 7 - 3) * 0.045, 0);
+          pn.position.set(pp3.x, pp3.y);
+          pn.zIndex = (x3 + y3) * 10;      // abaixo da unidade da mesma célula (+5)
+          objectLayer.addChild(pn);
+          boardNodes.push(pn);
+        }
       }
     }
   }
@@ -857,10 +939,10 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // obstáculo ALTO: prisma sólido, bloqueia visão — silhueta pesada e opaca
-  function buildHigh(theme, pal, x, y, st) {
+  function buildHigh(theme, sc, pal, x, y) {
     var c = new P.Container();
-    var art = artCall('obstacle', 'high', ['high', { theme: theme, x: x, y: y, palette: pal, height: H_HIGH }], TW, H_HIGH + TH);
-    if (art) { c.addChild(art); return c; }
+    var art = artNode('obstacleHigh', [theme, pick(sc.high, 'h' + x + '_' + y + theme)], 0.8);
+    if (art) { c.addChild(art); c.__artH = (art.height || H_HIGH); return c; }
     var g = new P.Graphics();
     var rnd = srand(hashStr('h' + x + '_' + y + theme));
     var hgt = H_HIGH * (0.86 + rnd() * 0.30);
@@ -897,10 +979,20 @@ var JOGO = (typeof window !== 'undefined')
 
   // obstáculo BAIXO ('=' cobertura): baixo, topo TRANSLÚCIDO — bloqueia passagem,
   // não bloqueia visão. Silhueta claramente distinta do alto.
-  function buildLow(theme, pal, x, y, st) {
+  function buildLow(theme, sc, pal, x, y) {
     var c = new P.Container();
-    var art = artCall('obstacle', 'low', ['low', { theme: theme, x: x, y: y, palette: pal, height: H_LOW }], TW, H_LOW + TH);
-    if (art) { c.addChild(art); return c; }
+    var art = artNode('obstacleLow', [theme, pick(sc.low, 'l' + x + '_' + y + theme)], 0.8);
+    if (art) {
+      c.addChild(art);
+      // reforço de leitura: o baixo é COBERTURA. Um contorno claro no chão
+      // separa-o do obstáculo alto mesmo quando a arte é parecida.
+      var ring = new P.Graphics();
+      ring.lineStyle(2, hexInt(shadeHex(pal.accent, 0.1)), 0.30);
+      diamondLine(ring, 0, 0, 0.12, 0);
+      ring.lineStyle(0);
+      c.addChildAt(ring, 0);
+      return c;
+    }
     var g = new P.Graphics();
     var hgt = H_LOW;
     var base = mixHex(pal.wall, '#8fa0b8', 0.28);
@@ -950,7 +1042,7 @@ var JOGO = (typeof window !== 'undefined')
   function getVisFor(uid, x, y) {
     if (!vis[uid]) {
       vis[uid] = {
-        x: x, y: y, z: 0, face: 1, flash: 0, flashHold: 0,
+        x: x, y: y, z: 0, face: 1, dir: 0, flash: 0, flashHold: 0,
         squash: 0, deathK: 0, popK: 1, hideK: 0, castK: 0, lungeK: 0,
         castTx: null, castTy: null, knockX: 0, knockY: 0,
         hp: -1, shield: -1, sig: '', bob: Math.random() * 6.28
@@ -970,23 +1062,27 @@ var JOGO = (typeof window !== 'undefined')
     c.addChild(sh); c.__shadow = sh;
 
     var body = new P.Container();
-    var art = artCall('unit', u.defId, [u.defId, { unit: u, boss: !!u.boss, kind: u.kind, element: u.element, side: u.side }], 64, 96);
-    var tex = null;
-    if (art) { body.addChild(art); c.__height = (art.height || 76); }
-    else {
-      tex = unitTexture(u);
-      var sp = new P.Sprite(tex);
-      sp.anchor.set(0.5, 1);
+    var cv = unitArtCanvas(u, 0);
+    var sp, fl, tex;
+    if (cv) {
+      // ARTE: sprite por direção isométrica (o Art já espelha internamente)
+      sp = artSprite(cv, 0.88);
       body.addChild(sp);
-      var fl = new P.Sprite(tex);
-      fl.anchor.set(0.5, 1);
-      fl.tint = 0xffffff;
-      fl.blendMode = P.BLEND_MODES.ADD;
-      fl.alpha = 0;
-      body.addChild(fl);
-      c.__flash = fl;
+      fl = artSprite(cv, 0.88);
+      c.__art = true; c.__artDir = 0;
+      c.__height = sp.height * 0.86;
+    } else {
+      tex = unitTexture(u);
+      sp = new P.Sprite(tex); sp.anchor.set(0.5, 1);
+      body.addChild(sp);
+      fl = new P.Sprite(tex); fl.anchor.set(0.5, 1);
       c.__height = texCache['unit|' + u.defId + '|' + (u.boss ? 'b' : '') + (u.kind || '') + '|' + (u.element || '') + '|h'] || 76;
     }
+    fl.tint = 0xffffff;
+    fl.blendMode = P.BLEND_MODES.ADD;
+    fl.alpha = 0;
+    body.addChild(fl);
+    c.__flash = fl; c.__sprite = sp;
     c.addChild(body); c.__body = body;
 
     var bars = new P.Graphics();
@@ -1006,7 +1102,7 @@ var JOGO = (typeof window !== 'undefined')
       else if (t === 'invisible') s.invisible++;
       else if (t === 'root') s.root++;
       else if (t === 'taunt') s.taunt++;
-      else if (t === 'mark') s.mark += (e[i].stacks || e[i].value != null ? (e[i].stacks || 1) : 1);
+      else if (t === 'mark') s.mark += (e[i].stacks || e[i].count || 1);
       else if (t === 'reflect') s.reflect++;
       else if (t === 'regen') s.regen++;
     }
@@ -1030,10 +1126,20 @@ var JOGO = (typeof window !== 'undefined')
     c.visible = alpha > 0.02;
 
     var body = c.__body;
+    // direção: a arte tem 4 poses isométricas; o placeholder espelha em X
+    if (c.__art && v.dir != null && v.dir !== c.__artDir) {
+      var ncv = unitArtCanvas(u, v.dir);
+      if (ncv) {
+        var ntex = P.Texture.from(ncv);
+        c.__sprite.texture = ntex;
+        c.__flash.texture = ntex;
+        c.__artDir = v.dir;
+      }
+    }
     // idle: respiração + bob; morte: achata e afunda; invocação: pop
     var t = nowT * 1.7 + v.bob;
     var breathe = 1 + Math.sin(t) * 0.022;
-    var sx = v.face, sy = 1;
+    var sx = c.__art ? 1 : v.face, sy = 1;
     sx *= breathe * (1 - (v.squash > 0 ? Math.sin(v.squash * Math.PI) * -0.16 : 0));
     sy *= (1 / breathe);
     if (v.squash > 0) { var q = Math.sin(Math.min(v.squash, 1) * Math.PI); sx *= (1 + q * 0.17); sy *= (1 - q * 0.15); }
@@ -1166,11 +1272,17 @@ var JOGO = (typeof window !== 'undefined')
       var d = Math.abs(o.x - u.x) + Math.abs(o.y - u.y);
       if (d < bd) { bd = d; best = o; }
     }
-    if (best) v.face = faceTo(u.x, u.y, best.x, best.y);
+    if (best) faceUnit(v, u.x, u.y, best.x, best.y);
   }
   function faceTo(fx, fy, tx, ty) {
     var a = iso(fx, fy, 0), b = iso(tx, ty, 0);
     return (b.x < a.x - 0.5) ? -1 : 1;
+  }
+  // define espelhamento (placeholder) E pose isométrica (arte) de uma vez
+  function faceUnit(v, fx, fy, tx, ty) {
+    if (!v) return;
+    v.face = faceTo(fx, fy, tx, ty);
+    v.dir = isoDir(tx - fx, ty - fy);
   }
   function animatingUid(uid) {
     for (var i = 0; i < animQ.length; i++) if (animQ[i].uid === uid) return true;
@@ -1391,6 +1503,13 @@ var JOGO = (typeof window !== 'undefined')
     g.beginFill(0x0d1016, 0.65); g.drawRoundedRect(-13, -32, 26, 26, 8); g.endFill();
     g.lineStyle(1.6, col, 0.8); g.drawRoundedRect(-13, -32, 26, 26, 8); g.lineStyle(0);
     c.addChild(g);
+    // ícone: preferimos a arte (Art.tileEventIcon); sem ela, um glifo de texto
+    var artIcon = artNode('tileEventIcon', [kind, 48], 0.5);
+    if (artIcon) {
+      artIcon.position.set(0, -19);
+      c.addChild(artIcon); c.__icon = artIcon;
+      return c;
+    }
     var icon = def.icon || ({ buff: '⚡', mystery: '?', portal: '@', drain: '×', fountain: '+' }[kind]);
     var tx = new P.Text(String(icon), {
       fontFamily: 'Segoe UI Emoji, Verdana, Arial, sans-serif', fontSize: 20,
@@ -1889,8 +2008,8 @@ var JOGO = (typeof window !== 'undefined')
           var to = a.path[a.seg];
           v2.x = from.x + (to.x - from.x) * a.k;
           v2.y = from.y + (to.y - from.y) * a.k;
-          v2.z = Math.abs(Math.sin(a.k * Math.PI)) * 7;      // quique célula a célula
-          if (to.x !== from.x || to.y !== from.y) v2.face = faceTo(from.x, from.y, to.x, to.y);
+          v2.z = Math.abs(Math.sin(a.k * Math.PI)) * 10;     // quique célula a célula
+          if (to.x !== from.x || to.y !== from.y) faceUnit(v2, from.x, from.y, to.x, to.y);
         }
         break;
       case 'slide':
@@ -1919,7 +2038,7 @@ var JOGO = (typeof window !== 'undefined')
           v2.castK = 1 - ck;
           v2.lungeK = ck > 0.52 ? Math.sin(Math.min((ck - 0.52) / 0.48, 1) * Math.PI) : 0;
           v2.castTx = a.tx; v2.castTy = a.ty;
-          if (a.tx != null) v2.face = faceTo(v2.x, v2.y, a.tx, a.ty);
+          if (a.tx != null) faceUnit(v2, v2.x, v2.y, a.tx, a.ty);
         }
         if (ck >= 1) { if (v2) { v2.castK = 0; v2.lungeK = 0; } done = true; }
         break;
