@@ -3,54 +3,96 @@ var JOGO = (typeof window !== 'undefined')
   : (globalThis.JOGO = globalThis.JOGO || {});
 
 /* ============================================================================
- * SOTERRA — js/core/engine.js  (dono: Agente de Lógica)
+ * SOTERRA 2.0 — js/core/engine.js  (dono: Lógica Combate)
  * Motor determinístico, sem DOM (não acessa document/window além do guard).
+ * Evolução direta do motor v1 (62/62 testes): BFS, LoS Bresenham, castTargets,
+ * aoeTiles, os 15 efeitos v1, os 5 traços, fila de eventos e determinismo
+ * continuam idênticos. O que muda está marcado com "v2".
  *
- * DECISÕES DE DESIGN (documentadas — o contrato é omisso nesses pontos):
- *  - RNG determinístico (mulberry32) semeado por dungeonId/roomIndex/heroIds:
+ * NOMENCLATURA: `pa` = Pontos de Ataque, `pp` = Pontos de Passos.
+ * O antigo `pm` NÃO existe mais em nenhum campo, evento, texto ou comentário.
+ *
+ * ---------------------------------------------------------------------------
+ * DECISÕES DE DESIGN v1 (mantidas — o contrato é omisso nesses pontos):
+ *  - RNG determinístico (mulberry32) semeado por dungeonId/roomIndex/party:
  *    a mesma batalha com as mesmas ações produz os mesmos números.
  *  - Recarga (cooldown) N: o feitiço fica indisponível por N turnos COMPLETOS
  *    do dono após o turno em que foi lançado (relança no turno N+1 seguinte).
- *    Assim cooldown 1 é diferente de cooldown 0 ("sem recarga"), como o
- *    data.js pressupõe ao distinguir os dois.
- *  - Durações: efeitos "por X turnos" decrementam no FIM do turno da vítima,
- *    valendo por X turnos completos dela. poison/regen ticam no INÍCIO do
- *    turno da vítima (X ticks para duração X).
- *  - AoE ofensiva (damage/poison/push/pull) NUNCA atinge o próprio conjurador
- *    (senão Dobre Fúnebre/Gole Amargo feririam o dono). Fogo amigo em ALIADOS
- *    existe — posicionamento importa.
+ *  - Durações: efeitos "por X turnos" decrementam no FIM do turno da vítima.
+ *    poison/regen ticam no INÍCIO do turno da vítima (X ticks para duração X).
+ *  - AoE ofensiva (damage/poison/push/pull/mark/…) NUNCA atinge o próprio
+ *    conjurador. Fogo amigo em ALIADOS existe — posicionamento importa.
  *  - Push: direção fixa = eixo dominante do vetor conjurador→alvo (empate =
- *    horizontal). Pull: passo a passo em direção ao conjurador, eixo dominante
- *    reavaliado a cada célula ("arrasta pela sala"). Colisão: 10 de dano por
- *    célula bloqueada (parede, buraco, unidade, borda), dano FIXO (sem
- *    power/resist), absorvível por escudo, só na unidade movida. Pull que para
- *    por ficar adjacente ao conjurador não conta colisão. pushImmune bloqueia
- *    push E pull (é âncora) e não sofre colisão. swap/teleport ignoram
- *    pushImmune (não são empurrão).
- *  - Lifesteal: cura = round(dano efetivo em HP / 2) ("metade do que colheu").
- *  - Poison guarda o power do conjurador no momento do cast; a resistência da
- *    vítima é lida a cada tick.
- *  - explodeOnDeath: dano = round(damage * (100 - resist)/100) em TODAS as
- *    unidades vivas (qualquer lado) em raio Manhattan; power não se aplica.
- *  - split: cópias nascem em células livres adjacentes (ortogonais primeiro,
- *    depois diagonais), herdam kind/side do original e entram na ordem de
- *    iniciativa logo após ele. Cópias de monstro comum CONTAM para a derrota
- *    do lado (matar a Carrapicho-Mãe exige matar as crias).
- *  - enrage: ao cruzar o limiar vira um efeito buff de power permanente
- *    (duration 9999) + eventos effectApplied/log; dispara uma única vez.
- *  - regenAura: cura aliados (EXCETO o próprio portador) no raio Manhattan,
- *    no início do turno do portador.
+ *    horizontal). Pull: passo a passo em direção ao conjurador. Colisão: 10 de
+ *    dano por célula bloqueada, dano FIXO, absorvível por escudo. pushImmune
+ *    bloqueia push E pull. swap/teleport ignoram pushImmune.
+ *  - Lifesteal: cura = round(dano efetivo em PV / 2).
+ *  - Poison guarda o power do conjurador no cast; a resistência é lida no tick.
+ *  - explodeOnDeath / split / enrage / regenAura: idênticos à v1.
  *  - Buff de initiative altera o valor mas NÃO reordena a batalha em curso.
- *  - Se os dois lados caírem no mesmo encadeamento de mortes, a derrota do
- *    jogador prevalece (phase 'lost').
- *  - Invisibilidade restringe apenas a IA (castTargets não filtra — o
- *    contrato diz "IA não consegue alvejar"); quebra quando o invisível
- *    conjura um feitiço que contenha efeito 'damage'.
- *  - LoS: Bresenham simples entre centros; só células de PAREDE estritamente
- *    entre os extremos bloqueiam.
- *  - Feitiço com efeito 'swap' exige unidade viva na célula-alvo. Demais
- *    feitiços podem mirar célula de chão vazia (o efeito simplesmente não
- *    encontra alvo), exceto needsEmptyTile, que EXIGE célula vazia.
+ *  - Se os dois lados caírem no mesmo encadeamento, a derrota prevalece.
+ *  - Invisibilidade restringe apenas a IA; quebra ao conjurar dano.
+ *  - LoS: Bresenham entre centros; só PAREDE ALTA ('#') estritamente entre os
+ *    extremos bloqueia.
+ *  - Feitiço com 'swap' exige unidade viva no alvo; needsEmptyTile exige vazio.
+ *
+ * ---------------------------------------------------------------------------
+ * DECISÕES DE DESIGN v2 (novas — documentadas porque o contrato não fecha):
+ *  1. TERRENO: '=' vira tile `cover` (obstáculo BAIXO): bloqueia passagem, não
+ *     bloqueia visão. '#' = `wall` (alto, bloqueia os dois). '~' = `hole`.
+ *  2. FEITIÇOS MODULARES: `Engine.spell(id)` resolve em DATA.spells,
+ *     DATA.monsterSpells, DATA.petSpells, DATA.itemSpells e no registro em
+ *     memória (feitiços de fusão). TODO acesso interno passa por ela.
+ *  3. CLIMA: `+5/−5` PV direto no início do turno da unidade — ignora escudo e
+ *     resistência (é ambiente, não ataque), nunca passa de hpMax, pode matar.
+ *     Só emite `weatherTick` quando o saldo é diferente de zero (clima neutro
+ *     para aquele elemento não gera evento). Ciclo automático: quando
+ *     `dungeon.weatherShiftEveryRounds > 0`, o clima avança um passo do ciclo
+ *     (`dungeon.weatherCycle` ou as chaves de DATA.weathers) toda vez que
+ *     `(round-1) % N === 0`, a partir da rodada N+1.
+ *  4. ESQUIVA/FIXAÇÃO: o teste acontece UMA vez por chamada de `Engine.move`,
+ *     contra o inimigo adjacente à célula de PARTIDA que deixa de ser adjacente
+ *     na célula de DESTINO — e, havendo vários, contra o PIOR deles (menor
+ *     chance de sucesso). Isso mantém `Engine.reachable().risky` e `move` em
+ *     acordo perfeito (a UI marca exatamente as células que arriscam teste).
+ *     Falhando, o movimento é CANCELADO (`move` devolve false) e a unidade
+ *     perde todo o PP restante — é isso que dá dentes à Fixação; "perder o PP
+ *     restante" e ainda assim andar seria contraditório.
+ *     Falha crítica: o contrato escreve `roll < chance/3`, mas o roll do teste
+ *     já é ≥ chance quando falha; a falha crítica usa portanto um SEGUNDO
+ *     sorteio com a fórmula literal do contrato.
+ *     Movimento forçado (push/pull/teleport/swap/moveTo) NÃO testa esquiva.
+ *  5. MARCAS: `mark.value` é o percentual por pilha; o multiplicador de dano é
+ *     `1 + Σ(value das pilhas)/100`, que com o `value: 5` canônico reproduz
+ *     exatamente `(1 + marcas*0.05)` do contrato §3. Estourado o `max`, uma
+ *     nova marca RENOVA a duração da pilha mais antiga em vez de empilhar.
+ *  6. detonateMarks: dano = round(pilhas * mult), literal — sem power, sem
+ *     resistência e sem o multiplicador de marcas (elas foram consumidas).
+ *     Escudo ainda absorve.
+ *  7. ARMADILHA: fica na célula com `duration` em RODADAS; dispara para quem
+ *     NÃO é do lado de quem armou, ao pisar durante um `Engine.move`
+ *     deliberado (movimento forçado não pisa em armadilha — evita recursão).
+ *     O feitiço da armadilha é conjurado pelo dono, a partir da célula dela.
+ *  8. reflect: devolve `pct`% do dano RECEBIDO (antes do escudo) ao agressor,
+ *     como dano fixo neutro que não volta a refletir.
+ *  9. moveTo: deslize por eixo dominante até `maxTiles`, parando na primeira
+ *     célula bloqueada. Emite `move {forced:true}` para o renderizador animar.
+ * 10. chain: atinge o alvo e salta para o inimigo vivo mais próximo ainda não
+ *     atingido dentro de CHAIN_JUMP_RANGE (3), multiplicando por `falloff`.
+ * 11. cone: triângulo que parte da célula-alvo e se abre no sentido oposto ao
+ *     conjurador (linha i tem 2i+1 células). ring: coroa de distância Manhattan
+ *     exatamente `size` em torno do alvo.
+ * 12. targetSide: quando o feitiço declara 'enemy'/'ally'/'self', a CÉLULA-ALVO
+ *     passa a ser validada (inimigo vivo / aliado vivo / a própria célula).
+ *     'any' ou ausente = como na v1.
+ * 13. PETS: não entram em `state.order` — agem em `Engine.runPetTurn`, logo
+ *     após o dono encerrar o turno (recebem ali o tique de clima, veneno/regen,
+ *     PA/PP cheios e o decremento de durações). Não contam para vitória/derrota.
+ * 14. EVENTOS DE TERRENO: aplicados sobre QUEM PISOU (o pisante é o
+ *     "conjurador" e também alvo legítimo dos efeitos ofensivos).
+ * 15. FUSÃO: a unidade fundida é a própria unidade A mutada — mantém o uid e a
+ *     casa dela na ordem de iniciativa; B sai do tabuleiro com
+ *     `alive:false, offBoard:true`, sem evento `death` e sem contar derrota.
  * ==========================================================================*/
 
 (function () {
@@ -62,8 +104,28 @@ var JOGO = (typeof window !== 'undefined')
   Engine.events = [];      // fila; main.js drena — a engine só faz push
   Engine.state = null;
 
+  // ------------------------------------------------------------- constantes
+  Engine.WEATHER_TICK = 5;       // PV ganhos/perdidos por tique de clima
+  Engine.CHAIN_JUMP_RANGE = 3;   // alcance de cada salto do efeito 'chain'
+  Engine.MARK_DEFAULT_VALUE = 5; // % de dano por pilha quando o dado omite
+  Engine.MARK_DEFAULT_MAX = 5;   // pilhas máximas quando o dado omite
+  Engine.PET_FOLLOW_DEFAULT = 2; // followDistance padrão
+
+  var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
+  var DEFAULT_WEATHERS = {
+    calmo:     { id: 'calmo',     name: 'Calmo',     favors: null,    harms: null },
+    chuva:     { id: 'chuva',     name: 'Chuva',     favors: 'agua',  harms: 'fogo' },
+    estiagem:  { id: 'estiagem',  name: 'Estiagem',  favors: 'fogo',  harms: 'agua' },
+    vendaval:  { id: 'vendaval',  name: 'Vendaval',  favors: 'ar',    harms: 'terra' },
+    tremor:    { id: 'tremor',    name: 'Tremor',    favors: 'terra', harms: 'ar' }
+  };
+
   function emit(ev) { Engine.events.push(ev); }
   function log(text) { emit({ type: 'log', text: text }); }
+  Engine.emit = emit;   // Fusion (mesmo dono) publica pela mesma fila
+  Engine.log = log;
+
+  function DATA() { return JOGO.DATA || {}; }
 
   // --------------------------------------------------------------- RNG
   function hashStr(s) {
@@ -85,6 +147,21 @@ var JOGO = (typeof window !== 'undefined')
     if (max <= min) return min;
     return min + Math.floor(nextRand(state) * (max - min + 1));
   }
+  Engine.rand = nextRand;   // exposto para Fusion/testes determinísticos
+
+  // sorteio ponderado determinístico sobre [{weight}]
+  function weightedPick(state, list) {
+    if (!list || !list.length) return null;
+    var total = 0, i;
+    for (i = 0; i < list.length; i++) total += Math.max(0, list[i].weight || 0);
+    if (total <= 0) return list[0];
+    var r = nextRand(state) * total;
+    for (i = 0; i < list.length; i++) {
+      r -= Math.max(0, list[i].weight || 0);
+      if (r < 0) return list[i];
+    }
+    return list[list.length - 1];
+  }
 
   // --------------------------------------------------------------- helpers
   function inBounds(state, x, y) {
@@ -97,14 +174,19 @@ var JOGO = (typeof window !== 'undefined')
     var t = tileAt(state, x, y);
     return !!t && t.type === 'floor';
   }
+  function blocksSight(state, x, y) {
+    var t = tileAt(state, x, y);
+    return !!t && t.type === 'wall';   // 'cover' (baixo) e 'hole' não bloqueiam visão
+  }
   function manhattan(x0, y0, x1, y1) {
     return Math.abs(x1 - x0) + Math.abs(y1 - y0);
   }
+  function clamp(lo, hi, v) { return v < lo ? lo : (v > hi ? hi : v); }
 
   Engine.unitAt = function (state, x, y) {
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.alive && u.x === x && u.y === y) return u;
+      if (u.alive && !u.offBoard && u.x === x && u.y === y) return u;
     }
     return null;
   };
@@ -139,6 +221,11 @@ var JOGO = (typeof window !== 'undefined')
     }
     return false;
   };
+  function countEffects(unit, type) {
+    var n = 0;
+    for (var i = 0; i < unit.effects.length; i++) if (unit.effects[i].type === type) n++;
+    return n;
+  }
 
   function sumBuffs(unit, stat) {
     var s = 0;
@@ -159,6 +246,24 @@ var JOGO = (typeof window !== 'undefined')
     }
     return Math.min(100, r);
   };
+  // v2: esquiva e fixação (com buffs)
+  Engine.effDodge = function (unit) {
+    return (unit.dodge || 0) + sumBuffs(unit, 'dodge');
+  };
+  Engine.effLock = function (unit) {
+    return (unit.lock || 0) + sumBuffs(unit, 'lock');
+  };
+  // v2: multiplicador de dano recebido por marcas — 1 + Σ(value)/100
+  Engine.markMultiplier = function (unit) {
+    var pct = 0;
+    for (var i = 0; i < unit.effects.length; i++) {
+      if (unit.effects[i].type === 'mark') {
+        pct += (unit.effects[i].value != null ? unit.effects[i].value : Engine.MARK_DEFAULT_VALUE);
+      }
+    }
+    return 1 + pct / 100;
+  };
+  Engine.markStacks = function (unit) { return countEffects(unit, 'mark'); };
 
   function recomputeShield(unit) {
     var s = 0;
@@ -169,59 +274,202 @@ var JOGO = (typeof window !== 'undefined')
     unit.shield = s;
   }
 
+  // --------------------------------------------------- v2: feitiços modulares
+  Engine._genSpells = {};   // feitiços gerados em memória (fusão, itens sintéticos)
+
+  Engine.registerSpell = function (spell) {
+    if (spell && spell.id) Engine._genSpells[spell.id] = spell;
+    return spell || null;
+  };
+  // Resolve um id de feitiço em QUALQUER fonte de dados. Uso interno obrigatório.
+  Engine.spell = function (id) {
+    if (!id) return null;
+    if (Engine._genSpells[id]) return Engine._genSpells[id];
+    var D = DATA();
+    var srcs = [D.spells, D.monsterSpells, D.petSpells, D.itemSpells, D.fusionSpells];
+    for (var i = 0; i < srcs.length; i++) {
+      if (srcs[i] && srcs[i][id]) return srcs[i][id];
+    }
+    return null;
+  };
+  function spellDef(id) { return Engine.spell(id); }
+
+  // acessores tolerantes (os dados podem estar incompletos durante o desenvolvimento)
+  function sRange(sp) { return sp.range || { min: 0, max: 1, line: false, los: false }; }
+  function sAoe(sp) { return sp.aoe || { shape: 'single', size: 0 }; }
+  function sEffects(sp) { return sp.effects || []; }
+  function sPaCost(sp) { return sp.paCost || 0; }
+  function sCooldown(sp) { return sp.cooldown || 0; }
+  function sCastsPerTurn(sp) { return sp.castsPerTurn || 0; }
+
+  function spellHasEffect(spell, type) {
+    var effs = sEffects(spell);
+    for (var i = 0; i < effs.length; i++) if (effs[i].type === type) return true;
+    return false;
+  }
+
+  // --------------------------------------------------- v2: elementos e clima
+  function rivalOf(element) {
+    var r = DATA().rivals || DEFAULT_RIVALS;
+    return r[element] !== undefined ? r[element] : (DEFAULT_RIVALS[element] || null);
+  }
+  Engine.rivalOf = rivalOf;
+
+  function weatherTable() {
+    var w = DATA().weathers;
+    return (w && Object.keys(w).length) ? w : DEFAULT_WEATHERS;
+  }
+  Engine.weatherDef = function (state) {
+    var t = weatherTable();
+    return t[state.weather] || null;
+  };
+  // elementos de uma unidade (a fusão carrega dois)
+  function unitElements(u) {
+    if (u.elements && u.elements.length) return u.elements;
+    return [u.element || 'neutro'];
+  }
+  Engine.unitElements = unitElements;
+
+  function setWeather(state, weatherId, silent) {
+    if (!weatherId || state.weather === weatherId) return false;
+    state.weather = weatherId;
+    var cyc = weatherCycle(state);
+    var idx = cyc.indexOf(weatherId);
+    if (idx >= 0) state._weatherIdx = idx;
+    if (!silent) {
+      var def = weatherTable()[weatherId];
+      emit({ type: 'weatherShift', weather: weatherId });
+      log('O clima muda: ' + ((def && def.name) || weatherId) + '.');
+    }
+    return true;
+  }
+  Engine.setWeather = setWeather;
+
+  function weatherCycle(state) {
+    var d = getDungeon(state.dungeonId);
+    if (d && d.weatherCycle && d.weatherCycle.length) return d.weatherCycle;
+    var keys = [];
+    var t = weatherTable();
+    for (var k in t) if (Object.prototype.hasOwnProperty.call(t, k)) keys.push(k);
+    return keys;
+  }
+
+  function weatherTick(state, u) {
+    if (!u.alive) return;
+    var w = Engine.weatherDef(state);
+    if (!w) return;
+    var els = unitElements(u);
+    var amount = 0;
+    if (w.favors && els.indexOf(w.favors) >= 0) amount += Engine.WEATHER_TICK;
+    if (w.harms && els.indexOf(w.harms) >= 0) amount -= Engine.WEATHER_TICK;
+    if (amount === 0) return;                    // clima indiferente: sem evento
+    if (amount > 0) {
+      var gain = Math.min(amount, u.hpMax - u.hp);
+      u.hp += gain;
+      emit({ type: 'weatherTick', uid: u.uid, amount: gain });
+      if (gain > 0) log(u.name + ' se fortalece com o clima (+' + gain + ').');
+    } else {
+      // dano ambiental: ignora escudo e resistência, pode matar
+      u.hp = Math.max(0, u.hp + amount);
+      emit({ type: 'weatherTick', uid: u.uid, amount: amount });
+      log(u.name + ' sofre com o clima (' + amount + ').');
+      checkEnrage(state, u);
+      if (u.hp <= 0) processDeath(state, u);
+    }
+  }
+
   // --------------------------------------------------------------- criação
-  // statsOverride (opcional): stats efetivos vindos de JOGO.Progress para
-  // heróis (nível + equipamento). Com save zerado é idêntico a def.stats.
-  function makeUnit(state, def, kind, side, x, y, statsOverride) {
+  function makeUnit(state, def, kind, side, x, y, opts) {
+    opts = opts || {};
     state._uidCounter++;
-    var st = statsOverride || def.stats;
+    var st = opts.stats || def.stats || {};
     var resists = {};
-    for (var k in st.resists) resists[k] = st.resists[k];
+    var srcRes = st.resists || {};
+    for (var k in srcRes) resists[k] = srcRes[k];
+    var spells = (opts.spells || def.spells || def.baseSpells || []).slice();
     return {
       uid: 'u' + state._uidCounter,
       defId: def.id,
-      kind: kind,
+      kind: kind,                     // 'hero' | 'monster' | 'summon' | 'pet' | 'fusion'
       side: side,
-      name: def.name,
+      name: opts.name || def.name,
       x: x, y: y,
       hp: st.hp, hpMax: st.hp,
       pa: st.pa, paMax: st.pa,
-      pm: st.pm, pmMax: st.pm,
-      initiative: st.initiative,
-      power: st.power,
+      pp: st.pp, ppMax: st.pp,        // v2: PP (Pontos de Passos)
+      initiative: st.initiative || 0,
+      power: st.power || 0,
+      dodge: st.dodge || 0,           // v2
+      lock: st.lock || 0,             // v2
+      element: opts.element || def.element || 'neutro',  // v2
+      level: opts.level || 1,         // v2
+      classId: opts.classId || null,  // v2
+      heroId: opts.heroId || null,    // v2
       resists: resists,
-      spells: def.spells.slice(),
+      spells: spells,
       cooldowns: {},
       castsThisTurn: {},
       effects: [],
       shield: 0,
       alive: true,
+      offBoard: false,                // v2: saiu do tabuleiro sem morrer (fusão)
       boss: !!def.boss,
       traits: def.traits ? def.traits.slice() : [],
-      aiRole: def.ai || null,
+      aiRole: def.ai || opts.aiRole || null,
       enraged: false,
       summonerUid: null,
+      ownerUid: opts.ownerUid || null, // v2: dono do pet
+      petId: opts.petId || null,       // v2
+      behavior: opts.behavior || null, // v2: comportamento do pet
+      range: opts.range || 0,          // v2: alcance de ação do pet
+      followDistance: opts.followDistance || 0, // v2
+      fusionIntent: null,              // v2
       _birth: state._uidCounter
     };
   }
 
   function getDungeon(dungeonId) {
-    var ds = JOGO.DATA.dungeons;
+    var ds = DATA().dungeons || [];
     for (var i = 0; i < ds.length; i++) if (ds[i].id === dungeonId) return ds[i];
     return null;
   }
-  function getHeroDef(heroId) {
-    var hs = JOGO.DATA.heroes;
-    for (var i = 0; i < hs.length; i++) if (hs[i].id === heroId) return hs[i];
-    return null;
+
+  // v2: stats efetivos de um herói do grupo (nível + itens ficam com Progress;
+  // aqui só há uma escala defensiva de nível quando o chamador não os fornece).
+  function heroStats(entry, cls) {
+    if (entry.stats) return entry.stats;
+    var base = cls && cls.stats;
+    if (!base) return null;
+    var out = { hp: base.hp, pa: base.pa, pp: base.pp, initiative: base.initiative,
+                power: base.power, dodge: base.dodge || 0, lock: base.lock || 0, resists: {} };
+    for (var k in (base.resists || {})) out.resists[k] = base.resists[k];
+    var lv = entry.level || 1;
+    var per = (DATA().leveling && DATA().leveling.perLevel) || null;
+    if (per && lv > 1) {
+      out.hp += (per.hp || 0) * (lv - 1);
+      out.power += (per.power || 0) * (lv - 1);
+    }
+    return out;
   }
 
-  Engine.createBattle = function (dungeonId, roomIndex, heroIds) {
+  // Normaliza `party`: aceita strings (id de classe/herói) ou objetos do contrato.
+  function normalizeParty(party) {
+    var out = [];
+    for (var i = 0; i < party.length; i++) {
+      var p = party[i];
+      if (typeof p === 'string') p = { heroId: p, classId: p };
+      out.push(p);
+    }
+    return out;
+  }
+
+  Engine.createBattle = function (dungeonId, roomIndex, party) {
     var dungeon = getDungeon(dungeonId);
-    if (!dungeon) throw new Error('Engine.createBattle: dungeon desconhecido: ' + dungeonId);
+    if (!dungeon) throw new Error('Engine.createBattle: calabouço desconhecido: ' + dungeonId);
     var room = dungeon.rooms[roomIndex];
     if (!room) throw new Error('Engine.createBattle: sala inválida: ' + roomIndex);
-    if (!heroIds || !heroIds.length) throw new Error('Engine.createBattle: heroIds vazio');
+    if (!party || !party.length) throw new Error('Engine.createBattle: grupo vazio');
+    party = normalizeParty(party);
 
     var layout = room.layout;
     var h = layout.length, w = layout[0].length;
@@ -235,6 +483,7 @@ var JOGO = (typeof window !== 'undefined')
       for (x = 0; x < w; x++) {
         ch = layout[y].charAt(x);
         if (ch === '#') row.push({ type: 'wall', deco: false });
+        else if (ch === '=') row.push({ type: 'cover', deco: false });   // v2: obstáculo BAIXO
         else if (ch === '~') row.push({ type: 'hole', deco: false });
         else if (ch === ',') row.push({ type: 'floor', deco: true });
         else row.push({ type: 'floor', deco: false });
@@ -243,10 +492,14 @@ var JOGO = (typeof window !== 'undefined')
       }
       tiles.push(row);
     }
-    if (heroIds.length > heroSpawns.length) {
+    if (party.length > heroSpawns.length) {
       throw new Error('Engine.createBattle: spawns de herói insuficientes na sala');
     }
 
+    var seedIds = [];
+    for (var s = 0; s < party.length; s++) {
+      seedIds.push(party[s].heroId || party[s].classId || ('p' + s));
+    }
     var state = {
       dungeonId: dungeonId,
       roomIndex: roomIndex,
@@ -256,39 +509,65 @@ var JOGO = (typeof window !== 'undefined')
       units: [],
       order: [],
       activeIdx: 0,
+      weather: room.weather || dungeon.defaultWeather || 'calmo',   // v2
+      tileEventsActive: [],                                          // v2
+      traps: [],                                                     // v2
+      pendingFusion: null,                                           // v2
+      _weatherIdx: 0,
       _uidCounter: 0,
-      _rng: hashStr(dungeonId + ':' + roomIndex + ':' + heroIds.join(','))
+      _rng: hashStr(dungeonId + ':' + roomIndex + ':' + seedIds.join(','))
     };
+    var cyc = weatherCycle(state);
+    var wi = cyc.indexOf(state.weather);
+    state._weatherIdx = wi >= 0 ? wi : 0;
 
     var i;
-    for (i = 0; i < heroIds.length; i++) {
-      var hd = getHeroDef(heroIds[i]);
-      if (!hd) throw new Error('Engine.createBattle: herói desconhecido: ' + heroIds[i]);
-      var hs = heroSpawns[i];
-      // ADENDO v2: heróis usam stats efetivos (nível + equipamento) quando
-      // JOGO.Progress existir; sem Progress (ou em erro), stats base.
-      var effStats = null;
-      if (JOGO.Progress && JOGO.Progress.effectiveStats) {
-        try { effStats = JOGO.Progress.effectiveStats(hd.id); } catch (err) { effStats = null; }
+    var pets = [];
+    for (i = 0; i < party.length; i++) {
+      var p = party[i];
+      var cls = (DATA().classes && DATA().classes[p.classId]) || null;
+      var def = cls;
+      if (!def && DATA().heroes) {   // compatibilidade defensiva com dados antigos
+        for (var hh = 0; hh < DATA().heroes.length; hh++) {
+          if (DATA().heroes[hh].id === (p.heroId || p.classId)) def = DATA().heroes[hh];
+        }
       }
-      state.units.push(makeUnit(state, hd, 'hero', 'player', hs.x, hs.y, effStats));
+      if (!def) throw new Error('Engine.createBattle: classe desconhecida: ' + p.classId);
+      var st = heroStats(p, def);
+      if (!st) throw new Error('Engine.createBattle: classe sem stats: ' + p.classId);
+      var hs = heroSpawns[i];
+      var unit = makeUnit(state, def, 'hero', 'player', hs.x, hs.y, {
+        stats: st,
+        spells: p.spells || def.baseSpells || def.spells || [],
+        element: p.element || 'neutro',
+        level: p.level || 1,
+        classId: p.classId || def.id,
+        heroId: p.heroId || def.id,
+        name: p.name || def.name
+      });
+      state.units.push(unit);
+      if (p.pet) pets.push({ ownerUnit: unit, petId: p.pet });
     }
     for (i = 0; i < monsterSpawns.length; i++) {
       var ms = monsterSpawns[i];
-      var mid = room.monsters[ms.letter];
+      var mid = room.monsters ? room.monsters[ms.letter] : null;
       if (!mid) throw new Error('Engine.createBattle: letra sem monstro: ' + ms.letter);
-      var md = JOGO.DATA.monsters[mid];
+      var md = (DATA().monsters || {})[mid];
       if (!md) throw new Error('Engine.createBattle: monstro desconhecido: ' + mid);
-      state.units.push(makeUnit(state, md, 'monster', 'enemy', ms.x, ms.y));
+      state.units.push(makeUnit(state, md, 'monster', 'enemy', ms.x, ms.y, { element: md.element }));
     }
 
-    // ordem por iniciativa (desc); desempate estável pela ordem de criação
+    // ordem por iniciativa (desc); desempate estável pela ordem de criação.
+    // v2: pets NÃO entram na ordem — agem no fim do turno do dono.
     var sorted = state.units.slice().sort(function (a, b) {
       if (b.initiative !== a.initiative) return b.initiative - a.initiative;
       return a._birth - b._birth;
     });
     for (i = 0; i < sorted.length; i++) state.order.push(sorted[i].uid);
     state.activeIdx = 0;
+
+    // v2: pets entram junto do dono, em célula livre adjacente
+    for (i = 0; i < pets.length; i++) spawnPet(state, pets[i].ownerUnit, pets[i].petId);
 
     Engine.state = state;
     emit({ type: 'battleStart', state: state });
@@ -297,6 +576,35 @@ var JOGO = (typeof window !== 'undefined')
     startTurn(state, 0);
     return state;
   };
+
+  // --------------------------------------------------------- v2: pets
+  function spawnPet(state, owner, petId) {
+    var pd = (DATA().pets || {})[petId];
+    if (!pd) return null;
+    var cells = freeAdjacentCells(state, owner.x, owner.y, 1);
+    if (!cells.length) return null;
+    var base = pd.stats || {};
+    var st = {
+      hp: base.hp || 40, pa: base.pa || 3, pp: base.pp || 3,
+      initiative: base.initiative || owner.initiative,
+      power: base.power || 0, dodge: base.dodge || 0, lock: base.lock || 0,
+      resists: base.resists || {}
+    };
+    var u = makeUnit(state, { id: pd.id, name: pd.name, spells: pd.spells || [] },
+      'pet', owner.side, cells[0].x, cells[0].y, {
+        stats: st,
+        spells: pd.spells || [],
+        element: pd.element || 'neutro',
+        ownerUid: owner.uid,
+        petId: pd.id,
+        behavior: pd.behavior || 'attack',
+        range: pd.range || 1,
+        followDistance: pd.followDistance || Engine.PET_FOLLOW_DEFAULT
+      });
+    state.units.push(u);
+    emit({ type: 'petSpawn', unit: u, ownerUid: owner.uid });
+    return u;
+  }
 
   // --------------------------------------------------------------- movimento
   function isWalkable(state, x, y) {
@@ -327,16 +635,65 @@ var JOGO = (typeof window !== 'undefined')
     return { dist: dist, parent: parent };
   }
 
+  // v2: inimigos vivos adjacentes a (x,y) que podem fixar `unit`
+  function lockersAt(state, unit, x, y) {
+    var out = [];
+    for (var i = 0; i < state.units.length; i++) {
+      var e = state.units[i];
+      if (!e.alive || e.offBoard || e === unit) continue;
+      if (e.side === unit.side) continue;
+      if (manhattan(x, y, e.x, e.y) === 1) out.push(e);
+    }
+    return out;
+  }
+
+  // v2: bônus elemental do teste de esquiva
+  function elementalDodgeBonus(fleeing, locker) {
+    var ef = unitElements(fleeing)[0] || 'neutro';
+    var el = unitElements(locker)[0] || 'neutro';
+    if (ef === el) return 0;                 // mesmo elemento
+    if (rivalOf(ef) === el) return 0.30;     // fugindo do próprio rival
+    return 0.10;                             // não relacionado (inclui neutro)
+  }
+
+  Engine.dodgeChance = function (state, uid, lockerUid) {
+    var u = Engine.findUnit(state, uid);
+    var l = Engine.findUnit(state, lockerUid);
+    if (!u || !l) return 1;
+    var raw = 0.35 + (Engine.effDodge(u) - Engine.effLock(l)) * 0.02 + elementalDodgeBonus(u, l);
+    return clamp(0.10, 0.90, raw);
+  };
+
+  // pior fixador: menor chance de sucesso. Empate = o primeiro encontrado.
+  function worstLocker(state, unit, destX, destY) {
+    var cand = lockersAt(state, unit, unit.x, unit.y);
+    var worst = null, worstChance = 2;
+    for (var i = 0; i < cand.length; i++) {
+      var e = cand[i];
+      if (manhattan(destX, destY, e.x, e.y) === 1) continue;  // continua colado nele
+      var c = Engine.dodgeChance(state, unit.uid, e.uid);
+      if (c < worstChance) { worstChance = c; worst = e; }
+    }
+    return worst;
+  }
+
   Engine.reachable = function (state, uid) {
     var u = Engine.findUnit(state, uid);
-    if (!u || !u.alive || u.pm <= 0) return [];
-    var r = bfs(state, u.x, u.y, u.pm);
+    if (!u || !u.alive || u.pp <= 0) return [];
+    if (Engine.unitHasEffect(u, 'root')) return [];       // v2: enraizado não anda
+    var r = bfs(state, u.x, u.y, u.pp);
+    var lockers = lockersAt(state, u, u.x, u.y);          // v2
     var out = [];
     for (var key in r.dist) {
       var c = r.dist[key];
       if (c === 0) continue;
       var parts = key.split(',');
-      out.push({ x: parseInt(parts[0], 10), y: parseInt(parts[1], 10), cost: c });
+      var cx = parseInt(parts[0], 10), cy = parseInt(parts[1], 10);
+      var risky = false;
+      for (var i = 0; i < lockers.length; i++) {
+        if (manhattan(cx, cy, lockers[i].x, lockers[i].y) !== 1) { risky = true; break; }
+      }
+      out.push({ x: cx, y: cy, cost: c, risky: risky });
     }
     return out;
   };
@@ -346,7 +703,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!u || !u.alive) return null;
     if (x === u.x && y === u.y) return null;
     if (!isWalkable(state, x, y)) return null;
-    var r = bfs(state, u.x, u.y, u.pm);
+    var r = bfs(state, u.x, u.y, u.pp);
     var key = x + ',' + y;
     if (r.dist[key] === undefined) return null;
     var path = [];
@@ -361,12 +718,43 @@ var JOGO = (typeof window !== 'undefined')
   Engine.move = function (state, uid, x, y) {
     if (state.phase !== 'playing') return false;
     var u = Engine.findUnit(state, uid);
-    if (!u || !u.alive) return false;
+    if (!u || !u.alive || u.offBoard) return false;
+    if (Engine.unitHasEffect(u, 'root')) {                // v2
+      log(u.name + ' está preso ao chão.');
+      return false;
+    }
     var path = Engine.path(state, uid, x, y);
-    if (!path || path.length > u.pm) return false;
-    u.pm -= path.length;
+    if (!path || path.length > u.pp) return false;
+
+    // v2: teste de esquiva/fixação, uma vez por movimento, contra o pior fixador
+    var locker = worstLocker(state, u, x, y);
+    if (locker) {
+      var chance = Engine.dodgeChance(state, uid, locker.uid);
+      var roll = nextRand(state);
+      if (roll < chance) {
+        emit({ type: 'dodgeOk', uid: uid, lockerUid: locker.uid, chance: chance });
+      } else {
+        u.pp = 0;
+        var critical = nextRand(state) < chance / 3;      // ver decisão de design 4
+        if (critical) u.pa = Math.max(0, u.pa - 1);
+        emit({ type: 'dodgeFail', uid: uid, lockerUid: locker.uid,
+               chance: chance, critical: critical });
+        log(u.name + ' não escapa de ' + locker.name + (critical ? ' (falha crítica!)' : '') + '.');
+        return false;
+      }
+    }
+
+    u.pp -= path.length;
     u.x = x; u.y = y;
     emit({ type: 'move', uid: uid, path: path });
+
+    // v2: pisa em armadilhas e eventos de terreno ao longo do caminho
+    for (var i = 0; i < path.length; i++) {
+      if (!u.alive || state.phase !== 'playing') break;
+      Engine.triggerTrap(state, uid, path[i].x, path[i].y);
+      if (!u.alive || state.phase !== 'playing') break;
+      Engine.triggerTileEvent(state, uid, path[i].x, path[i].y);
+    }
     return true;
   };
 
@@ -378,8 +766,7 @@ var JOGO = (typeof window !== 'undefined')
     var x = x0, y = y0;
     for (;;) {
       if (!(x === x0 && y === y0) && !(x === x1 && y === y1)) {
-        var t = tileAt(state, x, y);
-        if (t && t.type === 'wall') return false;
+        if (blocksSight(state, x, y)) return false;
       }
       if (x === x1 && y === y1) break;
       var e2 = 2 * err;
@@ -390,36 +777,35 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // --------------------------------------------------------------- feitiços
-  function spellDef(spellId) { return JOGO.DATA.spells[spellId] || null; }
-  function spellHasEffect(spell, type) {
-    for (var i = 0; i < spell.effects.length; i++) {
-      if (spell.effects[i].type === type) return true;
-    }
-    return false;
-  }
-
   function canCastNow(state, unit, spell) {
-    if (!unit.alive) return false;
+    if (!unit.alive || unit.offBoard) return false;
     if (unit.spells.indexOf(spell.id) < 0) return false;
-    if (unit.pa < spell.paCost) return false;
+    if (unit.pa < sPaCost(spell)) return false;
     if ((unit.cooldowns[spell.id] || 0) > 0) return false;
-    if (spell.castsPerTurn > 0 &&
-        (unit.castsThisTurn[spell.id] || 0) >= spell.castsPerTurn) return false;
+    if (sCastsPerTurn(spell) > 0 &&
+        (unit.castsThisTurn[spell.id] || 0) >= sCastsPerTurn(spell)) return false;
     return true;
   }
 
   function validTargetCell(state, unit, spell, tx, ty) {
     if (!inBounds(state, tx, ty)) return false;
     if (!isFloor(state, tx, ty)) return false;
+    var rg = sRange(spell);
     var d = manhattan(unit.x, unit.y, tx, ty);
-    if (d < spell.range.min || d > spell.range.max) return false;
-    if (spell.range.line && !(tx === unit.x || ty === unit.y)) return false;
-    if (spell.range.los && !Engine.los(state, unit.x, unit.y, tx, ty)) return false;
+    if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) return false;
+    if (rg.line && !(tx === unit.x || ty === unit.y)) return false;
+    if (rg.los && !Engine.los(state, unit.x, unit.y, tx, ty)) return false;
     var occupant = Engine.unitAt(state, tx, ty);
     if (spell.needsEmptyTile && occupant) return false;
     if (spellHasEffect(spell, 'swap') && (!occupant || occupant === unit)) return false;
+    // v2: targetSide
+    var ts = spell.targetSide;
+    if (ts === 'enemy' && (!occupant || occupant.side === unit.side)) return false;
+    if (ts === 'ally' && (!occupant || occupant.side !== unit.side)) return false;
+    if (ts === 'self' && !(tx === unit.x && ty === unit.y)) return false;
     return true;
   }
+  Engine.validTargetCell = validTargetCell;
 
   Engine.castTargets = function (state, uid, spellId) {
     var u = Engine.findUnit(state, uid);
@@ -437,23 +823,25 @@ var JOGO = (typeof window !== 'undefined')
   Engine.aoeTiles = function (state, spellId, casterX, casterY, tx, ty) {
     var spell = spellDef(spellId);
     if (!spell) return [];
-    var shape = spell.aoe.shape, size = spell.aoe.size;
+    var aoe = sAoe(spell);
+    var shape = aoe.shape, size = aoe.size || 0;
     var out = [];
     function add(x, y) {
-      if (inBounds(state, x, y) && tileAt(state, x, y).type !== 'wall') {
+      if (inBounds(state, x, y) && state.grid.tiles[y][x].type !== 'wall') {
         out.push({ x: x, y: y });
       }
     }
+    var dx, dy, i, s;
     if (shape === 'single') {
       add(tx, ty);
     } else if (shape === 'cross') {
       add(tx, ty);
-      for (var s = 1; s <= size; s++) {
+      for (s = 1; s <= size; s++) {
         add(tx + s, ty); add(tx - s, ty); add(tx, ty + s); add(tx, ty - s);
       }
     } else if (shape === 'circle') {
-      for (var dy = -size; dy <= size; dy++) {
-        for (var dx = -size; dx <= size; dx++) {
+      for (dy = -size; dy <= size; dy++) {
+        for (dx = -size; dx <= size; dx++) {
           if (Math.abs(dx) + Math.abs(dy) <= size) add(tx + dx, ty + dy);
         }
       }
@@ -463,20 +851,44 @@ var JOGO = (typeof window !== 'undefined')
       var sx = 0, sy = 0;
       if (Math.abs(ddx) >= Math.abs(ddy)) sx = ddx === 0 ? 1 : (ddx > 0 ? 1 : -1);
       else sy = ddy > 0 ? 1 : -1;
-      for (var i = 0; i < Math.max(1, size); i++) add(tx + i * sx, ty + i * sy);
+      for (i = 0; i < Math.max(1, size); i++) add(tx + i * sx, ty + i * sy);
+    } else if (shape === 'cone') {
+      // v2: triângulo a partir do alvo, abrindo no sentido oposto ao conjurador.
+      // linha i (0..size-1) tem 2i+1 células; total = size².
+      var cdx = tx - casterX, cdy = ty - casterY;
+      var fx = 0, fy = 0;
+      if (Math.abs(cdx) >= Math.abs(cdy)) fx = cdx === 0 ? 1 : (cdx > 0 ? 1 : -1);
+      else fy = cdy > 0 ? 1 : -1;
+      var px = -fy, py = fx;                  // eixo perpendicular
+      for (i = 0; i < Math.max(1, size); i++) {
+        for (var k = -i; k <= i; k++) {
+          add(tx + fx * i + px * k, ty + fy * i + py * k);
+        }
+      }
+    } else if (shape === 'ring') {
+      // v2: coroa de distância Manhattan exatamente `size`
+      if (size <= 0) { add(tx, ty); }
+      else {
+        for (dy = -size; dy <= size; dy++) {
+          for (dx = -size; dx <= size; dx++) {
+            if (Math.abs(dx) + Math.abs(dy) === size) add(tx + dx, ty + dy);
+          }
+        }
+      }
     }
     return out;
   };
 
   // --------------------------------------------------------------- dano
-  function rollDamageAmount(state, min, max, power, resist) {
+  // v2: `mult` extra (falloff de chain, marcas já embutidas pelo chamador)
+  function rollDamageAmount(state, min, max, power, resist, mult) {
     var roll = rollInt(state, min, max);
-    var amt = Math.round(roll * (100 + power) / 100 * (100 - resist) / 100);
+    var amt = Math.round(roll * (100 + power) / 100 * (100 - resist) / 100 * (mult == null ? 1 : mult));
     return Math.max(0, amt);
   }
 
-  // Aplica dano já calculado: escudo absorve antes do HP. Retorna a perda de HP.
-  function dealDamage(state, target, amount, element, sourceUid) {
+  // Aplica dano já calculado: escudo absorve antes do PV. Retorna a perda de PV.
+  function dealDamage(state, target, amount, element, sourceUid, noReflect) {
     if (!target.alive || amount <= 0) {
       if (target.alive) emit({ type: 'damage', uid: target.uid, amount: 0, element: element });
       return 0;
@@ -492,7 +904,6 @@ var JOGO = (typeof window !== 'undefined')
         absorbed += take;
         left -= take;
       }
-      // remove escudos esgotados
       for (var j = target.effects.length - 1; j >= 0; j--) {
         if (target.effects[j].type === 'shield' && target.effects[j].remaining <= 0) {
           target.effects.splice(j, 1);
@@ -504,6 +915,26 @@ var JOGO = (typeof window !== 'undefined')
     target.hp = Math.max(0, target.hp - hpLoss);
     emit({ type: 'damage', uid: target.uid, amount: amount, element: element,
            absorbed: absorbed, hpLoss: hpLoss, sourceUid: sourceUid || null });
+
+    // v2: reflect — devolve % do dano RECEBIDO ao agressor (não re-reflete)
+    if (!noReflect && sourceUid && sourceUid !== target.uid) {
+      var pct = 0;
+      for (var r = 0; r < target.effects.length; r++) {
+        if (target.effects[r].type === 'reflect') pct += (target.effects[r].pct || 0);
+      }
+      if (pct > 0) {
+        var attacker = Engine.findUnit(state, sourceUid);
+        if (attacker && attacker.alive) {
+          var back = Math.round(amount * pct / 100);
+          if (back > 0) {
+            log(target.name + ' reflete ' + back + ' de dano.');
+            emit({ type: 'reflect', uid: target.uid, targetUid: attacker.uid, amount: back });
+            dealDamage(state, attacker, back, 'neutro', target.uid, true);
+          }
+        }
+      }
+    }
+
     checkEnrage(state, target);
     if (target.hp <= 0) processDeath(state, target);
     return hpLoss;
@@ -516,6 +947,7 @@ var JOGO = (typeof window !== 'undefined')
     emit({ type: 'heal', uid: target.uid, amount: healed });
     return healed;
   }
+  Engine.applyHeal = applyHeal;
 
   function checkEnrage(state, unit) {
     if (!unit.alive || unit.enraged) return;
@@ -548,9 +980,9 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function spawnMonsterUnit(state, monsterId, x, y, kind, side, summonerUid) {
-    var def = JOGO.DATA.monsters[monsterId];
+    var def = (DATA().monsters || {})[monsterId];
     if (!def) return null;
-    var u = makeUnit(state, def, kind, side, x, y);
+    var u = makeUnit(state, def, kind, side, x, y, { element: def.element });
     u.summonerUid = summonerUid || null;
     state.units.push(u);
     insertIntoOrderAfter(state, summonerUid, u.uid);
@@ -565,13 +997,18 @@ var JOGO = (typeof window !== 'undefined')
     emit({ type: 'death', uid: unit.uid });
     log(unit.name + ' morre.');
 
+    // v2: fusão que morre some de vez (não devolve os dois)
+    if (unit.kind === 'fusion' && JOGO.Fusion && JOGO.Fusion.split) {
+      JOGO.Fusion.split(state, unit.uid);
+    }
+
     var explode = getTrait(unit, 'explodeOnDeath');
     if (explode) {
       log(unit.name + ' explode!');
       var victims = [];
       for (var i = 0; i < state.units.length; i++) {
         var v = state.units[i];
-        if (v.alive && manhattan(unit.x, unit.y, v.x, v.y) <= explode.radius) victims.push(v);
+        if (v.alive && !v.offBoard && manhattan(unit.x, unit.y, v.x, v.y) <= explode.radius) victims.push(v);
       }
       for (var j = 0; j < victims.length; j++) {
         var resist = Engine.effResist(victims[j], explode.element);
@@ -592,11 +1029,16 @@ var JOGO = (typeof window !== 'undefined')
 
     checkBattleEnd(state);
   }
+  Engine.processDeath = processDeath;
 
+  // v2: pets e invocações não sustentam o lado
   function sideHasCore(state, side) {
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.alive && u.side === side && u.kind !== 'summon') return true;
+      if (!u.alive || u.offBoard) continue;
+      if (u.side !== side) continue;
+      if (u.kind === 'summon' || u.kind === 'pet') continue;
+      return true;
     }
     return false;
   }
@@ -615,6 +1057,7 @@ var JOGO = (typeof window !== 'undefined')
       log('Sala limpa!');
     }
   }
+  Engine.checkBattleEnd = checkBattleEnd;
 
   // --------------------------------------------------------------- push/pull
   function forcedMove(state, caster, target, tiles, mode) {
@@ -649,7 +1092,6 @@ var JOGO = (typeof window !== 'undefined')
         else { sx = 0; sy = dy > 0 ? 1 : -1; }
         nx = target.x + sx; ny = target.y + sy;
         if (!isWalkable(state, nx, ny)) {
-          // tenta o outro eixo antes de declarar colisão
           if (sy === 0 && dy !== 0 && isWalkable(state, target.x, target.y + (dy > 0 ? 1 : -1))) {
             nx = target.x; ny = target.y + (dy > 0 ? 1 : -1);
           } else if (sx === 0 && dx !== 0 && isWalkable(state, target.x + (dx > 0 ? 1 : -1), target.y)) {
@@ -668,10 +1110,147 @@ var JOGO = (typeof window !== 'undefined')
              toX: target.x, toY: target.y, collision: collisionDmg });
       if (collisionDmg > 0) {
         log(target.name + ' colide! (' + collisionDmg + ' de dano)');
-        dealDamage(state, target, collisionDmg, 'neutral', caster.uid);
+        dealDamage(state, target, collisionDmg, 'neutro', caster.uid);
       }
     }
   }
+
+  // --------------------------------------------------- v2: marcas
+  function applyMark(state, target, eff, sourceUid) {
+    var maxStacks = eff.max || Engine.MARK_DEFAULT_MAX;
+    var value = eff.value != null ? eff.value : Engine.MARK_DEFAULT_VALUE;
+    var stacks = countEffects(target, 'mark');
+    if (stacks >= maxStacks) {
+      for (var i = 0; i < target.effects.length; i++) {   // renova a mais antiga
+        if (target.effects[i].type === 'mark') {
+          target.effects[i].duration = Math.max(target.effects[i].duration, eff.duration);
+          break;
+        }
+      }
+    } else {
+      var applied = { type: 'mark', value: value, duration: eff.duration,
+                      max: maxStacks, sourceUid: sourceUid };
+      target.effects.push(applied);
+      stacks++;
+      emit({ type: 'effectApplied', uid: target.uid, effect: applied });
+    }
+    emit({ type: 'markStack', uid: target.uid, stacks: stacks });
+  }
+
+  function consumeMarks(target) {
+    var n = 0;
+    for (var i = target.effects.length - 1; i >= 0; i--) {
+      if (target.effects[i].type === 'mark') { target.effects.splice(i, 1); n++; }
+    }
+    return n;
+  }
+
+  // --------------------------------------------------- v2: armadilhas
+  Engine.trapsAt = function (state, x, y) {
+    var out = [];
+    for (var i = 0; i < state.traps.length; i++) {
+      if (state.traps[i].x === x && state.traps[i].y === y) out.push(state.traps[i]);
+    }
+    return out;
+  };
+
+  Engine.triggerTrap = function (state, uid, x, y) {
+    var u = Engine.findUnit(state, uid);
+    if (!u || !u.alive || state.phase !== 'playing') return false;
+    for (var i = state.traps.length - 1; i >= 0; i--) {
+      var tr = state.traps[i];
+      if (tr.x !== x || tr.y !== y) continue;
+      if (tr.side === u.side) continue;              // não dispara para o próprio lado
+      state.traps.splice(i, 1);
+      emit({ type: 'trapTriggered', uid: uid, trapId: tr.trapId, x: x, y: y });
+      log(u.name + ' pisa em uma armadilha!');
+      var sp = spellDef(tr.trapId);
+      if (sp) {
+        var owner = Engine.findUnit(state, tr.ownerUid);
+        if (!owner || !owner.alive) owner = u;
+        castCore(state, owner, sp, x, y, { casterX: x, casterY: y, selfHarm: true, silent: true });
+      }
+      return true;
+    }
+    return false;
+  };
+
+  // --------------------------------------------------- v2: eventos de terreno
+  Engine.tileEventAt = function (state, x, y) {
+    for (var i = 0; i < state.tileEventsActive.length; i++) {
+      var te = state.tileEventsActive[i];
+      if (te.x === x && te.y === y) return te;
+    }
+    return null;
+  };
+
+  function spawnTileEvents(state) {
+    var D = DATA();
+    if (!D.tileEvents) return;
+    var dungeon = getDungeon(state.dungeonId);
+    if (!dungeon) return;
+    var rate = dungeon.tileEventRate;
+    if (!rate) return;
+    var perRound = dungeon.tileEventSpawnPerRound || dungeon.spawnPerRound || 1;
+    var pool = [];
+    for (var k in D.tileEvents) {
+      if (Object.prototype.hasOwnProperty.call(D.tileEvents, k)) pool.push(D.tileEvents[k]);
+    }
+    if (!pool.length) return;
+
+    for (var n = 0; n < perRound; n++) {
+      if (nextRand(state) >= rate) continue;
+      var free = [];
+      for (var y = 0; y < state.grid.h; y++) {
+        for (var x = 0; x < state.grid.w; x++) {
+          if (!isFloor(state, x, y)) continue;
+          if (Engine.unitAt(state, x, y)) continue;
+          if (Engine.tileEventAt(state, x, y)) continue;
+          if (Engine.trapsAt(state, x, y).length) continue;
+          free.push({ x: x, y: y });
+        }
+      }
+      if (!free.length) return;
+      var cell = free[Math.floor(nextRand(state) * free.length)];
+      var ev = weightedPick(state, pool);
+      if (!ev) return;
+      var entry = { x: cell.x, y: cell.y, eventId: ev.id, kind: ev.kind,
+                    icon: ev.icon || null, remaining: ev.duration || 3 };
+      state.tileEventsActive.push(entry);
+      emit({ type: 'tileEventSpawn', x: cell.x, y: cell.y, eventId: ev.id, kind: ev.kind });
+    }
+  }
+
+  Engine.triggerTileEvent = function (state, uid, x, y) {
+    var u = Engine.findUnit(state, uid);
+    if (!u || !u.alive || state.phase !== 'playing') return false;
+    for (var i = 0; i < state.tileEventsActive.length; i++) {
+      var te = state.tileEventsActive[i];
+      if (te.x !== x || te.y !== y) continue;
+      var def = (DATA().tileEvents || {})[te.eventId];
+      state.tileEventsActive.splice(i, 1);     // consome
+      var effects = null, text = '';
+      if (def) {
+        if (def.outcomes && def.outcomes.length) {           // '?' surpresa
+          var pick = weightedPick(state, def.outcomes);
+          if (pick) { effects = pick.effects || []; text = pick.text || def.name || ''; }
+        } else {
+          effects = def.effects || [];
+          text = def.name || '';
+        }
+      }
+      emit({ type: 'tileEvent', uid: uid, eventId: te.eventId, x: x, y: y, text: text });
+      if (text) log(u.name + ': ' + text);
+      if (effects && effects.length) {
+        // o pisante é o "conjurador" E alvo legítimo (decisão de design 14)
+        applyEffects(state, u, { id: 'tileEvent:' + te.eventId, element: 'neutro',
+                                 aoe: { shape: 'single', size: 0 }, effects: effects },
+                     x, y, { casterX: x, casterY: y, selfHarm: true });
+      }
+      return true;
+    }
+    return false;
+  };
 
   // --------------------------------------------------------------- cast
   Engine.cast = function (state, uid, spellId, x, y) {
@@ -682,13 +1261,20 @@ var JOGO = (typeof window !== 'undefined')
     if (!canCastNow(state, caster, spell)) return false;
     if (!validTargetCell(state, caster, spell, x, y)) return false;
 
-    caster.pa -= spell.paCost;
+    caster.pa -= sPaCost(spell);
     caster.castsThisTurn[spellId] = (caster.castsThisTurn[spellId] || 0) + 1;
-    if (spell.cooldown > 0) caster.cooldowns[spellId] = spell.cooldown + 1; // decrementa no fim do turno do dono
+    if (sCooldown(spell) > 0) caster.cooldowns[spellId] = sCooldown(spell) + 1;
 
-    emit({ type: 'cast', uid: uid, spellId: spellId, x: x, y: y,
+    castCore(state, caster, spell, x, y, {});
+    return true;
+  };
+
+  // Conjuração sem custo/validação (usada por cast, armadilhas, pets e eventos).
+  function castCore(state, caster, spell, x, y, opts) {
+    opts = opts || {};
+    emit({ type: 'cast', uid: caster.uid, spellId: spell.id, x: x, y: y,
            fxKey: spell.fxKey, element: spell.element });
-    log(caster.name + ' conjura ' + spell.name + '.');
+    if (!opts.silent) log(caster.name + ' conjura ' + spell.name + '.');
 
     // invisível quebra ao conjurar dano
     if (spellHasEffect(spell, 'damage') && Engine.unitHasEffect(caster, 'invisible')) {
@@ -697,8 +1283,17 @@ var JOGO = (typeof window !== 'undefined')
       }
       log(caster.name + ' sai das sombras!');
     }
+    applyEffects(state, caster, spell, x, y, opts);
+  }
+  Engine.castCore = castCore;
 
-    var tiles = Engine.aoeTiles(state, spellId, caster.x, caster.y, x, y);
+  function applyEffects(state, caster, spell, x, y, opts) {
+    opts = opts || {};
+    var cx = opts.casterX != null ? opts.casterX : caster.x;
+    var cy = opts.casterY != null ? opts.casterY : caster.y;
+    var tiles = Engine.aoeTiles(state, spell.id, cx, cy, x, y);
+    if (!tiles.length && spell.aoe === undefined) tiles = [{ x: x, y: y }];
+    var effects = sEffects(spell);
 
     function unitsInTiles(includeCaster) {
       var list = [];
@@ -708,19 +1303,23 @@ var JOGO = (typeof window !== 'undefined')
       }
       return list;
     }
+    // efeitos ofensivos não atingem o conjurador — exceto armadilha/evento de
+    // terreno, em que o "conjurador" é justamente a vítima (selfHarm).
+    function hostileTargets() { return unitsInTiles(!!opts.selfHarm); }
 
-    for (var e = 0; e < spell.effects.length; e++) {
+    for (var e = 0; e < effects.length; e++) {
       if (state.phase !== 'playing') break;
-      var eff = spell.effects[e];
+      var eff = effects[e];
       var targets, t, u, applied;
 
       switch (eff.type) {
         case 'damage':
-          targets = unitsInTiles(false); // AoE ofensiva não atinge o conjurador
+          targets = hostileTargets();
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             var amt = rollDamageAmount(state, eff.min, eff.max,
-              Engine.effPower(caster), Engine.effResist(u, eff.element));
+              Engine.effPower(caster), Engine.effResist(u, eff.element),
+              Engine.markMultiplier(u));                       // v2: marcas
             var hpLoss = dealDamage(state, u, amt, eff.element, caster.uid);
             if (eff.lifesteal && hpLoss > 0 && caster.alive) {
               var stolen = Math.round(hpLoss / 2);
@@ -761,8 +1360,8 @@ var JOGO = (typeof window !== 'undefined')
             u.effects.push(applied);
             // ajuste imediato para buffs de recursos valerem já neste turno
             if (eff.stat === 'pa') u.pa = Math.max(0, u.pa + eff.value);
-            if (eff.stat === 'pm') u.pm = Math.max(0, u.pm + eff.value);
-            if (eff.stat === 'initiative') u.initiative += eff.value; // não reordena a batalha
+            if (eff.stat === 'pp') u.pp = Math.max(0, u.pp + eff.value);
+            if (eff.stat === 'initiative') u.initiative += eff.value; // não reordena
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
           }
           break;
@@ -779,7 +1378,7 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'poison':
-          targets = unitsInTiles(false);
+          targets = hostileTargets();
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             applied = { type: 'poison', element: eff.element, min: eff.min, max: eff.max,
@@ -802,17 +1401,17 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'push':
-          targets = unitsInTiles(false);
-          targets.sort(function (a, b) { // mais distantes primeiro (liberam células)
-            return manhattan(caster.x, caster.y, b.x, b.y) - manhattan(caster.x, caster.y, a.x, a.y);
+          targets = hostileTargets();
+          targets.sort(function (a, b) {
+            return manhattan(cx, cy, b.x, b.y) - manhattan(cx, cy, a.x, a.y);
           });
           for (t = 0; t < targets.length; t++) forcedMove(state, caster, targets[t], eff.tiles, 'push');
           break;
 
         case 'pull':
-          targets = unitsInTiles(false);
-          targets.sort(function (a, b) { // mais próximos primeiro (assentam primeiro)
-            return manhattan(caster.x, caster.y, a.x, a.y) - manhattan(caster.x, caster.y, b.x, b.y);
+          targets = hostileTargets();
+          targets.sort(function (a, b) {
+            return manhattan(cx, cy, a.x, a.y) - manhattan(cx, cy, b.x, b.y);
           });
           for (t = 0; t < targets.length; t++) forcedMove(state, caster, targets[t], eff.tiles, 'pull');
           break;
@@ -828,11 +1427,11 @@ var JOGO = (typeof window !== 'undefined')
         case 'swap':
           u = Engine.unitAt(state, x, y);
           if (u && u !== caster) {
-            var cx = caster.x, cy = caster.y;
+            var sx2 = caster.x, sy2 = caster.y;
             caster.x = u.x; caster.y = u.y;
-            u.x = cx; u.y = cy;
-            emit({ type: 'teleport', uid: caster.uid, fromX: cx, fromY: cy, toX: caster.x, toY: caster.y });
-            emit({ type: 'teleport', uid: u.uid, fromX: caster.x, fromY: caster.y, toX: cx, toY: cy });
+            u.x = sx2; u.y = sy2;
+            emit({ type: 'teleport', uid: caster.uid, fromX: sx2, fromY: sy2, toX: caster.x, toY: caster.y });
+            emit({ type: 'teleport', uid: u.uid, fromX: caster.x, fromY: caster.y, toX: sx2, toY: sy2 });
           }
           break;
 
@@ -864,36 +1463,174 @@ var JOGO = (typeof window !== 'undefined')
             log(u.name + ' some nas sombras.');
           }
           break;
+
+        // ------------------------------------------------------------ v2
+        case 'root':
+          targets = hostileTargets();
+          for (t = 0; t < targets.length; t++) {
+            u = targets[t];
+            applied = { type: 'root', duration: eff.duration, sourceUid: caster.uid };
+            u.effects.push(applied);
+            u.pp = 0;                                   // prende já neste turno
+            emit({ type: 'effectApplied', uid: u.uid, effect: applied });
+            log(u.name + ' fica preso ao chão.');
+          }
+          break;
+
+        case 'mark':
+          targets = hostileTargets();
+          for (t = 0; t < targets.length; t++) applyMark(state, targets[t], eff, caster.uid);
+          break;
+
+        case 'detonateMarks':
+          targets = hostileTargets();
+          for (t = 0; t < targets.length; t++) {
+            u = targets[t];
+            var stacks = consumeMarks(u);
+            if (stacks <= 0) continue;
+            emit({ type: 'markStack', uid: u.uid, stacks: 0 });
+            var dmg = Math.round(stacks * (eff.mult || 0));
+            log(u.name + ': ' + stacks + ' marcas detonam (' + dmg + ').');
+            dealDamage(state, u, dmg, eff.element || spell.element || 'neutro', caster.uid);
+          }
+          break;
+
+        case 'trap':
+          if (isFloor(state, x, y)) {
+            var trap = { x: x, y: y, trapId: eff.trapId, ownerUid: caster.uid,
+                         side: caster.side, remaining: eff.duration || 3 };
+            state.traps.push(trap);
+            emit({ type: 'trapSet', uid: caster.uid, trapId: eff.trapId, x: x, y: y });
+            log(caster.name + ' arma uma armadilha.');
+          }
+          break;
+
+        case 'weatherShift':
+          setWeather(state, eff.weather);
+          break;
+
+        case 'cleanse':
+          targets = unitsInTiles(true);
+          for (t = 0; t < targets.length; t++) {
+            u = targets[t];
+            var kinds = eff.kinds || [];
+            var removed = 0;
+            for (var ci = u.effects.length - 1; ci >= 0; ci--) {
+              if (kinds.indexOf(u.effects[ci].type) >= 0) { u.effects.splice(ci, 1); removed++; }
+            }
+            recomputeShield(u);
+            if (removed > 0) {
+              emit({ type: 'cleanse', uid: u.uid, kinds: kinds.slice(), removed: removed });
+              log(u.name + ' se purifica.');
+            }
+          }
+          break;
+
+        case 'reflect':
+          targets = unitsInTiles(true);
+          for (t = 0; t < targets.length; t++) {
+            u = targets[t];
+            applied = { type: 'reflect', pct: eff.pct, duration: eff.duration, sourceUid: caster.uid };
+            u.effects.push(applied);
+            emit({ type: 'effectApplied', uid: u.uid, effect: applied });
+          }
+          break;
+
+        case 'dispelShield':
+          targets = hostileTargets();
+          for (t = 0; t < targets.length; t++) {
+            u = targets[t];
+            var had = u.shield;
+            for (var di = u.effects.length - 1; di >= 0; di--) {
+              if (u.effects[di].type === 'shield') u.effects.splice(di, 1);
+            }
+            recomputeShield(u);
+            if (had > 0) {
+              emit({ type: 'dispelShield', uid: u.uid, removed: had });
+              emit({ type: 'shield', uid: u.uid, amount: 0 });
+              log(u.name + ' perde o escudo.');
+            }
+          }
+          break;
+
+        case 'moveTo':
+          slideTo(state, caster, x, y, eff.maxTiles || 0);
+          break;
+
+        case 'chain':
+          chainDamage(state, caster, eff, spell, x, y);
+          break;
       }
     }
-    return true;
-  };
+  }
+  Engine.applyEffects = applyEffects;
+
+  // v2: investida — desliza por eixo dominante até maxTiles
+  function slideTo(state, caster, x, y, maxTiles) {
+    var path = [];
+    var steps = 0;
+    while (steps < maxTiles && !(caster.x === x && caster.y === y)) {
+      var dx = x - caster.x, dy = y - caster.y;
+      var sx = 0, sy = 0;
+      if (Math.abs(dx) >= Math.abs(dy)) sx = dx > 0 ? 1 : -1;
+      else sy = dy > 0 ? 1 : -1;
+      var nx = caster.x + sx, ny = caster.y + sy;
+      if (!isWalkable(state, nx, ny)) break;
+      caster.x = nx; caster.y = ny;
+      path.push({ x: nx, y: ny });
+      steps++;
+    }
+    if (path.length) emit({ type: 'move', uid: caster.uid, path: path, forced: true });
+  }
+
+  // v2: raio em cadeia
+  function chainDamage(state, caster, eff, spell, x, y) {
+    var cur = Engine.unitAt(state, x, y);
+    if (!cur || !cur.alive || cur.side === caster.side) return;
+    var hit = {};
+    var mult = 1;
+    var falloff = eff.falloff != null ? eff.falloff : 0.7;
+    var jumps = eff.jumps || 0;
+    var element = eff.element || spell.element || 'neutro';
+    for (var j = 0; j <= jumps; j++) {
+      if (!cur || !cur.alive) break;
+      hit[cur.uid] = true;
+      var amt = rollDamageAmount(state, eff.min, eff.max, Engine.effPower(caster),
+        Engine.effResist(cur, element), Engine.markMultiplier(cur) * mult);
+      emit({ type: 'chainHop', uid: cur.uid, index: j });
+      dealDamage(state, cur, amt, element, caster.uid);
+      if (state.phase !== 'playing') break;
+      mult *= falloff;
+      // próximo salto: inimigo vivo mais próximo ainda não atingido
+      var next = null, bestD = 999;
+      for (var i = 0; i < state.units.length; i++) {
+        var u = state.units[i];
+        if (!u.alive || u.offBoard || hit[u.uid]) continue;
+        if (u.side === caster.side) continue;
+        var d = manhattan(cur.x, cur.y, u.x, u.y);
+        if (d <= Engine.CHAIN_JUMP_RANGE && d < bestD) { bestD = d; next = u; }
+      }
+      cur = next;
+    }
+  }
 
   // --------------------------------------------------------------- turnos
-  function startTurn(state, guard) {
-    if (state.phase !== 'playing') return;
-    if (guard > state.order.length + 2) return;
-    var u = Engine.activeUnit(state);
-    if (!u || !u.alive) { advanceTurn(state, guard + 1); return; }
+  // Tiques de início de turno compartilhados por unidades da ordem e por pets.
+  function runStartTicks(state, u) {
+    weatherTick(state, u);                        // v2
+    if (!u.alive) return;
 
-    u.pa = Math.max(0, u.paMax + sumBuffs(u, 'pa'));
-    u.pm = Math.max(0, u.pmMax + sumBuffs(u, 'pm'));
-    u.castsThisTurn = {};
-    emit({ type: 'turnStart', uid: u.uid });
-
-    // aura de regeneração: cura aliados (exceto o portador) no início do turno dele
     var aura = getTrait(u, 'regenAura');
     if (aura) {
       for (var i = 0; i < state.units.length; i++) {
         var ally = state.units[i];
-        if (ally.alive && ally !== u && ally.side === u.side &&
+        if (ally.alive && !ally.offBoard && ally !== u && ally.side === u.side &&
             manhattan(u.x, u.y, ally.x, ally.y) <= aura.radius && ally.hp < ally.hpMax) {
           applyHeal(state, ally, aura.value);
         }
       }
     }
 
-    // poison/regen ticam no início do turno da vítima
     var effs = u.effects.slice();
     for (var e = 0; e < effs.length; e++) {
       if (!u.alive) break;
@@ -901,15 +1638,78 @@ var JOGO = (typeof window !== 'undefined')
       if (u.effects.indexOf(eff) < 0) continue;
       if (eff.type === 'poison') {
         var amt = rollDamageAmount(state, eff.min, eff.max,
-          eff.sourcePower || 0, Engine.effResist(u, eff.element));
+          eff.sourcePower || 0, Engine.effResist(u, eff.element), Engine.markMultiplier(u));
         if (amt > 0) log(u.name + ' sofre ' + amt + ' de veneno.');
         dealDamage(state, u, amt, eff.element, eff.sourceUid);
       } else if (eff.type === 'regen') {
         applyHeal(state, u, rollInt(state, eff.min, eff.max));
       }
     }
+  }
+
+  function tickDownEffects(state, u) {
+    for (var i = u.effects.length - 1; i >= 0; i--) {
+      var eff = u.effects[i];
+      eff.duration--;
+      if (eff.duration <= 0) {
+        u.effects.splice(i, 1);
+        log(u.name + ': efeito ' + eff.type + ' expira.');
+      }
+    }
+    recomputeShield(u);
+    for (var sid in u.cooldowns) {
+      if (u.cooldowns[sid] > 0) u.cooldowns[sid]--;
+    }
+  }
+
+  function startTurn(state, guard) {
+    if (state.phase !== 'playing') return;
+    if (guard > state.order.length + 2) return;
+    var u = Engine.activeUnit(state);
+    if (!u || !u.alive || u.offBoard) { advanceTurn(state, guard + 1); return; }
+
+    u.pa = Math.max(0, u.paMax + sumBuffs(u, 'pa'));
+    u.pp = Math.max(0, u.ppMax + sumBuffs(u, 'pp'));
+    if (Engine.unitHasEffect(u, 'root')) u.pp = 0;      // v2
+    u.castsThisTurn = {};
+    emit({ type: 'turnStart', uid: u.uid });
+
+    runStartTicks(state, u);
 
     if (!u.alive) advanceTurn(state, guard + 1);
+  }
+
+  // v2: início de rodada — clima automático, armadilhas e eventos de terreno
+  function onRoundStart(state) {
+    var i;
+    var dungeon = getDungeon(state.dungeonId);
+    var every = (dungeon && dungeon.weatherShiftEveryRounds) || 0;
+    if (every > 0 && state.round > 1 && (state.round - 1) % every === 0) {
+      var cyc = weatherCycle(state);
+      if (cyc.length > 1) {
+        state._weatherIdx = (state._weatherIdx + 1) % cyc.length;
+        var next = cyc[state._weatherIdx];
+        state.weather = null;             // força o evento mesmo em ciclo curto
+        setWeather(state, next);
+      }
+    }
+    for (i = state.traps.length - 1; i >= 0; i--) {
+      state.traps[i].remaining--;
+      if (state.traps[i].remaining <= 0) {
+        emit({ type: 'trapExpired', trapId: state.traps[i].trapId,
+               x: state.traps[i].x, y: state.traps[i].y });
+        state.traps.splice(i, 1);
+      }
+    }
+    for (i = state.tileEventsActive.length - 1; i >= 0; i--) {
+      state.tileEventsActive[i].remaining--;
+      if (state.tileEventsActive[i].remaining <= 0) {
+        emit({ type: 'tileEventExpired', eventId: state.tileEventsActive[i].eventId,
+               x: state.tileEventsActive[i].x, y: state.tileEventsActive[i].y });
+        state.tileEventsActive.splice(i, 1);
+      }
+    }
+    spawnTileEvents(state);
   }
 
   function advanceTurn(state, guard) {
@@ -922,11 +1722,13 @@ var JOGO = (typeof window !== 'undefined')
         state.activeIdx = 0;
         state.round++;
         emit({ type: 'roundStart', round: state.round });
+        onRoundStart(state);                            // v2
+        if (state.phase !== 'playing') return;
       }
       steps++;
       if (steps > max) return; // ninguém vivo (o fim de batalha já deveria ter disparado)
       var u = Engine.findUnit(state, state.order[state.activeIdx]);
-      if (u && u.alive) break;
+      if (u && u.alive && !u.offBoard) break;
     } while (true);
     startTurn(state, guard);
   }
@@ -935,21 +1737,133 @@ var JOGO = (typeof window !== 'undefined')
     if (state.phase !== 'playing') return;
     var u = Engine.activeUnit(state);
     if (u) {
-      // durações decrementam no fim do turno do dono do efeito (a vítima)
-      for (var i = u.effects.length - 1; i >= 0; i--) {
-        var eff = u.effects[i];
-        eff.duration--;
-        if (eff.duration <= 0) {
-          u.effects.splice(i, 1);
-          log(u.name + ': efeito ' + eff.type + ' expira.');
+      tickDownEffects(state, u);
+      // v2: a fusão declarada resolve no FIM do turno de quem declarou
+      if (JOGO.Fusion && JOGO.Fusion.resolve && state.pendingFusion &&
+          state.pendingFusion.a === u.uid) {
+        JOGO.Fusion.resolve(state);
+      }
+      // v2: os pets do dono agem logo depois dele
+      if (state.phase === 'playing') Engine.runPetTurn(state, u.uid);
+    }
+    if (state.phase !== 'playing') return;
+    advanceTurn(state, 0);
+  };
+
+  // --------------------------------------------------------- v2: turno do pet
+  Engine.petsOf = function (state, ownerUid) {
+    var out = [];
+    for (var i = 0; i < state.units.length; i++) {
+      var p = state.units[i];
+      if (p.kind === 'pet' && p.ownerUid === ownerUid && p.alive && !p.offBoard) out.push(p);
+    }
+    return out;
+  };
+
+  function petBestSpell(state, pet, kinds) {
+    var best = null;
+    for (var i = 0; i < pet.spells.length; i++) {
+      var sp = spellDef(pet.spells[i]);
+      if (!sp) continue;
+      if (!canCastNow(state, pet, sp)) continue;
+      var match = false;
+      for (var k = 0; k < kinds.length; k++) if (spellHasEffect(sp, kinds[k])) match = true;
+      if (!match) continue;
+      if (!best || sPaCost(sp) > sPaCost(best)) best = sp;   // o mais caro = o melhor
+    }
+    return best;
+  }
+
+  Engine.runPetTurn = function (state, ownerUid) {
+    if (state.phase !== 'playing') return false;
+    var pets = Engine.petsOf(state, ownerUid);
+    if (!pets.length) return false;
+    var owner = Engine.findUnit(state, ownerUid);
+    var acted = false;
+
+    for (var pi = 0; pi < pets.length; pi++) {
+      var pet = pets[pi];
+      if (!pet.alive || state.phase !== 'playing') continue;
+      pet.pa = Math.max(0, pet.paMax + sumBuffs(pet, 'pa'));
+      pet.pp = Math.max(0, pet.ppMax + sumBuffs(pet, 'pp'));
+      if (Engine.unitHasEffect(pet, 'root')) pet.pp = 0;
+      pet.castsThisTurn = {};
+      emit({ type: 'turnStart', uid: pet.uid, pet: true });
+      runStartTicks(state, pet);
+      if (!pet.alive || state.phase !== 'playing') { continue; }
+
+      var follow = pet.followDistance || Engine.PET_FOLLOW_DEFAULT;
+      var reach = pet.range || 1;
+      var i, u, d;
+
+      // ------- alvos
+      var enemies = [], woundedAlly = null, woundedPct = 1;
+      for (i = 0; i < state.units.length; i++) {
+        u = state.units[i];
+        if (!u.alive || u.offBoard || u === pet) continue;
+        if (u.side !== pet.side) { if (!Engine.unitHasEffect(u, 'invisible')) enemies.push(u); }
+        else if (u.hp / u.hpMax < woundedPct) { woundedPct = u.hp / u.hpMax; woundedAlly = u; }
+      }
+
+      // ------- reposiciona: nunca além de followDistance do dono
+      var anchor = owner && owner.alive && !owner.offBoard ? owner : null;
+      var cells = [{ x: pet.x, y: pet.y, cost: 0 }].concat(Engine.reachable(state, pet.uid));
+      var bestCell = cells[0], bestScore = -Infinity;
+      for (i = 0; i < cells.length; i++) {
+        var c = cells[i];
+        var dOwner = anchor ? manhattan(c.x, c.y, anchor.x, anchor.y) : 0;
+        if (anchor && dOwner > follow) continue;          // respeita a coleira
+        var score = -0.5 * c.cost;
+        if (pet.behavior === 'support') {
+          var tgt = woundedAlly || anchor;
+          if (tgt) score -= 1.2 * manhattan(c.x, c.y, tgt.x, tgt.y);
+        } else if (pet.behavior === 'guard') {
+          score -= 2.0 * dOwner;
+        } else { // attack
+          var dEnemy = 99;
+          for (var q = 0; q < enemies.length; q++) {
+            d = manhattan(c.x, c.y, enemies[q].x, enemies[q].y);
+            if (d < dEnemy) dEnemy = d;
+          }
+          score -= 1.0 * Math.abs(Math.min(dEnemy, 99) - Math.min(reach, 99));
+        }
+        if (c.risky) score -= 3;
+        if (score > bestScore) { bestScore = score; bestCell = c; }
+      }
+      if (bestCell.x !== pet.x || bestCell.y !== pet.y) {
+        if (Engine.move(state, pet.uid, bestCell.x, bestCell.y)) {
+          emit({ type: 'petAct', uid: pet.uid, action: 'move', ownerUid: ownerUid });
+          acted = true;
         }
       }
-      recomputeShield(u);
-      // recargas do dono decrementam no fim do turno dele
-      for (var sid in u.cooldowns) {
-        if (u.cooldowns[sid] > 0) u.cooldowns[sid]--;
+      if (!pet.alive || state.phase !== 'playing') continue;
+
+      // ------- age conforme o comportamento, respeitando `range`
+      var spell = null, target = null;
+      if (pet.behavior === 'support') {
+        spell = petBestSpell(state, pet, ['heal', 'shield', 'buff', 'regen', 'cleanse']);
+        target = woundedAlly && woundedAlly.hp < woundedAlly.hpMax ? woundedAlly : (anchor || pet);
+      } else {
+        spell = petBestSpell(state, pet, ['damage', 'poison', 'push', 'mark', 'root', 'chain']);
+        var bd = 999;
+        for (i = 0; i < enemies.length; i++) {
+          d = manhattan(pet.x, pet.y, enemies[i].x, enemies[i].y);
+          if (d <= reach && d < bd) { bd = d; target = enemies[i]; }
+        }
       }
+      if (spell && target && manhattan(pet.x, pet.y, target.x, target.y) <= reach &&
+          validTargetCell(state, pet, spell, target.x, target.y)) {
+        if (Engine.cast(state, pet.uid, spell.id, target.x, target.y)) {
+          emit({ type: 'petAct', uid: pet.uid, action: 'cast', spellId: spell.id,
+                 targetUid: target.uid, ownerUid: ownerUid });
+          acted = true;
+        }
+      } else if (!acted) {
+        emit({ type: 'petAct', uid: pet.uid, action: 'idle', ownerUid: ownerUid });
+      }
+
+      if (pet.alive) tickDownEffects(state, pet);
     }
-    advanceTurn(state, 0);
+    return acted;
   };
 })();

@@ -402,6 +402,579 @@ JOGO.DATA.spells = {
     fxKey: 'worldThrow'
   },
 
+  /* ======================================================================
+   * ELFO ARQUEIRO — ATIRADOR
+   * Assinatura: `mark` acumula, `detonateMarks` cobra a conta.
+   * Fogo: marcas que queimam e explodem · Água: arpões que puxam e alimentam
+   * Terra: flechas-menir que prendem · Ar: tiros que saltam de alvo em alvo
+   * ====================================================================== */
+
+  'arqueiro-neutro-1': {
+    id: 'arqueiro-neutro-1', name: 'Flecha Anotada', element: 'neutro', classId: 'arqueiro', unlockLevel: 0,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'neutro', min: 18, max: 24 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: '18–24 de dano neutro e 1 marca no alvo (cada marca aumenta em 5% todo o dano que ele receber). Duas vezes por turno.',
+    flavor: 'A flecha não é a cobrança. É só o registro no caderno.',
+    fxKey: 'markShot'
+  },
+  'arqueiro-neutro-2': {
+    id: 'arqueiro-neutro-2', name: 'Passo de Corça', element: 'neutro', classId: 'arqueiro', unlockLevel: 0,
+    paCost: 2, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'moveTo', maxTiles: 4 } ],
+    description: 'Desliza até 4 células até uma célula vazia, sem gastar PP. A distância é a armadura do arqueiro.',
+    flavor: 'Ninguém o viu correr. Todo mundo o viu já longe.',
+    fxKey: 'doeStep'
+  },
+  'arqueiro-neutro-3': {
+    id: 'arqueiro-neutro-3', name: 'Cobrar a Conta', element: 'neutro', classId: 'arqueiro', unlockLevel: 0,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'detonateMarks', mult: 9 }, { type: 'damage', element: 'neutro', min: 8, max: 12 } ],
+    description: 'Consome todas as marcas do alvo: 9 de dano por marca, mais 8–12 de dano neutro do tiro.',
+    flavor: 'Elfo nenhum perdoa dívida. No máximo adia o vencimento.',
+    fxKey: 'markCollect'
+  },
+
+  /* --- ARQUEIRO · FOGO: a marca queima; a conta explode --- */
+  'arqueiro-fogo-5': {
+    id: 'arqueiro-fogo-5', name: 'Flecha Incendiária', element: 'fogo', classId: 'arqueiro', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 20, max: 26 }, { type: 'poison', element: 'fogo', min: 5, max: 8, duration: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: '20–26 de fogo, queimadura de 5–8 por 2 turnos e 1 marca.',
+    flavor: 'A ponta é embebida na resina que sobrou da Estufa. Cheira a fim de tarde.',
+    fxKey: 'emberArrow'
+  },
+  'arqueiro-fogo-10': {
+    id: 'arqueiro-fogo-10', name: 'Salva de Fagulhas', element: 'fogo', classId: 'arqueiro', unlockLevel: 10,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 3, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 24, max: 30 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: 'Três flechas em leque: 24–30 de fogo em raio 1 e 1 marca em cada atingido. Marcar o grupo todo é o plano.',
+    flavor: 'Contabilidade em massa.',
+    fxKey: 'markVolley'
+  },
+  'arqueiro-fogo-12': {
+    id: 'arqueiro-fogo-12', name: 'Ferro em Brasa', element: 'fogo', classId: 'arqueiro', unlockLevel: 12,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 28, max: 35 }, { type: 'mark', value: 5, duration: 4, max: 5 } ],
+    description: '28–35 de fogo e 1 marca que dura 4 turnos — a ponta vermelha demora a esfriar.',
+    flavor: 'Marca gado, marca inimigo. A técnica é a mesma; a paciência também.',
+    fxKey: 'brandShot'
+  },
+  'arqueiro-fogo-15': {
+    id: 'arqueiro-fogo-15', name: 'Detonar as Brasas', element: 'fogo', classId: 'arqueiro', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'detonateMarks', mult: 12 }, { type: 'damage', element: 'fogo', min: 20, max: 26 } ],
+    description: 'Acende todas as marcas em raio 1: 12 de dano por marca de cada alvo, mais 20–26 de fogo na área.',
+    flavor: 'Ele acende o caderno inteiro de uma vez. É mais rápido do que somar.',
+    fxKey: 'markBlast'
+  },
+  'arqueiro-fogo-20': {
+    id: 'arqueiro-fogo-20', name: 'Chuva de Pavios', element: 'fogo', classId: 'arqueiro', unlockLevel: 20,
+    paCost: 5, cooldown: 2, castsPerTurn: 1,
+    range: { min: 3, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 40, max: 48 }, { type: 'poison', element: 'fogo', min: 10, max: 14, duration: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: 'Dezenas de flechas em brasa caem em raio 2: 40–48 de fogo, queimadura de 10–14 por 2 turnos e 1 marca em todos.',
+    flavor: 'Chove fogo num mundo que não vê chuva há mil anos. Justiça poética duvidosa.',
+    fxKey: 'wickRain'
+  },
+  'arqueiro-fogo-30': {
+    id: 'arqueiro-fogo-30', name: 'Aljava do Sol Morto', element: 'fogo', classId: 'arqueiro', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 2, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 62, max: 74 }, { type: 'detonateMarks', mult: 20 }, { type: 'poison', element: 'fogo', min: 16, max: 20, duration: 3 } ],
+    description: 'Esvazia a aljava inteira em raio 2: 62–74 de fogo, 20 de dano por marca acumulada em cada alvo e queimadura de 16–20 por 3 turnos.',
+    flavor: 'Guardava uma flecha do tempo em que ainda havia sol. Guardou até agora.',
+    fxKey: 'deadSunQuiver'
+  },
+
+  /* --- ARQUEIRO · ÁGUA: arpoa, puxa e se alimenta --- */
+  'arqueiro-agua-5': {
+    id: 'arqueiro-agua-5', name: 'Flecha-Arpão', element: 'agua', classId: 'arqueiro', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 18, max: 24, lifesteal: true }, { type: 'pull', tiles: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: '18–24 de água com roubo de vida, puxa 2 células e deixa 1 marca. Reposiciona o alvo para onde convém.',
+    flavor: 'A corda é fina. A vontade do outro lado é que é grossa.',
+    fxKey: 'harpoonArrow'
+  },
+  'arqueiro-agua-10': {
+    id: 'arqueiro-agua-10', name: 'Tiro da Nascente', element: 'agua', classId: 'arqueiro', unlockLevel: 10,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 25, max: 32, lifesteal: true }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: '25–32 de água com roubo de vida e 1 marca: cada tiro devolve fôlego ao atirador.',
+    flavor: 'Bebe da distância. É o único jeito de um arqueiro beber.',
+    fxKey: 'springShot'
+  },
+  'arqueiro-agua-12': {
+    id: 'arqueiro-agua-12', name: 'Linha de Correnteza', element: 'agua', classId: 'arqueiro', unlockLevel: 12,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 6 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 26, max: 33 }, { type: 'push', tiles: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: 'Uma correnteza atravessa a linha: 26–33 de água, 2 células de empurrão e 1 marca em cada alvo da fila.',
+    flavor: 'Ele mira no corredor, não em quem está nele.',
+    fxKey: 'currentLine'
+  },
+  'arqueiro-agua-15': {
+    id: 'arqueiro-agua-15', name: 'Detonar a Maré', element: 'agua', classId: 'arqueiro', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'detonateMarks', mult: 14 }, { type: 'damage', element: 'agua', min: 24, max: 30, lifesteal: true } ],
+    description: 'Estoura as marcas do alvo em água: 14 por marca, mais 24–30 com roubo de vida. Cobrar a conta cura.',
+    flavor: 'A dívida vira bebida.',
+    fxKey: 'tideCollect'
+  },
+  'arqueiro-agua-20': {
+    id: 'arqueiro-agua-20', name: 'Chuva Fria', element: 'agua', classId: 'arqueiro', unlockLevel: 20,
+    paCost: 5, cooldown: 2, castsPerTurn: 1,
+    range: { min: 3, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 38, max: 46, lifesteal: true }, { type: 'pull', tiles: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: 'Uma nuvem de flechas geladas em raio 2: 38–46 com roubo de vida, puxa 2 células e marca todos os atingidos.',
+    flavor: 'Junta o rebanho antes de cobrar. Sempre foi mais eficiente.',
+    fxKey: 'coldRain'
+  },
+  'arqueiro-agua-30': {
+    id: 'arqueiro-agua-30', name: 'Maré Marcada', element: 'agua', classId: 'arqueiro', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 2, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'pull', tiles: 3 }, { type: 'damage', element: 'agua', min: 58, max: 70, lifesteal: true }, { type: 'detonateMarks', mult: 18 } ],
+    description: 'A maré obedece à corda: puxa tudo em raio 3 por 3 células, causa 58–70 de água com roubo de vida e detona as marcas a 18 por pilha.',
+    flavor: 'Ele apontou para a cisterna e disse "venham". Vieram todos, inclusive a água.',
+    fxKey: 'markedTide'
+  },
+
+  /* --- ARQUEIRO · TERRA: flecha-menir, peso e raiz --- */
+  'arqueiro-terra-5': {
+    id: 'arqueiro-terra-5', name: 'Flecha de Sílex', element: 'terra', classId: 'arqueiro', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 22, max: 28 }, { type: 'mark', value: 5, duration: 4, max: 5 } ],
+    description: '22–28 de terra e 1 marca de 4 turnos: a pedra fica cravada muito depois do tiro.',
+    flavor: 'Sílex lascado à mão, como se fazia antes do céu virar teto.',
+    fxKey: 'flintArrow'
+  },
+  'arqueiro-terra-10': {
+    id: 'arqueiro-terra-10', name: 'Estaca no Pé', element: 'terra', classId: 'arqueiro', unlockLevel: 10,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 22, max: 28 }, { type: 'root', duration: 1 }, { type: 'mark', value: 5, duration: 4, max: 5 } ],
+    description: 'Prega o alvo no chão: 22–28 de terra, 0 PP por 1 turno e 1 marca.',
+    flavor: 'Regra do elfo: quem não anda, não erra a conta.',
+    fxKey: 'pinShot'
+  },
+  'arqueiro-terra-12': {
+    id: 'arqueiro-terra-12', name: 'Tiro Perfurante', element: 'terra', classId: 'arqueiro', unlockLevel: 12,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 7, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 7 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 30, max: 38 }, { type: 'mark', value: 5, duration: 4, max: 5 } ],
+    description: 'A flecha atravessa a fila inteira: 30–38 de terra e 1 marca em cada corpo do caminho.',
+    flavor: 'Besta de dois pés, corda de tendão de raiz. Não pede licença.',
+    fxKey: 'piercingShot'
+  },
+  'arqueiro-terra-15': {
+    id: 'arqueiro-terra-15', name: 'Detonar o Pedregulho', element: 'terra', classId: 'arqueiro', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'detonateMarks', mult: 13 }, { type: 'damage', element: 'terra', min: 22, max: 28 }, { type: 'root', duration: 2 } ],
+    description: 'As marcas viram pedra e desabam: 13 por marca, 22–28 de terra e 0 PP por 2 turnos.',
+    flavor: 'Cobrar dívida com pedregulho é grosseiro. É também definitivo.',
+    fxKey: 'boulderCollect'
+  },
+  'arqueiro-terra-20': {
+    id: 'arqueiro-terra-20', name: 'Salva de Menires', element: 'terra', classId: 'arqueiro', unlockLevel: 20,
+    paCost: 5, cooldown: 2, castsPerTurn: 1,
+    range: { min: 2, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 36, max: 44 }, { type: 'root', duration: 2 }, { type: 'mark', value: 5, duration: 4, max: 5 } ],
+    description: 'Flechas do tamanho de postes caem em raio 2: 36–44 de terra, 0 PP por 2 turnos e 1 marca em todos.',
+    flavor: 'Ninguém entende como ele carrega essas coisas na aljava. Ninguém pergunta.',
+    fxKey: 'menhirVolley'
+  },
+  'arqueiro-terra-30': {
+    id: 'arqueiro-terra-30', name: 'Flecha-Menir', element: 'terra', classId: 'arqueiro', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 2, max: 9, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 9 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 88, max: 104 }, { type: 'detonateMarks', mult: 22 }, { type: 'root', duration: 3 } ],
+    description: 'Uma coluna inteira lançada em linha reta: 88–104 de terra em toda a fila, 22 por marca detonada e 3 turnos sem PP.',
+    flavor: 'Os construtores fincavam menires para segurar o mundo. Ele descobriu outro uso.',
+    fxKey: 'menhirShot'
+  },
+
+  /* --- ARQUEIRO · AR: o tiro que salta --- */
+  'arqueiro-ar-5': {
+    id: 'arqueiro-ar-5', name: 'Flecha de Vento', element: 'ar', classId: 'arqueiro', unlockLevel: 5,
+    paCost: 2, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 14, max: 19 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: 'Barata e rápida: 14–19 de ar e 1 marca por apenas 2 PA. O jeito mais eficiente de encher o alvo de marcas.',
+    flavor: 'Sem ponta de metal: só ar comprimido e má intenção.',
+    fxKey: 'windArrow'
+  },
+  'arqueiro-ar-10': {
+    id: 'arqueiro-ar-10', name: 'Tiro Saltador', element: 'ar', classId: 'arqueiro', unlockLevel: 10,
+    paCost: 3, cooldown: 0, castsPerTurn: 1,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'chain', jumps: 2, falloff: 0.3, element: 'ar', min: 22, max: 28 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: '22–28 de ar que saltam para mais 2 inimigos próximos (−30% a cada salto) e marcam o primeiro alvo.',
+    flavor: 'A flecha ricocheteia no teto de pedra. O teto, pelo menos, serve para isso.',
+    fxKey: 'skipShot'
+  },
+  'arqueiro-ar-12': {
+    id: 'arqueiro-ar-12', name: 'Flecha Rodopiante', element: 'ar', classId: 'arqueiro', unlockLevel: 12,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 26, max: 33 }, { type: 'push', tiles: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: '26–33 de ar, 2 células de empurrão e 1 marca: mantém o corpo a corpo sempre a um passo de distância.',
+    flavor: 'Gira tanto que assobia. O assobio já é meio metro de recuo.',
+    fxKey: 'spinArrow'
+  },
+  'arqueiro-ar-15': {
+    id: 'arqueiro-ar-15', name: 'Detonar a Corrente', element: 'ar', classId: 'arqueiro', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'detonateMarks', mult: 12 }, { type: 'chain', jumps: 3, falloff: 0.25, element: 'ar', min: 18, max: 24 } ],
+    description: 'Detona as marcas (12 por pilha) e a descarga salta para mais 3 inimigos, perdendo 25% a cada salto.',
+    flavor: 'A conta de um vira a notícia de todos.',
+    fxKey: 'chainCollect'
+  },
+  'arqueiro-ar-20': {
+    id: 'arqueiro-ar-20', name: 'Vendaval de Setas', element: 'ar', classId: 'arqueiro', unlockLevel: 20,
+    paCost: 5, cooldown: 2, castsPerTurn: 1,
+    range: { min: 3, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 36, max: 44 }, { type: 'push', tiles: 3 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
+    description: 'Um vendaval de setas em raio 2: 36–44 de ar, 3 células de arremesso e 1 marca em cada alvo.',
+    flavor: 'Metade das flechas erra de propósito, só para fazer vento.',
+    fxKey: 'arrowGale'
+  },
+  'arqueiro-ar-30': {
+    id: 'arqueiro-ar-30', name: 'Tempestade Marcada', element: 'ar', classId: 'arqueiro', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 2, max: 10, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'detonateMarks', mult: 20 }, { type: 'chain', jumps: 5, falloff: 0.2, element: 'ar', min: 42, max: 52 }, { type: 'weatherShift', weather: 'vendaval' } ],
+    description: 'Detona as marcas a 20 por pilha e solta uma descarga de 42–52 que salta por até 5 inimigos (−20% por salto). O ar da sala vira vendaval.',
+    flavor: 'Ele soltou a corda e o Fecho inteiro passou a dever alguma coisa.',
+    fxKey: 'markedStorm'
+  },
+
+  /* ======================================================================
+   * BRUXO — MAGO
+   * Áreas de média/longa distância, maldições e controle de terreno.
+   * Fogo: apagar salas · Água: dissolver e sugar
+   * Terra: prender e negar chão · Ar: raio em cadeia e reposicionamento
+   * Único caminho em que TODOS os feitiços de nível 30 viram o clima da sala.
+   * ====================================================================== */
+
+  'bruxo-neutro-1': {
+    id: 'bruxo-neutro-1', name: 'Verruma Arcana', element: 'neutro', classId: 'bruxo', unlockLevel: 0,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'neutro', min: 20, max: 26 } ],
+    description: 'Um furo limpo de energia crua: 20–26 de dano neutro a até 7 células. Duas vezes por turno.',
+    flavor: 'A primeira lição da escola: o mundo tem buracos. Faça mais.',
+    fxKey: 'arcaneBore'
+  },
+  'bruxo-neutro-2': {
+    id: 'bruxo-neutro-2', name: 'Praga Sussurrada', element: 'neutro', classId: 'bruxo', unlockLevel: 0,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 2, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'poison', element: 'neutro', min: 8, max: 11, duration: 2 }, { type: 'buff', stat: 'power', value: -15, duration: 2 } ],
+    description: 'Maldição em raio 1: 8–11 de dano por turno durante 2 turnos e −15 de poder nos amaldiçoados.',
+    flavor: 'Ele nunca grita a praga. A pedra já é surda o bastante.',
+    fxKey: 'whisperCurse'
+  },
+  'bruxo-neutro-3': {
+    id: 'bruxo-neutro-3', name: 'Círculo de Chumbo', element: 'neutro', classId: 'bruxo', unlockLevel: 0,
+    paCost: 2, cooldown: 2, castsPerTurn: 1,
+    range: { min: 2, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'neutro', min: 6, max: 9 }, { type: 'buff', stat: 'pp', value: -2, duration: 1 } ],
+    description: 'Desenha um círculo pesado no chão: 6–9 de dano e −2 PP por 1 turno em raio 1.',
+    flavor: 'Chumbo é o metal preferido de quem gosta que as coisas fiquem onde estão.',
+    fxKey: 'leadCircle'
+  },
+
+  /* --- BRUXO · FOGO: apagar a sala --- */
+  'bruxo-fogo-5': {
+    id: 'bruxo-fogo-5', name: 'Fagulha Gêmea', element: 'fogo', classId: 'bruxo', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 22, max: 28 }, { type: 'poison', element: 'fogo', min: 4, max: 6, duration: 2 } ],
+    description: '22–28 de fogo e queimadura de 4–6 por 2 turnos. O básico que nunca sai do caderno.',
+    flavor: 'Duas fagulhas: uma para acertar, outra para lembrar.',
+    fxKey: 'twinSpark'
+  },
+  'bruxo-fogo-10': {
+    id: 'bruxo-fogo-10', name: 'Cone de Cinzas', element: 'fogo', classId: 'bruxo', unlockLevel: 10,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'cone', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 26, max: 33 }, { type: 'poison', element: 'fogo', min: 6, max: 9, duration: 2 } ],
+    description: 'Um leque de cinzas quentes: 26–33 de fogo em cone e queimadura de 6–9 por 2 turnos.',
+    flavor: 'Cinza é fogo com memória.',
+    fxKey: 'ashCone'
+  },
+  'bruxo-fogo-12': {
+    id: 'bruxo-fogo-12', name: 'Meteoro Menor', element: 'fogo', classId: 'bruxo', unlockLevel: 12,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 3, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 34, max: 42 } ],
+    description: 'Arranca um pedaço do teto de pedra e o derruba aceso: 34–42 de fogo em raio 1.',
+    flavor: 'A Lousa devolve o que empresta. Com juros e temperatura.',
+    fxKey: 'lesserMeteor'
+  },
+  'bruxo-fogo-15': {
+    id: 'bruxo-fogo-15', name: 'Braseiro Proibido', element: 'fogo', classId: 'bruxo', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 18, max: 24 }, { type: 'poison', element: 'fogo', min: 16, max: 21, duration: 3 } ],
+    description: 'Acende o chão em raio 2: 18–24 na hora e 16–21 por turno durante 3 turnos. Área que se paga com paciência.',
+    flavor: 'Escrito na porta da escola: "não acender braseiro em recinto fechado". O mundo inteiro é recinto fechado.',
+    fxKey: 'forbiddenBrazier'
+  },
+  'bruxo-fogo-20': {
+    id: 'bruxo-fogo-20', name: 'Pira Dobrada', element: 'fogo', classId: 'bruxo', unlockLevel: 20,
+    paCost: 5, cooldown: 2, castsPerTurn: 1,
+    range: { min: 3, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 44, max: 54 }, { type: 'poison', element: 'fogo', min: 12, max: 16, duration: 2 } ],
+    description: 'Duas piras dentro da mesma área: 44–54 de fogo em raio 2 e queimadura de 12–16 por 2 turnos.',
+    flavor: 'Dobrar uma pira é fácil. O difícil é desdobrar depois.',
+    fxKey: 'foldedPyre'
+  },
+  'bruxo-fogo-30': {
+    id: 'bruxo-fogo-30', name: 'Meteoro do Fecho', element: 'fogo', classId: 'bruxo', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 3, max: 10, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 70, max: 84 }, { type: 'poison', element: 'fogo', min: 18, max: 24, duration: 3 }, { type: 'weatherShift', weather: 'estiagem' } ],
+    description: 'Derruba um pedaço inteiro da Lousa em chamas: 70–84 de fogo em raio 3, queimadura de 18–24 por 3 turnos e a sala entra em estiagem.',
+    flavor: 'Ele leu a pedra até o fim. Na última página havia uma instrução: "puxe aqui".',
+    fxKey: 'lockMeteor'
+  },
+
+  /* --- BRUXO · ÁGUA: dissolver, sugar, arrastar --- */
+  'bruxo-agua-5': {
+    id: 'bruxo-agua-5', name: "Lança d'Água", element: 'agua', classId: 'bruxo', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 20, max: 26, lifesteal: true } ],
+    description: '20–26 de água com roubo de vida: o bruxo bebe metade do que derrama.',
+    flavor: 'Água da cisterna, temperada com mil anos de más companhias.',
+    fxKey: 'waterLance'
+  },
+  'bruxo-agua-10': {
+    id: 'bruxo-agua-10', name: 'Sifão', element: 'agua', classId: 'bruxo', unlockLevel: 10,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 3, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'pull', tiles: 3 }, { type: 'damage', element: 'agua', min: 24, max: 30 }, { type: 'dispelShield' } ],
+    description: 'Puxa o alvo 3 células, causa 24–30 de água e dissolve o escudo dele por completo.',
+    flavor: 'Escudo é só uma coisa seca que ainda não foi molhada.',
+    fxKey: 'siphon'
+  },
+  'bruxo-agua-12': {
+    id: 'bruxo-agua-12', name: 'Maremoto', element: 'agua', classId: 'bruxo', unlockLevel: 12,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 6 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 30, max: 38 }, { type: 'push', tiles: 3 } ],
+    description: 'Uma onda percorre a linha: 30–38 de água e 3 células de empurrão em toda a fila.',
+    flavor: 'Limpa o corredor. Literalmente.',
+    fxKey: 'tidalWave'
+  },
+  'bruxo-agua-15': {
+    id: 'bruxo-agua-15', name: 'Poça Faminta', element: 'agua', classId: 'bruxo', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 26, max: 33, lifesteal: true }, { type: 'pull', tiles: 2 } ],
+    description: 'Abre uma poça faminta em raio 2: 26–33 de água com roubo de vida e todos puxados 2 células para o centro.',
+    flavor: 'Não é fundo. É só insistente.',
+    fxKey: 'hungryPool'
+  },
+  'bruxo-agua-20': {
+    id: 'bruxo-agua-20', name: 'Dissolução', element: 'agua', classId: 'bruxo', unlockLevel: 20,
+    paCost: 5, cooldown: 2, castsPerTurn: 1,
+    range: { min: 2, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'dispelShield' }, { type: 'damage', element: 'agua', min: 44, max: 54, lifesteal: true }, { type: 'poison', element: 'agua', min: 10, max: 14, duration: 2 } ],
+    description: 'Dissolve todos os escudos em raio 2, causa 44–54 de água com roubo de vida e deixa 10–14 por turno durante 2 turnos.',
+    flavor: 'A cisterna nunca quebrou uma armadura. Só esperou.',
+    fxKey: 'dissolution'
+  },
+  'bruxo-agua-30': {
+    id: 'bruxo-agua-30', name: 'A Cisterna Lembra', element: 'agua', classId: 'bruxo', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 2, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'dispelShield' }, { type: 'pull', tiles: 3 }, { type: 'damage', element: 'agua', min: 66, max: 78, lifesteal: true }, { type: 'weatherShift', weather: 'chuva' } ],
+    description: 'Chama de volta a água que afogou a corte: dissolve escudos, puxa 3 células, causa 66–78 com roubo de vida em raio 3 e faz chover na sala.',
+    flavor: 'Ele só perguntou onde estavam os donos da cisterna. Ela respondeu mostrando.',
+    fxKey: 'cisternRemembers'
+  },
+
+  /* --- BRUXO · TERRA: negar o chão --- */
+  'bruxo-terra-5': {
+    id: 'bruxo-terra-5', name: 'Espinho de Laje', element: 'terra', classId: 'bruxo', unlockLevel: 5,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 22, max: 28 } ],
+    description: 'Uma lasca de laje sobe do chão sob os pés do alvo: 22–28 de terra.',
+    flavor: 'O piso do Fecho colabora. Sempre colaborou; ninguém tinha pedido.',
+    fxKey: 'slabSpike'
+  },
+  'bruxo-terra-10': {
+    id: 'bruxo-terra-10', name: 'Grilhão de Raiz', element: 'terra', classId: 'bruxo', unlockLevel: 10,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'root', duration: 2 }, { type: 'damage', element: 'terra', min: 18, max: 24 } ],
+    description: 'Raízes fecham o tornozelo do alvo: 0 PP por 2 turnos e 18–24 de terra.',
+    flavor: 'A Estufa manda lembranças pelo subsolo.',
+    fxKey: 'rootShackle'
+  },
+  'bruxo-terra-12': {
+    id: 'bruxo-terra-12', name: 'Fenda', element: 'terra', classId: 'bruxo', unlockLevel: 12,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 6 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 32, max: 40 }, { type: 'root', duration: 1 } ],
+    description: 'Racha o chão numa linha reta: 32–40 de terra e 0 PP por 1 turno em todos os que estiverem nela.',
+    flavor: 'Depois ele fecha. Quase sempre.',
+    fxKey: 'fissure'
+  },
+  'bruxo-terra-15': {
+    id: 'bruxo-terra-15', name: 'Campo de Estacas', element: 'terra', classId: 'bruxo', unlockLevel: 15,
+    paCost: 4, cooldown: 2, castsPerTurn: 1,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 28, max: 35 }, { type: 'poison', element: 'terra', min: 8, max: 12, duration: 3 } ],
+    description: 'Enche a área de estacas de pedra: 28–35 de terra em raio 2 e 8–12 por turno durante 3 turnos para quem ficar.',
+    flavor: 'A área continua lá. O bom senso é que costuma sair primeiro.',
+    fxKey: 'spikeField'
+  },
+  'bruxo-terra-20': {
+    id: 'bruxo-terra-20', name: 'Anel de Menires', element: 'terra', classId: 'bruxo', unlockLevel: 20,
+    paCost: 5, cooldown: 2, castsPerTurn: 1,
+    range: { min: 2, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'ring', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 46, max: 56 }, { type: 'root', duration: 2 } ],
+    description: 'Um anel de pedras sobe a 2 células do centro: 46–56 de terra e 0 PP por 2 turnos em quem estiver no anel.',
+    flavor: 'Quem projetou os círculos de pedra não os projetou para ficar do lado de dentro.',
+    fxKey: 'menhirRing'
+  },
+  'bruxo-terra-30': {
+    id: 'bruxo-terra-30', name: 'A Lousa Desce', element: 'terra', classId: 'bruxo', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 2, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'terra', min: 74, max: 88 }, { type: 'root', duration: 3 }, { type: 'weatherShift', weather: 'tremor' } ],
+    description: 'Chama um palmo do céu de pedra para baixo: 74–88 de terra em raio 3, 3 turnos sem PP e a sala inteira em tremor.',
+    flavor: 'É o feitiço mais proibido da escola: repete, em miniatura, o dia em que tudo acabou.',
+    fxKey: 'slateDescends'
+  },
+
+  /* --- BRUXO · AR: o raio que escolhe caminho --- */
+  'bruxo-ar-5': {
+    id: 'bruxo-ar-5', name: 'Estalo', element: 'ar', classId: 'bruxo', unlockLevel: 5,
+    paCost: 2, cooldown: 0, castsPerTurn: 2,
+    range: { min: 2, max: 8, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 15, max: 20 } ],
+    description: 'Um estalo seco de pressão: 15–20 de ar por apenas 2 PA, a até 8 células.',
+    flavor: 'Estala os dedos. O ar do outro lado da sala estala junto.',
+    fxKey: 'snapBolt'
+  },
+  'bruxo-ar-10': {
+    id: 'bruxo-ar-10', name: 'Faísca Saltitante', element: 'ar', classId: 'bruxo', unlockLevel: 10,
+    paCost: 3, cooldown: 0, castsPerTurn: 1,
+    range: { min: 2, max: 7, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'chain', jumps: 2, falloff: 0.3, element: 'ar', min: 24, max: 30 } ],
+    description: '24–30 de ar que saltam para mais 2 inimigos próximos, perdendo 30% da força a cada salto.',
+    flavor: 'Ela procura companhia. Sempre acha.',
+    fxKey: 'hopSpark'
+  },
+  'bruxo-ar-12': {
+    id: 'bruxo-ar-12', name: 'Passo do Bruxo', element: 'ar', classId: 'bruxo', unlockLevel: 12,
+    paCost: 2, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'teleport' } ],
+    description: 'Teleporta-se para uma célula vazia a até 5 de distância. O mago frágil precisa de uma saída.',
+    flavor: 'Não é magia elegante. É a magia de quem não quer apanhar.',
+    fxKey: 'warlockStep'
+  },
+  'bruxo-ar-15': {
+    id: 'bruxo-ar-15', name: 'Cone de Vendaval', element: 'ar', classId: 'bruxo', unlockLevel: 15,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'cone', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 30, max: 38 }, { type: 'push', tiles: 3 } ],
+    description: 'Um leque de vento comprimido: 30–38 de ar e 3 células de arremesso em tudo que estiver no cone.',
+    flavor: 'Os respiradouros do Fecho gemem quando ele faz isso. Ele acha bonito.',
+    fxKey: 'galeCone'
+  },
+  'bruxo-ar-20': {
+    id: 'bruxo-ar-20', name: 'Trovoada', element: 'ar', classId: 'bruxo', unlockLevel: 20,
+    paCost: 5, cooldown: 2, castsPerTurn: 1,
+    range: { min: 3, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'chain', jumps: 4, falloff: 0.25, element: 'ar', min: 42, max: 52 } ],
+    description: '42–52 de ar que percorrem até 5 corpos (4 saltos), perdendo 25% a cada salto. A sala inteira em um só gesto.',
+    flavor: 'Nunca houve trovão sob a Lousa. Ele acha que faz falta.',
+    fxKey: 'thunderRun'
+  },
+  'bruxo-ar-30': {
+    id: 'bruxo-ar-30', name: 'Olho da Tempestade', element: 'ar', classId: 'bruxo', unlockLevel: 30,
+    paCost: 6, cooldown: 4, castsPerTurn: 1,
+    range: { min: 2, max: 9, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 60, max: 72 }, { type: 'push', tiles: 4 }, { type: 'chain', jumps: 4, falloff: 0.2, element: 'ar', min: 30, max: 38 }, { type: 'weatherShift', weather: 'vendaval' } ],
+    description: 'Abre um olho de tempestade em raio 3: 60–72 de ar, 4 células de arremesso, descargas de 30–38 saltando por mais 4 corpos — e vendaval na sala.',
+    flavor: 'Ninguém sob a Lousa tinha visto uma tempestade. Agora todos já viram uma. Uma só.',
+    fxKey: 'stormEye'
+  },
+
   /*__NEXT__*/
 
 };
