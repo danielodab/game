@@ -1320,15 +1320,20 @@ var JOGO = (typeof window !== 'undefined')
   // o arquétipo sai de palavras-chave do id/nome e, em último caso, do hash:
   // nunca aparece um quadrado cinza no tabuleiro.
   // ==========================================================================
-  var ARCH = ['blob', 'fera', 'inseto', 'espirito', 'bruto', 'planta', 'pedra'];
+  // 9 arquétipos. A ordem da lista É a prioridade de casamento: o primeiro que
+  // bater vence, então o mais específico vem antes (planta antes de fera para
+  // 'Brotinho-Voraz'; pedra antes de bruto para 'Sentinela de Pedra').
+  var ARCH = ['blob', 'fera', 'inseto', 'espirito', 'bruto', 'planta', 'pedra', 'ave', 'verme'];
   var ARCH_WORDS = [
-    ['blob', /lodo|limo|gosma|blob|slime|lama|geleia/i],
-    ['planta', /raiz|planta|flor|cipo|cipó|vinha|broto|semente|fungo|cogumelo|espor|musgo|trepad/i],
-    ['inseto', /verme|larva|inseto|besouro|aranha|escorpi|mosca|traca|traça|casulo|ferr[ãa]o|centop/i],
-    ['espirito', /esp[ií]rito|alma|eco|fantasma|sopro|brilho|fogo.?f[aá]tuo|nevoa|névoa|sombra|assombr/i],
-    ['pedra', /pedra|rocha|golem|cristal|est[aá]tua|entulho|escombro|granito|mineral|laje/i],
-    ['fera', /lobo|c[aã]o|rato|morcego|fera|bicho|garra|presa|javali|serpente|cobra|peixe|enguia/i],
-    ['bruto', /guarda|bruto|carrasco|gigante|capataz|soldado|mestre|senhor|rei|rainha|campe/i]
+    ['planta', /raiz|planta|flor|cipo|cipó|vinha|broto|semente|fungo|cogumelo|espor|musgo|trepad|carrapich|verga|jardin|seiv|p[óo]len|thorn|root|vine|sprout|seed|bloom|spore|pollen|burr|leaf|garden|sap\b/i],
+    ['blob', /lodo|limo|gosma|blob|slime|lama|geleia|gota|gotinha|salmour|escorr|monte|[áa]gua-viva|jelly|ooze|sludge|slag|drop|droplet|goo|seep|mound|brine|damp/i],
+    ['verme', /verme|lombriga|serpe|serpente|cobra|enguia|moreia|larva|worm|snake|eel|moray|slither/i],
+    ['ave', /p[aá]ssaro|falc[aã]o|[aá]guia|morcego|corvo|coruja|asa|penas|pican[çc]o|cantarol|coro\b|assobio|bird|falcon|hawk|eagle|bat\b|crow|owl|shrike|warbler|choir|whistle|piper|wing/i],
+    ['inseto', /inseto|besouro|aranha|escorpi|mosca|traca|traça|casulo|ferr[ãa]o|centop|vespa|formig|wasp|spider|beetle|mite|roach|moth|ant-/i],
+    ['espirito', /esp[ií]rito|alma|eco|fantasma|sopro|brilho|f[aá]tuo|nevoa|névoa|sombra|assombr|cinza|cinzent|espelho|g[êe]meo|estilha|mote|fogar[ée]u|familiar|cora[çc][ãa]o|wraith|wisp|ghost|spirit|revenant|phantom|shade|mirror|sliver|ash|firedamp|rift|heart/i],
+    ['pedra', /pedra|rocha|golem|cristal|est[aá]tua|entulho|escombro|granito|mineral|laje|min[ée]rio|lasca|alicerce|bigorna|seixo|stone|rock|crystal|\bore\b|slate|boulder|anvil|lodestone|ballast/i],
+    ['fera', /lobo|c[aã]o\b|cão|rato|fera|bicho|garra|presa|javali|peixe|caranguejo|bocarra|ti[çc][ãa]o|fagulha|gremlin|ninfa|voraz|hound|wolf|beast|fang|claw|crab|jaw|imp\b|whelp|nymph|feral|sprite/i],
+    ['bruto', /guarda|bruto|carrasco|gigante|capataz|soldado|mestre|senhor|rei|rainha|campe|ferreiro|zelador|colosso|sentinela|arauto|baron|xam[ãa]|enforca|puxa|bate|acendedor|smith|warden|colossus|sentinel|porter|hauler|herald|wright|forge|knock|shaman|hanger|revenant/i]
   ];
   function archOf(defId, md) {
     if (md && md.archetype && ARCH.indexOf(md.archetype) >= 0) return md.archetype;

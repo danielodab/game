@@ -755,6 +755,10 @@
     }
 
     // ---- simulação do ganho da forja ----
+    var NON_SCALING = UP.nonScalingKeys || [];
+    check('upgrade.nonScalingKeys protege PA e PP da escala da forja',
+      has(NON_SCALING, 'pa') && has(NON_SCALING, 'pp'), JSON.stringify(NON_SCALING));
+
     function upgraded(bonuses, level) {
       var mult = 1 + UP.bonusPerLevel * level, out = {}, k;
       for (k in bonuses) if (Object.prototype.hasOwnProperty.call(bonuses, k)) {
@@ -763,6 +767,8 @@
           Object.keys(bonuses.resists).forEach(function (el) {
             out.resists[el] = Math.round(bonuses.resists[el] * mult);
           });
+        } else if (has(NON_SCALING, k)) {
+          out[k] = bonuses[k];                 // PA/PP nunca escalam
         } else {
           out[k] = Math.round(bonuses[k] * mult);
         }
@@ -785,31 +791,45 @@
       }
       return n;
     }
-    var simulated = 0, badRatio = [], badExact = [], neverBreaks = true;
+    var simulated = 0, badRatio = [], badExact = [], neverBreaks = true, brokeCap = [];
     var expectedMult = 1 + UP.bonusPerLevel * UP.maxLevel;   // 2.2
     itemIds.forEach(function (id) {
       var base = IT[id].bonuses, baseTotal = totalOf(base);
       if (baseTotal <= 0) return;
-      var prev = baseTotal;
-      for (var lv = 1; lv <= UP.maxLevel; lv++) {
-        var t = totalOf(upgraded(base, lv));
-        if (t < prev) neverBreaks = false;   // nunca regride
+      var prev = baseTotal, lv, up;
+      for (lv = 1; lv <= UP.maxLevel; lv++) {
+        up = upgraded(base, lv);
+        var t = totalOf(up);
+        if (t < prev) neverBreaks = false;                        // nunca regride
+        if ((up.pa || 0) > 1 || (up.pp || 0) > 1) {               // teto do §8 mantido
+          brokeCap.push(id + ' +' + lv + ' pa=' + (up.pa || 0) + ' pp=' + (up.pp || 0));
+        }
         prev = t;
       }
       var atTen = totalOf(upgraded(base, 10)), ratio = atTen / baseTotal;
       simulated++;
-      // exato: o desvio só pode vir do arredondamento (<= 0,5 por campo)
-      if (Math.abs(atTen - baseTotal * expectedMult) > 0.5 * fieldsOf(base) + 1e-9) {
-        badExact.push(id + ' ' + atTen + ' vs ' + (baseTotal * expectedMult).toFixed(1));
+      // exato: só a parte escalável cresce, e o desvio só vem do arredondamento
+      var fixo = 0, escalavel = 0, nFields = 0, k;
+      for (k in base) if (Object.prototype.hasOwnProperty.call(base, k)) {
+        if (k === 'resists') {
+          Object.keys(base.resists).forEach(function (el) { escalavel += base.resists[el]; nFields++; });
+        } else if (has(NON_SCALING, k)) { fixo += base[k]; }
+        else { escalavel += base[k]; nFields++; }
       }
-      if (ratio < 2.0 || ratio > 2.4) badRatio.push(id + ' ' + ratio.toFixed(2) + '×');
+      var esperado = fixo + escalavel * expectedMult;
+      if (Math.abs(atTen - esperado) > 0.5 * nFields + 1e-9) {
+        badExact.push(id + ' ' + atTen + ' vs ' + esperado.toFixed(1));
+      }
+      if (ratio < 1.95 || ratio > 2.4) badRatio.push(id + ' ' + ratio.toFixed(2) + '×');
     });
     check('forja simulada em todos os itens', simulated === itemIds.length,
       simulated + ' de ' + itemIds.length);
     check('item no +10 vale ~2,2× o base (só o arredondamento desvia) em todos os itens',
       badExact.length === 0, badExact.slice(0, 5).join(' · '));
-    check('nenhum item foge da faixa 2,0–2,4× no +10',
+    check('nenhum item foge da faixa 1,95–2,4× no +10',
       badRatio.length === 0, badRatio.slice(0, 5).join(' · '));
+    check('nenhum item passa de +1 PA / +1 PP em nenhum nível de forja (0..10)',
+      brokeCap.length === 0, brokeCap.slice(0, 5).join(' · '));
     check('evolução nunca regride nem quebra o item', neverBreaks);
     // exemplo concreto, para o relatório
     var ex = IT['cp-worldshell'] || IT[itemIds[0]];

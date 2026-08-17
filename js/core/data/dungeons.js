@@ -243,11 +243,20 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'gh-briar-charm', weight: 12, minRoom: 1 },
       { itemId: 'gh-widow-shears', weight: 4, minRoom: 2 }
     ],
-    // Cartas: só valem entradas com dropWeight > 0 e minDungeon ≤ order
-    // (DATA.cards, do Criativo Classes). No order 1 apenas a curandeira é
-    // obtenível — sumo e arqueiro já começam liberados e têm dropWeight 0.
+    // CARTAS (adendo v2.1). Só o chefe derruba, e derruba ao acaso; carta
+    // repetida NÃO é lixo: o excedente ao custo de desbloqueio vira estrela.
+    // Uma entrada só é legítima se a classe existe, tem `dropWeight > 0` e o
+    // `minDungeon` dela (índice 0-based, DATA.cards) alcança este calabouço —
+    // aqui, `minDungeon 0`. Os pesos de cada calabouço somam 100 e leem-se
+    // como porcentagem.
+    //
+    // Escada da coleção: sumo/curandeira (já liberados) só rendem estrela e
+    // dominam o raso; invocador (10) abre na Cisterna; bruxo (10) no Fecho;
+    // espadachim (20) nos Andaimes; arqueiro (25), o troféu, só na Mina e no
+    // Coração — as duas descidas que o jogador vai repetir de verdade.
     cardDrops: [
-      { classId: 'curandeira', weight: 30 }
+      { classId: 'sumo', weight: 50 },
+      { classId: 'curandeira', weight: 50 }
     ]
   });
 

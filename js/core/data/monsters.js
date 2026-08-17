@@ -20,13 +20,21 @@ var JOGO = (typeof window !== 'undefined')
 //     stats: { hp, pa, pp, initiative, power, dodge, lock,
 //              resists: { fogo, agua, terra, ar, neutro } },
 //     spells: ['m-...'], ai: 'melee'|'ranged'|'support'|'boss',
-//     traits: [...], boss: bool, summonOnly: bool, xp }
+//     traits: [...], boss: bool, summonOnly: bool, xp,
+//     stoneDrop: { chance, min, max } | null }
 // dodge/lock vivem DENTRO de `stats` (igual às classes, contrato §3).
 // `element` fica no topo porque é o que o tique de clima consulta (contrato §2).
 //
 // Traços permitidos (vocabulário FECHADO, contrato §3 / v1):
 //   explodeOnDeath{element,damage,radius} · split{monsterId,count} ·
 //   enrage{hpPct,power} · pushImmune{} · regenAura{value,radius}
+//
+// >>> PEDRAS DE FORJA (adendo v2.1). Todo monstro que NÃO é invocação derruba
+// >>> pedras do PRÓPRIO elemento: o id da pedra sai de `monster.element` cruzado
+// >>> com `DATA.stones` (dono: Criativo Fusão). `summonOnly` derruba nada
+// >>> (`stoneDrop: null`) — senão o Invocador viraria uma fábrica de pedras.
+// >>> A calibragem mora na tabela STONE_* logo abaixo do `mon()`, nunca colada
+// >>> monstro a monstro, para nenhuma linha divergir das outras.
 // ============================================================================
 
 JOGO.DATA = JOGO.DATA || {};
@@ -62,6 +70,41 @@ JOGO.DATA = JOGO.DATA || {};
     for (var id in map) { if (map.hasOwnProperty(id)) { DATA.monsterSpells[id] = sp(map[id], id); } }
   }
 
+  // --- PEDRAS: quanto cada andar do mundo enterrado rende -------------------
+  // Referência de economia (contrato §9-B): levar UM item até +10 custa 107
+  // pedras do elemento dele (soma de DATA.upgrade.stoneCost). Uma descida
+  // completa rende, por elemento, algo entre ~12 (Estufa) e ~15 (Coração) —
+  // ou seja, um +10 é objetivo de 7 a 9 descidas, e as fundas pagam melhor.
+  var STONE_COMMON = {
+    greenhouse:   { chance: 0.30, min: 1, max: 2 },
+    cistern:      { chance: 0.35, min: 1, max: 2 },
+    emberlock:    { chance: 0.40, min: 1, max: 3 },
+    windscaffold: { chance: 0.45, min: 1, max: 3 },
+    quakemine:    { chance: 0.50, min: 2, max: 4 },
+    brokenheart:  { chance: 0.55, min: 2, max: 5 }
+  };
+  // Chefe: cai SEMPRE e cai grosso — é o motivo de refazer o calabouço.
+  var STONE_BOSS = {
+    greenhouse:   { chance: 1, min: 6, max: 10 },
+    cistern:      { chance: 1, min: 8, max: 13 },
+    emberlock:    { chance: 1, min: 10, max: 16 },
+    windscaffold: { chance: 1, min: 12, max: 19 },
+    quakemine:    { chance: 1, min: 15, max: 24 },
+    brokenheart:  { chance: 1, min: 20, max: 32 }
+  };
+
+  function stoneDropFor(o) {
+    if (o.summonOnly) { return null; }          // invocação não vira minério
+    var table = o.boss ? STONE_BOSS : STONE_COMMON;
+    var t = table[o.dungeonId] || STONE_COMMON.greenhouse;
+    var chance = t.chance, min = t.min, max = t.max;
+    // bicho graúdo (≥ 90 PV) dá trabalho e paga por isso
+    if (!o.boss && o.hp >= 90) { chance = Math.round((chance + 0.05) * 100) / 100; max += 1; }
+    if (o.stone) { chance = o.stone[0]; min = o.stone[1]; max = o.stone[2]; }
+    if (chance > 1) { chance = 1; }
+    return { chance: chance, min: min, max: max };
+  }
+
   function mon(o, id) {
     var res = { fogo: 0, agua: 0, terra: 0, ar: 0, neutro: 0 };
     if (o.resists) { for (var k in o.resists) { if (res.hasOwnProperty(k)) { res[k] = o.resists[k]; } } }
@@ -82,7 +125,8 @@ JOGO.DATA = JOGO.DATA || {};
       traits: o.traits || [],
       boss: !!o.boss,
       summonOnly: !!o.summonOnly,
-      xp: o.xp
+      xp: o.xp,
+      stoneDrop: stoneDropFor(o)
     };
   }
   function addMonsters(map) {

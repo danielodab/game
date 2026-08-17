@@ -429,6 +429,43 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // ------------------------------------------------------------- recompensas [G5]
+  // id da pedra de forja do elemento pedido (DATA.stones; senão o próprio nome)
+  function stoneIdFor(element) {
+    var el = element || 'neutro';
+    var defs = (JOGO.DATA && JOGO.DATA.stones) || {};
+    for (var id in defs) {
+      if (defs.hasOwnProperty(id) && defs[id] && defs[id].element === el) return id;
+    }
+    return el;
+  }
+
+  // pedras derrubadas pelos inimigos mortos desta sala [G5]
+  function collectStones(units, monsters, prog) {
+    var ganho = {}, i, algum = false;
+    for (i = 0; i < units.length; i++) {
+      var u = units[i];
+      if (u.side !== 'enemy' || u.alive) continue;
+      var def = monsters[u.defId];
+      var sd = def && def.stoneDrop;
+      if (!sd) continue;
+      if (Math.random() >= num(sd.chance, 0)) continue;
+      var min = Math.max(0, Math.floor(num(sd.min, 1)));
+      var max = Math.max(min, Math.floor(num(sd.max, min)));
+      var qtd = min + Math.floor(Math.random() * (max - min + 1));
+      if (qtd <= 0) continue;
+      var sid = stoneIdFor(def.element);
+      ganho[sid] = (ganho[sid] || 0) + qtd;
+      algum = true;
+    }
+    if (algum && prog && prog.addStones) {
+      for (var sid2 in ganho) {
+        if (!ganho.hasOwnProperty(sid2)) continue;
+        try { prog.addStones(sid2, ganho[sid2]); } catch (err) { /* sem storage */ }
+      }
+    }
+    return ganho;
+  }
+
   function computeRewards() {
     var st = Game.state;
     var prog = P();
@@ -444,20 +481,21 @@ var JOGO = (typeof window !== 'undefined')
     }
     var xpGanho = Math.floor(xpTotal / partySize);
 
-    // cartas primeiro: a repetida vira XP e entra na mesma conta de níveis
-    var cards = [], xpCartas = 0;
+    // cartas do chefe: acumulam na coleção e podem virar estrela (§9-B)
+    var cards = [];
     if (prog && prog.rollCards) {
       try { cards = prog.rollCards(Game.dungeonId, Game.roomIndex, partySize) || []; }
       catch (err) { cards = []; }
-      for (i = 0; i < cards.length; i++) xpCartas += num(cards[i].xpBonus, 0);
     }
+
+    var stones = collectStones(st.units, monsters, prog);
 
     var levelUps = [];
     if (prog && prog.addXp) {
       for (var h = 0; h < Game.party.length; h++) {
         var heroId = Game.party[h];
         var gained = 0;
-        try { gained = prog.addXp(heroId, xpGanho + xpCartas); } catch (err) { gained = 0; }
+        try { gained = prog.addXp(heroId, xpGanho); } catch (err) { gained = 0; }
         if (gained > 0) {
           var hero = prog.hero ? prog.hero(heroId) : null;
           levelUps.push({ heroId: heroId, niveis: gained, novoNivel: hero ? hero.level : null });
@@ -483,11 +521,11 @@ var JOGO = (typeof window !== 'undefined')
 
     return {
       xpGanho: xpGanho,
-      xpCartas: xpCartas,
       levelUps: levelUps,
       drops: drops,
       pets: pets,
       cards: cards,
+      stones: stones,
       elementChoices: elementChoices
     };
   }

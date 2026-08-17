@@ -709,6 +709,12 @@ JOGO.DATA = JOGO.DATA || {};
   // FORJA — evolução determinística até +10 (nunca quebra, nunca regride).
   // Cada nível soma 12% dos bônus BASE do item: +10 = 1 + 0,12*10 = 2,2× o item.
   // Custo total do +0 ao +10: 107 pedras.
+  //
+  // ATENÇÃO, LÓGICA: `nonScalingKeys` — os bônus de PA e PP NUNCA escalam com o
+  // nível de forja. São pontos de ação inteiros e o teto do §8 continua valendo
+  // (+1 PA no máximo, +1 PP no máximo); sem essa exceção, um épico de +1 PA
+  // viraria +2 PA já no +5 (round(1 × 1,6)) e quebraria a economia de ações.
+  // Tudo o mais (PV, poder, iniciativa, esquiva, fixação, resistências) escala.
   // =========================================================================
   DATA.upgrade = {
     maxLevel: 10,
@@ -719,7 +725,8 @@ JOGO.DATA = JOGO.DATA || {};
       { from: 10, to: 10, name: 'Magnífico' }
     ],
     bonusPerLevel: 0.12,
-    stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25]
+    stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25],
+    nonScalingKeys: ['pa', 'pp']
   };
 
   // =========================================================================
