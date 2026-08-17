@@ -277,6 +277,39 @@ var JOGO = (typeof window !== 'undefined')
   function artCanvas(fnName, args) { return artRaw(fnName, args); }
   function artNode(fnName, args, dfltAnchorY) { return artSprite(artRaw(fnName, args), dfltAnchorY); }
 
+  // cor média do chão da arte — usada para casar buraco/sombra/fundo com o tema
+  function sampleColor(cv, px, py) {
+    if (!cv || !cv.getContext) return null;
+    try {
+      var c2 = cv.getContext('2d', { willReadFrequently: true });
+      var d = c2.getImageData(Math.round(px), Math.round(py), 1, 1).data;
+      if (d[3] < 8) return null;
+      return (d[0] << 16) | (d[1] << 8) | d[2];
+    } catch (e) { return null; }
+  }
+  // altura REAL do desenho acima dos pés (px de mundo): a caixa do canvas é
+  // maior que a figura, e barra de vida solta no ar fica feia.
+  function artTop(cv) {
+    if (!cv || !cv.getContext) return 0;
+    if (cv.__topPx != null) return cv.__topPx * (artK() / (cv.__res || 1));
+    var res = 0;
+    try {
+      var c2 = cv.getContext('2d', { willReadFrequently: true });
+      var w = cv.width, h = cv.height;
+      var img = c2.getImageData(0, 0, w, h).data;
+      var top = h, x, y;
+      for (y = 0; y < h; y += 2) {
+        for (x = 0; x < w; x += 3) {
+          if (img[(y * w + x) * 4 + 3] > 24) { top = y; y = h; break; }
+        }
+      }
+      var an = (cv.__anchor && cv.__anchor[1] != null) ? cv.__anchor[1] : 1;
+      res = Math.max(8, h * an - top);
+    } catch (e) { res = cv.height * 0.7; }
+    cv.__topPx = res;
+    return res * (artK() / (cv.__res || 1));
+  }
+
   // ---------- texturas procedurais (partilhadas com o FX) ----------
   function canvasTex(key, w, h, draw) {
     if (texCache[key]) return texCache[key];
@@ -414,13 +447,13 @@ var JOGO = (typeof window !== 'undefined')
   R.resize = onResize;
 
   // ---------- fundo e vinheta (espaço de tela) ----------
-  var bgGfx = null, vigGfx = null, weatherTint = null;
+  var bgGfx = null, vigGfx = null, weatherTint = null, roomPal = null;
   function buildBackdrop() {
     if (!bgLayer) return;
     bgLayer.removeChildren();
     vignetteLayer.removeChildren();
     var st = state();
-    var pal = dungeonPalette(st);
+    var pal = roomPal || dungeonPalette(st);
     var deep = shadeHex(pal.secondary, -0.72);
 
     bgGfx = new P.Graphics();
@@ -834,7 +867,17 @@ var JOGO = (typeof window !== 'undefined')
     var pal = dungeonPalette(st);
     var w = st.grid.w, h = st.grid.h;
     var rnd = srand(hashStr(String(st.dungeonId) + '|' + st.roomIndex + '|' + w + 'x' + h));
-    var useArtTile = artOk('tile') && !!artRaw('tile', [theme, 0]);
+    var tileCv = artOk('tile') ? artRaw('tile', [theme, 0]) : null;
+    var useArtTile = !!tileCv;
+    if (tileCv) {
+      // o chão veio da arte: buraco e sombra passam a nascer da MESMA cor,
+      // senão a sala fica com dois temas brigando
+      var cTop = sampleColor(tileCv, tileCv.width * 0.5, tileCv.height * 0.42);
+      var cSide = sampleColor(tileCv, tileCv.width * 0.5, tileCv.height * 0.94);
+      if (cTop != null) { pal.floor1 = cTop; pal.floor2 = shadeHex(cTop, -0.10); pal.primary = cTop; }
+      if (cSide != null) { pal.secondary = cSide; pal.wall = cSide; }
+    }
+    roomPal = pal;
 
     var f1 = hexInt(pal.floor1), f2 = hexInt(pal.floor2);
     var edge = shadeHex(pal.secondary, -0.45);
@@ -1102,7 +1145,7 @@ var JOGO = (typeof window !== 'undefined')
       body.addChild(sp);
       fl = artSprite(cv, 0.88);
       c.__art = true; c.__artDir = 0;
-      c.__height = sp.height * 0.86;
+      c.__height = artTop(cv);
     } else {
       tex = unitTexture(u);
       sp = new P.Sprite(tex); sp.anchor.set(0.5, 1);
@@ -1385,7 +1428,7 @@ var JOGO = (typeof window !== 'undefined')
   function rebuildOverlays(st) {
     ensureOverlayNodes();
     var g = game(), en = engine();
-    ovBase.clear(); ovAoe.clear(); ovActive.clear();
+    ovBase.clear(); ovAoe.clear();
     ovPulse = null;
     if (ppLabel) ppLabel.visible = false;
     rebuildTileEvents(st);
@@ -1413,7 +1456,7 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     var playerTurn = g && g.isPlayerTurn ? g.isPlayerTurn() : true;
-    if (!playerTurn || R.isBusy()) { drawActiveRing(active); return; }
+    if (!playerTurn || R.isBusy()) return;   // o anel da unidade ativa é por frame
 
     var spellId = g && g.selectedSpellId;
     var hv = g && g.hoverTile;
@@ -1425,8 +1468,8 @@ var JOGO = (typeof window !== 'undefined')
         for (var i = 0; i < reach.length; i++) {
           var t = reach[i];
           var risky = !!(t.risky || t.risk || t.dodgeRisk || t.locked);
-          fillTile(ovBase, t.x, t.y, risky ? '#ff9a3c' : '#3fd0ff', risky ? 0.38 : 0.30);
-          strokeTile(ovBase, t.x, t.y, risky ? '#ffd07a' : '#bff0ff', risky ? 0.85 : 0.60, 1.6);
+          fillTile(ovBase, t.x, t.y, risky ? '#ff8a24' : '#28c8ff', risky ? 0.46 : 0.40);
+          strokeTile(ovBase, t.x, t.y, risky ? '#ffd07a' : '#dcf6ff', risky ? 0.95 : 0.80, 2.2);
           if (risky) {
             // triângulo de alerta: sair daqui pode falhar a esquiva
             var pc = iso(t.x, t.y, 1);
@@ -1441,7 +1484,7 @@ var JOGO = (typeof window !== 'undefined')
         var path = safe(function () { return en.path ? en.path(st, active.uid, hv.x, hv.y) : null; }, null);
         if (path && path.length) {
           for (var j = 0; j < path.length; j++) {
-            fillTile(ovBase, path[j].x, path[j].y, '#ffffff', 0.42, 0.14);
+            fillTile(ovBase, path[j].x, path[j].y, '#ffffff', 0.52, 0.14);
             var pp2 = iso(path[j].x, path[j].y, 3);
             ovBase.beginFill(0xfff6d0, j === path.length - 1 ? 0.98 : 0.8);
             ovBase.drawCircle(pp2.x, pp2.y, j === path.length - 1 ? 8 : 4.4);
@@ -1476,8 +1519,8 @@ var JOGO = (typeof window !== 'undefined')
       var inTargets = false;
       if (targets) {
         for (var k = 0; k < targets.length; k++) {
-          fillTile(ovBase, targets[k].x, targets[k].y, elCol, 0.17);
-          strokeTile(ovBase, targets[k].x, targets[k].y, elCol, 0.48, 1.5);
+          fillTile(ovBase, targets[k].x, targets[k].y, elCol, 0.28);
+          strokeTile(ovBase, targets[k].x, targets[k].y, elCol, 0.80, 2);
           if (hv && targets[k].x === hv.x && targets[k].y === hv.y) inTargets = true;
         }
       }
@@ -1485,17 +1528,20 @@ var JOGO = (typeof window !== 'undefined')
         var aoe = safe(function () { return en.aoeTiles ? en.aoeTiles(st, spellId, active.x, active.y, hv.x, hv.y) : null; }, null);
         if (aoe && aoe.length) {
           for (var m = 0; m < aoe.length; m++) {
-            fillTile(ovAoe, aoe[m].x, aoe[m].y, '#ff7a4a', 0.34, 0.04);
-            strokeTile(ovAoe, aoe[m].x, aoe[m].y, '#ffc7a0', 0.85, 2.2, 0.04);
+            fillTile(ovAoe, aoe[m].x, aoe[m].y, '#ff5a28', 0.52, 0.04);
+            strokeTile(ovAoe, aoe[m].x, aoe[m].y, '#ffe0c0', 0.95, 3, 0.04);
           }
           ovPulse = { kind: 'aoe' };
         }
       }
     }
-    drawActiveRing(active);
   }
 
+  // desenhado a CADA frame: acompanha a unidade enquanto ela anda
   function drawActiveRing(active) {
+    if (!ovActive) return;
+    ovActive.clear();
+    if (!active) return;
     var v = vis[active.uid] || { x: active.x, y: active.y };
     var col = active.side === 'player' ? 0xffd98a : 0xff6a4a;
     ovActive.lineStyle(2.6, col, 0.9);
@@ -1631,19 +1677,19 @@ var JOGO = (typeof window !== 'undefined')
       var heat = new P.Container();
       box.addChild(heat);
       weather.heat = [];
-      for (var b = 0; b < 16; b++) {
+      for (var b = 0; b < 20; b++) {
         var bar = new P.Graphics();
-        bar.beginFill(0xffd08a, 0.05).drawRect(0, 0, W * 1.4, 10 + Math.random() * 16).endFill();
+        bar.beginFill(0xffd08a, 0.09).drawRect(0, 0, W * 1.4, 12 + Math.random() * 22).endFill();
         bar.blendMode = P.BLEND_MODES.ADD;
-        bar.y = (b / 16) * H;
+        bar.y = (b / 20) * H;
         bar.x = -W * 0.2;
         heat.addChild(bar);
-        weather.heat.push({ g: bar, ph: Math.random() * 6.28, amp: 10 + Math.random() * 26, sp: 0.5 + Math.random() * 0.9 });
+        weather.heat.push({ g: bar, ph: Math.random() * 6.28, amp: 16 + Math.random() * 34, sp: 0.5 + Math.random() * 0.9 });
       }
       var sun = new P.Sprite(texDot());
       sun.anchor.set(0.5); sun.position.set(W * 0.74, H * 0.12);
       sun.width = W * 0.9; sun.height = H * 0.8;
-      sun.tint = 0xffc264; sun.alpha = 0.22; sun.blendMode = P.BLEND_MODES.ADD;
+      sun.tint = 0xffc264; sun.alpha = 0.32; sun.blendMode = P.BLEND_MODES.ADD;
       box.addChild(sun);
       var dustC = new P.Container(); box.addChild(dustC);
       for (var d2 = 0; d2 < 46; d2++) {
@@ -1808,7 +1854,7 @@ var JOGO = (typeof window !== 'undefined')
       for (i = 0; weather.heat && i < weather.heat.length; i++) {
         var hb = weather.heat[i];
         hb.g.x = -W * 0.2 + Math.sin(nowT * hb.sp + hb.ph) * hb.amp;
-        hb.g.alpha = 0.03 + (0.5 + Math.sin(nowT * hb.sp * 1.7 + hb.ph) * 0.5) * 0.05;
+        hb.g.alpha = 0.06 + (0.5 + Math.sin(nowT * hb.sp * 1.7 + hb.ph) * 0.5) * 0.10;
       }
     }
     for (i = 0; i < weather.motes.length; i++) {
@@ -2180,6 +2226,10 @@ var JOGO = (typeof window !== 'undefined')
       if (st.units) syncUnits(st);
       var sig = overlaySignature(st);
       if (sig !== ovSig) { ovSig = sig; rebuildOverlays(st); }
+      if (ovActive && st.phase === 'playing') {
+        var en2 = engine();
+        drawActiveRing(safe(function () { return en2 && en2.activeUnit ? en2.activeUnit(st) : null; }, null));
+      }
       if (ovPulse) ovAoe.alpha = 0.62 + Math.sin(nowT * 7) * 0.34;
       else ovAoe.alpha = 1;
       if (ovActive) ovActive.alpha = 0.62 + Math.sin(nowT * 4) * 0.28;

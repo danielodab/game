@@ -800,3 +800,1001 @@ var JOGO = (typeof window !== 'undefined')
     box.appendChild(acts);
     s.appendChild(box);
   }
+
+  // ==========================================================================
+  // TELA: BATALHA
+  // ==========================================================================
+  var bt = {};   // referências vivas do HUD de batalha
+
+  function st() { return safe(function () { return G().state; }, null); }
+  function activeUnit() {
+    var s = st();
+    return s ? safe(function () { return E().activeUnit(s); }, null) : null;
+  }
+  function unitByUid(uid) {
+    var s = st();
+    if (!s || !s.units) return null;
+    for (var i = 0; i < s.units.length; i++) if (s.units[i].uid === uid) return s.units[i];
+    return null;
+  }
+
+  function buildBattle() {
+    var s = screens.battle;
+    clear(s);
+    bt = {};
+
+    // ---- topo: sala/clima + linha de iniciativa
+    var top = el('div', 'bt-top');
+    bt.room = el('div', 'bt-room');
+    top.appendChild(bt.room);
+    bt.timeline = el('div', 'bt-timeline');
+    top.appendChild(bt.timeline);
+    s.appendChild(top);
+
+    // ---- coluna esquerda: unidade ativa + cronômetro
+    var left = el('div', 'bt-left');
+    bt.active = el('div', 'bt-active');
+    left.appendChild(bt.active);
+    bt.timer = el('div', 'bt-timer');
+    left.appendChild(bt.timer);
+    s.appendChild(left);
+
+    // ---- log compacto (fechado por padrão; toque abre)
+    bt.log = el('div', 'bt-log');
+    bt.logList = el('div', 'bt-log-list');
+    bt.log.appendChild(bt.logList);
+    tap(bt.log, function () { bt.log.classList.toggle('is-open'); });
+    s.appendChild(bt.log);
+
+    // ---- barra de baixo: feitiços + ações
+    var bottom = el('div', 'bt-bottom');
+    bt.fusion = el('div', 'bt-fusion');
+    bottom.appendChild(bt.fusion);
+    bt.spells = el('div', 'bt-spells');
+    bottom.appendChild(bt.spells);
+    var acts = el('div', 'bt-acts');
+    bt.endBtn = btn('Encerrar turno', 'btn-primary btn-end', function () {
+      safe(function () { G().endTurn(); }, null);
+      battleSig = '';
+    });
+    acts.appendChild(bt.endBtn);
+    bt.menuBtn = btn('☰', 'btn-icon', function () { openSheet('battleMenu'); });
+    acts.appendChild(bt.menuBtn);
+    bottom.appendChild(acts);
+    s.appendChild(bottom);
+
+    paintBattle(true);
+  }
+
+  // assinatura: só repinta quando alguma coisa visível mudou [U2]
+  function battleSignature() {
+    var s = st();
+    if (!s) return 'none';
+    var u = activeUnit();
+    var parts = [s.round, s.activeIdx, s.weather, s.phase,
+                 safe(function () { return G().selectedSpellId; }, ''),
+                 safe(function () { return G().canFuse().length; }, 0)];
+    for (var i = 0; i < s.units.length; i++) {
+      var x = s.units[i];
+      parts.push(x.uid + ':' + x.hp + ':' + x.pa + ':' + x.pp + ':' + (x.alive ? 1 : 0) +
+                 ':' + (x.shield || 0) + ':' + (x.offBoard ? 1 : 0));
+    }
+    if (u) {
+      for (var k = 0; k < (u.spells || []).length; k++) {
+        parts.push((u.cooldowns && u.cooldowns[u.spells[k]]) || 0);
+      }
+    }
+    return parts.join('|');
+  }
+
+  function paintBattle(force) {
+    var s = st();
+    if (!s || !bt.room) return;
+    var sig = battleSignature();
+    if (!force && sig === battleSig) return;
+    battleSig = sig;
+
+    paintRoom(s);
+    paintTimeline(s);
+    paintActive(s);
+    paintSpells(s);
+    paintFusion(s);
+    paintTimer();
+  }
+
+  function paintRoom(s) {
+    clear(bt.room);
+    var dg = null, ds = dungeons();
+    for (var i = 0; i < ds.length; i++) if (ds[i].id === s.dungeonId) dg = ds[i];
+    var room = dg && dg.rooms && dg.rooms[s.roomIndex];
+    bt.room.appendChild(el('b', null, esc((room && room.name) || (dg && dg.name) || 'Sala')));
+    var wd = (D().weathers && D().weathers[s.weather]) || null;
+    if (wd) {
+      var wc = el('span', 'weather-chip w-' + s.weather, esc(wd.name));
+      if (wd.favors) wc.style.setProperty('--ec', elemColor(wd.favors));
+      tipOn(wc, wd.name, esc(wd.description || '') +
+        (wd.favors ? '<br><b>+5 PV</b> por turno para ' + (ELEM_PT[wd.favors] || wd.favors) : '') +
+        (wd.harms ? '<br><b>−5 PV</b> por turno para ' + (ELEM_PT[wd.harms] || wd.harms) : ''),
+        wd.favors ? elemColor(wd.favors) : '#ffd08a');
+      bt.room.appendChild(wc);
+    }
+    bt.room.appendChild(el('span', 'round-chip', 'Rodada ' + s.round));
+  }
+
+  function paintTimeline(s) {
+    clear(bt.timeline);
+    var order = s.order || [];
+    var n = order.length, shown = 0;
+    for (var i = 0; i < n && shown < 8; i++) {
+      var uid = order[(s.activeIdx + i) % n];
+      var u = unitByUid(uid);
+      if (!u || !u.alive || u.offBoard) continue;
+      shown++;
+      var cell = el('div', 'tl-unit ' + (u.side === 'hero' ? 's-hero' : 's-enemy') + (i === 0 ? ' is-now' : ''));
+      cell.appendChild(art('portrait', [u.defId, { element: u.element, size: 48 }], i === 0 ? 46 : 34));
+      var hpPct = u.hpMax ? u.hp / u.hpMax : 0;
+      var hb = el('div', 'tl-hp');
+      var hf = el('i');
+      hf.style.width = Math.max(0, Math.min(100, hpPct * 100)) + '%';
+      hb.appendChild(hf);
+      cell.appendChild(hb);
+      if (u.boss) cell.appendChild(el('span', 'tl-boss', '♛'));
+      tipOn(cell, u.name || u.defId, unitTipBody(u), u.side === 'hero' ? '#7ef0d4' : '#ff9a7a');
+      bt.timeline.appendChild(cell);
+    }
+  }
+
+  function unitTipBody(u) {
+    var out = '<i>' + (u.hp + ' / ' + u.hpMax + ' PV · ' + u.pa + ' PA · ' + u.pp + ' PP') + '</i>';
+    if (u.shield) out += '<br>Escudo: ' + u.shield;
+    if (u.element && u.element !== 'neutro') out += '<br>Elemento: ' + (ELEM_PT[u.element] || u.element);
+    if (u.elemPower) out += ' (+' + u.elemPower + ' de dano)';
+    var ef = (u.effects || []).filter(function (e) { return e && e.type; });
+    if (ef.length) {
+      out += '<br>' + ef.map(function (e) {
+        return esc(e.type) + (e.duration ? ' (' + e.duration + ')' : '');
+      }).join(' · ');
+    }
+    return out;
+  }
+
+  function paintActive(s) {
+    clear(bt.active);
+    var u = activeUnit();
+    if (!u) return;
+    bt.active.className = 'bt-active ' + (u.side === 'hero' ? 's-hero' : 's-enemy');
+    var pic = el('div', 'ba-pic');
+    pic.appendChild(art('portrait', [u.defId, { element: u.element, size: 64 }], 56));
+    bt.active.appendChild(pic);
+
+    var info = el('div', 'ba-info');
+    var nm = el('div', 'ba-name', esc(u.name || u.defId));
+    if (u.element && u.element !== 'neutro') {
+      var e2 = el('span', 'elem-dot');
+      e2.style.background = elemColor(u.element);
+      nm.appendChild(e2);
+    }
+    info.appendChild(nm);
+
+    var hp = el('div', 'ba-hp');
+    var hpb = bar('bar-hp', u.hpMax ? u.hp / u.hpMax : 0, u.hp + ' / ' + u.hpMax);
+    if (u.shield) {
+      var shd = el('span', 'shield-chip', '🛡 ' + u.shield);
+      hpb.appendChild(shd);
+    }
+    hp.appendChild(hpb);
+    info.appendChild(hp);
+
+    var res = el('div', 'ba-res');
+    var paw = el('div', 'res pa-res');
+    paw.appendChild(el('span', 'res-lb', 'PA'));
+    paw.appendChild(pips(u.pa, u.paMax, 'p-pa'));
+    tipOn(paw, 'Pontos de Ataque', 'Cada feitiço custa PA. Voltam ao máximo no começo do seu turno.', '#ffb15c');
+    res.appendChild(paw);
+    var ppw = el('div', 'res pp-res');
+    ppw.appendChild(el('span', 'res-lb', 'PP'));
+    ppw.appendChild(pips(u.pp, u.ppMax, 'p-pp'));
+    tipOn(ppw, 'Pontos de Passos', 'Cada célula andada gasta 1 PP. Sair de perto de um inimigo pode custar tudo.', '#7ef0d4');
+    res.appendChild(ppw);
+    info.appendChild(res);
+    bt.active.appendChild(info);
+  }
+
+  function paintTimer() {
+    if (!bt.timer) return;
+    var g = G();
+    if (!g) return;
+    var isMine = safe(function () { return g.isPlayerTurn(); }, false);
+    var left = safe(function () { return g.timeLeft(); }, 0);
+    var banked = g.banked || 0;
+    var turn = g.turnTime || 30;
+    var pct = Math.max(0, Math.min(1, left / turn));
+    clear(bt.timer);
+    bt.timer.className = 'bt-timer' + (isMine ? '' : ' is-idle') + (left <= 5 && isMine ? ' is-low' : '');
+    var t = el('div', 'tm-num', String(Math.ceil(left)) + 's');
+    bt.timer.appendChild(t);
+    var trk = el('div', 'tm-track');
+    var fil = el('i');
+    fil.style.width = (pct * 100) + '%';
+    trk.appendChild(fil);
+    bt.timer.appendChild(trk);
+    if (banked > 0) {
+      var bk = el('div', 'tm-bank', '+' + Math.round(banked) + 's guardados');
+      tipOn(bk, 'Tempo guardado',
+        'O que você não gasta no turno vai para o banco (máx. ' + (g.bankMax || 120) +
+        's) e é usado quando os ' + turn + 's acabarem.', '#9fd8ff');
+      bt.timer.appendChild(bk);
+    }
+  }
+
+  function paintSpells(s) {
+    clear(bt.spells);
+    var u = activeUnit();
+    var mine = safe(function () { return G().isPlayerTurn(); }, false);
+    if (!u || !mine) {
+      bt.spells.appendChild(el('div', 'bt-wait', u ? 'Turno de ' + esc(u.name || '') + '…' : 'Aguarde…'));
+      bt.endBtn.classList.add('is-off');
+      return;
+    }
+    bt.endBtn.classList.remove('is-off');
+    var sel = safe(function () { return G().selectedSpellId; }, null);
+    var list = u.spells || [];
+    if (!list.length) bt.spells.appendChild(el('div', 'bt-wait', 'Sem feitiços.'));
+    list.forEach(function (sid) {
+      var d2 = spellDef(sid) || (u.spellDefs && u.spellDefs[sid]) || null;
+      var cd = (u.cooldowns && u.cooldowns[sid]) || 0;
+      var cost = d2 ? (d2.paCost || 0) : 0;
+      var can = cd <= 0 && u.pa >= cost;
+      var cell = el('button', 'spell' + (sel === sid ? ' is-sel' : '') + (can ? '' : ' is-dim'));
+      cell.type = 'button';
+      cell.appendChild(art('spellIcon', [d2 || sid, 52], 48));
+      cell.appendChild(el('span', 'sp-cost', String(cost)));
+      if (d2 && d2.element && d2.element !== 'neutro') {
+        cell.style.setProperty('--ec', elemColor(d2.element));
+        cell.classList.add('has-elem');
+      }
+      if (cd > 0) cell.appendChild(el('span', 'sp-cd', String(cd)));
+      cell.appendChild(el('span', 'sp-name', esc((d2 && d2.name) || sid)));
+      tap(cell, function () {
+        if (cd > 0) { toast('Recarregando: ' + cd + (cd > 1 ? ' rodadas.' : ' rodada.')); return; }
+        if (u.pa < cost) { toast('PA insuficiente (' + cost + ' necessários).'); return; }
+        safe(function () { G().selectSpell(sid); }, null);
+        battleSig = '';
+        paintBattle(true);
+      });
+      // toque longo/segunda toque no nome abre a explicação
+      var q = el('span', 'sp-info', 'i');
+      tipOn(q, (d2 && d2.name) || sid, spellTipBody(d2, sid), d2 ? elemColor(d2.element) : '#ffd08a');
+      cell.appendChild(q);
+      bt.spells.appendChild(cell);
+    });
+  }
+
+  function spellTipBody(d2, sid) {
+    if (!d2) return 'Feitiço ' + esc(sid) + '.';
+    var out = '<i>' + (d2.paCost || 0) + ' PA';
+    if (d2.range) out += ' · alcance ' + (d2.range.min || 0) + '–' + (d2.range.max || 0);
+    if (d2.cooldown) out += ' · recarga ' + d2.cooldown;
+    if (d2.castsPerTurn) out += ' · ' + d2.castsPerTurn + '×/turno';
+    out += '</i><br>' + esc(d2.description || '');
+    if (d2.aoe && d2.aoe.shape && d2.aoe.shape !== 'single') {
+      out += '<br>Área: ' + esc(d2.aoe.shape) + ' ' + (d2.aoe.size || '');
+    }
+    if (d2.flavor) out += '<br><em>' + esc(d2.flavor) + '</em>';
+    return out;
+  }
+
+  // botão de FUSÃO com prévia do resultado
+  function paintFusion(s) {
+    clear(bt.fusion);
+    var pairs = safe(function () { return G().canFuse(); }, []);
+    if (!pairs.length) { bt.fusion.classList.remove('is-on'); return; }
+    bt.fusion.classList.add('is-on');
+    var pr = pairs[0];
+    var a = unitByUid(pr.uidA), b = unitByUid(pr.uidB);
+    if (!a || !b) { bt.fusion.classList.remove('is-on'); return; }
+    var ca = a.classId || a.defId, cb = b.classId || b.defId;
+    var pair = [ca, cb].sort();
+    var defId = 'fus:' + pair[0] + '+' + pair[1];
+    var cell = el('button', 'fusion-btn');
+    cell.type = 'button';
+    cell.appendChild(art('unit', [defId, { elements: [a.element, b.element], dir: 0, scale: 0.4 }], 60));
+    var t = el('div', 'fu-txt');
+    t.appendChild(el('b', null, 'FUNDIR'));
+    t.appendChild(el('span', null, esc(className(ca)) + ' + ' + esc(className(cb))));
+    cell.appendChild(t);
+    tap(cell, function () {
+      confirmSheet('Fundir os dois heróis?',
+        'Vira <b>uma única unidade</b>: vida somada, +2 PA, +1 PP, +50 de escudo e feitiços de fusão. ' +
+        'Custa 2 PA e <b>encerra o turno</b>. Se um deles se afastar antes do fim, não acontece nada.',
+        function () {
+          var ok = safe(function () { return G().declareFusion(pr.uidA, pr.uidB); }, false);
+          if (!ok) toast('A fusão não pôde ser declarada.');
+          else toast('Fusão declarada — encerrando o turno.', 'good');
+          battleSig = '';
+        });
+    });
+    bt.fusion.appendChild(cell);
+  }
+
+  // ==========================================================================
+  // FOLHAS (modais): coleção · inventário · forja · ficha do herói
+  // ==========================================================================
+  function closeSheet() {
+    if (!sheetEl) return;
+    sheetEl.classList.remove('is-on');
+    sheetName = null;
+    hideTip();
+  }
+  function sheetShell(title, sub) {
+    clear(sheetEl);
+    var panel = el('div', 'sheet-panel');
+    var head = el('div', 'sheet-head');
+    var t = el('div', 'sheet-head-txt');
+    t.appendChild(el('h2', null, esc(title)));
+    if (sub) t.appendChild(el('p', null, sub));
+    head.appendChild(t);
+    head.appendChild(btn('✕', 'btn-icon btn-close', closeSheet));
+    panel.appendChild(head);
+    var body = el('div', 'sheet-body');
+    panel.appendChild(body);
+    sheetEl.appendChild(panel);
+    sheetEl.classList.add('is-on');
+    return body;
+  }
+  function confirmSheet(title, body, onYes) {
+    var b = sheetShell(title);
+    sheetName = 'confirm';
+    b.appendChild(el('p', 'confirm-txt', body));
+    var acts = el('div', 'confirm-acts');
+    acts.appendChild(btn('Cancelar', 'btn-ghost', closeSheet));
+    acts.appendChild(btn('Confirmar', 'btn-primary', function () { closeSheet(); onYes(); }));
+    b.appendChild(acts);
+  }
+
+  function openSheet(name, arg) {
+    sheetName = name;
+    if (name === 'collection') sheetCollection(arg);
+    else if (name === 'inventory') sheetInventory(arg);
+    else if (name === 'forge') sheetForge(arg);
+    else if (name === 'heroSheet') sheetHero(arg);
+    else if (name === 'battleMenu') sheetBattleMenu();
+    else closeSheet();
+  }
+  UI.openSheet = openSheet;
+  UI.closeSheet = closeSheet;
+
+  // -------------------------------------------------------------- COLEÇÃO
+  // O cofre de recompensas: cartas por classe, custo, e a trilha de 5 estrelas
+  // com o próximo bônus em destaque.
+  function sheetCollection(focusId) {
+    var body = sheetShell('Coleção',
+      'Cartas caem dos chefes. Elas <b>liberam</b> a classe e, depois, viram <b>estrelas</b> permanentes.');
+    var cfg = starsCfg();
+    var legend = el('div', 'col-legend');
+    for (var s = 1; s <= (cfg.max || 5); s++) {
+      var bn = cfg.bonuses && (cfg.bonuses[s] || cfg.bonuses[String(s)]);
+      legend.appendChild(el('span', 'chip', '★' + s + ' ' + esc(bonusText(bn))));
+    }
+    body.appendChild(legend);
+
+    var ids = Object.keys(classes());
+    ids.sort(function (a, b) { return cardInfo(a).unlockCost - cardInfo(b).unlockCost; });
+    var list = el('div', 'col-list');
+    ids.forEach(function (cid) {
+      var info = cardInfo(cid);
+      var row = el('div', 'col-row' + (info.unlocked ? '' : ' is-locked') +
+                          (cid === focusId ? ' is-focus' : ''));
+      var pic = el('div', 'col-pic');
+      pic.appendChild(art('cardIcon', [cid, 92, 130], 92));
+      if (!info.unlocked) pic.classList.add('silhouette');
+      row.appendChild(pic);
+
+      var txt = el('div', 'col-txt');
+      var h3 = el('h3', null, esc(info.name));
+      if (info.unlocked) h3.appendChild(el('span', 'chip chip-ok', 'liberada'));
+      txt.appendChild(h3);
+      var def = classDef(cid) || {};
+      txt.appendChild(el('p', 'col-role', esc(def.role || '') + (def.description ? ' — ' + esc(def.description) : '')));
+
+      // progresso de desbloqueio
+      if (!info.unlocked) {
+        txt.appendChild(bar('bar-card', info.unlockCost ? info.cards / info.unlockCost : 0,
+          info.cards + ' / ' + info.unlockCost + ' cartas'));
+      } else {
+        txt.appendChild(el('div', 'col-cards', '<b>' + info.cards + '</b> cartas guardadas' +
+          (info.unlockCost ? ' · custou ' + info.unlockCost : '')));
+      }
+
+      // trilha de estrelas com o próximo bônus
+      var tr = el('div', 'star-track');
+      var costs = (D().cards && D().cards[cid] && D().cards[cid].starCosts) || [5, 15, 30, 55, 90];
+      for (var i2 = 0; i2 < (cfg.max || 5); i2++) {
+        var on = i2 < info.stars;
+        var stp = el('div', 'star-step' + (on ? ' is-on' : '') +
+                     (info.next && info.next.star === i2 + 1 ? ' is-next' : ''));
+        stp.appendChild(art('starIcon', [on, 26], 26));
+        var bn2 = cfg.bonuses && (cfg.bonuses[i2 + 1] || cfg.bonuses[String(i2 + 1)]);
+        stp.appendChild(el('span', 'star-b', esc(bonusText(bn2))));
+        tipOn(stp, '★' + (i2 + 1), 'Custa <b>' + costs[i2] + '</b> cartas além do desbloqueio.<br>Dá: ' +
+          esc(bonusText(bn2)) + '.', on ? '#ffc44d' : '#8b93a0');
+        tr.appendChild(stp);
+      }
+      txt.appendChild(tr);
+      if (info.next) {
+        txt.appendChild(el('p', 'col-next', 'Faltam <b>' + info.next.faltam + '</b> cartas para a ★' + info.next.star + '.'));
+      } else if (info.unlocked) {
+        txt.appendChild(el('p', 'col-next is-max', 'Todas as estrelas conquistadas.'));
+      }
+      row.appendChild(txt);
+      list.appendChild(row);
+    });
+    body.appendChild(list);
+    if (focusId) {
+      var f = list.querySelector('.is-focus');
+      if (f && f.scrollIntoView) f.scrollIntoView({ block: 'center' });
+    }
+  }
+
+  function bonusText(b) {
+    if (!b) return '—';
+    var out = [];
+    if (b.hp) out.push('+' + b.hp + ' PV');
+    if (b.pa) out.push('+' + b.pa + ' PA');
+    if (b.pp) out.push('+' + b.pp + ' PP');
+    if (b.power) out.push('+' + b.power + ' poder');
+    if (b.initiative) out.push('+' + b.initiative + ' iniciativa');
+    if (b.dodge) out.push('+' + b.dodge + ' esquiva');
+    if (b.lock) out.push('+' + b.lock + ' fixação');
+    if (b.resists) {
+      for (var e in b.resists) {
+        if (b.resists.hasOwnProperty(e)) out.push('+' + b.resists[e] + '% ' + (ELEM_PT[e] || e));
+      }
+    }
+    return out.join(' · ') || '—';
+  }
+
+  // ------------------------------------------------------- tier da forja
+  function tierOf(level) {
+    var tiers = upgradeCfg().tiers || [];
+    for (var i = 0; i < tiers.length; i++) {
+      if (level >= tiers[i].from && level <= tiers[i].to) return tiers[i].name;
+    }
+    return 'Comum';
+  }
+  function tierClass(level) {
+    return 't-' + String(tierOf(level)).toLowerCase().replace('í', 'i').replace('é', 'e');
+  }
+
+  function itemTipBody(itemId, level) {
+    var it = itemDef(itemId);
+    if (!it) return 'Item ' + esc(itemId) + '.';
+    var lv = level == null ? safe(function () { return P().itemLevel(itemId); }, 0) : level;
+    var mult = 1 + (upgradeCfg().bonusPerLevel || 0.12) * lv;
+    var out = '<i>' + esc(SLOT_PT[slotOf(itemId)] || '') + ' · ' + esc(RAR_PT[it.rarity] || it.rarity) +
+              (lv ? ' · <b>+' + lv + '</b> ' + esc(tierOf(lv)) : '') + '</i>';
+    var b = it.bonuses || {}, lines = [];
+    for (var k in b) {
+      if (!b.hasOwnProperty(k)) continue;
+      if (k === 'resists') {
+        for (var e in b.resists) {
+          if (b.resists.hasOwnProperty(e)) lines.push('+' + Math.round(b.resists[e] * mult) + '% ' + (ELEM_PT[e] || e));
+        }
+      } else {
+        var v = (k === 'pa' || k === 'pp') ? b[k] : Math.round(b[k] * mult);
+        lines.push('+' + v + ' ' + ({ hp: 'PV', pa: 'PA', pp: 'PP', power: 'poder',
+                                      initiative: 'iniciativa', dodge: 'esquiva', lock: 'fixação' }[k] || k));
+      }
+    }
+    if (lines.length) out += '<br>' + lines.join(' · ');
+    if (it.grantsSpell) {
+      var sp = spellDef(it.grantsSpell);
+      out += '<br>Concede: <b>' + esc((sp && sp.name) || it.grantsSpell) + '</b>';
+    }
+    if (it.setId) {
+      var sd = setDef(it.setId);
+      out += '<br>Conjunto: <b>' + esc((sd && sd.name) || it.setId) + '</b>';
+    }
+    if (it.description) out += '<br>' + esc(it.description);
+    return out;
+  }
+
+  // quantas peças do conjunto estão equipadas (por qualquer herói)
+  function setEquippedCount(setId) {
+    var sd = setDef(setId);
+    var pieces = (sd && sd.pieces) || [];
+    var n = 0;
+    for (var i = 0; i < pieces.length; i++) if (equippedBy(pieces[i])) n++;
+    if (!pieces.length) {
+      // sem lista de peças: conta pelos itens que declaram o mesmo setId
+      var items = D().items || {};
+      for (var k in items) {
+        if (items.hasOwnProperty(k) && items[k].setId === setId && equippedBy(k)) n++;
+      }
+    }
+    return n;
+  }
+  function setPieceCount(setId) {
+    var sd = setDef(setId);
+    if (sd && sd.pieces) return sd.pieces.length;
+    var items = D().items || {}, n = 0;
+    for (var k in items) if (items.hasOwnProperty(k) && items[k].setId === setId) n++;
+    return n || 4;
+  }
+
+  // ------------------------------------------------------------ INVENTÁRIO
+  // UM saco só para o grupo inteiro. Cada peça mostra raridade, nível +N, tier,
+  // conjunto (com quantas peças estão equipadas) e QUEM está usando.
+  function sheetInventory(preselect) {
+    var body = sheetShell('Inventário',
+      'Um saco só para todos os heróis. Uma peça equipada por um <b>não pode</b> estar em outro.');
+    var inv = inventory();
+
+    var tabs = el('div', 'inv-tabs');
+    ['todos'].concat(SLOTS).forEach(function (f) {
+      var b = btn(f === 'todos' ? 'Tudo' : SLOT_PT[f], 'btn-tab' + (invFilter === f ? ' is-on' : ''), function () {
+        invFilter = f;
+        sheetInventory(preselect);
+      });
+      tabs.appendChild(b);
+    });
+    body.appendChild(tabs);
+
+    if (!inv.length) {
+      body.appendChild(el('p', 'empty', 'Saco vazio. Os calabouços resolvem isso.'));
+      return;
+    }
+    var grid = el('div', 'inv-grid');
+    var shown = 0;
+    inv.forEach(function (entry, idx) {
+      var id = entry.itemId || entry;
+      var lv = entry.level || 0;
+      var it = itemDef(id);
+      if (!it) return;
+      var canon = slotOf(id);
+      if (invFilter !== 'todos' && canon !== invFilter) return;
+      shown++;
+      var cell = el('div', 'inv-cell ' + tierClass(lv) + (preselect === id ? ' is-focus' : ''));
+      cell.style.setProperty('--rc', rarColor(it.rarity));
+
+      var ic = el('div', 'inv-ic');
+      ic.appendChild(art('itemIcon', [id, 54], 54));
+      if (lv > 0) ic.appendChild(el('span', 'inv-lv', '+' + lv));
+      var owner = equippedBy(id);
+      if (owner) ic.appendChild(el('span', 'inv-worn', esc(className((hero(owner) || {}).classId || owner).slice(0, 3))));
+      cell.appendChild(ic);
+
+      var tx = el('div', 'inv-tx');
+      tx.appendChild(el('b', null, esc(it.name)));
+      tx.appendChild(el('span', 'inv-slot', esc(SLOT_PT[canon]) + ' · ' + esc(RAR_PT[it.rarity] || it.rarity) +
+        (lv ? ' · ' + esc(tierOf(lv)) : '')));
+      if (it.setId) {
+        var n = setEquippedCount(it.setId), tot = setPieceCount(it.setId);
+        var sd = setDef(it.setId);
+        var sc = el('span', 'inv-set' + (n >= 2 ? ' is-live' : ''),
+          esc((sd && sd.name) || it.setId) + ' <b>' + n + '/' + tot + '</b>');
+        tipOn(sc, (sd && sd.name) || it.setId, setTipBody(it.setId), '#9fd8ff');
+        tx.appendChild(sc);
+      }
+      if (owner) {
+        tx.appendChild(el('span', 'inv-owner', 'em uso por <b>' +
+          esc(className((hero(owner) || {}).classId || owner)) + '</b>'));
+      }
+      cell.appendChild(tx);
+
+      var acts = el('div', 'inv-acts');
+      var targets = heroIds().filter(function (hid) { return !!hero(hid); });
+      targets.slice(0, 4).forEach(function (hid) {
+        var h = hero(hid);
+        var has = heroItem(h, canon) === id;
+        acts.appendChild(btn(has ? 'Tirar' : className(h.classId || hid).split(' ')[0],
+          'btn-mini' + (has ? ' btn-warn' : ''), function () {
+            var ok;
+            if (has) ok = safe(function () { return P().unequip(hid, slotRaw(canon)); }, false);
+            else ok = safe(function () { return P().equip(hid, id); }, false);
+            if (!ok) {
+              var who = equippedBy(id);
+              toast(who ? 'Já está com ' + className((hero(who) || {}).classId || who) + '.' : 'Não deu para equipar.');
+            }
+            sheetInventory(id);
+          }));
+      });
+      var ui2 = safe(function () { return P().upgradeInfo(idx); }, null);
+      if (ui2 && !ui2.maxed) {
+        acts.appendChild(btn('Forjar', 'btn-mini btn-gold', function () { forgeSel = idx; openSheet('forge'); }));
+      }
+      cell.appendChild(acts);
+      tipOn(ic, it.name, itemTipBody(id, lv), rarColor(it.rarity));
+      grid.appendChild(cell);
+    });
+    if (!shown) grid.appendChild(el('p', 'empty', 'Nada nesse espaço ainda.'));
+    body.appendChild(grid);
+  }
+
+  function setTipBody(setId) {
+    var sd = setDef(setId);
+    if (!sd) return 'Conjunto ' + esc(setId) + '.';
+    var n = setEquippedCount(setId);
+    var out = '<i>' + esc(ELEM_PT[sd.element] || sd.element || '') + ' · ' +
+              setPieceCount(setId) + ' peças</i>';
+    var b = sd.bonuses || {};
+    ['2', '3', '4'].forEach(function (k) {
+      if (!b[k]) return;
+      out += '<br>' + (n >= +k ? '<b>' : '') + k + ' peças: ' + esc(bonusText(b[k])) + (n >= +k ? ' ✓</b>' : '');
+    });
+    if (sd.description) out += '<br>' + esc(sd.description);
+    return out;
+  }
+
+  // ----------------------------------------------------------------- FORJA
+  function sheetForge(preselect) {
+    var body = sheetShell('Forja',
+      'Melhorar é <b>determinístico</b>: nunca quebra, nunca regride. Consome pedras do elemento da peça.');
+
+    // estoque de pedras
+    var stock = el('div', 'forge-stock');
+    var defs = stoneDefs(), k;
+    for (k in defs) {
+      if (!defs.hasOwnProperty(k)) continue;
+      var n = stoneCount(k);
+      var chip = el('div', 'stone-chip' + (n ? '' : ' is-empty'));
+      chip.appendChild(art('stoneIcon', [k, 40], 40));
+      chip.appendChild(el('span', 'stone-n', String(n)));
+      chip.appendChild(el('span', 'stone-nm', esc(defs[k].name)));
+      tipOn(chip, defs[k].name, esc(defs[k].description || ''), elemColor(defs[k].element));
+      stock.appendChild(chip);
+    }
+    body.appendChild(stock);
+
+    var inv = inventory();
+    if (!inv.length) { body.appendChild(el('p', 'empty', 'Nenhuma peça para forjar.')); return; }
+    if (preselect != null) forgeSel = preselect;
+    if (forgeSel < 0 || forgeSel >= inv.length) forgeSel = 0;
+
+    var pick = el('div', 'forge-pick');
+    inv.forEach(function (entry, i) {
+      var id = entry.itemId || entry;
+      var it = itemDef(id);
+      if (!it) return;
+      var lv = entry.level || 0;
+      var c = el('button', 'forge-thumb ' + tierClass(lv) + (i === forgeSel ? ' is-on' : ''));
+      c.type = 'button';
+      c.appendChild(art('itemIcon', [id, 44], 44));
+      if (lv) c.appendChild(el('span', 'inv-lv', '+' + lv));
+      tap(c, function () { forgeSel = i; sheetForge(i); });
+      pick.appendChild(c);
+    });
+    body.appendChild(pick);
+
+    var entry = inv[forgeSel];
+    var id2 = entry.itemId || entry;
+    var it2 = itemDef(id2);
+    var lv2 = entry.level || 0;
+    var info = safe(function () { return P().upgradeInfo(forgeSel); }, null);
+
+    var panel = el('div', 'forge-panel ' + tierClass(lv2));
+    var head = el('div', 'forge-head');
+    head.appendChild(art('itemIcon', [id2, 72], 72));
+    var ht = el('div', 'forge-head-t');
+    ht.appendChild(el('h3', null, esc((it2 && it2.name) || id2) + (lv2 ? ' <b>+' + lv2 + '</b>' : '')));
+    ht.appendChild(el('span', 'forge-tier-nm', esc(tierOf(lv2)) + ' · ' + esc(SLOT_PT[slotOf(id2)] || '')));
+    if (it2 && it2.element) {
+      var ec = el('span', 'elem-badge e-' + it2.element, ELEM_PT[it2.element] || it2.element);
+      ec.style.setProperty('--ec', elemColor(it2.element));
+      ht.appendChild(ec);
+    }
+    head.appendChild(ht);
+    panel.appendChild(head);
+
+    // trilha 0..10 com os tiers marcados
+    var maxLv = upgradeCfg().maxLevel || 10;
+    var track = el('div', 'forge-track');
+    for (var i3 = 0; i3 <= maxLv; i3++) {
+      var stp = el('i', 'fg-step ' + tierClass(i3) + (i3 <= lv2 ? ' is-on' : '') + (i3 === lv2 + 1 ? ' is-next' : ''));
+      track.appendChild(stp);
+    }
+    panel.appendChild(track);
+    panel.appendChild(el('div', 'forge-legend',
+      '+0–2 Comum · +3–5 Raro · +6–9 Supremo · <b>+10 Magnífico</b>'));
+
+    // prévia do ganho
+    var per = upgradeCfg().bonusPerLevel || 0.12;
+    var prev = el('div', 'forge-prev');
+    prev.appendChild(el('div', 'fp-col', '<i>agora</i>' + bonusPreview(it2, lv2, per)));
+    prev.appendChild(el('div', 'fp-arrow', '→'));
+    prev.appendChild(el('div', 'fp-col fp-next', '<i>+' + (lv2 + 1) + '</i>' + bonusPreview(it2, lv2 + 1, per)));
+    if (lv2 < maxLv) panel.appendChild(prev);
+
+    if (!info) {
+      panel.appendChild(el('p', 'empty', 'A forja ainda não está disponível.'));
+    } else if (info.maxed) {
+      panel.appendChild(el('p', 'forge-max', 'No máximo: <b>Magnífico +' + maxLv + '</b>.'));
+    } else {
+      var sd2 = stoneDefs()[info.stoneId];
+      var have = stoneCount(info.stoneId);
+      var cost = el('div', 'forge-cost' + (info.temPedras ? '' : ' is-short'));
+      cost.appendChild(art('stoneIcon', [info.stoneId, 38], 38));
+      cost.appendChild(el('span', null, '<b>' + have + ' / ' + info.custo + '</b> ' +
+        esc((sd2 && sd2.name) || info.stoneId)));
+      panel.appendChild(cost);
+      if (!info.temPedras) {
+        panel.appendChild(el('p', 'forge-short',
+          'Faltam <b>' + (info.custo - have) + '</b> de <b>' + esc((sd2 && sd2.name) || info.stoneId) +
+          '</b>' + (sd2 ? ' (' + (ELEM_PT[sd2.element] || sd2.element) + ')' : '') +
+          '. Monstros desse elemento derrubam.'));
+      }
+      var go = btn('Forjar para +' + (lv2 + 1), 'btn-primary btn-block' + (info.temPedras ? '' : ' is-off'), function () {
+        var ok = safe(function () { return P().upgradeItem(forgeSel); }, false);
+        if (ok) { toast('Forjado: +' + (lv2 + 1) + ' ' + tierOf(lv2 + 1) + '!', 'good'); sheetForge(forgeSel); }
+        else toast('Pedras insuficientes.');
+      });
+      panel.appendChild(go);
+    }
+    body.appendChild(panel);
+  }
+
+  function bonusPreview(it, lv, per) {
+    if (!it) return '—';
+    var mult = 1 + per * lv;
+    var b = it.bonuses || {}, out = [], k;
+    for (k in b) {
+      if (!b.hasOwnProperty(k)) continue;
+      if (k === 'resists') {
+        for (var e in b.resists) {
+          if (b.resists.hasOwnProperty(e)) out.push('+' + Math.round(b.resists[e] * mult) + '% ' + (ELEM_PT[e] || e));
+        }
+      } else if (k === 'pa' || k === 'pp') {
+        out.push('+' + b[k] + ' ' + k.toUpperCase());
+      } else {
+        out.push('+' + Math.round(b[k] * mult) + ' ' +
+          ({ hp: 'PV', power: 'poder', initiative: 'inic.', dodge: 'esquiva', lock: 'fixação' }[k] || k));
+      }
+    }
+    return out.length ? out.join('<br>') : '—';
+  }
+
+  // ------------------------------------------------------ FICHA DO HERÓI
+  function sheetHero(heroId) {
+    var h = hero(heroId);
+    if (!h) { closeSheet(); return; }
+    var cid = h.classId || heroId;
+    var info = cardInfo(cid);
+    var stats = effStats(heroId) || (classDef(cid) || {}).stats || {};
+    var body = sheetShell(className(cid), 'Nível ' + (h.level || 1) + ' · ' +
+      (ELEM_PT[h.element] || 'Neutro') + (info.stars ? ' · ★' + info.stars : ''));
+
+    var top = el('div', 'hs-top');
+    top.appendChild(art('unit', [cid, { element: h.element, dir: 0, scale: 0.7 }], 110));
+    var col = el('div', 'hs-col');
+    var xi = xpInfo(heroId);
+    col.appendChild(bar('bar-xp', xi ? xi.pct : 0, xi && xi.xpNext ? 'XP ' + xi.xp + ' / ' + xi.xpNext : 'nível máximo'));
+    col.appendChild(el('div', 'hs-stats',
+      '<span class="s-hp">' + (stats.hp || 0) + ' PV</span>' +
+      '<span class="s-pa">' + (stats.pa || 0) + ' PA</span>' +
+      '<span class="s-pp">' + (stats.pp || 0) + ' PP</span>' +
+      '<span>' + (stats.power || 0) + ' poder</span>' +
+      (stats.elemPower ? '<span class="s-el">+' + stats.elemPower + ' ' + (ELEM_PT[h.element] || '') + '</span>' : '') +
+      '<span>' + (stats.initiative || 0) + ' inic.</span>' +
+      '<span>' + (stats.dodge || 0) + ' esq.</span>' +
+      '<span>' + (stats.lock || 0) + ' fix.</span>'));
+    col.appendChild(el('p', 'hs-gain', perLevelText(h.element)));
+    if (info.stars) {
+      var sr = el('div', 'hs-stars');
+      sr.appendChild(starRow(info.stars, 18));
+      sr.appendChild(el('span', null, 'bônus de estrela já contam nos números acima'));
+      col.appendChild(sr);
+    }
+    top.appendChild(col);
+    body.appendChild(top);
+
+    if (h.element === 'neutro' && (h.level || 1) >= ((D().leveling || {}).elementChoiceLevel || 5)) {
+      body.appendChild(btn('Escolher caminho elemental', 'btn-gold btn-block', function () {
+        closeSheet();
+        elemChoiceHero = heroId;
+        navTo('elementChoice');
+      }));
+    }
+
+    // ---- equipamento: 4 espaços + pet (adendo v2.2)
+    body.appendChild(el('h3', 'hs-sec', 'Equipamento'));
+    var slots = el('div', 'hs-slots');
+    SLOTS.forEach(function (canon) {
+      var itemId = heroItem(h, canon);
+      var it = itemId ? itemDef(itemId) : null;
+      var lv = itemId ? safe(function () { return P().itemLevel(itemId); }, 0) : 0;
+      var cell = el('div', 'hs-slot' + (it ? ' has-item ' + tierClass(lv) : ' is-empty'));
+      if (it) cell.style.setProperty('--rc', rarColor(it.rarity));
+      var ic = el('div', 'hs-slot-ic');
+      ic.appendChild(it ? art('itemIcon', [itemId, 52], 52) : art('slotIcon', [canon, 52], 52));
+      if (lv) ic.appendChild(el('span', 'inv-lv', '+' + lv));
+      cell.appendChild(ic);
+      cell.appendChild(el('span', 'hs-slot-nm', SLOT_PT[canon]));
+      cell.appendChild(el('span', 'hs-slot-it', it ? esc(it.name) : 'vazio'));
+      tipOn(ic, SLOT_PT[canon] + (it ? ' — ' + it.name : ''),
+        it ? itemTipBody(itemId, lv) : esc(SLOT_HINT[canon]),
+        it ? rarColor(it.rarity) : '#8b93a0');
+      var act = btn(it ? 'Trocar' : 'Equipar', 'btn-mini', function () {
+        closeSheet();
+        invFilter = canon;
+        openSheet('inventory', itemId);
+      });
+      cell.appendChild(act);
+      slots.appendChild(cell);
+    });
+    // espaço do pet, separado dos quatro
+    (function () {
+      var pid = h.pet;
+      var pd = pid ? petDef(pid) : null;
+      var cell = el('div', 'hs-slot hs-pet' + (pd ? ' has-item' : ' is-empty'));
+      var ic = el('div', 'hs-slot-ic');
+      ic.appendChild(pd ? art('petIcon', [pid, 52], 52) : el('div', 'pet-empty', '☾'));
+      cell.appendChild(ic);
+      cell.appendChild(el('span', 'hs-slot-nm', 'Bicho'));
+      cell.appendChild(el('span', 'hs-slot-it', pd ? esc(pd.name) : 'nenhum'));
+      if (pd) tipOn(ic, pd.name, esc(pd.description || '') + '<br><i>' + esc(bonusText(pd.bonuses)) + '</i>',
+        elemColor(pd.element));
+      var pets = ownedPets();
+      if (pd) {
+        cell.appendChild(btn('Soltar', 'btn-mini btn-warn', function () {
+          safe(function () { P().unequipPet(heroId); }, null);
+          sheetHero(heroId);
+        }));
+      } else if (pets.length) {
+        cell.appendChild(btn('Chamar', 'btn-mini', function () { petPicker(heroId); }));
+      } else {
+        cell.appendChild(el('span', 'hs-none', 'nenhum no saco'));
+      }
+      slots.appendChild(cell);
+    })();
+    body.appendChild(slots);
+
+    // ---- feitiços
+    body.appendChild(el('h3', 'hs-sec', 'Feitiços'));
+    var sl = safe(function () { return P().spellsFor(heroId); }, h.spells || []);
+    var sg = el('div', 'hs-spells');
+    (sl || []).forEach(function (sid) {
+      var d2 = spellDef(sid);
+      var c = el('div', 'hs-spell');
+      c.appendChild(art('spellIcon', [d2 || sid, 40], 40));
+      c.appendChild(el('span', null, esc((d2 && d2.name) || sid)));
+      tipOn(c, (d2 && d2.name) || sid, spellTipBody(d2, sid), d2 ? elemColor(d2.element) : '#ffd08a');
+      sg.appendChild(c);
+    });
+    body.appendChild(sg);
+
+    // ---- caminho ainda por abrir
+    var def = classDef(cid) || {};
+    if (h.element && h.element !== 'neutro' && def.paths && def.paths[h.element]) {
+      var tiers = D().unlockTiers || [];
+      var locked = def.paths[h.element].filter(function (sid, i) {
+        var d3 = spellDef(sid);
+        var need = (d3 && d3.unlockLevel) || tiers[i] || 99;
+        return (h.level || 1) < need;
+      });
+      if (locked.length) {
+        body.appendChild(el('h3', 'hs-sec', 'Ainda por abrir'));
+        var lg = el('div', 'hs-spells is-locked');
+        locked.forEach(function (sid) {
+          var d3 = spellDef(sid);
+          var i2 = def.paths[h.element].indexOf(sid);
+          var need = (d3 && d3.unlockLevel) || tiers[i2] || '?';
+          var c2 = el('div', 'hs-spell');
+          c2.appendChild(art('spellIcon', [d3 || sid, 40], 40, 'silhouette'));
+          c2.appendChild(el('span', null, esc((d3 && d3.name) || sid) + ' · Nv ' + need));
+          lg.appendChild(c2);
+        });
+        body.appendChild(lg);
+      }
+    }
+  }
+
+  function petPicker(heroId) {
+    var body = sheetShell('Chamar um bicho', 'Um bicho serve a um herói por vez.');
+    var pets = ownedPets();
+    var g = el('div', 'pet-grid');
+    pets.forEach(function (pid) {
+      var pd = petDef(pid);
+      var c = el('button', 'pet-cell');
+      c.type = 'button';
+      c.appendChild(art('petIcon', [pid, 56], 56));
+      c.appendChild(el('b', null, esc((pd && pd.name) || pid)));
+      c.appendChild(el('span', null, esc(bonusText(pd && pd.bonuses))));
+      tap(c, function () {
+        safe(function () { P().equipPet(heroId, pid); }, null);
+        sheetHero(heroId);
+      });
+      g.appendChild(c);
+    });
+    if (!pets.length) g.appendChild(el('p', 'empty', 'Nenhum bicho no saco.'));
+    body.appendChild(g);
+    body.appendChild(btn('Voltar', 'btn-ghost btn-block', function () { sheetHero(heroId); }));
+  }
+
+  function sheetBattleMenu() {
+    var body = sheetShell('Pausa');
+    var acts = el('div', 'menu-acts');
+    acts.appendChild(btn('Inventário', 'btn-ghost', function () { openSheet('inventory'); }));
+    acts.appendChild(btn('Coleção', 'btn-ghost', function () { openSheet('collection'); }));
+    acts.appendChild(btn('Abandonar a descida', 'btn-warn', function () {
+      confirmSheet('Abandonar?', 'O que você já ganhou fica. A sala em curso se perde.', function () {
+        safe(function () { G().restart(); }, null);
+        UI.showScreen('menu');
+      });
+    }));
+    acts.appendChild(btn('Voltar à luta', 'btn-primary', closeSheet));
+    body.appendChild(acts);
+  }
+
+  // ==========================================================================
+  // EVENTOS DO ENGINE  →  log compacto
+  // ==========================================================================
+  var EV_TEXT = {
+    dodgeFail: function (ev) { return nameOf(ev.uid) + ' foi fixado e perdeu o passo.'; },
+    dodgeOk: function (ev) { return nameOf(ev.uid) + ' escapou.'; },
+    weatherShift: function (ev) {
+      var w = (D().weathers && D().weathers[ev.weather]) || null;
+      return 'O clima vira ' + ((w && w.name) || ev.weather) + '.';
+    },
+    weatherTick: function (ev) {
+      return nameOf(ev.uid) + (ev.amount > 0 ? ' se recupera (+' : ' sofre com o clima (') +
+             Math.abs(ev.amount) + ' PV)' + (ev.amount > 0 ? '' : '');
+    },
+    tileEvent: function (ev) { return ev.text || (nameOf(ev.uid) + ' pisou em algo.'); },
+    trapTriggered: function (ev) { return nameOf(ev.uid) + ' pisou numa armadilha!'; },
+    markStack: function (ev) { return nameOf(ev.uid) + ' está marcado (' + ev.stacks + ').'; },
+    petAct: function (ev) { return nameOf(ev.uid) + ' agiu sozinho.'; },
+    fusion: function (ev) { return 'FUSÃO! ' + nameOf(ev.uid) + ' entra em campo.'; }
+  };
+  function nameOf(uid) {
+    var u = unitByUid(uid);
+    return esc((u && (u.name || u.defId)) || 'alguém');
+  }
+
+  function pushLog(text, cls) {
+    if (!text) return;
+    logLines.push({ t: text, c: cls || '' });
+    if (logLines.length > 40) logLines.shift();
+    if (!bt.logList) return;
+    var line = el('div', 'log-line ' + (cls || ''), text);
+    bt.logList.appendChild(line);
+    while (bt.logList.childNodes.length > 40) bt.logList.removeChild(bt.logList.firstChild);
+    bt.logList.scrollTop = bt.logList.scrollHeight;
+  }
+
+  UI.handleEvent = function (ev) {
+    if (!ev || !ev.type) return;
+    if (ev.type === 'timerTick') { paintTimer(); return; }
+    if (current !== 'battle') return;
+    if (ev.type === 'log') { pushLog(esc(ev.text)); return; }
+    var f = EV_TEXT[ev.type];
+    if (f) {
+      var cls = ev.type === 'fusion' ? 'l-fusion'
+              : ev.type === 'dodgeFail' || ev.type === 'trapTriggered' ? 'l-bad'
+              : ev.type === 'dodgeOk' ? 'l-good' : '';
+      pushLog(safe(function () { return f(ev); }, ''), cls);
+    }
+    if (ev.type === 'fusion' || ev.type === 'turnStart' || ev.type === 'turnEnd') battleSig = '';
+  };
+
+  // ==========================================================================
+  // LOOP
+  // ==========================================================================
+  UI.update = function (dt) {
+    if (toastEl && toastT > 0) {
+      toastT -= (dt || 0.016);
+      if (toastT <= 0) toastEl.classList.remove('is-on');
+    }
+    if (current !== 'battle') return;
+    paintBattle(false);
+    paintTimer();
+  };
+
+  // acesso para testes/galeria
+  UI.screens = screens;
+  UI.selection = function (ids) {
+    if (ids) selHeroes = ids.slice(0, 2);
+    return selHeroes.slice();
+  };
+  UI.toast = toast;
+  UI.version = '2.2';
+})();

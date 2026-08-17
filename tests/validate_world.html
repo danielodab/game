@@ -391,6 +391,10 @@
       typeof d.weatherShiftEveryRounds === 'number' && d.weatherShiftEveryRounds >= 0);
     check(L + ': tileEventRate entre 0 e 1',
       typeof d.tileEventRate === 'number' && d.tileEventRate > 0 && d.tileEventRate <= 1, String(d.tileEventRate));
+    check(L + ': recommendedLevel inteiro entre 1 e 30 (adendo v2.3)',
+      typeof d.recommendedLevel === 'number' && d.recommendedLevel >= 1 &&
+      d.recommendedLevel <= 30 && d.recommendedLevel === Math.floor(d.recommendedLevel),
+      String(d.recommendedLevel));
     check(L + ': theme existe em DATA.scenery', has(D.scenery || {}, d.theme), String(d.theme));
 
     // ---- salas ----
@@ -642,6 +646,115 @@
           keys(D.stars.bonuses[k]).join(','));
       });
     }
+  })();
+
+  // =========================================================================
+  // 5-B. PROGRESSÃO (adendo v2.3) — subir de nível custa, e o fundo paga
+  // =========================================================================
+  // Mede UMA descida completa (as 3 salas, contando cada spawn do layout) e
+  // cruza com DATA.leveling.xpTable, do Criativo Classes. As duas tabelas são
+  // de donos diferentes: esta seção existe justamente para acusar divergência
+  // se uma andar sem a outra.
+  var descent = null;
+  (function () {
+    var EXPECTED_REC = [3, 7, 11, 16, 22, 28];
+
+    function roomStats(d) {
+      var xp = 0, spawns = 0, hp = 0, pow = 0, commons = 0, bossHp = 0;
+      (d.rooms || []).forEach(function (r) {
+        keys(r.monsters || {}).forEach(function (c) {
+          var m = MON[r.monsters[c]];
+          if (!m) { return; }
+          var n = 0;
+          r.layout.forEach(function (row) { for (var i = 0; i < row.length; i++) { if (row[i] === c) { n++; } } });
+          xp += n * m.xp; spawns += n;
+          if (m.boss) { bossHp = m.stats.hp; } else { hp += n * m.stats.hp; commons += n; pow += n * m.stats.power; }
+        });
+      });
+      return { xp: xp, spawns: spawns, avgHp: commons ? Math.round(hp / commons) : 0,
+               avgPower: commons ? Math.round(pow / commons) : 0, bossHp: bossHp };
+    }
+    descent = DG.map(roomStats);
+
+    // ---- recommendedLevel: exatamente a escada fixada no adendo ----
+    DG.forEach(function (d, i) {
+      check('calabouço ' + d.id + ': recommendedLevel = ' + EXPECTED_REC[i],
+        d.recommendedLevel === EXPECTED_REC[i], String(d.recommendedLevel));
+    });
+    check('recommendedLevel estritamente crescente pelos 6 calabouços',
+      DG.every(function (d, i) { return i === 0 || d.recommendedLevel > DG[i - 1].recommendedLevel; }),
+      DG.map(function (d) { return d.recommendedLevel; }).join(' → '));
+
+    // ---- XP: cresce de forma MARCANTE a cada calabouço ----
+    check('XP por descida estritamente crescente',
+      descent.every(function (s, i) { return i === 0 || s.xp > descent[i - 1].xp; }),
+      descent.map(function (s) { return s.xp; }).join(' → '));
+    descent.forEach(function (s, i) {
+      if (i === 0) { return; }
+      var ratio = s.xp / descent[i - 1].xp;
+      check('XP do calabouço ' + DG[i].id + ' é ao menos 1,5× a do anterior (salto marcante)',
+        ratio >= 1.5, 'razão ' + (Math.round(ratio * 100) / 100) + '×');
+    });
+    check('a descida mais funda rende ao menos 20× a mais rasa (a profundidade paga)',
+      descent[5].xp >= descent[0].xp * 20,
+      descent[0].xp + ' → ' + descent[5].xp + ' (' + Math.round(descent[5].xp / descent[0].xp) + '×)');
+
+    // ---- XP × xpTable: ~1 nível cedo, ~1/3 de nível do 25 em diante ----
+    var LV = D.leveling;
+    if (check('DATA.leveling.xpTable existe (progression.js, Criativo Classes)',
+      !!LV && Array.isArray(LV.xpTable) && LV.xpTable.length === 30)) {
+      // degrau para SAIR do nível n (1-based): xpTable[n] - xpTable[n-1]
+      var step = function (n) { return LV.xpTable[n] - LV.xpTable[n - 1]; };
+      check('xpTable: degraus sempre crescentes (subir sempre custa mais)',
+        LV.xpTable.every(function (v, i) { return i < 2 || step(i) > step(i - 1); }));
+
+      var frac = DG.map(function (d, i) { return descent[i].xp / step(d.recommendedLevel); });
+      check('Estufa (nível 3): uma descida rende ~1 nível (entre 0,7 e 1,4)',
+        frac[0] >= 0.7 && frac[0] <= 1.4, 'rende ' + (Math.round(frac[0] * 100) / 100) + ' nível');
+      check('Mina (nível 22): uma descida rende cerca de 1/3 de nível (entre 0,25 e 0,55)',
+        frac[4] >= 0.25 && frac[4] <= 0.55, 'rende ' + (Math.round(frac[4] * 100) / 100) + ' nível');
+      check('Coração (nível 28): uma descida rende cerca de 1/3 de nível (entre 0,25 e 0,55)',
+        frac[5] >= 0.25 && frac[5] <= 0.55, 'rende ' + (Math.round(frac[5] * 100) / 100) + ' nível');
+      check('a fração de nível por descida NUNCA cresce com a profundidade ' +
+            '(a XP sobe, a exigência sobe mais)',
+        frac.every(function (f, i) { return i === 0 || f <= frac[i - 1] + 0.001; }),
+        frac.map(function (f) { return Math.round(f * 100) / 100; }).join(' → '));
+      check('nenhum calabouço rende mais de 1,4 nível por descida (nada de upar de graça)',
+        frac.every(function (f) { return f <= 1.4; }),
+        frac.map(function (f) { return Math.round(f * 100) / 100; }).join(' → '));
+
+      // o falloff do adendo é da Lógica Meta, mas o dado mora em DATA.leveling
+      if (LV.xpFalloff) {
+        check('xpFalloff: graceLevels ≥ 0', LV.xpFalloff.graceLevels >= 0);
+        check('xpFalloff: factorPerLevel entre 0 e 1',
+          LV.xpFalloff.factorPerLevel > 0 && LV.xpFalloff.factorPerLevel < 1);
+        check('xpFalloff: floor entre 0 e 1', LV.xpFalloff.floor > 0 && LV.xpFalloff.floor < 1);
+      }
+    }
+
+    // ---- DIFICULDADE: o fundo é mesmo mais duro ----
+    check('vida média dos comuns cresce a cada calabouço',
+      descent.every(function (s, i) { return i === 0 || s.avgHp > descent[i - 1].avgHp; }),
+      descent.map(function (s) { return s.avgHp; }).join(' → '));
+    check('poder dos comuns não decresce e chega a ≥ 100 no último calabouço',
+      descent.every(function (s, i) { return i === 0 || s.avgPower >= descent[i - 1].avgPower; }) &&
+      descent[5].avgPower >= 100,
+      descent.map(function (s) { return s.avgPower; }).join(' → '));
+    check('vida do chefe cresce a cada calabouço e respeita o teto de 600',
+      descent.every(function (s, i) { return (i === 0 || s.bossHp > descent[i - 1].bossHp) && s.bossHp <= 600; }),
+      descent.map(function (s) { return s.bossHp; }).join(' → '));
+    check('calabouços fundos (4–6) têm comuns mais duros que os rasos (1–3)',
+      descent[3].avgHp > descent[2].avgHp && descent[4].avgHp > descent[3].avgHp &&
+      descent[5].avgHp > descent[4].avgHp);
+    check('nº de spawns por descida não diminui com a profundidade',
+      descent.every(function (s, i) { return i === 0 || s.spawns >= descent[i - 1].spawns - 1; }),
+      descent.map(function (s) { return s.spawns; }).join(' → '));
+    // as invocações do jogador NÃO podem ter sido escaladas por engano
+    REQUIRED_SUMMONS.forEach(function (id) {
+      if (!has(MON, id)) { return; }
+      check('invocação ' + id + ': poder 0 (não leva escala de profundidade)',
+        MON[id].stats.power === 0, String(MON[id].stats.power));
+    });
   })();
 
   // --- ECONOMIA DAS PEDRAS: um +10 custa 107 pedras (DATA.upgrade) ----------

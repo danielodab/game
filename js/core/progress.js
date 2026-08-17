@@ -104,6 +104,13 @@ var JOGO = (typeof window !== 'undefined')
  *       + conjuntos + pet + estrelas da classe. Herói desconhecido devolve null
  *       (o Engine cai nos stats base).
  *
+ * [D15] RENDIMENTO DECRESCENTE DE XP (§9-D). `xpMultiplier(herói, calabouço)`:
+ *       ×1 até `recommendedLevel + graceLevels`; acima disso, `factorPerLevel`
+ *       elevado à diferença, com piso `floor`. É POR HERÓI (cada um tem seu
+ *       nível) e entra DEPOIS da divisão da XP pelo tamanho do grupo. Faltando
+ *       `recommendedLevel` ou `xpFalloff` no dado, devolve 1 — nunca corta por
+ *       engano. Itens, pedras e cartas NÃO sofrem o corte.
+ *
  * [D14] GANHO POR NÍVEL ELEMENTAL (§9-C). Todo nível dá `perLevel.hp`. As
  *       subidas ANTES da escolha do elemento (níveis 1→4, isto é
  *       `elementChoiceLevel - 2` subidas) dão `perLevel.power` genérico; as
@@ -207,6 +214,7 @@ var JOGO = (typeof window !== 'undefined')
       xpTable: lv.xpTable,
       perLevel: lv.perLevel || { hp: 0, power: 0 },
       perLevelElement: isObj(lv.perLevelElement) ? lv.perLevelElement : null,   // §9-C [D14]
+      xpFalloff: isObj(lv.xpFalloff) ? lv.xpFalloff : null,                     // §9-D [D15]
       elementChoiceLevel: num(lv.elementChoiceLevel, 5)
     };
   }
@@ -717,6 +725,27 @@ var JOGO = (typeof window !== 'undefined')
     if (h.level !== before) syncSpells(heroId);
     Progress.save();
     return h.level - before;
+  };
+
+  /* Rendimento decrescente de XP em conteúdo fácil (§9-D) [D15].
+   * Aceita heroId ou o nível cru. Devolve 1 quando faltar dado — nunca corta
+   * por engano. Vale SÓ para XP: item, pedra e carta seguem sua raridade. */
+  Progress.xpMultiplier = function (heroOrLevel, dungeonId) {
+    var level = null;
+    if (typeof heroOrLevel === 'number' && isFinite(heroOrLevel)) level = heroOrLevel;
+    else {
+      var h = Progress.hero(heroOrLevel);
+      if (h) level = h.level;
+    }
+    if (level === null) return 1;
+    var d = dungeonDef(dungeonId);
+    var rec = d ? num(d.recommendedLevel, null) : null;
+    var cfg = leveling().xpFalloff;
+    if (rec === null || !isObj(cfg)) return 1;          // dado ausente: sem corte
+    var acima = level - (rec + num(cfg.graceLevels, 0));
+    if (acima <= 0) return 1;                            // dentro da faixa de graça
+    var m = Math.pow(num(cfg.factorPerLevel, 1), acima); // queda geométrica
+    return Math.max(num(cfg.floor, 0), m);               // com piso
   };
 
   Progress.xpInfo = function (heroId) {

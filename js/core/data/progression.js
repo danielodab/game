@@ -1,7 +1,9 @@
 /* SOTERRA 2.0 — DATA.unlockTiers, DATA.leveling, DATA.cards, DATA.stars
  * Dono: Criativo Classes. Não editar em outro papel.
- * Curva calibrada para: 1ª Descida completa ≈ 2–3 níveis; nível 5 (escolha do elemento)
- * logo no começo do 2º calabouço; nível 20 no fim do conteúdo normal; nível 30 = troféu.
+ * Curva calibrada (adendo v2.3) sobre a XP real dos monstros: no nível recomendado do
+ * calabouço, uma descida completa rende ~1 nível no começo e ~1/3 de nível do 25 em diante.
+ * Repetir calabouço raso continua possível, mas o `xpFalloff` faz render cada vez menos:
+ * descer fundo é o único caminho eficiente. Nível 5 = escolha do elemento; nível 30 = troféu.
  */
 var JOGO = (typeof window !== 'undefined')
   ? (window.JOGO = window.JOGO || {})
@@ -16,16 +18,40 @@ JOGO.DATA.leveling = {
   maxLevel: 30,
 
   /* XP ACUMULADA para atingir cada nível: xpTable[0] = nível 1 (0),
-   * xpTable[29] = nível 30. Degraus crescem ~1,45× no início e amaciam
-   * até ~1,03× no fim, para o veterano nunca travar de vez. */
+   * xpTable[29] = nível 30 (39.055).
+   *
+   * CALIBRAGEM (adendo v2.3) — feita sobre a XP real dos monstros de
+   * `js/core/data/monsters.js` somada pelos spawns de `js/core/data/dungeons.js`.
+   * Descida completa (3 salas), XP de GRUPO, por calabouço:
+   *   133 · 385 · 844 · 1531 · 2427 · 3628   (a XP paga cresce 27× com a profundidade)
+   * A XP é dividida pelo tamanho do grupo (1 ou 2 heróis).
+   *
+   * No nível recomendado de cada calabouço (3 · 7 · 11 · 16 · 22 · 28), uma descida
+   * completa em DUPLA rende:
+   *   calabouço 1 → 1,02 nível  ·  2 → 0,71  ·  3 → 0,56
+   *   calabouço 4 → 0,46        ·  5 → 0,38  ·  6 → 0,33   (≈ 1/3 a partir do 25)
+   * Solo rende o dobro (e morre o dobro). A exigência sobe mais que o pagamento:
+   * os degraus vão de 35 para 5.950 — 170×, contra os 27× da XP dos monstros. */
   xpTable: [
-    0, 60, 145, 270, 440,
-    670, 980, 1390, 1925, 2620,
-    3505, 4620, 6010, 7720, 9800,
-    12305, 15290, 18810, 22915, 27655,
-    33065, 39175, 46010, 53570, 61850,
-    70830, 80465, 90695, 101450, 112640
+    0, 35, 80, 145, 240,
+    370, 560, 830, 1180, 1630,
+    2220, 2980, 3870, 4920, 6145,
+    7570, 9245, 11120, 13195, 15495,
+    18045, 20895, 24045, 27495, 31270,
+    35420, 39970, 44945, 50395, 56345
   ],
+
+  /* RENDIMENTO DECRESCENTE ao repetir conteúdo raso (adendo v2.3).
+   * Multiplicador de XP conforme a distância para o nível recomendado do calabouço:
+   * até `recommendedLevel + graceLevels` vale ×1,0; cada nível acima multiplica por
+   * 0,75 acumulativo, nunca abaixo de ×0,10 (o piso é atingido 8 níveis depois da graça).
+   * Não vale para itens, pedras nem cartas — só XP.
+   *
+   * Efeito medido na validação: moer SÓ o calabouço 1 do nível 3 ao 30 exige
+   * 7.918 descidas em dupla (3.959 solo); descer sempre no calabouço mais fundo
+   * liberado exige 77 (39 solo). Profundidade é ~100× mais eficiente — e mesmo
+   * sem o falloff seriam 846 descidas, então a curva já pune o raso sozinha. */
+  xpFalloff: { graceLevels: 4, factorPerLevel: 0.75, floor: 0.10 },
 
   /* GANHO POR NÍVEL (adendo v2.2) — todo nível dá +5 PV; o que muda é o dano.
    * Antes de escolher o elemento, o nível dá poder GENÉRICO; a partir da escolha,

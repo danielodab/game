@@ -36,6 +36,10 @@
 document.write('<scr' + 'ipt src="../js/core/data/classes.js?v=' + window.__V + '"><\/scr' + 'ipt>');
 document.write('<scr' + 'ipt src="../js/core/data/spells.js?v=' + window.__V + '"><\/scr' + 'ipt>');
 document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__V + '"><\/scr' + 'ipt>');
+/* SÓ LEITURA — dados do Criativo Mundo, usados para conferir a calibragem da xpTable
+   contra a XP real dos monstros. Se faltarem, a validação cai nos valores medidos. */
+document.write('<scr' + 'ipt src="../js/core/data/monsters.js?v=' + window.__V + '"><\/scr' + 'ipt>');
+document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V + '"><\/scr' + 'ipt>');
 </script>
 
 <script>
@@ -444,6 +448,116 @@ document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__
   check('degraus de XP não decrescem (curva suave)', stepsOk, stepsBad);
 
   /* ---------------- coleção de cartas e estrelas (adendo v2.1) ------------- */
+  /* ============ progressão × profundidade (adendo v2.3) =================== */
+  /* XP de GRUPO de uma descida completa (3 salas), medida somando os spawns de
+   * dungeons.js com o `xp` de monsters.js. Se os dois arquivos estiverem carregados,
+   * recalculamos ao vivo e comparamos: divergência > 20% significa que o Criativo Mundo
+   * mexeu na XP e esta curva precisa ser recalibrada. */
+  var DUNGEON_XP = [133, 385, 844, 1531, 2427, 3628];
+  var REC_LEVEL = [3, 7, 11, 16, 22, 28];
+  var liveXp = null;
+  if (D.dungeons && D.monsters && D.dungeons.length === 6) {
+    liveXp = D.dungeons.map(function (dg) {
+      var tot = 0;
+      (dg.rooms || []).forEach(function (rm) {
+        var counts = {};
+        (rm.layout || []).forEach(function (line) {
+          for (var i = 0; i < line.length; i++) {
+            var ch = line[i];
+            if (rm.monsters && rm.monsters[ch]) counts[ch] = (counts[ch] || 0) + 1;
+          }
+        });
+        Object.keys(counts).forEach(function (ch) {
+          var m = D.monsters[rm.monsters[ch]];
+          tot += (m && m.xp ? m.xp : 0) * counts[ch];
+        });
+      });
+      return tot;
+    });
+    D.dungeons.forEach(function (dg, i) {
+      if (isNum(dg.recommendedLevel)) REC_LEVEL[i] = dg.recommendedLevel;
+    });
+    var drift = [];
+    liveXp.forEach(function (v, i) {
+      if (Math.abs(v - DUNGEON_XP[i]) > DUNGEON_XP[i] * 0.2) drift.push('D' + (i + 1) + ' ' + DUNGEON_XP[i] + '→' + v);
+    });
+    check('XP dos calabouços continua próxima da usada na calibragem da xpTable',
+      drift.length === 0, drift.join(', ') + (drift.length ? ' — recalibrar xpTable' : ''));
+    DUNGEON_XP = liveXp;
+  } else {
+    check('dungeons/monsters ausentes — usando a XP medida na calibragem', true, DUNGEON_XP.join(' · '));
+  }
+
+  var F = L.xpFalloff;
+  check('leveling.xpFalloff existe', !!F);
+  check('xpFalloff.graceLevels = 4', !!F && F.graceLevels === 4, F && F.graceLevels);
+  check('xpFalloff.factorPerLevel = 0.75', !!F && F.factorPerLevel === 0.75, F && F.factorPerLevel);
+  check('xpFalloff.floor = 0.10', !!F && Math.abs(F.floor - 0.10) < 1e-9, F && F.floor);
+  check('xpFalloff coerente (0 < floor < factorPerLevel < 1, graça ≥ 1)',
+    !!F && F.floor > 0 && F.floor < F.factorPerLevel && F.factorPerLevel < 1 && F.graceLevels >= 1);
+
+  function xpMult(heroLevel, recommended) {
+    if (!F) return 1;
+    var over = heroLevel - (recommended + F.graceLevels);
+    if (over <= 0) return 1;
+    return Math.max(F.floor, Math.pow(F.factorPerLevel, over));
+  }
+  function stepTo(level) { return L.xpTable[level - 1] - L.xpTable[level - 2]; }   // XP para ir de level-1 a level
+  function descentsPerLevel(di, heroLevel, party) {
+    return stepTo(heroLevel + 1) / ((DUNGEON_XP[di] / party) * xpMult(heroLevel, REC_LEVEL[di]));
+  }
+
+  /* faixa aceita: ~1 descida por nível no começo, subindo até ~3 no fim */
+  var BANDS = [[0.7, 1.6], [1.0, 2.0], [1.3, 2.4], [1.6, 2.8], [2.0, 3.2], [2.4, 4.0]];
+  var progression = [];
+  for (var di = 0; di < 6; di++) {
+    var lvl = REC_LEVEL[di];
+    var duoD = descentsPerLevel(di, lvl, 2), soloD = descentsPerLevel(di, lvl, 1);
+    progression.push({ d: di + 1, rec: lvl, xp: DUNGEON_XP[di], step: stepTo(lvl + 1), duo: duoD, solo: soloD });
+    check('calabouço ' + (di + 1) + ' (nível ' + lvl + '): dupla sobe 1 nível em ' +
+      BANDS[di][0] + '–' + BANDS[di][1] + ' descidas',
+      duoD >= BANDS[di][0] && duoD <= BANDS[di][1], duoD.toFixed(2) + ' descidas');
+    check('calabouço ' + (di + 1) + ': solo sobe mais rápido que a dupla (metade das descidas)',
+      soloD < duoD, soloD.toFixed(2) + ' vs ' + duoD.toFixed(2));
+  }
+  var monoProg = true;
+  for (var pi = 1; pi < progression.length; pi++) {
+    if (progression[pi].duo < progression[pi - 1].duo) monoProg = false;
+  }
+  check('subir fica progressivamente mais caro a cada calabouço', monoProg,
+    progression.map(function (r) { return 'D' + r.d + ' ' + r.duo.toFixed(2); }).join(' '));
+  check('no começo (calabouço 1, nível recomendado) uma descida rende ~1 nível',
+    Math.abs(progression[0].duo - 1) <= 0.35, progression[0].duo.toFixed(2));
+  check('do nível 25 em diante uma descida rende ≈1/3 de nível (≥ 2,2 descidas)',
+    descentsPerLevel(5, 28, 2) >= 2.2 && descentsPerLevel(4, 25, 2) >= 2.2,
+    'D6@28 ' + descentsPerLevel(5, 28, 2).toFixed(2) + ' · D5@25 ' + descentsPerLevel(4, 25, 2).toFixed(2));
+
+  /* moer o calabouço 1 até o nível 30 tem de ser absurdo; descer fundo, viável */
+  function runsToThirty(fixedDungeon, party) {
+    var xp = L.xpTable[2], lv = 3, runs = 0;   // começa no nível 3, o recomendado do calabouço 1
+    while (lv < L.maxLevel && runs < 100000) {
+      var di2 = (fixedDungeon >= 0) ? fixedDungeon : (function () {
+        var best = 0;
+        for (var k = 0; k < 6; k++) { if (lv >= REC_LEVEL[k]) best = k; }
+        return best;
+      })();
+      xp += (DUNGEON_XP[di2] / party) * xpMult(lv, REC_LEVEL[di2]);
+      runs++;
+      while (lv < L.maxLevel && xp >= L.xpTable[lv]) lv++;
+    }
+    return runs;
+  }
+  var grindD1duo = runsToThirty(0, 2), grindD1solo = runsToThirty(0, 1);
+  var deepDuo = runsToThirty(-1, 2), deepSolo = runsToThirty(-1, 1);
+  check('moer só o calabouço 1 até o nível 30 é proibitivo (> 300 descidas em dupla)',
+    grindD1duo > 300, grindD1duo + ' descidas');
+  check('descer sempre no calabouço mais fundo liberado leva 30–120 descidas (dupla)',
+    deepDuo >= 30 && deepDuo <= 120, deepDuo + ' descidas');
+  check('profundidade é pelo menos 5× mais eficiente que moer o calabouço 1',
+    grindD1duo / deepDuo >= 5, (grindD1duo / deepDuo).toFixed(1) + '×');
+  check('solo chega ao 30 mais rápido que a dupla, nos dois cenários',
+    deepSolo < deepDuo && grindD1solo < grindD1duo, deepSolo + '/' + deepDuo);
+
   var cardIds = Object.keys(D.cards);
   check('cards cobre as 6 classes', cardIds.length === 6 &&
     CLASS_IDS.every(function (c) { return !!D.cards[c]; }), cardIds.join(','));
@@ -617,6 +731,22 @@ document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + window.__
         ((100 + row.power) / 100).toFixed(2) + '×</td></tr>';
     });
     html += '</table>';
+
+    html += '<h2>Subir de nível × profundidade (adendo v2.3)</h2>' +
+      '<div class="info">Descida completa = 3 salas. XP de grupo dividida pelo tamanho do grupo. ' +
+      'Falloff: ×1,0 até nível recomendado +' + (F ? F.graceLevels : '?') + ', depois ×' +
+      (F ? F.factorPerLevel : '?') + ' por nível, piso ×' + (F ? F.floor : '?') + '.</div>' +
+      '<table><tr><th>calabouço</th><th>nível rec.</th><th>XP da descida (grupo)</th>' +
+      '<th>XP do próximo nível</th><th>descidas p/ 1 nível — dupla</th><th>— solo</th></tr>';
+    progression.forEach(function (r) {
+      html += '<tr><td>' + r.d + '</td><td>' + r.rec + '</td><td>' + r.xp + '</td><td>' + r.step +
+        '</td><td>' + r.duo.toFixed(2) + '</td><td>' + r.solo.toFixed(2) + '</td></tr>';
+    });
+    html += '</table><ul class="info">' +
+      '<li>Moendo <b>só o calabouço 1</b> do nível 3 ao 30: <b>' + grindD1duo + '</b> descidas em dupla · ' + grindD1solo + ' solo.</li>' +
+      '<li>Descendo sempre no <b>calabouço mais fundo liberado</b>: <b>' + deepDuo + '</b> descidas em dupla · ' + deepSolo + ' solo.</li>' +
+      '<li>Profundidade é <b>' + (grindD1duo / deepDuo).toFixed(1) + '× mais eficiente</b> que repetir o raso.</li>' +
+      '<li>XP total do nível 1 ao 30: <b>' + L.xpTable[29] + '</b>.</li></ul>';
 
     html += '<h2>PV total por classe no nível 30 (base + ' + last.hp + ')</h2><ul class="info">';
     CLASS_IDS.forEach(function (cid) {

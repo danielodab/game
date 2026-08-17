@@ -200,6 +200,23 @@ JOGO.DATA = JOGO.DATA || {};
       fxKey: 'nova'
     }),
 
+    // Feitiço EXCLUSIVO do conjunto lendário (4 peças do Traje do Coração).
+    // Não pertence a nenhum item: é concedido por DATA.sets['cp-set-heart'].
+    'is-heart-whole': itemSpell({
+      id: 'is-heart-whole', name: 'Coração Inteiro', element: 'neutro',
+      paCost: 4, cooldown: 5, range: rng(0, 0, false, false), targetSide: 'self',
+      effects: [
+        { type: 'cleanse', kinds: ['poison', 'root'] },
+        { type: 'heal', min: 34, max: 44 },
+        { type: 'shield', value: 50, duration: 2 },
+        { type: 'reflect', pct: 30, duration: 2 },
+        { type: 'weatherShift', weather: 'calmo' }
+      ],
+      description: 'Com as quatro peças fechadas, o Coração Partido volta a bater inteiro por um instante: o veneno sai, a ferida fecha, a casca engrossa, o golpe volta pelo mesmo caminho — e a sala inteira se aquieta.',
+      flavor: 'Mil anos rachado. Um instante inteiro. Faça valer.',
+      fxKey: 'nova'
+    }),
+
     'is-heart-eclipse': itemSpell({
       id: 'is-heart-eclipse', name: 'Eclipse', element: 'neutro',
       paCost: 5, cooldown: 4, range: rng(1, 6), aoe: aoe('circle', 2), targetSide: 'enemy',
@@ -239,8 +256,8 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'firefly-claw' });
 
   item({ id: 'gh-widow-shears', name: 'Tesourão da Viúva', slot: 'punho', rarity: 'epico',
-    dungeonId: 'greenhouse', bonuses: { pa: 1, power: 10 },
-    description: 'O tesourão de poda da Jardineira-Viúva, mais alto que uma criança e ainda pegajoso de seiva. +1 PA, +10 de poder.',
+    dungeonId: 'greenhouse', bonuses: { pa: 1, power: 14 },
+    description: 'O tesourão de poda da Jardineira-Viúva, mais alto que uma criança e ainda pegajoso de seiva. +1 PA, +14 de poder.',
     flavor: 'Ela podava o jardim. Agora você poda o mundo.',
     iconKey: 'great-shears' });
 
@@ -348,7 +365,7 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'Andar sobre brasa é questão de sola, dizem eles.',
     iconKey: 'slag-boots' });
 
-  item({ id: 'em-chain-harness', name: 'Grilhões de Forja', slot: 'passo', rarity: 'raro',
+  item({ id: 'em-chain-harness', name: 'Grilhões de Forja', slot: 'passo', rarity: 'comum',
     dungeonId: 'emberlock', bonuses: { dodge: 12, lock: 8 },
     description: 'Correntes do teto da forja fechadas nos tornozelos: dão balanço de pêndulo para desviar e peso de âncora para segurar quem tentar fugir. +12 de esquiva, +8 de fixação.',
     flavor: 'Prendiam alguma coisa antes. Agora andam com você — de boa vontade.',
@@ -360,7 +377,7 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'O portão não sente falta. Provavelmente.',
     iconKey: 'riveted-plate' });
 
-  item({ id: 'em-soot-mantle', name: 'Manto de Fuligem', slot: 'casca', rarity: 'raro',
+  item({ id: 'em-soot-mantle', name: 'Manto de Fuligem', slot: 'casca', rarity: 'comum',
     dungeonId: 'emberlock', bonuses: { hp: 40, resists: { fogo: 15, ar: 5 } },
     description: 'Manto que esfarela em partículas na barra e se refaz sozinho enquanto houver fumaça na sala. +40 PV, +15% fogo, +5% ar.',
     flavor: 'Às vezes ele lembra que já foi alguém — e te abraça.',
@@ -379,13 +396,13 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'brand-iron' });
 
   // ===== 4. OS ANDAIMES DO VENTO (windscaffold) — av- ======================
-  item({ id: 'av-kite-crest', name: 'Garra de Vareta', slot: 'punho', rarity: 'raro',
+  item({ id: 'av-kite-crest', name: 'Garra de Vareta', slot: 'punho', rarity: 'comum',
     dungeonId: 'windscaffold', bonuses: { initiative: 14, power: 8 },
     description: 'Cinco varetas de papagaio amarradas aos dedos com pano esticado entre elas: a mão vira asa e o golpe vem com a corrente junto. +14 de iniciativa, +8 de poder.',
     flavor: 'Puxa para cima o tempo todo. Você se acostuma a inclinar.',
     iconKey: 'kite-claw' });
 
-  item({ id: 'av-plank-gauntlet', name: 'Manopla de Tábua', slot: 'punho', rarity: 'raro',
+  item({ id: 'av-plank-gauntlet', name: 'Manopla de Tábua', slot: 'punho', rarity: 'comum',
     dungeonId: 'windscaffold', bonuses: { power: 14, lock: 6 },
     description: 'Tábua de andaime amarrada ao antebraço com corda alcatroada: bate como remo e segura como corrimão. +14 de poder, +6 de fixação.',
     flavor: 'Já foi piso. Prefere ser argumento.',
@@ -409,7 +426,7 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'Cada nó tem nome. Aprenda dois, pelo menos.',
     iconKey: 'rope-vest' });
 
-  item({ id: 'av-storm-harness', name: 'Arnês de Tormenta', slot: 'casca', rarity: 'raro',
+  item({ id: 'av-storm-harness', name: 'Arnês de Tormenta', slot: 'casca', rarity: 'comum',
     dungeonId: 'windscaffold', bonuses: { hp: 45, resists: { ar: 15, terra: 6 } },
     description: 'Arnês de couro com anéis de latão que zunem no vendaval e mantêm o corpo colado à passarela. +45 PV, +15% ar, +6% terra.',
     flavor: 'Segura o corpo. A coragem é problema seu.',
@@ -428,7 +445,7 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'coil' });
 
   // ===== 5. A MINA TRÊMULA (quakemine) — mt- ===============================
-  item({ id: 'mt-drill-bit', name: 'Broca de Veio', slot: 'punho', rarity: 'raro',
+  item({ id: 'mt-drill-bit', name: 'Broca de Veio', slot: 'punho', rarity: 'comum',
     dungeonId: 'quakemine', bonuses: { power: 16, lock: 8 },
     description: 'Broca helicoidal de minério bruto, pesada demais para uma mão só e afiada por atrito. +16 de poder, +8 de fixação.',
     flavor: 'Cavou fundo demais. É por isso que a mina treme.',
@@ -446,19 +463,19 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'Sabem onde o chão ainda existe. Confie nelas.',
     iconKey: 'ore-greaves' });
 
-  item({ id: 'mt-cart-wheels', name: 'Rodas de Vagoneta', slot: 'passo', rarity: 'raro',
+  item({ id: 'mt-cart-wheels', name: 'Rodas de Vagoneta', slot: 'passo', rarity: 'comum',
     dungeonId: 'quakemine', bonuses: { initiative: 14, dodge: 10 },
     description: 'Duas rodinhas de vagoneta adaptadas aos calcanhares, boas em trilho e péssimas em escada. +14 de iniciativa, +10 de esquiva.',
     flavor: 'Descer é rápido. Descer é sempre rápido.',
     iconKey: 'cart-wheels' });
 
-  item({ id: 'mt-slate-plate', name: 'Peitoral de Ardósia', slot: 'casca', rarity: 'raro',
+  item({ id: 'mt-slate-plate', name: 'Peitoral de Ardósia', slot: 'casca', rarity: 'comum',
     dungeonId: 'quakemine', bonuses: { hp: 45, resists: { terra: 12, agua: 6 } },
     description: 'Lascas de ardósia sobrepostas como escamas, amarradas com fio de cobre. +45 PV, +12% terra, +6% água.',
     flavor: 'Racha uma lasca por golpe. Vieram muitas lascas.',
     iconKey: 'slate-plate' });
 
-  item({ id: 'mt-bedrock-carapace', name: 'Carapaça de Rocha-Mãe', slot: 'casca', rarity: 'raro',
+  item({ id: 'mt-bedrock-carapace', name: 'Carapaça de Rocha-Mãe', slot: 'casca', rarity: 'comum',
     dungeonId: 'quakemine', bonuses: { hp: 55, resists: { terra: 18, ar: 6 } },
     description: 'Bloco escavado da rocha-mãe da mina, moldado às costas do dono e pesado como uma promessa. +55 PV, +18% terra, +6% ar.',
     flavor: 'A mina emprestou. A mina cobra depois.',
@@ -477,9 +494,9 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'shoring-lamp' });
 
   // ===== 6. O CORAÇÃO PARTIDO (brokenheart) — cp- ==========================
-  item({ id: 'cp-heart-crown', name: 'Punho do Coração', slot: 'punho', rarity: 'epico',
-    dungeonId: 'brokenheart', bonuses: { pa: 1, power: 18, initiative: 10 },
-    description: 'Manopla montada com as quatro lascas maiores do Coração Partido, uma de cada elemento, girando devagar em volta dos dedos sem nunca se tocarem. +1 PA, +18 de poder, +10 de iniciativa.',
+  item({ id: 'cp-heart-crown', name: 'Punho do Coração', slot: 'punho', rarity: 'lendario',
+    dungeonId: 'brokenheart', bonuses: { pa: 1, power: 22, initiative: 10 },
+    description: 'Manopla montada com as quatro lascas maiores do Coração Partido, uma de cada elemento, girando devagar em volta dos dedos sem nunca se tocarem. +1 PA, +22 de poder, +10 de iniciativa.',
     flavor: 'Quatro elementos discutindo dentro da sua mão. Vença a discussão.',
     iconKey: 'heart-fist' });
 
@@ -489,7 +506,7 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'Aperta os dedos antes do golpe. É o jeito dela de concordar.',
     iconKey: 'shard-knuckles' });
 
-  item({ id: 'cp-quicksilver-boots', name: 'Botas de Azougue', slot: 'passo', rarity: 'epico',
+  item({ id: 'cp-quicksilver-boots', name: 'Botas de Azougue', slot: 'passo', rarity: 'lendario',
     dungeonId: 'brokenheart', bonuses: { pp: 1, dodge: 14, initiative: 12 },
     description: 'Botas com sola de metal líquido que se refaz a cada passo e nunca esfria. +1 PP, +14 de esquiva, +12 de iniciativa.',
     flavor: 'Chegam meio passo antes de você resolver ir.',
@@ -501,21 +518,21 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'O rastro apaga sozinho. Sempre um pouco tarde demais.',
     iconKey: 'ashen-anklets' });
 
-  item({ id: 'cp-scar-plate', name: 'Peitoral de Cicatriz', slot: 'casca', rarity: 'raro',
+  item({ id: 'cp-scar-plate', name: 'Peitoral de Cicatriz', slot: 'casca', rarity: 'comum',
     dungeonId: 'brokenheart', bonuses: { hp: 50, resists: { neutro: 15, fogo: 6, agua: 6 } },
     description: 'Placa remendada com grampos grossos sobre uma rachadura que atravessa o metal de lado a lado. +50 PV, +15% neutro, +6% fogo, +6% água.',
     flavor: 'Já falhou uma vez. Não pretende repetir.',
     iconKey: 'scar-plate' });
 
-  item({ id: 'cp-worldshell', name: 'Casco do Mundo', slot: 'casca', rarity: 'epico',
+  item({ id: 'cp-worldshell', name: 'Casco do Mundo', slot: 'casca', rarity: 'lendario',
     dungeonId: 'brokenheart', bonuses: { hp: 60, resists: { fogo: 12, agua: 12, terra: 12, ar: 12, neutro: 12 } },
     description: 'Um pedaço da própria Grande Lousa, fino como telha e frio como o céu que virou pedra. +60 PV e +12% de resistência a todos os elementos.',
     flavor: 'O céu desceu sobre o mundo. Um naco dele agora desce sobre você — do lado certo.',
     iconKey: 'worldshell' });
 
-  item({ id: 'cp-heart-horn', name: 'Corno de Brasa', slot: 'lume', rarity: 'epico',
-    dungeonId: 'brokenheart', bonuses: { power: 10 }, grantsSpell: 'is-heart-call',
-    description: 'Trompa curta talhada num caco oco do Coração, com um carvão vivo alojado no bocal: soprar acende o carvão, e a nota que sai é vermelha o bastante para a sala inteira enxergar de onde veio. Concede o feitiço Chamado do Coração.',
+  item({ id: 'cp-heart-horn', name: 'Corno de Brasa', slot: 'lume', rarity: 'lendario',
+    dungeonId: 'brokenheart', bonuses: { power: 16 }, grantsSpell: 'is-heart-call',
+    description: 'Trompa curta talhada num caco oco do Coração, com um carvão vivo alojado no bocal: soprar acende o carvão, e a nota que sai é vermelha o bastante para a sala inteira enxergar de onde veio. +16 de poder. Concede o feitiço Chamado do Coração.',
     flavor: 'Chama todo mundo. Todo mundo vem. Esse é o problema e a graça.',
     iconKey: 'ember-horn' });
 
@@ -526,11 +543,40 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'eclipse-lens' });
 
   // =========================================================================
-  // PESOS DE SAQUE — raro e épico são DIFÍCEIS.
-  // O sorteio ainda multiplica por LUCK (raro ×LUCK, épico ×LUCK²), com
-  // LUCK = 1.6 (dupla) e 2.4 (solo): mesmo solo, um épico continua raro.
+  // PESOS DE SAQUE — o saque é DURO, e o troféu é um evento.
+  //
+  // O peso de cada peça está em `DATA.items[id].dropWeight` (é ele que vai na
+  // lootTable do Criativo Mundo). Os números abaixo são o MODELO que o gera, e
+  // o rodapé deste arquivo normaliza tudo por calabouço para bater estas metas
+  // POR SORTEIO (já com a Sorte de Saque: raro ×LUCK, épico e lendário ×LUCK²;
+  // LUCK = 2,4 solo e 1,6 em dupla):
+  //
+  //            | solo            | dupla
+  //   vazio    | ~50%            | ~53%     ⇒ 4 sorteios por descida ≈ 2 itens
+  //   comum    | ~34%            | ~36%     ⇒ a maioria do que cai é comum
+  //   raro     | ~13,5%          | ~9,5%
+  //   épico    | ~2,5%           | ~1,2%    ⇒ ~10% / ~5% de sair 1 por descida
+  //   lendário | ~3,0% (só no CP)| ~1,4%    ⇒ ~70 / ~145 descidas pelo Traje
+  //
+  // `emptyRatio` é a entrada virtual de "NADA" do sorteio: LÓGICA, some
+  // `DATA.lootWeights.noDrop[dungeonId]` à lootTable como resultado "sem item".
+  // É ela que faz sair de uma descida com 1 peça útil já ser um bom resultado.
+  // `keyFactor`: peça-CHAVE (+1 PA, +1 PP ou Lume, que muda como se joga) pesa
+  // metade das irmãs de mesma raridade — são as mais difíceis de todas.
   // =========================================================================
-  DATA.lootWeights = { comum: 30, raro: 7, epico: 2 };
+  DATA.lootWeights = {
+    comum: 1000,            // peso de referência de uma comum não-chave
+    rareRatio: 0.1654,      // peso total dos raros    = 16,54% do peso total dos comuns
+    epicRatio: 0.012765,    // peso total dos épicos   =  1,28% do peso total dos comuns
+    legendRatio: 0.0158,    // peso total dos lendários=  1,58% do peso total dos comuns
+    emptyRatio: 1.4706,     // peso do "nada"          = 147% do peso total dos comuns
+    keyFactor: 0.5,
+    luck: { solo: 2.4, dupla: 1.6 },
+    // expoente da Sorte de Saque por raridade. O lendário divide o expoente do
+    // épico de propósito: com ×LUCK³ o solo trivializaria o troféu.
+    luckExponent: { comum: 0, raro: 1, epico: 2, lendario: 2 },
+    noDrop: {}              // preenchido no rodapé, por calabouço
+  };
 
   // =========================================================================
   // CONJUNTOS ELEMENTAIS — 2 por calabouço, 4 peças (pa/pp/vida/especial).
@@ -656,15 +702,21 @@ JOGO.DATA = JOGO.DATA || {};
     },
 
     // ---- 6. O CORAÇÃO PARTIDO --------------------------------------------
+    // ***** O CONJUNTO LENDÁRIO — o mais forte e o mais raro do jogo *****
+    // Único conjunto que CONCEDE UM FEITIÇO ao fechar as 4 peças (nenhum outro
+    // faz isso): `bonuses[4].grantsSpell`. A Lógica deve somá-lo em
+    // `Progress.spellsFor` do mesmo jeito que já soma o `grantsSpell` do Lume.
     'cp-set-heart': {
       id: 'cp-set-heart', name: 'Traje do Coração', element: 'neutro', dungeonId: 'brokenheart',
-      description: 'As quatro peças épicas do último Fecho, montadas em cima de um caco da própria Grande Lousa. Completar isto é o fim do jogo — e o começo do jogo de verdade.',
+      legendary: true,
+      description: 'As quatro peças lendárias do último Fecho, montadas em cima de um caco da própria Grande Lousa. Só caem no Coração Partido, e caem pouco: completar isto é o fim do jogo — e o começo do jogo de verdade.',
       pieces: ['cp-heart-crown', 'cp-quicksilver-boots', 'cp-worldshell', 'cp-heart-horn'],
       bonuses: {
         2: { hp: 30, power: 12 },
         3: { hp: 48, power: 20, initiative: 14, resists: { neutro: 15 } },
         4: { hp: 70, power: 32, initiative: 20, dodge: 16, lock: 16,
-             resists: { fogo: 10, agua: 10, terra: 10, ar: 10, neutro: 20 } }
+             resists: { fogo: 10, agua: 10, terra: 10, ar: 10, neutro: 20 },
+             grantsSpell: 'is-heart-whole' }
       }
     },
     'cp-set-cinder': {
@@ -741,16 +793,58 @@ JOGO.DATA = JOGO.DATA || {};
   // conjunto a que ele pertence e da raridade. Nenhum item pode ficar fora de
   // um conjunto: a validação acusa (element/setId nulos).
   // =========================================================================
-  (function bindSets() {
+  (function bindSetsAndLoot() {
+    var LW = DATA.lootWeights;
+    var RANK = { comum: 0, raro: 1, epico: 2, lendario: 3 };
+
+    // 1. conjunto → elemento e setId de cada peça; raridade do conjunto = a maior das peças
     Object.keys(DATA.sets).forEach(function (sid) {
-      var set = DATA.sets[sid];
+      var set = DATA.sets[sid], top = 'comum';
       set.pieces.forEach(function (iid) {
         var it = I[iid];
         if (!it) return;                       // acusado por tests/validate_fusion.html
         it.setId = sid;
         it.element = set.element;
-        it.dropWeight = DATA.lootWeights[it.rarity] || 0;
+        if (RANK[it.rarity] > RANK[top]) top = it.rarity;
       });
+      set.rarity = top;
+    });
+
+    // 2. peça-chave (muda COMO se joga) e sala mínima sugerida para a lootTable
+    Object.keys(I).forEach(function (id) {
+      var it = I[id];
+      it.keyPiece = !!(it.bonuses.pa || it.bonuses.pp || it.slot === 'lume');
+      it.minRoom = (it.rarity === 'epico' || it.rarity === 'lendario') ? 2
+                 : (it.rarity === 'raro' ? 1 : 0);
+    });
+
+    // 3. pesos de saque, normalizados por calabouço para bater as metas do modelo
+    var byDungeon = {};
+    Object.keys(I).forEach(function (id) {
+      var it = I[id];
+      (byDungeon[it.dungeonId] = byDungeon[it.dungeonId] || []).push(it);
+    });
+    Object.keys(byDungeon).forEach(function (dg) {
+      var list = byDungeon[dg];
+      function units(r) {
+        var u = 0;
+        list.forEach(function (it) { if (it.rarity === r) u += (it.keyPiece ? LW.keyFactor : 1); });
+        return u;
+      }
+      var uC = units('comum'), uR = units('raro'), uE = units('epico'), uL = units('lendario');
+      var totalComum = LW.comum * uC;
+      var perR = uR > 0 ? totalComum * LW.rareRatio / uR : 0;
+      var perE = uE > 0 ? totalComum * LW.epicRatio / uE : 0;
+      var perL = uL > 0 ? totalComum * LW.legendRatio / uL : 0;
+      list.forEach(function (it) {
+        var f = it.keyPiece ? LW.keyFactor : 1;
+        var w = it.rarity === 'comum' ? LW.comum * f
+              : it.rarity === 'raro' ? perR * f
+              : it.rarity === 'epico' ? perE * f
+              : perL * f;
+        it.dropWeight = Math.max(1, Math.round(w));
+      });
+      LW.noDrop[dg] = Math.round(totalComum * LW.emptyRatio);
     });
   })();
 

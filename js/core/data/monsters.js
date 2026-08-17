@@ -35,6 +35,11 @@ var JOGO = (typeof window !== 'undefined')
 // >>> (`stoneDrop: null`) — senão o Invocador viraria uma fábrica de pedras.
 // >>> A calibragem mora na tabela STONE_* logo abaixo do `mon()`, nunca colada
 // >>> monstro a monstro, para nenhuma linha divergir das outras.
+//
+// >>> PROFUNDIDADE (adendo v2.3). Os `hp` e `xp` escritos em cada monstro são
+// >>> RELATIVOS ao calabouço dele; a tabela TIER (logo abaixo) aplica a escala
+// >>> absoluta de vida, poder e XP por profundidade. Ler `DATA.monsters[id]`
+// >>> devolve sempre o valor JÁ escalado — ninguém precisa saber da tabela.
 // ============================================================================
 
 JOGO.DATA = JOGO.DATA || {};
@@ -69,6 +74,44 @@ JOGO.DATA = JOGO.DATA || {};
   function addSpells(map) {
     for (var id in map) { if (map.hasOwnProperty(id)) { DATA.monsterSpells[id] = sp(map[id], id); } }
   }
+
+  // ==========================================================================
+  // PROFUNDIDADE (adendo v2.3) — o andar do mundo define dureza, ameaça e XP.
+  //
+  // Os campos `hp` e `xp` escritos monstro a monstro lá embaixo são o desenho
+  // RELATIVO dentro do próprio calabouço (quem é o tanque, quem é o bicho de
+  // XP). A escala ABSOLUTA por profundidade mora nesta tabela e só aqui — é o
+  // único lugar a mexer quando o balanceamento pedir mais ou menos dificuldade.
+  //
+  //   hp     multiplica a vida dos COMUNS. Chefe não entra: a vida dele é
+  //          fixada à mão (300→600) e o contrato §10 limita o teto em 600.
+  //          Referência: o herói ganha +3 de dano elemental por nível, ou seja
+  //          ~+75% de dano do nível 3 ao 28 — a vida dos comuns acompanha.
+  //   power  soma de poder de TODOS os bichos do andar (fórmula de dano do
+  //          contrato §3: (100+power)/100). É por aqui que a ameaça cresce sem
+  //          alongar a luta: bicho fundo machuca mais, não demora mais.
+  //          Referência: o herói ganha +5 PV por nível (~+110% do 3 ao 28).
+  //   xp     escala a recompensa. Calibrada contra DATA.leveling.xpTable para
+  //          que UMA descida completa, no `recommendedLevel` do calabouço,
+  //          renda ~1 nível no começo e ~1/3 de nível do nível 25 em diante.
+  //          Alvo por descida (3 salas): 130 · 380 · 850 · 1500 · 2400 · 3600.
+  //          Antes do adendo, a Estufa rendia 785 XP com degrau de 125 no
+  //          nível 3 — SEIS níveis numa descida. Era esse o buraco.
+  //
+  // >>> ATENÇÃO: a escala de XP depende de DATA.leveling.xpTable (dono:
+  // >>> Criativo Classes). tests/validate_world.html confere a razão viva
+  // >>> entre as duas e ACUSA se a tabela de níveis mudar sem esta tabela.
+  // ==========================================================================
+  var TIER = {
+    greenhouse:   { hp: 1.00, power:   0, xp: 0.17 },
+    cistern:      { hp: 1.00, power:  12, xp: 0.38 },
+    emberlock:    { hp: 1.15, power:  28, xp: 0.70 },
+    windscaffold: { hp: 1.55, power:  48, xp: 1.25 },
+    quakemine:    { hp: 1.80, power:  75, xp: 1.75 },
+    brokenheart:  { hp: 2.00, power: 105, xp: 2.05 }
+  };
+  var NO_TIER = { hp: 1, power: 0, xp: 1 };   // invocações do jogador: intocadas
+  function tierOf(o) { return TIER[o.dungeonId] || NO_TIER; }
 
   // --- PEDRAS: quanto cada andar do mundo enterrado rende -------------------
   // Referência de economia (contrato §9-B): levar UM item até +10 custa 107
@@ -117,7 +160,10 @@ JOGO.DATA = JOGO.DATA || {};
       description: o.description,
       flavor: o.flavor || '',
       stats: {
-        hp: o.hp, pa: o.pa, pp: o.pp, initiative: o.initiative, power: 0,
+        // chefe mantém a vida escrita à mão (teto de 600 do contrato); o comum
+        // engorda conforme a profundidade. Poder sobe para todos do andar.
+        hp: o.boss ? o.hp : Math.round(o.hp * tierOf(o).hp),
+        pa: o.pa, pp: o.pp, initiative: o.initiative, power: tierOf(o).power,
         dodge: o.dodge, lock: o.lock, resists: res
       },
       spells: o.spells,
@@ -125,7 +171,7 @@ JOGO.DATA = JOGO.DATA || {};
       traits: o.traits || [],
       boss: !!o.boss,
       summonOnly: !!o.summonOnly,
-      xp: o.xp,
+      xp: Math.round(o.xp * tierOf(o).xp),
       stoneDrop: stoneDropFor(o)
     };
   }

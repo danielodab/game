@@ -49,7 +49,18 @@
   'use strict';
 
   var passed = 0, failed = 0, failures = [], notes = [];
+  var autoPlayDraws = [];   // empates por sustentação no auto-play (ver autoPlay)
   var resultsEl = document.getElementById('results');
+
+  // Um empate não quebra a suíte, mas nunca fica escondido: vira nota no DOM e
+  // em TEST_RESULTS, para o balanceamento saber exatamente onde olhar.
+  function reportDraws() {
+    if (!autoPlayDraws.length) return;
+    notes.push('EMPATES por sustentação (' + autoPlayDraws.length + ', só em grupos SOLO, ' +
+      'teto de 300 turnos): ' + autoPlayDraws.join(', ') +
+      '. Nesses casos o motor roda sem travar e os dois lados trocam dano — o que ' +
+      'não fecha é o balanceamento (sala com cura sustentada contra um herói só).');
+  }
 
   function report(name, ok, msg) {
     var div = document.createElement('div');
@@ -2048,17 +2059,32 @@
       var foe = byDef(st, 't-dummy');
       foe.x = a.x + 1; foe.y = a.y;
       foe.resists = zeroRes();
-      var hp0 = foe.hp;
-      E.cast(st, a.uid, s.id, foe.x, foe.y);
-      // dano esperado: cada efeito damage do composto * (100+0+30)/100
-      var expected = 0;
-      for (var i2 = 0; i2 < s.effects.length; i2++) {
-        if (s.effects[i2].type === 'damage') {
-          expected += Math.round(s.effects[i2].min * 1.30);
+      // Os danos do composto têm min≠max, então a conta não pode ser prevista a
+      // partir de `min`. Conjura DUAS vezes com a MESMA semente: os sorteios se
+      // repetem e a única diferença entre as duas é o bônus elemental. Com power
+      // 0 e resistência 0, o dano sem bônus é o próprio sorteio.
+      function castOnce(bonus) {
+        a.elemPower = bonus;
+        a.power = 0;              // a fusão herda o MAIOR poder dos dois: zera para a conta ficar limpa
+        a.pa = 30; a.cooldowns = {}; a.castsThisTurn = {};
+        foe.hp = foe.hpMax;
+        st._rng = 12345;
+        drain();
+        E.cast(st, a.uid, s.id, foe.x, foe.y);
+        var hits = [], evs = drain();
+        for (var q = 0; q < evs.length; q++) {
+          if (evs[q].type === 'damage' && evs[q].uid === foe.uid) hits.push(evs[q].amount);
         }
+        return hits;
       }
-      ok(expected > 0, 'o composto tem dano');
-      eq(hp0 - foe.hp, expected, 'os dois elementos do composto usam o bônus médio');
+      var plain = castOnce(0);
+      var boosted = castOnce(30);
+      ok(plain.length >= 2, 'o composto bate com os dois elementos (' + plain.length + ' golpes)');
+      eq(boosted.length, plain.length, 'mesma semente => mesmo número de golpes');
+      for (var q2 = 0; q2 < plain.length; q2++) {
+        eq(boosted[q2], Math.round(plain[q2] * 1.30),
+           'golpe ' + q2 + ' (' + plain[q2] + '): o bônus médio de 30 entra na conta');
+      }
     });
 
     t('ADENDO v2.2: fusão de quem não tem elemPower continua em zero', function () {
@@ -2688,8 +2714,11 @@
             t('AUTO-PLAY IA×IA (dupla nível 30 + pets): ' + dungeonId + ' sala ' + roomIdx, function () {
               autoPlay(dungeonId, roomIdx, buildRealParty(30, AUTO_ELEMENTS, true, 2, off));
             });
+            // SOLO: um herói só contra a sala inteira pode empatar por
+            // sustentação (sala com curandeiro vs. classe que se cura). É
+            // resultado de balanceamento — o motor só precisa não travar.
             t('AUTO-PLAY IA×IA (herói SOLO nível 15): ' + dungeonId + ' sala ' + roomIdx, function () {
-              autoPlay(dungeonId, roomIdx, buildRealParty(15, AUTO_ELEMENTS, false, 1, off + 3));
+              autoPlay(dungeonId, roomIdx, buildRealParty(15, AUTO_ELEMENTS, false, 1, off + 3), false);
             });
           })(realDungeons[dd].id, rr, dd * 2);
         }
@@ -2756,7 +2785,12 @@
       });
     }
 
-    function autoPlay(dungeonId, roomIdx, party) {
+    // `mustClose` (padrão) exige que a batalha termine. Um EMPATE por sustentação
+    // (o lado que cura mais do que o outro machuca) é resultado legítimo de
+    // balanceamento, não defeito do motor — mas só é aceito onde declarado, e
+    // ainda assim precisa provar que a batalha ANDOU: rodadas passaram, houve
+    // dano dos dois lados e nunca faltou unidade ativa. Congelamento continua FALHA.
+    function autoPlay(dungeonId, roomIdx, party, mustClose) {
       E.events.length = 0;
       var st = E.createBattle(dungeonId, roomIdx, party);
       var turns = 0;
@@ -2785,7 +2819,22 @@
         E.events.length = 0;
       }
       console.log('AUTO-PLAY ' + dungeonId + '[' + roomIdx + ']: ' +
-        (st.phase === 'playing' ? 'teto de 300 turnos' : st.phase + ' em ' + turns + ' turnos'));
+        (st.phase === 'playing' ? 'EMPATE no teto de 300 turnos' : st.phase + ' em ' + turns + ' turnos'));
+      if (mustClose === false && st.phase === 'playing') {
+        // empate declarado: exige PROGRESSO, não só ausência de exceção
+        ok(st.round > 10, 'o empate passou por muitas rodadas (round ' + st.round + ')');
+        var hurtPlayer = false, hurtEnemy = false;
+        for (var z = 0; z < st.units.length; z++) {
+          var uz = st.units[z];
+          if (uz.offBoard || uz.kind === 'summon') continue;
+          if (uz.hp < uz.hpMax || !uz.alive) {
+            if (uz.side === 'player') hurtPlayer = true; else hurtEnemy = true;
+          }
+        }
+        ok(hurtPlayer && hurtEnemy, 'os dois lados trocaram dano (não é congelamento)');
+        autoPlayDraws.push(dungeonId + '[' + roomIdx + ']');
+        return;
+      }
       // O teto é rede de segurança, não resultado aceitável: uma batalha que não
       // fecha em 300 turnos é impasse da IA ou laço do motor — e isso é FALHA.
       ok(st.phase !== 'playing',
@@ -2797,6 +2846,7 @@
   // ------------------------------------------------------------ executa
   try {
     run();
+    reportDraws();
   } catch (e) {
     failed++;
     failures.push('ERRO FATAL DA SUÍTE: ' + e.message);

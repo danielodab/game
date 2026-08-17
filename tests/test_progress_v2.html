@@ -52,6 +52,8 @@
     ],
     perLevel: { hp: 5, power: 3 },            // níveis 1→4
     perLevelElement: { hp: 5, elemPower: 3 }, // a partir da escolha (§9-C)
+    // rendimento decrescente ao moer conteúdo fácil (§9-D)
+    xpFalloff: { graceLevels: 4, factorPerLevel: 0.75, floor: 0.10 },
     elementChoiceLevel: 5
   };
 
@@ -268,10 +270,11 @@
   // 0-BASED. `minDungeon` das cartas é 0-based, então tem de ser comparado com
   // o ÍNDICE — é por isso que os dois números aqui são propositalmente
   // diferentes: se o código usar `order`, a carta cara vaza um andar acima.
+  var REC_LEVELS = [3, 7, 11, 16, 22, 28];   // nível recomendado por calabouço (§9-D)
   function dung(id, name, idx, extra) {
     var d = { id: id, name: name, theme: 'teste', description: '—', difficulty: idx + 1,
-      order: idx + 1, palette: {}, defaultWeather: 'calmo', weatherShiftEveryRounds: 0,
-      tileEventRate: 0, lootTable: [], cardDrops: CARD_DROPS,
+      order: idx + 1, recommendedLevel: REC_LEVELS[idx], palette: {}, defaultWeather: 'calmo',
+      weatherShiftEveryRounds: 0, tileEventRate: 0, lootTable: [], cardDrops: CARD_DROPS,
       rooms: [room('s1'), room('s2'), room('chefe')] };
     for (var k in (extra || {})) if (extra.hasOwnProperty(k)) d[k] = extra[k];
     return d;
@@ -1755,6 +1758,98 @@
     eq(ultimoDado.xpGanho, 30, 'dupla divide por 2');
     eq(P.hero(TANK).xp, 30, 'herói 1');
     eq(P.hero(CURA).xp, 30, 'herói 2');
+  });
+
+  t('§9-D: multiplicador 1.0 dentro da faixa de graça', function () {
+    fresh();
+    var rec = D.dungeons[0].recommendedLevel;       // 3
+    var graca = D.leveling.xpFalloff.graceLevels;   // 4
+    for (var lv = 1; lv <= rec + graca; lv++) {
+      eq(P.xpMultiplier(lv, 't-dung-0'), 1, 'nível ' + lv + ' (≤ ' + (rec + graca) + ') não sofre corte');
+    }
+  });
+
+  t('§9-D: queda geométrica de 0,75 por nível acima da graça', function () {
+    var rec = D.dungeons[0].recommendedLevel + D.leveling.xpFalloff.graceLevels;  // 7
+    near(P.xpMultiplier(rec + 1, 't-dung-0'), 0.75, 1e-9, '1 nível acima');
+    near(P.xpMultiplier(rec + 2, 't-dung-0'), 0.5625, 1e-9, '2 níveis acima');
+    near(P.xpMultiplier(rec + 3, 't-dung-0'), 0.421875, 1e-9, '3 níveis acima');
+    near(P.xpMultiplier(rec + 4, 't-dung-0'), Math.pow(0.75, 4), 1e-9, '4 níveis acima');
+    ok(P.xpMultiplier(rec + 5, 't-dung-0') < P.xpMultiplier(rec + 4, 't-dung-0'), 'sempre decrescente');
+  });
+
+  t('§9-D: o piso de 0,10 é respeitado', function () {
+    var rec = D.dungeons[0].recommendedLevel + D.leveling.xpFalloff.graceLevels;
+    for (var acima = 9; acima <= 23; acima++) {
+      eq(P.xpMultiplier(rec + acima, 't-dung-0'), 0.10, acima + ' níveis acima trava no piso');
+    }
+    eq(P.xpMultiplier(30, 't-dung-0'), 0.10, 'nível 30 no primeiro calabouço = piso');
+  });
+
+  t('§9-D: calabouço fundo NÃO corta a XP de herói compatível', function () {
+    eq(P.xpMultiplier(26, 't-dung-4'), 1, 'nível 26 = recomendado 22 + graça 4 (borda)');
+    ok(P.xpMultiplier(28, 't-dung-4') < 1, 'nível 28 já passa da borda do calabouço 5');
+    eq(P.xpMultiplier(30, 't-dung-vazio'), 1, 'nível 30 no calabouço de recomendado 28');
+    eq(P.xpMultiplier(22, 't-dung-4'), 1, 'exatamente no nível recomendado');
+    ok(P.xpMultiplier(30, 't-dung-0') < P.xpMultiplier(30, 't-dung-4'),
+      'moer o raso paga menos que descer fundo');
+  });
+
+  t('§9-D: sem recommendedLevel ou sem xpFalloff, nada é cortado', function () {
+    var rec = D.dungeons[0].recommendedLevel;
+    delete D.dungeons[0].recommendedLevel;
+    try { eq(P.xpMultiplier(30, 't-dung-0'), 1, 'sem recommendedLevel'); }
+    finally { D.dungeons[0].recommendedLevel = rec; }
+    var fall = D.leveling.xpFalloff;
+    delete D.leveling.xpFalloff;
+    try { eq(P.xpMultiplier(30, 't-dung-0'), 1, 'sem xpFalloff'); }
+    finally { D.leveling.xpFalloff = fall; }
+    eq(P.xpMultiplier(30, 'calabouço-fantasma'), 1, 'calabouço desconhecido');
+    eq(P.xpMultiplier('herói-fantasma', 't-dung-0'), 1, 'herói desconhecido');
+  });
+
+  t('§9-D: o Game corta a XP do herói alto e informa xpMult', function () {
+    fresh();
+    setLevel(TANK, 8);                          // 1 nível acima da graça (3+4)
+    var xpAntes = P.hero(TANK).xp;
+    venceSala([TANK], 't-dung-0', 0);           // 60 de XP bruta
+    eq(ultimoDado.xpGanho, 60, 'XP bruta da sala (antes do corte)');
+    near(ultimoDado.xpMult[TANK], 0.75, 1e-9, 'multiplicador informado à UI');
+    eq(ultimoDado.xpPorHeroi[TANK], 45, 'o herói recebeu 60 × 0,75');
+    eq(P.hero(TANK).xp - xpAntes, 45, 'XP realmente aplicada');
+  });
+
+  t('§9-D: o corte é POR HERÓI e vem depois da divisão pelo grupo', function () {
+    fresh();
+    setLevel(TANK, 16);                         // 9 níveis acima da graça: piso 0,10
+    setLevel(CURA, 3);                          // no nível recomendado: sem corte
+    var xpTank = P.hero(TANK).xp, xpCura = P.hero(CURA).xp;
+    venceSala([TANK, CURA], 't-dung-0', 0);     // 60 / 2 = 30 por herói
+    eq(ultimoDado.xpGanho, 30, 'XP dividida pela dupla');
+    eq(ultimoDado.xpMult[TANK], 0.10, 'herói alto no piso');
+    eq(ultimoDado.xpMult[CURA], 1, 'herói compatível sem corte');
+    eq(P.hero(TANK).xp - xpTank, 3, '30 × 0,10 = 3');
+    eq(P.hero(CURA).xp - xpCura, 30, '30 × 1 = 30');
+  });
+
+  t('§9-D: itens, pedras e cartas NÃO sofrem o corte de XP', function () {
+    fresh();
+    setLevel(TANK, 30);                          // multiplicador de XP no piso
+    var achouCarta = false, guard = 0;
+    while (!achouCarta && guard < 60) {
+      guard++;
+      fresh();
+      setLevel(TANK, 30);
+      venceSala([TANK], 't-dung-0', 2);          // sala do chefe
+      eq(ultimoDado.xpMult[TANK], 0.10, 'a XP está no piso');
+      ok(ultimoDado.drops.length === 2, 'o chefe deu os 2 saques de sempre');
+      eq(ultimoDado.stones['st-fogo'], 4, 'as pedras vieram inteiras');
+      if (ultimoDado.cards.length) {
+        achouCarta = true;
+        ok(ultimoDado.cards[0].amount >= 1, 'a carta veio inteira');
+      }
+    }
+    ok(achouCarta, 'alguma carta caiu apesar do corte de XP');
   });
 
   t('o pacote da UI tem o formato do adendo v2.1', function () {

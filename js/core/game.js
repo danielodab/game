@@ -49,8 +49,12 @@ var JOGO = (typeof window !== 'undefined')
  * [G5] RECOMPENSAS DA SALA. XP = soma do `xp` dos monstros INIMIGOS mortos
  *      dividida (piso) pelo tamanho do grupo; cada herói do grupo recebe esse
  *      valor (vivo ou morto).
- *      A UI recebe `{xpGanho, levelUps, drops, pets, cards, stones,
- *      elementChoices}`.
+ *      A UI recebe `{xpGanho, xpMult, xpPorHeroi, levelUps, drops, pets,
+ *      cards, stones, elementChoices}`.
+ *      `xpGanho` é a XP da sala já dividida pelo grupo e ANTES do corte de
+ *      nível; `xpMult`/`xpPorHeroi` mostram, herói a herói, o multiplicador de
+ *      §9-D e o que de fato entrou — é com isso que a UI explica "conteúdo
+ *      fácil demais para o seu nível".
  *      ADENDO v2.1: carta repetida NÃO vira mais XP (o campo `xpCartas` foi
  *      removido) — agora ela acumula na coleção e vira estrela, e quem faz
  *      essa conta é o `Progress`. As PEDRAS DE FORJA são colhidas aqui: cada
@@ -490,12 +494,21 @@ var JOGO = (typeof window !== 'undefined')
 
     var stones = collectStones(st.units, monsters, prog);
 
-    var levelUps = [];
+    // [G9] rendimento decrescente por herói (§9-D): conteúdo fácil paga menos.
+    // Vale só para XP — item, pedra e carta seguem suas próprias raridades.
+    var levelUps = [], xpMult = {}, xpPorHeroi = {};
     if (prog && prog.addXp) {
       for (var h = 0; h < Game.party.length; h++) {
         var heroId = Game.party[h];
+        var mult = 1;
+        try { if (prog.xpMultiplier) mult = prog.xpMultiplier(heroId, Game.dungeonId); }
+        catch (err) { mult = 1; }
+        if (typeof mult !== 'number' || !isFinite(mult) || mult < 0) mult = 1;
+        var xpHeroi = Math.floor(xpGanho * mult);
+        xpMult[heroId] = mult;
+        xpPorHeroi[heroId] = xpHeroi;
         var gained = 0;
-        try { gained = prog.addXp(heroId, xpGanho); } catch (err) { gained = 0; }
+        try { gained = prog.addXp(heroId, xpHeroi); } catch (err2) { gained = 0; }
         if (gained > 0) {
           var hero = prog.hero ? prog.hero(heroId) : null;
           levelUps.push({ heroId: heroId, niveis: gained, novoNivel: hero ? hero.level : null });
@@ -520,7 +533,9 @@ var JOGO = (typeof window !== 'undefined')
     if (prog && prog.save) { try { prog.save(); } catch (err) { /* sem storage */ } }
 
     return {
-      xpGanho: xpGanho,
+      xpGanho: xpGanho,          // XP da sala já dividida pelo grupo, ANTES do corte
+      xpMult: xpMult,            // multiplicador aplicado a cada herói (§9-D)
+      xpPorHeroi: xpPorHeroi,    // o que cada herói realmente recebeu
       levelUps: levelUps,
       drops: drops,
       pets: pets,

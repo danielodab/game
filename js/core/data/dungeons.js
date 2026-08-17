@@ -168,6 +168,11 @@ JOGO.DATA = JOGO.DATA || {};
     description: 'A estufa real do mundo antigo, selada com o jardim ainda vivo lá dentro. Séculos no escuro ensinaram as plantas a caçar; vagalumes presos em redomas fazem as vezes de sol. A água que a Grande Lousa prendeu lá em cima pinga pelas rachaduras do vidro a noite inteira — e o jardim adora.',
     difficulty: 1,
     order: 1,
+    // Faixa em que este calabouço é o conteúdo "certo" (adendo v2.3). A Lógica
+    // usa isto no `xpFalloff`: acima de recommendedLevel+4 a XP começa a cair
+    // ×0,75 por nível. Moer a Estufa no nível 20 continua possível — só deixa
+    // de compensar. Aqui o herói ainda nem escolheu elemento (nível 5).
+    recommendedLevel: 3,
     palette: {
       primary: '#5a8f4d', secondary: '#8a6b3e', accent: '#ffd76b',
       floor1: '#35513a', floor2: '#3d5c41', wall: '#57452f', lowWall: '#6b5334', voidColor: '#1b2a1e'
@@ -275,6 +280,9 @@ JOGO.DATA = JOGO.DATA || {};
     description: 'O reservatório que matou a sede do mundo antigo — e depois bebeu seus donos. A corte afogada ainda dá bailes na água parada: pérolas no lodo, lampiões submersos ainda acesos, lustres de águas-vivas. Tudo reflete, e o reflexo às vezes se mexe primeiro.',
     difficulty: 2,
     order: 2,
+    // O elemento já foi escolhido (nível 5) e a Cisterna cobra por isso: quase
+    // tudo aqui é água, então quem escolheu fogo sente o primeiro tranco.
+    recommendedLevel: 7,
     palette: {
       primary: '#2e6e8e', secondary: '#1d3a4d', accent: '#7ef0d4',
       floor1: '#24404f', floor2: '#2a4a5a', wall: '#16222c', lowWall: '#2b4756', voidColor: '#0d1a22'
@@ -374,6 +382,9 @@ JOGO.DATA = JOGO.DATA || {};
     description: 'O último Fecho, forjado ao redor da primeira chama do mundo. Corredores de bigornas frias, correntes penduradas do teto, luz que vem de baixo — das grelhas do piso. O calor sobe e fica: aqui a estiagem não é clima, é arquitetura. O maior portão já construído acordou com ciúme do próprio fogo.',
     difficulty: 3,
     order: 3,
+    // Segundo feitiço de caminho (nível 10) recém-liberado. É onde a curva
+    // começa a subir de verdade: os comuns ganham vida e poder de andar.
+    recommendedLevel: 11,
     palette: {
       primary: '#c4502e', secondary: '#4a2a26', accent: '#ffb347',
       floor1: '#3a2422', floor2: '#452a25', wall: '#241512', lowWall: '#5a3128', voidColor: '#180b08'
@@ -479,6 +490,9 @@ JOGO.DATA = JOGO.DATA || {};
     description: 'O poço de manutenção que os construtores nunca terminaram: quinze andares de andaime amarrado com corda, pendurados sobre um vazio que ninguém mediu. Os respiradouros do mundo enterrado desembocam todos aqui, e o vento sobe pelo poço a noite inteira fazendo as tábuas cantarem. Cair não é derrota tática. É o chão da sala não existir.',
     difficulty: 4,
     order: 4,
+    // Aqui o jogo deixa de perdoar: vazios por toda parte, tudo empurra, e os
+    // comuns saltam de ~93 para ~112 PV médios. Sem fusão ou pet, dói.
+    recommendedLevel: 16,
     palette: {
       primary: '#8f97b8', secondary: '#4a4636', accent: '#eef7f5',
       floor1: '#3a3a44', floor2: '#45444f', wall: '#26262f', lowWall: '#5b5344', voidColor: '#0a0a10'
@@ -584,6 +598,9 @@ JOGO.DATA = JOGO.DATA || {};
     description: 'A mina que cavava para cima, tentando furar a Grande Lousa por baixo. Parou quando o turno da noite não subiu. Desde então a rocha bate sozinha, de tempos em tempos, e a poeira desce em cortinas: é a Lousa se acomodando mais um palmo. Os mineiros continuam trabalhando. Ninguém teve coragem de dizer a eles que o turno acabou.',
     difficulty: 5,
     order: 5,
+    // Conteúdo de fim de jogo normal (nível 20 = último tier de feitiço antes
+    // do 30). Bocarrada com mais de 200 PV é bicho COMUM nesta mina.
+    recommendedLevel: 22,
     palette: {
       primary: '#8a7043', secondary: '#3b3228', accent: '#c9a227',
       floor1: '#37302a', floor2: '#413931', wall: '#211c17', lowWall: '#4e4133', voidColor: '#120e0a'
@@ -691,6 +708,9 @@ JOGO.DATA = JOGO.DATA || {};
     description: 'O Coração que sustentava o mundo inteiro, e não só um Fecho. Rachou em quatro quartos que batem fora de compasso — um de brasa, um d\'água, um de pedra, um de ar — e cada batida joga a sala para um clima diferente. Aqui não existe elemento seguro: o que curava você há três rodadas está te matando agora. É o fim da Descida, e a Lousa está ouvindo.',
     difficulty: 6,
     order: 6,
+    // O troféu. Nível 28 assume item evoluído, conjunto fechado e estrelas na
+    // classe. É o único andar onde o clima vira contra o jogador sozinho.
+    recommendedLevel: 28,
     palette: {
       primary: '#8f6ad0', secondary: '#2a2440', accent: '#ffd166',
       floor1: '#2d2a3d', floor2: '#373248', wall: '#1a1726', lowWall: '#4a4160', voidColor: '#0b0812'
