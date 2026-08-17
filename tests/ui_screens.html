@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOTERRA 2.0 — Telas da Interface (JOGO.UI)</title>
+<link rel="stylesheet" href="../css/style.css?v=3">
+<style>
+  /* moldura do teste: um "celular" 390×844 ao lado do painel de verificação */
+  html, body { overflow: auto; height: auto; }
+  body { background: #06080b; display: block; }
+  #lab { display: flex; gap: 18px; padding: 14px; align-items: flex-start; flex-wrap: wrap; }
+  #phone {
+    position: relative; width: 390px; height: 844px; flex: 0 0 auto;
+    border: 10px solid #1b2028; border-radius: 34px; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,.7);
+    background: #0b0d10;
+  }
+  #phone #app { position: absolute; inset: 0; }
+  #side { flex: 1 1 320px; min-width: 300px; color: #e8e0d0;
+          font: 13px/1.5 'Segoe UI', system-ui, sans-serif; }
+  #side h1 { font: 600 17px Georgia, serif; color: #ffd08a; margin: 0 0 8px; }
+  #verdict { display: inline-block; font-weight: 700; padding: 4px 12px; border-radius: 6px; }
+  #verdict.pass { background: rgba(95,208,138,.16); color: #5fd08a; border: 1px solid #5fd08a; }
+  #verdict.fail { background: rgba(255,107,90,.16); color: #ff6b5a; border: 1px solid #ff6b5a; }
+  #nav { display: flex; gap: 5px; flex-wrap: wrap; margin: 10px 0; }
+  #nav button { font: 12px system-ui; padding: 7px 10px; border-radius: 7px; cursor: pointer;
+                background: #1e2530; color: #e8e0d0; border: 1px solid #3a4553; }
+  #nav button:hover { background: #273040; }
+  #out { background: #101519; border: 1px solid #262d38; border-radius: 8px; padding: 10px;
+         font: 11.5px/1.5 monospace; max-height: 70vh; overflow: auto; }
+  .ok { color: #5fd08a; } .bad { color: #ff6b5a; } .dim { color: #8b93a0; }
+</style>
+</head>
+<body>
+<div id="lab">
+  <div id="phone">
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+      <div id="ui-root"></div>
+    </div>
+  </div>
+  <div id="side">
+    <h1>Telas da Interface — <span style="color:#9fb0c0">JOGO.UI</span></h1>
+    <span id="verdict">…</span> <span id="meta" class="dim"></span>
+    <div id="nav"></div>
+    <div id="out"></div>
+  </div>
+</div>
+
+<script src="../vendor/pixi.min.js?v=3" onerror="window.__noPixi=1"></script>
+<script src="../js/core/data/elements.js?v=3"></script>
+<script src="../js/core/data/classes.js?v=3"></script>
+<script src="../js/core/data/spells.js?v=3"></script>
+<script src="../js/core/data/progression.js?v=3"></script>
+<script src="../js/core/data/monsters.js?v=3"></script>
+<script src="../js/core/data/dungeons.js?v=3"></script>
+<script src="../js/core/data/fusions.js?v=3"></script>
+<script src="../js/core/data/pets.js?v=3"></script>
+<script src="../js/core/data/items.js?v=3"></script>
+<script src="../js/core/engine.js?v=3"></script>
+<script src="../js/core/fusion.js?v=3"></script>
+<script src="../js/core/ai.js?v=3"></script>
+<script src="../js/core/progress.js?v=3"></script>
+<script src="../js/core/game.js?v=3"></script>
+<script src="../js/render2d/art.js?v=3"></script>
+<script src="../js/ui/hud.js?v=3"></script>
+<script>
+(function () {
+  'use strict';
+  var R = { passed: 0, failed: 0, failures: [] };
+  var out = document.getElementById('out');
+  var D = JOGO.DATA || {};
+
+  function check(name, cond, detail) {
+    if (cond) R.passed++;
+    else { R.failed++; R.failures.push(name + (detail ? ' — ' + detail : '')); }
+    var line = document.createElement('div');
+    line.className = cond ? 'ok' : 'bad';
+    line.textContent = (cond ? '✓ ' : '✕ ') + name + (detail && !cond ? ' — ' + detail : '');
+    out.appendChild(line);
+    return !!cond;
+  }
+  function note(t) {
+    var d = document.createElement('div');
+    d.className = 'dim'; d.textContent = '· ' + t; out.appendChild(d);
+  }
+
+  // ---------------------------------------------------- semente de progresso
+  // Um save de teste rico o bastante para todas as telas terem o que mostrar.
+  function seed() {
+    var P = JOGO.Progress;
+    if (!P) return;
+    try { localStorage.removeItem('soterra-save-v2'); } catch (e) {}
+    P.reset ? P.reset() : P.load();
+    // cartas: libera invocador e bruxo e dá estrelas ao sumô
+    P.addCards('sumo', 42);          // liberada + estrelas
+    P.addCards('curandeira', 17);    // liberada + 2 estrelas
+    P.addCards('invocador', 12);     // liberada (custo 10)
+    P.addCards('bruxo', 6);          // ainda trancada (custo 10)
+    P.addCards('espadachim', 3);     // trancada (custo 20)
+    P.addCards('arqueiro', 1);       // trancada (custo 25)
+    // XP para passar do nível 5 (a tela de elemento precisa de gente pendente)
+    P.addXp('sumo', 900);
+    P.addXp('curandeira', 900);
+    P.addXp('invocador', 260);
+    // caminho já escolhido para um deles, o outro fica pendente
+    P.chooseElement('sumo', 'terra');
+    // itens: um de cada espaço + repetidos para a forja ter o que mastigar
+    var ids = Object.keys(D.items || {});
+    ids.slice(0, 9).forEach(function (id) { P.addItem(id); });
+    // pedras fartas para a forja mostrar o caminho todo
+    Object.keys(D.stones || {}).forEach(function (s) { P.addStones(s, 40); });
+    // bichos
+    Object.keys(D.pets || {}).slice(0, 3).forEach(function (p) { P.addPet(p); });
+    // equipa duas peças no sumô para o inventário mostrar "em uso"
+    var inv = P.state.inventory;
+    for (var i = 0; i < inv.length && i < 4; i++) P.equip('sumo', inv[i].itemId);
+    // sobe uma peça na forja para o tier aparecer
+    if (inv.length) { P.upgradeItem(0); P.upgradeItem(0); P.upgradeItem(0); }
+  }
+
+  // ------------------------------------------------------------- inspeções
+  function visibleScreen() {
+    var s = document.querySelectorAll('#ui-root .ui-screen.is-on');
+    return s.length === 1 ? s[0] : null;
+  }
+  // nenhum controle pode ser menor que 44px (contrato §0)
+  function tinyTargets(scope) {
+    var bad = [], nodes = scope.querySelectorAll('button, .btn');
+    for (var i = 0; i < nodes.length; i++) {
+      var r = nodes[i].getBoundingClientRect();
+      if (r.width < 2 && r.height < 2) continue;         // oculto
+      if (r.height < 40 || (r.width < 30 && r.height < 44)) {
+        bad.push((nodes[i].className || 'btn') + ' ' + Math.round(r.width) + '×' + Math.round(r.height));
+      }
+    }
+    return bad;
+  }
+  // nada pode vazar para fora da largura do celular
+  function overflows(scope) {
+    var bad = [], nodes = scope.querySelectorAll('*');
+    var lim = document.getElementById('phone').getBoundingClientRect();
+    for (var i = 0; i < nodes.length; i++) {
+      var r = nodes[i].getBoundingClientRect();
+      if (r.width === 0) continue;
+      if (r.right > lim.right + 1.5 || r.left < lim.left - 1.5) {
+        // barras roláveis podem ter conteúdo maior que a caixa: ignora o filho
+        var p = nodes[i].parentNode;
+        var ov = p && getComputedStyle(p).overflowX;
+        if (ov === 'auto' || ov === 'scroll') continue;
+        bad.push(nodes[i].className || nodes[i].tagName);
+      }
+    }
+    return bad;
+  }
+
+  function inspect(name) {
+    var s = visibleScreen();
+    if (!check('tela ' + name + ': exatamente uma visível', !!s)) return;
+    check('tela ' + name + ': tem conteúdo', s.childNodes.length > 0);
+    var tiny = tinyTargets(s);
+    check('tela ' + name + ': alvos de toque ≥ 44px', tiny.length === 0, tiny.slice(0, 4).join(' | '));
+    var ov = overflows(s);
+    check('tela ' + name + ': nada vaza da largura de 390px', ov.length === 0, ov.slice(0, 4).join(' | '));
+  }
+
+  // ------------------------------------------------------------------ roda
+  var t0 = performance.now();
+  var errs = [];
+  window.addEventListener('error', function (e) { errs.push(e.message); });
+
+  check('JOGO.Art carregado', !!JOGO.Art);
+  check('JOGO.UI carregado', !!JOGO.UI);
+  check('UI.init é função', typeof JOGO.UI.init === 'function');
+  check('UI.showScreen é função', typeof JOGO.UI.showScreen === 'function');
+  check('UI.handleEvent é função', typeof JOGO.UI.handleEvent === 'function');
+  check('UI.update é função', typeof JOGO.UI.update === 'function');
+
+  try { seed(); check('progresso semente gravado', true); }
+  catch (e) { check('progresso semente gravado', false, e.message); }
+
+  try { JOGO.UI.init(); check('UI.init sem erro', true); }
+  catch (e) { check('UI.init sem erro', false, e.message); }
+
+  var SCREENS = ['menu', 'heroSelect', 'dungeonSelect', 'elementChoice',
+                 'battle', 'roomClear', 'dungeonComplete', 'defeat'];
+
+  // dados de mentira para as telas de recompensa
+  var fakeRewards = {
+    xpGanho: 180,
+    levelUps: [{ heroId: 'curandeira', niveis: 1, novoNivel: 6 }],
+    drops: Object.keys(D.items || {}).slice(9, 12),
+    pets: Object.keys(D.pets || {}).slice(3, 4),
+    cards: [{ classId: 'bruxo', name: 'Bruxo', amount: 2, cards: 8, unlocked: false, stars: 0, starUp: false }],
+    stones: (function () { var o = {}; Object.keys(D.stones || {}).slice(0, 2).forEach(function (s) { o[s] = 3; }); return o; })(),
+    elementChoices: ['curandeira']
+  };
+
+  function goto(name) {
+    if (name === 'battle') {
+      // batalha de verdade: o HUD lê Engine/Game
+      try {
+        JOGO.UI.selection(['sumo', 'curandeira']);
+        var dg = (D.dungeons && D.dungeons[0]) ? D.dungeons[0].id : null;
+        JOGO.Game.startRun(['sumo', 'curandeira'], dg);
+      } catch (e) { note('startRun falhou: ' + e.message); JOGO.UI.showScreen('battle'); }
+    } else if (name === 'roomClear' || name === 'dungeonComplete') {
+      JOGO.UI.showScreen(name, fakeRewards);
+    } else if (name === 'elementChoice') {
+      JOGO.UI.showScreen(name, { heroIds: ['curandeira'] });
+    } else {
+      JOGO.UI.selection(['sumo', 'curandeira']);
+      JOGO.UI.showScreen(name);
+    }
+  }
+
+  var nav = document.getElementById('nav');
+  SCREENS.forEach(function (n) {
+    var b = document.createElement('button');
+    b.textContent = n;
+    b.onclick = function () { goto(n); };
+    nav.appendChild(b);
+  });
+  ['collection', 'inventory', 'forge', 'heroSheet'].forEach(function (n) {
+    var b = document.createElement('button');
+    b.textContent = '▸ ' + n;
+    b.onclick = function () { JOGO.UI.openSheet(n, n === 'heroSheet' ? 'sumo' : null); };
+    nav.appendChild(b);
+  });
+
+  // percorre todas as telas medindo cada uma
+  SCREENS.forEach(function (n) {
+    try { goto(n); } catch (e) { check('tela ' + n + ' monta', false, e.message); return; }
+    check('tela ' + n + ' monta', true);
+    inspect(n);
+  });
+
+  // ---- folhas (modais)
+  [['collection', null], ['inventory', null], ['forge', null], ['heroSheet', 'sumo']].forEach(function (p) {
+    try {
+      JOGO.UI.openSheet(p[0], p[1]);
+      var sh = document.querySelector('#ui-root .ui-sheet.is-on .sheet-panel');
+      check('folha ' + p[0] + ' abre', !!sh);
+      if (sh) {
+        var tiny = tinyTargets(sh);
+        check('folha ' + p[0] + ': alvos ≥ 44px', tiny.length === 0, tiny.slice(0, 4).join(' | '));
+        var ov = overflows(sh);
+        check('folha ' + p[0] + ': cabe em 390px', ov.length === 0, ov.slice(0, 4).join(' | '));
+      }
+      JOGO.UI.closeSheet();
+    } catch (e) { check('folha ' + p[0] + ' abre', false, e.message); }
+  });
+
+  // ---- conteúdo obrigatório das telas novas
+  JOGO.UI.openSheet('collection');
+  var colTxt = document.querySelector('#ui-root .ui-sheet').textContent;
+  check('coleção mostra progresso n/custo', /\d+\s*\/\s*\d+ cartas/.test(colTxt), colTxt.slice(0, 80));
+  check('coleção mostra os bônus de estrela', /PV/.test(colTxt) && /PP/.test(colTxt) && /PA/.test(colTxt));
+  check('coleção tem 5 passos de estrela por classe',
+    document.querySelectorAll('#ui-root .star-track').length >= 1 &&
+    document.querySelectorAll('#ui-root .col-row:first-child .star-step').length === 5);
+  JOGO.UI.closeSheet();
+
+  JOGO.UI.openSheet('inventory');
+  var invTxt = document.querySelector('#ui-root .ui-sheet').textContent;
+  check('inventário nomeia os espaços novos', /Punho/.test(invTxt) || /Passo/.test(invTxt) ||
+        /Casca/.test(invTxt) || /Lume/.test(invTxt), invTxt.slice(0, 80));
+  check('inventário mostra nível +N', /\+\d/.test(invTxt));
+  check('inventário mostra conjunto n/total', /\d\/\d/.test(invTxt));
+  check('inventário avisa quem está usando', /em uso por/.test(invTxt));
+  JOGO.UI.closeSheet();
+
+  JOGO.UI.openSheet('forge');
+  var fgTxt = document.querySelector('#ui-root .ui-sheet').textContent;
+  check('forja mostra os tiers', /Comum/.test(fgTxt) && /Raro/.test(fgTxt) &&
+        /Supremo/.test(fgTxt) && /Magn/.test(fgTxt));
+  check('forja mostra custo em pedras', /\d+ \/ \d+/.test(fgTxt));
+  check('forja tem trilha de 10 passos',
+    document.querySelectorAll('#ui-root .fg-step').length === ((D.upgrade && D.upgrade.maxLevel) || 10) + 1);
+  JOGO.UI.closeSheet();
+
+  JOGO.UI.openSheet('heroSheet', 'sumo');
+  var hsTxt = document.querySelector('#ui-root .ui-sheet').textContent;
+  check('ficha usa os 4 espaços com nome próprio',
+    /Punho/.test(hsTxt) && /Passo/.test(hsTxt) && /Casca/.test(hsTxt) && /Lume/.test(hsTxt));
+  check('ficha tem espaço de bicho separado', /Bicho/.test(hsTxt));
+  check('ficha explica o ganho por nível', /Cada nível/.test(hsTxt) && /\+5 PV/.test(hsTxt), hsTxt.slice(0, 120));
+  JOGO.UI.closeSheet();
+
+  // ---- escolha de elemento: 4 caminhos e o argumento do ganho elemental
+  goto('elementChoice');
+  var ecCards = document.querySelectorAll('#ui-root .screen-elementChoice .ec-card');
+  check('escolha de elemento: 4 caminhos', ecCards.length === 4, 'achou ' + ecCards.length);
+  var ecTxt = document.querySelector('#ui-root .screen-elementChoice').textContent;
+  check('escolha de elemento: mostra +5 PV e +3 de dano elemental',
+    /\+5 PV/.test(ecTxt) && /\+3 de dano/.test(ecTxt), ecTxt.slice(0, 140));
+  check('escolha de elemento: mostra prévia dos feitiços',
+    document.querySelectorAll('#ui-root .screen-elementChoice .ec-spell').length >= 12);
+
+  // ---- seleção de 1 ou 2 heróis + medidor de sorte
+  goto('heroSelect');
+  JOGO.UI.selection(['sumo']);
+  JOGO.UI.showScreen('heroSelect');
+  var hsel = document.querySelector('#ui-root .screen-heroSelect').textContent;
+  check('seleção solo: sorte máxima', /máxima/.test(hsel), hsel.slice(0, 100));
+  JOGO.UI.selection(['sumo', 'curandeira']);
+  JOGO.UI.showScreen('heroSelect');
+  hsel = document.querySelector('#ui-root .screen-heroSelect').textContent;
+  check('seleção dupla: sorte média', /média/.test(hsel));
+  check('seleção mostra classes trancadas em silhueta',
+    document.querySelectorAll('#ui-root .screen-heroSelect .hero-card.is-locked').length >= 1);
+  check('classe trancada mostra progresso de cartas',
+    /\d+ \/ \d+ cartas/.test(document.querySelector('#ui-root .screen-heroSelect').textContent));
+
+  // ---- HUD de batalha
+  goto('battle');
+  var bs = document.querySelector('#ui-root .screen-battle');
+  check('batalha: linha de iniciativa', !!bs.querySelector('.bt-timeline .tl-unit'));
+  check('batalha: painel da unidade ativa', !!bs.querySelector('.bt-active .bar-hp'));
+  check('batalha: pips de PA e PP', !!bs.querySelector('.p-pa .pip') && !!bs.querySelector('.p-pp .pip'));
+  check('batalha: cronômetro com segundos', /\d+s/.test(bs.querySelector('.bt-timer').textContent));
+  check('batalha: barra de feitiços rolável',
+    bs.querySelectorAll('.bt-spells .spell').length >= 1 &&
+    getComputedStyle(bs.querySelector('.bt-spells')).overflowX === 'auto');
+  check('batalha: custo de PA em cada feitiço',
+    bs.querySelectorAll('.bt-spells .sp-cost').length === bs.querySelectorAll('.bt-spells .spell').length);
+  check('batalha: botão de encerrar turno', !!bs.querySelector('.btn-end'));
+  check('batalha: log presente', !!bs.querySelector('.bt-log'));
+  // o canvas continua acessível ao toque entre os painéis
+  check('batalha: a camada de UI não bloqueia o tabuleiro',
+    getComputedStyle(bs).pointerEvents === 'none');
+  // cronômetro contando
+  var before = JOGO.Game.timeLeft();
+  JOGO.Game.update(1.0);
+  check('cronômetro anda com update(dt)', JOGO.Game.timeLeft() < before,
+    before + ' → ' + JOGO.Game.timeLeft());
+  JOGO.UI.update(0.016);
+  check('UI.update não quebra em batalha', true);
+  // eventos do Engine chegam ao log
+  JOGO.UI.handleEvent({ type: 'log', text: 'teste de log' });
+  JOGO.UI.handleEvent({ type: 'weatherShift', weather: 'chuva' });
+  check('log recebe eventos', bs.querySelectorAll('.bt-log-list .log-line').length >= 2);
+
+  check('nenhum erro de janela', errs.length === 0, errs.join(' | '));
+
+  // tela final para a captura headless (?screen=nome)
+  var want = (location.search.match(/[?&]screen=([a-zA-Z]+)/) || [])[1];
+  var sheet = (location.search.match(/[?&]sheet=([a-zA-Z]+)/) || [])[1];
+  if (want) goto(want); else goto('menu');
+  if (sheet) JOGO.UI.openSheet(sheet, sheet === 'heroSheet' ? 'sumo' : null);
+
+  var dt = Math.round(performance.now() - t0);
+  document.getElementById('meta').textContent = R.passed + ' ok · ' + R.failed + ' falhas · ' + dt + ' ms';
+  var v = document.getElementById('verdict');
+  v.textContent = R.failed === 0 ? 'PASS' : 'FAIL (' + R.failed + ')';
+  v.className = R.failed === 0 ? 'pass' : 'fail';
+  window.TEST_RESULTS = R;
+  window.UI_READY = true;
+})();
+</script>
+</body>
+</html>

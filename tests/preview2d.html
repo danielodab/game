@@ -481,7 +481,11 @@ JOGO.DATA = {
   location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { qs[k] = decodeURIComponent(v); });
 
   var jsErrors = [];
-  window.addEventListener('error', function (e) { jsErrors.push(String(e.message)); });
+  window.addEventListener('error', function (e) {
+    jsErrors.push(String(e.message) + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno);
+    var el = document.getElementById('test-status');
+    if (el) { el.textContent = 'ERRO: ' + jsErrors.join(' | '); el.style.color = '#e05a3c'; }
+  });
 
   var Engine = JOGO.Engine, Game = JOGO.Game;
   var lastTime = 0, frameCount = 0, maxFrames = Infinity;

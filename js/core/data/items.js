@@ -25,8 +25,12 @@ var JOGO = (typeof window !== 'undefined')
 //   em- Fecho de Brasa (emberlock)    · av- Andaimes do Vento (windscaffold)
 //   mt- Mina Trêmula (quakemine)      · cp- Coração Partido (brokenheart)
 //
-// Um item ÉPICO por calabouço é o troféu do chefe (dois no Coração Partido, que
-// é o desafio final). Poder e raridade crescem com a ordem do calabouço.
+// RARIDADE NÃO É PODER: cada calabouço tem 4 comuns / 3 raros / 1 épico (o
+// troféu do chefe), e o Coração Partido tem 2 comuns / 1 raro / 1 épico / 4
+// LENDÁRIAS. Um item comum do Coração Partido é melhor que um raro da Estufa —
+// o que cresce com a ordem do calabouço é o PODER; a raridade diz só o quanto
+// custa achar. As peças que mudam COMO se joga (+1 PA, +1 PP e os Lumes) são as
+// mais raras de cada faixa.
 //
 // --- ADENDO v2.1 (CONTRACT_V2 §9-B) -----------------------------------------
 // CONJUNTOS (DATA.sets): 2 conjuntos por calabouço, 4 peças cada (uma por
@@ -500,7 +504,7 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'Quatro elementos discutindo dentro da sua mão. Vença a discussão.',
     iconKey: 'heart-fist' });
 
-  item({ id: 'cp-shard-ring', name: 'Soqueira de Estilhaço', slot: 'punho', rarity: 'raro',
+  item({ id: 'cp-shard-ring', name: 'Soqueira de Estilhaço', slot: 'punho', rarity: 'comum',
     dungeonId: 'brokenheart', bonuses: { power: 20, initiative: 8 },
     description: 'Barra de metal para os quatro dedos com cacos do Coração cravados nas cristas, que esquentam quando o dono decide bater. +20 de poder, +8 de iniciativa.',
     flavor: 'Aperta os dedos antes do golpe. É o jeito dela de concordar.',
@@ -568,7 +572,9 @@ JOGO.DATA = JOGO.DATA || {};
     comum: 1000,            // peso de referência de uma comum não-chave
     rareRatio: 0.1654,      // peso total dos raros    = 16,54% do peso total dos comuns
     epicRatio: 0.012765,    // peso total dos épicos   =  1,28% do peso total dos comuns
-    legendRatio: 0.0158,    // peso total dos lendários=  1,58% do peso total dos comuns
+    legendRatio: 0.022,     // peso total dos lendários=  2,20% do peso total dos comuns
+                            // (4 peças dividindo essa fatia ⇒ cada uma é mais
+                            //  rara que o épico, e fechar as 4 leva ~60 descidas)
     emptyRatio: 1.4706,     // peso do "nada"          = 147% do peso total dos comuns
     keyFactor: 0.5,
     luck: { solo: 2.4, dupla: 1.6 },

@@ -506,14 +506,40 @@ var JOGO = (typeof window !== 'undefined')
     var b = boardBounds(st);
     var pad = 0.90;
     var z = Math.min(W * pad / (b.x1 - b.x0), H * pad / (b.y1 - b.y0));
+    // MOBILE: caber a sala inteira deixaria a célula com ~36 px — menor que o
+    // alvo de toque de 44 px do contrato. Preferimos começar aproximado e
+    // deixar o jogador arrastar (é o que o Dofus faz no celular).
+    var small = Math.min(W, H) < 620;
+    var minTilePx = small ? 58 : 44;
+    var didZoomIn = false;
+    if (z < minTilePx / TW) { z = minTilePx / TW; didZoomIn = true; }
     cam.fitZoom = clamp(z, 0.3, 2.2);
-    cam.minZoom = Math.max(0.28, cam.fitZoom * 0.62);
+    cam.minZoom = Math.max(0.26, cam.fitZoom * (didZoomIn ? 0.45 : 0.62));
     cam.maxZoom = Math.min(3.0, Math.max(cam.fitZoom * 2.4, 1.8));
     if (!keepZoom) cam.zoom = cam.fitZoom;
     cam.zoom = clamp(cam.zoom, cam.minZoom, cam.maxZoom);
-    cam.panX = W / 2 - ((b.x0 + b.x1) / 2) * cam.zoom;
-    cam.panY = H / 2 - ((b.y0 + b.y1) / 2) * cam.zoom;
+    // sem caber tudo, a câmera nasce em cima do grupo do jogador
+    var cxy = null;
+    if (didZoomIn) cxy = partyCenter(st);
+    if (cxy) {
+      var pc = iso(cxy.x, cxy.y, 0);
+      cam.panX = W / 2 - pc.x * cam.zoom;
+      cam.panY = H / 2 - pc.y * cam.zoom;
+    } else {
+      cam.panX = W / 2 - ((b.x0 + b.x1) / 2) * cam.zoom;
+      cam.panY = H / 2 - ((b.y0 + b.y1) / 2) * cam.zoom;
+    }
     clampCam();
+  }
+  function partyCenter(st) {
+    if (!st.units || !st.units.length) return null;
+    var sx = 0, sy = 0, n = 0;
+    for (var i = 0; i < st.units.length; i++) {
+      var u = st.units[i];
+      if (!u.alive || u.side !== 'player') continue;
+      sx += u.x; sy += u.y; n++;
+    }
+    return n ? { x: sx / n, y: sy / n } : null;
   }
   function clampCam() {
     var st = state();
@@ -833,7 +859,87 @@ var JOGO = (typeof window !== 'undefined')
     return dy >= 0 ? 1 : 3;
   }
   function unitArtCanvas(u, dir) {
+    // PREFERÊNCIA (combinada com o Designer Arte): se um dia o Art entregar
+    // partes articuladas (Art.unitParts) ou quadros de pose, basta trocar a
+    // fonte aqui — o rig abaixo já anima por peça.
     return artCanvas('unit', [u.defId, { elements: unitElements(u), dir: dir }]);
+  }
+
+  // ---------- RIG: o personagem é montado em PEÇAS e animado ----------
+  // Sem partes prontas na arte, fatiamos o desenho na linha do quadril e
+  // separamos as duas metades das pernas. Cada perna gira em torno do quadril,
+  // o tronco cobre a emenda. Resultado: passo visível, célula a célula.
+  function artBBox(cv) {
+    if (cv.__bbox) return cv.__bbox;
+    var bb = { x0: 0, y0: 0, x1: cv.width, y1: cv.height };
+    try {
+      var c2 = cv.getContext('2d', { willReadFrequently: true });
+      var w = cv.width, h = cv.height;
+      var img = c2.getImageData(0, 0, w, h).data;
+      var x0 = w, y0 = h, x1 = -1, y1 = -1, x, y;
+      for (y = 0; y < h; y += 2) {
+        for (x = 0; x < w; x += 2) {
+          if (img[(y * w + x) * 4 + 3] > 24) {
+            if (x < x0) x0 = x;
+            if (x > x1) x1 = x;
+            if (y < y0) y0 = y;
+            if (y > y1) y1 = y;
+          }
+        }
+      }
+      if (x1 >= 0) bb = { x0: x0, y0: y0, x1: x1 + 2, y1: y1 + 2 };
+    } catch (e) {}
+    cv.__bbox = bb;
+    return bb;
+  }
+  // descritor de fatias por canvas (uma vez por defId+direção)
+  function rigOf(cv) {
+    if (cv.__rig) return cv.__rig;
+    var bb = artBBox(cv);
+    var W2 = cv.width, H2 = cv.height;
+    var an = cv.__anchor || [0.5, 1];
+    var hipY = Math.round(bb.y0 + (bb.y1 - bb.y0) * 0.68);
+    hipY = clamp(hipY, 2, H2 - 3);
+    var midX = Math.round((bb.x0 + bb.x1) / 2);
+    midX = clamp(midX, 2, W2 - 3);
+    var seam = 4;                                  // sobreposição: nada de fresta
+    var base = P.Texture.from(cv).baseTexture;
+    var r = {
+      torso: new P.Texture(base, new P.Rectangle(0, 0, W2, Math.min(H2, hipY + seam))),
+      legL: new P.Texture(base, new P.Rectangle(0, hipY, midX, H2 - hipY)),
+      legR: new P.Texture(base, new P.Rectangle(midX, hipY, W2 - midX, H2 - hipY)),
+      hipY: hipY, midX: midX, w: W2, h: H2, ax: an[0], ay: an[1],
+      res: cv.__res || 1,
+      legH: (H2 - hipY)
+    };
+    cv.__rig = r;
+    return r;
+  }
+  function addFlashChild(sp) {
+    var f = new P.Sprite(sp.texture);
+    f.blendMode = P.BLEND_MODES.ADD;
+    f.alpha = 0;
+    sp.addChild(f);
+    return f;
+  }
+  function applyRig(node, cv) {
+    var r = rigOf(cv);
+    var s = artK() / r.res;
+    var ax = r.ax * r.w, ay = r.ay * r.h;
+    var t = node.__torso, l = node.__legL, rr = node.__legR;
+    t.texture = r.torso; l.texture = r.legL; rr.texture = r.legR;
+    if (t.__fl) t.__fl.texture = r.torso;
+    if (l.__fl) l.__fl.texture = r.legL;
+    if (rr.__fl) rr.__fl.texture = r.legR;
+    t.scale.set(s); l.scale.set(s); rr.scale.set(s);
+    t.position.set(-ax * s, -ay * s);
+    // as duas pernas giram em torno do MESMO ponto: o quadril
+    l.pivot.set(r.midX, 0);
+    rr.pivot.set(0, 0);
+    l.position.set((r.midX - ax) * s, (r.hipY - ay) * s);
+    rr.position.set((r.midX - ax) * s, (r.hipY - ay) * s);
+    node.__legLen = r.legH * s;
+    node.__rigOk = true;
   }
 
   // ---------- tabuleiro ----------
@@ -1120,6 +1226,8 @@ var JOGO = (typeof window !== 'undefined')
         x: x, y: y, z: 0, face: 1, dir: 0, flash: 0, flashHold: 0,
         squash: 0, deathK: 0, popK: 1, hideK: 0, castK: 0, lungeK: 0,
         castTx: null, castTy: null, knockX: 0, knockY: 0,
+        walkK: 0, walkPh: 0,           // ciclo de PERNAS (0..1 de mistura, fase)
+        atkK: 0, atkMelee: 0, hitK: 0, // gesto de ataque e recuo de dano
         hp: -1, shield: -1, sig: '', bob: Math.random() * 6.28
       };
     }
@@ -1895,6 +2003,7 @@ var JOGO = (typeof window !== 'undefined')
 
       case 'turnStart':
         ovSig = '';
+        nudgeTo(ev.uid);          // quem vai jogar precisa estar na tela
         break;
 
       case 'move':
@@ -2054,6 +2163,19 @@ var JOGO = (typeof window !== 'undefined')
     });
     // a câmera acompanha: aproxima na convergência, segura no clarão, volta depois
     focusOn(mid.x, mid.y, T.approach, T.flash + T.reveal, 0.55, 0.26);
+  }
+
+  // recentra suavemente se a unidade estiver fora da área confortável da tela
+  function nudgeTo(uid) {
+    if (!uid || camFocus) return;
+    var u = findUnit(uid);
+    if (!u) return;
+    var v = vis[uid];
+    var gx = v ? v.x : u.x, gy = v ? v.y : u.y;
+    var p = R.project(gx, gy, 40);
+    var m = Math.min(W, H) * 0.16;
+    if (p.x > m && p.x < W - m && p.y > m && p.y < H - m) return;
+    focusOn(gx, gy, 0.45, 0, 0, 0);
   }
 
   R.isBusy = function () {

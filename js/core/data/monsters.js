@@ -94,21 +94,30 @@ JOGO.DATA = JOGO.DATA || {};
   //   xp     escala a recompensa. Calibrada contra DATA.leveling.xpTable para
   //          que UMA descida completa, no `recommendedLevel` do calabouço,
   //          renda ~1 nível no começo e ~1/3 de nível do nível 25 em diante.
-  //          Alvo por descida (3 salas): 130 · 380 · 850 · 1500 · 2400 · 3600.
-  //          Antes do adendo, a Estufa rendia 785 XP com degrau de 125 no
-  //          nível 3 — SEIS níveis numa descida. Era esse o buraco.
+  //          Fração de nível alvo por descida, do 1º ao 6º calabouço:
+  //          1,00 · 0,75 · 0,55 · 0,45 · 0,38 · 0,34 — cai sempre, porque a
+  //          exigência da xpTable sobe mais rápido que a recompensa. Em XP
+  //          absoluta isso dá ~65 · 200 · 420 · 750 · 1200 · 1850, ou seja
+  //          cerca de 1,6× a 3× a cada andar e ~28× do primeiro ao último.
+  //          Antes do adendo, a Estufa rendia 785 XP com degrau de 65 no
+  //          nível 3 — DOZE níveis numa descida. Era esse o buraco.
   //
   // >>> ATENÇÃO: a escala de XP depende de DATA.leveling.xpTable (dono:
   // >>> Criativo Classes). tests/validate_world.html confere a razão viva
   // >>> entre as duas e ACUSA se a tabela de níveis mudar sem esta tabela.
+  // >>> O crescimento da XP tem teto: se a fração de nível precisa CAIR com a
+  // >>> profundidade, a XP só pode crescer até a razão entre os degraus dos
+  // >>> níveis recomendados (hoje 65 → 5450, ou 84×). A calibragem usa ~75% a
+  // >>> 90% desse teto — o resto fica para o `xpFalloff` do adendo, que é
+  // >>> quem realmente pune moer conteúdo raso (×0,10 no piso).
   // ==========================================================================
   var TIER = {
-    greenhouse:   { hp: 1.00, power:   0, xp: 0.17 },
-    cistern:      { hp: 1.00, power:  12, xp: 0.38 },
-    emberlock:    { hp: 1.15, power:  28, xp: 0.70 },
-    windscaffold: { hp: 1.55, power:  48, xp: 1.25 },
-    quakemine:    { hp: 1.80, power:  75, xp: 1.75 },
-    brokenheart:  { hp: 2.00, power: 105, xp: 2.05 }
+    greenhouse:   { hp: 1.00, power:   0, xp: 0.083 },
+    cistern:      { hp: 1.00, power:  12, xp: 0.20 },
+    emberlock:    { hp: 1.15, power:  28, xp: 0.35 },
+    windscaffold: { hp: 1.55, power:  48, xp: 0.62 },
+    quakemine:    { hp: 1.80, power:  75, xp: 0.86 },
+    brokenheart:  { hp: 2.00, power: 105, xp: 1.05 }
   };
   var NO_TIER = { hp: 1, power: 0, xp: 1 };   // invocações do jogador: intocadas
   function tierOf(o) { return TIER[o.dungeonId] || NO_TIER; }

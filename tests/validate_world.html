@@ -692,12 +692,9 @@
     descent.forEach(function (s, i) {
       if (i === 0) { return; }
       var ratio = s.xp / descent[i - 1].xp;
-      check('XP do calabouço ' + DG[i].id + ' é ao menos 1,5× a do anterior (salto marcante)',
-        ratio >= 1.5, 'razão ' + (Math.round(ratio * 100) / 100) + '×');
+      check('XP do calabouço ' + DG[i].id + ' é ao menos 1,15× a do anterior',
+        ratio >= 1.15, 'razão ' + (Math.round(ratio * 100) / 100) + '×');
     });
-    check('a descida mais funda rende ao menos 20× a mais rasa (a profundidade paga)',
-      descent[5].xp >= descent[0].xp * 20,
-      descent[0].xp + ' → ' + descent[5].xp + ' (' + Math.round(descent[5].xp / descent[0].xp) + '×)');
 
     // ---- XP × xpTable: ~1 nível cedo, ~1/3 de nível do 25 em diante ----
     var LV = D.leveling;
@@ -723,12 +720,52 @@
         frac.every(function (f) { return f <= 1.4; }),
         frac.map(function (f) { return Math.round(f * 100) / 100; }).join(' → '));
 
-      // o falloff do adendo é da Lógica Meta, mas o dado mora em DATA.leveling
-      if (LV.xpFalloff) {
-        check('xpFalloff: graceLevels ≥ 0', LV.xpFalloff.graceLevels >= 0);
+      // A XP absoluta não pode crescer mais do que a xpTable permite: se a
+      // fração de nível tem de CAIR com a profundidade, o crescimento máximo
+      // da XP é a razão entre os degraus dos níveis recomendados. Esta
+      // checagem cobra que a calibragem use quase todo esse teto — se sobrar
+      // folga, é XP jogada fora; se estourar, a fração subiu.
+      DG.forEach(function (d, i) {
+        if (i === 0) { return; }
+        var stepRatio = step(d.recommendedLevel) / step(DG[i - 1].recommendedLevel);
+        var xpRatio = descent[i].xp / descent[i - 1].xp;
+        check('calabouço ' + d.id + ': XP cresce quase o máximo que a xpTable permite',
+          xpRatio >= stepRatio * 0.72 && xpRatio <= stepRatio,
+          'XP ×' + (Math.round(xpRatio * 100) / 100) + ' · teto da xpTable ×' + (Math.round(stepRatio * 100) / 100));
+      });
+
+      // ---- O QUE FAZ A PROFUNDIDADE PAGAR: o xpFalloff do adendo v2.3 ------
+      // A razão bruta entre o 1º e o 6º calabouço é modesta (a xpTable limita).
+      // O que torna "descer mais fundo o único caminho eficiente" é o falloff:
+      // moer conteúdo raso com o herói graúdo rende uma fração do que rendia.
+      if (check('DATA.leveling.xpFalloff existe (adendo v2.3)', !!LV.xpFalloff)) {
+        var F = LV.xpFalloff;
+        check('xpFalloff: graceLevels ≥ 0', F.graceLevels >= 0, String(F.graceLevels));
         check('xpFalloff: factorPerLevel entre 0 e 1',
-          LV.xpFalloff.factorPerLevel > 0 && LV.xpFalloff.factorPerLevel < 1);
-        check('xpFalloff: floor entre 0 e 1', LV.xpFalloff.floor > 0 && LV.xpFalloff.floor < 1);
+          F.factorPerLevel > 0 && F.factorPerLevel < 1, String(F.factorPerLevel));
+        check('xpFalloff: floor entre 0 e 1', F.floor > 0 && F.floor < 1, String(F.floor));
+
+        var mult = function (level, rec) {
+          var over = level - rec - F.graceLevels;
+          if (over <= 0) { return 1; }
+          return Math.max(F.floor, Math.pow(F.factorPerLevel, over));
+        };
+        // no nível recomendado de cada calabouço, ele rende cheio
+        DG.forEach(function (d, i) {
+          check('calabouço ' + d.id + ': rende XP cheia no nível recomendado',
+            mult(d.recommendedLevel, d.recommendedLevel) === 1);
+        });
+        // com o herói no nível 22, descer fundo tem de pagar muito mais
+        var effAt22 = DG.map(function (d, i) { return descent[i].xp * mult(22, d.recommendedLevel); });
+        check('no nível 22, a Mina rende ao menos 10× o que render moer a Estufa',
+          effAt22[4] >= effAt22[0] * 10,
+          'Estufa ' + Math.round(effAt22[0]) + ' XP · Mina ' + Math.round(effAt22[4]) + ' XP');
+        check('no nível 22, a XP efetiva cresce a cada calabouço (descer sempre compensa)',
+          effAt22.every(function (v, i) { return i === 0 || v > effAt22[i - 1]; }),
+          effAt22.map(function (v) { return Math.round(v); }).join(' → '));
+        check('moer o 1º calabouço no nível 28 cai ao piso do falloff (mas nunca a zero)',
+          Math.abs(mult(28, DG[0].recommendedLevel) - F.floor) < 1e-9 && F.floor > 0,
+          '×' + mult(28, DG[0].recommendedLevel));
       }
     }
 
@@ -966,6 +1003,25 @@
         keys(D.monsters).filter(function (i) { return D.monsters[i].boss; }).length + ' chefes) · ' +
         keys(D.monsterSpells).length + ' feitiços de monstro · ' +
         keys(D.tileEvents).length + ' eventos de terreno · ' + keys(D.scenery).length + ' temas de cenário</div>' +
+        (descent ? ('<h2>Progressão: XP por descida e dificuldade (adendo v2.3)</h2><table><tr>' +
+          '<th>#</th><th>Calabouço</th><th>nível rec.</th><th>XP/descida</th><th>× o anterior</th>' +
+          '<th>frações de nível</th><th>XP no nível 22</th><th>PV médio comum</th><th>poder</th>' +
+          '<th>chefe PV</th><th>spawns</th></tr>' +
+          D.dungeons.map(function (d, i) {
+            var LV = D.leveling, s = descent[i];
+            var stp = LV.xpTable[d.recommendedLevel] - LV.xpTable[d.recommendedLevel - 1];
+            var F = LV.xpFalloff, over = 22 - d.recommendedLevel - (F ? F.graceLevels : 4);
+            var mu = (!F || over <= 0) ? 1 : Math.max(F.floor, Math.pow(F.factorPerLevel, over));
+            return '<tr><td>' + d.order + '</td><td>' + d.name + '</td><td>' + d.recommendedLevel +
+              '</td><td>' + s.xp + '</td><td>' + (i === 0 ? '—' : (Math.round(s.xp / descent[i - 1].xp * 100) / 100) + '×') +
+              '</td><td>' + (Math.round(s.xp / stp * 100) / 100) + '</td><td>' + Math.round(s.xp * mu) +
+              ' <span style="color:#6b7684">(×' + (Math.round(mu * 100) / 100) + ')</span></td><td>' + s.avgHp +
+              '</td><td>+' + s.avgPower + '</td><td>' + s.bossHp + '</td><td>' + s.spawns + '</td></tr>';
+          }).join('') + '</table>' +
+          '<div class="sub">Uma descida = as 3 salas, contando cada spawn do layout. ' +
+          '"Frações de nível" = XP da descida ÷ degrau da xpTable no nível recomendado: ' +
+          'alvo ~1 no começo e ~1/3 do nível 25 em diante. A coluna "XP no nível 22" aplica o ' +
+          '<code>xpFalloff</code> — é ela que mostra por que moer calabouço raso deixa de compensar.</div>') : '') +
         '<h2>Economia: pedras de forja e cartas</h2><table><tr><th>#</th><th>Calabouço</th>' +
         '<th>pedras/descida</th><th>elemento principal</th><th>descidas p/ um +10 (107)</th>' +
         '<th>chefe derruba</th><th>cartas do chefe</th></tr>' + econ + '</table>' +

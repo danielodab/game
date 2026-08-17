@@ -57,7 +57,8 @@
   var CLEANSE_KINDS = ['poison', 'root', 'mark', 'invisible', 'shield', 'buff', 'taunt', 'reflect', 'regen'];
   var CLASSES = ['arqueiro', 'bruxo', 'curandeira', 'espadachim', 'invocador', 'sumo'];
   var TIERS = [0, 5, 12, 20, 30];
-  var RARITIES = ['comum', 'raro', 'epico'];
+  var RARITIES = ['comum', 'raro', 'epico', 'lendario'];
+  var RANK = { comum: 0, raro: 1, epico: 2, lendario: 3 };
   // §9-C: os quatro espaços têm nome próprio (os ids antigos pa/pp/vida/especial
   // não existem mais como SLOT — 'pa'/'pp' seguem sendo nomes de BÔNUS).
   var SLOTS = ['punho', 'passo', 'casca', 'lume'];
@@ -512,9 +513,15 @@
       check('item ' + id + ' está na lista de peças do conjunto',
         has(D.sets[it.setId].pieces, id));
     }
-    check('item ' + id + ' dropWeight bate com a raridade',
-      isNum(it.dropWeight) && D.lootWeights && it.dropWeight === D.lootWeights[it.rarity],
+    check('item ' + id + ' dropWeight é inteiro positivo',
+      isNum(it.dropWeight) && it.dropWeight >= 1 && it.dropWeight === Math.round(it.dropWeight),
       String(it.dropWeight));
+    check('item ' + id + ' keyPiece booleano', typeof it.keyPiece === 'boolean');
+    check('item ' + id + ' keyPiece classificado certo',
+      it.keyPiece === !!(it.bonuses.pa || it.bonuses.pp || it.slot === 'lume'));
+    check('item ' + id + ' minRoom coerente com a raridade',
+      it.minRoom === ((it.rarity === 'epico' || it.rarity === 'lendario') ? 2
+                     : (it.rarity === 'raro' ? 1 : 0)), String(it.minRoom));
     if (has(SLOTS, it.slot)) bySlot[it.slot]++;
     if (it.rarity === 'epico') epicByPrefix[px]++;
     check('item ' + id + ' name/description/flavor/iconKey',
@@ -540,7 +547,8 @@
     // sanidade por espaço (§9-C)
     if (it.slot === 'punho') {
       check('item ' + id + ' (Punho) concede no máximo +1 PA', !bn.pa || bn.pa === 1, String(bn.pa));
-      check('item ' + id + ' (Punho) +1 PA só em épico', !bn.pa || it.rarity === 'epico', it.rarity);
+      check('item ' + id + ' (Punho) +1 PA só em épico ou lendário',
+        !bn.pa || it.rarity === 'epico' || it.rarity === 'lendario', it.rarity);
       check('item ' + id + ' (Punho) não concede PP', !bn.pp);
     }
     if (it.slot === 'passo') {
@@ -591,7 +599,13 @@
     })());
     var used = false;
     itemIds.forEach(function (id) { if (IT[id].grantsSpell === sid) used = true; });
-    check('itemSpell ' + sid + ' é concedido por algum item', used);
+    Object.keys(D.sets || {}).forEach(function (s) {
+      [2, 3, 4].forEach(function (k) {
+        var bn = D.sets[s].bonuses && D.sets[s].bonuses[k];
+        if (bn && bn.grantsSpell === sid) used = true;
+      });
+    });
+    check('itemSpell ' + sid + ' é concedido por algum item ou conjunto', used);
   });
 
   // =========================================================================
@@ -600,23 +614,108 @@
   var SETS = D.sets || {}, STONES = D.stones || {}, UP = D.upgrade || null, LW = D.lootWeights || null;
   var setIds = Object.keys(SETS);
 
-  // ---- pesos de saque: raro/épico devem ser DIFÍCEIS ----
+  // ---- modelo de pesos de saque ----
   check('DATA.lootWeights presente', !!LW);
   if (LW) {
-    check('lootWeights tem os 3 níveis de raridade',
-      isNum(LW.comum) && isNum(LW.raro) && isNum(LW.epico));
-    check('lootWeights: raro bem mais raro que comum (<= 1/3)',
-      LW.raro * 3 <= LW.comum, LW.comum + ' / ' + LW.raro);
-    check('lootWeights: épico bem mais raro que raro (<= 1/3)',
-      LW.epico * 3 <= LW.raro, LW.raro + ' / ' + LW.epico);
-    check('lootWeights: épico é pelo menos 10× mais difícil que comum',
-      LW.epico * 10 <= LW.comum, LW.comum + ' / ' + LW.epico);
-    // mesmo com a melhor Sorte de Saque (solo, LUCK 2.4) o épico continua raro
-    var luck = 2.4;
-    var wC = LW.comum, wR = LW.raro * luck, wE = LW.epico * luck * luck;
-    check('épico continua raro mesmo no solo (< 25% do peso total)',
-      wE / (wC + wR + wE) < 0.25, (100 * wE / (wC + wR + wE)).toFixed(1) + '%');
+    check('lootWeights: modelo completo',
+      isNum(LW.comum) && isNum(LW.rareRatio) && isNum(LW.epicRatio) &&
+      isNum(LW.legendRatio) && isNum(LW.emptyRatio) && isNum(LW.keyFactor));
+    check('lootWeights: peça-chave pesa menos que as irmãs de mesma raridade',
+      LW.keyFactor > 0 && LW.keyFactor <= 0.6, String(LW.keyFactor));
+    check('lootWeights: LUCK solo 2.4 e dupla 1.6',
+      !!LW.luck && LW.luck.solo === 2.4 && LW.luck.dupla === 1.6);
+    check('lootWeights: expoentes de sorte por raridade',
+      !!LW.luckExponent && LW.luckExponent.comum === 0 && LW.luckExponent.raro === 1 &&
+      LW.luckExponent.epico === 2 && LW.luckExponent.lendario === 2);
+    check('lootWeights: peso de "nada" definido para os 6 calabouços',
+      !!LW.noDrop && Object.keys(LW.noDrop).length === 6, JSON.stringify(LW.noDrop || {}));
+    check('lootWeights: o "nada" domina o peso dos itens (saque duro)',
+      LW.emptyRatio > 1, String(LW.emptyRatio));
   }
+
+  // ---- hierarquia de peso DENTRO de cada calabouço ----
+  var byDungeonItems = {};
+  itemIds.forEach(function (id) {
+    var it = IT[id];
+    (byDungeonItems[it.dungeonId] = byDungeonItems[it.dungeonId] || []).push(it);
+  });
+  Object.keys(byDungeonItems).forEach(function (dg) {
+    var list = byDungeonItems[dg], minOf = {}, maxOf = {};
+    list.forEach(function (it) {
+      if (minOf[it.rarity] === undefined || it.dropWeight < minOf[it.rarity]) minOf[it.rarity] = it.dropWeight;
+      if (maxOf[it.rarity] === undefined || it.dropWeight > maxOf[it.rarity]) maxOf[it.rarity] = it.dropWeight;
+    });
+    for (var r = 0; r < RARITIES.length - 1; r++) {
+      var lo = RARITIES[r], hi = RARITIES[r + 1];
+      if (minOf[lo] === undefined || maxOf[hi] === undefined) continue;
+      check(dg + ': todo ' + hi + ' é mais raro que todo ' + lo,
+        maxOf[hi] < minOf[lo], 'menor ' + lo + '=' + minOf[lo] + ' vs maior ' + hi + '=' + maxOf[hi]);
+    }
+    // peça-chave é a mais rara da sua faixa
+    RARITIES.forEach(function (rar) {
+      var keys = [], plain = [];
+      list.forEach(function (it) {
+        if (it.rarity !== rar) return;
+        (it.keyPiece ? keys : plain).push(it.dropWeight);
+      });
+      if (!keys.length || !plain.length) return;
+      check(dg + ': peça-chave ' + rar + ' é mais rara que a ' + rar + ' comum de bônus',
+        Math.max.apply(null, keys) < Math.min.apply(null, plain));
+    });
+  });
+
+  // ---- o conjunto LENDÁRIO ----
+  var legendIds = itemIds.filter(function (id) { return IT[id].rarity === 'lendario'; });
+  check('existem exatamente 4 peças lendárias no jogo', legendIds.length === 4,
+    legendIds.length + ': ' + legendIds.join(', '));
+  check('todas as lendárias são do Coração Partido', (function () {
+    for (var i = 0; i < legendIds.length; i++) if (IT[legendIds[i]].dungeonId !== 'brokenheart') return false;
+    return true;
+  })());
+  check('todas as lendárias são as 4 peças do cp-set-heart', (function () {
+    for (var i = 0; i < legendIds.length; i++) if (IT[legendIds[i]].setId !== 'cp-set-heart') return false;
+    return SETS['cp-set-heart'] && SETS['cp-set-heart'].pieces.length === 4;
+  })());
+  check('cp-set-heart marcado como lendário',
+    !!SETS['cp-set-heart'] && SETS['cp-set-heart'].rarity === 'lendario' &&
+    SETS['cp-set-heart'].legendary === true);
+  check('só existe UM conjunto lendário', setIds.filter(function (s) {
+    return SETS[s].rarity === 'lendario'; }).length === 1);
+  check('as lendárias caem só na sala do chefe (minRoom 2)', (function () {
+    for (var i = 0; i < legendIds.length; i++) if (IT[legendIds[i]].minRoom !== 2) return false;
+    return true;
+  })());
+  check('toda peça lendária é mais rara que QUALQUER épico do jogo', (function () {
+    var maxLegend = 0, minEpic = Infinity;
+    itemIds.forEach(function (id) {
+      if (IT[id].rarity === 'lendario') maxLegend = Math.max(maxLegend, IT[id].dropWeight);
+      if (IT[id].rarity === 'epico') minEpic = Math.min(minEpic, IT[id].dropWeight);
+    });
+    return maxLegend < minEpic;
+  })());
+  check('o conjunto lendário concede um feitiço ao fechar 4 peças (identidade única)',
+    !!SETS['cp-set-heart'] && isStr(SETS['cp-set-heart'].bonuses[4].grantsSpell) &&
+    !!IS[SETS['cp-set-heart'].bonuses[4].grantsSpell]);
+  check('nenhum OUTRO conjunto concede feitiço', (function () {
+    var n = 0;
+    setIds.forEach(function (s) {
+      [2, 3, 4].forEach(function (k) { if (SETS[s].bonuses[k] && SETS[s].bonuses[k].grantsSpell) n++; });
+    });
+    return n === 1;
+  })());
+  check('o bônus de 4 peças do lendário é o maior do jogo', (function () {
+    function tot(bn) {
+      var t = 0, k;
+      for (k in bn) if (Object.prototype.hasOwnProperty.call(bn, k)) {
+        if (k === 'resists') Object.keys(bn.resists).forEach(function (el) { t += bn.resists[el]; });
+        else if (isNum(bn[k])) t += bn[k];
+      }
+      return t;
+    }
+    var mine = tot(SETS['cp-set-heart'].bonuses[4]), best = 0;
+    setIds.forEach(function (s) { if (s !== 'cp-set-heart') best = Math.max(best, tot(SETS[s].bonuses[4])); });
+    return mine > best;
+  })());
 
   // ---- conjuntos ----
   check('DATA.sets com 12 conjuntos (2 por calabouço)', setIds.length === 12, 'tem ' + setIds.length);
@@ -664,6 +763,9 @@
               if (!has(ELEMENTS, el) || !isNum(bn.resists[el]) || bn.resists[el] < 0 || bn.resists[el] > 25) okKeys = false;
               total += bn.resists[el];
             });
+          } else if (k === 'grantsSpell') {
+            // exclusividade do conjunto lendário — feitiço concedido pelo CONJUNTO
+            if (!isStr(bn[k]) || !IS[bn[k]]) okKeys = false;
           } else if (!has(['hp', 'power', 'initiative', 'dodge', 'lock'], k) || !isNum(bn[k]) || bn[k] <= 0) {
             okKeys = false;
           } else {
@@ -852,6 +954,172 @@
         el === 'neutro' ? stoneIds.length > 0 : !!stoneByElement[el]);
     });
   }
+
+  // =========================================================================
+  // 7-B. MONTE CARLO DO SAQUE — prova numérica das metas
+  //   metas por sorteio: épico <= 3% solo / <= 1,5% dupla
+  //                      raro 12–15% solo / 8–11% dupla · comum domina
+  //   por descida (4 sorteios): ~2 itens, e ~10% (solo) / ~5% (dupla) de épico
+  //   e quantas descidas, em média, para fechar o Traje do Coração
+  // =========================================================================
+  var mcRows = [];
+  if (LW && LW.noDrop) {
+    // PRNG determinístico: o teste não pode falhar por azar
+    var _seed = 20260817;
+    function rnd() {
+      _seed = (_seed * 1103515245 + 12345) % 2147483648;
+      return _seed / 2147483648;
+    }
+    function tableFor(dgId, luck) {
+      var entries = [], total = 0, i, it, w;
+      for (i = 0; i < itemIds.length; i++) {
+        it = IT[itemIds[i]];
+        if (it.dungeonId !== dgId) continue;
+        w = it.dropWeight * Math.pow(luck, LW.luckExponent[it.rarity] || 0);
+        entries.push({ id: it.id, rarity: it.rarity, w: w });
+        total += w;
+      }
+      entries.push({ id: null, rarity: 'vazio', w: LW.noDrop[dgId] || 0 });
+      total += LW.noDrop[dgId] || 0;
+      return { entries: entries, total: total };
+    }
+    function draw(tbl) {
+      var r = rnd() * tbl.total, acc = 0, i;
+      for (i = 0; i < tbl.entries.length; i++) {
+        acc += tbl.entries[i].w;
+        if (r < acc) return tbl.entries[i];
+      }
+      return tbl.entries[tbl.entries.length - 1];
+    }
+
+    var DRAWS = 50000, DESCENTS = 20000, ROLLS_PER_DESCENT = 4;
+    var configs = [
+      { name: 'solo',  luck: LW.luck.solo,  raro: [0.12, 0.15], epico: 0.03,  epicDescent: [0.06, 0.14] },
+      { name: 'dupla', luck: LW.luck.dupla, raro: [0.08, 0.11], epico: 0.015, epicDescent: [0.03, 0.075] }
+    ];
+    var dungeonIds = Object.keys(byDungeonItems);
+
+    configs.forEach(function (cfg) {
+      dungeonIds.forEach(function (dg) {
+        var tbl = tableFor(dg, cfg.luck), c = { comum: 0, raro: 0, epico: 0, lendario: 0, vazio: 0 }, i;
+        for (i = 0; i < DRAWS; i++) c[draw(tbl).rarity]++;
+        var pC = c.comum / DRAWS, pR = c.raro / DRAWS, pE = c.epico / DRAWS,
+            pL = c.lendario / DRAWS, pV = c.vazio / DRAWS;
+
+        check('MC ' + cfg.name + '/' + dg + ': épico <= ' + (cfg.epico * 100) + '% por sorteio',
+          pE <= cfg.epico, (pE * 100).toFixed(2) + '%');
+        check('MC ' + cfg.name + '/' + dg + ': raro entre ' + (cfg.raro[0] * 100) + '% e ' + (cfg.raro[1] * 100) + '%',
+          pR >= cfg.raro[0] && pR <= cfg.raro[1], (pR * 100).toFixed(2) + '%');
+        check('MC ' + cfg.name + '/' + dg + ': comum domina o que cai',
+          pC > pR + pE + pL, (pC * 100).toFixed(1) + '% vs ' + ((pR + pE + pL) * 100).toFixed(1) + '%');
+        check('MC ' + cfg.name + '/' + dg + ': saque duro — 45% a 58% dos sorteios não dão item',
+          pV >= 0.45 && pV <= 0.58, (pV * 100).toFixed(1) + '%');
+
+        // descida completa: 4 sorteios
+        var itemsTotal = 0, withEpic = 0, d, k, got, gotEpic;
+        for (d = 0; d < DESCENTS; d++) {
+          gotEpic = false;
+          for (k = 0; k < ROLLS_PER_DESCENT; k++) {
+            got = draw(tbl);
+            if (got.rarity !== 'vazio') itemsTotal++;
+            if (got.rarity === 'epico') gotEpic = true;
+          }
+          if (gotEpic) withEpic++;
+        }
+        var avgItems = itemsTotal / DESCENTS, pEpicDescent = withEpic / DESCENTS;
+        check('MC ' + cfg.name + '/' + dg + ': descida rende ~2 itens (1,7–2,3)',
+          avgItems >= 1.7 && avgItems <= 2.3, avgItems.toFixed(2) + ' itens');
+        check('MC ' + cfg.name + '/' + dg + ': chance de épico por descida na faixa',
+          pEpicDescent >= cfg.epicDescent[0] && pEpicDescent <= cfg.epicDescent[1],
+          (pEpicDescent * 100).toFixed(1) + '%');
+
+        mcRows.push({ cfg: cfg.name, dg: dg, vazio: pV, comum: pC, raro: pR, epico: pE,
+                      lendario: pL, itens: avgItems, epicDesc: pEpicDescent });
+      });
+    });
+
+    // ---- quantas descidas para FECHAR o Traje do Coração ----
+    var legendPieces = SETS['cp-set-heart'] ? SETS['cp-set-heart'].pieces : [];
+    var setRuns = 1500, capDescents = 4000;
+    var legendResult = {};
+    configs.forEach(function (cfg) {
+      var tbl = tableFor('brokenheart', cfg.luck), soma = 0, run, got, need, descidas, k, idx;
+      for (run = 0; run < setRuns; run++) {
+        need = {}; legendPieces.forEach(function (p) { need[p] = true; });
+        var faltam = legendPieces.length;
+        descidas = 0;
+        while (faltam > 0 && descidas < capDescents) {
+          descidas++;
+          for (k = 0; k < ROLLS_PER_DESCENT; k++) {
+            got = draw(tbl);
+            if (got.id && need[got.id]) { need[got.id] = false; faltam--; }
+          }
+        }
+        soma += descidas;
+      }
+      legendResult[cfg.name] = soma / setRuns;
+    });
+    check('Traje do Coração: fechar as 4 peças exige uma caçada longa (>= 25 descidas solo)',
+      legendResult.solo >= 25, legendResult.solo.toFixed(0) + ' descidas solo');
+    check('Traje do Coração: mas não é impossível (<= 200 descidas solo)',
+      legendResult.solo <= 200, legendResult.solo.toFixed(0) + ' descidas solo');
+    check('Traje do Coração: solo fecha antes da dupla (o risco compra sorte)',
+      legendResult.solo < legendResult.dupla,
+      'solo ' + legendResult.solo.toFixed(0) + ' vs dupla ' + legendResult.dupla.toFixed(0));
+    check('MÉDIA DE DESCIDAS PARA O TRAJE DO CORAÇÃO — solo ' + legendResult.solo.toFixed(0) +
+      ' · dupla ' + legendResult.dupla.toFixed(0), true);
+    window.MC_LEGEND = legendResult;
+    window.MC_ROWS = mcRows;
+  }
+
+  // =========================================================================
+  // 7-C. HIERARQUIA DE RARIDADE vs FORJA
+  //   O épico/lendário não pode ser alcançado por um comum forjado: no MESMO
+  //   espaço e MESMO calabouço ele tem base escalável maior E carrega algo que
+  //   nenhuma forja dá (+1 PA, +1 PP ou um feitiço).
+  // =========================================================================
+  (function hierarquia() {
+    if (!UP) return;
+    function scalable(bn) {
+      var t = 0, k;
+      for (k in bn) if (Object.prototype.hasOwnProperty.call(bn, k)) {
+        if (k === 'resists') Object.keys(bn.resists).forEach(function (el) { t += bn.resists[el]; });
+        else if (!has(UP.nonScalingKeys || [], k)) t += bn[k];
+      }
+      return t;
+    }
+    var mult = 1 + UP.bonusPerLevel * UP.maxLevel;
+    itemIds.forEach(function (id) {
+      var it = IT[id];
+      if (it.rarity !== 'epico' && it.rarity !== 'lendario') return;
+      // 1. o troféu carrega algo que a forja nunca dá — ou, quando o espaço não
+      //    permite (a Casca só dá PV e resistências), uma vantagem numérica
+      //    decisiva (>= 1,5× a melhor peça de raridade menor do mesmo espaço).
+      var unforgeable = !!(it.bonuses.pa || it.bonuses.pp || isStr(it.grantsSpell));
+      var bestLower = 0;
+      itemIds.forEach(function (oid) {
+        var o = IT[oid];
+        if (o.dungeonId === it.dungeonId && o.slot === it.slot && RANK[o.rarity] < RANK[it.rarity]) {
+          bestLower = Math.max(bestLower, scalable(o.bonuses));
+        }
+      });
+      check('troféu ' + id + ' se destaca (bônus não-forjável ou >= 1,5× a peça menor do espaço)',
+        unforgeable || (bestLower > 0 && scalable(it.bonuses) >= bestLower * 1.5),
+        unforgeable ? 'não-forjável' : scalable(it.bonuses) + ' vs ' + bestLower);
+      // 2. base escalável >= a de qualquer item de raridade menor do mesmo espaço/calabouço
+      itemIds.forEach(function (oid) {
+        var other = IT[oid];
+        if (other.dungeonId !== it.dungeonId || other.slot !== it.slot) return;
+        if (RANK[other.rarity] >= RANK[it.rarity]) return;
+        check('hierarquia ' + it.slot + '/' + it.dungeonId + ': ' + id + ' >= ' + oid + ' (bônus escaláveis)',
+          scalable(it.bonuses) >= scalable(other.bonuses),
+          scalable(it.bonuses) + ' vs ' + scalable(other.bonuses));
+        // 3. no mesmo nível de forja o troféu continua na frente
+        check('forja não inverte a hierarquia: ' + id + ' +10 > ' + oid + ' +10',
+          scalable(it.bonuses) * mult >= scalable(other.bonuses) * mult);
+      });
+    });
+  })();
 
   // =========================================================================
   // 8. NOMENCLATURA — nada de "pm" em lugar nenhum
