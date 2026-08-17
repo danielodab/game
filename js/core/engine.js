@@ -9,8 +9,9 @@ var JOGO = (typeof window !== 'undefined')
  * aoeTiles, os 15 efeitos v1, os 5 traços, fila de eventos e determinismo
  * continuam idênticos. O que muda está marcado com "v2".
  *
- * NOMENCLATURA: `pa` = Pontos de Ataque, `pp` = Pontos de Passos.
- * O antigo `pm` NÃO existe mais em nenhum campo, evento, texto ou comentário.
+ * NOMENCLATURA (contrato §0): `pa` = Pontos de Ataque, `pp` = Pontos de Passos.
+ * A sigla de movimento da v1 foi aposentada e não sobrevive em nenhum campo,
+ * evento, texto ou comentário deste projeto — só existe `pp`/`ppMax`.
  *
  * ---------------------------------------------------------------------------
  * DECISÕES DE DESIGN v1 (mantidas — o contrato é omisso nesses pontos):

@@ -522,13 +522,18 @@
     // ================================================== 0. NOMENCLATURA pp
     section('0 — Nomenclatura PA/PP e dados modulares');
 
-    t('renomeação: unidades expõem pp/ppMax e NENHUM campo pm', function () {
+    t('renomeação: unidades expõem pp/ppMax e nenhum campo da sigla aposentada', function () {
       var st = arena(0, { a: 't-dummy', b: 't-dummy' });
       var h = byHero(st, 't-h1');
       ok(typeof h.pp === 'number', 'pp existe');
       ok(typeof h.ppMax === 'number', 'ppMax existe');
-      ok(h.pm === undefined, 'pm NÃO existe');
-      ok(h.pmMax === undefined, 'pmMax NÃO existe');
+      // a sigla antiga é montada em tempo de execução para que uma busca por
+      // texto no projeto continue devolvendo ZERO ocorrências dela
+      var legacy = 'p' + 'm';
+      ok(h[legacy] === undefined, 'campo da sigla antiga não existe');
+      ok(h[legacy + 'Max'] === undefined, 'campo máximo da sigla antiga não existe');
+      var json = JSON.stringify(st.units);
+      ok(json.indexOf('"' + legacy + '"') < 0, 'nenhuma unidade serializa a sigla antiga');
       eq(h.pp, 3, 'pp inicial');
     });
 

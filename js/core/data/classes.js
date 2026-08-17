@@ -54,8 +54,8 @@ JOGO.DATA.classes = {
       terra: ['arqueiro-terra-5', 'arqueiro-terra-10', 'arqueiro-terra-12', 'arqueiro-terra-15', 'arqueiro-terra-20', 'arqueiro-terra-30'],
       ar: ['arqueiro-ar-5', 'arqueiro-ar-10', 'arqueiro-ar-12', 'arqueiro-ar-15', 'arqueiro-ar-20', 'arqueiro-ar-30']
     },
-    startsUnlocked: true,
-    cardRarity: 'comum'
+    startsUnlocked: false,
+    cardRarity: 'epico'
   },
 
   /* ------------------------------------------------------------------ MAGO */
@@ -78,7 +78,7 @@ JOGO.DATA.classes = {
       ar: ['bruxo-ar-5', 'bruxo-ar-10', 'bruxo-ar-12', 'bruxo-ar-15', 'bruxo-ar-20', 'bruxo-ar-30']
     },
     startsUnlocked: false,
-    cardRarity: 'epico'
+    cardRarity: 'raro'
   },
 
   /* ------------------------------------------------------------- ASSASSINO */
@@ -123,8 +123,8 @@ JOGO.DATA.classes = {
       terra: ['curandeira-terra-5', 'curandeira-terra-10', 'curandeira-terra-12', 'curandeira-terra-15', 'curandeira-terra-20', 'curandeira-terra-30'],
       ar: ['curandeira-ar-5', 'curandeira-ar-10', 'curandeira-ar-12', 'curandeira-ar-15', 'curandeira-ar-20', 'curandeira-ar-30']
     },
-    startsUnlocked: false,
-    cardRarity: 'raro'
+    startsUnlocked: true,
+    cardRarity: 'comum'
   },
 
   /* ------------------------------------------------------------- INVOCADOR */

@@ -38,8 +38,10 @@
     '../js/core/data/elements.js',
     '../js/core/data/monsters.js',
     '../js/core/data/dungeons.js',
-    '../js/core/data/items.js',   // dono: Criativo Fusão (só leitura, p/ cruzar lootTable)
-    '../js/core/data/spells.js'   // dono: Criativo Classes (só leitura, p/ cruzar summons)
+    '../js/core/data/items.js',      // dono: Criativo Fusão (só leitura, p/ cruzar lootTable)
+    '../js/core/data/spells.js',     // dono: Criativo Classes (só leitura, p/ cruzar summons)
+    '../js/core/data/classes.js',    // dono: Criativo Classes (só leitura, p/ cruzar cardDrops)
+    '../js/core/data/progression.js' // dono: Criativo Classes (só leitura, DATA.cards)
   ];
   for (var i = 0; i < files.length; i++) {
     document.write('<scr' + 'ipt src="' + files[i] + v + '"><\/scr' + 'ipt>');
@@ -450,21 +452,50 @@
     check('chefes com vida crescendo por calabouço', growing, hps.join(' → '));
   })();
 
-  // classes fortes só nos calabouços avançados
+  // --- CARTAS: nenhuma entrada INERTE ------------------------------------
+  // Uma entrada é inerte se a classe tem dropWeight 0 (já começa liberada) ou
+  // se `minDungeon` é mais fundo que a `order` do calabouço: nesses casos a
+  // carta ocupa peso na tabela e nunca cai. Regras de DATA.cards (Classes).
   (function () {
-    var early = [];
-    DG.slice(0, 2).forEach(function (d) {
+    var CARDS = D.cards;
+    check('DATA.cards existe (progression.js, Criativo Classes)', !!CARDS);
+    if (!CARDS) { return; }
+
+    DG.forEach(function (d) {
+      var obtainable = 0;
       (d.cardDrops || []).forEach(function (c) {
-        if (c.classId === 'invocador' || c.classId === 'bruxo') { early.push(d.id + ':' + c.classId); }
+        var tag = 'calabouço ' + d.id + ' carta ' + c.classId;
+        if (!check(tag + ': existe em DATA.cards', has(CARDS, c.classId))) { return; }
+        var card = CARDS[c.classId];
+        var wOk = check(tag + ': dropWeight > 0 (não é classe já liberada)', card.dropWeight > 0,
+          'dropWeight=' + card.dropWeight);
+        var mOk = check(tag + ': minDungeon (' + card.minDungeon + ') ≤ order (' + d.order + ')',
+          card.minDungeon <= d.order);
+        if (wOk && mOk) { obtainable++; }
+      });
+      check('calabouço ' + d.id + ': o chefe tem ≥ 1 carta realmente obtenível', obtainable >= 1,
+        obtainable + ' obteníveis');
+    });
+
+    // escada: a classe mais rara (bruxo) só nos calabouços avançados
+    var badLadder = [];
+    DG.forEach(function (d) {
+      (d.cardDrops || []).forEach(function (c) {
+        if (c.classId === 'bruxo' && d.order < 4) { badLadder.push(d.id); }
       });
     });
-    check('cartas das classes mais fortes (bruxo/invocador) não caem nos 2 primeiros calabouços',
-      early.length === 0, early.join(', '));
-    var allCards = {};
-    DG.forEach(function (d) { (d.cardDrops || []).forEach(function (c) { allCards[c.classId] = true; }); });
-    check('as 6 classes têm carta em algum calabouço',
-      CLASS_IDS.every(function (c) { return allCards[c]; }),
-      CLASS_IDS.filter(function (c) { return !allCards[c]; }).join(', '));
+    check('carta de bruxo (a mais rara) só a partir do 4º calabouço', badLadder.length === 0, badLadder.join(', '));
+
+    // toda classe sorteável precisa cair em algum lugar
+    var listed = {};
+    DG.forEach(function (d) { (d.cardDrops || []).forEach(function (c) { listed[c.classId] = true; }); });
+    var droppable = CLASS_IDS.filter(function (c) { return has(CARDS, c) && CARDS[c].dropWeight > 0; });
+    check('toda classe com dropWeight > 0 tem carta em algum calabouço',
+      droppable.every(function (c) { return listed[c]; }),
+      droppable.filter(function (c) { return !listed[c]; }).join(', '));
+    check('nenhuma classe de dropWeight 0 aparece em cardDrops',
+      CLASS_IDS.filter(function (c) { return has(CARDS, c) && CARDS[c].dropWeight === 0; })
+        .every(function (c) { return !listed[c]; }));
   })();
 
   check('O Coração Partido muda de clima a cada 3 rodadas',

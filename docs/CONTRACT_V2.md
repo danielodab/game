@@ -260,6 +260,70 @@ v1 mais: escolha de elemento no nível 5, árvore de feitiços por caminho, pain
 pet, cartas de personagem ganhas, cronômetro do turno, botão de **Fusão** quando disponível,
 e layout que funciona em **retrato de celular**.
 
+## 9-B. ADENDO v2.1 — Grupo de 2, coleção de cartas, estrelas, conjuntos e forja
+
+Esta seção **substitui** o que a contrariar nas seções anteriores.
+
+### Grupo: 1 ou 2 heróis (não mais 3)
+`Game.startRun` e `Progress.battleParty` aceitam **1 ou 2**. Sorte de saque: `LUCK = 2.4` (solo) · `1.6` (dupla).
+Consequência de design: com 2 heróis, **a fusão transforma a dupla numa única unidade** — troca de economia
+de ações por poder concentrado. Layouts continuam válidos (spawns 'P' sobrando são ignorados).
+
+### Classes iniciais
+Começam liberadas **`sumo` (tanque)** e **`curandeira` (cura)**. `arqueiro` passa a ser desbloqueável.
+
+### Cartas acumulativas e estrelas
+
+```js
+DATA.cards = { classId: { unlockCost, dropWeight, minDungeon, starCosts:[5,15,30,55,90] } };
+DATA.stars = { max:5, bonuses: { 1:{hp:15}, 2:{power:8}, 3:{pp:1}, 4:{hp:25,dodge:10}, 5:{pa:1} } };
+```
+- **Custo de desbloqueio (fixado pelo usuário)**: `sumo` 0 · `curandeira` 0 · `invocador` 10 · `bruxo` 10 ·
+  `espadachim` 20 · `arqueiro` 25. Cartas caem **aleatoriamente** dos chefes; repetidas **acumulam**.
+- `Progress.state.cards[classId] = n` (total acumulado, nunca decresce).
+- Classe **liberada** quando `cards[classId] >= unlockCost` (as iniciais já nascem liberadas).
+- **Estrelas** (máx. 5) por classe: contadas sobre as cartas **excedentes** ao custo de desbloqueio,
+  conforme `starCosts` acumulados. Os bônus de estrela são **fixos e permanentes**, somados em
+  `Progress.effectiveStats` — `pp` e `pa` de estrela são somas inteiras ao máximo da unidade.
+- API: `Progress.addCards(classId, n)` · `Progress.cardInfo(classId) -> {cards, unlocked, unlockCost, stars, next:{star,faltam}}`.
+
+### Inventário ÚNICO e conjuntos elementais
+
+- **Um inventário só, compartilhado por todos os personagens** (`Progress.state.inventory`).
+  Um item equipado por um herói **não pode** estar equipado em outro ao mesmo tempo
+  (`Progress.equip` recusa e informa quem o está usando).
+- Item ganha `setId` e `element`. O **elemento do conjunto vem do elemento do monstro** que o derruba.
+```js
+DATA.sets = { setId: { id, name, element, dungeonId, pieces:['itemId'…],   // 4 peças (pa/pp/vida/especial)
+                       bonuses:{ 2:{…}, 3:{…}, 4:{…} } } };                // progressivo
+```
+`Progress.effectiveStats` soma os bônus de conjunto conforme quantas peças do mesmo `setId` estão equipadas.
+Itens raros têm peso de saque menor (a raridade já existente controla isso).
+
+### Forja: pedras e evolução até +10
+
+```js
+DATA.stones = { stoneId: { id, name, element, description, iconKey } };   // 5: uma por elemento
+DATA.upgrade = {
+  maxLevel: 10,
+  tiers: [ {from:0,to:2,name:'Comum'}, {from:3,to:5,name:'Raro'},
+           {from:6,to:9,name:'Supremo'}, {from:10,to:10,name:'Magnífico'} ],
+  bonusPerLevel: 0.12,          // +12% dos bônus base por nível ⇒ +10 = 2,2× o item
+  stoneCost: [2,3,4,6,8,10,13,16,20,25]   // custo em pedras do nível 1..10
+};
+```
+- Monstros derrubam **pedras do próprio elemento** (`monster.stoneDrop = {chance, min, max}`).
+- Melhorar um item **consome pedras do elemento do item** (item neutro aceita qualquer pedra).
+- Evolução é **determinística** (nunca quebra nem regride).
+- `Progress.state.stones = {stoneId: n}`; item no inventário vira `{itemId, level}` (compatível: string = nível 0).
+- API: `Progress.upgradeItem(invIndex)` · `Progress.upgradeInfo(invIndex) -> {level, tierName, custo, temPedras}`
+  · `Progress.addStones(stoneId, n)`. `effectiveStats` aplica `1 + bonusPerLevel*level` aos bônus do item.
+
+### UI correspondente (Designer Arte)
+Tela de **Coleção** (cartas por classe com progresso `n/custo` e trilha de 5 estrelas), **Inventário único**
+(itens com raridade, nível `+N`, tier e conjunto; indicação de quem está usando cada peça), **Forja**
+(pedras por elemento, custo, prévia do ganho) e seleção de **1 ou 2 heróis**.
+
 ## 10. Testes obrigatórios
 
 Cada dono entrega sua página em `tests/` (padrão v1: roda no load, resultado no DOM e em

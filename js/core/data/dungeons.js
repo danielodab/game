@@ -243,10 +243,11 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'gh-briar-charm', weight: 12, minRoom: 1 },
       { itemId: 'gh-widow-shears', weight: 4, minRoom: 2 }
     ],
+    // Cartas: só valem entradas com dropWeight > 0 e minDungeon ≤ order
+    // (DATA.cards, do Criativo Classes). No order 1 apenas a curandeira é
+    // obtenível — sumo e arqueiro já começam liberados e têm dropWeight 0.
     cardDrops: [
-      { classId: 'sumo', weight: 24 },
-      { classId: 'arqueiro', weight: 24 },
-      { classId: 'curandeira', weight: 12 }
+      { classId: 'curandeira', weight: 30 }
     ]
   });
 
@@ -341,10 +342,8 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'ci-baroness-collar', weight: 4, minRoom: 2 }
     ],
     cardDrops: [
-      { classId: 'arqueiro', weight: 18 },
-      { classId: 'curandeira', weight: 20 },
-      { classId: 'sumo', weight: 12 },
-      { classId: 'espadachim', weight: 10 }
+      { classId: 'curandeira', weight: 24 },
+      { classId: 'invocador', weight: 14 }
     ]
   });
 
@@ -444,9 +443,9 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'em-forge-grate', weight: 4, minRoom: 2 }
     ],
     cardDrops: [
-      { classId: 'espadachim', weight: 22 },
-      { classId: 'curandeira', weight: 14 },
-      { classId: 'bruxo', weight: 8 }
+      { classId: 'espadachim', weight: 20 },
+      { classId: 'invocador', weight: 16 },
+      { classId: 'curandeira', weight: 12 }
     ]
   });
 
@@ -546,8 +545,9 @@ JOGO.DATA = JOGO.DATA || {};
     ],
     cardDrops: [
       { classId: 'espadachim', weight: 18 },
-      { classId: 'bruxo', weight: 16 },
-      { classId: 'invocador', weight: 8 }
+      { classId: 'invocador', weight: 16 },
+      { classId: 'curandeira', weight: 10 },
+      { classId: 'bruxo', weight: 10 }
     ]
   });
 
@@ -646,9 +646,10 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'mt-quake-crown', weight: 4, minRoom: 2 }
     ],
     cardDrops: [
-      { classId: 'bruxo', weight: 20 },
+      { classId: 'bruxo', weight: 14 },
+      { classId: 'espadachim', weight: 16 },
       { classId: 'invocador', weight: 14 },
-      { classId: 'espadachim', weight: 8 }
+      { classId: 'curandeira', weight: 8 }
     ]
   });
 
@@ -750,10 +751,10 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'cp-eclipse-lens', weight: 4, minRoom: 2 }
     ],
     cardDrops: [
-      { classId: 'invocador', weight: 24 },
-      { classId: 'bruxo', weight: 16 },
-      { classId: 'espadachim', weight: 10 },
-      { classId: 'curandeira', weight: 6 }
+      { classId: 'bruxo', weight: 20 },
+      { classId: 'invocador', weight: 16 },
+      { classId: 'espadachim', weight: 12 },
+      { classId: 'curandeira', weight: 8 }
     ]
   });
 
