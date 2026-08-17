@@ -274,11 +274,11 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'Chacoalhar é desaconselhado. Todo mundo chacoalha.',
     iconKey: 'seed-lamp' });
 
-  item({ id: 'gh-briar-charm', name: 'Amuleto de Sarça', slot: 'lume', rarity: 'raro',
+  item({ id: 'gh-briar-charm', name: 'Fogaréu de Sarça', slot: 'lume', rarity: 'raro',
     dungeonId: 'greenhouse', bonuses: { hp: 10 }, grantsSpell: 'is-thorn-ward',
-    description: 'Um nó de sarça da calha que volta a florescer sempre que se molha — e o dono costuma se molhar de suor. Concede o feitiço Redoma de Espinhos.',
-    flavor: 'Floresce no susto. Você vai descobrir cedo.',
-    iconKey: 'briar-charm' });
+    description: 'Um nó de sarça da calha que arde sem se consumir, preso numa gaiola de arame. Quando o dono se assusta, a chama sobe e os espinhos fecham em volta dele. Concede o feitiço Redoma de Espinhos.',
+    flavor: 'Queima há mil anos e continua verde por dentro. Ninguém explicou.',
+    iconKey: 'briar-brazier' });
 
   // ===== 2. A CISTERNA DOS AFOGADOS (cistern) — ci- ========================
   item({ id: 'ci-lantern-fob', name: 'Garra do Afogadiço', slot: 'punho', rarity: 'comum',
@@ -317,16 +317,16 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'Quem a veste nunca larga o que carrega. Cuidado com o que carrega.',
     iconKey: 'coat' });
 
-  item({ id: 'ci-tide-flask', name: 'Frasco de Maré Viva', slot: 'lume', rarity: 'comum',
+  item({ id: 'ci-tide-flask', name: 'Lanterna de Maré', slot: 'lume', rarity: 'comum',
     dungeonId: 'cistern', bonuses: { power: 4 }, grantsSpell: 'is-undertow',
-    description: 'Frasco bojudo com uma linha d’água que fica inclinada mesmo na mesa. Concede o feitiço Ressaca.',
-    flavor: 'Duas vezes por dia, o frasco puxa. Ninguém sabe para onde.',
-    iconKey: 'tide-flask' });
+    description: 'Lampião submerso cuja chama nunca soube que afogou. A linha d’água dentro do vidro fica sempre inclinada — e a água de fora inclina junto. Concede o feitiço Ressaca.',
+    flavor: 'Duas vezes por dia a lanterna puxa. Ninguém sabe para onde.',
+    iconKey: 'tide-lantern' });
 
   item({ id: 'ci-jelly-vial', name: 'Ampola de Água-Viva', slot: 'lume', rarity: 'raro',
     dungeonId: 'cistern', bonuses: { hp: 12 }, grantsSpell: 'is-tide-mend',
-    description: 'Ampola morna com uma água-viva-lustre viva lá dentro, pulsando devagar. Concede o feitiço Maré Mansa.',
-    flavor: 'Ela cura porque acha que você é o aquário.',
+    description: 'Ampola morna com uma água-viva-lustre viva lá dentro, pulsando devagar e iluminando três células de corredor a cada pulso. Concede o feitiço Maré Mansa.',
+    flavor: 'Ela ilumina e cura porque acha que você é o aquário.',
     iconKey: 'jelly-vial' });
 
   // ===== 3. O FECHO DE BRASA (emberlock) — em- =============================
@@ -366,15 +366,15 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'Às vezes ele lembra que já foi alguém — e te abraça.',
     iconKey: 'soot-cloak' });
 
-  item({ id: 'em-ember-flask', name: 'Frasco de Fagulha', slot: 'lume', rarity: 'raro',
+  item({ id: 'em-ember-flask', name: 'Lampião de Fagulha', slot: 'lume', rarity: 'raro',
     dungeonId: 'emberlock', bonuses: { initiative: 6 }, grantsSpell: 'is-cinder-leap',
-    description: 'Frasco lacrado com uma fagulha inquieta que sabe o caminho de volta ao dono. Concede o feitiço Salto de Brasa.',
+    description: 'Lampião de vidro grosso com uma fagulha inquieta batendo nas paredes por dentro. Ela sempre sabe o caminho de volta ao dono — e às vezes vai na frente. Concede o feitiço Salto de Brasa.',
     flavor: 'Ela vai primeiro. Você vai junto. Combinem antes.',
-    iconKey: 'ember' });
+    iconKey: 'spark-lantern' });
 
-  item({ id: 'em-brand-iron', name: 'Ferro do Ferreiro', slot: 'lume', rarity: 'raro',
+  item({ id: 'em-brand-iron', name: 'Ferro em Brasa', slot: 'lume', rarity: 'raro',
     dungeonId: 'emberlock', bonuses: { power: 8 }, grantsSpell: 'is-forge-brand',
-    description: 'Ferro de marcar com o timbre do Fecho na ponta, quente há mil anos. Concede o feitiço Ferro de Marcar.',
+    description: 'Ferro de marcar com o timbre do Fecho na ponta, vermelho-vivo há mil anos sem forja nenhuma por perto. Ilumina o corredor de laranja e cheira a metal quente. Concede o feitiço Ferro de Marcar.',
     flavor: 'O Ferreiro Sem-Rosto marcava tudo. Inclusive a si mesmo.',
     iconKey: 'brand-iron' });
 
@@ -415,15 +415,15 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'Segura o corpo. A coragem é problema seu.',
     iconKey: 'storm-harness' });
 
-  item({ id: 'av-wind-whistle', name: 'Apito de Vão', slot: 'lume', rarity: 'raro',
+  item({ id: 'av-wind-whistle', name: 'Farolete de Vão', slot: 'lume', rarity: 'raro',
     dungeonId: 'windscaffold', bonuses: { initiative: 8 }, grantsSpell: 'is-updraft',
-    description: 'Apito de osso que chama a corrente ascendente de qualquer respiradouro por perto. Concede o feitiço Lufada.',
-    flavor: 'Os Fôlegos usavam para limpar a poeira. Você usa para limpar a passarela.',
-    iconKey: 'whistle' });
+    description: 'Farolete de sinalização das passarelas: a chama dentro dele deita na direção da corrente antes de a corrente chegar — e, se você soprar o vidro, a corrente vem. Concede o feitiço Lufada.',
+    flavor: 'Os Fôlegos o usavam para achar o respiradouro. Você usa para limpar a passarela.',
+    iconKey: 'gap-beacon' });
 
   item({ id: 'av-lightning-coil', name: 'Espiral de Raio', slot: 'lume', rarity: 'raro',
     dungeonId: 'windscaffold', bonuses: { power: 10 }, grantsSpell: 'is-storm-chain',
-    description: 'Bobina de arame fino enrolada num prego de cobre, sempre eriçada. Concede o feitiço Corrente de Tormenta.',
+    description: 'Bobina de arame fino enrolada num prego de cobre, sempre eriçada e acesa por dentro num azul de tempestade que estala baixinho. Concede o feitiço Corrente de Tormenta.',
     flavor: 'Arrepia o braço inteiro antes de decidir por você.',
     iconKey: 'coil' });
 
@@ -464,17 +464,17 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'A mina emprestou. A mina cobra depois.',
     iconKey: 'bedrock-carapace' });
 
-  item({ id: 'mt-quake-nail', name: 'Prego de Mina', slot: 'lume', rarity: 'raro',
+  item({ id: 'mt-quake-nail', name: 'Candeia de Prumo', slot: 'lume', rarity: 'raro',
     dungeonId: 'quakemine', bonuses: { power: 8 }, grantsSpell: 'is-quake-nail',
-    description: 'Prego de escora do tamanho de um antebraço, entortado de tanto segurar teto. Concede o feitiço Prego de Tremor.',
-    flavor: 'Segurou uma galeria inteira por trinta anos. Aguenta um inimigo.',
-    iconKey: 'mine-nail' });
+    description: 'Candeia pendurada num fio de prumo: aponta sempre para baixo, mesmo quando a galeria inteira está torta — e onde a luz dela bate no chão, o prego desce. Concede o feitiço Prego de Tremor.',
+    flavor: 'A mina mente sobre onde é embaixo. A candeia não.',
+    iconKey: 'plumb-lamp' });
 
-  item({ id: 'mt-shoring-charm', name: 'Talismã de Escoramento', slot: 'lume', rarity: 'raro',
+  item({ id: 'mt-shoring-charm', name: 'Lamparina do Escorador', slot: 'lume', rarity: 'raro',
     dungeonId: 'quakemine', bonuses: { hp: 15 }, grantsSpell: 'is-ore-bulwark',
-    description: 'Pequena viga entalhada que os mineiros penduravam no pescoço antes de descer. Concede o feitiço Escora de Minério.',
-    flavor: 'Quem descia sem um deles não subia com histórias.',
-    iconKey: 'shoring-charm' });
+    description: 'A lamparina de quem escorava o teto: chama baixa, vidro riscado e uma viga entalhada em miniatura soldada na alça. Onde ela é pousada, o minério lembra que sabia ficar de pé. Concede o feitiço Escora de Minério.',
+    flavor: 'Quem descia sem uma delas não subia com histórias.',
+    iconKey: 'shoring-lamp' });
 
   // ===== 6. O CORAÇÃO PARTIDO (brokenheart) — cp- ==========================
   item({ id: 'cp-heart-crown', name: 'Punho do Coração', slot: 'punho', rarity: 'epico',
@@ -513,16 +513,16 @@ JOGO.DATA = JOGO.DATA || {};
     flavor: 'O céu desceu sobre o mundo. Um naco dele agora desce sobre você — do lado certo.',
     iconKey: 'worldshell' });
 
-  item({ id: 'cp-heart-horn', name: 'Corno do Coração', slot: 'lume', rarity: 'epico',
+  item({ id: 'cp-heart-horn', name: 'Corno de Brasa', slot: 'lume', rarity: 'epico',
     dungeonId: 'brokenheart', bonuses: { power: 10 }, grantsSpell: 'is-heart-call',
-    description: 'Trompa curta feita de um caco oco do Coração; toca uma nota que a sala inteira obedece. Concede o feitiço Chamado do Coração.',
+    description: 'Trompa curta talhada num caco oco do Coração, com um carvão vivo alojado no bocal: soprar acende o carvão, e a nota que sai é vermelha o bastante para a sala inteira enxergar de onde veio. Concede o feitiço Chamado do Coração.',
     flavor: 'Chama todo mundo. Todo mundo vem. Esse é o problema e a graça.',
-    iconKey: 'heart-horn' });
+    iconKey: 'ember-horn' });
 
   item({ id: 'cp-eclipse-lens', name: 'Lente de Eclipse', slot: 'lume', rarity: 'epico',
     dungeonId: 'brokenheart', bonuses: { power: 12 }, grantsSpell: 'is-heart-eclipse',
-    description: 'Disco de vidro fumê talhado no Coração Partido: olhando por ele, o clima da sala parece uma sugestão. Concede o feitiço Eclipse.',
-    flavor: 'Por um segundo, ninguém tem elemento. Nem eles.',
+    description: 'Disco de vidro fumê talhado no Coração Partido — o único Lume que, em vez de dar luz, a recolhe: olhando por ele, o clima da sala vira uma sugestão. Concede o feitiço Eclipse.',
+    flavor: 'Todo Lume acende. Este é o que apaga — e por isso vale dois.',
     iconKey: 'eclipse-lens' });
 
   // =========================================================================

@@ -58,7 +58,10 @@
   var CLASSES = ['arqueiro', 'bruxo', 'curandeira', 'espadachim', 'invocador', 'sumo'];
   var TIERS = [0, 5, 12, 20, 30];
   var RARITIES = ['comum', 'raro', 'epico'];
-  var SLOTS = ['pa', 'pp', 'vida', 'especial'];
+  // §9-C: os quatro espaços têm nome próprio (os ids antigos pa/pp/vida/especial
+  // não existem mais como SLOT — 'pa'/'pp' seguem sendo nomes de BÔNUS).
+  var SLOTS = ['punho', 'passo', 'casca', 'lume'];
+  var OLD_SLOTS = ['pa', 'pp', 'vida', 'especial'];
   var BEHAVIORS = ['attack', 'support', 'guard'];
 
   var EFFECT_REQ = {
@@ -532,25 +535,31 @@
       }
     });
 
-    // sanidade por espaço
-    if (it.slot === 'pa') {
-      check('item ' + id + ' (pa) concede no máximo +1 PA', !bn.pa || bn.pa === 1, String(bn.pa));
-      check('item ' + id + ' (pa) +1 PA só em épico', !bn.pa || it.rarity === 'epico', it.rarity);
-      check('item ' + id + ' (pa) não concede PP', !bn.pp);
+    check('item ' + id + ' não usa slot antigo', !has(OLD_SLOTS, it.slot), String(it.slot));
+
+    // sanidade por espaço (§9-C)
+    if (it.slot === 'punho') {
+      check('item ' + id + ' (Punho) concede no máximo +1 PA', !bn.pa || bn.pa === 1, String(bn.pa));
+      check('item ' + id + ' (Punho) +1 PA só em épico', !bn.pa || it.rarity === 'epico', it.rarity);
+      check('item ' + id + ' (Punho) não concede PP', !bn.pp);
     }
-    if (it.slot === 'pp') {
-      check('item ' + id + ' (pp) concede no máximo +1 PP', !bn.pp || bn.pp === 1, String(bn.pp));
-      check('item ' + id + ' (pp) não concede PA', !bn.pa);
+    if (it.slot === 'passo') {
+      check('item ' + id + ' (Passo) concede no máximo +1 PP', !bn.pp || bn.pp === 1, String(bn.pp));
+      check('item ' + id + ' (Passo) não concede PA', !bn.pa);
     }
-    if (it.slot === 'vida') {
-      check('item ' + id + ' (vida) PV entre 10 e 60', isNum(bn.hp) && bn.hp >= 10 && bn.hp <= 60, String(bn.hp));
-      check('item ' + id + ' (vida) sem PA/PP', !bn.pa && !bn.pp);
+    if (it.slot === 'casca') {
+      check('item ' + id + ' (Casca) PV entre 10 e 60', isNum(bn.hp) && bn.hp >= 10 && bn.hp <= 60, String(bn.hp));
+      check('item ' + id + ' (Casca) sem PA/PP', !bn.pa && !bn.pp);
     }
-    if (it.slot === 'especial') {
-      check('item ' + id + ' (especial) tem grantsSpell', isStr(it.grantsSpell));
-      check('item ' + id + ' (especial) sem bônus de PA/PP', !bn.pa && !bn.pp);
+    if (it.slot === 'lume') {
+      check('item ' + id + ' (Lume) tem grantsSpell', isStr(it.grantsSpell));
+      check('item ' + id + ' (Lume) sem bônus de PA/PP', !bn.pa && !bn.pp);
+      // um Lume é uma relíquia ACESA — nome ou descrição precisam mostrar a luz
+      var lit = /lanterna|lampi[ãa]o|candeia|lamparina|farolete|farol|brasa|braseiro|fogar[ée]u|chama|acesa|aceso|arde|brilh|ilumin|luz|pulsa|vermelho-vivo|recolhe/i;
+      check('item ' + id + ' (Lume) é uma relíquia acesa (luz no nome ou na descrição)',
+        lit.test(it.name) || lit.test(it.description), it.name);
     } else {
-      check('item ' + id + ' (não especial) não concede feitiço',
+      check('item ' + id + ' (fora do Lume) não concede feitiço',
         it.grantsSpell === null || it.grantsSpell === undefined);
     }
     if (isStr(it.grantsSpell)) {
@@ -639,7 +648,7 @@
       });
       var cobre4 = true;
       SLOTS.forEach(function (s) { if (slotsSeen[s] !== 1) cobre4 = false; });
-      check('conjunto ' + sid + ' cobre os 4 espaços (pa/pp/vida/especial), um cada',
+      check('conjunto ' + sid + ' cobre os 4 espaços (Punho/Passo/Casca/Lume), um cada',
         cobre4, JSON.stringify(slotsSeen));
     }
 
@@ -858,6 +867,13 @@
     check('DATA.' + name + ' sem menção a "pm"', !/(^|[^0-9a-zA-ZÀ-ÿ])pm([^0-9a-zA-ZÀ-ÿ]|$)/i.test(json));
     check('DATA.' + name + ' sem chave "pm"', json.indexOf('"pm"') === -1);
   });
+  check('DATA.items não contém nenhum slot antigo (pa/pp/vida/especial)', (function () {
+    for (var i = 0; i < itemIds.length; i++) if (has(OLD_SLOTS, IT[itemIds[i]].slot)) return false;
+    return true;
+  })());
+  check('DATA.upgrade.nonScalingKeys continua ["pa","pp"] (nomes de BÔNUS, não de espaço)',
+    !!UP && isArr(UP.nonScalingKeys) && UP.nonScalingKeys.length === 2 &&
+    has(UP.nonScalingKeys, 'pa') && has(UP.nonScalingKeys, 'pp'));
   check('nomenclatura pa/pp usada nos bônus de item', (function () {
     var seenPa = false, seenPp = false;
     itemIds.forEach(function (id) {

@@ -360,6 +360,33 @@ DATA.leveling.perLevelElement = { hp: 5, elemPower: 3 };    // a partir da escol
 - A unidade em batalha carrega `elemPower` (0 quando não há). Na **fusão**, `elemPower` é a média
   dos dois e vale para os dois elementos da mistura.
 
+## 9-D. ADENDO v2.3 — Subir de nível custa, e a profundidade paga
+
+Pedido do usuário: *"para upar também não pode ser tão fácil; conforme vai para calabouço com
+níveis mais altos vai dificultando e dando a XP mais alta"*. Duas engrenagens:
+
+### 1. Cada calabouço tem faixa de nível e paga proporcional
+```js
+DATA.dungeons[i].recommendedLevel = n;   // 1:3 · 2:7 · 3:11 · 4:16 · 5:22 · 6:28
+```
+O `xp` dos monstros cresce com a profundidade de modo que **uma descida completa (3 salas), no
+nível recomendado, renda aproximadamente 1 nível no começo do jogo e cerca de 1/3 de nível a
+partir do nível 25** — a XP absoluta sobe muito, mas a exigência sobe mais.
+
+### 2. Rendimento decrescente ao repetir conteúdo fácil
+Ao ganhar XP, aplica-se um multiplicador conforme a distância entre o nível do herói e o nível
+recomendado do calabouço:
+```js
+DATA.leveling.xpFalloff = { graceLevels: 4, factorPerLevel: 0.75, floor: 0.10 };
+// nivel <= recommended+4  ⇒ ×1.0
+// cada nível acima disso  ⇒ ×0.75 acumulativo, nunca abaixo de ×0.10
+```
+Isso torna **descer mais fundo o único caminho eficiente** para subir, sem bloquear ninguém:
+moer o primeiro calabouço continua possível, só deixa de compensar. O mesmo multiplicador **não**
+se aplica a itens, pedras nem cartas (essas seguem suas próprias regras de raridade).
+`Game` informa o multiplicador aplicado no pacote de recompensa (`xpMult`) para a UI poder
+explicar ao jogador por que ganhou menos.
+
 ## 10. Testes obrigatórios
 
 Cada dono entrega sua página em `tests/` (padrão v1: roda no load, resultado no DOM e em

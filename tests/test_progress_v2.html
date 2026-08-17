@@ -50,7 +50,8 @@
       33065, 39175, 46010, 53570, 61850,
       70830, 80465, 90695, 101450, 112640
     ],
-    perLevel: { hp: 6, power: 3 },
+    perLevel: { hp: 5, power: 3 },            // níveis 1→4
+    perLevelElement: { hp: 5, elemPower: 3 }, // a partir da escolha (§9-C)
     elementChoiceLevel: 5
   };
 
@@ -194,36 +195,36 @@
       description: o.description || '—', flavor: '—', iconKey: 'test'
     };
   }
-  item({ id: 't-anel-pa', name: 'Anel de Ataque', slot: 'pa', rarity: 'epico', element: 'fogo',
+  item({ id: 't-anel-pa', name: 'Anel de Ataque', slot: 'punho', rarity: 'epico', element: 'fogo',
     bonuses: { pa: 1, power: 10 } });
-  item({ id: 't-anel-pa-exagerado', name: 'Anel Exagerado', slot: 'pa', rarity: 'epico', element: 'neutro',
+  item({ id: 't-anel-pa-exagerado', name: 'Anel Exagerado', slot: 'punho', rarity: 'epico', element: 'neutro',
     bonuses: { pa: 3 }, description: 'dado fora do contrato: deve ser limitado a +1' });
-  item({ id: 't-bota-pp', name: 'Botas Ligeiras', slot: 'pp', rarity: 'raro', element: 'agua',
+  item({ id: 't-bota-pp', name: 'Botas Ligeiras', slot: 'passo', rarity: 'raro', element: 'agua',
     bonuses: { pp: 1, dodge: 5 } });
-  item({ id: 't-peito-vida', name: 'Peitoral de Casca', slot: 'vida', rarity: 'comum', element: 'terra',
+  item({ id: 't-peito-vida', name: 'Peitoral de Casca', slot: 'casca', rarity: 'comum', element: 'terra',
     bonuses: { hp: 40, resists: { fogo: 10 } } });
-  item({ id: 't-peito-epico', name: 'Peitoral do Fundo', slot: 'vida', rarity: 'epico', element: 'terra',
+  item({ id: 't-peito-epico', name: 'Peitoral do Fundo', slot: 'casca', rarity: 'epico', element: 'terra',
     dungeonId: 't-dung-4', bonuses: { hp: 60, lock: 10, resists: { fogo: 20, agua: 5 } } });
-  item({ id: 't-relic-especial', name: 'Relíquia Cantante', slot: 'especial', rarity: 'raro', element: 'neutro',
+  item({ id: 't-relic-especial', name: 'Relíquia Cantante', slot: 'lume', rarity: 'raro', element: 'neutro',
     bonuses: { power: 10 }, grantsSpell: 't-feitico-item' });
-  item({ id: 't-relic-repetida', name: 'Relíquia Redundante', slot: 'especial', rarity: 'comum', element: 'neutro',
+  item({ id: 't-relic-repetida', name: 'Relíquia Redundante', slot: 'lume', rarity: 'comum', element: 'neutro',
     grantsSpell: 't-tanque-neutro-1' });
   item({ id: 't-item-slot-invalido', name: 'Chapéu Fora do Contrato', slot: 'chapeu', rarity: 'comum',
     element: 'ar', bonuses: { hp: 999 } });
   // peças do conjunto de brasa
-  item({ id: 't-set-pa', name: 'Bracelete de Brasa', slot: 'pa', rarity: 'raro', element: 'fogo',
+  item({ id: 't-set-pa', name: 'Bracelete de Brasa', slot: 'punho', rarity: 'raro', element: 'fogo',
     setId: 't-set-brasa', bonuses: { power: 5 } });
-  item({ id: 't-set-pp', name: 'Coturno de Brasa', slot: 'pp', rarity: 'raro', element: 'fogo',
+  item({ id: 't-set-pp', name: 'Coturno de Brasa', slot: 'passo', rarity: 'raro', element: 'fogo',
     setId: 't-set-brasa', bonuses: { dodge: 5 } });
-  item({ id: 't-set-vida', name: 'Couraça de Brasa', slot: 'vida', rarity: 'raro', element: 'fogo',
+  item({ id: 't-set-vida', name: 'Couraça de Brasa', slot: 'casca', rarity: 'raro', element: 'fogo',
     setId: 't-set-brasa', bonuses: { hp: 30 } });
-  item({ id: 't-set-especial', name: 'Tocha de Brasa', slot: 'especial', rarity: 'raro', element: 'fogo',
+  item({ id: 't-set-especial', name: 'Tocha de Brasa', slot: 'lume', rarity: 'raro', element: 'fogo',
     setId: 't-set-brasa', bonuses: {}, grantsSpell: 't-feitico-conjunto' });
   // peça de OUTRO conjunto (não pode somar com o de brasa) — sem `setId` de propósito:
   // o conjunto tem de ser reconhecido pela lista `pieces`
-  item({ id: 't-limo-pa', name: 'Bracelete de Limo', slot: 'pa', rarity: 'comum', element: 'agua',
+  item({ id: 't-limo-pa', name: 'Bracelete de Limo', slot: 'punho', rarity: 'comum', element: 'agua',
     bonuses: { initiative: 3 } });
-  item({ id: 't-limo-vida', name: 'Casaco de Limo', slot: 'vida', rarity: 'comum', element: 'agua',
+  item({ id: 't-limo-vida', name: 'Casaco de Limo', slot: 'casca', rarity: 'comum', element: 'agua',
     bonuses: { hp: 10 } });
 
   // ------------------------------------------------------------- pets
@@ -263,19 +264,28 @@
     { classId: 't-invo', weight: 1 }, { classId: 't-lamina', weight: 1 },
     { classId: 't-bruxo', weight: 1 }, { classId: 't-manco', weight: 1 }  // dropWeight 0: nunca sai
   ];
+  // ATENÇÃO: `order` é 1-BASED (como nos dados reais) e o ÍNDICE do array é
+  // 0-BASED. `minDungeon` das cartas é 0-based, então tem de ser comparado com
+  // o ÍNDICE — é por isso que os dois números aqui são propositalmente
+  // diferentes: se o código usar `order`, a carta cara vaza um andar acima.
+  function dung(id, name, idx, extra) {
+    var d = { id: id, name: name, theme: 'teste', description: '—', difficulty: idx + 1,
+      order: idx + 1, palette: {}, defaultWeather: 'calmo', weatherShiftEveryRounds: 0,
+      tileEventRate: 0, lootTable: [], cardDrops: CARD_DROPS,
+      rooms: [room('s1'), room('s2'), room('chefe')] };
+    for (var k in (extra || {})) if (extra.hasOwnProperty(k)) d[k] = extra[k];
+    return d;
+  }
   DATA.dungeons = [
-    { id: 't-dung-0', name: 'Cova Rasa', theme: 'teste', description: '—', difficulty: 1, order: 0,
-      palette: {}, defaultWeather: 'calmo', weatherShiftEveryRounds: 0, tileEventRate: 0,
+    dung('t-dung-0', 'Cova Rasa', 0, {                     // índice 0 · order 1
       lootTable: [{ itemId: 't-peito-vida', weight: 30, minRoom: 0 },
-                  { itemId: 't-relic-especial', weight: 5, minRoom: 2 }],
-      cardDrops: CARD_DROPS, rooms: [room('s1'), room('s2'), room('chefe')] },
-    { id: 't-dung-4', name: 'Fundo do Poço', theme: 'teste', description: '—', difficulty: 5, order: 4,
-      palette: {}, defaultWeather: 'calmo', weatherShiftEveryRounds: 0, tileEventRate: 0,
-      lootTable: [{ itemId: 't-peito-epico', weight: 10, minRoom: 0 }],
-      cardDrops: CARD_DROPS, rooms: [room('s1'), room('s2'), room('chefe')] },
-    { id: 't-dung-vazio', name: 'Sala Seca', theme: 'teste', description: '—', difficulty: 2, order: 2,
-      palette: {}, defaultWeather: 'calmo', weatherShiftEveryRounds: 0, tileEventRate: 0,
-      lootTable: [], cardDrops: [], rooms: [room('s1'), room('s2'), room('chefe')] }
+                  { itemId: 't-relic-especial', weight: 5, minRoom: 2 }] }),
+    dung('t-dung-1', 'Segundo Fecho', 1),                  // índice 1 · order 2
+    dung('t-dung-2', 'Terceiro Fecho', 2),                 // índice 2 · order 3
+    dung('t-dung-3', 'Quarto Fecho', 3),                   // índice 3 · order 4
+    dung('t-dung-4', 'Fundo do Poço', 4, {                 // índice 4 · order 5
+      lootTable: [{ itemId: 't-peito-epico', weight: 10, minRoom: 0 }] }),
+    dung('t-dung-vazio', 'Sala Seca', 5, { cardDrops: [] })  // índice 5 · order 6
   ];
 
   // ====================================================== DUBLÊ DE ENGINE ====
@@ -517,18 +527,50 @@
     eq(h.xp, 0, 'xp inicial');
     eq(h.level, 1, 'nível inicial');
     eq(h.pet, null, 'pet inicial');
-    eq(h.items.pa, null, 'espaço pa');
-    eq(h.items.especial, null, 'espaço especial');
+    eq(h.items.punho, null, 'espaço punho');
+    eq(h.items.lume, null, 'espaço lume');
     eq(h.spells.length, 3, 'cache de feitiços = 3 base');
   });
 
-  t('nenhum campo `pm` sobrou em Progress nem em Game', function () {
-    var txt = String(P.effectiveStats) + String(P.battleParty) + String(G.update) + String(G.timeLeft);
-    ok(txt.indexOf('.pm') < 0 && txt.indexOf("'pm'") < 0 && txt.indexOf('"pm"') < 0,
-      'referência a `pm` encontrada no código-fonte das funções');
+  t('a nomenclatura antiga não sobrou em NENHUMA linha dos meus fontes', function () {
+    // varre o próprio arquivo por XHR síncrono (na file:// o navegador recusa:
+    // aí o teste cai na checagem das funções em memória).
+    var arquivos = ['../js/core/progress.js', '../js/core/game.js'];
+    var lidos = 0;
+    for (var f = 0; f < arquivos.length; f++) {
+      var txt = null;
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', arquivos[f] + '?scan=' + Date.now(), false);
+        xhr.send(null);
+        if (xhr.status === 200 || xhr.status === 0) txt = xhr.responseText;
+      } catch (e) { txt = null; }
+      if (!txt) continue;
+      lidos++;
+      var linhas = txt.split('\n');
+      for (var i = 0; i < linhas.length; i++) {
+        if (/\bpm\b/i.test(linhas[i])) {
+          throw new Error(arquivos[f] + ' linha ' + (i + 1) + ' ainda diz "pm": ' + linhas[i].trim());
+        }
+      }
+    }
+    if (!lidos) {   // sem XHR (file://): checa ao menos o código em memória
+      var src = String(P.effectiveStats) + String(P.equip) + String(G.update);
+      ok(!/\bpm\b/i.test(src), 'referência a `pm` no código das funções');
+    }
     var st = P.effectiveStats(TANK);
     ok(st.pm === undefined, 'effectiveStats não pode expor pm');
     ok(typeof st.pp === 'number', 'effectiveStats precisa expor pp');
+  });
+
+  t('os 4 espaços usam os nomes do §9-C', function () {
+    fresh();
+    eq(P.SLOTS.join(','), 'punho,passo,casca,lume', 'ids dos espaços');
+    var it = P.hero(TANK).items;
+    ok(it.punho === null && it.passo === null && it.casca === null && it.lume === null,
+      'a ficha nasce com os 4 espaços novos');
+    ok(it.pa === undefined && it.pp === undefined && it.vida === undefined && it.especial === undefined,
+      'nenhum nome de planilha sobrou na ficha');
   });
 
   t('save/load: nível, elemento, itens, cartas e pedras sobrevivem', function () {
@@ -548,7 +590,7 @@
     var h = P.hero(TANK);
     eq(h.level, 7, 'nível restaurado');
     eq(h.element, 'fogo', 'elemento restaurado');
-    eq(h.items.vida, 't-peito-vida', 'item equipado restaurado');
+    eq(h.items.casca, 't-peito-vida', 'item equipado restaurado');
     eq(h.pet, 't-pet-fogo', 'pet restaurado');
     eq(P.state.inventory.length, 2, 'inventário restaurado (equipado continua no saco)');
     eq(P.itemLevel('t-peito-vida'), 1, 'nível de forja restaurado');
@@ -599,8 +641,8 @@
     eq(h.element, 'neutro', 'elemento inválido descartado');
     eq(h.xp, 0, 'xp negativo saneado');
     eq(h.level, 1, 'nível recalculado pelo xp');
-    eq(h.items.pa, null, 'item inexistente descartado');
-    eq(h.items.pp, null, 'item de espaço errado descartado');
+    eq(h.items.punho, null, 'item inexistente descartado');
+    eq(h.items.passo, null, 'item de espaço errado descartado');
     eq(h.pet, null, 'pet inexistente descartado');
     ok(!P.state.heroes['herói-sem-classe'], 'herói de classe inexistente descartado');
     ok(!P.state.heroes['lixo'], 'entrada não-objeto descartada');
@@ -631,7 +673,27 @@
     eq(P.state.inventory.length, 3, 'strings viraram entradas e repetidos fundiram');
     eq(P.itemLevel('t-bota-pp'), 0, 'nível 0 por compatibilidade');
     ok(P.invIndexOf('t-peito-epico') >= 0, 'item equipado voltou ao saco único');
-    eq(P.hero(TANK).items.vida, 't-peito-epico', 'segue equipado');
+    eq(P.hero(TANK).items.casca, 't-peito-epico', 'segue equipado');
+  });
+
+  t('save antigo com espaços pa/pp/vida/especial migra para os nomes novos', function () {
+    writeSave(JSON.stringify({
+      unlockedClasses: [TANK, CURA],
+      heroes: { 't-tanque': { classId: TANK, xp: 0, level: 1,
+        items: { pa: 't-anel-pa', pp: 't-bota-pp', vida: 't-peito-vida', especial: 't-relic-especial' },
+        pet: null } },
+      inventory: [], pets: [], cards: {}, stones: {}
+    }));
+    P.state = null;
+    P.load();
+    var it = P.hero(TANK).items;
+    eq(it.punho, 't-anel-pa', 'pa virou punho');
+    eq(it.passo, 't-bota-pp', 'pp virou passo');
+    eq(it.casca, 't-peito-vida', 'vida virou casca');
+    eq(it.lume, 't-relic-especial', 'especial virou lume');
+    ok(it.pa === undefined, 'o nome antigo não sobrevive');
+    eq(P.state.inventory.length, 4, 'os 4 itens voltaram ao saco único');
+    has(P.spellsFor(TANK), 't-feitico-item', 'o feitiço do lume continua valendo');
   });
 
   t('save com o MESMO item equipado em dois heróis é saneado', function () {
@@ -646,8 +708,8 @@
     P.state = null;
     P.load();
     var donos = 0;
-    if (P.hero(TANK).items.vida === 't-peito-vida') donos++;
-    if (P.hero(CURA).items.vida === 't-peito-vida') donos++;
+    if (P.hero(TANK).items.casca === 't-peito-vida') donos++;
+    if (P.hero(CURA).items.casca === 't-peito-vida') donos++;
     eq(donos, 1, 'só um herói pode ficar com a peça');
     eq(P.equippedBy('t-peito-vida'), TANK, 'o primeiro do save fica com ela');
   });
@@ -682,7 +744,7 @@
     try {
       P.load();
       P.addXp('qualquer', 100); P.xpInfo('qualquer'); P.spellsFor('qualquer');
-      P.effectiveStats('qualquer'); P.equip('qualquer', 'nada'); P.unequip('qualquer', 'pa');
+      P.effectiveStats('qualquer'); P.equip('qualquer', 'nada'); P.unequip('qualquer', 'punho');
       P.equipPet('qualquer', 'nada'); P.rollDrops('nada', 0, 1); P.rollCards('nada', 2, 1);
       P.rollPet('nada', 2, 1); P.battleParty(['qualquer']); P.chooseElement('qualquer', 'fogo');
       P.pendingElementChoice('qualquer'); P.addCards('qualquer', 5); P.cardInfo('qualquer');
@@ -866,7 +928,7 @@
     eq(sp.length, antes + 1, 'um feitiço a mais');
     has(sp, 't-feitico-item', 'feitiço do item');
     eq(P.hero(TANK).spells.length, antes + 1, 'cache de feitiços atualizado');
-    P.unequip(TANK, 'especial');
+    P.unequip(TANK, 'lume');
     hasNot(P.spellsFor(TANK), 't-feitico-item', 'some ao desequipar');
   });
 
@@ -896,15 +958,15 @@
     eq(P.state.inventory[0].level, 0, 'nível de forja 0');
     eq(P.equip(TANK, 't-peito-vida'), true, 'equipa');
     eq(P.state.inventory.length, 1, 'equipar NÃO tira do saco único');
-    eq(P.hero(TANK).items.vida, 't-peito-vida', 'foi para o espaço certo');
+    eq(P.hero(TANK).items.casca, 't-peito-vida', 'foi para o espaço certo');
     eq(P.equippedBy('t-peito-vida'), TANK, 'saber quem está usando');
   });
 
   t('o mesmo item não pode ser equipado por dois heróis', function () {
     eq(P.equip(CURA, 't-peito-vida'), false, 'segundo herói recusado');
-    eq(P.hero(CURA).items.vida, null, 'espaço do segundo continua vazio');
+    eq(P.hero(CURA).items.casca, null, 'espaço do segundo continua vazio');
     eq(P.equippedBy('t-peito-vida'), TANK, 'dono continua sendo o primeiro');
-    eq(P.unequip(TANK, 'vida'), true, 'primeiro solta a peça');
+    eq(P.unequip(TANK, 'casca'), true, 'primeiro solta a peça');
     eq(P.equippedBy('t-peito-vida'), null, 'ninguém usando');
     eq(P.equip(CURA, 't-peito-vida'), true, 'agora o segundo pode');
     eq(P.equippedBy('t-peito-vida'), CURA, 'novo dono');
@@ -927,10 +989,10 @@
     giveAndEquip(TANK, 't-peito-vida');
     giveAndEquip(TANK, 't-relic-especial');
     var it = P.hero(TANK).items;
-    eq(it.pa, 't-anel-pa', 'espaço pa');
-    eq(it.pp, 't-bota-pp', 'espaço pp');
-    eq(it.vida, 't-peito-vida', 'espaço vida');
-    eq(it.especial, 't-relic-especial', 'espaço especial');
+    eq(it.punho, 't-anel-pa', 'espaço punho');
+    eq(it.passo, 't-bota-pp', 'espaço passo');
+    eq(it.casca, 't-peito-vida', 'espaço casca');
+    eq(it.lume, 't-relic-especial', 'espaço lume');
   });
 
   t('item com slot fora do contrato é recusado', function () {
@@ -945,7 +1007,7 @@
     giveAndEquip(TANK, 't-anel-pa');
     P.addItem('t-anel-pa-exagerado');
     eq(P.equip(TANK, 't-anel-pa-exagerado'), true, 'troca');
-    eq(P.hero(TANK).items.pa, 't-anel-pa-exagerado', 'novo equipado');
+    eq(P.hero(TANK).items.punho, 't-anel-pa-exagerado', 'novo equipado');
     eq(P.equippedBy('t-anel-pa'), null, 'o anterior ficou livre');
     eq(P.equip(CURA, 't-anel-pa'), true, 'e o outro herói pode usá-lo');
   });
@@ -953,9 +1015,9 @@
   t('unequip: espaço inválido/vazio recusa', function () {
     fresh();
     giveAndEquip(TANK, 't-peito-vida');
-    eq(P.unequip(TANK, 'vida'), true, 'desequipa');
-    eq(P.hero(TANK).items.vida, null, 'espaço vazio');
-    eq(P.unequip(TANK, 'vida'), false, 'espaço já vazio');
+    eq(P.unequip(TANK, 'casca'), true, 'desequipa');
+    eq(P.hero(TANK).items.casca, null, 'espaço vazio');
+    eq(P.unequip(TANK, 'casca'), false, 'espaço já vazio');
     eq(P.unequip(TANK, 'chapeu'), false, 'espaço inexistente');
     eq(P.unequip(TANK, 'pet'), false, 'pet não é um dos 4 espaços');
   });
@@ -1000,13 +1062,61 @@
     eq(st.resists.fogo, 0, 'resistência');
   });
 
-  t('perLevel soma (nível-1) vezes em hp e power', function () {
-    setLevel(TANK, 10);
+  t('ganho por nível ANTES da escolha do elemento é poder genérico', function () {
+    fresh();
     var base = D.classes[TANK].stats;
+    setLevel(TANK, 4);                       // 3 subidas, todas genéricas
     var st = P.effectiveStats(TANK);
-    eq(st.hp, base.hp + 6 * 9, 'hp por nível');
-    eq(st.power, base.power + 3 * 9, 'power por nível');
+    eq(st.hp, base.hp + 5 * 3, '+5 PV por nível');
+    eq(st.power, base.power + 3 * 3, '+3 de poder genérico por nível');
+    eq(st.elemPower, 0, 'nenhum poder elemental antes da escolha');
+    eq(st.element, 'neutro', 'elemento do herói vem nos stats');
     eq(st.pa, base.pa, 'pa não cresce por nível');
+  });
+
+  t('DEPOIS da escolha, cada nível vira poder ELEMENTAL (§9-C)', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    setLevel(TANK, 5);
+    P.chooseElement(TANK, 'fogo');
+    var st5 = P.effectiveStats(TANK);        // 4 subidas: 3 genéricas + 1 elemental
+    eq(st5.hp, base.hp + 5 * 4, 'PV de todas as subidas');
+    eq(st5.power, base.power + 3 * 3, 'poder genérico congelado nas 3 primeiras');
+    eq(st5.elemPower, 3, 'a subida do nível 5 virou poder elemental');
+    eq(st5.element, 'fogo', 'elemento escolhido nos stats');
+
+    setLevel(TANK, 30); P.hero(TANK).element = 'fogo';
+    var st30 = P.effectiveStats(TANK);       // 29 subidas: 3 genéricas + 26 elementais
+    eq(st30.hp, base.hp + 5 * 29, 'PV no nível 30');
+    eq(st30.power, base.power + 9, 'poder genérico continua o mesmo');
+    eq(st30.elemPower, 3 * 26, 'poder elemental acumulado');
+  });
+
+  t('quem passa do nível 5 SEM escolher continua ganhando poder genérico', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    setLevel(TANK, 30);                      // sem elemento
+    var st = P.effectiveStats(TANK);
+    eq(st.hp, base.hp + 5 * 29, 'PV igual');
+    eq(st.power, base.power + 3 * 29, 'tudo genérico — ninguém perde progressão');
+    eq(st.elemPower, 0, 'sem poder elemental');
+    // e ao escolher, as subidas passam a valer como elementais
+    P.chooseElement(TANK, 'agua');
+    var st2 = P.effectiveStats(TANK);
+    eq(st2.power, base.power + 9, 'poder genérico volta às 3 primeiras subidas');
+    eq(st2.elemPower, 3 * 26, 'o resto virou poder de água');
+    eq(st2.element, 'agua', 'elemento nos stats');
+  });
+
+  t('battleParty leva elemPower e element ao Engine', function () {
+    fresh();
+    setLevel(TANK, 12);
+    P.chooseElement(TANK, 'terra');
+    var p = P.battleParty([TANK])[0];
+    eq(p.element, 'terra', 'elemento no grupo');
+    eq(p.elemPower, 3 * 8, 'elemPower no grupo (8 subidas elementais)');
+    eq(p.stats.elemPower, p.elemPower, 'mesmo valor dentro de stats');
+    eq(p.stats.element, 'terra', 'element dentro de stats');
   });
 
   t('bônus dos 4 itens entram (hp, pa, pp, power, dodge, lock, resists)', function () {
@@ -1086,7 +1196,7 @@
     var st = P.effectiveStats(TANK);
     eq(st.hp, base.hp + 10, 'só o bônus da peça, nenhum bônus de conjunto');
     giveAndEquip(TANK, 't-limo-pa');    // 2 peças de limo... mas o espaço pa já é da brasa
-    eq(P.hero(TANK).items.pa, 't-limo-pa', 'a peça de limo tomou o espaço pa');
+    eq(P.hero(TANK).items.punho, 't-limo-pa', 'a peça de limo tomou o espaço pa');
     var st2 = P.effectiveStats(TANK);
     eq(st2.hp, base.hp + 10 + 100, 'agora 2 peças de limo: +100 hp');
   });
@@ -1129,13 +1239,13 @@
   t('classe + nível + itens + pet + estrelas somam tudo junto', function () {
     fresh();
     var base = D.classes[TANK].stats;
-    setLevel(TANK, 11);                    // +60 hp, +30 power
+    setLevel(TANK, 11);                    // 10 subidas: +50 hp, +30 power (sem elemento)
     giveAndEquip(TANK, 't-peito-vida');    // +40 hp, resist fogo 10
     P.addPet('t-pet-fogo');
     P.equipPet(TANK, 't-pet-fogo');        // +10 hp, +1 pa, +5 power, resist fogo 5
     P.addCards(TANK, STAR_COSTS[0]);       // ★1: +15 hp
     var st = P.effectiveStats(TANK);
-    eq(st.hp, base.hp + 60 + 40 + 10 + 15, 'hp total');
+    eq(st.hp, base.hp + 50 + 40 + 10 + 15, 'hp total');
     eq(st.power, base.power + 30 + 5, 'power total');
     eq(st.pa, base.pa + 1, 'pa total');
     eq(st.resists.fogo, 15, 'resistências somadas');
@@ -1258,6 +1368,32 @@
     eq(contagem['t-bruxo'] || 0, 0, 'minDungeon 4 não cai no calabouço 0');
     eq(contagem['t-manco'] || 0, 0, 'dropWeight 0 nunca cai');
     eq(total, (contagem['t-cura'] || 0) + (contagem[TANK] || 0), 'só as cartas elegíveis caem');
+  });
+
+  t('minDungeon é 0-BASED: compara com o ÍNDICE, nunca com `order`', function () {
+    fresh();
+    // t-dung-0 tem índice 0 e order 1. A carta do arqueiro pede minDungeon 1.
+    // Se o código comparasse com `order` (=1), ela vazaria já no primeiro andar.
+    eq(D.dungeons[0].order, 1, 'o calabouço raso tem order 1 (1-based)');
+    eq(D.cards['t-arco'].minDungeon, 1, 'a carta do arqueiro pede o segundo andar');
+    var vazou = 0, caiu = 0;
+    semSave(function () {
+      for (var i = 0; i < 2000; i++) {
+        var cs = P.rollCards('t-dung-0', 2, 1);
+        for (var k = 0; k < cs.length; k++) { caiu++; if (cs[k].classId === 't-arco') vazou++; }
+      }
+    });
+    ok(caiu > 300, 'amostra suficiente (' + caiu + ')');
+    eq(vazou, 0, 'a carta de minDungeon 1 NÃO pode cair no calabouço de índice 0');
+    // e no índice 1 (order 2) ela passa a cair
+    var apareceu = 0;
+    semSave(function () {
+      for (var j = 0; j < 2000; j++) {
+        var cs2 = P.rollCards('t-dung-1', 2, 1);
+        for (var k2 = 0; k2 < cs2.length; k2++) if (cs2[k2].classId === 't-arco') apareceu++;
+      }
+    });
+    ok(apareceu > 0, 'no índice 1 a carta do arqueiro aparece (' + apareceu + ')');
   });
 
   t('classe mais forte = carta mais rara (4000 sorteios)', function () {
@@ -1544,7 +1680,7 @@
     eq(p.element, 'agua', 'element');
     eq(p.level, 12, 'level');
     eq(p.pet, 't-pet-fogo', 'pet');
-    eq(p.items.pa, 't-anel-pa', 'items');
+    eq(p.items.punho, 't-anel-pa', 'items');
     eq(p.stars, 1, 'estrelas da classe');
     eq(p.spells.length, 3 + 3, 'spells (3 base + 3 do caminho até o nível 12)');
     eq(p.stats.pa, P.effectiveStats(TANK).pa, 'stats batem com effectiveStats');
@@ -2090,7 +2226,7 @@
       P.addXp(TANK, 200);
       eq(P.hero(TANK).level, 3, 'progressão continua na memória (200 xp = nível 3)');
       giveAndEquip(TANK, 't-peito-vida');
-      eq(P.hero(TANK).items.vida, 't-peito-vida', 'equipar funciona sem storage');
+      eq(P.hero(TANK).items.casca, 't-peito-vida', 'equipar funciona sem storage');
       P.addCards('t-invo', 10);
       ok(P.isClassUnlocked('t-invo'), 'cartas funcionam sem storage');
       P.addStones('st-terra', 5);

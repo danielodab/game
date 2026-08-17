@@ -232,6 +232,14 @@
     sp('t-ring2', { aoe: { shape: 'ring', size: 2 }, range: { min: 0, max: 8, line: false, los: false },
       effects: [{ type: 'damage', element: 'neutro', min: 10, max: 10 }] });
 
+    // ---- v2.2: ganho elemental por nível (fora de T_SPELLS de propósito — os
+    // testes empurram o id na unidade, para não mexer nos planos da IA)
+    sp('t-water20', { element: 'agua', effects: [{ type: 'damage', element: 'agua', min: 20, max: 20 }] });
+    sp('t-fire-poison', { element: 'fogo', effects: [{ type: 'poison', element: 'fogo', min: 5, max: 5, duration: 2 }] });
+    sp('t-fire-chain', { element: 'fogo',
+      effects: [{ type: 'chain', jumps: 1, falloff: 0.5, element: 'fogo', min: 40, max: 40 }] });
+    sp('t-fire-mark', { element: 'fogo', effects: [{ type: 'mark', value: 5, duration: 5, max: 3 }] });
+
     // ---- feitiços de outras fontes (teste do merge de Engine.spell)
     sp('t-mon-bite', { paCost: 3, range: { min: 1, max: 1, line: false, los: true },
       effects: [{ type: 'damage', element: 'neutro', min: 5, max: 5 }] }, D.monsterSpells);
@@ -808,6 +816,146 @@
       var hp0 = d.hp;
       E.cast(st, h.uid, 't-fire20', d.x, d.y);
       eq(hp0 - d.hp, 24, '20 * 1.5 * 0.8 = 24');
+    });
+
+    // ---------------------------------------------- ADENDO v2.2: ganho elemental
+    // Prepara um herói com elemento e `elemPower` cravados na mão (o caminho
+    // oficial é Progress.battleParty; aqui interessa a CONTA, não a origem).
+    function elemHero(element, elemPower, power) {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.element = element;
+      h.elemPower = elemPower;
+      h.power = power || 0;
+      h.pa = 30;
+      h.spells.push('t-water20', 't-fire-poison', 't-fire-chain', 't-fire-mark');
+      return { st: st, h: h, d: byDef(st, 't-dummy', 0) };
+    }
+
+    t('v2.2 elemPower: feitiço do MESMO elemento do conjurador recebe o bônus', function () {
+      var f = elemHero('fogo', 50, 0);
+      var hp0 = f.d.hp;
+      E.cast(f.st, f.h.uid, 't-fire20', f.d.x, f.d.y);
+      eq(hp0 - f.d.hp, 30, '20 * (100+0+50)/100 = 30');
+      eq(E.elementalBonus(f.h, E.spell('t-fire20')), 50, 'bônus exposto pela engine');
+    });
+
+    t('v2.2 elemPower: feitiço de elemento DIFERENTE não recebe o bônus', function () {
+      var f = elemHero('fogo', 50, 0);
+      var hp0 = f.d.hp;
+      E.cast(f.st, f.h.uid, 't-water20', f.d.x, f.d.y);
+      eq(hp0 - f.d.hp, 20, 'feitiço de água: 20 puros, sem o bônus de fogo');
+      eq(E.elementalBonus(f.h, E.spell('t-water20')), 0, 'bônus zerado');
+      hp0 = f.d.hp;
+      E.cast(f.st, f.h.uid, 't-nuke10', f.d.x, f.d.y);
+      eq(hp0 - f.d.hp, 10, 'feitiço neutro também fica de fora');
+    });
+
+    t('v2.2 elemPower: soma com power e convive com resistência e marcas', function () {
+      var f = elemHero('fogo', 50, 50);
+      f.d.resists.fogo = 20;
+      // duas marcas de 5% => 1.10
+      f.h.spells.push('t-mark');
+      E.cast(f.st, f.h.uid, 't-mark', f.d.x, f.d.y);
+      E.cast(f.st, f.h.uid, 't-mark', f.d.x, f.d.y);
+      eq(E.markStacks(f.d), 2, 'duas pilhas');
+      var hp0 = f.d.hp;
+      E.cast(f.st, f.h.uid, 't-fire20', f.d.x, f.d.y);
+      // 20 * (100+50+50)/100 * (100-20)/100 * 1.10 = 35.2 => 35
+      eq(hp0 - f.d.hp, 35, '20 * 2.0 * 0.8 * 1.10 = 35');
+    });
+
+    t('v2.2 elemPower: sem o bônus, a mesma conta cai para o valor da v1', function () {
+      var f = elemHero('agua', 50, 50);      // herói de ÁGUA lançando fogo
+      f.d.resists.fogo = 20;
+      var hp0 = f.d.hp;
+      E.cast(f.st, f.h.uid, 't-fire20', f.d.x, f.d.y);
+      eq(hp0 - f.d.hp, 24, '20 * 1.5 * 0.8 = 24 (fórmula da v1 intacta)');
+    });
+
+    t('v2.2 elemPower: chain leva o bônus para todos os saltos', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      h.element = 'fogo'; h.elemPower = 50; h.power = 0; h.pa = 30;
+      h.spells.push('t-fire-chain');
+      var d1 = byDef(st, 't-dummy', 0), d2 = byDef(st, 't-dummy', 1);
+      d1.x = h.x + 2; d1.y = h.y;
+      d2.x = h.x + 3; d2.y = h.y;          // dentro do alcance de salto (3)
+      var a0 = d1.hp, b0 = d2.hp;
+      E.cast(st, h.uid, 't-fire-chain', d1.x, d1.y);
+      eq(a0 - d1.hp, 60, 'alvo: 40 * 1.5 = 60');
+      eq(b0 - d2.hp, 30, 'salto: 40 * 1.5 * 0.5 = 30');
+    });
+
+    t('v2.2 elemPower: veneno congela o bônus no cast e tica com ele', function () {
+      var f = elemHero('fogo', 100, 0);
+      E.cast(f.st, f.h.uid, 't-fire-poison', f.d.x, f.d.y);
+      var pz = null;
+      for (var i2 = 0; i2 < f.d.effects.length; i2++) {
+        if (f.d.effects[i2].type === 'poison') pz = f.d.effects[i2];
+      }
+      ok(!!pz, 'veneno aplicado');
+      eq(pz.sourcePower, 100, 'poder congelado = power(0) + elemPower(100)');
+      // e o tique usa esse número no início do turno da vítima
+      var hp0 = f.d.hp;
+      for (var g = 0; g < 40; g++) {
+        E.endTurn(f.st);
+        if (E.activeUnit(f.st) === f.d) break;
+      }
+      eq(hp0 - f.d.hp, 10, 'tique: 5 * (100+100)/100 = 10');
+    });
+
+    t('v2.2 elemPower: monstro/pet sem o campo não quebra (bônus 0)', function () {
+      var st = arena(0, { a: 't-foe', b: 't-dummy' });
+      var foe = byDef(st, 't-foe');
+      eq(E.effElemPower(foe), 0, 'monstro nasce com elemPower 0');
+      delete foe.elemPower;                       // dado antigo, sem o campo
+      eq(E.effElemPower(foe), 0, 'ausente também vale 0');
+      eq(E.elementalBonus(foe, E.spell('t-mon-nuke10')), 0, 'sem bônus');
+      var h = byHero(st, 't-h1');
+      var hp0 = h.hp;
+      foe.pa = 10;
+      E.cast(st, foe.uid, 't-mon-nuke10', h.x, h.y);
+      eq(hp0 - h.hp, 10, 'dano puro, como na v1');
+    });
+
+    t('v2.2 elemPower: createBattle deriva o ganho por nível de quem escolheu', function () {
+      var L = D.leveling || {};
+      var per = L.perLevel || { hp: 5, power: 3 };
+      var perEl = L.perLevelElement || { hp: 5, elemPower: 3 };
+      var choice = L.elementChoiceLevel || 5;
+      var base = D.classes['t-alfa'].stats;
+
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 0, [P({ element: 'fogo', level: 30 })]);
+      var h = byHero(st, 't-h1');
+      var genSteps = Math.min(30, choice) - 1;
+      var elSteps = 30 - choice;
+      eq(h.elemPower, (perEl.elemPower || 0) * elSteps, 'elemPower acumulado desde a escolha');
+      eq(h.power, base.power + (per.power || 0) * genSteps, 'poder genérico congela na escolha');
+      eq(h.hpMax, base.hp + (per.hp || 0) * genSteps + (perEl.hp || 0) * elSteps, 'PV sobe sempre');
+      eq(E.elementalBonus(h, E.spell('t-fire20')), h.elemPower, 'bônus vale no fogo');
+      eq(E.elementalBonus(h, E.spell('t-nuke10')), 0, 'e não vale no neutro');
+
+      // quem nunca escolheu fica só com o poder genérico, sem elemPower
+      E.events.length = 0;
+      var st2 = E.createBattle('test-arena-v2', 0, [P({ element: 'neutro', level: 30 })]);
+      var h2 = byHero(st2, 't-h1');
+      eq(h2.elemPower, 0, 'sem elemento, sem elemPower');
+      eq(h2.power, base.power + (per.power || 0) * 29, 'genérico até o fim');
+    });
+
+    t('v2.2 elemPower: `stats` vindos de Progress têm prioridade sobre a derivação', function () {
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 0, [
+        P({ element: 'fogo', level: 30,
+            stats: { hp: 111, pa: 7, pp: 4, initiative: 12, power: 9,
+                     elemPower: 123, dodge: 0, lock: 0, resists: zeroRes() } })
+      ]);
+      var h = byHero(st, 't-h1');
+      eq(h.elemPower, 123, 'elemPower veio pronto');
+      eq(h.power, 9, 'power veio pronto');
+      eq(h.hpMax, 111, 'a engine não escala por cima do que Progress entregou');
     });
 
     t('efeito shield: absorve antes do PV; evento shield emitido', function () {
@@ -1876,6 +2024,52 @@
       } finally {
         D.fusionForms['t-alfa+t-beta'] = saved;
       }
+    });
+
+    t('ADENDO v2.2: elemPower da fusão = MÉDIA e vale para os DOIS elementos', function () {
+      var st = fusionBattle('ar', 'agua', 10, 20);
+      var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+      a.elemPower = 40; b.elemPower = 20;
+      a.power = 0;
+      F.declare(st, a.uid, b.uid);
+      E.endTurn(st);
+      eq(a.kind, 'fusion', 'fundiu');
+      eq(a.elemPower, 30, 'média de 40 e 20');
+      // vale para os DOIS elementos da mistura, e só para eles
+      eq(E.elementalBonus(a, { element: 'ar' }), 30, "'@A' (ar) recebe o bônus");
+      eq(E.elementalBonus(a, { element: 'agua' }), 30, "'@B' (agua) recebe o bônus");
+      eq(E.elementalBonus(a, { element: 'fogo' }), 0, 'elemento de fora não recebe');
+      eq(E.elementalBonus(a, { element: 'neutro' }), 0, 'neutro não recebe');
+      // e a conta real: o feitiço composto é de elemento 'ar' (elements[0])
+      var s = E.spell(a.spells[0]);
+      eq(s.element, 'ar', 'o feitiço de fusão é do primeiro elemento da mistura');
+      eq(E.elementalBonus(a, s), 30, 'o feitiço composto leva o bônus');
+      toHero(st, 't-h1');
+      var foe = byDef(st, 't-dummy');
+      foe.x = a.x + 1; foe.y = a.y;
+      foe.resists = zeroRes();
+      var hp0 = foe.hp;
+      E.cast(st, a.uid, s.id, foe.x, foe.y);
+      // dano esperado: cada efeito damage do composto * (100+0+30)/100
+      var expected = 0;
+      for (var i2 = 0; i2 < s.effects.length; i2++) {
+        if (s.effects[i2].type === 'damage') {
+          expected += Math.round(s.effects[i2].min * 1.30);
+        }
+      }
+      ok(expected > 0, 'o composto tem dano');
+      eq(hp0 - foe.hp, expected, 'os dois elementos do composto usam o bônus médio');
+    });
+
+    t('ADENDO v2.2: fusão de quem não tem elemPower continua em zero', function () {
+      var st = fusionBattle('ar', 'agua', 10, 20);
+      var a = byHero(st, 't-h1'), b = byHero(st, 't-h2');
+      delete a.elemPower; delete b.elemPower;    // dado antigo, sem o campo
+      F.declare(st, a.uid, b.uid);
+      E.endTurn(st);
+      eq(a.kind, 'fusion', 'fundiu sem quebrar');
+      eq(a.elemPower, 0, 'média de nada é zero');
+      eq(E.elementalBonus(a, { element: 'ar' }), 0, 'sem bônus');
     });
 
     // ADENDO v2.1: o grupo é de 1 ou 2 heróis. Com 2, a fusão pode transformar

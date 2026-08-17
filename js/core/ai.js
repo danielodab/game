@@ -33,6 +33,9 @@ var JOGO = (typeof window !== 'undefined')
  *    (1 − chance de esquiva), usando `Engine.dodgeChance`.
  *  - A IA NÃO declara fusões: a Fusão é uma decisão do jogador (o auto-play
  *    IA×IA continua determinístico e comparável com a v1).
+ *  - GANHO ELEMENTAL (v2.2): o valor de um feitiço de dano usa o MESMO
+ *    `Engine.elementalBonus` da engine, então a IA prefere naturalmente os
+ *    feitiços do próprio caminho elemental — sem regra ad hoc.
  * ==========================================================================*/
 
 (function () {
@@ -195,6 +198,8 @@ var JOGO = (typeof window !== 'undefined')
 
     var effs = spell.effects || [];
     var value = 0;
+    // v2.2: bônus elemental do conjurador para ESTE feitiço (0 se não bater)
+    var elemBonus = E().elementalBonus ? E().elementalBonus(unit, spell) : 0;
     for (var e = 0; e < effs.length; e++) {
       var eff = effs[e];
       var t, u2, dmg;
@@ -203,7 +208,7 @@ var JOGO = (typeof window !== 'undefined')
           for (t = 0; t < unitsHit.length; t++) {
             u2 = unitsHit[t];
             if (u2 === unit) continue; // engine exclui o conjurador
-            dmg = expectDamage(unit, u2, eff);
+            dmg = expectDamage(unit, u2, eff, elemBonus);
             if (u2.side !== unit.side) {
               if (isInvisible(u2)) continue;
               value += dmg;
@@ -220,7 +225,7 @@ var JOGO = (typeof window !== 'undefined')
           for (t = 0; t < unitsHit.length; t++) {
             u2 = unitsHit[t];
             if (u2 === unit) continue;
-            dmg = expectDamage(unit, u2, eff) * eff.duration;
+            dmg = expectDamage(unit, u2, eff, elemBonus) * eff.duration;
             if (u2.side !== unit.side) { if (!isInvisible(u2)) value += dmg * 0.8; }
             else value -= dmg * 1.2;
           }
@@ -380,7 +385,7 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'chain':
-          value += chainValue(state, unit, eff, occ, ctx);
+          value += chainValue(state, unit, eff, occ, ctx, elemBonus);
           break;
         // teleport/swap: valor 0 — a IA não os planeja
       }
@@ -389,7 +394,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // v2: dano esperado de um raio em cadeia (alvo + saltos com falloff)
-  function chainValue(state, unit, eff, first, ctx) {
+  function chainValue(state, unit, eff, first, ctx, elemBonus) {
     if (!first || first.side === unit.side || isInvisible(first)) return 0;
     var range = E().CHAIN_JUMP_RANGE || 3;
     var falloff = eff.falloff != null ? eff.falloff : 0.7;
@@ -398,7 +403,7 @@ var JOGO = (typeof window !== 'undefined')
     for (var j = 0; j <= (eff.jumps || 0); j++) {
       if (!cur) break;
       hit[cur.uid] = true;
-      var dmg = expectDamage(unit, cur, eff) * mult;
+      var dmg = expectDamage(unit, cur, eff, elemBonus) * mult;
       total += dmg;
       if (dmg >= cur.hp + cur.shield) total += 20;
       mult *= falloff;
