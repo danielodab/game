@@ -167,9 +167,20 @@ var JOGO = (typeof window !== 'undefined')
             headSwap: { model: 'barbarian', mesh: 'Barbarian_Head' },
             headTint: '#fbfaf7', headWhite: 0.88,
             concept: 'Mago velho de barba branca, chapéu pontudo e cajado' },
+    // LADINO: o usuário pediu máscara preta na boca. O acervo não tem nenhuma
+    // peça de rosto além de cabeças, chapéus e um elmo — então a faixa é
+    // GEOMETRIA GERADA, presa ao osso da cabeça (ver `poeMascara`).
     espadachim: { model: 'rogue', show: ['Knife', 'Knife_Offhand'],
             scale: 0.97, tint: '#2f6f8f', accent: '#9be8ff', weapon: 'Knife',
-            concept: 'Ladino ágil de adagas gêmeas' },
+            faceMask: { cor: '#15181c', altura: 0.20, avanco: 0.05 },
+            // roupa preta: o corpo, braços e pernas do Ladino têm a textura
+            // clareada na direção do preto, do mesmo jeito que a barba do Bruxo
+            // vai para o branco. Tingir o material não serviria — a cor vem do
+            // atlas e multiplicar só escurece de forma suja.
+            bodyTint: { cor: '#1b1e24', forca: 0.78,
+                        malhas: ['Rogue_Body', 'Rogue_ArmLeft', 'Rogue_ArmRight',
+                                 'Rogue_LegLeft', 'Rogue_LegRight'] },
+            concept: 'Ladino ágil de adagas gêmeas, roupa preta e máscara' },
     curandeira: { model: 'knight', show: ['1H_Sword', 'Badge_Shield', 'Knight_Cape'],
             scale: 1.00, tint: '#f0c05a', accent: '#fff2c2', weapon: '1H_Sword',
             concept: 'Paladina de armadura clara e escudo de brasão' },
@@ -575,6 +586,55 @@ var JOGO = (typeof window !== 'undefined')
     return c;
   }
 
+  // ------------------------------------------------------------- MÁSCARA DE ROSTO
+  // O acervo KayKit não tem máscara nenhuma: só cabeças, chapéus e um elmo. A
+  // faixa é geometria gerada — uma casca que acompanha o terço inferior da
+  // cabeça, um fio à frente dela para não brigar por profundidade.
+  // Fica presa ao OSSO da cabeça, então acompanha toda animação sem custo.
+  function poeMascara(model, cfg) {
+    var cab = null, osso = null;
+    model.traverse(function (o) {
+      if (!cab && o.isSkinnedMesh && /_Head/.test(o.name || '')) cab = o;
+      if (!osso && o.isBone && (o.name || '').toLowerCase() === 'head') osso = o;
+    });
+    if (!cab || !osso) return null;
+    if (!cab.geometry.boundingBox) cab.geometry.computeBoundingBox();
+    var bb = cab.geometry.boundingBox;
+    var largura = (bb.max.x - bb.min.x), altura = (bb.max.y - bb.min.y);
+    var fundo = (bb.max.z - bb.min.z);
+
+    // Casca sobre a METADE DA FRENTE do terço inferior do rosto. A primeira
+    // tentativa usou a calota do FUNDO da esfera (phi perto de PI) e ela nasceu
+    // sob o queixo, escondida dentro da cabeça — invisível. O que cobre a boca é
+    // uma FAIXA no meio-baixo (phi ~0,52PI a ~0,78PI), e só na frente
+    // (theta meia-volta), senão vira um capuz dando a volta no crânio.
+    var raio = Math.max(largura, fundo) * 0.5 * (1 + (cfg.avanco || 0.06));
+    var alt = cfg.altura || 0.26;
+    var geo = new THREE.SphereGeometry(raio, 20, 14,
+      -Math.PI / 2, Math.PI,                    // só a metade da frente
+      Math.PI * 0.62, Math.PI * alt);
+    var mat = new THREE.MeshStandardMaterial({
+      color: col3(cfg.cor || '#15181c'), roughness: 0.85, metalness: 0.0
+    });
+    var m = new THREE.Mesh(geo, mat);
+    m.name = 'Rogue_FaceMask';
+    m.castShadow = true;
+
+    // posiciona no espaço do OSSO: a caixa da cabeça está no espaço de bind da
+    // malha, então convertemos pelo mundo e voltamos para o local do osso.
+    model.updateMatrixWorld(true);
+    var centro = new THREE.Vector3(
+      (bb.min.x + bb.max.x) / 2,
+      (bb.min.y + bb.max.y) / 2,        // centro do crânio: a faixa desce dele
+      (bb.min.z + bb.max.z) / 2
+    );
+    cab.localToWorld(centro);
+    osso.worldToLocal(centro);
+    m.position.copy(centro);
+    osso.add(m);
+    return m;
+  }
+
   // Clareia a TEXTURA de uma malha, puxando cada pixel para a cor pedida.
   // Cacheado por (textura, cor, força) — senão cada unidade redesenharia
   // 1024x1024 no carregamento.
@@ -691,6 +751,7 @@ var JOGO = (typeof window !== 'undefined')
       return { model: cl.model, show: cl.show.slice(), scale: cl.scale || 1,
                tint: cl.tint, accent: cl.accent, weapon: cl.weapon,
                build: cl.build || null, headTilt: cl.headTilt || 0,
+               faceMask: cl.faceMask || null, bodyTint: cl.bodyTint || null,
                headSwap: cl.headSwap || null, headTint: cl.headTint || null,
                classId: opts.classId || id, concept: cl.concept };
     }
@@ -852,6 +913,18 @@ var JOGO = (typeof window !== 'undefined')
     if (cabecaTrocada && look.headTint) {
       try { clareiaCabeca(cabecaTrocada, look.headTint, look.headWhite || 0.88); } catch (e) {}
     }
+    // ROUPA ESCURA. Aqui `tintMaterials` SERVE, ao contrário da barba branca:
+    // ele mexe em `material.color`, que MULTIPLICA a textura — e multiplicar só
+    // sabe escurecer. Para clarear precisou reescrever a textura; para escurecer
+    // a multiplicação é a ferramenta certa e custa nada.
+    if (look.bodyTint) {
+      var bt = look.bodyTint;
+      model.traverse(function (o) {
+        if (!o.isMesh && !o.isSkinnedMesh) return;
+        if (bt.malhas && bt.malhas.indexOf(o.name) < 0) return;
+        try { tintMaterials(o, bt.cor, bt.forca); } catch (e) {}
+      });
+    }
     if (elems.length > 1) {
       var e2 = col3(M.elementColor(elems[1]));
       for (var mj = 0; mj < mats.length; mj++) {
@@ -874,6 +947,7 @@ var JOGO = (typeof window !== 'undefined')
     // caixa, senão altura e raio sairiam do corpo magro.
     if (look.build) aplicaPorte(model, look.build);
     var cabecaTrocada = look.headSwap ? trocaCabeca(model, look.headSwap) : null;
+    if (look.faceMask) poeMascara(model, look.faceMask);
 
     var box = visibleBodyBox(model);
     var height = Math.max(0.6, (box.max.y - box.min.y) || 1.7);
@@ -973,7 +1047,16 @@ var JOGO = (typeof window !== 'undefined')
         var t = look.headTilt || 0;
         if (!t) return;
         var h = findBone(model, 'head');
-        if (h) h.rotation.x += t;
+        if (!h) return;
+        // SOMAR a cada quadro fazia a cabeça GIRAR sem parar: quando o clipe em
+        // curso não anima o osso da cabeça, o mixer não reescreve a rotação e a
+        // soma se acumula. Guardamos o que deixamos no quadro anterior; se o
+        // valor continuar igual, o mixer não mexeu e desfazemos antes de somar.
+        if (h.__tiltOut !== undefined && h.rotation.x === h.__tiltOut) {
+          h.rotation.x -= t;
+        }
+        h.rotation.x += t;
+        h.__tiltOut = h.rotation.x;
       },
       // introspecção (teste/depuração): QUAL clipe a cadeia de fallback escolheu
       clipFor: function (name) { var c = resolve(name, 0); return c ? c.name : null; },
