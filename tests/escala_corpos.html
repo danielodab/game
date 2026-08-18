@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Escala real dos corpos</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.5 system-ui,Segoe UI,sans-serif}
+  #cv{display:block;width:100vw;height:70vh}
+  .leg{padding:10px 16px}
+  h1{font-size:16px;margin:10px 16px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 16px 8px}
+  table{border-collapse:collapse;font-size:12px;margin:8px 16px}
+  th,td{border:1px solid #2b3542;padding:3px 9px;text-align:right}
+  th{background:#1b222c;color:#8895a6}
+  td.k{text-align:left;color:#cfe0f5}
+  #st{font:12px monospace;color:#7fe08a;margin:0 16px}
+</style>
+</head>
+<body>
+<h1>Escala real — os corpos como o jogo os monta</h1>
+<div class="sub">Sem retrato, sem corte: cada modelo na altura que ele realmente tem no tabuleiro. A régua marca 1 e 2 metros.</div>
+<div id="st">carregando…</div>
+<canvas id="cv"></canvas>
+<div class="leg"><table id="tab"></table></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+
+  function boot() {
+    var cv = document.getElementById('cv');
+    var W = cv.clientWidth || 1400, H = cv.clientHeight || 640;
+    var ren = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+    ren.setSize(W, H, false);
+    ren.setClearColor(0x0f1216, 1);
+    var sc = new THREE.Scene();
+
+    sc.add(new THREE.HemisphereLight(0xbfd4ea, 0x2b2f36, 1.15));
+    var key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(4, 9, 7); sc.add(key);
+    var rim = new THREE.DirectionalLight(0x9fc4ff, 0.8); rim.position.set(-6, 4, -5); sc.add(rim);
+
+    // quem entra na comparação
+    var lista = (Q.quem || 'sumo,arqueiro,bruxo,espadachim,curandeira,invocador,boss-gardener')
+                .split(',');
+    var M = JOGO.Models3D2;
+    var linhas = [], x = 0, maxH = 0, itens = [];
+
+    lista.forEach(function (id) {
+      var n;
+      try { n = M.unit(id, {}); } catch (e) { return; }
+      if (!n) return;
+      var b = new THREE.Box3().setFromObject(n);
+      var s = b.getSize(new THREE.Vector3());
+      // apoia no chão e centraliza em X
+      n.position.x = -( (b.min.x + b.max.x) / 2 );
+      n.position.y = -b.min.y;
+      n.position.z = -( (b.min.z + b.max.z) / 2 );
+      var g = new THREE.Group(); g.add(n);
+      itens.push({ id: id, no: g, larg: s.x, alt: s.y });
+      maxH = Math.max(maxH, s.y);
+    });
+
+    // enfileira com folga proporcional
+    var passo = 0;
+    itens.forEach(function (it) { passo = Math.max(passo, it.larg); });
+    passo = passo * 0.75 + 1.1;
+    itens.forEach(function (it, i) {
+      it.no.position.x = i * passo;
+      sc.add(it.no);
+      var C = (JOGO.DATA.classes[it.id] || {});
+      var Mo = (JOGO.DATA.monsters && JOGO.DATA.monsters[it.id]) || {};
+      linhas.push({ id: it.id, nome: C.name || Mo.name || it.id,
+                    alt: it.alt.toFixed(2), larg: it.larg.toFixed(2) });
+    });
+    x = (itens.length - 1) * passo;
+
+    // chão e régua de 1 m e 2 m
+    var chao = new THREE.Mesh(new THREE.PlaneGeometry(x + 12, 14),
+      new THREE.MeshStandardMaterial({ color: 0x1a2029, roughness: 1 }));
+    chao.rotation.x = -Math.PI / 2; chao.position.set(x / 2, 0, 0); sc.add(chao);
+    [1, 2].forEach(function (m) {
+      var g = new THREE.BufferGeometry().setFromPoints(
+        [new THREE.Vector3(-1.2, m, 0), new THREE.Vector3(x + 1.2, m, 0)]);
+      sc.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: m === 1 ? 0x39485c : 0x5b7a9c })));
+    });
+
+    var cam = new THREE.PerspectiveCamera(32, W / H, 0.1, 200);
+    var alvoY = maxH * 0.5;
+    cam.position.set(x / 2, alvoY + 0.4, Math.max(x, maxH * 2) * 1.35 + 5);
+    cam.lookAt(x / 2, alvoY, 0);
+    ren.render(sc, cam);
+
+    var t = '<tr><th class="k">quem</th><th>altura</th><th>largura</th></tr>';
+    linhas.forEach(function (l) {
+      t += '<tr><td class="k">' + l.nome + '</td><td>' + l.alt + '</td><td>' + l.larg + '</td></tr>';
+    });
+    document.getElementById('tab').innerHTML = t;
+    document.getElementById('st').textContent = 'PASS · ' + itens.length + ' modelos na escala real';
+    window.__pronto = true;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var t0 = Date.now();
+    (function espera() {
+      if (JOGO.Models3D2 && JOGO.Models3D2.isReady && JOGO.Models3D2.isReady()) return boot();
+      if (JOGO.Models3D2 && JOGO.Models3D2.load) JOGO.Models3D2.load(function () {});
+      if (Date.now() - t0 < 25000) return setTimeout(espera, 150);
+      document.getElementById('st').textContent = 'ERRO: modelos não carregaram';
+    })();
+  });
+})();
+</script>
+</body>
+</html>

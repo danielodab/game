@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Folha de aprovação — candidatos de modelo</title>
+<style>
+  html,body{margin:0;background:#11151b;color:#e8eef6;font:13px/1.45 system-ui,Segoe UI,sans-serif}
+  body.sil{background:#f3f1ea;color:#20242a}
+  #wrap{position:relative}
+  #cv{display:block}
+  h1{font:600 20px/1.2 system-ui;margin:14px 18px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 18px 10px}
+  body.sil .sub{color:#5c6470}
+  .cap{position:absolute;text-align:center;font-size:11px;line-height:1.25}
+  .cap b{display:block;font-size:12.5px;color:#fff}
+  body.sil .cap b{color:#111}
+  .cap i{display:block;font-style:normal;color:#8b98a8;font-size:10.5px}
+  body.sil .cap i{color:#5c6470}
+  .cap .lic{color:#6f7c8c;font-size:9.5px}
+  .rowlab{position:absolute;font:600 13px/1.3 system-ui;color:#ffd08a;text-align:right}
+  body.sil .rowlab{color:#8a5a12}
+  .rowlab span{display:block;font-weight:400;color:#8895a6;font-size:10.5px}
+  body.sil .rowlab span{color:#5c6470}
+  #st{font:12px monospace;color:#7fe08a;margin:0 18px 8px}
+</style>
+</head>
+<body>
+<h1 id="tit">Folha de aprovação</h1>
+<div class="sub" id="sub">carregando…</div>
+<div id="st">…</div>
+<div id="wrap"><canvas id="cv"></canvas></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+'use strict';
+var Q = {};
+location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+var SIL   = Q.sil === '1';
+var FOLHA = Q.folha || 'classes';
+var CAND  = '../assets/candidatos/quaternius_ultimate_monsters/';
+
+var CW = (FOLHA === 'chefes') ? 306 : 250, CH = 320, LAB = 152, PAD = 10, CAPH = 46;
+
+// ---------------------------------------------------------------- RECEITAS
+// Opção A: remix do KayKit — corpo/cabeça/adereços cruzados entre os 9 modelos
+// (todos partilham o MESMO rig de 41 ossos e as MESMAS matrizes de bind, então
+// peça skinned de um monta no esqueleto do outro) + passe de proporções.
+var REMIX = {
+  sumo: {
+    base: 'barbarian',
+    show: ['2H_Axe', 'Barbarian_Cape', 'Barbarian_Hat'],
+    prop: { all: 1.26, chest: [1.52, 1.04, 1.44], upperarm: [1.50, 1.06, 1.50],
+            lowerarm: [1.30, 1.0, 1.30],
+            upperleg: [1.34, 0.72, 1.34], lowerleg: [1.26, 0.74, 1.26],
+            head: [0.82, 0.82, 0.82], hips: [1.34, 1.0, 1.26] },
+    nome: 'Bárbaro — parede'
+  },
+  arqueiro: {
+    base: 'rogue_hooded',
+    show: ['2H_Crossbow', 'Rogue_Cape'],
+    prop: { all: 1.02, chest: [0.74, 1.10, 0.74], upperarm: [0.74, 1.14, 0.74],
+            lowerarm: [0.76, 1.16, 0.76],
+            upperleg: [0.78, 1.34, 0.78], lowerleg: [0.78, 1.34, 0.78],
+            head: [0.86, 0.86, 0.86], hips: [0.84, 1.0, 0.84] },
+    nome: 'Batedor — pernalta'
+  },
+  bruxo: {
+    base: 'mage',
+    show: ['2H_Staff', 'Mage_Hat', 'Mage_Cape'],
+    prop: { all: 0.96, chest: [0.84, 0.90, 0.84], upperarm: [0.78, 0.96, 0.78],
+            upperleg: [0.84, 0.84, 0.84], lowerleg: [0.84, 0.84, 0.84],
+            head: [1.34, 1.34, 1.34] },
+    nome: 'Bruxo — chapéu que anda'
+  },
+  espadachim: {
+    base: 'rogue',
+    show: ['Knife', 'Knife_Offhand'],
+    prop: { all: 0.80, chest: [0.80, 0.94, 0.80], upperarm: [0.74, 1.02, 0.74],
+            upperleg: [0.78, 1.10, 0.78], lowerleg: [0.78, 1.10, 0.78],
+            head: [0.94, 0.94, 0.94] },
+    nome: 'Ladino — dardo'
+  },
+  curandeira: {
+    base: 'knight',
+    troca: [{ de: 'mage', peca: 'Mage_Head', esconde: 'Knight_Head' },
+            { de: 'mage', peca: 'Mage_ArmLeft', esconde: 'Knight_ArmLeft' },
+            { de: 'mage', peca: 'Mage_ArmRight', esconde: 'Knight_ArmRight' }],
+    show: ['1H_Sword', 'Badge_Shield', 'Knight_Cape'],
+    prop: { all: 1.04, chest: [0.86, 1.10, 0.86], upperarm: [0.84, 1.06, 0.84],
+            upperleg: [0.86, 1.20, 0.86], lowerleg: [0.86, 1.20, 0.86],
+            head: [0.94, 0.94, 0.94], hips: [0.88, 1.0, 0.88] },
+    nome: 'Sacerdotisa — esguia'
+  },
+  invocador: {
+    base: 'mage',
+    troca: [{ de: 'barbarian', peca: 'Barbarian_ArmLeft', esconde: 'Mage_ArmLeft' },
+            { de: 'barbarian', peca: 'Barbarian_ArmRight', esconde: 'Mage_ArmRight' },
+            { de: 'barbarian', peca: 'Barbarian_Body', esconde: 'Mage_Body' },
+            { de: 'barbarian', peca: 'Barbarian_Cape' }],
+    show: ['Spellbook_open', '1H_Wand'],
+    prop: { all: 0.86, chest: [1.62, 0.94, 1.54], upperarm: [1.24, 0.86, 1.24],
+            upperleg: [1.30, 0.70, 1.30], lowerleg: [1.24, 0.72, 1.24],
+            head: [1.12, 1.12, 1.12], hips: [1.44, 1.0, 1.38] },
+    nome: 'Xamã — atarracado'
+  }
+};
+
+// Opção B: corpos do Quaternius Ultimate Monsters (arquivos em assets/candidatos)
+var UM = {
+  sumo:       { arq: 'Yeti.gltf',      nome: 'Yeti' },
+  arqueiro:   { arq: 'Cactoro.gltf',   nome: 'Cactoro' },
+  bruxo:      { arq: 'Wizard.gltf',    nome: 'Wizard' },
+  espadachim: { arq: 'Ninja.gltf',     nome: 'Ninja' },
+  curandeira: { arq: 'Monkroose.gltf', nome: 'Monkroose' },
+  invocador:  { arq: 'Tribal.gltf',    nome: 'Tribal' }
+};
+var UM2 = {
+  sumo:       { arq: 'Orc.gltf',            nome: 'Orc' },
+  arqueiro:   { arq: 'Birb.gltf',           nome: 'Birb' },
+  bruxo:      { arq: 'Mushnub_Evolved.gltf',nome: 'Mushnub Evoluído' },
+  espadachim: { arq: 'Alien.gltf',          nome: 'Alien' },
+  curandeira: { arq: 'Ghost.gltf',          nome: 'Ghost' },
+  invocador:  { arq: 'MushroomKing.gltf',   nome: 'Mushroom King' }
+};
+
+var CHEFES = [
+  { id: 'boss-gardener',  sala: 'Estufa · jardim',   cands: ['MushroomKing.gltf', 'Cactoro.gltf'] },
+  { id: 'boss-baroness',  sala: 'Cisterna · água',   cands: ['Squidle.gltf', 'Glub_Evolved.gltf'] },
+  { id: 'boss-heartforge',sala: 'Fecho · forja',     cands: ['Demon.gltf', 'BlueDemon.gltf'] },
+  { id: 'boss-windwright',sala: 'Andaimes · ar',     cands: ['Armabee_Evolved.gltf', 'Dragon.gltf'] },
+  { id: 'boss-deepknock', sala: 'Mina · terra',      cands: ['Goleling_Evolved.gltf', 'Yeti.gltf'] },
+  { id: 'boss-riftheart', sala: 'Coração · neutro',  cands: ['Dragon_Evolved.gltf', 'Ghost_Skull.gltf'] }
+];
+
+// ------------------------------------------------------------------ cena
+var ren, cam, cells = [], loader, wrap, cv;
+function makeScene() {
+  var sc = new THREE.Scene();
+  if (SIL) { sc.background = new THREE.Color(0xf3f1ea); }
+  else {
+    sc.background = new THREE.Color(0x161b22);
+    sc.add(new THREE.HemisphereLight(0xbfd4ea, 0x2b2f36, 1.05));
+    var k = new THREE.DirectionalLight(0xffffff, 1.55); k.position.set(4, 9, 7); sc.add(k);
+    var r = new THREE.DirectionalLight(0x9fc4ff, 0.75); r.position.set(-6, 4, -5); sc.add(r);
+  }
+  return sc;
+}
+function ruler(sc) {
+  var col = SIL ? 0xc9c4b4 : 0x2c3644;
+  var g = new THREE.Group();
+  for (var y = 1; y <= 3; y++) {
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.012),
+      new THREE.MeshBasicMaterial({ color: col }));
+    m.position.set(0, y, -0.9); g.add(m);
+  }
+  var ch = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.02),
+    new THREE.MeshBasicMaterial({ color: SIL ? 0x8d8674 : 0x44566c }));
+  ch.rotation.x = -Math.PI / 2; ch.position.y = 0.001; g.add(ch);
+  sc.add(g);
+}
+function silhouette(root) {
+  var mat = new THREE.MeshBasicMaterial({ color: 0x141a20 });
+  root.traverse(function (n) { if (n.isMesh || n.isSkinnedMesh) n.material = mat; });
+}
+
+// ------------------------------------------------------- passe de proporções
+function bonesByName(model) {
+  var map = {};
+  model.traverse(function (n) { if (n.isBone) map[n.name.toLowerCase()] = n; });
+  return map;
+}
+var SUFF = ['', '.l', '.r'];
+function applyProp(model, prop) {
+  if (!prop) return;
+  var bm = model.__bm || (model.__bm = bonesByName(model));
+  for (var key in prop) {
+    if (key === 'all') continue;
+    var f = prop[key];
+    for (var s = 0; s < SUFF.length; s++) {
+      var b = bm[key + SUFF[s]];
+      if (!b) continue;
+      b.scale.set(b.scale.x * f[0], b.scale.y * f[1], b.scale.z * f[2]);
+      for (var c = 0; c < b.children.length; c++) {
+        var ch = b.children[c];
+        if (!ch.isBone) continue;
+        ch.scale.set(ch.scale.x / f[0], ch.scale.y / f[1], ch.scale.z / f[2]);
+      }
+    }
+  }
+}
+
+// -------------------------------------------------------------- construtores
+function fitTo(node, alvo, maxW) {
+  var box = new THREE.Box3().setFromObject(node);
+  var h = Math.max(0.01, box.max.y - box.min.y);
+  var w = Math.max(0.01, Math.max(box.max.x - box.min.x, box.max.z - box.min.z));
+  var s = alvo / h;
+  if (maxW && w * s > maxW) s = maxW / w;
+  node.scale.multiplyScalar(s);
+  box = new THREE.Box3().setFromObject(node);
+  node.position.x -= (box.min.x + box.max.x) / 2;
+  node.position.z -= (box.min.z + box.max.z) / 2;
+  node.position.y -= box.min.y;
+  return alvo;
+}
+function atual(defId, opts) {
+  var g = JOGO.Models3D2.unit(defId, opts || {});
+  if (!g) return null;
+  if (g.userData.mixer) g.userData.mixer.update(0.42);
+  return g;
+}
+// Monta uma peça de OUTRO modelo KayKit no esqueleto deste. Funciona porque os
+// nove personagens têm a MESMA ordem de juntas e as MESMAS matrizes de bind:
+//   · peça skinned (cabeça, braço, corpo, perna) -> rebind no esqueleto do alvo
+//   · peça estática (chapéu, capa, arma, escudo)  -> pendurada no MESMO osso
+function montaPeca(model, doadorModel, nome, esconde) {
+  var peca = doadorModel.getObjectByName(nome);
+  if (!peca) return false;
+  var alvoSkel = null;
+  model.traverse(function (n) { if (!alvoSkel && n.isSkinnedMesh) alvoSkel = n; });
+  var c = peca.clone();
+  c.visible = true; c.frustumCulled = false;
+  if (c.isSkinnedMesh) {
+    c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.set(1, 1, 1);
+    if (alvoSkel) c.bind(alvoSkel.skeleton, c.bindMatrix);
+    model.add(c);
+  } else {
+    var ossoNome = (peca.parent && peca.parent.isBone) ? peca.parent.name : null;
+    var osso = null;
+    if (ossoNome) model.traverse(function (n) { if (n.isBone && n.name === ossoNome) osso = n; });
+    c.position.copy(peca.position); c.quaternion.copy(peca.quaternion); c.scale.copy(peca.scale);
+    (osso || model).add(c);
+  }
+  if (esconde) { var e = model.getObjectByName(esconde); if (e) e.visible = false; }
+  return true;
+}
+var _doador = {};
+function doador(key, tint, accent) {
+  if (_doador[key]) return _doador[key];
+  var g = JOGO.Models3D2.unit('doador:' + key, { classId: 'sumo',
+    look: { model: key, show: [], scale: 1, tint: tint || '#ffffff', accent: accent || '#ffffff', classId: 'sumo' } });
+  _doador[key] = g ? g.userData.model : null;
+  return _doador[key];
+}
+function remix(classId) {
+  var r = REMIX[classId];
+  var look = JOGO.Models3D2.lookFor(classId, { classId: classId });
+  look = JSON.parse(JSON.stringify(look));
+  look.model = r.base; look.show = r.show.slice();
+  var g = JOGO.Models3D2.unit(classId, { classId: classId, look: look });
+  if (!g) return null;
+  var model = g.userData.model;
+  (r.troca || []).forEach(function (t) {
+    var dm = doador(t.de, look.tint, look.accent);
+    if (dm) montaPeca(model, dm, t.peca, t.esconde);
+  });
+  if (g.userData.mixer) g.userData.mixer.update(0.42);
+  model.updateMatrixWorld(true);
+  applyProp(model, r.prop);
+  if (r.prop && r.prop.all) model.scale.multiplyScalar(r.prop.all);
+  model.updateMatrixWorld(true);
+  return g;
+}
+function fusaoAtual() {                       // como o jogo monta hoje
+  return atual('fus:sumo+bruxo', {});
+}
+function fusaoProposta() {                    // corpo do tanque VESTIDO de mago
+  var look = JOGO.Models3D2.lookFor('sumo', { classId: 'sumo' });
+  look = JSON.parse(JSON.stringify(look));
+  look.model = 'barbarian';
+  look.show = ['2H_Axe', 'Barbarian_Cape'];
+  var g = JOGO.Models3D2.unit('sumo', { classId: 'sumo', look: look });
+  if (!g) return null;
+  var model = g.userData.model;
+  var dm = doador('mage', '#7a5fa0', '#b98cff');
+  if (dm) {
+    montaPeca(model, dm, 'Mage_Hat', 'Barbarian_Hat');
+    montaPeca(model, dm, 'Mage_Cape');
+    montaPeca(model, dm, '2H_Staff');
+  }
+  if (g.userData.mixer) g.userData.mixer.update(0.42);
+  model.updateMatrixWorld(true);
+  applyProp(model, REMIX.sumo.prop);
+  model.scale.multiplyScalar(REMIX.sumo.prop.all * 1.10);
+  model.updateMatrixWorld(true);
+  return g;
+}
+
+var FRAME = { classes: { h: 4.4, olho: 1.75 }, chefes: { h: 5.4, olho: 2.15 }, fusao: { h: 4.8, olho: 1.90 } }[FOLHA]
+          || { h: 4.4, olho: 1.75 };
+var MAXW = FRAME.h * (CW / CH) * 1.12;
+
+var pend = 0, erros = [];
+function candidato(arq, alvo, cb) {
+  pend++;
+  loader.load(CAND + arq, function (gltf) {
+    var n = gltf.scene;
+    n.traverse(function (o) {
+      if (!o.isMesh && !o.isSkinnedMesh) return;
+      o.frustumCulled = false;
+      var ms = Array.isArray(o.material) ? o.material : [o.material];
+      for (var i = 0; i < ms.length; i++) if (ms[i] && ms[i].map) { ms[i].map.magFilter = THREE.NearestFilter; }
+    });
+    var g = new THREE.Group(); g.add(n);
+    if (gltf.animations && gltf.animations.length) {
+      var mx = new THREE.AnimationMixer(n);
+      var idle = null;
+      for (var i = 0; i < gltf.animations.length; i++) {
+        if (/^(Idle|Flying_Idle)$/i.test(gltf.animations[i].name)) idle = gltf.animations[i];
+      }
+      if (!idle) idle = gltf.animations[0];
+      mx.clipAction(idle).play(); mx.update(0.4);
+    }
+    n.updateMatrixWorld(true);
+    fitTo(g, alvo, MAXW);
+    cb(g);
+    if (--pend === 0) desenha();
+  }, undefined, function (e) {
+    erros.push(arq); if (--pend === 0) desenha();
+  });
+}
+
+// --------------------------------------------------------------- montagem
+var linhas = [];
+function novaLinha(rot, sub) { var l = { rot: rot, sub: sub, cels: [] }; linhas.push(l); return l; }
+function cel(linha, node, tit, sub, lic) {
+  linha.cels.push({ node: node, tit: tit, sub: sub, lic: lic || '' });
+}
+
+function montaClasses() {
+  var ids = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeira', 'invocador'];
+  var CL = JOGO.DATA.classes;
+  ids.forEach(function (id) {
+    var L = novaLinha(CL[id].name + ' · ' + id, CL[id].role);
+    cel(L, atual(id, { classId: id }), 'HOJE',
+        (JOGO.Models3D2.lookFor(id, { classId: id }) || {}).model, 'KayKit CC0');
+    cel(L, remix(id), 'A · KayKit remixado', REMIX[id].nome, 'KayKit CC0 · rig atual');
+    var u = UM[id];
+    cel(L, null, 'B · Quaternius', u.nome, 'Ultimate Monsters CC0');
+    var slot = L.cels[L.cels.length - 1];
+    candidato(u.arq, 2.05, function (g) { slot.node = g; });
+    var u2 = UM2[id];
+    cel(L, null, 'B · alternativa', u2.nome, 'Ultimate Monsters CC0');
+    var slot2 = L.cels[L.cels.length - 1];
+    candidato(u2.arq, 2.05, function (g) { slot2.node = g; });
+  });
+}
+function montaChefes() {
+  var MD = JOGO.DATA.monsters;
+  CHEFES.forEach(function (c) {
+    var md = MD[c.id] || {};
+    var L = novaLinha(md.name || c.id, c.sala);
+    cel(L, remix('sumo'), 'referência', 'tanque (2,05 m alvo)', '');
+    cel(L, atual(c.id, { boss: true }), 'CHEFE HOJE',
+        (JOGO.Models3D2.lookFor(c.id, {}) || {}).model, 'Quaternius/KayKit');
+    c.cands.forEach(function (arq, k) {
+      cel(L, null, k === 0 ? 'candidato 1' : 'candidato 2', arq.replace('.gltf', ''), 'Ultimate Monsters CC0');
+      var slot = L.cels[L.cels.length - 1];
+      candidato(arq, 3.30, function (g) { slot.node = g; });
+    });
+  });
+}
+function montaFusao() {
+  var L = novaLinha('Fusão sumo + bruxo', 'as duas naturezas');
+  cel(L, remix('sumo'), 'pai A', 'sumo · tanque', '');
+  cel(L, remix('bruxo'), 'pai B', 'bruxo · mago', '');
+  cel(L, fusaoAtual(), 'FUSÃO HOJE', 'corpo do tanque + só o cajado', 'perde chapéu e capa');
+  cel(L, fusaoProposta(), 'FUSÃO PROPOSTA', 'tanque de chapéu, capa e cajado', 'peças separáveis do KayKit');
+}
+
+// ---------------------------------------------------------------- desenho
+function desenha() {
+  var cols = 0;
+  linhas.forEach(function (l) { cols = Math.max(cols, l.cels.length); });
+  var W = LAB + cols * CW + PAD * 2;
+  var H = linhas.length * (CH + CAPH) + PAD * 2;
+  cv.width = W; cv.height = H; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ren.setSize(W, H, false);
+  ren.setScissorTest(true);
+
+  var asp = CW / CH;
+  cam = new THREE.PerspectiveCamera(22, asp, 0.1, 100);
+  var dist = (FRAME.h / 2) / Math.tan(22 * Math.PI / 360);
+  cam.position.set(Math.sin(0.55) * dist, FRAME.olho + dist * 0.055, Math.cos(0.55) * dist);
+  cam.lookAt(0, FRAME.olho, 0);
+
+  // limpa fundo inteiro
+  ren.setScissor(0, 0, W, H); ren.setViewport(0, 0, W, H);
+  ren.setClearColor(SIL ? 0xf3f1ea : 0x11151b, 1); ren.clear();
+
+  var htm = '';
+  linhas.forEach(function (l, ri) {
+    var y0 = PAD + ri * (CH + CAPH);
+    htm += '<div class="rowlab" style="left:0;top:' + (y0 + CH / 2 - 16) + 'px;width:' + (LAB - 12) + 'px">' +
+           l.rot + '<span>' + (l.sub || '') + '</span></div>';
+    l.cels.forEach(function (c, ci) {
+      var x0 = PAD + LAB + ci * CW;
+      var sc = makeScene(); ruler(sc);
+      if (c.node) {
+        if (SIL) silhouette(c.node);
+        sc.add(c.node);
+      }
+      var glY = H - y0 - CH;
+      ren.setScissor(x0, glY, CW, CH);
+      ren.setViewport(x0, glY, CW, CH);
+      ren.render(sc, cam);
+      if (c.node) sc.remove(c.node);
+      var alt = c.node ? (new THREE.Box3().setFromObject(c.node)).max.y : 0;
+      htm += '<div class="cap" style="left:' + x0 + 'px;top:' + (y0 + CH - 4) + 'px;width:' + CW + 'px">' +
+             '<b>' + c.tit + '</b>' + (c.sub || '') +
+             '<i>' + (alt ? alt.toFixed(2) + ' m' : 'não carregou') + '</i>' +
+             '<span class="lic">' + (c.lic || '') + '</span></div>';
+    });
+  });
+  wrap.insertAdjacentHTML('beforeend', htm);
+  document.getElementById('st').textContent =
+    'pronto · ' + linhas.length + ' linhas · erros: ' + (erros.length ? erros.join(', ') : 'nenhum');
+  document.title = 'PRONTO ' + FOLHA;
+  window.__pronto = true;
+}
+
+function boot() {
+  cv = document.getElementById('cv'); wrap = document.getElementById('wrap');
+  if (SIL) document.body.className = 'sil';
+  ren = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+  ren.setPixelRatio(1);
+  ren.outputEncoding = THREE.sRGBEncoding;
+  loader = new THREE.GLTFLoader();
+  var tit = { classes: 'Classes — o elenco atual e os candidatos',
+              chefes: 'Chefes — o que guarda cada sala',
+              fusao: 'Fusão — as duas naturezas num corpo só' }[FOLHA] || FOLHA;
+  document.getElementById('tit').textContent = tit + (SIL ? ' · SILHUETA' : '');
+  document.getElementById('sub').textContent =
+    'Mesma escala, mesmo chão, mesma câmera. As linhas da régua marcam 1, 2 e 3 metros. ' +
+    (SIL ? 'Teste de silhueta: se dá para dizer quem é quem só pela mancha preta, a proposta passa.'
+         : 'Altura impressa embaixo de cada um.');
+  if (FOLHA === 'classes') montaClasses();
+  else if (FOLHA === 'chefes') montaChefes();
+  else montaFusao();
+  if (pend === 0) desenha();
+}
+function esperaModelos() {
+  if (!window.JOGO || !JOGO.Models3D2) { setTimeout(esperaModelos, 60); return; }
+  JOGO.Models3D2.load(function () { try { boot(); } catch (e) {
+    document.getElementById('st').textContent = 'ERRO: ' + (e && e.message) + '\n' + (e && e.stack);
+    document.title = 'ERRO';
+  } });
+}
+esperaModelos();
+})();
+</script>
+</body>
+</html>
