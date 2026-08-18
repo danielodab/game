@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Por que o retrato ainda sai em 2D</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.6 system-ui,sans-serif;padding:14px}
+  pre{background:#171c23;padding:10px;border-radius:6px;font-size:12px;white-space:pre-wrap}
+  canvas{background:#222;border:1px solid #2b3542;margin:4px}
+</style>
+</head>
+<body>
+<h1 style="font-size:15px">Retrato do herói: 3D ou 2D?</h1>
+<pre id="out">rodando…</pre>
+<div id="fig"></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js','js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js',
+    'js/render2d/art.js','js/render3d/portraits3d.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var L = [];
+  function log(s) { L.push(s); document.getElementById('out').textContent = L.join('\n'); }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2, A = JOGO.Art, P = JOGO.Portraits3D;
+    log('Art existe: ' + !!A);
+    log('Portraits3D existe: ' + !!P);
+    log('Models3D2 existe: ' + !!M);
+
+    var t0 = Date.now();
+    (function espera() {
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 40000) return setTimeout(espera, 200);
+        log('MODELOS NAO FICARAM PRONTOS em 40 s');
+        window.__pronto = true; return;
+      }
+      log('modelos prontos em ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s');
+      log('Art.__portrait3dWrapped: ' + !!A.__portrait3dWrapped);
+
+      // instala na marra se o auto-install ainda nao rodou
+      if (!A.__portrait3dWrapped) {
+        log('  -> chamando P.install() na mao: ' + P.install());
+      }
+
+      // 1. M.portrait com corpo inteiro devolve alguma coisa?
+      var direto = null, erro = null;
+      try { direto = M.portrait('sumo', { size: 256, corpoInteiro: true, element: 'fogo' }); }
+      catch (e) { erro = e.message; }
+      log('M.portrait("sumo", corpoInteiro) -> ' + (direto ? direto.width + 'x' + direto.height : 'NULL') +
+          (erro ? ' ERRO: ' + erro : ''));
+
+      // 2. e o que Art.unit devolve — o mesmo canvas ou o 2D antigo?
+      var viaArt = null;
+      try { viaArt = A.unit('sumo', { element: 'fogo', dir: 0, scale: 0.6 }); }
+      catch (e) { log('Art.unit estourou: ' + e.message); }
+      log('Art.unit("sumo") -> ' + (viaArt ? viaArt.width + 'x' + viaArt.height : 'NULL'));
+
+      // 3. o teste que decide: sao o MESMO desenho?
+      function assinatura(cv) {
+        if (!cv) return 'nulo';
+        var c = document.createElement('canvas');
+        c.width = 16; c.height = 16;
+        var g = c.getContext('2d');
+        g.drawImage(cv, 0, 0, 16, 16);
+        var d = g.getImageData(0, 0, 16, 16).data, s = 0;
+        for (var i = 0; i < d.length; i += 4) s = (s * 31 + d[i] + d[i+1] * 3 + d[i+2] * 7) % 1e9;
+        return String(s);
+      }
+      var a1 = assinatura(direto), a2 = assinatura(viaArt);
+      log('assinatura do 3D direto: ' + a1);
+      log('assinatura do Art.unit : ' + a2);
+      log(a1 === a2 ? '>>> Art.unit ESTA servindo o 3D' : '>>> Art.unit ESTA servindo OUTRA COISA (o 2D antigo)');
+
+      // 4. e o retrato de busto, que a Colecao usa
+      var busto = null;
+      try { busto = A.portrait('sumo', { size: 128, element: 'fogo' }); } catch (e) {}
+      log('Art.portrait("sumo") -> ' + (busto ? busto.width + 'x' + busto.height : 'NULL'));
+
+      var fig = document.getElementById('fig');
+      [['3D direto', direto], ['via Art.unit', viaArt], ['via Art.portrait', busto]].forEach(function (p) {
+        if (!p[1]) return;
+        var d = document.createElement('div');
+        d.style.display = 'inline-block'; d.style.textAlign = 'center';
+        var t = document.createElement('div'); t.textContent = p[0]; t.style.fontSize = '11px';
+        d.appendChild(p[1]); d.appendChild(t);
+        fig.appendChild(d);
+      });
+      window.__pronto = true;
+    })();
+  });
+})();
+</script>
+</body>
+</html>

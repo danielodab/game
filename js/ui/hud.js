@@ -58,7 +58,7 @@ var JOGO = (typeof window !== 'undefined')
   var logLines = [];               // log compacto da batalha
   var battleSig = '';              // assinatura de repintura [U2]
   var tipEl = null, tipOwner = null;
-  var sheetEl = null, sheetName = null;
+  var sheetEl = null, sheetName = null, lastSheetArg = null;
   var lastRewards = null;
   var invFilter = 'todos';
   var elemChoiceHero = null;
@@ -1333,6 +1333,7 @@ var JOGO = (typeof window !== 'undefined')
 
   function openSheet(name, arg) {
     sheetName = name;
+    lastSheetArg = arg;          // guardado para UI.repaint() saber o que reabrir
     // As três telas de meta viraram ABAS de "Personagens" [U6]. Os nomes antigos
     // continuam valendo como atalho para a aba certa: o menu de pausa, a ficha
     // do herói e as páginas de teste chamam por eles.
@@ -2555,6 +2556,21 @@ var JOGO = (typeof window !== 'undefined')
     if (current !== 'battle') return;
     paintBattle(false);
     paintTimer();
+  };
+
+  /* Repinta o que está na tela AGORA.
+   *
+   * A arte 3D (retratos e bonecos de corpo inteiro) decodifica em segundo plano.
+   * Quem pintou antes dela ficar pronta recebeu o desenho 2D de emergência — e
+   * ficava com ele para sempre, porque a tela só se redesenha quando o jogador
+   * sai e volta. É a causa da queixa "os cards estão em 2D": não era o desenho
+   * errado, era o desenho CERTO chegando tarde demais para ser usado. */
+  UI.repaint = function () {
+    var eraNome = sheetName, eraArg = lastSheetArg;
+    try { if (current && screens[current]) UI.showScreen(current); } catch (e) {}
+    if (eraNome && eraNome !== 'confirm') {
+      try { openSheet(eraNome, eraArg); } catch (e2) {}
+    }
   };
 
   // acesso para testes/galeria

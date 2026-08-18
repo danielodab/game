@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — onde o quadro está indo embora</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.5 system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 16px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 16px 8px;max-width:900px}
+  #summary{font:12px monospace;margin:6px 16px;padding:6px 10px;border-radius:6px;background:#1b222c;color:#cdd6e2}
+  table{border-collapse:collapse;font-size:12px;margin:8px 16px}
+  th,td{border:1px solid #2b3542;padding:3px 10px;text-align:left}
+  th{background:#1b222c;color:#8895a6}
+  td.n{text-align:right;font-family:monospace}
+  .alto{color:#f88;font-weight:700} .medio{color:#ffcf5c} .ok{color:#7fe08a}
+  #app{position:fixed;left:-4000px;top:0;width:1280px;height:720px}
+</style>
+</head>
+<body>
+<h1>Onde o quadro está indo embora</h1>
+<div class="sub">Mede o jogo DE VERDADE, em sala, quadro a quadro. Aviso que vale ler:
+aqui o WebGL roda por software (SwiftShader), então tempo de GPU não serve de
+comparação com a máquina do jogador. O que serve são as CONTAGENS — chamadas de
+desenho, passes de pós-processamento e recursos de GPU criados no meio da luta —
+porque essas não mudam com a placa de vídeo.</div>
+<div id="summary">rodando…</div>
+<table id="tab"></table>
+
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/render3d/portraits3d.js','js/ui/hud.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var linhas = [];
+  function linha(o) { linhas.push(o); }
+
+  // Conta CRIAÇÃO de recurso de GPU. Textura e material novos no meio da luta são
+  // o suspeito clássico de engasgo: cada um é upload para a placa e/ou compilação
+  // de shader, e acontece no exato quadro em que o efeito aparece — que é onde o
+  // usuário sente o tranco.
+  var contagem;
+  function zera() { contagem = { textura: 0, material: 0, geometria: 0 }; }
+  function copia() { return { textura: contagem.textura, material: contagem.material,
+                              geometria: contagem.geometria }; }
+  zera();
+
+  function espiona() {
+    var alvos = ['Texture', 'CanvasTexture', 'DataTexture',
+                 'MeshBasicMaterial', 'MeshStandardMaterial', 'MeshLambertMaterial',
+                 'SpriteMaterial', 'ShaderMaterial', 'PointsMaterial', 'LineBasicMaterial',
+                 'BufferGeometry', 'PlaneGeometry', 'RingGeometry', 'SphereGeometry',
+                 'CylinderGeometry', 'BoxGeometry', 'ConeGeometry', 'TorusGeometry'];
+    alvos.forEach(function (nome) {
+      var orig = THREE[nome];
+      if (typeof orig !== 'function') return;
+      var chave = /Texture/.test(nome) ? 'textura'
+                : /Material/.test(nome) ? 'material' : 'geometria';
+      function Espiao() {
+        contagem[chave]++;
+        return new (Function.prototype.bind.apply(orig, [null].concat([].slice.call(arguments))))();
+      }
+      Espiao.prototype = orig.prototype;
+      for (var k in orig) if (orig.hasOwnProperty(k)) Espiao[k] = orig[k];
+      THREE[nome] = Espiao;
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, U = JOGO.UI, FX = JOGO.FX;
+    function morre(msg) {
+      document.getElementById('summary').textContent = msg;
+      window.__pronto = true;
+    }
+    try { R.init(document.getElementById('game-canvas')); }
+    catch (e) { return morre('ERRO no init do renderer: ' + e.message); }
+    try { U.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+
+    espiona();
+
+    var t0 = Date.now();
+    (function espera() {
+      var pronto = false;
+      try { pronto = R.isReady() && !!(G.state && G.state() && G.state().grid); } catch (e) {}
+      if (!pronto && Date.now() - t0 < 40000) return setTimeout(espera, 250);
+      medir();
+    })();
+
+    /* Roda n quadros iguais aos do jogo (main.js chama estes três em ordem) e
+     * devolve a média de cada trecho. */
+    function passos(n, dt) {
+      var m = { game: 0, ui: 0, render: 0 };
+      for (var i = 0; i < n; i++) {
+        var a = performance.now();
+        try { G.update(dt); } catch (e) {}
+        var b = performance.now();
+        try { U.update(dt); } catch (e) {}
+        var c = performance.now();
+        try { R.render(dt); } catch (e) {}
+        var d = performance.now();
+        m.game += b - a; m.ui += c - b; m.render += d - c;
+      }
+      m.game /= n; m.ui /= n; m.render /= n;
+      return m;
+    }
+
+    function medir() {
+      var st = null;
+      try { st = G.state(); } catch (e) {}
+      if (!st || !st.grid) return morre('não entrei em nenhuma sala — nada a medir');
+
+      var ren = R.threeRenderer ? R.threeRenderer() : null;
+
+      passos(20, 0.016);                        // aquece: compila shader, monta sala
+      zera();
+      var parado = passos(60, 0.016);
+      var alocParado = copia();
+      var statParado = R.stats ? R.stats() : {};
+
+      // ---- agora com efeito na tela. Disparo pelos MESMOS eventos que o motor
+      // manda numa área: um feitiço que pega várias células e o dano em cada alvo.
+      zera();
+      var vivos = (st.units || []).filter(function (u) { return u.alive; });
+      var celulas = [];
+      for (var cx = -1; cx <= 1; cx++) for (var cy = -1; cy <= 1; cy++) celulas.push({ x: 4 + cx, y: 4 + cy });
+      var disparos = 0;
+      vivos.slice(0, 6).forEach(function (u) {
+        try { FX.handleEvent({ type: 'spellCast', casterUid: u.uid, uid: u.uid, element: 'fogo',
+                               cells: celulas, x: u.x, y: u.y, targets: celulas }); disparos++; } catch (e) {}
+        try { FX.handleEvent({ type: 'damage', uid: u.uid, amount: 137, element: 'fogo',
+                               x: u.x, y: u.y }); disparos++; } catch (e) {}
+      });
+      var comEfeito = passos(60, 0.016);
+      var alocEfeito = copia();
+      var statEfeito = R.stats ? R.stats() : {};
+
+      // ---- pós-processamento: quantos passes de tela cheia por quadro?
+      var temBloom = !!(THREE.UnrealBloomPass && THREE.EffectComposer);
+      var passesBloom = 0;
+      if (temBloom && statParado.calls) {
+        // UnrealBloom faz 1 highpass + 5 níveis de borrão (2 passes cada) + 1 composição
+        passesBloom = 12;
+      }
+
+      linha({ g: 'tempo de JS por quadro (só CPU — a GPU aqui é software)' });
+      linha({ o: 'Game.update', ms: parado.game });
+      linha({ o: 'UI.update', ms: parado.ui });
+      linha({ o: 'Renderer.render — cena parada', ms: parado.render });
+      linha({ o: 'Renderer.render — com efeito na tela', ms: comEfeito.render });
+
+      linha({ g: 'recursos de GPU CRIADOS durante a medição (60 quadros)' });
+      linha({ o: 'texturas — cena parada', n: alocParado.textura });
+      linha({ o: 'texturas — com efeito', n: alocEfeito.textura, sus: true });
+      linha({ o: 'materiais — cena parada', n: alocParado.material });
+      linha({ o: 'materiais — com efeito', n: alocEfeito.material, sus: true });
+      linha({ o: 'geometrias — cena parada', n: alocParado.geometria });
+      linha({ o: 'geometrias — com efeito', n: alocEfeito.geometria, sus: true });
+
+      linha({ g: 'cena' });
+      linha({ o: 'chamadas de desenho por quadro (parada)', n: statParado.calls || 0 });
+      linha({ o: 'chamadas de desenho por quadro (com efeito)', n: statEfeito.calls || 0 });
+      linha({ o: 'triângulos por quadro', n: statParado.tris || 0 });
+      linha({ o: 'unidades em cena', n: statParado.units || 0 });
+      if (ren && ren.info) {
+        linha({ o: 'texturas vivas na memória', n: ren.info.memory.textures });
+        linha({ o: 'geometrias vivas na memória', n: ren.info.memory.geometries });
+        linha({ o: 'programas de shader compilados', n: (ren.info.programs || []).length });
+      }
+      linha({ o: 'pós-processamento (bloom) disponível', txt: temBloom ? 'SIM' : 'não' });
+      if (temBloom) linha({ o: 'passes de tela cheia que o bloom acrescenta, TODO quadro', n: passesBloom, sus: true });
+
+      var t = '<tr><th>o que</th><th>valor</th></tr>';
+      linhas.forEach(function (l) {
+        if (l.g) { t += '<tr><th colspan="2">' + l.g + '</th></tr>'; return; }
+        var v = l.ms != null ? l.ms.toFixed(2) + ' ms' : l.n != null ? String(l.n) : l.txt;
+        var cls = '';
+        if (l.ms != null) cls = l.ms > 8 ? 'alto' : l.ms > 3 ? 'medio' : 'ok';
+        else if (l.n != null && l.sus) cls = l.n > 20 ? 'alto' : l.n > 0 ? 'medio' : 'ok';
+        t += '<tr><td>' + l.o + '</td><td class="n ' + cls + '">' + v + '</td></tr>';
+      });
+      document.getElementById('tab').innerHTML = t;
+      document.getElementById('summary').textContent =
+        'PASS · medido em sala · ' + disparos + ' eventos de efeito disparados';
+      window.__pronto = true;
+    }
+  });
+})();
+</script>
+</body>
+</html>

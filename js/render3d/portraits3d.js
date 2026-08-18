@@ -166,7 +166,15 @@ var JOGO = (typeof window !== 'undefined')
     var tryInstall = function () {
       if (!JOGO.Art) { setTimeout(tryInstall, 120); return; }
       if (JOGO.Models3D2 && JOGO.Models3D2.load) {
-        JOGO.Models3D2.load(function () { P.install(); });
+        JOGO.Models3D2.load(function () {
+          // Instalar não basta: a tela que já estava pintada continua exibindo o
+          // 2D de emergência, porque o HUD desenha uma vez e não se redesenha
+          // sozinho. Sem este repaint, quem abriu a tela durante a decodificação
+          // ficava com o boneco antigo até sair e voltar.
+          if (P.install() && JOGO.UI && JOGO.UI.repaint) {
+            try { JOGO.UI.repaint(); } catch (e) {}
+          }
+        });
       } else {
         setTimeout(tryInstall, 200);
       }

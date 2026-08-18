@@ -25,7 +25,13 @@
     'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
     'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js','js/core/data/items_extra.js',
     'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js',
-    'js/core/game.js','js/render2d/art.js','js/ui/hud.js'];
+    'js/core/game.js',
+    // A pilha 3D INTEIRA. Sem ela o art.js cai no desenho 2D antigo e a foto
+    // do teste mostra um personagem que o jogo nao usa mais.
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js',
+    'js/render2d/art.js','js/render3d/portraits3d.js','js/ui/hud.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
 </script>
 
@@ -41,7 +47,18 @@
     if (cond) okN++; else falhas.push(nome);
   }
 
+  function comModelosProntos(cb) {
+    var M = JOGO.Models3D2, t0 = Date.now();
+    (function espera() {
+      if (M && M.isReady && M.isReady()) return cb();
+      if (M && M.load) M.load(function () {});
+      if (Date.now() - t0 < 40000) return setTimeout(espera, 200);
+      cb();                                   // segue mesmo assim: o teste acusa
+    })();
+  }
+
   window.addEventListener('DOMContentLoaded', function () {
+   comModelosProntos(function () {
     var D = JOGO.DATA, P = JOGO.Progress, S = D.spells, CL = D.classes;
     var ELEMS = ['fogo','agua','terra','ar'];
 
@@ -122,6 +139,34 @@
     });
 
     // 6. A grade tem uma linha por degrau e 4 colunas
+    // O retrato do carrossel tem de vir do 3D. Ja mandei foto do 2D antigo por
+    // ter montado a pagina sem esta camada; agora o teste nao deixa repetir.
+    var P3 = JOGO.Portraits3D, M3 = JOGO.Models3D2, A3 = JOGO.Art;
+    check('a camada de retrato 3D esta carregada', !!(M3 && P3 && A3),
+          (M3 ? 'modelos ok' : 'SEM modelos3d_v2') + ' · ' +
+          (P3 ? 'retratos ok' : 'SEM portraits3d'));
+    // Conferir só que o módulo existe deixou passar uma foto com o boneco 2D:
+    // o que importa é o pixel QUE FOI PARAR NA TELA. Comparo a figura do
+    // carrossel com o render 3D direto do modelo.
+    check('o retrato do carrossel é o do MODELO 3D, não o desenho 2D',
+          !!(A3 && A3.__portrait3dWrapped), A3 && A3.__portrait3dWrapped
+            ? 'Art.unit embrulhado' : 'Art.unit AINDA no 2D');
+    var direto3d = null, viaArt = null;
+    // mesmas opcoes dos dois lados: o elemento muda o fundo do retrato
+    try { direto3d = M3.portrait('sumo', { size: 256, corpoInteiro: true, element: 'fogo' }); } catch (e) {}
+    try { viaArt = A3.unit('sumo', { element: 'fogo', dir: 0, scale: 0.6 }); } catch (e) {}
+    function assina(cv) {
+      if (!cv) return 'nulo';
+      var cc = document.createElement('canvas'); cc.width = 16; cc.height = 16;
+      var gg = cc.getContext('2d'); gg.drawImage(cv, 0, 0, 16, 16);
+      var dd = gg.getImageData(0, 0, 16, 16).data, acc = 0;
+      for (var q = 0; q < dd.length; q += 4) acc = (acc * 31 + dd[q] + dd[q+1]*3 + dd[q+2]*7) % 1e9;
+      return String(acc);
+    }
+    var s3 = assina(direto3d), sa = assina(viaArt);
+    check('o boneco servido pelo Art.unit é pixel a pixel o do modelo 3D',
+          s3 !== 'nulo' && s3 === sa, s3 === sa ? 'idênticos' : s3 + ' vs ' + sa);
+
     var linhas = document.querySelectorAll('.tree-grid .tree-row');
     var degrausRef = {};
     ELEMS.forEach(function (e) {
@@ -138,6 +183,7 @@
     el.textContent = (falhas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') +
       okN + ' de ' + (okN + falhas.length) + ' checagens ok, ' + falhas.length + ' falharam';
     window.__pronto = true;
+   });
   });
 })();
 </script>

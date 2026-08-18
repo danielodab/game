@@ -910,3 +910,80 @@ de embutir. Deixar 512 px e confiar no mipmap faz a GPU escolher um nível borra
 partícula tem 14 px de tela — o desenho nítido morre no caminho, e você paga 16× em bytes
 pelo privilégio.
 
+
+---
+
+## III.2 FRENTE 2 — CHEFES MAIORES
+
+**Status: EM MEDIÇÃO (esta seção é salva a cada achado).**
+Pedido do usuário: *"cada chefe precisa ser MAIOR que qualquer personagem,
+incluindo a maior fusão."* Número que ele deu de cabeça: 4,38 m.
+
+### A primeira coisa medida foi a régua, e ela estava torta
+
+Antes de escolher modelo, é preciso saber contra o que se compara. Duas
+armadilhas apareceram nos primeiros dez minutos, e as duas já tinham contaminado
+números publicados neste documento.
+
+**Armadilha 1 — a altura de um chefe NÃO vem do modelo.**
+`js/render3d/models3d_v2.js`, linhas 948-951:
+
+```js
+var targetH = look.classId ? 2.05 : (look.pet ? 1.20 : (look.fusion ? 2.55 : 1.80));
+if (opts.boss || look.boss) targetH = 2.95;
+var natural = src.natural || 1.8;
+var scale = (targetH / natural) * (look.scale || 1) * (opts.scale || 1);
+```
+
+Todo corpo é **normalizado** para uma altura-alvo do papel e só então
+multiplicado por `look.scale`. Logo:
+
+> **altura de chefe no jogo = 2,95 × `look.scale`, seja qual for o modelo.**
+
+Trocar um T-Rex por um dragão não muda um milímetro de altura. O modelo decide
+**silhueta e largura**; a altura é um número na tabela `MONSTER_LOOK`. Isso muda
+a natureza do pedido: "chefes maiores" é, em primeiro lugar, uma linha de dados
+— e só depois uma questão de acervo.
+
+**Armadilha 2 — `THREE.Box3.setFromObject` não aplica skinning.**
+Ele lê `geometry.boundingBox`, que está na **pose de bind** — o T-pose, de
+braços abertos. Medir largura assim descreve um crucifixo, não uma criatura
+parada. Conferido contra os `min`/`max` dos acessores dos próprios `.gltf`:
+
+| modelo | caixa de bind (X × Y × Z) | leitura |
+|---|---|---|
+| `BlueDemon` | 4,63 × 2,84 × 2,16 | "mais largo que alto" — é o T-pose |
+| `Yeti` | 4,65 × 2,83 × 1,47 | idem |
+| `Ghost_Skull` | 5,50 × 3,10 × 1,53 | idem |
+
+É daí que veio a frase da seção II.5, *"os Evolved são largos, não altos"*.
+**Ela está errada** — mede a pose de bind, não a de Idle.
+
+A medição correta recalcula cada vértice pelos ossos, com `boneTransform`,
+depois que o mixer aplicou o clipe. E aqui mora uma terceira armadilha, esta de
+biblioteca: **no three r147 `boneTransform(i, alvo)` lê a posição-base do
+PRÓPRIO `alvo`**, não da geometria (só a partir do r151, renomeado para
+`applyBoneTransform`, ele lê o atributo sozinho). Passar um vetor vazio devolve
+**lixo finito** — números plausíveis, sem NaN, e completamente errados. O
+vértice tem de ser carregado antes da chamada.
+
+**Armadilha 4 — `mixer.update()` sem ação tocando não põe o corpo em pose de
+parado.** Sem `play('idle')` os ossos ficam na pose de REPOUSO do arquivo, que
+não é nem a de bind nem a de Idle. O `q_triceratops` mede 3,84 m numa e 1,81 m
+na outra.
+
+A página que faz tudo isso é `tests/chefes_sala.html?modo=medida`.
+
+### O teto a bater, medido (e ele não é 4,38 m)
+
+O número 4,38 m veio de `docs/AUDITORIA_FUSAO.md` §4, e naquele momento estava
+certo — era `userData.height` da fusão mais alta de então. Duas coisas
+aconteceram desde:
+
+1. O commit `dc7b470` ("Fusao troca de modelo") uniformizou as fusões: hoje as
+   **15 medem 3,21 m de corpo**, não mais quatro valores distintos.
+2. `userData.height` sai de `visibleBodyBox()`, que soma **só malha skinned** —
+   ou seja, ignora chapéu, machado, capa, cajado e escudo, que são malhas
+   simples penduradas nos ossos. É o *corpo*, não a *figura*.
+
+O olho compara a figura. Medindo a figura inteira, na pose de parado:

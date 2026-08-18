@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>CHEFES — candidatos dentro da sala real</title>
+<style>
+  html,body{margin:0;background:#0b0e12;color:#e8eef6;
+            font:13px/1.5 ui-monospace,Consolas,monospace}
+  #summary{margin:12px 16px;white-space:pre;font-size:12.5px}
+  h1{font:600 19px/1.25 system-ui,sans-serif;margin:14px 16px 2px}
+  .sub{color:#8895a6;font:12px/1.5 system-ui,sans-serif;margin:0 16px 10px;max-width:1400px}
+  /* palco onde o jogo desenha a sala. Tamanho FIXO: o renderizador mede o
+     elemento hospedeiro, entao ele decide a resolucao de cada tira. */
+  #app{position:relative;width:1400px;height:380px;margin:0 16px;overflow:hidden}
+  #game-canvas{display:block;width:100%;height:100%}
+  #ui-root{position:absolute;inset:0;z-index:5;pointer-events:none;display:none}
+  #folha{display:block;margin:10px 16px 30px;border:1px solid #232a33}
+  .oculto{position:absolute;left:-9000px;top:0}
+</style>
+</head>
+<body>
+<h1 id="tit">Chefes candidatos — DENTRO da sala real, ao lado do herói</h1>
+<div class="sub" id="sub">carregando…</div>
+<pre id="summary">…</pre>
+
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<canvas id="folha"></canvas>
+
+<!-- blindagem do save do jogador: PRIMEIRO script, sempre -->
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = [
+    'vendor/three.min.js', 'vendor/GLTFLoader.js', 'vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js', 'vendor/EffectComposer.js',
+    'vendor/RenderPass.js', 'vendor/ShaderPass.js', 'vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
+    'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+    'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
+    'js/core/progress.js', 'js/core/game.js',
+    'assets/embedded/env-kit.js', 'js/render3d/models3d.js',
+    'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js',
+    'js/render3d/models3d_v2.js', 'js/render3d/fx3d_v2.js', 'js/render3d/renderer3d_v2.js'
+  ];
+  for (var i = 0; i < arqs.length; i++) {
+    document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+  }
+</script>
+
+<script>
+/* ============================================================================
+ * CHEFES CANDIDATOS — a prova de escala feita DENTRO do jogo.
+ *
+ * Por que esta pagina existe: a folha `esp_chefes.png` mediu os candidatos num
+ * fundo neutro, com uma regua. Isso responde "quanto mede o arquivo", nao
+ * "quanto ele mede NO JOGO" — e as duas coisas nao tem relacao nenhuma, porque
+ * `models3d_v2.js` NORMALIZA todo corpo para uma altura-alvo por papel
+ * (classe 2,05 | fusao 2,55 | CHEFE 2,95) e so entao multiplica por `look.scale`.
+ * Ou seja: a altura de um chefe no jogo e 2,95 x escala, e NAO depende do
+ * modelo escolhido. O modelo decide SILHUETA e LARGURA.
+ *
+ * Modos:
+ *   ?modo=medida                 -> so a tabela de numeros (le-se #summary)
+ *   ?modo=sala&chefe=N           -> uma tira: a sala N com a fileira de escala
+ *   ?modo=sala                   -> as 6 tiras, empilhadas numa folha unica
+ *
+ * A fileira de cada tira, sempre na mesma sala e na mesma camera:
+ *   BARBARO (o heroi mais alto) · FUSAO mais alta · CHEFE DE HOJE ·
+ *   CANDIDATO 1 · CANDIDATO 2
+ *
+ * Nada em js/ e tocado. Os candidatos sao lidos de assets/candidatos/, pasta
+ * que esta no .gitignore e que nenhum arquivo do jogo referencia.
+ * ========================================================================= */
+(function () {
+'use strict';
+
+var Q = {};
+location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+var MODO = Q.modo || 'sala';
+
+var sum = document.getElementById('summary');
+var LOG = [];
+function p(s) { LOG.push(s == null ? '' : s); sum.textContent = LOG.join('\n'); }
+function fmt(v) { return (Math.round(v * 100) / 100).toFixed(2); }
+function pad(s, n) { s = String(s); while (s.length < n) s += ' '; return s; }
+function padl(s, n) { s = String(s); while (s.length < n) s = ' ' + s; return s; }
+
+// ------------------------------------------------------------ os candidatos
+// Escolha registrada em docs/PROPOSTA_MODELOS.md, secao II.5. `alt` e a altura
+// EM METROS que este teste pede para o candidato dentro da sala; o jogo a
+// obteria com look.scale = alt / 2,95.
+var DIR  = '../assets/candidatos/quaternius_ultimate_monsters/';
+var DIR2 = '../assets/candidatos/quaternius_um_extra/';
+var EXTRA = { Frog:1, Dino:1, Bunny:1, Cat:1, Chicken:1, Pigeon:1, Alpaking:1,
+              Mushnub:1, Glub:1, Armabee:1, Orc_Enemy:1, Pink_Slime:1,
+              Green_Blob:1, Fish:1 };
+function url(n) { return EXTRA[n] ? (DIR2 + n + '.glb') : (DIR + n + '.gltf'); }
+
+var CHEFES = [
+  { id:'boss-gardener',   dg:'greenhouse',   sala:2, nome:'A Jardineira-Viúva',
+    tema:'Estufa · terra',   c1:'Mushnub_Evolved',  c2:'GreenSpikyBlob' },
+  { id:'boss-baroness',   dg:'cistern',      sala:2, nome:'Baronesa Salmoura',
+    tema:'Cisterna · água',  c1:'Glub_Evolved',     c2:'Squidle' },
+  { id:'boss-heartforge', dg:'emberlock',    sala:2, nome:'Magno, o Acendedor',
+    tema:'Fecho · fogo',     c1:'BlueDemon',        c2:'Dragon_Evolved' },
+  { id:'boss-windwright', dg:'windscaffold', sala:2, nome:'Cambota, o Mestre-de-Obras',
+    tema:'Andaimes · ar',    c1:'Alpaking_Evolved', c2:'Armabee_Evolved' },
+  { id:'boss-deepknock',  dg:'quakemine',    sala:2, nome:'Batepedra',
+    tema:'Mina · terra',     c1:'Goleling_Evolved', c2:'Dino' },
+  { id:'boss-riftheart',  dg:'brokenheart',  sala:2, nome:'O Coração Partido',
+    tema:'Coração · neutro', c1:'Ghost_Skull',      c2:'Hywirl' }
+];
+// todo candidato citado no relatorio, para a tabela de medidas
+var TODOS = ['Mushnub_Evolved','GreenSpikyBlob','Glub_Evolved','Squidle','BlueDemon',
+             'Dragon_Evolved','Alpaking_Evolved','Armabee_Evolved','Goleling_Evolved',
+             'Dino','Ghost_Skull','Hywirl','Dragon'];
+
+// altura pedida no teste (metros). O default sai da regra: o teto de personagem
+// medido e 4,38 m; um chefe precisa LER como chefe, entao pedimos +20%.
+var ALVO = parseFloat(Q.alvo || '5.30');
+
+// ------------------------------------------------------------------ medidas
+var loader = null, cacheG = {};
+function raw(nome, cb) {
+  if (cacheG[nome]) { cb(cacheG[nome]); return; }
+  loader.load(url(nome), function (g) { cacheG[nome] = g; cb(g); },
+              undefined, function () { p('  !! nao carregou: ' + nome); cb(null); });
+}
+// a MESMA conta que models3d_v2.js chama de `naturalHeight`: so malha skinned,
+// na POSE DE BIND. E o divisor que o jogo usa para normalizar o porte.
+function caixaEsqueleto(root) {
+  root.updateMatrixWorld(true);
+  var box = new THREE.Box3(), tmp = new THREE.Box3(), achou = false;
+  root.traverse(function (n) {
+    if (!n.isSkinnedMesh || !n.geometry) return;
+    if (!n.geometry.boundingBox) n.geometry.computeBoundingBox();
+    tmp.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+    if (!achou) { box.copy(tmp); achou = true; } else box.union(tmp);
+  });
+  if (!achou) box.setFromObject(root);
+  return box;
+}
+
+/* A CAIXA HONESTA.
+ * `THREE.Box3.setFromObject` NÃO aplica skinning: ele lê o `boundingBox` da
+ * geometria, que está na pose de BIND — o T-pose, de braços abertos. Medir a
+ * largura assim infla tudo: o BlueDemon "mede" 4,63 m de largo por 2,84 m de
+ * alto, o que descreve um crucifixo, não um demônio parado.
+ * (É essa a origem do "os Evolved são largos, não altos" da seção II.5.)
+ *
+ * Aqui a posição de cada vértice é recalculada pelos ossos, com `boneTransform`,
+ * DEPOIS que o mixer aplicou o clipe. É lento e é o único jeito certo.
+ */
+function caixaPosada(root) {
+  root.updateMatrixWorld(true);
+  var box = new THREE.Box3(), v = new THREE.Vector3(), tmp = new THREE.Box3();
+  var achou = false;
+  root.traverse(function (n) {
+    if (!n.visible) return;
+    if (n.isSkinnedMesh && n.geometry && n.geometry.attributes.skinIndex && n.boneTransform) {
+      // ARMADILHA do three r147: `boneTransform(i, alvo)` lê a posição-base do
+      // PRÓPRIO `alvo` (`_basePosition.copy(target)`), não da geometria. Passar
+      // um vetor vazio devolve lixo finito — números plausíveis e errados.
+      // (Só a partir do r151, com o nome `applyBoneTransform`, ele lê o
+      // atributo sozinho.) Por isso o vértice é carregado ANTES da chamada.
+      var pos = n.geometry.attributes.position, i;
+      for (i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        n.boneTransform(i, v);
+        v.applyMatrix4(n.matrixWorld);
+        if (!isFinite(v.x) || !isFinite(v.y) || !isFinite(v.z)) continue;
+        if (!achou) { box.makeEmpty(); achou = true; }
+        box.expandByPoint(v);
+      }
+    } else if (n.isMesh && n.geometry) {
+      // adereços (chapéu, machado, capa) são malha simples pendurada num osso:
+      // o `matrixWorld` deles JÁ segue a pose, então a caixa da geometria basta
+      if (!n.geometry.boundingBox) n.geometry.computeBoundingBox();
+      tmp.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+      if (!achou) { box.copy(tmp); achou = true; } else box.union(tmp);
+    }
+  });
+  if (!achou) box.setFromObject(root);
+  return box;
+}
+function poseIdle(gltf, scene, t) {
+  if (!gltf.animations || !gltf.animations.length) return null;
+  var idle = null;
+  for (var i = 0; i < gltf.animations.length; i++)
+    if (/(^|\|)(Idle|Flying_Idle)$/i.test(gltf.animations[i].name)) idle = gltf.animations[i];
+  if (!idle) idle = gltf.animations[0];
+  var mx = new THREE.AnimationMixer(scene);
+  mx.clipAction(idle).play(); mx.update(t == null ? 0.40 : t);
+  return idle.name;
+}
+function prep(scene) {
+  scene.traverse(function (o) {
+    if (!o.isMesh && !o.isSkinnedMesh) return;
+    o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true;
+    var ms = Array.isArray(o.material) ? o.material : [o.material];
+    for (var i = 0; i < ms.length; i++) {
+      var m = ms[i]; if (!m) continue;
+      if (m.map) { m.map.magFilter = THREE.NearestFilter; }
+      m.roughness = 0.84; m.metalness = 0.02;
+    }
+  });
+}
+
+/* O corpo do jogo em pose de PARADO. Só chamar `mixer.update()` não basta: sem
+   uma ação tocando, os ossos ficam na pose de REPOUSO do arquivo, que não é a
+   pose de bind nem a de Idle. O triceratops media 1,81 m assim e 3,84 m parado. */
+function poeIdle(node, t) {
+  var ud = node && node.userData;
+  if (!ud) return node;
+  try { if (ud.play) ud.play('idle', { fade: 0 }); } catch (e) {}
+  if (ud.mixer) ud.mixer.update(t == null ? 0.42 : t);
+  node.updateMatrixWorld(true);
+  return node;
+}
+
+/* Um candidato pronto para entrar na sala, obedecendo A MESMA regra do jogo:
+   escala = alturaAlvo / alturaNatural. Devolve tambem as medidas. */
+function candidato(nome, alvo, cb) {
+  raw(nome, function (gltf) {
+    if (!gltf) { cb(null, null); return; }
+    var sc = JOGO.Models3D2.cloneSkinned(gltf.scene);
+    prep(sc);
+    var clipe = poseIdle(gltf, sc, 0.40);
+    sc.updateMatrixWorld(true);
+    var nat = Math.max(0.01, (function () {
+      var b = caixaEsqueleto(gltf.scene); return b.max.y - b.min.y;
+    })());
+    var s = alvo / nat;
+    var g = new THREE.Group();
+    g.add(sc); g.scale.setScalar(s);
+    g.updateMatrixWorld(true);
+    var vis = caixaPosada(g);                          // caixa REAL, ja escalada
+    // assenta os pes no chao (o rig flutuante nasce com deslocamento proprio)
+    g.position.y -= vis.min.y;
+    g.updateMatrixWorld(true);
+    vis = caixaPosada(g);
+    cb(g, {
+      nome: nome, natural: nat, escala: s, clipe: clipe,
+      altura: vis.max.y - vis.min.y,
+      largX: vis.max.x - vis.min.x,
+      largZ: vis.max.z - vis.min.z,
+      lookScale: alvo / 2.95
+    });
+  });
+}
+
+/* ==================================================================== MEDIDA
+   A regua honesta. Mede DUAS alturas de cada corpo:
+     corpo  = a caixa que o motor usa (`visibleBodyBox`: SO malha skinned).
+              E o numero que `userData.height` devolve.
+     visual = a caixa INTEIRA, com chapeu, machado, capa e asas. E o que o
+              olho compara — e e onde mora o 4,38 m do relatorio.
+ */
+function medeTudo(done) {
+  var M = JOGO.Models3D2, D = JOGO.DATA;
+  function duplo(node) {
+    node.updateMatrixWorld(true);
+    var bb = caixaEsqueleto(node), bp = caixaPosada(node);
+    return { corpo: bb.max.y - bb.min.y,
+             visual: bp.max.y - bp.min.y,
+             larg: Math.max(bp.max.x - bp.min.x, bp.max.z - bp.min.z) };
+  }
+  p('======================================================================');
+  p(' A REGUA — quanto mede cada corpo DENTRO DO JOGO (metros)');
+  p(' célula do tabuleiro = ' + JOGO.Renderer.CELL + ' m');
+  p('======================================================================');
+  p('');
+  p('=== CLASSES (altura-alvo 2,05 × look.scale × build) ===');
+  p('  ' + pad('classe', 14) + padl('corpo', 7) + padl('visual', 8) + padl('largura', 9) + '   modelo');
+  var classes = Object.keys(D.classes), topoClasse = 0, topoClasseN = '';
+  classes.forEach(function (c) {
+    var n = M.unit(c, { classId: c });
+    poeIdle(n);
+    var m = duplo(n);
+    if (m.visual > topoClasse) { topoClasse = m.visual; topoClasseN = c; }
+    p('  ' + pad(c, 14) + padl(fmt(m.corpo), 7) + padl(fmt(m.visual), 8) +
+      padl(fmt(m.larg), 9) + '   ' + (n.userData.look && n.userData.look.model));
+  });
+  p('');
+  p('=== AS 15 FUSÕES (altura-alvo 2,55 × 1,26) ===');
+  p('  ' + pad('dupla', 26) + padl('corpo', 7) + padl('visual', 8) + padl('largura', 9) + '   anfitrião');
+  var topoFus = 0, topoFusN = '', topoFusCorpo = 0;
+  for (var i = 0; i < classes.length; i++) {
+    for (var j = i + 1; j < classes.length; j++) {
+      var fid = 'fus:' + classes[i] + '+' + classes[j];
+      var nf = M.unit(fid, {});
+      poeIdle(nf);
+      var mf = duplo(nf);
+      if (mf.visual > topoFus) { topoFus = mf.visual; topoFusN = classes[i] + '+' + classes[j]; }
+      if (mf.corpo > topoFusCorpo) topoFusCorpo = mf.corpo;
+      p('  ' + pad(classes[i] + ' + ' + classes[j], 26) + padl(fmt(mf.corpo), 7) +
+        padl(fmt(mf.visual), 8) + padl(fmt(mf.larg), 9) + '   ' +
+        (nf.userData.look && nf.userData.look.hostClass));
+    }
+  }
+  var TETO = Math.max(topoClasse, topoFus);
+  p('');
+  p('=== CHEFES DE HOJE (altura-alvo 2,95 × look.scale) ===');
+  p('  ' + pad('chefe', 18) + padl('corpo', 7) + padl('visual', 8) + padl('largura', 9) +
+    '  ' + padl('células', 8) + '   modelo / escala');
+  var bosses = Object.keys(D.monsters).filter(function (m) { return D.monsters[m].boss; });
+  var reprovados = [];
+  bosses.forEach(function (b) {
+    var n = M.unit(b, { boss: true });
+    poeIdle(n);
+    var m = duplo(n), lk = M.lookFor(b, {});
+    var ok = m.visual > TETO;
+    if (!ok) reprovados.push(b);
+    p('  ' + pad(b, 18) + padl(fmt(m.corpo), 7) + padl(fmt(m.visual), 8) +
+      padl(fmt(m.larg), 9) + '  ' + padl(fmt(m.larg / JOGO.Renderer.CELL), 8) +
+      '   ' + pad(lk.model, 17) + '×' + lk.scale + (ok ? '   PASSA' : '   *** REPROVA ***'));
+  });
+  p('');
+  p('=== O TETO A BATER ===');
+  p('  classe mais alta ............... ' + fmt(topoClasse) + ' m  (' + topoClasseN + ')');
+  p('  FUSÃO mais alta ................ ' + fmt(topoFus) + ' m  (' + topoFusN + ')');
+  p('  (corpo, sem adereço) ........... ' + fmt(topoFusCorpo) + ' m');
+  p('  TETO DE PERSONAGEM ............. ' + fmt(TETO) + ' m');
+  p('  chefes abaixo do teto .......... ' + (reprovados.length ? reprovados.join(', ') : 'nenhum'));
+  p('');
+  p('=== CANDIDATOS, normalizados à altura pedida (' + fmt(ALVO) + ' m) ===');
+  p('  Cada linha responde: se este modelo virar chefe com altura ' + fmt(ALVO) +
+    ' m, quanto ele OCUPA?');
+  p('  ' + pad('candidato', 20) + padl('natural', 8) + padl('altura', 8) +
+    padl('largX', 8) + padl('largZ', 8) + padl('células', 9) + '  look.scale  clipe');
+  var fila = TODOS.slice(), res = [];
+  (function proximo() {
+    if (!fila.length) {
+      p('');
+      p('  Observação: a largura é medida na pose de Idle (t=0,40 s), não na');
+      p('  pose de bind — bind abre asas e braços e superestima a pegada.');
+      p('');
+      p('TETO=' + fmt(TETO) + ' ALVO=' + fmt(ALVO));
+      done(TETO, res);
+      return;
+    }
+    var nome = fila.shift();
+    candidato(nome, ALVO, function (g, med) {
+      if (med) {
+        res.push(med);
+        var cel = Math.max(med.largX, med.largZ) / JOGO.Renderer.CELL;
+        p('  ' + pad(nome, 20) + padl(fmt(med.natural), 8) + padl(fmt(med.altura), 8) +
+          padl(fmt(med.largX), 8) + padl(fmt(med.largZ), 8) + padl(fmt(cel), 9) +
+          '  ' + padl(fmt(med.lookScale), 9) + '  ' + (med.clipe || '—'));
+      }
+      proximo();
+    });
+  })();
+}
+
+/* ===================================================================== SALA
+   O candidato DENTRO da sala de verdade. Nada de fundo neutro: chao, parede,
+   props, luz e nevoeiro sao os do jogo, e a camera e a de batalha.
+ */
+var app, canvas, folha, fctx;
+var TIRA_W = 1400, TIRA_H = 380;
+
+function pump(n) {
+  for (var i = 0; i < (n || 1); i++) {
+    var E = JOGO.Engine;
+    if (E && E.events) {
+      while (E.events.length) {
+        var ev = E.events.shift();
+        [JOGO.Renderer, JOGO.Game].forEach(function (m) {
+          if (m && m.handleEvent) { try { m.handleEvent(ev); } catch (e) {} }
+        });
+      }
+    }
+    try { if (JOGO.Game.update) JOGO.Game.update(0.05); } catch (e) {}
+    try { JOGO.Renderer.render(0.05); } catch (e) {}
+  }
+}
+
+// a linha de chao mais LONGA da sala: e nela que a fileira de escala se planta
+function melhorLinha(estado) {
+  var melhor = { y: 0, x0: 0, len: 0 };
+  for (var y = 0; y < estado.grid.h; y++) {
+    var ini = -1;
+    for (var x = 0; x <= estado.grid.w; x++) {
+      var t = x < estado.grid.w ? estado.grid.tiles[y][x] : null;
+      var livre = t && t.type === 'floor';
+      if (livre && ini < 0) ini = x;
+      if (!livre && ini >= 0) {
+        if (x - ini > melhor.len) melhor = { y: y, x0: ini, len: x - ini };
+        ini = -1;
+      }
+    }
+  }
+  return melhor;
+}
+
+// tudo o que o motor colocou em cena sai de vista: a tira e uma REGUA, e um
+// monstro de estimacao atravessado na frente estraga a leitura
+function escondeUnidades() {
+  var sc = JOGO.Renderer.scene();
+  sc.traverse(function (o) {
+    if (o.name === 'units') o.visible = false;
+  });
+}
+
+var extras = [];
+function planta(node, gx, gy, rotY) {
+  var w = JOGO.Renderer.world(gx, gy, 0);
+  node.position.x = w.x; node.position.z = w.z;
+  node.rotation.y = rotY == null ? -Math.PI * 0.25 : rotY;
+  JOGO.Renderer.scene().add(node);
+  extras.push(node);
+}
+function limpaExtras() {
+  for (var i = 0; i < extras.length; i++)
+    if (extras[i].parent) extras[i].parent.remove(extras[i]);
+  extras.length = 0;
+}
+
+// um corpo do JOGO (herói, fusão, chefe de hoje), já normalizado pelo motor
+function corpoDoJogo(defId, opts) {
+  var n = JOGO.Models3D2.unit(defId, opts || {});
+  if (!n) return null;
+  poeIdle(n);
+  return n;
+}
+function alturaVisual(node) {
+  var b = caixaPosada(node);
+  return b.max.y - b.min.y;
+}
+
+// TETO DE PERSONAGEM: a altura do corpo jogavel mais alto que existe hoje.
+// E medido aqui mesmo, nao herdado de tabela: a fusao mais alta e a classe
+// mais alta, com adereco, na pose de parado.
+var TETO = 0, TETO_QUEM = '';
+function mediaTeto() {
+  var M = JOGO.Models3D2, D = JOGO.DATA, cls = Object.keys(D.classes), i, j;
+  for (i = 0; i < cls.length; i++) {
+    var h = alturaVisual(poeIdle(M.unit(cls[i], { classId: cls[i] })));
+    if (h > TETO) { TETO = h; TETO_QUEM = cls[i]; }
+  }
+  for (i = 0; i < cls.length; i++) for (j = i + 1; j < cls.length; j++) {
+    var f = 'fus:' + cls[i] + '+' + cls[j];
+    var hf = alturaVisual(poeIdle(M.unit(f, {})));
+    if (hf > TETO) { TETO = hf; TETO_QUEM = cls[i] + '+' + cls[j]; }
+  }
+}
+
+// rótulos desenhados por cima da tira, na folha
+var rotulos = [], tetoLinha = null;
+
+function montaTira(idx, slot, cb) {
+  var ch = CHEFES[idx];
+  limpaExtras();
+  var estado = JOGO.Engine.createBattle(ch.dg, ch.sala,
+                 JOGO.Progress.battleParty(JOGO.Progress.heroIds().slice(0, 1)));
+  JOGO.Game.state = estado;
+  pump(20);
+  escondeUnidades();
+
+  var linha = melhorLinha(estado);
+  var N = 5;
+  // espaçamento: distribui as 5 figuras dentro do trecho livre, com folga nas pontas
+  var passo = Math.max(2, Math.floor((linha.len - 2) / (N - 1)));
+  var x0 = linha.x0 + Math.max(1, Math.floor((linha.len - passo * (N - 1)) / 2));
+
+  var pecas = [
+    { tipo: 'jogo', id: 'sumo',  opts: { classId: 'sumo' }, rot: 'HERÓI mais alto\nBárbaro' },
+    { tipo: 'jogo', id: 'fus:sumo+bruxo', opts: {},         rot: 'FUSÃO mais alta\nBárbaro+Bruxo' },
+    { tipo: 'jogo', id: ch.id,   opts: { boss: true },      rot: 'CHEFE HOJE\n' + ch.id },
+    { tipo: 'cand', id: ch.c1,   rot: 'CANDIDATO 1\n' + ch.c1 },
+    { tipo: 'cand', id: ch.c2,   rot: 'CANDIDATO 2\n' + ch.c2 }
+  ];
+  rotulos = [];
+
+  var k = 0;
+  (function passoAPasso() {
+    if (k >= pecas.length) { enquadra(); return; }
+    var pc = pecas[k], gx = x0 + k * passo, gy = linha.y;
+    if (pc.tipo === 'jogo') {
+      var n = corpoDoJogo(pc.id, pc.opts);
+      if (n) {
+        planta(n, gx, gy);
+        rotulos.push({ gx: gx, gy: gy, txt: pc.rot, alt: alturaVisual(n) });
+      }
+      k++; passoAPasso();
+    } else {
+      candidato(pc.id, ALVO, function (g, med) {
+        if (g) {
+          planta(g, gx, gy);
+          rotulos.push({ gx: gx, gy: gy, txt: pc.rot, alt: med.altura });
+        }
+        k++; passoAPasso();
+      });
+    }
+  })();
+
+  function enquadra() {
+    var cx = x0 + passo * (N - 1) / 2;
+    tetoLinha = { gx0: x0, gx1: x0 + passo * (N - 1), gy: linha.y };
+    JOGO.Renderer.setCamera({ rot: 0, animate: false });
+    JOGO.Renderer.setCamera({ centerX: cx, centerY: linha.y,
+                              dist: parseFloat(Q.dist || '26'),
+                              tilt: parseFloat(Q.tilt || '0.62') });
+    pump(6);
+    escondeUnidades();
+    pump(2);
+    desenhaTira(slot, ch);
+    cb();
+  }
+}
+
+function desenhaTira(idx, ch) {
+  var y0 = idx * TIRA_H;
+  fctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, y0, TIRA_W, TIRA_H);
+  // A LINHA DO TETO: nenhum chefe pode ficar abaixo dela. Traçada em espaço de
+  // MUNDO e projetada, então acompanha a perspectiva em vez de ser um enfeite.
+  if (tetoLinha && TETO > 0) {
+    var wA = JOGO.Renderer.world(tetoLinha.gx0, tetoLinha.gy, 0);
+    var wB = JOGO.Renderer.world(tetoLinha.gx1, tetoLinha.gy, 0);
+    wA.y = TETO; wB.y = TETO;
+    var a = JOGO.Renderer.projectWorld(wA), b = JOGO.Renderer.projectWorld(wB);
+    var kx = TIRA_W / (canvas.clientWidth || TIRA_W);
+    var ky = TIRA_H / (canvas.clientHeight || TIRA_H);
+    fctx.save();
+    fctx.strokeStyle = '#ff5544'; fctx.lineWidth = 2; fctx.setLineDash([9, 6]);
+    fctx.beginPath();
+    fctx.moveTo(0, y0 + b.y * ky + (a.y - b.y) * ky * 1.2);
+    fctx.lineTo(a.x * kx, y0 + a.y * ky);
+    fctx.lineTo(b.x * kx, y0 + b.y * ky);
+    fctx.lineTo(TIRA_W, y0 + b.y * ky - (a.y - b.y) * ky * 0.6);
+    fctx.stroke();
+    fctx.setLineDash([]);
+    fctx.fillStyle = '#ff5544';
+    fctx.font = 'bold 12px Trebuchet MS, Verdana, sans-serif';
+    fctx.fillText('teto de personagem ' + fmt(TETO) + ' m — nenhum chefe pode ficar abaixo',
+                  TIRA_W - 430, y0 + b.y * ky - 7);
+    fctx.restore();
+  }
+  // faixa de identificação da sala
+  fctx.fillStyle = 'rgba(6,9,13,0.80)';
+  fctx.fillRect(0, y0, 250, 54);
+  fctx.fillStyle = '#ffd08a';
+  fctx.font = 'bold 15px Trebuchet MS, Verdana, sans-serif';
+  fctx.fillText(ch.nome, 10, y0 + 21);
+  fctx.fillStyle = '#9fb2c6';
+  fctx.font = '12px Trebuchet MS, Verdana, sans-serif';
+  fctx.fillText(ch.tema + ' · ' + ch.dg + ' sala ' + ch.sala, 10, y0 + 40);
+  // rótulos com a altura medida, sob cada figura
+  for (var i = 0; i < rotulos.length; i++) {
+    var r = rotulos[i];
+    var sp = JOGO.Renderer.project(r.gx, r.gy, 0);
+    if (!sp) continue;
+    var px = sp.x / canvas.clientWidth * TIRA_W;
+    var py = Math.min(TIRA_H - 40, sp.y / canvas.clientHeight * TIRA_H);
+    var linhasTxt = r.txt.split('\n');
+    linhasTxt.push(fmt(r.alt) + ' m');
+    fctx.font = 'bold 12px Trebuchet MS, Verdana, sans-serif';
+    var w = 0;
+    for (var j = 0; j < linhasTxt.length; j++)
+      w = Math.max(w, fctx.measureText(linhasTxt[j]).width);
+    fctx.fillStyle = 'rgba(6,9,13,0.78)';
+    fctx.fillRect(px - w / 2 - 6, y0 + py + 2, w + 12, 15 * linhasTxt.length + 6);
+    for (var j2 = 0; j2 < linhasTxt.length; j2++) {
+      fctx.fillStyle = j2 === linhasTxt.length - 1 ? '#7fe08a'
+                     : (j2 === 0 ? '#ffd08a' : '#dbe6f2');
+      fctx.textAlign = 'center';
+      fctx.fillText(linhasTxt[j2], px, y0 + py + 15 + j2 * 15);
+      fctx.textAlign = 'left';
+    }
+  }
+}
+
+// ------------------------------------------------------------------- boot
+function boot() {
+  app = document.getElementById('app');
+  canvas = document.getElementById('game-canvas');
+  folha = document.getElementById('folha');
+  fctx = folha.getContext('2d');
+  loader = new THREE.GLTFLoader();
+
+  document.getElementById('sub').textContent =
+    MODO === 'medida'
+      ? 'Modo MEDIDA. Cada altura é a que o motor produz, não a do arquivo .gltf.'
+      : ('Modo SALA. Cada tira é a sala do chefe, com a câmera de batalha. Altura pedida ' +
+         fmt(ALVO) + ' m para os candidatos.');
+
+  if (MODO === 'medida') {
+    app.className = 'oculto'; folha.className = 'oculto';
+    // o renderizador precisa existir só para CELL/project; nem precisa desenhar
+    medeTudo(function () {
+      document.title = 'PRONTO medida';
+      window.__pronto = true;
+    });
+    return;
+  }
+
+  JOGO.Renderer.init(canvas, { preserveDrawingBuffer: true, antialias: true });
+  JOGO.Game.init && JOGO.Game.init();
+  JOGO.Progress.reset();
+
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = JOGO.Renderer.isReady && JOGO.Renderer.isReady();
+    if (!pronto && Date.now() - t0 < 25000) return setTimeout(espera, 100);
+    pump(4);
+
+    mediaTeto();
+    p('teto de personagem medido: ' + fmt(TETO) + ' m (' + TETO_QUEM + ')');
+
+    var so = Q.chefe != null ? parseInt(Q.chefe, 10) : -1;
+    var lista = so >= 0 ? [so] : [0, 1, 2, 3, 4, 5];
+    folha.width = TIRA_W; folha.height = TIRA_H * lista.length;
+    folha.style.width = TIRA_W + 'px';
+    fctx.fillStyle = '#0b0e12'; fctx.fillRect(0, 0, folha.width, folha.height);
+
+    p('montando ' + lista.length + ' tira(s)…');
+    var k = 0;
+    (function proxima() {
+      if (k >= lista.length) {
+        limpaExtras();
+        p('PRONTO · ' + lista.length + ' tira(s) · altura pedida ' + fmt(ALVO) + ' m');
+        document.title = 'PRONTO sala';
+        window.__pronto = true;
+        return;
+      }
+      // a folha empilha na ORDEM da lista, não no índice do chefe
+      montaTira(lista[k], k, function () { k++; proxima(); });
+    })();
+  })();
+}
+
+function espera() {
+  if (!window.JOGO || !JOGO.Models3D2 || !JOGO.Renderer) { setTimeout(espera, 60); return; }
+  JOGO.Models3D2.load(function () {
+    try { boot(); } catch (e) {
+      p('ERRO: ' + (e && e.message) + '\n' + (e && e.stack));
+      document.title = 'ERRO';
+    }
+  });
+}
+espera();
+})();
+</script>
+</body>
+</html>
