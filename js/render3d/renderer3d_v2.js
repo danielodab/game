@@ -754,19 +754,31 @@ var JOGO = (typeof window !== 'undefined')
     if (focus) {
       cam.panX = wx((focus.x0 + focus.x1) / 2);
       cam.panZ = wz((focus.y0 + focus.y1) / 2);
-      // teto de 12 células: com salas de 23x19 mostrar tudo vira formigueiro.
-      // O jogador afasta a câmera quando quiser o panorama.
-      needW = clamp((focus.x1 - focus.x0 + 3), 7, 11) * CELL;
-      needH = clamp((focus.y1 - focus.y0 + 3), 7, 11) * CELL;
+      // Enquadramento: o teto de 11 células deixava a câmera colada — numa sala
+      // 17x15 apareciam 8 células e UMA unidade de sete, e o mapa tático não
+      // dava para ler. Agora a moldura acompanha a ação até a sala inteira, e a
+      // trava de legibilidade abaixo é que decide o limite.
+      // Quem decide o enquadramento é o PISO da faixa, não o teto: com a ação
+      // concentrada num canto, `focus` é pequeno e a câmera cola. Subir o teto
+      // de 11 para 17 mudou a distância de 17,2 para 18,9 — quase nada. O piso
+      // é que precisa mostrar o mapa: 15x13 células, ou a sala inteira se for menor.
+      needW = clamp((focus.x1 - focus.x0 + 6), Math.min(15, gridW), gridW) * CELL;
+      needH = clamp((focus.y1 - focus.y0 + 6), Math.min(13, gridH), gridH) * CELL;
     }
     var vfov = camera.fov * Math.PI / 180;
     var tanV = Math.tan(vfov / 2);
-    // fatores empíricos: a inclinação achata a profundidade na tela
-    var fitV = (needH * 0.5) / tanV * 0.66;
-    var fitH = (needW * 0.5) / (tanV * Math.max(0.55, W / H)) * 0.86;
+    // Fatores empíricos. Os antigos (0,66 e 0,86) ENCOLHIAM a distância bem na
+    // hora em que a inclinação já achata o tabuleiro — o resultado era a câmera
+    // colada mesmo pedindo a sala inteira. Recalibrados pelo enquadramento que
+    // ficou bom numa sala 17x15: mostra o mapa sem virar formigueiro.
+    var fitV = (needH * 0.5) / tanV * 0.88;
+    var fitH = (needW * 0.5) / (tanV * Math.max(0.55, W / H)) * 1.05;
     var d = Math.max(fitV, fitH);
-    // trava de legibilidade: célula nunca abaixo de ~44 px (retrato de celular)
-    var minCellPx = Math.min(W, H) < 620 ? 46 : 40;
+    // Trava de legibilidade. No celular a célula precisa caber o dedo (§0), mas
+    // no desktop os 40 px de antes eram o que prendia a câmera perto: davam
+    // dist ~17 numa sala de 17x15. Tela grande aguenta célula menor sem perder
+    // leitura, e é ela que mostra o mapa inteiro.
+    var minCellPx = Math.min(W, H) < 620 ? 40 : 26;
     var maxD = (CELL * H) / (2 * tanV * minCellPx);
     cam.dist = clamp(Math.min(d, maxD), cam.minDist, cam.maxDist);
     updateCamera();

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Captura de sala real</title>
+<style>
+  html,body{margin:0;background:#07090c;overflow:hidden}
+  #app{position:absolute;inset:0}
+  #game-canvas{display:block;width:100%;height:100%}
+  #ui-root{position:absolute;inset:0;z-index:5;pointer-events:none}
+  /* o headless nao compoe WebGL de forma confiavel: espelhamos o canvas num <img> */
+  #shot{position:absolute;left:0;top:0;z-index:50}
+  #st{position:absolute;left:8px;top:6px;z-index:99;font:12px monospace;color:#8f8;
+      background:#000a;padding:3px 7px;border-radius:4px;white-space:pre}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+</div>
+<div id="st">carregando…</div>
+
+<!-- blindagem do save do jogador: precisa vir ANTES de qualquer outro script -->
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = [
+    'vendor/three.min.js', 'vendor/GLTFLoader.js', 'vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js', 'vendor/EffectComposer.js',
+    'vendor/RenderPass.js', 'vendor/ShaderPass.js', 'vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
+    'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+    'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js',
+    'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
+    'js/core/progress.js', 'js/core/game.js',
+    'assets/embedded/env-kit.js', 'js/render3d/models3d.js',
+    'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js',
+    'js/render3d/models3d_v2.js', 'js/render3d/fx3d_v2.js', 'js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js', 'js/render3d/portraits3d.js',
+    'js/ui/hud.js'
+  ];
+  for (var i = 0; i < arqs.length; i++) {
+    document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+  }
+</script>
+
+<script>
+/* ===========================================================================
+ * Captura de uma SALA REAL do jogo, para conferir enquadramento e desenho do
+ * mapa sem depender do painel do navegador (que nao compoe: rAF nao dispara).
+ *
+ *   ?dungeon=greenhouse&sala=0&frames=60&rot=0&dist=&semUI=1
+ *
+ * Diferente de preview3d_v2.html, que monta um layout de mentira: aqui a sala
+ * vem de DATA.dungeons, entao o que aparece e exatamente o que o jogador ve.
+ * ======================================================================== */
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var st = document.getElementById('st');
+
+  function pump(n) {
+    for (var i = 0; i < (n || 1); i++) {
+      var E = JOGO.Engine;
+      if (E && E.events) {
+        while (E.events.length) {
+          var ev = E.events.shift();
+          [JOGO.Renderer, JOGO.UI, JOGO.Game].forEach(function (m) {
+            if (m && m.handleEvent) { try { m.handleEvent(ev); } catch (e) {} }
+          });
+        }
+      }
+      try { if (JOGO.Game.update) JOGO.Game.update(0.05); } catch (e) {}
+      try { if (JOGO.UI && JOGO.UI.update) JOGO.UI.update(0.05); } catch (e) {}
+      try { JOGO.Renderer.render(0.05); } catch (e) {}
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    try {
+      var canvas = document.getElementById('game-canvas');
+      JOGO.Renderer.init(canvas, { preserveDrawingBuffer: true });
+      if (Q.semUI !== '1' && JOGO.UI && JOGO.UI.init) JOGO.UI.init();
+      if (JOGO.Game.init) JOGO.Game.init();
+
+      var t0 = Date.now();
+      (function espera() {
+        var pronto = !JOGO.Models3D2 || !JOGO.Models3D2.isReady || JOGO.Models3D2.isReady();
+        if (!pronto && Date.now() - t0 < 20000) return setTimeout(espera, 100);
+
+        JOGO.Progress.reset();
+        var ids = JOGO.Progress.heroIds().slice(0, 2);
+        var dg = Q.dungeon || 'greenhouse';
+        var sala = parseInt(Q.sala || '0', 10);
+
+        // Sala pedida direto pelo motor: pular calabouco inteiro so para chegar
+        // na sala 2 gastaria minutos de IA.
+        // O renderizador le JOGO.Game.state sozinho e remonta o tabuleiro quando a
+        // sala muda — basta plantar o estado aqui e mandar renderizar.
+        var estado = JOGO.Engine.createBattle(dg, sala, JOGO.Progress.battleParty(ids));
+        JOGO.Game.state = estado;
+        pump(20);
+        if (Q.rot && JOGO.Renderer.setCamera) JOGO.Renderer.setCamera({ rot: parseInt(Q.rot, 10) });
+        if (Q.dist && JOGO.Renderer.setCamera) JOGO.Renderer.setCamera({ dist: parseFloat(Q.dist) });
+        pump(parseInt(Q.frames || '60', 10));
+
+        var c = JOGO.Renderer.getCamera ? JOGO.Renderer.getCamera() : {};
+        var im = document.createElement('img');
+        im.id = 'shot';
+        im.src = canvas.toDataURL('image/png');
+        im.style.width = '100%'; im.style.height = '100%';
+        document.body.appendChild(im);
+        st.textContent = 'PASS ' + dg + ' sala ' + sala +
+          ' · grade ' + estado.grid.w + 'x' + estado.grid.h +
+          ' · unidades ' + estado.units.length +
+          ' · dist ' + (c.dist != null ? c.dist.toFixed(1) : '?');
+        window.__pronto = true;
+      })();
+    } catch (e) {
+      st.textContent = 'ERRO: ' + e.message + '\n' + e.stack;
+    }
+  });
+})();
+</script>
+</body>
+</html>
