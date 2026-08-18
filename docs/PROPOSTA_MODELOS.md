@@ -341,3 +341,25 @@ referencia.
 | Ultimate Monsters (25 dos 50 modelos) | Quaternius | **CC0 1.0** — declarada em `quaternius.com/packs/ultimatemonsters.html` e no FAQ; `License.txt` incluído no pacote | pasta pública do Google Drive ligada na página oficial |
 
 Atribuição não é obrigatória. Creditamos assim mesmo, como já se faz em `docs/CREDITS_3D.md`.
+
+---
+---
+
+# PARTE II — A DIREÇÃO "DOFUS": ESPÉCIES DIFERENTES, NÃO PROPORÇÕES DIFERENTES
+
+**Status: EM PESQUISA (documento sendo escrito enquanto a investigação corre).**
+Data: 2026-08-18, sessão da tarde. Nenhum arquivo do jogo foi alterado.
+
+## II.0 O que mudou no pedido
+
+Palavras do usuário: *"pense no Dofus.. os personagens são humanoides mas são classes
+totalmente diferentes. cada um com uma característica. POR EXEMPLO: Sram é esqueleto,
+Ecaflip é um gato humanoide, Cra um elfo."*
+
+Isto **invalida a recomendação da Parte I**. A Opção A (remix do KayKit + passe de proporções)
+entrega seis corpos com massas diferentes, mas todos continuam sendo **o mesmo humano de
+cabeça grande**. O pedido agora é **espécie**: morto-vivo, felino, élfico, golem, demônio,
+inseto, anfíbio, orc — todos bípedes, mesma família de estilo, mas criaturas distintas.
+
+**A Opção A vira plano B.** O que segue é a busca por um elenco de espécies.
+

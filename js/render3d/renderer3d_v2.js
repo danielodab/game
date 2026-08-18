@@ -1505,15 +1505,28 @@ var JOGO = (typeof window !== 'undefined')
         }
       }
     } else {
-      var spell = (D.spells && D.spells[spellId]) ||
-        (JOGO.Fusion && JOGO.Fusion.spellById && safe(function () { return JOGO.Fusion.spellById(spellId); }, null)) ||
-        (g && g.selectedSpell) || null;
+      // A MESMA PORTA DO MOTOR: `Engine.spell` resolve feitiço de classe, de item,
+      // de pet, de monstro e os GERADOS de fusão. Ler só `DATA.spells` fazia toda
+      // fusão cair no cinza de neutro — o mesmo defeito que já corrigimos no HUD
+      // e no ícone de feitiço.
+      var spell = safe(function () { return en.spell ? en.spell(spellId) : null; }, null) ||
+        (D.spells && D.spells[spellId]) || (g && g.selectedSpell) || null;
       var elCol = R.elementColor(spell && spell.element ? spell.element : 'neutro');
+
+      // ALCANCE primeiro, fraco: onde o feitiço CHEGA, mesmo sem ninguém lá.
+      // Sem isto, escolher um ataque corpo a corpo sem inimigo ao lado não
+      // pintava NADA e parecia que o jogo tinha travado.
+      var range = safe(function () { return en.spellRange ? en.spellRange(st, active.uid, spellId) : null; }, null);
+      if (range) {
+        for (var rr = 0; rr < range.length; rr++) ovTile(range[rr].x, range[rr].y, elCol, 0.09, 0.05, 0.92);
+      }
+
+      // ALVOS por cima, forte: quem dá para acertar de verdade.
       var targets = safe(function () { return en.castTargets ? en.castTargets(st, active.uid, spellId) : null; }, null);
       var inTargets = false;
       if (targets) {
         for (var k = 0; k < targets.length; k++) {
-          ovTile(targets[k].x, targets[k].y, elCol, 0.20, 0.09, 0.84);
+          ovTile(targets[k].x, targets[k].y, elCol, 0.34, 0.11, 0.80);
           if (hv && targets[k].x === hv.x && targets[k].y === hv.y) inTargets = true;
         }
       }

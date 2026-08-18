@@ -995,6 +995,34 @@ var JOGO = (typeof window !== 'undefined')
   }
   Engine.validTargetCell = validTargetCell;
 
+  /* ALCANCE do feitiço, para a interface desenhar.
+   * `castTargets` devolve só as células com ALVO VÁLIDO: para um ataque de
+   * corpo a corpo sem ninguém ao lado, devolve VAZIO — e o tabuleiro não pinta
+   * nada. Do lado do jogador isso parece defeito: ele escolhe o ataque e a tela
+   * não responde. Foi o relato do playtest ("ao selecionar um ataque deve
+   * mostrar o alcance daquele ataque").
+   * Aqui devolvemos ONDE O FEITIÇO CHEGA — distância, linha e visão —, sem
+   * exigir que haja alguém lá. A interface pinta este conjunto fraco e, por
+   * cima, `castTargets` forte: o jogador vê o alcance E quem dá para acertar. */
+  Engine.spellRange = function (state, uid, spellId) {
+    var u = Engine.findUnit(state, uid);
+    var spell = spellDef(spellId);
+    if (!u || !spell) return [];
+    var rg = sRange(spell);
+    var out = [];
+    for (var y = 0; y < state.grid.h; y++) {
+      for (var x = 0; x < state.grid.w; x++) {
+        if (!isFloor(state, x, y)) continue;
+        var d = manhattan(u.x, u.y, x, y);
+        if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) continue;
+        if (rg.line && !(x === u.x || y === u.y)) continue;
+        if (rg.los && !Engine.los(state, u.x, u.y, x, y)) continue;
+        out.push({ x: x, y: y });
+      }
+    }
+    return out;
+  };
+
   Engine.castTargets = function (state, uid, spellId) {
     var u = Engine.findUnit(state, uid);
     var spell = spellDef(spellId);

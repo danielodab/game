@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Folha de aprovação — ESPÉCIES</title>
+<style>
+  html,body{margin:0;background:#11151b;color:#e8eef6;font:13px/1.45 system-ui,Segoe UI,sans-serif}
+  body.sil{background:#f3f1ea;color:#20242a}
+  #wrap{position:relative}
+  #cv{display:block}
+  h1{font:600 20px/1.2 system-ui;margin:14px 18px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 18px 10px;max-width:1500px}
+  body.sil .sub{color:#5c6470}
+  .cap{position:absolute;text-align:center;font-size:11px;line-height:1.25}
+  .cap b{display:block;font-size:12.5px;color:#fff}
+  body.sil .cap b{color:#111}
+  .cap i{display:block;font-style:normal;color:#8b98a8;font-size:10.5px}
+  body.sil .cap i{color:#5c6470}
+  .cap .lic{color:#6f7c8c;font-size:9.5px;display:block}
+  body.sil .cap .lic{color:#7b8290}
+  .rowlab{position:absolute;font:600 13px/1.3 system-ui;color:#ffd08a;text-align:right}
+  body.sil .rowlab{color:#8a5a12}
+  .rowlab span{display:block;font-weight:400;color:#8895a6;font-size:10.5px}
+  body.sil .rowlab span{color:#5c6470}
+  #st{font:12px monospace;color:#7fe08a;margin:0 18px 8px}
+</style>
+</head>
+<body>
+<h1 id="tit">Folha de aprovação — ESPÉCIES</h1>
+<div class="sub" id="sub">carregando…</div>
+<div id="st">…</div>
+<div id="wrap"><canvas id="cv"></canvas></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+'use strict';
+var Q = {};
+location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+var SIL   = Q.sil === '1';
+var ROT   = Q.rot !== '0';           // rótulos ligados por padrão
+var FOLHA = Q.folha || 'elenco';
+var DIR   = '../assets/candidatos/quaternius_ultimate_monsters/';
+var DIR2  = '../assets/candidatos/quaternius_um_extra/';
+var EXTRA = { Frog:1, Dino:1, Bunny:1, Cat:1, Chicken:1, Pigeon:1, Alpaking:1,
+              Mushnub:1, Glub:1, Armabee:1, Orc_Enemy:1, Pink_Slime:1, Green_Blob:1, Fish:1 };
+function url(n){ return EXTRA[n] ? (DIR2 + n + '.glb') : (DIR + n + '.gltf'); }
+
+// ======================================================== A PROPOSTA DAS 6
+// Uma ESPECIE por papel. Cada uma precisa de uma MARCA doavel para a fusao:
+// destacavel, unica entre as seis, e legivel no tamanho do tabuleiro.
+var SP = {
+  sumo:       { esp:'Yeti',         alt:3.95, bulk:5.0, cor:'#d4553f',
+                marca:'cabeçorra peluda de chifres curtos', papel:'tanque' },
+  arqueiro:   { esp:'Birb',         alt:3.60, bulk:2.0, cor:'#4f9d6a',
+                marca:'bico comprido e crista', papel:'atirador' },
+  bruxo:      { esp:'Demon',        alt:3.50, bulk:3.0, cor:'#7a5fa0',
+                marca:'chifres longos + TRIDENTE (malha separada)', papel:'mago' },
+  espadachim: { esp:'Frog',         alt:2.95, bulk:1.0, cor:'#2f6f8f',
+                marca:'crânio largo de olhos no topo', papel:'assassino' },
+  curandeira: { esp:'MushroomKing', alt:3.55, bulk:4.0, cor:'#f0c05a',
+                marca:'chapéu de cogumelo + COGUMELO (malha separada)', papel:'suporte' },
+  invocador:  { esp:'Tribal',       alt:3.80, bulk:3.5, cor:'#3f8f8a',
+                marca:'máscara e cocar de penas', papel:'invocador' }
+};
+var IDS = ['sumo','arqueiro','bruxo','espadachim','curandeira','invocador'];
+// peças realmente destacáveis (malha própria) que existem no pacote
+var ASSINATURA = { Demon:'Trident', Orc:'Orc_Weapon', MushroomKing:'Mushroom', Bunny:'Carrot' };
+// fator de cabeca: especies de cranio pequeno precisam crescer para a marca
+// continuar legivel no tamanho do tabuleiro.
+var CAB = { Frog:1.30, Birb:1.12, Ninja:1.15, Alien:1.05 };
+
+var ELENCO = [
+  { id:'sumo',       a:{n:'Yeti',        alt:3.95, rot:'Iéti — mole de pelo, braços que arrastam'},
+                     b:{n:'Orc',         alt:3.70, rot:'Orc — porrete próprio (malha separada)'} },
+  { id:'arqueiro',   a:{n:'Birb',        alt:3.60, rot:'Ave — pernalta, bico, crista'},
+                     b:{n:'Cactoro',     alt:3.70, rot:'Cacto — espinhos e chapéu de aba'} },
+  { id:'bruxo',      a:{n:'Demon',       alt:3.50, rot:'Demônio — chifres e tridente'},
+                     b:{n:'BlueDemon',   alt:3.40, rot:'Demônio azul — mais magro'} },
+  { id:'espadachim', a:{n:'Frog',        alt:2.95, rot:'Anfíbio — agachado, coxas de salto'},
+                     b:{n:'Ninja',       alt:3.10, rot:'Humano mascarado (o menos "espécie")'} },
+  { id:'curandeira', a:{n:'MushroomKing',alt:3.55, rot:'Fungo — coroa e cogumelo destacável'},
+                     b:{n:'Monkroose',   alt:3.30, rot:'Símio — ombros baixos, braços longos'} },
+  { id:'invocador',  a:{n:'Tribal',      alt:3.80, rot:'Xamã mascarado — cocar de penas'},
+                     b:{n:'Alien',       alt:3.45, rot:'Alienígena — crânio grande, esguio'} }
+];
+var TODAS = [
+  {n:'Yeti',rig:'bípede 43'},{n:'Orc',rig:'bípede 43'},{n:'Demon',rig:'bípede 43'},
+  {n:'BlueDemon',rig:'bípede 43'},{n:'Cactoro',rig:'bípede 43'},{n:'MushroomKing',rig:'bípede 43'},
+  {n:'Monkroose',rig:'bípede 43'},{n:'Birb',rig:'bípede 43'},{n:'Alien',rig:'bípede 43'},
+  {n:'Ninja',rig:'bípede 43'},{n:'Tribal',rig:'bípede 43'},{n:'Frog',rig:'bípede 43'},
+  {n:'Dino',rig:'bípede 43'},{n:'Bunny',rig:'bípede 49'},
+  {n:'Ghost_Skull',rig:'flutuante 38'},{n:'Ghost',rig:'flutuante 38'},{n:'Hywirl',rig:'flutuante 38'},
+  {n:'Goleling_Evolved',rig:'asa 13'},{n:'Squidle',rig:'flutuante 43'},{n:'Dragon_Evolved',rig:'asa 46'}
+];
+var CHEFES = [
+  { id:'boss-gardener',   sala:'Estufa · terra',  c:[{n:'Mushnub_Evolved',alt:5.60},{n:'GreenSpikyBlob',alt:5.20}] },
+  { id:'boss-baroness',   sala:'Cisterna · água', c:[{n:'Squidle',alt:5.40},{n:'Glub_Evolved',alt:5.30}] },
+  { id:'boss-heartforge', sala:'Fecho · fogo',    c:[{n:'Dragon_Evolved',alt:6.00},{n:'Hywirl',alt:5.20}] },
+  { id:'boss-windwright', sala:'Andaimes · ar',   c:[{n:'Armabee_Evolved',alt:5.30},{n:'Alpaking_Evolved',alt:5.40}] },
+  { id:'boss-deepknock',  sala:'Mina · terra',    c:[{n:'Goleling_Evolved',alt:5.70},{n:'Dino',alt:5.50}] },
+  { id:'boss-riftheart',  sala:'Coração · neutro',c:[{n:'Ghost_Skull',alt:6.20},{n:'Dragon',alt:5.20}] }
+];
+
+// ------------------------------------------------------------------ layout
+var CW = 250, CH = 330, LAB = 168, PAD = 10, CAPH = 50;
+if (FOLHA === 'especies')  { CW = 226; CH = 260; LAB = 0;   CAPH = 42; }
+if (FOLHA === 'chefes')    { CW = 300; CH = 420; CAPH = 58; }
+if (FOLHA === 'fusao')     { CW = 250; CH = 330; LAB = 150; }
+if (FOLHA === 'quinze')    { CW = 232; CH = 300; LAB = 0;   CAPH = ROT ? 46 : 16; }
+if (FOLHA === 'tabuleiro') { CW = 150; CH = 168; LAB = 0;   CAPH = ROT ? 40 : 12; }
+
+var FRAME = { elenco:{h:4.6,olho:1.85}, especies:{h:5.2,olho:1.95},
+              chefes:{h:8.2,olho:3.10}, fusao:{h:5.4,olho:2.10},
+              quinze:{h:5.4,olho:2.10},
+              // TABULEIRO: campo de visao equivalente ao do jogo. CELL=2,0 e a
+              // trava de legibilidade e 26 px por celula no desktop -> um heroi
+              // de ~4 m ocupa ~40 px de tela. Aqui: 168 px de altura de celula
+              // para 13 m de campo => 4 m ~ 52 px. Mesma ordem de grandeza.
+              tabuleiro:{h:13.0,olho:3.2} }[FOLHA] || {h:4.6,olho:1.85};
+var MAXW = FRAME.h * (CW/CH) * (FOLHA==='especies' ? 1.0 : (FOLHA==='chefes' ? 2.2 : 1.10));
+
+// ------------------------------------------------------------------- cena
+var ren, cam, loader, wrap, cv, pend = 0, erros = [], linhas = [];
+function makeScene() {
+  var sc = new THREE.Scene();
+  if (SIL) { sc.background = new THREE.Color(0xf3f1ea); }
+  else {
+    sc.background = new THREE.Color(0x161b22);
+    sc.add(new THREE.HemisphereLight(0xbfd4ea, 0x2b2f36, 1.05));
+    var k = new THREE.DirectionalLight(0xffffff, 1.55); k.position.set(4,9,7); sc.add(k);
+    var r = new THREE.DirectionalLight(0x9fc4ff, 0.75); r.position.set(-6,4,-5); sc.add(r);
+  }
+  return sc;
+}
+function ruler(sc, marca) {
+  if (FOLHA === 'tabuleiro') { return; }
+  var col = SIL ? 0xc9c4b4 : 0x2c3644;
+  var g = new THREE.Group();
+  for (var y = 1; y <= 6; y++) {
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.012),
+      new THREE.MeshBasicMaterial({ color: col }));
+    m.position.set(0, y, -1.0); g.add(m);
+  }
+  if (marca) {
+    var r = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.035),
+      new THREE.MeshBasicMaterial({ color: SIL ? 0xc03020 : 0xff5544 }));
+    r.position.set(0, marca, -0.98); g.add(r);
+  }
+  var ch = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.02),
+    new THREE.MeshBasicMaterial({ color: SIL ? 0x8d8674 : 0x44566c }));
+  ch.rotation.x = -Math.PI/2; ch.position.y = 0.001; g.add(ch);
+  sc.add(g);
+}
+function silhouette(root) {
+  root.traverse(function (n) {
+    if (!n.isMesh && !n.isSkinnedMesh) return;
+    var old = Array.isArray(n.material) ? n.material[0] : n.material;
+    var m = new THREE.MeshBasicMaterial({ color: 0x141a20, side: THREE.DoubleSide });
+    if (old && old.clippingPlanes) m.clippingPlanes = old.clippingPlanes;
+    n.material = m;
+  });
+}
+function fitTo(node, alvo, maxW) {
+  node.updateMatrixWorld(true);
+  var box = new THREE.Box3().setFromObject(node);
+  var h = Math.max(0.01, box.max.y - box.min.y);
+  var w = Math.max(0.01, Math.max(box.max.x - box.min.x, box.max.z - box.min.z));
+  var s = alvo / h;
+  if (maxW && w * s > maxW) s = maxW / w;
+  node.scale.multiplyScalar(s);
+  chao(node);
+}
+function chao(node) {
+  node.updateMatrixWorld(true);
+  var box = new THREE.Box3().setFromObject(node);
+  node.position.x -= (box.min.x + box.max.x) / 2;
+  node.position.z -= (box.min.z + box.max.z) / 2;
+  node.position.y -= box.min.y;
+  node.updateMatrixWorld(true);
+}
+
+// ---------------------------------------------------------- carregar candidato
+var cacheG = {};
+function raw(nome, cb) {
+  if (cacheG[nome]) { cb(cacheG[nome]); return; }
+  pend++;
+  loader.load(url(nome), function (gltf) {
+    cacheG[nome] = gltf; cb(gltf);
+    if (--pend === 0) desenha();
+  }, undefined, function () { erros.push(nome); if (--pend === 0) desenha(); });
+}
+function prep(scene, tint) {
+  scene.traverse(function (o) {
+    if (!o.isMesh && !o.isSkinnedMesh) return;
+    o.frustumCulled = false;
+    var ms = Array.isArray(o.material) ? o.material : [o.material];
+    var cl = [];
+    for (var i=0;i<ms.length;i++) {
+      var m = ms[i] ? ms[i].clone() : ms[i];
+      if (m && m.map) m.map.magFilter = THREE.NearestFilter;
+      if (m) { m.roughness = 0.84; m.metalness = 0.02; }
+      if (m && tint && m.color) m.color.lerp(new THREE.Color(tint), 0.42);
+      cl.push(m);
+    }
+    o.material = Array.isArray(o.material) ? cl : cl[0];
+  });
+}
+function poseIdle(gltf, scene, t) {
+  if (!gltf.animations || !gltf.animations.length) return;
+  var idle = null, i;
+  for (i=0;i<gltf.animations.length;i++)
+    if (/(^|\|)(Idle|Flying_Idle)$/i.test(gltf.animations[i].name)) idle = gltf.animations[i];
+  if (!idle) idle = gltf.animations[0];
+  var mx = new THREE.AnimationMixer(scene);
+  mx.clipAction(idle).play(); mx.update(t == null ? 0.40 : t);
+}
+// devolve {g: Group posicionado no chao, n: cena clonada}
+function unidade(nome, alt, cb, tint) {
+  raw(nome, function (gltf) {
+    var n = JOGO.Models3D2.cloneSkinned(gltf.scene);
+    prep(n, tint); poseIdle(gltf, n, 0.40);
+    var g = new THREE.Group(); g.add(n);
+    n.updateMatrixWorld(true);
+    if (alt) fitTo(g, alt, MAXW);
+    cb(g, gltf, n);
+  });
+}
+
+// ============================================================ CORTE POR OSSO
+// So e possivel porque as 13 especies bipedes do pacote compartilham NOMES DE
+// OSSO e POSE DE BIND (medido: divergencia maxima de 0,088 em modelos de ~3,5 m
+// = 2,5%). Entao da para recortar a malha fechada por peso de osso e trocar
+// regioes entre especies.
+var RE_CABECA = /^(Head|Neck)$/;
+function corta(mesh, querCabeca) {
+  var geo = mesh.geometry;
+  var si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+  if (!si || !mesh.skeleton || !geo.index) return;
+  var bones = mesh.skeleton.bones, n = si.count, marca = new Uint8Array(n), i, j;
+  var GET = ['getX','getY','getZ','getW'];
+  for (i=0;i<n;i++) {
+    var best = -1, bw = -1;
+    for (j=0;j<4;j++) { var w = sw[GET[j]](i); if (w > bw) { bw = w; best = si[GET[j]](i); } }
+    var b = bones[best];
+    marca[i] = (b && RE_CABECA.test(b.name)) ? 1 : 0;
+  }
+  var idx = geo.index, out = [];
+  for (i=0;i<idx.count;i+=3) {
+    var a=idx.getX(i), b2=idx.getX(i+1), c=idx.getX(i+2);
+    var s = marca[a]+marca[b2]+marca[c];
+    if (querCabeca ? (s === 3) : (s <= 1)) out.push(a,b2,c);
+  }
+  var g2 = geo.clone(); g2.setIndex(out); mesh.geometry = g2;
+}
+// As pecas destacaveis (Trident, Orc_Weapon, Mushroom, Carrot) NAO sao malhas
+// estaticas penduradas num osso: sao SKINNED no mesmo esqueleto. Entao para
+// levar a peca de uma especie para outra e preciso religar (bind) ela no
+// esqueleto do anfitriao. Isso so funciona porque a pose de bind e a mesma.
+function enxertaPeca(nh, gltfg, nome, tint) {
+  var src = gltfg.scene.getObjectByName(nome || '@nada');
+  if (!src || !src.isSkinnedMesh) return false;
+  var alvo = null;
+  nh.traverse(function (o) { if (!alvo && o.isSkinnedMesh) alvo = o; });
+  if (!alvo || !alvo.skeleton) return false;
+  var mapa = {};
+  alvo.skeleton.bones.forEach(function (b) { mapa[b.name] = b; });
+  var bones = [], invs = [], ok = true;
+  src.skeleton.bones.forEach(function (b, i) {
+    var t = mapa[b.name]; if (!t) ok = false;
+    bones.push(t || b); invs.push(src.skeleton.boneInverses[i].clone());
+  });
+  if (!ok) return false;
+  var c = new THREE.SkinnedMesh(src.geometry, src.material);
+  c.frustumCulled = false;
+  c.position.copy(src.position); c.quaternion.copy(src.quaternion); c.scale.copy(src.scale);
+  (alvo.parent || nh).add(c);
+  c.bind(new THREE.Skeleton(bones, invs), src.bindMatrix.clone());
+  prep(c, tint);
+  return true;
+}
+function osso(root, nome) {
+  var b = null;
+  root.traverse(function (n) { if (!b && n.isBone && n.name === nome) b = n; });
+  if (!b) return null;
+  b.updateWorldMatrix(true, false);
+  return new THREE.Vector3().setFromMatrixPosition(b.matrixWorld);
+}
+
+// ============================================================ AS FUSOES
+// RECEITA: corpo do ANFITRIAO (o de maior BULK) + CABECA do CONVIDADO,
+// alinhada pelo osso Neck + peca de assinatura do convidado no punho livre
+// + cor do convidado como acento. A cabeca e a marca: e destacavel (via corte
+// por osso), e unica entre as seis, e e silhueta -> le no tamanho do tabuleiro.
+function fusaoCabeca(idA, idB, alvo, cb) {
+  var A = SP[idA], B = SP[idB];
+  var host = A.bulk >= B.bulk ? A : B, guest = A.bulk >= B.bulk ? B : A;
+  var altF = alvo || ((host.alt + guest.alt) / 2 * 1.26);
+  unidade(host.esp, altF, function (gh, gltfh, nh) {
+    // corpo do anfitriao SEM cabeca
+    nh.traverse(function (o) { if (o.isSkinnedMesh) corta(o, false); });
+    unidade(guest.esp, 0, function (gg, gltfg, ng) {
+      // so a cabeca do convidado
+      ng.traverse(function (o) { if (o.isSkinnedMesh) corta(o, true); });
+      // alinhar pelo osso Neck, escalando por Neck-Body do proprio rig
+      var hN = osso(nh,'Neck'), hB = osso(nh,'Body'), gN = osso(ng,'Neck'), gB = osso(ng,'Body');
+      if (hN && hB && gN && gB) {
+        var s = hN.distanceTo(hB) / Math.max(1e-4, gN.distanceTo(gB));
+        gg.scale.multiplyScalar(s);
+        gg.updateMatrixWorld(true);
+        var gN2 = osso(ng,'Neck');
+        gg.position.add(hN.clone().sub(gN2));
+        gg.updateMatrixWorld(true);
+      }
+      var g = new THREE.Group(); g.add(gh); g.add(gg);
+      // peca de assinatura do convidado, se existir, no antebraco livre
+      enxertaPeca(nh, gltfg, ASSINATURA[guest.esp], guest.cor);
+      cb(g, host, guest);
+    }, guest.cor);
+  }, host.cor);
+}
+// (d') DUAS CABECAS — corpo inteiro do anfitriao (com a marca dele intacta)
+// + a cabeca do convidado ao lado da propria. Nenhuma marca se perde, e vale
+// para TODAS as 15 duplas, inclusive quando as duas marcas sao de cabeca.
+function fusaoDuasCabecas(idA, idB, alvo, cb) {
+  var A = SP[idA], B = SP[idB];
+  var host = A.bulk >= B.bulk ? A : B, guest = A.bulk >= B.bulk ? B : A;
+  var altF = alvo || ((host.alt + guest.alt) / 2 * 1.26);
+  unidade(host.esp, altF, function (gh, gltfh, nh) {
+    unidade(guest.esp, 0, function (gg, gltfg, ng) {
+      ng.traverse(function (o) { if (o.isSkinnedMesh) corta(o, true); });
+      var hN = osso(nh,'Neck'), hB = osso(nh,'Body'), gN = osso(ng,'Neck'), gB = osso(ng,'Body');
+      if (hN && hB && gN && gB) {
+        // escala pelo proprio rig (Neck-Body), com um fator por especie para as
+        // que tem cabeca pequena demais para serem lidas no tabuleiro.
+        var s = hN.distanceTo(hB) / Math.max(1e-4, gN.distanceTo(gB));
+        gg.scale.multiplyScalar(s * 0.96 * (CAB[guest.esp] || 1));
+        gg.updateMatrixWorld(true);
+        var gN2 = osso(ng,'Neck');
+        gg.position.add(hN.clone().sub(gN2));
+        var larg = new THREE.Box3().setFromObject(gh);
+        gg.position.x -= (larg.max.x - larg.min.x) * 0.22;
+        gg.position.y += altF * 0.015;
+        gg.updateMatrixWorld(true);
+      }
+      var g = new THREE.Group(); g.add(gh); g.add(gg);
+      enxertaPeca(nh, gltfg, ASSINATURA[guest.esp], guest.cor);
+      cb(g, host, guest);
+    }, guest.cor);
+  }, host.cor);
+}
+// (a') quimera sagital — metade de cada especie, corte vertical
+function fusaoQuimera(idA, idB, alvo, cb) {
+  var A = SP[idA], B = SP[idB];
+  var altF = alvo || ((A.alt + B.alt) / 2 * 1.26);
+  unidade(A.esp, altF, function (gh) {
+    unidade(B.esp, altF, function (gg) {
+      var pl = new THREE.Plane(new THREE.Vector3(-1,0,0), 0.0);
+      var pr = new THREE.Plane(new THREE.Vector3( 1,0,0), 0.0);
+      gh.traverse(function (o){ if (o.isMesh||o.isSkinnedMesh) setClip(o,[pl]); });
+      gg.traverse(function (o){ if (o.isMesh||o.isSkinnedMesh) setClip(o,[pr]); });
+      var g = new THREE.Group(); g.add(gh); g.add(gg); cb(g);
+    }, B.cor);
+  }, A.cor);
+}
+function setClip(o, planes) {
+  var ms = Array.isArray(o.material) ? o.material : [o.material];
+  for (var i=0;i<ms.length;i++) if (ms[i]) { ms[i].clippingPlanes = planes; ms[i].side = THREE.DoubleSide; }
+}
+// (b) so adereco — corpo inteiro do anfitriao + peca destacavel do convidado
+function fusaoAdereco(idA, idB, cb) {
+  var A = SP[idA], B = SP[idB];
+  var host = A.bulk >= B.bulk ? A : B, guest = A.bulk >= B.bulk ? B : A;
+  var altF = (host.alt + guest.alt) / 2 * 1.26;
+  unidade(host.esp, altF, function (gh, gltfh, nh) {
+    raw(guest.esp, function (gg) {
+      cb(gh, enxertaPeca(nh, gg, ASSINATURA[guest.esp], guest.cor));
+    });
+  }, host.cor);
+}
+
+// --------------------------------------------------------------- montagem
+function novaLinha(rot, sub) { var l = { rot:rot, sub:sub, cels:[] }; linhas.push(l); return l; }
+function cel(linha, tit, sub, lic) { var c = { node:null, tit:tit, sub:sub||'', lic:lic||'' }; linha.cels.push(c); return c; }
+function atual(defId, opts) {
+  var g = JOGO.Models3D2.unit(defId, opts || {});
+  if (!g) return null;
+  if (g.userData.mixer) g.userData.mixer.update(0.42);
+  g.updateMatrixWorld(true);
+  return g;
+}
+function pares() {
+  var out = [];
+  for (var i=0;i<IDS.length;i++) for (var j=i+1;j<IDS.length;j++) out.push([IDS[i], IDS[j]]);
+  return out;
+}
+
+function montaElenco() {
+  var CL = JOGO.DATA.classes;
+  ELENCO.forEach(function (e) {
+    var L = novaLinha(CL[e.id].name + ' · ' + SP[e.id].papel, e.id);
+    var c0 = cel(L, 'HOJE', (JOGO.Models3D2.lookFor(e.id,{classId:e.id})||{}).model, 'KayKit CC0');
+    c0.node = atual(e.id, { classId: e.id });
+    var c1 = cel(L, 'ESPÉCIE · ' + e.a.n, e.a.rot, 'Quaternius Ultimate Monsters · CC0 1.0');
+    unidade(e.a.n, e.a.alt, function (g) { c1.node = g; }, SP[e.id].cor);
+    var c2 = cel(L, 'alternativa · ' + e.b.n, e.b.rot, 'Quaternius Ultimate Monsters · CC0 1.0');
+    unidade(e.b.n, e.b.alt, function (g) { c2.node = g; }, SP[e.id].cor);
+  });
+}
+function montaEspecies() {
+  for (var i=0;i<TODAS.length;i+=5) {
+    var L = novaLinha('', '');
+    for (var j=i;j<Math.min(i+5, TODAS.length);j++) (function (t) {
+      var c = cel(L, t.n, t.rig, 'CC0 1.0');
+      unidade(t.n, 3.4, function (g) { c.node = g; });
+    })(TODAS[j]);
+  }
+}
+function montaChefes() {
+  var MD = JOGO.DATA.monsters;
+  CHEFES.forEach(function (ch) {
+    var md = MD[ch.id] || {};
+    var L = novaLinha(md.name || ch.id, ch.sala);
+    var cr = cel(L, 'referência', 'tanque Iéti, 3,95 m', '');
+    unidade('Yeti', 3.95, function (g) { cr.node = g; }, SP.sumo.cor);
+    var cf = cel(L, 'referência FUSÃO', 'Iéti+Demônio, 4,70 m', '');
+    fusaoCabeca('sumo','bruxo', 4.70, function (g) { cf.node = g; });
+    var c0 = cel(L, 'CHEFE HOJE', (JOGO.Models3D2.lookFor(ch.id,{})||{}).model, 'Quaternius/KayKit');
+    c0.node = atual(ch.id, { boss: true });
+    ch.c.forEach(function (cd, k) {
+      var c = cel(L, k===0?'candidato 1':'candidato 2', cd.n, 'Ultimate Monsters CC0 1.0');
+      unidade(cd.n, cd.alt, function (g) { c.node = g; });
+    });
+  });
+}
+function montaFusao() {
+  var casos = [['sumo','bruxo'], ['curandeira','espadachim'], ['invocador','arqueiro']];
+  var CL = JOGO.DATA.classes;
+  casos.forEach(function (p) {
+    var A = SP[p[0]], B = SP[p[1]];
+    var L = novaLinha(CL[p[0]].name + ' + ' + CL[p[1]].name, A.esp + ' + ' + B.esp);
+    var cA = cel(L, 'pai A · ' + A.esp, A.papel, A.marca);
+    unidade(A.esp, A.alt, function (g) { cA.node = g; }, A.cor);
+    var cB = cel(L, 'pai B · ' + B.esp, B.papel, B.marca);
+    unidade(B.esp, B.alt, function (g) { cB.node = g; }, B.cor);
+    var c1 = cel(L, 'b · SÓ adereço', 'corpo do anfitrião + peça do convidado', 'reprova: 4 de 13 espécies têm peça');
+    fusaoAdereco(p[0], p[1], function (g, ok) { c1.node = g; if (!ok) c1.sub = 'convidado NÃO tem peça → fusão invisível'; });
+    var c2 = cel(L, "a' · corpo + CABEÇA", 'RECEITA PROPOSTA', 'corte por peso de osso');
+    fusaoCabeca(p[0], p[1], 0, function (g) { c2.node = g; });
+    var c3 = cel(L, "d' · DUAS CABEÇAS", 'anfitrião inteiro + cabeça do convidado', 'nenhuma marca se perde');
+    fusaoDuasCabecas(p[0], p[1], 0, function (g) { c3.node = g; });
+    var c4 = cel(L, "c' · quimera sagital", 'metade de cada, corte vertical', 'mostra as duas, mas parte o corpo');
+    fusaoQuimera(p[0], p[1], 0, function (g) { c4.node = g; });
+  });
+}
+var RECEITA = Q.receita || 'duas';
+function fazFusao(a, b, alvo, cb) {
+  if (RECEITA === 'cabeca')  return fusaoCabeca(a, b, alvo, cb);
+  if (RECEITA === 'sagital') return fusaoQuimera(a, b, alvo, cb);
+  return fusaoDuasCabecas(a, b, alvo, cb);
+}
+function montaQuinze(board) {
+  var CL = JOGO.DATA.classes;
+  var ps = pares(), porLinha = board ? 8 : 5;
+  for (var i=0;i<ps.length;i+=porLinha) {
+    var L = novaLinha('', '');
+    for (var j=i;j<Math.min(i+porLinha, ps.length);j++) (function (p, k) {
+      var A = SP[p[0]], B = SP[p[1]];
+      var host = A.bulk >= B.bulk ? A : B, guest = A.bulk >= B.bulk ? B : A;
+      var c = cel(L, ROT ? ('#'+(k+1)+' ' + CL[p[0]].name + ' + ' + CL[p[1]].name) : ('#'+(k+1)),
+                     ROT ? (host.esp + ' + ' + guest.esp) : '',
+                     ROT ? (host.papel + ' + ' + guest.papel) : '');
+      fazFusao(p[0], p[1], board ? 4.6 : 0, function (g) { c.node = g; });
+    })(ps[j], j);
+  }
+}
+function montaTabuleiro() {
+  // linha 1: as 6 classes puras, no tamanho do tabuleiro
+  var CL = JOGO.DATA.classes;
+  var L0 = novaLinha('', '');
+  IDS.forEach(function (id) {
+    var c = cel(L0, ROT ? CL[id].name : '', '', '');
+    unidade(SP[id].esp, SP[id].alt, function (g) { c.node = g; }, SP[id].cor);
+  });
+  montaQuinze(true);
+}
+
+// ---------------------------------------------------------------- desenho
+function desenha() {
+  if (window.__pronto) return;
+  var cols = 0;
+  linhas.forEach(function (l) { cols = Math.max(cols, l.cels.length); });
+  var W = LAB + cols*CW + PAD*2, H = linhas.length*(CH+CAPH) + PAD*2;
+  cv.width = W; cv.height = H; cv.style.width = W+'px'; cv.style.height = H+'px';
+  ren.setSize(W, H, false); ren.setScissorTest(true);
+
+  cam = new THREE.PerspectiveCamera(22, CW/CH, 0.1, 300);
+  var dist = (FRAME.h/2) / Math.tan(22*Math.PI/360);
+  cam.position.set(Math.sin(0.55)*dist, FRAME.olho + dist*0.055, Math.cos(0.55)*dist);
+  cam.lookAt(0, FRAME.olho, 0);
+
+  ren.setScissor(0,0,W,H); ren.setViewport(0,0,W,H);
+  ren.setClearColor(SIL ? 0xf3f1ea : 0x11151b, 1); ren.clear();
+
+  var marca = (FOLHA === 'chefes') ? 4.70 : 0;
+  var htm = '';
+  linhas.forEach(function (l, ri) {
+    var y0 = PAD + ri*(CH+CAPH);
+    if (LAB) htm += '<div class="rowlab" style="left:0;top:'+(y0+CH/2-16)+'px;width:'+(LAB-12)+'px">'+
+                    l.rot+'<span>'+(l.sub||'')+'</span></div>';
+    l.cels.forEach(function (c, ci) {
+      var x0 = PAD + LAB + ci*CW;
+      var sc = makeScene(); ruler(sc, marca);
+      if (c.node) { if (SIL) silhouette(c.node); sc.add(c.node); }
+      var glY = H - y0 - CH;
+      ren.setScissor(x0, glY, CW, CH); ren.setViewport(x0, glY, CW, CH);
+      ren.render(sc, cam);
+      if (c.node) sc.remove(c.node);
+      var bx = c.node ? (new THREE.Box3().setFromObject(c.node)) : null;
+      var alt = bx ? bx.max.y : 0;
+      var lar = bx ? Math.max(bx.max.x-bx.min.x, bx.max.z-bx.min.z) : 0;
+      var med = alt ? (alt.toFixed(2)+' m alto' + (FOLHA==='chefes' ? ' · '+lar.toFixed(2)+' m largo' : '')
+                       + (FOLHA==='chefes' ? (alt>=4.70?' ✔':' ✘ ABAIXO DA FUSÃO') : '')) : 'não carregou';
+      htm += '<div class="cap" style="left:'+x0+'px;top:'+(y0+CH-4)+'px;width:'+CW+'px">'+
+             '<b>'+c.tit+'</b>'+(c.sub||'')+
+             (FOLHA==='tabuleiro' && !ROT ? '' : '<i>'+med+'</i>')+
+             '<span class="lic">'+(c.lic||'')+'</span></div>';
+    });
+  });
+  wrap.insertAdjacentHTML('beforeend', htm);
+  document.getElementById('st').textContent =
+    'pronto · '+linhas.length+' linhas · erros: '+(erros.length?erros.join(', '):'nenhum');
+  document.title = 'PRONTO ' + FOLHA;
+  window.__pronto = true;
+}
+
+function boot() {
+  cv = document.getElementById('cv'); wrap = document.getElementById('wrap');
+  if (SIL) document.body.className = 'sil';
+  ren = new THREE.WebGLRenderer({ canvas: cv, antialias:true, preserveDrawingBuffer:true });
+  ren.setPixelRatio(1); ren.outputEncoding = THREE.sRGBEncoding;
+  ren.localClippingEnabled = true;
+  loader = new THREE.GLTFLoader();
+  var tit = { elenco:'Elenco por ESPÉCIE — um bicho diferente por papel',
+              especies:'Catálogo de espécies CC0 do mesmo pacote',
+              chefes:'Chefes — acima da linha vermelha (4,70 m = dupla fundida)',
+              fusao:'FUSÃO entre espécies — os três caminhos, comparados',
+              quinze:'As 15 fusões — corpo do anfitrião + CABEÇA do convidado',
+              tabuleiro:'TAMANHO DE TABULEIRO — é assim que aparece no jogo' }[FOLHA] || FOLHA;
+  document.getElementById('tit').textContent = tit + (SIL?' · SILHUETA':'') + (ROT?'':' · SEM RÓTULO');
+  document.getElementById('sub').textContent =
+    'Mesma escala, mesmo chão, mesma câmera. Régua a cada 1 m. ' +
+    (FOLHA==='chefes' ? 'A linha VERMELHA a 4,70 m é a altura da dupla fundida: nenhum chefe pode ficar abaixo dela. ' : '') +
+    (FOLHA==='tabuleiro' ? 'Campo de 13 m em 168 px — a mesma ordem de grandeza do jogo (CELL=2,0; trava de 26 px por célula). Se não dá para nomear os dois pais AQUI, a marca não serve. ' : '') +
+    (SIL ? 'Teste de silhueta: se dá para dizer quem é quem só pela mancha, passa.' : '');
+  if (FOLHA === 'elenco') montaElenco();
+  else if (FOLHA === 'especies') montaEspecies();
+  else if (FOLHA === 'chefes') montaChefes();
+  else if (FOLHA === 'fusao') montaFusao();
+  else if (FOLHA === 'quinze') montaQuinze(false);
+  else if (FOLHA === 'tabuleiro') montaTabuleiro();
+  if (pend === 0) desenha();
+}
+function espera() {
+  if (!window.JOGO || !JOGO.Models3D2) { setTimeout(espera, 60); return; }
+  JOGO.Models3D2.load(function () { try { boot(); } catch (e) {
+    document.getElementById('st').textContent = 'ERRO: '+(e&&e.message)+'\n'+(e&&e.stack);
+    document.title = 'ERRO';
+  } });
+}
+espera();
+})();
+</script>
+</body>
+</html>

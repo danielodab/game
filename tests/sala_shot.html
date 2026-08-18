@@ -103,6 +103,27 @@
         var estado = JOGO.Engine.createBattle(dg, sala, JOGO.Progress.battleParty(ids));
         JOGO.Game.state = estado;
         pump(20);
+
+        // ?feitico=<indice>  seleciona um feitico do heroi ativo, para conferir
+        // o desenho de ALCANCE no chao (fraco) e de ALVOS (forte).
+        if (Q.feitico != null) {
+          // O overlay so desenha na vez do JOGADOR, e a ordem de iniciativa pode
+          // comecar num monstro. Forcamos o turno do primeiro heroi.
+          var heroi = estado.units.filter(function (u) {
+            return u.side === 'player' && u.alive;
+          })[0];
+          if (heroi && estado.order) {
+            var iu = estado.order.indexOf(heroi.uid);
+            if (iu >= 0) estado.turnIndex = iu;
+          }
+          pump(4);
+          var at = JOGO.Engine.activeUnit(estado);
+          if (at && at.spells && at.spells.length) {
+            var idx = Math.max(0, Math.min(at.spells.length - 1, parseInt(Q.feitico, 10) || 0));
+            JOGO.Game.selectedSpellId = at.spells[idx];
+          }
+          pump(8);
+        }
         if (Q.rot && JOGO.Renderer.setCamera) JOGO.Renderer.setCamera({ rot: parseInt(Q.rot, 10) });
         if (Q.dist && JOGO.Renderer.setCamera) JOGO.Renderer.setCamera({ dist: parseFloat(Q.dist) });
         pump(parseInt(Q.frames || '60', 10));
@@ -116,7 +137,8 @@
         st.textContent = 'PASS ' + dg + ' sala ' + sala +
           ' · grade ' + estado.grid.w + 'x' + estado.grid.h +
           ' · unidades ' + estado.units.length +
-          ' · dist ' + (c.dist != null ? c.dist.toFixed(1) : '?');
+          ' · dist ' + (c.dist != null ? c.dist.toFixed(1) : '?') +
+          (JOGO.Game.selectedSpellId ? ' · feitico ' + JOGO.Game.selectedSpellId : '');
         window.__pronto = true;
       })();
     } catch (e) {
