@@ -83,7 +83,11 @@ b { font-weight: 700; }
 i, em { font-style: normal; color: var(--dim); }
 .empty { color: var(--dim); font-size: 13px; padding: 14px; text-align: center; }
 .is-hidden { display: none !important; }
-.silhouette { filter: brightness(0.16) contrast(1.6) saturate(0); }
+/* SILHUETA de conteúdo bloqueado. Precisa continuar LEGÍVEL: `brightness(.16)`
+   apagava a arte inteira e o jogador via um retângulo preto — que não promete
+   nada. Aqui a peça perde cor e luz, mas a FORMA sobrevive: é a promessa do
+   que ele vai destravar. */
+.silhouette { filter: grayscale(1) brightness(0.46) contrast(1.3); opacity: .92; }
 .art-missing { width: 40px; height: 40px; border: 1px dashed var(--line2); border-radius: 6px; }
 
 /* ---------------------------------------------------------------- rolagem */
@@ -188,8 +192,11 @@ i, em { font-style: normal; color: var(--dim); }
 .bar-txt {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font: 700 10.5px/1 var(--ui-sans); color: #f2ecdd;
-  text-shadow: 0 1px 2px rgba(0,0,0,.9); letter-spacing: .02em;
+  font: 700 10.5px/1 var(--ui-sans); color: #fff8e8;
+  /* a legenda cruza o preenchimento claro E o trilho escuro: precisa de sombra
+     dupla para continuar legível nos dois */
+  text-shadow: 0 1px 2px rgba(0,0,0,.95), 0 0 5px rgba(0,0,0,.85);
+  letter-spacing: .02em;
 }
 .bar-hp   .bar-fill { background: linear-gradient(180deg, #ff8b7a, var(--hp)); }
 .bar-xp   .bar-fill { background: linear-gradient(180deg, #c8e8ff, var(--xp)); }
@@ -265,8 +272,12 @@ i, em { font-style: normal; color: var(--dim); }
   display: flex; flex-direction: column; gap: 16px;
 }
 .game-title {
-  font-size: clamp(38px, 13vw, 66px);
-  letter-spacing: .14em;
+  font-size: clamp(30px, 11.2vw, 66px);
+  letter-spacing: .12em;
+  /* `letter-spacing` sobra DEPOIS da última letra: sem esta compensação o
+     título fica descentrado e o 'A' final encosta/corta na moldura estreita */
+  margin-right: -.12em;
+  max-width: 100%; white-space: nowrap;
   color: var(--gold);
   text-shadow: 0 3px 0 #6b4410, 0 0 28px rgba(255,196,77,.28);
 }
@@ -671,8 +682,20 @@ i, em { font-style: normal; color: var(--dim); }
 }
 .col-row.is-locked { border-style: dashed; }
 .col-row.is-focus { border-color: var(--gold); box-shadow: 0 0 18px rgba(255,196,77,.2); }
-.col-pic { flex: 0 0 auto; }
+/* `align-self:flex-start` é o que faz a caixa ter a altura DA CARTA: sem isso
+   ela estica com a linha inteira e o cadeado cai fora da arte */
+.col-pic { flex: 0 0 auto; position: relative; align-self: flex-start; }
 .col-pic canvas { display: block; border-radius: 8px; }
+/* cadeado sobre a carta bloqueada — o filtro fica só no canvas, senão o
+   cadeado sairia cinza junto com a arte */
+.col-pic.silhouette { filter: none; opacity: 1; }
+.col-pic.silhouette canvas { filter: grayscale(1) brightness(0.46) contrast(1.3); }
+.col-pic.silhouette::after {
+  content: '🔒'; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; line-height: 1; text-shadow: 0 2px 7px rgba(0,0,0,.95);
+  pointer-events: none;
+}
 .col-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .col-txt h3 { font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .col-role { font-size: 11.5px; color: var(--dim); line-height: 1.4; }
@@ -681,15 +704,18 @@ i, em { font-style: normal; color: var(--dim); }
 .col-next.is-max { color: var(--good); }
 .star-track { display: flex; gap: 4px; }
 .star-step {
-  flex: 1 1 0; text-align: center;
+  flex: 1 1 0; min-width: 0; text-align: center;
   padding: 5px 2px; border-radius: 8px;
   border: 1px solid var(--line); background: rgba(255,255,255,.02);
-  min-height: 46px;
+  min-height: 46px; overflow: hidden;
 }
 .star-step.is-on { border-color: var(--gold-dim); background: rgba(255,196,77,.1); }
 .star-step.is-next { border-color: var(--xp); box-shadow: 0 0 12px rgba(159,216,255,.22); }
 .star-step canvas { display: block; margin: 0 auto; }
-.star-b { display: block; font-size: 9px; line-height: 1.15; color: var(--dim); margin-top: 2px; }
+.star-b {
+  display: block; font-size: 9px; line-height: 1.15; color: var(--dim); margin-top: 2px;
+  overflow-wrap: anywhere;   /* '+25 PV · +10 esquiva' não pode vazar da casinha */
+}
 .star-step.is-on .star-b { color: var(--gold); }
 
 /* ----------------------------------------------------------- inventário */
