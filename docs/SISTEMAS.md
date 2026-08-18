@@ -231,14 +231,28 @@ inclinação **troca de sinal** entre elas, então nenhum valor global resolve.
 
 Seis, cada um com elemento, clima próprio, bestiário e um chefe.
 
-| id | nome | chefe | modelo do chefe |
+| id | theme | nome | chefe |
 |---|---|---|---|
-| `greenhouse` | A Estufa Soterrada | `boss-gardener` — A Jardineira-Viúva | Mushnub_Evolved |
-| `cistern` | a Cisterna | `boss-baroness` — Baronesa Salmoura | Glub_Evolved |
-| `forge` | o Fecho de Brasa | `boss-heartforge` — Magno, o Acendedor | BlueDemon |
-| `scaffold` | os Andaimes | `boss-windwright` — Cambota | Alpaking_Evolved |
-| `mine` | a Mina Trêmula | `boss-deepknock` — Batepedra | Yeti |
-| `heart` | o Coração Partido | `boss-riftheart` — O Coração Partido | Ghost_Skull |
+| `greenhouse` | `garden` | A Estufa Soterrada | `boss-gardener` — A Jardineira-Viúva |
+| `cistern` | `cistern` | A Cisterna dos Afogados | `boss-baroness` — Baronesa Salmoura |
+| `emberlock` | `forge` | O Fecho de Brasa | `boss-heartforge` — Magno, o Acendedor |
+| `windscaffold` | `scaffold` | Os Andaimes do Vento | `boss-windwright` — Cambota |
+| `quakemine` | `mine` | A Mina Trêmula | `boss-deepknock` — Batepedra |
+| `brokenheart` | `heart` | O Coração Partido | `boss-riftheart` — O Coração Partido |
+
+> Esta tabela já listou **`theme` na coluna do `id`** em quatro dos seis. Quem
+> escrevesse `dungeonId: 'forge'` não acharia calabouço nenhum. Os dois campos
+> existem e são diferentes: o `id` identifica, o `theme` escolhe a paleta.
+>
+> Calabouço **não tem campo `element`** — os 14 campos são id, name, theme,
+> description, difficulty, order, recommendedLevel, palette, defaultWeather,
+> weatherShiftEveryRounds, tileEventRate, rooms, lootTable, cardDrops. O
+> elemento é implícito no tema e no clima.
+>
+> O **modelo 3D de cada chefe** (Mushnub_Evolved, Glub_Evolved, BlueDemon,
+> Alpaking_Evolved, Yeti, Ghost_Skull) **não existe em `js/core/data/`** — mora
+> só em `docs/` e no renderizador. Quem for montar o elenco na Unity precisa
+> dessa tabela num lugar que não seja documento.
 
 ### Os chefes têm de ser maiores que qualquer herói
 
@@ -319,22 +333,27 @@ do arquivo** a partir do conjunto — nunca escritos à mão, para não divergir
 Item sobe de nível com **pedras elementais**, até **+10**. É a trilha do poder
 bruto: o item cru vira **2,20×** ele mesmo no +10.
 
-### Estrelas — a trilha da raridade
+### Estrelas — e elas são de CLASSE, não de item
 
-Juntar **3 itens iguais** dá **1 estrela**. Três estrelas é o topo, e é o
-caminho difícil: **27 cópias** do mesmo item.
+**Atenção:** este documento já descreveu uma trilha de estrela de **item** — 3
+itens iguais viram ★1, ★1/★2/★3 dando +8%/+18%/+30%, teto de 2,50× somando com a
+forja. **Nada disso existe nos dados.** Não há estrela de item em
+`js/core/data/`; a descrição inteira era plano que não foi construído.
 
-A estrela mostra-se como **cor de fundo** da célula, não como nome:
+O que existe é estrela de **classe**, em `DATA.stars`, e vai até **★5**. Sobe
+gastando **carta excedente** da classe, com custo em `DATA.cards[*].starCosts`:
 
-| estrelas | cor | bônus |
+| estrela | custo em cartas | o que dá |
 |---|---|---|
-| ★1 | cinza | +8% |
-| ★2 | azul | +18% |
-| ★3 | amarelo | +30% |
+| ★1 | 5 | +15 PV |
+| ★2 | 15 | +8 poder |
+| ★3 | 30 | +1 PP |
+| ★4 | 55 | +25 PV e +10 esquiva |
+| ★5 | 90 | +1 PA |
 
-**As duas trilhas se somam**, e o teto do jogo é **★3 com +10 = 2,50×** o item
-cru. A estrela sozinha vale menos que a forja sozinha — de propósito: forjar é o
-caminho previsível, estrelar é o caminho da sorte.
+O bônus é **fixo**, não percentual — some direto na ficha, e não multiplica item
+nenhum. Quem quiser a trilha de raridade por item precisa construí-la; ela nunca
+saiu do papel.
 
 Nem forja nem estrela mexem em **PA/PP** além do teto de +1. Esses dois recursos
 são o esqueleto do turno; inflar eles quebraria o jogo inteiro.
