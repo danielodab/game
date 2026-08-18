@@ -6,7 +6,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0d10">
 <title>SOTERRA 2.0</title>
-<link rel="stylesheet" href="css/style.css?v=6">
+<script>
+  // Cache: o jogo é local e roda com os arquivos do disco. Marcar a versão à mão
+  // (?v=6) falhou duas vezes — o número ficava parado enquanto os arquivos mudavam,
+  // e o navegador servia código velho enquanto os testes passavam com o novo.
+  // Agora a marca é o instante do carregamento: sempre pega o que está no disco.
+  window.__V = '?v=' + Date.now();
+  document.write('<link rel="stylesheet" href="css/style.css' + window.__V + '">');
+</script>
 </head>
 <body>
 <div id="app">
@@ -16,67 +23,46 @@
 
 <!--
   SOTERRA 2.0 — tabuleiro 3D (Three.js) com modelos CC0 do KayKit e do Quaternius.
-  Alternativas preservadas:  index2d.html (isométrico 2D em PixiJS)  ·  v1_3d.html (linha 3D da v1)
-  Bump do ?v=N a cada entrega: sem isso o navegador serve script velho e o jogo
-  roda com dado antigo enquanto os testes passam com o novo (aconteceu — bug B5 do QA).
+  Alternativas:  index2d.html (isométrico 2D em PixiJS)  ·  v1_3d.html (linha 3D da v1)
+
+  A arte do Sumô desenhada pelo usuário está preservada em assets/embedded/sprites-sumo.js.
+  Ela ficou fora da lista porque a classe virou um Bárbaro de machado na migração 3D e o
+  retrato desenhado não combinaria com o modelo em campo. Para trazê-la de volta, acrescente
+  'assets/embedded/sprites-sumo.js' e 'js/render2d/spriteart.js' à lista abaixo, nesta ordem,
+  logo antes de 'js/render3d/portraits3d.js' — ela tem prioridade sobre o retrato 3D.
 -->
-<script src="vendor/three.min.js?v=6"></script>
-<script src="vendor/GLTFLoader.js?v=6"></script>
-<script src="vendor/CopyShader.js?v=6"></script>
-<script src="vendor/LuminosityHighPassShader.js?v=6"></script>
-<script src="vendor/EffectComposer.js?v=6"></script>
-<script src="vendor/RenderPass.js?v=6"></script>
-<script src="vendor/ShaderPass.js?v=6"></script>
-<script src="vendor/UnrealBloomPass.js?v=6"></script>
+<script>
+  (function () {
+    var arquivos = [
+      'vendor/three.min.js', 'vendor/GLTFLoader.js', 'vendor/CopyShader.js',
+      'vendor/LuminosityHighPassShader.js', 'vendor/EffectComposer.js',
+      'vendor/RenderPass.js', 'vendor/ShaderPass.js', 'vendor/UnrealBloomPass.js',
 
-<script src="js/core/data/elements.js?v=6"></script>
-<script src="js/core/data/classes.js?v=6"></script>
-<script src="js/core/data/spells.js?v=6"></script>
-<script src="js/core/data/progression.js?v=6"></script>
-<script src="js/core/data/monsters.js?v=6"></script>
-<script src="js/core/data/dungeons.js?v=6"></script>
-<script src="js/core/data/fusions.js?v=6"></script>
-<script src="js/core/data/pets.js?v=6"></script>
-<script src="js/core/data/items.js?v=6"></script>
+      'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
+      'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+      'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js',
 
-<script src="js/core/engine.js?v=6"></script>
-<script src="js/core/fusion.js?v=6"></script>
-<script src="js/core/ai.js?v=6"></script>
-<script src="js/core/progress.js?v=6"></script>
-<script src="js/core/game.js?v=6"></script>
+      'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
+      'js/core/progress.js', 'js/core/game.js',
 
-<!-- cenário: kit KayKit Dungeon embutido + montador de salas -->
-<script src="assets/embedded/env-kit.js?v=6"></script>
-<script src="js/render3d/models3d.js?v=6"></script>
+      // cenário: kit KayKit Dungeon embutido + montador de salas
+      'assets/embedded/env-kit.js', 'js/render3d/models3d.js',
 
-<!-- personagens e monstros: modelos CC0 embutidos + banco único de animações -->
-<script src="assets/embedded/models-anims.js?v=6"></script>
-<script src="assets/embedded/models-heroes.js?v=6"></script>
-<script src="assets/embedded/models-monsters.js?v=6"></script>
+      // personagens e monstros: modelos CC0 + banco único de animações
+      'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js',
+      'assets/embedded/models-monsters.js',
 
-<script src="js/render3d/models3d_v2.js?v=6"></script>
-<script src="js/render3d/fx3d_v2.js?v=6"></script>
-<script src="js/render3d/renderer3d_v2.js?v=6"></script>
+      'js/render3d/models3d_v2.js', 'js/render3d/fx3d_v2.js', 'js/render3d/renderer3d_v2.js',
 
-<!--
-  Ícones e retratos da interface (2D).
+      // ícones e retratos da interface
+      'js/render2d/art.js', 'js/render3d/portraits3d.js',
 
-  A arte do Sumô desenhada pelo usuário está preservada em
-  assets/embedded/sprites-sumo.js e continua funcionando — mas ficou FORA daqui
-  de propósito: a classe `sumo` virou um BÁRBARO de machado quando migramos para
-  os modelos 3D, então o retrato desenhado mostraria um lutador de sumô ao lado
-  de um bárbaro no tabuleiro. Os retratos agora saem dos próprios modelos, e
-  todos combinam com o que está em campo.
-
-  Para trazer a arte de volta (ela tem prioridade sobre o retrato 3D), basta
-  reativar as duas linhas comentadas abaixo.
--->
-<!-- <script src="assets/embedded/sprites-sumo.js?v=6"></script> -->
-<script src="js/render2d/art.js?v=6"></script>
-<!-- <script src="js/render2d/spriteart.js?v=6"></script> -->
-<script src="js/render3d/portraits3d.js?v=6"></script>
-
-<script src="js/ui/hud.js?v=6"></script>
-<script src="js/main.js?v=6"></script>
+      'js/ui/hud.js', 'js/main.js'
+    ];
+    for (var i = 0; i < arquivos.length; i++) {
+      document.write('<script src="' + arquivos[i] + window.__V + '"><\/script>');
+    }
+  })();
+</script>
 </body>
 </html>
