@@ -23,22 +23,22 @@ JOGO.DATA.leveling = {
    * CALIBRAGEM (adendo v2.3) — feita sobre a XP real dos monstros de
    * `js/core/data/monsters.js` somada pelos spawns de `js/core/data/dungeons.js`.
    * Descida completa (3 salas), XP de GRUPO, por calabouço:
-   *   133 · 385 · 844 · 1531 · 2427 · 3628   (a XP paga cresce 27× com a profundidade)
+   *   66 · 204 · 422 · 753 · 1196 · 1847   (a XP paga cresce 28× com a profundidade)
    * A XP é dividida pelo tamanho do grupo (1 ou 2 heróis).
    *
    * No nível recomendado de cada calabouço (3 · 7 · 11 · 16 · 22 · 28), uma descida
    * completa em DUPLA rende:
-   *   calabouço 1 → 1,02 nível  ·  2 → 0,71  ·  3 → 0,56
-   *   calabouço 4 → 0,46        ·  5 → 0,38  ·  6 → 0,33   (≈ 1/3 a partir do 25)
+   *   calabouço 1 → 0,94 nível  ·  2 → 0,73  ·  3 → 0,56
+   *   calabouço 4 → 0,45        ·  5 → 0,39  ·  6 → 0,33   (≈ 1/3 a partir do 25)
    * Solo rende o dobro (e morre o dobro). A exigência sobe mais que o pagamento:
-   * os degraus vão de 35 para 5.950 — 170×, contra os 27× da XP dos monstros. */
+   * os degraus vão de 15 para 3.050 — 203×, contra os 28× da XP dos monstros. */
   xpTable: [
-    0, 35, 80, 145, 240,
-    370, 560, 830, 1180, 1630,
-    2220, 2980, 3870, 4920, 6145,
-    7570, 9245, 11120, 13195, 15495,
-    18045, 20895, 24045, 27495, 31270,
-    35420, 39970, 44945, 50395, 56345
+    0, 15, 40, 75, 125,
+    195, 295, 435, 615, 845,
+    1145, 1525, 1965, 2485, 3095,
+    3805, 4635, 5555, 6580, 7705,
+    8955, 10355, 11905, 13605, 15480,
+    17555, 19830, 22355, 25130, 28180
   ],
 
   /* RENDIMENTO DECRESCENTE ao repetir conteúdo raso (adendo v2.3).
@@ -48,9 +48,9 @@ JOGO.DATA.leveling = {
    * Não vale para itens, pedras nem cartas — só XP.
    *
    * Efeito medido na validação: moer SÓ o calabouço 1 do nível 3 ao 30 exige
-   * 7.918 descidas em dupla (3.959 solo); descer sempre no calabouço mais fundo
-   * liberado exige 77 (39 solo). Profundidade é ~100× mais eficiente — e mesmo
-   * sem o falloff seriam 846 descidas, então a curva já pune o raso sozinha. */
+   * 7.973 descidas em dupla (3.986 solo); descer sempre no calabouço mais fundo
+   * liberado exige 77 (39 solo). Profundidade é ~104× mais eficiente — e mesmo
+   * sem o falloff seriam 852 descidas, então a curva já pune o raso sozinha. */
   xpFalloff: { graceLevels: 4, factorPerLevel: 0.75, floor: 0.10 },
 
   /* GANHO POR NÍVEL (adendo v2.2) — todo nível dá +5 PV; o que muda é o dano.
@@ -68,7 +68,22 @@ JOGO.DATA.leveling = {
   perLevelElement: { hp: 5, elemPower: 3 },
 
   /* Nível em que o herói escolhe o elemento — escolha permanente. */
-  elementChoiceLevel: 5
+  elementChoiceLevel: 5,
+
+  /* FÚRIA DA SALA — antídoto contra empate por sustentação (dupla que cura mais do
+   * que apanha e nunca resolve; acontecia até com sumo+curandeira, a dupla inicial).
+   * A partir da rodada `afterRound`, cada rodada dá +`powerPerRound` de poder a TODOS
+   * os inimigos e corta `healCutPerRound` da cura recebida por AMBOS os lados
+   * (acumulativo, piso 0 — a cura zera por volta da rodada 27). Na rodada `maxRounds`
+   * a batalha encerra como derrota. O motor lê estes valores com prioridade sobre o
+   * próprio padrão (`Engine.ROOM_FURY`).
+   *
+   * Calibragem medida pelo Motor (108 batalhas): 8 empates antes, 0 depois.
+   * Com `afterRound: 12` uma vitória legítima de 38 rodadas virava derrota; com 20
+   * nenhuma vitória se perde, todos os empates resolvem e só 4% das batalhas chegam
+   * a sentir a fúria (mediana de 5 rodadas) — é invisível no jogo normal e só aparece
+   * quando a luta já tinha deixado de ser uma luta. */
+  roomFury: { afterRound: 20, powerPerRound: 10, healCutPerRound: 0.15, maxRounds: 40 }
 };
 
 /* COLEÇÃO DE CARTAS (adendo v2.1) — cartas caem dos chefes, repetidas ACUMULAM.

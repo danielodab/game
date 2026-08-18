@@ -200,7 +200,9 @@ var JOGO = (typeof window !== 'undefined')
       canvas.style.display = 'block';
       host.appendChild(canvas);
     }
-    DPR = clamp(window.devicePixelRatio || 1, 1, 2);
+    // resolucao: 2x so faz sentido em tela pequena; no desktop 4x de pixels
+    // custa mais do que entrega. 1.5 e o teto util aqui.
+    DPR = clamp(window.devicePixelRatio || 1, 1, 1.5);
     var box = measure(); W = box.w; H = box.h;
 
     var wantPreserve = opts.preserveDrawingBuffer ||
@@ -283,6 +285,37 @@ var JOGO = (typeof window !== 'undefined')
   }
   R.resize = onResize;
 
+  // ---------------------------------------------------------- QUALIDADE
+  // A sala pode ter 23x19 celulas e ~40 unidades. Em vez de derrubar o quadro,
+  // cortamos onde nao se nota: resolucao da sombra e da tela.
+  var quality = { shadow: 2048, dpr: 1.5, units: 0 };
+  function shadowSize() {
+    var small = Math.min(W, H) < 700;
+    if (small) return 1024;
+    return quality.units > 26 ? 1024 : 2048;
+  }
+  function applyQuality(nUnits) {
+    if (nUnits === quality.units) return;
+    var before = shadowSize();
+    quality.units = nUnits;
+    var after = shadowSize();
+    if (after !== before && lights.sun) {
+      lights.sun.shadow.mapSize.set(after, after);
+      if (lights.sun.shadow.map) { lights.sun.shadow.map.dispose(); lights.sun.shadow.map = null; }
+    }
+    // muita unidade em cena: so quem tem porte projeta sombra
+    var limit = nUnits > 26;
+    for (var uid in unitNodes) {
+      var nd = unitNodes[uid];
+      if (!nd || nd.__shadowLimited === limit) continue;
+      nd.__shadowLimited = limit;
+      var big = nd.userData.height > 2.2;
+      nd.traverse(function (o) {
+        if (o.isMesh || o.isSkinnedMesh) o.castShadow = limit ? big : true;
+      });
+    }
+  }
+
   function buildLights() {
     lights.hemi = new THREE.HemisphereLight(col3('#a8c887'), col3('#2c3c66'), 1.30);
     scene.add(lights.hemi);
@@ -290,7 +323,7 @@ var JOGO = (typeof window !== 'undefined')
     lights.sun = new THREE.DirectionalLight(col3('#fff0c2'), 1.55);
     lights.sun.position.set(11, 20, 8);
     lights.sun.castShadow = true;
-    lights.sun.shadow.mapSize.set(2048, 2048);
+    lights.sun.shadow.mapSize.set(shadowSize(), shadowSize());
     lights.sun.shadow.camera.near = 1;
     lights.sun.shadow.camera.far = 90;
     lights.sun.shadow.camera.left = -26;
@@ -316,7 +349,7 @@ var JOGO = (typeof window !== 'undefined')
     try {
       composer = new THREE.EffectComposer(renderer);
       composer.addPass(new THREE.RenderPass(scene, camera));
-      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(W, H), 0.30, 0.62, 0.99);
+      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(W * 0.5, H * 0.5), 0.30, 0.62, 0.99);
       composer.addPass(bloomPass);
       composer.setSize(W, H);
     } catch (e) { composer = null; bloomPass = null; }
@@ -1535,27 +1568,44 @@ var JOGO = (typeof window !== 'undefined')
     var span = Math.max(gridW, gridH) * CELL * 0.9 + 8;
 
     if (id === 'chuva') {
-      var n = 1400;
-      var pos = new Float32Array(n * 3);
+      // RISCOS, nao pontos: a chuva precisa se ler de qualquer angulo
+      var n = 1500;
+      var pos = new Float32Array(n * 6);
+      var LEN = 1.5;
       for (var i = 0; i < n; i++) {
-        pos[i * 3] = (Math.random() - 0.5) * span * 2;
-        pos[i * 3 + 1] = Math.random() * 22;
-        pos[i * 3 + 2] = (Math.random() - 0.5) * span * 2;
+        var rx = (Math.random() - 0.5) * span * 2.2;
+        var ry = Math.random() * 26;
+        var rz = (Math.random() - 0.5) * span * 2.2;
+        pos[i * 6] = rx; pos[i * 6 + 1] = ry; pos[i * 6 + 2] = rz;
+        pos[i * 6 + 3] = rx + 0.18; pos[i * 6 + 4] = ry + LEN; pos[i * 6 + 5] = rz;
       }
       var g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      var mt = new THREE.PointsMaterial({
-        color: col3(pal.particle), size: 0.16, transparent: true, opacity: 0.62,
-        depthWrite: false, sizeAttenuation: true
-      });
-      var pts = new THREE.Points(g, mt);
-      pts.frustumCulled = false;
-      weatherG.add(pts);
-      weather.rain = { pts: pts, span: span };
-      lights.hemi.intensity = envOf(curTheme).hemiI * 0.72;
-      lights.sun.intensity = envOf(curTheme).sunI * 0.62;
-      scene.fog.color.lerp(col3('#3a6a86'), 0.32);
-      scene.background.lerp(col3('#24445a'), 0.32);
+      var seg = new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+        color: col3(pal.particle), transparent: true, opacity: 0.55, depthWrite: false
+      }));
+      seg.frustumCulled = false;
+      weatherG.add(seg);
+      // respingos no chao
+      var m = 260;
+      var sp2 = new Float32Array(m * 3);
+      for (var j = 0; j < m; j++) {
+        sp2[j * 3] = (Math.random() - 0.5) * span * 2;
+        sp2[j * 3 + 1] = 0.05 + Math.random() * 0.4;
+        sp2[j * 3 + 2] = (Math.random() - 0.5) * span * 2;
+      }
+      var gs = new THREE.BufferGeometry();
+      gs.setAttribute('position', new THREE.BufferAttribute(sp2, 3));
+      var splash = new THREE.Points(gs, new THREE.PointsMaterial({
+        color: col3('#dff2ff'), size: 0.14, transparent: true, opacity: 0.5, depthWrite: false
+      }));
+      splash.frustumCulled = false;
+      weatherG.add(splash);
+      weather.rain = { seg: seg, splash: splash, span: span, len: LEN };
+      lights.hemi.intensity = envOf(curTheme).hemiI * 0.66;
+      lights.sun.intensity = envOf(curTheme).sunI * 0.52;
+      scene.fog.color.lerp(col3('#3a6a86'), 0.34);
+      scene.background.lerp(col3('#24445a'), 0.34);
     } else if (id === 'estiagem') {
       var n2 = 420;
       var p2 = new Float32Array(n2 * 3);
@@ -1580,22 +1630,24 @@ var JOGO = (typeof window !== 'undefined')
       scene.fog.color.lerp(col3('#71401c'), 0.35);
       scene.background.lerp(col3('#7a4a20'), 0.32);
     } else if (id === 'vendaval') {
-      var n3 = 700;
-      var p3 = new Float32Array(n3 * 3);
+      var n3 = 620;
+      var p3 = new Float32Array(n3 * 6);
       for (var k2 = 0; k2 < n3; k2++) {
-        p3[k2 * 3] = (Math.random() - 0.5) * span * 2;
-        p3[k2 * 3 + 1] = Math.random() * 12;
-        p3[k2 * 3 + 2] = (Math.random() - 0.5) * span * 2;
+        var gx = (Math.random() - 0.5) * span * 2.2;
+        var gy = 0.4 + Math.random() * 11;
+        var gz = (Math.random() - 0.5) * span * 2.2;
+        p3[k2 * 6] = gx; p3[k2 * 6 + 1] = gy; p3[k2 * 6 + 2] = gz;
+        p3[k2 * 6 + 3] = gx + 2.6; p3[k2 * 6 + 4] = gy + 0.25; p3[k2 * 6 + 5] = gz + 0.8;
       }
       var g3 = new THREE.BufferGeometry();
       g3.setAttribute('position', new THREE.BufferAttribute(p3, 3));
-      var pts3 = new THREE.Points(g3, new THREE.PointsMaterial({
-        color: col3(pal.particle), size: 0.20, transparent: true, opacity: 0.42,
-        depthWrite: false, blending: THREE.AdditiveBlending
+      var gust = new THREE.LineSegments(g3, new THREE.LineBasicMaterial({
+        color: col3(pal.particle), transparent: true, opacity: 0.34, depthWrite: false,
+        blending: THREE.AdditiveBlending
       }));
-      pts3.frustumCulled = false;
-      weatherG.add(pts3);
-      weather.gust = { pts: pts3, span: span };
+      gust.frustumCulled = false;
+      weatherG.add(gust);
+      weather.gust = { seg: gust, span: span };
       lights.hemi.color = col3('#cfd8ff');
       scene.fog.color.lerp(col3('#4a4a68'), 0.28);
     } else if (id === 'tremor') {
@@ -1642,17 +1694,28 @@ var JOGO = (typeof window !== 'undefined')
   function updateWeather(dt) {
     var i, arr;
     if (weather.rain) {
-      arr = weather.rain.pts.geometry.attributes.position.array;
-      for (i = 1; i < arr.length; i += 3) {
-        arr[i] -= dt * 26;
-        arr[i - 1] += dt * 2.2;
-        if (arr[i] < 0) {
-          arr[i] = 20 + Math.random() * 4;
-          arr[i - 1] = (Math.random() - 0.5) * weather.rain.span * 2;
-          arr[i + 1] = (Math.random() - 0.5) * weather.rain.span * 2;
+      arr = weather.rain.seg.geometry.attributes.position.array;
+      var L = weather.rain.len, sp = weather.rain.span;
+      for (i = 0; i < arr.length; i += 6) {
+        arr[i + 1] -= dt * 34; arr[i + 4] -= dt * 34;
+        arr[i] += dt * 3.0;    arr[i + 3] += dt * 3.0;
+        if (arr[i + 1] < 0) {
+          var nx = (Math.random() - 0.5) * sp * 2.2, nz = (Math.random() - 0.5) * sp * 2.2;
+          arr[i] = nx; arr[i + 1] = 24 + Math.random() * 4; arr[i + 2] = nz;
+          arr[i + 3] = nx + 0.18; arr[i + 4] = arr[i + 1] + L; arr[i + 5] = nz;
         }
       }
-      weather.rain.pts.geometry.attributes.position.needsUpdate = true;
+      weather.rain.seg.geometry.attributes.position.needsUpdate = true;
+      arr = weather.rain.splash.geometry.attributes.position.array;
+      for (i = 1; i < arr.length; i += 3) {
+        arr[i] -= dt * 2.2;
+        if (arr[i] < 0.03) {
+          arr[i] = 0.05 + Math.random() * 0.5;
+          arr[i - 1] = (Math.random() - 0.5) * sp * 2;
+          arr[i + 1] = (Math.random() - 0.5) * sp * 2;
+        }
+      }
+      weather.rain.splash.geometry.attributes.position.needsUpdate = true;
     }
     if (weather.motes) {
       arr = weather.motes.pts.geometry.attributes.position.array;
@@ -1660,20 +1723,27 @@ var JOGO = (typeof window !== 'undefined')
       for (i = 1; i < arr.length; i += 3) {
         arr[i] += dt * up * (0.6 + (i % 7) * 0.12);
         arr[i - 1] += Math.sin(nowT * 0.8 + i) * dt * 0.35;
-        if (arr[i] > 9) { arr[i] = 0.1; }
+        if (arr[i] > 9) arr[i] = 0.1;
       }
       weather.motes.pts.geometry.attributes.position.needsUpdate = true;
     }
     if (weather.gust) {
-      arr = weather.gust.pts.geometry.attributes.position.array;
-      var sp = weather.gust.span;
-      for (i = 0; i < arr.length; i += 3) {
-        arr[i] += dt * 22;
-        arr[i + 2] += dt * 7;
-        if (arr[i] > sp) arr[i] = -sp;
-        if (arr[i + 2] > sp) arr[i + 2] = -sp;
+      arr = weather.gust.seg.geometry.attributes.position.array;
+      var sg = weather.gust.span;
+      for (i = 0; i < arr.length; i += 6) {
+        var d = dt * 30;
+        arr[i] += d; arr[i + 3] += d;
+        arr[i + 2] += d * 0.3; arr[i + 5] += d * 0.3;
+        if (arr[i] > sg * 1.2) {
+          var back = sg * 2.4;
+          arr[i] -= back; arr[i + 3] -= back;
+        }
+        if (arr[i + 2] > sg * 1.2) {
+          var back2 = sg * 2.4;
+          arr[i + 2] -= back2; arr[i + 5] -= back2;
+        }
       }
-      weather.gust.pts.geometry.attributes.position.needsUpdate = true;
+      weather.gust.seg.geometry.attributes.position.needsUpdate = true;
     }
     if (weather.id === 'tremor') {
       weather.shakeT += dt;
@@ -2073,6 +2143,7 @@ var JOGO = (typeof window !== 'undefined')
       if (weatherId(st) !== weather.id) setWeather(weatherId(st));
       updateAnims(dtv);
       syncUnits(st);
+      applyQuality(Object.keys(unitNodes).length);
       updateUnitNodes(st, dtv);
 
       var sig = overlaySignature(st);
@@ -2128,6 +2199,7 @@ var JOGO = (typeof window !== 'undefined')
   R.camera = function () { return camera; };
   R.threeRenderer = function () { return renderer; };
   R.isReady = function () { return ready && M && M.isReady(); };
+  R.quality = function () { return { shadow: shadowSize(), dpr: DPR, units: quality.units }; };
   R.stats = function () {
     return { units: Object.keys(unitNodes).length, anims: animQ.length,
              models: M ? M.modelKeys().length : 0, clips: M ? M.clips().length : 0,

@@ -453,7 +453,7 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
    * dungeons.js com o `xp` de monsters.js. Se os dois arquivos estiverem carregados,
    * recalculamos ao vivo e comparamos: divergência > 20% significa que o Criativo Mundo
    * mexeu na XP e esta curva precisa ser recalibrada. */
-  var DUNGEON_XP = [133, 385, 844, 1531, 2427, 3628];
+  var DUNGEON_XP = [66, 204, 422, 753, 1196, 1847];
   var REC_LEVEL = [3, 7, 11, 16, 22, 28];
   var liveXp = null;
   if (D.dungeons && D.monsters && D.dungeons.length === 6) {
@@ -486,6 +486,31 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
     DUNGEON_XP = liveXp;
   } else {
     check('dungeons/monsters ausentes — usando a XP medida na calibragem', true, DUNGEON_XP.join(' · '));
+  }
+
+  /* --------- fúria da sala: antídoto contra empate por sustentação -------- */
+  var RF = L.roomFury;
+  check('leveling.roomFury existe', !!RF);
+  if (RF) {
+    check('roomFury.afterRound inteiro positivo',
+      isNum(RF.afterRound) && RF.afterRound > 0 && RF.afterRound % 1 === 0, RF.afterRound);
+    check('roomFury.maxRounds inteiro positivo',
+      isNum(RF.maxRounds) && RF.maxRounds > 0 && RF.maxRounds % 1 === 0, RF.maxRounds);
+    check('roomFury.afterRound < maxRounds (a fúria tem tempo de agir)',
+      RF.afterRound < RF.maxRounds, RF.afterRound + ' < ' + RF.maxRounds);
+    check('roomFury.powerPerRound > 0', isNum(RF.powerPerRound) && RF.powerPerRound > 0, RF.powerPerRound);
+    check('roomFury.healCutPerRound entre 0 e 1',
+      isNum(RF.healCutPerRound) && RF.healCutPerRound > 0 && RF.healCutPerRound <= 1, RF.healCutPerRound);
+    /* a fúria não pode disparar dentro do combate normal (mediana medida: 5 rodadas)
+     * nem demorar tanto que o empate nunca resolva */
+    check('roomFury só começa bem depois do combate normal (afterRound ≥ 15)',
+      RF.afterRound >= 15, RF.afterRound);
+    check('roomFury zera a cura antes do fim da batalha',
+      RF.afterRound + Math.ceil(1 / RF.healCutPerRound) <= RF.maxRounds,
+      'cura zera na rodada ' + (RF.afterRound + Math.ceil(1 / RF.healCutPerRound)) + ' de ' + RF.maxRounds);
+    check('roomFury acumula poder suficiente para resolver a sala (≥ +100 até o fim)',
+      (RF.maxRounds - RF.afterRound) * RF.powerPerRound >= 100,
+      '+' + (RF.maxRounds - RF.afterRound) * RF.powerPerRound + ' de poder na rodada ' + RF.maxRounds);
   }
 
   var F = L.xpFalloff;
