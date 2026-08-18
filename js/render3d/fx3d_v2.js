@@ -594,7 +594,12 @@ var JOGO = (typeof window !== 'undefined')
       }
       var e = 1 - Math.pow(1 - k, p.curva);
       p.m.visible = true;
-      p.m.scale.set(p.w0 + (p.w1 - p.w0) * e, p.h0 + (p.h1 - p.h0) * e, 1);
+      var lw = p.w0 + (p.w1 - p.w0) * e, lh = p.h0 + (p.h1 - p.h0) * e;
+      // A placa deitada teve a geometria girada em X, entao o "para cima" do
+      // desenho virou o eixo Z e o Y virou a NORMAL. Escalar (w,h,1) nela deixa
+      // um anel de 13 m de largura por 1 m de fundo — uma tira, nao um anel.
+      if (p.modo === 'chao') p.m.scale.set(lw, 1, lh);
+      else p.m.scale.set(lw, lh, 1);
       p.m.position.set(p.p0.x + (p.p1.x - p.p0.x) * e,
                        p.p0.y + (p.p1.y - p.p0.y) * e,
                        p.p0.z + (p.p1.z - p.p0.z) * e);
@@ -1086,6 +1091,11 @@ var JOGO = (typeof window !== 'undefined')
     var col = ecol(el);
     shockRing(dest, col, 1.1, 0.7, 0.5);            // anel que FECHA, ao contrario
     scorch(dest, col, 1.7, 9);
+    // O SELO. Roda devagar e demora 1,8 s a apagar — o oposto do estouro, que
+    // e o que "armadilha" tem de dizer.
+    placa({ tile: PL.runas, color: col, modo: 'chao', pos: v3(dest.x, 0.09, dest.z),
+            de: [1.2, 1.2], ate: [4.0, 4.0], dur: 1.8, op: 0.95, saida: 0.5,
+            curva: 3.2, giro: 0.45, forro: 0.45 });
     burst(dest.x, dest.y + 0.15, dest.z, 12, {
       color: col, speed: 1.1, life: 0.7, size: 0.34, flat: true, up: 0.3, tile: TILE.runa
     });
@@ -1096,6 +1106,14 @@ var JOGO = (typeof window !== 'undefined')
   /* Invocacao: coluna de luz subindo onde a criatura vai aparecer. */
   function invocacao(dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    // circulo de invocacao girando ao contrario da armadilha, e o halo subindo
+    placa({ tile: PL.runas, color: col, modo: 'chao', pos: v3(dest.x, 0.10, dest.z),
+            de: [1.0, 1.0], ate: [4.8, 4.8], dur: 0.95, op: 1, saida: 1.0,
+            giro: -1.7, forro: 0.5 });
+    placa({ tile: PL.halo, color: col2 || col, modo: 'bilhete',
+            pos: v3(dest.x, 0.4, dest.z), para: v3(dest.x, 2.6, dest.z),
+            de: [3.0, 3.0], ate: [5.4, 5.4], dur: 0.85, atraso: 0.12,
+            op: 0.8, saida: 1.3 });
     for (var i = 0; i < 5; i++) {
       (function (k) {
         setTimeout(function () {
@@ -1115,6 +1133,13 @@ var JOGO = (typeof window !== 'undefined')
    * destino e estes feiticos apontam para si mesmos. */
   function aura(from, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    // Esta era a pior de todas: medida no tabuleiro, a aura pintava DOIS pixels.
+    // O halo no peito e o anel que FECHA em volta dos pes resolvem sem projetil.
+    placa({ tile: PL.halo, color: col, modo: 'bilhete',
+            pos: v3(from.x, from.y * 0.6 + 0.35, from.z),
+            de: [2.0, 2.0], ate: [5.4, 5.4], dur: 0.8, op: 0.85, saida: 1.2, giro: 1.1 });
+    placa({ tile: PL.anel, color: col2 || col, modo: 'chao', pos: v3(from.x, 0.10, from.z),
+            de: [5.0, 5.0], ate: [2.0, 2.0], dur: 0.75, op: 0.9, saida: 0.9, curva: 1.5 });
     for (var i = 0; i < 4; i++) {
       (function (k) {
         setTimeout(function () {
@@ -1132,6 +1157,11 @@ var JOGO = (typeof window !== 'undefined')
   /* Estouro seco no alvo: sem projetil, a coisa ja acontece la. */
   function estouro(dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    placa({ tile: PL.estouro, color: col, modo: 'bilhete',
+            pos: v3(dest.x, Math.max(0.8, dest.y + 0.6), dest.z),
+            de: [2.4, 2.4], ate: [10.0, 10.0], dur: 0.5, op: 1, saida: 1.6, forro: 0.55 });
+    placa({ tile: PL.anel, color: col2 || col, modo: 'chao', pos: v3(dest.x, 0.10, dest.z),
+            de: [1.6, 1.6], ate: [9.0, 9.0], dur: 0.56, op: 0.9, saida: 1.4 });
     burst(dest.x, dest.y + 0.3, dest.z, 46, {
       color: col, speed: 6.5, life: 0.55, size: 0.42, spread: 0.5, tile: TILE.estouro
     });
@@ -1146,6 +1176,12 @@ var JOGO = (typeof window !== 'undefined')
   /* Escudo: casca que FECHA em volta do alvo, subindo do chao. */
   function escudo(dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    // o aro grosso FECHANDO em volta do alvo — cresce ao contrario do estouro
+    placa({ tile: PL.aro, color: col, modo: 'bilhete', pos: v3(dest.x, dest.y + 0.5, dest.z),
+            de: [7.0, 7.0], ate: [3.6, 3.6], dur: 0.75, op: 0.9, saida: 0.85,
+            curva: 1.8, forro: 0.4 });
+    placa({ tile: PL.anel, color: col2 || col, modo: 'chao', pos: v3(dest.x, 0.10, dest.z),
+            de: [5.6, 5.6], ate: [3.0, 3.0], dur: 0.62, op: 0.75, saida: 1.1 });
     for (var i = 0; i < 3; i++) {
       (function (k) {
         setTimeout(function () {
@@ -1167,10 +1203,18 @@ var JOGO = (typeof window !== 'undefined')
   /* Piscar: some de um lugar e aparece no outro, sem nada no caminho. */
   function piscar(from, dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    // a estrela SUME de um lado e NASCE do outro: o crescimento invertido conta
+    // a historia sem nada percorrer o caminho
+    placa({ tile: PL.estrela, color: col, modo: 'bilhete',
+            pos: v3(from.x, from.y * 0.6 + 0.35, from.z),
+            de: [5.0, 5.0], ate: [0.5, 0.5], dur: 0.32, op: 1, saida: 0.8, curva: 1.3 });
     burst(from.x, from.y * 0.6 + 0.2, from.z, 20, {
       color: col, speed: 2.4, life: 0.4, size: 0.34, spread: 0.5, grav: -0.5,
       tile: TILE.cintila
     });
+    placa({ tile: PL.estrela, color: col2 || col, modo: 'bilhete',
+            pos: v3(dest.x, dest.y + 0.5, dest.z),
+            de: [0.6, 0.6], ate: [6.4, 6.4], dur: 0.44, atraso: 0.14, op: 1, saida: 1.5 });
     setTimeout(function () {
       burst(dest.x, dest.y + 0.2, dest.z, 24, {
         color: col2 || col, speed: 2.8, life: 0.45, size: 0.36, spread: 0.5, grav: -0.5,
@@ -1184,6 +1228,15 @@ var JOGO = (typeof window !== 'undefined')
   function gancho(from, dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
     beam(from, dest, col, col2);
+    // o fio ESTICADO: uma placa em trilho cobre a corda inteira, e ela ENCOLHE
+    // enquanto puxa
+    var gx = dest.x - from.x, gz = dest.z - from.z;
+    var gd = Math.max(0.8, Math.sqrt(gx * gx + gz * gz));
+    placa({ tile: PL.risco, color: col2 || col, modo: 'trilho', ang: angTrilho(gx, gz),
+            pos: v3((from.x + dest.x) / 2, (from.y + dest.y) / 2, (from.z + dest.z) / 2),
+            para: v3(from.x + gx * 0.28, from.y * 0.9, from.z + gz * 0.28),
+            de: [gd, 1.0], ate: [gd * 0.55, 0.6], dur: 0.55, op: 0.95,
+            atraso: 0.1, saida: 1.2, curva: 1.4 });
     var passos = 6;
     for (var i = 0; i <= passos; i++) {
       (function (k) {
@@ -1201,6 +1254,13 @@ var JOGO = (typeof window !== 'undefined')
   /* Maldicao: cai DE CIMA sobre o alvo, devagar, e assenta. */
   function maldicao(dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    // a fumaca DESCE sobre o alvo e o selo assenta no chao: nada explode
+    placa({ tile: PL.fumaca, color: col, modo: 'bilhete',
+            pos: v3(dest.x, dest.y + 3.4, dest.z), para: v3(dest.x, dest.y + 0.5, dest.z),
+            de: [3.0, 3.0], ate: [6.4, 6.4], dur: 0.9, op: 0.85, saida: 1.1, curva: 1.2 });
+    placa({ tile: PL.runas, color: col2 || col, modo: 'chao', pos: v3(dest.x, 0.09, dest.z),
+            de: [5.0, 5.0], ate: [2.6, 2.6], dur: 0.9, atraso: 0.22, op: 0.75,
+            saida: 0.8, giro: -0.9, curva: 1.5 });
     for (var i = 0; i < 3; i++) {
       (function (k) {
         setTimeout(function () {
@@ -1240,16 +1300,29 @@ var JOGO = (typeof window !== 'undefined')
       case 'piscar':    piscar(from, dest, el, el2); break;
       case 'gancho':    gancho(from, dest, el, el2); break;
       case 'maldicao':  maldicao(dest, el, el2); break;
-      case 'flecha':
+      case 'flecha': {
+        // a haste da flecha tem 4,5 cm de raio: meio pixel. O rastro em trilho e
+        // o que faz o tiro existir na tela, e e ele que separa a flecha da bola.
+        var fx2 = dest.x - from.x, fz2 = dest.z - from.z;
+        var fd = Math.max(0.8, Math.sqrt(fx2 * fx2 + fz2 * fz2));
+        placa({ tile: PL.risco, color: ecol(el), modo: 'trilho', ang: angTrilho(fx2, fz2),
+                pos: v3((from.x + dest.x) / 2, (from.y + dest.y) / 2 + 0.15, (from.z + dest.z) / 2),
+                de: [fd * 0.35, 0.7], ate: [fd * 1.02, 1.5], dur: 0.3, op: 0.9, saida: 1.9 });
         launch(from, dest, {
           color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'arrow', speed: 34, arc: 0.25,
           onHit: function (pos) { impact(pos, el, 1.0, el2); }
         });
         break;
+      }
       default:
         launch(from, dest, {
           color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'ball', speed: 22, arc: 0.6,
-          onHit: function (pos) { impact(pos, el, 1.0, el2); }
+          onHit: function (pos) {
+            impact(pos, el, 1.0, el2);
+            // a bola e o ultimo recurso, mas ate ela deixa uma marca no chao
+            placa({ tile: PL.anel, color: ecol(el), modo: 'chao', pos: v3(pos.x, 0.09, pos.z),
+                    de: [1.0, 1.0], ate: [5.6, 5.6], dur: 0.48, op: 0.8, saida: 1.5 });
+          }
         });
     }
   }
@@ -1418,6 +1491,21 @@ var JOGO = (typeof window !== 'undefined')
   var SCORCH = { agua: '#123646', ar: '#3c3c52', terra: '#2a2413', fogo: '#241208', neutro: '#26262c' };
   function impact(pos, element, power, element2) {
     var col = ecol(element), col2 = element2 && element2 !== element ? ecol(element2) : null;
+    // A batida. Aqui estava a prova de que "tudo parece igual": medindo o que
+    // aparece na tela, 'bola', 'corte' e 'flecha' pintavam o MESMO numero de
+    // pixels, porque o que se via nas tres era so o clarao desta funcao lavando
+    // o chao — as particulas ficavam abaixo do limiar. Agora a batida tem uma
+    // forma, e cada familia poe a SUA por cima.
+    placa({ tile: PL.estouro, color: col, modo: 'bilhete',
+            pos: v3(pos.x, Math.max(0.7, pos.y + 0.3), pos.z),
+            de: [1.5 * power, 1.5 * power], ate: [5.2 * power, 5.2 * power],
+            dur: 0.38, op: 0.95, saida: 1.8, forro: 0.5 });
+    if (col2) {
+      placa({ tile: PL.estouro, color: col2, modo: 'bilhete',
+              pos: v3(pos.x, Math.max(0.9, pos.y + 0.7), pos.z),
+              de: [1.1 * power, 1.1 * power], ate: [3.8 * power, 3.8 * power],
+              dur: 0.42, atraso: 0.06, op: 0.8, saida: 1.8 });
+    }
     burst(pos.x, Math.max(0.2, pos.y), pos.z, Math.round(26 * power), {
       color: col, speed: 5.2 * power, life: 0.55, size: 0.34, spread: 0.4
     });
@@ -1452,6 +1540,18 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   function beam(from, to, col, col2) {
+    // O feixe era 26 pontinhos em fila — a 7 px cada, uma pontilhada. A placa em
+    // trilho e UMA peca do tamanho do tiro.
+    var bx = to.x - from.x, bz = to.z - from.z;
+    var bd = Math.max(0.8, Math.sqrt(bx * bx + bz * bz));
+    placa({ tile: PL.raio, color: col, modo: 'trilho', ang: angTrilho(bx, bz),
+            pos: v3((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2),
+            de: [bd, 1.2], ate: [bd, 2.8], dur: 0.46, op: 1, saida: 1.6, forro: 0.4 });
+    if (col2) {
+      placa({ tile: PL.raio, color: col2, modo: 'trilho', ang: angTrilho(bx, bz),
+              pos: v3((from.x + to.x) / 2, (from.y + to.y) / 2 + 0.35, (from.z + to.z) / 2),
+              de: [bd * 0.9, 0.8], ate: [bd, 1.8], dur: 0.4, atraso: 0.06, op: 0.85, saida: 1.7 });
+    }
     var n = 26;
     for (var i = 0; i <= n; i++) {
       var k = i / n;
@@ -1480,6 +1580,11 @@ var JOGO = (typeof window !== 'undefined')
     addShake(5);
   }
   function nova(pos, col, col2) {
+    // o anel que ABRE, 13 m de diametro no chao — o desenho da nova
+    placa({ tile: PL.anel, color: col, modo: 'chao', pos: v3(pos.x, 0.10, pos.z),
+            de: [1.6, 1.6], ate: [13.5, 13.5], dur: 0.66, op: 1, saida: 1.3 });
+    placa({ tile: PL.halo, color: col2 || col, modo: 'bilhete', pos: v3(pos.x, 1.3, pos.z),
+            de: [2.4, 2.4], ate: [9.0, 9.0], dur: 0.52, op: 0.85, saida: 1.7 });
     burst(pos.x, 0.3, pos.z, 90, { color: col, speed: 8.5, life: 0.8, size: 0.36, flat: true, up: 0.35 });
     if (col2) burst(pos.x, 0.5, pos.z, 70, { color: col2, speed: 6.0, life: 1.0, size: 0.34, flat: true, up: 0.9 });
     shockRing(pos, col, 0.4, 5.2, 0.6);
@@ -1491,6 +1596,10 @@ var JOGO = (typeof window !== 'undefined')
     freezeT = Math.max(freezeT, 0.08);
   }
   function healUp(pos, col) {
+    placa({ tile: PL.estrela, color: col, modo: 'bilhete', pos: v3(pos.x, pos.y + 0.9, pos.z),
+            de: [2.2, 2.2], ate: [6.0, 6.0], dur: 0.72, op: 0.95, saida: 1.5, giro: 0.8 });
+    placa({ tile: PL.anel, color: col, modo: 'chao', pos: v3(pos.x, 0.10, pos.z),
+            de: [4.2, 4.2], ate: [1.2, 1.2], dur: 0.62, op: 0.8, saida: 1.0, curva: 1.5 });
     for (var i = 0; i < 26; i++) {
       var a = Math.random() * Math.PI * 2, r = 0.35 + Math.random() * 0.5;
       spawn({

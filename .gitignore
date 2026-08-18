@@ -13,9 +13,12 @@ desktop.ini
 *.tmp
 *.log
 
-# Arte de terceiros: nao redistribuir (licenca dos packs)
+# Arte de terceiros: nao redistribuir (licenca dos packs).
+# A regra e por LICENCA, nao por prefixo de nome: `fx-*.js` era ampla demais e
+# deixava de fora o `fx-atlas.js`, que e Kenney Particle Pack CC0 — dominio
+# publico, redistribuicao livre — e que o index.html CARREGA. Quem clonasse do
+# GitHub baixava um jogo apontando para um arquivo inexistente.
 assets/embedded/sprites-*.js
-assets/embedded/fx-*.js
 assets/packs/
 
 # Modelos CANDIDATOS, baixados só para avaliação (CC0, mas 20 MB e ainda nao

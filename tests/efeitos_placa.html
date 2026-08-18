@@ -63,7 +63,10 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
   // veria, na escala em que ele os veria.
   var RW = 400, RH = 300, ROT = 24;      // largura, altura e faixa do rótulo
   var PASSADAS = [{ id: 'hoje', placa: false }, { id: 'placa', placa: true }];
-  var QUADROS = 16, DT = 0.034;          // 16 x 34 ms = 0,54 s de efeito
+  var QUADROS = 22, DT = 0.034;          // 22 x 34 ms = 0,75 s: o meteoro cai em 0,5 s
+  var DRENO = 700;                       // ms para os setTimeout atrasados do efeito
+                                         // anterior (chuva, cone, meteoro) morrerem
+                                         // antes de a próxima família começar
   var st = document.getElementById('st');
 
   function diz(t) { st.textContent = t; }
@@ -186,20 +189,34 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
       }
 
       // ------------------------------------------------------------- medidas
+      /* DUAS contas, e a distinção é o coração da medida.
+       *
+       * `banho` conta todo pixel que mudou, por pouco que seja. Foi a primeira
+       * conta que fiz e ela MENTE: o clarão (a PointLight do impacto) lava o
+       * chão inteiro com uma diferença de 25 a 40, e uma vez que o pixel está
+       * na conta, desenhar por cima dele não muda mais o número. Foi assim que
+       * 'bola', 'corte' e 'flecha' deram o mesmo valor até o pixel.
+       *
+       * `nucleo` conta só o que mudou MUITO (>90 de 255). Aí sobra o desenho:
+       * a placa, a partícula, o traço. É esta a conta que responde "o jogador
+       * consegue ver a forma?", e é dela que sai a assinatura comparada entre
+       * famílias. */
       var GX = 20, GY = 15;                    // grade da assinatura de forma
+      var LIMIAR_BANHO = 20, LIMIAR_NUCLEO = 90;
       function mede(A, B) {
         var d = A.data, e = B.data, n = RW * RH;
-        var area = 0, sat = 0, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+        var banho = 0, nucleo = 0, sat = 0;
+        var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
         var grade = new Float32Array(GX * GY);
-        var somaL = 0;
         for (var i = 0; i < n; i++) {
           var o = i * 4;
           var dr = d[o] - e[o], dg = d[o + 1] - e[o + 1], db = d[o + 2] - e[o + 2];
           if (dr < 0) dr = -dr; if (dg < 0) dg = -dg; if (db < 0) db = -db;
           var dm = dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
-          if (dm <= 20) continue;
-          area++;
-          somaL += dm;
+          if (dm <= LIMIAR_BANHO) continue;
+          banho++;
+          if (dm <= LIMIAR_NUCLEO) continue;
+          nucleo++;
           var mn = Math.min(d[o], Math.min(d[o + 1], d[o + 2]));
           if (mn >= 232) sat++;            // estourou para branco: a forma sumiu
           var px = i % RW, py = (i / RW) | 0;
@@ -207,13 +224,13 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
           if (py < y0) y0 = py; if (py > y1) y1 = py;
           grade[((py * GY / RH) | 0) * GX + ((px * GX / RW) | 0)] += dm;
         }
-        if (!area) return { area: 0, w: 0, h: 0, sat: 0, forca: 0, grade: grade };
+        if (!nucleo) return { banho: banho, area: 0, w: 0, h: 0, sat: 0, grade: grade };
         // normaliza a assinatura: compara FORMA, não intensidade
         var mx = 0, k;
         for (k = 0; k < grade.length; k++) if (grade[k] > mx) mx = grade[k];
         if (mx > 0) for (k = 0; k < grade.length; k++) grade[k] /= mx;
-        return { area: area, w: x1 - x0 + 1, h: y1 - y0 + 1,
-                 sat: sat / area, forca: somaL / area, grade: grade };
+        return { banho: banho, area: nucleo, w: x1 - x0 + 1, h: y1 - y0 + 1,
+                 sat: sat / nucleo, grade: grade };
       }
       function cos(a, b) {
         var s = 0, na = 0, nb = 0;
@@ -265,7 +282,7 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
           if (++q < QUADROS) return setTimeout(quadro, DT * 1000);
           guarda(fam, passada, melhor);
           fi++;
-          setTimeout(proximo, 0);
+          setTimeout(proximo, DRENO);
         })();
       }
 
@@ -299,23 +316,34 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
         return n ? s / n : 0;
       }
 
+      // quantas famílias chegam à tela tão fracas que praticamente não existem
+      function mudas(passe) {
+        var n = 0;
+        fams.forEach(function (f) {
+          var m = res[f] && res[f][passe];
+          if (!m || m.area < 1000) n++;
+        });
+        return n;
+      }
+
       function fecha() {
         var linhas = '<tr><th>família</th>' +
-          '<th>px pintados hoje</th><th>px com placa</th>' +
+          '<th>desenho (px) hoje</th><th>com placa</th><th>×</th>' +
           '<th>maior lado hoje</th><th>com placa</th>' +
-          '<th>estourado p/ branco hoje</th><th>com placa</th></tr>';
+          '<th>banho de luz hoje</th><th>com placa</th></tr>';
         var somaH = 0, somaP = 0, ladoH = 0, ladoP = 0, satH = 0, satP = 0, nn = 0;
         fams.forEach(function (f) {
-          var h = res[f].hoje || { area: 0, w: 0, h: 0, sat: 0 };
-          var p = res[f].placa || { area: 0, w: 0, h: 0, sat: 0 };
+          var h = res[f].hoje || { area: 0, w: 0, h: 0, sat: 0, banho: 0 };
+          var p = res[f].placa || { area: 0, w: 0, h: 0, sat: 0, banho: 0 };
           var lh = Math.max(h.w, h.h), lp = Math.max(p.w, p.h);
           somaH += h.area; somaP += p.area; ladoH += lh; ladoP += lp;
           satH += h.sat; satP += p.sat; nn++;
+          var mult = h.area > 0 ? (p.area / h.area) : (p.area > 0 ? 99 : 1);
           linhas += '<tr><td>' + f + '</td>' +
             '<td class="n">' + h.area + '</td><td class="n bom">' + p.area + '</td>' +
+            '<td class="n ' + (mult >= 1.5 ? 'bom' : 'ruim') + '">' + mult.toFixed(1) + '×</td>' +
             '<td class="n">' + lh + ' px</td><td class="n bom">' + lp + ' px</td>' +
-            '<td class="n">' + Math.round(h.sat * 100) + '%</td>' +
-            '<td class="n">' + Math.round(p.sat * 100) + '%</td></tr>';
+            '<td class="n">' + h.banho + '</td><td class="n">' + p.banho + '</td></tr>';
         });
         document.getElementById('tab').innerHTML = linhas;
 
@@ -339,15 +367,18 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
              '<td class="n" colspan="2">' + pPx.toFixed(1) + ' px — a célula tem ' +
              pxCel.toFixed(0) + ' px e 1 metro do mundo tem ' + pxMetro.toFixed(1) + ' px</td></tr>';
         li('semelhança média entre famílias (1 = tudo igual)', simH, simP, p2);
-        li('pixels pintados pelo efeito, média', somaH / nn, somaP / nn, i0);
-        li('maior lado do efeito na tela, média', ladoH / nn, ladoP / nn, i0);
-        li('parte estourada para branco', satH / nn, satP / nn, pc);
+        li('DESENHO: pixels que mudaram forte (>90), média', somaH / nn, somaP / nn, i0);
+        li('maior lado do desenho na tela, média', ladoH / nn, ladoP / nn, i0);
+        li('famílias com menos de 1.000 px de desenho', mudas('hoje'), mudas('placa'), i0);
+        li('parte do desenho estourada para branco', satH / nn, satP / nn, pc);
         document.getElementById('resumo').innerHTML = r;
 
-        diz('PRONTO · célula = ' + pxCel.toFixed(1) + ' px, 1 metro = ' + pxMetro.toFixed(1) + ' px · ' +
-            'semelhança entre famílias ' + simH.toFixed(3) + ' → ' + simP.toFixed(3) +
-            ' · maior lado ' + Math.round(ladoH / nn) + ' → ' + Math.round(ladoP / nn) + ' px' +
-            ' · branco ' + Math.round(satH / nn * 100) + '% → ' + Math.round(satP / nn * 100) + '%');
+        diz('PRONTO · célula = ' + pxCel.toFixed(1) + ' px, 1 metro = ' + pxMetro.toFixed(1) +
+            ' px, partícula = ' + pPx.toFixed(1) + ' px · ' +
+            'semelhança entre famílias ' + simH.toFixed(3) + ' -> ' + simP.toFixed(3) +
+            ' · desenho ' + Math.round(somaH / nn) + ' -> ' + Math.round(somaP / nn) + ' px' +
+            ' · maior lado ' + Math.round(ladoH / nn) + ' -> ' + Math.round(ladoP / nn) + ' px' +
+            ' · famílias quase invisíveis ' + mudas('hoje') + ' -> ' + mudas('placa'));
         window.__pronto = true;
       }
 
