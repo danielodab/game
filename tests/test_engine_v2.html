@@ -51,6 +51,8 @@
   'use strict';
 
   var passed = 0, failed = 0, failures = [], notes = [];
+  // v2.4: quantos inícios de turno o tripwire de recarga de PP conferiu (seção 15)
+  var ppChecks = 0;
   var resultsEl = document.getElementById('results');
 
   function report(name, ok, msg) {
@@ -778,6 +780,65 @@
       ok(E.cast(st, h.uid, 't-twice', 5, 1) === true, 'renovado');
     });
 
+    /* ------------------------------------------------------------------ v2.4
+     * RECARGA DE PONTOS DE PASSOS — regressão do relato de playtest
+     * "o pp não carrega todo turno; depois que eu uso ele fica zerado".
+     * Carrega sim: `startTurn` devolve `ppMax + buffs` em TODO turno. O que zera
+     * o PP são duas regras do contrato §2 — `root` (prende o turno inteiro) e a
+     * FIXAÇÃO fracassada (leva o PP restante SEM tirar a unidade do lugar) — e
+     * nenhuma das duas sobrevive ao turno seguinte. O que faltava era o motor
+     * DIZER que o turno já não tem passo: sem PP, `Engine.move` recusava em
+     * silêncio e o jogador via o clique ser ignorado.
+     * A checagem turno a turno em todas as salas reais está na seção 15. */
+    t('recarga: PP volta ao máximo em TODO turno, tendo gastado tudo ou não', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d1 = byDef(st, 't-dummy', 0), d2 = byDef(st, 't-dummy', 1);
+      d1.x = 9; d1.y = 6; d2.x = 8; d2.y = 6;      // longe: ninguém fixa o herói
+      var x0 = h.x, y0 = h.y;
+      eq(h.pp, h.ppMax, 'batalha começa com o PP cheio');
+      for (var volta = 1; volta <= 6; volta++) {
+        var cells = E.reachable(st, h.uid), longe = null;
+        for (var i = 0; i < cells.length; i++) {
+          if (!longe || cells[i].cost > longe.cost) longe = cells[i];
+        }
+        ok(!!longe, 'volta ' + volta + ': há para onde andar');
+        ok(E.move(st, h.uid, longe.x, longe.y) === true, 'volta ' + volta + ': anda');
+        eq(h.pp, h.ppMax - longe.cost, 'volta ' + volta + ': PP debitado pelo caminho');
+        nextRound(st);
+        eq(h.pp, h.ppMax, 'volta ' + volta + ': turno seguinte começa com o PP CHEIO');
+        h.x = x0; h.y = y0;                        // volta ao ponto de partida
+      }
+    });
+
+    t('recarga: sem PP o motor DIZ que faltou passo (clique mudo é o que vira "bug")', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d1 = byDef(st, 't-dummy', 0), d2 = byDef(st, 't-dummy', 1);
+      d1.x = 9; d1.y = 6; d2.x = 8; d2.y = 6;
+      var cells = E.reachable(st, h.uid), longe = null;
+      for (var i = 0; i < cells.length; i++) {
+        if (!longe || cells[i].cost > longe.cost) longe = cells[i];
+      }
+      ok(!!longe && longe.cost >= 2, 'há um destino a 2+ passos');
+
+      h.pp = 0;                                    // como fica após uma fixação
+      drain();
+      ok(E.move(st, h.uid, longe.x, longe.y) === false, 'recusa o passo');
+      ok(!!findEv(drain(), 'log', function (e) { return /não tem mais Pontos de Passos/.test(e.text); }),
+         'diário explica que acabou o PP');
+
+      h.pp = 1;                                    // PP insuficiente para a distância
+      drain();
+      ok(E.move(st, h.uid, longe.x, longe.y) === false, 'recusa por distância');
+      ok(!!findEv(drain(), 'log', function (e) { return /precisa de \d+ PP/.test(e.text); }),
+         'diário diz quanto faltou');
+
+      drain();                                     // parede não merece comentário
+      ok(E.move(st, h.uid, 0, 0) === false, 'recusa fora do chão');
+      eq(countEv(drain(), 'log'), 0, 'toque em parede não polui o diário');
+    });
+
     t('needsEmptyTile: exclui células ocupadas', function () {
       var st = arena(0, { a: 't-dummy', b: 't-dummy' });
       var h = byHero(st, 't-h1');
@@ -1456,6 +1517,24 @@
       eq(ev.critical, false, 'não crítica');
     });
 
+    /* v2.4 — a metade que faltava da regra: a fixação leva o PP DESTE turno, e
+     * só. O relato "depois que eu uso, o PP fica zerado" nasce daqui — um herói
+     * melê colado num fixador falha a esquiva na maioria das tentativas e vê o
+     * PP sumir sem sair do lugar, turno após turno. O turno SEGUINTE, porém,
+     * tem de começar cheio; se um dia não começar, é aqui que vai doer. */
+    t('esquiva: o PP levado pela fixação volta CHEIO no turno seguinte', function () {
+      var s = dodgeSetup('agua', 't-fogo');
+      var chance = E.dodgeChance(s.st, s.h.uid, s.m.uid);
+      setRolls(s.st, [gte(chance), gte(chance / 3)]);
+      ok(E.move(s.st, s.h.uid, 1, 3) === false, 'fixado: movimento cancelado');
+      eq(s.h.pp, 0, 'PP zerado pela fixação');
+      eq(s.h.x, 1, 'não saiu do lugar');
+      nextRound(s.st);
+      eq(s.h.pp, s.h.ppMax, 'turno seguinte começa com o PP CHEIO');
+      eq(s.h.pa, s.h.paMax, 'e com o PA cheio');
+      ok(E.reachable(s.st, s.h.uid).length > 0, 'volta a ter para onde andar');
+    });
+
     t('esquiva: FALHA CRÍTICA (roll < chance/3) também tira 1 PA', function () {
       var s = dodgeSetup('agua', 't-fogo');
       var chance = E.dodgeChance(s.st, s.h.uid, s.m.uid);
@@ -1503,6 +1582,36 @@
       E.endTurn(st);            // turno da vítima começa: PP continua 0
       eq(E.activeUnit(st).uid, d.uid, 'turno da vítima');
       eq(d.pp, 0, 'preso também no turno seguinte');
+    });
+
+    /* v2.4 — a outra metade do relato do PP zerado. `root` custa o turno INTEIRO
+     * (é a regra), mas some quando a duração acaba e o PP volta cheio. E a
+     * expiração precisa ser legível: "efeito root expira" é vocabulário de
+     * contrato, não português — o jogador que lê isso conclui que quebrou. */
+    t('efeito root: acabada a duração, o PP volta cheio e o diário avisa em português', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      var outro = byDef(st, 't-dummy', 1);
+      d.x = 3; d.y = 3; outro.x = 9; outro.y = 6;
+      sp('t-root1', { effects: [{ type: 'root', duration: 1 }] });
+      h.spells.push('t-root1');
+      E.cast(st, h.uid, 't-root1', d.x, d.y);
+      eq(d.pp, 0, 'preso: PP zerado na hora');
+
+      E.endTurn(st);                                  // começa o turno da vítima
+      eq(E.activeUnit(st).uid, d.uid, 'turno da vítima');
+      eq(d.pp, 0, 'o turno inteiro sem passo (a regra)');
+
+      drain();
+      E.endTurn(st);                                  // fim do turno da vítima: expira
+      ok(!E.unitHasEffect(d, 'root'), 'root removido');
+      ok(!!findEv(drain(), 'log', function (e) { return /não está mais preso ao chão/.test(e.text); }),
+         'diário avisa em português que a unidade se soltou');
+
+      for (var g = 0; g < 20 && E.activeUnit(st).uid !== d.uid; g++) E.endTurn(st);
+      eq(E.activeUnit(st).uid, d.uid, 'voltou o turno da vítima');
+      eq(d.pp, d.ppMax, 'PP CHEIO no primeiro turno depois da soltura');
     });
 
     t('efeito mark: acumula por pilhas e respeita `max`', function () {
@@ -2864,6 +2973,18 @@
         }
       }
 
+      /* v2.4 — fecha a conta do tripwire embutido no auto-play. Ele não é um
+       * teste à parte: cada `eq` roda dentro do laço de turnos acima, então uma
+       * regressão na recarga aparece já no AUTO-PLAY da sala onde acontecer.
+       * Este teste existe para que o NÚMERO de conferências fique visível — se
+       * um dia cair para perto de zero, é sinal de que o tripwire deixou de
+       * rodar (e não de que o motor passou a estar certo). */
+      t('tripwire: a recarga de PP foi conferida turno a turno em todas as salas reais', function () {
+        ok(ppChecks > 1000, 'inícios de turno conferidos: ' + ppChecks + ' (esperado > 1000)');
+        notes.push('TRIPWIRE PP: ' + ppChecks + ' inícios de turno conferidos ' +
+          '(pp === ppMax + buffs, ou 0 com `root`) nas 18 salas reais × 3 grupos.');
+      });
+
       // ---------------------------------------------------------------------
       // VARREDURA ANTI-EMPATE (v2.3). Antes da fúria da sala, duplas com
       // curandeira nos calabouços rasos sustentavam mais do que os monstros
@@ -3013,6 +3134,24 @@
       while (st.phase === 'playing' && turns < cap) {
         var u = E.activeUnit(st);
         ok(!!u, 'sempre há unidade ativa');
+        /* v2.4 — TRIPWIRE DA RECARGA DE PP. Aqui `u` ACABOU de começar o turno
+         * (`startTurn` roda no fim do `endTurn` anterior e no `createBattle`) e
+         * ainda não agiu: é o instante exato em que o contrato manda o PP estar
+         * em `ppMax + buffs`, ou em 0 se a unidade estiver presa. O relato de
+         * playtest foi "o pp não carrega todo turno" — este laço repete a
+         * conferência em toda sala real, para toda unidade da ordem. */
+        ppChecks++;
+        var ppEsperado = 0;
+        if (!E.unitHasEffect(u, 'root')) {
+          ppEsperado = u.ppMax;
+          for (var bf2 = 0; bf2 < u.effects.length; bf2++) {
+            var ef2 = u.effects[bf2];
+            if (ef2.type === 'buff' && ef2.stat === 'pp') ppEsperado += ef2.value;
+          }
+          if (ppEsperado < 0) ppEsperado = 0;
+        }
+        eq(u.pp, ppEsperado, 'PP recarregado no início do turno de ' + u.defId +
+           ' (' + dungeonId + '[' + roomIdx + '], rodada ' + st.round + ')');
         var plan = JOGO.AI.planTurn(st, u.uid);
         eq(plan[plan.length - 1].action, 'end', 'plano termina com end');
         var paSum = 0;

@@ -1438,7 +1438,12 @@ var JOGO = (typeof window !== 'undefined')
     var evs = st.tileEventsActive || st.tileEvents || [];
     var pos = '';
     for (var i = 0; i < st.units.length; i++) pos += st.units[i].x + ',' + st.units[i].y + (st.units[i].alive ? '' : 'x') + ';';
+    // PP e PA entram na assinatura: sem eles, uma FIXAÇÃO fracassada — que leva
+    // todo o PP sem tirar a unidade do lugar — deixava a assinatura IDÊNTICA, e
+    // as casas azuis de caminhada continuavam acesas com PP 0. O jogador clicava
+    // nelas e nada acontecia. Foi metade do relato "o PP não carrega".
     return [st.phase, st.round, active ? active.uid : '-', g && g.selectedSpellId,
+      active ? active.pp + ':' + active.pa : '-',
       hv ? hv.x + ':' + hv.y : '-', evs.length, R.isBusy() ? 1 : 0, pos,
       g && g.isPlayerTurn ? (g.isPlayerTurn() ? 1 : 0) : 1].join('|');
   }

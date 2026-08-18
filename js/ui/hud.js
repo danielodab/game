@@ -984,6 +984,13 @@ var JOGO = (typeof window !== 'undefined')
       for (var k = 0; k < (u.spells || []).length; k++) {
         parts.push((u.cooldowns && u.cooldowns[u.spells[k]]) || 0);
       }
+      // [U6] os EFEITOS da unidade ativa entram na assinatura: sem eles, ganhar
+      // ou perder `root`/provocação/marca não repintava a faixa de estado — e é
+      // ela que explica um PP zerado.
+      for (var q = 0; q < (u.effects || []).length; q++) {
+        var ef = u.effects[q];
+        parts.push(ef.type + (ef.stat || '') + (ef.value != null ? ef.value : '') + 'x' + ef.duration);
+      }
     }
     return parts.join('|');
   }
@@ -1095,10 +1102,78 @@ var JOGO = (typeof window !== 'undefined')
     var ppw = el('div', 'res pp-res');
     ppw.appendChild(el('span', 'res-lb', 'PP'));
     ppw.appendChild(pips(u.pp, u.ppMax, 'p-pp'));
-    tipOn(ppw, 'Pontos de Passos', 'Cada célula andada gasta 1 PP. Sair de perto de um inimigo pode custar tudo.', '#7ef0d4');
+    // [U6] PP zerado com motivo à vista. Sem isto o jogador via "0 / 3" no
+    // começo do próprio turno e concluía que o PP não recarrega — quando o que
+    // houve foi `root` (prende o turno inteiro) ou uma FIXAÇÃO mal-sucedida,
+    // que leva todo o PP restante sem tirar ninguém do lugar (contrato §2).
+    if (u.pp <= 0) {
+      var why = el('span', 'res-why', hasEff(u, 'root') ? 'preso' : 'sem passo');
+      why.setAttribute('style', 'font:700 10px var(--ui-sans);color:#e2665a;margin-left:4px');
+      ppw.appendChild(why);
+    }
+    tipOn(ppw, 'Pontos de Passos',
+      'Cada célula andada gasta 1 PP. Voltam ao máximo no começo do seu turno — ' +
+      'salvo se você estiver <b>preso</b> (0 PP o turno todo). ' +
+      'Sair de célula colada num inimigo é um teste de esquiva: falhando, você ' +
+      '<b>perde todo o PP e não sai do lugar</b>.', '#7ef0d4');
     res.appendChild(ppw);
     info.appendChild(res);
+
+    var status = statusRow(u);          // [U6] faixa de estado da unidade ativa
+    if (status) info.appendChild(status);
     bt.active.appendChild(info);
+  }
+
+  /* [U6] FAIXA DE ESTADO. O painel da unidade ativa mostrava PV/PA/PP e mais
+   * nada: um herói enraizado era indistinguível de um herói com o PP quebrado.
+   * As fichas abaixo dão nome, em português, ao que está agindo sobre ela — o
+   * `type` do efeito é vocabulário fechado do contrato e não vai para a tela. */
+  var EF_CHIP = {
+    root:      { txt: 'Preso',      cor: '#e2665a' },
+    poison:    { txt: 'Veneno',     cor: '#8fd14f' },
+    regen:     { txt: 'Regen',      cor: '#7ef0d4' },
+    taunt:     { txt: 'Provocado',  cor: '#ffb15c' },
+    invisible: { txt: 'Invisível',  cor: '#9be0ff' },
+    reflect:   { txt: 'Reflexo',    cor: '#c8a2ff' },
+    resist:    { txt: 'Resist.',    cor: '#9be0ff' }
+  };
+  function hasEff(u, type) {
+    var l = (u && u.effects) || [];
+    for (var i = 0; i < l.length; i++) if (l[i].type === type) return true;
+    return false;
+  }
+  function chip(txt, cor) {
+    var c = el('span', 'st-chip', esc(txt));
+    c.setAttribute('style', 'display:inline-block;padding:1px 6px;border-radius:999px;' +
+      'font:700 10px var(--ui-sans);color:' + cor + ';border:1px solid ' + cor + '66;' +
+      'background:' + cor + '1f');
+    return c;
+  }
+  function statusRow(u) {
+    var list = (u && u.effects) || [];
+    if (!list.length) return null;
+    var row = el('div', 'ba-status');
+    row.setAttribute('style', 'display:flex;flex-wrap:wrap;gap:4px;margin-top:4px');
+    var marcas = 0, vistos = {}, n = 0, i;
+    for (i = 0; i < list.length; i++) {
+      var ef = list[i];
+      if (ef.type === 'mark') { marcas++; continue; }
+      if (ef.type === 'shield') continue;                 // já aparece na barra de PV
+      if (ef.type === 'buff') {
+        var v = (ef.value > 0 ? '+' : '') + ef.value;
+        row.appendChild(chip(v + ' ' + String(ef.stat || '').toUpperCase(),
+                             ef.value < 0 ? '#e2665a' : '#8fd14f'));
+        n++;
+        continue;
+      }
+      var d = EF_CHIP[ef.type];
+      if (!d || vistos[ef.type]) continue;
+      vistos[ef.type] = true;
+      row.appendChild(chip(d.txt, d.cor));
+      n++;
+    }
+    if (marcas) { row.appendChild(chip('Marcado ×' + marcas, '#ff8a24')); n++; }
+    return n ? row : null;
   }
 
   function paintTimer() {
@@ -1874,6 +1949,15 @@ var JOGO = (typeof window !== 'undefined')
               : ev.type === 'dodgeFail' || ev.type === 'trapTriggered' ? 'l-bad'
               : ev.type === 'dodgeOk' ? 'l-good' : '';
       pushLog(safe(function () { return f(ev); }, ''), cls);
+    }
+    // [U6] a fixação leva TODO o PP e não tira ninguém do lugar: a linha do
+    // diário (canto, 11px) passava despercebida e o jogador só via o PP sumir.
+    if (ev.type === 'dodgeFail') {
+      var vit = unitByUid(ev.uid);
+      if (vit && vit.side === 'player') {
+        toast((vit.name || vit.defId) + ' foi fixado: perdeu todo o PP' +
+              (ev.critical ? ' e 1 PA' : '') + ' sem sair do lugar.', 'bad');
+      }
     }
     if (ev.type === 'fusion' || ev.type === 'turnStart' || ev.type === 'turnEnd') battleSig = '';
   };

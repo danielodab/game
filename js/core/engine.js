@@ -861,6 +861,27 @@ var JOGO = (typeof window !== 'undefined')
     return path;
   };
 
+  /* v2.4 — POR QUE O PASSO NÃO SAIU.
+   * `Engine.move` recusava em SILÊNCIO quando faltava PP, e esse é justamente o
+   * estado em que o jogador mais precisa de explicação: uma FIXAÇÃO fracassada
+   * leva TODO o PP restante SEM tirar a unidade do lugar (contrato §2), e a
+   * partir daí cada clique no chão não fazia nada e não dizia nada. O relato do
+   * playtest foi exatamente esse: "o PP não carrega, depois que eu uso ele fica
+   * zerado" — o PP recarrega sim (todo `startTurn`), o que faltava era o motor
+   * dizer que aquele turno já não tem passo.
+   * O motor já fala quando a unidade está presa (`root`) e quando a esquiva
+   * falha; aqui fecha o terceiro caso. Só comenta destinos ALCANÇÁVEIS a pé —
+   * toque em parede, em buraco ou em cima de unidade dispensa explicação e não
+   * polui o diário. */
+  function explainNoStep(state, u, x, y) {
+    if (x === u.x && y === u.y) return;
+    if (!isWalkable(state, x, y)) return;
+    var need = bfs(state, u.x, u.y, -1).dist[x + ',' + y];
+    if (need === undefined) return;                       // sem caminho: nada a dizer
+    if (u.pp <= 0) log(u.name + ' não tem mais Pontos de Passos neste turno.');
+    else log(u.name + ' precisa de ' + need + ' PP para chegar aí e só tem ' + u.pp + '.');
+  }
+
   Engine.move = function (state, uid, x, y) {
     if (state.phase !== 'playing') return false;
     var u = Engine.findUnit(state, uid);
@@ -870,7 +891,7 @@ var JOGO = (typeof window !== 'undefined')
       return false;
     }
     var path = Engine.path(state, uid, x, y);
-    if (!path || path.length > u.pp) return false;
+    if (!path || path.length > u.pp) { explainNoStep(state, u, x, y); return false; }
 
     // v2: teste de esquiva/fixação, uma vez por movimento, contra o pior fixador
     var locker = worstLocker(state, u, x, y);
@@ -1806,13 +1827,24 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  /* v2.4 — o `type` do efeito é vocabulário FECHADO do contrato e fica em inglês
+   * no código; o diário de batalha, não. "Bárbaro: efeito root expira" era a
+   * única pista de que a unidade voltara a andar — e em inglês. */
+  var EFEITO_PT = {
+    root: 'não está mais preso ao chão', poison: 'se livra do veneno',
+    regen: 'para de se regenerar', shield: 'perde o escudo',
+    buff: 'perde o bônus', resist: 'perde a resistência',
+    taunt: 'não está mais provocado', invisible: 'reaparece',
+    mark: 'perde uma marca', reflect: 'para de refletir dano'
+  };
+
   function tickDownEffects(state, u) {
     for (var i = u.effects.length - 1; i >= 0; i--) {
       var eff = u.effects[i];
       eff.duration--;
       if (eff.duration <= 0) {
         u.effects.splice(i, 1);
-        log(u.name + ': efeito ' + eff.type + ' expira.');
+        log(u.name + ' ' + (EFEITO_PT[eff.type] || ('perde o efeito ' + eff.type)) + '.');
       }
     }
     recomputeShield(u);
