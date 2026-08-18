@@ -363,3 +363,353 @@ inseto, anfíbio, orc — todos bípedes, mesma família de estilo, mas criatura
 
 **A Opção A vira plano B.** O que segue é a busca por um elenco de espécies.
 
+## II.1 Onde procurei, e o que a busca devolveu
+
+Varri Poly Pizza, Sketchfab (filtro CC0/CC-BY + downloadable), OpenGameArt, itch.io,
+Quaternius, Kenney, KayKit/Kay Lousberg, Mixamo e Blender Studio, com os termos pedidos
+("low poly fantasy character pack", "stylized rpg races", "skeleton warrior low poly",
+"cat humanoid", "orc goblin low poly", "elf archer low poly").
+
+| fonte | o que tem | veredito |
+|---|---|---|
+| **Quaternius — Ultimate Monsters** (50 modelos) | **14 espécies bípedes no MESMO rig de 43 ossos**, 14 clipes cada | **é o único pacote coeso multiespécie CC0 que achei** |
+| KayKit — Adventurers / Skeletons | 5 humanos + 4 esqueletos, rig da casa | já embutido; só 2 espécies (humano, morto-vivo) |
+| KayKit — Mystery Monthly 4/5/6 | 14–15 personagens cada, prováveis não-humanos | **US$ 19,99 cada** → fora (o usuário não quer comprar) |
+| Quaternius — Universal Base Characters + Modular Outfits + UAL | modular de verdade, animação enorme | **todos humanos**; resolve fusão, não resolve espécie |
+| Quaternius — Cute Animated Monsters (21) | é a geração ANTERIOR dos mesmos bichos | redundante com Ultimate Monsters |
+| Kenney — Blocky/Mini Characters | CC0, mas **sem esqueleto** | exigiria rigging do zero, reprovado |
+| OpenGameArt — "LowPoly RPG Characters" (6) | CC0, riggados | são **classes humanas** (wizard/warrior/rogue/monk/ranger), não espécies; rigs avulsos |
+| itch.io — LOWPO: Goblin Assets | CC0, 3 goblins riggados | **uma espécie só**, rigs avulsos, não fecha um elenco |
+| Mixamo | tem não-humanos e retargeting automático | licença Adobe **não permite redistribuir o asset**; aqui os modelos vão embutidos em base64 no repositório, então está fora |
+| Sketchfab CC0 avulsos | dá para achar gato, elfo, esqueleto | **cada um com rig próprio**, o que daria 6 bancos de animação e 15 fusões atravessando 6 convenções |
+
+**Conclusão da busca:** não existe, em CC0/CC-BY, um "Dofus kit" com gato, elfo e esqueleto
+prontos no mesmo rig. O que existe e chega perto é **um** pacote — e ele é bom.
+
+### A licença, colada da fonte
+
+`assets/candidatos/quaternius_ultimate_monsters/License.txt`, íntegra da parte que importa:
+
+```
+License:
+CC0 1.0 Universal (CC0 1.0)
+Public Domain Dedication
+https://creativecommons.org/publicdomain/zero/1.0/
+```
+
+(o cabeçalho do arquivo diz "Ultimate Platformer Pack" — é um copiar-e-colar errado do
+próprio autor; o pacote baixado é o Ultimate Monsters e a licença declarada é a mesma.)
+
+`quaternius.com/faq.html`, verbatim:
+
+> "Yes, these assets can be used for free without the need for attribution in commercial,
+> educational, and personal projects."
+> "All models are under the CC0 License."
+> "No, attribution is not necessary. However, credit is always appreciated."
+> "Yes, you are free to modify the models in any way you like, including combining them
+> with other asset packs."
+
+`poly.pizza`, na página do pacote e de cada modelo: **"Public Domain (CC0)"**, "free to use
+in any project, even commercially".
+
+CC0 é renúncia de direitos: permite uso comercial, modificação **e redistribuição**, que é o
+que este repositório precisa (os modelos vão embutidos em base64 e versionados). Creditamos
+mesmo assim em `docs/CREDITS_3D.md`.
+
+---
+
+## II.2 A descoberta: o pacote é coeso, e ninguém tinha medido
+
+Baixei os 25 `.gltf` que já estavam aqui **mais 14 `.glb`** que faltavam (via poly.pizza,
+mesma licença), abri os 39 e contei osso por osso. O Ultimate Monsters não é um saco de
+modelos avulsos: são **quatro rigs**, e um deles é um elenco pronto.
+
+| grupo | ossos | clipes | espécies |
+|---|---|---|---|
+| **BÍPEDE** | **43** | **14** | Yeti, Orc, Demon, BlueDemon, Cactoro, MushroomKing, Monkroose, Birb, Alien, Ninja, Tribal, **Frog**, **Dino** (+ Bunny, 49) |
+| flutuante | 38 | 8 (sem Walk) | Ghost, Ghost_Skull, Hywirl, Squidle (43) |
+| asa | 13 | 8 (sem Walk) | Dragon, Goleling, Armabee, Glub, Alpaking |
+| blob | 4 | 9 | Wizard, Mushnub, Cat, slimes |
+
+**As 13 espécies bípedes têm os MESMOS nomes de osso, na MESMA ordem — e quase a MESMA
+pose de bind.** Medi a divergência máxima das `inverseBindMatrices`, uma contra a outra,
+em modelos de ~3,5 unidades de altura:
+
+```
+referência: Yeti
+Orc          0,0740      MushroomKing 0,0740      Monkroose 0,0130
+Ninja        0,0858      Cactoro      0,0046      Birb      0,0182
+Demon        0,0858      Tribal       0,0101      Alien     0,0055
+BlueDemon    0,0879
+```
+
+Máximo **0,088 em 3,5** = **2,5 %**. Na prática: mesma pose de bind. Isso é o equivalente,
+entre espécies, da descoberta da Parte I entre os KayKit — e é ela que destrava a fusão.
+
+---
+
+## II.3 As QUATRO amarras, medidas
+
+### Amarra 1 — animação: PASSA
+
+Um banco só serve as 13 espécies bípedes (o `AnimationMixer` casa por nome de osso, e os
+nomes são idênticos). Custo: **um** banco novo de 14 clipes, extraído uma vez.
+
+**Ressalva honesta:** são 14 clipes contra os 30 de hoje. Não existem `Spellcast_Shoot`,
+`Spellcast_Summon`, `Spellcast_Raise`, `Block`, `Dodge_Backward`, `Cheer`, `Taunt`, `Throw`.
+O que existe: Idle, Walk, Run, Jump, Jump_Idle, Jump_Land, Duck, Punch, Weapon, Wave, No,
+Yes, HitReact, Death. Seis classes que conjuram todo turno cairiam em `Punch`/`Weapon`.
+`autoActions()` precisa de um mapa novo (`Punch`→attack, `Weapon`→attack2, `HitReact`→hit).
+
+### Amarra 2 — ossos de mão: PASSA COM AJUSTE
+
+Não existe `handslot`. Existem, em todas as 13: `Shoulder.L/R`, `UpperArm.L/R`,
+`LowerArm.L/R`, e os dedos `Index1-3.L/R`, `Middle1-3.L/R`, `Pinky1-3.L/R`, `Thumb1-2.L/R`.
+Como os nomes são iguais nas 13, é **UM** mapa de nomes para o elenco inteiro, não seis.
+`fusionLook()` trocaria `'handslot.l'` por `'LowerArm.L'`.
+
+### Amarra 3 — peças separáveis: REPROVA NO PAPEL, PASSA NA PRÁTICA
+
+Cada espécie é **uma malha fechada**. Só 4 das 14 têm peça própria: `Demon→Trident`,
+`Orc→Orc_Weapon`, `MushroomKing→Mushroom`, `Bunny→Carrot` — e mesmo essas são **skinned**,
+não estáticas: estão presas ao esqueleto, não penduradas num osso.
+
+**A saída, e ela é código, não asset:** como a pose de bind é a mesma nas 13, dá para
+**recortar a malha fechada por peso de osso**, em tempo de carga. Escrevi e rodei:
+para cada vértice acho o osso dominante, classifico em cabeça/corpo, e reconstruo o índice
+do triângulo. ~35 linhas. Isso transforma "malha fechada" em "guarda-roupa por região".
+E as 4 peças skinned viajam entre espécies com um `bind()` no esqueleto do anfitrião —
+também testado, também funciona, **porque a bind pose é a mesma**. (Está no render: na folha
+`esp_fusao.png` o Iéti aparece segurando o tridente do Demônio.)
+
+### Amarra 4 — a FUSÃO: PASSA, com uma receita específica
+
+Testei os quatro caminhos, renderizados lado a lado em
+`assets/candidatos/_folhas/esp_fusao.png`:
+
+| caminho | resultado medido |
+|---|---|
+| **(b) só adereço** | **REPROVA.** 4 espécies de 14 têm peça. Nas outras 10 a fusão fica invisível: aparece o anfitrião e mais nada. |
+| **(a') corpo + CABEÇA do convidado** | Funciona e é bonito — **mas o anfitrião PERDE a marca dele.** O Rei-Cogumelo sem o chapéu deixa de ser Rei-Cogumelo; o Tribal sem a máscara vira só um corpo pintado. Reprova o teste "quais duas classes formaram isto". |
+| **(c') quimera sagital** (metade de cada, corte vertical) | Mostra as duas, mas **parte o corpo ao meio**. Radical demais para virar regra. |
+| **(d') DUAS CABEÇAS** — anfitrião inteiro + cabeça do convidado ao lado da própria | **VENCEDOR.** Nenhuma marca se perde, vale para **as 15 duplas**, e lê como fusão à primeira vista. |
+
+**A receita proposta:**
+`corpo + cabeça + marca do ANFITRIÃO, intactos · CABEÇA do CONVIDADO no ombro ·
+peça de assinatura do convidado no punho livre · cor da classe convidada como tinta`
+
+### O teste cego
+
+Renderizei as 15 fusões **sem rótulo** (`esp_quinze_sem.png`), olhei antes de ver o gabarito
+e tentei nomear os dois pais. **Acertei 15 de 15.** Depois conferi contra `esp_quinze.png`.
+
+**Ressalva sobre o meu próprio teste:** eu já conhecia as seis espécies, o que torna o teste
+mais fácil para mim do que para quem vê pela primeira vez. Por isso a folha sem rótulo está
+entregue: o teste que vale é o do usuário, não o meu.
+
+Honestidade sobre as fracas: na primeira rodada, as 5 fusões que tinham o **Anfíbio como
+convidado** (#3, #7, #10, #13, #14) ficaram ambíguas — o crânio do sapo é pequeno e pálido e
+lia como um caroço. Não aceitei e voltei: normalizei o tamanho da cabeça convidada por um
+fator por espécie (`Frog 1,30`) e subi a tinta de classe de 0,22 para 0,42. Na segunda
+rodada as cinco passaram. **Isso é uma regra que fica:** a cabeça convidada precisa de um
+fator de escala por espécie, senão espécies de crânio pequeno somem na fusão.
+
+### E no TAMANHO DO TABULEIRO (`esp_tabuleiro.png`)
+
+Medi o alvo em vez de chutar: `CELL = 2,0` e a trava de legibilidade é `26 px` por célula no
+desktop (`renderer3d_v2.js`, `minCellPx`), com `tilt 0,98` — **um herói de ~4 m ocupa da
+ordem de 40–55 px de tela.** A folha renderiza nesse tamanho.
+
+O que eu vejo lá, sem enfeitar: **o CORPO se identifica pela cor e pela silhueta grossa; a
+cabeça convidada vira uma mancha colorida.** A forma da cabeça (bico, chifre, chapéu) só
+começa a ler no retrato e no close. Ou seja: **no tabuleiro quem carrega a identificação é a
+PALETA da classe, e a forma confirma no retrato.** Isso vale para qualquer pacote, inclusive
+para o plano B com chapéu KayKit — chapéu de 20 px também é mancha. É uma limitação do
+tamanho na tela, não deste acervo, e é melhor dizer isso agora do que prometer o contrário.
+
+---
+
+## II.4 O elenco: seis espécies, uma por papel
+
+Folhas: `esp_elenco.png` (colorida) e **`esp_elenco_sil.png` (silhueta)**.
+
+| papel | classe | espécie | por quê | marca doável na fusão | alternativa |
+|---|---|---|---|---|---|
+| tanque | `sumo` Bárbaro | **Iéti** | mole de pelo, ombros o dobro da cabeça, braços que arrastam no chão: massa sem precisar de escala | cabeçorra peluda de chifres curtos | Orc (traz porrete próprio) |
+| atirador | `arqueiro` Batedor | **Ave (Birb)** | pernalta, ereta, bico e crista: a única silhueta vertical e fina do elenco | bico comprido + crista | Cactoro (chapéu de aba larga) |
+| mago | `bruxo` Bruxo | **Demônio** | chifres, asas curtas e **tridente em malha própria** — a única classe que doa arma de verdade | chifres + TRIDENTE | BlueDemon |
+| assassino | `espadachim` Ladino | **Anfíbio (Frog)** | agachado, coxas de salto, o corpo mais baixo e compacto do elenco | crânio largo de olhos no topo | Ninja (mas é humano, o menos "espécie") |
+| suporte | `curandeira` Paladina | **Rei-Cogumelo** | o chapéu **é** o corpo; nenhuma outra silhueta se confunde com ela | chapéu de cogumelo + COGUMELO em malha própria | Monkroose (símio) |
+| invocador | `invocador` Xamã | **Tribal mascarado** | máscara e cocar de penas: lê como quem chama coisa de fora | máscara + cocar | Alien (crânio grande, esguio) |
+
+**Teste de silhueta (`esp_elenco_sil.png`): passa com folga.** Na coluna HOJE as seis manchas
+são o mesmo boneco. Na coluna ESPÉCIE: macaco curvado, pernalta de bico, chifres e asas,
+agachado de patas largas, cogumelo, cocar de penas. Dá para nomear as seis de olhos meio
+fechados. Isso é exatamente o que a Parte I **não** conseguiu entregar.
+
+**As seis marcas são únicas entre si** (chifre ≠ bico ≠ chapéu ≠ cocar ≠ crânio de sapo ≠
+cabeça peluda) e **todas são silhueta**, não textura — que era a terceira condição.
+
+### O que este elenco NÃO tem, e é justo dizer
+
+O pedido citava Sram (esqueleto), Ecaflip (gato) e Cra (elfo). **O pacote não tem gato
+bípede, não tem elfo, e o morto-vivo que ele tem (`Ghost_Skull`) está no rig flutuante de
+38 ossos, com 8 clipes e SEM `Walk`** — não serve como classe jogável, serve como chefe.
+O que o pacote entrega no lugar: iéti, orc, demônio, planta, fungo, ave, anfíbio, réptil,
+símio, alienígena, lagomorfo. É outro baralho de espécies, com a mesma lógica.
+
+---
+
+## II.5 Chefes — agora com número, e uma má notícia sobre o presente
+
+Folha: `esp_chefes.png`. A linha **vermelha** marca 4,70 m, a altura da dupla fundida
+renderizada na folha (a fusão de hoje chega a 4,38 m). **Cuidado com esse número:** pela
+receita `média das duas alturas × 1,26`, a dupla mais alta da proposta (tanque + invocador)
+daria **4,88 m**. Então o piso seguro para um chefe é **4,9 m**, não 4,7. Nenhum veredito da
+tabela abaixo muda com isso — os dois reprovados continuam reprovados e os aprovados
+continuam acima de 5,2 m. Cada célula imprime altura, largura e um sinal de
+aprovado/reprovado.
+
+**Má notícia primeiro: metade dos chefes de HOJE já está abaixo da linha.**
+
+| sala | chefe hoje | altura | passa? |
+|---|---|---|---|
+| Fecho de Brasa | `q_trex` | **3,83 m** | NÃO — menor que a fusão |
+| Mina Trêmula | `q_triceratops` | **2,69 m** | NÃO — menor que o próprio tanque |
+| Coração Partido | `q_trex` | **4,28 m** | NÃO |
+| Estufa | `q_stag` (um cervo) | 4,88 m | sim (mas é um cervo) |
+| Cisterna | `skeleton_mage` | 5,13 m | sim |
+| Andaimes | `skeleton_warrior` | 5,39 m | sim |
+
+**Segunda descoberta, contraintuitiva:** os "Evolved" do Ultimate Monsters são **largos, não
+altos**. Medindo a caixa de bind:
+
+| candidato | altura | largura | veredito |
+|---|---|---|---|
+| **Ghost_Skull** | **6,20 m** | 4,83 m | melhor número do lote |
+| **Mushnub_Evolved** | **5,60 m** | 4,47 m | ótimo |
+| **Goleling_Evolved** | 5,70 m | 9,73 m | alto, mas ocupa 3 células de lado |
+| **Dino** | 5,50 m | 7,93 m | passa |
+| **Alpaking_Evolved** | 5,40 m | 7,28 m | passa |
+| **Glub_Evolved** | 5,30 m | 6,15 m | passa |
+| GreenSpikyBlob | 5,20 m | 5,22 m | passa (mas rig de 4 ossos, sem Walk) |
+| Dragon_Evolved | 6,00 m | **11,50 m** | espetacular e larguíssimo |
+| Armabee_Evolved | 5,30 m | 10,67 m | largo |
+| Hywirl | 5,20 m | 10,50 m | largo |
+| **Squidle** | **4,68 m** | **12,89 m** | REPROVADO: não chega nem aos 4,7 e ocupa 6 células |
+| **Dragon** | 4,53 m | 12,89 m | REPROVADO |
+
+Todos os aprovados acima ficam em 5,2 m ou mais, ou seja, **passam também do piso real de
+4,9 m**.
+
+(As larguras são da pose de bind, com braços/asas abertos — é a mesma caixa que o jogo usa
+em `visibleBodyBox`, então é a medida certa para comparar, mas superestima a pegada real na
+pose de Idle.)
+
+**Proposta de chefes:**
+
+| calabouço · tema | chefe | candidato | altura/largura | por quê |
+|---|---|---|---|---|
+| Estufa · `garden` | A Jardineira-Viúva | **Mushnub_Evolved** | 5,60 / 4,47 | cogumelo gigante espinhoso; acaba com o cervo verde |
+| Cisterna · `cistern` | Baronesa Salmoura | **Glub_Evolved** | 5,30 / 6,15 | peixe-anfíbio de bocarra |
+| Fecho de Brasa · `forge` | Magno, o Acendedor | **BlueDemon** ampliado a 6,2 m | bípede, estreito | usa o rig bípede, então o banco já está pago. Alternativa espetacular: Dragon_Evolved, 6,00 m mas 11,5 m de largura |
+| Andaimes · `scaffold` | Cambota, o Mestre-de-Obras | **Alpaking_Evolved** | 5,40 / 7,28 | criatura voadora, combina com o vento |
+| Mina Trêmula · `mine` | Batepedra | **Goleling_Evolved** | 5,70 / 9,73 | golem coroado; hoje é um triceratops de 2,69 m |
+| Coração Partido · `heart` | O Coração Partido | **Ghost_Skull** | **6,20 / 4,83** | caveira espectral; melhor razão altura/largura do acervo |
+
+---
+
+## II.6 O preço, em bytes — e ele é BEM menor do que a Parte I estimou
+
+A Parte I disse "+4,55 MB para as classes". Estava errado, porque contava a animação
+**seis vezes**. Medi acessor por acessor:
+
+| | malha+rig | animação | com UM banco | em base64 |
+|---|---|---|---|---|
+| 6 classes | 1,33 MB | 0,67 MB (duplicada 6×) | **1,49 MB** | **1,98 MB** |
+| 6 chefes | 1,01 MB | 0,31 MB | 1,14 MB | 1,52 MB |
+
+(os `.gltf` baixados pesam ~1,2 MB cada em disco só por causa do base64 embutido + JSON;
+o conteúdo binário de cada corpo é ~212 KB de malha e ~119 KB de animação.)
+
+Orçamento embutido hoje: 16,27 MB de 25 MB. **Cabe com folga**, e se os 5 corpos KayKit de
+herói saírem (3,98 MB — mas os esqueletos precisam ficar, os monstros os usam), o saldo é
+negativo, ou seja, o jogo **encolhe**.
+
+---
+
+## II.7 O que se perde — a conta honesta
+
+1. **O vocabulário de conjuração.** 14 clipes contra 30. `Spellcast_Shoot/Summon/Raise`,
+   `Block`, `Dodge_Backward`, `Taunt`, `Throw` deixam de existir. Para seis classes que
+   conjuram todo turno é rebaixamento visível, e o FX3D sincroniza com `hitDelay`/`castCurve`.
+   Mitigação: `Punch` e `Weapon` são dois ataques distintos, `Duck` serve de esquiva e
+   `Wave` serve de conjuração de suporte. Dá para cobrir ~6 dos 30 papéis. Não os 30.
+2. **O tom.** O Ultimate Monsters é mais redondo, olhudo e fofo que o KayKit. O **cenário**
+   é KayKit Dungeon Remastered. Seis classes nesse traço mudam o tom do jogo inteiro, não só
+   do elenco. As criaturas Quaternius já convivem lá, mas como coadjuvantes.
+3. **Os nomes.** Bárbaro, Batedor, Bruxo, Ladino, Paladina e Xamã não descrevem iéti, ave,
+   demônio, sapo, cogumelo e mascarado. É renome do elenco inteiro.
+4. **O trabalho de código**, que não é nenhum monstro mas não é zero:
+   corte por peso de osso (~35 linhas), `bind()` de peça entre esqueletos (~25),
+   `fusionLook` com cabeça convidada e fator por espécie (~40), mapa de `autoActions`
+   novo (~15), banco de animação novo, recalibrar `height`/`radius`/`portraitFraming`,
+   reteste das 15 fusões.
+5. **A `BULK`.** Ela decide o anfitrião. Com as espécies as massas mudam:
+   `sumo 5 · curandeira 4 · invocador 3,5 · bruxo 3 · arqueiro 2 · espadachim 1` (é a que
+   usei nas folhas). Sem reordenar, a fusão escolhe anfitrião errado.
+
+---
+
+## II.8 O dilema, posto na mesa
+
+|  | **Parte II · espécies (Ultimate Monsters)** | **Parte I · Opção A (remix KayKit), agora PLANO B** |
+|---|---|---|
+| silhueta distinta por classe | seis bichos diferentes | seis proporções do mesmo humano |
+| fusão identificável | 15/15 no teste cego, receita "duas cabeças" | 15/15, e mais natural: chapéu+capa+arma trocados |
+| fusão no tamanho do tabuleiro | lê pela COR; a forma só no retrato | igual — chapéu de 20 px também é mancha |
+| animação | 14 clipes (perde conjuração) | 30 clipes, os de hoje |
+| ossos de mão | 1 mapa novo | `handslot` intacto |
+| coerência com o cenário | muda o tom | mesmo autor, mesma paleta |
+| bytes | +1,98 MB | 0 |
+| nomes das classes | renome completo | 5 de 6 se mantêm |
+
+**Recomendação:** ir de **espécies (Parte II)** para as classes, porque é literalmente o que
+foi pedido e porque a fusão passou no teste — que era o risco real. O preço a pagar com os
+olhos abertos é o vocabulário de animação e o tom. Se o usuário olhar as folhas e disser que
+os bichos são fofos demais para o SOTERRA, o plano B continua de pé e custa zero.
+
+**Para os chefes a recomendação é a mesma dos dois lados:** Ultimate Monsters, porque chefe
+não funde, não precisa de guarda-roupa, e três dos seis chefes de hoje estão menores que uma
+dupla fundida.
+
+---
+
+## II.9 Índice das folhas (`assets/candidatos/_folhas/`)
+
+| arquivo | o que mostra |
+|---|---|
+| `esp_especies.png` / `_sil.png` | catálogo: 20 espécies do pacote, mesma escala, com o rig de cada |
+| `esp_elenco.png` / `_sil.png` | 6 papéis × [HOJE · ESPÉCIE · alternativa]. **A folha de silhueta é o teste** |
+| `esp_fusao.png` | 3 duplas × [pai A · pai B · só adereço · corpo+cabeça · DUAS CABEÇAS · quimera sagital] |
+| `esp_quinze_sem.png` | **as 15 fusões SEM rótulo**, para o usuário fazer o teste cego |
+| `esp_quinze.png` | as mesmas 15 COM rótulo — o gabarito |
+| `esp_tabuleiro.png` / `_rot.png` | as 6 classes e as 15 fusões **no tamanho em que aparecem no jogo** |
+| `esp_chefes.png` / `_sil.png` | 6 salas × [tanque · FUSÃO · chefe hoje · candidato 1 · candidato 2], com a linha de 4,70 m e altura/largura medidas |
+
+Regerar: subir `python -m http.server 8137 --directory C:\Users\danie\Documents\Jogo` e abrir
+`http://localhost:8137/tests/especies.html?folha=elenco|especies|fusao|quinze|tabuleiro|chefes`
+(`&sil=1` = silhueta, `&rot=0` = sem rótulo, `&receita=duas|cabeca|sagital`).
+
+Nada disso está ligado ao jogo. `tests/especies.html` carrega `tests/save_sandbox.js` como
+primeiro script e lê de `assets/candidatos/`, pasta no `.gitignore` que nenhum arquivo do
+jogo referencia. **Nenhum arquivo em `js/` foi tocado.**
+
+## II.10 Créditos
+
+| pacote | autor | licença | origem |
+|---|---|---|---|
+| Ultimate Monsters (39 dos 50 modelos baixados) | Quaternius | **CC0 1.0** — `License.txt` do pacote, página oficial e FAQ | Google Drive oficial (25 `.gltf`) + poly.pizza (14 `.glb`) |
+
+Atribuição não é obrigatória sob CC0. Creditamos assim mesmo, como já se faz em
+`docs/CREDITS_3D.md`.

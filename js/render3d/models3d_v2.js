@@ -497,17 +497,18 @@ var JOGO = (typeof window !== 'undefined')
   //   cor   = mistura das duas paletas · aura = mistura dos dois elementos
   //   porte = maior (a unidade soma a vida das duas)
   // As pecas que o CONVIDADO leva para dentro da fusao.
-  function marksOf(classId, look) {
+  function marksOf(classId, look, corDoConvidado) {
     var mk = M.CLASS_MARK[classId] || {};
     var out = [];
-    if (mk.head) out.push({ model: look.model, mesh: mk.head, bone: 'head' });
+    if (mk.head) out.push({ model: look.model, mesh: mk.head, bone: 'head', tint: corDoConvidado });
     // A CAPA e a "roupa" do convidado. Arqueiro e espadachim nao tem peca de
     // cabeca (o capuz faz parte da malha skinned), entao sem a capa eles
     // entrariam na fusao so por uma arma pequena e some. A capa muda a cor e a
     // silhueta das costas, que le de longe.
-    if (mk.cape) out.push({ model: look.model, mesh: mk.cape, bone: 'chest', hidesHostCape: true });
+    if (mk.cape) out.push({ model: look.model, mesh: mk.cape, bone: 'chest',
+                            hidesHostCape: true, tint: corDoConvidado });
     var arma = mk.hand || look.weapon;
-    if (arma) out.push({ model: look.model, mesh: arma, bone: 'handslotl' });
+    if (arma) out.push({ model: look.model, mesh: arma, bone: 'handslotl', tint: corDoConvidado });
     return out;
   }
 
@@ -524,7 +525,7 @@ var JOGO = (typeof window !== 'undefined')
       model: lh.model, show: lh.show.slice(), scale: 1.26,
       tint: lh.tint, accent: lg ? lg.accent : lh.accent,
       mixTint: lg ? lg.tint : null,
-      grafts: lg ? marksOf(guest, lg) : [],
+      grafts: lg ? marksOf(guest, lg, lg.tint) : [],
       fusion: true, hostClass: host, guestClass: guest,
       concept: lg ? (lh.concept + ' + marcas de ' + guest) : lh.concept
     };
@@ -684,6 +685,17 @@ var JOGO = (typeof window !== 'undefined')
             if (n !== g2 && n.isMesh && /_Cape$/.test(n.name || '')) n.visible = false;
           });
         }
+        // A peca entra com a COR DA CLASSE QUE A DOOU. O acervo so tem 4 capas e
+        // 3 pecas de cabeca para 6 classes — arqueiro e espadachim dividem a capa
+        // de ladino, bruxo e invocador a de mago. Sem a tinta, essas duplas
+        // ficariam indistinguiveis; com ela, uma entra verde e a outra azul.
+        // Tinta FORTE (0,92) so nas pecas doadas. No corpo, tingir forte lava o
+        // atlas e apaga o desenho — por isso o heroi leva so 0,30. Aqui e o
+        // contrario: a peca e pequena e precisa GRITAR de quem veio; perder o
+        // detalhe da textura numa capa de 20 px nao custa nada, e a 0,55 o
+        // verde do arqueiro saia #6c6246, um marrom indistinguivel do azul do
+        // espadachim (#664b57).
+        if (gf.tint) { try { tintMaterials(g2, gf.tint, 0.92); } catch (e) {} }
         bone.add(g2);
         group.userData_grafts.push(g2);
       }
@@ -1008,7 +1020,7 @@ var JOGO = (typeof window !== 'undefined')
   //   bípede de pé   -> busto medido em CABEÇAS (mesmo porte de rosto em todos,
   //                     adereço de cabeça ganha teto, membros soltos ficam fora)
   //   bicho/voador   -> corpo inteiro com a mesma margem
-  M.portraitFraming = function (node) {
+  M.portraitFraming = function (node, corpoInteiro) {
     var m = measurePose(node);
     var box = m.skin.isEmpty() ? m.any : m.skin;
     if (box.isEmpty()) return null;
@@ -1029,7 +1041,10 @@ var JOGO = (typeof window !== 'undefined')
                   (H >= 1.15 * Math.max(sz.x, sz.z));
 
     var top, bottom;
-    if (upright) {
+    // `corpoInteiro` força o caminho de corpo inteiro mesmo em bípede: os
+    // cartões da tela de escolha e a ficha do herói mostram a FIGURA toda, não
+    // um busto. Sem isto, `Art.unit` receberia um retrato cortado no peito.
+    if (upright && !corpoInteiro) {
       var want = m.head.max.y + hH * TOP_AIR;
       top = want;
       if (!m.gear.isEmpty() && m.gear.max.y > top) {
@@ -1098,7 +1113,8 @@ var JOGO = (typeof window !== 'undefined')
   M.portrait = function (defId, opts) {
     opts = opts || {};
     var size = opts.size || 192;
-    var key = defId + '|' + (opts.element || '') + '|' + size;
+    var key = defId + '|' + (opts.element || '') + '|' + (opts.elements ? opts.elements.join(',') : '') +
+              '|' + size + (opts.corpoInteiro ? '|inteiro' : '');
     if (portCache[key]) return portCache[key];
     if (!ready) return null;
 
@@ -1119,7 +1135,7 @@ var JOGO = (typeof window !== 'undefined')
 
     // ENQUADRAMENTO PELA GEOMETRIA (§ portraitFraming): sem isto, altura e
     // distância fixas decapitavam o Bárbaro e encolhiam o Xamã.
-    var f = M.portraitFraming(node);
+    var f = M.portraitFraming(node, opts.corpoInteiro);
     if (!f) { portScene.remove(node); return null; }
     var ca = Math.cos(PORT_ANG), sa = Math.sin(PORT_ANG);
     portCam.position.set(f.tx + sa * f.dist, f.cy, f.tz + ca * f.dist);

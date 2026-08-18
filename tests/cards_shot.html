@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Cards da tela "Quem desce"</title>
+<style>
+  html,body{margin:0;background:#0b0d10;overflow:auto}
+  #app{position:relative;width:100vw;min-height:100vh}
+  #game-canvas{position:absolute;inset:0;width:100%;height:100%}
+  #st{position:fixed;left:8px;top:6px;z-index:999;font:12px monospace;color:#8f8;
+      background:#000c;padding:3px 8px;border-radius:4px}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+</div>
+<div id="st">carregando…</div>
+
+<!-- blindagem do save do jogador: PRIMEIRO script, sempre -->
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = [
+    'vendor/three.min.js', 'vendor/GLTFLoader.js',
+    'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
+    'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+    'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js',
+    'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
+    'js/core/progress.js', 'js/core/game.js',
+    'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js',
+    'js/render3d/models3d_v2.js',
+    'js/render2d/art.js', 'js/render3d/portraits3d.js',
+    'js/ui/hud.js'
+  ];
+  document.write('<link rel="stylesheet" href="../css/style.css' + window.__V + '">');
+  for (var i = 0; i < arqs.length; i++) {
+    document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+  }
+</script>
+
+<script>
+/* Captura da tela de escolha de heróis ("Quem desce") com os cartões como o
+ * jogador os vê. Existe porque a queixa era exatamente essa tela, e conferir
+ * pelo painel do navegador não dá: ele não compõe (rAF não dispara). */
+(function () {
+  'use strict';
+  var st = document.getElementById('st');
+  window.addEventListener('DOMContentLoaded', function () {
+    try {
+      JOGO.UI.init();
+      var t0 = Date.now();
+      (function espera() {
+        var pronto = JOGO.Models3D2 && JOGO.Models3D2.isReady && JOGO.Models3D2.isReady();
+        if (!pronto && Date.now() - t0 < 25000) {
+          if (JOGO.Models3D2 && JOGO.Models3D2.load) JOGO.Models3D2.load(function () {});
+          return setTimeout(espera, 150);
+        }
+        if (JOGO.Portraits3D && JOGO.Portraits3D.install) JOGO.Portraits3D.install();
+        JOGO.Progress.reset();
+        // Chega na tela de escolha pelo caminho do JOGADOR: clicar em "Descer".
+        // `UI.show('party')` nao existe — a navegacao e por botao.
+        var descer = null;
+        var bs = document.querySelectorAll('#ui-root button');
+        for (var b = 0; b < bs.length; b++) {
+          if (/descer/i.test(bs[b].textContent)) { descer = bs[b]; break; }
+        }
+        if (descer) descer.click();
+        for (var i = 0; i < 30; i++) { try { JOGO.UI.update && JOGO.UI.update(0.05); } catch (e) {} }
+        var cards = document.querySelectorAll('#ui-root .hero-card').length;
+        var canvases = document.querySelectorAll('#ui-root .hero-pic canvas').length;
+        st.textContent = 'PASS · ' + cards + ' cartões · ' + canvases + ' figuras · modelos ' +
+          (JOGO.Models3D2.isReady() ? '3D' : 'AUSENTES');
+        window.__pronto = true;
+      })();
+    } catch (e) { st.textContent = 'ERRO: ' + e.message; }
+  });
+})();
+</script>
+</body>
+</html>

@@ -121,6 +121,41 @@ var JOGO = (typeof window !== 'undefined')
       A.cardIcon = A.classCard;
     }
 
+    // ---------------------------------------------------------- boneco inteiro
+    // `Art.unit` desenha a FIGURA DE CORPO INTEIRO, e e ela que aparece nos
+    // cartoes da tela "Quem desce", na ficha do heroi e na celula de fusao —
+    // cinco lugares que continuavam com o boneco procedural 2D ao lado dos
+    // modelos 3D do tabuleiro. O usuario reclamou tres vezes ("os cards
+    // precisam mudar! estao feio demais na versao 2d").
+    var originalUnit = A.unit;
+    if (originalUnit) {
+      A.unit = function (defId, opts) {
+        opts = opts || {};
+        if (!hasHandArt(defId)) {
+          var M = JOGO.Models3D2;
+          if (M && M.isReady && M.isReady()) {
+            var cv = null;
+            try {
+              cv = M.portrait(defId, {
+                size: opts.size || 256,
+                corpoInteiro: true,
+                element: opts.element || (opts.elements && opts.elements[0]) || null,
+                elements: opts.elements || null,
+                kind: opts.kind || null, classId: opts.classId || null, boss: !!opts.boss
+              });
+            } catch (e) { cv = null; }
+            if (cv) {
+              // o hud posiciona pelo ancoradouro; corpo inteiro centra no meio
+              cv.__res = 1;
+              cv.__anchor = [0.5, 0.5];
+              return cv;
+            }
+          }
+        }
+        return originalUnit.call(A, defId, opts);
+      };
+    }
+
     A.__portrait3dWrapped = true;
     wrapped = true;
     return true;
