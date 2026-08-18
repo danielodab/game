@@ -411,9 +411,10 @@
       check(RL + ': todas as linhas do mesmo comprimento',
         lay.every(function (row) { return typeof row === 'string' && row.length === wdt; }),
         'larguras: ' + lay.map(function (row) { return row.length; }).join(','));
-      // faixa ampliada a pedido do usuário ("achei os mapas pequenos")
-      check(RL + ': largura entre 17 e 23 (é ' + wdt + ')', wdt >= 17 && wdt <= 23);
-      check(RL + ': altura entre 15 e 19 (é ' + hgt + ')', hgt >= 15 && hgt <= 19);
+      // faixa ampliada a pedido do usuário. Primeiro "achei os mapas pequenos"
+      // (13×11–17×15 → 17×15–23×19), depois "é pequena demais" (→ 21×17–27×23).
+      check(RL + ': largura entre 21 e 27 (é ' + wdt + ')', wdt >= 21 && wdt <= 27);
+      check(RL + ': altura entre 17 e 23 (é ' + hgt + ')', hgt >= 17 && hgt <= 23);
 
       var counts = {};
       lay.forEach(function (row) {
@@ -936,8 +937,8 @@
         if (a < smallest) { smallest = a; }
       });
     });
-    check('a menor sala do jogo já é ≥ 17×15 (255 células)', smallest >= 255, smallest + '');
-    check('a maior sala do jogo é 23×19 (437 células)', biggest === 437, biggest + '');
+    check('a menor sala do jogo já é ≥ 21×17 (357 células)', smallest >= 357, smallest + '');
+    check('a maior sala do jogo é 27×23 (621 células)', biggest === 621, biggest + '');
     check('a sala do chefe final é a maior de todas',
       DG[5].rooms[2].layout[0].length * DG[5].rooms[2].layout.length === biggest);
   })();

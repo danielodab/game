@@ -17,3 +17,9 @@ desktop.ini
 assets/embedded/sprites-*.js
 assets/embedded/fx-*.js
 assets/packs/
+
+# Modelos CANDIDATOS, baixados só para avaliação (CC0, mas 20 MB e ainda nao
+# aprovados pelo usuario). As folhas de aprovacao viraram imagem e ja foram
+# entregues; a analise esta versionada em docs/PROPOSTA_MODELOS.md.
+# Se a troca for aprovada, o que entrar vai para assets/models/ e assets/embedded/.
+assets/candidatos/
