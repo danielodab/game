@@ -99,12 +99,30 @@ Mais o manifesto, `Assets/Resources/dados/_manifesto.json`:
   "chaves": { "spells": 171, "dungeons": 6 } }
 ```
 
-`chaves[k]` = comprimento, se for lista; número de chaves, se for objeto.
+`chaves[k]` = comprimento, se for lista; número de chaves **de topo**, se for
+objeto. A contagem é rasa de propósito: contar recursivamente daria número
+diferente para a mesma estrutura dependendo de onde o autor decidiu aninhar.
 
-**Âncoras que o manifesto tem de bater**, tiradas de `SISTEMAS.md`. Se o dado
-real divergir, **o dado ganha** — relate a divergência, não force o número:
-`spells: 171` · `classes: 6` · `dungeons: 6` · `fusionForms: 105` ·
-`fusionBlends: 16` · `elements: 5` · `weathers: 5`.
+**Âncoras que o manifesto tem de bater** — já conferidas contra o dado real na
+exportação de 18/08/2026:
+`spells: 171` · `classes: 6` · `dungeons: 6` · `items: 90` · `sets: 18` ·
+`monsters: 66` · `fusionForms: 15` · `fusionBlends: 25` · `elements: 5` ·
+`weathers: 5`.
+
+Duas dessas já enganaram uma vez, e a explicação evita o susto:
+
+- **`fusionForms: 15`, e não 105.** São 15 duplas de classe, cada uma com lista
+  de 7 degraus: 15 × 7 = 105 formas. A contagem rasa vê as 15; o 105 está um
+  nível abaixo, e continua verdadeiro.
+- **`fusionBlends: 25`, e não 16.** São os pares **ordenados** de 5 elementos.
+  16 seria só o que sobra tirando o `neutro` — e o neutro tem de existir, porque
+  herói abaixo do nível 5 ainda não escolheu caminho.
+
+Chave que é **objeto-embrulho** (`leveling`, `stars`, `upgrade`) conta os campos
+do embrulho: `stars: 2` é `{max, bonuses}`, não duas estrelas.
+
+Se o dado real divergir da âncora, **o dado ganha** — relate a divergência, não
+force o número.
 
 `Resources/` e não `StreamingAssets/` porque `Resources.Load<TextAsset>`
 funciona igual no Editor, no player e no **WebGL**, sem `UnityWebRequest` e sem

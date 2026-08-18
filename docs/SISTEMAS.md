@@ -178,7 +178,10 @@ sem evento de morte e **sem contar derrota**.
 
 - **15 duplas** possíveis (as combinações de 6 classes 2 a 2).
 - **105 formas** — 7 por dupla, nos degraus **0, 5, 10, 12, 15, 20, 30**.
-- **16 misturas** elementais (os pares de elemento dos dois heróis).
+- **25 misturas** elementais — os pares **ordenados** dos 5 elementos. Não 16:
+  16 seria só o que sobra tirando o `neutro`, e o neutro **tem** de existir,
+  porque herói abaixo do nível 5 ainda não escolheu caminho e a fusão precisa
+  funcionar assim mesmo.
 - **105 × 25 = 2.625 feitiços compostos.**
 
 ### Forma × mistura
@@ -194,7 +197,7 @@ substantivo masculino singular e todo afixo é adjetivo masculino singular, para
 a concatenação sempre concordar.
 
 > Isto já esteve **invertido**, e era um defeito grave: a mistura sobrepunha a
-> forma, e como são 16 misturas para 105 formas, **toda fusão do mesmo par de
+> forma, e como são 25 misturas para 105 formas, **toda fusão do mesmo par de
 > elementos saía com o mesmo efeito** — escudo, meteoro e gancho idênticos.
 
 ### Como a fusão se parece
@@ -300,12 +303,14 @@ Mais um espaço de **bicho** (pet), que age depois do dono.
 Quatro níveis, com cor e brilho próprios: **comum**, **raro**, **épico**,
 **lendário**.
 
-O acervo base tem 48 itens (22 comuns, 16 raros, 6 épicos, 4 lendários), mais 24
-avulsos em `items_extra.js`.
+O acervo tem **90 itens**. Começou em 48 (22 comuns, 16 raros, 6 épicos, 4
+lendários) e `items_extra.js` acrescentou 42: 24 peças de conjunto mais 18
+avulsos.
 
 ### Conjuntos
 
-**12 conjuntos** no acervo base, dois por calabouço, com bônus por **2, 3 ou 4
+**18 conjuntos** — os 12 do acervo base, dois por calabouço, mais 6 de
+`items_extra.js` — com bônus por **2, 3 ou 4
 peças** vestidas. O `element` e o `setId` de cada peça são **derivados no rodapé
 do arquivo** a partir do conjunto — nunca escritos à mão, para não divergirem.
 
