@@ -84,6 +84,13 @@ html, body {
    e a de batalha deixa passar para o canvas, reativando só os painéis (§ .screen-battle). */
 .ui-root { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
 .ui-screen { pointer-events: auto; }
+/* .ui-sheet e IRMA das telas, nao uma delas: sem a linha abaixo ela herdava o
+   `pointer-events: none` do contêiner e os botões Confirmar/Cancelar do modal
+   NÃO respondiam ao clique. Foi o que aconteceu ao tentar fundir. Toda camada
+   nova pendurada em .ui-root precisa decidir explicitamente se recebe clique —
+   .ui-tip e .ui-toast continuam sem receber, de propósito, para não taparem o
+   tabuleiro. */
+.ui-sheet { pointer-events: auto; }
 
 h1, h2, h3 { font-family: var(--ui-serif); font-weight: 600; margin: 0; letter-spacing: .01em; }
 p { margin: 0; }
