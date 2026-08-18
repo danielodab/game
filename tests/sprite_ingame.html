@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Sumô no tabuleiro — captura</title>
+<link rel="stylesheet" href="../css/style.css?v=ing1">
+<style>
+  #shot { position:absolute; left:0; top:0; z-index:50; }
+  #st { position:absolute; left:8px; top:6px; z-index:99; font:12px monospace; color:#8f8; }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+</div>
+<div id="st">carregando…</div>
+
+<script src="../vendor/pixi.min.js?v=ing1"></script>
+<script src="../js/core/data/elements.js?v=ing1"></script>
+<script src="../js/core/data/classes.js?v=ing1"></script>
+<script src="../js/core/data/spells.js?v=ing1"></script>
+<script src="../js/core/data/progression.js?v=ing1"></script>
+<script src="../js/core/data/monsters.js?v=ing1"></script>
+<script src="../js/core/data/dungeons.js?v=ing1"></script>
+<script src="../js/core/data/fusions.js?v=ing1"></script>
+<script src="../js/core/data/pets.js?v=ing1"></script>
+<script src="../js/core/data/items.js?v=ing1"></script>
+<script src="../js/core/engine.js?v=ing1"></script>
+<script src="../js/core/fusion.js?v=ing1"></script>
+<script src="../js/core/ai.js?v=ing1"></script>
+<script src="../js/core/progress.js?v=ing1"></script>
+<script src="../js/core/game.js?v=ing1"></script>
+<script src="../assets/embedded/sprites-sumo.js?v=ing1"></script>
+<script src="../js/render2d/art.js?v=ing1"></script>
+<script src="../js/render2d/spriteart.js?v=ing1"></script>
+<script src="../js/render2d/fx.js?v=ing1"></script>
+<script src="../js/render2d/renderer.js?v=ing1"></script>
+<script src="../js/ui/hud.js?v=ing1"></script>
+
+<script>
+// Página de captura: inicia uma batalha sozinha, posiciona a câmera e
+// espelha o canvas num <img> — o headless não compõe WebGL no --screenshot.
+// Parâmetros: ?fase=idle|andar|atacar|dano&dir=0..3&rot=0..3&zoom=1.6&frames=N
+(function () {
+  var qs = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { qs[k] = decodeURIComponent(v); });
+  var st = document.getElementById('st');
+
+  function pump(n) {
+    for (var i = 0; i < (n || 1); i++) {
+      var E = JOGO.Engine;
+      if (E && E.events) {
+        while (E.events.length) {
+          var ev = E.events.shift();
+          [JOGO.Renderer, JOGO.FX, JOGO.UI, JOGO.Game].forEach(function (m) {
+            if (m && m.handleEvent) { try { m.handleEvent(ev); } catch (e) {} }
+          });
+        }
+      }
+      try { JOGO.Game.update(0.05); } catch (e) {}
+      try { if (JOGO.UI.update) JOGO.UI.update(0.05); } catch (e) {}
+      try { JOGO.Renderer.render(0.05); } catch (e) {}
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    JOGO.Renderer.init(document.getElementById('game-canvas'));
+    JOGO.UI.init();
+    JOGO.Game.init();
+
+    var t0 = Date.now();
+    (function espera() {
+      var pronto = JOGO.SpriteArt && JOGO.SpriteArt.temSprite('sumo');
+      if (!pronto && Date.now() - t0 < 6000) return setTimeout(espera, 80);
+
+      JOGO.Progress.reset();
+      var ids = JOGO.Progress.heroIds ? JOGO.Progress.heroIds() : ['sumo', 'curandeira'];
+      JOGO.Game.startRun(ids.slice(0, 2), qs.dungeon || 'greenhouse');
+      pump(30);
+
+      var s = JOGO.Game.state;
+      var sumo = s && s.units.filter(function (u) { return u.defId === 'sumo'; })[0];
+      if (sumo) {
+        if (qs.fase && JOGO.Renderer.debugPose) JOGO.Renderer.debugPose(sumo.uid, qs.fase);
+        if (JOGO.Renderer.focusOn) JOGO.Renderer.focusOn(sumo.x, sumo.y);
+      }
+      if (JOGO.Renderer.setCamera) {
+        JOGO.Renderer.setCamera({ zoom: parseFloat(qs.zoom || '1.7'), rot: parseInt(qs.rot || '0', 10) });
+      }
+      pump(parseInt(qs.frames || '40', 10));
+
+      try {
+        var cv = document.getElementById('game-canvas');
+        var im = document.createElement('img');
+        im.id = 'shot';
+        im.src = cv.toDataURL('image/png');
+        im.style.width = cv.style.width || (cv.width + 'px');
+        im.style.height = cv.style.height || (cv.height + 'px');
+        document.body.appendChild(im);
+        st.textContent = 'PASS · sprite=' + (JOGO.SpriteArt.temSprite('sumo') ? 'sim' : 'nao') +
+                         ' · unidades=' + (s ? s.units.length : 0);
+      } catch (e) {
+        st.textContent = 'ERRO: ' + e.message;
+      }
+    })();
+  });
+})();
+</script>
+</body>
+</html>
