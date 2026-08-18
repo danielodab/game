@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — árvore de feitiços como aba de Personagens</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.5 system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 16px 2px}
+  #summary{font:12px monospace;margin:6px 16px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 16px;padding-left:18px;font-size:12px} li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>Árvore de feitiços — a aba nova de "Personagens"</h1>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+<div id="ui-root"></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js','js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js',
+    'js/core/game.js','js/render2d/art.js','js/ui/hud.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var okN = 0, falhas = [];
+  function check(nome, cond, extra) {
+    var li = document.createElement('li');
+    li.className = cond ? 'pass' : 'fail';
+    li.textContent = nome + (extra ? ' — ' + extra : '');
+    document.getElementById('lista').appendChild(li);
+    if (cond) okN++; else falhas.push(nome);
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var D = JOGO.DATA, P = JOGO.Progress, S = D.spells, CL = D.classes;
+    var ELEMS = ['fogo','agua','terra','ar'];
+
+    // 1. Os degraus da grade saem dos DADOS. Se a escada da classe mudar de
+    //    novo, a árvore acompanha sozinha — é o que este teste cobra.
+    var todasOk = true, detalhe = '';
+    Object.keys(CL).forEach(function (cid) {
+      var def = CL[cid];
+      var porElem = {};
+      ELEMS.forEach(function (e) {
+        porElem[e] = ((def.paths||{})[e]||[]).map(function (sid) {
+          return (S[sid]||{}).unlockLevel || 0;
+        }).sort(function(a,b){return a-b;}).join(',');
+      });
+      var ref = porElem.fogo;
+      ELEMS.forEach(function (e) {
+        if (porElem[e] !== ref) { todasOk = false; detalhe = cid + ' ' + e + '=' + porElem[e] + ' vs fogo=' + ref; }
+      });
+    });
+    check('os quatro galhos de cada classe abrem nos MESMOS níveis (a grade não fica com buraco)',
+          todasOk, detalhe || 'nenhum descompasso');
+
+    // 2. Todo feitiço de caminho tem unlockLevel — sem isso a célula cai na linha errada
+    var semNivel = [];
+    Object.keys(CL).forEach(function (cid) {
+      ELEMS.forEach(function (e) {
+        ((CL[cid].paths||{})[e]||[]).forEach(function (sid) {
+          if (!S[sid] || !S[sid].unlockLevel) semNivel.push(sid);
+        });
+      });
+    });
+    check('todo feitiço de galho declara unlockLevel', semNivel.length === 0,
+          semNivel.length ? semNivel.slice(0,4).join(', ') : Object.keys(CL).length + ' classes');
+
+    // 3. Todo feitiço mostrado tem descrição — a célula existe para ser LIDA
+    var semDesc = [];
+    Object.keys(CL).forEach(function (cid) {
+      var def = CL[cid];
+      (def.baseSpells||[]).concat(ELEMS.reduce(function (a,e) {
+        return a.concat((def.paths||{})[e]||[]);
+      }, [])).forEach(function (sid) {
+        if (!S[sid] || !S[sid].description) semDesc.push(sid);
+      });
+    });
+    check('todo feitiço da árvore tem descrição', semDesc.length === 0,
+          semDesc.length ? semDesc.length + ' sem texto: ' + semDesc.slice(0,3).join(', ') : 'todos descritos');
+
+    // 4. A aba existe e é uma DAS QUATRO — o pedido era menus separados
+    var H = JOGO.UI;
+    check('o HUD carregou', !!(H && H.openSheet), H ? 'ok' : 'ausente');
+    if (H && H.init) { try { H.init(); } catch (e) {} }
+
+    // 5. A tela abre sem estourar, nos três estados que importam:
+    //    nível 1 (nada escolhido), nível 5 (na escolha), nível 30 com elemento.
+    var estados = [
+      { lv: 1,  el: null,   nome: 'nível 1, sem elemento' },
+      { lv: 5,  el: null,   nome: 'nível 5, na hora da escolha' },
+      { lv: 30, el: 'fogo', nome: 'nível 30, galho de fogo' }
+    ];
+    estados.forEach(function (st) {
+      var erro = null;
+      try {
+        var save = P.load();
+        var hid = Object.keys(save.heroes || {})[0];
+        if (hid) {
+          save.heroes[hid].level = st.lv;
+          save.heroes[hid].element = st.el || 'neutro';
+          P.save(save);
+        }
+        if (H && H.openSheet) H.openSheet('spells');
+      } catch (e) { erro = e.message; }
+      var grade = document.querySelector('.tree-grid');
+      var celulas = document.querySelectorAll('.tree-cell').length;
+      // Cobrar só "não estourou" deixava o teste passar com a tela VAZIA.
+      check('a árvore abre com ' + st.nome + ' e monta as casas',
+            !erro && !!grade && celulas > 0,
+            erro || (grade ? celulas + ' casas' : 'não montou a grade'));
+    });
+
+    // 6. A grade tem uma linha por degrau e 4 colunas
+    var linhas = document.querySelectorAll('.tree-grid .tree-row');
+    var degrausRef = {};
+    ELEMS.forEach(function (e) {
+      ((CL[Object.keys(CL)[0]].paths||{})[e]||[]).forEach(function (sid) {
+        if (S[sid] && S[sid].unlockLevel) degrausRef[S[sid].unlockLevel] = 1;
+      });
+    });
+    var nDeg = Object.keys(degrausRef).length;
+    check('a grade tem cabeçalho + um degrau por nível (' + nDeg + ')',
+          linhas.length === nDeg + 1, linhas.length + ' linhas para ' + nDeg + ' degraus');
+
+    var el = document.getElementById('summary');
+    el.className = falhas.length ? 'fail' : 'allpass';
+    el.textContent = (falhas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') +
+      okN + ' de ' + (okN + falhas.length) + ' checagens ok, ' + falhas.length + ' falharam';
+    window.__pronto = true;
+  });
+})();
+</script>
+</body>
+</html>

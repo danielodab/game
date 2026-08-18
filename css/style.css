@@ -1195,3 +1195,45 @@ i, em { font-style: normal; color: var(--dim); }
 @media (min-width: 560px) {
   .inv-big { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
 }
+
+/* ---------------------------------------------------------------- ÁRVORE
+ * A ficha do herói lista o que vem depois em coluna; aqui a mesma informação
+ * é GRADE, para comparar os quatro elementos na mesma linha de nível. Rola no
+ * eixo X quando não cabe — o corpo da página nunca rola de lado. */
+.tree-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 6px 0 10px; font-size: 12px; color: #8895a6; }
+.tl-item { display: inline-flex; align-items: center; gap: 6px; }
+.tl-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.tl-dot.is-aberto     { background: #6fd08a; }
+.tl-dot.is-proximo    { background: #ffcf5c; }
+.tl-dot.is-trancado   { background: #3d4756; }
+.tl-dot.is-descartado { background: #2a303a; opacity: .55; }
+
+.tree-trunk { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.tree-trunk .tree-cell { flex: 1 1 180px; }
+
+.tree-grid { overflow-x: auto; }
+.tree-row { display: grid; grid-template-columns: 34px repeat(4, minmax(148px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.tree-row.is-head { position: sticky; top: 0; margin-bottom: 4px; }
+.tree-el { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+           color: var(--ec, #cdd6e2); padding: 4px 6px; border-bottom: 2px solid var(--ec, #3d4756); }
+.tree-el.is-descartado { opacity: .35; }
+.tree-lv { display: flex; align-items: center; justify-content: center; font: 700 12px/1 monospace;
+           color: #6f7c8c; background: #171c23; border-radius: 6px; }
+.tree-lv.is-passou { color: #6fd08a; background: #16241b; }
+
+.tree-cell { position: relative; padding: 8px; border-radius: 8px; background: #171c23;
+             border: 1px solid #262d38; border-left: 3px solid var(--ec, #3d4756); }
+.tree-cell.is-vazio { background: transparent; border: 1px dashed #232a34; border-left-style: dashed; }
+.tree-cell.is-aberto     { background: #16241b; border-color: #2f5a3c; }
+.tree-cell.is-proximo    { background: #241f14; border-color: #7a6224; box-shadow: 0 0 0 1px #7a622455; }
+.tree-cell.is-trancado   { opacity: .78; }
+.tree-cell.is-descartado { opacity: .34; filter: grayscale(1); }
+.tree-nm { font-size: 12px; font-weight: 700; color: #dbe3ee; margin-top: 4px; }
+.tree-n  { font-size: 11px; color: #8895a6; margin-top: 2px; }
+.tree-d  { font-size: 11px; line-height: 1.35; color: #7e8a99; margin: 4px 0 0; }
+.tree-cell .silhouette { filter: grayscale(1) brightness(.55); }
+
+@media (max-width: 720px) {
+  .tree-row { grid-template-columns: 28px repeat(4, minmax(126px, 1fr)); }
+  .tree-d { display: none; }        /* no celular a descrição fica no toque */
+}

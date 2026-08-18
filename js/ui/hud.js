@@ -1340,6 +1340,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'collection') sheetParty('colecao', arg);
     else if (name === 'inventory') sheetParty('inventario', arg);
     else if (name === 'forge') sheetParty('forja', arg);
+    else if (name === 'spells') sheetParty('feiticos', arg);
     else if (name === 'heroSheet') sheetHero(arg);
     else if (name === 'battleMenu') sheetBattleMenu();
     else closeSheet();
@@ -1358,6 +1359,8 @@ var JOGO = (typeof window !== 'undefined')
       sub: 'Um saco só para o grupo. Toque numa peça para vestir no herói ao lado.' },
     { id: 'forja', nome: 'Forja',
       sub: 'Pedras sobem a peça até +10. Determinístico: nunca quebra, nunca regride.' },
+    { id: 'feiticos', nome: 'Feitiços',
+      sub: 'A árvore inteira da classe: o tronco que todos têm e os quatro galhos elementais.' },
     { id: 'colecao', nome: 'Coleção',
       sub: 'Cartas de chefe liberam classes e, depois, viram estrelas permanentes.' }
   ];
@@ -1398,8 +1401,145 @@ var JOGO = (typeof window !== 'undefined')
 
     if (partyTab === 'forja') forgeBody(body, arg);
     else if (partyTab === 'colecao') collectionBody(body, arg);
+    else if (partyTab === 'feiticos') spellTreeBody(body, arg);
     else inventoryBody(body, arg);
   }
+  // ------------------------------------------------- ÁRVORE DE FEITIÇOS
+  // A ficha do herói já listava "o que vem depois", mas em lista corrida: dava
+  // para ler o próximo degrau e não dava para ENXERGAR a escada inteira nem
+  // comparar os quatro elementos lado a lado. Aqui a mesma informação vira
+  // grade — tronco em cima, quatro galhos embaixo, um nível por linha.
+  var TREE_ELEMS = ['fogo', 'agua', 'terra', 'ar'];
+
+  /* Os degraus saem dos DADOS (unlockLevel de cada feitiço do caminho), não de
+   * uma lista fixa aqui: quando a escada da classe ganhou os degraus 10 e 15,
+   * esta grade acompanhou sozinha. */
+  function tiersDaClasse(def) {
+    var vistos = {}, fora = [];
+    TREE_ELEMS.forEach(function (e) {
+      ((def.paths || {})[e] || []).forEach(function (sid) {
+        var d2 = spellDef(sid);
+        var lv = (d2 && d2.unlockLevel) || 0;
+        if (lv && !vistos[lv]) { vistos[lv] = 1; fora.push(lv); }
+      });
+    });
+    return fora.sort(function (a, b) { return a - b; });
+  }
+  function feiticoDoDegrau(def, elemento, lv) {
+    var caminho = (def.paths || {})[elemento] || [];
+    for (var i = 0; i < caminho.length; i++) {
+      var d2 = spellDef(caminho[i]);
+      if (d2 && d2.unlockLevel === lv) return caminho[i];
+    }
+    return null;
+  }
+
+  function spellTreeBody(body) {
+    var hid = ensurePartyHero();
+    body.appendChild(heroCarousel(hid));
+    if (!hid) return;
+
+    var h = hero(hid) || {};
+    var cid = h.classId || hid;
+    var def = classDef(cid) || {};
+    var nivel = h.level || 1;
+    var escolhido = (h.element && h.element !== 'neutro') ? h.element : null;
+    var lvEscolha = (D().leveling || {}).elementChoiceLevel || 5;
+
+    // ---- legenda: o que cada cor quer dizer
+    var leg = el('div', 'tree-legend');
+    [['aberto', 'já sabe'], ['proximo', 'o próximo'],
+     ['trancado', 'falta nível'], ['descartado', 'outro caminho']].forEach(function (p) {
+      var t = el('span', 'tl-item');
+      t.appendChild(el('i', 'tl-dot is-' + p[0]));
+      t.appendChild(el('span', null, esc(p[1])));
+      leg.appendChild(t);
+    });
+    body.appendChild(leg);
+
+    // ---- tronco: o que a classe tem de saída, valha qual elemento valer
+    var base = (def.baseSpells || def.spells || []);
+    if (base.length) {
+      body.appendChild(el('h3', 'hs-sec', 'Tronco · todo ' + className(cid) + ' tem'));
+      var tronco = el('div', 'tree-trunk');
+      base.forEach(function (sid) { tronco.appendChild(celulaDoFeitico(sid, 1, 'aberto')); });
+      body.appendChild(tronco);
+    }
+
+    // ---- galhos
+    body.appendChild(el('h3', 'hs-sec', escolhido
+      ? 'Galho de ' + (ELEM_PT[escolhido] || escolhido)
+      : 'Quatro galhos · a escolha é no nível ' + lvEscolha));
+    if (!escolhido) {
+      body.appendChild(el('p', 'hs-hint',
+        'Enquanto o elemento não é escolhido os quatro caminhos seguem abertos. ' +
+        'Depois da escolha, ela é permanente.'));
+    }
+
+    var grade = el('div', 'tree-grid');
+    var cab = el('div', 'tree-row is-head');
+    cab.appendChild(el('div', 'tree-lv', 'Nv'));
+    TREE_ELEMS.forEach(function (e) {
+      var c = el('div', 'tree-el', esc(ELEM_PT[e] || e));
+      c.style.setProperty('--ec', elemColor(e));
+      if (escolhido && e !== escolhido) c.classList.add('is-descartado');
+      cab.appendChild(c);
+    });
+    grade.appendChild(cab);
+
+    // o "próximo" é o degrau mais baixo ainda fechado — um por galho
+    var proximo = {};
+    var degraus = tiersDaClasse(def);
+    TREE_ELEMS.forEach(function (e) {
+      for (var i = 0; i < degraus.length; i++) {
+        if (nivel < degraus[i]) { proximo[e] = degraus[i]; break; }
+      }
+    });
+
+    degraus.forEach(function (lv) {
+      var linha = el('div', 'tree-row');
+      var marca = el('div', 'tree-lv', String(lv));
+      if (nivel >= lv) marca.classList.add('is-passou');
+      linha.appendChild(marca);
+      TREE_ELEMS.forEach(function (e) {
+        var sid = feiticoDoDegrau(def, e, lv);
+        if (!sid) { linha.appendChild(el('div', 'tree-cell is-vazio')); return; }
+        // Sem elemento escolhido NADA do galho está aberto, mesmo que o nível
+        // já dê: o feitiço só entra na mão depois da escolha.
+        var estado;
+        if (escolhido && e !== escolhido) estado = 'descartado';
+        else if (escolhido && nivel >= lv) estado = 'aberto';
+        else if (proximo[e] === lv) estado = 'proximo';
+        else estado = 'trancado';
+        linha.appendChild(celulaDoFeitico(sid, lv, estado));
+      });
+      grade.appendChild(linha);
+    });
+    body.appendChild(grade);
+  }
+
+  /* Uma casa da árvore. Mostra o suficiente para decidir sem abrir nada —
+   * nome, custo e o que faz — porque no celular não existe passar o mouse. */
+  function celulaDoFeitico(sid, lv, estado) {
+    var d2 = spellDef(sid);
+    var cel = el('div', 'tree-cell is-' + estado);
+    if (d2 && d2.element) cel.style.setProperty('--ec', elemColor(d2.element));
+    cel.appendChild(art('spellIcon', [d2 || sid, 34], 34,
+      estado === 'aberto' ? '' : 'silhouette'));
+    cel.appendChild(el('div', 'tree-nm', esc(spellName(d2, sid))));
+    if (d2) {
+      var ficha = (d2.paCost || 0) + ' PA';
+      if (d2.range) ficha += ' · ' + (d2.range.min || 0) + '–' + (d2.range.max || 0);
+      if (d2.aoe && d2.aoe.shape && d2.aoe.shape !== 'single') {
+        ficha += ' · ' + d2.aoe.shape + (d2.aoe.size ? ' ' + d2.aoe.size : '');
+      }
+      cel.appendChild(el('div', 'tree-n', esc(ficha)));
+      if (d2.description) cel.appendChild(el('p', 'tree-d', esc(d2.description)));
+      tipOn(cel, spellName(d2, sid), spellTipBody(d2, sid), elemColor(d2.element));
+    }
+    return cel;
+  }
+
   // -------------------------------------------------------------- COLEÇÃO
   // O cofre de recompensas: cartas por classe, custo, e a trilha de 5 estrelas
   // com o próximo bônus em destaque. ORDEM (pedido do usuário): liberadas
@@ -1662,7 +1802,7 @@ var JOGO = (typeof window !== 'undefined')
     function vai(passo) {
       partyHero = lista[(i + passo + lista.length) % lista.length];
       invSel = null;
-      sheetParty('inventario');
+      sheetParty(partyTab);        // a seta troca de HERÓI, não de aba
     }
     var ant = btn('‹', 'btn-icon pt-nav', function () { vai(-1); });
     var pro = btn('›', 'btn-icon pt-nav', function () { vai(1); });
