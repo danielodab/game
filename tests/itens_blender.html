@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — itens feitos no Blender ao lado dos do KayKit</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 14px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 14px 6px;max-width:1000px}
+  #st{font:12px monospace;color:#7fe08a;margin:0 14px 8px}
+  #folha{display:block;margin:0 14px 16px;border:1px solid #2b3542}
+  #cv{position:fixed;left:-4000px;top:0}
+</style>
+</head>
+<body>
+<h1>Itens feitos no Blender × itens do KayKit</h1>
+<div class="sub">Mesma escala, mesma luz, mesmo chão de masmorra. A fileira de cima é o que o
+jogo já usa; a de baixo é o que o script gerou. O teste é de OLHO: se der para
+apontar qual linha é qual sem ler o rótulo, o estilo não casou.</div>
+<div id="st">rodando…</div>
+<canvas id="folha"></canvas>
+<canvas id="cv" width="300" height="360"></canvas>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var TW = 300, TH = 360;
+
+  // par a par: o do kit e o meu que ocupa o mesmo papel
+  var PARES = [
+    { papel: 'machado de duas mãos', kit: '2H_Axe',       meu: 'machado' },
+    { papel: 'escudo',               kit: 'Badge_Shield', meu: 'escudo'  },
+    { papel: 'elmo',                 kit: 'Knight_Helmet',meu: 'elmo'    },
+    { papel: 'cajado',               kit: '2H_Staff',     meu: 'cajado'  }
+  ];
+
+  var st = document.getElementById('st');
+  var ren, sc, cam, luzes = [];
+
+  function cena() {
+    var cv = document.getElementById('cv');
+    ren = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: false,
+                                    preserveDrawingBuffer: true });
+    ren.setSize(TW, TH, false);
+    ren.setClearColor(0x1a2029, 1);
+    sc = new THREE.Scene();
+    // a luz do jogo: hemisfério frio + chave quente + contraluz
+    sc.add(new THREE.HemisphereLight(0xbfd4ea, 0x2b2f36, 0.95));
+    var key = new THREE.DirectionalLight(0xfff0d8, 1.7); key.position.set(4, 8, 7); sc.add(key);
+    var rim = new THREE.DirectionalLight(0xffb070, 0.9); rim.position.set(-6, 4, -6); sc.add(rim);
+    var chao = new THREE.Mesh(new THREE.PlaneGeometry(6, 6),
+      new THREE.MeshStandardMaterial({ color: 0x2a3240, roughness: 1 }));
+    chao.rotation.x = -Math.PI / 2; sc.add(chao);
+    cam = new THREE.PerspectiveCamera(30, TW / TH, 0.05, 60);
+  }
+
+  function enquadra(node) {
+    node.updateMatrixWorld(true);
+    var b = new THREE.Box3().setFromObject(node);
+    var s = b.getSize(new THREE.Vector3());
+    var c = b.getCenter(new THREE.Vector3());
+    node.position.x -= c.x; node.position.z -= c.z;
+    node.position.y -= b.min.y;
+    node.updateMatrixWorld(true);
+    var alt = Math.max(s.y, 0.3);
+    var d = alt * 2.5 + 0.7;
+    cam.position.set(d * 0.55, alt * 0.72, d);
+    cam.lookAt(0, alt * 0.44, 0);
+    return { x: s.x, y: s.y, z: s.z };
+  }
+
+  function doKit(nome) {
+    var M = JOGO.Models3D2;
+    // as pecas do kit vivem dentro dos modelos de heroi, escondidas
+    var alvos = ['sumo', 'curandeira', 'bruxo', 'arqueiro', 'espadachim'];
+    for (var i = 0; i < alvos.length; i++) {
+      var n = M.unit(alvos[i], {});
+      var achado = null;
+      n.traverse(function (o) { if (!achado && o.name === nome && o.isMesh) achado = o; });
+      if (achado) {
+        var c = achado.clone();
+        c.visible = true;
+        c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.set(1, 1, 1);
+        var g = new THREE.Group(); g.add(c);
+        return g;
+      }
+    }
+    return null;
+  }
+
+  function meu(nome, cb) {
+    var L = new THREE.GLTFLoader();
+    L.load('../assets/candidatos/blender/' + nome + '.glb',
+      function (gltf) { cb(gltf.scene); },
+      null,
+      function () { cb(null); });
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var t0 = Date.now();
+    (function espera() {
+      var M = JOGO.Models3D2;
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 40000) return setTimeout(espera, 200);
+        st.textContent = 'modelos não carregaram';
+        window.__pronto = true; return;
+      }
+      cena();
+      monta();
+    })();
+
+    function monta() {
+      var folha = document.getElementById('folha');
+      folha.width = PARES.length * TW;
+      folha.height = 2 * TH;
+      var g = folha.getContext('2d');
+      g.fillStyle = '#0b0e12'; g.fillRect(0, 0, folha.width, folha.height);
+      var src = document.getElementById('cv');
+      var i = 0, medidas = [];
+
+      function tira(node, col, linha, rotulo, sub) {
+        while (sc.children.length > 4) sc.remove(sc.children[sc.children.length - 1]);
+        var dim = { x: 0, y: 0, z: 0 };
+        if (node) { sc.add(node); dim = enquadra(node); }
+        ren.render(sc, cam);
+        var cx = col * TW, cy = linha * TH;
+        g.drawImage(src, cx, cy);
+        g.fillStyle = 'rgba(8,10,14,0.82)';
+        g.fillRect(cx, cy + TH - 46, TW, 46);
+        g.fillStyle = linha === 0 ? '#9aa7b6' : '#ffd98a';
+        g.font = 'bold 14px Segoe UI, sans-serif';
+        g.fillText(rotulo, cx + 9, cy + TH - 27);
+        g.fillStyle = '#7e8a99';
+        g.font = '11px Segoe UI, sans-serif';
+        g.fillText(sub, cx + 9, cy + TH - 10);
+        g.strokeStyle = '#2b3542'; g.strokeRect(cx + 0.5, cy + 0.5, TW - 1, TH - 1);
+        return dim;
+      }
+
+      function proximo() {
+        if (i >= PARES.length) {
+          st.textContent = 'PASS · ' + PARES.length + ' pares · ' +
+            medidas.map(function (m) { return m; }).join(' · ');
+          window.__pronto = true;
+          return;
+        }
+        var p = PARES[i];
+        var k = doKit(p.kit);
+        var dk = tira(k, i, 0, 'KayKit · ' + p.kit, k ? 'o que o jogo usa hoje' : 'não achei a peça');
+        meu(p.meu, function (node) {
+          var dm = tira(node, i, 1, 'Blender · ' + p.meu,
+                        node ? p.papel : 'FALHOU ao carregar');
+          if (node) {
+            medidas.push(p.meu + ' ' + dm.y.toFixed(2) + 'm vs kit ' + dk.y.toFixed(2) + 'm');
+          }
+          i++;
+          setTimeout(proximo, 0);
+        });
+      }
+      proximo();
+    }
+  });
+})();
+</script>
+</body>
+</html>
