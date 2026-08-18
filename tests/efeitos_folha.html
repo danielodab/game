@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — folha de contato das famílias de efeito</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 14px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 14px 6px}
+  #st{font:12px monospace;color:#7fe08a;margin:0 14px 8px}
+  #folha{display:block;margin:0 14px 16px;border:1px solid #2b3542}
+  #app{position:fixed;left:-4000px;top:0;width:460px;height:300px}
+</style>
+</head>
+<body>
+<h1>As famílias de efeito, cada uma na sala</h1>
+<div class="sub">Um feitiço de cada família, disparado no mesmo lugar, fotografado no auge.
+Antes desta mudança as quinze imagens seriam idênticas: a mesma bolinha.</div>
+<div id="st">rodando…</div>
+<canvas id="folha"></canvas>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/ui/hud.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var TW = 300, TH = 200, COLS = 5;
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, FX = JOGO.FX, D = JOGO.DATA;
+    var st = document.getElementById('st');
+    try { R.init(document.getElementById('game-canvas')); } catch (e) { st.textContent = 'init: ' + e.message; return; }
+    try { JOGO.UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try {
+        ok = JOGO.Models3D2 && JOGO.Models3D2.isReady() &&
+             JOGO.Models3D && JOGO.Models3D.isReady() && R.isReady();
+      } catch (e) {}
+      if (!ok && Date.now() - t0 < 60000) return setTimeout(espera, 250);
+      try {
+        var ids = JOGO.Progress.heroIds();
+        while (ids.length < 2) {
+          JOGO.Progress.createHero(ids.length ? 'curandeira' : 'sumo');
+          ids = JOGO.Progress.heroIds();
+        }
+        G.startRun(ids.slice(0, 2), 'greenhouse');
+      } catch (e) { st.textContent = 'não desci: ' + e.message; return; }
+      monta();
+    })();
+
+    function monta() {
+      var battle = G.state;
+      var heroi = (battle.units || []).filter(function (u) { return u.alive; })[0];
+      if (!heroi) { st.textContent = 'sem unidade'; return; }
+
+      // um feitiço representante de cada família
+      var porFam = {};
+      Object.keys(D.spells).forEach(function (id) {
+        var sp = D.spells[id];
+        if (!sp || !sp.fxKey) return;
+        var f = FX.familiaDe(sp.fxKey);
+        if (!porFam[f]) porFam[f] = sp;
+      });
+      var fams = Object.keys(porFam).sort();
+
+      var linhas = Math.ceil(fams.length / COLS);
+      var folha = document.getElementById('folha');
+      folha.width = COLS * TW; folha.height = linhas * TH;
+      var g = folha.getContext('2d');
+      g.fillStyle = '#0b0e12'; g.fillRect(0, 0, folha.width, folha.height);
+
+      var src = document.getElementById('game-canvas');
+      var alvoX = heroi.x + 2, alvoY = heroi.y;
+      var i = 0;
+
+      function proxima() {
+        if (i >= fams.length) {
+          st.textContent = 'PASS · ' + fams.length + ' famílias fotografadas na sala';
+          window.__pronto = true;
+          return;
+        }
+        var fam = fams[i], sp = porFam[fam];
+        try { FX.reset(); } catch (e) {}
+        try {
+          FX.handleEvent({ type: 'cast', uid: heroi.uid, spellId: sp.id,
+                           element: sp.element, x: alvoX, y: alvoY });
+        } catch (e) {}
+
+        // avança até o quadro de maior extensão: é onde o efeito se mostra
+        var q = 0, melhor = -1, melhorQ = 6;
+        (function mede() {
+          try { FX.update(0.045, 0.045); } catch (e) {}
+          var am = FX.amostra();
+          if (am.n > melhor) { melhor = am.n; melhorQ = q; }
+          if (++q < 20) return setTimeout(mede, 0);
+          desenha(fam, sp, melhorQ);
+        })();
+
+        function desenha(fam, sp, ate) {
+          try { FX.reset(); } catch (e) {}
+          try {
+            FX.handleEvent({ type: 'cast', uid: heroi.uid, spellId: sp.id,
+                             element: sp.element, x: alvoX, y: alvoY });
+          } catch (e) {}
+          var k = 0;
+          (function ande() {
+            try { FX.update(0.045, 0.045); } catch (e) {}
+            if (++k <= ate) return setTimeout(ande, 0);
+            try { R.render(0.045); } catch (e) {}
+            var cx = (i % COLS) * TW, cy = Math.floor(i / COLS) * TH;
+            try { g.drawImage(src, cx, cy, TW, TH); } catch (e) {}
+            g.fillStyle = 'rgba(8,10,14,0.78)';
+            g.fillRect(cx, cy + TH - 34, TW, 34);
+            g.fillStyle = '#ffd98a';
+            g.font = 'bold 14px Segoe UI, sans-serif';
+            g.fillText(fam, cx + 8, cy + TH - 18);
+            g.fillStyle = '#9aa7b6';
+            g.font = '11px Segoe UI, sans-serif';
+            g.fillText(sp.name + ' · ' + sp.fxKey, cx + 8, cy + TH - 5);
+            g.strokeStyle = '#2b3542'; g.strokeRect(cx + 0.5, cy + 0.5, TW - 1, TH - 1);
+            i++;
+            setTimeout(proxima, 0);
+          })();
+        }
+      }
+      proxima();
+    }
+  });
+})();
+</script>
+</body>
+</html>

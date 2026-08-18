@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — os 171 feitiços, um a um, com efeito próprio</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.55 system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 16px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 16px 8px;max-width:900px}
+  #summary{font:12px monospace;margin:6px 16px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 16px;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font-size:12px;margin:8px 16px}
+  th,td{border:1px solid #2b3542;padding:2px 9px;text-align:left}
+  th{background:#1b222c;color:#8895a6} td.n{text-align:right;font-family:monospace}
+  #app{position:fixed;left:-4000px;top:0;width:900px;height:560px}
+</style>
+</head>
+<body>
+<h1>Os 171 feitiços, um a um</h1>
+<div class="sub">Cada feitiço é disparado sozinho, numa sala de verdade, e o teste confere se ele
+DESENHOU alguma coisa e se feitiços de famílias diferentes desenham coisas diferentes.
+Era esta a falha: os 171 declaravam efeito próprio e o renderizador conhecia nove nomes
+genéricos, então todos caíam na mesma bolinha.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+<table id="fam"></table>
+<table id="mudos"></table>
+
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/ui/hud.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var okN = 0, falhas = [];
+  function check(nome, cond, extra) {
+    var li = document.createElement('li');
+    li.className = cond ? 'pass' : 'fail';
+    li.textContent = nome + (extra ? ' — ' + extra : '');
+    document.getElementById('lista').appendChild(li);
+    if (cond) okN++; else falhas.push(nome);
+  }
+  function fim(msg) {
+    var el = document.getElementById('summary');
+    el.className = falhas.length ? 'fail' : 'allpass';
+    el.textContent = (falhas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') +
+      okN + ' de ' + (okN + falhas.length) + ' ok, ' + falhas.length + ' falharam' +
+      (msg ? ' · ' + msg : '');
+    window.__pronto = true;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, FX = JOGO.FX, D = JOGO.DATA;
+    try { R.init(document.getElementById('game-canvas')); } catch (e) { return fim('init: ' + e.message); }
+    try { JOGO.UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try {
+        ok = JOGO.Models3D2 && JOGO.Models3D2.isReady() &&
+             JOGO.Models3D && JOGO.Models3D.isReady() && R.isReady();
+      } catch (e) {}
+      if (!ok && Date.now() - t0 < 60000) return setTimeout(espera, 250);
+      try {
+        var ids = JOGO.Progress.heroIds();
+        while (ids.length < 2) {
+          JOGO.Progress.createHero(ids.length ? 'curandeira' : 'sumo');
+          ids = JOGO.Progress.heroIds();
+        }
+        G.startRun(ids.slice(0, 2), 'greenhouse');
+      } catch (e) { return fim('não desci: ' + e.message); }
+      roda();
+    })();
+
+    function roda() {
+      var st = G.state;
+      if (!st || !st.grid) return fim('sem sala');
+      var heroi = (st.units || []).filter(function (u) { return u.alive; })[0];
+      if (!heroi) return fim('sem unidade viva');
+
+      var daClasse = Object.keys(D.spells).map(function (id) { return D.spells[id]; })
+                        .filter(function (sp) { return sp && sp.fxKey; });
+
+      // AS FUSOES TAMBEM. Elas nao vivem em DATA.spells: sao geradas de
+      // fusionForms x fusionBlends e declaram `fxShape` em vez de `fxKey`.
+      // Ficaram de fora do primeiro teste — e eram o caso PIOR, porque nenhuma
+      // chegava a ter definicao no FX e todas viravam a mesma flecha.
+      var daFusao = [];
+      try {
+        var F = JOGO.Fusion, DD = JOGO.DATA;
+        var pares = Object.keys(DD.fusionForms || {});
+        pares.forEach(function (par) {
+          var elems = Object.keys(DD.fusionBlends || {});
+          // uma amostra por par de classe x mistura: cobre todas as FORMAS
+          // nivel 30 traz TODAS as formas do par de uma vez
+          var mistura = elems[pares.indexOf(par) % elems.length];
+          var lista = null;
+          try { lista = F.spellsFor(par, mistura, 30); } catch (e) {}
+          (lista || []).forEach(function (sp) { if (sp && sp.fxKey) daFusao.push(sp); });
+        });
+      } catch (e) {}
+      // sem repetir: o que importa e cobrir cada DESENHO, nao cada composicao
+      var vistos = {};
+      daFusao = daFusao.filter(function (sp) {
+        var k = sp.fxShape || sp.fxKey;
+        if (vistos[k]) return false;
+        vistos[k] = 1; return true;
+      });
+
+      var todos = daClasse.concat(daFusao);
+
+      // ---------------------------------------------------------- 1. cobertura
+      var porFamilia = {};
+      todos.forEach(function (sp) {
+        var f = FX.familiaDe(sp.fxShape || sp.fxKey);
+        (porFamilia[f] = porFamilia[f] || []).push(sp.id);
+      });
+      var nomes = Object.keys(porFamilia).sort(function (a, b) {
+        return porFamilia[b].length - porFamilia[a].length;
+      });
+      check('há mais de uma família (antes TODOS caíam na mesma bolinha)',
+            nomes.length > 1, nomes.length + ' famílias para ' + todos.length + ' feitiços');
+      check('as FUSÕES também entraram no teste, não só os feitiços de classe',
+            daFusao.length > 0,
+            daClasse.length + ' de classe + ' + daFusao.length + ' desenhos de fusão');
+      var fusaoNaBola = daFusao.filter(function (sp) {
+        return FX.familiaDe(sp.fxShape || sp.fxKey) === 'bola';
+      });
+      check('nenhum desenho de fusão cai na bola genérica',
+            fusaoNaBola.length === 0,
+            fusaoNaBola.length ? fusaoNaBola.map(function (x) { return x.fxShape || x.fxKey; }).join(', ')
+                               : daFusao.length + ' desenhos de fusão, todos com família');
+      var naBola = (porFamilia['bola'] || []).length;
+      check('a bola genérica é o ÚLTIMO recurso, não o padrão',
+            naBola <= todos.length * 0.15,
+            naBola + ' de ' + todos.length + ' (' + Math.round(naBola / todos.length * 100) + '%)');
+      var maior = porFamilia[nomes[0]].length;
+      check('nenhuma família engole o jogo inteiro',
+            maior <= todos.length * 0.35,
+            'maior é "' + nomes[0] + '" com ' + maior);
+
+      var t = '<tr><th>família</th><th>feitiços</th><th>exemplos</th></tr>';
+      nomes.forEach(function (f) {
+        t += '<tr><td>' + f + '</td><td class="n">' + porFamilia[f].length + '</td><td>' +
+             porFamilia[f].slice(0, 3).join(', ') + '</td></tr>';
+      });
+      document.getElementById('fam').innerHTML = t;
+
+      // ------------------------------------------- 2. cada feitiço DESENHA algo
+      // Boa parte do desenho é adiada (o cone abre em passos, o meteoro cai),
+      // então cada um é medido depois de deixar o tempo correr.
+      function assinatura() {
+        var s = FX.stats();
+        return { p: s.particles, sh: s.shots, d: s.decals, r: s.rings, f: s.floaters };
+      }
+      function vazia(a) { return !a.p && !a.sh && !a.d && !a.r; }
+      /* A assinatura tem de descrever a FORMA, não só a presença: perguntar
+       * "tem partícula?" dá a mesma resposta para o meteoro e para a aura, e foi
+       * assim que o efeito repetido passou despercebido. Aqui entram a altura
+       * que o desenho alcança, a largura que ele abre e onde fica o centro em
+       * relação a quem conjura — que é justamente o que distingue um meteoro
+       * caindo de um sopro abrindo e de uma aura no próprio corpo. */
+      function forma(am, s, origem) {
+        if (!am || !am.n) return 'nada';
+        var q = function (v, passo) { return Math.round(v / passo); };
+        return [
+          q(am.alto, 1.5),                       // até onde sobe
+          q(Math.max(am.largX, am.largZ), 1.2),  // quanto abre
+          q(Math.abs(am.cx - origem.x) + Math.abs(am.cz - origem.z), 1.5), // longe de quem conjura?
+          s.shots > 0 ? 'proj' : '-',
+          s.rings > 0 ? 'anel' : '-',
+          s.decals > 0 ? 'marca' : '-'
+        ].join('|');
+      }
+
+      var mudos = [], assinaturas = {}, i = 0;
+      var alvoX = heroi.x + 2, alvoY = heroi.y;
+      var origem = R.unitWorld ? (function () {
+        var w = R.unitWorld(heroi.uid) || { x: heroi.x, y: heroi.y };
+        return { x: w.x, z: w.y };
+      })() : { x: heroi.x, z: heroi.y };
+
+      function passo() {
+        if (i >= todos.length) return fecha();
+        var sp = todos[i++];
+        try { FX.reset(); } catch (e) {}
+        try {
+          FX.handleEvent({ type: 'cast', uid: heroi.uid, spellId: sp.id, spell: sp,
+                           element: sp.element, x: alvoX, y: alvoY });
+        } catch (e) {}
+        // deixa o efeito acontecer: 18 quadros de 40 ms cobrem os passos adiados
+        var q = 0, pico = null, picoStats = null, viu = false;
+        (function quadro() {
+          try { FX.update(0.04, 0.04); } catch (e) {}
+          var am = FX.amostra(), sN = FX.stats();
+          if (sN.particles || sN.shots || sN.decals || sN.rings) viu = true;
+          // guarda o quadro de MAIOR extensão: é ali que a forma se mostra
+          if (am.n && (!pico || am.n > pico.n)) { pico = am; picoStats = sN; }
+          if (++q < 18) return setTimeout(quadro, 0);
+          if (!viu) mudos.push(sp.id + ' (' + (sp.fxShape || sp.fxKey) + ')');
+          var fam = FX.familiaDe(sp.fxShape || sp.fxKey);
+          if (!assinaturas[fam] && pico) {
+            assinaturas[fam] = forma(pico, picoStats || FX.stats(), origem);
+          }
+          setTimeout(passo, 0);
+        })();
+      }
+      passo();
+
+      function fecha() {
+        check('todo feitiço desenha alguma coisa (nenhum fica mudo)',
+              mudos.length === 0,
+              mudos.length ? mudos.length + ' mudos: ' + mudos.slice(0, 5).join(', ')
+                           : todos.length + ' feitiços, todos com efeito');
+
+        // ---------------------------------- 3. famílias diferentes DESENHAM diferente
+        var distintas = {}, nFam = 0;
+        for (var f in assinaturas) {
+          if (!assinaturas.hasOwnProperty(f)) continue;
+          nFam++;
+          distintas[assinaturas[f]] = (distintas[assinaturas[f]] || 0) + 1;
+        }
+        var nAssin = Object.keys(distintas).length;
+        check('famílias diferentes produzem desenhos diferentes',
+              nAssin >= Math.ceil(nFam * 0.6),
+              nAssin + ' formas distintas para ' + nFam + ' famílias');
+        var tf = '<tr><th>família</th><th>forma desenhada (altura|abertura|distância|peças)</th></tr>';
+        Object.keys(assinaturas).sort().forEach(function (f) {
+          tf += '<tr><td>' + f + '</td><td>' + assinaturas[f] + '</td></tr>';
+        });
+        document.getElementById('mudos').innerHTML = tf;
+
+        fim(todos.length + ' feitiços testados um a um');
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>

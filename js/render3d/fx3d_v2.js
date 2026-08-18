@@ -534,6 +534,383 @@ var JOGO = (typeof window !== 'undefined')
     return R3.world(x, y, h || 0);
   }
 
+  // =============================================== FAMILIAS DE FEITICO
+  // Os 171 feiticos declaram 171 `fxKey` distintos ('lesserMeteor', 'ashCone',
+  // 'emberRain'...), e o despacho antigo conhecia nove nomes genericos — nenhum
+  // deles batia. Resultado: TODO feitico caia no mesmo `else` e virava a mesma
+  // bolinha. O meteoro nao caia do ceu, o cone nao abria, a armadilha nao
+  // plantava nada. Era a queixa "entre todos os que testei o efeito foi o mesmo".
+  //
+  // Em vez de escrever 171 efeitos a mao, o NOME do fxKey diz a que familia o
+  // feitico pertence, e cada familia tem um desenho proprio. Feitico novo entra
+  // sozinho na familia certa; quando nao encaixa em nenhuma cai na bola, que
+  // volta a ser o ultimo recurso em vez do unico.
+  //
+  // A ORDEM importa: 'stoneSentinelCall' e invocacao, nao pedra; 'emberRain' e
+  // chuva, nao brasa. O especifico vem antes do generico.
+  var REGRAS_FX = [
+    ['meteoro',    /meteor/i],
+    ['chuva',      /rain|quiver|swarm|volley/i],
+    ['invocacao',  /call$|summon|sentinel|golem|nymph|falcon|hound/i],
+    ['armadilha',  /trap|stake|snare|alarm|ambush/i],
+    ['cone',       /cone|breath|gale|mist|typhoon/i],
+    ['cruz',       /cross/i],
+    ['anel',       /ring|circle|cyclone|maelstrom|whirl|vortex|dome|nova|storm|eye/i],
+    ['terremoto',  /quake|fissure|root|menhir|boulder|slab|spike|stone|mountain|wall|husk|bark/i],
+    ['onda',       /wave|tide|pool|current|undertow|drown|brine|spring|cistern|siphon|maw/i],
+    ['cura',       /heal|poultice|blessing|succor|tending|warm|sweet|restoring|calm|good/i],
+    ['aura',       /pact|skin|veins|blood|fury|forge|heart|dance|word|curse|bore|brazier|retort/i],
+    ['investida',  /step|swap|walk|run|charge|descend|throw|slam|hop|skip/i],
+    ['flecha',     /arrow|shot|bolt|spark|lance|harpoon|pin|brand|mark/i],
+    ['corte',      /blade|cut|slash|thrust|edge|dagger|hamstring|leech|scald|rust|flint|quick/i],
+    ['feixe',      /beam|line|ray/i],
+    // ---- vindos do `fxShape` das formas de FUSAO, que usam outro vocabulario
+    ['estouro',    /^burst$|explod/i],
+    ['escudo',     /shield|veil|guard/i],
+    ['piscar',     /blink|teleport|phase/i],
+    ['gancho',     /hook|grapple|pull|drag/i],
+    ['maldicao',   /debuff|hex|rot|wither/i],
+    ['aura',       /^buff$/i],
+    ['cone',       /gust|wind/i]
+  ];
+
+  function familiaDe(fk) {
+    if (!fk) return 'bola';
+    // os nomes genericos antigos continuam valendo
+    if (fk === 'melee') return 'corte';
+    if (fk === 'slam') return 'investida';
+    if (fk === 'beam' || fk === 'line') return 'feixe';
+    if (fk === 'nova' || fk === 'ring' || fk === 'circle') return 'anel';
+    if (fk === 'heal') return 'cura';
+    if (fk === 'arrow') return 'flecha';
+    for (var i = 0; i < REGRAS_FX.length; i++) {
+      if (REGRAS_FX[i][1].test(fk)) return REGRAS_FX[i][0];
+    }
+    return 'bola';
+  }
+  FX.familiaDe = familiaDe;      // exposto para o teste conferir a cobertura
+
+  /* Cai do ceu de vies e arrebenta: o desenho que o jogador espera de um
+   * meteoro, e que ele nao estava vendo. */
+  function meteoro(dest, el, el2, grande) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    var alto = new THREE.Vector3(dest.x + 3.0, 14, dest.z - 4.2);
+    burst(alto.x, alto.y, alto.z, 16, { color: col, speed: 1.2, life: 0.7, size: 0.4, grav: -1 });
+    launch(alto, dest, {
+      color: col, color2: col2, kind: 'ball', speed: grande ? 30 : 24, arc: 0,
+      onHit: function (pos) {
+        impact(pos, el, grande ? 2.0 : 1.4, el2);
+        shockRing(pos, col, 0.4, grande ? 4.6 : 3.0, 0.55);
+        scorch(pos, col, grande ? 3.6 : 2.4, 6);
+        addShake(grande ? 9 : 6.5);
+        freezeT = Math.max(freezeT, grande ? 0.09 : 0.05);
+      }
+    });
+  }
+
+  /* Varios corpos pequenos caindo sobre a area: chuva de brasa, revoada. */
+  function chuva(dest, el, el2, n) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    n = n || 7;
+    for (var i = 0; i < n; i++) {
+      (function (k) {
+        setTimeout(function () {
+          var dx = (Math.random() - 0.5) * 2.6, dz = (Math.random() - 0.5) * 2.6;
+          var chao = new THREE.Vector3(dest.x + dx, dest.y, dest.z + dz);
+          var ceu = new THREE.Vector3(chao.x + 1.2, 11, chao.z - 1.6);
+          launch(ceu, chao, {
+            color: (col2 && k % 3 === 2) ? col2 : col, kind: 'ball', speed: 22, arc: 0,
+            onHit: function (pos) {
+              burst(pos.x, pos.y + 0.2, pos.z, 14, { color: col, speed: 3.2, life: 0.4, size: 0.24 });
+              shockRing(pos, col, 0.2, 1.1, 0.35);
+            }
+          });
+        }, k * 85);
+      })(i);
+    }
+    scorch(dest, col, 3.2, 5);
+    addShake(4);
+  }
+
+  /* Sopro que ABRE a partir do conjurador na direcao do alvo. */
+  function cone(from, dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    var dx = dest.x - from.x, dz = dest.z - from.z;
+    var d = Math.max(0.001, Math.sqrt(dx * dx + dz * dz));
+    dx /= d; dz /= d;
+    var passos = 9;
+    for (var i = 0; i < passos; i++) {
+      (function (k) {
+        setTimeout(function () {
+          var t = (k + 1) / passos;
+          var cx = from.x + dx * d * t, cz = from.z + dz * d * t;
+          burst(cx, from.y + 0.1, cz, 12, {
+            color: (col2 && k % 2) ? col2 : col,
+            speed: 2.2, life: 0.42, size: 0.3,
+            spread: 0.35 + t * 1.9,               // abre conforme avanca
+            flat: true, up: 0.35
+          });
+        }, k * 26);
+      })(i);
+    }
+  }
+
+  /* Quatro bracos saindo do alvo: o desenho do feitico em cruz. */
+  function cruz(dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    impact(dest, el, 1.2, el2);
+    var dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    dirs.forEach(function (dr, di) {
+      for (var i = 1; i <= 4; i++) {
+        (function (k, d2) {
+          setTimeout(function () {
+            burst(dest.x + d2[0] * k, dest.y + 0.15, dest.z + d2[1] * k, 9, {
+              color: (col2 && di % 2) ? col2 : col,
+              speed: 2.0, life: 0.4, size: 0.28, flat: true, up: 0.5, spread: 0.35
+            });
+          }, k * 40);
+        })(i, dr);
+      }
+    });
+    scorch(dest, col, 2.6, 4);
+  }
+
+  /* O chao ERGUE: particulas subindo, marca no piso, tranco na camera. */
+  function terremoto(dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    burst(dest.x, dest.y + 0.05, dest.z, 40, {
+      color: col, speed: 5.5, life: 0.75, size: 0.36, up: 2.4, grav: 5.5, spread: 1.1
+    });
+    if (col2) burst(dest.x, dest.y + 0.05, dest.z, 24, {
+      color: col2, speed: 4.2, life: 0.9, size: 0.32, up: 2.0, grav: 4.5, spread: 1.3
+    });
+    shockRing(dest, col, 0.3, 3.0, 0.5);
+    scorch(dest, col, 2.6, 5);
+    addShake(7);
+  }
+
+  /* Lamina baixa e rapida correndo rente ao chao ate o alvo. */
+  function onda(from, dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    var passos = 8;
+    for (var i = 0; i <= passos; i++) {
+      (function (k) {
+        setTimeout(function () {
+          var t = k / passos;
+          burst(from.x + (dest.x - from.x) * t, 0.18, from.z + (dest.z - from.z) * t, 14, {
+            color: (col2 && k % 3 === 2) ? col2 : col,
+            speed: 2.6, life: 0.5, size: 0.34, flat: true, up: 0.22, spread: 1.0
+          });
+        }, k * 30);
+      })(i);
+    }
+    setTimeout(function () { shockRing(dest, col, 0.4, 2.4, 0.45); }, passos * 30);
+  }
+
+  /* Rastro de corrida do conjurador ate o destino, e o baque na chegada. */
+  function investida(from, dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    var passos = 7;
+    for (var i = 0; i <= passos; i++) {
+      (function (k) {
+        setTimeout(function () {
+          var t = k / passos;
+          burst(from.x + (dest.x - from.x) * t, from.y * 0.7 + 0.2,
+                from.z + (dest.z - from.z) * t, 9, {
+            color: (col2 && k % 2) ? col2 : col, speed: 1.5, life: 0.36, size: 0.28, spread: 0.4
+          });
+        }, k * 22);
+      })(i);
+    }
+    setTimeout(function () { impact(dest, el, 1.5, el2); addShake(6); }, passos * 22);
+  }
+
+  /* Arco de corte no alvo, no tempo do golpe corpo a corpo. */
+  function corte(dest, el, el2) {
+    var hd = R3 && R3.hitDelay ? R3.hitDelay() : 0.3;
+    setTimeout(function () {
+      var col = ecol(el);
+      // arco: as particulas seguem um semicirculo, nao uma explosao redonda
+      for (var i = 0; i < 14; i++) {
+        var a = -0.5 + (i / 13) * 2.2;
+        spawn({
+          x: dest.x + Math.cos(a) * 1.0, y: dest.y + 0.2 + Math.sin(a) * 0.5,
+          z: dest.z + Math.sin(a) * 0.5,
+          vx: Math.cos(a) * 3.2, vy: 0.6, vz: Math.sin(a) * 3.2,
+          life: 0.3, color: col, size: 0.26
+        });
+      }
+      impact(dest, el, 1.0, el2);
+    }, hd * 1000);
+  }
+
+  /* Armadilha: nao ha projetil nem estouro. Algo e PLANTADO e fica no chao. */
+  function armadilha(dest, el, el2) {
+    var col = ecol(el);
+    shockRing(dest, col, 1.1, 0.7, 0.5);            // anel que FECHA, ao contrario
+    scorch(dest, col, 1.7, 9);
+    burst(dest.x, dest.y + 0.15, dest.z, 12, {
+      color: col, speed: 1.1, life: 0.7, size: 0.22, flat: true, up: 0.3
+    });
+    if (el2) burst(dest.x, dest.y + 0.2, dest.z, 8, { color: ecol(el2), speed: 0.9, life: 0.8, size: 0.2 });
+  }
+
+  /* Invocacao: coluna de luz subindo onde a criatura vai aparecer. */
+  function invocacao(dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    for (var i = 0; i < 5; i++) {
+      (function (k) {
+        setTimeout(function () {
+          burst(dest.x, dest.y + k * 0.55, dest.z, 12, {
+            color: (col2 && k % 2) ? col2 : col,
+            speed: 0.9, life: 0.6, size: 0.3, up: 2.2, grav: -1.4, spread: 0.7
+          });
+        }, k * 70);
+      })(i);
+    }
+    shockRing(dest, col, 0.3, 2.0, 0.7);
+  }
+
+  /* Aura no PROPRIO conjurador: pacto, pele, sangue fervendo. Sem projetil —
+   * era isto que sumia por completo, porque a bola generica precisa de um
+   * destino e estes feiticos apontam para si mesmos. */
+  function aura(from, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    for (var i = 0; i < 4; i++) {
+      (function (k) {
+        setTimeout(function () {
+          burst(from.x, from.y * 0.55 + 0.25, from.z, 16, {
+            color: (col2 && k % 2) ? col2 : col,
+            speed: 1.4, life: 0.75, size: 0.28, up: 1.6, grav: -0.9, spread: 0.85
+          });
+        }, k * 90);
+      })(i);
+    }
+    shockRing({ x: from.x, y: 0, z: from.z }, col, 1.6, 0.4, 0.6);
+  }
+
+  /* Estouro seco no alvo: sem projetil, a coisa ja acontece la. */
+  function estouro(dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    burst(dest.x, dest.y + 0.3, dest.z, 46, {
+      color: col, speed: 6.5, life: 0.55, size: 0.36, spread: 0.5
+    });
+    if (col2) burst(dest.x, dest.y + 0.4, dest.z, 30, {
+      color: col2, speed: 5.0, life: 0.7, size: 0.32, spread: 0.7
+    });
+    shockRing(dest, col, 0.3, 3.4, 0.45);
+    scorch(dest, col, 2.4, 4);
+    addShake(6);
+  }
+
+  /* Escudo: casca que FECHA em volta do alvo, subindo do chao. */
+  function escudo(dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    for (var i = 0; i < 3; i++) {
+      (function (k) {
+        setTimeout(function () {
+          // as particulas nascem num anel e sobem: leitura de casca, nao de estouro
+          for (var j = 0; j < 14; j++) {
+            var a = (j / 14) * Math.PI * 2;
+            spawn({
+              x: dest.x + Math.cos(a) * 1.15, y: dest.y - 0.4 + k * 0.3, z: dest.z + Math.sin(a) * 1.15,
+              vx: -Math.cos(a) * 0.35, vy: 1.5, vz: -Math.sin(a) * 0.35,
+              life: 0.65, color: (col2 && k % 2) ? col2 : col, size: 0.26
+            });
+          }
+        }, k * 90);
+      })(i);
+    }
+    shockRing(dest, col, 1.9, 0.8, 0.55);
+  }
+
+  /* Piscar: some de um lugar e aparece no outro, sem nada no caminho. */
+  function piscar(from, dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    burst(from.x, from.y * 0.6 + 0.2, from.z, 20, {
+      color: col, speed: 2.4, life: 0.4, size: 0.28, spread: 0.5, grav: -0.5
+    });
+    setTimeout(function () {
+      burst(dest.x, dest.y + 0.2, dest.z, 24, {
+        color: col2 || col, speed: 2.8, life: 0.45, size: 0.3, spread: 0.5, grav: -0.5
+      });
+      shockRing(dest, col, 1.4, 0.3, 0.35);
+    }, 140);
+  }
+
+  /* Gancho: um fio sai da mao e PUXA — a linha corre do alvo de volta. */
+  function gancho(from, dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    beam(from, dest, col, col2);
+    var passos = 6;
+    for (var i = 0; i <= passos; i++) {
+      (function (k) {
+        setTimeout(function () {
+          var t = 1 - k / passos;                 // do alvo PARA quem puxa
+          burst(from.x + (dest.x - from.x) * t, from.y * 0.7 + 0.15,
+                from.z + (dest.z - from.z) * t, 7, {
+            color: col, speed: 1.2, life: 0.3, size: 0.24, spread: 0.3
+          });
+        }, 120 + k * 26);
+      })(i);
+    }
+  }
+
+  /* Maldicao: cai DE CIMA sobre o alvo, devagar, e assenta. */
+  function maldicao(dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    for (var i = 0; i < 3; i++) {
+      (function (k) {
+        setTimeout(function () {
+          burst(dest.x, dest.y + 2.4 - k * 0.5, dest.z, 14, {
+            color: (col2 && k % 2) ? col2 : col,
+            speed: 0.7, life: 0.9, size: 0.26, up: -0.6, grav: 1.4, spread: 0.9
+          });
+        }, k * 110);
+      })(i);
+    }
+    scorch(dest, col, 1.6, 5);
+  }
+
+  /* Escolhe e toca o desenho da familia. */
+  function tocaFamilia(fam, from, dest, el, el2, sp) {
+    switch (fam) {
+      case 'meteoro':   meteoro(dest, el, el2, !!(sp && sp.unlockLevel >= 20)); break;
+      case 'chuva':     chuva(dest, el, el2, 7); break;
+      case 'cone':      cone(from, dest, el, el2); break;
+      case 'cruz':      cruz(dest, el, el2); break;
+      case 'anel':      nova(dest, ecol(el), el2 ? ecol(el2) : null); break;
+      case 'terremoto': terremoto(dest, el, el2); break;
+      case 'onda':      onda(from, dest, el, el2); break;
+      case 'investida': investida(from, dest, el, el2); break;
+      case 'corte':     corte(dest, el, el2); break;
+      case 'armadilha': armadilha(dest, el, el2); break;
+      case 'invocacao': invocacao(dest, el, el2); break;
+      case 'aura':      aura(from, el, el2); break;
+      case 'cura':
+        healUp(dest, ecol(el));
+        if (el2) healUp(dest, ecol(el2));
+        break;
+      case 'feixe':     beam(from, dest, ecol(el), el2 ? ecol(el2) : null); break;
+      case 'estouro':   estouro(dest, el, el2); break;
+      case 'escudo':    escudo(dest, el, el2); break;
+      case 'piscar':    piscar(from, dest, el, el2); break;
+      case 'gancho':    gancho(from, dest, el, el2); break;
+      case 'maldicao':  maldicao(dest, el, el2); break;
+      case 'flecha':
+        launch(from, dest, {
+          color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'arrow', speed: 34, arc: 0.25,
+          onHit: function (pos) { impact(pos, el, 1.0, el2); }
+        });
+        break;
+      default:
+        launch(from, dest, {
+          color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'ball', speed: 22, arc: 0.6,
+          onHit: function (pos) { impact(pos, el, 1.0, el2); }
+        });
+    }
+  }
+
   // ================================================================ EVENTOS
   FX.handleEvent = function (ev) {
     if (!ev) return;
@@ -548,9 +925,14 @@ var JOGO = (typeof window !== 'undefined')
 
       case 'cast': {
         u = ev.uid ? unitPos(ev.uid, 0.72) : null;
-        var sp = (D.spells && D.spells[ev.spellId]) || ev.spell ||
-                 (JOGO.Fusion && JOGO.Fusion.spellById ?
-                    (function () { try { return JOGO.Fusion.spellById(ev.spellId); } catch (e) { return null; } })() : null);
+        // Engine.spell resolve em QUALQUER fonte: classes, monstros, pets, itens
+        // e — o que faltava aqui — os feiticos gerados da fusao. Antes so
+        // DATA.spells era consultado, entao as 2625 fusoes vinham sem definicao
+        // e caiam todas no 'bolt' padrao: a mesma flecha para o jogo inteiro.
+        var sp = ev.spell ||
+                 (JOGO.Engine && JOGO.Engine.spell ?
+                    (function () { try { return JOGO.Engine.spell(ev.spellId); } catch (e) { return null; } })() : null) ||
+                 (D.spells && D.spells[ev.spellId]) || null;
         var fk = (sp && sp.fxKey) || (sp && sp.fxShape) || ev.fxKey || 'bolt';
         var els = spellElements(ev, sp);
         var el = els[0], el2 = els[1] || null;
@@ -561,28 +943,16 @@ var JOGO = (typeof window !== 'undefined')
         burst(u.x, u.y, u.z, 14, { color: col, speed: 1.6, life: 0.36, size: 0.26, grav: 0.6, spread: 0.3 });
         if (col2) burst(u.x, u.y, u.z, 12, { color: col2, speed: 1.2, life: 0.46, size: 0.24, grav: 0.3, spread: 0.34 });
         var dest = (ev.x != null) ? cellPos(ev.x, ev.y, 0.7) : null;
-        if (!dest) break;
-        if (fk === 'melee' || fk === 'slam') {
-          var hd = R3 && R3.hitDelay ? R3.hitDelay() : 0.3;
-          (function (d2, e1, e2, p) {
-            setTimeout(function () { impact(d2, e1, p, e2); }, hd * 1000);
-          })(dest, el, el2, fk === 'slam' ? 1.5 : 1.0);
-        } else if (fk === 'beam' || fk === 'line') {
-          beam(u, dest, col, col2);
-        } else if (fk === 'nova' || fk === 'ring' || fk === 'circle') {
-          nova(dest, col, col2);
-        } else if (fk === 'heal') {
-          healUp(dest, col);
-          if (col2) healUp(dest, col2);
-        } else {
-          launch(u, dest, {
-            color: col, color2: col2, kind: fk === 'arrow' ? 'arrow' : 'ball',
-            speed: fk === 'arrow' ? 34 : 22, arc: fk === 'arrow' ? 0.25 : 0.6,
-            onHit: (function (e1, e2) {
-              return function (pos) { impact(pos, e1, 1.0, e2); };
-            })(el, el2)
-          });
+        if (!dest) {
+          // Sem celula de destino ainda ha desenho a fazer: os feiticos de
+          // pacto/pele/sangue agem sobre quem conjura. Antes o `break` aqui
+          // apagava o efeito inteiro deles.
+          var famSo = familiaDe(fk);
+          if (famSo === 'aura' || famSo === 'cura') tocaFamilia(famSo, u, u, el, el2, sp);
+          else aura(u, el, el2);
+          break;
         }
+        tocaFamilia(familiaDe(fk), u, dest, el, el2, sp);
         break;
       }
 
@@ -830,10 +1200,32 @@ var JOGO = (typeof window !== 'undefined')
     shakeAmp = 0; shakeOut.x = 0; shakeOut.y = 0; freezeT = 0;
   };
 
+  /* Forma do que esta desenhado agora — para o teste poder provar que familias
+   * diferentes desenham COISAS diferentes, e nao so "desenham alguma coisa".
+   * Sem isto a unica pergunta possivel era "tem particula?", que da a mesma
+   * resposta para o meteoro e para a aura. */
+  FX.amostra = function () {
+    var n = 0, sx = 0, sy = 0, sz = 0;
+    var minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9, minz = 1e9, maxz = -1e9;
+    for (var i = 0; i < MAXP; i++) {
+      var p = parts[i];
+      if (!p) continue;
+      n++; sx += p.x; sy += p.y; sz += p.z;
+      if (p.x < minx) minx = p.x; if (p.x > maxx) maxx = p.x;
+      if (p.y < miny) miny = p.y; if (p.y > maxy) maxy = p.y;
+      if (p.z < minz) minz = p.z; if (p.z > maxz) maxz = p.z;
+    }
+    if (!n) return { n: 0 };
+    return { n: n, cx: sx / n, cy: sy / n, cz: sz / n,
+             alto: maxy, baixo: miny,
+             largX: maxx - minx, largZ: maxz - minz };
+  };
+
   FX.stats = function () {
     var alive = 0;
     for (var i = 0; i < MAXP; i++) if (parts[i]) alive++;
     return { particles: alive, shots: shots.length, decals: decals.length,
-             floaters: floaters.length, texCache: texCacheN };
+             floaters: floaters.length, texCache: texCacheN,
+             rings: rings.length, luzes: flashes.length };
   };
 })();

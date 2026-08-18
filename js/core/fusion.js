@@ -231,7 +231,13 @@ var JOGO = (typeof window !== 'undefined')
         effects: effects,
         description: form.description || '',
         flavor: blend.flavor || form.flavor || '',
-        fxKey: blend.fxKey || form.fxShape || 'slam',
+        // Quem decide o DESENHO e a FORMA; a mistura decide o sabor elemental.
+        // Estava ao contrario (blend.fxKey primeiro) e as 16 misturas cobriam as
+        // 107 formas: toda fusao do mesmo par de elementos saia com o mesmo
+        // efeito, fosse escudo, meteoro ou gancho. O `fxBlend` sobra para quem
+        // quiser tingir o efeito com a cor da mistura.
+        fxKey: form.fxShape || blend.fxKey || 'slam',
+        fxBlend: blend.fxKey || null,
         fusion: true
       });
     }

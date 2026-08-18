@@ -1967,7 +1967,12 @@
       eq(s.effects[0].min, Math.round(10 * fator), '10 * fator');
       eq(s.effects[1].min, Math.round(6 * fator), '6 * fator');
       eq(s.effects[2].min, Math.round(3 * fator), 'rider 3 * fator');
-      eq(s.fxKey, 'fx-salgado', 'fx da mistura');
+      // A precedencia INVERTEU de proposito. Antes a mistura mandava no desenho,
+      // e como sao 16 misturas para 107 formas, toda fusao do mesmo par de
+      // elementos saia com o mesmo efeito — escudo, meteoro e gancho iguais.
+      // Agora a FORMA decide o desenho e a mistura fica com o sabor.
+      eq(s.fxKey, 'burst', 'o desenho vem da FORMA');
+      eq(s.fxBlend, 'fx-salgado', 'o sabor da mistura fica guardado a parte');
       var out30 = F.spellsFor('t-alfa+t-beta', 'ar+agua', 30);
       eq(out30.length, 2, 'nível 30 libera a forma tier 20');
     });
