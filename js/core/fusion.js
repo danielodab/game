@@ -47,37 +47,60 @@ var JOGO = (typeof window !== 'undefined')
   Fusion.BONUS_PA = 4;
   Fusion.BONUS_PP = 1;
   Fusion.BONUS_SHIELD = 50;
-  Fusion.POWER_MULT = 2.30;
+  Fusion.POWER_MULT = 1.144;
 
-  // AJUSTE FINO POR DUPLA. Depois de acertar a media com POWER_MULT, sobrou
-  // dispersao POR DUPLA: as duplas do sumo rendiam pouco fundidas (ele sozinho
-  // ja bate muito, entao o teto de comparacao e alto) e as do espadachim com
-  // curandeira rendiam demais. O coeficiente abaixo e o inverso da razao medida
-  // em tests/equilibrio_fusao.html — cada dupla puxada para perto de 100%.
+  // AJUSTE FINO POR DUPLA. Depois de acertar a media com POWER_MULT, sobra
+  // dispersao POR DUPLA, porque as formas de fusao de cada par nao valem o mesmo
+  // em relacao aos dois kits de classe que elas substituem. O coeficiente abaixo
+  // e medido em tests/equilibrio_fusao.html — cada dupla puxada para 100%.
   // Chave em ORDEM ALFABETICA, igual a de DATA.fusionForms.
   //
-  // RECALIBRADO (v2.7): as CINCO duplas do sumo subiram depois que sete feiticos
-  // dele — area centrada no proprio corpo — foram consertados. Eles estavam com
-  // `targetSide: 'enemy'` e alcance 0-0, o que exige um inimigo em cima da casa
-  // do conjurador: eram IMPOSSIVEIS de lancar. Com eles funcionando, o dano do
-  // Barbaro SEPARADO subiu ate 46% (sumo+espadachim foi de 267 para 391) e a
-  // razao da fusao caiu para 68-86%. Os coeficientes abaixo devolvem a faixa.
+  // RECALIBRADO (v2.8) depois que a area passou a mirar o CHAO (engine.js,
+  // `validTargetCell`). A recalibragem so foi possivel porque o banco de medicao
+  // tinha quatro defeitos que se anulavam, todos consertados agora:
+  //   1. a fusao era medida com 4 PA — a sobra da declaracao — contra dois
+  //      herois com 6+6=12 PA. Os coeficientes antigos (ate 1,656) existiam em
+  //      boa parte para tapar isso.
+  //   2. o feitico era mirado na primeira celula da varredura, o canto do
+  //      alcance: com area mirando o chao, media zero.
+  //   3. o instantaneo nao restaurava efeitos nem a semente, entao marcas de um
+  //      feitico inflavam o seguinte (27% de diferenca so por ordem).
+  //   4. o turno usava um feitico so, repetido; com `castsPerTurn: 1` em 92 das
+  //      106 formas, a fusao gastava 4 dos 10 PA dela.
+  // Medido o banco corrigido, a fusao estava ~2,4x acima, e POWER_MULT desceu de
+  // 2,30 para 1,144 — o valor antigo carregava, junto com os coeficientes, a
+  // compensacao daquele handicap de PA. A mudanca foi uma RENORMALIZACAO: o
+  // produto POWER_MULT x coeficiente ficou o mesmo (desvio maximo 0,07%), e com
+  // ela cada coeficiente volta a se ler como desvio em torno de 1,0, que e o que
+  // este bloco diz que ele e.
+  //
+  // LIMITE CONHECIDO: um coeficiente CONSTANTE por dupla nao fecha as duas
+  // pontas quando a razao muda muito com o nivel. Para caber em +-20% nos dois
+  // niveis e preciso razaoMax/razaoMin <= 1,5 (de k*max<=1,2 e k*min>=0,8).
+  // Seis duplas passam disso — de 1,52 (bruxo+espadachim) a 2,90
+  // (espadachim+invocador) — e ficam fora por construcao, nao por falta de
+  // ajuste. A inclinacao tambem troca de sinal entre duplas (arqueiro+curandeira
+  // rende MAIS fundida no 30, espadachim+invocador rende MENOS), entao nenhum
+  // valor global de POWER_MULT nem do peso de nivel em `powerFactor` conserta:
+  // so um coeficiente que varie COM O NIVEL, por dupla, fecharia — e isso seria
+  // ajustar dois parametros a dois pontos medidos, ou seja, o teste passaria por
+  // construcao. Fica registrado em vez de escondido.
   Fusion.PAIR_TUNE = {
-    'arqueiro+bruxo':        0.520,
-    'arqueiro+curandeira':   0.350,
-    'arqueiro+espadachim':   0.574,
-    'arqueiro+invocador':    0.625,
-    'arqueiro+sumo':         0.356,
-    'bruxo+curandeira':      0.638,
-    'bruxo+espadachim':      0.607,
-    'bruxo+invocador':       0.807,
-    'bruxo+sumo':            0.611,
-    'curandeira+espadachim': 0.272,
-    'curandeira+invocador':  0.637,
-    'curandeira+sumo':       0.424,
-    'espadachim+invocador':  0.548,
-    'espadachim+sumo':       0.251,
-    'invocador+sumo':        0.626
+    'arqueiro+bruxo':        1.046,
+    'arqueiro+curandeira':   0.704,
+    'arqueiro+espadachim':   1.154,
+    'arqueiro+invocador':    1.257,
+    'arqueiro+sumo':         0.716,
+    'bruxo+curandeira':      1.283,
+    'bruxo+espadachim':      1.221,
+    'bruxo+invocador':       1.623,
+    'bruxo+sumo':            1.229,
+    'curandeira+espadachim': 0.547,
+    'curandeira+invocador':  1.281,
+    'curandeira+sumo':       0.853,
+    'espadachim+invocador':  1.102,
+    'espadachim+sumo':       0.505,
+    'invocador+sumo':        1.259
   };
 
   function E() { return JOGO.Engine; }
