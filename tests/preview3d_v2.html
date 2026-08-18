@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOTERRA 2.0 — prévia 3D (v2)</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; background:#0b0d10; color:#e8e2d4;
+               font-family: Trebuchet MS, Verdana, sans-serif; overflow:hidden; }
+  #app { position:fixed; inset:0; }
+  canvas#game-canvas { display:block; width:100%; height:100%; }
+  #ui-root { position:fixed; left:0; top:0; right:0; padding:6px 8px; z-index:10;
+             display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+             background:linear-gradient(#0b0d10ee,#0b0d1000); pointer-events:auto; }
+  #ui-root button, #ui-root select {
+    background:#1d2430; color:#e8e2d4; border:1px solid #3a4658; border-radius:7px;
+    padding:6px 9px; font-size:12px; cursor:pointer; min-height:30px; }
+  #ui-root button:hover { background:#2a3444; }
+  #ui-root .sep { width:1px; height:22px; background:#3a4658; margin:0 3px; }
+  #status { position:fixed; left:8px; bottom:8px; z-index:10; font-size:11px;
+            background:#0b0d10cc; border:1px solid #2a3444; border-radius:7px; padding:5px 8px;
+            white-space:pre; line-height:1.45; }
+  #snapbox { position:fixed; inset:0; background:#000; z-index:99; display:none; }
+  #snapbox img { width:100%; height:100%; object-fit:contain; }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+</div>
+<div id="status">carregando…</div>
+<div id="snapbox"><img id="snapimg" alt=""></div>
+
+<script src="../vendor/three.min.js?v=1"></script>
+<script src="../vendor/GLTFLoader.js?v=1"></script>
+<script src="../vendor/CopyShader.js?v=1"></script>
+<script src="../vendor/LuminosityHighPassShader.js?v=1"></script>
+<script src="../vendor/EffectComposer.js?v=1"></script>
+<script src="../vendor/RenderPass.js?v=1"></script>
+<script src="../vendor/ShaderPass.js?v=1"></script>
+<script src="../vendor/UnrealBloomPass.js?v=1"></script>
+
+<script src="../js/core/data/elements.js?v=1"></script>
+<script src="../js/core/data/classes.js?v=1"></script>
+<script src="../js/core/data/spells.js?v=1"></script>
+<script src="../js/core/data/progression.js?v=1"></script>
+<script src="../js/core/data/monsters.js?v=1"></script>
+<script src="../js/core/data/dungeons.js?v=1"></script>
+<script src="../js/core/data/fusions.js?v=1"></script>
+<script src="../js/core/data/pets.js?v=1"></script>
+<script src="../js/core/data/items.js?v=1"></script>
+
+<script src="../assets/embedded/models-anims.js?v=1"></script>
+<script src="../assets/embedded/models-heroes.js?v=1"></script>
+
+<script src="../js/render3d/models3d_v2.js?v=1"></script>
+<script src="../js/render3d/fx3d_v2.js?v=1"></script>
+<script src="../js/render3d/renderer3d_v2.js?v=1"></script>
+
+<script>
+/* ===========================================================================
+ * Prévia da camada 3D da v2 (dono: Agente de Migração 3D).
+ * Stub de state v2: obstáculos ALTOS (#) e BAIXOS (=), buracos (~), chão
+ * decorado (,), clima, eventos de terreno, pet, chefe e as 6 classes.
+ * Botões disparam cada evento do contrato (§9).
+ * Modo snap:  ?snap=1&frames=90&shot=…   → renderiza N quadros SÍNCRONOS e
+ * espelha o canvas num <img> (o painel pode estar oculto: rAF não dispara).
+ * ======================================================================== */
+(function () {
+  'use strict';
+  var JOGO = window.JOGO;
+  var Q = new URLSearchParams(location.search);
+
+  // ------------------------------------------------------------- stub state
+  var LAYOUT = [
+    '...,..#....,..',
+    '..P..#..=.....',
+    '.P...#..=..,..',
+    '..P.....=.....',
+    '.....~~.......',
+    ',....~~....#..',
+    '......=.......',
+    '..#...=...a.b.',
+    '..#.......c...',
+    '.....,....d.e.',
+    '..........f...'
+  ];
+  var MONSTERS = ['a', 'b', 'c', 'd', 'e', 'f'];
+
+  function buildGrid() {
+    var h = LAYOUT.length, w = LAYOUT[0].length;
+    var tiles = [];
+    for (var y = 0; y < h; y++) {
+      var row = [];
+      for (var x = 0; x < w; x++) {
+        var ch = LAYOUT[y].charAt(x);
+        if (ch === '#') row.push({ type: 'wall', deco: false });
+        else if (ch === '=') row.push({ type: 'cover', deco: false });
+        else if (ch === '~') row.push({ type: 'hole', deco: false });
+        else if (ch === ',') row.push({ type: 'floor', deco: true });
+        else row.push({ type: 'floor', deco: false });
+      }
+      tiles.push(row);
+    }
+    return { w: w, h: h, tiles: tiles };
+  }
+
+  var uidN = 0;
+  function mkUnit(o) {
+    uidN++;
+    return {
+      uid: 'u' + uidN, defId: o.defId, kind: o.kind || 'hero', side: o.side || 'player',
+      name: o.name || o.defId, x: o.x, y: o.y,
+      hp: o.hp || 100, hpMax: o.hp || 100,
+      pa: 6, paMax: 6, pp: 3, ppMax: 3, initiative: 50, power: 0, elemPower: 0,
+      dodge: 10, lock: 10, element: o.element || 'neutro', level: o.level || 5,
+      classId: o.classId || null, heroId: null, resists: {}, spells: [],
+      cooldowns: {}, castsThisTurn: {}, effects: o.effects || [], shield: o.shield || 0,
+      alive: true, offBoard: false, boss: !!o.boss, traits: [], aiRole: null,
+      enraged: false, summonerUid: null, ownerUid: o.ownerUid || null,
+      petId: o.petId || null, behavior: null, range: 0,
+      followDistance: o.followDistance || 0, fusionIntent: null,
+      marks: o.marks || 0, elemPair: o.elemPair || null
+    };
+  }
+
+  var CLASSES = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeira', 'invocador'];
+  var ELEMS = ['fogo', 'agua', 'terra', 'ar', 'neutro', 'fogo'];
+
+  function firstMonsterId() {
+    var ms = JOGO.DATA.monsters;
+    for (var k in ms) if (!ms[k].boss) return k;
+    return null;
+  }
+  function monsterIds(n) {
+    var out = [], ms = JOGO.DATA.monsters;
+    for (var k in ms) { out.push(k); if (out.length >= n) break; }
+    return out;
+  }
+  function bossId() {
+    var ms = JOGO.DATA.monsters;
+    for (var k in ms) if (ms[k].boss) return k;
+    return firstMonsterId();
+  }
+  function firstPetId() {
+    for (var k in JOGO.DATA.pets) return k;
+    return null;
+  }
+
+  var state = null;
+  function buildState(opts) {
+    opts = opts || {};
+    uidN = 0;
+    var grid = buildGrid();
+    var units = [];
+    // 6 heróis em fila (a prévia mostra as 6 classes lado a lado)
+    var slots = [[1, 1], [2, 1], [1, 2], [2, 2], [1, 3], [3, 3]];
+    if (opts.line) slots = [[1, 1], [3, 1], [5, 1], [7, 1], [9, 1], [11, 1]];
+    for (var i = 0; i < CLASSES.length; i++) {
+      units.push(mkUnit({
+        defId: CLASSES[i], classId: CLASSES[i], kind: 'hero', side: 'player',
+        x: slots[i][0], y: slots[i][1], hp: 120, element: ELEMS[i],
+        name: (JOGO.DATA.classes[CLASSES[i]] || {}).name || CLASSES[i]
+      }));
+    }
+    // pet ao lado do dono
+    var petId = firstPetId();
+    if (petId && !opts.noPet) {
+      units.push(mkUnit({
+        defId: petId, kind: 'pet', side: 'player', x: slots[0][0] + 1, y: slots[0][1] + 1,
+        hp: 40, element: (JOGO.DATA.pets[petId] || {}).element || 'terra',
+        ownerUid: units[0].uid, followDistance: 2
+      }));
+    }
+    // monstros nos spawns do layout + chefe
+    var mids = monsterIds(5);
+    var mi = 0;
+    for (var y = 0; y < grid.h; y++) for (var x = 0; x < grid.w; x++) {
+      var ch = LAYOUT[y].charAt(x);
+      if (MONSTERS.indexOf(ch) < 0) continue;
+      var isBoss = (ch === 'f');
+      var mid = isBoss ? bossId() : mids[mi++ % mids.length];
+      var md = JOGO.DATA.monsters[mid] || {};
+      units.push(mkUnit({
+        defId: mid, kind: 'monster', side: 'enemy', x: x, y: y,
+        hp: isBoss ? 320 : 80, element: md.element || 'neutro', boss: isBoss,
+        name: md.name || mid,
+        effects: isBoss ? [{ type: 'taunt', remaining: 2 }] : []
+      }));
+    }
+    // estados visíveis: veneno, raiz, invisível, escudo, marcas
+    if (units[7]) units[7].effects.push({ type: 'poison', remaining: 3 });
+    if (units[8]) units[8].effects.push({ type: 'root', remaining: 2 });
+    if (units[9]) { units[9].effects.push({ type: 'invisible', remaining: 2 }); }
+    if (units[2]) units[2].shield = 45;
+    if (units[10]) units[10].marks = 4;
+
+    var evs = [];
+    var evKeys = Object.keys(JOGO.DATA.tileEvents || {});
+    var evSpots = [[6, 3], [9, 5], [4, 8], [11, 2], [7, 9]];
+    for (var e = 0; e < evSpots.length && e < evKeys.length; e++) {
+      evs.push({ x: evSpots[e][0], y: evSpots[e][1], eventId: evKeys[e], remaining: 4 });
+    }
+
+    return {
+      phase: 'playing', round: 1, dungeonId: opts.dungeonId || 'greenhouse',
+      roomIndex: 0, sceneryTheme: opts.theme || null,
+      grid: grid, units: units, order: units.map(function (u) { return u.uid; }),
+      activeIdx: 0, weather: opts.weather || 'chuva',
+      tileEventsActive: evs, log: []
+    };
+  }
+
+  // ------------------------------------------------------------- stub Engine
+  JOGO.Engine = {
+    activeUnit: function (st) {
+      for (var i = 0; i < st.units.length; i++) if (st.units[i].uid === st.order[st.activeIdx]) return st.units[i];
+      return st.units[0];
+    },
+    unitAt: function (st, x, y) {
+      for (var i = 0; i < st.units.length; i++) {
+        var u = st.units[i];
+        if (u.alive && !u.offBoard && u.x === x && u.y === y) return u;
+      }
+      return null;
+    },
+    reachable: function (st, uid) {
+      var u = null, i;
+      for (i = 0; i < st.units.length; i++) if (st.units[i].uid === uid) u = st.units[i];
+      if (!u) return [];
+      var out = [], pp = u.pp || 3;
+      for (var dy = -pp; dy <= pp; dy++) for (var dx = -pp; dx <= pp; dx++) {
+        if (Math.abs(dx) + Math.abs(dy) > pp || (!dx && !dy)) continue;
+        var x = u.x + dx, y = u.y + dy;
+        if (x < 0 || y < 0 || x >= st.grid.w || y >= st.grid.h) continue;
+        var t = st.grid.tiles[y][x];
+        if (t.type !== 'floor') continue;
+        if (JOGO.Engine.unitAt(st, x, y)) continue;
+        // risco de esquiva: adjacente a inimigo vivo
+        var risky = false;
+        for (i = 0; i < st.units.length; i++) {
+          var o = st.units[i];
+          if (!o.alive || o.side === u.side) continue;
+          if (Math.abs(o.x - u.x) + Math.abs(o.y - u.y) === 1) risky = true;
+        }
+        out.push({ x: x, y: y, risky: risky });
+      }
+      return out;
+    },
+    path: function (st, uid, tx, ty) {
+      var u = null;
+      for (var i = 0; i < st.units.length; i++) if (st.units[i].uid === uid) u = st.units[i];
+      if (!u) return null;
+      var out = [], x = u.x, y = u.y, guard = 0;
+      while ((x !== tx || y !== ty) && guard++ < 24) {
+        if (x !== tx) x += (tx > x ? 1 : -1);
+        else if (y !== ty) y += (ty > y ? 1 : -1);
+        out.push({ x: x, y: y });
+      }
+      return out;
+    },
+    castTargets: function (st, uid, spellId) {
+      var u = null;
+      for (var i = 0; i < st.units.length; i++) if (st.units[i].uid === uid) u = st.units[i];
+      if (!u) return [];
+      var out = [];
+      for (var dy = -5; dy <= 5; dy++) for (var dx = -5; dx <= 5; dx++) {
+        var d = Math.abs(dx) + Math.abs(dy);
+        if (d < 1 || d > 5) continue;
+        var x = u.x + dx, y = u.y + dy;
+        if (x < 0 || y < 0 || x >= st.grid.w || y >= st.grid.h) continue;
+        out.push({ x: x, y: y });
+      }
+      return out;
+    },
+    aoeTiles: function (st, spellId, sx, sy, tx, ty) {
+      var out = [];
+      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+        if (Math.abs(dx) + Math.abs(dy) > 1) continue;
+        out.push({ x: tx + dx, y: ty + dy });
+      }
+      return out;
+    }
+  };
+
+  // --------------------------------------------------------------- stub Game
+  var G = {
+    state: null, hoverTile: null, selectedSpellId: null, selectedSpell: null,
+    isPlayerTurn: function () { return true; },
+    onTileHover: function (x, y) { G.hoverTile = (x < 0 ? null : { x: x, y: y }); },
+    onTileClicked: function (x, y) {
+      var st = G.state; if (!st) return;
+      var a = JOGO.Engine.activeUnit(st);
+      var tgt = JOGO.Engine.unitAt(st, x, y);
+      if (tgt && tgt.side !== a.side) doCast(a, tgt);
+      else doMove(a, x, y);
+    }
+  };
+  JOGO.Game = G;
+
+  function emit(ev) {
+    if (JOGO.Renderer && JOGO.Renderer.handleEvent) JOGO.Renderer.handleEvent(ev);
+    if (JOGO.FX && JOGO.FX.handleEvent) JOGO.FX.handleEvent(ev);
+  }
+  function doMove(u, x, y) {
+    var p = JOGO.Engine.path(G.state, u.uid, x, y);
+    if (!p || !p.length) return;
+    var last = p[p.length - 1];
+    u.x = last.x; u.y = last.y;
+    emit({ type: 'move', uid: u.uid, path: p });
+  }
+  function doCast(u, tgt) {
+    emit({ type: 'cast', uid: u.uid, spellId: null, x: tgt.x, y: tgt.y,
+           fxKey: (Math.abs(u.x - tgt.x) + Math.abs(u.y - tgt.y)) <= 1 ? 'melee' : 'bolt',
+           element: u.element });
+    var dmg = 18 + Math.floor(Math.random() * 14);
+    tgt.hp = Math.max(0, tgt.hp - dmg);
+    emit({ type: 'damage', uid: tgt.uid, amount: dmg, element: u.element, sourceUid: u.uid });
+    if (tgt.hp <= 0) { tgt.alive = false; emit({ type: 'death', uid: tgt.uid }); }
+  }
+
+  // --------------------------------------------------------------- interface
+  function btn(label, fn) {
+    var b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = fn;
+    document.getElementById('ui-root').appendChild(b);
+    return b;
+  }
+  function sep() {
+    var s = document.createElement('span');
+    s.className = 'sep';
+    document.getElementById('ui-root').appendChild(s);
+  }
+  function heroes() { return G.state.units.filter(function (u) { return u.kind === 'hero' && u.alive; }); }
+  function enemies() { return G.state.units.filter(function (u) { return u.side === 'enemy' && u.alive; }); }
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+
+  function restart(opts) {
+    state = buildState(opts);
+    G.state = state;
+    G.hoverTile = null; G.selectedSpellId = null;
+    emit({ type: 'battleStart', state: state });
+  }
+
+  function buildUI() {
+    btn('↺ reiniciar', function () { restart(); });
+    var sel = document.createElement('select');
+    ['greenhouse', 'cistern', 'emberlock', 'windscaffold', 'quakemine', 'brokenheart']
+      .forEach(function (d) {
+        var o = document.createElement('option'); o.value = d; o.textContent = d;
+        sel.appendChild(o);
+      });
+    sel.onchange = function () { restart({ dungeonId: sel.value }); };
+    document.getElementById('ui-root').appendChild(sel);
+
+    var selw = document.createElement('select');
+    ['chuva', 'estiagem', 'vendaval', 'tremor', 'calmo'].forEach(function (w) {
+      var o = document.createElement('option'); o.value = w; o.textContent = w;
+      selw.appendChild(o);
+    });
+    selw.onchange = function () {
+      state.weather = selw.value;
+      emit({ type: 'weatherShift', weather: selw.value });
+    };
+    document.getElementById('ui-root').appendChild(selw);
+    sep();
+
+    btn('andar', function () {
+      var u = pick(heroes());
+      var tx = Math.max(0, Math.min(state.grid.w - 1, u.x + (Math.random() < 0.5 ? 3 : -3)));
+      doMove(u, tx, u.y);
+    });
+    btn('atacar', function () {
+      var e = enemies(); if (!e.length) return;
+      var u = pick(heroes());
+      var t = pick(e);
+      u.x = t.x - 1; u.y = t.y;
+      emit({ type: 'move', uid: u.uid, path: [{ x: u.x, y: u.y }] });
+      setTimeout(function () { doCast(u, t); }, 380);
+    });
+    btn('conjurar', function () {
+      var e = enemies(); if (!e.length) return;
+      var u = pick(heroes()); var t = pick(e);
+      emit({ type: 'cast', uid: u.uid, x: t.x, y: t.y, fxKey: 'bolt', element: u.element });
+      emit({ type: 'damage', uid: t.uid, amount: 22, element: u.element, sourceUid: u.uid });
+    });
+    btn('dano', function () {
+      var t = pick(G.state.units.filter(function (u) { return u.alive; }));
+      t.hp = Math.max(1, t.hp - 20);
+      emit({ type: 'damage', uid: t.uid, amount: 20, element: 'fogo' });
+    });
+    btn('morrer', function () {
+      var e = enemies(); if (!e.length) return;
+      var t = pick(e); t.alive = false;
+      emit({ type: 'death', uid: t.uid });
+    });
+    btn('empurrar', function () {
+      var e = enemies(); if (!e.length) return;
+      var t = pick(e); var fx = t.x, fy = t.y;
+      t.x = Math.max(0, t.x - 2);
+      emit({ type: 'pushed', uid: t.uid, fromX: fx, fromY: fy, toX: t.x, toY: t.y });
+    });
+    btn('teleporte', function () {
+      var u = pick(heroes()); var fx = u.x, fy = u.y;
+      u.x = Math.min(state.grid.w - 2, u.x + 5);
+      emit({ type: 'teleport', uid: u.uid, fromX: fx, fromY: fy, toX: u.x, toY: u.y });
+    });
+    sep();
+    btn('FUSÃO', function () { doFusion(); });
+    btn('marca +1', function () {
+      var e = enemies(); if (!e.length) return;
+      var t = e[0]; t.marks = (t.marks || 0) + 1;
+      emit({ type: 'markStack', uid: t.uid, stacks: t.marks });
+    });
+    btn('girar ⟳', function () { JOGO.Renderer.rotate(1); });
+    btn('girar ⟲', function () { JOGO.Renderer.rotate(-1); });
+    btn('câmera baixa', function () { JOGO.Renderer.setCamera({ tilt: 1.28 }); });
+    btn('câmera alta', function () { JOGO.Renderer.setCamera({ tilt: 0.5 }); });
+    sep();
+    btn('feitiço on/off', function () {
+      G.selectedSpellId = G.selectedSpellId ? null : 'demo';
+      G.selectedSpell = G.selectedSpellId ? { element: 'fogo' } : null;
+      G.hoverTile = { x: 7, y: 5 };
+    });
+  }
+
+  function doFusion() {
+    var hs = heroes();
+    if (hs.length < 2) return;
+    var a = hs[0], b = hs[1];
+    var newUnit = mkUnit({
+      defId: 'fus:' + a.classId + '+' + b.classId, kind: 'fusion', side: 'player',
+      x: a.x, y: a.y, hp: a.hp + b.hp, element: a.element,
+      elemPair: [a.element, b.element], classId: null,
+      name: 'Fusão ' + a.name + '+' + b.name
+    });
+    newUnit.shield = 50;
+    a.offBoard = true; b.offBoard = true;
+    state.units.push(newUnit);
+    state.order.push(newUnit.uid);
+    emit({
+      type: 'fusion', uid: newUnit.uid, from: [a.uid, b.uid],
+      classPair: a.classId + '+' + b.classId, elemPair: [a.element, b.element], level: 5
+    });
+  }
+
+  // --------------------------------------------------------------- boot/loop
+  var statusEl = document.getElementById('status');
+  function updateStatus() {
+    var s = JOGO.Renderer.stats ? JOGO.Renderer.stats() : {};
+    statusEl.textContent =
+      'modelos ' + (s.models || 0) + ' · clipes ' + (s.clips || 0) +
+      ' · unidades ' + (s.units || 0) + '\n' +
+      'draw ' + (s.calls || 0) + ' · tri ' + (s.tris || 0) +
+      ' · fila ' + (s.anims || 0) + '\n' +
+      'clima ' + (state ? state.weather : '-') + ' · cam rot ' + JOGO.Renderer.rotation();
+  }
+
+  var canvas = document.getElementById('game-canvas');
+  JOGO.Renderer.init(canvas, { preserveDrawingBuffer: true });
+  buildUI();
+
+  var SNAP = Q.get('snap');
+  window.PREVIEW = {
+    restart: restart, emit: emit, state: function () { return state; },
+    fusion: doFusion, G: G,
+    ready: function () { return JOGO.Models3D2 && JOGO.Models3D2.isReady(); },
+    // renderiza N quadros SÍNCRONOS (o painel pode estar oculto: rAF não dispara)
+    snap: function (frames, dt) {
+      frames = frames || 60; dt = dt || 0.016;
+      for (var i = 0; i < frames; i++) JOGO.Renderer.render(dt);
+      var img = document.getElementById('snapimg');
+      img.src = canvas.toDataURL('image/png');
+      document.getElementById('snapbox').style.display = 'block';
+      updateStatus();
+      return true;
+    },
+    hideSnap: function () { document.getElementById('snapbox').style.display = 'none'; }
+  };
+
+  JOGO.Models3D2.load(function (err) {
+    if (err) statusEl.textContent = 'ERRO: ' + err.message;
+    restart({ dungeonId: Q.get('d') || 'greenhouse', weather: Q.get('w') || 'chuva',
+              line: Q.get('line') === '1' });
+    if (Q.get('cam')) {
+      var c = Q.get('cam').split(',');
+      JOGO.Renderer.setCamera({ ang: +c[0], tilt: +c[1], dist: +c[2] });
+    }
+    window.PREVIEW_READY = true;
+  });
+
+  var last = performance.now();
+  function loop(t) {
+    var dt = Math.min(0.1, (t - last) / 1000);
+    last = t;
+    if (!SNAP) {
+      JOGO.Renderer.render(dt);
+      if ((t | 0) % 8 === 0) updateStatus();
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

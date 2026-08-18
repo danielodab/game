@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Prévia dos modelos 3D</title>
+<style>
+  body { margin:0; background:#12161b; color:#dfe6ee; font:13px system-ui, sans-serif; }
+  #st { position:fixed; left:10px; top:8px; z-index:9; font-family:monospace; color:#9f9; }
+  .grade { display:flex; flex-wrap:wrap; gap:10px; padding:34px 10px 10px; }
+  .cel { width:300px; }
+  .cel canvas, .cel img { width:300px; height:340px; display:block; background:#1b2129; border:1px solid #2b333f; border-radius:10px; }
+  .cel b { display:block; text-align:center; padding:6px 0; color:#ffd48a; }
+</style>
+</head>
+<body>
+<div id="st">carregando…</div>
+<div class="grade" id="grade"></div>
+
+<script src="../vendor/three.min.js"></script>
+<script src="../vendor/GLTFLoader.js"></script>
+<script>
+// Prévia rápida dos modelos CC0 baixados: um mini-palco por modelo, com a
+// animação de andar (ou a primeira disponível) rodando. Serve só para julgar
+// a qualidade da arte antes de integrar ao jogo.
+(function () {
+  var MODELOS = [
+    ['Barbarian',        'Tanque'],
+    ['Knight',           'Tanque alternativo'],
+    ['Rogue',            'Assassino'],
+    ['Rogue_Hooded',     'Assassino encapuzado'],
+    ['Mage',             'Mago'],
+    ['Skeleton_Warrior', 'Monstro: guerreiro esqueleto'],
+    ['Skeleton_Mage',    'Monstro: mago esqueleto'],
+    ['Skeleton_Minion',  'Monstro: lacaio esqueleto']
+  ];
+  var PASTAS = ['assets/models/kaykit_adventurers/', 'assets/models/kaykit_skeletons/',
+                'assets/models/'];
+  var st = document.getElementById('st'), grade = document.getElementById('grade');
+  var loader = new THREE.GLTFLoader();
+  var cenas = [], prontos = 0, tentados = 0;
+
+  function palco(nome, papel) {
+    var cel = document.createElement('div'); cel.className = 'cel';
+    var b = document.createElement('b'); b.textContent = nome + ' — ' + papel;
+    var host = document.createElement('div'); cel.appendChild(host); cel.appendChild(b);
+    grade.appendChild(cel);
+
+    var ren = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+    ren.setSize(300, 340); ren.setClearColor(0x1b2129);
+    ren.outputEncoding = THREE.sRGBEncoding;
+    host.appendChild(ren.domElement);
+
+    var cena = new THREE.Scene();
+    var cam = new THREE.PerspectiveCamera(35, 300 / 340, 0.1, 100);
+    cam.position.set(2.6, 2.2, 3.4); cam.lookAt(0, 0.9, 0);
+    cena.add(new THREE.HemisphereLight(0xdfe8ff, 0x33302c, 1.1));
+    var sol = new THREE.DirectionalLight(0xfff0d8, 1.5); sol.position.set(3, 6, 2); cena.add(sol);
+    var chao = new THREE.Mesh(new THREE.CircleGeometry(1.6, 32),
+      new THREE.MeshStandardMaterial({ color: 0x2a333d, roughness: 1 }));
+    chao.rotation.x = -Math.PI / 2; cena.add(chao);
+    return { ren: ren, cena: cena, cam: cam, mixer: null };
+  }
+
+  function tenta(nome, papel, i) {
+    var p = palco(nome, papel);
+    cenas.push(p);
+    var idx = 0;
+    (function proxima() {
+      if (idx >= PASTAS.length) { tentados++; checa(); return; }
+      var url = '../' + PASTAS[idx++] + nome + '.glb';
+      loader.load(url, function (gltf) {
+        var raiz = gltf.scene;
+        var caixa = new THREE.Box3().setFromObject(raiz);
+        var alt = Math.max(0.001, caixa.max.y - caixa.min.y);
+        var k = 1.8 / alt;
+        raiz.scale.setScalar(k);
+        raiz.position.y = -caixa.min.y * k;
+        p.cena.add(raiz);
+        if (gltf.animations && gltf.animations.length) {
+          p.mixer = new THREE.AnimationMixer(raiz);
+          var clipe = gltf.animations.filter(function (a) { return /walk|run|idle/i.test(a.name); })[0]
+                    || gltf.animations[0];
+          p.mixer.clipAction(clipe).play();
+          p.anim = clipe.name + ' (' + gltf.animations.length + ' animações)';
+        } else { p.anim = 'sem animação'; }
+        prontos++; tentados++; checa();
+      }, undefined, function () { proxima(); });
+    })();
+  }
+
+  function checa() {
+    st.textContent = prontos + ' de ' + MODELOS.length + ' modelos carregados' +
+      (tentados >= MODELOS.length ? ' · PRONTO' : ' …');
+    if (tentados >= MODELOS.length) {
+      var ani = cenas.map(function (c) { return c.anim || '-'; }).join(' | ');
+      st.textContent += ' · ' + ani;
+    }
+  }
+
+  MODELOS.forEach(function (m, i) { tenta(m[0], m[1], i); });
+
+  var relogio = new THREE.Clock();
+  (function laco() {
+    var dt = relogio.getDelta();
+    cenas.forEach(function (c) {
+      if (c.mixer) c.mixer.update(dt);
+      c.cena.rotation.y += dt * 0.55;
+      c.ren.render(c.cena, c.cam);
+    });
+    requestAnimationFrame(laco);
+  })();
+
+  // modo captura: renderiza N quadros e espelha em <img> (o headless não compõe WebGL)
+  var qs = location.search;
+  if (/snap/.test(qs)) {
+    setTimeout(function () {
+      var dt = 0.05;
+      for (var i = 0; i < 40; i++) {
+        cenas.forEach(function (c) { if (c.mixer) c.mixer.update(dt); c.cena.rotation.y += dt * 0.2; c.ren.render(c.cena, c.cam); });
+      }
+      cenas.forEach(function (c) {
+        var im = new Image(); im.src = c.ren.domElement.toDataURL('image/png');
+        im.style.cssText = c.ren.domElement.style.cssText;
+        c.ren.domElement.parentNode.replaceChild(im, c.ren.domElement);
+      });
+    }, 2500);
+  }
+})();
+</script>
+</body>
+</html>
