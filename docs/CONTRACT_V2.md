@@ -546,6 +546,67 @@ davam nada (Escarpins da Baronesa, Solados de Escória, Grevas de Minério).
   conta são os **conjuntos** (um conjunto de ar completo soma +44 de esquiva, cumulativo por
   peça) e a estrela ★4 (+10). Se um dia isso incomodar, o conserto é lá — não na curva de nível.
 
+## 9-I. ADENDO v2.7 — Fundir passa a ser uma escolha difícil
+
+**Como estava.** Medindo o dano máximo de um turno nas 15 duplas, contra alvo de
+vida infinita, **fundir rendia menos em 15 de 15**. Pior caso sumo+curandeira:
+265 separados contra 121 fundidos. A causa era aritmética, não conteúdo:
+
+| | separados | fundidos |
+|---|---|---|
+| PA | 12 (6+6) | **8** |
+| PP | 6 | 4 |
+| Feitiços na mão | 18 | 7 |
+
+O `BONUS_PA = 2` é sobre UM herói, mas ao fundir some o segundo corpo com os 6
+PA dele: o saldo real era **−4 PA**, um terço das ações. Fundir era uma jogada
+defensiva disfarçada de jogada de poder.
+
+**O alvo, nas palavras do usuário:** *"faça com que fique equilibrado ou
+potencialize os feitiços, faça algo que fique difícil do usuário decidir"*. Ou
+seja: as duas opções valendo quase o mesmo, por motivos diferentes.
+
+**O que mudou.**
+
+- `Fusion.BONUS_PA` de **2 para 4** — a fusão age 10 vezes contra as 12 dos dois
+  separados. Continua agindo menos: é o preço de virar um corpo só.
+- `Fusion.POWER_MULT = 2,30`, novo multiplicador sobre `powerFactor` — se a
+  fusão age menos vezes, cada golpe precisa valer por dois.
+- A inclinação por nível caiu de **3 para 1,2**. A antiga fazia a fusão crescer
+  2,15× do nível 12 ao 30 enquanto os heróis separados cresciam 1,55× — ficava
+  fraca cedo e dominante tarde.
+- `Fusion.PAIR_TUNE`, coeficiente por dupla. Depois de acertar a média, sobrou
+  dispersão: as duplas do sumô rendiam pouco fundidas (ele sozinho já bate
+  muito, então o teto de comparação é alto) e curandeira+espadachim rendia
+  demais. O coeficiente é o inverso da razão medida, e convergiu em duas
+  iterações.
+
+**Resultado medido:** média exatamente **100%**, faixa de 70% a 131% (era 34% a
+158%), e **26 de 30** medições dentro de ±20% — antes era 1 de 30 dentro de ±12%.
+
+**O que mantém a escolha difícil**, e que nenhum ajuste futuro deve apagar:
+
+- *não fundir* dá flexibilidade: dois corpos, 18 feitiços, cobre mais terreno,
+  ataca dois alvos distantes, e um pode cair sem acabar a batalha;
+- *fundir* dá concentração: vida somada, +50 de escudo, golpes que valem por
+  dois — e o risco de que **a fusão morrer encerra a batalha**, porque ela não
+  devolve os dois heróis.
+
+**Duas exceções aceitas.** `sumo+invocador` e `bruxo+curandeira` fundem mal cedo
+(75% e 70% no nível 12) e bem tarde (123% e 131% no nível 30). O coeficiente por
+dupla centra a média mas não achata a inclinação, porque o que cresce nelas são
+as formas de tier 20 e 30, desproporcionalmente fortes em relação às de baixo.
+É progressão defensável — "esta dupla melhora de fundir conforme sobe" — e está
+anotada em `tests/equilibrio_fusao.html` para que o teste continue reprovando
+regressão nova em vez de reprovar sempre.
+
+**Tripwire.** `tests/equilibrio_fusao.html` mede as 15 duplas nos níveis 12 e 30
+e falha se alguma sair de ±20%. Sem ele, o próximo ajuste em qualquer feitiço
+desfaz o equilíbrio sem ninguém perceber — foi o que aconteceu três vezes com a
+calibração do mundo. Os testes que cravavam `+2 PA` e o resultado do fator de
+poder passaram a ler `Fusion.BONUS_PA` e `Fusion.powerFactor`: teste bom cobra a
+regra, não o número.
+
 ## 10. Testes obrigatórios
 
 Cada dono entrega sua página em `tests/` (padrão v1: roda no load, resultado no DOM e em

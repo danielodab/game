@@ -1957,10 +1957,15 @@
       eq(s.effects[0].element, 'ar', "'@A' => elements[0]");
       eq(s.effects[1].element, 'agua', "'@B' => elements[1]");
       eq(s.effects[2].type, 'poison', 'rider da mistura');
-      // escala: fator = (100 + nível*3 + tier*1)/100 = 1.45
-      eq(s.effects[0].min, 15, '10 * 1.45 => 15');
-      eq(s.effects[1].min, 9, '6 * 1.45 => 9');
-      eq(s.effects[2].min, 4, 'rider 3 * 1.45 => 4');
+      // Escala: os numeros autorais passam por Fusion.powerFactor. NAO cravar o
+      // resultado aqui — quando o equilibrio da fusao mudou o fator (adendo
+      // §9-I), este teste falhou por conferir o numero antigo em vez da REGRA.
+      // A dupla de teste 't-alfa+t-beta' nao esta em PAIR_TUNE, entao o
+      // coeficiente por dupla vale 1 e o fator sai limpo.
+      var fator = F.powerFactor(0, 15, 't-alfa+t-beta');
+      eq(s.effects[0].min, Math.round(10 * fator), '10 * fator');
+      eq(s.effects[1].min, Math.round(6 * fator), '6 * fator');
+      eq(s.effects[2].min, Math.round(3 * fator), 'rider 3 * fator');
       eq(s.fxKey, 'fx-salgado', 'fx da mistura');
       var out30 = F.spellsFor('t-alfa+t-beta', 'ar+agua', 30);
       eq(out30.length, 2, 'nível 30 libera a forma tier 20');
@@ -2162,8 +2167,11 @@
       eq(a.defId, 'fus:t-alfa+t-beta', 'defId do contrato');
       eq(a.hp, 210, 'PV = soma dos PV restantes');
       eq(a.hpMax, hpMaxSum, 'hpMax = soma');
-      eq(a.paMax, Math.max(paMaxA, paMaxB) + 2, '+2 PA');
-      eq(a.ppMax, Math.max(ppMaxA, ppMaxB) + 1, '+1 PP');
+      // Os bonus saem de Fusion.BONUS_PA/BONUS_PP, nao de numeros cravados aqui:
+      // quando o equilibrio da fusao mudou o PA de +2 para +4 (adendo §9-I),
+      // este teste falhou por cravar o valor antigo em vez de cobrar a regra.
+      eq(a.paMax, Math.max(paMaxA, paMaxB) + F.BONUS_PA, '+' + F.BONUS_PA + ' PA');
+      eq(a.ppMax, Math.max(ppMaxA, ppMaxB) + F.BONUS_PP, '+' + F.BONUS_PP + ' PP');
       eq(a.shield, 50, '+50 de escudo');
       eq(a.initiative, Math.max(iniA, iniB), 'iniciativa = maior');
       eq(a.resists.fogo, 10, 'resistências = média');

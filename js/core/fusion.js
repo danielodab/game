@@ -44,9 +44,34 @@ var JOGO = (typeof window !== 'undefined')
   JOGO.Fusion = Fusion;
 
   Fusion.FUSION_PA_COST = 2;
-  Fusion.BONUS_PA = 2;
+  Fusion.BONUS_PA = 4;
   Fusion.BONUS_PP = 1;
   Fusion.BONUS_SHIELD = 50;
+  Fusion.POWER_MULT = 2.30;
+
+  // AJUSTE FINO POR DUPLA. Depois de acertar a media com POWER_MULT, sobrou
+  // dispersao POR DUPLA: as duplas do sumo rendiam pouco fundidas (ele sozinho
+  // ja bate muito, entao o teto de comparacao e alto) e as do espadachim com
+  // curandeira rendiam demais. O coeficiente abaixo e o inverso da razao medida
+  // em tests/equilibrio_fusao.html — cada dupla puxada para perto de 100%.
+  // Chave em ORDEM ALFABETICA, igual a de DATA.fusionForms.
+  Fusion.PAIR_TUNE = {
+    'arqueiro+bruxo':        1.117,
+    'arqueiro+curandeira':   0.971,
+    'arqueiro+espadachim':   0.858,
+    'arqueiro+invocador':    0.741,
+    'arqueiro+sumo':         1.351,
+    'bruxo+curandeira':      0.823,
+    'bruxo+espadachim':      0.760,
+    'bruxo+invocador':       0.971,
+    'bruxo+sumo':            1.242,
+    'curandeira+espadachim': 0.704,
+    'curandeira+invocador':  1.250,
+    'curandeira+sumo':       1.408,
+    'espadachim+invocador':  0.948,
+    'espadachim+sumo':       1.149,
+    'invocador+sumo':        1.075
+  };
 
   function E() { return JOGO.Engine; }
   function DATA() { return JOGO.DATA || {}; }
@@ -144,8 +169,9 @@ var JOGO = (typeof window !== 'undefined')
   // como um tempero (1%/tier) e o peso real fica com o nível da fusão (3%/nível)
   // — é o que faz uma forma tier 0 valer a pena numa fusão de nível 30 sem
   // contar o tier duas vezes.
-  Fusion.powerFactor = function (tier, level) {
-    return (100 + (level || 0) * 3 + (tier || 0) * 1) / 100;
+  Fusion.powerFactor = function (tier, level, pairKey) {
+    var tune = (pairKey && Fusion.PAIR_TUNE[pairKey]) || 1;
+    return (100 + (level || 0) * 1.2 + (tier || 0) * 1) / 100 * Fusion.POWER_MULT * tune;
   };
 
   Fusion.spellsFor = function (classPair, elemPair, level) {
@@ -166,7 +192,7 @@ var JOGO = (typeof window !== 'undefined')
       var form = forms[f];
       var tier = form.tier || 0;
       if (tier > lv) continue;
-      var factor = Fusion.powerFactor(tier, lv);
+      var factor = Fusion.powerFactor(tier, lv, kKey);
       var effects = [];
       var mech = form.mechanic || [];
       var i;
