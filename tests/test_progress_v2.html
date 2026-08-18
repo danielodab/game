@@ -342,6 +342,37 @@
       alive: true, hp: 50, hpMax: 50, x: 9, y: 8, pa: 6, pp: 3, spells: [] });
     return st;
   };
+  // Funde H0+H1 numa unidade `kind:'fusion'` (como o Engine real fará) e põe
+  // um pet do lado do jogador. Devolve a unidade fundida.
+  Engine.fundir = function (st) {
+    var a = Engine.byUid(st, 'H0'), b = Engine.byUid(st, 'H1');
+    var fus = {
+      uid: 'F0', kind: 'fusion', side: 'player',
+      heroIds: [a.heroId, b.heroId], from: ['H0', 'H1'],
+      defId: 'fus:' + a.defId + '+' + b.defId,
+      alive: true, hp: a.hp + b.hp, hpMax: a.hpMax + b.hpMax,
+      x: a.x, y: a.y, pa: 8, pp: 4, fused: true,
+      spells: ['fus:teste:0', 'fus:teste:5']
+    };
+    st.units.splice(st.units.indexOf(a), 1, fus);   // a fusão ocupa o lugar de A
+    st.units.splice(st.units.indexOf(b), 1);        // B sai do tabuleiro
+    st.turnIdx = st.units.indexOf(fus);
+    return fus;
+  };
+  Engine.porPet = function (st) {
+    var pet = { uid: 'P0', kind: 'pet', side: 'player', defId: 't-pet-fogo',
+      alive: true, hp: 20, hpMax: 20, x: 2, y: 2, pa: 3, pp: 3, spells: [] };
+    st.units.push(pet);
+    st.turnIdx = st.units.indexOf(pet);
+    return pet;
+  };
+  Engine.porInvocacao = function (st) {
+    var s = { uid: 'S0', kind: 'summon', side: 'player', defId: 't-grunt',
+      alive: true, hp: 10, hpMax: 10, x: 3, y: 3, pa: 3, pp: 3, spells: [] };
+    st.units.push(s);
+    st.turnIdx = st.units.indexOf(s);
+    return s;
+  };
   Engine.activeUnit = function (st) { return (st && st.units[st.turnIdx]) || null; };
   Engine.byUid = function (st, uid) {
     for (var i = 0; i < st.units.length; i++) if (st.units[i].uid === uid) return st.units[i];
@@ -2356,6 +2387,166 @@
     G.state.turnIdx = 2;
     eq(G.canFuse().length, 0, 'sem pares fora do turno do herói');
     eq(G.declareFusion('H0', 'H1'), false, 'declaração recusada');
+  });
+
+  // =========================================================================
+  section('14-B — Controle da unidade FUNDIDA (o jogador não pode perder o jogo)');
+
+  t('isPlayerTurn é VERDADEIRO no turno da unidade fundida', function () {
+    fresh();
+    G.startRun([TANK, CURA], 't-dung-0');
+    var fus = E.fundir(G.state);
+    eq(E.activeUnit(G.state).uid, 'F0', 'a fusão está ativa');
+    eq(fus.kind, 'fusion', 'kind da fusão');
+    eq(G.isPlayerTurn(), true, 'o turno é DO JOGADOR');
+    eq(G.isPlayerUnit(fus), true, 'a fusão é unidade do jogador');
+  });
+
+  t('a barra de feitiços da fusão não fica vazia', function () {
+    // é assim que a UI decide desenhar a barra: turno do jogador + feitiços
+    var u = E.activeUnit(G.state);
+    ok(G.isPlayerTurn() && u.spells.length > 0,
+      'a UI desenharia ' + u.spells.length + ' botões de feitiço');
+  });
+
+  t('selectSpell funciona com a fusão ativa', function () {
+    G.selectSpell('fus:teste:0');
+    eq(G.selectedSpellId, 'fus:teste:0', 'feitiço selecionado');
+    G.selectSpell('fus:teste:0');
+    eq(G.selectedSpellId, null, 'alterna igual ao herói');
+  });
+
+  t('a fusão conjura de verdade e gasta PA', function () {
+    fresh();
+    G.startRun([TANK, CURA], 't-dung-0');
+    var fus = E.fundir(G.state);
+    var paAntes = fus.pa;
+    E.calls.cast = 0;
+    G.selectSpell('fus:teste:0');
+    G.onTileClicked(8, 8);                       // alvo válido do dublê
+    eq(E.calls.cast, 1, 'conjurou');
+    eq(fus.pa, paAntes - 3, 'gastou PA (era 8, o Chefe media 8 parado)');
+    eq(G.selectedSpellId, null, 'desmarcou depois de conjurar');
+  });
+
+  t('o cancelamento de feitiço protege a fusão do mesmo jeito', function () {
+    fresh();
+    G.startRun([TANK, CURA], 't-dung-0');
+    var fus = E.fundir(G.state);
+    var paAntes = fus.pa, xAntes = fus.x;
+    E.calls.cast = 0; E.calls.move = 0;
+    G.selectSpell('fus:teste:5');
+    G.onTileClicked(3, 3);                       // fora da zona válida
+    eq(G.selectedSpellId, null, 'desmarcou');
+    eq(E.calls.cast, 0, 'não conjurou');
+    eq(E.calls.move, 0, 'não moveu');
+    eq(fus.pa, paAntes, 'PA intacto');
+    eq(fus.x, xAntes, 'posição intacta');
+  });
+
+  t('a fusão anda quando não há feitiço selecionado', function () {
+    var fus = E.activeUnit(G.state);
+    E.calls.move = 0;
+    G.onTileClicked(5, 5);
+    eq(E.calls.move, 1, 'moveu');
+    eq(fus.x, 5, 'andou');
+  });
+
+  t('a IA NUNCA é chamada para a unidade fundida', function () {
+    fresh();
+    var chamadas = [];
+    var planoAntigo = JOGO.AI.planTurn;
+    JOGO.AI.planTurn = function (st, uid) { chamadas.push(uid); return [{ action: 'end' }]; };
+    try {
+      G.startRun([TANK, CURA], 't-dung-0');
+      E.fundir(G.state);
+      E.calls.endTurn = 0;
+      G.update(0.016); G.update(0.016); G.update(0.016);
+      eq(chamadas.length, 0, 'a IA não pode jogar o personagem do jogador');
+      eq(E.calls.endTurn, 0, 'e o turno não é encerrado por trás');
+      ok(G.isPlayerTurn(), 'o turno continua do jogador');
+    } finally { JOGO.AI.planTurn = planoAntigo; }
+  });
+
+  t('o cronômetro corre no turno da fusão e encerra o turno ao zerar', function () {
+    var clock = 0;
+    fresh();
+    G._setClock(function () { return clock; });
+    G.startRun([TANK, CURA], 't-dung-0');
+    E.fundir(G.state);
+    G.update(0);
+    eq(G.timeLeft(), 30, 'cronômetro cheio no turno da fusão');
+    clock += 12; G.update(0);
+    eq(G.timeLeft(), 18, 'o tempo corre');
+    E.calls.endTurn = 0;
+    clock += 20; G.update(0);
+    eq(E.calls.endTurn, 1, 'expirou e encerrou sozinho');
+  });
+
+  t('endTurn manual funciona com a fusão ativa', function () {
+    fresh();
+    G.startRun([TANK, CURA], 't-dung-0');
+    E.fundir(G.state);
+    E.calls.endTurn = 0;
+    G.endTurn();
+    eq(E.calls.endTurn, 1, 'o jogador consegue passar o turno');
+  });
+
+  t('PET é do lado do jogador mas quem joga é a IA', function () {
+    fresh();
+    G.startRun([TANK, CURA], 't-dung-0');
+    var pet = E.porPet(G.state);
+    eq(pet.side, 'player', 'o pet é do lado do jogador');
+    eq(G.isPlayerTurn(), false, 'mas o turno NÃO é do jogador');
+    eq(G.isPlayerUnit(pet), false, 'e ele não é unidade controlável');
+    var chamadas = [];
+    var planoAntigo = JOGO.AI.planTurn;
+    JOGO.AI.planTurn = function (st, uid) { chamadas.push(uid); return [{ action: 'end' }]; };
+    try { G.update(0.016); } finally { JOGO.AI.planTurn = planoAntigo; }
+    eq(chamadas.length, 1, 'a IA conduziu o pet');
+    eq(chamadas[0], 'P0', 'e foi o pet mesmo');
+  });
+
+  t('INVOCAÇÃO do lado do jogador também continua com a IA', function () {
+    fresh();
+    G.startRun([TANK, CURA], 't-dung-0');
+    var s = E.porInvocacao(G.state);
+    eq(G.isPlayerTurn(), false, 'invocação não devolve o controle ao jogador');
+    eq(G.isPlayerUnit(s), false, 'não é unidade controlável');
+  });
+
+  t('unidade INIMIGA nunca é do jogador, nem se for fusão', function () {
+    fresh();
+    G.startRun([TANK, CURA], 't-dung-0');
+    eq(G.isPlayerUnit({ side: 'enemy', kind: 'hero', alive: true }), false, 'herói inimigo');
+    eq(G.isPlayerUnit({ side: 'enemy', kind: 'fusion', alive: true }), false, 'fusão inimiga');
+    eq(G.isPlayerUnit(null), false, 'nulo');
+  });
+
+  t('quem já está fundido não funde de novo', function () {
+    fresh();
+    G.startRun([TANK, CURA], 't-dung-0');
+    E.fundir(G.state);
+    eq(G.canFuse().length, 0, 'sem pares: a fusão não se funde');
+    F.calls = 0;
+    eq(G.declareFusion('F0', 'H1'), false, 'declaração recusada');
+    eq(F.calls, 0, 'Fusion.declare não é chamado');
+  });
+
+  t('vencer a sala FUNDIDO leva o PV para a sala seguinte', function () {
+    fresh();
+    G.startRun([TANK, CURA], 't-dung-0');
+    var fus = E.fundir(G.state);
+    fus.hp = 100;                                 // 100 de 200: metade para cada
+    matarInimigos();
+    G.state.phase = 'won';
+    G.handleEvent({ type: 'battleEnd' });
+    eq(G.screen, 'roomClear', 'sala vencida');
+    eq(G.nextRoom(), true, 'avançou');
+    var h0 = G.state.units[0], h1 = G.state.units[1];
+    eq(h0.kind, 'hero', 'os heróis voltam separados na sala nova');
+    eq(h0.hp, 75, 'metade da fusão (50) + 50% do que faltava');
+    eq(h1.hp, 75, 'idem para o segundo herói');
   });
 
   // =========================================================================

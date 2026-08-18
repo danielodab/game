@@ -61,6 +61,16 @@ var JOGO = (typeof window !== 'undefined')
  *      monstro inimigo morto com `stoneDrop {chance, min, max}` rende pedras
  *      do PRÓPRIO elemento (`DATA.stones` dá o id da pedra daquele elemento).
  *
+ * [G10] O QUE CONTA COMO "UNIDADE DO JOGADOR". `isPlayerTurn`/`isPlayerUnit`
+ *       aceitam `kind:'hero'` E `kind:'fusion'` do lado 'player'. O pet
+ *       (`kind:'pet'`) e as invocações continuam de fora — são do lado do
+ *       jogador mas quem os joga é a IA (contrato §5). Isto vale para tudo o
+ *       que depende do turno do jogador: barra de feitiços, `selectSpell`,
+ *       `onTileClicked`, cronômetro, `endTurn` e a decisão de entregar (ou
+ *       não) a unidade para `AI.planTurn`. O registro de PV entre salas
+ *       também considera a fusão, dividindo a vida dela entre os heróis que a
+ *       formaram.
+ *
  * [G8] GRUPO DE 1 OU 2 HERÓIS (§9-B). `startRun` recusa 3 ou mais; com dois
  *      heróis, a fusão vira a jogada de trocar economia de ações por poder.
  *
@@ -265,10 +275,21 @@ var JOGO = (typeof window !== 'undefined')
 
   Game.restart = function () { Game.init(); };
 
+  /* [G10] QUEM O JOGADOR CONTROLA. Não basta ser do lado 'player': o pet e as
+   * invocações são do lado do jogador e continuam sendo conduzidos pela IA
+   * (contrato §5). O jogador controla o HERÓI e a UNIDADE FUNDIDA — a fusão é
+   * o herói em outra forma, com feitiços próprios, e deixá-la de fora tirava o
+   * controle do jogo até o fim da batalha (barra de feitiços vazia, cliques
+   * ignorados e a IA jogando no lugar do jogador). */
+  function isPlayerUnit(u) {
+    return !!u && u.side === 'player' && (u.kind === 'hero' || u.kind === 'fusion');
+  }
+  Game.isPlayerUnit = isPlayerUnit;      // a UI usa para decidir o que desenhar
+
   Game.isPlayerTurn = function () {
     if (!Game.state || Game.state.phase !== 'playing') return false;
     var u = E() && E().activeUnit ? E().activeUnit(Game.state) : null;
-    return !!u && u.kind === 'hero';
+    return isPlayerUnit(u);
   };
 
   // ------------------------------------------------------------- cronômetro [G2]
@@ -391,6 +412,8 @@ var JOGO = (typeof window !== 'undefined')
     var out = [];
     if (Game.screen !== 'battle' || !Game.state || !Game.isPlayerTurn()) return out;
     var a = E().activeUnit(Game.state);
+    // aqui `hero` é proposital e NÃO vira `isPlayerUnit`: quem já está fundido
+    // não funde de novo (contrato §4 — "nenhum já fundido")
     if (!a || a.kind !== 'hero' || a.fused) return out;
     var F = JOGO.Fusion;
     var units = Game.state.units || [];
@@ -545,13 +568,47 @@ var JOGO = (typeof window !== 'undefined')
     };
   }
 
+  /* Heróis que formaram uma unidade fundida. O Engine é de outro dono, então
+   * aceitamos as formas plausíveis: `heroIds`, `from` (uids ou heroIds) ou o
+   * `heroId` simples. Sem nenhuma, devolve lista vazia e nada se perde. */
+  function fusionHeroIds(u) {
+    var out = [], i, v;
+    var fonte = null;
+    if (Object.prototype.toString.call(u.heroIds) === '[object Array]') fonte = u.heroIds;
+    else if (Object.prototype.toString.call(u.from) === '[object Array]') fonte = u.from;
+    if (fonte) {
+      for (i = 0; i < fonte.length; i++) {
+        v = fonte[i];
+        if (typeof v !== 'string') continue;
+        var alvo = null;
+        for (var k = 0; k < Game.state.units.length; k++) {
+          if (Game.state.units[k].uid === v) { alvo = Game.state.units[k]; break; }
+        }
+        out.push(alvo ? (alvo.heroId || alvo.defId) : v);   // uid vira heroId; senão é o próprio
+      }
+    } else if (typeof u.heroId === 'string') out.push(u.heroId);
+    return out;
+  }
+
   function handleBattleOver() {
     if (!Game.state || Game.screen !== 'battle') return;
     if (Game.state.phase === 'won') {
+      // [G10] PV para a próxima sala. A unidade FUNDIDA também precisa entrar
+      // na conta: sem isso, quem venceu a sala fundido chegava à seguinte com
+      // vida cheia de graça. O PV da fusão é dividido entre os heróis que a
+      // formaram (ela é a soma dos dois), lendo defensivamente os campos que o
+      // Engine expuser — sem eles, cai no comportamento antigo.
       carryHp = {};
       for (var i = 0; i < Game.state.units.length; i++) {
         var u = Game.state.units[i];
-        if (u.kind === 'hero') carryHp[u.heroId || u.defId] = u.alive ? u.hp : 0;
+        if (u.kind === 'hero') {
+          carryHp[u.heroId || u.defId] = u.alive ? u.hp : 0;
+        } else if (u.kind === 'fusion' && u.side === 'player') {
+          var donos = fusionHeroIds(u);
+          if (!donos.length) continue;
+          var parte = u.alive ? Math.max(1, Math.floor(u.hp / donos.length)) : 0;
+          for (var f = 0; f < donos.length; f++) carryHp[donos[f]] = parte;
+        }
       }
       resetAiState();
       resetTimer(true);
