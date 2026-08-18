@@ -12,6 +12,15 @@ var JOGO = (typeof window !== 'undefined')
 //             iniciativa/poder/fixação.
 //   'passo' — PASSO: o que anda (botas, esporas, grevas, grilhões).
 //             Carrega PP: no máximo +1 PP.
+//             ADENDO v2.7 (§9-H): TODA peça de Passo concede ESQUIVA — é o único
+//             espaço que concede, e é onde o jogador compra a chance de se soltar
+//             de quem o prendeu. A escada: 8/10 na Estufa, 10/12 na Cisterna,
+//             12/14 nos Andaimes e no Fecho, 12 na Mina, 10/16 no Coração —
+//             cresce com a PROFUNDIDADE e, dentro do mesmo calabouço, o mais raro
+//             leva +2. Exceção: as três peças que também carregam FIXAÇÃO
+//             (Grilhões de Forja, Grevas de Minério, Tornozeleiras de Cinza)
+//             ficam um degrau abaixo em esquiva — pagaram o preço no outro lado.
+//             Teto de 16 por peça: acima disso o chefe deixa de segurar.
 //   'casca' — CASCA: o que protege (couraça, carapaça, manto, casco).
 //             De +10 a +60 PV e resistências.
 //   'lume'  — LUME: a relíquia ACESA que se carrega no escuro (lanterna, candeia,
@@ -272,8 +281,8 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'moss-boots' });
 
   item({ id: 'gh-vine-stirrups', name: 'Estribos de Hera', slot: 'passo', rarity: 'raro',
-    dungeonId: 'greenhouse', bonuses: { pp: 1, dodge: 5 },
-    description: 'Duas heras vivas enroladas nas canelas que empurram o passo seguinte antes de você pedir. +1 PP, +5 de esquiva.',
+    dungeonId: 'greenhouse', bonuses: { pp: 1, dodge: 10 },
+    description: 'Duas heras vivas enroladas nas canelas que empurram o passo seguinte antes de você pedir. +1 PP, +10 de esquiva.',
     flavor: 'Elas sabem para onde você vai. Discordam pouco.',
     iconKey: 'vine-stirrup' });
 
@@ -321,8 +330,8 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'fins' });
 
   item({ id: 'ci-baroness-collar', name: 'Escarpins da Baronesa', slot: 'passo', rarity: 'epico',
-    dungeonId: 'cistern', bonuses: { pp: 1, hp: 15, initiative: 8 },
-    description: 'Os sapatos de baile da Baronesa Salmoura, com fivelas de pérola de lodo e sola que não encosta no fundo. A água abre caminho na frente deles. +1 PP, +15 PV, +8 de iniciativa.',
+    dungeonId: 'cistern', bonuses: { pp: 1, hp: 15, initiative: 8, dodge: 12 },
+    description: 'Os sapatos de baile da Baronesa Salmoura, com fivelas de pérola de lodo e sola que não encosta no fundo. A água abre caminho na frente deles. +1 PP, +15 PV, +8 de iniciativa, +12 de esquiva.',
     flavor: 'A maré abre caminho para quem os calça. Por respeito — ou por medo.',
     iconKey: 'pearl-shoes' });
 
@@ -364,8 +373,8 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'forge-maul' });
 
   item({ id: 'em-cinder-treads', name: 'Solados de Escória', slot: 'passo', rarity: 'raro',
-    dungeonId: 'emberlock', bonuses: { pp: 1, initiative: 6 },
-    description: 'Solas de escória fria que não queimam no piso da forja e ainda dão um empurrão em cada passada. +1 PP, +6 de iniciativa.',
+    dungeonId: 'emberlock', bonuses: { pp: 1, initiative: 6, dodge: 14 },
+    description: 'Solas de escória fria que não queimam no piso da forja e ainda dão um empurrão em cada passada. +1 PP, +6 de iniciativa, +14 de esquiva.',
     flavor: 'Andar sobre brasa é questão de sola, dizem eles.',
     iconKey: 'slag-boots' });
 
@@ -413,14 +422,14 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'plank-gauntlet' });
 
   item({ id: 'av-glider-cloak', name: 'Esporas de Vão', slot: 'passo', rarity: 'raro',
-    dungeonId: 'windscaffold', bonuses: { pp: 1, dodge: 10 },
-    description: 'Esporas de vareta e pano que abrem como leque a cada passada e pegam a corrente que sobe do vão: transformam a queda em passo. +1 PP, +10 de esquiva.',
+    dungeonId: 'windscaffold', bonuses: { pp: 1, dodge: 12 },
+    description: 'Esporas de vareta e pano que abrem como leque a cada passada e pegam a corrente que sobe do vão: transformam a queda em passo. +1 PP, +12 de esquiva.',
     flavor: 'Nos Andaimes, cair é só uma forma lenta de andar.',
     iconKey: 'gale-spurs' });
 
   item({ id: 'av-updraft-boots', name: 'Botas de Respiradouro', slot: 'passo', rarity: 'epico',
-    dungeonId: 'windscaffold', bonuses: { pp: 1, initiative: 12, dodge: 8 },
-    description: 'Botas com grelhas nos solados que aspiram o ar dos respiradouros e devolvem por baixo a cada passada. +1 PP, +12 de iniciativa, +8 de esquiva.',
+    dungeonId: 'windscaffold', bonuses: { pp: 1, initiative: 12, dodge: 14 },
+    description: 'Botas com grelhas nos solados que aspiram o ar dos respiradouros e devolvem por baixo a cada passada. +1 PP, +12 de iniciativa, +14 de esquiva.',
     flavor: 'Elas dão o passo. Você só decide a direção.',
     iconKey: 'updraft-boots' });
 
@@ -462,14 +471,14 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'quake-fist' });
 
   item({ id: 'mt-ore-greaves', name: 'Grevas de Minério', slot: 'passo', rarity: 'raro',
-    dungeonId: 'quakemine', bonuses: { pp: 1, lock: 10 },
-    description: 'Caneleiras de minério que acham sozinhas a pedra firme no meio do desabamento. +1 PP, +10 de fixação.',
+    dungeonId: 'quakemine', bonuses: { pp: 1, lock: 10, dodge: 8 },
+    description: 'Caneleiras de minério que acham sozinhas a pedra firme no meio do desabamento. +1 PP, +10 de fixação, +8 de esquiva.',
     flavor: 'Sabem onde o chão ainda existe. Confie nelas.',
     iconKey: 'ore-greaves' });
 
   item({ id: 'mt-cart-wheels', name: 'Rodas de Vagoneta', slot: 'passo', rarity: 'comum',
-    dungeonId: 'quakemine', bonuses: { initiative: 14, dodge: 10 },
-    description: 'Duas rodinhas de vagoneta adaptadas aos calcanhares, boas em trilho e péssimas em escada. +14 de iniciativa, +10 de esquiva.',
+    dungeonId: 'quakemine', bonuses: { initiative: 14, dodge: 12 },
+    description: 'Duas rodinhas de vagoneta adaptadas aos calcanhares, boas em trilho e péssimas em escada. +14 de iniciativa, +12 de esquiva.',
     flavor: 'Descer é rápido. Descer é sempre rápido.',
     iconKey: 'cart-wheels' });
 
@@ -511,14 +520,14 @@ JOGO.DATA = JOGO.DATA || {};
     iconKey: 'shard-knuckles' });
 
   item({ id: 'cp-quicksilver-boots', name: 'Botas de Azougue', slot: 'passo', rarity: 'lendario',
-    dungeonId: 'brokenheart', bonuses: { pp: 1, dodge: 14, initiative: 12 },
-    description: 'Botas com sola de metal líquido que se refaz a cada passo e nunca esfria. +1 PP, +14 de esquiva, +12 de iniciativa.',
+    dungeonId: 'brokenheart', bonuses: { pp: 1, dodge: 16, initiative: 12 },
+    description: 'Botas com sola de metal líquido que se refaz a cada passo e nunca esfria. +1 PP, +16 de esquiva, +12 de iniciativa.',
     flavor: 'Chegam meio passo antes de você resolver ir.',
     iconKey: 'quicksilver-boots' });
 
   item({ id: 'cp-ashen-anklets', name: 'Tornozeleiras de Cinza', slot: 'passo', rarity: 'raro',
-    dungeonId: 'brokenheart', bonuses: { pp: 1, dodge: 8, lock: 8 },
-    description: 'Duas argolas de cinza prensada que deixam um rastro curto no chão e confundem quem tenta segui-lo. +1 PP, +8 de esquiva, +8 de fixação.',
+    dungeonId: 'brokenheart', bonuses: { pp: 1, dodge: 10, lock: 8 },
+    description: 'Duas argolas de cinza prensada que deixam um rastro curto no chão e confundem quem tenta segui-lo. +1 PP, +10 de esquiva, +8 de fixação.',
     flavor: 'O rastro apaga sozinho. Sempre um pouco tarde demais.',
     iconKey: 'ashen-anklets' });
 

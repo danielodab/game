@@ -54,6 +54,17 @@
     perLevelElement: { hp: 5, elemPower: 3 }, // a partir da escolha (§9-C)
     // rendimento decrescente ao moer conteúdo fácil (§9-D)
     xpFalloff: { graceLevels: 4, factorPerLevel: 0.75, floor: 0.10 },
+    /* §9-H: alvo de esquiva/fixação no nível máximo, por PAPEL. Os valores aqui
+     * são de MENTIRA (redondos, para a conta do teste ser óbvia) — quem valida os
+     * números de verdade é tests/validate_classes.html e tests/curva_esquiva.html. */
+    defenseByRole: {
+      tanque:    { dodge: 15, lock: 70 },   // base 5/40  → +10 esquiva, +30 fixação
+      atirador:  { dodge: 54, lock: 39 },   // base 25/10 → +29 esquiva, +29 fixação
+      assassino: { dodge: 40, lock: 10 },   // base 40/10 → alvo IGUAL à base: ganho 0
+      mago:      { dodge: 10, lock: 1 },    // alvo ABAIXO da base: nunca encolhe
+      suporte:   { dodge: 49, lock: 5 },    // base 20/5  → +29 esquiva, 0 fixação
+      invocador: { dodge: 12, lock: 44 }    // base 12/15 → 0 esquiva, +29 fixação
+    },
     elementChoiceLevel: 5
   };
 
@@ -1192,6 +1203,106 @@
     eq(st2.power, base.power + 9, 'poder genérico volta às 3 primeiras subidas');
     eq(st2.elemPower, 3 * 26, 'o resto virou poder de água');
     eq(st2.element, 'agua', 'elemento nos stats');
+  });
+
+  /* =======================================================================
+   * §9-H — DEFESA DE POSIÇÃO POR NÍVEL. Até a v2.6 a esquiva do herói era a
+   * mesma no nível 1 e no 30: uma estatística morta, num jogo em que a fixação
+   * dos monstros vai de 4 a 55. Agora cada classe caminha em linha reta da base
+   * até o alvo do PAPEL. Os alvos da fixture cobrem os quatro casos de borda.
+   * ==================================================================== */
+  t('§9-H: nível 1 é EXATAMENTE a base (a fixação continua mordendo cedo)', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    var st = P.effectiveStats(TANK);
+    eq(st.dodge, base.dodge, 'esquiva intocada no nível 1');
+    eq(st.lock, base.lock, 'fixação intocada no nível 1');
+  });
+
+  t('§9-H: no nível máximo a classe pousa exatamente no alvo do papel', function () {
+    fresh();
+    var alvo = D.leveling.defenseByRole.tanque;
+    setLevel(TANK, D.leveling.maxLevel);
+    var st = P.effectiveStats(TANK);
+    eq(st.dodge, alvo.dodge, 'esquiva do tanque no teto');
+    eq(st.lock, alvo.lock, 'fixação do tanque no teto');
+  });
+
+  t('§9-H: a curva é reta e nunca anda para trás', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    var alvo = D.leveling.defenseByRole.tanque;
+    var top = D.leveling.maxLevel;
+    var antD = -1, antL = -1, ok1 = true, ok2 = true, bad = '';
+    for (var lv = 1; lv <= top; lv++) {
+      setLevel(TANK, lv);
+      var st = P.effectiveStats(TANK);
+      var esperado = base.lock + Math.round((alvo.lock - base.lock) * (lv - 1) / (top - 1));
+      if (st.lock !== esperado) { ok2 = false; bad = 'nível ' + lv + ': ' + st.lock + ' ≠ ' + esperado; }
+      if (st.dodge < antD || st.lock < antL) { ok1 = false; bad = bad || ('recuou no nível ' + lv); }
+      antD = st.dodge; antL = st.lock;
+    }
+    ok(ok1, 'monotônica em todos os 30 níveis' + (bad ? ' — ' + bad : ''));
+    ok(ok2, 'interpolação linear conferida nível a nível' + (bad ? ' — ' + bad : ''));
+  });
+
+  t('§9-H: alvo IGUAL ou ABAIXO da base não mexe na classe', function () {
+    fresh();
+    P.unlockClass('t-lamina'); var hb = P.createHero('t-lamina', 'h-lamina');
+    P.unlockClass('t-bruxo');  var hm = P.createHero('t-bruxo', 'h-bruxo');
+    setLevel(hb, D.leveling.maxLevel);
+    setLevel(hm, D.leveling.maxLevel);
+    var bb = D.classes['t-lamina'].stats, bm = D.classes['t-bruxo'].stats;
+    eq(P.effectiveStats(hb).dodge, bb.dodge, 'alvo igual à base: ganho 0');
+    eq(P.effectiveStats(hb).lock, bb.lock, 'idem na fixação');
+    eq(P.effectiveStats(hm).dodge, bm.dodge, 'alvo ABAIXO da base nunca encolhe a classe');
+    eq(P.effectiveStats(hm).lock, bm.lock, 'idem na fixação');
+  });
+
+  t('§9-H: papéis diferentes crescem em ritmos diferentes (identidade de classe)', function () {
+    fresh();
+    P.unlockClass(ARCO); var ha = P.createHero(ARCO, 'h-arqueiro');
+    var top = D.leveling.maxLevel;
+    setLevel(TANK, top); setLevel(ha, top);
+    var tk = P.effectiveStats(TANK), ar = P.effectiveStats(ha);
+    var dTk = tk.dodge - D.classes[TANK].stats.dodge;
+    var dAr = ar.dodge - D.classes[ARCO].stats.dodge;
+    var lTk = tk.lock - D.classes[TANK].stats.lock;
+    ok(dAr > dTk, 'o atirador ganha mais esquiva que o tanque (' + dAr + ' vs ' + dTk + ')');
+    ok(lTk > dTk, 'o tanque ganha mais fixação do que esquiva (' + lTk + ' vs ' + dTk + ')');
+  });
+
+  t('§9-H: a curva soma ANTES dos itens, e o item continua somando por cima', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    var top = D.leveling.maxLevel;
+    var alvo = D.leveling.defenseByRole.tanque;
+    setLevel(TANK, top);
+    giveAndEquip(TANK, 't-bota-pp');            // +1 pp, +5 dodge
+    var st = P.effectiveStats(TANK);
+    eq(st.dodge, alvo.dodge + 5, 'nível + item somam');
+    eq(st.lock, alvo.lock, 'a bota não mexe na fixação');
+    ok(st.dodge > base.dodge + 5, 'e o total supera o que o item dava sozinho');
+  });
+
+  t('§9-H: Progress.defenseAtLevel expõe a curva sem montar herói', function () {
+    var top = D.leveling.maxLevel;
+    var base = D.classes[TANK].stats;
+    var alvo = D.leveling.defenseByRole.tanque;
+    eq(P.defenseAtLevel(TANK, 1).dodge, base.dodge, 'nível 1 = base');
+    eq(P.defenseAtLevel(TANK, top).lock, alvo.lock, 'nível máximo = alvo');
+    eq(P.defenseAtLevel(TANK, top + 50).lock, alvo.lock, 'nível acima do teto não estoura');
+    eq(P.defenseAtLevel('classe-que-não-existe', 30).dodge, 0, 'classe desconhecida não lança');
+  });
+
+  t('§9-H: battleParty entrega a esquiva já crescida ao Engine', function () {
+    fresh();
+    var top = D.leveling.maxLevel;
+    var alvo = D.leveling.defenseByRole.tanque;
+    setLevel(TANK, top);
+    var p = P.battleParty([TANK])[0];
+    eq(p.stats.dodge, alvo.dodge, 'esquiva de nível 30 no grupo');
+    eq(p.stats.lock, alvo.lock, 'fixação de nível 30 no grupo');
   });
 
   t('battleParty leva elemPower e element ao Engine', function () {

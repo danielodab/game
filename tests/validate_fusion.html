@@ -629,6 +629,14 @@
     if (it.slot === 'passo') {
       check('item ' + id + ' (Passo) concede no máximo +1 PP', !bn.pp || bn.pp === 1, String(bn.pp));
       check('item ' + id + ' (Passo) não concede PA', !bn.pa);
+      /* §9-H: o Passo é o ÚNICO espaço que vende esquiva, e vende em TODA peça —
+       * é onde o jogador compra a chance de se soltar de quem o prendeu. Teto de
+       * 16: acima disso o herói de nível 30 escapa do chefe com moeda honesta e a
+       * sala de chefe deixa de ser um compromisso. */
+      check('item ' + id + ' (Passo) concede esquiva (§9-H)',
+        isNum(bn.dodge) && bn.dodge >= 5, String(bn.dodge));
+      check('item ' + id + ' (Passo) não passa do teto de 16 de esquiva',
+        !isNum(bn.dodge) || bn.dodge <= 16, String(bn.dodge));
     }
     if (it.slot === 'casca') {
       check('item ' + id + ' (Casca) PV entre 10 e 60', isNum(bn.hp) && bn.hp >= 10 && bn.hp <= 60, String(bn.hp));
@@ -656,6 +664,34 @@
   });
   SLOTS.forEach(function (s) {
     check('espaço "' + s + '" tem itens em quantidade (>= 6)', bySlot[s] >= 6, 'tem ' + bySlot[s]);
+  });
+
+  /* §9-H — A RARIDADE VALE DENTRO DO CALABOUÇO. `items.js` decidiu que o que
+   * cresce com a profundidade é o PODER e que a raridade só diz o quanto custa
+   * achar; para a esquiva, o adendo abre uma exceção pequena e explícita: dentro
+   * do MESMO calabouço, o Passo mais raro leva mais esquiva que o mais comum.
+   * Peça que também carrega FIXAÇÃO paga por isso e fica um degrau abaixo — mas
+   * nunca abaixo da metade. Sem essa regra, o "raro" do espaço vira downgrade. */
+  var RAR_ORD = { comum: 0, raro: 1, epico: 2, lendario: 3 };
+  var passoPorCal = {};
+  itemIds.forEach(function (id) {
+    var it = IT[id];
+    if (it.slot !== 'passo') return;
+    (passoPorCal[it.dungeonId] = passoPorCal[it.dungeonId] || []).push(it);
+  });
+  Object.keys(passoPorCal).forEach(function (dg) {
+    var lista = passoPorCal[dg].slice().sort(function (a, b) {
+      return RAR_ORD[a.rarity] - RAR_ORD[b.rarity];
+    });
+    for (var i = 1; i < lista.length; i++) {
+      var menos = lista[i - 1], mais = lista[i];
+      var dMenos = (menos.bonuses && menos.bonuses.dodge) || 0;
+      var dMais = (mais.bonuses && mais.bonuses.dodge) || 0;
+      var trocou = !!(mais.bonuses && mais.bonuses.lock);
+      check('Passo de ' + dg + ': ' + mais.id + ' (' + mais.rarity + ') vale mais esquiva que ' +
+        menos.id + ' (' + menos.rarity + ')' + (trocou ? ', ou troca por fixação' : ''),
+        trocou ? (dMais * 2 >= dMenos) : (dMais > dMenos), dMais + ' vs ' + dMenos);
+    }
   });
 
   Object.keys(IS).forEach(function (sid) {

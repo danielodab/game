@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOTERRA 2.0 — Curva de esquiva e fixação por classe (§9-H)</title>
+<style>
+  body { background: #14181c; color: #dde; font-family: Consolas, monospace; padding: 16px; }
+  h1 { font-size: 17px; }
+  h2 { font-size: 14px; color: #ffd98a; margin: 20px 0 4px; border-bottom: 1px solid #333; }
+  .sub { color: #89a; font-size: 12px; margin-bottom: 10px; }
+  #summary { font-size: 16px; font-weight: bold; margin: 12px 0; padding: 8px; border-radius: 4px; }
+  .allpass { background: #143d1e; color: #7f7; }
+  .somefail { background: #3d1414; color: #f77; }
+  table { border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  th, td { border: 1px solid #2a3138; padding: 3px 8px; text-align: right; }
+  th { color: #ffd76b; text-align: center; }
+  td.k { text-align: left; color: #cde; }
+  .up { color: #7fdc8a; }
+  .same { color: #667; }
+  .down { color: #e58; }
+  .pass::before { content: "PASS "; color: #6e6; font-weight: bold; }
+  .fail::before { content: "FAIL "; color: #f66; font-weight: bold; }
+  .fail { background: #2a1515; }
+  li { list-style: none; font-size: 12px; padding: 1px 4px; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: #8ab4d8; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>SOTERRA 2.0 — curva de esquiva e fixação por classe (adendo §9-H)</h1>
+<div class="sub">
+  Mede a chance de ESCAPAR de quem prende (<code>Engine.dodgeChance</code>) com os stats que
+  <code>Progress.effectiveStats</code> entrega, classe por classe e nível por nível, ANTES e
+  DEPOIS do adendo. Roda síncrono no load; resultado em <code>window.TEST_RESULTS</code>.
+</div>
+<div id="summary">Carregando…</div>
+<div id="failList"></div>
+<div id="report"></div>
+<details><summary>Todas as checagens</summary><ul id="allList"></ul></details>
+
+<!-- BLINDAGEM DO SAVE DO JOGADOR — TEM que ser o primeiro script da página -->
+<script src="save_sandbox.js"></script>
+
+<script>window.__V = String(Date.now());
+['data/classes', 'data/spells', 'data/progression', 'data/elements', 'data/monsters',
+ 'data/dungeons', 'data/items', 'data/pets', 'data/fusions'].forEach(function (f) {
+  document.write('<scr' + 'ipt src="../js/core/' + f + '.js?v=' + window.__V + '"><\/scr' + 'ipt>');
+});
+['engine', 'fusion', 'progress'].forEach(function (f) {
+  document.write('<scr' + 'ipt src="../js/core/' + f + '.js?v=' + window.__V + '"><\/scr' + 'ipt>');
+});
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var J = window.JOGO || {};
+  var D = J.DATA || {}, E = J.Engine, P = J.Progress;
+
+  var results = [];
+  function check(name, ok, detail) {
+    results.push({ name: name, ok: !!ok, detail: detail == null ? '' : String(detail) });
+    return !!ok;
+  }
+  function pct(v) { return (Math.round(v * 1000) / 10).toFixed(1) + '%'; }
+
+  /* ------------------------------------------------------------------------
+   * COMO ERA (v2.6, congelado aqui de propósito).
+   * A esquiva e a fixação eram a base da classe, do nível 1 ao 30, sem exceção:
+   * nenhum nível e nenhum caminho as mexia. Guardar os números à mão é o que
+   * permite imprimir a coluna "antes" depois de a fonte já ter mudado.
+   * ---------------------------------------------------------------------- */
+  var ANTES = {
+    sumo:       { dodge: 5,  lock: 40 },
+    arqueiro:   { dodge: 25, lock: 10 },
+    bruxo:      { dodge: 15, lock: 5  },
+    espadachim: { dodge: 40, lock: 10 },
+    curandeira: { dodge: 20, lock: 5  },
+    invocador:  { dodge: 12, lock: 15 }
+  };
+  var ORDEM = ['espadachim', 'arqueiro', 'curandeira', 'bruxo', 'invocador', 'sumo'];
+  var NIVEIS = [1, 5, 10, 15, 20, 25, 30];
+
+  /* Referências de FIXAÇÃO, medidas ao vivo em DATA.monsters. */
+  function mediana(a) {
+    var b = a.slice().sort(function (x, y) { return x - y; });
+    var m = Math.floor(b.length / 2);
+    return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2;
+  }
+  var CAL_ORDEM = (D.dungeons && D.dungeons.length)
+    ? D.dungeons.map(function (d) { return d.id; })
+    : ['greenhouse', 'cistern', 'windscaffold', 'emberlock', 'quakemine', 'brokenheart'];
+  var porCalLock = {}, locksChefes = [], dodgesComuns = [], maiorEsquivaMonstro = 0, vergasta = null;
+  var mons = D.monsters || {};
+  for (var mid in mons) {
+    if (!mons.hasOwnProperty(mid)) continue;
+    var m = mons[mid];
+    if (!m || !m.stats) continue;
+    if (m.boss) { locksChefes.push(m.stats.lock); }
+    else {
+      (porCalLock[m.dungeonId] = porCalLock[m.dungeonId] || []).push(m.stats.lock);
+      dodgesComuns.push(m.stats.dodge);
+      if (m.stats.dodge > maiorEsquivaMonstro) maiorEsquivaMonstro = m.stats.dodge;
+    }
+    if (mid === 'thorn-lasher') vergasta = m;
+  }
+  /* "Monstro comum" tem de ser LEVEL-APROPRIADO: a mediana de TODO o bestiário
+   * mistura o calabouço 1 (fixação mediana 12) com o 6 (20) e mede o nível 30
+   * contra bicho de nível 3. Cada extremo da tabela usa o seu calabouço. */
+  var raso = porCalLock[CAL_ORDEM[0]] || [], fundo = porCalLock[CAL_ORDEM[CAL_ORDEM.length - 1]] || [];
+  var LOCK_COMUM_RASO = raso.length ? mediana(raso) : 12;
+  var LOCK_COMUM = fundo.length ? mediana(fundo) : 20;
+  var LOCK_CHEFE = locksChefes.length ? Math.max.apply(null, locksChefes) : 55;
+  var LOCK_VERGASTA = vergasta ? vergasta.stats.lock : 26;
+  var ESQUIVA_ESCORREGADIO = maiorEsquivaMonstro || 36;
+
+  /* ------------------------------------------------------------------------
+   * A conta REAL: monta duas unidades de mentira e chama Engine.dodgeChance.
+   * Nada de reimplementar a fórmula aqui — se o motor mudar, esta página muda
+   * junto. `bonusElem` escolhe o caso elemental do contrato §2:
+   *   'igual' = 0 · 'solto' = +0,10 (o mais comum) · 'rival' = +0,30
+   * ---------------------------------------------------------------------- */
+  function chance(dodge, lock, caso) {
+    var elFug = 'fogo';
+    var elPreso = caso === 'igual' ? 'fogo' : (caso === 'rival' ? 'agua' : 'terra');
+    var st = { units: [
+      { uid: 'f', dodge: dodge, lock: 0, element: elFug, effects: [] },
+      { uid: 'l', dodge: 0, lock: lock, element: elPreso, effects: [] }
+    ] };
+    return E.dodgeChance(st, 'f', 'l');
+  }
+
+  /* Stats efetivos de verdade: cria um herói no sandbox e sobe o nível. */
+  function statsDe(classId, nivel, itemId) {
+    P.reset();
+    P.unlockClass(classId);                 // arqueiro/espadachim/… nascem trancados
+    var hid = P.createHero ? P.createHero(classId, 'cx-' + classId) : null;
+    if (!hid) return null;
+    var h = P.hero(hid);
+    h.level = nivel;
+    h.element = 'fogo';
+    if (itemId) { P.addItem(itemId); h.items.passo = itemId; }
+    return P.effectiveStats(hid);
+  }
+
+  var depois = {};   // classId -> nivel -> {dodge, lock}
+  ORDEM.forEach(function (cid) {
+    depois[cid] = {};
+    NIVEIS.forEach(function (n) {
+      var s = statsDe(cid, n, null);
+      depois[cid][n] = s ? { dodge: s.dodge, lock: s.lock } : { dodge: 0, lock: 0 };
+    });
+  });
+
+  // ======================================================================
+  // 1. A CURVA EXISTE E TEM O FORMATO COMBINADO
+  // ======================================================================
+  var DBR = (D.leveling || {}).defenseByRole;
+  check('DATA.leveling.defenseByRole existe', !!DBR);
+  var PAPEIS = ['tanque', 'atirador', 'mago', 'assassino', 'suporte', 'invocador'];
+  PAPEIS.forEach(function (r) {
+    var row = DBR && DBR[r];
+    check('defenseByRole.' + r + ' tem dodge e lock numéricos',
+      !!row && typeof row.dodge === 'number' && typeof row.lock === 'number',
+      row ? (row.dodge + '/' + row.lock) : 'ausente');
+  });
+  check('a xpTable NÃO foi tocada (30 degraus, começa em 0, termina em 28180)',
+    (D.leveling.xpTable || []).length === 30 && D.leveling.xpTable[0] === 0 &&
+    D.leveling.xpTable[29] === 28180, (D.leveling.xpTable || []).join(',').slice(0, 40));
+
+  ORDEM.forEach(function (cid) {
+    var base = D.classes[cid].stats;
+    check(cid + ': nível 1 é EXATAMENTE a base da classe (a fixação continua mordendo cedo)',
+      depois[cid][1].dodge === base.dodge && depois[cid][1].lock === base.lock,
+      depois[cid][1].dodge + '/' + depois[cid][1].lock + ' vs base ' + base.dodge + '/' + base.lock);
+    var cresceD = true, cresceL = true;
+    for (var i = 1; i < NIVEIS.length; i++) {
+      if (depois[cid][NIVEIS[i]].dodge < depois[cid][NIVEIS[i - 1]].dodge) cresceD = false;
+      if (depois[cid][NIVEIS[i]].lock < depois[cid][NIVEIS[i - 1]].lock) cresceL = false;
+    }
+    check(cid + ': esquiva nunca decresce com o nível', cresceD);
+    check(cid + ': fixação nunca decresce com o nível', cresceL);
+    check(cid + ': a esquiva DEIXOU de ser estatística morta (30 > 1)',
+      depois[cid][30].dodge > depois[cid][1].dodge,
+      depois[cid][1].dodge + ' → ' + depois[cid][30].dodge);
+    var alvo = DBR[D.classes[cid].role];
+    check(cid + ': nível 30 pousa exatamente no alvo do papel',
+      depois[cid][30].dodge === alvo.dodge && depois[cid][30].lock === alvo.lock,
+      depois[cid][30].dodge + '/' + depois[cid][30].lock + ' vs alvo ' + alvo.dodge + '/' + alvo.lock);
+  });
+
+  // ======================================================================
+  // 2. IDENTIDADE DE CLASSE — quem esquiva, quem prende
+  // ======================================================================
+  var d30 = {}; ORDEM.forEach(function (c) { d30[c] = depois[c][30]; });
+  check('nível 30: as duas classes de esquiva (espadachim, arqueiro) lideram a esquiva',
+    d30.espadachim.dodge > d30.curandeira.dodge && d30.arqueiro.dodge > d30.curandeira.dodge &&
+    d30.espadachim.dodge > d30.bruxo.dodge && d30.arqueiro.dodge > d30.bruxo.dodge &&
+    d30.espadachim.dodge > d30.invocador.dodge && d30.arqueiro.dodge > d30.invocador.dodge,
+    'espadachim ' + d30.espadachim.dodge + ' · arqueiro ' + d30.arqueiro.dodge);
+  check('nível 30: o tanque tem a MENOR esquiva do elenco',
+    ORDEM.every(function (c) { return c === 'sumo' || d30[c].dodge > d30.sumo.dodge; }),
+    'sumo ' + d30.sumo.dodge);
+  check('nível 30: o tanque tem a MAIOR fixação do elenco, com folga',
+    ORDEM.every(function (c) { return c === 'sumo' || d30.sumo.lock >= d30[c].lock * 2; }),
+    'sumo ' + d30.sumo.lock);
+  check('o tanque ganha MUITO mais fixação do que esquiva ao subir',
+    (d30.sumo.lock - depois.sumo[1].lock) > 4 * (d30.sumo.dodge - depois.sumo[1].dodge),
+    '+' + (d30.sumo.lock - depois.sumo[1].lock) + ' fixação vs +' +
+    (d30.sumo.dodge - depois.sumo[1].dodge) + ' esquiva');
+  check('as classes de esquiva ganham mais esquiva por nível que as do meio',
+    Math.min(d30.espadachim.dodge - depois.espadachim[1].dodge,
+             d30.arqueiro.dodge - depois.arqueiro[1].dodge) >
+    Math.max(d30.curandeira.dodge - depois.curandeira[1].dodge,
+             d30.bruxo.dodge - depois.bruxo[1].dodge,
+             d30.invocador.dodge - depois.invocador[1].dodge),
+    'esquiva +' + (d30.arqueiro.dodge - depois.arqueiro[1].dodge) + '/+' +
+    (d30.espadachim.dodge - depois.espadachim[1].dodge));
+
+  // ======================================================================
+  // 3. ALVO DE SENSAÇÃO (o pedido do usuário, em números)
+  // ======================================================================
+  var CASO = 'solto';   // o caso elemental mais comum: +0,10
+  function esc(cid, nivel, lock) { return chance(depois[cid][nivel].dodge, lock, CASO); }
+
+  check('nível 1: escapar da Vergasta (fixação ' + LOCK_VERGASTA + ') continua caro para todo mundo — ' +
+    'nenhuma classe passa de 60%',
+    ORDEM.every(function (c) { return esc(c, 1, LOCK_VERGASTA) <= 0.60; }),
+    ORDEM.map(function (c) { return c + ' ' + pct(esc(c, 1, LOCK_VERGASTA)); }).join(' · '));
+  check('nível 1: o tanque continua no piso de 10% contra a Vergasta (nada mudou para ele)',
+    Math.abs(esc('sumo', 1, LOCK_VERGASTA) - 0.10) < 1e-9, pct(esc('sumo', 1, LOCK_VERGASTA)));
+
+  check('nível 30, classes de esquiva: escapam de monstro comum (fixação ' + LOCK_COMUM +
+    ') na MAIORIA das vezes',
+    esc('espadachim', 30, LOCK_COMUM) > 0.5 && esc('arqueiro', 30, LOCK_COMUM) > 0.5,
+    'espadachim ' + pct(esc('espadachim', 30, LOCK_COMUM)) +
+    ' · arqueiro ' + pct(esc('arqueiro', 30, LOCK_COMUM)));
+  check('nível 30, tanque: continua ruim de escapar de monstro comum (abaixo de 1/3)',
+    esc('sumo', 30, LOCK_COMUM) < 0.34, pct(esc('sumo', 30, LOCK_COMUM)));
+  check('nível 30: as classes do meio ficam ENTRE o tanque e as de esquiva',
+    ['curandeira', 'bruxo', 'invocador'].every(function (c) {
+      return esc(c, 30, LOCK_COMUM) > esc('sumo', 30, LOCK_COMUM) &&
+             esc(c, 30, LOCK_COMUM) < esc('arqueiro', 30, LOCK_COMUM);
+    }),
+    ['curandeira', 'bruxo', 'invocador'].map(function (c) {
+      return c + ' ' + pct(esc(c, 30, LOCK_COMUM));
+    }).join(' · '));
+
+  check('CHEFE (fixação ' + LOCK_CHEFE + '): ninguém, em nenhum nível e sem equipamento, ' +
+    'passa de 25% de escapar',
+    ORDEM.every(function (c) {
+      return NIVEIS.every(function (n) { return esc(c, n, LOCK_CHEFE) <= 0.25; });
+    }),
+    ORDEM.map(function (c) { return c + ' ' + pct(esc(c, 30, LOCK_CHEFE)); }).join(' · '));
+  check('CHEFE: escapar dele melhora com o nível, mas continua difícil (nunca vira maioria)',
+    esc('espadachim', 30, LOCK_CHEFE) >= esc('espadachim', 1, LOCK_CHEFE) &&
+    esc('espadachim', 30, LOCK_CHEFE) < 0.5,
+    pct(esc('espadachim', 1, LOCK_CHEFE)) + ' → ' + pct(esc('espadachim', 30, LOCK_CHEFE)));
+
+  // fixação do tanque vista do outro lado: o monstro mais escorregadio do jogo
+  var fugaDoTanque1 = chance(ESQUIVA_ESCORREGADIO, depois.sumo[1].lock, CASO);
+  var fugaDoTanque30 = chance(ESQUIVA_ESCORREGADIO, depois.sumo[30].lock, CASO);
+  check('o monstro mais escorregadio do jogo (esquiva ' + ESQUIVA_ESCORREGADIO +
+    ') escapa MENOS do tanque de nível 30 do que do de nível 1',
+    fugaDoTanque30 < fugaDoTanque1,
+    pct(fugaDoTanque1) + ' → ' + pct(fugaDoTanque30));
+  check('tanque nível 30: nem o monstro mais escorregadio passa do piso de 10%',
+    Math.abs(fugaDoTanque30 - 0.10) < 1e-9, pct(fugaDoTanque30));
+
+  // ======================================================================
+  // 4. EQUIPAMENTO — o espaço PASSO é onde se compra esquiva
+  // ======================================================================
+  var passos = [], semEsquiva = [], acimaDoTeto = [];
+  var TETO_PASSO = 16;
+  for (var iid in (D.items || {})) {
+    if (!D.items.hasOwnProperty(iid)) continue;
+    var it = D.items[iid];
+    if (!it || it.slot !== 'passo') continue;
+    passos.push(it);
+    var dg = (it.bonuses && it.bonuses.dodge) || 0;
+    if (dg <= 0) semEsquiva.push(iid);
+    if (dg > TETO_PASSO) acimaDoTeto.push(iid + ' (' + dg + ')');
+  }
+  check('há itens de Passo para conferir', passos.length >= 6, passos.length + ' peças');
+  check('TODA peça de Passo concede esquiva (§9-H)', semEsquiva.length === 0, semEsquiva.join(', '));
+  check('nenhuma peça de Passo passa do teto de ' + TETO_PASSO + ' de esquiva ' +
+    '(acima disso o chefe deixa de segurar)', acimaDoTeto.length === 0, acimaDoTeto.join(', '));
+
+  // a raridade vale: dentro do MESMO calabouço, o mais raro leva mais — a menos
+  // que troque esquiva por fixação (as peças que também prendem)
+  var ORDEM_RAR = { comum: 0, raro: 1, epico: 2, lendario: 3 };
+  var porCal = {};
+  passos.forEach(function (it) {
+    (porCal[it.dungeonId] = porCal[it.dungeonId] || []).push(it);
+  });
+  Object.keys(porCal).forEach(function (dg) {
+    var lista = porCal[dg].slice().sort(function (a, b) {
+      return ORDEM_RAR[a.rarity] - ORDEM_RAR[b.rarity];
+    });
+    for (var i = 1; i < lista.length; i++) {
+      var menos = lista[i - 1], mais = lista[i];
+      var dMenos = menos.bonuses.dodge || 0, dMais = mais.bonuses.dodge || 0;
+      var trocou = !!(mais.bonuses.lock);         // pagou em fixação
+      check('Passo de ' + dg + ': ' + mais.id + ' (' + mais.rarity + ') vale mais esquiva que ' +
+        menos.id + ' (' + menos.rarity + ')' + (trocou ? ' — ou troca por fixação' : ''),
+        trocou ? (dMais >= dMenos / 2) : (dMais > dMenos),
+        dMais + ' vs ' + dMenos);
+    }
+  });
+
+  // o item de esquiva realmente chega ao herói e move a agulha
+  var BOTA = 'cp-quicksilver-boots';
+  var comBota = D.items[BOTA] ? statsDe('arqueiro', 30, BOTA) : null;
+  if (comBota) {
+    check('o item de Passo soma esquiva em Progress.effectiveStats',
+      comBota.dodge === depois.arqueiro[30].dodge + D.items[BOTA].bonuses.dodge,
+      depois.arqueiro[30].dodge + ' + ' + D.items[BOTA].bonuses.dodge + ' = ' + comBota.dodge);
+    var semB = chance(depois.arqueiro[30].dodge, LOCK_COMUM, CASO);
+    var comB = chance(comBota.dodge, LOCK_COMUM, CASO);
+    check('a bota lendária muda a chance de escapar de monstro comum',
+      comB > semB, pct(semB) + ' → ' + pct(comB));
+  } else {
+    check('item de referência ' + BOTA + ' existe em DATA.items', false, 'ausente');
+  }
+
+  // ======================================================================
+  // 5. O SAVE DO JOGADOR CONTINUA INTACTO
+  // ======================================================================
+  var sb = J.SaveSandbox ? J.SaveSandbox.check() : { ok: false };
+  check('save_sandbox: o disco não foi tocado', sb.ok, JSON.stringify(sb));
+
+  // ======================================================================
+  // RELATÓRIO — a tabela do antes e do depois
+  // ======================================================================
+  function seta(a, b) {
+    if (b > a) return '<span class="up">' + pct(a) + ' → ' + pct(b) + '</span>';
+    if (b < a) return '<span class="down">' + pct(a) + ' → ' + pct(b) + '</span>';
+    return '<span class="same">' + pct(a) + ' = </span>';
+  }
+  var html = '';
+
+  html += '<h2>Esquiva e fixação por nível (sem equipamento)</h2>';
+  html += '<table><tr><th>classe</th><th>papel</th>';
+  NIVEIS.forEach(function (n) { html += '<th>nv ' + n + '</th>'; });
+  html += '<th>antes (qualquer nível)</th></tr>';
+  ORDEM.forEach(function (c) {
+    html += '<tr><td class="k">' + D.classes[c].name + ' (' + c + ')</td><td class="k">' +
+      D.classes[c].role + '</td>';
+    NIVEIS.forEach(function (n) {
+      html += '<td>' + depois[c][n].dodge + ' / ' + depois[c][n].lock + '</td>';
+    });
+    html += '<td class="same">' + ANTES[c].dodge + ' / ' + ANTES[c].lock + '</td></tr>';
+  });
+  html += '</table><div class="sub">esquiva / fixação</div>';
+
+  var CENARIOS = [
+    { nome: 'monstro comum RASO (fixação ' + LOCK_COMUM_RASO + ', mediana do 1º calabouço)',
+      lock: LOCK_COMUM_RASO },
+    { nome: 'monstro comum FUNDO (fixação ' + LOCK_COMUM + ', mediana do último calabouço)',
+      lock: LOCK_COMUM },
+    { nome: 'Vergasta (fixação ' + LOCK_VERGASTA + ', 2ª sala do 1º calabouço)', lock: LOCK_VERGASTA },
+    { nome: 'CHEFE FINAL (fixação ' + LOCK_CHEFE + ')', lock: LOCK_CHEFE }
+  ];
+  CENARIOS.forEach(function (cen) {
+    html += '<h2>Chance de ESCAPAR — ' + cen.nome + '</h2>';
+    html += '<table><tr><th>classe</th>';
+    NIVEIS.forEach(function (n) { html += '<th>nv ' + n + '</th>'; });
+    html += '</tr>';
+    ORDEM.forEach(function (c) {
+      html += '<tr><td class="k">' + D.classes[c].name + ' (' + c + ')</td>';
+      NIVEIS.forEach(function (n) {
+        html += '<td>' + seta(chance(ANTES[c].dodge, cen.lock, CASO),
+                              chance(depois[c][n].dodge, cen.lock, CASO)) + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</table>';
+  });
+
+  html += '<h2>Do outro lado: o que escapa do TANQUE (fixação dele)</h2>';
+  html += '<table><tr><th>monstro</th>';
+  NIVEIS.forEach(function (n) { html += '<th>sumo nv ' + n + '</th>'; });
+  html += '<th>antes</th></tr>';
+  [{ n: 'escorregadio (esquiva ' + ESQUIVA_ESCORREGADIO + ')', d: ESQUIVA_ESCORREGADIO },
+   { n: 'mediano (esquiva ' + mediana(dodgesComuns) + ')', d: mediana(dodgesComuns) }].forEach(function (mm) {
+    html += '<tr><td class="k">' + mm.n + '</td>';
+    NIVEIS.forEach(function (n) {
+      html += '<td>' + pct(chance(mm.d, depois.sumo[n].lock, CASO)) + '</td>';
+    });
+    html += '<td class="same">' + pct(chance(mm.d, ANTES.sumo.lock, CASO)) + '</td></tr>';
+  });
+  html += '</table>';
+
+  html += '<h2>Teto de equipamento — nível 30 com a melhor bota do jogo</h2>';
+  if (comBota) {
+    html += '<table><tr><th>classe</th><th>esquiva</th>' +
+      '<th>comum fundo (' + LOCK_COMUM + ')</th><th>chefe (' + LOCK_CHEFE + ')</th></tr>';
+    ORDEM.forEach(function (c) {
+      var d = depois[c][30].dodge + D.items[BOTA].bonuses.dodge;
+      html += '<tr><td class="k">' + D.classes[c].name + '</td><td>' + d + '</td><td>' +
+        pct(chance(d, LOCK_COMUM, CASO)) + '</td><td>' + pct(chance(d, LOCK_CHEFE, CASO)) +
+        '</td></tr>';
+    });
+    var antesTeto = ANTES.espadachim.dodge + 14;   // a bota lendária dava 14 na v2.6
+    html += '<tr><td class="k">— na v2.6, o melhor caso era</td><td>' + antesTeto +
+      '</td><td>' + pct(chance(antesTeto, LOCK_COMUM, CASO)) + '</td><td>' +
+      pct(chance(antesTeto, LOCK_CHEFE, CASO)) + '</td></tr>';
+    html += '</table><div class="sub">O chefe segurar continua sendo a regra; o que compra a ' +
+      'exceção é o equipamento, não o nível.</div>';
+  }
+
+  html += '<h2>Itens do espaço PASSO (a esquiva que se compra)</h2>';
+  html += '<table><tr><th>item</th><th>calabouço</th><th>raridade</th><th>esquiva</th>' +
+          '<th>outros</th></tr>';
+  passos.sort(function (a, b) { return (a.id < b.id ? -1 : 1); }).forEach(function (it) {
+    var outros = [];
+    for (var k in it.bonuses) {
+      if (k !== 'dodge' && k !== 'resists' && it.bonuses.hasOwnProperty(k)) {
+        outros.push(k + ' ' + it.bonuses[k]);
+      }
+    }
+    html += '<tr><td class="k">' + it.name + '</td><td class="k">' + it.dungeonId +
+      '</td><td class="k">' + it.rarity + '</td><td>' + (it.bonuses.dodge || 0) +
+      '</td><td class="k">' + outros.join(', ') + '</td></tr>';
+  });
+  html += '</table>';
+
+  document.getElementById('report').innerHTML = html;
+
+  // ---------------------------------------------------------------- resumo
+  var fails = results.filter(function (r) { return !r.ok; });
+  window.TEST_RESULTS = {
+    passed: results.length - fails.length, failed: fails.length,
+    failures: fails.map(function (r) { return r.name + (r.detail ? ' — ' + r.detail : ''); })
+  };
+  var s = document.getElementById('summary');
+  s.className = fails.length ? 'somefail' : 'allpass';
+  s.textContent = fails.length
+    ? (fails.length + ' FALHAS de ' + results.length + ' checagens')
+    : ('TUDO PASSOU — ' + results.length + ' checagens, 0 falhas');
+  document.getElementById('failList').innerHTML = fails.map(function (r) {
+    return '<li class="fail">' + r.name + (r.detail ? ' — ' + r.detail : '') + '</li>';
+  }).join('');
+  document.getElementById('allList').innerHTML = results.map(function (r) {
+    return '<li class="' + (r.ok ? 'pass' : 'fail') + '">' + r.name +
+      (r.detail ? ' <span class="sub">' + r.detail + '</span>' : '') + '</li>';
+  }).join('');
+})();
+</script>
+</body>
+</html>

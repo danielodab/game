@@ -1008,6 +1008,101 @@
       eq(h2.power, base.power + (per.power || 0) * 29, 'genérico até o fim');
     });
 
+    /* ---------------------------------------------------------------------
+     * §9-H — DEFESA DE POSIÇÃO POR NÍVEL. `Engine.heroStats` (a porta de quem
+     * chama `createBattle` sem `stats`) tem de aplicar a MESMA curva que
+     * `Progress.effectiveStats`, senão a mesma dupla luta diferente conforme
+     * quem montou o grupo. Aqui exercitamos as classes REAIS, porque as de
+     * fixture usam papéis fora da tabela de propósito (ver o teste seguinte).
+     * ------------------------------------------------------------------- */
+    t('§9-H: esquiva e fixação sobem com o nível, no ritmo do PAPEL da classe', function () {
+      var tbl = (D.leveling || {}).defenseByRole;
+      if (!tbl || !D.classes || !D.classes.sumo) { notes.push('§9-H: dado real ausente'); return; }
+      var maxLv = D.leveling.maxLevel || 30;
+      var casos = ['sumo', 'arqueiro', 'espadachim', 'bruxo', 'curandeira', 'invocador'];
+      for (var i = 0; i < casos.length; i++) {
+        var cid = casos[i], cls = D.classes[cid];
+        if (!cls) continue;
+        var alvo = tbl[cls.role];
+        ok(!!alvo, 'papel ' + cls.role + ' está na tabela');
+        if (!alvo) continue;
+
+        E.events.length = 0;
+        var st1 = E.createBattle('test-arena-v2', 0,
+          [{ heroId: 't-h1', classId: cid, element: 'neutro', level: 1, spells: [], items: {} }]);
+        var h1 = byHero(st1, 't-h1');
+        eq(h1.dodge, cls.stats.dodge, cid + ' nv1 = esquiva base (a fixação morde cedo)');
+        eq(h1.lock, cls.stats.lock, cid + ' nv1 = fixação base');
+
+        E.events.length = 0;
+        var st30 = E.createBattle('test-arena-v2', 0,
+          [{ heroId: 't-h1', classId: cid, element: 'neutro', level: maxLv, spells: [], items: {} }]);
+        var h30 = byHero(st30, 't-h1');
+        eq(h30.dodge, Math.max(cls.stats.dodge, alvo.dodge), cid + ' nv' + maxLv + ' pousa no alvo de esquiva');
+        eq(h30.lock, Math.max(cls.stats.lock, alvo.lock), cid + ' nv' + maxLv + ' pousa no alvo de fixação');
+
+        // meio da escada: nunca anda para trás
+        E.events.length = 0;
+        var mid = Math.round((1 + maxLv) / 2);
+        var stM = E.createBattle('test-arena-v2', 0,
+          [{ heroId: 't-h1', classId: cid, element: 'neutro', level: mid, spells: [], items: {} }]);
+        var hM = byHero(stM, 't-h1');
+        ok(hM.dodge >= h1.dodge && hM.dodge <= h30.dodge, cid + ' nv' + mid + ' esquiva entre as pontas');
+        ok(hM.lock >= h1.lock && hM.lock <= h30.lock, cid + ' nv' + mid + ' fixação entre as pontas');
+      }
+    });
+
+    t('§9-H: papel fora da tabela não ganha nada (a curva é aditiva e opcional)', function () {
+      var base = D.classes['t-alfa'].stats;    // role 'tank', que NÃO é 'tanque'
+      E.events.length = 0;
+      var st = E.createBattle('test-arena-v2', 0, [P({ level: 30 })]);
+      var h = byHero(st, 't-h1');
+      eq(h.dodge, base.dodge || 0, 'esquiva intocada sem papel na tabela');
+      eq(h.lock, base.lock || 0, 'fixação intocada sem papel na tabela');
+    });
+
+    t('§9-H: a curva muda a chance de escapar — e o chefe continua segurando', function () {
+      if (!D.classes || !D.classes.arqueiro || !D.leveling.defenseByRole) return;
+      function chanceContra(cid, nivel, lockDoInimigo) {
+        E.events.length = 0;
+        var st = E.createBattle('test-arena-v2', 0,
+          [{ heroId: 't-h1', classId: cid, element: 'neutro', level: nivel, spells: [], items: {} }]);
+        var h = byHero(st, 't-h1');
+        var fake = { units: [h, { uid: 'lk', dodge: 0, lock: lockDoInimigo,
+                                 element: 'neutro', effects: [] }] };
+        return E.dodgeChance(fake, h.uid, 'lk');
+      }
+      var COMUM = 20;                       // fixação mediana do último calabouço
+      var CHEFE = 55;                       // a maior fixação do jogo
+      ok(chanceContra('arqueiro', 30, COMUM) > chanceContra('arqueiro', 1, COMUM),
+        'arqueiro nv30 escapa mais de monstro comum que nv1');
+      ok(chanceContra('arqueiro', 30, COMUM) > 0.5,
+        'arqueiro nv30 escapa de monstro comum na maioria das vezes');
+      ok(chanceContra('sumo', 30, COMUM) < 0.34,
+        'sumo nv30 continua ruim de escapar — ele não foi feito para fugir');
+      var todas = ['sumo', 'arqueiro', 'espadachim', 'bruxo', 'curandeira', 'invocador'];
+      for (var i = 0; i < todas.length; i++) {
+        if (!D.classes[todas[i]]) continue;
+        ok(chanceContra(todas[i], 30, CHEFE) <= 0.25,
+          todas[i] + ' nv30 continua preso pelo chefe (' +
+          Math.round(chanceContra(todas[i], 30, CHEFE) * 100) + '%)');
+      }
+      // do outro lado: a fixação do tanque cresce e prende quem é escorregadio
+      E.events.length = 0;
+      var st1 = E.createBattle('test-arena-v2', 0,
+        [{ heroId: 't-h1', classId: 'sumo', element: 'neutro', level: 1, spells: [], items: {} }]);
+      var t1 = byHero(st1, 't-h1');
+      E.events.length = 0;
+      var st30 = E.createBattle('test-arena-v2', 0,
+        [{ heroId: 't-h1', classId: 'sumo', element: 'neutro', level: 30, spells: [], items: {} }]);
+      var t30 = byHero(st30, 't-h1');
+      var fujao = { uid: 'fg', dodge: 36, lock: 0, element: 'neutro', effects: [] };
+      var f1 = E.dodgeChance({ units: [fujao, t1] }, 'fg', t1.uid);
+      var f30 = E.dodgeChance({ units: [fujao, t30] }, 'fg', t30.uid);
+      ok(f30 < f1, 'o monstro mais escorregadio escapa MENOS do sumo nv30 (' +
+        Math.round(f1 * 100) + '% → ' + Math.round(f30 * 100) + '%)');
+    });
+
     t('v2.2 elemPower: `stats` vindos de Progress têm prioridade sobre a derivação', function () {
       E.events.length = 0;
       var st = E.createBattle('test-arena-v2', 0, [

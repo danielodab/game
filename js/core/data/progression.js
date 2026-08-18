@@ -81,6 +81,45 @@ JOGO.DATA.leveling = {
   perLevel: { hp: 5, power: 3 },
   perLevelElement: { hp: 5, elemPower: 3 },
 
+  /* DEFESA DE POSIÇÃO POR NÍVEL (adendo v2.7, §9-H) — esquiva e fixação deixam de
+   * ser estatísticas mortas. Até aqui o herói nascia com a esquiva da classe e
+   * MORRIA com ela: nível 30 era idêntico ao nível 1, e como nenhum caminho a
+   * aumentava, a fixação dos monstros (4 nos fracos, 55 nos chefes) simplesmente
+   * ganhava sempre. A partir daqui cada classe caminha do valor de `stats` (nível 1)
+   * até o alvo abaixo (nível `maxLevel`), em linha reta:
+   *
+   *   efetivo = base + round((alvo − base) × (nível − 1) / (maxLevel − 1))
+   *
+   * Nível 1 é EXATAMENTE a base — a fixação continua mordendo cedo, que é como o
+   * jogador aprende que encostar num inimigo é um compromisso.
+   *
+   * A chave é o `role` da classe (`DATA.classes[*].role`), não o id: quem inventar
+   * uma sétima classe herda o ritmo do papel que escolher.
+   *
+   * POR QUE ESTES NÚMEROS. A fórmula do contrato (§2) é
+   * `clamp(0,10 · 0,90 · 0,35 + (esquiva − fixação)×0,02 + elemental)`: a diferença
+   * esquiva−fixação só vale alguma coisa numa janela de 40 pontos (de −12,5 a +27,5).
+   * Como a fixação dos monstros vai de 4 a 55, os alvos foram escolhidos para que,
+   * SEM equipamento e contra a fixação mediana do calabouço 6 (20), no nível 30:
+   *   atirador/assassino escapem na maioria das vezes (~0,81/0,85);
+   *   mago/suporte/invocador fiquem no meio (~0,45–0,61);
+   *   o tanque continue ruim de escapar (~0,25) — ele não foi feito para fugir.
+   * E que, contra a fixação de um CHEFE (50–55), todos continuem entre 0,10 e 0,15:
+   * o chefe segurar é temático e fica de pé.
+   *
+   * Do outro lado, `lock` é o que o herói faz COM o inimigo. O tanque sai de 40 e
+   * chega a 70: a partir daí nem o monstro mais escorregadio do jogo (esquiva 36,
+   * a Arauta da Rajada) escapa dele acima do piso de 10%. É o prêmio de identidade
+   * do papel — ele não corre, ele impede que corram. */
+  defenseByRole: {
+    tanque:    { dodge: 10, lock: 70 },
+    atirador:  { dodge: 38, lock: 16 },
+    assassino: { dodge: 40, lock: 16 },
+    mago:      { dodge: 24, lock: 10 },
+    suporte:   { dodge: 28, lock: 12 },
+    invocador: { dodge: 20, lock: 30 }
+  },
+
   /* Nível em que o herói escolhe o elemento — escolha permanente. */
   elementChoiceLevel: 5,
 

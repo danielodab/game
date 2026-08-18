@@ -89,8 +89,13 @@ JOGO.DATA.classes = {
     description: 'Duas adagas, velocidade, invisibilidade e veneno. Vive de escolher a hora: entra pelo flanco, corta duas vezes e some antes da resposta. Morre depressa se errar a janela.',
     lore: 'Não existe noite num mundo sem céu — existe o breu entre duas lanternas, e é ali que ele mora. Aprendeu a andar no intervalo das luzes e a devolver, na ponta das duas adagas, a mesma escuridão que a Lousa entregou a todo mundo.',
     palette: { primary: '#2f6f8f', secondary: '#1b2733', accent: '#9be8ff' },
+    /* §9-H: a esquiva base caiu de 40 para 30. 40 era o TETO do esquema, e um teto
+     * no nível 1 não deixa espaço nenhum para a curva por nível — a classe mais
+     * escorregadia do jogo era justamente a única que não tinha para onde crescer.
+     * Ela continua a maior esquiva base do elenco, e o alvo de nível 30 do papel
+     * `assassino` (40, em DATA.leveling.defenseByRole) devolve o número antigo. */
     stats: {
-      hp: 95, pa: 6, pp: 4, initiative: 90, power: 0, dodge: 40, lock: 10,
+      hp: 95, pa: 6, pp: 4, initiative: 90, power: 0, dodge: 30, lock: 10,
       resists: { fogo: 0, agua: 0, terra: 0, ar: 0, neutro: 0 }
     },
     baseSpells: ['espadachim-neutro-1', 'espadachim-neutro-2', 'espadachim-neutro-3'],

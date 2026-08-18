@@ -459,6 +459,93 @@ fusão uma ferramenta de posicionamento que ela não tinha.
 (`duplas × TIERS.length`): o "75 formName únicos" cravado no teste virou falha sozinho no dia
 em que a escada mudou.
 
+## 9-H. ADENDO v2.7 — A esquiva deixa de ser estatística morta
+
+Pedido do usuário: *"subir com o nível dependendo da classe sobe mais. por exemplo o arqueiro e
+assassino tem mais esquiva e o tank já prende mais.. ou pode ser por equipamento também"*.
+
+**Como estava.** `dodge` e `lock` saíam de `DATA.classes[*].stats` e **nunca mais mudavam**:
+nenhum nível, nenhum caminho elemental, nenhum feitiço os tocava. O Bárbaro tinha esquiva 5 no
+nível 1 e esquiva 5 no nível 30. Do outro lado, a fixação dos monstros vai de 4 (bicho fraco) a
+55 (chefe final), e a Vergasta — **segunda sala do primeiro calabouço** — já prende com 26.
+Com a fórmula do §2 (`0,35 + (esquiva − fixação)×0,02`, entre 0,10 e 0,90), o resultado medido
+era: contra a Vergasta o Bárbaro falhava 90% das vezes; contra qualquer chefe, 90%; e o nível 30
+era **idêntico** ao nível 1. A punição do §2 é dura de propósito (falhar custa TODO o PP do turno
+e a unidade não sai do lugar), mas o jogador não tinha nenhuma alavanca para responder a ela.
+
+### 1. A curva por nível, com ritmo por PAPEL
+
+`DATA.leveling.defenseByRole` (novo) dá a cada `role` um **destino no nível máximo**. A base
+continua sendo o nível 1, e a caminhada é reta:
+
+```js
+efetivo = base + round((alvo − base) × (nível − 1) / (maxLevel − 1))
+```
+
+| papel | classe | esquiva nv1 → nv30 | fixação nv1 → nv30 |
+|---|---|---|---|
+| `assassino` | Ladino (espadachim) | 30 → **40** | 10 → 16 |
+| `atirador` | Batedor (arqueiro) | 25 → **38** | 10 → 16 |
+| `suporte` | Paladina (curandeira) | 20 → 28 | 5 → 12 |
+| `mago` | Bruxo | 15 → 24 | 5 → 10 |
+| `invocador` | Xamã | 12 → 20 | 15 → 30 |
+| `tanque` | Bárbaro (sumo) | 5 → 10 | 40 → **70** |
+
+- **Nível 1 é exatamente a base** — a regra de fixação precisa morder cedo, é assim que o jogador
+  aprende que encostar num inimigo é um compromisso. A curva não alivia o começo do jogo.
+- A chave é o **papel**, não o id da classe: uma sétima classe herda o ritmo do papel que escolher.
+- Alvo **igual ou abaixo** da base vale ganho 0 — a curva nunca encolhe uma classe.
+- A conta entra **antes** dos itens, conjuntos, pet e estrelas, que continuam somando por cima.
+- Vive em dois lugares que têm de concordar: `Progress.effectiveStats` (caminho oficial) e
+  `Engine.heroStats` (rede de quem chama `createBattle` sem `stats`). `Progress.defenseAtLevel(classId, nível)`
+  expõe a curva para a UI sem precisar montar herói.
+
+**Por que estes números e não outros.** A janela útil da fórmula do §2 tem só **40 pontos**
+(de −12,5 a +27,5 em `esquiva − fixação` é o que separa o piso de 10% do teto de 90%), e a
+fixação dos monstros ocupa 51 pontos. Não cabe uma curva que seja generosa contra o bicho fraco
+e relevante contra o chefe: escolhemos calibrar pela **fixação mediana do último calabouço (20)**
+e pela **fixação do chefe final (55)**. Sem equipamento, no nível 30 e no caso elemental mais
+comum: atirador 81% · assassino 85% · suporte 61% · mago 53% · invocador 45% · **tanque 25%**;
+e contra o chefe, **todos entre 10% e 15%**. O tanque continuar ruim de fugir é o desenho, não
+uma sobra.
+
+**Uma base mudou.** `espadachim.stats.dodge` caiu de **40 para 30**. 40 era o teto do esquema de
+`validate_classes` e não deixava espaço nenhum para curva: a classe mais escorregadia do jogo era
+a única sem para onde crescer. Ela continua a maior esquiva base do elenco em todos os níveis, e
+o alvo do papel `assassino` devolve o 40 no nível 30. Nenhuma outra base foi tocada.
+
+**A fixação vista do outro lado.** `lock` é o que o herói faz *com* o inimigo, e é aí que o tanque
+recebe o prêmio de identidade: de 40 para 70. O monstro mais escorregadio do jogo (Arauta da
+Rajada, esquiva 36) escapava dele 37% das vezes e passa a escapar **10%** — o piso — a partir do
+nível 15. Ele não corre; ele impede que corram.
+
+### 2. O espaço **Passo** é onde a esquiva se compra
+
+Toda peça de `slot: 'passo'` passa a conceder **esquiva** — é o único espaço que concede, e
+completa a resposta do usuário ("ou pode ser por equipamento também"). Três das doze peças não
+davam nada (Escarpins da Baronesa, Solados de Escória, Grevas de Minério).
+
+- Escada por **profundidade**: 8/10 na Estufa · 10/12 na Cisterna · 12/14 nos Andaimes e no
+  Fecho · 12 na Mina · 10/16 no Coração Partido.
+- Dentro do **mesmo calabouço**, o mais raro leva **+2** — pequena exceção à lei do `items.js`
+  ("raridade não é poder"), sem a qual o "raro" do espaço vira downgrade.
+- As três peças que também carregam **fixação** (Grilhões de Forja, Grevas de Minério,
+  Tornozeleiras de Cinza) ficam um degrau abaixo em esquiva: pagaram no outro lado.
+- **Teto de 16 por peça.** Acima disso o herói de nível 30 escapa do chefe com moeda honesta e a
+  sala de chefe deixa de ser um compromisso.
+
+### 3. O que NÃO mudou, de propósito
+
+- **O chefe continua segurando.** Sem equipamento, nenhuma classe passa de 15% contra a fixação
+  55, em nenhum nível. Isso é temático e fica.
+- A `xpTable` e o `xp` dos monstros continuam **congelados** (§9-D) — nada aqui os toca.
+- A fórmula do §2, o bônus elemental (0 / +0,10 / +0,30) e a punição da falha continuam iguais.
+- **Ressalva registrada:** o teto do fim de jogo continua sendo o *equipamento*, não o nível. Um
+  Ladino de nível 30 com a bota lendária chega a 56 de esquiva e escapa do chefe final em 47% —
+  na v2.6 esse mesmo caso já dava 43%, então o adendo mexeu 4 pontos. Quem realmente estoura a
+  conta são os **conjuntos** (um conjunto de ar completo soma +44 de esquiva, cumulativo por
+  peça) e a estrela ★4 (+10). Se um dia isso incomodar, o conserto é lá — não na curva de nível.
+
 ## 10. Testes obrigatórios
 
 Cada dono entrega sua página em `tests/` (padrão v1: roda no load, resultado no DOM e em

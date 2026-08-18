@@ -593,7 +593,28 @@ var JOGO = (typeof window !== 'undefined')
       out.hp += (perEl.hp || 0) * elementSteps;
       out.elemPower += (perEl.elemPower || 0) * elementSteps;
     }
+    // §9-H: esquiva e fixação sobem com o nível no ritmo do PAPEL da classe.
+    // Mesma conta de `Progress.effectiveStats` — as duas portas de entrada do
+    // grupo têm de concordar, senão a batalha muda conforme quem a montou.
+    out.dodge += defenseGain(cls, lv, 'dodge', out.dodge);
+    out.lock += defenseGain(cls, lv, 'lock', out.lock);
     return out;
+  }
+
+  /* §9-H — DEFESA DE POSIÇÃO POR NÍVEL (espelho de Progress [D17]).
+   * `efetivo = base + round((alvo − base) × (nível − 1) / (maxLevel − 1))`, com o
+   * alvo lido em `DATA.leveling.defenseByRole[classe.role]`. Sem a tabela no dado
+   * o ganho é 0 e o motor se comporta como na v2.6. Alvo abaixo da base vale 0. */
+  function defenseGain(cls, level, stat, base) {
+    var tbl = (DATA().leveling || {}).defenseByRole;
+    if (!tbl || !cls || !cls.role) return 0;
+    var row = tbl[cls.role];
+    if (!row || typeof row[stat] !== 'number') return 0;
+    var span = row[stat] - (base || 0);
+    if (span <= 0) return 0;
+    var top = Math.max(2, (DATA().leveling || {}).maxLevel || 30);
+    var steps = Math.max(0, Math.min(level || 1, top) - 1);
+    return Math.round(span * steps / (top - 1));
   }
 
   // Normaliza `party`: aceita strings (id de classe/herói) ou objetos do contrato.

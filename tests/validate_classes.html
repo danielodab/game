@@ -513,6 +513,77 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
       '+' + (RF.maxRounds - RF.afterRound) * RF.powerPerRound + ' de poder na rodada ' + RF.maxRounds);
   }
 
+  /* ---- §9-H: defesa de posição por nível, com ritmo por PAPEL --------------
+   * A esquiva era estatística morta: igual no nível 1 e no 30, sem item nenhum
+   * que a mexesse, contra fixação de monstro que vai de 4 a 55. A tabela abaixo
+   * dá a cada PAPEL um destino no nível máximo; a base da classe continua sendo
+   * o nível 1. Estas checagens guardam as três coisas que não podem quebrar:
+   * (a) todo papel do elenco está na tabela; (b) as duas classes de esquiva
+   * lideram e o tanque lidera a fixação; (c) ninguém encosta na fixação de
+   * chefe — o chefe segurar é temático e fica de pé. */
+  var DBR = L.defenseByRole;
+  check('leveling.defenseByRole existe (§9-H)', !!DBR);
+  if (DBR) {
+    var papeis = {}, maiorEsquiva30 = 0, maiorFix30 = 0, donoEsquiva = '', donoFix = '';
+    CLASS_IDS.forEach(function (cid) {
+      var c = D.classes[cid];
+      if (!c) return;
+      papeis[c.role] = cid;
+      var row = DBR[c.role];
+      check('defenseByRole tem o papel "' + c.role + '" (classe ' + cid + ')', !!row);
+      if (!row) return;
+      check('defenseByRole.' + c.role + '.dodge inteiro 0–60',
+        isNum(row.dodge) && row.dodge >= 0 && row.dodge <= 60 && row.dodge % 1 === 0, row.dodge);
+      check('defenseByRole.' + c.role + '.lock inteiro 0–80',
+        isNum(row.lock) && row.lock >= 0 && row.lock <= 80 && row.lock % 1 === 0, row.lock);
+      check('defenseByRole.' + c.role + ': a esquiva do nível 30 não fica ABAIXO da base da classe',
+        row.dodge >= c.stats.dodge, row.dodge + ' vs base ' + c.stats.dodge);
+      check('defenseByRole.' + c.role + ': a fixação do nível 30 não fica ABAIXO da base da classe',
+        row.lock >= c.stats.lock, row.lock + ' vs base ' + c.stats.lock);
+      check('classe ' + cid + ': a esquiva CRESCE com o nível (deixou de ser estatística morta)',
+        row.dodge > c.stats.dodge || row.lock > c.stats.lock,
+        c.stats.dodge + '→' + row.dodge + ' · ' + c.stats.lock + '→' + row.lock);
+      if (row.dodge > maiorEsquiva30) { maiorEsquiva30 = row.dodge; donoEsquiva = c.role; }
+      if (row.lock > maiorFix30) { maiorFix30 = row.lock; donoFix = c.role; }
+    });
+    check('§9-H: quem mais esquiva no nível 30 é atirador ou assassino',
+      donoEsquiva === 'atirador' || donoEsquiva === 'assassino', donoEsquiva + ' (' + maiorEsquiva30 + ')');
+    check('§9-H: quem mais PRENDE no nível 30 é o tanque', donoFix === 'tanque',
+      donoFix + ' (' + maiorFix30 + ')');
+    if (DBR.tanque && DBR.atirador && DBR.assassino) {
+      check('§9-H: o tanque tem a MENOR esquiva de nível 30 do elenco',
+        Object.keys(papeis).every(function (r) {
+          return r === 'tanque' || !DBR[r] || DBR[r].dodge > DBR.tanque.dodge;
+        }), 'tanque ' + DBR.tanque.dodge);
+      check('§9-H: as duas classes de esquiva passam das do meio',
+        ['mago', 'suporte', 'invocador'].every(function (r) {
+          return !DBR[r] || (DBR.atirador.dodge > DBR[r].dodge && DBR.assassino.dodge > DBR[r].dodge);
+        }), 'atirador ' + DBR.atirador.dodge + ' · assassino ' + DBR.assassino.dodge);
+      /* Teto: a fórmula do contrato (§2) é 0,35 + (esquiva − fixação)×0,02, com piso
+       * 0,10 e teto 0,90. Com a fixação do chefe mais forte, ninguém pode chegar a
+       * uma moeda honesta SEM equipamento — senão o chefe deixa de ser um compromisso. */
+      var fixChefe = 55;
+      if (D.monsters) {
+        fixChefe = 0;
+        Object.keys(D.monsters).forEach(function (mid) {
+          var m = D.monsters[mid];
+          if (m && m.boss && m.stats && m.stats.lock > fixChefe) fixChefe = m.stats.lock;
+        });
+        if (!fixChefe) fixChefe = 55;
+      }
+      var pior = 0, quem = '';
+      Object.keys(papeis).forEach(function (r) {
+        if (!DBR[r]) return;
+        var c = 0.35 + (DBR[r].dodge - fixChefe) * 0.02 + 0.30;   // caso elemental mais generoso
+        c = Math.max(0.10, Math.min(0.90, c));
+        if (c > pior) { pior = c; quem = r; }
+      });
+      check('§9-H: contra o chefe mais forte (fixação ' + fixChefe + '), nenhum papel sem ' +
+        'equipamento passa de 50% de escapar', pior <= 0.50,
+        quem + ' ' + Math.round(pior * 100) + '%');
+    }
+  }
+
   var F = L.xpFalloff;
   check('leveling.xpFalloff existe', !!F);
   check('xpFalloff.graceLevels = 4', !!F && F.graceLevels === 4, F && F.graceLevels);

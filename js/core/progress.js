@@ -135,6 +135,14 @@ var JOGO = (typeof window !== 'undefined')
  *       assim que o elemento é escolhido. Sem `perLevelElement` no dado, tudo
  *       vira poder genérico (comportamento da v2.1).
  *       `effectiveStats` devolve `elemPower` e `element`; `battleParty` repassa.
+ *
+ * [D17] DEFESA DE POSIÇÃO POR NÍVEL (§9-H). `dodge` e `lock` caminham em linha
+ *       reta da base da classe (nível 1) até o alvo do PAPEL no nível máximo,
+ *       lido em `DATA.leveling.defenseByRole[role]`. A conta entra ANTES dos
+ *       itens, dos conjuntos, do pet e das estrelas — tudo isso continua somando
+ *       por cima. Sem a tabela no dado, o ganho é 0 e nada muda (a v2.6 volta
+ *       inteira). Um alvo ABAIXO da base nunca encolhe a classe: vale 0.
+ *       `Progress.defenseAtLevel(classId, nível)` expõe a curva para a UI.
  * ==========================================================================*/
 
 (function () {
@@ -233,9 +241,42 @@ var JOGO = (typeof window !== 'undefined')
       perLevel: lv.perLevel || { hp: 0, power: 0 },
       perLevelElement: isObj(lv.perLevelElement) ? lv.perLevelElement : null,   // §9-C [D14]
       xpFalloff: isObj(lv.xpFalloff) ? lv.xpFalloff : null,                     // §9-D [D15]
+      defenseByRole: isObj(lv.defenseByRole) ? lv.defenseByRole : null,         // §9-H [D17]
       elementChoiceLevel: num(lv.elementChoiceLevel, 5)
     };
   }
+
+  /* [D17] §9-H — DEFESA DE POSIÇÃO POR NÍVEL.
+   * Esquiva e fixação caminham em linha reta da base da classe (nível 1) até o alvo
+   * do PAPEL no nível máximo. Sem `defenseByRole` no dado, devolve 0: a curva é
+   * aditiva e o motor continua funcionando com os valores de antes. Nunca encolhe
+   * uma base — um alvo abaixo da base é lido como "essa classe não cresce nisso". */
+  function defenseGain(classId, level, stat, base) {
+    var lv = leveling();
+    var tbl = lv.defenseByRole;
+    if (!tbl) return 0;
+    var def = classDef(classId);
+    var role = def && def.role;
+    var row = role ? tbl[role] : null;
+    if (!isObj(row)) return 0;
+    var target = num(row[stat], null);
+    if (target === null) return 0;
+    var span = target - num(base, 0);
+    if (span <= 0) return 0;
+    var top = Math.max(2, num(lv.maxLevel, 30));
+    var steps = Math.max(0, Math.min(num(level, 1), top) - 1);
+    return Math.round(span * steps / (top - 1));
+  }
+  /* Exposto para a UI e para os testes mostrarem a curva sem montar um herói. */
+  Progress.defenseAtLevel = function (classId, level) {
+    var def = classDef(classId);
+    var base = (def && isObj(def.stats)) ? def.stats : {};
+    var d = num(base.dodge, 0), l = num(base.lock, 0);
+    return {
+      dodge: d + defenseGain(classId, level, 'dodge', d),
+      lock: l + defenseGain(classId, level, 'lock', l)
+    };
+  };
   function unlockTiers() {
     var t = D().unlockTiers;
     return isArray(t) && t.length ? t : [5, 10, 12, 15, 20, 30];
@@ -1106,6 +1147,10 @@ var JOGO = (typeof window !== 'undefined')
     var elementalUps = ups - genericUps;
     var hasElement = (h.element && h.element !== DEFAULT_ELEMENT);
 
+    // §9-H [D17]: esquiva e fixação também sobem com o nível, no ritmo do PAPEL
+    out.dodge += defenseGain(h.classId, h.level, 'dodge', out.dodge);
+    out.lock += defenseGain(h.classId, h.level, 'lock', out.lock);
+
     out.hp += num(per.hp, 0) * genericUps +
               num(perEl && perEl.hp, num(per.hp, 0)) * elementalUps;
     out.power += num(per.power, 0) * genericUps;
@@ -1153,6 +1198,8 @@ var JOGO = (typeof window !== 'undefined')
     out.pa = Math.max(0, Math.round(out.pa));
     out.pp = Math.max(0, Math.round(out.pp));
     out.elemPower = Math.max(0, Math.round(out.elemPower));
+    out.dodge = Math.max(0, Math.round(out.dodge));
+    out.lock = Math.max(0, Math.round(out.lock));
     return out;
   };
 
