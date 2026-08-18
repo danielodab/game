@@ -21,7 +21,7 @@ com a altura medida no canto.</div>
 <div id="st">rodando…</div>
 <h2>As 7 invocações — agora</h2>
 <canvas id="fHoje" class="folha"></canvas>
-<h2>As 25 disponíveis</h2>
+<h2>Os 12 que ainda sobram</h2>
 <canvas id="fNovas" class="folha"></canvas>
 <canvas id="cv" width="230" height="280"></canvas>
 
@@ -41,7 +41,7 @@ com a altura medida no canto.</div>
 <script>
 (function () {
   'use strict';
-  var TW = 230, TH = 280, COLS = 7;
+  var TW = 250, TH = 300, COLS = 6;
   var PASTA = '../assets/candidatos/quaternius_ultimate_monsters/';
 
   var HOJE = [
@@ -54,10 +54,11 @@ com a altura medida no canto.</div>
     ['sum-storm-falcon', 'Falcão da Tempestade', 'era vespa']
   ];
 
-  var NOVAS = ['Alien','Alpaking_Evolved','Armabee_Evolved','Birb','BlueDemon','Cactoro',
-    'Demon','Dragon','Dragon_Evolved','Ghost','Ghost_Skull','Glub_Evolved','Goleling',
-    'Goleling_Evolved','GreenSpikyBlob','Hywirl','Monkroose','Mushnub_Evolved',
-    'MushroomKing','Ninja','Orc','Squidle','Tribal','Wizard','Yeti'];
+  // Sobraram estes depois que os chefes levaram seis e as invocacoes sete.
+  // Escolher pelo NOME ja me traiu uma vez: apostei que "Goleling" seria de
+  // pedra e sao criaturas verdes de coroa. Agora olho antes.
+  var NOVAS = ['Alien','Armabee_Evolved','Cactoro','Dragon','Ghost','GreenSpikyBlob',
+    'Monkroose','MushroomKing','Ninja','Orc','Tribal','Wizard'];
 
   var st = document.getElementById('st');
   var ren, sc, cam, falhas = [];

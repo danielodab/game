@@ -32,7 +32,11 @@ BICHOS = [
     ("q_demon",    "Demon"),           # Cao de Brasa — vermelho e chifrudo
     ("q_dragon_ev", "Dragon_Evolved"), # Colosso de Magma — massa de colosso
     ("q_squidle",  "Squidle"),         # Ninfa da Mare — aquatico de verdade
-    ("q_goleling_s", "Goleling"),      # Sentinela de Pedra — golem pequeno
+    # O "Goleling" reprovou de OLHO: pelo nome eu esperava pedra e sao criaturas
+    # verdes de orelha grande, cara de goblin. O pacote nao tem nenhuma criatura
+    # de pedra; estas duas sao as mais MINERAIS que ele oferece.
+    ("q_cactoro",  "Cactoro"),         # Sentinela de Pedra — espinhoso e plantado
+    ("q_spikyblob", "GreenSpikyBlob"), # Golem da Montanha — massa com espinhos de cristal
     ("q_birb",     "Birb"),            # Falcao da Tempestade — e literalmente ave
 ]
 

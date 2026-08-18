@@ -1768,7 +1768,11 @@ var JOGO = (typeof window !== 'undefined')
     if (hid) body.appendChild(equipRow(hid));
     body.appendChild(pickBar(hid));
     body.appendChild(invFilterTabs());
-    body.appendChild(invGrid(hid));
+    var g = invGrid(hid);
+    if (g.dataset && g.dataset.vazio) {
+      body.appendChild(el('p', 'inv-dica', g.dataset.vazio));
+    }
+    body.appendChild(g);
   }
 
   function pilhaDe(itemId) {
@@ -2002,6 +2006,10 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ---- A GRADE. Iguais empilham num espaço só, com ×N.
+  /* Quantas casas a grade mostra no mínimo. Doze colunas cabem em tela larga e
+   * seis em celular, então 48 fecha fileira nos dois. */
+  var INV_CELULAS_MIN = 48;
+
   function invGrid(hid) {
     var pilhas = safe(function () { return P().invStacks(); }, []);
     var grid = el('div', 'inv-big');
@@ -2039,17 +2047,37 @@ var JOGO = (typeof window !== 'undefined')
       });
       grid.appendChild(cell);
     });
+    // ---- GRADE FIXA (pedido do usuário, com a foto do Dofus na mão)
+    // Antes a grade desenhava UMA célula por pilha existente, então ela encolhia
+    // e crescia conforme o saco: com três itens virava uma tirinha de três
+    // quadrados, e a tela inteira dançava a cada peça equipada. No Dofus a grade
+    // é FIXA — os espaços vazios continuam lá, e é isso que dá a leitura de
+    // "quanto ainda cabe".
+    //
+    // Cresce de doze em doze para nunca terminar numa fileira quebrada. Como o
+    // CSS usa auto-fill, o número de colunas muda com a largura da tela; por
+    // isso o passo é um múltiplo com muitos divisores (12 = 2·3·4·6), que fecha
+    // fileira em quase toda largura.
+    var alvo = Math.max(INV_CELULAS_MIN, Math.ceil(mostrou / 12) * 12);
+    for (var vz = mostrou; vz < alvo; vz++) {
+      grid.appendChild(el('div', 'ig-cell is-vazia'));
+    }
+
+    // O aviso vira DICA acima da grade, não substituto dela: a grade fixa já
+    // mostra sozinha que está vazia, e trocá-la por um parágrafo era justamente
+    // o que fazia a tela pular de tamanho.
     if (!mostrou) {
       var vestidas = 0;
       partyHeroes().forEach(function (id) {
         SLOTS.forEach(function (c) { if (heroItem(hero(id), c)) vestidas++; });
       });
-      grid.appendChild(el('p', 'empty', vestidas
+      grid.dataset.vazio = vestidas
         ? (invFilter === 'todos'
-            ? 'A grade está vazia: tudo o que você tem já está vestido.'
+            ? 'Tudo o que você tem já está vestido.'
             : 'Nenhuma peça de ' + SLOT_PT[invFilter] + ' no saco.')
-        : 'Saco vazio. Os calabouços resolvem isso.'));
+        : 'Saco vazio. Os calabouços resolvem isso.';
     }
+    grid.dataset.cheio = mostrou + ' de ' + alvo;
     return grid;
   }
 

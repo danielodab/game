@@ -315,10 +315,12 @@ var JOGO = (typeof window !== 'undefined')
     'sum-ember-hound':    { model: 'q_demon',      scale: 0.72 },  // era lobo
     'sum-magma-colossus': { model: 'q_dragon_ev',  scale: 0.95 },  // era boi
     'sum-tide-nymph':     { model: 'q_squidle',    scale: 0.80 },  // era esqueleto mago
-    'sum-stone-sentinel': { model: 'q_goleling_s', scale: 0.85 },  // era esqueleto guerreiro
-    // de graca: o Goleling_Evolved veio com os chefes e sobrou quando a Mina
-    // trocou para o Yeti. Golem largo e baixo e ruim para chefe e certo aqui.
-    'sum-mountain-golem': { model: 'q_goleling',   scale: 1.15 },  // era o MESMO boi
+    // Os dois Golelings foram REPROVADOS de olho: pelo nome eu esperava pedra e
+    // sao criaturas verdes de orelha grande, cara de goblin. Foi o mesmo erro de
+    // escolher pelo nome que ja tinha me pegado antes. O pacote nao tem criatura
+    // de pedra nenhuma; estas duas sao as mais minerais que ele oferece.
+    'sum-stone-sentinel': { model: 'q_cactoro',    scale: 0.62 },  // espinhoso e plantado
+    'sum-mountain-golem': { model: 'q_spikyblob',  scale: 0.72 },  // massa com espinhos de cristal
     'sum-storm-falcon':   { model: 'q_birb',       scale: 0.75 }   // era vespa
   };
 

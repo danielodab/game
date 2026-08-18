@@ -1237,3 +1237,22 @@ i, em { font-style: normal; color: var(--dim); }
   .tree-row { grid-template-columns: 28px repeat(4, minmax(126px, 1fr)); }
   .tree-d { display: none; }        /* no celular a descrição fica no toque */
 }
+
+
+/* ------------------------------------------------------ GRADE FIXA DO SACO
+ * A casa VAZIA existe para a grade não encolher. Ela não é botão, não recebe
+ * toque e não entra na navegação por teclado — é chão, não peça. */
+.ig-cell.is-vazia {
+  min-height: 108px;
+  border: 2px dashed rgba(255,255,255,.07);
+  background: rgba(0,0,0,.16);
+  box-shadow: none;
+  cursor: default;
+  pointer-events: none;
+}
+.ig-cell.is-vazia::after {
+  content: ""; position: absolute; inset: 50% auto auto 50%;
+  width: 16px; height: 16px; transform: translate(-50%, -50%);
+  border-radius: 4px; background: rgba(255,255,255,.045);
+}
+.inv-dica { margin: 2px 0 8px; font-size: 12px; color: #8895a6; }
