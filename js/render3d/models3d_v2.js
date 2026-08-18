@@ -307,13 +307,19 @@ var JOGO = (typeof window !== 'undefined')
     'boss-riftheart': { model: 'q_ghostskull',  scale: 1.75 },   // era o MESMO T-Rex do heartforge
     // --- Rebanho do Invocador (invocacoes)
     'sporeling':          { model: 'q_frog',   scale: 0.62 },
-    'sum-familiar':       { model: 'q_fox',    scale: 0.72 },
-    'sum-ember-hound':    { model: 'q_wolf',   scale: 0.85 },
-    'sum-magma-colossus': { model: 'q_bull',   scale: 1.30 },
-    'sum-tide-nymph':     { model: 'skeleton_mage', scale: 1.00 },
-    'sum-stone-sentinel': { model: 'skeleton_warrior', show: ['Skeleton_Shield_Large_A'], scale: 1.15 },
-    'sum-mountain-golem': { model: 'q_bull',   scale: 1.55 },
-    'sum-storm-falcon':   { model: 'q_wasp',   scale: 0.90 }
+    // Seis das sete estavam erradas no CONCEITO — cao de brasa era um lobo,
+    // ninfa da mare um esqueleto mago, falcao da tempestade uma vespa — e duas
+    // dividiam o MESMO modelo: colosso de magma e golem da montanha eram o
+    // mesmo boi, um laranja e outro verde.
+    'sum-familiar':       { model: 'q_hywirl',     scale: 0.60 },  // era raposa
+    'sum-ember-hound':    { model: 'q_demon',      scale: 0.72 },  // era lobo
+    'sum-magma-colossus': { model: 'q_dragon_ev',  scale: 0.95 },  // era boi
+    'sum-tide-nymph':     { model: 'q_squidle',    scale: 0.80 },  // era esqueleto mago
+    'sum-stone-sentinel': { model: 'q_goleling_s', scale: 0.85 },  // era esqueleto guerreiro
+    // de graca: o Goleling_Evolved veio com os chefes e sobrou quando a Mina
+    // trocou para o Yeti. Golem largo e baixo e ruim para chefe e certo aqui.
+    'sum-mountain-golem': { model: 'q_goleling',   scale: 1.15 },  // era o MESMO boi
+    'sum-storm-falcon':   { model: 'q_birb',       scale: 0.75 }   // era vespa
   };
 
   // Familias: rede de seguranca quando um id novo aparecer nos dados.
