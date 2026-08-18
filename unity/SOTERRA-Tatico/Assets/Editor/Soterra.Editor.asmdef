@@ -1,0 +1,10 @@
+{
+    "name": "Soterra.Editor",
+    "rootNamespace": "Soterra.Lote",
+    "references": [
+        "Soterra"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}

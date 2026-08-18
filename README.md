@@ -290,23 +290,26 @@ imagem já deixou passar quatro variantes secretamente idênticas.
 
 ## 9. Migração para Unity
 
-Existe uma prova pequena em [`unity/SOTERRA-Tatico/`](unity/SOTERRA-Tatico/): a
-grade tática mínima em C#, com **a mesma regra** (Manhattan, alcance por busca
-em largura, a paleta de `DATA.classes`, o mesmo enquadramento 3/4). O
-`LEIA-ME.md` de lá tem os cinco passos até o Play.
+Branch **`unity`**. Plano em [`docs/PLANO_UNITY.md`](docs/PLANO_UNITY.md);
+projeto em [`unity/SOTERRA-Tatico/`](unity/SOTERRA-Tatico/).
 
-**Migrar é reescrever, não portar.** São ~45 mil linhas de JS, e o motor, o
-renderizador e a interface **não atravessam**.
+Está provado nesta máquina que dá para desenvolver na Unity **sem abrir o
+Editor**: Editor 6000.5.8f1 com licença Personal (entitlement
+`com.unity.editor.headless`), projeto em URP 17.6.0, 6 testes EditMode passando
+e foto da cena renderizada em modo lote. Tudo por `unity/lote.ps1`.
+
+**Migrar é reescrever, não portar.** Das 44.647 linhas de JS, ~15 mil
+atravessam (7.872 de dados + 6.832 de regra) e ~23 mil não (render 2D, render
+3D, interface).
 
 **O que atravessa:**
 
-- **Os dados.** `js/core/data/*.js` são objetos literais — viram JSON numa
-  tarde. É a maior parte do valor: 171 feitiços, 105 formas de fusão, o
-  bestiário, os itens, os 6 calabouços.
+- **Os dados.** `js/core/data/*.js` viram JSON — mas por **execução**, não por
+  conversão de texto: `fusions.js`, `items.js`, `monsters.js` e `pets.js` têm
+  funções que geram conteúdo.
 - **A regra**, como especificação. `engine.js` é puro e legível; reescrever em
   C# é trabalho mecânico, não invenção.
-- **Os modelos CC0**, que na Unity entram com menos briga do que no `file://`
-  (sem base64, sem embutir).
+- **Os modelos CC0**, que na Unity entram com menos briga do que no `file://`.
 - **As decisões medidas** — equilíbrio, curva de estrela, teto de chefe.
 
 **O que se perde:** o jogo abre com dois cliques hoje. Na Unity vira build, com

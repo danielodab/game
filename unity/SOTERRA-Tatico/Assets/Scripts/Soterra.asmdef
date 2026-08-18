@@ -1,0 +1,8 @@
+{
+    "name": "Soterra",
+    "rootNamespace": "Soterra",
+    "references": [
+        "Unity.InputSystem"
+    ],
+    "autoReferenced": true
+}

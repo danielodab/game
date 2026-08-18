@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace Soterra
 {
@@ -48,7 +49,18 @@ namespace Soterra
         Camera _cam;
         Vector2Int _sob = new Vector2Int(-99, -99);
 
-        void Start()
+        /// <summary>A câmera montada, para quem precisa fotografar a cena de fora.</summary>
+        public Camera Cam { get { return _cam; } }
+
+        void Start() { Montar(); }
+
+        /// <summary>
+        /// Monta a cena. Separado de Start() porque o modo lote (-executeMethod)
+        /// nunca entra em Play: sem este método público, a única forma de ver a
+        /// cena seria alguém clicando no Editor — e é justamente isso que o
+        /// projeto evita.
+        /// </summary>
+        public void Montar()
         {
             _tab = gameObject.AddComponent<Tabuleiro>();
             _tab.Largura = Largura;
@@ -73,6 +85,48 @@ namespace Soterra
             RecalculaAlcance();
         }
 
+        static readonly int IdCorBase = Shader.PropertyToID("_BaseColor");
+        Material _material;
+        MaterialPropertyBlock _bloco;
+
+        /// <summary>
+        /// UM material para a grade inteira. A cor de cada casa não mora no
+        /// material: viaja em MaterialPropertyBlock.
+        ///
+        /// Dois defeitos morrem aqui. (1) Material por casa: 120 casas repintadas
+        /// a cada turno vazavam 120 materiais — e `renderer.material` fora de Play
+        /// devolve uma CÓPIA descartada, então a repintura nem chegava na tela.
+        /// (2) Com materiais distintos criados em tempo de edição, o SRP Batcher
+        /// agrupava todos no mesmo buffer e desenhava o tabuleiro inteiro com a
+        /// cor do primeiro — herói laranja incluído, que saía azul como o chão.
+        ///
+        /// Fosco de propósito: tabuleiro tático quer leitura de cor, não brilho.
+        /// Reflexo de ambiente e especular são termos ADITIVOS e neutros; ligados,
+        /// lavam a paleta.
+        /// </summary>
+        Material MaterialBase()
+        {
+            if (_material != null) return _material;
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            _material = new Material(shader) { name = "SOTERRA/Fosco" };
+            _material.SetFloat("_Metallic", 0f);
+            _material.SetFloat("_Smoothness", 0f);
+            _material.SetFloat("_SpecularHighlights", 0f);
+            _material.SetFloat("_EnvironmentReflections", 0f);
+            _material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            _material.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+            return _material;
+        }
+
+        /// <summary>Pinta um renderizador sem tocar no material dele.</summary>
+        void PintaRenderer(Renderer r, Color cor)
+        {
+            if (_bloco == null) _bloco = new MaterialPropertyBlock();
+            r.GetPropertyBlock(_bloco);
+            _bloco.SetColor(IdCorBase, cor);
+            r.SetPropertyBlock(_bloco);
+        }
+
         GameObject Cubo(string nome, Vector3 pos, Vector3 escala, Color cor, Transform pai)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -81,9 +135,8 @@ namespace Soterra
             go.transform.position = pos;
             go.transform.localScale = escala;
             var r = go.GetComponent<Renderer>();
-            r.material = new Material(Shader.Find("Universal Render Pipeline/Lit") ??
-                                      Shader.Find("Standard"));
-            r.material.color = cor;
+            r.sharedMaterial = MaterialBase();
+            PintaRenderer(r, cor);
             return go;
         }
 
@@ -111,9 +164,8 @@ namespace Soterra
             go.name = "Heroi";
             go.transform.localScale = new Vector3(0.55f, 0.55f, 0.55f);
             var r = go.GetComponent<Renderer>();
-            r.material = new Material(Shader.Find("Universal Render Pipeline/Lit") ??
-                                      Shader.Find("Standard"));
-            r.material.color = CorHeroi;
+            r.sharedMaterial = MaterialBase();
+            PintaRenderer(r, CorHeroi);
             return go.transform;
         }
 
@@ -152,9 +204,9 @@ namespace Soterra
             {
                 bool dentro = _alcance.ContainsKey(kv.Key);
                 var baseCor = ((kv.Key.x + kv.Key.y) % 2 == 0) ? CorChao : CorChaoAlt;
-                kv.Value.material.color = dentro
+                PintaRenderer(kv.Value, dentro
                     ? Color.Lerp(baseCor, CorAlcance, 0.45f)
-                    : baseCor;
+                    : baseCor);
             }
         }
 
@@ -162,8 +214,13 @@ namespace Soterra
         {
             if (_cam == null) return;
 
+            // Sem mouse (modo lote, ou celular antes do primeiro toque) não há
+            // cursor para seguir — sair cedo evita exceção de dispositivo nulo.
+            var ponteiro = PosicaoDoPonteiro();
+            if (!ponteiro.HasValue) return;
+
             // realce sob o cursor: dá o retorno imediato que a grade tática pede
-            var raio = _cam.ScreenPointToRay(Input.mousePosition);
+            var raio = _cam.ScreenPointToRay(ponteiro.Value);
             var plano = new Plane(Vector3.up, Vector3.zero);
             float t;
             if (plano.Raycast(raio, out t))
@@ -175,7 +232,7 @@ namespace Soterra
                     _sob = alvo;
                     Pinta(_sob, true);
                 }
-                if (Input.GetMouseButtonDown(0) && _alcance.ContainsKey(alvo))
+                if (Clicou() && _alcance.ContainsKey(alvo))
                 {
                     _pp -= _alcance[alvo];
                     _pos = alvo;
@@ -185,11 +242,27 @@ namespace Soterra
             }
 
             // espaço = novo turno, para dar para brincar sem interface
-            if (Input.GetKeyDown(KeyCode.Space))
+            if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
             {
                 _pp = PPporTurno;
                 RecalculaAlcance();
             }
+        }
+
+        /// <summary>Onde o dedo ou o mouse está. Nulo quando não há nem um nem outro.</summary>
+        static Vector2? PosicaoDoPonteiro()
+        {
+            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
+                return Touchscreen.current.primaryTouch.position.ReadValue();
+            if (Mouse.current != null) return Mouse.current.position.ReadValue();
+            return null;
+        }
+
+        static bool Clicou()
+        {
+            if (Touchscreen.current != null &&
+                Touchscreen.current.primaryTouch.press.wasPressedThisFrame) return true;
+            return Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
         }
 
         void Pinta(Vector2Int p, bool aceso)
@@ -198,7 +271,7 @@ namespace Soterra
             if (!_marcas.TryGetValue(p, out r)) return;
             var baseCor = ((p.x + p.y) % 2 == 0) ? CorChao : CorChaoAlt;
             if (_alcance.ContainsKey(p)) baseCor = Color.Lerp(baseCor, CorAlcance, 0.45f);
-            r.material.color = aceso ? Color.Lerp(baseCor, CorSobre, 0.5f) : baseCor;
+            PintaRenderer(r, aceso ? Color.Lerp(baseCor, CorSobre, 0.5f) : baseCor);
         }
 
         void OnGUI()

@@ -1,66 +1,77 @@
-# SOTERRA — prova em Unity, para comparar
+# SOTERRA na Unity — a grade tática, e o encanamento para trabalhar sem clicar
 
-Isto **não é o jogo**. É a grade tática mínima — chão, obstáculos, alcance de
-passo e clique para andar — escrita em C# com **a mesma regra** do jogo em JS,
-para você sentir a diferença de engenharia sem que a regra mude junto.
+Isto ainda **não é o jogo**. É a grade tática mínima — chão, obstáculos,
+alcance de passo, clique para andar — em C# com **a mesma regra** do motor em
+JS, mais o encanamento que faz o resto do trabalho caber em linha de comando.
 
-Se a cor, a câmera e a distância fossem diferentes, você não saberia o que está
-julgando. Por isso a paleta é a mesma de `DATA.classes`, o enquadramento é o
-mesmo 3/4, e a distância é Manhattan, como no motor de verdade.
+A paleta é a mesma de `DATA.classes` e a distância é Manhattan, como no motor
+de verdade: se a cor e a regra mudassem junto, você não saberia o que está
+julgando.
 
-## Como abrir (é tudo o que precisa de mouse)
+## O que já está resolvido
 
-1. No **Unity Hub**, aba *Installs* → *Install Editor* → **2022 LTS** ou mais
-   novo. (Você já tem o Hub; falta um Editor.)
-2. Aba *Projects* → *Add* → aponte para esta pasta
-   (`unity/SOTERRA-Tatico`). O Unity gera sozinho o que falta na primeira
-   abertura — `Library/`, `ProjectSettings/`, os `.meta`.
-3. Dentro do Editor: **File › New Scene › Basic (URP)**.
-4. **GameObject › Create Empty**. Com ele selecionado, arraste
-   `Assets/Scripts/Bootstrap.cs` para a janela *Inspector*.
-5. **Play**.
+- Projeto **Unity 6000.5.8f1** com **URP**, montado a partir do template do
+  próprio Editor instalado — abre sem diálogo de atualização.
+- **Input System novo** (mouse e toque), porque o projeto quer celular e porque
+  o `Input.` antigo lança exceção com `activeInputHandler: 1`.
+- **Testes EditMode** que rodam sem Editor aberto.
+- **Foto pela linha de comando**: a cena é renderizada para PNG sem ninguém
+  apertar Play — é o equivalente do Chrome headless que o jogo em JS usa.
 
-A cena inteira — chão, obstáculos, herói, luz e câmera — é montada por código
-no `Bootstrap`. Foi de propósito: cena da Unity é um YAML grande e ilegível em
-diff, e eu não consigo clicar no Editor. Assim o projeto cabe no Git e dá para
-revisar como se revisa código.
+## Abrir no Editor (opcional)
 
-## O que dá para fazer
+Unity Hub → *Projects* → *Add* → aponte para `unity/SOTERRA-Tatico`. A cena
+inicial é `Assets/Scenes/Tatico.unity` (gerada por `lote.ps1 cena`). Play.
 
-- **Clicar numa casa acesa** — o herói anda e desconta PP por passo.
+- **Clique numa casa acesa** — o herói anda e desconta PP por passo.
 - **ESPAÇO** — encerra o turno e devolve os PP.
-- O realce sob o cursor acompanha o mouse.
 
-O alcance é busca em largura, não distância crua: um corredor em L custa mais
-do que a linha reta sugere, e sem isso o jogador clicaria do outro lado da
-parede. É a mesma decisão que o motor em JS toma.
+## Trabalhar sem abrir o Editor
+
+```bash
+powershell -File unity/lote.ps1 verificar
+```
+
+| ação | o que faz |
+| --- | --- |
+| `verificar` | importa e compila; código de saída ≠ 0 se quebrou |
+| `testar` | testes EditMode → `unity/resultado.xml` |
+| `cena` | grava `Assets/Scenes/Tatico.unity` já montada |
+| `foto` | renderiza `unity/foto.png` da cena |
+
+As mesmas ações direto no Editor, se preferir:
+
+```bash
+"C:\Program Files\Unity\Hub\Editor\6000.5.8f1\Editor\Unity.exe" -batchmode -quit -nographics -projectPath unity\SOTERRA-Tatico -executeMethod Soterra.Ferramentas.Lote.Verificar -logFile -
+```
+
+**Armadilha:** `foto` e `build` **não podem** usar `-nographics`. Sem
+dispositivo de vídeo a câmera não tem o que renderizar e o PNG sai preto — é o
+mesmo defeito do `snap` no headless do Chrome, por motivo diferente.
+
+## Por que a cena é montada por código
+
+Cena da Unity é um YAML grande e ilegível em diff, e quem escreve este projeto
+não clica no Editor. `Bootstrap.Montar()` monta chão, obstáculos, herói, luz e
+câmera em C#; `Lote.MontarCena()` grava o resultado como cena de verdade. Assim
+o projeto cabe no Git e se revisa como se revisa código — e ainda dá para abrir
+no Editor e apertar Play.
 
 ## O que este projeto responde, e o que não responde
 
 **Responde:** como é trabalhar com iluminação, sombra e câmera de verdade; como
 a Unity organiza cena e componente; quanto código custa a mesma regra nas duas
-casas.
+casas; e — o que mais importava — que dá para desenvolver aqui pelo terminal.
 
-**Não responde:** se vale migrar. Migrar é **reescrever** — os ~15 mil linhas do
-motor de batalha, do renderizador e da interface não atravessam. O que
-atravessaria são os **dados** (classes, 171 feitiços, 107 formas de fusão, 90
-itens — objetos JS que viram JSON numa tarde) e os **modelos CC0**, que na Unity
-entram com menos briga do que no `file://`.
+**Não responde:** se vale migrar. Migrar é **reescrever**: das ~45 mil linhas
+de JS, o motor, o renderizador e a interface **não atravessam**.
 
-## O que eu consigo fazer aqui sem você
+**O que atravessa:** os **dados** (`js/core/data/*.js` são objetos literais —
+viram JSON), a **regra** como especificação (`engine.js` é puro e legível), os
+**modelos CC0** (na Unity entram sem base64 e sem briga com `file://`) e as
+**decisões medidas** de equilíbrio.
 
-Assim que houver um Editor instalado, consigo rodar em modo lote, igual já faço
-com o Blender:
+## O que continua sendo só seu
 
-```bash
-Unity.exe -batchmode -quit -projectPath "C:\Users\danie\Documents\Jogo\unity\SOTERRA-Tatico" -executeMethod Soterra.Build.Tudo
-```
-
-E rodar os testes lendo o resultado:
-
-```bash
-Unity.exe -batchmode -runTests -testPlatform EditMode -testResults resultado.xml
-```
-
-O que continua **só seu**: clicar no Editor, ativar a licença e qualquer coisa
-que peça login — Asset Store inclusive. Não faço login em conta nenhuma.
+Ativar licença, qualquer coisa que peça login — Asset Store inclusive. Não faço
+login em conta nenhuma.

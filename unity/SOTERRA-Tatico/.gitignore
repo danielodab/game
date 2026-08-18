@@ -1,3 +1,4 @@
+# Gerado pela Unity a cada importação — pesado e sem valor em revisão.
 Library/
 Temp/
 Obj/
@@ -5,5 +6,10 @@ Build/
 Builds/
 Logs/
 UserSettings/
+MemoryCaptures/
+Recordings/
+
+# Gerado pelo pacote de IDE a partir dos .asmdef.
 *.csproj
 *.sln
+*.user

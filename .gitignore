@@ -26,3 +26,8 @@ assets/packs/
 # entregues; a analise esta versionada em docs/PROPOSTA_MODELOS.md.
 # Se a troca for aprovada, o que entrar vai para assets/models/ e assets/embedded/.
 assets/candidatos/
+
+# Unity: saídas do modo lote (regeneráveis por unity/lote.ps1)
+unity/foto.png
+unity/resultado.xml
+unity/Build/
