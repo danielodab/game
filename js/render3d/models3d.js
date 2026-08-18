@@ -890,7 +890,12 @@ var JOGO = (typeof window !== 'undefined')
   // ---- chão ESTENDIDO ao redor do tabuleiro (o campo é um lugar)
   // Anel com RECORTE sob a grade (senão o plano atravessaria os buracos) +
   // rodapé que sela o perímetro. Origem = célula (0,0) do grid.
-  M.buildGround = function (theme, wCells, hCells) {
+  // `solido(x, y)` (opcional) diz se a célula faz parte da sala. Com ele, o
+  // rodapé passa a contornar a SILHUETA real em vez do retângulo da grade —
+  // era o rodapé que re-quadrava a sala inteira depois de os mapas ganharem
+  // recorte próprio, e ele virou a última coisa retangular em cena.
+  // Sem o argumento, o comportamento antigo continua valendo.
+  M.buildGround = function (theme, wCells, hCells, solido) {
     var g = grp();
     var w = wCells || 13, h = hCells || 11;
     var cx = (w - 1) / 2 * CELL, cz = (h - 1) / 2 * CELL;
@@ -927,10 +932,28 @@ var JOGO = (typeof window !== 'undefined')
       b.castShadow = false; b.receiveShadow = true;
       g.add(b);
     }
-    skirt(cx, z0 + 0.02 - SKT / 2, (w + 0.5) * CELL, SKT);
-    skirt(cx, z1 - 0.02 + SKT / 2, (w + 0.5) * CELL, SKT);
-    skirt(x0 + 0.02 - SKT / 2, cz, SKT, (h + 0.5) * CELL);
-    skirt(x1 - 0.02 + SKT / 2, cz, SKT, (h + 0.5) * CELL);
+    if (typeof solido !== 'function') {
+      // sem mapa: retângulo, como sempre foi
+      skirt(cx, z0 + 0.02 - SKT / 2, (w + 0.5) * CELL, SKT);
+      skirt(cx, z1 - 0.02 + SKT / 2, (w + 0.5) * CELL, SKT);
+      skirt(x0 + 0.02 - SKT / 2, cz, SKT, (h + 0.5) * CELL);
+      skirt(x1 - 0.02 + SKT / 2, cz, SKT, (h + 0.5) * CELL);
+      return g;
+    }
+    // com mapa: um trecho de rodapé em cada ARESTA de fronteira, isto é, toda
+    // vez que uma célula da sala encosta em vazio ou na borda do mundo. O
+    // contorno sai exatamente igual ao da sala, com cantos, reentrâncias e tudo.
+    var vx, vy;
+    for (vy = 0; vy < h; vy++) {
+      for (vx = 0; vx < w; vx++) {
+        if (!solido(vx, vy)) continue;
+        var px = vx * CELL, pz = vy * CELL;
+        if (!solido(vx, vy - 1)) skirt(px, pz - CELL / 2 + SKT / 2, CELL + SKT, SKT);
+        if (!solido(vx, vy + 1)) skirt(px, pz + CELL / 2 - SKT / 2, CELL + SKT, SKT);
+        if (!solido(vx - 1, vy)) skirt(px - CELL / 2 + SKT / 2, pz, SKT, CELL + SKT);
+        if (!solido(vx + 1, vy)) skirt(px + CELL / 2 - SKT / 2, pz, SKT, CELL + SKT);
+      }
+    }
     return g;
   };
 

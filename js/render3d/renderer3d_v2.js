@@ -486,7 +486,13 @@ var JOGO = (typeof window !== 'undefined')
     // CHAO ESTENDIDO: o campo tem de ser um LUGAR. O chao da v1 nasce escuro
     // demais para a luz nova, e props apoiados nele pareciam boiar no vazio.
     try {
-      var ground = K.buildGround(theme, w, h);
+      // O rodapé recebe a SILHUETA da sala: sem isso ele desenhava um retângulo
+      // em volta da grade e re-quadrava o mapa inteiro, justamente depois de as
+      // salas ganharem contorno próprio. Vazio ('hole') e fora da grade não são sala.
+      var ground = K.buildGround(theme, w, h, function (cx, cy) {
+        if (cx < 0 || cy < 0 || cx >= w || cy >= h) return false;
+        return tileKind(gridTile(st, cx, cy)) !== 'hole';
+      });
       var gcache = {};
       retint(ground, lighten(pal.floor2, 0.42), 0.55, gcache);
       staticG.add(ground);
@@ -762,8 +768,14 @@ var JOGO = (typeof window !== 'undefined')
       // concentrada num canto, `focus` é pequeno e a câmera cola. Subir o teto
       // de 11 para 17 mudou a distância de 17,2 para 18,9 — quase nada. O piso
       // é que precisa mostrar o mapa: 15x13 células, ou a sala inteira se for menor.
-      needW = clamp((focus.x1 - focus.x0 + 6), Math.min(15, gridW), gridW) * CELL;
-      needH = clamp((focus.y1 - focus.y0 + 6), Math.min(13, gridH), gridH) * CELL;
+      // O piso acompanha o TAMANHO DA SALA, não um número fixo: as salas
+      // cresceram para 21x17–27x23 e um piso cravado em 15x13 voltaria a
+      // esconder o mapa tático justamente nas salas grandes, que são as que
+      // mais precisam ser lidas de uma vez.
+      var pisoW = Math.min(gridW, Math.max(15, Math.round(gridW * 0.85)));
+      var pisoH = Math.min(gridH, Math.max(13, Math.round(gridH * 0.85)));
+      needW = clamp((focus.x1 - focus.x0 + 6), pisoW, gridW) * CELL;
+      needH = clamp((focus.y1 - focus.y0 + 6), pisoH, gridH) * CELL;
     }
     var vfov = camera.fov * Math.PI / 180;
     var tanV = Math.tan(vfov / 2);
