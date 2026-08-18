@@ -579,14 +579,26 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
   }
   var grindD1duo = runsToThirty(0, 2), grindD1solo = runsToThirty(0, 1);
   var deepDuo = runsToThirty(-1, 2), deepSolo = runsToThirty(-1, 1);
-  check('moer só o calabouço 1 até o nível 30 é proibitivo (> 300 descidas em dupla)',
-    grindD1duo > 300, grindD1duo + ' descidas');
-  check('descer sempre no calabouço mais fundo liberado leva 30–120 descidas (dupla)',
-    deepDuo >= 30 && deepDuo <= 120, deepDuo + ' descidas');
+  check('moer só o calabouço 1 até o nível 30 é proibitivo (> 300 descidas, mesmo solo)',
+    grindD1solo > 300, grindD1solo + ' descidas solo · ' + grindD1duo + ' em dupla');
+  check('descer sempre no calabouço mais fundo liberado leva 30–120 descidas (solo)',
+    deepSolo >= 30 && deepSolo <= 120, deepSolo + ' descidas solo · ' + deepDuo + ' em dupla');
   check('profundidade é pelo menos 5× mais eficiente que moer o calabouço 1',
-    grindD1duo / deepDuo >= 5, (grindD1duo / deepDuo).toFixed(1) + '×');
+    grindD1solo / deepSolo >= 5, (grindD1solo / deepSolo).toFixed(1) + '×');
   check('solo chega ao 30 mais rápido que a dupla, nos dois cenários',
     deepSolo < deepDuo && grindD1solo < grindD1duo, deepSolo + '/' + deepDuo);
+
+  /* TRIPWIRE DA TABELA CONGELADA — a `xpTable` foi congelada por coordenação (18/08):
+   * ela e o `xp` dos monstros descrevem a mesma economia por pontas opostas, e mexer
+   * num lado sozinho derruba a validação do outro dono. Se este teste falhar, alguém
+   * (inclusive eu) alterou a curva fora de uma rodada coordenada. */
+  var FROZEN_XP_TABLE = [0, 15, 40, 75, 125, 195, 295, 435, 615, 845, 1145, 1525, 1965,
+    2485, 3095, 3805, 4635, 5555, 6580, 7705, 8955, 10355, 11905, 13605, 15480, 17555,
+    19830, 22355, 25130, 28180];
+  check('xpTable continua CONGELADA nos valores acordados (não alterar sem rodada coordenada)',
+    L.xpTable.length === FROZEN_XP_TABLE.length &&
+    L.xpTable.every(function (v, i) { return v === FROZEN_XP_TABLE[i]; }),
+    'total ' + L.xpTable[L.xpTable.length - 1] + ' (esperado ' + FROZEN_XP_TABLE[29] + ')');
 
   var cardIds = Object.keys(D.cards);
   check('cards cobre as 6 classes', cardIds.length === 6 &&
@@ -763,20 +775,23 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
     html += '</table>';
 
     html += '<h2>Subir de nível × profundidade (adendo v2.3)</h2>' +
-      '<div class="info">Descida completa = 3 salas. XP de grupo dividida pelo tamanho do grupo. ' +
+      '<div class="info">Descida completa = 3 salas. <code>game.js</code> divide a XP pelo tamanho do grupo, ' +
+      'então o <b>solo</b> leva a descida inteira e é o caso de referência (o teto); a dupla leva metade por herói. ' +
       'Falloff: ×1,0 até nível recomendado +' + (F ? F.graceLevels : '?') + ', depois ×' +
       (F ? F.factorPerLevel : '?') + ' por nível, piso ×' + (F ? F.floor : '?') + '.</div>' +
       '<table><tr><th>calabouço</th><th>nível rec.</th><th>XP da descida (grupo)</th>' +
-      '<th>XP do próximo nível</th><th>descidas p/ 1 nível — dupla</th><th>— solo</th></tr>';
+      '<th>XP do próximo nível</th><th>descidas p/ 1 nível — SOLO</th><th>— dupla</th>' +
+      '<th>níveis por descida (solo)</th></tr>';
     progression.forEach(function (r) {
       html += '<tr><td>' + r.d + '</td><td>' + r.rec + '</td><td>' + r.xp + '</td><td>' + r.step +
-        '</td><td>' + r.duo.toFixed(2) + '</td><td>' + r.solo.toFixed(2) + '</td></tr>';
+        '</td><td><b>' + r.solo.toFixed(2) + '</b></td><td>' + r.duo.toFixed(2) + '</td><td>' +
+        (1 / r.solo).toFixed(2) + '</td></tr>';
     });
     html += '</table><ul class="info">' +
-      '<li>Moendo <b>só o calabouço 1</b> do nível 3 ao 30: <b>' + grindD1duo + '</b> descidas em dupla · ' + grindD1solo + ' solo.</li>' +
-      '<li>Descendo sempre no <b>calabouço mais fundo liberado</b>: <b>' + deepDuo + '</b> descidas em dupla · ' + deepSolo + ' solo.</li>' +
-      '<li>Profundidade é <b>' + (grindD1duo / deepDuo).toFixed(1) + '× mais eficiente</b> que repetir o raso.</li>' +
-      '<li>XP total do nível 1 ao 30: <b>' + L.xpTable[29] + '</b>.</li></ul>';
+      '<li>Moendo <b>só o calabouço 1</b> do nível 3 ao 30: <b>' + grindD1solo + '</b> descidas solo · ' + grindD1duo + ' em dupla.</li>' +
+      '<li>Descendo sempre no <b>calabouço mais fundo liberado</b>: <b>' + deepSolo + '</b> descidas solo · ' + deepDuo + ' em dupla.</li>' +
+      '<li>Profundidade é <b>' + (grindD1solo / deepSolo).toFixed(1) + '× mais eficiente</b> que repetir o raso.</li>' +
+      '<li>XP total do nível 1 ao 30: <b>' + L.xpTable[29] + '</b> — <b>tabela congelada</b> (18/08): só muda em rodada coordenada com <code>monsters.js</code>.</li></ul>';
 
     html += '<h2>PV total por classe no nível 30 (base + ' + last.hp + ')</h2><ul class="info">';
     CLASS_IDS.forEach(function (cid) {
