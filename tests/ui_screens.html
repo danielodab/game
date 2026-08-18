@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SOTERRA 2.0 — Telas da Interface (JOGO.UI)</title>
-<link rel="stylesheet" href="../css/style.css?v=22">
+<link rel="stylesheet" href="../css/style.css?v=32">
 <style>
   /* moldura do teste: um "celular" 390×844 ao lado do painel de verificação */
   html, body { overflow: auto; height: auto; }
@@ -48,23 +48,27 @@
   </div>
 </div>
 
-<script src="../vendor/pixi.min.js?v=22" onerror="window.__noPixi=1"></script>
-<script src="../js/core/data/elements.js?v=22"></script>
-<script src="../js/core/data/classes.js?v=22"></script>
-<script src="../js/core/data/spells.js?v=22"></script>
-<script src="../js/core/data/progression.js?v=22"></script>
-<script src="../js/core/data/monsters.js?v=22"></script>
-<script src="../js/core/data/dungeons.js?v=22"></script>
-<script src="../js/core/data/fusions.js?v=22"></script>
-<script src="../js/core/data/pets.js?v=22"></script>
-<script src="../js/core/data/items.js?v=22"></script>
-<script src="../js/core/engine.js?v=22"></script>
-<script src="../js/core/fusion.js?v=22"></script>
-<script src="../js/core/ai.js?v=22"></script>
-<script src="../js/core/progress.js?v=22"></script>
-<script src="../js/core/game.js?v=22"></script>
-<script src="../js/render2d/art.js?v=22"></script>
-<script src="../js/ui/hud.js?v=22"></script>
+<!-- BLINDAGEM DO SAVE: antes de tudo, porque esta página semeia um progresso de
+     mentira e não pode encostar no jogo do usuário. Uma linha; qualquer página
+     de teste que use JOGO.Progress deveria incluí-la. -->
+<script src="save_sandbox.js?v=32"></script>
+<script src="../vendor/pixi.min.js?v=32" onerror="window.__noPixi=1"></script>
+<script src="../js/core/data/elements.js?v=32"></script>
+<script src="../js/core/data/classes.js?v=32"></script>
+<script src="../js/core/data/spells.js?v=32"></script>
+<script src="../js/core/data/progression.js?v=32"></script>
+<script src="../js/core/data/monsters.js?v=32"></script>
+<script src="../js/core/data/dungeons.js?v=32"></script>
+<script src="../js/core/data/fusions.js?v=32"></script>
+<script src="../js/core/data/pets.js?v=32"></script>
+<script src="../js/core/data/items.js?v=32"></script>
+<script src="../js/core/engine.js?v=32"></script>
+<script src="../js/core/fusion.js?v=32"></script>
+<script src="../js/core/ai.js?v=32"></script>
+<script src="../js/core/progress.js?v=32"></script>
+<script src="../js/core/game.js?v=32"></script>
+<script src="../js/render2d/art.js?v=32"></script>
+<script src="../js/ui/hud.js?v=32"></script>
 <script>
 (function () {
   'use strict';
@@ -83,33 +87,11 @@
   // durante toda a página. O disco não é tocado nenhuma vez — nem para gravar
   // a semente, nem depois. O save real entra na sombra só para leitura, então
   // `Progress.load()` enxerga o mundo normal antes de `seed()` sobrescrever.
-  var SAVE_KEYS = ['soterra-save-v2', 'soterra-save-v1'];
-  var shadow = {}, shadowOn = false, rawGet = null;
-  (function installSaveSandbox() {
-    try {
-      if (!window.localStorage || !window.Storage || !Storage.prototype.setItem) return;
-      var _set = Storage.prototype.setItem,
-          _get = Storage.prototype.getItem,
-          _rm  = Storage.prototype.removeItem;
-      rawGet = function (k) { try { return _get.call(localStorage, k); } catch (e) { return null; } };
-      for (var i = 0; i < SAVE_KEYS.length; i++) shadow[SAVE_KEYS[i]] = rawGet(SAVE_KEYS[i]);
-      function mine(k) { return SAVE_KEYS.indexOf(String(k)) >= 0; }
-      Storage.prototype.setItem = function (k, v) {
-        if (mine(k)) { shadow[k] = String(v); return; }
-        return _set.apply(this, arguments);
-      };
-      Storage.prototype.getItem = function (k) {
-        if (mine(k)) { var v = shadow[k]; return v === undefined ? null : v; }
-        return _get.apply(this, arguments);
-      };
-      Storage.prototype.removeItem = function (k) {
-        if (mine(k)) { shadow[k] = null; return; }
-        return _rm.apply(this, arguments);
-      };
-      shadowOn = true;
-    } catch (e) { /* sem storage: nada a proteger */ }
-  })();
-  var saveAntes = shadowOn ? SAVE_KEYS.map(function (k) { return shadow[k]; }) : null;
+  // A blindagem em si mora em `tests/save_sandbox.js` (carregado no topo), para
+  // que QUALQUER página de teste possa adotá-la com uma linha — foi o mesmo
+  // defeito que reapareceu depois em `tests/chief_play.html`.
+  var SB = JOGO.SaveSandbox || null;
+  var shadowOn = !!(SB && SB.active);
 
   function check(name, cond, detail) {
     if (cond) R.passed++;
@@ -124,6 +106,8 @@
     var d = document.createElement('div');
     d.className = 'dim'; d.textContent = '· ' + t; out.appendChild(d);
   }
+  // avaliação tolerante: o teste nunca pode morrer por um módulo ausente
+  function safe(fn, def) { try { var v = fn(); return v === undefined ? def : v; } catch (e) { return def; } }
 
   // ---------------------------------------------------- semente de progresso
   // Um save de teste rico o bastante para todas as telas terem o que mostrar.
@@ -461,6 +445,92 @@
   JOGO.UI.handleEvent({ type: 'weatherShift', weather: 'chuva' });
   check('log recebe eventos', bs.querySelectorAll('.bt-log-list .log-line').length >= 2);
 
+  // ---------------------------------------------- NENHUM ID CRU NA INTERFACE
+  // O Chefe viu na barra o botão "0 is-seed-bomb" onde devia ler
+  // "Bomba de Sementes · 3 PA": a HUD resolvia o feitiço só em DATA.spells, e
+  // os 12 Lumes (itemSpells) e a barra INTEIRA da unidade fundida (feitiços
+  // gerados em memória) caíam fora. Aqui a barra é montada com os dois casos e
+  // varrida atrás de qualquer rótulo em formato de id e de custo zero mentiroso.
+  var ID_CRU = /^[a-z]+(-[a-z0-9]+)+$/;
+  (function () {
+    var u = safe(function () { return JOGO.Engine.activeUnit(JOGO.Game.state); }, null);
+    if (!check('barra: existe unidade ativa para o teste', !!u)) return;
+
+    // (a) feitiço de ITEM — o que o Chefe pegou
+    var itemSid = Object.keys(D.itemSpells || {})[0] || 'is-seed-bomb';
+    // (b) feitiço de FUSÃO gerado em memória (nunca esteve em DATA)
+    var fusSid = null;
+    try {
+      var kPar = Object.keys(D.fusionForms || {})[0];
+      var kEl = Object.keys(D.fusionBlends || {})[0];
+      var ger = JOGO.Fusion.spellsFor(kPar, kEl, 30) || [];
+      if (ger.length) {
+        ger.forEach(function (sp) { JOGO.Engine.registerSpell(sp); });
+        fusSid = ger[0].id;
+      }
+    } catch (e) { /* sem fusão disponível */ }
+
+    var originais = u.spells ? u.spells.slice() : [];
+    u.spells = [itemSid].concat(fusSid ? [fusSid] : []).concat(originais.slice(0, 2));
+    u.cooldowns = u.cooldowns || {};
+    JOGO.UI.showScreen('battle');
+    var barra = document.querySelector('#ui-root .bt-spells');
+    check('barra: montou com feitiço de item' + (fusSid ? ' e de fusão' : ''),
+      !!barra && barra.querySelectorAll('.spell').length >= (fusSid ? 2 : 1));
+
+    if (barra) {
+      var nomes = [], custos = [], ruins = [], zeros = [];
+      barra.querySelectorAll('.spell').forEach(function (cell, i) {
+        var nm = (cell.querySelector('.sp-name') || {}).textContent || '';
+        var ct = (cell.querySelector('.sp-cost') || {}).textContent || '';
+        nomes.push(nm); custos.push(ct);
+        if (ID_CRU.test(nm.trim())) ruins.push(nm.trim());
+        var sid = u.spells[i];
+        var real = safe(function () { return JOGO.Engine.spell(sid); }, null);
+        if (real && real.paCost > 0 && String(ct).trim() === '0') zeros.push(sid + ' devia custar ' + real.paCost);
+      });
+      check('barra: nenhum rótulo em formato de id', ruins.length === 0, ruins.join(' | '));
+      check('barra: nenhum custo 0 mentiroso', zeros.length === 0, zeros.join(' | '));
+      // e o caso exato do Chefe, pelo nome
+      var isb = safe(function () { return JOGO.Engine.spell('is-seed-bomb'); }, null);
+      if (isb) {
+        check('barra: "is-seed-bomb" aparece como "' + isb.name + '"',
+          nomes.indexOf('is-seed-bomb') < 0 && nomes.join('|').indexOf(isb.name) >= 0, nomes.join(' | '));
+        check('barra: e cobra os ' + isb.paCost + ' PA certos',
+          custos.indexOf(String(isb.paCost)) >= 0, custos.join(' | '));
+      }
+    }
+
+    // a tela inteira também não pode conter id cru solto em rótulo
+    (function () {
+      var bs2 = document.querySelector('#ui-root .screen-battle');
+      var soltos = [];
+      bs2.querySelectorAll('.sp-name, .hs-spell span, .ec-spell b').forEach(function (n) {
+        var t = (n.textContent || '').trim();
+        if (ID_CRU.test(t)) soltos.push(t);
+      });
+      check('batalha: nenhum id cru em rótulo de feitiço', soltos.length === 0, soltos.join(' | '));
+    })();
+
+    u.spells = originais;
+    JOGO.UI.showScreen('battle');
+  })();
+
+  // ficha do herói e item de Lume: o nome do feitiço concedido também é resolvido
+  (function () {
+    var lume = Object.keys(D.items || {}).filter(function (id) {
+      return D.items[id].slot === 'lume' && D.items[id].grantsSpell;
+    })[0];
+    if (!check('existe item de Lume para testar', !!lume)) return;
+    var sp = safe(function () { return JOGO.Engine.spell(D.items[lume].grantsSpell); }, null);
+    check('o feitiço concedido pelo Lume resolve pelo motor', !!sp, D.items[lume].grantsSpell);
+    JOGO.UI.openSheet('inventory');
+    var txt = document.querySelector('#ui-root .ui-sheet').textContent;
+    JOGO.UI.closeSheet();
+    check('inventário não mostra id cru de feitiço concedido',
+      txt.indexOf(D.items[lume].grantsSpell) < 0, D.items[lume].grantsSpell);
+  })();
+
   check('nenhum erro de janela', errs.length === 0, errs.join(' | '));
 
   // ------------------------------------------------ prova do sandbox (B4)
@@ -469,19 +539,14 @@
   // voltou a comer o progresso do jogador.
   check('sandbox de save instalado', shadowOn);
   if (shadowOn) {
-    var intacto = true, detalhe = '';
-    for (var vi = 0; vi < SAVE_KEYS.length; vi++) {
-      var disco = rawGet(SAVE_KEYS[vi]);
-      if (disco !== saveAntes[vi]) {
-        intacto = false;
-        detalhe += SAVE_KEYS[vi] + ': ' + (saveAntes[vi] === null ? 'ausente' : saveAntes[vi].length + ' B') +
-                   ' → ' + (disco === null ? 'ausente' : disco.length + ' B') + ' ';
-      }
-    }
-    check('o save REAL do jogador continua byte a byte igual', intacto, detalhe);
+    var st = SB.check();
+    var orig = SB.original('soterra-save-v2');
+    check('o save REAL do jogador continua byte a byte igual', st.ok,
+      'disco agora: ' + JSON.stringify(st.disco) + ' · original: ' +
+      (orig === null ? 'ausente' : orig.length + ' B'));
     // e a semente realmente existe (senão o sandbox estaria escondendo tudo)
-    check('a semente de demonstração vive só na memória',
-      !!shadow['soterra-save-v2'] && shadow['soterra-save-v2'] !== saveAntes[0]);
+    var mem = localStorage.getItem('soterra-save-v2');
+    check('a semente de demonstração vive só na memória', !!mem && mem !== orig);
   }
 
   // tela final para a captura headless (?screen=nome)

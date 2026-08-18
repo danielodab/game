@@ -88,7 +88,27 @@ var JOGO = (typeof window !== 'undefined')
   function classes() { return D().classes || {}; }
   function classDef(id) { return classes()[id] || null; }
   function className(id) { var c = classDef(id); return (c && c.name) || id; }
-  function spellDef(id) { return (D().spells && D().spells[id]) || (D().fusionSpells && D().fusionSpells[id]) || null; }
+  // FONTE ÚNICA de feitiço — a mesma porta que o motor usa.
+  // `Engine.spell(id)` resolve DATA.spells + monsterSpells + petSpells +
+  // itemSpells + fusionSpells + os feitiços GERADOS de fusão (que só existem em
+  // memória e nunca estiveram em DATA). Ler só `DATA.spells`/`fusionSpells`
+  // fazia os 12 itens de Lume e a barra INTEIRA da unidade fundida saírem com
+  // id cru e custo zero — "0 is-seed-bomb" no lugar de "Bomba de Sementes · 3 PA".
+  // Justamente as duas mecânicas mais especiais do jogo.
+  function spellDef(id, unit) {
+    if (!id) return null;
+    if (typeof id === 'object') return id;                     // já veio resolvido
+    var d = safe(function () { return JOGO.Engine.spell(id); }, null);
+    if (d) return d;
+    // rede de segurança: a unidade fundida carrega as próprias definições
+    if (unit && unit.spellDefs && unit.spellDefs[id]) return unit.spellDefs[id];
+    return (D().spells && D().spells[id]) || (D().fusionSpells && D().fusionSpells[id]) ||
+           (D().itemSpells && D().itemSpells[id]) || (D().petSpells && D().petSpells[id]) ||
+           (D().monsterSpells && D().monsterSpells[id]) || null;
+  }
+  // Nenhum id cru pode chegar à tela: sem definição, texto genérico legível.
+  function spellName(d2, id) { return (d2 && d2.name) || 'Feitiço desconhecido'; }
+  function spellCost(d2) { return (d2 && d2.paCost) || 0; }
   function itemDef(id) { return (D().items && D().items[id]) || null; }
   function setDef(id) { return (D().sets && D().sets[id]) || null; }
   function stoneDefs() { return D().stones || {}; }
@@ -622,7 +642,7 @@ var JOGO = (typeof window !== 'undefined')
         var row = el('div', 'ec-spell');
         row.appendChild(art('spellIcon', [d2 || sid, 34], 34));
         var info = el('div', 'ec-spell-txt');
-        info.appendChild(el('b', null, esc((d2 && d2.name) || sid)));
+        info.appendChild(el('b', null, esc(spellName(d2, sid))));
         info.appendChild(el('i', null, 'Nv ' + ((d2 && d2.unlockLevel) || tiers[i] || '?') +
           ((d2 && d2.paCost != null) ? ' · ' + d2.paCost + ' PA' : '')));
         row.appendChild(info);
@@ -1122,7 +1142,7 @@ var JOGO = (typeof window !== 'undefined')
     var list = u.spells || [];
     if (!list.length) bt.spells.appendChild(el('div', 'bt-wait', 'Sem feitiços.'));
     list.forEach(function (sid) {
-      var d2 = spellDef(sid) || (u.spellDefs && u.spellDefs[sid]) || null;
+      var d2 = spellDef(sid, u);
       var cd = (u.cooldowns && u.cooldowns[sid]) || 0;
       var cost = d2 ? (d2.paCost || 0) : 0;
       var can = cd <= 0 && u.pa >= cost;
@@ -1135,7 +1155,7 @@ var JOGO = (typeof window !== 'undefined')
         cell.classList.add('has-elem');
       }
       if (cd > 0) cell.appendChild(el('span', 'sp-cd', String(cd)));
-      cell.appendChild(el('span', 'sp-name', esc((d2 && d2.name) || sid)));
+      cell.appendChild(el('span', 'sp-name', esc(spellName(d2, sid))));
       tap(cell, function () {
         if (cd > 0) { toast('Recarregando: ' + cd + (cd > 1 ? ' rodadas.' : ' rodada.')); return; }
         if (u.pa < cost) { toast('PA insuficiente (' + cost + ' necessários).'); return; }
@@ -1145,14 +1165,14 @@ var JOGO = (typeof window !== 'undefined')
       });
       // toque longo/segunda toque no nome abre a explicação
       var q = el('span', 'sp-info', 'i');
-      tipOn(q, (d2 && d2.name) || sid, spellTipBody(d2, sid), d2 ? elemColor(d2.element) : '#ffd08a');
+      tipOn(q, spellName(d2, sid), spellTipBody(d2, sid), d2 ? elemColor(d2.element) : '#ffd08a');
       cell.appendChild(q);
       bt.spells.appendChild(cell);
     });
   }
 
   function spellTipBody(d2, sid) {
-    if (!d2) return 'Feitiço ' + esc(sid) + '.';
+    if (!d2) return 'Este feitiço não pôde ser carregado.';
     var out = '<i>' + (d2.paCost || 0) + ' PA';
     if (d2.range) out += ' · alcance ' + (d2.range.min || 0) + '–' + (d2.range.max || 0);
     if (d2.cooldown) out += ' · recarga ' + d2.cooldown;
@@ -1370,7 +1390,8 @@ var JOGO = (typeof window !== 'undefined')
     if (lines.length) out += '<br>' + lines.join(' · ');
     if (it.grantsSpell) {
       var sp = spellDef(it.grantsSpell);
-      out += '<br>Concede: <b>' + esc((sp && sp.name) || it.grantsSpell) + '</b>';
+      out += '<br>Concede: <b>' + esc(spellName(sp, it.grantsSpell)) + '</b>' +
+             (sp && sp.paCost ? ' <i>(' + sp.paCost + ' PA)</i>' : '');
     }
     if (it.setId) {
       var sd = setDef(it.setId);
@@ -1737,8 +1758,8 @@ var JOGO = (typeof window !== 'undefined')
       var d2 = spellDef(sid);
       var c = el('div', 'hs-spell');
       c.appendChild(art('spellIcon', [d2 || sid, 40], 40));
-      c.appendChild(el('span', null, esc((d2 && d2.name) || sid)));
-      tipOn(c, (d2 && d2.name) || sid, spellTipBody(d2, sid), d2 ? elemColor(d2.element) : '#ffd08a');
+      c.appendChild(el('span', null, esc(spellName(d2, sid))));
+      tipOn(c, spellName(d2, sid), spellTipBody(d2, sid), d2 ? elemColor(d2.element) : '#ffd08a');
       sg.appendChild(c);
     });
     body.appendChild(sg);
@@ -1761,7 +1782,7 @@ var JOGO = (typeof window !== 'undefined')
           var need = (d3 && d3.unlockLevel) || tiers[i2] || '?';
           var c2 = el('div', 'hs-spell');
           c2.appendChild(art('spellIcon', [d3 || sid, 40], 40, 'silhouette'));
-          c2.appendChild(el('span', null, esc((d3 && d3.name) || sid) + ' · Nv ' + need));
+          c2.appendChild(el('span', null, esc(spellName(d3, sid)) + ' · Nv ' + need));
           lg.appendChild(c2);
         });
         body.appendChild(lg);

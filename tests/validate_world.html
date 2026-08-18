@@ -770,20 +770,50 @@
       check('xpTable: degraus sempre crescentes (subir sempre custa mais)',
         LV.xpTable.every(function (v, i) { return i < 2 || step(i) > step(i - 1); }));
 
-      var frac = DG.map(function (d, i) { return descent[i].xp / step(d.recommendedLevel); });
-      check('Estufa (nível 3): uma descida rende ~1 nível (entre 0,7 e 1,4)',
+      // ---- OS DOIS CENÁRIOS DE GRUPO (adendo v2.1 + game.js) --------------
+      // `game.js` faz `xpGanho = floor(xpTotal / partySize)`: quem joga SOLO
+      // leva a descida inteira e a DUPLA parte ao meio. Medir só a dupla foi
+      // a lacuna que deixou o solo render 1,89 nível na Estufa — então as
+      // duas contas são checadas, e o SOLO é o que tem de caber na faixa,
+      // porque é o teto.
+      var PARTY = [{ size: 1, nome: 'SOLO' }, { size: 2, nome: 'DUPLA' }];
+      var fracBy = {};
+      PARTY.forEach(function (p) {
+        fracBy[p.size] = DG.map(function (d, i) {
+          return Math.floor(descent[i].xp / p.size) / step(d.recommendedLevel);
+        });
+      });
+      var frac = fracBy[1];   // solo = caso de referência
+
+      PARTY.forEach(function (p) {
+        var f = fracBy[p.size];
+        var linha = f.map(function (v) { return Math.round(v * 100) / 100; }).join(' → ');
+        check(p.nome + ': a fração de nível por descida NUNCA cresce com a profundidade ' +
+              '(a XP sobe, a exigência sobe mais)',
+          f.every(function (v, i) { return i === 0 || v <= f[i - 1] + 0.001; }), linha);
+        check(p.nome + ': nenhum calabouço rende mais de 1,4 nível por descida ' +
+              '(nada de upar de graça)',
+          f.every(function (v) { return v <= 1.4; }), linha);
+        check(p.nome + ': nenhum calabouço rende tão pouco que vire moagem (≥ 0,10 de nível)',
+          f.every(function (v) { return v >= 0.10; }), linha);
+      });
+
+      check('SOLO na Estufa (nível 3): uma descida rende ~1 nível (entre 0,7 e 1,4)',
         frac[0] >= 0.7 && frac[0] <= 1.4, 'rende ' + (Math.round(frac[0] * 100) / 100) + ' nível');
-      check('Mina (nível 22): uma descida rende cerca de 1/3 de nível (entre 0,25 e 0,55)',
+      check('SOLO na Mina (nível 22): uma descida rende cerca de 1/3 de nível (entre 0,25 e 0,55)',
         frac[4] >= 0.25 && frac[4] <= 0.55, 'rende ' + (Math.round(frac[4] * 100) / 100) + ' nível');
-      check('Coração (nível 28): uma descida rende cerca de 1/3 de nível (entre 0,25 e 0,55)',
+      check('SOLO no Coração (nível 28): uma descida rende cerca de 1/3 de nível (entre 0,25 e 0,55)',
         frac[5] >= 0.25 && frac[5] <= 0.55, 'rende ' + (Math.round(frac[5] * 100) / 100) + ' nível');
-      check('a fração de nível por descida NUNCA cresce com a profundidade ' +
-            '(a XP sobe, a exigência sobe mais)',
-        frac.every(function (f, i) { return i === 0 || f <= frac[i - 1] + 0.001; }),
-        frac.map(function (f) { return Math.round(f * 100) / 100; }).join(' → '));
-      check('nenhum calabouço rende mais de 1,4 nível por descida (nada de upar de graça)',
-        frac.every(function (f) { return f <= 1.4; }),
-        frac.map(function (f) { return Math.round(f * 100) / 100; }).join(' → '));
+
+      // a dupla recebe metade por herói — é a regra do contrato, não um bug,
+      // mas precisa ser metade DE FATO (e não, por exemplo, a mesma coisa).
+      DG.forEach(function (d, i) {
+        var solo = Math.floor(descent[i].xp), duo = Math.floor(descent[i].xp / 2);
+        check('calabouço ' + d.id + ': a dupla recebe metade da XP do solo (por herói)',
+          Math.abs(duo - solo / 2) <= 0.5, 'solo ' + solo + ' · dupla ' + duo);
+      });
+      check('DUPLA: a Estufa ainda entrega pelo menos meio nível por descida',
+        fracBy[2][0] >= 0.35, 'rende ' + (Math.round(fracBy[2][0] * 100) / 100) + ' nível');
 
       // A XP absoluta não pode crescer mais do que a xpTable permite: se a
       // fração de nível tem de CAIR com a profundidade, o crescimento máximo
@@ -1092,23 +1122,30 @@
         keys(D.monsterSpells).length + ' feitiços de monstro · ' +
         keys(D.tileEvents).length + ' eventos de terreno · ' + keys(D.scenery).length + ' temas de cenário</div>' +
         (descent ? ('<h2>Progressão: XP por descida e dificuldade (adendo v2.3)</h2><table><tr>' +
-          '<th>#</th><th>Calabouço</th><th>nível rec.</th><th>XP/descida</th><th>× o anterior</th>' +
-          '<th>frações de nível</th><th>XP no nível 22</th><th>PV médio comum</th><th>poder</th>' +
+          '<th>#</th><th>Calabouço</th><th>nível rec.</th><th>degrau</th><th>XP/descida</th>' +
+          '<th>× o anterior</th><th>níveis SOLO</th><th>níveis DUPLA</th>' +
+          '<th>XP solo no nível 22</th><th>PV médio comum</th><th>poder</th>' +
           '<th>chefe PV</th><th>spawns</th></tr>' +
           D.dungeons.map(function (d, i) {
             var LV = D.leveling, s = descent[i];
             var stp = LV.xpTable[d.recommendedLevel] - LV.xpTable[d.recommendedLevel - 1];
             var F = LV.xpFalloff, over = 22 - d.recommendedLevel - (F ? F.graceLevels : 4);
             var mu = (!F || over <= 0) ? 1 : Math.max(F.floor, Math.pow(F.factorPerLevel, over));
+            var solo = Math.floor(s.xp), duo = Math.floor(s.xp / 2);
             return '<tr><td>' + d.order + '</td><td>' + d.name + '</td><td>' + d.recommendedLevel +
-              '</td><td>' + s.xp + '</td><td>' + (i === 0 ? '—' : (Math.round(s.xp / descent[i - 1].xp * 100) / 100) + '×') +
-              '</td><td>' + (Math.round(s.xp / stp * 100) / 100) + '</td><td>' + Math.round(s.xp * mu) +
+              '</td><td>' + stp + '</td><td>' + s.xp +
+              '</td><td>' + (i === 0 ? '—' : (Math.round(s.xp / descent[i - 1].xp * 100) / 100) + '×') +
+              '</td><td>' + (Math.round(solo / stp * 100) / 100) +
+              '</td><td>' + (Math.round(duo / stp * 100) / 100) +
+              '</td><td>' + Math.round(solo * mu) +
               ' <span style="color:#6b7684">(×' + (Math.round(mu * 100) / 100) + ')</span></td><td>' + s.avgHp +
               '</td><td>+' + s.avgPower + '</td><td>' + s.bossHp + '</td><td>' + s.spawns + '</td></tr>';
           }).join('') + '</table>' +
           '<div class="sub">Uma descida = as 3 salas, contando cada spawn do layout. ' +
-          '"Frações de nível" = XP da descida ÷ degrau da xpTable no nível recomendado: ' +
-          'alvo ~1 no começo e ~1/3 do nível 25 em diante. A coluna "XP no nível 22" aplica o ' +
+          '<code>game.js</code> faz <code>xpGanho = floor(xpTotal / partySize)</code>: o <b>solo</b> ' +
+          'leva a descida inteira, a <b>dupla</b> parte ao meio por herói. "Níveis" = essa XP ÷ o degrau ' +
+          'da xpTable no nível recomendado; o alvo do adendo v2.3 (~1 no começo, ~1/3 do nível 25 em ' +
+          'diante) é medido no SOLO, que é o teto. A coluna "XP solo no nível 22" aplica o ' +
           '<code>xpFalloff</code> — é ela que mostra por que moer calabouço raso deixa de compensar.</div>') : '') +
         '<h2>Salas: tamanho, divisórias e ritmo</h2><table><tr><th>#</th><th>Sala</th><th>tema</th>' +
         '<th>tamanho</th><th>células</th><th>densidade</th><th>alto/baixo</th>' +

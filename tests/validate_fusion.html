@@ -240,6 +240,60 @@
     for (var t = 0; t < TIERS.length; t++) if (!has(seenTiers, TIERS[t])) tiersOk = false;
     check('dupla ' + pk + ' cobre os tiers 0/5/12/20/30', tiersOk, seenTiers.join(','));
   }
+  // =========================================================================
+  // 1-B. A FUSÃO PRECISA PODER MATAR SOZINHA  (achado nº 1 do Agente Chefe)
+  //   O grupo é de no máximo 2 heróis: ao fundir, a unidade fica SOZINHA em
+  //   campo. Uma dupla que só oferece apoio não tem em quem usar o apoio e
+  //   morre com os inimigos em PV cheio. Regras:
+  //     • a forma de tier 0 é SEMPRE ofensiva (é a única que a fusão tem
+  //       quando ela acontece cedo);
+  //     • pelo menos 3 das 5 formas causam dano;
+  //     • nenhum tier disponível pode ser só de apoio;
+  //     • forma de alvo aliado precisa alcançar o próprio conjurador
+  //       (range.min === 0), senão é inútil com a fusão sozinha.
+  // =========================================================================
+  var DAMAGE_TYPES = ['damage', 'chain', 'poison', 'detonateMarks'];
+  function formHurts(form) {
+    for (var i = 0; i < form.mechanic.length; i++) {
+      if (has(DAMAGE_TYPES, form.mechanic[i].type)) return true;
+    }
+    return false;
+  }
+  for (var dp = 0; dp < expectedPairs.length; dp++) {
+    (function (pk) {
+      var forms = FF[pk];
+      if (!isArr(forms)) return;
+      var nDmg = 0, tier0 = null;
+      forms.forEach(function (f) {
+        if (formHurts(f)) nDmg++;
+        if (f.tier === 0) tier0 = f;
+      });
+
+      check('dupla ' + pk + ': a forma de tier 0 é OFENSIVA',
+        !!tier0 && formHurts(tier0), tier0 ? tier0.formName + ' não causa dano' : 'sem tier 0');
+      check('dupla ' + pk + ': pelo menos 3 das 5 formas causam dano', nDmg >= 3, nDmg + '/5');
+
+      // por tier: o conjunto de feitiços disponíveis (tier <= L) precisa ferir
+      TIERS.forEach(function (lvl) {
+        var pool = forms.filter(function (f) { return f.tier <= lvl; });
+        var podeFerir = false, ofensivas = 0;
+        pool.forEach(function (f) { if (formHurts(f)) { podeFerir = true; ofensivas++; } });
+        check('dupla ' + pk + ' no nível ' + lvl + ': tem como causar dano',
+          podeFerir, pool.length + ' formas, nenhuma ofensiva');
+        check('dupla ' + pk + ' no nível ' + lvl + ': não avança só com apoio',
+          ofensivas >= Math.min(2, Math.ceil(pool.length / 2)) || lvl === 0,
+          ofensivas + ' ofensivas de ' + pool.length);
+      });
+
+      // fusão sozinha em campo: apoio a aliado precisa servir ao próprio corpo
+      forms.forEach(function (f) {
+        if (f.targetSide !== 'ally') return;
+        check('dupla ' + pk + ' t' + f.tier + ' (' + f.formName + '): apoio alcança o próprio conjurador',
+          f.range.min === 0, 'range.min=' + f.range.min + ' — inútil com a fusão sozinha');
+      });
+    })(expectedPairs[dp]);
+  }
+
   check('75 formName únicos em todo o sistema',
     Object.keys(allFormNames).length === 75 && dupFormNames.length === 0,
     dupFormNames.length ? 'repetidos: ' + dupFormNames.join(', ') : 'tem ' + Object.keys(allFormNames).length);
@@ -365,7 +419,7 @@
     };
   }
 
-  var composed = 0, badName = 0, badEffect = 0, badElement = 0, unresolved = 0, badIds = {};
+  var composed = 0, badName = 0, badEffect = 0, badElement = 0, unresolved = 0, badIds = {}, t0NoDamage = 0;
   var firstFailure = '';
   var blendKeysAll = Object.keys(FB);
   var sampleNames = [];
@@ -400,6 +454,18 @@
         }
         badIds[spell.id] = true;
 
+        // todo feitiço de tier 0 já composto (forma + rider) precisa ferir
+        if (flist[ff2].tier === 0) {
+          var hurts = false;
+          for (var hi = 0; hi < spell.effects.length; hi++) {
+            if (has(DAMAGE_TYPES, spell.effects[hi].type)) { hurts = true; break; }
+          }
+          if (!hurts) {
+            t0NoDamage++;
+            if (!firstFailure) firstFailure = 'tier 0 sem dano: ' + spell.id + ' (' + spell.name + ')';
+          }
+        }
+
         if (flist[ff2].tier === 30 && sampleNames.length < 12 && (composed % 37 === 0)) {
           sampleNames.push({ id: spell.id, name: spell.name, pair: pkey, blend: bkey,
                              effects: spell.effects.map(function (x) { return x.type + (x.element ? ':' + x.element : ''); }).join(', ') });
@@ -413,6 +479,8 @@
   check('nenhum elemento não resolvido', badElement === 0 && unresolved === 0,
     (badElement + unresolved) + ' falhas');
   check('nenhum efeito inválido nas composições', badEffect === 0, badEffect + ' falhas');
+  check('TODO feitiço de tier 0 composto causa dano (fusão recém-criada mata sozinha)',
+    t0NoDamage === 0, t0NoDamage + ' composições de tier 0 sem dano');
   check('ids de fusão únicos', Object.keys(badIds).length === composed,
     Object.keys(badIds).length + ' ids para ' + composed + ' composições');
   if (firstFailure) check('primeira falha de composição', false, firstFailure);

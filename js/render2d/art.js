@@ -4732,7 +4732,18 @@ var JOGO = (typeof window !== 'undefined')
     size = size || 56;
     var sp = spellOrKey, id;
     if (typeof spellOrKey === 'string') {
-      sp = (JOGO.DATA && JOGO.DATA.spells && JOGO.DATA.spells[spellOrKey]) || null;
+      // MESMA PORTA DO MOTOR: `Engine.spell` resolve também itemSpells,
+      // petSpells, monsterSpells e os feitiços gerados de fusão. Olhar só
+      // `DATA.spells` fazia todo Lume e toda fusão cair no ícone genérico —
+      // elemento errado, forma errada.
+      sp = null;
+      try { sp = (JOGO.Engine && JOGO.Engine.spell) ? JOGO.Engine.spell(spellOrKey) : null; } catch (e) { sp = null; }
+      if (!sp) {
+        var DD = JOGO.DATA || {};
+        sp = (DD.spells && DD.spells[spellOrKey]) || (DD.itemSpells && DD.itemSpells[spellOrKey]) ||
+             (DD.fusionSpells && DD.fusionSpells[spellOrKey]) || (DD.petSpells && DD.petSpells[spellOrKey]) ||
+             (DD.monsterSpells && DD.monsterSpells[spellOrKey]) || null;
+      }
       id = spellOrKey;
       if (!sp) {
         // sem dados ainda: deriva elemento/forma do id ('classe-elemento-nivel')

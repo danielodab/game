@@ -111,18 +111,23 @@ JOGO.DATA = JOGO.DATA || {};
   // >>> 90% desse teto — o resto fica para o `xpFalloff` do adendo, que é
   // >>> quem realmente pune moer conteúdo raso (×0,10 no piso).
   // ==========================================================================
-  // NOTA: a coluna `xp` foi reapertada quando as salas cresceram (17×15 a
-  // 23×19) e passaram a ter mais spawns — 16→27 bichos por descida em vez de
-  // 14→17. Sem o reaperto, a descida funda saltava de 0,34 para 0,44 de nível
-  // e o adendo v2.3 deixava de valer. Mapa maior dá mais espaço tático, não
-  // mais XP: o total por descida é o que manda, nunca o número de bichos.
+  // >>> TAMANHO DO GRUPO (game.js): `xpGanho = floor(xpTotal / partySize)`.
+  // >>> Quem joga SOLO leva a descida inteira; a dupla parte ao meio. Logo a
+  // >>> calibragem é feita no caso SOLO, que é o teto — se o solo cabe na
+  // >>> faixa, a dupla cabe por construção (metade). Calibrar pela dupla foi
+  // >>> o erro que deixou o solo render 1,89 nível na Estufa.
+  //
+  // NOTA: a coluna `xp` já foi reapertada duas vezes — uma quando as salas
+  // cresceram (mais spawns por descida) e outra quando o Criativo Classes
+  // recalibrou a `xpTable` e os degraus caíram quase à metade. O total por
+  // descida é o que manda: nem o número de bichos, nem o tamanho do mapa.
   var TIER = {
-    greenhouse:   { hp: 1.00, power:   0, xp: 0.0805 },
-    cistern:      { hp: 1.00, power:  12, xp: 0.176 },
-    emberlock:    { hp: 1.15, power:  28, xp: 0.308 },
-    windscaffold: { hp: 1.55, power:  48, xp: 0.514 },
-    quakemine:    { hp: 1.80, power:  75, xp: 0.681 },
-    brokenheart:  { hp: 2.00, power: 105, xp: 0.814 }
+    greenhouse:   { hp: 1.00, power:   0, xp: 0.0427 },
+    cistern:      { hp: 1.00, power:  12, xp: 0.0906 },
+    emberlock:    { hp: 1.15, power:  28, xp: 0.1525 },
+    windscaffold: { hp: 1.55, power:  48, xp: 0.2553 },
+    quakemine:    { hp: 1.80, power:  75, xp: 0.3354 },
+    brokenheart:  { hp: 2.00, power: 105, xp: 0.4160 }
   };
   var NO_TIER = { hp: 1, power: 0, xp: 1 };   // invocações do jogador: intocadas
   function tierOf(o) { return TIER[o.dungeonId] || NO_TIER; }
@@ -185,7 +190,13 @@ JOGO.DATA = JOGO.DATA || {};
       traits: o.traits || [],
       boss: !!o.boss,
       summonOnly: !!o.summonOnly,
-      xp: Math.round(o.xp * tierOf(o).xp),
+      // UMA CASA DECIMAL, de propósito. Com a xpTable atual o nível 3 custa 35
+      // XP e a Estufa inteira vale isso — arredondando para inteiro, TODO
+      // bicho do calabouço 1 viraria "1 XP" e o peso relativo entre eles
+      // (a mãe-carrapicho vale mais que o puff de pólen) sumiria. `game.js`
+      // soma os `xp` da sala e só então faz `floor(total / partySize)`, então
+      // fração aqui é segura e nunca chega fracionada ao jogador.
+      xp: Math.round(o.xp * tierOf(o).xp * 10) / 10,
       stoneDrop: stoneDropFor(o)
     };
   }
