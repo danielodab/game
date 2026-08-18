@@ -69,6 +69,15 @@
         }
         if (descer) descer.click();
         for (var i = 0; i < 30; i++) { try { JOGO.UI.update && JOGO.UI.update(0.05); } catch (e) {} }
+        // ?ficha=1 abre a FICHA do primeiro heroi liberado, para conferir a
+        // lista de feiticos com descricao e os que ainda vao abrir.
+        if (/[?&]ficha=1/.test(location.search)) {
+          var fichas = document.querySelectorAll('#ui-root button');
+          for (var f = 0; f < fichas.length; f++) {
+            if (/^ficha$/i.test((fichas[f].textContent || '').trim())) { fichas[f].click(); break; }
+          }
+          for (var k = 0; k < 20; k++) { try { JOGO.UI.update && JOGO.UI.update(0.05); } catch (e) {} }
+        }
         var cards = document.querySelectorAll('#ui-root .hero-card').length;
         var canvases = document.querySelectorAll('#ui-root .hero-pic canvas').length;
         st.textContent = 'PASS · ' + cards + ' cartões · ' + canvases + ' figuras · modelos ' +

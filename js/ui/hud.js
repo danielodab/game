@@ -1825,44 +1825,86 @@ var JOGO = (typeof window !== 'undefined')
     })();
     body.appendChild(slots);
 
-    // ---- feitiços
+    // ---- feitiços, com o que faz e o que cada um custa
+    // Antes esta lista era só ícone + nome, e a descrição vivia no balãozinho —
+    // que no celular ninguém vê, porque não existe passar o mouse.
     body.appendChild(el('h3', 'hs-sec', 'Feitiços'));
     var sl = safe(function () { return P().spellsFor(heroId); }, h.spells || []);
-    var sg = el('div', 'hs-spells');
-    (sl || []).forEach(function (sid) {
-      var d2 = spellDef(sid);
-      var c = el('div', 'hs-spell');
-      c.appendChild(art('spellIcon', [d2 || sid, 40], 40));
-      c.appendChild(el('span', null, esc(spellName(d2, sid))));
-      tipOn(c, spellName(d2, sid), spellTipBody(d2, sid), d2 ? elemColor(d2.element) : '#ffd08a');
-      sg.appendChild(c);
-    });
+    var sg = el('div', 'hs-spell-list');
+    (sl || []).forEach(function (sid) { sg.appendChild(linhaDeFeitico(sid, 0)); });
     body.appendChild(sg);
 
-    // ---- caminho ainda por abrir
+    // ---- o que ainda vem, e em que nível
     var def = classDef(cid) || {};
-    if (h.element && h.element !== 'neutro' && def.paths && def.paths[h.element]) {
-      var tiers = D().unlockTiers || [];
-      var locked = def.paths[h.element].filter(function (sid, i) {
-        var d3 = spellDef(sid);
-        var need = (d3 && d3.unlockLevel) || tiers[i] || 99;
-        return (h.level || 1) < need;
+    var nivel = h.level || 1;
+    var escolha = (D().leveling || {}).elementChoiceLevel || 5;
+
+    function listaDoCaminho(elemento, titulo) {
+      var caminho = (def.paths || {})[elemento] || [];
+      if (!caminho.length) return null;
+      var pendentes = caminho.filter(function (sid) {
+        var dd = spellDef(sid);
+        return nivel < ((dd && dd.unlockLevel) || 99);
       });
-      if (locked.length) {
-        body.appendChild(el('h3', 'hs-sec', 'Ainda por abrir'));
-        var lg = el('div', 'hs-spells is-locked');
-        locked.forEach(function (sid) {
-          var d3 = spellDef(sid);
-          var i2 = def.paths[h.element].indexOf(sid);
-          var need = (d3 && d3.unlockLevel) || tiers[i2] || '?';
-          var c2 = el('div', 'hs-spell');
-          c2.appendChild(art('spellIcon', [d3 || sid, 40], 40, 'silhouette'));
-          c2.appendChild(el('span', null, esc(spellName(d3, sid)) + ' · Nv ' + need));
-          lg.appendChild(c2);
-        });
-        body.appendChild(lg);
+      if (!pendentes.length) return null;
+      var bloco = el('div', 'hs-path');
+      if (titulo) {
+        var cab = el('div', 'hs-path-h', esc(titulo));
+        cab.style.color = elemColor(elemento);
+        bloco.appendChild(cab);
       }
+      var lst = el('div', 'hs-spell-list is-locked');
+      pendentes.forEach(function (sid) {
+        var dd = spellDef(sid);
+        lst.appendChild(linhaDeFeitico(sid, (dd && dd.unlockLevel) || 0));
+      });
+      bloco.appendChild(lst);
+      return bloco;
     }
+
+    if (h.element && h.element !== 'neutro') {
+      var b1 = listaDoCaminho(h.element, null);
+      if (b1) {
+        body.appendChild(el('h3', 'hs-sec', 'Ainda por abrir'));
+        body.appendChild(b1);
+      }
+    } else {
+      // Sem elemento escolhido não há UM caminho — há QUATRO. Mostramos os
+      // quatro para o jogador poder decidir antes de chegar no nível da escolha.
+      body.appendChild(el('h3', 'hs-sec', 'O que vem depois'));
+      body.appendChild(el('p', 'hs-hint',
+        'O caminho elemental abre no nível ' + escolha +
+        '. Estes são os feitiços de cada elemento, e o nível em que chegam.'));
+      ['fogo', 'agua', 'terra', 'ar'].forEach(function (e) {
+        var bl = listaDoCaminho(e, ELEM_PT[e] || e);
+        if (bl) body.appendChild(bl);
+      });
+    }
+  }
+
+  // Uma linha de feitiço: ícone, nome, nível de abertura, custo e o que faz.
+  function linhaDeFeitico(sid, nivelAbre) {
+    var d2 = spellDef(sid);
+    var linha = el('div', 'hs-spell-row');
+    linha.appendChild(art('spellIcon', [d2 || sid, 38], 38, nivelAbre ? 'silhouette' : ''));
+    var txt = el('div', 'hs-spell-txt');
+    var cab = el('div', 'hs-spell-h');
+    cab.appendChild(el('b', null, esc(spellName(d2, sid))));
+    if (nivelAbre) cab.appendChild(el('span', 'hs-lv', 'Nv ' + nivelAbre));
+    txt.appendChild(cab);
+    if (d2) {
+      var ficha = (d2.paCost || 0) + ' PA';
+      if (d2.range) ficha += ' · alcance ' + (d2.range.min || 0) + '–' + (d2.range.max || 0);
+      if (d2.aoe && d2.aoe.shape && d2.aoe.shape !== 'single') {
+        ficha += ' · área ' + d2.aoe.shape + ' ' + (d2.aoe.size || '');
+      }
+      if (d2.cooldown) ficha += ' · recarga ' + d2.cooldown;
+      txt.appendChild(el('div', 'hs-spell-n', esc(ficha)));
+      if (d2.description) txt.appendChild(el('p', 'hs-spell-d', esc(d2.description)));
+    }
+    linha.appendChild(txt);
+    if (d2) tipOn(linha, spellName(d2, sid), spellTipBody(d2, sid), elemColor(d2.element));
+    return linha;
   }
 
   function petPicker(heroId) {

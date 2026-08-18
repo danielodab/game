@@ -972,3 +972,30 @@ i, em { font-style: normal; color: var(--dim); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* --------------------------------------------------------------------------
+   FICHA DO HERÓI — lista de feitiços com o que cada um faz
+   O balãozinho (tipOn) continua valendo no desktop, mas no celular ninguém
+   passa o mouse: a descrição precisa estar na tela.
+   -------------------------------------------------------------------------- */
+.hs-spell-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.hs-spell-row {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 7px 9px; border-radius: 8px;
+  background: rgba(255,255,255,.03); border: 1px solid var(--line2);
+}
+.hs-spell-row canvas { flex: 0 0 38px; border-radius: 6px; }
+.hs-spell-txt { min-width: 0; flex: 1 1 auto; }
+.hs-spell-h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.hs-spell-h b { font-size: 13px; }
+.hs-lv {
+  font: 600 10px/1 monospace; padding: 3px 6px; border-radius: 4px;
+  background: #3a3116; color: #ffd479;
+}
+.hs-spell-n { font: 11px/1.4 monospace; color: var(--dim, #8b93a0); margin-top: 2px; }
+.hs-spell-d { font-size: 11.5px; line-height: 1.45; color: #b9c2ce; margin-top: 3px; }
+.hs-spell-list.is-locked .hs-spell-row { opacity: .72; }
+.hs-path { margin-bottom: 10px; }
+.hs-path-h { font: 600 12px/1 system-ui; text-transform: uppercase;
+             letter-spacing: .04em; margin: 8px 0 5px; }
+.hs-hint { font-size: 11.5px; color: var(--dim, #8b93a0); margin-bottom: 8px; }

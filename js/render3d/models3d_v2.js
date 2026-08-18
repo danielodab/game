@@ -172,7 +172,11 @@ var JOGO = (typeof window !== 'undefined')
     // GEOMETRIA GERADA, presa ao osso da cabeça (ver `poeMascara`).
     espadachim: { model: 'rogue', show: ['Knife', 'Knife_Offhand'],
             scale: 0.97, tint: '#2f6f8f', accent: '#9be8ff', weapon: 'Knife',
-            faceMask: { cor: '#15181c', altura: 0.20, avanco: 0.05 },
+            // MÁSCARA REMOVIDA a pedido do usuário ("a máscara ficou muito ruim
+            // do ladino, pode tirar"). A geometria gerada por `poeMascara`
+            // continua no arquivo e volta com uma linha, mas numa cabeça chibi
+            // de 40 px no tabuleiro a faixa vira um borrão preto sem leitura.
+            // A roupa escura sozinha já separa o Ladino do Batedor.
             // roupa preta: o corpo, braços e pernas do Ladino têm a textura
             // clareada na direção do preto, do mesmo jeito que a barba do Bruxo
             // vai para o branco. Tingir o material não serviria — a cor vem do
