@@ -719,8 +719,9 @@ Atribuição não é obrigatória sob CC0. Creditamos assim mesmo, como já se f
 
 # PARTE III — EFEITOS E CHEFES GRANDES
 
-**Status: EM PESQUISA (o documento é salvo a cada achado; sessões anteriores caíram).**
+**Status: PESQUISA CONCLUÍDA nas duas frentes. Nada aplicado ao jogo.**
 Data: 2026-08-18, sessão da noite. **Nenhum arquivo em `js/` foi tocado.**
+Frente 1 (efeitos) na seção III.1; Frente 2 (chefes maiores) na III.2.
 O elenco de personagens jogáveis está FECHADO (KayKit customizado) e não foi pesquisado.
 
 ## III.0 A régua que reprova
@@ -915,7 +916,8 @@ pelo privilégio.
 
 ## III.2 FRENTE 2 — CHEFES MAIORES
 
-**Status: EM MEDIÇÃO (esta seção é salva a cada achado).**
+**Status: CONCLUÍDA.** Folha: `assets/candidatos/_folhas/chefes_sala.png`.
+Página: `tests/chefes_sala.html`.
 Pedido do usuário: *"cada chefe precisa ser MAIOR que qualquer personagem,
 incluindo a maior fusão."* Número que ele deu de cabeça: 4,38 m.
 
@@ -1077,3 +1079,155 @@ outros por serem *altos*. Medindo a pose de verdade: `Squidle` e `Dragon` são o
 continuam reprovados, mas por **largura**: 4,9 e 6,3 células. E `Ghost_Skull`,
 que a II.5 dizia ter 4,83 m de largura, é na verdade **o mais estreito de
 todos**, com 2,4 células.
+
+### O defeito que a folha revelou: o chapéu da fusão
+
+`assets/candidatos/_folhas/chefes_sala.png`, primeira e quarta tiras. A figura
+rotulada *FUSÃO mais alta* não parece um herói fundido: é **um chapéu de mago
+gigante flutuando sobre um bárbaro**. Medindo peça por peça
+(`tests/chefes_sala.html?modo=medida&parte=graft`):
+
+| peça enxertada | no corpo do Bárbaro | nos outros corpos |
+|---|---|---|
+| `Mage_Hat` | **5,73 m de largura**, topo a 5,01 m | 3,28–3,45 m |
+| `Knight_Helmet` | **3,12 m de largura**, topo a 4,09 m | — |
+| `2H_Crossbow` | 3,39 m, topo a 3,93 m | 1,81–1,91 m |
+
+O chapéu é **mais largo do que o corpo que o carrega é alto** (5,73 contra
+3,94 m), e um elmo de 3,12 m de largura não é um elmo.
+
+**A causa está localizada.** `models3d_v2.js` linha 859: o enxerto faz
+`bone.add(g2)` copiando a pose local que a peça tinha no dono original, mas a
+peça passa a herdar a **escala acumulada da cadeia de ossos do anfitrião**. No
+Bárbaro essa cadeia foi inflada de propósito pelo `build`
+(`chest 1,42 · ombro 1,34 · braço 1,38`), e ninguém desfaz isso na peça. Daí o
+fator ~1,75× que aparece em **todas** as peças que caem no corpo do Bárbaro, e
+só nele.
+
+Isso não foi corrigido — o pedido era pesquisa, não implementação. Mas ele
+muda o número que os chefes têm de bater, então está medido dos dois jeitos.
+
+### A folha: `assets/candidatos/_folhas/chefes_sala.png`
+
+Seis tiras, uma por sala, **renderizadas dentro da sala de verdade**: chão,
+paredes, props, luz, névoa e clima do jogo. Em cada tira, na mesma célula-a-
+célula e com a mesma câmera:
+
+`HERÓI mais alto (Bárbaro) · FUSÃO mais alta · CHEFE DE HOJE · CANDIDATO 1 · CANDIDATO 2`
+
+A linha vermelha tracejada é o **teto de personagem (5,78 m)**, traçada em
+espaço de mundo e projetada — é altura de verdade, não enfeite. Cada figura leva
+sob os pés a altura medida e o veredito.
+
+Duas ressalvas de leitura honestas:
+
+1. A câmera foi virada para **azimute 0** (de frente), não para os 45° do jogo.
+   Nos 45° a fileira foge para o fundo e a perspectiva encolhe as figuras do
+   fim — o quadro deixaria de ser régua. Sala, luz e cenário continuam os do
+   jogo.
+2. **Não compare o tamanho aparente entre tiras diferentes.** A distância de
+   câmera é limitada pelo tamanho de cada sala, então as tiras não estão na
+   mesma escala de tela. Dentro de cada tira, sim — e é lá que a linha vermelha
+   e os números valem.
+
+Para regerar: subir o servidor na porta 8137 e abrir
+`http://localhost:8137/tests/chefes_sala.html?modo=sala&chefe=0..5&limpo=1`
+(sem `chefe=` ele monta as seis de uma vez; `&modo=medida` dá a tabela de
+números; `&alvo=6.6` muda a altura pedida aos candidatos).
+
+### O veredito de estilo, com as capturas na mão
+
+**APROVADOS.** As seis criaturas do Ultimate Monsters **pertencem** à sala. Isso
+não era óbvio no fundo neutro da folha `esp_chefes.png` e é o achado visual da
+frente: cor chapada de atlas, silhueta grossa, zero detalhe fino, proporção
+cabeçuda — a mesma língua do KayKit Dungeon Remastered. Na tira do Fecho de
+Brasa o `Dragon_Evolved` laranja e o `BlueDemon` azul-petróleo lêem como se
+tivessem sido feitos para aquele chão hexagonal.
+
+**REPROVADOS por FORMA, não por licença nem por estilo — e são os de hoje:**
+
+- `boss-deepknock` (`q_triceratops`): 1,81 m de figura. Na tira da Mina ele é
+  **uma manchinha verde menor que o Bárbaro**. Um chefe que some ao lado de um
+  herói não é um chefe.
+- `boss-heartforge` e `boss-riftheart` (`q_trex`, o mesmo modelo duas vezes):
+  3,77 e 4,20 m de altura para **7,92 e 8,83 m de comprimento** — quatro células
+  deitadas. Na tira do Fecho o T-Rex lê como um bicho *atravessado no chão*, não
+  como um adversário de frente.
+- `boss-gardener` (`q_stag`): um cervo pálido, quase invisível contra a estufa
+  verde. O problema aqui é de leitura, não de porte.
+
+**Nota de largura, que é o custo escondido.** `Squidle` (6,89 m, 4,9 células) e
+`Dragon` (8,25 m, 6,3 células) são os mais altos do acervo e continuam
+reprovados — por pegada. E existe um agravante no código: `models3d_v2.js`
+limita o raio lógico a `Math.min(1.2, …)`, meia célula. Um chefe de 4 células
+visuais com raio lógico de meia célula **mente para o jogador** sobre onde ele
+está. Isso já acontece hoje com os dois T-Rex.
+
+### A recomendação da Frente 2, em dois passos
+
+**Passo 1 — o que custa ZERO byte e é obrigatório de qualquer jeito: subir a
+escala.** Como `altura = 2,95 × look.scale`, os chefes de hoje já poderiam
+crescer trocando um número. É o passo barato, e ele resolve metade do pedido.
+
+**Passo 2 — trocar os quatro modelos cuja FORMA não lê como chefe.** Escala não
+conserta um triceratops deitado nem um cervo pálido.
+
+Os seis escolhidos (seção II.5), com o número que falta: quanto tem de valer
+`look.scale` e quanto o chefe passa a ocupar. Duas colunas, porque o teto
+depende de o enxerto ser corrigido ou não:
+
+| sala | chefe | modelo | **se o enxerto for corrigido**: alvo 5,20 m | **se ficar como está**: alvo 6,60 m |
+|---|---|---|---|---|
+| Estufa | A Jardineira-Viúva | `Mushnub_Evolved` | `scale` **1,75** · 2,1 células | `scale` **2,22** · 2,6 células |
+| Cisterna | Baronesa Salmoura | `Glub_Evolved` | `scale` **1,75** · 2,4 células | `scale` **2,22** · 3,1 células |
+| Fecho de Brasa | Magno, o Acendedor | `BlueDemon` | `scale` **1,85** · 2,9 células | `scale` **2,34** · 3,7 células |
+| Andaimes | Cambota | `Alpaking_Evolved` | `scale` **1,76** · 2,8 células | `scale` **2,23** · 3,5 células |
+| Mina Trêmula | Batepedra | `Goleling_Evolved` | `scale` **1,45** · 3,1 células | `scale` **1,84** · 3,9 células |
+| Coração Partido | O Coração Partido | `Ghost_Skull` | `scale` **1,75** · 2,3 células | `scale` **2,22** · 2,9 células |
+
+(Hoje a maior escala de chefe é 1,55. A fórmula é `look.scale = altura ÷ (2,95 × k)`,
+com o `k` da tabela de candidatos.)
+
+**Recomendação:** **corrigir o enxerto primeiro e mirar 5,20 m.** Motivo com
+número: no cenário de 6,60 m, quatro dos seis chefes passam de **3,5 células de
+largura**, e o raio lógico continua travado em meia célula. Pagar 6,60 m de
+altura para acomodar um chapéu que está grande por defeito é caro do lado
+errado.
+
+**Alternativas espetaculares, se o usuário topar a pegada:** `Dragon_Evolved`
+no Fecho de Brasa (3,5 células) e `Squidle` na Cisterna (4,9 células). As duas
+são as figuras mais impressionantes da folha; as duas custam largura.
+
+### O preço, em bytes
+
+| | conteúdo binário | em base64 |
+|---|---|---|
+| 6 chefes novos (só o buffer de malha+anim) | **1,33 MB** | **1,77 MB** |
+| atlas de textura, compartilhado pelos seis | 9 KB | 12 KB |
+
+Orçamento embutido hoje: 16,27 MB de 25 MB. Se `q_stag`, `q_trex` e
+`q_triceratops` saírem junto (existem no acervo por causa dos chefes), o saldo
+fica próximo de neutro.
+
+### Licença
+
+| pacote | autor | licença | onde está colada |
+|---|---|---|---|
+| Ultimate Monsters | Quaternius | **CC0 1.0** | `assets/candidatos/quaternius_ultimate_monsters/License.txt`, e a íntegra já transcrita na seção II.1 deste documento |
+
+CC0 permite uso comercial, modificação **e redistribuição** — que é o que este
+repositório exige, já que tudo vai embutido em base64 e versionado. Atribuição
+não é obrigatória; entra em `docs/CREDITS_3D.md` mesmo assim.
+
+### O que NÃO foi feito
+
+Nada em `js/` foi tocado. Nenhum modelo entrou em `assets/embedded/`. Os
+candidatos continuam em `assets/candidatos/`, pasta no `.gitignore` que nenhum
+arquivo do jogo referencia. `tests/chefes_sala.html` carrega
+`tests/save_sandbox.js` como primeiro script.
+
+**Decisões que dependem do usuário, e ele precisa das duas:**
+
+1. O chapéu da fusão é defeito (corrigir, teto cai para ~4,9 m) ou é assim
+   mesmo (teto 5,78 m, chefes de 6,60 m)?
+2. Largura: aceita chefes de 3 a 4 células, ou o teto de pegada é 2,5?

@@ -271,6 +271,31 @@ function medeTudo(done) {
   }
   var TETO = parseFloat(Q.teto || '0');
   if (SO_CAND) { tabelaCandidatos(TETO); return; }
+  if (Q.parte === 'graft') { medeEnxertos(); done(0, []); return; }
+
+  // Quanto mede, sozinha, cada PECA enxertada pela fusao. E a pergunta que a
+  // tira levantou: o chapeu do Bruxo aparece maior que o corpo que o carrega.
+  function medeEnxertos() {
+    p('=== PECAS ENXERTADAS PELA FUSAO (medidas isoladas, em metros) ===');
+    p('  ' + pad('dupla', 24) + pad('peca', 20) + padl('largura', 9) +
+      padl('altura', 8) + padl('topo Y', 8));
+    var cls = Object.keys(D.classes), i, j;
+    for (i = 0; i < cls.length; i++) for (j = 0; j < cls.length; j++) {
+      if (i === j) continue;
+      var fid = 'fus:' + cls[i] + '+' + cls[j];
+      var n = M.unit(fid, {});
+      if (!n) continue;
+      poeIdle(n);
+      var gs = n.userData_grafts || [];
+      for (var k = 0; k < gs.length; k++) {
+        var b = new THREE.Box3().setFromObject(gs[k]);
+        p('  ' + pad(cls[i] + '+' + cls[j], 24) + pad(gs[k].name || '?', 20) +
+          padl(fmt(Math.max(b.max.x - b.min.x, b.max.z - b.min.z)), 9) +
+          padl(fmt(b.max.y - b.min.y), 8) + padl(fmt(b.max.y), 8));
+      }
+      if (i === 0 && j === 5) break;
+    }
+  }
   p('======================================================================');
   p(' A REGUA — quanto mede cada corpo DENTRO DO JOGO (metros)');
   p(' célula do tabuleiro = ' + JOGO.Renderer.CELL + ' m');
@@ -478,9 +503,9 @@ function montaTira(idx, slot, cb) {
   var pecas = [
     { tipo: 'jogo', id: 'sumo',  opts: { classId: 'sumo' }, rot: 'HERÓI mais alto\nBárbaro' },
     { tipo: 'jogo', id: 'fus:sumo+bruxo', opts: {},         rot: 'FUSÃO mais alta\nBárbaro+Bruxo' },
-    { tipo: 'jogo', id: ch.id,   opts: { boss: true },      rot: 'CHEFE HOJE\n' + ch.id },
-    { tipo: 'cand', id: ch.c1,   rot: 'CANDIDATO 1\n' + ch.c1 },
-    { tipo: 'cand', id: ch.c2,   rot: 'CANDIDATO 2\n' + ch.c2 }
+    { tipo: 'jogo', id: ch.id,   opts: { boss: true },      rot: 'CHEFE HOJE\n' + ch.id, chefe: 1 },
+    { tipo: 'cand', id: ch.c1,   rot: 'CANDIDATO 1\n' + ch.c1, chefe: 1 },
+    { tipo: 'cand', id: ch.c2,   rot: 'CANDIDATO 2\n' + ch.c2, chefe: 1 }
   ];
   rotulos = [];
 
@@ -515,7 +540,7 @@ function montaTira(idx, slot, cb) {
     // as paredes continuam sendo os do jogo; so o angulo muda.
     JOGO.Renderer.setCamera({ centerX: cx, centerY: linha.y,
                               ang: parseFloat(Q.ang || '0'),
-                              dist: parseFloat(Q.dist || '19'),
+                              dist: parseFloat(Q.dist || '17'),
                               tilt: parseFloat(Q.tilt || '1.15') });
     pump(6);
     escondeUnidades();
@@ -552,7 +577,7 @@ function desenhaTira(idx, ch) {
 
   // faixa de identificacao da sala
   fctx.fillStyle = 'rgba(6,9,13,0.82)';
-  fctx.fillRect(0, y0 + TIRA_H - 92, TIRA_W, 92);
+  fctx.fillRect(0, y0 + TIRA_H - 96, TIRA_W, 96);
   fctx.fillStyle = '#ffd08a';
   fctx.font = 'bold 15px Trebuchet MS, Verdana, sans-serif';
   fctx.fillText(ch.nome, 12, y0 + TIRA_H - 70);
@@ -566,20 +591,23 @@ function desenhaTira(idx, ch) {
     var r = rotulos[i];
     var sp = JOGO.Renderer.project(r.gx, r.gy, 0);
     if (!sp) continue;
-    var px = Math.max(70, Math.min(TIRA_W - 70, sp.x * kx));
+    var px = Math.max(78, Math.min(TIRA_W - 78, sp.x * kx));
     var pe = y0 + sp.y * ky;                       // onde estao os pes
-    var base = y0 + TIRA_H - 84;
+    var base = y0 + TIRA_H - 90;
     fctx.strokeStyle = 'rgba(255,208,138,0.45)'; fctx.lineWidth = 1;
     fctx.beginPath(); fctx.moveTo(px, pe); fctx.lineTo(px, base); fctx.stroke();
     var ls = r.txt.split(String.fromCharCode(10));
-    fctx.font = 'bold 12px Trebuchet MS, Verdana, sans-serif';
-    fctx.fillStyle = '#ffd08a'; fctx.fillText(ls[0], px, base + 16);
-    fctx.font = '12px Trebuchet MS, Verdana, sans-serif';
-    fctx.fillStyle = '#dbe6f2'; fctx.fillText(ls[1] || '', px, base + 32);
+    fctx.font = 'bold 11px Trebuchet MS, Verdana, sans-serif';
+    fctx.fillStyle = '#ffd08a'; fctx.fillText(ls[0], px, base + 14);
+    fctx.font = '11px Trebuchet MS, Verdana, sans-serif';
+    fctx.fillStyle = '#dbe6f2'; fctx.fillText(ls[1] || '', px, base + 28);
     fctx.font = 'bold 14px Trebuchet MS, Verdana, sans-serif';
     fctx.fillStyle = r.alt > TETO ? '#7fe08a' : '#ff7a6a';
-    fctx.fillText(fmt(r.alt) + ' m' + (r.chefe ? (r.alt > TETO ? '  PASSA' : '  ABAIXO') : ''),
-                  px, base + 51);
+    fctx.fillText(fmt(r.alt) + ' m', px, base + 46);
+    if (r.chefe) {
+      fctx.font = 'bold 10.5px Trebuchet MS, Verdana, sans-serif';
+      fctx.fillText(r.alt > TETO ? 'PASSA' : 'ABAIXO DO TETO', px, base + 60);
+    }
   }
   fctx.textAlign = 'left';
 }
@@ -633,6 +661,17 @@ function boot() {
       if (k >= lista.length) {
         limpaExtras();
         p('PRONTO · ' + lista.length + ' tira(s) · altura pedida ' + fmt(ALVO) + ' m');
+        // ?limpo=1 — a pagina vira SO a folha, para o screenshot sair no
+        // tamanho exato da tira, sem cabecalho para recortar depois.
+        if (Q.limpo === '1') {
+          document.getElementById('tit').style.display = 'none';
+          document.getElementById('sub').style.display = 'none';
+          sum.style.display = 'none';
+          app.style.display = 'none';
+          folha.style.margin = '0'; folha.style.border = 'none';
+          document.body.style.margin = '0';
+          document.documentElement.style.overflow = 'hidden';
+        }
         document.title = 'PRONTO sala';
         window.__pronto = true;
         return;
