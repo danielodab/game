@@ -411,8 +411,9 @@
       check(RL + ': todas as linhas do mesmo comprimento',
         lay.every(function (row) { return typeof row === 'string' && row.length === wdt; }),
         'larguras: ' + lay.map(function (row) { return row.length; }).join(','));
-      check(RL + ': largura entre 13 e 17 (é ' + wdt + ')', wdt >= 13 && wdt <= 17);
-      check(RL + ': altura entre 11 e 15 (é ' + hgt + ')', hgt >= 11 && hgt <= 15);
+      // faixa ampliada a pedido do usuário ("achei os mapas pequenos")
+      check(RL + ': largura entre 17 e 23 (é ' + wdt + ')', wdt >= 17 && wdt <= 23);
+      check(RL + ': altura entre 15 e 19 (é ' + hgt + ')', hgt >= 15 && hgt <= 19);
 
       var counts = {};
       lay.forEach(function (row) {
@@ -441,6 +442,62 @@
         }
       });
 
+      // ---- DENSIDADE: mapa grande vazio é pior que mapa pequeno -------------
+      // Conta só o INTERIOR (fora o anel de parede): é o que ocupa o campo de
+      // batalha. O anel sozinho já seria 18–24% do total e mascararia tudo.
+      (function () {
+        var inner = 0, obst = 0;
+        for (var y = 1; y < hgt - 1; y++) {
+          for (var x = 1; x < wdt - 1; x++) {
+            inner++;
+            if (lay[y][x] === '#' || lay[y][x] === '=') { obst++; }
+          }
+        }
+        var dens = obst / inner;
+        check(RL + ': densidade de obstáculo entre 12% e 30% do interior',
+          dens >= 0.12 && dens <= 0.30, (Math.round(dens * 1000) / 10) + '% (' + obst + '/' + inner + ')');
+        check(RL + ': mistura obstáculo ALTO e BAIXO (não é só parede)',
+          (counts['#'] || 0) - (2 * wdt + 2 * hgt - 4) > 0 && (counts['='] || 0) > 0,
+          '# interno=' + ((counts['#'] || 0) - (2 * wdt + 2 * hgt - 4)) + ' = ' + (counts['='] || 0));
+      })();
+
+      // ---- RITMO: o primeiro grupo tem de estar a 4–7 células ---------------
+      // Com 3 a 4 PP, um mapa de 23×19 viraria duas rodadas de caminhada se os
+      // spawns ficassem em cantos opostos. Mede a distância (Manhattan, que é
+      // como a unidade anda) de cada 'P' até o monstro mais próximo.
+      (function () {
+        var Ps = [], Ms = [];
+        for (var y = 0; y < hgt; y++) {
+          for (var x = 0; x < wdt; x++) {
+            var ch = lay[y][x];
+            if (ch === 'P') { Ps.push([y, x]); }
+            else if (/^[a-z]$/.test(ch)) { Ms.push([y, x]); }
+          }
+        }
+        if (!Ps.length || !Ms.length) { return; }
+        var sum = 0, worst = 0;
+        Ps.forEach(function (p) {
+          var best = Infinity;
+          Ms.forEach(function (mm) { var d = Math.abs(p[0] - mm[0]) + Math.abs(p[1] - mm[1]); if (d < best) { best = d; } });
+          sum += best; if (best > worst) { worst = best; }
+        });
+        var avg = sum / Ps.length;
+        check(RL + ': distância média herói→monstro mais próximo entre 4 e 7',
+          avg >= 4 && avg <= 7, 'média ' + (Math.round(avg * 100) / 100) + ' · pior ' + worst);
+        check(RL + ': nenhum herói começa a mais de 10 células do primeiro monstro',
+          worst <= 10, 'pior ' + worst);
+        // 2 ou 3 grupos: os monstros não podem estar todos colados num bloco só
+        var far = 0;
+        Ms.forEach(function (mm) {
+          var near = Ms.some(function (o) {
+            return o !== mm && Math.abs(o[0] - mm[0]) + Math.abs(o[1] - mm[1]) <= 3;
+          });
+          if (!near) { far++; }
+        });
+        check(RL + ': monstros distribuídos, não empilhados num bloco único',
+          Ms.length >= 4, Ms.length + ' spawns');
+      })();
+
       var roomBosses = mapped.filter(function (c) { return has(MON, r.monsters[c]) && MON[r.monsters[c]].boss; });
       if (ri === 2) {
         check(RL + ': sala 3 tem exatamente 1 chefe', roomBosses.length === 1, roomBosses.join(','));
@@ -448,6 +505,14 @@
         check(RL + ': salas 1–2 sem chefe', roomBosses.length === 0, roomBosses.join(','));
       }
     });
+
+    // ---- tamanho das salas cresce com a profundidade, chefe na maior ------
+    (function () {
+      if (!Array.isArray(d.rooms) || d.rooms.length !== 3) { return; }
+      var areas = d.rooms.map(function (r) { return r.layout[0].length * r.layout.length; });
+      check(L + ': a sala do chefe é a maior do calabouço (arena, não corredor)',
+        areas[2] >= areas[0] && areas[2] >= areas[1], areas.join(' · '));
+    })();
 
     // ---- lootTable ----
     if (check(L + ': lootTable é array não-vazio', Array.isArray(d.lootTable) && d.lootTable.length > 0)) {
@@ -824,6 +889,29 @@
     check('a descida mais rasa já rende alguma coisa (≥ 10 pedras)', yields[0] >= 10, yields[0] + '');
   })();
 
+  // --- SALAS MAIORES: a escada de tamanho ao longo dos 6 calabouços --------
+  (function () {
+    var areas = DG.map(function (d) {
+      return d.rooms.reduce(function (a, r) { return a + r.layout[0].length * r.layout.length; }, 0);
+    });
+    check('área total das salas cresce (ou empata) a cada calabouço',
+      areas.every(function (v, i) { return i === 0 || v >= areas[i - 1]; }), areas.join(' → '));
+    check('o último calabouço é sensivelmente maior que o primeiro (≥ 1,5×)',
+      areas[5] >= areas[0] * 1.5, areas[0] + ' → ' + areas[5]);
+    var biggest = 0, smallest = Infinity;
+    DG.forEach(function (d) {
+      d.rooms.forEach(function (r) {
+        var a = r.layout[0].length * r.layout.length;
+        if (a > biggest) { biggest = a; }
+        if (a < smallest) { smallest = a; }
+      });
+    });
+    check('a menor sala do jogo já é ≥ 17×15 (255 células)', smallest >= 255, smallest + '');
+    check('a maior sala do jogo é 23×19 (437 células)', biggest === 437, biggest + '');
+    check('a sala do chefe final é a maior de todas',
+      DG[5].rooms[2].layout[0].length * DG[5].rooms[2].layout.length === biggest);
+  })();
+
   check('O Coração Partido muda de clima a cada 3 rodadas',
     DG.length === 6 && DG[5].weatherShiftEveryRounds === 3, DG[5] && String(DG[5].weatherShiftEveryRounds));
 
@@ -1022,6 +1110,43 @@
           '"Frações de nível" = XP da descida ÷ degrau da xpTable no nível recomendado: ' +
           'alvo ~1 no começo e ~1/3 do nível 25 em diante. A coluna "XP no nível 22" aplica o ' +
           '<code>xpFalloff</code> — é ela que mostra por que moer calabouço raso deixa de compensar.</div>') : '') +
+        '<h2>Salas: tamanho, divisórias e ritmo</h2><table><tr><th>#</th><th>Sala</th><th>tema</th>' +
+        '<th>tamanho</th><th>células</th><th>densidade</th><th>alto/baixo</th>' +
+        '<th>dist. herói→monstro</th><th>P</th><th>monstros</th></tr>' +
+        D.dungeons.map(function (d) {
+          return d.rooms.map(function (r, ri) {
+            var lay = r.layout, w = lay[0].length, h = lay.length;
+            var inner = 0, obst = 0, hi = 0, lo = 0, Ps = [], Ms = [];
+            for (var y = 0; y < h; y++) {
+              for (var x = 0; x < w; x++) {
+                var ch = lay[y][x];
+                if (y > 0 && y < h - 1 && x > 0 && x < w - 1) {
+                  inner++;
+                  if (ch === '#') { obst++; hi++; }
+                  if (ch === '=') { obst++; lo++; }
+                }
+                if (ch === 'P') { Ps.push([y, x]); }
+                else if (/^[a-z]$/.test(ch)) { Ms.push([y, x]); }
+              }
+            }
+            var sum = 0;
+            Ps.forEach(function (p) {
+              var best = Infinity;
+              Ms.forEach(function (mm) { var dd = Math.abs(p[0] - mm[0]) + Math.abs(p[1] - mm[1]); if (dd < best) { best = dd; } });
+              sum += best;
+            });
+            return '<tr><td>' + d.order + '.' + (ri + 1) + '</td><td>' + r.name +
+              (ri === 2 ? ' <span style="color:#ffd76b">(chefe)</span>' : '') + '</td><td>' + r.sceneryTheme +
+              '</td><td>' + w + '×' + h + '</td><td>' + (w * h) + '</td><td>' +
+              (Math.round(obst / inner * 1000) / 10) + '%</td><td>' + hi + ' / ' + lo +
+              '</td><td>' + (Math.round(sum / Ps.length * 100) / 100) + '</td><td>' + Ps.length +
+              '</td><td>' + Ms.length + '</td></tr>';
+          }).join('');
+        }).join('') + '</table>' +
+        '<div class="sub">Densidade conta só o interior (fora o anel de parede). ' +
+        '"alto/baixo" = células internas de <code>#</code> e de <code>=</code>. ' +
+        'Distância = média, em passos Manhattan, de cada spawn de herói até o monstro mais próximo ' +
+        '(alvo 4–7: perto o bastante para a luta começar na 1ª rodada).</div>' +
         '<h2>Economia: pedras de forja e cartas</h2><table><tr><th>#</th><th>Calabouço</th>' +
         '<th>pedras/descida</th><th>elemento principal</th><th>descidas p/ um +10 (107)</th>' +
         '<th>chefe derruba</th><th>cartas do chefe</th></tr>' + econ + '</table>' +

@@ -6,7 +6,7 @@ var JOGO = (typeof window !== 'undefined')
 // SOTERRA 2.0 — Os 6 calabouços, o cenário e os eventos de terreno
 // Dono: Criativo Mundo. Globais: DATA.dungeons, DATA.scenery, DATA.tileEvents.
 //
-// LEGENDA DE LAYOUT (contrato §6). Cada sala é um retângulo de 13×11 a 17×15
+// LEGENDA DE LAYOUT (contrato §6). Cada sala é um retângulo de 17×15 a 23×19
 // (largura = comprimento da string, altura = número de linhas):
 //   '.'  chão            ','  chão decorado
 //   '#'  obstáculo ALTO  — bloqueia passagem E visão
@@ -15,9 +15,29 @@ var JOGO = (typeof window !== 'undefined')
 //   'P'  spawn de herói   ·   a–z  spawn de monstro (ver `monsters`)
 //
 // GRUPO DE 1 OU 2 (adendo v2.1): o time desceu de 3 para 2 heróis, então cada
-// sala precisa de ≥ 2 spawns 'P'. Os layouts continuam com 4 de propósito —
+// sala precisa de ≥ 2 spawns 'P'. Os layouts trazem de 6 a 10 de propósito —
 // spawn sobrando é ignorado pela engine e dá margem para o pet e para a
 // unidade fundida, que ocupa uma célula só.
+//
+// SALAS GRANDES (pedido do usuário: "achei os mapas pequenos"). A faixa subiu
+// de 13×11–17×15 para 17×15–23×19, crescendo com a profundidade, e a sala do
+// chefe é sempre a maior do seu calabouço — arena, não corredor. Três regras
+// aprendidas ao ampliar, porque mapa grande vazio é PIOR que mapa pequeno:
+//
+//   1. DIVISÓRIA COM TEMA, não bloco solto. O '#' e o '=' desenham a mesma
+//      coisa que o cenário do tema promete: fileiras de canteiro e treliça na
+//      Estufa, parapeitos de canal e comportas na Cisterna, fornalhas e
+//      trilhos no Fecho, torres de andaime e vãos nos Andaimes, escoras e
+//      vagonetes na Mina, pilares partidos e fendas no Coração. Cada sala tem
+//      corredor, salão, gargalo e pelo menos uma rota alternativa.
+//   2. DENSIDADE ENTRE 12% E 30% do interior (sem contar o anel de parede).
+//      Abaixo disso vira campo aberto; acima vira labirinto e o corpo a corpo
+//      não alcança ninguém.
+//   3. RITMO ANTES DE ESPAÇO. Com 3 a 4 PP, mapa grande viraria duas rodadas
+//      de caminhada. Por isso os 'P' ficam no miolo da borda esquerda (nunca
+//      num canto), o primeiro grupo de monstros fica a 4–7 células, e o resto
+//      vem em 2 ou 3 grupos separados — o mapa grande é a decisão de PARA QUAL
+//      grupo ir primeiro, não tempo morto andando.
 //
 // O '=' é a novidade tática da v2: gargalos e coberturas onde o atirador
 // continua vendo o alvo mas ninguém consegue passar. Use as diagonais.
@@ -38,41 +58,48 @@ JOGO.DATA = JOGO.DATA || {};
   // CENÁRIO — nomes visuais que o Designer desenha no lugar de blocos genéricos.
   // high = obstáculo alto ('#') · low = cobertura baixa ('=')
   // floor = variações de piso ('.' e ',') · props = adereços sem colisão.
+  //
+  // Com as salas ampliadas (até 23×19) um mapa chega a ter mais de 50 células
+  // de obstáculo: com 4 variantes altas a repetição ficava óbvia a olho nu.
+  // Cada tema agora tem 6 altas e 7 baixas, e as novas seguem a mesma regra
+  // das antigas — a ALTA é algo que ninguém enxerga por cima (parede, torre,
+  // fornalha), a BAIXA é algo em que dá para escorar e atirar por cima
+  // (mureta, vagonete, bigorna). O Designer sorteia dentro do tema.
   // ==========================================================================
   DATA.scenery = {
     garden: {
-      high: ['treliça de madeira podre', 'sebe alta e emaranhada', 'estufa de vidro rachado', 'tutor de bambu cerrado'],
-      low: ['canteiro de alvenaria', 'muretinha de tijolo com musgo', 'carrinho de jardinagem tombado', 'fileira de vasos quebrados', 'tora caída coberta de hera'],
+      high: ['treliça de madeira podre', 'sebe alta e emaranhada', 'estufa de vidro rachado', 'tutor de bambu cerrado', 'palmeira de estufa tombada de través', 'painel de vidro embaçado de mofo'],
+      low: ['canteiro de alvenaria', 'muretinha de tijolo com musgo', 'carrinho de jardinagem tombado', 'fileira de vasos quebrados', 'tora caída coberta de hera', 'floreira comprida de pedra', 'cerca-viva podada até a altura do peito'],
       floor: ['ladrilho hexagonal com musgo', 'terra batida com raízes à mostra', 'grama irrompendo entre lajotas', 'poça de clorofila'],
       props: ['redoma de vagalumes', 'regador de cobre azinhavrado', 'espantalho de palha mofada', 'placa de nome de planta ilegível', 'esporos suspensos']
     },
     cistern: {
-      high: ['coluna de pedra negra', 'comporta de ferro emperrada', 'arcada submersa até o meio', 'pilha de barris apodrecidos'],
-      low: ['parapeito de canal', 'degrau de sal cristalizado', 'banco de baile emborcado', 'cano rompido escorrendo', 'amontoado de pérolas calcificadas'],
+      high: ['coluna de pedra negra', 'comporta de ferro emperrada', 'arcada submersa até o meio', 'pilha de barris apodrecidos', 'coluna de sal grossa como um carvalho', 'tela de eclusa entupida de limo'],
+      low: ['parapeito de canal', 'degrau de sal cristalizado', 'banco de baile emborcado', 'cano rompido escorrendo', 'amontoado de pérolas calcificadas', 'mureta de comporta na altura da cintura', 'passarela de tábua encalhada de lado'],
       floor: ['mosaico espelhado por um dedo d\'água', 'lodo turquesa', 'lajota rachada com raiz de sal', 'ripple de água parada'],
       props: ['lustre de águas-vivas', 'lampião submerso ainda aceso', 'partitura boiando', 'sapato de baile solitário', 'corrente de âncora']
     },
     forge: {
-      high: ['bloco de ferro rebitado', 'chaminé de tijolo refratário', 'portão de fundição', 'pilha de lingotes empilhados'],
-      low: ['bigorna abandonada', 'mureta de contenção de escória', 'fosso de têmpera com borda', 'carrinho de carvão', 'molde de areia rachado'],
+      high: ['bloco de ferro rebitado', 'chaminé de tijolo refratário', 'portão de fundição', 'pilha de lingotes empilhados', 'fornalha apagada do tamanho de uma casa', 'prensa de forja emperrada no alto'],
+      low: ['bigorna abandonada', 'mureta de contenção de escória', 'fosso de têmpera com borda', 'carrinho de carvão', 'molde de areia rachado', 'trilho elevado de vagoneta de lingote', 'bloco de têmpera com a água já seca'],
       floor: ['grelha de forja com brasa embaixo', 'chapa de ferro chamuscada', 'piso de areia de fundição', 'poça de metal solidificado'],
       props: ['corrente do teto balançando', 'martelo cravado na bancada', 'fole gigante murcho', 'avental pendurado', 'fagulhas subindo']
     },
     scaffold: {
-      high: ['torre de andaime fechada', 'guindaste travado', 'tapume de tábuas pregadas', 'chaminé de ventilação'],
-      low: ['guarda-corpo de corda e tábua', 'pilha de vigas amarradas', 'caixa de ferramentas', 'saco de brita de lastro', 'roldana caída de lado'],
+      high: ['torre de andaime fechada', 'guindaste travado', 'tapume de tábuas pregadas', 'chaminé de ventilação', 'elevador de obra parado entre andares', 'lona de proteção inflada pelo vento'],
+      low: ['guarda-corpo de corda e tábua', 'pilha de vigas amarradas', 'caixa de ferramentas', 'saco de brita de lastro', 'roldana caída de lado', 'estrado de tábua empilhado', 'rolo de cabo de aço na altura do joelho'],
       floor: ['tábua corrida rangendo', 'grade metálica vazada', 'chapa de compensado com prego exposto', 'passarela de corda'],
       props: ['prumo balançando', 'bandeirola de obra', 'balde pendurado', 'ninho de picanço com ossinhos', 'redemoinho de serragem']
     },
     mine: {
-      high: ['escoramento de galeria', 'veio de rocha bruta', 'desabamento antigo', 'silo de minério'],
-      low: ['vagonete emborcado', 'trilho elevado', 'pilha de estéril', 'caixa de dinamite úmida', 'vira-cavalete de escoramento'],
+      high: ['escoramento de galeria', 'veio de rocha bruta', 'desabamento antigo', 'silo de minério', 'pilar de rocha deixado de pé para segurar o teto', 'porta de galeria pregada e lacrada'],
+      low: ['vagonete emborcado', 'trilho elevado', 'pilha de estéril', 'caixa de dinamite úmida', 'vira-cavalete de escoramento', 'viga de escoramento caída atravessada', 'bancada de britagem quebrada'],
       floor: ['piso de cascalho socado', 'trilho de vagonete', 'lama mineral', 'rocha polida por botas'],
       props: ['lampião de carbureto apagado', 'gaiola de pássaro vazia', 'capacete no chão', 'cristal aflorando da parede', 'poeira em suspensão']
     },
     heart: {
-      high: ['costela de pedra do Coração', 'lasca de céu petrificado', 'muro de espelho fosco', 'coluna dos quatro elementos'],
-      low: ['degrau de basalto rachado', 'caco de espelho encravado', 'bacia elemental transbordando', 'raiz-do-coração grossa', 'anel de cinza compactada'],
+      high: ['costela de pedra do Coração', 'lasca de céu petrificado', 'muro de espelho fosco', 'coluna dos quatro elementos', 'pilar partido ao meio que não caiu', 'lasca de mundo suspensa e imóvel'],
+      low: ['degrau de basalto rachado', 'caco de espelho encravado', 'bacia elemental transbordando', 'raiz-do-coração grossa', 'anel de cinza compactada', 'soleira de mármore partida', 'banco de pedra das quatro estações'],
       floor: ['mosaico das quatro estações', 'piso que muda de cor com o clima', 'lajota partida ao meio', 'veio de luz antiga'],
       props: ['relógio de estações parado', 'estilhaço flutuando parado no ar', 'chuva que cai para cima', 'quatro lampiões, um por elemento', 'batida distante']
     }
@@ -186,17 +213,21 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'calmo',
         sceneryTheme: 'garden',
         layout: [
-          '#############',
-          '#P,....=....#',
-          '#P,.==.=.a..#',
-          '#P.....=..,.#',
-          '#...=......b#',
-          '#..~~..=....#',
-          '#...=.....a.#',
-          '#.....=..,..#',
-          '#P..==.=..c.#',
-          '#..........,#',
-          '#############'
+          '#################',
+          '#.,....#....,...#',
+          '#.==...#...==...#',
+          '#.....a#........#',
+          '#..=...=....=...#',
+          '#P..,.........,.#',
+          '#PP...b...#.....#',
+          '#P..,..=..#..,.c#',
+          '#PP...b...#.....#',
+          '#..=...=....=...#',
+          '#.....a.#.......#',
+          '#.==...#...==...#',
+          '#.,....#....,...#',
+          '#...,.....,.....#',
+          '#################'
         ],
         monsters: { a: 'pollen-puff', b: 'thorn-lasher', c: 'lantern-wasp' }
       },
@@ -205,19 +236,21 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'chuva',
         sceneryTheme: 'garden',
         layout: [
-          '#############',
-          '#..a......a.#',
-          '#.~~~=,,=~~~#',
-          '#.~~~....~~~#',
-          '#..=..s..=..#',
-          '#,,.......,,#',
-          '#..=..b..=..#',
-          '#,,.......,,#',
-          '#..=..c..=..#',
-          '#.~~~....~~~#',
-          '#.~~~=,,=~~~#',
-          '#P.P.P....P.#',
-          '#############'
+          '#################',
+          '#..,.....,......#',
+          '#.=====...=====.#',
+          '#.....a..s......#',
+          '#..~~..=..~~....#',
+          '#P.~~.....~~..c.#',
+          '#PP...==....##..#',
+          '#P.....b........#',
+          '#PP...==....##,.#',
+          '#..~~.....~~....#',
+          '#..~~..=..~~....#',
+          '#.....a.........#',
+          '#.=====...=====.#',
+          '#..,.....,......#',
+          '#################'
         ],
         monsters: { a: 'thorn-lasher', s: 'sap-shaman', b: 'burr-mother', c: 'dew-strider' }
       },
@@ -226,19 +259,21 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'chuva',
         sceneryTheme: 'garden',
         layout: [
-          '#############',
-          '#.....z.....#',
-          '#...=,,,=...#',
-          '#.a.......a.#',
-          '#..#==.==#..#',
-          '#..#..,..#..#',
-          '#....=,=....#',
-          '#..#..,..#..#',
-          '#..#==.==#..#',
-          '#...~...~...#',
-          '#..d.....d..#',
-          '#.P.P...P.P.#',
-          '#############'
+          '###################',
+          '#.,.....,....,....#',
+          '#.==.#.......#.==.#',
+          '#....#..a.d..#....#',
+          '#..=.=.......=.=..#',
+          '#P.....#===#......#',
+          '#PP...d=...=...,..#',
+          '#P.......z.....,..#',
+          '#PP...d=...=......#',
+          '#P.....#===#......#',
+          '#..=.=.......=.=..#',
+          '#....#..a....#....#',
+          '#.==.#.......#.==.#',
+          '#.,.....,....,....#',
+          '###################'
         ],
         monsters: { z: 'boss-gardener', a: 'sap-shaman', d: 'dew-strider' }
       }
@@ -296,17 +331,21 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'chuva',
         sceneryTheme: 'cistern',
         layout: [
-          '#############',
-          '#P...~.~..=a#',
-          '#P..=~.~=...#',
-          '#P..=~.~..a.#',
-          '#....~.~.=..#',
-          '#.=,.....,.=#',
-          '#..=.~.~....#',
-          '#...=~.~..b.#',
-          '#P..=~.~=...#',
-          '#..=.~.~...b#',
-          '#############'
+          '###################',
+          '#.,......,.......,#',
+          '#.==========.==...#',
+          '#........a........#',
+          '#..#...#...#...#..#',
+          '#P.....b.....b....#',
+          '#PP...............#',
+          '#P..=====...=====.#',
+          '#PP...............#',
+          '#.......a.........#',
+          '#..#...#...#...#..#',
+          '#.................#',
+          '#.==========.==...#',
+          '#.,......,.......,#',
+          '###################'
         ],
         monsters: { a: 'drowned-porter', b: 'moray-piper' }
       },
@@ -315,19 +354,21 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'calmo',
         sceneryTheme: 'cistern',
         layout: [
-          '###############',
-          '#P.....a......#',
-          '#P..#==,==#...#',
-          '#P.....,......#',
-          '#..=#.....#=e.#',
-          '#.....#=#.....#',
-          '#...b.#~#..c..#',
-          '#.....#=#.....#',
-          '#..=#.....#=..#',
-          '#......,....d.#',
-          '#P..#==,==#...#',
-          '#......,......#',
-          '###############'
+          '###################',
+          '#..,....,....,....#',
+          '#.#...#...#...#...#',
+          '#....a...d........#',
+          '#....==...==...==.#',
+          '#P.......b......e.#',
+          '#PP..#...#...#....#',
+          '#P.......c........#',
+          '#PP..#...#...#..e.#',
+          '#....a...b........#',
+          '#....==...==...==.#',
+          '#...==.....==.....#',
+          '#.#...#...#...#...#',
+          '#..,....,....,....#',
+          '###################'
         ],
         monsters: { a: 'drowned-porter', b: 'moray-piper', c: 'brine-golem', d: 'lantern-jelly', e: 'fat-drop' }
       },
@@ -336,19 +377,23 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'chuva',
         sceneryTheme: 'cistern',
         layout: [
-          '#############',
-          '#....,z,....#',
-          '#...==.==...#',
-          '#.b.......d.#',
-          '#..~..=..~..#',
-          '#..~.....~..#',
-          '#=..,...,..=#',
-          '#..~.....~..#',
-          '#..~..=..~..#',
-          '#.c.......b.#',
-          '#...==.==...#',
-          '#.P.P...P.P.#',
-          '#############'
+          '###################',
+          '#.,.....,.....,...#',
+          '#.===.........===.#',
+          '#.....~~...~~.....#',
+          '#..#..~~...~~..#..#',
+          '#.....b.....d.....#',
+          '#P...=========....#',
+          '#PP..=.......=....#',
+          '#P.....z.c........#',
+          '#PP..=.......=....#',
+          '#P...=========....#',
+          '#.....b.....d.....#',
+          '#..#..~~...~~..#..#',
+          '#.....~~...~~.....#',
+          '#.===.........===.#',
+          '#.,.....,.....,...#',
+          '###################'
         ],
         monsters: { z: 'boss-baroness', b: 'moray-piper', d: 'lantern-jelly', c: 'sump-crab' }
       }
@@ -398,17 +443,21 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'estiagem',
         sceneryTheme: 'forge',
         layout: [
-          '#############',
-          '#P..=....a..#',
-          '#P..=.==....#',
-          '#P..=..=..b.#',
-          '#...~..=....#',
-          '#..,...=.,..#',
-          '#...~..=....#',
-          '#P..=..=..a.#',
-          '#...=.==....#',
-          '#...=....c..#',
-          '#############'
+          '###################',
+          '#,.......,........#',
+          '#.###..=...=..###.#',
+          '#.###....a....###.#',
+          '#......=...=......#',
+          '#P.....b......c...#',
+          '#PP..==.....==....#',
+          '#P................#',
+          '#PP..==.....==..,.#',
+          '#......a..........#',
+          '#.###..=...=..###.#',
+          '#.###.........###.#',
+          '#,.......,........#',
+          '#........,........#',
+          '###################'
         ],
         monsters: { a: 'ember-imp', b: 'ash-wraith', c: 'walking-anvil' }
       },
@@ -419,19 +468,23 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'chuva',
         sceneryTheme: 'forge',
         layout: [
-          '###############',
-          '#P....=...=..a#',
-          '#P.==.=.=....d#',
-          '#P....=...=.d.#',
-          '#..~....=.=...#',
-          '#.,...=...=.b.#',
-          '#..~..=.=.=...#',
-          '#.....=...=.c.#',
-          '#..~....=.....#',
-          '#.,...=...=.e.#',
-          '#P.==.=.=.=...#',
-          '#.....=...=.a.#',
-          '###############'
+          '###################',
+          '#..,.....,.......,#',
+          '#.==..#####..==...#',
+          '#.....#...#.......#',
+          '#...a.#.~.#..d....#',
+          '#.....#...#.......#',
+          '#P..=.#####.=.....#',
+          '#PP...............#',
+          '#P.....b...c....e.#',
+          '#PP...............#',
+          '#P..=.#####.=.....#',
+          '#.....#...#.......#',
+          '#...a.#.~.#..d....#',
+          '#.....#...#.......#',
+          '#.==..#####..==...#',
+          '#..,.....,.......,#',
+          '###################'
         ],
         monsters: {
           a: 'ember-imp', b: 'slag-mound', c: 'walking-anvil',
@@ -443,19 +496,23 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'estiagem',
         sceneryTheme: 'forge',
         layout: [
-          '###############',
-          '#.....,z,.....#',
-          '#....==.==....#',
-          '#.a.=.....=.a.#',
-          '#..~.......~..#',
-          '#.....===.....#',
-          '#=.,..=~=..,.=#',
-          '#.....===.....#',
-          '#..~.......~..#',
-          '#.b.=.....=.b.#',
-          '#....==.==....#',
-          '#.P.P.....P.P.#',
-          '###############'
+          '#####################',
+          '#.,.....,.....,.....#',
+          '#.===.#.......#.===.#',
+          '#.....#...a...#.....#',
+          '#..=..=.......=..=..#',
+          '#P.....b.....b......#',
+          '#PP..###.....###....#',
+          '#P...b#~......~#....#',
+          '#PP......z..........#',
+          '#P...b#~......~#....#',
+          '#PP..###.....###....#',
+          '#P.....b.....b......#',
+          '#..=..=.......=..=..#',
+          '#.....#...a...#.....#',
+          '#.===.#.......#.===.#',
+          '#.,.....,.....,.....#',
+          '#####################'
         ],
         monsters: { z: 'boss-heartforge', a: 'ember-imp', b: 'chain-hauler' }
       }
@@ -506,17 +563,23 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'vendaval',
         sceneryTheme: 'scaffold',
         layout: [
-          '###############',
-          '#P..=.~~~.=..a#',
-          '#P..=.~~~.=...#',
-          '#P.,......,.b.#',
-          '#...=~~~~~=...#',
-          '#..........c..#',
-          '#...=~~~~~=...#',
-          '#P.,......,.b.#',
-          '#...=.~~~.=...#',
-          '#....=...=..a.#',
-          '###############'
+          '###################',
+          '#,.....~~~~~......#',
+          '#.===..~~~~~..===.#',
+          '#......~~~~~......#',
+          '#...a.........a...#',
+          '#.##...=====...##.#',
+          '#.##...........##.#',
+          '#P.....b...b......#',
+          '#PP...............#',
+          '#P....b=====......#',
+          '#PP...............#',
+          '#.##...b.....c.##.#',
+          '#.##...=====...##.#',
+          '#......~~~~~......#',
+          '#.===..~~~~~..===.#',
+          '#,.....~~~~~......#',
+          '###################'
         ],
         monsters: { a: 'plank-shrike', b: 'gust-gremlin', c: 'rope-hanger' }
       },
@@ -527,21 +590,23 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'calmo',
         sceneryTheme: 'scaffold',
         layout: [
-          '#############',
-          '#P..=...=..a#',
-          '#P.,.....,.b#',
-          '#P..=...=...#',
-          '#..~~.=.~~..#',
-          '#..~~...~~..#',
-          '#...=.,.=...#',
-          '#..~~...~~..#',
-          '#..~~.=.~~..#',
-          '#...=...=..c#',
-          '#P.,.....,.d#',
-          '#...=...=...#',
-          '#..=.....=..#',
-          '#....,.,....#',
-          '#############'
+          '###################',
+          '#..,....,....,....#',
+          '#.==..#####...==..#',
+          '#.....#~~~#.......#',
+          '#...a.#~~~#...d...#',
+          '#.....#~~~#.......#',
+          '#P..=..###..=.....#',
+          '#PP...............#',
+          '#P.....b...c......#',
+          '#PP...............#',
+          '#P..=..###..=.....#',
+          '#.....#~~~#.......#',
+          '#...a.#~~~#...d...#',
+          '#.....#~~~#.......#',
+          '#.==..#####...==..#',
+          '#..,....,....,....#',
+          '###################'
         ],
         monsters: { a: 'kite-serpent', b: 'whistle-choir', c: 'ballast-golem', d: 'mote-swarm' }
       },
@@ -550,19 +615,23 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'vendaval',
         sceneryTheme: 'scaffold',
         layout: [
-          '###############',
-          '#...~~.z.~~...#',
-          '#...~~,,,~~...#',
-          '#..=.......=..#',
-          '#.a.=.....=.a.#',
-          '#....=...=....#',
-          '#~~..=,.,=..~~#',
-          '#....=...=....#',
-          '#.b.=.....=.b.#',
-          '#..=.......=..#',
-          '#...~~...~~...#',
-          '#.P.P..c..P.P.#',
-          '###############'
+          '#####################',
+          '#,.....~~~~~~~......#',
+          '#.===..~~~~~~~..===.#',
+          '#......~~~~~~~......#',
+          '#...a....b.....a....#',
+          '#.##..=========..##.#',
+          '#.##...........c.##.#',
+          '#P........z.........#',
+          '#PP...b.............#',
+          '#P..................#',
+          '#PP...b.......c.....#',
+          '#.##..=========..##.#',
+          '#.##...........a.##.#',
+          '#......~~~~~~~......#',
+          '#.===..~~~~~~~..===.#',
+          '#,.....~~~~~~~......#',
+          '#####################'
         ],
         monsters: { z: 'boss-windwright', a: 'plank-shrike', b: 'kite-serpent', c: 'rope-hanger' }
       }
@@ -614,17 +683,23 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'tremor',
         sceneryTheme: 'mine',
         layout: [
-          '###############',
-          '#P..=..a..=...#',
-          '#P..=.....=.b.#',
-          '#P..==...==...#',
-          '#..,........,.#',
-          '#.====.~.====.#',
-          '#..,........,.#',
-          '#P..==...==.c.#',
-          '#...=.....=...#',
-          '#...=..a..=...#',
-          '###############'
+          '#####################',
+          '#,......,.....,.....#',
+          '#.====....===....==.#',
+          '#........a..........#',
+          '#..##.......##...##.#',
+          '#..##...b...##...##.#',
+          '#.........c.........#',
+          '#P..===.......===...#',
+          '#PP...b.............#',
+          '#P..===.......===...#',
+          '#PP...b...c.........#',
+          '#..##...b...##...##.#',
+          '#..##.......##...##.#',
+          '#........a..........#',
+          '#.====....===....==.#',
+          '#,......,.....,.....#',
+          '#####################'
         ],
         monsters: { a: 'pick-revenant', b: 'firedamp-wisp', c: 'ore-tumbler' }
       },
@@ -635,19 +710,23 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'vendaval',
         sceneryTheme: 'mine',
         layout: [
-          '#############',
-          '#P..=.,.=..a#',
-          '#P..=...=...#',
-          '#P.,.....,.b#',
-          '#..==...==..#',
-          '#....~.~....#',
-          '#=.,.~.~.,.=#',
-          '#....~.~....#',
-          '#..==...==..#',
-          '#P.,.....,.c#',
-          '#...=...=...#',
-          '#...=.,.=..a#',
-          '#############'
+          '#####################',
+          '#..,.....,.....,....#',
+          '#.==..#######..==...#',
+          '#.....#~~~~~#.......#',
+          '#...a.#~~~~~#...a...#',
+          '#.....#~~~~~#.......#',
+          '#P..=..#####..=.....#',
+          '#PP.................#',
+          '#P.....b....c.......#',
+          '#PP.........c.......#',
+          '#P..=..#####..=.....#',
+          '#.....#~~~~~#.......#',
+          '#...a.#~~~~~#...b...#',
+          '#.....#~~~~~#.......#',
+          '#.==..#######..==...#',
+          '#..,.....,.....,....#',
+          '#####################'
         ],
         monsters: { a: 'shaft-bat', b: 'damp-seeper', c: 'cave-jaw' }
       },
@@ -656,21 +735,25 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'tremor',
         sceneryTheme: 'mine',
         layout: [
-          '#################',
-          '#.....,,z,,.....#',
-          '#....==...==....#',
-          '#..a...........a#',
-          '#..=..=====..=..#',
-          '#.....=~~~=.....#',
-          '#..,..=~~~=..,..#',
-          '#.....=====.....#',
-          '#..=.........=..#',
-          '#..b...===...b..#',
-          '#....=.....=....#',
-          '#..~.........~..#',
-          '#.....,...,.....#',
-          '#.P.P..c.c..P.P.#',
-          '#################'
+          '#######################',
+          '#.,.....,.......,.....#',
+          '#.===.#.........#.===.#',
+          '#.....#....a....#.....#',
+          '#..=..=.........=..=..#',
+          '#........c...c........#',
+          '#P...###.......###....#',
+          '#PP..#~~.......~~#....#',
+          '#P...b#~........#.....#',
+          '#PP.......z...........#',
+          '#P...b#~........#.....#',
+          '#PP..#~~.......~~#....#',
+          '#P...###.......###....#',
+          '#........c...c........#',
+          '#..=..=.........=..=..#',
+          '#.....#....b....#.....#',
+          '#.===.#.........#.===.#',
+          '#.,.....,.......,.....#',
+          '#######################'
         ],
         monsters: { z: 'boss-deepknock', a: 'crystal-chanter', b: 'sinkhole-worm', c: 'firedamp-wisp' }
       }
@@ -724,19 +807,25 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'chuva',
         sceneryTheme: 'heart',
         layout: [
-          '###############',
-          '#P...=..a..=..#',
-          '#P..,..===..,.#',
-          '#P...=..b..=..#',
-          '#..~.........~#',
-          '#.,..=.,.=..,.#',
-          '#..=..===..=..#',
-          '#.,..=.,.=..,.#',
-          '#~.........~..#',
-          '#P...=..c..=..#',
-          '#..,..===..,..#',
-          '#....=..d..=..#',
-          '###############'
+          '#####################',
+          '#.,.....,.....,.....#',
+          '#.===..#######..===.#',
+          '#......#.....#......#',
+          '#...a..#..~..#..b...#',
+          '#......#.....#......#',
+          '#..=...##.##...=..b.#',
+          '#P....c.............#',
+          '#PP....=.....=......#',
+          '#P.........,....a...#',
+          '#PP....=.....=......#',
+          '#P....d.............#',
+          '#..=...##.##...=....#',
+          '#......#.....#......#',
+          '#...c..#..~..#..d...#',
+          '#......#.....#......#',
+          '#.===..#######..===.#',
+          '#.,.....,.....,.....#',
+          '#####################'
         ],
         monsters: { a: 'cinder-herald', b: 'tide-herald', c: 'gale-herald', d: 'stone-herald' }
       },
@@ -745,19 +834,25 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'estiagem',
         sceneryTheme: 'heart',
         layout: [
-          '###############',
-          '#P..=.a.=..b..#',
-          '#P..=...=.....#',
-          '#P.,.....,....#',
-          '#.==.~~~.==...#',
-          '#......,......#',
-          '#..=.~~~~~.=..#',
-          '#......,......#',
-          '#.==.~~~.==.c.#',
-          '#P.,.....,....#',
-          '#...=...=...d.#',
-          '#...=.a.=..b..#',
-          '###############'
+          '#####################',
+          '#,.....,.......,....#',
+          '#.==.#####.#####.==.#',
+          '#....#...#.#...#....#',
+          '#..a.#.~.#.#.~.#.b..#',
+          '#....#...#.#...#....#',
+          '#.====.###.###.====.#',
+          '#P..................#',
+          '#PP......c.d........#',
+          '#P..................#',
+          '#PP......c.d........#',
+          '#P..................#',
+          '#.====.###.###.====.#',
+          '#....#...#.#...#....#',
+          '#..b.#.~.#.#.~.#.a..#',
+          '#....#...#.#...#....#',
+          '#.==.#####.#####.==.#',
+          '#,.....,.......,....#',
+          '#####################'
         ],
         monsters: { a: 'mirror-twin', b: 'weather-mote', c: 'null-warden', d: 'heartroot' }
       },
@@ -766,21 +861,25 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'calmo',
         sceneryTheme: 'heart',
         layout: [
-          '#################',
-          '#......,z,......#',
-          '#....==,,,==....#',
-          '#..a...........a#',
-          '#.=..=======..=.#',
-          '#....=.~~~.=....#',
-          '#..,.=.~~~.=.,..#',
-          '#....=.~~~.=....#',
-          '#.=..=======..=.#',
-          '#..b....d....b..#',
-          '#....=.....=....#',
-          '#..~....e....~..#',
-          '#.....,...,.....#',
-          '#.P.P.......P.P.#',
-          '#################'
+          '#######################',
+          '#.,.....,.......,.....#',
+          '#.===.#....a....#.===.#',
+          '#.=...#...===...#...=.#',
+          '#..=..#..~~~~~..#..=..#',
+          '#........~~~........,.#',
+          '#P...==.........==....#',
+          '#PP..=...d...e...=....#',
+          '#P...e...........d....#',
+          '#PP.......z...........#',
+          '#P...d...........e....#',
+          '#PP..=...e...d...=....#',
+          '#P...==.........==....#',
+          '#........~~~........,.#',
+          '#..=..#..~~~~~..#..=..#',
+          '#.=...#...===...#...=.#',
+          '#.===.#....b....#.===.#',
+          '#.,.....,.......,.....#',
+          '#######################'
         ],
         monsters: {
           z: 'boss-riftheart', a: 'stone-herald', b: 'gale-herald',

@@ -406,6 +406,24 @@ isométricos clássicos.
 - A HUD indica a orientação atual (uma bússola simples ou marca no canto), para o jogador não se
   perder.
 
+## 9-F. ADENDO v2.5 — Salas maiores, mapa fixo
+
+- **Tamanho das salas**: a faixa passa de 13×11–17×15 para **17×15 a 23×19**, crescendo com a
+  profundidade do calabouço; a sala do chefe é a maior do seu calabouço.
+- **Divisórias temáticas**: o espaço extra precisa virar estrutura, não vazio — corredores, salões,
+  gargalos, coberturas baixas (`=`) para atirar por cima e rotas alternativas, tudo com a linguagem
+  visual do tema (canteiros e treliças, canais e comportas, fornalhas e trilhos, andaimes e vãos,
+  vagonetes e escoras, fendas e pilares partidos).
+- **Ritmo preservado**: com PP 3–4, spawns em cantos opostos viram caminhada morta. Spawns mais
+  próximos do miolo, monstros em 2–3 grupos, eventos de terreno espalhando o movimento.
+  Densidade de obstáculos entre **12% e 30%** das células; distância média entre os heróis e o
+  grupo inimigo mais próximo entre **4 e 7 células**.
+- **O MAPA É FIXO; QUEM SE MOVE É A CÂMERA.** Pivô de órbita fixo no centro, sem deriva ao arrastar;
+  chão estendido até as bordas da tela com névoa ao longe; ambiente ancorado no mundo (nada preso à
+  tela além da UI). A sensação-alvo é *"eu ando ao redor do campo"*, nunca *"o campo gira na minha mão"*.
+- **Enquadramento**: a câmera nasce mostrando o grupo e o primeiro grupo inimigo — não a sala inteira
+  reduzida. No celular, a célula nunca fica abaixo de ~44 px: a câmera aproxima em vez de mostrar tudo.
+
 ## 10. Testes obrigatórios
 
 Cada dono entrega sua página em `tests/` (padrão v1: roda no load, resultado no DOM e em

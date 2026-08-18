@@ -48,7 +48,7 @@ var JOGO = (typeof window !== 'undefined')
   var ANIM_WATCHDOG = 3.0;
   var TAP_PX = 9, TAP_MS = 260;
   var MOVE_RATE = 4.2;                // células por segundo
-  var FACE_OFF = Math.PI;             // o rig do KayKit nasce olhando para −Z
+  var FACE_OFF = 0;                   // o rig do KayKit nasce olhando para +Z
 
   R.CELL = CELL;
   R.FUSION_TIMING = { approach: 0.62, flash: 0.26, reveal: 0.66 };
@@ -63,12 +63,12 @@ var JOGO = (typeof window !== 'undefined')
   // Ambiente por tema (§7 — 6 calabouços). Céu/chão do hemisférico dão a
   // "sombra colorida" que faz a cena parecer desenho e não maquete cinza.
   var THEME_ENV = {
-    garden:   { fog: '#25381f', sky: '#a8c887', gnd: '#2c3c66', sun: '#fff0c2', sunI: 1.05, hemiI: 0.85, rim: '#a8ffc0' },
-    cistern:  { fog: '#123a4c', sky: '#7ec0da', gnd: '#20265c', sun: '#e2f4f8', sunI: 0.95, hemiI: 0.90, rim: '#7ef0d4' },
-    forge:    { fog: '#3a160a', sky: '#e09668', gnd: '#46205c', sun: '#ffd8a0', sunI: 1.00, hemiI: 0.82, rim: '#ff9a5a' },
-    scaffold: { fog: '#2a2c36', sky: '#c8d2ea', gnd: '#3a3550', sun: '#eef7f5', sunI: 1.05, hemiI: 0.92, rim: '#cfe4ff' },
-    mine:     { fog: '#241d14', sky: '#c8a878', gnd: '#2e2440', sun: '#ffe0a8', sunI: 0.92, hemiI: 0.80, rim: '#c9a227' },
-    heart:    { fog: '#1d1830', sky: '#b49ce8', gnd: '#2a2044', sun: '#ffe6b8', sunI: 1.00, hemiI: 0.88, rim: '#ffd166' }
+    garden:   { fog: '#3d5c30', sky: '#a8c887', gnd: '#2c3c66', sun: '#fff0c2', sunI: 1.05, hemiI: 0.85, rim: '#a8ffc0' },
+    cistern:  { fog: '#1d5570', sky: '#7ec0da', gnd: '#20265c', sun: '#e2f4f8', sunI: 0.95, hemiI: 0.90, rim: '#7ef0d4' },
+    forge:    { fog: '#5e2510', sky: '#e09668', gnd: '#46205c', sun: '#ffd8a0', sunI: 1.00, hemiI: 0.82, rim: '#ff9a5a' },
+    scaffold: { fog: '#454a5c', sky: '#c8d2ea', gnd: '#3a3550', sun: '#eef7f5', sunI: 1.05, hemiI: 0.92, rim: '#cfe4ff' },
+    mine:     { fog: '#403322', sky: '#c8a878', gnd: '#2e2440', sun: '#ffe0a8', sunI: 0.92, hemiI: 0.80, rim: '#c9a227' },
+    heart:    { fog: '#332a52', sky: '#b49ce8', gnd: '#2a2044', sun: '#ffe6b8', sunI: 1.00, hemiI: 0.88, rim: '#ffd166' }
   };
   function envOf(theme) { return THEME_ENV[theme] || THEME_ENV.garden; }
 
@@ -102,7 +102,7 @@ var JOGO = (typeof window !== 'undefined')
   var unitSnap = {};                  // último retrato conhecido (fusão)
   var animQ = [], delayed = [];
   var lastAtk = null, lastHitDelay = 0.28;
-  var ovSig = '', evSig = '';
+  var ovSig = '', evSig = '~init~';
 
   // ------------------------------------------------------------------ acesso
   function game() { return JOGO.Game || null; }
@@ -216,7 +216,7 @@ var JOGO = (typeof window !== 'undefined')
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     if (THREE.sRGBEncoding != null) renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.06;
+    renderer.toneMappingExposure = 0.98;
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x101418);
@@ -313,16 +313,45 @@ var JOGO = (typeof window !== 'undefined')
     try {
       composer = new THREE.EffectComposer(renderer);
       composer.addPass(new THREE.RenderPass(scene, camera));
-      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(W, H), 0.42, 0.72, 0.86);
+      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(W, H), 0.34, 0.70, 0.94);
       composer.addPass(bloomPass);
       composer.setSize(W, H);
     } catch (e) { composer = null; bloomPass = null; }
+  }
+
+  // Cúpula de céu em gradiente: o chão estendido se perde na névoa e o alto
+  // continua sendo um lugar, não um retângulo de cor chapada.
+  var skyDome = null;
+  var SKY_VS = 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }';
+  var SKY_FS = [
+    'uniform vec3 uTop; uniform vec3 uBot; varying vec3 vP;',
+    'void main(){',
+    '  float h = clamp(vP.y / 220.0 + 0.34, 0.0, 1.0);',
+    '  gl_FragColor = vec4(mix(uBot, uTop, pow(h, 0.85)), 1.0);',
+    '}'
+  ].join('\n');
+  function buildSky(E) {
+    if (!skyDome) {
+      var g = new THREE.SphereGeometry(300, 24, 16);
+      skyDome = new THREE.Mesh(g, new THREE.ShaderMaterial({
+        uniforms: { uTop: { value: new THREE.Color(0x0a0d10) }, uBot: { value: new THREE.Color(0x203020) } },
+        vertexShader: SKY_VS, fragmentShader: SKY_FS,
+        side: THREE.BackSide, depthWrite: false, fog: false
+      }));
+      skyDome.renderOrder = -1;
+      scene.add(skyDome);
+    }
+    var bot = new THREE.Color(hexInt(E.fog));
+    var top = bot.clone().multiplyScalar(0.28);
+    skyDome.material.uniforms.uBot.value.copy(bot);
+    skyDome.material.uniforms.uTop.value.copy(top);
   }
 
   function applyTheme(theme) {
     if (theme === curTheme) return;
     curTheme = theme;
     var E = envOf(theme);
+    buildSky(E);
     var fog = new THREE.Color(hexInt(E.fog));
     scene.background = fog.clone();
     scene.fog.color = fog.clone();
@@ -336,6 +365,7 @@ var JOGO = (typeof window !== 'undefined')
 
   // ================================================================ TABULEIRO
   var boardMeshes = [];
+  var boardProcedural = false;
   function clearBoard() {
     for (var i = boardMeshes.length - 1; i >= 0; i--) {
       var m = boardMeshes[i];
@@ -347,9 +377,171 @@ var JOGO = (typeof window !== 'undefined')
     while (boardG.children.length) boardG.remove(boardG.children[0]);
   }
 
+  // O KIT DE CENÁRIO já está no repositório: `assets/embedded/env-kit.js`
+  // (49 GLBs do KayKit Dungeon Remastered, CC0 — mesma família visual dos
+  // personagens). `js/render3d/models3d.js` (camada v1, congelada) sabe montá-lo
+  // com auto-tiling de paredes, buracos com profundidade e props de borda:
+  // REAPROVEITAMOS esse código em vez de reescrever.
+  function kit() {
+    var K = JOGO.Models3D;
+    return (K && K.isReady && K.isReady() && K.buildTile) ? K : null;
+  }
+  var LOW_PROPS = {
+    garden:   ['crates', 'barrel', 'chest'],
+    cistern:  ['chest', 'table', 'coins'],
+    forge:    ['keg', 'box_big', 'crates'],
+    scaffold: ['crates', 'barrel', 'chest'],
+    mine:     ['crates', 'barrel', 'rubble'],
+    heart:    ['chest', 'crates', 'barrel']
+  };
+  function hashXY(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
+
+  // Um único material clonado por material de origem: mantém o merge por
+  // material (poucas draw calls) e ainda permite tingir as paredes por tema.
+  function retint(root, color, k, cache) {
+    var c = new THREE.Color(hexInt(color));
+    root.traverse(function (n) {
+      if (!n.isMesh || !n.material) return;
+      var mats = Array.isArray(n.material) ? n.material : [n.material];
+      var out = [];
+      for (var i = 0; i < mats.length; i++) {
+        var m = mats[i];
+        if (!m) { out.push(m); continue; }
+        var key = m.uuid;
+        if (!cache[key]) {
+          var cl = m.clone();
+          if (cl.color) cl.color.lerp(c, k);
+          cache[key] = cl;
+        }
+        out.push(cache[key]);
+      }
+      n.material = Array.isArray(n.material) ? out : out[0];
+    });
+  }
+
+  function buildBoardKit(st, pal, theme) {
+    var K = kit();
+    if (!K) return false;
+    var w = gridW, h = gridH;
+    var envG = new THREE.Group();
+    envG.name = 'envkit';
+    // o kit da v1 nasce com a célula (0,0) na origem; o nosso mundo é centrado
+    envG.position.set(-(w - 1) / 2 * CELL, 0, -(h - 1) / 2 * CELL);
+
+    var staticG = new THREE.Group();
+    try { staticG.add(K.buildGround(theme, w, h)); } catch (e) {}
+
+    function isWall(x2, y2) {
+      if (x2 < 0 || y2 < 0 || x2 >= w || y2 >= h) return false;
+      return tileKind(gridTile(st, x2, y2)) === 'high';
+    }
+    var lowKinds = LOW_PROPS[theme] || LOW_PROPS.garden;
+    var lowNodes = [];
+    var wallCache = {};
+
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var k = tileKind(gridTile(st, x, y));
+      var seed = hashXY(x, y);
+      var node = null;
+      if (k === 'high') {
+        node = K.buildWall(theme, seed, {
+          mask: { n: isWall(x, y - 1), e: isWall(x + 1, y), s: isWall(x, y + 1), w: isWall(x - 1, y) },
+          border: (x === 0 || y === 0 || x === w - 1 || y === h - 1)
+        });
+        retint(node, pal.wall, 0.34, wallCache);
+      } else if (k === 'hole') {
+        node = K.buildHole(theme, seed);
+      } else if (k === 'low') {
+        // obstáculo BAIXO: chão normal + engradado/barril. Bloqueia passagem,
+        // NÃO bloqueia a visão — por isso é visivelmente mais baixo que a parede.
+        node = K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
+        var prop = K.buildProp(theme, lowKinds[seed % lowKinds.length], seed);
+        var bb = new THREE.Box3().setFromObject(prop);
+        var ph = Math.max(0.2, bb.max.y - bb.min.y);
+        prop.scale.multiplyScalar(Math.min(2.4, (LOW_H * 1.5) / ph));
+        prop.position.set(x * CELL, 0, y * CELL);
+        lowNodes.push({ node: prop, x: x, y: y });
+      } else if (k === 'deco') {
+        node = K.buildTile(theme, 'deco', seed % 4);
+      } else {
+        node = K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
+      }
+      if (node) { node.position.set(x * CELL, 0, y * CELL); staticG.add(node); }
+    }
+    for (var L = 0; L < lowNodes.length; L++) staticG.add(lowNodes[L].node);
+
+    // props de borda: o campo é um LUGAR, não um diorama solto no vazio
+    try {
+      var kinds = K.propKinds(theme);
+      var rr = 0;
+      for (var p = 0; p < 16; p++) {
+        var a = (p / 16) * Math.PI * 2 + ((hashXY(p, 7) % 100) / 100) * 0.5;
+        var d = Math.max(w, h) * CELL * 0.62 + CELL * (1.2 + ((hashXY(p, 3) % 100) / 100) * 3.2);
+        var cxp = (w - 1) / 2 * CELL, czp = (h - 1) / 2 * CELL;
+        var px = cxp + Math.cos(a) * d, pz = czp + Math.sin(a) * d;
+        var prop2 = K.buildProp(theme, kinds[(p * 7 + rr++) % kinds.length], p * 131 + 17);
+        prop2.position.set(px, 0, pz);
+        staticG.add(prop2);
+      }
+    } catch (e2) {}
+
+    envG.add((K.mergeStatic && !window.__nomerge) ? K.mergeStatic(staticG) : staticG);
+    try {
+      if (K.buildGridLines) envG.add(K.buildGridLines(theme, w, h));
+      if (K.buildBrazier) {
+        var corners = [[-1.1, -1.1], [w + 0.1, -1.1], [-1.1, h + 0.1], [w + 0.1, h + 0.1]];
+        for (var b2 = 0; b2 < 4; b2++) {
+          var brz = K.buildBrazier(theme, b2);
+          brz.position.set(corners[b2][0] * CELL, 0, corners[b2][1] * CELL);
+          envG.add(brz);
+        }
+      }
+    } catch (e3) {}
+
+    // marcador translúcido no topo do obstáculo BAIXO (§6: não tapa a visão)
+    var capMat = new THREE.MeshBasicMaterial({
+      color: hexInt(pal.accent), transparent: true, opacity: 0.20,
+      depthWrite: false, side: THREE.DoubleSide
+    });
+    for (var c2 = 0; c2 < lowNodes.length; c2++) {
+      var cap = new THREE.Mesh(M.tileFlatGeo(), capMat);
+      cap.position.set(lowNodes[c2].x * CELL, LOW_H + 0.10, lowNodes[c2].y * CELL);
+      cap.scale.setScalar(0.9);
+      cap.renderOrder = 3;
+      envG.add(cap);
+    }
+
+    boardG.add(envG);
+    boardMeshes.push(envG);
+    return true;
+  }
+
   function buildBoard(st) {
     clearBoard();
     gridW = st.grid.w; gridH = st.grid.h;
+    var pal0 = paletteOf(st), theme0 = themeOf(st);
+    applyTheme(theme0);
+    boardProcedural = false;
+    if (buildBoardKit(st, pal0, theme0)) {
+      var fw0 = gridW * CELL, fh0 = gridH * CELL;
+      var span0 = Math.max(fw0, fh0) * 0.75 + 6;
+      lights.sun.shadow.camera.left = -span0;
+      lights.sun.shadow.camera.right = span0;
+      lights.sun.shadow.camera.top = span0;
+      lights.sun.shadow.camera.bottom = -span0;
+      lights.sun.shadow.camera.updateProjectionMatrix();
+      scene.fog.near = span0 * 0.75;
+      scene.fog.far = span0 * 2.6;
+      fitCamera(st);
+      return;
+    }
+    boardProcedural = true;
+    buildBoardProc(st);
+  }
+
+  // Plano B totalmente procedural: se o env-kit não estiver disponível, o jogo
+  // continua rodando (caixas tingidas pela paleta do calabouço).
+  function buildBoardProc(st) {
     var pal = paletteOf(st);
     var theme = themeOf(st);
     applyTheme(theme);
@@ -456,8 +648,8 @@ var JOGO = (typeof window !== 'undefined')
     lights.sun.shadow.camera.top = span;
     lights.sun.shadow.camera.bottom = -span;
     lights.sun.shadow.camera.updateProjectionMatrix();
-    scene.fog.near = span * 0.9;
-    scene.fog.far = span * 4.2;
+    scene.fog.near = span * 0.75;
+    scene.fog.far = span * 2.6;
 
     fitCamera(st);
   }
@@ -469,16 +661,63 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // =================================================================== CÂMERA
+  // ENQUADRAMENTO: com salas de até 23×19 células, mostrar a sala inteira deixa
+  // todo mundo do tamanho de formiga. Enquadramos o GRUPO + o primeiro punhado
+  // de inimigos, e nunca deixamos a célula menor que ~44 px na tela (§0, mobile).
   function fitCamera(st) {
     var fw = gridW * CELL, fh = gridH * CELL;
     var span = Math.max(fw, fh);
-    var small = Math.min(W, H) < 620;
-    cam.dist = clamp(span * (small ? 1.05 : 0.92), 10, 60);
-    cam.minDist = Math.max(5, span * 0.20);
-    cam.maxDist = span * 1.9;
+    cam.minDist = Math.max(5, span * 0.16);
+    cam.maxDist = span * 2.0;
     cam.pivot.set(0, CELL * 0.4, 0);
     cam.panX = 0; cam.panZ = 0;
+
+    var focus = actionBounds(st);
+    var needW = span, needH = span;
+    if (focus) {
+      cam.panX = wx((focus.x0 + focus.x1) / 2);
+      cam.panZ = wz((focus.y0 + focus.y1) / 2);
+      // teto de 12 células: com salas de 23x19 mostrar tudo vira formigueiro.
+      // O jogador afasta a câmera quando quiser o panorama.
+      needW = clamp((focus.x1 - focus.x0 + 4), 7, 12) * CELL;
+      needH = clamp((focus.y1 - focus.y0 + 4), 7, 12) * CELL;
+    }
+    var vfov = camera.fov * Math.PI / 180;
+    var tanV = Math.tan(vfov / 2);
+    // fatores empíricos: a inclinação achata a profundidade na tela
+    var fitV = (needH * 0.5) / tanV * 0.74;
+    var fitH = (needW * 0.5) / (tanV * Math.max(0.55, W / H)) * 0.92;
+    var d = Math.max(fitV, fitH);
+    // trava de legibilidade: célula nunca abaixo de ~44 px (retrato de celular)
+    var minCellPx = Math.min(W, H) < 620 ? 46 : 40;
+    var maxD = (CELL * H) / (2 * tanV * minCellPx);
+    cam.dist = clamp(Math.min(d, maxD), cam.minDist, cam.maxDist);
     updateCamera();
+  }
+  // caixa que contém o grupo do jogador e os inimigos mais próximos dele
+  function actionBounds(st) {
+    if (!st.units || !st.units.length) return null;
+    var mine = [], foes = [];
+    for (var i = 0; i < st.units.length; i++) {
+      var u = st.units[i];
+      if (!u.alive || u.offBoard) continue;
+      (u.side === 'player' ? mine : foes).push(u);
+    }
+    if (!mine.length) mine = foes;
+    if (!mine.length) return null;
+    var cx = 0, cy = 0;
+    for (var m = 0; m < mine.length; m++) { cx += mine[m].x; cy += mine[m].y; }
+    cx /= mine.length; cy /= mine.length;
+    foes.sort(function (a, b) {
+      return (Math.abs(a.x - cx) + Math.abs(a.y - cy)) - (Math.abs(b.x - cx) + Math.abs(b.y - cy));
+    });
+    var pool = mine.concat(foes.slice(0, Math.max(2, Math.min(4, foes.length))));
+    var b = { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9 };
+    for (var p = 0; p < pool.length; p++) {
+      b.x0 = Math.min(b.x0, pool[p].x); b.x1 = Math.max(b.x1, pool[p].x);
+      b.y0 = Math.min(b.y0, pool[p].y); b.y1 = Math.max(b.y1, pool[p].y);
+    }
+    return b;
   }
   function updateCamera() {
     var st = Math.sin(cam.tilt), ct = Math.cos(cam.tilt);
@@ -723,7 +962,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!v) {
       v = vis[uid] = {
         x: x, y: y, z: 0, face: 0, faceTo: 0,
-        flash: 0, flashHold: 0, knockX: 0, knockZ: 0,
+        flash: 0, flashHold: 0, knockX: 0, knockZ: 0, castK: 0,
         deathK: 0, popK: 1, hideK: 0, walking: 0, anim: '', animLock: 0,
         bob: Math.random() * 6.28, startX: null, startY: null
       };
@@ -758,22 +997,35 @@ var JOGO = (typeof window !== 'undefined')
     return [e];
   }
 
-  // clipes por arma: o que a classe segura decide como ela bate
-  function attackClipFor(node) {
+  // AÇÃO por arma + por feitiço: com 76–95 clipes por modelo, feitiços
+  // diferentes da mesma classe ganham gestos diferentes (§ pedido do usuário).
+  function weaponOf(node) {
     var look = node && node.userData && node.userData.look;
-    var w = (look && look.weapon) || '';
-    if (/Crossbow|Bow/.test(w)) return '1H_Ranged_Shoot';
-    if (/Staff|Wand|Spellbook/.test(w)) return 'Spellcast_Shoot';
-    if (/^2H_/.test(w)) return '2H_Melee_Attack_Chop';
-    if (w) return '1H_Melee_Attack_Slice_Diagonal';
-    return 'Unarmed_Melee_Attack_Punch_A';
+    return (look && look.weapon) || '';
   }
-  function castClipFor(node, melee) {
-    if (melee) return attackClipFor(node);
-    var look = node && node.userData && node.userData.look;
-    var w = (look && look.weapon) || '';
-    if (/Crossbow|Bow/.test(w)) return '1H_Ranged_Shoot';
-    return 'Spellcast_Shoot';
+  function meleeActionFor(node, variant) {
+    var w = weaponOf(node);
+    if (/^2H_/.test(w)) return (variant % 2) ? 'attackSpin' : 'attack2h';
+    if (w) return (variant % 2) ? 'attackAlt' : 'attack';
+    return 'punch';
+  }
+  function rangedActionFor(node, variant) {
+    var w = weaponOf(node);
+    if (/Crossbow|Bow/.test(w)) return 'shoot';
+    if (/Staff|Wand|Spellbook/.test(w)) {
+      return ['cast', 'castRaise', 'castLong', 'summon'][variant % 4];
+    }
+    return (variant % 3) === 0 ? 'throw' : 'cast';
+  }
+  // o gesto é estável por feitiço: o mesmo feitiço sempre faz o mesmo gesto
+  function castActionFor(node, melee, spellId) {
+    var v = spellId ? (hashStr(String(spellId)) % 97) : 0;
+    return melee ? meleeActionFor(node, v) : rangedActionFor(node, v);
+  }
+  function hashStr(s) {
+    var h = 2166136261;
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }
+    return h >>> 0;
   }
 
   function buildUnitNode(u) {
@@ -804,7 +1056,7 @@ var JOGO = (typeof window !== 'undefined')
 
     // barra de vida + estados (canvas em sprite: legível de qualquer ângulo)
     var bar = makeBarSprite();
-    bar.position.y = node.userData.height + 0.42;
+    bar.position.y = node.userData.height + 0.30;
     node.add(bar);
     node.userData.bar = bar;
 
@@ -823,7 +1075,7 @@ var JOGO = (typeof window !== 'undefined')
     node.add(ring);
     node.userData.sideRing = ring;
 
-    node.userData.play('Idle', { fade: 0 });
+    node.userData.play('idle', { fade: 0 });
     return node;
   }
 
@@ -834,7 +1086,7 @@ var JOGO = (typeof window !== 'undefined')
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
     var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
     var sp = new THREE.Sprite(mat);
-    sp.scale.set(1.6, 0.7, 1);
+    sp.scale.set(1.25, 0.55, 1);
     sp.renderOrder = 20;
     sp.userData = { cv: cv, tex: tex, sig: '' };
     return sp;
@@ -974,22 +1226,23 @@ var JOGO = (typeof window !== 'undefined')
       if (stt.invisible) alpha *= 0.30;                 // §4: invisível ~30%
       applyAlpha(node, alpha);
 
-      // flash de dano
+      // flash de dano (o emissivo elemental volta ao valor de base depois)
       var mats = ud.tintMats;
       if (mats) {
         var f = v.flash;
-        for (var m = 0; m < mats.length; m++) {
-          if (!mats[m].emissive) continue;
-          if (f > 0) {
-            mats[m].emissiveIntensity = 0.16 + f * 1.6;
-            mats[m].emissive.setRGB(1, 0.55 + 0.4 * (1 - f), 0.45);
-          } else if (mats[m].__baseEmi === undefined) {
-            mats[m].__baseEmi = mats[m].emissiveIntensity;
-          } else if (mats[m].emissiveIntensity !== mats[m].__baseEmi) {
-            mats[m].emissiveIntensity = mats[m].__baseEmi;
-            var ec = R.elementColor(unitElements(u)[0]);
-            mats[m].emissive.setHex(hexInt(ec));
+        if (f > 0 || v.__wasFlash) {
+          for (var m = 0; m < mats.length; m++) {
+            var mm = mats[m];
+            if (!mm.emissive) continue;
+            if (f > 0) {
+              mm.emissiveIntensity = (mm.__baseEmiI || 0.1) + f * 1.7;
+              mm.emissive.setRGB(1, 0.52 + 0.42 * (1 - f), 0.42);
+            } else {
+              mm.emissiveIntensity = mm.__baseEmiI || 0.1;
+              mm.emissive.setHex(mm.__baseEmiHex == null ? 0x000000 : mm.__baseEmiHex);
+            }
           }
+          v.__wasFlash = f > 0;
         }
       }
 
@@ -998,27 +1251,33 @@ var JOGO = (typeof window !== 'undefined')
         ud.bar.visible = alpha > 0.05 && u.alive;
         if (ud.bar.visible) {
           drawBar(ud.bar, u, stt);
-          ud.bar.position.y = ud.height + 0.42 + Math.sin(nowT * 2.2 + v.bob) * 0.04;
+          ud.bar.position.y = ud.height + 0.30 + Math.sin(nowT * 2.2 + v.bob) * 0.03;
         }
       }
       if (ud.sideRing) {
         ud.sideRing.visible = u.alive && alpha > 0.2;
-        ud.sideRing.material.opacity = 0.30 + 0.25 * (0.5 + 0.5 * Math.sin(nowT * 2.4 + v.bob));
+        ud.sideRing.material.opacity = 0.20 + 0.16 * (0.5 + 0.5 * Math.sin(nowT * 2.4 + v.bob));
       }
       if (ud.contact) ud.contact.material.opacity = 0.30 * alpha;
 
-      // ANIMAÇÃO: a fase manda no clipe
+      // ANIMAÇÃO: a fase da unidade manda na ação lógica
       var want, opt = null;
-      if (v.deathK > 0) { want = 'Death_A'; opt = { loop: false, fade: 0.12 }; }
+      if (v.deathK > 0) { want = 'die'; opt = { loop: false, fade: 0.12 }; }
       else if (v.animLock > 0) { want = v.anim; }
-      else if (v.walking > 0) { want = 'Running_A'; opt = { timeScale: 1.15 }; }
-      else if (stt.root) { want = 'Blocking'; }
-      else want = 'Idle';
-      if (want && (v.anim !== want || v.animLock <= 0)) {
-        if (v.anim !== want) { ud.play(want, opt || {}); v.anim = want; }
-      }
+      else if (v.walking > 0) { want = 'run'; opt = { timeScale: 1.12 }; }
+      else if (stt.root) { want = 'blocking'; }
+      else if (stt.taunt && u.side === 'enemy') { want = 'taunt'; }
+      else want = 'idle';
+      if (want && v.anim !== want) { ud.play(want, opt || {}); v.anim = want; }
       if (v.animLock > 0) v.animLock -= dt;
       if (ud.mixer) ud.mixer.update(dt);
+      // modelos procedurais da v1 têm animação própria por código
+      if (ud.procAnimate) {
+        ud.procAnimate({
+          moving: v.walking > 0 ? 1 : 0, castK: v.castK || 0,
+          flash: v.flash, deathK: v.deathK, invis: !!stt.invisible
+        }, nowT + v.bob, dt);
+      }
     }
   }
 
@@ -1094,14 +1353,14 @@ var JOGO = (typeof window !== 'undefined')
           var t = reach[i];
           var risky = !!(t.risky || t.risk || t.dodgeRisk || t.locked);
           // células de RISCO DE ESQUIVA em âmbar (§2)
-          ovTile(t.x, t.y, risky ? '#ff8a24' : '#28c8ff', risky ? 0.40 : 0.30);
+          ovTile(t.x, t.y, risky ? '#ff8a24' : '#28c8ff', risky ? 0.30 : 0.18, 0.09, 0.84);
         }
       }
       if (hv && hv.x >= 0) {
         var path = safe(function () { return en.path ? en.path(st, active.uid, hv.x, hv.y) : null; }, null);
         if (path && path.length) {
           for (var j = 0; j < path.length; j++) {
-            ovTile(path[j].x, path[j].y, '#ffffff', j === path.length - 1 ? 0.72 : 0.44, 0.12, 0.62);
+            ovTile(path[j].x, path[j].y, '#fff2c8', j === path.length - 1 ? 0.66 : 0.34, 0.12, 0.50);
           }
         }
       }
@@ -1114,13 +1373,13 @@ var JOGO = (typeof window !== 'undefined')
       var inTargets = false;
       if (targets) {
         for (var k = 0; k < targets.length; k++) {
-          ovTile(targets[k].x, targets[k].y, elCol, 0.26);
+          ovTile(targets[k].x, targets[k].y, elCol, 0.20, 0.09, 0.84);
           if (hv && targets[k].x === hv.x && targets[k].y === hv.y) inTargets = true;
         }
       }
       if (hv && inTargets) {
         var aoe = safe(function () { return en.aoeTiles ? en.aoeTiles(st, spellId, active.x, active.y, hv.x, hv.y) : null; }, null);
-        if (aoe) for (var m = 0; m < aoe.length; m++) ovTile(aoe[m].x, aoe[m].y, '#ff5a28', 0.52, 0.13);
+        if (aoe) for (var m = 0; m < aoe.length; m++) ovTile(aoe[m].x, aoe[m].y, '#ff5a28', 0.42, 0.13, 0.90);
       }
     }
 
@@ -1354,9 +1613,15 @@ var JOGO = (typeof window !== 'undefined')
       weather.motes = { pts: pts4, span: span, up: 0.12 };
       scene.fog.color.lerp(new THREE.Color(hexInt('#5a4a2a')), 0.26);
     } else {
-      renderer.toneMappingExposure = 1.06;
+      renderer.toneMappingExposure = 0.98;
       applyThemeLights();
     }
+    syncSky();
+  }
+  function syncSky() {
+    if (!skyDome) return;
+    skyDome.material.uniforms.uBot.value.copy(scene.fog.color);
+    skyDome.material.uniforms.uTop.value.copy(scene.fog.color.clone().multiplyScalar(0.26));
   }
   function applyThemeLights() {
     var E = envOf(curTheme);
@@ -1368,6 +1633,7 @@ var JOGO = (typeof window !== 'undefined')
     var fog = new THREE.Color(hexInt(E.fog));
     scene.fog.color.copy(fog);
     scene.background.copy(fog);
+    syncSky();
   }
 
   function updateWeather(dt) {
@@ -1456,7 +1722,7 @@ var JOGO = (typeof window !== 'undefined')
         var melee = isMelee(ev, u);
         lastHitDelay = melee ? 0.30 : 0.52;
         animQ.push({
-          kind: 'cast', uid: ev.uid, tx: ev.x, ty: ev.y, t: 0,
+          kind: 'cast', uid: ev.uid, tx: ev.x, ty: ev.y, t: 0, spellId: ev.spellId,
           hit: lastHitDelay, dur: lastHitDelay + 0.42, melee: melee, age: 0, started: false
         });
         lastAtk = { x: u ? u.x : ev.x, y: u ? u.y : ev.y, age: 0 };
@@ -1469,8 +1735,8 @@ var JOGO = (typeof window !== 'undefined')
             vv.flash = 1; vv.flashHold = 0.07;
             var nd = unitNodes[uid];
             if (nd && vv.deathK <= 0 && vv.animLock <= 0) {
-              nd.userData.play('Hit_A', { loop: false, fade: 0.06 });
-              vv.anim = 'Hit_A'; vv.animLock = 0.34;
+              nd.userData.play('hit', { loop: false, fade: 0.06, restart: true });
+              vv.anim = 'hit'; vv.animLock = 0.34;
             }
             if (lastAtk && lastAtk.age < 2) {
               var dx = wx(vv.x) - wx(lastAtk.x), dz = wz(vv.y) - wz(lastAtk.y);
@@ -1542,7 +1808,7 @@ var JOGO = (typeof window !== 'undefined')
       case 'trapTriggered':
       case 'markStack':
       case 'effectApplied':
-        ovSig = ''; evSig = '';
+        ovSig = ''; evSig = '~init~';
         break;
 
       case 'battleEnd':
@@ -1562,7 +1828,7 @@ var JOGO = (typeof window !== 'undefined')
       if (n.parent) n.parent.remove(n);
     }
     unitNodes = {};
-    boardKey = null; ovSig = ''; evSig = '';
+    boardKey = null; ovSig = ''; evSig = '~init~';
     weather.id = '';
     if (st && st.grid) {
       buildBoard(st);
@@ -1693,12 +1959,13 @@ var JOGO = (typeof window !== 'undefined')
           a.started = true;
           var nd = unitNodes[a.uid];
           if (nd && v2) {
-            var clip = castClipFor(nd, a.melee);
-            nd.userData.play(clip, { loop: false, fade: 0.08, timeScale: 1.1 });
-            v2.anim = clip; v2.animLock = a.dur;
+            var act = castActionFor(nd, a.melee, a.spellId);
+            nd.userData.play(act, { loop: false, fade: 0.08, timeScale: 1.1, restart: true });
+            v2.anim = act; v2.animLock = a.dur;
             if (a.tx != null) faceTowards(v2, a.tx, a.ty);
           }
         }
+        if (v2) v2.castK = Math.sin(Math.min(1, a.t / a.dur) * Math.PI);
         if (v2 && a.melee) {
           // investida curta: avança meia célula no instante do golpe e volta
           var ck = Math.min(a.t / a.dur, 1);
@@ -1742,7 +2009,7 @@ var JOGO = (typeof window !== 'undefined')
             vv.popK = 0.0001; vv.hideK = 0;
             vn = vv;
             var nnode = unitNodes[a.uid];
-            if (nnode) { nnode.userData.play('Cheer', { loop: false, fade: 0.05 }); vv.anim = 'Cheer'; vv.animLock = 0.9; }
+            if (nnode) { nnode.userData.play('cheer', { loop: false, fade: 0.05, restart: true }); vv.anim = 'cheer'; vv.animLock = 0.9; }
           }
           if (vn) vn.hideK = 0;
           var kd = (a.t - T.approach - T.flash) / T.reveal;
@@ -1788,11 +2055,14 @@ var JOGO = (typeof window !== 'undefined')
     shake.y = sh.y + (weather.qy || 0) * 20;
 
     if (st && st.grid) {
+      // o env-kit decodifica em segundo plano: quando ficar pronto, o tabuleiro
+      // provisório (procedural) dá lugar ao cenário de verdade
+      if (boardProcedural && kit()) boardKey = null;
       var rk = roomKey(st);
       if (rk !== boardKey) {
         boardKey = rk;
         buildBoard(st);
-        ovSig = ''; evSig = '';
+        ovSig = ''; evSig = '~init~';
         weather.id = '';
         setWeather(weatherId(st), true);
         if (JOGO.FX && JOGO.FX.setAmbient) { try { JOGO.FX.setAmbient(themeOf(st)); } catch (e) {} }

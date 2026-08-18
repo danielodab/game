@@ -10,27 +10,28 @@ var JOGO = (typeof window !== 'undefined')
 //   1. decodifica os GLB embutidos em base64 (JOGO.MODELS, de
 //      assets/embedded/models-*.js) — o jogo abre por file://, onde fetch de
 //      .glb falha, então NADA é buscado na rede;
-//   2. mantém UM banco de animações (todos os personagens do KayKit dividem o
-//      mesmo esqueleto de 41 ossos, então 30 clipes servem para todo mundo);
-//   3. clona modelos com esqueleto (SkeletonUtils.clone reimplementado — o
-//      vendor não traz o utilitário) e tinge o material por elemento/classe;
-//   4. resolve `defId -> aparência`: classes, monstros (por família), pets e
-//      FUSÕES (corpo da classe dominante + arma-assinatura da outra).
+//   2. mantém UM banco de animações do KayKit (os 9 personagens dividem o mesmo
+//      esqueleto de 41 ossos, então 30 clipes servem para todos) e usa os
+//      clipes PRÓPRIOS de cada criatura Quaternius;
+//   3. traduz AÇÕES LÓGICAS ('idle','walk','attack','cast','hit','die'…) para o
+//      clipe certo de cada modelo — o renderizador nunca cita nome de clipe;
+//   4. clona modelos com esqueleto (SkeletonUtils.clone reimplementado — o
+//      vendor não traz o utilitário) e tinge o material por classe/elemento;
+//   5. resolve `defId -> aparência`: 6 classes, 66 monstros (por família, com
+//      exceções por id), 6 chefes, 6 pets e as 15 FUSÕES;
+//   6. gera RETRATOS a partir dos próprios modelos (cena offscreen, luz de três
+//      pontos) — a HUD ganha retrato de tudo sem arte manual.
 //
 // API:
-//   Models3D2.CELL                        tamanho de uma célula em unidades de mundo
-//   Models3D2.load(cb)                    decodifica tudo (idempotente)
-//   Models3D2.isReady()                   -> bool
-//   Models3D2.unit(defId, opts)           -> THREE.Group | null   (opts: {element, elements, boss, kind, classId, scale})
-//   Models3D2.lookFor(defId, opts)        -> descrição da aparência (sem construir)
-//   Models3D2.clips()                     -> [THREE.AnimationClip]
-//   Models3D2.clip(name)                  -> THREE.AnimationClip | null
-//   Models3D2.elementColor(e)             -> '#rrggbb'
-//   Models3D2.attach(group, meshKey, boneName)  acopla um adereço a um osso
+//   Models3D2.CELL · load(cb) · isReady()
+//   Models3D2.unit(defId, opts) -> THREE.Group        (opts: element, elements, boss, kind, classId)
+//   Models3D2.lookFor(defId, opts) -> descrição da aparência
+//   Models3D2.portrait(defId, opts) -> HTMLCanvasElement (cacheado)
+//   Models3D2.elementColor(e) · attach(group, modelKey, meshName, boneName)
 //
-// Cada grupo devolvido por `unit` traz:
-//   g.userData = { root, mixer, actions, height, radius, bones:{handR,handL,head,chest},
-//                  play(name, opts), stopAll(), tintMats:[…] }
+// Cada grupo devolvido por `unit` traz em `userData`:
+//   { model, mixer, height, radius, bones:{handR,handL,head,chest},
+//     play(acao, opts), has(acao), tintMats[], look, procAnimate(st,t,dt) }
 // ============================================================================
 
 (function () {
@@ -43,8 +44,8 @@ var JOGO = (typeof window !== 'undefined')
   var M = {};
   JOGO.Models3D2 = M;
 
-  M.CELL = 2.0;                       // 1 célula = 2 unidades de mundo
-  var UNIT_SCALE = 0.92;              // o KayKit nasce com ~1.7 de altura
+  M.CELL = 2.0;
+  var UNIT_SCALE = 0.92;
 
   // ------------------------------------------------------------------ cores
   var ELEMENT_COLORS = {
@@ -69,73 +70,200 @@ var JOGO = (typeof window !== 'undefined')
     return h >>> 0;
   }
   M.hashStr = hashStr;
+  function DATA() { return JOGO.DATA || {}; }
+
+  // ============================================================ AÇÕES LÓGICAS
+  // O renderizador pede 'attack'; aqui decidimos qual dos 76–95 clipes do
+  // KayKit (ou dos 3–13 do Quaternius) responde por isso naquele modelo.
+  var KAYKIT_ACTIONS = {
+    idle: 'Idle', walk: 'Walking_A', run: 'Running_A',
+    attack: '1H_Melee_Attack_Slice_Diagonal', attackAlt: '1H_Melee_Attack_Chop',
+    attack2h: '2H_Melee_Attack_Chop', attackSpin: '2H_Melee_Attack_Spin',
+    shoot: '1H_Ranged_Shoot', aim: '1H_Ranged_Aiming',
+    cast: 'Spellcast_Shoot', castRaise: 'Spellcast_Raise',
+    castLoop: 'Spellcasting', castLong: 'Spellcast_Long', summon: 'Spellcast_Summon',
+    hit: 'Hit_A', die: 'Death_A', diePose: 'Death_A_Pose',
+    cheer: 'Cheer', taunt: 'Taunt', block: 'Block', blocking: 'Blocking',
+    dodge: 'Dodge_Backward', punch: 'Unarmed_Melee_Attack_Punch_A',
+    throw: 'Throw', use: 'Use_Item', interact: 'Interact',
+    jump: 'Jump_Full_Short', pickup: 'PickUp',
+    spawn: 'Spawn_Ground', awaken: 'Skeletons_Awaken_Standing'
+  };
+  // fallback: se a ação não existir no modelo, tenta esta cadeia
+  var ACTION_FALLBACK = {
+    run: ['walk', 'idle'], walk: ['run', 'idle'],
+    attackAlt: ['attack'], attack2h: ['attack'], attackSpin: ['attack2h', 'attack'],
+    shoot: ['attack'], aim: ['idle'],
+    cast: ['attack'], castRaise: ['cast', 'attack'], castLoop: ['idle'],
+    castLong: ['castLoop', 'cast'], summon: ['cast'],
+    hit: ['idle'], die: ['idle'], diePose: ['die'],
+    cheer: ['idle'], taunt: ['idle'], block: ['idle'], blocking: ['idle'],
+    dodge: ['jump', 'idle'], punch: ['attack'], throw: ['attack'],
+    use: ['interact', 'idle'], interact: ['idle'], jump: ['idle'],
+    pickup: ['interact', 'idle'], spawn: ['jump', 'idle'], awaken: ['idle']
+  };
+
+  // criaturas Quaternius: cada GLB traz os próprios clipes ('RatArmature|Rat_Run')
+  function autoActions(clipNames) {
+    var out = {};
+    function pick(re, key) {
+      if (out[key]) return;
+      for (var i = 0; i < clipNames.length; i++) if (re.test(clipNames[i])) { out[key] = clipNames[i]; return; }
+    }
+    pick(/Idle$|Idle_2$|Flying$/i, 'idle');
+    pick(/Walk$/i, 'walk');
+    pick(/Run$|Gallop$/i, 'run');
+    pick(/Attack$/i, 'attack');
+    pick(/Death$/i, 'die');
+    pick(/Jump$|Jump_ToIdle$/i, 'jump');
+    pick(/HitReact/i, 'hit');
+    pick(/Eating$|Idle_2/i, 'interact');
+    if (!out.idle && clipNames.length) out.idle = clipNames[0];
+    if (out.attack) { out.cast = out.attack; out.shoot = out.attack; out.punch = out.attack; }
+    if (out.jump && !out.dodge) out.dodge = out.jump;
+    return out;
+  }
 
   // ---------------------------------------------------------------- APARÊNCIA
-  // Os nomes de malha vêm dos GLB do KayKit (ver docs/CREDITS_3D.md).
-  // `show` lista os adereços VISÍVEIS; qualquer adereço não citado fica oculto.
-  // As malhas com esqueleto (corpo) estão sempre visíveis.
-  //
-  // NOTA DE CONCEITO (repassar ao Criativo Classes): as aparências mudaram para
-  // caber no pacote CC0. Identidade tática preservada, visual novo.
+  // NOTA DE CONCEITO: as aparências mudaram para caber no acervo CC0. A
+  // identidade TÁTICA de cada classe está preservada; o visual é novo.
   M.CLASS_LOOK = {
-    // tanque: o corpo mais pesado do pacote, machado de duas mãos
     sumo: { model: 'barbarian', show: ['2H_Axe', 'Barbarian_Cape'],
-            scale: 1.16, tint: '#d4553f', accent: '#ffd08a',
-            concept: 'Bárbaro corpulento de machado e capa', weapon: '2H_Axe', hand: 'r' },
-    // atirador: encapuzado com besta de duas mãos
+            scale: 1.16, tint: '#d4553f', accent: '#ffd08a', weapon: '2H_Axe',
+            concept: 'Bárbaro corpulento de machado de duas mãos e capa' },
     arqueiro: { model: 'rogue_hooded', show: ['2H_Crossbow', 'Rogue_Cape'],
-            scale: 1.00, tint: '#4f9d6a', accent: '#d8f0a0',
-            concept: 'Batedor encapuzado de besta', weapon: '2H_Crossbow', hand: 'r' },
-    // mago: chapéu pontudo, cajado, capa
+            scale: 1.00, tint: '#4f9d6a', accent: '#d8f0a0', weapon: '2H_Crossbow',
+            concept: 'Batedor encapuzado de besta de duas mãos' },
     bruxo: { model: 'mage', show: ['2H_Staff', 'Mage_Hat', 'Mage_Cape'],
-            scale: 1.02, tint: '#7a5fa0', accent: '#b98cff',
-            concept: 'Mago de chapéu e cajado', weapon: '2H_Staff', hand: 'r' },
-    // assassino: ágil, duas adagas
+            scale: 1.02, tint: '#7a5fa0', accent: '#b98cff', weapon: '2H_Staff',
+            concept: 'Mago de chapéu pontudo e cajado' },
     espadachim: { model: 'rogue', show: ['Knife', 'Knife_Offhand'],
-            scale: 0.97, tint: '#2f6f8f', accent: '#9be8ff',
-            concept: 'Ladino ágil de adagas gêmeas', weapon: 'Knife', hand: 'r' },
-    // suporte: figura de luz, armadura clara e escudo com brasão
+            scale: 0.97, tint: '#2f6f8f', accent: '#9be8ff', weapon: 'Knife',
+            concept: 'Ladino ágil de adagas gêmeas' },
     curandeira: { model: 'knight', show: ['1H_Sword', 'Badge_Shield', 'Knight_Cape'],
-            scale: 1.00, tint: '#f0c05a', accent: '#fff2c2',
-            concept: 'Paladina/clériga de armadura clara e escudo de brasão',
-            weapon: '1H_Sword', hand: 'r' },
-    // invocador: xamã sem chapéu, grimório aberto e varinha
+            scale: 1.00, tint: '#f0c05a', accent: '#fff2c2', weapon: '1H_Sword',
+            concept: 'Paladina de armadura clara e escudo de brasão' },
     invocador: { model: 'mage', show: ['Spellbook_open', '1H_Wand', 'Mage_Cape'],
-            scale: 1.00, tint: '#3f8f8a', accent: '#8ff0d8',
-            concept: 'Xamã de grimório aberto e varinha (sem chapéu)',
-            weapon: '1H_Wand', hand: 'r' }
+            scale: 1.00, tint: '#3f8f8a', accent: '#8ff0d8', weapon: '1H_Wand',
+            concept: 'Xamã de grimório aberto e varinha, sem chapéu' }
   };
 
-  // Monstros: agrupados por FAMÍLIA (js/core/data/monsters.js, só leitura).
-  // Sem correspondência exata no acervo CC0 — o que temos é a linha de
-  // esqueletos do KayKit + criaturas do Quaternius; a variação dentro da
-  // família sai do tint elemental e do porte.
-  M.FAMILY_LOOK = {
-    'Turno da Noite':       { model: 'skeleton_minion',  show: [] },
-    'Prole da Fornalha':    { model: 'skeleton_warrior', show: ['Skeleton_Blade'] },
-    'Guarda do Coração':    { model: 'skeleton_warrior', show: ['Skeleton_Shield_Large_A'] },
-    'Coro dos Andaimes':    { model: 'skeleton_rogue',   show: ['Skeleton_Crossbow'] },
-    'Corte Afogada':        { model: 'skeleton_mage',    show: ['Skeleton_Staff'] },
-    'Rebanho do Invocador': { model: 'skeleton_minion',  show: [] },
-    'Flora Voraz':          { model: 'skeleton_mage',    show: [] },
-    'Enxame da Estufa':     { model: 'skeleton_rogue',   show: [] }
+  // Monstros — 3 fontes, escolhidas por id/família:
+  //   1. `proc:true` → modelo procedural da camada v1 (js/render3d/models3d.js),
+  //      feito sob medida para ESTE bestiário (flora, corte afogada, fornalha);
+  //   2. esqueletos KayKit (mesma família visual dos heróis) para humanoides;
+  //   3. criaturas Quaternius (CC0, animadas) para bichos.
+  var MONSTER_LOOK = {
+    // --- Flora Voraz (Estufa) - trepadeiras, esporos e carrapichos
+    'thorn-lasher':   { model: 'q_snake',        scale: 1.00 },
+    'pollen-puff':    { model: 'q_frog',         scale: 0.85 },
+    'burr-mother':    { model: 'q_spider',       scale: 1.05 },
+    'sap-shaman':     { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.00 },
+    'sprout-feral':   { model: 'q_frog',         scale: 0.78 },
+    'burrlet':        { model: 'q_spider',       scale: 0.58 },
+    'boss-gardener':  { model: 'q_stag',         scale: 1.25 },
+    // --- Enxame da Estufa
+    'lantern-wasp':   { model: 'q_wasp',         scale: 0.95 },
+    'dew-strider':    { model: 'q_spider',       scale: 0.85 },
+    // --- Corte Afogada (Cisterna)
+    'drowned-porter': { model: 'skeleton_warrior', show: ['Skeleton_Blade'], scale: 1.05 },
+    'moray-piper':    { model: 'q_snake',        scale: 1.10 },
+    'lantern-jelly':  { model: 'q_frog',         scale: 0.92 },
+    'brine-golem':    { model: 'skeleton_warrior', show: ['Skeleton_Shield_Large_A'], scale: 1.30 },
+    'fat-drop':       { model: 'q_frog',         scale: 0.95 },
+    'droplet':        { model: 'q_frog',         scale: 0.55 },
+    'sump-crab':      { model: 'q_spider',       scale: 0.95 },
+    'mist-warbler':   { model: 'q_wasp',         scale: 0.80 },
+    'boss-baroness':  { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.45 },
+    // --- Prole da Fornalha (Fecho de Brasa)
+    'ember-imp':      { model: 'skeleton_minion', scale: 0.82 },
+    'walking-anvil':  { model: 'q_bull',         scale: 1.05 },
+    'ash-wraith':     { model: 'skeleton_mage',  scale: 1.00 },
+    'slag-mound':     { model: 'q_frog',         scale: 1.05 },
+    'faceless-smith': { model: 'skeleton_warrior', show: ['Skeleton_Axe'], scale: 1.15 },
+    'quench-hound':   { model: 'q_wolf',         scale: 0.85 },
+    'chain-hauler':   { model: 'skeleton_warrior', show: ['Skeleton_Axe'], scale: 1.20 },
+    'spark-whelp':    { model: 'q_velociraptor', scale: 0.70 },
+    'slag-bit':       { model: 'q_frog',         scale: 0.50 },
+    'boss-heartforge':{ model: 'q_trex',         scale: 1.30 },
+    // --- Coro dos Andaimes (Andaimes do Vento)
+    'plank-shrike':   { model: 'q_wasp',         scale: 0.95 },
+    'gust-gremlin':   { model: 'skeleton_minion', scale: 0.85 },
+    'rope-hanger':    { model: 'skeleton_rogue', scale: 1.00 },
+    'kite-serpent':   { model: 'q_snake',        scale: 1.15 },
+    'ballast-golem':  { model: 'skeleton_warrior', show: ['Skeleton_Shield_Large_B'], scale: 1.30 },
+    'whistle-choir':  { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.00 },
+    'mote-swarm':     { model: 'q_wasp',         scale: 0.70 },
+    'mote-bit':       { model: 'q_wasp',         scale: 0.50 },
+    'nail-sprite':    { model: 'q_wasp',         scale: 0.60 },
+    'boss-windwright':{ model: 'skeleton_warrior', show: ['Skeleton_Axe', 'Skeleton_Shield_Large_A'], scale: 1.55 },
+    // --- Turno da Noite (Mina Tremula)
+    'pick-revenant':  { model: 'skeleton_warrior', show: ['Skeleton_Axe'], scale: 1.00 },
+    'firedamp-wisp':  { model: 'q_wasp',         scale: 0.70 },
+    'cave-jaw':       { model: 'q_velociraptor', scale: 0.90 },
+    'crystal-chanter':{ model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.05 },
+    'sinkhole-worm':  { model: 'q_snake',        scale: 1.30 },
+    'ore-tumbler':    { model: 'q_frog',         scale: 0.90 },
+    'ore-chip':       { model: 'q_frog',         scale: 0.55 },
+    'shaft-bat':      { model: 'q_wasp',         scale: 0.75 },
+    'damp-seeper':    { model: 'q_frog',         scale: 0.80 },
+    'boss-deepknock': { model: 'q_triceratops',  scale: 1.30 },
+    // --- Guarda do Coracao (Coracao Partido)
+    'cinder-herald':  { model: 'skeleton_warrior', show: ['Skeleton_Blade'], scale: 1.10 },
+    'tide-herald':    { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.10 },
+    'stone-herald':   { model: 'skeleton_warrior', show: ['Skeleton_Shield_Large_A'], scale: 1.15 },
+    'gale-herald':    { model: 'skeleton_rogue', show: ['Skeleton_Crossbow'], scale: 1.05 },
+    'null-warden':    { model: 'skeleton_warrior', show: ['Skeleton_Shield_Small_A', 'Skeleton_Blade'], scale: 1.20 },
+    'mirror-twin':    { model: 'skeleton_rogue', scale: 1.00 },
+    'mirror-sliver':  { model: 'skeleton_rogue', scale: 0.70 },
+    'weather-mote':   { model: 'q_wasp',         scale: 0.60 },
+    'heartroot':      { model: 'q_snake',        scale: 1.00 },
+    'boss-riftheart': { model: 'q_trex',         scale: 1.45 },
+    // --- Rebanho do Invocador (invocacoes)
+    'sporeling':          { model: 'q_frog',   scale: 0.62 },
+    'sum-familiar':       { model: 'q_fox',    scale: 0.72 },
+    'sum-ember-hound':    { model: 'q_wolf',   scale: 0.85 },
+    'sum-magma-colossus': { model: 'q_bull',   scale: 1.30 },
+    'sum-tide-nymph':     { model: 'skeleton_mage', scale: 1.00 },
+    'sum-stone-sentinel': { model: 'skeleton_warrior', show: ['Skeleton_Shield_Large_A'], scale: 1.15 },
+    'sum-mountain-golem': { model: 'q_bull',   scale: 1.55 },
+    'sum-storm-falcon':   { model: 'q_wasp',   scale: 0.90 }
   };
-  M.MONSTER_FALLBACK = { model: 'skeleton_minion', show: [] };
+
+  // Familias: rede de seguranca quando um id novo aparecer nos dados.
+  M.FAMILY_LOOK = {
+    'Flora Voraz':          { model: 'q_spider',         scale: 0.95 },
+    'Enxame da Estufa':     { model: 'q_wasp',           scale: 0.85 },
+    'Corte Afogada':        { model: 'skeleton_mage',    scale: 1.00 },
+    'Prole da Fornalha':    { model: 'skeleton_warrior', scale: 1.00 },
+    'Coro dos Andaimes':    { model: 'skeleton_rogue',   scale: 1.00 },
+    'Turno da Noite':       { model: 'skeleton_minion',  scale: 1.00 },
+    'Guarda do Coração':    { model: 'skeleton_warrior', scale: 1.10 },
+    'Rebanho do Invocador': { model: 'skeleton_minion',  scale: 0.90 }
+  };
+  M.MONSTER_FALLBACK = { model: 'skeleton_minion', scale: 1.0 };
+
+  M.PET_LOOK = {
+    'pet-emberling': { model: 'q_velociraptor', scale: 0.52 },
+    'pet-snapvine': { model: 'q_snake', scale: 0.62 },
+    'pet-galehawk': { model: 'q_wasp', scale: 0.62 },
+    'pet-dewling': { model: 'q_frog', scale: 0.55 },
+    'pet-lodestone': { model: 'q_spider', scale: 0.52 },
+    'pet-heartshard': { model: 'q_fox', scale: 0.55 }
+  };
 
   // ------------------------------------------------------------ decodificação
-  var raw = {};            // chave -> {gltf, scene}
-  var animClips = [];
+  var raw = {};            // chave -> {scene, clips:{nome->clip}, actions:{acao->nome}, kind}
+  var bankClips = {};      // nome -> AnimationClip (banco KayKit)
   var loading = false, ready = false, failed = false;
   var waiters = [];
 
   function b64ToArrayBuffer(b64) {
-    var bin = atob(b64);
-    var len = bin.length;
+    var bin = atob(b64), len = bin.length;
     var buf = new Uint8Array(len);
     for (var i = 0; i < len; i++) buf[i] = bin.charCodeAt(i);
     return buf.buffer;
   }
-
   M.isReady = function () { return ready; };
   M.failed = function () { return failed; };
 
@@ -147,20 +275,11 @@ var JOGO = (typeof window !== 'undefined')
 
     var src = JOGO.MODELS || {};
     var keys = Object.keys(src);
-    if (!keys.length) {
-      failed = true; ready = true; loading = false;
-      done(new Error('JOGO.MODELS vazio: inclua assets/embedded/models-*.js'));
-      return;
-    }
-    if (typeof THREE.GLTFLoader !== 'function') {
-      failed = true; ready = true; loading = false;
-      done(new Error('THREE.GLTFLoader ausente (vendor/GLTFLoader.js)'));
-      return;
-    }
-    var loader = new THREE.GLTFLoader();
-    var pending = keys.length;
-    var firstErr = null;
+    if (!keys.length) { finish(new Error('JOGO.MODELS vazio: inclua assets/embedded/models-*.js')); return; }
+    if (typeof THREE.GLTFLoader !== 'function') { finish(new Error('THREE.GLTFLoader ausente')); return; }
 
+    var loader = new THREE.GLTFLoader();
+    var pending = keys.length, firstErr = null;
     keys.forEach(function (key) {
       var ab;
       try { ab = b64ToArrayBuffer(src[key]); }
@@ -168,90 +287,89 @@ var JOGO = (typeof window !== 'undefined')
       try {
         loader.parse(ab, '', function (gltf) {
           if (key === '_anims') {
-            animClips = gltf.animations || [];
+            for (var i = 0; i < gltf.animations.length; i++) bankClips[gltf.animations[i].name] = gltf.animations[i];
           } else {
             prepScene(gltf.scene);
-            raw[key] = { scene: gltf.scene, animations: gltf.animations || [] };
+            var clips = {}, names = [];
+            for (var j = 0; j < (gltf.animations || []).length; j++) {
+              clips[gltf.animations[j].name] = gltf.animations[j];
+              names.push(gltf.animations[j].name);
+            }
+            raw[key] = {
+              scene: gltf.scene, clips: clips,
+              actions: names.length ? autoActions(names) : null,   // null = usa o banco KayKit
+              own: names.length > 0,
+              natural: naturalHeight(gltf.scene)
+            };
           }
           step();
         }, function (err) { firstErr = firstErr || err; step(); });
       } catch (e2) { firstErr = firstErr || e2; step(); }
     });
 
-    function step() {
-      pending--;
-      if (pending > 0) return;
+    function step() { if (--pending <= 0) finish(firstErr); }
+    function finish(err) {
       ready = true; loading = false;
-      failed = !!firstErr && !Object.keys(raw).length;
-      done(firstErr);
-    }
-    function done(err) {
+      failed = !!err && !Object.keys(raw).length;
       var q = waiters.slice(); waiters.length = 0;
       for (var i = 0; i < q.length; i++) { try { q[i](err); } catch (e) {} }
     }
   };
 
-  // materiais toon-friendly + sombra em tudo
+  // altura natural do modelo (para normalizar o porte entre acervos diferentes)
+  function naturalHeight(scene) {
+    scene.updateMatrixWorld(true);
+    var box = new THREE.Box3().setFromObject(scene);
+    var h = box.max.y - box.min.y;
+    return (isFinite(h) && h > 0.01) ? h : 1.8;
+  }
+
   function prepScene(scene) {
     scene.traverse(function (n) {
       if (!n.isMesh && !n.isSkinnedMesh) return;
-      n.castShadow = true;
-      n.receiveShadow = true;
-      n.frustumCulled = false;               // esqueleto animado sai da caixa
+      n.castShadow = true; n.receiveShadow = true;
+      n.frustumCulled = false;
       var mats = Array.isArray(n.material) ? n.material : [n.material];
       for (var i = 0; i < mats.length; i++) {
         var m = mats[i];
         if (!m) continue;
         if (m.map) { m.map.magFilter = THREE.NearestFilter; m.map.minFilter = THREE.LinearMipmapLinearFilter; }
-        m.roughness = 0.82;
-        m.metalness = 0.02;
+        m.roughness = 0.84; m.metalness = 0.02;
       }
     });
   }
 
-  M.clips = function () { return animClips; };
-  M.clip = function (name) {
-    for (var i = 0; i < animClips.length; i++) if (animClips[i].name === name) return animClips[i];
-    return null;
+  M.clipNames = function (key) {
+    if (key && raw[key] && raw[key].own) return Object.keys(raw[key].clips);
+    return Object.keys(bankClips);
   };
-  M.clipNames = function () { return animClips.map(function (c) { return c.name; }); };
+  M.modelKeys = function () { return Object.keys(raw); };
+  M.hasModel = function (k) { return !!raw[k]; };
+  M.clips = function () { var o = []; for (var k in bankClips) o.push(bankClips[k]); return o; };
 
   // --------------------------------------------------------- clone esqueletal
-  // Equivalente ao SkeletonUtils.clone do three (que não está vendorado).
   function cloneSkinned(source) {
-    var srcLookup = new Map();
-    var cloneLookup = new Map();
+    var srcLookup = new Map(), cloneLookup = new Map();
     var clone = source.clone();
-
-    parallelTraverse(source, clone, function (a, b) {
-      srcLookup.set(b, a);
-      cloneLookup.set(a, b);
-    });
-
+    parallelTraverse(source, clone, function (a, b) { srcLookup.set(b, a); cloneLookup.set(a, b); });
     clone.traverse(function (node) {
       if (!node.isSkinnedMesh) return;
-      var cloneMesh = node;
       var srcMesh = srcLookup.get(node);
       var srcBones = srcMesh.skeleton.bones;
-      cloneMesh.skeleton = srcMesh.skeleton.clone();
-      cloneMesh.bindMatrix.copy(srcMesh.bindMatrix);
-      cloneMesh.skeleton.bones = srcBones.map(function (bone) { return cloneLookup.get(bone); });
-      cloneMesh.bind(cloneMesh.skeleton, cloneMesh.bindMatrix);
+      node.skeleton = srcMesh.skeleton.clone();
+      node.bindMatrix.copy(srcMesh.bindMatrix);
+      node.skeleton.bones = srcBones.map(function (b) { return cloneLookup.get(b); });
+      node.bind(node.skeleton, node.bindMatrix);
     });
     return clone;
   }
-  function parallelTraverse(a, b, callback) {
-    callback(a, b);
-    for (var i = 0; i < a.children.length; i++) {
-      parallelTraverse(a.children[i], b.children[i], callback);
-    }
+  function parallelTraverse(a, b, cb) {
+    cb(a, b);
+    for (var i = 0; i < a.children.length; i++) parallelTraverse(a.children[i], b.children[i], cb);
   }
   M.cloneSkinned = cloneSkinned;
 
   // ------------------------------------------------------------- tint/material
-  // O KayKit usa uma textura minúscula de paleta. Tingir com `material.color`
-  // multiplica a paleta inteira e some com a leitura; usamos uma mistura
-  // suave + emissivo elemental discreto, que preserva o desenho.
   function tintMaterials(root, color, strength, emissive, emiI) {
     var out = [];
     var col = new THREE.Color(hexInt(color));
@@ -264,13 +382,15 @@ var JOGO = (typeof window !== 'undefined')
         if (!m) { cloned.push(m); continue; }
         var c = m.clone();
         c.color = c.color ? c.color.clone() : new THREE.Color(0xffffff);
-        c.color.lerp(col, strength == null ? 0.42 : strength);
+        c.color.lerp(col, strength == null ? 0.45 : strength);
         if (emissive != null) {
           c.emissive = new THREE.Color(hexInt(emissive));
-          c.emissiveIntensity = emiI == null ? 0.18 : emiI;
+          c.emissiveIntensity = emiI == null ? 0.10 : emiI;
+          c.__baseEmiI = c.emissiveIntensity;
+          c.__baseEmiHex = hexInt(emissive);
         }
-        cloned.push(c);
-        out.push(c);
+        c.__baseOpacity = c.opacity != null ? c.opacity : 1;
+        cloned.push(c); out.push(c);
       }
       n.material = Array.isArray(n.material) ? cloned : cloned[0];
     });
@@ -279,36 +399,15 @@ var JOGO = (typeof window !== 'undefined')
   M.tintMaterials = tintMaterials;
 
   // ------------------------------------------------------- resolução de aparência
-  function DATA() { return JOGO.DATA || {}; }
-
-  function classLook(classId) {
-    return M.CLASS_LOOK[classId] || null;
-  }
-  function monsterLook(defId) {
-    var D = DATA();
-    var md = D.monsters && D.monsters[defId];
-    if (md && md.family && M.FAMILY_LOOK[md.family]) {
-      var L = M.FAMILY_LOOK[md.family];
-      return { model: L.model, show: L.show.slice(), scale: md.boss ? 1.5 : 1.0,
-               tint: M.elementColor(md.element || 'neutro'), family: md.family };
-    }
-    return { model: M.MONSTER_FALLBACK.model, show: [], scale: 1.0,
-             tint: M.elementColor((md && md.element) || 'neutro') };
-  }
-  function petLook(defId) {
-    var D = DATA();
-    var pd = D.pets && D.pets[defId];
-    return { model: 'skeleton_minion', show: [], scale: 0.58,
-             tint: M.elementColor((pd && pd.element) || 'neutro'), pet: true };
-  }
-
-  // FUSÃO — sistema, não 15 casos escritos à mão (§4):
-  //   corpo = classe de silhueta DOMINANTE (a mais corpulenta das duas)
-  //   arma  = adereço-assinatura da OUTRA classe, acoplado ao punho livre
-  //   cor   = mistura das duas paletas; aura = mistura dos dois elementos
-  //   porte = maior (a unidade soma a vida das duas)
   var BULK = { sumo: 5, curandeira: 4, invocador: 3, bruxo: 3, arqueiro: 2, espadachim: 1 };
-  function fusionLook(defId, opts) {
+
+  function classLook(classId) { return M.CLASS_LOOK[classId] || null; }
+
+  // FUSÃO — SISTEMA, não 15 casos escritos à mão (§4):
+  //   corpo = classe de silhueta dominante · arma = adereço-assinatura da outra
+  //   cor   = mistura das duas paletas · aura = mistura dos dois elementos
+  //   porte = maior (a unidade soma a vida das duas)
+  function fusionLook(defId) {
     var pair = String(defId).slice(4).split('+');
     var a = pair[0], b = pair[1];
     var la = classLook(a), lb = classLook(b);
@@ -317,81 +416,139 @@ var JOGO = (typeof window !== 'undefined')
     var host = a, guest = b;
     if (lb && (BULK[b] || 0) > (BULK[a] || 0)) { host = b; guest = a; }
     var lh = classLook(host), lg = classLook(guest);
-    var show = lh.show.slice();
-    // a arma do hóspede entra pela mão livre (esquerda); se não der, fica só a cor
-    var graft = lg ? { model: lg.model, mesh: lg.weapon, bone: 'handslotl' } : null;
     return {
-      model: lh.model, show: show, scale: (lh.scale || 1) * 1.22,
-      tint: lh.tint, accent: lg ? lg.tint : lh.accent,
-      mixTint: lg ? lg.tint : null, graft: graft, fusion: true,
-      hostClass: host, guestClass: guest
+      model: lh.model, show: lh.show.slice(), scale: (lh.scale || 1) * 1.24,
+      tint: lh.tint, accent: lg ? lg.accent : lh.accent,
+      mixTint: lg ? lg.tint : null,
+      graft: lg ? { model: lg.model, mesh: lg.weapon, bone: 'handslot.l' } : null,
+      fusion: true, hostClass: host, guestClass: guest,
+      concept: lg ? (lh.concept + ' + ' + lg.weapon) : lh.concept
+    };
+  }
+
+  function monsterLook(defId) {
+    var D = DATA();
+    var md = (D.monsters && D.monsters[defId]) || null;
+    var base = MONSTER_LOOK[defId] ||
+               (md && md.family && M.FAMILY_LOOK[md.family]) ||
+               M.MONSTER_FALLBACK;
+    var boss = !!(md && md.boss);
+    return {
+      model: base.model, show: (base.show || []).slice(),
+      proc: !!base.proc, procId: defId,
+      scale: (base.scale || 1) * (boss ? 1.35 : 1),
+      tint: M.elementColor((md && md.element) || 'neutro'),
+      accent: M.elementColor((md && md.element) || 'neutro'),
+      family: md && md.family, boss: boss
+    };
+  }
+  function petLook(defId) {
+    var D = DATA();
+    var pd = (D.pets && D.pets[defId]) || null;
+    var base = M.PET_LOOK[defId] || { model: 'q_fox', scale: 0.55 };
+    return {
+      model: base.model, show: [], scale: base.scale || 0.55,
+      tint: M.elementColor((pd && pd.element) || 'neutro'), pet: true
     };
   }
 
   M.lookFor = function (defId, opts) {
     opts = opts || {};
     var id = String(defId || '');
-    if (id.indexOf('fus:') === 0) return fusionLook(id, opts);
-    if (opts.kind === 'pet') return petLook(id);
+    if (id.indexOf('fus:') === 0) return fusionLook(id);
     var cl = classLook(opts.classId || id);
     if (cl) {
       return { model: cl.model, show: cl.show.slice(), scale: cl.scale || 1,
-               tint: cl.tint, accent: cl.accent, classId: opts.classId || id };
+               tint: cl.tint, accent: cl.accent, weapon: cl.weapon,
+               classId: opts.classId || id, concept: cl.concept };
     }
     var D = DATA();
-    if (D.pets && D.pets[id]) return petLook(id);
-    if (D.monsters && D.monsters[id]) return monsterLook(id);
-    return { model: M.MONSTER_FALLBACK.model, show: [], scale: 1,
-             tint: M.elementColor(opts.element || 'neutro') };
+    if (opts.kind === 'pet' || (D.pets && D.pets[id])) return petLook(id);
+    return monsterLook(id);
   };
 
   // ------------------------------------------------------------------- unidade
+  function sanit(name) { return String(name).replace(/[\.\[\]:\/]/g, ''); }
   function findBone(root, name) {
-    var n = root.getObjectByName(name);
-    if (n) return n;
-    // GLTFLoader passa os nomes por PropertyBinding.sanitizeNodeName:
-    // 'handslot.r' vira 'handslotr'. Tentamos as duas grafias.
-    return root.getObjectByName(String(name).replace(/[\.\[\]:\/]/g, '')) || null;
+    return root.getObjectByName(name) || root.getObjectByName(sanit(name)) || null;
   }
   M.findBone = findBone;
-
   function meshByName(root, name) {
-    var clean = String(name).replace(/[\.\[\]:\/]/g, '');
-    var found = null;
-    root.traverse(function (n) {
-      if (found) return;
-      if (n.name === name || n.name === clean) found = n;
-    });
+    var clean = sanit(name), found = null;
+    root.traverse(function (n) { if (!found && (n.name === name || n.name === clean)) found = n; });
     return found;
   }
+  function visibleBodyBox(root) {
+    root.updateMatrixWorld(true);
+    var box = new THREE.Box3(), tmp = new THREE.Box3(), found = false;
+    root.traverse(function (n) {
+      if (!n.isSkinnedMesh || !n.visible || !n.geometry) return;
+      if (!n.geometry.boundingBox) n.geometry.computeBoundingBox();
+      tmp.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+      if (!found) { box.copy(tmp); found = true; } else box.union(tmp);
+    });
+    if (!found) box.setFromObject(root);
+    return box;
+  }
 
-  // Constrói o objeto visual de uma unidade.
-  //   opts: { element, elements:[a,b], boss, kind, classId, scale, look }
+  // modelo procedural da camada v1 (bestiário desenhado para o SOTERRA)
+  function procUnit(defId, look, opts) {
+    var V1 = JOGO.Models3D;
+    if (!V1 || !V1.isReady || !V1.isReady() || !V1.buildUnit) return null;
+    var ids = V1.unitIds ? V1.unitIds() : [];
+    if (ids.indexOf(defId) < 0) return null;
+    var built;
+    try { built = V1.buildUnit(defId); } catch (e) { return null; }
+    if (!built || !built.group) return null;
+    var group = new THREE.Group();
+    group.name = 'unit:' + defId;
+    group.add(built.group);
+    var scale = (look.scale || 1) * (opts.boss ? 1.15 : 1);
+    built.group.scale.setScalar(scale);
+    var box = new THREE.Box3().setFromObject(built.group);
+    var height = Math.max(0.7, box.max.y - box.min.y);
+    var radius = Math.max(0.25, Math.min(1.1, Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.4));
+    group.userData = {
+      defId: defId, look: look, model: built.group, mixer: null, proc: built,
+      height: height, radius: radius, scale: scale, tintMats: null,
+      bones: {}, procState: { moving: 0, castK: 0, flash: 0, deathK: 0, invis: false },
+      play: function () { return null; }, has: function () { return true; },
+      currentName: function () { return null; },
+      procAnimate: function (st, t, dt) { try { built.animate(st, t, dt); } catch (e) {} }
+    };
+    return group;
+  }
+
   M.unit = function (defId, opts) {
     opts = opts || {};
     if (!ready) return null;
     var look = opts.look || M.lookFor(defId, opts);
     if (!look) return null;
-    var src = raw[look.model];
-    if (!src) src = raw[M.MONSTER_FALLBACK.model];
+
+    if (look.proc) {
+      var pu = procUnit(look.procId || defId, look, opts);
+      if (pu) return pu;
+    }
+
+    var src = raw[look.model] || raw[M.MONSTER_FALLBACK.model];
     if (!src) return null;
 
     var group = new THREE.Group();
     group.name = 'unit:' + defId;
     var model = cloneSkinned(src.scene);
-    model.position.set(0, 0, 0);
     group.add(model);
 
-    // adereços: só os citados em `show` continuam visíveis
-    var showSet = {};
-    for (var i = 0; i < (look.show || []).length; i++) showSet[look.show[i]] = true;
-    model.traverse(function (n) {
-      if (!n.isMesh) return;
-      if (n.isSkinnedMesh) return;                  // corpo
-      n.visible = !!showSet[n.name];
-    });
+    // adereços: só os citados em `show` ficam visíveis (o corpo é skinned)
+    if (!src.own) {
+      var showSet = {};
+      for (var i = 0; i < (look.show || []).length; i++) showSet[look.show[i]] = true;
+      model.traverse(function (n) {
+        if (!n.isMesh || n.isSkinnedMesh) return;
+        n.visible = !!showSet[n.name];
+      });
+    }
 
-    // enxerto da fusão: arma-assinatura da outra classe no punho livre
+    // ENXERTO DA FUSÃO: a arma-assinatura da outra classe entra no punho livre
     if (look.graft && look.graft.mesh) {
       var gsrc = raw[look.graft.model];
       if (gsrc) {
@@ -399,51 +556,73 @@ var JOGO = (typeof window !== 'undefined')
         var bone = findBone(model, look.graft.bone) || findBone(model, 'handslot.l');
         if (gm && bone) {
           var g2 = gm.clone();
-          g2.visible = true;
-          g2.castShadow = true;
-          g2.position.set(0, 0, 0);
-          g2.rotation.set(0, 0, 0);
-          g2.scale.set(1, 1, 1);
+          g2.visible = true; g2.castShadow = true;
+          g2.position.set(0, 0, 0); g2.rotation.set(0, 0, 0); g2.scale.set(1, 1, 1);
           bone.add(g2);
+          group.userData_graft = g2;
         }
       }
     }
 
-    // cor: mistura da paleta da classe/elemento + emissivo elemental
-    var elems = opts.elements && opts.elements.length ? opts.elements : [opts.element || 'neutro'];
+    var elems = (opts.elements && opts.elements.length) ? opts.elements : [opts.element || 'neutro'];
     var eCol = M.elementColor(elems[0]);
     var baseTint = look.tint || eCol;
-    var mats = tintMaterials(model, baseTint, look.fusion ? 0.34 : 0.40,
-                             eCol, elems[0] === 'neutro' ? 0.05 : 0.16);
+    var mats = tintMaterials(model, baseTint, look.fusion ? 0.52 : 0.62,
+                             eCol, elems[0] === 'neutro' ? 0.04 : 0.10);
     if (look.fusion && look.mixTint) {
-      // a fusão puxa metade do caminho para a cor da segunda classe
       var mix = new THREE.Color(hexInt(look.mixTint));
-      for (var mi = 0; mi < mats.length; mi++) mats[mi].color.lerp(mix, 0.30);
+      for (var mi = 0; mi < mats.length; mi++) mats[mi].color.lerp(mix, 0.34);
     }
     if (elems.length > 1) {
       var e2 = new THREE.Color(hexInt(M.elementColor(elems[1])));
-      for (var mj = 0; mj < mats.length; mj++) mats[mj].emissive.lerp(e2, 0.5);
+      for (var mj = 0; mj < mats.length; mj++) {
+        mats[mj].emissive.lerp(e2, 0.5);
+        mats[mj].emissiveIntensity = 0.16;
+        mats[mj].__baseEmiI = 0.16;
+      }
     }
 
-    var scale = UNIT_SCALE * (look.scale || 1) * (opts.boss ? 1.35 : 1) * (opts.scale || 1);
+    // PORTE NORMALIZADO: cada acervo nasce numa escala diferente; medimos a
+    // altura natural e ajustamos para a altura-alvo do papel. Assim um lobo do
+    // Quaternius e um esqueleto do KayKit convivem sem um virar brinquedo.
+    var targetH = look.classId ? 2.05 : (look.pet ? 1.05 : (look.fusion ? 2.55 : 1.80));
+    if (opts.boss || look.boss) targetH = 2.95;
+    var natural = src.natural || 1.8;
+    var scale = (targetH / natural) * (look.scale || 1) * (opts.scale || 1);
     model.scale.setScalar(scale);
 
-    // caixa envolvente (barra de vida, ícones, alvo do FX)
-    var box = new THREE.Box3().setFromObject(model);
+    var box = visibleBodyBox(model);
     var height = Math.max(0.6, (box.max.y - box.min.y) || 1.7);
-    var radius = Math.max(0.25, Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.5);
+    var radius = Math.max(0.22, Math.min(1.2,
+      Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * (src.own ? 0.5 : 0.34)));
 
+    // ------------------------------------------------------------- animação
     var mixer = new THREE.AnimationMixer(model);
-    var actions = {};
-    var current = null;
+    var actionMap = src.own ? src.actions : KAYKIT_ACTIONS;
+    var clipSrc = src.own ? src.clips : bankClips;
+    var cache = {}, current = null, currentAct = '';
 
+    function resolve(name, depth) {
+      if (depth > 4) return null;
+      var clipName = actionMap[name];
+      if (clipName && clipSrc[clipName]) return clipSrc[clipName];
+      var fb = ACTION_FALLBACK[name];
+      for (var i = 0; fb && i < fb.length; i++) {
+        var r = resolve(fb[i], (depth || 0) + 1);
+        if (r) return r;
+      }
+      if (name !== 'idle') return resolve('idle', 5);
+      return null;
+    }
     function action(name) {
-      if (actions[name]) return actions[name];
-      var clip = M.clip(name);
-      if (!clip) return null;
-      var a = mixer.clipAction(clip);
-      actions[name] = a;
-      return a;
+      if (cache[name] !== undefined) return cache[name];
+      var clip = resolve(name, 0);
+      cache[name] = clip ? mixer.clipAction(clip) : null;
+      return cache[name];
+    }
+    function has(name) {
+      var clipName = actionMap[name];
+      return !!(clipName && clipSrc[clipName]);
     }
     function play(name, o) {
       o = o || {};
@@ -451,6 +630,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!a) return null;
       if (current === a && !o.restart) {
         if (o.timeScale != null) a.timeScale = o.timeScale;
+        currentAct = name;
         return a;
       }
       a.reset();
@@ -459,43 +639,31 @@ var JOGO = (typeof window !== 'undefined')
       a.clampWhenFinished = o.loop === false;
       a.enabled = true;
       a.setEffectiveWeight(1);
-      if (current && current !== a) {
-        a.crossFadeFrom(current, o.fade == null ? 0.18 : o.fade, false);
-        a.play();
-      } else {
-        a.fadeIn(o.fade == null ? 0.12 : o.fade);
-        a.play();
-      }
-      current = a;
+      if (current && current !== a) { a.crossFadeFrom(current, o.fade == null ? 0.16 : o.fade, false); a.play(); }
+      else { a.fadeIn(o.fade == null ? 0.10 : o.fade); a.play(); }
+      current = a; currentAct = name;
       return a;
-    }
-    function stopAll() {
-      mixer.stopAllAction();
-      current = null;
     }
 
     group.userData = {
-      defId: defId, look: look, model: model, mixer: mixer, actions: actions,
+      defId: defId, look: look, model: model, mixer: mixer,
       height: height, radius: radius, scale: scale, tintMats: mats,
+      own: src.own,
       bones: {
-        handR: findBone(model, 'handslot.r'),
-        handL: findBone(model, 'handslot.l'),
-        head: findBone(model, 'head'),
-        chest: findBone(model, 'chest')
+        handR: findBone(model, 'handslot.r'), handL: findBone(model, 'handslot.l'),
+        head: findBone(model, 'head'), chest: findBone(model, 'chest')
       },
-      play: play, stopAll: stopAll,
-      currentName: function () {
-        for (var k in actions) if (actions[k] === current) return k;
-        return null;
-      }
+      play: play, has: has,
+      currentName: function () { return currentAct; },
+      stopAll: function () { mixer.stopAllAction(); current = null; }
     };
+    group.userData.play('idle', { fade: 0 });
     return group;
   };
 
-  // acopla um adereço (por nome de malha, de qualquer modelo carregado) a um osso
   M.attach = function (group, modelKey, meshName, boneName) {
     var src = raw[modelKey];
-    if (!src || !group || !group.userData) return null;
+    if (!src || !group || !group.userData || !group.userData.model) return null;
     var mesh = meshByName(src.scene, meshName);
     var bone = findBone(group.userData.model, boneName);
     if (!mesh || !bone) return null;
@@ -505,48 +673,105 @@ var JOGO = (typeof window !== 'undefined')
     return c;
   };
 
-  M.modelKeys = function () { return Object.keys(raw); };
-  M.hasModel = function (k) { return !!raw[k]; };
+  // ================================================================ RETRATOS
+  // Cena offscreen com luz de três pontos e fundo em gradiente do elemento.
+  // Serve retrato para TUDO (6 classes, 66 monstros, 6 chefes, 6 pets, 15
+  // fusões) com consistência de estilo e sem arte manual.
+  var portCache = {}, portRenderer = null, portScene = null, portCam = null;
+  function portraitRig(size) {
+    if (portRenderer) return;
+    portRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    portRenderer.setSize(size, size, false);
+    portRenderer.setPixelRatio(1);
+    if (THREE.sRGBEncoding != null) portRenderer.outputEncoding = THREE.sRGBEncoding;
+    portRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    portRenderer.toneMappingExposure = 1.05;
+    portScene = new THREE.Scene();
+    portCam = new THREE.PerspectiveCamera(30, 1, 0.1, 60);
+    var key = new THREE.DirectionalLight(0xfff0d0, 2.1); key.position.set(2.4, 2.6, 3.2);
+    var fill = new THREE.DirectionalLight(0x9ec8ff, 0.85); fill.position.set(-3.0, 0.9, 1.6);
+    var rim = new THREE.DirectionalLight(0xffffff, 1.7); rim.position.set(-1.2, 2.2, -3.4);
+    portScene.add(key, fill, rim, new THREE.AmbientLight(0xffffff, 0.28));
+  }
+  function gradientBg(cv, colorA, colorB) {
+    var c = cv.getContext('2d'), s = cv.width;
+    var g = c.createRadialGradient(s * 0.5, s * 0.38, s * 0.06, s * 0.5, s * 0.5, s * 0.72);
+    g.addColorStop(0, colorA); g.addColorStop(1, colorB);
+    c.fillStyle = g; c.fillRect(0, 0, s, s);
+    // vinheta
+    var v = c.createRadialGradient(s * 0.5, s * 0.5, s * 0.30, s * 0.5, s * 0.5, s * 0.72);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)');
+    c.fillStyle = v; c.fillRect(0, 0, s, s);
+  }
+  function shadeHex(hex, k) {
+    var c = new THREE.Color(hexInt(hex));
+    c.r = Math.min(1, c.r * k); c.g = Math.min(1, c.g * k); c.b = Math.min(1, c.b * k);
+    return '#' + c.getHexString();
+  }
+
+  M.portrait = function (defId, opts) {
+    opts = opts || {};
+    var size = opts.size || 192;
+    var key = defId + '|' + (opts.element || '') + '|' + size;
+    if (portCache[key]) return portCache[key];
+    if (!ready) return null;
+
+    var look = M.lookFor(defId, opts);
+    if (!look) return null;
+    var node = null;
+    try { node = M.unit(defId, { element: opts.element, elements: opts.elements, kind: opts.kind, classId: opts.classId, boss: opts.boss }); }
+    catch (e) { node = null; }
+    if (!node) return null;
+
+    portraitRig(size);
+    portRenderer.setSize(size, size, false);
+    portScene.add(node);
+    // pose de parado, um quadro à frente para sair do bind pose
+    if (node.userData.mixer) { node.userData.play('idle', { fade: 0 }); node.userData.mixer.update(0.6); }
+    if (node.userData.procAnimate) node.userData.procAnimate({ moving: 0, castK: 0 }, 0.6, 0.016);
+    node.updateMatrixWorld(true);
+
+    var box = new THREE.Box3().setFromObject(node);
+    var h = Math.max(0.3, box.max.y - box.min.y);
+    // enquadra cabeça e ombros, em 3/4
+    var headY = box.min.y + h * (look.pet || (look.model || '').indexOf('q_') === 0 ? 0.62 : 0.82);
+    var frame = h * 0.42;
+    var dist = frame / Math.tan((portCam.fov * Math.PI / 180) / 2) * 1.05;
+    var ang = 0.62;
+    portCam.position.set(Math.sin(ang) * dist, headY + frame * 0.22, Math.cos(ang) * dist);
+    portCam.lookAt(0, headY, 0);
+    portCam.updateProjectionMatrix();
+
+    portRenderer.setClearColor(0x000000, 0);
+    portRenderer.clear();
+    portRenderer.render(portScene, portCam);
+
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    var el = (opts.element) || (look.classId ? null : null);
+    var base = look.accent || look.tint || '#8a8a92';
+    gradientBg(cv, shadeHex(base, 1.15), shadeHex(base, 0.22));
+    cv.getContext('2d').drawImage(portRenderer.domElement, 0, 0, size, size);
+
+    portScene.remove(node);
+    portCache[key] = cv;
+    return cv;
+  };
+  M.clearPortraits = function () { portCache = {}; };
 
   // --------------------------------------------------------- peças de cenário
-  // Geometria procedural: barata, combina com o tom cartoon dos modelos e
-  // permite tingir por tema sem baixar mais nada.
   var geoCache = {};
-  function geo(key, make) {
-    if (!geoCache[key]) geoCache[key] = make();
-    return geoCache[key];
-  }
+  function geo(key, make) { if (!geoCache[key]) geoCache[key] = make(); return geoCache[key]; }
   M.geo = geo;
-
-  M.floorGeo = function () {
-    return geo('floor', function () { return new THREE.BoxGeometry(M.CELL, 0.4, M.CELL); });
-  };
-  M.highGeo = function () {
-    return geo('high', function () { return new THREE.BoxGeometry(M.CELL * 0.96, M.CELL * 1.55, M.CELL * 0.96); });
-  };
-  M.lowGeo = function () {
-    return geo('low', function () { return new THREE.BoxGeometry(M.CELL * 0.94, M.CELL * 0.46, M.CELL * 0.94); });
-  };
-  M.lowTopGeo = function () {
-    return geo('lowtop', function () { return new THREE.BoxGeometry(M.CELL * 0.98, M.CELL * 0.30, M.CELL * 0.98); });
-  };
+  M.floorGeo = function () { return geo('floor', function () { return new THREE.BoxGeometry(M.CELL, 0.4, M.CELL); }); };
+  M.highGeo = function () { return geo('high', function () { return new THREE.BoxGeometry(M.CELL * 0.96, M.CELL * 1.55, M.CELL * 0.96); }); };
+  M.lowGeo = function () { return geo('low', function () { return new THREE.BoxGeometry(M.CELL * 0.94, M.CELL * 0.46, M.CELL * 0.94); }); };
+  M.lowTopGeo = function () { return geo('lowtop', function () { return new THREE.BoxGeometry(M.CELL * 0.98, M.CELL * 0.30, M.CELL * 0.98); }); };
   M.tileFlatGeo = function () {
     return geo('flat', function () {
       var g = new THREE.PlaneGeometry(M.CELL, M.CELL);
       g.rotateX(-Math.PI / 2);
       return g;
-    });
-  };
-
-  M.dispose = function (root) {
-    if (!root) return;
-    root.traverse(function (n) {
-      if (n.geometry && !n.__shared) n.geometry.dispose();
-      var mats = Array.isArray(n.material) ? n.material : (n.material ? [n.material] : []);
-      for (var i = 0; i < mats.length; i++) {
-        if (mats[i].map && mats[i].map.__shared !== true) { /* textura compartilhada: não descartar */ }
-        mats[i].dispose();
-      }
     });
   };
 })();

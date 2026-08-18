@@ -111,13 +111,18 @@ JOGO.DATA = JOGO.DATA || {};
   // >>> 90% desse teto — o resto fica para o `xpFalloff` do adendo, que é
   // >>> quem realmente pune moer conteúdo raso (×0,10 no piso).
   // ==========================================================================
+  // NOTA: a coluna `xp` foi reapertada quando as salas cresceram (17×15 a
+  // 23×19) e passaram a ter mais spawns — 16→27 bichos por descida em vez de
+  // 14→17. Sem o reaperto, a descida funda saltava de 0,34 para 0,44 de nível
+  // e o adendo v2.3 deixava de valer. Mapa maior dá mais espaço tático, não
+  // mais XP: o total por descida é o que manda, nunca o número de bichos.
   var TIER = {
-    greenhouse:   { hp: 1.00, power:   0, xp: 0.083 },
-    cistern:      { hp: 1.00, power:  12, xp: 0.20 },
-    emberlock:    { hp: 1.15, power:  28, xp: 0.35 },
-    windscaffold: { hp: 1.55, power:  48, xp: 0.62 },
-    quakemine:    { hp: 1.80, power:  75, xp: 0.86 },
-    brokenheart:  { hp: 2.00, power: 105, xp: 1.05 }
+    greenhouse:   { hp: 1.00, power:   0, xp: 0.0805 },
+    cistern:      { hp: 1.00, power:  12, xp: 0.176 },
+    emberlock:    { hp: 1.15, power:  28, xp: 0.308 },
+    windscaffold: { hp: 1.55, power:  48, xp: 0.514 },
+    quakemine:    { hp: 1.80, power:  75, xp: 0.681 },
+    brokenheart:  { hp: 2.00, power: 105, xp: 0.814 }
   };
   var NO_TIER = { hp: 1, power: 0, xp: 1 };   // invocações do jogador: intocadas
   function tierOf(o) { return TIER[o.dungeonId] || NO_TIER; }
@@ -227,7 +232,8 @@ JOGO.DATA = JOGO.DATA || {};
       flavor: 'A luz do abdômen é o último aviso amigável do jardim.', fxKey: 'bolt'
     },
     'm-sap-mend': {
-      name: 'Seiva Doce', element: 'agua', paCost: 3, castsPerTurn: 2, range: [0, 4], targetSide: 'ally',
+      // idem 'm-jelly-mend': duas curas por turno sustentavam a estufa inteira.
+      name: 'Seiva Doce', element: 'agua', paCost: 3, cooldown: 1, range: [0, 4], targetSide: 'ally',
       effects: [{ type: 'heal', min: 12, max: 16 }],
       description: 'O seiveiro verte seiva dourada sobre as feridas de um aliado.',
       flavor: 'Rega tudo com o mesmo carinho. Inclusive o que devia morrer.', fxKey: 'heal'
@@ -408,7 +414,11 @@ JOGO.DATA = JOGO.DATA || {};
       flavor: 'Convite formal da corte afogada.', fxKey: 'hook'
     },
     'm-jelly-mend': {
-      name: 'Pulso Salino', element: 'agua', paCost: 3, range: [0, 4], targetSide: 'ally',
+      // cooldown 2: com as salas ampliadas cabem mais monstros por sala, e um
+      // curandeiro que cura TODO turno passou a sustentar o grupo inteiro além
+      // do que uma dupla de nível 1 consegue furar — a luta empatava para
+      // sempre. A água-viva continua sendo o alvo a focar, só não é eterna.
+      name: 'Pulso Salino', element: 'agua', paCost: 3, cooldown: 2, range: [0, 4], targetSide: 'ally',
       effects: [{ type: 'heal', min: 14, max: 18 }],
       description: 'A água-viva pulsa e banha um aliado em salmoura restauradora.',
       flavor: 'Apague o lustre antes de discutir com os convidados.', fxKey: 'heal'

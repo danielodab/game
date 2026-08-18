@@ -51,8 +51,14 @@
 <script src="../js/core/data/pets.js?v=1"></script>
 <script src="../js/core/data/items.js?v=1"></script>
 
+<!-- cenário: env-kit (49 GLBs do KayKit Dungeon Remastered, CC0) + o montador
+     de salas da camada v1, reaproveitado só para o AMBIENTE -->
+<script src="../assets/embedded/env-kit.js?v=1"></script>
+<script src="../js/render3d/models3d.js?v=1"></script>
+
 <script src="../assets/embedded/models-anims.js?v=1"></script>
 <script src="../assets/embedded/models-heroes.js?v=1"></script>
+<script src="../assets/embedded/models-monsters.js?v=1"></script>
 
 <script src="../js/render3d/models3d_v2.js?v=1"></script>
 <script src="../js/render3d/fx3d_v2.js?v=1"></script>
@@ -480,15 +486,111 @@
     hideSnap: function () { document.getElementById('snapbox').style.display = 'none'; }
   };
 
+  // roteiros nomeados (?do=…) — usados pelas capturas automáticas
+  var SCENARIOS = {
+    idle: function () {},
+    // as 6 classes enfileiradas de frente para a câmera (galeria de conferência)
+    galeria: function () {
+      var hs = heroes();
+      var cy = Math.floor(state.grid.h / 2);
+      for (var i = 0; i < hs.length; i++) {
+        hs[i].x = 1 + i * 2; hs[i].y = cy;
+        var v = JOGO.Renderer.unitWorld(hs[i].uid);
+        emit({ type: 'teleport', uid: hs[i].uid, fromX: hs[i].x, fromY: hs[i].y, toX: hs[i].x, toY: hs[i].y });
+      }
+      state.units.forEach(function (u) {
+        if (u.kind !== 'hero') { u.alive = false; u.offBoard = true; }
+      });
+      state.tileEventsActive = [];
+      JOGO.Renderer.handleEvent({ type: 'battleStart', state: state });
+      setTimeout(function () {}, 0);
+    },
+    andar: function () {
+      var hs = heroes();
+      for (var i = 0; i < hs.length; i++) {
+        var u = hs[i], p = [];
+        for (var s = 1; s <= 3; s++) p.push({ x: Math.min(state.grid.w - 1, u.x + s), y: u.y });
+        u.x = p[p.length - 1].x;
+        emit({ type: 'move', uid: u.uid, path: p });
+      }
+    },
+    atacar: function () {
+      var hs = heroes(), es = enemies();
+      for (var i = 0; i < hs.length && i < es.length; i++) {
+        emit({ type: 'cast', uid: hs[i].uid, x: es[i].x, y: es[i].y, fxKey: 'melee', element: hs[i].element });
+        emit({ type: 'damage', uid: es[i].uid, amount: 24, element: hs[i].element, sourceUid: hs[i].uid });
+      }
+    },
+    conjurar: function () {
+      var hs = heroes(), es = enemies();
+      for (var i = 0; i < hs.length && i < es.length; i++) {
+        emit({ type: 'cast', uid: hs[i].uid, x: es[i].x, y: es[i].y,
+               fxKey: i % 2 ? 'bolt' : 'nova', element: hs[i].element });
+      }
+    },
+    // enfileira ids arbitrários (?ids=a,b,c) — bestiário, chefes, pets, fusões
+    fila: function () {
+      var ids = (Q.get('ids') || '').split(',').filter(Boolean);
+      if (!ids.length) return;
+      var cy = Math.floor(state.grid.h / 2);
+      state.units.length = 0; state.order.length = 0;
+      uidN = 0;
+      for (var i = 0; i < ids.length; i++) {
+        var id = ids[i];
+        var md = JOGO.DATA.monsters[id], pd = JOGO.DATA.pets[id];
+        var u = mkUnit({
+          defId: id, kind: pd ? 'pet' : (id.indexOf('fus:') === 0 ? 'fusion' : (md ? 'monster' : 'hero')),
+          classId: JOGO.DATA.classes[id] ? id : null,
+          side: 'player', x: 1 + i * 2, y: cy, hp: 100,
+          element: (md && md.element) || (pd && pd.element) || 'neutro',
+          boss: !!(md && md.boss),
+          elemPair: id.indexOf('fus:') === 0 ? ['fogo', 'agua'] : null
+        });
+        state.units.push(u); state.order.push(u.uid);
+      }
+      state.tileEventsActive = [];
+      JOGO.Renderer.handleEvent({ type: 'battleStart', state: state });
+    },
+    fusao: function () { doFusion(); },
+    feitico: function () {
+      G.selectedSpellId = 'demo';
+      G.selectedSpell = { element: 'fogo' };
+      G.hoverTile = { x: 8, y: 6 };
+    },
+    morrer: function () {
+      var es = enemies();
+      for (var i = 0; i < es.length; i++) { es[i].alive = false; emit({ type: 'death', uid: es[i].uid }); }
+    }
+  };
+
   JOGO.Models3D2.load(function (err) {
     if (err) statusEl.textContent = 'ERRO: ' + err.message;
-    restart({ dungeonId: Q.get('d') || 'greenhouse', weather: Q.get('w') || 'chuva',
-              line: Q.get('line') === '1' });
-    if (Q.get('cam')) {
-      var c = Q.get('cam').split(',');
-      JOGO.Renderer.setCamera({ ang: +c[0], tilt: +c[1], dist: +c[2] });
+    function go() {
+      restart({ dungeonId: Q.get('d') || 'greenhouse', weather: Q.get('w') || 'chuva',
+                line: Q.get('line') === '1' });
+      function applyCam() {
+        if (!Q.get('cam')) return;
+        var c = Q.get('cam').split(',');
+        JOGO.Renderer.setCamera({ ang: +c[0], tilt: +c[1], dist: +c[2],
+          centerX: c[3] != null ? +c[3] : undefined, centerY: c[4] != null ? +c[4] : undefined });
+      }
+      applyCam();
+      window.PREVIEW_READY = true;
+      window.APPLY_CAM = applyCam;
+      if (SNAP) {
+        // pré-aquece o cenário (o env-kit termina de decodificar) e roda o roteiro
+        for (var w0 = 0; w0 < 4; w0++) JOGO.Renderer.render(0.016);
+        var fn = SCENARIOS[Q.get('do') || 'idle'];
+        if (fn) try { fn(); } catch (e) {}
+        applyCam();
+        var pre = +(Q.get('pre') || 0);
+        for (var i = 0; i < pre; i++) JOGO.Renderer.render(0.016);
+        window.PREVIEW.snap(+(Q.get('frames') || 60));
+        window.SNAP_DONE = true;
+      }
     }
-    window.PREVIEW_READY = true;
+    if (JOGO.Models3D && JOGO.Models3D.ready) JOGO.Models3D.ready(go);
+    else go();
   });
 
   var last = performance.now();
