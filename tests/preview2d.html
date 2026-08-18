@@ -474,6 +474,8 @@ JOGO.DATA = {
 <!-- 2) módulos do renderizador (DEPOIS do stub).
         art.js entra junto para exercitar a integração real com a arte;
         `?art=0` derruba o Art de propósito e testa o placeholder geométrico. -->
+<!-- blindagem do save do jogador: precisa vir ANTES de qualquer outro script -->
+<script src="save_sandbox.js"></script>
 <script src="../vendor/pixi.min.js"></script>
 <script src="../js/render2d/art.js?v=r3"></script>
 <script src="../js/render2d/fx.js?v=r3"></script>

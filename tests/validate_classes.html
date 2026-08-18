@@ -453,7 +453,7 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
    * dungeons.js com o `xp` de monsters.js. Se os dois arquivos estiverem carregados,
    * recalculamos ao vivo e comparamos: divergência > 20% significa que o Criativo Mundo
    * mexeu na XP e esta curva precisa ser recalibrada. */
-  var DUNGEON_XP = [66, 204, 422, 753, 1196, 1847];
+  var DUNGEON_XP = [35.7, 104, 209.2, 374.3, 588.8, 944.9];
   var REC_LEVEL = [3, 7, 11, 16, 22, 28];
   var liveXp = null;
   if (D.dungeons && D.monsters && D.dungeons.length === 6) {
@@ -532,30 +532,35 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
     return stepTo(heroLevel + 1) / ((DUNGEON_XP[di] / party) * xpMult(heroLevel, REC_LEVEL[di]));
   }
 
-  /* faixa aceita: ~1 descida por nível no começo, subindo até ~3 no fim */
+  /* CASO DE REFERÊNCIA = SOLO. `game.js` faz `xpGanho = floor(xpTotal / partySize)`:
+   * o solo leva a descida inteira e é, portanto, o TETO da progressão — é ele que precisa
+   * ficar em ~1 nível por descida no começo. Medir pela dupla (como esta página fazia até
+   * 17/08) deixava o solo subir ~1,9 nível por descida na Estufa. O `validate_world.html`
+   * do Criativo Mundo usa a mesma referência; as duas páginas concordam.
+   * Faixa aceita: ~1 descida por nível no começo, subindo até ~3 no fim. */
   var BANDS = [[0.7, 1.6], [1.0, 2.0], [1.3, 2.4], [1.6, 2.8], [2.0, 3.2], [2.4, 4.0]];
   var progression = [];
   for (var di = 0; di < 6; di++) {
     var lvl = REC_LEVEL[di];
     var duoD = descentsPerLevel(di, lvl, 2), soloD = descentsPerLevel(di, lvl, 1);
     progression.push({ d: di + 1, rec: lvl, xp: DUNGEON_XP[di], step: stepTo(lvl + 1), duo: duoD, solo: soloD });
-    check('calabouço ' + (di + 1) + ' (nível ' + lvl + '): dupla sobe 1 nível em ' +
+    check('calabouço ' + (di + 1) + ' (nível ' + lvl + '): SOLO sobe 1 nível em ' +
       BANDS[di][0] + '–' + BANDS[di][1] + ' descidas',
-      duoD >= BANDS[di][0] && duoD <= BANDS[di][1], duoD.toFixed(2) + ' descidas');
-    check('calabouço ' + (di + 1) + ': solo sobe mais rápido que a dupla (metade das descidas)',
-      soloD < duoD, soloD.toFixed(2) + ' vs ' + duoD.toFixed(2));
+      soloD >= BANDS[di][0] && soloD <= BANDS[di][1], soloD.toFixed(2) + ' descidas');
+    check('calabouço ' + (di + 1) + ': a dupla precisa do dobro de descidas (XP dividida)',
+      Math.abs(duoD - soloD * 2) < 0.01, 'solo ' + soloD.toFixed(2) + ' · dupla ' + duoD.toFixed(2));
   }
   var monoProg = true;
   for (var pi = 1; pi < progression.length; pi++) {
-    if (progression[pi].duo < progression[pi - 1].duo) monoProg = false;
+    if (progression[pi].solo < progression[pi - 1].solo) monoProg = false;
   }
   check('subir fica progressivamente mais caro a cada calabouço', monoProg,
-    progression.map(function (r) { return 'D' + r.d + ' ' + r.duo.toFixed(2); }).join(' '));
-  check('no começo (calabouço 1, nível recomendado) uma descida rende ~1 nível',
-    Math.abs(progression[0].duo - 1) <= 0.35, progression[0].duo.toFixed(2));
-  check('do nível 25 em diante uma descida rende ≈1/3 de nível (≥ 2,2 descidas)',
-    descentsPerLevel(5, 28, 2) >= 2.2 && descentsPerLevel(4, 25, 2) >= 2.2,
-    'D6@28 ' + descentsPerLevel(5, 28, 2).toFixed(2) + ' · D5@25 ' + descentsPerLevel(4, 25, 2).toFixed(2));
+    progression.map(function (r) { return 'D' + r.d + ' ' + r.solo.toFixed(2); }).join(' '));
+  check('no começo (calabouço 1, nível recomendado) uma descida solo rende ~1 nível',
+    Math.abs(progression[0].solo - 1) <= 0.35, progression[0].solo.toFixed(2));
+  check('do nível 25 em diante uma descida solo rende ≈1/3 de nível (≥ 2,2 descidas)',
+    descentsPerLevel(5, 28, 1) >= 2.2 && descentsPerLevel(4, 25, 1) >= 2.2,
+    'D6@28 ' + descentsPerLevel(5, 28, 1).toFixed(2) + ' · D5@25 ' + descentsPerLevel(4, 25, 1).toFixed(2));
 
   /* moer o calabouço 1 até o nível 30 tem de ser absurdo; descer fundo, viável */
   function runsToThirty(fixedDungeon, party) {

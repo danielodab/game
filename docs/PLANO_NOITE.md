@@ -14,6 +14,42 @@ para você conferir de manhã e reverter o que não gostar (tudo está versionad
 | Efeitos | Partículas 3D + malhas emissivas + **luz dinâmica** | Em 3D o projétil pode iluminar o chão e os personagens — é o ganho que o 2D não dava. |
 | Camada 2D | **Preservada** como alternativa | Nada foi apagado; a versão com o seu Sumô continua no histórico. |
 
+## Duas decisões que mudaram o que você tinha combinado — leia com atenção
+
+O Agente Chefe reprovou uma versão da noite justamente por estas duas não estarem
+documentadas fora de um comentário de código. **Ambas são reversíveis e a palavra final é sua.**
+
+### 1. As classes foram renomeadas
+
+Você autorizou trocar a aparência das classes para casar com os modelos 3D prontos
+("podemos mudar também os personagens de cada classe"). O elenco ficou assim:
+
+| id interno | antes | agora |
+|---|---|---|
+| `sumo` | Sumô | **Bárbaro** (machado de duas mãos) |
+| `arqueiro` | Elfo Arqueiro | **Batedor** (besta, capuz) |
+| `curandeira` | Curandeira | **Paladina** (armadura clara, escudo) |
+| `espadachim` | Espadachim | **Ladino** (adagas gêmeas) |
+| `invocador` | Invocador | **Xamã** (grimório) |
+| `bruxo` | Bruxo | Bruxo (mantido) |
+
+Papéis táticos, ids, efeitos e balanceamento **não mudaram**. Foram renomeados 20 dos 171
+feitiços — só os que citavam a aparência antiga (sino, mawashi, dohyo, pavio, cajado).
+
+### 2. A sua arte do Sumô saiu da tela
+
+Ela está **preservada** em `assets/embedded/sprites-sumo.js` e não foi apagada.
+Tirei do `index.html` porque a classe virou um Bárbaro de machado: o retrato desenhado
+mostraria um lutador de sumô ao lado de um bárbaro no tabuleiro, e essa incoerência salta aos
+olhos. Os retratos agora são gerados dos próprios modelos, então tudo combina.
+
+**Para trazê-la de volta** (ela tem prioridade sobre o retrato 3D): acrescente
+`assets/embedded/sprites-sumo.js` e `js/render2d/spriteart.js` à lista de arquivos do
+`index.html`, nesta ordem, logo antes de `js/render3d/portraits3d.js`. Está explicado lá dentro.
+
+> Se preferir o contrário — manter o Sumô como conceito e a sua arte na tela — é meia hora de
+> trabalho: renomear a classe de volta e trocar o modelo do Bárbaro por um mais corpulento.
+
 ## Ordem de execução
 
 1. **Camada 3D**: 6 classes com modelo e animação → cenário nos 6 temas → monstros e chefes → efeitos → clima, pets, estados → fusão

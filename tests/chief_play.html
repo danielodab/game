@@ -18,6 +18,8 @@
   os dados mudam sem bump do ?v (bug B5 do QA, reincidente no commit c9276ef).
   Esta página é do Agente Chefe e serve só para auditar o código de HEAD.
 -->
+<!-- blindagem do save do jogador: precisa vir ANTES de qualquer outro script -->
+<script src="save_sandbox.js"></script>
 <script>
 (function () {
   var v = '?v=' + Date.now();

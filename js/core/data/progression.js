@@ -17,7 +17,21 @@ JOGO.DATA.unlockTiers = [5, 10, 12, 15, 20, 30];
 JOGO.DATA.leveling = {
   maxLevel: 30,
 
-  /* XP ACUMULADA para atingir cada nível: xpTable[0] = nível 1 (0),
+  /* ⚠ TABELA CONGELADA (18/08, por coordenação do Orquestrador) — NÃO ALTERAR SOZINHO.
+   * Esta tabela e o `xp` dos monstros (`js/core/data/monsters.js`, Criativo Mundo) descrevem
+   * a MESMA economia por pontas opostas: ele define quanto o monstro paga, ela define quanto
+   * o nível custa. Mexer num lado sem o outro derruba a validação do outro dono — já
+   * aconteceu três vezes numa noite. Qualquer ajuste daqui em diante é rodada COORDENADA,
+   * com as duas tabelas mudando juntas e as duas páginas de teste rodando no fim.
+   *
+   * SUGESTÃO REGISTRADA PARA A PRÓXIMA RODADA (do Criativo Mundo — NÃO executada aqui):
+   * multiplicar esta `xpTable` E o `xp` de todos os monstros por ~10, na mesma rodada.
+   * É mudança puramente cosmética — todas as razões se preservam — mas devolve folga para
+   * XP inteira por monstro: hoje o degrau do nível 3 vale 35 XP, o que obriga o outro lado
+   * a usar XP fracionária (0,9 · 1,1 · 1,3) para o bufo-de-pólen não valer o mesmo que a
+   * carrapicho-mãe. Funciona, mas é apertado.
+   *
+   * XP ACUMULADA para atingir cada nível: xpTable[0] = nível 1 (0),
    * xpTable[29] = nível 30 (39.055).
    *
    * CALIBRAGEM (adendo v2.3) — feita sobre a XP real dos monstros de

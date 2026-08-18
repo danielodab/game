@@ -109,7 +109,7 @@ JOGO.DATA.classes = {
     id: 'curandeira',
     name: 'Paladina',
     role: 'suporte',
-    description: 'Cura, escuda e abençoa o grupo — e bate com o martelo quando ninguém precisa dela. Armadura clara, escudo de brasão e sempre a um passo de quem está sangrando.',
+    description: 'Cura, escuda e abençoa o grupo — e bate com a espada quando ninguém precisa dela. Armadura clara, escudo de brasão e sempre a um passo de quem está sangrando.',
     lore: 'Herdou da avó a lanterna de vagalumes e a regra da casa: no mundo enterrado, quem apaga primeiro é quem parou de cuidar dos outros. Mandou polir a armadura até ficar clara de propósito — num Fecho escuro, quem cai precisa saber para onde correr. Ela não pretende apagar tão cedo.',
     palette: { primary: '#f0c05a', secondary: '#6b4a2f', accent: '#fff2c2' },
     stats: {

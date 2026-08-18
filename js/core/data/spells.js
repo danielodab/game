@@ -1263,7 +1263,7 @@ JOGO.DATA.spells = {
 
   /* ======================================================================
    * PALADINA — SUPORTE
-   * Cura, escuda, abençoa — e bate de martelo quando ninguém precisa dela.
+   * Cura, escuda, abençoa — e bate de espada quando ninguém precisa dela.
    * Fogo: cura agressiva e poder · Água: cura pura e limpeza
    * Terra: escudos e raízes protetoras · Ar: mobilidade e resgate
    * ====================================================================== */
@@ -1279,14 +1279,14 @@ JOGO.DATA.spells = {
     fxKey: 'warmHand'
   },
   'curandeira-neutro-2': {
-    id: 'curandeira-neutro-2', name: 'Martelo Teimoso', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+    id: 'curandeira-neutro-2', name: 'Espada Teimosa', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'neutro', min: 19, max: 25 } ],
-    description: '19–25 de dano neutro. A paladina também ataca — e o martelo pesa como o dever.',
-    flavor: 'Era da avó. A avó também batia com ele.',
-    fxKey: 'stubbornHammer'
+    description: '19–25 de dano neutro. A paladina também ataca — e a espada pesa como o dever.',
+    flavor: 'Era da avó. A avó também batia com ela.',
+    fxKey: 'stubbornBlade'
   },
   'curandeira-neutro-3': {
     id: 'curandeira-neutro-3', name: 'Bênção Breve', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
