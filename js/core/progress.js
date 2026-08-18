@@ -47,14 +47,20 @@ var JOGO = (typeof window !== 'undefined')
  * [D6] ELEMENTO. Todo herói nasce 'neutro'. `chooseElement` exige
  *      `level >= DATA.leveling.elementChoiceLevel` (5) e é IRREVERSÍVEL.
  *
- * [D7] INVENTÁRIO ÚNICO (§9-B). Um saco só para todo o grupo, com UMA entrada
- *      por `itemId`: `{itemId, level}`. Equipar NÃO tira o item do saco (é
- *      preciso vê-lo para forjar e para saber quem o usa); `hero.items[slot]`
- *      guarda o `itemId`. Um item não pode estar em dois heróis ao mesmo
- *      tempo: `equip` recusa e `equippedBy(itemId)` diz quem o está usando.
- *      Item REPETIDO no saque não vira entrada nova — é fundido em PEDRAS DE
- *      FORJA do elemento do item (`DUP_ITEM_STONES` = 2), decisão que
- *      substitui o antigo descarte silencioso e alimenta a forja.
+ * [D7] INVENTÁRIO ÚNICO DE CÓPIAS (§9-B + pedido do usuário de 18/ago). Um saco
+ *      só para todo o grupo, agora com uma entrada POR CÓPIA:
+ *      `{itemId, level, stars}`. Duas botas iguais são DUAS entradas — é o que
+ *      permite equipar uma em cada herói e é a matéria-prima das estrelas [D18].
+ *      A tela agrupa as cópias idênticas num espaço só com um contador ×N
+ *      (`invStacks()` faz o agrupamento; a UI não conta na mão).
+ *      EQUIPAR TIRA DO SACO: a cópia sai do inventário e passa a viver no
+ *      espaço do herói (`hero.items[slot]` = itemId, `hero.itemVar[slot]` =
+ *      `{level, stars}` da cópia em uso). Ela fica presa ali até ser
+ *      desequipada, e `unequip` devolve a MESMA cópia ao saco. Foi troca de
+ *      modelo: antes o item equipado continuava no saco. O que se perdia com
+ *      isso — forjar uma peça em uso — voltou por `upgradeWorn(heroId, slot)`.
+ *      Item repetido no saque NÃO vira mais pedra: vira cópia, porque é ela que
+ *      alimenta a fusão de estrelas. As pedras continuam caindo dos monstros.
  *      Sanidade do contrato §8: a contribuição de um item de espaço `pa`/`pp`
  *      é limitada a +1 mesmo depois do multiplicador da forja — a forja
  *      engorda vida, poder, resistências e esquiva, nunca a economia de ações.
@@ -108,6 +114,23 @@ var JOGO = (typeof window !== 'undefined')
  *       deixa ~50% dos sorteios secos (descida completa ≈ 2 peças) e que faz
  *       grupo menor tirar mais e melhor. 1 sorteio por sala + 1 extra no chefe.
  *       `rollPet` só no chefe.
+ *
+ * [D18] ESTRELAS DE ITEM (pedido do usuário, 18/ago). Segunda trilha de poder,
+ *       INDEPENDENTE da forja: juntar `FUSE_COPIES` (3) cópias IDÊNTICAS —
+ *       mesmo item, mesmo `level` de forja e mesmo `stars` — funde tudo numa
+ *       cópia só com uma estrela a mais, até `ITEM_STARS_MAX` (3). Como a
+ *       escada é de 3 em 3 sobre o MESMO degrau, um ★3 custa 27 cópias.
+ *       Exigir `level` igual é o que impede o truque de forjar uma cópia barata
+ *       e herdar o nível na fusão. O ganho entra SOMANDO no multiplicador da
+ *       forja (`itemMult`), nunca multiplicando: `1 + 0,12·nível + estrela`,
+ *       com estrela em `STAR_BONUS` = 0 / +10% / +25% / +50%. Somar mantém o
+ *       teto previsível (★3 +10 = 2,70× contra 2,20× do +10 de hoje); se os
+ *       dois eixos se multiplicassem daria 3,30× e a esquiva de conjunto
+ *       completo (§9-H) estouraria junto. `nonScalingKeys` (pa/pp) também vale
+ *       para as estrelas — nenhuma trilha cria +2 PA.
+ *       NÃO CONFUNDIR com as estrelas de CLASSE [D9], que vêm de cartas de
+ *       chefe, vão até 5 e vivem em `cardInfo`. São sistemas distintos: aqui a
+ *       estrela é de uma PEÇA e nasce de cópias repetidas.
  *
  * [D16] CONJUNTO QUE CONCEDE FEITIÇO. `spellsFor` inclui, além do `grantsSpell`
  *       do Lume, qualquer `DATA.sets[*].bonuses[n].grantsSpell` quando o herói
@@ -170,8 +193,21 @@ var JOGO = (typeof window !== 'undefined')
   var CARD_CHANCE = [0.60, 0.60, 0.50];
   var PET_CHANCE = 0.25;                 // chance base de pet no chefe [D12]
   var PA_ITEM_CAP = 1, PP_ITEM_CAP = 1;  // sanidade do contrato §8 [D7]
-  var DUP_ITEM_STONES = 2;               // item repetido vira pedras [D7]
   var UNLOCK_COST_FALLBACK = 10;         // dado ainda sem `unlockCost` [D9]
+
+  // ---- estrelas de ITEM [D18] — a régua inteira mora nestas três linhas.
+  // Trocar o custo (3 cópias por degrau) ou a curva de ganho é mexer aqui e em
+  // mais lugar nenhum; `DATA.upgrade` pode sobrescrever sem tocar no código.
+  var ITEM_STARS_MAX = 3;                     // ★ máximo de uma peça
+  var FUSE_COPIES = 3;                        // cópias idênticas por degrau (★3 = 27)
+  var STAR_BONUS = [0, 0.08, 0.18, 0.30];
+  /* Curva medida, nao chutada. A forja sozinha ja vale 2,2x no +10
+   * (0,12 por nivel), e forja e estrela SOMAM. Com a curva inicial de
+   * 0,10/0,25/0,50 um item ★3 +10 chegava a 2,7x o item cru — acima do teto de
+   * ~2x que eu mesmo tinha posto. Com esta, o topo do jogo fica em 2,5x.
+   * A estrela vale menos que a forja de proposito: as 27 copias de um ★3 caem
+   * sozinhas de tanto jogar, enquanto pedra o jogador cava. */     // somado ao multiplicador da forja
+  var MAX_COPIES = 99;                        // teto por variante ao sanear save
 
   // Padrões do ADENDO v2.1, usados enquanto os arquivos de dados não chegam.
   var STAR_COSTS_DEFAULT = [5, 15, 30, 55, 90];
@@ -306,6 +342,34 @@ var JOGO = (typeof window !== 'undefined')
       nonScalingKeys: isArray(u.nonScalingKeys) ? u.nonScalingKeys : UPGRADE_DEFAULT.nonScalingKeys
     };
   }
+
+  /* ---- régua das estrelas de ITEM [D18]. O dado pode mandar (`DATA.upgrade`
+   * .maxStars / .fuseCopies / .starBonus); sem ele valem as constantes daqui. */
+  function starItemCfg() {
+    var u = D().upgrade;
+    var b = (isObj(u) && isArray(u.starBonus) && u.starBonus.length) ? u.starBonus : STAR_BONUS;
+    var mx = (isObj(u) && num(u.maxStars, null) !== null) ? Math.floor(num(u.maxStars, ITEM_STARS_MAX))
+                                                          : ITEM_STARS_MAX;
+    var cp = (isObj(u) && num(u.fuseCopies, null) !== null) ? Math.floor(num(u.fuseCopies, FUSE_COPIES))
+                                                            : FUSE_COPIES;
+    return {
+      max: Math.max(0, Math.min(mx, b.length - 1)),
+      copies: Math.max(2, cp),
+      bonus: b
+    };
+  }
+  Progress.starCfg = starItemCfg;        // a UI lê o custo e a curva daqui
+  function clampLevel(v) {
+    return Math.max(0, Math.min(num(upgradeCfg().maxLevel, 10), Math.floor(num(v, 0))));
+  }
+  function clampStars(v) {
+    return Math.max(0, Math.min(starItemCfg().max, Math.floor(num(v, 0))));
+  }
+  function starBonusOf(stars) {
+    var cfg = starItemCfg();
+    var s = Math.max(0, Math.min(Math.floor(num(stars, 0)), cfg.bonus.length - 1));
+    return num(cfg.bonus[s], 0);
+  }
   function elements() {
     var e = D().elements;
     return isArray(e) && e.length ? e : ['neutro', 'fogo', 'agua', 'terra', 'ar'];
@@ -375,16 +439,18 @@ var JOGO = (typeof window !== 'undefined')
 
   // ============================================================ estado
   function emptyItems() { return { punho: null, passo: null, casca: null, lume: null }; }
+  // [D7] a variante (forja e estrelas) da CÓPIA que está em cada espaço
+  function emptyVars() { return { punho: null, passo: null, casca: null, lume: null }; }
 
   function newHero(classId) {
     return {
       classId: classId, element: DEFAULT_ELEMENT, xp: 0, level: 1,
-      spells: [], items: emptyItems(), pet: null
+      spells: [], items: emptyItems(), itemVar: emptyVars(), pet: null
     };
   }
 
   function freshState() {
-    var st = { version: 21, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {} };
+    var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {} };
     var cs = classes(), id;
     for (id in cs) {
       if (!cs.hasOwnProperty(id)) continue;
@@ -399,7 +465,7 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------ saneamento [D2]
   function sanitize(raw) {
     if (!isObj(raw)) return null;
-    var st = { version: 21, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {} };
+    var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {} };
     var cs = classes(), i, id;
     var hasClasses = keys(cs).length > 0;
     var up = upgradeCfg();
@@ -420,24 +486,39 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
 
-    // ---- inventário: aceita string (nível 0) e {itemId, level}; funde repetidos
-    function pushItem(itemId, level) {
+    /* ---- inventário: UMA entrada por cópia [D7].
+     * Aceita as três formas já gravadas em disco: string solta (v2.0),
+     * `{itemId, level}` (v2.1, uma entrada por item) e `{itemId, level, stars,
+     * count}` (a de agora). `count` existe para o save não inchar quando o
+     * jogador acumular 27 cópias mirando uma ★3. */
+    function pushItem(itemId, level, stars, count) {
       if (typeof itemId !== 'string' || !itemDef(itemId)) return;
-      var lv = Math.max(0, Math.min(num(up.maxLevel, 10), Math.floor(num(level, 0))));
-      for (var k = 0; k < st.inventory.length; k++) {
-        if (st.inventory[k].itemId === itemId) {                  // uma entrada por item
-          if (lv > st.inventory[k].level) st.inventory[k].level = lv;
-          return;
-        }
-      }
-      st.inventory.push({ itemId: itemId, level: lv });
+      var lv = clampLevel(level);
+      var sr = clampStars(stars);
+      var n = Math.max(1, Math.min(MAX_COPIES, Math.floor(num(count, 1))));
+      for (var c = 0; c < n; c++) st.inventory.push({ itemId: itemId, level: lv, stars: sr });
     }
     if (isArray(raw.inventory)) {
       for (i = 0; i < raw.inventory.length; i++) {
         var entry = raw.inventory[i];
-        if (typeof entry === 'string') pushItem(entry, 0);
-        else if (isObj(entry)) pushItem(entry.itemId, entry.level);
+        if (typeof entry === 'string') pushItem(entry, 0, 0, 1);
+        else if (isObj(entry)) pushItem(entry.itemId, entry.level, entry.stars, entry.count);
       }
+    }
+    /* Tira do saco a melhor cópia de um item (mais estrelas, depois mais forja).
+     * É como o save ANTIGO migra: lá o item equipado também aparecia no saco, e
+     * as duas linhas descreviam UMA peça só — deixar as duas viraria duplicação. */
+    function takeFromBag(itemId) {
+      var best = -1;
+      for (var k = 0; k < st.inventory.length; k++) {
+        var e = st.inventory[k];
+        if (e.itemId !== itemId) continue;
+        if (best < 0 || e.stars > st.inventory[best].stars ||
+            (e.stars === st.inventory[best].stars && e.level > st.inventory[best].level)) best = k;
+      }
+      if (best < 0) return null;
+      var taken = st.inventory.splice(best, 1)[0];
+      return { level: taken.level, stars: taken.stars };
     }
 
     // ---- heróis
@@ -463,6 +544,7 @@ var JOGO = (typeof window !== 'undefined')
           }
         }
         if (isObj(src.items)) {
+          var srcVars = isObj(src.itemVar) ? src.itemVar : null;
           for (var rawSlot in src.items) {
             if (!src.items.hasOwnProperty(rawSlot)) continue;
             var slot = SLOT_ALIASES[rawSlot] || rawSlot;   // migra pa/pp/vida/especial
@@ -471,10 +553,22 @@ var JOGO = (typeof window !== 'undefined')
             if (typeof itId !== 'string') continue;
             var it = itemDef(itId);
             if (!it || it.slot !== slot) continue;
-            if (equippedSeen[itId]) continue;      // exclusividade do item [D7]
-            equippedSeen[itId] = true;
-            pushItem(itId, 0);                     // migração: volta ao saco único
-            h.items[slot] = itId;
+            /* `itemVar` é o carimbo do modelo NOVO: quem o tem descreve uma
+             * cópia que já saiu do saco ao ser equipada, e por isso não desconta
+             * nada. Sem ele o save é antigo (equipado morava no saco também):
+             * vale a exclusividade de então — um dono por item — e a cópia
+             * correspondente sai do saco para não virar duas peças. */
+            var v = srcVars && isObj(srcVars[rawSlot] || srcVars[slot])
+                  ? (srcVars[rawSlot] || srcVars[slot]) : null;
+            if (v) {
+              h.items[slot] = itId;
+              h.itemVar[slot] = { level: clampLevel(v.level), stars: clampStars(v.stars) };
+            } else {
+              if (equippedSeen[itId]) continue;    // exclusividade do modelo antigo
+              equippedSeen[itId] = true;
+              h.items[slot] = itId;
+              h.itemVar[slot] = takeFromBag(itId) || { level: 0, stars: 0 };
+            }
           }
         }
         if (typeof src.pet === 'string' && petDef(src.pet)) h.pet = src.pet;
@@ -529,6 +623,7 @@ var JOGO = (typeof window !== 'undefined')
     var h = st.heroes[heroId];
     if (isObj(h) && typeof h.classId === 'string') {
       if (!isObj(h.items)) h.items = emptyItems();
+      if (!isObj(h.itemVar)) h.itemVar = emptyVars();
       if (typeof h.element !== 'string') h.element = DEFAULT_ELEMENT;
       if (typeof h.xp !== 'number' || !isFinite(h.xp)) h.xp = 0;
       if (typeof h.level !== 'number' || !isFinite(h.level)) h.level = levelForXp(h.xp);
@@ -911,7 +1006,7 @@ var JOGO = (typeof window !== 'undefined')
     return h ? h.spells : [];
   }
 
-  // ================================================= inventário único [D7]
+  // ================================= inventário único, uma entrada por cópia [D7]
   Progress.invIndexOf = function (itemId) {
     if (!Progress.state) return -1;
     var inv = Progress.state.inventory;
@@ -922,31 +1017,161 @@ var JOGO = (typeof window !== 'undefined')
     var i = Progress.invIndexOf(itemId);
     return i >= 0 ? Progress.state.inventory[i] : null;
   };
+  /* Cópias LIVRES no saco (o que a grade mostra como ×N). */
+  Progress.invCount = function (itemId) {
+    if (!Progress.state) return 0;
+    var inv = Progress.state.inventory, n = 0;
+    for (var i = 0; i < inv.length; i++) if (inv[i].itemId === itemId) n++;
+    return n;
+  };
+  /* Cópias que o jogador tem no mundo: as do saco mais as vestidas. */
+  Progress.ownedCount = function (itemId) {
+    return Progress.invCount(itemId) + Progress.equippedByAll(itemId).length;
+  };
+  /* A variante que está num espaço do herói: {itemId, level, stars} ou null. */
+  Progress.equippedVar = function (heroId, slot) {
+    var h = Progress.hero(heroId);
+    if (!h || indexOf(SLOTS, slot) < 0 || !h.items[slot]) return null;
+    var v = (isObj(h.itemVar) && isObj(h.itemVar[slot])) ? h.itemVar[slot] : null;
+    return { itemId: h.items[slot], level: v ? num(v.level, 0) : 0, stars: v ? num(v.stars, 0) : 0 };
+  };
+  /* Melhor cópia CONHECIDA do item (saco ou vestida) — usada só para exibição;
+   * quem calcula stat lê a variante do próprio espaço [D18]. */
   Progress.itemLevel = function (itemId) {
-    var e = Progress.invEntry(itemId);
-    return e ? e.level : 0;
+    var best = 0, i, hid;
+    var st = Progress.state;
+    if (!st) return 0;
+    for (i = 0; i < st.inventory.length; i++) {
+      if (st.inventory[i].itemId === itemId) best = Math.max(best, num(st.inventory[i].level, 0));
+    }
+    for (hid in st.heroes) {
+      if (!st.heroes.hasOwnProperty(hid)) continue;
+      for (i = 0; i < SLOTS.length; i++) {
+        var v = Progress.equippedVar(hid, SLOTS[i]);
+        if (v && v.itemId === itemId) best = Math.max(best, v.level);
+      }
+    }
+    return best;
+  };
+  Progress.itemStars = function (itemId) {
+    var best = 0, i, hid;
+    var st = Progress.state;
+    if (!st) return 0;
+    for (i = 0; i < st.inventory.length; i++) {
+      if (st.inventory[i].itemId === itemId) best = Math.max(best, num(st.inventory[i].stars, 0));
+    }
+    for (hid in st.heroes) {
+      if (!st.heroes.hasOwnProperty(hid)) continue;
+      for (i = 0; i < SLOTS.length; i++) {
+        var v = Progress.equippedVar(hid, SLOTS[i]);
+        if (v && v.itemId === itemId) best = Math.max(best, v.stars);
+      }
+    }
+    return best;
+  };
+  /* FUNDIR TRÊS IGUAIS NUMA ESTRELA [D19].
+   * Regra do usuário: "juntando 3 itens iguais ela ganha uma estrela e assim
+   * indo até 3 estrelas", e ele escolheu o caminho caro — 3 peças de ★N viram
+   * uma ★N+1, então um ★3 custa 27 cópias.
+   * Consome do INVENTÁRIO apenas: peça equipada não some do herói sem aviso.
+   * Devolve {ok, stars, usadas} ou {ok:false, motivo}. */
+  Progress.canMergeItem = function (itemId, stars) {
+    var st = Progress.state;
+    if (!st) return { ok: false, motivo: 'sem save' };
+    var cfg = starItemCfg();
+    var alvo = num(stars, 0);
+    if (alvo >= num(cfg.max, 3)) return { ok: false, motivo: 'já está no máximo' };
+    var precisa = num(cfg.copies, 3);
+    var tem = 0;
+    for (var i = 0; i < st.inventory.length; i++) {
+      if (st.inventory[i].itemId === itemId && num(st.inventory[i].stars, 0) === alvo &&
+          num(st.inventory[i].level, 0) === 0) tem++;
+    }
+    return tem >= precisa
+      ? { ok: true, tem: tem, precisa: precisa }
+      : { ok: false, motivo: 'faltam ' + (precisa - tem), tem: tem, precisa: precisa };
+  };
+  /* `stars` é o degrau DE ONDE se funde: 0 junta três sem estrela e devolve ★1. */
+  Progress.mergeItem = function (itemId, stars) {
+    var st = Progress.state;
+    var alvo = num(stars, 0);
+    var pode = Progress.canMergeItem(itemId, alvo);
+    if (!pode.ok) return pode;
+    var cfg = starItemCfg();
+    var precisa = num(cfg.copies, 3);
+    var usadas = 0;
+    // consome de trás para frente para não embaralhar os índices
+    for (var i = st.inventory.length - 1; i >= 0 && usadas < precisa; i--) {
+      var e = st.inventory[i];
+      if (e.itemId === itemId && num(e.stars, 0) === alvo && num(e.level, 0) === 0) {
+        st.inventory.splice(i, 1);
+        usadas++;
+      }
+    }
+    // a peça que sobe é uma nova entrada, sem forja (a forja não se herda:
+    // as três consumidas tinham de estar em +0, cobrado no `canMergeItem`)
+    st.inventory.push({ itemId: itemId, level: 0, stars: alvo + 1 });
+    Progress.save();
+    return { ok: true, stars: alvo + 1, usadas: usadas };
+  };
+
+  /* Multiplicador de bônus de uma peça: forja e estrelas SOMAM [D18]. */
+  Progress.itemMult = function (level, stars) {
+    return 1 + num(upgradeCfg().bonusPerLevel, 0.12) * Math.max(0, num(level, 0)) +
+           starBonusOf(stars);
   };
   Progress.equippedBy = function (itemId) {
-    var st = Progress.state;
-    if (!st) return null;
+    var all = Progress.equippedByAll(itemId);
+    return all.length ? all[0] : null;
+  };
+  /* TODOS os heróis usando uma cópia deste item (com 2 cópias, podem ser 2). */
+  Progress.equippedByAll = function (itemId) {
+    var st = Progress.state, out = [];
+    if (!st) return out;
     for (var hid in st.heroes) {
       if (!st.heroes.hasOwnProperty(hid)) continue;
       var it = st.heroes[hid].items;
-      for (var i = 0; i < SLOTS.length; i++) if (it[SLOTS[i]] === itemId) return hid;
+      for (var i = 0; i < SLOTS.length; i++) {
+        if (it[SLOTS[i]] === itemId) { out.push(hid); break; }
+      }
     }
-    return null;
+    return out;
   };
 
-  /* Entra no saco único. Item repetido vira pedras do elemento dele [D7]. */
+  /* Cópias do saco agrupadas para a tela: um espaço por variante, com ×N.
+   * A UI NÃO conta na mão — pediria o mesmo laço em três lugares. */
+  Progress.invStacks = function () {
+    var st = Progress.state;
+    if (!st) return [];
+    var out = [], mapa = {};
+    for (var i = 0; i < st.inventory.length; i++) {
+      var e = st.inventory[i];
+      var chave = e.itemId + '|' + num(e.level, 0) + '|' + num(e.stars, 0);
+      if (mapa.hasOwnProperty(chave)) { mapa[chave].count++; mapa[chave].indices.push(i); continue; }
+      var stack = { itemId: e.itemId, level: num(e.level, 0), stars: num(e.stars, 0),
+                    count: 1, index: i, indices: [i] };
+      mapa[chave] = stack;
+      out.push(stack);
+    }
+    return out;
+  };
+
+  /* Índice da melhor cópia livre: mais estrelas, depois mais forja. */
+  function bestFreeIndex(itemId) {
+    var inv = Progress.state.inventory, best = -1;
+    for (var i = 0; i < inv.length; i++) {
+      if (inv[i].itemId !== itemId) continue;
+      if (best < 0 || inv[i].stars > inv[best].stars ||
+          (inv[i].stars === inv[best].stars && inv[i].level > inv[best].level)) best = i;
+    }
+    return best;
+  }
+
+  /* Entra no saco único. Repetido agora vira CÓPIA (matéria da fusão) [D7]. */
   Progress.addItem = function (itemId) {
     if (!Progress.state || typeof itemId !== 'string') return false;
-    var def = itemDef(itemId);
-    if (!def) return false;
-    if (Progress.invIndexOf(itemId) >= 0) {
-      Progress.addStones(stoneIdForElement(def.element), DUP_ITEM_STONES);
-      return false;                        // repetido: virou pedra
-    }
-    Progress.state.inventory.push({ itemId: itemId, level: 0 });
+    if (!itemDef(itemId)) return false;
+    Progress.state.inventory.push({ itemId: itemId, level: 0, stars: 0 });
     Progress.save();
     return true;
   };
@@ -962,29 +1187,100 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
-  Progress.equip = function (heroId, itemId) {
+  /* Equipar TIRA a cópia do saco [D7]. `invIndex` escolhe qual cópia (a grade
+   * manda o índice do espaço tocado); sem ele vai a melhor livre. O que estava
+   * no espaço volta para o saco na hora. */
+  Progress.equip = function (heroId, itemId, invIndex) {
     var it = itemDef(itemId);
     if (!it || indexOf(SLOTS, it.slot) < 0) return false;
     var h = ensureHero(heroId);
     if (!h) return false;
-    if (Progress.invIndexOf(itemId) < 0) return false;          // precisa possuir
-    var dono = Progress.equippedBy(itemId);
-    if (dono !== null && dono !== heroId) return false;          // já está em uso [D7]
-    if (h.items[it.slot] === itemId) return true;
-    h.items[it.slot] = itemId;                                   // o anterior fica livre
+    if (h.items[it.slot] === itemId &&
+        (typeof invIndex !== 'number' || invIndex < 0)) return true;   // já está nele
+    var inv = Progress.state.inventory;
+    var idx = (typeof invIndex === 'number' && inv[invIndex] && inv[invIndex].itemId === itemId)
+            ? invIndex : bestFreeIndex(itemId);
+    if (idx < 0) return false;                                   // nenhuma cópia livre
+    var copia = inv.splice(idx, 1)[0];
+    if (!isObj(h.itemVar)) h.itemVar = emptyVars();
+    devolveAoSaco(h, it.slot);                                   // o anterior fica livre
+    h.items[it.slot] = itemId;
+    h.itemVar[it.slot] = { level: num(copia.level, 0), stars: num(copia.stars, 0) };
     syncSpells(heroId);
     Progress.save();
     return true;
   };
 
+  /* Devolve ao saco a cópia que está num espaço (sem salvar — quem chama salva). */
+  function devolveAoSaco(h, slot) {
+    var itId = h.items[slot];
+    if (!itId) return false;
+    var v = (isObj(h.itemVar) && isObj(h.itemVar[slot])) ? h.itemVar[slot] : null;
+    Progress.state.inventory.push({
+      itemId: itId, level: v ? num(v.level, 0) : 0, stars: v ? num(v.stars, 0) : 0
+    });
+    h.items[slot] = null;
+    if (isObj(h.itemVar)) h.itemVar[slot] = null;
+    return true;
+  }
+
   Progress.unequip = function (heroId, slot) {
     if (indexOf(SLOTS, slot) < 0) return false;
     var h = ensureHero(heroId);
     if (!h || !h.items[slot]) return false;
-    h.items[slot] = null;                                        // continua no saco
+    devolveAoSaco(h, slot);                                      // a MESMA cópia volta
     syncSpells(heroId);
     Progress.save();
     return true;
+  };
+
+  // ================================================ estrelas de item (fusão) [D18]
+  /* Situação da fusão da variante que está em `invIndex`: quantas cópias
+   * idênticas existem, quantas faltam e se dá para fundir agora. */
+  Progress.fuseInfo = function (invIndex) {
+    var st = Progress.state;
+    if (!st) return null;
+    var alvo = st.inventory[invIndex];
+    if (!isObj(alvo)) return null;
+    var cfg = starItemCfg();
+    var stars = num(alvo.stars, 0), level = num(alvo.level, 0);
+    var iguais = [];
+    for (var i = 0; i < st.inventory.length; i++) {
+      var e = st.inventory[i];
+      if (e.itemId === alvo.itemId && num(e.level, 0) === level && num(e.stars, 0) === stars) {
+        iguais.push(i);
+      }
+    }
+    var maxed = stars >= cfg.max;
+    return {
+      itemId: alvo.itemId, level: level, stars: stars,
+      copias: iguais.length, precisa: cfg.copies,
+      faltam: maxed ? 0 : Math.max(0, cfg.copies - iguais.length),
+      maxed: maxed,
+      proxima: maxed ? stars : stars + 1,
+      pode: !maxed && iguais.length >= cfg.copies
+    };
+  };
+
+  /* Funde `FUSE_COPIES` cópias IDÊNTICAS numa só com +1 estrela. As três têm de
+   * ter o MESMO nível de forja — é o que impede herdar forja de graça [D18].
+   * Devolve a cópia nova (com o índice novo) ou null. */
+  Progress.fuseItem = function (invIndex) {
+    var info = Progress.fuseInfo(invIndex);
+    if (!info || !info.pode) return null;
+    var st = Progress.state;
+    var alvos = [];
+    for (var i = 0; i < st.inventory.length && alvos.length < info.precisa; i++) {
+      var e = st.inventory[i];
+      if (e.itemId === info.itemId && num(e.level, 0) === info.level &&
+          num(e.stars, 0) === info.stars) alvos.push(i);
+    }
+    for (var k = alvos.length - 1; k >= 0; k--) st.inventory.splice(alvos[k], 1);
+    var nova = { itemId: info.itemId, level: info.level, stars: info.stars + 1 };
+    st.inventory.push(nova);
+    Progress.save();
+    return { itemId: nova.itemId, level: nova.level, stars: nova.stars,
+             index: st.inventory.length - 1 };
   };
 
   Progress.equipPet = function (heroId, petId) {
@@ -1062,34 +1358,64 @@ var JOGO = (typeof window !== 'undefined')
     return best;
   }
 
+  /* Núcleo da forja: o que custa subir esta peça deste nível, seja ela do saco
+   * ou já vestida. `upgradeInfo` (saco) e `upgradeInfoWorn` (vestida) só dizem
+   * DE ONDE vêm o item e o nível. */
+  function forgeInfo(itemId, rawLevel, stars) {
+    var def = itemDef(itemId);
+    if (!def) return null;
+    var up = upgradeCfg();
+    var level = Math.max(0, Math.floor(num(rawLevel, 0)));
+    var maxLv = num(up.maxLevel, 10);
+    var stoneId = stoneForItem(def);
+    var estrelas = Math.max(0, Math.floor(num(stars, 0)));
+    if (level >= maxLv) {
+      return { itemId: itemId, level: level, stars: estrelas, tierName: tierNameFor(level),
+               custo: 0, stoneId: stoneId, temPedras: false, maxed: true };
+    }
+    var custo = Math.max(0, Math.floor(num(up.stoneCost[level], 0)));
+    return {
+      itemId: itemId, level: level, stars: estrelas, tierName: tierNameFor(level),
+      custo: custo, stoneId: stoneId,
+      temPedras: Progress.stoneCount(stoneId) >= custo, maxed: false
+    };
+  }
+
   Progress.upgradeInfo = function (invIndex) {
     var st = Progress.state;
     if (!st) return null;
     var entry = st.inventory[invIndex];
     if (!isObj(entry)) return null;
-    var def = itemDef(entry.itemId);
-    var up = upgradeCfg();
-    var level = Math.max(0, Math.floor(num(entry.level, 0)));
-    var maxLv = num(up.maxLevel, 10);
-    var stoneId = stoneForItem(def);
-    if (level >= maxLv) {
-      return { itemId: entry.itemId, level: level, tierName: tierNameFor(level),
-               custo: 0, stoneId: stoneId, temPedras: false, maxed: true };
-    }
-    var custo = Math.max(0, Math.floor(num(up.stoneCost[level], 0)));
-    return {
-      itemId: entry.itemId, level: level, tierName: tierNameFor(level),
-      custo: custo, stoneId: stoneId,
-      temPedras: Progress.stoneCount(stoneId) >= custo, maxed: false
-    };
+    return forgeInfo(entry.itemId, entry.level, entry.stars);
+  };
+  /* Forjar sem desequipar: a peça em uso também sobe [D7]. */
+  Progress.upgradeInfoWorn = function (heroId, slot) {
+    var v = Progress.equippedVar(heroId, slot);
+    return v ? forgeInfo(v.itemId, v.level, v.stars) : null;
+  };
+  function pagaPedras(info) {
+    if (!info || info.maxed || !info.temPedras) return false;
+    var st = Progress.state;
+    if (!st) return false;
+    if (!isObj(st.stones)) st.stones = {};
+    st.stones[info.stoneId] = Progress.stoneCount(info.stoneId) - info.custo;
+    return true;
+  }
+  Progress.upgradeWorn = function (heroId, slot) {
+    var h = Progress.hero(heroId);
+    var info = Progress.upgradeInfoWorn(heroId, slot);
+    if (!h || !info || !pagaPedras(info)) return false;
+    if (!isObj(h.itemVar)) h.itemVar = emptyVars();
+    var v = isObj(h.itemVar[slot]) ? h.itemVar[slot] : { level: 0, stars: 0 };
+    h.itemVar[slot] = { level: info.level + 1, stars: num(v.stars, 0) };
+    Progress.save();
+    return true;
   };
 
   Progress.upgradeItem = function (invIndex) {
     var info = Progress.upgradeInfo(invIndex);
-    if (!info || info.maxed || !info.temPedras) return false;
-    var st = Progress.state;
-    st.stones[info.stoneId] = Progress.stoneCount(info.stoneId) - info.custo;
-    st.inventory[invIndex].level = info.level + 1;              // determinístico
+    if (!info || !pagaPedras(info)) return false;
+    Progress.state.inventory[invIndex].level = info.level + 1;  // determinístico
     Progress.save();
     return true;
   };
@@ -1162,14 +1488,15 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     // ---- itens equipados (com o multiplicador da forja) e contagem de conjuntos
-    var up = upgradeCfg();
     var setCount = equippedSetCounts(h);
     for (i = 0; i < SLOTS.length; i++) {
       var itId = h.items[SLOTS[i]];
       if (!itId) continue;
       var it = itemDef(itId);
       if (!it) continue;
-      var mult = 1 + num(up.bonusPerLevel, 0.12) * Progress.itemLevel(itId);
+      // a variante da CÓPIA em uso manda: forja e estrelas daquela peça [D7][D18]
+      var vv = (isObj(h.itemVar) && isObj(h.itemVar[SLOTS[i]])) ? h.itemVar[SLOTS[i]] : null;
+      var mult = Progress.itemMult(vv ? vv.level : 0, vv ? vv.stars : 0);
       applyBonuses(out, it.bonuses, true, mult);
     }
 
@@ -1269,7 +1596,7 @@ var JOGO = (typeof window !== 'undefined')
       var chosen = pickWeighted(pool);
       if (!chosen || chosen === NO_DROP) continue;      // saiu "nada"
       drops.push(chosen);
-      Progress.addItem(chosen);            // repetido vira pedras [D7]
+      Progress.addItem(chosen);            // repetido vira CÓPIA (fusão) [D7][D18]
     }
     Progress.save();
     return drops;
@@ -1324,6 +1651,7 @@ var JOGO = (typeof window !== 'undefined')
         spells: Progress.spellsFor(heroId),
         pet: h.pet || null,
         items: clone(h.items),
+        itemVar: clone(h.itemVar || {}),          // forja e ★ da cópia em uso [D18]
         stars: Progress.cardInfo(h.classId).stars,
         elemPower: stats ? stats.elemPower : 0,   // §9-C: o motor consome na fórmula de dano
         stats: stats

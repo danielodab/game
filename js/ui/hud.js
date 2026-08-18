@@ -61,8 +61,12 @@ var JOGO = (typeof window !== 'undefined')
   var sheetEl = null, sheetName = null;
   var lastRewards = null;
   var invFilter = 'todos';
-  var forgeSel = -1;
   var elemChoiceHero = null;
+  // ---- tela "Personagens" [U6]
+  var partyTab = 'inventario';     // aba corrente: inventario | forja | colecao
+  var partyHero = null;            // herói do carrossel (só classes liberadas)
+  var invSel = null;               // peça escolhida na grade: {itemId, level, stars}
+  var forgeTarget = null;          // alvo da forja: do saco ou vestido por alguém
 
   var LUCK = { 1: 2.4, 2: 1.6 };
   var ELEM_PT = { neutro: 'Neutro', fogo: 'Fogo', agua: 'Água', terra: 'Terra', ar: 'Ar' };
@@ -126,7 +130,6 @@ var JOGO = (typeof window !== 'undefined')
   }
   function xpInfo(hid) { return safe(function () { return P().xpInfo(hid); }, null); }
   function effStats(hid) { return safe(function () { return P().effectiveStats(hid); }, null); }
-  function inventory() { return safe(function () { return P().state.inventory.slice(); }, []); }
   function stoneCount(sid) { return safe(function () { return P().stoneCount(sid); }, 0); }
   function equippedBy(itemId) { return safe(function () { return P().equippedBy(itemId); }, null); }
   function ownedPets() { return safe(function () { return P().state.pets.slice(); }, []); }
@@ -376,9 +379,9 @@ var JOGO = (typeof window !== 'undefined')
 
     var acts = el('div', 'menu-acts');
     acts.appendChild(btn('Descer', 'btn-primary btn-big', function () { navTo('heroSelect'); }));
-    acts.appendChild(btn('Coleção', 'btn-ghost', function () { openSheet('collection'); }));
-    acts.appendChild(btn('Inventário', 'btn-ghost', function () { openSheet('inventory'); }));
-    acts.appendChild(btn('Forja', 'btn-ghost', function () { openSheet('forge'); }));
+    // [U6] UMA porta para tudo que é dos personagens: inventário, forja e
+    // coleção viraram abas lá dentro em vez de três botões soltos aqui.
+    acts.appendChild(btn('Personagens', 'btn-ghost btn-big', function () { openSheet('party'); }));
     box.appendChild(acts);
     box.appendChild(stonesStrip());
 
@@ -1330,9 +1333,13 @@ var JOGO = (typeof window !== 'undefined')
 
   function openSheet(name, arg) {
     sheetName = name;
-    if (name === 'collection') sheetCollection(arg);
-    else if (name === 'inventory') sheetInventory(arg);
-    else if (name === 'forge') sheetForge(arg);
+    // As três telas de meta viraram ABAS de "Personagens" [U6]. Os nomes antigos
+    // continuam valendo como atalho para a aba certa: o menu de pausa, a ficha
+    // do herói e as páginas de teste chamam por eles.
+    if (name === 'party') sheetParty(null, arg);
+    else if (name === 'collection') sheetParty('colecao', arg);
+    else if (name === 'inventory') sheetParty('inventario', arg);
+    else if (name === 'forge') sheetParty('forja', arg);
     else if (name === 'heroSheet') sheetHero(arg);
     else if (name === 'battleMenu') sheetBattleMenu();
     else closeSheet();
@@ -1340,12 +1347,64 @@ var JOGO = (typeof window !== 'undefined')
   UI.openSheet = openSheet;
   UI.closeSheet = closeSheet;
 
+  // ==========================================================================
+  // TELA "PERSONAGENS" — inventário · forja · coleção como ABAS [U6]
+  // ==========================================================================
+  // Três botões soltos no menu viravam três telas que falavam do mesmo assunto:
+  // o que os heróis vestem. Agora é uma tela só, e a aba do inventário traz o
+  // HERÓI junto (carrossel + espaços), que é onde o item vai parar.
+  var PARTY_TABS = [
+    { id: 'inventario', nome: 'Inventário',
+      sub: 'Um saco só para o grupo. Toque numa peça para vestir no herói ao lado.' },
+    { id: 'forja', nome: 'Forja',
+      sub: 'Pedras sobem a peça até +10. Determinístico: nunca quebra, nunca regride.' },
+    { id: 'colecao', nome: 'Coleção',
+      sub: 'Cartas de chefe liberam classes e, depois, viram estrelas permanentes.' }
+  ];
+
+  function partyTabDef(id) {
+    for (var i = 0; i < PARTY_TABS.length; i++) if (PARTY_TABS[i].id === id) return PARTY_TABS[i];
+    return PARTY_TABS[0];
+  }
+
+  /* Só entram no carrossel os heróis de classe LIBERADA (pedido do usuário). */
+  function partyHeroes() {
+    return heroIds().filter(function (hid) {
+      var h = hero(hid);
+      return !!h && isUnlocked(h.classId || hid);
+    });
+  }
+  function ensurePartyHero() {
+    var lista = partyHeroes();
+    if (!lista.length) { partyHero = null; return null; }
+    if (partyHero === null || lista.indexOf(partyHero) < 0) partyHero = lista[0];
+    return partyHero;
+  }
+
+  function sheetParty(tab, arg) {
+    if (tab) partyTab = tab;
+    sheetName = 'party';
+    var def = partyTabDef(partyTab);
+    var body = sheetShell('Personagens', def.sub);
+
+    var tabs = el('div', 'pt-tabs');
+    PARTY_TABS.forEach(function (t) {
+      tabs.appendChild(btn(t.nome, 'btn-tab' + (t.id === partyTab ? ' is-on' : ''), function () {
+        partyTab = t.id;
+        sheetParty(t.id);
+      }));
+    });
+    body.appendChild(tabs);
+
+    if (partyTab === 'forja') forgeBody(body, arg);
+    else if (partyTab === 'colecao') collectionBody(body, arg);
+    else inventoryBody(body, arg);
+  }
   // -------------------------------------------------------------- COLEÇÃO
   // O cofre de recompensas: cartas por classe, custo, e a trilha de 5 estrelas
-  // com o próximo bônus em destaque.
-  function sheetCollection(focusId) {
-    var body = sheetShell('Coleção',
-      'Cartas caem dos chefes. Elas <b>liberam</b> a classe e, depois, viram <b>estrelas</b> permanentes.');
+  // com o próximo bônus em destaque. ORDEM (pedido do usuário): liberadas
+  // primeiro; as trancadas em seguida, da que menos falta para a que mais falta.
+  function collectionBody(body, focusId) {
     var cfg = starsCfg();
     var legend = el('div', 'col-legend');
     for (var s = 1; s <= (cfg.max || 5); s++) {
@@ -1355,7 +1414,16 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(legend);
 
     var ids = Object.keys(classes());
-    ids.sort(function (a, b) { return cardInfo(a).unlockCost - cardInfo(b).unlockCost; });
+    ids.sort(function (a, b) {
+      var A = cardInfo(a), B = cardInfo(b);
+      if (A.unlocked !== B.unlocked) return A.unlocked ? -1 : 1;   // liberadas na frente
+      if (!A.unlocked) {                                           // depois, por quanto falta
+        var fa = Math.max(0, A.unlockCost - A.cards);
+        var fb = Math.max(0, B.unlockCost - B.cards);
+        if (fa !== fb) return fa - fb;
+      }
+      return A.unlockCost - B.unlockCost;
+    });
     var list = el('div', 'col-list');
     ids.forEach(function (cid) {
       var info = cardInfo(cid);
@@ -1375,8 +1443,11 @@ var JOGO = (typeof window !== 'undefined')
 
       // progresso de desbloqueio
       if (!info.unlocked) {
+        var faltam = Math.max(0, info.unlockCost - info.cards);
         txt.appendChild(bar('bar-card', info.unlockCost ? info.cards / info.unlockCost : 0,
           info.cards + ' / ' + info.unlockCost + ' cartas'));
+        txt.appendChild(el('p', 'col-faltam', 'Faltam <b>' + faltam + '</b> carta' +
+          (faltam === 1 ? '' : 's') + ' para liberar.'));
       } else {
         txt.appendChild(el('div', 'col-cards', '<b>' + info.cards + '</b> cartas guardadas' +
           (info.unlockCost ? ' · custou ' + info.unlockCost : '')));
@@ -1442,13 +1513,15 @@ var JOGO = (typeof window !== 'undefined')
     return 't-' + String(tierOf(level)).toLowerCase().replace('í', 'i').replace('é', 'e');
   }
 
-  function itemTipBody(itemId, level) {
+  function itemTipBody(itemId, level, stars) {
     var it = itemDef(itemId);
     if (!it) return 'Item ' + esc(itemId) + '.';
     var lv = level == null ? safe(function () { return P().itemLevel(itemId); }, 0) : level;
-    var mult = 1 + (upgradeCfg().bonusPerLevel || 0.12) * lv;
+    var sr = stars == null ? safe(function () { return P().itemStars(itemId); }, 0) : stars;
+    var mult = itemMult(lv, sr);
     var out = '<i>' + esc(SLOT_PT[slotOf(itemId)] || '') + ' · ' + esc(RAR_PT[it.rarity] || it.rarity) +
-              (lv ? ' · <b>+' + lv + '</b> ' + esc(tierOf(lv)) : '') + '</i>';
+              (lv ? ' · <b>+' + lv + '</b> ' + esc(tierOf(lv)) : '') +
+              (sr ? ' · <b>★' + sr + '</b>' : '') + '</i>';
     var b = it.bonuses || {}, lines = [];
     for (var k in b) {
       if (!b.hasOwnProperty(k)) continue;
@@ -1500,92 +1573,343 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ------------------------------------------------------------ INVENTÁRIO
-  // UM saco só para o grupo inteiro. Cada peça mostra raridade, nível +N, tier,
-  // conjunto (com quantas peças estão equipadas) e QUEM está usando.
-  function sheetInventory(preselect) {
-    var body = sheetShell('Inventário',
-      'Um saco só para todos os heróis. Uma peça equipada por um <b>não pode</b> estar em outro.');
-    var inv = inventory();
+  // Uma GRADE grande: um espaço por variante de peça, com contador ×N quando há
+  // repetidas. Em cima dela, o herói da vez (setas para passar de um para outro,
+  // só os liberados) com os quatro espaços e o do bicho.
+  // Equipar TIRA a peça da grade — ela passa a pertencer àquele herói até ser
+  // desequipada, e desequipar devolve a MESMA cópia (com forja e estrelas).
+  //
+  // DUAS CORES NO MESMO ITEM, e elas não podem brigar [U7]:
+  //   · RARIDADE  → borda e halo (`markRarity`, como no resto do jogo);
+  //   · ESTRELA   → FUNDO da célula (★1 cinza · ★2 azul · ★3 amarelo).
+  // O ícone senta numa placa escura por cima do fundo colorido, para a borda
+  // dourada da lendária não sumir no amarelo do ★3.
+  function starClass(stars) { return 'sq' + Math.max(0, Math.min(3, Math.floor(stars || 0))); }
+  function starPips(stars) {
+    var w = el('span', 'item-stars');
+    var n = Math.max(0, Math.floor(stars || 0));
+    for (var i = 0; i < n; i++) w.appendChild(el('i', null, '★'));
+    return w;
+  }
+  function itemMult(level, stars) {
+    return safe(function () { return P().itemMult(level, stars); },
+                1 + (upgradeCfg().bonusPerLevel || 0.12) * (level || 0));
+  }
+  var STAT_PT = { hp: 'PV', pa: 'PA', pp: 'PP', power: 'poder', initiative: 'iniciativa',
+                  dodge: 'esquiva', lock: 'fixação' };
+  // O que a peça dá, JÁ com forja e estrelas — texto, não balãozinho: no celular
+  // ninguém passa o mouse, e esta é a informação que decide o toque.
+  function itemBonusText(it, level, stars) {
+    if (!it) return '—';
+    var mult = itemMult(level, stars);
+    var b = it.bonuses || {}, out = [], k;
+    for (k in b) {
+      if (!b.hasOwnProperty(k)) continue;
+      if (k === 'resists') {
+        for (var e in b.resists) {
+          if (b.resists.hasOwnProperty(e)) out.push('+' + Math.round(b.resists[e] * mult) + '% ' + (ELEM_PT[e] || e));
+        }
+      } else {
+        var v = (k === 'pa' || k === 'pp') ? b[k] : Math.round(b[k] * mult);
+        out.push('+' + v + ' ' + (STAT_PT[k] || k));
+      }
+    }
+    return out.join(' · ') || '—';
+  }
 
+  function inventoryBody(body, preselect) {
+    var hid = ensurePartyHero();
+    if (typeof preselect === 'string' && preselect) {
+      var pilha0 = pilhaDe(preselect);
+      if (pilha0) invSel = { itemId: pilha0.itemId, level: pilha0.level, stars: pilha0.stars };
+    }
+    body.appendChild(heroCarousel(hid));
+    if (hid) body.appendChild(equipRow(hid));
+    body.appendChild(pickBar(hid));
+    body.appendChild(invFilterTabs());
+    body.appendChild(invGrid(hid));
+  }
+
+  function pilhaDe(itemId) {
+    var pilhas = safe(function () { return P().invStacks(); }, []);
+    for (var i = 0; i < pilhas.length; i++) if (pilhas[i].itemId === itemId) return pilhas[i];
+    return null;
+  }
+  function pilhaSel() {
+    if (!invSel) return null;
+    var pilhas = safe(function () { return P().invStacks(); }, []);
+    for (var i = 0; i < pilhas.length; i++) {
+      var s = pilhas[i];
+      if (s.itemId === invSel.itemId && s.level === invSel.level && s.stars === invSel.stars) return s;
+    }
+    return null;
+  }
+
+  // ---- carrossel de heróis: SÓ os liberados, com seta para os lados
+  function heroCarousel(hid) {
+    var lista = partyHeroes();
+    var wrap = el('div', 'pt-hero');
+    if (!lista.length || !hid) {
+      wrap.appendChild(el('p', 'empty', 'Nenhuma classe liberada ainda. As cartas dos chefes abrem as outras.'));
+      return wrap;
+    }
+    var i = lista.indexOf(hid);
+    var h = hero(hid) || {};
+    var cid = h.classId || hid;
+    var info = cardInfo(cid);
+    var stats = effStats(hid) || (classDef(cid) || {}).stats || {};
+
+    function vai(passo) {
+      partyHero = lista[(i + passo + lista.length) % lista.length];
+      invSel = null;
+      sheetParty('inventario');
+    }
+    var ant = btn('‹', 'btn-icon pt-nav', function () { vai(-1); });
+    var pro = btn('›', 'btn-icon pt-nav', function () { vai(1); });
+    if (lista.length < 2) { ant.classList.add('is-off'); pro.classList.add('is-off'); }
+    wrap.appendChild(ant);
+
+    var card = el('div', 'pt-hero-card');
+    var pic = el('div', 'pt-hero-pic');
+    pic.appendChild(art('unit', [cid, { element: h.element || 'neutro', dir: 0, scale: 0.6 }], 84));
+    card.appendChild(pic);
+
+    var col = el('div', 'pt-hero-txt');
+    col.appendChild(el('div', 'pt-hero-nm', esc(className(cid))));
+    var linha = el('div', 'pt-hero-lv');
+    linha.appendChild(el('span', 'lv-badge', 'Nv ' + (h.level || 1)));
+    var eb = el('span', 'elem-badge e-' + (h.element || 'neutro'), ELEM_PT[h.element] || 'Neutro');
+    eb.style.setProperty('--ec', elemColor(h.element || 'neutro'));
+    linha.appendChild(eb);
+    if (info.stars) linha.appendChild(starRow(info.stars, 12));
+    col.appendChild(linha);
+    col.appendChild(el('div', 'pt-hero-st',
+      '<span class="s-hp">' + (stats.hp || 0) + ' PV</span>' +
+      '<span class="s-pa">' + (stats.pa || 0) + ' PA</span>' +
+      '<span class="s-pp">' + (stats.pp || 0) + ' PP</span>' +
+      '<span>' + (stats.power || 0) + ' poder</span>' +
+      '<span>' + (stats.dodge || 0) + ' esq.</span>'));
+    col.appendChild(el('div', 'pt-hero-n', (i + 1) + ' de ' + lista.length + ' liberado' +
+      (lista.length === 1 ? '' : 's')));
+    card.appendChild(col);
+    var ficha = btn('Ficha', 'btn-mini pt-ficha', function () { openSheet('heroSheet', hid); });
+    card.appendChild(ficha);
+    wrap.appendChild(card);
+    wrap.appendChild(pro);
+    return wrap;
+  }
+
+  // ---- os quatro espaços do herói + o do bicho
+  function equipRow(hid) {
+    var h = hero(hid) || {};
+    var wrap = el('div', 'pt-slots');
+    SLOTS.forEach(function (canon) {
+      var v = safe(function () { return P().equippedVar(hid, slotRaw(canon)); }, null);
+      var itemId = v ? v.itemId : heroItem(h, canon);
+      var it = itemId ? itemDef(itemId) : null;
+      var lv = v ? v.level : 0, sr = v ? v.stars : 0;
+      var cell = el('div', 'pt-slot ' + starClass(sr) + (it ? ' has-item' : ' is-empty') +
+                            (invFilter === canon ? ' is-focus' : ''));
+      if (it) markRarity(cell, it.rarity);
+      var ic = el('div', 'pt-slot-ic');
+      ic.appendChild(it ? art('itemIcon', [itemId, 46], 46) : art('slotIcon', [canon, 46], 46));
+      if (lv) ic.appendChild(el('span', 'ig-lv', '+' + lv));
+      cell.appendChild(ic);
+      cell.appendChild(el('span', 'pt-slot-nm', SLOT_PT[canon]));
+      cell.appendChild(el('span', 'pt-slot-it', it ? esc(it.name) : 'vazio'));
+      if (sr) cell.appendChild(starPips(sr));
+      if (it) {
+        cell.appendChild(el('span', 'pt-slot-b', esc(itemBonusText(it, lv, sr))));
+        cell.appendChild(btn('Tirar', 'btn-mini btn-warn', function () {
+          var ok = safe(function () { return P().unequip(hid, slotRaw(canon)); }, false);
+          if (ok) {
+            invSel = { itemId: itemId, level: lv, stars: sr };     // volta selecionada na grade
+            toast('Voltou para o inventário.', 'good');
+          }
+          sheetParty('inventario');
+        }));
+      } else {
+        cell.appendChild(el('span', 'pt-slot-b', esc(SLOT_HINT[canon])));
+        cell.appendChild(btn('Ver peças', 'btn-mini', function () {
+          invFilter = canon;
+          sheetParty('inventario');
+        }));
+      }
+      wrap.appendChild(cell);
+    });
+
+    // espaço do bicho, separado dos quatro
+    var pid = h.pet;
+    var pd = pid ? petDef(pid) : null;
+    var cp = el('div', 'pt-slot pt-pet' + (pd ? ' has-item' : ' is-empty'));
+    var cic = el('div', 'pt-slot-ic');
+    cic.appendChild(pd ? art('petIcon', [pid, 46], 46) : el('div', 'pet-empty', '☾'));
+    cp.appendChild(cic);
+    cp.appendChild(el('span', 'pt-slot-nm', 'Bicho'));
+    cp.appendChild(el('span', 'pt-slot-it', pd ? esc(pd.name) : 'nenhum'));
+    cp.appendChild(el('span', 'pt-slot-b', pd ? esc(bonusText(pd.bonuses)) : 'age depois do dono'));
+    var pets = ownedPets();
+    if (pd) {
+      cp.appendChild(btn('Soltar', 'btn-mini btn-warn', function () {
+        safe(function () { P().unequipPet(hid); }, null);
+        sheetParty('inventario');
+      }));
+    } else if (pets.length) {
+      cp.appendChild(btn('Chamar', 'btn-mini', function () { petPicker(hid, 'party'); }));
+    } else {
+      cp.appendChild(el('span', 'hs-none', 'nenhum no saco'));
+    }
+    wrap.appendChild(cp);
+    return wrap;
+  }
+
+  // ---- barra da peça escolhida: fica grudada no topo enquanto se rola a grade,
+  // e é ela que carrega TODA a informação e TODAS as ações (nada de balãozinho).
+  function pickBar(hid) {
+    var wrap = el('div', 'inv-pick');
+    var pilha = pilhaSel();
+    if (!pilha) {
+      wrap.classList.add('is-idle');
+      wrap.appendChild(el('p', null, 'Toque numa peça da grade para ver o que ela dá e equipar.'));
+      return wrap;
+    }
+    var it = itemDef(pilha.itemId);
+    var canon = slotOf(pilha.itemId);
+    wrap.classList.add(starClass(pilha.stars));
+    markRarity(wrap, it && it.rarity);
+
+    var ic = el('div', 'inv-pick-ic');
+    ic.appendChild(art('itemIcon', [pilha.itemId, 52], 52));
+    if (pilha.count > 1) ic.appendChild(el('span', 'ig-n', '×' + pilha.count));
+    if (pilha.level) ic.appendChild(el('span', 'ig-lv', '+' + pilha.level));
+    wrap.appendChild(ic);
+
+    var tx = el('div', 'inv-pick-tx');
+    var h3 = el('div', 'inv-pick-nm', esc((it && it.name) || pilha.itemId));
+    if (pilha.stars) h3.appendChild(starPips(pilha.stars));
+    tx.appendChild(h3);
+    tx.appendChild(el('div', 'inv-pick-sub',
+      esc(SLOT_PT[canon] || '') + ' · ' + esc(RAR_PT[(it || {}).rarity] || (it || {}).rarity || '') +
+      (pilha.level ? ' · pedra <b>+' + pilha.level + '</b> ' + esc(tierOf(pilha.level)) : '') +
+      (pilha.stars ? ' · estrela <b>★' + pilha.stars + '</b>' : '')));
+    tx.appendChild(el('div', 'inv-pick-b', esc(itemBonusText(it, pilha.level, pilha.stars))));
+    if (it && it.grantsSpell) {
+      var sp = spellDef(it.grantsSpell);
+      tx.appendChild(el('div', 'inv-pick-sp', 'Concede <b>' + esc(spellName(sp, it.grantsSpell)) + '</b>' +
+        (sp && sp.paCost ? ' (' + sp.paCost + ' PA)' : '')));
+    }
+    if (it && it.setId) {
+      var sd = setDef(it.setId);
+      tx.appendChild(el('div', 'inv-pick-set', 'Conjunto <b>' + esc((sd && sd.name) || it.setId) + '</b> · ' +
+        setEquippedCount(it.setId) + '/' + setPieceCount(it.setId) + ' vestidas'));
+    }
+    var donos = safe(function () { return P().equippedByAll(pilha.itemId); }, []);
+    if (donos.length) {
+      tx.appendChild(el('div', 'inv-pick-us', 'Outra cópia em uso por <b>' +
+        donos.map(function (d) { return esc(className((hero(d) || {}).classId || d)); }).join(', ') + '</b>'));
+    }
+    wrap.appendChild(tx);
+
+    var acts = el('div', 'inv-pick-acts');
+    if (hid) {
+      var nome = className((hero(hid) || {}).classId || hid).split(' ')[0];
+      acts.appendChild(btn('Equipar em ' + esc(nome), 'btn-primary btn-mini', function () {
+        var ok = safe(function () { return P().equip(hid, pilha.itemId, pilha.index); }, false);
+        if (!ok) { toast('Não deu para equipar essa peça.'); }
+        else {
+          toast(esc((it && it.name) || 'Peça') + ' no ' + (SLOT_PT[canon] || 'espaço') + '.', 'good');
+          if (pilha.count <= 1) invSel = null;
+        }
+        sheetParty('inventario');
+      }));
+    }
+    var fu = safe(function () { return P().fuseInfo(pilha.index); }, null);
+    if (fu && !fu.maxed) {
+      var podeFundir = fu.pode;
+      acts.appendChild(btn(podeFundir ? 'Fundir ' + fu.precisa + ' → ★' + fu.proxima
+                                      : 'faltam ' + fu.faltam + ' p/ ★' + fu.proxima,
+        'btn-mini btn-gold' + (podeFundir ? '' : ' is-off'), function () {
+          var nova = safe(function () { return P().fuseItem(pilha.index); }, null);
+          if (nova) {
+            invSel = { itemId: nova.itemId, level: nova.level, stars: nova.stars };
+            toast('Fundiu ' + fu.precisa + ' iguais: agora é ★' + nova.stars + '!', 'good');
+          }
+          sheetParty('inventario');
+        }));
+    }
+    var fi = safe(function () { return P().upgradeInfo(pilha.index); }, null);
+    if (fi && !fi.maxed) {
+      acts.appendChild(btn('Forjar', 'btn-mini', function () {
+        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
+        sheetParty('forja');
+      }));
+    }
+    wrap.appendChild(acts);
+    return wrap;
+  }
+
+  function invFilterTabs() {
     var tabs = el('div', 'inv-tabs');
     ['todos'].concat(SLOTS).forEach(function (f) {
-      var b = btn(f === 'todos' ? 'Tudo' : SLOT_PT[f], 'btn-tab' + (invFilter === f ? ' is-on' : ''), function () {
-        invFilter = f;
-        sheetInventory(preselect);
-      });
-      tabs.appendChild(b);
+      tabs.appendChild(btn(f === 'todos' ? 'Tudo' : SLOT_PT[f],
+        'btn-tab' + (invFilter === f ? ' is-on' : ''), function () {
+          invFilter = f;
+          sheetParty('inventario');
+        }));
     });
-    body.appendChild(tabs);
+    return tabs;
+  }
 
-    if (!inv.length) {
-      body.appendChild(el('p', 'empty', 'Saco vazio. Os calabouços resolvem isso.'));
-      return;
-    }
-    var grid = el('div', 'inv-grid');
-    var shown = 0;
-    inv.forEach(function (entry, idx) {
-      var id = entry.itemId || entry;
-      var lv = entry.level || 0;
-      var it = itemDef(id);
-      if (!it) return;
-      var canon = slotOf(id);
+  // ---- A GRADE. Iguais empilham num espaço só, com ×N.
+  function invGrid(hid) {
+    var pilhas = safe(function () { return P().invStacks(); }, []);
+    var grid = el('div', 'inv-big');
+    var ordem = {};
+    SLOTS.forEach(function (s, i) { ordem[s] = i; });
+    pilhas = pilhas.filter(function (s) { return !!itemDef(s.itemId); });
+    pilhas.sort(function (a, b) {
+      var sa = ordem[slotOf(a.itemId)], sb = ordem[slotOf(b.itemId)];
+      if (sa !== sb) return sa - sb;
+      if (a.stars !== b.stars) return b.stars - a.stars;
+      if (a.level !== b.level) return b.level - a.level;
+      return String((itemDef(a.itemId) || {}).name || '').localeCompare(String((itemDef(b.itemId) || {}).name || ''));
+    });
+    var mostrou = 0;
+    pilhas.forEach(function (pilha) {
+      var canon = slotOf(pilha.itemId);
       if (invFilter !== 'todos' && canon !== invFilter) return;
-      shown++;
-      var cell = el('div', 'inv-cell ' + tierClass(lv) + (preselect === id ? ' is-focus' : ''));
+      mostrou++;
+      var it = itemDef(pilha.itemId);
+      var sel = invSel && invSel.itemId === pilha.itemId && invSel.level === pilha.level &&
+                invSel.stars === pilha.stars;
+      var cell = el('button', 'ig-cell ' + starClass(pilha.stars) + (sel ? ' is-sel' : ''));
+      cell.type = 'button';
       markRarity(cell, it.rarity);
-
-      var ic = el('div', 'inv-ic');
-      ic.appendChild(art('itemIcon', [id, 54], 54));
-      if (lv > 0) ic.appendChild(el('span', 'inv-lv', '+' + lv));
-      var owner = equippedBy(id);
-      if (owner) ic.appendChild(el('span', 'inv-worn', esc(className((hero(owner) || {}).classId || owner).slice(0, 3))));
-      cell.appendChild(ic);
-
-      var tx = el('div', 'inv-tx');
-      tx.appendChild(el('b', null, esc(it.name)));
-      tx.appendChild(el('span', 'inv-slot', esc(SLOT_PT[canon]) + ' · ' + esc(RAR_PT[it.rarity] || it.rarity) +
-        (lv ? ' · ' + esc(tierOf(lv)) : '')));
-      if (it.setId) {
-        var n = setEquippedCount(it.setId), tot = setPieceCount(it.setId);
-        var sd = setDef(it.setId);
-        var sc = el('span', 'inv-set' + (n >= 2 ? ' is-live' : ''),
-          esc((sd && sd.name) || it.setId) + ' <b>' + n + '/' + tot + '</b>');
-        tipOn(sc, (sd && sd.name) || it.setId, setTipBody(it.setId), '#9fd8ff');
-        tx.appendChild(sc);
-      }
-      if (owner) {
-        tx.appendChild(el('span', 'inv-owner', 'em uso por <b>' +
-          esc(className((hero(owner) || {}).classId || owner)) + '</b>'));
-      }
-      cell.appendChild(tx);
-
-      var acts = el('div', 'inv-acts');
-      var targets = heroIds().filter(function (hid) { return !!hero(hid); });
-      targets.slice(0, 4).forEach(function (hid) {
-        var h = hero(hid);
-        var has = heroItem(h, canon) === id;
-        acts.appendChild(btn(has ? 'Tirar' : className(h.classId || hid).split(' ')[0],
-          'btn-mini' + (has ? ' btn-warn' : ''), function () {
-            var ok;
-            if (has) ok = safe(function () { return P().unequip(hid, slotRaw(canon)); }, false);
-            else ok = safe(function () { return P().equip(hid, id); }, false);
-            if (!ok) {
-              var who = equippedBy(id);
-              toast(who ? 'Já está com ' + className((hero(who) || {}).classId || who) + '.' : 'Não deu para equipar.');
-            }
-            sheetInventory(id);
-          }));
+      var plate = el('span', 'ig-plate');
+      plate.appendChild(art('itemIcon', [pilha.itemId, 54], 54));
+      cell.appendChild(plate);
+      if (pilha.count > 1) cell.appendChild(el('span', 'ig-n', '×' + pilha.count));
+      if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
+      if (pilha.stars) cell.appendChild(starPips(pilha.stars));
+      cell.appendChild(el('span', 'ig-nm', esc(it.name)));
+      tap(cell, function () {
+        invSel = sel ? null : { itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
+        sheetParty('inventario');
       });
-      var ui2 = safe(function () { return P().upgradeInfo(idx); }, null);
-      if (ui2 && !ui2.maxed) {
-        acts.appendChild(btn('Forjar', 'btn-mini btn-gold', function () { forgeSel = idx; openSheet('forge'); }));
-      }
-      cell.appendChild(acts);
-      tipOn(ic, it.name, itemTipBody(id, lv), rarColor(it.rarity));
       grid.appendChild(cell);
     });
-    if (!shown) grid.appendChild(el('p', 'empty', 'Nada nesse espaço ainda.'));
-    body.appendChild(grid);
+    if (!mostrou) {
+      var vestidas = 0;
+      partyHeroes().forEach(function (id) {
+        SLOTS.forEach(function (c) { if (heroItem(hero(id), c)) vestidas++; });
+      });
+      grid.appendChild(el('p', 'empty', vestidas
+        ? (invFilter === 'todos'
+            ? 'A grade está vazia: tudo o que você tem já está vestido.'
+            : 'Nenhuma peça de ' + SLOT_PT[invFilter] + ' no saco.')
+        : 'Saco vazio. Os calabouços resolvem isso.'));
+    }
+    return grid;
   }
 
   function setTipBody(setId) {
@@ -1604,10 +1928,49 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ----------------------------------------------------------------- FORJA
-  function sheetForge(preselect) {
-    var body = sheetShell('Forja',
-      'Melhorar é <b>determinístico</b>: nunca quebra, nunca regride. Consome pedras do elemento da peça.');
+  // Agora a forja alcança TAMBÉM a peça vestida: no modelo novo equipar tira a
+  // cópia do saco, e sem isso o jogador teria de desequipar para melhorar.
+  // Um alvo é `{kind:'bag'|'worn', ...}` e é descrito por VALOR (item, nível,
+  // estrelas), nunca por índice cru — fundir e forjar remexem o saco.
+  function forgeAlvos() {
+    var out = [];
+    var pilhas = safe(function () { return P().invStacks(); }, []);
+    pilhas.forEach(function (s) {
+      if (!itemDef(s.itemId)) return;
+      out.push({ kind: 'bag', itemId: s.itemId, level: s.level, stars: s.stars,
+                 count: s.count, index: s.index, quem: null });
+    });
+    partyHeroes().forEach(function (hid) {
+      SLOTS.forEach(function (canon) {
+        var v = safe(function () { return P().equippedVar(hid, slotRaw(canon)); }, null);
+        if (!v || !itemDef(v.itemId)) return;
+        out.push({ kind: 'worn', itemId: v.itemId, level: v.level, stars: v.stars,
+                   count: 1, heroId: hid, slot: canon, quem: hid });
+      });
+    });
+    return out;
+  }
+  function mesmoAlvo(a, b) {
+    if (!a || !b || a.kind !== b.kind || a.itemId !== b.itemId) return false;
+    if (a.kind === 'worn') return a.heroId === b.heroId && a.slot === b.slot;
+    return a.level === b.level && a.stars === b.stars;
+  }
+  function forgeInfoDe(alvo) {
+    if (!alvo) return null;
+    if (alvo.kind === 'worn') {
+      return safe(function () { return P().upgradeInfoWorn(alvo.heroId, slotRaw(alvo.slot)); }, null);
+    }
+    return safe(function () { return P().upgradeInfo(alvo.index); }, null);
+  }
+  function forjar(alvo) {
+    if (!alvo) return false;
+    if (alvo.kind === 'worn') {
+      return safe(function () { return P().upgradeWorn(alvo.heroId, slotRaw(alvo.slot)); }, false);
+    }
+    return safe(function () { return P().upgradeItem(alvo.index); }, false);
+  }
 
+  function forgeBody(body, preselect) {
     // estoque de pedras
     var stock = el('div', 'forge-stock');
     var defs = stoneDefs(), k;
@@ -1623,47 +1986,65 @@ var JOGO = (typeof window !== 'undefined')
     }
     body.appendChild(stock);
 
-    var inv = inventory();
-    if (!inv.length) { body.appendChild(el('p', 'empty', 'Nenhuma peça para forjar.')); return; }
-    if (preselect != null) forgeSel = preselect;
-    if (forgeSel < 0 || forgeSel >= inv.length) forgeSel = 0;
+    var alvos = forgeAlvos();
+    if (!alvos.length) {
+      body.appendChild(el('p', 'empty', 'Nenhuma peça para forjar — nem no saco, nem vestida.'));
+      return;
+    }
+    if (preselect && typeof preselect === 'object') forgeTarget = preselect;
+    var atual = null, i;
+    for (i = 0; i < alvos.length; i++) if (mesmoAlvo(alvos[i], forgeTarget)) { atual = alvos[i]; break; }
+    if (!atual) atual = alvos[0];
+    forgeTarget = atual;
 
     var pick = el('div', 'forge-pick');
-    inv.forEach(function (entry, i) {
-      var id = entry.itemId || entry;
-      var it = itemDef(id);
-      if (!it) return;
-      var lv = entry.level || 0;
-      var c = el('button', 'forge-thumb ' + tierClass(lv) + (i === forgeSel ? ' is-on' : ''));
+    alvos.forEach(function (alvo) {
+      var it = itemDef(alvo.itemId);
+      var c = el('button', 'forge-thumb ' + starClass(alvo.stars) +
+                            (mesmoAlvo(alvo, atual) ? ' is-on' : ''));
       c.type = 'button';
-      c.appendChild(art('itemIcon', [id, 44], 44));
-      if (lv) c.appendChild(el('span', 'inv-lv', '+' + lv));
-      tap(c, function () { forgeSel = i; sheetForge(i); });
+      markRarity(c, it.rarity);
+      c.appendChild(art('itemIcon', [alvo.itemId, 44], 44));
+      if (alvo.level) c.appendChild(el('span', 'ig-lv', '+' + alvo.level));
+      if (alvo.count > 1) c.appendChild(el('span', 'ig-n', '×' + alvo.count));
+      if (alvo.kind === 'worn') {
+        c.appendChild(el('span', 'fg-worn',
+          esc(className((hero(alvo.heroId) || {}).classId || alvo.heroId).slice(0, 3))));
+      }
+      tap(c, function () { forgeTarget = alvo; sheetParty('forja'); });
       pick.appendChild(c);
     });
     body.appendChild(pick);
 
-    var entry = inv[forgeSel];
-    var id2 = entry.itemId || entry;
-    var it2 = itemDef(id2);
-    var lv2 = entry.level || 0;
-    var info = safe(function () { return P().upgradeInfo(forgeSel); }, null);
+    var it2 = itemDef(atual.itemId);
+    var lv2 = atual.level;
+    var info = forgeInfoDe(atual);
 
-    var panel = el('div', 'forge-panel ' + tierClass(lv2));
+    var panel = el('div', 'forge-panel ' + tierClass(lv2) + ' ' + starClass(atual.stars));
     var head = el('div', 'forge-head');
-    head.appendChild(art('itemIcon', [id2, 72], 72));
+    head.appendChild(art('itemIcon', [atual.itemId, 72], 72));
     var ht = el('div', 'forge-head-t');
-    ht.appendChild(el('h3', null, esc((it2 && it2.name) || id2) + (lv2 ? ' <b>+' + lv2 + '</b>' : '')));
-    ht.appendChild(el('span', 'forge-tier-nm', esc(tierOf(lv2)) + ' · ' + esc(SLOT_PT[slotOf(id2)] || '')));
+    ht.appendChild(el('h3', null, esc((it2 && it2.name) || atual.itemId) + (lv2 ? ' <b>+' + lv2 + '</b>' : '')));
+    ht.appendChild(el('span', 'forge-tier-nm', esc(tierOf(lv2)) + ' · ' + esc(SLOT_PT[slotOf(atual.itemId)] || '')));
+    if (atual.stars) {
+      var se = el('span', 'fg-stars ' + starClass(atual.stars));
+      se.appendChild(starPips(atual.stars));
+      se.appendChild(el('span', null, 'de fundir iguais'));
+      ht.appendChild(se);
+    }
     if (it2 && it2.element) {
       var ec = el('span', 'elem-badge e-' + it2.element, ELEM_PT[it2.element] || it2.element);
       ec.style.setProperty('--ec', elemColor(it2.element));
       ht.appendChild(ec);
     }
+    ht.appendChild(el('span', 'fg-onde', atual.kind === 'worn'
+      ? 'vestida por <b>' + esc(className((hero(atual.heroId) || {}).classId || atual.heroId)) + '</b>'
+      : 'no saco' + (atual.count > 1 ? ' · ×' + atual.count + ' (sobe UMA cópia)' : '')));
     head.appendChild(ht);
     panel.appendChild(head);
 
-    // trilha 0..10 com os tiers marcados
+    // trilha 0..10 com os tiers marcados — a trilha da PEDRA, que é outra coisa
+    // da trilha da ESTRELA (esta não tem degrau nomeado, tem cor de fundo).
     var maxLv = upgradeCfg().maxLevel || 10;
     var track = el('div', 'forge-track');
     for (var i3 = 0; i3 <= maxLv; i3++) {
@@ -1672,14 +2053,14 @@ var JOGO = (typeof window !== 'undefined')
     }
     panel.appendChild(track);
     panel.appendChild(el('div', 'forge-legend',
-      '+0–2 Comum · +3–5 Raro · +6–9 Supremo · <b>+10 Magnífico</b>'));
+      '<b>Pedra</b> +0–2 Comum · +3–5 Raro · +6–9 Supremo · +10 Magnífico ' +
+      '<span class="fg-sep">|</span> <b>Estrela</b> vem de fundir 3 iguais no inventário'));
 
-    // prévia do ganho
-    var per = upgradeCfg().bonusPerLevel || 0.12;
+    // prévia do ganho (com as estrelas já dentro da conta)
     var prev = el('div', 'forge-prev');
-    prev.appendChild(el('div', 'fp-col', '<i>agora</i>' + bonusPreview(it2, lv2, per)));
+    prev.appendChild(el('div', 'fp-col', '<i>agora</i>' + bonusPreview(it2, lv2, atual.stars)));
     prev.appendChild(el('div', 'fp-arrow', '→'));
-    prev.appendChild(el('div', 'fp-col fp-next', '<i>+' + (lv2 + 1) + '</i>' + bonusPreview(it2, lv2 + 1, per)));
+    prev.appendChild(el('div', 'fp-col fp-next', '<i>+' + (lv2 + 1) + '</i>' + bonusPreview(it2, lv2 + 1, atual.stars)));
     if (lv2 < maxLv) panel.appendChild(prev);
 
     if (!info) {
@@ -1701,18 +2082,27 @@ var JOGO = (typeof window !== 'undefined')
           '. Monstros desse elemento derrubam.'));
       }
       var go = btn('Forjar para +' + (lv2 + 1), 'btn-primary btn-block' + (info.temPedras ? '' : ' is-off'), function () {
-        var ok = safe(function () { return P().upgradeItem(forgeSel); }, false);
-        if (ok) { toast('Forjado: +' + (lv2 + 1) + ' ' + tierOf(lv2 + 1) + '!', 'good'); sheetForge(forgeSel); }
-        else toast('Pedras insuficientes.');
+        var ok = forjar(atual);
+        if (ok) {
+          toast('Forjado: +' + (lv2 + 1) + ' ' + tierOf(lv2 + 1) + '!', 'good');
+          forgeTarget = { kind: atual.kind, itemId: atual.itemId, level: lv2 + 1, stars: atual.stars,
+                          heroId: atual.heroId, slot: atual.slot };
+          if (invSel && invSel.itemId === atual.itemId && invSel.level === lv2 &&
+              invSel.stars === atual.stars && atual.kind === 'bag') {
+            invSel = { itemId: atual.itemId, level: lv2 + 1, stars: atual.stars };
+          }
+          sheetParty('forja');
+        } else toast('Pedras insuficientes.');
       });
       panel.appendChild(go);
     }
     body.appendChild(panel);
   }
 
-  function bonusPreview(it, lv, per) {
+  // prévia de bônus de uma peça num certo degrau das DUAS trilhas [D18]
+  function bonusPreview(it, lv, stars) {
     if (!it) return '—';
-    var mult = 1 + per * lv;
+    var mult = itemMult(lv, stars);
     var b = it.bonuses || {}, out = [], k;
     for (k in b) {
       if (!b.hasOwnProperty(k)) continue;
@@ -1776,24 +2166,31 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(el('h3', 'hs-sec', 'Equipamento'));
     var slots = el('div', 'hs-slots');
     SLOTS.forEach(function (canon) {
-      var itemId = heroItem(h, canon);
+      var v = safe(function () { return P().equippedVar(heroId, slotRaw(canon)); }, null);
+      var itemId = v ? v.itemId : heroItem(h, canon);
       var it = itemId ? itemDef(itemId) : null;
-      var lv = itemId ? safe(function () { return P().itemLevel(itemId); }, 0) : 0;
-      var cell = el('div', 'hs-slot' + (it ? ' has-item ' + tierClass(lv) : ' is-empty'));
+      var lv = v ? v.level : 0;
+      var estrelas = v ? v.stars : 0;
+      var cell = el('div', 'hs-slot ' + starClass(estrelas) +
+                            (it ? ' has-item ' + tierClass(lv) : ' is-empty'));
       if (it) markRarity(cell, it.rarity);
       var ic = el('div', 'hs-slot-ic');
       ic.appendChild(it ? art('itemIcon', [itemId, 52], 52) : art('slotIcon', [canon, 52], 52));
       if (lv) ic.appendChild(el('span', 'inv-lv', '+' + lv));
       cell.appendChild(ic);
       cell.appendChild(el('span', 'hs-slot-nm', SLOT_PT[canon]));
+      if (estrelas) cell.appendChild(starPips(estrelas));
       cell.appendChild(el('span', 'hs-slot-it', it ? esc(it.name) : 'vazio'));
+      if (it) cell.appendChild(el('span', 'pt-slot-b', esc(itemBonusText(it, lv, estrelas))));
       tipOn(ic, SLOT_PT[canon] + (it ? ' — ' + it.name : ''),
-        it ? itemTipBody(itemId, lv) : esc(SLOT_HINT[canon]),
+        it ? itemTipBody(itemId, lv, estrelas) : esc(SLOT_HINT[canon]),
         it ? rarColor(it.rarity) : '#8b93a0');
+      // a troca acontece na tela "Personagens", com este herói já no carrossel
       var act = btn(it ? 'Trocar' : 'Equipar', 'btn-mini', function () {
-        closeSheet();
         invFilter = canon;
-        openSheet('inventory', itemId);
+        partyHero = heroId;
+        invSel = null;
+        openSheet('inventory');
       });
       cell.appendChild(act);
       slots.appendChild(cell);
@@ -1907,7 +2304,11 @@ var JOGO = (typeof window !== 'undefined')
     return linha;
   }
 
-  function petPicker(heroId) {
+  function petPicker(heroId, origem) {
+    function volta() {
+      if (origem === 'party') { partyHero = heroId; sheetParty('inventario'); }
+      else sheetHero(heroId);
+    }
     var body = sheetShell('Chamar um bicho', 'Um bicho serve a um herói por vez.');
     var pets = ownedPets();
     var g = el('div', 'pet-grid');
@@ -1920,20 +2321,19 @@ var JOGO = (typeof window !== 'undefined')
       c.appendChild(el('span', null, esc(bonusText(pd && pd.bonuses))));
       tap(c, function () {
         safe(function () { P().equipPet(heroId, pid); }, null);
-        sheetHero(heroId);
+        volta();
       });
       g.appendChild(c);
     });
     if (!pets.length) g.appendChild(el('p', 'empty', 'Nenhum bicho no saco.'));
     body.appendChild(g);
-    body.appendChild(btn('Voltar', 'btn-ghost btn-block', function () { sheetHero(heroId); }));
+    body.appendChild(btn('Voltar', 'btn-ghost btn-block', volta));
   }
 
   function sheetBattleMenu() {
     var body = sheetShell('Pausa');
     var acts = el('div', 'menu-acts');
-    acts.appendChild(btn('Inventário', 'btn-ghost', function () { openSheet('inventory'); }));
-    acts.appendChild(btn('Coleção', 'btn-ghost', function () { openSheet('collection'); }));
+    acts.appendChild(btn('Personagens', 'btn-ghost', function () { openSheet('party'); }));
     acts.appendChild(btn('Abandonar a descida', 'btn-warn', function () {
       confirmSheet('Abandonar?', 'O que você já ganhou fica. A sala em curso se perde.', function () {
         safe(function () { G().restart(); }, null);

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Medição de porte — herói, fusão e chefes</title>
+<style>
+  html,body{margin:0;background:#11151b;color:#e8eef6;font:13px/1.5 ui-monospace,Consolas,monospace}
+  pre{margin:14px 18px;white-space:pre}
+  b{color:#ffd08a}
+</style>
+</head>
+<body>
+<pre id="out">medindo…</pre>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js','js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+/* ===========================================================================
+ * A RÉGUA. Quanto mede, DE VERDADE, cada corpo que o jogo constrói hoje?
+ * Não é o tamanho do arquivo .gltf: `models3d_v2.js` normaliza tudo para uma
+ * ALTURA-ALVO por papel (`targetH`) e só depois aplica `look.scale`. Então a
+ * pergunta "o chefe é maior que a fusão?" se responde aqui, não no Blender.
+ * ======================================================================== */
+(function () {
+  'use strict';
+  var out = document.getElementById('out');
+  var L = [];
+  function p(s) { L.push(s); out.textContent = L.join('\n'); }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    JOGO.Models3D2.load(function () {
+      var M = JOGO.Models3D2, D = JOGO.DATA;
+      p('ready=' + M.isReady() + ' failed=' + M.failed() +
+        ' modelos=' + (M.modelKeys ? M.modelKeys().length : '?') +
+        ' clipes=' + (M.clips ? M.clips().length : '?'));
+      try {
+        var probe = M.unit('sumo', { classId: 'sumo' }).userData;
+        p('probe sumo -> ' + JSON.stringify(Object.keys(probe)) +
+          ' | height=' + probe.height + ' scale=' + probe.scale);
+      } catch (e) { p('probe ERRO ' + e.message); }
+      p('=== CLASSES (targetH 2,05 x build) ===');
+      var classes = Object.keys(D.classes);
+      var maiorClasse = 0, nomeMaior = '';
+      classes.forEach(function (c) {
+        var u = M.unit(c, { classId: c }).userData;
+        if (u.height > maiorClasse) { maiorClasse = u.height; nomeMaior = c; }
+        p('  ' + pad(c, 14) + fmt(u.height) + ' m   raio ' + fmt(u.radius) +
+          '   modelo ' + (u.look && u.look.model || '?'));
+      });
+
+      p('');
+      p('=== FUSOES (targetH 2,55) — as 15 duplas ===');
+      // o id que o carregador entende e literalmente 'fus:classeA+classeB'
+      var maiorFus = 0, dupla = '';
+      for (var i = 0; i < classes.length; i++) {
+        for (var j = i + 1; j < classes.length; j++) {
+          var fid = 'fus:' + classes[i] + '+' + classes[j];
+          try {
+            var uf = M.unit(fid, {}).userData;
+            if (uf.height > maiorFus) { maiorFus = uf.height; dupla = classes[i] + '+' + classes[j]; }
+            p('  ' + pad(classes[i] + ' + ' + classes[j], 26) + fmt(uf.height) +
+              ' m   anfitriao ' + (uf.look && uf.look.hostClass || '?'));
+          } catch (e) { p('  ' + classes[i] + '+' + classes[j] + '  ERRO ' + e.message); }
+        }
+      }
+
+      p('');
+      p('=== CHEFES DE HOJE (targetH 2,95 x look.scale) ===');
+      var bosses = Object.keys(D.monsters).filter(function (m) { return D.monsters[m].boss; });
+      var menorChefe = 99, pior = '';
+      bosses.forEach(function (b) {
+        var u = M.unit(b, { boss: true }).userData;
+        if (u.height < menorChefe) { menorChefe = u.height; pior = b; }
+        var lk = M.lookFor(b, {});
+        p('  ' + pad(b, 18) + fmt(u.height) + ' m   raio ' + fmt(u.radius) +
+          '   modelo ' + pad(lk.model, 16) + ' scale ' + lk.scale);
+      });
+
+      p('');
+      p('=== O VEREDITO ===');
+      p('  classe mais alta ................ ' + fmt(maiorClasse) + ' m  (' + nomeMaior + ')');
+      p('  FUSAO mais alta ................. ' + fmt(maiorFus) + ' m  (' + dupla + ')');
+      p('  chefe MAIS BAIXO de hoje ........ ' + fmt(menorChefe) + ' m  (' + pior + ')');
+      p('  piso exigido pela regra ......... ' + fmt(maiorFus) + ' m');
+      bosses.forEach(function (b) {
+        var u = M.unit(b, { boss: true }).userData;
+        p('  ' + pad(b, 18) + (u.height > maiorFus ? 'PASSA' : '*** REPROVA ***') +
+          '  (' + fmt(u.height) + ' vs ' + fmt(maiorFus) + ')');
+      });
+      p('');
+      p('  targetH no codigo: classe 2,05 | pet 1,20 | monstro 1,80 | FUSAO 2,55 | CHEFE 2,95');
+      p('  (models3d_v2.js, linhas 948-949)');
+      window.__pronto = true;
+    });
+  });
+  function fmt(v) { return (Math.round(v * 100) / 100).toFixed(2); }
+  function pad(s, n) { s = String(s); while (s.length < n) s += ' '; return s; }
+})();
+</script>
+</body>
+</html>

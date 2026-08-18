@@ -311,7 +311,14 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'gh-sap-apron', weight: 12, minRoom: 0 },
       { itemId: 'gh-vine-stirrups', weight: 12, minRoom: 1 },
       { itemId: 'gh-briar-charm', weight: 12, minRoom: 1 },
-      { itemId: 'gh-widow-shears', weight: 4, minRoom: 2 }
+      { itemId: 'gh-widow-shears', weight: 4, minRoom: 2 },
+      { itemId: 'gh-wasp-sting', weight: 30, minRoom: 0 },
+      { itemId: 'gh-pollen-slippers', weight: 30, minRoom: 0 },
+      { itemId: 'gh-chitin-vest', weight: 30, minRoom: 0 },
+      { itemId: 'gh-dew-fang', weight: 30, minRoom: 0 },
+      { itemId: 'gh-hive-lantern', weight: 12, minRoom: 1 },
+      { itemId: 'gh-gutter-shell', weight: 12, minRoom: 1 },
+      { itemId: 'gh-root-spur', weight: 12, minRoom: 1 }
     ],
     // CARTAS (adendo v2.1). Só o chefe derruba, e derruba ao acaso; carta
     // repetida NÃO é lixo: o excedente ao custo de desbloqueio vira estrela.
@@ -437,7 +444,14 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'ci-drowned-coat', weight: 12, minRoom: 0 },
       { itemId: 'ci-harpoon-flute', weight: 12, minRoom: 1 },
       { itemId: 'ci-jelly-vial', weight: 12, minRoom: 1 },
-      { itemId: 'ci-baroness-collar', weight: 4, minRoom: 2 }
+      { itemId: 'ci-baroness-collar', weight: 4, minRoom: 2 },
+      { itemId: 'ci-crab-claw', weight: 30, minRoom: 0 },
+      { itemId: 'ci-silt-boots', weight: 30, minRoom: 0 },
+      { itemId: 'ci-pearl-mail', weight: 30, minRoom: 0 },
+      { itemId: 'ci-bone-lamp', weight: 30, minRoom: 0 },
+      { itemId: 'ci-crust-carapace', weight: 12, minRoom: 1 },
+      { itemId: 'ci-sump-lamp', weight: 12, minRoom: 1 },
+      { itemId: 'ci-piper-fang', weight: 12, minRoom: 1 }
     ],
     // A Baronesa é a primeira carta que LIBERA alguém: o invocador (10 cartas)
     // leva o peso maior, e o resto vira estrela para a dupla inicial.
@@ -562,7 +576,14 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'em-chain-harness', weight: 12, minRoom: 1 },
       { itemId: 'em-ember-flask', weight: 12, minRoom: 1 },
       { itemId: 'em-brand-iron', weight: 12, minRoom: 1 },
-      { itemId: 'em-forge-grate', weight: 4, minRoom: 2 }
+      { itemId: 'em-forge-grate', weight: 4, minRoom: 2 },
+      { itemId: 'em-quench-fang', weight: 30, minRoom: 0 },
+      { itemId: 'em-quench-treads', weight: 30, minRoom: 0 },
+      { itemId: 'em-cinder-plate', weight: 30, minRoom: 0 },
+      { itemId: 'em-hauler-links', weight: 30, minRoom: 0 },
+      { itemId: 'em-quench-vest', weight: 12, minRoom: 1 },
+      { itemId: 'em-quench-lamp', weight: 12, minRoom: 1 },
+      { itemId: 'em-imp-gauntlet', weight: 12, minRoom: 1 }
     ],
     // O bruxo (10 cartas, minDungeon 2) entra aqui; o invocador ainda domina,
     // então quem parou no meio do caminho termina a coleção dele de passagem.
@@ -689,7 +710,14 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'av-storm-harness', weight: 12, minRoom: 1 },
       { itemId: 'av-wind-whistle', weight: 12, minRoom: 1 },
       { itemId: 'av-lightning-coil', weight: 12, minRoom: 1 },
-      { itemId: 'av-updraft-boots', weight: 4, minRoom: 2 }
+      { itemId: 'av-updraft-boots', weight: 4, minRoom: 2 },
+      { itemId: 'av-noose-grip', weight: 30, minRoom: 0 },
+      { itemId: 'av-hemp-boots', weight: 30, minRoom: 0 },
+      { itemId: 'av-shrike-talon', weight: 30, minRoom: 0 },
+      { itemId: 'av-ballast-greaves', weight: 30, minRoom: 0 },
+      { itemId: 'av-knot-jerkin', weight: 12, minRoom: 1 },
+      { itemId: 'av-hangman-lamp', weight: 12, minRoom: 1 },
+      { itemId: 'av-serpent-sash', weight: 12, minRoom: 1 }
     ],
     // Espadachim (20 cartas) estreia no Mestre-de-Obras: daqui para baixo a
     // coleção deixa de ser souvenir e vira motivo para repetir o calabouço.
@@ -819,7 +847,14 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'mt-bedrock-carapace', weight: 12, minRoom: 1 },
       { itemId: 'mt-quake-nail', weight: 12, minRoom: 1 },
       { itemId: 'mt-shoring-charm', weight: 12, minRoom: 1 },
-      { itemId: 'mt-quake-crown', weight: 4, minRoom: 2 }
+      { itemId: 'mt-quake-crown', weight: 4, minRoom: 2 },
+      { itemId: 'mt-firedamp-fist', weight: 14, minRoom: 0 },
+      { itemId: 'mt-wisp-treads', weight: 14, minRoom: 0 },
+      { itemId: 'mt-seep-plate', weight: 14, minRoom: 0 },
+      { itemId: 'mt-grisu-wick', weight: 14, minRoom: 0 },
+      { itemId: 'mt-damp-mantle', weight: 12, minRoom: 1 },
+      { itemId: 'mt-firedamp-lamp', weight: 12, minRoom: 1 },
+      { itemId: 'mt-blast-knuckles', weight: 12, minRoom: 1 }
     ],
     // Batepedra é o primeiro chefe que solta carta de ARQUEIRO (25 cartas, o
     // desbloqueio mais caro do jogo). Espadachim empata em peso: as duas
@@ -956,7 +991,14 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'cp-quicksilver-boots', weight: 4, minRoom: 2 },
       { itemId: 'cp-heart-crown', weight: 4, minRoom: 2 },
       { itemId: 'cp-heart-horn', weight: 4, minRoom: 2 },
-      { itemId: 'cp-eclipse-lens', weight: 4, minRoom: 2 }
+      { itemId: 'cp-eclipse-lens', weight: 4, minRoom: 2 },
+      { itemId: 'cp-gale-fist', weight: 14, minRoom: 0 },
+      { itemId: 'cp-gale-steps', weight: 14, minRoom: 0 },
+      { itemId: 'cp-gale-plate', weight: 14, minRoom: 0 },
+      { itemId: 'cp-tide-anklets', weight: 14, minRoom: 0 },
+      { itemId: 'cp-gale-lamp', weight: 12, minRoom: 1 },
+      { itemId: 'cp-herald-ember', weight: 12, minRoom: 1 },
+      { itemId: 'cp-ember-censer', weight: 12, minRoom: 1 }
     ],
     // O fundo do mundo espelha exatamente os `dropWeight` de DATA.cards:
     // arqueiro 32 · espadachim 24 · bruxo 16 · invocador 16 · sumo 6 ·

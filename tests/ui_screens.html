@@ -62,6 +62,7 @@
 <script src="../js/core/data/fusions.js?v=32"></script>
 <script src="../js/core/data/pets.js?v=32"></script>
 <script src="../js/core/data/items.js?v=32"></script>
+<script src="../js/core/data/items_extra.js?v=32"></script>
 <script src="../js/core/engine.js?v=32"></script>
 <script src="../js/core/fusion.js?v=32"></script>
 <script src="../js/core/ai.js?v=32"></script>
@@ -142,11 +143,25 @@
     Object.keys(D.stones || {}).forEach(function (s) { P.addStones(s, 40); });
     // bichos
     Object.keys(D.pets || {}).slice(0, 3).forEach(function (p) { P.addPet(p); });
-    // equipa duas peças no sumô para o inventário mostrar "em uso"
-    var inv = P.state.inventory;
-    for (var i = 0; i < inv.length && i < 4; i++) P.equip('sumo', inv[i].itemId);
-    // sobe uma peça na forja para o tier aparecer
-    if (inv.length) { P.upgradeItem(0); P.upgradeItem(0); P.upgradeItem(0); }
+    // equipa uma peça de cada espaço no sumô (equipar TIRA a cópia do saco, por
+    // isso a lista é fotografada ANTES do laço — iterar o vivo pularia peças)
+    var alvos = P.state.inventory.map(function (e) { return e.itemId; });
+    var usados = {};
+    alvos.forEach(function (id) {
+      var slot = (D.items[id] || {}).slot;
+      if (!slot || usados[slot]) return;
+      if (P.equip('sumo', id)) usados[slot] = true;
+    });
+    // sobe a peça vestida na forja para o tier aparecer
+    P.upgradeWorn('sumo', 'punho'); P.upgradeWorn('sumo', 'punho'); P.upgradeWorn('sumo', 'punho');
+    // REPETIDAS: uma pilha de 3 pronta para fundir e uma peça que já é ★1,
+    // para a grade mostrar o contador ×N e as duas cores (raridade × estrela)
+    var repetido = ids.filter(function (id) { return D.items[id].slot === 'passo'; })[0];
+    if (repetido) {
+      for (var r1 = 0; r1 < 3; r1++) P.addItem(repetido);
+      P.fuseItem(P.invIndexOf(repetido));            // vira ★1
+      for (var r2 = 0; r2 < 3; r2++) P.addItem(repetido);  // e sobra ×3 para fundir
+    }
   }
 
   // ------------------------------------------------------------- inspeções
@@ -341,11 +356,12 @@
   (function () {
     JOGO.UI.openSheet('inventory');
     var sh = document.querySelector('#ui-root .ui-sheet');
-    var t = sh ? sh.textContent : '';
-    check('inventário escreve "Lendário" com acento e maiúscula',
-      t.indexOf('Lendário') >= 0 && t.indexOf('lendario') < 0, t.slice(0, 120));
-    var cel = sh && sh.querySelector('.inv-cell.is-lendario');
-    check('a peça lendária recebe a marcação própria', !!cel);
+    var cel = sh && sh.querySelector('.ig-cell.is-lendario');
+    check('a peça lendária recebe a marcação própria na grade', !!cel);
+    if (cel) cel.click();                       // toque do jogador: abre a barra da peça
+    var t = document.querySelector('#ui-root .ui-sheet').textContent;
+    check('a peça escolhida escreve "Lendário" com acento e maiúscula',
+      t.indexOf('Lendário') >= 0 && t.indexOf('lendario') < 0, t.slice(0, 160));
     if (cel) {
       var rc = cel.style.getPropertyValue('--rc').trim();
       var halo = cel.style.getPropertyValue('--rc-halo').trim();
@@ -358,13 +374,61 @@
   })();
 
   JOGO.UI.openSheet('inventory');
-  var invTxt = document.querySelector('#ui-root .ui-sheet').textContent;
-  check('inventário nomeia os espaços novos', /Punho/.test(invTxt) || /Passo/.test(invTxt) ||
-        /Casca/.test(invTxt) || /Lume/.test(invTxt), invTxt.slice(0, 80));
+  var shInv = document.querySelector('#ui-root .ui-sheet');
+  var invTxt = shInv.textContent;
+  check('a tela de personagens tem as três abas',
+    /Inventário/.test(invTxt) && /Forja/.test(invTxt) && /Coleção/.test(invTxt), invTxt.slice(0, 90));
+  check('inventário nomeia os espaços novos', /Punho/.test(invTxt) && /Passo/.test(invTxt) &&
+        /Casca/.test(invTxt) && /Lume/.test(invTxt), invTxt.slice(0, 80));
+  check('inventário traz o herói com setas para passar',
+    document.querySelectorAll('#ui-root .pt-hero .pt-nav').length === 2);
+  check('o carrossel só mostra herói de classe LIBERADA', (function () {
+    var nm = shInv.querySelector('.pt-hero-nm');
+    var trancadas = Object.keys(D.classes).filter(function (c) { return !P.isClassUnlocked(c); })
+                          .map(function (c) { return D.classes[c].name; });
+    return !!nm && trancadas.indexOf(nm.textContent) < 0;
+  })(), (shInv.querySelector('.pt-hero-nm') || {}).textContent);
+  check('a grade empilha repetidos com ×N',
+    /×\d/.test(invTxt) && shInv.querySelectorAll('.ig-n').length >= 1, invTxt.slice(0, 90));
   check('inventário mostra nível +N', /\+\d/.test(invTxt));
-  check('inventário mostra conjunto n/total', /\d\/\d/.test(invTxt));
-  check('inventário avisa quem está usando', /em uso por/.test(invTxt));
+  check('o item equipado SAIU da grade', (function () {
+    var vestido = P.hero('sumo').items.punho;
+    if (!vestido) return false;
+    var naGrade = shInv.querySelectorAll('.ig-cell');
+    for (var i = 0; i < naGrade.length; i++) {
+      if ((naGrade[i].textContent || '').indexOf(D.items[vestido].name) >= 0) return false;
+    }
+    return P.invCount(vestido) === 0;
+  })(), P.hero('sumo').items.punho);
+  check('o espaço do herói mostra a peça vestida e o que ela dá',
+    /Tirar/.test(invTxt) && /PV|PA|PP|poder|esquiva/.test(invTxt));
   JOGO.UI.closeSheet();
+
+  // ---- estrelas de item: fundir 3 iguais, sem confundir com as de classe
+  (function () {
+    JOGO.UI.openSheet('inventory');
+    var sh = document.querySelector('#ui-root .ui-sheet');
+    var pilha = sh.querySelector('.ig-cell .ig-n');
+    check('existe uma pilha com repetidos para fundir', !!pilha);
+    if (pilha) {
+      var cel = pilha.parentNode;
+      cel.click();
+      var t = document.querySelector('#ui-root .ui-sheet').textContent;
+      check('a barra da peça oferece a fusão', /Fundir\s*3|faltam \d+ p\/ ★/.test(t), t.slice(0, 200));
+    }
+    var comEstrela = sh.querySelector('.ig-cell.sq1, .ig-cell.sq2, .ig-cell.sq3');
+    check('a peça com estrela tem FUNDO próprio (★1 cinza · ★2 azul · ★3 amarelo)', !!comEstrela,
+      comEstrela ? comEstrela.className : 'nenhuma');
+    if (comEstrela) {
+      var bg = getComputedStyle(comEstrela).backgroundImage + getComputedStyle(comEstrela).backgroundColor;
+      var crua = sh.querySelector('.ig-cell.sq0');
+      check('o fundo da peça com estrela difere do fundo da peça crua',
+        !crua || bg !== (getComputedStyle(crua).backgroundImage + getComputedStyle(crua).backgroundColor), bg);
+      check('a estrela de ITEM não usa o desenho da estrela de CLASSE',
+        comEstrela.querySelector('.item-stars') && !comEstrela.querySelector('.star-row'));
+    }
+    JOGO.UI.closeSheet();
+  })();
 
   JOGO.UI.openSheet('forge');
   var fgTxt = document.querySelector('#ui-root .ui-sheet').textContent;

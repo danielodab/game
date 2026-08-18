@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>FX dentro de sala real</title>
+<style>
+  html,body{margin:0;background:#07090c;overflow:hidden}
+  #app{position:absolute;inset:0}
+  #game-canvas{display:block;width:100%;height:100%}
+  #ui-root{position:absolute;inset:0;z-index:5;pointer-events:none}
+  #shot{position:absolute;left:0;top:0;z-index:50}
+  #st{position:absolute;left:8px;top:6px;z-index:99;font:12px monospace;color:#8f8;
+      background:#000a;padding:3px 7px;border-radius:4px;white-space:pre}
+  #tag{position:absolute;left:0;right:0;bottom:0;z-index:99;
+       font:bold 22px Trebuchet MS,Verdana,sans-serif;color:#fff;text-align:center;
+       background:linear-gradient(transparent,#000c);padding:14px 0 10px;text-shadow:0 2px 4px #000}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+</div>
+<div id="st">carregando…</div>
+<div id="tag"></div>
+
+<!-- blindagem do save do jogador: PRIMEIRO script -->
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = [
+    'vendor/three.min.js', 'vendor/GLTFLoader.js', 'vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js', 'vendor/EffectComposer.js',
+    'vendor/RenderPass.js', 'vendor/ShaderPass.js', 'vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
+    'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+    'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js','js/core/data/items_extra.js',
+    'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
+    'js/core/progress.js', 'js/core/game.js',
+    'assets/embedded/env-kit.js', 'js/render3d/models3d.js',
+    'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js',
+    'js/render3d/models3d_v2.js', 'js/render3d/fx3d_v2.js', 'js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js', 'js/render3d/portraits3d.js',
+    'js/ui/hud.js'
+  ];
+  for (var i = 0; i < arqs.length; i++) {
+    document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+  }
+</script>
+
+<script>
+/* ===========================================================================
+ * PESQUISA DE EFEITOS — o candidato renderizado DENTRO DE UMA SALA REAL, ao
+ * lado dos nossos heróis e do cenário. Contra fundo preto tudo combina; é aqui
+ * que a diferença aparece.
+ *
+ *   ?dungeon=emberlock&sala=0&tex=magic_03&efeito=impacto&elem=fogo&frames=8
+ *
+ * `tex` troca APENAS o uniform `uMap` do THREE.Points que o FX3D já criou —
+ * nada em js/ é alterado, o arquivo é lido de assets/candidatos/ (gitignored).
+ * `tex=hoje` mantém o ponto radial que o próprio fx3d_v2.js desenha em canvas.
+ * ======================================================================== */
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var st = document.getElementById('st');
+
+  function pump(n) {
+    for (var i = 0; i < (n || 1); i++) {
+      var E = JOGO.Engine;
+      if (E && E.events) {
+        while (E.events.length) {
+          var ev = E.events.shift();
+          [JOGO.Renderer, JOGO.UI, JOGO.Game].forEach(function (m) {
+            if (m && m.handleEvent) { try { m.handleEvent(ev); } catch (e) {} }
+          });
+        }
+      }
+      try { if (JOGO.Game.update) JOGO.Game.update(0.05); } catch (e) {}
+      try { if (JOGO.UI && JOGO.UI.update) JOGO.UI.update(0.05); } catch (e) {}
+      try { JOGO.Renderer.render(0.05); } catch (e) {}
+    }
+  }
+
+  // acha o THREE.Points das partículas dentro da cena montada pelo FX3D
+  function acharPontos() {
+    var sc = JOGO.Renderer.scene ? JOGO.Renderer.scene() : null;
+    var achado = null;
+    if (!sc) return null;
+    sc.traverse(function (o) { if (o.isPoints && o.material && o.material.uniforms) achado = o; });
+    return achado;
+  }
+  // e as malhas de anel/decalque, que também usam a mesma textura
+  function acharDecais() {
+    var sc = JOGO.Renderer.scene ? JOGO.Renderer.scene() : null, out = [];
+    if (!sc) return out;
+    sc.traverse(function (o) { if (o.isMesh && o.material && o.material.map) out.push(o); });
+    return out;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    try {
+      var canvas = document.getElementById('game-canvas');
+      JOGO.Renderer.init(canvas, { preserveDrawingBuffer: true });
+      if (Q.semUI !== '1' && JOGO.UI && JOGO.UI.init) JOGO.UI.init();
+      if (JOGO.Game.init) JOGO.Game.init();
+
+      var t0 = Date.now();
+      (function espera() {
+        var pronto = !JOGO.Models3D2 || !JOGO.Models3D2.isReady || JOGO.Models3D2.isReady();
+        if (!pronto && Date.now() - t0 < 20000) return setTimeout(espera, 100);
+
+        JOGO.Progress.reset();
+        var ids = JOGO.Progress.heroIds().slice(0, 2);
+        var dg = Q.dungeon || 'emberlock';
+        var sala = parseInt(Q.sala || '0', 10);
+        var estado = JOGO.Engine.createBattle(dg, sala, JOGO.Progress.battleParty(ids));
+        JOGO.Game.state = estado;
+        pump(24);
+
+        if (Q.rot && JOGO.Renderer.setCamera) JOGO.Renderer.setCamera({ rot: parseInt(Q.rot, 10) });
+        if (Q.dist && JOGO.Renderer.setCamera) JOGO.Renderer.setCamera({ dist: parseFloat(Q.dist) });
+        pump(6);
+
+        // ---- troca de textura das partículas ---------------------------------
+        var tex = Q.tex || 'hoje';
+        var pts = acharPontos();
+        function dispara() {
+          var elem = Q.elem || 'fogo', elem2 = Q.elem2 || null;
+          var efe = Q.efeito || 'impacto';
+          // alvo: uma célula do meio da grade, à frente dos heróis
+          // alvo padrão: a célula VIZINHA ao primeiro herói, para o efeito nascer
+          // junto do boneco — é assim que o jogador vê, e é o que a régua mede.
+          var h0 = estado.units.filter(function (u) { return u.side === 'player' && u.alive; })[0];
+          var gx = Q.gx != null ? parseInt(Q.gx, 10) : (h0 ? h0.x + 2 : Math.floor(estado.grid.w / 2));
+          var gy = Q.gy != null ? parseInt(Q.gy, 10) : (h0 ? h0.y : Math.floor(estado.grid.h / 2));
+          if (Q.perto !== '0') {
+            JOGO.Renderer.setCamera({ centerX: gx, centerY: gy,
+                                      dist: parseFloat(Q.dist || '13') });
+            pump(3);
+          }
+          var F = JOGO.FX;
+          if (efe === 'impacto') F.debugImpact(gx, gy, elem, parseFloat(Q.power || '1.4'), elem2);
+          else if (efe === 'nova') F.debugNova(gx, gy, elem, elem2);
+          else if (efe === 'feixe') F.debugBeam(1, gy, gx, gy, elem, elem2);
+          else if (efe === 'tiro') F.debugLaunch(1, gy, gx, gy, elem, elem2);
+          else if (efe === 'tudo') {
+            F.debugImpact(gx, gy, elem, 1.4, elem2);
+            F.debugNova(gx - 3, gy - 2, elem, elem2);
+            F.debugBeam(1, gy + 2, gx + 2, gy + 2, elem, elem2);
+          }
+          var nf = parseInt(Q.frames || '7', 10);
+          pump(nf);
+
+          // --- BILHETE GRANDE: o mesmo desenho usado como UMA placa de 3 m em
+          // vez de 100 partículas de 14 px. É a hipótese que a folha testa.
+          if (Q.bilhete) {
+            var L = JOGO.Renderer.fxLayers();
+            var w = JOGO.Renderer.world(gx, gy, parseFloat(Q.by || '1.1'));
+            var tam = parseFloat(Q.btam || '3.4');
+            new THREE.TextureLoader().load(
+              '../assets/candidatos/kenney_fx/sel/' + Q.bilhete + '.png', function (t2) {
+                var mat = new THREE.MeshBasicMaterial({
+                  map: t2, color: new THREE.Color(JOGO.Renderer.elementColor(elem) ||
+                        '#ff8c3a').convertSRGBToLinear(),
+                  transparent: true, depthWrite: false, depthTest: false,
+                  blending: THREE.AdditiveBlending
+                });
+                var pl = new THREE.Mesh(new THREE.PlaneGeometry(tam, tam), mat);
+                pl.position.copy(w);
+                pl.renderOrder = 40;
+                pl.onBeforeRender = function () { pl.quaternion.copy(L.camera.quaternion); };
+                L.fx.add(pl);
+                pump(1);
+                finalizar();
+              }, undefined, function () { finalizar(); });
+            return;
+          }
+          finalizar();
+        }
+        function finalizar() {
+          var im = document.createElement('img');
+          im.id = 'shot';
+          im.src = canvas.toDataURL('image/png');
+          im.style.width = '100%'; im.style.height = '100%';
+          document.body.appendChild(im);
+          document.getElementById('tag').textContent =
+            (Q.rotulo || (tex === 'hoje' ? 'HOJE — ponto radial gerado em código' : 'KENNEY ' + tex));
+          st.textContent = 'PASS ' + dg + ' sala ' + sala + ' · tex ' + tex +
+            ' · ' + (Q.efeito || 'impacto') + ' · ' + (Q.elem || 'fogo') +
+            ' · parts ' + JOGO.FX.stats().particles;
+          window.__pronto = true;
+        }
+
+        // ?psize=2.2 — infla a partícula por remendo no vertex shader (só nesta
+        // página). Serve para responder: "a forma nítida passa a ler se for maior?"
+        if (Q.psize && pts) {
+          pts.material.vertexShader =
+            pts.material.vertexShader.replace('aSize *', 'aSize * ' + parseFloat(Q.psize) + ' *');
+          pts.material.needsUpdate = true;
+        }
+        if (tex === 'hoje' || !pts) { dispara(); return; }
+        var url = '../assets/candidatos/kenney_fx/sel/' + tex + '.png';
+        new THREE.TextureLoader().load(url, function (t) {
+          t.needsUpdate = true;
+          pts.material.uniforms.uMap.value = t;
+          pts.material.needsUpdate = true;
+          var ds = acharDecais();
+          for (var i = 0; i < ds.length; i++) {
+            // só os decalques do FX (renderOrder 7) recebem a troca
+            if (ds[i].renderOrder === 7) ds[i].material.map = t;
+          }
+          dispara();
+        }, undefined, function () { st.textContent = 'ERRO textura ' + url; dispara(); });
+      })();
+    } catch (e) {
+      st.textContent = 'ERRO: ' + e.message + '\n' + e.stack;
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -648,7 +648,7 @@
     P.equipPet(TANK, 't-pet-fogo');
     P.addCards('t-invo', 12);
     P.addStones('st-terra', 7);
-    P.upgradeItem(P.invIndexOf('t-peito-vida'));   // custa 2 pedras
+    P.upgradeWorn(TANK, 'casca');                  // peça em uso: custa 2 pedras
     P.save();
     P.state = null;
     P.load();
@@ -657,8 +657,9 @@
     eq(h.element, 'fogo', 'elemento restaurado');
     eq(h.items.casca, 't-peito-vida', 'item equipado restaurado');
     eq(h.pet, 't-pet-fogo', 'pet restaurado');
-    eq(P.state.inventory.length, 2, 'inventário restaurado (equipado continua no saco)');
+    eq(P.state.inventory.length, 1, 'saco restaurado (o equipado saiu dele)');
     eq(P.itemLevel('t-peito-vida'), 1, 'nível de forja restaurado');
+    eq(P.equippedVar(TANK, 'casca').level, 1, 'a variante da cópia em uso sobreviveu ao save');
     eq(P.state.cards['t-invo'], 12, 'cartas restauradas');
     eq(P.stoneCount('st-terra'), 5, 'pedras restauradas');
     ok(P.isClassUnlocked('t-invo'), 'classe liberada pelas cartas continua liberada');
@@ -735,10 +736,12 @@
     P.load();
     eq(P.state.cards['t-invo'], 3, 'array de cartas virou contagem');
     eq(P.state.cards['t-bruxo'], 1, 'contagem da segunda classe');
-    eq(P.state.inventory.length, 3, 'strings viraram entradas e repetidos fundiram');
+    eq(P.state.inventory.length, 3, 'cada string virou uma CÓPIA no saco');
+    eq(P.invCount('t-bota-pp'), 2, 'a bota repetida agora são duas cópias, não uma fundida');
     eq(P.itemLevel('t-bota-pp'), 0, 'nível 0 por compatibilidade');
-    ok(P.invIndexOf('t-peito-epico') >= 0, 'item equipado voltou ao saco único');
+    eq(P.invIndexOf('t-peito-epico'), -1, 'o equipado NÃO volta ao saco (modelo novo)');
     eq(P.hero(TANK).items.casca, 't-peito-epico', 'segue equipado');
+    eq(P.equippedVar(TANK, 'casca').stars, 0, 'save antigo entra com zero estrelas');
   });
 
   t('save antigo com espaços pa/pp/vida/especial migra para os nomes novos', function () {
@@ -757,7 +760,7 @@
     eq(it.casca, 't-peito-vida', 'vida virou casca');
     eq(it.lume, 't-relic-especial', 'especial virou lume');
     ok(it.pa === undefined, 'o nome antigo não sobrevive');
-    eq(P.state.inventory.length, 4, 'os 4 itens voltaram ao saco único');
+    eq(P.state.inventory.length, 0, 'os 4 continuam vestidos — no modelo novo, vestido não fica no saco');
     has(P.spellsFor(TANK), 't-feitico-item', 'o feitiço do lume continua valendo');
   });
 
@@ -1046,37 +1049,49 @@
   // =========================================================================
   section('5 — Inventário ÚNICO: 4 espaços + pet + exclusividade');
 
-  t('equipar exige POSSE e o item CONTINUA no inventário', function () {
+  t('equipar exige POSSE e TIRA a cópia do saco', function () {
     fresh();
     eq(P.equip(TANK, 't-peito-vida'), false, 'sem ter o item');
     eq(P.addItem('t-peito-vida'), true, 'entrou no saco');
-    eq(P.state.inventory.length, 1, 'uma entrada');
-    eq(P.state.inventory[0].itemId, 't-peito-vida', 'entrada {itemId, level}');
+    eq(P.state.inventory.length, 1, 'uma cópia');
+    eq(P.state.inventory[0].itemId, 't-peito-vida', 'entrada {itemId, level, stars}');
     eq(P.state.inventory[0].level, 0, 'nível de forja 0');
+    eq(P.state.inventory[0].stars, 0, 'sem estrela');
     eq(P.equip(TANK, 't-peito-vida'), true, 'equipa');
-    eq(P.state.inventory.length, 1, 'equipar NÃO tira do saco único');
+    eq(P.state.inventory.length, 0, 'equipar TIRA do saco (a peça foi para o herói)');
     eq(P.hero(TANK).items.casca, 't-peito-vida', 'foi para o espaço certo');
     eq(P.equippedBy('t-peito-vida'), TANK, 'saber quem está usando');
+    eq(P.equippedVar(TANK, 'casca').itemId, 't-peito-vida', 'a variante em uso é legível');
+    eq(P.ownedCount('t-peito-vida'), 1, 'continua sendo UMA peça no mundo');
   });
 
-  t('o mesmo item não pode ser equipado por dois heróis', function () {
-    eq(P.equip(CURA, 't-peito-vida'), false, 'segundo herói recusado');
+  t('com uma cópia só, o segundo herói fica sem — e desequipar devolve ao saco', function () {
+    eq(P.equip(CURA, 't-peito-vida'), false, 'segundo herói recusado: não há cópia livre');
     eq(P.hero(CURA).items.casca, null, 'espaço do segundo continua vazio');
     eq(P.equippedBy('t-peito-vida'), TANK, 'dono continua sendo o primeiro');
     eq(P.unequip(TANK, 'casca'), true, 'primeiro solta a peça');
     eq(P.equippedBy('t-peito-vida'), null, 'ninguém usando');
+    eq(P.invCount('t-peito-vida'), 1, 'a MESMA cópia voltou para a grade');
     eq(P.equip(CURA, 't-peito-vida'), true, 'agora o segundo pode');
     eq(P.equippedBy('t-peito-vida'), CURA, 'novo dono');
-    eq(P.state.inventory.length, 1, 'continua uma única entrada no saco');
+    eq(P.state.inventory.length, 0, 'e o saco esvaziou de novo');
   });
 
-  t('item repetido no saque vira PEDRAS do elemento do item', function () {
+  t('DUAS cópias iguais: ×2 na grade e uma em cada herói', function () {
     fresh();
-    eq(P.addItem('t-peito-vida'), true, 'primeira cópia');
-    var antes = P.stoneCount('st-terra');
-    eq(P.addItem('t-peito-vida'), false, 'repetida não cria entrada nova');
-    eq(P.state.inventory.length, 1, 'uma entrada só');
-    ok(P.stoneCount('st-terra') > antes, 'virou pedra do elemento terra (' + P.stoneCount('st-terra') + ')');
+    eq(P.addItem('t-bota-pp'), true, 'primeira cópia');
+    eq(P.addItem('t-bota-pp'), true, 'repetida TAMBÉM entra (não vira pedra)');
+    eq(P.invCount('t-bota-pp'), 2, 'a grade mostra ×2');
+    var pilhas = P.invStacks();
+    eq(pilhas.length, 1, 'um espaço só na grade');
+    eq(pilhas[0].count, 2, 'com contador 2');
+    eq(P.equip(TANK, 't-bota-pp'), true, 'primeira vai para o tanque');
+    eq(P.invCount('t-bota-pp'), 1, 'sobrou ×1 na grade');
+    eq(P.equip(CURA, 't-bota-pp'), true, 'a segunda vai para a curandeira');
+    eq(P.invCount('t-bota-pp'), 0, 'a grade esvaziou');
+    eq(P.equippedByAll('t-bota-pp').length, 2, 'dois heróis calçados');
+    eq(P.ownedCount('t-bota-pp'), 2, 'duas peças no mundo');
+    eq(P.equip(ARCO, 't-bota-pp'), false, 'não existe terceira cópia');
   });
 
   t('cada item vai para o SEU espaço e não invade os outros', function () {
@@ -1910,11 +1925,10 @@
     var base = D.classes[TANK].stats;
     giveAndEquip(TANK, 't-peito-vida');       // +40 hp, resist fogo 10
     eq(P.effectiveStats(TANK).hp, base.hp + 40, 'nível 0: bônus cru');
-    var idx = P.invIndexOf('t-peito-vida');
     P.addStones('st-terra', 200);
-    P.upgradeItem(idx);                        // +1 => 1,12×
+    P.upgradeWorn(TANK, 'casca');              // +1 => 1,12×
     eq(P.effectiveStats(TANK).hp, base.hp + Math.round(40 * 1.12), '+1: 1,12×');
-    for (var i = 1; i < 10; i++) P.upgradeItem(idx);
+    for (var i = 1; i < 10; i++) P.upgradeWorn(TANK, 'casca');
     eq(P.itemLevel('t-peito-vida'), 10, 'chegou a +10');
     eq(P.effectiveStats(TANK).hp, base.hp + 88, '+10: 40 × 2,2 = 88');
     eq(P.effectiveStats(TANK).resists.fogo, 22, 'resistência também escala');
@@ -1924,9 +1938,8 @@
     fresh();
     var base = D.classes[TANK].stats;
     giveAndEquip(TANK, 't-anel-pa');           // +1 pa, +10 power
-    var idx = P.invIndexOf('t-anel-pa');
     P.addStones('st-fogo', 200);
-    for (var i = 0; i < 10; i++) P.upgradeItem(idx);
+    for (var i = 0; i < 10; i++) P.upgradeWorn(TANK, 'punho');
     eq(P.itemLevel('t-anel-pa'), 10, '+10');
     var st = P.effectiveStats(TANK);
     eq(st.pa, base.pa + 1, 'PA continua limitado a +1');
@@ -1939,8 +1952,6 @@
     var base = D.classes[TANK].stats;
     giveAndEquip(TANK, 't-anel-pa');           // pa: +1 · power: +10 (escala)
     giveAndEquip(TANK, 't-bota-pp');           // pp: +1 · dodge: +5 (escala)
-    var iPa = P.invIndexOf('t-anel-pa');
-    var iPp = P.invIndexOf('t-bota-pp');
     P.addStones('st-fogo', 200);
     P.addStones('st-agua', 200);
     for (var lv = 0; lv <= 10; lv++) {
@@ -1951,8 +1962,169 @@
       eq(st.pp, base.pp + 1, '+' + lv + ': PP continua +1 (não escala)');
       eq(st.power, base.power + Math.round(10 * mult), '+' + lv + ': poder escala normalmente');
       eq(st.dodge, base.dodge + Math.round(5 * mult), '+' + lv + ': esquiva escala normalmente');
-      if (lv < 10) { P.upgradeItem(iPa); P.upgradeItem(iPp); }
+      if (lv < 10) { P.upgradeWorn(TANK, 'punho'); P.upgradeWorn(TANK, 'passo'); }
     }
+  });
+
+  // =========================================================================
+  section('9-B — Estrelas de ITEM: fundir 3 iguais (★3 = 27 cópias)');
+
+  function copias(itemId, n) { for (var i = 0; i < n; i++) P.addItem(itemId); }
+  function idxDe(itemId, level, stars) {          // índice da 1ª cópia da variante
+    var inv = P.state.inventory;
+    for (var i = 0; i < inv.length; i++) {
+      if (inv[i].itemId === itemId && inv[i].level === level && inv[i].stars === stars) return i;
+    }
+    return -1;
+  }
+
+  t('a régua está declarada num lugar só (3 cópias por degrau, ★ até 3)', function () {
+    var cfg = P.starCfg();
+    eq(cfg.copies, 3, 'três cópias por degrau');
+    eq(cfg.max, 3, 'teto de 3 estrelas');
+    eq(cfg.bonus.length, 4, 'curva com ★0..★3');
+  });
+
+  t('3 cópias idênticas viram UMA com ★1', function () {
+    fresh();
+    copias('t-peito-vida', 2);
+    var info2 = P.fuseInfo(0);
+    eq(info2.pode, false, 'com 2 ainda não funde');
+    eq(info2.faltam, 1, 'falta 1 cópia');
+    P.addItem('t-peito-vida');
+    var info3 = P.fuseInfo(0);
+    eq(info3.pode, true, 'com 3 funde');
+    eq(info3.copias, 3, 'contou as três');
+    var nova = P.fuseItem(0);
+    ok(!!nova, 'fusão devolveu a peça nova');
+    eq(nova.stars, 1, 'nasceu com ★1');
+    eq(P.state.inventory.length, 1, 'as três viraram uma');
+    eq(P.invCount('t-peito-vida'), 1, 'uma cópia no saco');
+    eq(P.invStacks()[0].stars, 1, 'a grade mostra ★1');
+  });
+
+  t('só funde cópias do MESMO nível de forja (não herda forja de graça)', function () {
+    fresh();
+    copias('t-peito-vida', 3);
+    P.addStones('st-terra', 50);
+    P.upgradeItem(0);                              // uma delas vira +1
+    eq(P.fuseInfo(idxDe('t-peito-vida', 0, 0)).copias, 2, 'as duas de +0 não contam a de +1');
+    eq(P.fuseInfo(idxDe('t-peito-vida', 0, 0)).pode, false, 'e por isso não funde');
+    P.addItem('t-peito-vida');                     // terceira de +0
+    eq(P.fuseItem(idxDe('t-peito-vida', 0, 0)).level, 0, 'a fundida sai no nível das consumidas');
+    eq(P.itemLevel('t-peito-vida'), 1, 'a de +1 continua intacta no saco');
+  });
+
+  t('★3 custa 27 cópias e para por aí', function () {
+    fresh();
+    copias('t-peito-vida', 27);
+    var voltas = 0;
+    while (voltas < 50) {                          // funde tudo o que der
+      var alvo = -1, inv = P.state.inventory, i;
+      for (i = 0; i < inv.length; i++) {
+        var f = P.fuseInfo(i);
+        if (f && f.pode) { alvo = i; break; }
+      }
+      if (alvo < 0) break;
+      P.fuseItem(alvo);
+      voltas++;
+    }
+    eq(voltas, 13, '9 fusões para ★1, 3 para ★2 e 1 para ★3');
+    eq(P.state.inventory.length, 1, 'sobrou uma peça só');
+    eq(P.state.inventory[0].stars, 3, 'e ela é ★3');
+    eq(P.fuseInfo(0).maxed, true, 'no teto de estrelas');
+    copias('t-peito-vida', 3);
+    eq(P.fuseInfo(P.state.inventory.length - 1).pode, true, 'cópias novas ainda fundem entre si');
+    eq(P.fuseItem(0), null, 'mas a ★3 não sobe mais');
+  });
+
+  t('peça VESTIDA não entra na fusão (é preciso desequipar)', function () {
+    fresh();
+    copias('t-peito-vida', 3);
+    P.equip(TANK, 't-peito-vida');
+    eq(P.invCount('t-peito-vida'), 2, 'sobraram 2 no saco');
+    eq(P.fuseInfo(0).pode, false, 'com a terceira em uso, não funde');
+    P.unequip(TANK, 'casca');
+    eq(P.fuseInfo(0).pode, true, 'devolvida, a fusão volta a valer');
+  });
+
+  t('a estrela SOMA no multiplicador e não multiplica a forja', function () {
+    eq(P.itemMult(0, 0), 1, '★0 +0 = 1,00×');
+    // A curva sai de `starCfg()`, nao de numeros cravados: quando ela baixou de
+    // 0,10/0,25/0,50 para 0,08/0,18/0,30 (o teto ★3+10 passava de 2,7x), estes
+    // tres testes falharam por conferir o numero antigo em vez da REGRA.
+    var CURVA = P.starCfg().bonus;
+    eq(Math.round(P.itemMult(0, 1) * 100), Math.round((1 + CURVA[1]) * 100), '★1 = 1+' + CURVA[1]);
+    eq(Math.round(P.itemMult(0, 2) * 100), Math.round((1 + CURVA[2]) * 100), '★2 = 1+' + CURVA[2]);
+    eq(Math.round(P.itemMult(0, 3) * 100), Math.round((1 + CURVA[3]) * 100), '★3 = 1+' + CURVA[3]);
+    eq(Math.round(P.itemMult(10, 0) * 100), 220, '+10 sem estrela = 2,20× (contrato §9-B)');
+    var SOMADO = P.itemMult(10, 0) + (P.itemMult(0, 3) - 1);
+    eq(Math.round(P.itemMult(10, 3) * 100), Math.round(SOMADO * 100),
+       '★3 +10 = ' + SOMADO.toFixed(2) + '× — somado, não ' +
+       (P.itemMult(10, 0) * P.itemMult(0, 3)).toFixed(2) + '× multiplicado');
+  });
+
+  t('★ e forja juntos em effectiveStats, sem furar o teto de PA/PP', function () {
+    fresh();
+    var base = D.classes[TANK].stats;
+    copias('t-peito-vida', 3);                     // +40 PV, resist fogo 10
+    P.fuseItem(0);
+    P.equip(TANK, 't-peito-vida');
+    eq(P.equippedVar(TANK, 'casca').stars, 1, 'vestiu a ★1');
+    eq(P.effectiveStats(TANK).hp, base.hp + Math.round(40 * (1 + P.starCfg().bonus[1])),
+       '★1 = +' + Math.round(40 * (1 + P.starCfg().bonus[1])) + ' PV');
+    P.addStones('st-terra', 300);
+    for (var i = 0; i < 10; i++) P.upgradeWorn(TANK, 'casca');
+    var M1 = P.itemMult(10, 1);
+    eq(P.effectiveStats(TANK).hp, base.hp + Math.round(40 * M1),
+       '★1 +10 = ' + M1.toFixed(2) + '×');
+    // PA/PP continuam presos ao +1 do contrato §8, venha de onde vier
+    fresh();
+    copias('t-anel-pa', 9);
+    P.fuseItem(0); P.fuseItem(0); P.fuseItem(0);   // 9 → 3 de ★1
+    P.fuseItem(0);                                  // 3 de ★1 → 1 de ★2
+    eq(P.invStacks()[0].stars, 2, 'anel ★2');
+    P.equip(TANK, 't-anel-pa');
+    P.addStones('st-fogo', 300);
+    for (var k = 0; k < 10; k++) P.upgradeWorn(TANK, 'punho');
+    var st = P.effectiveStats(TANK);
+    eq(st.pa, base.pa + 1, 'PA continua +1 com ★2 e +10');
+    var M2 = P.itemMult(10, 2);
+    eq(st.power, base.power + Math.round(10 * M2), 'poder escala pelos dois eixos (' + M2.toFixed(2) + '×)');
+  });
+
+  t('save guarda as estrelas — do saco e da peça vestida', function () {
+    fresh();
+    copias('t-peito-vida', 3);
+    P.fuseItem(0);
+    P.equip(TANK, 't-peito-vida');
+    copias('t-bota-pp', 3);
+    P.fuseItem(0);
+    P.save();
+    P.state = null;
+    P.load();
+    eq(P.equippedVar(TANK, 'casca').stars, 1, 'a ★ da peça vestida sobreviveu');
+    eq(P.invStacks()[0].stars, 1, 'a ★ da peça do saco sobreviveu');
+    eq(P.state.inventory.length, 1, 'sem cópia fantasma');
+  });
+
+  t('save com estrela inválida é saneado sem virar lixo', function () {
+    writeSave(JSON.stringify({
+      unlockedClasses: [TANK, CURA],
+      heroes: { 't-tanque': { classId: TANK, xp: 0, level: 1,
+        items: { casca: 't-peito-vida' }, itemVar: { casca: { level: 99, stars: 42 } }, pet: null } },
+      inventory: [{ itemId: 't-bota-pp', level: 0, stars: -3, count: 2 },
+                  { itemId: 't-anel-pa', level: 3, stars: 2 }],
+      pets: [], cards: {}, stones: {}
+    }));
+    P.state = null;
+    P.load();
+    var v = P.equippedVar(TANK, 'casca');
+    eq(v.level, 10, 'nível preso ao máximo');
+    eq(v.stars, 3, 'estrela presa ao máximo');
+    eq(P.invCount('t-bota-pp'), 2, '`count` virou duas cópias');
+    eq(P.invStacks()[0].stars, 0, 'estrela negativa vira zero');
+    eq(P.itemStars('t-anel-pa'), 2, 'estrela válida preservada');
   });
 
   // =========================================================================
@@ -2778,7 +2950,7 @@
       P.addCards('t-invo', 10);
       ok(P.isClassUnlocked('t-invo'), 'cartas funcionam sem storage');
       P.addStones('st-terra', 5);
-      eq(P.upgradeItem(P.invIndexOf('t-peito-vida')), true, 'forja funciona sem storage');
+      eq(P.upgradeWorn(TANK, 'casca'), true, 'forja funciona sem storage');
       P.reset();
       eq(P.hero(TANK).level, 1, 'reset funciona sem storage');
     } finally {

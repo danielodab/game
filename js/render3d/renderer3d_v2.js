@@ -1280,6 +1280,16 @@ var JOGO = (typeof window !== 'undefined')
       if (!v) { v = getVisFor(u.uid, u.x, u.y); initFacing(st, u, v); }
       unitSnap[u.uid] = { x: v.x, y: v.y, defId: u.defId };
       node = unitNodes[u.uid];
+      // O nó é guardado por UID, mas a FUSÃO mantém o uid do anfitrião e troca
+      // só o `defId` (vira 'fus:a+b'). Reaproveitando o nó, a unidade fundida
+      // continuava com o boneco de antes e as marcas da outra classe nunca
+      // apareciam — era o relato "ao fundir ele não vem fundido". Quando o
+      // defId muda, o modelo é refeito.
+      if (node && node.userData && node.userData.defId !== u.defId) {
+        if (node.parent) node.parent.remove(node);
+        delete unitNodes[u.uid];
+        node = null;
+      }
       if (!node) {
         node = buildUnitNode(u);
         if (!node) continue;

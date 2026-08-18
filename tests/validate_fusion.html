@@ -31,6 +31,7 @@
 <script src="../js/core/data/fusions.js?v=1"></script>
 <script src="../js/core/data/pets.js?v=1"></script>
 <script src="../js/core/data/items.js?v=1"></script>
+<script src="../js/core/data/items_extra.js?v=1"></script>
 <script>
 (function () {
   'use strict';
@@ -578,8 +579,12 @@
     check('item ' + id + ' rarity válida', has(RARITIES, it.rarity), String(it.rarity));
     // --- adendo v2.1: elemento, conjunto e peso de saque ---
     check('item ' + id + ' element válido', has(ELEMENTS, it.element), String(it.element));
-    check('item ' + id + ' setId existe em DATA.sets',
-      isStr(it.setId) && !!(D.sets && D.sets[it.setId]), String(it.setId));
+    /* 2ª leva de itens: passou a existir item AVULSO (`setId: null`). Antes
+     * TODO item era peça de coleção e o saque ficava engessado — nada do que
+     * caía servia sozinho. O avulso é legítimo; o que continua proibido é
+     * `setId` apontando para um conjunto que não existe. */
+    check('item ' + id + ' setId é null (avulso) ou existe em DATA.sets',
+      it.setId === null || (isStr(it.setId) && !!(D.sets && D.sets[it.setId])), String(it.setId));
     if (isStr(it.setId) && D.sets && D.sets[it.setId]) {
       check('item ' + id + ' element bate com o do conjunto',
         it.element === D.sets[it.setId].element, it.element + ' != ' + D.sets[it.setId].element);
@@ -829,7 +834,7 @@
   })());
 
   // ---- conjuntos ----
-  check('DATA.sets com 12 conjuntos (2 por calabouço)', setIds.length === 12, 'tem ' + setIds.length);
+  check('DATA.sets com 18 conjuntos (3 por calabouço)', setIds.length === 18, 'tem ' + setIds.length);
   var setsByDungeon = {}, pieceOwner = {}, setElements = {};
   setIds.forEach(function (sid) {
     var st = SETS[sid];
@@ -897,12 +902,29 @@
     }
   });
   Object.keys(PREFIX).forEach(function (px) {
-    check('calabouço ' + PREFIX[px] + ' tem 2 conjuntos', setsByDungeon[PREFIX[px]] === 2,
+    check('calabouço ' + PREFIX[px] + ' tem 3 conjuntos', setsByDungeon[PREFIX[px]] === 3,
       'tem ' + (setsByDungeon[PREFIX[px]] || 0));
   });
-  check('todo item pertence a algum conjunto',
-    Object.keys(pieceOwner).length === itemIds.length,
-    Object.keys(pieceOwner).length + ' de ' + itemIds.length);
+  /* Nenhum item pode ficar no limbo: ou é peça de um conjunto, ou é AVULSO
+   * declarado (`setId: null`). E todo calabouço precisa ter avulso — é o que o
+   * jogador veste enquanto a coleção não fecha. */
+  var avulsos = itemIds.filter(function (id) { return IT[id].setId === null; });
+  var avulsosPorCal = {};
+  avulsos.forEach(function (id) {
+    avulsosPorCal[IT[id].dungeonId] = (avulsosPorCal[IT[id].dungeonId] || 0) + 1;
+  });
+  check('todo item é peça de conjunto OU avulso declarado',
+    Object.keys(pieceOwner).length + avulsos.length === itemIds.length,
+    Object.keys(pieceOwner).length + ' em conjunto + ' + avulsos.length + ' avulsos de ' + itemIds.length);
+  check('existem itens avulsos (o saque não é só coleção)', avulsos.length >= 12,
+    'tem ' + avulsos.length);
+  Object.keys(PREFIX).forEach(function (px) {
+    check('calabouço ' + PREFIX[px] + ' tem pelo menos 2 itens avulsos',
+      (avulsosPorCal[PREFIX[px]] || 0) >= 2, 'tem ' + (avulsosPorCal[PREFIX[px]] || 0));
+  });
+  check('nenhum item avulso ficou sem elemento', avulsos.every(function (id) {
+    return has(ELEMENTS, IT[id].element);
+  }));
   check('os 5 elementos aparecem em pelo menos 2 conjuntos cada', (function () {
     for (var i = 0; i < ELEMENTS.length; i++) if (!(setElements[ELEMENTS[i]] >= 2)) return false;
     return true;

@@ -713,3 +713,200 @@ jogo referencia. **Nenhum arquivo em `js/` foi tocado.**
 
 Atribuição não é obrigatória sob CC0. Creditamos assim mesmo, como já se faz em
 `docs/CREDITS_3D.md`.
+
+---
+---
+
+# PARTE III — EFEITOS E CHEFES GRANDES
+
+**Status: EM PESQUISA (o documento é salvo a cada achado; sessões anteriores caíram).**
+Data: 2026-08-18, sessão da noite. **Nenhum arquivo em `js/` foi tocado.**
+O elenco de personagens jogáveis está FECHADO (KayKit customizado) e não foi pesquisado.
+
+## III.0 A régua que reprova
+
+Palavras do usuário: *"os monstros, efeitos e personagens devem seguir o gráfico que temos
+no jogo, para não ficar diferente."* Poder de veto.
+
+Traduzido para critério verificável, o nosso gráfico é:
+
+| eixo | o que o jogo é hoje |
+|---|---|
+| cor | **chapada**, vinda de um atlas-paleta; sem textura pintada, sem PBR |
+| forma | silhueta grossa, contorno limpo, zero detalhe fino |
+| proporção | chibi, cabeça grande |
+| cenário | KayKit Dungeon Remastered |
+| monstros | Quaternius (casa razoavelmente) |
+
+Para EFEITO o critério é outro, e é o que o usuário deu: **NITIDEZ e SATURAÇÃO**.
+Fumaça fotorrealista num jogo de cor chapada fica pior que partícula desenhada simples.
+
+---
+
+## III.1 FRENTE 1 — EFEITOS
+
+### O que existe hoje, medido no código
+
+`js/render3d/fx3d_v2.js` (807 linhas) gera **tudo por código**, sem um único arquivo de
+imagem. São cinco técnicas:
+
+| técnica | onde | textura |
+|---|---|---|
+| partículas | `THREE.Points`, pool de 2600, blend aditivo | **uma só**: `dotTexture()` |
+| projéteis | esfera/cilindro emissivo (`projMesh`) | nenhuma |
+| anéis de choque | `RingGeometry(0.86, 1.0, 40)` | nenhuma |
+| decalques de chão | `PlaneGeometry` | **a mesma** `dotTexture()` |
+| luz dinâmica | pool fixo de 6 `PointLight` | — |
+
+E `dotTexture()` é, na íntegra, **um degradê radial branco de 64×64 pixels desenhado num
+canvas** (linhas 62–75 do arquivo). Ou seja: **o jogo inteiro — 24 tipos de efeito × 5
+elementos — é pintado com um borrão macio só.** Não há um único traço desenhado em lugar
+nenhum da camada de efeitos.
+
+Esse é o achado que orienta a frente toda. Não faltam efeitos — falta **desenho**.
+
+### O acervo, com a licença colada da fonte
+
+| pacote | conteúdo | licença |
+|---|---|---|
+| **Kenney — Particle Pack 1.1** | 80 PNG 512×512 (transparente + fundo preto + versões giradas) | CC0 |
+| **Kenney — Smoke Particles** | 70 PNG, 5 famílias (fumaça preta, explosão, flash, puff branco, "fart") | CC0 |
+| Kenney — Splat Pack | 30 PNG de respingo | CC0 |
+| OpenGameArt — Magic Effect Particle System (HenriqueGibi) | 8 PNG, **16,8 MB** | CC-BY 4.0 |
+
+`assets/candidatos/kenney_fx/particle-pack/License.txt`, verbatim:
+
+```
+	Particle Pack (1.1)
+
+	by Kenney Vleugels (Kenney.nl)
+
+	Additional credit for creating filter templates:
+	Indigo Ray, Craig Nisbet, Zoltan Erdokovy, Heliagon, ThreeDee, Killst4r and Tim2501
+
+			------------------------------
+
+	License (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You may use these assets in personal and commercial projects.
+	Credit (Kenney or www.kenney.nl) would be nice but is not mandatory.
+```
+
+`assets/candidatos/kenney_fx/smoke-particles/License.txt`, verbatim:
+
+```
+	Smoke particle pack by Kenney Vleugels (www.kenney.nl)
+
+			------------------------------
+
+			        License (CC0)
+	       http://creativecommons.org/publicdomain/zero/1.0/
+
+	You may use these graphics in personal and commercial projects.
+	Credit (Kenney or www.kenney.nl) would be nice but is not mandatory.
+```
+
+CC0 é renúncia de direitos: uso comercial **e redistribuição** liberados, que é exatamente o
+que este repositório precisa (vai tudo em base64, versionado, e o jogo abre por `file://`).
+Créditos entram em `docs/CREDITS_3D.md` mesmo assim.
+
+**Peso bruto baixado:** particle-pack 15 MB (o zip traz quatro cópias de cada sprite);
+só a pasta `PNG (Transparent)`, que é a que importa, são **5,24 MB em 80 arquivos de
+512×512**. Nada disso entra como está — ver "O preço" abaixo.
+
+### O veredito de estilo, com as capturas na mão
+
+**REPROVADO — Kenney Smoke Particles (os 70).** Folha `fx_kenney_smoke.png`. São puffs de
+aerógrafo: borda difusa, sem silhueta, e com **cor assada dentro** (explosão laranja, puff
+verde, flash amarelo), o que briga com a tinta elemental que o FX aplica por código. É
+exatamente a "fumaça fotorrealista" que o critério manda recusar.
+
+**REPROVADO — a família macia do Particle Pack:** `circle_05`, `light_01..03`, `flare_01`,
+`star_01..05`, `smoke_01..10`, `fire_01/02`, `flame_01..04`, `spark_01..04/07`.
+Motivo com número: **`circle_05` é literalmente o degradê radial que o `dotTexture()` já
+desenha.** Metade do pacote não acrescenta nada, porque o jogo já tem essa metade de graça,
+em doze linhas de canvas.
+
+**APROVADO — a família de borda dura**, cerca de 30 dos 80: `magic_01/02/03`, `star_06..09`,
+`slash_01..04`, `spark_05/06` (raios), `scratch_01` (três riscos), `flame_05/06`,
+`muzzle_01..05`, `circle_01..04` (anéis), `twirl_01..03`, `trace_01..07`, `dirt_01..03`,
+`scorch_01..03`, `symbol_02`. São **desenhos**, com contorno — a mesma língua de cor chapada
+do KayKit.
+
+### A descoberta que muda a recomendação
+
+Renderizei cada candidato **dentro da Cisterna, sala 1**, ao lado dos heróis e dos monstros:
+mesma câmera, mesmo quadro (t = 0,15 s), mesmo impacto de fogo, mudando **só a textura**.
+Folha `fx_sala_tamanho.png`.
+
+**No tamanho de partícula de HOJE (~14 px de tela), toda forma nítida vira cisco.**
+A estrela de quatro pontas some; o anel do `magic_03` lê como um losango de 3 px; o
+`slash_03` lê como um traço. Pior: o borrão macio de hoje é o que **mais brilha**, porque
+cobre 19 % do quadrado contra 7,5 % da estrela — mais pixels acesos, mais luz.
+
+Isso derruba a hipótese óbvia ("é só trocar o `dotTexture` por um sprite bonito"). Trocar a
+textura sem mexer no tamanho **piora** o efeito.
+
+**Com a partícula inflada 2,6× a conclusão inverte** (folha `fx_sala_particula.png`, que é a
+folha que decide):
+
+| sprite | veredito dentro da sala |
+|---|---|
+| HOJE (ponto radial) | brilha, mas é **borrão**: mancha laranja/branca sem forma |
+| **`star_07`** | **melhor do lote.** Faíscas de quatro pontas, nítidas e saturadas; leem como magia desenhada |
+| **`flame_05`** | línguas de chama apontando para cima — a melhor para `fogo` |
+| `scratch_01` | riscos diagonais; ótimo para corpo-a-corpo |
+| `magic_03` | vira padrão repetido de anéis; bonito parado, **repetitivo** em 26 cópias |
+| `spark_06` | raio fino; serve para `chain`/`ar`, some no resto |
+| `smoke_04` | pior que o de hoje. Confirma a reprovação da família macia |
+
+### O achado maior: o desenho paga como PLACA, não como partícula
+
+Folha `fx_sala_bilhete.png`. Plantei o mesmo PNG como **uma placa única de 3,6 m** (~250 px
+de tela) no lugar do impacto, aditiva, tingida pela cor do elemento. Nessa escala o desenho
+do Kenney não só lê: ele **pertence**. O anel rosa que aparece em todas as células é o anel
+de choque que o jogo já desenha hoje — está lá de propósito, para comparar a língua.
+
+| sprite como placa | serve para |
+|---|---|
+| `slash_03` / `slash_01` | corpo-a-corpo, golpe cortante |
+| `magic_03` | conjurar, `summon`, `teleport`, `swap` |
+| `muzzle_04` | sopro de fogo, `cast` de projétil |
+| `twirl_01` | `push`, `pull`, `moveTo` |
+| `star_09` | `detonateMarks`, clarão |
+| `circle_02` | `nova`, `shield`, `root` — troca a `RingGeometry` de cor chapada por um anel desenhado |
+
+Hoje os 24 tipos de efeito se distinguem por **cor e quantidade de partícula**, não por
+forma. A placa desenhada dá a cada tipo uma **assinatura de silhueta** — que é o que falta.
+
+### O preço, em bytes
+
+Não entram 80 PNG de 512×512. A conta que fecha:
+
+| plano | conteúdo | peso |
+|---|---|---|
+| mínimo | 1 atlas 512×512 com 16 sprites a 128 px | **~120–180 KB** → base64 ~160–240 KB |
+| recomendado | 1 atlas 1024×1024 com 16 sprites a 256 px (placas) + 8 a 64 px (partículas) | **~400 KB** → base64 ~540 KB |
+
+Orçamento embutido hoje: 16,27 MB de 25 MB. Cabe folgado. E como os sprites são **brancos
+sobre transparente** (o FX já tinge por código, `col3(color)`), **um atlas serve os cinco
+elementos** — não há custo por elemento.
+
+### Recomendação da Frente 1
+
+1. **Adotar o Kenney Particle Pack (CC0), só a família de borda dura** — cerca de 16 dos 80,
+   reamostrados para 128/256 px e empacotados num atlas. Baixado em
+   `assets/candidatos/kenney_fx/`, seleção em `.../sel/` (39 arquivos, 2,1 MB).
+2. **A mudança de maior retorno não é a partícula: é a PLACA.** Um bilhete desenhado por tipo
+   de efeito dá silhueta própria a cada um dos 24 — e é onde o traço do Kenney pertence.
+3. **Se a partícula for trocada, o tamanho sobe junto** (~2,5×), senão o efeito piora. Está
+   medido na folha `fx_sala_tamanho.png`.
+4. **Reprovados:** Smoke Particles (70), a metade macia do Particle Pack, e o pacote da
+   OpenGameArt (16,8 MB para 8 arquivos, pintado, CC-BY).
+
+**Nota de engenharia, para quem for implementar:** reamostre o sprite para 128 px **antes**
+de embutir. Deixar 512 px e confiar no mipmap faz a GPU escolher um nível borrado quando a
+partícula tem 14 px de tela — o desenho nítido morre no caminho, e você paga 16× em bytes
+pelo privilégio.
+

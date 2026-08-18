@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOTERRA 2.0 — teto das duas trilhas do item (pedra +10 × estrela ★3)</title>
+<style>
+  body { background: #14181c; color: #dde; font-family: Consolas, monospace; padding: 16px; }
+  h1 { font-size: 17px; }
+  h2 { font-size: 14px; color: #ffd98a; margin: 20px 0 4px; border-bottom: 1px solid #333; }
+  .sub { color: #89a; font-size: 12px; margin-bottom: 10px; line-height: 1.5; }
+  #summary { font-size: 16px; font-weight: bold; margin: 12px 0; padding: 8px; border-radius: 4px; }
+  .allpass { background: #143d1e; color: #7f7; }
+  .somefail { background: #3d1414; color: #f77; }
+  table { border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  th, td { border: 1px solid #2a3138; padding: 3px 8px; text-align: right; }
+  th { color: #ffd76b; text-align: center; }
+  td.k { text-align: left; color: #cde; }
+  .up { color: #7fdc8a; }
+  .pass::before { content: "PASS "; color: #6e6; font-weight: bold; }
+  .fail::before { content: "FAIL "; color: #f66; font-weight: bold; }
+  .fail { background: #2a1515; }
+  li { list-style: none; font-size: 12px; padding: 1px 4px; }
+</style>
+</head>
+<body>
+<h1>SOTERRA 2.0 — as DUAS trilhas de um item, medidas com o dado de verdade</h1>
+<div class="sub">
+  Um item passou a ter dois eixos: <b>pedra</b> (forja, até +10) e <b>estrela</b> (fundir 3 iguais,
+  até ★3 — 27 cópias). A pergunta que esta página responde é uma só: <b>com os dois no máximo, o
+  item vira absurdo?</b> Mede-se com <code>DATA.items</code> real, item por item, e depois no herói
+  inteiro (nível 30, conjunto completo) porque é lá que os bônus se somam.
+  <br>Regra do multiplicador [D18]: os eixos <b>somam</b>, não multiplicam —
+  <code>1 + 0,12·nível + estrela</code>.
+</div>
+<div id="summary">Carregando…</div>
+<div id="failList"></div>
+<div id="report"></div>
+
+<!-- BLINDAGEM DO SAVE DO JOGADOR — TEM que ser o primeiro script da página -->
+<script src="save_sandbox.js"></script>
+
+<script>window.__V = String(Date.now());
+['data/classes', 'data/spells', 'data/progression', 'data/elements', 'data/monsters',
+ 'data/dungeons', 'data/items', 'data/pets', 'data/fusions'].forEach(function (f) {
+  document.write('<scr' + 'ipt src="../js/core/' + f + '.js?v=' + window.__V + '"><\/scr' + 'ipt>');
+});
+['engine', 'fusion', 'progress'].forEach(function (f) {
+  document.write('<scr' + 'ipt src="../js/core/' + f + '.js?v=' + window.__V + '"><\/scr' + 'ipt>');
+});
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var J = window.JOGO || {};
+  var D = J.DATA || {}, P = J.Progress;
+  var results = [];
+  function check(name, ok, detail) {
+    results.push({ name: name, ok: !!ok, detail: detail == null ? '' : String(detail) });
+    return !!ok;
+  }
+  function el(tag, cls, html) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+  var rep = document.getElementById('report');
+  var NOSCALE = (D.upgrade && D.upgrade.nonScalingKeys) || ['pa', 'pp'];
+  function naoEscala(k) { return NOSCALE.indexOf(k) >= 0; }
+
+  var MULT_CRU = P.itemMult(0, 0);
+  var MULT_PEDRA = P.itemMult(10, 0);
+  var MULT_ESTRELA = P.itemMult(0, 3);
+  var MULT_TUDO = P.itemMult(10, 3);
+
+  // =======================================================================
+  // 1. A régua
+  // =======================================================================
+  rep.appendChild(el('h2', null, '1. A régua declarada'));
+  var cfg = P.starCfg();
+  var t1 = el('table');
+  t1.innerHTML =
+    '<tr><th>eixo</th><th>máximo</th><th>custo do máximo</th><th>multiplicador</th></tr>' +
+    '<tr><td class="k">pedra (forja)</td><td>+' + (D.upgrade.maxLevel) + '</td><td>107 pedras</td>' +
+      '<td>' + MULT_PEDRA.toFixed(2) + '×</td></tr>' +
+    '<tr><td class="k">estrela (fundir ' + cfg.copies + ' iguais)</td><td>★' + cfg.max + '</td>' +
+      '<td>' + Math.pow(cfg.copies, cfg.max) + ' cópias</td>' +
+      '<td>' + MULT_ESTRELA.toFixed(2) + '×</td></tr>' +
+    '<tr><td class="k"><b>os dois juntos</b></td><td>★' + cfg.max + ' +' + D.upgrade.maxLevel + '</td>' +
+      '<td>—</td><td class="up"><b>' + MULT_TUDO.toFixed(2) + '×</b></td></tr>' +
+    '<tr><td class="k">(se multiplicassem, o que se recusou)</td><td>—</td><td>—</td>' +
+      '<td>' + (MULT_PEDRA * MULT_ESTRELA).toFixed(2) + '×</td></tr>';
+  rep.appendChild(t1);
+  check('★3 custa ' + Math.pow(cfg.copies, cfg.max) + ' cópias (a escada difícil)',
+        Math.pow(cfg.copies, cfg.max) === 27, cfg.copies + '^' + cfg.max);
+  // A regra e SOMAR os dois eixos, nao multiplicar. Confiro a REGRA contra o que
+  // as duas tabelas dizem hoje — se eu cravasse o numero, mexer na curva quebraria
+  // o teste sem que a regra tivesse mudado (foi o que aconteceu).
+  var SOMADO = MULT_PEDRA + (MULT_ESTRELA - 1);
+  check('os dois eixos SOMAM (' + SOMADO.toFixed(2) + '×) em vez de multiplicar (' +
+        (MULT_PEDRA * MULT_ESTRELA).toFixed(2) + '×)',
+        Math.abs(MULT_TUDO - SOMADO) < 0.001, MULT_TUDO.toFixed(4) + '×');
+  check('a estrela sozinha vale menos que a forja sozinha',
+        MULT_ESTRELA < MULT_PEDRA, MULT_ESTRELA.toFixed(2) + '× < ' + MULT_PEDRA.toFixed(2) + '×');
+  // O teto foi BAIXADO de propósito: com a curva inicial (0,10/0,25/0,50) o
+  // ★3 +10 chegava a 2,70×, acima do limite que eu mesmo tinha posto. A curva
+  // passou a 0,08/0,18/0,30 e o topo do jogo ficou em 2,50×.
+  check('a estrela sozinha não passa de +30%', MULT_ESTRELA <= 1.30, MULT_ESTRELA.toFixed(2) + '×');
+  check('★3 +10 fica em 2,50× o item cru ou menos (teto aceito)',
+        MULT_TUDO <= 2.50, MULT_TUDO.toFixed(2) + '×');
+
+  // =======================================================================
+  // 2. Item por item: o maior número que o jogo pode mostrar
+  // =======================================================================
+  rep.appendChild(el('h2', null, '2. Item por item — o maior atributo com os dois eixos no topo'));
+  var linhas = [], id, piorPaPp = 0;
+  for (id in D.items) {
+    if (!D.items.hasOwnProperty(id)) continue;
+    var it = D.items[id], b = it.bonuses || {}, k;
+    var cru = 0, topo = 0, chaveTopo = '';
+    for (k in b) {
+      if (!b.hasOwnProperty(k)) continue;
+      if (k === 'resists') {
+        for (var e in b.resists) {
+          if (!b.resists.hasOwnProperty(e)) continue;
+          var vr = b.resists[e], vrTopo = Math.round(vr * MULT_TUDO);
+          if (vrTopo > topo) { topo = vrTopo; cru = vr; chaveTopo = e + ' (resist)'; }
+        }
+        continue;
+      }
+      var v = b[k];
+      var vTopo = naoEscala(k) ? v : Math.round(v * MULT_TUDO);
+      if (naoEscala(k)) piorPaPp = Math.max(piorPaPp, vTopo);
+      if (vTopo > topo) { topo = vTopo; cru = v; chaveTopo = k; }
+    }
+    if (topo > 0) linhas.push({ id: id, nome: it.name, rar: it.rarity, k: chaveTopo, cru: cru, topo: topo });
+  }
+  linhas.sort(function (a, b2) { return b2.topo - a.topo; });
+  var t2 = el('table');
+  var html = '<tr><th>item</th><th>raridade</th><th>atributo</th><th>cru</th><th>★3 +10</th><th>razão</th></tr>';
+  for (var i = 0; i < Math.min(12, linhas.length); i++) {
+    var L = linhas[i];
+    html += '<tr><td class="k">' + L.nome + '</td><td>' + L.rar + '</td><td>' + L.k + '</td>' +
+            '<td>' + L.cru + '</td><td class="up">' + L.topo + '</td><td>' +
+            (L.topo / L.cru).toFixed(2) + '×</td></tr>';
+  }
+  t2.innerHTML = html;
+  rep.appendChild(t2);
+  rep.appendChild(el('div', 'sub', 'Os 12 maiores entre os ' + linhas.length +
+    ' itens do jogo. Nenhum atributo pode passar de ' + MULT_TUDO.toFixed(2) + '× o valor cru.'));
+  var estourou = linhas.filter(function (L) { return L.topo > Math.round(L.cru * MULT_TUDO) + 0.5; });
+  check('nenhum item passa do multiplicador declarado', estourou.length === 0,
+        estourou.length ? estourou[0].nome : 'os ' + linhas.length + ' itens obedecem');
+  check('PA/PP não escalam com nenhuma das trilhas (teto §8 de +1)', piorPaPp <= 1,
+        'maior PA/PP de um item no topo: +' + piorPaPp);
+
+  // =======================================================================
+  // 3. No herói inteiro: conjunto completo, nível 30
+  // =======================================================================
+  rep.appendChild(el('h2', null, '3. O herói inteiro — conjunto completo, nível 30'));
+  // conjunto com mais esquiva (§9-H diz que é onde a conta costuma estourar)
+  var melhorSet = null, melhorEsq = -1, sid;
+  for (sid in D.sets) {
+    if (!D.sets.hasOwnProperty(sid)) continue;
+    var soma = 0;
+    (D.sets[sid].pieces || []).forEach(function (pid) {
+      var bb = (D.items[pid] || {}).bonuses || {};
+      soma += (bb.dodge || 0);
+    });
+    var bon = D.sets[sid].bonuses || {};
+    ['2', '3', '4'].forEach(function (n) { if (bon[n] && bon[n].dodge) soma += bon[n].dodge; });
+    if (soma > melhorEsq) { melhorEsq = soma; melhorSet = sid; }
+  }
+  var pecas = (D.sets[melhorSet].pieces || []).slice();
+
+  function heroiCom(classeId, nivel, estrelas, forja) {
+    P.reset();
+    var h = P.hero(classeId) || (P.unlockClass(classeId), P.hero(classeId));
+    P.addXp(classeId, 9e9);                      // topo da tabela de XP
+    for (var sk in D.stones) {                   // ids reais das pedras (o dado manda)
+      if (D.stones.hasOwnProperty(sk)) P.addStones(sk, 9999);
+    }
+    pecas.forEach(function (pid) {
+      var precisa = Math.pow(P.starCfg().copies, estrelas);
+      for (var c = 0; c < precisa; c++) P.addItem(pid);
+      for (var s = 0; s < estrelas; s++) {       // funde tudo até o degrau pedido
+        var voltas = 0;
+        while (voltas < 60) {
+          var alvo = -1;
+          for (var q = 0; q < P.state.inventory.length; q++) {
+            var f = P.fuseInfo(q);
+            if (f && f.pode && f.itemId === pid && f.stars === s) { alvo = q; break; }
+          }
+          if (alvo < 0) break;
+          P.fuseItem(alvo); voltas++;
+        }
+      }
+      P.equip(classeId, pid);
+      var slot = D.items[pid].slot;
+      for (var g = 0; g < forja; g++) P.upgradeWorn(classeId, slot);
+    });
+    return P.effectiveStats(classeId);
+  }
+
+  var CLASSE = Object.keys(D.classes)[0];
+  for (var ck in D.classes) {                    // uma classe realmente liberada
+    if (D.classes.hasOwnProperty(ck) && D.classes[ck].startsUnlocked) { CLASSE = ck; break; }
+  }
+  var semItens = (function () { P.reset(); P.addXp(CLASSE, 9e9); return P.effectiveStats(CLASSE); })();
+  var cru30 = heroiCom(CLASSE, 30, 0, 0);
+  var pedra30 = heroiCom(CLASSE, 30, 0, 10);
+  var tudo30 = heroiCom(CLASSE, 30, 3, 10);
+
+  var t3 = el('table');
+  var chaves = ['hp', 'pa', 'pp', 'power', 'dodge', 'lock', 'initiative'];
+  var h3 = '<tr><th>estado</th>' + chaves.map(function (k) { return '<th>' + k + '</th>'; }).join('') + '</tr>';
+  function linha(nome, st) {
+    return '<tr><td class="k">' + nome + '</td>' +
+      chaves.map(function (k) { return '<td>' + (st[k] || 0) + '</td>'; }).join('') + '</tr>';
+  }
+  h3 += linha('nv30 sem item nenhum', semItens);
+  h3 += linha('nv30 + conjunto cru (★0 +0)', cru30);
+  h3 += linha('nv30 + conjunto ★0 +10', pedra30);
+  h3 += linha('nv30 + conjunto ★3 +10', tudo30);
+  t3.innerHTML = h3;
+  rep.appendChild(t3);
+  rep.appendChild(el('div', 'sub', 'Conjunto medido: <b>' + (D.sets[melhorSet].name || melhorSet) +
+    '</b> (' + pecas.length + ' peças, o de maior esquiva do jogo). ' +
+    'A estrela só mexe no que veio de ITEM: base de classe, ganho por nível e bônus de conjunto ' +
+    'não escalam, e é isso que segura a conta.'));
+
+  var ganhoEstrela = tudo30.dodge - pedra30.dodge;
+  var ganhoPedra = pedra30.dodge - cru30.dodge;
+  check('a estrela acrescenta menos esquiva que a forja já acrescentava',
+        ganhoEstrela <= ganhoPedra, '+' + ganhoEstrela + ' de estrela contra +' + ganhoPedra + ' de pedra');
+  check('PA e PP do herói não mudam com os dois eixos no topo',
+        tudo30.pa === cru30.pa && tudo30.pp === cru30.pp,
+        'pa ' + cru30.pa + '→' + tudo30.pa + ' · pp ' + cru30.pp + '→' + tudo30.pp);
+  check('o herói ★3 +10 não chega ao dobro do herói de conjunto cru (PV)',
+        tudo30.hp < cru30.hp * 2, cru30.hp + ' → ' + tudo30.hp +
+        ' (' + (tudo30.hp / cru30.hp).toFixed(2) + '×)');
+
+  // =======================================================================
+  var falhas = results.filter(function (r) { return !r.ok; });
+  var sum = document.getElementById('summary');
+  sum.className = falhas.length ? 'somefail' : 'allpass';
+  sum.textContent = (falhas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') +
+    (results.length - falhas.length) + ' de ' + results.length + ' checagens ok, ' +
+    falhas.length + ' falharam · teto medido: ★3 +10 = ' + MULT_TUDO.toFixed(2) + '× o item cru';
+  var lista = document.getElementById('failList');
+  results.forEach(function (r) {
+    lista.appendChild(el('li', r.ok ? 'pass' : 'fail', r.name + (r.detail ? ' — ' + r.detail : '')));
+  });
+  window.TEST_RESULTS = results;
+})();
+</script>
+</body>
+</html>

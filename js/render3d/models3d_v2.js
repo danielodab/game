@@ -152,7 +152,11 @@ var JOGO = (typeof window !== 'undefined')
     // clipe de andar sobrescreveria e a pose sumiria em movimento.
     sumo: { model: 'barbarian', show: ['2H_Axe', 'Barbarian_Cape'],
             scale: 1.16, tint: '#d4553f', accent: '#ffd08a', weapon: '2H_Axe',
-            build: { chest: 1.42, ombro: 1.34, braco: 1.38, perna: 0.88, cabeca: 0.92 },
+            // `cabeca` 0,92 -> 0,78: com o tronco a 1,42 a cabeça ficava do mesmo
+            // tamanho de antes e, ao lado de um corpo largo, LIA como maior.
+            // Quem tem músculo tem a cabeça proporcionalmente MENOR — foi o
+            // relato: "ele deve ser grande e forte de corpo, não de cabeça".
+            build: { chest: 1.42, ombro: 1.34, braco: 1.38, perna: 0.88, cabeca: 0.78 },
             headTilt: 0.30,
             concept: 'Bárbaro brutamontes de machado de duas mãos, capa e cabeça baixa' },
     arqueiro: { model: 'rogue_hooded', show: ['2H_Crossbow', 'Rogue_Cape'],
