@@ -150,15 +150,18 @@ var JOGO = (typeof window !== 'undefined')
     // `headTilt` baixa a cabeça (testa à frente, olhar de touro). Ele é POSTURA,
     // aplicado DEPOIS da animação a cada quadro: se fosse gravado no osso, o
     // clipe de andar sobrescreveria e a pose sumiria em movimento.
-    sumo: { model: 'barbarian', show: ['2H_Axe', 'Barbarian_Cape'],
-            scale: 1.16, tint: '#d4553f', accent: '#ffd08a', weapon: '2H_Axe',
+    // DOIS MACHADOS (pedido do usuario). O machado de duas maos e gramatica de
+    // dano; a classe e o TANQUE, e um machado em cada mao le como quem entra e
+    // segura. As duas pecas ja estavam dentro do arquivo, desligadas.
+    sumo: { model: 'barbarian', show: ['1H_Axe', '1H_Axe_Offhand', 'Barbarian_Cape'],
+            scale: 1.16, tint: '#d4553f', accent: '#ffd08a', weapon: '1H_Axe',
             // `cabeca` 0,92 -> 0,78: com o tronco a 1,42 a cabeça ficava do mesmo
             // tamanho de antes e, ao lado de um corpo largo, LIA como maior.
             // Quem tem músculo tem a cabeça proporcionalmente MENOR — foi o
             // relato: "ele deve ser grande e forte de corpo, não de cabeça".
             build: { chest: 1.42, ombro: 1.34, braco: 1.38, perna: 0.88, cabeca: 0.78 },
             headTilt: 0.30,
-            concept: 'Bárbaro brutamontes de machado de duas mãos, capa e cabeça baixa' },
+            concept: 'Bárbaro brutamontes de dois machados, capa e cabeça baixa' },
     arqueiro: { model: 'rogue_hooded', show: ['2H_Crossbow', 'Rogue_Cape'],
             scale: 1.00, tint: '#4f9d6a', accent: '#d8f0a0', weapon: '2H_Crossbow',
             concept: 'Batedor encapuzado de besta de duas mãos' },
@@ -166,7 +169,9 @@ var JOGO = (typeof window !== 'undefined')
     // experiente". O modelo do mago não tem barba — quem tem é o Bárbaro, e as
     // bind poses dos 9 humanoides KayKit são idênticas, então a cabeça troca.
     // `headSwap` põe a cabeça barbada no corpo do mago e `headTint` a embranquece.
-    bruxo: { model: 'mage', show: ['2H_Staff', 'Mage_Hat', 'Mage_Cape'],
+    // O grimorio fechado estava desligado. O mago segurava so o cajado e a mao
+    // esquerda ficava vazia — de longe lia como bengala.
+    bruxo: { model: 'mage', show: ['2H_Staff', 'Spellbook', 'Mage_Hat', 'Mage_Cape'],
             scale: 1.02, tint: '#7a5fa0', accent: '#b98cff', weapon: '2H_Staff',
             headSwap: { model: 'barbarian', mesh: 'Barbarian_Head' },
             headTint: '#fbfaf7', headWhite: 0.88,
@@ -174,7 +179,9 @@ var JOGO = (typeof window !== 'undefined')
     // LADINO: o usuário pediu máscara preta na boca. O acervo não tem nenhuma
     // peça de rosto além de cabeças, chapéus e um elmo — então a faixa é
     // GEOMETRIA GERADA, presa ao osso da cabeça (ver `poeMascara`).
-    espadachim: { model: 'rogue', show: ['Knife', 'Knife_Offhand'],
+    // A CAPA estava declarada em CLASS_MARK (e ia para as fusoes) e nunca era
+    // mostrada na propria classe: o Ladino era o unico sem silhueta nas costas.
+    espadachim: { model: 'rogue', show: ['Knife', 'Knife_Offhand', 'Rogue_Cape'],
             scale: 0.97, tint: '#2f6f8f', accent: '#9be8ff', weapon: 'Knife',
             // MÁSCARA REMOVIDA a pedido do usuário ("a máscara ficou muito ruim
             // do ladino, pode tirar"). A geometria gerada por `poeMascara`
@@ -213,10 +220,14 @@ var JOGO = (typeof window !== 'undefined')
   // identificador dele — a mao direita, com a arma principal do anfitriao,
   // nunca e tomada. Arqueiro e espadachim nao tem peca de cabeca (o capuz faz
   // parte da malha da cabeca, que e skinned): a arma responde por eles.
+  // A arma-assinatura de cada classe: a peca que, sozinha, diz "esta classe
+  // esteve aqui". Vai para a mao livre do anfitriao quando ele funde.
+  // Sao pecas de UMA mao de proposito: a de duas maos entra atravessada no
+  // corpo do anfitriao, que ja segura a propria.
   M.CLASS_MARK = {
-    sumo:       { head: 'Barbarian_Hat', cape: 'Barbarian_Cape', hand: '2H_Axe' },
-    arqueiro:   { head: null,            cape: 'Rogue_Cape',     hand: '2H_Crossbow' },
-    bruxo:      { head: 'Mage_Hat',      cape: 'Mage_Cape',      hand: '2H_Staff' },
+    sumo:       { head: 'Barbarian_Hat', cape: 'Barbarian_Cape', hand: '1H_Axe' },
+    arqueiro:   { head: null,            cape: 'Rogue_Cape',     hand: '1H_Crossbow' },
+    bruxo:      { head: 'Mage_Hat',      cape: 'Mage_Cape',      hand: '1H_Wand' },
     espadachim: { head: null,            cape: 'Rogue_Cape',     hand: 'Knife_Offhand' },
     curandeira: { head: 'Knight_Helmet', cape: 'Knight_Cape',    hand: 'Badge_Shield' },
     invocador:  { head: null,            cape: 'Mage_Cape',      hand: 'Spellbook_open' }
@@ -734,8 +745,13 @@ var JOGO = (typeof window !== 'undefined')
     // silhueta das costas, que le de longe.
     if (mk.cape) out.push({ model: look.model, mesh: mk.cape, bone: 'chest',
                             hidesHostCape: true, tint: corDoConvidado });
+    // A arma do convidado vai para a mao ESQUERDA, e a peca que o anfitriao
+    // carrega naquela mao sai de cena — senao as duas ocupam o mesmo punho e
+    // aparecem atravessadas uma na outra. Foi o que aconteceu assim que o
+    // Barbaro passou a usar as duas maos e o Ladino ganhou a segunda adaga.
     var arma = mk.hand || look.weapon;
-    if (arma) out.push({ model: look.model, mesh: arma, bone: 'handslotl', tint: corDoConvidado });
+    if (arma) out.push({ model: look.model, mesh: arma, bone: 'handslotl',
+                         tint: corDoConvidado, hidesHostOffhand: true });
     return out;
   }
 
@@ -920,6 +936,19 @@ var JOGO = (typeof window !== 'undefined')
           model.traverse(function (n) {
             if (n !== g2 && n.isMesh && /_Cape$/.test(n.name || '')) n.visible = false;
           });
+        }
+        // Esvazia a mao que vai receber a arma do convidado. Sem isto as duas
+        // pecas ocupam o mesmo punho e aparecem atravessadas — o que passou a
+        // acontecer assim que o Barbaro ganhou o segundo machado e o Ladino a
+        // segunda adaga: antes o anfitriao tinha a esquerda vazia por acaso.
+        if (gf.hidesHostOffhand) {
+          var punho = findBone(model, gf.bone);
+          if (punho) {
+            for (var pi = punho.children.length - 1; pi >= 0; pi--) {
+              var f = punho.children[pi];
+              if (f !== g2 && f.isMesh) f.visible = false;
+            }
+          }
         }
         // A peca entra com a COR DA CLASSE QUE A DOOU. O acervo so tem 4 capas e
         // 3 pecas de cabeca para 6 classes — arqueiro e espadachim dividem a capa

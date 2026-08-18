@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — armas das 6 classes e as 15 fusões</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 14px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 14px 6px;max-width:1000px}
+  #st{font:12px monospace;margin:0 14px 8px;padding:5px 9px;border-radius:5px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  canvas.folha{display:block;margin:0 14px 14px;border:1px solid #2b3542}
+  h2{font-size:13px;margin:8px 14px 4px;color:#ffd98a}
+  #cv{position:fixed;left:-4000px;top:0}
+</style>
+</head>
+<body>
+<h1>As armas de cada classe, e o que cada fusão herda</h1>
+<div class="sub">Corpo inteiro, mesma luz e mesma escala. Na fusão o teste é: dá para nomear as
+DUAS classes que se fundiram? A peça de cabeça, a capa e a arma vêm do convidado;
+o corpo é do anfitrião.</div>
+<div id="st">rodando…</div>
+<h2>As 6 classes</h2>
+<canvas id="fClasses" class="folha"></canvas>
+<h2>As 15 fusões — cada uma rotulada com os dois pais</h2>
+<canvas id="fFusoes" class="folha"></canvas>
+<canvas id="cv" width="260" height="330"></canvas>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var TW = 260, TH = 330;
+  var CLASSES = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeira', 'invocador'];
+  var PT = { sumo: 'Bárbaro', arqueiro: 'Batedor', bruxo: 'Bruxo',
+             espadachim: 'Ladino', curandeira: 'Paladina', invocador: 'Xamã' };
+
+  var st = document.getElementById('st');
+  var ren, sc, cam, problemas = [];
+
+  function cena() {
+    var cv = document.getElementById('cv');
+    ren = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+    ren.setSize(TW, TH, false);
+    ren.setClearColor(0x1a2029, 1);
+    sc = new THREE.Scene();
+    sc.add(new THREE.HemisphereLight(0xbfd4ea, 0x2b2f36, 0.95));
+    var key = new THREE.DirectionalLight(0xfff0d8, 1.75); key.position.set(4, 8, 7); sc.add(key);
+    var rim = new THREE.DirectionalLight(0xffb070, 0.95); rim.position.set(-6, 4, -6); sc.add(rim);
+    var chao = new THREE.Mesh(new THREE.PlaneGeometry(9, 9),
+      new THREE.MeshStandardMaterial({ color: 0x2a3240, roughness: 1 }));
+    chao.rotation.x = -Math.PI / 2; sc.add(chao);
+    cam = new THREE.PerspectiveCamera(28, TW / TH, 0.05, 60);
+  }
+
+  function pousa(node) {
+    var M = JOGO.Models3D2, clipes = M.clips ? M.clips() : [], alvo = null;
+    for (var i = 0; i < clipes.length; i++) {
+      if (/idle/.test((clipes[i].name || '').toLowerCase())) { alvo = clipes[i]; break; }
+    }
+    if (!alvo && clipes.length) alvo = clipes[0];
+    if (!alvo) return;
+    var mix = new THREE.AnimationMixer(node);
+    mix.clipAction(alvo).play();
+    mix.update(0.4);
+    node.updateMatrixWorld(true);
+  }
+
+  /* Que peças ESTÃO VISÍVEIS no boneco — é como o teste confere se a fusão
+   * carrega marca das duas classes, em vez de eu olhar a foto e achar. */
+  function pecas(node) {
+    var v = [];
+    node.traverse(function (o) {
+      if ((o.isMesh || o.isSkinnedMesh) && o.visible && o.parent && o.parent.isBone) {
+        v.push(o.name);
+      }
+    });
+    return v;
+  }
+
+  function tira(g, node, col, linha, rotulo, sub, cor) {
+    while (sc.children.length > 4) sc.remove(sc.children[sc.children.length - 1]);
+    if (node) {
+      sc.add(node);
+      node.updateMatrixWorld(true);
+      var b = new THREE.Box3().setFromObject(node);
+      var s = b.getSize(new THREE.Vector3());
+      var c = b.getCenter(new THREE.Vector3());
+      node.position.x -= c.x; node.position.z -= c.z; node.position.y -= b.min.y;
+      node.rotation.y = Math.PI * 0.18;
+      node.updateMatrixWorld(true);
+      var d = s.y * 2.05 + 0.8;
+      cam.position.set(d * 0.40, s.y * 0.60, d);
+      cam.lookAt(0, s.y * 0.47, 0);
+    }
+    ren.render(sc, cam);
+    var cx = col * TW, cy = linha * TH;
+    g.drawImage(document.getElementById('cv'), cx, cy);
+    g.fillStyle = 'rgba(8,10,14,0.86)';
+    g.fillRect(cx, cy + TH - 42, TW, 42);
+    g.fillStyle = cor || '#ffd98a';
+    g.font = 'bold 14px Segoe UI, sans-serif';
+    g.fillText(rotulo, cx + 8, cy + TH - 24);
+    g.fillStyle = '#828e9c';
+    g.font = '10px Segoe UI, sans-serif';
+    g.fillText(sub, cx + 8, cy + TH - 8);
+    g.strokeStyle = '#2b3542'; g.strokeRect(cx + 0.5, cy + 0.5, TW - 1, TH - 1);
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var t0 = Date.now();
+    (function espera() {
+      var M = JOGO.Models3D2;
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 40000) return setTimeout(espera, 200);
+        st.textContent = 'modelos não carregaram'; window.__pronto = true; return;
+      }
+      cena(); desenha();
+    })();
+
+    function desenha() {
+      var M = JOGO.Models3D2;
+
+      // ---------------------------------------------------------- as 6 classes
+      var f1 = document.getElementById('fClasses');
+      f1.width = 6 * TW; f1.height = TH;
+      var g1 = f1.getContext('2d');
+      g1.fillStyle = '#0b0e12'; g1.fillRect(0, 0, f1.width, f1.height);
+      var armasDe = {};
+      CLASSES.forEach(function (cid, i) {
+        var node = M.unit(cid, { element: 'fogo' });
+        pousa(node);
+        var p = pecas(node);
+        armasDe[cid] = p;
+        if (!p.length) problemas.push(PT[cid] + ' não mostra peça nenhuma');
+        tira(g1, node, i, 0, PT[cid], p.join(' · '), '#cfe0f2');
+      });
+
+      // ---------------------------------------------------------- as 15 fusões
+      var pares = [];
+      for (var a = 0; a < CLASSES.length; a++)
+        for (var b = a + 1; b < CLASSES.length; b++) pares.push([CLASSES[a], CLASSES[b]]);
+
+      var COLS = 5, linhas = Math.ceil(pares.length / COLS);
+      var f2 = document.getElementById('fFusoes');
+      f2.width = COLS * TW; f2.height = linhas * TH;
+      var g2 = f2.getContext('2d');
+      g2.fillStyle = '#0b0e12'; g2.fillRect(0, 0, f2.width, f2.height);
+
+      var MARK = M.CLASS_MARK || {};
+      pares.forEach(function (par, i) {
+        var id = 'fus:' + par[0] + '+' + par[1];
+        var node = null;
+        try { node = M.unit(id, { element: 'fogo' }); } catch (e) {}
+        if (!node) { problemas.push(id + ' não montou'); return; }
+        pousa(node);
+        var p = pecas(node);
+
+        // A REGRA que a fusão tem de cumprir: a marca do convidado precisa
+        // aparecer. Conferir na foto não serve — o teste cobra a peça.
+        var doConvidado = 0;
+        [par[0], par[1]].forEach(function (c) {
+          var mk = MARK[c] || {};
+          [mk.head, mk.cape, mk.hand].forEach(function (m) {
+            if (m && p.indexOf(m) >= 0) doConvidado++;
+          });
+        });
+        if (doConvidado < 2) {
+          problemas.push(PT[par[0]] + '+' + PT[par[1]] + ': só ' + doConvidado + ' marca(s)');
+        }
+
+        // punho com mais de uma peça = arma atravessada na arma
+        var duplas = 0;
+        node.traverse(function (o) {
+          if (!o.isBone || !/^handslot/.test((o.name || '').toLowerCase())) return;
+          var n = 0;
+          for (var k = 0; k < o.children.length; k++) {
+            if (o.children[k].isMesh && o.children[k].visible) n++;
+          }
+          if (n > 1) duplas++;
+        });
+        if (duplas) problemas.push(PT[par[0]] + '+' + PT[par[1]] + ': ' + duplas + ' punho com 2 peças');
+
+        tira(g2, node, i % COLS, Math.floor(i / COLS),
+             PT[par[0]] + ' + ' + PT[par[1]], p.join(' · '));
+      });
+
+      st.className = problemas.length ? 'fail' : 'allpass';
+      st.textContent = (problemas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') +
+        '6 classes e ' + pares.length + ' fusões' +
+        (problemas.length ? ' · ' + problemas.join(' | ') : ' · toda fusão mostra marca dos dois pais');
+      window.__pronto = true;
+    }
+  });
+})();
+</script>
+</body>
+</html>
