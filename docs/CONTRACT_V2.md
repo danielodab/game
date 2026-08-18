@@ -135,10 +135,10 @@ arredondado. Escudo absorve antes do PV.
 
 ```js
 DATA.fusionForms = { 'classA+classB': [   // chave com as duas classes em ordem alfabética
-    { tier:0|5|12|20|30, formName:'Furacão',            // fragmento nominal (substantivo)
+    { tier:0|5|10|12|15|20|30, formName:'Furacão',      // fragmento nominal (substantivo)
       paCost, cooldown, range:{…}, aoe:{…}, targetSide,
       mechanic:[ Effect… ],        // efeitos SEM elemento definido: use element:'@A' e '@B'
-      description, fxShape } , … ] };   // 5 formas por dupla (tiers 0,5,12,20,30)
+      description, fxShape } , … ] };   // 7 formas por dupla (tiers 0,5,10,12,15,20,30)
 
 DATA.fusionBlends = { 'elemA+elemB': {   // 15 combinações (inclui iguais e neutro)
     affix:'Salgado',                     // fragmento adjetival do nome
@@ -426,6 +426,38 @@ isométricos clássicos.
   tela além da UI). A sensação-alvo é *"eu ando ao redor do campo"*, nunca *"o campo gira na minha mão"*.
 - **Enquadramento**: a câmera nasce mostrando o grupo e o primeiro grupo inimigo — não a sala inteira
   reduzida. No celular, a célula nunca fica abaixo de ~44 px: a câmera aproxima em vez de mostrar tudo.
+
+## 9-G. ADENDO v2.6 — A escada da fusão passa a bater com a das classes
+
+**Como estava.** A classe ganhava feitiço nos níveis 5, 10, 12, 15, 20 e 30. A fusão ganhava
+forma nos níveis 0, 5, 12, 20 e 30. Consequência medida na página `tests/liberacao.html`: entre
+o nível 12 e o 19 uma dupla fundida não ganhava **nada**, enquanto cada um dos dois heróis
+separados ganhava dois feitiços no mesmo intervalo. Fundir ficava pior quanto mais se subia.
+
+**Como fica.** `DATA.fusionForms[dupla]` passa a ter **7 formas**, nos tiers
+`0, 5, 10, 12, 15, 20, 30` — as mesmas marcas da progressão de classe, mais o tier 0 que
+existe desde o instante da fusão. São 15 duplas × 7 formas = **105 formas autorais** e
+15 × 25 × 7 = **2.625 composições**.
+
+**Regras que os degraus novos respeitam** (as mesmas de antes, já cobradas por
+`tests/validate_fusion.html`):
+
+- todo `formName` continua substantivo masculino singular, e continua **único em todo o sistema**;
+- toda forma `riderMode:'offense'` carrega `'@A'` ou `'@B'` na mecânica — senão a mistura
+  elemental não pinta nada nela;
+- em **qualquer** nível, o conjunto de formas disponíveis mantém pelo menos
+  `min(2, ceil(n/2))` ofensivas: uma dupla fundida luta sozinha em campo e não pode ficar
+  só com apoio na mão;
+- forma de alvo aliado precisa ter `range.min === 0`, para servir ao próprio corpo fundido.
+
+**Novidade mecânica.** Os degraus 10 e 15 são os únicos que usam as áreas `cross`, `cone` e
+`ring` do motor — implementadas em `Engine` desde a v2 e até aqui nunca aproveitadas pela fusão.
+O `ring` é coroa vazada: acerta a distância exata e **poupa quem está colado**, o que dá à
+fusão uma ferramenta de posicionamento que ela não tinha.
+
+**Contagem que os testes cobram** deixa de ser um número cravado e passa a nascer do dado
+(`duplas × TIERS.length`): o "75 formName únicos" cravado no teste virou falha sozinho no dia
+em que a escada mudou.
 
 ## 10. Testes obrigatórios
 

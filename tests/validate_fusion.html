@@ -56,7 +56,9 @@
   var WEATHERS = ['calmo', 'chuva', 'estiagem', 'vendaval', 'tremor'];
   var CLEANSE_KINDS = ['poison', 'root', 'mark', 'invisible', 'shield', 'buff', 'taunt', 'reflect', 'regen'];
   var CLASSES = ['arqueiro', 'bruxo', 'curandeira', 'espadachim', 'invocador', 'sumo'];
-  var TIERS = [0, 5, 12, 20, 30];
+  // 10 e 15 entraram para a escada da fusao bater com a das classes (5/10/12/15/20/30):
+  // antes disso a dupla fundida ia do nivel 12 ao 19 sem ganhar feitico nenhum.
+  var TIERS = [0, 5, 10, 12, 15, 20, 30];
   var RARITIES = ['comum', 'raro', 'epico', 'lendario'];
   var RANK = { comum: 0, raro: 1, epico: 2, lendario: 3 };
   // §9-C: os quatro espaços têm nome próprio (os ids antigos pa/pp/vida/especial
@@ -184,7 +186,7 @@
     var parts = pk.split('+');
     check('dupla ' + pk + ' com chave em ordem alfabética',
       parts.length === 2 && parts[0] < parts[1] && has(CLASSES, parts[0]) && has(CLASSES, parts[1]));
-    check('dupla ' + pk + ' tem 5 formas', forms.length === 5, 'tem ' + forms.length);
+    check('dupla ' + pk + ' tem ' + TIERS.length + ' formas', forms.length === TIERS.length, 'tem ' + forms.length);
 
     var seenTiers = [];
     for (var f = 0; f < forms.length; f++) {
@@ -236,9 +238,9 @@
       for (var kk in form) if (Object.prototype.hasOwnProperty.call(form, kk) && kk !== 'mechanic') clone[kk] = form[kk];
       check(tag + " sem '@' fora de mechanic", JSON.stringify(clone).indexOf('@') === -1);
     }
-    var tiersOk = seenTiers.length === 5;
+    var tiersOk = seenTiers.length === TIERS.length;
     for (var t = 0; t < TIERS.length; t++) if (!has(seenTiers, TIERS[t])) tiersOk = false;
-    check('dupla ' + pk + ' cobre os tiers 0/5/12/20/30', tiersOk, seenTiers.join(','));
+    check('dupla ' + pk + ' cobre os tiers ' + TIERS.join('/'), tiersOk, seenTiers.join(','));
   }
   // =========================================================================
   // 1-B. A FUSÃO PRECISA PODER MATAR SOZINHA  (achado nº 1 do Agente Chefe)
@@ -247,7 +249,8 @@
   //   morre com os inimigos em PV cheio. Regras:
   //     • a forma de tier 0 é SEMPRE ofensiva (é a única que a fusão tem
   //       quando ela acontece cedo);
-  //     • pelo menos 3 das 5 formas causam dano;
+  //     • a MAIORIA das formas causa dano (a regra era "3 das 5"; com os degraus
+  //       10 e 15 virou "mais da metade das 7", que e a mesma intencao sem numero fixo);
   //     • nenhum tier disponível pode ser só de apoio;
   //     • forma de alvo aliado precisa alcançar o próprio conjurador
   //       (range.min === 0), senão é inútil com a fusão sozinha.
@@ -271,7 +274,8 @@
 
       check('dupla ' + pk + ': a forma de tier 0 é OFENSIVA',
         !!tier0 && formHurts(tier0), tier0 ? tier0.formName + ' não causa dano' : 'sem tier 0');
-      check('dupla ' + pk + ': pelo menos 3 das 5 formas causam dano', nDmg >= 3, nDmg + '/5');
+      check('dupla ' + pk + ': a maioria das formas causa dano',
+        nDmg * 2 > forms.length, nDmg + '/' + forms.length);
 
       // por tier: o conjunto de feitiços disponíveis (tier <= L) precisa ferir
       TIERS.forEach(function (lvl) {
@@ -294,8 +298,11 @@
     })(expectedPairs[dp]);
   }
 
-  check('75 formName únicos em todo o sistema',
-    Object.keys(allFormNames).length === 75 && dupFormNames.length === 0,
+  // O total nasce dos dados (15 duplas x TIERS.length), nao de um numero cravado:
+  // quando os degraus 10 e 15 entraram, o 75 cravado aqui virou falha sozinho.
+  var totalEsperado = expectedPairs.length * TIERS.length;
+  check(totalEsperado + ' formName únicos em todo o sistema',
+    Object.keys(allFormNames).length === totalEsperado && dupFormNames.length === 0,
     dupFormNames.length ? 'repetidos: ' + dupFormNames.join(', ') : 'tem ' + Object.keys(allFormNames).length);
 
   // =========================================================================

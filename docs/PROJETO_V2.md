@@ -139,7 +139,7 @@ ataque de fusão a partir de duas peças:
             puxa os inimigos e deixa poça que envenena
 ```
 
-São **15 duplas de classe × 5 formas** = 75 formas autorais, e **15 misturas de elemento**,
+São **15 duplas de classe × 7 formas** = 105 formas autorais, e **15 misturas de elemento**,
 gerando **mais de mil ataques de fusão distintos** — todos coerentes, todos com nome, efeito e visual.
 
 ---
