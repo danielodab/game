@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Atlas do Bárbaro</title>
+<style>
+  body{margin:0;background:#14181c;color:#dde;font:13px system-ui,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 8px}
+  #st{font:12px monospace;color:#7fe08a;margin-bottom:8px}
+  canvas{image-rendering:pixelated;border:1px solid #2b3542;background:#000}
+</style>
+</head>
+<body>
+<h1>Atlas de textura do Bárbaro — é paleta ou é pele desenhada?</h1>
+<div id="st">carregando…</div>
+<canvas id="cv" width="1024" height="1024" style="width:900px;height:900px"></canvas>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  window.addEventListener('DOMContentLoaded', function () {
+    var t0 = Date.now();
+    (function espera() {
+      var M = JOGO.Models3D2;
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 25000) return setTimeout(espera, 150);
+        document.getElementById('st').textContent = 'ERRO: modelos não carregaram';
+        return;
+      }
+      var n = M.unit('sumo', {});
+      var tex = null;
+      n.traverse(function (o) { if (!tex && o.material && o.material.map) tex = o.material.map; });
+      if (!tex || !tex.image) { document.getElementById('st').textContent = 'sem textura'; return; }
+      var cv = document.getElementById('cv');
+      var g = cv.getContext('2d');
+      g.drawImage(tex.image, 0, 0, 1024, 1024);
+
+      // marca onde cada malha do corpo cai no atlas
+      var cores = { Barbarian_Body:'#ff3b3b', Barbarian_Head:'#3bff6e',
+                    Barbarian_ArmLeft:'#3b9bff', Barbarian_LegLeft:'#ffd23b' };
+      g.lineWidth = 3;
+      n.traverse(function (o) {
+        if (!o.geometry || !cores[o.name]) return;
+        var uv = o.geometry.attributes && o.geometry.attributes.uv;
+        if (!uv) return;
+        var u0=1,u1=0,v0=1,v1=0;
+        for (var i=0;i<uv.count;i++){
+          var u=uv.getX(i), v=uv.getY(i);
+          if(u<u0)u0=u; if(u>u1)u1=u; if(v<v0)v0=v; if(v>v1)v1=v;
+        }
+        g.strokeStyle = cores[o.name];
+        g.strokeRect(u0*1024, (1-v1)*1024, (u1-u0)*1024, (v1-v0)*1024);
+        g.fillStyle = cores[o.name];
+        g.font = 'bold 20px monospace';
+        g.fillText(o.name.replace('Barbarian_',''), u0*1024+6, (1-v1)*1024+22);
+      });
+      document.getElementById('st').textContent =
+        'PASS · atlas 1024x1024 · retângulos = área de cada malha do corpo';
+      window.__pronto = true;
+    })();
+  });
+})();
+</script>
+</body>
+</html>

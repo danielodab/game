@@ -144,15 +144,29 @@ var JOGO = (typeof window !== 'undefined')
   // NOTA DE CONCEITO: as aparências mudaram para caber no acervo CC0. A
   // identidade TÁTICA de cada classe está preservada; o visual é novo.
   M.CLASS_LOOK = {
+    // BÁRBARO: o usuário pediu "mais forte de músculos" e "cara de feroz".
+    // `build` engrossa tronco e ombros e encurta as pernas por escala de OSSO —
+    // a razão largura/altura vai de 1,24 para 2,52 sem tocar em geometria.
+    // `headTilt` baixa a cabeça (testa à frente, olhar de touro). Ele é POSTURA,
+    // aplicado DEPOIS da animação a cada quadro: se fosse gravado no osso, o
+    // clipe de andar sobrescreveria e a pose sumiria em movimento.
     sumo: { model: 'barbarian', show: ['2H_Axe', 'Barbarian_Cape'],
             scale: 1.16, tint: '#d4553f', accent: '#ffd08a', weapon: '2H_Axe',
-            concept: 'Bárbaro corpulento de machado de duas mãos e capa' },
+            build: { chest: 1.42, ombro: 1.34, braco: 1.38, perna: 0.88, cabeca: 0.92 },
+            headTilt: 0.30,
+            concept: 'Bárbaro brutamontes de machado de duas mãos, capa e cabeça baixa' },
     arqueiro: { model: 'rogue_hooded', show: ['2H_Crossbow', 'Rogue_Cape'],
             scale: 1.00, tint: '#4f9d6a', accent: '#d8f0a0', weapon: '2H_Crossbow',
             concept: 'Batedor encapuzado de besta de duas mãos' },
+    // BRUXO: o usuário pediu cabelo e barba BRANCOS, "referência a mais velho e
+    // experiente". O modelo do mago não tem barba — quem tem é o Bárbaro, e as
+    // bind poses dos 9 humanoides KayKit são idênticas, então a cabeça troca.
+    // `headSwap` põe a cabeça barbada no corpo do mago e `headTint` a embranquece.
     bruxo: { model: 'mage', show: ['2H_Staff', 'Mage_Hat', 'Mage_Cape'],
             scale: 1.02, tint: '#7a5fa0', accent: '#b98cff', weapon: '2H_Staff',
-            concept: 'Mago de chapéu pontudo e cajado' },
+            headSwap: { model: 'barbarian', mesh: 'Barbarian_Head' },
+            headTint: '#f4f1ec',
+            concept: 'Mago velho de barba branca, chapéu pontudo e cajado' },
     espadachim: { model: 'rogue', show: ['Knife', 'Knife_Offhand'],
             scale: 0.97, tint: '#2f6f8f', accent: '#9be8ff', weapon: 'Knife',
             concept: 'Ladino ágil de adagas gêmeas' },
@@ -497,6 +511,70 @@ var JOGO = (typeof window !== 'undefined')
   //   cor   = mistura das duas paletas · aura = mistura dos dois elementos
   //   porte = maior (a unidade soma a vida das duas)
   // As pecas que o CONVIDADO leva para dentro da fusao.
+  // ------------------------------------------------------ PORTE POR ESCALA DE OSSO
+  // Engrossa tronco/ombros e encurta pernas. Três armadilhas, todas de HERANÇA
+  // de escala, que custaram três tentativas até sair certo:
+  //   · a arma pende de `handslot*` e crescia junto (machado maior que o boneco);
+  //   · a cabeça pende do peito e ACHATAVA num disco largo;
+  //   · a capa pende do peito e virava um balão cobrindo o corpo.
+  // Por isso cada peça pendurada num osso desfaz a escala do pai no fim.
+  function aplicaPorte(node, b) {
+    if (!b) return;
+    node.traverse(function (o) {
+      if (!o.isBone) return;
+      var nm = (o.name || '').toLowerCase();
+      if (nm === 'chest' || nm === 'spine') o.scale.set(b.chest, 1, b.chest * 0.9);
+      else if (/^upperarm/.test(nm)) o.scale.set(b.ombro, 1, b.ombro);
+      else if (/^lowerarm/.test(nm)) o.scale.set(b.braco, 1, b.braco);
+      else if (/^upperleg/.test(nm)) o.scale.set(b.perna * 1.1, b.perna, b.perna * 1.1);
+      else if (nm === 'head') {
+        var kh = b.cabeca / Math.max(0.001, b.chest);
+        o.scale.set(kh, b.cabeca, kh / 0.9);
+      } else if (/^handslot/.test(nm)) {
+        var k = 1 / Math.max(0.001, b.ombro * b.braco);
+        o.scale.set(k, 1, k);
+      }
+    });
+    node.traverse(function (o) {
+      if (!o.isMesh || o.isSkinnedMesh) return;
+      var p = o.parent;
+      if (!p || !p.isBone) return;
+      o.scale.set(1 / Math.max(0.001, p.scale.x), 1 / Math.max(0.001, p.scale.y),
+                  1 / Math.max(0.001, p.scale.z));
+    });
+    node.updateMatrixWorld(true);
+  }
+
+  // ------------------------------------------------------------ TROCA DE CABEÇA
+  // Os 9 humanoides do KayKit partilham ordem de juntas e inverseBindMatrices,
+  // então uma cabeça skinned de um monta no esqueleto do outro: basta reapontar
+  // o skeleton e o bindMatrix. É assim que o mago ganha barba — o modelo dele
+  // não tem, e o do Bárbaro tem.
+  function trocaCabeca(model, swap) {
+    var src = raw[swap.model];
+    if (!src) return null;
+    var nova = meshByName(src.scene, swap.mesh);
+    if (!nova || !nova.isSkinnedMesh) return null;
+    var alvo = null;
+    model.traverse(function (o) {
+      if (!alvo && o.isSkinnedMesh && /_Head/.test(o.name || '')) alvo = o;
+    });
+    if (!alvo) return null;
+    var c = nova.clone();
+    c.name = alvo.name;                       // mantém o nome para quem procura por ele
+    c.material = alvo.material;               // material do dono, para não trocar o atlas
+    if (nova.material && nova.material.map) c.material = nova.material.clone();
+    c.skeleton = alvo.skeleton;
+    c.bindMatrix.copy(alvo.bindMatrix);
+    c.bind(alvo.skeleton, alvo.bindMatrix);
+    c.visible = true;
+    alvo.parent.add(c);
+    alvo.visible = false;
+    // tinta FORTE: a 0,72 a barba castanha do Bárbaro saía cor de areia,
+    // não branca. Aqui a leitura de "velho" depende inteira da cor.
+    return c;
+  }
+
   function marksOf(classId, look, corDoConvidado) {
     var mk = M.CLASS_MARK[classId] || {};
     var out = [];
@@ -523,6 +601,7 @@ var JOGO = (typeof window !== 'undefined')
     var lh = classLook(host), lg = classLook(guest);
     return {
       model: lh.model, show: lh.show.slice(), scale: 1.26,
+      build: lh.build || null, headTilt: lh.headTilt || 0,
       tint: lh.tint, accent: lg ? lg.accent : lh.accent,
       mixTint: lg ? lg.tint : null,
       grafts: lg ? marksOf(guest, lg, lg.tint) : [],
@@ -563,8 +642,14 @@ var JOGO = (typeof window !== 'undefined')
     if (id.indexOf('fus:') === 0) return fusionLook(id);
     var cl = classLook(opts.classId || id);
     if (cl) {
+      // ATENÇÃO: este objeto é remontado campo a campo, então TODO campo novo do
+      // CLASS_LOOK precisa ser copiado aqui — senão ele some sem erro nenhum.
+      // Foi o que aconteceu com `build` e `headTilt`: estavam definidos e o
+      // Bárbaro continuava magro, sem uma linha de aviso.
       return { model: cl.model, show: cl.show.slice(), scale: cl.scale || 1,
                tint: cl.tint, accent: cl.accent, weapon: cl.weapon,
+               build: cl.build || null, headTilt: cl.headTilt || 0,
+               headSwap: cl.headSwap || null, headTint: cl.headTint || null,
                classId: opts.classId || id, concept: cl.concept };
     }
     var D = DATA();
@@ -716,6 +801,12 @@ var JOGO = (typeof window !== 'undefined')
       var mix = col3(look.mixTint);
       for (var mi = 0; mi < mats.length; mi++) mats[mi].color.lerp(mix, 0.28);
     }
+    // CABEÇA TROCADA por último: o tingimento geral acima reclona TODOS os
+    // materiais do modelo, então pintar a cabeça antes dele não sobrevive —
+    // foi por isso que a barba do mago continuava castanha na primeira tentativa.
+    if (cabecaTrocada && look.headTint) {
+      try { tintMaterials(cabecaTrocada, look.headTint, 0.90); } catch (e) {}
+    }
     if (elems.length > 1) {
       var e2 = col3(M.elementColor(elems[1]));
       for (var mj = 0; mj < mats.length; mj++) {
@@ -733,6 +824,11 @@ var JOGO = (typeof window !== 'undefined')
     var natural = src.natural || 1.8;
     var scale = (targetH / natural) * (look.scale || 1) * (opts.scale || 1);
     model.scale.setScalar(scale);
+
+    // PORTE por escala de osso (o brutamontes do Bárbaro). Antes de medir a
+    // caixa, senão altura e raio sairiam do corpo magro.
+    if (look.build) aplicaPorte(model, look.build);
+    var cabecaTrocada = look.headSwap ? trocaCabeca(model, look.headSwap) : null;
 
     var box = visibleBodyBox(model);
     var height = Math.max(0.6, (box.max.y - box.min.y) || 1.7);
@@ -824,6 +920,16 @@ var JOGO = (typeof window !== 'undefined')
         head: findBone(model, 'head'), chest: findBone(model, 'chest')
       },
       play: play, has: has, locomotion: locomotion,
+      // POSTURA: aplicada DEPOIS do mixer, a cada quadro. Gravar a inclinação no
+      // osso não adianta — o clipe de animação reescreve a rotação a cada
+      // atualização e a pose sumiria em movimento. O renderizador chama isto
+      // logo após `mixer.update`.
+      postura: function () {
+        var t = look.headTilt || 0;
+        if (!t) return;
+        var h = findBone(model, 'head');
+        if (h) h.rotation.x += t;
+      },
       // introspecção (teste/depuração): QUAL clipe a cadeia de fallback escolheu
       clipFor: function (name) { var c = resolve(name, 0); return c ? c.name : null; },
       clipDur: function (name) { var c = resolve(name, 0); return c ? c.duration : 0; },

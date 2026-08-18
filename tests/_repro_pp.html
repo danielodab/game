@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>repro pp fusao</title></head>
+<body>
+<div id="summary">rodando...</div>
+<pre id="out"></pre>
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  var v = '?v=' + Date.now();
+  var files = [
+    '../js/core/data/elements.js', '../js/core/data/classes.js', '../js/core/data/spells.js',
+    '../js/core/data/progression.js', '../js/core/data/monsters.js', '../js/core/data/dungeons.js',
+    '../js/core/data/fusions.js', '../js/core/data/pets.js', '../js/core/data/items.js',
+    '../js/core/engine.js', '../js/core/fusion.js', '../js/core/ai.js',
+    '../js/core/progress.js', '../js/core/game.js'
+  ];
+  for (var i = 0; i < files.length; i++) {
+    document.write('<scr' + 'ipt src="' + files[i] + v + '"></scr' + 'ipt>');
+  }
+})();
+</script>
+<script>
+(function () {
+  'use strict';
+  var out = [];
+  function L(s) { out.push(s); }
+
+  var E = JOGO.Engine, G = JOGO.Game, P = JOGO.Progress;
+
+  function sumPP(u) {
+    var s = 0;
+    for (var i = 0; i < u.effects.length; i++) {
+      if (u.effects[i].type === 'buff' && u.effects[i].stat === 'pp') s += u.effects[i].value;
+    }
+    return s;
+  }
+  function esperado(u) {
+    if (E.unitHasEffect(u, 'root')) return 0;
+    return Math.max(0, u.ppMax + sumPP(u));
+  }
+  function effStr(u) {
+    var a = [];
+    for (var i = 0; i < u.effects.length; i++) {
+      var e = u.effects[i];
+      a.push(e.type + (e.stat ? '/' + e.stat + '=' + e.value : '') + '(d' + e.duration + ')');
+    }
+    return a.join(' ') || '—';
+  }
+
+  var falhas = 0, turnosFusao = 0, dodgeFails = 0, dodgeOks = 0, moveBloqueado = 0;
+  var batalhas = 0, fusoesFeitas = 0;
+
+  function rodaBatalha(dungeonId, lvl, semente) {
+    P.reset();
+    var ids = P.heroIds().slice(0, 2);
+    for (var h = 0; h < ids.length; h++) {
+      var hero = P.hero(ids[h]);
+      hero.level = lvl;
+      if (lvl >= 5 && !hero.element) hero.element = (h === 0 ? 'fogo' : 'agua');
+    }
+    G.init();
+    if (!G.startRun(ids, dungeonId)) { L('startRun FALHOU ' + dungeonId); return; }
+    batalhas++;
+    var st = G.state;
+    st.rngSeed = semente;                       // determinismo por batalha
+    var fundiu = false, guard = 0, visto = {};
+
+    while (st.phase === 'playing' && guard++ < 6000) {
+      G.update(0.05);
+      if (G.screen !== 'battle' || st.phase !== 'playing') break;
+      if (!G.isPlayerTurn()) continue;
+      var u = E.activeUnit(G.state);
+      if (!u) break;
+
+      // ---- conferência no INÍCIO do turno (ainda não agiu)
+      var chave = u.uid + '#' + st.round;
+      if (!visto[chave]) {
+        visto[chave] = 1;
+        var esp = esperado(u);
+        if (u.pp !== esp) {
+          falhas++;
+          L('FALHA pp: ' + dungeonId + ' nv' + lvl + ' rodada ' + st.round + ' ' + u.kind +
+            ' ' + u.name + ' pp=' + u.pp + ' esperado=' + esp + ' ppMax=' + u.ppMax +
+            ' efeitos: ' + effStr(u));
+        }
+        if (u.kind === 'fusion') {
+          turnosFusao++;
+          if (turnosFusao <= 12 || turnosFusao % 20 === 0) {
+            L('  [fusao ' + turnosFusao + '] ' + dungeonId + ' r' + st.round + ' pp=' + u.pp +
+              '/' + u.ppMax + ' pa=' + u.pa + '/' + u.paMax + ' hp=' + u.hp +
+              ' alcance=' + E.reachable(G.state, u.uid).length + ' ef: ' + effStr(u));
+          }
+        }
+      }
+
+      // ---- declara fusão assim que possível
+      if (!fundiu) {
+        var pares = G.canFuse();
+        if (pares.length) {
+          if (G.declareFusion(pares[0].uidA, pares[0].uidB)) {
+            fundiu = true; fusoesFeitas++;
+            L('FUSAO declarada em ' + dungeonId + ' nv' + lvl + ' rodada ' + st.round);
+            continue;                       // Game.update fecha o turno
+          }
+        }
+      }
+
+      // ---- joga o turno pelo CAMINHO DO JOGADOR, com o plano da IA
+      var plano = [];
+      try { plano = JOGO.AI.planTurn(G.state, u.uid) || []; } catch (e) { plano = []; }
+      var aproximar = !fundiu;               // antes de fundir: junta os herois
+      if (aproximar) {
+        var outro = null;
+        for (var i = 0; i < st.units.length; i++) {
+          var o = st.units[i];
+          if (o.kind === 'hero' && o.alive && !o.offBoard && o.uid !== u.uid) outro = o;
+        }
+        if (outro) {
+          var rc = E.reachable(G.state, u.uid), melhor = null, bd = 1e9;
+          for (var r = 0; r < rc.length; r++) {
+            var dd = Math.abs(rc[r].x - outro.x) + Math.abs(rc[r].y - outro.y);
+            if (dd < bd) { bd = dd; melhor = rc[r]; }
+          }
+          if (melhor) G.onTileClicked(melhor.x, melhor.y);
+        }
+      }
+      for (var p = 0; p < plano.length && st.phase === 'playing'; p++) {
+        var ac = plano[p];
+        if (ac.action === 'move') {
+          if (aproximar) continue;
+          var ppAntes = u.pp;
+          G.onTileClicked(ac.x, ac.y);
+          if (u.pp === 0 && ppAntes > 0 && (u.x !== ac.x || u.y !== ac.y)) moveBloqueado++;
+        } else if (ac.action === 'cast') {
+          G.selectSpell(ac.spellId);
+          G.onTileClicked(ac.x, ac.y);
+          G.selectSpell(null);
+        } else break;
+      }
+      if (st.phase === 'playing' && G.isPlayerTurn()) G.endTurn();
+    }
+    for (var q = 0; q < E.events.length; q++) {
+      if (E.events[q].type === 'dodgeFail') dodgeFails++;
+      if (E.events[q].type === 'dodgeOk') dodgeOks++;
+    }
+    E.events.length = 0;
+    L('  fim ' + dungeonId + ' nv' + lvl + ': ' + st.phase + ' rodada ' + st.round +
+      ' fundiu=' + fundiu);
+  }
+
+  var duns = (JOGO.DATA.dungeons || []).map(function (d) { return d.id; });
+  var niveis = [1, 8, 15];
+  for (var d = 0; d < duns.length; d++) {
+    for (var n = 0; n < niveis.length; n++) {
+      rodaBatalha(duns[d], niveis[n], 1000 + d * 97 + n * 13);
+    }
+  }
+
+  L('');
+  L('=== TOTAIS ===');
+  L('batalhas=' + batalhas + ' fusoes=' + fusoesFeitas + ' turnos-de-fusao=' + turnosFusao);
+  L('FALHAS de recarga de PP = ' + falhas);
+  L('dodgeOk=' + dodgeOks + ' dodgeFail=' + dodgeFails + ' movimentos-anulados=' + moveBloqueado);
+
+  document.getElementById('out').textContent = out.join('\n');
+  document.getElementById('summary').textContent =
+    (falhas === 0 ? 'SEM falha de recarga' : falhas + ' FALHAS') +
+    ' — turnos de fusao: ' + turnosFusao;
+})();
+</script>
+</body>
+</html>

@@ -1406,6 +1406,9 @@ var JOGO = (typeof window !== 'undefined')
       if (want && v.anim !== want) { ud.play(want, opt || {}); v.anim = want; }
       if (v.animLock > 0) v.animLock -= dt;
       if (ud.mixer) ud.mixer.update(dt);
+      // POSTURA depois da animação: o clipe reescreve a rotação dos ossos a cada
+      // quadro, então a cabeça baixa do Bárbaro só fica de pé se for somada AQUI.
+      if (ud.postura) { try { ud.postura(); } catch (e) {} }
       // modelos procedurais da v1 têm animação própria por código
       if (ud.procAnimate) {
         ud.procAnimate({

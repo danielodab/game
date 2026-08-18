@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Bárbaro brutamontes — prévia</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.5 system-ui,Segoe UI,sans-serif}
+  h1{font-size:16px;margin:10px 16px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 16px 8px}
+  #cv{display:block;width:100vw;height:80vh}
+  table{border-collapse:collapse;font-size:12px;margin:8px 16px}
+  th,td{border:1px solid #2b3542;padding:3px 10px;text-align:right}
+  th{background:#1b222c;color:#8895a6}
+  td.k{text-align:left;color:#cfe0f5}
+  #st{font:12px monospace;color:#7fe08a;margin:0 16px 6px}
+</style>
+</head>
+<body>
+<h1>Bárbaro brutamontes — de frente, de lado e de costas</h1>
+<div class="sub">Comparado com o de hoje, na mesma escala e na mesma luz. Nada aplicado no jogo — é prévia.</div>
+<div id="st">carregando…</div>
+<canvas id="cv"></canvas>
+<table id="tab"></table>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  // Receita "brutamontes": tronco e ombros grossos, pernas curtas, cabeça um
+  // pouco menor (o que faz o corpo parecer maior). A escala de osso é herdada
+  // pelos filhos, então `handslot*` desfaz a conta — senão o machado cresce junto.
+  var BRUTA = { chest: 1.42, ombro: 1.34, braco: 1.38, perna: 0.88, cabeca: 0.92 };
+
+  function aplica(node, n) {
+    if (!n) return;
+    node.traverse(function (b) {
+      if (!b.isBone) return;
+      var nm = (b.name || '').toLowerCase();
+      if (nm === 'chest' || nm === 'spine') b.scale.set(n.chest, 1, n.chest * 0.9);
+      else if (/^upperarm/.test(nm)) b.scale.set(n.ombro, 1, n.ombro);
+      else if (/^lowerarm/.test(nm)) b.scale.set(n.braco, 1, n.braco);
+      else if (/^upperleg/.test(nm)) b.scale.set(n.perna * 1.1, n.perna, n.perna * 1.1);
+      else if (nm === 'head') {
+        // a cabeca PENDE do tronco e herda a escala dele: sem dividir, ela
+        // achatava num disco largo junto com o peito
+        var kh = n.cabeca / Math.max(0.001, n.chest);
+        b.scale.set(kh, n.cabeca, kh / 0.9);
+      }
+      else if (/^handslot/.test(nm)) {
+        var k = 1 / Math.max(0.001, n.ombro * n.braco);
+        b.scale.set(k, 1, k);
+      }
+    });
+    // Qualquer PECA pendurada num osso (capa, chapeu, arma) herda a escala dele.
+    // A capa pende do `chest` e virava um balao marrom cobrindo o corpo todo.
+    // Aqui desfazemos a conta em cada peca, uma vez, olhando a escala do pai.
+    node.traverse(function (o) {
+      if (!o.isMesh || o.isSkinnedMesh) return;
+      var p = o.parent;
+      if (!p || !p.isBone) return;
+      o.scale.set(1 / Math.max(0.001, p.scale.x),
+                  1 / Math.max(0.001, p.scale.y),
+                  1 / Math.max(0.001, p.scale.z));
+    });
+    node.updateMatrixWorld(true);
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var t0 = Date.now();
+    (function espera() {
+      var M = JOGO.Models3D2;
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 25000) return setTimeout(espera, 150);
+        document.getElementById('st').textContent = 'ERRO: modelos não carregaram';
+        return;
+      }
+      var cv = document.getElementById('cv');
+      var W = cv.clientWidth || 1400, H = cv.clientHeight || 760;
+      var ren = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+      ren.setSize(W, H, false); ren.setClearColor(0x0f1216, 1);
+      var sc = new THREE.Scene();
+      sc.add(new THREE.HemisphereLight(0xbfd4ea, 0x2b2f36, 1.05));
+      var key = new THREE.DirectionalLight(0xffffff, 1.7); key.position.set(5, 9, 8); sc.add(key);
+      var rim = new THREE.DirectionalLight(0x9fc4ff, 1.0); rim.position.set(-7, 5, -6); sc.add(rim);
+
+      // 4 figuras: hoje de frente, brutamontes de frente, de 3/4 e de costas
+      var itens = [
+        { rot: 0,            n: null,  rot0: 'HOJE · de frente' },
+        { rot: 0,            n: BRUTA, rot0: 'BRUTAMONTES · de frente' },
+        { rot: Math.PI * 0.75, n: BRUTA, rot0: 'BRUTAMONTES · 3/4' },
+        { rot: Math.PI,      n: BRUTA, rot0: 'BRUTAMONTES · de costas' }
+      ];
+      var passo = 2.6, linhas = [], maxH = 0;
+      itens.forEach(function (it, i) {
+        var node = M.unit('sumo', {});
+        aplica(node, it.n);
+        var b = new THREE.Box3().setFromObject(node);
+        var s = b.getSize(new THREE.Vector3());
+        node.position.x = -((b.min.x + b.max.x) / 2);
+        node.position.y = -b.min.y;
+        node.position.z = -((b.min.z + b.max.z) / 2);
+        var g = new THREE.Group(); g.add(node);
+        g.rotation.y = it.rot; g.position.x = i * passo;
+        sc.add(g);
+        maxH = Math.max(maxH, s.y);
+        linhas.push({ nome: it.rot0, alt: s.y.toFixed(2), larg: s.x.toFixed(2),
+                      razao: (s.x / s.y).toFixed(2) });
+      });
+
+      var x = (itens.length - 1) * passo;
+      var chao = new THREE.Mesh(new THREE.PlaneGeometry(x + 10, 12),
+        new THREE.MeshStandardMaterial({ color: 0x1a2029, roughness: 1 }));
+      chao.rotation.x = -Math.PI / 2; chao.position.set(x / 2, 0, 0); sc.add(chao);
+
+      var cam = new THREE.PerspectiveCamera(32, W / H, 0.1, 200);
+      cam.position.set(x / 2, maxH * 0.55, Math.max(x + 4, maxH * 2.4) * 1.05 + 3);
+      cam.lookAt(x / 2, maxH * 0.42, 0);
+      ren.render(sc, cam);
+
+      var t = '<tr><th class="k">figura</th><th>altura</th><th>largura</th><th>largura/altura</th></tr>';
+      linhas.forEach(function (l) {
+        t += '<tr><td class="k">' + l.nome + '</td><td>' + l.alt + '</td><td>' + l.larg +
+             '</td><td>' + l.razao + '</td></tr>';
+      });
+      document.getElementById('tab').innerHTML = t;
+      document.getElementById('st').textContent = 'PASS · prévia, nada aplicado no jogo';
+      window.__pronto = true;
+    })();
+  });
+})();
+</script>
+</body>
+</html>
