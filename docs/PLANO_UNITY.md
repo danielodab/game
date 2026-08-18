@@ -2,7 +2,8 @@
 
 Escrito em 18/08/2026, depois de provar que dá para desenvolver na Unity por
 linha de comando nesta máquina. O que está aqui é **plano**, não promessa de
-prazo — e a fase 3 depende de uma decisão sua que ainda não foi tomada.
+prazo. A decisão visual da fase 3 foi tomada no mesmo dia: **3D com câmera fixa
+em 3/4**.
 
 ## O que já é fato, medido nesta máquina
 
@@ -60,17 +61,36 @@ cena, em milissegundos.
 
 ## Fase 3 — o que não atravessa: render e interface
 
-**Aqui está a decisão pendente.** Duas saídas honestas:
+**Decidido em 18/08/2026: modelos 3D sob câmera ortográfica FIXA em 3/4.**
 
-1. **2D isométrico com sprites** — é o que o `CONTRACT_V2.md` manda (Dofus 1.29,
-   fixo). Fiel ao documento, mas exige folha de sprite por personagem e por
-   direção, e hoje o acervo é modelo 3D, não sprite.
-2. **Modelos 3D sob câmera ortográfica fixa em 3/4** — reaproveita os packs CC0
-   que já estão no projeto, mantém o enquadramento fixo (nada de câmera livre) e
-   é onde a Unity trabalha a favor. Fica mais perto de Dofus 2/Wakfu que de 1.29.
+Nada de câmera livre — o enquadramento é travado, como no jogo em JS. Isso
+reaproveita os packs CC0 que já estão no projeto (sem folha de sprite por
+personagem e por direção, que era o custo da outra saída) e é onde a Unity
+trabalha a favor: iluminação, sombra e animação saem de graça.
 
-Em qualquer dos dois, a interface vai de **UI Toolkit** (UXML/USS): é texto,
-versiona, revisa em diff — e dá para escrever sem clicar no Editor.
+Consequência que vale dizer em voz alta: o resultado fica mais perto de
+**Dofus 2 / Wakfu** do que do Dofus 1.29 que o `CONTRACT_V2.md` pede. O contrato
+v2 descreve 2D isométrico com sprites; **na linha Unity esse ponto está
+substituído por esta decisão**, e o contrato continua valendo para a linha JS.
+
+O que a decisão NÃO muda: a grade, a regra, os PA/PP, a rivalidade de elementos,
+a fusão. Fases 1 e 2 seguem idênticas.
+
+Pontos que já sabemos que vão pedir cuidado, porque a prova desta sessão já
+esbarrou neles:
+
+- **Cor lida, não brilho.** Material fosco (metálico 0, brilho 0, reflexo de
+  ambiente e especular desligados). Ligados, os dois somam cinza aditivo e lavam
+  a paleta — foi o que fez o herói laranja sair cinza.
+- **Cor por objeto em `MaterialPropertyBlock`**, nunca material por objeto: com
+  materiais distintos criados em tempo de edição o SRP Batcher desenha tudo com
+  a cor do primeiro.
+- **Contorno estilo cartoon**: a linha 3D anterior (Three.js) resolveu isso com
+  inverted-hull e normais soldadas por posição. A decisão de repetir ou não isso
+  na Unity fica para quando houver modelo em cena.
+
+A interface vai de **UI Toolkit** (UXML/USS): é texto, versiona, revisa em diff
+— e dá para escrever sem clicar no Editor.
 
 ## Fase 4 — build
 
