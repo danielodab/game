@@ -69,36 +69,123 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
 
   // Instantâneo/restauração: feitiços de invocação criam unidades, então o
   // tamanho do vetor muda e restaurar item a item não basta.
+  //
+  // O instantâneo precisa levar TAMBEM `effects`, as recargas e a semente:
+  //  - `effects` guarda marcas e quebras de resistencia, e `Engine.markMultiplier`
+  //    /`effResist` leem dali. Sem restaurar, cada feitico testado deixava a marca
+  //    dele no inimigo e o SEGUINTE batia mais forte — a medicao virava "melhor
+  //    feitico depois de empilhar tudo o que veio antes". Media do curandeira+sumo
+  //    dava 264 numa ordem e 335 na ordem invertida, 27% so de ordem.
+  //  - `_rng` e a semente do sorteio de dano (mulberry32). Sem restaurar, cada
+  //    feitico rolava um numero diferente e o "melhor de N" premiava sorte.
+  // Com os tres restaurados, cada feitico e medido do MESMO estado limpo.
+  function copiaObj(o) {
+    var c = {};
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) c[k] = o[k];
+    return c;
+  }
+  function copiaEfeitos(list) {
+    return (list || []).map(copiaObj);
+  }
   function salva(st) {
-    return { n: st.units.length,
-             d: st.units.map(function (u) { return [u.hp, u.shield, u.x, u.y, u.alive, u.pa, u.pp]; }) };
+    return { n: st.units.length, rng: st._rng,
+             d: st.units.map(function (u) {
+               return [u.hp, u.shield, u.x, u.y, u.alive, u.pa, u.pp,
+                       copiaEfeitos(u.effects), copiaObj(u.cooldowns), copiaObj(u.castsThisTurn)];
+             }) };
   }
   function volta(st, s) {
     st.units.length = s.n;
+    st._rng = s.rng;
     st.units.forEach(function (u, k) {
       var r = s.d[k]; if (!r) return;
       u.hp = r[0]; u.shield = r[1]; u.x = r[2]; u.y = r[3];
       u.alive = r[4]; u.pa = r[5]; u.pp = r[6];
+      u.effects = copiaEfeitos(r[7]);
+      u.cooldowns = copiaObj(r[8]);
+      u.castsThisTurn = copiaObj(r[9]);
     });
   }
-  // Melhor dano que UMA unidade consegue num turno: tenta cada feitiço da mão,
-  // repetindo enquanto houver PA, e fica com o melhor total.
-  function danoNoTurno(st, u, base) {
-    var melhor = 0;
-    (u.spells || []).slice().forEach(function (sid) {
-      volta(st, base); u.cooldowns = {}; u.castsThisTurn = {};
-      var dado = 0, g = 0;
-      while (u.pa > 0 && g++ < 8) {
-        var alvos = E.castTargets(st, u.uid, sid);
-        if (!alvos.length) break;
-        var antes = vidaInimiga(st);
-        if (!E.cast(st, u.uid, sid, alvos[0].x, alvos[0].y)) break;
-        dado += antes - vidaInimiga(st);
+  // ONDE MIRAR. Desde que feitico de area passou a mirar o CHAO, `castTargets`
+  // devolve TODA celula do alcance, e nao so as ocupadas por inimigo. Pegar
+  // `alvos[0]` — o primeiro da varredura, isto e, o canto superior-esquerdo do
+  // alcance — virou medir o feitico jogado no vazio: o bruxo de nivel 12 mirava
+  // (3,3) com o inimigo em (6,6) e marcava ZERO com os tres feiticos de area.
+  // A regra do teste e "dano MAXIMO de um turno", entao a celula escolhida e a
+  // que atinge MAIS inimigos. Sem falloff no motor (toda unidade na area leva o
+  // dano cheio), contar inimigos cobertos maximiza o dano de fato — e e assim
+  // que a area bem posicionada, pegando dois de uma vez, ganha o credito dela.
+  // Para feitico de alvo unico `aoeTiles` devolve so a propria celula, entao
+  // isto reproduz exatamente o criterio antigo: precisa ter inimigo em cima.
+  function casasInimigas(st) {          // mapa "x,y" -> 1, para nao varrer units
+    var m = {};
+    for (var i = 0; i < st.units.length; i++) {
+      var u = st.units[i];
+      if (u.side === 'enemy' && u.alive && !u.offBoard) m[u.x + ',' + u.y] = 1;
+    }
+    return m;
+  }
+  function melhorAlvo(st, u, sid, alvos) {
+    if (!alvos.length) return null;
+    var inim = casasInimigas(st);
+    var escolha = null, maisInimigos = 0;
+    for (var i = 0; i < alvos.length; i++) {
+      var c = alvos[i];
+      var tiles = E.aoeTiles(st, sid, u.x, u.y, c.x, c.y) || [];
+      var n = 0;
+      for (var t = 0; t < tiles.length; t++) {
+        if (inim[tiles[t].x + ',' + tiles[t].y]) n++;
       }
-      if (dado > melhor) melhor = dado;
-    });
+      if (n > maisInimigos) { maisInimigos = n; escolha = c; }
+    }
+    return escolha;   // null: nenhuma celula do alcance alcanca inimigo
+  }
+
+  // MELHOR DANO DE UM TURNO, GASTANDO O PA COMO QUISER.
+  //
+  // A versao antiga escolhia UM feitico e o repetia ate acabar o PA. So que 92
+  // das 106 formas de fusao — e a maioria dos feiticos de classe — trazem
+  // `castsPerTurn: 1`: o laco conjurava UMA vez e parava, deixando o resto do PA
+  // na mesa. Isso apagava exatamente a vantagem da fusao, que e ter `BONUS_PA`
+  // (+4): ela ficava com 10 PA e gastava 4, enquanto um sumo com 6 PA gastava os
+  // 6 em dois golpes de 3. Medir "melhor feitico repetido" nao e o que o
+  // subtitulo desta pagina promete, e penalizava um lado so.
+  //
+  // Agora o turno e montado de verdade: a cada passo escolhe-se a conjuracao
+  // disponivel (PA, recarga e limite por turno ja checados por `castTargets`)
+  // que rende mais, e segue-se ate o PA nao dar mais para nada.
+  // Duas gulosas rodam e vale a melhor: uma por DANO do golpe, outra por dano
+  // POR PA. Sozinha, a primeira gasta 6 PA num estouro de 177 quando dois
+  // golpes de 3 PA fariam 266; a segunda cobre esse caso. Vale para os dois
+  // lados, sem favorecer nenhum.
+  function turnoGuloso(st, u, base, porPA) {
     volta(st, base);
-    return melhor;
+    var total = 0, g = 0;
+    while (u.pa > 0 && g++ < 12) {
+      var marco = salva(st);
+      var melhorNota = 0, melhorDano = 0, melhorSid = null, melhorC = null;
+      var sids = (u.spells || []);
+      for (var i = 0; i < sids.length; i++) {
+        var alvo = melhorAlvo(st, u, sids[i], E.castTargets(st, u.uid, sids[i]));
+        if (!alvo) continue;
+        var paAntes = u.pa, antes = vidaInimiga(st);
+        if (!E.cast(st, u.uid, sids[i], alvo.x, alvo.y)) { volta(st, marco); continue; }
+        var d = antes - vidaInimiga(st);
+        var gasto = Math.max(1, paAntes - u.pa);
+        volta(st, marco);
+        var nota = porPA ? (d / gasto) : d;
+        if (nota > melhorNota) { melhorNota = nota; melhorDano = d; melhorSid = sids[i]; melhorC = alvo; }
+      }
+      if (!melhorSid || melhorDano <= 0) break;
+      var a0 = vidaInimiga(st);
+      if (!E.cast(st, u.uid, melhorSid, melhorC.x, melhorC.y)) break;
+      total += a0 - vidaInimiga(st);
+    }
+    volta(st, base);
+    return total;
+  }
+  function danoNoTurno(st, u, base) {
+    return Math.max(turnoGuloso(st, u, base, false), turnoGuloso(st, u, base, true));
   }
   function vidaInimiga(st) {
     return st.units.filter(function (x) { return x.side === 'enemy'; })
@@ -119,30 +206,84 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
 
   function medirDupla(a, b, nivel) {
     prepara(nivel);
-    // --- separados: os dois colados no mesmo inimigo
+    // --- separados: os dois colados no mesmo inimigo, NAS DUAS ORDENS.
+    // As duas casas vizinhas do inimigo nao valem o mesmo: a de baixo tem a
+    // visao cortada pelo canto de parede (ver montaFusao). Fixar "a embaixo, b
+    // em cima" fazia a nota depender da ordem de `Object.keys(DATA.classes)` —
+    // e o invocador, por ser o ultimo da lista, caia SEMPRE na casa boa, de onde
+    // o circle:3 dele pega dois inimigos. Um jogador poe cada heroi onde rende
+    // mais, entao vale a melhor das duas colocacoes. E o mesmo criterio usado do
+    // lado da fusao: melhor jogada com dois corpos contra melhor jogada com um.
     var st1 = E.createBattle('greenhouse', 0, P.battleParty([a, b]));
     var i1 = st1.units.filter(function (u) { return u.side === 'enemy'; })[0];
     var h1 = st1.units.filter(function (u) { return u.side === 'player'; });
-    h1[0].x = i1.x - 1; h1[0].y = i1.y;
-    h1[1].x = i1.x; h1[1].y = i1.y - 1;
+    var casa0 = { x: i1.x - 1, y: i1.y }, casa1 = { x: i1.x, y: i1.y - 1 };
     alvoInfinito(st1);
-    var b1 = salva(st1);
-    var sep = danoNoTurno(st1, h1[0], b1) + danoNoTurno(st1, h1[1], b1);
+    function somaEm(u0, c0, u1, c1) {
+      u0.x = c0.x; u0.y = c0.y; u1.x = c1.x; u1.y = c1.y;
+      var base = salva(st1);
+      return danoNoTurno(st1, u0, base) + danoNoTurno(st1, u1, base);
+    }
+    var sep = Math.max(somaEm(h1[0], casa0, h1[1], casa1),
+                       somaEm(h1[0], casa1, h1[1], casa0));
 
-    // --- fundidos
+    // --- fundidos, NAS DUAS CASAS que o par separado ocupou.
+    // A fusao ocupa a celula de A, e quem declara e escolha do jogador — as duas
+    // casas sao legitimas. Prender a fusao sempre na de baixo dava a ela o pior
+    // casco do banco: ha parede em (5,7) e (6,7), e dali a visao para (7,7),
+    // (7,8) e (7,9) esta BLOQUEADA, enquanto da casa de cima nao esta. O
+    // `circle:3` do invocador so encontra a celula que pega DOIS inimigos a
+    // partir da casa de cima; a fusao, presa embaixo, nunca podia responder.
+    // Isso e um canto de parede, nao uma propriedade de fundir — e o par
+    // separado, ocupando as duas casas, sempre ficava com a boa. Mede-se nas
+    // duas e vale a melhor.
+    var m2 = montaFusao(a, b, nivel, i1.x - 1, i1.y);
+    var m3 = montaFusao(a, b, nivel, i1.x, i1.y - 1);
+    var fus = Math.max(m2.dano, m3.dano);
+
+    return { sep: sep, fus: fus, paSep: h1[0].paMax + h1[1].paMax,
+             paFus: Math.max(m2.pa, m3.pa) };
+  }
+
+  // Vizinha ortogonal que serve de casa para B: precisa ser chao e estar livre.
+  // (A versao antiga plantava B em `A.y + 1`, que neste banco e PAREDE.)
+  function vizinhaLivre(st, x, y, ignoraUid) {
+    var d = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+    for (var i = 0; i < d.length; i++) {
+      var nx = x + d[i][0], ny = y + d[i][1];
+      var linha = st.grid.tiles[ny];
+      if (!linha || !linha[nx] || linha[nx].type === 'wall') continue;
+      var o = E.unitAt(st, nx, ny);
+      if (o && o.uid !== ignoraUid) continue;
+      return { x: nx, y: ny };
+    }
+    return null;
+  }
+
+  function montaFusao(a, b, nivel, cx, cy) {
     prepara(nivel);
-    var st2 = E.createBattle('greenhouse', 0, P.battleParty([a, b]));
-    var i2 = st2.units.filter(function (u) { return u.side === 'enemy'; })[0];
-    var h2 = st2.units.filter(function (u) { return u.side === 'player'; });
-    h2[0].x = i2.x - 1; h2[0].y = i2.y;
-    h2[1].x = h2[0].x; h2[1].y = h2[0].y + 1;
-    F.declare(st2, h2[0].uid, h2[1].uid); F.resolve(st2);
-    var f = st2.units.filter(function (u) { return u.kind === 'fusion'; })[0];
-    alvoInfinito(st2);
-    var b2 = salva(st2);
-    var fus = f ? danoNoTurno(st2, f, b2) : 0;
-
-    return { sep: sep, fus: fus, paSep: h1[0].paMax + h1[1].paMax, paFus: f ? f.paMax : 0 };
+    var st = E.createBattle('greenhouse', 0, P.battleParty([a, b]));
+    var h = st.units.filter(function (u) { return u.side === 'player'; });
+    h[0].x = cx; h[0].y = cy;
+    var viz = vizinhaLivre(st, cx, cy, h[1].uid);
+    if (!viz) return { dano: 0, pa: 0 };
+    h[1].x = viz.x; h[1].y = viz.y;
+    if (!F.declare(st, h[0].uid, h[1].uid) || !F.resolve(st)) return { dano: 0, pa: 0 };
+    var f = st.units.filter(function (u) { return u.kind === 'fusion'; })[0];
+    if (!f) return { dano: 0, pa: 0 };
+    // TURNO CHEIO DOS DOIS LADOS. `declare` cobra 2 PA de A e `doFuse` nao
+    // reenche o medidor — a fusao nascia com os 4 PA que sobraram de A e era
+    // medida assim, contra dois herois com 6+6=12 PA inteiros. A tabela abaixo
+    // ainda anunciava "10 de 12", ou seja, o relatorio prometia um orcamento que
+    // a medicao nunca deu. Era o defeito que mais pesava: a fusao mostrava 40%
+    // do PA dela, e os coeficientes de PAIR_TUNE vinham inflados para tapar isso.
+    // `fusion.js` ja diz a regra ("o turno seguinte ja nasce cheio"); o que se
+    // compara aqui e turno cheio contra turno cheio, e o custo de 2 PA da
+    // declaracao e uma despesa unica, de um turno so, fora dessa conta.
+    f.pa = f.paMax; f.pp = f.ppMax;
+    alvoInfinito(st);
+    var base = salva(st);
+    return { dano: danoNoTurno(st, f, base), pa: f.paMax };
   }
 
   window.addEventListener('DOMContentLoaded', function () {

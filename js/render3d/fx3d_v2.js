@@ -33,6 +33,7 @@ var JOGO = (typeof window !== 'undefined')
   JOGO.FX = FX;
 
   var THREE = null, scene = null, camera = null, fxG = null, decalG = null, R3 = null;
+  var glr = null;                  // o WebGLRenderer: so para saber o tamanho do buffer
   var attached = false;
   var queued = [];
 
@@ -95,16 +96,27 @@ var JOGO = (typeof window !== 'undefined')
     return DOT_TEX;
   }
 
+  /* O 320 que estava aqui era um numero solto, e ele MENTIA sobre o tamanho.
+   * O fator honesto — o que faz uma particula de `size` metros desenhar `size`
+   * metros na tela — e altura_do_buffer / (2 * tan(fov/2)). No quadro de celular
+   * (640 px de altura, fov 42) isso da 833, nao 320: cada particula saia com 38%
+   * do tamanho que o codigo pedia, e o desenho encolhia junto.
+   * Medido no tabuleiro: com 320, uma particula de size 0,34 tinha 2,8 px de
+   * tela — numa celula de 40 px. Meia-lua, runa e cascalho nao existem em 2,8 px.
+   * Agora o fator vem do buffer de verdade e acompanha a resolucao: em tela
+   * grande a particula cresce junto, em vez de virar poeira. */
+  var PT_K = 320;
   var PART_VS = [
     'attribute float aSize;',
     'attribute float aTile;',
+    'uniform float uPx;',
     'varying vec3 vColor;',
     'varying float vTile;',
     'void main() {',
     '  vColor = color;',
     '  vTile = aTile;',
     '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
-    '  gl_PointSize = aSize * (320.0 / max(0.001, -mv.z));',
+    '  gl_PointSize = aSize * (uPx / max(0.001, -mv.z));',
     '  gl_Position = projectionMatrix * mv;',
     '}'
   ].join('\n');
@@ -163,7 +175,8 @@ var JOGO = (typeof window !== 'undefined')
     var atlas = atlasTexture();
     var mat = new THREE.ShaderMaterial({
       uniforms: { uMap: { value: atlas || dotTexture() },
-                  uGrade: { value: atlas ? 1 : 0 } },
+                  uGrade: { value: atlas ? 1 : 0 },
+                  uPx: { value: PT_K } },
       vertexShader: PART_VS, fragmentShader: PART_FS,
       transparent: true, depthWrite: false, depthTest: true,
       blending: THREE.AdditiveBlending, vertexColors: true
@@ -422,6 +435,185 @@ var JOGO = (typeof window !== 'undefined')
     decals.length = 0;
   };
 
+  // ==================================================================== PLACAS
+  /* MEDIDO, nao suposto (tests/efeitos_placa.html, quadro de celular 420x640):
+   *   - a celula do tabuleiro mede 40 px e um metro do mundo mede 20 px;
+   *   - uma particula de tamanho 0,34 desenhava 2,8 px de tela.
+   * Meia-lua, runa e leque nao existem em 2,8 px: chegam como o mesmo pontinho,
+   * e o que sobra para separar um meteoro de um sopro e a cor. Pior — medindo o
+   * que cada familia PINTA na tela, 'bola', 'corte' e 'flecha' davam o mesmo
+   * numero ate o pixel (17.535 px, lado de 209 px), porque o que se ve nelas nao
+   * e o desenho: e a luz do impacto lavando o chao. O desenho ficava abaixo do
+   * limiar de deteccao. Oito familias pintavam menos de 1.000 px, e a aura
+   * pintava DOIS.
+   *
+   * (De quebra, a hipotese de que a mistura aditiva "satura tudo para branco"
+   * NAO se confirmou no tabuleiro: 0% dos pixels do efeito chegavam ao branco.
+   * Ela e verdadeira no close-up, que era onde estavamos olhando.)
+   *
+   * A PLACA e a resposta: um bilhete de 3 a 13 metros com a forma inteira, que
+   * na tela mede de 60 a 260 px. Ai a FORMA tem tamanho para competir com a cor.
+   *
+   * Quatro jeitos de por a placa no mundo:
+   *   'chao'    deitada no piso, girada para o alvo — runa, leque, anel, cruz
+   *   'bilhete' de frente para a camera — meia-lua, estouro, halo, estrela
+   *   'trilho'  em pe, a LARGURA ao longo do caminho — feixe, fio do gancho
+   *   'mira'    em pe, ATRAVESSADA no caminho — a onda que passa
+   *
+   * O `forro` e o truque de contraste: a mesma forma desenhada antes, 16% maior,
+   * em quase-preto e mistura normal. Ela escurece o chao exatamente onde o
+   * desenho claro vai entrar, entao a forma aparece clara sobre escuro em vez de
+   * somar com o piso iluminado — e ganha um contorno, como o resto da arte toon.
+   */
+  var PLACA_TEX = null, PLACA_TENTADO = false, PLACA_N = 4;
+  function placaTexture() {
+    if (PLACA_TENTADO) return PLACA_TEX;
+    PLACA_TENTADO = true;
+    var A = (typeof JOGO !== 'undefined') ? JOGO.FX_PLACAS : null;
+    if (!A || !A.png) return null;      // sem o atlas o jogo segue: cai no borrao
+    var img = new Image();
+    var tex = new THREE.Texture(img);
+    img.onload = function () { tex.needsUpdate = true; };
+    img.src = A.png;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;        // a placa e GRANDE na tela; mipmap so borra
+    PLACA_N = A.cols || 4;
+    PLACA_TEX = tex;
+    return tex;
+  }
+
+  var PL = {
+    runas: 0, anel: 1, aro: 2, halo: 3,
+    meialua: 4, virgula: 5, leque: 6, cruz: 7,
+    raio: 8, estouro: 9, detrito: 10, estrela: 11,
+    chama: 12, fumaca: 13, garras: 14, risco: 15
+  };
+  FX.PLACA = PL;
+
+  var PLACAS_ON = true;
+  FX.setPlacas = function (v) { PLACAS_ON = (v !== false); };
+  FX.placasLigadas = function () { return PLACAS_ON; };
+
+  var PLACA_VS = [
+    'varying vec2 vUv;',
+    'void main() {',
+    '  vUv = uv;',
+    '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+    '}'
+  ].join('\n');
+  // O atlas guarda cinza+alpha: a cor vem daqui, entao a MESMA forma serve aos
+  // cinco elementos e as duas cores de uma fusao sem duplicar textura.
+  var PLACA_FS = [
+    'uniform sampler2D uMap;',
+    'uniform vec2 uOff;',
+    'uniform float uCel;',
+    'uniform vec3 uCor;',
+    'uniform float uOp;',
+    'varying vec2 vUv;',
+    'void main() {',
+    '  vec4 t = texture2D(uMap, uOff + vUv * uCel);',
+    '  float a = t.a * uOp;',
+    '  if (a < 0.004) discard;',
+    '  gl_FragColor = vec4(uCor * t.rgb, a);',
+    '}'
+  ].join('\n');
+
+  var geoBil = null, geoChao = null;
+  function geosPlaca() {
+    if (geoBil) return;
+    geoBil = new THREE.PlaneGeometry(1, 1);
+    // deitada: +X e a direita do desenho, -Z e o "para cima" dele, normal = +Y
+    geoChao = new THREE.PlaneGeometry(1, 1);
+    geoChao.rotateX(-Math.PI / 2);
+  }
+  // para onde o desenho aponta, em cada um dos tres jeitos de deitar a placa
+  function angChao(dx, dz) { return Math.atan2(dx, dz) + Math.PI; }
+  function angTrilho(dx, dz) { return Math.atan2(-dz, dx); }
+  function angMira(dx, dz) { return Math.atan2(dx, dz); }
+  function v3(x, y, z) { return new THREE.Vector3(x, y, z); }
+
+  var placas = [];
+  var MAX_PLACAS = 26;
+  function placa(o) {
+    if (!PLACAS_ON || !attached) return null;
+    geosPlaca();
+    var tex = placaTexture(), n = PLACA_N;
+    var idx = o.tile || 0, cc = idx % n, rr = Math.floor(idx / n);
+    var de = o.de || [3, 3], ate = o.ate || de;
+
+    function faz(cor, escura) {
+      var mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uMap: { value: tex || dotTexture() },
+          // flipY do three deixa v=0 no rodape da imagem: a linha `rr` (contada
+          // de cima) comeca em (n-1-rr)/n
+          uOff: { value: new THREE.Vector2(tex ? cc / n : 0, tex ? (n - 1 - rr) / n : 0) },
+          uCel: { value: tex ? 1 / n : 1 },
+          uCor: { value: col3(cor) },
+          uOp: { value: 0 }
+        },
+        vertexShader: PLACA_VS, fragmentShader: PLACA_FS,
+        transparent: true, depthWrite: false, side: THREE.DoubleSide,
+        blending: escura ? THREE.NormalBlending : THREE.AdditiveBlending
+      });
+      var m = new THREE.Mesh(o.modo === 'chao' ? geoChao : geoBil, mat);
+      m.frustumCulled = false;
+      m.visible = false;
+      m.renderOrder = (o.modo === 'chao' ? 8 : 13) + (escura ? 0 : 1);
+      fxG.add(m);
+      var k = escura ? 1.16 : 1;
+      placas.push({
+        m: m, mat: mat, modo: o.modo || 'bilhete',
+        t: 0, atraso: o.atraso || 0, dur: o.dur || 0.6,
+        w0: de[0] * k, h0: de[1] * k, w1: ate[0] * k, h1: ate[1] * k,
+        p0: o.pos, p1: o.para || o.pos,
+        ang: o.ang || 0, giro: o.giro || 0,
+        op: escura ? (o.forro || 0.5) : (o.op == null ? 0.9 : o.op),
+        subida: o.subida == null ? 0.07 : o.subida,
+        saida: o.saida == null ? 1.4 : o.saida,
+        curva: o.curva == null ? 2.2 : o.curva
+      });
+    }
+    // teto: um feitico de area nao pode encher a cena de quadro transparente
+    if (placas.length > MAX_PLACAS) return null;
+    if (o.forro) faz(o.corForro || '#04050a', true);
+    faz(o.color || '#ffffff', false);
+    return true;
+  }
+
+  function updatePlacas(dt) {
+    for (var i = placas.length - 1; i >= 0; i--) {
+      var p = placas[i];
+      p.t += dt;
+      var tt = p.t - p.atraso;
+      if (tt < 0) { p.m.visible = false; continue; }
+      var k = tt / p.dur;
+      if (k >= 1) {
+        fxG.remove(p.m); p.mat.dispose(); placas.splice(i, 1); continue;
+      }
+      var e = 1 - Math.pow(1 - k, p.curva);
+      p.m.visible = true;
+      p.m.scale.set(p.w0 + (p.w1 - p.w0) * e, p.h0 + (p.h1 - p.h0) * e, 1);
+      p.m.position.set(p.p0.x + (p.p1.x - p.p0.x) * e,
+                       p.p0.y + (p.p1.y - p.p0.y) * e,
+                       p.p0.z + (p.p1.z - p.p0.z) * e);
+      var ang = p.ang + p.giro * tt;
+      if (p.modo === 'bilhete' && camera) {
+        p.m.quaternion.copy(camera.quaternion);
+        p.m.rotateZ(ang);
+      } else {
+        p.m.rotation.set(0, ang, 0);
+      }
+      var sobe = p.subida > 0 ? Math.min(1, tt / p.subida) : 1;
+      p.mat.uniforms.uOp.value = p.op * sobe * Math.pow(1 - k, p.saida);
+    }
+  }
+  function limpaPlacas() {
+    for (var i = 0; i < placas.length; i++) { fxG.remove(placas[i].m); placas[i].mat.dispose(); }
+    placas.length = 0;
+  }
+
   // ------------------------------------------------------------- números
   // Cada número que sobe na tela custava um canvas + uma textura + um material
   // NOVOS. Num feitiço de área que pega seis alvos são seis uploads para a placa
@@ -533,6 +725,7 @@ var JOGO = (typeof window !== 'undefined')
     scene = ctx.scene; camera = ctx.camera;
     fxG = ctx.fx; decalG = ctx.decal || ctx.fx;
     R3 = ctx.renderer3d || JOGO.Renderer;
+    glr = ctx.renderer || null;
     buildParticles();
     buildLights();
     attached = true;
@@ -653,12 +846,27 @@ var JOGO = (typeof window !== 'undefined')
     var alto = new THREE.Vector3(dest.x + 3.0, 14, dest.z - 4.2);
     burst(alto.x, alto.y, alto.z, 16, { color: col, speed: 1.2, life: 0.7, size: 0.4, grav: -1,
                                         tile: TILE.brasa });
+    // A PEDRA. A esfera do projetil tem 0,24 m de raio: cinco pixels de tela.
+    // A lingua de fogo acompanha a queda com 5 m de altura, e ai da para ver o
+    // que esta caindo.
+    var voo = Math.max(0.16, Math.min(0.8, alto.distanceTo(dest) / (grande ? 30 : 24)));
+    placa({ tile: PL.chama, color: col, modo: 'bilhete',
+            pos: v3(alto.x, alto.y, alto.z), para: v3(dest.x, dest.y + 0.8, dest.z),
+            de: [2.0, 4.6], ate: [2.8, 6.2], dur: voo * 1.05,
+            op: 0.95, curva: 1, subida: 0.05, saida: 0.35 });
     launch(alto, dest, {
       color: col, color2: col2, kind: 'ball', speed: grande ? 30 : 24, arc: 0,
       onHit: function (pos) {
         impact(pos, el, grande ? 2.0 : 1.4, el2);
         shockRing(pos, col, 0.4, grande ? 4.6 : 3.0, 0.55);
         scorch(pos, col, grande ? 3.6 : 2.4, 6);
+        placa({ tile: PL.estouro, color: col, modo: 'bilhete',
+                pos: v3(pos.x, Math.max(1.0, pos.y + 0.8), pos.z),
+                de: [2.6, 2.6], ate: grande ? [12.5, 12.5] : [9.0, 9.0],
+                dur: 0.55, op: 1, saida: 1.6, forro: 0.55 });
+        placa({ tile: PL.anel, color: col2 || col, modo: 'chao',
+                pos: v3(pos.x, 0.10, pos.z), de: [2.0, 2.0],
+                ate: grande ? [14, 14] : [10, 10], dur: 0.66, op: 0.9, saida: 1.4 });
         addShake(grande ? 9 : 6.5);
         freezeT = Math.max(freezeT, grande ? 0.09 : 0.05);
       }
@@ -675,17 +883,29 @@ var JOGO = (typeof window !== 'undefined')
           var dx = (Math.random() - 0.5) * 2.6, dz = (Math.random() - 0.5) * 2.6;
           var chao = new THREE.Vector3(dest.x + dx, dest.y, dest.z + dz);
           var ceu = new THREE.Vector3(chao.x + 1.2, 11, chao.z - 1.6);
+          var cor = (col2 && k % 3 === 2) ? col2 : col;
+          placa({ tile: PL.chama, color: cor, modo: 'bilhete',
+                  pos: v3(ceu.x, ceu.y, ceu.z), para: v3(chao.x, chao.y + 0.6, chao.z),
+                  de: [0.9, 2.4], ate: [1.3, 3.2], dur: 0.5, op: 0.9,
+                  curva: 1, subida: 0.04, saida: 0.4 });
           launch(ceu, chao, {
-            color: (col2 && k % 3 === 2) ? col2 : col, kind: 'ball', speed: 22, arc: 0,
+            color: cor, kind: 'ball', speed: 22, arc: 0,
             onHit: function (pos) {
               burst(pos.x, pos.y + 0.2, pos.z, 14, { color: col, speed: 3.2, life: 0.4, size: 0.24,
                                                     tile: TILE.brasa });
               shockRing(pos, col, 0.2, 1.1, 0.35);
+              placa({ tile: PL.estouro, color: cor, modo: 'bilhete',
+                      pos: v3(pos.x, Math.max(0.7, pos.y + 0.4), pos.z),
+                      de: [0.9, 0.9], ate: [3.6, 3.6], dur: 0.34, op: 0.95, saida: 1.7 });
             }
           });
         }, k * 85);
       })(i);
     }
+    // a area inteira marcada de uma vez: sem isto o jogador so ve pingos soltos
+    // e nao entende ONDE a chuva cai
+    placa({ tile: PL.anel, color: col, modo: 'chao', pos: v3(dest.x, 0.08, dest.z),
+            de: [3.4, 3.4], ate: [8.0, 8.0], dur: 0.95, op: 0.6, saida: 1.0, curva: 1.6 });
     scorch(dest, col, 3.2, 5);
     addShake(4);
   }
@@ -696,6 +916,17 @@ var JOGO = (typeof window !== 'undefined')
     var dx = dest.x - from.x, dz = dest.z - from.z;
     var d = Math.max(0.001, Math.sqrt(dx * dx + dz * dz));
     dx /= d; dz /= d;
+    // O LEQUE. Deitado no chao, apontado para o alvo, do tamanho da area que o
+    // sopro pega: e este desenho que diz "cone" antes de qualquer particula.
+    var meio = v3(from.x + dx * d * 0.52, 0.11, from.z + dz * d * 0.52);
+    placa({ tile: PL.leque, color: col, modo: 'chao', pos: meio, ang: angChao(dx, dz),
+            de: [d * 0.45, d * 0.55], ate: [d * 1.05, d * 1.25],
+            dur: 0.62, op: 0.95, saida: 1.3, forro: 0.5 });
+    if (col2) {
+      placa({ tile: PL.leque, color: col2, modo: 'chao', pos: meio, ang: angChao(dx, dz),
+              de: [d * 0.30, d * 0.36], ate: [d * 0.75, d * 0.90],
+              dur: 0.5, atraso: 0.09, op: 0.8, saida: 1.5 });
+    }
     var passos = 9;
     for (var i = 0; i < passos; i++) {
       (function (k) {
@@ -717,6 +948,10 @@ var JOGO = (typeof window !== 'undefined')
   function cruz(dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
     impact(dest, el, 1.2, el2);
+    // os quatro bracos, num desenho so, deitados no chao: 9 m de cruz
+    placa({ tile: PL.cruz, color: col, modo: 'chao', pos: v3(dest.x, 0.11, dest.z),
+            de: [3.0, 3.0], ate: [9.5, 9.5], dur: 0.62, op: 0.95, saida: 1.4,
+            giro: 0.5, forro: 0.5 });
     var dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     dirs.forEach(function (dr, di) {
       for (var i = 1; i <= 4; i++) {
@@ -747,12 +982,27 @@ var JOGO = (typeof window !== 'undefined')
     });
     shockRing(dest, col, 0.3, 3.0, 0.5);
     scorch(dest, col, 2.6, 5);
+    // a nuvem de cascalho tem de ter TAMANHO: 40 particulas de 7 px somem
+    placa({ tile: PL.detrito, color: col, modo: 'bilhete', pos: v3(dest.x, 1.2, dest.z),
+            de: [3.2, 2.6], ate: [8.6, 7.0], dur: 0.72, op: 0.95, saida: 1.5 });
+    placa({ tile: PL.anel, color: col2 || col, modo: 'chao', pos: v3(dest.x, 0.10, dest.z),
+            de: [1.6, 1.6], ate: [9.5, 9.5], dur: 0.6, op: 0.85, saida: 1.4 });
     addShake(7);
   }
 
   /* Lamina baixa e rapida correndo rente ao chao ate o alvo. */
   function onda(from, dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    // A PAREDE que atravessa: em pe, atravessada no caminho, ela ANDA de quem
+    // conjura ate o alvo. E o unico jeito de ler "passou por aqui".
+    var ox = dest.x - from.x, oz = dest.z - from.z;
+    placa({ tile: PL.virgula, color: col, modo: 'mira', ang: angMira(ox, oz),
+            pos: v3(from.x + ox * 0.12, 1.1, from.z + oz * 0.12),
+            para: v3(dest.x, 1.2, dest.z),
+            de: [5.0, 2.6], ate: [8.0, 3.8], dur: 0.5, op: 0.95,
+            curva: 1, saida: 1.2, forro: 0.45 });
+    placa({ tile: PL.anel, color: col2 || col, modo: 'chao', pos: v3(dest.x, 0.09, dest.z),
+            de: [1.4, 1.4], ate: [7.0, 7.0], dur: 0.5, atraso: 0.34, op: 0.85, saida: 1.4 });
     var passos = 8;
     for (var i = 0; i <= passos; i++) {
       (function (k) {
@@ -772,7 +1022,19 @@ var JOGO = (typeof window !== 'undefined')
   /* Rastro de corrida do conjurador ate o destino, e o baque na chegada. */
   function investida(from, dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    var ix = dest.x - from.x, iz = dest.z - from.z;
+    var idist = Math.max(0.8, Math.sqrt(ix * ix + iz * iz));
     var passos = 7;
+    // o risco da corrida cobre o caminho INTEIRO num desenho so
+    placa({ tile: PL.risco, color: col, modo: 'trilho', ang: angTrilho(ix, iz),
+            pos: v3((from.x + dest.x) / 2, from.y * 0.7 + 0.3, (from.z + dest.z) / 2),
+            de: [idist * 0.4, 1.2], ate: [idist * 1.05, 2.2],
+            dur: 0.36, op: 0.85, saida: 1.7 });
+    // e as garras no fim, no tempo da pancada
+    placa({ tile: PL.garras, color: col2 || col, modo: 'bilhete',
+            pos: v3(dest.x, dest.y + 0.6, dest.z),
+            de: [2.8, 2.8], ate: [7.0, 7.0], dur: 0.44, atraso: passos * 0.022,
+            op: 1, saida: 1.7, ang: 0.2, forro: 0.5 });
     for (var i = 0; i <= passos; i++) {
       (function (k) {
         setTimeout(function () {
@@ -793,6 +1055,18 @@ var JOGO = (typeof window !== 'undefined')
     var hd = R3 && R3.hitDelay ? R3.hitDelay() : 0.3;
     setTimeout(function () {
       var col = ecol(el);
+      // A MEIA-LUA. Sete metros de arco que GIRA durante o golpe: e a diferenca
+      // entre "cortou" e "aconteceu alguma coisa laranja".
+      placa({ tile: PL.meialua, color: col, modo: 'bilhete',
+              pos: v3(dest.x, dest.y + 0.5, dest.z),
+              de: [3.6, 3.6], ate: [7.4, 7.4], dur: 0.44, op: 1, saida: 1.7,
+              ang: -1.0, giro: 5.2, forro: 0.55 });
+      if (el2) {
+        placa({ tile: PL.meialua, color: ecol(el2), modo: 'bilhete',
+                pos: v3(dest.x, dest.y + 0.7, dest.z),
+                de: [2.4, 2.4], ate: [5.6, 5.6], dur: 0.4, atraso: 0.07, op: 0.85,
+                saida: 1.7, ang: 2.1, giro: -4.4 });
+      }
       // arco: as particulas seguem um semicirculo, nao uma explosao redonda
       for (var i = 0; i < 14; i++) {
         var a = -0.5 + (i / 13) * 2.2;
@@ -1229,9 +1503,25 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ================================================================= ATUALIZA
+  var tmpV2 = null;
+  // O tamanho de tela de uma particula depende do BUFFER, que muda com a janela
+  // e com o devicePixelRatio. Recalculado por quadro (uma divisao) em vez de
+  // cravado num 320 que so valia para uma resolucao — e para nenhuma, na verdade.
+  function ajustaEscalaPonto() {
+    if (!pts || !glr || !camera || !camera.fov) return;
+    if (!tmpV2) tmpV2 = new THREE.Vector2();
+    var h = 0;
+    try { h = glr.getDrawingBufferSize(tmpV2).y; } catch (e) { return; }
+    if (!(h > 0)) return;
+    PT_K = h / (2 * Math.tan(camera.fov * Math.PI / 360));
+    pts.material.uniforms.uPx.value = PT_K;
+  }
+
   FX.update = function (dt, realDt) {
     if (!attached) return;
     if (freezeT > 0) freezeT -= (realDt == null ? dt : realDt);
+    ajustaEscalaPonto();
+    updatePlacas(dt);
     updateShots(dt);
     updateFlashes(dt);
     updateRings(dt);
@@ -1264,6 +1554,7 @@ var JOGO = (typeof window !== 'undefined')
     rings.length = 0;
     for (var t = floaters.length - 1; t >= 0; t--) { fxG.remove(floaters[t].sp); floaters[t].sp.material.dispose(); }
     floaters.length = 0;
+    limpaPlacas();
     FX.clearDecals();
     limpaTexCache();          // as texturas dos numeros vao embora com a sala
     shakeAmp = 0; shakeOut.x = 0; shakeOut.y = 0; freezeT = 0;
@@ -1295,6 +1586,7 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < MAXP; i++) if (parts[i]) alive++;
     return { particles: alive, shots: shots.length, decals: decals.length,
              floaters: floaters.length, texCache: texCacheN,
-             rings: rings.length, luzes: flashes.length };
+             rings: rings.length, luzes: flashes.length,
+             placas: placas.length, ptK: PT_K };
   };
 })();

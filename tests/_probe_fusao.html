@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>sonda</title></head>
+<body>
+<pre id="out">medindo…</pre>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js','js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function(){
+'use strict';
+var L=[]; function p(s){L.push(s);}
+window.addEventListener('DOMContentLoaded',function(){
+  var P=JOGO.Progress,E=JOGO.Engine,F=JOGO.Fusion,D=JOGO.DATA;
+  var CLS=Object.keys(D.classes), ELEMS=['fogo','agua','terra','ar'];
+  P.reset();
+  CLS.forEach(function(c){try{P.unlockClass(c);}catch(e){}});
+  CLS.forEach(function(c,k){var h=P.hero(c);if(h){h.level=30;h.element=ELEMS[k%4];}});
+  var st=E.createBattle('greenhouse',0,P.battleParty(['arqueiro','invocador']));
+  var ini=st.units.filter(function(u){return u.side==='enemy';});
+  var h=st.units.filter(function(u){return u.side==='player';});
+  h[0].x=ini[0].x-1;h[0].y=ini[0].y; h[1].x=ini[0].x;h[1].y=ini[0].y-1;
+  ini.forEach(function(m){m.hp=999999;m.hpMax=999999;});
+  p('inimigos: '+ini.map(function(m){return '('+m.x+','+m.y+')';}).join(' '));
+  p('herois:   '+h.map(function(u){return u.classId+'('+u.x+','+u.y+')';}).join(' '));
+  p('');
+  var inim={}; ini.forEach(function(m){inim[m.x+','+m.y]=1;});
+  // para cada heroi, cada feitico: melhor celula e quantos pega
+  h.forEach(function(u){
+    p('== '+u.classId+' em ('+u.x+','+u.y+') ==');
+    u.spells.forEach(function(sid){
+      var sp=E.spell(sid); if(!sp) return;
+      var alvos=E.castTargets(st,u.uid,sid);
+      var best=null,bn=0,hist={};
+      alvos.forEach(function(c){
+        var t=E.aoeTiles(st,sid,u.x,u.y,c.x,c.y)||[];
+        var n=0; t.forEach(function(q){ if(inim[q.x+','+q.y]) n++; });
+        hist[n]=(hist[n]||0)+1;
+        if(n>bn){bn=n;best=c;}
+      });
+      p('   '+sid+' '+sp.aoe.shape+':'+sp.aoe.size+' rng='+sp.range.min+'-'+sp.range.max+
+        ' los='+sp.range.los+' celulas='+alvos.length+' melhor='+(best?'('+best.x+','+best.y+') pega '+bn:'-')+
+        '  histograma='+JSON.stringify(hist));
+    });
+  });
+  p('');
+  // a celula (6,8) e alcancavel/visivel dos dois cascos?
+  [[5,6],[6,5]].forEach(function(c){
+    var linha=[];
+    for (var yy=6; yy<=10; yy++) for (var xx=5; xx<=7; xx++) {
+      var d=Math.abs(xx-c[0])+Math.abs(yy-c[1]);
+      var tipo=st.grid.tiles[yy][xx].type;
+      linha.push('('+xx+','+yy+') d='+d+' '+tipo+' los='+E.los(st,c[0],c[1],xx,yy));
+    }
+    p('de ('+c[0]+','+c[1]+'): '+linha.join('  |  '));
+  });
+  P.reset();
+  document.getElementById('out').textContent=L.join('\n');
+  window.__pronto=true;
+});
+})();
+</script>
+</body>
+</html>

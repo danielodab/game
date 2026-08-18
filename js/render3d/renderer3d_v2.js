@@ -1605,6 +1605,109 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ------------------------------------------------- eventos de terreno (chão)
+  // ------------------------------------------------- ARMADILHA NO CHAO
+  // O motor guarda `state.traps` desde sempre, mas o renderizador so reagia ao
+  // INSTANTE em que a armadilha dispara: o Xama armava e o chao nao mostrava
+  // nada. O jogador perdia de vista onde poe os proprios lacos, e o adversario
+  // nao tinha o que ler no tabuleiro.
+  //
+  // Agora a armadilha ARMADA fica no chao ate disparar ou expirar, desenhada
+  // como um laco de urso — arco de metal e dentes — na cor do elemento dela.
+  var trapNodes = [];
+  var trapSig = '';
+  var trapGeoArco = null, trapGeoDente = null, trapGeoBase = null;
+
+  function trapElemento(tr) {
+    var sp = null;
+    try { sp = JOGO.Engine && JOGO.Engine.spell ? JOGO.Engine.spell(tr.trapId) : null; } catch (e) {}
+    return (sp && sp.element) || 'neutro';
+  }
+
+  /* Um laco de urso: base escura, arco aberto e dentes virados para dentro.
+   * Le como armadilha a 40 px porque a silhueta e um ANEL DENTADO, que nao se
+   * confunde com as marcas redondas de evento de terreno. */
+  function montaArmadilha(el) {
+    var cor = col3(R.elementColor(el));
+    var g = new THREE.Group();
+
+    if (!trapGeoBase) {
+      trapGeoBase = new THREE.CircleGeometry(0.34, 16);
+      trapGeoBase.rotateX(-Math.PI / 2);
+    }
+    var base = new THREE.Mesh(trapGeoBase, new THREE.MeshBasicMaterial({
+      color: col3('#0d0f12'), transparent: true, opacity: 0.72, depthWrite: false
+    }));
+    base.position.y = 0.03;
+    base.renderOrder = 6;
+    g.add(base);
+
+    if (!trapGeoArco) {
+      trapGeoArco = new THREE.TorusGeometry(0.30, 0.045, 6, 18);
+      trapGeoArco.rotateX(-Math.PI / 2);
+    }
+    var arco = new THREE.Mesh(trapGeoArco, new THREE.MeshStandardMaterial({
+      color: cor, roughness: 0.55, metalness: 0.25,
+      emissive: cor, emissiveIntensity: 0.35
+    }));
+    arco.position.y = 0.07;
+    arco.castShadow = true;
+    g.add(arco);
+
+    // os dentes: cones deitados apontando para o centro
+    if (!trapGeoDente) trapGeoDente = new THREE.ConeGeometry(0.045, 0.17, 4);
+    var N = 8;
+    for (var i = 0; i < N; i++) {
+      var a = (i / N) * Math.PI * 2;
+      var d = new THREE.Mesh(trapGeoDente, new THREE.MeshStandardMaterial({
+        color: cor, roughness: 0.5, metalness: 0.3,
+        emissive: cor, emissiveIntensity: 0.25
+      }));
+      d.position.set(Math.cos(a) * 0.30, 0.13, Math.sin(a) * 0.30);
+      // deitado para fora e inclinado para dentro: dente de laco, nao espinho
+      d.rotation.z = Math.cos(a) * 0.85;
+      d.rotation.x = -Math.sin(a) * 0.85;
+      d.castShadow = true;
+      g.add(d);
+    }
+    g.userData.arco = arco;
+    return g;
+  }
+
+  function rebuildTraps(st) {
+    var lista = (st && st.traps) || [];
+    var sig = '';
+    for (var i = 0; i < lista.length; i++) {
+      sig += lista[i].x + ',' + lista[i].y + ':' + (lista[i].trapId || '') + ';';
+    }
+    if (sig === trapSig) return;
+    trapSig = sig;
+    for (var q = trapNodes.length - 1; q >= 0; q--) {
+      var n = trapNodes[q];
+      if (n.parent) n.parent.remove(n);
+      n.traverse(function (o) { if (o.isMesh && o.material) o.material.dispose(); });
+    }
+    trapNodes.length = 0;
+    for (var t = 0; t < lista.length; t++) {
+      var tr = lista[t];
+      var node = montaArmadilha(trapElemento(tr));
+      var p = R.world(tr.x, tr.y, 0);
+      node.position.set(p.x, 0, p.z);
+      node.userData.ph = (tr.x * 7 + tr.y * 13) % 10;
+      scene.add(node);
+      trapNodes.push(node);
+    }
+  }
+
+  /* Pulsacao lenta: a armadilha respira para o olho achar, sem virar farol. */
+  function updateTraps() {
+    for (var i = 0; i < trapNodes.length; i++) {
+      var n = trapNodes[i];
+      var p = 0.5 + 0.5 * Math.sin(nowT * 1.8 + n.userData.ph);
+      if (n.userData.arco) n.userData.arco.material.emissiveIntensity = 0.22 + p * 0.42;
+      n.rotation.y = nowT * 0.25;
+    }
+  }
+
   var evNodes = [];
   var EV_COLORS = { buff: '#ffd76b', mystery: '#b98cff', portal: '#58b6f0', drain: '#e0556a', fountain: '#7ef0d4' };
   function rebuildTileEvents(st) {
@@ -2292,6 +2395,7 @@ var JOGO = (typeof window !== 'undefined')
       var sig = overlaySignature(st);
       if (sig !== ovSig) { ovSig = sig; rebuildOverlays(st); }
       rebuildTileEvents(st);
+      rebuildTraps(st);
       var en = engine();
       drawActiveRing(safe(function () { return en && en.activeUnit ? en.activeUnit(st) : null; }, null));
     }
@@ -2306,6 +2410,7 @@ var JOGO = (typeof window !== 'undefined')
       g.rotation.y = nowT * 0.6;
     }
 
+    updateTraps();
     updateWeather(dtv);
     updateRot(dtv);
     updateFocus(dtv);

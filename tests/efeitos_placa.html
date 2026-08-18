@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — a placa, medida no tamanho real do tabuleiro</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.5 system-ui,Segoe UI,sans-serif}
+  h1{font-size:16px;margin:10px 14px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 14px 8px;max-width:1100px}
+  #st{font:12px monospace;margin:0 14px 10px;padding:6px 10px;border-radius:6px;background:#182029;color:#9fd8a8}
+  table{border-collapse:collapse;font-size:12px;margin:8px 14px}
+  th,td{border:1px solid #2b3542;padding:2px 8px;text-align:left}
+  th{background:#1b222c;color:#8895a6}
+  td.n{text-align:right;font-family:monospace}
+  .bom{color:#7fe08a} .ruim{color:#f0885a}
+  #folha{display:block;margin:10px 14px 20px;border:1px solid #2b3542}
+  /* o jogo roda num quadro de CELULAR: e este tamanho de tela que decide se o
+     efeito e legivel, nao o close-up. */
+  #app{position:fixed;left:-4000px;top:0;width:420px;height:640px}
+</style>
+</head>
+<body>
+<h1>A placa, medida no tamanho real do tabuleiro</h1>
+<div class="sub">Cada família dispara o MESMO elemento (fogo) num quadro de celular (420×640, célula de ~40&nbsp;px).
+Duas passadas: <b>hoje</b> (só partícula) e <b>placa</b>. De cada passada sai um recorte 1:1 — sem
+aproximar, sem reduzir — e a medida do que mudou na tela em relação ao quadro sem efeito.
+A conta que interessa é a <b>semelhança média entre famílias</b>: se todas desenham a mesma mancha,
+ela fica perto de 1 e o jogador diz "é tudo igual".</div>
+<div id="st">rodando…</div>
+<table id="resumo"></table>
+<canvas id="folha"></canvas>
+<table id="tab"></table>
+
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/ui/hud.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  // recorte 1:1 do quadro do jogo. Não é um close: são os pixels que o jogador
+  // veria, na escala em que ele os veria.
+  var RW = 400, RH = 300, ROT = 24;      // largura, altura e faixa do rótulo
+  var PASSADAS = [{ id: 'hoje', placa: false }, { id: 'placa', placa: true }];
+  var QUADROS = 16, DT = 0.034;          // 16 x 34 ms = 0,54 s de efeito
+  var st = document.getElementById('st');
+
+  function diz(t) { st.textContent = t; }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, FX = JOGO.FX, D = JOGO.DATA;
+    try { R.init(document.getElementById('game-canvas')); } catch (e) { return diz('init: ' + e.message); }
+    try { JOGO.UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try {
+        ok = JOGO.Models3D2 && JOGO.Models3D2.isReady() &&
+             JOGO.Models3D && JOGO.Models3D.isReady() && R.isReady();
+      } catch (e) {}
+      if (!ok && Date.now() - t0 < 60000) return setTimeout(espera, 250);
+      try {
+        var ids = JOGO.Progress.heroIds();
+        while (ids.length < 2) {
+          JOGO.Progress.createHero(ids.length ? 'curandeira' : 'sumo');
+          ids = JOGO.Progress.heroIds();
+        }
+        G.startRun(ids.slice(0, 2), 'greenhouse');
+      } catch (e) { return diz('não desci: ' + e.message); }
+      monta();
+    })();
+
+    // ------------------------------------------------ um feitiço por família
+    function representantes() {
+      var porFam = {};
+      Object.keys(D.spells || {}).forEach(function (id) {
+        var sp = D.spells[id];
+        if (!sp || !sp.fxKey) return;
+        var f = FX.familiaDe(sp.fxKey);
+        if (!porFam[f]) porFam[f] = sp;
+      });
+      // As formas de FUSÃO usam outro vocabulário (fxShape) e trazem as famílias
+      // que nenhum feitiço de classe cobre: estouro, escudo, piscar, gancho…
+      try {
+        var F = JOGO.Fusion;
+        var pares = Object.keys(D.fusionForms || {});
+        var mist = Object.keys(D.fusionBlends || {});
+        pares.forEach(function (par, i) {
+          var lista = null;
+          try { lista = F.spellsFor(par, mist[i % mist.length], 30); } catch (e) {}
+          (lista || []).forEach(function (sp) {
+            if (!sp || !sp.fxKey) return;
+            var f = FX.familiaDe(sp.fxShape || sp.fxKey);
+            if (!porFam[f]) porFam[f] = sp;
+          });
+        });
+      } catch (e) {}
+      return porFam;
+    }
+
+    // O elemento é o mesmo para TODAS as famílias de propósito: se a cor muda
+    // junto com a forma, a cor esconde que a forma não mudou. Segurando a cor,
+    // o que sobra na medida é só o desenho.
+    function soFogo(sp) {
+      var c = { id: sp.id, name: sp.name || sp.id, fxKey: sp.fxKey, fxShape: sp.fxShape,
+                unlockLevel: sp.unlockLevel, element: 'fogo', effects: [] };
+      (sp.effects || []).forEach(function (e) {
+        var e2 = {}; for (var k in e) if (e.hasOwnProperty(k)) e2[k] = e[k];
+        e2.element = 'fogo'; c.effects.push(e2);
+      });
+      return c;
+    }
+
+    function monta() {
+      var battle = G.state;
+      var heroi = (battle.units || []).filter(function (u) { return u.alive; })[0];
+      if (!heroi) return diz('sem unidade viva');
+
+      /* A CENA FICA PARADA. O quadro é desenhado com dt=0 — nada de pulinho de
+       * unidade, de clima nem de tocha — e só o FX anda, por FX.update. Assim a
+       * diferença entre o quadro com efeito e o quadro sem efeito é o EFEITO, e
+       * mais nada.
+       * A tremida sai pelo mesmo motivo: ela empurra a câmera e portanto MUDA
+       * TODO pixel da tela. Medindo com ela ligada, o meteoro e a aura "pintam"
+       * os mesmos 400×300 px e a medida não diz nada. */
+      FX.getShake = function () { return { x: 0, y: 0 }; };
+      FX.getTimeScale = function () { return 1; };
+      try { FX.setAmbient(null); } catch (e) {}
+
+      var porFam = representantes();
+      var fams = Object.keys(porFam).sort();
+      var alvoX = heroi.x + 3, alvoY = heroi.y;
+
+      var src = document.getElementById('game-canvas');
+      var CW = src.width, CH = src.height;
+
+      // centro do recorte: entre quem conjura e o alvo, projetado na tela
+      function proj(v) {
+        var p = v.clone().project(R.camera());
+        return { x: (p.x * 0.5 + 0.5) * CW, y: (1 - (p.y * 0.5 + 0.5)) * CH };
+      }
+      R.render(0);
+      var a = proj(R.world(heroi.x, heroi.y, 1.0));
+      var b = proj(R.world(alvoX, alvoY, 1.0));
+      var cx = Math.round((a.x + b.x) / 2), cy = Math.round((a.y + b.y) / 2);
+      var rx = Math.max(0, Math.min(CW - RW, cx - RW / 2));
+      var ry = Math.max(0, Math.min(CH - RH, cy - RH / 2));
+      // quantos pixels de tela vale um metro do mundo — a escala que decide tudo
+      var m0 = proj(R.world(heroi.x, heroi.y, 0));
+      var m1 = proj(R.world(heroi.x + 1, heroi.y, 0));      // 1 célula = CELL metros
+      var pxCel = Math.abs(m1.x - m0.x);
+      var pxMetro = pxCel / (R.CELL || 2);
+
+      // ------------------------------------------------------ tela de trabalho
+      var work = document.createElement('canvas'); work.width = RW; work.height = RH;
+      var wg = work.getContext('2d', { willReadFrequently: true });
+      var best = document.createElement('canvas'); best.width = RW; best.height = RH;
+      var bg2 = best.getContext('2d');
+
+      function pega() {
+        wg.drawImage(src, rx, ry, RW, RH, 0, 0, RW, RH);
+        return wg.getImageData(0, 0, RW, RH);
+      }
+
+      // ------------------------------------------------------------- medidas
+      var GX = 20, GY = 15;                    // grade da assinatura de forma
+      function mede(A, B) {
+        var d = A.data, e = B.data, n = RW * RH;
+        var area = 0, sat = 0, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+        var grade = new Float32Array(GX * GY);
+        var somaL = 0;
+        for (var i = 0; i < n; i++) {
+          var o = i * 4;
+          var dr = d[o] - e[o], dg = d[o + 1] - e[o + 1], db = d[o + 2] - e[o + 2];
+          if (dr < 0) dr = -dr; if (dg < 0) dg = -dg; if (db < 0) db = -db;
+          var dm = dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
+          if (dm <= 20) continue;
+          area++;
+          somaL += dm;
+          var mn = Math.min(d[o], Math.min(d[o + 1], d[o + 2]));
+          if (mn >= 232) sat++;            // estourou para branco: a forma sumiu
+          var px = i % RW, py = (i / RW) | 0;
+          if (px < x0) x0 = px; if (px > x1) x1 = px;
+          if (py < y0) y0 = py; if (py > y1) y1 = py;
+          grade[((py * GY / RH) | 0) * GX + ((px * GX / RW) | 0)] += dm;
+        }
+        if (!area) return { area: 0, w: 0, h: 0, sat: 0, forca: 0, grade: grade };
+        // normaliza a assinatura: compara FORMA, não intensidade
+        var mx = 0, k;
+        for (k = 0; k < grade.length; k++) if (grade[k] > mx) mx = grade[k];
+        if (mx > 0) for (k = 0; k < grade.length; k++) grade[k] /= mx;
+        return { area: area, w: x1 - x0 + 1, h: y1 - y0 + 1,
+                 sat: sat / area, forca: somaL / area, grade: grade };
+      }
+      function cos(a, b) {
+        var s = 0, na = 0, nb = 0;
+        for (var i = 0; i < a.length; i++) { s += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+        if (na <= 0 || nb <= 0) return 0;
+        return s / Math.sqrt(na * nb);
+      }
+
+      // ------------------------------------------------------------- a folha
+      var folha = document.getElementById('folha');
+      var COLPAR = 2;                                   // 2 famílias por linha
+      folha.width = COLPAR * RW * 2;
+      folha.height = Math.ceil(fams.length / COLPAR) * (RH + ROT);
+      var g = folha.getContext('2d');
+      g.fillStyle = '#0b0e12'; g.fillRect(0, 0, folha.width, folha.height);
+
+      var res = {};       // fam -> {hoje:{}, placa:{}}
+      var pi = 0, fi = 0;
+
+      function proximo() {
+        if (pi >= PASSADAS.length) return fecha();
+        if (fi >= fams.length) { pi++; fi = 0; return setTimeout(proximo, 0); }
+        var passada = PASSADAS[pi], fam = fams[fi], sp = soFogo(porFam[fam]);
+        diz('passada "' + passada.id + '" · ' + (fi + 1) + '/' + fams.length + ' · ' + fam);
+        try { if (FX.setPlacas) FX.setPlacas(passada.placa); } catch (e) {}
+        try { FX.reset(); } catch (e) {}
+
+        // quadro SEM efeito, no mesmo instante da animação (dt=0 não anda)
+        R.render(0);
+        var base = pega();
+
+        try {
+          FX.handleEvent({ type: 'cast', uid: heroi.uid, spellId: sp.id, spell: sp,
+                           elements: ['fogo'], x: alvoX, y: alvoY });
+        } catch (e) {}
+
+        var q = 0, melhor = null;
+        (function quadro() {
+          try { FX.update(DT, DT); } catch (e) {}
+          try { R.render(0); } catch (e) {}
+          var m = mede(pega(), base);
+          if (!melhor || m.area > melhor.area) {
+            melhor = m; melhor.q = q;
+            bg2.drawImage(work, 0, 0);          // guarda o quadro de maior área
+          }
+          // O relógio de verdade tem de andar junto com o relógio simulado: os
+          // passos adiados do cone e do meteoro são setTimeout de 26 a 110 ms e
+          // NÃO acontecem se a página só encadear setTimeout(…,0).
+          if (++q < QUADROS) return setTimeout(quadro, DT * 1000);
+          guarda(fam, passada, melhor);
+          fi++;
+          setTimeout(proximo, 0);
+        })();
+      }
+
+      function guarda(fam, passada, m) {
+        (res[fam] = res[fam] || {})[passada.id] = m;
+        var idx = fams.indexOf(fam);
+        var col = idx % COLPAR, lin = (idx / COLPAR) | 0;
+        var ox = col * RW * 2 + (passada.placa ? RW : 0);
+        var oy = lin * (RH + ROT);
+        g.drawImage(best, ox, oy);
+        g.fillStyle = passada.placa ? '#1d2b1f' : '#241c1c';
+        g.fillRect(ox, oy + RH, RW, ROT);
+        g.fillStyle = passada.placa ? '#8fe0a0' : '#e0a08f';
+        g.font = 'bold 12px Consolas, monospace';
+        g.fillText(fam + '  ·  ' + passada.id + '  ·  ' + m.area + ' px  ·  ' +
+                   m.w + '×' + m.h + '  ·  branco ' + Math.round(m.sat * 100) + '%',
+                   ox + 6, oy + RH + 16);
+        g.strokeStyle = '#2b3542'; g.strokeRect(ox + 0.5, oy + 0.5, RW - 1, RH - 1);
+      }
+
+      function media(passe) {
+        // semelhança média entre PARES de famílias: 1 = todas desenham a mesma coisa
+        var vs = [], k;
+        for (k = 0; k < fams.length; k++) {
+          var m = res[fams[k]] && res[fams[k]][passe];
+          if (m && m.area) vs.push(m.grade);
+        }
+        var s = 0, n = 0;
+        for (var i = 0; i < vs.length; i++)
+          for (var j = i + 1; j < vs.length; j++) { s += cos(vs[i], vs[j]); n++; }
+        return n ? s / n : 0;
+      }
+
+      function fecha() {
+        var linhas = '<tr><th>família</th>' +
+          '<th>px pintados hoje</th><th>px com placa</th>' +
+          '<th>maior lado hoje</th><th>com placa</th>' +
+          '<th>estourado p/ branco hoje</th><th>com placa</th></tr>';
+        var somaH = 0, somaP = 0, ladoH = 0, ladoP = 0, satH = 0, satP = 0, nn = 0;
+        fams.forEach(function (f) {
+          var h = res[f].hoje || { area: 0, w: 0, h: 0, sat: 0 };
+          var p = res[f].placa || { area: 0, w: 0, h: 0, sat: 0 };
+          var lh = Math.max(h.w, h.h), lp = Math.max(p.w, p.h);
+          somaH += h.area; somaP += p.area; ladoH += lh; ladoP += lp;
+          satH += h.sat; satP += p.sat; nn++;
+          linhas += '<tr><td>' + f + '</td>' +
+            '<td class="n">' + h.area + '</td><td class="n bom">' + p.area + '</td>' +
+            '<td class="n">' + lh + ' px</td><td class="n bom">' + lp + ' px</td>' +
+            '<td class="n">' + Math.round(h.sat * 100) + '%</td>' +
+            '<td class="n">' + Math.round(p.sat * 100) + '%</td></tr>';
+        });
+        document.getElementById('tab').innerHTML = linhas;
+
+        var simH = media('hoje'), simP = media('placa');
+        var r = '<tr><th>medida (' + fams.length + ' famílias, mesmo elemento, quadro de celular)</th>' +
+                '<th>hoje</th><th>com placa</th></tr>';
+        function li(nome, a, b, fmt) {
+          r += '<tr><td>' + nome + '</td><td class="n">' + fmt(a) + '</td><td class="n bom">' + fmt(b) + '</td></tr>';
+        }
+        var i0 = function (v) { return Math.round(v); };
+        var p2 = function (v) { return v.toFixed(3); };
+        var pc = function (v) { return Math.round(v * 100) + '%'; };
+        /* Quanto MEDE uma partícula na tela. O shader faz
+         *   gl_PointSize = size * K / distância_da_câmera
+         * então dá para dizer o número exato em vez de achar que "está pequeno".
+         * 0,34 é o tamanho típico pedido pelos efeitos. */
+        var dist = R.camera().position.distanceTo(R.world(alvoX, alvoY, 0.6));
+        var ptK = (FX.stats().ptK || 320);
+        var pPx = 0.34 * ptK / dist;
+        r += '<tr><td>diâmetro de uma partícula típica (size 0,34) na tela</td>' +
+             '<td class="n" colspan="2">' + pPx.toFixed(1) + ' px — a célula tem ' +
+             pxCel.toFixed(0) + ' px e 1 metro do mundo tem ' + pxMetro.toFixed(1) + ' px</td></tr>';
+        li('semelhança média entre famílias (1 = tudo igual)', simH, simP, p2);
+        li('pixels pintados pelo efeito, média', somaH / nn, somaP / nn, i0);
+        li('maior lado do efeito na tela, média', ladoH / nn, ladoP / nn, i0);
+        li('parte estourada para branco', satH / nn, satP / nn, pc);
+        document.getElementById('resumo').innerHTML = r;
+
+        diz('PRONTO · célula = ' + pxCel.toFixed(1) + ' px, 1 metro = ' + pxMetro.toFixed(1) + ' px · ' +
+            'semelhança entre famílias ' + simH.toFixed(3) + ' → ' + simP.toFixed(3) +
+            ' · maior lado ' + Math.round(ladoH / nn) + ' → ' + Math.round(ladoP / nn) + ' px' +
+            ' · branco ' + Math.round(satH / nn * 100) + '% → ' + Math.round(satP / nn * 100) + '%');
+        window.__pronto = true;
+      }
+
+      proximo();
+    }
+  });
+})();
+</script>
+</body>
+</html>

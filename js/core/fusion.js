@@ -63,21 +63,21 @@ var JOGO = (typeof window !== 'undefined')
   // Barbaro SEPARADO subiu ate 46% (sumo+espadachim foi de 267 para 391) e a
   // razao da fusao caiu para 68-86%. Os coeficientes abaixo devolvem a faixa.
   Fusion.PAIR_TUNE = {
-    'arqueiro+bruxo':        1.117,
-    'arqueiro+curandeira':   0.971,
-    'arqueiro+espadachim':   0.858,
-    'arqueiro+invocador':    0.741,
-    'arqueiro+sumo':         1.571,
-    'bruxo+curandeira':      0.823,
-    'bruxo+espadachim':      0.760,
-    'bruxo+invocador':       0.971,
-    'bruxo+sumo':            1.534,
-    'curandeira+espadachim': 0.704,
-    'curandeira+invocador':  1.250,
-    'curandeira+sumo':       1.656,
-    'espadachim+invocador':  0.948,
-    'espadachim+sumo':       1.336,
-    'invocador+sumo':        1.361
+    'arqueiro+bruxo':        0.520,
+    'arqueiro+curandeira':   0.350,
+    'arqueiro+espadachim':   0.574,
+    'arqueiro+invocador':    0.625,
+    'arqueiro+sumo':         0.356,
+    'bruxo+curandeira':      0.638,
+    'bruxo+espadachim':      0.607,
+    'bruxo+invocador':       0.807,
+    'bruxo+sumo':            0.611,
+    'curandeira+espadachim': 0.272,
+    'curandeira+invocador':  0.637,
+    'curandeira+sumo':       0.424,
+    'espadachim+invocador':  0.548,
+    'espadachim+sumo':       0.251,
+    'invocador+sumo':        0.626
   };
 
   function E() { return JOGO.Engine; }
