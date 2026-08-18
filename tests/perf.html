@@ -100,11 +100,25 @@ porque essas não mudam com a placa de vídeo.</div>
 
     espiona();
 
+    // Entrar numa sala DE VERDADE: o jogo so custa caro em batalha, e e la que
+    // o usuario sente o tranco. Espera os dois bancos de modelo (heroi e cenario)
+    // antes de descer, senao a sala monta pela metade e a medicao mente.
     var t0 = Date.now();
     (function espera() {
-      var pronto = false;
-      try { pronto = R.isReady() && !!(G.state && G.state() && G.state().grid); } catch (e) {}
-      if (!pronto && Date.now() - t0 < 40000) return setTimeout(espera, 250);
+      var ok = false;
+      try {
+        ok = JOGO.Models3D2 && JOGO.Models3D2.isReady() &&
+             JOGO.Models3D && JOGO.Models3D.isReady() && R.isReady();
+      } catch (e) {}
+      if (!ok && Date.now() - t0 < 60000) return setTimeout(espera, 250);
+      try {
+        var ids = JOGO.Progress.heroIds();
+        while (ids.length < 2) {
+          JOGO.Progress.createHero(ids.length ? 'curandeira' : 'sumo');
+          ids = JOGO.Progress.heroIds();
+        }
+        G.startRun(ids.slice(0, 2), 'greenhouse');
+      } catch (e) { return morre('nao consegui descer: ' + e.message); }
       medir();
     })();
 
@@ -127,8 +141,7 @@ porque essas não mudam com a placa de vídeo.</div>
     }
 
     function medir() {
-      var st = null;
-      try { st = G.state(); } catch (e) {}
+      var st = G.state;                       // propriedade, nao funcao
       if (!st || !st.grid) return morre('não entrei em nenhuma sala — nada a medir');
 
       var ren = R.threeRenderer ? R.threeRenderer() : null;
@@ -156,14 +169,32 @@ porque essas não mudam com a placa de vídeo.</div>
       var alocEfeito = copia();
       var statEfeito = R.stats ? R.stats() : {};
 
-      // ---- pós-processamento: quantos passes de tela cheia por quadro?
-      var temBloom = !!(THREE.UnrealBloomPass && THREE.EffectComposer);
-      var passesBloom = 0;
-      if (temBloom && statParado.calls) {
-        // UnrealBloom faz 1 highpass + 5 níveis de borrão (2 passes cada) + 1 composição
-        passesBloom = 12;
+      // ---- REPETIR o mesmo efeito. Se as texturas dos numeros estao em cache,
+      // a segunda rodada nao cria textura nenhuma. Sem cache, cria de novo — que
+      // era o tranco a cada golpe.
+      zera();
+      vivos.slice(0, 6).forEach(function (u) {
+        try { FX.handleEvent({ type: 'spellCast', casterUid: u.uid, uid: u.uid, element: 'fogo',
+                               cells: celulas, x: u.x, y: u.y, targets: celulas }); } catch (e) {}
+        try { FX.handleEvent({ type: 'damage', uid: u.uid, amount: 137, element: 'fogo',
+                               x: u.x, y: u.y }); } catch (e) {}
+      });
+      passos(60, 0.016);
+      var alocRepete = copia();
+
+      // ---- e quanto o bloom custa em chamadas de desenho
+      var callsComBloom = statParado.calls || 0;
+      var tinhaBloom = !!(R.hasBloom && R.hasBloom());
+      var callsSemBloom = 0;
+      if (tinhaBloom && R.setBloom) {
+        R.setBloom(false);
+        passos(10, 0.016);
+        callsSemBloom = (R.stats() || {}).calls || 0;
+        R.setBloom(true);
+        passos(5, 0.016);
       }
 
+      // ---- pós-processamento: quantos passes de tela cheia por quadro?
       linha({ g: 'tempo de JS por quadro (só CPU — a GPU aqui é software)' });
       linha({ o: 'Game.update', ms: parado.game });
       linha({ o: 'UI.update', ms: parado.ui });
@@ -177,6 +208,8 @@ porque essas não mudam com a placa de vídeo.</div>
       linha({ o: 'materiais — com efeito', n: alocEfeito.material, sus: true });
       linha({ o: 'geometrias — cena parada', n: alocParado.geometria });
       linha({ o: 'geometrias — com efeito', n: alocEfeito.geometria, sus: true });
+      linha({ o: 'texturas — REPETINDO o mesmo efeito (cache funcionando = 0)',
+              n: alocRepete.textura, sus: true });
 
       linha({ g: 'cena' });
       linha({ o: 'chamadas de desenho por quadro (parada)', n: statParado.calls || 0 });
@@ -188,8 +221,35 @@ porque essas não mudam com a placa de vídeo.</div>
         linha({ o: 'geometrias vivas na memória', n: ren.info.memory.geometries });
         linha({ o: 'programas de shader compilados', n: (ren.info.programs || []).length });
       }
-      linha({ o: 'pós-processamento (bloom) disponível', txt: temBloom ? 'SIM' : 'não' });
-      if (temBloom) linha({ o: 'passes de tela cheia que o bloom acrescenta, TODO quadro', n: passesBloom, sus: true });
+      linha({ o: 'pós-processamento (bloom) ligado', txt: tinhaBloom ? 'SIM' : 'não' });
+      if (tinhaBloom) {
+        linha({ o: 'chamadas de desenho COM bloom', n: callsComBloom });
+        linha({ o: 'chamadas de desenho SEM bloom', n: callsSemBloom });
+        linha({ o: 'quanto do quadro é só o bloom',
+                txt: callsComBloom ? Math.round((1 - callsSemBloom / callsComBloom) * 100) + '% das chamadas' : '?' });
+      }
+
+      // ---- de ONDE vem o peso: quebra a cena por grupo de primeiro nivel
+      var cena = R.scene ? R.scene() : null;
+      if (cena) {
+        var porGrupo = [];
+        cena.children.forEach(function (g) {
+          var malhas = 0, tris = 0;
+          g.traverse(function (o) {
+            if (!o.isMesh && !o.isSkinnedMesh && !o.isPoints && !o.isSprite) return;
+            malhas++;
+            var gg = o.geometry;
+            if (gg && gg.index) tris += gg.index.count / 3;
+            else if (gg && gg.attributes && gg.attributes.position) tris += gg.attributes.position.count / 3;
+          });
+          if (malhas) porGrupo.push({ nome: g.name || g.type, malhas: malhas, tris: Math.round(tris) });
+        });
+        porGrupo.sort(function (a, b) { return b.malhas - a.malhas; });
+        linha({ g: 'de onde vem o peso (cada malha é pelo menos uma chamada de desenho)' });
+        porGrupo.slice(0, 10).forEach(function (p) {
+          linha({ o: p.nome + ' — ' + p.malhas + ' malhas', n: p.tris + ' triângulos' });
+        });
+      }
 
       var t = '<tr><th>o que</th><th>valor</th></tr>';
       linhas.forEach(function (l) {

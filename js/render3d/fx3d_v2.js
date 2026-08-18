@@ -367,8 +367,21 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // ------------------------------------------------------------- números
-  var floaters = [];
-  function floater(pos, text, color, big) {
+  // Cada número que sobe na tela custava um canvas + uma textura + um material
+  // NOVOS. Num feitiço de área que pega seis alvos são seis uploads para a placa
+  // no mesmo quadro — o tranco que se sente quando o efeito aparece.
+  //
+  // Os números se repetem muito (o mesmo dano, a mesma cor, o mesmo tamanho),
+  // então guardamos a TEXTURA por conteúdo. O sprite e o material continuam por
+  // instância, porque cada um tem opacidade própria enquanto sobe.
+  var texCache = {};          // "texto|cor|tamanho" -> THREE.CanvasTexture
+  var TEX_CACHE_MAX = 240;    // teto: uma batalha longa não vira vazamento
+  var texCacheN = 0;
+
+  function texDoNumero(text, color, big) {
+    var chave = text + '|' + color + '|' + (big ? 'g' : 'p');
+    var achada = texCache[chave];
+    if (achada) return achada;
     var cv = document.createElement('canvas');
     cv.width = 256; cv.height = 96;
     var c = cv.getContext('2d');
@@ -380,6 +393,21 @@ var JOGO = (typeof window !== 'undefined')
     c.fillText(text, 128, 50);
     var tex = new THREE.CanvasTexture(cv);
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    if (texCacheN >= TEX_CACHE_MAX) { limpaTexCache(); }
+    texCache[chave] = tex;
+    texCacheN++;
+    return tex;
+  }
+  function limpaTexCache() {
+    for (var k in texCache) {
+      if (texCache.hasOwnProperty(k)) { try { texCache[k].dispose(); } catch (e) {} }
+    }
+    texCache = {}; texCacheN = 0;
+  }
+
+  var floaters = [];
+  function floater(pos, text, color, big) {
+    var tex = texDoNumero(String(text), color, big);
     var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
     sp.position.copy(pos);
     sp.scale.set(big ? 2.2 : 1.6, big ? 0.82 : 0.6, 1);
@@ -397,7 +425,9 @@ var JOGO = (typeof window !== 'undefined')
       f.sp.material.opacity = k < 0.7 ? 1 : Math.max(0, 1 - (k - 0.7) / 0.3);
       if (k >= 1) {
         fxG.remove(f.sp);
-        if (f.sp.material.map) f.sp.material.map.dispose();
+        // A textura agora e COMPARTILHADA entre todos os numeros iguais: quem
+        // some nao pode joga-la fora, ou o proximo "24" apareceria em branco.
+        // Quem limpa e limpaTexCache(), no teto ou ao sair da sala.
         f.sp.material.dispose();
         floaters.splice(i, 1);
       }
@@ -796,12 +826,14 @@ var JOGO = (typeof window !== 'undefined')
     for (var t = floaters.length - 1; t >= 0; t--) { fxG.remove(floaters[t].sp); floaters[t].sp.material.dispose(); }
     floaters.length = 0;
     FX.clearDecals();
+    limpaTexCache();          // as texturas dos numeros vao embora com a sala
     shakeAmp = 0; shakeOut.x = 0; shakeOut.y = 0; freezeT = 0;
   };
 
   FX.stats = function () {
     var alive = 0;
     for (var i = 0; i < MAXP; i++) if (parts[i]) alive++;
-    return { particles: alive, shots: shots.length, decals: decals.length, floaters: floaters.length };
+    return { particles: alive, shots: shots.length, decals: decals.length,
+             floaters: floaters.length, texCache: texCacheN };
   };
 })();

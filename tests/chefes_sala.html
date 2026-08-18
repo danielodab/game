@@ -11,7 +11,7 @@
   .sub{color:#8895a6;font:12px/1.5 system-ui,sans-serif;margin:0 16px 10px;max-width:1400px}
   /* palco onde o jogo desenha a sala. Tamanho FIXO: o renderizador mede o
      elemento hospedeiro, entao ele decide a resolucao de cada tira. */
-  #app{position:relative;width:1400px;height:380px;margin:0 16px;overflow:hidden}
+  #app{position:relative;width:1400px;height:560px;margin:0 16px;overflow:hidden}
   #game-canvas{display:block;width:100%;height:100%}
   #ui-root{position:absolute;inset:0;z-index:5;pointer-events:none;display:none}
   #folha{display:block;margin:10px 16px 30px;border:1px solid #232a33}
@@ -261,6 +261,7 @@ function candidato(nome, alvo, cb) {
  */
 function medeTudo(done) {
   var M = JOGO.Models3D2, D = JOGO.DATA;
+  var SO_CAND = Q.parte === 'cand';
   function duplo(node) {
     node.updateMatrixWorld(true);
     var bb = caixaEsqueleto(node), bp = caixaPosada(node);
@@ -268,6 +269,8 @@ function medeTudo(done) {
              visual: bp.max.y - bp.min.y,
              larg: Math.max(bp.max.x - bp.min.x, bp.max.z - bp.min.z) };
   }
+  var TETO = parseFloat(Q.teto || '0');
+  if (SO_CAND) { tabelaCandidatos(TETO); return; }
   p('======================================================================');
   p(' A REGUA — quanto mede cada corpo DENTRO DO JOGO (metros)');
   p(' célula do tabuleiro = ' + JOGO.Renderer.CELL + ' m');
@@ -301,7 +304,7 @@ function medeTudo(done) {
         (nf.userData.look && nf.userData.look.hostClass));
     }
   }
-  var TETO = Math.max(topoClasse, topoFus);
+  TETO = Math.max(topoClasse, topoFus);
   p('');
   p('=== CHEFES DE HOJE (altura-alvo 2,95 × look.scale) ===');
   p('  ' + pad('chefe', 18) + padl('corpo', 7) + padl('visual', 8) + padl('largura', 9) +
@@ -325,13 +328,18 @@ function medeTudo(done) {
   p('  (corpo, sem adereço) ........... ' + fmt(topoFusCorpo) + ' m');
   p('  TETO DE PERSONAGEM ............. ' + fmt(TETO) + ' m');
   p('  chefes abaixo do teto .......... ' + (reprovados.length ? reprovados.join(', ') : 'nenhum'));
+  tabelaCandidatos(TETO);
+  }
+
+  function tabelaCandidatos(TETO) {
   p('');
   p('=== CANDIDATOS, normalizados à altura pedida (' + fmt(ALVO) + ' m) ===');
   p('  Cada linha responde: se este modelo virar chefe com altura ' + fmt(ALVO) +
     ' m, quanto ele OCUPA?');
   p('  ' + pad('candidato', 20) + padl('natural', 8) + padl('altura', 8) +
     padl('largX', 8) + padl('largZ', 8) + padl('células', 9) + '  look.scale  clipe');
-  var fila = TODOS.slice(), res = [];
+  var ini = parseInt(Q.ini || '0', 10), fim = parseInt(Q.fim || String(TODOS.length), 10);
+  var fila = TODOS.slice(ini, fim), res = [];
   (function proximo() {
     if (!fila.length) {
       p('');
@@ -361,7 +369,7 @@ function medeTudo(done) {
    props, luz e nevoeiro sao os do jogo, e a camera e a de batalha.
  */
 var app, canvas, folha, fctx;
-var TIRA_W = 1400, TIRA_H = 380;
+var TIRA_W = 1400, TIRA_H = 560;
 
 function pump(n) {
   for (var i = 0; i < (n || 1); i++) {
@@ -464,8 +472,8 @@ function montaTira(idx, slot, cb) {
   var linha = melhorLinha(estado);
   var N = 5;
   // espaçamento: distribui as 5 figuras dentro do trecho livre, com folga nas pontas
-  var passo = Math.max(2, Math.floor((linha.len - 2) / (N - 1)));
-  var x0 = linha.x0 + Math.max(1, Math.floor((linha.len - passo * (N - 1)) / 2));
+  var passo = Math.min(3, Math.max(2, Math.floor((linha.len - 1) / (N - 1))));
+  var x0 = linha.x0 + Math.max(0, Math.floor((linha.len - 1 - passo * (N - 1)) / 2));
 
   var pecas = [
     { tipo: 'jogo', id: 'sumo',  opts: { classId: 'sumo' }, rot: 'HERÓI mais alto\nBárbaro' },
@@ -484,14 +492,14 @@ function montaTira(idx, slot, cb) {
       var n = corpoDoJogo(pc.id, pc.opts);
       if (n) {
         planta(n, gx, gy);
-        rotulos.push({ gx: gx, gy: gy, txt: pc.rot, alt: alturaVisual(n) });
+        rotulos.push({ gx: gx, gy: gy, txt: pc.rot, alt: alturaVisual(n), chefe: pc.chefe });
       }
       k++; passoAPasso();
     } else {
       candidato(pc.id, ALVO, function (g, med) {
         if (g) {
           planta(g, gx, gy);
-          rotulos.push({ gx: gx, gy: gy, txt: pc.rot, alt: med.altura });
+          rotulos.push({ gx: gx, gy: gy, txt: pc.rot, alt: med.altura, chefe: pc.chefe });
         }
         k++; passoAPasso();
       });
@@ -501,10 +509,14 @@ function montaTira(idx, slot, cb) {
   function enquadra() {
     var cx = x0 + passo * (N - 1) / 2;
     tetoLinha = { gx0: x0, gx1: x0 + passo * (N - 1), gy: linha.y };
-    JOGO.Renderer.setCamera({ rot: 0, animate: false });
+    // A CAMERA E VIRADA DE FRENTE (azimute 0), nao para os 45 graus do jogo.
+    // Motivo: nos 45 graus a fileira foge para o fundo e a perspectiva encolhe
+    // as figuras do fim — o quadro deixa de ser regua. A sala, a luz, o chao e
+    // as paredes continuam sendo os do jogo; so o angulo muda.
     JOGO.Renderer.setCamera({ centerX: cx, centerY: linha.y,
-                              dist: parseFloat(Q.dist || '26'),
-                              tilt: parseFloat(Q.tilt || '0.62') });
+                              ang: parseFloat(Q.ang || '0'),
+                              dist: parseFloat(Q.dist || '19'),
+                              tilt: parseFloat(Q.tilt || '1.15') });
     pump(6);
     escondeUnidades();
     pump(2);
@@ -516,62 +528,60 @@ function montaTira(idx, slot, cb) {
 function desenhaTira(idx, ch) {
   var y0 = idx * TIRA_H;
   fctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, y0, TIRA_W, TIRA_H);
-  // A LINHA DO TETO: nenhum chefe pode ficar abaixo dela. Traçada em espaço de
-  // MUNDO e projetada, então acompanha a perspectiva em vez de ser um enfeite.
+  var kx = TIRA_W / (canvas.clientWidth || TIRA_W);
+  var ky = TIRA_H / (canvas.clientHeight || TIRA_H);
+
+  // A LINHA DO TETO: nenhum chefe pode ficar abaixo dela. Tracada em espaco de
+  // MUNDO e projetada, entao ela e a altura de verdade, nao um enfeite.
   if (tetoLinha && TETO > 0) {
     var wA = JOGO.Renderer.world(tetoLinha.gx0, tetoLinha.gy, 0);
     var wB = JOGO.Renderer.world(tetoLinha.gx1, tetoLinha.gy, 0);
     wA.y = TETO; wB.y = TETO;
     var a = JOGO.Renderer.projectWorld(wA), b = JOGO.Renderer.projectWorld(wB);
-    var kx = TIRA_W / (canvas.clientWidth || TIRA_W);
-    var ky = TIRA_H / (canvas.clientHeight || TIRA_H);
+    var ya = y0 + a.y * ky, yb = y0 + b.y * ky;
     fctx.save();
-    fctx.strokeStyle = '#ff5544'; fctx.lineWidth = 2; fctx.setLineDash([9, 6]);
-    fctx.beginPath();
-    fctx.moveTo(0, y0 + b.y * ky + (a.y - b.y) * ky * 1.2);
-    fctx.lineTo(a.x * kx, y0 + a.y * ky);
-    fctx.lineTo(b.x * kx, y0 + b.y * ky);
-    fctx.lineTo(TIRA_W, y0 + b.y * ky - (a.y - b.y) * ky * 0.6);
-    fctx.stroke();
+    fctx.strokeStyle = '#ff5544'; fctx.lineWidth = 2; fctx.setLineDash([10, 7]);
+    fctx.beginPath(); fctx.moveTo(0, ya); fctx.lineTo(TIRA_W, yb); fctx.stroke();
     fctx.setLineDash([]);
     fctx.fillStyle = '#ff5544';
-    fctx.font = 'bold 12px Trebuchet MS, Verdana, sans-serif';
-    fctx.fillText('teto de personagem ' + fmt(TETO) + ' m — nenhum chefe pode ficar abaixo',
-                  TIRA_W - 430, y0 + b.y * ky - 7);
+    fctx.font = 'bold 12.5px Trebuchet MS, Verdana, sans-serif';
+    fctx.fillText('TETO DE PERSONAGEM ' + fmt(TETO) + ' m (' + TETO_QUEM +
+                  ') — nenhum chefe pode ficar abaixo desta linha', 12, ya - 8);
     fctx.restore();
   }
-  // faixa de identificação da sala
-  fctx.fillStyle = 'rgba(6,9,13,0.80)';
-  fctx.fillRect(0, y0, 250, 54);
+
+  // faixa de identificacao da sala
+  fctx.fillStyle = 'rgba(6,9,13,0.82)';
+  fctx.fillRect(0, y0 + TIRA_H - 92, TIRA_W, 92);
   fctx.fillStyle = '#ffd08a';
   fctx.font = 'bold 15px Trebuchet MS, Verdana, sans-serif';
-  fctx.fillText(ch.nome, 10, y0 + 21);
+  fctx.fillText(ch.nome, 12, y0 + TIRA_H - 70);
   fctx.fillStyle = '#9fb2c6';
   fctx.font = '12px Trebuchet MS, Verdana, sans-serif';
-  fctx.fillText(ch.tema + ' · ' + ch.dg + ' sala ' + ch.sala, 10, y0 + 40);
-  // rótulos com a altura medida, sob cada figura
+  fctx.fillText(ch.tema + ' · ' + ch.dg + ' sala ' + ch.sala, 12, y0 + TIRA_H - 52);
+
+  // rotulos com a altura medida, alinhados na coluna de cada figura
+  fctx.textAlign = 'center';
   for (var i = 0; i < rotulos.length; i++) {
     var r = rotulos[i];
     var sp = JOGO.Renderer.project(r.gx, r.gy, 0);
     if (!sp) continue;
-    var px = sp.x / canvas.clientWidth * TIRA_W;
-    var py = Math.min(TIRA_H - 40, sp.y / canvas.clientHeight * TIRA_H);
-    var linhasTxt = r.txt.split('\n');
-    linhasTxt.push(fmt(r.alt) + ' m');
+    var px = Math.max(70, Math.min(TIRA_W - 70, sp.x * kx));
+    var pe = y0 + sp.y * ky;                       // onde estao os pes
+    var base = y0 + TIRA_H - 84;
+    fctx.strokeStyle = 'rgba(255,208,138,0.45)'; fctx.lineWidth = 1;
+    fctx.beginPath(); fctx.moveTo(px, pe); fctx.lineTo(px, base); fctx.stroke();
+    var ls = r.txt.split(String.fromCharCode(10));
     fctx.font = 'bold 12px Trebuchet MS, Verdana, sans-serif';
-    var w = 0;
-    for (var j = 0; j < linhasTxt.length; j++)
-      w = Math.max(w, fctx.measureText(linhasTxt[j]).width);
-    fctx.fillStyle = 'rgba(6,9,13,0.78)';
-    fctx.fillRect(px - w / 2 - 6, y0 + py + 2, w + 12, 15 * linhasTxt.length + 6);
-    for (var j2 = 0; j2 < linhasTxt.length; j2++) {
-      fctx.fillStyle = j2 === linhasTxt.length - 1 ? '#7fe08a'
-                     : (j2 === 0 ? '#ffd08a' : '#dbe6f2');
-      fctx.textAlign = 'center';
-      fctx.fillText(linhasTxt[j2], px, y0 + py + 15 + j2 * 15);
-      fctx.textAlign = 'left';
-    }
+    fctx.fillStyle = '#ffd08a'; fctx.fillText(ls[0], px, base + 16);
+    fctx.font = '12px Trebuchet MS, Verdana, sans-serif';
+    fctx.fillStyle = '#dbe6f2'; fctx.fillText(ls[1] || '', px, base + 32);
+    fctx.font = 'bold 14px Trebuchet MS, Verdana, sans-serif';
+    fctx.fillStyle = r.alt > TETO ? '#7fe08a' : '#ff7a6a';
+    fctx.fillText(fmt(r.alt) + ' m' + (r.chefe ? (r.alt > TETO ? '  PASSA' : '  ABAIXO') : ''),
+                  px, base + 51);
   }
+  fctx.textAlign = 'left';
 }
 
 // ------------------------------------------------------------------- boot

@@ -987,3 +987,93 @@ aconteceram desde:
    simples penduradas nos ossos. É o *corpo*, não a *figura*.
 
 O olho compara a figura. Medindo a figura inteira, na pose de parado:
+
+| corpo | corpo (skinned) | **figura inteira** | largura | modelo |
+|---|---|---|---|---|
+| `sumo` Bárbaro | 2,38 | **2,91** | 2,09 | barbarian + machado |
+| `bruxo` | 2,09 | 2,82 | 2,55 | mage + cajado |
+| `arqueiro` | 2,05 | 2,41 | 1,65 | rogue_hooded |
+| `invocador` | 2,05 | 2,02 | 1,45 | mage |
+| `curandeira` | 2,05 | 2,02 | 1,89 | knight |
+| `espadachim` | 1,99 | 1,96 | 1,44 | rogue |
+
+E as 15 fusões — **todas com 3,21 m de corpo**, e figura entre 3,16 e 5,78 m:
+
+| dupla | figura | largura | dupla | figura | largura |
+|---|---|---|---|---|---|
+| **sumo + bruxo** | **5,78** | **5,73** | bruxo + curandeira | 4,12 | 3,97 |
+| sumo + curandeira | 4,87 | 3,49 | sumo + espadachim | 3,94 | 2,83 |
+| sumo + arqueiro | 4,71 | 3,85 | sumo + invocador | 3,94 | 2,83 |
+| arqueiro + bruxo | 4,33 | 3,92 | arqueiro + espadachim | 3,78 | 2,83 |
+| bruxo + espadachim | 4,33 | 3,92 | arqueiro + curandeira | 3,17 | 2,97 |
+| bruxo + invocador | 4,33 | 3,92 | espadachim + curandeira | 3,17 | 2,97 |
+| espadachim + invocador | 4,33 | 3,92 | curandeira + invocador | 3,17 | 2,97 |
+| | | | arqueiro + invocador | 3,16 | 2,71 |
+
+> **TETO DE PERSONAGEM = 5,78 m** — a fusão Bárbaro + Bruxo.
+> Não 4,38 m. O piso para um chefe é **maior do que o usuário supunha**.
+
+**Achado colateral, e ele é um defeito:** essa mesma dupla tem **5,73 m de
+largura**, quase três células. O enxerto que a fusão faz põe o `2H_Staff` do
+Bruxo no osso `handslotl` do Bárbaro, e o cajado sai **atravessado**, não
+empunhado. É ele que produz tanto o 5,78 m de altura quanto os 5,73 m de
+largura. Duas leituras possíveis, e as duas pedem decisão do usuário:
+
+- se o cajado atravessado for **defeito** (é o que os números sugerem), corrigir
+  o enxerto derruba o teto para **4,87 m** (sumo + curandeira) e os chefes ficam
+  bem mais baratos de dimensionar;
+- se ficar como está, **todo chefe precisa passar de 5,78 m**.
+
+Esta seção dimensiona os chefes pelo caso pessimista — 5,78 m — porque é o que
+está no jogo hoje.
+
+### Os chefes de hoje, medidos: **os seis reprovam**
+
+| sala | chefe | modelo × escala | figura | largura | células | veredito |
+|---|---|---|---|---|---|---|
+| Andaimes | `boss-windwright` | skeleton_warrior ×1,55 | 4,50 | 2,79 | 1,4 | abaixo do teto |
+| Estufa | `boss-gardener` | q_stag ×1,25 | 4,87 | 4,27 | 2,1 | abaixo do teto |
+| Cisterna | `boss-baroness` | skeleton_mage ×1,45 | 4,21 | 2,58 | 1,3 | abaixo do teto |
+| Coração | `boss-riftheart` | q_trex ×1,45 | 4,20 | **8,83** | **4,4** | abaixo, e ocupa 4 células |
+| Fecho | `boss-heartforge` | q_trex ×1,30 | 3,77 | **7,92** | **4,0** | abaixo, e ocupa 4 células |
+| Mina | `boss-deepknock` | q_triceratops ×1,30 | **1,81** | 4,30 | 2,2 | **mais baixo que o Bárbaro** |
+
+O `boss-deepknock` é o caso extremo: `userData.height` diz 3,84 m — é o número
+que a auditoria anterior publicou —, mas a figura de pé mede **1,81 m**. Um
+triceratops é comprido e baixo; normalizar pela *altura* de um corpo assim não
+faz o bicho crescer, faz ele esticar. Ele é hoje **mais baixo que o Bárbaro sem
+fusão** (2,91 m) e cabe debaixo dele.
+
+### Os candidatos, medidos na pose de parado
+
+Pedindo 5,30 m de altura a cada um (`look.scale` 1,80), o que acontece com a
+pegada. `natural` é a altura de bind, que é o divisor que o jogo usa; `altura` é
+a figura real, e ela **não bate com o pedido** justamente porque o jogo divide
+pela bind e a pose muda tudo.
+
+| candidato | natural | altura real | largura X | largura Z | células | `k` = altura/pedido |
+|---|---|---|---|---|---|---|
+| `Ghost_Skull` | 3,10 | 5,35 | 4,75 | 3,58 | **2,4** | 1,01 |
+| `Mushnub_Evolved` | 4,41 | 5,33 | 4,10 | 4,23 | **2,1** | 1,01 |
+| `Glub_Evolved` | 3,71 | 5,33 | 4,95 | 1,81 | **2,5** | 1,01 |
+| `Dino` | 3,23 | 5,10 | 5,08 | 3,17 | 2,5 | 0,96 |
+| `Hywirl` | 2,74 | 5,47 | 5,37 | 4,29 | 2,7 | 1,03 |
+| `GreenSpikyBlob` | 4,14 | 5,36 | 4,48 | 5,32 | 2,7 | 1,01 |
+| `BlueDemon` | 2,84 | 5,06 | 5,63 | 3,66 | 2,8 | 0,96 |
+| `Alpaking_Evolved` | 3,19 | 5,31 | 5,68 | 4,94 | 2,8 | 1,00 |
+| `Dragon_Evolved` | 2,86 | 5,40 | 6,95 | 4,17 | 3,5 | 1,02 |
+| `Goleling_Evolved` | 2,57 | 6,43 | 7,62 | 3,75 | 3,8 | 1,21 |
+| `Armabee_Evolved` | 2,14 | 5,56 | 8,58 | 3,84 | 4,3 | 1,05 |
+| `Squidle` | 1,99 | 6,89 | 9,85 | 6,10 | 4,9 | 1,30 |
+| `Dragon` | 1,54 | 8,25 | 12,54 | 7,19 | **6,3** | 1,56 |
+
+Fórmula para quem for implementar: **`look.scale` = altura desejada ÷ (2,95 × k)**,
+com o `k` da última coluna.
+
+**A seção II.5 estava errada em dois pontos, e agora dá para dizer por quê.**
+Ela reprovou `Squidle` e `Dragon` por serem *baixos* (4,68 e 4,53 m) e aprovou os
+outros por serem *altos*. Medindo a pose de verdade: `Squidle` e `Dragon` são os
+**mais altos** do lote (k de 1,30 e 1,56 — eles empinam no `Flying_Idle`), e
+continuam reprovados, mas por **largura**: 4,9 e 6,3 células. E `Ghost_Skull`,
+que a II.5 dizia ter 4,83 m de largura, é na verdade **o mais estreito de
+todos**, com 2,4 células.

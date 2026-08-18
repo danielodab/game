@@ -75,6 +75,7 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------------ estado
   var canvas = null, host = null, renderer = null, scene = null, camera = null;
   var composer = null, bloomPass = null;
+  var lastCalls = 0, lastTris = 0;   // lidos no fim do quadro (ver R.stats)
   var W = 2, H = 2, DPR = 1;
   var ready = false, initFailed = false;
   var pendingEvents = [];
@@ -2312,8 +2313,16 @@ var JOGO = (typeof window !== 'undefined')
 
     if (JOGO.FX && JOGO.FX.update) { try { JOGO.FX.update(dtv, dt); } catch (e3) {} }
 
+    // O contador zera sozinho a cada renderer.render(); com o composer ligado
+    // sao varios passes por quadro e a leitura do fim media so o ULTIMO (dava 1).
+    // Desligamos o zerar automatico e zeramos nos na entrada do quadro, entao a
+    // conta passa a somar a cena INTEIRA mais os passes do bloom.
+    renderer.info.autoReset = false;
+    renderer.info.reset();
     if (composer) composer.render(dtv);
     else renderer.render(scene, camera);
+    lastCalls = renderer.info.render.calls;
+    lastTris = renderer.info.render.triangles;
   };
 
   R.isBusy = function () {
@@ -2342,11 +2351,36 @@ var JOGO = (typeof window !== 'undefined')
   R.threeRenderer = function () { return renderer; };
   R.isReady = function () { return ready && M && M.isReady(); };
   R.quality = function () { return { shadow: shadowSize(), dpr: DPR, units: quality.units }; };
+  /* Liga/desliga o brilho (bloom).
+   *
+   * O UnrealBloomPass e o custo FIXO mais alto deste renderer: ele acrescenta
+   * cerca de doze passes de tela cheia em TODO quadro, tenha ou nao algo
+   * brilhando na cena. Numa maquina modesta, ou em tela grande, e ele que come
+   * o quadro — e o jogador sente como "travado quando tem efeito", porque o
+   * efeito soma trabalho em cima de um custo que ja estava alto.
+   *
+   * Devolve o estado em que ficou. */
+  R.setBloom = function (ligado) {
+    if (ligado && !composer) buildComposer({ bloom: true });
+    else if (!ligado && composer) {
+      try { composer.renderTarget1 && composer.renderTarget1.dispose(); } catch (e) {}
+      try { composer.renderTarget2 && composer.renderTarget2.dispose(); } catch (e) {}
+      composer = null; bloomPass = null;
+    }
+    return !!composer;
+  };
+  R.hasBloom = function () { return !!composer; };
+
   R.stats = function () {
     return { units: Object.keys(unitNodes).length, anims: animQ.length,
              models: M ? M.modelKeys().length : 0, clips: M ? M.clips().length : 0,
-             calls: renderer ? renderer.info.render.calls : 0,
-             tris: renderer ? renderer.info.render.triangles : 0 };
+             // com o composer ligado, o ultimo passe zera o contador e estes dois
+             // saiam sempre como 1; guardamos a leitura do fim do quadro
+             calls: lastCalls, tris: lastTris,
+             bloom: !!composer,
+             texturas: renderer ? renderer.info.memory.textures : 0,
+             geometrias: renderer ? renderer.info.memory.geometries : 0,
+             programas: renderer && renderer.info.programs ? renderer.info.programs.length : 0 };
   };
 
   JOGO.Renderer = R;
