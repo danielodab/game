@@ -432,10 +432,12 @@ algumas horas.
 3. **Acabar com o JS velho de vez.** Bumpar o `?v=` do `index.html` agora **e** trocar a disciplina
    manual por carimbo automático de build (ou `?v=` gerado). Enquanto isso não existir, toda
    verificação "no jogo real" é suspeita.
-4. **Decidir e registrar os nomes das classes.** Ou volta *Sumô, Elfo Arqueiro, Bruxo, Espadachim,
-   Curandeira, Invocador* (é o que está no `PROJETO_V2.md` e o que você pediu), ou o novo elenco é
-   assumido, escrito no `PROJETO_V2.md` e registrado no `PLANO_NOITE.md` com o motivo. Decisão do
-   usuário, não do time.
+4. **Decidir e registrar os nomes das classes — e o destino da arte do usuário.** Ou volta
+   *Sumô, Elfo Arqueiro, Bruxo, Espadachim, Curandeira, Invocador* (é o que está no `PROJETO_V2.md`
+   e o que você pediu) **com o sprite desenhado religado**, ou o novo elenco é assumido, escrito no
+   `PROJETO_V2.md` e registrado no `PLANO_NOITE.md` com o motivo — incluindo o desligamento de
+   `sprites-sumo.js`/`spriteart.js` do `index.html` (§8), que hoje só existe num comentário de HTML.
+   Decisão do usuário, não do time.
 5. **Fechar a briga da XP e deixar `validate_world` verde.** Definir por escrito se o §9-D se
    calibra pela dupla ou pelo solo e ajustar o lado que estiver errado (dado ou teste). Suíte
    vermelha entregue como verde não pode acontecer de novo.
@@ -466,13 +468,36 @@ certa; (2) os feitiços que vêm de item e os da fusão aparecem na barra como c
 ("0 is-seed-bomb") em vez de nome e custo; (3) o `index.html` está servindo arquivos velhos do
 cache, então o que você abrir pode ser o jogo de ontem — abra `tests/chief_play.html` para ver o de
 hoje; e (4) alguém rebatizou suas 6 classes na madrugada: **o seu Sumô agora se chama "Bárbaro"**,
-a Curandeira virou "Paladina" — e o desenho que você fez do sumô continua lá, como retrato do
-"Bárbaro". Essa quarta é decisão sua, não minha: se você gostar dos nomes novos, é só dizer e a
+a Curandeira virou "Paladina" — e, já no fim da noite, o **seu desenho do sumô foi desligado do
+jogo** (duas linhas comentadas no index.html), justamente porque não combinava mais com o modelo de
+bárbaro em campo. Essa quarta é decisão sua, não minha: se você gostar dos nomes novos, é só dizer e a
 exigência cai.
 
 **Por onde começar de manhã (15 minutos):** abra `tests/chief_play.html`, faça uma descida na
 Estufa com a dupla, clique em **FUNDIR** para ver o problema (1) na prática, olhe a barra de
 feitiços de um herói com item de Lume para ver o (2), e depois passe os olhos em
 `tests/qa_shots/chief/` — em especial `08_fusao_modelo2.png`, que é a cara da sua fusão de perto.
+
+---
+
+## 8. Adendo — a árvore se moveu durante a auditoria (e piorou o C4)
+
+Enquanto eu auditava, dois commits entraram: `abec7b2` (*Retratos coerentes com os modelos em
+campo*) e `7778748` (*README atualizado*). Reverifiquei o HEAD depois deles:
+
+- **A sua arte desenhada saiu do jogo.** `abec7b2` **comentou** `assets/embedded/sprites-sumo.js` e
+  `js/render2d/spriteart.js` no `index.html`. Confirmado em runtime no HEAD: `JOGO.SpriteArt` e
+  `JOGO.SPRITES` não existem mais; todos os retratos vêm agora do `Portraits3D`. O motivo está
+  escrito — num comentário de HTML: *"a classe `sumo` virou um BÁRBARO de machado … o retrato
+  desenhado mostraria um lutador de sumô ao lado de um bárbaro"*. A justificativa técnica é boa e o
+  resultado é coerente (`tests/qa_shots/chief/10_head_retratos3d.png`), mas isto **contraria uma
+  promessa explícita** do `PLANO_NOITE.md` — *"Sua arte desenhada fica nos retratos e cartas da
+  interface"* — e a decisão continua fora de qualquer documento. Some-se ao C4: primeiro a classe
+  perdeu o nome, agora perdeu o desenho. **Duas linhas comentadas trazem tudo de volta.**
+- **O C3 continua valendo no HEAD**: `index.html` foi editado outra vez e os `?v=6` seguem
+  intocados. A exigência 3 permanece.
+- **Nada mais mudou em `js/`** entre `c9276ef` e o HEAD (`git diff --stat` só acusa `index.html`),
+  então todos os outros achados e números desta auditoria valem para o HEAD atual.
+
 
 *— Agente Chefe, 18/08/2026*
