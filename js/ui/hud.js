@@ -66,7 +66,7 @@ var JOGO = (typeof window !== 'undefined')
 
   var LUCK = { 1: 2.4, 2: 1.6 };
   var ELEM_PT = { neutro: 'Neutro', fogo: 'Fogo', agua: 'Água', terra: 'Terra', ar: 'Ar' };
-  var RAR_PT = { comum: 'Comum', raro: 'Raro', epico: 'Épico' };
+  var RAR_PT = { comum: 'Comum', raro: 'Raro', epico: 'Épico', lendario: 'Lendário' };
   var DIFF_PT = ['Fácil', 'Média', 'Difícil', 'Brutal', 'Cruel', 'Final'];
   var SLOTS = ['punho', 'passo', 'casca', 'lume'];
   var SLOT_PT = { punho: 'Punho', passo: 'Passo', casca: 'Casca', lume: 'Lume' };
@@ -173,6 +173,19 @@ var JOGO = (typeof window !== 'undefined')
   }
   function elemColor(e) { return safe(function () { return A().elementColor(e); }, '#d8dee4'); }
   function rarColor(r) { return safe(function () { return A().rarityColor(r); }, '#9aa4ae'); }
+  function rarGlow(r) { return safe(function () { return A().rarityGlow(r); }, rarColor(r)); }
+  // Marca a célula com a raridade: cor da borda, cor do halo e a classe que o
+  // CSS usa para acender a LENDÁRIA. Um lugar só — antes cada tela repetia o
+  // `--rc` na mão e a 4ª raridade não existia em nenhuma delas.
+  function markRarity(cell, rarity) {
+    if (!cell) return cell;
+    var r = rarity || 'comum';
+    cell.style.setProperty('--rc', rarColor(r));
+    cell.style.setProperty('--rc-halo', rarGlow(r));
+    cell.setAttribute('data-rar', r);
+    if (safe(function () { return A().rarityRank(r); }, 0) >= 3) cell.classList.add('is-lendario');
+    return cell;
+  }
 
   // ----------------------------------------------------------------- tooltip [U5]
   function hideTip() {
@@ -655,7 +668,34 @@ var JOGO = (typeof window !== 'undefined')
 
     box.appendChild(rwBlock('Experiência', (function () {
       var w = el('div', 'rw-xp');
-      w.appendChild(el('div', 'rw-xp-n', '+' + (lastRewards.xpGanho || 0) + ' XP'));
+      // A HUD anunciava `xpGanho` — que `game.js` documenta como o valor ANTES
+      // do corte do §9-D. Dava para o painel dizer "+4 XP" e o herói receber
+      // ZERO. Aqui manda o valor REAL; quando houve corte, o número cheio
+      // aparece riscado ao lado e uma linha explica o porquê. É esse feedback
+      // que ensina o jogador a descer mais fundo em vez de moer o calabouço 1.
+      var bruto = lastRewards.xpGanho || 0;
+      var mult = lastRewards.xpMult == null ? 1 : lastRewards.xpMult;
+      var real = lastRewards.xpPorHeroi == null ? Math.floor(bruto * mult) : lastRewards.xpPorHeroi;
+      var cortou = mult < 0.999 && bruto > 0;
+
+      var n = el('div', 'rw-xp-n' + (cortou ? ' is-cut' : ''), '+' + real + ' XP');
+      if (cortou) {
+        n.appendChild(el('span', 'rw-xp-was', '+' + bruto));
+        n.appendChild(el('span', 'rw-xp-mult', '×' + mult.toFixed(2).replace('.', ',')));
+      }
+      w.appendChild(n);
+
+      if (cortou) {
+        var rec = null, ds2 = dungeons(), gi;
+        var did = safe(function () { return G().dungeonId; }, null);
+        for (gi = 0; gi < ds2.length; gi++) {
+          if (ds2[gi].id === did && ds2[gi].recommendedLevel != null) rec = ds2[gi].recommendedLevel;
+        }
+        w.appendChild(el('div', 'rw-xp-why',
+          'Conteúdo fácil demais para o seu nível' +
+          (rec != null ? ' (recomendado: <b>' + rec + '</b>)' : '') +
+          '. <b>Desça mais fundo</b> para a XP valer inteira.'));
+      }
       (selHeroes.length ? selHeroes : heroIds()).forEach(function (hid) {
         var h = hero(hid); if (!h) return;
         var xi = xpInfo(hid);
@@ -692,7 +732,7 @@ var JOGO = (typeof window !== 'undefined')
           cell.appendChild(art('itemIcon', [id, 52], 52));
           cell.appendChild(el('span', null, esc((it && it.name) || id)));
           if (it) {
-            cell.style.setProperty('--rc', rarColor(it.rarity));
+            markRarity(cell, it.rarity);
             tipOn(cell, it.name, itemTipBody(id), rarColor(it.rarity));
           }
           w.appendChild(cell);
@@ -1355,7 +1395,7 @@ var JOGO = (typeof window !== 'undefined')
       if (invFilter !== 'todos' && canon !== invFilter) return;
       shown++;
       var cell = el('div', 'inv-cell ' + tierClass(lv) + (preselect === id ? ' is-focus' : ''));
-      cell.style.setProperty('--rc', rarColor(it.rarity));
+      markRarity(cell, it.rarity);
 
       var ic = el('div', 'inv-ic');
       ic.appendChild(art('itemIcon', [id, 54], 54));
@@ -1603,7 +1643,7 @@ var JOGO = (typeof window !== 'undefined')
       var it = itemId ? itemDef(itemId) : null;
       var lv = itemId ? safe(function () { return P().itemLevel(itemId); }, 0) : 0;
       var cell = el('div', 'hs-slot' + (it ? ' has-item ' + tierClass(lv) : ' is-empty'));
-      if (it) cell.style.setProperty('--rc', rarColor(it.rarity));
+      if (it) markRarity(cell, it.rarity);
       var ic = el('div', 'hs-slot-ic');
       ic.appendChild(it ? art('itemIcon', [itemId, 52], 52) : art('slotIcon', [canon, 52], 52));
       if (lv) ic.appendChild(el('span', 'inv-lv', '+' + lv));

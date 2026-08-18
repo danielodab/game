@@ -72,6 +72,45 @@
   var out = document.getElementById('out');
   var D = JOGO.DATA || {};
 
+  // ==================================================== SANDBOX DE SAVE (B4)
+  // Esta página SEMEIA um save de demonstração para as telas terem o que
+  // mostrar — e antes disso APAGAVA o save real do jogador (529 B do usuário
+  // viraram 1.357 B só de abrir a página).
+  //
+  // Snapshot-e-restaura no fim não bastaria: a interface continua viva depois
+  // dos testes (captura headless, cliques) e pode salvar sozinha. Então a
+  // blindagem é mais forte: as chaves do SOTERRA passam a viver em MEMÓRIA
+  // durante toda a página. O disco não é tocado nenhuma vez — nem para gravar
+  // a semente, nem depois. O save real entra na sombra só para leitura, então
+  // `Progress.load()` enxerga o mundo normal antes de `seed()` sobrescrever.
+  var SAVE_KEYS = ['soterra-save-v2', 'soterra-save-v1'];
+  var shadow = {}, shadowOn = false, rawGet = null;
+  (function installSaveSandbox() {
+    try {
+      if (!window.localStorage || !window.Storage || !Storage.prototype.setItem) return;
+      var _set = Storage.prototype.setItem,
+          _get = Storage.prototype.getItem,
+          _rm  = Storage.prototype.removeItem;
+      rawGet = function (k) { try { return _get.call(localStorage, k); } catch (e) { return null; } };
+      for (var i = 0; i < SAVE_KEYS.length; i++) shadow[SAVE_KEYS[i]] = rawGet(SAVE_KEYS[i]);
+      function mine(k) { return SAVE_KEYS.indexOf(String(k)) >= 0; }
+      Storage.prototype.setItem = function (k, v) {
+        if (mine(k)) { shadow[k] = String(v); return; }
+        return _set.apply(this, arguments);
+      };
+      Storage.prototype.getItem = function (k) {
+        if (mine(k)) { var v = shadow[k]; return v === undefined ? null : v; }
+        return _get.apply(this, arguments);
+      };
+      Storage.prototype.removeItem = function (k) {
+        if (mine(k)) { shadow[k] = null; return; }
+        return _rm.apply(this, arguments);
+      };
+      shadowOn = true;
+    } catch (e) { /* sem storage: nada a proteger */ }
+  })();
+  var saveAntes = shadowOn ? SAVE_KEYS.map(function (k) { return shadow[k]; }) : null;
+
   function check(name, cond, detail) {
     if (cond) R.passed++;
     else { R.failed++; R.failures.push(name + (detail ? ' — ' + detail : '')); }
@@ -131,7 +170,10 @@
     for (var i = 0; i < nodes.length; i++) {
       var r = nodes[i].getBoundingClientRect();
       if (r.width < 2 && r.height < 2) continue;         // oculto
-      if (r.height < 40 || (r.width < 30 && r.height < 44)) {
+      // §0 pede ≥44 px. O limiar estava em 40 e deixava passar exatamente a
+      // violação que existia (.btn-tab a 40 px) — o teste não pode ser mais
+      // frouxo que o contrato que ele guarda.
+      if (r.height < 44 || r.width < 44) {
         bad.push((nodes[i].className || 'btn') + ' ' + Math.round(r.width) + '×' + Math.round(r.height));
       }
     }
@@ -356,6 +398,27 @@
   check('log recebe eventos', bs.querySelectorAll('.bt-log-list .log-line').length >= 2);
 
   check('nenhum erro de janela', errs.length === 0, errs.join(' | '));
+
+  // ------------------------------------------------ prova do sandbox (B4)
+  // Depois de semear 3 classes, itens, pedras e forja +3, o save REAL no disco
+  // tem que estar exatamente como estava. Se esta checagem cair, a página
+  // voltou a comer o progresso do jogador.
+  check('sandbox de save instalado', shadowOn);
+  if (shadowOn) {
+    var intacto = true, detalhe = '';
+    for (var vi = 0; vi < SAVE_KEYS.length; vi++) {
+      var disco = rawGet(SAVE_KEYS[vi]);
+      if (disco !== saveAntes[vi]) {
+        intacto = false;
+        detalhe += SAVE_KEYS[vi] + ': ' + (saveAntes[vi] === null ? 'ausente' : saveAntes[vi].length + ' B') +
+                   ' → ' + (disco === null ? 'ausente' : disco.length + ' B') + ' ';
+      }
+    }
+    check('o save REAL do jogador continua byte a byte igual', intacto, detalhe);
+    // e a semente realmente existe (senão o sandbox estaria escondendo tudo)
+    check('a semente de demonstração vive só na memória',
+      !!shadow['soterra-save-v2'] && shadow['soterra-save-v2'] !== saveAntes[0]);
+  }
 
   // tela final para a captura headless (?screen=nome)
   var want = (location.search.match(/[?&]screen=([a-zA-Z]+)/) || [])[1];

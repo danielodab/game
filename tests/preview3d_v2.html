@@ -552,6 +552,24 @@
       JOGO.Renderer.handleEvent({ type: 'battleStart', state: state });
     },
     fusao: function () { doFusion(); },
+    // Mesma fusão, SEM os setTimeout do FX. O FX da fusão agenda 34 partículas
+    // por setTimeout; sob `--virtual-time-budget` do Chrome headless isso trava
+    // a captura. Este roteiro mostra a UNIDADE FUNDIDA pronta.
+    fusaoja: function () {
+      var hs = heroes();
+      if (hs.length < 2) return;
+      var a = hs[0], b = hs[1];
+      var nu = mkUnit({
+        defId: 'fus:' + a.classId + '+' + b.classId, kind: 'fusion', side: 'player',
+        x: a.x + 2, y: a.y + 2, hp: a.hp + b.hp, element: a.element,
+        elemPair: [a.element, b.element], name: 'Fusão'
+      });
+      nu.shield = 50;
+      a.offBoard = true; b.offBoard = true;
+      state.units.push(nu);
+      state.order.push(nu.uid);
+      JOGO.Renderer.handleEvent({ type: 'battleStart', state: state });
+    },
     // teste de carga: ~40 unidades (meta de 60 fps do contrato)
     carga: function () {
       var ids = ['ember-imp', 'cinder-herald', 'cave-jaw', 'sum-ember-hound',

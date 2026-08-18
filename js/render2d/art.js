@@ -127,9 +127,21 @@ var JOGO = (typeof window !== 'undefined')
   }
   A.elementColor = function (e) { return elemInfo(e).c; };
 
-  var RARITY = { comum: '#9aa4ae', raro: '#54a8e8', epico: '#ffc44d',
-                 common: '#9aa4ae', rare: '#54a8e8', epic: '#ffc44d' };
+  // 4 raridades. `lendario` (o Traje do Coração, troféu do jogo) é BRANCO-BRASA:
+  // um creme quase branco com halo laranja — não é "mais um dourado", é a única
+  // peça que parece estar acesa por dentro.
+  var RARITY = { comum: '#9aa4ae', raro: '#54a8e8', epico: '#ffc44d', lendario: '#ffe9a8',
+                 common: '#9aa4ae', rare: '#54a8e8', epic: '#ffc44d', legendary: '#ffe9a8' };
+  // halo por raridade: só a lendária tem cor de halo diferente da borda, que é
+  // o que dá o efeito de brasa (núcleo claro, auréola quente)
+  var RARITY_GLOW = { lendario: '#ff7a2f', legendary: '#ff7a2f' };
+  // quanto a peça "acende": intensidade do brilho e nº de pedrinhas
+  var RARITY_RANK = { comum: 0, raro: 1, epico: 2, lendario: 3,
+                      common: 0, rare: 1, epic: 2, legendary: 3 };
   A.rarityColor = function (r) { return RARITY[r] || RARITY.comum; };
+  A.rarityGlow = function (r) { return RARITY_GLOW[r] || A.rarityColor(r); };
+  A.rarityRank = function (r) { return RARITY_RANK[r] == null ? 0 : RARITY_RANK[r]; };
+  A.rarityIds = function () { return ['comum', 'raro', 'epico', 'lendario']; };
 
   // ------------------------------------------------------- canvas / contexto
   function mkCanvas(w, h) {
@@ -2583,33 +2595,33 @@ var JOGO = (typeof window !== 'undefined')
   var THEMES = {
     estufa:   { floor: '#7d9a4e', floor2: '#6a8642', edge: '#3f5326', wall: '#5c7a35', accent: '#e2f0a8',
                 data: 'garden',
-                highs: ['trelica', 'hedge', 'vidraca', 'bambu'],
-                lows:  ['planter', 'mureta', 'carrinhoJ', 'vasos', 'tora'],
+                highs: ['trelica', 'hedge', 'vidraca', 'bambu', 'palmeira', 'painelMofo'],
+                lows:  ['planter', 'mureta', 'carrinhoJ', 'vasos', 'tora', 'floreira', 'cercaViva'],
                 props: ['redoma', 'regador', 'espantalho', 'placa', 'esporos'] },
     cisterna: { floor: '#5d7f8c', floor2: '#4d6c78', edge: '#263a44', wall: '#456474', accent: '#b9f2ff',
                 data: 'cistern',
-                highs: ['coluna', 'comporta', 'arcada', 'barris'],
-                lows:  ['canal', 'degrau', 'banco', 'cano', 'perolas'],
+                highs: ['coluna', 'comporta', 'arcada', 'barris', 'colunaSal', 'telaEclusa'],
+                lows:  ['canal', 'degrau', 'banco', 'cano', 'perolas', 'muretaComporta', 'passarela'],
                 props: ['lustre', 'lampiao', 'partitura', 'sapato', 'corrente'] },
     brasa:    { floor: '#7a4a3a', floor2: '#663c30', edge: '#3a1e18', wall: '#5c3428', accent: '#ffb347',
                 data: 'forge',
-                highs: ['blocoFerro', 'chamine', 'forja', 'lingotes'],
-                lows:  ['bigornaB', 'escoria', 'tempera', 'carvao', 'molde'],
+                highs: ['blocoFerro', 'chamine', 'forja', 'lingotes', 'fornalha', 'prensa'],
+                lows:  ['bigornaB', 'escoria', 'tempera', 'carvao', 'molde', 'trilhoLingote', 'blocoTempera'],
                 props: ['correnteTeto', 'martelo', 'fole', 'avental', 'brasa'] },
     vento:    { floor: '#8a8296', floor2: '#756e82', edge: '#3c3748', wall: '#655e74', accent: '#f0eaff',
                 data: 'scaffold',
-                highs: ['andaime', 'guindaste', 'tapume', 'duto'],
-                lows:  ['guardaCorpo', 'vigas', 'caixa', 'brita', 'roldana'],
+                highs: ['andaime', 'guindaste', 'tapume', 'duto', 'elevador', 'lona'],
+                lows:  ['guardaCorpo', 'vigas', 'caixa', 'brita', 'roldana', 'estrado', 'roloCabo'],
                 props: ['prumo', 'bandeira', 'balde', 'ninho', 'serragem'] },
     mina:     { floor: '#7a6a4e', floor2: '#665842', edge: '#332b20', wall: '#5c4e38', accent: '#c9a227',
                 data: 'mine',
-                highs: ['escora', 'rocha', 'desabamento', 'silo'],
-                lows:  ['vagonete', 'trilho', 'entulho', 'dinamite', 'cavalete'],
+                highs: ['escora', 'rocha', 'desabamento', 'silo', 'pilarRocha', 'portaGaleria'],
+                lows:  ['vagonete', 'trilho', 'entulho', 'dinamite', 'cavalete', 'vigaCaida', 'britagem'],
                 props: ['carbureto', 'gaiola', 'capacete', 'cristal', 'poeira'] },
     coracao:  { floor: '#5a5270', floor2: '#4a4360', edge: '#241f36', wall: '#463f60', accent: '#b98cff',
                 data: 'heart',
-                highs: ['costela', 'cristal', 'espelho', 'colunaQuatro'],
-                lows:  ['basalto', 'caco', 'bacia', 'raizCoracao', 'anelCinza'],
+                highs: ['costela', 'cristal', 'espelho', 'colunaQuatro', 'pilarPartido', 'lascaMundo'],
+                lows:  ['basalto', 'caco', 'bacia', 'raizCoracao', 'anelCinza', 'soleira', 'bancoEstacoes'],
                 props: ['relogio', 'estilhaco', 'chuvaCima', 'lampiao', 'runa'] }
   };
   // compatibilidade: `T.high`/`T.low` continuam existindo (a 1ª variante)
@@ -2640,8 +2652,8 @@ var JOGO = (typeof window !== 'undefined')
     var col = hslHex(hue, 26, 44);
     return { floor: col, floor2: sh(col, -0.12), edge: sh(col, -0.5), wall: sh(col, -0.16),
              accent: sh(col, 0.55), high: 'rocha', low: 'entulho',
-             highs: ['rocha', 'coluna', 'desabamento', 'silo'],
-             lows: ['entulho', 'caixa', 'trilho', 'basalto', 'molde'],
+             highs: ['rocha', 'coluna', 'desabamento', 'silo', 'pilarRocha', 'portaGaleria'],
+             lows: ['entulho', 'caixa', 'trilho', 'basalto', 'molde', 'estrado', 'vigaCaida'],
              props: ['lanterna', 'urna', 'cristal', 'poeira', 'corrente'] };
   }
   // ---------------------------------------------------------------- variantes
@@ -3996,6 +4008,11 @@ var JOGO = (typeof window !== 'undefined')
          { flat: true, lw: 0.8, line: rgba(sh(col, 0.4), 0.5) });
     if (rar) {
       var rc = A.rarityColor(rar);
+      // a lendária ganha moldura DUPLA: fio laranja por fora, creme por dentro
+      if (A.rarityRank(rar) >= 3) {
+        g.save(); g.strokeStyle = A.rarityGlow(rar); g.lineWidth = 4;
+        Prr(s / 2, s / 2, s - 3, s - 3, s * 0.22)(g); g.stroke(); g.restore();
+      }
       g.save(); g.strokeStyle = rc; g.lineWidth = 2;
       Prr(s / 2, s / 2, s - 3, s - 3, s * 0.22)(g); g.stroke(); g.restore();
     }
@@ -4100,14 +4117,31 @@ var JOGO = (typeof window !== 'undefined')
     var rc = A.rarityColor(rar);
     var base = A.slotColor(slot);
     if (it && it.element && ELEM[it.element]) base = mx(base, elemInfo(it.element).c, 0.4);
+    var rank = A.rarityRank(rar);
     iconFrame(g, size, base, rar);
-    glow(g, size / 2, size / 2, size * 0.4, rc, rar === 'epico' ? 0.45 : 0.25);
+    // LENDÁRIA: brasa de dois tempos — auréola laranja larga por baixo, núcleo
+    // claro por cima. As outras mantêm o brilho simples de sempre.
+    if (rank >= 3) {
+      glow(g, size / 2, size / 2, size * 0.56, A.rarityGlow(rar), 0.5);
+      glow(g, size / 2, size / 2, size * 0.34, rc, 0.6);
+    } else {
+      glow(g, size / 2, size / 2, size * 0.4, rc, rank >= 2 ? 0.45 : 0.25);
+    }
     (SLOT_GLYPH[slot] || SLOT_GLYPH.casca)(g, size / 2, size / 2, size * 0.26, base);
-    // pedrinhas de raridade
-    var n = rar === 'epico' ? 3 : rar === 'raro' ? 2 : 1, i;
+    // pedrinhas de raridade: 1 · 2 · 3 · 4
+    var n = rank + 1, i;
     for (i = 0; i < n; i++) {
       part(g, Pel(size * 0.5 + (i - (n - 1) / 2) * size * 0.13, size * 0.88, size * 0.038, size * 0.038),
            rc, { k: 0.2, lw: 0.6 });
+    }
+    // e uma coroa de fagulhas no alto, só da lendária
+    if (rank >= 3) {
+      for (i = 0; i < 5; i++) {
+        var a = -Math.PI * 0.86 + i * (Math.PI * 0.72 / 4);
+        part(g, Pstar(size / 2 + Math.cos(a) * size * 0.36, size / 2 + Math.sin(a) * size * 0.36,
+                      size * (i === 2 ? 0.055 : 0.038), 4, 0.34), rc,
+             { flat: true, noline: true });
+      }
     }
     g.restore();
     c.__anchor = [0.5, 0.5];
