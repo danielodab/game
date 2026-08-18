@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d10">
+<title>SOTERRA 2.0 — 3D (auto)</title>
+<link rel="stylesheet" href="../css/style.css?v=3">
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+</div>
+
+<!--
+  SOTERRA 2.0 — apresentação em 3D (Three.js r147).
+  Entrada alternativa ao index.html (que serve a apresentação 2D em PixiJS).
+  Para trocar a entrada padrão, o Orquestrador copia esta ordem de scripts.
+
+  Ordem obrigatória:
+    vendor 3D → dados → núcleo → cenário (env-kit + montador da v1) →
+    modelos embutidos → camada 3D → arte 2D da HUD → retratos 3D → interface → loop
+
+  A camada 2D (js/render2d/renderer.js e fx.js) NÃO entra aqui: `JOGO.Renderer`
+  e `JOGO.FX` são fornecidos pela camada 3D. `js/render2d/art.js` continua
+  entrando porque a HUD usa `JOGO.Art` para ícones e retratos.
+-->
+
+<script src="../vendor/three.min.js?v=3"></script>
+<script src="../vendor/GLTFLoader.js?v=3"></script>
+<script src="../vendor/CopyShader.js?v=3"></script>
+<script src="../vendor/LuminosityHighPassShader.js?v=3"></script>
+<script src="../vendor/EffectComposer.js?v=3"></script>
+<script src="../vendor/RenderPass.js?v=3"></script>
+<script src="../vendor/ShaderPass.js?v=3"></script>
+<script src="../vendor/UnrealBloomPass.js?v=3"></script>
+
+<script src="../js/core/data/elements.js?v=3"></script>
+<script src="../js/core/data/classes.js?v=3"></script>
+<script src="../js/core/data/spells.js?v=3"></script>
+<script src="../js/core/data/progression.js?v=3"></script>
+<script src="../js/core/data/monsters.js?v=3"></script>
+<script src="../js/core/data/dungeons.js?v=3"></script>
+<script src="../js/core/data/fusions.js?v=3"></script>
+<script src="../js/core/data/pets.js?v=3"></script>
+<script src="../js/core/data/items.js?v=3"></script>
+
+<script src="../js/core/engine.js?v=3"></script>
+<script src="../js/core/fusion.js?v=3"></script>
+<script src="../js/core/ai.js?v=3"></script>
+<script src="../js/core/progress.js?v=3"></script>
+<script src="../js/core/game.js?v=3"></script>
+
+<!-- cenário: 49 peças CC0 do KayKit Dungeon Remastered + montador de salas da v1 -->
+<script src="../assets/embedded/env-kit.js?v=3"></script>
+<script src="../js/render3d/models3d.js?v=3"></script>
+
+<!-- modelos 3D embutidos em base64 (o jogo abre por file://) -->
+<script src="../assets/embedded/models-anims.js?v=3"></script>
+<script src="../assets/embedded/models-heroes.js?v=3"></script>
+<script src="../assets/embedded/models-monsters.js?v=3"></script>
+
+<script src="../js/render3d/models3d_v2.js?v=3"></script>
+<script src="../js/render3d/fx3d_v2.js?v=3"></script>
+<script src="../js/render3d/renderer3d_v2.js?v=3"></script>
+
+<!-- arte 2D da HUD (ícones, retratos de reserva) e a arte desenhada à mão -->
+<script src="../assets/embedded/sprites-sumo.js?v=3"></script>
+<script src="../js/render2d/art.js?v=3"></script>
+<script src="../js/render2d/spriteart.js?v=3"></script>
+<script src="../js/render3d/portraits3d.js?v=3"></script>
+
+<script src="../js/ui/hud.js?v=3"></script>
+<script src="../js/main.js?v=3"></script>
+
+<!-- SOMENTE TESTE: inicia uma descida e tira a captura sincrona (?auto=1) -->
+<script>
+(function () {
+  var Q = new URLSearchParams(location.search);
+  if (!Q.get('auto')) return;
+  function boot() {
+    var J = window.JOGO;
+    if (!J || !J.Progress || !J.Game || !J.Models3D2 || !J.Models3D2.isReady() ||
+        !(J.Models3D && J.Models3D.isReady())) { setTimeout(boot, 200); return; }
+    try {
+      var ids = J.Progress.heroIds();
+      if (ids.length < 2) { J.Progress.createHero('sumo'); J.Progress.createHero('curandeira'); ids = J.Progress.heroIds(); }
+      J.Game.startRun(ids.slice(0, 2), Q.get('d') || 'greenhouse');
+      if (Q.get('w')) { J.Game.state.weather = Q.get('w'); J.Renderer.handleEvent({ type: 'weatherShift', weather: Q.get('w') }); }
+      var n = +(Q.get('frames') || 60);
+      for (var i = 0; i < n; i++) J.Renderer.render(0.016);
+      window.AUTO_OK = true;
+    } catch (e) { document.title = 'ERRO ' + e.message; window.AUTO_ERR = String(e); }
+  }
+  if (document.readyState === 'complete') setTimeout(boot, 300);
+  else window.addEventListener('load', function () { setTimeout(boot, 300); });
+})();
+</script>
+</body>
+</html>

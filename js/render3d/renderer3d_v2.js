@@ -63,12 +63,12 @@ var JOGO = (typeof window !== 'undefined')
   // Ambiente por tema (§7 — 6 calabouços). Céu/chão do hemisférico dão a
   // "sombra colorida" que faz a cena parecer desenho e não maquete cinza.
   var THEME_ENV = {
-    garden:   { fog: '#3d5c30', sky: '#a8c887', gnd: '#2c3c66', sun: '#fff0c2', sunI: 1.55, hemiI: 1.30, rim: '#a8ffc0' },
-    cistern:  { fog: '#1d5570', sky: '#7ec0da', gnd: '#20265c', sun: '#e2f4f8', sunI: 1.42, hemiI: 1.36, rim: '#7ef0d4' },
-    forge:    { fog: '#5e2510', sky: '#e09668', gnd: '#46205c', sun: '#ffd8a0', sunI: 1.50, hemiI: 1.24, rim: '#ff9a5a' },
-    scaffold: { fog: '#454a5c', sky: '#c8d2ea', gnd: '#3a3550', sun: '#eef7f5', sunI: 1.55, hemiI: 1.38, rim: '#cfe4ff' },
-    mine:     { fog: '#403322', sky: '#c8a878', gnd: '#2e2440', sun: '#ffe0a8', sunI: 1.38, hemiI: 1.20, rim: '#c9a227' },
-    heart:    { fog: '#332a52', sky: '#b49ce8', gnd: '#2a2044', sun: '#ffe6b8', sunI: 1.50, hemiI: 1.32, rim: '#ffd166' }
+    garden:   { fog: '#3d5c30', sky: '#a8c887', gnd: '#2c3c66', sun: '#fff0c2', sunI: 1.12, hemiI: 0.82, rim: '#a8ffc0' },
+    cistern:  { fog: '#1d5570', sky: '#7ec0da', gnd: '#20265c', sun: '#e2f4f8', sunI: 1.02, hemiI: 0.86, rim: '#7ef0d4' },
+    forge:    { fog: '#5e2510', sky: '#e09668', gnd: '#46205c', sun: '#ffd8a0', sunI: 1.08, hemiI: 0.78, rim: '#ff9a5a' },
+    scaffold: { fog: '#454a5c', sky: '#c8d2ea', gnd: '#3a3550', sun: '#eef7f5', sunI: 1.12, hemiI: 0.88, rim: '#cfe4ff' },
+    mine:     { fog: '#403322', sky: '#c8a878', gnd: '#2e2440', sun: '#ffe0a8', sunI: 1.00, hemiI: 0.76, rim: '#c9a227' },
+    heart:    { fog: '#332a52', sky: '#b49ce8', gnd: '#2a2044', sun: '#ffe6b8', sunI: 1.08, hemiI: 0.84, rim: '#ffd166' }
   };
   function envOf(theme) { return THEME_ENV[theme] || THEME_ENV.garden; }
 
@@ -220,8 +220,11 @@ var JOGO = (typeof window !== 'undefined')
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     if (THREE.sRGBEncoding != null) renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.14;
+    // ACES comprime o realce e DESSATURA a cena inteira (lição da v1). Com
+    // arte de atlas chapado, o tom linear preserva a cor; as luzes abaixo já
+    // estão calibradas para isso.
+    renderer.toneMapping = THREE.LinearToneMapping;
+    renderer.toneMappingExposure = 1.0;
 
     scene = new THREE.Scene();
     scene.background = col3(0x101418);
@@ -317,10 +320,10 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function buildLights() {
-    lights.hemi = new THREE.HemisphereLight(col3('#a8c887'), col3('#2c3c66'), 1.30);
+    lights.hemi = new THREE.HemisphereLight(col3('#a8c887'), col3('#2c3c66'), 0.82);
     scene.add(lights.hemi);
 
-    lights.sun = new THREE.DirectionalLight(col3('#fff0c2'), 1.55);
+    lights.sun = new THREE.DirectionalLight(col3('#fff0c2'), 1.12);
     lights.sun.position.set(11, 20, 8);
     lights.sun.castShadow = true;
     lights.sun.shadow.mapSize.set(shadowSize(), shadowSize());
@@ -335,11 +338,11 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(lights.sun);
     scene.add(lights.sun.target);
 
-    lights.rim = new THREE.DirectionalLight(col3('#a8ffc0'), 0.70);
+    lights.rim = new THREE.DirectionalLight(col3('#a8ffc0'), 0.42);
     lights.rim.position.set(-12, 9, -14);
     scene.add(lights.rim);
 
-    lights.fill = new THREE.AmbientLight(0xffffff, 0.30);
+    lights.fill = new THREE.AmbientLight(0xffffff, 0.18);
     scene.add(lights.fill);
   }
 
@@ -431,6 +434,21 @@ var JOGO = (typeof window !== 'undefined')
     heart:    ['chest', 'crates', 'barrel']
   };
   function hashXY(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
+  function lighten(hex, k) {
+    var c = new THREE.Color(hexInt(hex));
+    c.r = Math.min(1, c.r + (1 - c.r) * k);
+    c.g = Math.min(1, c.g + (1 - c.g) * k);
+    c.b = Math.min(1, c.b + (1 - c.b) * k);
+    return '#' + c.getHexString();
+  }
+  // normaliza a altura de uma peca de cenario (o kit vem em escalas variadas)
+  function fitHeight(node, target) {
+    node.updateMatrixWorld(true);
+    var bb = new THREE.Box3().setFromObject(node);
+    var hgt = bb.max.y - bb.min.y;
+    if (!isFinite(hgt) || hgt <= 0.01) return;
+    node.scale.multiplyScalar(target / hgt);
+  }
 
   // Um único material clonado por material de origem: mantém o merge por
   // material (poucas draw calls) e ainda permite tingir as paredes por tema.
@@ -465,7 +483,14 @@ var JOGO = (typeof window !== 'undefined')
     envG.position.set(-(w - 1) / 2 * CELL, 0, -(h - 1) / 2 * CELL);
 
     var staticG = new THREE.Group();
-    try { staticG.add(K.buildGround(theme, w, h)); } catch (e) {}
+    // CHAO ESTENDIDO: o campo tem de ser um LUGAR. O chao da v1 nasce escuro
+    // demais para a luz nova, e props apoiados nele pareciam boiar no vazio.
+    try {
+      var ground = K.buildGround(theme, w, h);
+      var gcache = {};
+      retint(ground, lighten(pal.floor2, 0.42), 0.55, gcache);
+      staticG.add(ground);
+    } catch (e) {}
 
     function isWall(x2, y2) {
       if (x2 < 0 || y2 < 0 || x2 >= w || y2 >= h) return false;
@@ -492,9 +517,9 @@ var JOGO = (typeof window !== 'undefined')
         // NÃO bloqueia a visão — por isso é visivelmente mais baixo que a parede.
         node = K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
         var prop = K.buildProp(theme, lowKinds[seed % lowKinds.length], seed);
-        var bb = new THREE.Box3().setFromObject(prop);
-        var ph = Math.max(0.2, bb.max.y - bb.min.y);
-        prop.scale.multiplyScalar(Math.min(2.4, (LOW_H * 1.5) / ph));
+        // ALTURA NORMALIZADA: o obstaculo tem de ler como "da para ver por
+        // cima" e nunca competir com uma unidade (heroi ~2,05 de altura).
+        fitHeight(prop, 0.95);
         prop.position.set(x * CELL, 0, y * CELL);
         lowNodes.push({ node: prop, x: x, y: y });
       } else if (k === 'deco') {
@@ -507,17 +532,33 @@ var JOGO = (typeof window !== 'undefined')
     for (var L = 0; L < lowNodes.length; L++) staticG.add(lowNodes[L].node);
 
     // props de borda: o campo é um LUGAR, não um diorama solto no vazio
+    // Props de borda: encostados na arena (nunca boiando no horizonte), com
+    // altura normalizada e um disco de contato que os assenta no chao.
     try {
       var kinds = K.propKinds(theme);
       var rr = 0;
-      for (var p = 0; p < 16; p++) {
-        var a = (p / 16) * Math.PI * 2 + ((hashXY(p, 7) % 100) / 100) * 0.5;
-        var d = Math.max(w, h) * CELL * 0.62 + CELL * (1.2 + ((hashXY(p, 3) % 100) / 100) * 3.2);
-        var cxp = (w - 1) / 2 * CELL, czp = (h - 1) / 2 * CELL;
-        var px = cxp + Math.cos(a) * d, pz = czp + Math.sin(a) * d;
+      var cxp = (w - 1) / 2 * CELL, czp = (h - 1) / 2 * CELL;
+      var halfW = (w / 2) * CELL, halfH = (h / 2) * CELL;
+      for (var p = 0; p < 18; p++) {
+        var a = (p / 18) * Math.PI * 2 + ((hashXY(p, 7) % 100) / 100) * 0.35;
+        var ca = Math.cos(a), sa = Math.sin(a);
+        // distancia ate a BORDA do retangulo nessa direcao + folga de 1..2.6 celulas
+        var tx = Math.abs(ca) > 1e-4 ? halfW / Math.abs(ca) : 1e9;
+        var tz = Math.abs(sa) > 1e-4 ? halfH / Math.abs(sa) : 1e9;
+        var edge = Math.min(tx, tz);
+        var d = edge + CELL * (1.0 + ((hashXY(p, 3) % 100) / 100) * 1.6);
+        var px = cxp + ca * d, pz = czp + sa * d;
         var prop2 = K.buildProp(theme, kinds[(p * 7 + rr++) % kinds.length], p * 131 + 17);
+        fitHeight(prop2, 0.85 + ((hashXY(p, 5) % 100) / 100) * 0.9);
         prop2.position.set(px, 0, pz);
         staticG.add(prop2);
+        var pad = new THREE.Mesh(M.tileFlatGeo(), new THREE.MeshBasicMaterial({
+          color: 0x000000, transparent: true, opacity: 0.34, depthWrite: false
+        }));
+        pad.position.set(px, 0.02, pz);
+        pad.scale.setScalar(0.55);
+        pad.renderOrder = 2;
+        envG.add(pad);
       }
     } catch (e2) {}
 
@@ -1223,7 +1264,7 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
     for (var uid in unitNodes) {
-      if (seen[uid]) continue;
+      if (seen[uid] || fusionHolds(uid)) continue;
       var n = unitNodes[uid];
       if (n.parent) n.parent.remove(n);
       delete unitNodes[uid];
@@ -1231,7 +1272,29 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  // Durante a FUSÃO os dois fundidos já saíram do state (offBoard), mas a cena
+  // ainda precisa mostrá-los convergindo: seguramos os nós até a animação acabar.
+  function fusionHolds(uid) {
+    for (var i = 0; i < animQ.length; i++) {
+      var a = animQ[i];
+      if (a.kind === 'fusion' && (a.a === uid || a.b === uid)) return true;
+    }
+    return false;
+  }
+
   function updateUnitNodes(st, dt) {
+    // os fundidos segurados pela animação não estão mais em st.units
+    for (var h in unitNodes) {
+      if (!fusionHolds(h)) continue;
+      var hv = vis[h], hn = unitNodes[h];
+      if (!hv || !hn) continue;
+      hn.position.set(wx(hv.x) + hv.knockX, hv.z, wz(hv.y) + hv.knockZ);
+      hn.rotation.y = hv.face + FACE_OFF;
+      applyAlpha(hn, Math.max(0, 1 - hv.hideK));
+      if (hn.userData.bar) hn.userData.bar.visible = false;
+      if (hn.userData.sideRing) hn.userData.sideRing.visible = false;
+      if (hn.userData.mixer) hn.userData.mixer.update(dt);
+    }
     for (var i = 0; i < st.units.length; i++) {
       var u = st.units[i];
       var node = unitNodes[u.uid];
@@ -1624,9 +1687,9 @@ var JOGO = (typeof window !== 'undefined')
       weatherG.add(pts2);
       weather.motes = { pts: pts2, span: span, up: 0.5 };
       lights.sun.color = col3('#ffb347');
-      lights.sun.intensity = envOf(curTheme).sunI * 1.30;
+      lights.sun.intensity = envOf(curTheme).sunI * 1.18;
       lights.hemi.color = col3('#ffcf8a');
-      renderer.toneMappingExposure = 1.30;
+      renderer.toneMappingExposure = 1.12;
       scene.fog.color.lerp(col3('#71401c'), 0.35);
       scene.background.lerp(col3('#7a4a20'), 0.32);
     } else if (id === 'vendaval') {
@@ -1668,7 +1731,7 @@ var JOGO = (typeof window !== 'undefined')
       weather.motes = { pts: pts4, span: span, up: 0.12 };
       scene.fog.color.lerp(col3('#5a4a2a'), 0.26);
     } else {
-      renderer.toneMappingExposure = 1.14;
+      renderer.toneMappingExposure = 1.0;
       applyThemeLights();
     }
     syncSky();
@@ -2059,7 +2122,7 @@ var JOGO = (typeof window !== 'undefined')
         var va = a.a ? vis[a.a] : null, vb = a.b ? vis[a.b] : null;
         var vn = vis[a.uid];
         if (!a.lit) {
-          a.lit = new THREE.PointLight(0xffffff, 0, 16, 2);
+          a.lit = new THREE.PointLight(0xffffff, 0, 22, 2);
           a.lit.position.set(wx(a.mid.x), 1.6, wz(a.mid.y));
           fxG.add(a.lit);
         }
@@ -2068,12 +2131,12 @@ var JOGO = (typeof window !== 'undefined')
           if (va) { va.x += (a.mid.x - va.x) * Math.min(1, dt * 8); va.y += (a.mid.y - va.y) * Math.min(1, dt * 8); va.z = Math.sin(kk * Math.PI) * 0.7; }
           if (vb) { vb.x += (a.mid.x - vb.x) * Math.min(1, dt * 8); vb.y += (a.mid.y - vb.y) * Math.min(1, dt * 8); vb.z = Math.sin(kk * Math.PI) * 0.7; }
           if (vn) vn.hideK = 1;
-          a.lit.intensity = 4 + kk * 24;
+          a.lit.intensity = 1.5 + kk * 7;
         } else if (a.t < T.approach + T.flash) {
           if (va) va.hideK = 1;
           if (vb) vb.hideK = 1;
           if (vn) vn.hideK = 1;
-          a.lit.intensity = 90;
+          a.lit.intensity = 26;
         } else {
           if (!a.newReady) {
             a.newReady = true;
@@ -2086,7 +2149,7 @@ var JOGO = (typeof window !== 'undefined')
           }
           if (vn) vn.hideK = 0;
           var kd = (a.t - T.approach - T.flash) / T.reveal;
-          a.lit.intensity = Math.max(0, 90 * (1 - kd));
+          a.lit.intensity = Math.max(0, 26 * (1 - kd));
         }
         if (a.t >= a.dur) {
           if (va) va.hideK = 1;

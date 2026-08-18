@@ -215,7 +215,10 @@ DATA.dungeons = [ { id, name, theme, description, difficulty, order,
 ## 8. Itens (4 espaços + pet)
 
 ```js
-DATA.items = { itemId: { id, name, slot:'pa'|'pp'|'vida'|'especial', rarity:'comum'|'raro'|'epico',
+// slots: ver §9-C (punho/passo/casca/lume). Raridades: comum · raro · epico · lendario
+// (a 4ª nasceu com o Traje do Coração; a apresentação PRECISA ter cor e rótulo próprios
+//  para ela — sem isso a peça mais rara do jogo aparece com a cor de comum).
+DATA.items = { itemId: { id, name, slot:'pa'|'pp'|'vida'|'especial', rarity:'comum'|'raro'|'epico'|'lendario',
     dungeonId, bonuses:{…}, grantsSpell:'spellId'|null,   // obrigatório no slot 'especial'
     description, flavor, iconKey } };
 ```

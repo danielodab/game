@@ -244,7 +244,7 @@ var JOGO = (typeof window !== 'undefined')
       shell.scale.setScalar(1.9);
       mesh.add(shell);
     }
-    var light = takeLight(color, o.lightI || 9, o.lightD || 12);
+    var light = takeLight(color, o.lightI || 2.6, o.lightD || 9);
     if (light) light.position.copy(from);
     var d = from.distanceTo(to);
     shots.push({
@@ -317,7 +317,7 @@ var JOGO = (typeof window !== 'undefined')
   function shockRing(pos, color, r0, r1, dur) {
     if (!ringGeo) { ringGeo = new THREE.RingGeometry(0.86, 1.0, 40); ringGeo.rotateX(-Math.PI / 2); }
     var m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-      color: col3(color), transparent: true, opacity: 0.9,
+      color: col3(color), transparent: true, opacity: 0.75,
       depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
     }));
     m.position.set(pos.x, 0.08, pos.z);
@@ -332,7 +332,7 @@ var JOGO = (typeof window !== 'undefined')
       r.t += dt;
       var k = Math.min(1, r.t / r.dur);
       r.m.scale.setScalar(r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - k, 2)));
-      r.m.material.opacity = 0.9 * (1 - k);
+      r.m.material.opacity = 0.75 * (1 - k);
       if (k >= 1) { fxG.remove(r.m); r.m.material.dispose(); rings.splice(i, 1); }
     }
   }
@@ -341,7 +341,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!decalGeo) { decalGeo = new THREE.PlaneGeometry(1, 1); decalGeo.rotateX(-Math.PI / 2); }
     var m = new THREE.Mesh(decalGeo, new THREE.MeshBasicMaterial({
       map: dotTexture(), color: col3(color), transparent: true,
-      opacity: 0.5, depthWrite: false
+      opacity: 0.34, depthWrite: false
     }));
     m.position.set(pos.x, 0.05, pos.z);
     m.scale.setScalar(size || 2.2);
@@ -357,7 +357,7 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = decals.length - 1; i >= 0; i--) {
       var d = decals[i];
       d.t += dt;
-      d.m.material.opacity = 0.5 * Math.max(0, 1 - d.t / d.dur);
+      d.m.material.opacity = 0.34 * Math.max(0, 1 - d.t / d.dur);
       if (d.t >= d.dur) { decalG.remove(d.m); d.m.material.dispose(); decals.splice(i, 1); }
     }
   }
@@ -586,7 +586,7 @@ var JOGO = (typeof window !== 'undefined')
         p = unitPos(ev.uid, 0.5);
         burst(p.x, p.y, p.z, 46, { color: '#ffffff', speed: 4.6, life: 0.9, size: 0.30, spread: 0.5 });
         scorch(p, '#20160f', 2.4, 6);
-        flash(p, '#ffe0b0', 22, 0.4, 14);
+        flash(p, '#ffe0b0', 5.5, 0.4, 11);
         addShake(7);
         break;
 
@@ -629,7 +629,7 @@ var JOGO = (typeof window !== 'undefined')
           p = cellPos(ev.unit.x, ev.unit.y, 0.3);
           shockRing(p, '#b98cff', 0.3, 2.2, 0.6);
           burst(p.x, 0.2, p.z, 30, { color: '#b98cff', speed: 3.4, life: 0.8, up: 1.6 });
-          flash(p, '#b98cff', 20, 0.45, 12);
+          flash(p, '#b98cff', 5.0, 0.45, 10);
         }
         break;
 
@@ -654,7 +654,7 @@ var JOGO = (typeof window !== 'undefined')
             })(i);
           }
           setTimeout(function () {
-            flash(mid, '#ffffff', 95, 0.5, 28);
+            flash(mid, '#ffffff', 24, 0.55, 20);
             shockRing(mid, c1, 0.4, 6.5, 0.75);
             shockRing(mid, c2, 0.3, 5.0, 0.9);
             burst(mid.x, mid.y, mid.z, 120, { color: c1, speed: 7.5, life: 1.0, size: 0.42, spread: 0.6 });
@@ -689,8 +689,8 @@ var JOGO = (typeof window !== 'undefined')
     });
     shockRing(pos, col, 0.35, 2.4 * power, 0.42);
     if (col2) shockRing(pos, col2, 0.30, 3.1 * power, 0.58);
-    flash(new THREE.Vector3(pos.x, 0.8, pos.z), col, 26 * power, 0.34, 12 * power);
-    if (col2) flash(new THREE.Vector3(pos.x, 1.1, pos.z), col2, 20 * power, 0.46, 13 * power);
+    flash(new THREE.Vector3(pos.x, 0.8, pos.z), col, 6.5 * power, 0.34, 9 * power);
+    if (col2) flash(new THREE.Vector3(pos.x, 1.1, pos.z), col2, 5.0 * power, 0.46, 10 * power);
     scorch(pos, SCORCH[element] || '#241208', 2.0 * power, 4);
     addShake(5 * power);
   }
@@ -730,8 +730,8 @@ var JOGO = (typeof window !== 'undefined')
         });
       }
     }
-    flash(to, col, 30, 0.35, 14);
-    if (col2) flash(from, col2, 18, 0.4, 10);
+    flash(to, col, 7.5, 0.35, 11);
+    if (col2) flash(from, col2, 4.5, 0.4, 8);
     shockRing(to, col, 0.3, 2.2, 0.4);
     if (col2) shockRing(to, col2, 0.3, 3.0, 0.55);
     addShake(5);
@@ -742,8 +742,8 @@ var JOGO = (typeof window !== 'undefined')
     shockRing(pos, col, 0.4, 5.2, 0.6);
     if (col2) shockRing(pos, col2, 0.4, 6.4, 0.8);
     shockRing(pos, '#ffffff', 0.3, 3.6, 0.45);
-    flash(new THREE.Vector3(pos.x, 1.0, pos.z), col, 55, 0.5, 22);
-    if (col2) flash(new THREE.Vector3(pos.x, 1.6, pos.z), col2, 42, 0.66, 24);
+    flash(new THREE.Vector3(pos.x, 1.0, pos.z), col, 13, 0.5, 16);
+    if (col2) flash(new THREE.Vector3(pos.x, 1.6, pos.z), col2, 10, 0.66, 17);
     addShake(11);
     freezeT = Math.max(freezeT, 0.08);
   }
@@ -756,7 +756,7 @@ var JOGO = (typeof window !== 'undefined')
         life: 0.85, color: col, size: 0.30, grav: 0.5, drag: 0.4
       });
     }
-    flash(pos, col, 14, 0.5, 10);
+    flash(pos, col, 4.0, 0.5, 8);
   }
 
   // ================================================================= ATUALIZA

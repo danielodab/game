@@ -248,12 +248,12 @@ var JOGO = (typeof window !== 'undefined')
   M.MONSTER_FALLBACK = { model: 'skeleton_minion', scale: 1.0 };
 
   M.PET_LOOK = {
-    'pet-emberling': { model: 'q_velociraptor', scale: 0.52 },
-    'pet-snapvine': { model: 'q_snake', scale: 0.62 },
-    'pet-galehawk': { model: 'q_wasp', scale: 0.62 },
-    'pet-dewling': { model: 'q_frog', scale: 0.55 },
-    'pet-lodestone': { model: 'q_spider', scale: 0.52 },
-    'pet-heartshard': { model: 'q_fox', scale: 0.55 }
+    'pet-emberling': { model: 'q_velociraptor', scale: 0.86 },
+    'pet-snapvine': { model: 'q_snake', scale: 0.95 },
+    'pet-galehawk': { model: 'q_wasp', scale: 0.90 },
+    'pet-dewling': { model: 'q_frog', scale: 0.88 },
+    'pet-lodestone': { model: 'q_spider', scale: 0.84 },
+    'pet-heartshard': { model: 'q_fox', scale: 0.88 }
   };
 
   // ------------------------------------------------------------ decodificação
@@ -578,11 +578,16 @@ var JOGO = (typeof window !== 'undefined')
     var elems = (opts.elements && opts.elements.length) ? opts.elements : [opts.element || 'neutro'];
     var eCol = M.elementColor(elems[0]);
     var baseTint = look.tint || eCol;
-    var mats = tintMaterials(model, baseTint, look.fusion ? 0.52 : 0.62,
-                             eCol, elems[0] === 'neutro' ? 0.04 : 0.10);
+    // O material do KayKit nao tem baseColorFactor: TODA a cor vem do atlas de
+    // textura. Tingir forte multiplica o atlas por uma cor chapada e lava o
+    // desenho. Heroi recebe so um verniz (a identidade vem do anel e da aura);
+    // monstro recebe mais, porque a leitura do ELEMENTO e tatica.
+    var strength = look.classId ? 0.30 : (look.fusion ? 0.42 : 0.52);
+    var mats = tintMaterials(model, baseTint, strength,
+                             eCol, elems[0] === 'neutro' ? 0.03 : 0.08);
     if (look.fusion && look.mixTint) {
       var mix = col3(look.mixTint);
-      for (var mi = 0; mi < mats.length; mi++) mats[mi].color.lerp(mix, 0.34);
+      for (var mi = 0; mi < mats.length; mi++) mats[mi].color.lerp(mix, 0.28);
     }
     if (elems.length > 1) {
       var e2 = col3(M.elementColor(elems[1]));

@@ -346,3 +346,400 @@ A migração 3D preservou o contrato. As 3 suítes de núcleo passam intactas (*
 ## T7. Veredito final
 
 **APROVADO.** A camada 3D implementa fielmente as APIs do contrato sobre um núcleo intocado: suítes 62/62 · 18/18 · 2631, E2E nos 3 calabouços sem exceções, input do renderer exato em 3 ângulos, FX drenando sem watchdog, progressão e sandbox de save intactos, perf 9,4–12,8 ms @1440×900 com bloom (teto 16 ms). Bugs novos: **0 críticos · 0 altos · 0 médios · 2 baixos (N4, N5) · 1 informativo (N6)**, mais a lacuna **L1** (fallback WebGL) a cargo do orquestrador/Designer 3D. Nada bloqueia a entrega.
+
+---
+
+# QA de Integração da v2 — 18/08/2026
+
+**Agente Revisor.** Escopo: regressão e integração de **tudo que não depende da camada 3D**
+(dados, motor, progressão, interface 2D, fluxo E2E no jogo real, desempenho e celular).
+A camada 3D está sendo construída em paralelo por outro agente e **não foi avaliada**.
+
+**Instantâneo auditado:** `628f560` (*roomFury no dado e xpTable recalibrada*), com
+`js/render3d/*` sujos na árvore de trabalho (do outro agente). A árvore **se moveu três vezes
+durante esta auditoria** (`92c35f6` salas maiores, `d1f677e` fúria da sala, `628f560` xpTable) —
+onde isso muda um resultado, o texto diz explicitamente o antes e o depois.
+
+**Sandbox de save:** `localStorage['soterra-save-v2']` foi fotografado antes de qualquer coisa
+(529 bytes, save limpo do usuário: sumô + curandeira nível 1) e **restaurado byte a byte** ao fim
+(conferido por comparação de string exata). Cópia de segurança fora do projeto durante a sessão.
+
+---
+
+## A. Suítes (carga atual, HEAD `628f560`)
+
+| Página | Resultado | Observação |
+|---|---|---|
+| `tests/test_engine_v2.html` | **201 / 201** · 0 falhas | eram 186 antes de `d1f677e`; console só com `PASS`/`AUTO-PLAY` |
+| `tests/test_progress_v2.html` | **143 / 143** · 0 falhas | não suja o save (snapshot/restore próprio) |
+| `tests/validate_classes.html` | **6.161 / 6.161** · 0 falhas | **estava 6.143 com 9 falhas** no início da auditoria — ver B1 |
+| `tests/validate_world.html` | **6.498 / 6.498** · 0 falhas | eram 6.397 antes das salas maiores |
+| `tests/validate_fusion.html` | **3.674 / 3.674** · 0 falhas | — |
+| `tests/art_gallery.html` | **578 / 590 · 12 FALHAS** ✘ | **regressão nova** — ver B2 (era 542/542 há uma hora) |
+| `tests/ui_screens.html` | **93 / 93** · 0 falhas | mas apaga o save do jogador — ver B4 |
+| `tests/preview2d.html` | **18 / 18** · 0 falhas | PixiJS 7.4.2 carregado, renderizador pronto |
+
+Console limpo (zero `error`) em todas, exceto `art_gallery` (as 12 falhas) e `validate_classes`
+enquanto estava vermelha.
+
+---
+
+## B. Bugs
+
+### B1 — Economia de XP estava fora do contrato §9-D — **CORRIGIDO DURANTE A JANELA**
+
+- **Sintoma:** `validate_classes.html` abriu a auditoria com **9 falhas**. A XP viva dos calabouços
+  (`66 · 204 · 422 · 753 · 1.196 · 1.847`) era ~metade da usada para calibrar a `xpTable`
+  (`133 · 385 · 844 · 1.531 · 2.427 · 3.628`). Em dupla, o calabouço 1 pedia **1,97 descidas por
+  nível** (faixa 0,7–1,6) e o nível 30 saía em **151 descidas** (faixa 30–120).
+- **Causa raiz (integração):** `monsters.js` (Criativo Mundo, `40ccbb2`) recalibrou a XP mirando a
+  **fração de nível de um herói SOLO**; `progression.js` / `validate_classes.html` (Criativo Classes)
+  mediam a mesma coisa para a **DUPLA**. O contrato §9-D não diz o tamanho do grupo.
+- **Desfecho:** o Criativo Classes refez a `xpTable` em `628f560` adotando a **dupla** como
+  referência (o comentário do arquivo agora declara `calabouço 1 → 0,94 nível` em dupla).
+  Reverificado: **6.161/6.161, 0 falhas**. Fica registrada a decisão de interpretação tomada aqui:
+  *a referência de calibragem do §9-D é a DUPLA*.
+- **Pendência menor (BAIXO, Criativo Classes):** o comentário de `js/core/data/progression.js`
+  ainda diz `xpTable[29] = 39.055`; o valor real da tabela é **28.180**.
+
+### B2 — Cenário novo do adendo 9-F não tem desenho: 12 falhas em `art_gallery` — **MÉDIO**
+
+- **Sintoma:** `tests/art_gallery.html` caiu de 542/542 para **578/590 com 12 falhas**, duas por
+  tema: *"cenário X: as 4 descrições de ALTO dão desenhos distintos — 13 pares"* e o equivalente
+  de BAIXO (19 pares), nos 6 temas.
+- **Causa raiz (integração):** `92c35f6` (adendo v2.5, divisórias temáticas) cresceu
+  `DATA.scenery[tema].high` de 4 → **6** e `.low` de 5 → **7** descrições (ex.: *"palmeira de
+  estufa tombada de través"*, *"cerca-viva podada até a altura do peito"*), mas
+  `js/render2d/art.js` não ganhou desenho para os nomes novos — eles caem no genérico e saem
+  **pixel a pixel iguais** a outros (13 de 15 pares de ALTO colidem).
+- **Impacto:** a promessa central do 9-F ("o espaço extra precisa virar estrutura … com a
+  linguagem visual do tema") não chega à tela; salas maiores ficam repetitivas.
+- **Repro:** abrir `tests/art_gallery.html` → seção de cenário → 12 falhas em `TEST_RESULTS`.
+- **Dono sugerido:** Designer Arte (`js/render2d/art.js`); e atualizar o rótulo do teste em
+  `tests/art_gallery.html`, que ainda diz "as 4 descrições" quando já são 6.
+
+### B3 — A tela de recompensa mostra a XP **antes** do corte de profundidade — **MÉDIO**
+
+- **Sintoma:** o painel de "Sala limpa"/"Calabouço vencido" anuncia uma XP que o herói **não
+  recebeu**. Medido no jogo real: dupla nível 20 na Estufa (nível recomendado 3, multiplicador no
+  piso `×0,10`) → painel **"+4 XP"**, `xp` dos dois heróis **antes 15.495 / depois 15.495**
+  (ganho real **0**).
+- **Causa:** `js/ui/hud.js:658` imprime `lastRewards.xpGanho`, que `js/core/game.js:536` documenta
+  como *"XP da sala já dividida pelo grupo, **ANTES do corte**"*. O valor realmente entregue é
+  `xpPorHeroi = floor(xpGanho × xpMult)`.
+- **Contrato:** §9-D pede o oposto — *"`Game` informa o multiplicador aplicado no pacote de
+  recompensa (`xpMult`) **para a UI poder explicar ao jogador por que ganhou menos**"*.
+  `hud.js` **nunca lê** `xpMult`, `xpPorHeroi` nem `recommendedLevel` (grep: zero ocorrências).
+- **Repro:** herói acima de `recommendedLevel + 4`, vencer qualquer sala, comparar o "+N XP" do
+  painel com `JOGO.Progress.hero(id).xp` antes e depois.
+- **Dono sugerido:** Designer Arte (`js/ui/hud.js`, bloco de recompensa ~656-658).
+
+### B4 — `tests/ui_screens.html` **apaga o save do jogador** — **MÉDIO**
+
+- **Sintoma:** basta abrir a página de testes da interface para perder o progresso real.
+  `tests/ui_screens.html:94` faz `localStorage.removeItem('soterra-save-v2')` dentro de `seed()` e
+  em seguida grava um save de demonstração (3 classes, itens, 40 pedras de cada, forja +3),
+  **sem snapshot nem restauração**.
+- **Comprovado:** meu snapshot inicial (529 bytes) virou um save de 1.357 bytes com
+  `unlockedClasses: [sumo, curandeira, invocador]` e `cards {sumo:42,…}` só por eu ter aberto a página.
+- **Referência de como fazer certo:** `tests/test_progress_v2.html:461-471` guarda e devolve o save.
+- **Dono sugerido:** Designer Arte (`tests/ui_screens.html`).
+
+### B5 — `index.html` fixa `?v=2` e serve JS velho: o jogo real rodou com a `xpTable` antiga — **MÉDIO**
+
+- **Sintoma:** os arquivos de dados mudaram três vezes hoje; `index.html` continua com
+  `?v=2` em **todos** os `<script>`. As páginas de teste usam `?v=Date.now()` e enxergam o dado
+  novo; o **jogo** continua com o antigo em cache.
+- **Comprovado:** com `628f560` já no disco (`xpTable[29] = 28.180`), o `index.html` recarregado
+  ainda entregava `xpTable[29] = 56.345` — a suíte verde convivendo com um jogo cuja curva de
+  progressão inteira estava **por um fator 2**. Confirmado buscando o arquivo com
+  `XMLHttpRequest(…?fresh=…)`: o conteúdo servido já era o novo.
+- **Impacto:** qualquer verificação feita "no jogo real" é inválida sem limpar o cache; e o
+  jogador que abriu o jogo hoje continua com o balanceamento velho.
+- **Dono sugerido:** Orquestrador (`index.html`) — o próprio arquivo manda *"Bump do `?v=N` a cada
+  entrega"*; vale automatizar (carimbo de build) em vez de depender de disciplina.
+
+### B6 — Raridade `lendario` é desconhecida da apresentação — **MÉDIO**
+
+- **Sintoma:** as 4 peças do conjunto lendário do Coração Partido (`cp-heart-crown`,
+  `cp-quicksilver-boots`, `cp-worldshell`, `cp-heart-horn`) aparecem com a **cor de item comum** e
+  o rótulo em minúsculas sem acento.
+- **Comprovado (DOM do jogo real):** rótulo `"Punho · lendario"` (o épico ao lado sai `"Punho ·
+  Épico"`); as células recebem `--rc: #9aa4ae` (cinza de comum) enquanto o épico recebe `#ffc44d`;
+  `JOGO.Art.rarityColor('lendario') === '#9aa4ae'`.
+- **Causa:** `js/render2d/art.js:130-132` (mapa `RARITY` sem `lendario` → cai no `comum`),
+  `art.js:4104` (brilho 0,25 = comum) e `art.js:4107` (1 pedrinha = comum);
+  `js/ui/hud.js:69` (`RAR_PT` sem `lendario`, usado em `hud.js:1274` e `1369`).
+- **Causa de fundo:** `items.js` introduziu uma 4ª raridade (`e500f90`) que o **CONTRACT_V2 §8
+  ainda não define** (`rarity:'comum'|'raro'|'epico'`). `progress.js` e `validate_fusion.html` já a
+  tratam; a camada visual, não.
+- **Dono sugerido:** Designer Arte (`art.js`, `hud.js`, `css/style.css`) + Orquestrador (adendo no
+  contrato oficializando `lendario`).
+
+### B7 — Alvos de toque de 40 px (o contrato pede ≥ 44) — **BAIXO**
+
+- `css/style.css:180` → `.btn-tab { min-height: 40px }`. Medido em 390×844: abas do Inventário
+  (*Tudo / Punho / Passo / Casca / Lume*) a **40 px** e abas de herói da escolha de elemento a
+  **40 px**. Todo o resto passa (menu 56, ações 44-56, miniaturas da forja 54×56).
+- **Agravante de cobertura:** `tests/ui_screens.html:134` reprova só abaixo de **40**
+  (`r.height < 40`), então a própria suíte de interface não pega a violação do §0.
+- **Dono sugerido:** Designer Arte (`css/style.css` e o limiar do teste).
+
+### B8 — Dados inertes no bestiário — **BAIXO**
+
+- Varredura referencial completa (salas + `summon` em qualquer fonte de feitiço + `traits` +
+  eventos de terreno): **2 monstros não são alcançáveis por nada**.
+  - `mist-warbler` (*Cantarola-de-Névoa*, cisterna, `xp 6`, `summonOnly: false`): não está em
+    nenhuma sala e nenhum feitiço o invoca.
+  - `sporeling` (`summonOnly: true`): o único invocador (`sporeling-call`) existe apenas no
+    `js/core/data.js` da v1, que a v2 não carrega.
+- **Dono sugerido:** Criativo Mundo (`js/core/data/monsters.js`).
+
+### B9 — `progression.js` foi editado por quem não é o dono — **BAIXO (processo)**
+
+- `DATA.leveling.roomFury` foi acrescentado a `js/core/data/progression.js` (dono declarado no
+  contrato §1: **Criativo Classes**) pela Lógica Combate, em `d1f677e`. O contrato é explícito:
+  *"NUNCA edite arquivo de outro dono"*. O conteúdo em si está correto e testado — o problema é o
+  precedente.
+- **Dono sugerido:** Orquestrador (definir se `roomFury` é dado de Classes ou constante do Motor).
+
+---
+
+## C. Integração de dados (cruzada entre agentes) — **775 checagens, 0 falhas**
+
+Todos os arquivos `js/core/data/*.js` carregados juntos pelo `index.html` real.
+
+- **Feitiços:** todo `spellId` citado por classes (base + 4 caminhos), monstros, pets, invocações de
+  fusão e itens existe em `spells` (171) · `monsterSpells` (129) · `petSpells` (8) ·
+  `itemSpells` (13) · `fusionSpells` (9). **Zero órfãos reais**: `is-heart-whole` é o feitiço do
+  conjunto `cp-set-heart` e os 5 `fus-*` pertencem aos `fusionSummons`.
+- **Monstros:** os 66 `monsterId` de sala existem e pertencem ao calabouço certo; os 24 `summon`
+  (incluindo os 5 `fusionSummons`, todos usados) e os 6 `split` (via `traits`) resolvem; 17 `trap`
+  e 26 `weatherShift` apontam para feitiço/clima existentes.
+- **Saque:** 48 entradas de `lootTable`, todas com item existente, do próprio calabouço, peso > 0 e
+  `minRoom` válido; **todo item de um calabouço tem entrada na sua tabela**. Prefixos 1:1 com o
+  calabouço (`gh` / `ci` / `em` / `av` / `mt` / `cp`, 8 itens cada).
+- **Cartas:** 26 entradas de `cardDrops`, **nenhuma inerte** — as de `sumo`/`curandeira` (classes
+  iniciais) não são lixo: viram **estrelas** pela regra do §9-B, e nenhuma entrada viola o
+  `minDungeon` da carta. Taxa medida (4.000 sorteios por caso): **~59% solo · ~50% dupla**, só na
+  sala 2; **0%** nas salas 0 e 1.
+- **Conjuntos:** 12 `sets`, todos com 4 peças existentes, uma por espaço (`punho/passo/casca/lume`),
+  mesmo `setId`/elemento/calabouço, e bônus de 2/3/4 peças preenchidos.
+- **Pedras:** 5, uma por elemento, sem duplicata. `DATA.upgrade.nonScalingKeys = ['pa','pp']` presente.
+- **Itens:** 12 por espaço; sanidade do §8/§9-C respeitada (`punho` no máximo +1 PA, `passo` +1 PP,
+  `casca` 10–60 PV sem PA/PP, `lume` sempre com `grantsSpell` e sem PA/PP). Única divergência:
+  a raridade `lendario` (B6).
+- **Salas (pós adendo 9-F):** 18 salas de **17×15 a 23×19**, a do chefe sempre a maior do seu
+  calabouço; densidade de obstáculo do interior entre **12,3% e 24,8%** (faixa do 9-F: 12–30%) ✔.
+- **Vocabulário de efeitos:** 100% dentro dos 24 tipos fechados do §3; nenhum tipo estranho.
+
+---
+
+## D. Fluxo E2E no jogo real (`index.html`, cliques DOM, bombeamento síncrono)
+
+**4 calabouços** exercitados (o roteiro pedia 3), com a IA jogando os dois lados pela API de
+contrato (`selectSpell` / `onTileClicked` / `endTurn`), esperando `Renderer.isBusy()` entre ações.
+**Zero exceções de JavaScript em toda a sessão** (`window.onerror`, `unhandledrejection` e
+`console.error` instrumentados).
+
+| Calabouço | Grupo | Resultado |
+|---|---|---|
+| Estufa Soterrada | dupla nv30 + itens + pets | **3/3 salas · calabouço vencido** |
+| Cisterna dos Afogados | dupla nv30 + itens + pets | **3/3 salas · calabouço vencido** (carta + pet no chefe) |
+| Fecho de Brasa | dupla nv15 + itens + pets | **3/3 salas · calabouço vencido** |
+| Mina Trêmula | dupla nv26 + itens + pets | 2/3 salas · **derrota no chefe** (ver F) |
+| Estufa (extra) | herói SOLO nv3 | derrota na sala 1 |
+| Estufa (extra) | dupla nv10, fusão forçada | sala 0 vencida, derrota na sala 1 |
+
+Verificado no caminho:
+
+- **Menu → 1 herói / 2 heróis → calabouço → batalha → sala limpa → próxima sala → chefe →
+  recompensa**, tudo por clique real no DOM (o botão "Confirmar" nasce `is-off` com 0 selecionados).
+- **XP com multiplicador de profundidade:** dupla nível 10 na Estufa (rec. 3) →
+  `xpMultiplier = 0,421875` = `0,75³` (3 níveis acima de `rec+4`) ✔ exatamente o §9-D;
+  nível 15 no Fecho (rec. 11, dentro da graça) → `×1,0`, e aí o painel bateu com a XP real
+  (+26, +50, +138 por sala). O erro de exibição fora da graça está em B3.
+- **Saque, pedras e cartas:** itens caem com o nome certo; as pedras vêm do **elemento do monstro
+  morto** (Estufa derrubou `stone-root` de terra e `stone-breath` do ar, da vespa) ✔; carta do chefe
+  da Cisterna: *"+1 Invocador — 1 / 10 para liberar"* ✔; pet novo (*Borbulha*) no mesmo painel ✔.
+- **Cronômetro (§9 [G2]):** turno começa em 30 s; gastos 4,3 s, sobraram 25,7 s; ao encerrar o
+  turno o resto foi para o banco e o turno seguinte mostrou **55,7 s** ✔ (`bankMax` 120).
+- **Cancelamento de feitiço (§9 [G3]):** com feitiço selecionado, clique fora da zona válida
+  **desmarcou** e devolveu o modo de movimento — `pa` 6→6, `pp` 3→3, PV dos inimigos inalterados,
+  turno seguiu do mesmo herói. Depois, o mesmo feitiço conjurado normalmente gastou 3 PA ✔.
+- **Fusão declarada e resolvida em combate real:** `declareFusion` cobrou 2 PA (6→4), marcou
+  `mustEndTurn`, e `Fusion.resolve` fundiu no fim do turno. Unidade resultante
+  `fus:curandeira+sumo`: `hp 345` (190+155) · `hpMax 350` (195+155) · `paMax 8` (6+2) ·
+  `ppMax 4` (3+1) · `shield 50` · `level 10` (média) · `initiative 55` (máximo) ·
+  `elemPower 18` (média) · `unitElements = ['fogo','agua']` · feitiços gerados
+  `fus:curandeira+sumo:fogo+agua:0` e `:5`, resolvendo para *Amparo Escaldante* e *Chamado
+  Escaldante* ✔. O herói B saiu do tabuleiro e **não conta para derrota** ✔. Evento `fusion`
+  emitido; ao morrer, `fusionEnd` ✔.
+- **Eventos observados em batalha real:** `weatherTick` (160+), `dodgeOk`/`dodgeFail`,
+  `tileEventSpawn`/`tileEvent`/`tileEventExpired`, `petSpawn`/`petAct`, `summon`, `markStack`,
+  `dispelShield`, `reflect`, `cleanse`, `timerTick` — todos drenando sem travar.
+- **Escolha de elemento pela interface:** tela com os 4 caminhos e os 6 feitiços de cada,
+  confirmação em folha ("É **irreversível**"), efeito imediato em `spellsFor` e em
+  `effectiveStats` (nível 10: `power 9` dos níveis 2-4 + `elemPower 18` dos níveis 5-10, §9-C) ✔;
+  segunda tentativa de trocar recusada ✔.
+- **Renderizador:** `Renderer.isBusy()` **não** fica preso após derrota nem no menu (o defeito N4
+  da camada 3D **não existe** aqui); `strayNodes()` vazio em batalha; 5 ciclos
+  batalha→menu→batalha mantêm `objects`/`floor` constantes (97/172) — sem vazamento.
+
+---
+
+## E. Progressão de longo prazo (simulada com o sandbox)
+
+Simulação fiel ao caminho real de recompensa (`Math.floor(xpTotal / grupo)` por sala →
+`Math.floor(× xpMultiplier)`, mais `rollDrops` / `rollPet` / `rollCards` / pedras por
+`stoneDrop` de cada monstro morto), sempre descendo **no calabouço mais fundo liberado**.
+Números com a `xpTable` **corrigida** (`628f560`).
+
+**30 descidas em dupla, do zero:**
+
+| Marca | Quando |
+|---|---|
+| Nível 1 → 7 | descidas 1-9 (Estufa, +33 XP por descida) |
+| Nível 7 → 11 | descidas 10-18 (Cisterna, +101) |
+| Nível 11 → 15 | descidas 19-30 (Fecho, +211) |
+| **Invocador liberado** | descida **27** (10 cartas, Fecho — `minDungeon 1` respeitado) |
+| ★1 da Curandeira | descida 30 (6 cartas) |
+| Acervo | 16 itens · 3 pets · 749 pedras · 3 classes liberadas |
+
+`xpMultiplier` ficou em **×1,00 a run inteira** — o corte do §9-D só morde quem insiste no raso,
+que é exatamente o objetivo do adendo.
+
+**Até o nível 30:** **78 descidas em dupla** · **39 solo** (a faixa da suíte é 30-120 ✔).
+Desbloqueios em dupla, todos respeitando `minDungeon`: invocador d27 (nv15) · bruxo d52 (nv22) ·
+espadachim d59 (nv25) · **arqueiro não sai** dentro da corrida até o 30 (21 de 25 cartas) — cauda
+longa provavelmente deliberada, mas vale a decisão consciente: **a última classe só chega depois do
+nível máximo**.
+
+**Forja:** verificada peça a peça até **+10**. Custos gastos `2·3·4·6·8·10·13·16·20·25`
+(**107 pedras**, idêntico ao `DATA.upgrade.stoneCost`); tiers Comum → Raro (+3) → Supremo (+6) →
+Magnífico (+10); +11 recusado. Pedra de **elemento errado recusada** (500 pedras de fogo intactas
+diante de um item de terra) e item **neutro aceita qualquer pedra** ✔. Escala correta:
+bônus base `{pa: 1, power: 14}` no +10 → `power 31` (= 14 × 2,2) e `pa` **não escala**
+(`nonScalingKeys`) ✔. Determinístico, nunca regride ✔.
+
+**Observação de economia (BAIXO):** as pedras sobram muito — 3.364 acumuladas nas 78 descidas
+contra 107 de um item completo no +10. A forja, hoje, não é um sumidouro de recurso; é um
+formalismo. Vale ao Criativo Fusão decidir se quer isso.
+
+---
+
+## F. Dificuldade: a IA do jogador perde muito (observação de jogabilidade) — **MÉDIO**
+
+Não é falha de teste — as suítes só exigem que a batalha **termine**. Mas o retrato é consistente
+e merece decisão humana:
+
+- Auto-play do `test_engine_v2` (18 salas × 3 grupos): o **herói solo nível 15 perde nas 18 salas**;
+  a **dupla nível 30 com pets perde metade das salas profundas** (perde em `windscaffold[2]`,
+  `quakemine[0]`, `quakemine[2]`, `brokenheart[0]`, `brokenheart[2]`).
+- No meu E2E, o chefe da Mina Trêmula (`boss-deepknock`) levou **26 de dano em 35 rodadas** contra
+  uma dupla nível 26 com conjunto completo e pets: `m-vein-call` (custo 3 PA, recarga 1, **sem
+  teto**) repõe `ore-chip` mais rápido do que a IA limpa, e `m-quake-stance` ainda dá escudo e
+  reflexo. A IA nunca focou o chefe.
+- A **fúria da sala** (`roomFury`, `d1f677e`) entrou justamente para acabar com esses empates — e
+  acaba, mas convertendo o impasse em **derrota** na rodada 40. O empate virou derrota, não vitória.
+- **Recomendação:** playtest humano do chefe da Mina Trêmula e do Coração Partido antes de
+  aprovar o balanceamento; se a IA for a referência, `m-vein-call` precisa de teto de invocações
+  vivas e a `AI.planTurn` precisa de prioridade para o chefe.
+
+---
+
+## G. Casos de borda — **todos aprovados**
+
+| Caso | Resultado |
+|---|---|
+| Grupo de **0** | botão "Confirmar" nasce `is-off`, clique não faz nada; `Game.startRun([], …)` → `false` |
+| Grupo de **3** | `Game.startRun(['sumo','curandeira','invocador'], …)` → `false` |
+| Herói repetido / calabouço inexistente | `false` nos dois |
+| **Item em espaço errado** | impossível por construção: `Progress.equip` deriva o espaço do próprio item e ignora um 3º argumento de slot — nunca gera estado inválido |
+| **Item já equipado em outro herói** | `equip` → `false`; `equippedBy` responde `'sumo'`; nada muda no outro herói (§9-B) |
+| **Forja sem pedras** | `upgradeInfo.temPedras = false`, `upgradeItem` → `false`, nível intacto |
+| **Forja com pedra do elemento errado** | recusada, pedras não consumidas |
+| **Elemento antes do nível 5** | `Progress.chooseElement` e `Game.chooseElement` → `false`; no nível 5 aceita; elemento inexistente e `'neutro'` recusados; escolha irreversível |
+| **Save corrompido** (9 variantes: lixo, `{}`, array, `null`, `heroes` string, classe fantasma, nível 9999 / xp 1e12, versão 9999, formato v1) | **nenhuma exceção**; cai no padrão limpo (sumô + curandeira nv1), descarta classe/item inexistente, corta nível absurdo em 30, ignora o save v1; `startRun` continua funcionando em todos |
+| **`localStorage` negado** (`getItem`/`setItem`/`removeItem` lançando `SecurityError`) | `load` cai no padrão, `save()` devolve `false` sem lançar, XP/itens/reset funcionam em memória, batalha completa e volta ao menu — **zero erro de console** |
+
+---
+
+## H. Desempenho e celular
+
+**Desempenho** (`Renderer.perfProbe(120)`, viewport 390×844, DPR 2 → tela de 780×1688,
+painel oculto com SwiftShader — números **relativos**):
+
+| Sala | Grade | Objetos / chão / unidades | ms por render |
+|---|---|---|---|
+| Estufa sala 0 | 17×15 | 98 / 172 / 7 | **2,16 ms** |
+| Fecho sala 2 (chefe) | 21×17 | 136 / 238 / 11 | **2,77 ms** |
+| Coração sala 2 (a maior) | 23×19 | 160 / 292 / 13 | **2,59 ms** |
+
+Regime estável folgado dentro dos 16,7 ms de 60 fps, **mesmo com as salas maiores do adendo 9-F**.
+Uma única medição destoou (**15,8 ms/quadro** na primeira batalha logo após carregar a página, com
+`busy: true` e FX de abertura) — custo de aquecimento (upload de textura/shader), não reprodutível
+depois. Quadro completo (drenagem + `Game.update` + `UI.update` + `render`): 13–28 ms nesse mesmo
+aquecimento, 3-5 ms depois.
+
+**Retrato de celular 390×844** (auditoria de DOM no jogo real, não em maquete):
+
+- **Nenhum transbordo horizontal em nenhuma tela**: `documentElement.scrollWidth === 390` no menu,
+  seleção de heróis, seleção de calabouço, batalha, Coleção, Inventário e Forja; zero elementos
+  além da largura.
+- A faixa de itens da Forja é um **rolador horizontal legítimo** (`overflow-x: auto`,
+  360 visíveis de 834), com miniaturas de 54×56.
+- **Alvos ≥ 44 px em tudo, menos as abas** — ver B7 (40 px).
+- Canvas correto: 390×844 CSS / 780×1688 de buffer (DPR 2).
+- HUD de batalha em retrato traz ordem de turno, cartão da unidade ativa, PA/PP em pips,
+  cronômetro, botão **FUNDIR**, feitiços e "Encerrar turno" sem cortar nada.
+
+---
+
+## I. Lacunas e limitações desta auditoria
+
+- **Camada 3D não avaliada** (por atribuição). `index.html` hoje carrega `js/render2d/*`.
+- **A árvore se moveu durante a auditoria** (3 commits + arquivos sujos). Os resultados valem para
+  `628f560`; `art_gallery` foi a última a ser reexecutada e está vermelha **agora**.
+- **`recommendedLevel` não aparece em lugar nenhum da interface** — sem isso o jogador não tem como
+  saber onde descer para não cair no corte de XP. Somado ao B3, o sistema do §9-D é invisível.
+- **Seleção de heróis persiste entre runs** (`UI.selection` não é limpa ao voltar ao menu):
+  reaparece "Escolhido 1" ao abrir a tela de novo. Cosmético; é o antigo N3 da v1, ainda vivo.
+- **Estrelas ★2+ são inalcançáveis numa jogada normal**: as classes iniciais terminam a corrida ao
+  nível 30 com 10-13 cartas (★2 pede 15 excedentes). Pode ser intencional (cauda longa), mas nunca
+  foi declarado.
+- **Ferramenta nova:** criei `tests/qa_mobile_frame.html` — o Chrome headless desta máquina ignora
+  `--window-size` e entrega viewport de 504×692, cortando a captura em vez de reduzir o layout; a
+  moldura embute a página num iframe de exatamente 390×844 para fotografar o mobile de verdade.
+
+**Evidências:** `tests/qa_shots/v2/` — 9 capturas em 390×844 (menu, seleção de heróis, seleção de
+calabouço, batalha, sala limpa, inventário, forja, coleção, escolha de elemento).
+
+---
+
+## J. Veredito
+
+**APROVADO COM RESSALVAS.**
+
+O núcleo está sólido: 775 checagens de integração de dados sem uma única inconsistência, quatro
+calabouços percorridos de ponta a ponta no jogo real sem uma exceção de JavaScript, fusão
+declarada e resolvida em combate com todos os números do contrato batendo, cronômetro com banco,
+cancelamento de feitiço que não gasta ação, forja determinística até o +10, e uma robustez de save
+excelente (9 formatos corrompidos e `localStorage` negado sem quebrar nada). O desempenho aguenta
+as salas maiores do adendo 9-F com folga em retrato de celular.
+
+O que segura a aprovação plena são **cinco defeitos médios de integração**, todos entre donos
+diferentes e nenhum deles no motor: a arte não acompanhou o cenário novo (B2, suíte vermelha), a
+interface mente sobre a XP (B3) e ignora a raridade lendária (B6), a página de teste da interface
+apaga o save do jogador (B4) e o `index.html` serve JS velho (B5) — este último é o mais
+traiçoeiro, porque faz uma suíte verde conviver com um jogo desatualizado.
+
+Some-se a isso a **observação F**: com a IA no comando, o grupo perde metade das salas profundas e
+o chefe da Mina Trêmula é praticamente imortal. Isso precisa de um humano jogando antes de
+qualquer selo de balanceamento.
+
+**Contagem de bugs desta rodada: 0 críticos · 0 altos · 5 médios (B2, B3, B4, B5, B6) · 4 baixos
+(B7, B8, B9 e o comentário defasado da `xpTable`) · 1 observação de jogabilidade (F).**
+**1 defeito médio encontrado e corrigido dentro da janela (B1).**
+
+**Números das suítes:** 201 · 143 · 6.161 · 6.498 · 3.674 · **578/590 (12 falhas)** · 93 · 18.

@@ -80,7 +80,68 @@ animações (3 a 13 clipes: parado, andar, correr, atacar, morrer, pular).
 | `assets/embedded/env-kit.js` | 49 peças de cenário (já existia) | ~2,9 MB |
 | **Total** | | **~15,7 MB** (limite acordado: 25 MB) |
 
-## 7. Como reproduzir os arquivos embutidos
+## 7. Mapa de aparências (o que virou o quê)
+
+### Classes — CONCEITO NOVO (repassar ao Criativo Classes)
+
+Os ids internos **não mudam** (`sumo`, `arqueiro`, …) e a identidade tática está
+preservada; só a aparência foi trocada para caber no acervo CC0.
+
+| id | papel | modelo | adereços visíveis | conceito novo |
+|---|---|---|---|---|
+| `sumo` | tanque | Barbarian | machado de 2 mãos + capa | bárbaro corpulento |
+| `arqueiro` | atirador | Rogue_Hooded | besta de 2 mãos + capa | batedor encapuzado |
+| `bruxo` | mago | Mage | cajado + chapéu + capa | mago de chapéu pontudo |
+| `espadachim` | assassino | Rogue | duas adagas | ladino ágil |
+| `curandeira` | suporte | Knight | espada + escudo de brasão + capa | paladina/clériga de armadura clara |
+| `invocador` | invocador | Mage (sem chapéu) | grimório aberto + varinha + capa | xamã |
+
+O tom de cada uma vem da `palette.primary` de `DATA.classes` — o elemento
+escolhido entra como emissivo, não como cor de corpo.
+
+### Monstros (66) e chefes (6)
+
+Sem correspondência exata em acervo CC0 para um bestiário autoral. A regra usada:
+
+- **humanoides** (Corte Afogada, Prole da Fornalha, Guarda do Coração, Coro dos
+  Andaimes, Turno da Noite) → os 4 esqueletos KayKit (`Warrior`, `Rogue`,
+  `Mage`, `Minion`), variando por **tint elemental** e **porte**;
+- **bichos** (insetos, serpentes, anfíbios, feras, invocações) → criaturas
+  Quaternius (`Spider`, `Wasp`, `Snake`, `Frog`, `Rat`, `Wolf`, `Fox`, `Stag`,
+  `Bull`, `Velociraptor`, `Trex`, `Triceratops`);
+- **6 chefes com modelo próprio e porte maior** (altura-alvo 2,95 contra 1,80
+  do monstro comum): Jardineira-Viúva → Stag · Baronesa Salmoura →
+  Skeleton_Mage · Magno o Acendedor → Trex · Cambota → Skeleton_Warrior ·
+  Batepedra → Triceratops · Coração Partido → Trex neutro.
+
+O mapa completo, por id, está em `M.MONSTER_LOOK` (js/render3d/models3d_v2.js).
+
+**Aproximações assumidas** (registradas para revisão futura):
+
+- a Flora Voraz (plantas carnívoras) usa serpente/aranha/sapo tingidos de verde
+  — é o que existe em CC0 no mesmo estilo; um pacote de plantas animadas
+  resolveria melhor;
+- os esqueletos KayKit **não trazem arma embutida** no GLB de personagem (as
+  armas vêm num pacote separado, em `.gltf`+`.bin`), então as listas `show` das
+  famílias humanoides ainda não têm efeito: a variação vem de modelo, cor e
+  porte. Embutir `Skeleton_Blade/Axe/Staff/Crossbow/Shield_*` é o próximo passo
+  barato de qualidade;
+- os pets reaproveitam criaturas pequenas do mesmo acervo.
+
+### Fusões (15 duplas)
+
+Sistema, não casos escritos à mão (`fusionLook` em `models3d_v2.js`):
+
+1. **corpo** = classe de silhueta dominante (tabela `BULK`: sumo 5 · curandeira 4
+   · invocador/bruxo 3 · arqueiro 2 · espadachim 1);
+2. **arma-assinatura da outra classe** acoplada ao osso `handslot.l` (punho livre);
+3. **cor** = paleta do hospedeiro puxada 34% para a do hóspede;
+4. **aura** = emissivo misturando os dois elementos da fusão;
+5. **porte** = 1,26× (altura-alvo 2,55 contra 2,05 do herói).
+
+As 15 duplas foram verificadas: todas montam corpo + enxerto sem erro.
+
+## 8. Como reproduzir os arquivos embutidos
 
 Os originais `.glb` ficam em `assets/models/`. O gerador é
 `scratchpad/glbtool.py` + `scratchpad/gen_models.py`:
