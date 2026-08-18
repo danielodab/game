@@ -83,6 +83,16 @@
         linhas.push('');
       });
 
+      // os OSSOS do humanoide: e neles que a proporcao e as ombreiras se penduram
+      var esq = M.rawScene('barbarian');
+      if (esq) {
+        var ossos = [];
+        esq.traverse(function (o) { if (o.isBone) ossos.push(o.name); });
+        linhas.push('=== OSSOS DO BARBARIAN (' + ossos.length + ')');
+        linhas.push(ossos.join(', '));
+        linhas.push('');
+      }
+
       var nomes = Object.keys(todas).sort();
       linhas.push('=== TODAS AS MALHAS DO ACERVO: ' + nomes.length);
       linhas.push(nomes.join(', '));

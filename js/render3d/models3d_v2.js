@@ -543,19 +543,28 @@ var JOGO = (typeof window !== 'undefined')
   // Por isso cada peça pendurada num osso desfaz a escala do pai no fim.
   function aplicaPorte(node, b) {
     if (!b) { desfazHerancaDeOsso(node); return; }
+    // `tronco` e `pernaAlt` controlam ALTURA, e sao o que separa um boneco chibi
+    // de um heroico. Sem eles so dava para engordar: a altura do tronco era fixa
+    // em 1 e a da perna vinha grudada na grossura. O padrao mantem o
+    // comportamento antigo, entao nenhum porte ja ajustado muda.
+    var ty = b.tronco || 1;                    // altura do tronco
+    var py = b.pernaAlt || b.perna;            // altura da perna, separada da grossura
     node.traverse(function (o) {
       if (!o.isBone) return;
       var nm = (o.name || '').toLowerCase();
-      if (nm === 'chest' || nm === 'spine') o.scale.set(b.chest, 1, b.chest * 0.9);
-      else if (/^upperarm/.test(nm)) o.scale.set(b.ombro, 1, b.ombro);
-      else if (/^lowerarm/.test(nm)) o.scale.set(b.braco, 1, b.braco);
-      else if (/^upperleg/.test(nm)) o.scale.set(b.perna * 1.1, b.perna, b.perna * 1.1);
+      if (nm === 'chest' || nm === 'spine') o.scale.set(b.chest, ty, b.chest * 0.9);
+      else if (/^upperarm/.test(nm)) o.scale.set(b.ombro, b.bracoAlt || 1, b.ombro);
+      else if (/^lowerarm/.test(nm)) o.scale.set(b.braco, b.bracoAlt || 1, b.braco);
+      else if (/^upperleg/.test(nm)) o.scale.set(b.perna * 1.1, py, b.perna * 1.1);
+      else if (/^lowerleg/.test(nm)) o.scale.set(1, b.canela || 1, 1);
       else if (nm === 'head') {
+        // a cabeca herda a escala do chest nos DOIS eixos; para ela ficar no
+        // tamanho absoluto pedido e preciso desfazer os dois
         var kh = b.cabeca / Math.max(0.001, b.chest);
-        o.scale.set(kh, b.cabeca, kh / 0.9);
+        o.scale.set(kh, b.cabeca / Math.max(0.001, ty), kh / 0.9);
       } else if (/^handslot/.test(nm)) {
         var k = 1 / Math.max(0.001, b.ombro * b.braco);
-        o.scale.set(k, 1, k);
+        o.scale.set(k, 1 / Math.max(0.001, b.bracoAlt || 1), k);
       }
     });
     desfazHerancaDeOsso(node);
