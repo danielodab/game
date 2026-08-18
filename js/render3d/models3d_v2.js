@@ -466,6 +466,10 @@ var JOGO = (typeof window !== 'undefined')
     return Object.keys(bankClips);
   };
   M.modelKeys = function () { return Object.keys(raw); };
+  /* Acesso CRU ao gltf carregado. Existe para o inventario de pecas: `M.unit`
+   * espera um id de CLASSE e monta o look pronto, entao nao serve para varrer o
+   * guarda-roupa que cada arquivo traz escondido dentro de si. */
+  M.rawScene = function (k) { return raw[k] ? raw[k].scene : null; };
   M.hasModel = function (k) { return !!raw[k]; };
   M.clips = function () { var o = []; for (var k in bankClips) o.push(bankClips[k]); return o; };
 
@@ -800,6 +804,7 @@ var JOGO = (typeof window !== 'undefined')
     return root.getObjectByName(name) || root.getObjectByName(sanit(name)) || null;
   }
   M.findBone = findBone;
+  M.aplicaPorte = aplicaPorte;   // exposto para as folhas de variante
   function meshByName(root, name) {
     var clean = sanit(name), found = null;
     root.traverse(function (n) { if (!found && (n.name === name || n.name === clean)) found = n; });
@@ -1102,15 +1107,50 @@ var JOGO = (typeof window !== 'undefined')
     return group;
   };
 
+  /* Pendura uma peca de OUTRO modelo num osso deste.
+   *
+   * Fazia duas coisas de menos, e as duas apareceram quando esta funcao virou a
+   * base da recombinacao de pecas do kit:
+   *
+   *   1. Nao copiava a pose LOCAL que a peca tem no dono original. O machado
+   *      nasce deslocado e girado em relacao ao osso da mao; sem copiar isso,
+   *      ele aparecia no centro do punho, atravessado no corpo. E o mesmo
+   *      cuidado que o enxerto da fusao ja tomava — aqui faltava.
+   *   2. Nao desfazia a escala herdada da cadeia de ossos. No corpo do Barbaro,
+   *      que tem `build` inflado, a peca saia ate 1,75x maior.
+   *
+   * Devolve a peca, ou null dizendo por que nao deu (o chamador precisa saber
+   * a diferenca entre "modelo errado" e "malha errada"). */
   M.attach = function (group, modelKey, meshName, boneName) {
     var src = raw[modelKey];
-    if (!src || !group || !group.userData || !group.userData.model) return null;
+    if (!src) return null;
+    var model = group && group.userData ? group.userData.model : null;
+    if (!model) return null;
     var mesh = meshByName(src.scene, meshName);
-    var bone = findBone(group.userData.model, boneName);
+    var bone = findBone(model, boneName);
     if (!mesh || !bone) return null;
+
     var c = mesh.clone();
     c.visible = true; c.castShadow = true;
+    c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.set(1, 1, 1);
+    // a peca guarda a pose que tinha no osso do dono; sem ela nasce no centro
+    if (mesh.parent && mesh.parent.isBone) {
+      c.position.copy(mesh.position);
+      c.quaternion.copy(mesh.quaternion);
+      c.scale.copy(mesh.scale);
+    }
+    c.userData.escalaBase = c.scale.clone();
     bone.add(c);
+
+    // desfaz a escala acumulada do anfitriao, do osso ate a raiz do modelo
+    var ax = 1, ay = 1, az = 1;
+    for (var n = bone; n && n !== model; n = n.parent) {
+      if (!n.scale) continue;
+      ax *= n.scale.x; ay *= n.scale.y; az *= n.scale.z;
+    }
+    var b = c.userData.escalaBase;
+    c.scale.set(b.x / Math.max(0.001, ax), b.y / Math.max(0.001, ay),
+                b.z / Math.max(0.001, az));
     return c;
   };
 

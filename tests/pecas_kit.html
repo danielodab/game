@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — inventário de peças do KayKit</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 6px}
+  pre{background:#171c23;padding:10px;border-radius:6px;font-size:11px;line-height:1.5;white-space:pre-wrap}
+  #st{font:12px monospace;color:#7fe08a;margin-bottom:8px}
+</style>
+</head>
+<body>
+<h1>Que peças o kit tem, modelo por modelo</h1>
+<div id="st">rodando…</div>
+<pre id="out"></pre>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  window.addEventListener('DOMContentLoaded', function () {
+    var t0 = Date.now();
+    (function espera() {
+      var M = JOGO.Models3D2;
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 40000) return setTimeout(espera, 200);
+        document.getElementById('st').textContent = 'modelos não carregaram';
+        window.__pronto = true; return;
+      }
+
+      var linhas = [];
+      var chaves = M.modelKeys ? M.modelKeys() : [];
+      linhas.push('MODELOS: ' + chaves.length + ' — ' + chaves.join(', '));
+      linhas.push('');
+
+      // Toda malha de todo modelo, marcando quais nascem VISÍVEIS e quais estão
+      // escondidas (o kit guarda o guarda-roupa inteiro dentro do arquivo e só
+      // liga o conjunto de um look).
+      var porModelo = {}, todas = {}, acessorios = {};
+      chaves.forEach(function (k) {
+        // M.unit espera id de CLASSE e monta o look pronto; para varrer o
+        // guarda-roupa escondido e preciso a cena crua do arquivo.
+        var n = null;
+        try { n = M.rawScene(k); } catch (e) { return; }
+        if (!n) return;
+        var vis = [], esc = [], ac = [];
+        n.traverse(function (o) {
+          if (!o.isMesh && !o.isSkinnedMesh) return;
+          var nm = o.name || '?';
+          todas[nm] = (todas[nm] || 0) + 1;
+          // acessório = malha SIMPLES pendurada num osso (chapéu, capa, arma);
+          // o resto é pele costurada ao esqueleto
+          if (!o.isSkinnedMesh && o.parent && o.parent.isBone) {
+            ac.push(nm + '@' + o.parent.name);
+            acessorios[nm] = (acessorios[nm] || 0) + 1;
+          } else if (o.visible) vis.push(nm);
+          else esc.push(nm);
+        });
+        porModelo[k] = { vis: vis, esc: esc, ac: ac };
+      });
+
+      chaves.forEach(function (k) {
+        var p = porModelo[k];
+        if (!p) return;
+        linhas.push('== ' + k);
+        linhas.push('   pele visível (' + p.vis.length + '): ' + p.vis.join(', '));
+        if (p.ac.length) linhas.push('   acessório em osso (' + p.ac.length + '): ' + p.ac.join(', '));
+        if (p.esc.length) linhas.push('   escondidas (' + p.esc.length + '): ' + p.esc.join(', '));
+        linhas.push('');
+      });
+
+      var nomes = Object.keys(todas).sort();
+      linhas.push('=== TODAS AS MALHAS DO ACERVO: ' + nomes.length);
+      linhas.push(nomes.join(', '));
+      linhas.push('');
+      linhas.push('=== ACESSÓRIOS (malha simples em osso — transferíveis): ' +
+                  Object.keys(acessorios).length);
+      linhas.push(Object.keys(acessorios).sort().join(', '));
+
+      document.getElementById('out').textContent = linhas.join('\n');
+      document.getElementById('st').textContent =
+        'PASS · ' + chaves.length + ' modelos · ' + nomes.length + ' malhas distintas';
+      window.__pronto = true;
+    })();
+  });
+})();
+</script>
+</body>
+</html>

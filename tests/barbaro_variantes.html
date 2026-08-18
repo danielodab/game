@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — Bárbaro: o que dá para melhorar com as peças que já existem</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 14px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 14px 6px;max-width:1000px}
+  #st{font:12px monospace;color:#7fe08a;margin:0 14px 8px}
+  #folha{display:block;margin:0 14px 16px;border:1px solid #2b3542}
+  #cv{position:fixed;left:-4000px;top:0}
+</style>
+</head>
+<body>
+<h1>Bárbaro — variantes com as peças que o kit já tem</h1>
+<div class="sub">Nada de modelo novo: só recombinação do que está dentro dos arquivos que o jogo
+já carrega. A primeira imagem é o Bárbaro de hoje; as outras são propostas. Mesma
+escala, mesma luz, mesma câmera.</div>
+<div id="st">rodando…</div>
+<canvas id="folha"></canvas>
+<canvas id="cv" width="300" height="400"></canvas>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var TW = 300, TH = 400, COLS = 4;
+
+  /* Cada variante diz o que TIRAR e o que PÔR. `porte` mexe na escala de osso,
+   * que é o que dá musculatura sem modelo novo. */
+  var VARIANTES = [
+    { nome: 'HOJE', nota: 'chapéu + capa + machado de duas mãos', hoje: true },
+
+    { nome: 'sem chapéu', nota: 'a cabeça careca e a barba já leem de longe',
+      tira: ['Barbarian_Hat'] },
+
+    { nome: 'dois machados', nota: 'machado em cada mão — berserker',
+      tira: ['2H_Axe'],
+      poe: [['barbarian', '1H_Axe', 'handslotr'], ['barbarian', '1H_Axe_Offhand', 'handslotl']] },
+
+    { nome: 'machado e escudo', nota: 'a classe É o tanque; escudo diz isso',
+      tira: ['2H_Axe'],
+      poe: [['barbarian', '1H_Axe', 'handslotr'], ['knight', 'Spike_Shield', 'handslotl']] },
+
+    { nome: 'elmo de guerra', nota: 'elmo do cavaleiro no lugar do chapéu',
+      tira: ['Barbarian_Hat'],
+      poe: [['knight', 'Knight_Helmet', 'head']] },
+
+    { nome: 'elmo de osso', nota: 'elmo do esqueleto guerreiro — mais bruto',
+      tira: ['Barbarian_Hat'],
+      poe: [['skeleton_warrior', 'Skeleton_Warrior_Helmet', 'head']] },
+
+    { nome: 'capa de cavaleiro', nota: 'capa maior, cobre mais ombro',
+      tira: ['Barbarian_Cape'],
+      poe: [['knight', 'Knight_Cape', 'chest']] },
+
+    { nome: 'mais bruto', nota: 'mesmo conjunto, ombro e braço maiores',
+      porte: { chest: 1.55, ombro: 1.48, braco: 1.46, perna: 0.86, cabeca: 0.70 } },
+
+    { nome: 'escudo com cravos', nota: 'só troca a mão esquerda, mantém o 2H',
+      poe: [['barbarian', 'Barbarian_Round_Shield', 'handslotl']] },
+
+    { nome: 'espada grande', nota: 'espada de duas mãos do cavaleiro',
+      tira: ['2H_Axe'], poe: [['knight', '2H_Sword', 'handslotr']] },
+
+    { nome: 'caneco', nota: 'o caneco do kit — bárbaro de taverna',
+      tira: ['2H_Axe'],
+      poe: [['barbarian', 'Mug', 'handslotr'], ['barbarian', '1H_Axe_Offhand', 'handslotl']] },
+
+    { nome: 'tudo junto', nota: 'elmo de osso + capa de cavaleiro + machado e escudo',
+      tira: ['Barbarian_Hat', 'Barbarian_Cape', '2H_Axe'],
+      poe: [['skeleton_warrior', 'Skeleton_Warrior_Helmet', 'head'],
+            ['knight', 'Knight_Cape', 'chest'],
+            ['barbarian', '1H_Axe', 'handslotr'],
+            ['knight', 'Spike_Shield', 'handslotl']],
+      porte: { chest: 1.50, ombro: 1.42, braco: 1.42, perna: 0.87, cabeca: 0.74 } }
+  ];
+
+  var st = document.getElementById('st');
+  var ren, sc, cam;
+
+  function cena() {
+    var cv = document.getElementById('cv');
+    ren = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+    ren.setSize(TW, TH, false);
+    ren.setClearColor(0x1a2029, 1);
+    sc = new THREE.Scene();
+    sc.add(new THREE.HemisphereLight(0xbfd4ea, 0x2b2f36, 0.95));
+    var key = new THREE.DirectionalLight(0xfff0d8, 1.75); key.position.set(4, 8, 7); sc.add(key);
+    var rim = new THREE.DirectionalLight(0xffb070, 0.95); rim.position.set(-6, 4, -6); sc.add(rim);
+    var chao = new THREE.Mesh(new THREE.PlaneGeometry(8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2a3240, roughness: 1 }));
+    chao.rotation.x = -Math.PI / 2; sc.add(chao);
+    cam = new THREE.PerspectiveCamera(28, TW / TH, 0.05, 60);
+  }
+
+  function acha(node, nome) {
+    var r = [];
+    node.traverse(function (o) { if (o.name === nome) r.push(o); });
+    return r;
+  }
+
+  /* Poe o boneco na POSE DE DESCANSO. Sem isto ele fica em T, de bracos
+   * abertos, e toda arma aponta para fora do quadro — foi assim que a primeira
+   * folha saiu com quatro variantes aparentemente identicas. */
+  function pousa(node) {
+    var M = JOGO.Models3D2;
+    var clipes = M.clips ? M.clips() : [];
+    var alvo = null;
+    for (var i = 0; i < clipes.length; i++) {
+      var nm = (clipes[i].name || '').toLowerCase();
+      if (/idle/.test(nm)) { alvo = clipes[i]; break; }
+    }
+    if (!alvo && clipes.length) alvo = clipes[0];
+    if (!alvo) return false;
+    var mix = new THREE.AnimationMixer(node);
+    var a = mix.clipAction(alvo);
+    a.play();
+    mix.update(0.4);                 // um instante qualquer da pose parada
+    node.updateMatrixWorld(true);
+    return true;
+  }
+
+  function monta(v, erros) {
+    var M = JOGO.Models3D2;
+    var node = M.unit('sumo', { element: 'fogo' });
+
+    // O PORTE tem de vir antes das pecas: mexer na escala de osso depois faria
+    // a peca herdar a inflacao. Estava declarado nas variantes e nunca aplicado
+    // — as doze saiam com a mesma altura, o que denunciou o esquecimento.
+    if (v.porte && M.aplicaPorte) {
+      try { M.aplicaPorte(node.userData.model || node, v.porte); } catch (e) {
+        erros.push(v.nome + ': porte falhou');
+      }
+    }
+
+    (v.tira || []).forEach(function (nm) {
+      var achadas = acha(node, nm);
+      if (!achadas.length) erros.push(v.nome + ': não achei "' + nm + '" para tirar');
+      achadas.forEach(function (o) { o.visible = false; });
+    });
+    // sem try/catch mudo: se o encaixe falhar eu quero VER, e nao mandar uma
+    // folha com variantes secretamente identicas
+    (v.poe || []).forEach(function (p) {
+      var r = null;
+      try { r = M.attach(node, p[0], p[1], p[2]); } catch (e) { r = null; }
+      if (!r) erros.push(v.nome + ': encaixe falhou — ' + p[1] + '@' + p[2] + ' de ' + p[0]);
+    });
+    pousa(node);
+    return node;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var t0 = Date.now();
+    (function espera() {
+      var M = JOGO.Models3D2;
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 40000) return setTimeout(espera, 200);
+        st.textContent = 'modelos não carregaram'; window.__pronto = true; return;
+      }
+      cena();
+      desenha();
+    })();
+
+    function desenha() {
+      var linhas = Math.ceil(VARIANTES.length / COLS);
+      var folha = document.getElementById('folha');
+      folha.width = COLS * TW; folha.height = linhas * TH;
+      var g = folha.getContext('2d');
+      g.fillStyle = '#0b0e12'; g.fillRect(0, 0, folha.width, folha.height);
+      var src = document.getElementById('cv');
+      var erros = [];
+
+      VARIANTES.forEach(function (v, i) {
+        while (sc.children.length > 4) sc.remove(sc.children[sc.children.length - 1]);
+        var node = null;
+        try { node = monta(v, erros); } catch (e) { erros.push(v.nome + ': ' + e.message); }
+        var alt = 0;
+        if (node) {
+          sc.add(node);
+          node.updateMatrixWorld(true);
+          var b = new THREE.Box3().setFromObject(node);
+          var s = b.getSize(new THREE.Vector3());
+          var c = b.getCenter(new THREE.Vector3());
+          node.position.x -= c.x; node.position.z -= c.z; node.position.y -= b.min.y;
+          node.rotation.y = Math.PI * 0.15;
+          node.updateMatrixWorld(true);
+          alt = s.y;
+          var d = alt * 2.1 + 0.9;
+          cam.position.set(d * 0.42, alt * 0.62, d);
+          cam.lookAt(0, alt * 0.48, 0);
+        }
+        ren.render(sc, cam);
+
+        var cx = (i % COLS) * TW, cy = Math.floor(i / COLS) * TH;
+        g.drawImage(src, cx, cy);
+        g.fillStyle = 'rgba(8,10,14,0.84)';
+        g.fillRect(cx, cy + TH - 48, TW, 48);
+        g.fillStyle = v.hoje ? '#9aa7b6' : '#ffd98a';
+        g.font = 'bold 15px Segoe UI, sans-serif';
+        g.fillText((i + 1) + '. ' + v.nome, cx + 9, cy + TH - 28);
+        g.fillStyle = '#7e8a99';
+        g.font = '11px Segoe UI, sans-serif';
+        g.fillText(v.nota, cx + 9, cy + TH - 12);
+        g.fillStyle = '#5d6875';
+        g.font = '10px monospace';
+        g.fillText(alt.toFixed(2) + ' m', cx + TW - 54, cy + 18);
+        g.strokeStyle = '#2b3542'; g.strokeRect(cx + 0.5, cy + 0.5, TW - 1, TH - 1);
+      });
+
+      st.textContent = (erros.length ? 'FALHAS — ' : 'PASS · ') +
+        VARIANTES.length + ' variantes' +
+        (erros.length ? ' · ' + erros.length + ' problemas: ' + erros.join(' | ') : '');
+      window.__pronto = true;
+    }
+  });
+})();
+</script>
+</body>
+</html>
