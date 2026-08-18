@@ -25,6 +25,8 @@
 <div id="retratos" class="fila"></div>
 <h2>Carta de classe (usada na tela de Coleção)</h2>
 <div id="cartas" class="fila"></div>
+<h2>Outros donos do mesmo retrato (monstros, chefes, pets, fusão)</h2>
+<div id="bicho" class="fila"></div>
 <div id="erro"></div>
 
 <script src="save_sandbox.js"></script>
@@ -70,6 +72,29 @@
       if (c) { c.style.width = '150px'; c.style.height = '210px'; b.appendChild(c); }
       fc.appendChild(b);
     });
+    // a MESMA função serve monstro, chefe, pet e fusão: se a regra de
+    // enquadramento só valesse para as 6 classes, quebraria aqui.
+    var OUTROS = [
+      ['drowned-porter', 'carregador (esqueleto)'], ['sap-shaman', 'xamã de seiva (mago)'],
+      ['brine-golem', 'golem (escudo)'], ['quench-hound', 'cão (lobo)'],
+      ['fat-drop', 'gota (sapo)'], ['lantern-wasp', 'vespa'],
+      ['sinkhole-worm', 'verme (cobra)'], ['cave-jaw', 'mandíbula (raptor)'],
+      ['boss-windwright', 'CHEFE Ventureiro'], ['boss-heartforge', 'CHEFE Forjacoração (trex)'],
+      ['boss-deepknock', 'CHEFE Batepundo (tricerátops)'],
+      ['pet-emberling', 'pet brasinha'], ['pet-dewling', 'pet orvalho'],
+      ['fus:sumo+bruxo', 'fusão sumo+bruxo']
+    ];
+    var fb = el('bicho');
+    fb.innerHTML = '';
+    OUTROS.forEach(function (par) {
+      var d = document.createElement('div'); d.className = 'un';
+      var p = JOGO.Art.portrait(par[0], { size: 150 });
+      if (p) { p.style.width = '150px'; p.style.height = '150px'; d.appendChild(p); }
+      d.appendChild(Object.assign(document.createElement('div'), { className: 'nm', textContent: par[1] }));
+      d.appendChild(Object.assign(document.createElement('div'), { className: 'rl', textContent: par[0] }));
+      fb.appendChild(d);
+    });
+
     el('st').textContent = 'PASS · ' + CLS.length + ' classes · modelos 3D ' +
       (JOGO.Models3D2 && JOGO.Models3D2.isReady() ? 'prontos' : 'AUSENTES (caiu no desenho procedural)');
     window.__pronto = true;

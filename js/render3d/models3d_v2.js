@@ -27,6 +27,7 @@ var JOGO = (typeof window !== 'undefined')
 //   Models3D2.unit(defId, opts) -> THREE.Group        (opts: element, elements, boss, kind, classId)
 //   Models3D2.lookFor(defId, opts) -> descrição da aparência
 //   Models3D2.portrait(defId, opts) -> HTMLCanvasElement (cacheado)
+//   Models3D2.portraitFraming(node) -> câmera do retrato medida na geometria
 //   Models3D2.elementColor(e) · attach(group, modelKey, meshName, boneName)
 //
 // Cada grupo devolvido por `unit` traz em `userData`:
@@ -694,6 +695,18 @@ var JOGO = (typeof window !== 'undefined')
   // Serve retrato para TUDO (6 classes, 66 monstros, 6 chefes, 6 pets, 15
   // fusões) com consistência de estilo e sem arte manual.
   var portCache = {}, portRenderer = null, portScene = null, portCam = null;
+  var PORT_ANG = 0.62;    // azimute do 3/4 — o mesmo para todo mundo
+  var PORT_FOV = 30;
+  // Enquadramento em unidades de CABEÇA (ver portraitFraming): manter em cabeças
+  // é o que faz o rosto do Bárbaro, do Xamã e de um chefe saírem do mesmo porte.
+  // (os bonecos do acervo são chibi: o crânio dá ~metade da altura do corpo,
+  //  por isso o busto mede menos de duas cabeças)
+  var TOP_AIR = 0.20;     // ar acima do crânio, em cabeças
+  var GEAR_ROOM = 0.75;   // teto do adereço de cabeça (chapéu/elmo/chifre), em cabeças
+  var BUST_HEADS = 1.60;  // altura do busto, em cabeças
+  var GEAR_GROW = 0.50;   // parte do espaço do adereço que ALARGA o quadro…
+                          // …o resto sai do tronco, senão o rosto encolhe demais
+
   function portraitRig(size) {
     if (portRenderer) return;
     portRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -701,29 +714,242 @@ var JOGO = (typeof window !== 'undefined')
     portRenderer.setPixelRatio(1);
     if (THREE.sRGBEncoding != null) portRenderer.outputEncoding = THREE.sRGBEncoding;
     portRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-    portRenderer.toneMappingExposure = 1.05;
+    portRenderer.toneMappingExposure = 0.94;
     portScene = new THREE.Scene();
-    portCam = new THREE.PerspectiveCamera(30, 1, 0.1, 60);
-    var key = new THREE.DirectionalLight(0xfff0d0, 2.1); key.position.set(2.4, 2.6, 3.2);
-    var fill = new THREE.DirectionalLight(0x9ec8ff, 0.85); fill.position.set(-3.0, 0.9, 1.6);
-    var rim = new THREE.DirectionalLight(0xffffff, 1.7); rim.position.set(-1.2, 2.2, -3.4);
-    portScene.add(key, fill, rim, new THREE.AmbientLight(0xffffff, 0.28));
+    portCam = new THREE.PerspectiveCamera(PORT_FOV, 1, 0.1, 60);
+    // três pontos com CONTRALUZ forte: a figura clara (Paladina) precisa de um
+    // fio de luz na silhueta para não derreter no fundo.
+    var key = new THREE.DirectionalLight(0xfff0d0, 1.85); key.position.set(2.4, 2.6, 3.2);
+    var fill = new THREE.DirectionalLight(0x9ec8ff, 0.62); fill.position.set(-3.0, 0.9, 1.6);
+    var rim = new THREE.DirectionalLight(0xffffff, 2.60); rim.position.set(-1.6, 2.4, -3.4);
+    var rim2 = new THREE.DirectionalLight(0xdfe8ff, 1.30); rim2.position.set(2.2, 1.6, -3.0);
+    portScene.add(key, fill, rim, rim2, new THREE.AmbientLight(0xffffff, 0.20));
+  }
+
+  // FUNDO: escurecido por REGRA (não por classe). Ele nasce da cor de
+  // identidade, mas a luminância é decidida pela FIGURA JÁ RENDERIZADA: quanto
+  // mais clara a figura, mais fundo o fundo. Sem isso, a armadura creme da
+  // Paladina derretia num fundo creme.
+  function darkenBg(hex, figLuma) {
+    var c = new THREE.Color(hexInt(hex));
+    var hsl = { h: 0, s: 0, l: 0 };
+    c.getHSL(hsl);
+    var sat = Math.min(0.72, Math.max(0.34, hsl.s));
+    var f = (figLuma == null ? 0.5 : Math.max(0, Math.min(1, figLuma)));
+    var lc = Math.max(0.10, Math.min(0.32, 0.44 - 0.34 * f));    // centro
+    var a = new THREE.Color().setHSL(hsl.h, sat, lc);
+    var b = new THREE.Color().setHSL(hsl.h, Math.min(0.85, sat * 1.1), lc * 0.34);
+    return ['#' + a.getHexString(), '#' + b.getHexString()];
+  }
+  // luminância média da FIGURA (só pixels opacos) — 0..1
+  function figureLuma(ctx, size) {
+    var d;
+    try { d = ctx.getImageData(0, 0, size, size).data; } catch (e) { return null; }
+    var sum = 0, n = 0;
+    for (var i = 0; i < d.length; i += 16) {          // amostra 1 a cada 4 pixels
+      if (d[i + 3] < 128) continue;
+      sum += (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) / 255;
+      n++;
+    }
+    return n ? sum / n : null;
   }
   function gradientBg(cv, colorA, colorB) {
     var c = cv.getContext('2d'), s = cv.width;
-    var g = c.createRadialGradient(s * 0.5, s * 0.38, s * 0.06, s * 0.5, s * 0.5, s * 0.72);
+    var g = c.createRadialGradient(s * 0.5, s * 0.40, s * 0.05, s * 0.5, s * 0.5, s * 0.74);
     g.addColorStop(0, colorA); g.addColorStop(1, colorB);
     c.fillStyle = g; c.fillRect(0, 0, s, s);
     // vinheta
-    var v = c.createRadialGradient(s * 0.5, s * 0.5, s * 0.30, s * 0.5, s * 0.5, s * 0.72);
-    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)');
+    var v = c.createRadialGradient(s * 0.5, s * 0.5, s * 0.26, s * 0.5, s * 0.5, s * 0.74);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.62)');
     c.fillStyle = v; c.fillRect(0, 0, s, s);
   }
-  function shadeHex(hex, k) {
-    var c = new THREE.Color(hexInt(hex));
-    c.r = Math.min(1, c.r * k); c.g = Math.min(1, c.g * k); c.b = Math.min(1, c.b * k);
-    return '#' + c.getHexString();
+  // ------------------------------------------------- medida da POSE (retrato)
+  // Box3.setFromObject mede a malha em BIND POSE e engole TUDO que estiver
+  // pendurado no osso: era o cajado do Bruxo inflando a altura (e encolhendo o
+  // busto do Xamã), e a caixa de bind pose empurrando a cabeça do Bárbaro para
+  // fora do quadro. Aqui medimos os vértices DEPOIS do skinning e separamos:
+  //   · pele  (o corpo de verdade, na pose de parado)
+  //   · crânio (vértices cujo peso dominante é o osso da cabeça ou filhos dele)
+  //   · adereço de cabeça (chapéu/elmo: malha presa ao osso da cabeça)
+  //   · arma de mão (presa a handslot/wrist) — FORA do enquadramento
+  function isUnder(node, anc) {
+    for (var p = node; p; p = p.parent) if (p === anc) return true;
+    return false;
   }
+  function findHeadBone(root) {
+    var exact = null, loose = null;
+    root.traverse(function (n) {
+      if (!n.isBone) return;
+      if (!exact && /^head$/i.test(n.name)) exact = n;
+      else if (!loose && /head/i.test(n.name) && !/ik|pole|control|target/i.test(n.name)) loose = n;
+    });
+    return exact || loose;
+  }
+  function propSlot(o, headBone) {
+    for (var p = o.parent; p; p = p.parent) {
+      if (headBone && p === headBone) return 'head';
+      if (p.isBone) {
+        if (/hand|wrist|slot|weapon|finger/i.test(p.name)) return 'hand';
+        if (headBone && isUnder(p, headBone)) return 'head';
+        return 'body';
+      }
+    }
+    return 'body';
+  }
+  // BufferAttribute do r147 não tem getComponent
+  function attrComp(a, i, k) {
+    return k === 0 ? a.getX(i) : k === 1 ? a.getY(i) : k === 2 ? a.getZ(i) : a.getW(i);
+  }
+  function measurePose(node) {
+    node.updateMatrixWorld(true);
+    var headBone = findHeadBone(node);
+    var out = {
+      pts: [], skin: new THREE.Box3(), head: new THREE.Box3(),
+      gear: new THREE.Box3(), any: new THREE.Box3(), headBone: headBone
+    };
+    out.skin.makeEmpty(); out.head.makeEmpty(); out.gear.makeEmpty(); out.any.makeEmpty();
+    var v = new THREE.Vector3(), c = new THREE.Vector3();
+    node.traverse(function (o) {
+      if (!o.isMesh && !o.isSkinnedMesh) return;
+      for (var p = o; p; p = p.parent) if (!p.visible) return;
+      if (!o.geometry) return;
+      var at = o.geometry.attributes || {};
+      if (o.isSkinnedMesh && at.position && at.skinIndex && at.skinWeight && o.boneTransform) {
+        var n = at.position.count;
+        if (!n) return;
+        var step = Math.max(1, Math.ceil(n / 2600));   // amostra: caixa não precisa de tudo
+        var bones = (o.skeleton && o.skeleton.bones) || [];
+        var headOf = null;
+        if (headBone && bones.length) {
+          headOf = [];
+          for (var b = 0; b < bones.length; b++) headOf[b] = isUnder(bones[b], headBone);
+        }
+        for (var i = 0; i < n; i += step) {
+          // ATENÇÃO: no three r147 `boneTransform(idx, alvo)` recebe a posição de
+          // bind JÁ no alvo e devolve nele a posição deformada (a assinatura só
+          // passou a ler o atributo sozinha em revisões posteriores).
+          v.fromBufferAttribute(at.position, i);
+          try { o.boneTransform(i, v); } catch (e) { v.fromBufferAttribute(at.position, i); }
+          v.applyMatrix4(o.matrixWorld);
+          if (!isFinite(v.x) || !isFinite(v.y) || !isFinite(v.z)) continue;  // vértice sem peso de osso
+          out.pts.push(v.x, v.y, v.z);
+          out.skin.expandByPoint(v); out.any.expandByPoint(v);
+          if (headOf) {
+            var best = -1, bw = 0;
+            for (var k = 0; k < 4; k++) {
+              var w = attrComp(at.skinWeight, i, k);
+              if (w > bw) { bw = w; best = attrComp(at.skinIndex, i, k); }
+            }
+            if (best >= 0 && headOf[best]) out.head.expandByPoint(v);
+          }
+        }
+      } else {
+        var slot = propSlot(o, headBone);
+        if (slot === 'hand') return;                   // arma não manda no quadro
+        var bb = new THREE.Box3().setFromObject(o);
+        if (bb.isEmpty() || !isFinite(bb.min.y) || !isFinite(bb.max.y)) return;
+        for (var q = 0; q < 8; q++) {
+          c.set((q & 1) ? bb.max.x : bb.min.x, (q & 2) ? bb.max.y : bb.min.y, (q & 4) ? bb.max.z : bb.min.z);
+          out.pts.push(c.x, c.y, c.z);
+          out.any.expandByPoint(c);
+        }
+        if (slot === 'head') out.gear.union(bb);
+        else if (out.skin.isEmpty()) out.skin.union(bb);  // unidade procedural (sem esqueleto)
+      }
+    });
+    return out;
+  }
+
+  // Devolve a câmera do retrato a partir da GEOMETRIA — nunca do id.
+  //   bípede de pé   -> busto medido em CABEÇAS (mesmo porte de rosto em todos,
+  //                     adereço de cabeça ganha teto, membros soltos ficam fora)
+  //   bicho/voador   -> corpo inteiro com a mesma margem
+  M.portraitFraming = function (node) {
+    var m = measurePose(node);
+    var box = m.skin.isEmpty() ? m.any : m.skin;
+    if (box.isEmpty()) return null;
+    var sz = new THREE.Vector3(); box.getSize(sz);
+    var H = Math.max(1e-4, sz.y);
+    var hasHead = !m.head.isEmpty();
+    var hH = hasHead ? Math.max(1e-4, m.head.max.y - m.head.min.y) : 0;
+    // "de pé" é uma pergunta de geometria: cabeça no alto da silhueta E corpo
+    // mais alto do que largo/comprido. Quadrúpede e inseto reprovam no segundo.
+    // (mede-se pelo CENTRO do crânio: nesses bonecos chibi o queixo desce da
+    //  metade da altura, e um corte por `head.min` reprovaria o Bruxo.)
+    // Terceira condição: o crânio tem de ser o PONTO ALTO da silhueta. A vespa
+    // fica de pé e tem cabeça, mas quem encosta no teto são as asas — busto ali
+    // decapitaria o bicho. (Humanoide: head.max == box.max, sempre.)
+    var headMid = hasHead ? (m.head.min.y + m.head.max.y) / 2 : 0;
+    var upright = hasHead && (headMid > box.min.y + H * 0.45) &&
+                  (m.head.max.y >= box.max.y - H * 0.10) &&
+                  (H >= 1.15 * Math.max(sz.x, sz.z));
+
+    var top, bottom;
+    if (upright) {
+      var want = m.head.max.y + hH * TOP_AIR;
+      top = want;
+      if (!m.gear.isEmpty() && m.gear.max.y > top) {
+        top = Math.min(m.gear.max.y + hH * 0.08, m.head.max.y + hH * GEAR_ROOM);
+      }
+      var extra = top - want;
+      bottom = want - hH * BUST_HEADS + extra * (1 - GEAR_GROW);
+      if (bottom < box.min.y) bottom = box.min.y;
+    } else {
+      var pad = H * 0.06;
+      top = Math.max(box.max.y, m.any.max.y) + pad;
+      bottom = Math.min(box.min.y, m.any.min.y) - pad;
+    }
+
+    // largura e profundidade REAIS da faixa escolhida (a mão que sobra embaixo
+    // não entra na conta porque está fora da faixa)
+    var ca = Math.cos(PORT_ANG), sa = Math.sin(PORT_ANG);
+    var uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity;
+    var P = m.pts;
+    for (var i = 0; i < P.length; i += 3) {
+      var y = P[i + 1];
+      if (y < bottom || y > top) continue;
+      var u = P[i] * ca - P[i + 2] * sa, w = P[i] * sa + P[i + 2] * ca;
+      if (u < uMin) uMin = u; if (u > uMax) uMax = u;
+      if (w < vMin) vMin = w; if (w > vMax) vMax = w;
+    }
+    if (uMin > uMax) { uMin = uMax = 0; vMin = vMax = 0; }
+
+    var halfH = (top - bottom) / 2;
+    var cy = (top + bottom) / 2, cu = (uMin + uMax) / 2, cv = (vMin + vMax) / 2;
+    var tanH = Math.tan(PORT_FOV * Math.PI / 360);
+
+    // Segunda passada: distância EXATA. Um ponto cabe no quadro quando
+    //   dist >= |desvio lateral| / tan(fov/2) + profundidade dele.
+    // Sem o termo de profundidade, o que está mais perto da câmera (o focinho
+    // da cobra, adiantado no 3/4) projeta maior e escapa pela borda.
+    // Do QUEIXO PARA CIMA nada é cortado (cabeça, chapéu, mandíbula da cobra);
+    // do queixo para baixo o ombro pode sangrar, que é o corte normal de um
+    // busto. Sem essa distinção, ou a cobra perde a bocarra ou o humanoide sai
+    // pequeno demais para caber ombro e braço.
+    var chin = hasHead ? (m.head.min.y + hH * 0.08) : (top - (top - bottom) * 0.45);
+    var dBust = 0, dFull = 0;
+    for (var j = 0; j < P.length; j += 3) {
+      var y2 = P[j + 1];
+      if (y2 < bottom || y2 > top) continue;
+      var u2 = P[j] * ca - P[j + 2] * sa, w2 = P[j] * sa + P[j + 2] * ca;
+      var du = Math.abs(u2 - cu), dy = Math.abs(y2 - cy), dp = w2 - cv;
+      var db = Math.max(du * (y2 >= chin ? 1 : 0.80), dy) / tanH + dp;
+      if (db > dBust) dBust = db;
+      var df = Math.max(du * 0.92, dy) / tanH + dp;   // corpo inteiro: 8% de sangria
+      if (df > dFull) dFull = df;
+    }
+
+    // a altura da faixa é a COMPOSIÇÃO pedida; as contas acima só impedem corte
+    var dist = halfH / tanH + (vMax - cv) * 0.9;
+    dist = Math.max(dist, (upright ? dBust : dFull) * 1.02);
+    var half = dist * tanH;   // meia-altura visível no plano do alvo
+    return {
+      half: half, cy: cy, upright: upright, headH: hH, dist: dist,
+      tx: cu * ca + cv * sa, tz: -cu * sa + cv * ca,
+      // caixas medidas — expostas para inspeção (teste/depuração do quadro)
+      box: box, head: m.head, gear: m.gear, top: top, bottom: bottom
+    };
+  };
 
   M.portrait = function (defId, opts) {
     opts = opts || {};
@@ -747,27 +973,45 @@ var JOGO = (typeof window !== 'undefined')
     if (node.userData.procAnimate) node.userData.procAnimate({ moving: 0, castK: 0 }, 0.6, 0.016);
     node.updateMatrixWorld(true);
 
-    var box = new THREE.Box3().setFromObject(node);
-    var h = Math.max(0.3, box.max.y - box.min.y);
-    // enquadra cabeça e ombros, em 3/4
-    var headY = box.min.y + h * (look.pet || (look.model || '').indexOf('q_') === 0 ? 0.62 : 0.82);
-    var frame = h * 0.42;
-    var dist = frame / Math.tan((portCam.fov * Math.PI / 180) / 2) * 1.05;
-    var ang = 0.62;
-    portCam.position.set(Math.sin(ang) * dist, headY + frame * 0.22, Math.cos(ang) * dist);
-    portCam.lookAt(0, headY, 0);
+    // ENQUADRAMENTO PELA GEOMETRIA (§ portraitFraming): sem isto, altura e
+    // distância fixas decapitavam o Bárbaro e encolhiam o Xamã.
+    var f = M.portraitFraming(node);
+    if (!f) { portScene.remove(node); return null; }
+    var ca = Math.cos(PORT_ANG), sa = Math.sin(PORT_ANG);
+    portCam.position.set(f.tx + sa * f.dist, f.cy, f.tz + ca * f.dist);
+    portCam.lookAt(f.tx, f.cy, f.tz);
+    portCam.near = Math.max(0.02, f.dist - f.half * 5);
+    portCam.far = f.dist + f.half * 10;
     portCam.updateProjectionMatrix();
 
     portRenderer.setClearColor(0x000000, 0);
     portRenderer.clear();
     portRenderer.render(portScene, portCam);
 
+    // a figura vai primeiro para um canvas 2D: é dele que sai a medida de
+    // luminância que decide o quanto o fundo escurece
+    var fig = document.createElement('canvas');
+    fig.width = fig.height = size;
+    var fgc = fig.getContext('2d');
+    fgc.drawImage(portRenderer.domElement, 0, 0, size, size);
+    var luma = figureLuma(fgc, size);
+
     var cv = document.createElement('canvas');
     cv.width = cv.height = size;
-    var el = (opts.element) || (look.classId ? null : null);
-    var base = look.accent || look.tint || '#8a8a92';
-    gradientBg(cv, shadeHex(base, 1.15), shadeHex(base, 0.22));
-    cv.getContext('2d').drawImage(portRenderer.domElement, 0, 0, size, size);
+    var base = look.tint || look.accent ||
+               (opts.element && M.elementColor(opts.element)) || '#8a8a92';
+    var duo = darkenBg(base, luma);
+    gradientBg(cv, duo[0], duo[1]);
+    var g2 = cv.getContext('2d');
+    // halo escuro pela SILHUETA (sombra do canal alfa): separa figura e fundo
+    // mesmo quando as duas cores baterem.
+    g2.save();
+    g2.shadowColor = 'rgba(0,0,0,0.62)';
+    g2.shadowBlur = Math.max(4, size * 0.055);
+    g2.drawImage(fig, 0, 0);
+    g2.drawImage(fig, 0, 0);
+    g2.restore();
+    g2.drawImage(fig, 0, 0);
 
     portScene.remove(node);
     portCache[key] = cv;
