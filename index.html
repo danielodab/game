@@ -58,10 +58,22 @@
 <script src="js/render3d/fx3d_v2.js?v=6"></script>
 <script src="js/render3d/renderer3d_v2.js?v=6"></script>
 
-<!-- ícones e retratos da interface (2D): a arte desenhada à mão tem prioridade -->
-<script src="assets/embedded/sprites-sumo.js?v=6"></script>
+<!--
+  Ícones e retratos da interface (2D).
+
+  A arte do Sumô desenhada pelo usuário está preservada em
+  assets/embedded/sprites-sumo.js e continua funcionando — mas ficou FORA daqui
+  de propósito: a classe `sumo` virou um BÁRBARO de machado quando migramos para
+  os modelos 3D, então o retrato desenhado mostraria um lutador de sumô ao lado
+  de um bárbaro no tabuleiro. Os retratos agora saem dos próprios modelos, e
+  todos combinam com o que está em campo.
+
+  Para trazer a arte de volta (ela tem prioridade sobre o retrato 3D), basta
+  reativar as duas linhas comentadas abaixo.
+-->
+<!-- <script src="assets/embedded/sprites-sumo.js?v=6"></script> -->
 <script src="js/render2d/art.js?v=6"></script>
-<script src="js/render2d/spriteart.js?v=6"></script>
+<!-- <script src="js/render2d/spriteart.js?v=6"></script> -->
 <script src="js/render3d/portraits3d.js?v=6"></script>
 
 <script src="js/ui/hud.js?v=6"></script>

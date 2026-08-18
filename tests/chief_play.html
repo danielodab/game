@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>SOTERRA 2.0 — mesa de auditoria do Chefe</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+</div>
+
+<!--
+  Cópia fiel do index.html (mesma ordem de scripts), com UM ajuste: cache-buster por
+  timestamp em vez de ?v=N fixo. Existe porque o index.html real serve JS velho quando
+  os dados mudam sem bump do ?v (bug B5 do QA, reincidente no commit c9276ef).
+  Esta página é do Agente Chefe e serve só para auditar o código de HEAD.
+-->
+<script>
+(function () {
+  var v = '?v=' + Date.now();
+  var files = [
+    'vendor/three.min.js', 'vendor/GLTFLoader.js', 'vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js', 'vendor/EffectComposer.js',
+    'vendor/RenderPass.js', 'vendor/ShaderPass.js', 'vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
+    'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+    'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js',
+    'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
+    'js/core/progress.js', 'js/core/game.js',
+    'assets/embedded/env-kit.js', 'js/render3d/models3d.js',
+    'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js',
+    'js/render3d/models3d_v2.js', 'js/render3d/fx3d_v2.js', 'js/render3d/renderer3d_v2.js',
+    'assets/embedded/sprites-sumo.js', 'js/render2d/art.js', 'js/render2d/spriteart.js',
+    'js/render3d/portraits3d.js',
+    'js/ui/hud.js', 'js/main.js'
+  ];
+  for (var i = 0; i < files.length; i++) {
+    document.write('<scr' + 'ipt src="../' + files[i] + v + '"></scr' + 'ipt>');
+  }
+})();
+</script>
+
+<script>
+// Piloto automático para capturas em Chrome headless.
+//   ?auto=battle&d=greenhouse&r=0&lvl=10      sala montada, câmera no grupo
+//   ?auto=fusion&d=greenhouse                 fusão declarada e RESOLVIDA (unidade parada)
+//   ?auto=cast&d=greenhouse                   um feitiço no ar (FX em voo)
+//   &frames=N  quantos quadros síncronos antes de soltar o rAF
+(function () {
+  function Q(k, d) {
+    var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search);
+    return m ? decodeURIComponent(m[1]) : d;
+  }
+  var mode = Q('auto', '');
+  if (!mode) return;
+
+  window.addEventListener('load', function () { setTimeout(run, 80); });
+
+  function run() {
+    var J = window.JOGO, vt = 0;
+    if (!J || !J.Game) return;
+    J.Game._setClock(function () { return vt; });
+    function drain() {
+      var e = J.Engine;
+      while (e.events.length) {
+        var ev = e.events.shift();
+        J.Renderer.handleEvent(ev); J.FX.handleEvent(ev);
+        J.UI.handleEvent(ev); J.Game.handleEvent(ev);
+      }
+    }
+    function pump(n) {
+      for (var i = 0; i < (n || 1); i++) {
+        vt += 0.016; drain();
+        J.Game.update(0.016); J.UI.update(0.016); J.Renderer.render(0.016);
+        drain();
+      }
+    }
+    var P = J.Progress, lvl = parseInt(Q('lvl', '10'), 10);
+    P.reset();
+    var tbl = J.DATA.leveling.xpTable;
+    P.addXp('sumo', tbl[Math.max(0, lvl - 1)]);
+    P.addXp('curandeira', tbl[Math.max(0, lvl - 1)]);
+    if (lvl >= 5) { P.chooseElement('sumo', 'fogo'); P.chooseElement('curandeira', 'agua'); }
+    J.Game.startRun(['sumo', 'curandeira'], Q('d', 'greenhouse'));
+    var r = parseInt(Q('r', '0'), 10);
+    while (J.Game.roomIndex < r) { J.Game.roomIndex = r; J.Game.nextRoom && J.Game.nextRoom(); break; }
+    pump(20);
+
+    if (mode === 'fusion') {
+      var pares = J.Game.canFuse() || [];
+      // garante que seja o turno de um herói
+      var guard = 0;
+      while (!J.Game.isPlayerTurn() && guard++ < 400) pump(1);
+      pares = J.Game.canFuse() || [];
+      if (pares.length) {
+        J.Game.declareFusion(pares[0].uidA, pares[0].uidB);
+        pump(120);
+      }
+      var fu = J.Game.state.units.filter(function (u) {
+        return String(u.defId).indexOf('fus:') === 0;
+      })[0];
+      window.__FUSED = fu ? fu.name : 'nenhuma';
+      if (fu) {
+        J.Renderer.setCamera({ centerX: fu.x, centerY: fu.y, dist: parseFloat(Q('dist', '11')) });
+        pump(6);
+      }
+    } else if (mode === 'cast') {
+      var g2 = 0;
+      while (!J.Game.isPlayerTurn() && g2++ < 400) pump(1);
+      var u = J.Engine.activeUnit(J.Game.state);
+      var alvo = J.Game.state.units.filter(function (x) { return x.side === 'enemy' && x.alive !== false; })[0];
+      // anda para perto e conjura
+      var reach = J.Engine.reachable(J.Game.state, u.uid) || [];
+      var melhor = null;
+      reach.forEach(function (t) {
+        var d = Math.abs(t.x - alvo.x) + Math.abs(t.y - alvo.y);
+        if (!melhor || d < melhor.d) melhor = { d: d, x: t.x, y: t.y };
+      });
+      if (melhor) { J.Game.onTileClicked(melhor.x, melhor.y); pump(40); }
+      (u.spells || []).some(function (sid) {
+        var sp = J.Engine.spell(sid);
+        if (!sp || !sp.effects.some(function (e) { return e.type === 'damage'; })) return false;
+        var tg = J.Engine.castTargets(J.Game.state, u.uid, sid) || [];
+        for (var i = 0; i < tg.length; i++) {
+          if (J.Engine.unitAt(J.Game.state, tg[i].x, tg[i].y)) {
+            J.Game.selectSpell(sid); J.Game.onTileClicked(tg[i].x, tg[i].y); return true;
+          }
+        }
+        return false;
+      });
+      pump(parseInt(Q('fx', '6'), 10));
+    }
+    if (Q('rot', '') !== '') {
+      J.Renderer.setCamera({ rot: parseInt(Q('rot', '0'), 10), animate: false });
+      pump(4);
+    }
+    if (Q('cam', '') !== '') {
+      var c = Q('cam', '').split(',');
+      J.Renderer.setCamera({ centerX: parseFloat(c[0]), centerY: parseFloat(c[1]),
+                             dist: c[2] ? parseFloat(c[2]) : null });
+      pump(4);
+    }
+    pump(parseInt(Q('frames', '4'), 10));
+    document.title = 'PRONTO ' + mode;
+  }
+})();
+</script>
+</body>
+</html>
