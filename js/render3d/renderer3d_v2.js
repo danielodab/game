@@ -1517,8 +1517,12 @@ var JOGO = (typeof window !== 'undefined')
       // Sem isto, escolher um ataque corpo a corpo sem inimigo ao lado não
       // pintava NADA e parecia que o jogo tinha travado.
       var range = safe(function () { return en.spellRange ? en.spellRange(st, active.uid, spellId) : null; }, null);
+      var noAlcance = false;
       if (range) {
-        for (var rr = 0; rr < range.length; rr++) ovTile(range[rr].x, range[rr].y, elCol, 0.09, 0.05, 0.92);
+        for (var rr = 0; rr < range.length; rr++) {
+          ovTile(range[rr].x, range[rr].y, elCol, 0.09, 0.05, 0.92);
+          if (hv && range[rr].x === hv.x && range[rr].y === hv.y) noAlcance = true;
+        }
       }
 
       // ALVOS por cima, forte: quem dá para acertar de verdade.
@@ -1530,9 +1534,17 @@ var JOGO = (typeof window !== 'undefined')
           if (hv && targets[k].x === hv.x && targets[k].y === hv.y) inTargets = true;
         }
       }
-      if (hv && inTargets) {
+      // ÁREA DE EFEITO sob o cursor. Antes só aparecia sobre ALVO VÁLIDO, então
+      // um feitiço de área mirado no chão vazio não mostrava explosão nenhuma —
+      // e é justamente aí que o jogador precisa ver o desenho antes de gastar o
+      // PA. Agora basta o cursor estar DENTRO DO ALCANCE.
+      if (hv && (inTargets || noAlcance)) {
         var aoe = safe(function () { return en.aoeTiles ? en.aoeTiles(st, spellId, active.x, active.y, hv.x, hv.y) : null; }, null);
-        if (aoe) for (var m = 0; m < aoe.length; m++) ovTile(aoe[m].x, aoe[m].y, '#ff5a28', 0.42, 0.13, 0.90);
+        if (aoe && aoe.length) {
+          // mais forte quando o tiro sai de verdade; só prévia quando não há alvo
+          var forca = inTargets ? 0.42 : 0.26;
+          for (var m = 0; m < aoe.length; m++) ovTile(aoe[m].x, aoe[m].y, '#ff5a28', forca, 0.13, 0.90);
+        }
       }
     }
 
