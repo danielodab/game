@@ -999,3 +999,56 @@ i, em { font-style: normal; color: var(--dim); }
 .hs-path-h { font: 600 12px/1 system-ui; text-transform: uppercase;
              letter-spacing: .04em; margin: 8px 0 5px; }
 .hs-hint { font-size: 11.5px; color: var(--dim, #8b93a0); margin-bottom: 8px; }
+
+/* --------------------------------------------------------------------------
+   PAINEL DE TESTE (js/ui/debug.js)
+   Vive FORA de #ui-root de propósito: aquela camada tem `pointer-events: none`
+   e já engoliu clique três vezes neste projeto. Aqui é filho do body, com
+   z-index acima de tudo, e recebe clique sem depender de ninguém.
+   -------------------------------------------------------------------------- */
+.dbg-abrir {
+  position: fixed; right: 10px; bottom: 10px; z-index: 9000;
+  font: 600 12px/1 system-ui, sans-serif; color: #ffd479;
+  background: #1b222c; border: 1px solid #3a4655; border-radius: 8px;
+  padding: 8px 11px; cursor: pointer; opacity: .78;
+}
+.dbg-abrir:hover { opacity: 1; }
+.dbg-painel {
+  position: fixed; inset: auto 10px 52px 10px; max-width: 640px; margin: 0 auto;
+  max-height: 76vh; overflow: auto; z-index: 9001; display: none;
+  background: #12161b; border: 1px solid #3a4655; border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.6);
+  font: 13px/1.5 system-ui, Segoe UI, sans-serif; color: #e8eef6;
+}
+.dbg-painel.is-on { display: block; }
+.dbg-cab {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 12px; border-bottom: 1px solid #2b3542; position: sticky; top: 0;
+  background: #12161b;
+}
+.dbg-x { background: none; border: 0; color: #8b93a0; font-size: 15px; cursor: pointer; }
+.dbg-corpo { padding: 10px 12px 14px; }
+.dbg-acoes { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 8px; }
+.dbg-b {
+  font: 600 12px/1 system-ui; padding: 7px 10px; border-radius: 7px; cursor: pointer;
+  background: #1e2733; color: #cfe0f5; border: 1px solid #3a4655;
+}
+.dbg-b-ok { background: #1d3524; color: #8fe0a0; border-color: #2f5a3c; }
+.dbg-b-warn { background: #35201d; color: #ff9b8a; border-color: #5a2f2f; }
+.dbg-aviso { font-size: 11px; color: #8b93a0; margin: 0 0 10px; }
+.dbg-row {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 7px 9px; margin-bottom: 5px; border-radius: 8px;
+  background: rgba(255,255,255,.03); border: 1px solid #2b3542;
+}
+.dbg-nome { min-width: 116px; display: flex; flex-direction: column; }
+.dbg-nome b { font-size: 13px; }
+.dbg-nome span { font-size: 10.5px; color: #8b93a0; }
+.dbg-campo { display: flex; align-items: center; gap: 5px; }
+.dbg-campo label { font-size: 11px; color: #8b93a0; }
+.dbg-num { width: 58px; }
+.dbg-num, .dbg-sel {
+  background: #1b222c; color: #e8eef6; border: 1px solid #3a4655;
+  border-radius: 6px; padding: 4px 6px; font: 12px system-ui;
+}
+.dbg-info { font: 11px monospace; color: #8b93a0; margin-left: auto; }
