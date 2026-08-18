@@ -538,7 +538,7 @@ var JOGO = (typeof window !== 'undefined')
   //   · a capa pende do peito e virava um balão cobrindo o corpo.
   // Por isso cada peça pendurada num osso desfaz a escala do pai no fim.
   function aplicaPorte(node, b) {
-    if (!b) return;
+    if (!b) { desfazHerancaDeOsso(node); return; }
     node.traverse(function (o) {
       if (!o.isBone) return;
       var nm = (o.name || '').toLowerCase();
@@ -554,12 +554,38 @@ var JOGO = (typeof window !== 'undefined')
         o.scale.set(k, 1, k);
       }
     });
+    desfazHerancaDeOsso(node);
+  }
+
+  /* Desfaz a heranca de escala nas pecas presas a osso. Ver o comentario longo
+   * abaixo: e o conserto do chapeu gigante da fusao. */
+  function desfazHerancaDeOsso(node) {
+    // ---- desfaz a heranca de escala nas pecas presas a osso
+    // Chapeu, elmo, capa e arma sao malhas SIMPLES penduradas num osso, e osso
+    // passa escala para os filhos. Esta compensacao tinha dois furos:
+    //
+    //   1. desfazia so o osso IMEDIATO. O chapeu mora em `head`, mas acima de
+    //      head esta `chest`, que o porte do Barbaro infla para 1,42 — e esse
+    //      1,42 sobrava. Dai o Mage_Hat da fusao sair com 5,73 m de largura,
+    //      mais largo do que o corpo que o carrega e alto.
+    //   2. SOBRESCREVIA a escala da peca em vez de dividi-la, entao um adereco
+    //      que ja vinha menor ou maior do dono original perdia o proprio porte.
+    //
+    // Agora desfaz a cadeia INTEIRA, ate a raiz do modelo, e parte sempre da
+    // escala original guardada — o que torna a passagem repetivel sem acumular.
     node.traverse(function (o) {
       if (!o.isMesh || o.isSkinnedMesh) return;
       var p = o.parent;
       if (!p || !p.isBone) return;
-      o.scale.set(1 / Math.max(0.001, p.scale.x), 1 / Math.max(0.001, p.scale.y),
-                  1 / Math.max(0.001, p.scale.z));
+      if (!o.userData.escalaBase) o.userData.escalaBase = o.scale.clone();
+      var base = o.userData.escalaBase;
+      var ax = 1, ay = 1, az = 1;
+      for (var n = p; n && n !== node; n = n.parent) {
+        if (!n.scale) continue;
+        ax *= n.scale.x; ay *= n.scale.y; az *= n.scale.z;
+      }
+      o.scale.set(base.x / Math.max(0.001, ax), base.y / Math.max(0.001, ay),
+                  base.z / Math.max(0.001, az));
     });
     node.updateMatrixWorld(true);
   }
