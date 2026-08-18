@@ -55,22 +55,29 @@ var JOGO = (typeof window !== 'undefined')
   // curandeira rendiam demais. O coeficiente abaixo e o inverso da razao medida
   // em tests/equilibrio_fusao.html — cada dupla puxada para perto de 100%.
   // Chave em ORDEM ALFABETICA, igual a de DATA.fusionForms.
+  //
+  // RECALIBRADO (v2.7): as CINCO duplas do sumo subiram depois que sete feiticos
+  // dele — area centrada no proprio corpo — foram consertados. Eles estavam com
+  // `targetSide: 'enemy'` e alcance 0-0, o que exige um inimigo em cima da casa
+  // do conjurador: eram IMPOSSIVEIS de lancar. Com eles funcionando, o dano do
+  // Barbaro SEPARADO subiu ate 46% (sumo+espadachim foi de 267 para 391) e a
+  // razao da fusao caiu para 68-86%. Os coeficientes abaixo devolvem a faixa.
   Fusion.PAIR_TUNE = {
     'arqueiro+bruxo':        1.117,
     'arqueiro+curandeira':   0.971,
     'arqueiro+espadachim':   0.858,
     'arqueiro+invocador':    0.741,
-    'arqueiro+sumo':         1.351,
+    'arqueiro+sumo':         1.571,
     'bruxo+curandeira':      0.823,
     'bruxo+espadachim':      0.760,
     'bruxo+invocador':       0.971,
-    'bruxo+sumo':            1.242,
+    'bruxo+sumo':            1.534,
     'curandeira+espadachim': 0.704,
     'curandeira+invocador':  1.250,
-    'curandeira+sumo':       1.408,
+    'curandeira+sumo':       1.656,
     'espadachim+invocador':  0.948,
-    'espadachim+sumo':       1.149,
-    'invocador+sumo':        1.075
+    'espadachim+sumo':       1.336,
+    'invocador+sumo':        1.361
   };
 
   function E() { return JOGO.Engine; }

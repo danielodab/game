@@ -181,6 +181,42 @@ var JOGO = (typeof window !== 'undefined')
     topo.appendChild(bUndo);
     corpo.appendChild(topo);
 
+    // --- linha do modo de efeitos, que só faz sentido dentro de uma batalha
+    var emBatalha = !!(JOGO.Game && JOGO.Game.state && JOGO.Game.state.phase === 'playing');
+    var linhaFx = el('div', 'dbg-acoes');
+    var bFx = el('button', 'dbg-b ' + (modoAtivo ? 'dbg-b-warn' : 'dbg-b-ok'),
+                 modoAtivo ? 'Desligar modo efeitos' : 'Modo TESTE DE EFEITOS');
+    bFx.type = 'button';
+    bFx.title = 'Todos os feitiços na mão, PA e passo cheios, sem recarga, e ninguém morre';
+    bFx.onclick = function () {
+      ligaModo(!modoAtivo);
+      if (modoAtivo && JOGO.Game && JOGO.Game.state) aplicaModo(JOGO.Game.state);
+      desenha();
+    };
+    linhaFx.appendChild(bFx);
+
+    var bFundir = el('button', 'dbg-b', 'Fundir agora');
+    bFundir.type = 'button';
+    bFundir.title = 'Cola os dois heróis e resolve a fusão, para ver os ataques compostos';
+    bFundir.onclick = function () {
+      try {
+        var st = JOGO.Game.state, F = JOGO.Fusion;
+        var h = st.units.filter(function (u) { return u.side === 'player' && u.alive && u.kind !== 'fusion'; });
+        if (h.length < 2) { alert('Precisa de dois heróis vivos em campo.'); return; }
+        h[1].x = h[0].x; h[1].y = h[0].y + 1;
+        if (!F.canFuse(st, h[0].uid, h[1].uid)) { alert('A fusão foi recusada aqui.'); return; }
+        F.declare(st, h[0].uid, h[1].uid); F.resolve(st);
+        if (modoAtivo) aplicaModo(st);
+      } catch (e) { alert('Não deu para fundir: ' + e.message); }
+      desenha();
+    };
+    linhaFx.appendChild(bFundir);
+
+    if (!emBatalha) {
+      linhaFx.appendChild(el('span', 'dbg-info', 'entre numa sala para usar estes dois'));
+    }
+    corpo.appendChild(linhaFx);
+
     corpo.appendChild(el('p', 'dbg-aviso',
       'Este painel grava no save de verdade. Ao abrir, uma cópia foi guardada — ' +
       '"Desfazer tudo" devolve tudo como estava. O caminho elemental abre no nível ' +
@@ -189,6 +225,57 @@ var JOGO = (typeof window !== 'undefined')
     Object.keys(D().classes || {}).forEach(function (c) {
       corpo.appendChild(linhaDoHeroi(c));
     });
+  }
+
+  // ====================================================== MODO TESTE DE EFEITOS
+  // O objetivo do usuário não é só liberar as classes — é VER O EFEITO DE TODOS
+  // OS ATAQUES. Em batalha isso esbarra em três coisas: PA acaba, feitiço entra
+  // em recarga, e o herói só tem o caminho elemental que escolheu. Este modo
+  // remove as três e deixa a sala de pé para conjurar à vontade.
+  var modoAtivo = false;
+
+  function todosOsFeiticos(classId) {
+    var def = (D().classes || {})[classId] || {};
+    var out = (def.baseSpells || []).slice();
+    Object.keys(def.paths || {}).forEach(function (e) {
+      (def.paths[e] || []).forEach(function (sid) { if (out.indexOf(sid) < 0) out.push(sid); });
+    });
+    return out;
+  }
+
+  function aplicaModo(st) {
+    if (!st || !st.units) return;
+    st.units.forEach(function (u) {
+      if (!u.alive) return;
+      if (u.side === 'player') {
+        if (u.defId && (D().classes || {})[u.defId]) {
+          var todos = todosOsFeiticos(u.defId);
+          todos.forEach(function (sid) { if (u.spells.indexOf(sid) < 0) u.spells.push(sid); });
+        }
+        u.pa = Math.max(u.pa, 99);
+        u.pp = Math.max(u.pp, 20);
+        u.cooldowns = {};
+        u.castsThisTurn = {};
+        u.hpMax = Math.max(u.hpMax, 99999); u.hp = u.hpMax;
+      } else {
+        // o alvo não pode morrer no meio da demonstração
+        u.hpMax = Math.max(u.hpMax, 99999); u.hp = u.hpMax;
+      }
+    });
+  }
+
+  function ligaModo(liga) {
+    modoAtivo = !!liga;
+    if (!modoAtivo) return;
+    var laco = function () {
+      if (!modoAtivo) return;
+      try {
+        var g = JOGO.Game;
+        if (g && g.state && g.state.phase === 'playing') aplicaModo(g.state);
+      } catch (e) {}
+      setTimeout(laco, 400);
+    };
+    laco();
   }
 
   function monta() {
@@ -232,6 +319,6 @@ var JOGO = (typeof window !== 'undefined')
     else liga();
   }
 
-  JOGO.Debug = { abrir: function () { monta(); guardaCopia(); desenha(); painel.classList.add('is-on'); },
+  JOGO.Debug = { modoEfeitos: ligaModo, abrir: function () { monta(); guardaCopia(); desenha(); painel.classList.add('is-on'); },
                  desfazer: desfaz, poeNivel: poeNivel };
 })();

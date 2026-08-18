@@ -1052,3 +1052,146 @@ i, em { font-style: normal; color: var(--dim); }
   border-radius: 6px; padding: 4px 6px; font: 12px system-ui;
 }
 .dbg-info { font: 11px monospace; color: #8b93a0; margin-left: auto; }
+
+/* ==========================================================================
+   TELA "PERSONAGENS" — inventário · forja · coleção como abas   [Designer]
+   Tudo aqui vive DENTRO de `.ui-sheet`, que já reativa `pointer-events`
+   (linha 93). Nenhuma camada nova pendurada em `#ui-root` — a armadilha que
+   já derrubou os botões da fusão, do painel de equipamento e do modal.
+   ========================================================================== */
+.pt-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.pt-tabs .btn-tab { flex: 1 1 auto; min-width: 92px; }
+
+/* ---- carrossel de heróis (só os liberados) */
+.pt-hero { display: flex; align-items: stretch; gap: 6px; }
+.pt-nav {
+  flex: 0 0 auto; align-self: stretch; min-width: 40px; font-size: 26px; line-height: 1;
+  background: rgba(255,255,255,.05);
+}
+.pt-hero-card {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: 1px solid var(--line2); border-radius: 12px;
+  background: rgba(255,255,255,.035); flex-wrap: wrap;
+}
+.pt-hero-pic { flex: 0 0 auto; }
+.pt-hero-pic canvas { display: block; }
+.pt-hero-txt { flex: 1 1 130px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pt-hero-nm { font: 600 16px var(--ui-serif); color: var(--text); }
+.pt-hero-lv { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pt-hero-st { display: flex; gap: 8px; flex-wrap: wrap; font: 600 11.5px var(--ui-sans); color: var(--dim); }
+.pt-hero-st .s-hp { color: var(--hp); }
+.pt-hero-st .s-pa { color: var(--pa); }
+.pt-hero-st .s-pp { color: var(--pp); }
+.pt-hero-n { font-size: 11px; color: var(--dim); }
+.pt-ficha { flex: 0 0 auto; }
+
+/* ---- os quatro espaços + o bicho */
+.pt-slots { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); }
+.pt-slot {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+  padding: 8px 6px; border: 1px solid var(--rc, var(--line2)); border-radius: 12px;
+  background: rgba(255,255,255,.03);
+}
+.pt-slot.is-empty { border-style: dashed; border-color: var(--line2); }
+.pt-slot.is-focus { box-shadow: 0 0 0 1px var(--gold), 0 0 16px rgba(255,196,77,.2); }
+.pt-slot-ic { position: relative; }
+.pt-slot-ic canvas { display: block; border-radius: 10px; border: 2px solid var(--rc, transparent); }
+.pt-slot-nm { font: 700 10.5px var(--ui-sans); color: var(--gold); text-transform: uppercase; letter-spacing: .06em; }
+.pt-slot-it { font-size: 11.5px; color: var(--text); line-height: 1.25; }
+.pt-slot-b { font-size: 10.5px; color: var(--dim); line-height: 1.35; }
+.pt-slot .btn-mini { width: 100%; }
+
+/* ---- barra da peça escolhida: gruda no topo enquanto se rola a grade */
+.inv-pick {
+  position: sticky; top: 0; z-index: 3;
+  display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: start;
+  padding: 9px 10px; border: 1px solid var(--rc, var(--line2)); border-radius: 12px;
+  background: #161b22; box-shadow: 0 6px 18px rgba(0,0,0,.45);
+}
+.inv-pick.is-idle {
+  grid-template-columns: 1fr; border-style: dashed; border-color: var(--line2);
+  background: rgba(255,255,255,.03); box-shadow: none;
+}
+.inv-pick.is-idle p { font-size: 12px; color: var(--dim); text-align: center; }
+.inv-pick-ic { position: relative; }
+.inv-pick-ic canvas { display: block; border-radius: 10px; border: 2px solid var(--rc, var(--line2)); }
+.inv-pick-tx { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.inv-pick-nm { font: 600 15px var(--ui-serif); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.inv-pick-sub { font-size: 11.5px; color: var(--dim); }
+.inv-pick-sub b { color: var(--text); }
+.inv-pick-b { font: 600 12px var(--ui-sans); color: #cfe0f5; line-height: 1.4; }
+.inv-pick-sp { font-size: 11.5px; color: var(--gold); }
+.inv-pick-set { font-size: 11.5px; color: var(--xp); }
+.inv-pick-us { font-size: 11px; color: var(--pa); }
+.inv-pick-acts { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+.inv-pick-acts .btn { flex: 1 1 auto; min-width: 110px; }
+
+/* ---- A GRADE grande: iguais empilham num espaço só, com ×N */
+.inv-big { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+.ig-cell {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 5px 6px; min-height: 108px; cursor: pointer;
+  border: 2px solid var(--rc, var(--line2)); border-radius: 12px;
+  background: rgba(255,255,255,.04); color: var(--text);
+  font: inherit; text-align: center;
+}
+.ig-cell:active { transform: translateY(1px) scale(.985); }
+.ig-cell.is-sel { outline: 2px solid var(--gold); outline-offset: 1px; }
+/* a placa escura é o que garante que a borda de raridade continue visível
+   mesmo sobre o fundo amarelo do ★3 */
+.ig-plate {
+  display: block; padding: 3px; border-radius: 11px; background: rgba(6,9,13,.55);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.5);
+}
+.ig-plate canvas { display: block; border-radius: 8px; }
+.ig-nm {
+  font-size: 10.5px; line-height: 1.25; color: #dbe4ee; max-width: 100%;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.ig-n {
+  position: absolute; top: -7px; right: -5px; min-width: 24px; padding: 2px 5px;
+  font: 800 13px var(--ui-sans); color: #0d1116; background: var(--gold);
+  border-radius: 9px; box-shadow: 0 2px 6px rgba(0,0,0,.5);
+}
+.ig-lv {
+  position: absolute; top: -7px; left: -4px; padding: 1px 5px; border-radius: 8px;
+  font: 800 11px var(--ui-sans); color: #0d1116; background: #cfe0f5;
+}
+.forge-thumb .ig-n, .forge-thumb .ig-lv, .inv-pick-ic .ig-n, .inv-pick-ic .ig-lv,
+.pt-slot-ic .ig-lv { top: -6px; }
+
+/* ---- ESTRELAS DE ITEM (fundir 3 iguais). Sem nome de degrau: só COR DE FUNDO,
+   como o usuário pediu. ★1 cinza · ★2 azul · ★3 amarelo. A raridade continua
+   na borda e no halo, e por isso as duas leituras não se atropelam. */
+.item-stars { display: inline-flex; gap: 1px; font-size: 11px; line-height: 1; color: #ffe9a8; }
+.item-stars i { font-style: normal; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+.sq1 { --sq: #98a3b3; }
+.sq2 { --sq: #3d84d6; }
+.sq3 { --sq: #e6b53c; }
+.sq1, .sq2, .sq3 {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--sq) 52%, #0e1218),
+    color-mix(in srgb, var(--sq) 26%, #0e1218));
+}
+.sq1 .ig-nm, .sq2 .ig-nm, .sq3 .ig-nm,
+.sq1 .pt-slot-it, .sq2 .pt-slot-it, .sq3 .pt-slot-it { color: #f2f6fb; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.sq3 .pt-slot-nm { color: #201603; }
+.sq3 .ig-nm, .sq3 .pt-slot-it { color: #1a1204; text-shadow: none; }
+.sq3 .pt-slot-b { color: #3a2c08; }
+.sq3 .item-stars { color: #2a1e02; }
+.fg-stars { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 9px;
+            font-size: 10.5px; color: var(--text); }
+.fg-onde { font-size: 11px; color: var(--dim); }
+.fg-onde b { color: var(--pa); }
+.fg-worn {
+  position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%);
+  padding: 1px 5px; border-radius: 7px; font: 700 9.5px var(--ui-sans);
+  color: #0d1116; background: var(--pa);
+}
+.forge-thumb { position: relative; overflow: visible; }
+.fg-sep { color: var(--line2); margin: 0 4px; }
+.col-faltam { font-size: 12px; color: var(--gold); }
+
+@media (min-width: 560px) {
+  .inv-big { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+}
