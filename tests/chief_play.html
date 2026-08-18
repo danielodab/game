@@ -134,6 +134,29 @@
       });
       pump(parseInt(Q('fx', '6'), 10));
     }
+    if (Q('perf', '') !== '') {
+      var n = parseInt(Q('perf', '60'), 10);
+      var cv = document.getElementById('game-canvas');
+      var gl = cv.getContext('webgl2') || cv.getContext('webgl');
+      var dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      var gpu = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '(sem info)';
+      J.Renderer.render(0.016); gl.finish();
+      var t0 = performance.now();
+      for (var p = 0; p < n; p++) { J.Renderer.render(0.016); }
+      gl.finish();
+      var ms = (performance.now() - t0) / n;
+      var st = J.Game.state;
+      var txt = 'PERF ' + Math.round(ms * 100) / 100 + ' ms/quadro · ' + n + ' quadros · ' +
+                st.grid.w + 'x' + st.grid.h + ' · unidades ' + st.units.length +
+                ' · tela ' + cv.width + 'x' + cv.height + ' · GPU: ' + gpu;
+      var d = document.createElement('div');
+      d.id = 'perf';
+      d.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;background:#000;color:#0f0;font:14px monospace;padding:6px';
+      d.textContent = txt;
+      document.body.appendChild(d);
+      document.title = txt;
+      return;
+    }
     if (Q('still', '') === '1') J.Game.update = function () {};
     if (Q('rot', '') !== '') {
       J.Renderer.setCamera({ rot: parseInt(Q('rot', '0'), 10), animate: false });
