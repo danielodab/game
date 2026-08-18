@@ -64,8 +64,9 @@ namespace Soterra.Testes.Locomocao
 
             Assert.IsTrue(m.Andavel(new Vector2Int(0, 0)), "o herói nasce em chão andável");
             Assert.IsTrue(m.Andavel(new Vector2Int(2, 0)), "o monstro também");
-            Assert.AreEqual(new Vector2Int(0, 0), m.NascimentoHeroi);
-            Assert.AreEqual(new Vector2Int(2, 0), m.NascimentoMonstros['a']);
+            Assert.AreEqual(new Vector2Int(0, 0), m.NascimentosHeroi[0]);
+            Assert.AreEqual(new Vector2Int(2, 0), m.NascimentosMonstro[0].Casa);
+            Assert.AreEqual('a', m.NascimentosMonstro[0].Letra);
         }
 
         [Test]
@@ -106,30 +107,43 @@ namespace Soterra.Testes.Locomocao
             Assert.AreEqual(17, m.Altura);
             Assert.IsTrue(m.Largura >= 21 && m.Largura <= 27, "SISTEMAS §2: de 21×17 a 27×23");
             Assert.IsTrue(m.Altura  >= 17 && m.Altura  <= 23);
-            Assert.IsTrue(m.Andavel(m.NascimentoHeroi), "o herói não nasce dentro de parede");
+            foreach (var p in m.NascimentosHeroi)
+                Assert.IsTrue(m.Andavel(p), "nenhum herói nasce dentro de parede");
         }
 
         [Test]
-        public void DEFEITO_CONHECIDO_a_sala_traz_seis_nascimentos_de_heroi_e_a_API_guarda_um()
+        public void A_sala_guarda_TODOS_os_nascimentos_desenhados()
         {
-            // O contrato §5 declara `NascimentoHeroi` como UM Vector2Int e
-            // `NascimentoMonstros` como um dicionário por letra. A sala real tem
-            // SEIS casas 'P' — o jogo desce com DOIS heróis (SISTEMAS §1) e não
-            // há onde pôr o segundo — e repete as letras 'a' e 'b', que ali
-            // significam dois monstros do mesmo tipo.
-            //
-            // Este teste NÃO abençoa a perda: ele deixa o buraco medido e
-            // visível. Quando a assinatura for corrigida para listas, ele falha
-            // de propósito e a correção passa por aqui.
+            // A API já guardou UM 'P' e um dicionário por letra. A sala real tem
+            // SEIS 'P' — e o jogo desce com DOIS heróis (SISTEMAS §1), então o
+            // segundo não tinha onde nascer — e repete 'a' e 'b', que ali
+            // significam dois monstros do mesmo tipo. O dicionário engolia a
+            // repetição e esvaziava a sala em dois monstros.
             var m = Desenho.De(Desenho.Vestibulo);
 
-            Assert.AreEqual(6, Desenho.Contar(Desenho.Vestibulo, 'P'), "o desenho tem seis 'P'");
-            Assert.AreEqual(2, Desenho.Contar(Desenho.Vestibulo, 'a'), "e dois 'a'");
+            Assert.AreEqual(Desenho.Contar(Desenho.Vestibulo, 'P'), m.NascimentosHeroi.Count,
+                            "todo 'P' do desenho vira nascimento de herói");
+            Assert.AreEqual(6, m.NascimentosHeroi.Count);
 
-            Assert.AreEqual(3, m.NascimentoMonstros.Count,
-                            "cinco monstros desenhados, três guardados: 'a' e 'b' repetem");
-            Assert.AreEqual(new Vector2Int(2, 7), m.NascimentoHeroi,
-                            "sobra o ÚLTIMO 'P' lido; os outros cinco somem");
+            int monstrosDesenhados = 0;
+            for (char c = 'a'; c <= 'z'; c++) monstrosDesenhados += Desenho.Contar(Desenho.Vestibulo, c);
+            Assert.AreEqual(monstrosDesenhados, m.NascimentosMonstro.Count,
+                            "letra repetida é monstro repetido, não a mesma casa duas vezes");
+            int comA = 0;
+            foreach (var n in m.NascimentosMonstro) if (n.Letra == 'a') comA++;
+            Assert.AreEqual(2, comA, "os dois 'a' sobrevivem");
+        }
+
+        [Test]
+        public void Os_nascimentos_saem_na_ordem_de_leitura_do_desenho()
+        {
+            // Quem escreve a sala espera que o primeiro 'P' do texto seja o
+            // primeiro herói. A ordem em que o laço varre o mapa é de baixo para
+            // cima, e entregaria o último.
+            var m = Desenho.De(new[] { "..P", "P..", "..." });
+
+            Assert.AreEqual(new Vector2Int(2, 2), m.NascimentosHeroi[0], "o 'P' da linha de CIMA vem antes");
+            Assert.AreEqual(new Vector2Int(0, 1), m.NascimentosHeroi[1]);
         }
     }
 }

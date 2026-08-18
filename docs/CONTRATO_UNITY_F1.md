@@ -145,6 +145,8 @@ namespace Soterra.Grade
     public enum Casa { Chao, ChaoDecorado, ObstaculoAlto, ObstaculoBaixo, Vazio }
     public enum Forma { Single, Circle, Cross, Cone, Line, Ring }
 
+    public struct Nascimento { public char Letra; public Vector2Int Casa; }
+
     public sealed class Mapa
     {
         public int Largura { get; }
@@ -154,8 +156,12 @@ namespace Soterra.Grade
         public bool Dentro(Vector2Int p);
         public bool Andavel(Vector2Int p);         // Chao e ChaoDecorado
         public bool BloqueiaVisao(Vector2Int p);   // SO ObstaculoAlto
-        public Vector2Int NascimentoHeroi { get; }
-        public IReadOnlyDictionary<char, Vector2Int> NascimentoMonstros { get; }
+        // LISTA, nao casa unica: a sala real traz SEIS 'P' e o jogo desce com
+        // DOIS herois. Guardando um so, o segundo nao teria onde nascer.
+        public IReadOnlyList<Vector2Int> NascimentosHeroi { get; }
+        // LISTA com repeticao, nao dicionario por letra: dois 'a' sao dois
+        // monstros do mesmo tipo, e o dicionario engolia o segundo.
+        public IReadOnlyList<Nascimento> NascimentosMonstro { get; }
     }
 
     public static class Distancia

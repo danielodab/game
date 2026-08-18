@@ -86,10 +86,10 @@ namespace Soterra.Cena
 
             // Alcance de passo a partir do nascimento do herói, na cor que o jogo
             // em JS usa para casa alcançável.
-            palco.Realcar(Alcance(mapa, mapa.NascimentoHeroi, 6), Comalfa(Palco.CorAlcance, 0.55f));
+            palco.Realcar(Alcance(mapa, mapa.NascimentosHeroi[0], 6), Comalfa(Palco.CorAlcance, 0.55f));
             // E os nascimentos de monstro numa segunda cor, por cima.
             var inimigos = new List<Vector2Int>();
-            foreach (var kv in mapa.NascimentoMonstros) inimigos.Add(kv.Value);
+            foreach (var n in mapa.NascimentosMonstro) inimigos.Add(n.Casa);
             palco.Realcar(inimigos, Comalfa(CorRisco, 0.65f));
 
             // RenderTextureReadWrite.sRGB e não o padrão: o projeto é Linear, uma

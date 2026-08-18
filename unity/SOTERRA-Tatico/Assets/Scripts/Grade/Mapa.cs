@@ -20,6 +20,19 @@ namespace Soterra.Grade
     public enum Forma { Single, Circle, Cross, Cone, Line, Ring }
 
     /// <summary>
+    /// Onde um monstro nasce, e de que letra ele veio.
+    ///
+    /// Carrega a letra junto porque o desenho REPETE letra de propósito: dois
+    /// `a` são dois monstros do mesmo tipo, e perder a repetição esvazia a sala.
+    /// </summary>
+    public struct Nascimento
+    {
+        public char Letra;
+        public Vector2Int Casa;
+        public Nascimento(char letra, Vector2Int casa) { Letra = letra; Casa = casa; }
+    }
+
+    /// <summary>
     /// O chão de uma sala, lido do desenho em texto.
     ///
     /// O mapa é texto e não estrutura porque é assim que ele existe hoje no jogo
@@ -36,17 +49,26 @@ namespace Soterra.Grade
         public int Altura { get; private set; }
 
         readonly Casa[] _casas;
-        readonly Dictionary<char, Vector2Int> _monstros = new Dictionary<char, Vector2Int>();
+        readonly List<Vector2Int> _heroi = new List<Vector2Int>();
+        readonly List<Nascimento> _monstros = new List<Nascimento>();
 
-        public Vector2Int NascimentoHeroi { get; private set; }
-        public IReadOnlyDictionary<char, Vector2Int> NascimentoMonstros { get { return _monstros; } }
+        /// <summary>
+        /// TODAS as casas `P`, em ordem de leitura.
+        ///
+        /// Lista e não casa única: a sala real traz SEIS `P`, e o jogo desce com
+        /// dois heróis. Guardando um só, o segundo herói não teria onde nascer —
+        /// e o defeito só apareceria na hora de montar a batalha, longe daqui.
+        /// </summary>
+        public IReadOnlyList<Vector2Int> NascimentosHeroi { get { return _heroi; } }
+
+        /// <summary>Todas as casas `a`–`z`, em ordem de leitura, com repetição.</summary>
+        public IReadOnlyList<Nascimento> NascimentosMonstro { get { return _monstros; } }
 
         Mapa(int largura, int altura)
         {
             Largura = largura;
             Altura = altura;
             _casas = new Casa[largura * altura];
-            NascimentoHeroi = new Vector2Int(-1, -1);
         }
 
         /// <summary>
@@ -79,11 +101,22 @@ namespace Soterra.Grade
                     char c = x < linha.Length ? linha[x] : '~';
                     m._casas[y * largura + x] = DoSimbolo(c);
 
-                    if (c == 'P') m.NascimentoHeroi = new Vector2Int(x, y);
-                    else if (c >= 'a' && c <= 'z') m._monstros[c] = new Vector2Int(x, y);
+                    if (c == 'P') m._heroi.Add(new Vector2Int(x, y));
+                    else if (c >= 'a' && c <= 'z') m._monstros.Add(new Nascimento(c, new Vector2Int(x, y)));
                 }
             }
+            // Ordem de leitura do DESENHO (de cima para baixo, esquerda para a
+            // direita), e não a ordem em que o laço encheu a lista: quem escreve
+            // a sala espera que o primeiro `P` do texto seja o primeiro herói.
+            m._heroi.Sort(PorLeitura);
+            m._monstros.Sort((a, b) => PorLeitura(a.Casa, b.Casa));
             return m;
+        }
+
+        static int PorLeitura(Vector2Int a, Vector2Int b)
+        {
+            if (a.y != b.y) return b.y.CompareTo(a.y);   // Y maior = linha de cima
+            return a.x.CompareTo(b.x);
         }
 
         /// <summary>

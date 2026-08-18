@@ -259,9 +259,9 @@ namespace Soterra.Testes.Dados
             foreach (var sala in b.Calabocos[0].Salas)
             {
                 var mapa = sala.ParaMapa();
-                foreach (var nascimento in mapa.NascimentoMonstros)
+                foreach (var nascimento in mapa.NascimentosMonstro)
                 {
-                    string letra = nascimento.Key.ToString();
+                    string letra = nascimento.Letra.ToString();
                     Assert.IsTrue(sala.Monstros.ContainsKey(letra),
                         sala.Nome + ": a letra '" + letra + "' está desenhada mas não tem monstro declarado");
                 }
@@ -274,7 +274,7 @@ namespace Soterra.Testes.Dados
             var b = Banco(new FonteDeMemoria().Com("dungeons", Fixturas.Calabocos));
             var sala = b.Calabocos[0].Salas[0];
             var mapa = sala.ParaMapa();
-            var p = mapa.NascimentoHeroi;
+            var p = mapa.NascimentosHeroi[0];
 
             // O desenho tem a linha 0 em cima; o mapa põe o Y crescendo para
             // cima. Errar essa inversão espelha a sala inteira e todo teste
