@@ -4,9 +4,11 @@ Jogo tático de calabouço por turnos, em grade, inspirado em Dofus/Wakfu.
 Roda no navegador, **abrindo `index.html` direto do disco** — sem servidor, sem
 build, sem instalação.
 
-> **Leia antes de mexer:** este arquivo é o mapa. As regras de quem-manda-em-quê
-> estão em [`docs/CONTRACT_V2.md`](docs/CONTRACT_V2.md); o desenho de jogo está
-> em [`docs/GDD.md`](docs/GDD.md). Se os dois discordarem do código, **o código
+> **Leia antes de mexer:** este arquivo é o mapa **técnico**. Os SISTEMAS do jogo
+> — as 6 classes, fusão, feitiços, calabouços, chefes, itens, forja, inventário —
+> estão em [`docs/SISTEMAS.md`](docs/SISTEMAS.md). As regras de quem-manda-em-quê
+> estão em [`docs/CONTRACT_V2.md`](docs/CONTRACT_V2.md); a intenção de design em
+> [`docs/GDD.md`](docs/GDD.md). Se os dois discordarem do código, **o código
 > está certo e o documento está velho** — corrija o documento.
 
 ---
