@@ -165,7 +165,7 @@ var JOGO = (typeof window !== 'undefined')
     bruxo: { model: 'mage', show: ['2H_Staff', 'Mage_Hat', 'Mage_Cape'],
             scale: 1.02, tint: '#7a5fa0', accent: '#b98cff', weapon: '2H_Staff',
             headSwap: { model: 'barbarian', mesh: 'Barbarian_Head' },
-            headTint: '#f4f1ec',
+            headTint: '#fbfaf7', headWhite: 0.88,
             concept: 'Mago velho de barba branca, chapéu pontudo e cajado' },
     espadachim: { model: 'rogue', show: ['Knife', 'Knife_Offhand'],
             scale: 0.97, tint: '#2f6f8f', accent: '#9be8ff', weapon: 'Knife',
@@ -575,6 +575,48 @@ var JOGO = (typeof window !== 'undefined')
     return c;
   }
 
+  // Clareia a TEXTURA de uma malha, puxando cada pixel para a cor pedida.
+  // Cacheado por (textura, cor, força) — senão cada unidade redesenharia
+  // 1024x1024 no carregamento.
+  var texClara = {};
+  function clareiaCabeca(mesh, cor, forca) {
+    var mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (var i = 0; i < mats.length; i++) {
+      var m = mats[i];
+      if (!m || !m.map || !m.map.image) continue;
+      var img = m.map.image;
+      var chave = (m.map.uuid || 'x') + '|' + cor + '|' + forca;
+      var tex = texClara[chave];
+      if (!tex) {
+        var cv = document.createElement('canvas');
+        cv.width = img.width; cv.height = img.height;
+        var g = cv.getContext('2d');
+        g.drawImage(img, 0, 0);
+        var dados = g.getImageData(0, 0, cv.width, cv.height);
+        var d = dados.data;
+        var alvo = col3(cor);
+        var ar = alvo.r * 255, ag = alvo.g * 255, ab = alvo.b * 255;
+        for (var p = 0; p < d.length; p += 4) {
+          d[p]     = d[p]     + (ar - d[p])     * forca;
+          d[p + 1] = d[p + 1] + (ag - d[p + 1]) * forca;
+          d[p + 2] = d[p + 2] + (ab - d[p + 2]) * forca;
+        }
+        g.putImageData(dados, 0, 0);
+        tex = new THREE.CanvasTexture(cv);
+        tex.flipY = m.map.flipY;
+        tex.colorSpace = m.map.colorSpace;
+        tex.wrapS = m.map.wrapS; tex.wrapT = m.map.wrapT;
+        tex.needsUpdate = true;
+        texClara[chave] = tex;
+      }
+      var novo = m.clone();
+      novo.map = tex;
+      novo.color = new THREE.Color(0xffffff);   // a cor agora vem da textura
+      mats[i] = novo;
+    }
+    mesh.material = Array.isArray(mesh.material) ? mats : mats[0];
+  }
+
   function marksOf(classId, look, corDoConvidado) {
     var mk = M.CLASS_MARK[classId] || {};
     var out = [];
@@ -802,10 +844,13 @@ var JOGO = (typeof window !== 'undefined')
       for (var mi = 0; mi < mats.length; mi++) mats[mi].color.lerp(mix, 0.28);
     }
     // CABEÇA TROCADA por último: o tingimento geral acima reclona TODOS os
-    // materiais do modelo, então pintar a cabeça antes dele não sobrevive —
-    // foi por isso que a barba do mago continuava castanha na primeira tentativa.
+    // materiais do modelo, então pintar a cabeça antes dele não sobrevive.
+    // E `tintMaterials` sozinho NÃO basta aqui: ele mexe em `material.color`,
+    // que MULTIPLICA o atlas — e como a cor real vem da textura, a barba
+    // castanha continuava castanha por mais que subíssemos a força. Para
+    // embranquecer de verdade é preciso clarear a TEXTURA da cabeça.
     if (cabecaTrocada && look.headTint) {
-      try { tintMaterials(cabecaTrocada, look.headTint, 0.90); } catch (e) {}
+      try { clareiaCabeca(cabecaTrocada, look.headTint, look.headWhite || 0.88); } catch (e) {}
     }
     if (elems.length > 1) {
       var e2 = col3(M.elementColor(elems[1]));
