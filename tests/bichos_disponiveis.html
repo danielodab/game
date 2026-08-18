@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — as 25 criaturas CC0 que estão em disco e não usamos</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 14px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 14px 6px;max-width:1000px}
+  #st{font:12px monospace;color:#7fe08a;margin:0 14px 8px}
+  canvas.folha{display:block;margin:0 14px 14px;border:1px solid #2b3542}
+  h2{font-size:13px;margin:8px 14px 4px;color:#ffd98a}
+  #cv{position:fixed;left:-4000px;top:0}
+</style>
+</head>
+<body>
+<h1>O que temos de criatura e não usamos</h1>
+<div class="sub">Em cima, as 7 invocações do Xamã como estão hoje. Embaixo, as 25 criaturas CC0 da
+Quaternius que já estão em disco e nenhuma entrou no jogo. Mesma escala e mesma luz,
+com a altura medida no canto.</div>
+<div id="st">rodando…</div>
+<h2>As 7 invocações de hoje</h2>
+<canvas id="fHoje" class="folha"></canvas>
+<h2>As 25 disponíveis</h2>
+<canvas id="fNovas" class="folha"></canvas>
+<canvas id="cv" width="230" height="280"></canvas>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var TW = 230, TH = 280, COLS = 7;
+  var PASTA = '../assets/candidatos/quaternius_ultimate_monsters/';
+
+  var HOJE = [
+    ['sum-familiar', 'Familiar', 'raposa'],
+    ['sum-ember-hound', 'Cão de Brasa', 'lobo'],
+    ['sum-magma-colossus', 'Colosso de Magma', 'boi'],
+    ['sum-tide-nymph', 'Ninfa da Maré', 'esqueleto mago'],
+    ['sum-stone-sentinel', 'Sentinela de Pedra', 'esqueleto guerreiro'],
+    ['sum-mountain-golem', 'Golem da Montanha', 'boi de novo'],
+    ['sum-storm-falcon', 'Falcão da Tempestade', 'vespa']
+  ];
+
+  var NOVAS = ['Alien','Alpaking_Evolved','Armabee_Evolved','Birb','BlueDemon','Cactoro',
+    'Demon','Dragon','Dragon_Evolved','Ghost','Ghost_Skull','Glub_Evolved','Goleling',
+    'Goleling_Evolved','GreenSpikyBlob','Hywirl','Monkroose','Mushnub_Evolved',
+    'MushroomKing','Ninja','Orc','Squidle','Tribal','Wizard','Yeti'];
+
+  var st = document.getElementById('st');
+  var ren, sc, cam, falhas = [];
+
+  function cena() {
+    var cv = document.getElementById('cv');
+    ren = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+    ren.setSize(TW, TH, false);
+    ren.setClearColor(0x1a2029, 1);
+    sc = new THREE.Scene();
+    sc.add(new THREE.HemisphereLight(0xbfd4ea, 0x2b2f36, 1.0));
+    var key = new THREE.DirectionalLight(0xfff0d8, 1.7); key.position.set(4, 8, 7); sc.add(key);
+    var rim = new THREE.DirectionalLight(0xffb070, 0.9); rim.position.set(-6, 4, -6); sc.add(rim);
+    var chao = new THREE.Mesh(new THREE.PlaneGeometry(9, 9),
+      new THREE.MeshStandardMaterial({ color: 0x2a3240, roughness: 1 }));
+    chao.rotation.x = -Math.PI / 2; sc.add(chao);
+    cam = new THREE.PerspectiveCamera(28, TW / TH, 0.05, 60);
+  }
+
+  function tira(g, node, col, linha, rotulo, sub, cor) {
+    while (sc.children.length > 4) sc.remove(sc.children[sc.children.length - 1]);
+    var alt = 0;
+    if (node) {
+      sc.add(node);
+      node.updateMatrixWorld(true);
+      var b = new THREE.Box3().setFromObject(node);
+      var s = b.getSize(new THREE.Vector3());
+      var c = b.getCenter(new THREE.Vector3());
+      node.position.x -= c.x; node.position.z -= c.z; node.position.y -= b.min.y;
+      node.rotation.y = Math.PI * 0.2;
+      node.updateMatrixWorld(true);
+      alt = s.y;
+      var d = Math.max(s.y, s.x, s.z) * 2.0 + 0.7;
+      cam.position.set(d * 0.40, s.y * 0.62, d);
+      cam.lookAt(0, s.y * 0.46, 0);
+    }
+    ren.render(sc, cam);
+    var cx = col * TW, cy = linha * TH;
+    g.drawImage(document.getElementById('cv'), cx, cy);
+    g.fillStyle = 'rgba(8,10,14,0.86)';
+    g.fillRect(cx, cy + TH - 38, TW, 38);
+    g.fillStyle = cor || '#ffd98a';
+    g.font = 'bold 13px Segoe UI, sans-serif';
+    g.fillText(rotulo, cx + 7, cy + TH - 22);
+    g.fillStyle = '#828e9c';
+    g.font = '10px Segoe UI, sans-serif';
+    g.fillText(sub, cx + 7, cy + TH - 7);
+    if (alt) {
+      g.fillStyle = '#5d6875'; g.font = '10px monospace';
+      g.fillText(alt.toFixed(2) + ' m', cx + TW - 50, cy + 15);
+    }
+    g.strokeStyle = '#2b3542'; g.strokeRect(cx + 0.5, cy + 0.5, TW - 1, TH - 1);
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var t0 = Date.now();
+    (function espera() {
+      var M = JOGO.Models3D2;
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 40000) return setTimeout(espera, 200);
+        st.textContent = 'modelos não carregaram'; window.__pronto = true; return;
+      }
+      cena(); desenha();
+    })();
+
+    function desenha() {
+      var M = JOGO.Models3D2;
+
+      // ---- as 7 de hoje
+      var f1 = document.getElementById('fHoje');
+      f1.width = HOJE.length * TW; f1.height = TH;
+      var g1 = f1.getContext('2d');
+      g1.fillStyle = '#0b0e12'; g1.fillRect(0, 0, f1.width, f1.height);
+      HOJE.forEach(function (h, i) {
+        var node = null;
+        try { node = M.unit(h[0], {}); } catch (e) { falhas.push(h[0]); }
+        tira(g1, node, i, 0, h[1], 'hoje: ' + h[2], '#9aa7b6');
+      });
+
+      // ---- as 25 disponíveis, carregadas do disco
+      var linhas = Math.ceil(NOVAS.length / COLS);
+      var f2 = document.getElementById('fNovas');
+      f2.width = COLS * TW; f2.height = linhas * TH;
+      var g2 = f2.getContext('2d');
+      g2.fillStyle = '#0b0e12'; g2.fillRect(0, 0, f2.width, f2.height);
+
+      var L = new THREE.GLTFLoader(), i = 0;
+      (function proximo() {
+        if (i >= NOVAS.length) {
+          st.textContent = (falhas.length ? 'FALHAS — ' : 'PASS · ') +
+            NOVAS.length + ' criaturas disponíveis' +
+            (falhas.length ? ' · não carregaram: ' + falhas.join(', ') : '');
+          window.__pronto = true;
+          return;
+        }
+        var nome = NOVAS[i];
+        L.load(PASTA + nome + '.gltf', function (gltf) {
+          tira(g2, gltf.scene, i % COLS, Math.floor(i / COLS), nome, 'CC0 · em disco');
+          i++; setTimeout(proximo, 0);
+        }, null, function () {
+          falhas.push(nome);
+          tira(g2, null, i % COLS, Math.floor(i / COLS), nome, 'NÃO CARREGOU', '#f88');
+          i++; setTimeout(proximo, 0);
+        });
+      })();
+    }
+  });
+})();
+</script>
+</body>
+</html>

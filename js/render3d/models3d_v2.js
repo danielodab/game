@@ -246,7 +246,7 @@ var JOGO = (typeof window !== 'undefined')
     'sap-shaman':     { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.00 },
     'sprout-feral':   { model: 'q_frog',         scale: 0.78 },
     'burrlet':        { model: 'q_spider',       scale: 0.58 },
-    'boss-gardener':  { model: 'q_stag',         scale: 1.25 },
+    'boss-gardener':  { model: 'q_mushnub',     scale: 1.75 },   // era veado palido
     // --- Enxame da Estufa
     'lantern-wasp':   { model: 'q_wasp',         scale: 0.95 },
     'dew-strider':    { model: 'q_spider',       scale: 0.85 },
@@ -259,7 +259,7 @@ var JOGO = (typeof window !== 'undefined')
     'droplet':        { model: 'q_frog',         scale: 0.55 },
     'sump-crab':      { model: 'q_spider',       scale: 0.95 },
     'mist-warbler':   { model: 'q_wasp',         scale: 0.80 },
-    'boss-baroness':  { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.45 },
+    'boss-baroness':  { model: 'q_glub',        scale: 1.75 },   // era esqueleto mago
     // --- Prole da Fornalha (Fecho de Brasa)
     'ember-imp':      { model: 'skeleton_minion', scale: 0.82 },
     'walking-anvil':  { model: 'q_bull',         scale: 1.05 },
@@ -270,7 +270,7 @@ var JOGO = (typeof window !== 'undefined')
     'chain-hauler':   { model: 'skeleton_warrior', show: ['Skeleton_Axe'], scale: 1.20 },
     'spark-whelp':    { model: 'q_velociraptor', scale: 0.70 },
     'slag-bit':       { model: 'q_frog',         scale: 0.50 },
-    'boss-heartforge':{ model: 'q_trex',         scale: 1.30 },
+    'boss-heartforge':{ model: 'q_bluedemon',   scale: 1.85 },   // era T-Rex
     // --- Coro dos Andaimes (Andaimes do Vento)
     'plank-shrike':   { model: 'q_wasp',         scale: 0.95 },
     'gust-gremlin':   { model: 'skeleton_minion', scale: 0.85 },
@@ -281,7 +281,7 @@ var JOGO = (typeof window !== 'undefined')
     'mote-swarm':     { model: 'q_wasp',         scale: 0.70 },
     'mote-bit':       { model: 'q_wasp',         scale: 0.50 },
     'nail-sprite':    { model: 'q_wasp',         scale: 0.60 },
-    'boss-windwright':{ model: 'skeleton_warrior', show: ['Skeleton_Axe', 'Skeleton_Shield_Large_A'], scale: 1.55 },
+    'boss-windwright':{ model: 'q_alpaking',    scale: 1.76 },   // era esqueleto guerreiro
     // --- Turno da Noite (Mina Tremula)
     'pick-revenant':  { model: 'skeleton_warrior', show: ['Skeleton_Axe'], scale: 1.00 },
     'firedamp-wisp':  { model: 'q_wasp',         scale: 0.70 },
@@ -292,7 +292,8 @@ var JOGO = (typeof window !== 'undefined')
     'ore-chip':       { model: 'q_frog',         scale: 0.55 },
     'shaft-bat':      { model: 'q_wasp',         scale: 0.75 },
     'damp-seeper':    { model: 'q_frog',         scale: 0.80 },
-    'boss-deepknock': { model: 'q_triceratops',  scale: 1.30 },
+    'boss-deepknock': { model: 'q_yeti',        scale: 1.75 },   // era triceratops DEITADO: dizia 3,84 m e media 1,81 m de pe.
+                                                                //  o golem que eu tinha escolhido reprovou: largo e baixo
     // --- Guarda do Coracao (Coracao Partido)
     'cinder-herald':  { model: 'skeleton_warrior', show: ['Skeleton_Blade'], scale: 1.10 },
     'tide-herald':    { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.10 },
@@ -303,7 +304,7 @@ var JOGO = (typeof window !== 'undefined')
     'mirror-sliver':  { model: 'skeleton_rogue', scale: 0.70 },
     'weather-mote':   { model: 'q_wasp',         scale: 0.60 },
     'heartroot':      { model: 'q_snake',        scale: 1.00 },
-    'boss-riftheart': { model: 'q_trex',         scale: 1.45 },
+    'boss-riftheart': { model: 'q_ghostskull',  scale: 1.75 },   // era o MESMO T-Rex do heartforge
     // --- Rebanho do Invocador (invocacoes)
     'sporeling':          { model: 'q_frog',   scale: 0.62 },
     'sum-familiar':       { model: 'q_fox',    scale: 0.72 },
