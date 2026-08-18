@@ -1,0 +1,4650 @@
+{
+  "m-thorn-shot": {
+    "id": "m-thorn-shot",
+    "name": "Farpa",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 12,
+        "max": 16
+      }
+    ],
+    "description": "A vergasta chicoteia o ar e dispara um espinho farpado que assobia até acertar.",
+    "flavor": "Ela não corre atrás de ninguém. Ninguém precisa.",
+    "fxKey": "bolt"
+  },
+  "m-root-grip": {
+    "id": "m-root-grip",
+    "name": "Raiz-Trava",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "root",
+        "duration": 1
+      },
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 6,
+        "max": 9
+      }
+    ],
+    "description": "Raízes irrompem do piso e agarram os tornozelos do alvo: preso por 1 turno.",
+    "flavor": "A estufa acha que você é adubo em movimento.",
+    "fxKey": "debuff"
+  },
+  "m-pollen-bite": {
+    "id": "m-pollen-bite",
+    "name": "Mordiscada",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 8,
+        "max": 12
+      }
+    ],
+    "description": "Uma mordida fofa de dentinhos de pólen. O perigo de verdade vem depois.",
+    "flavor": "Ele sorri o tempo todo. Costurado, mas sorri.",
+    "fxKey": "slam"
+  },
+  "m-burr-hug": {
+    "id": "m-burr-hug",
+    "name": "Abraço Farpado",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 10,
+        "max": 14
+      }
+    ],
+    "description": "O carrapicho se atira no alvo e gruda, farpas para dentro.",
+    "flavor": "Carinho de novelo: dói e não sai.",
+    "fxKey": "slam"
+  },
+  "m-wasp-sting": {
+    "id": "m-wasp-sting",
+    "name": "Ferrão Lustroso",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 9,
+        "max": 13
+      },
+      {
+        "type": "poison",
+        "element": "ar",
+        "min": 4,
+        "max": 6,
+        "duration": 2
+      }
+    ],
+    "description": "O ferrão da vespa injeta um veneno luminoso que arde por 2 turnos.",
+    "flavor": "A luz do abdômen é o último aviso amigável do jardim.",
+    "fxKey": "bolt"
+  },
+  "m-sap-mend": {
+    "id": "m-sap-mend",
+    "name": "Seiva Doce",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 12,
+        "max": 16
+      }
+    ],
+    "description": "O seiveiro verte seiva dourada sobre as feridas de um aliado.",
+    "flavor": "Rega tudo com o mesmo carinho. Inclusive o que devia morrer.",
+    "fxKey": "heal"
+  },
+  "m-sap-sugar": {
+    "id": "m-sap-sugar",
+    "name": "Açúcar Bruto",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 15,
+        "duration": 2
+      }
+    ],
+    "description": "Uma dose de açúcar cru deixa o aliado frenético: +15 de poder por 2 turnos.",
+    "flavor": "Nenhuma planta desta sala sabe o que é moderação.",
+    "fxKey": "buff"
+  },
+  "m-dew-web": {
+    "id": "m-dew-web",
+    "name": "Teia de Orvalho",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "root",
+        "duration": 1
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 5,
+        "max": 8
+      }
+    ],
+    "description": "Fios pesados de orvalho se fecham sobre os pés do alvo e endurecem: preso por 1 turno.",
+    "flavor": "Cada gota da teia é uma lupa. Ela gosta de ver de perto.",
+    "fxKey": "debuff"
+  },
+  "m-dew-bite": {
+    "id": "m-dew-bite",
+    "name": "Picada de Orvalho",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 10,
+        "max": 14
+      },
+      {
+        "type": "poison",
+        "element": "agua",
+        "min": 3,
+        "max": 5,
+        "duration": 2
+      }
+    ],
+    "description": "As quelíceras injetam uma gota de água velha e parada, que apodrece por dentro.",
+    "flavor": "Água de estufa: nunca ferveu, nunca secou, nunca perdoou.",
+    "fxKey": "slam"
+  },
+  "m-shears": {
+    "id": "m-shears",
+    "name": "Tesourada",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 2,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 24,
+        "max": 30
+      }
+    ],
+    "description": "A tesoura de poda da Jardineira fecha com um estalo úmido.",
+    "flavor": "Ela não mata. Ela apara.",
+    "fxKey": "slam"
+  },
+  "m-vine-hook": {
+    "id": "m-vine-hook",
+    "name": "Cipó-Fisga",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 8,
+        "max": 12
+      }
+    ],
+    "description": "Um cipó farpado fisga o alvo e o arrasta 3 células até a tesoura.",
+    "flavor": "Erva daninha não decide onde é arrancada.",
+    "fxKey": "hook"
+  },
+  "m-seed-toss": {
+    "id": "m-seed-toss",
+    "name": "Semeadura",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "sprout-feral"
+      }
+    ],
+    "description": "A Jardineira planta uma semente que germina na hora, faminta.",
+    "flavor": "O jardim dela nunca teve estação morta.",
+    "fxKey": "summonFx"
+  },
+  "m-thorn-crown": {
+    "id": "m-thorn-crown",
+    "name": "Coroa de Espinhos",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "ring",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 14,
+        "max": 18
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "Um anel de espinhos brota a 2 células da Jardineira e se fecha: dano e prisão em quem estava na volta — mas não em quem está colado nela.",
+    "flavor": "Perto demais para a coroa. É o único lugar seguro do coreto.",
+    "fxKey": "nova"
+  },
+  "m-sprout-bite": {
+    "id": "m-sprout-bite",
+    "name": "Dentinhos",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 7,
+        "max": 10
+      }
+    ],
+    "description": "O brotinho morde com todas as suas fileiras de dentes de semente.",
+    "flavor": "Nasceu há dez segundos e já tem inimigos.",
+    "fxKey": "slam"
+  },
+  "m-burr-nip": {
+    "id": "m-burr-nip",
+    "name": "Farpinha",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 5,
+        "max": 8
+      }
+    ],
+    "description": "Pequeno, grudento e irritante.",
+    "flavor": "Metade do rancor, o dobro da velocidade.",
+    "fxKey": "slam"
+  },
+  "m-spore-nip": {
+    "id": "m-spore-nip",
+    "name": "Mordidinha Pútrida",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 6,
+        "max": 9
+      },
+      {
+        "type": "poison",
+        "element": "terra",
+        "min": 3,
+        "max": 5,
+        "duration": 1
+      }
+    ],
+    "description": "O esporinho morde e deixa bolor na ferida.",
+    "flavor": "Olhos grandes demais, lealdade maior ainda.",
+    "fxKey": "slam"
+  },
+  "m-drowned-bite": {
+    "id": "m-drowned-bite",
+    "name": "Bocanhada",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 12,
+        "max": 16,
+        "lifesteal": true
+      }
+    ],
+    "description": "O afogadiço morde e bebe: rouba a vida que lhe falta.",
+    "flavor": "Ele não tem fome. Tem frio.",
+    "fxKey": "slam"
+  },
+  "m-eel-beam": {
+    "id": "m-eel-beam",
+    "name": "Nota Grave",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 11,
+        "max": 15
+      }
+    ],
+    "description": "A moreia sopra uma nota pela flauta do próprio crânio: um jato d'água em linha reta.",
+    "flavor": "Saia da linha. Ela recoloca você nela.",
+    "fxKey": "beam"
+  },
+  "m-eel-hook": {
+    "id": "m-eel-hook",
+    "name": "Língua-Fisga",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 5,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 2
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 5,
+        "max": 8
+      }
+    ],
+    "description": "Uma língua-arpão dispara em linha reta e arrasta a presa para perto da água.",
+    "flavor": "Convite formal da corte afogada.",
+    "fxKey": "hook"
+  },
+  "m-jelly-mend": {
+    "id": "m-jelly-mend",
+    "name": "Pulso Salino",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 14,
+        "max": 18
+      }
+    ],
+    "description": "A água-viva pulsa e banha um aliado em salmoura restauradora.",
+    "flavor": "Apague o lustre antes de discutir com os convidados.",
+    "fxKey": "heal"
+  },
+  "m-jelly-ward": {
+    "id": "m-jelly-ward",
+    "name": "Membrana",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 15,
+        "duration": 2
+      }
+    ],
+    "description": "Uma película gelatinosa envolve o aliado, absorvendo golpes.",
+    "flavor": "Translúcida, morna, profundamente desagradável.",
+    "fxKey": "shieldFx"
+  },
+  "m-brine-fist": {
+    "id": "m-brine-fist",
+    "name": "Punho de Salmoura",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 16,
+        "max": 22
+      }
+    ],
+    "description": "Um punho de sal compactado desce como um aríete.",
+    "flavor": "Maré baixa para andar, maré alta para bater.",
+    "fxKey": "slam"
+  },
+  "m-drop-slam": {
+    "id": "m-drop-slam",
+    "name": "Chuaque",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 11,
+        "max": 15
+      }
+    ],
+    "description": "A gota se joga inteira em cima do alvo. É exatamente o som que você imagina.",
+    "flavor": "Chuaque.",
+    "fxKey": "slam"
+  },
+  "m-droplet-splash": {
+    "id": "m-droplet-splash",
+    "name": "Pingo",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 5,
+        "max": 8
+      }
+    ],
+    "description": "A gotinha se atira contra a canela do alvo com toda a indignação de que dispõe. Plic.",
+    "flavor": "Pequena, redonda, indignada.",
+    "fxKey": "slam"
+  },
+  "m-crab-pinch": {
+    "id": "m-crab-pinch",
+    "name": "Pinça de Sumidouro",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 14,
+        "max": 18
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "A pinça fecha com um estalo de pedra e devolve o alvo uma célula para trás.",
+    "flavor": "Ele mora no ralo. O ralo é dele.",
+    "fxKey": "slam"
+  },
+  "m-crab-guard": {
+    "id": "m-crab-guard",
+    "name": "Casco Fechado",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 25,
+        "duration": 2
+      },
+      {
+        "type": "resist",
+        "element": "agua",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "O caranguejo se fecha inteiro: 25 de escudo e +20% de resistência a água por 2 turnos.",
+    "flavor": "Mil anos debaixo d'água ensinam a fechar a porta.",
+    "fxKey": "shieldFx"
+  },
+  "m-mist-song": {
+    "id": "m-mist-song",
+    "name": "Cantiga de Névoa",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "dodge",
+        "value": 12,
+        "duration": 2
+      }
+    ],
+    "description": "Um assobio fino e desafinado deixa o aliado escorregadio: +12 de esquiva por 2 turnos.",
+    "flavor": "A nota certa é a que ninguém consegue segurar.",
+    "fxKey": "buff"
+  },
+  "m-mist-shove": {
+    "id": "m-mist-shove",
+    "name": "Sopro de Névoa",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 8,
+        "max": 11
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "Uma lufada úmida empurra o alvo 2 células — de preferência para dentro do canal.",
+    "flavor": "A cisterna tem muitos buracos e nenhuma paciência.",
+    "fxKey": "gust"
+  },
+  "m-tide-pull": {
+    "id": "m-tide-pull",
+    "name": "Maré Faminta",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      }
+    ],
+    "description": "A Baronesa inspira — e a sala inteira vira maré: tudo num raio de 3 células é arrastado até ela.",
+    "flavor": "Ela recebe. Ninguém recusa convite de anfitriã.",
+    "fxKey": "nova"
+  },
+  "m-bitter-gulp": {
+    "id": "m-bitter-gulp",
+    "name": "Gole Amargo",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "cross",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 20,
+        "max": 26
+      },
+      {
+        "type": "poison",
+        "element": "agua",
+        "min": 6,
+        "max": 9,
+        "duration": 2
+      }
+    ],
+    "description": "A Baronesa engole tudo ao redor num só trago de salmoura ácida, que continua corroendo por 2 turnos.",
+    "flavor": "Puxa num turno, bebe no outro. Saia entre um e outro.",
+    "fxKey": "nova"
+  },
+  "m-salt-lance": {
+    "id": "m-salt-lance",
+    "name": "Lança de Sal",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 16,
+        "max": 22
+      }
+    ],
+    "description": "Um cristal de sal afiado cruza a sala girando.",
+    "flavor": "Talheres da corte.",
+    "fxKey": "bolt"
+  },
+  "m-brine-spawn": {
+    "id": "m-brine-spawn",
+    "name": "Verter",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 3,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "droplet"
+      }
+    ],
+    "description": "A Baronesa transborda, e o que escorre ganha vontade própria.",
+    "flavor": "Todo baile tem convidados que ninguém chamou.",
+    "fxKey": "summonFx"
+  },
+  "m-ember-claw": {
+    "id": "m-ember-claw",
+    "name": "Garra Acesa",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 13,
+        "max": 17
+      }
+    ],
+    "description": "O tição rasga com garras em brasa viva.",
+    "flavor": "A risada é o estopim.",
+    "fxKey": "slam"
+  },
+  "m-anvil-crush": {
+    "id": "m-anvil-crush",
+    "name": "Esmagamento",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 20,
+        "max": 26
+      }
+    ],
+    "description": "A bigorna simplesmente cai por cima. Física básica, resultados excelentes.",
+    "flavor": "Cite-a por último, mas cite-a.",
+    "fxKey": "slam"
+  },
+  "m-ash-bolt": {
+    "id": "m-ash-bolt",
+    "name": "Seta de Cinza",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 13,
+        "max": 17
+      }
+    ],
+    "description": "O cinzento aponta o dedo e a fuligem obedece, voando em seta.",
+    "flavor": "Fuligem é só fogo que aprendeu a flutuar.",
+    "fxKey": "bolt"
+  },
+  "m-ash-veil": {
+    "id": "m-ash-veil",
+    "name": "Sudário de Cinza",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "invisible",
+        "duration": 1
+      }
+    ],
+    "description": "O cinzento se desfaz em fuligem suspensa por 1 turno: impossível de mirar.",
+    "flavor": "Troque de alvo — ou adivinhe.",
+    "fxKey": "veil"
+  },
+  "m-slag-slam": {
+    "id": "m-slag-slam",
+    "name": "Peso Morto",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 15,
+        "max": 20
+      }
+    ],
+    "description": "O monte de escória desaba sobre o alvo em câmera lenta, fervendo.",
+    "flavor": "Uma morte em três atos começa aqui.",
+    "fxKey": "slam"
+  },
+  "m-smith-hammer": {
+    "id": "m-smith-hammer",
+    "name": "Marretada",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 12,
+        "max": 16
+      }
+    ],
+    "description": "O ferreiro trata o alvo como peça mal forjada.",
+    "flavor": "Sem rosto, sem pressa, sem erro.",
+    "fxKey": "slam"
+  },
+  "m-forge-temper": {
+    "id": "m-forge-temper",
+    "name": "Têmpera",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "O ferreiro martela o aliado como quem afia uma arma: +20 de poder por 2 turnos.",
+    "flavor": "Uma Bigorna temperada desmonta um herói.",
+    "fxKey": "buff"
+  },
+  "m-smith-plate": {
+    "id": "m-smith-plate",
+    "name": "Chapa Quente",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "Uma placa de metal ainda rubro é soldada no aliado: 20 de escudo.",
+    "flavor": "Dói nos dois. Só um se importa.",
+    "fxKey": "shieldFx"
+  },
+  "m-quench-lunge": {
+    "id": "m-quench-lunge",
+    "name": "Bote de Têmpera",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 4
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 12,
+        "max": 16
+      }
+    ],
+    "description": "O cão salta do fosso de têmpera até 4 células e morde ainda pingando.",
+    "flavor": "Nasceu da água que apaga espadas.",
+    "fxKey": "gust"
+  },
+  "m-quench-hiss": {
+    "id": "m-quench-hiss",
+    "name": "Chiado",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "dispelShield"
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 9,
+        "max": 12
+      }
+    ],
+    "description": "Um jato de vapor fervente descola o escudo do alvo antes de queimá-lo.",
+    "flavor": "O barulho que uma proteção faz ao desistir.",
+    "fxKey": "burst"
+  },
+  "m-chain-yank": {
+    "id": "m-chain-yank",
+    "name": "Puxão de Corrente",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "A corrente do teto laça o alvo, arrasta 3 células e o prende ao gancho por 1 turno.",
+    "flavor": "A forja sempre precisou de carne pendurada.",
+    "fxKey": "hook"
+  },
+  "m-chain-lash": {
+    "id": "m-chain-lash",
+    "name": "Correntada",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 13,
+        "max": 17
+      }
+    ],
+    "description": "Elos grossos giram e batem de chapa.",
+    "flavor": "Nada de elegante. Muito de eficaz.",
+    "fxKey": "slam"
+  },
+  "m-doom-hammer": {
+    "id": "m-doom-hammer",
+    "name": "Martelo do Fim",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 2,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "cross",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 30,
+        "max": 38
+      }
+    ],
+    "description": "Magno ergue o martelo com que se forjou o primeiro Fecho — e o mundo range quando ele desce.",
+    "flavor": "A cruz inteira paga pelo alvo que ele escolheu.",
+    "fxKey": "nova"
+  },
+  "m-bellows-blast": {
+    "id": "m-bellows-blast",
+    "name": "Sopro de Fornalha",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 14,
+        "max": 18
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "O peito-fornalha de Magno expele um vendaval incandescente que arremessa o alvo 3 células.",
+    "flavor": "De costas para o fosso, isso é uma sentença.",
+    "fxKey": "gust"
+  },
+  "m-spark-call": {
+    "id": "m-spark-call",
+    "name": "Chamar Fagulhas",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "spark-whelp"
+      }
+    ],
+    "description": "Magno estala os dedos e uma fagulha ganha pernas — e péssimas intenções.",
+    "flavor": "Ele fabrica o próprio exército descartável.",
+    "fxKey": "summonFx"
+  },
+  "m-heart-brand": {
+    "id": "m-heart-brand",
+    "name": "Marca do Acendedor",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "Magno encosta a chama no alvo e deixa uma marca em brasa: +5% de dano recebido por pilha, até 5 pilhas.",
+    "flavor": "Ele marca a peça antes de bater nela.",
+    "fxKey": "debuff"
+  },
+  "m-anvil-verdict": {
+    "id": "m-anvil-verdict",
+    "name": "Veredito da Bigorna",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 2,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "detonateMarks",
+        "mult": 9
+      }
+    ],
+    "description": "Magno consome todas as marcas do alvo de uma vez: 9 de dano por pilha acumulada.",
+    "flavor": "A peça marcada volta para a bigorna. Sempre.",
+    "fxKey": "burst"
+  },
+  "m-stoke": {
+    "id": "m-stoke",
+    "name": "Atiçar-se",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 25,
+        "duration": 2
+      }
+    ],
+    "description": "Magno abre a grelha do próprio peito e sopra as brasas: +25 de poder.",
+    "flavor": "A fornalha respira. A segunda metade da luta é outra luta.",
+    "fxKey": "buff"
+  },
+  "m-spark-tap": {
+    "id": "m-spark-tap",
+    "name": "Estalo",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 6,
+        "max": 9
+      }
+    ],
+    "description": "A fagulha encosta e estala. Dói mais do que parece.",
+    "flavor": "Vive pouco, termina alto.",
+    "fxKey": "slam"
+  },
+  "m-slag-drip": {
+    "id": "m-slag-drip",
+    "name": "Respingo",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 5,
+        "max": 8
+      }
+    ],
+    "description": "Um respingo de escória fervente.",
+    "flavor": "Um caco ainda rubro, rastejando com propósito.",
+    "fxKey": "slam"
+  },
+  "m-shrike-dive": {
+    "id": "m-shrike-dive",
+    "name": "Rasante",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 5
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 14,
+        "max": 18
+      }
+    ],
+    "description": "O picanço desce a prumo pelo vão do andaime e acerta no fim da queda.",
+    "flavor": "Ele usa a altura como se ela fosse arma. É.",
+    "fxKey": "gust"
+  },
+  "m-shrike-peck": {
+    "id": "m-shrike-peck",
+    "name": "Bicada de Tábua",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 10,
+        "max": 14
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "Uma bicada seca que empurra o alvo uma célula para trás — e no andaime, uma célula é muita coisa.",
+    "flavor": "Ele empala o que sobra nos pregos.",
+    "fxKey": "slam"
+  },
+  "m-gremlin-shove": {
+    "id": "m-gremlin-shove",
+    "name": "Encontrão",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 9,
+        "max": 12
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "O gremlin dá um ombro entusiasmado e manda o alvo 2 células para onde não há chão.",
+    "flavor": "Ele acha isso hilário. Todos os dias.",
+    "fxKey": "gust"
+  },
+  "m-gremlin-swap": {
+    "id": "m-gremlin-swap",
+    "name": "Troca-Tábua",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "swap"
+      }
+    ],
+    "description": "O gremlin troca de lugar com a vítima — quase sempre para colocá-la na beirada.",
+    "flavor": "Ele nunca fica com a pior tábua.",
+    "fxKey": "blink"
+  },
+  "m-rope-noose": {
+    "id": "m-rope-noose",
+    "name": "Laço de Obra",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "A corda vem em linha reta, laça e recolhe 3 células — e o nó segura por 1 turno.",
+    "flavor": "A obra recolhe o material.",
+    "fxKey": "hook"
+  },
+  "m-rope-cinch": {
+    "id": "m-rope-cinch",
+    "name": "Aperto de Nó",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 12,
+        "max": 16
+      },
+      {
+        "type": "mark",
+        "value": 4,
+        "duration": 2,
+        "max": 4
+      }
+    ],
+    "description": "O nó aperta e deixa a marca da corda na carne: +4% de dano recebido por pilha.",
+    "flavor": "Cada volta da corda é uma promessa.",
+    "fxKey": "debuff"
+  },
+  "m-kite-arc": {
+    "id": "m-kite-arc",
+    "name": "Arco de Pipa",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "chain",
+        "jumps": 2,
+        "falloff": 0.65,
+        "element": "ar",
+        "min": 11,
+        "max": 15
+      }
+    ],
+    "description": "A linha da serpe-pipa risca o ar carregado e salta para até 2 inimigos vizinhos, enfraquecendo a cada salto.",
+    "flavor": "No vendaval, tudo aqui é para-raios.",
+    "fxKey": "beam"
+  },
+  "m-kite-whip": {
+    "id": "m-kite-whip",
+    "name": "Chicote de Linha",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 13,
+        "max": 17
+      }
+    ],
+    "description": "A cauda de fita corta com o fio de vidro moído que a reveste.",
+    "flavor": "Linha de pipa cega corta pescoço de dono.",
+    "fxKey": "bolt"
+  },
+  "m-ballast-drop": {
+    "id": "m-ballast-drop",
+    "name": "Queda de Lastro",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "O golem despeja um saco de pedras do próprio tronco em cima do alvo.",
+    "flavor": "Ele é o único aqui que pesa. Faz questão de provar.",
+    "fxKey": "slam"
+  },
+  "m-ballast-anchor": {
+    "id": "m-ballast-anchor",
+    "name": "Ancorar",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 30,
+        "duration": 2
+      },
+      {
+        "type": "taunt",
+        "duration": 2
+      }
+    ],
+    "description": "O golem crava os pés nas juntas do andaime: 30 de escudo e provocação por 2 turnos.",
+    "flavor": "Enquanto ele segura o vento, o vento o consome.",
+    "fxKey": "shieldFx"
+  },
+  "m-choir-hymn": {
+    "id": "m-choir-hymn",
+    "name": "Assobio Coral",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 10,
+        "max": 14
+      },
+      {
+        "type": "buff",
+        "stat": "dodge",
+        "value": 10,
+        "duration": 2
+      }
+    ],
+    "description": "Os tubos do coro afinam no mesmo tom: o aliado se recompõe e fica mais escorregadio.",
+    "flavor": "Quando eles cantam juntos, a obra inteira vibra.",
+    "fxKey": "heal"
+  },
+  "m-choir-clear": {
+    "id": "m-choir-clear",
+    "name": "Sopro Limpo",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root",
+          "mark"
+        ]
+      },
+      {
+        "type": "regen",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "description": "Uma lufada limpa veneno, nós e marcas do aliado, e deixa uma corrente morna regenerando.",
+    "flavor": "Ventilar é a religião local.",
+    "fxKey": "buff"
+  },
+  "m-mote-buzz": {
+    "id": "m-mote-buzz",
+    "name": "Zumbido",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 8,
+        "max": 11
+      }
+    ],
+    "description": "O enxame passa raspando e leva um pedaço junto.",
+    "flavor": "Mil bichinhos, uma opinião.",
+    "fxKey": "slam"
+  },
+  "m-mote-nip": {
+    "id": "m-mote-nip",
+    "name": "Ferroada de Mote",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 5,
+        "max": 8
+      }
+    ],
+    "description": "Um mote solitário faz o que pode.",
+    "flavor": "Sozinho é cômico. Em dois, nem tanto.",
+    "fxKey": "slam"
+  },
+  "m-nail-jab": {
+    "id": "m-nail-jab",
+    "name": "Espetada",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 6,
+        "max": 9
+      }
+    ],
+    "description": "Um prego vivo pula e se enterra onde encontra.",
+    "flavor": "A obra ainda tem pregos sobrando.",
+    "fxKey": "slam"
+  },
+  "m-scaffold-collapse": {
+    "id": "m-scaffold-collapse",
+    "name": "Desabar a Ala",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 18,
+        "max": 24
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "Cambota chuta a viga mestra e a linha inteira cede: dano e arremesso de 3 células.",
+    "flavor": "Ele derruba a própria obra sem hesitar. Reconstrói depois.",
+    "fxKey": "gust"
+  },
+  "m-rivet-volley": {
+    "id": "m-rivet-volley",
+    "name": "Salva de Rebites",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "cone",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 14,
+        "max": 18
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "Um leque de rebites em brasa cravado num cone de 3 células: cada rebite é uma marca aberta.",
+    "flavor": "Ele te transforma em parte da estrutura.",
+    "fxKey": "burst"
+  },
+  "m-raise-frame": {
+    "id": "m-raise-frame",
+    "name": "Levantar Prumo",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "nail-sprite"
+      }
+    ],
+    "description": "Cambota finca uma armação nova e um pregolim sai andando dela.",
+    "flavor": "A obra nunca para. É esse o problema.",
+    "fxKey": "summonFx"
+  },
+  "m-headwind": {
+    "id": "m-headwind",
+    "name": "Vento de Proa",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "vendaval"
+      },
+      {
+        "type": "buff",
+        "stat": "dodge",
+        "value": 15,
+        "duration": 2
+      }
+    ],
+    "description": "Cambota abre todas as comportas do poço: o vendaval volta a soprar e ele fica impossível de segurar.",
+    "flavor": "A sala é ferramenta dele. Você é que está de visita.",
+    "fxKey": "nova"
+  },
+  "m-pick-swing": {
+    "id": "m-pick-swing",
+    "name": "Picaretada",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 16,
+        "max": 21
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 2,
+        "max": 4
+      }
+    ],
+    "description": "A picareta abre uma fissura na armadura e deixa a marca do veio: +5% de dano recebido por pilha.",
+    "flavor": "Ele lê você como lê rocha: procurando onde racha.",
+    "fxKey": "slam"
+  },
+  "m-pick-verdict": {
+    "id": "m-pick-verdict",
+    "name": "Golpe de Veio",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "detonateMarks",
+        "mult": 7
+      }
+    ],
+    "description": "O assombro bate exatamente onde marcou e a rocha cede: 7 de dano por pilha acumulada.",
+    "flavor": "Toda pedra tem um golpe só. Ele decorou o seu.",
+    "fxKey": "burst"
+  },
+  "m-firedamp-flare": {
+    "id": "m-firedamp-flare",
+    "name": "Labareda de Grisu",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 12,
+        "max": 16
+      }
+    ],
+    "description": "O fogaréu cospe uma língua azul de gás aceso pela galeria.",
+    "flavor": "O gás não tem cheiro. O aviso é a luz.",
+    "fxKey": "bolt"
+  },
+  "m-firedamp-cloud": {
+    "id": "m-firedamp-cloud",
+    "name": "Bolsão de Gás",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 6,
+        "max": 9,
+        "duration": 2
+      }
+    ],
+    "description": "Um bolsão invisível se rompe e queima os pulmões de quem está na área por 2 turnos.",
+    "flavor": "Os mineiros levavam pássaros. Você levou heróis.",
+    "fxKey": "poisonCloud"
+  },
+  "m-cave-bite": {
+    "id": "m-cave-bite",
+    "name": "Bocarrada",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 20,
+        "max": 26
+      }
+    ],
+    "description": "A galeria se fecha nos dentes de pedra da Bocarra.",
+    "flavor": "Você achou que era um túnel.",
+    "fxKey": "slam"
+  },
+  "m-cave-roar": {
+    "id": "m-cave-roar",
+    "name": "Rugido de Galeria",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "cross",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 10,
+        "max": 14
+      },
+      {
+        "type": "taunt",
+        "duration": 2
+      }
+    ],
+    "description": "O rugido percorre a cruz de galerias e obriga todo mundo a olhar para ela por 2 turnos.",
+    "flavor": "Uma bocarra que exige plateia.",
+    "fxKey": "nova"
+  },
+  "m-crystal-chant": {
+    "id": "m-crystal-chant",
+    "name": "Canto de Cristal",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 14,
+        "max": 18
+      }
+    ],
+    "description": "O cristal ressoa na frequência da pedra viva e recompõe o aliado.",
+    "flavor": "A mina canta de volta para quem cava direito.",
+    "fxKey": "heal"
+  },
+  "m-crystal-facet": {
+    "id": "m-crystal-facet",
+    "name": "Faceta Espelhada",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 22,
+        "duration": 2
+      },
+      {
+        "type": "reflect",
+        "pct": 20,
+        "duration": 2
+      }
+    ],
+    "description": "Uma casca de quartzo cobre o aliado: 22 de escudo e 20% do dano recebido volta para quem bateu.",
+    "flavor": "Bater nele é bater em você mesmo, com atraso.",
+    "fxKey": "shieldFx"
+  },
+  "m-worm-drag": {
+    "id": "m-worm-drag",
+    "name": "Arrasto de Abatimento",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "O chão desmorona em funil e o alvo escorrega 3 células até a boca do verme, preso na areia.",
+    "flavor": "O piso é opinião. Ele discorda.",
+    "fxKey": "hook"
+  },
+  "m-worm-spit": {
+    "id": "m-worm-spit",
+    "name": "Cuspe de Cascalho",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 13,
+        "max": 17
+      }
+    ],
+    "description": "Uma rajada de cascalho triturado, quente do atrito.",
+    "flavor": "Ele mastiga a mina e devolve a parte inútil.",
+    "fxKey": "bolt"
+  },
+  "m-tumbler-roll": {
+    "id": "m-tumbler-roll",
+    "name": "Rolagem",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 4
+      },
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 15,
+        "max": 20
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "O rolo de minério ganha embalo por até 4 células e atropela o que estiver no fim do trilho.",
+    "flavor": "A mina inteira é uma ladeira, se você for redondo.",
+    "fxKey": "gust"
+  },
+  "m-ore-chip-hit": {
+    "id": "m-ore-chip-hit",
+    "name": "Lascada",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 7,
+        "max": 10
+      }
+    ],
+    "description": "Uma lasca de minério se atira contra a canela do alvo.",
+    "flavor": "O troco do rolo.",
+    "fxKey": "slam"
+  },
+  "m-bat-screech": {
+    "id": "m-bat-screech",
+    "name": "Guincho de Poço",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 3,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 9,
+        "max": 12
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "Um guincho tão agudo que empurra o ar — e o alvo junto.",
+    "flavor": "Ele enxerga com isso. Você só sente.",
+    "fxKey": "burst"
+  },
+  "m-bat-swoop": {
+    "id": "m-bat-swoop",
+    "name": "Voo Rasante",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 5
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 11,
+        "max": 15
+      }
+    ],
+    "description": "O morcego atravessa o poço na diagonal e passa raspando com as garras.",
+    "flavor": "No tremor ele perde 5 PV por turno. Ainda assim insiste.",
+    "fxKey": "gust"
+  },
+  "m-seep-drip": {
+    "id": "m-seep-drip",
+    "name": "Gotejo Ácido",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 10,
+        "max": 14
+      },
+      {
+        "type": "poison",
+        "element": "agua",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "description": "A escorrência lança água de mina — mineral, velha e corrosiva — que continua comendo por 2 turnos.",
+    "flavor": "Mil anos filtrando veneno da rocha.",
+    "fxKey": "bolt"
+  },
+  "m-seep-solvent": {
+    "id": "m-seep-solvent",
+    "name": "Solvente",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "dispelShield"
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 8,
+        "max": 11
+      }
+    ],
+    "description": "Um esguicho dissolve o escudo do alvo como se fosse sal.",
+    "flavor": "Nada aqui embaixo fica protegido para sempre.",
+    "fxKey": "burst"
+  },
+  "m-deep-knock": {
+    "id": "m-deep-knock",
+    "name": "A Batida",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "ring",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 20,
+        "max": 26
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "Batepedra bate uma vez no chão e o anel a 2 células ao redor dele racha: dano e pés presos por 1 turno.",
+    "flavor": "Os mineiros contavam as batidas. Quem chegava a três não voltava.",
+    "fxKey": "nova"
+  },
+  "m-rockfall": {
+    "id": "m-rockfall",
+    "name": "Desabamento",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "Ele aponta para o teto e o teto obedece: pedra em área, e o que sobra é jogado 2 células.",
+    "flavor": "A mina desaba com pontaria.",
+    "fxKey": "nova"
+  },
+  "m-vein-call": {
+    "id": "m-vein-call",
+    "name": "Chamar o Veio",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "ore-chip"
+      }
+    ],
+    "description": "Batepedra arranca um punhado do veio e o punhado começa a andar.",
+    "flavor": "Minério é gente também, aqui embaixo.",
+    "fxKey": "summonFx"
+  },
+  "m-quake-stance": {
+    "id": "m-quake-stance",
+    "name": "Postura de Tremor",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "tremor"
+      },
+      {
+        "type": "shield",
+        "value": 40,
+        "duration": 2
+      },
+      {
+        "type": "reflect",
+        "pct": 25,
+        "duration": 2
+      }
+    ],
+    "description": "Ele senta no próprio peso e a mina inteira treme junto: volta o tremor, 40 de escudo e 25% do dano devolvido.",
+    "flavor": "O clima é a arma dele. Tirá-lo do tremor é metade da luta.",
+    "fxKey": "nova"
+  },
+  "m-cinder-lash": {
+    "id": "m-cinder-lash",
+    "name": "Açoite de Brasa",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 15,
+        "max": 20
+      }
+    ],
+    "description": "O arauto estala um chicote de brasa que atravessa a sala partida.",
+    "flavor": "Um quarto do Coração ainda arde.",
+    "fxKey": "bolt"
+  },
+  "m-cinder-brand": {
+    "id": "m-cinder-brand",
+    "name": "Semear Brasa",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "m-cinder-trap",
+        "duration": 3
+      }
+    ],
+    "description": "O arauto enterra uma brasa viva na célula: quem pisar nela nos próximos 3 turnos acorda a armadilha.",
+    "flavor": "O chão desta sala tem memória e rancor.",
+    "fxKey": "summonFx"
+  },
+  "m-cinder-trap": {
+    "id": "m-cinder-trap",
+    "name": "Brasa Acordada",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 22,
+        "max": 28
+      }
+    ],
+    "description": "A brasa enterrada estoura sob o pé e cospe fogo num círculo de 1 célula. (Armadilha: dispara ao ser pisada, não é conjurada.)",
+    "flavor": "Você achou o lugar onde ele plantou.",
+    "fxKey": "nova"
+  },
+  "m-tide-hymn": {
+    "id": "m-tide-hymn",
+    "name": "Hino da Maré",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 18,
+        "max": 24
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root",
+          "mark"
+        ]
+      }
+    ],
+    "description": "A maré lava o aliado: cura funda e leva embora veneno, raízes e marcas.",
+    "flavor": "A água não perdoa: ela só desfaz.",
+    "fxKey": "heal"
+  },
+  "m-tide-drag": {
+    "id": "m-tide-drag",
+    "name": "Ressaca",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 2
+      }
+    ],
+    "description": "A ressaca arrasta 2 células tudo o que estiver num raio de 2 — de volta para o meio da sala partida.",
+    "flavor": "Ninguém escolhe onde a maré o deixa.",
+    "fxKey": "nova"
+  },
+  "m-stone-fist": {
+    "id": "m-stone-fist",
+    "name": "Punho de Alicerce",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 24,
+        "max": 30
+      }
+    ],
+    "description": "Um punho de fundação desce com o peso de tudo o que ele sustenta.",
+    "flavor": "Ele segura o teto. Ele te lembra disso.",
+    "fxKey": "slam"
+  },
+  "m-stone-bulwark": {
+    "id": "m-stone-bulwark",
+    "name": "Baluarte",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 35,
+        "duration": 2
+      },
+      {
+        "type": "taunt",
+        "duration": 2
+      }
+    ],
+    "description": "O arauto planta os pés e vira parede: 35 de escudo e provocação por 2 turnos.",
+    "flavor": "A única porta é ele.",
+    "fxKey": "shieldFx"
+  },
+  "m-gale-step": {
+    "id": "m-gale-step",
+    "name": "Passo de Vendaval",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 5
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 16,
+        "max": 21
+      }
+    ],
+    "description": "O arauto atravessa 5 células como corrente de ar e materializa o corte na chegada.",
+    "flavor": "Ele já estava lá quando você decidiu recuar.",
+    "fxKey": "gust"
+  },
+  "m-gale-cut": {
+    "id": "m-gale-cut",
+    "name": "Corte de Corrente",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 14,
+        "max": 19
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "Uma lâmina de ar comprimido corta e devolve o alvo 2 células.",
+    "flavor": "A sala partida tem muitas beiradas.",
+    "fxKey": "slam"
+  },
+  "m-null-hush": {
+    "id": "m-null-hush",
+    "name": "Silêncio Zelador",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "dispelShield"
+      },
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 12,
+        "max": 16
+      }
+    ],
+    "description": "O zelador apaga a proteção do alvo com um gesto de quem fecha uma janela — e cobra a passagem.",
+    "flavor": "Ele não odeia ninguém. Só organiza.",
+    "fxKey": "burst"
+  },
+  "m-null-mend": {
+    "id": "m-null-mend",
+    "name": "Remendo Zelador",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root",
+          "mark"
+        ]
+      },
+      {
+        "type": "regen",
+        "min": 8,
+        "max": 12,
+        "duration": 2
+      }
+    ],
+    "description": "Limpa o aliado de tudo o que grudou e deixa um remendo que fecha sozinho por 2 turnos.",
+    "flavor": "Zelar é tirar o que não pertence.",
+    "fxKey": "heal"
+  },
+  "m-mirror-cut": {
+    "id": "m-mirror-cut",
+    "name": "Corte Espelhado",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 18,
+        "max": 24
+      }
+    ],
+    "description": "O gêmeo repete o seu último golpe, com a mão trocada.",
+    "flavor": "Ele aprendeu isso vendo você.",
+    "fxKey": "slam"
+  },
+  "m-mirror-guard": {
+    "id": "m-mirror-guard",
+    "name": "Guarda de Espelho",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 20,
+        "duration": 2
+      },
+      {
+        "type": "reflect",
+        "pct": 30,
+        "duration": 2
+      }
+    ],
+    "description": "20 de escudo e 30% do dano recebido volta para o agressor por 2 turnos.",
+    "flavor": "Machuque-o depressa ou machuque-se devagar.",
+    "fxKey": "shieldFx"
+  },
+  "m-sliver-shard": {
+    "id": "m-sliver-shard",
+    "name": "Estilha",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 9,
+        "max": 13
+      }
+    ],
+    "description": "Um caco do gêmeo se atira sozinho.",
+    "flavor": "Todo espelho quebrado continua olhando.",
+    "fxKey": "slam"
+  },
+  "m-turn-rain": {
+    "id": "m-turn-rain",
+    "name": "Virar para a Chuva",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "chuva"
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 8,
+        "max": 11
+      }
+    ],
+    "description": "O mote inclina a sala para a água: começa a chover, e ele aproveita para molhar quem estava seco.",
+    "flavor": "Ele muda o tempo por diversão. Só isso.",
+    "fxKey": "nova"
+  },
+  "m-turn-drought": {
+    "id": "m-turn-drought",
+    "name": "Virar para a Estiagem",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "estiagem"
+      },
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 8,
+        "max": 11
+      }
+    ],
+    "description": "O mote seca o ar da sala num piscar: estiagem — e uma lambida de calor no alvo.",
+    "flavor": "Quem escolheu Água acabou de piorar de vida.",
+    "fxKey": "nova"
+  },
+  "m-turn-gale": {
+    "id": "m-turn-gale",
+    "name": "Virar para o Vendaval",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "vendaval"
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 8,
+        "max": 11
+      }
+    ],
+    "description": "O mote abre as fendas do Coração e o vendaval entra rasgando.",
+    "flavor": "Três climas, uma criatura, nenhuma vergonha.",
+    "fxKey": "nova"
+  },
+  "m-heartroot-lash": {
+    "id": "m-heartroot-lash",
+    "name": "Açoite de Raiz",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 14,
+        "max": 18
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "A raiz-do-coração chicoteia e enterra a ponta no pé do alvo: preso por 1 turno.",
+    "flavor": "Ela ainda tenta segurar o Coração inteiro.",
+    "fxKey": "debuff"
+  },
+  "m-heartroot-grasp": {
+    "id": "m-heartroot-grasp",
+    "name": "Agarrar",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 2
+      },
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 10,
+        "max": 14
+      }
+    ],
+    "description": "A raiz enrola o tornozelo e recolhe 2 células.",
+    "flavor": "Ela guarda tudo o que consegue puxar.",
+    "fxKey": "hook"
+  },
+  "m-season-ember": {
+    "id": "m-season-ember",
+    "name": "Estação de Brasa",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "estiagem"
+      },
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 20,
+        "max": 26
+      }
+    ],
+    "description": "O quarto de brasa do Coração bate: a sala seca inteira e um círculo de 1 célula pega fogo.",
+    "flavor": "Uma das quatro estações que ele carrega. Nunca a mesma duas vezes seguidas.",
+    "fxKey": "nova"
+  },
+  "m-season-tide": {
+    "id": "m-season-tide",
+    "name": "Estação de Maré",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "chuva"
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 20,
+        "max": 26
+      }
+    ],
+    "description": "O quarto d'água bate: começa a chover dentro da sala e a área alaga com força de arrebentação.",
+    "flavor": "Se você escolheu Fogo, este é o turno de recuar.",
+    "fxKey": "nova"
+  },
+  "m-season-gale": {
+    "id": "m-season-gale",
+    "name": "Estação de Vendaval",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "vendaval"
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 18,
+        "max": 24
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "O quarto de ar bate: vendaval na sala e uma lâmina reta que arremessa 3 células.",
+    "flavor": "A rachadura do Coração é uma boca soprando.",
+    "fxKey": "gust"
+  },
+  "m-season-quake": {
+    "id": "m-season-quake",
+    "name": "Estação de Tremor",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "ring",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "tremor"
+      },
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "O quarto de pedra bate: a mina do mundo inteiro treme e o anel a 2 células racha e prende.",
+    "flavor": "A Lousa desce mais um palmo a cada batida dessas.",
+    "fxKey": "nova"
+  },
+  "m-shard-storm": {
+    "id": "m-shard-storm",
+    "name": "Tempestade de Cacos",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "chain",
+        "jumps": 3,
+        "falloff": 0.7,
+        "element": "neutro",
+        "min": 14,
+        "max": 18
+      }
+    ],
+    "description": "Cacos do próprio Coração saltam de inimigo em inimigo, até 3 saltos, perdendo força a cada um.",
+    "flavor": "Ele se despedaça um pouco a cada vez. Não parece se importar.",
+    "fxKey": "beam"
+  },
+  "m-mend-rift": {
+    "id": "m-mend-rift",
+    "name": "Cerzir a Fenda",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 30,
+        "max": 40
+      },
+      {
+        "type": "shield",
+        "value": 40,
+        "duration": 2
+      }
+    ],
+    "description": "O Coração puxa as próprias bordas e se costura: cura funda e 40 de escudo.",
+    "flavor": "Mil anos rachando e ele ainda tenta.",
+    "fxKey": "heal"
+  },
+  "m-splinter-call": {
+    "id": "m-splinter-call",
+    "name": "Chamar Estilhas",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "mirror-sliver"
+      }
+    ],
+    "description": "Um caco se desprende do Coração e cai de pé, já com raiva.",
+    "flavor": "Cada estilha lembra de ter sido inteira.",
+    "fxKey": "summonFx"
+  },
+  "m-sum-familiar-bite": {
+    "id": "m-sum-familiar-bite",
+    "name": "Dentada do Familiar",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 10,
+        "max": 14
+      }
+    ],
+    "description": "O familiar morde com a convicção de quem não tem nome a zelar.",
+    "flavor": "Nome é compromisso. Ele só tem dentes.",
+    "fxKey": "slam"
+  },
+  "m-sum-hound-bite": {
+    "id": "m-sum-hound-bite",
+    "name": "Mordida Quente",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 13,
+        "max": 17
+      }
+    ],
+    "description": "O cão de brasa morde e deixa a marca do ferro em brasa.",
+    "flavor": "Abana o rabo. O rabo acende o chão.",
+    "fxKey": "slam"
+  },
+  "m-sum-colossus-smash": {
+    "id": "m-sum-colossus-smash",
+    "name": "Malho de Magma",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 26,
+        "max": 34
+      }
+    ],
+    "description": "O colosso desce o braço fundido como quem fecha um portão.",
+    "flavor": "Ninguém o convidava desde a Lousa.",
+    "fxKey": "slam"
+  },
+  "m-sum-colossus-eruption": {
+    "id": "m-sum-colossus-eruption",
+    "name": "Erupção",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 18,
+        "max": 24
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "description": "O chão abre num círculo de 1 célula e cospe magma que continua queimando.",
+    "flavor": "O calor dele é que muda o clima da sala.",
+    "fxKey": "nova"
+  },
+  "m-sum-nymph-mend": {
+    "id": "m-sum-nymph-mend",
+    "name": "Mão de Maré",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 14,
+        "max": 19
+      }
+    ],
+    "description": "A ninfa toca a ferida do aliado e a água decide fechá-la.",
+    "flavor": "Ela nunca fala. Só olha para quem está sangrando e resolve.",
+    "fxKey": "heal"
+  },
+  "m-sum-nymph-veil": {
+    "id": "m-sum-nymph-veil",
+    "name": "Véu de Água",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 18,
+        "duration": 2
+      }
+    ],
+    "description": "Uma película de água parada envolve o aliado: 18 de escudo por 2 turnos.",
+    "flavor": "Água parada aguenta mais do que água brava.",
+    "fxKey": "shieldFx"
+  },
+  "m-sum-sentinel-slam": {
+    "id": "m-sum-sentinel-slam",
+    "name": "Pancada de Sentinela",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 14,
+        "max": 18
+      }
+    ],
+    "description": "A sentinela bate uma vez, com o peso todo, sem sair do lugar.",
+    "flavor": "Fica onde foi posta.",
+    "fxKey": "slam"
+  },
+  "m-sum-sentinel-guard": {
+    "id": "m-sum-sentinel-guard",
+    "name": "Postar-se",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 25,
+        "duration": 2
+      },
+      {
+        "type": "taunt",
+        "duration": 2
+      }
+    ],
+    "description": "A sentinela crava os pés e chama o corredor inteiro para si: 25 de escudo e provocação.",
+    "flavor": "O tampão de corredor do invocador.",
+    "fxKey": "shieldFx"
+  },
+  "m-sum-golem-fist": {
+    "id": "m-sum-golem-fist",
+    "name": "Punho da Montanha",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 28,
+        "max": 36
+      }
+    ],
+    "description": "Um punho do tamanho de uma porta desce com a paciência de uma encosta.",
+    "flavor": "Ele só perguntou se a montanha topava dar uns passos.",
+    "fxKey": "slam"
+  },
+  "m-sum-golem-quake": {
+    "id": "m-sum-golem-quake",
+    "name": "Passo de Montanha",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 2,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "cross",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 20,
+        "max": 26
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "Um passo só, e a cruz ao redor racha: dano em área e pés presos por 1 turno.",
+    "flavor": "A montanha não corre. A montanha chega.",
+    "fxKey": "nova"
+  },
+  "m-sum-falcon-strike": {
+    "id": "m-sum-falcon-strike",
+    "name": "Bicada de Tormenta",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 12,
+        "max": 16
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "O bico acerta com o vento junto e devolve o alvo 2 células.",
+    "flavor": "Não existe céu para ele voar. Voa assim mesmo, de raiva.",
+    "fxKey": "slam"
+  },
+  "m-sum-falcon-dive": {
+    "id": "m-sum-falcon-dive",
+    "name": "Mergulho",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 5
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 10,
+        "max": 14
+      }
+    ],
+    "description": "O falcão fecha as asas, atravessa até 5 células e abre as garras no fim.",
+    "flavor": "Chega antes de todo mundo, inclusive do plano.",
+    "fxKey": "gust"
+  }
+}

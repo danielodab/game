@@ -1,0 +1,156 @@
+{
+  "fus-arrow-turret": {
+    "id": "fus-arrow-turret",
+    "name": "Torre de Aljava",
+    "family": "Obra de Fusão",
+    "description": "Um tripé de flechas espetadas no chão que criou vontade própria: gira devagar, mira sempre e não anda.",
+    "stats": {
+      "hp": 40,
+      "pa": 6,
+      "pp": 0,
+      "initiative": 30,
+      "power": 0,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "fus-turret-shot"
+    ],
+    "ai": "ranged",
+    "traits": [
+      {
+        "type": "pushImmune"
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0
+  },
+  "fus-hex-effigy": {
+    "id": "fus-hex-effigy",
+    "name": "Efígie Rúnica",
+    "family": "Obra de Fusão",
+    "description": "Boneco de cera e giz com runas escritas de trás para frente. Aponta o dedo e o alvo sente o dedo.",
+    "stats": {
+      "hp": 45,
+      "pa": 6,
+      "pp": 2,
+      "initiative": 40,
+      "power": 0,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "fus-effigy-hex"
+    ],
+    "ai": "ranged",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0
+  },
+  "fus-bloom-warden": {
+    "id": "fus-bloom-warden",
+    "name": "Guarda-Flor",
+    "family": "Obra de Fusão",
+    "description": "Um botão de flor do tamanho de um cão, com pétalas em forma de mão em concha. Rega quem sangra.",
+    "stats": {
+      "hp": 50,
+      "pa": 6,
+      "pp": 2,
+      "initiative": 45,
+      "power": 0,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "fus-warden-mend"
+    ],
+    "ai": "support",
+    "traits": [
+      {
+        "type": "regenAura",
+        "value": 6,
+        "radius": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0
+  },
+  "fus-shade-twin": {
+    "id": "fus-shade-twin",
+    "name": "Gêmeo de Breu",
+    "family": "Obra de Fusão",
+    "description": "A sombra da fusão descolada do chão, com meia lâmina e nenhum rosto. Anda meio passo à frente do original.",
+    "stats": {
+      "hp": 35,
+      "pa": 6,
+      "pp": 4,
+      "initiative": 70,
+      "power": 0,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "fus-shade-cut"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0
+  },
+  "fus-bulwark-idol": {
+    "id": "fus-bulwark-idol",
+    "name": "Ídolo-Escora",
+    "family": "Obra de Fusão",
+    "description": "Meio pilar entalhado com a cara das duas classes fundidas. Fica no caminho — é o trabalho inteiro dele.",
+    "stats": {
+      "hp": 75,
+      "pa": 6,
+      "pp": 1,
+      "initiative": 15,
+      "power": 0,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "fus-idol-slam"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0
+  }
+}

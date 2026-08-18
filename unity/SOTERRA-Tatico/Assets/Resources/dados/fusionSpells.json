@@ -1,0 +1,352 @@
+{
+  "fus-trap-arrow": {
+    "id": "fus-trap-arrow",
+    "name": "Cravo de Aljava",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 16,
+        "max": 22
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "A armadilha de aljava dispara de baixo para cima e prega o pé de quem pisou.",
+    "flavor": "Obra de um corpo que era dois.",
+    "fxKey": "burst"
+  },
+  "fus-trap-hex": {
+    "id": "fus-trap-hex",
+    "name": "Selo Rúnico",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 14,
+        "max": 19
+      },
+      {
+        "type": "poison",
+        "element": "neutro",
+        "min": 6,
+        "max": 9,
+        "duration": 2
+      }
+    ],
+    "description": "O selo desenhado no chão acende ao ser pisado e continua roendo depois.",
+    "flavor": "Obra de um corpo que era dois.",
+    "fxKey": "debuff"
+  },
+  "fus-trap-bloom": {
+    "id": "fus-trap-bloom",
+    "name": "Cercado Vivo",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "root",
+        "duration": 2
+      },
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 10,
+        "max": 14
+      }
+    ],
+    "description": "Gavinhas fecham o cercado em volta do tornozelo do intruso.",
+    "flavor": "Obra de um corpo que era dois.",
+    "fxKey": "hook"
+  },
+  "fus-trap-venom": {
+    "id": "fus-trap-venom",
+    "name": "Espinho de Breu",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "poison",
+        "element": "neutro",
+        "min": 8,
+        "max": 12,
+        "duration": 3
+      },
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 8,
+        "max": 12
+      }
+    ],
+    "description": "Um espinho invisível deixado na sombra: entra fácil e demora a sair.",
+    "flavor": "Obra de um corpo que era dois.",
+    "fxKey": "poisonCloud"
+  },
+  "fus-turret-shot": {
+    "id": "fus-turret-shot",
+    "name": "Tiro de Torre",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 12,
+        "max": 16
+      }
+    ],
+    "description": "A torre de aljava dispara sozinha em quem entrar no alcance.",
+    "flavor": "Obra de um corpo que era dois.",
+    "fxKey": "bolt"
+  },
+  "fus-effigy-hex": {
+    "id": "fus-effigy-hex",
+    "name": "Praga da Efígie",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 10,
+        "max": 14
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 2,
+        "max": 3
+      }
+    ],
+    "description": "A efígie aponta o dedo de cera e marca o alvo para a fusão.",
+    "flavor": "Obra de um corpo que era dois.",
+    "fxKey": "debuff"
+  },
+  "fus-warden-mend": {
+    "id": "fus-warden-mend",
+    "name": "Rega do Guarda-Flor",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 14,
+        "max": 18
+      },
+      {
+        "type": "regen",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "description": "O guarda-flor entorna seiva morna sobre o aliado mais machucado.",
+    "flavor": "Obra de um corpo que era dois.",
+    "fxKey": "heal"
+  },
+  "fus-shade-cut": {
+    "id": "fus-shade-cut",
+    "name": "Corte do Gêmeo",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 11,
+        "max": 15
+      },
+      {
+        "type": "poison",
+        "element": "neutro",
+        "min": 4,
+        "max": 6,
+        "duration": 2
+      }
+    ],
+    "description": "O gêmeo de breu corta de lado e some antes da resposta.",
+    "flavor": "Obra de um corpo que era dois.",
+    "fxKey": "slam"
+  },
+  "fus-idol-slam": {
+    "id": "fus-idol-slam",
+    "name": "Escora do Ídolo",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 14,
+        "max": 19
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "O ídolo-escora despenca o braço de pedra e abre espaço.",
+    "flavor": "Obra de um corpo que era dois.",
+    "fxKey": "slam"
+  }
+}

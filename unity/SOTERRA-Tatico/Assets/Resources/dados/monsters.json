@@ -1,0 +1,2781 @@
+{
+  "thorn-lasher": {
+    "id": "thorn-lasher",
+    "name": "Vergasta",
+    "family": "Flora Voraz",
+    "element": "terra",
+    "dungeonId": "greenhouse",
+    "description": "Um chicote vegetal enraizado num vaso rachado, coberto de farpas e flores mortas. Não sai do lugar — não precisa.",
+    "flavor": "Torreta com pétalas.",
+    "stats": {
+      "hp": 50,
+      "pa": 6,
+      "pp": 1,
+      "initiative": 35,
+      "power": 0,
+      "dodge": 4,
+      "lock": 26,
+      "resists": {
+        "fogo": -20,
+        "agua": 0,
+        "terra": 20,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-thorn-shot",
+      "m-root-grip"
+    ],
+    "ai": "ranged",
+    "traits": [
+      {
+        "type": "pushImmune"
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 1.1,
+    "stoneDrop": {
+      "chance": 0.3,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "pollen-puff": {
+    "id": "pollen-puff",
+    "name": "Bufo-de-Pólen",
+    "family": "Flora Voraz",
+    "element": "terra",
+    "dungeonId": "greenhouse",
+    "description": "Uma bola de pólen amarelo com perninhas de graveto e um sorriso costurado. Anda na sua direção balançando. Isso deveria ser um aviso.",
+    "flavor": "Mate-o longe. Por favor, mate-o longe.",
+    "stats": {
+      "hp": 45,
+      "pa": 3,
+      "pp": 3,
+      "initiative": 55,
+      "power": 0,
+      "dodge": 8,
+      "lock": 8,
+      "resists": {
+        "fogo": -30,
+        "agua": 0,
+        "terra": 10,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-pollen-bite"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "explodeOnDeath",
+        "element": "terra",
+        "damage": 18,
+        "radius": 1
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 0.9,
+    "stoneDrop": {
+      "chance": 0.3,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "burr-mother": {
+    "id": "burr-mother",
+    "name": "Carrapicho-Mãe",
+    "family": "Flora Voraz",
+    "element": "terra",
+    "dungeonId": "greenhouse",
+    "description": "Um novelo de farpas do tamanho de um cão, com dezenas de olhinhos pretos entre os espinhos. Ao morrer, desfia-se em dois novelos menores e igualmente rancorosos.",
+    "flavor": "Um corpo, três problemas de posicionamento.",
+    "stats": {
+      "hp": 60,
+      "pa": 3,
+      "pp": 3,
+      "initiative": 25,
+      "power": 0,
+      "dodge": 6,
+      "lock": 16,
+      "resists": {
+        "fogo": -15,
+        "agua": 0,
+        "terra": 15,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-burr-hug"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "split",
+        "monsterId": "burrlet",
+        "count": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 1.3,
+    "stoneDrop": {
+      "chance": 0.3,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "lantern-wasp": {
+    "id": "lantern-wasp",
+    "name": "Vespa-Lustre",
+    "family": "Enxame da Estufa",
+    "element": "ar",
+    "dungeonId": "greenhouse",
+    "description": "Uma vespa do tamanho de um gato cujo abdômen é uma lanterna de vidro com uma luz presa dentro. Rápida, brilhante, venenosa: chega primeiro e vai embora antes da resposta.",
+    "flavor": "A luz que ela carrega já foi de alguém.",
+    "stats": {
+      "hp": 48,
+      "pa": 3,
+      "pp": 4,
+      "initiative": 75,
+      "power": 0,
+      "dodge": 30,
+      "lock": 6,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -10,
+        "ar": 20,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-wasp-sting"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 1,
+    "stoneDrop": {
+      "chance": 0.3,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "sap-shaman": {
+    "id": "sap-shaman",
+    "name": "Seiveiro",
+    "family": "Flora Voraz",
+    "element": "agua",
+    "dungeonId": "greenhouse",
+    "description": "Um toco de árvore corcunda com um rosto entalhado a canivete e um caldeirão de seiva borbulhando no colo. Rega os aliados como quem cuida de um jardim — e o jardim morde.",
+    "flavor": "Na chuva ele canta. Mate-o antes do refrão.",
+    "stats": {
+      "hp": 55,
+      "pa": 6,
+      "pp": 2,
+      "initiative": 45,
+      "power": 0,
+      "dodge": 8,
+      "lock": 12,
+      "resists": {
+        "fogo": -20,
+        "agua": 15,
+        "terra": 15,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-sap-mend",
+      "m-sap-sugar"
+    ],
+    "ai": "support",
+    "traits": [
+      {
+        "type": "regenAura",
+        "value": 8,
+        "radius": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 1.2,
+    "stoneDrop": {
+      "chance": 0.3,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "dew-strider": {
+    "id": "dew-strider",
+    "name": "Aranha-de-Orvalho",
+    "family": "Enxame da Estufa",
+    "element": "agua",
+    "dungeonId": "greenhouse",
+    "description": "Uma aranha de pernas finíssimas que anda sobre a água acumulada nas folhas sem afundar um milímetro. Tece com orvalho: as teias brilham, pesam e endurecem.",
+    "flavor": "Ela pesa menos que a gota em que pisa.",
+    "stats": {
+      "hp": 52,
+      "pa": 5,
+      "pp": 4,
+      "initiative": 65,
+      "power": 0,
+      "dodge": 26,
+      "lock": 14,
+      "resists": {
+        "fogo": -10,
+        "agua": 20,
+        "terra": 0,
+        "ar": -10,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-dew-web",
+      "m-dew-bite"
+    ],
+    "ai": "ranged",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 1.1,
+    "stoneDrop": {
+      "chance": 0.3,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "sprout-feral": {
+    "id": "sprout-feral",
+    "name": "Brotinho-Voraz",
+    "family": "Flora Voraz",
+    "element": "terra",
+    "dungeonId": "greenhouse",
+    "description": "Uma muda recém-germinada que é só folhas, pressa e dentes. A Jardineira os planta; eles fazem o resto.",
+    "flavor": "Cresce rápido porque não pretende durar.",
+    "stats": {
+      "hp": 30,
+      "pa": 3,
+      "pp": 4,
+      "initiative": 60,
+      "power": 0,
+      "dodge": 14,
+      "lock": 6,
+      "resists": {
+        "fogo": -20,
+        "agua": 0,
+        "terra": 10,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-sprout-bite"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0.2,
+    "stoneDrop": null
+  },
+  "burrlet": {
+    "id": "burrlet",
+    "name": "Carrapichinho",
+    "family": "Flora Voraz",
+    "element": "terra",
+    "dungeonId": "greenhouse",
+    "description": "Metade do rancor, o dobro da velocidade. Gruda e não solta.",
+    "flavor": "Você vai encontrar um deles no bolso semanas depois.",
+    "stats": {
+      "hp": 22,
+      "pa": 3,
+      "pp": 3,
+      "initiative": 30,
+      "power": 0,
+      "dodge": 12,
+      "lock": 10,
+      "resists": {
+        "fogo": -15,
+        "agua": 0,
+        "terra": 10,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-burr-nip"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0.2,
+    "stoneDrop": null
+  },
+  "boss-gardener": {
+    "id": "boss-gardener",
+    "name": "A Jardineira-Viúva",
+    "family": "Flora Voraz",
+    "element": "terra",
+    "dungeonId": "greenhouse",
+    "description": "A guardiã da Estufa: um vulto de três metros feito de treliça, luvas de couro e véu de viúva, com uma tesoura de poda enferrujada no lugar das mãos. Ainda cuida do jardim. Você é a erva daninha.",
+    "flavor": "GIMMICK — A PODA: o cipó puxa você para dentro do coreto, a tesoura apara, a semeadura repõe o mato. A Coroa de Espinhos castiga o anel a 2 células: o lugar mais seguro do mundo é colado nela.",
+    "stats": {
+      "hp": 300,
+      "pa": 7,
+      "pp": 3,
+      "initiative": 50,
+      "power": 0,
+      "dodge": 10,
+      "lock": 42,
+      "resists": {
+        "fogo": -20,
+        "agua": 0,
+        "terra": 30,
+        "ar": 0,
+        "neutro": 10
+      }
+    },
+    "spells": [
+      "m-shears",
+      "m-vine-hook",
+      "m-seed-toss",
+      "m-thorn-crown"
+    ],
+    "ai": "boss",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.4,
+        "power": 30
+      }
+    ],
+    "boss": true,
+    "summonOnly": false,
+    "xp": 19.2,
+    "stoneDrop": {
+      "chance": 1,
+      "min": 6,
+      "max": 10
+    }
+  },
+  "drowned-porter": {
+    "id": "drowned-porter",
+    "name": "Afogadiço",
+    "family": "Corte Afogada",
+    "element": "agua",
+    "dungeonId": "cistern",
+    "description": "Um carregador da cisterna que nunca soltou seu lampião. Pele cinza-esverdeada, inchada de água, algas no lugar do cabelo. Morde para beber o calor que perdeu.",
+    "flavor": "Duelar com ele é alimentá-lo.",
+    "stats": {
+      "hp": 75,
+      "pa": 6,
+      "pp": 3,
+      "initiative": 40,
+      "power": 12,
+      "dodge": 10,
+      "lock": 20,
+      "resists": {
+        "fogo": 0,
+        "agua": 25,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 5
+      }
+    },
+    "spells": [
+      "m-drowned-bite"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 3.4,
+    "stoneDrop": {
+      "chance": 0.35,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "moray-piper": {
+    "id": "moray-piper",
+    "name": "Moreia-Flauta",
+    "family": "Corte Afogada",
+    "element": "agua",
+    "dungeonId": "cistern",
+    "description": "Uma enguia de dois metros cujo crânio perfurado assobia quando ela respira. Ergue-se da água como um ponto de interrogação, cospe jatos em linha reta e fisga presas com a língua-arpão.",
+    "flavor": "Toca uma nota só, e é sobre você.",
+    "stats": {
+      "hp": 65,
+      "pa": 5,
+      "pp": 3,
+      "initiative": 60,
+      "power": 12,
+      "dodge": 18,
+      "lock": 12,
+      "resists": {
+        "fogo": 0,
+        "agua": 20,
+        "terra": 0,
+        "ar": -15,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-eel-beam",
+      "m-eel-hook"
+    ],
+    "ai": "ranged",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 3,
+    "stoneDrop": {
+      "chance": 0.35,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "lantern-jelly": {
+    "id": "lantern-jelly",
+    "name": "Água-Viva-Lustre",
+    "family": "Corte Afogada",
+    "element": "agua",
+    "dungeonId": "cistern",
+    "description": "Uma água-viva do tamanho de um lustre, flutuando a um palmo do chão, tentáculos como franjas de cristal. Sua luz cura os afogados — apague-a primeiro.",
+    "flavor": "Transforma afogadiços em esponjas.",
+    "stats": {
+      "hp": 60,
+      "pa": 5,
+      "pp": 2,
+      "initiative": 30,
+      "power": 12,
+      "dodge": 14,
+      "lock": 6,
+      "resists": {
+        "fogo": 0,
+        "agua": 25,
+        "terra": -15,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-jelly-mend",
+      "m-jelly-ward"
+    ],
+    "ai": "support",
+    "traits": [
+      {
+        "type": "regenAura",
+        "value": 8,
+        "radius": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 2.7,
+    "stoneDrop": {
+      "chance": 0.35,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "brine-golem": {
+    "id": "brine-golem",
+    "name": "Salmourão",
+    "family": "Corte Afogada",
+    "element": "agua",
+    "dungeonId": "cistern",
+    "description": "Um colosso de sal cristalizado em camadas, com um coração de água escura visível no peito. Lento como maré baixa, imparável como maré alta. Quanto mais quebra, mais afiado fica.",
+    "flavor": "Ignorá-lo é um cronômetro.",
+    "stats": {
+      "hp": 105,
+      "pa": 4,
+      "pp": 2,
+      "initiative": 15,
+      "power": 12,
+      "dodge": 2,
+      "lock": 34,
+      "resists": {
+        "fogo": -15,
+        "agua": 30,
+        "terra": 20,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-brine-fist"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.5,
+        "power": 25
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 5,
+    "stoneDrop": {
+      "chance": 0.4,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "fat-drop": {
+    "id": "fat-drop",
+    "name": "Gota-Gorda",
+    "family": "Corte Afogada",
+    "element": "agua",
+    "dungeonId": "cistern",
+    "description": "Uma gota d'água do tamanho de um barril, com um rosto sonolento boiando dentro. Estoure-a e ela vira duas gotas menores e bem mais acordadas.",
+    "flavor": "Cada gota nova entope um vão a mais.",
+    "stats": {
+      "hp": 70,
+      "pa": 3,
+      "pp": 3,
+      "initiative": 35,
+      "power": 12,
+      "dodge": 10,
+      "lock": 14,
+      "resists": {
+        "fogo": -10,
+        "agua": 30,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-drop-slam"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "split",
+        "monsterId": "droplet",
+        "count": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 3.2,
+    "stoneDrop": {
+      "chance": 0.35,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "droplet": {
+    "id": "droplet",
+    "name": "Gotinha",
+    "family": "Corte Afogada",
+    "element": "agua",
+    "dungeonId": "cistern",
+    "description": "Pequena, redonda, indignada.",
+    "flavor": "Tem opiniões fortes sobre o seu tornozelo.",
+    "stats": {
+      "hp": 25,
+      "pa": 3,
+      "pp": 3,
+      "initiative": 45,
+      "power": 12,
+      "dodge": 14,
+      "lock": 8,
+      "resists": {
+        "fogo": -10,
+        "agua": 20,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-droplet-splash"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0.5,
+    "stoneDrop": null
+  },
+  "sump-crab": {
+    "id": "sump-crab",
+    "name": "Caranguejo de Sumidouro",
+    "family": "Corte Afogada",
+    "element": "terra",
+    "dungeonId": "cistern",
+    "description": "Um caranguejo do tamanho de uma mesa, com carapaça de pedra encrostada de sal e uma pinça desproporcional que ele arrasta pelo chão. Vive no ralo por onde a cisterna esvazia — e considera aquilo propriedade privada.",
+    "flavor": "Impossível de empurrar. Ele já escolheu o lugar dele.",
+    "stats": {
+      "hp": 85,
+      "pa": 5,
+      "pp": 2,
+      "initiative": 20,
+      "power": 12,
+      "dodge": 4,
+      "lock": 32,
+      "resists": {
+        "fogo": 0,
+        "agua": -10,
+        "terra": 30,
+        "ar": -15,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-crab-pinch",
+      "m-crab-guard"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 4,
+    "stoneDrop": {
+      "chance": 0.35,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "mist-warbler": {
+    "id": "mist-warbler",
+    "name": "Cantarola-de-Névoa",
+    "family": "Corte Afogada",
+    "element": "ar",
+    "dungeonId": "cistern",
+    "description": "Um pássaro sem penas, feito do vapor que sobe da água parada, com um bico longo por onde a cisterna assobia. Canta para os afogados e sopra os vivos para dentro dos canais.",
+    "flavor": "O eco dela chega antes dela.",
+    "stats": {
+      "hp": 55,
+      "pa": 5,
+      "pp": 4,
+      "initiative": 68,
+      "power": 12,
+      "dodge": 28,
+      "lock": 6,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -15,
+        "ar": 25,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-mist-shove",
+      "m-mist-song"
+    ],
+    "ai": "support",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 2.7,
+    "stoneDrop": {
+      "chance": 0.35,
+      "min": 1,
+      "max": 2
+    }
+  },
+  "boss-baroness": {
+    "id": "boss-baroness",
+    "name": "Baronesa Salmoura",
+    "family": "Corte Afogada",
+    "element": "agua",
+    "dungeonId": "cistern",
+    "description": "A dona da cisterna: um vestido de baile do século passado preenchido por água escura e viva, com um colar de pérolas boiando onde deveria haver um pescoço. Recebe visitas puxando-as para perto — e engolindo a sala inteira.",
+    "flavor": "GIMMICK — O BAILE: Maré Faminta arrasta a sala inteira até ela; no turno seguinte, o Gole Amargo devora quem ficou perto. Espalhar-se, ser puxado, sair antes do gole.",
+    "stats": {
+      "hp": 360,
+      "pa": 7,
+      "pp": 3,
+      "initiative": 55,
+      "power": 12,
+      "dodge": 12,
+      "lock": 46,
+      "resists": {
+        "fogo": -10,
+        "agua": 40,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 10
+      }
+    },
+    "spells": [
+      "m-tide-pull",
+      "m-bitter-gulp",
+      "m-salt-lance",
+      "m-brine-spawn"
+    ],
+    "ai": "boss",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.35,
+        "power": 30
+      }
+    ],
+    "boss": true,
+    "summonOnly": false,
+    "xp": 48.9,
+    "stoneDrop": {
+      "chance": 1,
+      "min": 8,
+      "max": 13
+    }
+  },
+  "ember-imp": {
+    "id": "ember-imp",
+    "name": "Tição",
+    "family": "Prole da Fornalha",
+    "element": "fogo",
+    "dungeonId": "emberlock",
+    "description": "Um carvão em brasa com braços finos e um sorriso rachado de luz alaranjada. Corre até você rindo. A risada é o estopim.",
+    "flavor": "Onde ele morre importa mais do que quando.",
+    "stats": {
+      "hp": 69,
+      "pa": 3,
+      "pp": 4,
+      "initiative": 75,
+      "power": 28,
+      "dodge": 22,
+      "lock": 8,
+      "resists": {
+        "fogo": 30,
+        "agua": -25,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-ember-claw"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "explodeOnDeath",
+        "element": "fogo",
+        "damage": 22,
+        "radius": 1
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 4.6,
+    "stoneDrop": {
+      "chance": 0.4,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "walking-anvil": {
+    "id": "walking-anvil",
+    "name": "Bigorna Ambulante",
+    "family": "Prole da Fornalha",
+    "element": "terra",
+    "dungeonId": "emberlock",
+    "description": "Uma bigorna centenária que criou pernas atarracadas e um rancor proporcional ao número de marteladas que levou. Impossível de empurrar; péssima ideia de deixar chegar perto.",
+    "flavor": "Lenta como culpa antiga.",
+    "stats": {
+      "hp": 126,
+      "pa": 4,
+      "pp": 2,
+      "initiative": 10,
+      "power": 28,
+      "dodge": 0,
+      "lock": 38,
+      "resists": {
+        "fogo": 20,
+        "agua": -20,
+        "terra": 30,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-anvil-crush"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.5,
+        "power": 30
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 8.4,
+    "stoneDrop": {
+      "chance": 0.45,
+      "min": 1,
+      "max": 4
+    }
+  },
+  "ash-wraith": {
+    "id": "ash-wraith",
+    "name": "Cinzento",
+    "family": "Prole da Fornalha",
+    "element": "ar",
+    "dungeonId": "emberlock",
+    "description": "O contorno de um ferreiro antigo desenhado em fuligem suspensa, com dois pontos de brasa no lugar dos olhos. Atira setas de cinza e se desmancha no ar quando ameaçado.",
+    "flavor": "Some no vendaval e volta na sua nuca.",
+    "stats": {
+      "hp": 81,
+      "pa": 5,
+      "pp": 3,
+      "initiative": 65,
+      "power": 28,
+      "dodge": 26,
+      "lock": 8,
+      "resists": {
+        "fogo": 15,
+        "agua": 0,
+        "terra": -15,
+        "ar": 25,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-ash-bolt",
+      "m-ash-veil"
+    ],
+    "ai": "ranged",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 5.3,
+    "stoneDrop": {
+      "chance": 0.4,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "slag-mound": {
+    "id": "slag-mound",
+    "name": "Monte de Escória",
+    "family": "Prole da Fornalha",
+    "element": "fogo",
+    "dungeonId": "emberlock",
+    "description": "Uma pilha de refugo de forja que aprendeu a se arrastar, deixando um rastro vitrificado. Quebre-a e ela desmorona em duas escorinhas incandescentes — que explodem.",
+    "flavor": "A pior coisa para matar em espaço apertado.",
+    "stats": {
+      "hp": 109,
+      "pa": 4,
+      "pp": 2,
+      "initiative": 20,
+      "power": 28,
+      "dodge": 2,
+      "lock": 26,
+      "resists": {
+        "fogo": 30,
+        "agua": -30,
+        "terra": 15,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-slag-slam"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "split",
+        "monsterId": "slag-bit",
+        "count": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 7.3,
+    "stoneDrop": {
+      "chance": 0.45,
+      "min": 1,
+      "max": 4
+    }
+  },
+  "faceless-smith": {
+    "id": "faceless-smith",
+    "name": "Ferreiro Sem-Rosto",
+    "family": "Prole da Fornalha",
+    "element": "fogo",
+    "dungeonId": "emberlock",
+    "description": "Um avental de couro e dois braços musculosos pendurados em nada: onde deveria haver um corpo, só calor tremulando. Tempera os aliados como lâminas e os cobre de chapas ardentes.",
+    "flavor": "O suporte que transforma lacaio em problema.",
+    "stats": {
+      "hp": 92,
+      "pa": 6,
+      "pp": 3,
+      "initiative": 45,
+      "power": 28,
+      "dodge": 12,
+      "lock": 16,
+      "resists": {
+        "fogo": 25,
+        "agua": -15,
+        "terra": 10,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-smith-hammer",
+      "m-forge-temper",
+      "m-smith-plate"
+    ],
+    "ai": "support",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 6.1,
+    "stoneDrop": {
+      "chance": 0.4,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "quench-hound": {
+    "id": "quench-hound",
+    "name": "Cão-de-Têmpera",
+    "family": "Prole da Fornalha",
+    "element": "agua",
+    "dungeonId": "emberlock",
+    "description": "Um cão de vapor condensado que nasceu no fosso onde as lâminas eram mergulhadas ainda vermelhas. O pelo goteja, a mordida chia, e onde ele passa a brasa apaga — inclusive a dos donos da casa.",
+    "flavor": "A única água do Fecho, e ela morde.",
+    "stats": {
+      "hp": 83,
+      "pa": 5,
+      "pp": 4,
+      "initiative": 70,
+      "power": 28,
+      "dodge": 24,
+      "lock": 14,
+      "resists": {
+        "fogo": -10,
+        "agua": 30,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-quench-lunge",
+      "m-quench-hiss"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 5.8,
+    "stoneDrop": {
+      "chance": 0.4,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "chain-hauler": {
+    "id": "chain-hauler",
+    "name": "Puxa-Corrente",
+    "family": "Prole da Fornalha",
+    "element": "neutro",
+    "dungeonId": "emberlock",
+    "description": "Um guindaste de forja que criou vontade: um carretel de ferro pendurado no trilho do teto, com três correntes que ele lança como anzóis. Não persegue ninguém — traz todo mundo até ele.",
+    "flavor": "Ancorado ao trilho: empurrar não resolve.",
+    "stats": {
+      "hp": 90,
+      "pa": 6,
+      "pp": 1,
+      "initiative": 30,
+      "power": 28,
+      "dodge": 2,
+      "lock": 30,
+      "resists": {
+        "fogo": 15,
+        "agua": 0,
+        "terra": 15,
+        "ar": 0,
+        "neutro": 10
+      }
+    },
+    "spells": [
+      "m-chain-yank",
+      "m-chain-lash"
+    ],
+    "ai": "ranged",
+    "traits": [
+      {
+        "type": "pushImmune"
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 6.4,
+    "stoneDrop": {
+      "chance": 0.4,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "spark-whelp": {
+    "id": "spark-whelp",
+    "name": "Fagulha",
+    "family": "Prole da Fornalha",
+    "element": "fogo",
+    "dungeonId": "emberlock",
+    "description": "Uma faísca com pernas e opinião. Vive pouco, termina alto.",
+    "flavor": "Magno as fabrica sem olhar.",
+    "stats": {
+      "hp": 32,
+      "pa": 3,
+      "pp": 4,
+      "initiative": 80,
+      "power": 28,
+      "dodge": 24,
+      "lock": 4,
+      "resists": {
+        "fogo": 25,
+        "agua": -25,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-spark-tap"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "explodeOnDeath",
+        "element": "fogo",
+        "damage": 15,
+        "radius": 1
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0.6,
+    "stoneDrop": null
+  },
+  "slag-bit": {
+    "id": "slag-bit",
+    "name": "Escorinha",
+    "family": "Prole da Fornalha",
+    "element": "fogo",
+    "dungeonId": "emberlock",
+    "description": "Um caco de escória ainda rubro, rastejando com propósito.",
+    "flavor": "Ato dois de três.",
+    "stats": {
+      "hp": 35,
+      "pa": 3,
+      "pp": 2,
+      "initiative": 25,
+      "power": 28,
+      "dodge": 6,
+      "lock": 12,
+      "resists": {
+        "fogo": 20,
+        "agua": -20,
+        "terra": 10,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-slag-drip"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "explodeOnDeath",
+        "element": "fogo",
+        "damage": 12,
+        "radius": 1
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0.6,
+    "stoneDrop": null
+  },
+  "boss-heartforge": {
+    "id": "boss-heartforge",
+    "name": "Magno, o Acendedor",
+    "family": "Prole da Fornalha",
+    "element": "fogo",
+    "dungeonId": "emberlock",
+    "description": "O coração do último Fecho em forma de titã: um forno a lenha de quatro metros com grelha no peito, martelo-chaminé ao ombro e a primeira chama do mundo queimando lá dentro. Ele não guarda o portão. Ele É o portão.",
+    "flavor": "GIMMICK — A PEÇA MARCADA: ele marca você com a brasa (até 5 pilhas), sopra você para longe com a fornalha e cobra tudo de uma vez no Veredito da Bigorna. Limpe a marca ou morra pelo total.",
+    "stats": {
+      "hp": 420,
+      "pa": 8,
+      "pp": 3,
+      "initiative": 60,
+      "power": 28,
+      "dodge": 10,
+      "lock": 50,
+      "resists": {
+        "fogo": 40,
+        "agua": -25,
+        "terra": 20,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-doom-hammer",
+      "m-bellows-blast",
+      "m-heart-brand",
+      "m-anvil-verdict",
+      "m-spark-call",
+      "m-stoke"
+    ],
+    "ai": "boss",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.5,
+        "power": 40
+      }
+    ],
+    "boss": true,
+    "summonOnly": false,
+    "xp": 96.1,
+    "stoneDrop": {
+      "chance": 1,
+      "min": 10,
+      "max": 16
+    }
+  },
+  "plank-shrike": {
+    "id": "plank-shrike",
+    "name": "Picanço-de-Tábua",
+    "family": "Coro dos Andaimes",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "Um pássaro cinzento de bico curvo que empala o que caça nos pregos expostos das tábuas. Vive nos vãos, desce em queda livre e some antes de você virar a cabeça.",
+    "flavor": "A despensa dele é o corrimão.",
+    "stats": {
+      "hp": 96,
+      "pa": 6,
+      "pp": 5,
+      "initiative": 80,
+      "power": 48,
+      "dodge": 34,
+      "lock": 8,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -15,
+        "ar": 25,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-shrike-dive",
+      "m-shrike-peck"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 8.7,
+    "stoneDrop": {
+      "chance": 0.45,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "gust-gremlin": {
+    "id": "gust-gremlin",
+    "name": "Gremlin de Rajada",
+    "family": "Coro dos Andaimes",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "Um bichinho de orelhas enormes que usa as próprias orelhas como velas. Não bate para matar: bate para ver a pessoa cair. Tem um senso de humor documentadamente ruim.",
+    "flavor": "Ele conta as quedas. Em voz alta.",
+    "stats": {
+      "hp": 85,
+      "pa": 5,
+      "pp": 5,
+      "initiative": 72,
+      "power": 48,
+      "dodge": 32,
+      "lock": 10,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -10,
+        "ar": 25,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-gremlin-shove",
+      "m-gremlin-swap"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 7.7,
+    "stoneDrop": {
+      "chance": 0.45,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "rope-hanger": {
+    "id": "rope-hanger",
+    "name": "Enforca-Corda",
+    "family": "Coro dos Andaimes",
+    "element": "neutro",
+    "dungeonId": "windscaffold",
+    "description": "Um novelo de cordas de obra amarrado num nó que ninguém consegue desfazer, pendurado na roldana mestra. Não desce nunca. Lança laços e recolhe o que pegou como quem puxa material.",
+    "flavor": "Preso à roldana: empurrão não move nó.",
+    "stats": {
+      "hp": 109,
+      "pa": 6,
+      "pp": 1,
+      "initiative": 28,
+      "power": 48,
+      "dodge": 4,
+      "lock": 30,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 10,
+        "neutro": 15
+      }
+    },
+    "spells": [
+      "m-rope-noose",
+      "m-rope-cinch"
+    ],
+    "ai": "ranged",
+    "traits": [
+      {
+        "type": "pushImmune"
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 9.7,
+    "stoneDrop": {
+      "chance": 0.45,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "kite-serpent": {
+    "id": "kite-serpent",
+    "name": "Serpe-Pipa",
+    "family": "Coro dos Andaimes",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "Uma serpente chata e comprida feita de papel encerado e ripas, com uma cauda de fitas revestida de vidro moído. Sobe nas correntes de ar e desce riscando.",
+    "flavor": "Uma pipa que aprendeu a puxar a própria linha.",
+    "stats": {
+      "hp": 102,
+      "pa": 6,
+      "pp": 3,
+      "initiative": 62,
+      "power": 48,
+      "dodge": 24,
+      "lock": 10,
+      "resists": {
+        "fogo": -20,
+        "agua": 0,
+        "terra": -10,
+        "ar": 30,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-kite-arc",
+      "m-kite-whip"
+    ],
+    "ai": "ranged",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 9.2,
+    "stoneDrop": {
+      "chance": 0.45,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "ballast-golem": {
+    "id": "ballast-golem",
+    "name": "Golem de Lastro",
+    "family": "Coro dos Andaimes",
+    "element": "terra",
+    "dungeonId": "windscaffold",
+    "description": "Uma armação de vigas cheia de sacos de brita, feita para segurar o andaime no lugar quando o poço sopra. Segurou por mil anos. Agora anda — devagar, e sempre contra o vento.",
+    "flavor": "O vendaval o mata 5 PV por turno. Não tenha pressa com ele.",
+    "stats": {
+      "hp": 186,
+      "pa": 4,
+      "pp": 2,
+      "initiative": 12,
+      "power": 48,
+      "dodge": 0,
+      "lock": 40,
+      "resists": {
+        "fogo": 0,
+        "agua": 10,
+        "terra": 30,
+        "ar": -20,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-ballast-drop",
+      "m-ballast-anchor"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.5,
+        "power": 25
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 15.8,
+    "stoneDrop": {
+      "chance": 0.5,
+      "min": 1,
+      "max": 4
+    }
+  },
+  "whistle-choir": {
+    "id": "whistle-choir",
+    "name": "Coro-Assobio",
+    "family": "Coro dos Andaimes",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "Um feixe de tubos de respiradouro amarrado com arame, flutuando de lado. Cada tubo assobia uma nota; juntos, remendam os companheiros e limpam deles tudo o que gruda.",
+    "flavor": "Apague a música antes de discutir com a banda.",
+    "stats": {
+      "hp": 90,
+      "pa": 6,
+      "pp": 3,
+      "initiative": 50,
+      "power": 48,
+      "dodge": 20,
+      "lock": 6,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -10,
+        "ar": 25,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-choir-hymn",
+      "m-choir-clear"
+    ],
+    "ai": "support",
+    "traits": [
+      {
+        "type": "regenAura",
+        "value": 7,
+        "radius": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 8.7,
+    "stoneDrop": {
+      "chance": 0.45,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "mote-swarm": {
+    "id": "mote-swarm",
+    "name": "Enxame de Motes",
+    "family": "Coro dos Andaimes",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "Uma nuvem compacta de bichinhos de poeira luminosa que se move como um corpo só. Bata forte o bastante e ela deixa de ser um corpo — vira dois.",
+    "flavor": "Você não mata uma nuvem. Você a divide.",
+    "stats": {
+      "hp": 115,
+      "pa": 4,
+      "pp": 4,
+      "initiative": 58,
+      "power": 48,
+      "dodge": 28,
+      "lock": 8,
+      "resists": {
+        "fogo": -20,
+        "agua": 0,
+        "terra": 0,
+        "ar": 25,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-mote-buzz"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "split",
+        "monsterId": "mote-bit",
+        "count": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 10.2,
+    "stoneDrop": {
+      "chance": 0.45,
+      "min": 1,
+      "max": 3
+    }
+  },
+  "mote-bit": {
+    "id": "mote-bit",
+    "name": "Motinho",
+    "family": "Coro dos Andaimes",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "Metade de uma nuvem, com o dobro da pressa. Quando se desfaz, o pó pega fogo por um instante.",
+    "flavor": "Poeira também explode. Pergunte a qualquer mineiro.",
+    "stats": {
+      "hp": 40,
+      "pa": 3,
+      "pp": 4,
+      "initiative": 66,
+      "power": 48,
+      "dodge": 26,
+      "lock": 4,
+      "resists": {
+        "fogo": -20,
+        "agua": 0,
+        "terra": 0,
+        "ar": 20,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-mote-nip"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "explodeOnDeath",
+        "element": "ar",
+        "damage": 12,
+        "radius": 1
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 1,
+    "stoneDrop": null
+  },
+  "nail-sprite": {
+    "id": "nail-sprite",
+    "name": "Pregolim",
+    "family": "Coro dos Andaimes",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "Um prego de quinze centímetros com dois olhinhos e muita convicção. Cambota os finca na armação e eles saem andando.",
+    "flavor": "Nasce torto, entra reto.",
+    "stats": {
+      "hp": 37,
+      "pa": 3,
+      "pp": 4,
+      "initiative": 70,
+      "power": 48,
+      "dodge": 22,
+      "lock": 6,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 15,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-nail-jab"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 1,
+    "stoneDrop": null
+  },
+  "boss-windwright": {
+    "id": "boss-windwright",
+    "name": "Cambota, o Mestre-de-Obras",
+    "family": "Coro dos Andaimes",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "O capataz que jamais entregou a obra: um esqueleto de vigas e cordame com uma roldana no lugar da cabeça e um prumo eterno balançando do braço. Constrói o andaime enquanto luta em cima dele — e derruba a ala inteira se isso resolver mais rápido.",
+    "flavor": "GIMMICK — A OBRA CONTINUA: rebites marcam você (até 5 pilhas), o Vento de Proa devolve o vendaval quando o clima esfria, e Desabar a Ala manda quem estiver marcado 3 células para dentro do vazio. Ele não precisa te matar: precisa te empurrar.",
+    "stats": {
+      "hp": 470,
+      "pa": 8,
+      "pp": 4,
+      "initiative": 66,
+      "power": 48,
+      "dodge": 24,
+      "lock": 44,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -15,
+        "ar": 40,
+        "neutro": 10
+      }
+    },
+    "spells": [
+      "m-scaffold-collapse",
+      "m-rivet-volley",
+      "m-raise-frame",
+      "m-headwind",
+      "m-rope-cinch"
+    ],
+    "ai": "boss",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.4,
+        "power": 35
+      }
+    ],
+    "boss": true,
+    "summonOnly": false,
+    "xp": 180,
+    "stoneDrop": {
+      "chance": 1,
+      "min": 12,
+      "max": 19
+    }
+  },
+  "pick-revenant": {
+    "id": "pick-revenant",
+    "name": "Assombro de Picareta",
+    "family": "Turno da Noite",
+    "element": "terra",
+    "dungeonId": "quakemine",
+    "description": "O turno da noite nunca subiu. Restou o gesto: um mineiro de poeira compactada que ainda bate na mesma parede, no mesmo ritmo, há mil anos. Bate em você com a mesma técnica — procurando onde racha.",
+    "flavor": "Marca primeiro. Cobra depois.",
+    "stats": {
+      "hp": 162,
+      "pa": 6,
+      "pp": 3,
+      "initiative": 42,
+      "power": 75,
+      "dodge": 10,
+      "lock": 24,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 25,
+        "ar": -15,
+        "neutro": 10
+      }
+    },
+    "spells": [
+      "m-pick-swing",
+      "m-pick-verdict"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 15.4,
+    "stoneDrop": {
+      "chance": 0.55,
+      "min": 2,
+      "max": 5
+    }
+  },
+  "firedamp-wisp": {
+    "id": "firedamp-wisp",
+    "name": "Fogaréu de Grisu",
+    "family": "Turno da Noite",
+    "element": "fogo",
+    "dungeonId": "quakemine",
+    "description": "Uma chama azul e silenciosa boiando à altura do peito, do tamanho de uma cabeça. É o gás da mina que ganhou vontade. Não persegue: espera você entrar na galeria errada.",
+    "flavor": "Mate-o longe. Depois lembre disso de novo.",
+    "stats": {
+      "hp": 104,
+      "pa": 5,
+      "pp": 3,
+      "initiative": 58,
+      "power": 75,
+      "dodge": 22,
+      "lock": 6,
+      "resists": {
+        "fogo": 30,
+        "agua": -30,
+        "terra": -10,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-firedamp-flare",
+      "m-firedamp-cloud"
+    ],
+    "ai": "ranged",
+    "traits": [
+      {
+        "type": "explodeOnDeath",
+        "element": "fogo",
+        "damage": 26,
+        "radius": 1
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 12.1,
+    "stoneDrop": {
+      "chance": 0.5,
+      "min": 2,
+      "max": 4
+    }
+  },
+  "cave-jaw": {
+    "id": "cave-jaw",
+    "name": "Bocarra",
+    "family": "Turno da Noite",
+    "element": "terra",
+    "dungeonId": "quakemine",
+    "description": "Um trecho de galeria que virou bicho: dez metros de túnel com dentes de estalactite e um gosto adquirido por carne com capacete. Fica parada até você achar que é caminho.",
+    "flavor": "O tanque da mina. E também a porta.",
+    "stats": {
+      "hp": 234,
+      "pa": 4,
+      "pp": 2,
+      "initiative": 14,
+      "power": 75,
+      "dodge": 0,
+      "lock": 44,
+      "resists": {
+        "fogo": 10,
+        "agua": 0,
+        "terra": 35,
+        "ar": -20,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-cave-bite",
+      "m-cave-roar"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.5,
+        "power": 30
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 22.8,
+    "stoneDrop": {
+      "chance": 0.55,
+      "min": 2,
+      "max": 5
+    }
+  },
+  "crystal-chanter": {
+    "id": "crystal-chanter",
+    "name": "Cantor de Cristal",
+    "family": "Turno da Noite",
+    "element": "terra",
+    "dungeonId": "quakemine",
+    "description": "Um aglomerado de quartzo do tamanho de um homem, crescido dentro de um capacete abandonado. Vibra numa nota baixa e constante que costura a pedra dos companheiros de volta.",
+    "flavor": "Bater nele é bater em você mesmo, com atraso.",
+    "stats": {
+      "hp": 137,
+      "pa": 6,
+      "pp": 2,
+      "initiative": 38,
+      "power": 75,
+      "dodge": 6,
+      "lock": 14,
+      "resists": {
+        "fogo": 10,
+        "agua": 0,
+        "terra": 30,
+        "ar": -15,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-crystal-chant",
+      "m-crystal-facet"
+    ],
+    "ai": "support",
+    "traits": [
+      {
+        "type": "regenAura",
+        "value": 9,
+        "radius": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 14.1,
+    "stoneDrop": {
+      "chance": 0.5,
+      "min": 2,
+      "max": 4
+    }
+  },
+  "sinkhole-worm": {
+    "id": "sinkhole-worm",
+    "name": "Verme de Abatimento",
+    "family": "Turno da Noite",
+    "element": "terra",
+    "dungeonId": "quakemine",
+    "description": "Uma boca circular de anéis que vive sob o piso solto e só mostra o funil. Não anda: reorganiza o chão até que você chegue por gravidade.",
+    "flavor": "Ancorado na rocha-mãe: nada o empurra.",
+    "stats": {
+      "hp": 151,
+      "pa": 6,
+      "pp": 1,
+      "initiative": 32,
+      "power": 75,
+      "dodge": 4,
+      "lock": 34,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 30,
+        "ar": -10,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-worm-drag",
+      "m-worm-spit"
+    ],
+    "ai": "ranged",
+    "traits": [
+      {
+        "type": "pushImmune"
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 14.8,
+    "stoneDrop": {
+      "chance": 0.5,
+      "min": 2,
+      "max": 4
+    }
+  },
+  "ore-tumbler": {
+    "id": "ore-tumbler",
+    "name": "Rolo de Minério",
+    "family": "Turno da Noite",
+    "element": "terra",
+    "dungeonId": "quakemine",
+    "description": "Uma bola de minério bruto do tamanho de um vagonete, lisa de tanto rolar pelos trilhos. Ganha embalo em linha reta e não tem nenhum plano para depois disso.",
+    "flavor": "Quebre-o e ele vira duas ladeiras.",
+    "stats": {
+      "hp": 180,
+      "pa": 4,
+      "pp": 3,
+      "initiative": 24,
+      "power": 75,
+      "dodge": 4,
+      "lock": 22,
+      "resists": {
+        "fogo": 10,
+        "agua": 0,
+        "terra": 30,
+        "ar": -15,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-tumbler-roll"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "split",
+        "monsterId": "ore-chip",
+        "count": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 17.4,
+    "stoneDrop": {
+      "chance": 0.55,
+      "min": 2,
+      "max": 5
+    }
+  },
+  "ore-chip": {
+    "id": "ore-chip",
+    "name": "Lasca de Veio",
+    "family": "Turno da Noite",
+    "element": "terra",
+    "dungeonId": "quakemine",
+    "description": "Um caco de minério com uma veia de metal brilhando no meio, rolando com propósito.",
+    "flavor": "Pequeno, denso e sem freio.",
+    "stats": {
+      "hp": 58,
+      "pa": 3,
+      "pp": 3,
+      "initiative": 30,
+      "power": 75,
+      "dodge": 8,
+      "lock": 12,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 20,
+        "ar": -10,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-ore-chip-hit"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 1.7,
+    "stoneDrop": null
+  },
+  "shaft-bat": {
+    "id": "shaft-bat",
+    "name": "Morcego-de-Poço",
+    "family": "Turno da Noite",
+    "element": "ar",
+    "dungeonId": "quakemine",
+    "description": "Asas de couro fino esticadas em ossos longos demais, com um guincho que faz a poeira desenhar o formato do túnel. Mora no poço vertical e desce em espiral.",
+    "flavor": "O único aqui que o tremor prejudica. Ele não entendeu isso ainda.",
+    "stats": {
+      "hp": 97,
+      "pa": 5,
+      "pp": 5,
+      "initiative": 78,
+      "power": 75,
+      "dodge": 34,
+      "lock": 4,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -20,
+        "ar": 30,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-bat-screech",
+      "m-bat-swoop"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 10.1,
+    "stoneDrop": {
+      "chance": 0.5,
+      "min": 2,
+      "max": 4
+    }
+  },
+  "damp-seeper": {
+    "id": "damp-seeper",
+    "name": "Escorrência",
+    "family": "Turno da Noite",
+    "element": "agua",
+    "dungeonId": "quakemine",
+    "description": "Uma poça vertical que escorre pela parede contra a gravidade, carregada de mineral dissolvido. Dissolve escudos como dissolveu a rocha que atravessou.",
+    "flavor": "Água de mina não mata a sede de ninguém.",
+    "stats": {
+      "hp": 122,
+      "pa": 5,
+      "pp": 3,
+      "initiative": 46,
+      "power": 75,
+      "dodge": 16,
+      "lock": 16,
+      "resists": {
+        "fogo": -15,
+        "agua": 30,
+        "terra": 10,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-seep-drip",
+      "m-seep-solvent"
+    ],
+    "ai": "ranged",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 12.7,
+    "stoneDrop": {
+      "chance": 0.5,
+      "min": 2,
+      "max": 4
+    }
+  },
+  "boss-deepknock": {
+    "id": "boss-deepknock",
+    "name": "Batepedra, o Que Bate Embaixo",
+    "family": "Turno da Noite",
+    "element": "terra",
+    "dungeonId": "quakemine",
+    "description": "A coisa que os mineiros ouviam batendo do outro lado da parede e fingiam ser eco. É maior que a galeria em que está: um torso de rocha-mãe com dois punhos de estéril e nenhum rosto onde procurar intenção. Bate. O mundo responde.",
+    "flavor": "GIMMICK — AS TRÊS BATIDAS: A Batida castiga o anel a 2 células (colado nele é seguro), o Desabamento pune quem se afasta, e a Postura de Tremor devolve o clima que o cura. Ou você o tira do tremor, ou aprende a lutar em cima dele.",
+    "stats": {
+      "hp": 530,
+      "pa": 9,
+      "pp": 2,
+      "initiative": 40,
+      "power": 75,
+      "dodge": 6,
+      "lock": 52,
+      "resists": {
+        "fogo": 15,
+        "agua": -10,
+        "terra": 45,
+        "ar": -20,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-deep-knock",
+      "m-rockfall",
+      "m-vein-call",
+      "m-quake-stance",
+      "m-cave-bite"
+    ],
+    "ai": "boss",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.45,
+        "power": 40
+      }
+    ],
+    "boss": true,
+    "summonOnly": false,
+    "xp": 266.6,
+    "stoneDrop": {
+      "chance": 1,
+      "min": 15,
+      "max": 24
+    }
+  },
+  "cinder-herald": {
+    "id": "cinder-herald",
+    "name": "Arauto de Brasa",
+    "family": "Guarda do Coração",
+    "element": "fogo",
+    "dungeonId": "brokenheart",
+    "description": "Um dos quatro pedaços do Coração que ganharam corpo. Este é uma armadura vazia com uma fresta acesa no peito, que semeia brasas no chão como quem prepara a casa para visitas.",
+    "flavor": "Ele não persegue. Ele prepara o terreno.",
+    "stats": {
+      "hp": 190,
+      "pa": 6,
+      "pp": 3,
+      "initiative": 55,
+      "power": 105,
+      "dodge": 16,
+      "lock": 20,
+      "resists": {
+        "fogo": 40,
+        "agua": -25,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 10
+      }
+    },
+    "spells": [
+      "m-cinder-lash",
+      "m-cinder-brand"
+    ],
+    "ai": "ranged",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 20.8,
+    "stoneDrop": {
+      "chance": 0.6,
+      "min": 2,
+      "max": 6
+    }
+  },
+  "tide-herald": {
+    "id": "tide-herald",
+    "name": "Arauto de Maré",
+    "family": "Guarda do Coração",
+    "element": "agua",
+    "dungeonId": "brokenheart",
+    "description": "A mesma armadura, cheia de água escura em movimento. Cura os irmãos e reorganiza o campo com ressacas curtas e certeiras.",
+    "flavor": "Enquanto ela viver, os outros três não morrem direito.",
+    "stats": {
+      "hp": 190,
+      "pa": 6,
+      "pp": 3,
+      "initiative": 48,
+      "power": 105,
+      "dodge": 16,
+      "lock": 18,
+      "resists": {
+        "fogo": -20,
+        "agua": 40,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 10
+      }
+    },
+    "spells": [
+      "m-tide-hymn",
+      "m-tide-drag",
+      "m-salt-lance"
+    ],
+    "ai": "support",
+    "traits": [
+      {
+        "type": "regenAura",
+        "value": 9,
+        "radius": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 21.6,
+    "stoneDrop": {
+      "chance": 0.6,
+      "min": 2,
+      "max": 6
+    }
+  },
+  "stone-herald": {
+    "id": "stone-herald",
+    "name": "Arauto de Alicerce",
+    "family": "Guarda do Coração",
+    "element": "terra",
+    "dungeonId": "brokenheart",
+    "description": "A armadura preenchida por fundação: pedra, cal e uma teimosia de mil anos. Fica entre você e o resto da sala e considera isso um trabalho honesto.",
+    "flavor": "Provoca, aguenta e não sai do lugar.",
+    "stats": {
+      "hp": 280,
+      "pa": 5,
+      "pp": 2,
+      "initiative": 22,
+      "power": 105,
+      "dodge": 2,
+      "lock": 46,
+      "resists": {
+        "fogo": 10,
+        "agua": 0,
+        "terra": 40,
+        "ar": -25,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-stone-fist",
+      "m-stone-bulwark"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.5,
+        "power": 30
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 29.1,
+    "stoneDrop": {
+      "chance": 0.6,
+      "min": 2,
+      "max": 6
+    }
+  },
+  "gale-herald": {
+    "id": "gale-herald",
+    "name": "Arauto de Vendaval",
+    "family": "Guarda do Coração",
+    "element": "ar",
+    "dungeonId": "brokenheart",
+    "description": "A armadura vazia de verdade — só o vento dentro dela é que a mantém de pé, e o vento tem pressa. Chega, corta e já está em outro lugar.",
+    "flavor": "Difícil de prender, pior de acertar.",
+    "stats": {
+      "hp": 180,
+      "pa": 6,
+      "pp": 5,
+      "initiative": 82,
+      "power": 105,
+      "dodge": 36,
+      "lock": 12,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -20,
+        "ar": 40,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-gale-step",
+      "m-gale-cut"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 20.8,
+    "stoneDrop": {
+      "chance": 0.6,
+      "min": 2,
+      "max": 6
+    }
+  },
+  "null-warden": {
+    "id": "null-warden",
+    "name": "Zelador Nulo",
+    "family": "Guarda do Coração",
+    "element": "neutro",
+    "dungeonId": "brokenheart",
+    "description": "O funcionário que sobrou: um vulto cinzento de avental, sem elemento nenhum, que apaga proteções alheias e remenda as dos irmãos. Nenhum clima o ajuda; nenhum clima o atrapalha.",
+    "flavor": "A resposta do Coração para quem se escondeu atrás de escudos.",
+    "stats": {
+      "hp": 200,
+      "pa": 6,
+      "pp": 3,
+      "initiative": 44,
+      "power": 105,
+      "dodge": 14,
+      "lock": 22,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 25
+      }
+    },
+    "spells": [
+      "m-null-hush",
+      "m-null-mend"
+    ],
+    "ai": "support",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 22.5,
+    "stoneDrop": {
+      "chance": 0.6,
+      "min": 2,
+      "max": 6
+    }
+  },
+  "mirror-twin": {
+    "id": "mirror-twin",
+    "name": "Gêmeo-Espelho",
+    "family": "Guarda do Coração",
+    "element": "neutro",
+    "dungeonId": "brokenheart",
+    "description": "Um caco de espelho do tamanho de uma pessoa que anda de lado e mostra, com um turno de atraso, a sua própria silhueta batendo em você. Quebrá-lo só cria mais superfícies refletoras.",
+    "flavor": "Bater com força é a pior ideia disponível.",
+    "stats": {
+      "hp": 220,
+      "pa": 5,
+      "pp": 3,
+      "initiative": 40,
+      "power": 105,
+      "dodge": 18,
+      "lock": 20,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 20
+      }
+    },
+    "spells": [
+      "m-mirror-cut",
+      "m-mirror-guard"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "split",
+        "monsterId": "mirror-sliver",
+        "count": 2
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 24.1,
+    "stoneDrop": {
+      "chance": 0.6,
+      "min": 2,
+      "max": 6
+    }
+  },
+  "mirror-sliver": {
+    "id": "mirror-sliver",
+    "name": "Estilha-Espelho",
+    "family": "Guarda do Coração",
+    "element": "neutro",
+    "dungeonId": "brokenheart",
+    "description": "Um caco menor, mais afiado, com metade do seu rosto ainda preso na superfície.",
+    "flavor": "Ao se despedaçar, corta quem está perto.",
+    "stats": {
+      "hp": 72,
+      "pa": 3,
+      "pp": 3,
+      "initiative": 52,
+      "power": 105,
+      "dodge": 16,
+      "lock": 10,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 15
+      }
+    },
+    "spells": [
+      "m-sliver-shard"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "explodeOnDeath",
+        "element": "neutro",
+        "damage": 14,
+        "radius": 1
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 2.1,
+    "stoneDrop": null
+  },
+  "weather-mote": {
+    "id": "weather-mote",
+    "name": "Mote do Tempo",
+    "family": "Guarda do Coração",
+    "element": "ar",
+    "dungeonId": "brokenheart",
+    "description": "Uma bolinha de ar comprimido do tamanho de um punho, girando devagar, com um pedacinho de céu velho preso dentro. É o que sobrou do clima do mundo antigo — e ele brinca com isso.",
+    "flavor": "GIMMICK: ele muda o clima da sala sozinho. Sua escolha elemental vira sorteio.",
+    "stats": {
+      "hp": 140,
+      "pa": 6,
+      "pp": 4,
+      "initiative": 74,
+      "power": 105,
+      "dodge": 32,
+      "lock": 6,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -15,
+        "ar": 30,
+        "neutro": 10
+      }
+    },
+    "spells": [
+      "m-turn-rain",
+      "m-turn-drought",
+      "m-turn-gale"
+    ],
+    "ai": "ranged",
+    "traits": [],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 19.1,
+    "stoneDrop": {
+      "chance": 0.55,
+      "min": 2,
+      "max": 5
+    }
+  },
+  "heartroot": {
+    "id": "heartroot",
+    "name": "Raiz-do-Coração",
+    "family": "Guarda do Coração",
+    "element": "terra",
+    "dungeonId": "brokenheart",
+    "description": "Uma raiz grossa que saiu da parede e atravessou o salão para abraçar o Coração e mantê-lo colado. Falhou. Continua tentando, e agarra qualquer coisa que passe perto.",
+    "flavor": "Enraizada de verdade: não empurre, corte.",
+    "stats": {
+      "hp": 176,
+      "pa": 6,
+      "pp": 1,
+      "initiative": 26,
+      "power": 105,
+      "dodge": 2,
+      "lock": 36,
+      "resists": {
+        "fogo": -20,
+        "agua": 0,
+        "terra": 35,
+        "ar": -10,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-heartroot-lash",
+      "m-heartroot-grasp"
+    ],
+    "ai": "ranged",
+    "traits": [
+      {
+        "type": "pushImmune"
+      }
+    ],
+    "boss": false,
+    "summonOnly": false,
+    "xp": 19.1,
+    "stoneDrop": {
+      "chance": 0.55,
+      "min": 2,
+      "max": 5
+    }
+  },
+  "boss-riftheart": {
+    "id": "boss-riftheart",
+    "name": "O Coração Partido",
+    "family": "Guarda do Coração",
+    "element": "neutro",
+    "dungeonId": "brokenheart",
+    "description": "O último Coração do mundo enterrado, rachado em quatro quartos que ainda batem fora de compasso — um de brasa, um d'água, um de pedra, um de ar. Cada batida joga a sala inteira para um clima diferente. Ele não guarda o Fecho: ele É o que sobrou do céu, e está morrendo alto.",
+    "flavor": "GIMMICK — AS QUATRO ESTAÇÕES: cada turno ele bate um quarto diferente e TROCA O CLIMA junto com o golpe. O elemento que te curava passa a te matar de 5 em 5 PV. Vencer é jogar com o clima do inimigo — e cerzir a fenda dele antes que ele cerza.",
+    "stats": {
+      "hp": 600,
+      "pa": 10,
+      "pp": 3,
+      "initiative": 70,
+      "power": 105,
+      "dodge": 18,
+      "lock": 55,
+      "resists": {
+        "fogo": 15,
+        "agua": 15,
+        "terra": 15,
+        "ar": 15,
+        "neutro": 30
+      }
+    },
+    "spells": [
+      "m-season-ember",
+      "m-season-tide",
+      "m-season-gale",
+      "m-season-quake",
+      "m-shard-storm",
+      "m-mend-rift",
+      "m-splinter-call"
+    ],
+    "ai": "boss",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.5,
+        "power": 45
+      }
+    ],
+    "boss": true,
+    "summonOnly": false,
+    "xp": 374.4,
+    "stoneDrop": {
+      "chance": 1,
+      "min": 20,
+      "max": 32
+    }
+  },
+  "sporeling": {
+    "id": "sporeling",
+    "name": "Esporinho",
+    "family": "Rebanho do Invocador",
+    "element": "terra",
+    "dungeonId": null,
+    "description": "Um cogumelo-bebê com olhos grandes demais e lealdade maior ainda. Morde, envenena e, ao cair, estoura numa nuvem de esporos vingativa.",
+    "flavor": "Corpo, dano retardado e negação de célula num pacote só.",
+    "stats": {
+      "hp": 35,
+      "pa": 3,
+      "pp": 3,
+      "initiative": 50,
+      "power": 0,
+      "dodge": 14,
+      "lock": 10,
+      "resists": {
+        "fogo": -10,
+        "agua": 0,
+        "terra": 10,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-spore-nip"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "explodeOnDeath",
+        "element": "terra",
+        "damage": 10,
+        "radius": 1
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0,
+    "stoneDrop": null
+  },
+  "sum-familiar": {
+    "id": "sum-familiar",
+    "name": "Familiar",
+    "family": "Rebanho do Invocador",
+    "element": "neutro",
+    "dungeonId": null,
+    "description": "Um bicho pequeno e sem nome que o invocador chama desde o primeiro dia: quatro patas, dentes tortos e uma lealdade que ninguém pediu. Corpo a mais para morder, tancar e negar passagem.",
+    "flavor": "Ele nunca diz o nome do bicho. Diz que nome é compromisso.",
+    "stats": {
+      "hp": 40,
+      "pa": 3,
+      "pp": 3,
+      "initiative": 50,
+      "power": 0,
+      "dodge": 14,
+      "lock": 14,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 10
+      }
+    },
+    "spells": [
+      "m-sum-familiar-bite"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0,
+    "stoneDrop": null
+  },
+  "sum-ember-hound": {
+    "id": "sum-ember-hound",
+    "name": "Cão de Brasa",
+    "family": "Rebanho do Invocador",
+    "element": "fogo",
+    "dungeonId": null,
+    "description": "Um cão de carvão aceso, magro e rápido, com uma costura de fogo correndo do focinho ao rabo. Morde quente e, quando cai, devolve a última brasa em quem estiver por perto.",
+    "flavor": "Abana o rabo. O rabo acende o chão.",
+    "stats": {
+      "hp": 48,
+      "pa": 4,
+      "pp": 5,
+      "initiative": 72,
+      "power": 0,
+      "dodge": 24,
+      "lock": 10,
+      "resists": {
+        "fogo": 30,
+        "agua": -25,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-sum-hound-bite"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "explodeOnDeath",
+        "element": "fogo",
+        "damage": 20,
+        "radius": 1
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0,
+    "stoneDrop": null
+  },
+  "sum-magma-colossus": {
+    "id": "sum-magma-colossus",
+    "name": "Colosso de Magma",
+    "family": "Rebanho do Invocador",
+    "element": "fogo",
+    "dungeonId": null,
+    "description": "Quatro metros de rocha derretida presa numa forma que lembra vagamente um corpo. Anda devagar porque cada passo abre uma fissura, e o calor que ele emana seca a sala inteira.",
+    "flavor": "O Coração do Fecho de Brasa tem um irmão mais velho. (Invocação de nível 30.)",
+    "stats": {
+      "hp": 160,
+      "pa": 5,
+      "pp": 2,
+      "initiative": 30,
+      "power": 0,
+      "dodge": 0,
+      "lock": 44,
+      "resists": {
+        "fogo": 45,
+        "agua": -30,
+        "terra": 20,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-sum-colossus-smash",
+      "m-sum-colossus-eruption"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.4,
+        "power": 30
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0,
+    "stoneDrop": null
+  },
+  "sum-tide-nymph": {
+    "id": "sum-tide-nymph",
+    "name": "Ninfa da Maré",
+    "family": "Rebanho do Invocador",
+    "element": "agua",
+    "dungeonId": null,
+    "description": "Uma silhueta de água limpa, do tamanho de uma criança, que flutua um palmo acima do chão e vai direto até quem está sangrando. Não ataca nunca; não é para isso que foi chamada.",
+    "flavor": "Ela nunca fala. Só olha para quem está sangrando e resolve.",
+    "stats": {
+      "hp": 44,
+      "pa": 5,
+      "pp": 3,
+      "initiative": 56,
+      "power": 0,
+      "dodge": 20,
+      "lock": 6,
+      "resists": {
+        "fogo": -15,
+        "agua": 30,
+        "terra": 0,
+        "ar": 0,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-sum-nymph-mend",
+      "m-sum-nymph-veil"
+    ],
+    "ai": "support",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0,
+    "stoneDrop": null
+  },
+  "sum-stone-sentinel": {
+    "id": "sum-stone-sentinel",
+    "name": "Sentinela de Pedra",
+    "family": "Rebanho do Invocador",
+    "element": "terra",
+    "dungeonId": null,
+    "description": "Um bloco de rocha vertical com dois sulcos por olhos, plantado onde o invocador mandar. Lenta, dura e teimosa: existe para que um corredor deixe de ser corredor.",
+    "flavor": "Fica onde foi posta. É a coisa mais confiável do mundo enterrado.",
+    "stats": {
+      "hp": 90,
+      "pa": 3,
+      "pp": 1,
+      "initiative": 16,
+      "power": 0,
+      "dodge": 0,
+      "lock": 38,
+      "resists": {
+        "fogo": 10,
+        "agua": 0,
+        "terra": 35,
+        "ar": -15,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-sum-sentinel-slam",
+      "m-sum-sentinel-guard"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0,
+    "stoneDrop": null
+  },
+  "sum-mountain-golem": {
+    "id": "sum-mountain-golem",
+    "name": "Golem da Montanha",
+    "family": "Rebanho do Invocador",
+    "element": "terra",
+    "dungeonId": null,
+    "description": "Uma encosta inteira que concordou em levantar e dar uns passos. Tem árvores mortas nas costas e um veio de água correndo pelo ombro. Nada no mundo enterrado é mais duro do que ele.",
+    "flavor": "Ele não invocou a montanha. Só perguntou se ela topava. (Invocação de nível 30.)",
+    "stats": {
+      "hp": 220,
+      "pa": 5,
+      "pp": 2,
+      "initiative": 20,
+      "power": 0,
+      "dodge": 0,
+      "lock": 50,
+      "resists": {
+        "fogo": 20,
+        "agua": 15,
+        "terra": 50,
+        "ar": -15,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-sum-golem-fist",
+      "m-sum-golem-quake"
+    ],
+    "ai": "melee",
+    "traits": [
+      {
+        "type": "pushImmune"
+      },
+      {
+        "type": "enrage",
+        "hpPct": 0.4,
+        "power": 30
+      }
+    ],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0,
+    "stoneDrop": null
+  },
+  "sum-storm-falcon": {
+    "id": "sum-storm-falcon",
+    "name": "Falcão da Tormenta",
+    "family": "Rebanho do Invocador",
+    "element": "ar",
+    "dungeonId": null,
+    "description": "Um falcão de penas cinzentas com relâmpago velho preso entre elas. Voa em círculos apertados sobre a batalha e desce quando decide, não quando mandam.",
+    "flavor": "Não existe céu para ele voar. Voa assim mesmo, de raiva.",
+    "stats": {
+      "hp": 40,
+      "pa": 4,
+      "pp": 6,
+      "initiative": 88,
+      "power": 0,
+      "dodge": 34,
+      "lock": 6,
+      "resists": {
+        "fogo": 0,
+        "agua": 0,
+        "terra": -15,
+        "ar": 30,
+        "neutro": 0
+      }
+    },
+    "spells": [
+      "m-sum-falcon-strike",
+      "m-sum-falcon-dive"
+    ],
+    "ai": "melee",
+    "traits": [],
+    "boss": false,
+    "summonOnly": true,
+    "xp": 0,
+    "stoneDrop": null
+  }
+}

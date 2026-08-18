@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — dump de JOGO.DATA para a Unity</title>
+</head>
+<body>
+
+<!--
+  DUMP DE DADOS PARA A UNITY (dono: Criativo/Dados — CONTRATO_UNITY_F1 §4)
+
+  Por que esta página existe em vez de um conversor de texto: `fusions.js`,
+  `items.js`, `items_extra.js`, `monsters.js` e `pets.js` GERAM conteúdo em
+  tempo de execução (espelham misturas, derivam `element`/`setId` no rodapé,
+  montam as 105 formas em laço). Ler o texto do arquivo entregaria os literais
+  e perderia tudo que nasce do laço — que é a maior parte.
+
+  Não há Node nesta máquina, então quem executa o JS é o Chrome headless
+  (`tools/exporta_dados_unity.py`). Esta página carrega os dados, serializa e
+  deixa o resultado no DOM para o `--dump-dom` capturar.
+
+  CARGA: só o bloco `js/core/data/*.js` do `v2.html`, na MESMA ORDEM.
+  O resto do `v2.html` (pixi, engine, render2d, hud, main) fica de fora de
+  propósito: nenhum deles escreve em `JOGO.DATA` — só os dez arquivos abaixo
+  escrevem — e `main.js` sobe o jogo pedindo canvas/WebGL, que em headless
+  falha e derruba o dump antes de ele existir. Se um dia a camada de regras
+  passar a derivar dado, esta lista tem de crescer junto.
+-->
+
+<script>
+  /* Tem de vir ANTES do primeiro `<script src>`: cada bloco `<script>` é um
+     programa separado, então hoisting NÃO atravessa blocos — declarar `marcar`
+     lá embaixo daria ReferenceError em toda chamada aqui de cima.
+     Serve para saber QUAL arquivo faltou quando o dump sair curto: sem isso um
+     404 silencioso viraria um JSON incompleto que ninguém notaria no diff. */
+  window.__CARREGADOS = [];
+  function marcar(arquivo) { window.__CARREGADOS.push(arquivo); }
+</script>
+
+<script src="../js/core/data/elements.js"></script>
+<script>marcar('elements.js');</script>
+<script src="../js/core/data/classes.js"></script>
+<script>marcar('classes.js');</script>
+<script src="../js/core/data/spells.js"></script>
+<script>marcar('spells.js');</script>
+<script src="../js/core/data/progression.js"></script>
+<script>marcar('progression.js');</script>
+<script src="../js/core/data/monsters.js"></script>
+<script>marcar('monsters.js');</script>
+<script src="../js/core/data/dungeons.js"></script>
+<script>marcar('dungeons.js');</script>
+<script src="../js/core/data/fusions.js"></script>
+<script>marcar('fusions.js');</script>
+<script src="../js/core/data/pets.js"></script>
+<script>marcar('pets.js');</script>
+<script src="../js/core/data/items.js"></script>
+<script>marcar('items.js');</script>
+<script src="../js/core/data/items_extra.js"></script>
+<script>marcar('items_extra.js');</script>
+
+<div id="estado">montando…</div>
+<pre id="saida"></pre>
+
+<script>
+(function () {
+  'use strict';
+
+  var ESPERADOS = [
+    'elements.js', 'classes.js', 'spells.js', 'progression.js', 'monsters.js',
+    'dungeons.js', 'fusions.js', 'pets.js', 'items.js', 'items_extra.js'
+  ];
+
+  var avisos = [];
+
+  /* Duas armadilhas ja pagas, as duas por causa do `--dump-dom`:
+     1) ele imprime TAMBEM o texto deste `<script>` inline, entao marca escrita
+        por extenso casa consigo mesma e a busca do Python acha o template em
+        vez do resultado — a primeira exportacao "reportou" o proprio erro.
+        Por isso as marcas nascem concatenadas, nunca inteiras no fonte.
+     2) ele devolve HTML serializado, onde `<` e `>` do texto viram `&lt;`/`&gt;`.
+        Marca de `>>>` chegava do outro lado como `&gt;&gt;&gt;` e nao casava.
+        Por isso a marca usa `#`, que atravessa o HTML intacto e nao existe no
+        alfabeto base64. */
+  var MARCA = {
+    b64ini: '#B6' + '4INI#', b64fim: '#B6' + '4FIM#',
+    erroIni: '#ER' + 'ROINI#', erroFim: '#ER' + 'ROFIM#'
+  };
+
+  function falhar(msg) {
+    document.getElementById('estado').textContent = 'ERRO';
+    document.getElementById('saida').textContent = MARCA.erroIni + msg + MARCA.erroFim;
+  }
+
+  var carregados = window.__CARREGADOS || [];
+  var faltando = ESPERADOS.filter(function (a) { return carregados.indexOf(a) < 0; });
+  if (faltando.length) {
+    falhar('arquivos de dados que nao executaram: ' + faltando.join(', '));
+    return;
+  }
+  if (!window.JOGO || !window.JOGO.DATA) {
+    falhar('JOGO.DATA nao existe depois de carregar os dez arquivos');
+    return;
+  }
+
+  var DATA = window.JOGO.DATA;
+
+  /* JSON.stringify é SILENCIOSO nas perdas: função e `undefined` somem da
+     saída, `NaN`/`Infinity` viram `null`, `Date` vira string, `Map`/`Set`
+     viram `{}`. Numa exportação isso é o pior defeito possível — o arquivo
+     parece inteiro e está furado. Esta caminhada acha a perda ANTES e a
+     reporta com o caminho, para o relatório citar onde dói. */
+  function auditar(valor, caminho, vistos) {
+    var t = typeof valor;
+
+    if (t === 'function') { avisos.push('funcao perdida em ' + caminho); return; }
+    if (t === 'undefined') { avisos.push('undefined perdido em ' + caminho); return; }
+    if (t === 'symbol') { avisos.push('symbol perdido em ' + caminho); return; }
+    if (t === 'bigint') { avisos.push('bigint nao serializavel em ' + caminho); return; }
+    if (t === 'number' && !isFinite(valor)) {
+      avisos.push('numero nao finito (' + String(valor) + ') vira null em ' + caminho);
+      return;
+    }
+    if (valor === null || t !== 'object') { return; }
+
+    if (vistos.indexOf(valor) >= 0) { avisos.push('referencia circular em ' + caminho); return; }
+    vistos.push(valor);
+
+    if (valor instanceof Date) { avisos.push('Date vira string em ' + caminho); }
+    else if (typeof Map !== 'undefined' && valor instanceof Map) { avisos.push('Map vira {} em ' + caminho); }
+    else if (typeof Set !== 'undefined' && valor instanceof Set) { avisos.push('Set vira {} em ' + caminho); }
+    else if (Array.isArray(valor)) {
+      for (var i = 0; i < valor.length; i++) { auditar(valor[i], caminho + '[' + i + ']', vistos); }
+    } else {
+      var ks = Object.keys(valor);
+      for (var j = 0; j < ks.length; j++) { auditar(valor[ks[j]], caminho + '.' + ks[j], vistos); }
+    }
+
+    vistos.pop();
+  }
+
+  /* §4 do contrato: comprimento se for lista, número de chaves se for objeto. */
+  function contar(v) {
+    if (Array.isArray(v)) { return v.length; }
+    if (v && typeof v === 'object') { return Object.keys(v).length; }
+    return null;
+  }
+
+  var chavesDATA = Object.keys(DATA).sort();
+  var dados = {};
+  var chaves = {};
+
+  for (var c = 0; c < chavesDATA.length; c++) {
+    var k = chavesDATA[c];
+    var v = DATA[k];
+
+    auditar(v, 'DATA.' + k, []);
+
+    var n = contar(v);
+    if (n === null) {
+      avisos.push('DATA.' + k + ' nao e lista nem objeto (' + typeof v + '); contagem foi a nulo');
+    }
+    chaves[k] = n;
+
+    /* Indentado de propósito: um JSON de 1 MB numa linha só não se revisa em
+       diff, e revisar o diff é a razão de existir um arquivo por chave. */
+    try {
+      dados[k] = JSON.stringify(v, null, 2);
+    } catch (e) {
+      avisos.push('DATA.' + k + ' nao serializou: ' + e.message);
+      dados[k] = null;
+    }
+  }
+
+  var pacote = {
+    gerado: new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
+    fonte: 'v2.html',
+    chaves: chaves,
+    avisos: avisos,
+    dados: dados
+  };
+
+  var texto = JSON.stringify(pacote);
+
+  /* Base64 e não o JSON cru no DOM: `--dump-dom` devolve HTML serializado, onde
+     `<`, `>` e `&` do conteúdo saem escapados como entidades. Desescapar 2 MB de
+     texto do lado do Python é um convite a corromper aspas dentro de string de
+     dado. Base64 só tem A-Z a-z 0-9 + / =, que atravessam o HTML intactos. */
+  function paraBase64(s) {
+    var bytes = new TextEncoder().encode(s);
+    var pedacos = [];
+    var passo = 0x8000; // String.fromCharCode.apply estoura a pilha com arrays enormes
+    for (var i = 0; i < bytes.length; i += passo) {
+      pedacos.push(String.fromCharCode.apply(null, bytes.subarray(i, i + passo)));
+    }
+    return btoa(pedacos.join(''));
+  }
+
+  document.getElementById('saida').textContent =
+    MARCA.b64ini + paraBase64(texto) + MARCA.b64fim;
+  document.getElementById('estado').textContent =
+    'PRONTO ' + chavesDATA.length + ' chaves, ' + avisos.length + ' avisos';
+})();
+</script>
+
+</body>
+</html>

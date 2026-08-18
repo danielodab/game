@@ -1,0 +1,74 @@
+{
+  "sumo": {
+    "unlockCost": 0,
+    "dropWeight": 6,
+    "minDungeon": 0,
+    "starCosts": [
+      5,
+      15,
+      30,
+      55,
+      90
+    ]
+  },
+  "curandeira": {
+    "unlockCost": 0,
+    "dropWeight": 6,
+    "minDungeon": 0,
+    "starCosts": [
+      5,
+      15,
+      30,
+      55,
+      90
+    ]
+  },
+  "invocador": {
+    "unlockCost": 10,
+    "dropWeight": 16,
+    "minDungeon": 1,
+    "starCosts": [
+      5,
+      15,
+      30,
+      55,
+      90
+    ]
+  },
+  "bruxo": {
+    "unlockCost": 10,
+    "dropWeight": 16,
+    "minDungeon": 2,
+    "starCosts": [
+      5,
+      15,
+      30,
+      55,
+      90
+    ]
+  },
+  "espadachim": {
+    "unlockCost": 20,
+    "dropWeight": 24,
+    "minDungeon": 3,
+    "starCosts": [
+      5,
+      15,
+      30,
+      55,
+      90
+    ]
+  },
+  "arqueiro": {
+    "unlockCost": 25,
+    "dropWeight": 32,
+    "minDungeon": 4,
+    "starCosts": [
+      5,
+      15,
+      30,
+      55,
+      90
+    ]
+  }
+}

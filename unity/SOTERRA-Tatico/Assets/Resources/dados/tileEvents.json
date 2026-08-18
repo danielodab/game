@@ -1,0 +1,262 @@
+{
+  "ev-might": {
+    "id": "ev-might",
+    "name": "Fôlego de Bravura",
+    "kind": "buff",
+    "icon": "⚡",
+    "weight": 22,
+    "duration": 4,
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 25,
+        "duration": 2
+      }
+    ],
+    "description": "Uma faísca de coragem antiga presa no piso: +25 de poder por 2 turnos.",
+    "flavor": "Alguém morreu bravo bem aqui. Sobrou um pouco.",
+    "fxKey": "buff"
+  },
+  "ev-haste": {
+    "id": "ev-haste",
+    "name": "Corrente de Passo",
+    "kind": "buff",
+    "icon": "💨",
+    "weight": 20,
+    "duration": 4,
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 1,
+        "duration": 2
+      }
+    ],
+    "description": "Um sopro dos respiradouros empurra pelas costas: +1 PP por 2 turnos.",
+    "flavor": "O mundo enterrado ainda respira, de vez em quando a favor.",
+    "fxKey": "buff"
+  },
+  "ev-focus": {
+    "id": "ev-focus",
+    "name": "Segundo de Clareza",
+    "kind": "buff",
+    "icon": "✦",
+    "weight": 12,
+    "duration": 3,
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "pa",
+        "value": 1,
+        "duration": 1
+      }
+    ],
+    "description": "O tempo abre uma fresta: +1 PA neste turno.",
+    "flavor": "Raro, curto e caro. Use já.",
+    "fxKey": "buff"
+  },
+  "ev-guard": {
+    "id": "ev-guard",
+    "name": "Restos de Redoma",
+    "kind": "buff",
+    "icon": "🛡",
+    "weight": 16,
+    "duration": 4,
+    "effects": [
+      {
+        "type": "shield",
+        "value": 25,
+        "duration": 2
+      }
+    ],
+    "description": "Um caco de proteção antiga se fecha em volta de quem pisa: 25 de escudo.",
+    "flavor": "Protegeu alguém por mil anos. Agora é sua vez.",
+    "fxKey": "shieldFx"
+  },
+  "ev-slip": {
+    "id": "ev-slip",
+    "name": "Piso Escorregadio",
+    "kind": "buff",
+    "icon": "👟",
+    "weight": 14,
+    "duration": 3,
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "dodge",
+        "value": 15,
+        "duration": 2
+      }
+    ],
+    "description": "Musgo, sal ou serragem: dá para escapulir de qualquer fixação. +15 de esquiva por 2 turnos.",
+    "flavor": "Escorregar na hora certa é uma escola inteira.",
+    "fxKey": "buff"
+  },
+  "ev-mystery": {
+    "id": "ev-mystery",
+    "name": "Surpresa",
+    "kind": "mystery",
+    "icon": "❓",
+    "weight": 24,
+    "duration": 4,
+    "description": "Ninguém sabe o que o mundo enterrado guardou nessa célula. Pise e descubra — pode ser presente, pode ser conta antiga.",
+    "flavor": "A casa sempre cobra. Às vezes paga.",
+    "fxKey": "burst",
+    "outcomes": [
+      {
+        "weight": 22,
+        "text": "Um respiro do mundo antigo enche o peito. Cura profunda!",
+        "effects": [
+          {
+            "type": "heal",
+            "min": 30,
+            "max": 40
+          }
+        ]
+      },
+      {
+        "weight": 20,
+        "text": "A célula cede e alguma coisa embaixo morde. Muito.",
+        "effects": [
+          {
+            "type": "damage",
+            "element": "neutro",
+            "min": 22,
+            "max": 30
+          }
+        ]
+      },
+      {
+        "weight": 18,
+        "text": "O tempo abre uma fresta: uma ação a mais neste turno.",
+        "effects": [
+          {
+            "type": "buff",
+            "stat": "pa",
+            "value": 1,
+            "duration": 1
+          }
+        ]
+      },
+      {
+        "weight": 18,
+        "text": "Um bolsão de ar podre estoura no rosto. Isso vai arder por um tempo.",
+        "effects": [
+          {
+            "type": "poison",
+            "element": "neutro",
+            "min": 6,
+            "max": 9,
+            "duration": 3
+          }
+        ]
+      },
+      {
+        "weight": 14,
+        "text": "Uma lembrança de força alheia sobe pelas pernas: +40 de poder!",
+        "effects": [
+          {
+            "type": "buff",
+            "stat": "power",
+            "value": 40,
+            "duration": 2
+          }
+        ]
+      },
+      {
+        "weight": 12,
+        "text": "Raízes velhas se fecham nos tornozelos e não pedem licença.",
+        "effects": [
+          {
+            "type": "root",
+            "duration": 1
+          },
+          {
+            "type": "damage",
+            "element": "neutro",
+            "min": 10,
+            "max": 14
+          }
+        ]
+      },
+      {
+        "weight": 10,
+        "text": "Uma redoma esquecida acorda inteira: escudo e regeneração.",
+        "effects": [
+          {
+            "type": "shield",
+            "value": 40,
+            "duration": 3
+          },
+          {
+            "type": "regen",
+            "min": 8,
+            "max": 12,
+            "duration": 3
+          }
+        ]
+      }
+    ]
+  },
+  "ev-portal": {
+    "id": "ev-portal",
+    "name": "Boca de Respiradouro",
+    "kind": "portal",
+    "icon": "🌀",
+    "weight": 14,
+    "duration": 5,
+    "effects": [
+      {
+        "type": "teleport"
+      }
+    ],
+    "description": "Uma boca de respiradouro suga quem pisa e cospe em outro ponto do mapa.",
+    "flavor": "Os Fôlegos usavam isso como escada. Você vai usar como fuga.",
+    "fxKey": "blink"
+  },
+  "ev-drain": {
+    "id": "ev-drain",
+    "name": "Sanguessuga do Piso",
+    "kind": "drain",
+    "icon": "🩸",
+    "weight": 16,
+    "duration": 4,
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 10,
+        "max": 16
+      },
+      {
+        "type": "poison",
+        "element": "neutro",
+        "min": 4,
+        "max": 6,
+        "duration": 2
+      }
+    ],
+    "description": "O piso está com fome: morde o tornozelo e continua bebendo por 2 turnos.",
+    "flavor": "Mil anos sem visita fazem qualquer chão ficar assim.",
+    "fxKey": "debuff"
+  },
+  "ev-fountain": {
+    "id": "ev-fountain",
+    "name": "Fonte Teimosa",
+    "kind": "fountain",
+    "icon": "💧",
+    "weight": 18,
+    "duration": 4,
+    "effects": [
+      {
+        "type": "heal",
+        "min": 22,
+        "max": 30
+      }
+    ],
+    "description": "Uma nascente que nunca soube que o mundo acabou. Bebe-se de joelhos.",
+    "flavor": "Ainda está limpa. Não pergunte por quê.",
+    "fxKey": "heal"
+  }
+}

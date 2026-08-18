@@ -1,0 +1,1864 @@
+{
+  "gh-firefly-crown": {
+    "id": "gh-firefly-crown",
+    "name": "Garra de Vagalumes",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "greenhouse",
+    "element": "agua",
+    "setId": "gh-set-dew",
+    "dropWeight": 1000,
+    "bonuses": {
+      "initiative": 8,
+      "power": 3
+    },
+    "grantsSpell": null,
+    "description": "Luva de arame com três redomas minúsculas nos nós dos dedos, cada uma com um vagalume da goteira vivo dentro da própria poça. +8 de iniciativa, +3 de poder.",
+    "flavor": "Acendem meio segundo antes do soco. Aprenda com eles.",
+    "iconKey": "firefly-claw",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "gh-widow-shears": {
+    "id": "gh-widow-shears",
+    "name": "Tesourão da Viúva",
+    "slot": "punho",
+    "rarity": "epico",
+    "dungeonId": "greenhouse",
+    "element": "terra",
+    "setId": "gh-set-flora",
+    "dropWeight": 96,
+    "bonuses": {
+      "pa": 1,
+      "power": 14
+    },
+    "grantsSpell": null,
+    "description": "O tesourão de poda da Jardineira-Viúva, mais alto que uma criança e ainda pegajoso de seiva. +1 PA, +14 de poder.",
+    "flavor": "Ela podava o jardim. Agora você poda o mundo.",
+    "iconKey": "great-shears",
+    "keyPiece": true,
+    "minRoom": 2
+  },
+  "gh-moss-treads": {
+    "id": "gh-moss-treads",
+    "name": "Solados de Musgo",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "greenhouse",
+    "element": "agua",
+    "setId": "gh-set-dew",
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 8,
+      "initiative": 4
+    },
+    "grantsSpell": null,
+    "description": "Sandálias forradas com musgo vivo que agarra o piso molhado e não faz barulho. +8 de esquiva, +4 de iniciativa.",
+    "flavor": "O musgo cresce de volta toda noite. Não pergunte do quê.",
+    "iconKey": "moss-boots",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "gh-vine-stirrups": {
+    "id": "gh-vine-stirrups",
+    "name": "Estribos de Hera",
+    "slot": "passo",
+    "rarity": "raro",
+    "dungeonId": "greenhouse",
+    "element": "terra",
+    "setId": "gh-set-flora",
+    "dropWeight": 138,
+    "bonuses": {
+      "pp": 1,
+      "dodge": 10
+    },
+    "grantsSpell": null,
+    "description": "Duas heras vivas enroladas nas canelas que empurram o passo seguinte antes de você pedir. +1 PP, +10 de esquiva.",
+    "flavor": "Elas sabem para onde você vai. Discordam pouco.",
+    "iconKey": "vine-stirrup",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "gh-trellis-guard": {
+    "id": "gh-trellis-guard",
+    "name": "Guarda de Treliça",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "greenhouse",
+    "element": "terra",
+    "setId": "gh-set-flora",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 15,
+      "resists": {
+        "terra": 5
+      }
+    },
+    "grantsSpell": null,
+    "description": "Placa de treliça de madeira coberta de hera, amarrada ao peito com corda de estufa. +15 PV, +5% de resistência a terra.",
+    "flavor": "A hera que o cobre aperta o seu braço com carinho.",
+    "iconKey": "trellis-shield",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "gh-sap-apron": {
+    "id": "gh-sap-apron",
+    "name": "Avental de Seiva",
+    "slot": "casca",
+    "rarity": "raro",
+    "dungeonId": "greenhouse",
+    "element": "agua",
+    "setId": "gh-set-dew",
+    "dropWeight": 276,
+    "bonuses": {
+      "hp": 30,
+      "resists": {
+        "terra": 10,
+        "agua": 5
+      }
+    },
+    "grantsSpell": null,
+    "description": "Avental de jardineiro encharcado de seiva endurecida, duro como couro cozido. +30 PV, +10% terra, +5% água.",
+    "flavor": "Os bolsos ainda têm sementes. Não plante nenhuma.",
+    "iconKey": "apron",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "gh-seed-pouch": {
+    "id": "gh-seed-pouch",
+    "name": "Candeia de Vagens",
+    "slot": "lume",
+    "rarity": "comum",
+    "dungeonId": "greenhouse",
+    "element": "terra",
+    "setId": "gh-set-flora",
+    "dropWeight": 500,
+    "bonuses": {
+      "power": 3
+    },
+    "grantsSpell": "is-seed-bomb",
+    "description": "Candeia de vidro cujo combustível são vagens estourantes colhidas verdes: elas brilham verde enquanto fermentam e vão junto quando o vidro se abre. Concede o feitiço Bomba de Sementes.",
+    "flavor": "Chacoalhar é desaconselhado. Todo mundo chacoalha.",
+    "iconKey": "seed-lamp",
+    "keyPiece": true,
+    "minRoom": 0
+  },
+  "gh-briar-charm": {
+    "id": "gh-briar-charm",
+    "name": "Fogaréu de Sarça",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "greenhouse",
+    "element": "agua",
+    "setId": "gh-set-dew",
+    "dropWeight": 138,
+    "bonuses": {
+      "hp": 10
+    },
+    "grantsSpell": "is-thorn-ward",
+    "description": "Um nó de sarça da calha que arde sem se consumir, preso numa gaiola de arame. Quando o dono se assusta, a chama sobe e os espinhos fecham em volta dele. Concede o feitiço Redoma de Espinhos.",
+    "flavor": "Queima há mil anos e continua verde por dentro. Ninguém explicou.",
+    "iconKey": "briar-brazier",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "ci-lantern-fob": {
+    "id": "ci-lantern-fob",
+    "name": "Garra do Afogadiço",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "cistern",
+    "element": "agua",
+    "setId": "ci-set-drowned",
+    "dropWeight": 1000,
+    "bonuses": {
+      "initiative": 10
+    },
+    "grantsSpell": null,
+    "description": "A mão inchada de um carregador da corte, endurecida em salmoura e calçada como luva. Continua agarrando primeiro e perguntando depois. +10 de iniciativa.",
+    "flavor": "Ela pega antes de você decidir pegar. Deixe.",
+    "iconKey": "drowned-claw",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "ci-harpoon-flute": {
+    "id": "ci-harpoon-flute",
+    "name": "Flauta-Arpão",
+    "slot": "punho",
+    "rarity": "raro",
+    "dungeonId": "cistern",
+    "element": "neutro",
+    "setId": "ci-set-brine",
+    "dropWeight": 232,
+    "bonuses": {
+      "power": 10,
+      "initiative": 5
+    },
+    "grantsSpell": null,
+    "description": "Osso longo com três furos de flauta e uma ponta farpada; assobia grave quando corta o ar. +10 de poder, +5 de iniciativa.",
+    "flavor": "Assobia a mesma nota grave a cada golpe: desça.",
+    "iconKey": "flute",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "ci-current-fins": {
+    "id": "ci-current-fins",
+    "name": "Membranas de Correnteza",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "cistern",
+    "element": "agua",
+    "setId": "ci-set-drowned",
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 10,
+      "initiative": 4
+    },
+    "grantsSpell": null,
+    "description": "Membranas finas esticadas entre os dedos dos pés e presas ao tornozelo: cada passada empurra a água parada como se ela concordasse. +10 de esquiva, +4 de iniciativa.",
+    "flavor": "Servem em terra firme. Ninguém entende como.",
+    "iconKey": "fins",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "ci-baroness-collar": {
+    "id": "ci-baroness-collar",
+    "name": "Escarpins da Baronesa",
+    "slot": "passo",
+    "rarity": "epico",
+    "dungeonId": "cistern",
+    "element": "neutro",
+    "setId": "ci-set-brine",
+    "dropWeight": 89,
+    "bonuses": {
+      "pp": 1,
+      "hp": 15,
+      "initiative": 8,
+      "dodge": 12
+    },
+    "grantsSpell": null,
+    "description": "Os sapatos de baile da Baronesa Salmoura, com fivelas de pérola de lodo e sola que não encosta no fundo. A água abre caminho na frente deles. +1 PP, +15 PV, +8 de iniciativa, +12 de esquiva.",
+    "flavor": "A maré abre caminho para quem os calça. Por respeito — ou por medo.",
+    "iconKey": "pearl-shoes",
+    "keyPiece": true,
+    "minRoom": 2
+  },
+  "ci-brine-cuirass": {
+    "id": "ci-brine-cuirass",
+    "name": "Couraça de Salmoura",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "cistern",
+    "element": "neutro",
+    "setId": "ci-set-brine",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 20,
+      "resists": {
+        "agua": 8
+      }
+    },
+    "grantsSpell": null,
+    "description": "Peitoral de placas de sal cristalizado, leve e cortante nas bordas. +20 PV, +8% de resistência a água.",
+    "flavor": "Quanto mais quebra, mais afiada fica. Igual ao dono anterior.",
+    "iconKey": "salt-plate",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "ci-drowned-coat": {
+    "id": "ci-drowned-coat",
+    "name": "Casaca do Carregador",
+    "slot": "casca",
+    "rarity": "raro",
+    "dungeonId": "cistern",
+    "element": "agua",
+    "setId": "ci-set-drowned",
+    "dropWeight": 232,
+    "bonuses": {
+      "hp": 35,
+      "resists": {
+        "agua": 12,
+        "fogo": 5
+      }
+    },
+    "grantsSpell": null,
+    "description": "Casaca de gola alta que escorre água para sempre e pesa como um abraço. +35 PV, +12% água, +5% fogo.",
+    "flavor": "Quem a veste nunca larga o que carrega. Cuidado com o que carrega.",
+    "iconKey": "coat",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "ci-tide-flask": {
+    "id": "ci-tide-flask",
+    "name": "Lanterna de Maré",
+    "slot": "lume",
+    "rarity": "comum",
+    "dungeonId": "cistern",
+    "element": "agua",
+    "setId": "ci-set-drowned",
+    "dropWeight": 500,
+    "bonuses": {
+      "power": 4
+    },
+    "grantsSpell": "is-undertow",
+    "description": "Lampião submerso cuja chama nunca soube que afogou. A linha d’água dentro do vidro fica sempre inclinada — e a água de fora inclina junto. Concede o feitiço Ressaca.",
+    "flavor": "Duas vezes por dia a lanterna puxa. Ninguém sabe para onde.",
+    "iconKey": "tide-lantern",
+    "keyPiece": true,
+    "minRoom": 0
+  },
+  "ci-jelly-vial": {
+    "id": "ci-jelly-vial",
+    "name": "Ampola de Água-Viva",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "cistern",
+    "element": "neutro",
+    "setId": "ci-set-brine",
+    "dropWeight": 116,
+    "bonuses": {
+      "hp": 12
+    },
+    "grantsSpell": "is-tide-mend",
+    "description": "Ampola morna com uma água-viva-lustre viva lá dentro, pulsando devagar e iluminando três células de corredor a cada pulso. Concede o feitiço Maré Mansa.",
+    "flavor": "Ela ilumina e cura porque acha que você é o aquário.",
+    "iconKey": "jelly-vial",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "em-bellows-valve": {
+    "id": "em-bellows-valve",
+    "name": "Manopla de Fole",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "emberlock",
+    "element": "terra",
+    "setId": "em-set-slag",
+    "dropWeight": 1000,
+    "bonuses": {
+      "initiative": 12
+    },
+    "grantsSpell": null,
+    "description": "Manopla de latão com um fole sanfonado no antebraço: o punho fecha, a válvula abre e o ar comprimido chega antes da mão. +12 de iniciativa.",
+    "flavor": "O assobio é meio segundo de vantagem. Nos Fechos, é uma vida.",
+    "iconKey": "bellows-gauntlet",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "em-forge-grate": {
+    "id": "em-forge-grate",
+    "name": "Malho do Primeiro Fogo",
+    "slot": "punho",
+    "rarity": "epico",
+    "dungeonId": "emberlock",
+    "element": "fogo",
+    "setId": "em-set-forge",
+    "dropWeight": 102,
+    "bonuses": {
+      "pa": 1,
+      "power": 12,
+      "resists": {
+        "fogo": 10
+      }
+    },
+    "grantsSpell": null,
+    "description": "O malho de Magno, com a cabeça vazada em grelha e brasa viva presa entre as barras. Cada golpe respira. +1 PA, +12 de poder, +10% fogo.",
+    "flavor": "Bateu o primeiro fogo do mundo. Não impressiona fácil.",
+    "iconKey": "forge-maul",
+    "keyPiece": true,
+    "minRoom": 2
+  },
+  "em-cinder-treads": {
+    "id": "em-cinder-treads",
+    "name": "Solados de Escória",
+    "slot": "passo",
+    "rarity": "raro",
+    "dungeonId": "emberlock",
+    "element": "fogo",
+    "setId": "em-set-forge",
+    "dropWeight": 165,
+    "bonuses": {
+      "pp": 1,
+      "initiative": 6,
+      "dodge": 14
+    },
+    "grantsSpell": null,
+    "description": "Solas de escória fria que não queimam no piso da forja e ainda dão um empurrão em cada passada. +1 PP, +6 de iniciativa, +14 de esquiva.",
+    "flavor": "Andar sobre brasa é questão de sola, dizem eles.",
+    "iconKey": "slag-boots",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "em-chain-harness": {
+    "id": "em-chain-harness",
+    "name": "Grilhões de Forja",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "emberlock",
+    "element": "terra",
+    "setId": "em-set-slag",
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 12,
+      "lock": 8
+    },
+    "grantsSpell": null,
+    "description": "Correntes do teto da forja fechadas nos tornozelos: dão balanço de pêndulo para desviar e peso de âncora para segurar quem tentar fugir. +12 de esquiva, +8 de fixação.",
+    "flavor": "Prendiam alguma coisa antes. Agora andam com você — de boa vontade.",
+    "iconKey": "forge-shackles",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "em-riveted-plate": {
+    "id": "em-riveted-plate",
+    "name": "Chapa Rebitada",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "emberlock",
+    "element": "terra",
+    "setId": "em-set-slag",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 25,
+      "resists": {
+        "fogo": 8
+      }
+    },
+    "grantsSpell": null,
+    "description": "Placa retangular arrancada do portão da forja, com quatro rebites nos cantos. +25 PV, +8% fogo.",
+    "flavor": "O portão não sente falta. Provavelmente.",
+    "iconKey": "riveted-plate",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "em-soot-mantle": {
+    "id": "em-soot-mantle",
+    "name": "Manto de Fuligem",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "emberlock",
+    "element": "fogo",
+    "setId": "em-set-forge",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 40,
+      "resists": {
+        "fogo": 15,
+        "ar": 5
+      }
+    },
+    "grantsSpell": null,
+    "description": "Manto que esfarela em partículas na barra e se refaz sozinho enquanto houver fumaça na sala. +40 PV, +15% fogo, +5% ar.",
+    "flavor": "Às vezes ele lembra que já foi alguém — e te abraça.",
+    "iconKey": "soot-cloak",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "em-ember-flask": {
+    "id": "em-ember-flask",
+    "name": "Lampião de Fagulha",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "emberlock",
+    "element": "fogo",
+    "setId": "em-set-forge",
+    "dropWeight": 165,
+    "bonuses": {
+      "initiative": 6
+    },
+    "grantsSpell": "is-cinder-leap",
+    "description": "Lampião de vidro grosso com uma fagulha inquieta batendo nas paredes por dentro. Ela sempre sabe o caminho de volta ao dono — e às vezes vai na frente. Concede o feitiço Salto de Brasa.",
+    "flavor": "Ela vai primeiro. Você vai junto. Combinem antes.",
+    "iconKey": "spark-lantern",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "em-brand-iron": {
+    "id": "em-brand-iron",
+    "name": "Ferro em Brasa",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "emberlock",
+    "element": "terra",
+    "setId": "em-set-slag",
+    "dropWeight": 165,
+    "bonuses": {
+      "power": 8
+    },
+    "grantsSpell": "is-forge-brand",
+    "description": "Ferro de marcar com o timbre do Fecho na ponta, vermelho-vivo há mil anos sem forja nenhuma por perto. Ilumina o corredor de laranja e cheira a metal quente. Concede o feitiço Ferro de Marcar.",
+    "flavor": "O Ferreiro Sem-Rosto marcava tudo. Inclusive a si mesmo.",
+    "iconKey": "brand-iron",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "av-kite-crest": {
+    "id": "av-kite-crest",
+    "name": "Garra de Vareta",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": "av-set-gale",
+    "dropWeight": 1000,
+    "bonuses": {
+      "initiative": 14,
+      "power": 8
+    },
+    "grantsSpell": null,
+    "description": "Cinco varetas de papagaio amarradas aos dedos com pano esticado entre elas: a mão vira asa e o golpe vem com a corrente junto. +14 de iniciativa, +8 de poder.",
+    "flavor": "Puxa para cima o tempo todo. Você se acostuma a inclinar.",
+    "iconKey": "kite-claw",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "av-plank-gauntlet": {
+    "id": "av-plank-gauntlet",
+    "name": "Manopla de Tábua",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": "av-set-rigging",
+    "dropWeight": 1000,
+    "bonuses": {
+      "power": 14,
+      "lock": 6
+    },
+    "grantsSpell": null,
+    "description": "Tábua de andaime amarrada ao antebraço com corda alcatroada: bate como remo e segura como corrimão. +14 de poder, +6 de fixação.",
+    "flavor": "Já foi piso. Prefere ser argumento.",
+    "iconKey": "plank-gauntlet",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "av-glider-cloak": {
+    "id": "av-glider-cloak",
+    "name": "Esporas de Vão",
+    "slot": "passo",
+    "rarity": "raro",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": "av-set-rigging",
+    "dropWeight": 165,
+    "bonuses": {
+      "pp": 1,
+      "dodge": 12
+    },
+    "grantsSpell": null,
+    "description": "Esporas de vareta e pano que abrem como leque a cada passada e pegam a corrente que sobe do vão: transformam a queda em passo. +1 PP, +12 de esquiva.",
+    "flavor": "Nos Andaimes, cair é só uma forma lenta de andar.",
+    "iconKey": "gale-spurs",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "av-updraft-boots": {
+    "id": "av-updraft-boots",
+    "name": "Botas de Respiradouro",
+    "slot": "passo",
+    "rarity": "epico",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": "av-set-gale",
+    "dropWeight": 102,
+    "bonuses": {
+      "pp": 1,
+      "initiative": 12,
+      "dodge": 14
+    },
+    "grantsSpell": null,
+    "description": "Botas com grelhas nos solados que aspiram o ar dos respiradouros e devolvem por baixo a cada passada. +1 PP, +12 de iniciativa, +14 de esquiva.",
+    "flavor": "Elas dão o passo. Você só decide a direção.",
+    "iconKey": "updraft-boots",
+    "keyPiece": true,
+    "minRoom": 2
+  },
+  "av-rope-vest": {
+    "id": "av-rope-vest",
+    "name": "Colete de Cordame",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": "av-set-rigging",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 30,
+      "resists": {
+        "ar": 8
+      }
+    },
+    "grantsSpell": null,
+    "description": "Colete trançado com o cordame dos andaimes, apertado no peito por nós de marinheiro. +30 PV, +8% ar.",
+    "flavor": "Cada nó tem nome. Aprenda dois, pelo menos.",
+    "iconKey": "rope-vest",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "av-storm-harness": {
+    "id": "av-storm-harness",
+    "name": "Arnês de Tormenta",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": "av-set-gale",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 45,
+      "resists": {
+        "ar": 15,
+        "terra": 6
+      }
+    },
+    "grantsSpell": null,
+    "description": "Arnês de couro com anéis de latão que zunem no vendaval e mantêm o corpo colado à passarela. +45 PV, +15% ar, +6% terra.",
+    "flavor": "Segura o corpo. A coragem é problema seu.",
+    "iconKey": "storm-harness",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "av-wind-whistle": {
+    "id": "av-wind-whistle",
+    "name": "Farolete de Vão",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": "av-set-gale",
+    "dropWeight": 165,
+    "bonuses": {
+      "initiative": 8
+    },
+    "grantsSpell": "is-updraft",
+    "description": "Farolete de sinalização das passarelas: a chama dentro dele deita na direção da corrente antes de a corrente chegar — e, se você soprar o vidro, a corrente vem. Concede o feitiço Lufada.",
+    "flavor": "Os Fôlegos o usavam para achar o respiradouro. Você usa para limpar a passarela.",
+    "iconKey": "gap-beacon",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "av-lightning-coil": {
+    "id": "av-lightning-coil",
+    "name": "Espiral de Raio",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": "av-set-rigging",
+    "dropWeight": 165,
+    "bonuses": {
+      "power": 10
+    },
+    "grantsSpell": "is-storm-chain",
+    "description": "Bobina de arame fino enrolada num prego de cobre, sempre eriçada e acesa por dentro num azul de tempestade que estala baixinho. Concede o feitiço Corrente de Tormenta.",
+    "flavor": "Arrepia o braço inteiro antes de decidir por você.",
+    "iconKey": "coil",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "mt-drill-bit": {
+    "id": "mt-drill-bit",
+    "name": "Broca de Veio",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "quakemine",
+    "element": "neutro",
+    "setId": "mt-set-tools",
+    "dropWeight": 1000,
+    "bonuses": {
+      "power": 16,
+      "lock": 8
+    },
+    "grantsSpell": null,
+    "description": "Broca helicoidal de minério bruto, pesada demais para uma mão só e afiada por atrito. +16 de poder, +8 de fixação.",
+    "flavor": "Cavou fundo demais. É por isso que a mina treme.",
+    "iconKey": "drill-bit",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "mt-quake-crown": {
+    "id": "mt-quake-crown",
+    "name": "Punho de Falha",
+    "slot": "punho",
+    "rarity": "epico",
+    "dungeonId": "quakemine",
+    "element": "terra",
+    "setId": "mt-set-bedrock",
+    "dropWeight": 96,
+    "bonuses": {
+      "pa": 1,
+      "hp": 20,
+      "resists": {
+        "terra": 10
+      }
+    },
+    "grantsSpell": null,
+    "description": "Um bloco de rocha rachada moldado em volta da mão, que treme baixinho no ritmo da mina e para de tremer no instante do impacto. +1 PA, +20 PV, +10% terra.",
+    "flavor": "O tremor não vem mais do chão. Vem de você.",
+    "iconKey": "quake-fist",
+    "keyPiece": true,
+    "minRoom": 2
+  },
+  "mt-ore-greaves": {
+    "id": "mt-ore-greaves",
+    "name": "Grevas de Minério",
+    "slot": "passo",
+    "rarity": "raro",
+    "dungeonId": "quakemine",
+    "element": "terra",
+    "setId": "mt-set-bedrock",
+    "dropWeight": 155,
+    "bonuses": {
+      "pp": 1,
+      "lock": 10,
+      "dodge": 8
+    },
+    "grantsSpell": null,
+    "description": "Caneleiras de minério que acham sozinhas a pedra firme no meio do desabamento. +1 PP, +10 de fixação, +8 de esquiva.",
+    "flavor": "Sabem onde o chão ainda existe. Confie nelas.",
+    "iconKey": "ore-greaves",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "mt-cart-wheels": {
+    "id": "mt-cart-wheels",
+    "name": "Rodas de Vagoneta",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "quakemine",
+    "element": "neutro",
+    "setId": "mt-set-tools",
+    "dropWeight": 1000,
+    "bonuses": {
+      "initiative": 14,
+      "dodge": 12
+    },
+    "grantsSpell": null,
+    "description": "Duas rodinhas de vagoneta adaptadas aos calcanhares, boas em trilho e péssimas em escada. +14 de iniciativa, +12 de esquiva.",
+    "flavor": "Descer é rápido. Descer é sempre rápido.",
+    "iconKey": "cart-wheels",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "mt-slate-plate": {
+    "id": "mt-slate-plate",
+    "name": "Peitoral de Ardósia",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "quakemine",
+    "element": "neutro",
+    "setId": "mt-set-tools",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 45,
+      "resists": {
+        "terra": 12,
+        "agua": 6
+      }
+    },
+    "grantsSpell": null,
+    "description": "Lascas de ardósia sobrepostas como escamas, amarradas com fio de cobre. +45 PV, +12% terra, +6% água.",
+    "flavor": "Racha uma lasca por golpe. Vieram muitas lascas.",
+    "iconKey": "slate-plate",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "mt-bedrock-carapace": {
+    "id": "mt-bedrock-carapace",
+    "name": "Carapaça de Rocha-Mãe",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "quakemine",
+    "element": "terra",
+    "setId": "mt-set-bedrock",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 55,
+      "resists": {
+        "terra": 18,
+        "ar": 6
+      }
+    },
+    "grantsSpell": null,
+    "description": "Bloco escavado da rocha-mãe da mina, moldado às costas do dono e pesado como uma promessa. +55 PV, +18% terra, +6% ar.",
+    "flavor": "A mina emprestou. A mina cobra depois.",
+    "iconKey": "bedrock-carapace",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "mt-quake-nail": {
+    "id": "mt-quake-nail",
+    "name": "Candeia de Prumo",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "quakemine",
+    "element": "neutro",
+    "setId": "mt-set-tools",
+    "dropWeight": 155,
+    "bonuses": {
+      "power": 8
+    },
+    "grantsSpell": "is-quake-nail",
+    "description": "Candeia pendurada num fio de prumo: aponta sempre para baixo, mesmo quando a galeria inteira está torta — e onde a luz dela bate no chão, o prego desce. Concede o feitiço Prego de Tremor.",
+    "flavor": "A mina mente sobre onde é embaixo. A candeia não.",
+    "iconKey": "plumb-lamp",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "mt-shoring-charm": {
+    "id": "mt-shoring-charm",
+    "name": "Lamparina do Escorador",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "quakemine",
+    "element": "terra",
+    "setId": "mt-set-bedrock",
+    "dropWeight": 155,
+    "bonuses": {
+      "hp": 15
+    },
+    "grantsSpell": "is-ore-bulwark",
+    "description": "A lamparina de quem escorava o teto: chama baixa, vidro riscado e uma viga entalhada em miniatura soldada na alça. Onde ela é pousada, o minério lembra que sabia ficar de pé. Concede o feitiço Escora de Minério.",
+    "flavor": "Quem descia sem uma delas não subia com histórias.",
+    "iconKey": "shoring-lamp",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "cp-heart-crown": {
+    "id": "cp-heart-crown",
+    "name": "Punho do Coração",
+    "slot": "punho",
+    "rarity": "lendario",
+    "dungeonId": "brokenheart",
+    "element": "neutro",
+    "setId": "cp-set-heart",
+    "dropWeight": 26,
+    "bonuses": {
+      "pa": 1,
+      "power": 22,
+      "initiative": 10
+    },
+    "grantsSpell": null,
+    "description": "Manopla montada com as quatro lascas maiores do Coração Partido, uma de cada elemento, girando devagar em volta dos dedos sem nunca se tocarem. +1 PA, +22 de poder, +10 de iniciativa.",
+    "flavor": "Quatro elementos discutindo dentro da sua mão. Vença a discussão.",
+    "iconKey": "heart-fist",
+    "keyPiece": true,
+    "minRoom": 2
+  },
+  "cp-shard-ring": {
+    "id": "cp-shard-ring",
+    "name": "Soqueira de Estilhaço",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "brokenheart",
+    "element": "fogo",
+    "setId": "cp-set-cinder",
+    "dropWeight": 1000,
+    "bonuses": {
+      "power": 20,
+      "initiative": 8
+    },
+    "grantsSpell": null,
+    "description": "Barra de metal para os quatro dedos com cacos do Coração cravados nas cristas, que esquentam quando o dono decide bater. +20 de poder, +8 de iniciativa.",
+    "flavor": "Aperta os dedos antes do golpe. É o jeito dela de concordar.",
+    "iconKey": "shard-knuckles",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "cp-quicksilver-boots": {
+    "id": "cp-quicksilver-boots",
+    "name": "Botas de Azougue",
+    "slot": "passo",
+    "rarity": "lendario",
+    "dungeonId": "brokenheart",
+    "element": "neutro",
+    "setId": "cp-set-heart",
+    "dropWeight": 26,
+    "bonuses": {
+      "pp": 1,
+      "dodge": 16,
+      "initiative": 12
+    },
+    "grantsSpell": null,
+    "description": "Botas com sola de metal líquido que se refaz a cada passo e nunca esfria. +1 PP, +16 de esquiva, +12 de iniciativa.",
+    "flavor": "Chegam meio passo antes de você resolver ir.",
+    "iconKey": "quicksilver-boots",
+    "keyPiece": true,
+    "minRoom": 2
+  },
+  "cp-ashen-anklets": {
+    "id": "cp-ashen-anklets",
+    "name": "Tornozeleiras de Cinza",
+    "slot": "passo",
+    "rarity": "raro",
+    "dungeonId": "brokenheart",
+    "element": "fogo",
+    "setId": "cp-set-cinder",
+    "dropWeight": 198,
+    "bonuses": {
+      "pp": 1,
+      "dodge": 10,
+      "lock": 8
+    },
+    "grantsSpell": null,
+    "description": "Duas argolas de cinza prensada que deixam um rastro curto no chão e confundem quem tenta segui-lo. +1 PP, +10 de esquiva, +8 de fixação.",
+    "flavor": "O rastro apaga sozinho. Sempre um pouco tarde demais.",
+    "iconKey": "ashen-anklets",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "cp-scar-plate": {
+    "id": "cp-scar-plate",
+    "name": "Peitoral de Cicatriz",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "brokenheart",
+    "element": "fogo",
+    "setId": "cp-set-cinder",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 50,
+      "resists": {
+        "neutro": 15,
+        "fogo": 6,
+        "agua": 6
+      }
+    },
+    "grantsSpell": null,
+    "description": "Placa remendada com grampos grossos sobre uma rachadura que atravessa o metal de lado a lado. +50 PV, +15% neutro, +6% fogo, +6% água.",
+    "flavor": "Já falhou uma vez. Não pretende repetir.",
+    "iconKey": "scar-plate",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "cp-worldshell": {
+    "id": "cp-worldshell",
+    "name": "Casco do Mundo",
+    "slot": "casca",
+    "rarity": "lendario",
+    "dungeonId": "brokenheart",
+    "element": "neutro",
+    "setId": "cp-set-heart",
+    "dropWeight": 53,
+    "bonuses": {
+      "hp": 60,
+      "resists": {
+        "fogo": 12,
+        "agua": 12,
+        "terra": 12,
+        "ar": 12,
+        "neutro": 12
+      }
+    },
+    "grantsSpell": null,
+    "description": "Um pedaço da própria Grande Lousa, fino como telha e frio como o céu que virou pedra. +60 PV e +12% de resistência a todos os elementos.",
+    "flavor": "O céu desceu sobre o mundo. Um naco dele agora desce sobre você — do lado certo.",
+    "iconKey": "worldshell",
+    "keyPiece": false,
+    "minRoom": 2
+  },
+  "cp-heart-horn": {
+    "id": "cp-heart-horn",
+    "name": "Corno de Brasa",
+    "slot": "lume",
+    "rarity": "lendario",
+    "dungeonId": "brokenheart",
+    "element": "neutro",
+    "setId": "cp-set-heart",
+    "dropWeight": 26,
+    "bonuses": {
+      "power": 16
+    },
+    "grantsSpell": "is-heart-call",
+    "description": "Trompa curta talhada num caco oco do Coração, com um carvão vivo alojado no bocal: soprar acende o carvão, e a nota que sai é vermelha o bastante para a sala inteira enxergar de onde veio. +16 de poder. Concede o feitiço Chamado do Coração.",
+    "flavor": "Chama todo mundo. Todo mundo vem. Esse é o problema e a graça.",
+    "iconKey": "ember-horn",
+    "keyPiece": true,
+    "minRoom": 2
+  },
+  "cp-eclipse-lens": {
+    "id": "cp-eclipse-lens",
+    "name": "Lente de Eclipse",
+    "slot": "lume",
+    "rarity": "epico",
+    "dungeonId": "brokenheart",
+    "element": "fogo",
+    "setId": "cp-set-cinder",
+    "dropWeight": 77,
+    "bonuses": {
+      "power": 12
+    },
+    "grantsSpell": "is-heart-eclipse",
+    "description": "Disco de vidro fumê talhado no Coração Partido — o único Lume que, em vez de dar luz, a recolhe: olhando por ele, o clima da sala vira uma sugestão. Concede o feitiço Eclipse.",
+    "flavor": "Todo Lume acende. Este é o que apaga — e por isso vale dois.",
+    "iconKey": "eclipse-lens",
+    "keyPiece": true,
+    "minRoom": 2
+  },
+  "gh-wasp-sting": {
+    "id": "gh-wasp-sting",
+    "name": "Ferrão de Vespa-Lustre",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "greenhouse",
+    "element": "ar",
+    "setId": "gh-set-swarm",
+    "dropWeight": 1000,
+    "bonuses": {
+      "initiative": 9,
+      "power": 4
+    },
+    "grantsSpell": null,
+    "description": "O ferrão de uma Vespa-Lustre montado num cabo de bambu, com um resto da lanterna do abdômen ainda preso na base. Chega antes da mão. +9 de iniciativa, +4 de poder.",
+    "flavor": "Ainda pisca. Ninguém teve coragem de perguntar por quê.",
+    "iconKey": "wasp-sting",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "gh-pollen-slippers": {
+    "id": "gh-pollen-slippers",
+    "name": "Chinelas de Pólen",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "greenhouse",
+    "element": "ar",
+    "setId": "gh-set-swarm",
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 9,
+      "initiative": 6
+    },
+    "grantsSpell": null,
+    "description": "Solas cobertas de pólen prensado que levantam uma nuvenzinha amarela a cada passada e borram o contorno de quem anda. +9 de esquiva, +6 de iniciativa.",
+    "flavor": "Espirrar entrega a posição. Segure.",
+    "iconKey": "pollen-slippers",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "gh-chitin-vest": {
+    "id": "gh-chitin-vest",
+    "name": "Colete de Quitina",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "greenhouse",
+    "element": "ar",
+    "setId": "gh-set-swarm",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 18,
+      "resists": {
+        "ar": 8
+      }
+    },
+    "grantsSpell": null,
+    "description": "Placas do dorso do enxame costuradas em telha, leves como papel e duras como unha. O vento passa por elas sem encontrar nada para empurrar. +18 PV, +8% de resistência a ar.",
+    "flavor": "Pesa menos que a camisa que você está usando.",
+    "iconKey": "chitin-vest",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "gh-hive-lantern": {
+    "id": "gh-hive-lantern",
+    "name": "Lanterna de Favo",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "greenhouse",
+    "element": "ar",
+    "setId": "gh-set-swarm",
+    "dropWeight": 138,
+    "bonuses": {
+      "initiative": 8
+    },
+    "grantsSpell": "is-swarm-sting",
+    "description": "Um naco de favo com três vespas-lustre vivas presas nas células, brilhando amarelo através da cera. Abrir a portinhola solta as três. Concede o feitiço Ferroada em Enxame.",
+    "flavor": "A luz é o aluguel. Elas cobram o resto na hora.",
+    "iconKey": "hive-lantern",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "gh-dew-fang": {
+    "id": "gh-dew-fang",
+    "name": "Presa de Orvalho",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "greenhouse",
+    "element": "agua",
+    "setId": null,
+    "dropWeight": 1000,
+    "bonuses": {
+      "power": 11,
+      "initiative": 2
+    },
+    "grantsSpell": null,
+    "description": "A quelícera de uma Aranha-de-Orvalho amarrada ao punho com fio de teia endurecida, sempre com uma gota pendurada na ponta que não cai nunca. +11 de poder, +2 de iniciativa.",
+    "flavor": "A gota pesa menos que o ar. A presa, não.",
+    "iconKey": "dew-fang",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "gh-gutter-shell": {
+    "id": "gh-gutter-shell",
+    "name": "Casca de Calha",
+    "slot": "casca",
+    "rarity": "raro",
+    "dungeonId": "greenhouse",
+    "element": "agua",
+    "setId": null,
+    "dropWeight": 276,
+    "bonuses": {
+      "hp": 32,
+      "resists": {
+        "agua": 12,
+        "ar": 5
+      }
+    },
+    "grantsSpell": null,
+    "description": "Meia calha de cobre da estufa dobrada em concha sobre o peito, com mil anos de limo verde por dentro servindo de forro. A chuva escorre por ela como sempre escorreu. +32 PV, +12% água, +5% ar.",
+    "flavor": "Cuida da água há mil anos. Não vai parar por sua causa.",
+    "iconKey": "gutter-shell",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "gh-root-spur": {
+    "id": "gh-root-spur",
+    "name": "Esporas de Vergasta",
+    "slot": "passo",
+    "rarity": "raro",
+    "dungeonId": "greenhouse",
+    "element": "terra",
+    "setId": null,
+    "dropWeight": 276,
+    "bonuses": {
+      "dodge": 11,
+      "lock": 8
+    },
+    "grantsSpell": null,
+    "description": "Dois pedaços de Vergasta ainda vivos amarrados aos calcanhares: puxam o pé para longe do golpe e, quando o dono planta os calcanhares, criam raiz em cima de quem tentar fugir. +11 de esquiva, +8 de fixação.",
+    "flavor": "Podadas do coreto, e ainda de mau humor.",
+    "iconKey": "root-spur",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "ci-crab-claw": {
+    "id": "ci-crab-claw",
+    "name": "Pinça de Sumidouro",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "cistern",
+    "element": "terra",
+    "setId": "ci-set-sump",
+    "dropWeight": 1000,
+    "bonuses": {
+      "power": 14,
+      "lock": 10
+    },
+    "grantsSpell": null,
+    "description": "A pinça grande do Caranguejo de Sumidouro, encaixada no antebraço com correias de couro molhado. Fecha uma vez e não abre por decisão de ninguém. +14 de poder, +10 de fixação.",
+    "flavor": "Ele arrastava essa coisa pelo chão. Você também vai.",
+    "iconKey": "crab-claw",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "ci-silt-boots": {
+    "id": "ci-silt-boots",
+    "name": "Botas de Assoreamento",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "cistern",
+    "element": "terra",
+    "setId": "ci-set-sump",
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 8,
+      "lock": 8
+    },
+    "grantsSpell": null,
+    "description": "Botas de cano curto entupidas de lodo compactado até virarem lastro: escorregam para fora do golpe e depois afundam no lugar, arrastando junto quem estiver colado. +8 de esquiva, +8 de fixação.",
+    "flavor": "O ralo entope de baixo para cima. Aprenda com ele.",
+    "iconKey": "silt-boots",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "ci-crust-carapace": {
+    "id": "ci-crust-carapace",
+    "name": "Carapaça de Crosta",
+    "slot": "casca",
+    "rarity": "raro",
+    "dungeonId": "cistern",
+    "element": "terra",
+    "setId": "ci-set-sump",
+    "dropWeight": 232,
+    "bonuses": {
+      "hp": 32,
+      "resists": {
+        "terra": 12,
+        "agua": 6
+      }
+    },
+    "grantsSpell": null,
+    "description": "O dorso do caranguejo inteiro, com a crosta de sal e pedra que ele levou uma vida acumulando ainda grudada nas bordas. Pesa como uma mesa. +32 PV, +12% terra, +6% água.",
+    "flavor": "Cada camada é um ano em que ninguém conseguiu tirá-lo do ralo.",
+    "iconKey": "crust-carapace",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "ci-sump-lamp": {
+    "id": "ci-sump-lamp",
+    "name": "Lamparina de Sumidouro",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "cistern",
+    "element": "terra",
+    "setId": "ci-set-sump",
+    "dropWeight": 116,
+    "bonuses": {
+      "hp": 14
+    },
+    "grantsSpell": "is-silt-grip",
+    "description": "Lamparina de latão que ficou décadas presa na grade do ralo, com a chama enlodada de verde e o vidro riscado por dentro. Onde a luz dela bate no chão, o lodo obedece. Concede o feitiço Agarrão de Lodo.",
+    "flavor": "Acesa embaixo d'água, e nenhum afogado achou isso estranho.",
+    "iconKey": "sump-lamp",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "ci-piper-fang": {
+    "id": "ci-piper-fang",
+    "name": "Presa de Moreia-Flauta",
+    "slot": "punho",
+    "rarity": "raro",
+    "dungeonId": "cistern",
+    "element": "agua",
+    "setId": null,
+    "dropWeight": 232,
+    "bonuses": {
+      "power": 18,
+      "initiative": 6
+    },
+    "grantsSpell": null,
+    "description": "A mandíbula inferior de uma Moreia-Flauta, com os dentes virados para dentro e um furo de flauta em cada lado que assobia grave quando o braço desce. +18 de poder, +6 de iniciativa.",
+    "flavor": "O assobio chega antes. É só o que ela te dá.",
+    "iconKey": "piper-fang",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "ci-pearl-mail": {
+    "id": "ci-pearl-mail",
+    "name": "Malha de Pérola de Lodo",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "cistern",
+    "element": "agua",
+    "setId": null,
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 24,
+      "resists": {
+        "agua": 10
+      }
+    },
+    "grantsSpell": null,
+    "description": "Milhares de pérolas calcificadas do fundo da cisterna furadas e costuradas em malha. Cada uma se formou em volta de um grão de sujeira da corte. +24 PV, +10% de resistência a água.",
+    "flavor": "Bonita de longe. De perto, é uma lista de nomes.",
+    "iconKey": "pearl-mail",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "ci-bone-lamp": {
+    "id": "ci-bone-lamp",
+    "name": "Candeia de Ossos",
+    "slot": "lume",
+    "rarity": "comum",
+    "dungeonId": "cistern",
+    "element": "neutro",
+    "setId": null,
+    "dropWeight": 500,
+    "bonuses": {
+      "power": 6
+    },
+    "grantsSpell": "is-bone-toll",
+    "description": "Uma gaiola de costelas polidas com um caroço de luz fria pendurado dentro. Bater no osso maior com o nó do dedo faz a cisterna inteira responder. Concede o feitiço Dobre de Ossos.",
+    "flavor": "A corte era grande. Sempre sobra quem responda.",
+    "iconKey": "bone-lamp",
+    "keyPiece": true,
+    "minRoom": 0
+  },
+  "em-quench-fang": {
+    "id": "em-quench-fang",
+    "name": "Presa de Têmpera",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "emberlock",
+    "element": "agua",
+    "setId": "em-set-quench",
+    "dropWeight": 1000,
+    "bonuses": {
+      "power": 14,
+      "initiative": 4
+    },
+    "grantsSpell": null,
+    "description": "A mandíbula do Cão-de-Têmpera, ainda gotejando o vapor condensado que a formou. Cada mordida chia como lâmina entrando no fosso. +14 de poder, +4 de iniciativa.",
+    "flavor": "A água do Fecho tem dente. Agora é o seu dente.",
+    "iconKey": "quench-fang",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "em-quench-treads": {
+    "id": "em-quench-treads",
+    "name": "Solados de Fosso",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "emberlock",
+    "element": "agua",
+    "setId": "em-set-quench",
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 13,
+      "initiative": 6
+    },
+    "grantsSpell": null,
+    "description": "Solas encharcadas na água dos fossos de têmpera que nunca secam: pisam na grelha em brasa sem chiar e deixam uma pegada fria por onde passam. +13 de esquiva, +6 de iniciativa.",
+    "flavor": "A brasa recua um passo. Sempre o mesmo passo.",
+    "iconKey": "quench-treads",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "em-quench-vest": {
+    "id": "em-quench-vest",
+    "name": "Peitoral de Vapor",
+    "slot": "casca",
+    "rarity": "raro",
+    "dungeonId": "emberlock",
+    "element": "agua",
+    "setId": "em-set-quench",
+    "dropWeight": 331,
+    "bonuses": {
+      "hp": 36,
+      "resists": {
+        "agua": 12,
+        "fogo": 8
+      }
+    },
+    "grantsSpell": null,
+    "description": "Duas chapas com um dedo de água presa entre elas, que vira vapor quando o calor aperta e engrossa a defesa exatamente quando ela é necessária. +36 PV, +12% água, +8% fogo.",
+    "flavor": "Chia antes de você sentir. É o aviso incluso.",
+    "iconKey": "quench-vest",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "em-quench-lamp": {
+    "id": "em-quench-lamp",
+    "name": "Lampião de Têmpera",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "emberlock",
+    "element": "agua",
+    "setId": "em-set-quench",
+    "dropWeight": 165,
+    "bonuses": {
+      "hp": 12
+    },
+    "grantsSpell": "is-quench-hiss",
+    "description": "Lampião de vidro grosso cheio até a boca com a água dos fossos, aceso por dentro num azul frio que não vem de chama nenhuma. Inclinar derrama. Concede o feitiço Chiado de Têmpera.",
+    "flavor": "A única coisa acesa aqui que não é fogo.",
+    "iconKey": "quench-lamp",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "em-imp-gauntlet": {
+    "id": "em-imp-gauntlet",
+    "name": "Manopla de Tição",
+    "slot": "punho",
+    "rarity": "raro",
+    "dungeonId": "emberlock",
+    "element": "fogo",
+    "setId": null,
+    "dropWeight": 331,
+    "bonuses": {
+      "power": 15,
+      "resists": {
+        "fogo": 6
+      }
+    },
+    "grantsSpell": null,
+    "description": "Um Tição inteiro endurecido em molde de areia e vazado por dentro para caber a mão. Continua quente e continua de mau humor. +15 de poder, +6% de resistência a fogo.",
+    "flavor": "Magno fabricava esses sem olhar. Um sobrou inteiro.",
+    "iconKey": "imp-gauntlet",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "em-cinder-plate": {
+    "id": "em-cinder-plate",
+    "name": "Placa de Escória Viva",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "emberlock",
+    "element": "fogo",
+    "setId": null,
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 28,
+      "resists": {
+        "fogo": 14
+      }
+    },
+    "grantsSpell": null,
+    "description": "Placa de escória arrancada do Monte antes de esfriar, com veios laranja ainda correndo por dentro do cinza. Aquece as costas do dono a noite inteira. +28 PV, +14% de resistência a fogo.",
+    "flavor": "Esfria em mil anos. Faltam novecentos.",
+    "iconKey": "cinder-plate",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "em-hauler-links": {
+    "id": "em-hauler-links",
+    "name": "Correntes de Arrasto",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "emberlock",
+    "element": "neutro",
+    "setId": null,
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 11,
+      "lock": 12
+    },
+    "grantsSpell": null,
+    "description": "Três elos do carretel do Puxa-Corrente arrastados atrás dos calcanhares: dão contrapeso para girar fora do golpe e enroscam no tornozelo de quem tentar se soltar. +11 de esquiva, +12 de fixação.",
+    "flavor": "Ele não perseguia ninguém. Trazia todo mundo.",
+    "iconKey": "hauler-links",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "av-noose-grip": {
+    "id": "av-noose-grip",
+    "name": "Punho de Nó Cego",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "windscaffold",
+    "element": "neutro",
+    "setId": "av-set-noose",
+    "dropWeight": 1000,
+    "bonuses": {
+      "power": 16,
+      "lock": 10
+    },
+    "grantsSpell": null,
+    "description": "Um nó de corda de obra do tamanho de um punho, endurecido de alcatrão e impossível de desfazer, com meia braça de cabo sobrando para laçar. +16 de poder, +10 de fixação.",
+    "flavor": "Ninguém desfez esse nó. Ninguém vai.",
+    "iconKey": "noose-grip",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "av-hemp-boots": {
+    "id": "av-hemp-boots",
+    "name": "Botas de Cânhamo",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "windscaffold",
+    "element": "neutro",
+    "setId": "av-set-noose",
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 10,
+      "initiative": 8
+    },
+    "grantsSpell": null,
+    "description": "Botas com a sola enfaixada em cânhamo trançado que morde a tábua molhada e não deixa o pé escorregar para o vão. +10 de esquiva, +8 de iniciativa.",
+    "flavor": "Nos Andaimes, a diferença entre andar e cair é o atrito.",
+    "iconKey": "hemp-boots",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "av-knot-jerkin": {
+    "id": "av-knot-jerkin",
+    "name": "Gibão de Nós",
+    "slot": "casca",
+    "rarity": "raro",
+    "dungeonId": "windscaffold",
+    "element": "neutro",
+    "setId": "av-set-noose",
+    "dropWeight": 331,
+    "bonuses": {
+      "hp": 40,
+      "resists": {
+        "neutro": 14,
+        "ar": 5
+      }
+    },
+    "grantsSpell": null,
+    "description": "Gibão trançado inteiro em nós de marinheiro sobrepostos, tão apertado que o vento não encontra folga nenhuma para levantar. +40 PV, +14% neutro, +5% ar.",
+    "flavor": "Cada nó tem nome. Este aqui tem quarenta.",
+    "iconKey": "knot-jerkin",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "av-hangman-lamp": {
+    "id": "av-hangman-lamp",
+    "name": "Farolete de Roldana",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "windscaffold",
+    "element": "neutro",
+    "setId": "av-set-noose",
+    "dropWeight": 165,
+    "bonuses": {
+      "hp": 14
+    },
+    "grantsSpell": "is-noose-drag",
+    "description": "Farolete de sinaleiro pendurado num gancho de roldana, com um carretel de cabo enrolado na base e a chama sempre virada para o vão. Puxar o cabo traz de volta o que o laço pegou. Concede o feitiço Laço de Roldana.",
+    "flavor": "Serve para içar material. Você é material.",
+    "iconKey": "hangman-lamp",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "av-shrike-talon": {
+    "id": "av-shrike-talon",
+    "name": "Garra de Picanço",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": null,
+    "dropWeight": 1000,
+    "bonuses": {
+      "initiative": 18,
+      "power": 8
+    },
+    "grantsSpell": null,
+    "description": "A garra de um Picanço-de-Tábua calçada como soqueira, com os ossinhos que ele espetava nos pregos ainda pendurados por um fio. +18 de iniciativa, +8 de poder.",
+    "flavor": "O ninho dele era um mostruário. Você levou uma peça.",
+    "iconKey": "shrike-talon",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "av-serpent-sash": {
+    "id": "av-serpent-sash",
+    "name": "Faixa de Serpe-Pipa",
+    "slot": "casca",
+    "rarity": "raro",
+    "dungeonId": "windscaffold",
+    "element": "ar",
+    "setId": null,
+    "dropWeight": 331,
+    "bonuses": {
+      "hp": 34,
+      "resists": {
+        "ar": 16
+      }
+    },
+    "grantsSpell": null,
+    "description": "A cauda de fitas de uma Serpe-Pipa enrolada duas voltas no peito, com o vidro moído ainda colado no encerado. Sobe com a corrente e leva o corpo meio palmo junto. +34 PV, +16% de resistência a ar.",
+    "flavor": "Uma pipa que aprendeu a puxar a própria linha. Você segura a linha agora.",
+    "iconKey": "serpent-sash",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "av-ballast-greaves": {
+    "id": "av-ballast-greaves",
+    "name": "Grevas de Lastro",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "windscaffold",
+    "element": "terra",
+    "setId": null,
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 11,
+      "lock": 12
+    },
+    "grantsSpell": null,
+    "description": "Dois sacos de brita do Golem de Lastro amarrados às canelas: dão inércia para desviar sem sair da tábua e peso de âncora contra quem quiser passar. +11 de esquiva, +12 de fixação.",
+    "flavor": "Segurou o andaime por mil anos. Agora segura você — e quem chegar perto.",
+    "iconKey": "ballast-greaves",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "mt-firedamp-fist": {
+    "id": "mt-firedamp-fist",
+    "name": "Punho de Grisu",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "quakemine",
+    "element": "fogo",
+    "setId": "mt-set-firedamp",
+    "dropWeight": 1000,
+    "bonuses": {
+      "power": 20,
+      "initiative": 6
+    },
+    "grantsSpell": null,
+    "description": "Uma bolsa de couro cheia do gás azul da galeria, costurada em volta da mão e lacrada com breu. Cada soco arrota um pouco de chama pelas costuras. +20 de poder, +6 de iniciativa.",
+    "flavor": "Vaza um pouco. Sempre vaza um pouco.",
+    "iconKey": "firedamp-fist",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "mt-wisp-treads": {
+    "id": "mt-wisp-treads",
+    "name": "Solados de Fogaréu",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "quakemine",
+    "element": "fogo",
+    "setId": "mt-set-firedamp",
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 13,
+      "initiative": 7
+    },
+    "grantsSpell": null,
+    "description": "Solados que boiam um dedo acima do cascalho, do mesmo jeito que o Fogaréu de Grisu boia à altura do peito. Não fazem barulho e não pisam em armadilha. +13 de esquiva, +7 de iniciativa.",
+    "flavor": "A poeira não sobe. É como a mina sabe que você chegou.",
+    "iconKey": "wisp-treads",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "mt-damp-mantle": {
+    "id": "mt-damp-mantle",
+    "name": "Manto de Chama Azul",
+    "slot": "casca",
+    "rarity": "raro",
+    "dungeonId": "quakemine",
+    "element": "fogo",
+    "setId": "mt-set-firedamp",
+    "dropWeight": 310,
+    "bonuses": {
+      "hp": 44,
+      "resists": {
+        "fogo": 16,
+        "terra": 6
+      }
+    },
+    "grantsSpell": null,
+    "description": "Um manto de lona de mineiro com uma película de gás aceso correndo por fora do tecido, azul e sem calor. O que vem quente encontra fogo antes de encontrar pano. +44 PV, +16% fogo, +6% terra.",
+    "flavor": "Frio ao toque. Mentira das boas.",
+    "iconKey": "damp-mantle",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "mt-firedamp-lamp": {
+    "id": "mt-firedamp-lamp",
+    "name": "Lamparina de Segurança",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "quakemine",
+    "element": "fogo",
+    "setId": "mt-set-firedamp",
+    "dropWeight": 155,
+    "bonuses": {
+      "power": 10
+    },
+    "grantsSpell": "is-firedamp-blast",
+    "description": "A lamparina de tela de arame que avisava o mineiro do grisu: a chama cresce e fica azul quando o gás chega. A tela abre — e foi para isso que você a pegou. Concede o feitiço Estouro de Grisu.",
+    "flavor": "Inventada para salvar vidas. Depende do lado da tela.",
+    "iconKey": "firedamp-lamp",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "mt-blast-knuckles": {
+    "id": "mt-blast-knuckles",
+    "name": "Soqueira de Detonação",
+    "slot": "punho",
+    "rarity": "raro",
+    "dungeonId": "quakemine",
+    "element": "fogo",
+    "setId": null,
+    "dropWeight": 310,
+    "bonuses": {
+      "power": 21,
+      "resists": {
+        "fogo": 8
+      }
+    },
+    "grantsSpell": null,
+    "description": "Quatro cápsulas de dinamite úmida engastadas numa barra de ferro, uma por dedo. Nenhuma explodiu ainda; todas ouviram o convite. +21 de poder, +8% de resistência a fogo.",
+    "flavor": "A caixa dizia \"úmida\". A caixa mentia sobre muita coisa.",
+    "iconKey": "blast-knuckles",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "mt-seep-plate": {
+    "id": "mt-seep-plate",
+    "name": "Peitoral de Escorrência",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "quakemine",
+    "element": "agua",
+    "setId": null,
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 42,
+      "resists": {
+        "agua": 14,
+        "terra": 6
+      }
+    },
+    "grantsSpell": null,
+    "description": "Uma placa de mineral depositado camada por camada pela água que escorre parede acima, lisa de um lado e áspera do outro. Escudo que a própria mina fabricou sozinha. +42 PV, +14% água, +6% terra.",
+    "flavor": "Água de mina não mata a sede. Serve para outra coisa.",
+    "iconKey": "seep-plate",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "mt-grisu-wick": {
+    "id": "mt-grisu-wick",
+    "name": "Pavio de Grisu",
+    "slot": "lume",
+    "rarity": "comum",
+    "dungeonId": "quakemine",
+    "element": "fogo",
+    "setId": null,
+    "dropWeight": 500,
+    "bonuses": {
+      "power": 7
+    },
+    "grantsSpell": "is-long-wick",
+    "description": "Um rolo de pavio de mina embebido em gás azul, com uma ponta sempre acesa numa chama do tamanho de uma unha. Queima devagar e não apaga com vento. +7 de poder. Concede o feitiço Pavio Longo.",
+    "flavor": "Acende num canto da galeria e cobra no outro.",
+    "iconKey": "grisu-wick",
+    "keyPiece": true,
+    "minRoom": 0
+  },
+  "cp-gale-fist": {
+    "id": "cp-gale-fist",
+    "name": "Manopla de Vendaval",
+    "slot": "punho",
+    "rarity": "comum",
+    "dungeonId": "brokenheart",
+    "element": "ar",
+    "setId": "cp-set-gale",
+    "dropWeight": 1000,
+    "bonuses": {
+      "power": 18,
+      "initiative": 11
+    },
+    "grantsSpell": null,
+    "description": "A manopla vazia do Arauto de Vendaval, mantida em forma de mão só pelo vento que continua correndo dentro dela. Fecha sozinha meio instante antes do golpe. +18 de poder, +11 de iniciativa.",
+    "flavor": "Não tem nada aí dentro. Continua doendo.",
+    "iconKey": "gale-fist",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "cp-gale-steps": {
+    "id": "cp-gale-steps",
+    "name": "Grevas de Vendaval",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "brokenheart",
+    "element": "ar",
+    "setId": "cp-set-gale",
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 12,
+      "initiative": 12
+    },
+    "grantsSpell": null,
+    "description": "Duas grevas ocas da mesma armadura, com o vento entrando pelo joelho e saindo pelo calcanhar a cada passada. Chegam onde miraram e não onde o inimigo esperou. +12 de esquiva, +12 de iniciativa.",
+    "flavor": "Difícil de prender, pior de acertar. Era o lema dele.",
+    "iconKey": "gale-steps",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "cp-gale-plate": {
+    "id": "cp-gale-plate",
+    "name": "Couraça Oca",
+    "slot": "casca",
+    "rarity": "comum",
+    "dungeonId": "brokenheart",
+    "element": "ar",
+    "setId": "cp-set-gale",
+    "dropWeight": 1000,
+    "bonuses": {
+      "hp": 48,
+      "resists": {
+        "ar": 16,
+        "neutro": 6
+      }
+    },
+    "grantsSpell": null,
+    "description": "O tronco da armadura do Arauto, sem forro, sem dono e sem peso: por dentro é só corrente de ar girando. O golpe entra e não encontra em que bater. +48 PV, +16% ar, +6% neutro.",
+    "flavor": "Vazia de verdade. Confirme batendo — soa como sino.",
+    "iconKey": "gale-plate",
+    "keyPiece": false,
+    "minRoom": 0
+  },
+  "cp-gale-lamp": {
+    "id": "cp-gale-lamp",
+    "name": "Farol de Vendaval",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "brokenheart",
+    "element": "ar",
+    "setId": "cp-set-gale",
+    "dropWeight": 198,
+    "bonuses": {
+      "initiative": 10
+    },
+    "grantsSpell": "is-gale-cut",
+    "description": "O elmo do Arauto virado de boca para cima e usado como farol, com o vento dele preso lá dentro empurrando uma chama branca deitada. Soltar o vento corta em linha reta. Concede o feitiço Corte do Arauto.",
+    "flavor": "A chama nunca fica em pé. Nunca apaga também.",
+    "iconKey": "gale-lamp",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "cp-herald-ember": {
+    "id": "cp-herald-ember",
+    "name": "Manopla do Arauto de Brasa",
+    "slot": "punho",
+    "rarity": "raro",
+    "dungeonId": "brokenheart",
+    "element": "fogo",
+    "setId": null,
+    "dropWeight": 397,
+    "bonuses": {
+      "power": 21,
+      "resists": {
+        "fogo": 10
+      }
+    },
+    "grantsSpell": null,
+    "description": "A manopla do quarto de brasa do Coração, cheia até o pulso de carvão que não termina de queimar. Marca a palma de quem a veste no primeiro dia e não marca mais. +21 de poder, +10% de resistência a fogo.",
+    "flavor": "A marca é o contrato. Você já assinou.",
+    "iconKey": "herald-ember",
+    "keyPiece": false,
+    "minRoom": 1
+  },
+  "cp-ember-censer": {
+    "id": "cp-ember-censer",
+    "name": "Turíbulo de Brasa",
+    "slot": "lume",
+    "rarity": "raro",
+    "dungeonId": "brokenheart",
+    "element": "fogo",
+    "setId": null,
+    "dropWeight": 198,
+    "bonuses": {
+      "power": 11
+    },
+    "grantsSpell": "is-cinder-wake",
+    "description": "Um incensário de corrente curta com um caco do quarto de brasa alojado no fundo, aceso e soltando fumaça vermelha. Girado uma volta inteira, larga um anel de fogo no chão. +11 de poder. Concede o feitiço Rastro de Brasa.",
+    "flavor": "Alguém rezava com isto. Não terminou a reza.",
+    "iconKey": "ember-censer",
+    "keyPiece": true,
+    "minRoom": 1
+  },
+  "cp-tide-anklets": {
+    "id": "cp-tide-anklets",
+    "name": "Tornozeleiras de Maré",
+    "slot": "passo",
+    "rarity": "comum",
+    "dungeonId": "brokenheart",
+    "element": "agua",
+    "setId": null,
+    "dropWeight": 1000,
+    "bonuses": {
+      "dodge": 13,
+      "initiative": 10
+    },
+    "grantsSpell": null,
+    "description": "Duas argolas cheias da água escura do Arauto de Maré, sempre em movimento por dentro do metal. Puxam o pé para o lado certo meio tempo antes do golpe chegar. +13 de esquiva, +10 de iniciativa.",
+    "flavor": "A água decide primeiro. Você só não discorda.",
+    "iconKey": "tide-anklets",
+    "keyPiece": false,
+    "minRoom": 0
+  }
+}

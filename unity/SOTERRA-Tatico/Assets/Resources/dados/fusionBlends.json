@@ -1,0 +1,939 @@
+{
+  "agua+agua": {
+    "id": "agua+agua",
+    "affix": "Abissal",
+    "elements": [
+      "agua",
+      "agua"
+    ],
+    "description": "Duas águas somadas viram profundidade: a sala inteira fica pesada, escura e molhada. Elemento puro, dano puro.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 8,
+        "max": 12
+      },
+      {
+        "type": "weatherShift",
+        "weather": "chuva"
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "regen",
+        "min": 6,
+        "max": 9,
+        "duration": 2
+      },
+      {
+        "type": "weatherShift",
+        "weather": "chuva"
+      }
+    ],
+    "palette": {
+      "primary": "#2e6e8e",
+      "secondary": "#102a3a",
+      "accent": "#7ef0d4"
+    },
+    "fxKey": "blend-abissal"
+  },
+  "agua+ar": {
+    "id": "agua+ar",
+    "affix": "Salgado",
+    "elements": [
+      "agua",
+      "ar"
+    ],
+    "description": "A ventania puxa a água para dentro de si: cada golpe chega encharcado de sal e empurra quem apanha mais um passo para trás.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 6,
+        "max": 10
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 1,
+        "duration": 2
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison"
+        ]
+      }
+    ],
+    "palette": {
+      "primary": "#4fa8b8",
+      "secondary": "#1b3f4d",
+      "accent": "#d8fff2"
+    },
+    "fxKey": "blend-salgado"
+  },
+  "agua+fogo": {
+    "id": "agua+fogo",
+    "affix": "Escaldante",
+    "elements": [
+      "agua",
+      "fogo"
+    ],
+    "description": "Rivais fundidos não se anulam: viram vapor sob pressão. Queima na hora e continua queimando depois.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 5,
+        "max": 8
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      },
+      {
+        "type": "resist",
+        "element": "fogo",
+        "value": 12,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#c96b4a",
+      "secondary": "#3a4d58",
+      "accent": "#ffe6cf"
+    },
+    "fxKey": "blend-escaldante"
+  },
+  "agua+neutro": {
+    "id": "agua+neutro",
+    "affix": "Turvo",
+    "elements": [
+      "agua",
+      "neutro"
+    ],
+    "description": "Metade do corpo ainda não escolheu elemento: a água carrega o golpe sem cor, e a lama que sobra desmancha escudos.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 4,
+        "max": 7
+      },
+      {
+        "type": "dispelShield"
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "regen",
+        "min": 4,
+        "max": 6,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#527d8c",
+      "secondary": "#232f36",
+      "accent": "#c9dde4"
+    },
+    "fxKey": "blend-turvo"
+  },
+  "agua+terra": {
+    "id": "agua+terra",
+    "affix": "Lamacento",
+    "elements": [
+      "agua",
+      "terra"
+    ],
+    "description": "Água e terra dão lama: pesa nos pés de quem apanha e cola o inimigo no chão por um instante.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 6,
+        "max": 9
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "shield",
+        "value": 14,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#6d6a3f",
+      "secondary": "#2c2a1c",
+      "accent": "#b8c48a"
+    },
+    "fxKey": "blend-lamacento"
+  },
+  "ar+ar": {
+    "id": "ar+ar",
+    "affix": "Ciclônico",
+    "elements": [
+      "ar",
+      "ar"
+    ],
+    "description": "Dois ares somados não sopram: giram. O vendaval passa a ser a regra da sala.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 8,
+        "max": 12
+      },
+      {
+        "type": "weatherShift",
+        "weather": "vendaval"
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 1,
+        "duration": 2
+      },
+      {
+        "type": "weatherShift",
+        "weather": "vendaval"
+      }
+    ],
+    "palette": {
+      "primary": "#9fd8e8",
+      "secondary": "#2b3f4a",
+      "accent": "#ffffff"
+    },
+    "fxKey": "blend-ciclonico"
+  },
+  "ar+fogo": {
+    "id": "ar+fogo",
+    "affix": "Incendiário",
+    "elements": [
+      "ar",
+      "fogo"
+    ],
+    "description": "Fogo com vento embaixo vira sopro de forja: a labareda alonga o alcance e o estouro joga o alvo para longe.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 7,
+        "max": 11
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 12,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#ff8c3a",
+      "secondary": "#4a2418",
+      "accent": "#ffe08a"
+    },
+    "fxKey": "blend-incendiario"
+  },
+  "ar+neutro": {
+    "id": "ar+neutro",
+    "affix": "Ligeiro",
+    "elements": [
+      "ar",
+      "neutro"
+    ],
+    "description": "Sem elemento definido do outro lado, sobra pressa: o golpe é leve, mas chega antes e desarruma a formação.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 4,
+        "max": 7
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 1,
+        "duration": 1
+      }
+    ],
+    "palette": {
+      "primary": "#b9c9d0",
+      "secondary": "#39424a",
+      "accent": "#f2fbff"
+    },
+    "fxKey": "blend-ligeiro"
+  },
+  "ar+terra": {
+    "id": "ar+terra",
+    "affix": "Arenoso",
+    "elements": [
+      "ar",
+      "terra"
+    ],
+    "description": "Rivais fundidos viram tempestade de areia: o grão entra na ferida e faz doer tudo o que vier depois.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 5,
+        "max": 8
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 2,
+        "max": 3
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "resist",
+        "element": "ar",
+        "value": 10,
+        "duration": 2
+      },
+      {
+        "type": "resist",
+        "element": "terra",
+        "value": 10,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#c9ac6b",
+      "secondary": "#463a24",
+      "accent": "#f2e3bd"
+    },
+    "fxKey": "blend-arenoso"
+  },
+  "fogo+fogo": {
+    "id": "fogo+fogo",
+    "affix": "Infernal",
+    "elements": [
+      "fogo",
+      "fogo"
+    ],
+    "description": "Duas chamas somadas não se dividem: viram uma só, maior, e secam o ar da sala inteira.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 9,
+        "max": 13
+      },
+      {
+        "type": "weatherShift",
+        "weather": "estiagem"
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 14,
+        "duration": 2
+      },
+      {
+        "type": "weatherShift",
+        "weather": "estiagem"
+      }
+    ],
+    "palette": {
+      "primary": "#c4502e",
+      "secondary": "#2a0f0b",
+      "accent": "#ffb347"
+    },
+    "fxKey": "blend-infernal"
+  },
+  "fogo+neutro": {
+    "id": "fogo+neutro",
+    "affix": "Chamuscado",
+    "elements": [
+      "fogo",
+      "neutro"
+    ],
+    "description": "Uma metade arde, a outra ainda é só força bruta: o golpe sai sem cor, mas sai quente e sem economia.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 5,
+        "max": 9
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 10,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#a06a4a",
+      "secondary": "#332018",
+      "accent": "#ffd0a0"
+    },
+    "fxKey": "blend-chamuscado"
+  },
+  "fogo+terra": {
+    "id": "fogo+terra",
+    "affix": "Vulcânico",
+    "elements": [
+      "fogo",
+      "terra"
+    ],
+    "description": "Pedra derretida: bate como rocha e continua cozinhando por baixo da armadura.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 6,
+        "max": 9
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "shield",
+        "value": 16,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#8a3a22",
+      "secondary": "#241512",
+      "accent": "#ff7a2f"
+    },
+    "fxKey": "blend-vulcanico"
+  },
+  "neutro+neutro": {
+    "id": "neutro+neutro",
+    "affix": "Cru",
+    "elements": [
+      "neutro",
+      "neutro"
+    ],
+    "description": "Nenhum dos dois escolheu elemento ainda: a fusão sai crua — só as duas classes, sem cor, e o clima se aquieta em volta.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 6,
+        "max": 10
+      },
+      {
+        "type": "weatherShift",
+        "weather": "calmo"
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "heal",
+        "min": 8,
+        "max": 12
+      }
+    ],
+    "palette": {
+      "primary": "#9aa4ac",
+      "secondary": "#22282d",
+      "accent": "#e6edf2"
+    },
+    "fxKey": "blend-cru"
+  },
+  "neutro+terra": {
+    "id": "neutro+terra",
+    "affix": "Bruto",
+    "elements": [
+      "neutro",
+      "terra"
+    ],
+    "description": "Metade pedra, metade nada: o que falta em elemento sobra em peso — quem apanha fica onde está.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 4,
+        "max": 7
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "shield",
+        "value": 12,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#8a7a5c",
+      "secondary": "#2b2519",
+      "accent": "#d8cba8"
+    },
+    "fxKey": "blend-bruto"
+  },
+  "terra+terra": {
+    "id": "terra+terra",
+    "affix": "Telúrico",
+    "elements": [
+      "terra",
+      "terra"
+    ],
+    "description": "Duas terras somadas viram falha geológica: o chão trabalha junto com a fusão e não para de tremer.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 9,
+        "max": 13
+      },
+      {
+        "type": "weatherShift",
+        "weather": "tremor"
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "shield",
+        "value": 22,
+        "duration": 2
+      },
+      {
+        "type": "weatherShift",
+        "weather": "tremor"
+      }
+    ],
+    "palette": {
+      "primary": "#6b8f3d",
+      "secondary": "#2c3320",
+      "accent": "#e0c86a"
+    },
+    "fxKey": "blend-telurico"
+  },
+  "ar+agua": {
+    "id": "ar+agua",
+    "affix": "Salgado",
+    "elements": [
+      "ar",
+      "agua"
+    ],
+    "description": "A ventania puxa a água para dentro de si: cada golpe chega encharcado de sal e empurra quem apanha mais um passo para trás.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 6,
+        "max": 10
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 1,
+        "duration": 2
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison"
+        ]
+      }
+    ],
+    "palette": {
+      "primary": "#4fa8b8",
+      "secondary": "#1b3f4d",
+      "accent": "#d8fff2"
+    },
+    "fxKey": "blend-salgado",
+    "mirrorOf": "agua+ar"
+  },
+  "fogo+agua": {
+    "id": "fogo+agua",
+    "affix": "Escaldante",
+    "elements": [
+      "fogo",
+      "agua"
+    ],
+    "description": "Rivais fundidos não se anulam: viram vapor sob pressão. Queima na hora e continua queimando depois.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 5,
+        "max": 8
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      },
+      {
+        "type": "resist",
+        "element": "fogo",
+        "value": 12,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#c96b4a",
+      "secondary": "#3a4d58",
+      "accent": "#ffe6cf"
+    },
+    "fxKey": "blend-escaldante",
+    "mirrorOf": "agua+fogo"
+  },
+  "neutro+agua": {
+    "id": "neutro+agua",
+    "affix": "Turvo",
+    "elements": [
+      "neutro",
+      "agua"
+    ],
+    "description": "Metade do corpo ainda não escolheu elemento: a água carrega o golpe sem cor, e a lama que sobra desmancha escudos.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 4,
+        "max": 7
+      },
+      {
+        "type": "dispelShield"
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "regen",
+        "min": 4,
+        "max": 6,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#527d8c",
+      "secondary": "#232f36",
+      "accent": "#c9dde4"
+    },
+    "fxKey": "blend-turvo",
+    "mirrorOf": "agua+neutro"
+  },
+  "terra+agua": {
+    "id": "terra+agua",
+    "affix": "Lamacento",
+    "elements": [
+      "terra",
+      "agua"
+    ],
+    "description": "Água e terra dão lama: pesa nos pés de quem apanha e cola o inimigo no chão por um instante.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 6,
+        "max": 9
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "shield",
+        "value": 14,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#6d6a3f",
+      "secondary": "#2c2a1c",
+      "accent": "#b8c48a"
+    },
+    "fxKey": "blend-lamacento",
+    "mirrorOf": "agua+terra"
+  },
+  "fogo+ar": {
+    "id": "fogo+ar",
+    "affix": "Incendiário",
+    "elements": [
+      "fogo",
+      "ar"
+    ],
+    "description": "Fogo com vento embaixo vira sopro de forja: a labareda alonga o alcance e o estouro joga o alvo para longe.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 7,
+        "max": 11
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 12,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#ff8c3a",
+      "secondary": "#4a2418",
+      "accent": "#ffe08a"
+    },
+    "fxKey": "blend-incendiario",
+    "mirrorOf": "ar+fogo"
+  },
+  "neutro+ar": {
+    "id": "neutro+ar",
+    "affix": "Ligeiro",
+    "elements": [
+      "neutro",
+      "ar"
+    ],
+    "description": "Sem elemento definido do outro lado, sobra pressa: o golpe é leve, mas chega antes e desarruma a formação.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 4,
+        "max": 7
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 1,
+        "duration": 1
+      }
+    ],
+    "palette": {
+      "primary": "#b9c9d0",
+      "secondary": "#39424a",
+      "accent": "#f2fbff"
+    },
+    "fxKey": "blend-ligeiro",
+    "mirrorOf": "ar+neutro"
+  },
+  "terra+ar": {
+    "id": "terra+ar",
+    "affix": "Arenoso",
+    "elements": [
+      "terra",
+      "ar"
+    ],
+    "description": "Rivais fundidos viram tempestade de areia: o grão entra na ferida e faz doer tudo o que vier depois.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 5,
+        "max": 8
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 2,
+        "max": 3
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "resist",
+        "element": "ar",
+        "value": 10,
+        "duration": 2
+      },
+      {
+        "type": "resist",
+        "element": "terra",
+        "value": 10,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#c9ac6b",
+      "secondary": "#463a24",
+      "accent": "#f2e3bd"
+    },
+    "fxKey": "blend-arenoso",
+    "mirrorOf": "ar+terra"
+  },
+  "neutro+fogo": {
+    "id": "neutro+fogo",
+    "affix": "Chamuscado",
+    "elements": [
+      "neutro",
+      "fogo"
+    ],
+    "description": "Uma metade arde, a outra ainda é só força bruta: o golpe sai sem cor, mas sai quente e sem economia.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 5,
+        "max": 9
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 10,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#a06a4a",
+      "secondary": "#332018",
+      "accent": "#ffd0a0"
+    },
+    "fxKey": "blend-chamuscado",
+    "mirrorOf": "fogo+neutro"
+  },
+  "terra+fogo": {
+    "id": "terra+fogo",
+    "affix": "Vulcânico",
+    "elements": [
+      "terra",
+      "fogo"
+    ],
+    "description": "Pedra derretida: bate como rocha e continua cozinhando por baixo da armadura.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 6,
+        "max": 9
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "shield",
+        "value": 16,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#8a3a22",
+      "secondary": "#241512",
+      "accent": "#ff7a2f"
+    },
+    "fxKey": "blend-vulcanico",
+    "mirrorOf": "fogo+terra"
+  },
+  "terra+neutro": {
+    "id": "terra+neutro",
+    "affix": "Bruto",
+    "elements": [
+      "terra",
+      "neutro"
+    ],
+    "description": "Metade pedra, metade nada: o que falta em elemento sobra em peso — quem apanha fica onde está.",
+    "rider": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 4,
+        "max": 7
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "riderSupport": [
+      {
+        "type": "shield",
+        "value": 12,
+        "duration": 2
+      }
+    ],
+    "palette": {
+      "primary": "#8a7a5c",
+      "secondary": "#2b2519",
+      "accent": "#d8cba8"
+    },
+    "fxKey": "blend-bruto",
+    "mirrorOf": "neutro+terra"
+  }
+}

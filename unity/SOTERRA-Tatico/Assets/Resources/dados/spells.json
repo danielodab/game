@@ -1,0 +1,6702 @@
+{
+  "trap-neutro-alarme": {
+    "id": "trap-neutro-alarme",
+    "name": "Estaca-Alarme (disparo)",
+    "element": "neutro",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 16,
+        "max": 22
+      },
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": -1,
+        "duration": 1
+      }
+    ],
+    "description": "A estaca salta do chão, fura o pé de quem pisou e apita: 16–22 de dano neutro e −1 PP por 1 turno.",
+    "flavor": "Serve mais para avisar do que para matar. Mas avisa doendo.",
+    "fxKey": "alarmSnap"
+  },
+  "trap-fogo-brasa": {
+    "id": "trap-fogo-brasa",
+    "name": "Armadilha de Brasa (disparo)",
+    "element": "fogo",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 24,
+        "max": 30
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 6,
+        "max": 9,
+        "duration": 2
+      }
+    ],
+    "description": "O carvão enterrado acorda: 24–30 de fogo em raio 1 e queimadura de 6–9 por 2 turnos.",
+    "flavor": "Ele enterra brasa como quem planta. Colhe gritos.",
+    "fxKey": "emberTrap"
+  },
+  "trap-fogo-pira": {
+    "id": "trap-fogo-pira",
+    "name": "Armadilha-Pira (disparo)",
+    "element": "fogo",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 52,
+        "max": 62
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 12,
+        "max": 16,
+        "duration": 2
+      }
+    ],
+    "description": "Uma pira inteira dobrada dentro de uma célula: 52–62 de fogo em raio 1 e queimadura de 12–16 por 2 turnos.",
+    "flavor": "A célula lembra de ter sido uma fogueira. Você lembrou tarde.",
+    "fxKey": "pyreTrap"
+  },
+  "trap-agua-redemoinho": {
+    "id": "trap-agua-redemoinho",
+    "name": "Armadilha-Redemoinho (disparo)",
+    "element": "agua",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 20,
+        "max": 26
+      },
+      {
+        "type": "pull",
+        "tiles": 2
+      }
+    ],
+    "description": "O chão vira funil: 20–26 de água e o incauto é puxado 2 células para o centro.",
+    "flavor": "Água parada de mil anos guarda uma vontade só: descer.",
+    "fxKey": "whirlTrap"
+  },
+  "trap-agua-sorvedouro": {
+    "id": "trap-agua-sorvedouro",
+    "name": "Armadilha-Sorvedouro (disparo)",
+    "element": "agua",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 46,
+        "max": 56
+      },
+      {
+        "type": "pull",
+        "tiles": 3
+      }
+    ],
+    "description": "Um ralo do mundo antigo se abre: 46–56 de água em raio 1 e sucção de 3 células.",
+    "flavor": "Alguém, algum dia, puxou essa tampa. Ninguém nunca a repôs.",
+    "fxKey": "maelstromTrap"
+  },
+  "trap-terra-laco": {
+    "id": "trap-terra-laco",
+    "name": "Armadilha-Laço (disparo)",
+    "element": "terra",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 18,
+        "max": 24
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "Raízes fecham o tornozelo: 18–24 de terra e 0 PP por 2 turnos.",
+    "flavor": "O micélio não come depressa. Come com calma, que é para durar.",
+    "fxKey": "snareTrap"
+  },
+  "trap-terra-tremor": {
+    "id": "trap-terra-tremor",
+    "name": "Armadilha-Tremor (disparo)",
+    "element": "terra",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 48,
+        "max": 58
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "A laje cede em raio 1: 48–58 de terra e ninguém sai do lugar por 2 turnos.",
+    "flavor": "Não é o buraco que machuca — é o susto de o chão ter opinião.",
+    "fxKey": "quakeTrap"
+  },
+  "trap-ar-rajada": {
+    "id": "trap-ar-rajada",
+    "name": "Armadilha-Rajada (disparo)",
+    "element": "ar",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 16,
+        "max": 22
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "Um respiradouro guardado estoura: 16–22 de ar e arremesso de 3 células.",
+    "flavor": "Ar velho, guardado desde antes da Lousa, e mal-humorado como convém.",
+    "fxKey": "gustTrap"
+  },
+  "trap-ar-vortice": {
+    "id": "trap-ar-vortice",
+    "name": "Armadilha-Vórtice (disparo)",
+    "element": "ar",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 0,
+    "cooldown": 0,
+    "castsPerTurn": 0,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 42,
+        "max": 52
+      },
+      {
+        "type": "push",
+        "tiles": 4
+      }
+    ],
+    "description": "Um nó de vento se desata em raio 1: 42–52 de ar e 4 células de arremesso.",
+    "flavor": "Quem projetou os respiradouros nunca imaginou que alguém os fecharia de propósito.",
+    "fxKey": "vortexTrap"
+  },
+  "sumo-neutro-1": {
+    "id": "sumo-neutro-1",
+    "name": "Machadada de Ferro",
+    "element": "neutro",
+    "classId": "sumo",
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 20,
+        "max": 26
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "O machado desce no peito do adversário: 20–26 de dano neutro e 1 célula de empurrão. Duas vezes por turno.",
+    "flavor": "No portão se aprende cedo: primeiro tira o outro do lugar, depois discute.",
+    "fxKey": "axeSlam"
+  },
+  "sumo-neutro-2": {
+    "id": "sumo-neutro-2",
+    "name": "Grito de Guerra",
+    "element": "neutro",
+    "classId": "sumo",
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "taunt",
+        "duration": 2
+      },
+      {
+        "type": "shield",
+        "value": 30,
+        "duration": 2
+      }
+    ],
+    "description": "Bate o cabo do machado no chão e ruge: todos os inimigos são obrigados a atacá-lo por 2 turnos, e ele ganha 30 de escudo.",
+    "flavor": "O chão do Fecho responde. É a única resposta que sobrou.",
+    "fxKey": "warCry"
+  },
+  "sumo-neutro-3": {
+    "id": "sumo-neutro-3",
+    "name": "Pegada de Urso",
+    "element": "neutro",
+    "classId": "sumo",
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 10,
+        "max": 14
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "Fecha a manopla na garganta do inimigo: 10–14 de dano e 0 PP por 1 turno.",
+    "flavor": "Ele não segura para machucar. Segura para conversar.",
+    "fxKey": "grappleHold"
+  },
+  "sumo-fogo-5": {
+    "id": "sumo-fogo-5",
+    "name": "Pele em Brasa",
+    "element": "fogo",
+    "classId": "sumo",
+    "unlockLevel": 5,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "reflect",
+        "pct": 25,
+        "duration": 2
+      },
+      {
+        "type": "resist",
+        "element": "fogo",
+        "value": 15,
+        "duration": 2
+      }
+    ],
+    "description": "A pele esquenta até rachar: devolve 25% do dano recebido ao agressor por 2 turnos e resiste 15% a fogo.",
+    "flavor": "Bater nele é encostar na chapa. Todo mundo encosta uma vez.",
+    "fxKey": "emberSkin"
+  },
+  "sumo-fogo-10": {
+    "id": "sumo-fogo-10",
+    "name": "Gume Incandescente",
+    "element": "fogo",
+    "classId": "sumo",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 25,
+        "max": 32
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 6,
+        "max": 9,
+        "duration": 2
+      }
+    ],
+    "description": "25–32 de fogo no fio do machado, e a marca continua queimando 6–9 por 2 turnos.",
+    "flavor": "O machado dele deixa assinatura. Em brasa.",
+    "fxKey": "emberSlam"
+  },
+  "sumo-fogo-12": {
+    "id": "sumo-fogo-12",
+    "name": "Estouro de Brasa",
+    "element": "fogo",
+    "classId": "sumo",
+    "unlockLevel": 12,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 24,
+        "max": 30
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "Explode para fora quando o cercam: 24–30 de fogo em raio 1 e todo mundo 1 célula para trás.",
+    "flavor": "Cercá-lo é aquecê-lo. Ninguém foi avisado disso.",
+    "fxKey": "emberBurst"
+  },
+  "sumo-fogo-15": {
+    "id": "sumo-fogo-15",
+    "name": "Sangue Fervente",
+    "element": "fogo",
+    "classId": "sumo",
+    "unlockLevel": 15,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 35,
+        "duration": 2
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 6,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "description": "Ferve o próprio sangue: +35 de poder por 2 turnos, ao preço de 6–8 de queimadura própria por turno.",
+    "flavor": "Dizem que ele cospe vapor quando está satisfeito com a luta.",
+    "fxKey": "boilingBlood"
+  },
+  "sumo-fogo-20": {
+    "id": "sumo-fogo-20",
+    "name": "Represália Vulcânica",
+    "element": "fogo",
+    "classId": "sumo",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "reflect",
+        "pct": 50,
+        "duration": 2
+      },
+      {
+        "type": "shield",
+        "value": 70,
+        "duration": 2
+      },
+      {
+        "type": "taunt",
+        "duration": 2
+      }
+    ],
+    "description": "Provoca a sala inteira, veste 70 de escudo e devolve 50% de tudo que receber por 2 turnos.",
+    "flavor": "A pergunta não é se vão bater. É quantos vão continuar em pé depois de bater.",
+    "fxKey": "volcanicRetort"
+  },
+  "sumo-fogo-30": {
+    "id": "sumo-fogo-30",
+    "name": "Fúria da Fornalha",
+    "element": "fogo",
+    "classId": "sumo",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 70,
+        "max": 84
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 14,
+        "max": 18,
+        "duration": 3
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      },
+      {
+        "type": "weatherShift",
+        "weather": "estiagem"
+      }
+    ],
+    "description": "O corpo inteiro vira forja e arrebenta: 70–84 de fogo em raio 2, queimadura de 14–18 por 3 turnos, 2 células de empurrão — e a sala inteira entra em estiagem.",
+    "flavor": "Foi assim que ele descobriu, mil anos atrás, que o Coração do Fecho ainda batia.",
+    "fxKey": "furyForge"
+  },
+  "sumo-agua-5": {
+    "id": "sumo-agua-5",
+    "name": "Gume da Maré",
+    "element": "agua",
+    "classId": "sumo",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 20,
+        "max": 26,
+        "lifesteal": true
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "20–26 de água com roubo de vida e 1 célula de empurrão: bate, bebe e afasta.",
+    "flavor": "O machado sai molhado. O outro sai mais seco.",
+    "fxKey": "tideEdge"
+  },
+  "sumo-agua-10": {
+    "id": "sumo-agua-10",
+    "name": "Passo Escorregadio",
+    "element": "agua",
+    "classId": "sumo",
+    "unlockLevel": 10,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "dodge",
+        "value": 30,
+        "duration": 2
+      },
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 1,
+        "duration": 2
+      }
+    ],
+    "description": "Molha o chão da sala e desliza nele: +30 de esquiva e +1 PP por 2 turnos.",
+    "flavor": "Cento e cinquenta quilos deslizando. É mais elegante do que parece.",
+    "fxKey": "slickStep"
+  },
+  "sumo-agua-12": {
+    "id": "sumo-agua-12",
+    "name": "Onda de Ombro",
+    "element": "agua",
+    "classId": "sumo",
+    "unlockLevel": 12,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "line",
+      "size": 4
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 28,
+        "max": 35,
+        "lifesteal": true
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "Um ombro de água atravessa a linha: 28–35 com roubo de vida em todos, e 2 células de empurrão.",
+    "flavor": "A cisterna aprendeu a brigar observando pelo ralo.",
+    "fxKey": "shoulderWave"
+  },
+  "sumo-agua-15": {
+    "id": "sumo-agua-15",
+    "name": "Bebedor de Golpes",
+    "element": "agua",
+    "classId": "sumo",
+    "unlockLevel": 15,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 60,
+        "duration": 2
+      },
+      {
+        "type": "regen",
+        "min": 14,
+        "max": 18,
+        "duration": 2
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      }
+    ],
+    "description": "Absorve o que vier: 60 de escudo, regeneração de 14–18 por 2 turnos e limpa venenos e raízes.",
+    "flavor": "Ele não cura. Ele engole e digere depois.",
+    "fxKey": "tideDrink"
+  },
+  "sumo-agua-20": {
+    "id": "sumo-agua-20",
+    "name": "Maré Bruta",
+    "element": "agua",
+    "classId": "sumo",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 36,
+        "max": 44,
+        "lifesteal": true
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "Gira e solta a maré: 36–44 de água com roubo de vida em raio 2 e 2 células de empurrão para todos.",
+    "flavor": "Meia sala recua. Ele fica mais gordo de vida do que começou.",
+    "fxKey": "bruteTide"
+  },
+  "sumo-agua-30": {
+    "id": "sumo-agua-30",
+    "name": "Ressaca Absoluta",
+    "element": "agua",
+    "classId": "sumo",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 66,
+        "max": 78,
+        "lifesteal": true
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "Puxa a sala inteira 3 células para dentro do próprio corpo, engole 66–78 de água com roubo de vida e deixa todos sem PP por 1 turno.",
+    "flavor": "Quando a cisterna respira fundo, o baile inteiro vai junto.",
+    "fxKey": "undertowMaw"
+  },
+  "sumo-terra-5": {
+    "id": "sumo-terra-5",
+    "name": "Casco de Pedra",
+    "element": "terra",
+    "classId": "sumo",
+    "unlockLevel": 5,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 45,
+        "duration": 2
+      },
+      {
+        "type": "buff",
+        "stat": "lock",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "Endurece a casca: 45 de escudo e +20 de fixação por 2 turnos — fugir dele fica bem mais caro.",
+    "flavor": "Ele não fica mais duro. O mundo é que fica mais mole em comparação.",
+    "fxKey": "stoneHusk"
+  },
+  "sumo-terra-10": {
+    "id": "sumo-terra-10",
+    "name": "Pisada Fundadora",
+    "element": "terra",
+    "classId": "sumo",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 20,
+        "max": 26
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "Pisa como quem assenta um alicerce: 20–26 de terra em raio 1 e 0 PP por 1 turno.",
+    "flavor": "O portão dele tem mil anos e nunca precisou de conserto.",
+    "fxKey": "rootQuake"
+  },
+  "sumo-terra-12": {
+    "id": "sumo-terra-12",
+    "name": "Estaca Humana",
+    "element": "terra",
+    "classId": "sumo",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "taunt",
+        "duration": 2
+      },
+      {
+        "type": "shield",
+        "value": 70,
+        "duration": 2
+      },
+      {
+        "type": "resist",
+        "element": "terra",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "Finca-se no chão e chama todos: provocação por 2 turnos, 70 de escudo e 20% de resistência a terra.",
+    "flavor": "Foi plantado ali. Vai ter que ser desenterrado.",
+    "fxKey": "humanStake"
+  },
+  "sumo-terra-15": {
+    "id": "sumo-terra-15",
+    "name": "Raízes de Pedra",
+    "element": "terra",
+    "classId": "sumo",
+    "unlockLevel": 15,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 26,
+        "max": 33
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "Manda raízes por baixo do chão até o ponto escolhido: 26–33 de terra em raio 1 e 0 PP por 2 turnos.",
+    "flavor": "A sala inteira é dele. Só emprestou o chão para você pisar.",
+    "fxKey": "stoneRoots"
+  },
+  "sumo-terra-20": {
+    "id": "sumo-terra-20",
+    "name": "Muralha Viva",
+    "element": "terra",
+    "classId": "sumo",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 120,
+        "duration": 3
+      },
+      {
+        "type": "resist",
+        "element": "terra",
+        "value": 25,
+        "duration": 3
+      },
+      {
+        "type": "buff",
+        "stat": "lock",
+        "value": 30,
+        "duration": 3
+      }
+    ],
+    "description": "Vira parede de carne e pedra: 120 de escudo, 25% de resistência a terra e +30 de fixação por 3 turnos.",
+    "flavor": "Os construtores selavam Fechos com portões. Ele dispensa o portão.",
+    "fxKey": "livingWall"
+  },
+  "sumo-terra-30": {
+    "id": "sumo-terra-30",
+    "name": "Montanha que Anda",
+    "element": "terra",
+    "classId": "sumo",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 58,
+        "max": 70
+      },
+      {
+        "type": "root",
+        "duration": 2
+      },
+      {
+        "type": "taunt",
+        "duration": 3
+      },
+      {
+        "type": "weatherShift",
+        "weather": "tremor"
+      }
+    ],
+    "description": "Dá um passo e a sala racha: 58–70 de terra em raio 2, ninguém anda por 2 turnos, todos são obrigados a encará-lo por 3 — e a poeira do tremor toma o ar.",
+    "flavor": "Não é que a montanha tenha aprendido a andar. É que ele nunca aceitou ficar parado.",
+    "fxKey": "walkingMountain"
+  },
+  "sumo-ar-5": {
+    "id": "sumo-ar-5",
+    "name": "Investida Bruta",
+    "element": "ar",
+    "classId": "sumo",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 4
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 18,
+        "max": 24
+      }
+    ],
+    "description": "Desliza até 4 células até o alvo e tromba nele: 18–24 de dano de ar. A entrada de graça do tanque.",
+    "flavor": "Cento e cinquenta quilos não correm. Chegam.",
+    "fxKey": "brutalCharge"
+  },
+  "sumo-ar-10": {
+    "id": "sumo-ar-10",
+    "name": "Arremesso Brutal",
+    "element": "ar",
+    "classId": "sumo",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 25,
+        "max": 32
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "Pega pelo peitoral e joga: 25–32 de ar e 3 células de voo (colidir dói mais).",
+    "flavor": "Ele mira sempre no obstáculo mais próximo. Por economia de movimento.",
+    "fxKey": "brutalThrow"
+  },
+  "sumo-ar-12": {
+    "id": "sumo-ar-12",
+    "name": "Ciclone de Machado",
+    "element": "ar",
+    "classId": "sumo",
+    "unlockLevel": 12,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 26,
+        "max": 33
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "Roda sobre si mesmo com o machado esticado: 26–33 de ar em raio 1 e 2 células de empurrão em todos.",
+    "flavor": "Quem estava perto vira espectador. Bem longe, de preferência.",
+    "fxKey": "axeCyclone"
+  },
+  "sumo-ar-15": {
+    "id": "sumo-ar-15",
+    "name": "Puxão e Volta",
+    "element": "ar",
+    "classId": "sumo",
+    "unlockLevel": 15,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 4
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "Um sopro-laço arrasta o alvo 4 células até ele: 30–38 de ar e 0 PP por 1 turno. O atirador inimigo detesta.",
+    "flavor": "Ele acha grosseria conversar de longe.",
+    "fxKey": "graspAndSlam"
+  },
+  "sumo-ar-20": {
+    "id": "sumo-ar-20",
+    "name": "Tufão de Ferro",
+    "element": "ar",
+    "classId": "sumo",
+    "unlockLevel": 20,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 6
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 58,
+        "max": 70
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "Atravessa até 6 células em linha reta de fúria: 58–70 de ar e 3 células de arremesso no fim do trajeto.",
+    "flavor": "O corredor inteiro ouve o assobio antes de ver o bárbaro.",
+    "fxKey": "ironTyphoon"
+  },
+  "sumo-ar-30": {
+    "id": "sumo-ar-30",
+    "name": "Arremesso do Fim do Mundo",
+    "element": "ar",
+    "classId": "sumo",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 2,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 96,
+        "max": 112
+      },
+      {
+        "type": "push",
+        "tiles": 6
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "Agarra, gira três vezes e solta: 96–112 de ar, 6 células de voo e 2 turnos sem conseguir levantar (0 PP).",
+    "flavor": "Ele treinou mil anos para o arremesso que finalmente encostasse alguém na Lousa.",
+    "fxKey": "worldThrow"
+  },
+  "arqueiro-neutro-1": {
+    "id": "arqueiro-neutro-1",
+    "name": "Flecha Anotada",
+    "element": "neutro",
+    "classId": "arqueiro",
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 18,
+        "max": 24
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "18–24 de dano neutro e 1 marca no alvo (cada marca aumenta em 5% todo o dano que ele receber). Duas vezes por turno.",
+    "flavor": "A flecha não é a cobrança. É só o registro no caderno.",
+    "fxKey": "markShot"
+  },
+  "arqueiro-neutro-2": {
+    "id": "arqueiro-neutro-2",
+    "name": "Passo de Corça",
+    "element": "neutro",
+    "classId": "arqueiro",
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 4
+      }
+    ],
+    "description": "Desliza até 4 células até uma célula vazia, sem gastar PP. A distância é a armadura do arqueiro.",
+    "flavor": "Ninguém o viu correr. Todo mundo o viu já longe.",
+    "fxKey": "doeStep"
+  },
+  "arqueiro-neutro-3": {
+    "id": "arqueiro-neutro-3",
+    "name": "Cobrar a Conta",
+    "element": "neutro",
+    "classId": "arqueiro",
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "detonateMarks",
+        "mult": 9
+      },
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 8,
+        "max": 12
+      }
+    ],
+    "description": "Consome todas as marcas do alvo: 9 de dano por marca, mais 8–12 de dano neutro do tiro.",
+    "flavor": "Batedor nenhum perdoa dívida. No máximo adia o vencimento.",
+    "fxKey": "markCollect"
+  },
+  "arqueiro-fogo-5": {
+    "id": "arqueiro-fogo-5",
+    "name": "Flecha Incendiária",
+    "element": "fogo",
+    "classId": "arqueiro",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 20,
+        "max": 26
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "20–26 de fogo, queimadura de 5–8 por 2 turnos e 1 marca.",
+    "flavor": "A ponta é embebida na resina que sobrou da Estufa. Cheira a fim de tarde.",
+    "fxKey": "emberArrow"
+  },
+  "arqueiro-fogo-10": {
+    "id": "arqueiro-fogo-10",
+    "name": "Salva de Fagulhas",
+    "element": "fogo",
+    "classId": "arqueiro",
+    "unlockLevel": 10,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 24,
+        "max": 30
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "Três flechas em leque: 24–30 de fogo em raio 1 e 1 marca em cada atingido. Marcar o grupo todo é o plano.",
+    "flavor": "Contabilidade em massa.",
+    "fxKey": "markVolley"
+  },
+  "arqueiro-fogo-12": {
+    "id": "arqueiro-fogo-12",
+    "name": "Ferro em Brasa",
+    "element": "fogo",
+    "classId": "arqueiro",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 28,
+        "max": 35
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 4,
+        "max": 5
+      }
+    ],
+    "description": "28–35 de fogo e 1 marca que dura 4 turnos — a ponta vermelha demora a esfriar.",
+    "flavor": "Marca gado, marca inimigo. A técnica é a mesma; a paciência também.",
+    "fxKey": "brandShot"
+  },
+  "arqueiro-fogo-15": {
+    "id": "arqueiro-fogo-15",
+    "name": "Detonar as Brasas",
+    "element": "fogo",
+    "classId": "arqueiro",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "detonateMarks",
+        "mult": 12
+      },
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 20,
+        "max": 26
+      }
+    ],
+    "description": "Acende todas as marcas em raio 1: 12 de dano por marca de cada alvo, mais 20–26 de fogo na área.",
+    "flavor": "Ele acende o caderno inteiro de uma vez. É mais rápido do que somar.",
+    "fxKey": "markBlast"
+  },
+  "arqueiro-fogo-20": {
+    "id": "arqueiro-fogo-20",
+    "name": "Chuva de Brasas",
+    "element": "fogo",
+    "classId": "arqueiro",
+    "unlockLevel": 20,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 40,
+        "max": 48
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 10,
+        "max": 14,
+        "duration": 2
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "Dezenas de flechas em brasa caem em raio 2: 40–48 de fogo, queimadura de 10–14 por 2 turnos e 1 marca em todos.",
+    "flavor": "Chove fogo num mundo que não vê chuva há mil anos. Justiça poética duvidosa.",
+    "fxKey": "emberRain"
+  },
+  "arqueiro-fogo-30": {
+    "id": "arqueiro-fogo-30",
+    "name": "Aljava do Sol Morto",
+    "element": "fogo",
+    "classId": "arqueiro",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 62,
+        "max": 74
+      },
+      {
+        "type": "detonateMarks",
+        "mult": 20
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 16,
+        "max": 20,
+        "duration": 3
+      }
+    ],
+    "description": "Esvazia a aljava inteira em raio 2: 62–74 de fogo, 20 de dano por marca acumulada em cada alvo e queimadura de 16–20 por 3 turnos.",
+    "flavor": "Guardava uma flecha do tempo em que ainda havia sol. Guardou até agora.",
+    "fxKey": "deadSunQuiver"
+  },
+  "arqueiro-agua-5": {
+    "id": "arqueiro-agua-5",
+    "name": "Flecha-Arpão",
+    "element": "agua",
+    "classId": "arqueiro",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 18,
+        "max": 24,
+        "lifesteal": true
+      },
+      {
+        "type": "pull",
+        "tiles": 2
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "18–24 de água com roubo de vida, puxa 2 células e deixa 1 marca. Reposiciona o alvo para onde convém.",
+    "flavor": "A corda é fina. A vontade do outro lado é que é grossa.",
+    "fxKey": "harpoonArrow"
+  },
+  "arqueiro-agua-10": {
+    "id": "arqueiro-agua-10",
+    "name": "Tiro da Nascente",
+    "element": "agua",
+    "classId": "arqueiro",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 25,
+        "max": 32,
+        "lifesteal": true
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "25–32 de água com roubo de vida e 1 marca: cada tiro devolve fôlego ao atirador.",
+    "flavor": "Bebe da distância. É o único jeito de um arqueiro beber.",
+    "fxKey": "springShot"
+  },
+  "arqueiro-agua-12": {
+    "id": "arqueiro-agua-12",
+    "name": "Linha de Correnteza",
+    "element": "agua",
+    "classId": "arqueiro",
+    "unlockLevel": 12,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "line",
+      "size": 6
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 26,
+        "max": 33
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "Uma correnteza atravessa a linha: 26–33 de água, 2 células de empurrão e 1 marca em cada alvo da fila.",
+    "flavor": "Ele mira no corredor, não em quem está nele.",
+    "fxKey": "currentLine"
+  },
+  "arqueiro-agua-15": {
+    "id": "arqueiro-agua-15",
+    "name": "Detonar a Maré",
+    "element": "agua",
+    "classId": "arqueiro",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "detonateMarks",
+        "mult": 14
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 24,
+        "max": 30,
+        "lifesteal": true
+      }
+    ],
+    "description": "Estoura as marcas do alvo em água: 14 por marca, mais 24–30 com roubo de vida. Cobrar a conta cura.",
+    "flavor": "A dívida vira bebida.",
+    "fxKey": "tideCollect"
+  },
+  "arqueiro-agua-20": {
+    "id": "arqueiro-agua-20",
+    "name": "Chuva Fria",
+    "element": "agua",
+    "classId": "arqueiro",
+    "unlockLevel": 20,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 38,
+        "max": 46,
+        "lifesteal": true
+      },
+      {
+        "type": "pull",
+        "tiles": 2
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "Uma nuvem de flechas geladas em raio 2: 38–46 com roubo de vida, puxa 2 células e marca todos os atingidos.",
+    "flavor": "Junta o rebanho antes de cobrar. Sempre foi mais eficiente.",
+    "fxKey": "coldRain"
+  },
+  "arqueiro-agua-30": {
+    "id": "arqueiro-agua-30",
+    "name": "Maré Marcada",
+    "element": "agua",
+    "classId": "arqueiro",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 58,
+        "max": 70,
+        "lifesteal": true
+      },
+      {
+        "type": "detonateMarks",
+        "mult": 18
+      }
+    ],
+    "description": "A maré obedece à corda: puxa tudo em raio 3 por 3 células, causa 58–70 de água com roubo de vida e detona as marcas a 18 por pilha.",
+    "flavor": "Ele apontou para a cisterna e disse \"venham\". Vieram todos, inclusive a água.",
+    "fxKey": "markedTide"
+  },
+  "arqueiro-terra-5": {
+    "id": "arqueiro-terra-5",
+    "name": "Flecha de Sílex",
+    "element": "terra",
+    "classId": "arqueiro",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 4,
+        "max": 5
+      }
+    ],
+    "description": "22–28 de terra e 1 marca de 4 turnos: a pedra fica cravada muito depois do tiro.",
+    "flavor": "Sílex lascado à mão, como se fazia antes do céu virar teto.",
+    "fxKey": "flintArrow"
+  },
+  "arqueiro-terra-10": {
+    "id": "arqueiro-terra-10",
+    "name": "Estaca no Pé",
+    "element": "terra",
+    "classId": "arqueiro",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "root",
+        "duration": 1
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 4,
+        "max": 5
+      }
+    ],
+    "description": "Prega o alvo no chão: 22–28 de terra, 0 PP por 1 turno e 1 marca.",
+    "flavor": "Regra do batedor: quem não anda, não erra a conta.",
+    "fxKey": "pinShot"
+  },
+  "arqueiro-terra-12": {
+    "id": "arqueiro-terra-12",
+    "name": "Tiro Perfurante",
+    "element": "terra",
+    "classId": "arqueiro",
+    "unlockLevel": 12,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 7,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "line",
+      "size": 7
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 4,
+        "max": 5
+      }
+    ],
+    "description": "A flecha atravessa a fila inteira: 30–38 de terra e 1 marca em cada corpo do caminho.",
+    "flavor": "Besta de dois pés, corda de tendão de raiz. Não pede licença.",
+    "fxKey": "piercingShot"
+  },
+  "arqueiro-terra-15": {
+    "id": "arqueiro-terra-15",
+    "name": "Detonar o Pedregulho",
+    "element": "terra",
+    "classId": "arqueiro",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "detonateMarks",
+        "mult": 13
+      },
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "As marcas viram pedra e desabam: 13 por marca, 22–28 de terra e 0 PP por 2 turnos.",
+    "flavor": "Cobrar dívida com pedregulho é grosseiro. É também definitivo.",
+    "fxKey": "boulderCollect"
+  },
+  "arqueiro-terra-20": {
+    "id": "arqueiro-terra-20",
+    "name": "Salva de Menires",
+    "element": "terra",
+    "classId": "arqueiro",
+    "unlockLevel": 20,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 36,
+        "max": 44
+      },
+      {
+        "type": "root",
+        "duration": 2
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 4,
+        "max": 5
+      }
+    ],
+    "description": "Flechas do tamanho de postes caem em raio 2: 36–44 de terra, 0 PP por 2 turnos e 1 marca em todos.",
+    "flavor": "Ninguém entende como ele carrega essas coisas na aljava. Ninguém pergunta.",
+    "fxKey": "menhirVolley"
+  },
+  "arqueiro-terra-30": {
+    "id": "arqueiro-terra-30",
+    "name": "Flecha-Menir",
+    "element": "terra",
+    "classId": "arqueiro",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 9,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "line",
+      "size": 9
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 88,
+        "max": 104
+      },
+      {
+        "type": "detonateMarks",
+        "mult": 22
+      },
+      {
+        "type": "root",
+        "duration": 3
+      }
+    ],
+    "description": "Uma coluna inteira lançada em linha reta: 88–104 de terra em toda a fila, 22 por marca detonada e 3 turnos sem PP.",
+    "flavor": "Os construtores fincavam menires para segurar o mundo. Ele descobriu outro uso.",
+    "fxKey": "menhirShot"
+  },
+  "arqueiro-ar-5": {
+    "id": "arqueiro-ar-5",
+    "name": "Flecha de Vento",
+    "element": "ar",
+    "classId": "arqueiro",
+    "unlockLevel": 5,
+    "paCost": 2,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 14,
+        "max": 19
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "Barata e rápida: 14–19 de ar e 1 marca por apenas 2 PA. O jeito mais eficiente de encher o alvo de marcas.",
+    "flavor": "Sem ponta de metal: só ar comprimido e má intenção.",
+    "fxKey": "windArrow"
+  },
+  "arqueiro-ar-10": {
+    "id": "arqueiro-ar-10",
+    "name": "Tiro Saltador",
+    "element": "ar",
+    "classId": "arqueiro",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "chain",
+        "jumps": 2,
+        "falloff": 0.3,
+        "element": "ar",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "22–28 de ar que saltam para mais 2 inimigos próximos (−30% a cada salto) e marcam o primeiro alvo.",
+    "flavor": "A flecha ricocheteia no teto de pedra. O teto, pelo menos, serve para isso.",
+    "fxKey": "skipShot"
+  },
+  "arqueiro-ar-12": {
+    "id": "arqueiro-ar-12",
+    "name": "Flecha Rodopiante",
+    "element": "ar",
+    "classId": "arqueiro",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 26,
+        "max": 33
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "26–33 de ar, 2 células de empurrão e 1 marca: mantém o corpo a corpo sempre a um passo de distância.",
+    "flavor": "Gira tanto que assobia. O assobio já é meio metro de recuo.",
+    "fxKey": "spinArrow"
+  },
+  "arqueiro-ar-15": {
+    "id": "arqueiro-ar-15",
+    "name": "Detonar a Corrente",
+    "element": "ar",
+    "classId": "arqueiro",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "detonateMarks",
+        "mult": 12
+      },
+      {
+        "type": "chain",
+        "jumps": 3,
+        "falloff": 0.25,
+        "element": "ar",
+        "min": 18,
+        "max": 24
+      }
+    ],
+    "description": "Detona as marcas (12 por pilha) e a descarga salta para mais 3 inimigos, perdendo 25% a cada salto.",
+    "flavor": "A conta de um vira a notícia de todos.",
+    "fxKey": "chainCollect"
+  },
+  "arqueiro-ar-20": {
+    "id": "arqueiro-ar-20",
+    "name": "Vendaval de Setas",
+    "element": "ar",
+    "classId": "arqueiro",
+    "unlockLevel": 20,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 36,
+        "max": 44
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 3,
+        "max": 5
+      }
+    ],
+    "description": "Um vendaval de setas em raio 2: 36–44 de ar, 3 células de arremesso e 1 marca em cada alvo.",
+    "flavor": "Metade das flechas erra de propósito, só para fazer vento.",
+    "fxKey": "arrowGale"
+  },
+  "arqueiro-ar-30": {
+    "id": "arqueiro-ar-30",
+    "name": "Tempestade Marcada",
+    "element": "ar",
+    "classId": "arqueiro",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 10,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "detonateMarks",
+        "mult": 20
+      },
+      {
+        "type": "chain",
+        "jumps": 5,
+        "falloff": 0.2,
+        "element": "ar",
+        "min": 42,
+        "max": 52
+      },
+      {
+        "type": "weatherShift",
+        "weather": "vendaval"
+      }
+    ],
+    "description": "Detona as marcas a 20 por pilha e solta uma descarga de 42–52 que salta por até 5 inimigos (−20% por salto). O ar da sala vira vendaval.",
+    "flavor": "Ele soltou a corda e o Fecho inteiro passou a dever alguma coisa.",
+    "fxKey": "markedStorm"
+  },
+  "bruxo-neutro-1": {
+    "id": "bruxo-neutro-1",
+    "name": "Verruma Arcana",
+    "element": "neutro",
+    "classId": "bruxo",
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 20,
+        "max": 26
+      }
+    ],
+    "description": "Um furo limpo de energia crua: 20–26 de dano neutro a até 7 células. Duas vezes por turno.",
+    "flavor": "A primeira lição da escola: o mundo tem buracos. Faça mais.",
+    "fxKey": "arcaneBore"
+  },
+  "bruxo-neutro-2": {
+    "id": "bruxo-neutro-2",
+    "name": "Praga Sussurrada",
+    "element": "neutro",
+    "classId": "bruxo",
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "poison",
+        "element": "neutro",
+        "min": 8,
+        "max": 11,
+        "duration": 2
+      },
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": -15,
+        "duration": 2
+      }
+    ],
+    "description": "Maldição em raio 1: 8–11 de dano por turno durante 2 turnos e −15 de poder nos amaldiçoados.",
+    "flavor": "Ele nunca grita a praga. A pedra já é surda o bastante.",
+    "fxKey": "whisperCurse"
+  },
+  "bruxo-neutro-3": {
+    "id": "bruxo-neutro-3",
+    "name": "Círculo de Chumbo",
+    "element": "neutro",
+    "classId": "bruxo",
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 6,
+        "max": 9
+      },
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": -2,
+        "duration": 1
+      }
+    ],
+    "description": "Desenha um círculo pesado no chão: 6–9 de dano e −2 PP por 1 turno em raio 1.",
+    "flavor": "Chumbo é o metal preferido de quem gosta que as coisas fiquem onde estão.",
+    "fxKey": "leadCircle"
+  },
+  "bruxo-fogo-5": {
+    "id": "bruxo-fogo-5",
+    "name": "Fagulha Gêmea",
+    "element": "fogo",
+    "classId": "bruxo",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 4,
+        "max": 6,
+        "duration": 2
+      }
+    ],
+    "description": "22–28 de fogo e queimadura de 4–6 por 2 turnos. O básico que nunca sai do caderno.",
+    "flavor": "Duas fagulhas: uma para acertar, outra para lembrar.",
+    "fxKey": "twinSpark"
+  },
+  "bruxo-fogo-10": {
+    "id": "bruxo-fogo-10",
+    "name": "Cone de Cinzas",
+    "element": "fogo",
+    "classId": "bruxo",
+    "unlockLevel": 10,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "cone",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 26,
+        "max": 33
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 6,
+        "max": 9,
+        "duration": 2
+      }
+    ],
+    "description": "Um leque de cinzas quentes: 26–33 de fogo em cone e queimadura de 6–9 por 2 turnos.",
+    "flavor": "Cinza é fogo com memória.",
+    "fxKey": "ashCone"
+  },
+  "bruxo-fogo-12": {
+    "id": "bruxo-fogo-12",
+    "name": "Meteoro Menor",
+    "element": "fogo",
+    "classId": "bruxo",
+    "unlockLevel": 12,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 34,
+        "max": 42
+      }
+    ],
+    "description": "Arranca um pedaço do teto de pedra e o derruba aceso: 34–42 de fogo em raio 1.",
+    "flavor": "A Lousa devolve o que empresta. Com juros e temperatura.",
+    "fxKey": "lesserMeteor"
+  },
+  "bruxo-fogo-15": {
+    "id": "bruxo-fogo-15",
+    "name": "Braseiro Proibido",
+    "element": "fogo",
+    "classId": "bruxo",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 18,
+        "max": 24
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 16,
+        "max": 21,
+        "duration": 3
+      }
+    ],
+    "description": "Acende o chão em raio 2: 18–24 na hora e 16–21 por turno durante 3 turnos. Área que se paga com paciência.",
+    "flavor": "Escrito na porta da escola: \"não acender braseiro em recinto fechado\". O mundo inteiro é recinto fechado.",
+    "fxKey": "forbiddenBrazier"
+  },
+  "bruxo-fogo-20": {
+    "id": "bruxo-fogo-20",
+    "name": "Pira Dobrada",
+    "element": "fogo",
+    "classId": "bruxo",
+    "unlockLevel": 20,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 44,
+        "max": 54
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 12,
+        "max": 16,
+        "duration": 2
+      }
+    ],
+    "description": "Duas piras dentro da mesma área: 44–54 de fogo em raio 2 e queimadura de 12–16 por 2 turnos.",
+    "flavor": "Dobrar uma pira é fácil. O difícil é desdobrar depois.",
+    "fxKey": "foldedPyre"
+  },
+  "bruxo-fogo-30": {
+    "id": "bruxo-fogo-30",
+    "name": "Meteoro do Fecho",
+    "element": "fogo",
+    "classId": "bruxo",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 10,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 70,
+        "max": 84
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 18,
+        "max": 24,
+        "duration": 3
+      },
+      {
+        "type": "weatherShift",
+        "weather": "estiagem"
+      }
+    ],
+    "description": "Derruba um pedaço inteiro da Lousa em chamas: 70–84 de fogo em raio 3, queimadura de 18–24 por 3 turnos e a sala entra em estiagem.",
+    "flavor": "Ele leu a pedra até o fim. Na última página havia uma instrução: \"puxe aqui\".",
+    "fxKey": "lockMeteor"
+  },
+  "bruxo-agua-5": {
+    "id": "bruxo-agua-5",
+    "name": "Lança d'Água",
+    "element": "agua",
+    "classId": "bruxo",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 20,
+        "max": 26,
+        "lifesteal": true
+      }
+    ],
+    "description": "20–26 de água com roubo de vida: o bruxo bebe metade do que derrama.",
+    "flavor": "Água da cisterna, temperada com mil anos de más companhias.",
+    "fxKey": "waterLance"
+  },
+  "bruxo-agua-10": {
+    "id": "bruxo-agua-10",
+    "name": "Sifão",
+    "element": "agua",
+    "classId": "bruxo",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 24,
+        "max": 30
+      },
+      {
+        "type": "dispelShield"
+      }
+    ],
+    "description": "Puxa o alvo 3 células, causa 24–30 de água e dissolve o escudo dele por completo.",
+    "flavor": "Escudo é só uma coisa seca que ainda não foi molhada.",
+    "fxKey": "siphon"
+  },
+  "bruxo-agua-12": {
+    "id": "bruxo-agua-12",
+    "name": "Maremoto",
+    "element": "agua",
+    "classId": "bruxo",
+    "unlockLevel": 12,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "line",
+      "size": 6
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "Uma onda percorre a linha: 30–38 de água e 3 células de empurrão em toda a fila.",
+    "flavor": "Limpa o corredor. Literalmente.",
+    "fxKey": "tidalWave"
+  },
+  "bruxo-agua-15": {
+    "id": "bruxo-agua-15",
+    "name": "Poça Faminta",
+    "element": "agua",
+    "classId": "bruxo",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 26,
+        "max": 33,
+        "lifesteal": true
+      },
+      {
+        "type": "pull",
+        "tiles": 2
+      }
+    ],
+    "description": "Abre uma poça faminta em raio 2: 26–33 de água com roubo de vida e todos puxados 2 células para o centro.",
+    "flavor": "Não é fundo. É só insistente.",
+    "fxKey": "hungryPool"
+  },
+  "bruxo-agua-20": {
+    "id": "bruxo-agua-20",
+    "name": "Dissolução",
+    "element": "agua",
+    "classId": "bruxo",
+    "unlockLevel": 20,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "dispelShield"
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 44,
+        "max": 54,
+        "lifesteal": true
+      },
+      {
+        "type": "poison",
+        "element": "agua",
+        "min": 10,
+        "max": 14,
+        "duration": 2
+      }
+    ],
+    "description": "Dissolve todos os escudos em raio 2, causa 44–54 de água com roubo de vida e deixa 10–14 por turno durante 2 turnos.",
+    "flavor": "A cisterna nunca quebrou uma armadura. Só esperou.",
+    "fxKey": "dissolution"
+  },
+  "bruxo-agua-30": {
+    "id": "bruxo-agua-30",
+    "name": "A Cisterna Lembra",
+    "element": "agua",
+    "classId": "bruxo",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "dispelShield"
+      },
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 66,
+        "max": 78,
+        "lifesteal": true
+      },
+      {
+        "type": "weatherShift",
+        "weather": "chuva"
+      }
+    ],
+    "description": "Chama de volta a água que afogou a corte: dissolve escudos, puxa 3 células, causa 66–78 com roubo de vida em raio 3 e faz chover na sala.",
+    "flavor": "Ele só perguntou onde estavam os donos da cisterna. Ela respondeu mostrando.",
+    "fxKey": "cisternRemembers"
+  },
+  "bruxo-terra-5": {
+    "id": "bruxo-terra-5",
+    "name": "Espinho de Laje",
+    "element": "terra",
+    "classId": "bruxo",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 22,
+        "max": 28
+      }
+    ],
+    "description": "Uma lasca de laje sobe do chão sob os pés do alvo: 22–28 de terra.",
+    "flavor": "O piso do Fecho colabora. Sempre colaborou; ninguém tinha pedido.",
+    "fxKey": "slabSpike"
+  },
+  "bruxo-terra-10": {
+    "id": "bruxo-terra-10",
+    "name": "Grilhão de Raiz",
+    "element": "terra",
+    "classId": "bruxo",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "root",
+        "duration": 2
+      },
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 18,
+        "max": 24
+      }
+    ],
+    "description": "Raízes fecham o tornozelo do alvo: 0 PP por 2 turnos e 18–24 de terra.",
+    "flavor": "A Estufa manda lembranças pelo subsolo.",
+    "fxKey": "rootShackle"
+  },
+  "bruxo-terra-12": {
+    "id": "bruxo-terra-12",
+    "name": "Fenda",
+    "element": "terra",
+    "classId": "bruxo",
+    "unlockLevel": 12,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "line",
+      "size": 6
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 32,
+        "max": 40
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "Racha o chão numa linha reta: 32–40 de terra e 0 PP por 1 turno em todos os que estiverem nela.",
+    "flavor": "Depois ele fecha. Quase sempre.",
+    "fxKey": "fissure"
+  },
+  "bruxo-terra-15": {
+    "id": "bruxo-terra-15",
+    "name": "Campo de Estacas",
+    "element": "terra",
+    "classId": "bruxo",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 28,
+        "max": 35
+      },
+      {
+        "type": "poison",
+        "element": "terra",
+        "min": 8,
+        "max": 12,
+        "duration": 3
+      }
+    ],
+    "description": "Enche a área de estacas de pedra: 28–35 de terra em raio 2 e 8–12 por turno durante 3 turnos para quem ficar.",
+    "flavor": "A área continua lá. O bom senso é que costuma sair primeiro.",
+    "fxKey": "spikeField"
+  },
+  "bruxo-terra-20": {
+    "id": "bruxo-terra-20",
+    "name": "Anel de Menires",
+    "element": "terra",
+    "classId": "bruxo",
+    "unlockLevel": 20,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "ring",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 46,
+        "max": 56
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "Um anel de pedras sobe a 2 células do centro: 46–56 de terra e 0 PP por 2 turnos em quem estiver no anel.",
+    "flavor": "Quem projetou os círculos de pedra não os projetou para ficar do lado de dentro.",
+    "fxKey": "menhirRing"
+  },
+  "bruxo-terra-30": {
+    "id": "bruxo-terra-30",
+    "name": "A Lousa Desce",
+    "element": "terra",
+    "classId": "bruxo",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 74,
+        "max": 88
+      },
+      {
+        "type": "root",
+        "duration": 3
+      },
+      {
+        "type": "weatherShift",
+        "weather": "tremor"
+      }
+    ],
+    "description": "Chama um palmo do céu de pedra para baixo: 74–88 de terra em raio 3, 3 turnos sem PP e a sala inteira em tremor.",
+    "flavor": "É o feitiço mais proibido da escola: repete, em miniatura, o dia em que tudo acabou.",
+    "fxKey": "slateDescends"
+  },
+  "bruxo-ar-5": {
+    "id": "bruxo-ar-5",
+    "name": "Estalo",
+    "element": "ar",
+    "classId": "bruxo",
+    "unlockLevel": 5,
+    "paCost": 2,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 2,
+      "max": 8,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 15,
+        "max": 20
+      }
+    ],
+    "description": "Um estalo seco de pressão: 15–20 de ar por apenas 2 PA, a até 8 células.",
+    "flavor": "Estala os dedos. O ar do outro lado da sala estala junto.",
+    "fxKey": "snapBolt"
+  },
+  "bruxo-ar-10": {
+    "id": "bruxo-ar-10",
+    "name": "Faísca Saltitante",
+    "element": "ar",
+    "classId": "bruxo",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "chain",
+        "jumps": 2,
+        "falloff": 0.3,
+        "element": "ar",
+        "min": 24,
+        "max": 30
+      }
+    ],
+    "description": "24–30 de ar que saltam para mais 2 inimigos próximos, perdendo 30% da força a cada salto.",
+    "flavor": "Ela procura companhia. Sempre acha.",
+    "fxKey": "hopSpark"
+  },
+  "bruxo-ar-12": {
+    "id": "bruxo-ar-12",
+    "name": "Passo do Bruxo",
+    "element": "ar",
+    "classId": "bruxo",
+    "unlockLevel": 12,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "teleport"
+      }
+    ],
+    "description": "Teleporta-se para uma célula vazia a até 5 de distância. O mago frágil precisa de uma saída.",
+    "flavor": "Não é magia elegante. É a magia de quem não quer apanhar.",
+    "fxKey": "warlockStep"
+  },
+  "bruxo-ar-15": {
+    "id": "bruxo-ar-15",
+    "name": "Cone de Vendaval",
+    "element": "ar",
+    "classId": "bruxo",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "cone",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "Um leque de vento comprimido: 30–38 de ar e 3 células de arremesso em tudo que estiver no cone.",
+    "flavor": "Os respiradouros do Fecho gemem quando ele faz isso. Ele acha bonito.",
+    "fxKey": "galeCone"
+  },
+  "bruxo-ar-20": {
+    "id": "bruxo-ar-20",
+    "name": "Trovoada",
+    "element": "ar",
+    "classId": "bruxo",
+    "unlockLevel": 20,
+    "paCost": 5,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "chain",
+        "jumps": 4,
+        "falloff": 0.25,
+        "element": "ar",
+        "min": 42,
+        "max": 52
+      }
+    ],
+    "description": "42–52 de ar que percorrem até 5 corpos (4 saltos), perdendo 25% a cada salto. A sala inteira em um só gesto.",
+    "flavor": "Nunca houve trovão sob a Lousa. Ele acha que faz falta.",
+    "fxKey": "thunderRun"
+  },
+  "bruxo-ar-30": {
+    "id": "bruxo-ar-30",
+    "name": "Olho da Tempestade",
+    "element": "ar",
+    "classId": "bruxo",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 60,
+        "max": 72
+      },
+      {
+        "type": "push",
+        "tiles": 4
+      },
+      {
+        "type": "chain",
+        "jumps": 4,
+        "falloff": 0.2,
+        "element": "ar",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "weatherShift",
+        "weather": "vendaval"
+      }
+    ],
+    "description": "Abre um olho de tempestade em raio 3: 60–72 de ar, 4 células de arremesso, descargas de 30–38 saltando por mais 4 corpos — e vendaval na sala.",
+    "flavor": "Ninguém sob a Lousa tinha visto uma tempestade. Agora todos já viram uma. Uma só.",
+    "fxKey": "stormEye"
+  },
+  "espadachim-neutro-1": {
+    "id": "espadachim-neutro-1",
+    "name": "Estocada Rápida",
+    "element": "neutro",
+    "classId": "espadachim",
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 15,
+        "max": 20
+      }
+    ],
+    "description": "15–20 de dano neutro por 2 PA, duas vezes por turno. Barato, rápido, sem drama.",
+    "flavor": "A lâmina entra pelo vão entre a armadura e a distração.",
+    "fxKey": "quickThrust"
+  },
+  "espadachim-neutro-2": {
+    "id": "espadachim-neutro-2",
+    "name": "Sombra Curta",
+    "element": "neutro",
+    "classId": "espadachim",
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "invisible",
+        "duration": 1
+      },
+      {
+        "type": "buff",
+        "stat": "dodge",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "Some no intervalo entre duas lanternas: invisível por 1 turno e +20 de esquiva por 2.",
+    "flavor": "Num mundo sem céu, a sombra é o único lugar com espaço sobrando.",
+    "fxKey": "shortShadow"
+  },
+  "espadachim-neutro-3": {
+    "id": "espadachim-neutro-3",
+    "name": "Passo Lateral",
+    "element": "neutro",
+    "classId": "espadachim",
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 4
+      }
+    ],
+    "description": "Desliza até 4 células sem gastar PP — normalmente para as costas de alguém.",
+    "flavor": "Ele não anda em volta do inimigo. O inimigo é que fica virado para o lado errado.",
+    "fxKey": "sideStep"
+  },
+  "espadachim-fogo-5": {
+    "id": "espadachim-fogo-5",
+    "name": "Lâmina de Brasa",
+    "element": "fogo",
+    "classId": "espadachim",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "description": "22–28 de fogo e queimadura de 5–8 por 2 turnos. Duas vezes por turno.",
+    "flavor": "A lâmina fica vermelha sozinha desde que ele passou a dormir com ela.",
+    "fxKey": "emberBlade"
+  },
+  "espadachim-fogo-10": {
+    "id": "espadachim-fogo-10",
+    "name": "Corte Duplo Ardente",
+    "element": "fogo",
+    "classId": "espadachim",
+    "unlockLevel": 10,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 36,
+        "max": 44
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 6,
+        "max": 9,
+        "duration": 2
+      }
+    ],
+    "description": "Dois cortes em X: 36–44 de fogo e 6–9 de queimadura por 2 turnos.",
+    "flavor": "O segundo corte serve só para o primeiro não esfriar.",
+    "fxKey": "burningCross"
+  },
+  "espadachim-fogo-12": {
+    "id": "espadachim-fogo-12",
+    "name": "Veias em Chamas",
+    "element": "fogo",
+    "classId": "espadachim",
+    "unlockLevel": 12,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 40,
+        "duration": 2
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 6,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "description": "Aquece o próprio sangue: +40 de poder por 2 turnos, ao preço de 6–8 de queimadura própria por turno.",
+    "flavor": "Aposta velha: dói agora, mata primeiro.",
+    "fxKey": "boilingVeins"
+  },
+  "espadachim-fogo-15": {
+    "id": "espadachim-fogo-15",
+    "name": "Dança das Fagulhas",
+    "element": "fogo",
+    "classId": "espadachim",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 8,
+        "max": 11,
+        "duration": 2
+      }
+    ],
+    "description": "Gira com as duas lâminas acesas: 30–38 de fogo em raio 1 e queimadura de 8–11 por 2 turnos.",
+    "flavor": "Quem o cercou paga a entrada do espetáculo.",
+    "fxKey": "sparkDance"
+  },
+  "espadachim-fogo-20": {
+    "id": "espadachim-fogo-20",
+    "name": "Estocada Escaldante",
+    "element": "fogo",
+    "classId": "espadachim",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 56,
+        "max": 66
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 12,
+        "max": 16,
+        "duration": 2
+      }
+    ],
+    "description": "A lâmina entra em brasa branca: 56–66 de fogo e 12–16 de queimadura por 2 turnos.",
+    "flavor": "Cauteriza no caminho de volta. É quase um favor.",
+    "fxKey": "scaldingThrust"
+  },
+  "espadachim-fogo-30": {
+    "id": "espadachim-fogo-30",
+    "name": "Sete Cortes de Chama",
+    "element": "fogo",
+    "classId": "espadachim",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 92,
+        "max": 108
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 20,
+        "max": 26,
+        "duration": 3
+      },
+      {
+        "type": "dispelShield"
+      }
+    ],
+    "description": "Sete cortes numa respiração só: dissolve o escudo do alvo, 92–108 de fogo e queimadura de 20–26 por 3 turnos.",
+    "flavor": "Conta-se que o sétimo corte é dado depois de o alvo já ter caído. Por capricho.",
+    "fxKey": "sevenFlameCuts"
+  },
+  "espadachim-agua-5": {
+    "id": "espadachim-agua-5",
+    "name": "Lâmina Sedenta",
+    "element": "agua",
+    "classId": "espadachim",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 22,
+        "max": 28,
+        "lifesteal": true
+      }
+    ],
+    "description": "22–28 de água com roubo de vida, duas vezes por turno: o assassino que se sustenta sozinho.",
+    "flavor": "A lâmina não está molhada. Está com sede.",
+    "fxKey": "thirstyBlade"
+  },
+  "espadachim-agua-10": {
+    "id": "espadachim-agua-10",
+    "name": "Névoa Salgada",
+    "element": "agua",
+    "classId": "espadachim",
+    "unlockLevel": 10,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "invisible",
+        "duration": 2
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      }
+    ],
+    "description": "Some numa névoa de sal por 2 turnos e lava venenos e raízes de cima do corpo.",
+    "flavor": "Sal cura, sal esconde, sal conserva. Ele usa os três sentidos.",
+    "fxKey": "brineMist"
+  },
+  "espadachim-agua-12": {
+    "id": "espadachim-agua-12",
+    "name": "Corte da Correnteza",
+    "element": "agua",
+    "classId": "espadachim",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 2,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 28,
+        "max": 35
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "28–35 de água a até 2 células e 2 de empurrão: corta e afasta antes da resposta.",
+    "flavor": "Ele corta na ida e a correnteza faz o resto do serviço.",
+    "fxKey": "currentSlash"
+  },
+  "espadachim-agua-15": {
+    "id": "espadachim-agua-15",
+    "name": "Passo de Lodo",
+    "element": "agua",
+    "classId": "espadachim",
+    "unlockLevel": 15,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "moveTo",
+        "maxTiles": 5
+      }
+    ],
+    "description": "Escorrega até 5 células por qualquer superfície molhada, sem gastar PP.",
+    "flavor": "Aprendeu com os afogadiços. Só não aprendeu a parte de afundar.",
+    "fxKey": "slimeStep"
+  },
+  "espadachim-agua-20": {
+    "id": "espadachim-agua-20",
+    "name": "Sanguessuga",
+    "element": "agua",
+    "classId": "espadachim",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 52,
+        "max": 62,
+        "lifesteal": true
+      },
+      {
+        "type": "poison",
+        "element": "agua",
+        "min": 10,
+        "max": 14,
+        "duration": 2
+      }
+    ],
+    "description": "52–62 de água com roubo de vida e 10–14 de veneno por 2 turnos. Um golpe que paga a própria conta.",
+    "flavor": "Não é crueldade. É logística.",
+    "fxKey": "leechCut"
+  },
+  "espadachim-agua-30": {
+    "id": "espadachim-agua-30",
+    "name": "Afogar em Sangue",
+    "element": "agua",
+    "classId": "espadachim",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 90,
+        "max": 106,
+        "lifesteal": true
+      },
+      {
+        "type": "poison",
+        "element": "agua",
+        "min": 14,
+        "max": 18,
+        "duration": 3
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "90–106 de água com roubo de vida — metade volta como vida —, veneno de 14–18 por 3 turnos e 1 turno sem PP.",
+    "flavor": "A corte afogada aplaudiu. Foi a primeira vez em mil anos que alguém dançou direito.",
+    "fxKey": "drownInBlood"
+  },
+  "espadachim-terra-5": {
+    "id": "espadachim-terra-5",
+    "name": "Lâmina Enferrujada",
+    "element": "terra",
+    "classId": "espadachim",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 20,
+        "max": 26
+      },
+      {
+        "type": "poison",
+        "element": "terra",
+        "min": 6,
+        "max": 9,
+        "duration": 3
+      }
+    ],
+    "description": "20–26 de terra e 6–9 de infecção por 3 turnos. O veneno do espadachim é paciente.",
+    "flavor": "Ele não afia a lâmina. Só a deixa suja o suficiente.",
+    "fxKey": "rustBlade"
+  },
+  "espadachim-terra-10": {
+    "id": "espadachim-terra-10",
+    "name": "Corte do Tornozelo",
+    "element": "terra",
+    "classId": "espadachim",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 24,
+        "max": 30
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "24–30 de terra e 0 PP por 2 turnos: quem não anda não escapa do próximo golpe.",
+    "flavor": "Regra da faca: primeiro tire a fuga, depois tire o resto.",
+    "fxKey": "hamstring"
+  },
+  "espadachim-terra-12": {
+    "id": "espadachim-terra-12",
+    "name": "Pele de Casca",
+    "element": "terra",
+    "classId": "espadachim",
+    "unlockLevel": 12,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 50,
+        "duration": 2
+      },
+      {
+        "type": "resist",
+        "element": "terra",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "Cobre-se de casca seca: 50 de escudo e 20% de resistência a terra por 2 turnos. O assassino também precisa sobreviver ao contra-ataque.",
+    "flavor": "Casca de árvore que morreu no dia da Lousa e nunca aceitou apodrecer.",
+    "fxKey": "barkSkin"
+  },
+  "espadachim-terra-15": {
+    "id": "espadachim-terra-15",
+    "name": "Punhal de Sílex",
+    "element": "terra",
+    "classId": "espadachim",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 46,
+        "max": 56
+      },
+      {
+        "type": "poison",
+        "element": "terra",
+        "min": 8,
+        "max": 12,
+        "duration": 3
+      }
+    ],
+    "description": "46–56 de terra e 8–12 de infecção por 3 turnos. A lasca fica dentro.",
+    "flavor": "Pedra lascada não enferruja nem perdoa.",
+    "fxKey": "flintDagger"
+  },
+  "espadachim-terra-20": {
+    "id": "espadachim-terra-20",
+    "name": "Emboscada Enterrada",
+    "element": "terra",
+    "classId": "espadachim",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "invisible",
+        "duration": 2
+      },
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 45,
+        "duration": 2
+      },
+      {
+        "type": "buff",
+        "stat": "lock",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "Enterra-se no pó e espera: invisível por 2 turnos, +45 de poder e +20 de fixação. O golpe seguinte é outro golpe.",
+    "flavor": "Paciência é uma arma que não faz barulho ao ser sacada.",
+    "fxKey": "buriedAmbush"
+  },
+  "espadachim-terra-30": {
+    "id": "espadachim-terra-30",
+    "name": "Estocada do Menir",
+    "element": "terra",
+    "classId": "espadachim",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 96,
+        "max": 114
+      },
+      {
+        "type": "root",
+        "duration": 3
+      },
+      {
+        "type": "poison",
+        "element": "terra",
+        "min": 14,
+        "max": 18,
+        "duration": 3
+      }
+    ],
+    "description": "Crava a lâmina como quem finca um menir: 96–114 de terra, 3 turnos sem PP e 14–18 de infecção por turno.",
+    "flavor": "Fica de pé por educação. O corpo já entendeu que acabou.",
+    "fxKey": "menhirThrust"
+  },
+  "espadachim-ar-5": {
+    "id": "espadachim-ar-5",
+    "name": "Corte de Vento",
+    "element": "ar",
+    "classId": "espadachim",
+    "unlockLevel": 5,
+    "paCost": 2,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 2,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 15,
+        "max": 20
+      }
+    ],
+    "description": "15–20 de ar a até 2 células por 2 PA, duas vezes por turno. Corta antes de encostar.",
+    "flavor": "O corte chega meio passo antes da lâmina. Ninguém sabe explicar; ele também não.",
+    "fxKey": "windCut"
+  },
+  "espadachim-ar-10": {
+    "id": "espadachim-ar-10",
+    "name": "Passo do Vento",
+    "element": "ar",
+    "classId": "espadachim",
+    "unlockLevel": 10,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "teleport"
+      }
+    ],
+    "description": "Teleporta-se para qualquer célula vazia a até 6 de distância. Entrada, saída, ou as duas coisas.",
+    "flavor": "O ar do Fecho o deve por algum favor antigo.",
+    "fxKey": "windStep"
+  },
+  "espadachim-ar-12": {
+    "id": "espadachim-ar-12",
+    "name": "Fôlego Roubado",
+    "element": "ar",
+    "classId": "espadachim",
+    "unlockLevel": 12,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 2,
+        "duration": 2
+      },
+      {
+        "type": "buff",
+        "stat": "dodge",
+        "value": 25,
+        "duration": 2
+      }
+    ],
+    "description": "+2 PP e +25 de esquiva por 2 turnos: atravessa a sala e escapa de qualquer fixação.",
+    "flavor": "Rouba fôlego dos respiradouros. Devolve em forma de problema.",
+    "fxKey": "stolenBreath"
+  },
+  "espadachim-ar-15": {
+    "id": "espadachim-ar-15",
+    "name": "Corte em Cadeia",
+    "element": "ar",
+    "classId": "espadachim",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "chain",
+        "jumps": 3,
+        "falloff": 0.25,
+        "element": "ar",
+        "min": 32,
+        "max": 40
+      }
+    ],
+    "description": "32–40 de ar que saltam para mais 3 inimigos próximos, perdendo 25% a cada salto.",
+    "flavor": "Um corte só. A repetição é problema do vento.",
+    "fxKey": "chainSlash"
+  },
+  "espadachim-ar-20": {
+    "id": "espadachim-ar-20",
+    "name": "Troca de Sombras",
+    "element": "ar",
+    "classId": "espadachim",
+    "unlockLevel": 20,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "swap"
+      },
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 30,
+        "max": 38
+      }
+    ],
+    "description": "Troca de lugar com qualquer unidade e corta ao chegar: 30–38 de ar. Resgata um aliado ou entrega um inimigo.",
+    "flavor": "Ele acha que o tabuleiro está sempre um pouco errado.",
+    "fxKey": "shadowSwap"
+  },
+  "espadachim-ar-30": {
+    "id": "espadachim-ar-30",
+    "name": "Mil Cortes de Vento",
+    "element": "ar",
+    "classId": "espadachim",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 2,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "chain",
+        "jumps": 5,
+        "falloff": 0.15,
+        "element": "ar",
+        "min": 62,
+        "max": 74
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "62–74 de ar que percorrem até 6 corpos (5 saltos, apenas −15% cada) e empurram todos 2 células.",
+    "flavor": "Ele saca uma vez. O som chega depois, e em várias partes da sala.",
+    "fxKey": "thousandWindCuts"
+  },
+  "curandeira-neutro-1": {
+    "id": "curandeira-neutro-1",
+    "name": "Imposição das Mãos",
+    "element": "neutro",
+    "classId": "curandeira",
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 24,
+        "max": 30
+      }
+    ],
+    "description": "Cura 24–30 de vida de um aliado (ou de si mesma), duas vezes por turno.",
+    "flavor": "Ela cospe na mão antes. Diz que ajuda. Ninguém tem coragem de discordar.",
+    "fxKey": "warmHand"
+  },
+  "curandeira-neutro-2": {
+    "id": "curandeira-neutro-2",
+    "name": "Espada Teimosa",
+    "element": "neutro",
+    "classId": "curandeira",
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 19,
+        "max": 25
+      }
+    ],
+    "description": "19–25 de dano neutro. A paladina também ataca — e a espada pesa como o dever.",
+    "flavor": "Era da avó. A avó também batia com ela.",
+    "fxKey": "stubbornBlade"
+  },
+  "curandeira-neutro-3": {
+    "id": "curandeira-neutro-3",
+    "name": "Bênção Breve",
+    "element": "neutro",
+    "classId": "curandeira",
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "+20 de poder num aliado por 2 turnos. Curta — e faz uma diferença enorme.",
+    "flavor": "Ergue o escudo diante do bárbaro antes de cada investida. Ele espera, por respeito.",
+    "fxKey": "briefBlessing"
+  },
+  "curandeira-fogo-5": {
+    "id": "curandeira-fogo-5",
+    "name": "Compressa Escaldante",
+    "element": "fogo",
+    "classId": "curandeira",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 22,
+        "max": 28
+      },
+      {
+        "type": "resist",
+        "element": "fogo",
+        "value": 15,
+        "duration": 2
+      }
+    ],
+    "description": "Cura 22–28 e deixa 15% de resistência a fogo por 2 turnos. Arde, mas fecha.",
+    "flavor": "\"Vai queimar um pouquinho.\" Sempre queima muito.",
+    "fxKey": "searingPoultice"
+  },
+  "curandeira-fogo-10": {
+    "id": "curandeira-fogo-10",
+    "name": "Brasa Curativa",
+    "element": "fogo",
+    "classId": "curandeira",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 24,
+        "max": 30,
+        "lifesteal": true
+      }
+    ],
+    "description": "24–30 de fogo num inimigo, e metade volta como vida para ela. Curar atacando é o caminho do fogo.",
+    "flavor": "A avó chamava isso de \"reciclagem\".",
+    "fxKey": "healingEmber"
+  },
+  "curandeira-fogo-12": {
+    "id": "curandeira-fogo-12",
+    "name": "Fôlego de Forja",
+    "element": "fogo",
+    "classId": "curandeira",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 35,
+        "duration": 2
+      },
+      {
+        "type": "regen",
+        "min": 10,
+        "max": 14,
+        "duration": 2
+      }
+    ],
+    "description": "+35 de poder e regeneração de 10–14 por 2 turnos num aliado. Acende quem já estava quente.",
+    "flavor": "Ela sopra no aliado como quem sopra brasa de forja. Funciona igual.",
+    "fxKey": "forgeBreath"
+  },
+  "curandeira-fogo-15": {
+    "id": "curandeira-fogo-15",
+    "name": "Anel de Cinzas",
+    "element": "fogo",
+    "classId": "curandeira",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 8,
+        "max": 11,
+        "duration": 2
+      }
+    ],
+    "description": "Bate o escudo no chão e solta um anel de cinzas: 30–38 de fogo em raio 1 e 8–11 de queimadura por 2 turnos.",
+    "flavor": "Armadura clara, e um barulho que chega ao teto.",
+    "fxKey": "ashRing"
+  },
+  "curandeira-fogo-20": {
+    "id": "curandeira-fogo-20",
+    "name": "Coração de Brasa",
+    "element": "fogo",
+    "classId": "curandeira",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 46,
+        "max": 56
+      },
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 30,
+        "duration": 2
+      }
+    ],
+    "description": "Cura 46–56 e dá +30 de poder por 2 turnos a todos os aliados em raio 2.",
+    "flavor": "Ela empresta o próprio coração de brasa. Devolve-se em vitória.",
+    "fxKey": "emberHeart"
+  },
+  "curandeira-fogo-30": {
+    "id": "curandeira-fogo-30",
+    "name": "A Chama que Cuida",
+    "element": "fogo",
+    "classId": "curandeira",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 78,
+        "max": 92
+      },
+      {
+        "type": "regen",
+        "min": 18,
+        "max": 24,
+        "duration": 3
+      },
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 45,
+        "duration": 3
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      }
+    ],
+    "description": "Cura 78–92 em raio 2, regenera 18–24 por 3 turnos, dá +45 de poder e limpa venenos e raízes de todos os aliados.",
+    "flavor": "A lanterna da avó tinha um vagalume só. Ela descobriu como acender a sala inteira com ele.",
+    "fxKey": "tendingFlame"
+  },
+  "curandeira-agua-5": {
+    "id": "curandeira-agua-5",
+    "name": "Gota Boa",
+    "element": "agua",
+    "classId": "curandeira",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 0,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 27,
+        "max": 33
+      }
+    ],
+    "description": "Cura 27–33 a até 6 células, duas vezes por turno. A cura mais eficiente do jogo.",
+    "flavor": "Uma gota. Ela promete que é só uma gota.",
+    "fxKey": "goodDrop"
+  },
+  "curandeira-agua-10": {
+    "id": "curandeira-agua-10",
+    "name": "Fonte Serena",
+    "element": "agua",
+    "classId": "curandeira",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "regen",
+        "min": 14,
+        "max": 18,
+        "duration": 3
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison"
+        ]
+      }
+    ],
+    "description": "Regeneração de 14–18 por 3 turnos e limpeza de todos os venenos do aliado.",
+    "flavor": "Ela encosta a manopla no chão e sai água. Nunca explicou.",
+    "fxKey": "calmSpring"
+  },
+  "curandeira-agua-12": {
+    "id": "curandeira-agua-12",
+    "name": "Puxão de Maré",
+    "element": "agua",
+    "classId": "curandeira",
+    "unlockLevel": 12,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      }
+    ],
+    "description": "Puxa qualquer unidade 3 células: resgata o aliado ferido ou arranca o inimigo da linha de tiro dele.",
+    "flavor": "\"Vem cá.\" E vem.",
+    "fxKey": "tideTug"
+  },
+  "curandeira-agua-15": {
+    "id": "curandeira-agua-15",
+    "name": "Onda Boa",
+    "element": "agua",
+    "classId": "curandeira",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 42,
+        "max": 50
+      }
+    ],
+    "description": "Cura 42–50 em todos os aliados em raio 2.",
+    "flavor": "A maré que sobe levanta todos os barcos, inclusive os furados.",
+    "fxKey": "goodWave"
+  },
+  "curandeira-agua-20": {
+    "id": "curandeira-agua-20",
+    "name": "Corrente Sanadora",
+    "element": "agua",
+    "classId": "curandeira",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 56,
+        "max": 68
+      },
+      {
+        "type": "regen",
+        "min": 12,
+        "max": 16,
+        "duration": 2
+      }
+    ],
+    "description": "Cura 56–68 imediatamente e mais 12–16 por turno durante 2 turnos. O botão de \"não morra\".",
+    "flavor": "Água corrente não junta poeira. Nem luto.",
+    "fxKey": "healingCurrent"
+  },
+  "curandeira-agua-30": {
+    "id": "curandeira-agua-30",
+    "name": "A Cisterna Boa",
+    "element": "agua",
+    "classId": "curandeira",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 80,
+        "max": 95
+      },
+      {
+        "type": "regen",
+        "min": 20,
+        "max": 26,
+        "duration": 3
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      },
+      {
+        "type": "weatherShift",
+        "weather": "chuva"
+      }
+    ],
+    "description": "Cura 80–95 em raio 3, regenera 20–26 por 3 turnos, limpa venenos e raízes — e faz chover dentro do Fecho.",
+    "flavor": "Existe uma cisterna que matou uma corte inteira. Ela pediu emprestada a mesma água, com melhores modos.",
+    "fxKey": "goodCistern"
+  },
+  "curandeira-terra-5": {
+    "id": "curandeira-terra-5",
+    "name": "Casca Amiga",
+    "element": "terra",
+    "classId": "curandeira",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 42,
+        "duration": 2
+      }
+    ],
+    "description": "42 de escudo num aliado por 2 turnos, duas vezes por turno. Escudo é cura que chega antes.",
+    "flavor": "Ela pede licença à árvore morta e a árvore empresta a casca.",
+    "fxKey": "friendlyBark"
+  },
+  "curandeira-terra-10": {
+    "id": "curandeira-terra-10",
+    "name": "Emplastro de Barro",
+    "element": "terra",
+    "classId": "curandeira",
+    "unlockLevel": 10,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 26,
+        "max": 32
+      },
+      {
+        "type": "resist",
+        "element": "terra",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "Cura 26–32 e dá 20% de resistência a terra por 2 turnos.",
+    "flavor": "Barro do canteiro fundo. Cheira mal, cura bem.",
+    "fxKey": "mudPoultice"
+  },
+  "curandeira-terra-12": {
+    "id": "curandeira-terra-12",
+    "name": "Raiz Zelosa",
+    "element": "terra",
+    "classId": "curandeira",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "root",
+        "duration": 2
+      },
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 16,
+        "max": 22
+      }
+    ],
+    "description": "Raízes prendem quem está incomodando: 0 PP por 2 turnos e 16–22 de terra em raio 1.",
+    "flavor": "\"Fica quietinho aí que eu já volto.\" Ninguém fica quietinho por vontade própria.",
+    "fxKey": "zealousRoot"
+  },
+  "curandeira-terra-15": {
+    "id": "curandeira-terra-15",
+    "name": "Redoma de Raízes",
+    "element": "terra",
+    "classId": "curandeira",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 68,
+        "duration": 2
+      },
+      {
+        "type": "regen",
+        "min": 10,
+        "max": 14,
+        "duration": 2
+      }
+    ],
+    "description": "68 de escudo e regeneração de 10–14 por 2 turnos em todos os aliados em raio 2.",
+    "flavor": "Uma estufa portátil, feita às pressas, com o que havia no bolso.",
+    "fxKey": "rootDome"
+  },
+  "curandeira-terra-20": {
+    "id": "curandeira-terra-20",
+    "name": "Pedra Amparo",
+    "element": "terra",
+    "classId": "curandeira",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 50,
+        "max": 60
+      },
+      {
+        "type": "shield",
+        "value": 65,
+        "duration": 2
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "root"
+        ]
+      }
+    ],
+    "description": "Cura 50–60, veste 65 de escudo por 2 turnos e arranca as raízes que prendiam o aliado.",
+    "flavor": "Ela chega, empurra a pedra e o mundo para de escorregar por um instante.",
+    "fxKey": "stoneSuccor"
+  },
+  "curandeira-terra-30": {
+    "id": "curandeira-terra-30",
+    "name": "Jardim Fechado",
+    "element": "terra",
+    "classId": "curandeira",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 62,
+        "max": 74
+      },
+      {
+        "type": "shield",
+        "value": 130,
+        "duration": 3
+      },
+      {
+        "type": "resist",
+        "element": "terra",
+        "value": 25,
+        "duration": 3
+      },
+      {
+        "type": "regen",
+        "min": 16,
+        "max": 20,
+        "duration": 3
+      }
+    ],
+    "description": "Fecha um jardim inteiro em volta do grupo: cura 62–74, 130 de escudo, 25% de resistência a terra e 16–20 de regeneração por 3 turnos, em raio 3.",
+    "flavor": "Foi assim que os construtores fizeram os Fechos. Ela só copiou a ideia, em tamanho de bolso.",
+    "fxKey": "sealedGarden"
+  },
+  "curandeira-ar-5": {
+    "id": "curandeira-ar-5",
+    "name": "Sopro Doce",
+    "element": "ar",
+    "classId": "curandeira",
+    "unlockLevel": 5,
+    "paCost": 2,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 0,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 18,
+        "max": 23
+      }
+    ],
+    "description": "Cura 18–23 por apenas 2 PA, duas vezes por turno. Cura pouco, cura sempre, sobra PA.",
+    "flavor": "Sopra no machucado. Cientificamente indefensável; funciona.",
+    "fxKey": "sweetBreath"
+  },
+  "curandeira-ar-10": {
+    "id": "curandeira-ar-10",
+    "name": "Fôlego Emprestado",
+    "element": "ar",
+    "classId": "curandeira",
+    "unlockLevel": 10,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 2,
+        "duration": 1
+      },
+      {
+        "type": "buff",
+        "stat": "initiative",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "+2 PP por 1 turno e +20 de iniciativa por 2 num aliado: alcances que não existiam passam a existir.",
+    "flavor": "Guarda suspiros num vidrinho. Diz que são de gente que não precisava mais deles.",
+    "fxKey": "lentBreath"
+  },
+  "curandeira-ar-12": {
+    "id": "curandeira-ar-12",
+    "name": "Troca de Lugar",
+    "element": "ar",
+    "classId": "curandeira",
+    "unlockLevel": 12,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "swap"
+      }
+    ],
+    "description": "Troca de posição com qualquer unidade a até 6 células. Tira o aliado do cerco — e assume o lugar dele.",
+    "flavor": "Nunca foi de fugir. Só de trocar de lugar com quem precisava mais.",
+    "fxKey": "placeSwap"
+  },
+  "curandeira-ar-15": {
+    "id": "curandeira-ar-15",
+    "name": "Rajada Amiga",
+    "element": "ar",
+    "classId": "curandeira",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "cone",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "Um sopro em leque: 30–38 de ar e 3 células de empurrão. Abre espaço em volta de quem está caindo.",
+    "flavor": "\"Licença!\" — e meia sala recua.",
+    "fxKey": "friendlyGust"
+  },
+  "curandeira-ar-20": {
+    "id": "curandeira-ar-20",
+    "name": "Brisa Restauradora",
+    "element": "ar",
+    "classId": "curandeira",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 44,
+        "max": 52
+      },
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 1,
+        "duration": 2
+      }
+    ],
+    "description": "Cura 44–52 e dá +1 PP por 2 turnos a todos os aliados em raio 2.",
+    "flavor": "Cura andando. O grupo inteiro aprende a andar junto.",
+    "fxKey": "restoringBreeze"
+  },
+  "curandeira-ar-30": {
+    "id": "curandeira-ar-30",
+    "name": "Respiração do Fecho",
+    "element": "ar",
+    "classId": "curandeira",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 62,
+        "max": 74
+      },
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 2,
+        "duration": 3
+      },
+      {
+        "type": "buff",
+        "stat": "initiative",
+        "value": 40,
+        "duration": 3
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      }
+    ],
+    "description": "Abre todos os respiradouros da sala: cura 62–74 em raio 3, +2 PP e +40 de iniciativa por 3 turnos, e limpa venenos e raízes.",
+    "flavor": "Por três turnos, o Fecho inteiro respira no ritmo dela. Depois volta a sufocar, como sempre.",
+    "fxKey": "lockBreath"
+  },
+  "invocador-neutro-1": {
+    "id": "invocador-neutro-1",
+    "name": "Chamado Menor",
+    "element": "neutro",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "sum-familiar"
+      }
+    ],
+    "description": "Invoca um Familiar numa célula vazia: um corpo a mais para morder, tancar e negar passagem.",
+    "flavor": "Ele nunca diz o nome do bicho. Diz que nome é compromisso.",
+    "fxKey": "lesserCall"
+  },
+  "invocador-neutro-2": {
+    "id": "invocador-neutro-2",
+    "name": "Verbo do Pacto",
+    "element": "neutro",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 2,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 19,
+        "max": 25
+      }
+    ],
+    "description": "19–25 de dano neutro a até 6 células. Ele também ataca, quando o rebanho está ocupado.",
+    "flavor": "A página foi escrita por alguém que também chamava coisas. Ninguém sabe com o quê.",
+    "fxKey": "pactWord"
+  },
+  "invocador-neutro-3": {
+    "id": "invocador-neutro-3",
+    "name": "Estaca-Alarme",
+    "element": "neutro",
+    "classId": "invocador",
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "trap-neutro-alarme",
+        "duration": 3
+      }
+    ],
+    "description": "Arma uma estaca na célula escolhida por 3 rodadas: quem pisar leva 16–22 de dano e perde 1 PP.",
+    "flavor": "O mundo enterrado é cheio de corredores. Corredor é lugar de armadilha.",
+    "fxKey": "alarmStake"
+  },
+  "invocador-fogo-5": {
+    "id": "invocador-fogo-5",
+    "name": "Armadilha de Brasa",
+    "element": "fogo",
+    "classId": "invocador",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "trap-fogo-brasa",
+        "duration": 3
+      }
+    ],
+    "description": "Enterra carvão vivo por 3 rodadas: quem pisar sofre 24–30 de fogo em raio 1 e queima por 2 turnos.",
+    "flavor": "Planta brasa em fila, como quem semeia cebola.",
+    "fxKey": "emberTrapSet"
+  },
+  "invocador-fogo-10": {
+    "id": "invocador-fogo-10",
+    "name": "Cão de Brasa",
+    "element": "fogo",
+    "classId": "invocador",
+    "unlockLevel": 10,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "sum-ember-hound"
+      }
+    ],
+    "description": "Invoca um Cão de Brasa: rápido, mordida quente e explode ao morrer. Serve tanto vivo quanto morto.",
+    "flavor": "Abana o rabo. O rabo acende o chão.",
+    "fxKey": "emberHoundCall"
+  },
+  "invocador-fogo-12": {
+    "id": "invocador-fogo-12",
+    "name": "Pacto Ardente",
+    "element": "fogo",
+    "classId": "invocador",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 35,
+        "duration": 2
+      },
+      {
+        "type": "resist",
+        "element": "fogo",
+        "value": 15,
+        "duration": 2
+      }
+    ],
+    "description": "+35 de poder e 15% de resistência a fogo por 2 turnos — vale para aliados e para as próprias criaturas.",
+    "flavor": "Pacto não é bondade. É contrato com cláusula de desempenho.",
+    "fxKey": "burningPact"
+  },
+  "invocador-fogo-15": {
+    "id": "invocador-fogo-15",
+    "name": "Sopro do Pacto",
+    "element": "fogo",
+    "classId": "invocador",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 32,
+        "max": 40
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 8,
+        "max": 11,
+        "duration": 2
+      }
+    ],
+    "description": "Alguma coisa sopra do outro lado do pacto: 32–40 de fogo em raio 1 e queimadura de 8–11 por 2 turnos.",
+    "flavor": "O sopro vem sempre da mesma direção. Ninguém quer saber qual.",
+    "fxKey": "pactBreath"
+  },
+  "invocador-fogo-20": {
+    "id": "invocador-fogo-20",
+    "name": "Armadilha-Pira",
+    "element": "fogo",
+    "classId": "invocador",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "trap-fogo-pira",
+        "duration": 3
+      }
+    ],
+    "description": "Dobra uma pira inteira dentro de uma célula por 3 rodadas: 52–62 de fogo em raio 1 e queimadura de 12–16 em quem pisar.",
+    "flavor": "Ele avisa os aliados por onde não andar. Uma vez. Baixinho.",
+    "fxKey": "pyreTrapSet"
+  },
+  "invocador-fogo-30": {
+    "id": "invocador-fogo-30",
+    "name": "Colosso de Magma",
+    "element": "fogo",
+    "classId": "invocador",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 5,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "sum-magma-colossus"
+      },
+      {
+        "type": "weatherShift",
+        "weather": "estiagem"
+      }
+    ],
+    "description": "Abre o chão e chama um Colosso de Magma para o campo — e o calor dele coloca a sala inteira em estiagem.",
+    "flavor": "O Coração do Fecho de Brasa tem um irmão mais velho. Ninguém o convidava desde a Lousa.",
+    "fxKey": "magmaColossusCall"
+  },
+  "invocador-agua-5": {
+    "id": "invocador-agua-5",
+    "name": "Armadilha-Redemoinho",
+    "element": "agua",
+    "classId": "invocador",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "trap-agua-redemoinho",
+        "duration": 3
+      }
+    ],
+    "description": "Abre um funil de água por 3 rodadas: 20–26 de dano e 2 células de sucção em quem pisar.",
+    "flavor": "Um ralo com opinião própria sobre por onde as pessoas deviam andar.",
+    "fxKey": "whirlTrapSet"
+  },
+  "invocador-agua-10": {
+    "id": "invocador-agua-10",
+    "name": "Ninfa da Maré",
+    "element": "agua",
+    "classId": "invocador",
+    "unlockLevel": 10,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "sum-tide-nymph"
+      }
+    ],
+    "description": "Invoca uma Ninfa da Maré: cura os aliados por conta própria enquanto o invocador cuida do resto.",
+    "flavor": "Ela nunca fala. Só olha para quem está sangrando e resolve.",
+    "fxKey": "tideNymphCall"
+  },
+  "invocador-agua-12": {
+    "id": "invocador-agua-12",
+    "name": "Pacto da Fonte",
+    "element": "agua",
+    "classId": "invocador",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "regen",
+        "min": 14,
+        "max": 18,
+        "duration": 3
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison"
+        ]
+      }
+    ],
+    "description": "Regeneração de 14–18 por 3 turnos e limpeza de venenos num aliado ou numa criatura invocada.",
+    "flavor": "Assinado com água. É o tipo de contrato que se pode beber depois.",
+    "fxKey": "springPact"
+  },
+  "invocador-agua-15": {
+    "id": "invocador-agua-15",
+    "name": "Chamado da Ressaca",
+    "element": "agua",
+    "classId": "invocador",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 30,
+        "max": 38,
+        "lifesteal": true
+      },
+      {
+        "type": "pull",
+        "tiles": 2
+      }
+    ],
+    "description": "30–38 de água com roubo de vida em raio 1 e 2 células de sucção: arrasta o inimigo para o meio do rebanho.",
+    "flavor": "Chama a ressaca do jeito que se chama um cachorro grande: com cuidado.",
+    "fxKey": "undertowCall"
+  },
+  "invocador-agua-20": {
+    "id": "invocador-agua-20",
+    "name": "Armadilha-Sorvedouro",
+    "element": "agua",
+    "classId": "invocador",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "trap-agua-sorvedouro",
+        "duration": 3
+      }
+    ],
+    "description": "Um ralo do mundo antigo, armado por 3 rodadas: 46–56 de água em raio 1 e 3 células de sucção.",
+    "flavor": "Ele destampou uma coisa que os construtores tinham tampado de propósito.",
+    "fxKey": "maelstromTrapSet"
+  },
+  "invocador-agua-30": {
+    "id": "invocador-agua-30",
+    "name": "O Sorvedouro",
+    "element": "agua",
+    "classId": "invocador",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 7,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 4
+      },
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 68,
+        "max": 80,
+        "lifesteal": true
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "Abre o ralo do mundo: puxa tudo em raio 3 por 4 células, causa 68–80 de água com roubo de vida e prende todos por 2 turnos.",
+    "flavor": "Não invocou nada. Só abriu a tampa e deixou o que estava embaixo fazer o serviço.",
+    "fxKey": "theMaelstrom"
+  },
+  "invocador-terra-5": {
+    "id": "invocador-terra-5",
+    "name": "Armadilha-Laço",
+    "element": "terra",
+    "classId": "invocador",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "trap-terra-laco",
+        "duration": 3
+      }
+    ],
+    "description": "Esconde um laço de raízes por 3 rodadas: 18–24 de terra e 0 PP por 2 turnos em quem pisar.",
+    "flavor": "O micélio adora um pedido desses. Faz de graça.",
+    "fxKey": "snareTrapSet"
+  },
+  "invocador-terra-10": {
+    "id": "invocador-terra-10",
+    "name": "Sentinela de Pedra",
+    "element": "terra",
+    "classId": "invocador",
+    "unlockLevel": 10,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "sum-stone-sentinel"
+      }
+    ],
+    "description": "Invoca uma Sentinela de Pedra: lenta, dura e teimosa — o tampão de corredor do invocador.",
+    "flavor": "Fica onde foi posta. É a coisa mais confiável do mundo enterrado.",
+    "fxKey": "stoneSentinelCall"
+  },
+  "invocador-terra-12": {
+    "id": "invocador-terra-12",
+    "name": "Pacto de Casca",
+    "element": "terra",
+    "classId": "invocador",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 58,
+        "duration": 2
+      },
+      {
+        "type": "resist",
+        "element": "terra",
+        "value": 20,
+        "duration": 2
+      }
+    ],
+    "description": "58 de escudo e 20% de resistência a terra por 2 turnos num aliado ou numa criatura invocada.",
+    "flavor": "Casca emprestada da própria parede do Fecho. A parede não reclamou.",
+    "fxKey": "barkPact"
+  },
+  "invocador-terra-15": {
+    "id": "invocador-terra-15",
+    "name": "Estacas do Pacto",
+    "element": "terra",
+    "classId": "invocador",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "Estacas sobem do chão em raio 1: 30–38 de terra e 0 PP por 2 turnos. Prepara a célula para a armadilha seguinte.",
+    "flavor": "Primeiro prende, depois arma, depois espera. Sempre nessa ordem.",
+    "fxKey": "pactStakes"
+  },
+  "invocador-terra-20": {
+    "id": "invocador-terra-20",
+    "name": "Armadilha-Tremor",
+    "element": "terra",
+    "classId": "invocador",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "trap-terra-tremor",
+        "duration": 3
+      }
+    ],
+    "description": "Enfraquece a laje por 3 rodadas: quem pisar sofre 48–58 de terra em raio 1 e fica 2 turnos sem PP.",
+    "flavor": "A mina trêmula ensinou: nem todo chão é obrigado a continuar sendo chão.",
+    "fxKey": "quakeTrapSet"
+  },
+  "invocador-terra-30": {
+    "id": "invocador-terra-30",
+    "name": "Golem da Montanha",
+    "element": "terra",
+    "classId": "invocador",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 5,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "sum-mountain-golem"
+      }
+    ],
+    "description": "Levanta um Golem da Montanha: a criatura mais dura que o mundo enterrado consegue emprestar. Um segundo tanque, de graça, todo turno.",
+    "flavor": "Ele não invocou a montanha. Só perguntou se ela topava dar uns passos.",
+    "fxKey": "mountainGolemCall"
+  },
+  "invocador-ar-5": {
+    "id": "invocador-ar-5",
+    "name": "Armadilha-Rajada",
+    "element": "ar",
+    "classId": "invocador",
+    "unlockLevel": 5,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "trap-ar-rajada",
+        "duration": 3
+      }
+    ],
+    "description": "Tampa um respiradouro por 3 rodadas: quem pisar leva 16–22 de ar e voa 3 células.",
+    "flavor": "Ar velho, guardado com raiva. Vale por um chute.",
+    "fxKey": "gustTrapSet"
+  },
+  "invocador-ar-10": {
+    "id": "invocador-ar-10",
+    "name": "Falcão da Tormenta",
+    "element": "ar",
+    "classId": "invocador",
+    "unlockLevel": 10,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "summon",
+        "monsterId": "sum-storm-falcon"
+      }
+    ],
+    "description": "Invoca um Falcão da Tormenta: muitos PP, iniciativa alta e um bico que empurra. Chega antes de todo mundo.",
+    "flavor": "Não existe céu para ele voar. Voa assim mesmo, de raiva.",
+    "fxKey": "stormFalconCall"
+  },
+  "invocador-ar-12": {
+    "id": "invocador-ar-12",
+    "name": "Pacto do Vento",
+    "element": "ar",
+    "classId": "invocador",
+    "unlockLevel": 12,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "pp",
+        "value": 2,
+        "duration": 2
+      },
+      {
+        "type": "buff",
+        "stat": "initiative",
+        "value": 25,
+        "duration": 2
+      }
+    ],
+    "description": "+2 PP e +25 de iniciativa por 2 turnos num aliado ou criatura: o rebanho inteiro chega mais cedo.",
+    "flavor": "Contrato curto, assinado no ar, sem testemunhas.",
+    "fxKey": "windPact"
+  },
+  "invocador-ar-15": {
+    "id": "invocador-ar-15",
+    "name": "Sopro Cortante",
+    "element": "ar",
+    "classId": "invocador",
+    "unlockLevel": 15,
+    "paCost": 4,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "cone",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 30,
+        "max": 38
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "Um leque de vento afiado: 30–38 de ar e 3 células de empurrão — direto para cima das armadilhas.",
+    "flavor": "Ele não empurra para longe. Empurra para onde já está armado.",
+    "fxKey": "cuttingBreath"
+  },
+  "invocador-ar-20": {
+    "id": "invocador-ar-20",
+    "name": "Armadilha-Vórtice",
+    "element": "ar",
+    "classId": "invocador",
+    "unlockLevel": 20,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "trap",
+        "trapId": "trap-ar-vortice",
+        "duration": 3
+      }
+    ],
+    "description": "Ata um nó de vento na célula por 3 rodadas: 42–52 de ar em raio 1 e 4 células de arremesso em quem pisar.",
+    "flavor": "Desatar é fácil: basta pisar. É sempre fácil, do lado errado.",
+    "fxKey": "vortexTrapSet"
+  },
+  "invocador-ar-30": {
+    "id": "invocador-ar-30",
+    "name": "Enxame de Falcões",
+    "element": "ar",
+    "classId": "invocador",
+    "unlockLevel": 30,
+    "paCost": 6,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 3,
+      "max": 9,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 58,
+        "max": 70
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      },
+      {
+        "type": "chain",
+        "jumps": 3,
+        "falloff": 0.2,
+        "element": "ar",
+        "min": 30,
+        "max": 38
+      }
+    ],
+    "description": "Chama tudo que tem asa nos Fechos: 58–70 de ar em raio 2, 3 células de arremesso e bicadas de 30–38 que saltam por mais 3 inimigos.",
+    "flavor": "Vieram todos. Ele só precisava de dois, mas ninguém diz não a um enxame que já chegou.",
+    "fxKey": "falconSwarm"
+  }
+}

@@ -1,0 +1,1296 @@
+[
+  {
+    "id": "greenhouse",
+    "name": "A Estufa Soterrada",
+    "theme": "garden",
+    "description": "A estufa real do mundo antigo, selada com o jardim ainda vivo lá dentro. Séculos no escuro ensinaram as plantas a caçar; vagalumes presos em redomas fazem as vezes de sol. A água que a Grande Lousa prendeu lá em cima pinga pelas rachaduras do vidro a noite inteira — e o jardim adora.",
+    "difficulty": 1,
+    "order": 1,
+    "recommendedLevel": 3,
+    "palette": {
+      "primary": "#5a8f4d",
+      "secondary": "#8a6b3e",
+      "accent": "#ffd76b",
+      "floor1": "#35513a",
+      "floor2": "#3d5c41",
+      "wall": "#57452f",
+      "lowWall": "#6b5334",
+      "voidColor": "#1b2a1e"
+    },
+    "defaultWeather": "chuva",
+    "weatherShiftEveryRounds": 0,
+    "tileEventRate": 0.15,
+    "rooms": [
+      {
+        "name": "O Vestíbulo das Heras",
+        "weather": "calmo",
+        "sceneryTheme": "garden",
+        "layout": [
+          "~~~~~###########~~~~~",
+          "~~~~#,.........,#~~~~",
+          "~~~##===.....===##~~~",
+          "~~#.##.........##.#~~",
+          "~#.,..##.....##..,.#~",
+          "#...=====...=====...#",
+          "#.....a...#...b.....#",
+          "#PP..##.......##....#",
+          "#PP..............c..#",
+          "#PP..##.......##....#",
+          "#.....a...#...b.....#",
+          "#...=====...=====...#",
+          "~#.,..##.....##..,.#~",
+          "~~#.##.........##.#~~",
+          "~~~##===.....===##~~~",
+          "~~~~#,.........,#~~~~",
+          "~~~~~###########~~~~~"
+        ],
+        "monsters": {
+          "a": "pollen-puff",
+          "b": "thorn-lasher",
+          "c": "lantern-wasp"
+        }
+      },
+      {
+        "name": "Os Canteiros Afundados",
+        "weather": "chuva",
+        "sceneryTheme": "garden",
+        "layout": [
+          "~~~~#############~~~~",
+          "~~~,.............,~~~",
+          "~~..=##=...=##=....~~",
+          "~..~~~..a...~~~.....~",
+          "#..~~~#....#~~~.....#",
+          "#..=##=....=##=.....#",
+          "#..##..s.....##.....#",
+          "#PP...b.........##..#",
+          "#PP......##.....#...#",
+          "#PP..............c..#",
+          "#..##..a.....##.....#",
+          "#..=##=....=##=.....#",
+          "#..~~~#....#~~~.....#",
+          "~..~~~......~~~.....~",
+          "~~..=##=...=##=....~~",
+          "~~~,.............,~~~",
+          "~~~~#############~~~~"
+        ],
+        "monsters": {
+          "a": "thorn-lasher",
+          "s": "sap-shaman",
+          "b": "burr-mother",
+          "c": "dew-strider"
+        }
+      },
+      {
+        "name": "O Coreto da Viúva",
+        "weather": "chuva",
+        "sceneryTheme": "garden",
+        "layout": [
+          "~~~~~~###########~~~~~~",
+          "~~~~~#,.........,#~~~~~",
+          "~~~~#..=#####=....#~~~~",
+          "~~~#..##.......##..#~~~",
+          "~~#..==..a..==......#~~",
+          "~#..==.........==....#~",
+          "#..==...#=#=#=#..==...#",
+          "#PP...d.#.....#.......#",
+          "#PP........z.....d....#",
+          "#PP...d.#.....#.......#",
+          "#..==...#=#=#=#..==...#",
+          "~#..==.........==....#~",
+          "~~#..==..a..==......#~~",
+          "~~~#..##.......##..#~~~",
+          "~~~~#..=#####=....#~~~~",
+          "~~~~~#,.........,#~~~~~",
+          "~~~~~~###########~~~~~~"
+        ],
+        "monsters": {
+          "z": "boss-gardener",
+          "a": "sap-shaman",
+          "d": "dew-strider"
+        }
+      }
+    ],
+    "lootTable": [
+      {
+        "itemId": "gh-trellis-guard",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "gh-moss-treads",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "gh-firefly-crown",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "gh-seed-pouch",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "gh-sap-apron",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "gh-vine-stirrups",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "gh-briar-charm",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "gh-widow-shears",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "gh-wasp-sting",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "gh-pollen-slippers",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "gh-chitin-vest",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "gh-dew-fang",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "gh-hive-lantern",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "gh-gutter-shell",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "gh-root-spur",
+        "weight": 12,
+        "minRoom": 1
+      }
+    ],
+    "cardDrops": [
+      {
+        "classId": "sumo",
+        "weight": 50
+      },
+      {
+        "classId": "curandeira",
+        "weight": 50
+      }
+    ]
+  },
+  {
+    "id": "cistern",
+    "name": "A Cisterna dos Afogados",
+    "theme": "cistern",
+    "description": "O reservatório que matou a sede do mundo antigo — e depois bebeu seus donos. A corte afogada ainda dá bailes na água parada: pérolas no lodo, lampiões submersos ainda acesos, lustres de águas-vivas. Tudo reflete, e o reflexo às vezes se mexe primeiro.",
+    "difficulty": 2,
+    "order": 2,
+    "recommendedLevel": 7,
+    "palette": {
+      "primary": "#2e6e8e",
+      "secondary": "#1d3a4d",
+      "accent": "#7ef0d4",
+      "floor1": "#24404f",
+      "floor2": "#2a4a5a",
+      "wall": "#16222c",
+      "lowWall": "#2b4756",
+      "voidColor": "#0d1a22"
+    },
+    "defaultWeather": "chuva",
+    "weatherShiftEveryRounds": 0,
+    "tileEventRate": 0.2,
+    "rooms": [
+      {
+        "name": "A Galeria das Goteiras",
+        "weather": "chuva",
+        "sceneryTheme": "cistern",
+        "layout": [
+          "~~~~#############~~~~",
+          "~~~~#,.........,#~~~~",
+          "~~~~#.==.===.==.#~~~~",
+          "####..#.......#..####",
+          "#...===~~~~~===.....#",
+          "#..#....~~~....#....#",
+          "#..#.a.......a.#....#",
+          "#PP...b.......b.....#",
+          "#PP.................#",
+          "#PP...=========.....#",
+          "#..#...........#....#",
+          "#..#....~~~....#....#",
+          "#...===~~~~~===.....#",
+          "####..#.......#..####",
+          "~~~~#.==.===.==.#~~~~",
+          "~~~~#,.........,#~~~~",
+          "~~~~#############~~~~"
+        ],
+        "monsters": {
+          "a": "drowned-porter",
+          "b": "moray-piper"
+        }
+      },
+      {
+        "name": "O Salão das Colunas de Sal",
+        "weather": "calmo",
+        "sceneryTheme": "cistern",
+        "layout": [
+          "~~~#######~~~#######~~~",
+          "~~~#..,..#~~~#..,..#~~~",
+          "~~~#=.===#~~~#===.=#~~~",
+          "#..##.....~~~#.....##.#",
+          "#..#..a...~~~#...a..#.#",
+          "#...===.......===.....#",
+          "#..#.......d..........#",
+          "#PP...b.......c.....e.#",
+          "#PP...................#",
+          "#PP...b.........#...e.#",
+          "#..#..................#",
+          "#...===.......===.....#",
+          "#..#......~~~#......#.#",
+          "#..##.....~~~#.....##.#",
+          "~~~#=.===#~~~#===.=#~~~",
+          "~~~#..,..#~~~#..,..#~~~",
+          "~~~#######~~~#######~~~"
+        ],
+        "monsters": {
+          "a": "drowned-porter",
+          "b": "moray-piper",
+          "c": "brine-golem",
+          "d": "lantern-jelly",
+          "e": "fat-drop"
+        }
+      },
+      {
+        "name": "O Trono da Salmoura",
+        "weather": "chuva",
+        "sceneryTheme": "cistern",
+        "layout": [
+          "~~~~#####~~~~~#####~~~~",
+          "~~~~#..,..~~~~..,..~~~~",
+          "~~~~#==.==~~~~==.==~~~~",
+          "~~~~#~#.###~~##..##~~~~",
+          "#...==..#~~~~~#..==...#",
+          "#..#....~~~~~~~....#..#",
+          "#..#..b.~.....~..b.#..#",
+          "#...=..~..###..~..=...#",
+          "#PP....~..#z#..~......#",
+          "#PP.#........c....#...#",
+          "#PP....~..###..~......#",
+          "#...=..~.......~..=...#",
+          "#..#..d.~.....~..d.#..#",
+          "#..#....~~~~~~~....#..#",
+          "#...==..#~~~~~#..==...#",
+          "~~~~#~#.###~~##..##~~~~",
+          "~~~~#==.==~~~~==.==~~~~",
+          "~~~~#..,..~~~~..,..~~~~",
+          "~~~~#####~~~~~#####~~~~"
+        ],
+        "monsters": {
+          "z": "boss-baroness",
+          "b": "moray-piper",
+          "d": "lantern-jelly",
+          "c": "sump-crab"
+        }
+      }
+    ],
+    "lootTable": [
+      {
+        "itemId": "ci-brine-cuirass",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "ci-current-fins",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "ci-lantern-fob",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "ci-tide-flask",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "ci-drowned-coat",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "ci-harpoon-flute",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "ci-jelly-vial",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "ci-baroness-collar",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "ci-crab-claw",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "ci-silt-boots",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "ci-pearl-mail",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "ci-bone-lamp",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "ci-crust-carapace",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "ci-sump-lamp",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "ci-piper-fang",
+        "weight": 12,
+        "minRoom": 1
+      }
+    ],
+    "cardDrops": [
+      {
+        "classId": "invocador",
+        "weight": 40
+      },
+      {
+        "classId": "sumo",
+        "weight": 30
+      },
+      {
+        "classId": "curandeira",
+        "weight": 30
+      }
+    ]
+  },
+  {
+    "id": "emberlock",
+    "name": "O Fecho de Brasa",
+    "theme": "forge",
+    "description": "O último Fecho, forjado ao redor da primeira chama do mundo. Corredores de bigornas frias, correntes penduradas do teto, luz que vem de baixo — das grelhas do piso. O calor sobe e fica: aqui a estiagem não é clima, é arquitetura. O maior portão já construído acordou com ciúme do próprio fogo.",
+    "difficulty": 3,
+    "order": 3,
+    "recommendedLevel": 11,
+    "palette": {
+      "primary": "#c4502e",
+      "secondary": "#4a2a26",
+      "accent": "#ffb347",
+      "floor1": "#3a2422",
+      "floor2": "#452a25",
+      "wall": "#241512",
+      "lowWall": "#5a3128",
+      "voidColor": "#180b08"
+    },
+    "defaultWeather": "estiagem",
+    "weatherShiftEveryRounds": 0,
+    "tileEventRate": 0.25,
+    "rooms": [
+      {
+        "name": "O Corredor de Brasas",
+        "weather": "estiagem",
+        "sceneryTheme": "forge",
+        "layout": [
+          "~~~~######~~~######~~~~",
+          "~~~~#..,.......,..#~~~~",
+          "~~~~#.###.....###.#~~~~",
+          "~~~~#.#.........#.#~~~~",
+          "#...==...a...==......##",
+          "#...#####...#####.....#",
+          "#....b................#",
+          "#PP.................c.#",
+          "#PP...................#",
+          "#PP...................#",
+          "#.....................#",
+          "#...#####...#####.....#",
+          "#...==...a...==......##",
+          "~~~~#.#.........#.#~~~~",
+          "~~~~#.###.....###.#~~~~",
+          "~~~~#..,.......,..#~~~~",
+          "~~~~######~~~######~~~~"
+        ],
+        "monsters": {
+          "a": "ember-imp",
+          "b": "ash-wraith",
+          "c": "walking-anvil"
+        }
+      },
+      {
+        "name": "A Nave dos Malhos",
+        "weather": "chuva",
+        "sceneryTheme": "forge",
+        "layout": [
+          "~~~~~####~~~~~####~~~~~",
+          "~~~~~#..#~~~~~#..#~~~~~",
+          "~~~~~#..,.....,..#~~~~~",
+          "#####.==#####==..#~~~~~",
+          "#...a...........a..~~~~",
+          "#..#####..~..#####..###",
+          "#..#...#.....#...#....#",
+          "#..#...#..d..#...#....#",
+          "#PP.....==...==.......#",
+          "#PP....b.......c.....e#",
+          "#PP.....==...==.......#",
+          "#..#...#..d..#...#....#",
+          "#..#...#.....#...#....#",
+          "#..#####..~..#####..###",
+          "#................#~~~~~",
+          "#####.==#####==..#~~~~~",
+          "~~~~~#..,.....,..#~~~~~",
+          "~~~~~#...........#~~~~~",
+          "~~~~~#############~~~~~"
+        ],
+        "monsters": {
+          "a": "ember-imp",
+          "b": "slag-mound",
+          "c": "walking-anvil",
+          "d": "quench-hound",
+          "e": "faceless-smith"
+        }
+      },
+      {
+        "name": "A Câmara do Coração",
+        "weather": "estiagem",
+        "sceneryTheme": "forge",
+        "layout": [
+          "~~~~~######~~~######~~~~~",
+          "~~~~~#....#~~~#....#~~~~~",
+          "~~~~~#..,.......,..#~~~~~",
+          "~~~~~#.===#####===.#~~~~~",
+          "#....==...a....==.......#",
+          "#....b.........b........#",
+          "#..###.......###........#",
+          "#..#...........#........#",
+          "#PP....b.....b..........#",
+          "#PP.........z...........#",
+          "#PP....b.....b..........#",
+          "#..#...........#........#",
+          "#..###.......###........#",
+          "#..............a........#",
+          "#....==........==.......#",
+          "~~~~~#.===#####===.#~~~~~",
+          "~~~~~#..,.......,..#~~~~~",
+          "~~~~~#....#~~~#....#~~~~~",
+          "~~~~~######~~~######~~~~~"
+        ],
+        "monsters": {
+          "z": "boss-heartforge",
+          "a": "ember-imp",
+          "b": "chain-hauler"
+        }
+      }
+    ],
+    "lootTable": [
+      {
+        "itemId": "em-riveted-plate",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "em-bellows-valve",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "em-soot-mantle",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "em-cinder-treads",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "em-chain-harness",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "em-ember-flask",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "em-brand-iron",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "em-forge-grate",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "em-quench-fang",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "em-quench-treads",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "em-cinder-plate",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "em-hauler-links",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "em-quench-vest",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "em-quench-lamp",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "em-imp-gauntlet",
+        "weight": 12,
+        "minRoom": 1
+      }
+    ],
+    "cardDrops": [
+      {
+        "classId": "invocador",
+        "weight": 34
+      },
+      {
+        "classId": "bruxo",
+        "weight": 30
+      },
+      {
+        "classId": "sumo",
+        "weight": 18
+      },
+      {
+        "classId": "curandeira",
+        "weight": 18
+      }
+    ]
+  },
+  {
+    "id": "windscaffold",
+    "name": "Os Andaimes do Vento",
+    "theme": "scaffold",
+    "description": "O poço de manutenção que os construtores nunca terminaram: quinze andares de andaime amarrado com corda, pendurados sobre um vazio que ninguém mediu. Os respiradouros do mundo enterrado desembocam todos aqui, e o vento sobe pelo poço a noite inteira fazendo as tábuas cantarem. Cair não é derrota tática. É o chão da sala não existir.",
+    "difficulty": 4,
+    "order": 4,
+    "recommendedLevel": 16,
+    "palette": {
+      "primary": "#8f97b8",
+      "secondary": "#4a4636",
+      "accent": "#eef7f5",
+      "floor1": "#3a3a44",
+      "floor2": "#45444f",
+      "wall": "#26262f",
+      "lowWall": "#5b5344",
+      "voidColor": "#0a0a10"
+    },
+    "defaultWeather": "vendaval",
+    "weatherShiftEveryRounds": 0,
+    "tileEventRate": 0.3,
+    "rooms": [
+      {
+        "name": "A Passarela dos Guindastes",
+        "weather": "vendaval",
+        "sceneryTheme": "scaffold",
+        "layout": [
+          "~~~~#####~~~~~#####~~~~",
+          "~~~~#...#~~~~~#...#~~~~",
+          "~~~~#...#~~~~~#...#~~~~",
+          "~~~~#...#~~~~~#...#~~~~",
+          "~~~~#..===...===..#~~~~",
+          "##...a.......a......###",
+          "#..##...=====...##....#",
+          "#PP##...........##....#",
+          "#PP....b.....b......c~~",
+          "#PP..................~~",
+          "#PP....b.....b.......~~",
+          "#..##...........##....#",
+          "#..##...=====...##....#",
+          "##..................###",
+          "~~~~#..===...===..#~~~~",
+          "~~~~#...#~~~~~#...#~~~~",
+          "~~~~#...#~~~~~#...#~~~~",
+          "~~~~#...#~~~~~#...#~~~~",
+          "~~~~#####~~~~~#####~~~~"
+        ],
+        "monsters": {
+          "a": "plank-shrike",
+          "b": "gust-gremlin",
+          "c": "rope-hanger"
+        }
+      },
+      {
+        "name": "O Poço de Serviço",
+        "weather": "calmo",
+        "sceneryTheme": "scaffold",
+        "layout": [
+          "~~~~~######~~~######~~~~~",
+          "~~~~~#....#~~~#....#~~~~~",
+          "~~~~~#....#~~~#....#~~~~~",
+          "~~~~~#..,.......,..#~~~~~",
+          "#####.==#####==.....#####",
+          "#...a...........a.......#",
+          "#..###.......###........#",
+          "#PP.#.........#..d......#",
+          "#PP.=.........=.........#",
+          "#PP...b.......c.........#",
+          "#PP.=.........=.........#",
+          "#PP.#.........#..d......#",
+          "#..###.......###........#",
+          "#.......................#",
+          "#####.==#####==.....#####",
+          "~~~~~#..,.......,..#~~~~~",
+          "~~~~~#....#~~~#....#~~~~~",
+          "~~~~~#....#~~~#....#~~~~~",
+          "~~~~~######~~~######~~~~~"
+        ],
+        "monsters": {
+          "a": "kite-serpent",
+          "b": "whistle-choir",
+          "c": "ballast-golem",
+          "d": "mote-swarm"
+        }
+      },
+      {
+        "name": "A Ponte do Mestre-de-Obras",
+        "weather": "vendaval",
+        "sceneryTheme": "scaffold",
+        "layout": [
+          "~~~~~#####~~~~~#####~~~~~",
+          "~~~~~#...#~~~~~#...#~~~~~",
+          "~~~~~#...#~~~~~#...#~~~~~",
+          "~~~~~#...#~~~~~#...#~~~~~",
+          "~~~~~#...#~~~~~#...#~~~~~",
+          "~~~~~#..,.......,..#~~~~~",
+          "#...===.......===...#...#",
+          "#...a...........a....#..#",
+          "#..##...=====...##......#",
+          "#PP##....b.b....##......~",
+          "#PP.......z.............~",
+          "#PP##....b......##......~",
+          "#..##...=====...##..#...#",
+          "#...c...........c....#..#",
+          "#...a...................#",
+          "~~~~~#..,.......,..#~~~~~",
+          "~~~~~#...#~~~~~#...#~~~~~",
+          "~~~~~#...#~~~~~#...#~~~~~",
+          "~~~~~#...#~~~~~#...#~~~~~",
+          "~~~~~#...#~~~~~#...#~~~~~",
+          "~~~~~#####~~~~~#####~~~~~"
+        ],
+        "monsters": {
+          "z": "boss-windwright",
+          "a": "plank-shrike",
+          "b": "kite-serpent",
+          "c": "rope-hanger"
+        }
+      }
+    ],
+    "lootTable": [
+      {
+        "itemId": "av-rope-vest",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "av-kite-crest",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "av-glider-cloak",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "av-plank-gauntlet",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "av-storm-harness",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "av-wind-whistle",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "av-lightning-coil",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "av-updraft-boots",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "av-noose-grip",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "av-hemp-boots",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "av-shrike-talon",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "av-ballast-greaves",
+        "weight": 30,
+        "minRoom": 0
+      },
+      {
+        "itemId": "av-knot-jerkin",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "av-hangman-lamp",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "av-serpent-sash",
+        "weight": 12,
+        "minRoom": 1
+      }
+    ],
+    "cardDrops": [
+      {
+        "classId": "espadachim",
+        "weight": 30
+      },
+      {
+        "classId": "bruxo",
+        "weight": 26
+      },
+      {
+        "classId": "invocador",
+        "weight": 24
+      },
+      {
+        "classId": "sumo",
+        "weight": 10
+      },
+      {
+        "classId": "curandeira",
+        "weight": 10
+      }
+    ]
+  },
+  {
+    "id": "quakemine",
+    "name": "A Mina Trêmula",
+    "theme": "mine",
+    "description": "A mina que cavava para cima, tentando furar a Grande Lousa por baixo. Parou quando o turno da noite não subiu. Desde então a rocha bate sozinha, de tempos em tempos, e a poeira desce em cortinas: é a Lousa se acomodando mais um palmo. Os mineiros continuam trabalhando. Ninguém teve coragem de dizer a eles que o turno acabou.",
+    "difficulty": 5,
+    "order": 5,
+    "recommendedLevel": 22,
+    "palette": {
+      "primary": "#8a7043",
+      "secondary": "#3b3228",
+      "accent": "#c9a227",
+      "floor1": "#37302a",
+      "floor2": "#413931",
+      "wall": "#211c17",
+      "lowWall": "#4e4133",
+      "voidColor": "#120e0a"
+    },
+    "defaultWeather": "tremor",
+    "weatherShiftEveryRounds": 0,
+    "tileEventRate": 0.35,
+    "rooms": [
+      {
+        "name": "A Galeria do Turno da Noite",
+        "weather": "tremor",
+        "sceneryTheme": "mine",
+        "layout": [
+          "~~~~~#######~~~#####~~~~~",
+          "~~~##......#~~~#....##~~~",
+          "~~#...===....===......#~~",
+          "~#...###.......###.....#~",
+          "#....a...........a......#",
+          "#..##...==...==...##....#",
+          "#..##...........c.##....#",
+          "#PP...b.........b.......#",
+          "#PP.....................#",
+          "#PP...b.....c...b.......#",
+          "#..##...........#.##....#",
+          "#..##...==...==...##....#",
+          "#.......................#",
+          "#...###.......###.......#",
+          "~#...===....===........#~",
+          "~~#..==......==.......#~~",
+          "~~~#......###........#~~~",
+          "~~~~##...#~~~#.....##~~~~",
+          "~~~~~~####~~~######~~~~~~"
+        ],
+        "monsters": {
+          "a": "pick-revenant",
+          "b": "firedamp-wisp",
+          "c": "ore-tumbler"
+        }
+      },
+      {
+        "name": "O Respiradouro",
+        "weather": "vendaval",
+        "sceneryTheme": "mine",
+        "layout": [
+          "~~~~~~######~~#####~~~~~~",
+          "~~~~##.....#~~#....##~~~~",
+          "~~##.......#~~#......##~~",
+          "~#....,.........,......#~",
+          "#...===.......===.......#",
+          "#...###.......###.......#",
+          "#...#...........#.......#",
+          "#....a.........a........#",
+          "#..##.........##........#",
+          "#PP##....b....##..c.....#",
+          "#PP.....................#",
+          "#PP##....b....##..c.....#",
+          "#..##.........##........#",
+          "#....a..................#",
+          "#...#...........#.......#",
+          "#...###.......###.......#",
+          "~#..===.......===......#~",
+          "~~#..,.........,.....##~~",
+          "~~~~#...............#~~~~",
+          "~~~~~##...........##~~~~~",
+          "~~~~~~~###########~~~~~~~"
+        ],
+        "monsters": {
+          "a": "shaft-bat",
+          "b": "damp-seeper",
+          "c": "cave-jaw"
+        }
+      },
+      {
+        "name": "A Face de Batepedra",
+        "weather": "tremor",
+        "sceneryTheme": "mine",
+        "layout": [
+          "~~~~~~#######~~######~~~~~~",
+          "~~~~##......#~~#.....##~~~~",
+          "~~##........#~~#.......##~~",
+          "~#...,.............,.....#~",
+          "#...===.........===.......#",
+          "#...###....a....###.......#",
+          "#...#...........#.........#",
+          "#....c.........c..........#",
+          "#..##...##.##...##........#",
+          "#PP##..#~...~#..##..b.....#",
+          "#PP.....~.z.~......b......#",
+          "#PP##..#~...~#..##..b.....#",
+          "#..##...##.##...##........#",
+          "#....c.........c..........#",
+          "#...#...........#.........#",
+          "#...###.........###.......#",
+          "~#...===.........===.....#~",
+          "~~#..,.............,....#~~",
+          "~~~##......#~~#.......##~~~",
+          "~~~~~##....#~~#.....##~~~~~",
+          "~~~~~~~#####~~######~~~~~~~"
+        ],
+        "monsters": {
+          "z": "boss-deepknock",
+          "a": "crystal-chanter",
+          "b": "sinkhole-worm",
+          "c": "firedamp-wisp"
+        }
+      }
+    ],
+    "lootTable": [
+      {
+        "itemId": "mt-slate-plate",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "mt-ore-greaves",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "mt-drill-bit",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "mt-cart-wheels",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "mt-bedrock-carapace",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "mt-quake-nail",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "mt-shoring-charm",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "mt-quake-crown",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "mt-firedamp-fist",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "mt-wisp-treads",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "mt-seep-plate",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "mt-grisu-wick",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "mt-damp-mantle",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "mt-firedamp-lamp",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "mt-blast-knuckles",
+        "weight": 12,
+        "minRoom": 1
+      }
+    ],
+    "cardDrops": [
+      {
+        "classId": "arqueiro",
+        "weight": 28
+      },
+      {
+        "classId": "espadachim",
+        "weight": 28
+      },
+      {
+        "classId": "bruxo",
+        "weight": 20
+      },
+      {
+        "classId": "invocador",
+        "weight": 14
+      },
+      {
+        "classId": "sumo",
+        "weight": 5
+      },
+      {
+        "classId": "curandeira",
+        "weight": 5
+      }
+    ]
+  },
+  {
+    "id": "brokenheart",
+    "name": "O Coração Partido",
+    "theme": "heart",
+    "description": "O Coração que sustentava o mundo inteiro, e não só um Fecho. Rachou em quatro quartos que batem fora de compasso — um de brasa, um d'água, um de pedra, um de ar — e cada batida joga a sala para um clima diferente. Aqui não existe elemento seguro: o que curava você há três rodadas está te matando agora. É o fim da Descida, e a Lousa está ouvindo.",
+    "difficulty": 6,
+    "order": 6,
+    "recommendedLevel": 28,
+    "palette": {
+      "primary": "#8f6ad0",
+      "secondary": "#2a2440",
+      "accent": "#ffd166",
+      "floor1": "#2d2a3d",
+      "floor2": "#373248",
+      "wall": "#1a1726",
+      "lowWall": "#4a4160",
+      "voidColor": "#0b0812"
+    },
+    "defaultWeather": "calmo",
+    "weatherShiftEveryRounds": 3,
+    "tileEventRate": 0.45,
+    "rooms": [
+      {
+        "name": "O Átrio das Quatro Estações",
+        "weather": "chuva",
+        "sceneryTheme": "heart",
+        "layout": [
+          "~~####~~~~~~~~~~~~~####~~",
+          "~~#..#~~#~~~~~~~~~~#..#~~",
+          "~~#..#~~==#####==~~#..#~~",
+          "##...#..a...b..#..~#...##",
+          "#....#.........#..~#....#",
+          "#...==.......==.........#",
+          "#....c.........d........#",
+          "#..###.........###....###",
+          "#PP#.............#....~~~",
+          "~...............=....#~~~",
+          "~~~....,......,......#~~~",
+          "~...............=.....###",
+          "#PP#.............#......#",
+          "#..###.........###......#",
+          "#....c.........d........#",
+          "#...==.......==.........#",
+          "#....#.........#..~#....#",
+          "##...#..b...a..#..~#...##",
+          "~~#..#~~==#####==~~#..#~~",
+          "~~#..#~~#~~~~~~~~~~#..#~~",
+          "~~####~~~~~~~~~~~~~####~~"
+        ],
+        "monsters": {
+          "a": "cinder-herald",
+          "b": "tide-herald",
+          "c": "gale-herald",
+          "d": "stone-herald"
+        }
+      },
+      {
+        "name": "A Sala dos Espelhos",
+        "weather": "estiagem",
+        "sceneryTheme": "heart",
+        "layout": [
+          "#####~~#####~~~#####~~#####",
+          "#...#~~#...#~~~#...#~~#...#",
+          "#...#~~#...#~~~#...#~~#...#",
+          "#...#~~#...#~~~#...#~~#...#",
+          "#...#~~#..,.....,..#~~#...#",
+          "#...#~~.=#######=..#~~#...#",
+          "#...a...........a.........#",
+          "#..###...###...###........#",
+          "#..#=#...#=#...#=#.......##",
+          "#PP..#...#.#...#........#~~",
+          "#PP...c...d.c...d.......#~~",
+          "#PP..#...#.#...#........#~~",
+          "#..#=#...#=#...#=#.......##",
+          "#..###...###...###........#",
+          "#...b...........b.........#",
+          "#...#~~.=#######=..#~~#...#",
+          "#...#~~#..,.....,..#~~#...#",
+          "#...#~~#...#~~~#...#~~#...#",
+          "#...#~~#...#~~~#...#~~#...#",
+          "#...#~~#...#~~~#...#~~#...#",
+          "#####~~#####~~~#####~~#####"
+        ],
+        "monsters": {
+          "a": "mirror-twin",
+          "b": "weather-mote",
+          "c": "null-warden",
+          "d": "heartroot"
+        }
+      },
+      {
+        "name": "O Coração Partido",
+        "weather": "calmo",
+        "sceneryTheme": "heart",
+        "layout": [
+          "######~~~~~~~~~~~~~~~######",
+          "#....#~~~~~~~~~~~~~~~#....#",
+          "#....#~~#~~~~~~~~~~~~#....#",
+          "#....#~~=#######=~~~~#....#",
+          "#....##.........##~~~#....#",
+          "#....#....a....#..#~~#....#",
+          "#....==.......==..........#",
+          "#....d.........e..........#",
+          "#..###....~....###........#",
+          "#PP#..~~~~~~~~~..#......###",
+          "~.....e..~~~....d......#~~~",
+          "~PP....~..z..~.........#~~~",
+          "~.....d..~~~....e......#~~~",
+          "#PP#..~~~~~~~~~..#......###",
+          "#..###....~....###........#",
+          "#....e.........d..........#",
+          "#....==.......==..........#",
+          "#....#....b....#..#~~#....#",
+          "#....##.........##~~~#....#",
+          "#....#~~=#######=~~~~#....#",
+          "#....#~~#~~~~~~~~~~~~#....#",
+          "#....#~~~~~~~~~~~~~~~#....#",
+          "######~~~~~~~~~~~~~~~######"
+        ],
+        "monsters": {
+          "z": "boss-riftheart",
+          "a": "stone-herald",
+          "b": "gale-herald",
+          "d": "null-warden",
+          "e": "weather-mote"
+        }
+      }
+    ],
+    "lootTable": [
+      {
+        "itemId": "cp-scar-plate",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "cp-ashen-anklets",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "cp-shard-ring",
+        "weight": 12,
+        "minRoom": 0
+      },
+      {
+        "itemId": "cp-worldshell",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "cp-quicksilver-boots",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "cp-heart-crown",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "cp-heart-horn",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "cp-eclipse-lens",
+        "weight": 4,
+        "minRoom": 2
+      },
+      {
+        "itemId": "cp-gale-fist",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "cp-gale-steps",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "cp-gale-plate",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "cp-tide-anklets",
+        "weight": 14,
+        "minRoom": 0
+      },
+      {
+        "itemId": "cp-gale-lamp",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "cp-herald-ember",
+        "weight": 12,
+        "minRoom": 1
+      },
+      {
+        "itemId": "cp-ember-censer",
+        "weight": 12,
+        "minRoom": 1
+      }
+    ],
+    "cardDrops": [
+      {
+        "classId": "arqueiro",
+        "weight": 32
+      },
+      {
+        "classId": "espadachim",
+        "weight": 24
+      },
+      {
+        "classId": "bruxo",
+        "weight": 16
+      },
+      {
+        "classId": "invocador",
+        "weight": 16
+      },
+      {
+        "classId": "sumo",
+        "weight": 6
+      },
+      {
+        "classId": "curandeira",
+        "weight": 6
+      }
+    ]
+  }
+]

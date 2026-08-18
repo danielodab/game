@@ -1,0 +1,26 @@
+{
+  "comum": 1000,
+  "rareRatio": 0.1654,
+  "epicRatio": 0.012765,
+  "legendRatio": 0.022,
+  "emptyRatio": 1.4706,
+  "keyFactor": 0.5,
+  "luck": {
+    "solo": 2.4,
+    "dupla": 1.6
+  },
+  "luckExponent": {
+    "comum": 0,
+    "raro": 1,
+    "epico": 2,
+    "lendario": 2
+  },
+  "noDrop": {
+    "greenhouse": 11030,
+    "cistern": 10294,
+    "emberlock": 11765,
+    "windscaffold": 11765,
+    "quakemine": 11030,
+    "brokenheart": 8824
+  }
+}

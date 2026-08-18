@@ -1,0 +1,7 @@
+{
+  "fogo": "agua",
+  "agua": "fogo",
+  "terra": "ar",
+  "ar": "terra",
+  "neutro": null
+}

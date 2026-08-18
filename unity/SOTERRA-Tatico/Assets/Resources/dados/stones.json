@@ -1,0 +1,37 @@
+{
+  "stone-ember": {
+    "id": "stone-ember",
+    "name": "Brasa Coagulada",
+    "element": "fogo",
+    "description": "Um pingo de fogo que esfriou por fora e desistiu de esfriar por dentro. Fica morno na mão e mais quente perto da bigorna.",
+    "iconKey": "stone-ember"
+  },
+  "stone-tear": {
+    "id": "stone-tear",
+    "name": "Lágrima de Cisterna",
+    "element": "agua",
+    "description": "Gota de água parada que endureceu sem virar gelo. Ainda tem uma ondinha presa girando lá dentro, devagar.",
+    "iconKey": "stone-tear"
+  },
+  "stone-root": {
+    "id": "stone-root",
+    "name": "Grão de Rocha-Mãe",
+    "element": "terra",
+    "description": "Uma semente de pedra do fundo da mina, com veios claros correndo por dentro como raízes. Pesa mais do que deveria.",
+    "iconKey": "stone-root"
+  },
+  "stone-breath": {
+    "id": "stone-breath",
+    "name": "Sopro Engarrafado",
+    "element": "ar",
+    "description": "Uma bolha de vento comprimido até virar mineral. Assobia baixinho quando alguém passa correndo do lado.",
+    "iconKey": "stone-breath"
+  },
+  "stone-slate": {
+    "id": "stone-slate",
+    "name": "Lasca da Lousa",
+    "element": "neutro",
+    "description": "Um caco do céu que virou pedra. Não é de elemento nenhum porque é de tudo ao mesmo tempo — serve em qualquer forja.",
+    "iconKey": "stone-slate"
+  }
+}

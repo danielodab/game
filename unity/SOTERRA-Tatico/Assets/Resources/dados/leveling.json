@@ -1,0 +1,81 @@
+{
+  "maxLevel": 30,
+  "xpTable": [
+    0,
+    15,
+    40,
+    75,
+    125,
+    195,
+    295,
+    435,
+    615,
+    845,
+    1145,
+    1525,
+    1965,
+    2485,
+    3095,
+    3805,
+    4635,
+    5555,
+    6580,
+    7705,
+    8955,
+    10355,
+    11905,
+    13605,
+    15480,
+    17555,
+    19830,
+    22355,
+    25130,
+    28180
+  ],
+  "xpFalloff": {
+    "graceLevels": 4,
+    "factorPerLevel": 0.75,
+    "floor": 0.1
+  },
+  "perLevel": {
+    "hp": 5,
+    "power": 3
+  },
+  "perLevelElement": {
+    "hp": 5,
+    "elemPower": 3
+  },
+  "defenseByRole": {
+    "tanque": {
+      "dodge": 10,
+      "lock": 70
+    },
+    "atirador": {
+      "dodge": 38,
+      "lock": 16
+    },
+    "assassino": {
+      "dodge": 40,
+      "lock": 16
+    },
+    "mago": {
+      "dodge": 24,
+      "lock": 10
+    },
+    "suporte": {
+      "dodge": 28,
+      "lock": 12
+    },
+    "invocador": {
+      "dodge": 20,
+      "lock": 30
+    }
+  },
+  "elementChoiceLevel": 5,
+  "roomFury": {
+    "afterRound": 20,
+    "powerPerRound": 10,
+    "healCutPerRound": 0.15,
+    "maxRounds": 40
+  }
+}

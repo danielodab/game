@@ -1,0 +1,639 @@
+{
+  "gh-set-flora": {
+    "id": "gh-set-flora",
+    "name": "Traje da Flora Voraz",
+    "element": "terra",
+    "dungeonId": "greenhouse",
+    "description": "Arrancado peça por peça das plantas que aprenderam a caçar no escuro. Quem o veste cria raiz no lugar onde decidiu ficar.",
+    "pieces": [
+      "gh-widow-shears",
+      "gh-vine-stirrups",
+      "gh-trellis-guard",
+      "gh-seed-pouch"
+    ],
+    "bonuses": {
+      "2": {
+        "hp": 12,
+        "lock": 5
+      },
+      "3": {
+        "hp": 20,
+        "lock": 8,
+        "resists": {
+          "terra": 5
+        }
+      },
+      "4": {
+        "hp": 30,
+        "lock": 12,
+        "power": 6,
+        "resists": {
+          "terra": 10
+        }
+      }
+    },
+    "rarity": "epico"
+  },
+  "gh-set-dew": {
+    "id": "gh-set-dew",
+    "name": "Traje da Goteira",
+    "element": "agua",
+    "dungeonId": "greenhouse",
+    "description": "A estufa chove por dentro há mil anos. O que vive nas calhas é feito de água parada — e escorre entre os dedos de quem tenta segurar.",
+    "pieces": [
+      "gh-firefly-crown",
+      "gh-moss-treads",
+      "gh-sap-apron",
+      "gh-briar-charm"
+    ],
+    "bonuses": {
+      "2": {
+        "hp": 10,
+        "dodge": 5
+      },
+      "3": {
+        "hp": 16,
+        "dodge": 8,
+        "resists": {
+          "agua": 5
+        }
+      },
+      "4": {
+        "hp": 24,
+        "dodge": 12,
+        "power": 6,
+        "resists": {
+          "agua": 10
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "ci-set-drowned": {
+    "id": "ci-set-drowned",
+    "name": "Traje da Corte Afogada",
+    "element": "agua",
+    "dungeonId": "cistern",
+    "description": "As roupas de baile da corte que a cisterna bebeu. Ainda escorrem, ainda pesam, ainda sabem dançar.",
+    "pieces": [
+      "ci-lantern-fob",
+      "ci-current-fins",
+      "ci-drowned-coat",
+      "ci-tide-flask"
+    ],
+    "bonuses": {
+      "2": {
+        "hp": 14,
+        "power": 4
+      },
+      "3": {
+        "hp": 22,
+        "power": 7,
+        "resists": {
+          "agua": 8
+        }
+      },
+      "4": {
+        "hp": 34,
+        "power": 12,
+        "dodge": 10,
+        "resists": {
+          "agua": 15
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "ci-set-brine": {
+    "id": "ci-set-brine",
+    "name": "Traje de Sal e Osso",
+    "element": "neutro",
+    "dungeonId": "cistern",
+    "description": "Sal cristalizado, osso polido e luz de água-viva: as criaturas que largaram estas peças não tinham elemento nenhum — só paciência.",
+    "pieces": [
+      "ci-harpoon-flute",
+      "ci-baroness-collar",
+      "ci-brine-cuirass",
+      "ci-jelly-vial"
+    ],
+    "bonuses": {
+      "2": {
+        "power": 5,
+        "initiative": 6
+      },
+      "3": {
+        "power": 9,
+        "initiative": 10,
+        "resists": {
+          "neutro": 8
+        }
+      },
+      "4": {
+        "power": 14,
+        "initiative": 14,
+        "hp": 20,
+        "resists": {
+          "neutro": 15
+        }
+      }
+    },
+    "rarity": "epico"
+  },
+  "em-set-forge": {
+    "id": "em-set-forge",
+    "name": "Traje da Prole da Fornalha",
+    "element": "fogo",
+    "dungeonId": "emberlock",
+    "description": "Feito do que a primeira chama do mundo cuspiu fora. Não protege do fogo: convence o fogo de que você é da casa.",
+    "pieces": [
+      "em-forge-grate",
+      "em-cinder-treads",
+      "em-soot-mantle",
+      "em-ember-flask"
+    ],
+    "bonuses": {
+      "2": {
+        "power": 8
+      },
+      "3": {
+        "power": 14,
+        "resists": {
+          "fogo": 10
+        }
+      },
+      "4": {
+        "power": 22,
+        "initiative": 10,
+        "resists": {
+          "fogo": 18
+        }
+      }
+    },
+    "rarity": "epico"
+  },
+  "em-set-slag": {
+    "id": "em-set-slag",
+    "name": "Traje de Escória",
+    "element": "terra",
+    "dungeonId": "emberlock",
+    "description": "Ferro frio, escória e corrente: o refugo da forja, endurecido por mil anos de nada acontecer. Pesa como um argumento definitivo.",
+    "pieces": [
+      "em-bellows-valve",
+      "em-chain-harness",
+      "em-riveted-plate",
+      "em-brand-iron"
+    ],
+    "bonuses": {
+      "2": {
+        "hp": 20,
+        "lock": 8
+      },
+      "3": {
+        "hp": 32,
+        "lock": 12,
+        "resists": {
+          "terra": 10
+        }
+      },
+      "4": {
+        "hp": 48,
+        "lock": 18,
+        "power": 10,
+        "resists": {
+          "terra": 18
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "av-set-gale": {
+    "id": "av-set-gale",
+    "name": "Traje do Vendaval",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "Tudo o que vive nos vãos abertos é feito de pressa. Estas peças cantam na corrente e chegam meio passo antes do dono.",
+    "pieces": [
+      "av-kite-crest",
+      "av-updraft-boots",
+      "av-storm-harness",
+      "av-wind-whistle"
+    ],
+    "bonuses": {
+      "2": {
+        "initiative": 12,
+        "dodge": 8
+      },
+      "3": {
+        "initiative": 18,
+        "dodge": 14,
+        "resists": {
+          "ar": 12
+        }
+      },
+      "4": {
+        "initiative": 26,
+        "dodge": 22,
+        "power": 12,
+        "resists": {
+          "ar": 20
+        }
+      }
+    },
+    "rarity": "epico"
+  },
+  "av-set-rigging": {
+    "id": "av-set-rigging",
+    "name": "Traje do Cordame",
+    "element": "ar",
+    "dungeonId": "windscaffold",
+    "description": "Tábua, corda e arame — o que sobrou dos que construíram as passarelas e continuaram andando nelas depois de mortos.",
+    "pieces": [
+      "av-plank-gauntlet",
+      "av-glider-cloak",
+      "av-rope-vest",
+      "av-lightning-coil"
+    ],
+    "bonuses": {
+      "2": {
+        "dodge": 10,
+        "hp": 16
+      },
+      "3": {
+        "dodge": 16,
+        "hp": 26,
+        "resists": {
+          "ar": 12
+        }
+      },
+      "4": {
+        "dodge": 24,
+        "hp": 38,
+        "lock": 14,
+        "resists": {
+          "ar": 20
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "mt-set-bedrock": {
+    "id": "mt-set-bedrock",
+    "name": "Traje da Rocha-Mãe",
+    "element": "terra",
+    "dungeonId": "quakemine",
+    "description": "Talhado no osso da montanha pelas coisas que moram embaixo dela. Enquanto a mina treme, isto aqui não.",
+    "pieces": [
+      "mt-quake-crown",
+      "mt-ore-greaves",
+      "mt-bedrock-carapace",
+      "mt-shoring-charm"
+    ],
+    "bonuses": {
+      "2": {
+        "hp": 26,
+        "lock": 10
+      },
+      "3": {
+        "hp": 42,
+        "lock": 16,
+        "resists": {
+          "terra": 14
+        }
+      },
+      "4": {
+        "hp": 60,
+        "lock": 24,
+        "power": 14,
+        "resists": {
+          "terra": 22
+        }
+      }
+    },
+    "rarity": "epico"
+  },
+  "mt-set-tools": {
+    "id": "mt-set-tools",
+    "name": "Traje do Mineiro",
+    "element": "neutro",
+    "dungeonId": "quakemine",
+    "description": "Broca, roda, ardósia e prego: ferramenta de gente, sem elemento nenhum. Continuou trabalhando muito depois de a gente ter parado.",
+    "pieces": [
+      "mt-drill-bit",
+      "mt-cart-wheels",
+      "mt-slate-plate",
+      "mt-quake-nail"
+    ],
+    "bonuses": {
+      "2": {
+        "power": 10,
+        "initiative": 10
+      },
+      "3": {
+        "power": 16,
+        "initiative": 16,
+        "resists": {
+          "neutro": 12
+        }
+      },
+      "4": {
+        "power": 24,
+        "initiative": 24,
+        "dodge": 14,
+        "resists": {
+          "neutro": 20
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "cp-set-heart": {
+    "id": "cp-set-heart",
+    "name": "Traje do Coração",
+    "element": "neutro",
+    "dungeonId": "brokenheart",
+    "legendary": true,
+    "description": "As quatro peças lendárias do último Fecho, montadas em cima de um caco da própria Grande Lousa. Só caem no Coração Partido, e caem pouco: completar isto é o fim do jogo — e o começo do jogo de verdade.",
+    "pieces": [
+      "cp-heart-crown",
+      "cp-quicksilver-boots",
+      "cp-worldshell",
+      "cp-heart-horn"
+    ],
+    "bonuses": {
+      "2": {
+        "hp": 30,
+        "power": 12
+      },
+      "3": {
+        "hp": 48,
+        "power": 20,
+        "initiative": 14,
+        "resists": {
+          "neutro": 15
+        }
+      },
+      "4": {
+        "hp": 70,
+        "power": 32,
+        "initiative": 20,
+        "dodge": 16,
+        "lock": 16,
+        "resists": {
+          "fogo": 10,
+          "agua": 10,
+          "terra": 10,
+          "ar": 10,
+          "neutro": 20
+        },
+        "grantsSpell": "is-heart-whole"
+      }
+    },
+    "rarity": "lendario"
+  },
+  "cp-set-cinder": {
+    "id": "cp-set-cinder",
+    "name": "Traje da Brasa Partida",
+    "element": "fogo",
+    "dungeonId": "brokenheart",
+    "description": "A metade do Coração que ainda queima. Não aquece nada: só quer terminar o que estava fazendo quando rachou.",
+    "pieces": [
+      "cp-shard-ring",
+      "cp-ashen-anklets",
+      "cp-scar-plate",
+      "cp-eclipse-lens"
+    ],
+    "bonuses": {
+      "2": {
+        "power": 14
+      },
+      "3": {
+        "power": 24,
+        "initiative": 12,
+        "resists": {
+          "fogo": 15
+        }
+      },
+      "4": {
+        "power": 38,
+        "initiative": 20,
+        "hp": 30,
+        "resists": {
+          "fogo": 25
+        }
+      }
+    },
+    "rarity": "epico"
+  },
+  "gh-set-swarm": {
+    "id": "gh-set-swarm",
+    "name": "Traje do Enxame",
+    "element": "ar",
+    "dungeonId": "greenhouse",
+    "description": "Quitina, pólen e três vespas presas num favo. O que zumbe na estufa não briga: chega primeiro, resolve e some antes de a planta perceber que perdeu alguém.",
+    "pieces": [
+      "gh-wasp-sting",
+      "gh-pollen-slippers",
+      "gh-chitin-vest",
+      "gh-hive-lantern"
+    ],
+    "bonuses": {
+      "2": {
+        "initiative": 10,
+        "dodge": 4
+      },
+      "3": {
+        "initiative": 16,
+        "dodge": 7,
+        "resists": {
+          "ar": 6
+        }
+      },
+      "4": {
+        "initiative": 24,
+        "dodge": 10,
+        "power": 8,
+        "resists": {
+          "ar": 12
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "ci-set-sump": {
+    "id": "ci-set-sump",
+    "name": "Traje do Sumidouro",
+    "element": "terra",
+    "dungeonId": "cistern",
+    "description": "Pedra, sal e lodo compactado — o que se acumulou no ralo por onde a cisterna esvazia. Não flutua, não desvia e não sai do lugar que escolheu.",
+    "pieces": [
+      "ci-crab-claw",
+      "ci-silt-boots",
+      "ci-crust-carapace",
+      "ci-sump-lamp"
+    ],
+    "bonuses": {
+      "2": {
+        "hp": 16,
+        "lock": 6
+      },
+      "3": {
+        "hp": 26,
+        "lock": 10,
+        "resists": {
+          "terra": 8
+        }
+      },
+      "4": {
+        "hp": 38,
+        "lock": 16,
+        "power": 8,
+        "resists": {
+          "terra": 14
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "em-set-quench": {
+    "id": "em-set-quench",
+    "name": "Traje da Têmpera",
+    "element": "agua",
+    "dungeonId": "emberlock",
+    "description": "A única água do Fecho, vestida. Foi feita para apagar lâmina em brasa, e não desaprendeu: onde este traje passa, o fogo da casa recua um passo e fica olhando.",
+    "pieces": [
+      "em-quench-fang",
+      "em-quench-treads",
+      "em-quench-vest",
+      "em-quench-lamp"
+    ],
+    "bonuses": {
+      "2": {
+        "hp": 18,
+        "power": 6
+      },
+      "3": {
+        "hp": 28,
+        "power": 10,
+        "resists": {
+          "agua": 10
+        }
+      },
+      "4": {
+        "hp": 42,
+        "power": 16,
+        "initiative": 10,
+        "resists": {
+          "agua": 18,
+          "fogo": 8
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "av-set-noose": {
+    "id": "av-set-noose",
+    "name": "Traje do Enforca-Corda",
+    "element": "neutro",
+    "dungeonId": "windscaffold",
+    "description": "Corda, nó e roldana: o material de obra que sobreviveu aos obreiros. Não tem elemento nenhum, então o vendaval não ajuda e também não atrapalha — e nos Andaimes isso é uma vantagem inteira.",
+    "pieces": [
+      "av-noose-grip",
+      "av-hemp-boots",
+      "av-knot-jerkin",
+      "av-hangman-lamp"
+    ],
+    "bonuses": {
+      "2": {
+        "hp": 18,
+        "lock": 8
+      },
+      "3": {
+        "hp": 30,
+        "lock": 14,
+        "resists": {
+          "neutro": 10
+        }
+      },
+      "4": {
+        "hp": 44,
+        "lock": 22,
+        "power": 12,
+        "resists": {
+          "neutro": 18
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "mt-set-firedamp": {
+    "id": "mt-set-firedamp",
+    "name": "Traje do Grisu",
+    "element": "fogo",
+    "dungeonId": "quakemine",
+    "description": "O gás azul que o turno da noite aprendeu a temer, costurado em roupa. Numa mina inteira de pedra e paciência, é a única coisa que resolve rápido — e resolve para os dois lados.",
+    "pieces": [
+      "mt-firedamp-fist",
+      "mt-wisp-treads",
+      "mt-damp-mantle",
+      "mt-firedamp-lamp"
+    ],
+    "bonuses": {
+      "2": {
+        "power": 12,
+        "initiative": 8
+      },
+      "3": {
+        "power": 20,
+        "initiative": 12,
+        "resists": {
+          "fogo": 12
+        }
+      },
+      "4": {
+        "power": 30,
+        "initiative": 18,
+        "hp": 24,
+        "resists": {
+          "fogo": 20
+        }
+      }
+    },
+    "rarity": "raro"
+  },
+  "cp-set-gale": {
+    "id": "cp-set-gale",
+    "name": "Traje do Vendaval Partido",
+    "element": "ar",
+    "dungeonId": "brokenheart",
+    "description": "O quarto de ar do Coração, desmontado peça por peça do Arauto que o guardava. Por dentro é oco: quem o veste anda meio passo à frente do próprio corpo e chega antes de ser esperado.",
+    "pieces": [
+      "cp-gale-fist",
+      "cp-gale-steps",
+      "cp-gale-plate",
+      "cp-gale-lamp"
+    ],
+    "bonuses": {
+      "2": {
+        "initiative": 14,
+        "dodge": 6
+      },
+      "3": {
+        "initiative": 22,
+        "dodge": 10,
+        "resists": {
+          "ar": 12
+        }
+      },
+      "4": {
+        "initiative": 32,
+        "dodge": 14,
+        "power": 16,
+        "resists": {
+          "ar": 20,
+          "neutro": 8
+        }
+      }
+    },
+    "rarity": "raro"
+  }
+}

@@ -1,0 +1,318 @@
+{
+  "pet-ember-breath": {
+    "id": "pet-ember-breath",
+    "name": "Bafo de Brasa",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 3,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 12,
+        "max": 17
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 3,
+        "max": 5,
+        "duration": 2
+      }
+    ],
+    "description": "O dragãozinho enche o peito, fecha os olhos com força e solta um jato curto de brasa que continua queimando depois.",
+    "flavor": "Ele acha que fez muito barulho. Fez mesmo.",
+    "fxKey": "bolt"
+  },
+  "pet-vine-chomp": {
+    "id": "pet-vine-chomp",
+    "name": "Bocada",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 1,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 14,
+        "max": 19
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "A planta carnívora fecha a boca no tornozelo do inimigo e não solta: quem foi mordido não sai do lugar neste turno.",
+    "flavor": "Mastiga devagar. Está aproveitando.",
+    "fxKey": "hook"
+  },
+  "pet-gale-buffet": {
+    "id": "pet-gale-buffet",
+    "name": "Vergastada de Asa",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 10,
+        "max": 15
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "A águia mergulha, bate as asas uma vez a um palmo do rosto do inimigo e o empurra duas células para trás.",
+    "flavor": "O vento dela tem opinião sobre onde você deveria estar.",
+    "fxKey": "gust"
+  },
+  "pet-dew-mend": {
+    "id": "pet-dew-mend",
+    "name": "Borrifo",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 0,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 14,
+        "max": 19
+      },
+      {
+        "type": "regen",
+        "min": 4,
+        "max": 6,
+        "duration": 2
+      }
+    ],
+    "description": "A criaturinha de água se aperta como uma esponja e borrifa água limpa no aliado mais machucado.",
+    "flavor": "Fica menorzinha depois. Enche de novo sozinha.",
+    "fxKey": "heal"
+  },
+  "pet-dew-rinse": {
+    "id": "pet-dew-rinse",
+    "name": "Enxágue",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 3,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      },
+      {
+        "type": "resist",
+        "element": "agua",
+        "value": 15,
+        "duration": 2
+      }
+    ],
+    "description": "Se despeja inteira sobre o aliado e leva embora o veneno e as raízes que o prendiam.",
+    "flavor": "Não pergunte para onde vai o que ela lava.",
+    "fxKey": "heal"
+  },
+  "pet-guide-hum": {
+    "id": "pet-guide-hum",
+    "name": "Zumbido-Guia",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "buff",
+        "stat": "power",
+        "value": 15,
+        "duration": 2
+      },
+      {
+        "type": "buff",
+        "stat": "initiative",
+        "value": 10,
+        "duration": 2
+      }
+    ],
+    "description": "A pedrinha-guia zumbe numa nota que só o aliado escuta: os golpes dele saem mais certeiros e mais cedo.",
+    "flavor": "Aponta sempre para o perigo. É o defeito dela.",
+    "fxKey": "buff"
+  },
+  "pet-shard-ward": {
+    "id": "pet-shard-ward",
+    "name": "Lasca-Escudo",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 1,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 22,
+        "duration": 2
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison"
+        ]
+      }
+    ],
+    "description": "O caco vivo se estilhaça de propósito e as lascas orbitam o aliado como uma redoma curta.",
+    "flavor": "Ele se remonta no turno seguinte. Reclamando.",
+    "fxKey": "shieldFx"
+  },
+  "pet-shard-echo": {
+    "id": "pet-shard-echo",
+    "name": "Eco Partido",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 13,
+        "max": 18
+      },
+      {
+        "type": "mark",
+        "value": 5,
+        "duration": 2,
+        "max": 3
+      }
+    ],
+    "description": "Solta um eco do Coração Partido que bate no inimigo e deixa uma trinca luminosa por onde tudo dói mais.",
+    "flavor": "O som é o de uma sala muito maior do que esta.",
+    "fxKey": "burst"
+  }
+}

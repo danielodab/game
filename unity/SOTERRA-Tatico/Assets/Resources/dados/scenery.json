@@ -1,0 +1,194 @@
+{
+  "garden": {
+    "high": [
+      "treliça de madeira podre",
+      "sebe alta e emaranhada",
+      "estufa de vidro rachado",
+      "tutor de bambu cerrado",
+      "palmeira de estufa tombada de través",
+      "painel de vidro embaçado de mofo"
+    ],
+    "low": [
+      "canteiro de alvenaria",
+      "muretinha de tijolo com musgo",
+      "carrinho de jardinagem tombado",
+      "fileira de vasos quebrados",
+      "tora caída coberta de hera",
+      "floreira comprida de pedra",
+      "cerca-viva podada até a altura do peito"
+    ],
+    "floor": [
+      "ladrilho hexagonal com musgo",
+      "terra batida com raízes à mostra",
+      "grama irrompendo entre lajotas",
+      "poça de clorofila"
+    ],
+    "props": [
+      "redoma de vagalumes",
+      "regador de cobre azinhavrado",
+      "espantalho de palha mofada",
+      "placa de nome de planta ilegível",
+      "esporos suspensos"
+    ]
+  },
+  "cistern": {
+    "high": [
+      "coluna de pedra negra",
+      "comporta de ferro emperrada",
+      "arcada submersa até o meio",
+      "pilha de barris apodrecidos",
+      "coluna de sal grossa como um carvalho",
+      "tela de eclusa entupida de limo"
+    ],
+    "low": [
+      "parapeito de canal",
+      "degrau de sal cristalizado",
+      "banco de baile emborcado",
+      "cano rompido escorrendo",
+      "amontoado de pérolas calcificadas",
+      "mureta de comporta na altura da cintura",
+      "passarela de tábua encalhada de lado"
+    ],
+    "floor": [
+      "mosaico espelhado por um dedo d'água",
+      "lodo turquesa",
+      "lajota rachada com raiz de sal",
+      "ripple de água parada"
+    ],
+    "props": [
+      "lustre de águas-vivas",
+      "lampião submerso ainda aceso",
+      "partitura boiando",
+      "sapato de baile solitário",
+      "corrente de âncora"
+    ]
+  },
+  "forge": {
+    "high": [
+      "bloco de ferro rebitado",
+      "chaminé de tijolo refratário",
+      "portão de fundição",
+      "pilha de lingotes empilhados",
+      "fornalha apagada do tamanho de uma casa",
+      "prensa de forja emperrada no alto"
+    ],
+    "low": [
+      "bigorna abandonada",
+      "mureta de contenção de escória",
+      "fosso de têmpera com borda",
+      "carrinho de carvão",
+      "molde de areia rachado",
+      "trilho elevado de vagoneta de lingote",
+      "bloco de têmpera com a água já seca"
+    ],
+    "floor": [
+      "grelha de forja com brasa embaixo",
+      "chapa de ferro chamuscada",
+      "piso de areia de fundição",
+      "poça de metal solidificado"
+    ],
+    "props": [
+      "corrente do teto balançando",
+      "martelo cravado na bancada",
+      "fole gigante murcho",
+      "avental pendurado",
+      "fagulhas subindo"
+    ]
+  },
+  "scaffold": {
+    "high": [
+      "torre de andaime fechada",
+      "guindaste travado",
+      "tapume de tábuas pregadas",
+      "chaminé de ventilação",
+      "elevador de obra parado entre andares",
+      "lona de proteção inflada pelo vento"
+    ],
+    "low": [
+      "guarda-corpo de corda e tábua",
+      "pilha de vigas amarradas",
+      "caixa de ferramentas",
+      "saco de brita de lastro",
+      "roldana caída de lado",
+      "estrado de tábua empilhado",
+      "rolo de cabo de aço na altura do joelho"
+    ],
+    "floor": [
+      "tábua corrida rangendo",
+      "grade metálica vazada",
+      "chapa de compensado com prego exposto",
+      "passarela de corda"
+    ],
+    "props": [
+      "prumo balançando",
+      "bandeirola de obra",
+      "balde pendurado",
+      "ninho de picanço com ossinhos",
+      "redemoinho de serragem"
+    ]
+  },
+  "mine": {
+    "high": [
+      "escoramento de galeria",
+      "veio de rocha bruta",
+      "desabamento antigo",
+      "silo de minério",
+      "pilar de rocha deixado de pé para segurar o teto",
+      "porta de galeria pregada e lacrada"
+    ],
+    "low": [
+      "vagonete emborcado",
+      "trilho elevado",
+      "pilha de estéril",
+      "caixa de dinamite úmida",
+      "vira-cavalete de escoramento",
+      "viga de escoramento caída atravessada",
+      "bancada de britagem quebrada"
+    ],
+    "floor": [
+      "piso de cascalho socado",
+      "trilho de vagonete",
+      "lama mineral",
+      "rocha polida por botas"
+    ],
+    "props": [
+      "lampião de carbureto apagado",
+      "gaiola de pássaro vazia",
+      "capacete no chão",
+      "cristal aflorando da parede",
+      "poeira em suspensão"
+    ]
+  },
+  "heart": {
+    "high": [
+      "costela de pedra do Coração",
+      "lasca de céu petrificado",
+      "muro de espelho fosco",
+      "coluna dos quatro elementos",
+      "pilar partido ao meio que não caiu",
+      "lasca de mundo suspensa e imóvel"
+    ],
+    "low": [
+      "degrau de basalto rachado",
+      "caco de espelho encravado",
+      "bacia elemental transbordando",
+      "raiz-do-coração grossa",
+      "anel de cinza compactada",
+      "soleira de mármore partida",
+      "banco de pedra das quatro estações"
+    ],
+    "floor": [
+      "mosaico das quatro estações",
+      "piso que muda de cor com o clima",
+      "lajota partida ao meio",
+      "veio de luz antiga"
+    ],
+    "props": [
+      "relógio de estações parado",
+      "estilhaço flutuando parado no ar",
+      "chuva que cai para cima",
+      "quatro lampiões, um por elemento",
+      "batida distante"
+    ]
+  }
+}

@@ -1,0 +1,876 @@
+{
+  "is-seed-bomb": {
+    "id": "is-seed-bomb",
+    "name": "Bomba de Sementes",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 18,
+        "max": 24
+      },
+      {
+        "type": "poison",
+        "element": "terra",
+        "min": 5,
+        "max": 8,
+        "duration": 2
+      }
+    ],
+    "description": "Arremessa um punhado de sementes de vagem estourante: elas abrem no ar e brotam dentro de quem estiver na roda.",
+    "flavor": "A estufa continua semeando. Você só escolhe onde.",
+    "fxKey": "burst"
+  },
+  "is-thorn-ward": {
+    "id": "is-thorn-ward",
+    "name": "Redoma de Espinhos",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 30,
+        "duration": 2
+      },
+      {
+        "type": "reflect",
+        "pct": 20,
+        "duration": 2
+      }
+    ],
+    "description": "Escudo de emergência: uma sebe de espinhos fecha em volta do corpo e devolve parte do que bater nela.",
+    "flavor": "Cresce rápido demais para ser educada.",
+    "fxKey": "shieldFx"
+  },
+  "is-undertow": {
+    "id": "is-undertow",
+    "name": "Ressaca",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 14,
+        "max": 19
+      },
+      {
+        "type": "pull",
+        "tiles": 3
+      }
+    ],
+    "description": "Abre no chão uma correnteza curta que arrasta o alvo três células na sua direção.",
+    "flavor": "A cisterna nunca devolveu nada de graça — mas devolve.",
+    "fxKey": "hook"
+  },
+  "is-tide-mend": {
+    "id": "is-tide-mend",
+    "name": "Maré Mansa",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "heal",
+        "min": 22,
+        "max": 29
+      },
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      }
+    ],
+    "description": "Uma onda baixa passa pelo aliado, fecha o que estava aberto e leva embora veneno e raízes.",
+    "flavor": "Água parada há mil anos ainda sabe subir quando pedem.",
+    "fxKey": "heal"
+  },
+  "is-cinder-leap": {
+    "id": "is-cinder-leap",
+    "name": "Salto de Brasa",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": true,
+    "targetSide": "any",
+    "effects": [
+      {
+        "type": "teleport"
+      },
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 12,
+        "max": 17
+      }
+    ],
+    "description": "O corpo vira fagulha, atravessa o ar e se remonta na célula escolhida — o estouro da chegada queima a vizinhança.",
+    "flavor": "Chegar é fácil. O difícil é avisar.",
+    "fxKey": "blink"
+  },
+  "is-forge-brand": {
+    "id": "is-forge-brand",
+    "name": "Ferro de Marcar",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 16,
+        "max": 21
+      },
+      {
+        "type": "mark",
+        "value": 8,
+        "duration": 3,
+        "max": 4
+      }
+    ],
+    "description": "Grava no inimigo a marca da forja: tudo o que o atingir depois disso dói mais.",
+    "flavor": "O Fecho marca o gado dele. Agora você também.",
+    "fxKey": "debuff"
+  },
+  "is-updraft": {
+    "id": "is-updraft",
+    "name": "Lufada",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 2,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 12,
+        "max": 17
+      },
+      {
+        "type": "push",
+        "tiles": 3
+      }
+    ],
+    "description": "Uma coluna de ar sobe debaixo do inimigo e o joga três células para trás — em andaime, isso costuma resolver a discussão.",
+    "flavor": "O vento dos Andaimes não empurra: publica opinião.",
+    "fxKey": "gust"
+  },
+  "is-storm-chain": {
+    "id": "is-storm-chain",
+    "name": "Corrente de Tormenta",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "chain",
+        "jumps": 3,
+        "falloff": 0.65,
+        "element": "ar",
+        "min": 16,
+        "max": 22
+      }
+    ],
+    "description": "Corrente elemental: o raio pula de inimigo em inimigo até três vezes, perdendo força a cada salto.",
+    "flavor": "Conta os corpos sozinha. Sempre conta certo.",
+    "fxKey": "beam"
+  },
+  "is-quake-nail": {
+    "id": "is-quake-nail",
+    "name": "Prego de Tremor",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 15,
+        "max": 20
+      },
+      {
+        "type": "root",
+        "duration": 2
+      }
+    ],
+    "description": "Um prego de minério é cravado no chão sob o alvo: ele fica dois turnos exatamente onde está.",
+    "flavor": "A mina prega tudo o que se mexe demais.",
+    "fxKey": "slam"
+  },
+  "is-ore-bulwark": {
+    "id": "is-ore-bulwark",
+    "name": "Escora de Minério",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 3,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "ally",
+    "effects": [
+      {
+        "type": "shield",
+        "value": 45,
+        "duration": 2
+      },
+      {
+        "type": "buff",
+        "stat": "lock",
+        "value": 15,
+        "duration": 2
+      }
+    ],
+    "description": "Sobe do chão uma escora de minério bruto na frente do aliado: escudo grosso e ninguém escapa de perto dele.",
+    "flavor": "Escoraram o teto com isso por mil anos. O teto continua lá.",
+    "fxKey": "shieldFx"
+  },
+  "is-heart-call": {
+    "id": "is-heart-call",
+    "name": "Chamado do Coração",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 14,
+        "max": 19
+      }
+    ],
+    "description": "O caco toca uma nota que o Coração Partido reconhece: tudo que é hostil num raio de três células é arrastado para perto de você.",
+    "flavor": "Chamar todo mundo de uma vez é uma decisão. Boa sorte.",
+    "fxKey": "nova"
+  },
+  "is-heart-whole": {
+    "id": "is-heart-whole",
+    "name": "Coração Inteiro",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 5,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "self",
+    "effects": [
+      {
+        "type": "cleanse",
+        "kinds": [
+          "poison",
+          "root"
+        ]
+      },
+      {
+        "type": "heal",
+        "min": 34,
+        "max": 44
+      },
+      {
+        "type": "shield",
+        "value": 50,
+        "duration": 2
+      },
+      {
+        "type": "reflect",
+        "pct": 30,
+        "duration": 2
+      },
+      {
+        "type": "weatherShift",
+        "weather": "calmo"
+      }
+    ],
+    "description": "Com as quatro peças fechadas, o Coração Partido volta a bater inteiro por um instante: o veneno sai, a ferida fecha, a casca engrossa, o golpe volta pelo mesmo caminho — e a sala inteira se aquieta.",
+    "flavor": "Mil anos rachado. Um instante inteiro. Faça valer.",
+    "fxKey": "nova"
+  },
+  "is-heart-eclipse": {
+    "id": "is-heart-eclipse",
+    "name": "Eclipse",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 5,
+    "cooldown": 4,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "weatherShift",
+        "weather": "calmo"
+      },
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 24,
+        "max": 32
+      },
+      {
+        "type": "dispelShield"
+      }
+    ],
+    "description": "A lente apaga o clima da sala por um instante e o que sobra cai em cima do inimigo sem escudo e sem elemento para se apoiar.",
+    "flavor": "Por um segundo, ninguém tem vantagem nenhuma. Use o segundo.",
+    "fxKey": "nova"
+  },
+  "is-swarm-sting": {
+    "id": "is-swarm-sting",
+    "name": "Ferroada em Enxame",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "chain",
+        "jumps": 2,
+        "falloff": 0.6,
+        "element": "ar",
+        "min": 13,
+        "max": 18
+      },
+      {
+        "type": "poison",
+        "element": "ar",
+        "min": 4,
+        "max": 7,
+        "duration": 2
+      }
+    ],
+    "description": "Abre a portinhola do favo e solta três vespas de uma vez: elas pulam de inimigo em inimigo perdendo fôlego a cada salto e deixam a picada trabalhando por dois turnos.",
+    "flavor": "Voltam sozinhas. Contam certo quem faltou.",
+    "fxKey": "beam"
+  },
+  "is-silt-grip": {
+    "id": "is-silt-grip",
+    "name": "Agarrão de Lodo",
+    "element": "terra",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 4,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "terra",
+        "min": 15,
+        "max": 20
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "O lodo do ralo sobe em pinça e fecha em volta dos pés de todo mundo na roda: machuca ao apertar e não deixa ninguém sair de onde estava.",
+    "flavor": "O ralo é propriedade privada. Você foi avisado.",
+    "fxKey": "slam"
+  },
+  "is-quench-hiss": {
+    "id": "is-quench-hiss",
+    "name": "Chiado de Têmpera",
+    "element": "agua",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 1
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "agua",
+        "min": 16,
+        "max": 21
+      },
+      {
+        "type": "dispelShield"
+      }
+    ],
+    "description": "Despeja no alvo a água do fosso de têmpera: a nuvem de vapor queima por dentro e apaga qualquer casca mágica que ele tenha acendido.",
+    "flavor": "Foi assim que se temperou tudo aqui. Inclusive as pessoas.",
+    "fxKey": "burst"
+  },
+  "is-noose-drag": {
+    "id": "is-noose-drag",
+    "name": "Laço de Roldana",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 13,
+        "max": 18
+      },
+      {
+        "type": "pull",
+        "tiles": 3
+      },
+      {
+        "type": "root",
+        "duration": 1
+      }
+    ],
+    "description": "Lança um laço de corda de obra e recolhe: arrasta o alvo três células para perto e deixa o nó apertado no tornozelo por um turno.",
+    "flavor": "Material que chega na plataforma não volta.",
+    "fxKey": "hook"
+  },
+  "is-firedamp-blast": {
+    "id": "is-firedamp-blast",
+    "name": "Estouro de Grisu",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 2,
+      "max": 6,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 19,
+        "max": 26
+      },
+      {
+        "type": "push",
+        "tiles": 1
+      }
+    ],
+    "description": "Abre a tela da lamparina de propósito e deixa o gás da galeria encontrar a chama: o bolsão inteiro estoura duas células adiante e o sopro afasta quem estava perto.",
+    "flavor": "A tela existe para isso não acontecer. Você a abriu.",
+    "fxKey": "nova"
+  },
+  "is-gale-cut": {
+    "id": "is-gale-cut",
+    "name": "Corte do Arauto",
+    "element": "ar",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 6,
+      "line": true,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "line",
+      "size": 3
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "ar",
+        "min": 18,
+        "max": 24
+      },
+      {
+        "type": "push",
+        "tiles": 2
+      }
+    ],
+    "description": "O vento preso no farol sai numa lâmina só e atravessa a fila inteira em linha reta, empurrando dois passos cada corpo que cortou.",
+    "flavor": "Chega, corta e já está em outro lugar. Copie.",
+    "fxKey": "slash"
+  },
+  "is-bone-toll": {
+    "id": "is-bone-toll",
+    "name": "Dobre de Ossos",
+    "element": "neutro",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "circle",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "neutro",
+        "min": 12,
+        "max": 17
+      },
+      {
+        "type": "taunt",
+        "duration": 2
+      }
+    ],
+    "description": "A candeia bate uma nota funda que a corte afogada reconhece: quem está a duas células apanha e passa dois turnos sem conseguir olhar para outra pessoa.",
+    "flavor": "Eles ainda respondem à chamada. Sempre respondem.",
+    "fxKey": "nova"
+  },
+  "is-long-wick": {
+    "id": "is-long-wick",
+    "name": "Pavio Longo",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 3,
+    "cooldown": 2,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 1,
+      "max": 5,
+      "line": false,
+      "los": true,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "single",
+      "size": 0
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 12,
+        "max": 16
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 8,
+        "max": 12,
+        "duration": 3
+      }
+    ],
+    "description": "Enfia no alvo um pavio de mina aceso: a queimadura inicial é pequena, mas o pavio continua descendo por dentro dele durante três turnos.",
+    "flavor": "Pavio longo é para quem tem tempo de sair andando.",
+    "fxKey": "debuff"
+  },
+  "is-cinder-wake": {
+    "id": "is-cinder-wake",
+    "name": "Rastro de Brasa",
+    "element": "fogo",
+    "classId": null,
+    "unlockLevel": 0,
+    "paCost": 4,
+    "cooldown": 3,
+    "castsPerTurn": 1,
+    "range": {
+      "min": 0,
+      "max": 0,
+      "line": false,
+      "los": false,
+      "movable": false
+    },
+    "aoe": {
+      "shape": "ring",
+      "size": 2
+    },
+    "needsEmptyTile": false,
+    "targetSide": "enemy",
+    "effects": [
+      {
+        "type": "damage",
+        "element": "fogo",
+        "min": 20,
+        "max": 27
+      },
+      {
+        "type": "poison",
+        "element": "fogo",
+        "min": 8,
+        "max": 12,
+        "duration": 2
+      }
+    ],
+    "description": "O turíbulo é girado uma volta inteira e larga um anel de brasa a duas células do corpo: pega quem estava se aproximando, e não quem já chegou.",
+    "flavor": "Queima o círculo de fora. O de dentro é problema seu.",
+    "fxKey": "nova"
+  }
+}
