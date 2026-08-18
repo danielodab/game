@@ -78,7 +78,12 @@ html, body {
   touch-action: none;
 }
 
-.ui-root { position: absolute; inset: 0; z-index: 5; }
+/* A camada da UI cobre a tela inteira por cima do tabuleiro. Sem `pointer-events:
+   none` AQUI, o contêiner engole todo clique e o jogador não consegue andar nem
+   atacar — foi exatamente o que aconteceu. As telas voltam a capturar (`.ui-screen`),
+   e a de batalha deixa passar para o canvas, reativando só os painéis (§ .screen-battle). */
+.ui-root { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.ui-screen { pointer-events: auto; }
 
 h1, h2, h3 { font-family: var(--ui-serif); font-weight: 600; margin: 0; letter-spacing: .01em; }
 p { margin: 0; }
