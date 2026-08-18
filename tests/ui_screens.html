@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SOTERRA 2.0 — Telas da Interface (JOGO.UI)</title>
-<link rel="stylesheet" href="../css/style.css?v=3">
+<link rel="stylesheet" href="../css/style.css?v=12">
 <style>
   /* moldura do teste: um "celular" 390×844 ao lado do painel de verificação */
   html, body { overflow: auto; height: auto; }
@@ -48,23 +48,23 @@
   </div>
 </div>
 
-<script src="../vendor/pixi.min.js?v=3" onerror="window.__noPixi=1"></script>
-<script src="../js/core/data/elements.js?v=3"></script>
-<script src="../js/core/data/classes.js?v=3"></script>
-<script src="../js/core/data/spells.js?v=3"></script>
-<script src="../js/core/data/progression.js?v=3"></script>
-<script src="../js/core/data/monsters.js?v=3"></script>
-<script src="../js/core/data/dungeons.js?v=3"></script>
-<script src="../js/core/data/fusions.js?v=3"></script>
-<script src="../js/core/data/pets.js?v=3"></script>
-<script src="../js/core/data/items.js?v=3"></script>
-<script src="../js/core/engine.js?v=3"></script>
-<script src="../js/core/fusion.js?v=3"></script>
-<script src="../js/core/ai.js?v=3"></script>
-<script src="../js/core/progress.js?v=3"></script>
-<script src="../js/core/game.js?v=3"></script>
-<script src="../js/render2d/art.js?v=3"></script>
-<script src="../js/ui/hud.js?v=3"></script>
+<script src="../vendor/pixi.min.js?v=10" onerror="window.__noPixi=1"></script>
+<script src="../js/core/data/elements.js?v=10"></script>
+<script src="../js/core/data/classes.js?v=10"></script>
+<script src="../js/core/data/spells.js?v=10"></script>
+<script src="../js/core/data/progression.js?v=10"></script>
+<script src="../js/core/data/monsters.js?v=10"></script>
+<script src="../js/core/data/dungeons.js?v=10"></script>
+<script src="../js/core/data/fusions.js?v=10"></script>
+<script src="../js/core/data/pets.js?v=10"></script>
+<script src="../js/core/data/items.js?v=10"></script>
+<script src="../js/core/engine.js?v=10"></script>
+<script src="../js/core/fusion.js?v=10"></script>
+<script src="../js/core/ai.js?v=10"></script>
+<script src="../js/core/progress.js?v=10"></script>
+<script src="../js/core/game.js?v=10"></script>
+<script src="../js/render2d/art.js?v=10"></script>
+<script src="../js/ui/hud.js?v=10"></script>
 <script>
 (function () {
   'use strict';
@@ -145,10 +145,15 @@
       var r = nodes[i].getBoundingClientRect();
       if (r.width === 0) continue;
       if (r.right > lim.right + 1.5 || r.left < lim.left - 1.5) {
-        // barras roláveis podem ter conteúdo maior que a caixa: ignora o filho
-        var p = nodes[i].parentNode;
-        var ov = p && getComputedStyle(p).overflowX;
-        if (ov === 'auto' || ov === 'scroll') continue;
+        // barras roláveis podem ter conteúdo maior que a caixa: se QUALQUER
+        // ancestral rola na horizontal, o transbordo é intencional
+        var p = nodes[i].parentNode, rolavel = false;
+        while (p && p.nodeType === 1 && p !== scope.parentNode) {
+          var ov = getComputedStyle(p).overflowX;
+          if (ov === 'auto' || ov === 'scroll') { rolavel = true; break; }
+          p = p.parentNode;
+        }
+        if (rolavel) continue;
         bad.push(nodes[i].className || nodes[i].tagName);
       }
     }
@@ -315,6 +320,14 @@
 
   // ---- HUD de batalha
   goto('battle');
+  // a ordem de iniciativa pode começar num monstro: avança até o turno do herói
+  // (o HUD de feitiços e o cronômetro só valem no turno do jogador)
+  (function () {
+    for (var i = 0; i < 20 && !JOGO.Game.isPlayerTurn(); i++) {
+      try { JOGO.Engine.endTurn(JOGO.Game.state); } catch (e) { break; }
+    }
+    JOGO.UI.showScreen('battle');
+  })();
   var bs = document.querySelector('#ui-root .screen-battle');
   check('batalha: linha de iniciativa', !!bs.querySelector('.bt-timeline .tl-unit'));
   check('batalha: painel da unidade ativa', !!bs.querySelector('.bt-active .bar-hp'));

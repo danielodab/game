@@ -88,7 +88,8 @@ var JOGO = (typeof window !== 'undefined')
   var W = 0, H = 0, DPR = 1;
   var ready = false, initFailed = false;
 
-  var cam = { zoom: 1, panX: 0, panY: 0, fitZoom: 1, minZoom: 0.35, maxZoom: 2.6 };
+  var cam = { zoom: 1, panX: 0, panY: 0, rot: 0, fitZoom: 1, minZoom: 0.35, maxZoom: 2.6 };
+  var rotAnim = null;              // {t, dur, to, center, k}
   var shake = { x: 0, y: 0 };
   var nowT = 0;
 
@@ -98,7 +99,7 @@ var JOGO = (typeof window !== 'undefined')
   var lastAtk = null, lastHitDelay = 0.26;
   var boardKey = null, boardNodes = [];
   var ovSig = '', ovPulse = null, ovEventNodes = [];
-  var texCache = {}, artMode = {};
+  var texCache = {}, artMode = {}, boardMask = [];
   var pendingEvents = [];          // eventos recebidos antes do init
 
   function game() { return JOGO.Game || null; }
@@ -147,26 +148,69 @@ var JOGO = (typeof window !== 'undefined')
     return function () { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
   }
 
-  // ---------- projeção isométrica ----------
+  // ---------- projeção isométrica (com rotação de 1/4 de volta — §9-E) ----------
+  // O MUNDO nunca gira: giramos a leitura dele. `rotPoint` leva (x,y) de mundo
+  // para o espaço da câmera atual; `unrotPoint` faz o caminho de volta (é o que
+  // mantém o clique honesto nas 4 orientações).
+  var gridW = 1, gridH = 1;
+  function gridDims() {
+    var st = state();
+    if (st && st.grid) { gridW = st.grid.w; gridH = st.grid.h; }
+    return { w: gridW, h: gridH };
+  }
+  function rotPoint(gx, gy) {
+    var r = cam.rot & 3;
+    if (!r) return { x: gx, y: gy };
+    var d = gridDims();
+    var cx = (d.w - 1) / 2, cy = (d.h - 1) / 2;
+    var dx = gx - cx, dy = gy - cy;
+    if (r === 1) return { x: cy - dy, y: cx + dx };
+    if (r === 2) return { x: cx - dx, y: cy - dy };
+    return { x: cy + dy, y: cx - dx };
+  }
+  // só a parte linear (para vetores/direções, sem recentrar)
+  function rotDelta(dx, dy) {
+    var r = cam.rot & 3;
+    if (r === 1) return { x: -dy, y: dx };
+    if (r === 2) return { x: -dx, y: -dy };
+    if (r === 3) return { x: dy, y: -dx };
+    return { x: dx, y: dy };
+  }
+  function unrotPoint(X, Y) {
+    var r = cam.rot & 3;
+    if (!r) return { x: X, y: Y };
+    var d = gridDims();
+    var cx = (d.w - 1) / 2, cy = (d.h - 1) / 2;
+    if (r === 1) return { x: Y, y: 2 * cy - X };
+    if (r === 2) return { x: 2 * cx - X, y: 2 * cy - Y };
+    return { x: 2 * cx - Y, y: X };
+  }
   function iso(gx, gy, z) {
-    return { x: (gx - gy) * HW, y: (gx + gy) * HH - (z || 0) };
+    var p = rotPoint(gx, gy);
+    return { x: (p.x - p.y) * HW, y: (p.x + p.y) * HH - (z || 0) };
   }
   R.iso = iso;
+  // profundidade de desenho: segue a TELA, não o mundo
+  function depthOf(gx, gy) {
+    var p = rotPoint(gx, gy);
+    return p.x + p.y;
+  }
   R.project = function (gx, gy, z) {
     var p = iso(gx, gy, z);
     return {
       x: cam.panX + shake.x + p.x * cam.zoom,
       y: cam.panY + shake.y + p.y * cam.zoom,
-      s: cam.zoom, d: gx + gy
+      s: cam.zoom, d: depthOf(gx, gy)
     };
   };
   function unproject(sx, sy) {
     var ix = (sx - cam.panX - shake.x) / cam.zoom;
     var iy = (sy - cam.panY - shake.y) / cam.zoom;
     var a = ix / HW, b = iy / HH;
-    return { x: (a + b) / 2, y: (b - a) / 2 };
+    return unrotPoint((a + b) / 2, (b - a) / 2);
   }
   R.camZoom = function () { return cam.zoom; };
+  R.camRot = function () { return cam.rot & 3; };
 
   // ---------- leitura DEFENSIVA do grid ----------
   // aceita tiles como objeto {type,deco} ou como caractere de layout
@@ -551,8 +595,66 @@ var JOGO = (typeof window !== 'undefined')
     lo = H - m - b.y1 * cam.zoom; hi = m - b.y0 * cam.zoom;
     cam.panY = lo > hi ? (lo + hi) / 2 : clamp(cam.panY, lo, hi);
   }
+  // ---------- ROTAÇÃO DO TABULEIRO (§9-E) ----------
+  // 4 posições fixas. A transição é um "quarto de volta" achatando o mundo no
+  // eixo X (1 → 0 → 1) e trocando o layout no meio: barato, legível, e sem
+  // deformar a arte, que só existe em 4 direções.
+  var ROT_DUR = 0.26;
+  function centerCell() {
+    var d = gridDims();
+    var c = unproject(W / 2, H / 2);
+    return { x: clamp(c.x, 0, d.w - 1), y: clamp(c.y, 0, d.h - 1) };
+  }
+  function centerOn(cell) {
+    var p = iso(cell.x, cell.y, 0);
+    cam.panX = W / 2 - p.x * cam.zoom;
+    cam.panY = H / 2 - p.y * cam.zoom;
+    clampCam();
+  }
+  function applyRot(r) {
+    cam.rot = ((r % 4) + 4) % 4;
+    var st = state();
+    if (st && st.grid) {
+      buildBoard(st);              // obstáculos/props/chão mudam de lugar
+      buildWeather();              // as marcas de clima no chão também
+    }
+    ovSig = ''; evSig = '';
+    if (JOGO.FX && JOGO.FX.clearDecals) { try { JOGO.FX.clearDecals(); } catch (e) {} }
+  }
+  R.rotate = function (dir) {
+    if (rotAnim) return false;
+    var to = ((cam.rot + (dir < 0 ? -1 : 1)) % 4 + 4) % 4;
+    rotAnim = { t: 0, dur: ROT_DUR, to: to, center: centerCell(), swapped: false };
+    return true;
+  };
+  R.rotation = function () { return cam.rot & 3; };
+  function updateRot(dt) {
+    if (!rotAnim) return;
+    rotAnim.t += dt;
+    var k = Math.min(1, rotAnim.t / rotAnim.dur);
+    if (!rotAnim.swapped && k >= 0.5) {
+      rotAnim.swapped = true;
+      applyRot(rotAnim.to);
+      centerOn(rotAnim.center);      // a célula do meio da tela continua no meio
+    }
+    rotAnim.k = k;
+    if (k >= 1) rotAnim = null;
+  }
+  function rotSquash() {
+    if (!rotAnim) return 1;
+    // 1 → 0 → 1 com um respiro no meio (não chega a sumir de vez)
+    return Math.max(0.06, Math.abs(Math.cos(rotAnim.k * Math.PI)));
+  }
+
   R.setCamera = function (o) {
     if (!o) return;
+    if (o.rot != null) {
+      var want = ((o.rot | 0) % 4 + 4) % 4;
+      if (want !== cam.rot) {
+        if (o.animate === false) { var cc = centerCell(); applyRot(want); centerOn(cc); }
+        else { rotAnim = { t: 0, dur: ROT_DUR, to: want, center: centerCell(), swapped: false }; }
+      }
+    }
     if (o.zoom != null) cam.zoom = clamp(o.zoom, cam.minZoom, cam.maxZoom);
     if (o.panX != null) cam.panX = o.panX;
     if (o.panY != null) cam.panY = o.panY;
@@ -563,7 +665,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     clampCam();
   };
-  R.getCamera = function () { return { zoom: cam.zoom, panX: cam.panX, panY: cam.panY, fitZoom: cam.fitZoom }; };
+  R.getCamera = function () {
+    return { zoom: cam.zoom, panX: cam.panX, panY: cam.panY, rot: cam.rot & 3, fitZoom: cam.fitZoom };
+  };
 
   // ---------- foco cinematográfico (usado pela FUSÃO) ----------
   var camFocus = null;
@@ -633,7 +737,11 @@ var JOGO = (typeof window !== 'undefined')
         drag = null;
         var ids = Object.keys(ptrs);
         var a = ptrs[ids[0]], b = ptrs[ids[1]];
-        pinch = { ids: ids, dist: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+        pinch = {
+          ids: ids, dist: Math.hypot(a.x - b.x, a.y - b.y),
+          mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2,
+          ang: Math.atan2(b.y - a.y, b.x - a.x), rotAcc: 0
+        };
       }
       e.preventDefault();
     }, { passive: false });
@@ -654,6 +762,17 @@ var JOGO = (typeof window !== 'undefined')
           zoomAt(mx, my, d / (pinch.dist || d));
           cam.panX += mx - pinch.mx; cam.panY += my - pinch.my;
           clampCam();
+          // GIRO com dois dedos (§9-E): acumula o ângulo e vira de 1/4 em 1/4
+          var ang = Math.atan2(b.y - a.y, b.x - a.x);
+          var da = ang - pinch.ang;
+          while (da > Math.PI) da -= Math.PI * 2;
+          while (da < -Math.PI) da += Math.PI * 2;
+          pinch.ang = ang;
+          pinch.rotAcc += da;
+          if (Math.abs(pinch.rotAcc) > 0.60) {       // ~35°
+            R.rotate(pinch.rotAcc > 0 ? 1 : -1);
+            pinch.rotAcc = 0;
+          }
           pinch.dist = d; pinch.mx = mx; pinch.my = my;
         }
       } else if (drag && drag.id === e.pointerId) {
@@ -705,6 +824,8 @@ var JOGO = (typeof window !== 'undefined')
     var w = unproject(sx, sy);
     return { x: Math.round(w.x), y: Math.round(w.y) };
   }
+  // célula de MUNDO sob um ponto de tela — já desfaz a rotação da câmera
+  R.tileAt = function (sx, sy) { return tileFromScreen(sx, sy); };
   function doHover(sx, sy) {
     var g = game(); if (!g || !g.onTileHover) return;
     var t = tileFromScreen(sx, sy);
@@ -859,10 +980,49 @@ var JOGO = (typeof window !== 'undefined')
     return dy >= 0 ? 1 : 3;
   }
   function unitArtCanvas(u, dir) {
-    // PREFERÊNCIA (combinada com o Designer Arte): se um dia o Art entregar
-    // partes articuladas (Art.unitParts) ou quadros de pose, basta trocar a
-    // fonte aqui — o rig abaixo já anima por peça.
     return artCanvas('unit', [u.defId, { elements: unitElements(u), dir: dir }]);
+  }
+  // FONTE DO RIG — uma só porta de entrada. Hoje o Art entrega o desenho
+  // inteiro e nós fatiamos; quando ele entregar `Art.unitParts` (pernas, braços,
+  // tronco e cabeça com pivôs), este é o único lugar que muda.
+  //   Art.unitParts(defId, {elements, dir}) -> { anchor:[ax,ay], res, order:[…],
+  //       parts: { legF:{canvas, pivot:[x,y], pos:[x,y]}, legB:…, torso:…, head:…,
+  //                armF:…, armB:… } }   (pivot/pos em px de arte, pos relativo aos PÉS)
+  function unitRigSource(u, dir) {
+    if (artOk('unitParts')) {
+      var p = artRaw('unitParts', [u.defId, { elements: unitElements(u), dir: dir }]);
+      if (p && p.parts && p.parts.torso) return { kind: 'parts', data: p };
+    }
+    var cv = unitArtCanvas(u, dir);
+    return cv ? { kind: 'slice', data: cv } : null;
+  }
+  // monta/atualiza um rig de PARTES (formato futuro do Art)
+  function applyPartsRig(node, P0) {
+    var res = P0.res || 1, s = artK() / res;
+    var an = P0.anchor || [0.5, 0.88];
+    var slots = { legF: '__legL', legB: '__legR', torso: '__torso', head: '__head', armF: '__armF', armB: '__armB' };
+    var order = P0.order || ['legB', 'armB', 'torso', 'head', 'armF', 'legF'];
+    var box = node.__body;
+    for (var i = 0; i < order.length; i++) {
+      var name = order[i], def = P0.parts[name];
+      if (!def || !def.canvas) continue;
+      var key = slots[name] || ('__p_' + name);
+      var sp = node[key];
+      if (!sp) {
+        sp = new P.Sprite(P.Texture.EMPTY);
+        node[key] = sp;
+        box.addChild(sp);
+        sp.__fl = addFlashChild(sp);
+      }
+      sp.texture = P.Texture.from(def.canvas);
+      if (sp.__fl) sp.__fl.texture = sp.texture;
+      var pv = def.pivot || [0, 0], ps = def.pos || [0, 0];
+      sp.pivot.set(pv[0], pv[1]);
+      sp.position.set(ps[0] * s, ps[1] * s);
+      sp.scale.set(s);
+    }
+    node.__partsRig = true;
+    node.__legBaseY = node.__legL ? node.__legL.position.y : 0;
   }
 
   // ---------- RIG: o personagem é montado em PEÇAS e animado ----------
@@ -898,7 +1058,8 @@ var JOGO = (typeof window !== 'undefined')
     var bb = artBBox(cv);
     var W2 = cv.width, H2 = cv.height;
     var an = cv.__anchor || [0.5, 1];
-    var hipY = Math.round(bb.y0 + (bb.y1 - bb.y0) * 0.68);
+    // linha do quadril: abaixo do cinto, senão o corpo inteiro "entorta" no passo
+    var hipY = Math.round(bb.y0 + (bb.y1 - bb.y0) * 0.74);
     hipY = clamp(hipY, 2, H2 - 3);
     var midX = Math.round((bb.x0 + bb.x1) / 2);
     midX = clamp(midX, 2, W2 - 3);
@@ -985,6 +1146,27 @@ var JOGO = (typeof window !== 'undefined')
     }
     roomPal = pal;
 
+    // MÁSCARA DA ARENA: overlays e marcas do chão nunca vazam para fora do
+    // tabuleiro (e some qualquer resíduo de geometria depois de girar).
+    // (uma máscara POR camada: no Pixi um mesmo Graphics não serve a dois alvos)
+    var m0 = iso(-0.5, -0.5, 0), m1 = iso(w - 0.5, -0.5, 0),
+        m2 = iso(w - 0.5, h - 0.5, 0), m3 = iso(-0.5, h - 0.5, 0);
+    var poly = [m0.x, m0.y - 4, m1.x + 4, m1.y, m2.x, m2.y + H_HIGH, m3.x - 4, m3.y];
+    for (var mi = 0; mi < boardMask.length; mi++) {
+      var om = boardMask[mi];
+      if (om.parent) om.parent.removeChild(om);
+      om.destroy();
+    }
+    boardMask.length = 0;
+    var targets = [overlayLayer, decalLayer];
+    for (var ti = 0; ti < targets.length; ti++) {
+      var mk = new P.Graphics();
+      mk.beginFill(0xffffff, 1).drawPolygon(poly).endFill();
+      world.addChild(mk);
+      targets[ti].mask = mk;
+      boardMask.push(mk);
+    }
+
     var f1 = hexInt(pal.floor1), f2 = hexInt(pal.floor2);
     var edge = shadeHex(pal.secondary, -0.45);
     var g = new P.Graphics();
@@ -1033,20 +1215,28 @@ var JOGO = (typeof window !== 'undefined')
     // vizinho ao sul/leste, que é desenhado depois). Poucas texturas ⇒ o batch
     // do Pixi resolve a sala inteira em 1–2 draw calls.
     if (useArtTile) {
+      // ordem de desenho pela profundidade de TELA (a espessura do losango cobre
+      // o vizinho da frente) — precisa respeitar a rotação atual da câmera
+      var cells = [];
       for (var ay = 0; ay < h; ay++) {
         for (var ax = 0; ax < w; ax++) {
           var ak = tileKind(gridTile(st, ax, ay));
           if (ak === 'hole' || ak === 'high' || ak === 'low') continue;
-          // 2 variações de chão + variação de decoração (','), mais uma rara
-          var variant = (ak === 'deco') ? 2 : (((ax + ay) % 2) ? 1 : 0);
-          if (ak !== 'deco' && (hashStr('v' + ax + '_' + ay + theme) % 11) === 0) variant = 3;
-          var sp = artNode('tile', [theme, variant], 0.5);
-          if (!sp) continue;
-          var tp = iso(ax, ay, 0);
-          sp.position.set(tp.x, tp.y);
-          floorLayer.addChild(sp);
-          boardNodes.push(sp);
+          cells.push({ x: ax, y: ay, k: ak, d: depthOf(ax, ay) });
         }
+      }
+      cells.sort(function (p, q) { return p.d - q.d; });
+      for (var ci = 0; ci < cells.length; ci++) {
+        var cell = cells[ci];
+        // 2 variações de chão + variação de decoração (','), mais uma rara
+        var variant = (cell.k === 'deco') ? 2 : (((cell.x + cell.y) % 2) ? 1 : 0);
+        if (cell.k !== 'deco' && (hashStr('v' + cell.x + '_' + cell.y + theme) % 11) === 0) variant = 3;
+        var sp = artNode('tile', [theme, variant], 0.5);
+        if (!sp) continue;
+        var tp = iso(cell.x, cell.y, 0);
+        sp.position.set(tp.x, tp.y);
+        floorLayer.addChild(sp);
+        boardNodes.push(sp);
       }
     }
 
@@ -1058,7 +1248,7 @@ var JOGO = (typeof window !== 'undefined')
         var node = k2 === 'high' ? buildHigh(theme, sc, pal, x2, y2) : buildLow(theme, sc, pal, x2, y2);
         var p = iso(x2, y2, 0);
         node.position.set(p.x, p.y);
-        node.zIndex = (x2 + y2) * 10 + (k2 === 'low' ? 1 : 2);
+        node.zIndex = Math.round(depthOf(x2, y2) * 10) + (k2 === 'low' ? 1 : 2);
         objectLayer.addChild(node);
         boardNodes.push(node);
       }
@@ -1078,7 +1268,7 @@ var JOGO = (typeof window !== 'undefined')
           if (!pn) break;
           var pp3 = iso(x3 + ((hsh >> 3) % 7 - 3) * 0.045, y3 + ((hsh >> 7) % 7 - 3) * 0.045, 0);
           pn.position.set(pp3.x, pp3.y);
-          pn.zIndex = (x3 + y3) * 10;      // abaixo da unidade da mesma célula (+5)
+          pn.zIndex = Math.round(depthOf(x3, y3) * 10);   // abaixo da unidade da célula (+5)
           objectLayer.addChild(pn);
           boardNodes.push(pn);
         }
@@ -1245,8 +1435,15 @@ var JOGO = (typeof window !== 'undefined')
     c.addChild(sh); c.__shadow = sh;
 
     var body = new P.Container();
-    var cv = unitArtCanvas(u, 0);
-    if (cv) {
+    c.__body = body;
+    var src = unitRigSource(u, 0);
+    var cv = (src && src.kind === 'slice') ? src.data : null;
+    if (src && src.kind === 'parts') {
+      applyPartsRig(c, src.data);
+      c.__art = true; c.__artDir = 0;
+      c.__height = 130;
+      c.__gait = 'walk';
+    } else if (cv) {
       // ARTE ARTICULADA: pernas primeiro, tronco por cima (esconde a emenda)
       var legL = new P.Sprite(P.Texture.EMPTY);
       var legR = new P.Sprite(P.Texture.EMPTY);
@@ -1276,7 +1473,7 @@ var JOGO = (typeof window !== 'undefined')
       body.addChildAt(phl.left, 0); body.addChildAt(phl.right, 0);
       c.__legL = phl.left; c.__legR = phl.right; c.__phLegs = true;
     }
-    c.addChild(body); c.__body = body;
+    c.addChild(body);
 
     var bars = new P.Graphics();
     c.addChild(bars); c.__bars = bars;
@@ -1348,6 +1545,12 @@ var JOGO = (typeof window !== 'undefined')
       L.rotation = swing + plant * 0.22;
       R2.rotation = -swing - plant * 0.14;
     }
+    // braços (só existem no rig de PARTES): contrabalançam as pernas e
+    // desferem o golpe no ataque
+    if (c.__armF) c.__armF.rotation = -swing * 0.7 - plant * 1.25;
+    if (c.__armB) c.__armB.rotation = swing * 0.7 + plant * 0.35;
+    if (c.__head) c.__head.rotation = swing * 0.06 - plant * 0.10;
+
     // o passo levanta o pé de trás: um leve deslocamento vertical alternado
     var base = c.__legBaseY;
     if (base == null) { base = c.__legBaseY = L.position.y; }
@@ -1360,7 +1563,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!c) { c = unitNodes[u.uid] = makeUnitNode(u); objectLayer.addChild(c); }
     var p = iso(v.x, v.y, v.z || 0);
     c.position.set(p.x + (v.knockX || 0), p.y + (v.knockY || 0));
-    c.zIndex = Math.round((v.x + v.y) * 10) + 5;
+    c.zIndex = Math.round(depthOf(v.x, v.y) * 10) + 5;
 
     var stt = unitStatus(u);
     var alpha = 1;
@@ -1371,15 +1574,20 @@ var JOGO = (typeof window !== 'undefined')
     c.visible = alpha > 0.02;
 
     var body = c.__body;
-    // direção: a arte tem 4 poses isométricas; o placeholder espelha em X
-    if (c.__art && v.dir != null && v.dir !== c.__artDir) {
-      var ncv = unitArtCanvas(u, v.dir);
-      if (ncv) { applyRig(c, ncv); c.__artDir = v.dir; }
+    // direção APARENTE = (direção no mundo + rotação da câmera) mod 4  (§9-E):
+    // girar a câmera mostra as costas de quem estava de frente.
+    if (c.__art) {
+      var wantDir = ((v.dir || 0) + (cam.rot & 3)) & 3;
+      if (wantDir !== c.__artDir) {
+        var nsrc = unitRigSource(u, wantDir);
+        if (nsrc && nsrc.kind === 'parts') { applyPartsRig(c, nsrc.data); c.__artDir = wantDir; }
+        else if (nsrc) { applyRig(c, nsrc.data); c.__artDir = wantDir; }
+      }
     }
     // idle: respiração + bob; morte: achata e afunda; invocação: pop
     var t = nowT * 1.7 + v.bob;
     var breathe = 1 + Math.sin(t) * 0.022;
-    var sx = c.__art ? 1 : v.face, sy = 1;
+    var sx = c.__art ? 1 : apparentFace(v), sy = 1;
     sx *= breathe * (1 - (v.squash > 0 ? Math.sin(v.squash * Math.PI) * -0.16 : 0));
     sy *= (1 / breathe);
     if (v.squash > 0) { var q = Math.sin(Math.min(v.squash, 1) * Math.PI); sx *= (1 + q * 0.17); sy *= (1 - q * 0.15); }
@@ -1491,11 +1699,23 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  // o motor apaga A e B do estado no instante da fusão; o renderizador precisa
+  // deles em cena até a animação acabar (é a parte que o jogador vê)
+  var unitSnap = {};
+  function fusionHolds(uid) {
+    for (var i = 0; i < animQ.length; i++) {
+      var a = animQ[i];
+      if (a.kind === 'fusion' && (a.a === uid || a.b === uid)) return a;
+    }
+    return null;
+  }
+
   function syncUnits(st) {
     var seen = {};
     for (var i = 0; i < st.units.length; i++) {
       var u = st.units[i];
       seen[u.uid] = 1;
+      unitSnap[u.uid] = u;
       var v = vis[u.uid];
       if (!v) { v = getVisFor(u.uid, u.x, u.y); initFacing(st, u, v); }
       else if (!animatingUid(u.uid)) {
@@ -1512,13 +1732,21 @@ var JOGO = (typeof window !== 'undefined')
       }
       updateUnitNode(u, v, st);
     }
+    // unidades já removidas do estado mas ainda em cena pela fusão
+    for (var f = 0; f < animQ.length; f++) {
+      var fa = animQ[f];
+      if (fa.kind !== 'fusion') continue;
+      if (fa.a && !seen[fa.a] && unitSnap[fa.a] && vis[fa.a]) updateUnitNode(unitSnap[fa.a], vis[fa.a], st);
+      if (fa.b && !seen[fa.b] && unitSnap[fa.b] && vis[fa.b]) updateUnitNode(unitSnap[fa.b], vis[fa.b], st);
+    }
     // limpa nós de unidades que saíram do estado (ex.: fundida absorvida)
     for (var uid in unitNodes) {
-      if (!seen[uid]) {
+      if (!seen[uid] && !fusionHolds(uid)) {
         var n = unitNodes[uid];
         if (n.parent) n.parent.removeChild(n);
         n.destroy({ children: true });
         delete unitNodes[uid];
+        delete unitSnap[uid];
       }
     }
   }
@@ -1536,11 +1764,20 @@ var JOGO = (typeof window !== 'undefined')
     var a = iso(fx, fy, 0), b = iso(tx, ty, 0);
     return (b.x < a.x - 0.5) ? -1 : 1;
   }
-  // define espelhamento (placeholder) E pose isométrica (arte) de uma vez
+  // define espelhamento (placeholder) E pose isométrica (arte) de uma vez.
+  // Guardamos o VETOR de mundo: assim a pose continua certa se a câmera girar.
   function faceUnit(v, fx, fy, tx, ty) {
     if (!v) return;
+    var dx = tx - fx, dy = ty - fy;
+    if (!dx && !dy) return;
+    v.fdx = dx; v.fdy = dy;
     v.face = faceTo(fx, fy, tx, ty);
-    v.dir = isoDir(tx - fx, ty - fy);
+    v.dir = isoDir(dx, dy);
+  }
+  function apparentFace(v) {
+    if (v.fdx == null) return v.face || 1;
+    var d = rotDelta(v.fdx, v.fdy);
+    return (d.x - d.y) < 0 ? -1 : 1;
   }
   function animatingUid(uid) {
     for (var i = 0; i < animQ.length; i++) if (animQ[i].uid === uid) return true;
@@ -2242,7 +2479,10 @@ var JOGO = (typeof window !== 'undefined')
   function startFusion(ev) {
     var from = ev.from || [];
     var a = from[0], b = from[1];
-    var va = a ? getVis(a) : null, vb = b ? getVis(b) : null;
+    // A e B podem já ter saído do estado: usamos o retrato guardado
+    var va = (a && vis[a]) || null, vb = (b && vis[b]) || null;
+    if (a && !va && unitSnap[a]) va = getVisFor(a, unitSnap[a].x, unitSnap[a].y);
+    if (b && !vb && unitSnap[b]) vb = getVisFor(b, unitSnap[b].x, unitSnap[b].y);
     var mid = null;
     if (va && vb) mid = { x: (va.x + vb.x) / 2, y: (va.y + vb.y) / 2 };
     else {
@@ -2475,25 +2715,55 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     updateCamFocus(dtv);
+    updateRot(dt);
     world.position.set(cam.panX + shake.x, cam.panY + shake.y);
-    world.scale.set(cam.zoom);
+    world.scale.set(cam.zoom * rotSquash(), cam.zoom);
 
     updateWeather(dt);
     if (JOGO.FX && JOGO.FX.update) { try { JOGO.FX.update(dtv, dt); } catch (e2) { if (console && console.warn) console.warn('[FX]', e2); } }
 
-    app.renderer.render(stage);
+    if (!skipGpu) app.renderer.render(stage);
     perf.frames++;
   };
 
-  // sonda de perf p/ testes: renderiza n frames medindo o custo
-  R.perfProbe = function (n) {
+  // sonda de perf p/ testes: renderiza n frames medindo o custo.
+  // opts.cpuOnly pula a submissão ao GPU (útil no headless, onde o SwiftShader
+  // rasteriza em software e mascara o custo real de CPU).
+  var skipGpu = false;
+  R.perfProbe = function (n, opts) {
     n = n || 60;
+    opts = opts || {};
+    skipGpu = !!opts.cpuOnly;
     var t0 = (performance && performance.now) ? performance.now() : Date.now();
     for (var i = 0; i < n; i++) R.render(0.016);
     var gl = app && app.renderer && app.renderer.gl;
-    if (gl && gl.finish) gl.finish();
+    if (!skipGpu && gl && gl.finish) gl.finish();
     var t1 = (performance && performance.now) ? performance.now() : Date.now();
-    return { frames: n, totalMs: t1 - t0, msPerFrame: (t1 - t0) / n, fps: 1000 / ((t1 - t0) / n) };
+    skipGpu = false;
+    return { frames: n, totalMs: t1 - t0, msPerFrame: (t1 - t0) / n, fps: 1000 / ((t1 - t0) / n), cpuOnly: !!opts.cpuOnly };
+  };
+  // depuração: nós desenhados FORA do tabuleiro (caça a resíduo de rotação)
+  R.strayNodes = function () {
+    var d = gridDims(), out = [];
+    function scan(layer, name) {
+      if (!layer) return;
+      for (var i = 0; i < layer.children.length; i++) {
+        var n = layer.children[i];
+        if (n.position.x === 0 && n.position.y === 0) continue;
+        var a = n.position.x / HW, b = n.position.y / HH;
+        var rp = unrotPoint((a + b) / 2, (b - a) / 2);
+        if (rp.x < -1.2 || rp.y < -1.2 || rp.x > d.w + 0.2 || rp.y > d.h + 0.2) {
+          out.push(name + '[' + i + ']=' + n.constructor.name + '@' +
+            Math.round(rp.x) + ',' + Math.round(rp.y) + (n.__tag ? ('#' + n.__tag) : ''));
+        }
+      }
+    }
+    scan(objectLayer, 'obj');
+    scan(floorLayer, 'floor');
+    scan(overlayLayer, 'ov');
+    scan(ovEventsBox, 'evs');
+    scan(decalLayer, 'decal');
+    return out;
   };
   R.canvas = function () { return view; };
   R.stats = function () {

@@ -61,16 +61,16 @@
 <div id="app"></div>
 <div id="results"></div>
 
-<script src="../js/core/data/elements.js?v=1"></script>
-<script src="../js/core/data/classes.js?v=1"></script>
-<script src="../js/core/data/progression.js?v=1"></script>
-<script src="../js/core/data/spells.js?v=1" onerror="window.__noSpells=1"></script>
-<script src="../js/core/data/monsters.js?v=1" onerror="window.__noMonsters=1"></script>
-<script src="../js/core/data/dungeons.js?v=1" onerror="window.__noDungeons=1"></script>
-<script src="../js/core/data/fusions.js?v=1" onerror="window.__noFusions=1"></script>
-<script src="../js/core/data/pets.js?v=1" onerror="window.__noPets=1"></script>
-<script src="../js/core/data/items.js?v=1" onerror="window.__noItems=1"></script>
-<script src="../js/render2d/art.js?v=1"></script>
+<script src="../js/core/data/elements.js?v=10"></script>
+<script src="../js/core/data/classes.js?v=10"></script>
+<script src="../js/core/data/progression.js?v=10"></script>
+<script src="../js/core/data/spells.js?v=10" onerror="window.__noSpells=1"></script>
+<script src="../js/core/data/monsters.js?v=10" onerror="window.__noMonsters=1"></script>
+<script src="../js/core/data/dungeons.js?v=10" onerror="window.__noDungeons=1"></script>
+<script src="../js/core/data/fusions.js?v=10" onerror="window.__noFusions=1"></script>
+<script src="../js/core/data/pets.js?v=10" onerror="window.__noPets=1"></script>
+<script src="../js/core/data/items.js?v=10" onerror="window.__noItems=1"></script>
+<script src="../js/render2d/art.js?v=10"></script>
 <script>
 (function () {
   var app = document.getElementById('app');
@@ -206,15 +206,51 @@
   var g7 = sec('7 · Cenário por tema — chão, obstáculo alto (bloqueia visão), obstáculo baixo (cobertura)',
     'Temas: ' + THEMES.join(' · ') + (D.dungeons ? ' — paletas cruzadas com DATA.dungeons' : ' — DATA.dungeons ainda não existe'));
   THEMES.forEach(function (th) {
-    rowTitle(g7, 'tema ' + th);
+    var V = Art.themeVariants(th);
+    var dataKey = (Art.themePalette(th) || {}).data;
+    var sc = (D.scenery && dataKey && D.scenery[dataKey]) || null;
+    rowTitle(g7, 'tema ' + th + ' — chão');
     for (var v = 0; v < 4; v++) {
       show(g7, Art.tile(th, v), 'chão v' + v, 'stage t-' + th, 'tile ' + th + ' ' + v);
     }
-    show(g7, Art.obstacleHigh(th), 'ALTO', 'stage t-' + th, 'alto ' + th);
-    show(g7, Art.obstacleLow(th), 'baixo', 'stage t-' + th, 'baixo ' + th);
-    Art.themePalette(th).props.forEach(function (pk) {
-      show(g7, Art.prop(th, pk), 'prop ' + pk, 'stage t-' + th, 'prop ' + th + ' ' + pk);
+    // OBSTÁCULOS: pedidos exatamente como o Renderer pede — pela DESCRIÇÃO de
+    // DATA.scenery. Se a resolução quebrar, a fileira vira tudo igual e se vê.
+    rowTitle(g7, 'tema ' + th + ' — ALTO (bloqueia visão) · ' + V.high.length + ' variantes');
+    (sc ? sc.high : V.high).forEach(function (name, i) {
+      var cv = Art.obstacleHigh(th, name);
+      show(g7, cv, (sc ? name : V.high[i]), 'stage t-' + th, 'alto ' + th + ' ' + name);
+      check('cenário ' + th + ' alto[' + i + ']: desenhado', inked(cv), String(name));
     });
+    rowTitle(g7, 'tema ' + th + ' — baixo (cobertura) · ' + V.low.length + ' variantes');
+    (sc ? sc.low : V.low).forEach(function (name, i) {
+      var cv = Art.obstacleLow(th, name);
+      show(g7, cv, (sc ? name : V.low[i]), 'stage t-' + th, 'baixo ' + th + ' ' + name);
+      check('cenário ' + th + ' baixo[' + i + ']: desenhado', inked(cv), String(name));
+    });
+    rowTitle(g7, 'tema ' + th + ' — props');
+    (sc ? sc.props : V.props).forEach(function (name, i) {
+      var cv = Art.prop(th, name);
+      show(g7, cv, (sc ? name : V.props[i]), 'stage t-' + th, 'prop ' + th + ' ' + name);
+      check('cenário ' + th + ' prop[' + i + ']: desenhado', inked(cv), String(name));
+    });
+    // a prova do bug corrigido: descrições diferentes precisam dar desenhos
+    // diferentes (antes TODAS caíam na mesma peça)
+    if (sc) {
+      var keys = sc.high.map(function (n) { return Art.obstacleHigh(th, n); });
+      var distintos = 0, i2, j2;
+      for (i2 = 0; i2 < keys.length; i2++) {
+        for (j2 = i2 + 1; j2 < keys.length; j2++) if (keys[i2] !== keys[j2]) distintos++;
+      }
+      check('cenário ' + th + ': as 4 descrições de ALTO dão desenhos distintos',
+            distintos === (keys.length * (keys.length - 1)) / 2, distintos + ' pares');
+      var lk = sc.low.map(function (n) { return Art.obstacleLow(th, n); });
+      var dl = 0;
+      for (i2 = 0; i2 < lk.length; i2++) {
+        for (j2 = i2 + 1; j2 < lk.length; j2++) if (lk[i2] !== lk[j2]) dl++;
+      }
+      check('cenário ' + th + ': as 5 descrições de BAIXO dão desenhos distintos',
+            dl === (lk.length * (lk.length - 1)) / 2, dl + ' pares');
+    }
   });
 
   // -------------------------------------------------------- 8. MONSTROS E PETS
@@ -424,6 +460,15 @@
   check('canvas traz __anchor', !!Art.unit('sumo', {}).__anchor);
   check('canvas traz __res', Art.unit('sumo', {}).__res >= 1);
   check('ancoragem do herói nos pés', Art.unit('sumo', {}).__anchor[1] > 0.7);
+
+  // ?sec=N — deixa só a seção N visível (para captura de tela focada)
+  var onlySec = (location.search.match(/[?&]sec=(\d+)/) || [])[1];
+  if (onlySec) {
+    var secs = app.querySelectorAll('section'), si;
+    for (si = 0; si < secs.length; si++) {
+      if (si !== (+onlySec - 1)) secs[si].style.display = 'none';
+    }
+  }
 
   var dt = Math.round(performance.now() - t0);
   var st = Art.stats();

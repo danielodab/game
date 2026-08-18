@@ -56,6 +56,11 @@
       <button id="bt-trap">armadilha</button>
       <button id="bt-nova">nova</button>
       <button id="bt-sel">selecionar feitiço</button>
+      <button id="bt-rot-ccw">⟲ girar</button>
+      <button id="bt-rot-cw">girar ⟳</button>
+      <button id="bt-walk2">andar 2</button>
+      <button id="bt-melee">golpe</button>
+      <button id="bt-ranged">à distância</button>
       <button id="bt-reset">reiniciar</button>
       <button class="el" id="bt-fogo">fogo</button>
       <button class="el" id="bt-agua">água</button>
@@ -536,6 +541,14 @@ JOGO.DATA = {
     });
   };
 
+  // reposiciona unidades e faz o renderizador aceitar as posições NA HORA
+  // (sem isso a figura ainda estaria deslizando quando a tira é fotografada)
+  function snapScene(pairs) {
+    pairs.forEach(function (p) { p[0].x = p[1]; p[0].y = p[2]; });
+    Engine.emit({ type: 'battleStart', state: st() });
+    if (window.__pump) window.__pump();
+  }
+
   var acts = {
     'bt-move': function () {
       var a = heroes()[0]; if (!a) return;
@@ -585,7 +598,9 @@ JOGO.DATA = {
       var hs = heroes();
       if (hs.length < 2) return;
       var A2 = hs[0], B = hs[1];
-      B.x = A2.x + 1; B.y = A2.y;                     // adjacentes
+      snapScene([[A2, 6, 6], [B, 7, 6]]);              // adjacentes, no meio do mapa
+      window.__stripA = { x: A2.x, y: A2.y };
+      window.__stripB = { x: B.x, y: B.y };
       // chave da dupla em ordem alfabética (CONTRACT_V2 §4)
       var pairIds = [A2.classId, B.classId].sort();
       var fused = {
@@ -698,19 +713,23 @@ JOGO.DATA = {
     'bt-melee': function () {                     // golpe corpo a corpo
       var a = heroes()[0], e = enemies()[0];
       if (!a || !e) return;
-      a.x = e.x - 1; a.y = e.y;                   // encosta no alvo
+      e.x = 8; e.y = 6;
+      snapScene([[a, 7, 6], [e, 8, 6]]);          // encostados, no meio do mapa
       window.__stripA = { x: a.x, y: a.y };
       window.__stripB = { x: e.x, y: e.y };
       JOGO.__castAt(a, 'aparo', e.x, e.y);
     },
-    'bt-ranged': function () {                    // feitiço à distância
-      var a = heroes()[1] || heroes()[0], e = enemies()[0];
+    'bt-ranged': function () {                    // feitiço à distância (por cima do buraco)
+      var a = heroes()[1] || heroes()[0];
+      var e = st().units.filter(function (u) { return u.defId === 'lodo' && u.alive; })[0] || enemies()[0];
       if (!a || !e) return;
-      a.x = e.x - 5; a.y = e.y;
+      snapScene([[a, 7, 8], [e, 12, 8]]);         // 5 células, com buraco no meio
       window.__stripA = { x: a.x, y: a.y };
       window.__stripB = { x: e.x, y: e.y };
       JOGO.__castAt(a, 'brasa', e.x, e.y);
     },
+    'bt-rot-cw': function () { JOGO.Renderer.rotate(1); },
+    'bt-rot-ccw': function () { JOGO.Renderer.rotate(-1); },
     'bt-reset': function () { boot(); }
   };
   ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (el) {
@@ -734,6 +753,7 @@ JOGO.DATA = {
     var fs = (JOGO.FX && JOGO.FX.stats) ? JOGO.FX.stats() : {};
     el.textContent = 'clima=' + Game.state.weather +
       ' · ativo=' + (a ? a.name : '—') +
+      ' · rot=' + (JOGO.Renderer.rotation ? JOGO.Renderer.rotation() * 90 + '°' : '?') +
       ' · zoom=' + (s.zoom ? s.zoom.toFixed(2) : '?') +
       ' · unid=' + s.units + ' obj=' + s.objects +
       ' · part=' + (fs.parts || 0) +
@@ -761,12 +781,32 @@ JOGO.DATA = {
     var ok = JOGO.Renderer.init(document.getElementById('game-canvas'), { preserveDrawingBuffer: true });
     boot();
 
+    // NOTA: a aplicação dos parâmetros de cena mora em applyQuery(), chamada
+    // DEPOIS das checagens — elas terminam com boot() e apagariam tudo.
+    function applyQuery() {
+    // demonstração do VALOR TÁTICO da rotação (§9-E): um inimigo escondido
+    // atrás do obstáculo ALTO em rot=0 aparece quando a câmera gira.
+    if (qs.demo === 'oclusao') {
+      var hid = Game.state.units.filter(function (u) { return u.defId === 'lodo'; })[0];
+      if (hid) { hid.x = 3; hid.y = 6; }
+      var her = Game.state.units.filter(function (u) { return u.side === 'player' && u.kind === 'hero'; });
+      if (her[0]) { her[0].x = 6; her[0].y = 9; }
+      if (her[1]) { her[1].x = 7; her[1].y = 9; }
+      JOGO.Renderer.handleEvent({ type: 'battleStart', state: Game.state });
+      JOGO.Renderer.setCamera({ centerX: 3, centerY: 7, zoom: 0.95 });
+    }
     if (qs.zoom) JOGO.Renderer.setCamera({ zoom: parseFloat(qs.zoom) });
+    if (qs.rot) {
+      JOGO.Renderer.setCamera({ rot: parseInt(qs.rot, 10) || 0, animate: false });
+      if (qs.demo === 'oclusao') JOGO.Renderer.setCamera({ centerX: 3, centerY: 7 });
+    }
     if (qs.spell) Game.selectedSpellId = qs.spell;
     if (qs.hover) {
       var hv = qs.hover.split(',');
       Game.hoverTile = { x: parseInt(hv[0], 10), y: parseInt(hv[1], 10) };
     }
+    pump();
+    }   // fim de applyQuery()
 
     requestAnimationFrame(frame);
 
@@ -793,7 +833,31 @@ JOGO.DATA = {
         JOGO.Renderer.setCamera({ zoom: z0 });
         return z1 !== z0;
       })(),
-      'isBusy=false parado': JOGO.Renderer.isBusy() === false
+      'isBusy=false parado': JOGO.Renderer.isBusy() === false,
+      'Renderer.rotate': typeof JOGO.Renderer.rotate === 'function',
+      // §9-E: o erro mais provável — clicar numa célula e o jogo entender outra.
+      // Testa ida e volta (mundo → tela → mundo) nas QUATRO orientações.
+      'clique honesto nas 4 rotações': (function () {
+        var g = Game.state.grid, ok = true, r, i, gx, gy, p, back;
+        for (r = 0; r < 4; r++) {
+          JOGO.Renderer.setCamera({ rot: r, animate: false });
+          for (i = 0; i < 12; i++) {
+            gx = (i * 7 + r) % g.w; gy = (i * 5 + r * 3) % g.h;
+            p = JOGO.Renderer.project(gx, gy, 0);
+            back = JOGO.Renderer.tileAt(p.x, p.y);
+            if (!back || back.x !== gx || back.y !== gy) ok = false;
+          }
+        }
+        JOGO.Renderer.setCamera({ rot: 0, animate: false });
+        return ok;
+      })(),
+      'rotação muda a projeção': (function () {
+        var a = JOGO.Renderer.project(0, 0, 0);
+        JOGO.Renderer.setCamera({ rot: 1, animate: false });
+        var b = JOGO.Renderer.project(0, 0, 0);
+        JOGO.Renderer.setCamera({ rot: 0, animate: false });
+        return Math.abs(a.x - b.x) > 1 || Math.abs(a.y - b.y) > 1;
+      })()
     };
     // isBusy verdadeiro durante animação
     JOGO.Renderer.handleEvent({ type: 'move', uid: (Game.state.units[0] || {}).uid, path: [{ x: 2, y: 1 }, { x: 3, y: 1 }] });
@@ -801,6 +865,7 @@ JOGO.DATA = {
     for (var i = 0; i < 40; i++) JOGO.Renderer.render(0.05);
     checks['isBusy volta a false'] = JOGO.Renderer.isBusy() === false;
     boot();
+    applyQuery();          // só agora a cena pedida na URL é montada
 
     var failures = Object.keys(checks).filter(function (k) { return !checks[k]; });
     if (jsErrors.length) failures.push('erros JS: ' + jsErrors.join(' | '));
@@ -852,6 +917,9 @@ JOGO.DATA = {
     function runStrip() {
       var shots = parseInt(qs.shots || '8', 10);
       var step = parseInt(qs.step || '4', 10);
+      // dt por render: no headless (SwiftShader) cada frame custa caro, então
+      // avançamos mais tempo por render em vez de renderizar mais vezes
+      var dts = (parseFloat(qs.dt || '16') || 16) / 1000;
       var cr = (qs.crop || '300,320').split(',');
       var cw = parseInt(cr[0], 10), ch = parseInt(cr[1], 10);
       var cols = parseInt(qs.cols || '4', 10);
@@ -866,10 +934,12 @@ JOGO.DATA = {
       if (acts[qs.strip]) { acts[qs.strip](); pump(); }
       var A = window.__stripA || { x: 4, y: 4 }, B = window.__stripB || A;
       var fx = (A.x + B.x) / 2, fy = (A.y + B.y) / 2;
+      R.setCamera({ centerX: fx, centerY: fy });     // a ação no meio da tela
+      R.render(0.001);
       var i, f;
       for (i = 0; i < shots; i++) {
-        for (f = 0; f < step; f++) { R.render(0.016); pump(); }
-        box.appendChild(stripTile(cv, R, fx, fy, cw, ch, i, i * step * 16));
+        for (f = 0; f < step; f++) { R.render(dts); pump(); }
+        box.appendChild(stripTile(cv, R, fx, fy, cw, ch, i, Math.round(i * step * dts * 1000)));
       }
       var stx = document.getElementById('test-status');
       if (stx) stx.textContent += ' | tira ' + qs.strip + ' ' + shots + '×' + step + 'f';
@@ -890,13 +960,42 @@ JOGO.DATA = {
       return out;
     }
 
-    if (qs.perf) {
+    // diagnóstico de geometria (usado para caçar overlay fora do tabuleiro)
+    if (qs.diag) {
       setTimeout(function () {
-        var r = JOGO.Renderer.perfProbe(parseInt(qs.perf, 10) || 120);
-        var st4 = document.getElementById('test-status');
-        window.__PERF = r;
-        if (st4) st4.textContent += ' | perf ' + r.msPerFrame.toFixed(2) + 'ms/frame (' + r.fps.toFixed(0) + ' fps)';
-      }, 400);
+        var st2 = Game.state, g = st2.grid, out = [];
+        var a2 = Engine.activeUnit(st2);
+        var re = Engine.reachable(st2, a2.uid) || [];
+        var bad = re.filter(function (t) { return t.x < 0 || t.y < 0 || t.x >= g.w || t.y >= g.h; });
+        (st2.tileEventsActive || []).forEach(function (e2) {
+          var p2 = JOGO.Renderer.project(e2.x, e2.y, 0);
+          out.push(e2.eventId + '@' + e2.x + ',' + e2.y + '→' + Math.round(p2.x) + ':' + Math.round(p2.y));
+        });
+        var pets = st2.units.filter(function (u) { return u.kind === 'pet'; });
+        var el2 = document.getElementById('test-status');
+        el2.textContent += ' || rot=' + JOGO.Renderer.rotation() +
+          ' reach=' + re.length + ' fora=' + bad.length +
+          ' ativo=' + a2.uid + '@' + a2.x + ',' + a2.y +
+          ' pet=' + pets.map(function (p3) { return p3.x + ',' + p3.y; }).join('/') +
+          ' evs=' + out.join(' ') +
+          ' | FORA: ' + (JOGO.Renderer.strayNodes ? JOGO.Renderer.strayNodes().join(' ') : '?');
+      }, 300);
+    }
+
+    // PERF: medido em linha (sem timer) para funcionar mesmo com relógio
+    // virtualizado do headless. Mede CPU (cena+animação) e total (com GPU).
+    if (qs.perf) {
+      var pn2 = parseInt(qs.perf, 10) || 120;
+      JOGO.Renderer.perfProbe(10, { cpuOnly: true });                 // aquece
+      var rc = JOGO.Renderer.perfProbe(pn2, { cpuOnly: true });
+      var rg = JOGO.Renderer.perfProbe(Math.min(pn2, 40));
+      window.__PERF = { cpu: rc, full: rg, units: Game.state.units.length };
+      var st4 = document.getElementById('test-status');
+      if (st4) {
+        st4.textContent += ' | perf ' + Game.state.units.length + ' unid: CPU ' +
+          rc.msPerFrame.toFixed(2) + 'ms/f (' + rc.fps.toFixed(0) + ' fps) · total ' +
+          rg.msPerFrame.toFixed(2) + 'ms/f';
+      }
     }
   }
 

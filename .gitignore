@@ -12,3 +12,8 @@ desktop.ini
 # Temporários
 *.tmp
 *.log
+
+# Arte de terceiros: nao redistribuir (licenca dos packs)
+assets/embedded/sprites-*.js
+assets/embedded/fx-*.js
+assets/packs/

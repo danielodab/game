@@ -314,10 +314,10 @@ var JOGO = (typeof window !== 'undefined')
     addShake(4.5 * pw, 0.24);
     // TEMPO 2 — explosão + anel + fumaça (2 quadros depois)
     later(0.055, function () {
-      burst(gx, gy, element, Math.round(16 + 16 * pw), { speed: 120 * pw, size: 16 * pw, life: 0.5, power: pw });
-      ring(gx, gy, E.b, 14, 78 * pw, 0.40, 6);
-      ring(gx, gy, E.a, 8, 52 * pw, 0.30, 10);
-      flare(gx, gy, E.b, 54 * pw, 0.24, 20);
+      burst(gx, gy, element, Math.round(18 + 18 * pw), { speed: 130 * pw, size: 18 * pw, life: 0.5, power: pw });
+      ring(gx, gy, E.b, 14, 96 * pw, 0.46, 6);        // anel largo: marca a célula
+      ring(gx, gy, E.a, 8, 62 * pw, 0.34, 10);
+      flare(gx, gy, E.b, 64 * pw, 0.26, 20);
       if (element === 'terra' || element === 'neutro') smokePuff(gx, gy, 3, '#6a5a44');
       if (element === 'fogo') smokePuff(gx, gy, 3, '#4a2a1c');
       spawnDecal(gx, gy, element, pw);
@@ -440,19 +440,21 @@ var JOGO = (typeof window !== 'undefined')
       var perp = Math.sin(k * Math.PI * (p.element === 'agua' ? 2.2 : 3.4)) * p.wob * 7 * SC;
       w.x += perp;
       var E = elemOf(p.element);
-      var sz = (p.element === 'terra' ? 20 : 17) * SC;
+      // cabeça generosa: o projétil tem de ser visto por cima do tabuleiro
+      var sz = (p.element === 'terra' ? 28 : 24) * SC;
       p.head.position.set(w.x, w.y);
       p.head.width = p.head.height = sz;
       p.head.rotation += (p.spin || 0) * dt * (p.element === 'terra' ? 1 : 0.4);
       p.glow.position.set(w.x, w.y);
-      p.glow.width = p.glow.height = sz * 2.6;
-      p.glow.alpha = 0.55;
+      p.glow.width = p.glow.height = sz * 3.1;
+      p.glow.alpha = 0.7;
       // rastro
-      if (Math.random() < 0.92) {
+      // rastro: 2 partículas por quadro deixam um risco contínuo, não pontilhado
+      for (var q = 0; q < 2; q++) {
         spawn({
-          tex: E.trail, x: w.x + (Math.random() - 0.5) * 5, y: w.y + (Math.random() - 0.5) * 5,
+          tex: E.trail, x: w.x + (Math.random() - 0.5) * 6, y: w.y + (Math.random() - 0.5) * 6,
           vx: (Math.random() - 0.5) * 26, vy: (E.up * 0.35) + (Math.random() - 0.5) * 18,
-          life: 0.34 + Math.random() * 0.22, s0: 12 + Math.random() * 7, s1: 0,
+          life: 0.34 + Math.random() * 0.22, s0: 15 + Math.random() * 9, s1: 0,
           tint: E.b, tint1: E.a, spin: (Math.random() - 0.5) * 4, rot: Math.random() * 6.28
         });
       }
@@ -854,11 +856,12 @@ var JOGO = (typeof window !== 'undefined')
     }
     // 2) CLARÃO
     later(T.approach, function () {
-      screenFlash('#ffffff', 0.85, 0.42);
+      // clarão forte, mas CURTO: a silhueta do fundido tem de aparecer depois
+      screenFlash('#ffffff', 0.62, 0.26);
       hitStop(0.1);
       addShake(11, 0.5);
-      flare(mid.x, mid.y, '#ffffff', 190, 0.34, 34);
-      ring(mid.x, mid.y, '#ffffff', 10, 210, 0.5, 20);
+      flare(mid.x, mid.y, '#ffffff', 150, 0.26, 34);
+      ring(mid.x, mid.y, '#ffffff', 10, 190, 0.42, 20);
     });
     // 3) revelação: colunas de luz nas duas cores + chuva de faíscas + anel duplo
     later(T.approach + T.flash * 0.6, function () {
@@ -875,11 +878,12 @@ var JOGO = (typeof window !== 'undefined')
           tint: i % 2 ? cA : cB, tint1: '#ffffff', g: 90, spin: (Math.random() - 0.5) * 6
         });
       }
-      // coluna de luz
-      for (i = 0; i < 26; i++) {
-        var w2 = world(mid.x + (Math.random() - 0.5) * 0.5, mid.y + (Math.random() - 0.5) * 0.5, 4 + i * 5);
-        spawn({ tex: 'dot', x: w2.x, y: w2.y, vy: -70 - Math.random() * 60, life: 0.8,
-          s0: 30 - i * 0.6, s1: 4, a0: 0.55, a1: 0, tint: i % 2 ? cA : cB });
+      // coluna de luz: fina e nas cores dos dois elementos, para não apagar
+      // a silhueta do fundido que surge no meio dela
+      for (i = 0; i < 22; i++) {
+        var w2 = world(mid.x + (Math.random() - 0.5) * 0.9, mid.y + (Math.random() - 0.5) * 0.9, 4 + i * 6);
+        spawn({ tex: 'dot', x: w2.x, y: w2.y, vy: -70 - Math.random() * 60, life: 0.7,
+          s0: 20 - i * 0.5, s1: 3, a0: 0.42, a1: 0, tint: i % 2 ? cA : cB });
       }
       floater(mid.x, mid.y, 'FUSÃO!', '#fff0c0', true, 'info');
     });
@@ -1001,6 +1005,13 @@ var JOGO = (typeof window !== 'undefined')
     shakeM = shakeT = 0; freezeT = 0; flashA = 0;
     shakeOut.x = shakeOut.y = 0;
     if (flashSpr) flashSpr.alpha = 0;
+  };
+
+  // o Renderer chama ao girar a câmera: marcas do chão foram desenhadas em
+  // coordenadas de mundo antigas e ficariam fora de lugar
+  FX.clearDecals = function () {
+    for (var i = 0; i < decals.length; i++) decals[i].g.destroy();
+    decals.length = 0;
   };
 
   FX.stats = function () {

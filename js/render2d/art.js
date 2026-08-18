@@ -98,9 +98,17 @@ var JOGO = (typeof window !== 'undefined')
     for (i = 0; i < 3; i++) o[i] = m + (v[i] - m) * (1 + k);
     return toHex(o[0], o[1], o[2]);
   }
-  // contorno: escuro, com um resto do matiz original (jeito Dofus, não preto puro)
-  function lineOf(c) { return mx(sh(c, -0.62), '#191016', 0.5); }
-  A.sh = sh; A.mx = mx; A.rgba = rgba; A.lineOf = lineOf;
+  // CONTORNO (revisão v4): o Dofus não usa preto pesado. O contorno é a própria
+  // cor de preenchimento, mais escura e DESSATURADA — some onde a forma já se
+  // separa por cor e nunca "suja" o desenho.
+  function lineOf(c) { return vivid(sh(c, -0.42), -0.28); }
+  // SOMBRA QUENTE: `sh(c,-k)` puxa para o preto e DESSATURA — foi o que deixava
+  // a pele com cara de verde-acinzentado. Carne sombreia para o terracota, não
+  // para o cinza. Toda sombra de pele passa por aqui.
+  var WARM = '#a2532a';
+  function wsh(c, k) { return mx(c, WARM, k); }
+  function whi(c, k) { return mx(c, '#fff0d2', k); }
+  A.sh = sh; A.mx = mx; A.rgba = rgba; A.lineOf = lineOf; A.wsh = wsh;
 
   var ELEM = {
     neutro: { c: '#d8dee4', deep: '#8b93a0', glow: '#f4f8ff', name: 'Neutro' },
@@ -137,7 +145,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   var _lw = 2;              // espessura de contorno em unidades de arte (por desenho)
-  var LW = 3.2;             // espessura-base desejada em px de TELA (traço grosso)
+  var LW = 2.1;             // espessura-base em px de TELA (traço fino e colorido)
   function setScale(k) { _lw = LW * RES / k; }
 
   // ------------------------------------------------------------ construtores
@@ -218,6 +226,14 @@ var JOGO = (typeof window !== 'undefined')
   // A peça central do estilo: preenche chapado, corta um segundo tom no lado
   // oposto à luz (fixa em cima-à-esquerda) e fecha com contorno escuro.
   var LIGHT = 0.62;
+  // MODO SILHUETA (revisão v4): com `NO_LINE` ligado, nenhuma peça desenha o
+  // próprio contorno. O corpo é pintado só com preenchimento e sombreado, e o
+  // contorno é extraído depois do ALFA COMPOSTO — assim a linha aparece só no
+  // perímetro externo do personagem e some no meio do corpo. É o que tira o
+  // efeito "boneco montado de salsichas".
+  // Peças que PRECISAM de linha própria (olhos, boca, fivelas) pedem
+  // explicitamente `{keepLine: true}`.
+  var NO_LINE = false;
   function part(ctx, P, col, o) {
     o = o || {};
     ctx.save();
@@ -236,14 +252,14 @@ var JOGO = (typeof window !== 'undefined')
       if (o.hi) {
         var rr = (o.r || P.r || 22);
         ctx.save(); ctx.clip();
-        ctx.fillStyle = sh(col, o.hi === true ? 0.26 : o.hi);
+        ctx.fillStyle = o.lite || sh(col, o.hi === true ? 0.26 : o.hi);
         ctx.beginPath();
         ctx.ellipse(c[0] - rr * 0.36, c[1] - rr * 0.46, rr * 0.44, rr * 0.3, -0.5, 0, TAU);
         ctx.fill();
         ctx.restore();
       }
     }
-    if (!o.noline) {
+    if (!o.noline && (!NO_LINE || o.keepLine)) {
       P(ctx);
       ctx.strokeStyle = o.line || lineOf(col);
       ctx.lineWidth = (o.lw == null ? 1 : o.lw) * _lw;
@@ -251,6 +267,94 @@ var JOGO = (typeof window !== 'undefined')
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // ---------------------------------------------------------------- NANQUIM
+  // TRAÇO DE ESPESSURA VARIÁVEL (revisão v5, pela referência do Dofus).
+  // `stroke()` com lineWidth dá linha uniforme — é o que deixava o boneco com
+  // cara de marionete. Aqui a linha é uma FORMA PREENCHIDA: nasce fina, engrossa
+  // no meio e afina na outra ponta, como pincel de nanquim.
+  // Usada tanto para reforçar a silhueta quanto para as linhas internas
+  // (curva do peitoral, dobra da barriga, vinco do cotovelo, prega do pano).
+  function catmull(pts, t) {
+    var n = pts.length / 2;
+    if (n < 2) return [pts[0] || 0, pts[1] || 0, 1, 0];
+    var seg = Math.min(Math.floor(t * (n - 1)), n - 2);
+    var lt = t * (n - 1) - seg;
+    function P(i) {
+      var j = Math.max(0, Math.min(n - 1, i));
+      return [pts[j * 2], pts[j * 2 + 1]];
+    }
+    var p0 = P(seg - 1), p1 = P(seg), p2 = P(seg + 1), p3 = P(seg + 2);
+    var t2 = lt * lt, t3 = t2 * lt, i;
+    var out = [0, 0], d = [0, 0];
+    for (i = 0; i < 2; i++) {
+      out[i] = 0.5 * ((2 * p1[i]) + (-p0[i] + p2[i]) * lt +
+               (2 * p0[i] - 5 * p1[i] + 4 * p2[i] - p3[i]) * t2 +
+               (-p0[i] + 3 * p1[i] - 3 * p2[i] + p3[i]) * t3);
+      d[i] = 0.5 * ((-p0[i] + p2[i]) +
+             2 * (2 * p0[i] - 5 * p1[i] + 4 * p2[i] - p3[i]) * lt +
+             3 * (-p0[i] + 3 * p1[i] - 3 * p2[i] + p3[i]) * t2);
+    }
+    return [out[0], out[1], d[0], d[1]];
+  }
+  // PERFIL DE PESO (revisão v6): a linha não pode ser um fuso simétrico — isso
+  // é o que ainda deixava o traço com cara de gerado. Aqui a barriga do traço
+  // fica DESLOCADA (parâmetro `taper` numérico = onde engrossa, 0..1), a
+  // variação é assimétrica e uma segunda onda lenta engrossa/afina ao longo do
+  // caminho, como pincel apoiando e aliviando. Traços LONGOS ficam vivos.
+  //   taper: 'start' | 'end' | número 0..1 (posição do ponto mais grosso)
+  //          | undefined = 0.42 (levemente antes do meio, como no nanquim)
+  function inkStroke(ctx, pts, wMax, col, taper) {
+    var n = 40, i, t, s, len, nx, ny, w, u, b;
+    var L = [], Rt = [];
+    b = (typeof taper === 'number') ? clamp(taper, 0.06, 0.94) : 0.42;
+    for (i = 0; i <= n; i++) {
+      t = i / n;
+      s = catmull(pts, t);
+      len = Math.sqrt(s[2] * s[2] + s[3] * s[3]) || 1;
+      nx = -s[3] / len; ny = s[2] / len;
+      if (taper === 'start') w = wMax * Math.pow(t, 0.5);
+      else if (taper === 'end') w = wMax * Math.pow(1 - t, 0.5);
+      else {
+        // dois ramos com expoentes diferentes: sobe rápido, alivia devagar
+        u = t < b ? t / b : (1 - t) / (1 - b);
+        w = wMax * Math.pow(Math.sin(u * Math.PI * 0.5), t < b ? 0.55 : 0.85);
+      }
+      // segunda onda: o pincel apoia e alivia ao longo do caminho
+      w *= 0.82 + 0.24 * Math.sin(t * Math.PI * 1.7 + 0.7);
+      w = Math.max(w, wMax * 0.045);
+      L.push(s[0] + nx * w, s[1] + ny * w);
+      Rt.push(s[0] - nx * w, s[1] - ny * w);
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(L[0], L[1]);
+    for (i = 1; i <= n; i++) ctx.lineTo(L[i * 2], L[i * 2 + 1]);
+    for (i = n; i >= 0; i--) ctx.lineTo(Rt[i * 2], Rt[i * 2 + 1]);
+    ctx.closePath();
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.restore();
+  }
+  A.inkStroke = inkStroke;
+
+  // Extrai o contorno externo do que já foi pintado: tinge a silhueta e a
+  // carimba em volta em N direções, por baixo do desenho colorido.
+  function outlineComposite(dst, src, col, px) {
+    var tmp = document.createElement('canvas');
+    tmp.width = src.width; tmp.height = src.height;
+    var t = tmp.getContext('2d');
+    t.drawImage(src, 0, 0);
+    t.globalCompositeOperation = 'source-in';
+    t.fillStyle = col;
+    t.fillRect(0, 0, tmp.width, tmp.height);
+    var i, a, n = 14;
+    for (i = 0; i < n; i++) {
+      a = i / n * TAU;
+      dst.drawImage(tmp, Math.cos(a) * px, Math.sin(a) * px);
+    }
+    dst.drawImage(src, 0, 0);
   }
   // forma chapada sem contorno (sombras internas, panos de fundo)
   function flat(ctx, P, col) { ctx.save(); P(ctx); ctx.fillStyle = col; ctx.fill(); ctx.restore(); }
@@ -298,16 +402,21 @@ var JOGO = (typeof window !== 'undefined')
   // Puxa DATA.classes[id].palette quando existir; senão usa o padrão daqui.
   // O elemento tinge a cor principal sem destruir a identidade da classe.
   // ==========================================================================
-  // Cores SATURADAS e alegres — o Dofus 1.29 não tinha medo de cor. Nada de
-  // pastel lavado: cada classe tem um dominante que se reconhece de longe.
+  // PALETA (revisão v4): sóbria e HARMÔNICA, como a referência do Dofus —
+  // verde-oliva, laranja-queimado, creme e couro. Duas cores dominantes
+  // (`main` + `cloth`) e UMA de destaque (`accent`). Nada de saturação de
+  // desenho infantil.
   var DEF_PAL = {
-    sumo:       { main: '#f0562f', dark: '#40241c', accent: '#ffd44a', skin: '#ffc493', hair: '#241410', cloth: '#c81f38' },
-    arqueiro:   { main: '#3fbf6a', dark: '#1c4a2b', accent: '#eaff8a', skin: '#ffdfb4', hair: '#ffd45c', cloth: '#1f7a45' },
-    bruxo:      { main: '#8f4fd4', dark: '#241338', accent: '#c88fff', skin: '#e2c2a4', hair: '#f2ece0', cloth: '#3d1f7a' },
-    espadachim: { main: '#1f8fd4', dark: '#12212e', accent: '#7fe8ff', skin: '#f2c79c', hair: '#1a2a38', cloth: '#1a3d5c' },
-    curandeira: { main: '#ffcf46', dark: '#7a4520', accent: '#fff6cc', skin: '#ffe0c0', hair: '#ff7a33', cloth: '#ff8fb0' },
-    invocador:  { main: '#22b39c', dark: '#123330', accent: '#7dffdd', skin: '#d8c8a4', hair: '#213c36', cloth: '#1d5c54' },
-    _:          { main: '#8a8f96', dark: '#2a2f36', accent: '#e0e6ec', skin: '#e0c0a0', hair: '#33291f', cloth: '#3a4048' }
+    // Sumô: pele CREME BRONZEADA quente (a cor de carne do desenho, não bege
+    // acinzentado), mawashi de lona índigo-escura (o único frio da figura, para
+    // a pele saltar) e cordão/nó em ouro velho.
+    sumo:       { main: '#c9553c', dark: '#33241c', accent: '#f0b855', skin: '#f2c48f', hair: '#2c1e16', cloth: '#3d4a70' },
+    arqueiro:   { main: '#6f8f4a', dark: '#2c3a24', accent: '#dcc98a', skin: '#e8c7a0', hair: '#c9a55e', cloth: '#4a5c33' },
+    bruxo:      { main: '#6b5a86', dark: '#26203a', accent: '#b9a2e0', skin: '#cfae90', hair: '#ded6c6', cloth: '#3b3055' },
+    espadachim: { main: '#4a7288', dark: '#1e2a34', accent: '#bcd8e0', skin: '#dfb98a', hair: '#26323c', cloth: '#33495c' },
+    curandeira: { main: '#d9b56a', dark: '#6b4a2f', accent: '#f3e3bc', skin: '#f0cdaa', hair: '#c9663c', cloth: '#c98a96' },
+    invocador:  { main: '#4e8a80', dark: '#20342f', accent: '#bfe0cf', skin: '#c9b596', hair: '#2b3a35', cloth: '#3a5a52' },
+    _:          { main: '#8a8f96', dark: '#2a2f36', accent: '#dfe0d8', skin: '#dcbb9a', hair: '#3a2f24', cloth: '#4a5048' }
   };
 
   function classPal(id, els) {
@@ -483,21 +592,87 @@ var JOGO = (typeof window !== 'undefined')
   // clássico de "herói sem cara" não acontece por construção.
   ACC.head = {
     // Sumô — cabelo colado e coque samurai
+    // Sumô — touca de cabelo BAIXA (deixa a testa e o rosto livres) e um coque
+    // alto e gordo, que é o que se enxerga de longe.
+    // Sumô (revisão v5, pela referência): GORRO verde com pompom laranja e uma
+    // TRANÇA longa caindo pelo ombro. A trança balança com a pose.
+    capBraid: {
+      behind: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal, ink = An.ink, i;
+        // trança: 4 gomos descendo pelo ombro do lado da câmera
+        var f = flapOf(cfg);
+        var bx = h[0] + r * (cfg.back ? 0.1 : 0.95), by = h[1] + r * 0.6;
+        for (i = 0; i < 5; i++) {
+          var t = i / 4;
+          var x = bx + r * 0.5 * t - f.x * 0.35 * t;
+          var y = by + r * (0.7 + i * 0.78) - f.y * 0.3 * t;
+          part(ctx, Pel(x, y, r * (0.34 - t * 0.11), r * (0.3 - t * 0.09), 0.3 + i * 0.1),
+               i % 2 ? sh(p.hair, 0.1) : p.hair, { k: 0.24, lw: W_MID });
+        }
+        part(ctx, Pel(bx + r * 0.5, by + r * 3.9, r * 0.2, r * 0.16), p.accent, { k: 0.2, lw: W_IN });
+      },
+      front: function (ctx, An, cfg) {
+        var h = An.head, r = h[2], p = cfg.pal, ink = An.ink;
+        var cap = mx(p.cloth, '#5e6b38', 0.35);
+        // gorro colado, cobrindo o alto da cabeça
+        part(ctx, tag(function (g) {
+          g.beginPath();
+          g.moveTo(h[0] - r * 1.04, h[1] - r * 0.26);
+          g.quadraticCurveTo(h[0] - r * 1.0, h[1] - r * 1.24, h[0] + r * 0.04, h[1] - r * 1.3);
+          g.quadraticCurveTo(h[0] + r * 1.04, h[1] - r * 1.2, h[0] + r * 1.06, h[1] - r * 0.22);
+          g.quadraticCurveTo(h[0] + r * 0.5, h[1] - r * 0.56, h[0] + r * 0.02, h[1] - r * 0.54);
+          g.quadraticCurveTo(h[0] - r * 0.56, h[1] - r * 0.56, h[0] - r * 1.04, h[1] - r * 0.26);
+          g.closePath();
+        }, h[0], h[1] - r * 0.8, r), cap, { k: 0.24, hi: 0.16, lw: W_MID });
+        // barra do gorro + pregas em nanquim
+        inkStroke(ctx, [h[0] - r * 1.0, h[1] - r * 0.34, h[0], h[1] - r * 0.62,
+                        h[0] + r * 1.02, h[1] - r * 0.3], 1.5, ink);
+        inkStroke(ctx, [h[0] - r * 0.5, h[1] - r * 1.18, h[0] - r * 0.34, h[1] - r * 0.66], 1.0, ink);
+        inkStroke(ctx, [h[0] + r * 0.42, h[1] - r * 1.2, h[0] + r * 0.3, h[1] - r * 0.68], 1.0, ink);
+        // POMPOM laranja
+        part(ctx, Pel(h[0] + r * 0.16, h[1] - r * 1.5, r * 0.34, r * 0.32), p.accent,
+             { k: 0.26, hi: 0.3, lw: W_MID });
+        // franja saindo por baixo do gorro
+        part(ctx, Ppoly([h[0] - r * 0.9, h[1] - r * 0.36, h[0] - r * 0.62, h[1] - r * 0.02,
+                         h[0] - r * 0.44, h[1] - r * 0.44]), p.hair, { k: 0.2, lw: W_IN });
+      }
+    },
     topknot: {
       front: function (ctx, An, cfg) {
         var h = An.head, r = h[2], p = cfg.pal;
         part(ctx, tag(function (g) {
           g.beginPath();
-          g.moveTo(h[0] - r * 1.0, h[1] - r * 0.16);
-          g.quadraticCurveTo(h[0] - r * 0.92, h[1] - r * 1.06, h[0] + r * 0.06, h[1] - r * 1.08);
-          g.quadraticCurveTo(h[0] + r * 1.0, h[1] - r * 1.02, h[0] + r * 1.02, h[1] - r * 0.12);
-          g.quadraticCurveTo(h[0] + r * 0.7, h[1] - r * 0.5, h[0] + r * 0.1, h[1] - r * 0.46);
-          g.quadraticCurveTo(h[0] - r * 0.6, h[1] - r * 0.48, h[0] - r * 1.0, h[1] - r * 0.16);
+          g.moveTo(h[0] - r * 1.02, h[1] - r * 0.42);
+          g.quadraticCurveTo(h[0] - r * 0.94, h[1] - r * 1.1, h[0] + r * 0.06, h[1] - r * 1.12);
+          g.quadraticCurveTo(h[0] + r * 1.02, h[1] - r * 1.06, h[0] + r * 1.04, h[1] - r * 0.4);
+          g.quadraticCurveTo(h[0] + r * 0.72, h[1] - r * 0.74, h[0] + r * 0.08, h[1] - r * 0.7);
+          g.quadraticCurveTo(h[0] - r * 0.62, h[1] - r * 0.72, h[0] - r * 1.02, h[1] - r * 0.42);
           g.closePath();
-        }, h[0], h[1] - r * 0.6, r), p.hair, { k: 0.3 });
-        part(ctx, Pel(h[0] + r * 0.06, h[1] - r * 1.12, r * 0.32, r * 0.24), sh(p.hair, 0.12), { k: 0.3, lw: 0.85 });
-        part(ctx, Pcap(h[0] + r * 0.06, h[1] - r * 1.16, r * 0.18, h[0] + r * 0.52, h[1] - r * 1.5, r * 0.13),
-             p.hair, { k: 0.24, lw: 0.85 });
+        }, h[0], h[1] - r * 0.8, r), p.hair, { k: 0.34, hi: 0.16, lw: W_OUT });
+        // costeletas curtas
+        part(ctx, Ppoly([h[0] - r * 1.0, h[1] - r * 0.5, h[0] - r * 0.86, h[1] + r * 0.16,
+                         h[0] - r * 0.66, h[1] - r * 0.54]), sh(p.hair, -0.1), { k: 0.2, lw: W_MID });
+        part(ctx, Ppoly([h[0] + r * 1.02, h[1] - r * 0.48, h[0] + r * 0.88, h[1] + r * 0.14,
+                         h[0] + r * 0.68, h[1] - r * 0.52]), sh(p.hair, -0.1), { k: 0.2, lw: W_MID });
+        // coque
+        part(ctx, Pcap(h[0] + r * 0.04, h[1] - r * 1.04, r * 0.2, h[0] + r * 0.3, h[1] - r * 1.42, r * 0.14),
+             sh(p.hair, -0.12), { k: 0.24, lw: W_MID });
+        part(ctx, Pel(h[0] + r * 0.34, h[1] - r * 1.52, r * 0.34, r * 0.28, -0.3), sh(p.hair, 0.14),
+             { k: 0.3, hi: 0.2, lw: W_OUT });
+        // HACHIMAKI: bandana na testa com duas pontas caídas atrás
+        var bc = mx(p.cloth, '#e8dcc0', 0.3);
+        clothTail(ctx, h[0] - r * 0.92, h[1] - r * 0.42, r * 1.5, 2.55, r * 0.2, sh(bc, -0.12), cfg, 0.55);
+        clothTail(ctx, h[0] - r * 0.9, h[1] - r * 0.26, r * 1.1, 2.3, r * 0.16, bc, cfg, 0.4);
+        part(ctx, tag(function (g) {
+          g.beginPath();
+          g.moveTo(h[0] - r * 1.04, h[1] - r * 0.34);
+          g.quadraticCurveTo(h[0], h[1] - r * 0.74, h[0] + r * 1.06, h[1] - r * 0.32);
+          g.quadraticCurveTo(h[0] + r * 1.06, h[1] - r * 0.06, h[0] + r * 1.02, h[1] - r * 0.02);
+          g.quadraticCurveTo(h[0], h[1] - r * 0.44, h[0] - r * 1.0, h[1] - r * 0.04);
+          g.closePath();
+        }, h[0], h[1] - r * 0.36, r), bc, { k: 0.26, hi: 0.2, lw: W_MID });
+        part(ctx, Pel(h[0] + r * 0.2, h[1] - r * 0.42, r * 0.2, r * 0.16), p.accent,
+             { k: 0.2, lw: W_IN, keepLine: true });
       }
     },
     // Elfo — capuz curto que emoldura o rosto e deixa as orelhas de fora
@@ -798,20 +973,143 @@ var JOGO = (typeof window !== 'undefined')
     ctx.restore();
   }
 
+  // ==========================================================================
+  // VESTUÁRIO EM CAMADAS (revisão v4)
+  // A referência do Dofus carrega o personagem pela ROUPA, não pelo corpo:
+  // bandana com pontas caídas, faixa com nó e pontas soltas, enfaixamento de
+  // antebraço e canela, bainha dobrada, cinto com bolsinhas. Cada classe usa de
+  // 3 a 5 destas peças.
+  //
+  // `cfg.flap` vem da pose: as pontas de pano ATRASAM em relação ao corpo, então
+  // balançam sozinhas ao andar e ao atacar. É barato e é o que dá vida.
+  // ==========================================================================
+  function flapOf(cfg) { return (cfg && cfg.flap) || { x: 0, y: 0 }; }
+
+  // ponta de tecido: uma fita que sai da silhueta e chicoteia com o movimento
+  function clothTail(ctx, x, y, len, ang, w, col, cfg, lag) {
+    var f = flapOf(cfg);
+    var k = lag == null ? 1 : lag;
+    var tx = x + Math.cos(ang) * len - f.x * k;
+    var ty = y + Math.sin(ang) * len - f.y * k * 0.5;
+    var mx1 = x + Math.cos(ang) * len * 0.5 - f.x * k * 0.35;
+    var my1 = y + Math.sin(ang) * len * 0.5 + w * 0.6 - f.y * k * 0.2;
+    part(ctx, tag(function (g) {
+      g.beginPath();
+      g.moveTo(x, y - w * 0.5);
+      g.quadraticCurveTo(mx1, my1 - w * 0.5, tx, ty);
+      g.quadraticCurveTo(mx1, my1 + w * 0.7, x, y + w * 0.5);
+      g.closePath();
+    }, (x + tx) / 2, (y + ty) / 2, len * 0.5), col, { k: 0.28, hi: 0.12, lw: W_MID });
+  }
+
+  // enfaixamento (antebraço, canela): 3 voltas de tira sobre o membro
+  function wraps(ctx, a, k0, k1, col, n) {
+    var A0 = a[k0], A1 = a[k1], i, t, x, y;
+    n = n || 3;
+    for (i = 0; i < n; i++) {
+      t = 0.34 + i * (0.52 / n);
+      x = A0[0] + (A1[0] - A0[0]) * t;
+      y = A0[1] + (A1[1] - A0[1]) * t;
+      part(ctx, Pel(x, y, a.r1 * 1.32, a.r1 * 0.52, Math.atan2(A1[1] - A0[1], A1[0] - A0[0])),
+           i % 2 ? col : sh(col, 0.1), { k: 0.24, lw: W_IN * 1.3 });
+    }
+  }
+
   // ------------------------------------------------------------------ torso
   ACC.torso = {
-    mawashi: function (ctx, An, cfg) {
-      var p = cfg.pal, y = An.hipY + 2, w = An.wide * 1.08, i;
+    // cinta de sumô: faixa GROSSA na cintura + franja curta, para as pernas
+    // continuarem visíveis andando (a franja comprida escondia a passada).
+    // corda cerimonial cruzando o peito, com amuletos pendurados
+    chestRope: function (ctx, An, cfg) {
+      var p = cfg.pal, i;
+      var x0 = An.shF[0] + An.wide * 0.16, y0 = An.shF[1] + An.headR * 0.3;
+      var x1 = An.hipC[0] + An.wide * 0.72, y1 = An.hipY - An.headR * 0.2;
+      var rope = mx(p.accent, '#c9b184', 0.5);
+      part(ctx, Pcap(x0, y0, An.headR * 0.16, x1, y1, An.headR * 0.14), rope,
+           { k: 0.26, hi: 0.2, lw: W_MID });
+      for (i = 0; i < 3; i++) {
+        var t = 0.3 + i * 0.22;
+        var cx2 = x0 + (x1 - x0) * t, cy2 = y0 + (y1 - y0) * t;
+        part(ctx, Ppoly([cx2 - An.headR * 0.14, cy2, cx2, cy2 + An.headR * 0.42,
+                         cx2 + An.headR * 0.14, cy2]), i % 2 ? p.accent : sh(p.cloth, 0.2),
+             { k: 0.22, lw: W_IN * 1.2 });
+      }
+    },
+    // pano curto pendurado no quadril, com bainha dobrada
+    // TANGA verde com barra laranja e pregas — a peça de baixo da referência
+    hipCloth: function (ctx, An, cfg) {
+      var p = cfg.pal, w = An.wide * 1.02, y = An.hipY + An.headR * 0.1;
+      var c = mx(p.cloth, '#5e6b38', 0.3), ink = An.ink;
+      var bot = y + An.headR * 1.05;    // curta: as pernas precisam aparecer andando
       part(ctx, tag(function (g) {
         g.beginPath();
-        g.moveTo(-w, y - 8); g.quadraticCurveTo(0, y - 12, w, y - 8);
-        g.lineTo(w * 0.96, y + 4); g.quadraticCurveTo(0, y + 9, -w * 0.96, y + 4);
+        g.moveTo(-w * 0.9, y);
+        g.quadraticCurveTo(-w * 1.06, bot - 4, -w * 0.92, bot);
+        g.quadraticCurveTo(0, bot + An.headR * 0.42, w * 0.92, bot);
+        g.quadraticCurveTo(w * 1.06, bot - 4, w * 0.9, y);
         g.closePath();
-      }, 0, y - 2, w), p.cloth, { k: 0.22, rot: LIGHT });
-      for (i = -2; i <= 2; i++) {
-        part(ctx, Prr(i * w * 0.34, y + 9, w * 0.17, 15, 1.5), sh(p.cloth, i % 2 ? -0.1 : 0.06), { k: 0.2, lw: 0.75 });
+      }, 0, (y + bot) / 2, w), c, { k: 0.24, hi: 0.12, lw: W_MID, rot: LIGHT });
+      // BARRA LARANJA na bainha
+      part(ctx, tag(function (g) {
+        g.beginPath();
+        g.moveTo(-w * 0.92, bot - An.headR * 0.26);
+        g.quadraticCurveTo(0, bot + An.headR * 0.16, w * 0.92, bot - An.headR * 0.26);
+        g.quadraticCurveTo(0, bot + An.headR * 0.44, -w * 0.92, bot - An.headR * 0.26);
+        g.closePath();
+      }, 0, bot, w), p.accent, { k: 0.24, hi: 0.2, lw: W_IN });
+      // pregas do pano em nanquim
+      inkStroke(ctx, [-w * 0.4, y + 3, -w * 0.5, bot - An.headR * 0.4], 1.1, ink);
+      inkStroke(ctx, [w * 0.34, y + 3, w * 0.44, bot - An.headR * 0.4], 1.1, ink);
+      inkStroke(ctx, [0, y + 5, w * 0.02, bot - An.headR * 0.4], 0.9, ink);
+    },
+    // CINTO largo de couro com fivela retangular
+    beltBuckle: function (ctx, An, cfg) {
+      var p = cfg.pal, y = An.hipY + An.headR * 0.02, w = An.wide * 1.06;
+      var hgt = An.headR * 0.46, ink = An.ink;
+      var leather = mx(p.leather, '#6b4426', 0.3);
+      part(ctx, tag(function (g) {
+        g.beginPath();
+        g.moveTo(-w, y - hgt * 0.7);
+        g.quadraticCurveTo(0, y - hgt * 1.5, w, y - hgt * 0.7);
+        g.quadraticCurveTo(w * 1.04, y + hgt * 0.6, w * 0.94, y + hgt);
+        g.quadraticCurveTo(0, y + hgt * 1.8, -w * 0.94, y + hgt);
+        g.quadraticCurveTo(-w * 1.04, y + hgt * 0.6, -w, y - hgt * 0.7);
+        g.closePath();
+      }, 0, y, w), leather, { k: 0.26, hi: 0.14, lw: W_MID, rot: LIGHT });
+      // fivela retangular
+      part(ctx, Prr(An.wide * 0.1, y + hgt * 0.1, An.headR * 0.86, An.headR * 0.62, 2),
+           mx(p.accent, '#c9a24a', 0.4), { k: 0.24, hi: 0.3, lw: W_IN, keepLine: true });
+      part(ctx, Prr(An.wide * 0.1, y + hgt * 0.1, An.headR * 0.5, An.headR * 0.3, 1),
+           sh(leather, -0.2), { flat: true, noline: true });
+      inkStroke(ctx, [-w * 0.92, y + hgt * 0.5, 0, y + hgt * 1.1, w * 0.92, y + hgt * 0.5], 1.3, ink);
+    },
+    mawashi: function (ctx, An, cfg) {
+      var p = cfg.pal, y = An.hipY + 5, w = An.wide * 0.96, i;
+      var hgt = An.headR * 0.42;
+      // faixa que ABRAÇA o quadril (curva), não uma barra chapada atravessada
+      part(ctx, tag(function (g) {
+        g.beginPath();
+        g.moveTo(-w, y - hgt * 0.6);
+        g.quadraticCurveTo(0, y - hgt * 1.7, w, y - hgt * 0.6);
+        g.quadraticCurveTo(w * 1.04, y + hgt * 0.5, w * 0.88, y + hgt * 1.0);
+        g.quadraticCurveTo(0, y + hgt * 1.9, -w * 0.88, y + hgt * 1.0);
+        g.quadraticCurveTo(-w * 1.04, y + hgt * 0.5, -w, y - hgt * 0.6);
+        g.closePath();
+      }, 0, y, w), p.cloth, { k: 0.32, hi: 0.2, lw: W_OUT, rot: LIGHT });
+      for (i = -1; i <= 1; i++) {                      // franja curta
+        part(ctx, Prr(i * w * 0.44, y + hgt * 2.3, w * 0.18, hgt * 1.7, 1.5),
+             sh(p.cloth, i ? -0.16 : 0.08), { k: 0.28, lw: W_MID });
       }
-      part(ctx, Pel(0, y - 3, w * 0.2, 4), p.accent, { k: 0.2, lw: 0.8 });
+      // PONTAS SOLTAS da faixa: saem da silhueta e chicoteiam com o movimento
+      clothTail(ctx, -w * 0.9, y + hgt * 0.5, An.headR * 1.15, 1.9, An.headR * 0.3,
+                sh(p.cloth, -0.1), cfg, 0.5);
+      clothTail(ctx, -w * 0.82, y + hgt * 1.0, An.headR * 0.85, 1.65, An.headR * 0.24,
+                sh(p.cloth, 0.14), cfg, 0.35);
+      // nó cerimonial — o adereço-assinatura do lutador
+      part(ctx, Pel(0, y - hgt * 0.1, w * 0.22, hgt * 0.86), p.accent, { k: 0.26, hi: 0.34, lw: W_MID });
+      part(ctx, Pel(0, y - hgt * 0.1, w * 0.08, hgt * 0.34), sh(p.accent, -0.3), { flat: true, noline: true });
+      stroke(ctx, [-w * 0.13, y - hgt * 0.5, -w * 0.06, y + hgt * 0.6], sh(p.cloth, -0.3), W_IN * 1.3);
+      stroke(ctx, [w * 0.14, y - hgt * 0.5, w * 0.07, y + hgt * 0.6], sh(p.cloth, -0.3), W_IN * 1.3);
     },
     baldric: function (ctx, An, cfg) {
       var p = cfg.pal;
@@ -886,13 +1184,21 @@ var JOGO = (typeof window !== 'undefined')
   // SOMBRA: três tons CHAPADOS bem separados (base · sombra · luz), sem
   // degradê. `part(..., {k, hi})` corta os três com borda dura.
   // ==========================================================================
-  var W_OUT = 1.75;   // multiplicador de contorno da silhueta
-  var W_MID = 1.15;   // peças internas grandes (braços, pernas)
-  var W_IN  = 0.7;    // detalhe fino
+  var W_OUT = 1.3;    // multiplicador de contorno da silhueta
+  var W_MID = 0.95;   // peças internas grandes (braços, pernas)
+  var W_IN  = 0.65;   // detalhe fino
 
-  function drawArm(ctx, a, col) {
+  function drawArm(ctx, a, col, ink) {
     part(ctx, Pcap(a.sh[0], a.sh[1], a.r0, a.el[0], a.el[1], a.r1), col, { k: 0.3, hi: 0.16, lw: W_MID });
     part(ctx, Pcap(a.el[0], a.el[1], a.r1, a.hd[0], a.hd[1], a.r1 * 0.94), col, { k: 0.3, hi: 0.14, lw: W_MID });
+    // vinco do cotovelo: traço anatômico de nanquim, não contorno de peça
+    if (ink) {
+      var dx = a.hd[0] - a.el[0], dy = a.hd[1] - a.el[1];
+      var L = Math.sqrt(dx * dx + dy * dy) || 1;
+      var nx = -dy / L, ny = dx / L;
+      inkStroke(ctx, [a.el[0] - nx * a.r1 * 0.8, a.el[1] - ny * a.r1 * 0.8,
+                      a.el[0] + nx * a.r1 * 0.2, a.el[1] + ny * a.r1 * 0.2], a.r1 * 0.3, ink);
+    }
   }
   // mão GRANDE, tipo luva de desenho — com o corte do polegar para ler o gesto
   function drawHand(ctx, a, col, open) {
@@ -928,7 +1234,7 @@ var JOGO = (typeof window !== 'undefined')
   // o jogador achar o personagem simpático.
   function eye(ctx, x, y, rx, ry, col, look, iris) {
     look = look == null ? 0.26 : look;
-    part(ctx, Pel(x, y, rx, ry), '#fdfaf2', { k: 0.06, lw: W_IN * 1.1, line: '#3a2a33' });
+    part(ctx, Pel(x, y, rx, ry), '#fdfaf2', { k: 0.06, lw: W_IN * 1.1, line: '#3a2a33', keepLine: true });
     if (iris) flat(ctx, Pel(x + rx * look, y + ry * 0.06, rx * 0.62, ry * 0.72), iris);
     flat(ctx, Pel(x + rx * look, y + ry * 0.08, rx * 0.44, ry * 0.56), col || '#2a2028');
     flat(ctx, Pel(x + rx * look - rx * 0.16, y - ry * 0.34, rx * 0.24, ry * 0.26), 'rgba(255,255,255,0.95)');
@@ -959,10 +1265,11 @@ var JOGO = (typeof window !== 'undefined')
         g.quadraticCurveTo(cx, cy + r * 0.3, cx + r * 0.42, cy + r * 0.42);
         g.quadraticCurveTo(cx, cy + r * 0.72, cx - r * 0.42, cy + r * 0.42);
         g.closePath();
-      }, cx, cy + r * 0.5, r * 0.42), '#5e2a2c', { k: 0.14, lw: W_IN * 1.4, line: '#3a1a1c' });
+      }, cx, cy + r * 0.5, r * 0.42), '#5e2a2c', { k: 0.14, lw: W_IN * 1.4, line: '#3a1a1c', keepLine: true });
       stroke(ctx, [cx - r * 0.3, cy + r * 0.44, cx + r * 0.3, cy + r * 0.44], '#f4ecd8', W_IN * 1.2);
     } else if (kind === 'open') {
-      part(ctx, Pel(cx + r * 0.06, cy + r * 0.48, r * 0.2, r * 0.16), '#5e2a2c', { k: 0.12, lw: W_IN * 1.2 });
+      part(ctx, Pel(cx + r * 0.06, cy + r * 0.48, r * 0.2, r * 0.16), '#5e2a2c',
+           { k: 0.12, lw: W_IN * 1.2, keepLine: true });
     } else if (kind === 'sly') {
       stroke(ctx, [cx - r * 0.26, cy + r * 0.5, cx + r * 0.1, cy + r * 0.42, cx + r * 0.34, cy + r * 0.54], col, W_IN * 1.6, true);
     } else if (kind === 'mask') {
@@ -1065,17 +1372,18 @@ var JOGO = (typeof window !== 'undefined')
   // Cada plano devolve ÂNCORAS; o resto (acessórios, elemento, fusão) se apoia
   // nelas, o que permite montar qualquer combinação sem redesenhar nada.
   // ==========================================================================
-  // RIG — esqueleto paramétrico de 3 CABEÇAS.
-  // Todas as medidas saem de `h` (altura total, pés em y = 0) e do raio da
-  // cabeça (`h/6` ⇒ 3 cabeças). Mãos e pés vêm do raio da CABEÇA, não do braço:
-  // é o que os deixa grandes como em desenho animado.
-  // `o.attitude` desalinha ombros/quadril e joga o peso numa perna — nenhum
-  // herói fica em pose de manequim.
+  // RIG — esqueleto paramétrico de ~5 CABEÇAS (revisão v4, pela referência do
+  // Dofus). Corpo ESGUIO E ADULTO: pernas longas, tronco enxuto, cabeça só um
+  // pouco maior que o realista — nada de chibi de bebê. Mãos e pés continuam
+  // generosos (saem do raio da cabeça), porque é o que dá leitura de desenho.
+  // O Sumô é a exceção declarada: ~4 cabeças e corpo largo e pesado.
+  // Os ombros/quadril saem desalinhados de propósito: nenhum herói em pose de
+  // manequim.
   // ==========================================================================
   function rig(cfg, o) {
     var p = cfg.pal;
     var H = o.h;
-    var hr = H * (o.headR || 0.168);            // ~3 cabeças
+    var hr = H * (o.headR || 0.105);            // ~4,8 cabeças
     var An = { h: H, headR: hr, wide: o.wide };
     An.skin = mx(p.skin, p.el.c, p.elId === 'neutro' ? 0 : (o.elSkin == null ? 0.1 : o.elSkin));
 
@@ -1084,7 +1392,7 @@ var JOGO = (typeof window !== 'undefined')
     var hy = -(H - hr * 1.02);
     An.head = [hx, hy, hr];
     An.neck = [hx * 0.7, hy + hr * 0.92];
-    An.hipY = -H * (o.hip || 0.34);
+    An.hipY = -H * (o.hip || 0.47);             // pernas LONGAS
     An.hipC = [lean * H * 0.02, An.hipY - H * 0.02];
     An.chest = [hx * 0.4, (An.neck[1] + An.hipY) * 0.5];
     An.backC = [An.chest[0] - o.wide * 0.14, An.chest[1]];
@@ -1095,9 +1403,9 @@ var JOGO = (typeof window !== 'undefined')
     An.shN = [o.wide * 0.95 + hx * 0.3, shY - tilt];
     An.shF = [-o.wide * 0.95 + hx * 0.3, shY + tilt];
 
-    var aL = H * (o.armLen || 0.30);            // braço curto e grosso
-    var aR = hr * (o.armR || 0.30);
-    var handR = hr * (o.handR || 0.46);         // MÃO GRANDE
+    var aL = H * (o.armLen || 0.36);            // braço longo, mão generosa
+    var aR = hr * (o.armR || 0.36);
+    var handR = hr * (o.handR || 0.6);          // MÃO GRANDE
     An.armN = { sh: An.shN.slice(), r0: aR, r1: aR * 0.84, hr: handR,
                 el: [An.shN[0] + o.wide * 0.42, An.shN[1] + aL * 0.5],
                 hd: [An.shN[0] + o.wide * 0.28, An.shN[1] + aL] };
@@ -1108,8 +1416,8 @@ var JOGO = (typeof window !== 'undefined')
     if (o.legs === false) { An.legN = null; An.legF = null; }
     else {
       var stance = o.stance == null ? 0.5 : o.stance;   // abertura das pernas
-      var lR = hr * (o.legR || 0.42);
-      var fw = hr * (o.footW || 1.15), fh = hr * (o.footH || 0.4);
+      var lR = hr * (o.legR || 0.5);
+      var fw = hr * (o.footW || 1.5), fh = hr * (o.footH || 0.5);
       var weight = o.weight == null ? 1 : o.weight;     // peso na perna de trás
       An.legN = { hip: [o.wide * stance, An.hipY], r0: lR, r1: lR * 0.8,
                   knee: [o.wide * (stance + 0.18), An.hipY * 0.46],
@@ -1121,8 +1429,16 @@ var JOGO = (typeof window !== 'undefined')
                   foot: [-o.wide * (stance + 0.36) * weight, -H * 0.008, fw * 0.94, fh * 0.94], footDir: -1 };
     }
     An.handN = An.armN.hd; An.handF = An.armF.hd;
-    An.armCol = An.skin; An.legCol = An.skin; An.handCol = An.skin;
+    // membros um tom abaixo do tronco: pele sobre pele precisa de separação,
+    // senão o braço some dentro da barriga. A separação é por TEMPERATURA
+    // (mais terracota), nunca por cinza.
+    An.skinSh = wsh(An.skin, 0.30);
+    An.skinHi = whi(An.skin, 0.24);
+    An.armCol = wsh(An.skin, 0.13); An.legCol = wsh(An.skin, 0.19); An.handCol = An.skin;
     An.footCol = mx(p.dark, An.skin, 0.3);
+    // cor do nanquim: sépia escuro e QUENTE, tirado da própria carne — nunca
+    // preto neutro (o preto endurece e esfria o desenho)
+    An.ink = sh(wsh(An.skin, 0.86), -0.46);
     return An;
   }
 
@@ -1135,50 +1451,93 @@ var JOGO = (typeof window !== 'undefined')
   PLANS.sumo = {
     face: 'grim',
     anchors: function (cfg) {
-      var An = rig(cfg, { h: 106, wide: 30, headR: 0.172, hip: 0.30, armLen: 0.26,
-                          armR: 0.42, handR: 0.52, legR: 0.62, footW: 1.35, footH: 0.44,
-                          stance: 0.72, weight: 1.06, shTilt: 0.2, lean: 0.1, elSkin: 0.12 });
-      // punho da frente erguido (guarda de lutador)
-      An.armF.el = [An.shF[0] - An.wide * 0.5, An.shF[1] + An.h * 0.1];
-      An.armF.hd = [An.shF[0] - An.wide * 0.16, An.shF[1] + An.h * 0.13];
+      // ~4 cabeças, massa pesada: torso enorme, pernas CURTAS e troncudas,
+      // braços grossos afastados do corpo, mãos e pés grandes.
+      var An = rig(cfg, { h: 106, wide: 20, headR: 0.14, hip: 0.36, armLen: 0.36,
+                          armR: 0.56, handR: 0.78, legR: 0.92, footW: 1.42, footH: 0.5,
+                          stance: 0.95, weight: 1.0, shTilt: 0.1, lean: 0.05, elSkin: 0.12 });
+      // ATITUDE da referência: braços AFASTADOS do corpo, cotovelos abertos,
+      // mãos longe da barriga — silhueta de lutador pronto, e cada braço lê
+      // separado do tronco sem precisar de linha entre eles.
+      An.armF.el = [An.shF[0] - An.wide * 0.95, An.shF[1] + An.h * 0.11];
+      An.armF.hd = [An.shF[0] - An.wide * 1.02, An.shF[1] + An.h * 0.26];
       An.handF = An.armF.hd;
-      // braço de trás caído, aberto para fora
-      An.armN.el = [An.shN[0] + An.wide * 0.5, An.shN[1] + An.h * 0.14];
-      An.armN.hd = [An.shN[0] + An.wide * 0.46, An.shN[1] + An.h * 0.27];
+      An.armN.el = [An.shN[0] + An.wide * 1.0, An.shN[1] + An.h * 0.12];
+      An.armN.hd = [An.shN[0] + An.wide * 1.08, An.shN[1] + An.h * 0.27];
       An.handN = An.armN.hd;
+      // peso na perna de trás, pé da frente adiantado e virado
+      An.legF.knee = [An.legF.knee[0] - 2, An.legF.knee[1]];
+      An.legF.ank = [An.legF.ank[0] - 5, An.legF.ank[1]];
+      An.legF.foot = [An.legF.foot[0] - 7, An.legF.foot[1], An.legF.foot[2] * 1.1, An.legF.foot[3]];
+      An.legN.ank = [An.legN.ank[0] + 3, An.legN.ank[1]];
+      An.legN.foot = [An.legN.foot[0] + 4, An.legN.foot[1], An.legN.foot[2], An.legN.foot[3]];
       return An;
     },
     torso: function (ctx, An, cfg) {
-      var s = An.skin, W = An.wide, hipY = An.hipY, chY = An.neck[1] + 4;
-      // barrigão em pera: largo embaixo, ombros altos e redondos
-      part(ctx, Pblob([-W * 1.0, hipY - 4, -W * 0.98, chY + 12, -W * 0.62, chY - 6,
-                       0, chY - 11, W * 0.62, chY - 6, W * 1.0, chY + 12,
-                       W * 1.06, hipY - 2, W * 0.72, hipY + 10, 0, hipY + 14, -W * 0.74, hipY + 10]),
-           s, { k: 0.32, hi: 0.2, lw: W_OUT, rot: LIGHT });
-      // três tons chapados: dobra do peitoral e da barriga em sombra dura
+      var s = An.skin, W = An.wide, hipY = An.hipY, chY = An.neck[1] + 3;
+      var mid = (chY + hipY) * 0.5;
+      var ink = An.ink;
+      // BARRIGÃO: a massa é o personagem. Ombros largos, barriga caindo sobre
+      // o cinto, quadril estreito — silhueta de pera bem marcada.
+      part(ctx, Pblob([-W * 1.26, mid + 6, -W * 1.04, chY + 8, -W * 0.6, chY - 7,
+                       0, chY - 11, W * 0.6, chY - 7, W * 1.06, chY + 8,
+                       W * 1.32, mid + 6, W * 0.96, hipY + 6, 0, hipY + 10, -W * 0.98, hipY + 6]),
+           s, { k: 0.26, hi: 0.16, lw: W_OUT, rot: LIGHT });
+      // sombreado MÍNIMO: só sob a barriga (uma área chapada, sem degradê)
       part(ctx, tag(function (g) {
         g.beginPath();
-        g.moveTo(-W * 0.82, chY + 16);
-        g.quadraticCurveTo(0, chY + 30, W * 0.82, chY + 16);
-        g.quadraticCurveTo(0, chY + 6, -W * 0.82, chY + 16);
+        g.moveTo(-W * 1.04, mid + 2);
+        g.quadraticCurveTo(0, mid + 20, W * 1.08, mid + 2);
+        g.quadraticCurveTo(0, mid + 8, -W * 1.04, mid + 2);
         g.closePath();
-      }, 0, chY + 18, W * 0.8), sh(s, -0.2), { flat: true, noline: true });
-      stroke(ctx, [-W * 0.6, chY + 14, 0, chY + 24, W * 0.6, chY + 14], sh(s, -0.42), W_IN * 1.8, true);
-      stroke(ctx, [-W * 0.42, hipY - 12, 0, hipY - 6, W * 0.42, hipY - 13], sh(s, -0.34), W_IN * 1.5, true);
-      part(ctx, Pel(-2, hipY - 8, An.headR * 0.16, An.headR * 0.12), sh(s, -0.4), { flat: true, noline: true });
+      }, 0, mid + 8, W), sh(s, -0.14), { flat: true, noline: true });
+      if (cfg.back) {
+        // COSTAS: omoplatas e o sulco da coluna, em nanquim
+        inkStroke(ctx, [-W * 0.6, chY + 4, -W * 0.34, chY + 16, -W * 0.5, mid - 2], 1.5, ink);
+        inkStroke(ctx, [W * 0.62, chY + 4, W * 0.36, chY + 16, W * 0.52, mid - 2], 1.5, ink);
+        inkStroke(ctx, [0, chY + 2, W * 0.06, mid, 0, hipY - 4], 1.6, ink);
+        return;
+      }
+      // FRENTE: curva do peitoral e dobra da barriga — traço anatômico, não
+      // contorno de peça. Espessura variável, grossa no meio.
+      inkStroke(ctx, [-W * 0.86, mid - 10, -W * 0.3, mid + 1, 0, mid + 2,
+                      W * 0.32, mid + 1, W * 0.88, mid - 10], 2.1, ink);
+      inkStroke(ctx, [-W * 0.5, hipY - 9, 0, hipY - 4, W * 0.52, hipY - 10], 1.5, ink);
+      part(ctx, Pel(-1, hipY - 7, An.headR * 0.22, An.headR * 0.15), ink, { flat: true, noline: true });
+      // vinco entre o braço e o tronco (só sombra, nunca linha fechada)
+      flat(ctx, Pel(-W * 1.0, chY + 16, W * 0.26, W * 0.52, 0.18), rgba(sh(s, -0.5), 0.26));
+      flat(ctx, Pel(W * 1.04, chY + 16, W * 0.26, W * 0.52, -0.18), rgba(sh(s, -0.5), 0.2));
+      // MARCAS VERMELHAS de lutador nos ombros
+      var mk = '#c8452e';
+      inkStroke(ctx, [-W * 0.82, chY + 2, -W * 0.62, chY + 9], 1.5, mk);
+      inkStroke(ctx, [-W * 0.6, chY - 1, -W * 0.4, chY + 6], 1.2, mk);
+      inkStroke(ctx, [W * 0.84, chY + 2, W * 0.64, chY + 9], 1.5, mk);
+      inkStroke(ctx, [W * 0.62, chY - 1, W * 0.42, chY + 6], 1.2, mk);
     },
     head: function (ctx, An, cfg) {
-      var h = An.head, r = h[2], s = An.skin;
+      var h = An.head, r = h[2], s = An.skin, ink = An.ink;
+      // pescoço grosso engolido pelos ombros
+      part(ctx, Pcap(An.neck[0], An.neck[1] + r * 0.5, r * 0.52, h[0], h[1] + r * 0.5, r * 0.6),
+           sh(s, -0.08), { k: 0.2, lw: W_MID });
       // cabeça larga de lutador, com mandíbula e bochechas
-      part(ctx, Pblob([h[0] - r * 1.02, h[1] - r * 0.2, h[0] - r * 0.8, h[1] - r * 0.92,
-                       h[0], h[1] - r * 1.1, h[0] + r * 0.8, h[1] - r * 0.9,
-                       h[0] + r * 1.04, h[1] - r * 0.18, h[0] + r * 0.92, h[1] + r * 0.66,
-                       h[0], h[1] + r * 1.02, h[0] - r * 0.9, h[1] + r * 0.64]),
-           s, { k: 0.28, hi: 0.22, lw: W_OUT });
-      // orelhas grandes
-      part(ctx, Pel(h[0] - r * 0.98, h[1] + r * 0.16, r * 0.26, r * 0.34), sh(s, -0.06), { k: 0.2, lw: W_MID });
-      part(ctx, Pel(h[0] + r * 1.0, h[1] + r * 0.12, r * 0.26, r * 0.34), s, { k: 0.2, lw: W_MID });
-      if (cfg.back) drawNape(ctx, An, cfg);
+      part(ctx, Pblob([h[0] - r * 1.0, h[1] - r * 0.18, h[0] - r * 0.78, h[1] - r * 0.9,
+                       h[0], h[1] - r * 1.08, h[0] + r * 0.78, h[1] - r * 0.88,
+                       h[0] + r * 1.02, h[1] - r * 0.16, h[0] + r * 0.9, h[1] + r * 0.68,
+                       h[0], h[1] + r * 1.04, h[0] - r * 0.88, h[1] + r * 0.66]),
+           s, { k: 0.22, hi: 0.18, lw: W_OUT });
+      // ORELHAS PONTUDAS (a referência tem)
+      part(ctx, Ppoly([h[0] - r * 0.9, h[1] - r * 0.04, h[0] - r * 1.6, h[1] - r * 0.6,
+                       h[0] - r * 0.84, h[1] + r * 0.4]), sh(s, -0.05), { k: 0.22, lw: W_MID });
+      part(ctx, Ppoly([h[0] + r * 0.92, h[1] - r * 0.08, h[0] + r * 1.62, h[1] - r * 0.64,
+                       h[0] + r * 0.86, h[1] + r * 0.36]), s, { k: 0.22, lw: W_MID });
+      inkStroke(ctx, [h[0] + r * 1.02, h[1] - r * 0.06, h[0] + r * 1.3, h[1] - r * 0.38], 0.9, ink);
+      if (cfg.back) {
+        // de costas: nuca e a base da trança
+        part(ctx, Pel(h[0], h[1] + r * 0.1, r * 0.86, r * 0.9), sh(An.cfg.pal.hair, -0.05),
+             { k: 0.24, hi: 0.12, lw: W_MID });
+        inkStroke(ctx, [h[0] - r * 0.4, h[1] - r * 0.5, h[0] - r * 0.2, h[1] + r * 0.5], 1.1, ink);
+        inkStroke(ctx, [h[0] + r * 0.36, h[1] - r * 0.54, h[0] + r * 0.2, h[1] + r * 0.46], 1.1, ink);
+      }
     }
   };
 
@@ -1373,7 +1732,8 @@ var JOGO = (typeof window !== 'undefined')
   // Cobre as 15 duplas sem desenhar nenhuma à mão.
   // ==========================================================================
   var KIT = {
-    sumo:       { head: 'topknot', torso: 'mawashi', weapon: null,    back: null,     face: 'grim',  ears: false },
+    sumo:       { head: 'capBraid', torso: 'hipCloth', weapon: null,  back: null,     face: 'grim',  ears: false,
+                  wrap: true, layers: ['hipCloth', 'beltBuckle'] },
     arqueiro:   { head: 'hood',    torso: 'baldric', weapon: 'bow',   back: 'quiver', face: 'sharp', ears: true },
     bruxo:      { head: 'wizhat',  torso: 'robe',    weapon: 'staff', back: 'cape',   face: 'glow',  ears: false },
     espadachim: { head: 'bandana', torso: 'sash',    weapon: 'sword', back: 'scarf',  face: 'grin',  ears: false },
@@ -1389,7 +1749,8 @@ var JOGO = (typeof window !== 'undefined')
     return {
       base: PLANS[classId] ? classId : 'sumo',
       pal: classPal(classId, els),
-      acc: { head: k.head, torso: k.torso, weapon: k.weapon, back: k.back, face: k.face, ears: k.ears },
+      acc: { head: k.head, torso: k.torso, weapon: k.weapon, back: k.back, face: k.face,
+             ears: k.ears, wrap: k.wrap, layers: k.layers },
       fusion: false
     };
   }
@@ -1487,16 +1848,16 @@ var JOGO = (typeof window !== 'undefined')
         R.legN = [-0.24 * a, 0.5 * a]; R.legF = [0.2 * a, 0.42 * a];
         R.armN = [-0.6 * a, -0.5 * a]; R.armF = [-0.5 * a, -0.7 * a];
       } else if (k < 0.56) {                            // golpe: o corpo inteiro vai junto
-        var b = (k - 0.34) / 0.22;
-        R.lean = -0.16 + 0.62 * b; R.sway = -6 + 22 * b; R.squash = 0.91 + 0.14 * b;
-        R.legN = [-0.24 + 0.9 * b, 0.5 - 0.46 * b]; R.legF = [0.2 - 0.8 * b, 0.42 - 0.3 * b];
-        R.armN = [-0.6 + 2.1 * b, -0.5 + 0.5 * b]; R.armF = [-0.5 + 1.5 * b, -0.7 + 0.7 * b];
+        var b = ease((k - 0.34) / 0.22);
+        R.lean = -0.16 + 0.42 * b; R.sway = -6 + 14 * b; R.squash = 0.91 + 0.13 * b;
+        R.legN = [-0.24 + 0.8 * b, 0.5 - 0.46 * b]; R.legF = [0.2 - 0.7 * b, 0.42 - 0.3 * b];
+        R.armN = [-0.6 + 1.9 * b, -0.5 + 0.5 * b]; R.armF = [-0.5 + 1.5 * b, -0.7 + 0.7 * b];
         R.mood = 'grito';
       } else {                                          // retorno
-        var c = (k - 0.56) / 0.44;
-        R.lean = 0.46 * (1 - c); R.sway = 16 * (1 - c); R.squash = 1.05 - 0.05 * c;
-        R.legN = [0.66 * (1 - c), 0.04]; R.legF = [-0.6 * (1 - c), 0.12];
-        R.armN = [1.5 * (1 - c), 0]; R.armF = [1.0 * (1 - c), 0];
+        var c = ease((k - 0.56) / 0.44);
+        R.lean = 0.26 * (1 - c); R.sway = 8 * (1 - c); R.squash = 1.04 - 0.04 * c;
+        R.legN = [0.56 * (1 - c), 0.04]; R.legF = [-0.5 * (1 - c), 0.12];
+        R.armN = [1.3 * (1 - c), 0]; R.armF = [1.0 * (1 - c), 0];
         if (c < 0.4) R.mood = 'grito';
       }
     },
@@ -1611,15 +1972,17 @@ var JOGO = (typeof window !== 'undefined')
     if (fase === 'andar') {
       // ciclo de passada: coxas em contrafase, joelho dobra na volta,
       // corpo sobe duas vezes por ciclo e os braços contrabalançam.
+      // PASSADA EXAGERADA: a perna da frente vai bem à frente, a de trás bem
+      // atrás, o joelho de trás dobra forte e o corpo sobe e desce de verdade.
       var sN = Math.sin(ph), sF = Math.sin(ph + Math.PI);
-      R.legN = [sN * 0.62, -0.55 * Math.max(0, -sN) - 0.06];
-      R.legF = [sF * 0.62, -0.55 * Math.max(0, -sF) - 0.06];
-      R.armN = [sF * 0.5, -0.18 - 0.16 * Math.max(0, sF)];
-      R.armF = [sN * 0.5, -0.18 - 0.16 * Math.max(0, sN)];
-      R.bob = -Math.abs(Math.sin(ph)) * 3.4 + 1.2;
-      R.lean = 0.08 + Math.sin(ph * 2) * 0.02;
-      R.sway = Math.sin(ph * 2) * 1.4;
-      R.squash = 1 + Math.sin(ph * 2) * 0.015;
+      R.legN = [sN * 0.8, -0.7 * Math.max(0, -sN) - 0.08];
+      R.legF = [sF * 0.8, -0.7 * Math.max(0, -sF) - 0.08];
+      R.armN = [sF * 0.7, -0.22 - 0.26 * Math.max(0, sF)];
+      R.armF = [sN * 0.7, -0.22 - 0.26 * Math.max(0, sN)];
+      R.bob = -Math.abs(Math.sin(ph)) * 5 + 1.8;
+      R.lean = 0.1 + Math.sin(ph * 2) * 0.035;
+      R.sway = Math.sin(ph * 2) * 2.6;
+      R.squash = 1 + Math.sin(ph * 2) * 0.03;
     } else if (fase === 'atacar') {
       (ATTACK[base] || ATTACK.sumo)(t, R);
     } else if (fase === 'conjurar') {
@@ -1646,10 +2009,10 @@ var JOGO = (typeof window !== 'undefined')
     } else if (fase === 'morte') {
       // joelhos cedem, tronco tomba para trás e a figura apaga
       var m = ease(t);
-      R.lean = -0.9 * m;
-      R.bob = 6 * m;
-      R.sway = -10 * m;
-      R.squash = 1 - 0.42 * m;
+      R.lean = -0.55 * m;
+      R.bob = 4 * m;
+      R.sway = -6 * m;
+      R.squash = 1 - 0.4 * m;
       R.legN = [-0.5 * m, 1.3 * m]; R.legF = [0.4 * m, 1.2 * m];
       R.armN = [-1.3 * m, -0.4 * m]; R.armF = [-1.2 * m, -0.4 * m];
       R.alpha = 1 - m * 0.55;
@@ -1693,6 +2056,8 @@ var JOGO = (typeof window !== 'undefined')
       var R = poseRig(cfg.base, pose.fase, t);
       applyRig(An, R);
       cfg.mood = R.mood;
+      // as pontas de pano ATRASAM em relação ao corpo: é o balanço da roupa
+      cfg.flap = { x: R.sway * 0.85 + R.lean * 26, y: R.bob * 0.7 };
       // tronco: sobe/desce, inclina (cisalhamento, pés plantados) e amassa
       ctx.save();
       ctx.translate(R.sway, R.bob);
@@ -1707,15 +2072,27 @@ var JOGO = (typeof window !== 'undefined')
     if (!cfg.back) drawBackItems(ctx, An, cfg);
     else if (wp) { ctx.save(); ctx.globalAlpha = 0.95; wp(ctx, An, cfg, An.handN[0], An.handN[1]); ctx.restore(); }
 
-    if (An.legF) drawLeg(ctx, An.legF, sh(An.legCol, -0.12), sh(An.footCol, -0.12));
-    drawArm(ctx, An.armF, sh(An.armCol, -0.12));
+    var wrapCol = cfg.acc.wrap ? mx(cfg.pal.cloth, '#e8dcc0', 0.45) : null;
+
+    if (An.legF) {
+      drawLeg(ctx, An.legF, sh(An.legCol, -0.12), sh(An.footCol, -0.12));
+      if (wrapCol) wraps(ctx, An.legF, 'knee', 'ank', sh(wrapCol, -0.12), 3);
+    }
+    drawArm(ctx, An.armF, sh(An.armCol, -0.12), An.ink);
+    if (wrapCol) wraps(ctx, An.armF, 'el', 'hd', sh(wrapCol, -0.12), 3);
     drawHand(ctx, An.armF, sh(An.handCol, -0.12));
 
     P.torso(ctx, An, cfg);
-    if (An.legN) drawLeg(ctx, An.legN, An.legCol, An.footCol);
+    if (An.legN) {
+      drawLeg(ctx, An.legN, An.legCol, An.footCol);
+      if (wrapCol) wraps(ctx, An.legN, 'knee', 'ank', wrapCol, 3);
+    }
 
-    if (cfg.acc.torso && ACC.torso[cfg.acc.torso]) ACC.torso[cfg.acc.torso](ctx, An, cfg);
-    if (cfg.acc.torso2 && ACC.torso[cfg.acc.torso2]) ACC.torso[cfg.acc.torso2](ctx, An, cfg);
+    // vestuário em CAMADAS: 3 a 5 peças por classe, na ordem declarada
+    var lay = cfg.acc.layers || [cfg.acc.torso, cfg.acc.torso2];
+    for (var li = 0; li < lay.length; li++) {
+      if (lay[li] && ACC.torso[lay[li]]) ACC.torso[lay[li]](ctx, An, cfg);
+    }
 
     var hg = (cfg.acc.head && ACC.head[cfg.acc.head]) || null;
     if (hg && hg.behind) hg.behind(ctx, An, cfg);
@@ -1723,7 +2100,8 @@ var JOGO = (typeof window !== 'undefined')
     if (hg && hg.front) hg.front(ctx, An, cfg);
     if (!cfg.back && !(hg && hg.hideFace)) drawFace(ctx, An, cfg, cfg.acc.face || P.face || 'sharp');
 
-    drawArm(ctx, An.armN, An.armCol);
+    drawArm(ctx, An.armN, An.armCol, An.ink);
+    if (wrapCol) wraps(ctx, An.armN, 'el', 'hd', wrapCol, 3);
     if (!cfg.back && wp) wp(ctx, An, cfg, An.handN[0], An.handN[1]);
     drawHand(ctx, An.armN, An.handCol);
 
@@ -2134,63 +2512,113 @@ var JOGO = (typeof window !== 'undefined')
 
   function unitCanvas(defId, els, dir, scale, pose) {
     var w = M.unitW * scale, h = M.unitH * scale;
-    var c = mkCanvas(w, h), g = c.getContext('2d');
+    var c = mkCanvas(w, h);
+    // pinta o boneco SEM contornos numa camada à parte…
+    var body = mkCanvas(w, h);
+    var g = body.getContext('2d');
     var k = M.artUnit * scale * RES;
     setScale(k);
     var d = DIRS[dir];
+    NO_LINE = true;
     g.save();
-    g.translate(c.width / 2, c.height * M.anchorY);
+    g.translate(body.width / 2, body.height * M.anchorY);
     g.scale(k, k);
     if (d.mirror) g.scale(-1, 1);
 
+    var lineCol = '#2e2119';
     var fus = parseFusion(defId);
     if (fus && (isClass(fus[0]) || isClass(fus[1]))) {
       var cfg = fusionCfg(fus[0], fus[1], els);
       cfg.back = d.back;
       cfg.pose = pose;
       paintUnit(g, cfg);
+      lineCol = outlineColor(cfg.pal);
     } else if (isClass(defId)) {
       var cfg2 = baseCfg(defId, els);
       cfg2.back = d.back;
       cfg2.pose = pose;
       paintUnit(g, cfg2);
+      lineCol = outlineColor(cfg2.pal);
     } else {
       var pets = (JOGO.DATA && JOGO.DATA.pets) || null;
       var pd = pets && pets[defId];
       if (pd) {
-        paintPet(g, defId, pd, { pal: creaturePal(defId, pd, els), back: d.back });
+        var pp = creaturePal(defId, pd, els);
+        paintPet(g, defId, pd, { pal: pp, back: d.back });
+        lineCol = outlineColor(pp);
       } else {
         var md = (JOGO.DATA && JOGO.DATA.monsters && JOGO.DATA.monsters[defId]) || null;
+        var mp = creaturePal(defId, md, els);
         paintCreature(g, defId, md, {
-          pal: creaturePal(defId, md, els),
+          pal: mp,
           arch: archOf(defId, md),
           boss: !!(md && (md.boss || md.isBoss)),
           back: d.back
         });
+        lineCol = outlineColor(mp);
       }
     }
     g.restore();
+    NO_LINE = false;
+    // …e agora o contorno sai do alfa composto: só o perímetro externo.
+    // espessura em px de TELA (o canvas já encolheu junto com o desenho, então
+    // a linha NÃO deve escalar com `scale` — senão some no tamanho de jogo)
+    outlineComposite(c.getContext('2d'), body, lineCol, Math.max(1.6, LW * RES * 1.15));
     c.__anchor = [M.anchorX, M.anchorY];
     return c;
+  }
+  // cor do contorno: a dominante do personagem, bem mais escura e dessaturada
+  function outlineColor(pal) {
+    var base = mx(pal.main || '#8a8f96', pal.cloth || pal.main || '#8a8f96', 0.4);
+    return vivid(sh(base, -0.68), -0.35);
   }
 
   // ==========================================================================
   // CENÁRIO — chão, obstáculos e props por tema
   // ==========================================================================
+  // Cada tema declara as MESMAS quantidades que `DATA.scenery`: 4 obstáculos
+  // ALTOS, 5 BAIXOS e 5 props, **na mesma ordem** das descrições escritas pelo
+  // Criativo Mundo. É isso que faz `'sebe alta e emaranhada'` virar o desenho
+  // da sebe em vez de cair sempre na mesma peça genérica.
   var THEMES = {
     estufa:   { floor: '#7d9a4e', floor2: '#6a8642', edge: '#3f5326', wall: '#5c7a35', accent: '#e2f0a8',
-                high: 'hedge', low: 'planter', props: ['samambaia', 'cogumelo', 'lanterna', 'vaso'] },
+                data: 'garden',
+                highs: ['trelica', 'hedge', 'vidraca', 'bambu'],
+                lows:  ['planter', 'mureta', 'carrinhoJ', 'vasos', 'tora'],
+                props: ['redoma', 'regador', 'espantalho', 'placa', 'esporos'] },
     cisterna: { floor: '#5d7f8c', floor2: '#4d6c78', edge: '#263a44', wall: '#456474', accent: '#b9f2ff',
-                high: 'coluna', low: 'canal', props: ['poca', 'corrente', 'lanterna', 'urna'] },
+                data: 'cistern',
+                highs: ['coluna', 'comporta', 'arcada', 'barris'],
+                lows:  ['canal', 'degrau', 'banco', 'cano', 'perolas'],
+                props: ['lustre', 'lampiao', 'partitura', 'sapato', 'corrente'] },
     brasa:    { floor: '#7a4a3a', floor2: '#663c30', edge: '#3a1e18', wall: '#5c3428', accent: '#ffb347',
-                high: 'forja', low: 'veio', props: ['brasa', 'bigorna', 'corrente', 'urna'] },
+                data: 'forge',
+                highs: ['blocoFerro', 'chamine', 'forja', 'lingotes'],
+                lows:  ['bigornaB', 'escoria', 'tempera', 'carvao', 'molde'],
+                props: ['correnteTeto', 'martelo', 'fole', 'avental', 'brasa'] },
     vento:    { floor: '#8a8296', floor2: '#756e82', edge: '#3c3748', wall: '#655e74', accent: '#f0eaff',
-                high: 'andaime', low: 'caixa', props: ['corda', 'bandeira', 'lanterna', 'caixa'] },
+                data: 'scaffold',
+                highs: ['andaime', 'guindaste', 'tapume', 'duto'],
+                lows:  ['guardaCorpo', 'vigas', 'caixa', 'brita', 'roldana'],
+                props: ['prumo', 'bandeira', 'balde', 'ninho', 'serragem'] },
     mina:     { floor: '#7a6a4e', floor2: '#665842', edge: '#332b20', wall: '#5c4e38', accent: '#c9a227',
-                high: 'rocha', low: 'entulho', props: ['carrinho', 'picareta', 'lanterna', 'cristal'] },
+                data: 'mine',
+                highs: ['escora', 'rocha', 'desabamento', 'silo'],
+                lows:  ['vagonete', 'trilho', 'entulho', 'dinamite', 'cavalete'],
+                props: ['carbureto', 'gaiola', 'capacete', 'cristal', 'poeira'] },
     coracao:  { floor: '#5a5270', floor2: '#4a4360', edge: '#241f36', wall: '#463f60', accent: '#b98cff',
-                high: 'cristal', low: 'runa', props: ['cristal', 'runa', 'lanterna', 'urna'] }
+                data: 'heart',
+                highs: ['costela', 'cristal', 'espelho', 'colunaQuatro'],
+                lows:  ['basalto', 'caco', 'bacia', 'raizCoracao', 'anelCinza'],
+                props: ['relogio', 'estilhaco', 'chuvaCima', 'lampiao', 'runa'] }
   };
+  // compatibilidade: `T.high`/`T.low` continuam existindo (a 1ª variante)
+  (function () {
+    for (var k in THEMES) {
+      THEMES[k].high = THEMES[k].highs[0];
+      THEMES[k].low = THEMES[k].lows[0];
+    }
+  })();
   var THEME_ALIAS = {
     greenhouse: 'estufa', garden: 'estufa', jardim: 'estufa', vegetal: 'estufa', estufa: 'estufa',
     cistern: 'cisterna', agua: 'cisterna', water: 'cisterna', afogados: 'cisterna', cisterna: 'cisterna',
@@ -2211,8 +2639,47 @@ var JOGO = (typeof window !== 'undefined')
     var hue = h % 360;
     var col = hslHex(hue, 26, 44);
     return { floor: col, floor2: sh(col, -0.12), edge: sh(col, -0.5), wall: sh(col, -0.16),
-             accent: sh(col, 0.55), high: 'rocha', low: 'entulho', props: ['lanterna', 'urna', 'cristal'] };
+             accent: sh(col, 0.55), high: 'rocha', low: 'entulho',
+             highs: ['rocha', 'coluna', 'desabamento', 'silo'],
+             lows: ['entulho', 'caixa', 'trilho', 'basalto', 'molde'],
+             props: ['lanterna', 'urna', 'cristal', 'poeira', 'corrente'] };
   }
+  // ---------------------------------------------------------------- variantes
+  // O Renderer passa como "variante" a DESCRIÇÃO em pt-BR que o Criativo Mundo
+  // escreveu em `DATA.scenery` ('sebe alta e emaranhada'). Antes isso não casava
+  // com nada e TODA peça da sala caía no mesmo desenho. Aqui a descrição vira o
+  // desenho da MESMA POSIÇÃO na lista do tema — 4 altos e 5 baixos por tema, na
+  // ordem declarada. Chave direta e índice numérico continuam valendo.
+  function variantKey(T, map, list, want, kind) {
+    var i, n = list.length;
+    if (!n) return null;
+    if (typeof want === 'string' && map[want]) return want;
+    if (typeof want === 'number' && isFinite(want)) return list[((want % n) + n) % n];
+    if (typeof want === 'string' && want) {
+      var sc = (JOGO.DATA && JOGO.DATA.scenery) || null;
+      var e = sc && T.data && sc[T.data];
+      if (e && e[kind] && e[kind].length) {
+        i = e[kind].indexOf(want);
+        if (i >= 0) return list[i % n];
+      }
+      if (e) {                                   // descrição de outro tema: mesma posição
+        for (var t in sc) {
+          if (sc[t] && sc[t][kind]) {
+            i = sc[t][kind].indexOf(want);
+            if (i >= 0) return list[i % n];
+          }
+        }
+      }
+      return list[hash(want) % n];               // desconhecida: estável por hash
+    }
+    return list[0];
+  }
+  // lista de variantes de um tema (usado pela galeria e por quem quiser sortear)
+  A.themeVariants = function (theme) {
+    var T = themeOf(theme);
+    return { high: (T.highs || [T.high]).slice(), low: (T.lows || [T.low]).slice(),
+             props: (T.props || []).slice() };
+  };
   // se o Criativo Mundo já escreveu os calabouços, respeita a paleta dele
   function withDungeonPalette(key, T) {
     var dgs = (JOGO.DATA && JOGO.DATA.dungeons) || null;
@@ -2293,6 +2760,186 @@ var JOGO = (typeof window !== 'undefined')
     c.__kind = 'tile';
     return c;
   }
+  // ==========================================================================
+  // BLOCOS GENÉRICOS DE CENÁRIO
+  // Um obstáculo tem que ser lido em 64 px: UMA silhueta forte + 2 ou 3
+  // detalhes. Estes construtores dão a silhueta; cada peça nomeada só escolhe
+  // material, proporção e o detalhe que a identifica.
+  // ==========================================================================
+  // fiada horizontal atravessando as duas faces à vista de um isoBox
+  function boxSeam(g, cx, cy, w, t, col, lw) {
+    var hw = w / 2, hh = w / 4;
+    stroke(g, [cx - hw, cy - t, cx, cy - t + hh, cx + hw, cy - t], col, lw == null ? 0.75 : lw);
+  }
+  // bloco maciço (parede, tapume, silo, bloco de ferro)
+  function gBlock(g, T, cx, cy, o) {
+    var col = o.col || T.wall, w = o.w || 72, h = o.h || 80, i, n = o.seams || 0;
+    if (o.base) isoBox(g, cx, cy, w + 10, o.base, sh(col, -0.22));
+    isoBox(g, cx, cy - (o.base || 0), w, h, col);
+    for (i = 1; i <= n; i++) {
+      boxSeam(g, cx, cy - (o.base || 0), w, h * (i / (n + 1)), rgba(sh(col, -0.5), 0.75));
+    }
+    if (o.rivets) {
+      for (i = 0; i < 4; i++) {
+        part(g, Pel(cx - w * 0.3 + i * w * 0.2, cy - (o.base || 0) - h * 0.5 + (i % 2) * 14 + w * 0.12,
+                    2.2, 2.0), sh(col, 0.34), { flat: true, noline: true });
+      }
+    }
+  }
+  // coluna / chaminé: base, fuste e capitel
+  function gPillar(g, T, cx, cy, o) {
+    var col = o.col || T.wall, h = o.h || 62, w = o.w || 44;
+    isoBox(g, cx, cy, w + 18, 12, sh(col, -0.14));
+    isoBox(g, cx, cy - 12, w, h, col);
+    if (o.flutes !== false) {
+      stroke(g, [cx - w * 0.28, cy - 20, cx - w * 0.28, cy - 12 - h + 6], rgba(sh(col, -0.42), 0.8), 0.8);
+      stroke(g, [cx + w * 0.28, cy - 20, cx + w * 0.28, cy - 12 - h + 6], rgba(sh(col, -0.42), 0.8), 0.8);
+    }
+    isoBox(g, cx, cy - 12 - h, o.capW || (w + 14), 12, sh(col, 0.08));
+    if (o.halo) part(g, Pel(cx, cy - h - 32, 20, 8), rgba(T.accent, 0.35), { flat: true, noline: true });
+  }
+  // estrutura vazada: postes verticais + travessas (treliça, andaime, escora)
+  function gFrame(g, T, cx, cy, o) {
+    var col = o.col || mx(T.wall, '#8a6b3f', 0.5), h = o.h || 80, w = o.w || 48, i;
+    var np = o.posts == null ? 2 : o.posts, nr = o.rungs == null ? 3 : o.rungs;
+    for (i = 0; i < np; i++) {
+      var x = cx - w / 2 + (np === 1 ? w / 2 : i * (w / (np - 1)));
+      part(g, Prr(x, cy - h / 2, o.pw || 8, h, 2), i % 2 ? sh(col, -0.1) : col, { k: 0.26, lw: 0.9 });
+    }
+    for (i = 0; i < nr; i++) {
+      part(g, Prr(cx, cy - 14 - i * ((h - 20) / Math.max(1, nr)), w + 12, o.rh || 6, 2),
+           sh(col, 0.08), { k: 0.24, lw: 0.9 });
+    }
+    if (o.diag) stroke(g, [cx - w / 2, cy - h + 8, cx + w / 2, cy - 18], rgba(sh(col, 0.3), 0.85), 0.95);
+  }
+  // massa orgânica ou amontoado (sebe, desabamento, entulho alto)
+  function gMass(g, T, cx, cy, o) {
+    var col = o.col || T.wall, rd = rng(o.seed || 'm'), i, h = o.h || 66;
+    part(g, Pblob([cx - 40, cy - h * 0.24, cx - 34, cy - h * 0.82, cx - 6, cy - h * 1.06,
+                   cx + 26, cy - h * 0.96, cx + 41, cy - h * 0.55, cx + 34, cy - h * 0.22,
+                   cx, cy - 4, cx - 30, cy - 10]), col, { k: 0.26, hi: 0.14 });
+    for (i = 0; i < (o.tufts || 7); i++) {
+      var a = rd() * TAU, rr = 11 + rd() * 24;
+      if (o.shards) {
+        part(g, Pshard(cx + Math.cos(a) * rr, cy - h * 0.6 + Math.sin(a) * rr * 0.6, 7 + rd() * 7, 's' + i),
+             sh(col, -0.1 + rd() * 0.3), { k: 0.26, lw: 0.8 });
+      } else {
+        part(g, Pel(cx + Math.cos(a) * rr, cy - h * 0.62 + Math.sin(a) * rr * 0.62,
+                    7 + rd() * 4, 5 + rd() * 3, rd()), sh(o.leaf || col, 0.12), { k: 0.18, lw: 0.75 });
+      }
+    }
+    if (o.dots) for (i = 0; i < 3; i++) {
+      part(g, Pel(cx - 20 + i * 20, cy - h * 0.86 + (i % 2) * 14, 4, 4),
+           i === 1 ? (o.dot2 || '#ff8fa8') : T.accent, { k: 0.16, lw: 0.7 });
+    }
+  }
+  // painel translúcido (vidraça, espelho, tapume envidraçado)
+  function gPane(g, T, cx, cy, o) {
+    var col = o.col || mx(T.wall, '#cfe4e8', 0.5), h = o.h || 86, w = o.w || 62, i;
+    isoBox(g, cx, cy, w + 8, 10, sh(T.wall, -0.24));
+    part(g, Ppoly([cx - w / 2, cy - 10, cx + w / 2, cy - 10, cx + w / 2, cy - h, cx - w / 2, cy - h]),
+         rgba(col, o.alpha == null ? 0.72 : o.alpha), { k: 0.14, lw: 0.9, line: sh(T.wall, -0.5) });
+    // reflexos em diagonal + a rachadura que conta a história
+    for (i = 0; i < 3; i++) {
+      stroke(g, [cx - w * 0.4 + i * 12, cy - 16, cx - w * 0.1 + i * 12, cy - h + 8],
+             rgba('#ffffff', 0.28), 1.1);
+    }
+    if (o.crack) {
+      stroke(g, [cx - w * 0.3, cy - h * 0.9, cx - 2, cy - h * 0.55, cx + w * 0.16, cy - h * 0.34,
+                 cx + w * 0.1, cy - 16], rgba(sh(T.wall, -0.6), 0.85), 1.0);
+      stroke(g, [cx - 2, cy - h * 0.55, cx + w * 0.34, cy - h * 0.62], rgba(sh(T.wall, -0.6), 0.7), 0.8);
+    }
+  }
+  // empilhamento (barris, lingotes, vigas)
+  function gStack(g, T, cx, cy, o) {
+    var col = o.col || mx(T.wall, '#8a6b3f', 0.5), i, n = o.n || 5, rd = rng(o.seed || 'st');
+    for (i = 0; i < n; i++) {
+      var row = Math.floor(i / 2), sx = cx + ((i % 2) ? 15 : -15) + row * 4;
+      var sy = cy - row * (o.dy || 24) - 4;
+      if (o.round) {
+        part(g, Prr(sx, sy - 12, 26, 26, 8), i % 2 ? sh(col, -0.12) : col, { k: 0.28, hi: 0.12, lw: 0.9 });
+        part(g, Pel(sx, sy - 24, 12, 5), sh(col, 0.18), { k: 0.2, lw: 0.8 });
+        stroke(g, [sx - 12, sy - 16, sx + 12, sy - 16], rgba(sh(col, -0.5), 0.8), 0.8);
+      } else {
+        part(g, Ppoly([sx - 15, sy, sx + 15, sy, sx + 19, sy - 11, sx - 11, sy - 11]),
+             i % 2 ? sh(col, 0.12) : col, { k: 0.24, lw: 0.9 });
+      }
+      if (rd() > 0.7) stroke(g, [sx - 8, sy - 6, sx + 8, sy - 8], rgba(sh(col, -0.4), 0.6), 0.7);
+    }
+  }
+  // ---------------- construtores de obstáculo BAIXO (cobertura) -------------
+  function gCurb(g, T, cx, cy, o) {
+    var col = o.col || mx(T.wall, '#8a7a5a', 0.4), w = o.w || 70, h = o.h || 22, i;
+    isoBox(g, cx, cy, w, h, col);
+    for (i = 0; i < (o.seams || 2); i++) boxSeam(g, cx, cy, w, h * ((i + 1) / (o.seams || 2 + 1)),
+                                                 rgba(sh(col, -0.5), 0.6), 0.7);
+    if (o.moss) {
+      for (i = 0; i < 4; i++) {
+        part(g, Pel(cx - 22 + i * 15, cy - h - 2 + (i % 2) * 4, 8, 4, 0.2),
+             mx(col, '#66a83f', 0.7), { k: 0.2, lw: 0.7 });
+      }
+    }
+  }
+  function gCrate(g, T, cx, cy, o) {
+    var col = o.col || mx(T.wall, '#9a7a4a', 0.55), w = o.w || 54, h = o.h || 34;
+    isoBox(g, cx, cy, w, h, col);
+    stroke(g, [cx - w / 2, cy - h * 0.55, cx, cy - h * 0.55 + w / 4, cx + w / 2, cy - h * 0.55],
+           rgba(sh(col, -0.42), 0.85), 0.85);
+    if (o.lid) part(g, Prr(cx, cy - h - 6, w * 0.56, 7, 2), sh(col, -0.16), { k: 0.24, lw: 0.85 });
+    if (o.strap) {
+      part(g, Prr(cx - w * 0.22, cy - h * 0.5, 5, h, 1), sh(col, -0.34), { k: 0.2, lw: 0.7 });
+      part(g, Prr(cx + w * 0.22, cy - h * 0.5, 5, h, 1), sh(col, -0.34), { k: 0.2, lw: 0.7 });
+    }
+  }
+  function gBasin(g, T, cx, cy, o) {
+    var col = o.col || sh(T.wall, -0.1), liq = o.liquid || mx('#2f9fe0', T.floor, 0.25);
+    isoBox(g, cx, cy, o.w || 74, o.h || 12, col);
+    part(g, Pdiamond(cx, cy - (o.h || 12) - 2, (o.w || 74) * 0.76, (o.w || 74) * 0.38), liq,
+         { k: 0.18, lw: 0.8 });
+    if (o.inner) part(g, Pdiamond(cx, cy - (o.h || 12) - 3, (o.w || 74) * 0.42, (o.w || 74) * 0.21),
+                     o.inner, { k: 0.14, lw: 0.7 });
+    stroke(g, [cx - 18, cy - (o.h || 12) - 2, cx - 4, cy - (o.h || 12) + 4, cx + 12, cy - (o.h || 12) - 4],
+           rgba(o.spark || '#b9f2ff', 0.75), 0.8, true);
+    if (o.glow) glow(g, cx, cy - (o.h || 12) - 2, 34, o.glow, 0.42);
+  }
+  function gHeap(g, T, cx, cy, o) {
+    var rd = rng(o.seed || 'hp'), i, col = o.col || T.wall;
+    for (i = 0; i < (o.n || 5); i++) {
+      part(g, Pshard(cx - 20 + rd() * 40, cy - 5 - rd() * 22, 8 + rd() * 8, (o.seed || 'h') + i),
+           sh(col, -0.1 + rd() * 0.3), { k: 0.28, lw: 0.85 });
+    }
+    if (o.pole) part(g, Prr(cx + 10, cy - 24, 5, 30, 2), mx(col, '#8a6b3f', 0.6), { k: 0.26, lw: 0.85 });
+    if (o.sack) {
+      part(g, Pblob([cx - 16, cy - 2, cx - 18, cy - 20, cx - 4, cy - 28, cx + 12, cy - 22,
+                     cx + 16, cy - 6]), mx(col, '#b8a074', 0.6), { k: 0.24, hi: 0.12 });
+      stroke(g, [cx - 8, cy - 24, cx + 6, cy - 26], rgba(sh(col, -0.4), 0.7), 0.8);
+    }
+  }
+  function gBeam(g, T, cx, cy, o) {
+    var col = o.col || mx(T.wall, '#9a7a4a', 0.5), i;
+    for (i = 0; i < 2; i++) {
+      part(g, Prr(cx - 26 + i * 52, cy - 14, 7, 30, 2), sh(col, -0.14), { k: 0.26, lw: 0.9 });
+    }
+    part(g, Prr(cx, cy - 28, 62, 7, 2), col, { k: 0.24, lw: 0.9 });
+    if (o.rope) {
+      stroke(g, [cx - 26, cy - 22, cx, cy - 14, cx + 26, cy - 22], rgba(mx(col, '#e8dcc0', 0.6), 0.9), 1.0, true);
+    } else {
+      part(g, Prr(cx, cy - 16, 58, 5, 2), sh(col, 0.1), { k: 0.22, lw: 0.85 });
+    }
+  }
+  function gCart(g, T, cx, cy, o) {
+    var col = o.col || mx(T.wall, '#8a6b3f', 0.5), tip = o.tip || 0;
+    g.save(); g.translate(cx, cy); g.rotate(tip); g.translate(-cx, -cy);
+    part(g, Ppoly([cx - 22, cy - 30, cx + 22, cy - 30, cx + 16, cy - 9, cx - 16, cy - 9]), col,
+         { k: 0.26, lw: 0.9 });
+    part(g, Ppoly([cx - 22, cy - 30, cx + 22, cy - 30, cx + 17, cy - 25, cx - 17, cy - 25]),
+         sh(col, 0.16), { k: 0.2, lw: 0.8 });
+    part(g, Pel(cx - 11, cy - 5, 6.5, 6.5), '#3a3128', { k: 0.24, lw: 0.85 });
+    part(g, Pel(cx + 11, cy - 5, 6.5, 6.5), '#3a3128', { k: 0.24, lw: 0.85 });
+    if (o.load) part(g, Pshard(cx, cy - 33, 10, 'cl'), o.load, { k: 0.24, lw: 0.85 });
+    g.restore();
+  }
+
   var HIGH = {
     hedge: function (g, T, cx, cy, v) {
       var rd = rng('hedge' + v), i;
@@ -2355,6 +3002,178 @@ var JOGO = (typeof window !== 'undefined')
       part(g, Ppoly([cx + 26, cy - 48, cx + 34, cy - 26, cx + 24, cy - 12, cx + 16, cy - 30]),
            mx(T.accent, T.wall, 0.45), { k: 0.24 });
       glow(g, cx, cy - 46, 44, T.accent, 0.45);
+    },
+
+    // ---------------------------------------------------- ESTUFA (garden)
+    trelica: function (g, T, cx, cy) {                 // treliça de madeira podre
+      var w = mx(T.wall, '#7a5a34', 0.66), i;
+      gFrame(g, T, cx, cy, { col: w, h: 88, w: 52, posts: 2, rungs: 5, pw: 7, rh: 5 });
+      for (i = 0; i < 5; i++) {                        // trepadeira subindo
+        part(g, Pel(cx - 24 + i * 12, cy - 20 - i * 14, 8, 5, 0.5 + i * 0.3),
+             mx(T.wall, '#5f9a38', 0.75), { k: 0.2, lw: 0.75 });
+      }
+      stroke(g, [cx - 22, cy - 12, cx + 4, cy - 46, cx - 8, cy - 84], rgba('#4a7a2a', 0.9), 1.0, true);
+    },
+    vidraca: function (g, T, cx, cy) {                 // estufa de vidro rachado
+      gPane(g, T, cx, cy, { col: '#cfe8dc', h: 90, w: 64, crack: true, alpha: 0.62 });
+      part(g, Prr(cx, cy - 92, 68, 7, 2), mx(T.wall, '#6a5a44', 0.6), { k: 0.26, lw: 0.9 });
+      part(g, Prr(cx, cy - 52, 6, 82, 1), rgba(mx(T.wall, '#6a5a44', 0.6), 0.9), { k: 0.24, lw: 0.7 });
+    },
+    bambu: function (g, T, cx, cy) {                   // tutor de bambu cerrado
+      var i, col = mx(T.wall, '#b8c06a', 0.62);
+      for (i = 0; i < 5; i++) {
+        var x = cx - 26 + i * 13, h = 74 + ((i * 37) % 5) * 6;
+        part(g, Prr(x, cy - h / 2, 8, h, 3), i % 2 ? sh(col, -0.1) : col, { k: 0.26, lw: 0.85 });
+        stroke(g, [x - 4, cy - h * 0.34, x + 4, cy - h * 0.34], rgba(sh(col, -0.45), 0.85), 0.8);
+        stroke(g, [x - 4, cy - h * 0.68, x + 4, cy - h * 0.68], rgba(sh(col, -0.45), 0.85), 0.8);
+      }
+      part(g, Pfeather(cx + 22, cy - 70, 22, -0.9), mx(col, '#4f8a35', 0.6), { k: 0.22, lw: 0.8 });
+      part(g, Pfeather(cx - 22, cy - 64, 20, -2.3), mx(col, '#4f8a35', 0.6), { k: 0.22, lw: 0.8 });
+    },
+    // -------------------------------------------------- CISTERNA (cistern)
+    comporta: function (g, T, cx, cy) {                // comporta de ferro emperrada
+      gBlock(g, T, cx, cy, { col: mx(T.wall, '#5a6670', 0.55), w: 66, h: 74, seams: 3, rivets: true });
+      part(g, Pel(cx, cy - 46, 15, 15), sh(mx(T.wall, '#5a6670', 0.55), 0.12), { k: 0.26, lw: 0.9 });
+      var i;
+      for (i = 0; i < 4; i++) {                        // volante travado
+        var a = i / 4 * Math.PI;
+        stroke(g, [cx - Math.cos(a) * 15, cy - 46 - Math.sin(a) * 15,
+                   cx + Math.cos(a) * 15, cy - 46 + Math.sin(a) * 15],
+               rgba(sh(T.wall, -0.5), 0.9), 1.1);
+      }
+      part(g, Pel(cx, cy - 46, 4, 4), sh(T.wall, -0.4), { k: 0.2, lw: 0.7 });
+    },
+    arcada: function (g, T, cx, cy) {                  // arcada submersa até o meio
+      var col = T.wall;
+      isoBox(g, cx - 26, cy, 26, 62, col);
+      isoBox(g, cx + 26, cy, 26, 62, sh(col, -0.06));
+      part(g, tag(function (c2) {                      // arco cheio
+        c2.beginPath();
+        c2.moveTo(cx - 36, cy - 58);
+        c2.quadraticCurveTo(cx, cy - 104, cx + 36, cy - 58);
+        c2.lineTo(cx + 36, cy - 44);
+        c2.quadraticCurveTo(cx, cy - 84, cx - 36, cy - 44);
+        c2.closePath();
+      }, cx, cy - 70, 38), sh(col, 0.06), { k: 0.26, hi: 0.14, lw: 0.9 });
+      part(g, Pdiamond(cx, cy - 4, 92, 24), rgba('#2f9fe0', 0.42), { flat: true, noline: true });
+      stroke(g, [cx - 30, cy - 6, cx - 6, cy - 1, cx + 26, cy - 8], rgba('#b9f2ff', 0.7), 0.9, true);
+    },
+    barris: function (g, T, cx, cy) {                  // pilha de barris apodrecidos
+      gStack(g, T, cx, cy, { col: mx(T.wall, '#7a5a34', 0.62), n: 5, round: true, dy: 26, seed: 'br' });
+      part(g, Pel(cx + 4, cy - 78, 12, 5), sh(mx(T.wall, '#7a5a34', 0.62), 0.2), { k: 0.2, lw: 0.8 });
+      part(g, Pel(cx - 20, cy - 6, 10, 4), rgba(T.accent, 0.3), { flat: true, noline: true });
+    },
+    // ------------------------------------------------------ BRASA (forge)
+    blocoFerro: function (g, T, cx, cy) {              // bloco de ferro rebitado
+      gBlock(g, T, cx, cy, { col: mx(T.wall, '#5d5a58', 0.6), w: 72, h: 82, seams: 2, rivets: true, base: 8 });
+      stroke(g, [cx - 30, cy - 40, cx + 6, cy - 56], rgba('#ff8c3a', 0.5), 1.2);
+      glow(g, cx - 12, cy - 48, 20, '#ff8c3a', 0.25);
+    },
+    chamine: function (g, T, cx, cy) {                 // chaminé de tijolo refratário
+      gPillar(g, T, cx, cy, { col: mx(T.wall, '#8a4a34', 0.55), h: 78, w: 40, capW: 52, flutes: false });
+      var i;
+      for (i = 1; i <= 5; i++) boxSeam(g, cx, cy - 12, 40, 78 * (i / 6), rgba('#3a1e18', 0.7), 0.7);
+      part(g, Pel(cx, cy - 100, 15, 6), '#2a1410', { k: 0.2, lw: 0.8 });
+      part(g, Pel(cx + 2, cy - 112, 11, 8), rgba('#8a7a70', 0.5), { flat: true, noline: true });
+      part(g, Pel(cx - 4, cy - 124, 8, 6), rgba('#8a7a70', 0.3), { flat: true, noline: true });
+    },
+    lingotes: function (g, T, cx, cy) {                // pilha de lingotes empilhados
+      gStack(g, T, cx, cy, { col: mx(T.wall, '#8a6a48', 0.5), n: 7, dy: 13, seed: 'lg' });
+      part(g, Ppoly([cx - 14, cy - 92, cx + 16, cy - 92, cx + 20, cy - 103, cx - 10, cy - 103]),
+           mx(T.accent, '#ffd98a', 0.4), { k: 0.2, hi: 0.24, lw: 0.85 });
+      glow(g, cx + 4, cy - 96, 22, T.accent, 0.3);
+    },
+    // ------------------------------------------------- VENTO (scaffold)
+    guindaste: function (g, T, cx, cy) {               // guindaste travado
+      var col = mx(T.wall, '#8a7a5a', 0.5);
+      gFrame(g, T, cx - 8, cy, { col: col, h: 92, w: 34, posts: 2, rungs: 4, pw: 7, rh: 5, diag: true });
+      part(g, Prr(cx + 10, cy - 92, 62, 7, 2), sh(col, 0.1), { k: 0.24, lw: 0.9 });  // lança
+      stroke(g, [cx + 36, cy - 88, cx + 36, cy - 42], rgba('#6a6055', 0.9), 1.0);
+      part(g, Ppoly([cx + 30, cy - 42, cx + 42, cy - 42, cx + 36, cy - 28]), '#6a6055', { k: 0.24, lw: 0.85 });
+      part(g, Pel(cx - 8, cy - 96, 8, 5), T.accent, { k: 0.2, lw: 0.8 });
+    },
+    tapume: function (g, T, cx, cy) {                  // tapume de tábuas pregadas
+      var col = mx(T.wall, '#9a7a4a', 0.6), i;
+      for (i = 0; i < 6; i++) {
+        part(g, Prr(cx - 30 + i * 12, cy - 42, 11, 84 - (i % 3) * 5, 1),
+             i % 2 ? sh(col, -0.12) : col, { k: 0.26, lw: 0.85 });
+      }
+      part(g, Prr(cx, cy - 26, 76, 7, 1), sh(col, -0.2), { k: 0.24, lw: 0.85 });
+      part(g, Prr(cx, cy - 66, 76, 7, 1), sh(col, -0.2), { k: 0.24, lw: 0.85 });
+      part(g, Ppoly([cx + 14, cy - 78, cx + 40, cy - 72, cx + 14, cy - 64]), T.accent, { k: 0.2, lw: 0.85 });
+    },
+    duto: function (g, T, cx, cy) {                    // chaminé de ventilação
+      var col = mx(T.wall, '#7a808c', 0.55), i;
+      isoBox(g, cx, cy, 56, 12, sh(col, -0.2));
+      part(g, Prr(cx, cy - 54, 34, 86, 6), col, { k: 0.28, hi: 0.14, lw: 0.9 });
+      for (i = 0; i < 4; i++) {
+        part(g, Prr(cx, cy - 22 - i * 22, 40, 6, 3), sh(col, 0.12), { k: 0.22, lw: 0.8 });
+      }
+      part(g, Ppoly([cx - 20, cy - 96, cx + 20, cy - 96, cx + 26, cy - 108, cx - 14, cy - 108]),
+           sh(col, -0.18), { k: 0.26, lw: 0.9 });
+      part(g, Pel(cx + 6, cy - 112, 12, 5), rgba(T.accent, 0.35), { flat: true, noline: true });
+    },
+    // -------------------------------------------------------- MINA (mine)
+    escora: function (g, T, cx, cy) {                  // escoramento de galeria
+      var col = mx(T.wall, '#7a5a34', 0.62);
+      part(g, Prr(cx - 32, cy - 44, 12, 88, 2), col, { k: 0.28, lw: 0.9 });
+      part(g, Prr(cx + 32, cy - 44, 12, 88, 2), sh(col, -0.1), { k: 0.28, lw: 0.9 });
+      part(g, Prr(cx, cy - 84, 84, 12, 2), sh(col, 0.1), { k: 0.24, lw: 0.9 });
+      stroke(g, [cx - 26, cy - 76, cx - 14, cy - 62], rgba(sh(col, -0.4), 0.85), 1.0);
+      stroke(g, [cx + 26, cy - 76, cx + 14, cy - 62], rgba(sh(col, -0.4), 0.85), 1.0);
+      part(g, Pdiamond(cx, cy - 46, 46, 60), rgba('#100c08', 0.72), { flat: true, noline: true });
+      part(g, Pel(cx, cy - 84, 5, 4), rgba(T.accent, 0.7), { k: 0.16, lw: 0.7 });
+    },
+    desabamento: function (g, T, cx, cy) {             // desabamento antigo
+      gMass(g, T, cx, cy, { col: sh(T.wall, -0.06), h: 74, seed: 'dsb', shards: true, tufts: 9 });
+      part(g, Prr(cx - 16, cy - 52, 6, 46, 1), mx(T.wall, '#7a5a34', 0.6), { k: 0.26, lw: 0.85, rot: 0.3 });
+      part(g, Pel(cx + 16, cy - 44, 4.5, 3.6), rgba(T.accent, 0.8), { k: 0.18, lw: 0.7 });
+    },
+    silo: function (g, T, cx, cy) {                    // silo de minério
+      var col = mx(T.wall, '#6a6258', 0.5);
+      isoBox(g, cx, cy, 64, 16, sh(col, -0.24));
+      part(g, tag(function (c2) {
+        c2.beginPath();
+        c2.moveTo(cx - 30, cy - 16); c2.lineTo(cx + 30, cy - 16);
+        c2.lineTo(cx + 22, cy - 96); c2.lineTo(cx - 22, cy - 96); c2.closePath();
+      }, cx, cy - 56, 30), col, { k: 0.28, hi: 0.14, lw: 0.9 });
+      boxSeam(g, cx, cy - 34, 58, 0, rgba(sh(col, -0.5), 0.7), 0.8);
+      boxSeam(g, cx, cy - 66, 52, 0, rgba(sh(col, -0.5), 0.7), 0.8);
+      part(g, Ppoly([cx - 26, cy - 96, cx + 26, cy - 96, cx + 18, cy - 108, cx - 18, cy - 108]),
+           sh(col, 0.14), { k: 0.24, lw: 0.9 });
+      part(g, Pshard(cx + 2, cy - 20, 9, 'si'), T.accent, { k: 0.24, lw: 0.85 });
+    },
+    // ------------------------------------------------- CORAÇÃO (heart)
+    costela: function (g, T, cx, cy) {                 // costela de pedra do Coração
+      var col = mx(T.wall, '#6a627a', 0.5), i;
+      isoBox(g, cx, cy, 56, 10, sh(col, -0.26));
+      for (i = 0; i < 3; i++) {
+        var lean = (i - 1) * 0.22;
+        part(g, tag(function (c2) {
+          c2.beginPath();
+          c2.moveTo(cx - 12 + i * 12, cy - 10);
+          c2.quadraticCurveTo(cx - 30 + i * 16 + lean * 40, cy - 60, cx - 6 + i * 14 + lean * 30, cy - 96);
+          c2.quadraticCurveTo(cx + 6 + i * 14 + lean * 30, cy - 60, cx + 2 + i * 12, cy - 10);
+          c2.closePath();
+        }, cx + i * 12 - 4, cy - 54, 22), i % 2 ? sh(col, 0.08) : col, { k: 0.26, hi: 0.12, lw: 0.9 });
+      }
+      glow(g, cx + 8, cy - 70, 30, T.accent, 0.3);
+    },
+    espelho: function (g, T, cx, cy) {                 // muro de espelho fosco
+      gPane(g, T, cx, cy, { col: '#d6d0e8', h: 88, w: 70, crack: true, alpha: 0.55 });
+      part(g, Prr(cx, cy - 90, 76, 8, 2), mx(T.wall, '#4a4360', 0.6), { k: 0.26, lw: 0.9 });
+      part(g, Pel(cx - 12, cy - 56, 11, 20, 0.2), rgba(T.accent, 0.22), { flat: true, noline: true });
+      glow(g, cx, cy - 50, 40, T.accent, 0.18);
+    },
+    colunaQuatro: function (g, T, cx, cy) {            // coluna dos quatro elementos
+      gPillar(g, T, cx, cy, { col: mx(T.wall, '#5a5270', 0.4), h: 74, w: 40, capW: 56 });
+      var cols = ['#ff8c3a', '#57c8ec', '#9bd06a', '#c8b6ff'], i;
+      for (i = 0; i < 4; i++) {
+        part(g, Pel(cx - 12 + (i % 2) * 24, cy - 30 - Math.floor(i / 2) * 30, 6.5, 6.5), cols[i],
+             { k: 0.2, hi: 0.24, lw: 0.75 });
+      }
+      part(g, Pstar(cx, cy - 104, 11, 4, 0.34), T.accent, { k: 0.18, lw: 0.8 });
+      glow(g, cx, cy - 100, 34, T.accent, 0.42);
     }
   };
   var LOW = {
@@ -2399,6 +3218,213 @@ var JOGO = (typeof window !== 'undefined')
       part(g, Pdiamond(cx, cy - 18, 46, 23), sh(T.wall, 0.14), { k: 0.16, lw: 0.8 });
       part(g, Pstar(cx, cy - 18, 12, 4, 0.36), T.accent, { k: 0.16, lw: 0.8 });
       glow(g, cx, cy - 18, 26, T.accent, 0.4);
+    },
+
+    // ---------------------------------------------------- ESTUFA (garden)
+    mureta: function (g, T, cx, cy) {                  // muretinha de tijolo com musgo
+      gCurb(g, T, cx, cy, { col: mx(T.wall, '#a06a48', 0.6), w: 72, h: 24, seams: 3, moss: true });
+    },
+    carrinhoJ: function (g, T, cx, cy) {               // carrinho de jardinagem tombado
+      gCart(g, T, cx, cy, { col: mx(T.wall, '#8a6b3f', 0.5), tip: 0.24, load: mx(T.wall, '#4f8a35', 0.7) });
+      part(g, Pfeather(cx + 14, cy - 30, 18, -1.1), mx(T.wall, '#4f8a35', 0.7), { k: 0.22, lw: 0.8 });
+    },
+    vasos: function (g, T, cx, cy) {                   // fileira de vasos quebrados
+      var col = mx(T.wall, '#b07a4a', 0.66), i;
+      for (i = 0; i < 3; i++) {
+        var x = cx - 20 + i * 20, hh = 20 - (i % 2) * 5;
+        part(g, Ppoly([x - 11, cy - hh, x + 11, cy - hh, x + 8, cy - 1, x - 8, cy - 1]),
+             i % 2 ? sh(col, -0.12) : col, { k: 0.26, hi: 0.12, lw: 0.85 });
+        part(g, Pel(x, cy - hh, 11, 4), sh(col, -0.22), { k: 0.2, lw: 0.8 });
+        if (i === 1) stroke(g, [x - 4, cy - hh, x + 2, cy - 6], rgba(sh(col, -0.5), 0.85), 0.9);
+      }
+      part(g, Pel(cx + 24, cy - 6, 7, 4, 0.4), mx(T.wall, '#4f8a35', 0.7), { k: 0.2, lw: 0.75 });
+    },
+    tora: function (g, T, cx, cy) {                    // tora caída coberta de hera
+      var col = mx(T.wall, '#7a5a34', 0.6), i;
+      part(g, Pcap(cx - 30, cy - 12, 11, cx + 30, cy - 9, 10), col, { k: 0.28, hi: 0.12, lw: 0.9 });
+      part(g, Pel(cx + 30, cy - 9, 5, 10), sh(col, 0.14), { k: 0.2, lw: 0.8 });
+      part(g, Pel(cx + 30, cy - 9, 2.4, 5), sh(col, -0.2), { flat: true, noline: true });
+      for (i = 0; i < 5; i++) {
+        part(g, Pel(cx - 24 + i * 12, cy - 20 + (i % 2) * 5, 7, 4, 0.4 + i),
+             mx(T.wall, '#5f9a38', 0.72), { k: 0.2, lw: 0.75 });
+      }
+    },
+    // -------------------------------------------------- CISTERNA (cistern)
+    degrau: function (g, T, cx, cy) {                  // degrau de sal cristalizado
+      var col = mx(T.wall, '#dcd8cf', 0.55);
+      isoBox(g, cx, cy, 72, 12, col);
+      isoBox(g, cx - 6, cy - 12, 52, 12, sh(col, 0.1));
+      var i;
+      for (i = 0; i < 4; i++) {
+        part(g, Pshard(cx - 20 + i * 14, cy - 28 - (i % 2) * 5, 6, 'sal' + i), sh(col, 0.22),
+             { k: 0.16, lw: 0.7 });
+      }
+      glow(g, cx, cy - 22, 24, '#b9f2ff', 0.22);
+    },
+    banco: function (g, T, cx, cy) {                   // banco de baile emborcado
+      var col = mx(T.wall, '#8a6b3f', 0.55);
+      g.save(); g.translate(cx, cy); g.rotate(0.16); g.translate(-cx, -cy);
+      part(g, Prr(cx, cy - 24, 66, 9, 2), col, { k: 0.26, hi: 0.12, lw: 0.9 });
+      part(g, Prr(cx - 22, cy - 12, 7, 24, 1), sh(col, -0.14), { k: 0.24, lw: 0.85 });
+      part(g, Prr(cx + 22, cy - 12, 7, 24, 1), sh(col, -0.14), { k: 0.24, lw: 0.85 });
+      part(g, Prr(cx, cy - 34, 58, 6, 2), sh(col, 0.14), { k: 0.22, lw: 0.85 });
+      g.restore();
+    },
+    cano: function (g, T, cx, cy) {                    // cano rompido escorrendo
+      var col = mx(T.wall, '#6a727c', 0.6);
+      part(g, Pcap(cx - 34, cy - 18, 9, cx + 22, cy - 20, 9), col, { k: 0.28, hi: 0.12, lw: 0.9 });
+      part(g, Pel(cx + 22, cy - 20, 5, 10), sh(col, -0.24), { k: 0.2, lw: 0.85 });
+      part(g, Prr(cx - 10, cy - 20, 8, 22, 2), sh(col, 0.12), { k: 0.24, lw: 0.85 });
+      stroke(g, [cx + 24, cy - 18, cx + 27, cy - 8, cx + 25, cy - 1], rgba('#7fd8f4', 0.85), 1.3, true);
+      part(g, Pel(cx + 26, cy - 1, 12, 4.5), rgba('#2f9fe0', 0.5), { flat: true, noline: true });
+    },
+    perolas: function (g, T, cx, cy) {                 // amontoado de pérolas calcificadas
+      var rd = rng('pe'), i;
+      part(g, Pel(cx, cy - 6, 30, 11), rgba(sh(T.wall, -0.3), 0.6), { flat: true, noline: true });
+      for (i = 0; i < 9; i++) {
+        var a = rd() * TAU, rr = rd() * 22;
+        part(g, Pel(cx + Math.cos(a) * rr, cy - 8 - Math.abs(Math.sin(a)) * 14, 6 + rd() * 4,
+                    6 + rd() * 4), mx('#f0ece0', T.accent, rd() * 0.4), { k: 0.16, hi: 0.3, lw: 0.75 });
+      }
+      glow(g, cx, cy - 14, 26, '#b9f2ff', 0.24);
+    },
+    // ------------------------------------------------------ BRASA (forge)
+    bigornaB: function (g, T, cx, cy) {                // bigorna abandonada
+      var col = mx(T.wall, '#6a5a4a', 0.5);
+      isoBox(g, cx, cy, 44, 14, col);
+      part(g, Prr(cx, cy - 24, 16, 16, 2), '#5a5f66', { k: 0.26, lw: 0.9 });
+      part(g, Ppoly([cx - 26, cy - 42, cx + 20, cy - 42, cx + 30, cy - 36, cx + 14, cy - 32,
+                     cx - 20, cy - 32]), '#7a828c', { k: 0.24, hi: 0.16, lw: 0.9 });
+      stroke(g, [cx - 18, cy - 38, cx + 12, cy - 38], rgba('#3a3f46', 0.8), 0.8);
+    },
+    escoria: function (g, T, cx, cy) {                 // mureta de contenção de escória
+      gCurb(g, T, cx, cy, { col: mx(T.wall, '#5a4a44', 0.6), w: 74, h: 26, seams: 2 });
+      var i;
+      for (i = 0; i < 4; i++) {
+        part(g, Pshard(cx - 22 + i * 15, cy - 30 - (i % 2) * 4, 7, 'esc' + i),
+             mx('#3a1e18', '#ff6a1e', 0.25 + (i % 2) * 0.2), { k: 0.22, lw: 0.8 });
+      }
+      glow(g, cx, cy - 30, 28, '#ff8c3a', 0.24);
+    },
+    tempera: function (g, T, cx, cy) {                 // fosso de têmpera com borda
+      gBasin(g, T, cx, cy, { col: mx(T.wall, '#4a4038', 0.5), w: 76, h: 14,
+                             liquid: '#2a3a44', inner: rgba('#8fd4ec', 0.55), spark: '#cfeeff' });
+      var i;
+      for (i = 0; i < 3; i++) {
+        part(g, Pel(cx - 12 + i * 12, cy - 24 - i * 7, 5 - i, 3.4 - i * 0.6),
+             rgba('#e8e4dc', 0.4 - i * 0.1), { flat: true, noline: true });
+      }
+    },
+    carvao: function (g, T, cx, cy) {                  // carrinho de carvão
+      gCart(g, T, cx, cy, { col: mx(T.wall, '#5a4a3a', 0.55), load: '#241c18' });
+      var rd = rng('cv'), i;
+      for (i = 0; i < 5; i++) {
+        part(g, Pshard(cx - 14 + rd() * 28, cy - 32 - rd() * 6, 5 + rd() * 3, 'cv' + i), '#2a2220',
+             { k: 0.2, lw: 0.7 });
+      }
+      glow(g, cx + 6, cy - 32, 16, '#ff8c3a', 0.2);
+    },
+    molde: function (g, T, cx, cy) {                   // molde de areia rachado
+      var col = mx(T.wall, '#b0a284', 0.62);
+      isoBox(g, cx, cy, 70, 18, col);
+      part(g, Pdiamond(cx, cy - 20, 50, 25), sh(col, -0.16), { k: 0.16, lw: 0.8 });
+      stroke(g, [cx - 20, cy - 22, cx - 2, cy - 16, cx + 18, cy - 24], rgba(sh(col, -0.55), 0.9), 0.9, true);
+      stroke(g, [cx - 4, cy - 28, cx + 2, cy - 12], rgba(sh(col, -0.55), 0.7), 0.7);
+    },
+    // ------------------------------------------------- VENTO (scaffold)
+    guardaCorpo: function (g, T, cx, cy) {             // guarda-corpo de corda e tábua
+      gBeam(g, T, cx, cy, { col: mx(T.wall, '#9a7a4a', 0.55), rope: true });
+      part(g, Pel(cx, cy - 18, 3.4, 3.4), mx(T.wall, '#e8dcc0', 0.5), { k: 0.2, lw: 0.7 });
+    },
+    vigas: function (g, T, cx, cy) {                   // pilha de vigas amarradas
+      gStack(g, T, cx, cy, { col: mx(T.wall, '#9a7a4a', 0.6), n: 5, dy: 11, seed: 'vg' });
+      stroke(g, [cx - 16, cy - 6, cx - 12, cy - 40], rgba('#6a5a44', 0.9), 1.2);
+      stroke(g, [cx + 18, cy - 6, cx + 14, cy - 40], rgba('#6a5a44', 0.9), 1.2);
+    },
+    brita: function (g, T, cx, cy) {                   // saco de brita de lastro
+      gHeap(g, T, cx, cy, { col: sh(T.wall, -0.08), n: 4, seed: 'bt', sack: true });
+    },
+    roldana: function (g, T, cx, cy) {                 // roldana caída de lado
+      var col = mx(T.wall, '#7a6a54', 0.55);
+      part(g, Pel(cx, cy - 14, 20, 20), col, { k: 0.28, hi: 0.14, lw: 0.9 });
+      part(g, Pel(cx, cy - 14, 12, 12), sh(col, -0.28), { k: 0.2, lw: 0.85 });
+      part(g, Pel(cx, cy - 14, 4, 4), sh(col, 0.2), { k: 0.16, lw: 0.7 });
+      stroke(g, [cx - 20, cy - 12, cx - 34, cy - 2], rgba(mx(col, '#e8dcc0', 0.5), 0.9), 1.2);
+      stroke(g, [cx + 20, cy - 16, cx + 32, cy - 6], rgba(mx(col, '#e8dcc0', 0.5), 0.9), 1.2);
+    },
+    // -------------------------------------------------------- MINA (mine)
+    vagonete: function (g, T, cx, cy) {                // vagonete emborcado
+      gCart(g, T, cx, cy, { col: mx(T.wall, '#6a6258', 0.5), tip: -0.3, load: T.accent });
+    },
+    trilho: function (g, T, cx, cy) {                  // trilho elevado
+      var col = mx(T.wall, '#6a6258', 0.5), i;
+      for (i = 0; i < 4; i++) {
+        part(g, Prr(cx - 24 + i * 16, cy - 6, 13, 6, 1), mx(T.wall, '#7a5a34', 0.6), { k: 0.24, lw: 0.8 });
+      }
+      part(g, Pcap(cx - 34, cy - 14, 3.4, cx + 34, cy - 18, 3.4), col, { k: 0.24, lw: 0.85 });
+      part(g, Pcap(cx - 30, cy - 4, 3.4, cx + 38, cy - 8, 3.4), sh(col, 0.1), { k: 0.24, lw: 0.85 });
+    },
+    dinamite: function (g, T, cx, cy) {                // caixa de dinamite úmida
+      gCrate(g, T, cx, cy, { col: mx(T.wall, '#8a6b3f', 0.55), w: 52, h: 30, lid: true, strap: true });
+      part(g, Pel(cx - 4, cy - 42, 5, 9), '#c04a34', { k: 0.24, lw: 0.85 });
+      part(g, Pel(cx + 6, cy - 42, 5, 9), '#c04a34', { k: 0.24, lw: 0.85 });
+      stroke(g, [cx + 6, cy - 50, cx + 14, cy - 58], rgba('#3a3128', 0.9), 0.9);
+    },
+    cavalete: function (g, T, cx, cy) {                // vira-cavalete de escoramento
+      var col = mx(T.wall, '#7a5a34', 0.6);
+      part(g, Prr(cx, cy - 30, 62, 8, 2), col, { k: 0.26, lw: 0.9 });
+      stroke(g, [cx - 22, cy - 28, cx - 30, cy - 2], rgba(sh(col, -0.24), 1), 2.6);
+      stroke(g, [cx - 14, cy - 28, cx - 4, cy - 2], rgba(sh(col, -0.24), 1), 2.6);
+      stroke(g, [cx + 16, cy - 28, cx + 8, cy - 2], rgba(sh(col, -0.32), 1), 2.6);
+      stroke(g, [cx + 24, cy - 28, cx + 32, cy - 2], rgba(sh(col, -0.32), 1), 2.6);
+      part(g, Prr(cx, cy - 16, 44, 5, 1), sh(col, 0.12), { k: 0.22, lw: 0.8 });
+    },
+    // ------------------------------------------------- CORAÇÃO (heart)
+    basalto: function (g, T, cx, cy) {                 // degrau de basalto rachado
+      var col = mx(T.wall, '#3a3448', 0.5);
+      isoBox(g, cx, cy, 72, 14, col);
+      isoBox(g, cx - 4, cy - 14, 54, 12, sh(col, 0.08));
+      stroke(g, [cx - 22, cy - 28, cx - 4, cy - 20, cx + 16, cy - 30], rgba('#1a1626', 0.9), 1.0, true);
+      part(g, Pel(cx + 6, cy - 24, 6, 3), rgba(T.accent, 0.4), { flat: true, noline: true });
+    },
+    caco: function (g, T, cx, cy) {                    // caco de espelho encravado
+      var i;
+      part(g, Pel(cx, cy - 4, 26, 9), rgba(sh(T.wall, -0.4), 0.5), { flat: true, noline: true });
+      for (i = 0; i < 3; i++) {
+        var lean = (i - 1) * 0.3;
+        part(g, Ppoly([cx - 8 + i * 12, cy - 4, cx - 2 + i * 12 + lean * 18, cy - 30 - i * 6,
+                       cx + 6 + i * 12, cy - 6]), rgba('#d6d0e8', 0.72),
+             { k: 0.14, lw: 0.85, line: sh(T.wall, -0.55) });
+      }
+      glow(g, cx + 4, cy - 22, 24, T.accent, 0.28);
+    },
+    bacia: function (g, T, cx, cy) {                   // bacia elemental transbordando
+      gBasin(g, T, cx, cy, { col: mx(T.wall, '#4a4360', 0.5), w: 70, h: 16,
+                             liquid: mx(T.accent, '#4a4360', 0.4), inner: T.accent,
+                             spark: '#f0eaff', glow: T.accent });
+      var cols = ['#ff8c3a', '#57c8ec', '#9bd06a', '#c8b6ff'], i;
+      for (i = 0; i < 4; i++) {
+        part(g, Pel(cx - 24 + i * 16, cy - 6, 3.4, 3.0), cols[i], { k: 0.18, lw: 0.7 });
+      }
+    },
+    raizCoracao: function (g, T, cx, cy) {             // raiz-do-coração grossa
+      var col = mx(T.wall, '#5a3a44', 0.55);
+      part(g, Pcap(cx - 34, cy - 8, 8, cx - 4, cy - 22, 10), col, { k: 0.28, hi: 0.12, lw: 0.9 });
+      part(g, Pcap(cx - 4, cy - 22, 10, cx + 32, cy - 10, 7), sh(col, -0.06), { k: 0.28, lw: 0.9 });
+      part(g, Pcap(cx - 2, cy - 20, 5, cx + 10, cy - 34, 3), sh(col, 0.1), { k: 0.24, lw: 0.85 });
+      stroke(g, [cx - 26, cy - 12, cx - 4, cy - 24, cx + 24, cy - 14], rgba(sh(col, -0.45), 0.85), 0.9, true);
+      glow(g, cx - 2, cy - 22, 22, T.accent, 0.24);
+    },
+    anelCinza: function (g, T, cx, cy) {               // anel de cinza compactada
+      var col = mx(T.wall, '#8a8290', 0.55), i;
+      part(g, Pdiamond(cx, cy - 6, 74, 37), sh(col, -0.16), { k: 0.16, lw: 0.8 });
+      part(g, Pdiamond(cx, cy - 8, 46, 23), sh(col, 0.14), { k: 0.14, lw: 0.75 });
+      for (i = 0; i < 6; i++) {
+        var a = i / 6 * TAU;
+        part(g, Pel(cx + Math.cos(a) * 28, cy - 8 + Math.sin(a) * 14, 4, 2.6), sh(col, 0.3),
+             { flat: true, noline: true });
+      }
+      part(g, Pel(cx, cy - 14, 8, 4), rgba(T.accent, 0.4), { flat: true, noline: true });
     }
   };
   var PROPS = {
@@ -2492,6 +3518,231 @@ var JOGO = (typeof window !== 'undefined')
     runa: function (g, T, cx, cy) {
       part(g, Pstar(cx, cy - 8, 11, 4, 0.34), T.accent, { k: 0.18, lw: 0.8 });
       glow(g, cx, cy - 8, 22, T.accent, 0.42);
+    },
+
+    // ---------------------------------------------------- ESTUFA (garden)
+    redoma: function (g, T, cx, cy) {                  // redoma de vagalumes
+      var i;
+      part(g, Pel(cx, cy - 4, 12, 5), mx(T.wall, '#6a5a44', 0.6), { k: 0.24, lw: 0.85 });
+      part(g, tag(function (c2) {
+        c2.beginPath(); c2.moveTo(cx - 11, cy - 6);
+        c2.quadraticCurveTo(cx - 13, cy - 30, cx, cy - 32);
+        c2.quadraticCurveTo(cx + 13, cy - 30, cx + 11, cy - 6); c2.closePath();
+      }, cx, cy - 19, 13), rgba('#dff0e4', 0.5), { k: 0.12, lw: 0.85, line: sh(T.wall, -0.5) });
+      for (i = 0; i < 4; i++) {
+        part(g, Pel(cx - 6 + i * 4, cy - 12 - (i % 3) * 7, 1.8, 1.8), '#ffe98a', { flat: true, noline: true });
+      }
+      glow(g, cx, cy - 18, 20, '#ffe98a', 0.42);
+    },
+    regador: function (g, T, cx, cy) {                 // regador de cobre azinhavrado
+      var col = mx('#7fb8a0', T.wall, 0.3);
+      part(g, Pel(cx, cy - 12, 12, 11), col, { k: 0.26, hi: 0.18, lw: 0.85 });
+      part(g, Pcap(cx + 9, cy - 18, 3, cx + 24, cy - 24, 4.4), sh(col, -0.08), { k: 0.24, lw: 0.85 });
+      part(g, Pel(cx + 25, cy - 25, 4.6, 4), sh(col, 0.16), { k: 0.2, lw: 0.8 });
+      stroke(g, [cx - 8, cy - 20, cx - 2, cy - 28, cx + 6, cy - 20], rgba(sh(col, -0.4), 0.9), 1.2, true);
+    },
+    espantalho: function (g, T, cx, cy) {              // espantalho de palha mofada
+      var pal = mx('#c8b06a', T.wall, 0.28);
+      part(g, Pcap(cx, cy - 2, 2.2, cx, cy - 44, 2.0), mx(T.wall, '#7a5a34', 0.6), { k: 0.26, lw: 0.85 });
+      part(g, Prr(cx, cy - 34, 30, 4, 1), mx(T.wall, '#7a5a34', 0.6), { k: 0.24, lw: 0.8 });
+      part(g, Pel(cx, cy - 50, 9, 10), pal, { k: 0.24, hi: 0.16, lw: 0.85 });
+      part(g, Ppoly([cx - 12, cy - 55, cx + 12, cy - 55, cx + 8, cy - 62, cx - 8, cy - 62]), sh(pal, -0.2),
+           { k: 0.22, lw: 0.85 });
+      stroke(g, [cx - 4, cy - 50, cx - 2, cy - 48], '#3a2f24', 1.1);
+      stroke(g, [cx + 4, cy - 50, cx + 6, cy - 48], '#3a2f24', 1.1);
+      part(g, Ppoly([cx - 15, cy - 32, cx - 8, cy - 24, cx - 18, cy - 22]), pal, { k: 0.2, lw: 0.75 });
+    },
+    placa: function (g, T, cx, cy) {                   // placa de nome de planta ilegível
+      part(g, Pcap(cx, cy - 2, 1.7, cx + 2, cy - 22, 1.5), mx(T.wall, '#7a5a34', 0.6), { k: 0.24, lw: 0.8 });
+      part(g, Prr(cx + 3, cy - 28, 22, 12, 2), mx('#e8dcc0', T.wall, 0.2), { k: 0.2, hi: 0.18, lw: 0.85 });
+      stroke(g, [cx - 4, cy - 30, cx + 9, cy - 30], rgba('#6a5a44', 0.7), 0.8);
+      stroke(g, [cx - 4, cy - 26, cx + 6, cy - 26], rgba('#6a5a44', 0.5), 0.7);
+    },
+    esporos: function (g, T, cx, cy) {                 // esporos suspensos
+      var rd = rng('esp'), i;
+      for (i = 0; i < 9; i++) {
+        var x = cx - 22 + rd() * 44, y = cy - 6 - rd() * 44;
+        part(g, Pel(x, y, 2.2 + rd() * 2, 2.2 + rd() * 2), rgba(mx(T.accent, '#ffffff', 0.4), 0.6),
+             { flat: true, noline: true });
+      }
+      glow(g, cx, cy - 26, 30, T.accent, 0.22);
+    },
+    // -------------------------------------------------- CISTERNA (cistern)
+    lustre: function (g, T, cx, cy) {                  // lustre de águas-vivas
+      var i;
+      stroke(g, [cx, cy - 66, cx, cy - 46], rgba('#7a828c', 0.85), 1.0);
+      for (i = 0; i < 3; i++) {
+        var x = cx - 14 + i * 14, y = cy - 40 - (i % 2) * 8;
+        part(g, tag(function (c2) {
+          c2.beginPath(); c2.moveTo(x - 8, y);
+          c2.quadraticCurveTo(x, y - 14, x + 8, y);
+          c2.quadraticCurveTo(x, y + 4, x - 8, y); c2.closePath();
+        }, x, y - 4, 9), rgba('#9fe8f4', 0.6), { k: 0.14, lw: 0.8, line: rgba('#1f6bb0', 0.7) });
+        stroke(g, [x - 4, y + 2, x - 5, y + 12], rgba('#b9f2ff', 0.6), 0.7);
+        stroke(g, [x + 3, y + 2, x + 5, y + 13], rgba('#b9f2ff', 0.6), 0.7);
+      }
+      glow(g, cx, cy - 42, 30, '#b9f2ff', 0.4);
+    },
+    lampiao: function (g, T, cx, cy) {                 // lampião submerso ainda aceso
+      part(g, Pel(cx, cy - 4, 10, 4), rgba('#2f9fe0', 0.35), { flat: true, noline: true });
+      part(g, Ppoly([cx - 7, cy - 6, cx + 7, cy - 6, cx + 6, cy - 22, cx - 6, cy - 22]),
+           mx(T.accent, '#ffd98a', 0.5), { k: 0.2, lw: 0.85 });
+      part(g, Ppoly([cx - 8, cy - 22, cx + 8, cy - 22, cx, cy - 29]), '#4a4038', { k: 0.24, lw: 0.85 });
+      stroke(g, [cx, cy - 29, cx + 1, cy - 36], rgba('#4a4038', 0.9), 0.9);
+      glow(g, cx, cy - 14, 26, T.accent, 0.5);
+    },
+    partitura: function (g, T, cx, cy) {               // partitura boiando
+      var i;
+      part(g, Ppoly([cx - 14, cy - 4, cx + 12, cy - 7, cx + 15, cy - 16, cx - 11, cy - 13]),
+           '#efe6d2', { k: 0.14, hi: 0.2, lw: 0.8 });
+      for (i = 0; i < 3; i++) stroke(g, [cx - 10, cy - 8 - i * 3, cx + 12, cy - 11 - i * 3],
+                                     rgba('#6a6055', 0.55), 0.6);
+      part(g, Pel(cx + 20, cy - 3, 14, 5), rgba('#2f9fe0', 0.4), { flat: true, noline: true });
+    },
+    sapato: function (g, T, cx, cy) {                  // sapato de baile solitário
+      var col = mx('#8a4a5a', T.wall, 0.22);
+      part(g, tag(function (c2) {
+        c2.beginPath(); c2.moveTo(cx - 12, cy - 2);
+        c2.quadraticCurveTo(cx - 14, cy - 12, cx - 4, cy - 13);
+        c2.quadraticCurveTo(cx + 10, cy - 12, cx + 13, cy - 2); c2.closePath();
+      }, cx, cy - 8, 14), col, { k: 0.26, hi: 0.18, lw: 0.85 });
+      part(g, Prr(cx + 9, cy - 5, 4, 8, 1), sh(col, -0.2), { k: 0.22, lw: 0.75 });
+      part(g, Pel(cx - 3, cy - 13, 3.4, 2.4), T.accent, { k: 0.16, lw: 0.7 });
+    },
+    // ------------------------------------------------------ BRASA (forge)
+    correnteTeto: function (g, T, cx, cy) {            // corrente do teto balançando
+      var i;
+      for (i = 0; i < 8; i++) {
+        part(g, Pel(cx + Math.sin(i * 0.5) * 3, cy - 12 - i * 8, 3.4, 4.6), '#7a828c', { k: 0.24, lw: 0.8 });
+      }
+      part(g, Ppoly([cx + 2, cy - 12, cx + 8, cy - 4, cx - 4, cy - 4]), '#6a7078', { k: 0.24, lw: 0.85 });
+    },
+    martelo: function (g, T, cx, cy) {                 // martelo cravado na bancada
+      part(g, Pcap(cx - 6, cy - 4, 2.4, cx + 5, cy - 34, 2.2), mx(T.wall, '#9a7a4a', 0.6), { k: 0.26, lw: 0.85 });
+      part(g, Prr(cx + 6, cy - 38, 22, 11, 2), '#6a7078', { k: 0.26, hi: 0.16, lw: 0.9 });
+      part(g, Prr(cx + 15, cy - 38, 5, 12, 1), '#8a929c', { k: 0.2, lw: 0.8 });
+      part(g, Pel(cx - 8, cy - 3, 13, 4), mx(T.wall, '#7a5a34', 0.6), { k: 0.2, lw: 0.8 });
+    },
+    fole: function (g, T, cx, cy) {                    // fole gigante murcho
+      var col = mx(T.wall, '#8a5a3a', 0.5), i;
+      part(g, Ppoly([cx - 22, cy - 6, cx + 12, cy - 18, cx + 20, cy - 12, cx - 18, cy - 2]),
+           col, { k: 0.26, hi: 0.14, lw: 0.9 });
+      for (i = 0; i < 4; i++) {
+        stroke(g, [cx - 16 + i * 9, cy - 4 - i * 2.6, cx - 12 + i * 9, cy - 12 - i * 2.6],
+               rgba(sh(col, -0.45), 0.85), 0.85);
+      }
+      part(g, Pcap(cx + 18, cy - 14, 2.4, cx + 30, cy - 18, 1.8), '#6a7078', { k: 0.22, lw: 0.8 });
+    },
+    avental: function (g, T, cx, cy) {                 // avental pendurado
+      var col = mx(T.wall, '#7a4a2a', 0.55);
+      stroke(g, [cx - 10, cy - 44, cx + 10, cy - 44], rgba('#6a6055', 0.8), 0.9);
+      part(g, tag(function (c2) {
+        c2.beginPath(); c2.moveTo(cx - 9, cy - 42); c2.lineTo(cx + 9, cy - 42);
+        c2.quadraticCurveTo(cx + 14, cy - 26, cx + 11, cy - 8);
+        c2.quadraticCurveTo(cx, cy - 4, cx - 11, cy - 8);
+        c2.quadraticCurveTo(cx - 14, cy - 26, cx - 9, cy - 42); c2.closePath();
+      }, cx, cy - 24, 14), col, { k: 0.26, hi: 0.12, lw: 0.9 });
+      stroke(g, [cx - 6, cy - 30, cx + 2, cy - 20], rgba('#2a1410', 0.6), 0.8);
+    },
+    // ------------------------------------------------- VENTO (scaffold)
+    prumo: function (g, T, cx, cy) {                   // prumo balançando
+      stroke(g, [cx + 2, cy - 52, cx, cy - 22], rgba('#8a7a5a', 0.9), 0.9);
+      part(g, Ppoly([cx - 5, cy - 22, cx + 5, cy - 22, cx, cy - 8]), '#7a828c', { k: 0.26, hi: 0.18, lw: 0.85 });
+      part(g, Pel(cx + 2, cy - 52, 3, 2.4), '#6a6055', { k: 0.2, lw: 0.7 });
+    },
+    balde: function (g, T, cx, cy) {                   // balde pendurado
+      var col = mx(T.wall, '#7a828c', 0.5);
+      stroke(g, [cx, cy - 46, cx, cy - 30], rgba('#8a7a5a', 0.9), 0.9);
+      stroke(g, [cx - 9, cy - 30, cx, cy - 36, cx + 9, cy - 30], rgba('#6a7078', 0.95), 1.0, true);
+      part(g, Ppoly([cx - 10, cy - 30, cx + 10, cy - 30, cx + 7, cy - 10, cx - 7, cy - 10]),
+           col, { k: 0.26, hi: 0.16, lw: 0.9 });
+      part(g, Pel(cx, cy - 30, 10, 3.6), sh(col, 0.16), { k: 0.2, lw: 0.8 });
+    },
+    ninho: function (g, T, cx, cy) {                   // ninho de picanço com ossinhos
+      var col = mx(T.wall, '#8a7a5a', 0.55), i;
+      part(g, Pel(cx, cy - 8, 16, 8), col, { k: 0.26, hi: 0.12, lw: 0.9 });
+      part(g, Pel(cx, cy - 10, 10, 4.4), sh(col, -0.3), { k: 0.18, lw: 0.75 });
+      for (i = 0; i < 3; i++) {
+        stroke(g, [cx - 12 + i * 9, cy - 13, cx - 6 + i * 9, cy - 18], rgba('#e8e0cc', 0.9), 1.0);
+      }
+      for (i = 0; i < 4; i++) {
+        stroke(g, [cx - 16 + i * 10, cy - 6, cx - 8 + i * 10, cy - 10], rgba(sh(col, -0.4), 0.7), 0.7);
+      }
+    },
+    serragem: function (g, T, cx, cy) {                // redemoinho de serragem
+      var i;
+      g.save();
+      g.strokeStyle = rgba(mx('#d8c69a', T.accent, 0.3), 0.55); g.lineWidth = _lw * 1.3; g.lineCap = 'round';
+      Pswirl(cx, cy - 18, 20, 1.3)(g); g.stroke();
+      g.restore();
+      for (i = 0; i < 6; i++) {
+        part(g, Pel(cx - 16 + i * 7, cy - 10 - (i % 3) * 12, 2, 1.6, i), rgba('#d8c69a', 0.6),
+             { flat: true, noline: true });
+      }
+    },
+    // -------------------------------------------------------- MINA (mine)
+    carbureto: function (g, T, cx, cy) {               // lampião de carbureto apagado
+      var col = mx(T.wall, '#7a7268', 0.5);
+      part(g, Ppoly([cx - 8, cy - 4, cx + 8, cy - 4, cx + 6, cy - 18, cx - 6, cy - 18]), col,
+           { k: 0.26, hi: 0.14, lw: 0.9 });
+      part(g, Pel(cx, cy - 20, 6.5, 4), sh(col, 0.18), { k: 0.2, lw: 0.8 });
+      part(g, Pel(cx, cy - 24, 3, 3.4), sh(col, -0.3), { k: 0.18, lw: 0.75 });
+      stroke(g, [cx - 6, cy - 24, cx, cy - 30, cx + 6, cy - 24], rgba(sh(col, -0.3), 0.9), 0.9, true);
+    },
+    gaiola: function (g, T, cx, cy) {                  // gaiola de pássaro vazia
+      var col = mx(T.wall, '#8a8078', 0.5), i;
+      part(g, Pel(cx, cy - 4, 11, 4), sh(col, -0.2), { k: 0.22, lw: 0.85 });
+      for (i = 0; i < 5; i++) {
+        var x = cx - 9 + i * 4.5;
+        stroke(g, [x, cy - 6, x + (i - 2) * 0.6, cy - 28], rgba(col, 0.95), 0.85);
+      }
+      stroke(g, [cx - 11, cy - 28, cx, cy - 34, cx + 11, cy - 28], rgba(col, 0.95), 1.0, true);
+      stroke(g, [cx, cy - 34, cx + 1, cy - 42], rgba(col, 0.9), 0.85);
+      part(g, Pel(cx, cy - 4, 11, 4), rgba(sh(col, -0.4), 0.3), { flat: true, noline: true });
+    },
+    capacete: function (g, T, cx, cy) {                // capacete no chão
+      var col = mx(T.accent, '#c07a2a', 0.4);
+      part(g, tag(function (c2) {
+        c2.beginPath(); c2.moveTo(cx - 13, cy - 3);
+        c2.quadraticCurveTo(cx - 12, cy - 18, cx, cy - 18);
+        c2.quadraticCurveTo(cx + 12, cy - 18, cx + 13, cy - 3); c2.closePath();
+      }, cx, cy - 11, 14), col, { k: 0.26, hi: 0.22, lw: 0.9 });
+      part(g, Pel(cx, cy - 3, 15, 4), sh(col, -0.22), { k: 0.2, lw: 0.8 });
+      part(g, Pel(cx - 1, cy - 16, 4, 3), sh(col, 0.3), { flat: true, noline: true });
+    },
+    poeira: function (g, T, cx, cy) {                  // poeira em suspensão
+      var rd = rng('po'), i;
+      for (i = 0; i < 12; i++) {
+        var x = cx - 26 + rd() * 52, y = cy - 4 - rd() * 40;
+        part(g, Pel(x, y, 1.4 + rd() * 1.8, 1.2 + rd() * 1.4), rgba('#d8ccae', 0.45),
+             { flat: true, noline: true });
+      }
+    },
+    // ------------------------------------------------- CORAÇÃO (heart)
+    relogio: function (g, T, cx, cy) {                 // relógio de estações parado
+      var col = mx(T.wall, '#8a8296', 0.5);
+      part(g, Pcap(cx, cy - 2, 2.4, cx, cy - 26, 2.2), sh(col, -0.24), { k: 0.24, lw: 0.85 });
+      part(g, Pel(cx, cy - 36, 12, 12), col, { k: 0.24, hi: 0.2, lw: 0.9 });
+      part(g, Pel(cx, cy - 36, 9, 9), sh(col, 0.28), { k: 0.14, lw: 0.7 });
+      stroke(g, [cx, cy - 36, cx + 5, cy - 41], rgba('#2a2430', 0.9), 1.0);
+      stroke(g, [cx, cy - 36, cx - 2, cy - 30], rgba('#2a2430', 0.9), 0.9);
+      part(g, Pel(cx, cy - 36, 1.6, 1.6), '#2a2430', { flat: true, noline: true });
+    },
+    estilhaco: function (g, T, cx, cy) {               // estilhaço parado no ar
+      part(g, Ppoly([cx - 9, cy - 30, cx + 5, cy - 40, cx + 11, cy - 26, cx - 2, cy - 18]),
+           mx(T.accent, T.wall, 0.34), { k: 0.24, hi: 0.24, lw: 0.85 });
+      part(g, Ppoly([cx + 12, cy - 44, cx + 19, cy - 48, cx + 17, cy - 38]),
+           mx(T.accent, T.wall, 0.5), { k: 0.22, lw: 0.8 });
+      glow(g, cx + 2, cy - 30, 26, T.accent, 0.34);
+      stroke(g, [cx - 16, cy - 20, cx - 8, cy - 24], rgba(T.accent, 0.35), 0.8);
+    },
+    chuvaCima: function (g, T, cx, cy) {               // chuva que cai para cima
+      var rd = rng('cc'), i;
+      for (i = 0; i < 7; i++) {
+        var x = cx - 22 + rd() * 44, y = cy - 6 - rd() * 44;
+        part(g, Pdrop(x, y, 2.4 + rd() * 1.4), rgba('#b9f2ff', 0.55), { flat: true, noline: true });
+        stroke(g, [x, y + 5, x, y + 12], rgba('#b9f2ff', 0.28), 0.7);
+      }
     }
   };
 
@@ -3083,21 +4334,21 @@ var JOGO = (typeof window !== 'undefined')
   };
   A.obstacleHigh = function (theme, variant) {
     var T = themeOf(theme);
-    var key = (typeof variant === 'string' && HIGH[variant]) ? variant : T.high;
+    var key = variantKey(T, HIGH, T.highs || [T.high], variant, 'high') || T.high;
     return cached('high:' + theme + ':' + key, function () {
       return sceneryCanvas(HIGH, theme, key, M.tileH + 116);
     });
   };
   A.obstacleLow = function (theme, variant) {
     var T = themeOf(theme);
-    var key = (typeof variant === 'string' && LOW[variant]) ? variant : T.low;
+    var key = variantKey(T, LOW, T.lows || [T.low], variant, 'low') || T.low;
     return cached('low:' + theme + ':' + key, function () {
       return sceneryCanvas(LOW, theme, key, M.tileH + 64);
     });
   };
   A.prop = function (theme, key) {
     var T = themeOf(theme);
-    var k = (key && PROPS[key]) ? key : T.props[hash(String(key || 'p')) % T.props.length];
+    var k = variantKey(T, PROPS, T.props, key, 'props') || T.props[0];
     return cached('prop:' + theme + ':' + k, function () {
       return sceneryCanvas(PROPS, theme, k, M.tileH + 68);
     });
