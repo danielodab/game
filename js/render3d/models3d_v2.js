@@ -164,6 +164,31 @@ var JOGO = (typeof window !== 'undefined')
             concept: 'Xamã de grimório aberto e varinha, sem chapéu' }
   };
 
+  // ------------------------------------------------------- MARCAS DE CLASSE
+  // O que cada classe DOA para uma fusão. A regra do usuário: "a classe com
+  // características de outras, tipo chapéu, roupa, arma.. mas que dê pra
+  // identificar que aquilo foi uma fusão das classes X e Y".
+  //
+  // Medido: nos 5 modelos KayKit os aderecos (chapeu, elmo, capa, arma, escudo)
+  // sao malhas SIMPLES penduradas num osso — nao sao skinned. E os 5 modelos
+  // tem os MESMOS 41 ossos com os mesmos nomes (`head`, `chest`, `handslotl`,
+  // `handslotr`). Entao a peca de um entra no osso do outro com um `add`, sem
+  // reajustar pele nenhuma.
+  //
+  // `head` e a marca mais legivel de longe (muda a silhueta). `hand` entra
+  // SEMPRE na mao esquerda do anfitriao, que fica livre ou carrega o item menos
+  // identificador dele — a mao direita, com a arma principal do anfitriao,
+  // nunca e tomada. Arqueiro e espadachim nao tem peca de cabeca (o capuz faz
+  // parte da malha da cabeca, que e skinned): a arma responde por eles.
+  M.CLASS_MARK = {
+    sumo:       { head: 'Barbarian_Hat', cape: 'Barbarian_Cape', hand: '2H_Axe' },
+    arqueiro:   { head: null,            cape: 'Rogue_Cape',     hand: '2H_Crossbow' },
+    bruxo:      { head: 'Mage_Hat',      cape: 'Mage_Cape',      hand: '2H_Staff' },
+    espadachim: { head: null,            cape: 'Rogue_Cape',     hand: 'Knife_Offhand' },
+    curandeira: { head: 'Knight_Helmet', cape: 'Knight_Cape',    hand: 'Badge_Shield' },
+    invocador:  { head: null,            cape: 'Mage_Cape',      hand: 'Spellbook_open' }
+  };
+
   // Monstros — 3 fontes, escolhidas por id/família:
   //   1. `proc:true` → modelo procedural da camada v1 (js/render3d/models3d.js),
   //      feito sob medida para ESTE bestiário (flora, corte afogada, fornalha);
@@ -471,6 +496,21 @@ var JOGO = (typeof window !== 'undefined')
   //   corpo = classe de silhueta dominante · arma = adereço-assinatura da outra
   //   cor   = mistura das duas paletas · aura = mistura dos dois elementos
   //   porte = maior (a unidade soma a vida das duas)
+  // As pecas que o CONVIDADO leva para dentro da fusao.
+  function marksOf(classId, look) {
+    var mk = M.CLASS_MARK[classId] || {};
+    var out = [];
+    if (mk.head) out.push({ model: look.model, mesh: mk.head, bone: 'head' });
+    // A CAPA e a "roupa" do convidado. Arqueiro e espadachim nao tem peca de
+    // cabeca (o capuz faz parte da malha skinned), entao sem a capa eles
+    // entrariam na fusao so por uma arma pequena e some. A capa muda a cor e a
+    // silhueta das costas, que le de longe.
+    if (mk.cape) out.push({ model: look.model, mesh: mk.cape, bone: 'chest', hidesHostCape: true });
+    var arma = mk.hand || look.weapon;
+    if (arma) out.push({ model: look.model, mesh: arma, bone: 'handslotl' });
+    return out;
+  }
+
   function fusionLook(defId) {
     var pair = String(defId).slice(4).split('+');
     var a = pair[0], b = pair[1];
@@ -484,9 +524,9 @@ var JOGO = (typeof window !== 'undefined')
       model: lh.model, show: lh.show.slice(), scale: 1.26,
       tint: lh.tint, accent: lg ? lg.accent : lh.accent,
       mixTint: lg ? lg.tint : null,
-      graft: lg ? { model: lg.model, mesh: lg.weapon, bone: 'handslot.l' } : null,
+      grafts: lg ? marksOf(guest, lg) : [],
       fusion: true, hostClass: host, guestClass: guest,
-      concept: lg ? (lh.concept + ' + ' + lg.weapon) : lh.concept
+      concept: lg ? (lh.concept + ' + marcas de ' + guest) : lh.concept
     };
   }
 
@@ -614,20 +654,40 @@ var JOGO = (typeof window !== 'undefined')
       });
     }
 
-    // ENXERTO DA FUSÃO: a arma-assinatura da outra classe entra no punho livre
-    if (look.graft && look.graft.mesh) {
-      var gsrc = raw[look.graft.model];
-      if (gsrc) {
-        var gm = meshByName(gsrc.scene, look.graft.mesh);
-        var bone = findBone(model, look.graft.bone) || findBone(model, 'handslot.l');
-        if (gm && bone) {
-          var g2 = gm.clone();
-          g2.visible = true; g2.castShadow = true;
-          g2.position.set(0, 0, 0); g2.rotation.set(0, 0, 0); g2.scale.set(1, 1, 1);
-          bone.add(g2);
-          group.userData_graft = g2;
+    // ENXERTO DA FUSÃO: as MARCAS da outra classe entram no corpo do anfitrião.
+    // Antes entrava só a arma, num osso com nome errado ('handslot.l' em vez de
+    // 'handslotl'), e por isso as cinco fusões do sumô saíam idênticas: o
+    // convidado não aparecia em lugar nenhum. Agora vem o adereço de cabeça
+    // (que muda a silhueta e lê de longe) e a arma-assinatura.
+    if (look.grafts && look.grafts.length) {
+      group.userData_grafts = [];
+      for (var gi = 0; gi < look.grafts.length; gi++) {
+        var gf = look.grafts[gi];
+        var gsrc = raw[gf.model];
+        if (!gsrc) continue;
+        var gm = meshByName(gsrc.scene, gf.mesh);
+        var bone = findBone(model, gf.bone);
+        if (!gm || !bone) continue;
+        var g2 = gm.clone();
+        g2.visible = true; g2.castShadow = true;
+        g2.position.set(0, 0, 0); g2.rotation.set(0, 0, 0); g2.scale.set(1, 1, 1);
+        // a peça guarda a pose que tinha no dono original; sem copiar, o chapéu
+        // nasce no centro do osso e afunda na cabeça
+        if (gm.parent && gm.parent.isBone) {
+          g2.position.copy(gm.position);
+          g2.quaternion.copy(gm.quaternion);
+          g2.scale.copy(gm.scale);
         }
+        // a capa do anfitriao sai de cena para a do convidado nao empilhar
+        if (gf.hidesHostCape) {
+          model.traverse(function (n) {
+            if (n !== g2 && n.isMesh && /_Cape$/.test(n.name || '')) n.visible = false;
+          });
+        }
+        bone.add(g2);
+        group.userData_grafts.push(g2);
       }
+      group.userData_graft = group.userData_grafts[0] || null;
     }
 
     var elems = (opts.elements && opts.elements.length) ? opts.elements : [opts.element || 'neutro'];
