@@ -988,6 +988,19 @@ var JOGO = (typeof window !== 'undefined')
     if (spellHasEffect(spell, 'swap') && (!occupant || occupant === unit)) return false;
     // v2: targetSide
     var ts = spell.targetSide;
+
+    // FEITICO DE AREA MIRA O CHAO, NAO A CRIATURA.
+    // `targetSide:'enemy'` exigia um inimigo NA PROPRIA celula, entao um feitico
+    // de area so podia ser lancado em cima de alguem — nao dava para largar a
+    // explosao entre dois inimigos, nem chutar onde o outro VAI estar. Numa
+    // grade tatica isso e meia mecanica jogada fora.
+    // Quando o feitico tem area de verdade, a celula-alvo passa a ser um LUGAR:
+    // basta estar no alcance, e a area pega quem estiver dentro (ou ninguem).
+    // O alvo 'self' continua preso ao conjurador, que e o que ele significa.
+    var ar = spell.aoe;
+    var temArea = !!(ar && ar.shape && ar.shape !== 'single' && (ar.size || 0) > 0);
+    if (temArea && (ts === 'enemy' || ts === 'ally')) return true;
+
     if (ts === 'enemy' && (!occupant || occupant.side === unit.side)) return false;
     if (ts === 'ally' && (!occupant || occupant.side !== unit.side)) return false;
     if (ts === 'self' && !(tx === unit.x && ty === unit.y)) return false;
