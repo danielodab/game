@@ -54,9 +54,30 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // --------------------------------------------------------------- partículas
-  var pts = null, pPos = null, pCol = null, pSize = null, pGeo = null;
+  var pts = null, pPos = null, pCol = null, pSize = null, pTile = null, pGeo = null;
   var parts = [];                    // {x,y,z,vx,vy,vz,life,max,r,g,b,size,grav,drag,fade}
   var freeList = [];
+
+  /* O atlas vem EMBUTIDO em base64 (assets/embedded/fx-atlas.js) porque buscar
+   * um .png por fetch falha quando o jogo abre por file://. Se o arquivo nao
+   * estiver na pagina, o sistema volta ao ponto gerado por codigo e nada quebra
+   * — as paginas de teste antigas continuam funcionando sem carrega-lo. */
+  var ATLAS_TEX = null, ATLAS_TENTADO = false;
+  function atlasTexture() {
+    if (ATLAS_TENTADO) return ATLAS_TEX;
+    ATLAS_TENTADO = true;
+    var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ATLAS : null;
+    if (!A || !A.png) return null;
+    var img = new Image();
+    var tex = new THREE.Texture(img);
+    img.onload = function () { tex.needsUpdate = true; };
+    img.src = A.png;
+    tex.minFilter = THREE.LinearFilter;      // sem mipmap: o quadro e pequeno e
+    tex.magFilter = THREE.LinearFilter;      // o borrao de nivel come o desenho
+    tex.generateMipmaps = false;
+    ATLAS_TEX = tex;
+    return tex;
+  }
 
   var DOT_TEX = null;
   function dotTexture() {
@@ -76,29 +97,59 @@ var JOGO = (typeof window !== 'undefined')
 
   var PART_VS = [
     'attribute float aSize;',
+    'attribute float aTile;',
     'varying vec3 vColor;',
+    'varying float vTile;',
     'void main() {',
     '  vColor = color;',
+    '  vTile = aTile;',
     '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
     '  gl_PointSize = aSize * (320.0 / max(0.001, -mv.z));',
     '  gl_Position = projectionMatrix * mv;',
     '}'
   ].join('\n');
+  // O quadro do atlas entra como ATRIBUTO por particula, nao como material
+  // separado: assim as dezesseis formas convivem numa unica chamada de desenho.
+  // `uGrade` e 1 quando o atlas esta carregado e 0 quando caimos no ponto
+  // gerado por codigo — com 0 a conta de UV se anula e a textura inteira e lida.
   var PART_FS = [
     'uniform sampler2D uMap;',
+    'uniform float uGrade;',
     'varying vec3 vColor;',
+    'varying float vTile;',
     'void main() {',
-    '  vec4 t = texture2D(uMap, gl_PointCoord);',
+    '  vec2 uv = gl_PointCoord;',
+    '  if (uGrade > 0.5) {',
+    '    float n = 4.0;',
+    '    float col = mod(vTile, n);',
+    '    float row = floor(vTile / n);',
+    '    uv = (vec2(col, row) + vec2(uv.x, 1.0 - uv.y)) / n;',
+    '    uv.y = 1.0 - uv.y;',
+    '  }',
+    '  vec4 t = texture2D(uMap, uv);',
     '  gl_FragColor = vec4(vColor, 1.0) * t;',
     '  if (gl_FragColor.a < 0.01) discard;',
     '}'
   ].join('\n');
+
+  // ------------------------------------------------------ QUADROS DO ATLAS
+  // Cada familia aponta para o desenho que a LE. Antes tudo usava o mesmo
+  // borrao radial: um corte, um terremoto e uma invocacao chegavam na tela com
+  // a mesma mancha redonda, e so a cor os separava.
+  var TILE = {
+    ponto: 0, corte: 1, cascalho: 2, brasa: 3,
+    runa: 4, brilho: 5, fumaca: 6, raio: 7,
+    redemoinho: 8, anel: 9, risco: 10, estouro: 11,
+    aura: 12, lingua: 13, halo: 14, cintila: 15
+  };
+  FX.TILE = TILE;
 
   function buildParticles() {
     pGeo = new THREE.BufferGeometry();
     pPos = new Float32Array(MAXP * 3);
     pCol = new Float32Array(MAXP * 3);
     pSize = new Float32Array(MAXP);
+    pTile = new Float32Array(MAXP);
     for (var i = 0; i < MAXP; i++) {
       pPos[i * 3 + 1] = -9999;
       pSize[i] = 0;
@@ -108,8 +159,11 @@ var JOGO = (typeof window !== 'undefined')
     pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
     pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
     pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1));
+    pGeo.setAttribute('aTile', new THREE.BufferAttribute(pTile, 1));
+    var atlas = atlasTexture();
     var mat = new THREE.ShaderMaterial({
-      uniforms: { uMap: { value: dotTexture() } },
+      uniforms: { uMap: { value: atlas || dotTexture() },
+                  uGrade: { value: atlas ? 1 : 0 } },
       vertexShader: PART_VS, fragmentShader: PART_FS,
       transparent: true, depthWrite: false, depthTest: true,
       blending: THREE.AdditiveBlending, vertexColors: true
@@ -132,8 +186,10 @@ var JOGO = (typeof window !== 'undefined')
       size: o.size || 0.3, grav: o.grav == null ? -3.2 : o.grav,
       drag: o.drag == null ? 1.6 : o.drag,
       fade: o.fade == null ? 1 : o.fade,
-      grow: o.grow || 0
+      grow: o.grow || 0,
+      tile: o.tile == null ? TILE.ponto : o.tile
     };
+    pTile[i] = parts[i].tile;
     return i;
   }
   function burst(x, y, z, n, o) {
@@ -149,7 +205,7 @@ var JOGO = (typeof window !== 'undefined')
         vx: Math.cos(a) * sp, vy: e * sp * (o.up == null ? 1 : o.up), vz: Math.sin(a) * sp,
         life: (o.life || 0.6) * (0.6 + Math.random() * 0.8),
         color: o.color, size: (o.size || 0.32) * (0.5 + Math.random()),
-        grav: o.grav, drag: o.drag, grow: o.grow
+        grav: o.grav, drag: o.drag, grow: o.grow, tile: o.tile
       });
     }
   }
@@ -595,7 +651,8 @@ var JOGO = (typeof window !== 'undefined')
   function meteoro(dest, el, el2, grande) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
     var alto = new THREE.Vector3(dest.x + 3.0, 14, dest.z - 4.2);
-    burst(alto.x, alto.y, alto.z, 16, { color: col, speed: 1.2, life: 0.7, size: 0.4, grav: -1 });
+    burst(alto.x, alto.y, alto.z, 16, { color: col, speed: 1.2, life: 0.7, size: 0.4, grav: -1,
+                                        tile: TILE.brasa });
     launch(alto, dest, {
       color: col, color2: col2, kind: 'ball', speed: grande ? 30 : 24, arc: 0,
       onHit: function (pos) {
@@ -621,7 +678,8 @@ var JOGO = (typeof window !== 'undefined')
           launch(ceu, chao, {
             color: (col2 && k % 3 === 2) ? col2 : col, kind: 'ball', speed: 22, arc: 0,
             onHit: function (pos) {
-              burst(pos.x, pos.y + 0.2, pos.z, 14, { color: col, speed: 3.2, life: 0.4, size: 0.24 });
+              burst(pos.x, pos.y + 0.2, pos.z, 14, { color: col, speed: 3.2, life: 0.4, size: 0.24,
+                                                    tile: TILE.brasa });
               shockRing(pos, col, 0.2, 1.1, 0.35);
             }
           });
@@ -648,7 +706,7 @@ var JOGO = (typeof window !== 'undefined')
             color: (col2 && k % 2) ? col2 : col,
             speed: 2.2, life: 0.42, size: 0.3,
             spread: 0.35 + t * 1.9,               // abre conforme avanca
-            flat: true, up: 0.35
+            flat: true, up: 0.35, tile: TILE.fumaca
           });
         }, k * 26);
       })(i);
@@ -666,7 +724,8 @@ var JOGO = (typeof window !== 'undefined')
           setTimeout(function () {
             burst(dest.x + d2[0] * k, dest.y + 0.15, dest.z + d2[1] * k, 9, {
               color: (col2 && di % 2) ? col2 : col,
-              speed: 2.0, life: 0.4, size: 0.28, flat: true, up: 0.5, spread: 0.35
+              speed: 2.0, life: 0.4, size: 0.28, flat: true, up: 0.5, spread: 0.35,
+              tile: TILE.lingua
             });
           }, k * 40);
         })(i, dr);
@@ -679,10 +738,12 @@ var JOGO = (typeof window !== 'undefined')
   function terremoto(dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
     burst(dest.x, dest.y + 0.05, dest.z, 40, {
-      color: col, speed: 5.5, life: 0.75, size: 0.36, up: 2.4, grav: 5.5, spread: 1.1
+      color: col, speed: 5.5, life: 0.75, size: 0.36, up: 2.4, grav: 5.5, spread: 1.1,
+      tile: TILE.cascalho
     });
     if (col2) burst(dest.x, dest.y + 0.05, dest.z, 24, {
-      color: col2, speed: 4.2, life: 0.9, size: 0.32, up: 2.0, grav: 4.5, spread: 1.3
+      color: col2, speed: 4.2, life: 0.9, size: 0.32, up: 2.0, grav: 4.5, spread: 1.3,
+      tile: TILE.cascalho
     });
     shockRing(dest, col, 0.3, 3.0, 0.5);
     scorch(dest, col, 2.6, 5);
@@ -699,7 +760,8 @@ var JOGO = (typeof window !== 'undefined')
           var t = k / passos;
           burst(from.x + (dest.x - from.x) * t, 0.18, from.z + (dest.z - from.z) * t, 14, {
             color: (col2 && k % 3 === 2) ? col2 : col,
-            speed: 2.6, life: 0.5, size: 0.34, flat: true, up: 0.22, spread: 1.0
+            speed: 2.6, life: 0.5, size: 0.34, flat: true, up: 0.22, spread: 1.0,
+            tile: TILE.redemoinho
           });
         }, k * 30);
       })(i);
@@ -717,7 +779,8 @@ var JOGO = (typeof window !== 'undefined')
           var t = k / passos;
           burst(from.x + (dest.x - from.x) * t, from.y * 0.7 + 0.2,
                 from.z + (dest.z - from.z) * t, 9, {
-            color: (col2 && k % 2) ? col2 : col, speed: 1.5, life: 0.36, size: 0.28, spread: 0.4
+            color: (col2 && k % 2) ? col2 : col, speed: 1.5, life: 0.36, size: 0.28, spread: 0.4,
+            tile: TILE.risco
           });
         }, k * 22);
       })(i);
@@ -737,7 +800,7 @@ var JOGO = (typeof window !== 'undefined')
           x: dest.x + Math.cos(a) * 1.0, y: dest.y + 0.2 + Math.sin(a) * 0.5,
           z: dest.z + Math.sin(a) * 0.5,
           vx: Math.cos(a) * 3.2, vy: 0.6, vz: Math.sin(a) * 3.2,
-          life: 0.3, color: col, size: 0.26
+          life: 0.3, color: col, size: 0.42, tile: TILE.corte
         });
       }
       impact(dest, el, 1.0, el2);
@@ -750,9 +813,10 @@ var JOGO = (typeof window !== 'undefined')
     shockRing(dest, col, 1.1, 0.7, 0.5);            // anel que FECHA, ao contrario
     scorch(dest, col, 1.7, 9);
     burst(dest.x, dest.y + 0.15, dest.z, 12, {
-      color: col, speed: 1.1, life: 0.7, size: 0.22, flat: true, up: 0.3
+      color: col, speed: 1.1, life: 0.7, size: 0.34, flat: true, up: 0.3, tile: TILE.runa
     });
-    if (el2) burst(dest.x, dest.y + 0.2, dest.z, 8, { color: ecol(el2), speed: 0.9, life: 0.8, size: 0.2 });
+    if (el2) burst(dest.x, dest.y + 0.2, dest.z, 8, { color: ecol(el2), speed: 0.9, life: 0.8,
+                                                      size: 0.3, tile: TILE.runa });
   }
 
   /* Invocacao: coluna de luz subindo onde a criatura vai aparecer. */
@@ -763,7 +827,8 @@ var JOGO = (typeof window !== 'undefined')
         setTimeout(function () {
           burst(dest.x, dest.y + k * 0.55, dest.z, 12, {
             color: (col2 && k % 2) ? col2 : col,
-            speed: 0.9, life: 0.6, size: 0.3, up: 2.2, grav: -1.4, spread: 0.7
+            speed: 0.9, life: 0.6, size: 0.36, up: 2.2, grav: -1.4, spread: 0.7,
+            tile: TILE.runa
           });
         }, k * 70);
       })(i);
@@ -781,7 +846,8 @@ var JOGO = (typeof window !== 'undefined')
         setTimeout(function () {
           burst(from.x, from.y * 0.55 + 0.25, from.z, 16, {
             color: (col2 && k % 2) ? col2 : col,
-            speed: 1.4, life: 0.75, size: 0.28, up: 1.6, grav: -0.9, spread: 0.85
+            speed: 1.4, life: 0.75, size: 0.34, up: 1.6, grav: -0.9, spread: 0.85,
+            tile: TILE.aura
           });
         }, k * 90);
       })(i);
@@ -793,10 +859,10 @@ var JOGO = (typeof window !== 'undefined')
   function estouro(dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
     burst(dest.x, dest.y + 0.3, dest.z, 46, {
-      color: col, speed: 6.5, life: 0.55, size: 0.36, spread: 0.5
+      color: col, speed: 6.5, life: 0.55, size: 0.42, spread: 0.5, tile: TILE.estouro
     });
     if (col2) burst(dest.x, dest.y + 0.4, dest.z, 30, {
-      color: col2, speed: 5.0, life: 0.7, size: 0.32, spread: 0.7
+      color: col2, speed: 5.0, life: 0.7, size: 0.38, spread: 0.7, tile: TILE.estouro
     });
     shockRing(dest, col, 0.3, 3.4, 0.45);
     scorch(dest, col, 2.4, 4);
@@ -815,7 +881,7 @@ var JOGO = (typeof window !== 'undefined')
             spawn({
               x: dest.x + Math.cos(a) * 1.15, y: dest.y - 0.4 + k * 0.3, z: dest.z + Math.sin(a) * 1.15,
               vx: -Math.cos(a) * 0.35, vy: 1.5, vz: -Math.sin(a) * 0.35,
-              life: 0.65, color: (col2 && k % 2) ? col2 : col, size: 0.26
+              life: 0.65, color: (col2 && k % 2) ? col2 : col, size: 0.34, tile: TILE.halo
             });
           }
         }, k * 90);
@@ -828,11 +894,13 @@ var JOGO = (typeof window !== 'undefined')
   function piscar(from, dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
     burst(from.x, from.y * 0.6 + 0.2, from.z, 20, {
-      color: col, speed: 2.4, life: 0.4, size: 0.28, spread: 0.5, grav: -0.5
+      color: col, speed: 2.4, life: 0.4, size: 0.34, spread: 0.5, grav: -0.5,
+      tile: TILE.cintila
     });
     setTimeout(function () {
       burst(dest.x, dest.y + 0.2, dest.z, 24, {
-        color: col2 || col, speed: 2.8, life: 0.45, size: 0.3, spread: 0.5, grav: -0.5
+        color: col2 || col, speed: 2.8, life: 0.45, size: 0.36, spread: 0.5, grav: -0.5,
+        tile: TILE.cintila
       });
       shockRing(dest, col, 1.4, 0.3, 0.35);
     }, 140);
@@ -849,7 +917,7 @@ var JOGO = (typeof window !== 'undefined')
           var t = 1 - k / passos;                 // do alvo PARA quem puxa
           burst(from.x + (dest.x - from.x) * t, from.y * 0.7 + 0.15,
                 from.z + (dest.z - from.z) * t, 7, {
-            color: col, speed: 1.2, life: 0.3, size: 0.24, spread: 0.3
+            color: col, speed: 1.2, life: 0.3, size: 0.3, spread: 0.3, tile: TILE.risco
           });
         }, 120 + k * 26);
       })(i);
@@ -864,7 +932,8 @@ var JOGO = (typeof window !== 'undefined')
         setTimeout(function () {
           burst(dest.x, dest.y + 2.4 - k * 0.5, dest.z, 14, {
             color: (col2 && k % 2) ? col2 : col,
-            speed: 0.7, life: 0.9, size: 0.26, up: -0.6, grav: 1.4, spread: 0.9
+            speed: 0.7, life: 0.9, size: 0.34, up: -0.6, grav: 1.4, spread: 0.9,
+            tile: TILE.fumaca
           });
         }, k * 110);
       })(i);
