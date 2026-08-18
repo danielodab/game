@@ -501,3 +501,310 @@ campo*) e `7778748` (*README atualizado*). Reverifiquei o HEAD depois deles:
 
 
 *— Agente Chefe, 18/08/2026*
+
+---
+
+# Reauditoria — 18/08/2026
+
+**Agente Chefe.** Escopo: verificar se as **5 exigências** da "Auditoria Final da v2" foram
+cumpridas, se as correções não regrediram nada, e emitir o veredito. O usuário dorme e delegou a
+decisão.
+
+**Instantâneo auditado:** `c4763ad` (*xpTable congelada com tripwire*), árvore limpa.
+A árvore se moveu uma vez durante a auditoria (`c969889` → `c4763ad`): só
+`tests/validate_classes.html`, nenhum arquivo de `js/`. Todos os números abaixo valem para o HEAD.
+
+**Método.** Nada foi copiado de relatório: rodei as 9 suítes do zero em Chrome headless com perfil
+temporário e cache-buster; joguei o `index.html` real (não a `chief_play.html`) com cliques DOM e
+bombeamento síncrono idêntico ao `frame()` do `main.js`; escrevi **varreduras independentes** da
+fusão e da economia de XP em vez de aceitar as das suítes; capturei minhas próprias telas em
+`tests/qa_shots/chief2/`. **Antes de tocar em qualquer coisa fiz backup do `localStorage` do Chrome**
+e joguei na origem `http://localhost:8137`, separada do `file://` onde mora o save do usuário — ao
+final conferi que o arquivo do save (`004281.ldb`) está **byte a byte idêntico** ao backup.
+
+---
+
+## 1. Suítes — carga atual, rodadas por mim
+
+| Página | Meu resultado | Cobrado na reprovação |
+|---|---|---|
+| `tests/test_engine_v2.html` | **201 / 201** ✔ | 201 |
+| `tests/test_progress_v2.html` | **143 / 143** ✔ | 143 |
+| `tests/validate_classes.html` | **6.162 checagens, 0 falhas** ✔ | 6.161 (+1: tripwire da `xpTable`) |
+| `tests/validate_world.html` | **6.509 checagens, 0 falhas** ✔ | era **4 FALHAS** |
+| `tests/validate_fusion.html` | **3.877 checagens, 0 falhas** · 1.875 composições ✔ | 3.674 |
+| `tests/art_gallery.html` | **618 ok, 0 falhas** ✔ | 618 |
+| `tests/art_anim.html` | **75 ok, 0 falhas** ✔ | — |
+| `tests/ui_screens.html` | **120 ok, 0 falhas** ✔ | 110 |
+| `tests/preview2d.html` | **18 / 18** ✔ | 18 |
+
+**9 de 9 verdes.** A `validate_world`, que eu havia entregado vermelha, está verde e cresceu.
+
+---
+
+## 2. As 5 exigências, uma a uma
+
+### Exigência 1 — dar ataque a toda fusão · **ATENDIDA**
+
+Não aceitei a suíte: escrevi minha própria varredura sobre `Fusion.spellsFor`, com um critério
+explícito de "ofensivo" (`damage`, `poison`, `chain`, `detonateMarks`) e **2.400 combinações**
+(15 duplas × 16 misturas × 10 níveis, do 5 ao 30):
+
+- combos com lista **vazia**: **0**
+- combos **sem nenhum feitiço ofensivo**: **0** (eram 4 duplas inteiras)
+- combos cujo **tier mais baixo** não causa dano: **0** — o tier 0 é ofensivo em **240/240** casos
+- no nível 30, a pior dupla tem **3** feitiços com dano; nenhuma abaixo disso
+- `curandeira+invocador`, que não atacava **nem no nível 30**, hoje tem 3 com dano
+
+**Confirmado jogando**, que era o pedido. A dupla inicial no nível 1 (ainda **Neutro**, antes da
+escolha de caminho) funde e recebe *Anteparo Cru* — **3 PA, com dano**. Os números da fusão batem
+com o §4: `hp 260/260` (150+110), `paMax 8` (6+2), `ppMax 4` (3+1), `escudo 50`,
+`iniciativa 55` (máximo), herói B fora do tabuleiro sem contar derrota. Em combate real essa fusão
+**matou 4 dos 5 inimigos** da primeira sala. O caso do C1 — "não tinha como causar um único ponto de
+dano" — acabou.
+
+### Exigência 2 — a HUD lendo as cinco fontes · **ATENDIDA**
+
+`hud.js` resolve por `Engine.spell(id)` num único `spellDef()` (l.98), com rede de segurança para as
+definições que a unidade fundida carrega. O mesmo defeito no `Art.spellIcon()` (l.4731) foi corrigido
+pela mesma porta.
+
+**Visto na tela**, que é o que importa:
+- com a Candeia de Vagens (espaço **Lume**) equipada, o botão sai **"Bomba de Sementes"** com custo
+  **3** e ícone de **terra** (classe `has-elem`) — era `0 is-seed-bomb`;
+- os **12 itens de Lume** resolvem para nome, custo e elemento reais;
+- o feitiço da unidade fundida resolve para **"Anteparo Cru · 3 PA"** — era `fus:…:0` com custo 0.
+
+A captura `03_feitico_no_ar.png` mostra a barra inteira com nome e custo em todos os botões.
+
+### Exigência 3 — acabar com o JS velho · **ATENDIDA**
+
+`index.html` injeta os scripts com `window.__V = '?v=' + Date.now()` — a marca é o instante do
+carregamento, não um número escrito à mão. Medi no navegador: **34 de 34 scripts** com a marca,
+**nenhum** servido do cache (`transferSize 0` em zero arquivos).
+
+**Confirmado abrindo o `index.html` direto**, sem a `chief_play.html`: o jogo mostra **"Bárbaro"** e
+**"Machadada de Ferro"**. Vale nos dois caminhos — `file://` (como o usuário abre) e por servidor.
+O `file://` sobe limpo, sem erro de console (`05_index_file_protocol.png`).
+
+### Exigência 4 — nomes das classes e destino da arte do usuário · **PARCIAL**
+
+O `PLANO_NOITE.md` cumpre a parte principal e bem: tabela do elenco (id interno × antes × agora),
+o motivo, a nota de que papéis/ids/balanceamento não mudaram, o destino da arte do Sumô e
+**instruções exatas de reversão** (duas linhas no `index.html`, na ordem certa). O `index.html`
+também carrega a explicação no cabeçalho.
+
+**O que falta:** a exigência dizia, textualmente, que o elenco novo teria de ser *"assumido, escrito
+no `PROJETO_V2.md`"*. O `PROJETO_V2.md` **continua listando Sumô, Elfo Arqueiro, Espadachim,
+Curandeira e Invocador** (§2, linhas 70-75) — a visão do projeto ainda contradiz o jogo. É uma
+tabela de 6 linhas. Não bloqueia nada, mas a exigência não está fechada.
+
+### Exigência 5 — XP verde e briga resolvida por escrito · **ATENDIDA**
+
+`validate_world` verde (6.509, 0 falhas) e a decisão está escrita: a referência do §9-D é o **solo**,
+porque `game.js` divide a XP pelo tamanho do grupo e portanto o solo leva a descida inteira — é o
+teto. Conferi os números na saída da própria suíte:
+
+| calabouço | nível rec. | XP/descida | níveis SOLO | níveis DUPLA |
+|---|---|---|---|---|
+| Estufa | 3 | 35,7 | **1,00** | 0,49 |
+| Cisterna | 7 | 104 | 0,74 | 0,37 |
+| Fecho de Brasa | 11 | 209 | 0,55 | 0,27 |
+| Andaimes | 16 | 374 | 0,45 | 0,23 |
+| Mina Trêmula | 22 | 589 | 0,38 | 0,19 |
+| Coração Partido | 28 | 945 | **0,34** | 0,17 |
+
+Bate com o alvo do adendo v2.3 (~1 no começo, ~1/3 do nível 25 em diante). A `xpTable` ficou
+**congelada com tripwire** em `validate_classes.html`, o que impede um dono mexer sozinho — boa
+resposta ao problema de fundo, que era ter dois donos da mesma economia.
+
+*Ressalva de higiene (não bloqueia):* o cabeçalho de `js/core/data/progression.js` (l.39-47) ainda
+descreve a calibragem **velha** — "66 · 204 · 422 · 753 · 1196 · 1847" e "calabouço 1 → 0,94 nível em
+dupla". Os valores reais hoje são 35,7 · 104 · 209 · 374 · 589 · 945 e 0,49 em dupla. O comentário do
+arquivo que **é** a economia está desatualizado por um fator de ~2.
+
+---
+
+## 3. O que eu verifiquei jogando
+
+Sessão inteira pelo `index.html` real, ~14 mil quadros bombeados, **zero exceções de JavaScript**.
+
+- **Descida na Estufa**: salas 0 → 1 → 2 com a transição `battle → roomClear → battle` correta,
+  botão "Próxima sala" clicado por mim, e a cura entre salas funcionando (heróis chegaram à sala do
+  chefe com 186/195 e 151/155). Sala do chefe montada com a Jardineira-Viúva (300 PV), invocações e
+  um Seiveiro que cura o chefe.
+- **Fusão declarada e resolvida** pela interface: botão FUNDIR → folha de confirmação
+  ("Vira uma única unidade: vida somada, +2 PA, +1 PP, +50 de escudo…") → Confirmar → fusão em campo.
+- **Cronômetro**, medido com relógio virtual injetado: nasce com **30 s**; 10 s ociosos deixam 20 s;
+  encerrar cedo **bancou 20 s** e o turno seguinte nasceu com **50 s**; deixando correr, o turno
+  **encerrou sozinho** e o banco zerou; teto de 120 s respeitado.
+- **Celular (375×812)**: zero transbordo horizontal, **zero alvo de toque abaixo de 44 px**, botões
+  de feitiço em 72×86 px, HUD legível em retrato (`04_celular.png`).
+- **`file://` e servidor** dão o mesmo jogo, com os dados novos.
+- **Save do usuário intacto** — verificado por hash contra o backup.
+
+Capturas minhas em `tests/qa_shots/chief2/`: `01_batalha_estufa`, `02_fusao`, `03_feitico_no_ar`,
+`04_celular`, `05_index_file_protocol`.
+
+---
+
+## 4. O defeito que me faz reprovar
+
+### D1 — a unidade fundida **não é controlável pelo jogador** — **ALTO**
+
+Este é novo, e é o motivo do veredito. A exigência 1 devolveu **ataques** à fusão; ninguém percebeu
+que o jogador **não consegue usá-los**.
+
+`js/core/game.js:271`:
+
+```js
+Game.isPlayerTurn = function () {
+  if (!Game.state || Game.state.phase !== 'playing') return false;
+  var u = E() && E().activeUnit ? E().activeUnit(Game.state) : null;
+  return !!u && u.kind === 'hero';
+};
+```
+
+A unidade fundida tem `side === 'player'` mas `kind === 'fusion'`. Como todo o resto da camada de
+jogador passa por essa única porta, no turno **dela**:
+
+- a **barra de feitiços some** — medi **0 botões** renderizados (`hud.js` l.1108 e l.1134);
+- `Game.selectSpell` e `Game.onTileClicked` são **no-ops** — medi PA parado em 8 e o alvo intacto em
+  50/50 depois de tentar selecionar e clicar (l.342);
+- os overlays de alcance não são calculados (l.392);
+- e, o pior, `Game.update` cai no ramo de IA (l.603) e **entrega a fusão para `AI.planTurn`**.
+
+Ou seja: o jogador aperta FUNDIR e, daí em diante, **o jogo joga sozinho**. Com dupla — o grupo
+padrão — não sobra nenhuma unidade controlável, e a batalha inteira corre sem o jogador. Medi isso
+de ponta a ponta: numa batalha completa após fundir, o total de ações do jogador foi **0**.
+
+O motor está certo (`Engine.spell` resolve o feitiço, a fusão ataca e mata). A HUD está certa. É a
+porta de autorização que não conhece a fusão.
+
+**Não é regressão desta noite:** o `kind === 'hero'` está lá desde o primeiro commit do `game.js`,
+quando fusão não existia. O que mudou é que antes a fusão não tinha ataque e morria calada, então o
+sintoma se confundia com o C1. Corrigido o C1, o defeito de baixo aparece.
+
+**Por que é bloqueante e não "melhoria":** o contrato (§9-B) descreve a fusão como *"troca de
+economia de ações por poder concentrado"* — poder concentrado **do jogador**. A queixa do usuário
+seria a mesma da auditoria passada: "apertei FUNDIR e perdi a batalha sem jogar". Trocamos "a fusão
+não mata" por "a fusão não é minha".
+
+**É uma linha.** O predicado correto exclui pet e invocação (que devem mesmo ser automáticos) e
+inclui a fusão:
+
+```js
+return !!u && u.side === 'player' && (u.kind === 'hero' || u.kind === 'fusion');
+```
+
+Dono: Lógica (`js/core/game.js`). Pede um teste de regressão na `test_engine_v2.html` ou na
+`ui_screens.html`: *no turno de uma unidade fundida, `isPlayerTurn()` é verdadeiro e a barra
+de feitiços tem botões*.
+
+---
+
+## 5. Notas por área
+
+- **Criativo (dados, mundo, fusão) — 8,5/10** (era 7,5). O conteúdo de fusão foi reescrito pela causa
+  raiz, não remendado: tier 0 ofensivo em 240/240 e nomes que continuam concordando em gênero
+  ("Anteparo Escaldante", "Anteparo Cru"). A economia de XP fechou e ganhou tripwire. Segura o 9 o
+  `PROJETO_V2.md` com o elenco velho e o comentário desatualizado da `progression.js`.
+- **Lógica (motor, fusão, progressão) — 8,5/10** (era 9,0). Continua a área mais sólida: 344 testes
+  verdes, números da fusão exatos, cronômetro com banco e expiração corretos, zero exceção numa
+  sessão longa. Desce por D1 — a porta de autorização ficou para trás quando a fusão entrou no jogo,
+  e o efeito é grande.
+- **Apresentação 3D — 7,0/10** (mantida). Sem regressão: cenário, luz, modelos e FX iguais ao
+  auditado; a Estufa tem mais props do que a descrição anterior sugeria, mas ainda é o cenário mais
+  simples dos seis, e o "clarão branco" da fusão continua sendo a única marca visual dela. Segue sem
+  suíte automatizada (§6).
+- **Interface — 8,5/10** (era 6,5). A correção do C2 é a maior subida do relatório: os dois recursos
+  que chegavam como identificador cru — item de Lume e fusão — agora aparecem com nome, custo e ícone
+  de elemento. Celular limpo, alvos de toque corretos, telas de meta boas.
+- **QA — 8,0/10** (era 7,5). As suítes cresceram nos lugares certos (fusão +203, ui_screens +10,
+  art_anim nova) e a blindagem de save virou infraestrutura de verdade (`tests/save_sandbox.js`,
+  primeiro script em **10** páginas de teste) — o problema que destruiu o save duas vezes está
+  resolvido na raiz. Não pegou D1 porque ninguém testou *agir* com a fusão, só *criá-la*.
+
+---
+
+## 6. `js/render3d/*_v2.js` sem suíte — **julgamento: NÃO BLOQUEIA**
+
+O renderizador em produção soma **3.875 linhas** (`renderer3d_v2.js` 2.275 · `fx3d_v2.js` 807 ·
+`models3d_v2.js` 793) e não tem uma única asserção automatizada — a `preview2d.html` (18 checagens)
+testa o renderizador PixiJS, que o `index.html` **não carrega**, e a `preview3d_v2.html` não afirma
+nada.
+
+Não bloqueia, e digo isso explicitamente: nesta auditoria eu exercitei essa camada com força —
+milhares de quadros, três salas, fusão, FX, duas resoluções, `file://` e servidor — com **zero erro
+de JavaScript** e telas corretas. A cobertura empírica do caminho feliz existe; o que falta é **rede
+de segurança para mudanças futuras**. É risco de manutenção, não risco para o usuário amanhã.
+Continua como recomendação (era a nº 10 da auditoria anterior).
+
+---
+
+## 7. VEREDITO
+
+> ## **REPROVADO**
+
+Reprovação **estreita**, e quero que fique claro o que ela não é: as 5 exigências foram levadas a
+sério e 4 delas estão fechadas com evidência independente minha, a quinta faltando uma tabela de
+6 linhas num documento. As 9 suítes estão verdes, a `validate_world` que eu entreguei vermelha
+voltou, o cache acabou de verdade, o save do usuário virou infraestrutura protegida, e o jogo roda
+sem um único erro de JavaScript. O trabalho da noite foi bom.
+
+Reprovo por **um** defeito, encontrado agora, no lugar exato onde a noite inteira foi gasta: a fusão
+recuperou os ataques mas o jogador não consegue usá-los.
+
+### Impede de jogar
+
+1. **D1 — a unidade fundida não aceita comando do jogador** (`js/core/game.js:271`). Apertar FUNDIR
+   entrega a batalha para a IA. Uma linha, dono conhecido, teste de regressão sugerido no §4.
+
+**É só isso.** Nada mais na lista abaixo impede o usuário de abrir o jogo e jogar amanhã de manhã.
+
+### Melhoria desejável (não bloqueia)
+
+2. `PROJETO_V2.md` §2 com o elenco novo (fecha a exigência 4).
+3. Cabeçalho de `js/core/data/progression.js` com os números atuais da calibragem.
+4. Suíte de regressão para `js/render3d/*_v2.js` (§6).
+5. Log de clima ainda confuso — vi *"Seiveiro sofre com o clima (0 PV)"* com PV cheio (C6, herdado).
+6. Encher a Estufa, subir o impacto do FX de ataque e marcar a fusão visualmente (herdadas 6-8).
+7. As páginas de `tests/` ainda usam `?v=N` escrito à mão; só o `index.html` ganhou o carimbo
+   automático. Baixo risco (headless não cacheia), mas é a mesma armadilha do C3 esperando.
+
+---
+
+## 8. Recado para o usuário (leia ao acordar)
+
+Bom dia. O time trabalhou a noite e **quase** fechou: das cinco coisas que eu tinha exigido, quatro
+estão resolvidas e eu conferi cada uma por conta própria, sem acreditar em relatório.
+
+O que você vai encontrar: **abra o `index.html` direto** — o problema do cache acabou, não precisa
+mais da página de teste, e o jogo já mostra o Bárbaro com a Machadada de Ferro. A barra de feitiços
+parou de mentir: o item de **Lume** que concede feitiço agora aparece como *"Bomba de Sementes · 3
+PA"* com o ícone certo, em vez do `0 is-seed-bomb` que você viu ontem. A fusão **ganhou ataque de
+verdade** — conferi as 2.400 combinações possíveis e não existe mais nenhuma dupla que fique sem
+como machucar ninguém, inclusive a sua dupla inicial no nível 1. O cronômetro guarda o tempo que
+sobra, o celular está limpo, e **o seu save está intacto** (conferi byte a byte; agora existe uma
+blindagem que impede qualquer página de teste de encostar nele de novo).
+
+**Mas eu não aprovei**, por um motivo só, e é justo o botão que eu ia te mandar apertar: quando você
+aperta **FUNDIR**, a unidade fundida deixa de aceitar seus comandos — a barra de feitiços some e o
+jogo passa a jogar aquela unidade sozinho. Ela luta e até mata (na minha partida ela matou 4 dos 5
+inimigos), mas você vira espectador. É um defeito antigo, de antes desta noite, que só ficou visível
+agora que a fusão tem o que fazer. A correção é **uma linha** em `js/core/game.js` e já deixei
+escrita no §4 para quem for mexer.
+
+**Por onde começar de manhã (10 minutos):** abra `index.html`, escolha os dois heróis, desça na
+Estufa e **jogue normalmente, sem apertar FUNDIR** — assim o jogo está inteiro e gostoso. Repare na
+barra de feitiços com nome e custo, no cronômetro guardando o tempo que sobra e na transição entre as
+salas. Se quiser ver o defeito com os próprios olhos, aperte FUNDIR e observe a barra de feitiços
+sumir. Depois passe os olhos em `tests/qa_shots/chief2/` — `03_feitico_no_ar.png` é a barra
+consertada, que era a sua reclamação de ontem.
+
+**O que continua em aberto, sem pressa:** o `PROJETO_V2.md` ainda lista os nomes antigos das classes
+(a decisão sobre *Bárbaro* × *Sumô* continua sendo **sua** — está tudo documentado com instruções de
+reversão no `PLANO_NOITE.md`); o renderizador 3D não tem suíte automatizada (eu exercitei bastante e
+não achei nada, mas é rede que falta); e a Estufa ainda é o cenário mais simples dos seis.
+
+*— Agente Chefe, 18/08/2026*
