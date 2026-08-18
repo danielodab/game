@@ -456,6 +456,11 @@ i, em { font-style: normal; color: var(--dim); }
   text-decoration: line-through; text-decoration-thickness: 2px;
 }
 .rw-xp-mult { font: 700 13px var(--ui-sans); color: var(--bad); letter-spacing: .02em; }
+.rw-hero-t b { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.rw-hero-xp { font: 700 13px var(--ui-sans); color: var(--gold); }
+.rw-hero-xp.is-cut { color: var(--bad); }
+.rw-hero-t .rw-xp-was { font-size: 12px; }
+.rw-hero-t .rw-xp-mult { font-size: 11px; }
 .rw-xp-why {
   font: 12px/1.45 var(--ui-sans); color: var(--dim);
   border-left: 3px solid var(--bad); padding: 4px 0 4px 8px; margin-bottom: 8px;

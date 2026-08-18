@@ -673,36 +673,77 @@ var JOGO = (typeof window !== 'undefined')
       // ZERO. Aqui manda o valor REAL; quando houve corte, o número cheio
       // aparece riscado ao lado e uma linha explica o porquê. É esse feedback
       // que ensina o jogador a descer mais fundo em vez de moer o calabouço 1.
+      // `xpMult` e `xpPorHeroi` vêm INDEXADOS POR heroId (cada herói tem o seu
+      // corte, porque depende do nível DELE contra o `recommendedLevel`).
+      // Imprimir o objeto direto daria '[object Object]'.
       var bruto = lastRewards.xpGanho || 0;
-      var mult = lastRewards.xpMult == null ? 1 : lastRewards.xpMult;
-      var real = lastRewards.xpPorHeroi == null ? Math.floor(bruto * mult) : lastRewards.xpPorHeroi;
-      var cortou = mult < 0.999 && bruto > 0;
-
-      var n = el('div', 'rw-xp-n' + (cortou ? ' is-cut' : ''), '+' + real + ' XP');
-      if (cortou) {
-        n.appendChild(el('span', 'rw-xp-was', '+' + bruto));
-        n.appendChild(el('span', 'rw-xp-mult', '×' + mult.toFixed(2).replace('.', ',')));
+      var mults = lastRewards.xpMult, reais = lastRewards.xpPorHeroi;
+      function multDe(hid) {
+        if (mults == null) return 1;
+        if (typeof mults === 'number') return mults;             // formato simples
+        var v = mults[hid];
+        return (typeof v === 'number') ? v : 1;
       }
-      w.appendChild(n);
+      function realDe(hid) {
+        if (reais != null) {
+          if (typeof reais === 'number') return reais;
+          if (typeof reais[hid] === 'number') return reais[hid];
+        }
+        return Math.floor(bruto * multDe(hid));
+      }
+      function fmtMult(m) { return '×' + m.toFixed(2).replace('.', ','); }
 
-      if (cortou) {
-        var rec = null, ds2 = dungeons(), gi;
+      // nível recomendado do calabouço em que estamos
+      var rec = null;
+      (function () {
+        var ds2 = dungeons(), gi;
         var did = safe(function () { return G().dungeonId; }, null);
         for (gi = 0; gi < ds2.length; gi++) {
           if (ds2[gi].id === did && ds2[gi].recommendedLevel != null) rec = ds2[gi].recommendedLevel;
         }
+      })();
+
+      var lista = (selHeroes.length ? selHeroes : heroIds()).filter(function (hid) { return !!hero(hid); });
+      var valores = lista.map(realDe);
+      var uniforme = valores.length > 0 && valores.every(function (v) { return v === valores[0]; });
+      var algumCorte = lista.some(function (hid) { return multDe(hid) < 0.999; }) && bruto > 0;
+      var noPiso = lista.some(function (hid) { return multDe(hid) <= 0.101; }) && bruto > 0;
+
+      // número grande: só pode existir se TODOS receberam o mesmo, senão mente
+      if (uniforme) {
+        var n = el('div', 'rw-xp-n' + (algumCorte ? ' is-cut' : ''), '+' + valores[0] + ' XP');
+        if (algumCorte) {
+          n.appendChild(el('span', 'rw-xp-was', '+' + bruto));
+          n.appendChild(el('span', 'rw-xp-mult', fmtMult(multDe(lista[0]))));
+        }
+        w.appendChild(n);
+      } else {
+        w.appendChild(el('div', 'rw-xp-n is-cut', 'XP por herói'));
+      }
+
+      if (algumCorte) {
         w.appendChild(el('div', 'rw-xp-why',
           'Conteúdo fácil demais para o seu nível' +
-          (rec != null ? ' (recomendado: <b>' + rec + '</b>)' : '') +
-          '. <b>Desça mais fundo</b> para a XP valer inteira.'));
+          (rec != null ? ' (recomendado: <b>' + rec + '</b>)' : '') + '.' +
+          (noPiso ? ' <b>Desça um Fecho mais fundo</b> para a XP valer inteira.'
+                  : ' Quanto mais fundo, mais a XP rende.')));
       }
-      (selHeroes.length ? selHeroes : heroIds()).forEach(function (hid) {
-        var h = hero(hid); if (!h) return;
+
+      lista.forEach(function (hid) {
+        var h = hero(hid);
         var xi = xpInfo(hid);
+        var m = multDe(hid), ganho = realDe(hid), cortou = m < 0.999 && bruto > 0;
         var r = el('div', 'rw-hero');
         r.appendChild(art('portrait', [h.classId || hid, { element: h.element, size: 40 }], 36));
         var t = el('div', 'rw-hero-t');
-        t.appendChild(el('b', null, esc(className(h.classId || hid)) + ' — Nv ' + h.level));
+        var lin = el('b', null, esc(className(h.classId || hid)) + ' — Nv ' + h.level);
+        // o ganho REAL deste herói, ao lado do nome
+        lin.appendChild(el('span', 'rw-hero-xp' + (cortou ? ' is-cut' : ''), '+' + ganho + ' XP'));
+        if (cortou) {
+          lin.appendChild(el('span', 'rw-xp-was', '+' + bruto));
+          lin.appendChild(el('span', 'rw-xp-mult', fmtMult(m)));
+        }
+        t.appendChild(lin);
         t.appendChild(bar('bar-xp', xi ? xi.pct : 0, xi && xi.xpNext ? xi.xp + '/' + xi.xpNext : 'máximo'));
         r.appendChild(t);
         w.appendChild(r);

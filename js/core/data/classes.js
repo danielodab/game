@@ -15,10 +15,10 @@ JOGO.DATA.classes = {
   /* ---------------------------------------------------------------- TANQUE */
   sumo: {
     id: 'sumo',
-    name: 'Sumô',
+    name: 'Bárbaro',
     role: 'tanque',
-    description: 'Muralha de carne que ocupa o gargalo e não sai dele. Provoca, prende, empurra e cobra caro cada célula do tabuleiro. Pouca pressa, muita presença.',
-    lore: 'A Grande Lousa pegou a arena do Fecho de Baixo com o torneio pela metade. Os lutadores continuaram lutando — não havia mais para onde ir. Mil anos depois, o campeão ainda bate o pé no dohyo a cada manhã imaginária: enquanto o chão responder, o mundo ainda está de pé.',
+    description: 'Corpanzil, capa surrada e um machado de duas mãos: ocupa o gargalo e não sai dele. Provoca, prende, empurra e cobra caro cada célula do tabuleiro. Pouca pressa, muita presença.',
+    lore: 'Quando a Lousa desceu, os construtores selaram os Fechos — e alguém teve de segurar o portão pelo lado de dentro. Ele segurou, com o machado do pai e as costas contra a pedra. Mil anos depois ainda bate o cabo no chão a cada manhã imaginária: enquanto o chão responder, o mundo ainda está de pé.',
     palette: { primary: '#d4553f', secondary: '#3a2b26', accent: '#ffd08a' },
     stats: {
       hp: 150, pa: 6, pp: 3, initiative: 15, power: 0, dodge: 5, lock: 40,
@@ -38,10 +38,10 @@ JOGO.DATA.classes = {
   /* -------------------------------------------------------------- ATIRADOR */
   arqueiro: {
     id: 'arqueiro',
-    name: 'Elfo Arqueiro',
+    name: 'Batedor',
     role: 'atirador',
-    description: 'Dano à distância que se acumula: cada tiro deixa uma marca no alvo, e quem tem marcas demais recebe a conta toda de uma vez. Fraco de perto, letal de longe.',
-    lore: 'Os elfos da Estufa mediram o teto de pedra e concluíram que ainda cabia uma flecha entre ele e o chão. Desde então marcam tudo o que se move: as marcas são um caderno de contas, e nenhum Fecho jamais viu um elfo perdoar uma dívida.',
+    description: 'Capuz fundo e besta de duas mãos. Dano à distância que se acumula: cada tiro deixa uma marca no alvo, e quem tem marcas demais recebe a conta toda de uma vez. Fraco de perto, letal de longe.',
+    lore: 'Foram os batedores que mediram o teto de pedra dos Fechos e concluíram que ainda cabia um tiro entre ele e o chão. Desde então marcam tudo o que se move: as marcas são um caderno de contas, e nenhum Fecho jamais viu um batedor perdoar uma dívida.',
     palette: { primary: '#4f9d6a', secondary: '#26402f', accent: '#d8f0a0' },
     stats: {
       hp: 100, pa: 6, pp: 3, initiative: 70, power: 0, dodge: 25, lock: 10,
@@ -64,7 +64,7 @@ JOGO.DATA.classes = {
     name: 'Bruxo',
     role: 'mago',
     description: 'Áreas de média e longa distância, maldições que trabalham sozinhas e controle do terreno. Apaga salas inteiras — desde que sobreviva ao tempo de conjuração.',
-    lore: 'Quando o céu coagulou, houve quem tentasse ler a Lousa por dentro. Os que voltaram vieram com a caligrafia da pedra grudada nas mãos: agora escrevem no ar o que a Lousa escreveu no mundo, e o ar obedece do mesmo jeito.',
+    lore: 'Quando o céu coagulou, houve quem tentasse ler a Lousa por dentro. Os que voltaram vieram com a caligrafia da pedra grudada nas mãos: agora escrevem no ar o que a Lousa escreveu no mundo, e o ar obedece do mesmo jeito. O chapéu pontudo é praxe da escola: aponta para o céu que não existe mais.',
     palette: { primary: '#7a5fa0', secondary: '#241c33', accent: '#b98cff' },
     stats: {
       hp: 95, pa: 6, pp: 3, initiative: 45, power: 0, dodge: 15, lock: 5,
@@ -84,10 +84,10 @@ JOGO.DATA.classes = {
   /* ------------------------------------------------------------- ASSASSINO */
   espadachim: {
     id: 'espadachim',
-    name: 'Espadachim',
+    name: 'Ladino',
     role: 'assassino',
-    description: 'Velocidade, invisibilidade e veneno. Vive de escolher a hora: entra pelo flanco, corta duas vezes e some antes da resposta. Morre depressa se errar a janela.',
-    lore: 'Não existe noite num mundo sem céu — existe o breu entre duas lanternas, e é ali que ele mora. Aprendeu a andar no intervalo das luzes e a devolver, na ponta da lâmina, a mesma escuridão que a Lousa entregou a todo mundo.',
+    description: 'Duas adagas, velocidade, invisibilidade e veneno. Vive de escolher a hora: entra pelo flanco, corta duas vezes e some antes da resposta. Morre depressa se errar a janela.',
+    lore: 'Não existe noite num mundo sem céu — existe o breu entre duas lanternas, e é ali que ele mora. Aprendeu a andar no intervalo das luzes e a devolver, na ponta das duas adagas, a mesma escuridão que a Lousa entregou a todo mundo.',
     palette: { primary: '#2f6f8f', secondary: '#1b2733', accent: '#9be8ff' },
     stats: {
       hp: 95, pa: 6, pp: 4, initiative: 90, power: 0, dodge: 40, lock: 10,
@@ -107,10 +107,10 @@ JOGO.DATA.classes = {
   /* --------------------------------------------------------------- SUPORTE */
   curandeira: {
     id: 'curandeira',
-    name: 'Curandeira',
+    name: 'Paladina',
     role: 'suporte',
-    description: 'Cura, escuda e abençoa o grupo — e bate com o cajado quando ninguém precisa dela. Baixinha, teimosa e sempre a um passo de quem está sangrando.',
-    lore: 'Tinha a altura de um banquinho quando a Lousa desceu, e continua tendo. Herdou da avó a lanterna de vagalumes e a regra da casa: no mundo enterrado, quem apaga primeiro é quem parou de cuidar dos outros. Ela não pretende parar tão cedo.',
+    description: 'Cura, escuda e abençoa o grupo — e bate com o martelo quando ninguém precisa dela. Armadura clara, escudo de brasão e sempre a um passo de quem está sangrando.',
+    lore: 'Herdou da avó a lanterna de vagalumes e a regra da casa: no mundo enterrado, quem apaga primeiro é quem parou de cuidar dos outros. Mandou polir a armadura até ficar clara de propósito — num Fecho escuro, quem cai precisa saber para onde correr. Ela não pretende apagar tão cedo.',
     palette: { primary: '#f0c05a', secondary: '#6b4a2f', accent: '#fff2c2' },
     stats: {
       hp: 110, pa: 6, pp: 3, initiative: 55, power: 0, dodge: 20, lock: 5,
@@ -130,10 +130,10 @@ JOGO.DATA.classes = {
   /* ------------------------------------------------------------- INVOCADOR */
   invocador: {
     id: 'invocador',
-    name: 'Invocador',
+    name: 'Xamã',
     role: 'invocador',
-    description: 'Enche o tabuleiro: invoca criaturas que tancam e mordem, arma armadilhas nas células de passagem e fortalece quem estiver por perto. Sozinho é frágil; nunca está sozinho.',
-    lore: 'Passou a vida ouvindo o micélio dos Fechos contar quem morreu onde. Um dia respondeu — e alguma coisa do outro lado achou graça. Hoje ele não invoca nada: apenas pede licença, e o mundo enterrado empresta um pedaço de si.',
+    description: 'Enche o tabuleiro com o grimório aberto numa das mãos: invoca criaturas que tancam e mordem, arma armadilhas nas células de passagem e fortalece quem estiver por perto. Sozinho é frágil; nunca está sozinho.',
+    lore: 'Passou a vida ouvindo o micélio dos Fechos contar quem morreu onde. Um dia respondeu — e alguma coisa do outro lado achou graça. Hoje ele não invoca nada: apenas pede licença, e o mundo enterrado empresta um pedaço de si. Cada empréstimo vai anotado no grimório: dívida esquecida é a única que cobra juros.',
     palette: { primary: '#3f8f8a', secondary: '#1e3330', accent: '#8ff0d8' },
     stats: {
       hp: 105, pa: 6, pp: 3, initiative: 35, power: 0, dodge: 12, lock: 15,

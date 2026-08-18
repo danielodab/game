@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SOTERRA 2.0 — Telas da Interface (JOGO.UI)</title>
-<link rel="stylesheet" href="../css/style.css?v=13">
+<link rel="stylesheet" href="../css/style.css?v=22">
 <style>
   /* moldura do teste: um "celular" 390×844 ao lado do painel de verificação */
   html, body { overflow: auto; height: auto; }
@@ -48,23 +48,23 @@
   </div>
 </div>
 
-<script src="../vendor/pixi.min.js?v=11" onerror="window.__noPixi=1"></script>
-<script src="../js/core/data/elements.js?v=11"></script>
-<script src="../js/core/data/classes.js?v=11"></script>
-<script src="../js/core/data/spells.js?v=11"></script>
-<script src="../js/core/data/progression.js?v=11"></script>
-<script src="../js/core/data/monsters.js?v=11"></script>
-<script src="../js/core/data/dungeons.js?v=11"></script>
-<script src="../js/core/data/fusions.js?v=11"></script>
-<script src="../js/core/data/pets.js?v=11"></script>
-<script src="../js/core/data/items.js?v=11"></script>
-<script src="../js/core/engine.js?v=11"></script>
-<script src="../js/core/fusion.js?v=11"></script>
-<script src="../js/core/ai.js?v=11"></script>
-<script src="../js/core/progress.js?v=11"></script>
-<script src="../js/core/game.js?v=11"></script>
-<script src="../js/render2d/art.js?v=11"></script>
-<script src="../js/ui/hud.js?v=11"></script>
+<script src="../vendor/pixi.min.js?v=22" onerror="window.__noPixi=1"></script>
+<script src="../js/core/data/elements.js?v=22"></script>
+<script src="../js/core/data/classes.js?v=22"></script>
+<script src="../js/core/data/spells.js?v=22"></script>
+<script src="../js/core/data/progression.js?v=22"></script>
+<script src="../js/core/data/monsters.js?v=22"></script>
+<script src="../js/core/data/dungeons.js?v=22"></script>
+<script src="../js/core/data/fusions.js?v=22"></script>
+<script src="../js/core/data/pets.js?v=22"></script>
+<script src="../js/core/data/items.js?v=22"></script>
+<script src="../js/core/engine.js?v=22"></script>
+<script src="../js/core/fusion.js?v=22"></script>
+<script src="../js/core/ai.js?v=22"></script>
+<script src="../js/core/progress.js?v=22"></script>
+<script src="../js/core/game.js?v=22"></script>
+<script src="../js/render2d/art.js?v=22"></script>
+<script src="../js/ui/hud.js?v=22"></script>
 <script>
 (function () {
   'use strict';
@@ -148,6 +148,12 @@
     // itens: um de cada espaço + repetidos para a forja ter o que mastigar
     var ids = Object.keys(D.items || {});
     ids.slice(0, 9).forEach(function (id) { P.addItem(id); });
+    // uma peça de CADA raridade tem que estar no inventário, senão a lendária
+    // (o troféu do jogo) nunca aparece numa tela e volta a passar despercebida
+    ['comum', 'raro', 'epico', 'lendario'].forEach(function (r) {
+      var achou = ids.filter(function (id) { return D.items[id].rarity === r; })[0];
+      if (achou) P.addItem(achou);
+    });
     // pedras fartas para a forja mostrar o caminho todo
     Object.keys(D.stones || {}).forEach(function (s) { P.addStones(s, 40); });
     // bichos
@@ -234,8 +240,14 @@
                  'battle', 'roomClear', 'dungeonComplete', 'defeat'];
 
   // dados de mentira para as telas de recompensa
+  // Formato REAL de game.js: `xpMult` e `xpPorHeroi` são objetos por heroId.
+  // O sumô está muito acima do nível do calabouço (corte no piso ×0,10); a
+  // curandeira está na faixa (×1). É o caso que o QA pegou: a HUD anunciava
+  // 180 e o sumô levava 18.
   var fakeRewards = {
     xpGanho: 180,
+    xpMult: { sumo: 0.1, curandeira: 1 },
+    xpPorHeroi: { sumo: 18, curandeira: 180 },
     levelUps: [{ heroId: 'curandeira', niveis: 1, novoNivel: 6 }],
     drops: Object.keys(D.items || {}).slice(9, 12),
     pets: Object.keys(D.pets || {}).slice(3, 4),
@@ -283,6 +295,38 @@
     inspect(n);
   });
 
+  // ---- B3: a tela de recompensa não pode mentir sobre a XP
+  (function () {
+    goto('roomClear');
+    var rw = document.querySelector('#ui-root .ui-screen.is-on');
+    var txt = rw ? rw.textContent : '';
+    // o pecado original: imprimir o objeto `xpMult` cru
+    check('recompensa: nenhum [object Object] na tela', txt.indexOf('[object Object]') < 0);
+    // o valor REAL de cada herói tem que aparecer…
+    check('recompensa: mostra a XP real do herói cortado (+18)', /\+18\s*XP/.test(txt), txt.slice(0, 140));
+    check('recompensa: mostra a XP real do herói não cortado (+180)', /\+180\s*XP/.test(txt));
+    // …e o corte tem que estar explicado
+    check('recompensa: mostra o multiplicador aplicado', /×0,10/.test(txt), txt.slice(0, 200));
+    check('recompensa: explica POR QUE ganhou menos',
+      /f[áa]cil demais/i.test(txt), txt.slice(0, 200));
+    check('recompensa: cita o nível recomendado do calabouço',
+      /recomendado/i.test(txt), txt.slice(0, 200));
+    check('recompensa: empurra o jogador a descer', /mais fundo/i.test(txt));
+    // sem corte, nada de barulho: o painel volta a ser simples
+    JOGO.UI.showScreen('roomClear', { xpGanho: 90, xpMult: { sumo: 1, curandeira: 1 },
+                                      xpPorHeroi: { sumo: 90, curandeira: 90 } });
+    var limpo = document.querySelector('#ui-root .ui-screen.is-on').textContent;
+    check('recompensa: sem corte não mostra aviso nenhum',
+      /\+90\s*XP/.test(limpo) && !/f[áa]cil demais/i.test(limpo) && limpo.indexOf('×') < 0,
+      limpo.slice(0, 140));
+    // formato antigo (número simples) não pode quebrar a tela
+    JOGO.UI.showScreen('roomClear', { xpGanho: 50 });
+    var velho = document.querySelector('#ui-root .ui-screen.is-on').textContent;
+    check('recompensa: aguenta o pacote sem xpMult/xpPorHeroi',
+      /\+50\s*XP/.test(velho) && velho.indexOf('[object Object]') < 0 && velho.indexOf('NaN') < 0,
+      velho.slice(0, 140));
+  })();
+
   // ---- folhas (modais)
   [['collection', null], ['inventory', null], ['forge', null], ['heroSheet', 'sumo']].forEach(function (p) {
     try {
@@ -308,6 +352,26 @@
     document.querySelectorAll('#ui-root .star-track').length >= 1 &&
     document.querySelectorAll('#ui-root .col-row:first-child .star-step').length === 5);
   JOGO.UI.closeSheet();
+
+  // ---- B6: a raridade lendária tem que existir na apresentação
+  (function () {
+    JOGO.UI.openSheet('inventory');
+    var sh = document.querySelector('#ui-root .ui-sheet');
+    var t = sh ? sh.textContent : '';
+    check('inventário escreve "Lendário" com acento e maiúscula',
+      t.indexOf('Lendário') >= 0 && t.indexOf('lendario') < 0, t.slice(0, 120));
+    var cel = sh && sh.querySelector('.inv-cell.is-lendario');
+    check('a peça lendária recebe a marcação própria', !!cel);
+    if (cel) {
+      var rc = cel.style.getPropertyValue('--rc').trim();
+      var halo = cel.style.getPropertyValue('--rc-halo').trim();
+      check('lendária não usa a cor de comum', rc && rc !== '#9aa4ae' && rc !== '#ffc44d', rc);
+      check('lendária tem halo próprio', halo && halo !== rc, halo);
+      var cs = getComputedStyle(cel);
+      check('lendária brilha (box-shadow)', cs.boxShadow && cs.boxShadow !== 'none', cs.boxShadow);
+    }
+    JOGO.UI.closeSheet();
+  })();
 
   JOGO.UI.openSheet('inventory');
   var invTxt = document.querySelector('#ui-root .ui-sheet').textContent;

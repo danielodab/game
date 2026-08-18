@@ -61,16 +61,16 @@
 <div id="app"></div>
 <div id="results"></div>
 
-<script src="../js/core/data/elements.js?v=10"></script>
-<script src="../js/core/data/classes.js?v=10"></script>
-<script src="../js/core/data/progression.js?v=10"></script>
-<script src="../js/core/data/spells.js?v=10" onerror="window.__noSpells=1"></script>
-<script src="../js/core/data/monsters.js?v=10" onerror="window.__noMonsters=1"></script>
-<script src="../js/core/data/dungeons.js?v=10" onerror="window.__noDungeons=1"></script>
-<script src="../js/core/data/fusions.js?v=10" onerror="window.__noFusions=1"></script>
-<script src="../js/core/data/pets.js?v=10" onerror="window.__noPets=1"></script>
-<script src="../js/core/data/items.js?v=10" onerror="window.__noItems=1"></script>
-<script src="../js/render2d/art.js?v=10"></script>
+<script src="../js/core/data/elements.js?v=20"></script>
+<script src="../js/core/data/classes.js?v=20"></script>
+<script src="../js/core/data/progression.js?v=20"></script>
+<script src="../js/core/data/spells.js?v=20" onerror="window.__noSpells=1"></script>
+<script src="../js/core/data/monsters.js?v=20" onerror="window.__noMonsters=1"></script>
+<script src="../js/core/data/dungeons.js?v=20" onerror="window.__noDungeons=1"></script>
+<script src="../js/core/data/fusions.js?v=20" onerror="window.__noFusions=1"></script>
+<script src="../js/core/data/pets.js?v=20" onerror="window.__noPets=1"></script>
+<script src="../js/core/data/items.js?v=20" onerror="window.__noItems=1"></script>
+<script src="../js/render2d/art.js?v=20"></script>
 <script>
 (function () {
   var app = document.getElementById('app');
@@ -209,6 +209,18 @@
     var V = Art.themeVariants(th);
     var dataKey = (Art.themePalette(th) || {}).data;
     var sc = (D.scenery && dataKey && D.scenery[dataKey]) || null;
+    // GUARDA DE REGRESSÃO: quando o Criativo Mundo cresce DATA.scenery e a arte
+    // não acompanha, as descrições novas colidem em silêncio com desenhos
+    // velhos (foi exatamente o B2 do QA: 6 descrições → 4 desenhos). Aqui a
+    // contagem tem que bater ANTES de qualquer comparação de pixel.
+    if (sc) {
+      check('cenário ' + th + ': arte cobre as ' + sc.high.length + ' descrições de ALTO',
+            V.high.length >= sc.high.length, V.high.length + ' desenhos p/ ' + sc.high.length + ' descrições');
+      check('cenário ' + th + ': arte cobre as ' + sc.low.length + ' descrições de BAIXO',
+            V.low.length >= sc.low.length, V.low.length + ' desenhos p/ ' + sc.low.length + ' descrições');
+      check('cenário ' + th + ': arte cobre as ' + sc.props.length + ' descrições de PROP',
+            V.props.length >= sc.props.length, V.props.length + ' desenhos p/ ' + sc.props.length + ' descrições');
+    }
     rowTitle(g7, 'tema ' + th + ' — chão');
     for (var v = 0; v < 4; v++) {
       show(g7, Art.tile(th, v), 'chão v' + v, 'stage t-' + th, 'tile ' + th + ' ' + v);
@@ -241,15 +253,17 @@
       for (i2 = 0; i2 < keys.length; i2++) {
         for (j2 = i2 + 1; j2 < keys.length; j2++) if (keys[i2] !== keys[j2]) distintos++;
       }
-      check('cenário ' + th + ': as 4 descrições de ALTO dão desenhos distintos',
-            distintos === (keys.length * (keys.length - 1)) / 2, distintos + ' pares');
+      check('cenário ' + th + ': as ' + keys.length + ' descrições de ALTO dão desenhos distintos',
+            distintos === (keys.length * (keys.length - 1)) / 2,
+            distintos + ' de ' + (keys.length * (keys.length - 1)) / 2 + ' pares distintos');
       var lk = sc.low.map(function (n) { return Art.obstacleLow(th, n); });
       var dl = 0;
       for (i2 = 0; i2 < lk.length; i2++) {
         for (j2 = i2 + 1; j2 < lk.length; j2++) if (lk[i2] !== lk[j2]) dl++;
       }
-      check('cenário ' + th + ': as 5 descrições de BAIXO dão desenhos distintos',
-            dl === (lk.length * (lk.length - 1)) / 2, dl + ' pares');
+      check('cenário ' + th + ': as ' + lk.length + ' descrições de BAIXO dão desenhos distintos',
+            dl === (lk.length * (lk.length - 1)) / 2,
+            dl + ' de ' + (lk.length * (lk.length - 1)) / 2 + ' pares distintos');
     }
   });
 
@@ -328,6 +342,45 @@
   check('4 espaços nomeados (punho/passo/casca/lume)', Art.slotIds().join(',') === 'punho,passo,casca,lume');
   check('ids antigos ainda resolvem', Art.slotKey('pa') === 'punho' && Art.slotKey('pp') === 'passo' &&
         Art.slotKey('vida') === 'casca' && Art.slotKey('especial') === 'lume');
+  // ---- as 4 RARIDADES lado a lado (B6: `lendario` saía com a cor de comum)
+  rowTitle(g10, 'Raridades — comum · raro · épico · LENDÁRIA (troféu do jogo)');
+  check('4 raridades declaradas', Art.rarityIds().join(',') === 'comum,raro,epico,lendario',
+        Art.rarityIds().join(','));
+  check('lendária tem cor própria (não é a de comum)',
+        Art.rarityColor('lendario') !== Art.rarityColor('comum') &&
+        Art.rarityColor('lendario') !== Art.rarityColor('epico'), Art.rarityColor('lendario'));
+  check('lendária tem halo diferente da borda (efeito brasa)',
+        Art.rarityGlow('lendario') !== Art.rarityColor('lendario'), Art.rarityGlow('lendario'));
+  check('as 4 raridades sobem de posto', Art.rarityRank('comum') < Art.rarityRank('raro') &&
+        Art.rarityRank('raro') < Art.rarityRank('epico') && Art.rarityRank('epico') < Art.rarityRank('lendario'));
+  (function () {
+    var porRar = {}, k;
+    for (k in (D.items || {})) { var r = D.items[k].rarity; if (!porRar[r]) porRar[r] = k; }
+    var assinaturas = {};
+    Art.rarityIds().forEach(function (r) {
+      var id = porRar[r];
+      if (!id) return;
+      var cv = Art.itemIcon(id, 64);
+      show(g10, cv, '<b>' + r + '</b><br>' + Art.rarityColor(r), 'stage', 'ícone raridade ' + r);
+      // assinatura de pixels: duas raridades não podem desenhar igual
+      try {
+        var d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, s = 0, i;
+        for (i = 0; i < d.length; i += 4 * 11) s += d[i] + d[i + 1] * 3 + d[i + 2] * 7 + d[i + 3] * 11;
+        assinaturas[r] = s;
+      } catch (e) { /* sem canvas */ }
+    });
+    var vals = Object.keys(assinaturas).map(function (r) { return assinaturas[r]; });
+    var unicos = vals.filter(function (v, i) { return vals.indexOf(v) === i; });
+    check('cada raridade desenha o ícone de um jeito', vals.length === unicos.length,
+          unicos.length + ' de ' + vals.length);
+    // e nenhum item do jogo pode cair na cor de comum sem SER comum
+    var mentindo = Object.keys(D.items || {}).filter(function (id) {
+      return D.items[id].rarity !== 'comum' && Art.rarityColor(D.items[id].rarity) === Art.rarityColor('comum');
+    });
+    check('nenhum item usa a cor de comum sem ser comum', mentindo.length === 0,
+          mentindo.slice(0, 4).join(','));
+  })();
+
   rowTitle(g10, 'Itens de DATA.items');
   (items.length ? items : ['demo-pa', 'demo-pp', 'demo-vida', 'demo-especial']).forEach(function (id) {
     var it = D.items && D.items[id];

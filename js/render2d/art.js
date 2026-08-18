@@ -3186,6 +3186,206 @@ var JOGO = (typeof window !== 'undefined')
       }
       part(g, Pstar(cx, cy - 104, 11, 4, 0.34), T.accent, { k: 0.18, lw: 0.8 });
       glow(g, cx, cy - 100, 34, T.accent, 0.42);
+    },
+
+    // ======================================================================
+    // ADENDO 9-F — divisórias das salas grandes. Duas peças ALTAS a mais por
+    // tema. O espaço extra só vira estrutura se cada bloco tiver silhueta
+    // própria; repetir a mesma peça seis vezes é o que o adendo veio evitar.
+    // ======================================================================
+    palmeira: function (g, T, cx, cy) {                // estufa: palmeira tombada de través
+      var tronco = mx(T.wall, '#7a5a34', 0.6), folha = mx(T.wall, '#4f8a35', 0.72), i;
+      // deitada na diagonal: silhueta HORIZONTAL, o oposto do bambu vertical
+      part(g, Pcap(cx - 42, cy - 14, 11, cx + 26, cy - 58, 8), tronco, { k: 0.28, hi: 0.12, lw: 0.9 });
+      for (i = 1; i <= 4; i++) {
+        var t = i / 5;
+        stroke(g, [cx - 42 + 68 * t - 6, cy - 14 - 44 * t - 4, cx - 42 + 68 * t + 6, cy - 14 - 44 * t + 4],
+               rgba(sh(tronco, -0.45), 0.85), 0.9);
+      }
+      for (i = 0; i < 5; i++) {                        // coroa de folhas na ponta alta
+        part(g, Pfeather(cx + 28, cy - 60, 30, -2.5 + i * 0.62), i % 2 ? sh(folha, -0.1) : folha,
+             { k: 0.24, lw: 0.85 });
+      }
+      part(g, Pel(cx - 40, cy - 12, 9, 6, 0.3), sh(tronco, 0.16), { k: 0.2, lw: 0.8 });
+      part(g, Pel(cx + 6, cy - 24, 7, 4, 0.5), folha, { k: 0.2, lw: 0.75 });
+    },
+    painelMofo: function (g, T, cx, cy) {              // estufa: painel de vidro embaçado de mofo
+      gPane(g, T, cx, cy, { col: '#b8c9a8', h: 84, w: 58, alpha: 0.82 });
+      var rd = rng('mofo'), i;
+      for (i = 0; i < 10; i++) {                       // manchas de mofo (o que o diferencia da vidraça)
+        var x = cx - 24 + rd() * 48, y = cy - 18 - rd() * 58;
+        part(g, Pel(x, y, 4 + rd() * 6, 3 + rd() * 5, rd() * 3), rgba(mx('#5f7a3a', T.wall, 0.3), 0.5),
+             { flat: true, noline: true });
+      }
+      part(g, Prr(cx, cy - 46, 6, 74, 1), rgba(mx(T.wall, '#6a5a44', 0.6), 0.95), { k: 0.24, lw: 0.7 });
+      part(g, Prr(cx, cy - 46, 60, 5, 1), rgba(mx(T.wall, '#6a5a44', 0.6), 0.95), { k: 0.24, lw: 0.7 });
+    },
+    colunaSal: function (g, T, cx, cy) {               // cisterna: coluna de sal grossa como carvalho
+      var col = mx(T.wall, '#e4e8ea', 0.6), rd = rng('csal'), i;
+      isoBox(g, cx, cy, 66, 14, sh(col, -0.3));
+      // fuste irregular: não é a coluna lisa, é sal crescido
+      part(g, tag(function (c2) {
+        c2.beginPath();
+        c2.moveTo(cx - 26, cy - 14);
+        c2.quadraticCurveTo(cx - 34, cy - 56, cx - 20, cy - 100);
+        c2.lineTo(cx + 22, cy - 100);
+        c2.quadraticCurveTo(cx + 33, cy - 54, cx + 27, cy - 14);
+        c2.closePath();
+      }, cx, cy - 58, 30), col, { k: 0.26, hi: 0.2, lw: 0.9 });
+      for (i = 0; i < 7; i++) {                        // cristais brotando dos lados
+        var yy = cy - 20 - rd() * 74, sx = rd() > 0.5 ? 1 : -1;
+        part(g, Ppoly([cx + sx * 24, yy, cx + sx * (36 + rd() * 10), yy - 8 - rd() * 8,
+                       cx + sx * 26, yy + 9]), sh(col, 0.2), { k: 0.2, lw: 0.8 });
+      }
+      glow(g, cx, cy - 60, 40, '#b9f2ff', 0.24);
+    },
+    telaEclusa: function (g, T, cx, cy) {              // cisterna: tela de eclusa entupida de limo
+      var col = mx(T.wall, '#4a5a62', 0.55), i;
+      part(g, Prr(cx - 30, cy - 46, 8, 92, 2), col, { k: 0.28, lw: 0.9 });
+      part(g, Prr(cx + 30, cy - 46, 8, 92, 2), sh(col, -0.1), { k: 0.28, lw: 0.9 });
+      part(g, Prr(cx, cy - 90, 70, 8, 2), sh(col, 0.12), { k: 0.24, lw: 0.9 });
+      for (i = 0; i < 5; i++) {                        // grade
+        stroke(g, [cx - 24 + i * 12, cy - 86, cx - 24 + i * 12, cy - 6], rgba(sh(col, 0.06), 0.95), 1.1);
+      }
+      for (i = 0; i < 4; i++) {
+        stroke(g, [cx - 28, cy - 20 - i * 18, cx + 28, cy - 20 - i * 18], rgba(sh(col, 0.06), 0.95), 1.0);
+      }
+      for (i = 0; i < 6; i++) {                        // limo pendurado na grade
+        part(g, Pel(cx - 24 + i * 10, cy - 34 + (i % 3) * 10, 7, 12, 0.1),
+             rgba(mx('#4f8a55', T.floor, 0.3), 0.72), { k: 0.18, lw: 0.7 });
+      }
+    },
+    fornalha: function (g, T, cx, cy) {                // brasa: fornalha apagada do tamanho de uma casa
+      var col = mx(T.wall, '#4a3a34', 0.5);
+      gBlock(g, T, cx, cy, { col: col, w: 80, h: 92, seams: 3, base: 10 });
+      // boca ENORME e fria: o contraste com o portão de fundição aceso
+      part(g, tag(function (c2) {
+        c2.beginPath();
+        c2.moveTo(cx - 24, cy - 16);
+        c2.lineTo(cx - 24, cy - 52);
+        c2.quadraticCurveTo(cx, cy - 76, cx + 24, cy - 52);
+        c2.lineTo(cx + 24, cy - 16);
+        c2.closePath();
+      }, cx, cy - 44, 26), '#181010', { k: 0.1, lw: 0.9, line: sh(col, -0.6) });
+      var i;
+      for (i = 0; i < 3; i++) {                        // cinza fria acumulada na boca
+        part(g, Pel(cx - 12 + i * 12, cy - 20, 8, 4), rgba('#6a6058', 0.5), { flat: true, noline: true });
+      }
+      part(g, Prr(cx, cy - 100, 42, 9, 2), sh(col, 0.14), { k: 0.24, lw: 0.9 });
+    },
+    prensa: function (g, T, cx, cy) {                  // brasa: prensa emperrada NO ALTO
+      var col = mx(T.wall, '#5d5a58', 0.6);
+      part(g, Prr(cx - 28, cy - 40, 11, 80, 2), col, { k: 0.28, lw: 0.9 });
+      part(g, Prr(cx + 28, cy - 40, 11, 80, 2), sh(col, -0.12), { k: 0.28, lw: 0.9 });
+      part(g, Prr(cx, cy - 92, 76, 16, 3), sh(col, 0.12), { k: 0.26, lw: 0.9 });
+      // martelo pendurado, parado no meio do curso — a leitura de "emperrada"
+      part(g, Prr(cx, cy - 62, 46, 22, 3), mx(col, '#3a3630', 0.4), { k: 0.28, hi: 0.12, lw: 0.9 });
+      stroke(g, [cx - 14, cy - 76, cx - 14, cy - 84], rgba(sh(col, -0.4), 0.9), 1.2);
+      stroke(g, [cx + 14, cy - 76, cx + 14, cy - 84], rgba(sh(col, -0.4), 0.9), 1.2);
+      part(g, Prr(cx, cy - 12, 54, 12, 2), sh(col, -0.2), { k: 0.26, lw: 0.9 });
+      glow(g, cx, cy - 20, 22, '#ff8c3a', 0.18);
+    },
+    elevador: function (g, T, cx, cy) {                // vento: elevador de obra parado entre andares
+      var col = mx(T.wall, '#7a808c', 0.5), i;
+      for (i = 0; i < 2; i++) {                        // guias
+        part(g, Prr(cx - 30 + i * 60, cy - 50, 7, 100, 2), sh(col, -0.16), { k: 0.26, lw: 0.9 });
+      }
+      // cabine SUSPENSA, com folga visível até o chão
+      part(g, Prr(cx, cy - 62, 50, 40, 3), col, { k: 0.28, hi: 0.14, lw: 0.9 });
+      part(g, Prr(cx, cy - 62, 38, 26, 2), sh(col, -0.3), { k: 0.18, lw: 0.8 });
+      for (i = 0; i < 3; i++) {
+        stroke(g, [cx - 16 + i * 16, cy - 74, cx - 16 + i * 16, cy - 50], rgba(sh(col, 0.2), 0.85), 0.9);
+      }
+      stroke(g, [cx, cy - 82, cx, cy - 98], rgba('#6a6055', 0.95), 1.3);
+      part(g, Prr(cx, cy - 100, 30, 7, 2), sh(col, 0.16), { k: 0.24, lw: 0.85 });
+      part(g, Pel(cx, cy - 8, 26, 8), rgba(sh(T.wall, -0.5), 0.45), { flat: true, noline: true });
+    },
+    lona: function (g, T, cx, cy) {                    // vento: lona de proteção inflada pelo vento
+      var col = mx(T.accent, T.wall, 0.42), i;
+      part(g, Prr(cx - 32, cy - 44, 6, 88, 2), mx(T.wall, '#8a7a5a', 0.5), { k: 0.26, lw: 0.85 });
+      part(g, Prr(cx + 32, cy - 44, 6, 88, 2), mx(T.wall, '#8a7a5a', 0.5), { k: 0.26, lw: 0.85 });
+      // barriga INFLADA: a única silhueta curva e mole do tema
+      part(g, tag(function (c2) {
+        c2.beginPath();
+        c2.moveTo(cx - 30, cy - 86);
+        c2.quadraticCurveTo(cx + 34, cy - 74, cx + 30, cy - 6);
+        c2.quadraticCurveTo(cx - 4, cy - 22, cx - 30, cy - 12);
+        c2.closePath();
+      }, cx, cy - 50, 34), col, { k: 0.28, hi: 0.18, lw: 0.9, rot: LIGHT });
+      for (i = 0; i < 3; i++) {                        // vincos da lona
+        stroke(g, [cx - 24 + i * 6, cy - 78 + i * 4, cx + 18 + i * 4, cy - 40 + i * 14],
+               rgba(sh(col, -0.34), 0.6), 0.9);
+      }
+      part(g, Pel(cx - 30, cy - 86, 3.4, 3.4), sh(col, -0.4), { k: 0.2, lw: 0.7 });
+      part(g, Pel(cx - 30, cy - 12, 3.4, 3.4), sh(col, -0.4), { k: 0.2, lw: 0.7 });
+    },
+    pilarRocha: function (g, T, cx, cy) {              // mina: pilar deixado de pé para segurar o teto
+      var col = sh(T.wall, 0.04), rd = rng('plr'), i;
+      // rocha NÃO escavada: cintura fina, topo e base largos (é o que sobra)
+      part(g, tag(function (c2) {
+        c2.beginPath();
+        c2.moveTo(cx - 34, cy - 4);
+        c2.quadraticCurveTo(cx - 16, cy - 54, cx - 28, cy - 104);
+        c2.lineTo(cx + 30, cy - 104);
+        c2.quadraticCurveTo(cx + 17, cy - 52, cx + 35, cy - 4);
+        c2.closePath();
+      }, cx, cy - 54, 34), col, { k: 0.3, hi: 0.14, lw: 0.9 });
+      for (i = 0; i < 4; i++) {                        // marcas de picareta
+        var yy = cy - 20 - rd() * 70;
+        stroke(g, [cx - 14 + rd() * 26, yy, cx - 6 + rd() * 26, yy - 7], rgba(sh(col, -0.5), 0.8), 1.0);
+      }
+      part(g, Prr(cx, cy - 108, 74, 10, 2), sh(col, -0.24), { k: 0.26, lw: 0.9 });
+      part(g, Pel(cx + 12, cy - 68, 4.5, 3.6), rgba(T.accent, 0.8), { k: 0.18, lw: 0.7 });
+    },
+    portaGaleria: function (g, T, cx, cy) {            // mina: porta de galeria pregada e lacrada
+      var mad = mx(T.wall, '#7a5a34', 0.62), i;
+      part(g, Prr(cx - 34, cy - 46, 10, 92, 2), sh(mad, -0.14), { k: 0.28, lw: 0.9 });
+      part(g, Prr(cx + 34, cy - 46, 10, 92, 2), sh(mad, -0.14), { k: 0.28, lw: 0.9 });
+      part(g, Prr(cx, cy - 90, 88, 11, 2), sh(mad, 0.1), { k: 0.24, lw: 0.9 });
+      for (i = 0; i < 6; i++) {                        // tábuas pregadas na diagonal
+        part(g, Prr(cx, cy - 16 - i * 13, 58, 11, 1), i % 2 ? mad : sh(mad, -0.1), { k: 0.26, lw: 0.85 });
+      }
+      stroke(g, [cx - 28, cy - 12, cx + 28, cy - 84], rgba(sh(mad, -0.5), 0.9), 1.4);
+      stroke(g, [cx + 28, cy - 12, cx - 28, cy - 84], rgba(sh(mad, -0.5), 0.9), 1.4);
+      part(g, Pel(cx, cy - 48, 5, 5), mx(T.accent, '#c04a34', 0.5), { k: 0.2, lw: 0.8 });
+    },
+    pilarPartido: function (g, T, cx, cy) {            // coração: pilar partido ao meio que não caiu
+      var col = mx(T.wall, '#6a627a', 0.5);
+      isoBox(g, cx, cy, 58, 10, sh(col, -0.26));
+      // metade de baixo reta, metade de cima DESLOCADA e flutuando
+      part(g, Ppoly([cx - 22, cy - 10, cx + 22, cy - 10, cx + 20, cy - 50, cx - 20, cy - 50]),
+           col, { k: 0.28, hi: 0.14, lw: 0.9 });
+      stroke(g, [cx - 20, cy - 50, cx - 6, cy - 44, cx + 8, cy - 52, cx + 20, cy - 46],
+             rgba(sh(col, -0.55), 0.9), 1.2, true);
+      part(g, Ppoly([cx - 16, cy - 60, cx + 24, cy - 58, cx + 22, cy - 100, cx - 14, cy - 100]),
+           sh(col, 0.08), { k: 0.26, hi: 0.14, lw: 0.9 });
+      part(g, Prr(cx + 4, cy - 104, 52, 9, 2), sh(col, 0.16), { k: 0.24, lw: 0.9 });
+      // a fresta entre as metades brilha: é o que prova que ele "não caiu"
+      part(g, Ppoly([cx - 18, cy - 52, cx + 22, cy - 50, cx + 22, cy - 58, cx - 16, cy - 60]),
+           rgba(T.accent, 0.45), { flat: true, noline: true });
+      glow(g, cx + 2, cy - 55, 32, T.accent, 0.4);
+    },
+    lascaMundo: function (g, T, cx, cy) {              // coração: lasca de mundo suspensa e imóvel
+      var col = mx(T.wall, '#5a5270', 0.44), i;
+      // NADA toca o chão: só a sombra embaixo — silhueta única no jogo
+      part(g, Pel(cx, cy - 4, 30, 10), rgba(sh(T.wall, -0.6), 0.5), { flat: true, noline: true });
+      part(g, tag(function (c2) {
+        c2.beginPath();
+        c2.moveTo(cx - 36, cy - 60);
+        c2.lineTo(cx + 32, cy - 72);
+        c2.lineTo(cx + 20, cy - 40);
+        c2.lineTo(cx - 6, cy - 26);
+        c2.closePath();
+      }, cx - 2, cy - 52, 36), col, { k: 0.28, hi: 0.16, lw: 0.9 });
+      // grama/piso ainda agarrado no topo da lasca
+      part(g, Ppoly([cx - 36, cy - 60, cx + 32, cy - 72, cx + 30, cy - 78, cx - 34, cy - 66]),
+           mx(T.accent, '#6a8a55', 0.4), { k: 0.2, lw: 0.8 });
+      for (i = 0; i < 4; i++) {                        // pedrinhas paradas no ar em volta
+        var a = -0.4 + i * 0.7;
+        part(g, Pshard(cx - 30 + i * 22, cy - 88 - Math.sin(a) * 14, 5 + (i % 2) * 3, 'lm' + i),
+             sh(col, 0.1), { k: 0.22, lw: 0.75 });
+      }
+      glow(g, cx, cy - 56, 44, T.accent, 0.26);
     }
   };
   var LOW = {
@@ -3437,6 +3637,147 @@ var JOGO = (typeof window !== 'undefined')
              { flat: true, noline: true });
       }
       part(g, Pel(cx, cy - 14, 8, 4), rgba(T.accent, 0.4), { flat: true, noline: true });
+    },
+
+    // ======================================================================
+    // ADENDO 9-F — duas coberturas a mais por tema (7 no total).
+    // ======================================================================
+    floreira: function (g, T, cx, cy) {                // estufa: floreira comprida de pedra
+      var col = mx(T.wall, '#9a9284', 0.55), i;
+      // COMPRIDA: ocupa a largura toda e é rasa — silhueta oposta ao canteiro
+      isoBox(g, cx, cy, 86, 16, col);
+      part(g, Pdiamond(cx, cy - 18, 64, 32), sh(col, -0.34), { k: 0.14, lw: 0.75 });
+      for (i = 0; i < 6; i++) {
+        part(g, Pel(cx - 26 + i * 11, cy - 22 - (i % 3) * 5, 7, 5, 0.3 + i),
+             mx(T.wall, '#5f9a38', 0.72), { k: 0.2, lw: 0.75 });
+      }
+      part(g, Pel(cx - 8, cy - 30, 4, 4), '#e8746a', { k: 0.16, lw: 0.7 });
+      part(g, Pel(cx + 18, cy - 27, 3.4, 3.4), T.accent, { k: 0.16, lw: 0.7 });
+    },
+    cercaViva: function (g, T, cx, cy) {               // estufa: cerca-viva podada na altura do peito
+      var folha = mx(T.wall, '#4f8a35', 0.6), rd = rng('cvv'), i;
+      // BLOCO retangular podado: a sebe alta é orgânica, esta é geométrica
+      isoBox(g, cx, cy, 76, 30, folha);
+      for (i = 0; i < 9; i++) {                        // textura de folhagem só nas bordas do topo
+        var a = rd() * TAU, rr = 14 + rd() * 22;
+        part(g, Pel(cx + Math.cos(a) * rr, cy - 32 + Math.sin(a) * rr * 0.42, 6 + rd() * 3,
+                    4 + rd() * 2, rd()), sh(folha, 0.14 + rd() * 0.14), { k: 0.18, lw: 0.7 });
+      }
+      stroke(g, [cx - 38, cy - 30, cx, cy - 11, cx + 38, cy - 30], rgba(sh(folha, -0.45), 0.55), 0.8);
+    },
+    muretaComporta: function (g, T, cx, cy) {          // cisterna: mureta de comporta na cintura
+      var col = mx(T.wall, '#5a6670', 0.55);
+      gCurb(g, T, cx, cy, { col: col, w: 76, h: 30, seams: 2 });
+      part(g, Prr(cx, cy - 34, 22, 8, 2), sh(col, 0.14), { k: 0.24, lw: 0.85 });
+      part(g, Pel(cx, cy - 44, 9, 9), sh(col, 0.2), { k: 0.24, lw: 0.85 });   // volante pequeno
+      var i;
+      for (i = 0; i < 3; i++) {
+        var a = i / 3 * Math.PI;
+        stroke(g, [cx - Math.cos(a) * 9, cy - 44 - Math.sin(a) * 9,
+                   cx + Math.cos(a) * 9, cy - 44 + Math.sin(a) * 9], rgba(sh(col, -0.5), 0.9), 0.9);
+      }
+    },
+    passarela: function (g, T, cx, cy) {               // cisterna: passarela de tábua encalhada de lado
+      var col = mx(T.wall, '#8a6b3f', 0.58), i;
+      g.save(); g.translate(cx, cy); g.rotate(-0.42); g.translate(-cx, -cy);
+      for (i = 0; i < 5; i++) {                        // DE LADO: as tábuas viram uma parede baixa
+        part(g, Prr(cx - 26 + i * 13, cy - 18, 11, 40, 1), i % 2 ? sh(col, -0.12) : col,
+             { k: 0.26, lw: 0.85 });
+      }
+      part(g, Prr(cx, cy - 32, 68, 6, 1), sh(col, -0.24), { k: 0.24, lw: 0.85 });
+      g.restore();
+      part(g, Pel(cx + 4, cy - 3, 24, 8), rgba('#2f9fe0', 0.4), { flat: true, noline: true });
+    },
+    trilhoLingote: function (g, T, cx, cy) {           // brasa: trilho elevado de vagoneta de lingote
+      var col = mx(T.wall, '#6a5a4a', 0.5), i;
+      for (i = 0; i < 3; i++) {                        // cavaletes que ERGUEM o trilho
+        part(g, Prr(cx - 26 + i * 26, cy - 12, 8, 24, 1), sh(col, -0.16), { k: 0.26, lw: 0.85 });
+      }
+      part(g, Pcap(cx - 36, cy - 26, 4, cx + 36, cy - 30, 4), '#7a828c', { k: 0.24, lw: 0.85 });
+      part(g, Pcap(cx - 34, cy - 34, 4, cx + 38, cy - 38, 4), '#8a929c', { k: 0.24, lw: 0.85 });
+      part(g, Ppoly([cx - 8, cy - 40, cx + 14, cy - 40, cx + 18, cy - 50, cx - 4, cy - 50]),
+           mx(T.accent, '#ffd98a', 0.4), { k: 0.2, hi: 0.24, lw: 0.85 });
+      glow(g, cx + 5, cy - 45, 20, T.accent, 0.3);
+    },
+    blocoTempera: function (g, T, cx, cy) {            // brasa: bloco de têmpera com a água já seca
+      var col = mx(T.wall, '#4a4038', 0.55);
+      isoBox(g, cx, cy, 68, 28, col);
+      part(g, Pdiamond(cx, cy - 30, 50, 25), sh(col, -0.4), { k: 0.12, lw: 0.8 });
+      // crosta de sal/ferrugem no fundo seco — o oposto do fosso cheio
+      var rd = rng('bt2'), i;
+      for (i = 0; i < 6; i++) {
+        part(g, Pel(cx - 16 + rd() * 32, cy - 30 + (rd() - 0.5) * 12, 4 + rd() * 4, 2 + rd() * 2),
+             rgba(mx('#8a5a3a', T.accent, 0.3), 0.55), { flat: true, noline: true });
+      }
+      stroke(g, [cx - 18, cy - 32, cx, cy - 27, cx + 16, cy - 33], rgba(sh(col, -0.6), 0.8), 0.9, true);
+    },
+    estrado: function (g, T, cx, cy) {                 // vento: estrado de tábua empilhado
+      var col = mx(T.wall, '#9a7a4a', 0.6), i, j;
+      for (j = 0; j < 3; j++) {                        // 3 paletes, um sobre o outro
+        var yy = cy - j * 11;
+        part(g, Ppoly([cx - 34, yy, cx, yy + 16, cx + 34, yy, cx, yy - 16]),
+             j % 2 ? sh(col, -0.1) : col, { k: 0.22, lw: 0.85 });
+        for (i = 0; i < 3; i++) {
+          stroke(g, [cx - 22 + i * 15, yy - 9, cx - 10 + i * 15, yy + 4], rgba(sh(col, -0.45), 0.6), 0.7);
+        }
+      }
+    },
+    roloCabo: function (g, T, cx, cy) {                // vento: rolo de cabo de aço na altura do joelho
+      var col = mx(T.wall, '#7a828c', 0.5), i;
+      part(g, Pel(cx, cy - 6, 30, 12), sh(col, -0.28), { k: 0.2, lw: 0.85 });
+      for (i = 0; i < 4; i++) {                        // espiras empilhadas
+        part(g, Pel(cx, cy - 10 - i * 6, 28 - i * 2.5, 11 - i), i % 2 ? col : sh(col, 0.12),
+             { k: 0.24, hi: 0.12, lw: 0.85 });
+      }
+      stroke(g, [cx + 24, cy - 30, cx + 36, cy - 12, cx + 30, cy - 2],
+             rgba(sh(col, 0.14), 0.95), 1.3, true);
+      part(g, Pel(cx + 30, cy - 2, 3, 2.4), sh(col, -0.3), { k: 0.18, lw: 0.7 });
+    },
+    vigaCaida: function (g, T, cx, cy) {               // mina: viga de escoramento caída atravessada
+      var col = mx(T.wall, '#7a5a34', 0.62), i;
+      g.save(); g.translate(cx, cy); g.rotate(0.3); g.translate(-cx, -cy);
+      part(g, Prr(cx, cy - 14, 84, 15, 2), col, { k: 0.28, hi: 0.12, lw: 0.9 });
+      for (i = 0; i < 4; i++) {
+        stroke(g, [cx - 30 + i * 20, cy - 21, cx - 30 + i * 20, cy - 7], rgba(sh(col, -0.45), 0.75), 0.85);
+      }
+      g.restore();
+      part(g, Pshard(cx - 32, cy - 6, 8, 'vc1'), sh(T.wall, -0.06), { k: 0.26, lw: 0.8 });
+      part(g, Pshard(cx + 30, cy - 5, 7, 'vc2'), sh(T.wall, 0.06), { k: 0.26, lw: 0.8 });
+    },
+    britagem: function (g, T, cx, cy) {                // mina: bancada de britagem quebrada
+      var col = mx(T.wall, '#6a6258', 0.5), i;
+      isoBox(g, cx, cy, 64, 22, col);
+      // funil rachado por cima, tombado para um lado
+      part(g, Ppoly([cx - 24, cy - 24, cx + 22, cy - 24, cx + 14, cy - 48, cx - 12, cy - 46]),
+           sh(col, 0.12), { k: 0.26, hi: 0.12, lw: 0.9 });
+      stroke(g, [cx - 6, cy - 46, cx + 2, cy - 32, cx - 2, cy - 25], rgba(sh(col, -0.55), 0.9), 1.0, true);
+      for (i = 0; i < 4; i++) {                        // brita derramada na boca
+        part(g, Pshard(cx - 12 + i * 9, cy - 22 - (i % 2) * 4, 5, 'brg' + i), sh(T.wall, -0.14),
+             { k: 0.24, lw: 0.75 });
+      }
+    },
+    soleira: function (g, T, cx, cy) {                 // coração: soleira de mármore partida
+      var col = mx(T.wall, '#c8c2d4', 0.5);
+      // duas metades AFASTADAS, com a fenda no meio
+      part(g, Ppoly([cx - 40, cy - 4, cx - 6, cy - 14, cx - 8, cy - 28, cx - 42, cy - 18]),
+           col, { k: 0.24, hi: 0.18, lw: 0.9 });
+      part(g, Ppoly([cx + 4, cy - 15, cx + 40, cy - 5, cx + 42, cy - 19, cx + 6, cy - 29]),
+           sh(col, -0.08), { k: 0.24, hi: 0.14, lw: 0.9 });
+      part(g, Ppoly([cx - 6, cy - 14, cx + 4, cy - 15, cx + 6, cy - 29, cx - 8, cy - 28]),
+           rgba(T.accent, 0.35), { flat: true, noline: true });
+      stroke(g, [cx - 34, cy - 20, cx - 14, cy - 24], rgba(sh(col, -0.4), 0.55), 0.8);
+      glow(g, cx, cy - 20, 22, T.accent, 0.26);
+    },
+    bancoEstacoes: function (g, T, cx, cy) {           // coração: banco de pedra das quatro estações
+      var col = mx(T.wall, '#7a7288', 0.5);
+      part(g, Prr(cx - 26, cy - 12, 12, 24, 2), sh(col, -0.18), { k: 0.26, lw: 0.9 });
+      part(g, Prr(cx + 26, cy - 12, 12, 24, 2), sh(col, -0.18), { k: 0.26, lw: 0.9 });
+      part(g, Prr(cx, cy - 28, 76, 12, 3), col, { k: 0.26, hi: 0.16, lw: 0.9 });
+      var cols = ['#9bd06a', '#ff8c3a', '#c8b6ff', '#57c8ec'], i;
+      for (i = 0; i < 4; i++) {                        // as quatro estações no encosto
+        part(g, Pel(cx - 24 + i * 16, cy - 38, 5, 5), cols[i], { k: 0.2, hi: 0.24, lw: 0.75 });
+      }
+      stroke(g, [cx - 34, cy - 34, cx + 34, cy - 34], rgba(sh(col, -0.45), 0.7), 0.85);
     }
   };
   var PROPS = {

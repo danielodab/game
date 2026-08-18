@@ -117,44 +117,44 @@ JOGO.DATA.spells = {
   },
 
   /* ======================================================================
-   * SUMÔ — TANQUE
+   * BÁRBARO — TANQUE
    * Neutro: ocupar, provocar, prender.
    * Fogo: devolver o dano · Água: absorver e escorregar
    * Terra: escudo colossal e raízes · Ar: investir, girar e arremessar
    * ====================================================================== */
 
   'sumo-neutro-1': {
-    id: 'sumo-neutro-1', name: 'Palma de Ferro', element: 'neutro', classId: 'sumo', unlockLevel: 0,
+    id: 'sumo-neutro-1', name: 'Machadada de Ferro', element: 'neutro', classId: 'sumo', unlockLevel: 0,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 1, max: 1, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'neutro', min: 20, max: 26 }, { type: 'push', tiles: 1 } ],
-    description: 'Palma aberta no peito do adversário: 20–26 de dano neutro e 1 célula de empurrão. Duas vezes por turno.',
-    flavor: 'No dohyo se aprende cedo: primeiro tira o outro do lugar, depois discute.',
-    fxKey: 'palmSlam'
+    description: 'O machado desce no peito do adversário: 20–26 de dano neutro e 1 célula de empurrão. Duas vezes por turno.',
+    flavor: 'No portão se aprende cedo: primeiro tira o outro do lugar, depois discute.',
+    fxKey: 'axeSlam'
   },
   'sumo-neutro-2': {
-    id: 'sumo-neutro-2', name: 'Grito do Dohyo', element: 'neutro', classId: 'sumo', unlockLevel: 0,
+    id: 'sumo-neutro-2', name: 'Grito de Guerra', element: 'neutro', classId: 'sumo', unlockLevel: 0,
     paCost: 2, cooldown: 3, castsPerTurn: 1,
     range: { min: 0, max: 0, line: false, los: false, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
     effects: [ { type: 'taunt', duration: 2 }, { type: 'shield', value: 30, duration: 2 } ],
-    description: 'Bate o pé e ruge: todos os inimigos são obrigados a atacá-lo por 2 turnos, e ele ganha 30 de escudo.',
-    flavor: 'O chão do Fecho responde. É a única plateia que sobrou.',
-    fxKey: 'dohyoRoar'
+    description: 'Bate o cabo do machado no chão e ruge: todos os inimigos são obrigados a atacá-lo por 2 turnos, e ele ganha 30 de escudo.',
+    flavor: 'O chão do Fecho responde. É a única resposta que sobrou.',
+    fxKey: 'warCry'
   },
   'sumo-neutro-3': {
-    id: 'sumo-neutro-3', name: 'Agarrão do Mawashi', element: 'neutro', classId: 'sumo', unlockLevel: 0,
+    id: 'sumo-neutro-3', name: 'Pegada de Urso', element: 'neutro', classId: 'sumo', unlockLevel: 0,
     paCost: 2, cooldown: 1, castsPerTurn: 1,
     range: { min: 1, max: 1, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'neutro', min: 10, max: 14 }, { type: 'root', duration: 1 } ],
-    description: 'Fecha a mão no cinto do inimigo: 10–14 de dano e 0 PP por 1 turno.',
+    description: 'Fecha a manopla na garganta do inimigo: 10–14 de dano e 0 PP por 1 turno.',
     flavor: 'Ele não segura para machucar. Segura para conversar.',
     fxKey: 'grappleHold'
   },
 
-  /* --- SUMÔ · FOGO: quanto mais apanha, mais devolve --- */
+  /* --- BÁRBARO · FOGO: quanto mais apanha, mais devolve --- */
   'sumo-fogo-5': {
     id: 'sumo-fogo-5', name: 'Pele em Brasa', element: 'fogo', classId: 'sumo', unlockLevel: 5,
     paCost: 2, cooldown: 2, castsPerTurn: 1,
@@ -166,23 +166,23 @@ JOGO.DATA.spells = {
     fxKey: 'emberSkin'
   },
   'sumo-fogo-10': {
-    id: 'sumo-fogo-10', name: 'Bofetada Incandescente', element: 'fogo', classId: 'sumo', unlockLevel: 10,
+    id: 'sumo-fogo-10', name: 'Gume Incandescente', element: 'fogo', classId: 'sumo', unlockLevel: 10,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 1, max: 1, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'fogo', min: 25, max: 32 }, { type: 'poison', element: 'fogo', min: 6, max: 9, duration: 2 } ],
-    description: '25–32 de fogo na palma aberta, e a marca continua queimando 6–9 por 2 turnos.',
-    flavor: 'A mão dele deixa impressão digital. Em brasa.',
+    description: '25–32 de fogo no fio do machado, e a marca continua queimando 6–9 por 2 turnos.',
+    flavor: 'O machado dele deixa assinatura. Em brasa.',
     fxKey: 'emberSlam'
   },
   'sumo-fogo-12': {
-    id: 'sumo-fogo-12', name: 'Estouro do Dohyo', element: 'fogo', classId: 'sumo', unlockLevel: 12,
+    id: 'sumo-fogo-12', name: 'Estouro de Brasa', element: 'fogo', classId: 'sumo', unlockLevel: 12,
     paCost: 4, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 0, line: false, los: false, movable: false },
     aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'fogo', min: 24, max: 30 }, { type: 'push', tiles: 1 } ],
     description: 'Explode para fora quando o cercam: 24–30 de fogo em raio 1 e todo mundo 1 célula para trás.',
-    flavor: 'Cercar o campeão é aquecer o campeão. Ninguém leu o regulamento.',
+    flavor: 'Cercá-lo é aquecê-lo. Ninguém foi avisado disso.',
     fxKey: 'emberBurst'
   },
   'sumo-fogo-15': {
@@ -206,26 +206,26 @@ JOGO.DATA.spells = {
     fxKey: 'volcanicRetort'
   },
   'sumo-fogo-30': {
-    id: 'sumo-fogo-30', name: 'Fornalha do Campeão', element: 'fogo', classId: 'sumo', unlockLevel: 30,
+    id: 'sumo-fogo-30', name: 'Fúria da Fornalha', element: 'fogo', classId: 'sumo', unlockLevel: 30,
     paCost: 6, cooldown: 4, castsPerTurn: 1,
     range: { min: 0, max: 0, line: false, los: false, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'fogo', min: 70, max: 84 }, { type: 'poison', element: 'fogo', min: 14, max: 18, duration: 3 }, { type: 'push', tiles: 2 }, { type: 'weatherShift', weather: 'estiagem' } ],
     description: 'O corpo inteiro vira forja e arrebenta: 70–84 de fogo em raio 2, queimadura de 14–18 por 3 turnos, 2 células de empurrão — e a sala inteira entra em estiagem.',
     flavor: 'Foi assim que ele descobriu, mil anos atrás, que o Coração do Fecho ainda batia.',
-    fxKey: 'championForge'
+    fxKey: 'furyForge'
   },
 
-  /* --- SUMÔ · ÁGUA: bebe o golpe, devolve maré --- */
+  /* --- BÁRBARO · ÁGUA: bebe o golpe, devolve maré --- */
   'sumo-agua-5': {
-    id: 'sumo-agua-5', name: 'Palma da Maré', element: 'agua', classId: 'sumo', unlockLevel: 5,
+    id: 'sumo-agua-5', name: 'Gume da Maré', element: 'agua', classId: 'sumo', unlockLevel: 5,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 1, max: 1, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'agua', min: 20, max: 26, lifesteal: true }, { type: 'push', tiles: 1 } ],
     description: '20–26 de água com roubo de vida e 1 célula de empurrão: bate, bebe e afasta.',
-    flavor: 'A palma sai molhada. O outro sai mais seco.',
-    fxKey: 'tidePalm'
+    flavor: 'O machado sai molhado. O outro sai mais seco.',
+    fxKey: 'tideEdge'
   },
   'sumo-agua-10': {
     id: 'sumo-agua-10', name: 'Passo Escorregadio', element: 'agua', classId: 'sumo', unlockLevel: 10,
@@ -233,7 +233,7 @@ JOGO.DATA.spells = {
     range: { min: 0, max: 0, line: false, los: false, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
     effects: [ { type: 'buff', stat: 'dodge', value: 30, duration: 2 }, { type: 'buff', stat: 'pp', value: 1, duration: 2 } ],
-    description: 'Molha o dohyo e desliza nele: +30 de esquiva e +1 PP por 2 turnos.',
+    description: 'Molha o chão da sala e desliza nele: +30 de esquiva e +1 PP por 2 turnos.',
     flavor: 'Cento e cinquenta quilos deslizando. É mais elegante do que parece.',
     fxKey: 'slickStep'
   },
@@ -244,7 +244,7 @@ JOGO.DATA.spells = {
     aoe: { shape: 'line', size: 4 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'agua', min: 28, max: 35, lifesteal: true }, { type: 'push', tiles: 2 } ],
     description: 'Um ombro de água atravessa a linha: 28–35 com roubo de vida em todos, e 2 células de empurrão.',
-    flavor: 'A cisterna aprendeu a lutar sumô observando pelo ralo.',
+    flavor: 'A cisterna aprendeu a brigar observando pelo ralo.',
     fxKey: 'shoulderWave'
   },
   'sumo-agua-15': {
@@ -258,14 +258,14 @@ JOGO.DATA.spells = {
     fxKey: 'tideDrink'
   },
   'sumo-agua-20': {
-    id: 'sumo-agua-20', name: 'Maré do Campeão', element: 'agua', classId: 'sumo', unlockLevel: 20,
+    id: 'sumo-agua-20', name: 'Maré Bruta', element: 'agua', classId: 'sumo', unlockLevel: 20,
     paCost: 4, cooldown: 3, castsPerTurn: 1,
     range: { min: 0, max: 0, line: false, los: false, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'agua', min: 36, max: 44, lifesteal: true }, { type: 'push', tiles: 2 } ],
     description: 'Gira e solta a maré: 36–44 de água com roubo de vida em raio 2 e 2 células de empurrão para todos.',
     flavor: 'Meia sala recua. Ele fica mais gordo de vida do que começou.',
-    fxKey: 'championTide'
+    fxKey: 'bruteTide'
   },
   'sumo-agua-30': {
     id: 'sumo-agua-30', name: 'Ressaca Absoluta', element: 'agua', classId: 'sumo', unlockLevel: 30,
@@ -278,7 +278,7 @@ JOGO.DATA.spells = {
     fxKey: 'undertowMaw'
   },
 
-  /* --- SUMÔ · TERRA: a muralha que provoca e enraíza --- */
+  /* --- BÁRBARO · TERRA: a muralha que provoca e enraíza --- */
   'sumo-terra-5': {
     id: 'sumo-terra-5', name: 'Casco de Pedra', element: 'terra', classId: 'sumo', unlockLevel: 5,
     paCost: 2, cooldown: 2, castsPerTurn: 1,
@@ -296,7 +296,7 @@ JOGO.DATA.spells = {
     aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'terra', min: 20, max: 26 }, { type: 'root', duration: 1 } ],
     description: 'Pisa como quem assenta um alicerce: 20–26 de terra em raio 1 e 0 PP por 1 turno.',
-    flavor: 'O dohyo dele tem mil anos e nunca precisou de conserto.',
+    flavor: 'O portão dele tem mil anos e nunca precisou de conserto.',
     fxKey: 'rootQuake'
   },
   'sumo-terra-12': {
@@ -310,14 +310,14 @@ JOGO.DATA.spells = {
     fxKey: 'humanStake'
   },
   'sumo-terra-15': {
-    id: 'sumo-terra-15', name: 'Raízes do Dohyo', element: 'terra', classId: 'sumo', unlockLevel: 15,
+    id: 'sumo-terra-15', name: 'Raízes de Pedra', element: 'terra', classId: 'sumo', unlockLevel: 15,
     paCost: 3, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 4, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'terra', min: 26, max: 33 }, { type: 'root', duration: 2 } ],
     description: 'Manda raízes por baixo do chão até o ponto escolhido: 26–33 de terra em raio 1 e 0 PP por 2 turnos.',
-    flavor: 'A arena inteira é dele. Só emprestou o chão para você pisar.',
-    fxKey: 'dohyoRoots'
+    flavor: 'A sala inteira é dele. Só emprestou o chão para você pisar.',
+    fxKey: 'stoneRoots'
   },
   'sumo-terra-20': {
     id: 'sumo-terra-20', name: 'Muralha Viva', element: 'terra', classId: 'sumo', unlockLevel: 20,
@@ -340,36 +340,36 @@ JOGO.DATA.spells = {
     fxKey: 'walkingMountain'
   },
 
-  /* --- SUMÔ · AR: agarra, gira e arremessa --- */
+  /* --- BÁRBARO · AR: agarra, gira e arremessa --- */
   'sumo-ar-5': {
-    id: 'sumo-ar-5', name: 'Investida do Dohyo', element: 'ar', classId: 'sumo', unlockLevel: 5,
+    id: 'sumo-ar-5', name: 'Investida Bruta', element: 'ar', classId: 'sumo', unlockLevel: 5,
     paCost: 3, cooldown: 1, castsPerTurn: 1,
     range: { min: 2, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'moveTo', maxTiles: 4 }, { type: 'damage', element: 'ar', min: 18, max: 24 } ],
     description: 'Desliza até 4 células até o alvo e tromba nele: 18–24 de dano de ar. A entrada de graça do tanque.',
     flavor: 'Cento e cinquenta quilos não correm. Chegam.',
-    fxKey: 'dohyoCharge'
+    fxKey: 'brutalCharge'
   },
   'sumo-ar-10': {
-    id: 'sumo-ar-10', name: 'Arremesso do Mawashi', element: 'ar', classId: 'sumo', unlockLevel: 10,
+    id: 'sumo-ar-10', name: 'Arremesso Brutal', element: 'ar', classId: 'sumo', unlockLevel: 10,
     paCost: 3, cooldown: 1, castsPerTurn: 1,
     range: { min: 1, max: 1, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'ar', min: 25, max: 32 }, { type: 'push', tiles: 3 } ],
-    description: 'Pega pelo cinto e joga: 25–32 de ar e 3 células de voo (colidir dói mais).',
+    description: 'Pega pelo peitoral e joga: 25–32 de ar e 3 células de voo (colidir dói mais).',
     flavor: 'Ele mira sempre no obstáculo mais próximo. Por economia de movimento.',
-    fxKey: 'mawashiThrow'
+    fxKey: 'brutalThrow'
   },
   'sumo-ar-12': {
-    id: 'sumo-ar-12', name: 'Giro de Cem Braços', element: 'ar', classId: 'sumo', unlockLevel: 12,
+    id: 'sumo-ar-12', name: 'Ciclone de Machado', element: 'ar', classId: 'sumo', unlockLevel: 12,
     paCost: 4, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 0, line: false, los: false, movable: false },
     aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'ar', min: 26, max: 33 }, { type: 'push', tiles: 2 } ],
-    description: 'Roda sobre si mesmo com os braços abertos: 26–33 de ar em raio 1 e 2 células de empurrão em todos.',
-    flavor: 'Quem estava perto vira plateia. Bem longe, de preferência.',
-    fxKey: 'hundredArmSpin'
+    description: 'Roda sobre si mesmo com o machado esticado: 26–33 de ar em raio 1 e 2 células de empurrão em todos.',
+    flavor: 'Quem estava perto vira espectador. Bem longe, de preferência.',
+    fxKey: 'axeCyclone'
   },
   'sumo-ar-15': {
     id: 'sumo-ar-15', name: 'Puxão e Volta', element: 'ar', classId: 'sumo', unlockLevel: 15,
@@ -382,14 +382,14 @@ JOGO.DATA.spells = {
     fxKey: 'graspAndSlam'
   },
   'sumo-ar-20': {
-    id: 'sumo-ar-20', name: 'Tufão de Carne', element: 'ar', classId: 'sumo', unlockLevel: 20,
+    id: 'sumo-ar-20', name: 'Tufão de Ferro', element: 'ar', classId: 'sumo', unlockLevel: 20,
     paCost: 5, cooldown: 2, castsPerTurn: 1,
     range: { min: 2, max: 7, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'moveTo', maxTiles: 6 }, { type: 'damage', element: 'ar', min: 58, max: 70 }, { type: 'push', tiles: 3 } ],
     description: 'Atravessa até 6 células em linha reta de fúria: 58–70 de ar e 3 células de arremesso no fim do trajeto.',
-    flavor: 'O corredor inteiro ouve o assobio antes de ver o campeão.',
-    fxKey: 'fleshTyphoon'
+    flavor: 'O corredor inteiro ouve o assobio antes de ver o bárbaro.',
+    fxKey: 'ironTyphoon'
   },
   'sumo-ar-30': {
     id: 'sumo-ar-30', name: 'Arremesso do Fim do Mundo', element: 'ar', classId: 'sumo', unlockLevel: 30,
@@ -403,7 +403,7 @@ JOGO.DATA.spells = {
   },
 
   /* ======================================================================
-   * ELFO ARQUEIRO — ATIRADOR
+   * BATEDOR — ATIRADOR
    * Assinatura: `mark` acumula, `detonateMarks` cobra a conta.
    * Fogo: marcas que queimam e explodem · Água: arpões que puxam e alimentam
    * Terra: flechas-menir que prendem · Ar: tiros que saltam de alvo em alvo
@@ -436,7 +436,7 @@ JOGO.DATA.spells = {
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'detonateMarks', mult: 9 }, { type: 'damage', element: 'neutro', min: 8, max: 12 } ],
     description: 'Consome todas as marcas do alvo: 9 de dano por marca, mais 8–12 de dano neutro do tiro.',
-    flavor: 'Elfo nenhum perdoa dívida. No máximo adia o vencimento.',
+    flavor: 'Batedor nenhum perdoa dívida. No máximo adia o vencimento.',
     fxKey: 'markCollect'
   },
 
@@ -482,14 +482,14 @@ JOGO.DATA.spells = {
     fxKey: 'markBlast'
   },
   'arqueiro-fogo-20': {
-    id: 'arqueiro-fogo-20', name: 'Chuva de Pavios', element: 'fogo', classId: 'arqueiro', unlockLevel: 20,
+    id: 'arqueiro-fogo-20', name: 'Chuva de Brasas', element: 'fogo', classId: 'arqueiro', unlockLevel: 20,
     paCost: 5, cooldown: 2, castsPerTurn: 1,
     range: { min: 3, max: 9, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'fogo', min: 40, max: 48 }, { type: 'poison', element: 'fogo', min: 10, max: 14, duration: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
     description: 'Dezenas de flechas em brasa caem em raio 2: 40–48 de fogo, queimadura de 10–14 por 2 turnos e 1 marca em todos.',
     flavor: 'Chove fogo num mundo que não vê chuva há mil anos. Justiça poética duvidosa.',
-    fxKey: 'wickRain'
+    fxKey: 'emberRain'
   },
   'arqueiro-fogo-30': {
     id: 'arqueiro-fogo-30', name: 'Aljava do Sol Morto', element: 'fogo', classId: 'arqueiro', unlockLevel: 30,
@@ -582,7 +582,7 @@ JOGO.DATA.spells = {
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'terra', min: 22, max: 28 }, { type: 'root', duration: 1 }, { type: 'mark', value: 5, duration: 4, max: 5 } ],
     description: 'Prega o alvo no chão: 22–28 de terra, 0 PP por 1 turno e 1 marca.',
-    flavor: 'Regra do elfo: quem não anda, não erra a conta.',
+    flavor: 'Regra do batedor: quem não anda, não erra a conta.',
     fxKey: 'pinShot'
   },
   'arqueiro-terra-12': {
@@ -976,7 +976,7 @@ JOGO.DATA.spells = {
   },
 
   /* ======================================================================
-   * ESPADACHIM — ASSASSINO
+   * LADINO — ASSASSINO
    * Entrar, cortar duas vezes, sumir. Vive de escolher a hora.
    * Fogo: queimar o próprio sangue por dano bruto · Água: beber o que corta
    * Terra: apodrecer e prender · Ar: velocidade, teleporte e cortes em cadeia
@@ -1262,14 +1262,14 @@ JOGO.DATA.spells = {
   },
 
   /* ======================================================================
-   * CURANDEIRA — SUPORTE
-   * Cura, escuda, abençoa — e bate de cajado quando ninguém precisa dela.
+   * PALADINA — SUPORTE
+   * Cura, escuda, abençoa — e bate de martelo quando ninguém precisa dela.
    * Fogo: cura agressiva e poder · Água: cura pura e limpeza
    * Terra: escudos e raízes protetoras · Ar: mobilidade e resgate
    * ====================================================================== */
 
   'curandeira-neutro-1': {
-    id: 'curandeira-neutro-1', name: 'Mãozinha Quente', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+    id: 'curandeira-neutro-1', name: 'Imposição das Mãos', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1279,24 +1279,24 @@ JOGO.DATA.spells = {
     fxKey: 'warmHand'
   },
   'curandeira-neutro-2': {
-    id: 'curandeira-neutro-2', name: 'Cajado Teimoso', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+    id: 'curandeira-neutro-2', name: 'Martelo Teimoso', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'neutro', min: 19, max: 25 } ],
-    description: '19–25 de dano neutro. A curandeira também ataca — e o cajado é mais alto que ela.',
+    description: '19–25 de dano neutro. A paladina também ataca — e o martelo pesa como o dever.',
     flavor: 'Era da avó. A avó também batia com ele.',
-    fxKey: 'stubbornStaff'
+    fxKey: 'stubbornHammer'
   },
   'curandeira-neutro-3': {
-    id: 'curandeira-neutro-3', name: 'Bênção Miúda', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+    id: 'curandeira-neutro-3', name: 'Bênção Breve', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
     paCost: 2, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
     effects: [ { type: 'buff', stat: 'power', value: 20, duration: 2 } ],
-    description: '+20 de poder num aliado por 2 turnos. Pequena, como ela, e faz uma diferença enorme.',
-    flavor: 'Fica na ponta dos pés para abençoar o sumô. Ele se agacha, por respeito.',
-    fxKey: 'littleBlessing'
+    description: '+20 de poder num aliado por 2 turnos. Curta — e faz uma diferença enorme.',
+    flavor: 'Ergue o escudo diante do bárbaro antes de cada investida. Ele espera, por respeito.',
+    fxKey: 'briefBlessing'
   },
 
   /* --- CURANDEIRA · FOGO: curar com raiva --- */
@@ -1331,14 +1331,14 @@ JOGO.DATA.spells = {
     fxKey: 'forgeBreath'
   },
   'curandeira-fogo-15': {
-    id: 'curandeira-fogo-15', name: 'Sino de Cinzas', element: 'fogo', classId: 'curandeira', unlockLevel: 15,
+    id: 'curandeira-fogo-15', name: 'Anel de Cinzas', element: 'fogo', classId: 'curandeira', unlockLevel: 15,
     paCost: 4, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'fogo', min: 30, max: 38 }, { type: 'poison', element: 'fogo', min: 8, max: 11, duration: 2 } ],
-    description: 'Bate o cajado no chão e solta um anel de cinzas: 30–38 de fogo em raio 1 e 8–11 de queimadura por 2 turnos.',
-    flavor: 'Baixinha, mas o barulho chega ao teto.',
-    fxKey: 'ashBell'
+    description: 'Bate o escudo no chão e solta um anel de cinzas: 30–38 de fogo em raio 1 e 8–11 de queimadura por 2 turnos.',
+    flavor: 'Armadura clara, e um barulho que chega ao teto.',
+    fxKey: 'ashRing'
   },
   'curandeira-fogo-20': {
     id: 'curandeira-fogo-20', name: 'Coração de Brasa', element: 'fogo', classId: 'curandeira', unlockLevel: 20,
@@ -1373,14 +1373,14 @@ JOGO.DATA.spells = {
     fxKey: 'goodDrop'
   },
   'curandeira-agua-10': {
-    id: 'curandeira-agua-10', name: 'Fonte Miúda', element: 'agua', classId: 'curandeira', unlockLevel: 10,
+    id: 'curandeira-agua-10', name: 'Fonte Serena', element: 'agua', classId: 'curandeira', unlockLevel: 10,
     paCost: 3, cooldown: 1, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
     effects: [ { type: 'regen', min: 14, max: 18, duration: 3 }, { type: 'cleanse', kinds: ['poison'] } ],
     description: 'Regeneração de 14–18 por 3 turnos e limpeza de todos os venenos do aliado.',
-    flavor: 'Ela cava com o dedo mínimo e sai água. Nunca explicou.',
-    fxKey: 'littleSpring'
+    flavor: 'Ela encosta a manopla no chão e sai água. Nunca explicou.',
+    fxKey: 'calmSpring'
   },
   'curandeira-agua-12': {
     id: 'curandeira-agua-12', name: 'Puxão de Maré', element: 'agua', classId: 'curandeira', unlockLevel: 12,
@@ -1513,7 +1513,7 @@ JOGO.DATA.spells = {
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'any',
     effects: [ { type: 'swap' } ],
     description: 'Troca de posição com qualquer unidade a até 6 células. Tira o aliado do cerco — e assume o lugar dele.',
-    flavor: 'É baixinha, mas nunca foi de fugir.',
+    flavor: 'Nunca foi de fugir. Só de trocar de lugar com quem precisava mais.',
     fxKey: 'placeSwap'
   },
   'curandeira-ar-15': {
@@ -1548,7 +1548,7 @@ JOGO.DATA.spells = {
   },
 
   /* ======================================================================
-   * INVOCADOR — INVOCADOR
+   * XAMÃ — INVOCADOR
    * Enche o tabuleiro: criaturas, armadilhas (`trap`) e pactos que fortalecem.
    * Fogo: matilha explosiva e brasa enterrada · Água: ninfa que cura e sucção
    * Terra: paredes vivas e laços · Ar: bicho veloz, rajadas e vórtices
@@ -1568,14 +1568,14 @@ JOGO.DATA.spells = {
     fxKey: 'lesserCall'
   },
   'invocador-neutro-2': {
-    id: 'invocador-neutro-2', name: 'Cajado do Pacto', element: 'neutro', classId: 'invocador', unlockLevel: 0,
+    id: 'invocador-neutro-2', name: 'Verbo do Pacto', element: 'neutro', classId: 'invocador', unlockLevel: 0,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'neutro', min: 19, max: 25 } ],
-    description: '19–25 de dano neutro a até 6 células. Ele também bate, quando o rebanho está ocupado.',
-    flavor: 'O cajado é feito do osso de alguém que também chamava coisas.',
-    fxKey: 'pactStaff'
+    description: '19–25 de dano neutro a até 6 células. Ele também ataca, quando o rebanho está ocupado.',
+    flavor: 'A página foi escrita por alguém que também chamava coisas. Ninguém sabe com o quê.',
+    fxKey: 'pactWord'
   },
   'invocador-neutro-3': {
     id: 'invocador-neutro-3', name: 'Estaca-Alarme', element: 'neutro', classId: 'invocador', unlockLevel: 0,
