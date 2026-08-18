@@ -94,6 +94,16 @@ var JOGO = (typeof window !== 'undefined')
  * 15. FUSÃO: a unidade fundida é a própria unidade A mutada — mantém o uid e a
  *     casa dela na ordem de iniciativa; B sai do tabuleiro com
  *     `alive:false, offBoard:true`, sem evento `death` e sem contar derrota.
+ * 18. FÚRIA DA SALA (v2.3): a partir de `roomFury.afterRound`, cada rodada dá
+ *     `powerPerRound` de poder aos INIMIGOS e corta `healCutPerRound` da cura
+ *     recebida por TODOS (piso 0). É DERIVADA de `state.round` — nunca acumulada
+ *     em campo —, então não há bookkeeping para dessincronizar e uma unidade
+ *     invocada tarde já nasce com a fúria da rodada em que apareceu. O corte de
+ *     cura vale para os dois lados de propósito: cortar só de um transferiria o
+ *     empate em vez de encerrá-lo. O tique de clima NÃO é cortado: é ambiente,
+ *     não "cura recebida", e o poder crescente o supera de qualquer forma.
+ *     Atingido `maxRounds`, a batalha encerra como DERROTA do jogador
+ *     (`furyTimeout` + `battleEnd{reason:'fury'}`) — a sala cobra a demora.
  * 17. GANHO ELEMENTAL (v2.2, contrato §9-C): `unit.elemPower` entra na conta de
  *     dano como poder EXTRA, e só quando `spell.element` é um dos elementos do
  *     conjurador. O gatilho é o elemento do FEITIÇO (literal do contrato), não o
@@ -122,6 +132,20 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------- constantes
   Engine.WEATHER_TICK = 5;       // PV ganhos/perdidos por tique de clima
   Engine.CHAIN_JUMP_RANGE = 3;   // alcance de cada salto do efeito 'chain'
+  // v2.3 — FÚRIA PROGRESSIVA DA SALA. Padrão usado quando
+  // `DATA.leveling.roomFury` ainda não existe (o dado é de outro dono).
+  //
+  // NÚMEROS MEDIDOS, não chutados. Varredura de 108 batalhas (6 duplas × 18
+  // salas, nível 1, só feitiços base — a configuração mais dura que existe):
+  //   sem fúria ............ 8 EMPATES, 16 vitórias, pior caso 77 rodadas
+  //   afterRound 12 ........ 0 empates, 15 vitórias (custou uma legítima)
+  //   afterRound 20 ........ 0 empates, 16 vitórias, pior caso 28 rodadas
+  // Ficou em 20 porque resolve todos os empates SEM cobrar nenhuma vitória
+  // legítima: só 4% das batalhas decididas passam da rodada 20 (a mediana é 5),
+  // então a fúria segue invisível no jogo normal. `maxRounds: 40` é folga de 12
+  // rodadas sobre o pior caso observado — nunca disparou na varredura.
+  Engine.ROOM_FURY = { afterRound: 20, powerPerRound: 10,
+                       healCutPerRound: 0.15, maxRounds: 40 };
   Engine.MARK_DEFAULT_VALUE = 5; // % de dano por pilha quando o dado omite
   Engine.MARK_DEFAULT_MAX = 5;   // pilhas máximas quando o dado omite
   Engine.PET_FOLLOW_DEFAULT = 2; // followDistance padrão
@@ -437,6 +461,48 @@ var JOGO = (typeof window !== 'undefined')
       if (u.hp <= 0) processDeath(state, u);
     }
   }
+
+  // ------------------------------------------------- v2.3: fúria da sala
+  // Empate por sustentação (um lado cura mais do que o outro machuca) é um
+  // beco sem saída: o jogador não perde e não ganha. A partir de `afterRound`
+  // a sala esquenta — os INIMIGOS ganham poder a cada rodada e a cura recebida
+  // por TODOS encolhe até zerar —, de modo que toda batalha necessariamente
+  // resolve. É o "enrage" clássico do gênero: invisível numa luta normal, que
+  // termina muito antes da rodada 12.
+  function furyConfig() {
+    var L = DATA().leveling || {};
+    return L.roomFury || Engine.ROOM_FURY;
+  }
+  Engine.furyConfig = furyConfig;
+
+  // DERIVADA de `state.round`, nunca acumulada em campo: não há bookkeeping para
+  // dessincronizar, e uma unidade invocada na rodada 20 já nasce com a fúria
+  // daquela rodada — não com a de quando a sala começou a esquentar.
+  Engine.furyOf = function (state) {
+    var cfg = furyConfig();
+    var over = state.round - (cfg.afterRound || 0);
+    if (over <= 0) return { rounds: 0, power: 0, healScale: 1 };
+    return {
+      rounds: over,
+      power: Math.round((cfg.powerPerRound || 0) * over),
+      healScale: Math.max(0, 1 - (cfg.healCutPerRound || 0) * over)
+    };
+  };
+  // O poder da fúria é do lado INIMIGO: é a sala reagindo aos invasores.
+  Engine.furyPower = function (state, unit) {
+    if (!state || !unit || unit.side !== 'enemy') return 0;
+    return Engine.furyOf(state).power;
+  };
+  // O corte de cura vale para os DOIS lados (senão o empate só trocaria de mãos).
+  Engine.healScale = function (state) {
+    return state ? Engine.furyOf(state).healScale : 1;
+  };
+  // Poder efetivo de uma conjuração: base + buffs (v1) + bônus elemental (v2.2)
+  // + fúria da sala (v2.3). Todo cálculo de dano passa por aqui.
+  Engine.castPower = function (state, caster, spell) {
+    return Engine.effPower(caster) + Engine.elementalBonus(caster, spell) +
+           Engine.furyPower(state, caster);
+  };
 
   // --------------------------------------------------------------- criação
   function makeUnit(state, def, kind, side, x, y, opts) {
@@ -1022,8 +1088,12 @@ var JOGO = (typeof window !== 'undefined')
     return hpLoss;
   }
 
+  // TODA cura passa por aqui — efeito heal, regen, roubo de vida e regenAura —,
+  // então é o único ponto em que a fúria da sala precisa cortar (v2.3).
   function applyHeal(state, target, amount) {
     if (!target.alive || amount <= 0) return 0;
+    amount = Math.round(amount * Engine.healScale(state));
+    if (amount <= 0) return 0;
     var healed = Math.min(amount, target.hpMax - target.hp);
     target.hp += healed;
     emit({ type: 'heal', uid: target.uid, amount: healed });
@@ -1375,8 +1445,9 @@ var JOGO = (typeof window !== 'undefined')
     var cy = opts.casterY != null ? opts.casterY : caster.y;
     var tiles = Engine.aoeTiles(state, spell, cx, cy, x, y);
     var effects = sEffects(spell);
-    // v2.2: calculado UMA vez por conjuração — depende do feitiço, não do alvo.
-    var elemBonus = Engine.elementalBonus(caster, spell);
+    // v2.2/v2.3: calculado UMA vez por conjuração — depende do conjurador e do
+    // feitiço, não do alvo. Inclui buffs, bônus elemental e fúria da sala.
+    var castPower = Engine.castPower(state, caster, spell);
 
     function unitsInTiles(includeCaster) {
       var list = [];
@@ -1401,7 +1472,7 @@ var JOGO = (typeof window !== 'undefined')
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             var amt = rollDamageAmount(state, eff.min, eff.max,
-              Engine.effPower(caster) + elemBonus,             // v2.2: bônus elemental
+              castPower,                                       // v2.2/v2.3
               Engine.effResist(u, eff.element),
               Engine.markMultiplier(u));                       // v2: marcas
             var hpLoss = dealDamage(state, u, amt, eff.element, caster.uid);
@@ -1465,11 +1536,12 @@ var JOGO = (typeof window !== 'undefined')
           targets = hostileTargets();
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
-            // o veneno congela o poder do conjurador no cast (decisão v1) — e o
-            // bônus elemental v2.2 é parte desse poder, congelado junto.
+            // o veneno congela o poder do conjurador no cast (decisão v1) — o
+            // bônus elemental v2.2 e a fúria v2.3 são parte desse poder e vão
+            // congelados junto, no valor que valia na hora da conjuração.
             applied = { type: 'poison', element: eff.element, min: eff.min, max: eff.max,
                         duration: eff.duration, sourceUid: caster.uid,
-                        sourcePower: Engine.effPower(caster) + elemBonus };
+                        sourcePower: castPower };
             u.effects.push(applied);
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
           }
@@ -1644,7 +1716,7 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'chain':
-          chainDamage(state, caster, eff, spell, x, y, elemBonus);
+          chainDamage(state, caster, eff, spell, x, y, castPower);
           break;
       }
     }
@@ -1670,7 +1742,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // v2: raio em cadeia
-  function chainDamage(state, caster, eff, spell, x, y, elemBonus) {
+  function chainDamage(state, caster, eff, spell, x, y, castPower) {
     var cur = Engine.unitAt(state, x, y);
     if (!cur || !cur.alive || cur.side === caster.side) return;
     var hit = {};
@@ -1682,7 +1754,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!cur || !cur.alive) break;
       hit[cur.uid] = true;
       var amt = rollDamageAmount(state, eff.min, eff.max,
-        Engine.effPower(caster) + (elemBonus || 0),           // v2.2
+        castPower != null ? castPower : Engine.effPower(caster),   // v2.2/v2.3
         Engine.effResist(cur, element), Engine.markMultiplier(cur) * mult);
       emit({ type: 'chainHop', uid: cur.uid, index: j });
       dealDamage(state, cur, amt, element, caster.uid);
@@ -1769,6 +1841,23 @@ var JOGO = (typeof window !== 'undefined')
   // v2: início de rodada — clima automático, armadilhas e eventos de terreno
   function onRoundStart(state) {
     var i;
+    // v2.3: a sala esquenta. Avisa a interface a cada degrau para o jogador ver
+    // a pressão subindo, e corta a batalha no teto — sem teto, uma sala em que
+    // ninguém consegue matar ninguém ainda seria um beco sem saída.
+    var fcfg = furyConfig();
+    var fury = Engine.furyOf(state);
+    if (fury.rounds > 0) {
+      emit({ type: 'fury', round: state.round, power: fury.power,
+             healScale: fury.healScale, rounds: fury.rounds });
+      if (fury.rounds === 1) log('A sala se enfurece! Os inimigos ganham força a cada rodada.');
+    }
+    if (fcfg.maxRounds > 0 && state.round >= fcfg.maxRounds) {
+      state.phase = 'lost';
+      emit({ type: 'furyTimeout', round: state.round, maxRounds: fcfg.maxRounds });
+      emit({ type: 'battleEnd', winner: 'enemy', reason: 'fury' });
+      log('A sala consome quem demora demais.');
+      return;
+    }
     var dungeon = getDungeon(state.dungeonId);
     var every = (dungeon && dungeon.weatherShiftEveryRounds) || 0;
     if (every > 0 && state.round > 1 && (state.round - 1) % every === 0) {

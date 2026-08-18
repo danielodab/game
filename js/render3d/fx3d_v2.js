@@ -44,6 +44,7 @@ var JOGO = (typeof window !== 'undefined')
     terra: '#9bd06a', ar: '#c8b6ff'
   };
   function ecol(e) { return ELEM[e] || ELEM.neutro; }
+  function col3(c) { return new THREE.Color(hexInt(c)).convertSRGBToLinear(); }
   function hexInt(c) {
     if (typeof c === 'number') return c;
     var s = String(c).charAt(0) === '#' ? String(c).slice(1) : String(c);
@@ -122,7 +123,7 @@ var JOGO = (typeof window !== 'undefined')
   function spawn(o) {
     if (!freeList.length) return null;
     var i = freeList.pop();
-    var col = new THREE.Color(hexInt(o.color || '#ffffff'));
+    var col = col3(o.color || '#ffffff');
     parts[i] = {
       x: o.x, y: o.y, z: o.z,
       vx: o.vx || 0, vy: o.vy || 0, vz: o.vz || 0,
@@ -194,7 +195,7 @@ var JOGO = (typeof window !== 'undefined')
       if (lightPool[i].userData.busy) continue;
       var l = lightPool[i];
       l.userData.busy = true;
-      l.color.setHex(hexInt(color));
+      l.color.copy(col3(color));
       l.intensity = intensity;
       l.distance = dist || 14;
       return l;
@@ -212,7 +213,7 @@ var JOGO = (typeof window !== 'undefined')
   var shots = [];               // {mesh, light, from, to, t, dur, onHit}
   var sphereGeo = null, arrowGeo = null;
   function projMesh(kind, color) {
-    var mat = new THREE.MeshBasicMaterial({ color: hexInt(color), transparent: true, opacity: 0.95 });
+    var mat = new THREE.MeshBasicMaterial({ color: col3(color), transparent: true, opacity: 0.95 });
     var g;
     if (kind === 'arrow') {
       if (!arrowGeo) { arrowGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.9, 6); arrowGeo.rotateX(Math.PI / 2); }
@@ -229,17 +230,28 @@ var JOGO = (typeof window !== 'undefined')
   function launch(from, to, o) {
     o = o || {};
     var color = o.color || '#ffcc66';
+    var color2 = o.color2 || null;              // segundo elemento (fusao)
     var mesh = projMesh(o.kind, color);
     mesh.position.copy(from);
     fxG.add(mesh);
+    // casca externa na cor do segundo elemento: o projétil da fusão é bicolor
+    var shell = null;
+    if (color2) {
+      shell = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({
+        color: col3(color2), transparent: true, opacity: 0.45,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      }));
+      shell.scale.setScalar(1.9);
+      mesh.add(shell);
+    }
     var light = takeLight(color, o.lightI || 9, o.lightD || 12);
     if (light) light.position.copy(from);
     var d = from.distanceTo(to);
     shots.push({
-      mesh: mesh, light: light, from: from.clone(), to: to.clone(),
+      mesh: mesh, shell: shell, light: light, from: from.clone(), to: to.clone(),
       t: 0, dur: Math.max(0.16, Math.min(0.8, d / (o.speed || 22))),
-      arc: o.arc == null ? 0.5 : o.arc, color: color, trail: o.trail !== false,
-      onHit: o.onHit || null
+      arc: o.arc == null ? 0.5 : o.arc, color: color, color2: color2,
+      trail: o.trail !== false, onHit: o.onHit || null
     });
   }
   function updateShots(dt) {
@@ -252,13 +264,28 @@ var JOGO = (typeof window !== 'undefined')
       var py = s.from.y + (s.to.y - s.from.y) * k + Math.sin(k * Math.PI) * s.arc;
       s.mesh.position.set(px, py, pz);
       if (s.light) s.light.position.set(px, py + 0.2, pz);
-      if (s.trail && Math.random() < 0.85) {
-        spawn({ x: px, y: py, z: pz, vx: (Math.random() - 0.5) * 0.8, vy: (Math.random() - 0.5) * 0.6,
-                vz: (Math.random() - 0.5) * 0.8, life: 0.32, color: s.color, size: 0.30, grav: 0.4, drag: 3 });
+      if (s.trail) {
+        // rastro: alterna as duas cores (a fusão deixa um rastro trançado)
+        var use2 = s.color2 && ((s.t * 60) | 0) % 2 === 1;
+        spawn({ x: px, y: py, z: pz, vx: (Math.random() - 0.5) * 0.9, vy: (Math.random() - 0.5) * 0.7,
+                vz: (Math.random() - 0.5) * 0.9, life: 0.34,
+                color: use2 ? s.color2 : s.color, size: 0.30, grav: 0.4, drag: 3 });
+        if (s.color2) {
+          // espiral do segundo elemento em volta do eixo do tiro
+          var ph = s.t * 26;
+          spawn({ x: px + Math.cos(ph) * 0.34, y: py + Math.sin(ph) * 0.34, z: pz,
+                  vx: 0, vy: 0, vz: 0, life: 0.30, color: s.color2, size: 0.26, grav: 0.2, drag: 4 });
+        }
       }
+      if (s.light && s.color2) {
+        // a luz pulsa entre as duas cores: o chão recebe as duas
+        s.light.color.copy(mixCol(s.color, s.color2, 0.5 + 0.5 * Math.sin(s.t * 22)));
+      }
+      if (s.shell) s.shell.scale.setScalar(1.7 + Math.sin(s.t * 26) * 0.35);
       if (k >= 1) {
         if (s.onHit) { try { s.onHit(s.to); } catch (e) {} }
         fxG.remove(s.mesh);
+        if (s.shell) s.shell.material.dispose();
         s.mesh.material.dispose();
         freeLight(s.light);
         shots.splice(i, 1);
@@ -290,7 +317,7 @@ var JOGO = (typeof window !== 'undefined')
   function shockRing(pos, color, r0, r1, dur) {
     if (!ringGeo) { ringGeo = new THREE.RingGeometry(0.86, 1.0, 40); ringGeo.rotateX(-Math.PI / 2); }
     var m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-      color: hexInt(color), transparent: true, opacity: 0.9,
+      color: col3(color), transparent: true, opacity: 0.9,
       depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
     }));
     m.position.set(pos.x, 0.08, pos.z);
@@ -313,7 +340,7 @@ var JOGO = (typeof window !== 'undefined')
   function scorch(pos, color, size, life) {
     if (!decalGeo) { decalGeo = new THREE.PlaneGeometry(1, 1); decalGeo.rotateX(-Math.PI / 2); }
     var m = new THREE.Mesh(decalGeo, new THREE.MeshBasicMaterial({
-      map: dotTexture(), color: hexInt(color), transparent: true,
+      map: dotTexture(), color: col3(color), transparent: true,
       opacity: 0.5, depthWrite: false
     }));
     m.position.set(pos.x, 0.05, pos.z);
@@ -429,6 +456,39 @@ var JOGO = (typeof window !== 'undefined')
     }
   };
 
+  // ELEMENTOS DE UM FEITICO. A fusao gera feitico composto (DATA.fusionForms x
+  // DATA.fusionBlends): ar+agua tem de mostrar VENTO E AGUA ao mesmo tempo, com
+  // as duas cores na luz dinamica. Ordem de busca: o evento diz > a unidade
+  // fundida diz (elemPair) > o feitico diz > neutro.
+  function spellElements(ev, spell) {
+    var out = [];
+    function push(e) { if (e && out.indexOf(e) < 0) out.push(e); }
+    if (ev && ev.elements && ev.elements.length) { for (var i = 0; i < ev.elements.length; i++) push(ev.elements[i]); }
+    if (ev && ev.elemPair && ev.elemPair.length) { for (var j = 0; j < ev.elemPair.length; j++) push(ev.elemPair[j]); }
+    if (spell) {
+      push(spell.element);
+      var eff = spell.effects || [];
+      for (var k = 0; k < eff.length; k++) push(eff[k].element);
+    }
+    if (ev && ev.element) push(ev.element);
+    // o conjurador fundido carrega os dois elementos da mistura
+    var u = ev && ev.uid ? unitOf(ev.uid) : null;
+    if (u && u.elemPair) { for (var m = 0; m < u.elemPair.length; m++) push(u.elemPair[m]); }
+    if (!out.length) out.push('neutro');
+    return out.slice(0, 2);
+  }
+  function unitOf(uid) {
+    var st = (JOGO.Game && JOGO.Game.state) || null;
+    if (!st || !st.units) return null;
+    for (var i = 0; i < st.units.length; i++) if (st.units[i].uid === uid) return st.units[i];
+    return null;
+  }
+  // mistura das duas cores elementais (usada na luz dinamica)
+  function mixCol(a, b, k) {
+    var ca = col3(a), cb = col3(b);
+    return ca.lerp(cb, k == null ? 0.5 : k);
+  }
+
   // posição 3D de uma unidade (centro do peito) / de uma célula
   function unitPos(uid, hFrac) {
     if (!R3) return new THREE.Vector3();
@@ -458,31 +518,39 @@ var JOGO = (typeof window !== 'undefined')
 
       case 'cast': {
         u = ev.uid ? unitPos(ev.uid, 0.72) : null;
-        var sp = (D.spells && D.spells[ev.spellId]) || ev.spell || null;
-        var fk = (sp && sp.fxKey) || ev.fxKey || 'bolt';
-        var el = (sp && sp.element) || ev.element || 'neutro';
+        var sp = (D.spells && D.spells[ev.spellId]) || ev.spell ||
+                 (JOGO.Fusion && JOGO.Fusion.spellById ?
+                    (function () { try { return JOGO.Fusion.spellById(ev.spellId); } catch (e) { return null; } })() : null);
+        var fk = (sp && sp.fxKey) || (sp && sp.fxShape) || ev.fxKey || 'bolt';
+        var els = spellElements(ev, sp);
+        var el = els[0], el2 = els[1] || null;
         col = ecol(el);
+        var col2 = el2 ? ecol(el2) : null;
         if (!u) break;
-        // carga na mão do conjurador
+        // carga na mão do conjurador (as duas cores quando é fusão)
         burst(u.x, u.y, u.z, 14, { color: col, speed: 1.6, life: 0.36, size: 0.26, grav: 0.6, spread: 0.3 });
+        if (col2) burst(u.x, u.y, u.z, 12, { color: col2, speed: 1.2, life: 0.46, size: 0.24, grav: 0.3, spread: 0.34 });
         var dest = (ev.x != null) ? cellPos(ev.x, ev.y, 0.7) : null;
         if (!dest) break;
         if (fk === 'melee' || fk === 'slam') {
           var hd = R3 && R3.hitDelay ? R3.hitDelay() : 0.3;
-          setTimeout(function () {
-            impact(dest, el, fk === 'slam' ? 1.5 : 1.0);
-          }, hd * 1000);
-        } else if (fk === 'beam') {
-          beam(u, dest, col);
-        } else if (fk === 'nova') {
-          nova(dest, col);
+          (function (d2, e1, e2, p) {
+            setTimeout(function () { impact(d2, e1, p, e2); }, hd * 1000);
+          })(dest, el, el2, fk === 'slam' ? 1.5 : 1.0);
+        } else if (fk === 'beam' || fk === 'line') {
+          beam(u, dest, col, col2);
+        } else if (fk === 'nova' || fk === 'ring' || fk === 'circle') {
+          nova(dest, col, col2);
         } else if (fk === 'heal') {
           healUp(dest, col);
+          if (col2) healUp(dest, col2);
         } else {
           launch(u, dest, {
-            color: col, kind: fk === 'arrow' ? 'arrow' : 'ball',
+            color: col, color2: col2, kind: fk === 'arrow' ? 'arrow' : 'ball',
             speed: fk === 'arrow' ? 34 : 22, arc: fk === 'arrow' ? 0.25 : 0.6,
-            onHit: function (pos) { impact(pos, el, 1.0); }
+            onHit: (function (e1, e2) {
+              return function (pos) { impact(pos, e1, 1.0, e2); };
+            })(el, el2)
           });
         }
         break;
@@ -604,22 +672,43 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // -------------------------------------------------------- efeitos compostos
-  function impact(pos, element, power) {
-    var col = ecol(element);
+  var SCORCH = { agua: '#123646', ar: '#3c3c52', terra: '#2a2413', fogo: '#241208', neutro: '#26262c' };
+  function impact(pos, element, power, element2) {
+    var col = ecol(element), col2 = element2 && element2 !== element ? ecol(element2) : null;
     burst(pos.x, Math.max(0.2, pos.y), pos.z, Math.round(26 * power), {
       color: col, speed: 5.2 * power, life: 0.55, size: 0.34, spread: 0.4
     });
+    if (col2) {
+      // segunda assinatura: mesma explosão, outra cor, outro ritmo
+      burst(pos.x, Math.max(0.2, pos.y), pos.z, Math.round(22 * power), {
+        color: col2, speed: 3.6 * power, life: 0.75, size: 0.30, spread: 0.5, grav: -1.2
+      });
+    }
     burst(pos.x, 0.15, pos.z, Math.round(16 * power), {
       color: '#ffffff', speed: 5.0 * power, life: 0.3, size: 0.24, flat: true, up: 0.25
     });
     shockRing(pos, col, 0.35, 2.4 * power, 0.42);
+    if (col2) shockRing(pos, col2, 0.30, 3.1 * power, 0.58);
     flash(new THREE.Vector3(pos.x, 0.8, pos.z), col, 26 * power, 0.34, 12 * power);
-    scorch(pos, element === 'agua' ? '#1a3a4a' : (element === 'ar' ? '#4a4a5a' : '#241208'), 2.0 * power, 4);
+    if (col2) flash(new THREE.Vector3(pos.x, 1.1, pos.z), col2, 20 * power, 0.46, 13 * power);
+    scorch(pos, SCORCH[element] || '#241208', 2.0 * power, 4);
     addShake(5 * power);
   }
-  FX.debugImpact = function (gx, gy, element, power) { impact(cellPos(gx, gy, 0.5), element, power || 1); };
+  FX.debugImpact = function (gx, gy, element, power, element2) {
+    impact(cellPos(gx, gy, 0.5), element, power || 1, element2);
+  };
+  FX.debugNova = function (gx, gy, e1, e2) { nova(cellPos(gx, gy, 0.3), ecol(e1), e2 ? ecol(e2) : null); };
+  FX.debugBeam = function (fx2, fy2, tx, ty, e1, e2) {
+    beam(cellPos(fx2, fy2, 1.0), cellPos(tx, ty, 1.0), ecol(e1), e2 ? ecol(e2) : null);
+  };
+  FX.debugLaunch = function (fx2, fy2, tx, ty, e1, e2) {
+    launch(cellPos(fx2, fy2, 1.0), cellPos(tx, ty, 0.8), {
+      color: ecol(e1), color2: e2 ? ecol(e2) : null,
+      onHit: function (pos) { impact(pos, e1, 1.0, e2); }
+    });
+  };
 
-  function beam(from, to, col) {
+  function beam(from, to, col, col2) {
     var n = 26;
     for (var i = 0; i <= n; i++) {
       var k = i / n;
@@ -630,16 +719,31 @@ var JOGO = (typeof window !== 'undefined')
         vx: (Math.random() - 0.5) * 0.8, vy: (Math.random() - 0.5) * 0.8, vz: (Math.random() - 0.5) * 0.8,
         life: 0.42, color: col, size: 0.46, grav: 0.2, drag: 2.4
       });
+      if (col2) {
+        // o segundo elemento espirala em torno do feixe
+        var a2 = k * 26;
+        spawn({
+          x: from.x + (to.x - from.x) * k + Math.cos(a2) * 0.4,
+          y: from.y + (to.y - from.y) * k + Math.sin(a2) * 0.4,
+          z: from.z + (to.z - from.z) * k,
+          vx: 0, vy: 0, vz: 0, life: 0.5, color: col2, size: 0.38, grav: 0.1, drag: 2.0
+        });
+      }
     }
     flash(to, col, 30, 0.35, 14);
+    if (col2) flash(from, col2, 18, 0.4, 10);
     shockRing(to, col, 0.3, 2.2, 0.4);
+    if (col2) shockRing(to, col2, 0.3, 3.0, 0.55);
     addShake(5);
   }
-  function nova(pos, col) {
+  function nova(pos, col, col2) {
     burst(pos.x, 0.3, pos.z, 90, { color: col, speed: 8.5, life: 0.8, size: 0.36, flat: true, up: 0.35 });
+    if (col2) burst(pos.x, 0.5, pos.z, 70, { color: col2, speed: 6.0, life: 1.0, size: 0.34, flat: true, up: 0.9 });
     shockRing(pos, col, 0.4, 5.2, 0.6);
+    if (col2) shockRing(pos, col2, 0.4, 6.4, 0.8);
     shockRing(pos, '#ffffff', 0.3, 3.6, 0.45);
     flash(new THREE.Vector3(pos.x, 1.0, pos.z), col, 55, 0.5, 22);
+    if (col2) flash(new THREE.Vector3(pos.x, 1.6, pos.z), col2, 42, 0.66, 24);
     addShake(11);
     freezeT = Math.max(freezeT, 0.08);
   }

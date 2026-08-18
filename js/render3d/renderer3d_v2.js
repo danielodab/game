@@ -63,12 +63,12 @@ var JOGO = (typeof window !== 'undefined')
   // Ambiente por tema (§7 — 6 calabouços). Céu/chão do hemisférico dão a
   // "sombra colorida" que faz a cena parecer desenho e não maquete cinza.
   var THEME_ENV = {
-    garden:   { fog: '#3d5c30', sky: '#a8c887', gnd: '#2c3c66', sun: '#fff0c2', sunI: 1.05, hemiI: 0.85, rim: '#a8ffc0' },
-    cistern:  { fog: '#1d5570', sky: '#7ec0da', gnd: '#20265c', sun: '#e2f4f8', sunI: 0.95, hemiI: 0.90, rim: '#7ef0d4' },
-    forge:    { fog: '#5e2510', sky: '#e09668', gnd: '#46205c', sun: '#ffd8a0', sunI: 1.00, hemiI: 0.82, rim: '#ff9a5a' },
-    scaffold: { fog: '#454a5c', sky: '#c8d2ea', gnd: '#3a3550', sun: '#eef7f5', sunI: 1.05, hemiI: 0.92, rim: '#cfe4ff' },
-    mine:     { fog: '#403322', sky: '#c8a878', gnd: '#2e2440', sun: '#ffe0a8', sunI: 0.92, hemiI: 0.80, rim: '#c9a227' },
-    heart:    { fog: '#332a52', sky: '#b49ce8', gnd: '#2a2044', sun: '#ffe6b8', sunI: 1.00, hemiI: 0.88, rim: '#ffd166' }
+    garden:   { fog: '#3d5c30', sky: '#a8c887', gnd: '#2c3c66', sun: '#fff0c2', sunI: 1.55, hemiI: 1.30, rim: '#a8ffc0' },
+    cistern:  { fog: '#1d5570', sky: '#7ec0da', gnd: '#20265c', sun: '#e2f4f8', sunI: 1.42, hemiI: 1.36, rim: '#7ef0d4' },
+    forge:    { fog: '#5e2510', sky: '#e09668', gnd: '#46205c', sun: '#ffd8a0', sunI: 1.50, hemiI: 1.24, rim: '#ff9a5a' },
+    scaffold: { fog: '#454a5c', sky: '#c8d2ea', gnd: '#3a3550', sun: '#eef7f5', sunI: 1.55, hemiI: 1.38, rim: '#cfe4ff' },
+    mine:     { fog: '#403322', sky: '#c8a878', gnd: '#2e2440', sun: '#ffe0a8', sunI: 1.38, hemiI: 1.20, rim: '#c9a227' },
+    heart:    { fog: '#332a52', sky: '#b49ce8', gnd: '#2a2044', sun: '#ffe6b8', sunI: 1.50, hemiI: 1.32, rim: '#ffd166' }
   };
   function envOf(theme) { return THEME_ENV[theme] || THEME_ENV.garden; }
 
@@ -117,6 +117,9 @@ var JOGO = (typeof window !== 'undefined')
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
   function safe(fn, dflt) { try { var r = fn(); return r == null ? dflt : r; } catch (e) { return dflt; } }
   function hexInt(c) { return M ? M.hexInt(c) : 0xffffff; }
+  // cor de cena: hex escrito a mao esta em sRGB; o three r147 (legacyMode)
+  // espera LINEAR nos materiais e nas luzes.
+  function col3(c) { return new THREE.Color(hexInt(c)).convertSRGBToLinear(); }
 
   // grid → mundo (centro do tabuleiro na origem)
   function wx(gx) { return (gx - (gridW - 1) / 2) * CELL; }
@@ -216,11 +219,11 @@ var JOGO = (typeof window !== 'undefined')
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     if (THREE.sRGBEncoding != null) renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.98;
+    renderer.toneMappingExposure = 1.14;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x101418);
-    scene.fog = new THREE.Fog(0x101418, 26, 90);
+    scene.background = col3(0x101418);
+    scene.fog = new THREE.Fog(col3(0x101418).getHex(), 26, 90);
 
     camera = new THREE.PerspectiveCamera(42, W / H, 0.5, 400);
 
@@ -281,10 +284,10 @@ var JOGO = (typeof window !== 'undefined')
   R.resize = onResize;
 
   function buildLights() {
-    lights.hemi = new THREE.HemisphereLight(0xa8c887, 0x2c3c66, 0.85);
+    lights.hemi = new THREE.HemisphereLight(col3('#a8c887'), col3('#2c3c66'), 1.30);
     scene.add(lights.hemi);
 
-    lights.sun = new THREE.DirectionalLight(0xfff0c2, 1.05);
+    lights.sun = new THREE.DirectionalLight(col3('#fff0c2'), 1.55);
     lights.sun.position.set(11, 20, 8);
     lights.sun.castShadow = true;
     lights.sun.shadow.mapSize.set(2048, 2048);
@@ -299,11 +302,11 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(lights.sun);
     scene.add(lights.sun.target);
 
-    lights.rim = new THREE.DirectionalLight(0xa8ffc0, 0.45);
+    lights.rim = new THREE.DirectionalLight(col3('#a8ffc0'), 0.70);
     lights.rim.position.set(-12, 9, -14);
     scene.add(lights.rim);
 
-    lights.fill = new THREE.AmbientLight(0xffffff, 0.16);
+    lights.fill = new THREE.AmbientLight(0xffffff, 0.30);
     scene.add(lights.fill);
   }
 
@@ -313,7 +316,7 @@ var JOGO = (typeof window !== 'undefined')
     try {
       composer = new THREE.EffectComposer(renderer);
       composer.addPass(new THREE.RenderPass(scene, camera));
-      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(W, H), 0.34, 0.70, 0.94);
+      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(W, H), 0.30, 0.62, 0.99);
       composer.addPass(bloomPass);
       composer.setSize(W, H);
     } catch (e) { composer = null; bloomPass = null; }
@@ -341,7 +344,7 @@ var JOGO = (typeof window !== 'undefined')
       skyDome.renderOrder = -1;
       scene.add(skyDome);
     }
-    var bot = new THREE.Color(hexInt(E.fog));
+    var bot = col3(E.fog);
     var top = bot.clone().multiplyScalar(0.28);
     skyDome.material.uniforms.uBot.value.copy(bot);
     skyDome.material.uniforms.uTop.value.copy(top);
@@ -352,15 +355,15 @@ var JOGO = (typeof window !== 'undefined')
     curTheme = theme;
     var E = envOf(theme);
     buildSky(E);
-    var fog = new THREE.Color(hexInt(E.fog));
+    var fog = col3(E.fog);
     scene.background = fog.clone();
     scene.fog.color = fog.clone();
-    lights.hemi.color = new THREE.Color(hexInt(E.sky));
-    lights.hemi.groundColor = new THREE.Color(hexInt(E.gnd));
+    lights.hemi.color = col3(E.sky);
+    lights.hemi.groundColor = col3(E.gnd);
     lights.hemi.intensity = E.hemiI;
-    lights.sun.color = new THREE.Color(hexInt(E.sun));
+    lights.sun.color = col3(E.sun);
     lights.sun.intensity = E.sunI;
-    lights.rim.color = new THREE.Color(hexInt(E.rim));
+    lights.rim.color = col3(E.rim);
   }
 
   // ================================================================ TABULEIRO
@@ -399,7 +402,7 @@ var JOGO = (typeof window !== 'undefined')
   // Um único material clonado por material de origem: mantém o merge por
   // material (poucas draw calls) e ainda permite tingir as paredes por tema.
   function retint(root, color, k, cache) {
-    var c = new THREE.Color(hexInt(color));
+    var c = col3(color);
     root.traverse(function (n) {
       if (!n.isMesh || !n.material) return;
       var mats = Array.isArray(n.material) ? n.material : [n.material];
@@ -500,7 +503,7 @@ var JOGO = (typeof window !== 'undefined')
 
     // marcador translúcido no topo do obstáculo BAIXO (§6: não tapa a visão)
     var capMat = new THREE.MeshBasicMaterial({
-      color: hexInt(pal.accent), transparent: true, opacity: 0.20,
+      color: col3(pal.accent), transparent: true, opacity: 0.20,
       depthWrite: false, side: THREE.DoubleSide
     });
     for (var c2 = 0; c2 < lowNodes.length; c2++) {
@@ -546,14 +549,14 @@ var JOGO = (typeof window !== 'undefined')
     var theme = themeOf(st);
     applyTheme(theme);
 
-    var floorMat1 = new THREE.MeshStandardMaterial({ color: hexInt(pal.floor1), roughness: 0.94, metalness: 0.0 });
-    var floorMat2 = new THREE.MeshStandardMaterial({ color: hexInt(pal.floor2), roughness: 0.94, metalness: 0.0 });
-    var decoMat = new THREE.MeshStandardMaterial({ color: hexInt(pal.primary), roughness: 0.88, metalness: 0.02 });
-    var wallMat = new THREE.MeshStandardMaterial({ color: hexInt(pal.wall), roughness: 0.9, metalness: 0.04 });
-    var lowMat = new THREE.MeshStandardMaterial({ color: hexInt(pal.lowWall), roughness: 0.88, metalness: 0.04 });
+    var floorMat1 = new THREE.MeshStandardMaterial({ color: col3(pal.floor1), roughness: 0.94, metalness: 0.0 });
+    var floorMat2 = new THREE.MeshStandardMaterial({ color: col3(pal.floor2), roughness: 0.94, metalness: 0.0 });
+    var decoMat = new THREE.MeshStandardMaterial({ color: col3(pal.primary), roughness: 0.88, metalness: 0.02 });
+    var wallMat = new THREE.MeshStandardMaterial({ color: col3(pal.wall), roughness: 0.9, metalness: 0.04 });
+    var lowMat = new THREE.MeshStandardMaterial({ color: col3(pal.lowWall), roughness: 0.88, metalness: 0.04 });
     // topo do obstáculo BAIXO: translúcido, para deixar claro que NÃO tapa a visão
     var lowTopMat = new THREE.MeshStandardMaterial({
-      color: hexInt(pal.accent), roughness: 0.5, metalness: 0.0,
+      color: col3(pal.accent), roughness: 0.5, metalness: 0.0,
       transparent: true, opacity: 0.34, depthWrite: false
     });
 
@@ -617,14 +620,14 @@ var JOGO = (typeof window !== 'undefined')
     var voidGeo = new THREE.PlaneGeometry(gridW * CELL + 40, gridH * CELL + 40);
     voidGeo.rotateX(-Math.PI / 2);
     var voidMesh = new THREE.Mesh(voidGeo, new THREE.MeshStandardMaterial({
-      color: hexInt(pal.voidColor), roughness: 1, metalness: 0
+      color: col3(pal.voidColor), roughness: 1, metalness: 0
     }));
     voidMesh.position.y = -HOLE_D;
     voidMesh.receiveShadow = true;
     boardG.add(voidMesh); boardMeshes.push(voidMesh);
 
     // borda: uma moldura baixa que dá "lugar" ao campo
-    var frameMat = new THREE.MeshStandardMaterial({ color: hexInt(pal.secondary), roughness: 0.95 });
+    var frameMat = new THREE.MeshStandardMaterial({ color: col3(pal.secondary), roughness: 0.95 });
     var fw = gridW * CELL, fh = gridH * CELL;
     var edges = [
       [0, -(fh / 2 + CELL * 0.6), fw + CELL * 2, CELL * 1.2],
@@ -679,14 +682,14 @@ var JOGO = (typeof window !== 'undefined')
       cam.panZ = wz((focus.y0 + focus.y1) / 2);
       // teto de 12 células: com salas de 23x19 mostrar tudo vira formigueiro.
       // O jogador afasta a câmera quando quiser o panorama.
-      needW = clamp((focus.x1 - focus.x0 + 4), 7, 12) * CELL;
-      needH = clamp((focus.y1 - focus.y0 + 4), 7, 12) * CELL;
+      needW = clamp((focus.x1 - focus.x0 + 3), 7, 11) * CELL;
+      needH = clamp((focus.y1 - focus.y0 + 3), 7, 11) * CELL;
     }
     var vfov = camera.fov * Math.PI / 180;
     var tanV = Math.tan(vfov / 2);
     // fatores empíricos: a inclinação achata a profundidade na tela
-    var fitV = (needH * 0.5) / tanV * 0.74;
-    var fitH = (needW * 0.5) / (tanV * Math.max(0.55, W / H)) * 0.92;
+    var fitV = (needH * 0.5) / tanV * 0.66;
+    var fitH = (needW * 0.5) / (tanV * Math.max(0.55, W / H)) * 0.86;
     var d = Math.max(fitV, fitH);
     // trava de legibilidade: célula nunca abaixo de ~44 px (retrato de celular)
     var minCellPx = Math.min(W, H) < 620 ? 46 : 40;
@@ -1299,7 +1302,7 @@ var JOGO = (typeof window !== 'undefined')
     var k = color + '|' + opacity;
     if (!ovMatCache[k]) {
       ovMatCache[k] = new THREE.MeshBasicMaterial({
-        color: hexInt(color), transparent: true, opacity: opacity,
+        color: col3(color), transparent: true, opacity: opacity,
         depthWrite: false, side: THREE.DoubleSide
       });
     }
@@ -1449,24 +1452,24 @@ var JOGO = (typeof window !== 'undefined')
       grp.position.set(wx(ev.x), 0, wz(ev.y));
 
       var disc = new THREE.Mesh(M.tileFlatGeo(), new THREE.MeshBasicMaterial({
-        color: hexInt(col), transparent: true, opacity: 0.42, depthWrite: false
+        color: col3(col), transparent: true, opacity: 0.30, depthWrite: false
       }));
       disc.position.y = 0.10; disc.scale.setScalar(0.9); disc.renderOrder = 5;
       grp.add(disc);
 
       var beam = new THREE.Mesh(
-        M.geo('evBeam', function () { return new THREE.CylinderGeometry(0.30, 0.46, 2.4, 12, 1, true); }),
-        new THREE.MeshBasicMaterial({ color: hexInt(col), transparent: true, opacity: 0.24,
+        M.geo('evBeam', function () { return new THREE.CylinderGeometry(0.16, 0.30, 1.7, 10, 1, true); }),
+        new THREE.MeshBasicMaterial({ color: col3(col), transparent: true, opacity: 0.13,
           depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
       );
-      beam.position.y = 1.2; beam.renderOrder = 6;
+      beam.position.y = 0.85; beam.renderOrder = 6;
       grp.add(beam);
 
       var icon = makeIconSprite(def.icon || ({ buff: '⚡', mystery: '?', portal: '@', drain: '×', fountain: '+' }[kind]), col);
-      icon.position.y = 1.5;
+      icon.position.y = 1.15;
       grp.add(icon);
 
-      var lite = new THREE.PointLight(hexInt(col), 0.9, 6, 2);
+      var lite = new THREE.PointLight(col3(col), 0.6, 5, 2);
       lite.position.y = 0.8;
       grp.add(lite);
 
@@ -1490,7 +1493,7 @@ var JOGO = (typeof window !== 'undefined')
     var tex = new THREE.CanvasTexture(cv);
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
     var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-    sp.scale.set(0.9, 0.9, 1);
+    sp.scale.set(0.66, 0.66, 1);
     sp.renderOrder = 21;
     return sp;
   }
@@ -1542,7 +1545,7 @@ var JOGO = (typeof window !== 'undefined')
       var g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       var mt = new THREE.PointsMaterial({
-        color: hexInt(pal.particle), size: 0.16, transparent: true, opacity: 0.62,
+        color: col3(pal.particle), size: 0.16, transparent: true, opacity: 0.62,
         depthWrite: false, sizeAttenuation: true
       });
       var pts = new THREE.Points(g, mt);
@@ -1551,8 +1554,8 @@ var JOGO = (typeof window !== 'undefined')
       weather.rain = { pts: pts, span: span };
       lights.hemi.intensity = envOf(curTheme).hemiI * 0.72;
       lights.sun.intensity = envOf(curTheme).sunI * 0.62;
-      scene.fog.color.lerp(new THREE.Color(hexInt('#3a6a86')), 0.32);
-      scene.background.lerp(new THREE.Color(hexInt('#24445a')), 0.32);
+      scene.fog.color.lerp(col3('#3a6a86'), 0.32);
+      scene.background.lerp(col3('#24445a'), 0.32);
     } else if (id === 'estiagem') {
       var n2 = 420;
       var p2 = new Float32Array(n2 * 3);
@@ -1564,18 +1567,18 @@ var JOGO = (typeof window !== 'undefined')
       var g2 = new THREE.BufferGeometry();
       g2.setAttribute('position', new THREE.BufferAttribute(p2, 3));
       var pts2 = new THREE.Points(g2, new THREE.PointsMaterial({
-        color: hexInt(pal.particle), size: 0.12, transparent: true, opacity: 0.55,
+        color: col3(pal.particle), size: 0.12, transparent: true, opacity: 0.55,
         depthWrite: false, blending: THREE.AdditiveBlending
       }));
       pts2.frustumCulled = false;
       weatherG.add(pts2);
       weather.motes = { pts: pts2, span: span, up: 0.5 };
-      lights.sun.color = new THREE.Color(hexInt('#ffb347'));
+      lights.sun.color = col3('#ffb347');
       lights.sun.intensity = envOf(curTheme).sunI * 1.30;
-      lights.hemi.color = new THREE.Color(hexInt('#ffcf8a'));
-      renderer.toneMappingExposure = 1.20;
-      scene.fog.color.lerp(new THREE.Color(hexInt('#71401c')), 0.35);
-      scene.background.lerp(new THREE.Color(hexInt('#7a4a20')), 0.32);
+      lights.hemi.color = col3('#ffcf8a');
+      renderer.toneMappingExposure = 1.30;
+      scene.fog.color.lerp(col3('#71401c'), 0.35);
+      scene.background.lerp(col3('#7a4a20'), 0.32);
     } else if (id === 'vendaval') {
       var n3 = 700;
       var p3 = new Float32Array(n3 * 3);
@@ -1587,14 +1590,14 @@ var JOGO = (typeof window !== 'undefined')
       var g3 = new THREE.BufferGeometry();
       g3.setAttribute('position', new THREE.BufferAttribute(p3, 3));
       var pts3 = new THREE.Points(g3, new THREE.PointsMaterial({
-        color: hexInt(pal.particle), size: 0.20, transparent: true, opacity: 0.42,
+        color: col3(pal.particle), size: 0.20, transparent: true, opacity: 0.42,
         depthWrite: false, blending: THREE.AdditiveBlending
       }));
       pts3.frustumCulled = false;
       weatherG.add(pts3);
       weather.gust = { pts: pts3, span: span };
-      lights.hemi.color = new THREE.Color(hexInt('#cfd8ff'));
-      scene.fog.color.lerp(new THREE.Color(hexInt('#4a4a68')), 0.28);
+      lights.hemi.color = col3('#cfd8ff');
+      scene.fog.color.lerp(col3('#4a4a68'), 0.28);
     } else if (id === 'tremor') {
       var n4 = 520;
       var p4 = new Float32Array(n4 * 3);
@@ -1606,14 +1609,14 @@ var JOGO = (typeof window !== 'undefined')
       var g4 = new THREE.BufferGeometry();
       g4.setAttribute('position', new THREE.BufferAttribute(p4, 3));
       var pts4 = new THREE.Points(g4, new THREE.PointsMaterial({
-        color: hexInt(pal.particle), size: 0.15, transparent: true, opacity: 0.50, depthWrite: false
+        color: col3(pal.particle), size: 0.15, transparent: true, opacity: 0.50, depthWrite: false
       }));
       pts4.frustumCulled = false;
       weatherG.add(pts4);
       weather.motes = { pts: pts4, span: span, up: 0.12 };
-      scene.fog.color.lerp(new THREE.Color(hexInt('#5a4a2a')), 0.26);
+      scene.fog.color.lerp(col3('#5a4a2a'), 0.26);
     } else {
-      renderer.toneMappingExposure = 0.98;
+      renderer.toneMappingExposure = 1.14;
       applyThemeLights();
     }
     syncSky();
@@ -1625,12 +1628,12 @@ var JOGO = (typeof window !== 'undefined')
   }
   function applyThemeLights() {
     var E = envOf(curTheme);
-    lights.hemi.color = new THREE.Color(hexInt(E.sky));
-    lights.hemi.groundColor = new THREE.Color(hexInt(E.gnd));
+    lights.hemi.color = col3(E.sky);
+    lights.hemi.groundColor = col3(E.gnd);
     lights.hemi.intensity = E.hemiI;
-    lights.sun.color = new THREE.Color(hexInt(E.sun));
+    lights.sun.color = col3(E.sun);
     lights.sun.intensity = E.sunI;
-    var fog = new THREE.Color(hexInt(E.fog));
+    var fog = col3(E.fog);
     scene.fog.color.copy(fog);
     scene.background.copy(fog);
     syncSky();
@@ -2083,9 +2086,9 @@ var JOGO = (typeof window !== 'undefined')
     for (var e = 0; e < evNodes.length; e++) {
       var g = evNodes[e], ud = g.userData;
       var p = 0.5 + 0.5 * Math.sin(nowT * 2.6 + ud.ph);
-      ud.beam.material.opacity = 0.16 + p * 0.18;
-      ud.icon.position.y = 1.5 + p * 0.12;
-      ud.lite.intensity = 0.6 + p * 0.8;
+      ud.beam.material.opacity = 0.08 + p * 0.10;
+      ud.icon.position.y = 1.15 + p * 0.10;
+      ud.lite.intensity = 0.4 + p * 0.5;
       g.rotation.y = nowT * 0.6;
     }
 

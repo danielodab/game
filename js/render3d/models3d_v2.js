@@ -64,6 +64,10 @@ var JOGO = (typeof window !== 'undefined')
     return isNaN(n) ? 0xffffff : n;
   }
   M.hexInt = hexInt;
+  // three r147 roda em legacyMode: o material do glTF guarda cor LINEAR, mas
+  // um hex escrito a mao esta em sRGB. Sem converter, tudo sai lavado.
+  function col3(c) { return new THREE.Color(hexInt(c)).convertSRGBToLinear(); }
+  M.col3 = col3;
   function hashStr(s) {
     var h = 2166136261; s = String(s || '');
     for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }
@@ -319,7 +323,14 @@ var JOGO = (typeof window !== 'undefined')
   // altura natural do modelo (para normalizar o porte entre acervos diferentes)
   function naturalHeight(scene) {
     scene.updateMatrixWorld(true);
-    var box = new THREE.Box3().setFromObject(scene);
+    var box = new THREE.Box3(), tmp = new THREE.Box3(), found = false;
+    scene.traverse(function (n) {
+      if (!n.isSkinnedMesh || !n.geometry) return;
+      if (!n.geometry.boundingBox) n.geometry.computeBoundingBox();
+      tmp.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+      if (!found) { box.copy(tmp); found = true; } else box.union(tmp);
+    });
+    if (!found) box.setFromObject(scene);
     var h = box.max.y - box.min.y;
     return (isFinite(h) && h > 0.01) ? h : 1.8;
   }
@@ -372,7 +383,7 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------- tint/material
   function tintMaterials(root, color, strength, emissive, emiI) {
     var out = [];
-    var col = new THREE.Color(hexInt(color));
+    var col = col3(color);
     root.traverse(function (n) {
       if (!n.isMesh && !n.isSkinnedMesh) return;
       var mats = Array.isArray(n.material) ? n.material : [n.material];
@@ -384,10 +395,10 @@ var JOGO = (typeof window !== 'undefined')
         c.color = c.color ? c.color.clone() : new THREE.Color(0xffffff);
         c.color.lerp(col, strength == null ? 0.45 : strength);
         if (emissive != null) {
-          c.emissive = new THREE.Color(hexInt(emissive));
+          c.emissive = col3(emissive);
           c.emissiveIntensity = emiI == null ? 0.10 : emiI;
           c.__baseEmiI = c.emissiveIntensity;
-          c.__baseEmiHex = hexInt(emissive);
+          c.__baseEmiHex = c.emissive.getHex();
         }
         c.__baseOpacity = c.opacity != null ? c.opacity : 1;
         cloned.push(c); out.push(c);
@@ -417,7 +428,7 @@ var JOGO = (typeof window !== 'undefined')
     if (lb && (BULK[b] || 0) > (BULK[a] || 0)) { host = b; guest = a; }
     var lh = classLook(host), lg = classLook(guest);
     return {
-      model: lh.model, show: lh.show.slice(), scale: (lh.scale || 1) * 1.24,
+      model: lh.model, show: lh.show.slice(), scale: 1.26,
       tint: lh.tint, accent: lg ? lg.accent : lh.accent,
       mixTint: lg ? lg.tint : null,
       graft: lg ? { model: lg.model, mesh: lg.weapon, bone: 'handslot.l' } : null,
@@ -436,7 +447,7 @@ var JOGO = (typeof window !== 'undefined')
     return {
       model: base.model, show: (base.show || []).slice(),
       proc: !!base.proc, procId: defId,
-      scale: (base.scale || 1) * (boss ? 1.35 : 1),
+      scale: (base.scale || 1),          // o porte de chefe ja vem da altura-alvo
       tint: M.elementColor((md && md.element) || 'neutro'),
       accent: M.elementColor((md && md.element) || 'neutro'),
       family: md && md.family, boss: boss
@@ -570,11 +581,11 @@ var JOGO = (typeof window !== 'undefined')
     var mats = tintMaterials(model, baseTint, look.fusion ? 0.52 : 0.62,
                              eCol, elems[0] === 'neutro' ? 0.04 : 0.10);
     if (look.fusion && look.mixTint) {
-      var mix = new THREE.Color(hexInt(look.mixTint));
+      var mix = col3(look.mixTint);
       for (var mi = 0; mi < mats.length; mi++) mats[mi].color.lerp(mix, 0.34);
     }
     if (elems.length > 1) {
-      var e2 = new THREE.Color(hexInt(M.elementColor(elems[1])));
+      var e2 = col3(M.elementColor(elems[1]));
       for (var mj = 0; mj < mats.length; mj++) {
         mats[mj].emissive.lerp(e2, 0.5);
         mats[mj].emissiveIntensity = 0.16;
@@ -585,7 +596,7 @@ var JOGO = (typeof window !== 'undefined')
     // PORTE NORMALIZADO: cada acervo nasce numa escala diferente; medimos a
     // altura natural e ajustamos para a altura-alvo do papel. Assim um lobo do
     // Quaternius e um esqueleto do KayKit convivem sem um virar brinquedo.
-    var targetH = look.classId ? 2.05 : (look.pet ? 1.05 : (look.fusion ? 2.55 : 1.80));
+    var targetH = look.classId ? 2.05 : (look.pet ? 1.20 : (look.fusion ? 2.55 : 1.80));
     if (opts.boss || look.boss) targetH = 2.95;
     var natural = src.natural || 1.8;
     var scale = (targetH / natural) * (look.scale || 1) * (opts.scale || 1);

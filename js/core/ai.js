@@ -36,6 +36,9 @@ var JOGO = (typeof window !== 'undefined')
  *  - GANHO ELEMENTAL (v2.2): o valor de um feitiço de dano usa o MESMO
  *    `Engine.elementalBonus` da engine, então a IA prefere naturalmente os
  *    feitiços do próprio caminho elemental — sem regra ad hoc.
+ *  - FÚRIA DA SALA (v2.3): dano usa `Engine.furyPower` e cura é escalada por
+ *    `Engine.healScale`. Assim, quando a sala esquenta, a IA para sozinha de
+ *    gastar turno numa cura que já não cura — de novo, sem regra ad hoc.
  * ==========================================================================*/
 
 (function () {
@@ -140,12 +143,13 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   }
 
-  // v2.2: `elemBonus` é o `elemPower` do conjurador quando o feitiço é do
-  // elemento dele — o mesmo número que a engine soma ao poder. Sem ele a IA
-  // subestimaria justamente os feitiços do próprio caminho elemental.
-  function expectDamage(unit, victim, eff, elemBonus) {
+  // `extraPower` é o que a engine soma ao poder base nesta conjuração: o
+  // `elemPower` quando o feitiço é do elemento do conjurador (v2.2) e a fúria da
+  // sala (v2.3). Sem isso a IA subestimaria os feitiços do próprio caminho
+  // elemental e não perceberia que a sala enfurecida a deixou letal.
+  function expectDamage(unit, victim, eff, extraPower) {
     var avg = (eff.min + eff.max) / 2;
-    var power = E().effPower(unit) + (elemBonus || 0);
+    var power = E().effPower(unit) + (extraPower || 0);
     var resist = E().effResist(victim, eff.element);
     var marks = E().markMultiplier ? E().markMultiplier(victim) : 1;
     return Math.max(0, avg * (100 + power) / 100 * (100 - resist) / 100 * marks);
@@ -198,8 +202,11 @@ var JOGO = (typeof window !== 'undefined')
 
     var effs = spell.effects || [];
     var value = 0;
-    // v2.2: bônus elemental do conjurador para ESTE feitiço (0 se não bater)
-    var elemBonus = E().elementalBonus ? E().elementalBonus(unit, spell) : 0;
+    // v2.2/v2.3: o que a engine somará ao poder nesta conjuração, e o quanto a
+    // fúria da sala já encolheu a cura (curar por 0 não pode valer pontos).
+    var elemBonus = (E().elementalBonus ? E().elementalBonus(unit, spell) : 0) +
+                    (E().furyPower ? E().furyPower(state, unit) : 0);
+    var healScale = E().healScale ? E().healScale(state) : 1;
     for (var e = 0; e < effs.length; e++) {
       var eff = effs[e];
       var t, u2, dmg;
@@ -215,7 +222,9 @@ var JOGO = (typeof window !== 'undefined')
               if (dmg >= u2.hp + u2.shield) value += 40; // abate
               value += (1 - u2.hp / u2.hpMax) * 8;      // prefere feridos
               value -= weatherBiasFor(ctx, u2) * 2;     // v2: clima já o castiga
-              if (eff.lifesteal) value += Math.min(dmg / 2, unit.hpMax - unit.hp) * 0.6;
+              if (eff.lifesteal) {
+                value += Math.min((dmg / 2) * healScale, unit.hpMax - unit.hp) * 0.6;
+              }
             } else {
               value -= dmg * 1.6; // fogo amigo
             }
@@ -233,7 +242,7 @@ var JOGO = (typeof window !== 'undefined')
         case 'heal':
           for (t = 0; t < unitsHit.length; t++) {
             u2 = unitsHit[t];
-            var healed = Math.min((eff.min + eff.max) / 2, u2.hpMax - u2.hp);
+            var healed = Math.min(((eff.min + eff.max) / 2) * healScale, u2.hpMax - u2.hp);
             if (u2.side === unit.side) value += healed * (ctx.role === 'support' ? 1.3 : 0.9);
             else value -= healed;
           }
@@ -242,7 +251,8 @@ var JOGO = (typeof window !== 'undefined')
           for (t = 0; t < unitsHit.length; t++) {
             u2 = unitsHit[t];
             if (u2.side !== unit.side) continue;
-            value += Math.min(((eff.min + eff.max) / 2) * eff.duration, u2.hpMax - u2.hp) * 0.6;
+            value += Math.min(((eff.min + eff.max) / 2) * eff.duration * healScale,
+                              u2.hpMax - u2.hp) * 0.6;
           }
           break;
         case 'shield':

@@ -49,18 +49,7 @@
   'use strict';
 
   var passed = 0, failed = 0, failures = [], notes = [];
-  var autoPlayDraws = [];   // empates por sustentação no auto-play (ver autoPlay)
   var resultsEl = document.getElementById('results');
-
-  // Um empate não quebra a suíte, mas nunca fica escondido: vira nota no DOM e
-  // em TEST_RESULTS, para o balanceamento saber exatamente onde olhar.
-  function reportDraws() {
-    if (!autoPlayDraws.length) return;
-    notes.push('EMPATES por sustentação (' + autoPlayDraws.length + ', só em grupos SOLO, ' +
-      'teto de 300 turnos): ' + autoPlayDraws.join(', ') +
-      '. Nesses casos o motor roda sem travar e os dois lados trocam dano — o que ' +
-      'não fecha é o balanceamento (sala com cura sustentada contra um herói só).');
-  }
 
   function report(name, ok, msg) {
     var div = document.createElement('div');
@@ -2554,6 +2543,158 @@
       ok(used, 'planejou usar o feitiço de item');
     });
 
+    // ============================== 14-B. FÚRIA PROGRESSIVA DA SALA (v2.3)
+    section('14-B — Fúria progressiva da sala (fim dos empates por sustentação)');
+
+    // Roda `fn` com uma configuração de fúria própria e devolve o padrão depois.
+    function withFury(cfg, fn) {
+      var saved = E.ROOM_FURY;
+      var savedData = (D.leveling || {}).roomFury;
+      if (D.leveling) delete D.leveling.roomFury;   // o padrão da engine manda no teste
+      E.ROOM_FURY = cfg;
+      try { fn(); } finally {
+        E.ROOM_FURY = saved;
+        if (D.leveling && savedData !== undefined) D.leveling.roomFury = savedData;
+      }
+    }
+
+    t('fúria: não existe antes de afterRound', function () {
+      withFury({ afterRound: 10, powerPerRound: 10, healCutPerRound: 0.2, maxRounds: 40 }, function () {
+        var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+        st.round = 1;
+        var f = E.furyOf(st);
+        eq(f.rounds, 0, 'nenhuma rodada de fúria');
+        eq(f.power, 0, 'sem poder extra');
+        eq(f.healScale, 1, 'cura inteira');
+        st.round = 10;
+        eq(E.furyOf(st).rounds, 0, 'na rodada do limiar ainda não');
+      });
+    });
+
+    t('fúria: cresce por rodada e o poder é só do lado INIMIGO', function () {
+      withFury({ afterRound: 10, powerPerRound: 10, healCutPerRound: 0.2, maxRounds: 99 }, function () {
+        var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+        var h = byHero(st, 't-h1'), d = byDef(st, 't-dummy', 0);
+        st.round = 13;
+        var f = E.furyOf(st);
+        eq(f.rounds, 3, '3 rodadas acima do limiar');
+        eq(f.power, 30, '3 * 10 de poder');
+        eq(E.furyPower(st, d), 30, 'o inimigo ganha o poder');
+        eq(E.furyPower(st, h), 0, 'o herói NÃO ganha');
+      });
+    });
+
+    t('fúria: o poder extra entra de fato na conta de dano do inimigo', function () {
+      withFury({ afterRound: 10, powerPerRound: 10, healCutPerRound: 0, maxRounds: 99 }, function () {
+        var st = arena(0, { a: 't-foe', b: 't-dummy' });
+        var h = byHero(st, 't-h1'), foe = byDef(st, 't-foe');
+        foe.pa = 30;
+        var hp0 = h.hp;
+        E.cast(st, foe.uid, 't-mon-nuke10', h.x, h.y);
+        eq(hp0 - h.hp, 10, 'sem fúria: 10 puros');
+        st.round = 15;                       // 5 rodadas de fúria => +50 de poder
+        hp0 = h.hp;
+        E.cast(st, foe.uid, 't-mon-nuke10', h.x, h.y);
+        eq(hp0 - h.hp, 15, 'com fúria: 10 * (100+50)/100 = 15');
+      });
+    });
+
+    t('fúria: corta a cura dos DOIS lados e o piso é zero', function () {
+      withFury({ afterRound: 10, powerPerRound: 0, healCutPerRound: 0.25, maxRounds: 99 }, function () {
+        var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+        var h = byHero(st, 't-h1'), d = byDef(st, 't-dummy', 0);
+        h.hp = 10; d.hp = 10;
+        st.round = 12;                       // 2 rodadas => corte de 50%
+        eq(E.healScale(st), 0.5, 'cura pela metade');
+        eq(E.applyHeal(st, h, 20), 10, 'herói: 20 vira 10');
+        eq(E.applyHeal(st, d, 20), 10, 'inimigo: 20 vira 10 também');
+        st.round = 14;                       // 4 rodadas => corte de 100%
+        eq(E.healScale(st), 0, 'cura zerada');
+        h.hp = 10;
+        eq(E.applyHeal(st, h, 20), 0, 'nada de cura');
+        st.round = 30;                       // muito além: piso, nunca negativo
+        eq(E.healScale(st), 0, 'o piso é zero, não negativo');
+      });
+    });
+
+    t('fúria: o corte vale para heal, regen e roubo de vida (tudo passa por applyHeal)', function () {
+      withFury({ afterRound: 1, powerPerRound: 0, healCutPerRound: 0.5, maxRounds: 99 }, function () {
+        var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+        var h = byHero(st, 't-h1');
+        h.hp = h.hpMax - 100;
+        st.round = 2;                        // 1 rodada => metade
+        eq(E.healScale(st), 0.5, 'metade');
+        var hp0 = h.hp;
+        E.cast(st, h.uid, 't-heal20', h.x, h.y);
+        eq(h.hp - hp0, 10, 'heal de 20 cura 10');
+      });
+    });
+
+    t('fúria: emite o evento fury a cada rodada acima do limiar', function () {
+      withFury({ afterRound: 2, powerPerRound: 10, healCutPerRound: 0.1, maxRounds: 99 }, function () {
+        var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+        var seen = [];
+        for (var g = 0; g < 60 && st.round < 5; g++) {
+          drain();
+          E.endTurn(st);
+          var evs = drain();
+          for (var i2 = 0; i2 < evs.length; i2++) {
+            if (evs[i2].type === 'fury') seen.push(evs[i2].round + ':' + evs[i2].power);
+          }
+        }
+        ok(seen.length > 0, 'houve evento fury');
+        eq(seen[0], '3:10', 'primeira fúria na rodada 3, com +10 de poder');
+        ok(seen.indexOf('4:20') >= 0, 'na rodada 4 já são +20');
+      });
+    });
+
+    t('fúria: maxRounds encerra a batalha como DERROTA, com evento próprio', function () {
+      withFury({ afterRound: 2, powerPerRound: 5, healCutPerRound: 0.2, maxRounds: 6 }, function () {
+        var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+        var all = [];
+        for (var g = 0; g < 200 && st.phase === 'playing'; g++) {
+          drain();
+          E.endTurn(st);
+          all = all.concat(drain());
+        }
+        eq(st.phase, 'lost', 'a sala cobra a demora: derrota');
+        var to = findEv(all, 'furyTimeout');
+        ok(!!to, 'evento furyTimeout');
+        eq(to.maxRounds, 6, 'teto informado no evento');
+        var end = findEv(all, 'battleEnd');
+        ok(!!end, 'evento battleEnd');
+        eq(end.winner, 'enemy', 'vitória do lado inimigo');
+        eq(end.reason, 'fury', 'motivo declarado');
+      });
+    });
+
+    t('fúria: numa luta normal (curta) nada disso aparece', function () {
+      var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+      drain();
+      var h = byHero(st, 't-h1');
+      var d = byDef(st, 't-dummy', 0);
+      d.hp = 1;
+      E.cast(st, h.uid, 't-nuke100', d.x, d.y);
+      var evs = drain();
+      ok(!findEv(evs, 'fury'), 'nenhum evento de fúria');
+      eq(E.furyOf(st).power, 0, 'sem poder de fúria na rodada 1');
+      eq(E.healScale(st), 1, 'cura intacta');
+    });
+
+    t('fúria: DATA.leveling.roomFury tem prioridade sobre o padrão da engine', function () {
+      var L = D.leveling = D.leveling || {};
+      var saved = L.roomFury;
+      L.roomFury = { afterRound: 3, powerPerRound: 100, healCutPerRound: 1, maxRounds: 99 };
+      try {
+        var st = arena(0, { a: 't-dummy', b: 't-dummy' });
+        st.round = 5;
+        eq(E.furyOf(st).power, 200, 'usou o dado, não o padrão');
+        eq(E.healScale(st), 0, 'corte do dado');
+      } finally {
+        if (saved === undefined) delete L.roomFury; else L.roomFury = saved;
+      }
+    });
+
     // ================================================== 15. AUTO-PLAY
     section('15 — Auto-play IA × IA nas salas reais');
 
@@ -2714,15 +2855,79 @@
             t('AUTO-PLAY IA×IA (dupla nível 30 + pets): ' + dungeonId + ' sala ' + roomIdx, function () {
               autoPlay(dungeonId, roomIdx, buildRealParty(30, AUTO_ELEMENTS, true, 2, off));
             });
-            // SOLO: um herói só contra a sala inteira pode empatar por
-            // sustentação (sala com curandeiro vs. classe que se cura). É
-            // resultado de balanceamento — o motor só precisa não travar.
             t('AUTO-PLAY IA×IA (herói SOLO nível 15): ' + dungeonId + ' sala ' + roomIdx, function () {
-              autoPlay(dungeonId, roomIdx, buildRealParty(15, AUTO_ELEMENTS, false, 1, off + 3), false);
+              autoPlay(dungeonId, roomIdx, buildRealParty(15, AUTO_ELEMENTS, false, 1, off + 3));
             });
           })(realDungeons[dd].id, rr, dd * 2);
         }
       }
+
+      // ---------------------------------------------------------------------
+      // VARREDURA ANTI-EMPATE (v2.3). Antes da fúria da sala, duplas com
+      // curandeira nos calabouços rasos sustentavam mais do que os monstros
+      // machucavam e a batalha nunca fechava — inclusive `sumo + curandeira`,
+      // que é a dupla com que o jogador COMEÇA o jogo. Estas varreduras rodam
+      // no nível 1 e só com os feitiços base (a configuração mais dura) e
+      // exigem que TODA batalha resolva.
+      function pairParty(classA, classB) {
+        var out = [], ids = [classA, classB];
+        for (var n = 0; n < ids.length; n++) {
+          var cls = D.classes[ids[n]];
+          if (!cls) return null;
+          out.push({ heroId: 'sw-h' + n, classId: ids[n], element: 'neutro', level: 1,
+                     spells: (cls.baseSpells || []).slice(), pet: null, items: {} });
+        }
+        return out;
+      }
+      function sweepPair(classA, classB) {
+        if (!pairParty(classA, classB)) { notes.push('varredura pulada: classe ausente'); return; }
+        var stuck = [];
+        for (var d2 = 0; d2 < realDungeons.length; d2++) {
+          for (var r2 = 0; r2 < realDungeons[d2].rooms.length; r2++) {
+            E.events.length = 0;
+            var party = pairParty(classA, classB);
+            var st = E.createBattle(realDungeons[d2].id, r2, party);
+            var cap = turnCapFor(st);
+            var turns = 0;
+            while (st.phase === 'playing' && turns < cap) {
+              var u = E.activeUnit(st);
+              if (!u) break;
+              var plan = JOGO.AI.planTurn(st, u.uid);
+              for (var a2 = 0; a2 < plan.length && st.phase === 'playing'; a2++) {
+                if (plan[a2].action === 'move') E.move(st, u.uid, plan[a2].x, plan[a2].y);
+                else if (plan[a2].action === 'cast') E.cast(st, u.uid, plan[a2].spellId, plan[a2].x, plan[a2].y);
+                else break;
+              }
+              if (st.phase === 'playing') E.endTurn(st);
+              turns++;
+              E.events.length = 0;
+            }
+            if (st.phase === 'playing') {
+              stuck.push(realDungeons[d2].id + '[' + r2 + '] rodada ' + st.round);
+            }
+          }
+        }
+        eq(stuck.length, 0, classA + '+' + classB + ' empatou em: ' + stuck.join(', '));
+      }
+
+      t('VARREDURA anti-empate: sumo + curandeira (a dupla INICIAL) nas 18 salas', function () {
+        sweepPair('sumo', 'curandeira');
+      });
+      t('VARREDURA anti-empate: curandeira + curandeira nas 18 salas', function () {
+        sweepPair('curandeira', 'curandeira');
+      });
+      t('VARREDURA anti-empate: curandeira + arqueiro nas 18 salas', function () {
+        sweepPair('curandeira', 'arqueiro');
+      });
+      t('VARREDURA anti-empate: bruxo + curandeira nas 18 salas', function () {
+        sweepPair('bruxo', 'curandeira');
+      });
+      t('VARREDURA anti-empate: espadachim + curandeira nas 18 salas', function () {
+        sweepPair('espadachim', 'curandeira');
+      });
+      t('VARREDURA anti-empate: sumo + sumo nas 18 salas', function () {
+        sweepPair('sumo', 'sumo');
+      });
 
       // ADENDO v2.1: a dupla que se funde vira UMA unidade — e isso não pode
       // ser lido como derrota. Com dados reais, roda a batalha inteira em que
@@ -2785,16 +2990,25 @@
       });
     }
 
-    // `mustClose` (padrão) exige que a batalha termine. Um EMPATE por sustentação
-    // (o lado que cura mais do que o outro machuca) é resultado legítimo de
-    // balanceamento, não defeito do motor — mas só é aceito onde declarado, e
-    // ainda assim precisa provar que a batalha ANDOU: rodadas passaram, houve
-    // dano dos dois lados e nunca faltou unidade ativa. Congelamento continua FALHA.
-    function autoPlay(dungeonId, roomIdx, party, mustClose) {
+    // Com a FÚRIA DA SALA (v2.3) não existe mais empate aceitável: toda batalha
+    // tem de fechar, em qualquer configuração. Bater o teto é FALHA, sem exceção.
+    //
+    // O teto é medido em TURNOS, mas a garantia do motor é em RODADAS (a fúria
+    // encerra em `maxRounds`). Numa sala de chefe com invocações a ordem chega a
+    // ~23 unidades, e aí uma rodada custa mais de 20 turnos: um teto fixo de 300
+    // turnos cortaria a batalha na rodada 24, ANTES da garantia agir, e acusaria
+    // de empate algo que o motor fecharia. Por isso o teto é derivado do tamanho
+    // real da ordem — assim o teste mede a garantia, não o próprio arbítrio.
+    function turnCapFor(st) {
+      var cfg = E.furyConfig ? E.furyConfig() : { maxRounds: 40 };
+      return ((cfg.maxRounds || 40) + 3) * (st.order.length + 4) + 100;
+    }
+    function autoPlay(dungeonId, roomIdx, party) {
       E.events.length = 0;
       var st = E.createBattle(dungeonId, roomIdx, party);
+      var cap = turnCapFor(st);
       var turns = 0;
-      while (st.phase === 'playing' && turns < 300) {
+      while (st.phase === 'playing' && turns < cap) {
         var u = E.activeUnit(st);
         ok(!!u, 'sempre há unidade ativa');
         var plan = JOGO.AI.planTurn(st, u.uid);
@@ -2819,34 +3033,20 @@
         E.events.length = 0;
       }
       console.log('AUTO-PLAY ' + dungeonId + '[' + roomIdx + ']: ' +
-        (st.phase === 'playing' ? 'EMPATE no teto de 300 turnos' : st.phase + ' em ' + turns + ' turnos'));
-      if (mustClose === false && st.phase === 'playing') {
-        // empate declarado: exige PROGRESSO, não só ausência de exceção
-        ok(st.round > 10, 'o empate passou por muitas rodadas (round ' + st.round + ')');
-        var hurtPlayer = false, hurtEnemy = false;
-        for (var z = 0; z < st.units.length; z++) {
-          var uz = st.units[z];
-          if (uz.offBoard || uz.kind === 'summon') continue;
-          if (uz.hp < uz.hpMax || !uz.alive) {
-            if (uz.side === 'player') hurtPlayer = true; else hurtEnemy = true;
-          }
-        }
-        ok(hurtPlayer && hurtEnemy, 'os dois lados trocaram dano (não é congelamento)');
-        autoPlayDraws.push(dungeonId + '[' + roomIdx + ']');
-        return;
-      }
+        (st.phase === 'playing' ? 'EMPATE no teto de ' + cap + ' turnos'
+                                : st.phase + ' em ' + turns + ' turnos / rodada ' + st.round));
       // O teto é rede de segurança, não resultado aceitável: uma batalha que não
-      // fecha em 300 turnos é impasse da IA ou laço do motor — e isso é FALHA.
+      // fecha em 300 turnos é empate por sustentação, impasse da IA ou laço do
+      // motor — e a fúria da sala existe justamente para que isso não aconteça.
       ok(st.phase !== 'playing',
-         'a batalha fecha sozinha (bateu o teto de 300 turnos em ' + dungeonId +
-         '[' + roomIdx + '])');
+         'a batalha fecha sozinha (bateu o teto de ' + cap + ' turnos, rodada ' +
+         st.round + ', em ' + dungeonId + '[' + roomIdx + '])');
     }
   }
 
   // ------------------------------------------------------------ executa
   try {
     run();
-    reportDraws();
   } catch (e) {
     failed++;
     failures.push('ERRO FATAL DA SUÍTE: ' + e.message);

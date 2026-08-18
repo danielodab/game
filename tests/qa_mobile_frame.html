@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — moldura 390×844 para captura de QA</title>
+<!--
+  Ferramenta do AGENTE REVISOR (QA). O Chrome headless desta máquina ignora
+  --window-size e entrega um viewport de 504×692, o que corta a captura em vez
+  de reduzir o layout. Esta moldura embute a página alvo num iframe de exatamente
+  390×844 (retrato de celular), então a captura mostra o layout mobile REAL.
+  Uso: qa_mobile_frame.html?u=<url relativa codificada>&w=390&h=844
+-->
+<style>
+  html, body { margin: 0; background: #14171c; }
+  body { display: flex; align-items: flex-start; justify-content: flex-start; }
+  iframe { border: 0; display: block; background: #0b0d10; }
+</style>
+</head>
+<body>
+<script>
+(function () {
+  var q = location.search;
+  function p(name, def) {
+    var m = q.match(new RegExp('[?&]' + name + '=([^&]*)'));
+    return m ? decodeURIComponent(m[1]) : def;
+  }
+  var f = document.createElement('iframe');
+  f.width = p('w', '390');
+  f.height = p('h', '844');
+  f.src = p('u', '../index.html');
+  document.body.appendChild(f);
+})();
+</script>
+</body>
+</html>
