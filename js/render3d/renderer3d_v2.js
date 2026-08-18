@@ -1387,7 +1387,19 @@ var JOGO = (typeof window !== 'undefined')
       var want, opt = null;
       if (v.deathK > 0) { want = 'die'; opt = { loop: false, fade: 0.12 }; }
       else if (v.animLock > 0) { want = v.anim; }
-      else if (v.walking > 0) { want = 'run'; opt = { timeScale: 1.12 }; }
+      else if (v.walking > 0) {
+        // LOCOMOÇÃO: o MODELO decide qual clipe responde por "andando" (§
+        // Models3D2.locomotion). Pedir 'run' na marra fazia o sapo — que só
+        // tem Jump — cair no clipe de parado e deslizar pelo tabuleiro.
+        var lm = ud.locomotion ? ud.locomotion() : null;
+        want = lm ? lm.action : 'run';
+        if (lm && !lm.cycle && lm.dur > 0) {
+          // arco único (pulo): um pulo por célula andada
+          opt = { timeScale: clamp(lm.dur * MOVE_RATE, 0.7, 2.4) };
+        } else {
+          opt = { timeScale: 1.12 };
+        }
+      }
       else if (stt.root) { want = 'blocking'; }
       else if (stt.taunt && u.side === 'enemy') { want = 'taunt'; }
       else want = 'idle';

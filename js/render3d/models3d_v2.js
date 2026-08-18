@@ -81,7 +81,7 @@ var JOGO = (typeof window !== 'undefined')
   // O renderizador pede 'attack'; aqui decidimos qual dos 76–95 clipes do
   // KayKit (ou dos 3–13 do Quaternius) responde por isso naquele modelo.
   var KAYKIT_ACTIONS = {
-    idle: 'Idle', walk: 'Walking_A', run: 'Running_A',
+    idle: 'Idle', walk: 'Walking_A', run: 'Running_A', fly: '',
     attack: '1H_Melee_Attack_Slice_Diagonal', attackAlt: '1H_Melee_Attack_Chop',
     attack2h: '2H_Melee_Attack_Chop', attackSpin: '2H_Melee_Attack_Spin',
     shoot: '1H_Ranged_Shoot', aim: '1H_Ranged_Aiming',
@@ -95,8 +95,16 @@ var JOGO = (typeof window !== 'undefined')
     spawn: 'Spawn_Ground', awaken: 'Skeletons_Awaken_Standing'
   };
   // fallback: se a ação não existir no modelo, tenta esta cadeia
+  //
+  // LOCOMOÇÃO (defeito "os monstros se arrastam"): nem todo bicho do acervo
+  // ANDA. O sapo do Quaternius só traz Attack/Death/Idle/Jump — foi feito para
+  // se locomover PULANDO; a vespa só traz Attack/Death/Flying. Com a cadeia
+  // antiga (`run → walk → idle`) os dois caíam no clipe de PARADO enquanto
+  // deslizavam pelo tabuleiro. Agora `walk`/`run` passam por `fly` e `jump`
+  // antes de desistir, e só então viram `idle`.
   var ACTION_FALLBACK = {
-    run: ['walk', 'idle'], walk: ['run', 'idle'],
+    run: ['walk', 'fly', 'jump', 'idle'], walk: ['run', 'fly', 'jump', 'idle'],
+    fly: ['idle'],
     attackAlt: ['attack'], attack2h: ['attack'], attackSpin: ['attack2h', 'attack'],
     shoot: ['attack'], aim: ['idle'],
     cast: ['attack'], castRaise: ['cast', 'attack'], castLoop: ['idle'],
@@ -116,8 +124,11 @@ var JOGO = (typeof window !== 'undefined')
       for (var i = 0; i < clipNames.length; i++) if (re.test(clipNames[i])) { out[key] = clipNames[i]; return; }
     }
     pick(/Idle$|Idle_2$|Flying$/i, 'idle');
-    pick(/Walk$/i, 'walk');
-    pick(/Run$|Gallop$/i, 'run');
+    pick(/Walk$|Walk_Cycle$|Swim$|Slither$|Crawl$/i, 'walk');
+    pick(/Run$|Gallop$|Sprint$/i, 'run');
+    // voar é locomoção E parada ao mesmo tempo (a vespa flutua no lugar): o
+    // mesmo clipe entra como `idle` e como `fly`, e a diferença fica no ritmo.
+    pick(/Fly$|Flying$|Fly_Cycle$|Hover$/i, 'fly');
     pick(/Attack$/i, 'attack');
     pick(/Death$/i, 'die');
     pick(/Jump$|Jump_ToIdle$/i, 'jump');
@@ -304,7 +315,8 @@ var JOGO = (typeof window !== 'undefined')
               scene: gltf.scene, clips: clips,
               actions: names.length ? autoActions(names) : null,   // null = usa o banco KayKit
               own: names.length > 0,
-              natural: naturalHeight(gltf.scene)
+              natural: naturalHeight(gltf.scene),
+              yaw: measureYaw(gltf.scene)
             };
           }
           step();
@@ -320,6 +332,46 @@ var JOGO = (typeof window !== 'undefined')
       for (var i = 0; i < q.length; i++) { try { q[i](err); } catch (e) {} }
     }
   };
+
+  // ------------------------------------------------ ORIENTAÇÃO DE NASCENÇA
+  // O renderizador assume que todo bicho olha para +Z (é o rig do KayKit e o
+  // que `FACE_OFF = 0` diz). Nem todo acervo combina: a vespa do Quaternius
+  // nasce olhando para +X e atravessava o tabuleiro DE LADO — parte do relato
+  // "os monstros não viram quando andam".
+  //
+  // Em vez de uma lista de exceções por id, MEDIMOS: o osso da cabeça contra o
+  // centro do corpo dá o eixo da frente. Só corrigimos quando o desvio passa de
+  // 45° (arredondamos para o quarto de volta mais próximo), então um modelo já
+  // correto continua em 0. Bípede não tem frente mensurável — a cabeça fica em
+  // cima do quadril —, e o limiar de deslocamento o deixa em 0 também.
+  function skinBox(scene) {
+    scene.updateMatrixWorld(true);
+    var box = new THREE.Box3(), tmp = new THREE.Box3(), found = false;
+    scene.traverse(function (n) {
+      if (!n.isSkinnedMesh || !n.geometry) return;
+      if (!n.geometry.boundingBox) n.geometry.computeBoundingBox();
+      tmp.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+      if (!found) { box.copy(tmp); found = true; } else box.union(tmp);
+    });
+    return found ? box : null;
+  }
+  function measureYaw(scene) {
+    var head = null;
+    scene.traverse(function (n) { if (!head && n.isBone && /^head$/i.test(n.name)) head = n; });
+    if (!head) return 0;
+    var box = skinBox(scene);
+    if (!box) return 0;
+    var c = new THREE.Vector3(); box.getCenter(c);
+    var sz = new THREE.Vector3(); box.getSize(sz);
+    var hp = new THREE.Vector3(); head.getWorldPosition(hp);
+    var dx = hp.x - c.x, dz = hp.z - c.z;
+    var span = Math.max(sz.x, sz.z) || 1;
+    if (Math.sqrt(dx * dx + dz * dz) < span * 0.18) return 0;   // sem frente medível
+    var ang = Math.atan2(dx, dz);
+    var snap = Math.round(ang / (Math.PI / 2)) * (Math.PI / 2);
+    return -snap;                        // gira o modelo até a frente cair em +Z
+  }
+  M.modelYaw = function (key) { return raw[key] ? (raw[key].yaw || 0) : 0; };
 
   // altura natural do modelo (para normalizar o porte entre acervos diferentes)
   function naturalHeight(scene) {
@@ -525,6 +577,8 @@ var JOGO = (typeof window !== 'undefined')
       height: height, radius: radius, scale: scale, tintMats: null,
       bones: {}, procState: { moving: 0, castK: 0, flash: 0, deathK: 0, invis: false },
       play: function () { return null; }, has: function () { return true; },
+      locomotion: function () { return { action: 'proc', clip: 'proc', dur: 0, cycle: true, found: true }; },
+      clipFor: function () { return 'proc'; }, clipDur: function () { return 0; },
       currentName: function () { return null; },
       procAnimate: function (st, t, dt) { try { built.animate(st, t, dt); } catch (e) {} }
     };
@@ -641,6 +695,33 @@ var JOGO = (typeof window !== 'undefined')
       var clipName = actionMap[name];
       return !!(clipName && clipSrc[clipName]);
     }
+    // ------------------------------------------------------------ LOCOMOÇÃO
+    // QUAL ação responde por "está se deslocando" NESTE modelo, e com que
+    // ritmo. É aqui — e não no renderizador — porque a resposta depende do
+    // acervo, e o mesmo caminho serve monstro, chefe, pet e herói. Nunca por id.
+    //   corrida > caminhada > voo > pulo, e `idle` só como derrota declarada.
+    var locoCache = null;
+    var LOCO_ORDER = ['run', 'walk', 'fly', 'jump'];
+    function locomotion() {
+      if (locoCache) return locoCache;
+      for (var i = 0; i < LOCO_ORDER.length; i++) {
+        var nm = LOCO_ORDER[i];
+        if (!has(nm)) continue;
+        var c = resolve(nm, 0);
+        if (!c) continue;
+        locoCache = {
+          action: nm, clip: c.name, dur: c.duration || 0,
+          // o pulo é um ARCO ÚNICO, não um ciclo: quem toca precisa encaixar
+          // um pulo por célula andada, senão o bicho fica agachado no ar.
+          cycle: nm !== 'jump', found: true
+        };
+        return locoCache;
+      }
+      var idl = resolve('idle', 0);
+      locoCache = { action: 'idle', clip: idl ? idl.name : null,
+                    dur: idl ? idl.duration : 0, cycle: true, found: false };
+      return locoCache;
+    }
     function play(name, o) {
       o = o || {};
       var a = action(name);
@@ -670,7 +751,10 @@ var JOGO = (typeof window !== 'undefined')
         handR: findBone(model, 'handslot.r'), handL: findBone(model, 'handslot.l'),
         head: findBone(model, 'head'), chest: findBone(model, 'chest')
       },
-      play: play, has: has,
+      play: play, has: has, locomotion: locomotion,
+      // introspecção (teste/depuração): QUAL clipe a cadeia de fallback escolheu
+      clipFor: function (name) { var c = resolve(name, 0); return c ? c.name : null; },
+      clipDur: function (name) { var c = resolve(name, 0); return c ? c.duration : 0; },
       currentName: function () { return currentAct; },
       stopAll: function () { mixer.stopAllAction(); current = null; }
     };
