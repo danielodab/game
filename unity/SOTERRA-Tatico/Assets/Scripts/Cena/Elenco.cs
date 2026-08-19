@@ -197,6 +197,25 @@ namespace Soterra.Cena
             _palco.AlturaDeCena = maisAlto;
         }
 
+        /// <summary>
+        /// Entrega o objeto desta unidade e PARA de administrá-lo: as
+        /// sincronizações seguintes não vão movê-lo, trocá-lo nem destruí-lo.
+        ///
+        /// Existe por causa da MORTE animada: o espelho do jogo tira o morto da
+        /// lista e o Sincronizar destruiria o corpo no mesmo quadro em que o
+        /// clipe de queda começa. Soltando ANTES do espelho, o corpo fica caído
+        /// no tabuleiro — que é o que o piloto do elenco pede — e o Elenco segue
+        /// só com quem está vivo. O objeto continua pendurado no grupo do
+        /// tabuleiro, então remontar o palco ainda o leva junto, como tudo.
+        /// </summary>
+        public GameObject Soltar(string uid)
+        {
+            EmCena e;
+            if (uid == null || !_porUid.TryGetValue(uid, out e)) return null;
+            _porUid.Remove(uid);
+            return e.Raiz;
+        }
+
         /// <summary>Tira todo mundo do tabuleiro.</summary>
         public void Limpar()
         {
@@ -310,6 +329,13 @@ namespace Soterra.Cena
             //   2. o modelo que o _aparencia.json manda vestir (o acervo de hoje);
             //   3. cápsula.
             var prefab = _modelos.Modelo(id);
+
+            // O desenho (a lista `show`, degrau 2) descreve as peças do modelo
+            // do ACERVO. Aplicá-lo a um modelo do degrau 1 apagaria qualquer
+            // peça solta cujo nome não bata com a lista do outro modelo — o
+            // bruxo do Meshy entraria sem o que quer que não seja pele.
+            if (prefab != null) desenho = null;
+
             if (prefab == null && desenho != null) prefab = _modelos.Modelo(desenho.Modelo);
 
             if (prefab != null) { Modelo(pai, prefab, altura, desenho, id, heroi); return; }
@@ -398,6 +424,133 @@ namespace Soterra.Cena
                                  caixa.size.ToString("0.00") + ", rotação de origem " +
                                  rotacao.eulerAngles.ToString("0") + "): confira se ele não " +
                                  "chegou deitado.");
+
+            Animar(go, id);
+        }
+
+        // ============================================================ ANIMAÇÃO
+
+        /// <summary>
+        /// Caminho, dentro de <c>Resources</c>, do AnimatorController
+        /// compartilhado do elenco — o do CONTRATO_ENTREGA_PERSONAGEM §6, gerado
+        /// por <c>Soterra.Ferramentas.ControladorDoElenco</c>. O <c>_</c> na
+        /// frente é o prefixo que a pasta reserva para o que não é personagem;
+        /// id de classe nunca começa com ele.
+        /// </summary>
+        public const string CaminhoDoControlador = ModelosDeResources.Pasta + "/_controlador";
+
+        /// <summary>Os seis nomes de clipe do CONTRATO_ENTREGA_PERSONAGEM §1.
+        /// O jogo chama a animação pelo nome: nome diferente é animação que
+        /// nunca toca — e é por isso que os nomes moram numa constante e não
+        /// espalhados em texto.</summary>
+        public static readonly IReadOnlyList<string> NomesDeClipe =
+            new[] { "idle", "walk", "run", "attack", "hit", "death" };
+
+        /// <summary>Os que repetem, da tabela do §1. <c>death</c> fica de fora
+        /// DE PROPÓSITO: clipe sem laço segura o último quadro, e é isso que
+        /// deixa o corpo caído em vez de ressuscitar em pé.</summary>
+        public static readonly IReadOnlyList<string> ClipesEmLaco =
+            new[] { "idle", "walk", "run" };
+
+        // Estáticos como o cache de malhas: o controlador e os clipes são
+        // assets, um só de cada por processo, e recarregá-los por unidade
+        // custaria um Load por monstro por batalha.
+        static RuntimeAnimatorController _controlador;
+        static bool _controladorProcurado;
+        static readonly Dictionary<string, AnimationClip[]> _clipesPorId =
+            new Dictionary<string, AnimationClip[]>();
+
+        /// <summary>
+        /// Os clipes que o acervo tem para este id — os sub-assets de animação
+        /// da PASTA do id (<c>elenco/&lt;id&gt;/</c>). Vazio é o estado normal
+        /// de quem ainda não tem modelo definitivo, não um defeito.
+        ///
+        /// A pasta inteira, e não só o FBX homônimo, porque o contrato §1 aceita
+        /// a entrega em um arquivo por animação quando o exportador não deixa
+        /// renomear takes — e aí os clipes chegam espalhados em seis arquivos.
+        /// </summary>
+        public static AnimationClip[] ClipesDe(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return new AnimationClip[0];
+
+            AnimationClip[] achados;
+            if (_clipesPorId.TryGetValue(id, out achados)) return achados;
+
+            var brutos = Resources.LoadAll<AnimationClip>(ModelosDeResources.Pasta + "/" + id);
+            // Os clipes de pré-visualização do importador não são animação de
+            // ninguém — se algum vazar no Load, entraria no override por nome.
+            achados = Array.FindAll(brutos, c => c != null && !c.name.StartsWith("__preview__"));
+            _clipesPorId[id] = achados;
+            return achados;
+        }
+
+        /// <summary>
+        /// Anexa o Animator do CONTRATO_ENTREGA_PERSONAGEM §6 quando este id tem
+        /// clipes no acervo. Sem clipes — todo o elenco CC0 estático de hoje —
+        /// NADA acontece, e é essa a rede: um personagem que ainda não chegou
+        /// não pode quebrar os que já estão em cena.
+        ///
+        /// O controlador é um só, compartilhado; a animação de verdade entra por
+        /// <c>AnimatorOverrideController</c>, clipe a clipe, casado pelo NOME —
+        /// os seis nomes do contrato §1. Clipe que faltar fica com o vazio do
+        /// controlador: o estado existe, só não desenha nada.
+        /// </summary>
+        void Animar(GameObject go, string id)
+        {
+            var clipes = ClipesDe(id);
+            if (clipes.Length == 0) return;
+
+            var controlador = Controlador();
+            if (controlador == null) return;
+
+            // O FBX importado com rig já traz o Animator (e o Avatar) na raiz;
+            // o AddComponent é só para um acervo empacotado de outro jeito.
+            var animator = go.GetComponentInChildren<Animator>(true);
+            if (animator == null) animator = go.AddComponent<Animator>();
+
+            var sobre = new AnimatorOverrideController(controlador) { name = id };
+            var pares = new List<KeyValuePair<AnimationClip, AnimationClip>>();
+            sobre.GetOverrides(pares);
+            for (int i = 0; i < pares.Count; i++)
+            {
+                var alvo = Clipe(clipes, pares[i].Key.name);
+                if (alvo != null)
+                    pares[i] = new KeyValuePair<AnimationClip, AnimationClip>(pares[i].Key, alvo);
+            }
+            sobre.ApplyOverrides(pares);
+
+            animator.runtimeAnimatorController = sobre;
+            // A câmera é fixa e o tabuleiro gira: um corpo que congela porque a
+            // caixa dele saiu do enquadre por um quadro é defeito invisível de
+            // reproduzir. O elenco de uma sala cabe no orçamento de animar sempre.
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+            // Fora de Play ninguém dá corda no Animator, e o modelo ficaria na
+            // pose de amarração do FBX em toda foto do lote. Um passo de zero
+            // segundos liga o grafo e pousa o corpo no primeiro quadro do idle.
+            if (!Application.isPlaying) animator.Update(0f);
+        }
+
+        static AnimationClip Clipe(AnimationClip[] clipes, string nome)
+        {
+            for (int i = 0; i < clipes.Length; i++)
+                if (clipes[i] != null && clipes[i].name == nome) return clipes[i];
+            return null;
+        }
+
+        RuntimeAnimatorController Controlador()
+        {
+            if (_controladorProcurado) return _controlador;
+            _controladorProcurado = true;
+            _controlador = Resources.Load<RuntimeAnimatorController>(CaminhoDoControlador);
+            if (_controlador == null)
+                // Aviso e não exceção: sem controlador o modelo entra parado,
+                // que é como o elenco inteiro vivia até ontem — pior seria a
+                // batalha cair por causa de um asset de animação.
+                Debug.LogWarning("[SOTERRA] não há controlador em Resources/" +
+                                 CaminhoDoControlador + " — o elenco entra sem animação. " +
+                                 "Gere com Soterra.Ferramentas.ControladorDoElenco.Gerar.");
+            return _controlador;
         }
 
         /// <summary>
