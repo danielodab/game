@@ -68,6 +68,31 @@ bonito e o **animado** errado — e o teste que olha a pose de repouso passa.
 
 ---
 
+## O achado que fecha o diagnóstico
+
+**Sem tocar no rig e sem animar, os três renderizam perfeitos.** Com a animação
+tocando, viram de ponta-cabeça — sempre, em toda combinação que testei.
+
+Isso descarta a malha, a escala, a orientação do arquivo e o meu conversor: o
+modelo está bom. **A inversão vem do clipe.**
+
+Tentei corrigir por medida — conferir se a cabeça está abaixo do pé depois do
+mixer posar o modelo, e girar π em X se estiver. Não pegou, o que sugere que a
+animação não apenas inverte: ela reposiciona de um jeito que uma rotação única
+não desfaz.
+
+### O que eu faria a seguir, na ordem
+
+1. **Reexportar do Meshy com outras opções.** É o caminho mais curto e não custa
+   código. Se houver escolha de "Y-up", de esqueleto padrão (Mixamo) ou de
+   "aplicar transformações na exportação", tente. O arquivo atual mistura rig em
+   centímetros com armature compensando — é sintoma de exportação sem normalizar.
+2. **Abrir um `.glb` original no Blender e dar Play na animação.** Se lá também
+   inverter, o problema nasce no gerador e nenhum conserto do meu lado resolve
+   direito. Se lá ficar em pé, o problema é como o three.js lê essa animação, e
+   aí vale converter as ações para o formato que o resto do jogo usa (banco
+   único de clipes, como `models-anims.js`).
+
 ## O que falta, e é estreito
 
 **Fazer o jogo medir o ESQUELETO, não a malha em repouso.** Em `models3d_v2.js`

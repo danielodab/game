@@ -474,21 +474,7 @@ var JOGO = (typeof window !== 'undefined')
    * do quadro. E o teste passava, porque conferia peca e marca, nao tamanho.
    *
    * Entao: se a malha vier degenerada, a altura sai da extensao dos OSSOS. */
-  function alturaPelosOssos(scene) {
-    var min = Infinity, max = -Infinity, v = new THREE.Vector3(), n = 0;
-    scene.traverse(function (o) {
-      if (!o.isBone) return;
-      o.getWorldPosition(v);
-      if (v.y < min) min = v.y;
-      if (v.y > max) max = v.y;
-      n++;
-    });
-    if (n < 2 || !isFinite(min) || !isFinite(max)) return 0;
-    // do pe ao topo da cabeca e um pouco mais que do osso mais baixo ao mais
-    // alto: o cranio passa do osso `Head`. 1,12 e o fator medido no KayKit,
-    // onde as duas medidas sao conhecidas.
-    return (max - min) * 1.12;
-  }
+
 
   function naturalHeight(scene) {
     scene.updateMatrixWorld(true);
@@ -499,13 +485,12 @@ var JOGO = (typeof window !== 'undefined')
       tmp.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
       if (!found) { box.copy(tmp); found = true; } else box.union(tmp);
     });
-    if (found) {
-      var alt = box.max.y - box.min.y;
-      // 0,2 m nao e personagem nenhum: e malha em repouso de um rig cujo tamanho
-      // mora nos ossos. Cai para a medida do esqueleto.
-      if (alt < 0.2) {
-        var porOsso = alturaPelosOssos(scene);
-        if (porOsso > 0.2) return porOsso;
+    if (found && (box.max.y - box.min.y) < 0.2) {
+      // mesma regra de visibleBodyBox: quando a malha em bind vem degenerada,
+      // o tamanho mora nos ossos
+      var porOsso = caixaPelosOssos(scene);
+      if (porOsso && (porOsso.max.y - porOsso.min.y) > 0.2) {
+        return porOsso.max.y - porOsso.min.y;
       }
     }
     if (!found) box.setFromObject(scene);
@@ -527,26 +512,28 @@ var JOGO = (typeof window !== 'undefined')
    * sem precisar lembrar de cadastrar o nome dele em lugar nenhum. */
   function poeDePe(scene) {
     scene.updateMatrixWorld(true);
-    var v = new THREE.Vector3(), yCabeca = null, yQuadril = null;
+    var v = new THREE.Vector3(), yCabeca = null, yPe = null;
     scene.traverse(function (o) {
       if (!o.isBone) return;
       var nm = (o.name || '').toLowerCase();
       if (yCabeca === null && /^head$|^mixamorighead$/.test(nm)) {
         o.getWorldPosition(v); yCabeca = v.y;
       }
-      if (yQuadril === null && /^hips$|^mixamorighips$|^root$/.test(nm)) {
-        o.getWorldPosition(v); yQuadril = v.y;
+      // o PE e a referencia inequivoca. O quadril pode estar em qualquer altura
+      // dependendo da pose (agachado, caindo), e comparar com ele erra.
+      if (/^(left|right)?foot|^mixamorig(left|right)foot|^footl$|^footr$/.test(nm)) {
+        o.getWorldPosition(v);
+        if (yPe === null || v.y < yPe) yPe = v.y;
       }
     });
-    if (yCabeca === null || yQuadril === null) return false;
-    if (yCabeca >= yQuadril) return false;          // ja esta de pe
+    if (yCabeca === null || yPe === null) return false;
+    if (yCabeca >= yPe) return false;               // ja esta de pe
     scene.rotateX(Math.PI);
     scene.updateMatrixWorld(true);
     return true;
   }
 
   function prepScene(scene) {
-    poeDePe(scene);
     scene.traverse(function (n) {
       if (!n.isMesh && !n.isSkinnedMesh) return;
       n.castShadow = true; n.receiveShadow = true;
@@ -965,6 +952,37 @@ var JOGO = (typeof window !== 'undefined')
     root.traverse(function (n) { if (!found && (n.name === name || n.name === clean)) found = n; });
     return found;
   }
+  /* Caixa do corpo pelos OSSOS.
+   *
+   * `Box3.setFromObject` nao aplica skinning: mede a geometria em pose de bind.
+   * Para o KayKit tanto faz, porque a malha ja esta no tamanho final. Para um
+   * rig cujo TAMANHO VIVE NOS OSSOS — como os personagens do Meshy, feitos em
+   * centimetros com um armature que encolhe por 0,01 — ela responde a pergunta
+   * errada: devolve 0,02 para um corpo que renderiza com metros.
+   *
+   * Aqui a caixa sai da posicao de MUNDO de cada osso, que e o que a GPU usa
+   * para deformar a malha. Alarga um pouco em X e Z porque osso e uma linha no
+   * meio do corpo e a carne fica em volta. */
+  function caixaPelosOssos(root) {
+    root.updateMatrixWorld(true);
+    var v = new THREE.Vector3(), box = new THREE.Box3(), n = 0;
+    root.traverse(function (o) {
+      if (!o.isBone) return;
+      o.getWorldPosition(v);
+      if (!n) box.min.copy(v), box.max.copy(v);
+      else box.expandByPoint(v);
+      n++;
+    });
+    if (n < 2) return null;
+    // o cranio passa do osso `Head` e os pes passam do `Foot`
+    var alt = box.max.y - box.min.y;
+    box.max.y += alt * 0.12;
+    var folga = alt * 0.16;
+    box.min.x -= folga; box.max.x += folga;
+    box.min.z -= folga; box.max.z += folga;
+    return box;
+  }
+
   function visibleBodyBox(root) {
     root.updateMatrixWorld(true);
     var box = new THREE.Box3(), tmp = new THREE.Box3(), found = false;
@@ -975,6 +993,12 @@ var JOGO = (typeof window !== 'undefined')
       if (!found) { box.copy(tmp); found = true; } else box.union(tmp);
     });
     if (!found) box.setFromObject(root);
+    // 0,2 de altura nao e corpo nenhum: e malha em pose de bind de um rig cujo
+    // tamanho esta nos ossos. Vai medir onde o tamanho realmente mora.
+    if ((box.max.y - box.min.y) < 0.2) {
+      var porOsso = caixaPelosOssos(root);
+      if (porOsso && (porOsso.max.y - porOsso.min.y) > 0.2) return porOsso;
+    }
     return box;
   }
 
@@ -1272,6 +1296,20 @@ var JOGO = (typeof window !== 'undefined')
       stopAll: function () { mixer.stopAllAction(); current = null; }
     };
     group.userData.play('idle', { fade: 0 });
+    // Confere se o boneco esta de pe DEPOIS de posado, e nao na pose de bind.
+    //
+    // Os personagens do Meshy tem a pose de bind correta e o CLIPE invertido:
+    // sem animar eles ficam perfeitos, e assim que o mixer toca `idle` viram de
+    // ponta-cabeca. Medir antes da animacao — que era o que eu fazia — nao ve
+    // nada de errado e deixa passar.
+    //
+    // A correcao e por MEDIDA, nao por lista de modelo: se a cabeca esta abaixo
+    // do quadril depois de posado, o corpo esta invertido. Serve para qualquer
+    // arquivo futuro sem precisar cadastrar nome nenhum.
+    mixer.update(0);
+    if (poeDePe(model)) {
+      group.userData.invertido = true;
+    }
     return group;
   };
 

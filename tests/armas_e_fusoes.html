@@ -95,15 +95,22 @@ o corpo é do anfitrião.</div>
     if (node) {
       sc.add(node);
       node.updateMatrixWorld(true);
+      // Enquadra pela medida que o JOGO faz (userData.height), nao por um Box3
+      // proprio. Box3.setFromObject nao aplica skinning: num rig cujo tamanho
+      // mora nos ossos ela devolve 0,02 e a camera vai parar dentro do boneco.
+      // Era isso que fazia o personagem sair do quadro num teste "verde".
       var b = new THREE.Box3().setFromObject(node);
-      var s = b.getSize(new THREE.Vector3());
+      var alt = node.userData && node.userData.height ? node.userData.height
+                                                     : (b.max.y - b.min.y);
       var c = b.getCenter(new THREE.Vector3());
-      node.position.x -= c.x; node.position.z -= c.z; node.position.y -= b.min.y;
+      if ((b.max.y - b.min.y) > 0.2) {
+        node.position.x -= c.x; node.position.z -= c.z; node.position.y -= b.min.y;
+      }
       node.rotation.y = Math.PI * 0.18;
       node.updateMatrixWorld(true);
-      var d = s.y * 2.05 + 0.8;
-      cam.position.set(d * 0.40, s.y * 0.60, d);
-      cam.lookAt(0, s.y * 0.47, 0);
+      var d = alt * 2.05 + 0.8;
+      cam.position.set(d * 0.40, alt * 0.60, d);
+      cam.lookAt(0, alt * 0.47, 0);
     }
     ren.render(sc, cam);
     var cx = col * TW, cy = linha * TH;
