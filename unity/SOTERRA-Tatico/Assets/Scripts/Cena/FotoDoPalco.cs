@@ -64,6 +64,8 @@ namespace Soterra.Cena
             int larg = int.Parse(Argumento("-largura", "1600"));
             int alt = int.Parse(Argumento("-altura", "1000"));
             int giros = int.Parse(Argumento("-giros", "0"));
+            string idDoCalabouco = Argumento("-calabouco", null);
+            int indiceDaSala = int.Parse(Argumento("-sala", "0"));
 
 #if UNITY_EDITOR
             // Cena vazia primeiro: em modo lote o Editor abre a última cena
@@ -71,10 +73,45 @@ namespace Soterra.Cena
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 #endif
 
-            var palco = new GameObject("Palco").AddComponent<Palco>();
+            // Sem `-calabouco` fica a sala embutida com o tema da Estufa, que é o
+            // que esta prova sempre foi. COM ele, a sala e a paleta saem do dado
+            // de verdade — é assim que se prova que trocar de calabouço troca o
+            // cenário, e não só a cor de um cubo.
             var mapa = Mapa.DeTexto(SalaDeProva);
-            palco.Montar(mapa);                       // fora de Play, sem ninguém apertar nada
+            var tema = TemaDoCenario.Padrao;
+            string nomeDaSala = "prova embutida (Estufa)";
+
+            if (!string.IsNullOrEmpty(idDoCalabouco))
+            {
+                var banco = Soterra.Dados.BancoDeDados.CarregarDeResources();
+                var calabouco = banco.AchaCalabouco(idDoCalabouco);
+                if (calabouco == null || calabouco.Salas.Count <= indiceDaSala)
+                {
+                    Debug.LogError("[SOTERRA] calabouço '" + idDoCalabouco + "' sem a sala " +
+                                   indiceDaSala);
+                    Sair(2);
+                    return;
+                }
+                var sala = calabouco.Salas[indiceDaSala];
+                mapa = sala.ParaMapa();
+                // A SALA manda no tema, e o calabouço só entra quando ela cala:
+                // `sceneryTheme` existe justamente para uma sala destoar do resto
+                // do calabouço, e ignorá-lo apagaria a exceção sem avisar.
+                tema = TemaDoCenario.De(sala.TemaDeCenario ?? calabouco.Tema, calabouco.Paleta);
+                nomeDaSala = calabouco.Nome + " / " + sala.Nome;
+            }
+
+            var palco = new GameObject("Palco").AddComponent<Palco>();
+            palco.Montar(mapa, tema);                 // fora de Play, sem ninguém apertar nada
             if (giros != 0) palco.Girar(giros);
+
+            var cenografia = palco.Cenografia;
+            Debug.Log(string.Format(
+                "[SOTERRA] sala {0} — tema '{1}', {2}×{3} = {4} casas, kit {5}, " +
+                "{6} objetos com malha, {7} chamadas de desenho, altura máxima {8:F2}",
+                nomeDaSala, tema.Nome, mapa.Largura, mapa.Altura,
+                mapa.Largura * mapa.Altura, cenografia.ComKit ? "SIM" : "NAO (cubo)",
+                cenografia.Objetos, cenografia.ChamadasDeDesenho, cenografia.AlturaMaxima));
 
             var cam = palco.Camera;
             if (cam == null) { Debug.LogError("[SOTERRA] Palco não montou câmera."); Sair(2); return; }
