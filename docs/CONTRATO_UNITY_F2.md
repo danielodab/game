@@ -105,9 +105,15 @@ namespace Soterra.Batalha
 }
 ```
 
-A sala real tem **seis** `P` e repete letra de monstro — use
-`Mapa.NascimentosHeroi` e `NascimentosMonstro`, que sao LISTAS. Dois herois
-ocupam os dois primeiros `P`; os outros quatro sobram e isso e correto.
+A sala real traz VARIOS `P` e repete letra de monstro — use
+`Mapa.NascimentosHeroi` e `NascimentosMonstro`, que sao LISTAS. Os dois herois
+ocupam os primeiros; os que sobram ficam vazios, e isso e correto.
+
+**Nao conte com seis.** Este contrato ja afirmou "seis" como fato e estava
+errado: 15 das 18 salas tem seis, mas `windscaffold` 0 tem **8**,
+`windscaffold` 1 tem **10** e `brokenheart` 0 tem **4**. O piso e QUATRO. Quem
+escrever selecao de grupo maior que quatro precisa saber disso antes, nao na
+hora em que o terceiro heroi nao tiver onde nascer.
 
 ## Cena — dono: Cena
 
