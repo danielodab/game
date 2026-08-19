@@ -402,11 +402,22 @@ namespace Soterra.Testes.Cena
                                "carregou de Resources/" + ModelosDeResources.Pasta);
 
                 var caixa = CaixaDoCorpo(elenco, "u");
-                Assert.AreEqual(Elenco.AlturaDaClasse(id), caixa.size.y, 0.03f,
-                                "o modelo de " + id + " não foi normalizado para a altura da classe");
-                Assert.LessOrEqual(Mathf.Max(caixa.size.x, caixa.size.z) / Palco.Passo,
-                                   Elenco.LarguraMaxima,
+                float larguraEmCasas = Mathf.Max(caixa.size.x, caixa.size.z) / Palco.Passo;
+                Assert.LessOrEqual(larguraEmCasas, Elenco.LarguraMaxima + 0.01f,
                                    "o modelo de " + id + " passa do teto de largura do §3");
+                // A ALTURA da classe e o alvo, mas a LARGURA tem teto e ganha
+                // (contrato §3): corpo largo demais e encolhido pelo teto e sai
+                // ABAIXO da altura da classe DE PROPOSITO. O sumo do Meshy foi o
+                // primeiro a exercer a regra: 2,26 casas de largura a 2,30 m,
+                // segurado em 2,2 casas e 2,24 m. Entao ou a altura bate, ou a
+                // largura esta cravada no teto — nunca os dois soltos.
+                bool alturaBate = Mathf.Abs(caixa.size.y - Elenco.AlturaDaClasse(id)) <= 0.03f;
+                bool presoNoTeto = larguraEmCasas >= Elenco.LarguraMaxima - 0.03f &&
+                                   caixa.size.y <= Elenco.AlturaDaClasse(id) + 0.03f;
+                Assert.IsTrue(alturaBate || presoNoTeto,
+                              "o modelo de " + id + " nem bate a altura da classe (" +
+                              Elenco.AlturaDaClasse(id) + ") nem esta preso no teto de largura: " +
+                              "altura=" + caixa.size.y + " largura=" + larguraEmCasas + " casas");
             }
         }
 
@@ -444,7 +455,10 @@ namespace Soterra.Testes.Cena
             // que ela foi rodada — sem ele, alguém reconverte sem a opção um dia
             // e o elenco volta a abrir os braços sem nenhum teste vermelho.
             var elenco = new Elenco(_palco, null);
-            elenco.Sincronizar(new[] { Ficha("u", "sumo", true, 4, 1) });
+            // O exemplo era o sumo, e envelheceu quando o sumo do Meshy chegou —
+            // o esqueleto novo tem outros nomes e ja vem com bracos baixos por
+            // construcao. A curandeira (knight) continua no acervo KayKit.
+            elenco.Sincronizar(new[] { Ficha("u", "curandeira", true, 4, 1) });
 
             var corpo = elenco.ObjetoDe("u").transform.Find("Corpo");
             Transform ombro = null, mao = null;

@@ -193,8 +193,12 @@ namespace Soterra.Testes.Cena
         [Test]
         public void Elenco_SemClipes_NaoGanhaControlador_ENadaQuebraParaOAcervo()
         {
-            // O elenco CC0 de hoje — e os 20 personagens que ainda não chegaram.
             // A rede do piloto: quem não tem clipe segue EXATAMENTE como está.
+            // O exemplo era o sumo — e envelheceu no dia em que o sumo do Meshy
+            // chegou com os seis clipes. A classe de agora é a curandeira, que
+            // ainda não tem pasta em elenco/; quando o dela chegar, o exemplo
+            // muda de novo, e este comentário diz para onde: qualquer id SEM
+            // pasta em Resources/elenco.
             var cubo = new GameObject("modelo-sem-clipe");
             try
             {
@@ -203,9 +207,9 @@ namespace Soterra.Testes.Cena
                 Object.DestroyImmediate(malha.GetComponent<BoxCollider>());
 
                 var elenco = new Elenco(_palco, null,
-                                        new ModelosDeMemoria().Com("sumo", cubo),
+                                        new ModelosDeMemoria().Com("curandeira", cubo),
                                         new Aparencia());
-                elenco.Sincronizar(new[] { Ficha("h0", "sumo", 1, 1) });
+                elenco.Sincronizar(new[] { Ficha("h0", "curandeira", 1, 1) });
 
                 Assert.IsNull(elenco.ObjetoDe("h0").GetComponentInChildren<Animator>(true),
                               "modelo sem clipe ganhou Animator — o anexo tinha de ser condicional");
