@@ -1,0 +1,321 @@
+/*
+  SOTERRA — estilo das telas de fluxo (recompensa, caminho, conclusão, derrota).
+
+  Nome diferente do `.uxml` de propósito: `Resources.Load<T>` desempata por
+  tipo, mas dois arquivos "fluxo" na mesma pasta de Resources é a espécie de
+  ambiguidade que só aparece no player, tarde.
+
+  NENHUM `:hover`, como na folha de batalha e pela mesma razão: o destino é
+  celular, e o dedo não passa por cima de nada.
+*/
+
+/* ==========================================================================
+   ALVO DE TOQUE — repetido aqui, e não importado da folha de batalha.
+
+   USS não tem `@import` (só o TSS tem). Uma tela que dependesse da folha da
+   OUTRA para o piso de 44 pontos ficaria sem piso no dia em que alguém a
+   montasse sozinha — e o defeito seria invisível na tela do computador. O
+   número aparece duas vezes; o teste `ToqueDoFluxoTests` lê ESTA folha e
+   cobra o mesmo mínimo de `Toque.MinimoEmPontos`, então as duas não têm como
+   divergir em silêncio.
+   ========================================================================== */
+.alvo {
+    min-width: 44px;
+    min-height: 44px;
+}
+
+/* ============================================================= ESTRUTURA */
+
+/* Cobre a tela inteira: a tela de fluxo é MODAL. O fundo quase opaco não é
+   enfeite — ele é o que diz "a batalha acabou, o que você toca agora é
+   outra coisa". */
+.fluxo {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: column;
+    justify-content: space-between;
+    background-color: rgba(8, 10, 14, 0.94);
+    color: rgb(232, 237, 242);
+    font-size: 13px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
+.fluxo__cabecalho {
+    flex-shrink: 0;
+}
+
+.fluxo__titulo {
+    font-size: 24px;
+    -unity-font-style: bold;
+    color: rgb(255, 208, 138);
+    white-space: normal;
+}
+
+.fluxo__subtitulo {
+    font-size: 13px;
+    color: rgb(155, 224, 255);
+    margin-top: 2px;
+    white-space: normal;
+}
+
+.fluxo__texto {
+    font-size: 13px;
+    color: rgb(190, 200, 210);
+    margin-top: 6px;
+    white-space: normal;
+}
+
+/* O miolo cresce e ENGOLE a sobra. É ele que empurra as ações para a base da
+   tela — a metade de baixo, onde o polegar chega. */
+.fluxo__corpo {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.fluxo__acoes {
+    flex-shrink: 0;
+    flex-direction: column;
+}
+
+/* ================================================================ GANHOS */
+
+.ganho {
+    flex-direction: column;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    margin-bottom: 6px;
+}
+
+.ganho__linha {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ganho__nome {
+    -unity-font-style: bold;
+    font-size: 15px;
+}
+
+.ganho__xp {
+    color: rgb(126, 240, 212);
+    -unity-font-style: bold;
+    font-size: 14px;
+}
+
+/* A subida de nível é a única coisa desta tela que muda a ficha para sempre.
+   Ela tem cor e peso próprios porque, misturada ao resto, passa despercebida
+   — e passar despercebido é o pior destino de uma recompensa. */
+.ganho__subiu {
+    color: rgb(255, 208, 138);
+    -unity-font-style: bold;
+    font-size: 14px;
+    margin-top: 2px;
+}
+
+.ganho__nivel {
+    color: rgb(190, 200, 210);
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.ganho__corte {
+    color: rgb(226, 102, 90);
+    font-size: 12px;
+    margin-top: 2px;
+    white-space: normal;
+}
+
+.ganho__trilho {
+    height: 8px;
+    margin-top: 5px;
+    background-color: rgba(0, 0, 0, 0.55);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    overflow: hidden;
+}
+
+.ganho__cheio {
+    height: 8px;
+    background-color: rgb(126, 240, 212);
+}
+
+/* =============================================================== PRÊMIOS */
+
+.premios {
+    margin-top: 8px;
+}
+
+.premio {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-left-width: 3px;
+    border-left-color: rgba(255, 255, 255, 0.18);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+.premio__nome {
+    font-size: 13px;
+}
+
+.premio__detalhe {
+    font-size: 12px;
+    color: rgb(255, 208, 138);
+}
+
+/* A carta é o único prêmio que pode LIBERAR uma classe — cor própria para não
+   se perder entre três pedras e uma bota. */
+.premio--carta {
+    border-left-color: rgb(255, 208, 138);
+}
+
+.premio--bicho {
+    border-left-color: rgb(126, 240, 212);
+}
+
+.premios__vazio {
+    color: rgb(160, 170, 180);
+    -unity-font-style: italic;
+    font-size: 12px;
+    padding-top: 4px;
+}
+
+/* ============================================================= ELEMENTOS */
+
+.elementos {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+/* 48% e não 25%: quatro numa linha só dariam ~80 pontos de largura no celular
+   em pé, e o nome do caminho não caberia. Dois por linha deixam o alvo largo
+   e o texto legível — a escolha é permanente, tem de ser lida antes de tocada. */
+.elemento {
+    width: 48%;
+    height: 64px;
+    /* As quatro margens EXPLÍCITAS: o tema padrão do Unity dá 3px em volta de
+       todo Button, e 48% + 48% + 12px de margem passa de 100% — os quatro
+       caminhos saíam empilhados numa coluna só, um por linha, ocupando meia
+       tela cada. A foto pegou; o layout no Editor, não. */
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 8px;
+    align-items: center;
+    justify-content: center;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-left-color: rgba(255, 255, 255, 0.25);
+    border-right-color: rgba(255, 255, 255, 0.25);
+    border-top-color: rgba(255, 255, 255, 0.25);
+    border-bottom-color: rgba(255, 255, 255, 0.25);
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.08);
+    -unity-font-style: bold;
+    font-size: 15px;
+    color: rgb(232, 237, 242);
+    white-space: normal;
+}
+
+/* ================================================================ BOTÃO */
+
+.botao {
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    -unity-font-style: bold;
+    font-size: 16px;
+    color: rgb(18, 20, 24);
+    background-color: rgb(255, 208, 138);
+}
+
+/* Sem as margens do tema padrão, pelo mesmo motivo de `.elemento`: com elas o
+   botão de largura cheia transborda a faixa e o canto direito some. */
+.botao--descer {
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* Depois da derrota o botão não pode parecer o mesmo de "Descer": um leva
+   adiante, o outro reinicia o calabouço. */
+.botao--reiniciar {
+    background-color: rgb(226, 102, 90);
+    color: rgb(255, 244, 240);
+}
+
+.botao:active {
+    background-color: rgb(212, 170, 108);
+}
+
+/* =========================================================== ORIENTAÇÃO
+
+   Sem `@media` no USS: quem troca a classe é o C#
+   (`TelaDeFluxo.AplicarOrientacao`). Deitado sobram ~360 pontos de altura, e
+   uma coluna de fichas de ganho comeria a tela inteira — vira linha.
+   ======================================================================== */
+
+.fluxo--paisagem .ganhos {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.fluxo--paisagem .ganho {
+    width: 49%;
+    margin-right: 1%;
+}
+
+.fluxo--paisagem .fluxo__titulo {
+    font-size: 20px;
+}
+
+.fluxo--paisagem .elemento {
+    width: 24%;
+    height: 56px;
+}
