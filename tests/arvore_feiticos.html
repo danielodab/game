@@ -29,7 +29,7 @@
     // A pilha 3D INTEIRA. Sem ela o art.js cai no desenho 2D antigo e a foto
     // do teste mostra um personagem que o jogo nao usa mais.
     'vendor/three.min.js','vendor/GLTFLoader.js',
-    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
     'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js','js/render3d/models3d_v2.js',
     'js/render2d/art.js','js/render3d/portraits3d.js','js/ui/hud.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
@@ -128,7 +128,7 @@
           save.heroes[hid].element = st.el || 'neutro';
           P.save(save);
         }
-        if (H && H.openSheet) H.openSheet('inventory');
+        if (H && H.openSheet) H.openSheet('spells');
       } catch (e) { erro = e.message; }
       var grade = document.querySelector('.tree-grid');
       var celulas = document.querySelectorAll('.tree-cell').length;

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Sonda dos personagens do Meshy</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui;padding:14px}
+pre{background:#171c23;padding:10px;border-radius:6px;font-size:12px;white-space:pre-wrap}</style>
+</head><body>
+<h1 style="font-size:15px">O que o jogo enxerga nos modelos novos</h1>
+<pre id="out">rodando…</pre>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js','assets/embedded/models-monsters.js',
+    'assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var L = [];
+  function log(s) { L.push(s); document.getElementById('out').textContent = L.join('\n'); }
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2, t0 = Date.now();
+    (function espera() {
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 40000) return setTimeout(espera, 200);
+        log('modelos não carregaram'); window.__pronto = true; return;
+      }
+      ['meshy_sumo','meshy_bruxo','meshy_invocador','barbarian'].forEach(function (k) {
+        var cru = M.rawScene(k);
+        if (!cru) { log(k + ': NAO CARREGOU'); return; }
+        var skin = 0, mesh = 0, tris = 0;
+        cru.traverse(function (o) {
+          if (o.isSkinnedMesh) skin++;
+          else if (o.isMesh) mesh++;
+          if (o.geometry && o.geometry.index) tris += o.geometry.index.count / 3;
+        });
+        cru.updateMatrixWorld(true);
+        var b = new THREE.Box3().setFromObject(cru);
+        var s = b.getSize(new THREE.Vector3());
+        log(k + ': skinned=' + skin + ' mesh=' + mesh +
+            ' tris=' + Math.round(tris) +
+            ' caixa=' + s.x.toFixed(2) + 'x' + s.y.toFixed(2) + 'x' + s.z.toFixed(2) +
+            ' minY=' + b.min.y.toFixed(2));
+      });
+      log('');
+      ['sumo','bruxo','invocador','arqueiro'].forEach(function (cid) {
+        var n = null, err = null;
+        try { n = M.unit(cid, {}); } catch (e) { err = e.message; }
+        if (!n) { log(cid + ': unit() falhou — ' + err); return; }
+        n.updateMatrixWorld(true);
+        var b = new THREE.Box3().setFromObject(n);
+        var s = b.getSize(new THREE.Vector3());
+        log(cid + ': altura=' + s.y.toFixed(2) + ' largura=' + s.x.toFixed(2) +
+            ' userData.height=' + (n.userData.height || 0).toFixed(2) +
+            ' scale=' + (n.userData.scale || 0).toFixed(2) +
+            ' clipes=' + Object.keys((M.rawScene(n.userData.look.model) ? {} : {})).length +
+            ' modelo=' + n.userData.look.model);
+      });
+      window.__pronto = true;
+    })();
+  });
+})();
+</script></body></html>

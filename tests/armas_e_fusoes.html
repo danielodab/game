@@ -34,7 +34,7 @@ o corpo é do anfitrião.</div>
     'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
     'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
     'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
-    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
     'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js','js/render3d/models3d_v2.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
 </script>
@@ -145,7 +145,11 @@ o corpo é do anfitrião.</div>
         pousa(node);
         var p = pecas(node);
         armasDe[cid] = p;
-        if (!p.length) problemas.push(PT[cid] + ' não mostra peça nenhuma');
+        // Peça pendurada em OSSO é o jeito do KayKit. Os personagens novos do
+        // Meshy trazem a arma esculpida no próprio corpo, então zero peças aqui
+        // é o esperado — cobrar isso reprovaria o modelo certo.
+        var meshy = /^meshy_/.test((M.lookFor(cid, {}) || {}).model || '');
+        if (!p.length && !meshy) problemas.push(PT[cid] + ' não mostra peça nenhuma');
         tira(g1, node, i, 0, PT[cid], p.join(' · '), '#cfe0f2');
       });
 

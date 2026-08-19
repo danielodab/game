@@ -47,7 +47,7 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
     'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
     'assets/embedded/env-kit.js','js/render3d/models3d.js',
     'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js',
-    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
     'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
     'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
     'js/render2d/art.js','js/ui/hud.js'];
@@ -224,13 +224,14 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
           if (py < y0) y0 = py; if (py > y1) y1 = py;
           grade[((py * GY / RH) | 0) * GX + ((px * GX / RW) | 0)] += dm;
         }
-        if (!nucleo) return { banho: banho, area: 0, w: 0, h: 0, sat: 0, grade: grade };
-        // normaliza a assinatura: compara FORMA, não intensidade
-        var mx = 0, k;
+        if (!nucleo) return { banho: banho, area: 0, w: 0, h: 0, sat: 0, grade: grade, bruta: grade };
+        // a assinatura compara FORMA, não intensidade — mas a soma CRUA é o que
+        // se acumula ao longo do efeito, então as duas voltam
+        var bruta = grade.slice(), mx = 0, k;
         for (k = 0; k < grade.length; k++) if (grade[k] > mx) mx = grade[k];
         if (mx > 0) for (k = 0; k < grade.length; k++) grade[k] /= mx;
         return { banho: banho, area: nucleo, w: x1 - x0 + 1, h: y1 - y0 + 1,
-                 sat: sat / nucleo, grade: grade };
+                 sat: sat / nucleo, grade: grade, bruta: bruta };
       }
       function cos(a, b) {
         var s = 0, na = 0, nb = 0;
@@ -267,15 +268,32 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
                            elements: ['fogo'], x: alvoX, y: alvoY });
         } catch (e) {}
 
-        var q = 0, melhor = null;
+        /* SONDADO quadro a quadro e foi assim que a primeira versão desta página
+         * mentiu: escolhendo "o quadro de maior área", ela escolhia SEMPRE o
+         * quadro 0 — o clarão da batida, que acende antes de a placa subir. O
+         * feixe e o gancho davam número idêntico até o pixel com e sem placa,
+         * e a placa estava lá, viva, de 7 × 14 m (FX.debugPlacas confirmou).
+         * Agora vale o EFEITO INTEIRO: a assinatura soma os 22 quadros e o
+         * recorte é o RASTRO — o que mais acendeu em cada pixel ao longo dos
+         * 0,75 s, que é o que o olho integra. */
+        var q = 0, melhor = null, somaNuc = 0, acum = null;
+        var rst = wg.createImageData(RW, RH);
+        rst.data.set(base.data);
         (function quadro() {
           try { FX.update(DT, DT); } catch (e) {}
           try { R.render(0); } catch (e) {}
-          var m = mede(pega(), base);
-          if (!melhor || m.area > melhor.area) {
-            melhor = m; melhor.q = q;
-            bg2.drawImage(work, 0, 0);          // guarda o quadro de maior área
+          var img = pega();
+          var m = mede(img, base);
+          somaNuc += m.area;
+          if (!acum) acum = new Float32Array(m.bruta.length);
+          for (var gi = 0; gi < acum.length; gi++) acum[gi] += m.bruta[gi];
+          var rd = rst.data, cd = img.data;
+          for (var pi2 = 0; pi2 < cd.length; pi2 += 4) {
+            if (cd[pi2] > rd[pi2]) rd[pi2] = cd[pi2];
+            if (cd[pi2 + 1] > rd[pi2 + 1]) rd[pi2 + 1] = cd[pi2 + 1];
+            if (cd[pi2 + 2] > rd[pi2 + 2]) rd[pi2 + 2] = cd[pi2 + 2];
           }
+          if (!melhor || m.area > melhor.area) { melhor = m; melhor.q = q; }
           // O relógio de verdade tem de andar junto com o relógio simulado: os
           // passos adiados do cone e do meteoro são setTimeout de 26 a 110 ms e
           // NÃO acontecem se a página só encadear setTimeout(…,0).

@@ -153,6 +153,10 @@ var JOGO = (typeof window !== 'undefined')
     // DOIS MACHADOS (pedido do usuario). O machado de duas maos e gramatica de
     // dano; a classe e o TANQUE, e um machado em cada mao le como quem entra e
     // segura. As duas pecas ja estavam dentro do arquivo, desligadas.
+    // MODELO NOVO (Meshy, feito pelo usuario). Sem `show`, `build` nem
+    // `headSwap`: aquilo era guarda-roupa e escala de osso do KayKit. O corpo
+    // novo ja vem com as armas modeladas e a musculatura esculpida, e manter
+    // as linhas antigas faria o jogo procurar malha inexistente em silencio.
     sumo: { model: 'barbarian', show: ['1H_Axe', '1H_Axe_Offhand', 'Barbarian_Cape'],
             scale: 1.16, tint: '#d4553f', accent: '#ffd08a', weapon: '1H_Axe',
             // `cabeca` 0,92 -> 0,78: com o tronco a 1,42 a cabeça ficava do mesmo
@@ -224,13 +228,17 @@ var JOGO = (typeof window !== 'undefined')
   // esteve aqui". Vai para a mao livre do anfitriao quando ele funde.
   // Sao pecas de UMA mao de proposito: a de duas maos entra atravessada no
   // corpo do anfitriao, que ja segura a propria.
+  // `model` diz de QUAL arquivo a peca sai. Enquanto todas as classes usavam
+  // KayKit isso era implicito (`look.model`); agora tres delas usam corpo do
+  // Meshy, que nao tem guarda-roupa separavel, e sem esta coluna a marca do
+  // convidado sumiria da fusao sem erro nenhum.
   M.CLASS_MARK = {
-    sumo:       { head: 'Barbarian_Hat', cape: 'Barbarian_Cape', hand: '1H_Axe' },
-    arqueiro:   { head: null,            cape: 'Rogue_Cape',     hand: '1H_Crossbow' },
-    bruxo:      { head: 'Mage_Hat',      cape: 'Mage_Cape',      hand: '1H_Wand' },
-    espadachim: { head: null,            cape: 'Rogue_Cape',     hand: 'Knife_Offhand' },
-    curandeira: { head: 'Knight_Helmet', cape: 'Knight_Cape',    hand: 'Badge_Shield' },
-    invocador:  { head: null,            cape: 'Mage_Cape',      hand: 'Spellbook_open' }
+    sumo:       { model: 'barbarian', head: 'Barbarian_Hat', cape: 'Barbarian_Cape', hand: '1H_Axe' },
+    arqueiro:   { model: 'rogue',     head: null,            cape: 'Rogue_Cape',     hand: '1H_Crossbow' },
+    bruxo:      { model: 'mage',      head: 'Mage_Hat',      cape: 'Mage_Cape',      hand: '1H_Wand' },
+    espadachim: { model: 'rogue',     head: null,            cape: 'Rogue_Cape',     hand: 'Knife_Offhand' },
+    curandeira: { model: 'knight',    head: 'Knight_Helmet', cape: 'Knight_Cape',    hand: 'Badge_Shield' },
+    invocador:  { model: 'mage',      head: null,            cape: 'Mage_Cape',      hand: 'Spellbook_open' }
   };
 
   // Monstros — 3 fontes, escolhidas por id/família:
@@ -452,6 +460,36 @@ var JOGO = (typeof window !== 'undefined')
   M.modelYaw = function (key) { return raw[key] ? (raw[key].yaw || 0) : 0; };
 
   // altura natural do modelo (para normalizar o porte entre acervos diferentes)
+  /* Altura do corpo em pose de repouso, para normalizar todo mundo ao mesmo
+   * porte.
+   *
+   * Mede a caixa da MALHA. Isso vale enquanto a malha estiver no tamanho final,
+   * que e o caso do KayKit — mas nao de todo rig. Os personagens do Meshy vem
+   * com o esqueleto feito em CENTIMETROS (o osso `Hips` tem 1226 de comprimento)
+   * e um armature que encolhe por 0,01: a malha em repouso mede 0,02, e quem
+   * carrega o tamanho de verdade sao os ossos.
+   *
+   * Com 0,02 a normalizacao calculava escala de 135x e aplicava por cima de um
+   * esqueleto que ja estava certo — o personagem virava uma mancha gigante fora
+   * do quadro. E o teste passava, porque conferia peca e marca, nao tamanho.
+   *
+   * Entao: se a malha vier degenerada, a altura sai da extensao dos OSSOS. */
+  function alturaPelosOssos(scene) {
+    var min = Infinity, max = -Infinity, v = new THREE.Vector3(), n = 0;
+    scene.traverse(function (o) {
+      if (!o.isBone) return;
+      o.getWorldPosition(v);
+      if (v.y < min) min = v.y;
+      if (v.y > max) max = v.y;
+      n++;
+    });
+    if (n < 2 || !isFinite(min) || !isFinite(max)) return 0;
+    // do pe ao topo da cabeca e um pouco mais que do osso mais baixo ao mais
+    // alto: o cranio passa do osso `Head`. 1,12 e o fator medido no KayKit,
+    // onde as duas medidas sao conhecidas.
+    return (max - min) * 1.12;
+  }
+
   function naturalHeight(scene) {
     scene.updateMatrixWorld(true);
     var box = new THREE.Box3(), tmp = new THREE.Box3(), found = false;
@@ -461,12 +499,54 @@ var JOGO = (typeof window !== 'undefined')
       tmp.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
       if (!found) { box.copy(tmp); found = true; } else box.union(tmp);
     });
+    if (found) {
+      var alt = box.max.y - box.min.y;
+      // 0,2 m nao e personagem nenhum: e malha em repouso de um rig cujo tamanho
+      // mora nos ossos. Cai para a medida do esqueleto.
+      if (alt < 0.2) {
+        var porOsso = alturaPelosOssos(scene);
+        if (porOsso > 0.2) return porOsso;
+      }
+    }
     if (!found) box.setFromObject(scene);
     var h = box.max.y - box.min.y;
     return (isFinite(h) && h > 0.01) ? h : 1.8;
   }
 
+  /* Poe o personagem DE PE, se ele veio deitado ou invertido.
+   *
+   * Nao e capricho de arquivo: o gerador que fez os personagens novos escreve a
+   * cena com o eixo para baixo, e os tres saiam plantando bananeira. Tentei
+   * consertar na exportacao — assar a transformacao no armature, mexer nos
+   * ossos em modo de edicao — e as duas coisas ou nao resolviam ou pioravam.
+   *
+   * Corrigir na CARGA e mais honesto: o arquivo continua sendo o que o gerador
+   * produziu, e o jogo faz a acomodacao que so ele sabe fazer. A pergunta e
+   * respondida por MEDIDA, nao por lista de modelo: se a cabeca esta abaixo do
+   * quadril, o corpo esta de ponta-cabeca. Serve para qualquer arquivo futuro,
+   * sem precisar lembrar de cadastrar o nome dele em lugar nenhum. */
+  function poeDePe(scene) {
+    scene.updateMatrixWorld(true);
+    var v = new THREE.Vector3(), yCabeca = null, yQuadril = null;
+    scene.traverse(function (o) {
+      if (!o.isBone) return;
+      var nm = (o.name || '').toLowerCase();
+      if (yCabeca === null && /^head$|^mixamorighead$/.test(nm)) {
+        o.getWorldPosition(v); yCabeca = v.y;
+      }
+      if (yQuadril === null && /^hips$|^mixamorighips$|^root$/.test(nm)) {
+        o.getWorldPosition(v); yQuadril = v.y;
+      }
+    });
+    if (yCabeca === null || yQuadril === null) return false;
+    if (yCabeca >= yQuadril) return false;          // ja esta de pe
+    scene.rotateX(Math.PI);
+    scene.updateMatrixWorld(true);
+    return true;
+  }
+
   function prepScene(scene) {
+    poeDePe(scene);
     scene.traverse(function (n) {
       if (!n.isMesh && !n.isSkinnedMesh) return;
       n.castShadow = true; n.receiveShadow = true;
@@ -747,19 +827,20 @@ var JOGO = (typeof window !== 'undefined')
   function marksOf(classId, look, corDoConvidado) {
     var mk = M.CLASS_MARK[classId] || {};
     var out = [];
-    if (mk.head) out.push({ model: look.model, mesh: mk.head, bone: 'head', tint: corDoConvidado });
+    var mm = mk.model || look.model;   // de onde a peca sai — ver CLASS_MARK
+    if (mk.head) out.push({ model: mm, mesh: mk.head, bone: 'head', tint: corDoConvidado });
     // A CAPA e a "roupa" do convidado. Arqueiro e espadachim nao tem peca de
     // cabeca (o capuz faz parte da malha skinned), entao sem a capa eles
     // entrariam na fusao so por uma arma pequena e some. A capa muda a cor e a
     // silhueta das costas, que le de longe.
-    if (mk.cape) out.push({ model: look.model, mesh: mk.cape, bone: 'chest',
+    if (mk.cape) out.push({ model: mm, mesh: mk.cape, bone: 'chest',
                             hidesHostCape: true, tint: corDoConvidado });
     // A arma do convidado vai para a mao ESQUERDA, e a peca que o anfitriao
     // carrega naquela mao sai de cena — senao as duas ocupam o mesmo punho e
     // aparecem atravessadas uma na outra. Foi o que aconteceu assim que o
     // Barbaro passou a usar as duas maos e o Ladino ganhou a segunda adaga.
     var arma = mk.hand || look.weapon;
-    if (arma) out.push({ model: look.model, mesh: arma, bone: 'handslotl',
+    if (arma) out.push({ model: mm, mesh: arma, bone: 'handslotl',
                          tint: corDoConvidado, hidesHostOffhand: true });
     return out;
   }
@@ -774,7 +855,9 @@ var JOGO = (typeof window !== 'undefined')
     if (lb && (BULK[b] || 0) > (BULK[a] || 0)) { host = b; guest = a; }
     var lh = classLook(host), lg = classLook(guest);
     return {
-      model: lh.model, show: lh.show.slice(), scale: 1.26,
+      // `show` opcional aqui tambem: o anfitriao pode ser um corpo do Meshy,
+      // que nao tem malha para ligar ou desligar (ver classLook).
+      model: lh.model, show: (lh.show || []).slice(), scale: 1.26,
       build: lh.build || null, headTilt: lh.headTilt || 0,
       tint: lh.tint, accent: lg ? lg.accent : lh.accent,
       mixTint: lg ? lg.tint : null,
@@ -820,7 +903,11 @@ var JOGO = (typeof window !== 'undefined')
       // CLASS_LOOK precisa ser copiado aqui — senão ele some sem erro nenhum.
       // Foi o que aconteceu com `build` e `headTilt`: estavam definidos e o
       // Bárbaro continuava magro, sem uma linha de aviso.
-      return { model: cl.model, show: cl.show.slice(), scale: cl.scale || 1,
+      // `show` e OPCIONAL desde que ha modelos com guarda-roupa embutido: os
+      // personagens do Meshy ja vem com a arma modelada no corpo e nao tem
+      // malha para ligar ou desligar. Antes isto era `cl.show.slice()` direto e
+      // estourava assim que a primeira classe deixou de declarar a lista.
+      return { model: cl.model, show: (cl.show || []).slice(), scale: cl.scale || 1,
                tint: cl.tint, accent: cl.accent, weapon: cl.weapon,
                build: cl.build || null, headTilt: cl.headTilt || 0,
                faceMask: cl.faceMask || null, bodyTint: cl.bodyTint || null,
@@ -834,8 +921,42 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------------- unidade
   function sanit(name) { return String(name).replace(/[\.\[\]:\/]/g, ''); }
+  /* Onde cada osso do KayKit mora nos OUTROS esqueletos.
+   *
+   * O jogo nasceu falando o vocabulario do KayKit — `head`, `chest`,
+   * `handslotl`. Os personagens novos do Meshy usam o padrao Mixamo — `Head`,
+   * `Spine02`, `LeftHand`. Sem tradutor o enxerto da fusao simplesmente nao
+   * acha o osso e a marca do convidado some, SEM ERRO NENHUM: foi assim que as
+   * dez fusoes com corpo novo sairam sem chapeu, sem capa e sem arma.
+   *
+   * Traduzir aqui, num lugar so, e melhor que espalhar `if (meshy)` por todo
+   * lado — e o proximo esqueleto que chegar so acrescenta uma linha. */
+  var OSSO_EQUIV = {
+    head:      ['Head', 'head', 'mixamorigHead'],
+    chest:     ['Spine02', 'Spine2', 'chest', 'mixamorigSpine2'],
+    spine:     ['Spine01', 'Spine1', 'spine', 'mixamorigSpine1'],
+    hips:      ['Hips', 'hips', 'mixamorigHips'],
+    handslotl: ['LeftHand', 'handslotl', 'mixamorigLeftHand'],
+    handslotr: ['RightHand', 'handslotr', 'mixamorigRightHand'],
+    upperarml: ['LeftArm', 'upperarml', 'mixamorigLeftArm'],
+    upperarmr: ['RightArm', 'upperarmr', 'mixamorigRightArm'],
+    lowerarml: ['LeftForeArm', 'lowerarml'],
+    lowerarmr: ['RightForeArm', 'lowerarmr'],
+    upperlegl: ['LeftUpLeg', 'upperlegl'],
+    upperlegr: ['RightUpLeg', 'upperlegr'],
+    lowerlegl: ['LeftLeg', 'lowerlegl'],
+    lowerlegr: ['RightLeg', 'lowerlegr']
+  };
+
   function findBone(root, name) {
-    return root.getObjectByName(name) || root.getObjectByName(sanit(name)) || null;
+    var direto = root.getObjectByName(name) || root.getObjectByName(sanit(name));
+    if (direto) return direto;
+    var alt = OSSO_EQUIV[String(name).toLowerCase()];
+    for (var i = 0; alt && i < alt.length; i++) {
+      var o = root.getObjectByName(alt[i]);
+      if (o) return o;
+    }
+    return null;
   }
   M.findBone = findBone;
   M.aplicaPorte = aplicaPorte;   // exposto para as folhas de variante

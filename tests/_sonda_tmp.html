@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>sonda</title>
+<style>body{background:#0f1216;color:#e8eef6;font:12px monospace}
+#app{position:fixed;left:-4000px;top:0;width:420px;height:640px}</style></head>
+<body>
+<pre id="out">…</pre>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/ui/hud.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var out = document.getElementById('out');
+  function log(s) { out.textContent += '\n' + s; }
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, FX = JOGO.FX;
+    R.init(document.getElementById('game-canvas'));
+    try { JOGO.UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try { ok = JOGO.Models3D2.isReady() && JOGO.Models3D.isReady() && R.isReady(); } catch (e) {}
+      if (!ok && Date.now() - t0 < 60000) return setTimeout(espera, 250);
+      var ids = JOGO.Progress.heroIds();
+      while (ids.length < 2) { JOGO.Progress.createHero(ids.length ? 'curandeira' : 'sumo'); ids = JOGO.Progress.heroIds(); }
+      G.startRun(ids.slice(0, 2), 'greenhouse');
+      roda();
+    })();
+
+    function roda() {
+      var b = G.state, h = (b.units || []).filter(function (u) { return u.alive; })[0];
+      FX.getShake = function () { return { x: 0, y: 0 }; };
+      try { FX.setAmbient(null); } catch (e) {}
+      var src = document.getElementById('game-canvas');
+      var W = src.width, H = src.height;
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      var g = cv.getContext('2d', { willReadFrequently: true });
+      function pega() { g.drawImage(src, 0, 0); return g.getImageData(0, 0, W, H).data; }
+      function nuc(a, b2) {
+        var n = 0; for (var i = 0; i < a.length; i += 4) {
+          var d = Math.max(Math.abs(a[i] - b2[i]), Math.abs(a[i+1] - b2[i+1]), Math.abs(a[i+2] - b2[i+2]));
+          if (d > 90) n++;
+        } return n;
+      }
+      log('placas vivas expostas: ' + (typeof FX.debugPlacas === 'function'));
+      var casos = [['feixe', false], ['feixe', true], ['armadilha', false], ['armadilha', true]];
+      var ci = 0;
+      (function prox() {
+        if (ci >= casos.length) { log('FIM'); return; }
+        var c = casos[ci], fam = c[0];
+        FX.setPlacas(c[1]); FX.reset();
+        R.render(0);
+        var base = pega();
+        var alvo = { x: h.x + 3, y: h.y };
+        var dest = R.world(alvo.x, alvo.y, 0.5), from = R.world(h.x, h.y, 1.0);
+        FX.debugFam(fam, from, dest, 'fogo', null);
+        var linha = [], q = 0;
+        (function quadro() {
+          FX.update(0.034, 0.034); R.render(0);
+          linha.push(nuc(pega(), base));
+          if (FX.debugPlacas && q === 4) log('  placas @q4: ' + JSON.stringify(FX.debugPlacas()));
+          if (++q < 22) return setTimeout(quadro, 34);
+          log(fam + ' placas=' + c[1] + ' -> ' + linha.join(' '));
+          ci++; setTimeout(prox, 700);
+        })();
+      })();
+    }
+  });
+})();
+</script>
+</body></html>
