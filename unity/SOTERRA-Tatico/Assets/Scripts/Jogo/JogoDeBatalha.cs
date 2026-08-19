@@ -48,6 +48,7 @@ namespace Soterra.Jogo
         Partida _partida;
         Cena.Palco _palco;
         Cena.Elenco _elenco;
+        AnimacaoDoElenco _animacao;
         Interface.HudDeBatalha _hud;
 
         float _espera;
@@ -59,6 +60,7 @@ namespace Soterra.Jogo
         public Partida Partida { get { return _partida; } }
         public Cena.Palco Palco { get { return _palco; } }
         public Cena.Elenco Elenco { get { return _elenco; } }
+        public AnimacaoDoElenco Animacao { get { return _animacao; } }
         public Interface.HudDeBatalha Hud { get { return _hud; } }
 
         /// <summary>A câmera do palco — é ela que o modo lote fotografa.</summary>
@@ -96,6 +98,7 @@ namespace Soterra.Jogo
                                                 calabouco.Paleta));
 
             _elenco = new Cena.Elenco(_palco, _banco);
+            _animacao = new AnimacaoDoElenco(_elenco, _palco, batalha);
             _partida = new Partida(_banco, batalha, Motor.Sorte.DeTexto("soterra-jogo"));
 
             _hud = AcharOuCriarHud();
@@ -116,6 +119,11 @@ namespace Soterra.Jogo
         void Update()
         {
             if (_partida == null) return;
+
+            // O tempo dos deslizes anda SEMPRE — inclusive depois do fim, para
+            // o último corpo terminar de cair em vez de congelar no ar.
+            _animacao.Avancar(Time.deltaTime);
+
             if (_partida.Acabou) return;
 
             if (_partida.TurnoDoJogador)
@@ -126,6 +134,15 @@ namespace Soterra.Jogo
             }
             else
             {
+                // Enquanto um deslize anda, o relógio da próxima jogada não
+                // conta: sem isto o monstro seguinte agiria com o anterior
+                // ainda no meio do caminho, e o deslize morreria cortado.
+                if (_animacao.Ocupada)
+                {
+                    _espera = 0f;
+                    return;
+                }
+
                 // O monstro joga em parcelas com pausa — a decisão continua do
                 // Cérebro; aqui só mora o relógio.
                 _espera += Time.deltaTime;
@@ -146,7 +163,17 @@ namespace Soterra.Jogo
         void AposAcao(Motor.Resultado r)
         {
             var batalha = _partida.Batalha;
+
+            // ANTES do espelho: quem morreu ainda existe em cena, e é agora que
+            // o corpo é adotado (fica caído) e os gatilhos disparam — depois do
+            // Sincronizar o objeto já teria sido destruído.
+            _animacao.Reagir(r);
             _elenco.Sincronizar(Fichas.De(batalha, _banco));
+            // DEPOIS do espelho: quem andou já está plantado no destino; o
+            // deslize o devolve ao ponto de partida e atravessa o caminho com
+            // tempo — é o deslocamento que faz o walk aparecer.
+            _animacao.Animar();
+
             _casaSobPonteiro = null;
             AtualizarRealce();
             _hud.Mostrar(_partida.Quadro());
