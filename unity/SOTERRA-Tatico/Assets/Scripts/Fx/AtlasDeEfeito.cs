@@ -72,7 +72,24 @@ namespace Soterra.Fx
 
         public Texture2D Textura { get; private set; }
         public MapaDoAtlas Mapa { get; private set; }
+
+        /// <summary>O material ADITIVO: efeito é luz, e luz soma.</summary>
         public Material Material { get; private set; }
+
+        /// <summary>
+        /// O material de mistura NORMAL, para as formas que precisam de
+        /// CONTRASTE em vez de brilho.
+        ///
+        /// Não é luxo — foi a foto que cobrou. O selo da armadilha é
+        /// quase-branco (o elemento neutro é #d8dee4) e, somado ao chão claro da
+        /// Estufa, sumia: a primeira foto mostrou uma casa vazia onde havia uma
+        /// armadilha plantada. Aditivo só aparece sobre fundo escuro. A linha JS
+        /// resolveu o mesmo problema com um "forro" quase-preto por baixo do
+        /// desenho; aqui a mistura normal faz o serviço com um material a menos.
+        ///
+        /// Continua sendo UMA textura — o que o orçamento de celular pede.
+        /// </summary>
+        public Material MaterialOpaco { get; private set; }
 
         public int Colunas { get { return Mapa != null && Mapa.Colunas > 0 ? Mapa.Colunas : 4; } }
         public int Linhas { get { return Mapa != null && Mapa.Linhas > 0 ? Mapa.Linhas : 4; } }
@@ -98,7 +115,8 @@ namespace Soterra.Fx
                 if (q != null && !string.IsNullOrEmpty(q.Nome)) a._porNome[q.Nome] = q.Indice;
             }
 
-            a.Material = a.MontarMaterial();
+            a.Material = a.MontarMaterial(true);
+            a.MaterialOpaco = a.MontarMaterial(false);
             return a;
         }
 
@@ -118,13 +136,13 @@ namespace Soterra.Fx
             return _porNome.ContainsKey(nome);
         }
 
-        Material MontarMaterial()
+        Material MontarMaterial(bool aditivo)
         {
             Shader s = null;
             for (int i = 0; i < Shaders.Length && s == null; i++) s = Shader.Find(Shaders[i]);
             if (s == null) return null;
 
-            var m = new Material(s) { name = "SOTERRA/Efeitos" };
+            var m = new Material(s) { name = aditivo ? "SOTERRA/Efeitos" : "SOTERRA/EfeitosOpacos" };
             // O nome da propriedade de textura mudou entre pipelines: o URP usa
             // _BaseMap e os antigos _MainTex. Escrever nos dois é mais barato
             // que descobrir na foto que o efeito saiu branco chapado — foi
@@ -134,17 +152,55 @@ namespace Soterra.Fx
                 if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", Textura);
                 if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", Textura);
             }
-            // Aditivo: efeito é LUZ, e luz soma. Sem isto o quadrado do sprite
-            // aparece como retângulo escuro sobre o chão claro.
             if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);       // transparente
-            if (m.HasProperty("_Blend")) m.SetFloat("_Blend", 1f);           // additive
-            if (m.HasProperty("_SrcBlend")) m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            if (m.HasProperty("_DstBlend")) m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            // 1 = additive, 0 = alpha, no vocabulário do shader de partícula do
+            // URP. O aditivo é o padrão porque efeito é LUZ; o alpha existe para
+            // a forma que precisa CONTRASTAR com um chão claro em vez de brilhar.
+            if (m.HasProperty("_Blend")) m.SetFloat("_Blend", aditivo ? 1f : 0f);
+            // No aditivo o fator de origem é ONE, e não SrcAlpha: com
+            // `_ALPHAPREMULTIPLY_ON` o shader JÁ multiplicou a cor pelo alfa, e
+            // multiplicar de novo no blend cobrava o alfa duas vezes — o clarão
+            // do meteoro saía com metade do brilho que o molde pedia.
+            if (m.HasProperty("_SrcBlend"))
+                m.SetFloat("_SrcBlend", aditivo
+                    ? (float)UnityEngine.Rendering.BlendMode.One
+                    : (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (m.HasProperty("_DstBlend"))
+                m.SetFloat("_DstBlend", aditivo
+                    ? (float)UnityEngine.Rendering.BlendMode.One
+                    : (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             if (m.HasProperty("_ZWrite")) m.SetFloat("_ZWrite", 0f);
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
             if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
             m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            m.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+
+            // Os KEYWORDS, e não só as propriedades. Escrever `_Surface = 1` sem
+            // ligar `_SURFACE_TYPE_TRANSPARENT` deixa o shader compilado no
+            // caminho OPACO: ele lê a cor e IGNORA o alfa. No material aditivo
+            // isso passou despercebido (com DstBlend = One, o preto do fundo do
+            // quadro soma zero e some sozinho), mas no opaco a foto mostrou o
+            // selo da armadilha dentro de um retângulo PRETO do tamanho do
+            // sprite. Alfa que não é lido não recorta nada.
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+
+            // `_ALPHAMODULATE_ON` fica DESLIGADO nos dois, e isto custou uma
+            // foto para descobrir: esse modo empurra a cor para BRANCO onde o
+            // alfa é baixo, e o quadro do Kenney é quase todo borda macia. O
+            // resultado foi um meteoro de FOGO saindo branco — o efeito parava
+            // de dizer de que elemento era, que é metade da informação que ele
+            // existe para dar.
+            m.DisableKeyword("_ALPHAMODULATE_ON");
+            if (aditivo)
+            {
+                m.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+                m.DisableKeyword("_ALPHABLEND_ON");
+            }
+            else
+            {
+                m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                m.EnableKeyword("_ALPHABLEND_ON");
+            }
             return m;
         }
     }

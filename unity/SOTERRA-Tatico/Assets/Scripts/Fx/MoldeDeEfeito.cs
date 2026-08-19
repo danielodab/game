@@ -46,6 +46,24 @@ namespace Soterra.Fx
         Trilho
     }
 
+    /// <summary>
+    /// Como a camada se soma ao que já está na tela.
+    ///
+    /// A foto cobrou esta escolha: o selo da armadilha é quase-branco (o
+    /// elemento neutro é #d8dee4) e, somado ao chão claro da Estufa, SUMIU — a
+    /// primeira foto mostrou uma casa vazia onde havia armadilha plantada.
+    /// Aditivo só aparece sobre fundo escuro.
+    /// </summary>
+    public enum Mistura
+    {
+        /// <summary>Soma: efeito é luz. O padrão de quase tudo.</summary>
+        Aditiva,
+
+        /// <summary>Cobre: a forma CONTRASTA com o chão em vez de brilhar. É o
+        /// que faz um selo pálido existir sobre grama clara.</summary>
+        Normal
+    }
+
     /// <summary>De que volume as partículas saem.</summary>
     public enum FormaDeEmissao
     {
@@ -87,6 +105,7 @@ namespace Soterra.Fx
         public Ancora Onde = Ancora.Alvo;
         public ModoDeDesenho Modo = ModoDeDesenho.Bilhete;
         public FormaDeEmissao Forma = FormaDeEmissao.Ponto;
+        public Mistura Mistura = Mistura.Aditiva;
 
         /// <summary>Raio (ou meia-largura) do volume de nascimento, em metros.</summary>
         public float Raio = 0.2f;
@@ -152,6 +171,21 @@ namespace Soterra.Fx
 
         /// <summary>Opacidade máxima — a camada de pó cede o palco à de forma.</summary>
         public float Opacidade = 1f;
+
+        /// <summary>
+        /// O FORRO: opacidade de uma cópia quase-preta desta camada, desenhada
+        /// atrás e 16% maior. Zero desliga.
+        ///
+        /// É o truque de contraste que a linha JS documenta, e a foto desta
+        /// rodada cobrou duas vezes. O selo neutro da armadilha é #d8dee4 — mais
+        /// claro que a grama da Estufa. Em mistura aditiva ele somava luz a um
+        /// chão que já era claro e SUMIA; em mistura normal ele aparecia, mas
+        /// como um cinza pálido sobre verde pálido, ainda ilegível. O forro
+        /// escurece o piso exatamente onde o desenho vai entrar, e aí a forma
+        /// clara aparece sobre escuro — e ganha um contorno, como o resto da
+        /// arte do jogo.
+        /// </summary>
+        public float Forro;
     }
 
     /// <summary>
@@ -161,6 +195,15 @@ namespace Soterra.Fx
     {
         public string Familia;
         public CamadaDeEfeito[] Camadas;
+
+        /// <summary>A cor do forro: quase preto, não preto. Preto cravado
+        /// deixaria um buraco de tinta no chão; este tom guarda um resto de azul
+        /// que lê como sombra.</summary>
+        public static readonly Color CorDoForro = new Color(0.016f, 0.02f, 0.04f, 1f);
+
+        /// <summary>O quanto o forro passa da forma que ele destaca. 16% é
+        /// pouco o bastante para virar contorno e não mancha.</summary>
+        public const float FolgaDoForro = 1.16f;
 
         /// <summary>Tranco na câmera, em unidades do <c>Palco</c>. Zero em
         /// armadilha e aura de propósito: elas não batem em nada.</summary>
@@ -191,7 +234,13 @@ namespace Soterra.Fx
             {
                 int n = 0;
                 for (int i = 0; i < Camadas.Length; i++)
-                    n += Camadas[i].Quantidade * Mathf.Max(1, Camadas[i].Ciclos);
+                {
+                    // O forro é uma cópia da camada: conta duas vezes. Somar só
+                    // as declaradas faria o orçamento mentir para baixo — que é
+                    // o pior jeito de um orçamento errar.
+                    int vezes = Camadas[i].Forro > 0f ? 2 : 1;
+                    n += Camadas[i].Quantidade * Mathf.Max(1, Camadas[i].Ciclos) * vezes;
+                }
                 return n;
             }
         }
@@ -232,7 +281,8 @@ namespace Soterra.Fx
                 {
                     Quadro = "estouro", Onde = Ancora.PeitoDoAlvo, Modo = ModoDeDesenho.Bilhete,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Atraso = 0.45f,
-                    Vida = 0.5f, Tamanho = 2.2f, EscalaFinal = 3.2f, Permanencia = 0.1f
+                    Vida = 0.5f, Tamanho = 2.2f, EscalaFinal = 3.2f, Permanencia = 0.1f,
+                    Opacidade = 0.85f
                 },
                 new CamadaDeEfeito
                 {
@@ -240,7 +290,18 @@ namespace Soterra.Fx
                     Forma = FormaDeEmissao.Disco, Raio = 0.4f, Quantidade = 26, Atraso = 0.45f,
                     Vida = 0.55f, VidaVariacao = 0.25f, Velocidade = 5.5f, VelocidadeVariacao = 3f,
                     Gravidade = 1.1f, Tamanho = 0.5f, TamanhoVariacao = 0.3f, EscalaFinal = 0.2f,
-                    GiroInicialAleatorio = true, Opacidade = 0.9f
+                    GiroInicialAleatorio = true, Opacidade = 0.8f
+                },
+                new CamadaDeEfeito
+                {
+                    // O anel no chão custa UMA partícula e responde a pergunta
+                    // que mais importa: em QUE casa caiu. Sem ele a foto mostra
+                    // um clarão no ar e o jogador procura o alvo.
+                    Quadro = "anel", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
+                    Forma = FormaDeEmissao.Ponto, Quantidade = 1, Atraso = 0.45f,
+                    Vida = 0.66f, Tamanho = 1.4f, EscalaFinal = 4.2f, Permanencia = 0.12f,
+                    Opacidade = 0.85f,
+                    Forro = 0.5f
                 });
 
             // Vários corpos pequenos caindo sobre a ÁREA, um a um. O anel no
@@ -258,7 +319,8 @@ namespace Soterra.Fx
                 {
                     Quadro = "anel", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.95f,
-                    Tamanho = 2.4f, EscalaFinal = 2.3f, Permanencia = 0.35f, Opacidade = 0.7f
+                    Tamanho = 2.4f, EscalaFinal = 2.3f, Permanencia = 0.35f, Opacidade = 0.7f,
+                    Forro = 0.5f
                 });
 
             // ABRE a partir do conjurador na direção do alvo. O leque é o shape:
@@ -267,16 +329,20 @@ namespace Soterra.Fx
                 new CamadaDeEfeito
                 {
                     Quadro = "fumaca", Onde = Ancora.PeitoDoConjurador, Modo = ModoDeDesenho.Bilhete,
-                    Forma = FormaDeEmissao.Leque, Abertura = 32f, Raio = 0.3f, Quantidade = 12,
+                    Forma = FormaDeEmissao.Leque, Abertura = 32f, Raio = 0.3f, Quantidade = 8,
                     Ciclos = 4, IntervaloDeCiclo = 0.06f, Vida = 0.5f, VidaVariacao = 0.2f,
-                    Velocidade = 7f, VelocidadeVariacao = 2.5f, Tamanho = 0.9f, TamanhoVariacao = 0.4f,
-                    EscalaFinal = 2.2f, GiroInicialAleatorio = true, Opacidade = 0.85f
+                    Velocidade = 7f, VelocidadeVariacao = 2.5f, Tamanho = 0.8f, TamanhoVariacao = 0.35f,
+                    EscalaFinal = 1.9f, GiroInicialAleatorio = true, Opacidade = 0.55f
                 },
                 new CamadaDeEfeito
                 {
+                    // O leque no chão marca a ÁREA que o sopro pega, e marca-se
+                    // área por contraste: em aditivo ele se dissolveria na
+                    // grama, e o jogador não saberia até onde o cone chegou.
                     Quadro = "lingua", Onde = Ancora.Meio, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.55f,
-                    Tamanho = 3.4f, EscalaFinal = 1.6f, Permanencia = 0.25f
+                    Tamanho = 3.4f, EscalaFinal = 1.8f, Permanencia = 0.25f,
+                    Forro = 0.5f
                 });
 
             // Quatro braços saindo do alvo. O quadro `aura` do Kenney É uma
@@ -287,7 +353,8 @@ namespace Soterra.Fx
                 {
                     Quadro = "aura", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.6f,
-                    Tamanho = 2.6f, EscalaFinal = 2.4f, Giro = 40f, Permanencia = 0.2f
+                    Tamanho = 2.6f, EscalaFinal = 2.4f, Giro = 40f, Permanencia = 0.2f,
+                    Forro = 0.5f
                 },
                 new CamadaDeEfeito
                 {
@@ -303,7 +370,8 @@ namespace Soterra.Fx
                 {
                     Quadro = "anel", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.66f,
-                    Tamanho = 1.2f, EscalaFinal = 5.5f, Permanencia = 0.1f
+                    Tamanho = 1.2f, EscalaFinal = 5.5f, Permanencia = 0.1f,
+                    Forro = 0.5f
                 },
                 new CamadaDeEfeito
                 {
@@ -340,7 +408,8 @@ namespace Soterra.Fx
                 {
                     Quadro = "anel", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.6f,
-                    Tamanho = 1.0f, EscalaFinal = 4.6f, Permanencia = 0.1f, Opacidade = 0.85f
+                    Tamanho = 1.0f, EscalaFinal = 4.6f, Permanencia = 0.1f, Opacidade = 0.85f,
+                    Forro = 0.5f
                 });
 
             // A parede que ATRAVESSA: o redemoinho anda do conjurador ao alvo,
@@ -358,7 +427,8 @@ namespace Soterra.Fx
                     Forma = FormaDeEmissao.Linha, Quantidade = 22, Vida = 0.5f, VidaVariacao = 0.2f,
                     Velocidade = 1.6f, Empuxo = new Vector3(0f, 0.6f, 0f),
                     Tamanho = 0.8f, TamanhoVariacao = 0.4f, EscalaFinal = 1.6f,
-                    GiroInicialAleatorio = true, Opacidade = 0.8f
+                    GiroInicialAleatorio = true, Opacidade = 0.8f,
+                    Forro = 0.5f
                 });
 
             // O rastro da corrida cobre o caminho inteiro, e as garras chegam no
@@ -411,16 +481,21 @@ namespace Soterra.Fx
             Por(FamiliaDeEfeito.Armadilha, 0f,
                 new CamadaDeEfeito
                 {
+                    // Mistura NORMAL: o selo é pálido (o neutro do acervo é
+                    // #d8dee4) e somado ao chão claro da Estufa ele SUMIA — a
+                    // primeira foto mostrou uma casa vazia onde havia armadilha.
                     Quadro = "runa", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 1.8f,
-                    Tamanho = 1.0f, EscalaFinal = 2.6f, Giro = 26f, Permanencia = 0.72f
+                    Tamanho = 1.2f, EscalaFinal = 3.4f, Giro = 26f, Permanencia = 0.72f,
+                    Forro = 0.5f
                 },
                 new CamadaDeEfeito
                 {
                     Quadro = "runa", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Disco, Raio = 1.1f, Quantidade = 10,
                     Vida = 0.9f, VidaVariacao = 0.4f, Empuxo = new Vector3(0f, 0.5f, 0f),
-                    Tamanho = 0.5f, EscalaFinal = 0.4f, Giro = 40f, Permanencia = 0.5f, Opacidade = 0.8f
+                    Tamanho = 0.5f, EscalaFinal = 0.4f, Giro = 40f, Permanencia = 0.5f, Opacidade = 0.8f,
+                    Forro = 0.5f
                 });
 
             // COLUNA DE LUZ subindo onde a criatura vai aparecer, e o círculo
@@ -431,7 +506,8 @@ namespace Soterra.Fx
                 {
                     Quadro = "runa", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.95f,
-                    Tamanho = 1.0f, EscalaFinal = 3.0f, Giro = -100f, Permanencia = 0.35f
+                    Tamanho = 1.2f, EscalaFinal = 3.4f, Giro = -100f, Permanencia = 0.35f,
+                    Forro = 0.5f
                 },
                 new CamadaDeEfeito
                 {
@@ -461,7 +537,8 @@ namespace Soterra.Fx
                     // O anel FECHA nos pés: aura recolhe, não espalha.
                     Quadro = "anel", Onde = Ancora.Conjurador, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.75f,
-                    Tamanho = 3.2f, EscalaFinal = 0.4f, Permanencia = 0.25f
+                    Tamanho = 3.2f, EscalaFinal = 0.4f, Permanencia = 0.25f,
+                    Forro = 0.5f
                 },
                 new CamadaDeEfeito
                 {
@@ -478,22 +555,23 @@ namespace Soterra.Fx
                 {
                     Quadro = "brilho", Onde = Ancora.PeitoDoAlvo, Modo = ModoDeDesenho.Bilhete,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.72f,
-                    Tamanho = 1.6f, EscalaFinal = 2.2f, Giro = 45f, Permanencia = 0.25f
+                    Tamanho = 2.2f, EscalaFinal = 2.4f, Giro = 45f, Permanencia = 0.3f
                 },
                 new CamadaDeEfeito
                 {
                     Quadro = "brilho", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Bilhete,
                     Forma = FormaDeEmissao.Coluna, Raio = 0.65f, Quantidade = 22,
                     Vida = 0.85f, VidaVariacao = 0.3f, Empuxo = new Vector3(0f, 3.4f, 0f),
-                    Gravidade = -0.3f, Tamanho = 0.5f, TamanhoVariacao = 0.2f, EscalaFinal = 0.3f,
-                    Giro = 100f
+                    Gravidade = -0.3f, Tamanho = 0.55f, TamanhoVariacao = 0.2f, EscalaFinal = 0.3f,
+                    Giro = 100f, Opacidade = 0.7f
                 },
                 new CamadaDeEfeito
                 {
                     // O anel também FECHA: cura recolhe para dentro do corpo.
                     Quadro = "anel", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.62f,
-                    Tamanho = 2.6f, EscalaFinal = 0.45f, Permanencia = 0.2f, Opacidade = 0.75f
+                    Tamanho = 2.6f, EscalaFinal = 0.45f, Permanencia = 0.2f, Opacidade = 0.75f,
+                    Forro = 0.5f
                 });
 
             // Uma peça DO TAMANHO DO TIRO. No JS o feixe eram 26 pontinhos em
@@ -546,13 +624,14 @@ namespace Soterra.Fx
                 {
                     Quadro = "estouro", Onde = Ancora.PeitoDoAlvo, Modo = ModoDeDesenho.Bilhete,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.5f,
-                    Tamanho = 1.8f, EscalaFinal = 3.6f, Permanencia = 0.1f
+                    Tamanho = 1.8f, EscalaFinal = 3.6f, Permanencia = 0.1f, Opacidade = 0.9f
                 },
                 new CamadaDeEfeito
                 {
                     Quadro = "anel", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.56f,
-                    Tamanho = 1.2f, EscalaFinal = 4.2f, Permanencia = 0.1f, Opacidade = 0.85f
+                    Tamanho = 1.2f, EscalaFinal = 4.2f, Permanencia = 0.1f, Opacidade = 0.85f,
+                    Forro = 0.5f
                 },
                 new CamadaDeEfeito
                 {
@@ -560,7 +639,7 @@ namespace Soterra.Fx
                     Forma = FormaDeEmissao.Esfera, Raio = 0.35f, Quantidade = 34,
                     Vida = 0.55f, VidaVariacao = 0.25f, Velocidade = 7.5f, VelocidadeVariacao = 3f,
                     Gravidade = 0.6f, Tamanho = 0.55f, TamanhoVariacao = 0.3f, EscalaFinal = 0.25f,
-                    GiroInicialAleatorio = true, Opacidade = 0.9f
+                    GiroInicialAleatorio = true, Opacidade = 0.82f
                 });
 
             // A casca que FECHA em volta de quem recebe — cresce ao contrário do
@@ -576,7 +655,8 @@ namespace Soterra.Fx
                 {
                     Quadro = "anel", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Vida = 0.62f,
-                    Tamanho = 3.0f, EscalaFinal = 0.5f, Permanencia = 0.25f, Opacidade = 0.8f
+                    Tamanho = 3.0f, EscalaFinal = 0.5f, Permanencia = 0.25f, Opacidade = 0.8f,
+                    Forro = 0.5f
                 },
                 new CamadaDeEfeito
                 {
@@ -653,7 +733,8 @@ namespace Soterra.Fx
                 {
                     Quadro = "runa", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Atraso = 0.22f, Vida = 0.9f,
-                    Tamanho = 2.8f, EscalaFinal = 0.55f, Giro = -52f, Permanencia = 0.4f, Opacidade = 0.8f
+                    Tamanho = 3.4f, EscalaFinal = 0.6f, Giro = -52f, Permanencia = 0.4f, Opacidade = 0.8f,
+                    Forro = 0.5f
                 });
 
             // O ÚLTIMO RECURSO — 4% das chaves do acervo. Mesmo ela deixa marca
@@ -675,7 +756,8 @@ namespace Soterra.Fx
                 {
                     Quadro = "anel", Onde = Ancora.Alvo, Modo = ModoDeDesenho.Chao,
                     Forma = FormaDeEmissao.Ponto, Quantidade = 1, Atraso = 0.34f,
-                    Vida = 0.48f, Tamanho = 0.8f, EscalaFinal = 3.4f, Permanencia = 0.1f, Opacidade = 0.8f
+                    Vida = 0.48f, Tamanho = 0.8f, EscalaFinal = 3.4f, Permanencia = 0.1f, Opacidade = 0.8f,
+                    Forro = 0.5f
                 });
 
             return m;

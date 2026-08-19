@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Soterra.Fx
@@ -35,6 +36,11 @@ namespace Soterra.Fx
 
         readonly MoldeDeEfeito _molde;
         readonly ParticleSystem[] _sistemas;
+
+        /// <summary>As camadas EFETIVAS: as declaradas mais o forro de cada uma
+        /// que o pediu. Andam em paralelo com <see cref="_sistemas"/>.</summary>
+        readonly CamadaDeEfeito[] _camadas;
+        readonly bool[] _ehForro;
         readonly GameObject _raiz;
 
         float _restante;
@@ -49,11 +55,14 @@ namespace Soterra.Fx
         /// <summary>Partículas que este sistema pode ter no ar ao mesmo tempo.</summary>
         public int TetoDeParticulas { get { return _molde.TetoDeParticulas; } }
 
-        SistemaDeEfeito(MoldeDeEfeito molde, GameObject raiz, ParticleSystem[] sistemas)
+        SistemaDeEfeito(MoldeDeEfeito molde, GameObject raiz, ParticleSystem[] sistemas,
+                        CamadaDeEfeito[] camadas, bool[] ehForro)
         {
             _molde = molde;
             _raiz = raiz;
             _sistemas = sistemas;
+            _camadas = camadas;
+            _ehForro = ehForro;
         }
 
         // =============================================================== MONTAR
@@ -65,11 +74,50 @@ namespace Soterra.Fx
             if (pai != null) raiz.transform.SetParent(pai, false);
             raiz.SetActive(false);
 
-            var sistemas = new ParticleSystem[molde.Camadas.Length];
+            var camadas = new List<CamadaDeEfeito>(molde.Camadas.Length + 4);
+            var ehForro = new List<bool>(camadas.Capacity);
             for (int i = 0; i < molde.Camadas.Length; i++)
-                sistemas[i] = MontarCamada(molde.Camadas[i], atlas, raiz.transform, i, semente + i * 7919);
+            {
+                // O forro vem ANTES da forma que ele destaca — desenha por baixo.
+                if (molde.Camadas[i].Forro > 0f)
+                {
+                    camadas.Add(Forrar(molde.Camadas[i]));
+                    ehForro.Add(true);
+                }
+                camadas.Add(molde.Camadas[i]);
+                ehForro.Add(false);
+            }
 
-            return new SistemaDeEfeito(molde, raiz, sistemas);
+            var sistemas = new ParticleSystem[camadas.Count];
+            for (int i = 0; i < camadas.Count; i++)
+                sistemas[i] = MontarCamada(camadas[i], atlas, raiz.transform, i, semente + i * 7919);
+
+            return new SistemaDeEfeito(molde, raiz, sistemas, camadas.ToArray(), ehForro.ToArray());
+        }
+
+        /// <summary>
+        /// A cópia escura de uma camada: a MESMA forma, 16% maior, em mistura
+        /// normal. Ela não tem vida própria — nasce e morre com a camada que
+        /// destaca, senão o contorno apareceria sozinho no chão.
+        /// </summary>
+        static CamadaDeEfeito Forrar(CamadaDeEfeito c)
+        {
+            return new CamadaDeEfeito
+            {
+                Quadro = c.Quadro, Onde = c.Onde, Modo = c.Modo,
+                Mistura = Mistura.Normal, Forma = c.Forma,
+                Raio = c.Raio, Abertura = c.Abertura, Quantidade = c.Quantidade,
+                Atraso = c.Atraso, Ciclos = c.Ciclos, IntervaloDeCiclo = c.IntervaloDeCiclo,
+                Vida = c.Vida, VidaVariacao = c.VidaVariacao,
+                Velocidade = c.Velocidade, VelocidadeVariacao = c.VelocidadeVariacao,
+                Empuxo = c.Empuxo, Gravidade = c.Gravidade,
+                Tamanho = c.Tamanho * MoldeDeEfeito.FolgaDoForro,
+                TamanhoVariacao = c.TamanhoVariacao * MoldeDeEfeito.FolgaDoForro,
+                EscalaFinal = c.EscalaFinal, Permanencia = c.Permanencia,
+                Giro = c.Giro, GiroInicialAleatorio = c.GiroInicialAleatorio,
+                Alongamento = c.Alongamento, Viaja = c.Viaja,
+                Opacidade = c.Forro, Forro = 0f
+            };
         }
 
         static ParticleSystem MontarCamada(CamadaDeEfeito c, AtlasDeEfeito atlas,
@@ -243,8 +291,13 @@ namespace Soterra.Fx
 
             // sharedMaterial, NUNCA material: fora de Play a segunda devolve uma
             // cópia descartada — a pintura não chega na tela e vaza um material
-            // por objeto (CONTRATO_UNITY_F1 §3).
-            if (atlas != null && atlas.Material != null) r.sharedMaterial = atlas.Material;
+            // por objeto (CONTRATO_UNITY_F1 §3). São dois materiais no projeto
+            // inteiro (aditivo e opaco), COMPARTILHADOS, sobre a mesma textura.
+            if (atlas != null)
+            {
+                var escolhido = c.Mistura == Mistura.Normal ? atlas.MaterialOpaco : atlas.Material;
+                if (escolhido != null) r.sharedMaterial = escolhido;
+            }
 
             // As camadas mais tardias desenham por cima: a forma grande tem de
             // ficar acima do pó, senão o pó a apaga.
@@ -324,7 +377,7 @@ namespace Soterra.Fx
             {
                 var ps = _sistemas[i];
                 if (ps == null) continue;
-                var c = _molde.Camadas[i];
+                var c = _camadas[i];
 
                 var nasce = PontoDe(c.Onde, origem, destino);
                 var alvo = destino + Vector3.up * (c.Onde == Ancora.Alvo ? 0.06f : AlturaDoPeito);
@@ -358,8 +411,11 @@ namespace Soterra.Fx
                 }
 
                 var main = ps.main;
-                var pintada = cor;
-                pintada.a = Mathf.Clamp01(cor.a * c.Opacidade);
+                // O forro NÃO recebe a cor do elemento: ele é a sombra que faz a
+                // forma clara aparecer. Pintá-lo do elemento o transformaria numa
+                // segunda cópia da forma, e o contraste sumiria.
+                var pintada = _ehForro[i] ? MoldeDeEfeito.CorDoForro : cor;
+                pintada.a = Mathf.Clamp01((_ehForro[i] ? 1f : cor.a) * c.Opacidade);
                 main.startColor = pintada;
 
                 if (Application.isPlaying) ps.Play(false);
@@ -403,9 +459,16 @@ namespace Soterra.Fx
 
             _restante -= dt;
 
+            // `fixedTimeStep: false` — e não o `true` que parece o padrão
+            // sensato. Com passo fixo, a Unity só avança em múltiplos do Fixed
+            // Time (0,02 s) e DESCARTA o resto: com quadros de 1/60 (0,0167 s)
+            // o sistema andava menos que o pedido, e as camadas com atraso —
+            // justamente as que fazem o meteoro estourar e a flecha acertar —
+            // ficavam para trás. Passo exato faz o tempo do efeito bater com o
+            // tempo do jogo.
             if (!Application.isPlaying)
                 for (int i = 0; i < _sistemas.Length; i++)
-                    if (_sistemas[i] != null) _sistemas[i].Simulate(dt, false, false, true);
+                    if (_sistemas[i] != null) _sistemas[i].Simulate(dt, false, false, false);
 
             if (_restante <= 0f)
             {

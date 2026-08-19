@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -65,26 +66,45 @@ namespace Soterra.Testes.Fx
         }
 
         [Test]
-        public void UmMaterialSo_ParaTodasAsFamilias()
+        public void UmaTextura_EDoisMateriaisCOMPARTILHADOS()
         {
             _banco.PrepararTodas();
 
-            Material unico = null;
+            // DOIS materiais no projeto inteiro, e nunca um por objeto: o
+            // aditivo (efeito é luz) e o opaco (a forma que precisa contrastar
+            // com o chão claro em vez de brilhar). Material distinto criado em
+            // tempo de edição faz o SRP Batcher desenhar TUDO com a cor do
+            // primeiro (CONTRATO_UNITY_F1 §3) — o meteoro de fogo pintaria a
+            // onda de água de laranja. Por isso a cor vai em main.startColor.
+            var materiais = new List<Material>();
+            var texturas = new List<Texture>();
             int sistemas = 0;
+
             var particulas = _raiz.GetComponentsInChildren<ParticleSystem>(true);
             for (int i = 0; i < particulas.Length; i++)
             {
                 var r = particulas[i].GetComponent<ParticleSystemRenderer>();
                 if (r == null || r.sharedMaterial == null) continue;
                 sistemas++;
-                if (unico == null) unico = r.sharedMaterial;
-                Assert.AreSame(unico, r.sharedMaterial,
-                               "apareceu um segundo material. Material distinto criado em tempo " +
-                               "de edição faz o SRP Batcher desenhar TUDO com a cor do primeiro " +
-                               "(CONTRATO_UNITY_F1 §3) — o meteoro de fogo pintaria a onda de " +
-                               "água de laranja");
+                if (!materiais.Contains(r.sharedMaterial)) materiais.Add(r.sharedMaterial);
+
+                var t = r.sharedMaterial.HasProperty("_BaseMap")
+                    ? r.sharedMaterial.GetTexture("_BaseMap")
+                    : (r.sharedMaterial.HasProperty("_MainTex")
+                        ? r.sharedMaterial.GetTexture("_MainTex") : null);
+                if (t != null && !texturas.Contains(t)) texturas.Add(t);
             }
+
             Assert.Greater(sistemas, 0, "nenhum sistema recebeu material");
+            Assert.LessOrEqual(materiais.Count, 2,
+                               "apareceram " + materiais.Count + " materiais: alguém está criando " +
+                               "material por objeto, e o SRP Batcher vai pintar tudo com a cor do " +
+                               "primeiro");
+
+            if (_banco.Atlas.Completo)
+                Assert.AreEqual(1, texturas.Count,
+                                "as 21 famílias e as 16 formas têm de sair de UMA textura — o " +
+                                "orçamento de celular é isso");
         }
 
         [Test]
