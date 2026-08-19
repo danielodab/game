@@ -114,6 +114,15 @@ namespace Soterra.Jogo
             _animacao = new AnimacaoDoElenco(_elenco, _palco, batalha);
             _partida = new Partida(_banco, batalha, Motor.Sorte.DeTexto("soterra-jogo"));
 
+            // A camera passa a obedecer ao jogador E a se reenquadrar quando a
+            // tela muda. Enquadrar so na montagem era o defeito que deixava a
+            // camera colada em Play: a proporcao da janela ainda nao e a final
+            // no quadro em que a sala e montada.
+            var cameraDoJogador = gameObject.GetComponent<CameraDoJogador>();
+            if (cameraDoJogador == null) cameraDoJogador = gameObject.AddComponent<CameraDoJogador>();
+            cameraDoJogador.MarcarOrigem();
+            cameraDoJogador.Ligar(_palco);
+
             _hud = AcharOuCriarHud();
             _hud.Montar();
             _hud.Tela.AoEscolherFeitico += AoEscolherFeitico;
