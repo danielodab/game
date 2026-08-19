@@ -107,7 +107,11 @@ namespace Soterra.Batalha
                 iniciativas.Add(monstro.Atributos.Iniciativa);
             }
 
-            var ordem = PorIniciativa(unidades, iniciativas);
+            // A ordem sai pronta do proprio Motor: o construtor dele ordena por
+            // iniciativa e ja comeca o turno do primeiro. Ordenar aqui tambem
+            // criaria DUAS fontes para a mesma fila, e elas divergiriam no dia
+            // em que uma das duas ganhasse um criterio de desempate novo.
+            unidades = PorIniciativa(unidades, iniciativas);
 
             // A sala manda no clima; o calabouço só responde por quem não
             // declarou. Ler o clima do calabouço primeiro apagaria a decisão de
@@ -117,7 +121,7 @@ namespace Soterra.Batalha
                       : (!string.IsNullOrEmpty(calabouco.ClimaPadrao) ? calabouco.ClimaPadrao
                                                                       : ClimaSemOpiniao);
 
-            return new Motor.Batalha(mapa, unidades, ordem, clima);
+            return new Motor.Batalha(banco, mapa, unidades, clima);
         }
 
         /// <summary>

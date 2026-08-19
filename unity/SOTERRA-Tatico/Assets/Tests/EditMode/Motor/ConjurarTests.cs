@@ -3,6 +3,11 @@ using Soterra.Motor;
 
 namespace Soterra.Testes.Motor
 {
+    // `Motor.X` dentro de `Soterra.Testes.Motor` acha o PROPRIO namespace de
+    // teste antes de chegar em `Soterra.Motor`, e some com o tipo. O apelido
+    // global trava no lugar certo — mesma armadilha do apelido de `Batalha`.
+    using Motor = global::Soterra.Motor;
+
     using Batalha = global::Soterra.Motor.Batalha;
 
     /// <summary>
