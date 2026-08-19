@@ -1,0 +1,394 @@
+{
+ "classes": {
+  "sumo": {
+   "model": "barbarian",
+   "tint": "#d4553f",
+   "accent": "#ffd08a",
+   "weapon": "1H_Axe",
+   "concept": "Bárbaro brutamontes de dois machados, capa e cabeça baixa",
+   "scale": 1.16,
+   "headTilt": 0.3,
+   "show": [
+    "1H_Axe",
+    "1H_Axe_Offhand",
+    "Barbarian_Cape"
+   ]
+  },
+  "arqueiro": {
+   "model": "rogue_hooded",
+   "tint": "#4f9d6a",
+   "accent": "#d8f0a0",
+   "weapon": "2H_Crossbow",
+   "concept": "Batedor encapuzado de besta de duas mãos",
+   "scale": 1.0,
+   "show": [
+    "2H_Crossbow",
+    "Rogue_Cape"
+   ]
+  },
+  "bruxo": {
+   "model": "mage",
+   "tint": "#7a5fa0",
+   "accent": "#b98cff",
+   "weapon": "2H_Staff",
+   "headTint": "#fbfaf7",
+   "concept": "Mago velho de barba branca, chapéu pontudo e cajado",
+   "scale": 1.02,
+   "headWhite": 0.88,
+   "show": [
+    "2H_Staff",
+    "Spellbook",
+    "Mage_Hat",
+    "Mage_Cape"
+   ]
+  },
+  "espadachim": {
+   "model": "rogue",
+   "tint": "#2f6f8f",
+   "accent": "#9be8ff",
+   "weapon": "Knife",
+   "concept": "Ladino ágil de adagas gêmeas, roupa preta e máscara",
+   "scale": 0.97,
+   "show": [
+    "Knife",
+    "Knife_Offhand",
+    "Rogue_Cape"
+   ]
+  },
+  "curandeira": {
+   "model": "knight",
+   "tint": "#f0c05a",
+   "accent": "#fff2c2",
+   "weapon": "1H_Sword",
+   "concept": "Paladina de armadura clara e escudo de brasão",
+   "scale": 1.0,
+   "show": [
+    "1H_Sword",
+    "Badge_Shield",
+    "Knight_Cape"
+   ]
+  },
+  "invocador": {
+   "model": "mage",
+   "tint": "#3f8f8a",
+   "accent": "#8ff0d8",
+   "weapon": "1H_Wand",
+   "concept": "Xamã de grimório aberto e varinha, sem chapéu",
+   "scale": 1.0,
+   "show": [
+    "Spellbook_open",
+    "1H_Wand",
+    "Mage_Cape"
+   ]
+  }
+ },
+ "monstros": {
+  "thorn-lasher": {
+   "model": "q_snake",
+   "scale": 1.0
+  },
+  "pollen-puff": {
+   "model": "q_frog",
+   "scale": 0.85
+  },
+  "burr-mother": {
+   "model": "q_spider",
+   "scale": 1.05
+  },
+  "sap-shaman": {
+   "model": "skeleton_mage",
+   "scale": 1.0,
+   "show": [
+    "Skeleton_Staff"
+   ]
+  },
+  "sprout-feral": {
+   "model": "q_frog",
+   "scale": 0.78
+  },
+  "burrlet": {
+   "model": "q_spider",
+   "scale": 0.58
+  },
+  "boss-gardener": {
+   "model": "q_mushnub",
+   "scale": 1.75
+  },
+  "lantern-wasp": {
+   "model": "q_wasp",
+   "scale": 0.95
+  },
+  "dew-strider": {
+   "model": "q_spider",
+   "scale": 0.85
+  },
+  "drowned-porter": {
+   "model": "skeleton_warrior",
+   "scale": 1.05,
+   "show": [
+    "Skeleton_Blade"
+   ]
+  },
+  "moray-piper": {
+   "model": "q_snake",
+   "scale": 1.1
+  },
+  "lantern-jelly": {
+   "model": "q_frog",
+   "scale": 0.92
+  },
+  "brine-golem": {
+   "model": "skeleton_warrior",
+   "scale": 1.3,
+   "show": [
+    "Skeleton_Shield_Large_A"
+   ]
+  },
+  "fat-drop": {
+   "model": "q_frog",
+   "scale": 0.95
+  },
+  "droplet": {
+   "model": "q_frog",
+   "scale": 0.55
+  },
+  "sump-crab": {
+   "model": "q_spider",
+   "scale": 0.95
+  },
+  "mist-warbler": {
+   "model": "q_wasp",
+   "scale": 0.8
+  },
+  "boss-baroness": {
+   "model": "q_glub",
+   "scale": 1.75
+  },
+  "ember-imp": {
+   "model": "skeleton_minion",
+   "scale": 0.82
+  },
+  "walking-anvil": {
+   "model": "q_bull",
+   "scale": 1.05
+  },
+  "ash-wraith": {
+   "model": "skeleton_mage",
+   "scale": 1.0
+  },
+  "slag-mound": {
+   "model": "q_frog",
+   "scale": 1.05
+  },
+  "faceless-smith": {
+   "model": "skeleton_warrior",
+   "scale": 1.15,
+   "show": [
+    "Skeleton_Axe"
+   ]
+  },
+  "quench-hound": {
+   "model": "q_wolf",
+   "scale": 0.85
+  },
+  "chain-hauler": {
+   "model": "skeleton_warrior",
+   "scale": 1.2,
+   "show": [
+    "Skeleton_Axe"
+   ]
+  },
+  "spark-whelp": {
+   "model": "q_velociraptor",
+   "scale": 0.7
+  },
+  "slag-bit": {
+   "model": "q_frog",
+   "scale": 0.5
+  },
+  "boss-heartforge": {
+   "model": "q_bluedemon",
+   "scale": 1.85
+  },
+  "plank-shrike": {
+   "model": "q_wasp",
+   "scale": 0.95
+  },
+  "gust-gremlin": {
+   "model": "skeleton_minion",
+   "scale": 0.85
+  },
+  "rope-hanger": {
+   "model": "skeleton_rogue",
+   "scale": 1.0
+  },
+  "kite-serpent": {
+   "model": "q_snake",
+   "scale": 1.15
+  },
+  "ballast-golem": {
+   "model": "skeleton_warrior",
+   "scale": 1.3,
+   "show": [
+    "Skeleton_Shield_Large_B"
+   ]
+  },
+  "whistle-choir": {
+   "model": "skeleton_mage",
+   "scale": 1.0,
+   "show": [
+    "Skeleton_Staff"
+   ]
+  },
+  "mote-swarm": {
+   "model": "q_wasp",
+   "scale": 0.7
+  },
+  "mote-bit": {
+   "model": "q_wasp",
+   "scale": 0.5
+  },
+  "nail-sprite": {
+   "model": "q_wasp",
+   "scale": 0.6
+  },
+  "boss-windwright": {
+   "model": "q_alpaking",
+   "scale": 1.76
+  },
+  "pick-revenant": {
+   "model": "skeleton_warrior",
+   "scale": 1.0,
+   "show": [
+    "Skeleton_Axe"
+   ]
+  },
+  "firedamp-wisp": {
+   "model": "q_wasp",
+   "scale": 0.7
+  },
+  "cave-jaw": {
+   "model": "q_velociraptor",
+   "scale": 0.9
+  },
+  "crystal-chanter": {
+   "model": "skeleton_mage",
+   "scale": 1.05,
+   "show": [
+    "Skeleton_Staff"
+   ]
+  },
+  "sinkhole-worm": {
+   "model": "q_snake",
+   "scale": 1.3
+  },
+  "ore-tumbler": {
+   "model": "q_frog",
+   "scale": 0.9
+  },
+  "ore-chip": {
+   "model": "q_frog",
+   "scale": 0.55
+  },
+  "shaft-bat": {
+   "model": "q_wasp",
+   "scale": 0.75
+  },
+  "damp-seeper": {
+   "model": "q_frog",
+   "scale": 0.8
+  },
+  "boss-deepknock": {
+   "model": "q_yeti",
+   "scale": 1.75
+  },
+  "cinder-herald": {
+   "model": "skeleton_warrior",
+   "scale": 1.1,
+   "show": [
+    "Skeleton_Blade"
+   ]
+  },
+  "tide-herald": {
+   "model": "skeleton_mage",
+   "scale": 1.1,
+   "show": [
+    "Skeleton_Staff"
+   ]
+  },
+  "stone-herald": {
+   "model": "skeleton_warrior",
+   "scale": 1.15,
+   "show": [
+    "Skeleton_Shield_Large_A"
+   ]
+  },
+  "gale-herald": {
+   "model": "skeleton_rogue",
+   "scale": 1.05,
+   "show": [
+    "Skeleton_Crossbow"
+   ]
+  },
+  "null-warden": {
+   "model": "skeleton_warrior",
+   "scale": 1.2,
+   "show": [
+    "Skeleton_Shield_Small_A",
+    "Skeleton_Blade"
+   ]
+  },
+  "mirror-twin": {
+   "model": "skeleton_rogue",
+   "scale": 1.0
+  },
+  "mirror-sliver": {
+   "model": "skeleton_rogue",
+   "scale": 0.7
+  },
+  "weather-mote": {
+   "model": "q_wasp",
+   "scale": 0.6
+  },
+  "heartroot": {
+   "model": "q_snake",
+   "scale": 1.0
+  },
+  "boss-riftheart": {
+   "model": "q_ghostskull",
+   "scale": 1.75
+  },
+  "sporeling": {
+   "model": "q_frog",
+   "scale": 0.62
+  },
+  "sum-familiar": {
+   "model": "q_hywirl",
+   "scale": 0.6
+  },
+  "sum-ember-hound": {
+   "model": "q_demon",
+   "scale": 0.72
+  },
+  "sum-magma-colossus": {
+   "model": "q_dragon_ev",
+   "scale": 0.95
+  },
+  "sum-tide-nymph": {
+   "model": "q_squidle",
+   "scale": 0.8
+  },
+  "sum-stone-sentinel": {
+   "model": "q_cactoro",
+   "scale": 0.62
+  },
+  "sum-mountain-golem": {
+   "model": "q_spikyblob",
+   "scale": 0.72
+  },
+  "sum-storm-falcon": {
+   "model": "q_birb",
+   "scale": 0.75
+  }
+ }
+}
