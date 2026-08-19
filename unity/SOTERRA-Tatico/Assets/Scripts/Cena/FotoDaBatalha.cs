@@ -60,7 +60,11 @@ namespace Soterra.Cena
             var mapa = sala.ParaMapa();
 
             var palco = new GameObject("Palco").AddComponent<Palco>();
-            palco.Montar(mapa);                       // fora de Play, sem ninguém apertar nada
+            // O tema vem do CALABOUÇO, e a sala pode destoar dele (`sceneryTheme`
+            // existe para isso). Sem esta linha a batalha da Cisterna sairia com
+            // o verde da Estufa, que foi o defeito desta rodada.
+            palco.Montar(mapa, TemaDoCenario.De(sala.TemaDeCenario ?? calabouco.Tema,
+                                                calabouco.Paleta));
 
             var elenco = new Elenco(palco, banco);
             var fichas = Montar(banco, sala, mapa);

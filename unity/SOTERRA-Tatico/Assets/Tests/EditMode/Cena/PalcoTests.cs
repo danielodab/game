@@ -58,7 +58,7 @@ namespace Soterra.Testes.Cena
                 for (int x = 0; x < _mapa.Largura; x++)
                 {
                     var casa = new Vector2Int(x, y);
-                    var peca = _palco.ObjetoDa(casa);
+                    var peca = _palco.DesenhoDa(casa);
                     if (_mapa.Em(casa) == Casa.Vazio)
                         Assert.IsNull(peca, "buraco em " + casa + " ganhou peça: a silhueta da " +
                                             "sala é feita de buraco, tapá-lo apaga o recorte");
@@ -273,13 +273,20 @@ namespace Soterra.Testes.Cena
         {
             _palco.Montar(_mapa);
 
-            var alto = new Vector2Int(3, 2);    // '#' do miolo
+            // Um trecho de PAREDE, e não o '#' solto do miolo. O '#' solto vira
+            // coluna, e coluna é fina de propósito — medindo por ela, a prova de
+            // "o alto preenche a casa" cobrava da peça errada. A parede é o que
+            // o jogador vê em toda sala; a coluna é o caso raro, e vai medida
+            // logo abaixo pelo que ela de fato promete, que é altura.
+            var alto = new Vector2Int(3, 4);    // '#' da fileira de baixo, com vizinho dos dois lados
+            var coluna = new Vector2Int(3, 2);  // '#' do miolo, sem vizinho nenhum
             var baixo = new Vector2Int(2, 3);   // '=' da linha de cima
             Assert.AreEqual(Casa.ObstaculoAlto, _mapa.Em(alto), "o mapa de teste saiu do lugar");
+            Assert.AreEqual(Casa.ObstaculoAlto, _mapa.Em(coluna), "o mapa de teste saiu do lugar");
             Assert.AreEqual(Casa.ObstaculoBaixo, _mapa.Em(baixo), "o mapa de teste saiu do lugar");
 
-            var pAlto = _palco.ObjetoDa(alto);
-            var pBaixo = _palco.ObjetoDa(baixo);
+            var pAlto = _palco.DesenhoDa(alto);
+            var pBaixo = _palco.DesenhoDa(baixo);
             Assert.IsNotNull(pAlto);
             Assert.IsNotNull(pBaixo);
 
@@ -289,21 +296,35 @@ namespace Soterra.Testes.Cena
                            "alto e baixo com alturas parecidas demais");
 
             // 2) TAMANHO: o alto preenche a casa, o baixo deixa um anel de chão.
-            Assert.Greater(pAlto.transform.localScale.x, pBaixo.transform.localScale.x * 1.3f,
+            // A medida saiu de `localScale` para a PEGADA do que foi desenhado —
+            // não há mais um objeto por casa para interrogar, e uma escala não
+            // diria nada sobre um traste do kit, cuja caixa não é a da malha.
+            Assert.Greater(pAlto.Value.Pegada, pBaixo.Value.Pegada * 1.3f,
                            "o baixo precisa do anel de piso em volta para ler como algo SOBRE o chão");
 
             // 3) COR: contraste de claro/escuro, que sobrevive em foto pequena e
             // para quem não separa as duas matizes.
-            float lAlto = Luz(CorDe(pAlto));
-            float lBaixo = Luz(CorDe(pBaixo));
+            float lAlto = Luz(pAlto.Value.Tinta);
+            float lBaixo = Luz(pBaixo.Value.Tinta);
             Assert.Greater(Mathf.Abs(lAlto - lBaixo), 0.25f,
-                           "alto e baixo com o mesmo valor de cor: em cubo, sem silhueta " +
-                           "própria, a cor é metade da leitura");
+                           "alto e baixo com o mesmo valor de cor: a cor é metade da leitura");
 
             // 4) nenhum dos dois pode sumir dentro do chão
-            float lChao = Luz(Palco.CorChao);
+            float lChao = Luz(TemaDoCenario.Padrao.Chao1);
             Assert.Greater(Mathf.Abs(lAlto - lChao), 0.05f, "obstáculo alto se confunde com o piso");
             Assert.Greater(Mathf.Abs(lBaixo - lChao), 0.05f, "obstáculo baixo se confunde com o piso");
+
+            // 5) a ORDEM de valor, que é o que se lê de relance: a parede é a
+            // coisa mais pesada da sala e a cobertura a mais clara. Trocar as
+            // duas não quebraria nada acima e destruiria o tabuleiro.
+            Assert.Less(lAlto, lChao, "a parede ficou mais clara que o chão");
+            Assert.Greater(lBaixo, lChao, "a cobertura ficou mais escura que o chão");
+
+            // 6) a COLUNA solta é mais estreita que a parede — é o que ela é —,
+            // mas continua sendo obstáculo alto: quem separa ela da cobertura é
+            // a altura, e essa não pode encolher junto com a pegada.
+            Assert.Greater(_palco.TopoDe(coluna), _palco.TopoDe(baixo) * 1.9f,
+                           "a coluna solta encolheu até a altura da cobertura");
         }
 
         // ================================================================ REALCE

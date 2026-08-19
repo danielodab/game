@@ -13,10 +13,14 @@ namespace Soterra.Cena
     /// O palco 3D: desenha um <see cref="Mapa"/> sob câmera ortográfica FIXA em
     /// 3/4 (decisão fechada em PLANO_UNITY.md, fase 3).
     ///
-    /// Nesta rodada não há modelo nenhum: chão, os dois obstáculos e os realces
-    /// saem de cubo e cor. O que se cobra aqui é a LEITURA do tabuleiro, não o
-    /// acabamento — se você não disser num relance qual obstáculo é alto e qual
-    /// é baixo, o palco falhou mesmo compilando.
+    /// Quem desenha as CASAS é o <see cref="Cenografia"/>, com as peças do env-kit
+    /// e auto-tiling de parede; o palco cuida do que é dele — coordenada, giro,
+    /// câmera, luz, realce e material. Antes desta rodada as casas eram cubo, e
+    /// o cubo continua de reserva: sem o kit importado, a sala desenha em cubo
+    /// em vez de desenhar nada.
+    ///
+    /// O que se cobra aqui não mudou: se você não disser num relance qual
+    /// obstáculo é alto e qual é baixo, o palco falhou mesmo compilando.
     ///
     /// Quem gira é o TABULEIRO, não a câmera. Duas razões: "câmera fixa" é a
     /// decisão, e com a câmera parada o sol continua vindo da mesma direção da
@@ -46,18 +50,27 @@ namespace Soterra.Cena
         /// </summary>
         public const float AlturaBaixo = 0.48f;
 
-        // O alto PREENCHE a casa e um fio a mais. Com 1.00 exato sobra um fio de
-        // fundo entre dois cubos vizinhos nas quinas, e a parede — que tem de ler
-        // como um maciço só — vira uma fileira de blocos soltos.
-        const float LadoAlto = 1.01f;
+        // As medidas do CUBO de reserva — o desenho da rodada 1, que continua
+        // valendo quando o env-kit não está importado. Públicas porque quem
+        // desenha a casa hoje é o <see cref="Cenografia"/>, e duas cópias do mesmo
+        // número acabam divergindo.
 
-        // O baixo é MENOR que a casa de propósito: o anel de piso em volta diz
-        // que ele está SOBRE o chão, e não que ele É o chão. É o terceiro sinal
-        // (com altura e cor) que separa alto de baixo sem ler legenda.
-        const float LadoBaixo = 0.70f;
+        /// <summary>O alto PREENCHE a casa e um fio a mais. Com 1,00 exato sobra
+        /// um fio de fundo entre dois cubos vizinhos nas quinas, e a parede — que
+        /// tem de ler como um maciço só — vira uma fileira de blocos soltos.</summary>
+        public const float LadoAlto = 1.01f;
 
-        const float LadoChao = 0.96f;       // a junta escura entre lajes desenha a grade
-        const float EspessuraChao = 0.14f;  // laje com topo exatamente em y = 0
+        /// <summary>O baixo é MENOR que a casa de propósito: o anel de piso em
+        /// volta diz que ele está SOBRE o chão, e não que ele É o chão. É o
+        /// terceiro sinal (com altura e cor) que separa alto de baixo sem ler
+        /// legenda, e vale igual para o cubo e para o traste do kit.</summary>
+        public const float LadoBaixo = 0.70f;
+
+        /// <summary>A junta escura entre lajes desenha a grade.</summary>
+        public const float LadoChao = 0.96f;
+
+        /// <summary>Laje com topo exatamente em y = 0.</summary>
+        public const float EspessuraChao = 0.14f;
 
         // As três camadas de realce do jogo em JS, copiadas de renderer3d_v2.js:
         // passo `ovTile(..., 0.18, 0.09, 0.84)`, alvo `(..., 0.34, 0.11, 0.80)`,
@@ -106,11 +119,11 @@ namespace Soterra.Cena
         const float FolgaEnquadramento = 1.06f;  // 6% de ar em volta do tabuleiro
 
         // ================================================================= PALETA
-        // Todas as cores saem do jogo em JS. As do obstáculo são as do tema
-        // `garden` (models3d.js) com o CONTRASTE ABERTO: lá o alto é uma parede
-        // modelada e o baixo é um engradado, e a silhueta já os separa; aqui os
-        // dois são cubo, então a diferença precisa caber na cor. `wall` #57452f e
-        // `lowWall` #6b5334 lado a lado, em cubo, ficam quase iguais.
+        // As cores das CASAS saíram daqui: a paleta era a do tema `garden`
+        // cravada no código e marcada como provisória desde a rodada 1, e com ela
+        // a Cisterna e a Forja saíam com o verde da Estufa. Agora elas vêm de
+        // `dungeons.json` por <see cref="TemaDoCenario"/>. O que continua aqui é
+        // o que não é de calabouço nenhum: o sol, o realce e os selos de lado.
 
         /// <summary>Hex do jogo em JS vira Color. Existe para estas cores se
         /// conferirem LITERALMENTE contra js/render3d/models3d.js, em vez de
@@ -122,12 +135,9 @@ namespace Soterra.Cena
                              (rgb & 0xFF) / 255f);
         }
 
-        public static readonly Color CorChao = De(0x35513a);          // garden.floor1
-        public static readonly Color CorChaoPar = De(0x3d5c41);       // garden.floor2
-        public static readonly Color CorChaoDecorado = Color.Lerp(De(0x3d5c41), Color.white, 0.18f);
-        public static readonly Color CorAlto = Color.Lerp(De(0x57452f), Color.black, 0.34f);
-        public static readonly Color CorBaixo = Color.Lerp(De(0x6b5334), Color.white, 0.42f);
-        public static readonly Color CorFundo = De(0x101418);         // scene.background do JS
+        /// <summary>O escuro em volta do tabuleiro quando o tema não diz outro
+        /// (`scene.background` do JS).</summary>
+        public static readonly Color CorFundo = De(0x101418);
         static readonly Color CorSol = De(0xfff0c2);                  // lights.sun do JS
         static readonly Color CorCeu = De(0xa8c887);                  // lights.hemi, céu
         static readonly Color CorChaoAmbiente = De(0x2c3c66);         // lights.hemi, chão
@@ -179,7 +189,7 @@ namespace Soterra.Cena
         // ================================================================= ESTADO
 
         Transform _raiz;          // o tabuleiro: é ELE que gira
-        Transform _chao, _obstaculos, _realces;
+        Transform _sala, _realces;
         Camera _cam;
         Mapa _mapa;
         int _larg = 1, _alt = 1;
@@ -187,9 +197,8 @@ namespace Soterra.Cena
 
         Material _fosco, _marcador;
         Mesh _cubo;
+        Cenografia _cenario;
 
-        readonly Dictionary<Vector2Int, GameObject> _pecas = new Dictionary<Vector2Int, GameObject>();
-        readonly Dictionary<Vector2Int, float> _topo = new Dictionary<Vector2Int, float>();
         readonly List<GameObject> _poolRealce = new List<GameObject>();
         readonly List<Vector2Int> _realcadas = new List<Vector2Int>();
 
@@ -198,6 +207,23 @@ namespace Soterra.Cena
 
         /// <summary>A câmera do palco. Quem fotografa precisa dela.</summary>
         public Camera Camera { get { return _cam; } }
+
+        /// <summary>
+        /// O tema visual do calabouço: quais peças a sala usa e com que tinta.
+        /// Trocá-lo é o que faz a Cisterna não sair verde. Nulo vale a Estufa,
+        /// que é onde o jogo começa. Vale a partir do próximo <see cref="Montar"/>.
+        /// </summary>
+        public TemaDoCenario Tema { get; set; }
+
+        /// <summary>
+        /// De onde vêm as peças do env-kit. Existe para o teste montar a sala sem
+        /// depender dos 49 FBX estarem importados — passe <see cref="SemPecas"/>
+        /// e a sala desenha em cubo, que é o comportamento de reserva.
+        /// </summary>
+        public IFonteDePecas Pecas { get; set; }
+
+        /// <summary>A sala desenhada agora. Nula antes do primeiro Montar.</summary>
+        public Cenografia Cenografia { get { return _cenario; } }
 
         /// <summary>O mapa desenhado agora, ou nulo antes do primeiro Montar.</summary>
         public Mapa Mapa { get { return _mapa; } }
@@ -248,18 +274,15 @@ namespace Soterra.Cena
 
             Limpar();
 
-            _chao = NovoGrupo("Chao", Raiz);
-            _obstaculos = NovoGrupo("Obstaculos", Raiz);
+            _sala = NovoGrupo("Sala", Raiz);
             _realces = NovoGrupo("Realces", Raiz);
 
-            for (int y = 0; y < _alt; y++)
-            {
-                for (int x = 0; x < _larg; x++)
-                {
-                    var casa = new Vector2Int(x, y);
-                    Desenhar(casa, mapa.Em(casa));
-                }
-            }
+            // A fonte FICA. Ela guarda a caixa medida de cada peça, e recriá-la a
+            // cada montagem faria o palco remedir as 49 peças toda vez que o
+            // jogador passa para a sala seguinte do calabouço.
+            if (Pecas == null) Pecas = new PecasDeResources();
+            _cenario = new Cenografia(Pecas, Tema ?? TemaDoCenario.Padrao);
+            _cenario.Montar(mapa, _sala, Fosco, Marcador, MalhaCubo(), casa => Local(casa, 0f));
 
             MontarLuz();
             MontarCamera();
@@ -267,68 +290,13 @@ namespace Soterra.Cena
             Enquadrar();
         }
 
-        /// <summary>
-        /// Uma casa. O vazio não recebe NADA — nem laje: é buraco, e o jogo em JS
-        /// usa o recorte de '~' para a sala ler como plataforma sobre o escuro,
-        /// não como caixa. Desenhar chão embaixo do buraco apagaria a silhueta da
-        /// sala inteira.
-        /// </summary>
-        void Desenhar(Vector2Int casa, TipoDeCasa tipo)
+        /// <summary>Monta a sala com o tema de um calabouço. Atalho para não
+        /// obrigar quem chama a mexer numa propriedade antes de montar e depois
+        /// lembrar de desfazer.</summary>
+        public void Montar(Mapa mapa, TemaDoCenario tema)
         {
-            switch (tipo)
-            {
-                case TipoDeCasa.Vazio:
-                    _topo[casa] = 0f;
-                    return;
-
-                case TipoDeCasa.ObstaculoAlto:
-                    // Sem laje embaixo: o bloco alto desce até abaixo do piso e
-                    // fica plantado. Uma laje sob ele só apareceria como um
-                    // degrau de 2 cm que ninguém vê e que briga de Z na base.
-                    _pecas[casa] = Bloco("alto_" + casa.x + "_" + casa.y, _obstaculos,
-                                         Local(casa, (AlturaAlto - EspessuraChao) * 0.5f),
-                                         new Vector3(LadoAlto, AlturaAlto + EspessuraChao, LadoAlto),
-                                         CorAlto, Fosco, true);
-                    _topo[casa] = AlturaAlto;
-                    return;
-
-                case TipoDeCasa.ObstaculoBaixo:
-                    // O baixo é chão + caixote, como no JS: o piso continua
-                    // visível em volta dele, e é essa moldura que diz "isto está
-                    // EM CIMA do chão, dá para ver por cima".
-                    Laje(casa, CorDoChao(casa));
-                    _pecas[casa] = Bloco("baixo_" + casa.x + "_" + casa.y, _obstaculos,
-                                         Local(casa, AlturaBaixo * 0.5f),
-                                         new Vector3(LadoBaixo, AlturaBaixo, LadoBaixo),
-                                         CorBaixo, Fosco, true);
-                    _topo[casa] = AlturaBaixo;
-                    return;
-
-                default:
-                    _pecas[casa] = Laje(casa, tipo == TipoDeCasa.ChaoDecorado
-                                              ? CorChaoDecorado : CorDoChao(casa));
-                    _topo[casa] = 0f;
-                    return;
-            }
-        }
-
-        GameObject Laje(Vector2Int casa, Color cor)
-        {
-            // Laje não projeta sombra: ela é rasa e está no chão, então a única
-            // sombra que produziria seria em cima da laje vizinha — acne de
-            // sombra de graça, sem nada em troca.
-            return Bloco("chao_" + casa.x + "_" + casa.y, _chao,
-                         Local(casa, -EspessuraChao * 0.5f),
-                         new Vector3(LadoChao, EspessuraChao, LadoChao),
-                         cor, Fosco, false);
-        }
-
-        static Color CorDoChao(Vector2Int casa)
-        {
-            // Xadrez, como o jogo em JS ((x+y)%2 escolhe floor1/floor2): sem ele
-            // o chão vira uma mancha só e a grade — a unidade de medida do jogo
-            // inteiro — some da imagem.
-            return ((casa.x + casa.y) % 2 == 0) ? CorChao : CorChaoPar;
+            Tema = tema;
+            Montar(mapa);
         }
 
         // ============================================================== COORDENADAS
@@ -483,20 +451,21 @@ namespace Soterra.Cena
         /// obstáculo onde houver um.</summary>
         public float TopoDe(Vector2Int casa)
         {
-            float t;
-            return _topo.TryGetValue(casa, out t) ? t : 0f;
+            return _cenario != null ? _cenario.TopoDe(casa) : 0f;
         }
 
         /// <summary>
-        /// O objeto desenhado nesta casa — o obstáculo, se houver; senão a laje.
-        /// Nulo no vazio. Existe para o teste medir o que está na TELA (altura,
-        /// largura e cor de verdade) em vez de reconferir uma constante contra
-        /// ela mesma.
+        /// O que foi desenhado nesta casa — peça, giro, altura, pegada e tinta.
+        /// Nada no vazio.
+        ///
+        /// Substituiu um <c>ObjetoDa(casa)</c> que devolvia o GameObject da casa,
+        /// e a troca não é de gosto: não HÁ mais um objeto por casa. A sala
+        /// inteira é costurada em meia dúzia de malhas, senão uma sala de 21×17
+        /// custaria 357 desenhos na tela e o celular não a aguentaria.
         /// </summary>
-        public GameObject ObjetoDa(Vector2Int casa)
+        public DesenhoDaCasa? DesenhoDa(Vector2Int casa)
         {
-            GameObject go;
-            return _pecas.TryGetValue(casa, out go) ? go : null;
+            return _cenario != null ? _cenario.Em(casa) : null;
         }
 
         // Placas são reaproveitadas, como o `ovPool` do renderizador em JS:
@@ -536,7 +505,10 @@ namespace Soterra.Cena
             }
             _cam.orthographic = true;              // decisão fechada: nada de perspectiva
             _cam.clearFlags = CameraClearFlags.SolidColor;
-            _cam.backgroundColor = CorFundo;
+            // O escuro em volta é do CALABOUÇO (`voidColor` em dungeons.json):
+            // o buraco em torno da sala é a primeira coisa que a foto mostra, e
+            // um cinza-azulado fixo desmentia o tema em cinco dos seis.
+            _cam.backgroundColor = Tema != null ? Tema.Vazio : CorFundo;
             _cam.transform.rotation = Quaternion.Euler(Inclinacao, Guinada, 0f);
         }
 
@@ -567,7 +539,11 @@ namespace Soterra.Cena
             // cortada pela metade nos mapas grandes — e desde que há UNIDADE em
             // cima do tabuleiro, o que estoura primeiro não é a parede de 1 m e
             // sim o chefe de 5.
+            // A coluna solta do kit passa da parede (1,2 casa contra 1,0), então
+            // o teto é o que a sala REALMENTE desenhou, e não a constante da
+            // parede: com a constante, a coluna da borda sairia decapitada.
             float teto = Mathf.Max(AlturaAlto, AlturaDeCena);
+            if (_cenario != null) teto = Mathf.Max(teto, _cenario.AlturaMaxima);
             var inversa = Quaternion.Inverse(rot);
 
             float minX = 0f, maxX = 0f, minY = 0f, maxY = 0f, minZ = 0f, maxZ = 0f;
@@ -836,8 +812,7 @@ namespace Soterra.Cena
 
         void Limpar()
         {
-            _pecas.Clear();
-            _topo.Clear();
+            if (_cenario != null) { _cenario.Soltar(); _cenario = null; }
             _poolRealce.Clear();
             _realcadas.Clear();
 
@@ -860,6 +835,7 @@ namespace Soterra.Cena
 
         void OnDestroy()
         {
+            if (_cenario != null) _cenario.Soltar();
             Descartar(_fosco);
             Descartar(_marcador);
         }
