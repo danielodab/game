@@ -62,7 +62,19 @@ namespace Soterra.Jogo
         public string Calabouco = CalaboucoPadrao;
         public int IndiceDaSala = IndiceDaSalaPadrao;
         public string Heroi1 = "sumo";
-        public string Heroi2 = "curandeira";
+        public string Heroi2 = "bruxo";
+
+        /// <summary>
+        /// Libera as seis classes antes de abrir a descida.
+        ///
+        /// O jogo de verdade tranca quatro delas (`startsUnlocked: false`) e
+        /// elas entram por carta — regra que a Progressao cobra e que a Descida
+        /// respeita, recusando grupo com heroi trancado. Mas esta cena existe
+        /// para VER, e o painel de teste do jogo em JS fazia exatamente isso:
+        /// liberava as seis para ninguem ter de jogar ate o nivel 30 so para
+        /// olhar um personagem. Desligue para sentir a progressao de verdade.
+        /// </summary>
+        public bool LiberarTodasAsClasses = true;
 
         /// <summary>
         /// A dupla das FOTOS de elenco (<c>FotoDaFusao</c>, <c>FotoDaAnimacao</c>).
@@ -161,12 +173,10 @@ namespace Soterra.Jogo
             var armazem = Armazem ?? new Progressao.ArmazemDePlayerPrefs();
             _progresso = Progressao.Progresso.Carregar(_banco, armazem);
 
-            _palco = AcharOuCriarPalco();
+            if (LiberarTodasAsClasses && _banco.Classes != null)
+                foreach (var id in _banco.Classes.Keys) _progresso.LiberarClasse(id);
 
-            _elenco = new Cena.Elenco(_palco, _banco);
-            _animacao = new AnimacaoDoElenco(_elenco, _palco, batalha);
-            _efeitos = new DespachoDeEfeitos(_palco, batalha, _banco);
-            _partida = new Partida(_banco, batalha, Motor.Sorte.DeTexto("soterra-jogo"));
+            _palco = AcharOuCriarPalco();
 
             // A camera passa a obedecer ao jogador E a se reenquadrar quando a
             // tela muda. Enquadrar so na montagem era o defeito que deixava a
@@ -239,6 +249,7 @@ namespace Soterra.Jogo
 
             _elenco = new Cena.Elenco(_palco, _banco);
             _animacao = new AnimacaoDoElenco(_elenco, _palco, batalha);
+            _efeitos = new DespachoDeEfeitos(_palco, batalha, _banco);
 
             _fimAnunciado = false;
             _fimDaSalaTratado = false;
