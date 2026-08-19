@@ -44,10 +44,25 @@ namespace Soterra.Testes.IA
         [Test]
         public void SementesDiferentesRendemBatalhasDiferentes()
         {
-            var mesma = Rodar("um");
-            var outra = Rodar("dois");
-            Assert.AreNotEqual(mesma, outra,
-                "duas sementes de IA diferentes rederam a MESMA batalha: o desempate não olha a semente");
+            // A semente so e CONSULTADA quando ha empate a desfazer. A cena
+            // antiga deste teste perdeu o ultimo empate quando os 8 efeitos
+            // restantes entraram no Motor (a pontuacao mudou), e duas sementes
+            // passaram a render a mesma batalha — o teste afirmava uma
+            // propriedade que nenhuma cena garante por si. Agora ele roda a
+            // cena de empate PERFEITO, onde a semente decide o alvo por
+            // construcao, e cobra que entre varias sementes exista diferenca.
+            var vistos = new HashSet<string>();
+            string[] sementes = { "um", "dois", "tres", "quatro", "cinco", "seis", "sete", "oito" };
+            for (int i = 0; i < sementes.Length; i++)
+            {
+                var b = Simetrica();
+                var feitas = Cenario.Conduzir(b, Cenario.Ia(b, sementes[i]), 12);
+                var sb = new StringBuilder();
+                for (int j = 0; j < feitas.Count; j++) sb.Append(feitas[j]).Append('\n');
+                vistos.Add(sb.ToString());
+            }
+            Assert.Greater(vistos.Count, 1,
+                "oito sementes de IA renderam TODAS a mesma batalha na cena de empate perfeito: o desempate não olha a semente");
         }
 
         /// <summary>

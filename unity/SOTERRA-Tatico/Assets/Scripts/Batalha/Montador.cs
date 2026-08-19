@@ -56,10 +56,6 @@ namespace Soterra.Batalha
 
             var unidades = new List<Motor.Unidade>();
 
-            // A iniciativa mora fora da Unidade porque a API do contrato não tem
-            // campo para ela. Lista paralela, na ordem de nascimento, para o
-            // desempate abaixo continuar sendo pela ordem de nascimento.
-            var iniciativas = new List<int>();
 
             for (int i = 0; i < classesDosHerois.Count; i++)
             {
@@ -75,10 +71,12 @@ namespace Soterra.Batalha
                 // nada, e o caminho elemental só se escolhe no nível 5. Ler o
                 // elemento da classe seria inventar uma escolha que o jogador
                 // não fez.
-                unidades.Add(Nascer(unidades.Count, idDaClasse, Motor.Lado.Heroi,
-                                    mapa.NascimentosHeroi[i], classe.Atributos, Dados.Elemento.Neutro));
-                unidades[unidades.Count - 1].Iniciativa = classe.Atributos.Iniciativa;
-                iniciativas.Add(classe.Atributos.Iniciativa);
+                // Pela FABRICA do Motor, e nao por um construtor local: o
+                // Nascer() daqui montava unidade MUDA — sem Feiticos, Poder,
+                // Fixacao, Resistencias — e a batalha montada por DeSala nao
+                // conjurava nada, de nenhum lado. A fabrica preenche tudo.
+                unidades.Add(Motor.Unidade.DeClasse(classe, "u" + (unidades.Count + 1),
+                                                    mapa.NascimentosHeroi[i]));
             }
 
             // Um monstro por NASCIMENTO, não por letra: a letra repete de
@@ -103,10 +101,8 @@ namespace Soterra.Batalha
                 if (monstro.Atributos == null)
                     throw new InvalidOperationException("monstro sem atributos: " + idDoMonstro);
 
-                unidades.Add(Nascer(unidades.Count, idDoMonstro, Motor.Lado.Monstro,
-                                    nascimento.Casa, monstro.Atributos, monstro.Elemento));
-                unidades[unidades.Count - 1].Iniciativa = monstro.Atributos.Iniciativa;
-                iniciativas.Add(monstro.Atributos.Iniciativa);
+                unidades.Add(Motor.Unidade.DeMonstro(monstro, "u" + (unidades.Count + 1),
+                                                     nascimento.Casa));
             }
 
             // A ordem sai pronta do proprio Motor: o construtor dele ordena por
@@ -142,22 +138,6 @@ namespace Soterra.Batalha
         /// numa máquina e noutra na seguinte, e uma batalha que muda de ordem
         /// sozinha é impossível de reproduzir num relato de defeito.
         /// </summary>
-        static List<Motor.Unidade> PorIniciativa(List<Motor.Unidade> unidades, List<int> iniciativas)
-        {
-            var indices = new List<int>(unidades.Count);
-            for (int i = 0; i < unidades.Count; i++) indices.Add(i);
-
-            indices.Sort(delegate (int a, int b)
-            {
-                if (iniciativas[a] != iniciativas[b]) return iniciativas[b].CompareTo(iniciativas[a]);
-                return a.CompareTo(b);
-            });
-
-            var ordem = new List<Motor.Unidade>(unidades.Count);
-            for (int i = 0; i < indices.Count; i++) ordem.Add(unidades[indices[i]]);
-            return ordem;
-        }
-
         /// <summary>
         /// Procura nas duas tabelas de bicho, na ordem do <c>Engine.monster</c>
         /// do JS: o bestiário primeiro, as invocações de fusão depois.
@@ -178,35 +158,5 @@ namespace Soterra.Batalha
         /// fábrica do JS multiplica antes de escrever, e escalar de novo aqui
         /// dobraria a dureza do jogo inteiro.
         /// </summary>
-        static Motor.Unidade Nascer(int nascimento, string id, Motor.Lado lado,
-                                    Vector2Int casa, Atributos ficha, string elemento)
-        {
-            return new Motor.Unidade
-            {
-                // `u1`, `u2`, ... na ordem de nascimento, igual ao
-                // `state._uidCounter` do JS: é por este id que a interface e a
-                // cena vão achar a unidade, e ele não pode depender da ordem de
-                // iniciativa — ela muda quando alguém morre.
-                Uid = "u" + (nascimento + 1),
-                ClasseOuMonstroId = id,
-                Lado = lado,
-                Casa = casa,
-                PV = ficha.Pv,
-                PVMax = ficha.Pv,
-                PA = ficha.Pa,
-                PAMax = ficha.Pa,
-                PP = ficha.Pp,
-                PPMax = ficha.Pp,
-                // Esquiva é identidade de classe — 5 no Bárbaro, 30 no Ladino.
-                // Zerar aqui achataria as seis classes numa só.
-                Esquiva = ficha.Esquiva,
-                // Nível 1: `DeSala` recebe id de classe e nada de progressão.
-                // Quem tiver herói de nível maior monta por outra porta.
-                Nivel = 1,
-                Elemento = string.IsNullOrEmpty(elemento) ? Dados.Elemento.Neutro : elemento,
-                Viva = true,
-                ForaDoTabuleiro = false
-            };
-        }
     }
 }

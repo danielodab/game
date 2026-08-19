@@ -74,13 +74,23 @@ namespace Soterra.Progressao
                     !fora.Contains(item.ConcedeFeitico)) fora.Add(item.ConcedeFeitico);
             }
 
-            /* FALTA AQUI, e a falta é conhecida: o CONJUNTO que concede feitiço.
-             * `cp-set-heart` traz `bonuses["4"].grantsSpell = "is-heart-whole"`
-             * em `sets.json` — quem vestir as quatro peças do Coração deveria
-             * ganhar esse feitiço. O campo existe no arquivo e NÃO existe em
-             * `Dados.Bonus`, que é de outro dono (`Assets/Scripts/Dados/Item.cs`).
-             * Modelar o campo é uma linha lá; enquanto ela não vier, ler o
-             * conjunto daqui só devolveria nulo. Está no relatório. */
+            // O CONJUNTO tambem concede feitico: cp-set-heart da
+            // `is-heart-whole` a quem veste as 4 pecas. O bonus de conjunto e
+            // PROGRESSIVO (4 pecas ativam os degraus 2, 3 e 4), entao todo
+            // degrau ate a contagem vestida e consultado.
+            foreach (var kv in PecasVestidasPorConjunto(h))
+            {
+                Dados.Conjunto conj;
+                if (_banco.Conjuntos == null || !_banco.Conjuntos.TryGetValue(kv.Key, out conj) ||
+                    conj == null || conj.Bonus == null) continue;
+                for (int n = 2; n <= kv.Value; n++)
+                {
+                    Dados.Bonus bn;
+                    if (conj.Bonus.TryGetValue(n, out bn) && bn != null &&
+                        !string.IsNullOrEmpty(bn.ConcedeFeitico) && !fora.Contains(bn.ConcedeFeitico))
+                        fora.Add(bn.ConcedeFeitico);
+                }
+            }
 
             return fora;
         }

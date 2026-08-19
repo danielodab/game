@@ -26,6 +26,13 @@ namespace Soterra.Dados
         [JsonProperty("lock")] public int Fixacao { get; set; }
         [JsonProperty("resists")] public Resistencias Resistencias { get; set; }
 
+        /// <summary>
+        /// Feitiço que o BÔNUS concede. Só o degrau de 4 peças do Coração
+        /// Partido usa (`cp-set-heart.bonuses["4"].grantsSpell`); sem este
+        /// campo, quem vestisse o conjunto inteiro não ganhava o feitiço.
+        /// </summary>
+        [JsonProperty("grantsSpell")] public string ConcedeFeitico { get; set; }
+
         public Bonus()
         {
             Resistencias = new Resistencias();
