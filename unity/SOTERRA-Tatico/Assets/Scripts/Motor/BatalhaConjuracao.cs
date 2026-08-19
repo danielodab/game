@@ -214,12 +214,34 @@ namespace Soterra.Motor
 
         void AplicarEfeitos(Unidade conjurador, Dados.Feitico f, Vector2Int alvo)
         {
-            var casas = CasasDaArea(conjurador.Casa, f, alvo);
+            AplicarEfeitos(conjurador, f, alvo, conjurador.Casa, false);
+        }
+
+        /// <summary>
+        /// A conjuração de verdade, com as duas alavancas que só armadilha e
+        /// marca de terreno usam.
+        ///
+        /// <paramref name="origem"/> é de onde a área se abre: numa armadilha o
+        /// "conjurador" é o dono, que pode estar do outro lado da sala, mas a
+        /// explosão sai da CASA da armadilha.
+        ///
+        /// <paramref name="oConjuradorTambemApanha"/> inverte a regra de fogo
+        /// amigo: quem pisa numa sanguessuga é ao mesmo tempo o conjurador do
+        /// efeito e a única vítima possível dele. Sem esta alavanca, o evento de
+        /// terreno seria conjurado e não pegaria ninguém.
+        /// </summary>
+        void AplicarEfeitos(Unidade conjurador, Dados.Feitico f, Vector2Int alvo,
+                            Vector2Int origem, bool oConjuradorTambemApanha)
+        {
+            var casas = CasasDaArea(origem, f, alvo);
 
             // Calculado UMA vez por conjuração: depende do conjurador e do
             // feitiço, nunca do alvo. Recalcular por alvo faria a segunda vítima
             // de uma explosão receber um número diferente da primeira sem motivo.
             int poder = PoderDeConjuracao(conjurador, f);
+
+            Func<List<Unidade>> Ofendidos = () =>
+                oConjuradorTambemApanha ? Todos(casas) : Hostis(conjurador, casas);
 
             var efeitos = f.Efeitos ?? new List<Dados.Efeito>();
             for (int i = 0; i < efeitos.Count; i++)
@@ -231,7 +253,7 @@ namespace Soterra.Motor
                 switch (eff.Tipo)
                 {
                     case "damage":
-                        foreach (var alvoU in Hostis(conjurador, casas))
+                        foreach (var alvoU in Ofendidos())
                         {
                             int amt = RolarDano(eff.Min ?? 0, eff.Max ?? 0, poder,
                                                 ResistenciaEfetiva(alvoU, eff.Elemento),
@@ -292,7 +314,7 @@ namespace Soterra.Motor
                         break;
 
                     case "poison":
-                        foreach (var alvoU in Hostis(conjurador, casas))
+                        foreach (var alvoU in Ofendidos())
                             Aplicar(alvoU, new EfeitoAtivo
                             {
                                 Tipo = "poison", Elemento = eff.Elemento,
@@ -312,7 +334,7 @@ namespace Soterra.Motor
                         break;
 
                     case "root":
-                        foreach (var alvoU in Hostis(conjurador, casas))
+                        foreach (var alvoU in Ofendidos())
                         {
                             Aplicar(alvoU, new EfeitoAtivo
                             {
@@ -323,12 +345,12 @@ namespace Soterra.Motor
                         break;
 
                     case "mark":
-                        foreach (var alvoU in Hostis(conjurador, casas))
+                        foreach (var alvoU in Ofendidos())
                             AplicarMarca(alvoU, eff, conjurador.Uid);
                         break;
 
                     case "detonateMarks":
-                        foreach (var alvoU in Hostis(conjurador, casas))
+                        foreach (var alvoU in Ofendidos())
                         {
                             int pilhas = ConsumirMarcas(alvoU);
                             if (pilhas <= 0) continue;
@@ -349,9 +371,9 @@ namespace Soterra.Motor
                         // Do mais distante para o mais perto: empurrar primeiro
                         // quem está na frente faria o de trás colidir no vizinho
                         // que ainda nem saiu do lugar.
-                        var alvosP = Hostis(conjurador, casas);
-                        alvosP.Sort((a, b) => Distancia.Manhattan(conjurador.Casa, b.Casa)
-                                     .CompareTo(Distancia.Manhattan(conjurador.Casa, a.Casa)));
+                        var alvosP = Ofendidos();
+                        alvosP.Sort((a, b) => Distancia.Manhattan(origem, b.Casa)
+                                     .CompareTo(Distancia.Manhattan(origem, a.Casa)));
                         foreach (var alvoU in alvosP)
                             MovimentoForcado(conjurador, alvoU, eff.Casas ?? 0, true);
                         break;
@@ -359,9 +381,9 @@ namespace Soterra.Motor
 
                     case "pull":
                     {
-                        var alvosP = Hostis(conjurador, casas);
-                        alvosP.Sort((a, b) => Distancia.Manhattan(conjurador.Casa, a.Casa)
-                                     .CompareTo(Distancia.Manhattan(conjurador.Casa, b.Casa)));
+                        var alvosP = Ofendidos();
+                        alvosP.Sort((a, b) => Distancia.Manhattan(origem, a.Casa)
+                                     .CompareTo(Distancia.Manhattan(origem, b.Casa)));
                         foreach (var alvoU in alvosP)
                             MovimentoForcado(conjurador, alvoU, eff.Casas ?? 0, false);
                         break;
@@ -381,7 +403,7 @@ namespace Soterra.Motor
                         break;
 
                     case "dispelShield":
-                        foreach (var alvoU in Hostis(conjurador, casas))
+                        foreach (var alvoU in Ofendidos())
                         {
                             int tinha = alvoU.Escudo;
                             for (int k = alvoU.Efeitos.Count - 1; k >= 0; k--)
@@ -405,10 +427,98 @@ namespace Soterra.Motor
                             });
                         break;
 
+                    // ---- movimento forçado do PRÓPRIO conjurador ----------
+                    //
+                    // Os três ignoram `pushImmune` de propósito (decisão de
+                    // design do `engine.js`): o traço diz "ninguém me tira do
+                    // lugar", e aqui quem se tira do lugar é a própria unidade.
+
+                    case "teleport":
+                        // Casa ocupada ou não-andável simplesmente não recebe —
+                        // sem recusa e sem devolver o PA, como no `engine.js`. A
+                        // validação de alvo já barrou o caso normal; isto é a
+                        // rede para o alvo que mudou entre mirar e conjurar.
+                        if (Mapa.Andavel(alvo) && EmCasa(alvo) == null)
+                        {
+                            var dePonto = conjurador.Casa;
+                            conjurador.Casa = alvo;
+                            Emitir(TipoDeEvento.Teleporte, conjurador.Uid, de: dePonto, para: alvo);
+                        }
+                        break;
+
+                    case "swap":
+                    {
+                        var outro = EmCasa(alvo);
+                        if (outro != null && outro != conjurador)
+                        {
+                            // A troca não confere se a casa é andável: as duas já
+                            // têm gente em pé em cima, logo as duas são andáveis.
+                            var dePonto = conjurador.Casa;
+                            conjurador.Casa = outro.Casa;
+                            outro.Casa = dePonto;
+                            Emitir(TipoDeEvento.Teleporte, conjurador.Uid,
+                                   de: dePonto, para: conjurador.Casa);
+                            Emitir(TipoDeEvento.Teleporte, outro.Uid,
+                                   de: conjurador.Casa, para: dePonto);
+                        }
+                        break;
+                    }
+
+                    case "moveTo":
+                        Investir(conjurador, alvo, eff.CasasMaximas ?? 0);
+                        break;
+
+                    // ---- o que a conjuração deixa NO TABULEIRO -------------
+
+                    case "summon":
+                        if (Mapa.Andavel(alvo) && EmCasa(alvo) == null)
+                            Invocar(eff.IdDoMonstro, alvo, conjurador);
+                        break;
+
+                    case "trap":
+                        if (Mapa.Andavel(alvo))
+                        {
+                            // Arma mesmo com alguém em cima: a carga espera,
+                            // e quem já está ali só a pisa quando se mexer. É o
+                            // que permite plantar debaixo do inimigo parado.
+                            _armadilhas.Add(new Armadilha
+                            {
+                                Casa = alvo, FeiticoId = eff.IdDaArmadilha,
+                                UidDoDono = conjurador.Uid, LadoDoDono = conjurador.Lado,
+                                Restante = eff.Duracao ?? 3
+                            });
+                            Emitir(TipoDeEvento.ArmadilhaArmada, conjurador.Uid,
+                                   feitico: eff.IdDaArmadilha, para: alvo);
+                        }
+                        break;
+
+                    case "weatherShift":
+                        TrocarClima(eff.Clima);
+                        break;
+
+                    // ---- dano que anda sozinho ----------------------------
+
+                    case "reflect":
+                        foreach (var alvoU in Todos(casas))
+                            Aplicar(alvoU, new EfeitoAtivo
+                            {
+                                // `Valor` carrega a PORCENTAGEM devolvida. Um
+                                // campo próprio só para este efeito faria toda
+                                // outra linha de `EfeitoAtivo` carregar um zero.
+                                Tipo = "reflect", Valor = eff.Porcentagem ?? 0,
+                                Duracao = eff.Duracao ?? 1, UidDaFonte = conjurador.Uid
+                            });
+                        break;
+
+                    case "chain":
+                        RaioEmCadeia(conjurador, eff, f, alvo, poder);
+                        break;
+
                     default:
-                        // A falta APARECE. Ignorar em silêncio um `summon` faria
-                        // o Xamã gastar PA e não invocar nada, e o defeito seria
-                        // lido como "a invocação sumiu".
+                        // A falta APARECE. Ignorar em silêncio um efeito que o
+                        // acervo invente e o motor não conheça faria a unidade
+                        // gastar PA sem nada acontecer, e o defeito seria lido
+                        // como "o feitiço sumiu".
                         Emitir(TipoDeEvento.EfeitoIgnorado, conjurador.Uid,
                                feitico: f.Id, detalhe: eff.Tipo);
                         break;
@@ -594,6 +704,100 @@ namespace Soterra.Motor
             return Mapa.Andavel(p) && EmCasa(p) == null;
         }
 
+        // ---- investida e raio em cadeia --------------------------------------
+
+        /// <summary>
+        /// <c>moveTo</c>: desliza pelo eixo dominante até <paramref name="teto"/>
+        /// casas, parando na PRIMEIRA casa bloqueada.
+        ///
+        /// Parar em vez de contornar é o que separa a investida do passo: o
+        /// Passo de Corça é um pulo em linha, e um pulo que faz a curva em volta
+        /// da parede seria só um andar caro. Não gasta PP e não paga teste de
+        /// fixação — quem investe não está "largando" ninguém, está atropelando.
+        /// </summary>
+        void Investir(Unidade u, Vector2Int destino, int teto)
+        {
+            if (u == null || !u.NoTabuleiro || teto <= 0) return;
+
+            var partida = u.Casa;
+            int andou = 0;
+            while (andou < teto && u.Casa != destino)
+            {
+                int dx = destino.x - u.Casa.x, dy = destino.y - u.Casa.y;
+                int sx = 0, sy = 0;
+                if (Math.Abs(dx) >= Math.Abs(dy)) sx = dx > 0 ? 1 : -1;
+                else sy = dy > 0 ? 1 : -1;
+
+                var n = new Vector2Int(u.Casa.x + sx, u.Casa.y + sy);
+                if (!Livre(n)) break;
+                u.Casa = n;
+                andou++;
+            }
+
+            if (andou > 0)
+                Emitir(TipoDeEvento.Movimento, u.Uid, q: andou,
+                       de: partida, para: u.Casa, detalhe: "forçado");
+        }
+
+        /// <summary>Alcance de CADA salto da cadeia (<c>Engine.CHAIN_JUMP_RANGE</c>).</summary>
+        public const int AlcanceDoSaltoEmCadeia = 3;
+
+        /// <summary>
+        /// <c>chain</c>: acerta o alvo e pula para o inimigo vivo mais próximo
+        /// que ainda não apanhou, dentro de <see cref="AlcanceDoSaltoEmCadeia"/>.
+        ///
+        /// O alcance do SALTO é próprio e não tem nada a ver com o alcance do
+        /// feitiço: o raio parte da última vítima, não do conjurador — é isso que
+        /// faz um grupo apertado ser um erro de posicionamento.
+        ///
+        /// Cada salto multiplica o dano por <c>falloff</c>. A lista de já
+        /// atingidos é obrigatória: sem ela dois inimigos colados jogariam o raio
+        /// de um para o outro até acabarem os saltos.
+        /// </summary>
+        void RaioEmCadeia(Unidade conjurador, Dados.Efeito eff, Dados.Feitico f,
+                          Vector2Int alvo, int poder)
+        {
+            var atual = EmCasa(alvo);
+            if (atual == null || atual.Lado == conjurador.Lado) return;
+
+            var jaAtingidos = new HashSet<string>();
+            double mult = 1.0;
+            double queda = eff.Queda ?? 0.7;
+            int saltos = eff.Saltos ?? 0;
+            string elemento = eff.Elemento ?? (f == null ? null : f.Elemento) ?? Dados.Elemento.Neutro;
+
+            for (int j = 0; j <= saltos; j++)
+            {
+                if (atual == null || !atual.NoTabuleiro) break;
+                jaAtingidos.Add(atual.Uid);
+
+                int amt = RolarDano(eff.Min ?? 0, eff.Max ?? 0, poder,
+                                    ResistenciaEfetiva(atual, elemento),
+                                    MultiplicadorDeMarcas(atual) * mult);
+                Emitir(TipoDeEvento.SaltoEmCadeia, atual.Uid, fonte: conjurador.Uid, q: j);
+                AplicarDano(atual, amt, elemento, conjurador.Uid);
+                if (Fase != FaseDaBatalha.EmAndamento) break;
+
+                mult *= queda;
+
+                Unidade proxima = null;
+                int menorDistancia = int.MaxValue;
+                for (int i = 0; i < _unidades.Count; i++)
+                {
+                    var u = _unidades[i];
+                    if (!u.NoTabuleiro || jaAtingidos.Contains(u.Uid)) continue;
+                    if (u.Lado == conjurador.Lado) continue;
+                    int d = Distancia.Manhattan(atual.Casa, u.Casa);
+                    if (d <= AlcanceDoSaltoEmCadeia && d < menorDistancia)
+                    {
+                        menorDistancia = d;
+                        proxima = u;
+                    }
+                }
+                atual = proxima;
+            }
+        }
+
         // ---- dano e cura -----------------------------------------------------
 
         /// <summary>
@@ -650,7 +854,14 @@ namespace Soterra.Motor
         /// Aplica dano JÁ calculado. Devolve o que saiu do PV — que não é o mesmo
         /// que o dano, porque o escudo come primeiro.
         /// </summary>
-        int AplicarDano(Unidade alvo, int quantia, string elemento, string uidFonte)
+        /// <param name="semReflexo">
+        /// O dano JÁ é uma devolução de <c>reflect</c> e não pode ser refletido
+        /// outra vez. É a ÚNICA coisa que trava o laço: dois corpos refletindo
+        /// ao mesmo tempo devolveriam a devolução um do outro até a pilha
+        /// estourar — o <c>engine.js</c> paga com a mesma bandeira.
+        /// </param>
+        int AplicarDano(Unidade alvo, int quantia, string elemento, string uidFonte,
+                        bool semReflexo = false)
         {
             if (alvo == null) return 0;
             if (!alvo.NoTabuleiro || quantia <= 0)
@@ -685,8 +896,42 @@ namespace Soterra.Motor
             Emitir(TipoDeEvento.Dano, alvo.Uid, fonte: uidFonte, elemento: elemento,
                    q: quantia, absorvido: absorvido);
 
+            Refletir(alvo, quantia, uidFonte, semReflexo);
+            ConfereEnfurecer(alvo);
             if (alvo.PV <= 0) Morrer(alvo);
             return perda;
+        }
+
+        /// <summary>
+        /// Devolve ao agressor a porcentagem que os efeitos <c>reflect</c> do
+        /// alvo somarem.
+        ///
+        /// Sobre o dano BRUTO, antes do escudo: o espinho está na pele, e o
+        /// escudo protege quem o veste, não quem bate nele. Devolver só o que
+        /// passou faria a Redoma de Espinhos parar de espetar justamente quando
+        /// o escudo está de pé — as duas metades do feitiço se anulariam.
+        ///
+        /// A devolução é dano NEUTRO e fixo: não passa por poder, resistência
+        /// nem marcas, porque não é uma conjuração — é o golpe do outro voltando.
+        /// Acontece ANTES da morte do alvo: quem morre espetado ainda espeta.
+        /// </summary>
+        void Refletir(Unidade alvo, int quantiaBruta, string uidFonte, bool semReflexo)
+        {
+            if (semReflexo || string.IsNullOrEmpty(uidFonte) || uidFonte == alvo.Uid) return;
+
+            int pct = 0;
+            for (int i = 0; i < alvo.Efeitos.Count; i++)
+                if (alvo.Efeitos[i].Tipo == "reflect") pct += alvo.Efeitos[i].Valor;
+            if (pct <= 0) return;
+
+            var agressor = Acha(uidFonte);
+            if (agressor == null || !agressor.NoTabuleiro) return;
+
+            int volta = Arredonda(quantiaBruta * pct / 100.0);
+            if (volta <= 0) return;
+
+            Emitir(TipoDeEvento.Reflexo, alvo.Uid, fonte: agressor.Uid, q: volta);
+            AplicarDano(agressor, volta, Dados.Elemento.Neutro, alvo.Uid, true);
         }
 
         /// <summary>

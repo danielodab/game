@@ -42,14 +42,49 @@ namespace Soterra.Motor
         FimDeBatalha,
 
         /// <summary>
-        /// O feitiço trouxe um efeito que esta rodada do motor não implementa.
+        /// O feitiço trouxe um efeito que o motor não conhece.
         ///
-        /// Existe para que a falta APAREÇA. Ignorar em silêncio um
-        /// <c>summon</c> faria o Xamã conjurar, gastar PA e não invocar nada —
-        /// e o defeito seria lido como "a invocação sumiu", não como "isto não
-        /// foi escrito ainda".
+        /// Os 24 tipos do contrato entraram todos; isto agora é a rede para um
+        /// tipo que o acervo invente. Continua existindo porque a falta tem de
+        /// APARECER: ignorar em silêncio faria a unidade gastar PA e nada
+        /// acontecer, e o defeito seria lido como "o feitiço sumiu" em vez de
+        /// "este tipo não foi escrito".
         /// </summary>
-        EfeitoIgnorado
+        EfeitoIgnorado,
+
+        /// <summary>
+        /// Alguém trocou de casa sem andar — <c>teleport</c>, <c>swap</c>.
+        ///
+        /// Separado de <see cref="Movimento"/> porque a cena desenha os dois de
+        /// formas opostas: o passo desliza casa a casa e o teleporte pisca. Usar
+        /// o mesmo evento faria o corpo atravessar a parede deslizando.
+        /// </summary>
+        Teleporte,
+
+        /// <summary>Nasceu gente no meio da batalha: <c>summon</c> ou <c>split</c>.</summary>
+        Invocacao,
+
+        ArmadilhaArmada,
+        ArmadilhaDisparada,
+        ArmadilhaExpirada,
+
+        /// <summary>Brotou uma marca <c>ev-*</c> no chão.</summary>
+        MarcaDeTerrenoNasceu,
+
+        /// <summary>Alguém pisou na marca e ela agiu. <c>Detalhe</c> traz o texto.</summary>
+        EventoDeTerreno,
+
+        /// <summary>A marca apagou sozinha, sem ninguém pisar.</summary>
+        MarcaDeTerrenoExpirou,
+
+        /// <summary>O clima da sala mudou — por feitiço ou pelo ciclo do calabouço.</summary>
+        MudancaDeClima,
+
+        /// <summary>Parte do dano recebido voltou para quem bateu.</summary>
+        Reflexo,
+
+        /// <summary>Um salto do raio em cadeia. <c>Quantidade</c> é o número do salto.</summary>
+        SaltoEmCadeia
     }
 
     /// <summary>
