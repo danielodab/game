@@ -526,9 +526,19 @@ namespace Soterra.Cena
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             // Fora de Play ninguém dá corda no Animator, e o modelo ficaria na
-            // pose de amarração do FBX em toda foto do lote. Um passo de zero
-            // segundos liga o grafo e pousa o corpo no primeiro quadro do idle.
-            if (!Application.isPlaying) animator.Update(0f);
+            // pose de amarração do FBX em toda foto do lote — que no elenco do
+            // Meshy é DEITADA, porque a correção de eixo Z-up→Y-up mora dentro
+            // dos clipes. Update(0f) religa o grafo mas não escreve osso nenhum
+            // (o RaioXDoElenco dá dois passos pelo mesmo motivo); quem pousa o
+            // corpo no quadro 0 do idle é o SampleAnimation, que escreve as
+            // curvas direto nos nós. Quem bombear tempo depois — o Avancar da
+            // AnimacaoDoElenco — escreve por cima, como deve.
+            if (!Application.isPlaying)
+            {
+                animator.Update(0f);
+                var idle = Clipe(clipes, "idle");
+                if (idle != null) idle.SampleAnimation(animator.gameObject, 0f);
+            }
         }
 
         static AnimationClip Clipe(AnimationClip[] clipes, string nome)
