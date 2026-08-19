@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SOTERRA — as telas de FLUXO: recompensa, escolha de caminho, calabouço
+  concluído e derrota. Um layout só para as quatro porque elas são a mesma
+  coisa: um anúncio em cima, o que mudou no meio, e o que fazer embaixo.
+  Quatro arquivos seriam quatro lugares para o piso de 44 pontos se perder.
+
+  Mora em `Assets/UI/Resources/` pelo mesmo motivo de `batalha.uxml`:
+  `Resources.Load` é a única forma de carregar layout sem arrastar referência
+  no Inspector, e este projeto é escrito por linha de comando.
+
+  A folha de estilo NÃO é presa por `<Style src=...>` — quando o caminho do
+  `src` quebra, o UXML entra quebrado e calado. `TelaDeFluxo` anexa a folha em
+  C#, onde a falta vira exceção com nome de arquivo.
+
+  ORDEM VERTICAL, a mesma regra de celular da tela de batalha: o que se LÊ em
+  cima, o que se TOCA embaixo. A mão que segura o telefone tapa o terço de
+  baixo — o que ela tapa tem de ser o que ela está tocando.
+
+  Esta tela é MODAL de propósito: ela cobre o tabuleiro e engole o toque. É a
+  diferença dela para a HUD de batalha, cuja raiz é `picking-mode="Ignore"`
+  justamente para o dedo chegar ao chão da sala. Aqui não há sala para tocar —
+  a batalha acabou.
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+
+  <ui:VisualElement name="fluxo" class="fluxo">
+
+    <!-- ============================================== TOPO: o que se lê -->
+    <ui:VisualElement name="fluxo-cabecalho" class="fluxo__cabecalho">
+      <ui:Label name="fluxo-titulo" class="fluxo__titulo" text="" />
+      <ui:Label name="fluxo-subtitulo" class="fluxo__subtitulo" text="" />
+      <ui:Label name="fluxo-texto" class="fluxo__texto" text="" />
+    </ui:VisualElement>
+
+    <!-- O que mudou: XP e nível por herói, e o saque. Entram por C#. -->
+    <ui:VisualElement name="fluxo-corpo" class="fluxo__corpo">
+      <ui:VisualElement name="fluxo-ganhos" class="ganhos" />
+      <ui:VisualElement name="fluxo-premios" class="premios" />
+    </ui:VisualElement>
+
+    <!-- ========================================== BAIXO: o que se toca -->
+    <ui:VisualElement name="fluxo-acoes" class="fluxo__acoes">
+      <!-- Os quatro caminhos elementais, só na tela de escolha. Entram por C#. -->
+      <ui:VisualElement name="fluxo-elementos" class="elementos" />
+      <ui:Button name="fluxo-botao" class="alvo botao botao--descer" text="Descer" />
+    </ui:VisualElement>
+
+  </ui:VisualElement>
+
+</ui:UXML>

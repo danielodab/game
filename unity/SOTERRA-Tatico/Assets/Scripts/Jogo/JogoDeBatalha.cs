@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -11,17 +12,26 @@ namespace Soterra.Jogo
     using Cena = global::Soterra.Cena;
     using Interface = global::Soterra.Interface;
     using Batalha = global::Soterra.Batalha;
+    using Progressao = global::Soterra.Progressao;
 
     /// <summary>
-    /// O componente que faz de SOTERRA um jogo: aperta-se Play e JOGA-SE uma
-    /// sala. Liga o que já existe — <c>Montador.DeSala</c> monta, o Motor manda,
-    /// o Cérebro joga pelo bicho, o Palco e o Elenco desenham, o HUD conversa —
-    /// e não reescreve nada de nenhum deles.
+    /// O componente que faz de SOTERRA um jogo: aperta-se Play e DESCE-SE um
+    /// calabouço. Liga o que já existe — a <see cref="Expedicao"/> rege a fila
+    /// de salas em cima da <c>Progressao.Descida</c>, a <see cref="Partida"/>
+    /// rege a sala, o Motor manda, o Cérebro joga pelo bicho, o Palco e o
+    /// Elenco desenham, os dois HUDs conversam — e não reescreve nada de
+    /// nenhum deles.
     ///
-    /// O componente é FINO de propósito: o laço mora na <see cref="Partida"/>,
-    /// que é C# puro e testada sem Play. Aqui só fica o que precisa de quadro e
-    /// de aparelho — ler o dedo, dar ritmo ao turno do monstro e repassar cada
-    /// resultado para a cena e para o HUD.
+    /// O componente é FINO de propósito: o laço de uma sala mora na
+    /// <see cref="Partida"/> e o laço do calabouço na <see cref="Expedicao"/>,
+    /// as duas C# puro e testadas sem Play. Aqui só fica o que precisa de
+    /// quadro e de aparelho — ler o dedo, dar ritmo ao turno do monstro,
+    /// repovoar a cena entre salas e repassar cada resultado.
+    ///
+    /// Entre salas a cena NÃO recarrega: o palco remonta com o mapa novo e o
+    /// elenco renasce em cima dele. Recarregar a cena mataria o painel do UI
+    /// Toolkit, o progresso em memória e o próprio componente no meio de um
+    /// evento de clique.
     ///
     /// Toque, não só mouse: o destino é celular. E NENHUMA linha de
     /// <c>Input.</c> legado — neste projeto ele LANÇA exceção
@@ -30,24 +40,56 @@ namespace Soterra.Jogo
     [DisallowMultipleComponent]
     public sealed class JogoDeBatalha : MonoBehaviour
     {
-        /// <summary>A sala que o jogo abre e o grupo que desce nela.
+        /// <summary>O calabouço que o jogo abre e o grupo que desce nele.
         ///
         /// Campos SERIALIZADOS, e não constantes, desde que o elenco definitivo
         /// começou a chegar: o usuário testa cada personagem novo trocando o id
         /// no Inspector — sem esperar código. Ids válidos: sumo, arqueiro,
         /// bruxo, espadachim, curandeira, invocador. Id sem modelo em
-        /// Resources/elenco cai no acervo antigo, e sem nada vira cápsula.</summary>
+        /// Resources/elenco cai no acervo antigo, e sem nada vira cápsula.
+        ///
+        /// A dupla padrão é sumo + curandeira porque são as DUAS classes que o
+        /// acervo declara `startsUnlocked` — o grupo agora nasce da progressão,
+        /// e um herói de classe trancada não tem ficha para descer. Trocar o id
+        /// aqui por uma classe trancada faz a montagem estourar dizendo isso,
+        /// em vez de o jogo abrir com um herói cru.
+        ///
+        /// <c>IndiceDaSala</c> é a sala de PARTIDA da descida — dali em diante
+        /// quem manda é a Descida, e um save em curso a ignora (retomar vence).
+        /// </summary>
         public const string CalaboucoPadrao = "greenhouse";
         public const int IndiceDaSalaPadrao = 0;
         public string Calabouco = CalaboucoPadrao;
         public int IndiceDaSala = IndiceDaSalaPadrao;
         public string Heroi1 = "sumo";
-        public string Heroi2 = "bruxo";
+        public string Heroi2 = "curandeira";
 
-        /// <summary>O grupo padrao, para quem fotografa fora da cena.</summary>
+        /// <summary>
+        /// A dupla das FOTOS de elenco (<c>FotoDaFusao</c>, <c>FotoDaAnimacao</c>).
+        ///
+        /// Continua sumo + bruxo, e não acompanha o grupo jogável de propósito:
+        /// essas fotos documentam os modelos do Meshy que existem em
+        /// <c>Resources/elenco/</c>, e montam a batalha pela CLASSE, sem passar
+        /// pela progressão — nada ali depende de a classe estar liberada.
+        /// </summary>
         public static readonly string[] HeroisPadrao = { "sumo", "bruxo" };
 
         public string[] Herois { get { return new[] { Heroi1, Heroi2 }; } }
+
+        /// <summary>
+        /// Semente do sorteio da descida (saque, IA, esquiva). Fixa: uma
+        /// descida que se comporta diferente a cada Play é impossível de
+        /// relatar num defeito.
+        /// </summary>
+        public string Semente = "soterra-jogo";
+
+        /// <summary>
+        /// Onde o save mora. Nulo = <c>PlayerPrefs</c>, que é o do jogo de
+        /// verdade. O teste troca por um armazém de memória: gravar no
+        /// PlayerPrefs da máquina passaria o resultado de uma execução do lote
+        /// para a seguinte, e dois testes que se contaminam não provam nada.
+        /// </summary>
+        public Progressao.IArmazem Armazem { get; set; }
 
         /// <summary>
         /// Pausa entre as jogadas do monstro, em segundos. Sem ela o turno
@@ -58,23 +100,37 @@ namespace Soterra.Jogo
         public const float PausaEntreJogadas = 0.55f;
 
         Dados.BancoDeDados _banco;
+        Progressao.Progresso _progresso;
+        Expedicao _expedicao;
         Partida _partida;
         Cena.Palco _palco;
         Cena.Elenco _elenco;
         AnimacaoDoElenco _animacao;
         Interface.HudDeBatalha _hud;
+        Interface.HudDeFluxo _fluxo;
 
         float _espera;
         bool _fimAnunciado;
+        bool _fimDaSalaTratado;
         string _motivoDoFim;
         Vector2Int? _casaSobPonteiro;
 
-        /// <summary>O regente. Nulo antes de <see cref="Montar"/>.</summary>
+        /// <summary>O regente da sala. Nulo antes de <see cref="Montar"/>.</summary>
         public Partida Partida { get { return _partida; } }
+
+        /// <summary>O regente do calabouço. Nulo antes de <see cref="Montar"/>.</summary>
+        public Expedicao Expedicao { get { return _expedicao; } }
+
+        /// <summary>O progresso do jogador — nível, saco, cartas.</summary>
+        public Progressao.Progresso Progresso { get { return _progresso; } }
+
         public Cena.Palco Palco { get { return _palco; } }
         public Cena.Elenco Elenco { get { return _elenco; } }
         public AnimacaoDoElenco Animacao { get { return _animacao; } }
         public Interface.HudDeBatalha Hud { get { return _hud; } }
+
+        /// <summary>As telas entre salas: recompensa, caminho, conclusão, derrota.</summary>
+        public Interface.HudDeFluxo Fluxo { get { return _fluxo; } }
 
         /// <summary>A câmera do palco — é ela que o modo lote fotografa.</summary>
         public Camera Camera { get { return _palco != null ? _palco.Camera : null; } }
@@ -85,34 +141,25 @@ namespace Soterra.Jogo
         }
 
         /// <summary>
-        /// Monta o jogo inteiro: banco, batalha real da sala, palco com o tema
-        /// do calabouço, elenco, HUD e o regente. Público e utilizável FORA de
-        /// Play porque o modo lote (-executeMethod) nunca aperta Play — é assim
-        /// que a cena `Batalha.unity` é gerada e fotografada.
+        /// Monta o jogo inteiro: banco, progresso, a descida (retomada do save
+        /// ou nova), palco com o tema do calabouço, elenco e os dois HUDs.
+        /// Público e utilizável FORA de Play porque o modo lote
+        /// (-executeMethod) nunca aperta Play — é assim que a cena
+        /// `Batalha.unity` é gerada e fotografada.
         ///
         /// Idempotente: o Start chama de novo na cena já salva, e remontar
         /// destruiria o que o Palco acabou de desenhar.
         /// </summary>
         public void Montar()
         {
-            if (_partida != null) return;
+            if (_expedicao != null) return;
 
             _banco = Dados.BancoDeDados.CarregarDeResources();
-            var batalha = Batalha.Montador.DeSala(_banco, Calabouco, IndiceDaSala, Herois);
 
-            // O tema vem do calabouço — e a sala pode destoar dele
-            // (`sceneryTheme`). Sem isto a Cisterna sairia com o verde da
-            // Estufa, o defeito que a rodada da Cena já pagou.
-            var calabouco = _banco.AchaCalabouco(Calabouco);
-            var sala = calabouco.Salas[IndiceDaSala];
+            var armazem = Armazem ?? new Progressao.ArmazemDePlayerPrefs();
+            _progresso = Progressao.Progresso.Carregar(_banco, armazem);
+
             _palco = AcharOuCriarPalco();
-            _palco.Montar(batalha.Mapa,
-                          Cena.TemaDoCenario.De(sala.TemaDeCenario ?? calabouco.Tema,
-                                                calabouco.Paleta));
-
-            _elenco = new Cena.Elenco(_palco, _banco);
-            _animacao = new AnimacaoDoElenco(_elenco, _palco, batalha);
-            _partida = new Partida(_banco, batalha, Motor.Sorte.DeTexto("soterra-jogo"));
 
             _hud = AcharOuCriarHud();
             _hud.Montar();
@@ -121,10 +168,73 @@ namespace Soterra.Jogo
             _hud.Tela.AoFundir += AoFundir;
             _hud.Tela.AoCancelarFusao += AoCancelarFusao;
 
+            _fluxo = AcharOuCriarFluxo();
+            _fluxo.Montar();
+            _fluxo.Tela.AoAvancar += AoAvancarNoFluxo;
+            _fluxo.Tela.AoEscolherElemento += AoEscolherElementoNoFluxo;
+
+            // O save VENCE o Inspector: fechar o jogo na sala do meio e reabrir
+            // tem de continuar dali, e não do vestíbulo. Sem descida gravada,
+            // abre-se uma nova com o que o Inspector diz.
+            var expedicao = Expedicao.Retomar(_progresso, Semente, armazem);
+            if (expedicao == null)
+                expedicao = Expedicao.Comecar(_progresso, Calabouco, Herois, Semente, armazem,
+                                              IndiceDaSala);
+
+            if (expedicao == null)
+                throw new InvalidOperationException(
+                    "não abriu a descida de '" + Calabouco + "' com [" + string.Join(", ", Herois) +
+                    "] — calabouço desconhecido, grupo com id repetido, ou herói de classe " +
+                    "ainda trancada (só as `startsUnlocked` têm ficha antes da primeira carta)");
+
+            // A PRIMEIRA sala já foi montada dentro da fábrica, antes de haver
+            // quem escutasse — por isso o repovoamento inicial é chamado à mão.
+            // Da segunda em diante quem avisa é o evento.
+            expedicao.AoMontarSala += RepovoarSala;
+            _expedicao = expedicao;
+            RepovoarSala();
+        }
+
+        /// <summary>
+        /// Põe a cena de acordo com a sala corrente da descida: palco com o
+        /// mapa e o tema novos, elenco renascido, animação zerada, HUD repintado.
+        ///
+        /// O tema vem do calabouço — e a sala pode destoar dele
+        /// (`sceneryTheme`). Sem isto a Cisterna sairia com o verde da Estufa,
+        /// o defeito que a rodada da Cena já pagou.
+        ///
+        /// O Elenco e a Animação são NOVOS a cada sala, e não reaproveitados:
+        /// o <c>Palco.Montar</c> destrói os filhos do tabuleiro, inclusive o
+        /// grupo "Elenco" inteiro. Um elenco reaproveitado ficaria segurando
+        /// referências a objetos destruídos — que em Unity não são nulos e
+        /// também não são nada.
+        /// </summary>
+        void RepovoarSala()
+        {
+            _partida = _expedicao.Partida;
+            var batalha = _partida.Batalha;
+
+            var calabouco = _expedicao.DadosDoCalabouco;
+            var sala = calabouco.Salas[_expedicao.IndiceDaSala];
+
+            _palco.Montar(batalha.Mapa,
+                          Cena.TemaDoCenario.De(sala.TemaDeCenario ?? calabouco.Tema,
+                                                calabouco.Paleta));
+
+            _elenco = new Cena.Elenco(_palco, _banco);
+            _animacao = new AnimacaoDoElenco(_elenco, _palco, batalha);
+
+            _fimAnunciado = false;
+            _fimDaSalaTratado = false;
+            _motivoDoFim = null;
+            _espera = 0f;
+            _casaSobPonteiro = null;
+
             // A abertura já aconteceu dentro do construtor da batalha (tique de
             // clima, veneno de quem abre) — repassar os eventos dela é o que
             // impede a primeira imagem de discordar do primeiro estado.
             AposAcao(batalha.Abertura);
+            MostrarFluxo();
         }
 
         // ================================================================ LAÇO
@@ -137,7 +247,18 @@ namespace Soterra.Jogo
             // o último corpo terminar de cair em vez de congelar no ar.
             _animacao.Avancar(Time.deltaTime);
 
-            if (_partida.Acabou) return;
+            // Tela de fluxo aberta: a batalha não anda e o dedo é dela. Quem a
+            // fecha é o botão, não o relógio.
+            if (_expedicao.Passo != PassoDaExpedicao.EmSala) return;
+
+            if (_partida.Acabou)
+            {
+                // O fim da sala só é REGISTRADO depois de o último corpo cair.
+                // Registrar no mesmo quadro faria a tela de recompensa subir por
+                // cima de um monstro ainda de pé no ar.
+                if (!_animacao.Ocupada) ConferirFimDaSala();
+                return;
+            }
 
             if (_partida.TurnoDoJogador)
             {
@@ -230,6 +351,95 @@ namespace Soterra.Jogo
                 _hud.Tela.MostrarFicha("Derrota", "rodada " + _partida.Batalha.Rodada,
                                        string.IsNullOrEmpty(_motivoDoFim)
                                            ? "O grupo caiu." : _motivoDoFim);
+        }
+
+        // =============================================================== FLUXO
+
+        /// <summary>
+        /// A batalha acabou e os corpos já caíram: registra o fim na descida
+        /// (vitória recolhe a recompensa, derrota encerra) e abre a tela.
+        ///
+        /// A trava é local e não da Descida: ela também recusa registrar duas
+        /// vezes, mas o <c>Update</c> chamaria isto sessenta vezes por segundo
+        /// até o jogador tocar no botão, e sessenta chamadas por segundo que
+        /// "não fazem nada" são sessenta oportunidades de alguma delas fazer.
+        /// </summary>
+        public void ConferirFimDaSala()
+        {
+            if (_fimDaSalaTratado) return;
+            _fimDaSalaTratado = true;
+
+            _palco.LimparRealce();
+            _expedicao.ConferirFimDaSala();
+            MostrarFluxo();
+        }
+
+        /// <summary>Repinta a tela de fluxo com o passo em que a descida está.
+        /// Fora de sala vencida ela desenha <c>Nenhum</c> — e some.</summary>
+        void MostrarFluxo()
+        {
+            if (_fluxo == null) return;
+            _fluxo.Mostrar(Interface.PonteDaDescida.Quadro(
+                _progresso, _expedicao.Descida, _expedicao.Recompensa,
+                TipoDaTela(_expedicao.Passo), _expedicao.HeroiDaEscolha));
+        }
+
+        static Interface.TipoDeFluxo TipoDaTela(PassoDaExpedicao passo)
+        {
+            switch (passo)
+            {
+                case PassoDaExpedicao.EscolhaDeElemento:
+                    return Interface.TipoDeFluxo.EscolhaDeElemento;
+                case PassoDaExpedicao.Recompensa:
+                    return Interface.TipoDeFluxo.Recompensa;
+                case PassoDaExpedicao.CalaboucoConcluido:
+                    return Interface.TipoDeFluxo.CalaboucoConcluido;
+                case PassoDaExpedicao.Derrota:
+                    return Interface.TipoDeFluxo.Derrota;
+                default:
+                    return Interface.TipoDeFluxo.Nenhum;
+            }
+        }
+
+        /// <summary>
+        /// O botão principal da tela de fluxo. Depois da recompensa ele DESCE;
+        /// depois do chefe e depois da derrota ele recomeça o calabouço — o
+        /// progresso ganho fica nos dois casos, que é a regra da Descida.
+        /// </summary>
+        void AoAvancarNoFluxo()
+        {
+            if (_expedicao == null) return;
+
+            switch (_expedicao.Passo)
+            {
+                case PassoDaExpedicao.Recompensa:
+                    _expedicao.Descer();
+                    break;
+                case PassoDaExpedicao.CalaboucoConcluido:
+                case PassoDaExpedicao.Derrota:
+                    _expedicao.Recomecar();
+                    break;
+            }
+
+            // O Descer e o Recomecar já repovoaram a cena pelo evento — este
+            // Mostrar é para o caso de nenhum dos dois ter acontecido (o botão
+            // apertado num passo que não avança), e a tela não pode ficar
+            // mostrando um estado que já mudou.
+            MostrarFluxo();
+        }
+
+        /// <summary>
+        /// O toque num dos quatro caminhos elementais. A escolha é PERMANENTE —
+        /// a Progressão recusa a segunda —, e depois dela a tela reavalia: se
+        /// o outro herói também deve uma escolha, ela aparece; senão, a
+        /// recompensa.
+        /// </summary>
+        void AoEscolherElementoNoFluxo(string elementoId)
+        {
+            if (_expedicao == null) return;
+            var heroi = _expedicao.HeroiDaEscolha;
+            if (heroi != null) _expedicao.EscolherElemento(heroi, elementoId);
+            MostrarFluxo();
         }
 
         /// <summary>
@@ -468,6 +678,24 @@ namespace Soterra.Jogo
             var go = new GameObject("Hud");
             go.transform.SetParent(transform, false);
             return go.AddComponent<Interface.HudDeBatalha>();
+        }
+
+        /// <summary>
+        /// O HUD de fluxo mora num objeto SEPARADO do de batalha: cada
+        /// <c>UIDocument</c> exige o seu <c>PanelSettings</c>, e dois
+        /// componentes de documento no mesmo objeto brigariam pelo mesmo painel.
+        /// </summary>
+        Interface.HudDeFluxo AcharOuCriarFluxo()
+        {
+            var t = transform.Find("Fluxo");
+            if (t != null)
+            {
+                var pronto = t.GetComponent<Interface.HudDeFluxo>();
+                if (pronto != null) return pronto;
+            }
+            var go = new GameObject("Fluxo");
+            go.transform.SetParent(transform, false);
+            return go.AddComponent<Interface.HudDeFluxo>();
         }
     }
 }

@@ -6,6 +6,7 @@ namespace Soterra.Testes.Jogo
     // Ver a nota de armadilha de nome em AcervoDoJogo.cs.
     using Motor = global::Soterra.Motor;
     using Jogo = global::Soterra.Jogo;
+    using Progressao = global::Soterra.Progressao;
 
     /// <summary>
     /// A montagem que o <c>LoteJogo.MontarCenaDeBatalha</c> grava e que o Play
@@ -26,6 +27,12 @@ namespace Soterra.Testes.Jogo
 
             _go = new GameObject("jogo-de-teste");
             _jogo = _go.AddComponent<Jogo.JogoDeBatalha>();
+
+            // Armazém de MEMÓRIA: o jogo agora carrega e grava progresso ao
+            // montar, e o padrão é o PlayerPrefs. Sem esta linha o lote sujaria
+            // o registro da máquina e passaria o save de uma execução para a
+            // seguinte — dois testes que se contaminam não provam nada.
+            _jogo.Armazem = new Progressao.ArmazemDeMemoria();
             _jogo.Montar();
         }
 
@@ -48,6 +55,14 @@ namespace Soterra.Testes.Jogo
                                            "nasce nela");
             Assert.IsNotNull(_jogo.Hud, "sem HUD não há barra de feitiços nem botão de encerrar");
             Assert.IsNotNull(_jogo.Hud.Tela, "o HUD subiu sem tela montada");
+            Assert.IsNotNull(_jogo.Fluxo, "sem HUD de fluxo não há tela de recompensa entre salas");
+            Assert.IsNotNull(_jogo.Fluxo.Tela, "o HUD de fluxo subiu sem tela montada");
+            Assert.AreEqual(global::Soterra.Interface.TipoDeFluxo.Nenhum, _jogo.Fluxo.Tela.Tipo,
+                            "com a batalha em pé a tela de fluxo tem de estar escondida — " +
+                            "ela cobre o tabuleiro inteiro");
+
+            Assert.IsNotNull(_jogo.Expedicao, "sem expedição não há calabouço, só uma sala");
+            Assert.IsNotNull(_jogo.Progresso, "o jogo montou sem progresso: os heróis nasceriam crus");
 
             Assert.AreSame(_jogo.Partida.Batalha.Mapa, _jogo.Palco.Mapa,
                            "o palco desenhou UM mapa e o motor joga em OUTRO — o toque cairia " +
@@ -97,6 +112,46 @@ namespace Soterra.Testes.Jogo
 
             Assert.AreEqual(1, _go.GetComponentsInChildren<global::Soterra.Cena.Palco>(true).Length);
             Assert.AreEqual(1, _go.GetComponentsInChildren<global::Soterra.Interface.HudDeBatalha>(true).Length);
+            Assert.AreEqual(1, _go.GetComponentsInChildren<global::Soterra.Interface.HudDeFluxo>(true).Length);
+        }
+
+        /// <summary>
+        /// O grupo nasce da PROGRESSÃO, não da classe crua.
+        ///
+        /// É a diferença desta rodada: até aqui o Montador recebia id de classe
+        /// e fazia nascer herói de nível 1 sem item nenhum, sempre. Agora a
+        /// unidade em campo tem o nível da ficha e os feitiços que a progressão
+        /// liberou — na primeira sala, com a progressão zerada, isso dá
+        /// exatamente a ficha crua, e é por isso que o teste compara com ela em
+        /// vez de cravar números.
+        /// </summary>
+        [Test]
+        public void OsHeroisNascemPelaProgressao()
+        {
+            var progresso = _jogo.Progresso;
+            var grupo = _jogo.Expedicao.Grupo;
+            Assert.AreEqual(2, grupo.Count, "o grupo do jogo é uma dupla");
+
+            var herois = new System.Collections.Generic.List<Motor.Unidade>();
+            var unidades = _jogo.Partida.Batalha.Unidades;
+            for (int i = 0; i < unidades.Count; i++)
+                if (unidades[i].Lado == Motor.Lado.Heroi) herois.Add(unidades[i]);
+
+            Assert.AreEqual(grupo.Count, herois.Count,
+                            "o tabuleiro tem de ter um corpo por herói do grupo");
+
+            for (int i = 0; i < grupo.Count; i++)
+            {
+                var ficha = progresso.FichaDeCombate(grupo[i]);
+                Assert.IsNotNull(ficha, grupo[i] + " não tem ficha de combate — a classe está " +
+                                        "trancada e não deveria estar no grupo padrão");
+                Assert.AreEqual(ficha.Pv, herois[i].PVMax,
+                    grupo[i] + " nasceu com o PV da CLASSE e não o da ficha da progressão");
+                Assert.AreEqual(ficha.Nivel, herois[i].Nivel);
+                Assert.AreEqual(progresso.FeiticosDe(grupo[i]).Count, herois[i].Feiticos.Count,
+                    grupo[i] + " nasceu com a lista de feitiços da classe em vez da liberada " +
+                    "pelo nível");
+            }
         }
     }
 }
