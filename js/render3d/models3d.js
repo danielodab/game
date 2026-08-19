@@ -308,21 +308,112 @@ var JOGO = (typeof window !== 'undefined')
   // acesso do renderer p/ pulsar emissivos do ambiente (lava/água/brasa)
   M.envMat = function (key) { return envMatCache[key] || null; };
 
-  // ---- fusão de estáticos: um Mesh por material (o tabuleiro inteiro em
-  // ~1-2 dúzias de draw calls em vez de centenas). Luzes/sprites sobrevivem.
-  M.mergeStatic = function (root) {
+  /* ---- fusão de estáticos ------------------------------------------------
+   *
+   * MEDIDO (tests/perf.html, sala 21x17, 7 unidades): o grupo `board` chegava
+   * ao quadro com 149 malhas e 184 772 triângulos. Cada malha é pelo menos uma
+   * chamada de desenho, e num GPU de celular a chamada custa mais que o
+   * triângulo. A fusão já existia — e mesmo assim sobravam 63 malhas de
+   * cenário. Por quê?
+   *
+   * Porque o agrupamento era por `material.uuid`. O kit KayKit vem em 49 `.glb`
+   * separados, cada um com sua PRÓPRIA cópia do mesmo atlas de 1024 px e do
+   * mesmo material — objetos diferentes, conteúdo idêntico. O código via 63
+   * materiais onde a placa de vídeo veria 2 texturas.
+   *
+   * Duas correções, nesta ordem:
+   *
+   *   1. A TEXTURA é comparada pelo CONTEÚDO, não pela identidade: desenhamos
+   *      cada imagem num quadrado de 32 px e tiramos um resumo dos pixels. As
+   *      cópias do mesmo atlas colapsam numa só.
+   *
+   *   2. A COR sai do material e vai para os VÉRTICES. Eram 31 cores distintas
+   *      — 31 materiais impossíveis de juntar. Como `MeshToonMaterial`
+   *      multiplica cor-de-vértice × cor-do-material × textura, gravar a cor em
+   *      cada vértice e deixar o material branco dá EXATAMENTE o mesmo pixel, e
+   *      agora tudo o que compartilha textura vira uma malha só.
+   *
+   * Fica de fora quem tem EMISSIVO (lava, brasa, água): esses o renderizador
+   * pulsa por referência via `M.envMat`, e trocar o material por um novo
+   * apagaria a pulsação. São 4 ou 5 malhas — não vale o risco.
+   */
+
+  // resumo do CONTEÚDO de uma imagem (32x32 → FNV-1a). Cacheado no objeto.
+  var lupa = null;
+  function resumoImagem(img) {
+    if (!img) return 'sem';
+    if (img.__soterraResumo) return img.__soterraResumo;
+    var r;
+    try {
+      if (!lupa) { lupa = document.createElement('canvas'); lupa.width = 32; lupa.height = 32; }
+      var ctx = lupa.getContext('2d');
+      ctx.clearRect(0, 0, 32, 32);
+      ctx.drawImage(img, 0, 0, 32, 32);
+      var d = ctx.getImageData(0, 0, 32, 32).data;
+      var h = 2166136261;
+      for (var i = 0; i < d.length; i++) { h ^= d[i]; h = (h * 16777619) >>> 0; }
+      r = (img.width || 0) + 'x' + (img.height || 0) + '#' + h.toString(16);
+    } catch (e) {
+      // imagem que não deixa ler pixel: cada uma fica no seu balde, como antes
+      r = 'opaca' + (contaOpacas++);
+    }
+    img.__soterraResumo = r;
+    return r;
+  }
+  var contaOpacas = 0;
+  var texCanonica = {};                      // resumo -> a primeira textura vista
+  function chaveTextura(t) {
+    if (!t) return 'sem';
+    if (t.__soterraChave) return t.__soterraChave;
+    var k = resumoImagem(t.image) + '|' + (t.flipY ? 1 : 0) + '|' + t.wrapS + ',' + t.wrapT +
+            '|' + t.repeat.x + ',' + t.repeat.y + '|' + t.offset.x + ',' + t.offset.y +
+            '|' + (t.encoding != null ? t.encoding : (t.colorSpace || ''));
+    t.__soterraChave = k;
+    if (!texCanonica[k]) texCanonica[k] = t;
+    return k;
+  }
+  function temEmissivo(m) {
+    return !!(m.emissive && (m.emissive.r + m.emissive.g + m.emissive.b) > 0.01);
+  }
+
+  M.mergeStatic = function (root, opts) {
+    opts = opts || {};
+    // Traço do cenário: 20 malhas e 74 968 triângulos só para o contorno — um
+    // segundo desenho do mesmo casco. É a primeira coisa a cair num aparelho de
+    // bateria; a leitura do tabuleiro não depende dele.
+    var semTraco = opts.outline === false ||
+      (opts.outline == null && JOGO.Mobile && JOGO.Mobile.economico && JOGO.Mobile.economico());
+
     root.updateMatrixWorld(true);
     var buckets = {};
     var keep = [];
     root.traverse(function (n) {
       if (n.isSprite || n.isPointLight || (n.userData && n.userData.keep)) { keep.push(n); return; }
       if (!n.isMesh || !n.geometry || !n.material) return;
-      var key = n.material.uuid + '|' + (n.castShadow ? 1 : 0) + '|' + (n.receiveShadow ? 1 : 0);
+      var m = n.material;
+      var porUuid = temEmissivo(m) || !m.isMeshToonMaterial;
+      var key = porUuid
+        ? ('uuid:' + m.uuid)
+        : ['toon', chaveTextura(m.map), m.transparent ? 1 : 0, m.opacity, m.side,
+           m.depthWrite ? 1 : 0, m.alphaTest, m.gradientMap ? m.gradientMap.uuid : '-',
+           (m.userData && m.userData.envOutline) ? 1 : 0].join('|');
+      key += '|' + (n.castShadow ? 1 : 0) + '|' + (n.receiveShadow ? 1 : 0);
       var b = buckets[key];
-      if (!b) b = buckets[key] = { mat: n.material, cast: n.castShadow, recv: n.receiveShadow, geoms: [] };
+      if (!b) {
+        b = buckets[key] = {
+          mat: m, porUuid: porUuid, cast: n.castShadow, recv: n.receiveShadow,
+          geoms: [], cores: [], usaVC: []
+        };
+      }
       var g2 = n.geometry.index ? n.geometry.toNonIndexed() : n.geometry.clone();
       g2.applyMatrix4(n.matrixWorld);          // (applyMatrix4 já corrige normais)
       b.geoms.push(g2);
+      b.cores.push(m.color ? m.color : null);  // vai para os vértices
+      // ARMADILHA: várias peças do kit trazem um atributo `color` que o material
+      // NÃO usa (`vertexColors` desligado) — é dado morto que o shader ignora.
+      // Multiplicar por ele ao fundir acendia esse dado morto e escurecia a sala
+      // inteira. Só entra na conta quem já usava.
+      b.usaVC.push(!!m.vertexColors);
     });
     var out = new THREE.Group();
     Object.keys(buckets).forEach(function (key) {
@@ -335,12 +426,24 @@ var JOGO = (typeof window !== 'undefined')
       var pos = new Float32Array(total * 3);
       var nor = new Float32Array(total * 3);
       var uv = hasUv ? new Float32Array(total * 2) : null;
+      var cor = b.porUuid ? null : new Float32Array(total * 3);
       var off = 0;
       for (i = 0; i < b.geoms.length; i++) {
         var ga = b.geoms[i].attributes;
         pos.set(ga.position.array, off * 3);
         if (ga.normal) nor.set(ga.normal.array, off * 3);
         if (uv && ga.uv) uv.set(ga.uv.array, off * 2);
+        if (cor) {
+          // cor do material × cor-de-vértice que a peça já trouxesse
+          var c = b.cores[i] || { r: 1, g: 1, b: 1 };
+          var vc = b.usaVC[i] ? (ga.color || null) : null;
+          for (var v = 0; v < ga.position.count; v++) {
+            var j = (off + v) * 3;
+            cor[j]     = c.r * (vc ? vc.getX(v) : 1);
+            cor[j + 1] = c.g * (vc ? vc.getY(v) : 1);
+            cor[j + 2] = c.b * (vc ? vc.getZ(v) : 1);
+          }
+        }
         off += ga.position.count;
         b.geoms[i].dispose();
       }
@@ -348,12 +451,26 @@ var JOGO = (typeof window !== 'undefined')
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
       if (uv) geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-      var ms = new THREE.Mesh(geo, b.mat);
+      if (cor) geo.setAttribute('color', new THREE.BufferAttribute(cor, 3));
+
+      var mat = b.mat;
+      if (!b.porUuid) {
+        var src = b.mat;
+        mat = new THREE.MeshToonMaterial({
+          map: texCanonica[chaveTextura(src.map)] || src.map || null,
+          gradientMap: src.gradientMap || null,
+          vertexColors: true, color: 0xffffff,
+          transparent: src.transparent, opacity: src.opacity,
+          side: src.side, depthWrite: src.depthWrite, alphaTest: src.alphaTest
+        });
+        if (src.userData && src.userData.envOutline) mat.userData.envOutline = 1;
+      }
+      var ms = new THREE.Mesh(geo, mat);
       ms.castShadow = b.cast;
       ms.receiveShadow = b.recv;
       out.add(ms);
       // traço FINO no ambiente (só materiais marcados: paredes/pilares/props)
-      if (b.mat.userData && b.mat.userData.envOutline) {
+      if (!semTraco && mat.userData && mat.userData.envOutline) {
         var oc = b.mat.color ? b.mat.color.clone().convertLinearToSRGB() : new THREE.Color('#443344');
         oc.multiplyScalar(0.30).lerp(new THREE.Color('#171226'), 0.4);
         var hull = new THREE.Mesh(hullGeometry(geo), outlineMat('#' + oc.getHexString(), 0.0016));

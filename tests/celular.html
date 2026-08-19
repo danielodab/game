@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — cabe no retrato do celular?</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:390px;height:844px;border:0;background:#000}
+  #saida{position:fixed;left:390px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .ok{color:#7fe08a} .fail{color:#ff8477;font-weight:700}
+</style>
+</head>
+<body>
+<!-- O QUADRO É O APARELHO. Chrome headless não entrega uma janela de 390 px
+     (o sistema impõe um mínimo), e medir `vw`/consulta de mídia numa janela de
+     504 px seria medir outra coisa. Um <iframe> de 390x844 dá ao documento de
+     dentro um viewport DE VERDADE desse tamanho — e o documento de dentro é o
+     `index.html` do jogo, não uma imitação. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+/* Três perguntas que o olho sozinho erra, com o jogo aberto em 390x844:
+ *
+ *   1. algum pedaço da interface passou da borda? (rolagem lateral = quebrado)
+ *   2. todo botão tem 44 px de lado? (§0 do contrato — alvo de dedo)
+ *   3. dá para VER o jogo? A HUD tapa as duas pontas da tela; se o tabuleiro
+ *      for enquadrado no centro do CANVAS, a fileira de baixo nasce atrás da
+ *      barra de feitiços. É o que `R.setMoldura` conserta — e é aqui que se prova.
+ */
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, testes = 0;
+  function diz(t) { linhas.push(t); }
+  function checa(nome, cond, detalhe) {
+    testes++; if (!cond) falhas++;
+    linhas.push((cond ? '  ok   ' : '  FALHA') + '  ' + nome + (detalhe ? '   [' + detalhe + ']' : ''));
+  }
+  function fim() {
+    document.getElementById('log').textContent = linhas.join(NL);
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'ok';
+    s.textContent = (falhas ? 'FAIL' : 'PASS') + ' · ' + (testes - falhas) + '/' + testes + ' verificações';
+    window.__pronto = true;
+  }
+
+  var quadro = document.getElementById('tela');
+  /* `sandbox=1` faz o jogo lá dentro guardar o save na MEMÓRIA. É obrigatório:
+   * `save_sandbox.js` remenda o `Storage.prototype` da JANELA em que roda, e o
+   * quadro tem a janela dele — sem este pedido, medir a tela apagaria o jogo de
+   * quem estivesse jogando pelo servidor.
+   * O resto da barra de endereço passa adiante: `?mobile=1` é o padrão (é o que
+   * estamos testando) e `?mobile=0` serve para comparar com o perfil de mesa. */
+  (function () {
+    var q = location.search || '?mobile=1';
+    if (!/[?&]mobile=/.test(q)) q += (q ? '&' : '?') + 'mobile=1';
+    if (!/[?&]sandbox=1/.test(q)) q += '&sandbox=1';
+    if (!/[?&]snap=/.test(q)) q += '&snap=1';    // preserva o buffer: dá para ler pixel
+    quadro.src = '../index.html' + q;
+  })();
+  var W, H, J, doc, R, G, E, U;
+
+  function quadros(n) {
+    for (var i = 0; i < (n || 6); i++) { G.update(0.016); U.update(0.016); R.render(0.016); }
+  }
+
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Models3D && J.Models3D.isReady() &&
+                  J.Renderer && J.Renderer.isReady() && J.UI && J.Game);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 120000) { diz('o jogo não abriu dentro do quadro em 120 s'); falhas++; testes++; return fim(); }
+      return setTimeout(espera, 250);
+    }
+    doc = quadro.contentDocument;
+    W = quadro.contentWindow.innerWidth; H = quadro.contentWindow.innerHeight;
+    R = J.Renderer; G = J.Game; E = J.Engine; U = J.UI;
+
+    var ids = J.Progress.heroIds();
+    while (ids.length < 2) { J.Progress.createHero(ids.length ? 'curandeira' : 'sumo'); ids = J.Progress.heroIds(); }
+    G.startRun(ids.slice(0, 2), 'greenhouse');
+    quadros(60);
+    setTimeout(mede, 200);
+  })();
+
+  function mede() {
+    quadros(20);
+    diz('viewport de dentro: ' + W + 'x' + H);
+    diz('perfil: toque=' + J.Mobile.toque() + ' celular=' + J.Mobile.celular() +
+        ' retrato=' + J.Mobile.retrato());
+    checa('o quadro é o retrato de 390x844', W === 390 && H === 844, W + 'x' + H);
+    checa('o save do jogador está blindado dentro do quadro',
+          !!(J.SaveSandbox && J.SaveSandbox.active && J.SaveSandbox.check().ok));
+    checa('entrou na batalha', G.screen === 'battle', G.screen);
+
+    // ------------------------------------------------ 1) nada passa da borda
+    var vaza = [], todos = doc.querySelectorAll('#ui-root .ui-screen.is-on *');
+    for (var i = 0; i < todos.length; i++) {
+      var e = todos[i], r = e.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) continue;
+      if (r.right > W + 1 || r.left < -1 || r.bottom > H + 1 || r.top < -1) {
+        vaza.push((e.className || e.tagName) + ' [' + Math.round(r.left) + '..' + Math.round(r.right) +
+                  ' , ' + Math.round(r.top) + '..' + Math.round(r.bottom) + ']');
+      }
+    }
+    checa('nenhum pedaço da HUD passa da tela', vaza.length === 0, vaza.slice(0, 4).join(' ; '));
+    checa('o documento não rola de lado', doc.documentElement.scrollWidth <= W,
+          doc.documentElement.scrollWidth + ' > ' + W);
+
+    // ------------------------------------------------ 2) alvo de dedo (44 px)
+    var pequenos = [], bts = doc.querySelectorAll('#ui-root .ui-screen.is-on button');
+    for (var b = 0; b < bts.length; b++) {
+      var rb = bts[b].getBoundingClientRect();
+      if (rb.width === 0 || rb.height === 0) continue;
+      if (rb.width < 43.5 || rb.height < 43.5) {
+        pequenos.push((bts[b].className || '?') + ' ' + Math.round(rb.width) + 'x' + Math.round(rb.height));
+      }
+    }
+    checa('todo botão tem 44 px de lado', pequenos.length === 0, pequenos.slice(0, 5).join(' ; '));
+
+    // ---------------------------- 2b) nada cai em cima de um botão de verdade
+    // O botão de teste morava no canto de baixo à direita — exatamente onde o
+    // "Encerrar turno" fica em pé. Um toque no fim do turno abria o painel de
+    // depuração em vez de encerrar.
+    var fim1 = doc.querySelector('.btn-end'), dbg = doc.querySelector('.dbg-abrir');
+    if (fim1 && dbg) {
+      var a = fim1.getBoundingClientRect(), b2 = dbg.getBoundingClientRect();
+      var cruza = !(a.right < b2.left || b2.right < a.left || a.bottom < b2.top || b2.bottom < a.top);
+      checa('nada se sobrepõe ao "Encerrar turno"', !cruza,
+            'teste em ' + Math.round(b2.left) + ',' + Math.round(b2.top));
+    }
+
+    // ------------------------------------------------ 3) dá para ver o jogo
+    var m = R.moldura(), topo = m.topo, base = m.base, livre = H - topo - base;
+    diz('moldura da HUD: ' + topo + ' px em cima, ' + base + ' px embaixo → faixa livre de ' +
+        livre + ' px (' + Math.round(100 * livre / H) + '% da tela)');
+    checa('a HUD avisou o renderizador do quanto ela tapa', topo > 0 && base > 0, topo + '/' + base);
+    checa('sobra pelo menos 45% da altura para o tabuleiro', livre >= H * 0.45, livre + ' de ' + H);
+
+    /* Quantas unidades cabem na faixa livre.
+     *
+     * Não exigimos TODAS: uma sala de 21x17 em 390 px de largura não cabe com
+     * célula que o dedo alcance — 390/30 dá 13 casas, e a briga se espalha por
+     * mais que isso. Quem completa é a câmera (arrastar gira, dois dedos
+     * aproximam). O que NÃO pode faltar é a unidade que está jogando: se o
+     * jogador não vê quem ele controla, o turno começa perdido. */
+    var st = G.state, fora = [], dentro = 0, vivos = 0;
+    function naFaixa(un) {
+      var p = R.project(un.x, un.y, 0);
+      return p.y >= topo && p.y <= H - base && p.x >= 0 && p.x <= W;
+    }
+    for (var u = 0; u < st.units.length; u++) {
+      var un = st.units[u];
+      if (!un.alive || un.offBoard) continue;
+      vivos++;
+      if (naFaixa(un)) dentro++;
+      else {
+        var p = R.project(un.x, un.y, 0);
+        fora.push((un.name || un.defId) + ' em ' + un.x + ',' + un.y +
+                  ' → tela ' + Math.round(p.x) + ',' + Math.round(p.y));
+      }
+    }
+    var ativa = E.activeUnit(st);
+    checa('a unidade que está jogando aparece na tela', !!ativa && naFaixa(ativa),
+          ativa ? (ativa.name + ' em ' + ativa.x + ',' + ativa.y) : 'sem unidade ativa');
+    checa('pelo menos metade das unidades vivas cabe na faixa', dentro * 2 >= vivos,
+          dentro + ' de ' + vivos + ' — fora: ' + fora.slice(0, 3).join(' ; '));
+    diz('unidades visíveis na faixa: ' + dentro + ' de ' + vivos);
+
+    // e a mira por toque continua caindo na casa certa com a moldura ligada?
+    var alvo = null;
+    for (var v = 0; v < st.units.length; v++) if (st.units[v].alive) { alvo = st.units[v]; break; }
+    if (alvo) {
+      var pa = R.project(alvo.x, alvo.y, 0);
+      var t = R.tileAt(pa.x, pa.y);
+      checa('a conta de tela→casa sobrevive à moldura', t.x === alvo.x && t.y === alvo.y,
+            'pedi ' + alvo.x + ',' + alvo.y + ' e voltou ' + t.x + ',' + t.y);
+    }
+    /* ------------------------------------- 4) o brilho pode sair sem escurecer
+     * Desligar o bloom no celular é a economia mais barata que existe (cinco
+     * desfoques de tela cheia por quadro). Mas ele não é só brilho: quando o
+     * `EffectComposer` sai de cena, a imagem passa a ir para a tela por outro
+     * caminho. Aqui medimos o MESMO quadro dos dois jeitos e comparamos o tom
+     * médio — se o tabuleiro escurecer ao desligar o brilho, o telefone recebe
+     * um jogo mais escuro que o do computador, e isso não é economia, é defeito.
+     */
+    var cv = doc.getElementById('game-canvas');
+    function tomMedio() {
+      quadros(3);
+      var lg = document.createElement('canvas');
+      lg.width = 120; lg.height = 200;
+      var c2 = lg.getContext('2d');
+      c2.drawImage(cv, 0, 0, 120, 200);
+      var d = c2.getImageData(0, 0, 120, 200).data, soma = 0;
+      for (var i = 0; i < d.length; i += 4) soma += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      return soma / (d.length / 4);
+    }
+    if (cv && cv.width) {
+      var tinha = R.hasBloom();
+      var tomA = tomMedio();
+      R.setBloom(!tinha);
+      var tomB = tomMedio();
+      R.setBloom(tinha);
+      var semBrilho = tinha ? tomB : tomA, comBrilho = tinha ? tomA : tomB;
+      var razao = comBrilho > 0.5 ? (semBrilho / comBrilho) : 1;
+      diz('tom médio do quadro: com brilho ' + comBrilho.toFixed(1) +
+          ' · sem brilho ' + semBrilho.toFixed(1) + ' → ' + razao.toFixed(2) + 'x');
+      checa('desligar o brilho não escurece a imagem', razao > 0.80 && razao < 1.25,
+            'ficou ' + razao.toFixed(2) + 'x do tom original');
+    }
+
+    fim();
+  }
+})();
+</script>
+</body>
+</html>

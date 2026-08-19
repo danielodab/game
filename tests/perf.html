@@ -33,6 +33,7 @@ porque essas não mudam com a placa de vídeo.</div>
 <script>
   window.__V = '?v=' + Date.now();
   var arquivos = [
+    'js/mobile.js',
     'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
     'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
     'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
@@ -194,7 +195,29 @@ porque essas não mudam com a placa de vídeo.</div>
         passos(5, 0.016);
       }
 
-      // ---- pós-processamento: quantos passes de tela cheia por quadro?
+      // ---- e quanto o TRACO DE CONTORNO custa. Ele e um segundo desenho do
+      // mesmo casco, por dentro e ao contrario: cada malha de cenario marcada
+      // ganha uma companheira. No celular ele sai (ver models3d.js/mergeStatic),
+      // e aqui medimos EXATAMENTE quanto isso devolve — mesma sala, mesmo quadro,
+      // so escondendo quem tem `userData.outline`.
+      var cenaT = R.scene ? R.scene() : null;
+      var callsComTraco = statParado.calls || 0, trisComTraco = statParado.tris || 0;
+      var callsSemTraco = callsComTraco, trisSemTraco = trisComTraco, nTracos = 0;
+      if (cenaT) {
+        var tracos = [];
+        cenaT.traverse(function (o) { if (o.userData && o.userData.outline) tracos.push(o); });
+        nTracos = tracos.length;
+        if (nTracos) {
+          for (var it = 0; it < tracos.length; it++) tracos[it].visible = false;
+          passos(10, 0.016);
+          var stTraco = R.stats ? R.stats() : {};
+          callsSemTraco = stTraco.calls || 0; trisSemTraco = stTraco.tris || 0;
+          for (var it2 = 0; it2 < tracos.length; it2++) tracos[it2].visible = true;
+          passos(5, 0.016);
+        }
+      }
+
+      // ---- pos-processamento: quantos passes de tela cheia por quadro?
       linha({ g: 'tempo de JS por quadro (só CPU — a GPU aqui é software)' });
       linha({ o: 'Game.update', ms: parado.game });
       linha({ o: 'UI.update', ms: parado.ui });
@@ -220,6 +243,18 @@ porque essas não mudam com a placa de vídeo.</div>
         linha({ o: 'texturas vivas na memória', n: ren.info.memory.textures });
         linha({ o: 'geometrias vivas na memória', n: ren.info.memory.geometries });
         linha({ o: 'programas de shader compilados', n: (ren.info.programs || []).length });
+      }
+      linha({ o: 'perfil de aparelho',
+              txt: (JOGO.Mobile ? ('toque=' + JOGO.Mobile.toque() + ' · economico=' +
+                    JOGO.Mobile.economico()) : 'js/mobile.js ausente') });
+      linha({ o: 'traços de contorno na cena', n: nTracos });
+      if (nTracos) {
+        linha({ o: 'chamadas COM traço', n: callsComTraco });
+        linha({ o: 'chamadas SEM traço', n: callsSemTraco });
+        linha({ o: 'triângulos COM traço', n: trisComTraco });
+        linha({ o: 'triângulos SEM traço', n: trisSemTraco });
+        linha({ o: 'quanto do quadro é só o traço',
+                txt: trisComTraco ? Math.round((1 - trisSemTraco / trisComTraco) * 100) + '% dos triângulos' : '?' });
       }
       linha({ o: 'pós-processamento (bloom) ligado', txt: tinhaBloom ? 'SIM' : 'não' });
       if (tinhaBloom) {

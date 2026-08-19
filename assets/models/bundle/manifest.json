@@ -1,0 +1,563 @@
+{
+ "gerado": "2026-08-19T18:57:31",
+ "ferramenta": "tools/extrai_assets.py",
+ "base": "assets/models/bundle/",
+ "itens": [
+  {
+   "alvo": "ASSETS",
+   "chave": "banner_blue",
+   "arquivo": "env-kit/banner_blue.glb",
+   "bytes": 24216
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "banner_green",
+   "arquivo": "env-kit/banner_green.glb",
+   "bytes": 24216
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "banner_pat_b",
+   "arquivo": "env-kit/banner_pat_b.glb",
+   "bytes": 24224
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "banner_pat_g",
+   "arquivo": "env-kit/banner_pat_g.glb",
+   "bytes": 25168
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "banner_pat_r",
+   "arquivo": "env-kit/banner_pat_r.glb",
+   "bytes": 24224
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "banner_red",
+   "arquivo": "env-kit/banner_red.glb",
+   "bytes": 24216
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "barrel",
+   "arquivo": "env-kit/barrel.glb",
+   "bytes": 32060
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "barrel_big",
+   "arquivo": "env-kit/barrel_big.glb",
+   "bytes": 44292
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "barrier",
+   "arquivo": "env-kit/barrier.glb",
+   "bytes": 19948
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "barrier_col",
+   "arquivo": "env-kit/barrier_col.glb",
+   "bytes": 24856
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "bottle",
+   "arquivo": "env-kit/bottle.glb",
+   "bytes": 26460
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "box",
+   "arquivo": "env-kit/box.glb",
+   "bytes": 28692
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "box_big",
+   "arquivo": "env-kit/box_big.glb",
+   "bytes": 28740
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "candle",
+   "arquivo": "env-kit/candle.glb",
+   "bytes": 28240
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "chair",
+   "arquivo": "env-kit/chair.glb",
+   "bytes": 36252
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "chest",
+   "arquivo": "env-kit/chest.glb",
+   "bytes": 81412
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "chest_gold",
+   "arquivo": "env-kit/chest_gold.glb",
+   "bytes": 140140
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "coins",
+   "arquivo": "env-kit/coins.glb",
+   "bytes": 101076
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "column",
+   "arquivo": "env-kit/column.glb",
+   "bytes": 20260
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "crates",
+   "arquivo": "env-kit/crates.glb",
+   "bytes": 103704
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "floor_a",
+   "arquivo": "env-kit/floor_a.glb",
+   "bytes": 20740
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "floor_b",
+   "arquivo": "env-kit/floor_b.glb",
+   "bytes": 22132
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "floor_c",
+   "arquivo": "env-kit/floor_c.glb",
+   "bytes": 21608
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "floor_deco",
+   "arquivo": "env-kit/floor_deco.glb",
+   "bytes": 40812
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "floor_dirt",
+   "arquivo": "env-kit/floor_dirt.glb",
+   "bytes": 20460
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "floor_grate",
+   "arquivo": "env-kit/floor_grate.glb",
+   "bytes": 26700
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "floor_weeds",
+   "arquivo": "env-kit/floor_weeds.glb",
+   "bytes": 44020
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "floor_weeds2",
+   "arquivo": "env-kit/floor_weeds2.glb",
+   "bytes": 42368
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "keg",
+   "arquivo": "env-kit/keg.glb",
+   "bytes": 59912
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "pillar",
+   "arquivo": "env-kit/pillar.glb",
+   "bytes": 25552
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "pillar_deco",
+   "arquivo": "env-kit/pillar_deco.glb",
+   "bytes": 62460
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "rubble",
+   "arquivo": "env-kit/rubble.glb",
+   "bytes": 38836
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "rubble_big",
+   "arquivo": "env-kit/rubble_big.glb",
+   "bytes": 60196
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "stool",
+   "arquivo": "env-kit/stool.glb",
+   "bytes": 28528
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "sword_shield",
+   "arquivo": "env-kit/sword_shield.glb",
+   "bytes": 47764
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "table",
+   "arquivo": "env-kit/table.glb",
+   "bytes": 33832
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "torch",
+   "arquivo": "env-kit/torch.glb",
+   "bytes": 31244
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "torch_wall",
+   "arquivo": "env-kit/torch_wall.glb",
+   "bytes": 33220
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "trunk",
+   "arquivo": "env-kit/trunk.glb",
+   "bytes": 30184
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_broken",
+   "arquivo": "env-kit/wall_broken.glb",
+   "bytes": 69276
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_corner",
+   "arquivo": "env-kit/wall_corner.glb",
+   "bytes": 49212
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_cross",
+   "arquivo": "env-kit/wall_cross.glb",
+   "bytes": 66856
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_half",
+   "arquivo": "env-kit/wall_half.glb",
+   "bytes": 36840
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_pil",
+   "arquivo": "env-kit/wall_pil.glb",
+   "bytes": 55156
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_str",
+   "arquivo": "env-kit/wall_str.glb",
+   "bytes": 53132
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_str2",
+   "arquivo": "env-kit/wall_str2.glb",
+   "bytes": 138396
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_str3",
+   "arquivo": "env-kit/wall_str3.glb",
+   "bytes": 69276
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_tsplit",
+   "arquivo": "env-kit/wall_tsplit.glb",
+   "bytes": 60080
+  },
+  {
+   "alvo": "ASSETS",
+   "chave": "wall_win",
+   "arquivo": "env-kit/wall_win.glb",
+   "bytes": 57256
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "_anims",
+   "arquivo": "models-anims/_anims.glb",
+   "bytes": 1427872
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "barbarian",
+   "arquivo": "models-heroes/barbarian.glb",
+   "bytes": 334384
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "knight",
+   "arquivo": "models-heroes/knight.glb",
+   "bytes": 380284
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mage",
+   "arquivo": "models-heroes/mage.glb",
+   "bytes": 310832
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "rogue",
+   "arquivo": "models-heroes/rogue.glb",
+   "bytes": 337388
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "rogue_hooded",
+   "arquivo": "models-heroes/rogue_hooded.glb",
+   "bytes": 318960
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "skeleton_warrior",
+   "arquivo": "models-heroes/skeleton_warrior.glb",
+   "bytes": 372648
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "skeleton_minion",
+   "arquivo": "models-heroes/skeleton_minion.glb",
+   "bytes": 323684
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "skeleton_mage",
+   "arquivo": "models-heroes/skeleton_mage.glb",
+   "bytes": 270840
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "skeleton_rogue",
+   "arquivo": "models-heroes/skeleton_rogue.glb",
+   "bytes": 336340
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "meshy_sumo",
+   "arquivo": "models-meshy/meshy_sumo.glb",
+   "bytes": 1091988
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "meshy_invocador",
+   "arquivo": "models-meshy/meshy_invocador.glb",
+   "bytes": 1397924
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "meshy_bruxo",
+   "arquivo": "models-meshy/meshy_bruxo.glb",
+   "bytes": 1107700
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_frog",
+   "arquivo": "models-monsters/q_frog.glb",
+   "bytes": 581708
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_spider",
+   "arquivo": "models-monsters/q_spider.glb",
+   "bytes": 439716
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_wasp",
+   "arquivo": "models-monsters/q_wasp.glb",
+   "bytes": 436820
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_snake",
+   "arquivo": "models-monsters/q_snake.glb",
+   "bytes": 212804
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_rat",
+   "arquivo": "models-monsters/q_rat.glb",
+   "bytes": 541640
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_wolf",
+   "arquivo": "models-monsters/q_wolf.glb",
+   "bytes": 588768
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_fox",
+   "arquivo": "models-monsters/q_fox.glb",
+   "bytes": 570360
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_stag",
+   "arquivo": "models-monsters/q_stag.glb",
+   "bytes": 668632
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_bull",
+   "arquivo": "models-monsters/q_bull.glb",
+   "bytes": 629372
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_velociraptor",
+   "arquivo": "models-monsters/q_velociraptor.glb",
+   "bytes": 277244
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_trex",
+   "arquivo": "models-monsters/q_trex.glb",
+   "bytes": 327680
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_triceratops",
+   "arquivo": "models-monsters/q_triceratops.glb",
+   "bytes": 301168
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_mushnub",
+   "arquivo": "models-bosses/q_mushnub.glb",
+   "bytes": 163392
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_glub",
+   "arquivo": "models-bosses/q_glub.glb",
+   "bytes": 236380
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_bluedemon",
+   "arquivo": "models-bosses/q_bluedemon.glb",
+   "bytes": 644208
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_alpaking",
+   "arquivo": "models-bosses/q_alpaking.glb",
+   "bytes": 273764
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_goleling",
+   "arquivo": "models-bosses/q_goleling.glb",
+   "bytes": 311000
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_ghostskull",
+   "arquivo": "models-bosses/q_ghostskull.glb",
+   "bytes": 349616
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_yeti",
+   "arquivo": "models-bosses/q_yeti.glb",
+   "bytes": 651656
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_hywirl",
+   "arquivo": "models-summons/q_hywirl.glb",
+   "bytes": 317228
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_demon",
+   "arquivo": "models-summons/q_demon.glb",
+   "bytes": 700840
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_dragon_ev",
+   "arquivo": "models-summons/q_dragon_ev.glb",
+   "bytes": 533556
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_squidle",
+   "arquivo": "models-summons/q_squidle.glb",
+   "bytes": 418132
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_cactoro",
+   "arquivo": "models-summons/q_cactoro.glb",
+   "bytes": 676764
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_spikyblob",
+   "arquivo": "models-summons/q_spikyblob.glb",
+   "bytes": 214664
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_birb",
+   "arquivo": "models-summons/q_birb.glb",
+   "bytes": 648736
+  }
+ ],
+ "meshyClips": {
+  "meshy_sumo": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "meshy_invocador": [
+   "attack",
+   "death",
+   "hit",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "meshy_bruxo": [
+   "attack",
+   "death",
+   "hit",
+   "idle",
+   "run",
+   "walk"
+  ]
+ },
+ "totalBytes": 21935136,
+ "totalBase64": 29246968
+}

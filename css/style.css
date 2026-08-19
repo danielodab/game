@@ -78,6 +78,33 @@ html, body {
   touch-action: none;
 }
 
+/* ------------------------------------------------------------ tela de carga
+   Só aparece no caminho SERVIDO (http:// e dentro do APK), onde os 21 MB de
+   modelo descem por XHR e há o que contar. Existe porque uma barra que anda é a
+   diferença entre "está carregando" e "travou": no celular, a versão anterior
+   era uma tela preta de vários segundos sem sinal nenhum de vida. */
+#carga {
+  position: absolute; inset: 0; z-index: 40;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; background: var(--ink); text-align: center;
+  padding: 24px calc(24px + var(--sa-l)) 24px calc(24px + var(--sa-r));
+}
+#carga[hidden] { display: none; }
+.carga-marca {
+  font-family: var(--ui-serif); font-size: 30px; letter-spacing: .22em;
+  color: var(--gold); text-shadow: 0 2px 0 #000, 0 0 22px rgba(255,196,77,.25);
+}
+.carga-trilho {
+  width: min(280px, 72vw); height: 8px; border-radius: 999px;
+  background: var(--panel2); border: 1px solid var(--line); overflow: hidden;
+}
+.carga-barra {
+  height: 100%; width: 0%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+  transition: width .12s linear;
+}
+.carga-txt { color: var(--dim); font-size: 12.5px; }
+
 /* A camada da UI cobre a tela inteira por cima do tabuleiro. Sem `pointer-events:
    none` AQUI, o contêiner engole todo clique e o jogador não consegue andar nem
    atacar — foi exatamente o que aconteceu. As telas voltam a capturar (`.ui-screen`),
@@ -276,6 +303,22 @@ i, em { font-style: normal; color: var(--dim); }
 }
 .ui-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
 .ui-toast.t-good { border-color: #2b6b46; color: var(--good); }
+
+/* Dica da MIRA por toque. Fica ACIMA do tabuleiro e longe da barra de feitiços,
+   porque ela fala de uma casa que o dedo acabou de tocar — se ficar embaixo, o
+   próprio dedo a tapa. */
+.ui-mira {
+  position: fixed; z-index: 95;
+  left: 50%; top: calc(84px + var(--sa-t));
+  transform: translate(-50%, -8px);
+  padding: 8px 15px; border-radius: 999px;
+  background: rgba(9,12,16,.94); border: 1px solid var(--gold-dim);
+  color: var(--gold); font-size: 12.5px; font-weight: 700;
+  opacity: 0; pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease;
+  max-width: 86vw; text-align: center; white-space: nowrap;
+}
+.ui-mira.is-on { opacity: 1; transform: translate(-50%, 0); }
 
 /* ==========================================================================
    MENU
@@ -1013,6 +1056,14 @@ i, em { font-style: normal; color: var(--dim); }
   padding: 8px 11px; cursor: pointer; opacity: .78;
 }
 .dbg-abrir:hover { opacity: 1; }
+/* Em pé, o canto de baixo à direita é do "Encerrar turno" — o botão de teste
+   caía EM CIMA dele e roubava o toque que encerra o turno. Sobe para o topo,
+   onde a barra da sala tem folga, e encolhe. */
+html.celular .dbg-abrir {
+  right: 6px; bottom: auto; top: calc(4px + var(--sa-t));
+  padding: 5px 8px; font-size: 11px; opacity: .55;
+}
+html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .dbg-painel {
   position: fixed; inset: auto 10px 52px 10px; max-width: 640px; margin: 0 auto;
   max-height: 76vh; overflow: auto; z-index: 9001; display: none;

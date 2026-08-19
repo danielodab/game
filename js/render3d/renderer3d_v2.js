@@ -203,7 +203,13 @@ var JOGO = (typeof window !== 'undefined')
     }
     // resolucao: 2x so faz sentido em tela pequena; no desktop 4x de pixels
     // custa mais do que entrega. 1.5 e o teto util aqui.
-    DPR = clamp(window.devicePixelRatio || 1, 1, 1.5);
+    //
+    // No celular o teto desce para 1,25. Um aparelho com dpr 3 desenharia
+    // 585x1266 = 741 mil pixels a 1,5; a 1,25 são 514 mil — 31% de
+    // preenchimento a menos por quadro, e a HUD (que é DOM) continua nítida
+    // porque ela não passa pelo canvas.
+    var teto = (JOGO.Mobile && JOGO.Mobile.economico && JOGO.Mobile.economico()) ? 1.25 : 1.5;
+    DPR = clamp(window.devicePixelRatio || 1, 1, teto);
     var box = measure(); W = box.w; H = box.h;
 
     var wantPreserve = opts.preserveDrawingBuffer ||
@@ -283,8 +289,7 @@ var JOGO = (typeof window !== 'undefined')
     if (b.w === W && b.h === H) return;
     W = b.w; H = b.h;
     renderer.setSize(W, H, false);
-    camera.aspect = W / H;
-    camera.updateProjectionMatrix();
+    aplicaMoldura();                 // já faz o updateProjectionMatrix
     if (composer) composer.setSize(W, H);
   }
   R.resize = onResize;
@@ -349,6 +354,18 @@ var JOGO = (typeof window !== 'undefined')
 
   function buildComposer(opts) {
     if (opts && opts.bloom === false) return;
+    /* BLOOM NO CELULAR: não. O `UnrealBloomPass` é um recorte de brilho mais
+     * CINCO desfoques em cadeia, cada um lendo e escrevendo a tela inteira. Em
+     * chamadas de desenho ele parece barato (14 de 341, ~4%); em PREENCHIMENTO,
+     * que é onde o GPU de telefone se afoga, ele multiplica o custo do quadro.
+     * `R.setBloom(true)` continua religando para quem quiser. */
+    // `?bloom=1` / `?bloom=0` mandam por cima — é como se compara o MESMO
+    // quadro com e sem o brilho, que foi como descobrimos que desligar o
+    // composer mudava o tom da imagem inteira (ver `aplicaTomSemComposer`).
+    var pedido = /[?&]bloom=1/.test(location.search || '') ? true
+               : /[?&]bloom=0/.test(location.search || '') ? false : null;
+    if (pedido === false) return;
+    if (pedido !== true && JOGO.Mobile && JOGO.Mobile.economico && JOGO.Mobile.economico()) return;
     if (!THREE.EffectComposer || !THREE.RenderPass || !THREE.UnrealBloomPass) return;
     try {
       composer = new THREE.EffectComposer(renderer);
@@ -541,6 +558,7 @@ var JOGO = (typeof window !== 'undefined')
     // props de borda: o campo é um LUGAR, não um diorama solto no vazio
     // Props de borda: encostados na arena (nunca boiando no horizonte), com
     // altura normalizada e um disco de contato que os assenta no chao.
+    var padPos = [];
     try {
       var kinds = K.propKinds(theme);
       var rr = 0;
@@ -559,15 +577,29 @@ var JOGO = (typeof window !== 'undefined')
         fitHeight(prop2, 0.85 + ((hashXY(p, 5) % 100) / 100) * 0.9);
         prop2.position.set(px, 0, pz);
         staticG.add(prop2);
-        var pad = new THREE.Mesh(M.tileFlatGeo(), new THREE.MeshBasicMaterial({
-          color: 0x000000, transparent: true, opacity: 0.34, depthWrite: false
-        }));
-        pad.position.set(px, 0.02, pz);
-        pad.scale.setScalar(0.55);
-        pad.renderOrder = 2;
-        envG.add(pad);
+        padPos.push([px, 0.02, pz]);
       }
     } catch (e2) {}
+
+    /* Os 18 discos de contato dos props eram 18 malhas COM 18 MATERIAIS — 18
+     * chamadas de desenho para 36 triângulos no total. São todos iguais: viram
+     * um `InstancedMesh`, uma chamada. (MEDIDO: parte dos 149 do grupo `board`.) */
+    if (padPos.length) {
+      var padMesh = new THREE.InstancedMesh(M.tileFlatGeo(), new THREE.MeshBasicMaterial({
+        color: 0x000000, transparent: true, opacity: 0.34, depthWrite: false
+      }), padPos.length);
+      var mtxP = new THREE.Matrix4(), escP = new THREE.Vector3(0.55, 0.55, 0.55);
+      var quatP = new THREE.Quaternion(), posP = new THREE.Vector3();
+      for (var pi = 0; pi < padPos.length; pi++) {
+        posP.set(padPos[pi][0], padPos[pi][1], padPos[pi][2]);
+        mtxP.compose(posP, quatP, escP);
+        padMesh.setMatrixAt(pi, mtxP);
+      }
+      padMesh.instanceMatrix.needsUpdate = true;
+      padMesh.renderOrder = 2;
+      padMesh.frustumCulled = false;
+      envG.add(padMesh);
+    }
 
     envG.add((K.mergeStatic && !window.__nomerge) ? K.mergeStatic(staticG) : staticG);
     try {
@@ -582,17 +614,25 @@ var JOGO = (typeof window !== 'undefined')
       }
     } catch (e3) {}
 
-    // marcador translúcido no topo do obstáculo BAIXO (§6: não tapa a visão)
-    var capMat = new THREE.MeshBasicMaterial({
-      color: col3(pal.accent), transparent: true, opacity: 0.20,
-      depthWrite: false, side: THREE.DoubleSide
-    });
-    for (var c2 = 0; c2 < lowNodes.length; c2++) {
-      var cap = new THREE.Mesh(M.tileFlatGeo(), capMat);
-      cap.position.set(lowNodes[c2].x * CELL, LOW_H + 0.10, lowNodes[c2].y * CELL);
-      cap.scale.setScalar(0.9);
-      cap.renderOrder = 3;
-      envG.add(cap);
+    /* marcador translúcido no topo do obstáculo BAIXO (§6: não tapa a visão).
+     * Eram 32 malhas idênticas, uma por obstáculo — 32 chamadas de desenho para
+     * 64 triângulos. Uma instância só, com a mesma aparência. */
+    if (lowNodes.length) {
+      var capMesh = new THREE.InstancedMesh(M.tileFlatGeo(), new THREE.MeshBasicMaterial({
+        color: col3(pal.accent), transparent: true, opacity: 0.20,
+        depthWrite: false, side: THREE.DoubleSide
+      }), lowNodes.length);
+      var mtxC = new THREE.Matrix4(), escC = new THREE.Vector3(0.9, 0.9, 0.9);
+      var quatC = new THREE.Quaternion(), posC = new THREE.Vector3();
+      for (var c2 = 0; c2 < lowNodes.length; c2++) {
+        posC.set(lowNodes[c2].x * CELL, LOW_H + 0.10, lowNodes[c2].y * CELL);
+        mtxC.compose(posC, quatC, escC);
+        capMesh.setMatrixAt(c2, mtxC);
+      }
+      capMesh.instanceMatrix.needsUpdate = true;
+      capMesh.renderOrder = 3;
+      capMesh.frustumCulled = false;
+      envG.add(capMesh);
     }
 
     boardG.add(envG);
@@ -602,6 +642,7 @@ var JOGO = (typeof window !== 'undefined')
 
   function buildBoard(st) {
     clearBoard();
+    moldura.jaAjustou = false;          // sala nova: vale reenquadrar de novo
     gridW = st.grid.w; gridH = st.grid.h;
     var pal0 = paletteOf(st), theme0 = themeOf(st);
     applyTheme(theme0);
@@ -748,6 +789,54 @@ var JOGO = (typeof window !== 'undefined')
   // ENQUADRAMENTO: com salas de até 23×19 células, mostrar a sala inteira deixa
   // todo mundo do tamanho de formiga. Enquadramos o GRUPO + o primeiro punhado
   // de inimigos, e nunca deixamos a célula menor que ~44 px na tela (§0, mobile).
+  /* ------------------------------------------------------- MOLDURA DA HUD
+   * Em retrato de celular a HUD come as duas pontas da tela: 95 px de barra
+   * em cima e 229 px de feitiços embaixo, num aparelho de 844 px. O tabuleiro
+   * continuava sendo enquadrado no CENTRO DO CANVAS — que fica 67 px abaixo do
+   * centro da faixa que sobra —, então a fileira de baixo do mapa nascia atrás
+   * da barra de feitiços. Quem joga no telefone não via as próprias unidades.
+   *
+   * `setViewOffset` resolve sem gambiarra de posição: a câmera passa a enquadrar
+   * uma IMAGEM MAIOR e desenhamos só a janela que aparece, deslocada para que o
+   * centro do enquadramento caia no meio da FAIXA LIVRE, não do canvas.
+   *
+   * Só entra no celular (`Mobile.celular()`): no desktop a HUD é lateral e o
+   * enquadramento de sempre continua valendo — e continua sendo o que as 50
+   * páginas de teste medem.
+   */
+  var moldura = { topo: 0, base: 0, imgH: 0 };
+  function faixaLivre() { return Math.max(80, H - moldura.topo - moldura.base); }
+  function aplicaMoldura() {
+    if (!camera) return;
+    if (!moldura.topo && !moldura.base) {
+      if (camera.view && camera.view.enabled) camera.clearViewOffset();
+      camera.aspect = W / H;
+      moldura.imgH = H;
+      camera.updateProjectionMatrix();
+      return;
+    }
+    var cy = (moldura.topo + (H - moldura.base)) / 2;      // centro da faixa livre
+    var imgH = 2 * Math.max(cy, H - cy);                   // altura da imagem virtual
+    moldura.imgH = imgH;
+    camera.aspect = W / imgH;
+    camera.setViewOffset(W, imgH, 0, Math.round(imgH / 2 - cy), W, H);
+    camera.updateProjectionMatrix();
+  }
+  R.setMoldura = function (topoPx, basePx) {
+    var t = Math.max(0, topoPx | 0), b = Math.max(0, basePx | 0);
+    if (t === moldura.topo && b === moldura.base) return false;
+    moldura.topo = t; moldura.base = b;
+    aplicaMoldura();
+    // Reenquadrar UMA vez por sala. A barra de fusão aparece e some no meio da
+    // luta; refazer o enquadramento a cada vez roubaria a câmera das mãos de
+    // quem já tinha girado ou aproximado — o deslocamento acima já resolve o
+    // essencial sozinho.
+    var st = state();
+    if (st && st.grid && !moldura.jaAjustou) { moldura.jaAjustou = true; fitCamera(st); }
+    return true;
+  };
+  R.moldura = function () { return { topo: moldura.topo, base: moldura.base, imgH: moldura.imgH }; };
+
   function fitCamera(st) {
     var fw = gridW * CELL, fh = gridH * CELL;
     var span = Math.max(fw, fh);
@@ -773,10 +862,16 @@ var JOGO = (typeof window !== 'undefined')
       // cresceram para 21x17–27x23 e um piso cravado em 15x13 voltaria a
       // esconder o mapa tático justamente nas salas grandes, que são as que
       // mais precisam ser lidas de uma vez.
-      var pisoW = Math.min(gridW, Math.max(15, Math.round(gridW * 0.85)));
-      var pisoH = Math.min(gridH, Math.max(13, Math.round(gridH * 0.85)));
-      needW = clamp((focus.x1 - focus.x0 + 6), pisoW, gridW) * CELL;
-      needH = clamp((focus.y1 - focus.y0 + 6), pisoH, gridH) * CELL;
+      // NO CELULAR O PISO SE INVERTE. Em 390 px de largura só cabem ~13 casas
+      // com célula legível; pedir 85% de uma sala de 21x17 empurra a câmera até
+      // o teto de legibilidade e ainda assim corta os lados — o pior dos dois
+      // mundos, longe E incompleto. Em pé, a moldura hug a AÇÃO: 11 casas de
+      // piso, que é o que a tela sustenta.
+      var noCelular = !!(moldura.topo || moldura.base);
+      var pisoW = noCelular ? Math.min(gridW, 11) : Math.min(gridW, Math.max(15, Math.round(gridW * 0.85)));
+      var pisoH = noCelular ? Math.min(gridH, 11) : Math.min(gridH, Math.max(13, Math.round(gridH * 0.85)));
+      needW = clamp((focus.x1 - focus.x0 + (noCelular ? 3 : 6)), pisoW, gridW) * CELL;
+      needH = clamp((focus.y1 - focus.y0 + (noCelular ? 3 : 6)), pisoH, gridH) * CELL;
     }
     var vfov = camera.fov * Math.PI / 180;
     var tanV = Math.tan(vfov / 2);
@@ -784,15 +879,31 @@ var JOGO = (typeof window !== 'undefined')
     // hora em que a inclinação já achata o tabuleiro — o resultado era a câmera
     // colada mesmo pedindo a sala inteira. Recalibrados pelo enquadramento que
     // ficou bom numa sala 17x15: mostra o mapa sem virar formigueiro.
-    var fitV = (needH * 0.5) / tanV * 0.88;
-    var fitH = (needW * 0.5) / (tanV * Math.max(0.55, W / H)) * 1.05;
+    // Com moldura, o que cabe não é o canvas inteiro: é a FAIXA LIVRE. `kV`
+    // mede quanto da imagem virtual sobra visível; sem moldura vale 1 e a conta
+    // volta a ser exatamente a de antes.
+    var imgH = moldura.imgH || H;
+    var kV = imgH / faixaLivre();
+    var aspEff = W / imgH;
+    // O piso do aspecto existe para a câmera não fugir numa tela muito alta.
+    // Com moldura ele desce: a imagem virtual é 977 px para 390 de largura, e
+    // travar em 0,55 faria a conta acreditar numa tela 38% mais larga do que
+    // ela é — foi por isso que as unidades da esquerda nasciam fora da tela.
+    var pisoAsp = (moldura.topo || moldura.base) ? 0.34 : 0.55;
+    var fitV = (needH * 0.5) / tanV * kV * 0.88;
+    var fitH = (needW * 0.5) / (tanV * Math.max(pisoAsp, aspEff)) * 1.05;
     var d = Math.max(fitV, fitH);
     // Trava de legibilidade. No celular a célula precisa caber o dedo (§0), mas
     // no desktop os 40 px de antes eram o que prendia a câmera perto: davam
     // dist ~17 numa sala de 17x15. Tela grande aguenta célula menor sem perder
     // leitura, e é ela que mostra o mapa inteiro.
-    var minCellPx = Math.min(W, H) < 620 ? 40 : 26;
-    var maxD = (CELL * H) / (2 * tanV * minCellPx);
+    // 40 px de célula era a regra do dedo — e ela nasceu quando UM toque já
+    // resolvia a jogada. Com a mira em dois toques o erro passou a ser de graça
+    // (o primeiro toque só aponta), então 30 px cabem: são três casas a mais de
+    // tabuleiro visível em cada direção, que num mapa 21x17 é a diferença entre
+    // ver a briga e ver um pedaço dela.
+    var minCellPx = (moldura.topo || moldura.base) ? 30 : (Math.min(W, H) < 620 ? 40 : 26);
+    var maxD = (CELL * imgH) / (2 * tanV * minCellPx);
     cam.dist = clamp(Math.min(d, maxD), cam.minDist, cam.maxDist);
     updateCamera();
   }
@@ -949,7 +1060,8 @@ var JOGO = (typeof window !== 'undefined')
       if (overUI(e)) return;
       camFocus = null;
       var p = localPos(e);
-      ptrs[e.pointerId] = { x: p.x, y: p.y, sx: p.x, sy: p.y, t: (e.timeStamp || Date.now()) };
+      ptrs[e.pointerId] = { x: p.x, y: p.y, sx: p.x, sy: p.y, t: (e.timeStamp || Date.now()),
+                            tipo: e.pointerType || 'mouse' };
       ptrCount++;
       if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (er) {} }
       if (ptrCount === 1) { drag = { id: e.pointerId, moved: false, px: p.x, py: p.y }; pinch = null; }
@@ -1012,7 +1124,7 @@ var JOGO = (typeof window !== 'undefined')
         var left = Object.keys(ptrs)[0];
         drag = left ? { id: left, moved: true, px: ptrs[left].x, py: ptrs[left].y } : null;
       }
-      if (wasTap && !overUI(e)) doTap(p.x, p.y);
+      if (wasTap && !overUI(e)) doTap(p.x, p.y, rec.tipo);
     }
     canvas.addEventListener('pointerup', endPointer);
     canvas.addEventListener('pointercancel', endPointer);
@@ -1050,11 +1162,65 @@ var JOGO = (typeof window !== 'undefined')
     hoverTile = t;
     g.onTileHover(t.x, t.y);
   }
-  function doTap(sx, sy) {
+  /* ------------------------------------------------------- MIRA POR TOQUE
+   * O jogo mostrava a área do feitiço com o MOUSE POR CIMA. No celular isso
+   * não existe: o dedo não paira, e o primeiro contato já é o clique. Sem
+   * conserto, quem joga no telefone gasta o PA às cegas — larga a explosão sem
+   * nunca ter visto o desenho dela.
+   *
+   * A saída é a mesma do Dofus Touch: o primeiro toque MIRA (acende o caminho,
+   * o alcance e a área, exatamente o que o mouse acendia), o segundo toque na
+   * MESMA casa CONFIRMA. Tocar em outra casa só muda a mira — nunca dispara.
+   *
+   * A mira guarda de quem e de qual feitiço ela é: trocar de feitiço, de
+   * unidade ou de turno invalida a confirmação pendente, para que um toque
+   * antigo nunca resolva uma ação nova.
+   */
+  var mira = null;
+  R.mira = function () { return mira; };
+  R.limpaMira = function () {
+    if (!mira) return;
+    mira = null;
+    var g = game();
+    if (g && g.onTileHover) g.onTileHover(-1, -1);
+  };
+  /* Quem manda é o PONTEIRO que chegou, não o aparelho: num híbrido (notebook
+   * com tela sensível) o dedo tem de mirar e o mouse tem de continuar agindo de
+   * primeira. Só quando o ponteiro é mouse é que consultamos o perfil — e aí
+   * `?mobile=1` serve para experimentar o modo toque numa máquina de mesa. */
+  function modoToque(tipo) {
+    if (tipo === 'touch' || tipo === 'pen') return true;
+    if (JOGO.Mobile && JOGO.Mobile.forcado !== null && JOGO.Mobile.forcado !== undefined) {
+      return !!JOGO.Mobile.forcado;
+    }
+    return !!(JOGO.Mobile && JOGO.Mobile.toque());
+  }
+  function assinaturaMira() {
+    var g = game(), en = engine(), st = state();
+    var u = safe(function () { return (en && en.activeUnit && st) ? en.activeUnit(st) : null; }, null);
+    return (g ? (g.selectedSpellId || '-') : '-') + '|' + (u ? u.uid : '-') +
+           '|' + (u ? u.pa + ':' + u.pp : '-');
+  }
+
+  function doTap(sx, sy, tipo) {
     var g = game(); if (!g || !g.onTileClicked) return;
     if (R.isBusy()) return;
     var t = tileFromScreen(sx, sy);
-    g.onTileClicked(t.x, t.y);
+
+    if (!modoToque(tipo)) { g.onTileClicked(t.x, t.y); return; }
+
+    var sig = assinaturaMira();
+    if (mira && mira.x === t.x && mira.y === t.y && mira.sig === sig) {
+      mira = null;
+      g.onTileClicked(t.x, t.y);
+      if (g.onTileHover) g.onTileHover(-1, -1);
+      ovSig = '';
+      return;
+    }
+    mira = { x: t.x, y: t.y, sig: sig };
+    if (g.onTileHover) g.onTileHover(t.x, t.y);
+    ovSig = '';
+    if (JOGO.UI && JOGO.UI.dicaMira) JOGO.UI.dicaMira(g.selectedSpellId ? 'feitico' : 'andar');
   }
 
   // =================================================================== UNIDADES
@@ -1482,7 +1648,8 @@ var JOGO = (typeof window !== 'undefined')
     // nelas e nada acontecia. Foi metade do relato "o PP não carrega".
     return [st.phase, st.round, active ? active.uid : '-', g && g.selectedSpellId,
       active ? active.pp + ':' + active.pa : '-',
-      hv ? hv.x + ':' + hv.y : '-', evs.length, R.isBusy() ? 1 : 0, pos,
+      hv ? hv.x + ':' + hv.y : '-', mira ? 'M' + mira.x + ':' + mira.y : '-',
+      evs.length, R.isBusy() ? 1 : 0, pos,
       g && g.isPlayerTurn ? (g.isPlayerTurn() ? 1 : 0) : 1].join('|');
   }
 
@@ -1496,6 +1663,9 @@ var JOGO = (typeof window !== 'undefined')
 
     var playerTurn = g && g.isPlayerTurn ? g.isPlayerTurn() : true;
     if (!playerTurn || R.isBusy()) { hideRestOverlay(); return; }
+
+    // uma mira de outro turno / outro feitiço não confirma nada: some sozinha
+    if (mira && mira.sig !== assinaturaMira()) mira = null;
 
     var spellId = g && g.selectedSpellId;
     var hv = g && g.hoverTile;
@@ -1576,6 +1746,15 @@ var JOGO = (typeof window !== 'undefined')
         if (px < 0 || py < 0 || px >= st.grid.w || py >= st.grid.h) continue;
         ovTile(px, py, '#9be0ff', 0.14, 0.07, 0.86);
       }
+    }
+
+    // ALVO DA MIRA por último, por cima de tudo: no toque, é ele que diz
+    // "estou apontando AQUI — toque de novo e vai". Sem esta marca, a prévia
+    // some no meio das casas azuis de caminhada e o jogador não sabe se o
+    // primeiro toque pegou.
+    if (mira && mira.x >= 0 && mira.y >= 0) {
+      ovTile(mira.x, mira.y, '#ffffff', 0.55, 0.155, 0.34);
+      ovTile(mira.x, mira.y, '#ffd98a', 0.42, 0.150, 0.96);
     }
     hideRestOverlay();
   }

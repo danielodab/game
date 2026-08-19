@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0b0d10">
 <title>SOTERRA 2.0</title>
 <script>
@@ -11,14 +13,31 @@
   // (?v=6) falhou duas vezes — o número ficava parado enquanto os arquivos mudavam,
   // e o navegador servia código velho enquanto os testes passavam com o novo.
   // Agora a marca é o instante do carregamento: sempre pega o que está no disco.
+  //
+  // Isto vale para o CÓDIGO. Os modelos (21 MB de .glb) NÃO levam esta marca:
+  // eles têm a marca do manifesto, senão cada F5 baixaria os 21 MB de novo.
   window.__V = '?v=' + Date.now();
+  window.__T0 = Date.now();
   document.write('<link rel="stylesheet" href="css/style.css' + window.__V + '">');
+
+  // `?sandbox=1` manda o save viver na MEMÓRIA, sem tocar o disco. Existe para
+  // `tests/celular.html`, que abre este mesmo index.html dentro de um quadro de
+  // 390x844 para medir a interface: sem isto, medir a tela apagaria o jogo de
+  // quem estivesse jogando pelo servidor. Uma linha, e só liga quando pedido.
+  if (/[?&]sandbox=1/.test(location.search)) {
+    document.write('<scr' + 'ipt src="tests/save_sandbox.js' + window.__V + '"><\/scr' + 'ipt>');
+  }
 </script>
 </head>
 <body>
 <div id="app">
   <canvas id="game-canvas"></canvas>
   <div id="ui-root"></div>
+  <div id="carga" hidden>
+    <div class="carga-marca">SOTERRA</div>
+    <div class="carga-trilho"><div class="carga-barra" id="carga-barra"></div></div>
+    <div class="carga-txt" id="carga-txt">preparando…</div>
+  </div>
 </div>
 
 <!--
@@ -32,8 +51,16 @@
   logo antes de 'js/render3d/portraits3d.js' — ela tem prioridade sobre o retrato 3D.
 -->
 <script>
+  // O carregador de modelos precisa existir antes da decisão abaixo.
+  document.write('<scr' + 'ipt src="js/assets_bundle.js' + window.__V + '"><\/scr' + 'ipt>');
+</script>
+<script>
   (function () {
+    // A ORDEM DESTA LISTA É A ÁRVORE DE DEPENDÊNCIAS. Não há bundler para avisar
+    // se você errar: um arquivo que use JOGO.Engine tem de vir depois de engine.js.
     var arquivos = [
+      'js/mobile.js',                  // detecta toque/celular — todo o resto consulta
+
       'vendor/three.min.js', 'vendor/GLTFLoader.js', 'vendor/CopyShader.js',
       'vendor/LuminosityHighPassShader.js', 'vendor/EffectComposer.js',
       'vendor/RenderPass.js', 'vendor/ShaderPass.js', 'vendor/UnrealBloomPass.js',
@@ -45,6 +72,8 @@
 
       'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
       'js/core/progress.js', 'js/core/game.js',
+
+      // ---- daqui para baixo, precisa dos MODELOS carregados ----
 
       // cenário: kit KayKit Dungeon embutido + montador de salas
       'assets/embedded/env-kit.js', 'js/render3d/models3d.js',
@@ -65,9 +94,60 @@
 
       'js/ui/hud.js', 'js/ui/debug.js', 'js/main.js'
     ];
-    for (var i = 0; i < arquivos.length; i++) {
-      document.write('<script src="' + arquivos[i] + window.__V + '"><\/script>');
+
+    // Os embutidos que VIRARAM ARQUIVO (tools/extrai_assets.py). `fx-atlas.js` e
+    // `fx-placas.js` continuam embutidos de propósito: somam 0,8 MB e têm outro dono.
+    var EMBUTIDO = /^assets\/embedded\/(env-kit|models-)/;
+    var B = window.JOGO && window.JOGO.Bundle;
+
+    function escreve(lista) {
+      for (var i = 0; i < lista.length; i++) {
+        document.write('<scr' + 'ipt src="' + lista[i] + window.__V + '"><\/scr' + 'ipt>');
+      }
     }
+
+    // ---- CAMINHO 1: dois cliques no index.html (file://) --------------------
+    // `fetch`/XHR de .glb é bloqueado aqui. Continua exatamente como sempre foi:
+    // os 27,9 MB de base64 entram como código. É lento, e é o preço de abrir sem
+    // servidor — que o usuário faz questão de manter.
+    if (!B || !B.servido) { escreve(arquivos); return; }
+
+    // ---- CAMINHO 2: servido (http://, e o https://localhost do APK) ---------
+    // Fase A (vendor + regra de jogo) desce JÁ, enquanto os 21 MB de modelo
+    // vêm por XHR. Fase B (render + HUD) só entra quando os modelos chegaram,
+    // porque models3d.js lê JOGO.ASSETS no instante em que é avaliado.
+    var corte = 0;
+    while (corte < arquivos.length && !EMBUTIDO.test(arquivos[corte])) corte++;
+    var faseA = arquivos.slice(0, corte);
+    var faseB = arquivos.slice(corte).filter(function (f) { return !EMBUTIDO.test(f); });
+
+    escreve(faseA);
+    B.aquece(faseB, '');
+
+    var caixa = document.getElementById('carga');
+    var barra = document.getElementById('carga-barra');
+    var texto = document.getElementById('carga-txt');
+    if (caixa) caixa.hidden = false;
+
+    B.busca({
+      base: '',
+      progresso: function (feitos, total) {
+        var p = Math.round(100 * feitos / total);
+        if (barra) barra.style.width = p + '%';
+        if (texto) texto.textContent = 'modelos ' + feitos + '/' + total;
+      },
+      pronto: function (err) {
+        if (err) {
+          if (texto) texto.textContent = 'falhou: ' + err.message + ' — rode tools/extrai_assets.py';
+          if (console && console.error) console.error('[Bundle]', err);
+        }
+        if (texto) texto.textContent = 'montando a sala…';
+        B.injeta(faseB, '', function () {
+          if (caixa) caixa.hidden = true;
+          window.__BOOT_MS = Date.now() - window.__T0;
+        });
+      }
+    });
   })();
 </script>
 </body>

@@ -31,6 +31,7 @@ Outras portas de entrada:
 | arquivo | o que é |
 |---|---|
 | `index.html` | o jogo, tabuleiro 3D (Three.js) |
+| `www/` + `capacitor.config.json` | o mesmo jogo como aplicativo — ver [`docs/CELULAR.md`](docs/CELULAR.md) |
 | `index2d.html` | a versão isométrica 2D em PixiJS (linha antiga, preservada) |
 | `v1_3d.html` | a primeira linha 3D, preservada para comparação |
 
@@ -43,9 +44,20 @@ e derruba três coisas que seriam óbvias em qualquer projeto web:
 
 1. **Nada de ES modules.** `import`/`export` exigem servidor. Todo arquivo é um
    `<script>` clássico e tudo pendura num único global, `JOGO.*`.
-2. **Nada de `fetch`.** Carregar um `.glb` do disco falha. Por isso **todo
-   modelo 3D vive embutido em base64** dentro de `assets/embedded/*.js`. É o
-   motivo de o repositório ter ~28 MB de `assets/embedded`.
+2. **Nada de `fetch` — *por `file://`*.** Carregar um `.glb` do disco falha.
+   Por isso todo modelo 3D vive **também** embutido em base64 dentro de
+   `assets/embedded/*.js` (os ~28 MB de `assets/embedded`).
+   **Desde a preparação para celular isso virou um caminho de dois lados**, e
+   quem decide é o endereço:
+
+   | endereço | o que carrega |
+   |---|---|
+   | `file://` (duplo clique) | o base64 embutido, como sempre foi |
+   | `http://`, `https://localhost` (dentro do APK) | os `.glb` de verdade de `assets/models/bundle/`, por XHR |
+
+   Quem escolhe é `js/assets_bundle.js`; quem gera os `.glb` é
+   `tools/extrai_assets.py`. MEDIDO: 30,84 MB de JavaScript para o motor
+   compilar viraram 2,94 MB. Detalhes em [`docs/CELULAR.md`](docs/CELULAR.md).
 3. **Nada de bundler.** A ordem dos `<script>` no `index.html` **é** a árvore de
    dependências. Um arquivo que use `JOGO.Engine` tem de vir depois de
    `engine.js`, e não há ferramenta que avise se você errar.
@@ -56,7 +68,10 @@ e derruba três coisas que seriam óbvias em qualquer projeto web:
 
 ```
 index.html              a ordem dos scripts É a árvore de dependências
+capacitor.config.json   o APK: aponta para www/ (gerada) — ver docs/CELULAR.md
 js/
+  assets_bundle.js      escolhe entre .glb por XHR (servido) e base64 (file://)
+  mobile.js             o que este aparelho é: toque? celular? economizar GPU?
   core/
     data/               DADOS — sem lógica, sem DOM, sem Three.js
       elements.js       5 elementos: fogo, água, terra, ar, neutro
@@ -85,9 +100,11 @@ js/
     hud.js              TODA a interface
     debug.js            painel de teste (libera classes, nível, modo de efeitos)
   main.js               o laço de quadro
-assets/embedded/*.js    modelos em base64 (a consequência do file://)
-tests/*.html            50 páginas de teste, cada uma abre sozinha no navegador
-docs/                   contrato, GDD, auditorias, pesquisas de acervo
+assets/embedded/*.js    modelos em base64 (o caminho file://)
+assets/models/bundle/   os MESMOS modelos em .glb de verdade + manifest.json
+                        (gerados por tools/extrai_assets.py; o caminho servido)
+tests/*.html            55 páginas de teste, cada uma abre sozinha no navegador
+docs/                   contrato, GDD, celular, auditorias, pesquisas de acervo
 unity/SOTERRA-Tatico/   prova em C# da mesma grade tática (ver §9)
 ```
 
@@ -174,7 +191,14 @@ jogador. Página nova sem essa linha é bug.
 | `validate_data.html` | 2.631 checagens, 0 falhas |
 | `efeitos_um_a_um.html` | 7 de 7 — 186 desenhos disparados um a um |
 | `armadilha_chao.html` | passou — 5 armadilhas, uma cor por elemento |
+| `carga.html` | passou — 23,87 MB servido contra 30,84 MB embutido |
+| `toque.html` | 12 de 12 — mirar com o dedo, agir com o mouse |
+| `celular.html` | 13 de 13 — o `index.html` num quadro de 390×844 |
+| `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
 | **`equilibrio_fusao.html`** | **FALHA — 18 de 30 duplas na faixa.** Ver §7 |
+
+As quatro últimas são a preparação para celular; o passo a passo do APK e todos
+os números medidos estão em [`docs/CELULAR.md`](docs/CELULAR.md).
 
 ---
 

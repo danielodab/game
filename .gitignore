@@ -13,6 +13,15 @@ desktop.ini
 *.tmp
 *.log
 
+# Empacotamento para celular. `www/` é GERADA por tools/empacota_www.py a partir
+# do que já está versionado — versioná-la seria guardar 25 MB de cópia. O resto
+# é o que o Capacitor e o Node criam sozinhos ao rodar `npx cap add android`.
+www/
+node_modules/
+android/
+ios/
+package-lock.json
+
 # Arte de terceiros: nao redistribuir (licenca dos packs).
 # A regra e por LICENCA, nao por prefixo de nome: `fx-*.js` era ampla demais e
 # deixava de fora o `fx-atlas.js`, que e Kenney Particle Pack CC0 — dominio

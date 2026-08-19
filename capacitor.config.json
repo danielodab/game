@@ -1,0 +1,17 @@
+{
+  "appId": "br.com.soterra.jogo",
+  "appName": "SOTERRA",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#0b0d10",
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": true
+  },
+  "ios": {
+    "backgroundColor": "#0b0d10",
+    "contentInset": "always"
+  }
+}

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — quanto pesa e quanto demora para abrir</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.6 system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 16px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 16px 8px;max-width:900px}
+  #summary{font:12px monospace;margin:6px 16px;padding:6px 10px;border-radius:6px;background:#1b222c;color:#cdd6e2}
+  table{border-collapse:collapse;font-size:12px;margin:8px 16px}
+  th,td{border:1px solid #2b3542;padding:3px 10px;text-align:left}
+  th{background:#1b222c;color:#8895a6}
+  td.n{text-align:right;font-family:monospace}
+  .alto{color:#f88;font-weight:700} .ok{color:#7fe08a}
+  #app{position:fixed;left:-4000px;top:0;width:390px;height:844px}
+</style>
+</head>
+<body>
+<h1>Quanto pesa e quanto demora para abrir</h1>
+<div class="sub">Mede o BOOT do jogo pelos dois caminhos. Sem parâmetro, usa o
+caminho servido (busca os <code>.glb</code> de <code>assets/models/bundle/</code>);
+com <code>?embutido=1</code>, força o caminho antigo, o mesmo que o
+<code>file://</code> usa (27,9&nbsp;MB de base64 dentro de <code>.js</code>). A
+comparação só vale rodando os dois na MESMA máquina.</div>
+<div id="summary">rodando…</div>
+<table id="tab"></table>
+
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  window.__T0 = (performance && performance.now) ? 0 : Date.now();
+  document.write('<scr' + 'ipt src="../js/assets_bundle.js' + window.__V + '"><\/scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  // A MESMA lista do index.html, na MESMA ordem — senão não é a mesma medição.
+  var arquivos = [
+    'js/mobile.js',
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/render3d/portraits3d.js',
+    'js/ui/hud.js','js/ui/debug.js'];
+  var EMBUTIDO = /^assets\/embedded\/(env-kit|models-)/;
+  var B = window.JOGO && window.JOGO.Bundle;
+
+  function escreve(lista) {
+    for (var i = 0; i < lista.length; i++)
+      document.write('<scr' + 'ipt src="../' + lista[i] + window.__V + '"><\/scr' + 'ipt>');
+  }
+  window.__marcas = {};
+  function marca(nome) { window.__marcas[nome] = performance.now(); }
+
+  if (!B || !B.servido) {
+    escreve(arquivos);
+    // no caminho embutido os <script> são do parser: o marco certo é o fim do documento
+    document.write('<scr' + 'ipt>window.__marcas.scriptsProntos = performance.now();' +
+                   'window.__pediuMedir = true;<\/scr' + 'ipt>');
+    return;
+  }
+
+  var corte = 0;
+  while (corte < arquivos.length && !EMBUTIDO.test(arquivos[corte])) corte++;
+  var faseA = arquivos.slice(0, corte);
+  var faseB = arquivos.slice(corte).filter(function (f) { return !EMBUTIDO.test(f); });
+  escreve(faseA);
+  B.aquece(faseB, '../');
+  B.busca({
+    base: '../',
+    pronto: function () {
+      marca('binariosProntos');
+      B.injeta(faseB, '../', function () {
+        marca('scriptsProntos');
+        if (window.__faseB) window.__faseB();
+      });
+    }
+  });
+})();
+</script>
+
+<script>
+window.__faseB = function () {
+  var linhas = [], falhas = [];
+  function linha(o, v, cls) { linhas.push({ o: o, v: v, cls: cls || '' }); }
+  function mb(n) { return (n / 1048576).toFixed(2) + ' MB'; }
+
+  function espera(cb) {
+    var t0 = Date.now();
+    (function laco() {
+      var ok = false;
+      try {
+        ok = JOGO.Models3D2 && JOGO.Models3D2.isReady() &&
+             JOGO.Models3D && JOGO.Models3D.isReady();
+      } catch (e) {}
+      if (ok) return cb(true);
+      if (Date.now() - t0 > 120000) return cb(false);
+      setTimeout(laco, 60);
+    })();
+  }
+
+  // o renderer precisa existir para os modelos serem pedidos
+  var tPedido = performance.now();
+  try { JOGO.Renderer.init(document.getElementById('game-canvas')); } catch (e) { falhas.push('init: ' + e.message); }
+  try { JOGO.Models3D2.load(function () {}); } catch (e) { falhas.push('load: ' + e.message); }
+
+  espera(function (ok) {
+    var tModelos = performance.now();
+    var B = JOGO.Bundle, inf = B ? B.info() : { modo: '?' };
+
+    // --- o que desceu pela rede
+    var porTipo = { js: 0, glb: 0, css: 0, outro: 0 }, contagem = { js: 0, glb: 0 };
+    var recs = [];
+    try { recs = performance.getEntriesByType('resource') || []; } catch (e) {}
+    for (var i = 0; i < recs.length; i++) {
+      var r = recs[i];
+      // decodedBodySize e o TAMANHO DO CONTEUDO — sobrevive ao cache do
+      // navegador, que zera transferSize e faria a segunda medicao mentir.
+      var n = r.decodedBodySize || r.transferSize || 0;
+      if (/\.glb(\?|$)/.test(r.name)) { porTipo.glb += n; contagem.glb++; }
+      else if (/\.js(\?|$)/.test(r.name)) { porTipo.js += n; contagem.js++; }
+      else if (/\.css(\?|$)/.test(r.name)) porTipo.css += n;
+      else porTipo.outro += n;
+    }
+    var total = porTipo.js + porTipo.glb + porTipo.css + porTipo.outro;
+
+    linha('caminho', inf.modo === 'busca' ? 'SERVIDO (fetch dos .glb)' : 'EMBUTIDO (base64 no .js)');
+    linha('protocolo', location.protocol);
+    linha('— o que desceu —', '');
+    linha('JavaScript', mb(porTipo.js) + '  (' + contagem.js + ' arquivos)');
+    linha('modelos .glb', mb(porTipo.glb) + '  (' + contagem.glb + ' arquivos)');
+    linha('CSS + resto', mb(porTipo.css + porTipo.outro));
+    linha('TOTAL', mb(total), total > 25 * 1048576 ? 'alto' : 'ok');
+    linha('— quanto demorou —', '');
+    // O NÚMERO DO USUÁRIO: quando a tela deixa de ser preta. No caminho embutido
+    // nada pinta antes de o motor compilar os 30 MB de .js; no servido, a tela de
+    // carga aparece assim que a fase A entra.
+    var fcp = 0;
+    try {
+      var p = performance.getEntriesByType('paint');
+      for (var q = 0; q < p.length; q++) if (p[q].name === 'first-contentful-paint') fcp = p[q].startTime;
+    } catch (e) {}
+    linha('primeiro pixel na tela (FCP)', fcp ? fcp.toFixed(0) + ' ms' : 'não medido',
+          fcp > 2000 ? 'alto' : 'ok');
+    linha('até os modelos ficarem prontos', tModelos.toFixed(0) + ' ms',
+          tModelos > 6000 ? 'alto' : 'ok');
+    var m = window.__marcas || {};
+    if (m.binariosProntos) linha('   ⤷ binários na mão', m.binariosProntos.toFixed(0) + ' ms');
+    if (m.scriptsProntos) linha('   ⤷ scripts todos rodados', m.scriptsProntos.toFixed(0) + ' ms');
+    linha('   ⤷ só o parse dos 88 GLB', (tModelos - tPedido).toFixed(0) + ' ms');
+    if (inf.modo === 'busca') {
+      linha('   ⤷ manifesto', inf.msManifesto.toFixed(0) + ' ms');
+      linha('   ⤷ 88 XHR de binário', inf.msBinarios.toFixed(0) + ' ms');
+      // A PONTE: quantos bilhetes de 20 bytes viraram binário de verdade na
+      // entrada do GLTFLoader. Tem de bater com o número de itens.
+      linha('   ⤷ bilhetes trocados por binário', inf.trocas + ' / ' + inf.itens,
+            inf.trocas === inf.itens ? 'ok' : 'alto');
+    }
+    try {
+      var nav = performance.getEntriesByType('navigation')[0];
+      if (nav) linha('DOMContentLoaded do documento', nav.domContentLoadedEventEnd.toFixed(0) + ' ms');
+    } catch (e) {}
+    linha('— o que carregou —', '');
+    linha('modelos no catálogo (JOGO.MODELS)', Object.keys(JOGO.MODELS || {}).length);
+    linha('peças de cenário (JOGO.ASSETS)', Object.keys(JOGO.ASSETS || {}).length);
+    linha('clipes do Meshy', Object.keys(JOGO.MESHY_CLIPS || {}).length);
+    if (inf.erros && inf.erros.length) { linha('ERROS DE REDE', inf.erros.length, 'alto'); falhas.push(inf.erros[0]); }
+
+    linha('decodificação falhou?', (JOGO.Models3D2 && JOGO.Models3D2.failed && JOGO.Models3D2.failed()) ? 'SIM' : 'não');
+    if (!ok) falhas.push('os modelos não ficaram prontos em 120 s');
+    if (JOGO.Models3D2 && JOGO.Models3D2.failed && JOGO.Models3D2.failed()) falhas.push('a decodificação dos GLB falhou');
+    if (inf.modo === 'busca' && inf.trocas !== inf.itens) falhas.push('a ponte não trocou todos os bilhetes');
+    if (Object.keys(JOGO.MODELS || {}).length < 30) falhas.push('catálogo de modelos incompleto');
+    if (Object.keys(JOGO.ASSETS || {}).length < 40) falhas.push('cenário incompleto');
+
+    var t = '<tr><th>o que</th><th>valor</th></tr>';
+    for (var j = 0; j < linhas.length; j++) {
+      var l = linhas[j];
+      if (l.v === '') { t += '<tr><th colspan="2">' + l.o + '</th></tr>'; continue; }
+      t += '<tr><td>' + l.o + '</td><td class="n ' + l.cls + '">' + l.v + '</td></tr>';
+    }
+    document.getElementById('tab').innerHTML = t;
+    var resumo = (falhas.length ? 'FAIL · ' + falhas.join(' · ') : 'PASS · ' + inf.modo +
+       ' · total ' + mb(total) + ' · JS a compilar ' + mb(porTipo.js) +
+       ' · 1º pixel ' + fcp.toFixed(0) + ' ms · modelos ' + tModelos.toFixed(0) + ' ms');
+    document.getElementById('summary').textContent = resumo;
+    // Manda o resultado para quem estiver ouvindo. O painel de browser e o
+    // headless com tempo virtual DEFORMAM o relogio; medir de verdade exige um
+    // Chrome sem instrumentacao, e ele nao tem como devolver a tabela. Este
+    // pedido resolve — e no servidor comum ele so vira um 404 inofensivo.
+    try {
+      new Image().src = '/__medida?r=' + encodeURIComponent(resumo) +
+        '&t=' + encodeURIComponent(document.getElementById('tab').innerText.replace(/\n/g, ' | '));
+    } catch (e) {}
+    window.__pronto = true;
+  });
+};
+// no caminho embutido o pedido chegou antes deste bloco existir
+if (window.__pediuMedir) window.__faseB();
+</script>
+</body>
+</html>

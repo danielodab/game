@@ -246,6 +246,22 @@ var JOGO = (typeof window !== 'undefined')
     toastT = 2.4;
   }
 
+  /* ------------------------------------------------------------ dica da MIRA
+   * No toque não existe "passar por cima": o primeiro toque MIRA e o segundo
+   * CONFIRMA (ver renderer3d_v2.js). O jogador precisa saber disso na primeira
+   * vez que acontece com ele — senão o primeiro toque parece um toque perdido.
+   * Some sozinha depois de três vezes: quem já entendeu não quer mais o aviso. */
+  var miraEl = null, miraT = 0, miraVistas = 0;
+  UI.dicaMira = function (tipo) {
+    if (!miraEl || miraVistas >= 3) return;
+    miraVistas++;
+    miraEl.textContent = (tipo === 'feitico')
+      ? 'toque de novo para lançar'
+      : 'toque de novo para andar até aqui';
+    miraEl.classList.add('is-on');
+    miraT = 2.0;
+  };
+
   // ------------------------------------------------------------ barras e pips
   function bar(cls, pct, label) {
     var b = el('div', 'bar ' + cls);
@@ -307,6 +323,8 @@ var JOGO = (typeof window !== 'undefined')
     root.appendChild(tipEl);
     toastEl = el('div', 'ui-toast');
     root.appendChild(toastEl);
+    miraEl = el('div', 'ui-mira');
+    root.appendChild(miraEl);
 
     document.addEventListener('click', function (ev) {
       if (tipOwner && tipEl && !tipEl.contains(ev.target) && !tipOwner.contains(ev.target)) hideTip();
@@ -326,6 +344,10 @@ var JOGO = (typeof window !== 'undefined')
       if (screens.hasOwnProperty(k)) screens[k].classList.toggle('is-on', k === name);
     }
     root.classList.toggle('in-battle', name === 'battle');
+    // fora da batalha o tabuleiro volta a ter a tela inteira
+    if (name !== 'battle' && JOGO.Renderer && JOGO.Renderer.setMoldura) {
+      JOGO.Renderer.setMoldura(0, 0);
+    }
     battleSig = '';
     if (name === 'menu') buildMenu();
     else if (name === 'heroSelect') buildHeroSelect();
@@ -1011,6 +1033,28 @@ var JOGO = (typeof window !== 'undefined')
     paintSpells(s);
     paintFusion(s);
     paintTimer();
+    avisaMoldura();
+  }
+
+  /* Diz ao renderizador quanto da tela a HUD está tapando.
+   *
+   * Em retrato de celular a barra de cima e a de feitiços somam ~324 px de 844,
+   * e o tabuleiro era enquadrado no centro do CANVAS — 67 px abaixo do centro
+   * da faixa que sobra. A fileira de baixo do mapa nascia ATRÁS dos feitiços.
+   * O renderizador sabe corrigir (`R.setMoldura`), mas só o HUD sabe a medida,
+   * e ela muda quando a barra de fusão aparece ou some.
+   *
+   * Fora do celular não mexemos em nada: a HUD de mesa não some com o mapa, e
+   * mudar o enquadramento lá quebraria as fotos de todas as páginas de teste. */
+  function avisaMoldura() {
+    var R = JOGO.Renderer;
+    if (!R || !R.setMoldura) return;
+    if (!(JOGO.Mobile && JOGO.Mobile.celular())) { R.setMoldura(0, 0); return; }
+    var topo = screens.battle.querySelector('.bt-top');
+    var base = screens.battle.querySelector('.bt-bottom');
+    var ht = topo ? Math.round(topo.getBoundingClientRect().height) : 0;
+    var hb = base ? Math.round(base.getBoundingClientRect().height) : 0;
+    R.setMoldura(ht, hb);
   }
 
   function paintRoom(s) {
@@ -2580,6 +2624,10 @@ var JOGO = (typeof window !== 'undefined')
     if (toastEl && toastT > 0) {
       toastT -= (dt || 0.016);
       if (toastT <= 0) toastEl.classList.remove('is-on');
+    }
+    if (miraEl && miraT > 0) {
+      miraT -= (dt || 0.016);
+      if (miraT <= 0) miraEl.classList.remove('is-on');
     }
     if (current !== 'battle') return;
     paintBattle(false);

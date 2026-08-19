@@ -39,7 +39,16 @@ var JOGO = (typeof window !== 'undefined')
     root.appendChild(el);
   }
 
-  window.addEventListener('DOMContentLoaded', function () {
+  // Servido (http:// ou dentro do APK), este arquivo entra por injeção DEPOIS
+  // que os 21 MB de modelo chegaram — e nessa hora o `DOMContentLoaded` já
+  // passou faz tempo. Escutar um evento que já aconteceu deixa a tela preta
+  // para sempre. Então: se o documento já está de pé, começa agora.
+  function quandoPronto(fn) {
+    if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  }
+
+  quandoPronto(function () {
     var canvas = document.getElementById('game-canvas');
     var rendererOk = true;
     try {
