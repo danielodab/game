@@ -1,0 +1,14 @@
+@import url("unity-theme://default");
+
+/*
+  Tema do painel de execução.
+
+  Um `PanelSettings` sem tema sobe sem fonte e sem nenhum estilo dos controles
+  padrão — a tela aparece, mas em branco e sem letra, que é o defeito mais
+  difícil de diagnosticar do UI Toolkit em modo lote.
+
+  O arquivo existe como TEXTO, e não criado pelo botão "Create > UI Toolkit >
+  TSS Theme File" do Editor, porque este projeto é escrito por linha de comando:
+  asset que só nasce clicando é asset que ninguém reproduz.
+*/
+VisualElement {}
