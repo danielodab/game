@@ -30,11 +30,24 @@ namespace Soterra.Jogo
     [DisallowMultipleComponent]
     public sealed class JogoDeBatalha : MonoBehaviour
     {
-        /// <summary>A sala que o jogo abre: a primeira da Estufa Soterrada, com
-        /// o tanque e o dano de área — o mesmo grupo do jogo em JS.</summary>
-        public const string Calabouco = "greenhouse";
-        public const int IndiceDaSala = 0;
-        public static readonly string[] Herois = { "sumo", "bruxo" };
+        /// <summary>A sala que o jogo abre e o grupo que desce nela.
+        ///
+        /// Campos SERIALIZADOS, e não constantes, desde que o elenco definitivo
+        /// começou a chegar: o usuário testa cada personagem novo trocando o id
+        /// no Inspector — sem esperar código. Ids válidos: sumo, arqueiro,
+        /// bruxo, espadachim, curandeira, invocador. Id sem modelo em
+        /// Resources/elenco cai no acervo antigo, e sem nada vira cápsula.</summary>
+        public const string CalaboucoPadrao = "greenhouse";
+        public const int IndiceDaSalaPadrao = 0;
+        public string Calabouco = CalaboucoPadrao;
+        public int IndiceDaSala = IndiceDaSalaPadrao;
+        public string Heroi1 = "sumo";
+        public string Heroi2 = "bruxo";
+
+        /// <summary>O grupo padrao, para quem fotografa fora da cena.</summary>
+        public static readonly string[] HeroisPadrao = { "sumo", "bruxo" };
+
+        public string[] Herois { get { return new[] { Heroi1, Heroi2 }; } }
 
         /// <summary>
         /// Pausa entre as jogadas do monstro, em segundos. Sem ela o turno

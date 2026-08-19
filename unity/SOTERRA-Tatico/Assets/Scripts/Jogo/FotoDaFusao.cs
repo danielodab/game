@@ -36,8 +36,8 @@ namespace Soterra.Jogo
     {
         /// <summary>A mesma sala e a mesma dupla que o jogo abre — ver
         /// <see cref="JogoDeBatalha"/>.</summary>
-        public const string Calabouco = JogoDeBatalha.Calabouco;
-        public const int IndiceDaSala = JogoDeBatalha.IndiceDaSala;
+        public const string Calabouco = JogoDeBatalha.CalaboucoPadrao;
+        public const int IndiceDaSala = JogoDeBatalha.IndiceDaSalaPadrao;
 
         public static void Tirar()
         {
@@ -71,8 +71,8 @@ namespace Soterra.Jogo
                 Sair(2);
                 return;
             }
-            unidades.Add(Motor.Unidade.DeClasse(banco.Classes[JogoDeBatalha.Herois[0]], "h1", casaA));
-            unidades.Add(Motor.Unidade.DeClasse(banco.Classes[JogoDeBatalha.Herois[1]], "h2", casaB.Value));
+            unidades.Add(Motor.Unidade.DeClasse(banco.Classes[JogoDeBatalha.HeroisPadrao[0]], "h1", casaA));
+            unidades.Add(Motor.Unidade.DeClasse(banco.Classes[JogoDeBatalha.HeroisPadrao[1]], "h2", casaB.Value));
 
             for (int i = 0; i < mapa.NascimentosMonstro.Count; i++)
             {

@@ -46,18 +46,18 @@ namespace Soterra.Jogo
             string saida = Argumento("-foto", "foto-bruxo.png");
 
             var banco = Dados.BancoDeDados.CarregarDeResources();
-            var calabouco = banco.AchaCalabouco(JogoDeBatalha.Calabouco);
-            if (calabouco == null || calabouco.Salas.Count <= JogoDeBatalha.IndiceDaSala)
+            var calabouco = banco.AchaCalabouco(JogoDeBatalha.CalaboucoPadrao);
+            if (calabouco == null || calabouco.Salas.Count <= JogoDeBatalha.IndiceDaSalaPadrao)
             {
-                Falhar("calabouço '" + JogoDeBatalha.Calabouco + "' sem a sala " +
-                       JogoDeBatalha.IndiceDaSala);
+                Falhar("calabouço '" + JogoDeBatalha.CalaboucoPadrao + "' sem a sala " +
+                       JogoDeBatalha.IndiceDaSalaPadrao);
                 return;
             }
-            var sala = calabouco.Salas[JogoDeBatalha.IndiceDaSala];
+            var sala = calabouco.Salas[JogoDeBatalha.IndiceDaSalaPadrao];
 
             // A batalha REAL do jogo, montada como o Play monta.
             var batalha = global::Soterra.Batalha.Montador.DeSala(
-                banco, JogoDeBatalha.Calabouco, JogoDeBatalha.IndiceDaSala, JogoDeBatalha.Herois);
+                banco, JogoDeBatalha.CalaboucoPadrao, JogoDeBatalha.IndiceDaSalaPadrao, JogoDeBatalha.HeroisPadrao);
             var partida = new Partida(banco, batalha, Motor.Sorte.DeTexto("soterra-foto-animacao"));
 
             var palco = new GameObject("Palco").AddComponent<Cena.Palco>();
