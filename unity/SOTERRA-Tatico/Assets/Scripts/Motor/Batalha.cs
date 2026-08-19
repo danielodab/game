@@ -417,6 +417,13 @@ namespace Soterra.Motor
                 if (u != null) DecrementarDuracoes(u);
                 if (Fase != FaseDaBatalha.EmAndamento) return _r;
 
+                // A fusão declarada resolve no FIM do turno de quem declarou,
+                // DEPOIS das durações caírem — a ordem do `Engine.endTurn` do
+                // JS. Antes delas, o escudo recém-nascido da fusão perderia um
+                // turno de vida no mesmo instante em que nasce.
+                if (u != null) ResolverFusaoPendente(u);
+                if (Fase != FaseDaBatalha.EmAndamento) return _r;
+
                 Avancar(0);
                 return _r;
             }
@@ -704,9 +711,12 @@ namespace Soterra.Motor
             Dados.Clima def;
             if (_banco.Climas == null || !_banco.Climas.TryGetValue(Clima ?? "", out def) || def == null) return;
 
+            // `TemElemento`, e não a igualdade crua: a FUNDIDA carrega os dois
+            // elementos da mistura e o clima vale para os dois — como o
+            // `weatherTick` do JS, que consulta `unitElements`.
             int saldo = 0;
-            if (!string.IsNullOrEmpty(def.Favorece) && def.Favorece == u.Elemento) saldo += TiqueDeClima;
-            if (!string.IsNullOrEmpty(def.Prejudica) && def.Prejudica == u.Elemento) saldo -= TiqueDeClima;
+            if (u.TemElemento(def.Favorece)) saldo += TiqueDeClima;
+            if (u.TemElemento(def.Prejudica)) saldo -= TiqueDeClima;
             if (saldo == 0) return;    // clima indiferente: sem evento nenhum
 
             if (saldo > 0)
@@ -758,6 +768,11 @@ namespace Soterra.Motor
             u.Viva = false;
             u.PV = 0;
             Emitir(TipoDeEvento.Morte, u.Uid);
+
+            // Fusão que morre some DE VEZ: os dois fundidos não voltam
+            // (`processDeath` do engine.js, na mesma posição — depois do
+            // evento de morte, antes da explosão).
+            if (u.EFusao) DesfazerFusaoNaMorte(u);
 
             // Antes de conferir o fim: a explosão pode matar o último herói e a
             // divisão pode repor o último monstro. Conferir primeiro declararia
