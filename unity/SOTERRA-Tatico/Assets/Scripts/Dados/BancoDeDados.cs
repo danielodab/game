@@ -46,6 +46,9 @@ namespace Soterra.Dados
         public const string ChaveMonstros = "monsters";
         public const string ChaveInvocadosDeFusao = "fusionSummons";
         public const string ChaveBichos = "pets";
+        public const string ChaveFormasDeFusao = "fusionForms";
+        public const string ChaveMisturasDeFusao = "fusionBlends";
+        public const string ChaveIdentidadesDeFusao = "fusionIdentities";
 
         public static readonly string[] ChavesModeladas =
         {
@@ -54,7 +57,8 @@ namespace Soterra.Dados
             ChaveFeiticosDeBicho, ChaveFeiticosDeFusao, ChaveCalabocos, ChaveCenarios,
             ChaveEventosDeTerreno, ChaveItens, ChaveConjuntos, ChavePedras,
             ChaveForja, ChavePesosDeSaque, ChaveDegrausDeDesbloqueio, ChaveNivelamento,
-            ChaveCartas, ChaveEstrelas, ChaveMonstros, ChaveInvocadosDeFusao, ChaveBichos
+            ChaveCartas, ChaveEstrelas, ChaveMonstros, ChaveInvocadosDeFusao, ChaveBichos,
+            ChaveFormasDeFusao, ChaveMisturasDeFusao, ChaveIdentidadesDeFusao
         };
 
         // ---- o acervo ------------------------------------------------------
@@ -93,6 +97,15 @@ namespace Soterra.Dados
         public IDictionary<string, Monstro> Monstros { get; private set; }
         public IDictionary<string, Monstro> InvocadosDeFusao { get; private set; }
         public IDictionary<string, Bicho> Bichos { get; private set; }
+
+        /// <summary>As 15 duplas, cada uma com os 7 degraus do arsenal (105 formas).</summary>
+        public IDictionary<string, List<FormaDeFusao>> FormasDeFusao { get; private set; }
+
+        /// <summary>Os 25 pares ORDENADOS de elemento — o neutro incluso, ver <see cref="Fusao"/>.</summary>
+        public IDictionary<string, MisturaDeFusao> MisturasDeFusao { get; private set; }
+
+        /// <summary>Nome e frase de apresentação de cada dupla fundida (15).</summary>
+        public IDictionary<string, IdentidadeDeFusao> IdentidadesDeFusao { get; private set; }
 
         /// <summary>Chaves modeladas cujo arquivo não veio. Vazia = acervo completo.</summary>
         public IList<string> ChavesAusentes { get; private set; }
@@ -152,6 +165,10 @@ namespace Soterra.Dados
             b.Monstros = b.Mapa<Monstro>(ChaveMonstros);
             b.InvocadosDeFusao = b.Mapa<Monstro>(ChaveInvocadosDeFusao);
             b.Bichos = b.Mapa<Bicho>(ChaveBichos);
+
+            b.FormasDeFusao = b.Mapa<List<FormaDeFusao>>(ChaveFormasDeFusao);
+            b.MisturasDeFusao = b.Mapa<MisturaDeFusao>(ChaveMisturasDeFusao);
+            b.IdentidadesDeFusao = b.Mapa<IdentidadeDeFusao>(ChaveIdentidadesDeFusao);
 
             return b;
         }

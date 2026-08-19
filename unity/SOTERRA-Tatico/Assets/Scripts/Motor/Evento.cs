@@ -84,7 +84,31 @@ namespace Soterra.Motor
         Reflexo,
 
         /// <summary>Um salto do raio em cadeia. <c>Quantidade</c> é o número do salto.</summary>
-        SaltoEmCadeia
+        SaltoEmCadeia,
+
+        /// <summary>
+        /// Fusão declarada (2 PA pagos). <c>Uid</c> é o anfitrião,
+        /// <c>UidDaFonte</c> o convidado. Resolve no fim do turno do anfitrião.
+        /// </summary>
+        FusaoDeclarada,
+
+        /// <summary>A fusão declarada não aconteceu. <c>Detalhe</c>: morte, afastamento, cancelada.</summary>
+        FusaoFalhou,
+
+        /// <summary>
+        /// A fusão ACONTECEU. <c>Uid</c> é a fundida (o uid do anfitrião,
+        /// preservado), <c>UidDaFonte</c> o convidado que saiu,
+        /// <c>Quantidade</c> o nível, <c>Detalhe</c> = "dupla:mistura". É este
+        /// evento que manda a cena trocar o corpo — o
+        /// <see cref="Unidade.ClasseOuMonstroId"/> já é o id da dupla.
+        /// </summary>
+        Fusao,
+
+        /// <summary>
+        /// A fundida morreu e a fusão sumiu DE VEZ — ninguém volta. Acompanha o
+        /// evento de <see cref="Morte"/> normal, que é quem conta a derrota.
+        /// </summary>
+        FusaoDesfeita
     }
 
     /// <summary>

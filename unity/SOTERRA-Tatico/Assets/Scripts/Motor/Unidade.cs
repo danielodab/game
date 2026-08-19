@@ -133,6 +133,51 @@ namespace Soterra.Motor
 
         public Dados.Resistencias Resistencias = new Dados.Resistencias();
 
+        // ---- fusão (ver BatalhaFusao.cs) -----------------------------------
+
+        /// <summary>
+        /// A chave alfabética da dupla (<c>arqueiro+bruxo</c>) quando esta
+        /// unidade É uma fusão; nula no resto do elenco. É também o marcador de
+        /// "é fusão" — o <c>kind: 'fusion'</c> do JS —, e não um booleano à
+        /// parte, porque toda pergunta que começa com "é fusão?" continua com
+        /// "de qual dupla?".
+        /// </summary>
+        public string ParDeClasses;
+
+        /// <summary>A chave da mistura NA ORDEM DOS FUNDIDOS (<c>fogo+agua</c> ≠ <c>agua+fogo</c>).</summary>
+        public string ParDeElementos;
+
+        /// <summary>
+        /// Os DOIS elementos da fusão, na ordem (anfitrião, convidado). Nulo em
+        /// quem tem um elemento só — <see cref="TemElemento"/> esconde a
+        /// diferença de quem pergunta.
+        /// </summary>
+        public List<string> Elementos;
+
+        /// <summary>Os uids que a formaram (anfitrião primeiro). Nulo fora da fusão.</summary>
+        public List<string> FundidaDe;
+
+        /// <summary>No CONVIDADO que saiu do tabuleiro: o uid da fusão em que ele virou.</summary>
+        public string FundidaEm;
+
+        public bool EFusao
+        {
+            get { return ParDeClasses != null; }
+        }
+
+        /// <summary>
+        /// A unidade É deste elemento? A fusão carrega DOIS — o clima e o poder
+        /// elemental valem para os dois lados da mistura (contrato §9-C), e é
+        /// esta pergunta, não a igualdade crua com <see cref="Elemento"/>, que
+        /// o motor tem de fazer.
+        /// </summary>
+        public bool TemElemento(string elemento)
+        {
+            if (string.IsNullOrEmpty(elemento)) return false;
+            if (Elementos != null && Elementos.Count > 0) return Elementos.Contains(elemento);
+            return Elemento == elemento;
+        }
+
         /// <summary>Os ids que ela sabe conjurar. Feitiço fora desta lista não sai.</summary>
         public List<string> Feiticos = new List<string>();
 

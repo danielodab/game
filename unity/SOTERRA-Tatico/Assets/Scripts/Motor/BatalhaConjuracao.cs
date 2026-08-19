@@ -17,9 +17,16 @@ namespace Soterra.Motor
     {
         // ---- mira ------------------------------------------------------------
 
-        /// <summary>O feitiço, procurado nas cinco tabelas do acervo.</summary>
+        /// <summary>
+        /// O feitiço: primeiro no registro dos COMPOSTOS desta batalha (os
+        /// <c>fus:*</c> que a fusão gera em memória — o <c>_genSpells</c> do
+        /// JS), depois nas cinco tabelas do acervo.
+        /// </summary>
         public Dados.Feitico Feitico(string feiticoId)
         {
+            Dados.Feitico gerado;
+            if (feiticoId != null && _feiticosGerados.TryGetValue(feiticoId, out gerado))
+                return gerado;
             return _banco.AchaFeitico(feiticoId);
         }
 
@@ -820,7 +827,10 @@ namespace Soterra.Motor
         static int BonusElemental(Unidade u, Dados.Feitico f)
         {
             if (u.PoderElemental == 0 || f == null || string.IsNullOrEmpty(f.Elemento)) return 0;
-            return f.Elemento == u.Elemento ? u.PoderElemental : 0;
+            // `TemElemento`, não a igualdade crua: a FUNDIDA tem dois elementos
+            // e o contrato §9-C manda o bônus dela valer para os dois lados da
+            // mistura — é o `Engine.elementalBonus` consultando `unitElements`.
+            return u.TemElemento(f.Elemento) ? u.PoderElemental : 0;
         }
 
         /// <summary>
