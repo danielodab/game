@@ -67,6 +67,12 @@ o corpo é do anfitrião.</div>
 
   function pousa(node) {
     var M = JOGO.Models3D2, clipes = M.clips ? M.clips() : [], alvo = null;
+    // Respeita a trava do jogo: modelo marcado para nao animar fica na pose de
+    // repouso. Esta pagina montava um mixer proprio e tocava o clipe direto,
+    // contornando a decisao do renderizador — e mostrava de ponta-cabeca um
+    // personagem que no jogo aparece certo.
+    var mk = node.userData && node.userData.look ? node.userData.look.model : '';
+    if (/^meshy_/.test(mk || '')) return;
     for (var i = 0; i < clipes.length; i++) {
       if (/idle/.test((clipes[i].name || '').toLowerCase())) { alvo = clipes[i]; break; }
     }

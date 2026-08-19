@@ -100,6 +100,8 @@ def limpa_lixo():
     if fora:
         print("LIXO REMOVIDO|", ", ".join(fora))
 
+
+
     # ---- O RIG EM CENTIMETROS NAO SE CONSERTA AQUI
     # O arquivo chega com os ossos em cm (o `Hips` tem 1226) e um armature que
     # encolhe por 0,01. Malha e esqueleto discordam por 100x.

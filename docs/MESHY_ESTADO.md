@@ -3,8 +3,13 @@
 Estado de `sumo`, `xama` e `mago`, gerados pelo usuário no Meshy e deixados em
 `C:\Users\danie\Downloads\assets_ok`.
 
-**Resumo:** a conversão está pronta e boa. A integração **não** fechou, e o jogo
-segue com os corpos KayKit — de propósito, para não ficar quebrado.
+**Resumo:** os três **estão no jogo** e aparecem corretos. A **animação deles
+está desligada** até o arquivo ser reexportado — os clipes viram o personagem de
+ponta-cabeça, e sete consertos falharam (todos listados abaixo).
+
+Um personagem bonito e parado é melhor que um animado de cabeça para baixo. A
+trava é uma linha (`semAnimacao`, ligada por `/^meshy_/`) e some sozinha quando
+o arquivo vier certo.
 
 ---
 
@@ -62,6 +67,9 @@ medição.
 | o mesmo com todos os objetos juntos | idem — a malha é filha e recebia a transformação duas vezes |
 | escalar os ossos em modo de **edição** | pose de repouso certa, **animada quebrada** (as curvas continuam em cm) |
 | o anterior **mais** escalar as curvas | continua invertido |
+| virar por medida **antes** de animar | não dispara: a pose de bind está certa |
+| virar por medida **depois** de animar | não corrige — não é rotação simples |
+| girar a **malha** 180° mantendo o esqueleto | nada: malha *skinned* ignora a própria transformação |
 
 A lição do terceiro: mexer no *bind* sem mexer nas ações deixa o modelo parado
 bonito e o **animado** errado — e o teste que olha a pose de repouso passa.

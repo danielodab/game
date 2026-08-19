@@ -157,7 +157,7 @@ var JOGO = (typeof window !== 'undefined')
     // `headSwap`: aquilo era guarda-roupa e escala de osso do KayKit. O corpo
     // novo ja vem com as armas modeladas e a musculatura esculpida, e manter
     // as linhas antigas faria o jogo procurar malha inexistente em silencio.
-    sumo: { model: 'barbarian', show: ['1H_Axe', '1H_Axe_Offhand', 'Barbarian_Cape'],
+    sumo: { model: 'meshy_sumo', show: ['1H_Axe', '1H_Axe_Offhand', 'Barbarian_Cape'],
             scale: 1.16, tint: '#d4553f', accent: '#ffd08a', weapon: '1H_Axe',
             // `cabeca` 0,92 -> 0,78: com o tronco a 1,42 a cabeça ficava do mesmo
             // tamanho de antes e, ao lado de um corpo largo, LIA como maior.
@@ -175,7 +175,7 @@ var JOGO = (typeof window !== 'undefined')
     // `headSwap` põe a cabeça barbada no corpo do mago e `headTint` a embranquece.
     // O grimorio fechado estava desligado. O mago segurava so o cajado e a mao
     // esquerda ficava vazia — de longe lia como bengala.
-    bruxo: { model: 'mage', show: ['2H_Staff', 'Spellbook', 'Mage_Hat', 'Mage_Cape'],
+    bruxo: { model: 'meshy_bruxo', show: ['2H_Staff', 'Spellbook', 'Mage_Hat', 'Mage_Cape'],
             scale: 1.02, tint: '#7a5fa0', accent: '#b98cff', weapon: '2H_Staff',
             headSwap: { model: 'barbarian', mesh: 'Barbarian_Head' },
             headTint: '#fbfaf7', headWhite: 0.88,
@@ -203,7 +203,7 @@ var JOGO = (typeof window !== 'undefined')
     curandeira: { model: 'knight', show: ['1H_Sword', 'Badge_Shield', 'Knight_Cape'],
             scale: 1.00, tint: '#f0c05a', accent: '#fff2c2', weapon: '1H_Sword',
             concept: 'Paladina de armadura clara e escudo de brasão' },
-    invocador: { model: 'mage', show: ['Spellbook_open', '1H_Wand', 'Mage_Cape'],
+    invocador: { model: 'meshy_invocador', show: ['Spellbook_open', '1H_Wand', 'Mage_Cape'],
             scale: 1.00, tint: '#3f8f8a', accent: '#8ff0d8', weapon: '1H_Wand',
             concept: 'Xamã de grimório aberto e varinha, sem chapéu' }
   };
@@ -401,6 +401,14 @@ var JOGO = (typeof window !== 'undefined')
               scene: gltf.scene, clips: clips,
               actions: names.length ? autoActions(names) : null,   // null = usa o banco KayKit
               own: names.length > 0,
+              // ANIMACAO DESLIGADA para os corpos do Meshy: a pose de bind
+              // deles esta correta e renderiza perfeita, mas os clipes assumem
+              // uma pose de repouso diferente e viram o personagem de
+              // ponta-cabeca assim que o mixer toca. Sete consertos foram
+              // testados, cada um com foto (ver docs/MESHY_ESTADO.md). Ate o
+              // arquivo ser reexportado, e melhor um personagem bonito e parado
+              // do que um animado de cabeca para baixo.
+              semAnimacao: /^meshy_/.test(key),
               natural: naturalHeight(gltf.scene),
               yaw: measureYaw(gltf.scene)
             };
@@ -1241,6 +1249,9 @@ var JOGO = (typeof window !== 'undefined')
       return locoCache;
     }
     function play(name, o) {
+      // ver `semAnimacao` no carregamento: modelo cujo clipe inverte o corpo
+      // fica na pose de repouso, que e a correta
+      if (src.semAnimacao) return null;
       o = o || {};
       var a = action(name);
       if (!a) return null;
@@ -1306,9 +1317,9 @@ var JOGO = (typeof window !== 'undefined')
     // A correcao e por MEDIDA, nao por lista de modelo: se a cabeca esta abaixo
     // do quadril depois de posado, o corpo esta invertido. Serve para qualquer
     // arquivo futuro sem precisar cadastrar nome nenhum.
-    mixer.update(0);
-    if (poeDePe(model)) {
-      group.userData.invertido = true;
+    if (!src.semAnimacao) {
+      mixer.update(0);
+      if (poeDePe(model)) group.userData.invertido = true;
     }
     return group;
   };
