@@ -255,7 +255,7 @@ namespace Soterra.Testes.Batalha
             };
 
             for (int i = 0; i < esperado.Length; i++)
-                Assert.AreEqual(esperado[i], b.Unidades[i].ClasseOuMonstroId,
+                Assert.AreEqual(esperado[i], b.Ordem[i].ClasseOuMonstroId,
                     "posição " + i + " da fila. Fila inteira: " + Fila(b));
         }
 
@@ -268,10 +268,10 @@ namespace Soterra.Testes.Batalha
             // sozinha é impossível de reproduzir num relato de defeito.
             var b = MontarOVestibulo();
 
-            Assert.AreEqual(new Vector2Int(6, 10), b.Unidades[2].Casa, "o Bufo de cima nasceu antes");
-            Assert.AreEqual(new Vector2Int(6, 6),  b.Unidades[3].Casa, "o de baixo vem depois");
-            Assert.AreEqual(new Vector2Int(14, 10), b.Unidades[4].Casa, "mesma regra para as Vergastas");
-            Assert.AreEqual(new Vector2Int(14, 6),  b.Unidades[5].Casa);
+            Assert.AreEqual(new Vector2Int(6, 10), b.Ordem[2].Casa, "o Bufo de cima nasceu antes");
+            Assert.AreEqual(new Vector2Int(6, 6),  b.Ordem[3].Casa, "o de baixo vem depois");
+            Assert.AreEqual(new Vector2Int(14, 10), b.Ordem[4].Casa, "mesma regra para as Vergastas");
+            Assert.AreEqual(new Vector2Int(14, 6),  b.Ordem[5].Casa);
         }
 
         [Test]
@@ -279,7 +279,7 @@ namespace Soterra.Testes.Batalha
         {
             var b = MontarOVestibulo();
 
-            Assert.AreSame(b.Unidades[0], b.Atual, "`Atual` é o topo da fila de iniciativa");
+            Assert.AreSame(b.Ordem[0], b.Atual, "`Atual` é o topo da fila de iniciativa");
             Assert.AreEqual("espadachim", b.Atual.ClasseOuMonstroId, "o Ladino tem a maior iniciativa em campo");
             Assert.AreEqual(1, b.Rodada, "a batalha começa na rodada 1");
         }

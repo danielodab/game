@@ -77,6 +77,7 @@ namespace Soterra.Batalha
                 // não fez.
                 unidades.Add(Nascer(unidades.Count, idDaClasse, Motor.Lado.Heroi,
                                     mapa.NascimentosHeroi[i], classe.Atributos, Dados.Elemento.Neutro));
+                unidades[unidades.Count - 1].Iniciativa = classe.Atributos.Iniciativa;
                 iniciativas.Add(classe.Atributos.Iniciativa);
             }
 
@@ -104,6 +105,7 @@ namespace Soterra.Batalha
 
                 unidades.Add(Nascer(unidades.Count, idDoMonstro, Motor.Lado.Monstro,
                                     nascimento.Casa, monstro.Atributos, monstro.Elemento));
+                unidades[unidades.Count - 1].Iniciativa = monstro.Atributos.Iniciativa;
                 iniciativas.Add(monstro.Atributos.Iniciativa);
             }
 
@@ -111,7 +113,10 @@ namespace Soterra.Batalha
             // iniciativa e ja comeca o turno do primeiro. Ordenar aqui tambem
             // criaria DUAS fontes para a mesma fila, e elas divergiriam no dia
             // em que uma das duas ganhasse um criterio de desempate novo.
-            unidades = PorIniciativa(unidades, iniciativas);
+            // NAO ordena aqui: o Motor guarda `Unidades` na ordem de
+            // NASCIMENTO e monta `Ordem` por iniciativa sozinho. Ordenar
+            // antes entregava nascimento ja embaralhado, e o primeiro heroi
+            // deixava de ser o primeiro 'P' do desenho.
 
             // A sala manda no clima; o calabouço só responde por quem não
             // declarou. Ler o clima do calabouço primeiro apagaria a decisão de

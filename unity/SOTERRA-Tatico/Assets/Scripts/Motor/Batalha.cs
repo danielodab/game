@@ -47,7 +47,20 @@ namespace Soterra.Motor
         /// tabuleiro — a interface desenha a fila inteira, com os caídos
         /// apagados, e retirar da lista faria a fila pular de lugar a cada morte.
         /// </summary>
-        public IReadOnlyList<Unidade> Unidades { get { return _unidades; } }
+        /// <summary>
+        /// As unidades na ordem em que NASCERAM, que e a ordem do desenho da
+        /// sala. Quem montou a batalha conta com isso: o primeiro heroi e o
+        /// primeiro `P` do texto.
+        /// </summary>
+        public IReadOnlyList<Unidade> Unidades { get { return _nascimento; } }
+
+        /// <summary>
+        /// A fila de iniciativa. Lista SEPARADA de propria: uma so servindo aos
+        /// dois papeis obrigava quem monta a batalha a procurar o heroi por
+        /// busca, e obrigava a interface a desenhar a fila fora de ordem. Cada
+        /// uma responde por uma pergunta.
+        /// </summary>
+        public IReadOnlyList<Unidade> Ordem { get { return _unidades; } }
 
         /// <summary>De quem é a vez. <c>null</c> só se a batalha estiver vazia.</summary>
         public Unidade Atual
@@ -77,7 +90,8 @@ namespace Soterra.Motor
         public Resultado Abertura { get; private set; }
 
         readonly Dados.BancoDeDados _banco;
-        readonly List<Unidade> _unidades = new List<Unidade>();
+        readonly List<Unidade> _unidades = new List<Unidade>();   // por iniciativa
+        readonly List<Unidade> _nascimento = new List<Unidade>(); // como chegaram
         readonly Sorte _sorte;
         int _indice;
         Resultado _r;
@@ -117,6 +131,7 @@ namespace Soterra.Motor
                 if (u == null) continue;
                 chegada[u] = chegada.Count;
                 _unidades.Add(u);
+                _nascimento.Add(u);
             }
             _unidades.Sort((a, b) =>
             {

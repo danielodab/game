@@ -83,7 +83,7 @@ namespace Soterra.Testes.Motor
 
             var esperado = new[] { "u-ladino", "u-batedor", "u-paladina", "u-bruxo", "u-xama", "u-sumo" };
             for (int i = 0; i < esperado.Length; i++)
-                Assert.AreEqual(esperado[i], b.Unidades[i].Uid,
+                Assert.AreEqual(esperado[i], b.Ordem[i].Uid,
                     "posição " + i + " da fila de iniciativa");
         }
 

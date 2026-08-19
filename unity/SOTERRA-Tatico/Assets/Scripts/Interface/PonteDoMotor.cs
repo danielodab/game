@@ -39,7 +39,7 @@ namespace Soterra.Interface
             q.Elementos = banco != null ? banco.InfoDeElementos : null;
             q.Clima = NomeDoClima(banco, batalha.Clima);
 
-            var unidades = batalha.Unidades;
+            var unidades = batalha.Ordem;   // a fila da tela e por iniciativa
             if (unidades != null && unidades.Count > 0)
             {
                 // A ordem é GIRADA para começar em quem joga agora. A pergunta que
