@@ -18,9 +18,9 @@ classe e método** — não busca por substring, que dava falso positivo (procur
 | Dados | `Soterra.Dados` | 25 das 28 chaves carregadas de `Resources/dados/` |
 | Turno, PA/PP | `Soterra.Motor` | enchem no turno DA UNIDADE, não na virada da rodada |
 | Andar | `Soterra.Motor` | desconta PP por passo, com teste de fixação/esquiva |
-| Conjurar e dano | `Soterra.Motor` | **16 dos 24** tipos de efeito |
+| Conjurar e dano | `Soterra.Motor` | **os 24** tipos de efeito |
 | Rivalidade elemental | `Soterra.Motor` | fogo↔água, terra↔ar |
-| Clima | `Soterra.Motor` | tique de ±5 PV por turno, favorece/prejudica por elemento, pode matar — **confere com o JS** |
+| Clima | `Soterra.Motor` | tique de ±5 PV, favorece/prejudica, pode matar — e o **ciclo automático** gira quando o calabouço manda |
 | Fúria da sala | `Soterra.Motor` | poder por rodada, corte de cura, derrota na rodada 40 |
 | Montar a sala | `Soterra.Batalha` | 18 salas dos 6 calabouços varridas, todas montam |
 | Tabuleiro e elenco | `Soterra.Cena` | sala real, heróis e monstros com os modelos CC0 |
@@ -38,13 +38,23 @@ Verificado procurando a definição; todas voltaram vazias.
 | **Itens e equipamento** | 90 itens, 18 conjuntos | não se equipa nada |
 | **Forja e estrelas** | pedras até +10, estrela de classe até ★5 | — |
 | **Inventário** | 4 abas | não existe tela |
-| **Eventos de terreno** | 9 marcas `ev-*` | pisar numa marca não faz nada |
 | **Pets** | 6 bichos | — |
 | **Calabouço sala a sala** | 18 salas, 6 chefes | joga-se UMA sala e acaba |
 | **Efeito visual de feitiço** | 21 famílias | o feitiço acerta sem nada aparecer |
-| **8 dos 24 tipos de efeito** | `teleport`, `swap`, `moveTo`, `summon`, `trap`, `weatherShift`, `chain`, `reflect` | o feitiço é lançado e o efeito é ignorado — **com evento no log**, não em silêncio |
-| **Ciclo automático de clima** | `weatherShiftEveryRounds` | o clima da sala nunca muda sozinho |
-| **4 dos 5 traços** | `enrage`, `explodeOnDeath`, `split`, `regenAura` | a Carrapicho-Mãe não se parte |
+
+
+### Fechado depois da medição (rodada Efeitos, 248 testes)
+
+Os 8 efeitos, os 4 traços, os 9 eventos de terreno e o ciclo de clima
+**entraram**. Dois achados dessa rodada são defeito da linha JS, não do porte:
+`ev-portal` nunca teleportou ninguém (efeito sem destino, aplicado na casa
+ocupada) e a Troca de Sombras promete um dano que nunca acontece. Os dois estão
+reproduzidos fielmente no C#, documentados em teste, e registrados como tarefa
+para a linha JS.
+
+O que a Cena e a Interface ainda devem a essa rodada: 11 tipos de evento novos
+para desenhar, e — mais grave — **corpos que nascem no meio da batalha**
+(`summon`, `split`) entram na lista do motor mas ninguém instancia o modelo.
 
 ## 3. Por que a sala parece diferente
 

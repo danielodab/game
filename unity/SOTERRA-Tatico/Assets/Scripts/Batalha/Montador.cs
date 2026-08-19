@@ -126,7 +126,11 @@ namespace Soterra.Batalha
                       : (!string.IsNullOrEmpty(calabouco.ClimaPadrao) ? calabouco.ClimaPadrao
                                                                       : ClimaSemOpiniao);
 
-            return new Motor.Batalha(banco, mapa, unidades, clima);
+            // O id do calabouco vai junto porque e dele que saem o ciclo de
+            // clima e a taxa de marca de terreno. Sem ele, clima nunca gira e
+            // marca nenhuma nasce — as duas coisas so existiriam sob teste.
+            return new Motor.Batalha(banco, mapa, unidades, clima,
+                                     idDoCalabouco: calabocoId);
         }
 
         /// <summary>
