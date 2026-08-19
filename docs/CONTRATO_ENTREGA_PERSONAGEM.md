@@ -88,18 +88,33 @@ Então: **arma junto do corpo, já na mão, animada junto.** Se ela precisar sai
 depois (a fusão empresta a arma do convidado), eu separo por peça, que é
 trabalho que já sei fazer.
 
-## 5. Fusão
+## 5. Fusão — decidido: cada dupla tem modelo próprio
 
-São **15 duplas** de classe, cada uma com 7 formas — 105 no total. Não peço 105
-modelos.
+Decisão do usuário em 19/08/2026: **a fusão vira um modelo gerado por dupla**,
+entregue como qualquer personagem. Ao fundir, o jogo troca o corpo inteiro pela
+nova forma — nada de emprestar cabeça, capa e arma do convidado, que era como o
+JS fazia e era a parte mais frágil de todo o visual.
 
-O que a fusão precisa, e que só você pode decidir: se cada uma das **15 duplas**
-vira um modelo próprio, ou se ela é montada emprestando cabeça, capa e arma do
-convidado sobre o corpo do anfitrião, como é hoje no jogo em JS.
+O que isso fixa:
 
-Montar sai muito mais barato e é o que o `SISTEMAS.md` §5 já descreve. Mas
-depende de as peças serem separáveis — e é por isso que vale entregar o modelo
-**em partes** quando der.
+- **São 15 modelos**, um por dupla de classe — e não 105. Os 7 degraus da dupla
+  mudam os feitiços, não o corpo. Se algum degrau merecer corpo próprio um dia,
+  é decisão nova.
+- **O id da dupla é o do dado**, ordem alfabética com `+`: `arqueiro+bruxo`,
+  `espadachim+sumo`… (as 15 chaves de `fusionForms.json`). A pasta é
+  `Assets/Resources/elenco/<id>/` como a de qualquer classe.
+- **Mesmos seis clipes** (`idle`, `walk`, `run`, `attack`, `hit`, `death`) e o
+  mesmo padrão do §2. Altura: a fusão é maior que os dois pais — o teto de
+  personagem do projeto é ~4,76 m; fique entre o pai mais alto e esse teto.
+- **Largura continua valendo** (§3): fusão é unidade de UMA casa. Teto ~2,2
+  células; o que for grande demais nasce recolhido no `idle`.
+
+O que ainda falta do MEU lado, e não é visual: o sistema de fusão no motor —
+`fusion.js` (452 linhas), as 3 chaves de dado que ficaram de fora
+(`fusionForms`, `fusionBlends`, `fusionIdentities`) e os 2.625 feitiços
+compostos de forma × mistura. É rodada própria, já prevista. O campo
+`ForaDoTabuleiro` que tira o convidado sem contar derrota já existe e está
+testado.
 
 ## 6. O que eu monto deste lado
 
