@@ -62,6 +62,7 @@ namespace Soterra.Jogo
         Cena.Palco _palco;
         Cena.Elenco _elenco;
         AnimacaoDoElenco _animacao;
+        DespachoDeEfeitos _efeitos;
         Interface.HudDeBatalha _hud;
 
         float _espera;
@@ -74,6 +75,7 @@ namespace Soterra.Jogo
         public Cena.Palco Palco { get { return _palco; } }
         public Cena.Elenco Elenco { get { return _elenco; } }
         public AnimacaoDoElenco Animacao { get { return _animacao; } }
+        public DespachoDeEfeitos Efeitos { get { return _efeitos; } }
         public Interface.HudDeBatalha Hud { get { return _hud; } }
 
         /// <summary>A câmera do palco — é ela que o modo lote fotografa.</summary>
@@ -112,6 +114,7 @@ namespace Soterra.Jogo
 
             _elenco = new Cena.Elenco(_palco, _banco);
             _animacao = new AnimacaoDoElenco(_elenco, _palco, batalha);
+            _efeitos = new DespachoDeEfeitos(_palco, batalha, _banco);
             _partida = new Partida(_banco, batalha, Motor.Sorte.DeTexto("soterra-jogo"));
 
             _hud = AcharOuCriarHud();
@@ -134,8 +137,11 @@ namespace Soterra.Jogo
             if (_partida == null) return;
 
             // O tempo dos deslizes anda SEMPRE — inclusive depois do fim, para
-            // o último corpo terminar de cair em vez de congelar no ar.
+            // o último corpo terminar de cair em vez de congelar no ar. O mesmo
+            // vale para os efeitos: cortá-los no fim da batalha deixaria a
+            // última explosão pendurada no ar.
             _animacao.Avancar(Time.deltaTime);
+            _efeitos.Avancar(Time.deltaTime);
 
             if (_partida.Acabou) return;
 
@@ -179,8 +185,11 @@ namespace Soterra.Jogo
 
             // ANTES do espelho: quem morreu ainda existe em cena, e é agora que
             // o corpo é adotado (fica caído) e os gatilhos disparam — depois do
-            // Sincronizar o objeto já teria sido destruído.
+            // Sincronizar o objeto já teria sido destruído. O efeito visual lê
+            // os mesmos eventos no mesmo ponto, e pela mesma razão: quem morreu
+            // ainda tem casa de onde o estouro sair.
             _animacao.Reagir(r);
+            _efeitos.Reagir(r);
             _elenco.Sincronizar(Fichas.De(batalha, _banco));
             // DEPOIS do espelho: quem andou já está plantado no destino; o
             // deslize o devolve ao ponto de partida e atravessa o caminho com
