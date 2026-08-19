@@ -128,6 +128,33 @@ namespace Soterra.Jogo
             return _batalha.EncerrarTurno();
         }
 
+        /// <summary>
+        /// O toque em "Fundir": declara a fusão da unidade da vez com o
+        /// PRIMEIRO candidato que o motor lista. O grupo desce com DOIS heróis,
+        /// então há no máximo um candidato — quando o grupo crescer, escolher o
+        /// par vai precisar de tela própria, e aí esta linha é o lugar que
+        /// quebra. Nulo quando não é jogada (turno do monstro, ninguém colado);
+        /// a RECUSA do motor (sem PA, pendência já declarada) volta inteira,
+        /// com o motivo em português para a ficha do topo.
+        /// </summary>
+        public Motor.Resultado DeclararFusao()
+        {
+            if (!TurnoDoJogador) return null;
+            var candidatos = _batalha.CandidatosAFusao(_batalha.Atual.Uid);
+            if (candidatos.Count == 0) return null;
+            return _batalha.DeclararFusao(_batalha.Atual.Uid, candidatos[0]);
+        }
+
+        /// <summary>
+        /// O toque em "Cancelar fusão". Os 2 PA NÃO voltam — regra do motor
+        /// (<c>Fusion.cancel</c> do JS), não desta classe; o aviso é da tela.
+        /// </summary>
+        public Motor.Resultado CancelarFusao()
+        {
+            if (!TurnoDoJogador) return null;
+            return _batalha.CancelarFusao();
+        }
+
         // ============================================================== MONSTRO
 
         /// <summary>

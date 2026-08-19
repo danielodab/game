@@ -123,6 +123,27 @@ namespace Soterra.Interface
         /// </summary>
         public IDictionary<string, Soterra.Dados.InfoDeElemento> Elementos;
 
+        /// <summary>
+        /// A unidade da vez tem com quem fundir AGORA
+        /// (<c>Batalha.CandidatosAFusao</c> não vazio). É o que acende o botão
+        /// "Fundir" — a tela não pergunta ao motor, o quadro já traz a resposta.
+        /// </summary>
+        public bool PodeFundir;
+
+        /// <summary>
+        /// Há uma fusão declarada e ainda não resolvida. Com ela o botão vira
+        /// "Cancelar fusão" — e o cancelamento NÃO devolve os PA, aviso que a
+        /// ficha do topo carrega quando a declaração acontece.
+        /// </summary>
+        public bool FusaoPendente;
+
+        /// <summary>
+        /// O que declarar custa, em PA. Vem do motor
+        /// (<c>Batalha.CustoDePaDaFusao</c>) por dentro do quadro: um "2"
+        /// escrito na tela seria o número inventado que este arquivo proíbe.
+        /// </summary>
+        public int CustoDaFusao;
+
         public QuadroDaBatalha()
         {
             Ordem = new List<UnidadeNaTela>();
