@@ -102,6 +102,8 @@ namespace Soterra.Jogo
             _hud.Montar();
             _hud.Tela.AoEscolherFeitico += AoEscolherFeitico;
             _hud.Tela.AoEncerrarTurno += AoEncerrarTurno;
+            _hud.Tela.AoFundir += AoFundir;
+            _hud.Tela.AoCancelarFusao += AoCancelarFusao;
 
             // A abertura já aconteceu dentro do construtor da batalha (tique de
             // clima, veneno de quem abre) — repassar os eventos dela é o que
@@ -163,6 +165,11 @@ namespace Soterra.Jogo
                 // clique era o defeito da linha JS.
                 if (!r.Valido && !string.IsNullOrEmpty(r.Recusa) && !_partida.Acabou)
                     _hud.Tela.MostrarFicha("Jogada recusada", string.Empty, r.Recusa);
+
+                // A fusão também fala pela ficha: declarar, falhar e acontecer
+                // são invisíveis no tabuleiro até o corpo trocar — sem texto o
+                // jogador paga 2 PA e não vê NADA mudar até o fim do turno.
+                if (r.Valido) NarrarFusao(r);
             }
 
             AnunciarFim();
@@ -185,6 +192,70 @@ namespace Soterra.Jogo
                                            ? "O grupo caiu." : _motivoDoFim);
         }
 
+        /// <summary>
+        /// Os três momentos da fusão viram texto na ficha do topo. Os textos
+        /// nascem dos EVENTOS do motor (e o nome e a frase da dupla, do acervo)
+        /// — a interface narra o que aconteceu, nunca decide o que acontece.
+        /// </summary>
+        void NarrarFusao(Motor.Resultado r)
+        {
+            for (int i = 0; i < r.Eventos.Count; i++)
+            {
+                var e = r.Eventos[i];
+                switch (e.Tipo)
+                {
+                    case Motor.TipoDeEvento.FusaoDeclarada:
+                        // O aviso do não-reembolso entra AQUI, na declaração:
+                        // na hora de cancelar já é tarde para avisar.
+                        _hud.Tela.MostrarFicha("Fusão declarada",
+                            Motor.Batalha.CustoDePaDaFusao + " PA",
+                            "Resolve no fim do turno, se os dois seguirem colados " +
+                            "e de pé. Cancelar não devolve os PA.");
+                        break;
+
+                    case Motor.TipoDeEvento.FusaoFalhou:
+                        _hud.Tela.MostrarFicha(
+                            e.Detalhe == "cancelada" ? "Fusão cancelada" : "A fusão falhou",
+                            string.Empty,
+                            MotivoDaFalha(e.Detalhe));
+                        break;
+
+                    case Motor.TipoDeEvento.Fusao:
+                        var idf = IdentidadeDe(e.Uid);
+                        _hud.Tela.MostrarFicha(
+                            idf != null && !string.IsNullOrEmpty(idf.Nome) ? idf.Nome : "Fusão!",
+                            "nível " + e.Quantidade,
+                            idf != null && !string.IsNullOrEmpty(idf.Frase)
+                                ? idf.Frase : "Dois viraram um.");
+                        break;
+                }
+            }
+        }
+
+        /// <summary>O `Detalhe` do motor (morte/afastamento/cancelada) numa
+        /// frase que explica os PA perdidos — a pergunta que o jogador faz.</summary>
+        static string MotivoDaFalha(string detalhe)
+        {
+            if (detalhe == "morte") return "Um dos dois caiu antes do fim do turno. " +
+                                           "A preparação foi gasta: os PA não voltam.";
+            if (detalhe == "afastamento") return "Os dois se afastaram antes do fim do turno. " +
+                                                 "A preparação foi gasta: os PA não voltam.";
+            return "A preparação já foi gasta: os " +
+                   Motor.Batalha.CustoDePaDaFusao + " PA não voltam.";
+        }
+
+        /// <summary>Nome e frase da dupla, de <c>fusionIdentities</c> — a chave
+        /// é o <c>ClasseOuMonstroId</c> da fundida, que JÁ é o id da dupla.</summary>
+        Dados.IdentidadeDeFusao IdentidadeDe(string uid)
+        {
+            var u = _partida.Batalha.Acha(uid);
+            Dados.IdentidadeDeFusao idf;
+            if (u != null && _banco.IdentidadesDeFusao != null &&
+                _banco.IdentidadesDeFusao.TryGetValue(u.ClasseOuMonstroId, out idf))
+                return idf;
+            return null;
+        }
+
         // =============================================================== TOQUE
 
         void AoEscolherFeitico(string id)
@@ -196,6 +267,16 @@ namespace Soterra.Jogo
         void AoEncerrarTurno()
         {
             AposAcao(_partida.EncerrarTurno());
+        }
+
+        void AoFundir()
+        {
+            AposAcao(_partida.DeclararFusao());
+        }
+
+        void AoCancelarFusao()
+        {
+            AposAcao(_partida.CancelarFusao());
         }
 
         void LerToque()
@@ -300,10 +381,13 @@ namespace Soterra.Jogo
         }
 
         /// <summary>A cor do alvo é a do ELEMENTO do feitiço, do acervo — é a
-        /// única pista visual de qual feitiço está na mão.</summary>
+        /// única pista visual de qual feitiço está na mão. Perguntada à BATALHA
+        /// e não ao banco: os compostos da fusão (<c>fus:...</c>) só existem no
+        /// registro dela, e pelo banco o realce da fundida sairia sempre na cor
+        /// padrão — <c>Batalha.Feitico</c> cai no banco para todos os outros.</summary>
         Color CorDoFeitico(string feiticoId)
         {
-            var f = _banco.AchaFeitico(feiticoId);
+            var f = _partida.Batalha.Feitico(feiticoId);
             Dados.InfoDeElemento info;
             Color cor;
             if (f != null && f.Elemento != null && _banco.InfoDeElementos != null &&
