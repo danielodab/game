@@ -32,15 +32,19 @@ Verificado procurando a definição; todas voltaram vazias.
 
 | falta | tamanho no JS | o que isso significa jogando |
 | --- | --- | --- |
-| **IA de monstro** | `ai.js`, 681 linhas | **o monstro não joga.** Passa o turno parado |
-| **Fusão** | `fusion.js`, 452 linhas + 105 formas | o sistema mais próprio do jogo não existe |
-| **Progressão** | `progress.js`, 1.665 linhas | não se ganha XP, não se sobe de nível |
-| **Itens e equipamento** | 90 itens, 18 conjuntos | não se equipa nada |
-| **Forja e estrelas** | pedras até +10, estrela de classe até ★5 | — |
-| **Inventário** | 4 abas | não existe tela |
+| **Inventário e telas fora da batalha** | 4 abas + escolha de herói/elemento | não existe tela — a LÓGICA de itens/forja/XP existe e está testada |
+| **Ligação Descida↔Cena** | — | a lógica sala-a-sala existe; a cena jogável joga UMA sala |
 | **Pets** | 6 bichos | — |
-| **Calabouço sala a sala** | 18 salas, 6 chefes | joga-se UMA sala e acaba |
 | **Efeito visual de feitiço** | 21 famílias | o feitiço acerta sem nada aparecer |
+| **Som e música** | — | nunca existiu em nenhuma das duas linhas |
+
+### Fechado depois (rodadas IA, Progressão, Cenário, Jogável e Fusão — 424 testes)
+
+IA de monstro (joga, determinística), progressão completa (XP, nível, itens,
+forja, estrela de classe, save), calabouço sala a sala na LÓGICA, cenário com
+env-kit e tema por calabouço, cena jogável de toque (`Batalha.unity`), e a
+FUSÃO inteira: motor (2.625 compostos por batalha, sem caminho de volta) e tela
+(botão, troca de corpo por id de dupla, arsenal composto na barra).
 
 
 ### Fechado depois da medição (rodada Efeitos, 248 testes)
