@@ -412,6 +412,22 @@
     flex-grow: 1;
 }
 
+/* O botão de fusão só EXISTE quando há aliado colado (ou fusão pendente) — o
+   C# o mostra e o esconde por display. A cor fria o separa do "Encerrar turno"
+   dourado ao lado: os dois nunca podem se confundir num toque de polegar,
+   porque um passa a vez e o outro gasta 2 PA. */
+.botao--fundir {
+    margin-right: 8px;
+    background-color: rgb(126, 240, 212);
+}
+
+/* Pendente, o mesmo botão vira "Cancelar fusão" — vermelho de consequência:
+   cancelar NÃO devolve os 2 PA, e a cor tem de dizer isso antes do texto. */
+.botao--cancelar {
+    background-color: rgb(226, 102, 90);
+    color: rgb(255, 244, 240);
+}
+
 .botao:active {
     background-color: rgb(212, 170, 108);
 }

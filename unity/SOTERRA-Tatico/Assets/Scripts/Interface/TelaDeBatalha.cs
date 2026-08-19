@@ -49,10 +49,18 @@ namespace Soterra.Interface
         /// <summary>Disparado no toque do botão de encerrar turno.</summary>
         public event Action AoEncerrarTurno;
 
+        /// <summary>Disparado no toque de "Fundir" quando há candidato. Quem
+        /// escolhe o par e paga os PA é o motor — a tela só avisa.</summary>
+        public event Action AoFundir;
+
+        /// <summary>Disparado no toque de "Cancelar fusão" com fusão pendente.
+        /// O cancelamento NÃO devolve os PA; o aviso vive na ficha do topo.</summary>
+        public event Action AoCancelarFusao;
+
         readonly Label _rodada, _clima, _nome, _pv, _pa, _pp;
         readonly Label _fichaTitulo, _fichaNumeros, _fichaTexto;
         readonly VisualElement _iniciativa, _feiticos, _pvCheio, _pipsPa, _pipsPp;
-        readonly Button _encerrar;
+        readonly Button _encerrar, _fundir;
 
         QuadroDaBatalha _quadro = new QuadroDaBatalha();
 
@@ -117,8 +125,10 @@ namespace Soterra.Interface
             _pipsPp = Exigir<VisualElement>("pips-pp");
             _feiticos = Exigir<VisualElement>("barra-de-feiticos");
             _encerrar = Exigir<Button>("botao-encerrar-turno");
+            _fundir = Exigir<Button>("botao-fundir");
 
             _encerrar.clicked += EncerrarTurno;
+            _fundir.clicked += TocarFusao;
 
             // Quem decide retrato ou paisagem é o tamanho real do painel: USS não
             // tem `@media`, então a troca de classe é feita aqui, no primeiro
@@ -152,7 +162,29 @@ namespace Soterra.Interface
             PintarOrdem();
             PintarRecursos();
             PintarFeiticos();
+            PintarFusao();
             PintarFichaInicial();
+        }
+
+        /// <summary>
+        /// O botão de fusão tem TRÊS estados, e o terceiro é não existir: fora
+        /// do turno do jogador, ou sem candidato e sem pendência, ele some em
+        /// vez de apagar. Botão apagado pede explicação ("por que não posso?");
+        /// a fusão só é uma pergunta quando há um aliado colado, e aí o botão
+        /// aparece já respondendo — com o custo escrito nele.
+        /// </summary>
+        void PintarFusao()
+        {
+            bool mostrar = _quadro.ETurnoDoJogador && (_quadro.FusaoPendente || _quadro.PodeFundir);
+            _fundir.style.display = mostrar ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!mostrar) return;
+
+            // Pendente, o MESMO botão vira o de cancelar — dois botões dariam
+            // um par que nunca existe junto e um vão morto no meio das ações.
+            _fundir.EnableInClassList("botao--cancelar", _quadro.FusaoPendente);
+            _fundir.text = _quadro.FusaoPendente
+                ? "Cancelar fusão"
+                : "Fundir · " + _quadro.CustoDaFusao + " PA";
         }
 
         void PintarOrdem()
@@ -335,6 +367,28 @@ namespace Soterra.Interface
         public void EncerrarTurno()
         {
             var f = AoEncerrarTurno;
+            if (f != null) f();
+        }
+
+        /// <summary>
+        /// O que o botão de fusão faz: declara ou cancela, conforme o estado do
+        /// quadro. A validade fica com o motor — se faltar PA, a recusa dele
+        /// volta em português e vira texto na ficha do topo, o mesmo caminho de
+        /// toda jogada recusada.
+        /// </summary>
+        public void TocarFusao()
+        {
+            if (!_quadro.ETurnoDoJogador) return;
+
+            if (_quadro.FusaoPendente)
+            {
+                var c = AoCancelarFusao;
+                if (c != null) c();
+                return;
+            }
+
+            if (!_quadro.PodeFundir) return;
+            var f = AoFundir;
             if (f != null) f();
         }
 

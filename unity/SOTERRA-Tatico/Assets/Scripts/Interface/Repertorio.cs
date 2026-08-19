@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Soterra.Dados;
 
@@ -58,6 +59,40 @@ namespace Soterra.Interface
                 // Monstro não tem escada de nível: o acervo já entrega a lista
                 // dele pronta e escalada pela profundidade do calabouço.
                 Acrescenta(banco, saida, monstro.Feiticos, int.MaxValue);
+            }
+            return saida;
+        }
+
+        /// <summary>
+        /// A barra de uma unidade FUNDIDA: os ids que ela carrega, resolvidos
+        /// por quem conhece o registro POR BATALHA (<c>Batalha.Feitico</c>).
+        ///
+        /// A fundida não pode passar por <see cref="De"/>: os compostos têm id
+        /// <c>fus:...</c> e só existem no registro da batalha — o banco os
+        /// devolve nulos, e a barra sairia VAZIA no exato turno em que o jogador
+        /// pagou 2 PA por um arsenal novo. O resolvedor entra por parâmetro para
+        /// este arquivo continuar sem conhecer <c>Soterra.Motor</c> — quem o
+        /// conhece é só a <c>PonteDoMotor</c>.
+        ///
+        /// Sem corte por nível: a composição do motor já cortou os degraus pelo
+        /// nível da fusão, e cortar de novo aqui seria uma segunda regra — que
+        /// divergiria da primeira no dia em que a escada mudasse.
+        /// </summary>
+        public static List<Feitico> DaBatalha(IList<string> ids, Func<string, Feitico> acha)
+        {
+            var saida = new List<Feitico>();
+            if (ids == null || acha == null) return saida;
+            for (int i = 0; i < ids.Count; i++)
+            {
+                var f = acha(ids[i]);
+
+                // O mesmo critério de `Acrescenta`: id que não resolve é pulado,
+                // não desenhado — botão com id cru e custo zero é pior que a
+                // ausência.
+                if (f == null) continue;
+                if (!PodeAparecerNaBarra(f)) continue;
+
+                saida.Add(f);
             }
             return saida;
         }

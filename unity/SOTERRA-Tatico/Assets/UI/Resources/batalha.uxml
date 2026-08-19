@@ -80,6 +80,10 @@
       <ui:VisualElement name="barra-de-feiticos" class="feiticos" />
 
       <ui:VisualElement name="acoes" class="acoes">
+        <!-- Só aparece com candidato à fusão (ou pendência, quando vira
+             "Cancelar fusão"). O C# escreve o texto e o custo; ver
+             TelaDeBatalha.PintarFusao. -->
+        <ui:Button name="botao-fundir" class="alvo botao botao--fundir" text="Fundir" />
         <ui:Button name="botao-encerrar-turno" class="alvo botao botao--encerrar" text="Encerrar turno" />
       </ui:VisualElement>
 

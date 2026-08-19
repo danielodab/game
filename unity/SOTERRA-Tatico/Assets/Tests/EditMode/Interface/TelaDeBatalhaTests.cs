@@ -68,7 +68,7 @@ namespace Soterra.Testes.Interface
                 "vao-do-tabuleiro", "faixa-inferior", "painel-de-recursos", "rotulo-nome",
                 "medidor-pv", "medidor-pv-cheio", "rotulo-pv", "linha-de-pontos",
                 "rotulo-pa", "pips-pa", "rotulo-pp", "pips-pp",
-                "barra-de-feiticos", "acoes", "botao-encerrar-turno"
+                "barra-de-feiticos", "acoes", "botao-encerrar-turno", "botao-fundir"
             };
 
             for (int i = 0; i < nomes.Length; i++)

@@ -78,8 +78,22 @@ namespace Soterra.Interface
                 // fica apagada e o botão de encerrar desliga.
                 q.ETurnoDoJogador = batalha.Atual.Lado == Motor.Lado.Heroi;
 
-                var lista = Repertorio.De(banco, batalha.Atual.ClasseOuMonstroId,
-                                          batalha.Atual.Elemento, batalha.Atual.Nivel);
+                // O botão "Fundir" acende quando o motor lista candidato; com
+                // fusão pendente ele vira "Cancelar". O custo vai junto porque a
+                // tela o escreve no botão e não tem autoridade para inventá-lo.
+                q.FusaoPendente = batalha.FusaoPendente != null;
+                q.PodeFundir = batalha.CandidatosAFusao(batalha.Atual.Uid).Count > 0;
+                q.CustoDaFusao = Motor.Batalha.CustoDePaDaFusao;
+
+                // A FUNDIDA não resolve pela classe: o arsenal composto tem ids
+                // `fus:...` que só existem no registro da batalha, e a barra
+                // montada pelo banco sairia vazia. `Batalha.Feitico` consulta o
+                // registro primeiro e cai no banco — o mesmo caminho que o
+                // motor usa para conjurar, então a barra não tem como discordar.
+                var lista = batalha.Atual.EFusao
+                    ? Repertorio.DaBatalha(batalha.Atual.Feiticos, batalha.Feitico)
+                    : Repertorio.De(banco, batalha.Atual.ClasseOuMonstroId,
+                                    batalha.Atual.Elemento, batalha.Atual.Nivel);
                 for (int i = 0; i < lista.Count; i++)
                 {
                     var f = lista[i];
@@ -138,6 +152,17 @@ namespace Soterra.Interface
             Monstro m;
             if (banco.Monstros.TryGetValue(id, out m) && m != null && !string.IsNullOrEmpty(m.Nome))
                 return m.Nome;
+
+            // A FUNDIDA: o id dela é o da dupla (`arqueiro+bruxo`), que não é
+            // classe nem monstro. O nome visível mora em `fusionIdentities` —
+            // que existe EXATAMENTE para a interface (o motor não a lê). Sem
+            // esta linha a fundida sairia com id cru na tela, o defeito da
+            // linha JS que este arquivo documenta lá em cima.
+            IdentidadeDeFusao idf;
+            if (banco.IdentidadesDeFusao != null &&
+                banco.IdentidadesDeFusao.TryGetValue(id, out idf) &&
+                idf != null && !string.IsNullOrEmpty(idf.Nome))
+                return idf.Nome;
 
             return id;
         }
