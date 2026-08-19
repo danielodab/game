@@ -103,6 +103,23 @@ namespace Soterra.Testes.Motor
             return Unidade.DeClasse(cls, uid, new Vector2Int(x, y), elemento, feiticos);
         }
 
+        /// <summary>
+        /// Herói com feitiços escolhidos a dedo, além dos três neutros da classe.
+        ///
+        /// Existe porque <see cref="Heroi"/> só acrescenta UM degrau do caminho,
+        /// e há teste que precisa de dois feitiços do mesmo elemento ao mesmo
+        /// tempo — a Pele em Brasa para refletir e a Fúria da Fornalha para
+        /// bater. Os ids continuam sendo os do acervo; o que muda é quantos.
+        /// </summary>
+        public static Unidade HeroiCom(string classeId, string uid, int x, int y,
+                                       string elemento, params string[] feiticosExtras)
+        {
+            var cls = Acervo().Classes[classeId];
+            var feiticos = new List<string>(cls.FeiticosBase);
+            feiticos.AddRange(feiticosExtras);
+            return Unidade.DeClasse(cls, uid, new Vector2Int(x, y), elemento, feiticos);
+        }
+
         public static Unidade Monstro(string monstroId, string uid, int x, int y)
         {
             return Unidade.DeMonstro(Acervo().Monstros[monstroId], uid, new Vector2Int(x, y));
@@ -118,6 +135,33 @@ namespace Soterra.Testes.Motor
         public static Batalha Montar(Mapa mapa, string clima, Sorte sorte, params Unidade[] unidades)
         {
             return new Batalha(Acervo(), mapa, unidades, clima, sorte);
+        }
+
+        /// <summary>
+        /// Batalha que SABE em que calabouço está — o que liga as duas coisas
+        /// que só o calabouço define: o rodízio de clima e a semeadura de
+        /// marcas de evento. Sem o id, as duas ficam desligadas.
+        /// </summary>
+        public static Batalha MontarEm(string calaboucoId, Mapa mapa, string clima,
+                                       Sorte sorte, params Unidade[] unidades)
+        {
+            return new Batalha(Acervo(), mapa, unidades, clima, sorte, calaboucoId);
+        }
+
+        /// <summary>
+        /// Encerra turnos até a batalha chegar em <paramref name="rodada"/>,
+        /// guardando o caminho — é nas viradas de rodada que o clima gira e as
+        /// marcas brotam, e é justamente isso que os testes de terreno medem.
+        /// </summary>
+        public static List<Evento> AteARodada(Batalha b, int rodada, int tetoDeTurnos = 200)
+        {
+            var diario = new List<Evento>(b.Abertura.Eventos);
+            int voltas = 0;
+            while (b.Rodada < rodada && b.Fase == FaseDaBatalha.EmAndamento && voltas++ < tetoDeTurnos)
+                diario.AddRange(b.EncerrarTurno().Eventos);
+
+            Assert.AreEqual(rodada, b.Rodada, "não chegou à rodada " + rodada);
+            return diario;
         }
 
         /// <summary>Atalho para não escrever <c>new Vector2Int</c> cinquenta vezes.</summary>
@@ -152,6 +196,34 @@ namespace Soterra.Testes.Motor
             Assert.AreEqual(uid, b.Atual == null ? null : b.Atual.Uid,
                 "não chegou a vez de " + uid + " em " + tetoDeTurnos + " turnos");
             return diario;
+        }
+    }
+
+    /// <summary>
+    /// Sorteio com ROTEIRO: devolve os valores escritos, na ordem, e depois um
+    /// valor fixo para sempre.
+    ///
+    /// <see cref="Sorte.Fixa"/> não serve para o terreno porque lá o mesmo
+    /// número decide coisas opostas: um sorteio baixo faz a marca brotar e o
+    /// mesmo sorteio baixo escolhe sempre o PRIMEIRO evento da tabela. Sem
+    /// separar um do outro não dá para provar que os nove funcionam — só o
+    /// primeiro.
+    /// </summary>
+    public sealed class SorteRoteirizada : Sorte
+    {
+        readonly double[] _roteiro;
+        readonly double _depois;
+        int _i;
+
+        public SorteRoteirizada(double depois, params double[] roteiro) : base(0u)
+        {
+            _depois = depois;
+            _roteiro = roteiro ?? new double[0];
+        }
+
+        public override double Proximo()
+        {
+            return _i < _roteiro.Length ? _roteiro[_i++] : _depois;
         }
     }
 }

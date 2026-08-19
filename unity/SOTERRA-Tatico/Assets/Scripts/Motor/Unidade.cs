@@ -102,6 +102,35 @@ namespace Soterra.Motor
         /// <summary>Traço <c>pushImmune</c>: empurrão e puxão não a tiram do lugar.</summary>
         public bool ImuneAEmpurrao;
 
+        /// <summary>
+        /// Os traços passivos da ficha, como o acervo os escreveu.
+        ///
+        /// A lista inteira, e não um campo booleano por traço: quatro dos cinco
+        /// carregam NÚMEROS (<c>radius</c>, <c>damage</c>, <c>hpPct</c>,
+        /// <c>count</c>) e um booleano os jogaria fora. <c>ImuneAEmpurrao</c>
+        /// continua existindo porque o empurrão é o único que só precisa do
+        /// sim/não e é consultado a cada casa de deslocamento.
+        /// </summary>
+        public List<Dados.Traco> Tracos = new List<Dados.Traco>();
+
+        /// <summary>
+        /// O <c>enrage</c> já disparou? Uma vez só na batalha inteira: sem esta
+        /// trava, cada golpe abaixo do limiar empilharia outro bônus de poder e
+        /// um chefe ferido viraria imbatível em três golpes.
+        /// </summary>
+        public bool Enfurecida;
+
+        /// <summary>
+        /// Entrou em campo por invocação (<c>summon</c> ou <c>split</c>).
+        ///
+        /// Não sustenta o lado: matar o Xamã acaba a sala mesmo com os bichos
+        /// dele de pé, senão bastaria invocar sem parar para empatar a batalha.
+        /// </summary>
+        public bool Invocada;
+
+        /// <summary>Quem a invocou. Define onde ela entra na fila de iniciativa.</summary>
+        public string UidDoInvocador;
+
         public Dados.Resistencias Resistencias = new Dados.Resistencias();
 
         /// <summary>Os ids que ela sabe conjurar. Feitiço fora desta lista não sai.</summary>
@@ -203,14 +232,27 @@ namespace Soterra.Motor
 
             u.Feiticos.AddRange(monstro.Feiticos);
 
-            // Dos cinco traços do acervo só este muda o resultado de um efeito
-            // já implementado; os outros quatro (enrage, explodeOnDeath, split,
-            // regenAura) ficaram de fora desta rodada e estão no relatório.
             for (int i = 0; monstro.Tracos != null && i < monstro.Tracos.Count; i++)
-                if (monstro.Tracos[i] != null && monstro.Tracos[i].Tipo == "pushImmune")
-                    u.ImuneAEmpurrao = true;
+            {
+                var t = monstro.Tracos[i];
+                if (t == null || string.IsNullOrEmpty(t.Tipo)) continue;
+                u.Tracos.Add(t);
+                if (t.Tipo == "pushImmune") u.ImuneAEmpurrao = true;
+            }
 
             return u;
+        }
+
+        /// <summary>
+        /// O traço deste tipo, ou <c>null</c>. Devolve o traço INTEIRO e não um
+        /// booleano porque quem pergunta quase sempre quer o número que vem
+        /// junto — o raio da explosão, a fração de vida do <c>enrage</c>.
+        /// </summary>
+        public Dados.Traco Traco(string tipo)
+        {
+            for (int i = 0; i < Tracos.Count; i++)
+                if (Tracos[i] != null && Tracos[i].Tipo == tipo) return Tracos[i];
+            return null;
         }
 
         public override string ToString()

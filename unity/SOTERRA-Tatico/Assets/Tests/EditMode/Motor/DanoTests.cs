@@ -198,27 +198,50 @@ namespace Soterra.Testes.Motor
         }
 
         /// <summary>
-        /// O que este motor ainda NÃO faz, ele DIZ.
+        /// O que este motor não conhece, ele DIZ.
         ///
-        /// O Passo de Corça é um <c>moveTo</c>, e <c>moveTo</c> ficou fora desta
-        /// rodada (relatório). Ignorar em silêncio faria o Batedor gastar 2 PA e
-        /// não sair do lugar, e o defeito seria lido como "o passo sumiu".
+        /// Este teste media outra coisa antes: que o <c>moveTo</c> do Passo de
+        /// Corça caía no <c>default</c> por não estar escrito. Ele estava CERTO
+        /// enquanto o efeito não existia, e passou a mentir no instante em que
+        /// ele passou a existir — a conjuração continuava válida, mas o evento
+        /// que ele cobrava nunca mais saía. Os 24 tipos do contrato entraram
+        /// todos; o guardião do <c>default</c> agora só responde a um tipo que o
+        /// acervo invente, e é isso que se mede aqui.
+        ///
+        /// Provar isso exige um acervo com um feitiço que não existe — daí a
+        /// fonte de texto envelopada, que devolve o disco em tudo menos na
+        /// tabela de feitiços.
         /// </summary>
         [Test]
-        public void Efeito_ainda_nao_implementado_e_anunciado_e_nao_engolido()
+        public void Efeito_que_o_motor_nao_conhece_e_anunciado_e_nao_engolido()
         {
-            var mapa = Cenario.Aberta(10, 3);
-            var batedor = Cenario.Heroi("arqueiro", "h1", 1, 1);
-            var vespa = Cenario.Monstro("lantern-wasp", "m1", 6, 1);
-            var b = Cenario.Montar(mapa, Sorte.SempreOMinimo, batedor, vespa);
-            Cenario.AteAVezDe(b, "h1");
+            const string tabelaInventada =
+                "{\"prova-de-efeito\":{\"id\":\"prova-de-efeito\",\"name\":\"Prova\"," +
+                "\"element\":\"neutro\",\"paCost\":1,\"castsPerTurn\":1," +
+                "\"range\":{\"min\":0,\"max\":3},\"aoe\":{\"shape\":\"single\",\"size\":0}," +
+                "\"targetSide\":\"any\",\"effects\":[{\"type\":\"tipo-que-nao-existe\"}]}}";
 
-            var r = b.Conjurar("arqueiro-neutro-2", Cenario.Ponto(3, 1));
-            Assert.IsTrue(r.Valido);
+            var disco = new global::Soterra.Dados.FonteDeResources();
+            var fonte = new global::Soterra.Dados.FonteDeFuncao(
+                chave => chave == global::Soterra.Dados.BancoDeDados.ChaveFeiticos
+                       ? tabelaInventada
+                       : disco.Ler(chave));
+            var acervo = global::Soterra.Dados.BancoDeDados.Carregar(fonte);
+
+            var mapa = Cenario.Aberta(10, 3);
+            var ladino = Unidade.DeClasse(acervo.Classes["espadachim"], "h1",
+                                          Cenario.Ponto(1, 1), null,
+                                          new[] { "prova-de-efeito" });
+            var vespa = Unidade.DeMonstro(acervo.Monstros["lantern-wasp"], "m1",
+                                          Cenario.Ponto(6, 1));
+            var b = new Batalha(acervo, mapa, new[] { ladino, vespa }, null, Sorte.SempreOMinimo);
+
+            var r = b.Conjurar("prova-de-efeito", Cenario.Ponto(3, 1));
+            Assert.IsTrue(r.Valido, r.Recusa);
 
             var ignorados = r.Do(TipoDeEvento.EfeitoIgnorado);
             Assert.AreEqual(1, ignorados.Count);
-            Assert.AreEqual("moveTo", ignorados[0].Detalhe);
+            Assert.AreEqual("tipo-que-nao-existe", ignorados[0].Detalhe);
         }
     }
 }

@@ -77,6 +77,18 @@ namespace Soterra.Motor
         /// <summary>Clima da sala. Indexa <c>DATA.weathers</c>.</summary>
         public string Clima { get; set; }
 
+        /// <summary>
+        /// De qual calabouço é esta sala. Indexa <c>DATA.dungeons</c>.
+        ///
+        /// O motor precisa dele para DUAS coisas que só o calabouço sabe: de
+        /// quantas em quantas rodadas o clima gira
+        /// (<c>weatherShiftEveryRounds</c>) e com que frequência brotam marcas
+        /// de evento no chão (<c>tileEventRate</c>). Nulo desliga as duas — é o
+        /// que acontece numa sala de teste montada à mão, e é o certo: sala sem
+        /// calabouço não tem ciclo de clima para seguir.
+        /// </summary>
+        public string IdDoCalabouco { get; set; }
+
         public FaseDaBatalha Fase { get; private set; }
 
         /// <summary>
@@ -108,7 +120,7 @@ namespace Soterra.Motor
         /// relatório.
         /// </summary>
         public Batalha(Dados.BancoDeDados banco, Mapa mapa, IEnumerable<Unidade> unidades,
-                       string clima = null, Sorte sorte = null)
+                       string clima = null, Sorte sorte = null, string idDoCalabouco = null)
         {
             if (banco == null) throw new ArgumentNullException("banco");
             if (mapa == null) throw new ArgumentNullException("mapa");
@@ -117,6 +129,7 @@ namespace Soterra.Motor
             _banco = banco;
             Mapa = mapa;
             Clima = string.IsNullOrEmpty(clima) ? "calmo" : clima;
+            IdDoCalabouco = idDoCalabouco;
             Rodada = 1;
             Fase = FaseDaBatalha.EmAndamento;
 
@@ -141,6 +154,11 @@ namespace Soterra.Motor
 
             _sorte = sorte ?? Sorte.DeTexto(SementeDe(_unidades));
             _indice = 0;
+
+            // Onde o ciclo automático de clima começa a contar. Sem isto uma
+            // sala de `tremor` giraria para `chuva` na primeira virada em vez de
+            // seguir do lugar dela no ciclo.
+            _indiceDoClima = Math.Max(0, CicloDeClima().IndexOf(Clima));
 
             _r = new Resultado();
             Abertura = _r;
@@ -308,9 +326,15 @@ namespace Soterra.Motor
                 }
 
                 var partida = u.Casa;
+                var passos = Caminho(partida, destino);
                 u.PP -= custo;
                 u.Casa = destino;
                 Emitir(TipoDeEvento.Movimento, u.Uid, q: custo, de: partida, para: destino);
+
+                // Só depois de a unidade já estar no destino, como no
+                // `engine.js`: uma armadilha que empurre precisa achar a vítima
+                // onde ela parou, não onde ela estava quando o passo começou.
+                PisarNoCaminho(u, passos);
                 return _r;
             }
             finally { _r = null; }
@@ -467,7 +491,11 @@ namespace Soterra.Motor
             {
                 Fase = FaseDaBatalha.Derrota;
                 Emitir(TipoDeEvento.FimDeBatalha, null, detalhe: "fúria: a sala cobra a demora");
+                // Sem o `return` a sala ainda giraria o clima e semearia marcas
+                // numa batalha já encerrada.
+                return;
             }
+            AoComecarRodadaNoTerreno();
         }
 
         Dados.FuriaDaSala ConfiguracaoDaFuria()
@@ -511,6 +539,9 @@ namespace Soterra.Motor
             TiqueDeClimaEm(u);
             if (!u.NoTabuleiro) return;
 
+            AuraDeRegeneracao(u);
+            if (!u.NoTabuleiro) return;
+
             // Cópia da lista: veneno mata, morte pode mexer no estado, e
             // percorrer a lista original enquanto ela muda é o defeito clássico.
             var efeitos = u.Efeitos.ToArray();
@@ -530,6 +561,134 @@ namespace Soterra.Motor
                 {
                     Curar(u, _sorte.Inteiro(e.Min, e.Max), e.UidDaFonte);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Traço <c>regenAura</c>: no começo do turno de quem a carrega, todo
+        /// ALIADO ferido dentro do raio recebe vida.
+        ///
+        /// Só quem está ferido: curar quem está cheio gastaria um evento de cura
+        /// por aliado por turno e encheria o diário de zeros. E nunca a si mesma
+        /// — a Xamã-de-Seiva sustenta o grupo, não a própria pele; fosse
+        /// diferente, quatro delas juntas seriam imortais.
+        /// </summary>
+        void AuraDeRegeneracao(Unidade u)
+        {
+            var t = u.Traco("regenAura");
+            if (t == null) return;
+
+            int raio = t.Raio ?? 0;
+            int valor = t.Valor ?? 0;
+            if (valor <= 0) return;
+
+            for (int i = 0; i < _unidades.Count; i++)
+            {
+                var a = _unidades[i];
+                if (a == u || !a.NoTabuleiro || a.Lado != u.Lado) continue;
+                if (a.PV >= a.PVMax) continue;
+                if (Distancia.Manhattan(u.Casa, a.Casa) > raio) continue;
+                Curar(a, valor, u.Uid);
+            }
+        }
+
+        /// <summary>
+        /// Traço <c>enrage</c>: abaixo de <c>hpPct</c> da vida, a criatura ganha
+        /// poder de uma vez e para sempre.
+        ///
+        /// Conferido depois de TODO dano, inclusive o do clima — um chefe que se
+        /// enfurecesse só ao apanhar de feitiço deixaria de reagir quando quem o
+        /// mata é a própria sala.
+        /// </summary>
+        void ConfereEnfurecer(Unidade u)
+        {
+            if (u == null || !u.NoTabuleiro || u.Enfurecida) return;
+            var t = u.Traco("enrage");
+            if (t == null) return;
+            if (u.PV >= (t.FracaoDePv ?? 0) * u.PVMax) return;
+
+            u.Enfurecida = true;
+            // Duração enorme em vez de "sem duração": o decremento de fim de
+            // turno é cego ao tipo, e um efeito sem duração sumiria na primeira
+            // virada. 9999 é o número do `engine.js`.
+            Aplicar(u, new EfeitoAtivo
+            {
+                Tipo = "buff", Atributo = "power", Valor = t.Poder ?? 0,
+                Duracao = 9999, UidDaFonte = u.Uid
+            });
+        }
+
+        /// <summary>
+        /// Traço <c>explodeOnDeath</c>: ao cair, a criatura leva junto quem
+        /// estiver no raio — dos DOIS lados.
+        ///
+        /// Dano FIXO, sem poder e sem multiplicador de marcas: é a criatura
+        /// arrebentando, não um feitiço conjurado. A resistência conta, porque
+        /// ela é do corpo de quem apanha.
+        /// </summary>
+        void Explodir(Unidade morta)
+        {
+            var t = morta.Traco("explodeOnDeath");
+            if (t == null) return;
+
+            int raio = t.Raio ?? 0;
+            int dano = t.Dano ?? 0;
+            var elemento = string.IsNullOrEmpty(t.Elemento) ? Dados.Elemento.Neutro : t.Elemento;
+
+            // Lista fechada ANTES de bater: a explosão pode matar, a morte pode
+            // gerar outra explosão, e percorrer `_unidades` enquanto ela cresce é
+            // o defeito clássico.
+            var vitimas = new List<Unidade>();
+            for (int i = 0; i < _unidades.Count; i++)
+            {
+                var v = _unidades[i];
+                if (!v.NoTabuleiro) continue;
+                if (Distancia.Manhattan(morta.Casa, v.Casa) <= raio) vitimas.Add(v);
+            }
+
+            for (int i = 0; i < vitimas.Count; i++)
+            {
+                int amt = Math.Max(0, Arredonda(dano * (100.0 - ResistenciaEfetiva(vitimas[i], elemento)) / 100.0));
+                AplicarDano(vitimas[i], amt, elemento, morta.Uid);
+            }
+        }
+
+        /// <summary>
+        /// Traço <c>split</c>: ao cair, a criatura vira duas menores.
+        ///
+        /// As casas saem das OITO vizinhas, diagonais inclusive — a Carrapicho-Mãe
+        /// morre encostada na parede quase sempre, e limitar às quatro
+        /// ortogonais faria o traço mais visível do bestiário não acontecer
+        /// justamente nas mortes mais comuns. Sem casa livre, não parte: é a
+        /// única forma honesta de recusar.
+        /// </summary>
+        void Partir(Unidade morta)
+        {
+            var t = morta.Traco("split");
+            if (t == null || string.IsNullOrEmpty(t.IdDoMonstro)) return;
+
+            int quantas = t.Quantidade ?? 0;
+            if (quantas <= 0) return;
+
+            var candidatas = new[]
+            {
+                new Vector2Int(0, 1), new Vector2Int(0, -1),
+                new Vector2Int(-1, 0), new Vector2Int(1, 0),
+                new Vector2Int(-1, 1), new Vector2Int(1, 1),
+                new Vector2Int(-1, -1), new Vector2Int(1, -1)
+            };
+
+            // A morta é a invocadora: as filhas entram na fila no lugar dela, e
+            // não no fim — senão a Carrapicho-Mãe morta na frente da fila daria
+            // aos dois filhotes um turno imediato.
+            int postas = 0;
+            for (int i = 0; i < candidatas.Length && postas < quantas; i++)
+            {
+                var p = morta.Casa + candidatas[i];
+                if (!Mapa.Andavel(p) || EmCasa(p) != null) continue;
+                // Os filhotes herdam o papel da mãe: se ela segurava o lado,
+                // eles seguram; se ela já era invocação, eles também são.
+                if (Invocar(t.IdDoMonstro, p, morta, morta.Invocada) != null) postas++;
             }
         }
 
@@ -560,6 +719,7 @@ namespace Soterra.Motor
             {
                 u.PV = Math.Max(0, u.PV + saldo);
                 Emitir(TipoDeEvento.TiqueDeClima, u.Uid, q: saldo, detalhe: Clima);
+                ConfereEnfurecer(u);
                 if (u.PV <= 0) Morrer(u);
             }
         }
@@ -598,6 +758,14 @@ namespace Soterra.Motor
             u.Viva = false;
             u.PV = 0;
             Emitir(TipoDeEvento.Morte, u.Uid);
+
+            // Antes de conferir o fim: a explosão pode matar o último herói e a
+            // divisão pode repor o último monstro. Conferir primeiro declararia
+            // vitória contra a Carrapicho-Mãe um instante antes de os dois
+            // filhotes aparecerem.
+            Explodir(u);
+            Partir(u);
+
             ConfereFimDeBatalha();
         }
 
@@ -629,11 +797,29 @@ namespace Soterra.Motor
             finally { _r = null; }
         }
 
+        /// <summary>
+        /// O lado ainda tem quem o SUSTENTE?
+        ///
+        /// Invocação não conta. Sem esta regra, matar o Xamã não acabaria a sala
+        /// enquanto sobrasse um bichinho dele em pé — e, do outro lado, bastaria
+        /// invocar sem parar para nunca perder. Quem segura o lado é quem chegou
+        /// nele.
+        /// </summary>
+        bool TemNucleo(Lado lado)
+        {
+            for (int i = 0; i < _unidades.Count; i++)
+            {
+                var u = _unidades[i];
+                if (u.NoTabuleiro && u.Lado == lado && !u.Invocada) return true;
+            }
+            return false;
+        }
+
         void ConfereFimDeBatalha()
         {
             if (Fase != FaseDaBatalha.EmAndamento) return;
-            bool herois = Vivas(Lado.Heroi).Count > 0;
-            bool monstros = Vivas(Lado.Monstro).Count > 0;
+            bool herois = TemNucleo(Lado.Heroi);
+            bool monstros = TemNucleo(Lado.Monstro);
 
             if (!herois)
             {
