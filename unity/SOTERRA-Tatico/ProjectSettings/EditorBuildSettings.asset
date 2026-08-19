@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/Batalha.unity
+    guid: f1600fde5f5cdbf479ef730e8c86b7bc
+  - enabled: 1
     path: Assets/Scenes/Tatico.unity
     guid: 138245bc889cc344c87bbe5a6b70b109
   m_configObjects:

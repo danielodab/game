@@ -1,0 +1,349 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.UIElements;
+
+namespace Soterra.Jogo
+{
+    // Ver a nota em Partida.cs: apelidos globais contra o CS0234 dos irmãos.
+    using Motor = global::Soterra.Motor;
+    using Dados = global::Soterra.Dados;
+    using Cena = global::Soterra.Cena;
+    using Interface = global::Soterra.Interface;
+    using Batalha = global::Soterra.Batalha;
+
+    /// <summary>
+    /// O componente que faz de SOTERRA um jogo: aperta-se Play e JOGA-SE uma
+    /// sala. Liga o que já existe — <c>Montador.DeSala</c> monta, o Motor manda,
+    /// o Cérebro joga pelo bicho, o Palco e o Elenco desenham, o HUD conversa —
+    /// e não reescreve nada de nenhum deles.
+    ///
+    /// O componente é FINO de propósito: o laço mora na <see cref="Partida"/>,
+    /// que é C# puro e testada sem Play. Aqui só fica o que precisa de quadro e
+    /// de aparelho — ler o dedo, dar ritmo ao turno do monstro e repassar cada
+    /// resultado para a cena e para o HUD.
+    ///
+    /// Toque, não só mouse: o destino é celular. E NENHUMA linha de
+    /// <c>Input.</c> legado — neste projeto ele LANÇA exceção
+    /// (<c>activeInputHandler: 1</c>, CONTRATO_UNITY_F1 §3).
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class JogoDeBatalha : MonoBehaviour
+    {
+        /// <summary>A sala que o jogo abre: a primeira da Estufa Soterrada, com
+        /// o tanque e o dano de área — o mesmo grupo do jogo em JS.</summary>
+        public const string Calabouco = "greenhouse";
+        public const int IndiceDaSala = 0;
+        public static readonly string[] Herois = { "sumo", "bruxo" };
+
+        /// <summary>
+        /// Pausa entre as jogadas do monstro, em segundos. Sem ela o turno
+        /// inimigo inteiro acontece num quadro só e o jogador vê o tabuleiro
+        /// "teleportar" — meio segundo por jogada é o que dá leitura sem dar
+        /// tédio.
+        /// </summary>
+        public const float PausaEntreJogadas = 0.55f;
+
+        Dados.BancoDeDados _banco;
+        Partida _partida;
+        Cena.Palco _palco;
+        Cena.Elenco _elenco;
+        Interface.HudDeBatalha _hud;
+
+        float _espera;
+        bool _fimAnunciado;
+        string _motivoDoFim;
+        Vector2Int? _casaSobPonteiro;
+
+        /// <summary>O regente. Nulo antes de <see cref="Montar"/>.</summary>
+        public Partida Partida { get { return _partida; } }
+        public Cena.Palco Palco { get { return _palco; } }
+        public Cena.Elenco Elenco { get { return _elenco; } }
+        public Interface.HudDeBatalha Hud { get { return _hud; } }
+
+        /// <summary>A câmera do palco — é ela que o modo lote fotografa.</summary>
+        public Camera Camera { get { return _palco != null ? _palco.Camera : null; } }
+
+        void Start()
+        {
+            Montar();
+        }
+
+        /// <summary>
+        /// Monta o jogo inteiro: banco, batalha real da sala, palco com o tema
+        /// do calabouço, elenco, HUD e o regente. Público e utilizável FORA de
+        /// Play porque o modo lote (-executeMethod) nunca aperta Play — é assim
+        /// que a cena `Batalha.unity` é gerada e fotografada.
+        ///
+        /// Idempotente: o Start chama de novo na cena já salva, e remontar
+        /// destruiria o que o Palco acabou de desenhar.
+        /// </summary>
+        public void Montar()
+        {
+            if (_partida != null) return;
+
+            _banco = Dados.BancoDeDados.CarregarDeResources();
+            var batalha = Batalha.Montador.DeSala(_banco, Calabouco, IndiceDaSala, Herois);
+
+            // O tema vem do calabouço — e a sala pode destoar dele
+            // (`sceneryTheme`). Sem isto a Cisterna sairia com o verde da
+            // Estufa, o defeito que a rodada da Cena já pagou.
+            var calabouco = _banco.AchaCalabouco(Calabouco);
+            var sala = calabouco.Salas[IndiceDaSala];
+            _palco = AcharOuCriarPalco();
+            _palco.Montar(batalha.Mapa,
+                          Cena.TemaDoCenario.De(sala.TemaDeCenario ?? calabouco.Tema,
+                                                calabouco.Paleta));
+
+            _elenco = new Cena.Elenco(_palco, _banco);
+            _partida = new Partida(_banco, batalha, Motor.Sorte.DeTexto("soterra-jogo"));
+
+            _hud = AcharOuCriarHud();
+            _hud.Montar();
+            _hud.Tela.AoEscolherFeitico += AoEscolherFeitico;
+            _hud.Tela.AoEncerrarTurno += AoEncerrarTurno;
+
+            // A abertura já aconteceu dentro do construtor da batalha (tique de
+            // clima, veneno de quem abre) — repassar os eventos dela é o que
+            // impede a primeira imagem de discordar do primeiro estado.
+            AposAcao(batalha.Abertura);
+        }
+
+        // ================================================================ LAÇO
+
+        void Update()
+        {
+            if (_partida == null) return;
+            if (_partida.Acabou) return;
+
+            if (_partida.TurnoDoJogador)
+            {
+                _espera = 0f;
+                LerToque();
+                PreverAreaSobOMouse();
+            }
+            else
+            {
+                // O monstro joga em parcelas com pausa — a decisão continua do
+                // Cérebro; aqui só mora o relógio.
+                _espera += Time.deltaTime;
+                if (_espera >= PausaEntreJogadas)
+                {
+                    _espera = 0f;
+                    AposAcao(_partida.JogadaDoMonstro());
+                }
+            }
+        }
+
+        /// <summary>
+        /// Todo caminho de mudança desagua aqui: sincroniza o elenco com a
+        /// lista REAL do motor (o que cria quem nasceu por summon/split e tira
+        /// quem caiu), reacende o realce, repinta o HUD e, quando for o caso,
+        /// anuncia o fim. Um funil só, para a cena nunca ficar meio-atualizada.
+        /// </summary>
+        void AposAcao(Motor.Resultado r)
+        {
+            var batalha = _partida.Batalha;
+            _elenco.Sincronizar(Fichas.De(batalha, _banco));
+            _casaSobPonteiro = null;
+            AtualizarRealce();
+            _hud.Mostrar(_partida.Quadro());
+
+            if (r != null)
+            {
+                // O motivo do fim viaja num evento; guardado aqui porque o
+                // anúncio pode sair de OUTRA chamada (a fúria encerra no começo
+                // de rodada, dentro de um EncerrarTurno qualquer).
+                for (int i = 0; i < r.Eventos.Count; i++)
+                    if (r.Eventos[i].Tipo == Motor.TipoDeEvento.FimDeBatalha)
+                        _motivoDoFim = r.Eventos[i].Detalhe;
+
+                // A recusa vira texto na ficha do topo. Foi para isto que o
+                // motor escreveu os motivos em português — o silêncio diante do
+                // clique era o defeito da linha JS.
+                if (!r.Valido && !string.IsNullOrEmpty(r.Recusa) && !_partida.Acabou)
+                    _hud.Tela.MostrarFicha("Jogada recusada", string.Empty, r.Recusa);
+            }
+
+            AnunciarFim();
+        }
+
+        /// <summary>Vitória e derrota viram mensagem simples na ficha do topo —
+        /// a tela bonita de fim é de outra rodada.</summary>
+        void AnunciarFim()
+        {
+            if (_fimAnunciado || !_partida.Acabou) return;
+            _fimAnunciado = true;
+
+            _palco.LimparRealce();
+            if (_partida.Batalha.Fase == Motor.FaseDaBatalha.Vitoria)
+                _hud.Tela.MostrarFicha("Vitória!", "rodada " + _partida.Batalha.Rodada,
+                                       "A sala está limpa.");
+            else
+                _hud.Tela.MostrarFicha("Derrota", "rodada " + _partida.Batalha.Rodada,
+                                       string.IsNullOrEmpty(_motivoDoFim)
+                                           ? "O grupo caiu." : _motivoDoFim);
+        }
+
+        // =============================================================== TOQUE
+
+        void AoEscolherFeitico(string id)
+        {
+            _partida.EscolherFeitico(id);
+            AposAcao(null);
+        }
+
+        void AoEncerrarTurno()
+        {
+            AposAcao(_partida.EncerrarTurno());
+        }
+
+        void LerToque()
+        {
+            var toque = ToqueDesteQuadro();
+            if (!toque.HasValue) return;
+
+            // O HUD cobre as faixas de cima e de baixo; o que cai nelas é dos
+            // botões, não do chão. Sem esta pergunta, tocar num feitiço da
+            // barra também "clicaria" na casa atrás dele.
+            if (SobreAInterface(toque.Value)) return;
+
+            var casa = Apontador.CasaSobPonteiro(Camera, _palco, toque.Value);
+            if (!casa.HasValue) return;
+
+            AposAcao(_partida.TocarCasa(casa.Value));
+        }
+
+        /// <summary>Onde o dedo ou o botão do mouse DESCEU neste quadro. Toque
+        /// primeiro: no celular há Touchscreen e pode não haver Mouse.</summary>
+        static Vector2? ToqueDesteQuadro()
+        {
+            var tela = Touchscreen.current;
+            if (tela != null && tela.primaryTouch.press.wasPressedThisFrame)
+                return tela.primaryTouch.position.ReadValue();
+
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                return mouse.position.ReadValue();
+
+            return null;
+        }
+
+        /// <summary>
+        /// O ponto de tela cai em cima de algo tocável do HUD? Pergunta feita ao
+        /// próprio painel (<c>Pick</c>), que já respeita os `picking-mode` do
+        /// layout — o vão do tabuleiro é `Ignore` e devolve nulo. A conversão
+        /// inverte o Y porque o Input System mede da borda de BAIXO e o painel
+        /// mede da de cima.
+        /// </summary>
+        bool SobreAInterface(Vector2 ponto)
+        {
+            if (_hud == null || _hud.Tela == null) return false;
+            var raiz = _hud.Tela.Raiz;
+            if (raiz == null || raiz.panel == null) return false;
+
+            var noPainel = RuntimePanelUtils.ScreenToPanel(
+                raiz.panel, new Vector2(ponto.x, Screen.height - ponto.y));
+            return raiz.panel.Pick(noPainel) != null;
+        }
+
+        /// <summary>
+        /// Com feitiço na mão e um MOUSE presente, a área do feitiço acompanha o
+        /// ponteiro — é o que deixa o jogador ver o que a explosão pega antes de
+        /// soltar. Só mouse: no toque não existe "pairar", e a área aparece de
+        /// qualquer forma no realce da casa válida tocada.
+        /// </summary>
+        void PreverAreaSobOMouse()
+        {
+            if (_partida.FeiticoEscolhido == null || Mouse.current == null) return;
+
+            var casa = Apontador.CasaSobPonteiro(
+                Camera, _palco, Mouse.current.position.ReadValue());
+            if (casa == _casaSobPonteiro) return;
+
+            _casaSobPonteiro = casa;
+            AtualizarRealce();
+        }
+
+        // ============================================================== REALCE
+
+        /// <summary>
+        /// O realce diz sempre a mesma coisa que o motor: sem feitiço na mão,
+        /// onde dá para pisar (e onde pisar é arriscado); com feitiço, onde ele
+        /// pode cair — e, sob o mouse, o que ele pega. Tudo perguntado ao motor
+        /// na hora, nunca guardado: realce guardado é realce que mente um turno
+        /// depois.
+        /// </summary>
+        void AtualizarRealce()
+        {
+            _palco.LimparRealce();
+            if (!_partida.TurnoDoJogador) return;
+
+            var batalha = _partida.Batalha;
+            var feitico = _partida.FeiticoEscolhido;
+
+            if (feitico == null)
+            {
+                var seguras = new List<Vector2Int>();
+                var arriscadas = new List<Vector2Int>();
+                foreach (var par in batalha.AlcanceDePasso())
+                    (batalha.Arriscada(par.Key) ? arriscadas : seguras).Add(par.Key);
+                _palco.RealcarPasso(seguras);
+                _palco.RealcarPasso(arriscadas, true);
+                return;
+            }
+
+            _palco.RealcarAlvo(batalha.AlvosDe(feitico), CorDoFeitico(feitico));
+
+            if (_casaSobPonteiro.HasValue && batalha.PodeConjurar(feitico, _casaSobPonteiro.Value))
+                _palco.RealcarArea(batalha.AreaDe(feitico, _casaSobPonteiro.Value));
+        }
+
+        /// <summary>A cor do alvo é a do ELEMENTO do feitiço, do acervo — é a
+        /// única pista visual de qual feitiço está na mão.</summary>
+        Color CorDoFeitico(string feiticoId)
+        {
+            var f = _banco.AchaFeitico(feiticoId);
+            Dados.InfoDeElemento info;
+            Color cor;
+            if (f != null && f.Elemento != null && _banco.InfoDeElementos != null &&
+                _banco.InfoDeElementos.TryGetValue(f.Elemento, out info) && info != null &&
+                ColorUtility.TryParseHtmlString(info.Cor, out cor))
+                return cor;
+            return Cena.Palco.CorAlcance;
+        }
+
+        // ============================================================ MONTAGEM
+
+        /// <summary>
+        /// Acha por nome antes de criar: a cena `Batalha.unity` é SALVA com o
+        /// palco e o HUD dentro, e o Start remonta em cima dela — criar de novo
+        /// deixaria dois palcos disputando a mesma câmera.
+        /// </summary>
+        Cena.Palco AcharOuCriarPalco()
+        {
+            var t = transform.Find("Palco");
+            if (t != null)
+            {
+                var pronto = t.GetComponent<Cena.Palco>();
+                if (pronto != null) return pronto;
+            }
+            var go = new GameObject("Palco");
+            go.transform.SetParent(transform, false);
+            return go.AddComponent<Cena.Palco>();
+        }
+
+        Interface.HudDeBatalha AcharOuCriarHud()
+        {
+            var t = transform.Find("Hud");
+            if (t != null)
+            {
+                var pronto = t.GetComponent<Interface.HudDeBatalha>();
+                if (pronto != null) return pronto;
+            }
+            var go = new GameObject("Hud");
+            go.transform.SetParent(transform, false);
+            return go.AddComponent<Interface.HudDeBatalha>();
+        }
+    }
+}
