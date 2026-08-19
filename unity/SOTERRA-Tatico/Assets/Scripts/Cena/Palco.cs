@@ -59,8 +59,24 @@ namespace Soterra.Cena
         const float LadoChao = 0.96f;       // a junta escura entre lajes desenha a grade
         const float EspessuraChao = 0.14f;  // laje com topo exatamente em y = 0
 
-        const float LadoRealce = 0.84f;     // mesma proporção do overlay do jogo em JS
-        const float FolgaRealce = 0.05f;    // acima do topo da casa: sem isso, briga de Z com a laje
+        // As três camadas de realce do jogo em JS, copiadas de renderer3d_v2.js:
+        // passo `ovTile(..., 0.18, 0.09, 0.84)`, alvo `(..., 0.34, 0.11, 0.80)`,
+        // área `(..., forca, 0.13, 0.90)` — os dois últimos números de cada uma
+        // são altura e lado.
+        //
+        // O que importa é a ALTURA subir a cada camada: as três se sobrepõem na
+        // mesma casa o tempo todo — a área do feitiço cai DENTRO do alcance de
+        // passo — e duas placas transparentes na mesma altura brigam de Z,
+        // piscando de uma cor para a outra conforme o ângulo. O lado também
+        // muda, e é o que faz a sobreposição ler como quadrado dentro de
+        // quadrado em vez de virar uma mancha só.
+        const float FolgaPasso = 0.09f, LadoPasso = 0.84f;
+        const float FolgaAlvo = 0.11f, LadoAlvo = 0.80f;
+        const float FolgaArea = 0.13f, LadoArea = 0.90f;
+
+        // O realce sem camada declarada entra como o de passo, que é o mais baixo.
+        const float LadoRealce = LadoPasso;
+        const float FolgaRealce = FolgaPasso;
 
         // ================================================================= CÂMERA
 
@@ -121,6 +137,45 @@ namespace Soterra.Cena
         /// não ter de inventar uma.</summary>
         public static readonly Color CorAlcance = De(0x28c8ff);
 
+        /// <summary>Casa alcançável mas ARRISCADA — o JS troca o azul por este
+        /// laranja quando andar até ali entrega o herói.</summary>
+        public static readonly Color CorRisco = De(0xff8a24);
+
+        /// <summary>Área de efeito do feitiço (`ovTile(..., '#ff5a28', ...)` no
+        /// JS). A cor do ALVO não é constante: é a do elemento do feitiço, e
+        /// quem conjura é que sabe qual é.</summary>
+        public static readonly Color CorArea = De(0xff5a28);
+
+        /// <summary>
+        /// Selo de lado do jogo em JS (`u.side === 'player' ? 0x6fd8ff :
+        /// 0xff7a5a`, renderer3d_v2.js). É a leitura de "quem é meu" mais rápida
+        /// que o tabuleiro tem, e por isso não é derivada de nada: é literal.
+        /// </summary>
+        public static readonly Color CorAliado = De(0x6fd8ff);
+
+        /// <summary>Selo de lado do inimigo — ver <see cref="CorAliado"/>.</summary>
+        public static readonly Color CorInimigo = De(0xff7a5a);
+
+        // Opacidade de cada camada. O JS usa 0,18 no passo, 0,34 no alvo e um
+        // valor variável (~0,5) na área. Aqui elas vão DOBRADAS, e o motivo é
+        // que a placa não é a mesma coisa nos dois lugares: lá ela é desenhada
+        // sobre um chão mais claro e ainda ganha por cima um anel pulsante que
+        // reforça a leitura quadro a quadro; aqui é uma placa unlit sozinha, e
+        // parada, sobre o verde escuro da Estufa — nas alfas cruas do JS o
+        // alcance simplesmente não aparece na foto.
+        /// <summary>Opacidade do realce de alcance de passo.</summary>
+        public const float AlfaPasso = 0.36f;
+        /// <summary>
+        /// Opacidade do realce de casa-alvo. Sobe MENOS que as outras duas de
+        /// propósito: o conjunto de alvos é, de longe, o maior dos três — no
+        /// primeiro feitiço do Bruxo são 54 casas contra 11 de passo e 5 de
+        /// área. Na mesma opacidade das outras, ele repinta meio tabuleiro e
+        /// engole o alcance de passo que está por baixo.
+        /// </summary>
+        public const float AlfaAlvo = 0.45f;
+        /// <summary>Opacidade do realce de área de efeito.</summary>
+        public const float AlfaArea = 0.85f;
+
         // ================================================================= ESTADO
 
         Transform _raiz;          // o tabuleiro: é ELE que gira
@@ -132,7 +187,6 @@ namespace Soterra.Cena
 
         Material _fosco, _marcador;
         Mesh _cubo;
-        MaterialPropertyBlock _bloco;
 
         readonly Dictionary<Vector2Int, GameObject> _pecas = new Dictionary<Vector2Int, GameObject>();
         readonly Dictionary<Vector2Int, float> _topo = new Dictionary<Vector2Int, float>();
@@ -140,6 +194,7 @@ namespace Soterra.Cena
         readonly List<Vector2Int> _realcadas = new List<Vector2Int>();
 
         static readonly int IdCorBase = Shader.PropertyToID("_BaseColor");
+        static readonly int IdCorAntiga = Shader.PropertyToID("_Color");
 
         /// <summary>A câmera do palco. Quem fotografa precisa dela.</summary>
         public Camera Camera { get { return _cam; } }
@@ -149,6 +204,27 @@ namespace Soterra.Cena
 
         /// <summary>Casas realçadas neste momento, na ordem em que entraram.</summary>
         public IReadOnlyList<Vector2Int> Realcadas { get { return _realcadas; } }
+
+        /// <summary>
+        /// Altura do mais alto que está EM CIMA do tabuleiro, em unidades de
+        /// mundo. Quem põe unidade avisa aqui (o <see cref="Elenco"/> faz isso
+        /// sozinho) para o enquadramento não cortar a cabeça de ninguém: a
+        /// parede tem 1 m, mas um chefe tem 5, e a câmera só sabe o que lhe
+        /// contam. Zero enquadra pelo tabuleiro nu.
+        /// </summary>
+        public float AlturaDeCena { get; set; }
+
+        /// <summary>
+        /// A raiz que GIRA. Quem põe coisa em cima do tabuleiro — unidade,
+        /// adereço, marca de terreno — pendura aqui, e não no Palco: pendurado
+        /// no Palco, o objeto ficaria parado enquanto o chão embaixo dele gira,
+        /// e a unidade acabaria em outra casa depois do primeiro <see cref="Girar"/>.
+        ///
+        /// Cuidado que vem junto: <see cref="Montar"/> apaga TODOS os filhos
+        /// desta raiz. Quem pendurou tem de repovoar depois de remontar — é o
+        /// que o <see cref="Elenco"/> faz ao notar que o próprio grupo morreu.
+        /// </summary>
+        public Transform Tabuleiro { get { return Raiz; } }
 
         // ================================================================= MONTAR
 
@@ -330,6 +406,19 @@ namespace Soterra.Cena
         /// </summary>
         public void Realcar(IEnumerable<Vector2Int> casas, Color cor)
         {
+            Realcar(casas, cor, FolgaRealce, LadoRealce);
+        }
+
+        /// <summary>
+        /// Realce numa camada escolhida: <paramref name="folga"/> é a altura
+        /// acima do topo da casa e <paramref name="lado"/> o tamanho da placa.
+        /// Público porque quem empilha dois realces na mesma casa precisa
+        /// separá-los — ver as constantes de camada e
+        /// <see cref="RealcarPasso"/>, <see cref="RealcarAlvo"/> e
+        /// <see cref="RealcarArea"/>.
+        /// </summary>
+        public void Realcar(IEnumerable<Vector2Int> casas, Color cor, float folga, float lado)
+        {
             if (casas == null || _mapa == null || _realces == null) return;
 
             foreach (var casa in casas)
@@ -339,11 +428,47 @@ namespace Soterra.Cena
                 if (!_mapa.Dentro(casa)) continue;
 
                 var go = PlacaLivre();
-                go.transform.localPosition = Local(casa, TopoDe(casa) + FolgaRealce);
+                go.transform.localPosition = Local(casa, TopoDe(casa) + folga);
+                // O lado vai aqui e não na criação: a mesma placa volta do bolso
+                // servindo ora de passo, ora de área, e uma escala presa ao
+                // nascimento faria o tamanho depender de quem pegou a placa antes.
+                go.transform.localScale = new Vector3(lado, 0.02f, lado);
                 Pintar(go.GetComponent<Renderer>(), cor);
                 go.SetActive(true);
                 _realcadas.Add(casa);
             }
+        }
+
+        /// <summary>Alcance de passo: azul, na camada mais baixa. Passe
+        /// <c>arriscadas</c> para trocar o azul pelo laranja de risco.</summary>
+        public void RealcarPasso(IEnumerable<Vector2Int> casas, bool arriscadas = false)
+        {
+            Realcar(casas, Com(arriscadas ? CorRisco : CorAlcance, AlfaPasso),
+                    FolgaPasso, LadoPasso);
+        }
+
+        /// <summary>
+        /// Casas em que o feitiço PODE ser largado. A cor vem de fora porque no
+        /// jogo ela é a do elemento do feitiço (`elCol` no JS) — fixar uma aqui
+        /// apagaria a única pista de qual feitiço está na mão.
+        /// </summary>
+        public void RealcarAlvo(IEnumerable<Vector2Int> casas, Color corDoElemento)
+        {
+            Realcar(casas, Com(corDoElemento, AlfaAlvo), FolgaAlvo, LadoAlvo);
+        }
+
+        /// <summary>O que o feitiço PEGA ao cair: a camada mais alta e a mais
+        /// opaca, porque é a que decide a jogada.</summary>
+        public void RealcarArea(IEnumerable<Vector2Int> casas)
+        {
+            Realcar(casas, Com(CorArea, AlfaArea), FolgaArea, LadoArea);
+        }
+
+        /// <summary>A mesma cor com outra opacidade. Existe para ninguém ter de
+        /// reescrever os três canais só para mexer no alfa.</summary>
+        public static Color Com(Color cor, float alfa)
+        {
+            return new Color(cor.r, cor.g, cor.b, alfa);
         }
 
         /// <summary>Apaga todos os realces.</summary>
@@ -428,33 +553,62 @@ namespace Soterra.Cena
             var rot = Quaternion.Euler(Inclinacao, Guinada, 0f);
             _cam.transform.rotation = rot;
 
-            // As oito quinas da caixa do tabuleiro, já no mundo (a raiz pode
-            // estar girada). O topo entra na conta: sem ele, a parede da borda do
-            // fundo sai cortada pela metade justamente nos mapas grandes.
-            var quinas = new Vector3[8];
-            int n = 0;
-            float mx = _larg * 0.5f * Passo, mz = _alt * 0.5f * Passo;
-            for (int i = 0; i < 2; i++)
-                for (int j = 0; j < 2; j++)
-                    for (int k = 0; k < 2; k++)
-                        quinas[n++] = Raiz.TransformPoint(new Vector3(
-                            i == 0 ? -mx : mx,
-                            k == 0 ? -EspessuraChao : AlturaAlto,
-                            j == 0 ? -mz : mz));
-
-            var centro = Vector3.zero;
-            for (int i = 0; i < 8; i++) centro += quinas[i];
-            centro /= 8f;
-
+            // A medida é feita no espaço da CÂMERA, casa por casa do que está
+            // desenhado — e não numa caixa em volta do retângulo do mapa.
+            //
+            // A diferença é grande e é o recorte: a sala da Estufa é 21×17 mas
+            // tem as quatro quinas em '~', e numa câmera a 45° são justamente as
+            // quinas do retângulo que definem as pontas do losango na tela.
+            // Enquadrando a caixa, mais de um terço da imagem fica gasto com
+            // buraco que ninguém desenhou. Num celular esse terço é o que decide
+            // se o tabuleiro cabe no polegar.
+            //
+            // O topo entra na conta: sem ele, a parede da borda do fundo sai
+            // cortada pela metade nos mapas grandes — e desde que há UNIDADE em
+            // cima do tabuleiro, o que estoura primeiro não é a parede de 1 m e
+            // sim o chefe de 5.
+            float teto = Mathf.Max(AlturaAlto, AlturaDeCena);
             var inversa = Quaternion.Inverse(rot);
-            float larguraMeia = 0f, alturaMeia = 0f, profundidade = 0f;
-            for (int i = 0; i < 8; i++)
+
+            float minX = 0f, maxX = 0f, minY = 0f, maxY = 0f, minZ = 0f, maxZ = 0f;
+            bool algum = false;
+
+            for (int y = 0; y < _alt; y++)
             {
-                var p = inversa * (quinas[i] - centro);
-                larguraMeia = Mathf.Max(larguraMeia, Mathf.Abs(p.x));
-                alturaMeia = Mathf.Max(alturaMeia, Mathf.Abs(p.y));
-                profundidade = Mathf.Max(profundidade, Mathf.Abs(p.z));
+                for (int x = 0; x < _larg; x++)
+                {
+                    var casa = new Vector2Int(x, y);
+                    if (_mapa != null && _mapa.Em(casa) == TipoDeCasa.Vazio) continue;
+
+                    for (int q = 0; q < 8; q++)
+                    {
+                        var local = Local(casa, (q & 4) == 0 ? -EspessuraChao : teto);
+                        local.x += ((q & 1) == 0 ? -0.5f : 0.5f) * Passo;
+                        local.z += ((q & 2) == 0 ? -0.5f : 0.5f) * Passo;
+                        var p = inversa * Raiz.TransformPoint(local);
+
+                        if (!algum)
+                        {
+                            minX = maxX = p.x; minY = maxY = p.y; minZ = maxZ = p.z;
+                            algum = true;
+                        }
+                        else
+                        {
+                            minX = Mathf.Min(minX, p.x); maxX = Mathf.Max(maxX, p.x);
+                            minY = Mathf.Min(minY, p.y); maxY = Mathf.Max(maxY, p.y);
+                            minZ = Mathf.Min(minZ, p.z); maxZ = Mathf.Max(maxZ, p.z);
+                        }
+                    }
+                }
             }
+            if (!algum) return;
+
+            float larguraMeia = (maxX - minX) * 0.5f;
+            float alturaMeia = (maxY - minY) * 0.5f;
+            float profundidade = (maxZ - minZ) * 0.5f;
+            var centro = rot * new Vector3((minX + maxX) * 0.5f,
+                                           (minY + maxY) * 0.5f,
+                                           (minZ + maxZ) * 0.5f);
 
             // Proporção inválida acontece de verdade: câmera recém-criada em modo
             // lote pode devolver 0. 1,6 é o 1280×800 que lote.ps1 fotografa.
@@ -484,7 +638,14 @@ namespace Soterra.Cena
             }
             sol.type = LightType.Directional;
             sol.color = CorSol;
-            sol.intensity = 1.12f;                 // mesma do jogo em JS
+            // O jogo em JS usa 1,12, e na rodada 1 isso bastava: o tabuleiro era
+            // cubo e cor chapada, e cubo escuro ainda tem silhueta. Com PESSOAS
+            // em cima ele deixou de bastar — um herói de 1,65 m ocupa umas
+            // quatro dezenas de pixels num celular, e nessa escala a leitura é
+            // toda de valor: rosto, arma e capa somem juntos num vulto só se a
+            // cena estiver escura. O chão da Estufa (#35513a) já é dos mais
+            // escuros do jogo, e é justamente onde a batalha começa.
+            sol.intensity = 1.85f;
             sol.shadows = LightShadows.Soft;
             // A sombra é o quarto sinal que separa alto de baixo: o alto lança uma
             // faixa longa, o baixo um risco curto. Por isso o sol fica baixo (50°)
@@ -493,10 +654,13 @@ namespace Soterra.Cena
 
             // A hemisférica do jogo em JS vira ambiente de três faixas: sem ela a
             // face virada para longe do sol fica preta e o cubo perde o volume.
+            // Subiu junto com o sol, e pelo mesmo motivo: é o ambiente que
+            // levanta a face virada para longe da luz, e é justamente essa face
+            // que fica voltada para a câmera em metade das unidades.
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = CorCeu * 0.82f;
-            RenderSettings.ambientGroundColor = CorChaoAmbiente * 0.82f;
-            RenderSettings.ambientEquatorColor = Color.Lerp(CorCeu, CorChaoAmbiente, 0.5f) * 0.60f;
+            RenderSettings.ambientSkyColor = CorCeu * 1.00f;
+            RenderSettings.ambientGroundColor = CorChaoAmbiente * 1.00f;
+            RenderSettings.ambientEquatorColor = Color.Lerp(CorCeu, CorChaoAmbiente, 0.5f) * 0.78f;
         }
 
         // ============================================================== MATERIAIS
@@ -562,12 +726,63 @@ namespace Soterra.Cena
             }
         }
 
-        void Pintar(Renderer r, Color cor)
+        /// <summary>
+        /// O material fosco do palco, para quem desenha EM CIMA do tabuleiro
+        /// usar o mesmo. Um material só no projeto inteiro, e a cor por objeto
+        /// em <see cref="Pintar"/> — ver §3 do contrato da rodada 1.
+        /// </summary>
+        public Material MaterialFosco { get { return Fosco; } }
+
+        /// <summary>O material chapado e translúcido dos marcadores — realce,
+        /// selo de lado, marca de unidade.</summary>
+        public Material MaterialMarcador { get { return Marcador; } }
+
+        // Um bloco só, reaproveitado. `new MaterialPropertyBlock()` por chamada
+        // aloca a cada unidade de cada quadro, e o coletor cobra isso na hora
+        // errada — no meio de uma animação de passo.
+        static MaterialPropertyBlock _blocoCompartilhado;
+
+        /// <summary>
+        /// Pinta um renderizador. Estático e público porque quem desenha unidade
+        /// em cima do tabuleiro precisa da MESMA disciplina: cor em
+        /// <c>MaterialPropertyBlock</c>, nunca em material clonado.
+        ///
+        /// `renderer.material` fora de Play devolve uma cópia descartada — a
+        /// pintura nem chega na tela — e material distinto por objeto criado em
+        /// tempo de edição faz o SRP Batcher desenhar tudo com a cor do
+        /// primeiro. As duas armadilhas estão na §3 do contrato da rodada 1 e as
+        /// duas já custaram uma rodada.
+        /// </summary>
+        public static void Pintar(Renderer r, Color cor)
         {
-            if (_bloco == null) _bloco = new MaterialPropertyBlock();
-            r.GetPropertyBlock(_bloco);
-            _bloco.SetColor(IdCorBase, cor);
-            r.SetPropertyBlock(_bloco);
+            if (r == null) return;
+            if (_blocoCompartilhado == null) _blocoCompartilhado = new MaterialPropertyBlock();
+            r.GetPropertyBlock(_blocoCompartilhado);
+            Cor(cor);
+            r.SetPropertyBlock(_blocoCompartilhado);
+        }
+
+        /// <summary>
+        /// Pinta UM material de um renderizador com vários. Um personagem do
+        /// acervo traz corpo, roupa e metal em materiais separados, e pintar o
+        /// renderizador inteiro de uma cor só apagaria essa separação.
+        /// </summary>
+        public static void Pintar(Renderer r, Color cor, int material)
+        {
+            if (r == null) return;
+            if (_blocoCompartilhado == null) _blocoCompartilhado = new MaterialPropertyBlock();
+            r.GetPropertyBlock(_blocoCompartilhado, material);
+            Cor(cor);
+            r.SetPropertyBlock(_blocoCompartilhado, material);
+        }
+
+        static void Cor(Color cor)
+        {
+            _blocoCompartilhado.SetColor(IdCorBase, cor);
+            // `_Color` junto: o material que a Unity gera ao importar um FBX nem
+            // sempre é URP/Lit — quando cai no shader antigo, a cor mora em
+            // `_Color` e só `_BaseColor` não mudaria nada, calado.
+            _blocoCompartilhado.SetColor(IdCorAntiga, cor);
         }
 
         // Uma malha de cubo emprestada de um primitivo descartado na hora. O

@@ -245,6 +245,14 @@ namespace Soterra.Testes.Cena
                     for (int x = 0; x < grande.Largura; x++)
                     {
                         var casa = new Vector2Int(x, y);
+                        // O '~' fica de FORA da conta. Ele não é tabuleiro: é o
+                        // escuro em volta, e o enquadramento não desenha nada
+                        // ali. Cobrar que ele caiba obrigaria a câmera a
+                        // enquadrar as quinas do retângulo — que numa vista a
+                        // 45° são as pontas do losango — e um terço da tela de
+                        // celular iria para buraco vazio.
+                        if (grande.Em(casa) == Casa.Vazio) continue;
+
                         // o TOPO da casa, não o chão: parede de borda cortada ao
                         // meio é o jeito favorito de este enquadramento falhar
                         var v = _palco.Camera.WorldToViewportPoint(
