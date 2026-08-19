@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SOTERRA — a tela de batalha, em UI Toolkit.
+
+  Mora em `Assets/UI/Resources/` porque a única forma de carregar um layout sem
+  arrastar referência no Inspector é `Resources.Load<VisualTreeAsset>` — e este
+  projeto é escrito por linha de comando: interface que só existe montada no
+  Editor é interface que ninguém consegue revisar em diff.
+
+  A folha de estilo NÃO é presa aqui por `<Style src=...>`: o caminho do `src`
+  se resolve na importação, e quando ele quebra o UXML entra quebrado, calado,
+  e a tela sobe sem estilo nenhum. `TelaDeBatalha` anexa a folha em C#, onde a
+  falta vira exceção com nome de arquivo.
+
+  ORDEM VERTICAL — é a regra de celular, não gosto: informação EM CIMA, controle
+  EMBAIXO. A mão que segura o telefone tapa o terço de baixo da tela; o que ela
+  tapa tem de ser o que ela está tocando, nunca o que ela precisa ler.
+
+  `picking-mode="Ignore"` na raiz e no vão do meio porque a interface já engoliu
+  o tabuleiro inteiro uma vez na linha JS (commit "CRÍTICO: a interface engolia
+  todo clique e arrasto do tabuleiro"). Elemento transparente que cobre a tela
+  continua recebendo o toque; só o `Ignore` deixa o dedo chegar no chão da sala.
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+
+  <ui:VisualElement name="hud-batalha" class="hud hud--retrato" picking-mode="Ignore">
+
+    <!-- ================================================== TOPO: o que se lê -->
+    <ui:VisualElement name="faixa-superior" class="faixa faixa--topo">
+
+      <ui:VisualElement name="cabecalho" class="cabecalho">
+        <ui:Label name="rotulo-rodada" class="cabecalho__rodada" text="Rodada —" />
+        <ui:Label name="rotulo-clima" class="cabecalho__clima" text="" />
+      </ui:VisualElement>
+
+      <!-- Quem joga agora e quem vem depois. As fichas entram por C#. -->
+      <ui:VisualElement name="ordem-de-iniciativa" class="iniciativa" />
+
+      <!--
+        A FICHA. É o que substitui o `hover` do hud.js: no toque não existe
+        "passar por cima", então a explicação do feitiço ou da criatura não pode
+        morar num balão que só aparece com o mouse. Ela mora aqui, fixa, no alto
+        da tela, e troca de conteúdo conforme o que o dedo escolheu embaixo.
+      -->
+      <ui:VisualElement name="ficha" class="ficha">
+        <ui:Label name="ficha-titulo" class="ficha__titulo" text="" />
+        <ui:Label name="ficha-numeros" class="ficha__numeros" text="" />
+        <ui:Label name="ficha-texto" class="ficha__texto" text="" />
+      </ui:VisualElement>
+
+    </ui:VisualElement>
+
+    <!-- O tabuleiro aparece por este vão. Nada aqui recebe toque. -->
+    <ui:VisualElement name="vao-do-tabuleiro" class="vao" picking-mode="Ignore" />
+
+    <!-- =============================================== BAIXO: o que se toca -->
+    <ui:VisualElement name="faixa-inferior" class="faixa faixa--base">
+
+      <ui:VisualElement name="painel-de-recursos" class="recursos">
+        <ui:Label name="rotulo-nome" class="recursos__nome" text="" />
+
+        <ui:VisualElement name="medidor-pv" class="medidor">
+          <ui:VisualElement name="medidor-pv-cheio" class="medidor__cheio" picking-mode="Ignore" />
+          <ui:Label name="rotulo-pv" class="medidor__texto" text="— / — PV" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="linha-de-pontos" class="recursos__linha">
+          <ui:VisualElement class="pastilha pastilha--pa">
+            <ui:Label name="rotulo-pa" class="pastilha__texto" text="PA —/—" />
+            <ui:VisualElement name="pips-pa" class="pips pips--pa" picking-mode="Ignore" />
+          </ui:VisualElement>
+          <ui:VisualElement class="pastilha pastilha--pp">
+            <ui:Label name="rotulo-pp" class="pastilha__texto" text="PP —/—" />
+            <ui:VisualElement name="pips-pp" class="pips pips--pp" picking-mode="Ignore" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- Os botões de feitiço entram por C#, a partir do acervo. -->
+      <ui:VisualElement name="barra-de-feiticos" class="feiticos" />
+
+      <ui:VisualElement name="acoes" class="acoes">
+        <ui:Button name="botao-encerrar-turno" class="alvo botao botao--encerrar" text="Encerrar turno" />
+      </ui:VisualElement>
+
+    </ui:VisualElement>
+
+  </ui:VisualElement>
+
+</ui:UXML>

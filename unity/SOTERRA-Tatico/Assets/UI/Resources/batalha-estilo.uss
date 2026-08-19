@@ -1,0 +1,461 @@
+/*
+  SOTERRA — estilo da tela de batalha.
+
+  Nome diferente do `.uxml` de propósito: `Resources.Load<T>` desempata por
+  tipo, mas dois arquivos "batalha" na mesma pasta de Resources é a espécie de
+  ambiguidade que só aparece no player, tarde.
+
+  NENHUM `:hover` neste arquivo, e não por esquecimento. O destino é celular:
+  o dedo não passa por cima de nada, ele toca ou não toca. Estado que só
+  aparece no `hover` é estado que no telefone não existe — a informação que o
+  hud.js mostrava em balão de mouse foi para a ficha fixa do topo.
+*/
+
+/* ==========================================================================
+   ALVO DE TOQUE — a regra que manda em todas as outras.
+
+   44×44 é o piso, não o alvo. Abaixo disso o dedo erra, e quem erra culpa o
+   jogo, não o próprio polegar. Com o painel em `ConstantPhysicalSize` e
+   `referenceDpi = 160` (ver HudDeBatalha), 1px daqui é 1 ponto de verdade:
+   44px = 44/160 de polegada ≈ 7 mm, que é a medida das duas guias de celular.
+
+   Todo elemento que recebe toque nesta tela carrega esta classe, e o teste
+   `ToqueTests` percorre a árvore montada cobrando isso peça por peça.
+   ========================================================================== */
+.alvo {
+    min-width: 44px;
+    min-height: 44px;
+}
+
+/* ============================================================ ESTRUTURA */
+
+.hud {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: column;
+    justify-content: space-between;
+    color: rgb(232, 237, 242);
+    font-size: 13px;
+}
+
+.faixa {
+    background-color: rgba(12, 14, 18, 0.92);
+    border-left-color: rgba(255, 255, 255, 0.06);
+    border-right-color: rgba(255, 255, 255, 0.06);
+    border-top-color: rgba(255, 255, 255, 0.06);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+.faixa--topo {
+    border-bottom-width: 1px;
+}
+
+.faixa--base {
+    border-top-width: 1px;
+}
+
+/* O vão do meio existe para NÃO existir: é onde o tabuleiro aparece. Sem
+   `flex-grow` ele encolheria a zero e as duas faixas se encostariam no meio
+   da tela. */
+.vao {
+    flex-grow: 1;
+}
+
+/* ============================================================== CABEÇALHO */
+
+.cabecalho {
+    flex-direction: row;
+    align-items: center;
+}
+
+.cabecalho__rodada {
+    -unity-font-style: bold;
+    font-size: 14px;
+    margin-right: 8px;
+}
+
+.cabecalho__clima {
+    color: rgb(255, 208, 138);
+    font-size: 12px;
+}
+
+/* ========================================================== INICIATIVA */
+
+/* `wrap` e não rolagem: a ordem de iniciativa tem de ser lida de relance, e
+   barra que rola esconde metade da informação atrás de um gesto. */
+.iniciativa {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.iniciativa__ficha {
+    width: 52px;
+    height: 52px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+    margin-left: 0;
+    margin-top: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    border-left-color: rgba(0, 0, 0, 0);
+    border-right-color: rgba(0, 0, 0, 0);
+    border-top-color: rgba(0, 0, 0, 0);
+    border-bottom-color: rgba(0, 0, 0, 0);
+    background-color: rgba(255, 255, 255, 0.06);
+    align-items: center;
+    justify-content: center;
+    white-space: normal;
+    font-size: 10px;
+    color: rgb(232, 237, 242);
+}
+
+.iniciativa__ficha--heroi {
+    background-color: rgba(126, 240, 212, 0.16);
+}
+
+.iniciativa__ficha--monstro {
+    background-color: rgba(255, 154, 122, 0.16);
+}
+
+/* Quem joga AGORA. É a única informação da faixa que não pode depender de cor
+   sozinha — a moldura acesa some menos em tela ao sol do que um matiz. */
+.iniciativa__ficha--agora {
+    border-left-color: rgb(255, 208, 138);
+    border-right-color: rgb(255, 208, 138);
+    border-top-color: rgb(255, 208, 138);
+    border-bottom-color: rgb(255, 208, 138);
+}
+
+.iniciativa__sigla {
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.iniciativa__pv {
+    height: 4px;
+    width: 42px;
+    margin-top: 3px;
+    background-color: rgba(0, 0, 0, 0.55);
+    border-top-left-radius: 2px;
+    border-top-right-radius: 2px;
+    border-bottom-left-radius: 2px;
+    border-bottom-right-radius: 2px;
+    overflow: hidden;
+}
+
+.iniciativa__pv-cheio {
+    height: 4px;
+    background-color: rgb(226, 102, 90);
+}
+
+/* ================================================================= FICHA */
+
+.ficha {
+    margin-top: 4px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+.ficha__titulo {
+    -unity-font-style: bold;
+    font-size: 14px;
+}
+
+.ficha__numeros {
+    color: rgb(255, 208, 138);
+    font-size: 12px;
+}
+
+.ficha__texto {
+    white-space: normal;
+    color: rgb(190, 200, 210);
+    font-size: 12px;
+}
+
+/* ============================================================= RECURSOS */
+
+.recursos__nome {
+    -unity-font-style: bold;
+    font-size: 14px;
+}
+
+.medidor {
+    height: 16px;
+    min-width: 120px;
+    background-color: rgba(0, 0, 0, 0.55);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    overflow: hidden;
+    justify-content: center;
+    margin-top: 2px;
+}
+
+.medidor__cheio {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    background-color: rgb(226, 102, 90);
+}
+
+.medidor__texto {
+    -unity-text-align: middle-center;
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+.recursos__linha {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.pastilha {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 10px;
+}
+
+.pastilha__texto {
+    -unity-font-style: bold;
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.pastilha--pa .pastilha__texto {
+    color: rgb(255, 177, 92);
+}
+
+.pastilha--pp .pastilha__texto {
+    color: rgb(126, 240, 212);
+}
+
+.pips {
+    flex-direction: row;
+    align-items: center;
+}
+
+.pip {
+    width: 8px;
+    height: 8px;
+    margin-right: 2px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+.pip--cheio {
+    background-color: rgb(255, 177, 92);
+}
+
+.pips--pp .pip--cheio {
+    background-color: rgb(126, 240, 212);
+}
+
+/* ============================================================== FEITIÇOS */
+
+.feiticos {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+/* 56 e não 44: 44 é o piso do que dá para acertar, e a barra de feitiços é a
+   coisa mais tocada da tela inteira. Quem folga aqui paga em erro de mira. */
+.feitico {
+    width: 56px;
+    height: 56px;
+    margin-right: 6px;
+    margin-bottom: 6px;
+    margin-left: 0;
+    margin-top: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-left-color: rgba(0, 0, 0, 0);
+    border-right-color: rgba(0, 0, 0, 0);
+    border-top-color: rgba(0, 0, 0, 0);
+    border-bottom-color: rgba(0, 0, 0, 0);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    white-space: normal;
+    font-size: 10px;
+    color: rgb(232, 237, 242);
+}
+
+.feitico--escolhido {
+    border-left-color: rgb(255, 208, 138);
+    border-right-color: rgb(255, 208, 138);
+    border-top-color: rgb(255, 208, 138);
+    border-bottom-color: rgb(255, 208, 138);
+    background-color: rgba(255, 208, 138, 0.22);
+}
+
+/* Indisponível continua TOCÁVEL: o toque explica o motivo na ficha do topo.
+   Botão desligado que não responde deixa o jogador sem saber se falta PA ou se
+   a recarga ainda corre — e essa dúvida é o que faz repetir o toque. */
+.feitico--indisponivel {
+    opacity: 0.45;
+}
+
+.feitico__custo {
+    position: absolute;
+    left: 3px;
+    top: 2px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgb(255, 177, 92);
+}
+
+/* Apagada = "este feitiço custa N rodadas de espera depois de lançado".
+   Acesa = "faltam N para poder lançar de novo". Duas perguntas, dois estados. */
+.feitico__recarga {
+    position: absolute;
+    right: 3px;
+    top: 2px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgba(155, 224, 255, 0.5);
+}
+
+.feitico__recarga--contando {
+    color: rgb(155, 224, 255);
+}
+
+.feiticos__espera {
+    color: rgb(160, 170, 180);
+    -unity-font-style: italic;
+    font-size: 13px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.feitico__nome {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: 2px;
+    font-size: 9px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    overflow: hidden;
+}
+
+/* ================================================================ AÇÕES */
+
+.acoes {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.botao {
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    -unity-font-style: bold;
+    font-size: 14px;
+    color: rgb(18, 20, 24);
+    background-color: rgb(255, 208, 138);
+}
+
+.botao--encerrar {
+    flex-grow: 1;
+}
+
+.botao:active {
+    background-color: rgb(212, 170, 108);
+}
+
+/* =========================================================== ORIENTAÇÃO
+
+   UI Toolkit não tem `@media`, então quem decide a orientação é o C# —
+   `TelaDeBatalha.AplicarOrientacao` troca a classe da raiz. Deitado sobram
+   ~360 pontos de altura e o tabuleiro precisa deles: a faixa de baixo vira uma
+   LINHA (recursos | feitiços | botão) em vez de três blocos empilhados.
+   ======================================================================== */
+
+.hud--retrato .faixa--base {
+    flex-direction: column;
+}
+
+.hud--paisagem .faixa--base {
+    flex-direction: row;
+    align-items: flex-end;
+}
+
+.hud--paisagem .recursos {
+    width: 150px;
+    margin-right: 10px;
+}
+
+.hud--paisagem .feiticos {
+    flex-grow: 1;
+    margin-top: 0;
+}
+
+.hud--paisagem .acoes {
+    margin-top: 0;
+    margin-left: 8px;
+}
+
+.hud--paisagem .botao--encerrar {
+    flex-grow: 0;
+    width: 120px;
+}
+
+/* Deitado a ficha não pode roubar meia tela do tabuleiro. Encolhe o texto
+   longo; o nome e os números continuam inteiros, que é o que se lê no meio de
+   um turno. */
+.hud--paisagem .ficha__texto {
+    max-height: 32px;
+}
