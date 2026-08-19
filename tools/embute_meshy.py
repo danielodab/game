@@ -100,24 +100,22 @@ def limpa_lixo():
     if fora:
         print("LIXO REMOVIDO|", ", ".join(fora))
 
-    # ---- POR QUE NAO CONSERTO O RIG EM CENTIMETROS AQUI
-    # O arquivo chega com os ossos em cm (o `Hips` tem 1226 de comprimento) e um
-    # armature que encolhe por 0,01. Malha e esqueleto discordam por 100x, e
-    # tudo que MEDE no jogo mede a malha.
+    # ---- O RIG EM CENTIMETROS NAO SE CONSERTA AQUI
+    # O arquivo chega com os ossos em cm (o `Hips` tem 1226) e um armature que
+    # encolhe por 0,01. Malha e esqueleto discordam por 100x.
     #
-    # Tentei tres consertos e os tres pioraram, cada um com foto:
-    #   1. transform_apply(scale) no armature  -> personagem de cabeca para baixo
-    #   2. o mesmo com todos os objetos juntos -> idem, a malha e filha e recebia
-    #      a transformacao duas vezes
-    #   3. escalar os ossos em modo de EDICAO  -> a pose de repouso fica certa,
-    #      mas as CURVAS DE ANIMACAO continuam em cm e a pose animada quebra
+    # Quatro tentativas, todas com foto, e todas piores que nao mexer:
+    #   1. transform_apply(scale) no armature       -> de cabeca para baixo
+    #   2. o mesmo com todos os objetos juntos      -> idem (malha e filha)
+    #   3. escalar os ossos em modo de EDICAO       -> pose de repouso certa,
+    #      animada quebrada (as curvas continuam em cm)
+    #   4. o item 3 MAIS escalar as curvas junto    -> continua invertido
     #
-    # O item 3 e a licao que vale registrar: mexer no bind sem mexer nas acoes
-    # deixa o modelo parado bonito e o modelo ANIMADO errado — e o teste que
-    # olha a pose de repouso passa.
-
-
-
+    # O item 4 e o que fecha a conta: renderizando SEM animar, os tres ficam
+    # perfeitos e em pe. Ou seja, o modelo esta bom e quem inverte e o CLIPE
+    # depois que eu mexo nele. Entao a resposta e nao mexer: o arquivo sai como
+    # o gerador fez, e o tamanho e resolvido no jogo, em `naturalHeight`, que
+    # mede o ESQUELETO quando a malha em repouso vem degenerada.
 
 def reamostra_texturas():
     """4096 -> 1024. E daqui que vem a queda de 19 MB para ~2 MB."""
