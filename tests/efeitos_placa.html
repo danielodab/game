@@ -24,6 +24,10 @@
 <div class="sub">Cada família dispara o MESMO elemento (fogo) num quadro de celular (420×640, célula de ~40&nbsp;px).
 Duas passadas: <b>hoje</b> (só partícula) e <b>placa</b>. De cada passada sai um recorte 1:1 — sem
 aproximar, sem reduzir — e a medida do que mudou na tela em relação ao quadro sem efeito.
+Cada célula é o <b>rastro de 1&nbsp;segundo</b>: o que mais acendeu em cada pixel ao longo do efeito
+inteiro, que é o que o olho integra. Julgar por um instante escolhido já mentiu aqui — a página
+pegava sempre o quadro&nbsp;0, o clarão da batida, e com isso relatava "nada mudou" para efeitos
+cuja placa estava viva e de 7&nbsp;×&nbsp;14&nbsp;m.
 A conta que interessa é a <b>semelhança média entre famílias</b>: se todas desenham a mesma mancha,
 ela fica perto de 1 e o jogador diz "é tudo igual".</div>
 <div id="st">rodando…</div>
@@ -63,7 +67,11 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
   // veria, na escala em que ele os veria.
   var RW = 400, RH = 300, ROT = 24;      // largura, altura e faixa do rótulo
   var PASSADAS = [{ id: 'hoje', placa: false }, { id: 'placa', placa: true }];
-  var QUADROS = 22, DT = 0.034;          // 22 x 34 ms = 0,75 s: o meteoro cai em 0,5 s
+  /* 30 x 34 ms = 1,02 s. Eram 22 (0,75 s) e isso era injusto com quem comeca
+     atrasado: o corte espera o `hitDelay` de 0,3 s do golpe corpo a corpo, entao
+     40% da janela era zero garantido e a media saia pela metade. Um segundo e
+     tambem a lente certa para julgar DURACAO, que era uma das queixas. */
+  var QUADROS = 30, DT = 0.034;
   var DRENO = 700;                       // ms para os setTimeout atrasados do efeito
                                          // anterior (chuva, cone, meteoro) morrerem
                                          // antes de a próxima família começar
@@ -222,15 +230,35 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
           var px = i % RW, py = (i / RW) | 0;
           if (px < x0) x0 = px; if (px > x1) x1 = px;
           if (py < y0) y0 = py; if (py > y1) y1 = py;
-          grade[((py * GY / RH) | 0) * GX + ((px * GX / RW) | 0)] += dm;
         }
         if (!nucleo) return { banho: banho, area: 0, w: 0, h: 0, sat: 0, grade: grade, bruta: grade };
-        // a assinatura compara FORMA, não intensidade — mas a soma CRUA é o que
-        // se acumula ao longo do efeito, então as duas voltam
+
+        /* A ASSINATURA É TIRADA DENTRO DA MOLDURA DO PRÓPRIO DESENHO, e não do
+         * recorte. Medindo sobre o recorte inteiro, a grade dizia ONDE o efeito
+         * pintou — e como todos pintam em cima do mesmo alvo, ela premiava o
+         * efeito pequeno e punia o grande: ao crescer as placas, o número de
+         * pares "parecidos" SUBIU, embora na folha as famílias tivessem ficado
+         * visivelmente distintas. Normalizando pela moldura, o que se compara é
+         * o DESENHO — uma cruz continua diferente de um anel, tenham eles 60 ou
+         * 300 px de lado. É esta a pergunta do jogador: não "onde caiu", e sim
+         * "consigo ver que é outra coisa?". */
+        var bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+        for (var y = y0; y <= y1; y++) {
+          var gy = ((y - y0) * GY / bh) | 0; if (gy >= GY) gy = GY - 1;
+          for (var x = x0; x <= x1; x++) {
+            var o2 = (y * RW + x) * 4;
+            var r2 = d[o2] - e[o2], g2 = d[o2 + 1] - e[o2 + 1], b2 = d[o2 + 2] - e[o2 + 2];
+            if (r2 < 0) r2 = -r2; if (g2 < 0) g2 = -g2; if (b2 < 0) b2 = -b2;
+            var m2 = r2 > g2 ? (r2 > b2 ? r2 : b2) : (g2 > b2 ? g2 : b2);
+            if (m2 <= LIMIAR_NUCLEO) continue;
+            var gx = ((x - x0) * GX / bw) | 0; if (gx >= GX) gx = GX - 1;
+            grade[gy * GX + gx] += m2;
+          }
+        }
         var bruta = grade.slice(), mx = 0, k;
         for (k = 0; k < grade.length; k++) if (grade[k] > mx) mx = grade[k];
         if (mx > 0) for (k = 0; k < grade.length; k++) grade[k] /= mx;
-        return { banho: banho, area: nucleo, w: x1 - x0 + 1, h: y1 - y0 + 1,
+        return { banho: banho, area: nucleo, w: bw, h: bh,
                  sat: sat / nucleo, grade: grade, bruta: bruta };
       }
       function cos(a, b) {
@@ -298,6 +326,14 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
           // passos adiados do cone e do meteoro são setTimeout de 26 a 110 ms e
           // NÃO acontecem se a página só encadear setTimeout(…,0).
           if (++q < QUADROS) return setTimeout(quadro, DT * 1000);
+          wg.putImageData(rst, 0, 0);
+          bg2.drawImage(work, 0, 0);
+          melhor.media = Math.round(somaNuc / QUADROS);
+          // a assinatura do efeito INTEIRO, normalizada só no fim
+          var amx = 0, ak;
+          for (ak = 0; ak < acum.length; ak++) if (acum[ak] > amx) amx = acum[ak];
+          if (amx > 0) for (ak = 0; ak < acum.length; ak++) acum[ak] /= amx;
+          melhor.grade = acum;
           guarda(fam, passada, melhor);
           fi++;
           setTimeout(proximo, DRENO);
@@ -315,27 +351,47 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
         g.fillRect(ox, oy + RH, RW, ROT);
         g.fillStyle = passada.placa ? '#8fe0a0' : '#e0a08f';
         g.font = 'bold 12px Consolas, monospace';
-        g.fillText(fam + '  ·  ' + passada.id + '  ·  ' + m.area + ' px  ·  ' +
-                   m.w + '×' + m.h + '  ·  branco ' + Math.round(m.sat * 100) + '%',
-                   ox + 6, oy + RH + 16);
+        // o rótulo tem 400 px: passando disso ele invade a célula vizinha
+        g.fillText(fam + ' · ' + passada.id + ' · médio ' + m.media +
+                   ' px · pico ' + m.area, ox + 6, oy + RH + 16);
         g.strokeStyle = '#2b3542'; g.strokeRect(ox + 0.5, oy + 0.5, RW - 1, RH - 1);
       }
 
+      /* PARES CONFUNDIVEIS. A semelhanca media e um numero sem regua: ninguem
+       * sabe se 0,53 e bom. O que responde a queixa "e tudo igual" e quantos
+       * PARES de familias o jogador nao distingue — aqui, quantos passam de
+       * 0,85 de semelhanca, e qual e o pior deles. */
+      var piorPar = { hoje: ['', '', 0], placa: ['', '', 0] };
+      var confusos = { hoje: 0, placa: 0 };
       function media(passe) {
-        // semelhança média entre PARES de famílias: 1 = todas desenham a mesma coisa
-        var vs = [], k;
+        var vs = [], nm = [], k;
         for (k = 0; k < fams.length; k++) {
           var m = res[fams[k]] && res[fams[k]][passe];
-          if (m && m.area) vs.push(m.grade);
+          if (m && m.area) { vs.push(m.grade); nm.push(fams[k]); }
         }
         var s = 0, n = 0;
+        confusos[passe] = 0;
         for (var i = 0; i < vs.length; i++)
-          for (var j = i + 1; j < vs.length; j++) { s += cos(vs[i], vs[j]); n++; }
+          for (var j = i + 1; j < vs.length; j++) {
+            var c = cos(vs[i], vs[j]);
+            if (c > 0.85) confusos[passe]++;
+            if (c > piorPar[passe][2]) piorPar[passe] = [nm[i], nm[j], c];
+            s += c; n++;
+          }
         return n ? s / n : 0;
       }
 
       // quantas famílias chegam à tela tão fracas que praticamente não existem
       function mudas(passe) {
+        var n = 0;
+        fams.forEach(function (f) {
+          var m = res[f] && res[f][passe];
+          if (!m || m.media < 600) n++;      // 600 px SUSTENTADOS ao longo do efeito
+        });
+        return n;
+      }
+      // e quantas nem no melhor instante chegam a um borrão de 32×32 px
+      function nunca(passe) {
         var n = 0;
         fams.forEach(function (f) {
           var m = res[f] && res[f][passe];
@@ -346,20 +402,22 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
 
       function fecha() {
         var linhas = '<tr><th>família</th>' +
-          '<th>desenho (px) hoje</th><th>com placa</th><th>×</th>' +
+          '<th>desenho médio (px) hoje</th><th>com placa</th><th>×</th>' +
+          '<th>pico hoje</th><th>com placa</th>' +
           '<th>maior lado hoje</th><th>com placa</th>' +
           '<th>banho de luz hoje</th><th>com placa</th></tr>';
         var somaH = 0, somaP = 0, ladoH = 0, ladoP = 0, satH = 0, satP = 0, nn = 0;
         fams.forEach(function (f) {
-          var h = res[f].hoje || { area: 0, w: 0, h: 0, sat: 0, banho: 0 };
-          var p = res[f].placa || { area: 0, w: 0, h: 0, sat: 0, banho: 0 };
+          var vz = { area: 0, media: 0, w: 0, h: 0, sat: 0, banho: 0 };
+          var h = res[f].hoje || vz, p = res[f].placa || vz;
           var lh = Math.max(h.w, h.h), lp = Math.max(p.w, p.h);
-          somaH += h.area; somaP += p.area; ladoH += lh; ladoP += lp;
+          somaH += h.media; somaP += p.media; ladoH += lh; ladoP += lp;
           satH += h.sat; satP += p.sat; nn++;
-          var mult = h.area > 0 ? (p.area / h.area) : (p.area > 0 ? 99 : 1);
+          var mult = h.media > 0 ? (p.media / h.media) : (p.media > 0 ? 99 : 1);
           linhas += '<tr><td>' + f + '</td>' +
-            '<td class="n">' + h.area + '</td><td class="n bom">' + p.area + '</td>' +
+            '<td class="n">' + h.media + '</td><td class="n bom">' + p.media + '</td>' +
             '<td class="n ' + (mult >= 1.5 ? 'bom' : 'ruim') + '">' + mult.toFixed(1) + '×</td>' +
+            '<td class="n">' + h.area + '</td><td class="n">' + p.area + '</td>' +
             '<td class="n">' + lh + ' px</td><td class="n bom">' + lp + ' px</td>' +
             '<td class="n">' + h.banho + '</td><td class="n">' + p.banho + '</td></tr>';
         });
@@ -385,9 +443,17 @@ ela fica perto de 1 e o jogador diz "é tudo igual".</div>
              '<td class="n" colspan="2">' + pPx.toFixed(1) + ' px — a célula tem ' +
              pxCel.toFixed(0) + ' px e 1 metro do mundo tem ' + pxMetro.toFixed(1) + ' px</td></tr>';
         li('semelhança média entre famílias (1 = tudo igual)', simH, simP, p2);
-        li('DESENHO: pixels que mudaram forte (>90), média', somaH / nn, somaP / nn, i0);
+        li('PARES de famílias que o jogador não distingue (semelhança > 0,85)',
+           confusos.hoje, confusos.placa, i0);
+        r += '<tr><td>o par mais parecido de todos</td><td class="n">' +
+             piorPar.hoje[0] + '/' + piorPar.hoje[1] + ' ' + piorPar.hoje[2].toFixed(2) +
+             '</td><td class="n bom">' +
+             piorPar.placa[0] + '/' + piorPar.placa[1] + ' ' + piorPar.placa[2].toFixed(2) +
+             '</td></tr>';
+        li('DESENHO: pixels fortes (>90) SUSTENTADOS durante o efeito, média', somaH / nn, somaP / nn, i0);
         li('maior lado do desenho na tela, média', ladoH / nn, ladoP / nn, i0);
-        li('famílias com menos de 1.000 px de desenho', mudas('hoje'), mudas('placa'), i0);
+        li('famílias com menos de 600 px de desenho sustentado', mudas('hoje'), mudas('placa'), i0);
+        li('famílias que NUNCA chegam a 1.000 px na tela', nunca('hoje'), nunca('placa'), i0);
         li('parte do desenho estourada para branco', satH / nn, satP / nn, pc);
         document.getElementById('resumo').innerHTML = r;
 

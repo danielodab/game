@@ -491,6 +491,31 @@ var JOGO = (typeof window !== 'undefined')
   };
   FX.PLACA = PL;
 
+  /* ENQUADRAMENTO — medido no proprio atlas, quadro a quadro (a conta esta em
+   * tests/efeitos_placa.html, secao "tinta"). O sprite do Kenney nao preenche o
+   * quadro: `risco` ocupa 16% da ALTURA da celula e `raio` 18%. Pedir uma placa
+   * de 1,2 m de altura para o fio do gancho entregava 0,19 m de desenho — 4 px
+   * na tela. Era por isso que o feixe e o gancho mediam o MESMO que sem placa
+   * nenhuma, ate o pixel: a placa estava la e nao dava para ver.
+   *
+   * [fracao da largura, fracao da altura, ganho de brilho]. O tamanho pedido em
+   * `de`/`ate` passa a ser o tamanho da TINTA, nao o do quadro vazio ao redor
+   * dela; o quadro cresce por baixo para entregar aquilo. O ganho compensa os
+   * quadros de tinta rala (halo, virgula, fumaca ficam com alfa ~0,35). */
+  var PL_ENQ = [
+    [0.62, 0.62, 2.30], [0.69, 0.69, 1.00], [0.88, 0.88, 1.00], [0.73, 0.78, 2.10],
+    [0.61, 0.27, 2.40], [0.46, 0.58, 2.20], [0.34, 0.55, 1.00], [0.89, 0.89, 1.00],
+    [1.00, 0.18, 1.00], [0.39, 0.42, 1.00], [0.71, 0.80, 1.00], [0.59, 0.63, 1.00],
+    [0.21, 0.50, 1.00], [0.72, 0.73, 2.20], [0.62, 0.62, 1.11], [0.53, 0.16, 1.00]
+  ];
+  /* Os quatro ganhos acima de 1,5 (runas, halo, virgula, fumaca) sao os quadros
+   * de tinta rala e BORRADA. Medida no tabuleiro, a aura desenhava 44 px: o
+   * halo estava la, de 6 metros, mas e um brilho tao macio que sobre um chao ja
+   * iluminado nao chega a mudar 90 de 255 em pixel nenhum — existe e nao se ve.
+   * A conta de partida foi 0,62 / (percentil 80 da tinta do quadro); estes
+   * quatro subiram acima dela porque somam sobre um piso claro, nao sobre
+   * preto. O branco estourado segue medido na folha e continua em 0%. */
+
   var PLACAS_ON = true;
   FX.setPlacas = function (v) { PLACAS_ON = (v !== false); };
   FX.placasLigadas = function () { return PLACAS_ON; };
@@ -540,7 +565,12 @@ var JOGO = (typeof window !== 'undefined')
     geosPlaca();
     var tex = placaTexture(), n = PLACA_N;
     var idx = o.tile || 0, cc = idx % n, rr = Math.floor(idx / n);
-    var de = o.de || [3, 3], ate = o.ate || de;
+    var de0 = o.de || [3, 3], ate0 = o.ate || de0;
+    // o pedido e o tamanho da TINTA; o quadro cresce por baixo para entrega-lo
+    var eq = PL_ENQ[idx] || [1, 1, 1];
+    var de = [de0[0] / eq[0], de0[1] / eq[1]];
+    var ate = [ate0[0] / eq[0], ate0[1] / eq[1]];
+    var ganho = eq[2];
 
     function faz(cor, escura) {
       var mat = new THREE.ShaderMaterial({
@@ -569,9 +599,10 @@ var JOGO = (typeof window !== 'undefined')
         w0: de[0] * k, h0: de[1] * k, w1: ate[0] * k, h1: ate[1] * k,
         p0: o.pos, p1: o.para || o.pos,
         ang: o.ang || 0, giro: o.giro || 0,
-        op: escura ? (o.forro || 0.5) : (o.op == null ? 0.9 : o.op),
+        op: escura ? (o.forro || 0.5) : (o.op == null ? 0.9 : o.op) * ganho,
         subida: o.subida == null ? 0.07 : o.subida,
         saida: o.saida == null ? 1.4 : o.saida,
+        patamar: o.patamar == null ? 0.45 : o.patamar,
         curva: o.curva == null ? 2.2 : o.curva
       });
     }
@@ -610,8 +641,15 @@ var JOGO = (typeof window !== 'undefined')
       } else {
         p.m.rotation.set(0, ang, 0);
       }
+      /* PATAMAR. A queda era (1-k)^saida desde o primeiro quadro: SONDADO, o
+       * corte batia 1.109 px no quadro 4 e caia para 173 no quadro 8 — 0,17 s
+       * de desenho legivel num efeito de 0,6 s. A media ao longo do efeito,
+       * que e o que o jogador enxerga, ficava em 304 px. Agora a placa SEGURA
+       * a opacidade cheia ate `patamar` da vida e so entao cai. */
       var sobe = p.subida > 0 ? Math.min(1, tt / p.subida) : 1;
-      p.mat.uniforms.uOp.value = p.op * sobe * Math.pow(1 - k, p.saida);
+      var cai = k <= p.patamar ? 1
+              : Math.pow((1 - k) / (1 - p.patamar), p.saida);
+      p.mat.uniforms.uOp.value = p.op * sobe * cai;
     }
   }
   function limpaPlacas() {
@@ -925,13 +963,13 @@ var JOGO = (typeof window !== 'undefined')
     // sopro pega: e este desenho que diz "cone" antes de qualquer particula.
     var meio = v3(from.x + dx * d * 0.52, 0.11, from.z + dz * d * 0.52);
     placa({ tile: PL.leque, color: col, modo: 'chao', pos: meio, ang: angChao(dx, dz),
-            de: [d * 0.45, d * 0.55], ate: [d * 1.05, d * 1.25],
-            dur: 0.62, op: 0.95, saida: 1.3, forro: 0.5 });
-    if (col2) {
-      placa({ tile: PL.leque, color: col2, modo: 'chao', pos: meio, ang: angChao(dx, dz),
-              de: [d * 0.30, d * 0.36], ate: [d * 0.75, d * 0.90],
-              dur: 0.5, atraso: 0.09, op: 0.8, saida: 1.5 });
-    }
+            de: [d * 0.60, d * 0.70], ate: [d * 1.45, d * 1.55],
+            dur: 0.78, op: 1, saida: 1.1, patamar: 0.5, forro: 0.5 });
+    // segunda lingua, atrasada e mais estreita: o sopro PULSA em vez de abrir
+    // uma vez so e sumir
+    placa({ tile: PL.leque, color: col2 || col, modo: 'chao', pos: meio, ang: angChao(dx, dz),
+            de: [d * 0.34, d * 0.42], ate: [d * 1.05, d * 1.15],
+            dur: 0.62, atraso: 0.14, op: 0.9, saida: 1.2, patamar: 0.45 });
     var passos = 9;
     for (var i = 0; i < passos; i++) {
       (function (k) {
@@ -1004,8 +1042,8 @@ var JOGO = (typeof window !== 'undefined')
     placa({ tile: PL.virgula, color: col, modo: 'mira', ang: angMira(ox, oz),
             pos: v3(from.x + ox * 0.12, 1.1, from.z + oz * 0.12),
             para: v3(dest.x, 1.2, dest.z),
-            de: [5.0, 2.6], ate: [8.0, 3.8], dur: 0.5, op: 0.95,
-            curva: 1, saida: 1.2, forro: 0.45 });
+            de: [5.6, 3.4], ate: [9.0, 5.2], dur: 0.66, op: 1,
+            curva: 1, saida: 1.15, patamar: 0.5, forro: 0.45 });
     placa({ tile: PL.anel, color: col2 || col, modo: 'chao', pos: v3(dest.x, 0.09, dest.z),
             de: [1.4, 1.4], ate: [7.0, 7.0], dur: 0.5, atraso: 0.34, op: 0.85, saida: 1.4 });
     var passos = 8;
@@ -1062,15 +1100,21 @@ var JOGO = (typeof window !== 'undefined')
       var col = ecol(el);
       // A MEIA-LUA. Sete metros de arco que GIRA durante o golpe: e a diferenca
       // entre "cortou" e "aconteceu alguma coisa laranja".
+      /* SONDADO: pedindo 8,2 m de ALTURA de meia-lua o enquadramento abria um
+       * quadro de 30 m (a lua ocupa 27% da altura da celula) e esticava um
+       * sprite de 256 px em 570 px de tela. Ela ficava enorme, borrada e mais
+       * FRACA: 12,6 x 28,5 m de placa acesa a 92% pintavam 44 px. Um corte e
+       * LARGO E RASO — pedir a proporcao do desenho, e nao um quadrado, e o que
+       * faz a lamina existir. */
       placa({ tile: PL.meialua, color: col, modo: 'bilhete',
               pos: v3(dest.x, dest.y + 0.5, dest.z),
-              de: [3.6, 3.6], ate: [7.4, 7.4], dur: 0.44, op: 1, saida: 1.7,
-              ang: -1.0, giro: 5.2, forro: 0.55 });
+              de: [4.8, 1.9], ate: [6.4, 2.6], dur: 0.62, op: 1, saida: 1.1,
+              patamar: 0.62, ang: -0.75, giro: 1.4, forro: 0.55 });
       if (el2) {
         placa({ tile: PL.meialua, color: ecol(el2), modo: 'bilhete',
                 pos: v3(dest.x, dest.y + 0.7, dest.z),
-                de: [2.4, 2.4], ate: [5.6, 5.6], dur: 0.4, atraso: 0.07, op: 0.85,
-                saida: 1.7, ang: 2.1, giro: -4.4 });
+                de: [3.4, 1.3], ate: [6.6, 2.5], dur: 0.5, atraso: 0.07, op: 0.9,
+                saida: 1.4, patamar: 0.45, ang: 2.1, giro: -4.4 });
       }
       // arco: as particulas seguem um semicirculo, nao uma explosao redonda
       for (var i = 0; i < 14; i++) {
@@ -1093,9 +1137,15 @@ var JOGO = (typeof window !== 'undefined')
     scorch(dest, col, 1.7, 9);
     // O SELO. Roda devagar e demora 1,8 s a apagar — o oposto do estouro, que
     // e o que "armadilha" tem de dizer.
+    // DUAS voltas de selo, girando em sentidos opostos. Uma so era linha fina
+    // demais: 4 m de runa desenhavam 160 px na tela, e um selo tem camadas.
     placa({ tile: PL.runas, color: col, modo: 'chao', pos: v3(dest.x, 0.09, dest.z),
-            de: [1.2, 1.2], ate: [4.0, 4.0], dur: 1.8, op: 0.95, saida: 0.5,
-            curva: 3.2, giro: 0.45, forro: 0.45 });
+            de: [1.8, 1.8], ate: [7.4, 7.4], dur: 1.8, op: 1.1, saida: 0.5,
+            patamar: 0.55, curva: 3.2, giro: 0.45, forro: 0.45 });
+    placa({ tile: PL.runas, color: el2 ? ecol(el2) : col, modo: 'chao',
+            pos: v3(dest.x, 0.11, dest.z),
+            de: [1.0, 1.0], ate: [3.6, 3.6], dur: 1.7, atraso: 0.12, op: 0.95,
+            saida: 0.5, patamar: 0.55, curva: 3.0, giro: -0.7 });
     burst(dest.x, dest.y + 0.15, dest.z, 12, {
       color: col, speed: 1.1, life: 0.7, size: 0.34, flat: true, up: 0.3, tile: TILE.runa
     });
@@ -1137,9 +1187,17 @@ var JOGO = (typeof window !== 'undefined')
     // O halo no peito e o anel que FECHA em volta dos pes resolvem sem projetil.
     placa({ tile: PL.halo, color: col, modo: 'bilhete',
             pos: v3(from.x, from.y * 0.6 + 0.35, from.z),
-            de: [2.0, 2.0], ate: [5.4, 5.4], dur: 0.8, op: 0.85, saida: 1.2, giro: 1.1 });
-    placa({ tile: PL.anel, color: col2 || col, modo: 'chao', pos: v3(from.x, 0.10, from.z),
-            de: [5.0, 5.0], ate: [2.0, 2.0], dur: 0.75, op: 0.9, saida: 0.9, curva: 1.5 });
+            de: [2.8, 2.8], ate: [6.6, 6.6], dur: 1.15, op: 1.15, saida: 0.9,
+            patamar: 0.65, giro: 1.1 });
+    // TRES aneis que FECHAM em volta dos pes, um atras do outro. O que separa a
+    // aura de todo o resto nao e a forma do anel — e o sentido: aqui a energia
+    // entra, no estouro ela sai. Repetido tres vezes o olho pega o sentido.
+    for (var a = 0; a < 3; a++) {
+      placa({ tile: PL.anel, color: (a % 2 && col2) ? col2 : col, modo: 'chao',
+              pos: v3(from.x, 0.10 + a * 0.01, from.z),
+              de: [5.4, 5.4], ate: [1.5, 1.5], dur: 0.62, atraso: a * 0.19,
+              op: 0.95, saida: 0.9, patamar: 0.5, curva: 1.4 });
+    }
     for (var i = 0; i < 4; i++) {
       (function (k) {
         setTimeout(function () {
@@ -1226,17 +1284,31 @@ var JOGO = (typeof window !== 'undefined')
 
   /* Gancho: um fio sai da mao e PUXA — a linha corre do alvo de volta. */
   function gancho(from, dest, el, el2) {
+    /* MEDIDO: o gancho chamava `beam` e depois acrescentava um fio. As duas
+     * familias saiam com 1,00 de semelhanca — eram o MESMO desenho, e nao ha
+     * placa que conserte duas coisas que sao uma so. O gancho tem tres tempos
+     * que o feixe nao tem: o arpeu VAI, MORDE e PUXA. */
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
-    beam(from, dest, col, col2);
-    // o fio ESTICADO: uma placa em trilho cobre a corda inteira, e ela ENCOLHE
-    // enquanto puxa
     var gx = dest.x - from.x, gz = dest.z - from.z;
-    var gd = Math.max(0.8, Math.sqrt(gx * gx + gz * gz));
+    var gdd = Math.max(0.8, Math.sqrt(gx * gx + gz * gz));
+    // 1. VAI: o fio cresce de quem lanca ate o alvo
+    placa({ tile: PL.risco, color: col, modo: 'trilho', ang: angTrilho(gx, gz),
+            pos: v3(from.x + gx * 0.16, from.y * 0.8, from.z + gz * 0.16),
+            para: v3((from.x + dest.x) / 2, (from.y + dest.y) / 2, (from.z + dest.z) / 2),
+            de: [gdd * 0.25, 0.9], ate: [gdd, 1.4], dur: 0.26, op: 1,
+            saida: 1.0, patamar: 0.7, curva: 1.0 });
+    // 2. MORDE: as garras fecham no alvo
+    placa({ tile: PL.garras, color: col2 || col, modo: 'bilhete',
+            pos: v3(dest.x, dest.y + 0.55, dest.z),
+            de: [1.8, 1.8], ate: [4.6, 4.6], dur: 0.42, atraso: 0.2, op: 1,
+            saida: 1.3, patamar: 0.45, ang: -0.6, forro: 0.5 });
+    // 3. PUXA: o fio ESTICADO encolhe de volta, trazendo o alvo junto
     placa({ tile: PL.risco, color: col2 || col, modo: 'trilho', ang: angTrilho(gx, gz),
             pos: v3((from.x + dest.x) / 2, (from.y + dest.y) / 2, (from.z + dest.z) / 2),
             para: v3(from.x + gx * 0.28, from.y * 0.9, from.z + gz * 0.28),
-            de: [gd, 1.0], ate: [gd * 0.55, 0.6], dur: 0.55, op: 0.95,
-            atraso: 0.1, saida: 1.2, curva: 1.4 });
+            de: [gdd, 1.8], ate: [gdd * 0.55, 1.1], dur: 0.62, op: 1,
+            atraso: 0.3, saida: 1.1, patamar: 0.5, curva: 1.4 });
+    setTimeout(function () { impact(dest, el, 0.8, el2); addShake(4); }, 230);
     var passos = 6;
     for (var i = 0; i <= passos; i++) {
       (function (k) {
@@ -1307,7 +1379,8 @@ var JOGO = (typeof window !== 'undefined')
         var fd = Math.max(0.8, Math.sqrt(fx2 * fx2 + fz2 * fz2));
         placa({ tile: PL.risco, color: ecol(el), modo: 'trilho', ang: angTrilho(fx2, fz2),
                 pos: v3((from.x + dest.x) / 2, (from.y + dest.y) / 2 + 0.15, (from.z + dest.z) / 2),
-                de: [fd * 0.35, 0.7], ate: [fd * 1.02, 1.5], dur: 0.3, op: 0.9, saida: 1.9 });
+                de: [fd * 0.35, 1.6], ate: [fd * 1.02, 3.2], dur: 0.62, op: 1,
+                saida: 1.25, patamar: 0.48 });
         launch(from, dest, {
           color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'arrow', speed: 34, arc: 0.25,
           onHit: function (pos) { impact(pos, el, 1.0, el2); }
@@ -1321,7 +1394,8 @@ var JOGO = (typeof window !== 'undefined')
             impact(pos, el, 1.0, el2);
             // a bola e o ultimo recurso, mas ate ela deixa uma marca no chao
             placa({ tile: PL.anel, color: ecol(el), modo: 'chao', pos: v3(pos.x, 0.09, pos.z),
-                    de: [1.0, 1.0], ate: [5.6, 5.6], dur: 0.48, op: 0.8, saida: 1.5 });
+                    de: [1.0, 1.0], ate: [7.0, 7.0], dur: 0.6, op: 1, saida: 1.2,
+                    patamar: 0.45 });
           }
         });
     }
@@ -1496,10 +1570,14 @@ var JOGO = (typeof window !== 'undefined')
     // pixels, porque o que se via nas tres era so o clarao desta funcao lavando
     // o chao — as particulas ficavam abaixo do limiar. Agora a batida tem uma
     // forma, e cada familia poe a SUA por cima.
+    /* A batida e PONTUACAO, nao a manchete. Ela aparece em toda familia; se for
+     * o maior desenho da tela, o que o jogador ve de meteoro, corte e flecha e
+     * a mesma coisa. Encolhida, ela pontua o golpe e deixa a assinatura da
+     * familia liderar. */
     placa({ tile: PL.estouro, color: col, modo: 'bilhete',
             pos: v3(pos.x, Math.max(0.7, pos.y + 0.3), pos.z),
-            de: [1.5 * power, 1.5 * power], ate: [5.2 * power, 5.2 * power],
-            dur: 0.38, op: 0.95, saida: 1.8, forro: 0.5 });
+            de: [1.2 * power, 1.2 * power], ate: [3.4 * power, 3.4 * power],
+            dur: 0.34, op: 0.95, saida: 1.8, patamar: 0.3, forro: 0.5 });
     if (col2) {
       placa({ tile: PL.estouro, color: col2, modo: 'bilhete',
               pos: v3(pos.x, Math.max(0.9, pos.y + 0.7), pos.z),
@@ -1518,13 +1596,39 @@ var JOGO = (typeof window !== 'undefined')
     burst(pos.x, 0.15, pos.z, Math.round(16 * power), {
       color: '#ffffff', speed: 5.0 * power, life: 0.3, size: 0.24, flat: true, up: 0.25
     });
-    shockRing(pos, col, 0.35, 2.4 * power, 0.42);
-    if (col2) shockRing(pos, col2, 0.30, 3.1 * power, 0.58);
-    flash(new THREE.Vector3(pos.x, 0.8, pos.z), col, 6.5 * power, 0.34, 9 * power);
-    if (col2) flash(new THREE.Vector3(pos.x, 1.1, pos.z), col2, 5.0 * power, 0.46, 10 * power);
+    /* O CLARAO ENCOLHEU, e nao foi para economizar. Medido no tabuleiro, a luz
+     * desta funcao lavava de 26.000 a 63.000 px do recorte — ate METADE da
+     * tela — com o mesmo amarelo em TODA familia, porque `impact` e a unica
+     * coisa que meteoro, corte, flecha e bola tem em comum. Era ela a resposta
+     * literal a queixa "tudo igual, nao da para ver diferenca": a assinatura
+     * compartilhada era maior que a propria. Com 4,5 m de alcance a batida
+     * continua acendendo o alvo e o chao em volta, e para de pintar o quadro
+     * inteiro por cima do desenho de cada familia. O anel de choque duplicado
+     * saiu pelo mesmo motivo: dois aneis iguais em cores diferentes nao dizem
+     * duas coisas, dizem a mesma duas vezes. */
+    /* O ANEL DE CHOQUE SAIU DAQUI. Olhando a folha de contato, o mesmo anel
+     * dourado concentrico no chao aparecia em estouro, flecha, feixe, gancho,
+     * investida e invocacao — seis familias com a mesma assinatura, porque
+     * todas passam por `impact`. As que precisam de anel ja chamam `shockRing`
+     * por conta propria (meteoro, chuva, terremoto, onda, corte, armadilha,
+     * aura, maldicao, nova), e nessas ele quer dizer alguma coisa. Aqui ele so
+     * dizia "houve uma batida", que a placa de estouro ja diz com forma. */
+    flash(new THREE.Vector3(pos.x, 0.8, pos.z), col, 5.0 * power, 0.30, 4.5 * power);
+    if (col2) flash(new THREE.Vector3(pos.x, 1.1, pos.z), col2, 3.8 * power, 0.40, 5.0 * power);
     scorch(pos, SCORCH[element] || '#241208', 2.0 * power, 4);
     addShake(5 * power);
   }
+  /* Costuras de teste: a folha de contato precisa disparar UMA familia sem
+   * inventar um feitico, e precisa poder perguntar o que a placa virou no
+   * mundo — tamanho, opacidade e se esta na frente da camera. */
+  FX.debugFam = function (fam, from, dest, el, el2) { tocaFamilia(fam, from, dest, el, el2, null); };
+  FX.debugPlacas = function () {
+    return placas.map(function (p) {
+      return { modo: p.modo, vis: p.m.visible, op: +p.mat.uniforms.uOp.value.toFixed(3),
+               esc: [+p.m.scale.x.toFixed(2), +p.m.scale.y.toFixed(2), +p.m.scale.z.toFixed(2)],
+               pos: [+p.m.position.x.toFixed(2), +p.m.position.y.toFixed(2), +p.m.position.z.toFixed(2)] };
+    });
+  };
   FX.debugImpact = function (gx, gy, element, power, element2) {
     impact(cellPos(gx, gy, 0.5), element, power || 1, element2);
   };
@@ -1546,12 +1650,14 @@ var JOGO = (typeof window !== 'undefined')
     var bd = Math.max(0.8, Math.sqrt(bx * bx + bz * bz));
     placa({ tile: PL.raio, color: col, modo: 'trilho', ang: angTrilho(bx, bz),
             pos: v3((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2),
-            de: [bd, 1.2], ate: [bd, 2.8], dur: 0.46, op: 1, saida: 1.6, forro: 0.4 });
-    if (col2) {
-      placa({ tile: PL.raio, color: col2, modo: 'trilho', ang: angTrilho(bx, bz),
-              pos: v3((from.x + to.x) / 2, (from.y + to.y) / 2 + 0.35, (from.z + to.z) / 2),
-              de: [bd * 0.9, 0.8], ate: [bd, 1.8], dur: 0.4, atraso: 0.06, op: 0.85, saida: 1.7 });
-    }
+            de: [bd, 2.4], ate: [bd, 4.6], dur: 0.66, op: 1, saida: 1.1,
+            patamar: 0.5, forro: 0.4 });
+    // um segundo raio, mais fino e fora de tempo, para o feixe TREMER em vez de
+    // ser uma barra parada
+    placa({ tile: PL.raio, color: col2 || col, modo: 'trilho', ang: angTrilho(bx, bz),
+            pos: v3((from.x + to.x) / 2, (from.y + to.y) / 2 + 0.5, (from.z + to.z) / 2),
+            de: [bd * 0.94, 1.4], ate: [bd, 3.0], dur: 0.52, atraso: 0.1, op: 0.9,
+            saida: 1.2, patamar: 0.45 });
     var n = 26;
     for (var i = 0; i <= n; i++) {
       var k = i / n;
@@ -1573,10 +1679,11 @@ var JOGO = (typeof window !== 'undefined')
         });
       }
     }
-    flash(to, col, 7.5, 0.35, 11);
-    if (col2) flash(from, col2, 4.5, 0.4, 8);
+    // 11 m de alcance de luz lavavam 26.800 px do recorte — mais da metade do
+    // que o feixe inteiro pintava era clarao, e clarao e igual em toda familia
+    flash(to, col, 6.0, 0.32, 4.5);
+    if (col2) flash(from, col2, 3.6, 0.36, 3.6);
     shockRing(to, col, 0.3, 2.2, 0.4);
-    if (col2) shockRing(to, col2, 0.3, 3.0, 0.55);
     addShake(5);
   }
   function nova(pos, col, col2) {
