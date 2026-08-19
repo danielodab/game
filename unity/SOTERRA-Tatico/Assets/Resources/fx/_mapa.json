@@ -1,0 +1,89 @@
+{
+  "fonte": "assets/embedded/fx-atlas.js",
+  "licenca": "Kenney Particle Pack - CC0 1.0",
+  "cols": 4,
+  "rows": 4,
+  "lado": 128,
+  "quadros": [
+    {
+      "indice": 0,
+      "nome": "ponto",
+      "kenney": "circle_05"
+    },
+    {
+      "indice": 1,
+      "nome": "corte",
+      "kenney": "slash_02"
+    },
+    {
+      "indice": 2,
+      "nome": "cascalho",
+      "kenney": "dirt_02"
+    },
+    {
+      "indice": 3,
+      "nome": "brasa",
+      "kenney": "fire_01"
+    },
+    {
+      "indice": 4,
+      "nome": "runa",
+      "kenney": "magic_01"
+    },
+    {
+      "indice": 5,
+      "nome": "brilho",
+      "kenney": "star_07"
+    },
+    {
+      "indice": 6,
+      "nome": "fumaca",
+      "kenney": "smoke_04"
+    },
+    {
+      "indice": 7,
+      "nome": "raio",
+      "kenney": "spark_05"
+    },
+    {
+      "indice": 8,
+      "nome": "redemoinho",
+      "kenney": "twirl_02"
+    },
+    {
+      "indice": 9,
+      "nome": "anel",
+      "kenney": "circle_02"
+    },
+    {
+      "indice": 10,
+      "nome": "risco",
+      "kenney": "trace_01"
+    },
+    {
+      "indice": 11,
+      "nome": "estouro",
+      "kenney": "scorch_01"
+    },
+    {
+      "indice": 12,
+      "nome": "aura",
+      "kenney": "magic_03"
+    },
+    {
+      "indice": 13,
+      "nome": "lingua",
+      "kenney": "muzzle_04"
+    },
+    {
+      "indice": 14,
+      "nome": "halo",
+      "kenney": "light_01"
+    },
+    {
+      "indice": 15,
+      "nome": "cintila",
+      "kenney": "star_08"
+    }
+  ]
+}
