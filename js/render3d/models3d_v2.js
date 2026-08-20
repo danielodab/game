@@ -129,10 +129,14 @@ var JOGO = (typeof window !== 'undefined')
     // voar é locomoção E parada ao mesmo tempo (a vespa flutua no lugar): o
     // mesmo clipe entra como `idle` e como `fly`, e a diferença fica no ritmo.
     pick(/Fly$|Flying$|Fly_Cycle$|Hover$/i, 'fly');
-    pick(/Attack$/i, 'attack');
-    pick(/Death$/i, 'die');
+    pick(/Attack$|Strike$|Slash$|Cast$/i, 'attack');
+    pick(/Death$|^die$|Dying$|Defeat$/i, 'die');
     pick(/Jump$|Jump_ToIdle$/i, 'jump');
-    pick(/HitReact/i, 'hit');
+    // `hit` alem de `HitReact`: o KayKit nomeia HitReact, outros acervos nomeiam
+    // hit, Damage ou Impact. Procurar so um nome deixava o Bruxo e o Xama SEM
+    // reacao a dano — o jogador batia e o boneco nao piscava. E o pior tipo de
+    // falha: nao da erro, so nao acontece nada.
+    pick(/HitReact|^hit$|Damage$|Impact$|Flinch$/i, 'hit');
     pick(/Eating$|Idle_2/i, 'interact');
     if (!out.idle && clipNames.length) out.idle = clipNames[0];
     if (out.attack) { out.cast = out.attack; out.shoot = out.attack; out.punch = out.attack; }

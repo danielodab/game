@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 2.0 — todo movimento que o jogo pede, classe por classe</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:900px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  table{border-collapse:collapse;font-size:12px}
+  th,td{border:1px solid #2b3542;padding:3px 8px;text-align:center}
+  th{background:#1b222c;color:#8895a6}
+  td.n{text-align:left;color:#cdd6e2}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700} .cai{color:#ffcf5c}
+</style>
+</head>
+<body>
+<h1>Todo movimento que o jogo pede — classe por classe</h1>
+<div class="sub">O renderizador chama <code>play(nome)</code> em momentos específicos: andar, correr,
+conjurar, apanhar, morrer. Aqui cada classe é montada de verdade e perguntada,
+movimento a movimento, se ela TEM aquele clipe — e, quando não tem, para onde cai.
+<b>✓</b> tem o próprio · <b>≈</b> cai num substituto · <b>✗</b> não tem nada.</div>
+<div id="summary">rodando…</div>
+<table id="tab"></table>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
+    'js/assets_bundle.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js','assets/embedded/models-monsters.js',
+    'assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  /* Os movimentos que o renderizador realmente pede, e quando.
+   * Tirados de renderer3d_v2.js: locomocao (1583), conjurar (2461),
+   * apanhar (2236), comemorar (2510), parado (1346). */
+  var MOVIMENTOS = [
+    ['idle',     'parado'],
+    ['walk',     'andando'],
+    ['run',      'correndo'],
+    ['attack',   'golpe corpo a corpo'],
+    ['cast',     'conjurar feitiço'],
+    ['shoot',    'tiro à distância'],
+    ['hit',      'levar dano'],
+    ['die',      'morrer'],
+    ['cheer',    'comemorar'],
+    ['dodge',    'esquivar'],
+    ['blocking', 'travado (raiz)'],
+    ['taunt',    'provocar']
+  ];
+
+  var CLASSES = [
+    ['sumo', 'Bárbaro'], ['arqueiro', 'Batedor'], ['bruxo', 'Bruxo'],
+    ['espadachim', 'Ladino'], ['curandeira', 'Paladina'], ['invocador', 'Xamã']
+  ];
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2, t0 = Date.now();
+    (function espera() {
+      if (!(M && M.isReady && M.isReady())) {
+        if (M && M.load) M.load(function () {});
+        if (Date.now() - t0 < 45000) return setTimeout(espera, 200);
+        document.getElementById('summary').textContent = 'modelos não carregaram';
+        window.__pronto = true; return;
+      }
+      roda();
+    })();
+
+    function roda() {
+      var faltas = [], caiu = [];
+      var h = '<tr><th class="n">movimento</th>';
+      CLASSES.forEach(function (c) { h += '<th>' + c[1] + '</th>'; });
+      h += '</tr>';
+
+      var uni = {};
+      CLASSES.forEach(function (c) {
+        try { uni[c[0]] = M.unit(c[0], {}); } catch (e) { uni[c[0]] = null; }
+      });
+
+      MOVIMENTOS.forEach(function (mv) {
+        h += '<tr><td class="n">' + mv[0] + ' <span style="color:#6f7c8c">· ' + mv[1] + '</span></td>';
+        CLASSES.forEach(function (c) {
+          var n = uni[c[0]];
+          if (!n || !n.userData || !n.userData.has) { h += '<td class="no">?</td>'; return; }
+          var tem = false, temAlgo = false;
+          try { tem = !!n.userData.has(mv[0]); } catch (e) {}
+          // `play` devolve a acao resolvida (com substituto) ou null
+          try { temAlgo = !!n.userData.play(mv[0], { fade: 0 }); } catch (e) {}
+          if (tem) { h += '<td class="ok">✓</td>'; }
+          else if (temAlgo) { h += '<td class="cai">≈</td>'; caiu.push(c[1] + '/' + mv[0]); }
+          else { h += '<td class="no">✗</td>'; faltas.push(c[1] + '/' + mv[0]); }
+        });
+        h += '</tr>';
+      });
+      document.getElementById('tab').innerHTML = h;
+
+      var el = document.getElementById('summary');
+      el.className = faltas.length ? 'fail' : 'allpass';
+      el.textContent = (faltas.length ? 'FALTAM — ' : 'TUDO COBERTO — ') +
+        faltas.length + ' sem nenhum clipe' +
+        (faltas.length ? ': ' + faltas.slice(0, 8).join(', ') : '') +
+        ' · ' + caiu.length + ' caem em substituto';
+      window.__pronto = true;
+    }
+  });
+})();
+</script>
+</body>
+</html>
