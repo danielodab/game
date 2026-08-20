@@ -1887,6 +1887,168 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  // ------------------------------------------------- MURO INVOCADO
+  // O verbo do Minotauro. O motor ja o guardava em `state.walls` e ja trocava
+  // o tipo da celula para 'wall' — mas o tabuleiro so se redesenha quando a
+  // CHAVE DA SALA muda, e essa chave amostra uma celula sim, outra nao. Um
+  // muro erguido numa casa impar nao mudava chave nenhuma: a classe inteira
+  // era invisivel. Redesenhar o tabuleiro por causa de uma casa tambem nao
+  // serve — ele foi reduzido a 29 malhas de proposito.
+  //
+  // Entao o muro invocado e desenhado como coisa PROPRIA, do mesmo jeito que a
+  // armadilha: uma laje de pedra na cor do elemento de quem a ergueu, que SOBE
+  // do chao quando nasce e AFUNDA quando o turno dela acaba. Sobe e afunda
+  // porque muro que aparece e some piscando nao se le como muro — o olho
+  // precisa ver a pedra vindo para entender que o caminho fechou.
+  var wallNodes = {};        // "x,y" -> malha de pe
+  var wallFalling = [];      // as que estao afundando, ainda na cena
+  var wallSig = '';
+  var wallGeo = null;
+  // A pedra tem de ter o PORTE DA PAREDE DA SALA. Escrita com 0,86 de largura e
+  // 1,05 de altura num mundo onde a casa mede CELL = 2,0 e a parede sobe a
+  // WALL_H = 3,1, ela saía com menos de meia casa de largura e um terço da
+  // altura: lia como CAIXOTE largado no chão, não como caminho fechado. O motor
+  // trata a célula como obstáculo alto — bloqueia passagem E visão —, então o
+  // desenho tem de dizer a mesma coisa que a regra.
+  var MURO_LARG = CELL * 0.9;
+  var MURO_ALT = WALL_H;
+  var MURO_SOBE = 0.42;      // segundos de subida e de descida
+
+  // A CAIXA E PROVISORIA, e de proposito.
+  //
+  // Entra aqui a arte do escudo quando ela existir: basta o modelo responder
+  // pela chave 'muro-escudo' em `Models3D2` que este desenho passa a usa-lo,
+  // encaixado no mesmo porte (largura da casa, altura da parede) e tingido com
+  // a cor do elemento. Nada mais no arquivo precisa mudar — subida, queda,
+  // faixa acesa e limpeza continuam valendo para os dois casos. Enquanto o
+  // modelo nao existe, a caixa segura o lugar: ela ja diz "o caminho fechou",
+  // que e a informacao que o jogador precisa ler.
+  var MURO_MODELO = 'muro-escudo';
+
+  function tingeMuro(no, cor) {
+    no.traverse(function (o) {
+      if (!o.isMesh || !o.material) return;
+      var m = o.material.clone();
+      if (m.color) m.color.copy(cor);
+      if (m.emissive) { m.emissive.copy(cor); m.emissiveIntensity = 0.16; }
+      o.material = m;
+      o.castShadow = true;
+      o.receiveShadow = true;
+    });
+  }
+
+  function corpoDoMuro(cor) {
+    try {
+      if (M && M.hasModel && M.hasModel(MURO_MODELO)) {
+        var cena = M.rawScene(MURO_MODELO);
+        if (cena) {
+          var no = cena.clone(true);
+          tingeMuro(no, cor);
+          // encaixa no porte da casa, seja qual for a escala em que veio
+          var cx = new THREE.Box3().setFromObject(no);
+          var tam = cx.getSize(new THREE.Vector3());
+          var k = Math.min(MURO_LARG / Math.max(0.001, tam.x),
+                           MURO_ALT / Math.max(0.001, tam.y),
+                           MURO_LARG / Math.max(0.001, tam.z));
+          if (isFinite(k) && k > 0) no.scale.setScalar(k);
+          no.position.y = -cx.min.y * (no.scale.y || 1);
+          return no;
+        }
+      }
+    } catch (e) {}
+    if (!wallGeo) wallGeo = new THREE.BoxGeometry(MURO_LARG, MURO_ALT, MURO_LARG);
+    var pedra = new THREE.Mesh(wallGeo, new THREE.MeshStandardMaterial({
+      color: cor, roughness: 0.85, metalness: 0.05,
+      emissive: cor, emissiveIntensity: 0.16
+    }));
+    pedra.position.y = MURO_ALT / 2;
+    pedra.castShadow = true;
+    pedra.receiveShadow = true;
+    return pedra;
+  }
+
+  function montaMuro(el) {
+    var cor = col3(R.elementColor(el));
+    var g = new THREE.Group();
+    var pedra = corpoDoMuro(cor);
+    g.add(pedra);
+
+    // Uma faixa acesa na base: diz "isto foi invocado, nao e parede da sala".
+    var faixa = new THREE.Mesh(
+      new THREE.BoxGeometry(MURO_LARG * 1.08, 0.09, MURO_LARG * 1.08),
+      new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.9, depthWrite: false })
+    );
+    faixa.position.y = 0.06;
+    faixa.renderOrder = 6;
+    g.add(faixa);
+
+    g.userData.pedra = pedra;
+    g.userData.faixa = faixa;
+    return g;
+  }
+
+  function rebuildWalls(st) {
+    var lista = (st && st.walls) || [];
+    var sig = '';
+    for (var i = 0; i < lista.length; i++) {
+      sig += lista[i].x + ',' + lista[i].y + ':' + (lista[i].element || '') + ';';
+    }
+    if (sig === wallSig) return;
+    wallSig = sig;
+
+    var vivos = {};
+    for (i = 0; i < lista.length; i++) {
+      var w = lista[i], k = w.x + ',' + w.y;
+      vivos[k] = 1;
+      if (wallNodes[k]) continue;
+      var node = montaMuro(w.element || 'neutro');
+      var p = R.world(w.x, w.y, 0);
+      node.position.set(p.x, 0, p.z);
+      node.userData.t0 = nowT;        // nasce afundada e sobe
+      scene.add(node);
+      wallNodes[k] = node;
+    }
+    // as que sairam da lista comecam a afundar em vez de sumir de uma vez
+    for (var k2 in wallNodes) {
+      if (vivos[k2]) continue;
+      var n = wallNodes[k2];
+      n.userData.tFim = nowT;
+      wallFalling.push(n);
+      delete wallNodes[k2];
+    }
+  }
+
+  function descartaMuro(n) {
+    if (n.parent) n.parent.remove(n);
+    n.traverse(function (o) { if (o.isMesh && o.material) o.material.dispose(); });
+  }
+
+  function updateWalls() {
+    var k;
+    for (k in wallNodes) {
+      var n = wallNodes[k];
+      var t = Math.min(1, (nowT - n.userData.t0) / MURO_SOBE);
+      // desacelera no fim: a pedra assenta, nao freia de supetao
+      var e = 1 - (1 - t) * (1 - t);
+      n.position.y = -MURO_ALT * (1 - e);
+      if (n.userData.faixa) n.userData.faixa.material.opacity = 0.55 + 0.35 * Math.sin(nowT * 2.2);
+    }
+    for (var i = wallFalling.length - 1; i >= 0; i--) {
+      var f = wallFalling[i];
+      var tf = (nowT - f.userData.tFim) / MURO_SOBE;
+      if (tf >= 1) { descartaMuro(f); wallFalling.splice(i, 1); continue; }
+      f.position.y = -MURO_ALT * (tf * tf);
+    }
+  }
+
+  function limpaMuros() {
+    for (var k in wallNodes) descartaMuro(wallNodes[k]);
+    wallNodes = {};
+    for (var i = 0; i < wallFalling.length; i++) descartaMuro(wallFalling[i]);
+    wallFalling.length = 0;
+    wallSig = '';
+  }
+
   var evNodes = [];
   var EV_COLORS = { buff: '#ffd76b', mystery: '#b98cff', portal: '#58b6f0', drain: '#e0556a', fountain: '#7ef0d4' };
   function rebuildTileEvents(st) {
@@ -2327,6 +2489,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     unitNodes = {};
     boardKey = null; ovSig = ''; evSig = '~init~';
+    limpaMuros();
     weather.id = '';
     if (st && st.grid) {
       buildBoard(st);
@@ -2575,6 +2738,7 @@ var JOGO = (typeof window !== 'undefined')
       if (sig !== ovSig) { ovSig = sig; rebuildOverlays(st); }
       rebuildTileEvents(st);
       rebuildTraps(st);
+      rebuildWalls(st);
       var en = engine();
       drawActiveRing(safe(function () { return en && en.activeUnit ? en.activeUnit(st) : null; }, null));
     }
@@ -2590,6 +2754,7 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     updateTraps();
+    updateWalls();
     updateWeather(dtv);
     updateRot(dtv);
     updateFocus(dtv);

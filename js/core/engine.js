@@ -1760,8 +1760,14 @@ var JOGO = (typeof window !== 'undefined')
             }
             if (!jaTem) {
               var cel = tileAt(state, x, y);
+              // O ELEMENTO fica guardado no muro, nao so no evento. O
+              // renderizador desenha a pedra pela lista `state.walls` (um muro
+              // dura varios turnos e o evento passa uma vez so), e sem isso ele
+              // nao teria como saber de que cor pintar o que ja estava de pe —
+              // mesmo problema que a armadilha teve, resolvido do mesmo jeito.
               state.walls.push({ x: x, y: y, antes: cel.type, deco: !!cel.deco,
                                  ownerUid: caster.uid, side: caster.side,
+                                 element: eff.element || spell.element || 'neutro',
                                  remaining: eff.duration || 3 });
               cel.type = 'wall';
               cel.deco = false;

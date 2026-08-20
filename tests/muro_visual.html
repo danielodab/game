@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a pedra do Minotauro na tela</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:900px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  #app{position:relative;width:960px;height:540px}
+  canvas#game-canvas{width:960px;height:540px;display:block}
+  #tira{margin-top:10px;border:1px solid #2b3542}
+</style>
+</head>
+<body>
+<h1>A pedra do Minotauro — o muro que o jogador VÊ</h1>
+<div class="sub">O motor já erguia o muro e <code>tests/muro.html</code> cobra as regras dele.
+Esta página cobra outra coisa: se a pedra APARECE. O tabuleiro só se redesenha quando a chave da
+sala muda, e essa chave amostra uma célula sim, outra não — um muro em casa ímpar não mudava chave
+nenhuma, e o verbo inteiro da classe ficava invisível. Aqui se mede em PIXELS: quantos mudaram no
+quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da queda.</div>
+<div id="summary">montando…</div>
+<ul id="lista"></ul>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<canvas id="tira" width="900" height="150"></canvas>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/ui/hud.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? '✓ ' : '✗ ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function diz(t) { document.getElementById('summary').textContent = t; }
+  function fecha() {
+    // Zero checagens NAO e sucesso: e a pagina tendo desistido antes de medir.
+    if (!res.length) {
+      var s0 = document.getElementById('summary');
+      s0.className = 'fail';
+      s0.textContent = 'FALHOU — nenhuma checagem chegou a rodar';
+      return;
+    }
+    var mau = res.filter(function (x) { return !x; }).length;
+    var s = document.getElementById('summary');
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = (mau ? 'FALHOU' : 'TUDO PASSOU') + ' — ' + (res.length - mau) +
+      ' de ' + res.length + ' checagens ok';
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, E = JOGO.Engine, P = JOGO.Progress, D = JOGO.DATA;
+    try { R.init(document.getElementById('game-canvas')); } catch (e) { return diz('init: ' + e.message); }
+    try { JOGO.UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try {
+        ok = JOGO.Models3D2 && JOGO.Models3D2.isReady() &&
+             JOGO.Models3D && JOGO.Models3D.isReady() && R.isReady();
+      } catch (e) {}
+      if (!ok && Date.now() - t0 < 60000) return setTimeout(espera, 250);
+      try {
+        P.reset();
+        // `unlockClass` JA cria o herói com id igual ao da classe. Chamar
+        // `createHero` em cima disso criava um segundo ('minotauro#2') e, pior,
+        // `heroIds()` devolve TODOS os heróis — os dois primeiros eram os
+        // iniciais, não os que eu tinha pedido. O teste media o sumo e dizia
+        // "há Minotauro em campo".
+        ['minotauro', 'sumo'].forEach(function (c) { try { P.unlockClass(c); } catch (e) {} });
+        ['minotauro', 'sumo'].forEach(function (c) {
+          var h = P.hero(c); if (h) h.level = 30;
+        });
+        G.startRun(['minotauro', 'sumo'], 'greenhouse');
+      } catch (e) { return diz('não desci: ' + e.message); }
+      setTimeout(roda, 500);
+    })();
+
+    // ------------------------------------------------------------- medida
+    var RW = 480, RH = 270;
+    var work = document.createElement('canvas');
+    work.width = RW; work.height = RH;
+    var wg = work.getContext('2d', { willReadFrequently: true });
+    var src = document.getElementById('game-canvas');
+    function pega() {
+      wg.drawImage(src, 0, 0, src.width, src.height, 0, 0, RW, RH);
+      return wg.getImageData(0, 0, RW, RH);
+    }
+    // Conta o pixel que mudou MUITO. O limiar alto é de propósito: mudança fraca
+    // é sombra e luz mexendo, e isso acontece com ou sem pedra. O que se quer
+    // contar é desenho novo, opaco, tapando o que estava atrás.
+    function difere(A, B) {
+      var d = A.data, e = B.data, n = 0;
+      for (var i = 0; i < d.length; i += 4) {
+        var dif = Math.abs(d[i] - e[i]) + Math.abs(d[i + 1] - e[i + 1]) + Math.abs(d[i + 2] - e[i + 2]);
+        if (dif > 90) n++;
+      }
+      return n;
+    }
+    function passos(n, dt) { for (var i = 0; i < n; i++) { try { R.render(dt); } catch (e) {} } }
+
+    // `Game.state` e PROPRIEDADE, nao funcao. Chamada como `G.state()` ela
+    // lanca e o `catch` engolia — a pagina fechava com zero checagens dizendo
+    // "tudo passou", que e a pior coisa que um teste sabe fazer.
+    function estado() { return G.state || null; }
+
+    function roda() {
+      var st = estado();
+      if (!st || !st.grid) { diz('sem estado de batalha'); return fecha(); }
+
+      var heroi = null;
+      for (var u = 0; u < st.units.length; u++) {
+        if (st.units[u].side === 'player' && st.units[u].classId === 'minotauro') heroi = st.units[u];
+      }
+      check('há Minotauro em campo', !!heroi,
+            heroi ? heroi.classId : (st.units.filter(function (x) { return x.side === 'player'; })
+                                       .map(function (x) { return x.classId; }).join(', ') || 'nenhum'));
+      if (!heroi) return fecha();
+
+      passos(8, 0.016);
+      var base = pega();
+      var parado = difere(pega(), base);
+      check('quadro parado não muda sozinho', parado < 600, parado + ' px mudaram sem muro');
+
+      // Ergue pelo MESMO caminho do jogo: um feitiço de muro do Minotauro.
+      // Prefere um muro de CAMINHO ELEMENTAL, não o neutro. Não é capricho: a
+      // pedra é pintada com a cor do elemento, e a neutra sai cinza sobre chão
+      // cinza — a medida ficava lutando contra o próprio contraste e a segunda
+      // pedra acrescentava só 1,3× em vez de ~2×. Com fogo ou água, o que se
+      // mede é desenho, não sorte de paleta. De quebra, cobre a regra que o
+      // muro herdou da armadilha: sai da cor de quem o ergueu.
+      var sid = null, sidNeutro = null;
+      Object.keys(D.spells || {}).forEach(function (k) {
+        var sp = D.spells[k];
+        if (!sp || sp.classId !== 'minotauro') return;
+        if (!(sp.effects || []).some(function (ef) { return ef.type === 'wall'; })) return;
+        if (sp.element && sp.element !== 'neutro') { if (!sid) sid = k; }
+        else if (!sidNeutro) sidNeutro = k;
+      });
+      if (!sid) sid = sidNeutro;
+      check('o Minotauro tem feitiço de muro nos dados', !!sid,
+            sid ? sid + ' (' + (D.spells[sid].element || '?') + ')' : '');
+      if (!sid) return fecha();
+
+      heroi.spells = (heroi.spells || []).slice();
+      if (heroi.spells.indexOf(sid) < 0) heroi.spells.push(sid);
+
+      var lancou = false, casa = null;
+      var alvos = [];
+      try { alvos = E.castTargets(st, heroi.uid, sid) || []; } catch (e) {}
+      for (var a = 0; a < alvos.length && !lancou; a++) {
+        heroi.pa = 12;
+        try { heroi.cooldowns = {}; heroi.castsThisTurn = {}; } catch (e) {}
+        try { lancou = E.cast(st, heroi.uid, sid, alvos[a].x, alvos[a].y); } catch (e2) {}
+        if (lancou) casa = alvos[a];
+      }
+      check('o feitiço de muro foi conjurado', lancou,
+            (D.spells[sid].name || sid) + (casa ? ' em ' + casa.x + ',' + casa.y : ''));
+      check('o motor registrou o muro', (st.walls || []).length > 0,
+            (st.walls || []).length + ' na lista');
+      if (!lancou || !(st.walls || []).length) return fecha();
+      check('o muro guarda o elemento do feitiço que o ergueu',
+            st.walls[0].element === D.spells[sid].element,
+            'muro ' + st.walls[0].element + ' · feitiço ' + D.spells[sid].element);
+
+      // ---- SUBIDA, quadro a quadro
+      var serie = [];
+      for (var f = 0; f < 26; f++) { passos(1, 0.033); serie.push(difere(pega(), base)); }
+      var pico = Math.max.apply(null, serie);
+      // O piso é uma FRAÇÃO DO QUADRO, não um número escolhido a dedo: 0,4% de
+      // 480×270 são 518 px, e é pouco de propósito. O renderizador de teste é o
+      // SwiftShader, que pinta pálido, e a medida ainda é feita numa redução de
+      // 960×540 para 480×270 — os dois achatam a diferença. O que responde
+      // "dá para ver?" de verdade é a checagem seguinte, que compara UMA pedra
+      // com DUAS e não depende de nenhum limiar absoluto.
+      var PISO = Math.round(RW * RH * 0.004);
+      check('a pedra APARECE na tela', pico > PISO,
+            'pico de ' + pico + ' px mudados (piso ' + PISO + ')');
+      check('a pedra SOBE (o começo mostra menos que o fim)', serie[25] > serie[0] * 1.25,
+            'quadro 1 = ' + serie[0] + ' px · quadro 26 = ' + serie[25] + ' px');
+      check('a subida assenta em vez de seguir crescendo',
+            Math.abs(serie[25] - serie[20]) < Math.max(150, serie[25] * 0.2),
+            'quadro 21 = ' + serie[20] + ' · quadro 26 = ' + serie[25]);
+
+      // ---- DUAS PEDRAS: a medida que se calibra sozinha.
+      // Se o que mudou no quadro fosse luz, sombra ou algum efeito solto, erguer
+      // a segunda pedra num lugar diferente não mudaria quase nada. Se for
+      // mesmo geometria nova tapando o chão, tem de crescer perto do dobro.
+      // Devolver PA e recarga ANTES de perguntar o alcance: `castTargets` já
+      // checa custo e recarga, então perguntar primeiro e pagar depois devolvia
+      // zero casas — e a falha parecia "não há onde erguer" quando era só
+      // "o herói ainda está sem PA da conjuração anterior".
+      passos(20, 0.033);
+      var antesDaSegunda = pega();
+      heroi.pa = 12; heroi.cooldowns = {}; heroi.castsThisTurn = {};
+      var alvos2 = [];
+      try { alvos2 = E.castTargets(st, heroi.uid, sid) || []; } catch (e) {}
+      // A casa mais LONGE da primeira, e não a próxima da lista. Numa vista
+      // isométrica duas pedras vizinhas se tapam: a de trás quase não acrescenta
+      // pixel, e a comparação media oclusão em vez de desenho (1,18× em vez de
+      // ~2×). Separando-as, o que sobra na conta é geometria nova de verdade.
+      var segunda = false;
+      var ordenados = alvos2.slice().sort(function (m, n2) {
+        var dm = Math.abs(m.x - casa.x) + Math.abs(m.y - casa.y);
+        var dn = Math.abs(n2.x - casa.x) + Math.abs(n2.y - casa.y);
+        return dn - dm;
+      });
+      for (var b = 0; b < ordenados.length && !segunda; b++) {
+        if (casa && ordenados[b].x === casa.x && ordenados[b].y === casa.y) continue;
+        heroi.pa = 12; heroi.cooldowns = {}; heroi.castsThisTurn = {};
+        try { segunda = E.cast(st, heroi.uid, sid, ordenados[b].x, ordenados[b].y); } catch (e2) {}
+      }
+      if (segunda) {
+        var casa2 = st.walls[st.walls.length - 1];
+        passos(30, 0.033);
+        var duas = difere(pega(), base);
+        // A conta certa é o ACRÉSCIMO da segunda pedra, não a razão entre os
+        // dois totais. O total da primeira não é só a pedra: entre a base e ela
+        // o herói ainda conjurou — animação de lançamento e clarão do efeito
+        // entram na diferença. Comparar 756 com 945 estava comparando
+        // (pedra + herói + efeito) com (pedra + pedra + herói + efeito), e a
+        // razão nunca podia dar 2×. O acréscimo isola a segunda pedra.
+        var quadroUma = difere(antesDaSegunda, base);
+        var acrescimo = duas - quadroUma;
+        check('a segunda pedra acrescenta desenho próprio', acrescimo > 120,
+              'uma pedra = ' + quadroUma + ' px · duas = ' + duas + ' px · acréscimo = ' +
+              acrescimo + ' px · casas ' + casa.x + ',' + casa.y + ' e ' + casa2.x + ',' + casa2.y);
+      } else {
+        check('consegui erguer uma segunda pedra para comparar', false,
+              alvos2.length + ' casas no alcance · ' + (st.walls || []).length + ' muros de pé');
+      }
+
+      // `?fica` deixa as pedras de pé e para aqui: é o modo de tirar retrato,
+      // porque o teste normal termina com o quadro já limpo.
+      if (location.href.indexOf('fica') >= 0) {
+        passos(20, 0.033);
+        diz('pedras de pé para retrato — ' + (st.walls || []).length + ' muros');
+        return;
+      }
+
+      // ---- QUEDA: gasta os turnos do muro
+      var vezes = 0;
+      while ((st.walls || []).length && vezes < 40) { try { E.endTurn(st); } catch (e) {} vezes++; }
+      check('o muro expira sozinho', (st.walls || []).length === 0, vezes + ' passagens de turno');
+
+      var caindo = [];
+      for (var g = 0; g < 22; g++) { passos(1, 0.033); caindo.push(difere(pega(), base)); }
+      var altoAntes = Math.max(pico, segunda ? duas : 0);
+      check('as pedras AFUNDAM e saem do quadro', caindo[caindo.length - 1] < altoAntes * 0.4,
+            'de ' + altoAntes + ' px para ' + caindo[caindo.length - 1] + ' px');
+
+      // tira de diagnóstico: a curva subida → parada → queda
+      try {
+        var c = document.getElementById('tira'), gg = c.getContext('2d');
+        var todos = serie.concat(caindo), mx = Math.max.apply(null, todos) || 1;
+        gg.fillStyle = '#12161c'; gg.fillRect(0, 0, c.width, c.height);
+        gg.strokeStyle = '#7fe08a'; gg.beginPath();
+        todos.forEach(function (v, k) {
+          var px = (k / (todos.length - 1)) * (c.width - 10) + 5;
+          var py = c.height - 8 - (v / mx) * (c.height - 20);
+          if (!k) gg.moveTo(px, py); else gg.lineTo(px, py);
+        });
+        gg.stroke();
+        gg.fillStyle = '#8895a6'; gg.font = '11px monospace';
+        gg.fillText('subida', 10, 14);
+        gg.fillText('queda', c.width - 60, 14);
+        gg.fillText('pico ' + mx + ' px', 10, c.height - 4);
+      } catch (e) {}
+
+      fecha();
+    }
+  });
+})();
+</script>
+</body>
+</html>
