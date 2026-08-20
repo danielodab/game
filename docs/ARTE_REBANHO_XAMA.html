@@ -275,60 +275,6 @@
   }
   .ficha dd { margin: 2px 0 0; color: var(--ink); font-variant-numeric: tabular-nums; }
 
-  /* ------------------------------------------------------------ prompts */
-  .prompt {
-    grid-column: 1 / -1;
-    margin-top: 6px;
-    border: 1px solid var(--line);
-    background: var(--sunken);
-  }
-  .prompt-cab {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--line);
-  }
-  .prompt-rot {
-    font-family: var(--f-data);
-    font-size: 9.5px;
-    font-weight: 600;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-    color: var(--faint);
-  }
-  .copiar {
-    font-family: var(--f-data);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: transparent;
-    border: 1px solid var(--accent);
-    border-radius: 2px;
-    padding: 4px 11px;
-    cursor: pointer;
-    transition: background 0.12s ease, color 0.12s ease;
-  }
-  .copiar:hover, .copiar:focus-visible {
-    background: var(--accent);
-    color: var(--ground);
-  }
-  .copiar:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .copiar[data-feito="1"] { background: var(--accent); color: var(--ground); }
-  .prompt pre {
-    margin: 0;
-    padding: 14px 16px;
-    font-family: var(--f-data);
-    font-size: 12px;
-    line-height: 1.62;
-    color: var(--ink);
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
   ul { max-width: 66ch; padding-left: 20px; margin: 0 0 18px; }
   li { margin-bottom: 9px; }
 
@@ -450,33 +396,6 @@
 </section>
 
 <section>
-  <h2>Como usar os prompts</h2>
-  <p class="lede">Cada criatura abaixo traz um prompt pronto para colar. Imagem primeiro,
-  3D depois — que é como você já vinha fazendo.</p>
-
-  <p><strong>Estão em inglês de propósito.</strong> Os modelos de imagem foram treinados
-  sobre legendas em inglês e respondem visivelmente melhor nele, mesmo quando a interface
-  está em português. Cole como está.</p>
-
-  <p><strong>Cada prompt já traz o bloco de estilo no fim</strong> — fundo cinza liso, luz
-  difusa sem sombra projetada, material quase sem cor, vista três quartos, corpo inteiro no
-  quadro. Isso não é enfeite: é o que faz a imagem virar 3D limpo depois. Fundo com cenário
-  vira geometria no modelo, sombra dura vira buraco, e cor saturada briga com o tingimento
-  do jogo.</p>
-
-  <p><strong>Prompt negativo</strong>, se a ferramenta aceitar um: <code>saturated colors,
-  colored rim lighting, scenery, ground plane, multiple creatures, cropped limbs, action pose,
-  motion blur, text, watermark</code>.</p>
-
-  <p><strong>Se der para gerar duas vistas</strong> — frente e lado, na mesma folha e na mesma
-  escala —, o passo de 3D acerta muito mais o volume das costas. Vale para as três grandes
-  (Colosso, Golem, Sentinela), onde o volume é o assunto.</p>
-
-  <p>E uma coisa que só descobri medindo: a criatura vai aparecer com cerca de 60 pixels de
-  altura em jogo. Se a imagem gerada só funcionar de perto, ela não vai funcionar.</p>
-</section>
-
-<section>
   <h2>As sete</h2>
   <p class="lede">Cada uma existe para fazer uma coisa que as outras não fazem. A silhueta
   precisa dizer isso antes de o jogador ler o nome.</p>
@@ -505,13 +424,6 @@
         <dt>id</dt><dd>sum-familiar</dd>
       </dl>
     </div>
-    <div class="prompt">
-      <div class="prompt-cab">
-        <span class="prompt-rot">prompt de imagem</span>
-        <button class="copiar" type="button">copiar</button>
-      </div>
-      <pre>A small friendly creature companion the size of a lapdog. Oversized rounded head roughly one third of its total height, short compact four-legged body, large gentle eyes, soft tufted fur at the ears and tail tip. No fangs, no claws, curious and harmless expression. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
-    </div>
   </div>
 
   <div class="bicho">
@@ -537,13 +449,6 @@
         <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
         <dt>id</dt><dd>sum-ember-hound</dd>
       </dl>
-    </div>
-    <div class="prompt">
-      <div class="prompt-cab">
-        <span class="prompt-rot">prompt de imagem</span>
-        <button class="copiar" type="button">copiar</button>
-      </div>
-      <pre>A gaunt hound-like creature built for speed, twice as long as it is tall. Head carried low, haunches high, thin wiry legs, ribs visible under the hide. A single continuous seam of deep cracked fissures runs from the muzzle along the spine to the tip of the tail. Charcoal-like hide, dry and rough. Lean and starved, never muscular. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
     </div>
   </div>
 
@@ -573,13 +478,6 @@
         <dt>id</dt><dd>sum-magma-colossus</dd>
       </dl>
     </div>
-    <div class="prompt">
-      <div class="prompt-cab">
-        <span class="prompt-rot">prompt de imagem</span>
-        <button class="copiar" type="button">copiar</button>
-      </div>
-      <pre>A towering colossus of cooled molten rock that only loosely holds a humanoid shape. Massive asymmetric shoulders far wider than the hips, one shoulder visibly heavier and higher than the other, long heavy arms hanging near the ground, almost no head — just a shallow mass sunk between the shoulders. Deep fissures split the chest and shoulder plates. Broken crust surface of slabs and shear faces. It must read as matter that stood up, not as a stone man. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
-    </div>
   </div>
 
   <div class="bicho">
@@ -607,13 +505,6 @@
         <dt>id</dt><dd>sum-tide-nymph</dd>
       </dl>
     </div>
-    <div class="prompt">
-      <div class="prompt-cab">
-        <span class="prompt-rot">prompt de imagem</span>
-        <button class="copiar" type="button">copiar</button>
-      </div>
-      <pre>A small child-sized figure made of clear flowing water. Unnaturally long slender arms held forward in a cupping, tending gesture. Smooth featureless face with no mouth. The lower half has no legs and no feet: it dissolves downward into ripples and trailing droplets. Translucent and calm, entirely harmless — no weapon, no claw, no tooth anywhere on it. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
-    </div>
   </div>
 
   <div class="bicho">
@@ -639,13 +530,6 @@
         <dt>clipes</dt><dd>idle · attack · hit<br>death</dd>
         <dt>id</dt><dd>sum-stone-sentinel</dd>
       </dl>
-    </div>
-    <div class="prompt">
-      <div class="prompt-cab">
-        <span class="prompt-rot">prompt de imagem</span>
-        <button class="copiar" type="button">copiar</button>
-      </div>
-      <pre>A tall vertical monolith of rough hewn stone, taller than a man and nearly as wide at the base as it is tall. Two deep horizontal grooves carved near the top serve as eyes. No legs and no separate arms, at most shallow ridges suggesting shoulders. The base is buried, merging into cracked broken ground rather than resting on it. Weathered chiselled surface, chipped edges, patches of lichen. It must read as an obstacle blocking a passage. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
     </div>
   </div>
 
@@ -674,13 +558,6 @@
         <dt>id</dt><dd>sum-mountain-golem</dd>
       </dl>
     </div>
-    <div class="prompt">
-      <div class="prompt-cab">
-        <span class="prompt-rot">prompt de imagem</span>
-        <button class="copiar" type="button">copiar</button>
-      </div>
-      <pre>An enormous golem shaped like a hillside that stood up and took a few steps. Extremely wide base narrowing to an irregular crest, no neck, the head barely distinct from the shoulders. Dead bare trees embedded across its back, loose scree and moss down its slopes, a thin vein of water running over one shoulder. Mountain silhouette rather than human silhouette: wider than tall at the base. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
-    </div>
   </div>
 
   <div class="bicho">
@@ -705,13 +582,6 @@
         <dt>clipes</dt><dd>fly · attack · hit<br>death</dd>
         <dt>id</dt><dd>sum-storm-falcon</dd>
       </dl>
-    </div>
-    <div class="prompt">
-      <div class="prompt-cab">
-        <span class="prompt-rot">prompt de imagem</span>
-        <button class="copiar" type="button">copiar</button>
-      </div>
-      <pre>A grey falcon with its wings held fully spread, wingspan twice the height of the body. Small compact body, sharp layered feathers, tail fanned, feet tucked back. Thin branching lines of old lightning caught between the feathers. Shown in flight with wings open — never perched, never with folded wings. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
     </div>
   </div>
 </section>
@@ -746,13 +616,6 @@
         <dt>faz</dt><dd>puxa 2 casas por turno<br>+ dano de água</dd>
       </dl>
     </div>
-    <div class="prompt">
-      <div class="prompt-cab">
-        <span class="prompt-rot">prompt de imagem</span>
-        <button class="copiar" type="button">copiar</button>
-      </div>
-      <pre>A standing mass of dark water that vaguely holds the shape of drowned figures pressed together. Very heavy wide base tapering upward like a wave frozen at the moment of breaking. A hollow void where a face should be. Indistinct arms and shoulders suggested inside the mass, impossible to count how many bodies are in there. Not clearly humanoid. Smooth, slow-moving surface. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
-    </div>
   </div>
 
   <div class="bicho criar">
@@ -781,13 +644,6 @@
         <dt>faz</dt><dd>empurra 2 casas em raio 2<br>no início do turno</dd>
       </dl>
     </div>
-    <div class="prompt">
-      <div class="prompt-cab">
-        <span class="prompt-rot">prompt de imagem</span>
-        <button class="copiar" type="button">copiar</button>
-      </div>
-      <pre>A vertical spiralling funnel of wind, wide at the top and narrowing to a thin point where it touches the ground. Slowly rotating, with dust, grit and small debris caught in the spiral. A single calm face high near the top, looking downward. No arms, no legs, no body: it is a column, not a creature. Rooted and still, like a totem. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
-    </div>
   </div>
 </section>
 
@@ -815,29 +671,3 @@
 
 </div>
 
-<script>
-  document.querySelectorAll('.copiar').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var pre = b.closest('.prompt').querySelector('pre');
-      var txt = pre.textContent;
-      function feito() {
-        b.textContent = 'copiado';
-        b.dataset.feito = '1';
-        setTimeout(function () { b.textContent = 'copiar'; b.dataset.feito = ''; }, 1600);
-      }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt).then(feito, seleciona);
-      } else { seleciona(); }
-      function seleciona() {
-        // Sem permissão de área de transferência ainda dá para ajudar: seleciona
-        // o texto inteiro para que um Ctrl+C resolva.
-        var r = document.createRange();
-        r.selectNodeContents(pre);
-        var sel = window.getSelection();
-        sel.removeAllRanges(); sel.addRange(r);
-        b.textContent = 'ctrl+c';
-        setTimeout(function () { b.textContent = 'copiar'; }, 2200);
-      }
-    });
-  });
-</script>
