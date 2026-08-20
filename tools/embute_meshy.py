@@ -95,6 +95,28 @@ CLASSES = [
         "dying_backwards":        "death",
         "ForwardRight_Run_Fight": "Dodge",
     }),
+    # CURANDEIRA (v3). ESTA VEIO DIFERENTE DAS OUTRAS: nos personagens
+    # anteriores os seis .glb eram redundantes (cada um trazia todas as acoes) e
+    # bastava escolher o mais completo. Nos dela cada arquivo traz UMA acao so,
+    # entao nao ha "o mais completo" — e preciso FUNDIR os seis. Por isso a
+    # entrada abaixo passa `None` no lugar do arquivo: o mapa deixa de ser
+    # {nome-da-acao: papel} e vira {arquivo: papel}.
+    #
+    # E DOIS ARQUIVOS ESTAO TROCADOS EM RELACAO AO NOME. `attack.glb` contem
+    # `Slap_Reaction` — reacao a um tapa, ou seja, LEVAR dano — e `hit.glb`
+    # contem `mage_soell_cast_6` (sic), que e uma conjuracao, ou seja, ATACAR.
+    # Mapeio pelo que a animacao E, nao pelo nome do arquivo: uma curandeira que
+    # apanha quando manda atacar seria um defeito silencioso, dificil de achar
+    # depois. Se o Daniel quis mesmo um tapa como ataque dela, e so trocar as
+    # duas linhas.
+    ("curandeiro", "curandeira", None, {
+        "idle.glb":   "idle",
+        "walk.glb":   "walk",
+        "run.glb":    "run",
+        "hit.glb":    "attack",      # mage_soell_cast_6 -> conjurar
+        "attack.glb": "HitReact",    # Slap_Reaction     -> levar dano
+        "death.glb":  "death",
+    }),
     ("bruxo", "mago", "idle.glb", {
         "Idle_02":                 "idle",
         "Walking":                 "walk",
@@ -182,6 +204,65 @@ def renomeia_acoes(mapa):
     return achadas, perdidas
 
 
+def funde_arquivos(pasta_orig, mapa):
+    """Junta SEIS .glb de uma acao cada num personagem so.
+
+    Fica com o corpo do primeiro arquivo e traz das outras cinco importacoes
+    apenas a ACAO, jogando fora o corpo repetido. Da certo porque os seis saem
+    do mesmo personagem no Meshy: os ossos tem os mesmos nomes, entao uma curva
+    gravada num arquivo toca no esqueleto do outro sem tradução.
+
+    As acoes precisam de `use_fake_user`: sem dono, o Blender descarta o
+    data-block no momento em que eu apago o objeto que a trazia, e o export sai
+    com uma animacao so — foi o que aconteceu na primeira tentativa.
+    """
+    itens = list(mapa.items())
+    achadas, perdidas = {}, []
+
+    for i, (arquivo, papel) in enumerate(itens):
+        caminho = os.path.join(pasta_orig, arquivo)
+        if not os.path.exists(caminho):
+            perdidas.append(arquivo); continue
+
+        antes_obj = set(o.name for o in bpy.data.objects)
+        antes_act = set(a.name for a in bpy.data.actions)
+        bpy.ops.import_scene.gltf(filepath=caminho)
+        novos_obj = [o for o in bpy.data.objects if o.name not in antes_obj]
+        novas_act = [a for a in bpy.data.actions if a.name not in antes_act]
+
+        if not novas_act:
+            perdidas.append(arquivo + " (sem acao)")
+        else:
+            act = novas_act[0]
+            act.name = "papel_" + papel
+            act.use_fake_user = True
+            achadas[papel] = arquivo
+            for extra in novas_act[1:]:
+                bpy.data.actions.remove(extra)
+
+        if i == 0:
+            limpa_lixo()          # so no primeiro: e o corpo que fica
+        else:
+            for o in novos_obj:   # corpo repetido vai fora; a acao ja esta salva
+                try: bpy.data.objects.remove(o, do_unlink=True)
+                except Exception: pass
+
+    # tira o prefixo agora que nao ha risco de colidir com nome importado
+    for a in bpy.data.actions:
+        if a.name.startswith("papel_"):
+            a.name = a.name[len("papel_"):]
+    for a in list(bpy.data.actions):
+        if a.name not in mapa.values():
+            bpy.data.actions.remove(a)
+
+    # malha e textura repetidas ficam orfas depois de remover os objetos
+    for _ in range(3):
+        try: bpy.ops.outliner.orphans_purge(do_recursive=True)
+        except Exception: break
+
+    return achadas, perdidas
+
+
 def main():
     if not os.path.isdir(TMP):
         os.makedirs(TMP)
@@ -210,16 +291,23 @@ def main():
 
     rel = []
     for classe, pasta, arquivo, mapa in CLASSES:
-        origem = os.path.join(ORIG, pasta, pasta, arquivo)
-        if not os.path.exists(origem):
-            print("FALTA:", origem); continue
-
+        base = os.path.join(ORIG, pasta, pasta)
         bpy.ops.wm.read_factory_settings(use_empty=True)
-        bpy.ops.import_scene.gltf(filepath=origem)
 
-        limpa_lixo()
+        if arquivo is None:
+            # personagem que veio com uma acao por arquivo: funde os seis
+            if not os.path.isdir(base):
+                print("FALTA:", base); continue
+            achadas, perdidas = funde_arquivos(base, mapa)
+            origem = os.path.join(base, list(mapa.keys())[0])
+        else:
+            origem = os.path.join(base, arquivo)
+            if not os.path.exists(origem):
+                print("FALTA:", origem); continue
+            bpy.ops.import_scene.gltf(filepath=origem)
+            limpa_lixo()
+            achadas, perdidas = renomeia_acoes(mapa)
         ntex = reamostra_texturas()
-        achadas, perdidas = renomeia_acoes(mapa)
 
 
         tris = 0

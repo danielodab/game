@@ -166,7 +166,9 @@ var JOGO = (typeof window !== 'undefined')
     // novo ja vem com as armas modeladas e a musculatura esculpida, e manter
     // as linhas antigas faria o jogo procurar malha inexistente em silencio.
     sumo: { model: 'meshy_sumo', show: ['1H_Axe', '1H_Axe_Offhand', 'Barbarian_Cape'],
-            scale: 1.16, tint: '#d4553f', accent: '#ffd08a', weapon: '1H_Axe',
+            // 1,28 e nao 1,22: `build` encurta as pernas (perna 0.88), entao o
+            // corpo mede ~5% menos do que a escala promete. Medido, nao suposto.
+            scale: 1.28, tint: '#d4553f', accent: '#ffd08a', weapon: '1H_Axe',
             // `cabeca` 0,92 -> 0,78: com o tronco a 1,42 a cabeça ficava do mesmo
             // tamanho de antes e, ao lado de um corpo largo, LIA como maior.
             // Quem tem músculo tem a cabeça proporcionalmente MENOR — foi o
@@ -184,7 +186,7 @@ var JOGO = (typeof window !== 'undefined')
     // O grimorio fechado estava desligado. O mago segurava so o cajado e a mao
     // esquerda ficava vazia — de longe lia como bengala.
     bruxo: { model: 'meshy_bruxo', show: ['2H_Staff', 'Spellbook', 'Mage_Hat', 'Mage_Cape'],
-            scale: 1.02, tint: '#7a5fa0', accent: '#b98cff', weapon: '2H_Staff',
+            scale: 1.00, tint: '#7a5fa0', accent: '#b98cff', weapon: '2H_Staff',
             headSwap: { model: 'barbarian', mesh: 'Barbarian_Head' },
             headTint: '#fbfaf7', headWhite: 0.88,
             concept: 'Mago velho de barba branca, chapéu pontudo e cajado' },
@@ -208,13 +210,22 @@ var JOGO = (typeof window !== 'undefined')
                         malhas: ['Rogue_Body', 'Rogue_ArmLeft', 'Rogue_ArmRight',
                                  'Rogue_LegLeft', 'Rogue_LegRight'] },
             concept: 'Ladino ágil de adagas gêmeas, roupa preta e máscara' },
-    curandeiro: { model: 'knight', show: ['1H_Sword', 'Badge_Shield', 'Knight_Cape'],
-            scale: 1.00, tint: '#f0c05a', accent: '#fff2c2', weapon: '1H_Sword',
-            concept: 'Paladina de armadura clara e escudo de brasão' },
+    // CURANDEIRA (v3, corpo do Meshy feito pelo usuario). Substitui o cavaleiro
+    // KayKit que segurava o lugar desde que a Paladina virou Curandeiro. Sem
+    // `show`: o corpo ja vem com o cajado, os frascos no cinto e a capa
+    // modelados — emprestar peca do KayKit so poria espada em cima de cajado.
+    //
+    // O TOM continua dourado, e nao o verde-agua da roupa dela: o Xama ja usa
+    // '#3f8f8a', e duas classes de apoio na mesma cor seriam indistinguiveis no
+    // tabuleiro, que e onde a cor precisa trabalhar. O dourado esta na arte
+    // dela de qualquer forma (todo o filete da roupa e o brilho do cajado).
+    curandeiro: { model: 'meshy_curandeiro',
+            scale: 0.96, tint: '#e8c46a', accent: '#fff4cf',
+            concept: 'Curandeira de cajado com luz, frascos no cinto e roupa verde-clara' },
     // MINOTAURO (v3). Nasce ja com o corpo do Meshy — nao passou pela fase
     // KayKit, entao nao tem `show` nem guarda-roupa a ligar.
     minotauro: { model: 'meshy_minotauro',
-            scale: 1.22, tint: '#8a6a4f', accent: '#d9c39a',
+            scale: 1.28, tint: '#8a6a4f', accent: '#d9c39a',
             concept: 'Minotauro de escudo enorme, que ergue muro no chao' },
     invocador: { model: 'meshy_invocador', show: ['Spellbook_open', '1H_Wand', 'Mage_Cape'],
             scale: 1.00, tint: '#3f8f8a', accent: '#8ff0d8', weapon: '1H_Wand',
@@ -1150,7 +1161,17 @@ var JOGO = (typeof window !== 'undefined')
     // PORTE NORMALIZADO: cada acervo nasce numa escala diferente; medimos a
     // altura natural e ajustamos para a altura-alvo do papel. Assim um lobo do
     // Quaternius e um esqueleto do KayKit convivem sem um virar brinquedo.
-    var targetH = look.classId ? 2.05 : (look.pet ? 1.20 : (look.fusion ? 2.55 : 1.80));
+    // A ESCADA DE PORTE. Heroi 2,05 m vezes a escala da classe, e a escala e
+    // que faz a leitura: o Minotauro sobe a 2,62 m e o Sumo a 2,50 m, os dois
+    // guardas do grupo; a Curandeira desce a 1,97 m e o Ladino a 1,99 m.
+    //
+    // A FUSAO subiu de 2,55 para 3,00 m junto com eles, e nao por capricho: com
+    // o Minotauro a 2,62 m, um corpo fundido de 2,55 m ficaria MENOR que a
+    // metade dele que entrou na fusao. Fundir tem de ser visivelmente maior que
+    // qualquer um dos dois sozinho — e essa era a regra que estava a ponto de
+    // quebrar. Chefe nao muda: 2,95 m vezes a escala propria dele (1,7 a 1,85)
+    // ja poe os chefes em 5,0 a 5,5 m, muito acima de tudo isto.
+    var targetH = look.classId ? 2.05 : (look.pet ? 1.20 : (look.fusion ? 3.00 : 1.80));
     if (opts.boss || look.boss) targetH = 2.95;
     var natural = src.natural || 1.8;
     var scale = (targetH / natural) * (look.scale || 1) * (opts.scale || 1);

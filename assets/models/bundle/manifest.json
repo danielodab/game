@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-20T08:49:56",
+ "gerado": "2026-08-20T13:59:30",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -383,6 +383,12 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "meshy_curandeiro",
+   "arquivo": "models-meshy/meshy_curandeiro.glb",
+   "bytes": 1405560
+  },
+  {
+   "alvo": "MODELS",
    "chave": "meshy_bruxo",
    "arquivo": "models-meshy/meshy_bruxo.glb",
    "bytes": 1107700
@@ -580,6 +586,14 @@
    "run",
    "walk"
   ],
+  "meshy_curandeiro": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
   "meshy_bruxo": [
    "attack",
    "death",
@@ -589,6 +603,6 @@
    "walk"
   ]
  },
- "totalBytes": 24220728,
- "totalBase64": 32294428
+ "totalBytes": 25626288,
+ "totalBase64": 34168508
 }

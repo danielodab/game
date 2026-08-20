@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a escada de porte das sete classes</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:940px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  #app{position:absolute;left:-4000px;top:0;width:520px;height:640px}
+  canvas#game-canvas{width:520px;height:640px;display:block}
+  #tira{margin-top:12px;border:1px solid #2b3542;background:#0b0d10}
+</style>
+</head>
+<body>
+<h1>A escada de porte — as sete classes lado a lado</h1>
+<div class="sub">O Minotauro e o Sumo têm de ter mais presença que o resto; a Curandeira e o Ladino,
+menos. Esta página mede a altura de cada corpo <em>como ele sai do renderizador</em>, com a
+animação de repouso rodando, e desenha as sete na mesma régua — porque número em tabela não
+diz se a leitura no tabuleiro está certa, e silhueta diz.</div>
+<div id="summary">montando…</div>
+<ul id="lista"></ul>
+<canvas id="tira" width="1180" height="470"></canvas>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? '✓ ' : '✗ ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    if (!res.length) { s.className = 'fail'; s.textContent = 'FALHOU — nenhuma checagem rodou'; return; }
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = (mau ? 'FALHOU' : 'TUDO PASSOU') + ' — ' + (res.length - mau) +
+      ' de ' + res.length + ' checagens ok';
+  }
+
+  // A ordem que o jogo PROMETE, do maior ao menor. Não é gosto: sai da função
+  // de cada classe. Guarda grande na frente, apoio leve atrás.
+  var ORDEM = ['minotauro', 'sumo', 'bruxo', 'invocador', 'arqueiro', 'espadachim', 'curandeiro'];
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2, D = JOGO.DATA;
+    var cv = document.getElementById('game-canvas');
+    var ren, cena, cam;
+
+    try {
+      ren = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: false });
+      ren.setSize(520, 640, false);
+      ren.setClearColor(0x0b0d10, 1);
+      cena = new THREE.Scene();
+      cam = new THREE.PerspectiveCamera(28, 520 / 640, 0.1, 100);
+      var luz = new THREE.DirectionalLight(0xfff0d0, 2.0); luz.position.set(2.4, 3.2, 3.0);
+      cena.add(luz); cena.add(new THREE.AmbientLight(0x8fa6c0, 1.1));
+    } catch (e) { return check('WebGL disponível', false, e.message); }
+
+    // PEDIR O CARREGAMENTO. `isReady()` responde "já carregou?", não "carregue";
+    // sem esta chamada ele fica falso para sempre e o teste só descobre isso
+    // quando o tempo estoura — e aí mede com `M.unit` devolvendo nulo nas sete.
+    try { M.load(function () {}); } catch (e) { check('M.load', false, e.message); }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try { ok = M && M.isReady(); } catch (e) {}
+      if (!ok && Date.now() - t0 < 90000) return setTimeout(espera, 250);
+      check('os modelos carregaram', !!ok, ok ? '' : 'estourou o tempo');
+      mede();
+    })();
+
+    function mede() {
+      var g = document.getElementById('tira').getContext('2d');
+      var medidas = [];
+
+      ORDEM.forEach(function (cid) {
+        var obj = null;
+        try { obj = M.unit(cid, { classId: cid }); } catch (e) {}
+        if (!obj) { medidas.push({ cid: cid, h: 0, erro: 'não consegui montar' }); return; }
+        cena.add(obj);
+        // MEDIR DEPOIS DE POSADO. A pose de repouso do arquivo não é a pose que
+        // o jogador vê: o mixer é que põe o corpo de pé, e nos modelos do Meshy
+        // a diferença entre as duas chega a virar o boneco de cabeça para baixo.
+        // Medir a caixa antes de rodar o mixer mede o arquivo, não o jogo.
+        try {
+          obj.userData.play('idle', { fade: 0 });
+          obj.userData.mixer.update(0.6);
+        } catch (e2) {}
+        obj.updateMatrixWorld(true);
+        // A ALTURA VEM DO PRÓPRIO RENDERIZADOR, não de um Box3 meu.
+        //
+        // `Box3.setFromObject` NÃO aplica skinning: ele mede a malha na pose de
+        // repouso do arquivo. Nos rigs do Meshy essa malha vem degenerada — o
+        // tamanho mora nos OSSOS —, e a conta devolvia 0,02 m para o Sumo e para
+        // a Curandeira enquanto o Batedor (KayKit, malha normal) dava 2,45 m.
+        // Comparar os dois assim não compara nada. `models3d_v2` já resolve isso
+        // em `visibleBodyBox`, que cai para a caixa dos ossos quando a malha é
+        // degenerada, e guarda o resultado em `userData.height`. É esse número
+        // que o jogo usa para posicionar barra de vida e câmera, então é ele que
+        // vale aqui também.
+        var h = (obj.userData && obj.userData.height) || 0;
+        var larg = (obj.userData && obj.userData.radius ? obj.userData.radius * 2 : 0.7);
+        medidas.push({ cid: cid, h: h, larg: larg, obj: obj });
+        cena.remove(obj);
+      });
+
+      var falhas = medidas.filter(function (m) { return m.erro; });
+      check('as sete classes montam', falhas.length === 0,
+            falhas.map(function (m) { return m.cid; }).join(', '));
+      if (falhas.length) { desenha(g, medidas); return fecha(); }
+
+      // ---- as regras que o porte tem de cumprir
+      var porNome = {};
+      medidas.forEach(function (m) { porNome[m.cid] = m; });
+
+      var maior = medidas.slice().sort(function (a, b) { return b.h - a.h; })[0];
+      check('o MINOTAURO é o mais alto de todos', maior.cid === 'minotauro',
+            'o mais alto é ' + maior.cid + ' com ' + maior.h.toFixed(2) + ' m');
+
+      var semGuardas = medidas.filter(function (m) {
+        return m.cid !== 'minotauro' && m.cid !== 'sumo';
+      });
+      var maiorResto = semGuardas.sort(function (a, b) { return b.h - a.h; })[0];
+      check('o SUMO passa de todo mundo que não é o Minotauro',
+            porNome.sumo.h > maiorResto.h,
+            'sumo ' + porNome.sumo.h.toFixed(2) + ' m · maior do resto: ' +
+            maiorResto.cid + ' ' + maiorResto.h.toFixed(2) + ' m');
+
+      // «presença» não é só altura: os dois guardas têm de destacar de VERDADE,
+      // não por três centímetros que ninguém vê a 40 px no tabuleiro.
+      check('a diferença é VISÍVEL (guardas ≥ 15% acima do maior dos outros)',
+            porNome.sumo.h >= maiorResto.h * 1.15,
+            'sumo/' + maiorResto.cid + ' = ' + (porNome.sumo.h / maiorResto.h).toFixed(2) + '×');
+
+      check('a CURANDEIRA está entre as menores', porNome.curandeiro.h <= maiorResto.h,
+            'curandeira ' + porNome.curandeiro.h.toFixed(2) + ' m');
+
+      // e ninguém pode virar anão nem gigante: a faixa toda tem de caber num
+      // tabuleiro cuja casa mede 2,0 m e cuja parede sobe a 3,1 m.
+      var menor = medidas.slice().sort(function (a, b) { return a.h - b.h; })[0];
+      check('nenhuma classe passa da parede da sala (3,1 m)', maior.h < 3.1,
+            maior.cid + ' com ' + maior.h.toFixed(2) + ' m');
+      check('nenhuma classe fica abaixo de 1,7 m', menor.h > 1.7,
+            menor.cid + ' com ' + menor.h.toFixed(2) + ' m');
+
+      // a fusão tem de ser maior que QUALQUER metade que a compõe
+      var alvoFus = 3.00;
+      check('a fusão (3,00 m) fica acima da classe mais alta', alvoFus > maior.h,
+            'fusão ' + alvoFus.toFixed(2) + ' m · ' + maior.cid + ' ' + maior.h.toFixed(2) + ' m');
+
+      desenha(g, medidas);
+      fecha();
+    }
+
+    // ---- a tira: cada classe desenhada na MESMA régua, com o chão alinhado
+    function desenha(g, medidas) {
+      var W = 1180, H = 470, PISO = H - 34, ESC = 118;   // px por metro
+      g.fillStyle = '#0b0d10'; g.fillRect(0, 0, W, H);
+
+      // réguas de referência
+      [[2.05, 'herói base', '#3a4652'], [3.00, 'fusão', '#5a4a2a'],
+       [2.0, 'casa', '#26313c']].forEach(function (r) {
+        var y = PISO - r[0] * ESC;
+        g.strokeStyle = r[2]; g.setLineDash([4, 5]); g.beginPath();
+        g.moveTo(0, y); g.lineTo(W, y); g.stroke(); g.setLineDash([]);
+        g.fillStyle = r[2]; g.font = '10px monospace';
+        g.fillText(r[1] + ' ' + r[0].toFixed(2) + ' m', 6, y - 4);
+      });
+      g.strokeStyle = '#2b3542'; g.beginPath();
+      g.moveTo(0, PISO); g.lineTo(W, PISO); g.stroke();
+
+      var larguraCol = W / medidas.length;
+      medidas.forEach(function (m, i) {
+        var cx = larguraCol * (i + 0.5);
+        var alt = (m.h || 0) * ESC;
+        var lg = Math.max(18, (m.larg || 0.7) * ESC * 0.55);
+        var guarda = (m.cid === 'minotauro' || m.cid === 'sumo');
+        g.fillStyle = guarda ? '#c9873a' : '#4a5866';
+        g.fillRect(cx - lg / 2, PISO - alt, lg, alt);
+        g.fillStyle = '#e8eef6'; g.font = '12px system-ui';
+        g.textAlign = 'center';
+        var nome = (D.classes[m.cid] && D.classes[m.cid].name) || m.cid;
+        g.fillText(nome, cx, PISO + 16);
+        g.fillStyle = guarda ? '#ffd08a' : '#8895a6';
+        g.font = '11px monospace';
+        g.fillText((m.h || 0).toFixed(2) + ' m', cx, PISO - alt - 6);
+        g.textAlign = 'left';
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>
