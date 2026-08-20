@@ -64,11 +64,26 @@ CLASSES = [
         "Charged_Spell_Cast":      "attack",
         "Crouch_and_Step_Back":    "hit",
         "Stand_To_Side_Lying":     "death",
+        # sobrava sem uso; investida para a frente serve de esquiva
+        "Standard_Forward_Charge": "Dodge",
     }),
     # ATENCAO: para o mago o arquivo completo e o idle.glb, nao o attack.glb.
     # Peguei o attack primeiro e perdi DUAS acoes — justo idle e death, que sao
     # as mais usadas. Os seis arquivos sao redundantes mas nao sao IDENTICOS:
     # cada um traz um subconjunto diferente. Confira a lista antes de escolher.
+    # O LADINO tem SETE acoes, uma a mais que os outros: `Shot_and_Blown_Back` e
+    # reacao a dano de verdade (levar tiro e ser jogado para tras), entao ela
+    # fica como HitReact e o `Crouch_and_Step_Back` sobra para a ESQUIVA — que
+    # nos outros cai num substituto.
+    ("espadachim", "ladino", "attack.glb", {
+        "Idle_02":                          "idle",
+        "Walking":                          "walk",
+        "Running":                          "run",
+        "Sword_Judgment":                   "attack",
+        "Shot_and_Blown_Back":              "HitReact",
+        "Fall_Dead_from_Abdominal_Injury":  "death",
+        "Crouch_and_Step_Back":             "Dodge",
+    }),
     ("bruxo", "mago", "idle.glb", {
         "Idle_02":                 "idle",
         "Walking":                 "walk",

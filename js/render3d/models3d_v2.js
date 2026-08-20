@@ -132,6 +132,10 @@ var JOGO = (typeof window !== 'undefined')
     pick(/Attack$|Strike$|Slash$|Cast$/i, 'attack');
     pick(/Death$|^die$|Dying$|Defeat$/i, 'die');
     pick(/Jump$|Jump_ToIdle$/i, 'jump');
+    // ESQUIVA propria, quando o acervo traz uma. Ate agora ela so existia como
+    // heranca do pulo (ver o fim desta funcao), e num acervo sem pulo o
+    // personagem esquivava sem mexer um musculo.
+    pick(/^dodge$|Dodge$|Evade$|Roll$|Sidestep$/i, 'dodge');
     // `hit` alem de `HitReact`: o KayKit nomeia HitReact, outros acervos nomeiam
     // hit, Damage ou Impact. Procurar so um nome deixava o Bruxo e o Xama SEM
     // reacao a dano — o jogador batia e o boneco nao piscava. E o pior tipo de
@@ -189,7 +193,7 @@ var JOGO = (typeof window !== 'undefined')
     // GEOMETRIA GERADA, presa ao osso da cabeça (ver `poeMascara`).
     // A CAPA estava declarada em CLASS_MARK (e ia para as fusoes) e nunca era
     // mostrada na propria classe: o Ladino era o unico sem silhueta nas costas.
-    espadachim: { model: 'rogue', show: ['Knife', 'Knife_Offhand', 'Rogue_Cape'],
+    espadachim: { model: 'meshy_espadachim', show: ['Knife', 'Knife_Offhand', 'Rogue_Cape'],
             scale: 0.97, tint: '#2f6f8f', accent: '#9be8ff', weapon: 'Knife',
             // MÁSCARA REMOVIDA a pedido do usuário ("a máscara ficou muito ruim
             // do ladino, pode tirar"). A geometria gerada por `poeMascara`

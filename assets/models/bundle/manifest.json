@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-19T21:34:23",
+ "gerado": "2026-08-19T21:43:40",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -367,7 +367,13 @@
    "alvo": "MODELS",
    "chave": "meshy_invocador",
    "arquivo": "models-meshy/meshy_invocador.glb",
-   "bytes": 1397924
+   "bytes": 1421332
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "meshy_espadachim",
+   "arquivo": "models-meshy/meshy_espadachim.glb",
+   "bytes": 1130948
   },
   {
    "alvo": "MODELS",
@@ -542,9 +548,19 @@
    "walk"
   ],
   "meshy_invocador": [
+   "Dodge",
    "attack",
    "death",
    "hit",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "meshy_espadachim": [
+   "Dodge",
+   "HitReact",
+   "attack",
+   "death",
    "idle",
    "run",
    "walk"
@@ -558,6 +574,6 @@
    "walk"
   ]
  },
- "totalBytes": 21935136,
- "totalBase64": 29246968
+ "totalBytes": 23089492,
+ "totalBase64": 30786112
 }
