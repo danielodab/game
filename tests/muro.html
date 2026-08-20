@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o muro invocado do Minotauro</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:900px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>O muro invocado — o verbo BARRAR</h1>
+<div class="sub">O Minotauro ergue muro no chão para atrapalhar quem vem. O muro não é peça nova:
+é a própria célula que endurece por alguns turnos e depois volta ao que era.
+Estas checagens cobram cada regra que ele tem de respeitar.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var okN = 0, falhas = [];
+  function check(nome, cond, extra) {
+    var li = document.createElement('li');
+    li.className = cond ? 'pass' : 'fail';
+    li.textContent = nome + (extra ? ' — ' + extra : '');
+    document.getElementById('lista').appendChild(li);
+    if (cond) okN++; else falhas.push(nome);
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var E = JOGO.Engine;
+
+    function sala() {
+      return E.createBattle('greenhouse', 0,
+        [{ classId: 'sumo', level: 20 }, { classId: 'curandeiro', level: 20 }]);
+    }
+    function chao(st) {
+      for (var y = 1; y < st.grid.h - 1; y++) {
+        for (var x = 1; x < st.grid.w - 1; x++) {
+          if (st.grid.tiles[y][x].type === 'floor' && !E.unitAt(st, x, y)) return { x: x, y: y };
+        }
+      }
+      return null;
+    }
+    // conjura um efeito solto, do jeito que um feitiço faria
+    function ergue(st, uid, x, y, dur) {
+      var u = E.findUnit(st, uid);
+      E.registerSpell({
+        id: 't-muro', name: 'Muro de Teste', element: 'terra', classId: null,
+        paCost: 0, cooldown: 0, castsPerTurn: 0,
+        range: { min: 0, max: 20, line: false, los: false, movable: false },
+        aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'any',
+        effects: [{ type: 'wall', duration: dur || 3, element: 'terra' }],
+        description: 'teste'
+      });
+      // o motor so deixa conjurar o que a unidade CONHECE, e esta certo nisso:
+      // ensina o feitico de teste antes de pedir
+      if (u.spells.indexOf('t-muro') < 0) u.spells.push('t-muro');
+      // e conjurar exige ser a vez dela
+      if (st.order[st.activeIdx] !== u.uid) {
+        var giros = 0;
+        while (st.order[st.activeIdx] !== u.uid && giros < 20) { E.endTurn(st); giros++; }
+      }
+      return E.cast(st, u.uid, 't-muro', x, y);
+    }
+
+    // ---- 1. sobe e bloqueia
+    var st = sala();
+    var c = chao(st);
+    check('achei chão livre para o teste', !!c, c ? c.x + ',' + c.y : 'nenhum');
+    // ATENCAO: 'hero' e o KIND da unidade; o LADO dela e 'player'.
+    var heroi = st.units.filter(function (u) { return u.alive && u.kind === 'hero'; })[0];
+
+    var antesTipo = st.grid.tiles[c.y][c.x].type;
+    var antesDeco = st.grid.tiles[c.y][c.x].deco;
+    ergue(st, heroi.uid, c.x, c.y, 3);
+    check('o muro SOBE na célula', st.grid.tiles[c.y][c.x].type === 'wall',
+          'tipo agora: ' + st.grid.tiles[c.y][c.x].type);
+    check('o muro entra na lista do estado', st.walls.length === 1, st.walls.length + ' muro(s)');
+    check('a célula deixa de ser andável', !E.isFloor || !E.isFloor(st, c.x, c.y) ||
+          st.grid.tiles[c.y][c.x].type !== 'floor', 'não é mais floor');
+    check('o muro BLOQUEIA VISÃO, como o obstáculo alto',
+          !E.los(st, c.x - 1, c.y, c.x + 1, c.y),
+          'linha através dele: ' + (E.los(st, c.x - 1, c.y, c.x + 1, c.y) ? 'passa' : 'barrada'));
+
+    // ---- 2. não empilha nem engole ninguém
+    var quantosAntes = st.walls.length;
+    ergue(st, heroi.uid, c.x, c.y, 3);
+    check('NÃO ergue dois muros na mesma célula', st.walls.length === quantosAntes,
+          st.walls.length + ' (era ' + quantosAntes + ')');
+
+    var st2 = sala();
+    var h2 = st2.units.filter(function (u) { return u.alive; })[0];
+    ergue(st2, h2.uid, h2.x, h2.y, 3);
+    check('NÃO ergue muro em cima de alguém (ficaria preso na pedra)',
+          st2.walls.length === 0 && st2.grid.tiles[h2.y][h2.x].type === 'floor',
+          st2.walls.length + ' muro(s) sobre a unidade');
+
+    // ---- 3. expira e DEVOLVE a célula ao que era
+    var st3 = sala();
+    var c3 = chao(st3);
+    // marca a célula como decorada, para provar que a decoração volta
+    st3.grid.tiles[c3.y][c3.x].deco = true;
+    var h3 = st3.units.filter(function (u) { return u.alive; })[0];
+    ergue(st3, h3.uid, c3.x, c3.y, 2);
+    check('muro de 2 turnos entra com 2 de duração',
+          st3.walls.length === 1 && st3.walls[0].remaining === 2,
+          st3.walls.length ? 'restam ' + st3.walls[0].remaining : 'nenhum');
+
+    var voltas = 0;
+    while (st3.walls.length && voltas < 12) { E.endTurn(st3); voltas++; }
+    check('o muro CAI sozinho quando a duração acaba', st3.walls.length === 0,
+          voltas + ' turnos até cair');
+    check('a célula volta a ser chão', st3.grid.tiles[c3.y][c3.x].type === 'floor',
+          'tipo: ' + st3.grid.tiles[c3.y][c3.x].type);
+    check('e a DECORAÇÃO do chão volta junto (não vira chão cru)',
+          st3.grid.tiles[c3.y][c3.x].deco === true,
+          'deco: ' + st3.grid.tiles[c3.y][c3.x].deco);
+
+    // ---- 4. não sobe em buraco nem sobre outro muro do mapa
+    var st4 = sala();
+    var h4 = st4.units.filter(function (u) { return u.alive; })[0];
+    var duro = null;
+    for (var y = 0; y < st4.grid.h && !duro; y++)
+      for (var x = 0; x < st4.grid.w && !duro; x++)
+        if (st4.grid.tiles[y][x].type !== 'floor') duro = { x: x, y: y };
+    if (duro) {
+      ergue(st4, h4.uid, duro.x, duro.y, 3);
+      check('NÃO ergue muro fora do chão (buraco, parede, cobertura)',
+            st4.walls.length === 0, st4.walls.length + ' muro(s) em ' + duro.x + ',' + duro.y);
+    }
+
+    var el = document.getElementById('summary');
+    el.className = falhas.length ? 'fail' : 'allpass';
+    el.textContent = (falhas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') +
+      okN + ' de ' + (okN + falhas.length) + ' checagens ok, ' + falhas.length + ' falharam';
+    window.__pronto = true;
+  });
+})();
+</script>
+</body>
+</html>

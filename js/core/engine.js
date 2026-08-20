@@ -677,6 +677,10 @@ var JOGO = (typeof window !== 'undefined')
       weather: room.weather || dungeon.defaultWeather || 'calmo',   // v2
       tileEventsActive: [],                                          // v2
       traps: [],                                                     // v2
+      // MUROS INVOCADOS (v3, verbo do Minotauro). Cada um guarda a celula e o
+      // que ela ERA, para devolver quando expirar — nunca supor 'floor', porque
+      // o Minotauro pode erguer muro sobre chao decorado e a decoracao some.
+      walls: [],
       pendingFusion: null,                                           // v2
       _weatherIdx: 0,
       _uidCounter: 0,
@@ -1736,6 +1740,40 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
 
+        /* MURO INVOCADO — o verbo BARRAR, do Minotauro.
+         *
+         * `wall` ja e um tipo de celula que bloqueia passagem e visao, vindo do
+         * `#` do desenho da sala. O que faltava era mudar o tipo DURANTE a
+         * partida e devolver depois. Nao ha peca nova no tabuleiro: e a propria
+         * celula que endurece por alguns turnos.
+         *
+         * Regras que o muro respeita, e o motivo de cada uma:
+         *   · so sobe em celula de CHAO — nao em cima de buraco nem de outro muro;
+         *   · nao sobe em celula OCUPADA, senao a unidade fica presa dentro da
+         *     pedra sem ter como sair;
+         *   · guarda o tipo anterior e devolve ao expirar. */
+        case 'wall':
+          if (isFloor(state, x, y) && !Engine.unitAt(state, x, y)) {
+            var jaTem = false;
+            for (var wi = 0; wi < state.walls.length; wi++) {
+              if (state.walls[wi].x === x && state.walls[wi].y === y) { jaTem = true; break; }
+            }
+            if (!jaTem) {
+              var cel = tileAt(state, x, y);
+              state.walls.push({ x: x, y: y, antes: cel.type, deco: !!cel.deco,
+                                 ownerUid: caster.uid, side: caster.side,
+                                 remaining: eff.duration || 3 });
+              cel.type = 'wall';
+              cel.deco = false;
+              cel.invocado = true;
+              emit({ type: 'wallRaised', uid: caster.uid, x: x, y: y,
+                     element: eff.element || spell.element || 'neutro',
+                     duration: eff.duration || 3 });
+              log(caster.name + ' ergue um muro.');
+            }
+          }
+          break;
+
         case 'trap':
           if (isFloor(state, x, y)) {
             var trap = { x: x, y: y, trapId: eff.trapId, ownerUid: caster.uid,
@@ -1961,6 +1999,18 @@ var JOGO = (typeof window !== 'undefined')
         var next = cyc[state._weatherIdx];
         state.weather = null;             // força o evento mesmo em ciclo curto
         setWeather(state, next);
+      }
+    }
+    // muros invocados envelhecem junto das armadilhas, e devolvem a celula ao
+    // que ela era — nao a 'floor' cru, para nao apagar chao decorado
+    for (i = state.walls.length - 1; i >= 0; i--) {
+      state.walls[i].remaining--;
+      if (state.walls[i].remaining <= 0) {
+        var w = state.walls[i];
+        var cw = tileAt(state, w.x, w.y);
+        if (cw) { cw.type = w.antes; cw.deco = w.deco; cw.invocado = false; }
+        emit({ type: 'wallFell', x: w.x, y: w.y });
+        state.walls.splice(i, 1);
       }
     }
     for (i = state.traps.length - 1; i >= 0; i--) {
