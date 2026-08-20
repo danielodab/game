@@ -390,9 +390,23 @@
     </table>
   </div>
 
-  <p>Quatro clipes bastam para quem não anda (Sentinela, e as duas novas que proponho). Cinco
-  para o resto. Use o mesmo esqueleto dos heróis que você já fez — o carregador reconhece
-  aquela nomenclatura de ossos.</p>
+  <p><strong>Não faça <code>Walk</code> e <code>Run</code> na mesma criatura.</strong> Quando
+  a criatura se desloca no tabuleiro, o renderizador escolhe um clipe só, e a ordem de escolha
+  é <code>run</code> antes de <code>walk</code>. Se os dois existirem, o <code>walk</code>
+  nunca toca — vira trabalho jogado fora. Faça <em>um</em>, o que couber ao bicho: passada
+  pesada no Golem e no Colosso, corrida no Cão de Brasa e no Falcão.</p>
+
+  <p><strong>O mínimo real é quatro:</strong> <code>Idle</code>, uma locomoção,
+  <code>Attack</code> e <code>Death</code>. Some <code>HitReact</code> se quiser que ela
+  estremeça ao apanhar — sem ele o golpe ainda pisca a criatura de branco e mostra o número,
+  então é o menos sentido dos cinco. E quem não anda (o Olho da Tormenta) fica em três.</p>
+
+  <p><strong>A Ninfa também precisa de <code>Attack</code></strong>, mesmo nunca ferindo
+  ninguém: o gesto de curar entra por esse mesmo espaço, porque <code>cast</code> cai em
+  <code>attack</code> quando não existe. No caso dela, o clipe é o gesto de dar.</p>
+
+  <p>Use o mesmo esqueleto dos heróis que você já fez — o carregador reconhece aquela
+  nomenclatura de ossos.</p>
 </section>
 
 <section>
