@@ -186,9 +186,9 @@ var JOGO = (typeof window !== 'undefined')
     // O grimorio fechado estava desligado. O mago segurava so o cajado e a mao
     // esquerda ficava vazia — de longe lia como bengala.
     bruxo: { model: 'meshy_bruxo', show: ['2H_Staff', 'Spellbook', 'Mage_Hat', 'Mage_Cape'],
-            // 0,95: mago velho e encurvado, nao imponente. A altura dele estava
-            // empatada com a do Batedor e nao dizia nada sobre a funcao.
-            scale: 0.95, tint: '#7a5fa0', accent: '#b98cff', weapon: '2H_Staff',
+            // 1,80 m pedidos pelo Daniel. A escala nao e a altura: o corpo mede
+            // ~2,05 m vezes ela, entao 1,80 / 2,05 = 0,877.
+            scale: 0.877, tint: '#7a5fa0', accent: '#b98cff', weapon: '2H_Staff',
             headSwap: { model: 'barbarian', mesh: 'Barbarian_Head' },
             headTint: '#fbfaf7', headWhite: 0.88,
             concept: 'Mago velho de barba branca, chapéu pontudo e cajado' },
@@ -198,9 +198,9 @@ var JOGO = (typeof window !== 'undefined')
     // A CAPA estava declarada em CLASS_MARK (e ia para as fusoes) e nunca era
     // mostrada na propria classe: o Ladino era o unico sem silhueta nas costas.
     espadachim: { model: 'meshy_espadachim', show: ['Knife', 'Knife_Offhand', 'Rogue_Cape'],
-            // 0,92: o MENOR do grupo. A classe e esquiva e invisibilidade —
-            // corpo pequeno e o que a silhueta tem a dizer sobre isso.
-            scale: 0.92, tint: '#2f6f8f', accent: '#9be8ff', weapon: 'Knife',
+            // 1,75 m pedidos pelo Daniel: o MENOR do grupo. A classe e esquiva e
+            // invisibilidade, e corpo pequeno e o que a silhueta diz sobre isso.
+            scale: 0.852, tint: '#2f6f8f', accent: '#9be8ff', weapon: 'Knife',
             // MÁSCARA REMOVIDA a pedido do usuário ("a máscara ficou muito ruim
             // do ladino, pode tirar"). A geometria gerada por `poeMascara`
             // continua no arquivo e volta com uma linha, mas numa cabeça chibi
