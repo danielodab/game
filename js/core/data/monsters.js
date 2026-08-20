@@ -325,7 +325,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um chicote vegetal enraizado num vaso rachado, coberto de farpas e flores mortas. Não sai do lugar — não precisa.',
       flavor: 'Torreta com pétalas.',
       hp: 50, pa: 6, pp: 1, initiative: 35, dodge: 4, lock: 26,
-      resists: { fogo: -20, terra: 20 },
+      resists: { fogo: -20, agua: 20, ar: -15 },
       spells: ['m-thorn-shot', 'm-root-grip'], ai: 'ranged',
       traits: [{ type: 'pushImmune' }], xp: 25
     },
@@ -334,7 +334,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma bola de pólen amarelo com perninhas de graveto e um sorriso costurado. Anda na sua direção balançando. Isso deveria ser um aviso.',
       flavor: 'Mate-o longe. Por favor, mate-o longe.',
       hp: 45, pa: 3, pp: 3, initiative: 55, dodge: 8, lock: 8,
-      resists: { fogo: -30, terra: 10 },
+      resists: { fogo: -30, agua: 10, ar: -15 },
       spells: ['m-pollen-bite'], ai: 'melee',
       traits: [{ type: 'explodeOnDeath', element: 'terra', damage: 18, radius: 1 }], xp: 22
     },
@@ -343,7 +343,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um novelo de farpas do tamanho de um cão, com dezenas de olhinhos pretos entre os espinhos. Ao morrer, desfia-se em dois novelos menores e igualmente rancorosos.',
       flavor: 'Um corpo, três problemas de posicionamento.',
       hp: 60, pa: 3, pp: 3, initiative: 25, dodge: 6, lock: 16,
-      resists: { fogo: -15, terra: 15 },
+      resists: { fogo: -15, agua: 15, ar: -15 },
       spells: ['m-burr-hug'], ai: 'melee',
       traits: [{ type: 'split', monsterId: 'burrlet', count: 2 }], xp: 30
     },
@@ -352,7 +352,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma vespa do tamanho de um gato cujo abdômen é uma lanterna de vidro com uma luz presa dentro. Rápida, brilhante, venenosa: chega primeiro e vai embora antes da resposta.',
       flavor: 'A luz que ela carrega já foi de alguém.',
       hp: 48, pa: 3, pp: 4, initiative: 75, dodge: 30, lock: 6,
-      resists: { terra: -10, ar: 20 },
+      resists: { fogo: -10, terra: 20 },
       spells: ['m-wasp-sting'], ai: 'melee', traits: [], xp: 24
     },
     'sap-shaman': {
@@ -360,7 +360,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um toco de árvore corcunda com um rosto entalhado a canivete e um caldeirão de seiva borbulhando no colo. Rega os aliados como quem cuida de um jardim — e o jardim morde.',
       flavor: 'Na chuva ele canta. Mate-o antes do refrão.',
       hp: 55, pa: 6, pp: 2, initiative: 45, dodge: 8, lock: 12,
-      resists: { fogo: -20, agua: 15, terra: 15 },
+      resists: { fogo: 15, terra: -20 },
       spells: ['m-sap-mend', 'm-sap-sugar'], ai: 'support',
       traits: [{ type: 'regenAura', value: 8, radius: 2 }], xp: 28
     },
@@ -369,7 +369,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma aranha de pernas finíssimas que anda sobre a água acumulada nas folhas sem afundar um milímetro. Tece com orvalho: as teias brilham, pesam e endurecem.',
       flavor: 'Ela pesa menos que a gota em que pisa.',
       hp: 52, pa: 5, pp: 4, initiative: 65, dodge: 26, lock: 14,
-      resists: { fogo: -10, agua: 20, ar: -10 },
+      resists: { fogo: 20, terra: -10, ar: -10 },
       spells: ['m-dew-web', 'm-dew-bite'], ai: 'ranged', traits: [], xp: 26
     },
     'sprout-feral': {
@@ -377,7 +377,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma muda recém-germinada que é só folhas, pressa e dentes. A Jardineira os planta; eles fazem o resto.',
       flavor: 'Cresce rápido porque não pretende durar.',
       hp: 30, pa: 3, pp: 4, initiative: 60, dodge: 14, lock: 6,
-      resists: { fogo: -20, terra: 10 },
+      resists: { fogo: -20, agua: 10, ar: -15 },
       spells: ['m-sprout-bite'], ai: 'melee', traits: [], summonOnly: true, xp: 5
     },
     'burrlet': {
@@ -385,7 +385,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Metade do rancor, o dobro da velocidade. Gruda e não solta.',
       flavor: 'Você vai encontrar um deles no bolso semanas depois.',
       hp: 22, pa: 3, pp: 3, initiative: 30, dodge: 12, lock: 10,
-      resists: { fogo: -15, terra: 10 },
+      resists: { fogo: -15, agua: 10, ar: -15 },
       spells: ['m-burr-nip'], ai: 'melee', traits: [], summonOnly: true, xp: 4
     },
     'boss-gardener': {
@@ -393,7 +393,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'A guardiã da Estufa: um vulto de três metros feito de treliça, luvas de couro e véu de viúva, com uma tesoura de poda enferrujada no lugar das mãos. Ainda cuida do jardim. Você é a erva daninha.',
       flavor: 'GIMMICK — A PODA: o cipó puxa você para dentro do coreto, a tesoura apara, a semeadura repõe o mato. A Coroa de Espinhos castiga o anel a 2 células: o lugar mais seguro do mundo é colado nela.',
       hp: 300, pa: 7, pp: 3, initiative: 50, dodge: 10, lock: 42,
-      resists: { fogo: -20, terra: 30, neutro: 10 },
+      resists: { fogo: -20, agua: 30, ar: -15, neutro: 10 },
       spells: ['m-shears', 'm-vine-hook', 'm-seed-toss', 'm-thorn-crown'], ai: 'boss',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.4, power: 30 }],
       boss: true, xp: 450
@@ -523,7 +523,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um carregador da cisterna que nunca soltou seu lampião. Pele cinza-esverdeada, inchada de água, algas no lugar do cabelo. Morde para beber o calor que perdeu.',
       flavor: 'Duelar com ele é alimentá-lo.',
       hp: 75, pa: 6, pp: 3, initiative: 40, dodge: 10, lock: 20,
-      resists: { agua: 25, neutro: 5 },
+      resists: { fogo: 25, terra: -15, neutro: 5 },
       spells: ['m-drowned-bite'], ai: 'melee', traits: [], xp: 38
     },
     'moray-piper': {
@@ -531,7 +531,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma enguia de dois metros cujo crânio perfurado assobia quando ela respira. Ergue-se da água como um ponto de interrogação, cospe jatos em linha reta e fisga presas com a língua-arpão.',
       flavor: 'Toca uma nota só, e é sobre você.',
       hp: 65, pa: 5, pp: 3, initiative: 60, dodge: 18, lock: 12,
-      resists: { agua: 20, ar: -15 },
+      resists: { fogo: 20, terra: -15, ar: -15 },
       spells: ['m-eel-beam', 'm-eel-hook'], ai: 'ranged', traits: [], xp: 33
     },
     'lantern-jelly': {
@@ -539,7 +539,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma água-viva do tamanho de um lustre, flutuando a um palmo do chão, tentáculos como franjas de cristal. Sua luz cura os afogados — apague-a primeiro.',
       flavor: 'Transforma afogadiços em esponjas.',
       hp: 60, pa: 5, pp: 2, initiative: 30, dodge: 14, lock: 6,
-      resists: { agua: 25, terra: -15 },
+      resists: { fogo: 25, terra: -15 },
       spells: ['m-jelly-mend', 'm-jelly-ward'], ai: 'support',
       traits: [{ type: 'regenAura', value: 8, radius: 2 }], xp: 30
     },
@@ -548,7 +548,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um colosso de sal cristalizado em camadas, com um coração de água escura visível no peito. Lento como maré baixa, imparável como maré alta. Quanto mais quebra, mais afiado fica.',
       flavor: 'Ignorá-lo é um cronômetro.',
       hp: 105, pa: 4, pp: 2, initiative: 15, dodge: 2, lock: 34,
-      resists: { fogo: -15, agua: 30, terra: 20 },
+      resists: { fogo: 30, terra: -15 },
       spells: ['m-brine-fist'], ai: 'melee',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.5, power: 25 }], xp: 55
     },
@@ -557,7 +557,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma gota d\'água do tamanho de um barril, com um rosto sonolento boiando dentro. Estoure-a e ela vira duas gotas menores e bem mais acordadas.',
       flavor: 'Cada gota nova entope um vão a mais.',
       hp: 70, pa: 3, pp: 3, initiative: 35, dodge: 10, lock: 14,
-      resists: { fogo: -10, agua: 30 },
+      resists: { fogo: 30, terra: -10 },
       spells: ['m-drop-slam'], ai: 'melee',
       traits: [{ type: 'split', monsterId: 'droplet', count: 2 }], xp: 35
     },
@@ -566,7 +566,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Pequena, redonda, indignada.',
       flavor: 'Tem opiniões fortes sobre o seu tornozelo.',
       hp: 25, pa: 3, pp: 3, initiative: 45, dodge: 14, lock: 8,
-      resists: { fogo: -10, agua: 20 },
+      resists: { fogo: 20, terra: -10 },
       spells: ['m-droplet-splash'], ai: 'melee', traits: [], summonOnly: true, xp: 5
     },
     'sump-crab': {
@@ -574,7 +574,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um caranguejo do tamanho de uma mesa, com carapaça de pedra encrostada de sal e uma pinça desproporcional que ele arrasta pelo chão. Vive no ralo por onde a cisterna esvazia — e considera aquilo propriedade privada.',
       flavor: 'Impossível de empurrar. Ele já escolheu o lugar dele.',
       hp: 85, pa: 5, pp: 2, initiative: 20, dodge: 4, lock: 32,
-      resists: { agua: -10, terra: 30, ar: -15 },
+      resists: { agua: 30, ar: -15 },
       spells: ['m-crab-pinch', 'm-crab-guard'], ai: 'melee',
       traits: [{ type: 'pushImmune' }], xp: 44
     },
@@ -583,7 +583,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um pássaro sem penas, feito do vapor que sobe da água parada, com um bico longo por onde a cisterna assobia. Canta para os afogados e sopra os vivos para dentro dos canais.',
       flavor: 'O eco dela chega antes dela.',
       hp: 55, pa: 5, pp: 4, initiative: 68, dodge: 28, lock: 6,
-      resists: { terra: -15, ar: 25 },
+      resists: { fogo: -15, terra: 25 },
       spells: ['m-mist-shove', 'm-mist-song'], ai: 'support', traits: [], xp: 30
     },
     'boss-baroness': {
@@ -591,7 +591,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'A dona da cisterna: um vestido de baile do século passado preenchido por água escura e viva, com um colar de pérolas boiando onde deveria haver um pescoço. Recebe visitas puxando-as para perto — e engolindo a sala inteira.',
       flavor: 'GIMMICK — O BAILE: Maré Faminta arrasta a sala inteira até ela; no turno seguinte, o Gole Amargo devora quem ficou perto. Espalhar-se, ser puxado, sair antes do gole.',
       hp: 360, pa: 7, pp: 3, initiative: 55, dodge: 12, lock: 46,
-      resists: { fogo: -10, agua: 40, neutro: 10 },
+      resists: { fogo: 40, terra: -10, neutro: 10 },
       spells: ['m-tide-pull', 'm-bitter-gulp', 'm-salt-lance', 'm-brine-spawn'], ai: 'boss',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.35, power: 30 }],
       boss: true, xp: 540
@@ -734,7 +734,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um carvão em brasa com braços finos e um sorriso rachado de luz alaranjada. Corre até você rindo. A risada é o estopim.',
       flavor: 'Onde ele morre importa mais do que quando.',
       hp: 60, pa: 3, pp: 4, initiative: 75, dodge: 22, lock: 8,
-      resists: { fogo: 30, agua: -25 },
+      resists: { agua: -25, ar: 30 },
       spells: ['m-ember-claw'], ai: 'melee',
       traits: [{ type: 'explodeOnDeath', element: 'fogo', damage: 22, radius: 1 }], xp: 30
     },
@@ -743,7 +743,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma bigorna centenária que criou pernas atarracadas e um rancor proporcional ao número de marteladas que levou. Impossível de empurrar; péssima ideia de deixar chegar perto.',
       flavor: 'Lenta como culpa antiga.',
       hp: 110, pa: 4, pp: 2, initiative: 10, dodge: 0, lock: 38,
-      resists: { fogo: 20, agua: -20, terra: 30 },
+      resists: { fogo: 20, agua: 30, ar: -15 },
       spells: ['m-anvil-crush'], ai: 'melee',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.5, power: 30 }], xp: 55
     },
@@ -752,7 +752,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'O contorno de um ferreiro antigo desenhado em fuligem suspensa, com dois pontos de brasa no lugar dos olhos. Atira setas de cinza e se desmancha no ar quando ameaçado.',
       flavor: 'Some no vendaval e volta na sua nuca.',
       hp: 70, pa: 5, pp: 3, initiative: 65, dodge: 26, lock: 8,
-      resists: { fogo: 15, terra: -15, ar: 25 },
+      resists: { fogo: -15, terra: 25 },
       spells: ['m-ash-bolt', 'm-ash-veil'], ai: 'ranged', traits: [], xp: 35
     },
     'slag-mound': {
@@ -760,7 +760,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma pilha de refugo de forja que aprendeu a se arrastar, deixando um rastro vitrificado. Quebre-a e ela desmorona em duas escorinhas incandescentes — que explodem.',
       flavor: 'A pior coisa para matar em espaço apertado.',
       hp: 95, pa: 4, pp: 2, initiative: 20, dodge: 2, lock: 26,
-      resists: { fogo: 30, agua: -30, terra: 15 },
+      resists: { agua: -30, terra: 15, ar: 30 },
       spells: ['m-slag-slam'], ai: 'melee',
       traits: [{ type: 'split', monsterId: 'slag-bit', count: 2 }], xp: 48
     },
@@ -769,7 +769,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um avental de couro e dois braços musculosos pendurados em nada: onde deveria haver um corpo, só calor tremulando. Tempera os aliados como lâminas e os cobre de chapas ardentes.',
       flavor: 'O suporte que transforma lacaio em problema.',
       hp: 80, pa: 6, pp: 3, initiative: 45, dodge: 12, lock: 16,
-      resists: { fogo: 25, agua: -15, terra: 10 },
+      resists: { agua: -15, terra: 10, ar: 25 },
       spells: ['m-smith-hammer', 'm-forge-temper', 'm-smith-plate'], ai: 'support', traits: [], xp: 40
     },
     'quench-hound': {
@@ -777,7 +777,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um cão de vapor condensado que nasceu no fosso onde as lâminas eram mergulhadas ainda vermelhas. O pelo goteja, a mordida chia, e onde ele passa a brasa apaga — inclusive a dos donos da casa.',
       flavor: 'A única água do Fecho, e ela morde.',
       hp: 72, pa: 5, pp: 4, initiative: 70, dodge: 24, lock: 14,
-      resists: { fogo: -10, agua: 30 },
+      resists: { fogo: 30, terra: -10 },
       spells: ['m-quench-lunge', 'm-quench-hiss'], ai: 'melee', traits: [], xp: 38
     },
     'chain-hauler': {
@@ -794,7 +794,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma faísca com pernas e opinião. Vive pouco, termina alto.',
       flavor: 'Magno as fabrica sem olhar.',
       hp: 28, pa: 3, pp: 4, initiative: 80, dodge: 24, lock: 4,
-      resists: { fogo: 25, agua: -25 },
+      resists: { agua: -25, ar: 25 },
       spells: ['m-spark-tap'], ai: 'melee',
       traits: [{ type: 'explodeOnDeath', element: 'fogo', damage: 15, radius: 1 }],
       summonOnly: true, xp: 4
@@ -804,7 +804,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um caco de escória ainda rubro, rastejando com propósito.',
       flavor: 'Ato dois de três.',
       hp: 30, pa: 3, pp: 2, initiative: 25, dodge: 6, lock: 12,
-      resists: { fogo: 20, agua: -20, terra: 10 },
+      resists: { agua: -20, terra: 10, ar: 20 },
       spells: ['m-slag-drip'], ai: 'melee',
       traits: [{ type: 'explodeOnDeath', element: 'fogo', damage: 12, radius: 1 }],
       summonOnly: true, xp: 4
@@ -814,7 +814,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'O coração do último Fecho em forma de titã: um forno a lenha de quatro metros com grelha no peito, martelo-chaminé ao ombro e a primeira chama do mundo queimando lá dentro. Ele não guarda o portão. Ele É o portão.',
       flavor: 'GIMMICK — A PEÇA MARCADA: ele marca você com a brasa (até 5 pilhas), sopra você para longe com a fornalha e cobra tudo de uma vez no Veredito da Bigorna. Limpe a marca ou morra pelo total.',
       hp: 420, pa: 8, pp: 3, initiative: 60, dodge: 10, lock: 50,
-      resists: { fogo: 40, agua: -25, terra: 20 },
+      resists: { agua: -25, terra: 20, ar: 40 },
       spells: ['m-doom-hammer', 'm-bellows-blast', 'm-heart-brand', 'm-anvil-verdict', 'm-spark-call', 'm-stoke'],
       ai: 'boss',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.5, power: 40 }],
@@ -967,7 +967,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um pássaro cinzento de bico curvo que empala o que caça nos pregos expostos das tábuas. Vive nos vãos, desce em queda livre e some antes de você virar a cabeça.',
       flavor: 'A despensa dele é o corrimão.',
       hp: 62, pa: 6, pp: 5, initiative: 80, dodge: 34, lock: 8,
-      resists: { terra: -15, ar: 25 },
+      resists: { fogo: -15, terra: 25 },
       spells: ['m-shrike-dive', 'm-shrike-peck'], ai: 'melee', traits: [], xp: 34
     },
     'gust-gremlin': {
@@ -975,7 +975,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um bichinho de orelhas enormes que usa as próprias orelhas como velas. Não bate para matar: bate para ver a pessoa cair. Tem um senso de humor documentadamente ruim.',
       flavor: 'Ele conta as quedas. Em voz alta.',
       hp: 55, pa: 5, pp: 5, initiative: 72, dodge: 32, lock: 10,
-      resists: { terra: -10, ar: 25 },
+      resists: { fogo: -10, terra: 25 },
       spells: ['m-gremlin-shove', 'm-gremlin-swap'], ai: 'melee', traits: [], xp: 30
     },
     'rope-hanger': {
@@ -992,7 +992,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma serpente chata e comprida feita de papel encerado e ripas, com uma cauda de fitas revestida de vidro moído. Sobe nas correntes de ar e desce riscando.',
       flavor: 'Uma pipa que aprendeu a puxar a própria linha.',
       hp: 66, pa: 6, pp: 3, initiative: 62, dodge: 24, lock: 10,
-      resists: { fogo: -20, terra: -10, ar: 30 },
+      resists: { fogo: -10, terra: 30 },
       spells: ['m-kite-arc', 'm-kite-whip'], ai: 'ranged', traits: [], xp: 36
     },
     'ballast-golem': {
@@ -1000,7 +1000,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma armação de vigas cheia de sacos de brita, feita para segurar o andaime no lugar quando o poço sopra. Segurou por mil anos. Agora anda — devagar, e sempre contra o vento.',
       flavor: 'O vendaval o mata 5 PV por turno. Não tenha pressa com ele.',
       hp: 120, pa: 4, pp: 2, initiative: 12, dodge: 0, lock: 40,
-      resists: { agua: 10, terra: 30, ar: -20 },
+      resists: { agua: 30, ar: -20 },
       spells: ['m-ballast-drop', 'm-ballast-anchor'], ai: 'melee',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.5, power: 25 }], xp: 62
     },
@@ -1009,7 +1009,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um feixe de tubos de respiradouro amarrado com arame, flutuando de lado. Cada tubo assobia uma nota; juntos, remendam os companheiros e limpam deles tudo o que gruda.',
       flavor: 'Apague a música antes de discutir com a banda.',
       hp: 58, pa: 6, pp: 3, initiative: 50, dodge: 20, lock: 6,
-      resists: { terra: -10, ar: 25 },
+      resists: { fogo: -10, terra: 25 },
       spells: ['m-choir-hymn', 'm-choir-clear'], ai: 'support',
       traits: [{ type: 'regenAura', value: 7, radius: 2 }], xp: 34
     },
@@ -1018,7 +1018,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma nuvem compacta de bichinhos de poeira luminosa que se move como um corpo só. Bata forte o bastante e ela deixa de ser um corpo — vira dois.',
       flavor: 'Você não mata uma nuvem. Você a divide.',
       hp: 74, pa: 4, pp: 4, initiative: 58, dodge: 28, lock: 8,
-      resists: { fogo: -20, ar: 25 },
+      resists: { fogo: -15, terra: 25 },
       spells: ['m-mote-buzz'], ai: 'melee',
       traits: [{ type: 'split', monsterId: 'mote-bit', count: 2 }], xp: 40
     },
@@ -1027,7 +1027,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Metade de uma nuvem, com o dobro da pressa. Quando se desfaz, o pó pega fogo por um instante.',
       flavor: 'Poeira também explode. Pergunte a qualquer mineiro.',
       hp: 26, pa: 3, pp: 4, initiative: 66, dodge: 26, lock: 4,
-      resists: { fogo: -20, ar: 20 },
+      resists: { fogo: -15, terra: 20 },
       spells: ['m-mote-nip'], ai: 'melee',
       traits: [{ type: 'explodeOnDeath', element: 'ar', damage: 12, radius: 1 }],
       summonOnly: true, xp: 4
@@ -1037,7 +1037,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um prego de quinze centímetros com dois olhinhos e muita convicção. Cambota os finca na armação e eles saem andando.',
       flavor: 'Nasce torto, entra reto.',
       hp: 24, pa: 3, pp: 4, initiative: 70, dodge: 22, lock: 6,
-      resists: { ar: 15 },
+      resists: { fogo: -15, terra: 15 },
       spells: ['m-nail-jab'], ai: 'melee', traits: [], summonOnly: true, xp: 4
     },
     'boss-windwright': {
@@ -1045,7 +1045,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'O capataz que jamais entregou a obra: um esqueleto de vigas e cordame com uma roldana no lugar da cabeça e um prumo eterno balançando do braço. Constrói o andaime enquanto luta em cima dele — e derruba a ala inteira se isso resolver mais rápido.',
       flavor: 'GIMMICK — A OBRA CONTINUA: rebites marcam você (até 5 pilhas), o Vento de Proa devolve o vendaval quando o clima esfria, e Desabar a Ala manda quem estiver marcado 3 células para dentro do vazio. Ele não precisa te matar: precisa te empurrar.',
       hp: 470, pa: 8, pp: 4, initiative: 66, dodge: 24, lock: 44,
-      resists: { terra: -15, ar: 40, neutro: 10 },
+      resists: { fogo: -15, terra: 40, neutro: 10 },
       spells: ['m-scaffold-collapse', 'm-rivet-volley', 'm-raise-frame', 'm-headwind', 'm-rope-cinch'],
       ai: 'boss',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.4, power: 35 }],
@@ -1209,7 +1209,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'O turno da noite nunca subiu. Restou o gesto: um mineiro de poeira compactada que ainda bate na mesma parede, no mesmo ritmo, há mil anos. Bate em você com a mesma técnica — procurando onde racha.',
       flavor: 'Marca primeiro. Cobra depois.',
       hp: 90, pa: 6, pp: 3, initiative: 42, dodge: 10, lock: 24,
-      resists: { terra: 25, ar: -15, neutro: 10 },
+      resists: { agua: 25, ar: -15, neutro: 10 },
       spells: ['m-pick-swing', 'm-pick-verdict'], ai: 'melee', traits: [], xp: 46
     },
     'firedamp-wisp': {
@@ -1217,7 +1217,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma chama azul e silenciosa boiando à altura do peito, do tamanho de uma cabeça. É o gás da mina que ganhou vontade. Não persegue: espera você entrar na galeria errada.',
       flavor: 'Mate-o longe. Depois lembre disso de novo.',
       hp: 58, pa: 5, pp: 3, initiative: 58, dodge: 22, lock: 6,
-      resists: { fogo: 30, agua: -30, terra: -10 },
+      resists: { agua: -30, terra: -10, ar: 30 },
       spells: ['m-firedamp-flare', 'm-firedamp-cloud'], ai: 'ranged',
       traits: [{ type: 'explodeOnDeath', element: 'fogo', damage: 26, radius: 1 }], xp: 36
     },
@@ -1226,7 +1226,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um trecho de galeria que virou bicho: dez metros de túnel com dentes de estalactite e um gosto adquirido por carne com capacete. Fica parada até você achar que é caminho.',
       flavor: 'O tanque da mina. E também a porta.',
       hp: 130, pa: 4, pp: 2, initiative: 14, dodge: 0, lock: 44,
-      resists: { fogo: 10, terra: 35, ar: -20 },
+      resists: { fogo: 10, agua: 35, ar: -20 },
       spells: ['m-cave-bite', 'm-cave-roar'], ai: 'melee',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.5, power: 30 }], xp: 68
     },
@@ -1235,7 +1235,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um aglomerado de quartzo do tamanho de um homem, crescido dentro de um capacete abandonado. Vibra numa nota baixa e constante que costura a pedra dos companheiros de volta.',
       flavor: 'Bater nele é bater em você mesmo, com atraso.',
       hp: 76, pa: 6, pp: 2, initiative: 38, dodge: 6, lock: 14,
-      resists: { fogo: 10, terra: 30, ar: -15 },
+      resists: { fogo: 10, agua: 30, ar: -15 },
       spells: ['m-crystal-chant', 'm-crystal-facet'], ai: 'support',
       traits: [{ type: 'regenAura', value: 9, radius: 2 }], xp: 42
     },
@@ -1244,7 +1244,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma boca circular de anéis que vive sob o piso solto e só mostra o funil. Não anda: reorganiza o chão até que você chegue por gravidade.',
       flavor: 'Ancorado na rocha-mãe: nada o empurra.',
       hp: 84, pa: 6, pp: 1, initiative: 32, dodge: 4, lock: 34,
-      resists: { terra: 30, ar: -10 },
+      resists: { agua: 30, ar: -10 },
       spells: ['m-worm-drag', 'm-worm-spit'], ai: 'ranged',
       traits: [{ type: 'pushImmune' }], xp: 44
     },
@@ -1253,7 +1253,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma bola de minério bruto do tamanho de um vagonete, lisa de tanto rolar pelos trilhos. Ganha embalo em linha reta e não tem nenhum plano para depois disso.',
       flavor: 'Quebre-o e ele vira duas ladeiras.',
       hp: 100, pa: 4, pp: 3, initiative: 24, dodge: 4, lock: 22,
-      resists: { fogo: 10, terra: 30, ar: -15 },
+      resists: { fogo: 10, agua: 30, ar: -15 },
       spells: ['m-tumbler-roll'], ai: 'melee',
       traits: [{ type: 'split', monsterId: 'ore-chip', count: 2 }], xp: 52
     },
@@ -1262,7 +1262,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um caco de minério com uma veia de metal brilhando no meio, rolando com propósito.',
       flavor: 'Pequeno, denso e sem freio.',
       hp: 32, pa: 3, pp: 3, initiative: 30, dodge: 8, lock: 12,
-      resists: { terra: 20, ar: -10 },
+      resists: { agua: 20, ar: -10 },
       spells: ['m-ore-chip-hit'], ai: 'melee', traits: [], summonOnly: true, xp: 5
     },
     'shaft-bat': {
@@ -1270,7 +1270,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Asas de couro fino esticadas em ossos longos demais, com um guincho que faz a poeira desenhar o formato do túnel. Mora no poço vertical e desce em espiral.',
       flavor: 'O único aqui que o tremor prejudica. Ele não entendeu isso ainda.',
       hp: 54, pa: 5, pp: 5, initiative: 78, dodge: 34, lock: 4,
-      resists: { terra: -20, ar: 30 },
+      resists: { fogo: -20, terra: 30 },
       spells: ['m-bat-screech', 'm-bat-swoop'], ai: 'melee', traits: [], xp: 30
     },
     'damp-seeper': {
@@ -1278,7 +1278,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma poça vertical que escorre pela parede contra a gravidade, carregada de mineral dissolvido. Dissolve escudos como dissolveu a rocha que atravessou.',
       flavor: 'Água de mina não mata a sede de ninguém.',
       hp: 68, pa: 5, pp: 3, initiative: 46, dodge: 16, lock: 16,
-      resists: { fogo: -15, agua: 30, terra: 10 },
+      resists: { fogo: 30, terra: -15 },
       spells: ['m-seep-drip', 'm-seep-solvent'], ai: 'ranged', traits: [], xp: 38
     },
     'boss-deepknock': {
@@ -1286,7 +1286,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'A coisa que os mineiros ouviam batendo do outro lado da parede e fingiam ser eco. É maior que a galeria em que está: um torso de rocha-mãe com dois punhos de estéril e nenhum rosto onde procurar intenção. Bate. O mundo responde.',
       flavor: 'GIMMICK — AS TRÊS BATIDAS: A Batida castiga o anel a 2 células (colado nele é seguro), o Desabamento pune quem se afasta, e a Postura de Tremor devolve o clima que o cura. Ou você o tira do tremor, ou aprende a lutar em cima dele.',
       hp: 530, pa: 9, pp: 2, initiative: 40, dodge: 6, lock: 52,
-      resists: { fogo: 15, agua: -10, terra: 45, ar: -20 },
+      resists: { fogo: 15, agua: 45, ar: -20 },
       spells: ['m-deep-knock', 'm-rockfall', 'm-vein-call', 'm-quake-stance', 'm-cave-bite'],
       ai: 'boss',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.45, power: 40 }],
@@ -1577,7 +1577,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um dos quatro pedaços do Coração que ganharam corpo. Este é uma armadura vazia com uma fresta acesa no peito, que semeia brasas no chão como quem prepara a casa para visitas.',
       flavor: 'Ele não persegue. Ele prepara o terreno.',
       hp: 95, pa: 6, pp: 3, initiative: 55, dodge: 16, lock: 20,
-      resists: { fogo: 40, agua: -25, neutro: 10 },
+      resists: { agua: -25, ar: 40, neutro: 10 },
       spells: ['m-cinder-lash', 'm-cinder-brand'], ai: 'ranged', traits: [], xp: 50
     },
     'tide-herald': {
@@ -1585,7 +1585,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'A mesma armadura, cheia de água escura em movimento. Cura os irmãos e reorganiza o campo com ressacas curtas e certeiras.',
       flavor: 'Enquanto ela viver, os outros três não morrem direito.',
       hp: 95, pa: 6, pp: 3, initiative: 48, dodge: 16, lock: 18,
-      resists: { fogo: -20, agua: 40, neutro: 10 },
+      resists: { fogo: 40, terra: -20, neutro: 10 },
       spells: ['m-tide-hymn', 'm-tide-drag', 'm-salt-lance'], ai: 'support',
       traits: [{ type: 'regenAura', value: 9, radius: 2 }], xp: 52
     },
@@ -1594,7 +1594,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'A armadura preenchida por fundação: pedra, cal e uma teimosia de mil anos. Fica entre você e o resto da sala e considera isso um trabalho honesto.',
       flavor: 'Provoca, aguenta e não sai do lugar.',
       hp: 140, pa: 5, pp: 2, initiative: 22, dodge: 2, lock: 46,
-      resists: { fogo: 10, terra: 40, ar: -25 },
+      resists: { fogo: 10, agua: 40, ar: -25 },
       spells: ['m-stone-fist', 'm-stone-bulwark'], ai: 'melee',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.5, power: 30 }], xp: 70
     },
@@ -1603,7 +1603,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'A armadura vazia de verdade — só o vento dentro dela é que a mantém de pé, e o vento tem pressa. Chega, corta e já está em outro lugar.',
       flavor: 'Difícil de prender, pior de acertar.',
       hp: 90, pa: 6, pp: 5, initiative: 82, dodge: 36, lock: 12,
-      resists: { terra: -20, ar: 40 },
+      resists: { fogo: -20, terra: 40 },
       spells: ['m-gale-step', 'm-gale-cut'], ai: 'melee', traits: [], xp: 50
     },
     'null-warden': {
@@ -1638,7 +1638,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma bolinha de ar comprimido do tamanho de um punho, girando devagar, com um pedacinho de céu velho preso dentro. É o que sobrou do clima do mundo antigo — e ele brinca com isso.',
       flavor: 'GIMMICK: ele muda o clima da sala sozinho. Sua escolha elemental vira sorteio.',
       hp: 70, pa: 6, pp: 4, initiative: 74, dodge: 32, lock: 6,
-      resists: { terra: -15, ar: 30, neutro: 10 },
+      resists: { fogo: -15, terra: 30, neutro: 10 },
       spells: ['m-turn-rain', 'm-turn-drought', 'm-turn-gale'], ai: 'ranged', traits: [], xp: 46
     },
     'heartroot': {
@@ -1646,7 +1646,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma raiz grossa que saiu da parede e atravessou o salão para abraçar o Coração e mantê-lo colado. Falhou. Continua tentando, e agarra qualquer coisa que passe perto.',
       flavor: 'Enraizada de verdade: não empurre, corte.',
       hp: 88, pa: 6, pp: 1, initiative: 26, dodge: 2, lock: 36,
-      resists: { fogo: -20, terra: 35, ar: -10 },
+      resists: { fogo: -20, agua: 35, ar: -10 },
       spells: ['m-heartroot-lash', 'm-heartroot-grasp'], ai: 'ranged',
       traits: [{ type: 'pushImmune' }], xp: 46
     },
@@ -1675,7 +1675,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um cogumelo-bebê com olhos grandes demais e lealdade maior ainda. Morde, envenena e, ao cair, estoura numa nuvem de esporos vingativa.',
       flavor: 'Corpo, dano retardado e negação de célula num pacote só.',
       hp: 35, pa: 3, pp: 3, initiative: 50, dodge: 14, lock: 10,
-      resists: { fogo: -10, terra: 10 },
+      resists: { fogo: -10, agua: 10, ar: -15 },
       spells: ['m-spore-nip'], ai: 'melee',
       traits: [{ type: 'explodeOnDeath', element: 'terra', damage: 10, radius: 1 }],
       summonOnly: true, xp: 0
@@ -1694,7 +1694,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um cão de carvão aceso, magro e rápido, com uma costura de fogo correndo do focinho ao rabo. Morde quente e, quando cai, devolve a última brasa em quem estiver por perto.',
       flavor: 'Abana o rabo. O rabo acende o chão.',
       hp: 48, pa: 4, pp: 5, initiative: 72, dodge: 24, lock: 10,
-      resists: { fogo: 30, agua: -25 },
+      resists: { agua: -25, ar: 30 },
       spells: ['m-sum-hound-bite'], ai: 'melee',
       traits: [{ type: 'explodeOnDeath', element: 'fogo', damage: 20, radius: 1 }],
       summonOnly: true, xp: 0
@@ -1704,7 +1704,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Quatro metros de rocha derretida presa numa forma que lembra vagamente um corpo. Anda devagar porque cada passo abre uma fissura, e o calor que ele emana seca a sala inteira.',
       flavor: 'O Coração do Fecho de Brasa tem um irmão mais velho. (Invocação de nível 30.)',
       hp: 160, pa: 5, pp: 2, initiative: 30, dodge: 0, lock: 44,
-      resists: { fogo: 45, agua: -30, terra: 20 },
+      resists: { agua: -30, terra: 20, ar: 45 },
       spells: ['m-sum-colossus-smash', 'm-sum-colossus-eruption'], ai: 'melee',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.4, power: 30 }],
       summonOnly: true, xp: 0
@@ -1714,7 +1714,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma silhueta de água limpa, do tamanho de uma criança, que flutua um palmo acima do chão e vai direto até quem está sangrando. Não ataca nunca; não é para isso que foi chamada.',
       flavor: 'Ela nunca fala. Só olha para quem está sangrando e resolve.',
       hp: 44, pa: 5, pp: 3, initiative: 56, dodge: 20, lock: 6,
-      resists: { fogo: -15, agua: 30 },
+      resists: { fogo: 30, terra: -15 },
       spells: ['m-sum-nymph-mend', 'm-sum-nymph-veil'], ai: 'support', traits: [], summonOnly: true, xp: 0
     },
     'sum-stone-sentinel': {
@@ -1722,7 +1722,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um bloco de rocha vertical com dois sulcos por olhos, plantado onde o invocador mandar. Lenta, dura e teimosa: existe para que um corredor deixe de ser corredor.',
       flavor: 'Fica onde foi posta. É a coisa mais confiável do mundo enterrado.',
       hp: 90, pa: 3, pp: 1, initiative: 16, dodge: 0, lock: 38,
-      resists: { fogo: 10, terra: 35, ar: -15 },
+      resists: { fogo: 10, agua: 35, ar: -15 },
       spells: ['m-sum-sentinel-slam', 'm-sum-sentinel-guard'], ai: 'melee',
       traits: [{ type: 'pushImmune' }], summonOnly: true, xp: 0
     },
@@ -1731,7 +1731,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Uma encosta inteira que concordou em levantar e dar uns passos. Tem árvores mortas nas costas e um veio de água correndo pelo ombro. Nada no mundo enterrado é mais duro do que ele.',
       flavor: 'Ele não invocou a montanha. Só perguntou se ela topava. (Invocação de nível 30.)',
       hp: 220, pa: 5, pp: 2, initiative: 20, dodge: 0, lock: 50,
-      resists: { fogo: 20, agua: 15, terra: 50, ar: -15 },
+      resists: { fogo: 20, agua: 50, ar: -15 },
       spells: ['m-sum-golem-fist', 'm-sum-golem-quake'], ai: 'melee',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.4, power: 30 }],
       summonOnly: true, xp: 0
@@ -1741,7 +1741,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um falcão de penas cinzentas com relâmpago velho preso entre elas. Voa em círculos apertados sobre a batalha e desce quando decide, não quando mandam.',
       flavor: 'Não existe céu para ele voar. Voa assim mesmo, de raiva.',
       hp: 40, pa: 4, pp: 6, initiative: 88, dodge: 34, lock: 6,
-      resists: { terra: -15, ar: 30 },
+      resists: { fogo: -15, terra: 30 },
       spells: ['m-sum-falcon-strike', 'm-sum-falcon-dive'], ai: 'melee', traits: [], summonOnly: true, xp: 0
     }
   });

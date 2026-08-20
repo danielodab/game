@@ -86,27 +86,27 @@ var JOGO = (typeof window !== 'undefined')
   // ajustar dois parametros a dois pontos medidos, ou seja, o teste passaria por
   // construcao. Fica registrado em vez de escondido.
   Fusion.PAIR_TUNE = {
-    'arqueiro+bruxo':        1.118,
-    'arqueiro+curandeiro':   0.705,
-    'arqueiro+espadachim':   1.310,
-    'arqueiro+invocador':    1.185,
-    'arqueiro+minotauro':    1.809,
-    'arqueiro+sumo':         0.793,
-    'bruxo+curandeiro':      0.987,
-    'bruxo+espadachim':      1.259,
-    'bruxo+invocador':       1.696,
-    'bruxo+minotauro':       0.914,
-    'bruxo+sumo':            0.972,
-    'curandeiro+espadachim': 0.563,
-    'curandeiro+invocador':  1.525,
-    'curandeiro+minotauro':  1.166,
+    'arqueiro+bruxo':        1.091,
+    'arqueiro+curandeiro':   0.697,
+    'arqueiro+espadachim':   1.251,
+    'arqueiro+invocador':    1.219,
+    'arqueiro+minotauro':    1.682,
+    'arqueiro+sumo':         0.755,
+    'bruxo+curandeiro':      1.007,
+    'bruxo+espadachim':      1.245,
+    'bruxo+invocador':       1.607,
+    'bruxo+minotauro':       0.888,
+    'bruxo+sumo':            1.013,
+    'curandeiro+espadachim': 0.569,
+    'curandeiro+invocador':  1.500,
+    'curandeiro+minotauro':  1.159,
     'curandeiro+sumo':       0.638,
-    'espadachim+invocador':  1.208,
-    'espadachim+minotauro':  1.109,
-    'espadachim+sumo':       0.432,
-    'invocador+minotauro':   4.000,
-    'invocador+sumo':        1.088,
-    'minotauro+sumo':        1.131
+    'espadachim+invocador':  1.112,
+    'espadachim+minotauro':  1.027,
+    'espadachim+sumo':       0.454,
+    'invocador+minotauro':   3.830,
+    'invocador+sumo':        1.080,
+    'minotauro+sumo':        1.104
   };
 
   function E() { return JOGO.Engine; }

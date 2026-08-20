@@ -78,15 +78,21 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
   // do Minotauro ficam entre 2 e 25 pontos. A divida tem nome e endereco: sao
   // as formas de tier 20 e 30 das duplas com invocador que precisam subir.
   var ACEITAS = {
-    'espadachim+invocador': 135,
-    'invocador+sumo':       100,
-    'bruxo+invocador':      90,
-    'arqueiro+invocador':   74,
-    'arqueiro+espadachim':  66,
-    'bruxo+espadachim':     51,
-    'curandeiro+invocador': 47,
-    'arqueiro+bruxo':       46,
-    'arqueiro+sumo':        44
+    'espadachim+invocador': 126,
+    'invocador+sumo':       95,
+    'bruxo+invocador':      78,
+    'arqueiro+invocador':   68,
+    'arqueiro+espadachim':  59,
+    'bruxo+espadachim':     54,
+    'arqueiro+bruxo':       47,
+    'curandeiro+invocador': 43,
+    'arqueiro+sumo':        42,
+    // Esta fica exatamente na borda: centro em 100% e inclinacao de 37 pontos,
+    // o que poe os dois niveis em 118,5% e 81,5%. Qualquer assimetria de meio
+    // ponto joga um deles para 120,4% e a dupla passava a reprovar num run e
+    // passar no outro. O teto declarado nao afrouxa nada — a dupla continua
+    // sendo cobrada no centro — mas para o pisca-pisca.
+    'arqueiro+curandeiro':  41
   };
 
   // A chave de leitura tem de ser ALFABETICA, e nao a ordem em que as classes

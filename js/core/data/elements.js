@@ -22,6 +22,38 @@ JOGO.DATA = JOGO.DATA || {};
 
   DATA.rivals = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
 
+  // --------------------------------------------------------------------------
+  // A RODA — quem GANHA de quem. Diferente de `rivals`, que é simétrico.
+  //
+  // `rivals` responde "quem se odeia" e é o que o CLIMA usa: a chuva favorece a
+  // água e prejudica o fogo, e os dois lados do par se revezam conforme o
+  // tempo. Isso continua igual. A roda responde outra pergunta, que o jogo não
+  // sabia responder: "numa briga entre dois elementos, qual leva a melhor?"
+  //
+  //        fogo  →  ar  →  terra  →  agua  →  fogo
+  //
+  // Cada seta é uma imagem concreta: o fogo consome o ar, o ar leva a terra
+  // embora um grão por vez, a terra bebe a água, a água apaga o fogo. A última
+  // é a que o Daniel deu de exemplo ("água ganha de fogo"); as outras três saem
+  // dela, porque com quatro elementos o único fecho coerente é um CICLO — um
+  // par simétrico deixaria dois elementos sem nada que os vencesse.
+  //
+  // A lore em `elementInfo` diz que a Terra odeia o Ar "que a leva embora" E
+  // que o Ar odeia a Terra "que o prende". Os dois se dizem vencedores; um
+  // tinha de ceder. Ficou com o Ar, porque erosão é um processo e prender é um
+  // estado — e a roda fala de quem vence a TROCA, não de quem é mais forte.
+  //
+  // COMO ISSO CHEGA NO DANO: não há conta escondida no motor. A tabela
+  // `resists` de cada monstro é que aponta para os elementos certos — ele
+  // resiste ao elemento que VENCE e é fraco contra quem o vence, guardando a
+  // magnitude autoral de sempre. `tests/validate_data.html` cobra a regra em
+  // todos eles, para que nenhum monstro novo nasça fora da roda.
+  DATA.beats = { fogo: 'ar', ar: 'terra', terra: 'agua', agua: 'fogo', neutro: null };
+
+  // Quem vence ESTE elemento — o inverso da roda, para não obrigar quem lê a
+  // varrer a tabela de trás para frente.
+  DATA.beatenBy = { ar: 'fogo', terra: 'ar', agua: 'terra', fogo: 'agua', neutro: null };
+
   // Apresentação (Designer/HUD): nome visível, cor do número de dano, ícone.
   DATA.elementInfo = {
     neutro: {

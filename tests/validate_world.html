@@ -236,6 +236,26 @@
   check('bestiário: ≥ 40 monstros comuns', commons.length >= 40, commons.length + ' comuns');
   check('bestiário: exatamente 6 chefes', bosses.length === 6, bosses.length + ' — ' + bosses.join(', '));
 
+  // A roda tem de ser um CICLO FECHADO sobre os quatro elementos: se não for,
+  // algum elemento fica sem nada que o vença (invencível) ou sem nada para
+  // vencer (inútil), e a regra inteira desanda.
+  (function () {
+    var quatro = ['fogo', 'agua', 'terra', 'ar'];
+    check('DATA.beats existe', !!D.beats);
+    check('DATA.beatenBy existe', !!D.beatenBy);
+    if (!D.beats || !D.beatenBy) return;
+    var visto = {}, at = 'fogo', passos = 0;
+    while (!visto[at] && passos <= 4) { visto[at] = 1; at = D.beats[at]; passos++; }
+    check('a roda é um ciclo que passa pelos quatro elementos',
+      passos === 4 && at === 'fogo' && quatro.every(function (e) { return visto[e]; }),
+      'voltou a ' + at + ' em ' + passos + ' passos');
+    check('beatenBy é o inverso exato de beats',
+      quatro.every(function (e) { return D.beatenBy[D.beats[e]] === e; }));
+    check('nenhum elemento vence a si mesmo',
+      quatro.every(function (e) { return D.beats[e] !== e; }));
+    check('neutro fica fora da roda', !D.beats.neutro && !D.beatenBy.neutro);
+  })();
+
   monIds.forEach(function (id) {
     var m = MON[id];
     var L = 'monstro ' + id;
@@ -258,6 +278,26 @@
       check(L + ': stats.pa ≥ 1', st.pa >= 1);
       check(L + ': stats.pp ≥ 0', st.pp >= 0);
       check(L + ': sem campo pm nos stats', !has(st, 'pm'));
+      // A RODA — fogo > ar > terra > agua > fogo (DATA.beats, em elements.js).
+      //
+      // Um bicho resiste ao elemento que o SEU elemento vence, e é fraco contra
+      // quem o vence. O próprio elemento passa NORMAL: quem é de água não se
+      // defende de água, se defende de fogo — que é a água apagando o fogo.
+      //
+      // Até a v3 a convenção era a INVERSA: 58 dos 60 monstros resistiam ao
+      // próprio elemento e 44 eram fracos ao rival. A inversão foi pedida de
+      // propósito, e esta checagem existe porque é fácil demais escrever "sou
+      // de fogo, resisto a fogo" no automático e reintroduzir a convenção velha
+      // num monstro novo sem ninguém perceber.
+      if (st.resists && D.beats && D.beats[m.element]) {
+        var venceEl = D.beats[m.element], venceMe = D.beatenBy[m.element];
+        check(L + ': resiste ao que seu elemento vence (' + venceEl + ')',
+          st.resists[venceEl] > 0, m.element + '→' + venceEl + ' = ' + st.resists[venceEl]);
+        check(L + ': fraco contra quem o vence (' + venceMe + ')',
+          st.resists[venceMe] < 0, venceMe + '→' + m.element + ' = ' + st.resists[venceMe]);
+        check(L + ': NÃO resiste ao próprio elemento (' + m.element + ')',
+          !(st.resists[m.element] > 0), m.element + ' = ' + st.resists[m.element]);
+      }
       check(L + ': resists com as 5 chaves numéricas',
         !!st.resists && ELEMENTS.every(function (e) { return typeof st.resists[e] === 'number'; }),
         JSON.stringify(st.resists));
