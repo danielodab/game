@@ -1,0 +1,843 @@
+<meta charset="utf-8">
+<title>Rebanho do Invocador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+  :root {
+    --ground:   #E7E9E3;
+    --surface:  #F3F4EF;
+    --sunken:   #DDE0D8;
+    --ink:      #1D2225;
+    --muted:    #5B635E;
+    --faint:    #858C86;
+    --line:     #CBCFC5;
+    --accent:   #A2661F;
+    --accent-soft: #EFE0CB;
+
+    --fogo:   #C4642A;
+    --agua:   #2E7E9E;
+    --terra:  #5C8A33;
+    --ar:     #6E5CA8;
+    --neutro: #6E756F;
+
+    --f-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    --f-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --f-data: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:   #15181A;
+      --surface:  #1D2124;
+      --sunken:   #101315;
+      --ink:      #E4E7E1;
+      --muted:    #98A19A;
+      --faint:    #6E7872;
+      --line:     #2E3439;
+      --accent:   #DCA35C;
+      --accent-soft: #33291B;
+
+      --fogo:   #F09354;
+      --agua:   #63C2E4;
+      --terra:  #9BCF6D;
+      --ar:     #C0B0F0;
+      --neutro: #A7AEA8;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:   #15181A;
+    --surface:  #1D2124;
+    --sunken:   #101315;
+    --ink:      #E4E7E1;
+    --muted:    #98A19A;
+    --faint:    #6E7872;
+    --line:     #2E3439;
+    --accent:   #DCA35C;
+    --accent-soft: #33291B;
+
+    --fogo:   #F09354;
+    --agua:   #63C2E4;
+    --terra:  #9BCF6D;
+    --ar:     #C0B0F0;
+    --neutro: #A7AEA8;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 17px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 20px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 780px; margin: 0 auto; }
+
+  /* ---------------------------------------------------------- cabeçalho */
+  header {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 72px 0 34px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--f-data);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 800;
+    font-size: clamp(38px, 7vw, 58px);
+    line-height: 1.02;
+    letter-spacing: -0.022em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin: 0;
+    max-width: 60ch;
+  }
+
+  /* ------------------------------------------------------------ seções */
+  section { padding-top: 52px; }
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin: 0 0 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h2::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+  .lede {
+    color: var(--muted);
+    margin: 0 0 26px;
+    max-width: 64ch;
+  }
+  p { margin: 0 0 18px; max-width: 66ch; }
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+
+  code {
+    font-family: var(--f-data);
+    font-size: 0.855em;
+    background: var(--sunken);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+
+  /* --------------------------------------------------------- achados */
+  .achado {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    padding: 22px 26px;
+    margin: 0 0 20px;
+  }
+  .achado h3 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+  }
+  .achado p { margin: 0; color: var(--muted); }
+  .achado p + p { margin-top: 12px; }
+
+  /* ---------------------------------------------------------- tabela */
+  .tabela-envolve { overflow-x: auto; margin: 0 0 26px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: var(--f-data);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 10.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding: 0 14px 8px 0;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  td {
+    padding: 9px 14px 9px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: baseline;
+    white-space: nowrap;
+  }
+  td.nome { font-family: var(--f-body); font-size: 15.5px; white-space: normal; }
+  td.num { text-align: right; padding-right: 22px; }
+  .baixo { color: var(--fogo); font-weight: 600; }
+  .alvo  { color: var(--accent); font-weight: 600; }
+
+  /* --------------------------------------------------------- criaturas */
+  .bicho {
+    border-top: 1px solid var(--line);
+    padding: 30px 0;
+    display: grid;
+    grid-template-columns: 1fr 210px;
+    gap: 34px;
+  }
+  .bicho:last-of-type { border-bottom: 1px solid var(--line); }
+  .bicho.criar { background: var(--surface); padding-left: 22px; padding-right: 22px; }
+
+  .bicho-cab { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+  .bicho h3 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: 24px;
+    letter-spacing: -0.016em;
+    margin: 0;
+  }
+  .chip {
+    font-family: var(--f-data);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    border: 1px solid currentColor;
+  }
+  .chip.fogo { color: var(--fogo); }
+  .chip.agua { color: var(--agua); }
+  .chip.terra { color: var(--terra); }
+  .chip.ar { color: var(--ar); }
+  .chip.neutro { color: var(--neutro); }
+  .chip.nova {
+    color: var(--surface);
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .bicho.criar .chip.nova { color: var(--ground); }
+
+  .papel {
+    font-family: var(--f-data);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 0 0 14px;
+  }
+  .bicho p { margin: 0 0 12px; max-width: 52ch; }
+  .bicho p:last-child { margin-bottom: 0; }
+  .naofaca {
+    color: var(--muted);
+    font-style: italic;
+    border-left: 2px solid var(--line);
+    padding-left: 14px;
+  }
+
+  .ficha {
+    font-family: var(--f-data);
+    font-size: 12px;
+    line-height: 1.5;
+    border-top: 2px solid var(--ink);
+    padding-top: 12px;
+    align-self: start;
+  }
+  .ficha dl { margin: 0; display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .ficha dt {
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .ficha dd { margin: 2px 0 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  /* ------------------------------------------------------------ prompts */
+  .prompt {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    border: 1px solid var(--line);
+    background: var(--sunken);
+  }
+  .prompt-cab {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .prompt-rot {
+    font-family: var(--f-data);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .copiar {
+    font-family: var(--f-data);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    padding: 4px 11px;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .copiar:hover, .copiar:focus-visible {
+    background: var(--accent);
+    color: var(--ground);
+  }
+  .copiar:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .copiar[data-feito="1"] { background: var(--accent); color: var(--ground); }
+  .prompt pre {
+    margin: 0;
+    padding: 14px 16px;
+    font-family: var(--f-data);
+    font-size: 12px;
+    line-height: 1.62;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  ul { max-width: 66ch; padding-left: 20px; margin: 0 0 18px; }
+  li { margin-bottom: 9px; }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-family: var(--f-data);
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    color: var(--faint);
+  }
+
+  @media (max-width: 620px) {
+    .bicho { grid-template-columns: 1fr; gap: 20px; }
+    .ficha { border-top-width: 1px; }
+    body { font-size: 16px; }
+  }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">SOTERRA · briefing de arte</div>
+  <h1>Rebanho do Invocador</h1>
+  <p class="standfirst">As sete criaturas que o Xamã chama ao campo — e as duas que faltam.
+  O que modelar, em que proporção, e as duas coisas que o jogo faz com o modelo depois
+  que ele chega.</p>
+</header>
+
+<section>
+  <h2>Antes de qualquer coisa</h2>
+  <p class="lede">Dois problemas apareceram medindo o que existe hoje. Os dois mudam o que vale a pena modelar.</p>
+
+  <div class="achado">
+    <h3>As sete são menores que um herói. Todas.</h3>
+    <p>O jogo normaliza toda criatura invocada para 1,80&nbsp;m vezes uma escala que eu defino.
+    Um herói tem 2,05&nbsp;m. O resultado é que o <em>Colosso de Magma</em> — descrito nos dados
+    como «quatro metros de rocha derretida» — entra em campo com 1,71&nbsp;m, mais baixo que o
+    sujeito que o chamou. O <em>Golem da Montanha</em>, «uma encosta inteira que concordou em
+    levantar», tem 1,30&nbsp;m: do tamanho de um cão grande.</p>
+    <p>Isso é ajuste meu, não seu — mas define o que você modela. Se as criaturas de nível 30
+    vão ter porte de verdade, a silhueta precisa aguentar ser vista grande.</p>
+  </div>
+
+  <div class="achado">
+    <h3>Água e Ar não têm invocação de nível 30.</h3>
+    <p>Fogo ganha o Cão de Brasa no nível 10 e o Colosso no 30. Terra ganha a Sentinela e o
+    Golem. Água e Ar param no nível 10 — quem escolher esses caminhos nunca vê uma invocação
+    grande. Os espaços de nível 30 deles estão ocupados por feitiços de dano direto.</p>
+    <p>Propus duas criaturas para fechar isso, no fim desta página.</p>
+  </div>
+
+  <div class="tabela-envolve">
+    <table>
+      <tr>
+        <th>criatura</th><th>elem</th><th>nv</th>
+        <th class="num">hoje</th><th class="num">alvo</th><th>modelo provisório</th>
+      </tr>
+      <tr><td class="nome">Chamado Menor</td><td>neutro</td><td>1</td>
+          <td class="num">1,08 m</td><td class="num alvo">1,10 m</td><td>q_hywirl</td></tr>
+      <tr><td class="nome">Cão de Brasa</td><td>fogo</td><td>10</td>
+          <td class="num">1,30 m</td><td class="num alvo">1,20 m</td><td>q_demon</td></tr>
+      <tr><td class="nome">Colosso de Magma</td><td>fogo</td><td>30</td>
+          <td class="num baixo">1,71 m</td><td class="num alvo">2,85 m</td><td>q_dragon_ev</td></tr>
+      <tr><td class="nome">Ninfa da Maré</td><td>agua</td><td>10</td>
+          <td class="num">1,44 m</td><td class="num alvo">1,30 m</td><td>q_squidle</td></tr>
+      <tr><td class="nome">Sentinela de Pedra</td><td>terra</td><td>10</td>
+          <td class="num baixo">1,12 m</td><td class="num alvo">2,10 m</td><td>q_cactoro</td></tr>
+      <tr><td class="nome">Golem da Montanha</td><td>terra</td><td>30</td>
+          <td class="num baixo">1,30 m</td><td class="num alvo">2,90 m</td><td>q_spikyblob</td></tr>
+      <tr><td class="nome">Falcão da Tormenta</td><td>ar</td><td>10</td>
+          <td class="num">1,35 m</td><td class="num alvo">1,15 m</td><td>q_birb</td></tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>O que vale para todas</h2>
+
+  <p><strong>Modele em material quase sem cor.</strong> O jogo multiplica a textura do modelo
+  por 52% da cor do elemento. Isso significa que o volume — claro e escuro, onde a luz bate e
+  onde não bate — é seu; o <em>matiz</em> é do jogo. Se você assar um azul saturado na Ninfa,
+  o tingimento de água multiplica azul por azul e ela sai escura e suja. Cinza levemente
+  quente, com o desenho todo no valor, é o que responde melhor.</p>
+
+  <p><strong>Você controla a proporção, não o tamanho.</strong> Como o jogo normaliza pela
+  altura, o que sobrevive da sua modelagem é a razão entre largura e altura. Uma criatura
+  magra e alta continua magra; uma baixa e larga fica larga. Modele na escala que for mais
+  cômoda — eu ajusto o número.</p>
+
+  <p><strong>A câmera é isométrica e está longe.</strong> A criatura ocupa cerca de 60 pixels
+  de altura em jogo. Detalhe de textura desaparece; silhueta é tudo o que resta. O teste é
+  simples: preencha a forma de preto e veja se ainda dá para dizer o que é.</p>
+
+  <p><strong>As referências de tamanho no tabuleiro:</strong> uma casa tem 2,0&nbsp;m de lado,
+  a parede da sala sobe a 3,1&nbsp;m, um herói tem 2,05&nbsp;m, um corpo fundido 2,55&nbsp;m e
+  um chefe 2,95&nbsp;m. Uma invocação de nível 30 deve ler entre o herói e o chefe.</p>
+
+  <p><strong>Os nomes dos clipes de animação importam.</strong> O renderizador acha a animação
+  por padrão de nome, então uma boa animação com nome fora do padrão simplesmente não toca —
+  já perdi um dia inteiro com isso. O que ele procura:</p>
+
+  <div class="tabela-envolve">
+    <table>
+      <tr><th>papel</th><th>nomes que ele reconhece</th><th>precisa?</th></tr>
+      <tr><td class="nome">parado</td><td><code>Idle</code> · <code>Flying</code></td><td>sim</td></tr>
+      <tr><td class="nome">andar</td><td><code>Walk</code> · <code>Swim</code> · <code>Slither</code></td><td>só se anda</td></tr>
+      <tr><td class="nome">atacar</td><td><code>Attack</code> · <code>Strike</code> · <code>Cast</code></td><td>sim</td></tr>
+      <tr><td class="nome">levar dano</td><td><code>HitReact</code> · <code>hit</code> · <code>Impact</code></td><td>sim</td></tr>
+      <tr><td class="nome">morrer</td><td><code>Death</code> · <code>Dying</code> · <code>Defeat</code></td><td>sim</td></tr>
+      <tr><td class="nome">voar</td><td><code>Fly</code> · <code>Hover</code></td><td>só o Falcão</td></tr>
+    </table>
+  </div>
+
+  <p>Quatro clipes bastam para quem não anda (Sentinela, e as duas novas que proponho). Cinco
+  para o resto. Use o mesmo esqueleto dos heróis que você já fez — o carregador reconhece
+  aquela nomenclatura de ossos.</p>
+</section>
+
+<section>
+  <h2>Como usar os prompts</h2>
+  <p class="lede">Cada criatura abaixo traz um prompt pronto para colar. Imagem primeiro,
+  3D depois — que é como você já vinha fazendo.</p>
+
+  <p><strong>Estão em inglês de propósito.</strong> Os modelos de imagem foram treinados
+  sobre legendas em inglês e respondem visivelmente melhor nele, mesmo quando a interface
+  está em português. Cole como está.</p>
+
+  <p><strong>Cada prompt já traz o bloco de estilo no fim</strong> — fundo cinza liso, luz
+  difusa sem sombra projetada, material quase sem cor, vista três quartos, corpo inteiro no
+  quadro. Isso não é enfeite: é o que faz a imagem virar 3D limpo depois. Fundo com cenário
+  vira geometria no modelo, sombra dura vira buraco, e cor saturada briga com o tingimento
+  do jogo.</p>
+
+  <p><strong>Prompt negativo</strong>, se a ferramenta aceitar um: <code>saturated colors,
+  colored rim lighting, scenery, ground plane, multiple creatures, cropped limbs, action pose,
+  motion blur, text, watermark</code>.</p>
+
+  <p><strong>Se der para gerar duas vistas</strong> — frente e lado, na mesma folha e na mesma
+  escala —, o passo de 3D acerta muito mais o volume das costas. Vale para as três grandes
+  (Colosso, Golem, Sentinela), onde o volume é o assunto.</p>
+
+  <p>E uma coisa que só descobri medindo: a criatura vai aparecer com cerca de 60 pixels de
+  altura em jogo. Se a imagem gerada só funcionar de perto, ela não vai funcionar.</p>
+</section>
+
+<section>
+  <h2>As sete</h2>
+  <p class="lede">Cada uma existe para fazer uma coisa que as outras não fazem. A silhueta
+  precisa dizer isso antes de o jogador ler o nome.</p>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab">
+        <h3>Chamado Menor</h3>
+        <span class="chip neutro">neutro</span>
+      </div>
+      <p class="papel">o primeiro · anda com você a campanha toda</p>
+      <p>Um bicho pequeno de estimação, sem elemento e sem pretensão. É a primeira coisa que
+      o Xamã aprende e continua sendo útil no nível 30 — o jogador vai olhar para ele mais
+      vezes que para qualquer outro.</p>
+      <p>Deve parecer <em>companheiro</em>, não arma: proporção de cachorro pequeno ou de
+      bicho de colo, cabeça grande em relação ao corpo.</p>
+      <p class="naofaca">Não faça ameaçador. Se ele intimidar, rouba a leitura do Cão de Brasa,
+      que é o que deve intimidar no nível 10.</p>
+    </div>
+    <div class="ficha">
+      <dl>
+        <dt>altura em jogo</dt><dd>1,10 m</dd>
+        <dt>proporção</dt><dd>compacto, cabeça grande</dd>
+        <dt>anda?</dt><dd>sim</dd>
+        <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
+        <dt>id</dt><dd>sum-familiar</dd>
+      </dl>
+    </div>
+    <div class="prompt">
+      <div class="prompt-cab">
+        <span class="prompt-rot">prompt de imagem</span>
+        <button class="copiar" type="button">copiar</button>
+      </div>
+      <pre>A small friendly creature companion the size of a lapdog. Oversized rounded head roughly one third of its total height, short compact four-legged body, large gentle eyes, soft tufted fur at the ears and tail tip. No fangs, no claws, curious and harmless expression. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
+    </div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab">
+        <h3>Cão de Brasa</h3>
+        <span class="chip fogo">fogo · nv 10</span>
+      </div>
+      <p class="papel">rápido · morde · explode quando cai</p>
+      <p>Magro, comprido e baixo — construído para chegar antes. Nos dados ele tem a segunda
+      maior iniciativa do rebanho e devolve a última brasa em quem estiver por perto quando
+      morre, então a morte dele é uma jogada, não um acidente.</p>
+      <p>A silhueta deve ser <em>toda horizontal</em>: focinho baixo, garupa alta, pernas
+      finas. Uma costura de fissuras correndo do focinho ao rabo dá onde a luz do elemento
+      pega sem precisar de cor.</p>
+      <p class="naofaca">Não faça musculoso nem pesado. Peso é do Colosso; este é velocidade.</p>
+    </div>
+    <div class="ficha">
+      <dl>
+        <dt>altura em jogo</dt><dd>1,20 m</dd>
+        <dt>proporção</dt><dd>longo e baixo, 2× mais<br>comprido que alto</dd>
+        <dt>anda?</dt><dd>sim, rápido</dd>
+        <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
+        <dt>id</dt><dd>sum-ember-hound</dd>
+      </dl>
+    </div>
+    <div class="prompt">
+      <div class="prompt-cab">
+        <span class="prompt-rot">prompt de imagem</span>
+        <button class="copiar" type="button">copiar</button>
+      </div>
+      <pre>A gaunt hound-like creature built for speed, twice as long as it is tall. Head carried low, haunches high, thin wiry legs, ribs visible under the hide. A single continuous seam of deep cracked fissures runs from the muzzle along the spine to the tip of the tail. Charcoal-like hide, dry and rough. Lean and starved, never muscular. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
+    </div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab">
+        <h3>Colosso de Magma</h3>
+        <span class="chip fogo">fogo · nv 30</span>
+      </div>
+      <p class="papel">o peso · seca a sala inteira ao chegar</p>
+      <p>Nos dados ele tem 160 de vida e a menor esquiva do rebanho: não desvia de nada,
+      aguenta tudo. Chegar já muda o clima da sala para estiagem — então a entrada dele é um
+      acontecimento, e o modelo tem de sustentar isso.</p>
+      <p>Rocha presa numa forma que <em>lembra vagamente</em> um corpo — a leitura certa é
+      «alguma coisa fez isso ficar de pé», não «isto é uma pessoa de pedra». Ombros muito
+      mais largos que o quadril, braços longos, cabeça pequena ou quase ausente. Fissuras
+      fundas onde a luz do elemento vai morar.</p>
+      <p class="naofaca">Não faça simétrico. Um lado mais pesado que o outro é o que separa
+      «massa que se levantou» de «estátua».</p>
+    </div>
+    <div class="ficha">
+      <dl>
+        <dt>altura em jogo</dt><dd>2,85 m<br><span style="color:var(--faint)">hoje: 1,71 m</span></dd>
+        <dt>proporção</dt><dd>ombros largos, cabeça<br>pequena, assimétrico</dd>
+        <dt>anda?</dt><dd>sim, devagar</dd>
+        <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
+        <dt>id</dt><dd>sum-magma-colossus</dd>
+      </dl>
+    </div>
+    <div class="prompt">
+      <div class="prompt-cab">
+        <span class="prompt-rot">prompt de imagem</span>
+        <button class="copiar" type="button">copiar</button>
+      </div>
+      <pre>A towering colossus of cooled molten rock that only loosely holds a humanoid shape. Massive asymmetric shoulders far wider than the hips, one shoulder visibly heavier and higher than the other, long heavy arms hanging near the ground, almost no head — just a shallow mass sunk between the shoulders. Deep fissures split the chest and shoulder plates. Broken crust surface of slabs and shear faces. It must read as matter that stood up, not as a stone man. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
+    </div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab">
+        <h3>Ninfa da Maré</h3>
+        <span class="chip agua">agua · nv 10</span>
+      </div>
+      <p class="papel">cura sozinha · nunca ataca</p>
+      <p>A única do rebanho que não tem ataque nenhum — vai direto até quem está sangrando e
+      resolve. Flutua um palmo acima do chão, então o modelo não precisa de pés que aguentem
+      peso.</p>
+      <p>Silhueta de criança, de água limpa, com a parte de baixo se desfazendo em vez de
+      terminar. Braços longos demais para o corpo: são eles que fazem o gesto de cuidar, e é
+      o único gesto que ela tem.</p>
+      <p class="naofaca">Não dê arma, garra nem dente. Se ela parecer capaz de machucar, o
+      jogador vai mandá-la para a frente e perdê-la.</p>
+    </div>
+    <div class="ficha">
+      <dl>
+        <dt>altura em jogo</dt><dd>1,30 m</dd>
+        <dt>proporção</dt><dd>criança, braços longos,<br>base que se desfaz</dd>
+        <dt>anda?</dt><dd>flutua</dd>
+        <dt>clipes</dt><dd>idle · walk (flutuar)<br>cast · hit · death</dd>
+        <dt>id</dt><dd>sum-tide-nymph</dd>
+      </dl>
+    </div>
+    <div class="prompt">
+      <div class="prompt-cab">
+        <span class="prompt-rot">prompt de imagem</span>
+        <button class="copiar" type="button">copiar</button>
+      </div>
+      <pre>A small child-sized figure made of clear flowing water. Unnaturally long slender arms held forward in a cupping, tending gesture. Smooth featureless face with no mouth. The lower half has no legs and no feet: it dissolves downward into ripples and trailing droplets. Translucent and calm, entirely harmless — no weapon, no claw, no tooth anywhere on it. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
+    </div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab">
+        <h3>Sentinela de Pedra</h3>
+        <span class="chip terra">terra · nv 10</span>
+      </div>
+      <p class="papel">plantada · existe para um corredor deixar de ser corredor</p>
+      <p>Esta é a mais mal servida hoje: 1,12&nbsp;m para uma coisa cujo trabalho inteiro é
+      <em>tapar passagem</em>. Tem de ler como obstáculo à distância, no meio de uma sala
+      cheia — mais alta que um herói, quase tão larga quanto uma casa.</p>
+      <p>Um bloco vertical com dois sulcos por olhos. Sem braços, ou com braços que mal se
+      destacam do corpo. A base deve parecer <em>enterrada</em>, não apoiada.</p>
+      <p class="naofaca">Não faça com pernas. No instante em que tem pernas, vira golem — e o
+      Golem da Montanha já existe e é outra coisa.</p>
+    </div>
+    <div class="ficha">
+      <dl>
+        <dt>altura em jogo</dt><dd>2,10 m<br><span style="color:var(--faint)">hoje: 1,12 m</span></dd>
+        <dt>proporção</dt><dd>bloco vertical, largo,<br>base enterrada</dd>
+        <dt>anda?</dt><dd>quase não (1 passo)</dd>
+        <dt>clipes</dt><dd>idle · attack · hit<br>death</dd>
+        <dt>id</dt><dd>sum-stone-sentinel</dd>
+      </dl>
+    </div>
+    <div class="prompt">
+      <div class="prompt-cab">
+        <span class="prompt-rot">prompt de imagem</span>
+        <button class="copiar" type="button">copiar</button>
+      </div>
+      <pre>A tall vertical monolith of rough hewn stone, taller than a man and nearly as wide at the base as it is tall. Two deep horizontal grooves carved near the top serve as eyes. No legs and no separate arms, at most shallow ridges suggesting shoulders. The base is buried, merging into cracked broken ground rather than resting on it. Weathered chiselled surface, chipped edges, patches of lichen. It must read as an obstacle blocking a passage. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
+    </div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab">
+        <h3>Golem da Montanha</h3>
+        <span class="chip terra">terra · nv 30</span>
+      </div>
+      <p class="papel">220 de vida · o mais duro do mundo enterrado</p>
+      <p>A descrição nos dados é boa demais para não seguir: «uma encosta inteira que
+      concordou em levantar e dar uns passos, com árvores mortas nas costas e um veio de água
+      correndo pelo ombro». É a maior criatura do rebanho e hoje tem 1,30&nbsp;m.</p>
+      <p>O que separa ele do Colosso é a <em>paisagem</em>: o Colosso é matéria fundida, este
+      carrega coisas em cima. Tronco largo, quase sem pescoço, costas irregulares onde cabe
+      vegetação morta. Silhueta de morro, não de homem.</p>
+      <p class="naofaca">Não repita a proporção do Colosso. Se os dois grandes lerem igual, o
+      jogador só vê «o boneco grande» duas vezes.</p>
+    </div>
+    <div class="ficha">
+      <dl>
+        <dt>altura em jogo</dt><dd>2,90 m<br><span style="color:var(--faint)">hoje: 1,30 m</span></dd>
+        <dt>proporção</dt><dd>morro: base muito larga,<br>topo irregular</dd>
+        <dt>anda?</dt><dd>sim, muito devagar</dd>
+        <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
+        <dt>id</dt><dd>sum-mountain-golem</dd>
+      </dl>
+    </div>
+    <div class="prompt">
+      <div class="prompt-cab">
+        <span class="prompt-rot">prompt de imagem</span>
+        <button class="copiar" type="button">copiar</button>
+      </div>
+      <pre>An enormous golem shaped like a hillside that stood up and took a few steps. Extremely wide base narrowing to an irregular crest, no neck, the head barely distinct from the shoulders. Dead bare trees embedded across its back, loose scree and moss down its slopes, a thin vein of water running over one shoulder. Mountain silhouette rather than human silhouette: wider than tall at the base. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
+    </div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab">
+        <h3>Falcão da Tormenta</h3>
+        <span class="chip ar">ar · nv 10</span>
+      </div>
+      <p class="papel">a maior iniciativa do jogo · desce quando decide</p>
+      <p>Voa em círculos sobre a batalha e desce quando quer, não quando mandam. Tem 88 de
+      iniciativa — age antes de todo mundo, inclusive dos chefes.</p>
+      <p>Aqui a envergadura importa mais que a altura: o corpo é pequeno, as asas é que
+      ocupam a casa. Modele com as asas <em>abertas</em> na pose de repouso, porque ele nunca
+      pousa em jogo.</p>
+      <p class="naofaca">Não faça asas dobradas nem pose de poleiro. Ele não tem chão.</p>
+    </div>
+    <div class="ficha">
+      <dl>
+        <dt>altura em jogo</dt><dd>1,15 m</dd>
+        <dt>proporção</dt><dd>envergadura ≈ 2× a<br>altura do corpo</dd>
+        <dt>anda?</dt><dd>voa (fly, não walk)</dd>
+        <dt>clipes</dt><dd>fly · attack · hit<br>death</dd>
+        <dt>id</dt><dd>sum-storm-falcon</dd>
+      </dl>
+    </div>
+    <div class="prompt">
+      <div class="prompt-cab">
+        <span class="prompt-rot">prompt de imagem</span>
+        <button class="copiar" type="button">copiar</button>
+      </div>
+      <pre>A grey falcon with its wings held fully spread, wingspan twice the height of the body. Small compact body, sharp layered feathers, tail fanned, feet tucked back. Thin branching lines of old lightning caught between the feathers. Shown in flight with wings open — never perched, never with folded wings. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>As duas que faltam</h2>
+  <p class="lede">Propostas minhas, para fechar o buraco de nível 30 na Água e no Ar. Se
+  aprovar, escrevo os dados e os feitiços — a arte entra depois, sem pressa.</p>
+
+  <div class="bicho criar">
+    <div>
+      <div class="bicho-cab">
+        <h3>Afogado da Cisterna</h3>
+        <span class="chip agua">agua · nv 30</span>
+        <span class="chip nova">a criar</span>
+      </div>
+      <p class="papel">puxa · o peso que faltava na Água</p>
+      <p>O caminho da Água hoje é cuidar e arrastar — a Ninfa cura, as armadilhas sugam. Falta
+      o corpo pesado que faz isso sozinho, todo turno, sem gastar o turno do Xamã.</p>
+      <p>Uma massa de água de pé, guardando a forma vaga do que se afogou dentro dela. Base
+      muito pesada, afinando para cima, como uma onda que parou no meio de quebrar. Vazio no
+      lugar do rosto.</p>
+      <p class="naofaca">Não faça humanoide claro. O que assusta é justamente não dar para
+      dizer quantos estão ali dentro.</p>
+    </div>
+    <div class="ficha">
+      <dl>
+        <dt>altura em jogo</dt><dd>2,60 m</dd>
+        <dt>proporção</dt><dd>base pesada, topo fino,<br>onda de pé</dd>
+        <dt>anda?</dt><dd>sim, devagar</dd>
+        <dt>clipes</dt><dd>idle · walk · cast<br>hit · death</dd>
+        <dt>faz</dt><dd>puxa 2 casas por turno<br>+ dano de água</dd>
+      </dl>
+    </div>
+    <div class="prompt">
+      <div class="prompt-cab">
+        <span class="prompt-rot">prompt de imagem</span>
+        <button class="copiar" type="button">copiar</button>
+      </div>
+      <pre>A standing mass of dark water that vaguely holds the shape of drowned figures pressed together. Very heavy wide base tapering upward like a wave frozen at the moment of breaking. A hollow void where a face should be. Indistinct arms and shoulders suggested inside the mass, impossible to count how many bodies are in there. Not clearly humanoid. Smooth, slow-moving surface. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
+    </div>
+  </div>
+
+  <div class="bicho criar">
+    <div>
+      <div class="bicho-cab">
+        <h3>Olho da Tormenta</h3>
+        <span class="chip ar">ar · nv 30</span>
+        <span class="chip nova">a criar</span>
+      </div>
+      <p class="papel">totem · não anda, não ataca, empurra tudo</p>
+      <p>O rebanho inteiro é bicho que anda e bate. Falta ao Xamã o arquétipo que a palavra
+      «xamã» promete: o <em>totem</em> — plantado, sem ataque, que muda a regra do espaço em
+      volta. Este empurra para longe tudo o que se aproximar, todo turno, e é o oposto exato
+      do Afogado.</p>
+      <p>Não é um bicho: é uma espiral vertical, larga em cima e estreita onde toca o chão,
+      girando devagar. Se tiver rosto, um só — no alto, olhando para baixo.</p>
+      <p class="naofaca">Não dê pernas nem braços. O dia em que ele parecer capaz de andar,
+      deixa de ser totem.</p>
+    </div>
+    <div class="ficha">
+      <dl>
+        <dt>altura em jogo</dt><dd>2,70 m</dd>
+        <dt>proporção</dt><dd>funil invertido: largo<br>em cima, fino embaixo</dd>
+        <dt>anda?</dt><dd>não</dd>
+        <dt>clipes</dt><dd>idle · cast · hit<br>death</dd>
+        <dt>faz</dt><dd>empurra 2 casas em raio 2<br>no início do turno</dd>
+      </dl>
+    </div>
+    <div class="prompt">
+      <div class="prompt-cab">
+        <span class="prompt-rot">prompt de imagem</span>
+        <button class="copiar" type="button">copiar</button>
+      </div>
+      <pre>A vertical spiralling funnel of wind, wide at the top and narrowing to a thin point where it touches the ground. Slowly rotating, with dust, grit and small debris caught in the spiral. A single calm face high near the top, looking downward. No arms, no legs, no body: it is a column, not a creature. Rooted and still, like a totem. — stylized game-ready creature concept, single subject centred, full body in frame, neutral standing pose, plain flat light-grey background, soft even studio lighting, no cast shadows, desaturated near-monochrome grey material with the form described by light and shadow alone, matte surface, three-quarter front view, clean readable silhouette.</pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Por onde começar</h2>
+  <p>Se for fazer em ordem de impacto, esta é a ordem:</p>
+  <ul>
+    <li><strong>Sentinela de Pedra</strong> — é a que está mais errada hoje. Uma coisa que
+    deveria fechar corredor tem 1,12&nbsp;m e a silhueta de um cacto.</li>
+    <li><strong>Golem da Montanha</strong> e <strong>Colosso de Magma</strong> — os dois
+    grandes, que hoje não são grandes. Faça um depois do outro, para garantir que não leiam
+    igual.</li>
+    <li><strong>Chamado Menor</strong> — o mais visto de todos, porque acompanha a campanha
+    inteira desde o nível 1.</li>
+    <li><strong>Cão de Brasa</strong>, <strong>Ninfa</strong>, <strong>Falcão</strong> — os
+    três de nível 10 estão razoáveis em proporção; é ganho de qualidade, não conserto.</li>
+  </ul>
+  <p>Os ajustes de altura eu faço assim que os modelos chegarem — não precisa se preocupar
+  com escala na hora de exportar.</p>
+</section>
+
+<footer>
+  SOTERRA · rebanho do invocador · medido em 20 de agosto de 2026 sobre a v3 do jogo
+</footer>
+
+</div>
+
+<script>
+  document.querySelectorAll('.copiar').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var pre = b.closest('.prompt').querySelector('pre');
+      var txt = pre.textContent;
+      function feito() {
+        b.textContent = 'copiado';
+        b.dataset.feito = '1';
+        setTimeout(function () { b.textContent = 'copiar'; b.dataset.feito = ''; }, 1600);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(feito, seleciona);
+      } else { seleciona(); }
+      function seleciona() {
+        // Sem permissão de área de transferência ainda dá para ajudar: seleciona
+        // o texto inteiro para que um Ctrl+C resolva.
+        var r = document.createRange();
+        r.selectNodeContents(pre);
+        var sel = window.getSelection();
+        sel.removeAllRanges(); sel.addRange(r);
+        b.textContent = 'ctrl+c';
+        setTimeout(function () { b.textContent = 'copiar'; }, 2200);
+      }
+    });
+  });
+</script>
