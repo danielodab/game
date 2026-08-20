@@ -78,7 +78,7 @@
       if (!pronto && Date.now() - t0 < 6000) return setTimeout(espera, 80);
 
       JOGO.Progress.reset();
-      var ids = JOGO.Progress.heroIds ? JOGO.Progress.heroIds() : ['sumo', 'curandeira'];
+      var ids = JOGO.Progress.heroIds ? JOGO.Progress.heroIds() : ['sumo', 'curandeiro'];
       JOGO.Game.startRun(ids.slice(0, 2), qs.dungeon || 'greenhouse');
       pump(30);
 

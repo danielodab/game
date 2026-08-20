@@ -327,13 +327,13 @@ JOGO.DATA = JOGO.DATA || {};
     // aqui, `minDungeon 0`. Os pesos de cada calabouço somam 100 e leem-se
     // como porcentagem.
     //
-    // Escada da coleção: sumo/curandeira (já liberados) só rendem estrela e
+    // Escada da coleção: sumo/curandeiro (já liberados) só rendem estrela e
     // dominam o raso; invocador (10) abre na Cisterna; bruxo (10) no Fecho;
     // espadachim (20) nos Andaimes; arqueiro (25), o troféu, só na Mina e no
     // Coração — as duas descidas que o jogador vai repetir de verdade.
     cardDrops: [
       { classId: 'sumo', weight: 50 },
-      { classId: 'curandeira', weight: 50 }
+      { classId: 'curandeiro', weight: 50 }
     ]
   });
 
@@ -458,7 +458,7 @@ JOGO.DATA = JOGO.DATA || {};
     cardDrops: [
       { classId: 'invocador', weight: 40 },
       { classId: 'sumo', weight: 30 },
-      { classId: 'curandeira', weight: 30 }
+      { classId: 'curandeiro', weight: 30 }
     ]
   });
 
@@ -591,7 +591,7 @@ JOGO.DATA = JOGO.DATA || {};
       { classId: 'invocador', weight: 34 },
       { classId: 'bruxo', weight: 30 },
       { classId: 'sumo', weight: 18 },
-      { classId: 'curandeira', weight: 18 }
+      { classId: 'curandeiro', weight: 18 }
     ]
   });
 
@@ -726,7 +726,7 @@ JOGO.DATA = JOGO.DATA || {};
       { classId: 'bruxo', weight: 26 },
       { classId: 'invocador', weight: 24 },
       { classId: 'sumo', weight: 10 },
-      { classId: 'curandeira', weight: 10 }
+      { classId: 'curandeiro', weight: 10 }
     ]
   });
 
@@ -865,7 +865,7 @@ JOGO.DATA = JOGO.DATA || {};
       { classId: 'bruxo', weight: 20 },
       { classId: 'invocador', weight: 14 },
       { classId: 'sumo', weight: 5 },
-      { classId: 'curandeira', weight: 5 }
+      { classId: 'curandeiro', weight: 5 }
     ]
   });
 
@@ -1002,7 +1002,7 @@ JOGO.DATA = JOGO.DATA || {};
     ],
     // O fundo do mundo espelha exatamente os `dropWeight` de DATA.cards:
     // arqueiro 32 · espadachim 24 · bruxo 16 · invocador 16 · sumo 6 ·
-    // curandeira 6. Farmar aqui é sempre o caminho mais curto para qualquer
+    // curandeiro 6. Farmar aqui é sempre o caminho mais curto para qualquer
     // carta — inclusive para as 5 estrelas de quem já liberou tudo.
     cardDrops: [
       { classId: 'arqueiro', weight: 32 },
@@ -1010,7 +1010,7 @@ JOGO.DATA = JOGO.DATA || {};
       { classId: 'bruxo', weight: 16 },
       { classId: 'invocador', weight: 16 },
       { classId: 'sumo', weight: 6 },
-      { classId: 'curandeira', weight: 6 }
+      { classId: 'curandeiro', weight: 6 }
     ]
   });
 

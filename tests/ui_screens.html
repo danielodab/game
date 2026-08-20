@@ -119,14 +119,14 @@
     P.reset ? P.reset() : P.load();
     // cartas: libera invocador e bruxo e dá estrelas ao sumô
     P.addCards('sumo', 42);          // liberada + estrelas
-    P.addCards('curandeira', 17);    // liberada + 2 estrelas
+    P.addCards('curandeiro', 17);    // liberada + 2 estrelas
     P.addCards('invocador', 12);     // liberada (custo 10)
     P.addCards('bruxo', 6);          // ainda trancada (custo 10)
     P.addCards('espadachim', 3);     // trancada (custo 20)
     P.addCards('arqueiro', 1);       // trancada (custo 25)
     // XP para passar do nível 5 (a tela de elemento precisa de gente pendente)
     P.addXp('sumo', 900);
-    P.addXp('curandeira', 900);
+    P.addXp('curandeiro', 900);
     P.addXp('invocador', 260);
     // caminho já escolhido para um deles, o outro fica pendente
     P.chooseElement('sumo', 'terra');
@@ -241,34 +241,34 @@
   // dados de mentira para as telas de recompensa
   // Formato REAL de game.js: `xpMult` e `xpPorHeroi` são objetos por heroId.
   // O sumô está muito acima do nível do calabouço (corte no piso ×0,10); a
-  // curandeira está na faixa (×1). É o caso que o QA pegou: a HUD anunciava
+  // curandeiro está na faixa (×1). É o caso que o QA pegou: a HUD anunciava
   // 180 e o sumô levava 18.
   var fakeRewards = {
     xpGanho: 180,
-    xpMult: { sumo: 0.1, curandeira: 1 },
-    xpPorHeroi: { sumo: 18, curandeira: 180 },
-    levelUps: [{ heroId: 'curandeira', niveis: 1, novoNivel: 6 }],
+    xpMult: { sumo: 0.1, curandeiro: 1 },
+    xpPorHeroi: { sumo: 18, curandeiro: 180 },
+    levelUps: [{ heroId: 'curandeiro', niveis: 1, novoNivel: 6 }],
     drops: Object.keys(D.items || {}).slice(9, 12),
     pets: Object.keys(D.pets || {}).slice(3, 4),
     cards: [{ classId: 'bruxo', name: 'Bruxo', amount: 2, cards: 8, unlocked: false, stars: 0, starUp: false }],
     stones: (function () { var o = {}; Object.keys(D.stones || {}).slice(0, 2).forEach(function (s) { o[s] = 3; }); return o; })(),
-    elementChoices: ['curandeira']
+    elementChoices: ['curandeiro']
   };
 
   function goto(name) {
     if (name === 'battle') {
       // batalha de verdade: o HUD lê Engine/Game
       try {
-        JOGO.UI.selection(['sumo', 'curandeira']);
+        JOGO.UI.selection(['sumo', 'curandeiro']);
         var dg = (D.dungeons && D.dungeons[0]) ? D.dungeons[0].id : null;
-        JOGO.Game.startRun(['sumo', 'curandeira'], dg);
+        JOGO.Game.startRun(['sumo', 'curandeiro'], dg);
       } catch (e) { note('startRun falhou: ' + e.message); JOGO.UI.showScreen('battle'); }
     } else if (name === 'roomClear' || name === 'dungeonComplete') {
       JOGO.UI.showScreen(name, fakeRewards);
     } else if (name === 'elementChoice') {
-      JOGO.UI.showScreen(name, { heroIds: ['curandeira'] });
+      JOGO.UI.showScreen(name, { heroIds: ['curandeiro'] });
     } else {
-      JOGO.UI.selection(['sumo', 'curandeira']);
+      JOGO.UI.selection(['sumo', 'curandeiro']);
       JOGO.UI.showScreen(name);
     }
   }
@@ -312,8 +312,8 @@
       /recomendado/i.test(txt), txt.slice(0, 200));
     check('recompensa: empurra o jogador a descer', /mais fundo/i.test(txt));
     // sem corte, nada de barulho: o painel volta a ser simples
-    JOGO.UI.showScreen('roomClear', { xpGanho: 90, xpMult: { sumo: 1, curandeira: 1 },
-                                      xpPorHeroi: { sumo: 90, curandeira: 90 } });
+    JOGO.UI.showScreen('roomClear', { xpGanho: 90, xpMult: { sumo: 1, curandeiro: 1 },
+                                      xpPorHeroi: { sumo: 90, curandeiro: 90 } });
     var limpo = document.querySelector('#ui-root .ui-screen.is-on').textContent;
     check('recompensa: sem corte não mostra aviso nenhum',
       /\+90\s*XP/.test(limpo) && !/f[áa]cil demais/i.test(limpo) && limpo.indexOf('×') < 0,
@@ -463,7 +463,7 @@
   JOGO.UI.showScreen('heroSelect');
   var hsel = document.querySelector('#ui-root .screen-heroSelect').textContent;
   check('seleção solo: sorte máxima', /máxima/.test(hsel), hsel.slice(0, 100));
-  JOGO.UI.selection(['sumo', 'curandeira']);
+  JOGO.UI.selection(['sumo', 'curandeiro']);
   JOGO.UI.showScreen('heroSelect');
   hsel = document.querySelector('#ui-root .screen-heroSelect').textContent;
   check('seleção dupla: sorte média', /média/.test(hsel));

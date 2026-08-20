@@ -59,13 +59,13 @@ gastando o PA como quiser, separados e fundidos, contra alvo de vida infinita.
 
 | dupla | separados | fundidos | |
 |---|---|---|---|
-| sumo+curandeira | 265 | 121 | −144 |
+| sumo+curandeiro | 265 | 121 | −144 |
 | sumo+arqueiro | 275 | 133 | −142 |
 | sumo+espadachim | 267 | 136 | −131 |
 | sumo+bruxo | 254 | 131 | −123 |
-| curandeira+invocador | 234 | 123 | −111 |
+| curandeiro+invocador | 234 | 123 | −111 |
 | … | | | |
-| bruxo+curandeira | 198 | 184 | −14 |
+| bruxo+curandeiro | 198 | 184 | −14 |
 
 A causa é aritmética, não conteúdo:
 

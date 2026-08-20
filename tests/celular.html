@@ -85,7 +85,7 @@
     R = J.Renderer; G = J.Game; E = J.Engine; U = J.UI;
 
     var ids = J.Progress.heroIds();
-    while (ids.length < 2) { J.Progress.createHero(ids.length ? 'curandeira' : 'sumo'); ids = J.Progress.heroIds(); }
+    while (ids.length < 2) { J.Progress.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = J.Progress.heroIds(); }
     G.startRun(ids.slice(0, 2), 'greenhouse');
     quadros(60);
     setTimeout(mede, 200);

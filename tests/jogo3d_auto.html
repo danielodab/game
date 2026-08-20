@@ -89,7 +89,7 @@
         !(J.Models3D && J.Models3D.isReady())) { setTimeout(boot, 200); return; }
     try {
       var ids = J.Progress.heroIds();
-      if (ids.length < 2) { J.Progress.createHero('sumo'); J.Progress.createHero('curandeira'); ids = J.Progress.heroIds(); }
+      if (ids.length < 2) { J.Progress.createHero('sumo'); J.Progress.createHero('curandeiro'); ids = J.Progress.heroIds(); }
       J.Game.startRun(ids.slice(0, 2), Q.get('d') || 'greenhouse');
       if (Q.get('w')) { J.Game.state.weather = Q.get('w'); J.Renderer.handleEvent({ type: 'weatherShift', weather: Q.get('w') }); }
       var n = +(Q.get('frames') || 60);

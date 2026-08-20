@@ -361,7 +361,7 @@ durante esta auditoria** (`92c35f6` salas maiores, `d1f677e` fúria da sala, `62
 onde isso muda um resultado, o texto diz explicitamente o antes e o depois.
 
 **Sandbox de save:** `localStorage['soterra-save-v2']` foi fotografado antes de qualquer coisa
-(529 bytes, save limpo do usuário: sumô + curandeira nível 1) e **restaurado byte a byte** ao fim
+(529 bytes, save limpo do usuário: sumô + curandeiro nível 1) e **restaurado byte a byte** ao fim
 (conferido por comparação de string exata). Cópia de segurança fora do projeto durante a sessão.
 
 ---
@@ -441,7 +441,7 @@ enquanto estava vermelha.
   em seguida grava um save de demonstração (3 classes, itens, 40 pedras de cada, forja +3),
   **sem snapshot nem restauração**.
 - **Comprovado:** meu snapshot inicial (529 bytes) virou um save de 1.357 bytes com
-  `unlockedClasses: [sumo, curandeira, invocador]` e `cards {sumo:42,…}` só por eu ter aberto a página.
+  `unlockedClasses: [sumo, curandeiro, invocador]` e `cards {sumo:42,…}` só por eu ter aberto a página.
 - **Referência de como fazer certo:** `tests/test_progress_v2.html:461-471` guarda e devolve o save.
 - **Dono sugerido:** Designer Arte (`tests/ui_screens.html`).
 
@@ -519,7 +519,7 @@ Todos os arquivos `js/core/data/*.js` carregados juntos pelo `index.html` real.
 - **Saque:** 48 entradas de `lootTable`, todas com item existente, do próprio calabouço, peso > 0 e
   `minRoom` válido; **todo item de um calabouço tem entrada na sua tabela**. Prefixos 1:1 com o
   calabouço (`gh` / `ci` / `em` / `av` / `mt` / `cp`, 8 itens cada).
-- **Cartas:** 26 entradas de `cardDrops`, **nenhuma inerte** — as de `sumo`/`curandeira` (classes
+- **Cartas:** 26 entradas de `cardDrops`, **nenhuma inerte** — as de `sumo`/`curandeiro` (classes
   iniciais) não são lixo: viram **estrelas** pela regra do §9-B, e nenhuma entrada viola o
   `minDungeon` da carta. Taxa medida (4.000 sorteios por caso): **~59% solo · ~50% dupla**, só na
   sala 2; **0%** nas salas 0 e 1.
@@ -569,10 +569,10 @@ Verificado no caminho:
   turno seguiu do mesmo herói. Depois, o mesmo feitiço conjurado normalmente gastou 3 PA ✔.
 - **Fusão declarada e resolvida em combate real:** `declareFusion` cobrou 2 PA (6→4), marcou
   `mustEndTurn`, e `Fusion.resolve` fundiu no fim do turno. Unidade resultante
-  `fus:curandeira+sumo`: `hp 345` (190+155) · `hpMax 350` (195+155) · `paMax 8` (6+2) ·
+  `fus:curandeiro+sumo`: `hp 345` (190+155) · `hpMax 350` (195+155) · `paMax 8` (6+2) ·
   `ppMax 4` (3+1) · `shield 50` · `level 10` (média) · `initiative 55` (máximo) ·
   `elemPower 18` (média) · `unitElements = ['fogo','agua']` · feitiços gerados
-  `fus:curandeira+sumo:fogo+agua:0` e `:5`, resolvendo para *Amparo Escaldante* e *Chamado
+  `fus:curandeiro+sumo:fogo+agua:0` e `:5`, resolvendo para *Amparo Escaldante* e *Chamado
   Escaldante* ✔. O herói B saiu do tabuleiro e **não conta para derrota** ✔. Evento `fusion`
   emitido; ao morrer, `fusionEnd` ✔.
 - **Eventos observados em batalha real:** `weatherTick` (160+), `dodgeOk`/`dodgeFail`,
@@ -653,14 +653,14 @@ e merece decisão humana:
 | Caso | Resultado |
 |---|---|
 | Grupo de **0** | botão "Confirmar" nasce `is-off`, clique não faz nada; `Game.startRun([], …)` → `false` |
-| Grupo de **3** | `Game.startRun(['sumo','curandeira','invocador'], …)` → `false` |
+| Grupo de **3** | `Game.startRun(['sumo','curandeiro','invocador'], …)` → `false` |
 | Herói repetido / calabouço inexistente | `false` nos dois |
 | **Item em espaço errado** | impossível por construção: `Progress.equip` deriva o espaço do próprio item e ignora um 3º argumento de slot — nunca gera estado inválido |
 | **Item já equipado em outro herói** | `equip` → `false`; `equippedBy` responde `'sumo'`; nada muda no outro herói (§9-B) |
 | **Forja sem pedras** | `upgradeInfo.temPedras = false`, `upgradeItem` → `false`, nível intacto |
 | **Forja com pedra do elemento errado** | recusada, pedras não consumidas |
 | **Elemento antes do nível 5** | `Progress.chooseElement` e `Game.chooseElement` → `false`; no nível 5 aceita; elemento inexistente e `'neutro'` recusados; escolha irreversível |
-| **Save corrompido** (9 variantes: lixo, `{}`, array, `null`, `heroes` string, classe fantasma, nível 9999 / xp 1e12, versão 9999, formato v1) | **nenhuma exceção**; cai no padrão limpo (sumô + curandeira nv1), descarta classe/item inexistente, corta nível absurdo em 30, ignora o save v1; `startRun` continua funcionando em todos |
+| **Save corrompido** (9 variantes: lixo, `{}`, array, `null`, `heroes` string, classe fantasma, nível 9999 / xp 1e12, versão 9999, formato v1) | **nenhuma exceção**; cai no padrão limpo (sumô + curandeiro nv1), descarta classe/item inexistente, corta nível absurdo em 30, ignora o save v1; `startRun` continua funcionando em todos |
 | **`localStorage` negado** (`getItem`/`setItem`/`removeItem` lançando `SecurityError`) | `load` cai no padrão, `save()` devolve `false` sem lançar, XP/itens/reset funcionam em memória, batalha completa e volta ao menu — **zero erro de console** |
 
 ---

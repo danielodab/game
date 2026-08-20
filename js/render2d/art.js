@@ -426,7 +426,7 @@ var JOGO = (typeof window !== 'undefined')
     arqueiro:   { main: '#6f8f4a', dark: '#2c3a24', accent: '#dcc98a', skin: '#e8c7a0', hair: '#c9a55e', cloth: '#4a5c33' },
     bruxo:      { main: '#6b5a86', dark: '#26203a', accent: '#b9a2e0', skin: '#cfae90', hair: '#ded6c6', cloth: '#3b3055' },
     espadachim: { main: '#4a7288', dark: '#1e2a34', accent: '#bcd8e0', skin: '#dfb98a', hair: '#26323c', cloth: '#33495c' },
-    curandeira: { main: '#d9b56a', dark: '#6b4a2f', accent: '#f3e3bc', skin: '#f0cdaa', hair: '#c9663c', cloth: '#c98a96' },
+    curandeiro: { main: '#d9b56a', dark: '#6b4a2f', accent: '#f3e3bc', skin: '#f0cdaa', hair: '#c9663c', cloth: '#c98a96' },
     invocador:  { main: '#4e8a80', dark: '#20342f', accent: '#bfe0cf', skin: '#c9b596', hair: '#2b3a35', cloth: '#3a5a52' },
     _:          { main: '#8a8f96', dark: '#2a2f36', accent: '#dfe0d8', skin: '#dcbb9a', hair: '#3a2f24', cloth: '#4a5048' }
   };
@@ -1659,7 +1659,7 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // ------------------------------------------------------------- CURANDEIRA
-  PLANS.curandeira = {
+  PLANS.curandeiro = {
     face: 'cute',
     anchors: function (cfg) {
       var p = cfg.pal;
@@ -1749,11 +1749,11 @@ var JOGO = (typeof window !== 'undefined')
     arqueiro:   { head: 'hood',    torso: 'baldric', weapon: 'bow',   back: 'quiver', face: 'sharp', ears: true },
     bruxo:      { head: 'wizhat',  torso: 'robe',    weapon: 'staff', back: 'cape',   face: 'glow',  ears: false },
     espadachim: { head: 'bandana', torso: 'sash',    weapon: 'sword', back: 'scarf',  face: 'grin',  ears: false },
-    curandeira: { head: 'buns',    torso: 'apron',   weapon: 'wand',  back: null,     face: 'cute',  ears: false },
+    curandeiro: { head: 'buns',    torso: 'apron',   weapon: 'wand',  back: null,     face: 'cute',  ears: false },
     invocador:  { head: 'mask',    torso: 'tabard',  weapon: 'tome',  back: 'totem',  face: 'mask',  ears: false }
   };
   // quanto o corpo da classe é "dono" da silhueta
-  var BODY_RANK = { sumo: 6, arqueiro: 4, espadachim: 3.5, curandeira: 3, bruxo: 2.5, invocador: 2 };
+  var BODY_RANK = { sumo: 6, arqueiro: 4, espadachim: 3.5, curandeiro: 3, bruxo: 2.5, invocador: 2 };
   A.KIT = KIT;
 
   function baseCfg(classId, els) {
@@ -1931,7 +1931,7 @@ var JOGO = (typeof window !== 'undefined')
       }
     },
     // Curandeira: levanta as duas mãos e dá um pulinho.
-    curandeira: function (k, R) {
+    curandeiro: function (k, R) {
       if (k < 0.5) {
         var a = ease(k / 0.5);
         R.armN = [-2.2 * a, -0.5 * a]; R.armF = [-2.1 * a, -0.5 * a];
@@ -1972,7 +1972,7 @@ var JOGO = (typeof window !== 'undefined')
     arqueiro:   { breath: 1.0, arm: 0.09, tilt: 0.012, knee: 0.05 },
     bruxo:      { breath: 1.2, arm: 0.07, tilt: 0.014, knee: 0 },
     espadachim: { breath: 0.8, arm: 0.12, tilt: 0.016, knee: 0.07 },
-    curandeira: { breath: 1.1, arm: 0.11, tilt: 0.018, knee: 0.05 },
+    curandeiro: { breath: 1.1, arm: 0.11, tilt: 0.018, knee: 0.05 },
     invocador:  { breath: 1.0, arm: 0.08, tilt: 0.01, knee: 0.04 }
   };
 

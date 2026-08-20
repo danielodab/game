@@ -157,7 +157,7 @@ Seis corpos montados a partir do que já está embutido, com um passe de propor�
 | `arqueiro` atirador | Rogue_Hooded | `2H_Crossbow`, `Rogue_Cape` | tronco ×0,74 · pernas ×1,34 | 2,09 m |
 | `bruxo` mago | Mage | `Mage_Hat`, `Mage_Cape`, `2H_Staff` | corpo ×0,84 · **cabeça ×1,34** (o chapéu cresce junto) | 3,23 m |
 | `espadachim` assassino | Rogue | `Knife`, `Knife_Offhand` | tudo ×0,8 | **1,59 m** |
-| `curandeira` suporte | **Knight + cabeça e braços do Mage** | `1H_Sword`, `Badge_Shield`, `Knight_Cape` | tronco ×0,86 · pernas ×1,20 | 2,20 m |
+| `curandeiro` suporte | **Knight + cabeça e braços do Mage** | `1H_Sword`, `Badge_Shield`, `Knight_Cape` | tronco ×0,86 · pernas ×1,20 | 2,20 m |
 | `invocador` invocador | **Mage + corpo, braços e capa do Barbarian** | `Spellbook_open`, `1H_Wand` | tronco ×1,62 · pernas ×0,70 · geral ×0,86 | 2,53 m |
 
 Veredito das três amarras: **passa nas três por construção.** Mesmo rig, mesmo banco de 30 clipes,
@@ -168,9 +168,9 @@ Veredito das três amarras: **passa nas três por construção.** Mesmo rig, mes
   `CLASS_LOOK` com um campo de peças trocadas; recalibrar retrato (`portraitFraming` mede cabeças)
   e `height`/`radius` de cada classe; reteste das 15 fusões.
 - **Risco honesto:** continuam sendo bonecos da mesma família. As proporções resolvem porte e
-  massa, não anatomia. Na folha de silhueta, `arqueiro` × `curandeira` ainda é o par mais fraco —
+  massa, não anatomia. Na folha de silhueta, `arqueiro` × `curandeiro` ainda é o par mais fraco —
   os dois são humanoides de altura média, e o que os separa é besta × escudo, ou seja adereço.
-  Correção possível: dar à curandeira o `Skeleton_Rogue_Hood` ou uma capa longa e ao arqueiro um
+  Correção possível: dar à curandeiro o `Skeleton_Rogue_Hood` ou uma capa longa e ao arqueiro um
   perfil ainda mais alto; ou aceitar e diferenciar por cor.
 
 ### Opção B — trocar as classes para o Quaternius Ultimate Monsters
@@ -181,7 +181,7 @@ Veredito das três amarras: **passa nas três por construção.** Mesmo rig, mes
 | `arqueiro` atirador | **Cactoro** — magro, espinhos, chapéu de aba larga | **Birb** — pernalta, bico |
 | `bruxo` mago | **Wizard** — bola com chapéu mole, sem pernas | **Mushnub Evoluído** — cogumelo espinhoso |
 | `espadachim` assassino | **Ninja** — compacto, espadas nas costas | **Alien** — esguio, tentáculos |
-| `curandeira` suporte | **Monkroose** — postura de símio, ombros baixos | **Ghost** — flutuante, sem pernas |
+| `curandeiro` suporte | **Monkroose** — postura de símio, ombros baixos | **Ghost** — flutuante, sem pernas |
 | `invocador` invocador | **Tribal** — cocar de penas, máscara, cajado | **Mushroom King** — chapéu de cogumelo e coroa |
 
 Veredito das três amarras:
@@ -255,10 +255,10 @@ Regra sugerida para a fusão (uma linha de conceito por peça):
 `corpo + pernas do anfitrião · cabeça/adereço de cabeça do convidado · capa do convidado ·
 arma-assinatura do convidado no punho livre · proporção = média das duas receitas`.
 
-**Sobre a tabela `BULK`** (`sumo 5 · curandeira 4 · invocador/bruxo 3 · arqueiro 2 · espadachim 1`):
+**Sobre a tabela `BULK`** (`sumo 5 · curandeiro 4 · invocador/bruxo 3 · arqueiro 2 · espadachim 1`):
 ela decide quem é o corpo anfitrião. Se a Opção A entrar, as massas reais mudam — o `invocador`
-passa a ser o segundo corpo mais largo (tronco ×1,62) e a `curandeira` fica esguia. A tabela
-precisa ser reordenada para `sumo 5 · invocador 4 · curandeira 3 · bruxo 2,5 · arqueiro 2 ·
+passa a ser o segundo corpo mais largo (tronco ×1,62) e a `curandeiro` fica esguia. A tabela
+precisa ser reordenada para `sumo 5 · invocador 4 · curandeiro 3 · bruxo 2,5 · arqueiro 2 ·
 espadachim 1`, senão a fusão vai escolher como anfitrião um corpo que já não é o mais encorpado.
 São 15 duplas para reconferir.
 
@@ -284,7 +284,7 @@ dois bancos de animação e 15 fusões atravessando as duas.
 | `arqueiro` | Batedor | sim — capuz fundo e besta, como o texto já diz | manter |
 | `bruxo` | Bruxo | sim — chapéu pontudo | manter |
 | `espadachim` | Ladino | sim — duas adagas | manter |
-| `curandeira` | **Paladina** | **não** — com cabeça e braços de mago sob a armadura, ela deixa de ler como paladina de placa | **Sacerdotisa** ou **Guardiã** |
+| `curandeiro` | **Paladina** | **não** — com cabeça e braços de mago sob a armadura, ela deixa de ler como paladina de placa | **Sacerdotisa** ou **Guardiã** |
 | `invocador` | Xamã | sim — e melhora: com corpo e capa de pele fica xamã, não mago | manter |
 
 Com a Opção B, os seis nomes caem: Yeti, Cactoro, Wizard, Ninja, Monkroose e Tribal não são
@@ -539,7 +539,7 @@ Folhas: `esp_elenco.png` (colorida) e **`esp_elenco_sil.png` (silhueta)**.
 | atirador | `arqueiro` Batedor | **Ave (Birb)** | pernalta, ereta, bico e crista: a única silhueta vertical e fina do elenco | bico comprido + crista | Cactoro (chapéu de aba larga) |
 | mago | `bruxo` Bruxo | **Demônio** | chifres, asas curtas e **tridente em malha própria** — a única classe que doa arma de verdade | chifres + TRIDENTE | BlueDemon |
 | assassino | `espadachim` Ladino | **Anfíbio (Frog)** | agachado, coxas de salto, o corpo mais baixo e compacto do elenco | crânio largo de olhos no topo | Ninja (mas é humano, o menos "espécie") |
-| suporte | `curandeira` Paladina | **Rei-Cogumelo** | o chapéu **é** o corpo; nenhuma outra silhueta se confunde com ela | chapéu de cogumelo + COGUMELO em malha própria | Monkroose (símio) |
+| suporte | `curandeiro` Paladina | **Rei-Cogumelo** | o chapéu **é** o corpo; nenhuma outra silhueta se confunde com ela | chapéu de cogumelo + COGUMELO em malha própria | Monkroose (símio) |
 | invocador | `invocador` Xamã | **Tribal mascarado** | máscara e cocar de penas: lê como quem chama coisa de fora | máscara + cocar | Alien (crânio grande, esguio) |
 
 **Teste de silhueta (`esp_elenco_sil.png`): passa com folga.** Na coluna HOJE as seis manchas
@@ -656,7 +656,7 @@ negativo, ou seja, o jogo **encolhe**.
    novo (~15), banco de animação novo, recalibrar `height`/`radius`/`portraitFraming`,
    reteste das 15 fusões.
 5. **A `BULK`.** Ela decide o anfitrião. Com as espécies as massas mudam:
-   `sumo 5 · curandeira 4 · invocador 3,5 · bruxo 3 · arqueiro 2 · espadachim 1` (é a que
+   `sumo 5 · curandeiro 4 · invocador 3,5 · bruxo 3 · arqueiro 2 · espadachim 1` (é a que
    usei nas folhas). Sem reordenar, a fusão escolhe anfitrião errado.
 
 ---
@@ -996,20 +996,20 @@ O olho compara a figura. Medindo a figura inteira, na pose de parado:
 | `bruxo` | 2,09 | 2,82 | 2,55 | mage + cajado |
 | `arqueiro` | 2,05 | 2,41 | 1,65 | rogue_hooded |
 | `invocador` | 2,05 | 2,02 | 1,45 | mage |
-| `curandeira` | 2,05 | 2,02 | 1,89 | knight |
+| `curandeiro` | 2,05 | 2,02 | 1,89 | knight |
 | `espadachim` | 1,99 | 1,96 | 1,44 | rogue |
 
 E as 15 fusões — **todas com 3,21 m de corpo**, e figura entre 3,16 e 5,78 m:
 
 | dupla | figura | largura | dupla | figura | largura |
 |---|---|---|---|---|---|
-| **sumo + bruxo** | **5,78** | **5,73** | bruxo + curandeira | 4,12 | 3,97 |
-| sumo + curandeira | 4,87 | 3,49 | sumo + espadachim | 3,94 | 2,83 |
+| **sumo + bruxo** | **5,78** | **5,73** | bruxo + curandeiro | 4,12 | 3,97 |
+| sumo + curandeiro | 4,87 | 3,49 | sumo + espadachim | 3,94 | 2,83 |
 | sumo + arqueiro | 4,71 | 3,85 | sumo + invocador | 3,94 | 2,83 |
 | arqueiro + bruxo | 4,33 | 3,92 | arqueiro + espadachim | 3,78 | 2,83 |
-| bruxo + espadachim | 4,33 | 3,92 | arqueiro + curandeira | 3,17 | 2,97 |
-| bruxo + invocador | 4,33 | 3,92 | espadachim + curandeira | 3,17 | 2,97 |
-| espadachim + invocador | 4,33 | 3,92 | curandeira + invocador | 3,17 | 2,97 |
+| bruxo + espadachim | 4,33 | 3,92 | arqueiro + curandeiro | 3,17 | 2,97 |
+| bruxo + invocador | 4,33 | 3,92 | espadachim + curandeiro | 3,17 | 2,97 |
+| espadachim + invocador | 4,33 | 3,92 | curandeiro + invocador | 3,17 | 2,97 |
 | | | | arqueiro + invocador | 3,16 | 2,71 |
 
 > **TETO DE PERSONAGEM = 5,78 m** — a fusão Bárbaro + Bruxo.
@@ -1022,7 +1022,7 @@ empunhado. É ele que produz tanto o 5,78 m de altura quanto os 5,73 m de
 largura. Duas leituras possíveis, e as duas pedem decisão do usuário:
 
 - se o cajado atravessado for **defeito** (é o que os números sugerem), corrigir
-  o enxerto derruba o teto para **4,87 m** (sumo + curandeira) e os chefes ficam
+  o enxerto derruba o teto para **4,87 m** (sumo + curandeiro) e os chefes ficam
   bem mais baratos de dimensionar;
 - se ficar como está, **todo chefe precisa passar de 5,78 m**.
 

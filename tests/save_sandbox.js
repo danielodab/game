@@ -10,7 +10,7 @@
    APAGA o jogo do usuário. Já aconteceu duas vezes:
      · `tests/ui_screens.html` (achado B4 do QA de Integração);
      · `tests/chief_play.html`, que reproduziu o estrago depois (o save do
-       usuário virou "sumô nv12 fogo + curandeira nv12 água" — exatamente a
+       usuário virou "sumô nv12 fogo + curandeiro nv12 água" — exatamente a
        semente daquela página).
 
    COMO USAR — uma linha, ANTES de qualquer outro <script>:

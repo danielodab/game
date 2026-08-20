@@ -110,23 +110,28 @@ JOGO.DATA.classes = {
   },
 
   /* --------------------------------------------------------------- SUPORTE */
-  curandeira: {
-    id: 'curandeira',
-    name: 'Paladina',
+  curandeiro: {
+    id: 'curandeiro',
+    // A Paladina VIROU o Curandeiro, e não foi troca de nome por capricho: dos
+    // 27 feitiços dela, 14 eram cura, 9 bênção e 7 regeneração. Ela já era o
+    // suporte puro — o nome e a armadura de cavaleiro é que contavam outra
+    // história. O escudo sai daqui e vira o verbo do MINOTAURO (ver
+    // docs/CLASSES_V3.md); o que fica é curar e abençoar.
+    name: 'Curandeiro',
     role: 'suporte',
-    description: 'Cura, escuda e abençoa o grupo — e bate com a espada quando ninguém precisa dela. Armadura clara, escudo de brasão e sempre a um passo de quem está sangrando.',
+    description: 'Devolve vida e abençoa quem luta. Não segura linha nem estraga o terreno: o que ele faz, e ninguém mais faz, é manter o grupo de pé por mais um turno.',
     lore: 'Herdou da avó a lanterna de vagalumes e a regra da casa: no mundo enterrado, quem apaga primeiro é quem parou de cuidar dos outros. Mandou polir a armadura até ficar clara de propósito — num Fecho escuro, quem cai precisa saber para onde correr. Ela não pretende apagar tão cedo.',
     palette: { primary: '#f0c05a', secondary: '#6b4a2f', accent: '#fff2c2' },
     stats: {
       hp: 110, pa: 6, pp: 3, initiative: 55, power: 0, dodge: 20, lock: 5,
       resists: { fogo: 0, agua: 0, terra: 0, ar: 0, neutro: 0 }
     },
-    baseSpells: ['curandeira-neutro-1', 'curandeira-neutro-2', 'curandeira-neutro-3'],
+    baseSpells: ['curandeiro-neutro-1', 'curandeiro-neutro-2', 'curandeiro-neutro-3'],
     paths: {
-      fogo: ['curandeira-fogo-5', 'curandeira-fogo-10', 'curandeira-fogo-12', 'curandeira-fogo-15', 'curandeira-fogo-20', 'curandeira-fogo-30'],
-      agua: ['curandeira-agua-5', 'curandeira-agua-10', 'curandeira-agua-12', 'curandeira-agua-15', 'curandeira-agua-20', 'curandeira-agua-30'],
-      terra: ['curandeira-terra-5', 'curandeira-terra-10', 'curandeira-terra-12', 'curandeira-terra-15', 'curandeira-terra-20', 'curandeira-terra-30'],
-      ar: ['curandeira-ar-5', 'curandeira-ar-10', 'curandeira-ar-12', 'curandeira-ar-15', 'curandeira-ar-20', 'curandeira-ar-30']
+      fogo: ['curandeiro-fogo-5', 'curandeiro-fogo-10', 'curandeiro-fogo-12', 'curandeiro-fogo-15', 'curandeiro-fogo-20', 'curandeiro-fogo-30'],
+      agua: ['curandeiro-agua-5', 'curandeiro-agua-10', 'curandeiro-agua-12', 'curandeiro-agua-15', 'curandeiro-agua-20', 'curandeiro-agua-30'],
+      terra: ['curandeiro-terra-5', 'curandeiro-terra-10', 'curandeiro-terra-12', 'curandeiro-terra-15', 'curandeiro-terra-20', 'curandeiro-terra-30'],
+      ar: ['curandeiro-ar-5', 'curandeiro-ar-10', 'curandeiro-ar-12', 'curandeiro-ar-15', 'curandeiro-ar-20', 'curandeiro-ar-30']
     },
     startsUnlocked: true,
     cardRarity: 'comum'

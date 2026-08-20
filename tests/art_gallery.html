@@ -161,7 +161,7 @@
   var g4 = sec('4 · Fusão com dois elementos (amostra) + costas',
     'A fusão recebe os dois elementos: o primeiro tinge o corpo, o segundo aparece no eco da aura.');
   [['sumo+bruxo', 'fogo', 'ar'], ['arqueiro+invocador', 'terra', 'agua'],
-   ['curandeira+espadachim', 'agua', 'fogo'], ['bruxo+curandeira', 'ar', 'terra'],
+   ['curandeiro+espadachim', 'agua', 'fogo'], ['bruxo+curandeiro', 'ar', 'terra'],
    ['espadachim+sumo', 'terra', 'fogo'], ['arqueiro+bruxo', 'agua', 'ar']].forEach(function (t) {
     for (var d = 0; d < 4; d += 3) {
       var cv = Art.unit('fus:' + t[0], { elements: [t[1], t[2]], dir: d, scale: 0.8 });
@@ -303,7 +303,7 @@
   var g8b = sec('9 · Pets' + (pets.length ? ' (' + pets.length + ')' : ' — DATA.pets ainda não existe: demonstração'),
     'O pet entra em campo junto do dono; ícone usado no espaço de pet do painel de equipamento.');
   var petKinds = {};
-  (pets.length ? pets : ['dragaozinho-de-brasa', 'planta-mordedora', 'aguia-do-vendaval', 'bolha-curandeira', 'bicho-de-pedra'])
+  (pets.length ? pets : ['dragaozinho-de-brasa', 'planta-mordedora', 'aguia-do-vendaval', 'bolha-curandeiro', 'bicho-de-pedra'])
     .forEach(function (id) {
       var pd = D.pets && D.pets[id];
       var kind = Art.petKindOf(id);
@@ -325,7 +325,7 @@
     'Forma escolhida pelo efeito principal; cor pelo elemento.');
   var sList = spells.length ? spells.filter(function (_, i) { return i % Math.ceil(spells.length / 48) === 0; })
     : ['sumo-neutro-1', 'sumo-fogo-5', 'arqueiro-agua-10', 'bruxo-terra-12', 'espadachim-ar-15',
-       'curandeira-fogo-20', 'invocador-agua-30', 'bruxo-neutro-2'];
+       'curandeiro-fogo-20', 'invocador-agua-30', 'bruxo-neutro-2'];
   sList.forEach(function (sid) {
     var sp = D.spells && D.spells[sid];
     show(g9, Art.spellIcon(sp || sid, 52), (sp ? sp.name : sid), 'stage', 'ícone feitiço ' + sid);
@@ -409,7 +409,7 @@
   // ------------------------------------ 13. ADENDO v2.1 — cartas, estrelas, pedras
   var g12 = sec('13 · Cartas de classe, trilha de estrelas e pedras de forja (ADENDO v2.1)',
     'Cofre de recompensas: a carta libera/estrela a classe, as pedras alimentam a forja. ' +
-    'Custos de desbloqueio: sumô 0 · curandeira 0 · invocador 10 · bruxo 10 · espadachim 20 · arqueiro 25.');
+    'Custos de desbloqueio: sumô 0 · curandeiro 0 · invocador 10 · bruxo 10 · espadachim 20 · arqueiro 25.');
   rowTitle(g12, 'Art.cardIcon(classId) — uma carta por classe');
   CLASSES.forEach(function (cid) {
     var ci = D.cards && D.cards[cid];

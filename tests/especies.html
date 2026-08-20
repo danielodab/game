@@ -70,12 +70,12 @@ var SP = {
                 marca:'chifres longos + TRIDENTE (malha separada)', papel:'mago' },
   espadachim: { esp:'Frog',         alt:2.95, bulk:1.0, cor:'#2f6f8f',
                 marca:'crânio largo de olhos no topo', papel:'assassino' },
-  curandeira: { esp:'MushroomKing', alt:3.55, bulk:4.0, cor:'#f0c05a',
+  curandeiro: { esp:'MushroomKing', alt:3.55, bulk:4.0, cor:'#f0c05a',
                 marca:'chapéu de cogumelo + COGUMELO (malha separada)', papel:'suporte' },
   invocador:  { esp:'Tribal',       alt:3.80, bulk:3.5, cor:'#3f8f8a',
                 marca:'máscara e cocar de penas', papel:'invocador' }
 };
-var IDS = ['sumo','arqueiro','bruxo','espadachim','curandeira','invocador'];
+var IDS = ['sumo','arqueiro','bruxo','espadachim','curandeiro','invocador'];
 // peças realmente destacáveis (malha própria) que existem no pacote
 var ASSINATURA = { Demon:'Trident', Orc:'Orc_Weapon', MushroomKing:'Mushroom', Bunny:'Carrot' };
 // fator de cabeca: especies de cranio pequeno precisam crescer para a marca
@@ -91,7 +91,7 @@ var ELENCO = [
                      b:{n:'BlueDemon',   alt:3.40, rot:'Demônio azul — mais magro'} },
   { id:'espadachim', a:{n:'Frog',        alt:2.95, rot:'Anfíbio — agachado, coxas de salto'},
                      b:{n:'Ninja',       alt:3.10, rot:'Humano mascarado (o menos "espécie")'} },
-  { id:'curandeira', a:{n:'MushroomKing',alt:3.55, rot:'Fungo — coroa e cogumelo destacável'},
+  { id:'curandeiro', a:{n:'MushroomKing',alt:3.55, rot:'Fungo — coroa e cogumelo destacável'},
                      b:{n:'Monkroose',   alt:3.30, rot:'Símio — ombros baixos, braços longos'} },
   { id:'invocador',  a:{n:'Tribal',      alt:3.80, rot:'Xamã mascarado — cocar de penas'},
                      b:{n:'Alien',       alt:3.45, rot:'Alienígena — crânio grande, esguio'} }
@@ -446,7 +446,7 @@ function montaChefes() {
   });
 }
 function montaFusao() {
-  var casos = [['sumo','bruxo'], ['curandeira','espadachim'], ['invocador','arqueiro']];
+  var casos = [['sumo','bruxo'], ['curandeiro','espadachim'], ['invocador','arqueiro']];
   var CL = JOGO.DATA.classes;
   casos.forEach(function (p) {
     var A = SP[p[0]], B = SP[p[1]];

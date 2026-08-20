@@ -95,7 +95,7 @@ JOGO.DATA = {
     arqueiro:    { id:'arqueiro',    name:'Elfo Arqueiro',role:'atirador', palette:{ primary:'#7fc06a', secondary:'#33562e', accent:'#e8f0a0' } },
     bruxo:       { id:'bruxo',       name:'Bruxo',       role:'mago',      palette:{ primary:'#8a6ad0', secondary:'#3a2a5a', accent:'#c8a8ff' } },
     espadachim:  { id:'espadachim',  name:'Espadachim',  role:'assassino', palette:{ primary:'#5aa0c0', secondary:'#24485a', accent:'#a0e8ff' } },
-    curandeira:  { id:'curandeira',  name:'Curandeira',  role:'suporte',   palette:{ primary:'#e0b8d0', secondary:'#7a4a68', accent:'#ffe0f0' } },
+    curandeiro:  { id:'curandeiro',  name:'Curandeira',  role:'suporte',   palette:{ primary:'#e0b8d0', secondary:'#7a4a68', accent:'#ffe0f0' } },
     invocador:   { id:'invocador',   name:'Invocador',   role:'invocador', palette:{ primary:'#c0a860', secondary:'#5a4a20', accent:'#ffe8a0' } }
   },
 
@@ -349,7 +349,7 @@ JOGO.DATA = {
     // ADENDO v2.1: o grupo é de 1 ou 2 heróis. Spawns 'P' sobrando são ignorados.
     var heroDefs = [
       { defId:'sumo', name:'Repique', element:'terra', hp:110, pa:6, pp:3 },
-      { defId:'curandeira', name:'Rosácea', element:'agua', hp:84, pa:6, pp:4 }
+      { defId:'curandeiro', name:'Rosácea', element:'agua', hp:84, pa:6, pp:4 }
     ];
     for (var hi = 0; hi < heroDefs.length && hi < heroSpawns.length; hi++) {
       var hd = heroDefs[hi], sp = heroSpawns[hi];

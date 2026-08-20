@@ -86,9 +86,9 @@
     P.reset();
     var tbl = J.DATA.leveling.xpTable;
     P.addXp('sumo', tbl[Math.max(0, lvl - 1)]);
-    P.addXp('curandeira', tbl[Math.max(0, lvl - 1)]);
-    if (lvl >= 5) { P.chooseElement('sumo', 'fogo'); P.chooseElement('curandeira', 'agua'); }
-    J.Game.startRun(['sumo', 'curandeira'], Q('d', 'greenhouse'));
+    P.addXp('curandeiro', tbl[Math.max(0, lvl - 1)]);
+    if (lvl >= 5) { P.chooseElement('sumo', 'fogo'); P.chooseElement('curandeiro', 'agua'); }
+    J.Game.startRun(['sumo', 'curandeiro'], Q('d', 'greenhouse'));
     var r = parseInt(Q('r', '0'), 10);
     while (J.Game.roomIndex < r) { J.Game.roomIndex = r; J.Game.nextRoom && J.Game.nextRoom(); break; }
     pump(20);

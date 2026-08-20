@@ -208,7 +208,7 @@ var JOGO = (typeof window !== 'undefined')
                         malhas: ['Rogue_Body', 'Rogue_ArmLeft', 'Rogue_ArmRight',
                                  'Rogue_LegLeft', 'Rogue_LegRight'] },
             concept: 'Ladino ágil de adagas gêmeas, roupa preta e máscara' },
-    curandeira: { model: 'knight', show: ['1H_Sword', 'Badge_Shield', 'Knight_Cape'],
+    curandeiro: { model: 'knight', show: ['1H_Sword', 'Badge_Shield', 'Knight_Cape'],
             scale: 1.00, tint: '#f0c05a', accent: '#fff2c2', weapon: '1H_Sword',
             concept: 'Paladina de armadura clara e escudo de brasão' },
     invocador: { model: 'meshy_invocador', show: ['Spellbook_open', '1H_Wand', 'Mage_Cape'],
@@ -245,7 +245,7 @@ var JOGO = (typeof window !== 'undefined')
     arqueiro:   { model: 'rogue',     head: null,            cape: 'Rogue_Cape',     hand: '1H_Crossbow' },
     bruxo:      { model: 'mage',      head: 'Mage_Hat',      cape: 'Mage_Cape',      hand: '1H_Wand' },
     espadachim: { model: 'rogue',     head: null,            cape: 'Rogue_Cape',     hand: 'Knife_Offhand' },
-    curandeira: { model: 'knight',    head: 'Knight_Helmet', cape: 'Knight_Cape',    hand: 'Badge_Shield' },
+    curandeiro: { model: 'knight',    head: 'Knight_Helmet', cape: 'Knight_Cape',    hand: 'Badge_Shield' },
     invocador:  { model: 'mage',      head: null,            cape: 'Mage_Cape',      hand: 'Spellbook_open' }
   };
 
@@ -587,7 +587,7 @@ var JOGO = (typeof window !== 'undefined')
   M.tintMaterials = tintMaterials;
 
   // ------------------------------------------------------- resolução de aparência
-  var BULK = { sumo: 5, curandeira: 4, invocador: 3, bruxo: 3, arqueiro: 2, espadachim: 1 };
+  var BULK = { sumo: 5, curandeiro: 4, invocador: 3, bruxo: 3, arqueiro: 2, espadachim: 1 };
 
   function classLook(classId) { return M.CLASS_LOOK[classId] || null; }
 

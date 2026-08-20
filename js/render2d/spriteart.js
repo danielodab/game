@@ -96,7 +96,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // Tamanho relativo de cada classe no tabuleiro (o Sumô é a referência).
-  var PORTE = { sumo: 1.0, invocador: 0.92, bruxo: 0.9, arqueiro: 0.88, espadachim: 0.88, curandeira: 0.72 };
+  var PORTE = { sumo: 1.0, invocador: 0.92, bruxo: 0.9, arqueiro: 0.88, espadachim: 0.88, curandeiro: 0.72 };
 
   // O sprite precisa sair com a MESMA métrica do desenho procedural, senão o
   // boneco não assenta na célula: canvas 320x400 com supersampling 2 e âncora

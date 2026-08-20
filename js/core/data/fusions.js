@@ -73,17 +73,17 @@ JOGO.DATA = JOGO.DATA || {};
   // =========================================================================
   DATA.fusionIdentities = {
     'arqueiro+bruxo':      { name: 'Artilharia Arcana',   line: 'Magia de longuíssimo alcance: marca o campo inteiro de longe e detona as marcas em área.' },
-    'arqueiro+curandeira': { name: 'Arco Votivo',          line: 'Flechas que atravessam a fila em linha reta e devolvem ao corpo fundido cada gota que tiram.' },
+    'arqueiro+curandeiro': { name: 'Arco Votivo',          line: 'Flechas que atravessam a fila em linha reta e devolvem ao corpo fundido cada gota que tiram.' },
     'arqueiro+espadachim': { name: 'Caçador de Sombras',   line: 'Atira do breu, salta para cima do alvo marcado e executa: invisibilidade + reposicionamento + marcas.' },
     'arqueiro+invocador':  { name: 'Torreta Viva',         line: 'Planta torres de aljava e cravos-armadilha; os tiros saltam entre os presos.' },
     'arqueiro+sumo':       { name: 'Balista de Carne',     line: 'Cerco: projéteis pesados que empurram, arpéus que puxam e uma âncora que ninguém tira do lugar.' },
-    'bruxo+curandeira':    { name: 'Praga Piedosa',        line: 'Transfusão: tudo que tira do inimigo vira vida própria; benção de um lado, apodrecimento do outro.' },
+    'bruxo+curandeiro':    { name: 'Praga Piedosa',        line: 'Transfusão: tudo que tira do inimigo vira vida própria; benção de um lado, apodrecimento do outro.' },
     'bruxo+espadachim':    { name: 'Lâmina Rúnica',        line: 'Pisca pelo campo deixando explosões nas partidas e chegadas, com veneno arcano na lâmina.' },
     'bruxo+invocador':     { name: 'Sabá das Armadilhas',  line: 'Ritual: selos acesos sob os pés do inimigo, círculos deixados de emboscada, efígies que amaldiçoam e o clima virado à força.' },
     'bruxo+sumo':          { name: 'Colosso Arcano',       line: 'A magia não é lançada, é irradiada: tudo ao redor do corpo apanha, prende e devolve o golpe.' },
-    'curandeira+espadachim': { name: 'Bisturi Dançante',   line: 'Cortes rápidos com roubo de vida, cura de emergência entre um passo e outro, e some no meio do turno.' },
-    'curandeira+invocador':{ name: 'Jardim Sagrado',       line: 'Planta a semente DENTRO do inimigo e o jardim cobra depois: espinheiro em volta, cercado de emboscada, e guardiões que curam o que sobrou.' },
-    'curandeira+sumo':     { name: 'Baluarte Compassivo',  line: 'Muralha que se cura batendo: arrasta o inimigo para dentro do alcance, bebe o que arranca e reparte o excedente com quem sangra.' },
+    'curandeiro+espadachim': { name: 'Bisturi Dançante',   line: 'Cortes rápidos com roubo de vida, cura de emergência entre um passo e outro, e some no meio do turno.' },
+    'curandeiro+invocador':{ name: 'Jardim Sagrado',       line: 'Planta a semente DENTRO do inimigo e o jardim cobra depois: espinheiro em volta, cercado de emboscada, e guardiões que curam o que sobrou.' },
+    'curandeiro+sumo':     { name: 'Baluarte Compassivo',  line: 'Muralha que se cura batendo: arrasta o inimigo para dentro do alcance, bebe o que arranca e reparte o excedente com quem sangra.' },
     'espadachim+invocador':{ name: 'Sombra Multiplicada',  line: 'A própria sombra corta primeiro; depois vêm os espinhos escondidos e os gêmeos de breu — veneno de três lugares ao mesmo tempo.' },
     'espadachim+sumo':     { name: 'Investida Titânica',   line: 'Peso em movimento: investe de longe, agarra, gira e arremessa — e o chão fica marcado.' },
     'invocador+sumo':      { name: 'Fortaleza Viva',       line: 'Tanque que invoca: o brado machuca e provoca a sala inteira, os ídolos de escora caem batendo e o resto do grupo vai coberto de escudo.' }
@@ -277,7 +277,7 @@ JOGO.DATA = JOGO.DATA || {};
 
   // --- ARQUEIRO + CURANDEIRA — Arco Votivo --------------------------------
   // Assinatura: tiros em LINHA que atravessam a fila + roubo de vida + cuidado.
-  F['arqueiro+curandeira'] = [
+  F['arqueiro+curandeiro'] = [
     { tier: 0, formName: 'Dardo', paCost: 3, cooldown: 0, castsPerTurn: 2,
       range: rng(1, 7, true), aoe: aoe('single', 0), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
@@ -465,7 +465,7 @@ JOGO.DATA = JOGO.DATA || {};
 
   // --- BRUXO + CURANDEIRA — Praga Piedosa ---------------------------------
   // Assinatura: transfusão — tudo drena e vira vida; benção de um lado, praga do outro.
-  F['bruxo+curandeira'] = [
+  F['bruxo+curandeiro'] = [
     { tier: 0, formName: 'Dreno', paCost: 3, cooldown: 0, castsPerTurn: 2,
       range: rng(1, 5), aoe: aoe('single', 0), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
@@ -653,7 +653,7 @@ JOGO.DATA = JOGO.DATA || {};
 
   // --- CURANDEIRA + ESPADACHIM — Bisturi Dançante -------------------------
   // Assinatura: velocidade + roubo de vida + limpeza; barato e sem parar.
-  F['curandeira+espadachim'] = [
+  F['curandeiro+espadachim'] = [
     { tier: 0, formName: 'Lanho', paCost: 2, cooldown: 0, castsPerTurn: 2,
       range: rng(1, 1), aoe: aoe('single', 0), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
@@ -700,7 +700,7 @@ JOGO.DATA = JOGO.DATA || {};
 
   // --- CURANDEIRA + INVOCADOR — Jardim Sagrado ----------------------------
   // Assinatura: planta coisas que cuidam sozinhas — guardiões, cercados, campos.
-  F['curandeira+invocador'] = [
+  F['curandeiro+invocador'] = [
     { tier: 0, formName: 'Broto', paCost: 3, cooldown: 0, castsPerTurn: 2,
       range: rng(1, 4), aoe: aoe('single', 0), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
@@ -747,7 +747,7 @@ JOGO.DATA = JOGO.DATA || {};
 
   // --- CURANDEIRA + SUMO — Baluarte Compassivo ----------------------------
   // Assinatura: escudo grande + provocar + PUXAR O ALIADO para trás da muralha.
-  F['curandeira+sumo'] = [
+  F['curandeiro+sumo'] = [
     { tier: 0, formName: 'Anteparo', paCost: 3, cooldown: 0, castsPerTurn: 2,
       range: rng(1, 1), aoe: aoe('single', 0), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',

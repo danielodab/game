@@ -67,7 +67,7 @@ Seis classes, cada uma com identidade tática única (pedido do usuário):
 
 > **Atualizado na migração 3D**: a aparência das classes mudou para casar com os modelos CC0
 > (decisão registrada em `PLANO_NOITE.md`). Os **ids internos e os papéis táticos são os mesmos** —
-> `sumo`, `arqueiro`, `bruxo`, `espadachim`, `curandeira`, `invocador`.
+> `sumo`, `arqueiro`, `bruxo`, `espadachim`, `curandeiro`, `invocador`.
 
 | Classe | id | Arquétipo | Identidade |
 |---|---|---|---|
@@ -75,7 +75,7 @@ Seis classes, cada uma com identidade tática única (pedido do usuário):
 | **Batedor** (besta, capuz) | `arqueiro` | Atirador | Dano à distância que **acumula marcas** no alvo (quanto mais atinge, mais dói) |
 | **Bruxo** (chapéu e cajado) | `bruxo` | Mago | Áreas de média/longa distância, maldições e controle de terreno |
 | **Ladino** (adagas gêmeas) | `espadachim` | Assassino | Velocidade, invisibilidade, venenos, ataques pelas costas |
-| **Paladina** (espada e escudo) | `curandeira` | Suporte | Cura, escudos e bênçãos — e ataca quando precisa |
+| **Paladina** (espada e escudo) | `curandeiro` | Suporte | Cura, escudos e bênçãos — e ataca quando precisa |
 | **Xamã** (grimório) | `invocador` | Invocador | Invoca criaturas, arma **armadilhas** e potencializa aliados |
 
 ### 2.1 Progressão de feitiços

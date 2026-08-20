@@ -93,7 +93,7 @@ var REMIX = {
             head: [0.94, 0.94, 0.94] },
     nome: 'Ladino — dardo'
   },
-  curandeira: {
+  curandeiro: {
     base: 'knight',
     troca: [{ de: 'mage', peca: 'Mage_Head', esconde: 'Knight_Head' },
             { de: 'mage', peca: 'Mage_ArmLeft', esconde: 'Knight_ArmLeft' },
@@ -124,7 +124,7 @@ var UM = {
   arqueiro:   { arq: 'Cactoro.gltf',   nome: 'Cactoro' },
   bruxo:      { arq: 'Wizard.gltf',    nome: 'Wizard' },
   espadachim: { arq: 'Ninja.gltf',     nome: 'Ninja' },
-  curandeira: { arq: 'Monkroose.gltf', nome: 'Monkroose' },
+  curandeiro: { arq: 'Monkroose.gltf', nome: 'Monkroose' },
   invocador:  { arq: 'Tribal.gltf',    nome: 'Tribal' }
 };
 var UM2 = {
@@ -132,7 +132,7 @@ var UM2 = {
   arqueiro:   { arq: 'Birb.gltf',           nome: 'Birb' },
   bruxo:      { arq: 'Mushnub_Evolved.gltf',nome: 'Mushnub Evoluído' },
   espadachim: { arq: 'Alien.gltf',          nome: 'Alien' },
-  curandeira: { arq: 'Ghost.gltf',          nome: 'Ghost' },
+  curandeiro: { arq: 'Ghost.gltf',          nome: 'Ghost' },
   invocador:  { arq: 'MushroomKing.gltf',   nome: 'Mushroom King' }
 };
 
@@ -341,7 +341,7 @@ function cel(linha, node, tit, sub, lic) {
 }
 
 function montaClasses() {
-  var ids = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeira', 'invocador'];
+  var ids = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro', 'invocador'];
   var CL = JOGO.DATA.classes;
   ids.forEach(function (id) {
     var L = novaLinha(CL[id].name + ' · ' + id, CL[id].role);

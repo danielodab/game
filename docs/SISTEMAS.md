@@ -104,11 +104,11 @@ mais **quatro caminhos elementais** — e você escolhe **um** no nível 5,
 | `arqueiro` | **Batedor** | atirador | 100 | 6 | 3 | 25 |
 | `bruxo` | **Bruxo** | mago | 95 | 6 | 3 | 15 |
 | `espadachim` | **Ladino** | assassino | 95 | 6 | **4** | 30 |
-| `curandeira` | **Paladina** | suporte | 110 | 6 | 3 | 20 |
+| `curandeiro` | **Paladina** | suporte | 110 | 6 | 3 | 20 |
 | `invocador` | **Xamã** | invocador | 105 | 6 | 3 | 12 |
 
 > O `id` no código não bate com o nome na tela — `sumo` virou Bárbaro,
-> `curandeira` virou Paladina, `espadachim` virou Ladino. É dívida de renomeação
+> `curandeiro` virou Paladina, `espadachim` virou Ladino. É dívida de renomeação
 > antiga; **os ids são o que importa** para quem mexe no código.
 
 ### O que cada uma veste

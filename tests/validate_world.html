@@ -68,7 +68,7 @@
   var BUFF_STATS = ['pa', 'pp', 'power', 'initiative', 'dodge', 'lock'];
   var SIDES = ['any', 'enemy', 'ally', 'self'];
   var EVENT_KINDS = ['buff', 'mystery', 'portal', 'drain', 'fountain'];
-  var CLASS_IDS = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeira', 'invocador'];
+  var CLASS_IDS = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro', 'invocador'];
   var DUNGEON_IDS = ['greenhouse', 'cistern', 'emberlock', 'windscaffold', 'quakemine', 'brokenheart'];
   var ITEM_PREFIX = {
     greenhouse: 'gh-', cistern: 'ci-', emberlock: 'em-',
@@ -603,16 +603,16 @@
         JSON.stringify(card.starCosts));
     });
     // custos fixados pelo usuário no adendo 9-B
-    var EXPECTED_COST = { sumo: 0, curandeira: 0, invocador: 10, bruxo: 10, espadachim: 20, arqueiro: 25 };
+    var EXPECTED_COST = { sumo: 0, curandeiro: 0, invocador: 10, bruxo: 10, espadachim: 20, arqueiro: 25 };
     for (var cid in EXPECTED_COST) {
       if (!EXPECTED_COST.hasOwnProperty(cid)) { continue; }
       check('custo de desbloqueio de ' + cid + ' = ' + EXPECTED_COST[cid],
         has(CARDS, cid) && CARDS[cid].unlockCost === EXPECTED_COST[cid],
         has(CARDS, cid) ? String(CARDS[cid].unlockCost) : 'ausente');
     }
-    check('exatamente 2 classes iniciais (unlockCost 0): sumo e curandeira',
+    check('exatamente 2 classes iniciais (unlockCost 0): sumo e curandeiro',
       CLASS_IDS.filter(function (c) { return has(CARDS, c) && CARDS[c].unlockCost === 0; }).sort().join(',') ===
-      'curandeira,sumo');
+      'curandeiro,sumo');
 
     // ---- nenhuma entrada inerte, calabouço a calabouço ----
     DG.forEach(function (d) {

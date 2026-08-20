@@ -84,7 +84,7 @@ DATA.classes = { classId: { id, name, role, description, lore,
     startsUnlocked: bool, cardRarity:'comum'|'raro'|'epico' } };
 ```
 Classes obrigatórias: `sumo` (tanque), `arqueiro` (atirador), `bruxo` (mago),
-`espadachim` (assassino), `curandeira` (suporte), `invocador`. Exatamente **2** com
+`espadachim` (assassino), `curandeiro` (suporte), `invocador`. Exatamente **2** com
 `startsUnlocked: true`.
 
 ```js
@@ -273,7 +273,7 @@ Consequência de design: com 2 heróis, **a fusão transforma a dupla numa únic
 de ações por poder concentrado. Layouts continuam válidos (spawns 'P' sobrando são ignorados).
 
 ### Classes iniciais
-Começam liberadas **`sumo` (tanque)** e **`curandeira` (cura)**. `arqueiro` passa a ser desbloqueável.
+Começam liberadas **`sumo` (tanque)** e **`curandeiro` (cura)**. `arqueiro` passa a ser desbloqueável.
 
 ### Cartas acumulativas e estrelas
 
@@ -281,7 +281,7 @@ Começam liberadas **`sumo` (tanque)** e **`curandeira` (cura)**. `arqueiro` pas
 DATA.cards = { classId: { unlockCost, dropWeight, minDungeon, starCosts:[5,15,30,55,90] } };
 DATA.stars = { max:5, bonuses: { 1:{hp:15}, 2:{power:8}, 3:{pp:1}, 4:{hp:25,dodge:10}, 5:{pa:1} } };
 ```
-- **Custo de desbloqueio (fixado pelo usuário)**: `sumo` 0 · `curandeira` 0 · `invocador` 10 · `bruxo` 10 ·
+- **Custo de desbloqueio (fixado pelo usuário)**: `sumo` 0 · `curandeiro` 0 · `invocador` 10 · `bruxo` 10 ·
   `espadachim` 20 · `arqueiro` 25. Cartas caem **aleatoriamente** dos chefes; repetidas **acumulam**.
 - `Progress.state.cards[classId] = n` (total acumulado, nunca decresce).
 - Classe **liberada** quando `cards[classId] >= unlockCost` (as iniciais já nascem liberadas).
@@ -486,7 +486,7 @@ efetivo = base + round((alvo − base) × (nível − 1) / (maxLevel − 1))
 |---|---|---|---|
 | `assassino` | Ladino (espadachim) | 30 → **40** | 10 → 16 |
 | `atirador` | Batedor (arqueiro) | 25 → **38** | 10 → 16 |
-| `suporte` | Paladina (curandeira) | 20 → 28 | 5 → 12 |
+| `suporte` | Paladina (curandeiro) | 20 → 28 | 5 → 12 |
 | `mago` | Bruxo | 15 → 24 | 5 → 10 |
 | `invocador` | Xamã | 12 → 20 | 15 → 30 |
 | `tanque` | Bárbaro (sumo) | 5 → 10 | 40 → **70** |
@@ -549,7 +549,7 @@ davam nada (Escarpins da Baronesa, Solados de Escória, Grevas de Minério).
 ## 9-I. ADENDO v2.7 — Fundir passa a ser uma escolha difícil
 
 **Como estava.** Medindo o dano máximo de um turno nas 15 duplas, contra alvo de
-vida infinita, **fundir rendia menos em 15 de 15**. Pior caso sumo+curandeira:
+vida infinita, **fundir rendia menos em 15 de 15**. Pior caso sumo+curandeiro:
 265 separados contra 121 fundidos. A causa era aritmética, não conteúdo:
 
 | | separados | fundidos |
@@ -577,7 +577,7 @@ seja: as duas opções valendo quase o mesmo, por motivos diferentes.
   fraca cedo e dominante tarde.
 - `Fusion.PAIR_TUNE`, coeficiente por dupla. Depois de acertar a média, sobrou
   dispersão: as duplas do sumô rendiam pouco fundidas (ele sozinho já bate
-  muito, então o teto de comparação é alto) e curandeira+espadachim rendia
+  muito, então o teto de comparação é alto) e curandeiro+espadachim rendia
   demais. O coeficiente é o inverso da razão medida, e convergiu em duas
   iterações.
 
@@ -592,7 +592,7 @@ seja: as duas opções valendo quase o mesmo, por motivos diferentes.
   dois — e o risco de que **a fusão morrer encerra a batalha**, porque ela não
   devolve os dois heróis.
 
-**Duas exceções aceitas.** `sumo+invocador` e `bruxo+curandeira` fundem mal cedo
+**Duas exceções aceitas.** `sumo+invocador` e `bruxo+curandeiro` fundem mal cedo
 (75% e 70% no nível 12) e bem tarde (123% e 131% no nível 30). O coeficiente por
 dupla centra a média mas não achata a inclinação, porque o que cresce nelas são
 as formas de tier 20 e 30, desproporcionalmente fortes em relação às de baixo.

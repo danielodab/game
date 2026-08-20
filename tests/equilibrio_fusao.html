@@ -50,7 +50,7 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
   var NIVEIS = [12, 30];
 
   // EXCECOES CONHECIDAS E ACEITAS. Estas duas duplas fundem MAL cedo e BEM
-  // tarde (sumo+invocador 75% no nv12 e 123% no nv30; bruxo+curandeira 70% e
+  // tarde (sumo+invocador 75% no nv12 e 123% no nv30; bruxo+curandeiro 70% e
   // 131%). O coeficiente por dupla centra a media mas nao achata a inclinacao,
   // porque o que cresce nelas nao e o fator de poder e sim as formas de tier 20
   // e 30, que nessas duas sao desproporcionalmente fortes em relacao as de
@@ -62,7 +62,7 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
   // unico centra a media mas nao achata a inclinacao. Ela apareceu aqui quando
   // sete feiticos do sumo, ate entao IMPOSSIVEIS de conjurar, voltaram a
   // funcionar e o dano dele separado subiu.
-  var ACEITAS = { 'sumo+invocador': 1, 'bruxo+curandeira': 1, 'sumo+espadachim': 1 };
+  var ACEITAS = { 'sumo+invocador': 1, 'bruxo+curandeiro': 1, 'sumo+espadachim': 1 };
 
   var P, E, F, D, CLS;
   var ELEMS = ['fogo', 'agua', 'terra', 'ar'];
@@ -74,7 +74,7 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
   //  - `effects` guarda marcas e quebras de resistencia, e `Engine.markMultiplier`
   //    /`effResist` leem dali. Sem restaurar, cada feitico testado deixava a marca
   //    dele no inimigo e o SEGUINTE batia mais forte — a medicao virava "melhor
-  //    feitico depois de empilhar tudo o que veio antes". Media do curandeira+sumo
+  //    feitico depois de empilhar tudo o que veio antes". Media do curandeiro+sumo
   //    dava 264 numa ordem e 335 na ordem invertida, 27% so de ordem.
   //  - `_rng` e a semente do sorteio de dano (mulberry32). Sem restaurar, cada
   //    feitico rolava um numero diferente e o "melhor de N" premiava sorte.

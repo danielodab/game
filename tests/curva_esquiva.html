@@ -76,10 +76,10 @@
     arqueiro:   { dodge: 25, lock: 10 },
     bruxo:      { dodge: 15, lock: 5  },
     espadachim: { dodge: 40, lock: 10 },
-    curandeira: { dodge: 20, lock: 5  },
+    curandeiro: { dodge: 20, lock: 5  },
     invocador:  { dodge: 12, lock: 15 }
   };
-  var ORDEM = ['espadachim', 'arqueiro', 'curandeira', 'bruxo', 'invocador', 'sumo'];
+  var ORDEM = ['espadachim', 'arqueiro', 'curandeiro', 'bruxo', 'invocador', 'sumo'];
   var NIVEIS = [1, 5, 10, 15, 20, 25, 30];
 
   /* Referências de FIXAÇÃO, medidas ao vivo em DATA.monsters. */
@@ -195,7 +195,7 @@
   // ======================================================================
   var d30 = {}; ORDEM.forEach(function (c) { d30[c] = depois[c][30]; });
   check('nível 30: as duas classes de esquiva (espadachim, arqueiro) lideram a esquiva',
-    d30.espadachim.dodge > d30.curandeira.dodge && d30.arqueiro.dodge > d30.curandeira.dodge &&
+    d30.espadachim.dodge > d30.curandeiro.dodge && d30.arqueiro.dodge > d30.curandeiro.dodge &&
     d30.espadachim.dodge > d30.bruxo.dodge && d30.arqueiro.dodge > d30.bruxo.dodge &&
     d30.espadachim.dodge > d30.invocador.dodge && d30.arqueiro.dodge > d30.invocador.dodge,
     'espadachim ' + d30.espadachim.dodge + ' · arqueiro ' + d30.arqueiro.dodge);
@@ -212,7 +212,7 @@
   check('as classes de esquiva ganham mais esquiva por nível que as do meio',
     Math.min(d30.espadachim.dodge - depois.espadachim[1].dodge,
              d30.arqueiro.dodge - depois.arqueiro[1].dodge) >
-    Math.max(d30.curandeira.dodge - depois.curandeira[1].dodge,
+    Math.max(d30.curandeiro.dodge - depois.curandeiro[1].dodge,
              d30.bruxo.dodge - depois.bruxo[1].dodge,
              d30.invocador.dodge - depois.invocador[1].dodge),
     'esquiva +' + (d30.arqueiro.dodge - depois.arqueiro[1].dodge) + '/+' +
@@ -239,11 +239,11 @@
   check('nível 30, tanque: continua ruim de escapar de monstro comum (abaixo de 1/3)',
     esc('sumo', 30, LOCK_COMUM) < 0.34, pct(esc('sumo', 30, LOCK_COMUM)));
   check('nível 30: as classes do meio ficam ENTRE o tanque e as de esquiva',
-    ['curandeira', 'bruxo', 'invocador'].every(function (c) {
+    ['curandeiro', 'bruxo', 'invocador'].every(function (c) {
       return esc(c, 30, LOCK_COMUM) > esc('sumo', 30, LOCK_COMUM) &&
              esc(c, 30, LOCK_COMUM) < esc('arqueiro', 30, LOCK_COMUM);
     }),
-    ['curandeira', 'bruxo', 'invocador'].map(function (c) {
+    ['curandeiro', 'bruxo', 'invocador'].map(function (c) {
       return c + ' ' + pct(esc(c, 30, LOCK_COMUM));
     }).join(' · '));
 

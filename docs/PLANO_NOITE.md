@@ -28,7 +28,7 @@ Você autorizou trocar a aparência das classes para casar com os modelos 3D pro
 |---|---|---|
 | `sumo` | Sumô | **Bárbaro** (machado de duas mãos) |
 | `arqueiro` | Elfo Arqueiro | **Batedor** (besta, capuz) |
-| `curandeira` | Curandeira | **Paladina** (armadura clara, escudo) |
+| `curandeiro` | Curandeira | **Paladina** (armadura clara, escudo) |
 | `espadachim` | Espadachim | **Ladino** (adagas gêmeas) |
 | `invocador` | Invocador | **Xamã** (grimório) |
 | `bruxo` | Bruxo | Bruxo (mantido) |

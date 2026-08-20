@@ -1020,7 +1020,7 @@
       var tbl = (D.leveling || {}).defenseByRole;
       if (!tbl || !D.classes || !D.classes.sumo) { notes.push('§9-H: dado real ausente'); return; }
       var maxLv = D.leveling.maxLevel || 30;
-      var casos = ['sumo', 'arqueiro', 'espadachim', 'bruxo', 'curandeira', 'invocador'];
+      var casos = ['sumo', 'arqueiro', 'espadachim', 'bruxo', 'curandeiro', 'invocador'];
       for (var i = 0; i < casos.length; i++) {
         var cid = casos[i], cls = D.classes[cid];
         if (!cls) continue;
@@ -1081,7 +1081,7 @@
         'arqueiro nv30 escapa de monstro comum na maioria das vezes');
       ok(chanceContra('sumo', 30, COMUM) < 0.34,
         'sumo nv30 continua ruim de escapar — ele não foi feito para fugir');
-      var todas = ['sumo', 'arqueiro', 'espadachim', 'bruxo', 'curandeira', 'invocador'];
+      var todas = ['sumo', 'arqueiro', 'espadachim', 'bruxo', 'curandeiro', 'invocador'];
       for (var i = 0; i < todas.length; i++) {
         if (!D.classes[todas[i]]) continue;
         ok(chanceContra(todas[i], 30, CHEFE) <= 0.25,
@@ -3096,8 +3096,8 @@
 
       // ---------------------------------------------------------------------
       // VARREDURA ANTI-EMPATE (v2.3). Antes da fúria da sala, duplas com
-      // curandeira nos calabouços rasos sustentavam mais do que os monstros
-      // machucavam e a batalha nunca fechava — inclusive `sumo + curandeira`,
+      // curandeiro nos calabouços rasos sustentavam mais do que os monstros
+      // machucavam e a batalha nunca fechava — inclusive `sumo + curandeiro`,
       // que é a dupla com que o jogador COMEÇA o jogo. Estas varreduras rodam
       // no nível 1 e só com os feitiços base (a configuração mais dura) e
       // exigem que TODA batalha resolva.
@@ -3142,20 +3142,20 @@
         eq(stuck.length, 0, classA + '+' + classB + ' empatou em: ' + stuck.join(', '));
       }
 
-      t('VARREDURA anti-empate: sumo + curandeira (a dupla INICIAL) nas 18 salas', function () {
-        sweepPair('sumo', 'curandeira');
+      t('VARREDURA anti-empate: sumo + curandeiro (a dupla INICIAL) nas 18 salas', function () {
+        sweepPair('sumo', 'curandeiro');
       });
-      t('VARREDURA anti-empate: curandeira + curandeira nas 18 salas', function () {
-        sweepPair('curandeira', 'curandeira');
+      t('VARREDURA anti-empate: curandeiro + curandeiro nas 18 salas', function () {
+        sweepPair('curandeiro', 'curandeiro');
       });
-      t('VARREDURA anti-empate: curandeira + arqueiro nas 18 salas', function () {
-        sweepPair('curandeira', 'arqueiro');
+      t('VARREDURA anti-empate: curandeiro + arqueiro nas 18 salas', function () {
+        sweepPair('curandeiro', 'arqueiro');
       });
-      t('VARREDURA anti-empate: bruxo + curandeira nas 18 salas', function () {
-        sweepPair('bruxo', 'curandeira');
+      t('VARREDURA anti-empate: bruxo + curandeiro nas 18 salas', function () {
+        sweepPair('bruxo', 'curandeiro');
       });
-      t('VARREDURA anti-empate: espadachim + curandeira nas 18 salas', function () {
-        sweepPair('espadachim', 'curandeira');
+      t('VARREDURA anti-empate: espadachim + curandeiro nas 18 salas', function () {
+        sweepPair('espadachim', 'curandeiro');
       });
       t('VARREDURA anti-empate: sumo + sumo nas 18 salas', function () {
         sweepPair('sumo', 'sumo');

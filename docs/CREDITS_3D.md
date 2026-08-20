@@ -93,7 +93,7 @@ preservada; só a aparência foi trocada para caber no acervo CC0.
 | `arqueiro` | atirador | Rogue_Hooded | besta de 2 mãos + capa | batedor encapuzado |
 | `bruxo` | mago | Mage | cajado + chapéu + capa | mago de chapéu pontudo |
 | `espadachim` | assassino | Rogue | duas adagas | ladino ágil |
-| `curandeira` | suporte | Knight | espada + escudo de brasão + capa | paladina/clériga de armadura clara |
+| `curandeiro` | suporte | Knight | espada + escudo de brasão + capa | paladina/clériga de armadura clara |
 | `invocador` | invocador | Mage (sem chapéu) | grimório aberto + varinha + capa | xamã |
 
 O tom de cada uma vem da `palette.primary` de `DATA.classes` — o elemento
@@ -132,7 +132,7 @@ O mapa completo, por id, está em `M.MONSTER_LOOK` (js/render3d/models3d_v2.js).
 
 Sistema, não casos escritos à mão (`fusionLook` em `models3d_v2.js`):
 
-1. **corpo** = classe de silhueta dominante (tabela `BULK`: sumo 5 · curandeira 4
+1. **corpo** = classe de silhueta dominante (tabela `BULK`: sumo 5 · curandeiro 4
    · invocador/bruxo 3 · arqueiro 2 · espadachim 1);
 2. **arma-assinatura da outra classe** acoplada ao osso `handslot.l` (punho livre);
 3. **cor** = paleta do hospedeiro puxada 34% para a do hóspede;

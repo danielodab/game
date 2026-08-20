@@ -639,6 +639,28 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // =========================================================== load/save/reset
+  /* Ids de classe que mudaram de nome, e o que era antes.
+   *
+   * O save guarda o `classId` de cada heroi. Quando um id muda, o heroi salvo
+   * aponta para uma classe que nao existe mais — e SOME da lista sem aviso, que
+   * e o pior jeito de perder o progresso de alguem.
+   *
+   * `curandeira` virou `curandeiro` quando a Paladina passou a ser o Curandeiro
+   * (ver docs/CLASSES_V3.md). A migracao roda na carga e e idempotente. */
+  var CLASSE_RENOMEADA = { curandeira: 'curandeiro' };
+
+  function migraClasses(save) {
+    if (!save || !save.heroes) return 0;
+    var n = 0;
+    for (var id in save.heroes) {
+      if (!save.heroes.hasOwnProperty(id)) continue;
+      var h = save.heroes[id];
+      var novo = h && CLASSE_RENOMEADA[h.classId];
+      if (novo) { h.classId = novo; n++; }
+    }
+    return n;
+  }
+
   Progress.load = function () {
     var st = null;
     var s = getStorage();
@@ -649,6 +671,10 @@ var JOGO = (typeof window !== 'undefined')
       } catch (e) { st = null; }
     }
     if (!st || !isObj(st.heroes)) st = freshState();
+    // ANTES de qualquer coisa ler o heroi: id de classe renomeado precisa virar
+    // o novo, senao `syncSpells` abaixo procura uma classe que nao existe e o
+    // heroi some da lista sem aviso.
+    migraClasses(st);
     Progress.state = st;
     for (var hid in st.heroes) if (st.heroes.hasOwnProperty(hid)) syncSpells(hid);
     syncUnlocksFromCards();

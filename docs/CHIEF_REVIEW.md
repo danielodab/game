@@ -234,7 +234,7 @@ Duas observações de peso:
 - **Calabouço completo**: Estufa Soterrada, dupla nível 10 com conjunto e pet — 3 salas + a
   Jardineira-Viúva (300 PV) vencida na rodada 6. Cisterna e Coração Partido abrem e rodam.
 - **Fusão declarada e resolvida em combate real** (botão FUNDIR → folha de confirmação → fim de
-  turno): `fus:curandeira+sumo`, `hp 251/300` (96+155 / 130+170), `paMax 8` (6+2), `ppMax 4` (3+1),
+  turno): `fus:curandeiro+sumo`, `hp 251/300` (96+155 / 130+170), `paMax 8` (6+2), `ppMax 4` (3+1),
   `escudo 50`, `nível 5` (média), `iniciativa 55` (máximo), `elemPower 3` (média), herói B fora do
   tabuleiro. **Todos os números do §4 batem.**
 - **Cronômetro**: 30 s, sobra vai para o banco (26,9 s → turno seguinte com 56,9 s, teto 120) e a
@@ -276,14 +276,14 @@ A mecânica que você mais quer ver é, hoje, uma armadilha para o grupo padrão
 
 - Com **2 heróis** (§9-B), fundir transforma a dupla em **uma única unidade** — não sobra aliado.
 - A fusão **substitui** o kit pelos feitiços compostos (isso é o contrato, §4). Para o par
-  `curandeira+sumo` (as duas classes que já nascem liberadas) as formas de tier 0 e 5 são de
+  `curandeiro+sumo` (as duas classes que já nascem liberadas) as formas de tier 0 e 5 são de
   **apoio**: *Amparo Escaldante* (escudo em aliado) e *Chamado Escaldante* (puxa aliado). Como
   formas de apoio usam `riderSupport`, **nem o rider elemental traz dano**.
 - Resultado medido em batalha real: a unidade fundida nível 5 morreu ao longo de 5 rodadas com os
   **5 inimigos em PV cheio** — ela não tinha como causar um único ponto de dano.
 - Varredura completa (`Fusion.spellsFor` nos 15 pares): **sem nenhum feitiço ofensivo** em
-  **4 pares no nível 5-11** (`curandeira+sumo`, `curandeira+invocador`, `espadachim+invocador`,
-  `invocador+sumo`), **2 pares no 12-19**, e **`curandeira+invocador` continua sem dano no nível 30**
+  **4 pares no nível 5-11** (`curandeiro+sumo`, `curandeiro+invocador`, `espadachim+invocador`,
+  `invocador+sumo`), **2 pares no 12-19**, e **`curandeiro+invocador` continua sem dano no nível 30**
   — 5 feitiços, nenhum ataque, para sempre.
 - **Causa raiz de integração:** as formas foram escritas quando o grupo era de 1-3 heróis (havia
   aliado para escudar); o adendo v2.1 baixou para 1-2 e ninguém revisitou o conteúdo da fusão.
@@ -298,7 +298,7 @@ A mecânica que você mais quer ver é, hoje, uma armadilha para o grupo padrão
   Atinge os **12 itens de Lume** — o espaço que você inventou para "conceder um feitiço novo".
 - Os feitiços de fusão são gerados em memória (`Engine._genSpells`) e **também não são achados**
   por esse `spellDef` (conferido em runtime: `emSpells:false, emFusionSpells:false, emGen:true`).
-  Ou seja, a barra da unidade fundida mostra `fus:curandeira+sumo:agua+fogo:0` e custo 0.
+  Ou seja, a barra da unidade fundida mostra `fus:curandeiro+sumo:agua+fogo:0` e custo 0.
 - O motor está certo (`Engine.spell` resolve as 5 fontes); é a HUD que ficou para trás.
 
 ### C3 — O jogo que você vai abrir de manhã **não é o jogo auditado** — **ALTO (processo)**
@@ -324,7 +324,7 @@ Espadachim → **Ladino** · Curandeira → **Paladina** · Invocador → **Xam�
   menciona** isso. Foi decidido às 23h e ficou só no diff.
 - Ironia técnica: o **seu desenho do Sumô** (`assets/embedded/sprites-sumo.js`) continua sendo o
   retrato da classe na HUD — o jogo mostra a sua arte de sumô com o nome "Bárbaro".
-- Os ids (`sumo`, `curandeira`…) e as chaves de fusão (`fus:curandeira+sumo`) não mudaram, então é
+- Os ids (`sumo`, `curandeiro`…) e as chaves de fusão (`fus:curandeiro+sumo`) não mudaram, então é
   reversível numa linha por classe.
 
 ### C5 — `validate_world` vermelha: a economia de XP ainda tem dois donos — **MÉDIO**
@@ -422,8 +422,8 @@ algumas horas.
 
 1. **Dar ataque a toda fusão possível.** Nenhum par de classes pode gerar, em nenhum nível a partir
    do 5, um conjunto de feitiços sem um único efeito ofensivo. Corrigir pelo menos os 4 pares do C1
-   (prioridade absoluta ao `curandeira+sumo`, a dupla que todo jogador tem no começo) e o
-   `curandeira+invocador`, que hoje não ataca nem no nível 30. Acrescentar à `validate_fusion.html`
+   (prioridade absoluta ao `curandeiro+sumo`, a dupla que todo jogador tem no começo) e o
+   `curandeiro+invocador`, que hoje não ataca nem no nível 30. Acrescentar à `validate_fusion.html`
    a checagem "todo par, em todo tier, tem ao menos um feitiço com dano".
 2. **Fazer a HUD ler as cinco fontes de feitiço.** `js/ui/hud.js:91` precisa consultar
    `Engine.spell(id)` (ou incluir `itemSpells`, `petSpells`, `monsterSpells` e `Engine._genSpells`),
@@ -554,7 +554,7 @@ explícito de "ofensivo" (`damage`, `poison`, `chain`, `detonateMarks`) e **2.40
 - combos **sem nenhum feitiço ofensivo**: **0** (eram 4 duplas inteiras)
 - combos cujo **tier mais baixo** não causa dano: **0** — o tier 0 é ofensivo em **240/240** casos
 - no nível 30, a pior dupla tem **3** feitiços com dano; nenhuma abaixo disso
-- `curandeira+invocador`, que não atacava **nem no nível 30**, hoje tem 3 com dano
+- `curandeiro+invocador`, que não atacava **nem no nível 30**, hoje tem 3 com dano
 
 **Confirmado jogando**, que era o pedido. A dupla inicial no nível 1 (ainda **Neutro**, antes da
 escolha de caminho) funde e recebe *Anteparo Cru* — **3 PA, com dano**. Os números da fusão batem

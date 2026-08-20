@@ -64,7 +64,7 @@ Antes desta mudança as quinze imagens seriam idênticas: a mesma bolinha.</div>
       try {
         var ids = JOGO.Progress.heroIds();
         while (ids.length < 2) {
-          JOGO.Progress.createHero(ids.length ? 'curandeira' : 'sumo');
+          JOGO.Progress.createHero(ids.length ? 'curandeiro' : 'sumo');
           ids = JOGO.Progress.heroIds();
         }
         G.startRun(ids.slice(0, 2), 'greenhouse');

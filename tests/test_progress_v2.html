@@ -95,7 +95,7 @@
   var PATH_ELEMENTS = ['fogo', 'agua', 'terra', 'ar'];
   var TIERS = DATA.unlockTiers;
 
-  // startsUnlocked segue o DADO (v2.1: tanque + curandeira)
+  // startsUnlocked segue o DADO (v2.1: tanque + curandeiro)
   var SPEC = [
     { id: 't-tanque', name: 'Tanque de Teste', role: 'tanque', startsUnlocked: true,
       cardRarity: 'comum', unlockCost: 0, dropWeight: 6, minDungeon: 0,
@@ -565,7 +565,7 @@
     fresh();
     eq(P.state.unlockedClasses.length, 2, 'nº de classes liberadas');
     has(P.state.unlockedClasses, TANK, 'tanque liberado');
-    has(P.state.unlockedClasses, CURA, 'curandeira liberada');
+    has(P.state.unlockedClasses, CURA, 'curandeiro liberada');
     hasNot(P.state.unlockedClasses, ARCO, 'arqueiro NÃO começa liberado na v2.1');
     // muda o dado e o estado novo tem de acompanhar
     D.classes[ARCO].startsUnlocked = true;
@@ -1087,7 +1087,7 @@
     eq(pilhas[0].count, 2, 'com contador 2');
     eq(P.equip(TANK, 't-bota-pp'), true, 'primeira vai para o tanque');
     eq(P.invCount('t-bota-pp'), 1, 'sobrou ×1 na grade');
-    eq(P.equip(CURA, 't-bota-pp'), true, 'a segunda vai para a curandeira');
+    eq(P.equip(CURA, 't-bota-pp'), true, 'a segunda vai para a curandeiro');
     eq(P.invCount('t-bota-pp'), 0, 'a grade esvaziou');
     eq(P.equippedByAll('t-bota-pp').length, 2, 'dois heróis calçados');
     eq(P.ownedCount('t-bota-pp'), 2, 'duas peças no mundo');
@@ -1469,7 +1469,7 @@
   t('custos de desbloqueio saem do DADO', function () {
     fresh();
     eq(P.cardInfo(TANK).unlockCost, 0, 'tanque (inicial) 0');
-    eq(P.cardInfo(CURA).unlockCost, 0, 'curandeira (inicial) 0');
+    eq(P.cardInfo(CURA).unlockCost, 0, 'curandeiro (inicial) 0');
     eq(P.cardInfo('t-invo').unlockCost, 10, 'invocador 10');
     eq(P.cardInfo('t-bruxo').unlockCost, 10, 'bruxo 10');
     eq(P.cardInfo('t-lamina').unlockCost, 20, 'espadachim 20');

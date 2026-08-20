@@ -79,7 +79,7 @@ var JOGO = (typeof window !== 'undefined')
   // niveis e preciso razaoMax/razaoMin <= 1,5 (de k*max<=1,2 e k*min>=0,8).
   // Seis duplas passam disso — de 1,52 (bruxo+espadachim) a 2,90
   // (espadachim+invocador) — e ficam fora por construcao, nao por falta de
-  // ajuste. A inclinacao tambem troca de sinal entre duplas (arqueiro+curandeira
+  // ajuste. A inclinacao tambem troca de sinal entre duplas (arqueiro+curandeiro
   // rende MAIS fundida no 30, espadachim+invocador rende MENOS), entao nenhum
   // valor global de POWER_MULT nem do peso de nivel em `powerFactor` conserta:
   // so um coeficiente que varie COM O NIVEL, por dupla, fecharia — e isso seria
@@ -87,17 +87,17 @@ var JOGO = (typeof window !== 'undefined')
   // construcao. Fica registrado em vez de escondido.
   Fusion.PAIR_TUNE = {
     'arqueiro+bruxo':        1.046,
-    'arqueiro+curandeira':   0.704,
+    'arqueiro+curandeiro':   0.704,
     'arqueiro+espadachim':   1.154,
     'arqueiro+invocador':    1.257,
     'arqueiro+sumo':         0.716,
-    'bruxo+curandeira':      1.283,
+    'bruxo+curandeiro':      1.283,
     'bruxo+espadachim':      1.221,
     'bruxo+invocador':       1.623,
     'bruxo+sumo':            1.229,
-    'curandeira+espadachim': 0.547,
-    'curandeira+invocador':  1.281,
-    'curandeira+sumo':       0.853,
+    'curandeiro+espadachim': 0.547,
+    'curandeiro+invocador':  1.281,
+    'curandeiro+sumo':       0.853,
     'espadachim+invocador':  1.102,
     'espadachim+sumo':       0.505,
     'invocador+sumo':        1.259

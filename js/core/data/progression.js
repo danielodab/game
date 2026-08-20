@@ -124,7 +124,7 @@ JOGO.DATA.leveling = {
   elementChoiceLevel: 5,
 
   /* FÚRIA DA SALA — antídoto contra empate por sustentação (dupla que cura mais do
-   * que apanha e nunca resolve; acontecia até com sumo+curandeira, a dupla inicial).
+   * que apanha e nunca resolve; acontecia até com sumo+curandeiro, a dupla inicial).
    * A partir da rodada `afterRound`, cada rodada dá +`powerPerRound` de poder a TODOS
    * os inimigos e corta `healCutPerRound` da cura recebida por AMBOS os lados
    * (acumulativo, piso 0 — a cura zera por volta da rodada 27). Na rodada `maxRounds`
@@ -150,7 +150,7 @@ JOGO.DATA.leveling = {
  * então nunca existe carta inútil. Quanto mais cara a classe, MAIOR o peso e mais fundo o
  * calabouço: nos Fechos rasos só caem as baratas; no último, os pesos somam exatamente 100
  * (leem-se como porcentagem: arqueiro 32%, espadachim 24%, bruxo 16%, invocador 16%,
- * sumo 6%, curandeira 6%). Assim a classe cara é objetivo de longo prazo sem virar moagem
+ * sumo 6%, curandeiro 6%). Assim a classe cara é objetivo de longo prazo sem virar moagem
  * infinita: farmar fundo é sempre o caminho mais rápido para ela.
  *
  * Calibragem (supondo 1–2 cartas por sala de chefe): invocador libera em ~10–18 descidas do
@@ -159,7 +159,7 @@ JOGO.DATA.leveling = {
  * (mais 90 cartas excedentes) são conteúdo de fim de jogo. */
 JOGO.DATA.cards = {
   sumo:       { unlockCost:  0, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 30, 55, 90] },
-  curandeira: { unlockCost:  0, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 30, 55, 90] },
+  curandeiro: { unlockCost:  0, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 30, 55, 90] },
   invocador:  { unlockCost: 10, dropWeight: 16, minDungeon: 1, starCosts: [5, 15, 30, 55, 90] },
   bruxo:      { unlockCost: 10, dropWeight: 16, minDungeon: 2, starCosts: [5, 15, 30, 55, 90] },
   espadachim: { unlockCost: 20, dropWeight: 24, minDungeon: 3, starCosts: [5, 15, 30, 55, 90] },

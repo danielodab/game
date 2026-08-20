@@ -1268,8 +1268,8 @@ JOGO.DATA.spells = {
    * Terra: escudos e raízes protetoras · Ar: mobilidade e resgate
    * ====================================================================== */
 
-  'curandeira-neutro-1': {
-    id: 'curandeira-neutro-1', name: 'Imposição das Mãos', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+  'curandeiro-neutro-1': {
+    id: 'curandeiro-neutro-1', name: 'Imposição das Mãos', element: 'neutro', classId: 'curandeiro', unlockLevel: 0,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1278,8 +1278,8 @@ JOGO.DATA.spells = {
     flavor: 'Ela cospe na mão antes. Diz que ajuda. Ninguém tem coragem de discordar.',
     fxKey: 'warmHand'
   },
-  'curandeira-neutro-2': {
-    id: 'curandeira-neutro-2', name: 'Espada Teimosa', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+  'curandeiro-neutro-2': {
+    id: 'curandeiro-neutro-2', name: 'Espada Teimosa', element: 'neutro', classId: 'curandeiro', unlockLevel: 0,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -1288,8 +1288,8 @@ JOGO.DATA.spells = {
     flavor: 'Era da avó. A avó também batia com ela.',
     fxKey: 'stubbornBlade'
   },
-  'curandeira-neutro-3': {
-    id: 'curandeira-neutro-3', name: 'Bênção Breve', element: 'neutro', classId: 'curandeira', unlockLevel: 0,
+  'curandeiro-neutro-3': {
+    id: 'curandeiro-neutro-3', name: 'Bênção Breve', element: 'neutro', classId: 'curandeiro', unlockLevel: 0,
     paCost: 2, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1300,8 +1300,8 @@ JOGO.DATA.spells = {
   },
 
   /* --- CURANDEIRA · FOGO: curar com raiva --- */
-  'curandeira-fogo-5': {
-    id: 'curandeira-fogo-5', name: 'Compressa Escaldante', element: 'fogo', classId: 'curandeira', unlockLevel: 5,
+  'curandeiro-fogo-5': {
+    id: 'curandeiro-fogo-5', name: 'Compressa Escaldante', element: 'fogo', classId: 'curandeiro', unlockLevel: 5,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1310,8 +1310,8 @@ JOGO.DATA.spells = {
     flavor: '"Vai queimar um pouquinho." Sempre queima muito.',
     fxKey: 'searingPoultice'
   },
-  'curandeira-fogo-10': {
-    id: 'curandeira-fogo-10', name: 'Brasa Curativa', element: 'fogo', classId: 'curandeira', unlockLevel: 10,
+  'curandeiro-fogo-10': {
+    id: 'curandeiro-fogo-10', name: 'Brasa Curativa', element: 'fogo', classId: 'curandeiro', unlockLevel: 10,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -1320,8 +1320,8 @@ JOGO.DATA.spells = {
     flavor: 'A avó chamava isso de "reciclagem".',
     fxKey: 'healingEmber'
   },
-  'curandeira-fogo-12': {
-    id: 'curandeira-fogo-12', name: 'Fôlego de Forja', element: 'fogo', classId: 'curandeira', unlockLevel: 12,
+  'curandeiro-fogo-12': {
+    id: 'curandeiro-fogo-12', name: 'Fôlego de Forja', element: 'fogo', classId: 'curandeiro', unlockLevel: 12,
     paCost: 3, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1330,8 +1330,8 @@ JOGO.DATA.spells = {
     flavor: 'Ela sopra no aliado como quem sopra brasa de forja. Funciona igual.',
     fxKey: 'forgeBreath'
   },
-  'curandeira-fogo-15': {
-    id: 'curandeira-fogo-15', name: 'Anel de Cinzas', element: 'fogo', classId: 'curandeira', unlockLevel: 15,
+  'curandeiro-fogo-15': {
+    id: 'curandeiro-fogo-15', name: 'Anel de Cinzas', element: 'fogo', classId: 'curandeiro', unlockLevel: 15,
     paCost: 4, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -1340,8 +1340,8 @@ JOGO.DATA.spells = {
     flavor: 'Armadura clara, e um barulho que chega ao teto.',
     fxKey: 'ashRing'
   },
-  'curandeira-fogo-20': {
-    id: 'curandeira-fogo-20', name: 'Coração de Brasa', element: 'fogo', classId: 'curandeira', unlockLevel: 20,
+  'curandeiro-fogo-20': {
+    id: 'curandeiro-fogo-20', name: 'Coração de Brasa', element: 'fogo', classId: 'curandeiro', unlockLevel: 20,
     paCost: 4, cooldown: 3, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1350,8 +1350,8 @@ JOGO.DATA.spells = {
     flavor: 'Ela empresta o próprio coração de brasa. Devolve-se em vitória.',
     fxKey: 'emberHeart'
   },
-  'curandeira-fogo-30': {
-    id: 'curandeira-fogo-30', name: 'A Chama que Cuida', element: 'fogo', classId: 'curandeira', unlockLevel: 30,
+  'curandeiro-fogo-30': {
+    id: 'curandeiro-fogo-30', name: 'A Chama que Cuida', element: 'fogo', classId: 'curandeiro', unlockLevel: 30,
     paCost: 6, cooldown: 4, castsPerTurn: 1,
     range: { min: 0, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1362,8 +1362,8 @@ JOGO.DATA.spells = {
   },
 
   /* --- CURANDEIRA · ÁGUA: a cura sem truques --- */
-  'curandeira-agua-5': {
-    id: 'curandeira-agua-5', name: 'Gota Boa', element: 'agua', classId: 'curandeira', unlockLevel: 5,
+  'curandeiro-agua-5': {
+    id: 'curandeiro-agua-5', name: 'Gota Boa', element: 'agua', classId: 'curandeiro', unlockLevel: 5,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 0, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1372,8 +1372,8 @@ JOGO.DATA.spells = {
     flavor: 'Uma gota. Ela promete que é só uma gota.',
     fxKey: 'goodDrop'
   },
-  'curandeira-agua-10': {
-    id: 'curandeira-agua-10', name: 'Fonte Serena', element: 'agua', classId: 'curandeira', unlockLevel: 10,
+  'curandeiro-agua-10': {
+    id: 'curandeiro-agua-10', name: 'Fonte Serena', element: 'agua', classId: 'curandeiro', unlockLevel: 10,
     paCost: 3, cooldown: 1, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1382,8 +1382,8 @@ JOGO.DATA.spells = {
     flavor: 'Ela encosta a manopla no chão e sai água. Nunca explicou.',
     fxKey: 'calmSpring'
   },
-  'curandeira-agua-12': {
-    id: 'curandeira-agua-12', name: 'Puxão de Maré', element: 'agua', classId: 'curandeira', unlockLevel: 12,
+  'curandeiro-agua-12': {
+    id: 'curandeiro-agua-12', name: 'Puxão de Maré', element: 'agua', classId: 'curandeiro', unlockLevel: 12,
     paCost: 2, cooldown: 1, castsPerTurn: 1,
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'any',
@@ -1392,8 +1392,8 @@ JOGO.DATA.spells = {
     flavor: '"Vem cá." E vem.',
     fxKey: 'tideTug'
   },
-  'curandeira-agua-15': {
-    id: 'curandeira-agua-15', name: 'Onda Boa', element: 'agua', classId: 'curandeira', unlockLevel: 15,
+  'curandeiro-agua-15': {
+    id: 'curandeiro-agua-15', name: 'Onda Boa', element: 'agua', classId: 'curandeiro', unlockLevel: 15,
     paCost: 4, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1402,8 +1402,8 @@ JOGO.DATA.spells = {
     flavor: 'A maré que sobe levanta todos os barcos, inclusive os furados.',
     fxKey: 'goodWave'
   },
-  'curandeira-agua-20': {
-    id: 'curandeira-agua-20', name: 'Corrente Sanadora', element: 'agua', classId: 'curandeira', unlockLevel: 20,
+  'curandeiro-agua-20': {
+    id: 'curandeiro-agua-20', name: 'Corrente Sanadora', element: 'agua', classId: 'curandeiro', unlockLevel: 20,
     paCost: 4, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1412,8 +1412,8 @@ JOGO.DATA.spells = {
     flavor: 'Água corrente não junta poeira. Nem luto.',
     fxKey: 'healingCurrent'
   },
-  'curandeira-agua-30': {
-    id: 'curandeira-agua-30', name: 'A Cisterna Boa', element: 'agua', classId: 'curandeira', unlockLevel: 30,
+  'curandeiro-agua-30': {
+    id: 'curandeiro-agua-30', name: 'A Cisterna Boa', element: 'agua', classId: 'curandeiro', unlockLevel: 30,
     paCost: 6, cooldown: 4, castsPerTurn: 1,
     range: { min: 0, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1424,8 +1424,8 @@ JOGO.DATA.spells = {
   },
 
   /* --- CURANDEIRA · TERRA: guardar o grupo atrás de casca --- */
-  'curandeira-terra-5': {
-    id: 'curandeira-terra-5', name: 'Casca Amiga', element: 'terra', classId: 'curandeira', unlockLevel: 5,
+  'curandeiro-terra-5': {
+    id: 'curandeiro-terra-5', name: 'Casca Amiga', element: 'terra', classId: 'curandeiro', unlockLevel: 5,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1434,8 +1434,8 @@ JOGO.DATA.spells = {
     flavor: 'Ela pede licença à árvore morta e a árvore empresta a casca.',
     fxKey: 'friendlyBark'
   },
-  'curandeira-terra-10': {
-    id: 'curandeira-terra-10', name: 'Emplastro de Barro', element: 'terra', classId: 'curandeira', unlockLevel: 10,
+  'curandeiro-terra-10': {
+    id: 'curandeiro-terra-10', name: 'Emplastro de Barro', element: 'terra', classId: 'curandeiro', unlockLevel: 10,
     paCost: 3, cooldown: 1, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1444,8 +1444,8 @@ JOGO.DATA.spells = {
     flavor: 'Barro do canteiro fundo. Cheira mal, cura bem.',
     fxKey: 'mudPoultice'
   },
-  'curandeira-terra-12': {
-    id: 'curandeira-terra-12', name: 'Raiz Zelosa', element: 'terra', classId: 'curandeira', unlockLevel: 12,
+  'curandeiro-terra-12': {
+    id: 'curandeiro-terra-12', name: 'Raiz Zelosa', element: 'terra', classId: 'curandeiro', unlockLevel: 12,
     paCost: 3, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -1454,8 +1454,8 @@ JOGO.DATA.spells = {
     flavor: '"Fica quietinho aí que eu já volto." Ninguém fica quietinho por vontade própria.',
     fxKey: 'zealousRoot'
   },
-  'curandeira-terra-15': {
-    id: 'curandeira-terra-15', name: 'Redoma de Raízes', element: 'terra', classId: 'curandeira', unlockLevel: 15,
+  'curandeiro-terra-15': {
+    id: 'curandeiro-terra-15', name: 'Redoma de Raízes', element: 'terra', classId: 'curandeiro', unlockLevel: 15,
     paCost: 4, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1464,8 +1464,8 @@ JOGO.DATA.spells = {
     flavor: 'Uma estufa portátil, feita às pressas, com o que havia no bolso.',
     fxKey: 'rootDome'
   },
-  'curandeira-terra-20': {
-    id: 'curandeira-terra-20', name: 'Pedra Amparo', element: 'terra', classId: 'curandeira', unlockLevel: 20,
+  'curandeiro-terra-20': {
+    id: 'curandeiro-terra-20', name: 'Pedra Amparo', element: 'terra', classId: 'curandeiro', unlockLevel: 20,
     paCost: 4, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1474,8 +1474,8 @@ JOGO.DATA.spells = {
     flavor: 'Ela chega, empurra a pedra e o mundo para de escorregar por um instante.',
     fxKey: 'stoneSuccor'
   },
-  'curandeira-terra-30': {
-    id: 'curandeira-terra-30', name: 'Jardim Fechado', element: 'terra', classId: 'curandeira', unlockLevel: 30,
+  'curandeiro-terra-30': {
+    id: 'curandeiro-terra-30', name: 'Jardim Fechado', element: 'terra', classId: 'curandeiro', unlockLevel: 30,
     paCost: 6, cooldown: 4, castsPerTurn: 1,
     range: { min: 0, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1486,8 +1486,8 @@ JOGO.DATA.spells = {
   },
 
   /* --- CURANDEIRA · AR: chegar a tempo --- */
-  'curandeira-ar-5': {
-    id: 'curandeira-ar-5', name: 'Sopro Doce', element: 'ar', classId: 'curandeira', unlockLevel: 5,
+  'curandeiro-ar-5': {
+    id: 'curandeiro-ar-5', name: 'Sopro Doce', element: 'ar', classId: 'curandeiro', unlockLevel: 5,
     paCost: 2, cooldown: 0, castsPerTurn: 2,
     range: { min: 0, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1496,8 +1496,8 @@ JOGO.DATA.spells = {
     flavor: 'Sopra no machucado. Cientificamente indefensável; funciona.',
     fxKey: 'sweetBreath'
   },
-  'curandeira-ar-10': {
-    id: 'curandeira-ar-10', name: 'Fôlego Emprestado', element: 'ar', classId: 'curandeira', unlockLevel: 10,
+  'curandeiro-ar-10': {
+    id: 'curandeiro-ar-10', name: 'Fôlego Emprestado', element: 'ar', classId: 'curandeiro', unlockLevel: 10,
     paCost: 2, cooldown: 1, castsPerTurn: 1,
     range: { min: 0, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1506,8 +1506,8 @@ JOGO.DATA.spells = {
     flavor: 'Guarda suspiros num vidrinho. Diz que são de gente que não precisava mais deles.',
     fxKey: 'lentBreath'
   },
-  'curandeira-ar-12': {
-    id: 'curandeira-ar-12', name: 'Troca de Lugar', element: 'ar', classId: 'curandeira', unlockLevel: 12,
+  'curandeiro-ar-12': {
+    id: 'curandeiro-ar-12', name: 'Troca de Lugar', element: 'ar', classId: 'curandeiro', unlockLevel: 12,
     paCost: 2, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'any',
@@ -1516,8 +1516,8 @@ JOGO.DATA.spells = {
     flavor: 'Nunca foi de fugir. Só de trocar de lugar com quem precisava mais.',
     fxKey: 'placeSwap'
   },
-  'curandeira-ar-15': {
-    id: 'curandeira-ar-15', name: 'Rajada Amiga', element: 'ar', classId: 'curandeira', unlockLevel: 15,
+  'curandeiro-ar-15': {
+    id: 'curandeiro-ar-15', name: 'Rajada Amiga', element: 'ar', classId: 'curandeiro', unlockLevel: 15,
     paCost: 4, cooldown: 1, castsPerTurn: 1,
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'cone', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -1526,8 +1526,8 @@ JOGO.DATA.spells = {
     flavor: '"Licença!" — e meia sala recua.',
     fxKey: 'friendlyGust'
   },
-  'curandeira-ar-20': {
-    id: 'curandeira-ar-20', name: 'Brisa Restauradora', element: 'ar', classId: 'curandeira', unlockLevel: 20,
+  'curandeiro-ar-20': {
+    id: 'curandeiro-ar-20', name: 'Brisa Restauradora', element: 'ar', classId: 'curandeiro', unlockLevel: 20,
     paCost: 4, cooldown: 2, castsPerTurn: 1,
     range: { min: 0, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'ally',
@@ -1536,8 +1536,8 @@ JOGO.DATA.spells = {
     flavor: 'Cura andando. O grupo inteiro aprende a andar junto.',
     fxKey: 'restoringBreeze'
   },
-  'curandeira-ar-30': {
-    id: 'curandeira-ar-30', name: 'Respiração do Fecho', element: 'ar', classId: 'curandeira', unlockLevel: 30,
+  'curandeiro-ar-30': {
+    id: 'curandeiro-ar-30', name: 'Respiração do Fecho', element: 'ar', classId: 'curandeiro', unlockLevel: 30,
     paCost: 6, cooldown: 4, castsPerTurn: 1,
     range: { min: 0, max: 7, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'ally',
