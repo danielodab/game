@@ -195,6 +195,7 @@ def main():
         ntex = reamostra_texturas()
         achadas, perdidas = renomeia_acoes(mapa)
 
+
         tris = 0
         for o in bpy.data.objects:
             if o.type == 'MESH':

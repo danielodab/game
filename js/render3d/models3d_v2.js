@@ -401,14 +401,6 @@ var JOGO = (typeof window !== 'undefined')
               scene: gltf.scene, clips: clips,
               actions: names.length ? autoActions(names) : null,   // null = usa o banco KayKit
               own: names.length > 0,
-              // ANIMACAO DESLIGADA para os corpos do Meshy: a pose de bind
-              // deles esta correta e renderiza perfeita, mas os clipes assumem
-              // uma pose de repouso diferente e viram o personagem de
-              // ponta-cabeca assim que o mixer toca. Sete consertos foram
-              // testados, cada um com foto (ver docs/MESHY_ESTADO.md). Ate o
-              // arquivo ser reexportado, e melhor um personagem bonito e parado
-              // do que um animado de cabeca para baixo.
-              semAnimacao: /^meshy_/.test(key),
               natural: naturalHeight(gltf.scene),
               yaw: measureYaw(gltf.scene)
             };
@@ -506,40 +498,7 @@ var JOGO = (typeof window !== 'undefined')
     return (isFinite(h) && h > 0.01) ? h : 1.8;
   }
 
-  /* Poe o personagem DE PE, se ele veio deitado ou invertido.
-   *
-   * Nao e capricho de arquivo: o gerador que fez os personagens novos escreve a
-   * cena com o eixo para baixo, e os tres saiam plantando bananeira. Tentei
-   * consertar na exportacao — assar a transformacao no armature, mexer nos
-   * ossos em modo de edicao — e as duas coisas ou nao resolviam ou pioravam.
-   *
-   * Corrigir na CARGA e mais honesto: o arquivo continua sendo o que o gerador
-   * produziu, e o jogo faz a acomodacao que so ele sabe fazer. A pergunta e
-   * respondida por MEDIDA, nao por lista de modelo: se a cabeca esta abaixo do
-   * quadril, o corpo esta de ponta-cabeca. Serve para qualquer arquivo futuro,
-   * sem precisar lembrar de cadastrar o nome dele em lugar nenhum. */
-  function poeDePe(scene) {
-    scene.updateMatrixWorld(true);
-    var v = new THREE.Vector3(), yCabeca = null, yPe = null;
-    scene.traverse(function (o) {
-      if (!o.isBone) return;
-      var nm = (o.name || '').toLowerCase();
-      if (yCabeca === null && /^head$|^mixamorighead$/.test(nm)) {
-        o.getWorldPosition(v); yCabeca = v.y;
-      }
-      // o PE e a referencia inequivoca. O quadril pode estar em qualquer altura
-      // dependendo da pose (agachado, caindo), e comparar com ele erra.
-      if (/^(left|right)?foot|^mixamorig(left|right)foot|^footl$|^footr$/.test(nm)) {
-        o.getWorldPosition(v);
-        if (yPe === null || v.y < yPe) yPe = v.y;
-      }
-    });
-    if (yCabeca === null || yPe === null) return false;
-    if (yCabeca >= yPe) return false;               // ja esta de pe
-    scene.rotateX(Math.PI);
-    scene.updateMatrixWorld(true);
-    return true;
-  }
+
 
   function prepScene(scene) {
     scene.traverse(function (n) {
@@ -1249,9 +1208,6 @@ var JOGO = (typeof window !== 'undefined')
       return locoCache;
     }
     function play(name, o) {
-      // ver `semAnimacao` no carregamento: modelo cujo clipe inverte o corpo
-      // fica na pose de repouso, que e a correta
-      if (src.semAnimacao) return null;
       o = o || {};
       var a = action(name);
       if (!a) return null;
@@ -1317,10 +1273,6 @@ var JOGO = (typeof window !== 'undefined')
     // A correcao e por MEDIDA, nao por lista de modelo: se a cabeca esta abaixo
     // do quadril depois de posado, o corpo esta invertido. Serve para qualquer
     // arquivo futuro sem precisar cadastrar nome nenhum.
-    if (!src.semAnimacao) {
-      mixer.update(0);
-      if (poeDePe(model)) group.userData.invertido = true;
-    }
     return group;
   };
 

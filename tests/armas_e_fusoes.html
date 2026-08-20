@@ -66,13 +66,20 @@ o corpo é do anfitrião.</div>
   }
 
   function pousa(node) {
+    // Usa o `play` DA PROPRIA UNIDADE, que e o que o jogo usa.
+    //
+    // Antes esta funcao montava um mixer proprio e tocava um clipe de
+    // `M.clips()` — que e o BANCO DO KAYKIT. Num corpo com esqueleto proprio
+    // (24 ossos, nomes Mixamo) isso aplica animacao de outro esqueleto, e o
+    // resultado sai de ponta-cabeca. Passei sete tentativas consertando o
+    // modelo por causa de um defeito que era da pagina de teste.
+    if (node.userData && typeof node.userData.play === 'function') {
+      node.userData.play('idle', { fade: 0 });
+      if (node.userData.mixer) node.userData.mixer.update(0.4);
+      node.updateMatrixWorld(true);
+      return;
+    }
     var M = JOGO.Models3D2, clipes = M.clips ? M.clips() : [], alvo = null;
-    // Respeita a trava do jogo: modelo marcado para nao animar fica na pose de
-    // repouso. Esta pagina montava um mixer proprio e tocava o clipe direto,
-    // contornando a decisao do renderizador — e mostrava de ponta-cabeca um
-    // personagem que no jogo aparece certo.
-    var mk = node.userData && node.userData.look ? node.userData.look.model : '';
-    if (/^meshy_/.test(mk || '')) return;
     for (var i = 0; i < clipes.length; i++) {
       if (/idle/.test((clipes[i].name || '').toLowerCase())) { alvo = clipes[i]; break; }
     }
@@ -83,6 +90,7 @@ o corpo é do anfitrião.</div>
     mix.update(0.4);
     node.updateMatrixWorld(true);
   }
+
 
   /* Que peças ESTÃO VISÍVEIS no boneco — é como o teste confere se a fusão
    * carrega marca das duas classes, em vez de eu olhar a foto e achar. */
