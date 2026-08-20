@@ -211,6 +211,11 @@ var JOGO = (typeof window !== 'undefined')
     curandeiro: { model: 'knight', show: ['1H_Sword', 'Badge_Shield', 'Knight_Cape'],
             scale: 1.00, tint: '#f0c05a', accent: '#fff2c2', weapon: '1H_Sword',
             concept: 'Paladina de armadura clara e escudo de brasão' },
+    // MINOTAURO (v3). Nasce ja com o corpo do Meshy — nao passou pela fase
+    // KayKit, entao nao tem `show` nem guarda-roupa a ligar.
+    minotauro: { model: 'meshy_minotauro',
+            scale: 1.22, tint: '#8a6a4f', accent: '#d9c39a',
+            concept: 'Minotauro de escudo enorme, que ergue muro no chao' },
     invocador: { model: 'meshy_invocador', show: ['Spellbook_open', '1H_Wand', 'Mage_Cape'],
             scale: 1.00, tint: '#3f8f8a', accent: '#8ff0d8', weapon: '1H_Wand',
             concept: 'Xamã de grimório aberto e varinha, sem chapéu' }
@@ -246,7 +251,9 @@ var JOGO = (typeof window !== 'undefined')
     bruxo:      { model: 'mage',      head: 'Mage_Hat',      cape: 'Mage_Cape',      hand: '1H_Wand' },
     espadachim: { model: 'rogue',     head: null,            cape: 'Rogue_Cape',     hand: 'Knife_Offhand' },
     curandeiro: { model: 'knight',    head: 'Knight_Helmet', cape: 'Knight_Cape',    hand: 'Badge_Shield' },
-    invocador:  { model: 'mage',      head: null,            cape: 'Mage_Cape',      hand: 'Spellbook_open' }
+    invocador:  { model: 'mage',      head: null,            cape: 'Mage_Cape',      hand: 'Spellbook_open' },
+    // O Minotauro empresta o ESCUDO na fusao — e a peca que diz o verbo dele.
+    minotauro:  { model: 'knight',    head: null,            cape: 'Knight_Cape',    hand: 'Spike_Shield' }
   };
 
   // Monstros — 3 fontes, escolhidas por id/família:

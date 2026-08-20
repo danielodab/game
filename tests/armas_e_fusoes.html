@@ -20,9 +20,9 @@
 DUAS classes que se fundiram? A peça de cabeça, a capa e a arma vêm do convidado;
 o corpo é do anfitrião.</div>
 <div id="st">rodando…</div>
-<h2>As 6 classes</h2>
+<h2>As classes</h2>
 <canvas id="fClasses" class="folha"></canvas>
-<h2>As 15 fusões — cada uma rotulada com os dois pais</h2>
+<h2>As fusões — cada uma rotulada com os dois pais</h2>
 <canvas id="fFusoes" class="folha"></canvas>
 <canvas id="cv" width="260" height="330"></canvas>
 
@@ -43,9 +43,9 @@ o corpo é do anfitrião.</div>
 (function () {
   'use strict';
   var TW = 260, TH = 330;
-  var CLASSES = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro', 'invocador'];
+  var CLASSES = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro', 'invocador', 'minotauro'];
   var PT = { sumo: 'Bárbaro', arqueiro: 'Batedor', bruxo: 'Bruxo',
-             espadachim: 'Ladino', curandeiro: 'Paladina', invocador: 'Xamã' };
+             espadachim: 'Ladino', curandeiro: 'Curandeiro', invocador: 'Xamã', minotauro: 'Minotauro' };
 
   var st = document.getElementById('st');
   var ren, sc, cam, problemas = [];
@@ -157,7 +157,9 @@ o corpo é do anfitrião.</div>
 
       // ---------------------------------------------------------- as 6 classes
       var f1 = document.getElementById('fClasses');
-      f1.width = 6 * TW; f1.height = TH;
+      // largura pela LISTA, nao pelo numero 6: com a setima classe a folha
+      // cortava o Minotauro fora do quadro.
+      f1.width = CLASSES.length * TW; f1.height = TH;
       var g1 = f1.getContext('2d');
       g1.fillStyle = '#0b0e12'; g1.fillRect(0, 0, f1.width, f1.height);
       var armasDe = {};
@@ -225,7 +227,7 @@ o corpo é do anfitrião.</div>
 
       st.className = problemas.length ? 'fail' : 'allpass';
       st.textContent = (problemas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') +
-        '6 classes e ' + pares.length + ' fusões' +
+        CLASSES.length + ' classes e ' + pares.length + ' fusões' +
         (problemas.length ? ' · ' + problemas.join(' | ') : ' · toda fusão mostra marca dos dois pais');
       window.__pronto = true;
     }

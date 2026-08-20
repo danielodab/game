@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-19T21:43:40",
+ "gerado": "2026-08-20T08:49:56",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -377,6 +377,12 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "meshy_minotauro",
+   "arquivo": "models-meshy/meshy_minotauro.glb",
+   "bytes": 1131236
+  },
+  {
+   "alvo": "MODELS",
    "chave": "meshy_bruxo",
    "arquivo": "models-meshy/meshy_bruxo.glb",
    "bytes": 1107700
@@ -565,6 +571,15 @@
    "run",
    "walk"
   ],
+  "meshy_minotauro": [
+   "Dodge",
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
   "meshy_bruxo": [
    "attack",
    "death",
@@ -574,6 +589,6 @@
    "walk"
   ]
  },
- "totalBytes": 23089492,
- "totalBase64": 30786112
+ "totalBytes": 24220728,
+ "totalBase64": 32294428
 }

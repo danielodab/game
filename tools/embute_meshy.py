@@ -84,6 +84,17 @@ CLASSES = [
         "Fall_Dead_from_Abdominal_Injury":  "death",
         "Crouch_and_Step_Back":             "Dodge",
     }),
+    # MINOTAURO (v3, o verbo BARRAR). Sete acoes no attack.glb, e a sobra
+    # `ForwardRight_Run_Fight` — avancar lutando — serve de esquiva.
+    ("minotauro", "minotauro", "attack.glb", {
+        "Idle_02":                "idle",
+        "Walking":                "walk",
+        "Running":                "run",
+        "Triple_Combo_Attack":    "attack",
+        "Hit_Reaction":           "HitReact",
+        "dying_backwards":        "death",
+        "ForwardRight_Run_Fight": "Dodge",
+    }),
     ("bruxo", "mago", "idle.glb", {
         "Idle_02":                 "idle",
         "Walking":                 "walk",
