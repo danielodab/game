@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-20T13:59:30",
+ "gerado": "2026-08-20T20:13:56",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -395,6 +395,60 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "sum_familiar",
+   "arquivo": "models-meshy-sum/sum_familiar.glb",
+   "bytes": 1135152
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sum_ember_hound",
+   "arquivo": "models-meshy-sum/sum_ember_hound.glb",
+   "bytes": 1217308
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sum_magma_colossus",
+   "arquivo": "models-meshy-sum/sum_magma_colossus.glb",
+   "bytes": 1188880
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sum_tide_nymph",
+   "arquivo": "models-meshy-sum/sum_tide_nymph.glb",
+   "bytes": 1069532
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sum_stone_sentinel",
+   "arquivo": "models-meshy-sum/sum_stone_sentinel.glb",
+   "bytes": 1120444
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sum_mountain_golem",
+   "arquivo": "models-meshy-sum/sum_mountain_golem.glb",
+   "bytes": 1091920
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sum_storm_falcon",
+   "arquivo": "models-meshy-sum/sum_storm_falcon.glb",
+   "bytes": 1263740
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sum_drowned_cistern",
+   "arquivo": "models-meshy-sum/sum_drowned_cistern.glb",
+   "bytes": 994008
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sum_storm_eye",
+   "arquivo": "models-meshy-sum/sum_storm_eye.glb",
+   "bytes": 1196328
+  },
+  {
+   "alvo": "MODELS",
    "chave": "q_frog",
    "arquivo": "models-monsters/q_frog.glb",
    "bytes": 581708
@@ -601,8 +655,80 @@
    "idle",
    "run",
    "walk"
+  ],
+  "sum_familiar": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "sum_ember_hound": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "sum_magma_colossus": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "sum_tide_nymph": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "sum_stone_sentinel": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "sum_mountain_golem": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "sum_storm_falcon": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "sum_drowned_cistern": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "sum_storm_eye": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
   ]
  },
- "totalBytes": 25626288,
- "totalBase64": 34168508
+ "totalBytes": 35903600,
+ "totalBase64": 47871604
 }

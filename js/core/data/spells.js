@@ -1702,13 +1702,13 @@ JOGO.DATA.spells = {
     fxKey: 'maelstromTrapSet'
   },
   'invocador-agua-30': {
-    id: 'invocador-agua-30', name: 'O Sorvedouro', element: 'agua', classId: 'invocador', unlockLevel: 30,
-    paCost: 6, cooldown: 4, castsPerTurn: 1,
-    range: { min: 2, max: 7, line: false, los: true, movable: false },
-    aoe: { shape: 'circle', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
-    effects: [ { type: 'pull', tiles: 4 }, { type: 'damage', element: 'agua', min: 68, max: 80, lifesteal: true }, { type: 'root', duration: 2 } ],
-    description: 'Abre o ralo do mundo: puxa tudo em raio 3 por 4 células, causa 68–80 de água com roubo de vida e prende todos por 2 turnos.',
-    flavor: 'Não invocou nada. Só abriu a tampa e deixou o que estava embaixo fazer o serviço.',
+    id: 'invocador-agua-30', name: 'Afogado da Cisterna', element: 'agua', classId: 'invocador', unlockLevel: 30,
+    paCost: 6, cooldown: 5, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'summon', monsterId: 'sum-drowned-cistern' }, { type: 'weatherShift', weather: 'chuva' } ],
+    description: 'Abre a tampa e deixa subir o que estava embaixo — e a chuva vem junto com ele.',
+    flavor: 'A cisterna devolve o que engoliu. Nunca um de cada vez.',
     fxKey: 'theMaelstrom'
   },
 
@@ -1826,13 +1826,13 @@ JOGO.DATA.spells = {
     fxKey: 'vortexTrapSet'
   },
   'invocador-ar-30': {
-    id: 'invocador-ar-30', name: 'Enxame de Falcões', element: 'ar', classId: 'invocador', unlockLevel: 30,
-    paCost: 6, cooldown: 4, castsPerTurn: 1,
-    range: { min: 3, max: 9, line: false, los: true, movable: false },
-    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
-    effects: [ { type: 'damage', element: 'ar', min: 58, max: 70 }, { type: 'push', tiles: 3 }, { type: 'chain', jumps: 3, falloff: 0.2, element: 'ar', min: 30, max: 38 } ],
-    description: 'Chama tudo que tem asa nos Fechos: 58–70 de ar em raio 2, 3 células de arremesso e bicadas de 30–38 que saltam por mais 3 inimigos.',
-    flavor: 'Vieram todos. Ele só precisava de dois, mas ninguém diz não a um enxame que já chegou.',
+    id: 'invocador-ar-30', name: 'Olho da Tormenta', element: 'ar', classId: 'invocador', unlockLevel: 30,
+    paCost: 6, cooldown: 5, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'summon', monsterId: 'sum-storm-eye' }, { type: 'weatherShift', weather: 'vendaval' } ],
+    description: 'Planta o miolo parado da tempestade no campo, e o vendaval se instala em volta dele.',
+    flavor: 'No meio da tempestade há um lugar parado. É onde ele mora.',
     fxKey: 'falconSwarm'
   },
 

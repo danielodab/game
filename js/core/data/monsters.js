@@ -1557,6 +1557,31 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'Um passo só, e a cruz ao redor racha: dano em área e pés presos por 1 turno.',
       flavor: 'A montanha não corre. A montanha chega.', fxKey: 'nova'
     },
+    'm-sum-drowned-drag': {
+      name: 'Braçada Funda', element: 'agua', paCost: 3, castsPerTurn: 1, range: [1, 4],
+      effects: [{ type: 'damage', element: 'agua', min: 20, max: 27 }, { type: 'pull', tiles: 2 }],
+      description: 'O braço pesado alcança longe e traz o alvo 2 células para perto.',
+      flavor: 'Não puxa para matar. Puxa para não ficar sozinho.'
+    },
+    'm-sum-drowned-weight': {
+      name: 'Peso de Água', element: 'agua', paCost: 4, castsPerTurn: 1, range: [1, 1],
+      effects: [{ type: 'damage', element: 'agua', min: 26, max: 34 }, { type: 'root', duration: 1 }],
+      description: 'Despeja o próprio corpo sobre quem está colado: dói e prende no chão por um turno.',
+      flavor: 'Afogar é uma questão de paciência.'
+    },
+    'm-sum-eye-gale': {
+      name: 'Ventania Curta', element: 'ar', paCost: 3, castsPerTurn: 1, range: [1, 3],
+      aoe: { shape: 'circle', size: 2 },
+      effects: [{ type: 'damage', element: 'ar', min: 16, max: 22 }, { type: 'push', tiles: 2 }],
+      description: 'Abre os braços e o que estiver em volta volta 2 células, machucado.',
+      flavor: 'Ele não expulsa por raiva. Expulsa por hábito.'
+    },
+    'm-sum-eye-calm': {
+      name: 'Miolo Parado', element: 'ar', paCost: 4, castsPerTurn: 1, range: [0, 2], targetSide: 'ally',
+      effects: [{ type: 'shield', value: 40, duration: 2 }],
+      description: 'Dentro da espiral o vento não bate: quem estiver perto ganha 40 de escudo por 2 turnos.',
+      flavor: 'No meio da tempestade há um lugar parado.'
+    },
     'm-sum-falcon-strike': {
       name: 'Bicada de Tormenta', element: 'ar', paCost: 3, castsPerTurn: 2,
       effects: [{ type: 'damage', element: 'ar', min: 12, max: 16 }, { type: 'push', tiles: 2 }],
@@ -1735,6 +1760,23 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-sum-golem-fist', 'm-sum-golem-quake'], ai: 'melee',
       traits: [{ type: 'pushImmune' }, { type: 'enrage', hpPct: 0.4, power: 30 }],
       summonOnly: true, xp: 0
+    },
+    // AS DUAS DE NIVEL 30 QUE FALTAVAM (v3), com arte do usuario.
+    'sum-drowned-cistern': {
+      name: 'Afogado da Cisterna', family: 'Rebanho do Invocador', element: 'agua', dungeonId: null,
+      description: 'Um corpo alto e encharcado, de ombros caídos, feito de água escura que não escorre. Onde devia haver rosto há um vazio, e dentro do tronco adivinham-se outros: mãos, ombros, meio rosto pressionados contra a superfície por dentro. Ninguém conseguiu contar quantos são.',
+      flavor: 'A cisterna devolve o que engoliu. Nunca um de cada vez.',
+      hp: 150, pa: 5, pp: 2, initiative: 26, dodge: 4, lock: 40,
+      resists: { fogo: 30, terra: -15 },
+      spells: ['m-sum-drowned-drag', 'm-sum-drowned-weight'], ai: 'melee', traits: [], summonOnly: true, xp: 0
+    },
+    'sum-storm-eye': {
+      name: 'Olho da Tormenta', family: 'Rebanho do Invocador', element: 'ar', dungeonId: null,
+      description: 'Uma figura de pé, de braços abertos, envolta numa espiral de vento que sobe do chão e se alarga acima da cabeça. O rosto é sereno e olha para baixo. Os pés ficam onde foram postos: ele não anda, e tudo o que chega perto volta.',
+      flavor: 'No meio da tempestade há um lugar parado. É onde ele mora.',
+      hp: 120, pa: 5, pp: 0, initiative: 34, dodge: 8, lock: 30,
+      resists: { terra: 30, fogo: -15 },
+      spells: ['m-sum-eye-gale', 'm-sum-eye-calm'], ai: 'ranged', traits: [{ type: 'pushImmune' }], summonOnly: true, xp: 0
     },
     'sum-storm-falcon': {
       name: 'Falcão da Tormenta', family: 'Rebanho do Invocador', element: 'ar', dungeonId: null,

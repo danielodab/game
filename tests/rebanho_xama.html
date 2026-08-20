@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o Rebanho do Invocador em campo</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font-size:12px;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:3px 8px;text-align:center}
+  th{background:#1b222c;color:#8895a6} td.n{text-align:left;color:#cdd6e2}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700} .cai{color:#ffcf5c}
+  #app{position:absolute;left:-4000px;top:0;width:420px;height:520px}
+  canvas#game-canvas{width:420px;height:520px;display:block}
+  #tira{margin-top:12px;border:1px solid #2b3542;background:#0b0d10}
+</style>
+</head>
+<body>
+<h1>O Rebanho do Invocador — as nove em campo</h1>
+<div class="sub">As nove invocações do Xamã, feitas pelo usuário no Meshy. Esta página cobra três
+coisas que ninguém vê olhando o arquivo: se o jogo está usando <em>o modelo dele</em> e não caindo
+num esqueleto substituto; se cada um dos seis papéis de animação achou um clipe PRÓPRIO em vez de
+cair no <code>idle</code>; e se o porte de cada criatura bate com o que o briefing pediu.</div>
+<div id="summary">montando…</div>
+<ul id="lista"></ul>
+<div id="tabela"></div>
+<canvas id="tira" width="1180" height="420"></canvas>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js','assets/embedded/models-meshy-sum.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? '✓ ' : '✗ ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    if (!res.length) { s.className = 'fail'; s.textContent = 'FALHOU — nenhuma checagem rodou'; return; }
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = (mau ? 'FALHOU' : 'TUDO PASSOU') + ' — ' + (res.length - mau) +
+      ' de ' + res.length + ' checagens ok';
+  }
+
+  // id da invocação -> altura que o briefing pediu, em metros
+  var REBANHO = [
+    ['sum-familiar',        1.10],
+    ['sum-ember-hound',     1.20],
+    ['sum-tide-nymph',      1.30],
+    ['sum-storm-falcon',    1.15],
+    ['sum-stone-sentinel',  2.10],
+    ['sum-drowned-cistern', 2.60],
+    ['sum-storm-eye',       2.70],
+    ['sum-magma-colossus',  2.85],
+    ['sum-mountain-golem',  2.90]
+  ];
+  var PAPEIS = ['idle', 'walk', 'run', 'attack', 'hit', 'die'];
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2, D = JOGO.DATA;
+    try {
+      new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: false });
+    } catch (e) { return check('WebGL disponível', false, e.message); }
+
+    // O ERRO DO CARREGAMENTO TEM DE APARECER. Engolir o callback e depois dizer
+    // só "estourou o tempo" transforma qualquer falha de um modelo em mistério:
+    // uma chave errada, um GLB corrompido e um simples atraso dão exatamente a
+    // mesma mensagem.
+    var erroCarga = null;
+    try { M.load(function (err) { if (err) erroCarga = err.message || String(err); }); }
+    catch (e) { erroCarga = e.message; }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try { ok = M && M.isReady(); } catch (e) {}
+      if (!ok && !erroCarga && Date.now() - t0 < 240000) return setTimeout(espera, 250);
+      var falhou = [];
+      try { falhou = (M.failed && M.failed()) || []; } catch (e) {}
+      var quantos = 0;
+      try { quantos = Object.keys(JOGO.MODELS || {}).length; } catch (e) {}
+      check('os modelos carregaram', !!ok,
+            (erroCarga ? 'erro: ' + erroCarga + ' · ' : '') +
+            quantos + ' chaves em JOGO.MODELS' +
+            (falhou.length ? ' · falharam: ' + falhou.slice(0, 4).join(', ') : ''));
+      mede();
+    })();
+
+    function mede() {
+      var linhas = [], semModelo = [], caindo = [], foraDoPorte = [];
+
+      REBANHO.forEach(function (par) {
+        var id = par[0], alvo = par[1];
+        var mon = (D.monsters || {})[id];
+        if (!mon) { semModelo.push(id + ' (não existe em DATA.monsters)'); return; }
+
+        var look = null, obj = null;
+        try { look = M.lookFor(id, {}); } catch (e) {}
+        try { obj = M.unit(id, {}); } catch (e) {}
+        if (!obj) { semModelo.push(id + ' (não montou)'); return; }
+
+        // O MODELO É O DELE? `MONSTER_FALLBACK` é o esqueletinho genérico, e ele
+        // aparece SEM ERRO NENHUM quando a chave não existe — foi assim que as
+        // cinco invocações de fusão passaram meses parecendo o mesmo boneco.
+        var proprio = !!(look && /^sum_/.test(look.model));
+
+        // CADA PAPEL ACHOU CLIPE PRÓPRIO? `clipFor` devolve o nome do clipe que a
+        // cadeia de substituição escolheu. Se `attack` devolve o mesmo que
+        // `idle`, é porque não existe ataque e o bicho vai atacar parado.
+        var doIdle = null, quaisCaem = [];
+        try { doIdle = obj.userData.clipFor('idle'); } catch (e) {}
+        var mapa = {};
+        PAPEIS.forEach(function (p) {
+          var c = null;
+          try { c = obj.userData.clipFor(p); } catch (e) {}
+          mapa[p] = c;
+          if (p !== 'idle' && (!c || c === doIdle)) quaisCaem.push(p);
+        });
+        if (quaisCaem.length) caindo.push(id + ': ' + quaisCaem.join(','));
+        if (!proprio) semModelo.push(id + ' → ' + (look && look.model));
+
+        var h = (obj.userData && obj.userData.height) || 0;
+        if (Math.abs(h - alvo) > 0.25) foraDoPorte.push(id + ' ' + h.toFixed(2) + ' m (pedia ' + alvo.toFixed(2) + ')');
+
+        linhas.push({ id: id, nome: mon.name, el: mon.element, h: h, alvo: alvo,
+                      modelo: look && look.model, mapa: mapa, cai: quaisCaem });
+      });
+
+      check('as nove invocações existem e montam', linhas.length === REBANHO.length,
+            (REBANHO.length - linhas.length) + ' faltando');
+      check('todas usam o modelo do usuário, não o esqueleto substituto',
+            semModelo.length === 0, semModelo.join(' · '));
+      check('nenhum papel de animação cai no idle',
+            caindo.length === 0, caindo.join(' · '));
+      check('o porte bate com o briefing (±25 cm)',
+            foraDoPorte.length === 0, foraDoPorte.join(' · '));
+
+      // as duas novas têm de estar no rebanho, senão o buraco de nível 30 volta
+      var temNovas = linhas.filter(function (l) {
+        return l.id === 'sum-drowned-cistern' || l.id === 'sum-storm-eye';
+      }).length;
+      check('as duas de nível 30 (Água e Ar) entraram', temNovas === 2, temNovas + ' de 2');
+
+      desenhaTabela(linhas);
+      desenhaTira(linhas);
+      fecha();
+    }
+
+    function desenhaTabela(linhas) {
+      var h = '<table><tr><th class="n">invocação</th><th>elem</th><th>altura</th><th>modelo</th>';
+      PAPEIS.forEach(function (p) { h += '<th>' + p + '</th>'; });
+      h += '</tr>';
+      linhas.forEach(function (l) {
+        h += '<tr><td class="n">' + l.nome + '</td><td>' + l.el + '</td>' +
+             '<td>' + l.h.toFixed(2) + ' m</td>' +
+             '<td class="' + (/^sum_/.test(l.modelo) ? 'ok' : 'no') + '">' + l.modelo + '</td>';
+        PAPEIS.forEach(function (p) {
+          var caiu = l.cai.indexOf(p) >= 0;
+          h += '<td class="' + (caiu ? 'cai' : 'ok') + '">' + (caiu ? 'cai' : '✓') + '</td>';
+        });
+        h += '</tr>';
+      });
+      document.getElementById('tabela').innerHTML = h + '</table>';
+    }
+
+    function desenhaTira(linhas) {
+      var c = document.getElementById('tira'), g = c.getContext('2d');
+      var W = c.width, H = c.height, PISO = H - 34, ESC = 108;
+      g.fillStyle = '#0b0d10'; g.fillRect(0, 0, W, H);
+      [[2.05, 'herói 2,05 m', '#3a4652'], [2.0, 'casa 2,0 m', '#26313c']].forEach(function (r) {
+        var y = PISO - r[0] * ESC;
+        g.strokeStyle = r[2]; g.setLineDash([4, 5]); g.beginPath();
+        g.moveTo(0, y); g.lineTo(W, y); g.stroke(); g.setLineDash([]);
+        g.fillStyle = r[2]; g.font = '10px monospace'; g.fillText(r[1], 6, y - 4);
+      });
+      g.strokeStyle = '#2b3542'; g.beginPath(); g.moveTo(0, PISO); g.lineTo(W, PISO); g.stroke();
+      var col = W / linhas.length;
+      var COR = { fogo: '#c4642a', agua: '#2e7e9e', terra: '#5c8a33', ar: '#6e5ca8', neutro: '#6e756f' };
+      linhas.forEach(function (l, i) {
+        var cx = col * (i + 0.5), alt = l.h * ESC, lg = Math.max(20, col * 0.42);
+        g.fillStyle = COR[l.el] || '#4a5866';
+        g.fillRect(cx - lg / 2, PISO - alt, lg, alt);
+        g.fillStyle = '#e8eef6'; g.font = '11px system-ui'; g.textAlign = 'center';
+        g.fillText(l.nome.length > 17 ? l.nome.slice(0, 16) + '…' : l.nome, cx, PISO + 16);
+        g.fillStyle = '#8895a6'; g.font = '10px monospace';
+        g.fillText(l.h.toFixed(2) + ' m', cx, PISO - alt - 5);
+        g.textAlign = 'left';
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>

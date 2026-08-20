@@ -349,17 +349,28 @@ var JOGO = (typeof window !== 'undefined')
     // ninfa da mare um esqueleto mago, falcao da tempestade uma vespa — e duas
     // dividiam o MESMO modelo: colosso de magma e golem da montanha eram o
     // mesmo boi, um laranja e outro verde.
-    'sum-familiar':       { model: 'q_hywirl',     scale: 0.60 },  // era raposa
-    'sum-ember-hound':    { model: 'q_demon',      scale: 0.72 },  // era lobo
-    'sum-magma-colossus': { model: 'q_dragon_ev',  scale: 0.95 },  // era boi
-    'sum-tide-nymph':     { model: 'q_squidle',    scale: 0.80 },  // era esqueleto mago
+    // O REBANHO DO INVOCADOR PASSA A SER DO USUARIO (v3).
+    //
+    // As nove sairam do Meshy, todas humanoides — a biblioteca de animacao dele
+    // e de esqueleto humanoide, e um bicho de quatro patas so teria clipe de
+    // andar. As escalas abaixo saem do briefing (`docs/ARTE_REBANHO_XAMA.html`)
+    // e a conta e sempre a mesma: altura em jogo = 1,80 m x escala. Os numeros
+    // consertam de passagem um defeito antigo — o "Colosso" media 1,71 m e o
+    // "Golem da Montanha" 1,30 m, os dois MENORES que um heroi de 2,05 m.
+    'sum-familiar':       { model: 'sum_familiar',       scale: 0.61 },  // 1,10 m
+    'sum-ember-hound':    { model: 'sum_ember_hound',    scale: 0.67 },  // 1,20 m
+    'sum-magma-colossus': { model: 'sum_magma_colossus', scale: 1.58 },  // 2,85 m
+    'sum-tide-nymph':     { model: 'sum_tide_nymph',     scale: 0.72 },  // 1,30 m
     // Os dois Golelings foram REPROVADOS de olho: pelo nome eu esperava pedra e
     // sao criaturas verdes de orelha grande, cara de goblin. Foi o mesmo erro de
     // escolher pelo nome que ja tinha me pegado antes. O pacote nao tem criatura
     // de pedra nenhuma; estas duas sao as mais minerais que ele oferece.
-    'sum-stone-sentinel': { model: 'q_cactoro',    scale: 0.62 },  // espinhoso e plantado
-    'sum-mountain-golem': { model: 'q_spikyblob',  scale: 0.72 },  // massa com espinhos de cristal
-    'sum-storm-falcon':   { model: 'q_birb',       scale: 0.75 }   // era vespa
+    'sum-stone-sentinel': { model: 'sum_stone_sentinel', scale: 1.17 },  // 2,10 m
+    'sum-mountain-golem': { model: 'sum_mountain_golem', scale: 1.61 },  // 2,90 m
+    'sum-storm-falcon':   { model: 'sum_storm_falcon',   scale: 0.64 },  // 1,15 m
+    // as duas novas, que fecham o buraco de nivel 30 na Agua e no Ar
+    'sum-drowned-cistern': { model: 'sum_drowned_cistern', scale: 1.44 }, // 2,60 m
+    'sum-storm-eye':       { model: 'sum_storm_eye',       scale: 1.50 }  // 2,70 m
   };
 
   // Familias: rede de seguranca quando um id novo aparecer nos dados.
