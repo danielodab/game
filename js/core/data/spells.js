@@ -1834,6 +1834,316 @@ JOGO.DATA.spells = {
     description: 'Chama tudo que tem asa nos Fechos: 58–70 de ar em raio 2, 3 células de arremesso e bicadas de 30–38 que saltam por mais 3 inimigos.',
     flavor: 'Vieram todos. Ele só precisava de dois, mas ninguém diz não a um enxame que já chegou.',
     fxKey: 'falconSwarm'
-  }
+  },
+
+
+  /* ======================================================================
+   * MINOTAURO — o verbo BARRAR (docs/CLASSES_V3.md)
+   *
+   * Escudo em quem precisa, MURO no chao para estragar o caminho de quem vem.
+   * O dano dele e baixo DE PROPOSITO: se o Minotauro bater bem, ele vira um
+   * Sumo melhor e as duas classes viram uma so. Ele nao mata — ele decide por
+   * onde o outro pode andar.
+   *
+   * Como os quatro caminhos se separam, para nao virarem o mesmo feitico
+   * pintado de outra cor:
+   *   fogo  — o muro QUEIMA quem encosta; escudo que devolve dano
+   *   agua  — o muro ESCORREGA (empurra quem passa perto); escudo que regenera
+   *   terra — o muro DURA mais e e mais largo; escudo grosso, o mais puro
+   *   ar    — o muro se MOVE junto com voce; escudo leve que da PP
+   * ====================================================================== */
+
+  'minotauro-neutro-1': {
+    id: 'minotauro-neutro-1', name: 'Marrada', element: 'neutro', classId: 'minotauro', unlockLevel: 0,
+    paCost: 3, cooldown: 0, castsPerTurn: 2,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'neutro', min: 12, max: 16 }, { type: 'push', tiles: 1 } ],
+    description: 'Abaixa a cabeça e empurra: 12–16 de dano neutro e 1 célula de empurrão.',
+    flavor: 'Ele não persegue. Ele decide onde você não vai passar.',
+    fxKey: 'shoulderCharge'
+  },
+  'minotauro-neutro-2': {
+    id: 'minotauro-neutro-2', name: 'Escudo de Ombro', element: 'neutro', classId: 'minotauro', unlockLevel: 0,
+    paCost: 2, cooldown: 1, castsPerTurn: 1,
+    range: { min: 0, max: 3, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 40, duration: 2 } ],
+    description: 'Põe o próprio escudo na frente de um aliado: 40 de escudo por 2 turnos.',
+    flavor: 'O escudo é dele. A vida que ele guarda é sua.',
+    fxKey: 'guardWard'
+  },
+  'minotauro-neutro-3': {
+    id: 'minotauro-neutro-3', name: 'Primeira Pedra', element: 'neutro', classId: 'minotauro', unlockLevel: 0,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 2, element: 'neutro' } ],
+    description: 'Ergue um muro numa célula vazia por 2 turnos — bloqueia passagem e visão.',
+    flavor: 'Não é para proteger ninguém. É para o outro ter de dar a volta.',
+    fxKey: 'stoneWall'
+  },
+
+  'minotauro-fogo-5': {
+    id: 'minotauro-fogo-5', name: 'Muro em Brasa', element: 'fogo', classId: 'minotauro', unlockLevel: 5,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 2, element: 'fogo' },
+               { type: 'trap', trapId: 'trap-fogo-brasa', duration: 2 } ],
+    description: 'Muro de 2 turnos que deixa brasa acesa em volta: quem encostar se queima.',
+    flavor: 'A pedra esfria. A brasa embaixo dela, não.',
+    fxKey: 'emberWall'
+  },
+  'minotauro-fogo-10': {
+    id: 'minotauro-fogo-10', name: 'Couro Fervente', element: 'fogo', classId: 'minotauro', unlockLevel: 10,
+    paCost: 2, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'shield', value: 55, duration: 2 },
+               { type: 'reflect', pct: 25, duration: 2 } ],
+    description: '55 de escudo e devolve 25% do dano recebido por 2 turnos.',
+    flavor: 'Bate nele e a sua mão volta doendo.',
+    fxKey: 'boilingHide'
+  },
+  'minotauro-fogo-12': {
+    id: 'minotauro-fogo-12', name: 'Chifrada Acesa', element: 'fogo', classId: 'minotauro', unlockLevel: 12,
+    paCost: 4, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 1, line: false, los: true, movable: false },
+    aoe: { shape: 'cone', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'fogo', min: 18, max: 24 }, { type: 'push', tiles: 1 } ],
+    description: '18–24 de fogo num leque à frente e 1 célula de empurrão em todos.',
+    flavor: 'Ele não corre atrás. Ele abre espaço.',
+    fxKey: 'burningHorn'
+  },
+  'minotauro-fogo-15': {
+    id: 'minotauro-fogo-15', name: 'Cerca de Fogo', element: 'fogo', classId: 'minotauro', unlockLevel: 15,
+    paCost: 4, cooldown: 3, castsPerTurn: 1,
+    range: { min: 1, max: 3, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 3 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 2, element: 'fogo' },
+               { type: 'damage', element: 'fogo', min: 12, max: 16 } ],
+    description: 'Levanta uma linha de 3 muros e queima 12–16 em quem estava no caminho.',
+    flavor: 'Três pedras, uma decisão: por aqui, não.',
+    fxKey: 'fireFence'
+  },
+  'minotauro-fogo-20': {
+    id: 'minotauro-fogo-20', name: 'Bigorna Viva', element: 'fogo', classId: 'minotauro', unlockLevel: 20,
+    paCost: 3, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 3, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 80, duration: 3 },
+               { type: 'reflect', pct: 35, duration: 3 } ],
+    description: '80 de escudo e 35% de dano devolvido, por 3 turnos, num aliado.',
+    flavor: 'Quem bate na bigorna aprende sobre a bigorna.',
+    fxKey: 'livingAnvil'
+  },
+  'minotauro-fogo-30': {
+    id: 'minotauro-fogo-30', name: 'A Forja Fechada', element: 'fogo', classId: 'minotauro', unlockLevel: 30,
+    paCost: 5, cooldown: 5, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'ring', size: 2 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'wall', duration: 3, element: 'fogo' },
+               { type: 'shield', value: 90, duration: 3 } ],
+    description: 'Fecha um anel de muros em raio 2 à sua volta e ganha 90 de escudo por 3 turnos.',
+    flavor: 'A forja não tem porta. Quem entrou, fica.',
+    fxKey: 'sealedForge'
+  },
+
+  'minotauro-agua-5': {
+    id: 'minotauro-agua-5', name: 'Muro Escorregadio', element: 'agua', classId: 'minotauro', unlockLevel: 5,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 2, element: 'agua' },
+               { type: 'trap', trapId: 'trap-agua-redemoinho', duration: 2 } ],
+    description: 'Muro de 2 turnos com o chão molhado em volta: quem chega perto escorrega.',
+    flavor: 'A pedra para o corpo. A poça decide o resto.',
+    fxKey: 'slickWall'
+  },
+  'minotauro-agua-10': {
+    id: 'minotauro-agua-10', name: 'Casco de Maré', element: 'agua', classId: 'minotauro', unlockLevel: 10,
+    paCost: 2, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 3, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 45, duration: 3 },
+               { type: 'regen', min: 8, max: 12, duration: 3 } ],
+    description: '45 de escudo e 8–12 de vida por turno, durante 3 turnos.',
+    flavor: 'A maré bate e devolve. Sempre devolve.',
+    fxKey: 'tideHusk'
+  },
+  'minotauro-agua-12': {
+    id: 'minotauro-agua-12', name: 'Empurrão de Onda', element: 'agua', classId: 'minotauro', unlockLevel: 12,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 2, line: false, los: true, movable: false },
+    aoe: { shape: 'cone', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'agua', min: 14, max: 19 }, { type: 'push', tiles: 2 } ],
+    description: '14–19 de água num leque e 2 células de empurrão.',
+    flavor: 'Ninguém segura água. Ela é que segura você.',
+    fxKey: 'waveShove'
+  },
+  'minotauro-agua-15': {
+    id: 'minotauro-agua-15', name: 'Dique', element: 'agua', classId: 'minotauro', unlockLevel: 15,
+    paCost: 4, cooldown: 3, castsPerTurn: 1,
+    range: { min: 1, max: 3, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 3 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 3, element: 'agua' }, { type: 'push', tiles: 1 } ],
+    description: 'Uma linha de 3 muros por 3 turnos, empurrando 1 célula quem estava ali.',
+    flavor: 'O rio não discute com o dique. Só faz a volta.',
+    fxKey: 'dike'
+  },
+  'minotauro-agua-20': {
+    id: 'minotauro-agua-20', name: 'Cisterna Guardada', element: 'agua', classId: 'minotauro', unlockLevel: 20,
+    paCost: 4, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'shield', value: 60, duration: 3 },
+               { type: 'regen', min: 10, max: 14, duration: 3 } ],
+    description: '60 de escudo e 10–14 de regeneração por turno, para você e quem estiver em raio 2.',
+    flavor: 'Ele guarda a água. A água guarda todo mundo.',
+    fxKey: 'guardedCistern'
+  },
+  'minotauro-agua-30': {
+    id: 'minotauro-agua-30', name: 'O Cerco de Água', element: 'agua', classId: 'minotauro', unlockLevel: 30,
+    paCost: 5, cooldown: 5, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'ring', size: 2 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 3, element: 'agua' },
+               { type: 'damage', element: 'agua', min: 16, max: 22 },
+               { type: 'push', tiles: 1 } ],
+    description: 'Anel de muros em raio 2 no alvo: 16–22 de água e 1 de empurrão em quem ficou dentro.',
+    flavor: 'Cercar não é prender. É escolher a saída por ele.',
+    fxKey: 'waterSiege'
+  },
+
+  'minotauro-terra-5': {
+    id: 'minotauro-terra-5', name: 'Menir', element: 'terra', classId: 'minotauro', unlockLevel: 5,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 4, element: 'terra' } ],
+    description: 'Ergue um muro que dura 4 turnos — o mais teimoso dos quatro caminhos.',
+    flavor: 'Puseram ali antes de haver estrada. A estrada é que deu a volta.',
+    fxKey: 'menhir'
+  },
+  'minotauro-terra-10': {
+    id: 'minotauro-terra-10', name: 'Casca de Pedra', element: 'terra', classId: 'minotauro', unlockLevel: 10,
+    paCost: 2, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 3, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 70, duration: 2 },
+               { type: 'resist', element: 'terra', value: 20, duration: 2 } ],
+    description: '70 de escudo — o mais grosso do jogo — e +20% de resistência a terra por 2 turnos.',
+    flavor: 'Não é armadura. É o chão dizendo que hoje não.',
+    fxKey: 'stoneBark'
+  },
+  'minotauro-terra-12': {
+    id: 'minotauro-terra-12', name: 'Baque de Casco', element: 'terra', classId: 'minotauro', unlockLevel: 12,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 0, line: false, los: false, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'self',
+    effects: [ { type: 'damage', element: 'terra', min: 15, max: 20 }, { type: 'root', duration: 1 } ],
+    description: '15–20 de terra em raio 1 e 0 PP por 1 turno em quem estiver perto.',
+    flavor: 'O chão treme uma vez. Quem estava em pé aprende.',
+    fxKey: 'hoofQuake'
+  },
+  'minotauro-terra-15': {
+    id: 'minotauro-terra-15', name: 'Muralha', element: 'terra', classId: 'minotauro', unlockLevel: 15,
+    paCost: 4, cooldown: 3, castsPerTurn: 1,
+    range: { min: 1, max: 3, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 3 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 4, element: 'terra' } ],
+    description: 'Três muros em linha, de pé por 4 turnos. Corta a sala em duas.',
+    flavor: 'Toda muralha é uma frase curta: não.',
+    fxKey: 'rampart'
+  },
+  'minotauro-terra-20': {
+    id: 'minotauro-terra-20', name: 'Fundação', element: 'terra', classId: 'minotauro', unlockLevel: 20,
+    paCost: 3, cooldown: 4, castsPerTurn: 1,
+    range: { min: 0, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 95, duration: 3 },
+               { type: 'resist', element: 'neutro', value: 15, duration: 3 } ],
+    description: '95 de escudo e +15% de resistência para você e os aliados em raio 1, por 3 turnos.',
+    flavor: 'Ele não levanta parede. Ele levanta o chão.',
+    fxKey: 'foundation'
+  },
+  'minotauro-terra-30': {
+    id: 'minotauro-terra-30', name: 'O Labirinto', element: 'terra', classId: 'minotauro', unlockLevel: 30,
+    paCost: 5, cooldown: 5, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'cross', size: 2 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 4, element: 'terra' },
+               { type: 'root', duration: 1 } ],
+    description: 'Cruz de muros de 4 turnos em torno do alvo, e 0 PP por 1 turno em quem ficou dentro.',
+    flavor: 'O labirinto é dele. Vocês só estão passando.',
+    fxKey: 'labyrinth'
+  },
+
+  'minotauro-ar-5': {
+    id: 'minotauro-ar-5', name: 'Parede de Sopro', element: 'ar', classId: 'minotauro', unlockLevel: 5,
+    paCost: 3, cooldown: 2, castsPerTurn: 1,
+    range: { min: 1, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 1, element: 'ar' },
+               { type: 'trap', trapId: 'trap-ar-rajada', duration: 2 } ],
+    description: 'Muro de 1 turno, mas erguido de longe — e deixa uma rajada armada em volta.',
+    flavor: 'Dura um instante. O instante era o que faltava.',
+    fxKey: 'gustWall'
+  },
+  'minotauro-ar-10': {
+    id: 'minotauro-ar-10', name: 'Escudo Leve', element: 'ar', classId: 'minotauro', unlockLevel: 10,
+    paCost: 2, cooldown: 2, castsPerTurn: 1,
+    range: { min: 0, max: 4, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 35, duration: 2 },
+               { type: 'buff', stat: 'pp', value: 1, duration: 2 } ],
+    description: '35 de escudo e +1 PP por 2 turnos — o escudo que não pesa.',
+    flavor: 'Proteger não é prender no lugar.',
+    fxKey: 'lightWard'
+  },
+  'minotauro-ar-12': {
+    id: 'minotauro-ar-12', name: 'Chifre de Vento', element: 'ar', classId: 'minotauro', unlockLevel: 12,
+    paCost: 3, cooldown: 1, castsPerTurn: 1,
+    range: { min: 1, max: 3, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 3 }, needsEmptyTile: false, targetSide: 'enemy',
+    effects: [ { type: 'damage', element: 'ar', min: 13, max: 18 }, { type: 'push', tiles: 2 } ],
+    description: '13–18 de ar numa linha de 3 e 2 células de empurrão.',
+    flavor: 'A investida passa. O vento dela continua.',
+    fxKey: 'windHorn'
+  },
+  'minotauro-ar-15': {
+    id: 'minotauro-ar-15', name: 'Cerca Volante', element: 'ar', classId: 'minotauro', unlockLevel: 15,
+    paCost: 3, cooldown: 3, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: true, los: true, movable: false },
+    aoe: { shape: 'line', size: 3 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 2, element: 'ar' } ],
+    description: 'Três muros em linha, erguidos a 6 células de distância — o maior alcance da classe.',
+    flavor: 'Ele fecha a porta do outro lado da sala.',
+    fxKey: 'flyingFence'
+  },
+  'minotauro-ar-20': {
+    id: 'minotauro-ar-20', name: 'Guarda Errante', element: 'ar', classId: 'minotauro', unlockLevel: 20,
+    paCost: 3, cooldown: 3, castsPerTurn: 1,
+    range: { min: 0, max: 5, line: false, los: true, movable: false },
+    aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'ally',
+    effects: [ { type: 'shield', value: 65, duration: 3 },
+               { type: 'buff', stat: 'pp', value: 2, duration: 3 } ],
+    description: '65 de escudo e +2 PP por 3 turnos. Protege quem precisa correr.',
+    flavor: 'A guarda dele anda com você.',
+    fxKey: 'wanderingGuard'
+  },
+  'minotauro-ar-30': {
+    id: 'minotauro-ar-30', name: 'O Curral de Vento', element: 'ar', classId: 'minotauro', unlockLevel: 30,
+    paCost: 5, cooldown: 5, castsPerTurn: 1,
+    range: { min: 1, max: 6, line: false, los: true, movable: false },
+    aoe: { shape: 'ring', size: 2 }, needsEmptyTile: false, targetSide: 'any',
+    effects: [ { type: 'wall', duration: 2, element: 'ar' },
+               { type: 'push', tiles: 2 },
+               { type: 'damage', element: 'ar', min: 14, max: 19 } ],
+    description: 'Anel de muros a até 6 células: empurra 2, causa 14–19 de ar e fecha o cerco.',
+    flavor: 'Curral não precisa ser grande. Precisa ser fechado.',
+    fxKey: 'windPen'
+  },
 
 };

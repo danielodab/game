@@ -117,7 +117,13 @@ JOGO.DATA.leveling = {
     assassino: { dodge: 40, lock: 16 },
     mago:      { dodge: 24, lock: 10 },
     suporte:   { dodge: 28, lock: 12 },
-    invocador: { dodge: 20, lock: 30 }
+    invocador: { dodge: 20, lock: 30 },
+    // GUARDIAO (v3, o Minotauro). Eu tinha posto 8/76, o que o fazia PRENDER
+    // mais que o tanque — e o §9-H diz que quem mais prende e o tanque. O
+    // pedido do usuario diz a mesma coisa com outras palavras: "sumo = tank ...
+    // esse prende mais o inimigo". O Minotauro nao e o que mais segura: e o que
+    // mais BARRA, e barrar mora no muro, nao na ficha.
+    guardiao:  { dodge: 14, lock: 62 }
   },
 
   /* Nível em que o herói escolhe o elemento — escolha permanente. */
@@ -163,7 +169,10 @@ JOGO.DATA.cards = {
   invocador:  { unlockCost: 10, dropWeight: 16, minDungeon: 1, starCosts: [5, 15, 30, 55, 90] },
   bruxo:      { unlockCost: 10, dropWeight: 16, minDungeon: 2, starCosts: [5, 15, 30, 55, 90] },
   espadachim: { unlockCost: 20, dropWeight: 24, minDungeon: 3, starCosts: [5, 15, 30, 55, 90] },
-  arqueiro:   { unlockCost: 25, dropWeight: 32, minDungeon: 4, starCosts: [5, 15, 30, 55, 90] }
+  arqueiro:   { unlockCost: 25, dropWeight: 32, minDungeon: 4, starCosts: [5, 15, 30, 55, 90] },
+  // O Minotauro e o mais caro: entra no 5o calabouco, depois de o jogador ja
+  // ter sentido falta de alguem que segure a linha.
+  minotauro:  { unlockCost: 30, dropWeight: 36, minDungeon: 5, starCosts: [5, 15, 30, 55, 90] }
 };
 
 /* ESTRELAS — bônus fixos e permanentes por classe, somados em Progress.effectiveStats.

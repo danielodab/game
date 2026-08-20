@@ -158,6 +158,46 @@ JOGO.DATA.classes = {
     },
     startsUnlocked: false,
     cardRarity: 'raro'
-  }
+  },
 
+  /* MINOTAURO — o verbo BARRAR (docs/CLASSES_V3.md).
+   *
+   * Escudo em quem precisa e MURO no chao para estragar o caminho de quem vem.
+   * Os numeros dele contam essa historia: vida alta como o Sumo, mas ESQUIVA 3
+   * — a menor do jogo, porque ele nao desvia, ele aguenta — e PP 2, o mais
+   * lento, porque quem barra escolhe um lugar e fica nele.
+   *
+   * O dano dos feiticos dele e baixo DE PROPOSITO. Se o Minotauro bater bem,
+   * ele vira um Sumo melhor e as duas classes viram uma so.
+   */
+  minotauro: {
+    id: 'minotauro',
+    name: 'Minotauro',
+    role: 'guardiao',
+    description: 'Grande demais para desviar e teimoso demais para recuar. Ergue muro onde nao havia caminho e poe o proprio escudo na frente de quem esta sangrando. Nao mata: decide por onde o outro pode andar.',
+    palette: { primary: '#8a6a4f', secondary: '#3a2e26', accent: '#d9c39a' },
+    startsUnlocked: false,
+    lore: 'Puseram o Minotauro para guardar a passagem porque ninguém mais coubera nela. Ele não conta os anos: conta as pedras que já ergueu e as que ainda vai erguer. Diz que labirinto não é para perder ninguém — é para que quem entrar tenha de escolher, e escolher devagar.',
+    // O contrato prende PP em 3–4, iniciativa em 10–90 e fixação em 0–40. Eu
+    // tinha escrito 2 / 6 / 45 para fazer dele o mais lento e o mais teimoso do
+    // jogo, e o validador acusou os três. As bandas existem porque PA e PP são
+    // o esqueleto do turno: quem sai delas não fica "diferente", fica quebrado.
+    // A identidade dele nao mora na ficha e sim no MURO: quem barra estraga o
+    // caminho, nao a rolagem de esquiva. O tanque continua sendo quem mais
+    // prende, como o §9-H exige e como o pedido do usuario diz.
+    stats: {
+      hp: 145, pa: 6, pp: 3, dodge: 8, lock: 38,
+      power: 0, initiative: 12,
+      resists: { fogo: 0, agua: 0, terra: 10, ar: 0, neutro: 5 }
+    },
+    // custo 30 (o mais caro do elenco) exige raridade epica — regra do contrato
+    cardRarity: 'epico',
+    baseSpells: ['minotauro-neutro-1', 'minotauro-neutro-2', 'minotauro-neutro-3'],
+    paths: {
+      fogo: ['minotauro-fogo-5', 'minotauro-fogo-10', 'minotauro-fogo-12', 'minotauro-fogo-15', 'minotauro-fogo-20', 'minotauro-fogo-30'],
+      agua: ['minotauro-agua-5', 'minotauro-agua-10', 'minotauro-agua-12', 'minotauro-agua-15', 'minotauro-agua-20', 'minotauro-agua-30'],
+      terra: ['minotauro-terra-5', 'minotauro-terra-10', 'minotauro-terra-12', 'minotauro-terra-15', 'minotauro-terra-20', 'minotauro-terra-30'],
+      ar: ['minotauro-ar-5', 'minotauro-ar-10', 'minotauro-ar-12', 'minotauro-ar-15', 'minotauro-ar-20', 'minotauro-ar-30']
+    }
+  }
 };

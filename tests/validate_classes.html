@@ -56,10 +56,14 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
   function has(o, k) { return o && Object.prototype.hasOwnProperty.call(o, k); }
 
   /* ------------------------------------------------------------- vocabulário */
-  var CLASS_IDS = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro', 'invocador'];
+  // SETE classes desde a reestruturacao (docs/CLASSES_V3.md): a Paladina virou o
+  // Curandeiro e entrou o Minotauro, dono do verbo BARRAR.
+  var CLASS_IDS = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro',
+                   'invocador', 'minotauro'];
   /* adendo v2.1: iniciais e custos de desbloqueio fixados pelo usuário */
   var STARTERS = ['sumo', 'curandeiro'];
-  var UNLOCK_COST = { sumo: 0, curandeiro: 0, invocador: 10, bruxo: 10, espadachim: 20, arqueiro: 25 };
+  var UNLOCK_COST = { sumo: 0, curandeiro: 0, invocador: 10, bruxo: 10, espadachim: 20,
+                      arqueiro: 25, minotauro: 30 };
   var ELEMENTS = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
   var PATH_ELEMENTS = ['fogo', 'agua', 'terra', 'ar'];
   var SHAPES = ['single', 'cross', 'circle', 'line', 'cone', 'ring'];
@@ -72,6 +76,9 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
 
   /* tipos de efeito FECHADOS (contrato v2: v1 + os 10 novos) e campos obrigatórios */
   var EFFECT_REQ = {
+    // MURO INVOCADO (v3): endurece uma celula por N turnos. Ver o verbo
+    // BARRAR em docs/CLASSES_V3.md e o efeito em engine.js.
+    wall: ['duration'],
     damage:         ['element', 'min', 'max'],
     heal:           ['min', 'max'],
     shield:         ['value', 'duration'],
@@ -120,7 +127,7 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
     TIERS.length === 6 && TIERS.join(',') === '5,10,12,15,20,30', TIERS.join(','));
 
   /* ========================================================= 2. classes ==== */
-  check('exatamente 6 classes', classIds.length === 6, 'tem ' + classIds.length);
+  check('tantas classes quantas o contrato lista', classIds.length === CLASS_IDS.length, 'tem ' + classIds.length);
   CLASS_IDS.forEach(function (cid) { check('classe ' + cid + ' existe', !!D.classes[cid]); });
   classIds.forEach(function (cid) {
     check('classe ' + cid + ' é um dos ids do contrato', CLASS_IDS.indexOf(cid) >= 0);
@@ -205,7 +212,7 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
 
   /* =============================================== 3. contagem de feitiços = */
   var refCount = Object.keys(referenced).length;
-  check('162 feitiços jogáveis referenciados (18 neutros + 144 elementais)', refCount === 162, 'tem ' + refCount);
+  check('feitiços jogáveis = 27 por classe (3 neutros + 4 caminhos × 6)', refCount === (CLASS_IDS.length * 27), 'tem ' + refCount);
 
   var trapPayloadIds = {};
   spellIds.forEach(function (sid) {
@@ -672,7 +679,7 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
     'total ' + L.xpTable[L.xpTable.length - 1] + ' (esperado ' + FROZEN_XP_TABLE[29] + ')');
 
   var cardIds = Object.keys(D.cards);
-  check('cards cobre as 6 classes', cardIds.length === 6 &&
+  check('cards cobre todas as classes', cardIds.length === CLASS_IDS.length &&
     CLASS_IDS.every(function (c) { return !!D.cards[c]; }), cardIds.join(','));
   cardIds.forEach(function (cid) {
     var cd = D.cards[cid], cls = D.classes[cid];
