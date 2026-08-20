@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — as regras elementais da fusão</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font-size:12px;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:3px 8px;text-align:right}
+  th{background:#1b222c;color:#8895a6} td.k{text-align:left;color:#cdd6e2}
+</style>
+</head>
+<body>
+<h1>As regras elementais da fusão</h1>
+<div class="sub">Três regras, ditas pelo Daniel: <b>(1)</b> fundir dois heróis do MESMO elemento aumenta o
+dano daquele elemento; <b>(2)</b> fundir elementos DIFERENTES faz o golpe sair com os dois elementos
+unidos; <b>(3)</b> isso conversa com a resistência do bicho — quem resiste a um elemento só segura
+metade de um golpe misto, e segura um golpe puro inteiro. As duas primeiras são regras de composição
+e se cobram nos dados; a terceira é do motor e se cobra em dano recebido de verdade.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+<div id="tabela"></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js','js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? '✓ ' : '✗ ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    if (!res.length) { s.className = 'fail'; s.textContent = 'FALHOU — nenhuma checagem rodou'; return; }
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = (mau ? 'FALHOU' : 'TUDO PASSOU') + ' — ' + (res.length - mau) +
+      ' de ' + res.length + ' checagens ok';
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var F = JOGO.Fusion, D = JOGO.DATA, E = JOGO.Engine;
+    var ELEMS = ['fogo', 'agua', 'terra', 'ar'];
+    var pares = Object.keys(D.fusionForms || {});
+    check('há duplas de classe para examinar', pares.length > 0, pares.length + ' duplas');
+
+    function danoPorElemento(sp) {
+      var m = {};
+      (sp.effects || []).forEach(function (ef) {
+        if (ef.type !== 'damage' && ef.type !== 'poison' && ef.type !== 'chain') return;
+        m[ef.element] = (m[ef.element] || 0) + ((ef.min || 0) + (ef.max || 0)) / 2;
+      });
+      return m;
+    }
+    function formaDoTier(par, tier) {
+      var fs = D.fusionForms[par] || [];
+      for (var i = 0; i < fs.length; i++) if (fs[i].tier === tier) return fs[i];
+      return null;
+    }
+
+    // ---------------------------------------------------------------- REGRA 1
+    // Mesmo elemento bate MAIS FORTE naquele elemento. Compara-se a MESMA forma
+    // da MESMA dupla: só o par de elementos muda, então o coeficiente da dupla,
+    // o tier e o nível são idênticos dos dois lados e não podem explicar a
+    // diferença. O que sobra na conta é o bônus de pureza.
+    var linhas = [], falhas1 = 0, comparadas = 0;
+    pares.forEach(function (par) {
+      var puro = F.spellsFor(par, 'fogo+fogo', 30) || [];
+      var misto = F.spellsFor(par, 'ar+fogo', 30) || [];
+      puro.forEach(function (sp) {
+        var par2 = null;
+        for (var i = 0; i < misto.length; i++) if (misto[i].tier === sp.tier) par2 = misto[i];
+        if (!par2) return;
+        var a = danoPorElemento(sp).fogo || 0;
+        var b = danoPorElemento(par2).fogo || 0;
+        if (a <= 0 || b <= 0) return;
+        comparadas++;
+        if (!(a > b)) falhas1++;
+        if (linhas.length < 8) linhas.push([par + ' t' + sp.tier, b.toFixed(1), a.toFixed(1),
+                                            ((a / b - 1) * 100).toFixed(0) + '%']);
+      });
+    });
+    check('há formas comparáveis entre puro e misto', comparadas > 20, comparadas + ' formas');
+    check('REGRA 1 — mesmo elemento fere mais naquele elemento',
+          comparadas > 0 && falhas1 === 0, falhas1 + ' formas não subiram');
+    check('o bônus de pureza está declarado no código', F.PURO_MULT > 1,
+          'PURO_MULT = ' + F.PURO_MULT);
+
+    // O bônus NÃO pode tocar cura nem escudo: se tocasse, elemento puro seria a
+    // escolha certa para tudo e a mistura nunca teria razão de existir.
+    var curaPura = 0, curaMista = 0;
+    pares.forEach(function (par) {
+      (F.spellsFor(par, 'fogo+fogo', 30) || []).forEach(function (sp) {
+        (sp.effects || []).forEach(function (ef) {
+          if (ef.type === 'heal') curaPura += ((ef.min || 0) + (ef.max || 0)) / 2;
+          if (ef.type === 'shield') curaPura += (ef.value || 0);
+        });
+      });
+      (F.spellsFor(par, 'ar+fogo', 30) || []).forEach(function (sp) {
+        (sp.effects || []).forEach(function (ef) {
+          if (ef.type === 'heal') curaMista += ((ef.min || 0) + (ef.max || 0)) / 2;
+          if (ef.type === 'shield') curaMista += (ef.value || 0);
+        });
+      });
+    });
+    check('o bônus de pureza NÃO toca cura nem escudo',
+          Math.abs(curaPura - curaMista) < 1,
+          'puro ' + curaPura.toFixed(0) + ' · misto ' + curaMista.toFixed(0));
+
+    // ---------------------------------------------------------------- REGRA 2
+    // Toda forma OFENSIVA de uma mistura fere com os dois elementos.
+    //
+    // Formas de APOIO ficam de fora, e por um motivo: elas recebem
+    // `blend.riderSupport` no lugar de `blend.rider` (senão um rider ofensivo
+    // cairia sobre o próprio aliado curado), e é o rider que carrega o segundo
+    // elemento. Algumas delas machucam de raspão — o muro que sobe empurrando
+    // quem estava colado, por exemplo —, mas esse arranhão não é O GOLPE da
+    // fusão, que é do que a regra fala.
+    var faltando = [], checadas = 0;
+    pares.forEach(function (par) {
+      for (var a = 0; a < ELEMS.length; a++) for (var b = 0; b < ELEMS.length; b++) {
+        if (a === b) continue;
+        var chave = ELEMS[a] + '+' + ELEMS[b];
+        (F.spellsFor(par, chave, 30) || []).forEach(function (sp) {
+          var forma = formaDoTier(par, sp.tier);
+          if (!forma || forma.riderMode === 'support') return;
+          var m = danoPorElemento(sp);
+          if (!Object.keys(m).length) return;      // forma que não fere
+          checadas++;
+          if (!(m[ELEMS[a]] > 0 && m[ELEMS[b]] > 0)) {
+            if (faltando.length < 5) faltando.push(par + ' ' + chave + ' t' + sp.tier +
+                                                   ' [' + Object.keys(m).join(',') + ']');
+          }
+        });
+      }
+    });
+    check('há golpes mistos para examinar', checadas > 100, checadas + ' golpes');
+    check('REGRA 2 — golpe de mistura fere com OS DOIS elementos',
+          faltando.length === 0, faltando.join(' · '));
+
+    // ---------------------------------------------------------------- REGRA 3
+    // A resistência do bicho lê elemento por elemento. Um bicho couraçado
+    // contra fogo tem de segurar MAIS de um golpe puro de fogo do que do mesmo
+    // golpe vindo de uma mistura ar+fogo — porque metade da mistura passa por
+    // uma porta que ele não trancou.
+    var couraça = { resists: { fogo: 60, agua: 0, terra: 0, ar: 0, neutro: 0 }, effects: [] };
+    check('o motor lê resistência por elemento',
+          E.effResist(couraça, 'fogo') === 60 && E.effResist(couraça, 'ar') === 0,
+          'fogo ' + E.effResist(couraça, 'fogo') + ' · ar ' + E.effResist(couraça, 'ar'));
+
+    // A pergunta certa NÃO é "a mistura passa mais dano?" — isso depende também
+    // do bônus de pureza, que empurra o golpe puro para cima e pode compensar a
+    // couraça. A pergunta da regra 3 é sobre a COURAÇA: que FRAÇÃO do golpe ela
+    // consegue segurar. Um golpe todo de fogo contra 60% de fogo perde 60%. Um
+    // golpe meio ar meio fogo perde menos, porque metade dele entra por uma
+    // porta que o bicho não trancou. Essa comparação isola a resistência.
+    function fracaoBloqueada(sp) {
+      var bruto = 0, passa = 0, m = danoPorElemento(sp);
+      for (var el in m) {
+        bruto += m[el];
+        passa += m[el] * (1 - E.effResist(couraça, el) / 100);
+      }
+      return bruto > 0 ? (1 - passa / bruto) : 0;
+    }
+    var vantagens = 0, casos = 0;
+    pares.forEach(function (par) {
+      var puro = F.spellsFor(par, 'fogo+fogo', 30) || [];
+      var misto = F.spellsFor(par, 'ar+fogo', 30) || [];
+      puro.forEach(function (sp) {
+        var o = null;
+        for (var i = 0; i < misto.length; i++) if (misto[i].tier === sp.tier) o = misto[i];
+        if (!o) return;
+        var forma = formaDoTier(par, sp.tier);
+        if (!forma || forma.riderMode === 'support') return;
+        if (!Object.keys(danoPorElemento(sp)).length) return;
+        casos++;
+        if (fracaoBloqueada(o) < fracaoBloqueada(sp)) vantagens++;
+      });
+    });
+    check('REGRA 3 — a couraça de um elemento só segura MENOS de um golpe misto',
+          casos > 0 && vantagens === casos,
+          vantagens + ' de ' + casos + ' golpes');
+
+    // ---------------------------------------------------------------- REGRA 4
+    // O CLIMA QUE SE ANULA.
+    //
+    // "Fundi água com fogo e começou a chover: como ele ganharia vida pela água
+    // e perderia pelo fogo, não acontece nada." O motor guarda `unit.elements`
+    // (os DOIS da mistura) e a chuva favorece água e prejudica fogo — os dois
+    // tiques se cancelam e o evento nem chega a ser emitido. Isto se cobra
+    // rodando turnos de verdade, não lendo a tabela: o que importa é o PV no
+    // fim, e ele passa por cura, veneno, regeneração e tudo mais.
+    (function () {
+      var P = JOGO.Progress;
+      P.reset();
+      ['sumo', 'invocador'].forEach(function (c) { try { P.unlockClass(c); } catch (e) {} });
+      var st;
+      try { st = E.createBattle('greenhouse', 0, P.battleParty(['sumo', 'invocador'])); }
+      catch (e) { return check('montei uma batalha para o teste de clima', false, e.message); }
+      st.weather = 'chuva';
+
+      var herois = st.units.filter(function (u) { return u.side === 'player'; });
+      if (herois.length < 2) return check('há dois heróis para o teste de clima', false, '');
+
+      // um SÓ de água, um SÓ de fogo, e o mesmo estado de partida
+      var soAgua = herois[0], soFogo = herois[1];
+      soAgua.element = 'agua'; soAgua.elements = ['agua'];
+      soFogo.element = 'fogo'; soFogo.elements = ['fogo'];
+      soAgua.hp = soFogo.hp = 100; soAgua.hpMax = soFogo.hpMax = 200;
+
+      function rodaUmaVolta() {
+        for (var i = 0; i < st.order.length + 1; i++) { try { E.endTurn(st); } catch (e) {} }
+      }
+      rodaUmaVolta();
+      check('REGRA 4 (controle) — na chuva, quem é só ÁGUA ganha vida',
+            soAgua.hp > 100, '100 → ' + soAgua.hp);
+      check('REGRA 4 (controle) — na chuva, quem é só FOGO perde vida',
+            soFogo.hp < 100, '100 → ' + soFogo.hp);
+
+      // agora o mesmo herói, mas fundido: água E fogo
+      var duplo = soFogo;
+      duplo.elements = ['agua', 'fogo'];
+      duplo.hp = 100;
+      var antes = duplo.hp;
+      rodaUmaVolta();
+      check('REGRA 4 — na chuva, a fusão ÁGUA+FOGO não ganha nem perde',
+            duplo.hp === antes, antes + ' → ' + duplo.hp);
+    })();
+
+    // ------------------------------------------------------- tabela de amostra
+    var h = '<table><tr><th class="k">forma</th><th>fogo (misto)</th><th>fogo (puro)</th><th>ganho</th></tr>';
+    linhas.forEach(function (l) {
+      h += '<tr><td class="k">' + l[0] + '</td><td>' + l[1] + '</td><td>' + l[2] +
+           '</td><td>' + l[3] + '</td></tr>';
+    });
+    document.getElementById('tabela').innerHTML = h + '</table>';
+    fecha();
+  });
+})();
+</script>
+</body>
+</html>

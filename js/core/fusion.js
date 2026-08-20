@@ -86,27 +86,27 @@ var JOGO = (typeof window !== 'undefined')
   // ajustar dois parametros a dois pontos medidos, ou seja, o teste passaria por
   // construcao. Fica registrado em vez de escondido.
   Fusion.PAIR_TUNE = {
-    'arqueiro+bruxo':        1.148,
-    'arqueiro+curandeiro':   0.707,
-    'arqueiro+espadachim':   1.341,
-    'arqueiro+invocador':    1.484,
-    'arqueiro+minotauro':    1.842,
-    'arqueiro+sumo':         0.792,
-    'bruxo+curandeiro':      0.982,
-    'bruxo+espadachim':      1.204,
-    'bruxo+invocador':       1.744,
-    'bruxo+minotauro':       1.120,
-    'bruxo+sumo':            1.006,
-    'curandeiro+espadachim': 0.535,
+    'arqueiro+bruxo':        1.118,
+    'arqueiro+curandeiro':   0.705,
+    'arqueiro+espadachim':   1.310,
+    'arqueiro+invocador':    1.185,
+    'arqueiro+minotauro':    1.809,
+    'arqueiro+sumo':         0.793,
+    'bruxo+curandeiro':      0.987,
+    'bruxo+espadachim':      1.259,
+    'bruxo+invocador':       1.696,
+    'bruxo+minotauro':       0.914,
+    'bruxo+sumo':            0.972,
+    'curandeiro+espadachim': 0.563,
     'curandeiro+invocador':  1.525,
-    'curandeiro+minotauro':  1.157,
-    'curandeiro+sumo':       0.785,
-    'espadachim+invocador':  1.251,
-    'espadachim+minotauro':  1.118,
-    'espadachim+sumo':       0.457,
+    'curandeiro+minotauro':  1.166,
+    'curandeiro+sumo':       0.638,
+    'espadachim+invocador':  1.208,
+    'espadachim+minotauro':  1.109,
+    'espadachim+sumo':       0.432,
     'invocador+minotauro':   4.000,
-    'invocador+sumo':        1.096,
-    'minotauro+sumo':        1.128
+    'invocador+sumo':        1.088,
+    'minotauro+sumo':        1.131
   };
 
   function E() { return JOGO.Engine; }
@@ -187,9 +187,32 @@ var JOGO = (typeof window !== 'undefined')
 
   var SCALED_MINMAX = { damage: 1, heal: 1, poison: 1, chain: 1 };
 
-  function scaleEffect(eff, factor) {
+  // ELEMENTO PURO — o bônus de fundir dois heróis do MESMO elemento.
+  //
+  // A regra do jogo tem duas metades e elas se equilibram: mistura dá
+  // FLEXIBILIDADE (dois elementos batendo, então a resistência do bicho só
+  // segura metade do golpe), elemento puro dá FORÇA BRUTA (um elemento só, mas
+  // maior). Sem esta metade, fundir dois piromantes não valia nada: os dois
+  // tokens viravam 'fogo' e o golpe saía igual ao de qualquer outra dupla,
+  // enquanto o bicho resistente a fogo segurava o golpe INTEIRO. Era a pior
+  // combinação possível — menos flexível E não mais forte.
+  //
+  // Vale só para o DANO daquele elemento: cura e escudo não são elementais, e
+  // multiplicá-los faria do elemento puro a escolha certa para tudo.
+  var PURO_MULT = 1.25;
+
+  function bonusPureza(elements) {
+    return (elements && elements.length > 1 && elements[0] === elements[1]) ? PURO_MULT : 1;
+  }
+  Fusion.PURO_MULT = PURO_MULT;
+
+  function scaleEffect(eff, factor, puro) {
     var out = {};
     for (var k in eff) if (Object.prototype.hasOwnProperty.call(eff, k)) out[k] = eff[k];
+    // O bônus de pureza só toca o que FERE, e só na cor certa.
+    if (puro && puro > 1 && (out.type === 'damage' || out.type === 'poison' || out.type === 'chain')) {
+      factor = factor * puro;
+    }
     if (SCALED_MINMAX[out.type]) {
       if (typeof out.min === 'number') out.min = Math.max(1, Math.round(out.min * factor));
       if (typeof out.max === 'number') out.max = Math.max(out.min || 1, Math.round(out.max * factor));
@@ -232,15 +255,16 @@ var JOGO = (typeof window !== 'undefined')
       var effects = [];
       var mech = form.mechanic || [];
       var i;
+      var puro = bonusPureza(elements);
       for (i = 0; i < mech.length; i++) {
-        effects.push(scaleEffect(resolveTokens(mech[i], elements), factor));
+        effects.push(scaleEffect(resolveTokens(mech[i], elements), factor, puro));
       }
       // Formas de apoio (alvo aliado/próprio) usam `blend.riderSupport`: o rider
       // ofensivo da mistura cairia sobre o próprio aliado curado.
       var rider = (form.riderMode === 'support' && blend.riderSupport)
         ? blend.riderSupport : (blend.rider || []);
       for (i = 0; i < rider.length; i++) {
-        effects.push(scaleEffect(resolveTokens(rider[i], elements), factor));
+        effects.push(scaleEffect(resolveTokens(rider[i], elements), factor, puro));
       }
       out.push({
         id: 'fus:' + kKey + ':' + eKey + ':' + tier,

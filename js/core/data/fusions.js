@@ -110,7 +110,7 @@ JOGO.DATA = JOGO.DATA || {};
     'agua+ar': {
       id: 'agua+ar', affix: 'Salgado', elements: ['agua', 'ar'],
       description: 'A ventania puxa a água para dentro de si: cada golpe chega encharcado de sal e empurra quem apanha mais um passo para trás.',
-      rider: [d('agua', 6, 10), ps(1)],
+      rider: [d('agua', 4, 6), d('ar', 3, 5), ps(1)],
       riderSupport: [bf('pp', 1, 2), cl(['poison'])],
       palette: { primary: '#4fa8b8', secondary: '#1b3f4d', accent: '#d8fff2' },
       fxKey: 'blend-salgado'
@@ -126,7 +126,7 @@ JOGO.DATA = JOGO.DATA || {};
     'agua+neutro': {
       id: 'agua+neutro', affix: 'Turvo', elements: ['agua', 'neutro'],
       description: 'Metade do corpo ainda não escolheu elemento: a água carrega o golpe sem cor, e a lama que sobra desmancha escudos.',
-      rider: [d('neutro', 4, 7), dsh()],
+      rider: [d('agua', 3, 5), d('neutro', 2, 3), dsh()],
       riderSupport: [rg(4, 6, 2)],
       palette: { primary: '#527d8c', secondary: '#232f36', accent: '#c9dde4' },
       fxKey: 'blend-turvo'
@@ -134,7 +134,7 @@ JOGO.DATA = JOGO.DATA || {};
     'agua+terra': {
       id: 'agua+terra', affix: 'Lamacento', elements: ['agua', 'terra'],
       description: 'Água e terra dão lama: pesa nos pés de quem apanha e cola o inimigo no chão por um instante.',
-      rider: [d('terra', 6, 9), rt(1)],
+      rider: [d('terra', 4, 6), d('agua', 3, 4), rt(1)],
       riderSupport: [sh(14, 2)],
       palette: { primary: '#6d6a3f', secondary: '#2c2a1c', accent: '#b8c48a' },
       fxKey: 'blend-lamacento'
@@ -150,7 +150,7 @@ JOGO.DATA = JOGO.DATA || {};
     'ar+fogo': {
       id: 'ar+fogo', affix: 'Incendiário', elements: ['ar', 'fogo'],
       description: 'Fogo com vento embaixo vira sopro de forja: a labareda alonga o alcance e o estouro joga o alvo para longe.',
-      rider: [d('fogo', 7, 11), ps(1)],
+      rider: [d('fogo', 5, 7), d('ar', 3, 5), ps(1)],
       riderSupport: [bf('power', 12, 2)],
       palette: { primary: '#ff8c3a', secondary: '#4a2418', accent: '#ffe08a' },
       fxKey: 'blend-incendiario'
@@ -158,7 +158,7 @@ JOGO.DATA = JOGO.DATA || {};
     'ar+neutro': {
       id: 'ar+neutro', affix: 'Ligeiro', elements: ['ar', 'neutro'],
       description: 'Sem elemento definido do outro lado, sobra pressa: o golpe é leve, mas chega antes e desarruma a formação.',
-      rider: [d('neutro', 4, 7), ps(1)],
+      rider: [d('ar', 3, 5), d('neutro', 2, 3), ps(1)],
       riderSupport: [bf('pp', 1, 1)],
       palette: { primary: '#b9c9d0', secondary: '#39424a', accent: '#f2fbff' },
       fxKey: 'blend-ligeiro'
@@ -166,7 +166,7 @@ JOGO.DATA = JOGO.DATA || {};
     'ar+terra': {
       id: 'ar+terra', affix: 'Arenoso', elements: ['ar', 'terra'],
       description: 'Rivais fundidos viram tempestade de areia: o grão entra na ferida e faz doer tudo o que vier depois.',
-      rider: [d('ar', 5, 8), mk(5, 2, 3)],
+      rider: [d('ar', 3, 5), d('terra', 3, 4), mk(5, 2, 3)],
       riderSupport: [rs('ar', 10, 2), rs('terra', 10, 2)],
       palette: { primary: '#c9ac6b', secondary: '#463a24', accent: '#f2e3bd' },
       fxKey: 'blend-arenoso'
@@ -182,7 +182,7 @@ JOGO.DATA = JOGO.DATA || {};
     'fogo+neutro': {
       id: 'fogo+neutro', affix: 'Chamuscado', elements: ['fogo', 'neutro'],
       description: 'Uma metade arde, a outra ainda é só força bruta: o golpe sai sem cor, mas sai quente e sem economia.',
-      rider: [d('neutro', 5, 9)],
+      rider: [d('fogo', 4, 6), d('neutro', 2, 4)],
       riderSupport: [bf('power', 10, 2)],
       palette: { primary: '#a06a4a', secondary: '#332018', accent: '#ffd0a0' },
       fxKey: 'blend-chamuscado'
@@ -206,7 +206,7 @@ JOGO.DATA = JOGO.DATA || {};
     'neutro+terra': {
       id: 'neutro+terra', affix: 'Bruto', elements: ['neutro', 'terra'],
       description: 'Metade pedra, metade nada: o que falta em elemento sobra em peso — quem apanha fica onde está.',
-      rider: [d('neutro', 4, 7), rt(1)],
+      rider: [d('terra', 3, 5), d('neutro', 2, 3), rt(1)],
       riderSupport: [sh(12, 2)],
       palette: { primary: '#8a7a5c', secondary: '#2b2519', accent: '#d8cba8' },
       fxKey: 'blend-bruto'
