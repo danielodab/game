@@ -56,7 +56,9 @@
   var SIDES = ['any', 'enemy', 'ally', 'self'];
   var WEATHERS = ['calmo', 'chuva', 'estiagem', 'vendaval', 'tremor'];
   var CLEANSE_KINDS = ['poison', 'root', 'mark', 'invisible', 'shield', 'buff', 'taunt', 'reflect', 'regen'];
-  var CLASSES = ['arqueiro', 'bruxo', 'curandeiro', 'espadachim', 'invocador', 'sumo'];
+  // SETE desde a v3: entrou o Minotauro (docs/CLASSES_V3.md)
+  var CLASSES = ['arqueiro', 'bruxo', 'curandeiro', 'espadachim', 'invocador',
+                 'minotauro', 'sumo'];
   // 10 e 15 entraram para a escada da fusao bater com a das classes (5/10/12/15/20/30):
   // antes disso a dupla fundida ia do nivel 12 ao 19 sem ganhar feitico nenhum.
   var TIERS = [0, 5, 10, 12, 15, 20, 30];
@@ -72,6 +74,9 @@
     damage: ['element', 'min', 'max'],
     heal: ['min', 'max'],
     shield: ['value', 'duration'],
+    // MURO INVOCADO (v3) — verbo BARRAR do Minotauro. Ver engine.js e
+    // docs/CLASSES_V3.md.
+    wall: ['duration'],
     buff: ['stat', 'value', 'duration'],
     resist: ['element', 'value', 'duration'],
     push: ['tiles'],
@@ -166,7 +171,11 @@
   check('DATA.fusionBlends existe', !!FB && typeof FB === 'object');
   if (!FF || !FB) { render([]); return; }
 
-  // as 15 duplas de classe esperadas, em ordem alfabética
+  // as duplas de classe esperadas, em ordem alfabética.
+  // O NUMERO sai da conta, nao de uma constante: sao as combinacoes 2 a 2 das
+  // classes, C(n,2). Com 6 classes eram 15; com o Minotauro sao 21. Cravar 15
+  // aqui quebrava a cada classe nova — o mesmo padrao que ja corrigi em
+  // validate_classes.
   var expectedPairs = [];
   var sortedClasses = CLASSES.slice().sort();
   for (var ci = 0; ci < sortedClasses.length; ci++) {
@@ -174,9 +183,48 @@
       expectedPairs.push(sortedClasses[ci] + '+' + sortedClasses[cj]);
     }
   }
-  check('15 duplas de classe esperadas', expectedPairs.length === 15, 'tem ' + expectedPairs.length);
+  var PARES_ESPERADOS = CLASSES.length * (CLASSES.length - 1) / 2;
+  check('duplas de classe = C(' + CLASSES.length + ',2)',
+        expectedPairs.length === PARES_ESPERADOS, 'tem ' + expectedPairs.length);
   var formKeys = Object.keys(FF);
-  check('fusionForms tem exatamente 15 chaves', formKeys.length === 15, 'tem ' + formKeys.length);
+  check('fusionForms tem uma chave por dupla', formKeys.length === PARES_ESPERADOS,
+        'tem ' + formKeys.length + ' para ' + PARES_ESPERADOS + ' duplas');
+
+  // RESPOSTA A QUEM ESTA COLADO.
+  //
+  // Uma fusao nasce com os dois herois lado a lado, e o inimigo anda ate ela.
+  // Se todo o inicio da dupla exigir distancia 2 ou mais, basta encostar para
+  // desarma-la: ela passa o turno inteiro sem nada para conjurar. Foi o que
+  // aconteceu com arqueiro+minotauro — o minimo do arqueiro em TODAS as formas
+  // ofensivas ate o tier 12 — e o banco de equilibrio marcou zero de dano, o
+  // que parecia fraqueza e era impotencia. Cobra-se a REGRA, nao a dupla: toda
+  // dupla que sabe ferir tem de saber ferir de perto antes do tier 15, que e
+  // quando o jogador ainda nao tem escolha de forma.
+  (function () {
+    var semResposta = [];
+    for (var q = 0; q < expectedPairs.length; q++) {
+      var fs = FF[expectedPairs[q]] || [];
+      var fere = false, perto = false;
+      for (var r = 0; r < fs.length; r++) {
+        var fo = fs[r];
+        if (fo.tier > 12) continue;
+        var temDano = (fo.mechanic || []).some(function (m) {
+          return m && (m.type === 'damage' || m.type === 'poison');
+        });
+        if (!temDano) continue;
+        fere = true;
+        var mn = (fo.range && fo.range.min) || 0;
+        var raio = (fo.aoe && fo.aoe.size) || 0;
+        // alcance minimo 2 com raio >= 1 ainda pega quem esta a 1: o estouro
+        // cobre a casa vizinha. Por isso a conta e `min - raio <= 1`.
+        if (mn - raio <= 1) perto = true;
+      }
+      if (fere && !perto) semResposta.push(expectedPairs[q]);
+    }
+    check('toda dupla que fere ate o tier 12 alcanca quem esta colado',
+          semResposta.length === 0,
+          'sem resposta de perto: ' + semResposta.join(', '));
+  })();
 
   var allFormNames = {}, dupFormNames = [];
   for (var p = 0; p < expectedPairs.length; p++) {

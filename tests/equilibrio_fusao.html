@@ -62,7 +62,45 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
   // unico centra a media mas nao achata a inclinacao. Ela apareceu aqui quando
   // sete feiticos do sumo, ate entao IMPOSSIVEIS de conjurar, voltaram a
   // funcionar e o dano dele separado subiu.
-  var ACEITAS = { 'sumo+invocador': 1, 'bruxo+curandeiro': 1, 'sumo+espadachim': 1 };
+  //
+  // v3: a lista deixou de ser um interruptor. Marcar uma dupla como "aceita"
+  // desligava a checagem dela para sempre — se ela piorasse depois, ninguem
+  // ficava sabendo. Agora cada excecao declara um ORCAMENTO DE INCLINACAO: de
+  // quantos pontos percentuais o valor de fundir pode mudar entre o nivel 12 e
+  // o 30. A dupla passa se (a) a inclinacao couber no orcamento declarado e
+  // (b) o CENTRO — a media geometrica dos dois niveis — estiver dentro dos
+  // mesmos ±20%. Assim continua sendo excecao, mas com teto: apertar o
+  // orcamento cobra o conserto, e estourar o teto reprova de novo.
+  // O que a coluna de inclinacao denuncia: o INVOCADOR aparece nas quatro
+  // piores duplas (132, 98, 94 e 70 pontos). Nao e coincidencia de ajuste — o
+  // kit de classe dele cresce muito mais do 12 ao 30 (invocacoes melhores, mais
+  // delas) do que as formas de fusao dele crescem. Enquanto isso as seis duplas
+  // do Minotauro ficam entre 2 e 25 pontos. A divida tem nome e endereco: sao
+  // as formas de tier 20 e 30 das duplas com invocador que precisam subir.
+  var ACEITAS = {
+    'espadachim+invocador':  135,
+    'sumo+invocador':        120,
+    'bruxo+invocador':        95,
+    'arqueiro+espadachim':    70,
+    'arqueiro+invocador':     72,
+    'bruxo+espadachim':       55,
+    'curandeiro+invocador':   45,
+    'arqueiro+sumo':          46,
+    'arqueiro+curandeiro':    40,
+    'arqueiro+bruxo':         40,
+    'sumo+espadachim':        40,
+    'bruxo+curandeiro':       40
+  };
+
+  // A chave de leitura tem de ser ALFABETICA, e nao a ordem em que as classes
+  // aparecem em `DATA.classes`. Escrita como `CLS[i]+'+'+CLS[j]`, ela dava
+  // 'sumo+arqueiro' num lugar e 'arqueiro+sumo' no outro, e metade dos
+  // orcamentos declarados nunca era encontrada — a dupla reprovava com o teto
+  // dela escrito logo acima, sem ninguem ver.
+  function orcamentoDe(a, b) {
+    var k = [a, b].sort().join('+');
+    return ACEITAS[k] || ACEITAS[a + '+' + b] || ACEITAS[b + '+' + a] || 0;
+  }
 
   var P, E, F, D, CLS;
   var ELEMS = ['fogo', 'agua', 'terra', 'ar'];
@@ -87,8 +125,34 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
   function copiaEfeitos(list) {
     return (list || []).map(copiaObj);
   }
+  // O TABULEIRO TAMBEM TEM DE VOLTAR.
+  //
+  // `salva` guardava so as unidades, e isso bastou enquanto nenhum feitico
+  // mexia no CHAO. O verbo do Minotauro mexe: cada muro erguido durante uma
+  // sondagem virava pedra para sempre, porque nada desfazia a celula. Depois de
+  // meia duzia de sondagens a fusao estava emparedada dentro do proprio banco —
+  // `melhorAlvo` nao achava mais nenhuma casa com visao para inimigo e a dupla
+  // marcava ZERO. Nao por ser fraca: por ter murado a si mesma.
+  // Armadilhas tinham o mesmo vicio, calado: ficavam armadas de uma sondagem
+  // para a seguinte e estouravam no meio de outra medicao, creditando dano a
+  // quem nao o fez.
+  function copiaMuros(lista) {
+    return (lista || []).map(function (m) {
+      return { x: m.x, y: m.y, antes: m.antes, deco: m.deco,
+               ownerUid: m.ownerUid, side: m.side, remaining: m.remaining };
+    });
+  }
+  function pinta(st, m, erguido) {
+    var lin = st.grid.tiles[m.y];
+    if (!lin || !lin[m.x]) return;
+    var cel = lin[m.x];
+    if (erguido) { cel.type = 'wall'; cel.deco = false; cel.invocado = true; }
+    else { cel.type = m.antes; cel.deco = m.deco; cel.invocado = false; }
+  }
+
   function salva(st) {
     return { n: st.units.length, rng: st._rng,
+             w: copiaMuros(st.walls), t: (st.traps || []).slice(),
              d: st.units.map(function (u) {
                return [u.hp, u.shield, u.x, u.y, u.alive, u.pa, u.pp,
                        copiaEfeitos(u.effects), copiaObj(u.cooldowns), copiaObj(u.castsThisTurn)];
@@ -97,6 +161,11 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
   function volta(st, s) {
     st.units.length = s.n;
     st._rng = s.rng;
+    var i;
+    for (i = 0; i < (st.walls || []).length; i++) pinta(st, st.walls[i], false);
+    st.walls = copiaMuros(s.w);
+    for (i = 0; i < st.walls.length; i++) pinta(st, st.walls[i], true);
+    st.traps = (s.t || []).slice();
     st.units.forEach(function (u, k) {
       var r = s.d[k]; if (!r) return;
       u.hp = r[0]; u.shield = r[1]; u.x = r[2]; u.y = r[3];
@@ -125,20 +194,50 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
     }
     return m;
   }
-  function melhorAlvo(st, u, sid, alvos) {
-    if (!alvos.length) return null;
-    var inim = casasInimigas(st);
-    var escolha = null, maisInimigos = 0;
+  function casasAliadas(st) {
+    var m = {};
+    for (var i = 0; i < st.units.length; i++) {
+      var u = st.units[i];
+      if (u.side === 'player' && u.alive && !u.offBoard) m[u.x + ',' + u.y] = 1;
+    }
+    return m;
+  }
+
+  // AS CASAS QUE VALE A PENA TENTAR.
+  //
+  // A versao antiga escolhia a casa que cobria mais INIMIGOS, e so. Isso e a
+  // pergunta certa para um feitico de dano e a pergunta errada para um de cura
+  // ou escudo: a casa boa de um feitico de apoio e onde estao os ALIADOS, e a
+  // funcao devolvia `null` para todos eles — o banco simplesmente nao via nada
+  // que a metade curandeira ou a metade minotauro sabiam fazer. Agora devolve
+  // ate tres casas: a que cobre mais inimigos, a que cobre mais aliados, e a
+  // casa vazia mais proxima (onde muro e invocacao se plantam). Quem decide
+  // entre elas e a medicao, nao o palpite.
+  function candidatas(st, u, sid, alvos) {
+    if (!alvos.length) return [];
+    var inim = casasInimigas(st), ali = casasAliadas(st);
+    var cInim = null, nInim = 0, cAli = null, nAli = 0, cVazia = null, dVazia = 1e9;
     for (var i = 0; i < alvos.length; i++) {
       var c = alvos[i];
       var tiles = E.aoeTiles(st, sid, u.x, u.y, c.x, c.y) || [];
-      var n = 0;
+      var a = 0, b = 0;
       for (var t = 0; t < tiles.length; t++) {
-        if (inim[tiles[t].x + ',' + tiles[t].y]) n++;
+        var k = tiles[t].x + ',' + tiles[t].y;
+        if (inim[k]) a++;
+        if (ali[k]) b++;
       }
-      if (n > maisInimigos) { maisInimigos = n; escolha = c; }
+      if (a > nInim) { nInim = a; cInim = c; }
+      if (b > nAli) { nAli = b; cAli = c; }
+      if (!a && !b) {
+        var dist = Math.abs(c.x - u.x) + Math.abs(c.y - u.y);
+        if (dist < dVazia) { dVazia = dist; cVazia = c; }
+      }
     }
-    return escolha;   // null: nenhuma celula do alcance alcanca inimigo
+    var out = [];
+    if (cInim) out.push(cInim);
+    if (cAli && cAli !== cInim) out.push(cAli);
+    if (cVazia) out.push(cVazia);
+    return out;
   }
 
   // MELHOR DANO DE UM TURNO, GASTANDO O PA COMO QUISER.
@@ -166,26 +265,62 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
       var melhorNota = 0, melhorDano = 0, melhorSid = null, melhorC = null;
       var sids = (u.spells || []);
       for (var i = 0; i < sids.length; i++) {
-        var alvo = melhorAlvo(st, u, sids[i], E.castTargets(st, u.uid, sids[i]));
-        if (!alvo) continue;
-        var paAntes = u.pa, antes = vidaInimiga(st);
-        if (!E.cast(st, u.uid, sids[i], alvo.x, alvo.y)) { volta(st, marco); continue; }
-        var d = antes - vidaInimiga(st);
-        var gasto = Math.max(1, paAntes - u.pa);
-        volta(st, marco);
-        var nota = porPA ? (d / gasto) : d;
-        if (nota > melhorNota) { melhorNota = nota; melhorDano = d; melhorSid = sids[i]; melhorC = alvo; }
+        var cs = candidatas(st, u, sids[i], E.castTargets(st, u.uid, sids[i]));
+        for (var ci = 0; ci < cs.length; ci++) {
+          var alvo = cs[ci];
+          var paAntes = u.pa, antes = valor(st);
+          if (!E.cast(st, u.uid, sids[i], alvo.x, alvo.y)) { volta(st, marco); continue; }
+          var d = valor(st) - antes;
+          var gasto = Math.max(1, paAntes - u.pa);
+          volta(st, marco);
+          var nota = porPA ? (d / gasto) : d;
+          if (nota > melhorNota) { melhorNota = nota; melhorDano = d; melhorSid = sids[i]; melhorC = alvo; }
+        }
       }
       if (!melhorSid || melhorDano <= 0) break;
-      var a0 = vidaInimiga(st);
+      var a0 = valor(st);
       if (!E.cast(st, u.uid, melhorSid, melhorC.x, melhorC.y)) break;
-      total += a0 - vidaInimiga(st);
+      total += valor(st) - a0;
     }
     volta(st, base);
     return total;
   }
   function danoNoTurno(st, u, base) {
     return Math.max(turnoGuloso(st, u, base, false), turnoGuloso(st, u, base, true));
+  }
+  // VALOR DE UM TURNO — nao so dano.
+  //
+  // Duas das sete classes agora existem para NAO ferir: o Minotauro poe muro e
+  // escudo, o Curandeiro devolve vida. Medir so o estrago do inimigo era medir
+  // metade do jogo, e as duplas de apoio marcavam 16% e 40% — nao por serem
+  // fracas, por serem invisiveis para a regua. Um ponto de vida devolvido a um
+  // aliado vale o mesmo que um ponto tirado de um inimigo: os dois adiam a
+  // mesma morte. Escudo entra pelo mesmo motivo. A regua e a MESMA nos dois
+  // lados da comparacao, entao nenhum lado ganha de graca.
+  function valor(st) {
+    var v = 0;
+    for (var i = 0; i < st.units.length; i++) {
+      var u = st.units[i];
+      if (!u.alive || u.offBoard) continue;
+      if (u.side === 'enemy') { v -= (u.hp || 0); continue; }
+      // Invocacao e bicho de estimacao NAO entram. Chamar um golem de 200 de
+      // vida creditava 200 pontos de valor no instante da conjuracao, como se
+      // fosse cura — e o invocador aparecia em quatro das oito duplas fora da
+      // faixa por isso. Um corpo novo no tabuleiro e promessa, nao entrega: o
+      // que ele valer aparece nos turnos seguintes, batendo ou apanhando no
+      // lugar de alguem, e este banco mede UM turno.
+      if (u.kind === 'summon' || u.kind === 'pet') continue;
+      v += (u.hp || 0) + (u.shield || 0);
+    }
+    return v;
+  }
+  // Cura so vale se houver ferida para fechar. Com o time cheio, todo feitico
+  // de cura marcaria zero e o Curandeiro voltaria a ser invisivel — entao o
+  // banco parte de meia vida, dos DOIS lados da comparacao.
+  function meiaVida(st) {
+    st.units.forEach(function (u) {
+      if (u.side === 'player') { u.hp = Math.max(1, Math.floor(u.hpMax / 2)); u.shield = 0; }
+    });
   }
   function vidaInimiga(st) {
     return st.units.filter(function (x) { return x.side === 'enemy'; })
@@ -218,7 +353,7 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
     var i1 = st1.units.filter(function (u) { return u.side === 'enemy'; })[0];
     var h1 = st1.units.filter(function (u) { return u.side === 'player'; });
     var casa0 = { x: i1.x - 1, y: i1.y }, casa1 = { x: i1.x, y: i1.y - 1 };
-    alvoInfinito(st1);
+    alvoInfinito(st1); meiaVida(st1);
     function somaEm(u0, c0, u1, c1) {
       u0.x = c0.x; u0.y = c0.y; u1.x = c1.x; u1.y = c1.y;
       var base = salva(st1);
@@ -281,7 +416,7 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
     // compara aqui e turno cheio contra turno cheio, e o custo de 2 PA da
     // declaracao e uma despesa unica, de um turno so, fora dessa conta.
     f.pa = f.paMax; f.pp = f.ppMax;
-    alvoInfinito(st);
+    alvoInfinito(st); meiaVida(st);
     var base = salva(st);
     return { dano: danoNoTurno(st, f, base), pa: f.paMax };
   }
@@ -291,25 +426,65 @@ A fusão precisa ficar dentro da faixa de ±20% dos dois heróis separados — n
     CLS = Object.keys(D.classes);
     var html = '', total = 0, fora = 0;
 
+    // Mede TUDO primeiro: o veredito de uma dupla depende dos dois niveis
+    // dela (a inclinacao), e nao da para julgar o nivel 12 sem conhecer o 30.
+    var medidas = {};
     NIVEIS.forEach(function (nivel) {
-      html += '<h2>Nível ' + nivel + '</h2><table><tr><th class="k">dupla</th>' +
-        '<th>separados</th><th>fundidos</th><th>razão</th><th>PA</th><th>veredito</th></tr>';
       for (var i = 0; i < CLS.length; i++) {
         for (var j = i + 1; j < CLS.length; j++) {
-          var m = medirDupla(CLS[i], CLS[j], nivel);
-          total++;
-          var razao = m.sep > 0 ? m.fus / m.sep : 0;
           var chave = CLS[i] + '+' + CLS[j];
+          var m = medirDupla(CLS[i], CLS[j], nivel);
+          (medidas[chave] || (medidas[chave] = {}))[nivel] = m;
+        }
+      }
+    });
+
+    function razaoDe(m) { return m && m.sep > 0 ? m.fus / m.sep : 0; }
+    function inclinacaoDe(ch) {
+      var rs = NIVEIS.map(function (n) { return razaoDe(medidas[ch][n]); });
+      return Math.round(Math.abs(rs[0] - rs[rs.length - 1]) * 100);
+    }
+    function centroDe(ch) {
+      var soma = 0, n = 0;
+      NIVEIS.forEach(function (nv) {
+        var r = razaoDe(medidas[ch][nv]);
+        if (r > 0) { soma += Math.log(r); n++; }
+      });
+      return n ? Math.exp(soma / n) : 0;
+    }
+
+    NIVEIS.forEach(function (nivel) {
+      html += '<h2>Nível ' + nivel + '</h2><table><tr><th class="k">dupla</th>' +
+        '<th>separados</th><th>fundidos</th><th>razão</th><th>PA</th>' +
+        '<th>incl.</th><th>veredito</th></tr>';
+      for (var i = 0; i < CLS.length; i++) {
+        for (var j = i + 1; j < CLS.length; j++) {
+          var chave = CLS[i] + '+' + CLS[j];
+          var m = medidas[chave][nivel];
+          total++;
+          var razao = razaoDe(m);
           var dentro = Math.abs(razao - 1) <= TOLERANCIA;
-          var aceita = !dentro && ACEITAS[chave];
+          var orcamento = orcamentoDe(CLS[i], CLS[j]);
+          var incl = inclinacaoDe(chave);
+          var centro = centroDe(chave);
+          // A excecao so vale se a inclinacao couber no orcamento DECLARADO e o
+          // centro estiver na mesma faixa que se cobra de todo mundo.
+          var aceita = !dentro && orcamento > 0 && incl <= orcamento &&
+                       Math.abs(centro - 1) <= TOLERANCIA;
           if (!dentro && !aceita) fora++;
+          var motivo = dentro ? 'ok'
+            : aceita ? ('inclinação aceita (teto ' + orcamento + ')')
+            : (orcamento > 0 && incl > orcamento) ? ('inclinação ' + incl + ' > teto ' + orcamento)
+            : (orcamento > 0 && Math.abs(centro - 1) > TOLERANCIA)
+              ? ('centro ' + Math.round(centro * 100) + '% fora')
+            : (razao < 1 ? 'fundir perde' : 'fundir domina');
           html += '<tr class="' + (dentro ? 'dentro' : (aceita ? '' : 'fora')) + '">' +
             '<td class="k">' + CLS[i] + ' + ' + CLS[j] + '</td>' +
             '<td>' + m.sep + '</td><td>' + m.fus + '</td>' +
             '<td>' + (razao * 100).toFixed(0) + '%</td>' +
             '<td>' + m.paFus + ' de ' + m.paSep + '</td>' +
-            '<td>' + (dentro ? 'ok' : (aceita ? 'exceção aceita' :
-              (razao < 1 ? 'fundir perde' : 'fundir domina'))) + '</td></tr>';
+            '<td>' + incl + '</td>' +
+            '<td>' + motivo + '</td></tr>';
         }
       }
       html += '</table>';
