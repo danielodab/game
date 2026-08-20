@@ -390,6 +390,17 @@
     </table>
   </div>
 
+  <p><strong>TODAS TÊM DE SER HUMANOIDES — de pé, dois braços, duas pernas.</strong> Não é
+  gosto: as animações que você tem à mão são de esqueleto humanoide, e um bicho de quatro
+  patas não tem de onde tirar ataque, reação a dano nem morte. Ele acabaria com um clipe de
+  andar e mais nada, o que no tabuleiro significa deslizar parado a batalha inteira. O sapo
+  de pé que você fez é exatamente o registro: <em>bicho, mas ereto</em>. E não é só solução
+  técnica — a comédia de um animal em pé é o que faz um mascote ficar na memória.</p>
+
+  <p>Isso vale até para as que não parecem ter corpo. A Ninfa precisa de pernas mesmo que
+  elas se percam na água; a Sentinela precisa de braços mesmo que fiquem colados ao tronco.
+  O que a silhueta esconde, o esqueleto por baixo tem de ter — senão não há o que animar.</p>
+
   <p><strong>Não faça <code>Walk</code> e <code>Run</code> na mesma criatura.</strong> Quando
   a criatura se desloca no tabuleiro, o renderizador escolhe um clipe só, e a ordem de escolha
   é <code>run</code> antes de <code>walk</code>. Se os dois existirem, o <code>walk</code>
@@ -424,15 +435,16 @@
       <p>Um bicho pequeno de estimação, sem elemento e sem pretensão. É a primeira coisa que
       o Xamã aprende e continua sendo útil no nível 30 — o jogador vai olhar para ele mais
       vezes que para qualquer outro.</p>
-      <p>Deve parecer <em>companheiro</em>, não arma: proporção de cachorro pequeno ou de
-      bicho de colo, cabeça grande em relação ao corpo.</p>
+      <p>O sapo de pé que você fez acerta o alvo: <em>bicho, mas ereto</em>. Barrigudo, de
+      pernas curtas e braços curtos, cabeça enorme em relação ao corpo. A graça está no
+      contraste — um animal que se comporta como gente.</p>
       <p class="naofaca">Não faça ameaçador. Se ele intimidar, rouba a leitura do Cão de Brasa,
       que é o que deve intimidar no nível 10.</p>
     </div>
     <div class="ficha">
       <dl>
         <dt>altura em jogo</dt><dd>1,10 m</dd>
-        <dt>proporção</dt><dd>compacto, cabeça grande</dd>
+        <dt>proporção</dt><dd>bípede baixinho,<br>cabeça enorme</dd>
         <dt>anda?</dt><dd>sim</dd>
         <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
         <dt>id</dt><dd>sum-familiar</dd>
@@ -450,15 +462,17 @@
       <p>Magro, comprido e baixo — construído para chegar antes. Nos dados ele tem a segunda
       maior iniciativa do rebanho e devolve a última brasa em quem estiver por perto quando
       morre, então a morte dele é uma jogada, não um acidente.</p>
-      <p>A silhueta deve ser <em>toda horizontal</em>: focinho baixo, garupa alta, pernas
-      finas. Uma costura de fissuras correndo do focinho ao rabo dá onde a luz do elemento
-      pega sem precisar de cor.</p>
-      <p class="naofaca">Não faça musculoso nem pesado. Peso é do Colosso; este é velocidade.</p>
+      <p>Como tem de ficar de pé, deixa de ser cão e passa a ser <em>algo com cabeça de
+      cão</em>: bípede magro, pernas longas e finas, tronco estreito, braços compridos quase
+      raspando o chão. A cabeça vai baixa e à frente dos ombros, como quem já está correndo
+      antes de sair. A costura de fissuras desce da nuca pela espinha até a cauda.</p>
+      <p class="naofaca">Não faça musculoso nem ereto de peito aberto. Peso é do Colosso; este
+      é fome e velocidade — tem de parecer que vai cair para a frente.</p>
     </div>
     <div class="ficha">
       <dl>
         <dt>altura em jogo</dt><dd>1,20 m</dd>
-        <dt>proporção</dt><dd>longo e baixo, 2× mais<br>comprido que alto</dd>
+        <dt>proporção</dt><dd>bípede magro, cabeça<br>de cão à frente</dd>
         <dt>anda?</dt><dd>sim, rápido</dd>
         <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
         <dt>id</dt><dd>sum-ember-hound</dd>
@@ -504,16 +518,17 @@
       <p>A única do rebanho que não tem ataque nenhum — vai direto até quem está sangrando e
       resolve. Flutua um palmo acima do chão, então o modelo não precisa de pés que aguentem
       peso.</p>
-      <p>Silhueta de criança, de água limpa, com a parte de baixo se desfazendo em vez de
-      terminar. Braços longos demais para o corpo: são eles que fazem o gesto de cuidar, e é
-      o único gesto que ela tem.</p>
+      <p>Silhueta de criança, de água limpa. Braços longos demais para o corpo: são eles que
+      fazem o gesto de cuidar, e é o único gesto que ela tem. <strong>As pernas existem</strong>
+      — podem se perder na água da cintura para baixo, ficar meio transparentes, arrastar um
+      rastro —, mas têm de estar lá, senão não há o que animar quando ela anda.</p>
       <p class="naofaca">Não dê arma, garra nem dente. Se ela parecer capaz de machucar, o
       jogador vai mandá-la para a frente e perdê-la.</p>
     </div>
     <div class="ficha">
       <dl>
         <dt>altura em jogo</dt><dd>1,30 m</dd>
-        <dt>proporção</dt><dd>criança, braços longos,<br>base que se desfaz</dd>
+        <dt>proporção</dt><dd>criança, braços longos,<br>pernas veladas na água</dd>
         <dt>anda?</dt><dd>flutua</dd>
         <dt>clipes</dt><dd>idle · walk (flutuar)<br>cast · hit · death</dd>
         <dt>id</dt><dd>sum-tide-nymph</dd>
@@ -531,15 +546,17 @@
       <p>Esta é a mais mal servida hoje: 1,12&nbsp;m para uma coisa cujo trabalho inteiro é
       <em>tapar passagem</em>. Tem de ler como obstáculo à distância, no meio de uma sala
       cheia — mais alta que um herói, quase tão larga quanto uma casa.</p>
-      <p>Um bloco vertical com dois sulcos por olhos. Sem braços, ou com braços que mal se
-      destacam do corpo. A base deve parecer <em>enterrada</em>, não apoiada.</p>
-      <p class="naofaca">Não faça com pernas. No instante em que tem pernas, vira golem — e o
-      Golem da Montanha já existe e é outra coisa.</p>
+      <p>Uma figura de pedra atarracada: pernas curtíssimas e grossas, tronco muito largo,
+      braços pesados cruzados sobre o peito. Dois sulcos fundos por olhos, sem boca. O que faz
+      ela ler como obstáculo é a <em>largura</em>, não a falta de membros — quase tão larga
+      quanto alta, ocupando a casa inteira.</p>
+      <p class="naofaca">Não faça esguia nem elegante. E não copie a proporção do Golem: aquele
+      é uma encosta, este é um marco de fronteira que resolveu ficar no caminho.</p>
     </div>
     <div class="ficha">
       <dl>
         <dt>altura em jogo</dt><dd>2,10 m<br><span style="color:var(--faint)">hoje: 1,12 m</span></dd>
-        <dt>proporção</dt><dd>bloco vertical, largo,<br>base enterrada</dd>
+        <dt>proporção</dt><dd>atarracada: quase tão<br>larga quanto alta</dd>
         <dt>anda?</dt><dd>quase não (1 passo)</dd>
         <dt>clipes</dt><dd>idle · attack · hit<br>death</dd>
         <dt>id</dt><dd>sum-stone-sentinel</dd>
@@ -583,15 +600,17 @@
       <p class="papel">a maior iniciativa do jogo · desce quando decide</p>
       <p>Voa em círculos sobre a batalha e desce quando quer, não quando mandam. Tem 88 de
       iniciativa — age antes de todo mundo, inclusive dos chefes.</p>
-      <p>Aqui a envergadura importa mais que a altura: o corpo é pequeno, as asas é que
-      ocupam a casa. Modele com as asas <em>abertas</em> na pose de repouso, porque ele nunca
-      pousa em jogo.</p>
-      <p class="naofaca">Não faça asas dobradas nem pose de poleiro. Ele não tem chão.</p>
+      <p>Também deixa de ser ave e vira <em>figura de rapina</em>: bípede esguio com cabeça de
+      falcão, penas em vez de roupa, e as <strong>asas no lugar dos braços</strong> — é o que
+      faz um esqueleto humanoide animá-las de graça, porque o osso do braço vira o osso da asa.
+      Pernas finas com garras. A envergadura continua sendo o que ocupa a casa.</p>
+      <p class="naofaca">Não ponha braços E asas. Quatro membros superiores num rig de dois
+      deixam metade sem osso, parada no ar enquanto o resto se mexe.</p>
     </div>
     <div class="ficha">
       <dl>
         <dt>altura em jogo</dt><dd>1,15 m</dd>
-        <dt>proporção</dt><dd>envergadura ≈ 2× a<br>altura do corpo</dd>
+        <dt>proporção</dt><dd>bípede, asas no lugar<br>dos braços</dd>
         <dt>anda?</dt><dd>voa (fly, não walk)</dd>
         <dt>clipes</dt><dd>fly · attack · hit<br>death</dd>
         <dt>id</dt><dd>sum-storm-falcon</dd>
@@ -615,16 +634,16 @@
       <p class="papel">puxa · o peso que faltava na Água</p>
       <p>O caminho da Água hoje é cuidar e arrastar — a Ninfa cura, as armadilhas sugam. Falta
       o corpo pesado que faz isso sozinho, todo turno, sem gastar o turno do Xamã.</p>
-      <p>Uma massa de água de pé, guardando a forma vaga do que se afogou dentro dela. Base
-      muito pesada, afinando para cima, como uma onda que parou no meio de quebrar. Vazio no
-      lugar do rosto.</p>
-      <p class="naofaca">Não faça humanoide claro. O que assusta é justamente não dar para
-      dizer quantos estão ali dentro.</p>
+      <p>Um corpo alto e encharcado, de ombros caídos e braços pesados pendendo, feito de água
+      escura que não escorre. Vazio no lugar do rosto. Dentro da massa do tronco adivinham-se
+      <em>outros</em> — mãos, ombros, meio rosto pressionados contra a superfície por dentro.</p>
+      <p class="naofaca">O corpo principal tem de ser claramente humanoide; o que assusta são os
+      que estão presos DENTRO dele, e não dá para contar quantos são.</p>
     </div>
     <div class="ficha">
       <dl>
         <dt>altura em jogo</dt><dd>2,60 m</dd>
-        <dt>proporção</dt><dd>base pesada, topo fino,<br>onda de pé</dd>
+        <dt>proporção</dt><dd>humanoide alto, ombros<br>caídos, braços pesados</dd>
         <dt>anda?</dt><dd>sim, devagar</dd>
         <dt>clipes</dt><dd>idle · walk · cast<br>hit · death</dd>
         <dt>faz</dt><dd>puxa 2 casas por turno<br>+ dano de água</dd>
@@ -644,15 +663,16 @@
       «xamã» promete: o <em>totem</em> — plantado, sem ataque, que muda a regra do espaço em
       volta. Este empurra para longe tudo o que se aproximar, todo turno, e é o oposto exato
       do Afogado.</p>
-      <p>Não é um bicho: é uma espiral vertical, larga em cima e estreita onde toca o chão,
-      girando devagar. Se tiver rosto, um só — no alto, olhando para baixo.</p>
-      <p class="naofaca">Não dê pernas nem braços. O dia em que ele parecer capaz de andar,
-      deixa de ser totem.</p>
+      <p>Uma figura de pé com os braços abertos, envolta numa espiral de vento que sobe do chão
+      e se alarga acima da cabeça. O corpo é humanoide e magro; a espiral é que faz o volume.
+      Rosto sereno, olhando para baixo.</p>
+      <p class="naofaca">Os pés ficam plantados e nunca se movem — ele não anda. Mas modele as
+      pernas mesmo assim: é o que segura a pose de pé no esqueleto.</p>
     </div>
     <div class="ficha">
       <dl>
         <dt>altura em jogo</dt><dd>2,70 m</dd>
-        <dt>proporção</dt><dd>funil invertido: largo<br>em cima, fino embaixo</dd>
+        <dt>proporção</dt><dd>corpo magro dentro de<br>uma espiral de vento</dd>
         <dt>anda?</dt><dd>não</dd>
         <dt>clipes</dt><dd>idle · cast · hit<br>death</dd>
         <dt>faz</dt><dd>empurra 2 casas em raio 2<br>no início do turno</dd>
