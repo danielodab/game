@@ -1,0 +1,334 @@
+<meta charset="utf-8">
+<title>As Vinte e Uma Fusões</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Figtree:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+  :root {
+    /* O fundo é pedra de subsolo; a paleta de verdade são as sete cores de
+       classe, que já existem em js/core/data/classes.js. Nenhuma inventada. */
+    --fundo:   #f4f1ec;
+    --carta:   #ffffff;
+    --tinta:   #1a1620;
+    --tinta-2: #6b6274;
+    --fio:     #ddd6cd;
+    --fio-2:   #ece7e0;
+
+    --barbaro:    #d4553f;
+    --cacador:    #4f9d6a;
+    --bruxo:      #7a5fa0;
+    --ladino:     #2f6f8f;
+    --curandeiro: #c2932f;
+    --xama:       #3f8f8a;
+    --minotauro:  #8a6a4f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fundo:   #16131a;
+      --carta:   #1f1b26;
+      --tinta:   #e9e3ef;
+      --tinta-2: #968ca4;
+      --fio:     #322c3d;
+      --fio-2:   #272231;
+      --curandeiro: #f0c05a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --fundo:   #16131a;
+    --carta:   #1f1b26;
+    --tinta:   #e9e3ef;
+    --tinta-2: #968ca4;
+    --fio:     #322c3d;
+    --fio-2:   #272231;
+    --curandeiro: #f0c05a;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fundo); color: var(--tinta);
+    font: 400 16px/1.62 Figtree, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .env { max-width: 64rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+  .capa { margin-bottom: 2.5rem; }
+  .eyebrow {
+    font: 700 11px/1 "JetBrains Mono", monospace;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: var(--tinta-2); margin: 0 0 1rem;
+  }
+  h1 {
+    font: 600 clamp(2.5rem, 7.5vw, 4.4rem)/0.98 Fraunces, Georgia, serif;
+    margin: 0 0 1rem; letter-spacing: -0.022em; text-wrap: balance;
+  }
+  .linha-fina { font-size: 1.06rem; color: var(--tinta-2); max-width: 42rem; margin: 0; }
+
+  .lei {
+    background: var(--carta); border: 1px solid var(--fio);
+    padding: 1.4rem 1.6rem; margin: 2.5rem 0;
+    display: grid; gap: .85rem;
+  }
+  .lei h2 { font: 600 1.3rem/1.2 Fraunces, Georgia, serif; margin: 0; }
+  .lei p { margin: 0; }
+
+  h2.secao {
+    font: 600 1.7rem/1.15 Fraunces, Georgia, serif;
+    margin: 3.5rem 0 .3rem; text-wrap: balance;
+  }
+  .secao-nota { color: var(--tinta-2); margin: 0 0 1.4rem; max-width: 42rem; }
+
+  /* ------------------------------------------------------------- a matriz */
+  .rolo { overflow-x: auto; padding-bottom: .4rem; }
+  table.matriz { border-collapse: collapse; font: 400 11px/1.2 "JetBrains Mono", monospace; }
+  table.matriz th, table.matriz td {
+    border: 1px solid var(--fio); padding: .35rem .4rem; text-align: center;
+    min-width: 5.4rem; height: 2.5rem;
+  }
+  table.matriz th { color: var(--tinta-2); font-weight: 700; background: var(--fio-2); }
+  table.matriz th.lado { text-align: right; padding-right: .6rem; }
+  td.vazio { background: var(--fio-2); }
+  td.par { background: var(--carta); }
+  td.par a { color: var(--tinta); text-decoration: none; display: block; font-size: 10px; }
+  td.par a:hover { text-decoration: underline; }
+  td.par i { display: block; height: 3px; margin-bottom: .25rem; }
+
+  /* ------------------------------------------------------------- os cards */
+  .grade { display: grid; gap: 1rem; }
+  .fus {
+    background: var(--carta); border: 1px solid var(--fio);
+    padding: 0 0 1.3rem; overflow: hidden;
+  }
+  .barra { height: 5px; display: flex; }
+  .barra span { flex: 1; }
+  .corpo { padding: 1.2rem 1.5rem 0; }
+  .fus h3 { font: 600 1.42rem/1.15 Fraunces, Georgia, serif; margin: 0 0 .15rem; }
+  .quem {
+    font: 400 .8rem/1.4 "JetBrains Mono", monospace;
+    color: var(--tinta-2); margin: 0 0 .5rem;
+  }
+  .verbos {
+    font: 700 10px/1 "JetBrains Mono", monospace;
+    letter-spacing: .13em; text-transform: uppercase;
+    margin: 0 0 .9rem; color: var(--tinta);
+  }
+  .fus p { margin: 0 0 .8rem; }
+  .fus p:last-child { margin-bottom: 0; }
+  .rot {
+    font: 700 10px/1 "JetBrains Mono", monospace;
+    letter-spacing: .13em; text-transform: uppercase;
+    color: var(--tinta-2); display: block; margin: 1.05rem 0 .3rem;
+  }
+  .base {
+    background: var(--fio-2); padding: .85rem 1rem; margin-top: 1rem;
+    border-left: 3px solid var(--tinta-2);
+  }
+  .base .rot { margin-top: 0; }
+  .base p { font-size: .95rem; }
+
+  .fecho {
+    margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--fio);
+    color: var(--tinta-2); font-size: .96rem;
+  }
+  .fecho h2 { font: 600 1.32rem/1.2 Fraunces, Georgia, serif; color: var(--tinta); margin: 0 0 .6rem; }
+  code {
+    font: 400 .86em/1 "JetBrains Mono", monospace;
+    background: var(--fio-2); padding: .15em .38em;
+  }
+  em { font-style: italic; color: var(--tinta); }
+  :focus-visible { outline: 2px solid var(--bruxo); outline-offset: 2px; }
+</style>
+
+<div class="env">
+
+<header class="capa">
+  <p class="eyebrow">Soterra · sete classes · vinte e uma fusões</p>
+  <h1>As Vinte e Uma Fusões</h1>
+  <p class="linha-fina">Sete classes combinam duas a duas em exatamente 21 corpos — nem um a mais,
+  nem um a menos. Todos já existem no jogo, com nome, verbo e 7 níveis de feitiço cada. O que falta
+  é o corpo.</p>
+</header>
+
+<section class="lei">
+  <h2>Três regras que valem para as 21</h2>
+  <p><strong>Toda fusão mede 3,00 m.</strong> É o alvo fixo no renderizador, e ele existe por uma
+  razão: fundir tem de ser <em>visivelmente</em> maior que qualquer uma das metades. O Minotauro e
+  o Bárbaro sozinhos já medem 2,62 m — um corpo fundido de 2,55 m ficaria menor que a metade que
+  entrou nele, e a regra quebraria bem onde ela mais importa.</p>
+  <p><strong>Humanoide, como sempre.</strong> O esqueleto do Meshy tem 24 ossos de gente e a
+  biblioteca de animação é de gente. Isso aqui é mais fácil que nos monstros: as duas metades já
+  são humanoides.</p>
+  <p><strong>Não são dois corpos colados — é um corpo que herdou dos dois.</strong> A receita que
+  funciona, e que está na caixa <span style="font-family:'JetBrains Mono',monospace;font-size:.86em">O
+  CORPO</span> de cada ficha: escolha <em>uma</em> silhueta como base (quase sempre a metade mais
+  pesada), e deixe a outra entrar por <em>uma</em> peça-assinatura e pela superfície. Duas cabeças,
+  quatro braços e dois conjuntos de roupa fazem monstro de colagem, não fusão.</p>
+</section>
+
+<h2 class="secao">As 21, de uma vez</h2>
+<p class="secao-nota">Vinte e uma é exatamente o triângulo de uma grade 7×7 — a diagonal é vazia
+porque classe não funde consigo mesma, e a metade de baixo repetiria a de cima. A barra de cor em
+cada casa são as duas classes que entram.</p>
+
+<div class="rolo"><table class="matriz" id="matriz"></table></div>
+
+<h2 class="secao">As fichas</h2>
+<p class="secao-nota">Agrupadas pela <strong>silhueta-base</strong> — a metade que dá o corpo —,
+porque essa é a primeira decisão que você toma ao modelar. Dentro de cada grupo, a outra metade
+entra pela peça que ela doa.</p>
+
+<div class="grade" id="grade"></div>
+
+<section class="fecho">
+  <h2>Onde isto entra no jogo</h2>
+  <p>Hoje o corpo fundido é emprestado: o jogo pega o esqueleto KayKit de uma das metades e pendura
+  nele a cabeça, a capa e a arma que <code>CLASS_MARK</code> declara para cada classe. Funciona e
+  lê, mas é a última coisa no jogo que não é sua.</p>
+  <p>Quando os arquivos chegarem, mande como os da Estufa — uma pasta por fusão, com
+  <code>idle</code>, <code>walk</code>, <code>attack</code>, <code>hit</code> e <code>death</code>.
+  <strong>Corrida não precisa</strong>: o motor usa o andar no lugar dela sozinho.</p>
+  <p><strong>Não precisa fazer as 21 de uma vez.</strong> Cada fusão entra sozinha — o jogo já
+  procura o modelo por chave e cai no emprestado quando não acha. Se quiser começar por uma, comece
+  pelas do Minotauro: são as seis mais novas e as únicas cujo verbo (BARRAR) ainda não tem corpo
+  próprio nenhum.</p>
+</section>
+
+</div>
+
+<script>
+  var CLASSES = {
+    sumo:       { nome: 'Bárbaro',    cor: 'var(--barbaro)',    alt: 2.62, sil: 'corpanzil, ombros largos, pernas curtas', peca: 'dois machados de uma mão e a capa surrada' },
+    minotauro:  { nome: 'Minotauro',  cor: 'var(--minotauro)',  alt: 2.62, sil: 'enorme, chifres, cabeça baixa', peca: 'o escudo gigante que ele crava no chão' },
+    arqueiro:   { nome: 'Caçador',    cor: 'var(--cacador)',    alt: 2.05, sil: 'magro e alto', peca: 'chapéu de aba larga, espingarda de dois canos, casaco de pele' },
+    invocador:  { nome: 'Xamã',       cor: 'var(--xama)',       alt: 2.05, sil: 'ereto, braços à frente', peca: 'o grimório aberto numa das mãos' },
+    curandeiro: { nome: 'Curandeiro', cor: 'var(--curandeiro)', alt: 1.97, sil: 'ereto e calmo', peca: 'cajado com luz na ponta e frascos no cinto' },
+    bruxo:      { nome: 'Bruxo',      cor: 'var(--bruxo)',      alt: 1.80, sil: 'velho e curvado', peca: 'chapéu pontudo, barba branca, cajado' },
+    espadachim: { nome: 'Ladino',     cor: 'var(--ladino)',     alt: 1.75, sil: 'o menor, agachado, ágil', peca: 'duas adagas e roupa preta' }
+  };
+  var ORDEM = ['minotauro','sumo','arqueiro','invocador','curandeiro','bruxo','espadachim'];
+
+  // As 21. `base` é a metade que dá o corpo; `doa` é o que a outra traz.
+  var FUS = [
+    { p:['arqueiro','minotauro'], nome:'A Seteira', verbos:'ACUMULAR + BARRAR', base:'minotauro',
+      faz:'Atira e continua coberto. O muro não é obstáculo para quem o ergueu — é a janela por onde ele mira.',
+      corpo:'Corpo do Minotauro, e o escudo deixa de ser só escudo: abra nele uma FRESTA, na altura do peito, e ponha o cano da espingarda saindo por ela. O chapéu de aba larga do Caçador entre os chifres resolve a cabeça sem esconder a cara.' },
+    { p:['bruxo','minotauro'], nome:'A Cratera', verbos:'ESTOURAR + BARRAR', base:'minotauro',
+      faz:'A explosão deixa borda. O que sobra da área vira parede.',
+      corpo:'Corpo do Minotauro com o escudo RACHADO — e a racha acesa por dentro, como brasa. O Bruxo entra pelo chapéu pontudo amassado sob os chifres e pelo cajado usado como alavanca, não como varinha. Ele quebra o chão para levantar parede.' },
+    { p:['curandeiro','minotauro'], nome:'O Abrigo', verbos:'RESTAURAR + BARRAR', base:'minotauro',
+      faz:'O muro cura quem se encosta. Guardar e cuidar viram a mesma coisa — é a dupla mais defensiva do jogo.',
+      corpo:'Corpo do Minotauro, escudo INTEIRO e polido (é o único que não deve estar surrado), com a luz do cajado do Curandeiro embutida no brasão. Frascos do Curandeiro pendurados na correia do escudo, tilintando. A cara do Minotauro aqui é serena, não brava.' },
+    { p:['espadachim','minotauro'], nome:'A Emboscada', verbos:'SUMIR + BARRAR', base:'minotauro',
+      faz:'Some e deixa muro no lugar onde estava. O inimigo bate na pedra procurando o que já não está lá.',
+      corpo:'A mais difícil das seis: um corpo de 3 m que precisa ler como furtivo. Minotauro AGACHADO, ombros para a frente, escudo virado de lado como quem se esconde atrás dele. Roupa preta do Ladino por baixo da pelagem e uma adaga presa por dentro do escudo. Sem capa — capa é silhueta grande, e aqui é o oposto.' },
+    { p:['invocador','minotauro'], nome:'O Muro Vivo', verbos:'INVOCAR + BARRAR', base:'minotauro',
+      faz:'A pedra tem alguém dentro. Barra E ataca.',
+      corpo:'Corpo do Minotauro, e o escudo tem uma CARA entalhada que está viva — olhos que abrem. O grimório do Xamã não fica na mão: fica encravado no escudo, aberto, como se a página fosse o que anima a pedra. As mãos ficam livres, e é isso que separa esta das outras cinco.' },
+    { p:['minotauro','sumo'], nome:'O Portão', verbos:'BARRAR + PRENDER', base:'minotauro',
+      faz:'Os dois no mesmo lugar, e ninguém sai. A dupla que decide onde a luta acontece.',
+      corpo:'As duas metades mais pesadas do jogo, e o risco é virar uma bola. Minotauro como base pelos chifres, mas com a MUSCULATURA do Bárbaro e as pernas curtas dele — um corpo largo, não alto. Um machado numa mão, o escudo na outra, e a capa surrada do Bárbaro por cima do lombo. É uma porta com pernas.' },
+
+    { p:['arqueiro','sumo'], nome:'Balista de Carne', verbos:'ACUMULAR + PRENDER', base:'sumo',
+      faz:'Cerco: projétil pesado que empurra, arpéu que puxa, âncora que segura.',
+      corpo:'Corpo do Bárbaro, e a espingarda do Caçador vira uma BALISTA de ombro — grande demais para uma pessoa normal, do tamanho certo para ele. O casaco de pele por cima da capa. Um machado fica no cinto, sem uso: ele não precisa mais chegar perto.' },
+    { p:['bruxo','sumo'], nome:'Colosso Arcano', verbos:'ESTOURAR + PRENDER', base:'sumo',
+      faz:'Nada é lançado: tudo é IRRADIADO do próprio corpo. Devolve o golpe a quem bate.',
+      corpo:'Corpo do Bárbaro com runas ACESAS gravadas na pele — nos ombros, no peito, nos antebraços. Sem cajado e sem chapéu: a magia dele não passa por objeto, passa pelo corpo. A barba branca do Bruxo numa cara de Bárbaro é a única pista de que há um velho ali dentro.' },
+    { p:['curandeiro','sumo'], nome:'Baluarte Compassivo', verbos:'RESTAURAR + PRENDER', base:'sumo',
+      faz:'Escudo grande, provocar, e PUXAR O ALIADO para trás da muralha.',
+      corpo:'Corpo do Bárbaro, mas com um dos machados trocado por um escudo largo de madeira e a mão livre ESTENDIDA para trás — o gesto de puxar alguém. Os frascos do Curandeiro no cinto e a luz do cajado presa no ombro, virada para os aliados e não para a frente.' },
+    { p:['espadachim','sumo'], nome:'Investida Titânica', verbos:'SUMIR + PRENDER', base:'sumo',
+      faz:'Peso em movimento: investe de longe, agarra, gira e arremessa.',
+      corpo:'Corpo do Bárbaro numa postura de CORRIDA parada — tronco inclinado, um pé à frente, como quem já vai. Machados fora: as mãos estão abertas para agarrar. As adagas do Ladino ficam presas nos antebraços, viradas para trás, sem uso na investida.' },
+    { p:['invocador','sumo'], nome:'Fortaleza Viva', verbos:'INVOCAR + PRENDER', base:'sumo',
+      faz:'O tanque que invoca: provoca, ergue ídolos e reparte escudo com o grupo.',
+      corpo:'Corpo do Bárbaro carregando um ÍDOLO de pedra nas costas — pesado, amarrado com correia, do tamanho de uma criança. O grimório do Xamã aberto e preso ao peito por um cinto, para as duas mãos ficarem livres. A capa vira um manto de couro cru.' },
+
+    { p:['arqueiro','invocador'], nome:'Torreta Viva', verbos:'ACUMULAR + INVOCAR', base:'arqueiro',
+      faz:'Nega o terreno: torres, cravos-armadilha e tiros que saltam.',
+      corpo:'Corpo do Caçador, mais alto e mais magro, com a espingarda apoiada num TRIPÉ que ele carrega nas costas quando anda. O grimório do Xamã aberto pendurado no cinto, virado para cima, com o dedo marcando a página. Cartucheira cruzada no peito.' },
+    { p:['arqueiro','curandeiro'], nome:'Arco Votivo', verbos:'ACUMULAR + RESTAURAR', base:'arqueiro',
+      faz:'Tiros em LINHA que atravessam a fila, com roubo de vida — cuida ferindo.',
+      corpo:'Corpo do Caçador com o casaco de pele trocado por uma sobrecasaca limpa, quase litúrgica. A espingarda tem um FRASCO acoplado ao cano, e o que sai dela volta como luz para trás. Aba do chapéu mais estreita: menos caçador, mais coroinha armado.' },
+    { p:['arqueiro','bruxo'], nome:'Artilharia Arcana', verbos:'ACUMULAR + ESTOURAR', base:'arqueiro',
+      faz:'Alcance absurdo, acúmulo de marcas e detonação em área.',
+      corpo:'Corpo do Caçador com a espingarda ALONGADA — cano longo demais, com anéis de runa espaçados por ele, como um telescópio. O chapéu de aba larga ganha ponta, que é onde o chapéu do Bruxo entra sem virar fantasia. Barba branca curta.' },
+    { p:['arqueiro','espadachim'], nome:'Caçador de Sombras', verbos:'ACUMULAR + SUMIR', base:'arqueiro',
+      faz:'Invisibilidade, salto até o alvo e execução das marcas.',
+      corpo:'Corpo do Caçador encolhido na direção do Ladino: mais baixo do que a fusão média pede, mais fechado. A espingarda vira SERRADA, curta, de uma mão só — a outra mão tem a adaga. Roupa preta, casaco sem pele, aba do chapéu caída sobre os olhos.' },
+
+    { p:['curandeiro','invocador'], nome:'Jardim Sagrado', verbos:'RESTAURAR + INVOCAR', base:'invocador',
+      faz:'Planta coisas que cuidam sozinhas — guardiões, cercados, campos que curam.',
+      corpo:'Corpo do Xamã com raízes subindo pelas pernas e pelo cajado, como se ele estivesse plantado. O grimório aberto numa mão e o cajado com luz na outra — é a única fusão em que as duas peças-assinatura convivem, porque as duas são de dar e não de tirar. Frascos pendurados por cordão nas raízes.' },
+    { p:['bruxo','invocador'], nome:'Sabá das Armadilhas', verbos:'ESTOURAR + INVOCAR', base:'invocador',
+      faz:'Ritual de terreno: selos, efígies e o clima virado à força.',
+      corpo:'Corpo do Xamã com o chapéu pontudo do Bruxo, mas rasgado e coberto de amuletos amarrados. O grimório não está mais na mão: está preso ao peito, ABERTO, e ele desenha no ar com as duas mãos. Barba branca com contas trançadas.' },
+    { p:['espadachim','invocador'], nome:'Sombra Multiplicada', verbos:'SUMIR + INVOCAR', base:'invocador',
+      faz:'Gêmeos de breu e espinhos escondidos; veneno vindo de todo lado.',
+      corpo:'Corpo do Xamã com a roupa preta do Ladino e o grimório fechado — ele não precisa mais ler. A silhueta ganha uma SEGUNDA sombra: modele uma capa longa e esfarrapada que se abre em duas pontas, para o gêmeo dele parecer que saiu dali. Adagas nas costas, cabo para baixo.' },
+    { p:['bruxo','curandeiro'], nome:'Praga Piedosa', verbos:'ESTOURAR + RESTAURAR', base:'curandeiro',
+      faz:'Transfusão: tudo drena e vira vida. Bênção de um lado, praga do outro.',
+      corpo:'Corpo do Curandeiro, e a assimetria é o conceito: um lado limpo e claro, o outro enegrecido e sangrando. O cajado tem luz numa ponta e um frasco escuro na outra. Chapéu pontudo do Bruxo caído para o lado da praga. Se você fizer só uma coisa nesta, faça a metade partida.' },
+    { p:['curandeiro','espadachim'], nome:'Bisturi Dançante', verbos:'RESTAURAR + SUMIR', base:'curandeiro',
+      faz:'Velocidade, roubo de vida e limpeza; barato e sem parar.',
+      corpo:'Corpo do Curandeiro afinado e leve, em postura de meio-passo — nunca parado. O cajado vira curto, de uma mão, e a outra mão tem uma LÂMINA fina de cirurgia, não uma adaga de briga. Frascos presos ao antebraço em fileira, como instrumentos.' },
+    { p:['bruxo','espadachim'], nome:'Lâmina Rúnica', verbos:'ESTOURAR + SUMIR', base:'espadachim',
+      faz:'Pisca pelo campo deixando estouro na chegada, com veneno arcano.',
+      corpo:'A única fusão baseada no MENOR corpo do jogo, e por isso a que mais precisa crescer para chegar aos 3 m — alongue as pernas e o tronco em vez de engrossar. Duas adagas com runas acesas na lâmina, roupa preta com fio de luz nas costuras, e nenhum chapéu. O Bruxo aqui entra só pela luz.' }
+  ];
+
+  // ---------------------------------------------------------------- a matriz
+  (function () {
+    var t = document.getElementById('matriz');
+    var h = '<tr><th></th>';
+    ORDEM.forEach(function (c) { h += '<th>' + CLASSES[c].nome + '</th>'; });
+    h += '</tr>';
+    ORDEM.forEach(function (a, ia) {
+      h += '<tr><th class="lado">' + CLASSES[a].nome + '</th>';
+      ORDEM.forEach(function (b, ib) {
+        if (ib <= ia) { h += '<td class="vazio"></td>'; return; }
+        var f = FUS.filter(function (x) {
+          return (x.p[0] === a && x.p[1] === b) || (x.p[0] === b && x.p[1] === a);
+        })[0];
+        if (!f) { h += '<td class="vazio">—</td>'; return; }
+        h += '<td class="par">' +
+             '<i style="background:linear-gradient(90deg,' + CLASSES[a].cor + ' 50%,' + CLASSES[b].cor + ' 50%)"></i>' +
+             '<a href="#f-' + f.nome.replace(/\s+/g, '-') + '">' + f.nome + '</a></td>';
+      });
+      h += '</tr>';
+    });
+    t.innerHTML = h;
+  })();
+
+  // ---------------------------------------------------------------- as fichas
+  (function () {
+    var g = document.getElementById('grade');
+    // ordenadas pela silhueta-base, na ordem de porte das classes
+    var por = {};
+    FUS.forEach(function (f) { (por[f.base] = por[f.base] || []).push(f); });
+    var html = '';
+    ORDEM.forEach(function (b) {
+      if (!por[b]) return;
+      var C = CLASSES[b];
+      html += '<h2 class="secao" style="margin-top:2.6rem">Corpo de ' + C.nome +
+              ' <span style="font:400 .95rem/1 \'JetBrains Mono\',monospace;color:var(--tinta-2)">· ' +
+              por[b].length + (por[b].length === 1 ? ' fusão' : ' fusões') + '</span></h2>' +
+              '<p class="secao-nota">' + C.sil.charAt(0).toUpperCase() + C.sil.slice(1) +
+              '. Traz para a fusão: ' + C.peca + '.</p>';
+      por[b].forEach(function (f) {
+        var a = CLASSES[f.p[0]], c = CLASSES[f.p[1]];
+        var outro = (f.p[0] === b) ? c : a;
+        html += '<article class="fus" id="f-' + f.nome.replace(/\s+/g, '-') + '">' +
+          '<div class="barra"><span style="background:' + a.cor + '"></span>' +
+          '<span style="background:' + c.cor + '"></span></div>' +
+          '<div class="corpo">' +
+          '<h3>' + f.nome + '</h3>' +
+          '<p class="quem">' + a.nome + ' + ' + c.nome +
+          '  ·  base: ' + CLASSES[b].nome + '  ·  doa: ' + outro.nome + '</p>' +
+          '<p class="verbos">' + f.verbos + '</p>' +
+          '<p>' + f.faz + '</p>' +
+          '<div class="base"><span class="rot">o corpo</span><p>' + f.corpo + '</p></div>' +
+          '</div></article>';
+      });
+    });
+    g.innerHTML = html;
+  })();
+</script>
