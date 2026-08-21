@@ -639,26 +639,21 @@ var JOGO = (typeof window !== 'undefined')
       }
     } catch (e3) {}
 
-    /* marcador translúcido no topo do obstáculo BAIXO (§6: não tapa a visão).
-     * Eram 32 malhas idênticas, uma por obstáculo — 32 chamadas de desenho para
-     * 64 triângulos. Uma instância só, com a mesma aparência. */
-    if (lowNodes.length) {
-      var capMesh = new THREE.InstancedMesh(M.tileFlatGeo(), new THREE.MeshBasicMaterial({
-        color: col3(pal.accent), transparent: true, opacity: 0.20,
-        depthWrite: false, side: THREE.DoubleSide
-      }), lowNodes.length);
-      var mtxC = new THREE.Matrix4(), escC = new THREE.Vector3(0.9, 0.9, 0.9);
-      var quatC = new THREE.Quaternion(), posC = new THREE.Vector3();
-      for (var c2 = 0; c2 < lowNodes.length; c2++) {
-        posC.set(lowNodes[c2].x * CELL, LOW_H + 0.10, lowNodes[c2].y * CELL);
-        mtxC.compose(posC, quatC, escC);
-        capMesh.setMatrixAt(c2, mtxC);
-      }
-      capMesh.instanceMatrix.needsUpdate = true;
-      capMesh.renderOrder = 3;
-      capMesh.frustumCulled = false;
-      envG.add(capMesh);
-    }
+    /* O MARCADOR FLUTUANTE DO OBSTÁCULO BAIXO SAIU.
+     *
+     * Havia aqui um quadrado translúcido da cor de destaque, do tamanho da
+     * casa, pairando a 1,02 m sobre cada baú e cada barril. Ele existia para
+     * dizer uma regra verdadeira (§6: obstáculo baixo bloqueia passagem, não
+     * bloqueia visão), mas dizia isso com uma placa no ar — o Daniel reclamou
+     * dele duas vezes, e da segunda com razão redobrada: eu tinha consertado o
+     * tampo inflado das mesas e jurado que era isso, quando o quadrado que ele
+     * via era este, num caminho de código diferente.
+     *
+     * A regra continua sendo dita, só que pelo objeto: o obstáculo tem 0,95 m e
+     * a parede tem 3,10 m — mais de três vezes. Quem olha o tabuleiro vê por
+     * cima de um e não vê por cima do outro. Se um dia fizer falta um reforço,
+     * que seja um CONTORNO no chão da casa, nunca uma placa suspensa.
+     */
 
     boardG.add(envG);
     boardMeshes.push(envG);
@@ -701,13 +696,8 @@ var JOGO = (typeof window !== 'undefined')
     var decoMat = new THREE.MeshStandardMaterial({ color: col3(pal.primary), roughness: 0.88, metalness: 0.02 });
     var wallMat = new THREE.MeshStandardMaterial({ color: col3(pal.wall), roughness: 0.9, metalness: 0.04 });
     var lowMat = new THREE.MeshStandardMaterial({ color: col3(pal.lowWall), roughness: 0.88, metalness: 0.04 });
-    // topo do obstáculo BAIXO: translúcido, para deixar claro que NÃO tapa a visão
-    var lowTopMat = new THREE.MeshStandardMaterial({
-      color: col3(pal.accent), roughness: 0.5, metalness: 0.0,
-      transparent: true, opacity: 0.34, depthWrite: false
-    });
 
-    var floorGeo = M.floorGeo(), highGeo = M.highGeo(), lowGeo = M.lowGeo(), lowTopGeo = M.lowTopGeo();
+    var floorGeo = M.floorGeo(), highGeo = M.highGeo(), lowGeo = M.lowGeo();
 
     var counts = { f1: 0, f2: 0, deco: 0, high: 0, low: 0 };
     var x, y, k;
@@ -726,12 +716,11 @@ var JOGO = (typeof window !== 'undefined')
       deco: counts.deco ? new THREE.InstancedMesh(floorGeo, decoMat, counts.deco) : null,
       high: counts.high ? new THREE.InstancedMesh(highGeo, wallMat, counts.high) : null,
       low: counts.low ? new THREE.InstancedMesh(lowGeo, lowMat, counts.low) : null,
-      lowTop: counts.low ? new THREE.InstancedMesh(lowTopGeo, lowTopMat, counts.low) : null
     };
     for (var key in inst) {
       var im = inst[key];
       if (!im) continue;
-      im.castShadow = key !== 'lowTop';
+      im.castShadow = true;
       im.receiveShadow = true;
       im.frustumCulled = false;
       boardG.add(im);
@@ -747,10 +736,10 @@ var JOGO = (typeof window !== 'undefined')
         mtx.makeTranslation(px, WALL_H / 2, pz);
         inst.high.setMatrixAt(idx.high++, mtx);
       } else if (k === 'low') {
+        // (o marcador suspenso que ficava em LOW_H + 0.12 saiu — ver a nota
+        //  em buildBoardKit: a altura do obstáculo já diz que dá para ver por cima)
         mtx.makeTranslation(px, LOW_H / 2, pz);
         inst.low.setMatrixAt(idx.low, mtx);
-        mtx.makeTranslation(px, LOW_H + 0.12, pz);
-        inst.lowTop.setMatrixAt(idx.low, mtx);
         idx.low++;
       } else if (k === 'deco') {
         mtx.makeTranslation(px, -0.2, pz);
