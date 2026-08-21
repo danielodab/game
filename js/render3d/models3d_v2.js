@@ -176,9 +176,23 @@ var JOGO = (typeof window !== 'undefined')
             build: { chest: 1.42, ombro: 1.34, braco: 1.38, perna: 0.88, cabeca: 0.78 },
             headTilt: 0.30,
             concept: 'Bárbaro brutamontes de dois machados, capa e cabeça baixa' },
-    arqueiro: { model: 'rogue_hooded', show: ['2H_Crossbow', 'Rogue_Cape'],
-            scale: 1.00, tint: '#4f9d6a', accent: '#d8f0a0', weapon: '2H_Crossbow',
-            concept: 'Batedor encapuzado de besta de duas mãos' },
+    // CAÇADOR (v3, corpo do Meshy feito pelo usuário). Substitui o Batedor
+    // encapuzado do KayKit, que segurava o lugar do `arqueiro` desde o início.
+    // Sem `show` nem `weapon`: o corpo já vem com a arma modelada, e pendurar
+    // a besta do KayKit no osso da mão só poria arma em cima de arma — foi o
+    // mesmo raciocínio do Minotauro e da Curandeira.
+    //
+    // `scale` fica em 1,00: o corpo mede 2,05 m, que é a altura certa dele na
+    // escada de porte do elenco (o Bárbaro acima, o Ladino em 1,75 m abaixo).
+    //
+    // O `tint` verde é herdado do Batedor e é o mesmo `palette.primary` da
+    // classe em `classes.js`. Não mexi: a cor é o que separa a classe das
+    // outras no tabuleiro e trocá-la sozinha aqui deixaria HUD e boneco
+    // discordando. O casaco do Caçador é castanho, então um dia vale rever as
+    // duas juntas.
+    arqueiro: { model: 'meshy_arqueiro',
+            scale: 1.00, tint: '#4f9d6a', accent: '#d8f0a0',
+            concept: 'Caçador barbudo de espingarda, chapéu de aba larga e casaco de pele' },
     // BRUXO: o usuário pediu cabelo e barba BRANCOS, "referência a mais velho e
     // experiente". O modelo do mago não tem barba — quem tem é o Bárbaro, e as
     // bind poses dos 9 humanoides KayKit são idênticas, então a cabeça troca.
@@ -205,7 +219,7 @@ var JOGO = (typeof window !== 'undefined')
             // do ladino, pode tirar"). A geometria gerada por `poeMascara`
             // continua no arquivo e volta com uma linha, mas numa cabeça chibi
             // de 40 px no tabuleiro a faixa vira um borrão preto sem leitura.
-            // A roupa escura sozinha já separa o Ladino do Batedor.
+            // A roupa escura sozinha já separa o Ladino do Caçador.
             // roupa preta: o corpo, braços e pernas do Ladino têm a textura
             // clareada na direção do preto, do mesmo jeito que a barba do Bruxo
             // vai para o branco. Tingir o material não serviria — a cor vem do

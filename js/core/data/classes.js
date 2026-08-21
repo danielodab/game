@@ -38,10 +38,14 @@ JOGO.DATA.classes = {
   /* -------------------------------------------------------------- ATIRADOR */
   arqueiro: {
     id: 'arqueiro',
-    name: 'Batedor',
+    // O `id` continua `arqueiro` de propósito, embora o nome visível seja
+    // Caçador e a arma seja espingarda: o id aparece em save, em feitiço
+    // (`arqueiro-fogo-5`) e em tabela de dano, e renomeá-lo custaria uma
+    // migração de save para não ganhar nada que o jogador veja.
+    name: 'Caçador',
     role: 'atirador',
-    description: 'Capuz fundo e besta de duas mãos. Dano à distância que se acumula: cada tiro deixa uma marca no alvo, e quem tem marcas demais recebe a conta toda de uma vez. Fraco de perto, letal de longe.',
-    lore: 'Foram os batedores que mediram o teto de pedra dos Fechos e concluíram que ainda cabia um tiro entre ele e o chão. Desde então marcam tudo o que se move: as marcas são um caderno de contas, e nenhum Fecho jamais viu um batedor perdoar uma dívida.',
+    description: 'Chapéu de aba larga e espingarda de dois canos. Dano à distância que se acumula: cada tiro deixa uma marca no alvo, e quem tem marcas demais recebe a conta toda de uma vez. Fraco de perto, letal de longe.',
+    lore: 'Foram os caçadores que mediram o teto de pedra dos Fechos e concluíram que ainda cabia um tiro entre ele e o chão. Desde então marcam tudo o que se move: as marcas são um caderno de contas, e nenhum Fecho jamais viu um caçador perdoar uma dívida.',
     palette: { primary: '#4f9d6a', secondary: '#26402f', accent: '#d8f0a0' },
     stats: {
       hp: 100, pa: 6, pp: 3, initiative: 70, power: 0, dodge: 25, lock: 10,

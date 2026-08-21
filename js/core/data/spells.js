@@ -436,7 +436,7 @@ JOGO.DATA.spells = {
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'detonateMarks', mult: 9 }, { type: 'damage', element: 'neutro', min: 8, max: 12 } ],
     description: 'Consome todas as marcas do alvo: 9 de dano por marca, mais 8–12 de dano neutro do tiro.',
-    flavor: 'Batedor nenhum perdoa dívida. No máximo adia o vencimento.',
+    flavor: 'Caçador nenhum perdoa dívida. No máximo adia o vencimento.',
     fxKey: 'markCollect'
   },
 
@@ -582,7 +582,7 @@ JOGO.DATA.spells = {
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'terra', min: 22, max: 28 }, { type: 'root', duration: 1 }, { type: 'mark', value: 5, duration: 4, max: 5 } ],
     description: 'Prega o alvo no chão: 22–28 de terra, 0 PP por 1 turno e 1 marca.',
-    flavor: 'Regra do batedor: quem não anda, não erra a conta.',
+    flavor: 'Regra do caçador: quem não anda, não erra a conta.',
     fxKey: 'pinShot'
   },
   'arqueiro-terra-12': {

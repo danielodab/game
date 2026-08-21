@@ -117,6 +117,33 @@ CLASSES = [
         "attack.glb": "HitReact",    # Slap_Reaction     -> levar dano
         "death.glb":  "death",
     }),
+    # CACADOR (v3). Substitui o Batedor encapuzado do KayKit, que segurava o
+    # lugar do `arqueiro` desde o inicio. O id da CLASSE continua `arqueiro`:
+    # trocar id exigiria migracao de save e o nome visivel ja resolve.
+    #
+    # Fusao de arquivos, como a curandeira — mas com uma novidade que o caminho
+    # antigo nao cobria: `walk.glb` traz DUAS acoes uteis, `Walking` e
+    # `Running`, e os dois papeis (andar e correr) saem do MESMO arquivo. Como a
+    # chave do mapa e o arquivo, um valor so nao dava conta; por isso o valor
+    # pode agora ser uma LISTA de pares (acao, papel).
+    #
+    # Os outros cinco pedem a acao pelo nome so por seguranca — cada um traz uma
+    # acao so, entao "a primeira" bastaria. Mas escrever o nome documenta o que
+    # o arquivo contem de verdade, que aqui NUNCA e o que o nome do arquivo diz.
+    #
+    # E os nomes de arquivo mentem, como no resto do elenco: `hit.glb` guarda
+    # `Rifle_Aim_Turn_Right` (mirar = o ataque a distancia dele) e `attack.glb`
+    # guarda `Slap_Reaction` (levar um tapa = reagir a dano). `run.glb` sobra do
+    # rodizio — `Vault_with_Rifle`, saltar um obstaculo — e vira a ESQUIVA.
+    ("arqueiro", "caçador", None, {
+        "idle.glb":   ("Idle_02",               "idle"),
+        "walk.glb":   [("Walking",              "walk"),
+                       ("Running",              "run")],
+        "hit.glb":    ("Rifle_Aim_Turn_Right",  "attack"),
+        "attack.glb": ("Slap_Reaction",         "HitReact"),
+        "death.glb":  ("falling_down",          "death"),
+        "run.glb":    ("Vault_with_Rifle",      "Dodge"),
+    }),
     ("bruxo", "mago", "idle.glb", {
         "Idle_02":                 "idle",
         "Walking":                 "walk",
@@ -204,13 +231,70 @@ def renomeia_acoes(mapa):
     return achadas, perdidas
 
 
+def pares_do_valor(valor):
+    """Le o valor do mapa de fusao e devolve sempre uma lista de (acao, papel).
+
+    O mapa de fusao e {arquivo: valor}, e o valor aceita tres formas — todas
+    nascidas de um personagem que quebrou a anterior:
+
+      "walk"                                 a curandeira: um arquivo, uma acao
+                                             so, e tanto faz o nome dela.
+      ("Walking", "walk")                    o cacador: o arquivo traz sobra do
+                                             exportador junto, entao e preciso
+                                             DIZER qual acao serve.
+      [("Walking","walk"), ("Running","run")] tambem o cacador: um MESMO arquivo
+                                             (walk.glb) rende dois papeis.
+
+    `None` no lugar da acao quer dizer "a primeira que vier", que e o
+    comportamento antigo e o que os cinco personagens ja embutidos usam.
+    """
+    if isinstance(valor, str):
+        return [(None, valor)]
+    if isinstance(valor, tuple) and len(valor) == 2 and isinstance(valor[1], str):
+        return [valor]
+    return [tuple(par) for par in valor]
+
+
+def acha_acao(novas, nome):
+    """Procura a acao pelo nome entre as recem-importadas.
+
+    Nao basta comparar o nome cru, por duas razoes:
+
+      · o importador de glTF do Blender BATIZA a acao com `rig|animacao|faixa` —
+        o `idle.glb` do cacador entra como `Armature|Idle_02|baselayer`, nao
+        como `Idle_02`. (Nem todo arquivo faz isso: o `walk.glb` dele traz
+        `Walking` e `Running` puros. Depende de como o glTF foi gravado.)
+      · o Blender poe sufixo `.001` quando o nome ja existe, e ele existe: ao
+        fundir seis arquivos do mesmo personagem, `Armature|...` colide.
+
+    Entao: nome exato, depois o miolo do `rig|animacao|faixa`, e os dois de novo
+    sem o sufixo numerico.
+    """
+    def variantes(nm):
+        yield nm
+        base = nm.rsplit(".", 1)
+        if len(base) == 2 and base[1].isdigit():
+            nm = base[0]
+            yield nm
+        partes = nm.split("|")
+        if len(partes) == 3:
+            yield partes[1]
+    for a in novas:
+        if nome in variantes(a.name):
+            return a
+    return None
+
+
 def funde_arquivos(pasta_orig, mapa):
-    """Junta SEIS .glb de uma acao cada num personagem so.
+    """Junta SEIS .glb num personagem so.
 
     Fica com o corpo do primeiro arquivo e traz das outras cinco importacoes
-    apenas a ACAO, jogando fora o corpo repetido. Da certo porque os seis saem
+    apenas as ACOES, jogando fora o corpo repetido. Da certo porque os seis saem
     do mesmo personagem no Meshy: os ossos tem os mesmos nomes, entao uma curva
     gravada num arquivo toca no esqueleto do outro sem tradução.
+
+    Um arquivo pode render mais de um papel (ver `pares_do_valor`): o walk.glb
+    do cacador traz `Walking` e `Running`, e as duas ficam.
 
     As acoes precisam de `use_fake_user`: sem dono, o Blender descarta o
     data-block no momento em que eu apago o objeto que a trazia, e o export sai
@@ -218,8 +302,9 @@ def funde_arquivos(pasta_orig, mapa):
     """
     itens = list(mapa.items())
     achadas, perdidas = {}, []
+    papeis = set(p for v in mapa.values() for _, p in pares_do_valor(v))
 
-    for i, (arquivo, papel) in enumerate(itens):
+    for i, (arquivo, valor) in enumerate(itens):
         caminho = os.path.join(pasta_orig, arquivo)
         if not os.path.exists(caminho):
             perdidas.append(arquivo); continue
@@ -230,14 +315,26 @@ def funde_arquivos(pasta_orig, mapa):
         novos_obj = [o for o in bpy.data.objects if o.name not in antes_obj]
         novas_act = [a for a in bpy.data.actions if a.name not in antes_act]
 
-        if not novas_act:
-            perdidas.append(arquivo + " (sem acao)")
-        else:
-            act = novas_act[0]
-            act.name = "papel_" + papel
+        guardadas = []
+        for acao, papel in pares_do_valor(valor):
+            if acao is None:
+                # sem nome pedido: a primeira que ainda nao foi tomada
+                act = next((a for a in novas_act if a not in guardadas), None)
+            else:
+                act = acha_acao(novas_act, acao)
+            if act is None or act in guardadas:
+                perdidas.append("%s:%s" % (arquivo, acao or "(1a acao)"))
+                continue
+            act.name = "papel_" + papel     # prefixo evita colidir com importado
             act.use_fake_user = True
             achadas[papel] = arquivo
-            for extra in novas_act[1:]:
+            guardadas.append(act)
+
+        # o que veio junto e nao serve sai agora: nos arquivos do cacador cada
+        # importacao traz `Armature` e `baselayer` de sobra, e elas iriam parar
+        # no .glb final como animacao vazia
+        for extra in novas_act:
+            if extra not in guardadas:
                 bpy.data.actions.remove(extra)
 
         if i == 0:
@@ -252,7 +349,7 @@ def funde_arquivos(pasta_orig, mapa):
         if a.name.startswith("papel_"):
             a.name = a.name[len("papel_"):]
     for a in list(bpy.data.actions):
-        if a.name not in mapa.values():
+        if a.name not in papeis:
             bpy.data.actions.remove(a)
 
     # malha e textura repetidas ficam orfas depois de remover os objetos
