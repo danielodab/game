@@ -1,0 +1,376 @@
+<meta charset="utf-8">
+<title>Bestiário da Estufa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+  :root {
+    --ground:#E7E9E3; --surface:#F3F4EF; --sunken:#DDE0D8;
+    --ink:#1D2225; --muted:#5B635E; --faint:#858C86; --line:#CBCFC5;
+    --accent:#4A7A2B;
+    --terra:#5C8A33; --agua:#2E7E9E; --ar:#6E5CA8; --chefe:#A03A5E;
+    --f-display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+    --f-body:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --f-data:"JetBrains Mono","SF Mono",Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#15181A; --surface:#1D2124; --sunken:#101315;
+      --ink:#E4E7E1; --muted:#98A19A; --faint:#6E7872; --line:#2E3439;
+      --accent:#9BCF6D;
+      --terra:#9BCF6D; --agua:#63C2E4; --ar:#C0B0F0; --chefe:#E8799C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#15181A; --surface:#1D2124; --sunken:#101315;
+    --ink:#E4E7E1; --muted:#98A19A; --faint:#6E7872; --line:#2E3439;
+    --accent:#9BCF6D;
+    --terra:#9BCF6D; --agua:#63C2E4; --ar:#C0B0F0; --chefe:#E8799C;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--ink);font-family:var(--f-body);
+       font-size:17px;line-height:1.65;margin:0;padding:0 20px 96px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:800px;margin:0 auto}
+  header{display:flex;flex-direction:column;gap:14px;padding:72px 0 34px;border-bottom:2px solid var(--ink)}
+  .eyebrow{font-family:var(--f-data);font-size:11.5px;font-weight:600;letter-spacing:.16em;
+           text-transform:uppercase;color:var(--accent)}
+  h1{font-family:var(--f-display);font-weight:800;font-size:clamp(38px,7vw,58px);
+     line-height:1.02;letter-spacing:-.022em;margin:0;text-wrap:balance}
+  .standfirst{font-size:19px;line-height:1.55;color:var(--muted);margin:0;max-width:60ch}
+  section{padding-top:52px}
+  h2{font-family:var(--f-display);font-weight:700;font-size:15px;letter-spacing:.09em;
+     text-transform:uppercase;margin:0 0 6px;display:flex;align-items:baseline;gap:12px}
+  h2::after{content:"";flex:1;height:1px;background:var(--line)}
+  .lede{color:var(--muted);margin:0 0 26px;max-width:64ch}
+  p{margin:0 0 18px;max-width:66ch}
+  strong{font-weight:600} em{font-style:italic}
+  code{font-family:var(--f-data);font-size:.855em;background:var(--sunken);
+       border:1px solid var(--line);border-radius:3px;padding:1px 5px}
+  .achado{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+          padding:22px 26px;margin:0 0 20px}
+  .achado h3{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0 0 8px}
+  .achado p{margin:0;color:var(--muted)} .achado p+p{margin-top:12px}
+  .tabela-envolve{overflow-x:auto;margin:0 0 26px}
+  table{border-collapse:collapse;width:100%;font-family:var(--f-data);font-size:13px;
+        font-variant-numeric:tabular-nums}
+  th{text-align:left;font-weight:600;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+     color:var(--faint);padding:0 14px 8px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--line);vertical-align:baseline;white-space:nowrap}
+  td.n{font-family:var(--f-body);font-size:15px;white-space:normal}
+  td.num{text-align:right;padding-right:20px}
+  .baixo{color:var(--chefe);font-weight:600} .alvo{color:var(--accent);font-weight:600}
+
+  .bicho{border-top:1px solid var(--line);padding:30px 0;display:grid;
+         grid-template-columns:1fr 200px;gap:32px}
+  .bicho:last-of-type{border-bottom:1px solid var(--line)}
+  .bicho.chefe{background:var(--surface);padding-left:22px;padding-right:22px}
+  .bicho-cab{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:2px}
+  .bicho h3{font-family:var(--f-display);font-weight:700;font-size:24px;letter-spacing:-.016em;margin:0}
+  .chip{font-family:var(--f-data);font-size:10px;font-weight:600;letter-spacing:.1em;
+        text-transform:uppercase;padding:3px 8px;border-radius:2px;border:1px solid currentColor}
+  .c-terra{color:var(--terra)} .c-agua{color:var(--agua)} .c-ar{color:var(--ar)}
+  .c-chefe{color:var(--ground);background:var(--chefe);border-color:var(--chefe)}
+  .papel{font-family:var(--f-data);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
+         color:var(--faint);margin:0 0 12px}
+  .bicho p{margin:0 0 12px;max-width:52ch} .bicho p:last-child{margin-bottom:0}
+  .naofaca{color:var(--muted);font-style:italic;border-left:2px solid var(--line);padding-left:14px}
+  .ficha{font-family:var(--f-data);font-size:12px;line-height:1.5;border-top:2px solid var(--ink);
+         padding-top:12px;align-self:start}
+  .ficha dl{margin:0;display:grid;grid-template-columns:1fr;gap:10px}
+  .ficha dt{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  .ficha dd{margin:2px 0 0;color:var(--ink);font-variant-numeric:tabular-nums}
+  ul{max-width:66ch;padding-left:20px;margin:0 0 18px} li{margin-bottom:8px}
+  footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);
+         font-family:var(--f-data);font-size:11.5px;letter-spacing:.05em;color:var(--faint)}
+  @media(max-width:620px){.bicho{grid-template-columns:1fr;gap:20px}body{font-size:16px}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">SOTERRA · briefing de bestiário</div>
+  <h1>Bestiário da Estufa</h1>
+  <p class="standfirst">Os nove bichos do jardim que aprendeu a caçar — oito da horda e a
+  guardiã. O que cada um é, o que faz no turno, e a regra que obriga todos a ficarem de pé.</p>
+</header>
+
+<section>
+  <h2>A regra que decide tudo</h2>
+
+  <div class="achado">
+    <h3>Humanoides, os nove. Inclusive a vespa e a aranha.</h3>
+    <p>Mesma razão das invocações: sua biblioteca de animação é de esqueleto humanoide. Um
+    bicho de seis patas não tem de onde tirar ataque, reação a dano nem morte — acabaria com um
+    clipe de andar e nada mais, deslizando parado a batalha inteira.</p>
+    <p>Isso não empobrece: <em>obriga a inventar</em>. Uma vespa humanoide é uma figura de
+    cintura fina com as <strong>asas no lugar dos braços</strong> — e é o que faz o osso do
+    braço animar a asa de graça. Uma aranha humanoide é um vulto alto sobre duas pernas de
+    palito, com o abdômen nas costas. Ficam mais estranhas que as originais, e estranho é bom
+    num jardim que aprendeu a caçar.</p>
+  </div>
+
+  <div class="achado">
+    <h3>Cor quase nenhuma, de novo.</h3>
+    <p>O jogo multiplica a textura pela cor do elemento do bicho — verde para terra, azul para
+    água, lilás para ar. O volume é seu; o matiz é do jogo. Se você assar o amarelo do pólen no
+    Bufo, ele vira amarelo × verde e sai pardo.</p>
+    <p>A exceção é o detalhe que o bicho tem de ter: o vidro da Vespa-Lustre, os olhinhos
+    pretos do Carrapicho. Esses podem ser escuros ou muito claros, porque contraste de VALOR
+    sobrevive ao tingimento — só a cor é que não.</p>
+  </div>
+
+  <div class="achado">
+    <h3>Uma locomoção só, e quatro clipes bastam.</h3>
+    <p><code>Idle</code>, uma locomoção, <code>Attack</code> e <code>Death</code>.
+    <code>HitReact</code> se quiser o estremecimento — é o menos sentido, porque o golpe já
+    pisca o bicho de branco e mostra o número.</p>
+    <p>E não faça <code>Walk</code> e <code>Run</code> na mesma criatura: quando ela se desloca,
+    o jogo escolhe um só, e a ordem é <code>run</code> antes de <code>walk</code>. Os dois
+    juntos e o <code>walk</code> nunca toca.</p>
+  </div>
+
+  <div class="tabela-envolve">
+    <table>
+      <tr><th>bicho</th><th>elem</th><th>papel</th><th class="num">hoje</th><th class="num">alvo</th></tr>
+      <tr><td class="n">Carrapichinho</td><td>terra</td><td>enxame</td><td class="num">1,04 m</td><td class="num alvo">0,90 m</td></tr>
+      <tr><td class="n">Brotinho-Voraz</td><td>terra</td><td>enxame</td><td class="num">1,40 m</td><td class="num alvo">1,20 m</td></tr>
+      <tr><td class="n">Bufo-de-Pólen</td><td>terra</td><td>corpo a corpo</td><td class="num">1,53 m</td><td class="num alvo">1,55 m</td></tr>
+      <tr><td class="n">Seiveiro</td><td>agua</td><td>apoio</td><td class="num">1,80 m</td><td class="num alvo">1,60 m</td></tr>
+      <tr><td class="n">Vespa-Lustre</td><td>ar</td><td>corpo a corpo</td><td class="num">1,71 m</td><td class="num alvo">1,70 m</td></tr>
+      <tr><td class="n">Carrapicho-Mãe</td><td>terra</td><td>corpo a corpo</td><td class="num">1,89 m</td><td class="num alvo">1,90 m</td></tr>
+      <tr><td class="n">Vergasta</td><td>terra</td><td>distância</td><td class="num baixo">1,80 m</td><td class="num alvo">2,10 m</td></tr>
+      <tr><td class="n">Aranha-de-Orvalho</td><td>agua</td><td>distância</td><td class="num baixo">1,53 m</td><td class="num alvo">2,20 m</td></tr>
+      <tr><td class="n">A Jardineira-Viúva</td><td>terra</td><td>CHEFE</td><td class="num">5,16 m</td><td class="num alvo">5,00 m</td></tr>
+    </table>
+  </div>
+  <p>Para calibrar: um herói tem entre 1,75 m (Ladino) e 2,62 m (Minotauro), a casa mede
+  2,0 m e a parede sobe a 3,10 m. O bicho pequeno tem de ser <em>claramente</em> menor que um
+  herói, e a chefe tem de ser maior que tudo o que anda no tabuleiro.</p>
+</section>
+
+<section>
+  <h2>A horda</h2>
+  <p class="lede">Oito bichos, e a regra que os separa: cada um tem de fazer uma coisa que os
+  outros não fazem. A silhueta precisa dizer isso antes de o jogador ler o nome.</p>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab"><h3>Carrapichinho</h3><span class="chip c-terra">terra</span></div>
+      <p class="papel">o menor de todos · vem em bando · gruda e não solta</p>
+      <p>«Metade do rancor, o dobro da velocidade.» Nasce quando a Carrapicho-Mãe morre, então
+      o jogador vê vários de uma vez — a leitura tem de funcionar em grupo, de longe.</p>
+      <p>Uma bolinha de farpas com <strong>duas perninhas e dois bracinhos</strong>, correndo
+      inclinada para a frente. Sem pescoço: a cabeça é o próprio corpo, e os olhinhos pretos
+      ficam entre os espinhos.</p>
+      <p class="naofaca">Não dê detalhe. A 0,90 m e em bando, o que se vê é a silhueta — farpa
+      grossa e poucas, não mil agulhinhas que viram borrão.</p>
+    </div>
+    <div class="ficha"><dl>
+      <dt>altura</dt><dd>0,90 m</dd>
+      <dt>proporção</dt><dd>bola com membros<br>curtos, inclinada</dd>
+      <dt>anda?</dt><dd>sim, rápido</dd>
+      <dt>clipes</dt><dd>idle · run · attack<br>hit · death</dd>
+    </dl></div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab"><h3>Brotinho-Voraz</h3><span class="chip c-terra">terra</span></div>
+      <p class="papel">rápido e frágil · a Jardineira planta, ele faz o resto</p>
+      <p>«Uma muda recém-germinada que é só folhas, pressa e dentes.» É o bicho mais fraco do
+      jogo (30 de vida) e um dos mais rápidos.</p>
+      <p>Um bípede pequeno feito de caule: pernas finas e longas demais para o corpo, dois
+      braços que são folhas, e uma <strong>boca que abre o tronco inteiro</strong> — do queixo
+      à cintura, cheia de dentes de espinho. Fechada, parece uma muda; aberta, é outra coisa.</p>
+      <p class="naofaca">Não faça fofo. Ele é o primeiro susto do jogo: parece planta até
+      abrir.</p>
+    </div>
+    <div class="ficha"><dl>
+      <dt>altura</dt><dd>1,20 m</dd>
+      <dt>proporção</dt><dd>pernas longas, tronco<br>curto que se abre</dd>
+      <dt>anda?</dt><dd>sim, rápido</dd>
+      <dt>clipes</dt><dd>idle · run · attack<br>hit · death</dd>
+    </dl></div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab"><h3>Bufo-de-Pólen</h3><span class="chip c-terra">terra</span></div>
+      <p class="papel">anda balançando · o mais inofensivo à primeira vista</p>
+      <p>«Uma bola de pólen amarelo com perninhas de graveto e um sorriso costurado.» O sorriso
+      é o assunto dele: é <em>costurado</em>, e alguém teve de costurar.</p>
+      <p>Corpo esférico ocupando quase toda a altura, perninhas de graveto tão finas que mal se
+      veem de longe, bracinhos idem. A costura do sorriso feita de fio grosso, com nós
+      visíveis — é o único detalhe que precisa ler pequeno.</p>
+      <p class="naofaca">Não dê pescoço nem cintura. Ele é uma bola com membros enfiados, e a
+      graça é o desequilíbrio.</p>
+    </div>
+    <div class="ficha"><dl>
+      <dt>altura</dt><dd>1,55 m</dd>
+      <dt>proporção</dt><dd>esfera com gravetos,<br>membros quase invisíveis</dd>
+      <dt>anda?</dt><dd>sim, balançando</dd>
+      <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
+    </dl></div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab"><h3>Seiveiro</h3><span class="chip c-agua">agua</span></div>
+      <p class="papel">APOIO · cura os outros · não é para matar primeiro, e sim para matar antes</p>
+      <p>«Um toco de árvore corcunda com um rosto entalhado a canivete e um caldeirão de seiva
+      borbulhando no colo.» É o único que <strong>cura</strong> no bestiário da Estufa, e o
+      jogador precisa reconhecê-lo à distância para escolhê-lo como alvo.</p>
+      <p>Baixo e largo, corcunda, com o caldeirão preso ao peito pelos dois braços — a
+      silhueta é <em>a do caldeirão</em>, e é isso que o denuncia de longe. Rosto entalhado
+      raso, feito a canivete: traços retos, sem volume.</p>
+      <p class="naofaca">Não faça alto nem esguio. Ele tem de ler como «aquele ali é o que
+      cura» no primeiro olhar, e o que faz isso é o volume redondo do caldeirão.</p>
+    </div>
+    <div class="ficha"><dl>
+      <dt>altura</dt><dd>1,60 m</dd>
+      <dt>proporção</dt><dd>baixo e largo, caldeirão<br>na frente do peito</dd>
+      <dt>anda?</dt><dd>sim, devagar</dd>
+      <dt>clipes</dt><dd>idle · walk · cast<br>hit · death</dd>
+    </dl></div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab"><h3>Vespa-Lustre</h3><span class="chip c-ar">ar</span></div>
+      <p class="papel">a mais rápida da horda · abdômen de lanterna</p>
+      <p>«Uma vespa do tamanho de um gato cujo abdômen é uma lanterna de vidro com uma luz
+      presa dentro.» Na Estufa os vaga-lumes em redomas fazem as vezes de sol — ela é o que
+      acontece quando um deles vira bicho.</p>
+      <p>Figura de cintura finíssima com as <strong>asas no lugar dos braços</strong>, pernas
+      curtas e o abdômen-lanterna pendendo atrás como uma cauda pesada. O vidro do abdômen é o
+      detalhe que tem de sobreviver ao tingimento: deixe-o quase branco por dentro.</p>
+      <p class="naofaca">Não ponha braços E asas. Quatro membros superiores num rig de dois
+      deixam metade sem osso, parada no ar enquanto o resto se mexe.</p>
+    </div>
+    <div class="ficha"><dl>
+      <dt>altura</dt><dd>1,70 m</dd>
+      <dt>proporção</dt><dd>cintura fina, asas nos<br>braços, cauda pesada</dd>
+      <dt>anda?</dt><dd>voa (fly, não walk)</dd>
+      <dt>clipes</dt><dd>fly · attack · hit<br>death</dd>
+    </dl></div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab"><h3>Carrapicho-Mãe</h3><span class="chip c-terra">terra</span></div>
+      <p class="papel">ao morrer, se parte em Carrapichinhos</p>
+      <p>«Um novelo de farpas do tamanho de um cão, com dezenas de olhinhos pretos entre os
+      espinhos.» O jogador tem de saber, olhando, que matar essa vai render trabalho.</p>
+      <p>Um vulto encurvado <em>coberto</em> de farpas, com os filhotes já visíveis grudados
+      nas costas e nos ombros — pequenos, do tamanho de punhos, e é isso que anuncia a divisão
+      antes de ela acontecer. Braços curtos e grossos, pernas escondidas sob o novelo.</p>
+      <p class="naofaca">Não faça só uma bola grande. A leitura que importa é <em>mãe</em>: os
+      filhotes têm de estar lá antes de saírem.</p>
+    </div>
+    <div class="ficha"><dl>
+      <dt>altura</dt><dd>1,90 m</dd>
+      <dt>proporção</dt><dd>encurvada e larga,<br>filhotes nas costas</dd>
+      <dt>anda?</dt><dd>sim</dd>
+      <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
+    </dl></div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab"><h3>Vergasta</h3><span class="chip c-terra">terra</span></div>
+      <p class="papel">NÃO SAI DO LUGAR · bate de longe · o primeiro problema tático do jogo</p>
+      <p>«Um chicote vegetal enraizado num vaso rachado, coberto de farpas e flores mortas.» É
+      a única da horda que fica plantada e bate à distância — o jogador aprende com ela que
+      nem todo inimigo se resolve andando até lá.</p>
+      <p>Um torso que sobe de um vaso rachado, sem pernas visíveis: a raiz sai do vaso e some
+      no chão. Os <strong>braços são os chicotes</strong>, longos, farpados, com flores mortas
+      penduradas — e é o osso do braço que os anima. Modele as pernas mesmo assim, escondidas
+      dentro do vaso: é o que segura a pose de pé no esqueleto.</p>
+      <p class="naofaca">Não dê base larga de planta. O vaso RACHADO é a assinatura dela — a
+      mesma louça quebrada que aparece no cenário da sala.</p>
+    </div>
+    <div class="ficha"><dl>
+      <dt>altura</dt><dd>2,10 m</dd>
+      <dt>proporção</dt><dd>torso alto saindo de<br>um vaso, braços-chicote</dd>
+      <dt>anda?</dt><dd>quase não (1 passo)</dd>
+      <dt>clipes</dt><dd>idle · attack · hit<br>death</dd>
+    </dl></div>
+  </div>
+
+  <div class="bicho">
+    <div>
+      <div class="bicho-cab"><h3>Aranha-de-Orvalho</h3><span class="chip c-agua">agua</span></div>
+      <p class="papel">anda sobre a água sem afundar · tece à distância</p>
+      <p>«Pernas finíssimas que andam sobre a água acumulada nas folhas sem afundar um
+      milímetro.» Ela é o bicho <em>alto</em> da horda — e alto, aqui, é o que a torna
+      inquietante.</p>
+      <p>Um vulto magro sobre <strong>duas pernas de palito</strong> desproporcionalmente
+      longas, joelhos acima da cintura como os de um gafanhoto. O abdômen vai nas costas, como
+      uma mochila pesada, e os braços são finos e longos, para tecer. Cabeça pequena, muitos
+      olhos.</p>
+      <p class="naofaca">Não faça baixa e larga como aranha de verdade. O que assusta nela é a
+      altura e a finura — ela tem de ser mais alta que o Ladino.</p>
+    </div>
+    <div class="ficha"><dl>
+      <dt>altura</dt><dd>2,20 m</dd>
+      <dt>proporção</dt><dd>pernas de palito, joelhos<br>altos, abdômen nas costas</dd>
+      <dt>anda?</dt><dd>sim, leve</dd>
+      <dt>clipes</dt><dd>idle · walk · attack<br>hit · death</dd>
+    </dl></div>
+  </div>
+</section>
+
+<section>
+  <h2>A guardiã</h2>
+
+  <div class="bicho chefe">
+    <div>
+      <div class="bicho-cab"><h3>A Jardineira-Viúva</h3><span class="chip c-chefe">chefe · terra</span></div>
+      <p class="papel">300 de vida · planta os Brotinhos · a maior coisa do tabuleiro</p>
+      <p>«Um vulto de treliça, luvas de couro e véu de viúva, com uma tesoura de poda.» Ela é a
+      única figura da Estufa que já foi <em>gente</em>, ou fingiu ser — e é isso que a separa
+      de tudo o que veio antes: a horda é jardim, ela é jardineira.</p>
+      <p>Corpo de <strong>treliça vazada</strong>, do tipo que a hera sobe: dá para ver
+      através dela, e é o que a faz parecer oca. O véu cobre onde deveria haver rosto e não
+      cobre nada — não há rosto. As luvas de couro são a única parte sólida e humana, e a
+      tesoura de poda é do tamanho de um herói.</p>
+      <p>A cinco metros, ela precisa ser lida em três tempos: o véu no alto, o vazado do
+      tronco, a tesoura na mão. Nada mais compete com esses três.</p>
+      <p class="naofaca">Não a faça musculosa nem monstruosa. O terror dela é ser <em>alta,
+      oca e educada</em> — silhueta de senhora, três vezes o tamanho certo.</p>
+    </div>
+    <div class="ficha"><dl>
+      <dt>altura</dt><dd>5,00 m</dd>
+      <dt>proporção</dt><dd>alta e magra, tronco<br>vazado, véu no alto</dd>
+      <dt>anda?</dt><dd>sim, devagar</dd>
+      <dt>clipes</dt><dd>idle · walk · attack<br>cast · hit · death</dd>
+      <dt>nota</dt><dd>a descrição nos dados<br>diz «três metros» —<br>vou alinhar o texto</dd>
+    </dl></div>
+  </div>
+</section>
+
+<section>
+  <h2>Se for fazer em ordem</h2>
+  <ul>
+    <li><strong>A Jardineira-Viúva primeiro.</strong> É a que o jogador olha por mais tempo,
+    a que fecha a primeira descida, e a única que já é humanoide na descrição — então é a que
+    menos exige reinvenção.</li>
+    <li><strong>Depois os três de silhueta única</strong>: a Vergasta no vaso, a
+    Aranha-de-Orvalho de pernas de palito e a Vespa-Lustre de asas nos braços. São as que mais
+    mudam com a regra humanoide, e as mais fáceis de errar se deixadas por último.</li>
+    <li><strong>Os quatro de farpa e folha</strong> (Carrapicho-Mãe, Carrapichinho,
+    Brotinho-Voraz, Bufo-de-Pólen) podem sair numa folha só: dividem o vocabulário — espinho,
+    caule, olho preto — e ficam coerentes se feitos juntos.</li>
+    <li><strong>O Seiveiro por último</strong>, porque é o único de apoio e o mais raro em
+    campo.</li>
+  </ul>
+  <p>E como nas peças de cenário: pode mandar vários por arquivo, com vão entre eles. Eu
+  separo, meço e ponho no lugar.</p>
+</section>
+
+<footer>
+  SOTERRA · bestiário da Estufa Soterrada · 9 bichos · escrito em 21 de agosto de 2026
+</footer>
+
+</div>
