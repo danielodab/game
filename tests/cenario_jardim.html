@@ -144,13 +144,13 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
      * procuro a semente que cai na peca que quero. E feio, mas e honesto: a
      * alternativa seria o teste montar a peca por conta propria, e ai ele
      * estaria conferindo a si mesmo em vez do jogo. */
-    function medeFiadas(papel, chave, alvo) {
+    function medeMuro(papel, chave, alvo) {
       var R = window.JOGO && JOGO.Renderer;
-      if (!R || !R.muroEmFiadas) return null;
+      if (!R || !R.muroDaCasa) return null;
       var lista = (JOGO.CENARIO.garden || {})[papel] || [];
       var semente = lista.indexOf(chave);
       if (semente < 0) return null;
-      var g = R.muroEmFiadas('garden', papel, semente, alvo, CELL);
+      var g = R.muroDaCasa('garden', papel, semente, alvo, CELL);
       if (!g) return null;
       g.updateMatrixWorld(true);
       var b = new THREE.Box3().setFromObject(g);
@@ -160,7 +160,7 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       return { alt: alt, larg: larg, base: b.min.y,
                desvio: Math.max(Math.abs(b.min.x + b.max.x) / 2,
                                 Math.abs(b.min.z + b.max.z) / 2),
-               fiadas: g.userData.fiadas,
+               estica: g.userData.estica,
                cruaAlt: alt, cruaLarg: larg };
     }
 
@@ -179,10 +179,10 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
           //
           // Os dois passaram a ser montados em FIADAS pelo renderizador, e
           // medi-los aqui por outra conta seria medir uma coisa que o jogo nao
-          // desenha. `R.muroEmFiadas` e a mesma funcao que a sala chama.
+          // desenha. `R.muroDaCasa` e a mesma funcao que a sala chama.
           var m;
-          if (papel === 'alto' || papel === 'baixo') {
-            m = medeFiadas(papel, chave, ALVO[papel]);
+          if (papel === 'alto' || papel === 'baixo' || papel === 'pilar') {
+            m = medeMuro(papel, chave, ALVO[papel]);
           } else {
             m = normaliza(cena.clone(true), ALVO[papel], null);
           }
@@ -206,7 +206,7 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
             curtas.push(chave + ' ' + m.alt.toFixed(2) + '/' + ALVO[papel].toFixed(2));
           linhas.push({ chave: chave, papel: papel, alvo: ALVO[papel], base: m.base,
                         desvio: m.desvio,
-                        alt: m.alt, larg: m.larg, fiadas: m.fiadas,
+                        alt: m.alt, larg: m.larg, estica: m.estica,
                         razao: m.cruaLarg / m.cruaAlt,
                         nome: (JOGO.CENARIO_NOME || {})[chave] || chave });
         });
@@ -251,9 +251,14 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       // Com fiadas a altura é escolhida, não sofrida. Então a régua fecha, e a
       // exceção sai junto: exceção que sobrevive ao problema que a justificava
       // vira mentira no teste. Se a ruína voltar a ficar curta, agora reprova.
-      var muros = linhas.filter(function (l) { return l.papel === 'alto'; });
+      // O PILAR ENTRA NA MESMA RÉGUA. Ele pontua a parede, então nasce lado a
+      // lado com o muro — e foi assim que a diferença apareceu: o muro fechava
+      // em 3,10 m e o pilar parava em 2,76 m, 34 cm que se veem.
+      var muros = linhas.filter(function (l) {
+        return l.papel === 'alto' || l.papel === 'pilar';
+      });
       var fora = muros.filter(function (l) { return Math.abs(l.alt - ALVO.alto) > 0.02; });
-      check('TODO muro tem exatamente a mesma altura (' + ALVO.alto.toFixed(2) + ' m)',
+      check('TODO muro e pilar têm exatamente a mesma altura (' + ALVO.alto.toFixed(2) + ' m)',
             muros.length > 0 && fora.length === 0,
             fora.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + ' m'; }).join(' · '));
 
@@ -271,17 +276,37 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       check('toda mureta tem a mesma altura (' + ALVO.baixo.toFixed(2) + ' m)',
             muretas.length > 0 && mFora.length === 0,
             mFora.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + ' m'; }).join(' · '));
+      // O ESTICÃO É O PREÇO, e ele fica MEDIDO em vez de escondido.
+      //
+      // A peça é aumentada em Y para chegar à altura cheia, porque empilhar foi
+      // reprovado ("você colocou muro em cima do outro"). O esticão não é
+      // defeito, é a escolha — mas se um dia passar de 3,5× é sinal de que
+      // chegou um módulo ainda mais achatado, e aí a arte é que precisa mudar.
+      //
       // `every` de lista VAZIA devolve true: sem o teste de tamanho esta
-      // checagem passaria justamente quando nenhum muro foi medido, que e o
+      // checagem passaria justamente quando nenhum muro foi medido, que é o
       // caso em que ela mais precisa gritar.
-      check('a mureta é UMA fiada e o muro é mais de uma',
-            muretas.length > 0 && muros.length > 0 &&
-            muretas.every(function (l) { return l.fiadas === 1; }) &&
-            muros.every(function (l) { return l.fiadas >= 2; }),
-            'mureta ' + muretas.map(function (l) { return l.fiadas; }).join('/') +
-            ' · muro ' + muros.map(function (l) { return l.fiadas; }).join('/'));
+      var demais = muros.filter(function (l) { return l.estica > 3.5; });
+      check('o esticão fica dentro do aceitável (≤ 3,5×)',
+            muros.length > 0 && demais.length === 0,
+            'muro ' + muros.map(function (l) { return l.estica.toFixed(1) + '×'; }).join(' / ') +
+            ' · mureta ' + muretas.map(function (l) { return l.estica.toFixed(1) + '×'; }).join(' / '));
 
       // e o muro tem de passar de um herói, que é o que o separa de decoração
+      // UMA PEÇA SÓ. O berço do muro tem exatamente um filho; mais que um
+      // significa que alguém voltou a empilhar, e foi disso que o Daniel
+      // reclamou de olho.
+      var R2 = window.JOGO && JOGO.Renderer;
+      var empilhados = [];
+      if (R2 && R2.muroDaCasa) {
+        for (var sd = 0; sd < 4; sd++) {
+          var gg = R2.muroDaCasa('garden', 'alto', sd, ALVO.alto, CELL);
+          if (gg && gg.children.length !== 1) empilhados.push(sd + ':' + gg.children.length);
+        }
+      }
+      check('o muro é UMA peça, não peça em cima de peça',
+            empilhados.length === 0, empilhados.join(' '));
+
       check('todo muro passa da altura do maior herói (2,62 m)',
             muros.length > 0 && muros.every(function (l) { return l.alt > 2.62; }),
             muros.map(function (l) { return l.alt.toFixed(2); }).join(', '));
