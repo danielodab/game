@@ -21,15 +21,21 @@ ORIG = r"C:\Users\danie\Downloads\assets_ok\mapa\jardim\_separado"
 SAIDA = os.path.join(RAIZ, "assets", "embedded", "cenario-jardim.js")
 
 # arquivo -> (chave, nome, papel)
-#   baixo = divisória (0,95 m) · alto = coluna (3,10 m)
-#   chao  = enfeite de piso    · borda = enfeite fora da arena
+#   baixo   = MÓDULO de divisória (0,95 m), o muro que se enfileira
+#   sotaque = enfeite que entra UMA vez no meio de uma fileira, como charme
+#   alto    = coluna (3,10 m) · chao = enfeite de piso · borda = fora da arena
+#
+# As seis peças decorativas entram nos DOIS: em `baixo` porque ainda não há
+# módulo de muro e alguma coisa tem de segurar a fileira, e em `sotaque` porque
+# é o papel definitivo delas. Quando os módulos chegarem, some a linha de
+# `baixo` e elas ficam só como charme.
 PECAS = [
-    ("itens_jardim2_01.glb",  "jd_regador",      "Regador de cobre tombado",          "baixo"),
-    ("itens_jardim_01.glb",   "jd_carrinho",     "Carrinho de jardim tombado",        "baixo"),
-    ("itens_jardim_02.glb",   "jd_tronco",       "Tronco serrado com cogumelos",      "baixo"),
-    ("itens_jardmi_5_01.glb", "jd_redoma",       "Redoma de vidro quebrada",          "baixo"),
-    ("itens_jardmi_5_02.glb", "jd_canteiro",     "Canteiro suspenso com brotos",      "baixo"),
-    ("itens_jardmi_5_03.glb", "jd_vaso",         "Vaso de barro rachado",             "baixo"),
+    ("itens_jardim2_01.glb",  "jd_regador",      "Regador de cobre tombado",          "sotaque"),
+    ("itens_jardim_01.glb",   "jd_carrinho",     "Carrinho de jardim tombado",        "sotaque"),
+    ("itens_jardim_02.glb",   "jd_tronco",       "Tronco serrado com cogumelos",      "sotaque"),
+    ("itens_jardmi_5_01.glb", "jd_redoma",       "Redoma de vidro quebrada",          "sotaque"),
+    ("itens_jardmi_5_02.glb", "jd_canteiro",     "Canteiro suspenso com brotos",      "sotaque"),
+    ("itens_jardmi_5_03.glb", "jd_vaso",         "Vaso de barro rachado",             "sotaque"),
 
     ("itens_jardim_03.glb",   "jd_coluna_vidro", "Coluna de vidro da estufa",         "alto"),
     ("itens_jardim_04.glb",   "jd_cipo",         "Cipó grosso na estaca",             "alto"),
@@ -72,7 +78,7 @@ def main():
         "JOGO.CENARIO_NOME = JOGO.CENARIO_NOME || {};",
     ]
 
-    papeis = {"baixo": [], "alto": [], "chao": [], "borda": []}
+    papeis = {"baixo": [], "alto": [], "chao": [], "borda": [], "sotaque": []}
     total, faltando = 0, []
     for arq, chave, nome, papel in PECAS:
         caminho = os.path.join(ORIG, arq)
@@ -83,6 +89,9 @@ def main():
         linhas.append("JOGO.MODELS['%s']='%s';" % (chave, b64))
         linhas.append("JOGO.CENARIO_NOME['%s']=%s;" % (chave, json.dumps(nome, ensure_ascii=False)))
         papeis[papel].append(chave)
+        # provisório: sem módulo de muro, o enfeite também segura a fileira
+        if papel == "sotaque":
+            papeis["baixo"].append(chave)
         total += len(dados)
 
     linhas.append("JOGO.CENARIO['garden']=%s;" % json.dumps(papeis, ensure_ascii=False))
@@ -90,7 +99,7 @@ def main():
     io.open(SAIDA, "w", encoding="utf-8", newline="\n").write("\n".join(linhas))
 
     print("=== CENÁRIO DA ESTUFA ===")
-    for p in ("baixo", "alto", "chao", "borda"):
+    for p in ("baixo", "alto", "sotaque", "chao", "borda"):
         print("  %-6s %d: %s" % (p, len(papeis[p]), ", ".join(papeis[p])))
     print("  binário %.2f MB · arquivo %.2f MB"
           % (total / 1048576.0, os.path.getsize(SAIDA) / 1048576.0))

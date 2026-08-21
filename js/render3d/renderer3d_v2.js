@@ -571,8 +571,22 @@ var JOGO = (typeof window !== 'undefined')
     while (ehBaixo(x, y0 - 1)) y0--;
     while (ehBaixo(x, y1 + 1)) y1++;
     var compX = x1 - x0 + 1, compZ = y1 - y0 + 1;
-    if (compX >= compZ) return { semente: hashXY(x0, y), eixo: 'x', comp: compX };
-    return { semente: hashXY(x, y0), eixo: 'z', comp: compZ };
+    if (compX >= compZ) {
+      return { semente: hashXY(x0, y), eixo: 'x', comp: compX, i: x - x0 };
+    }
+    return { semente: hashXY(x, y0), eixo: 'z', comp: compZ, i: y - y0 };
+  }
+
+  // ESTA CASA LEVA O SOTAQUE?
+  //
+  // Um enfeite pontual no meio de um muro corrido dá charme; espalhado, polui.
+  // Daí as três amarras: no máximo um por fileira, só em fileira de 3 ou mais,
+  // e nunca na ponta — enfeite na ponta faz o jogador ler que a barreira acabou
+  // ali, e ele tenta passar por onde não passa.
+  function ehSotaque(fila) {
+    if (fila.comp < 3) return false;
+    var miolo = fila.comp - 2;                 // as casas que não são ponta
+    return fila.i === 1 + (fila.semente % miolo);
   }
 
   function buildBoardKit(st, pal, theme) {
@@ -653,7 +667,13 @@ var JOGO = (typeof window !== 'undefined')
         var fila = fileiraDe(st, x, y, isLow);
         // ALTURA NORMALIZADA: o obstaculo tem de ler como "da para ver por
         // cima" e nunca competir com uma unidade (heroi ~2,05 de altura).
-        var prop = pecaUsuario(theme, 'baixo', fila.semente, 0.95);
+        var prop = null;
+        if (ehSotaque(fila)) {
+          // a semente do SOTAQUE muda com a posição, senão toda fileira da sala
+          // escolheria o mesmo enfeite e o charme viraria padrão
+          prop = pecaUsuario(theme, 'sotaque', fila.semente + fila.i * 7, 0.95);
+        }
+        if (!prop) prop = pecaUsuario(theme, 'baixo', fila.semente, 0.95);
         if (!prop) {
           prop = K.buildProp(theme, lowKinds[fila.semente % lowKinds.length], fila.semente);
           fitHeight(prop, 0.95);
@@ -662,7 +682,11 @@ var JOGO = (typeof window !== 'undefined')
         // GIRA PARA O EIXO DA FILEIRA. Uma peça mais larga que funda, posta numa
         // corrida vertical sem girar, deixa vão entre uma casa e a seguinte — a
         // barreira fica furada justamente onde devia barrar.
-        if (fila.eixo === 'z' && fila.comp > 1) prop.rotation.y = Math.PI / 2;
+        // O MURO gira para o eixo da fileira; o SOTAQUE não. Ele é um objeto
+        // largado ali, e girar junto o faria parecer parte da alvenaria.
+        if (fila.eixo === 'z' && fila.comp > 1 && !ehSotaque(fila)) {
+          prop.rotation.y = Math.PI / 2;
+        }
         lowNodes.push({ node: prop, x: x, y: y });
       } else if (k === 'deco') {
         node = K.buildTile(theme, 'deco', seed % 4);
