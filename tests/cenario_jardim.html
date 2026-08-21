@@ -98,10 +98,22 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       var teto = (limite == null ? CELL * 0.95 : limite);
       if (isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
       no.scale.multiplyScalar(k);
+      // o MESMO berço que `pecaUsuario` monta: sem ele eu estaria medindo o
+      // arquivo cru e não o que o jogo põe no tabuleiro.
+      var berco = new THREE.Group();
+      berco.add(no);
       no.updateMatrixWorld(true);
-      var bb2 = new THREE.Box3().setFromObject(no);
+      var pre = new THREE.Box3().setFromObject(no);
+      if (isFinite(pre.min.y)) no.position.y -= pre.min.y;
+      berco.updateMatrixWorld(true);
+      var bb2 = new THREE.Box3().setFromObject(berco);
+      // A BASE, que é o que estava errado: o separador punha a base em y=0
+      // mexendo nos vértices, medindo em MUNDO e corrigindo em LOCAL. Com o
+      // objeto rotacionado os dois espaços não batem e a peça afunda. O
+      // renderizador passou a assentar na montagem; aqui se cobra o resultado.
       return { alt: bb2.max.y - bb2.min.y,
                larg: Math.max(bb2.max.x - bb2.min.x, bb2.max.z - bb2.min.z),
+               base: bb2.min.y,
                cruaAlt: h, cruaLarg: larg };
     }
 
@@ -126,7 +138,7 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
           // 60% do papel a peça deixa de ler como obstáculo.
           if (m.alt < ALVO[papel] * 0.60)
             curtas.push(chave + ' ' + m.alt.toFixed(2) + '/' + ALVO[papel].toFixed(2));
-          linhas.push({ chave: chave, papel: papel, alvo: ALVO[papel],
+          linhas.push({ chave: chave, papel: papel, alvo: ALVO[papel], base: m.base,
                         alt: m.alt, larg: m.larg,
                         razao: m.cruaLarg / m.cruaAlt,
                         nome: (JOGO.CENARIO_NOME || {})[chave] || chave });
@@ -137,6 +149,14 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       check('há 15 peças no cenário', linhas.length === 15, linhas.length + ' peças');
       check('nenhuma peça encolhe abaixo de 60% do papel',
             curtas.length === 0, curtas.join(' · '));
+      // ENTERRADA OU FLUTUANDO. Uma peça cuja base não está no zero afunda no
+      // piso (ou paira acima dele) quando o jogo a posiciona pelo pé. Foi o que
+      // o Daniel viu: "os itens de enfeite estão todos enterrados".
+      var fundas = linhas.filter(function (l) { return Math.abs(l.base) > 0.02; });
+      check('toda peça assenta com a base no chão',
+            fundas.length === 0,
+            fundas.map(function (l) { return l.chave + ' base ' + l.base.toFixed(2); }).join(' · '));
+
       check('nenhuma peça passa da casa (2,0 m de lado)',
             linhas.every(function (l) { return l.larg <= CELL + 0.01; }),
             linhas.filter(function (l) { return l.larg > CELL + 0.01; })

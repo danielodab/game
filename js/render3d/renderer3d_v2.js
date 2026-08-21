@@ -535,7 +535,25 @@ var JOGO = (typeof window !== 'undefined')
     var no = cena.clone(true);
     no.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     if (alvoAlt) fitHeight(no, alvoAlt);
-    return no;
+
+    // ASSENTAR NO CHÃO, AQUI E NÃO NA EXPORTAÇÃO.
+    //
+    // O separador tentava pôr a base em y=0 mexendo nos vértices, e errou: media
+    // a caixa em coordenadas de MUNDO e corrigia em coordenadas LOCAIS. Com o
+    // objeto rotacionado — e o importador de glTF rotaciona — os dois espaços não
+    // batem, e o deslocamento saía no eixo errado. O resultado na tela foi o
+    // Daniel ver as peças ENTERRADAS: as altas ainda apareciam pela metade, e as
+    // divisórias, que são baixas, sumiam inteiras dentro do piso.
+    //
+    // Medir depois de montado e empurrar o nó para cima resolve para qualquer
+    // arquivo, venha ele centrado ou não, e não obriga a reexportar nada. O nó
+    // vai dentro de um grupo para que quem chama continue posicionando pelo pé.
+    var berco = new THREE.Group();
+    berco.add(no);
+    no.updateMatrixWorld(true);
+    var cxb = new THREE.Box3().setFromObject(no);
+    if (isFinite(cxb.min.y)) no.position.y -= cxb.min.y;
+    return berco;
   }
 
   // A FILEIRA A QUE ESTA CASA PERTENCE.
