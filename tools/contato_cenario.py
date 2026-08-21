@@ -81,7 +81,11 @@ def main():
         nome = os.path.splitext(os.path.basename(arq))[0]
         cena.render.filepath = os.path.join(saida, nome + '.png')
         bpy.ops.render.render(write_still=True)
-        print('RETRATO| %-28s alt=%.3f larg=%.3f' % (nome, y1 - y0, max(x1 - x0, z1 - z0)))
+        # ALTURA É Z, não Y. Mesmo tombo do enquadramento: o importador de glTF
+        # converte Y-para-cima em Z-para-cima, então em coordenadas de mundo o
+        # chão é X/Y. A linha antiga imprimia a PROFUNDIDADE chamando-a de
+        # altura, e altura é justamente o que eu leio para escolher o papel.
+        print('RETRATO| %-28s alt=%.3f larg=%.3f' % (nome, z1 - z0, max(x1 - x0, y1 - y0)))
 
 
 main()

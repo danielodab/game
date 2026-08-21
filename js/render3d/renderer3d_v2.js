@@ -524,7 +524,7 @@ var JOGO = (typeof window !== 'undefined')
   // A escolha é por SEMENTE DA CASA, nunca aleatória: a mesma sala tem de nascer
   // igual toda vez que for redesenhada, senão o barril troca de lugar quando um
   // muro sobe e o jogador vê o cenário piscar.
-  function pecaUsuario(theme, papel, seed, alvoAlt) {
+  function pecaUsuario(theme, papel, seed, alvoAlt, teto) {
     var cat = JOGO.CENARIO && JOGO.CENARIO[theme];
     var lista = cat && cat[papel];
     if (!lista || !lista.length || !M || !M.rawScene) return null;
@@ -534,7 +534,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!cena) return null;
     var no = cena.clone(true);
     no.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    if (alvoAlt) fitHeight(no, alvoAlt);
+    if (alvoAlt) fitHeight(no, alvoAlt, teto);
 
     // ASSENTAR NO CHÃO, AQUI E NÃO NA EXPORTAÇÃO.
     //
@@ -553,6 +553,23 @@ var JOGO = (typeof window !== 'undefined')
     no.updateMatrixWorld(true);
     var cxb = new THREE.Box3().setFromObject(no);
     if (isFinite(cxb.min.y)) no.position.y -= cxb.min.y;
+
+    // E CENTRAR NA HORIZONTAL, pela mesma razão.
+    //
+    // O separador também errava aqui, e por um motivo só: o importador de glTF
+    // do Blender converte Y-para-cima em Z-PARA-CIMA, e o script supunha Y.
+    // Com os eixos trocados ele centrava a peça no plano errado — as quinze
+    // primeiras saíram com o centro deslocado em até 0,95 m numa casa de 2,0 m,
+    // ou seja, quase encostando na casa vizinha.
+    //
+    // Assentar a altura já se fazia aqui; centrar em X/Z é a metade que
+    // faltava. Feito na montagem, vale para todo arquivo — os que já estão no
+    // jogo e os que ainda vão chegar — sem depender de o exportador ter
+    // acertado.
+    var cx2 = (cxb.min.x + cxb.max.x) / 2;
+    var cz2 = (cxb.min.z + cxb.max.z) / 2;
+    if (isFinite(cx2)) no.position.x -= cx2;
+    if (isFinite(cz2)) no.position.z -= cz2;
     return berco;
   }
 
@@ -637,15 +654,22 @@ var JOGO = (typeof window !== 'undefined')
       var node = null;
       var naBorda = (x === 0 || y === 0 || x === w - 1 || y === h - 1);
       if (k === 'high') {
-        // As colunas do usuário são PILARES SOLTOS, e o anel de borda precisa de
-        // parede contínua (com encaixe de vizinho) para a sala ter muro. Então:
-        // pilar dele nas casas de dentro, parede do acervo na moldura.
-        // O mesmo vale para a parede de dentro: `##` é um trecho de muro, não
-        // duas estátuas soltas. A peça vem da fileira.
-        var filaA = naBorda ? null : fileiraDe(st, x, y, isWall);
-        var col = filaA ? pecaUsuario(theme, 'alto', filaA.semente, WALL_H) : null;
+        // A BORDA TAMBÉM É DELE AGORA.
+        //
+        // Antes eu deixava a moldura com a parede do acervo, com medo de que
+        // peça solta abrisse buraco no muro da sala. Mas o Daniel fez MÓDULOS de
+        // muro justamente para enfileirar, e ele pediu: "substitui todos os da
+        // lateral". Então a borda usa as peças dele, e a continuidade vem de
+        // duas coisas — a peça é a mesma ao longo de todo o trecho, e ela gira
+        // para o eixo do trecho, senão a face fica de lado e aparece vão.
+        //
+        // `fileiraDe` serve para os dois casos: numa borda o trecho corre pela
+        // aresta, no miolo corre pelo `##`. A conta é a mesma.
+        var filaA = fileiraDe(st, x, y, isWall);
+        var col = pecaUsuario(theme, 'alto', filaA.semente, WALL_H);
         if (col) {
           node = col;
+          if (filaA.eixo === 'z' && filaA.comp > 1) col.rotation.y = Math.PI / 2;
         } else {
           node = K.buildWall(theme, seed, {
             mask: { n: isWall(x, y - 1), e: isWall(x + 1, y), s: isWall(x, y + 1), w: isWall(x - 1, y) },
@@ -718,11 +742,20 @@ var JOGO = (typeof window !== 'undefined')
         var edge = Math.min(tx, tz);
         var d = edge + CELL * (1.0 + ((hashXY(p, 3) % 100) / 100) * 1.6);
         var px = cxp + ca * d, pz = czp + sa * d;
-        var altBorda = 0.85 + ((hashXY(p, 5) % 100) / 100) * 0.9;
-        var prop2 = pecaUsuario(theme, 'borda', p * 131 + 17, altBorda);
+        // 0,85–1,75 m -> 2,2–4,6 m. Estes props ficam FORA da arena, a duas ou
+        // três casas de distância, e a perspectiva os encolhe ainda mais. No
+        // porte antigo a escada de podar aparecia do tamanho de um prego ao lado
+        // de uma parede de 3,10 m — foi a reclamação do Daniel, e ele tem razão.
+        // Cenário de fundo pode e deve ser MAIOR que a arquitetura da sala: é o
+        // que dá a sensação de que o campo está dentro de um lugar maior.
+        var altBorda = 2.2 + ((hashXY(p, 5) % 100) / 100) * 2.4;
+        // fora da arena não há casa para respeitar, então o teto de largura sobe
+        // junto — senão uma árvore larga voltaria a ser estrangulada em altura.
+        var tetoBorda = altBorda * 1.6;
+        var prop2 = pecaUsuario(theme, 'borda', p * 131 + 17, altBorda, tetoBorda);
         if (!prop2) {
           prop2 = K.buildProp(theme, kinds[(p * 7 + rr++) % kinds.length], p * 131 + 17);
-          fitHeight(prop2, altBorda);
+          fitHeight(prop2, altBorda, tetoBorda);
         }
         prop2.position.set(px, 0, pz);
         staticG.add(prop2);

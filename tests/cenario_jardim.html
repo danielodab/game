@@ -67,7 +67,12 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
   }
 
   // papel -> altura que o briefing prometeu
-  var ALVO = { baixo: 0.95, alto: 3.10, chao: 0.25, borda: 1.30 };
+  // `sotaque` entra com a MESMA altura de `baixo` porque é assim que o
+  // renderizador o normaliza: ele ocupa uma casa de divisória no miolo da
+  // fileira, então tem de ler na mesma linha do muro que o cerca. Sem esta
+  // linha as seis peças decorativas sairiam da medição inteiras — foi o que
+  // quase aconteceu quando elas deixaram de ser duplicadas em `baixo`.
+  var ALVO = { baixo: 0.95, alto: 3.10, sotaque: 0.95, chao: 0.25, borda: 1.30 };
   var CELL = 2.0;
 
   window.addEventListener('DOMContentLoaded', function () {
@@ -105,6 +110,9 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       no.updateMatrixWorld(true);
       var pre = new THREE.Box3().setFromObject(no);
       if (isFinite(pre.min.y)) no.position.y -= pre.min.y;
+      var cX = (pre.min.x + pre.max.x) / 2, cZ = (pre.min.z + pre.max.z) / 2;
+      if (isFinite(cX)) no.position.x -= cX;
+      if (isFinite(cZ)) no.position.z -= cZ;
       berco.updateMatrixWorld(true);
       var bb2 = new THREE.Box3().setFromObject(berco);
       // A BASE, que é o que estava errado: o separador punha a base em y=0
@@ -114,6 +122,8 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       return { alt: bb2.max.y - bb2.min.y,
                larg: Math.max(bb2.max.x - bb2.min.x, bb2.max.z - bb2.min.z),
                base: bb2.min.y,
+               desvio: Math.max(Math.abs(bb2.min.x + bb2.max.x) / 2,
+                                Math.abs(bb2.min.z + bb2.max.z) / 2),
                cruaAlt: h, cruaLarg: larg };
     }
 
@@ -139,6 +149,7 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
           if (m.alt < ALVO[papel] * 0.60)
             curtas.push(chave + ' ' + m.alt.toFixed(2) + '/' + ALVO[papel].toFixed(2));
           linhas.push({ chave: chave, papel: papel, alvo: ALVO[papel], base: m.base,
+                        desvio: m.desvio,
                         alt: m.alt, larg: m.larg,
                         razao: m.cruaLarg / m.cruaAlt,
                         nome: (JOGO.CENARIO_NOME || {})[chave] || chave });
@@ -146,7 +157,11 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       });
 
       check('todas as peças têm modelo carregado', semModelo.length === 0, semModelo.join(', '));
-      check('há 15 peças no cenário', linhas.length === 15, linhas.length + ' peças');
+      // 20 = as 15 primeiras folhas de enfeite + os 4 muros + o pilar. O número
+      // é cru de propósito: ele existe para gritar quando uma peça SOME — chave
+      // renomeada na tabela, arquivo que não foi copiado, papel escrito errado.
+      // Nada disso dá erro na tela; só a contagem pega.
+      check('há 20 peças no cenário', linhas.length === 20, linhas.length + ' peças');
       check('nenhuma peça encolhe abaixo de 60% do papel',
             curtas.length === 0, curtas.join(' · '));
       // ENTERRADA OU FLUTUANDO. Uma peça cuja base não está no zero afunda no
@@ -156,6 +171,15 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       check('toda peça assenta com a base no chão',
             fundas.length === 0,
             fundas.map(function (l) { return l.chave + ' base ' + l.base.toFixed(2); }).join(' · '));
+
+      // DESCENTRADA. Metade do mesmo defeito de eixo que enterrava as peças: o
+      // separador centrava no plano errado, e as quinze primeiras saíram com o
+      // centro deslocado em até 0,95 m numa casa de 2,0 m. O jogo posiciona pelo
+      // centro da casa, então o desvio vai direto para a tela.
+      var tortas = linhas.filter(function (l) { return l.desvio > 0.05; });
+      check('toda peça fica centrada na casa',
+            tortas.length === 0,
+            tortas.map(function (l) { return l.chave + ' ' + l.desvio.toFixed(2) + ' m fora'; }).join(' · '));
 
       check('nenhuma peça passa da casa (2,0 m de lado)',
             linhas.every(function (l) { return l.larg <= CELL + 0.01; }),

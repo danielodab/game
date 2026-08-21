@@ -36,15 +36,50 @@ O QUE ELE FAZ DEPOIS DE SEPARAR
 
 Sem `--recortar` ele só RELATA. É de propósito: eu quero olhar a lista antes de
 gravar 30 arquivos com nome errado.
+
+CUIDADO AO REPROCESSAR PASTA ANTIGA
+-----------------------------------
+As quinze peças que já estão em `_separado` foram cortadas quando o eixo de cima
+ainda estava trocado (veja `EIXO_ALT` abaixo). Elas saíram boas o bastante e o
+`embute_cenario.py` referencia cada uma pelo NÚMERO do arquivo. Como a ordem de
+saída é a da altura — agora a altura de verdade —, reprocessar aquela pasta pode
+renumerar as peças e fazer a tabela `PECAS` apontar para outra coisa, sem erro
+nenhum na tela. Se um dia for preciso, refaça os retratos e reconfira a tabela.
 """
 import bpy, bmesh, os, sys, math, json
 
 MIN_TRIS = 40          # abaixo disto e caco de gerador, nao peca
-MIN_TAM = 0.04         # idem, em unidades do arquivo
+MIN_TAM = 0.10         # FRACAO da folha, nao unidade absoluta. Com o eixo de
+                       # cima corrigido o agrupamento passou a separar de
+                       # verdade, e o entulho que o Meshy espalha ao pe das
+                       # pecas — lascas de 1 a 2 cm, chatas, com 200 triangulos —
+                       # comecou a sair como "peca". Passa no corte de
+                       # triangulos e passava no de tamanho absoluto. O que
+                       # separa caco de peca nao e um numero de centimetros e
+                       # sim a PROPORCAO: numa folha do Meshy uma peca de
+                       # verdade ocupa de um quarto a uma folha inteira, e o
+                       # entulho nunca chega a 10%. Se um dia vier folha com
+                       # peca miuda de proposito, e aqui que se afrouxa.
 TEX_ALVO = 1024
 FOLGA = 0.03           # fracao do tamanho da folha: ilhas mais proximas que
                        # isto sao a MESMA peca. 3% de uma folha de 1,0 = 3 cm,
                        # e as pecas do Daniel vem com vao bem maior que isso.
+
+# QUAL EIXO E O DE CIMA. Isto estava ERRADO e custou caro. O `.glb` chega em
+# Y-para-cima, mas o importador de glTF do Blender converte para a convencao da
+# casa — Z para cima — girando o objeto 90 graus em X. Como `caixa()` mede em
+# coordenadas de MUNDO, o que sai ja vem convertido: X e Y sao o chao, Z e a
+# altura. O codigo antigo supunha Y como altura e com isso (a) agrupava as ilhas
+# no plano X/altura em vez do plano do chao, colando no pilar o entulho que so
+# se sobrepoe a ele visto de lado; (b) relatava a PROFUNDIDADE na coluna "alt",
+# que e justamente o numero pelo qual eu decido o papel da peca; e (c) centrava
+# a peca em X e na ALTURA, deixando-a descentrada na profundidade — o muro
+# nascia meio metro fora do centro da casa.
+#
+# E o mesmo tombo que `contato_cenario.py` documenta nos quinze retratos pretos:
+# o eixo vertical destes arquivos nao e o que se supoe.
+EIXO_ALT = 2           # Z, depois da conversao do importador
+EIXO_CHAO = (0, 1)     # X e Y — o plano onde as pecas estao enfileiradas
 
 
 def argumentos():
@@ -80,11 +115,11 @@ def separa_soltas():
 
 
 def agrupa(itens, folga):
-    """Une ilhas cujas caixas se tocam no chao (X/Z). Union-find simples.
+    """Une ilhas cujas caixas se tocam no chao (X/Y). Union-find simples.
 
-    Só X e Z importam: as peças estão lado a lado na folha, e duas partes da
-    MESMA peça (o cogumelo e o tronco onde ele nasce) se sobrepõem vistas de
-    cima, enquanto peças diferentes têm vão entre elas.
+    Só o plano do CHÃO importa: as peças estão lado a lado na folha, e duas
+    partes da MESMA peça (o cogumelo e o tronco onde ele nasce) se sobrepõem
+    vistas de cima, enquanto peças diferentes têm vão entre elas.
     """
     pai = list(range(len(itens)))
 
@@ -99,7 +134,7 @@ def agrupa(itens, folga):
 
     def perto(a, b):
         ca, cb = a['cx'], b['cx']
-        for eixo in (0, 2):
+        for eixo in EIXO_CHAO:
             if ca['min'][eixo] - folga > cb['max'][eixo]: return False
             if cb['min'][eixo] - folga > ca['max'][eixo]: return False
         return True
@@ -144,14 +179,34 @@ def caixa(o):
 
 
 def assenta(o, cx):
-    """Centra em X/Z e põe a base em Y=0 — o jogo posiciona pelo pé."""
-    dx = (cx['min'][0] + cx['max'][0]) / 2.0
-    dz = (cx['min'][2] + cx['max'][2]) / 2.0
-    dy = cx['min'][1]
+    """Centra no CHÃO (X/Y) e põe a base em Z=0 — o jogo posiciona pelo pé.
+
+    O deslocamento é medido em MUNDO e aplicado nos VÉRTICES, que são locais.
+    Os dois espaços só batem se a matriz do objeto for a identidade, e depois do
+    importador de glTF ela não é — daí `desgira()`, que assa a matriz nos
+    vértices antes. Sem isso a peça descia no eixo errado e aparecia enterrada.
+    """
+    d = [(cx['min'][e] + cx['max'][e]) / 2.0 for e in (0, 1, 2)]
+    d[EIXO_ALT] = cx['min'][EIXO_ALT]
     for v in o.data.vertices:
-        v.co.x -= dx
-        v.co.y -= dy
-        v.co.z -= dz
+        v.co.x -= d[0]
+        v.co.y -= d[1]
+        v.co.z -= d[2]
+
+
+def desgira(o):
+    """Assa a matriz do objeto nos vértices, deixando-a identidade.
+
+    O importador de glTF entrega o objeto GIRADO 90° em X (é assim que ele
+    converte Y-para-cima em Z-para-cima). Enquanto essa rotação estiver na
+    matriz, mexer em `v.co` mexe num espaço que não é o do mundo. Aplicando a
+    transformação primeiro, mundo e local passam a ser a mesma coisa e
+    `assenta()` acerta.
+    """
+    bpy.ops.object.select_all(action='DESELECT')
+    o.select_set(True)
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
 
 def reamostra():
@@ -217,8 +272,11 @@ def main():
             if n > 1 and (melhor is None or corrida > melhor[2]):
                 melhor = (ini, n, corrida)
         folga_usada = melhor[0] if melhor else FOLGA
-        print('   patamar escolhido: folga %.4f → %d peca(s)' % (folga_usada, melhor[1] if melhor else 0))
         grupos = agrupa(ilhas, folha * folga_usada)
+        # o `else` e a folha que nao se parte em nenhuma folga: nao ha patamar
+        # para escolher, entao vale a folga padrao e o grupo unico
+        print('   patamar escolhido: folga %.4f → %d grupo(s)'
+              % (folga_usada, len(grupos)))
 
         # 3) junta cada grupo e SO ENTAO decide se e peca ou caco
         pecas, cacos = [], 0
@@ -226,11 +284,12 @@ def main():
             o = junta([it['obj'] for it in g])
             t = tris(o)
             cx = caixa(o)
-            if not cx or t < MIN_TRIS or max(cx['dim']) < MIN_TAM:
+            if not cx or t < MIN_TRIS or max(cx['dim']) < folha * MIN_TAM:
                 cacos += 1
                 bpy.data.objects.remove(o, do_unlink=True)
                 continue
-            pecas.append({'obj': o, 'tris': t, 'cx': cx, 'alt': cx['dim'][1], 'ilhas': len(g)})
+            pecas.append({'obj': o, 'tris': t, 'cx': cx,
+                          'alt': cx['dim'][EIXO_ALT], 'ilhas': len(g)})
 
         # da mais alta para a mais baixa: a altura e o que decide o papel
         pecas.sort(key=lambda p: -p['alt'])
@@ -238,16 +297,20 @@ def main():
         print('\n=== %s — %d malha(s) -> %d peca(s), %d caco(s)' % (arq, antes, len(pecas), cacos))
         for i, p in enumerate(pecas):
             d = p['cx']['dim']
-            print('   %2d  alt=%6.3f  larg=%6.3f x %6.3f  tris=%5d  (%d ilhas)'
-                  % (i + 1, d[1], d[0], d[2], p['tris'], p['ilhas']))
-            relatorio.append({'arquivo': arq, 'i': i + 1, 'alt': d[1],
-                              'larg': max(d[0], d[2]), 'tris': p['tris']})
+            a, b = EIXO_CHAO
+            print('   %2d  alt=%6.3f  chao=%6.3f x %6.3f  tris=%5d  (%d ilhas)'
+                  % (i + 1, d[EIXO_ALT], d[a], d[b], p['tris'], p['ilhas']))
+            relatorio.append({'arquivo': arq, 'i': i + 1, 'alt': d[EIXO_ALT],
+                              'larg': max(d[a], d[b]), 'tris': p['tris']})
 
         if recortar:
             base = os.path.splitext(arq)[0].replace(' ', '_')
             for i, p in enumerate(pecas):
                 o = p['obj']
-                assenta(o, p['cx'])
+                # desgirar ANTES de medir de novo: `assenta` mexe em vértices e
+                # só acerta com a matriz do objeto já assada
+                desgira(o)
+                assenta(o, caixa(o))
                 bpy.ops.object.select_all(action='DESELECT')
                 o.select_set(True)
                 bpy.context.view_layer.objects.active = o

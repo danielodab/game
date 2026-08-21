@@ -17,18 +17,28 @@ me enganaram antes.
 import io, os, base64, json
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ORIG = r"C:\Users\danie\Downloads\assets_ok\mapa\jardim\_separado"
 SAIDA = os.path.join(RAIZ, "assets", "embedded", "cenario-jardim.js")
+
+# DUAS PASTAS, e não uma. As folhas de MURO chegaram depois, e reprocessá-las
+# junto com as antigas renumeraria as quinze peças que a tabela abaixo já cita
+# pelo número do arquivo. Então elas foram separadas numa subpasta própria e
+# cada uma tem o seu `_separado`. Procura-se nas duas, na ordem.
+ORIGENS = [
+    r"C:\Users\danie\Downloads\assets_ok\mapa\jardim\_separado",
+    r"C:\Users\danie\Downloads\assets_ok\mapa\jardim\muros\_separado",
+]
 
 # arquivo -> (chave, nome, papel)
 #   baixo   = MÓDULO de divisória (0,95 m), o muro que se enfileira
 #   sotaque = enfeite que entra UMA vez no meio de uma fileira, como charme
 #   alto    = coluna (3,10 m) · chao = enfeite de piso · borda = fora da arena
 #
-# As seis peças decorativas entram nos DOIS: em `baixo` porque ainda não há
-# módulo de muro e alguma coisa tem de segurar a fileira, e em `sotaque` porque
-# é o papel definitivo delas. Quando os módulos chegarem, some a linha de
-# `baixo` e elas ficam só como charme.
+# OS MÓDULOS DE MURO CHEGARAM. Enquanto não havia nenhum, as seis peças
+# decorativas eram duplicadas em `baixo` — alguma coisa tinha de segurar a
+# fileira, e um regador tombado repetido cinco vezes segurava mal, mas segurava.
+# Agora `baixo` tem quatro muros de verdade, feitos para enfileirar, e a
+# duplicação saiu: as decorativas voltaram a ser SÓ `sotaque`, que é o papel
+# definitivo delas — o enfeite pontual no meio de um muro corrido.
 PECAS = [
     ("itens_jardim2_01.glb",  "jd_regador",      "Regador de cobre tombado",          "sotaque"),
     ("itens_jardim_01.glb",   "jd_carrinho",     "Carrinho de jardim tombado",        "sotaque"),
@@ -37,9 +47,23 @@ PECAS = [
     ("itens_jardmi_5_02.glb", "jd_canteiro",     "Canteiro suspenso com brotos",      "sotaque"),
     ("itens_jardmi_5_03.glb", "jd_vaso",         "Vaso de barro rachado",             "sotaque"),
 
+    # OS MÓDULOS DE MURO. Cada folha veio com UMA peça só — o Meshy desta vez
+    # não empilhou várias — e cada uma já nasce como um trecho de alvenaria de
+    # ponta a ponta, larga o dobro da altura. É o que `baixo` sempre quis: cinco
+    # cópias lado a lado leem como uma barreira, não como cinco objetos.
+    ("muro_com_pilastra_inteiro_01.glb", "jd_muro_pilastra", "Muro de pilastras inteiro",    "baixo"),
+    ("muro_com_pilastra_furado_01.glb",  "jd_muro_brecha",   "Muro de pilastras com brecha", "baixo"),
+    ("muro_sem_pilastra_furado_01.glb",  "jd_muro_ruina",    "Muro desabado em ruína",       "baixo"),
+    ("muros_com_mato_01.glb",            "jd_muro_mato",     "Muro tomado pelo mato",        "baixo"),
+
     ("itens_jardim_03.glb",   "jd_coluna_vidro", "Coluna de vidro da estufa",         "alto"),
     ("itens_jardim_04.glb",   "jd_cipo",         "Cipó grosso na estaca",             "alto"),
     ("itens_jardim_3_03.glb", "jd_estatua",      "Estátua de jardineiro musgosa",     "alto"),
+    # o pilar sai da folha com o entulho que caiu ao pé dele, e fica: o vão entre
+    # a coluna e as pedras é menor que a folga, e a ruína ao pé combina com a
+    # Estufa Soterrada. O preço é a caixa mais larga, que rouba um pouco da
+    # altura na normalização — 2,8 m em vez de 3,1 m, ainda bem acima do herói.
+    ("pilar_01.glb",          "jd_pilar",        "Pilar de pedra com entulho ao pé",  "alto"),
 
     ("itens_jardim2_02.glb",  "jd_cristal_p",    "Cristais pequenos no chão",         "chao"),
     ("itens_jardim_4_02.glb", "jd_cristal_g",    "Afloramento de cristais",           "chao"),
@@ -62,16 +86,18 @@ def main():
         "  : (globalThis.JOGO = globalThis.JOGO || {});",
         "/* SOTERRA 3.0 - cenário da ESTUFA SOTERRADA, feito pelo usuário no Meshy.",
         " *",
-        " * Chegaram cinco folhas com várias peças GRUDADAS numa malha só (o Meshy",
-        " * gera assim para não gastar um crédito por barril). `separa_cenario.py`",
-        " * corta por vizinhança de ilhas de geometria — partir por 'parte solta'",
-        " * não serve, porque cada folha e cada cogumelo é uma casca desconectada.",
+        " * Chegaram dez folhas: cinco de enfeite, com várias peças GRUDADAS numa",
+        " * malha só (o Meshy gera assim para não gastar um crédito por barril), e",
+        " * cinco de alvenaria, com uma peça cada. `separa_cenario.py` corta por",
+        " * vizinhança de ilhas de geometria — partir por 'parte solta' não serve,",
+        " * porque cada folha e cada cogumelo é uma casca desconectada.",
         " *",
         " * `JOGO.CENARIO[tema][papel]` diz ao renderizador o que usar onde:",
-        " *   baixo = divisória (0,95 m, bloqueia passagem e não a visão)",
-        " *   alto  = coluna (3,10 m, bloqueia tudo)",
-        " *   chao  = enfeite de piso, sem colisão",
-        " *   borda = enfeite fora da arena",
+        " *   baixo   = divisória (0,95 m, bloqueia passagem e não a visão)",
+        " *   alto    = coluna (3,10 m, bloqueia tudo)",
+        " *   sotaque = enfeite pontual, UMA vez no miolo de uma fileira de `baixo`",
+        " *   chao    = enfeite de piso, sem colisão",
+        " *   borda   = enfeite fora da arena",
         " */",
         "JOGO.MODELS = JOGO.MODELS || {};",
         "JOGO.CENARIO = JOGO.CENARIO || {};",
@@ -81,17 +107,21 @@ def main():
     papeis = {"baixo": [], "alto": [], "chao": [], "borda": [], "sotaque": []}
     total, faltando = 0, []
     for arq, chave, nome, papel in PECAS:
-        caminho = os.path.join(ORIG, arq)
-        if not os.path.exists(caminho):
+        caminho = None
+        for pasta in ORIGENS:
+            tenta = os.path.join(pasta, arq)
+            if os.path.exists(tenta):
+                caminho = tenta; break
+        if not caminho:
             faltando.append(arq); continue
         dados = open(caminho, "rb").read()
         b64 = base64.b64encode(dados).decode("ascii")
         linhas.append("JOGO.MODELS['%s']='%s';" % (chave, b64))
         linhas.append("JOGO.CENARIO_NOME['%s']=%s;" % (chave, json.dumps(nome, ensure_ascii=False)))
         papeis[papel].append(chave)
-        # provisório: sem módulo de muro, o enfeite também segura a fileira
-        if papel == "sotaque":
-            papeis["baixo"].append(chave)
+        # Aqui havia um `if papel == "sotaque": papeis["baixo"].append(chave)`.
+        # Era muleta enquanto `baixo` estava vazio, e saiu com a chegada dos
+        # muros: enfeite repetido casa a casa não é divisória, é entulho.
         total += len(dados)
 
     linhas.append("JOGO.CENARIO['garden']=%s;" % json.dumps(papeis, ensure_ascii=False))

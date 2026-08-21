@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-21T11:54:55",
+ "gerado": "2026-08-21T12:01:13",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -491,6 +491,30 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "jd_muro_pilastra",
+   "arquivo": "cenario-jardim/jd_muro_pilastra.glb",
+   "bytes": 708232
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_muro_brecha",
+   "arquivo": "cenario-jardim/jd_muro_brecha.glb",
+   "bytes": 696208
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_muro_ruina",
+   "arquivo": "cenario-jardim/jd_muro_ruina.glb",
+   "bytes": 756988
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_muro_mato",
+   "arquivo": "cenario-jardim/jd_muro_mato.glb",
+   "bytes": 953804
+  },
+  {
+   "alvo": "MODELS",
    "chave": "jd_coluna_vidro",
    "arquivo": "cenario-jardim/jd_coluna_vidro.glb",
    "bytes": 479288
@@ -506,6 +530,12 @@
    "chave": "jd_estatua",
    "arquivo": "cenario-jardim/jd_estatua.glb",
    "bytes": 514956
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_pilar",
+   "arquivo": "cenario-jardim/jd_pilar.glb",
+   "bytes": 627264
   },
   {
    "alvo": "MODELS",
@@ -834,6 +864,6 @@
    "walk"
   ]
  },
- "totalBytes": 45751944,
- "totalBase64": 61002748
+ "totalBytes": 49494440,
+ "totalBase64": 65992752
 }
