@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-20T20:13:56",
+ "gerado": "2026-08-21T10:07:29",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -449,6 +449,96 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "jd_regador",
+   "arquivo": "cenario-jardim/jd_regador.glb",
+   "bytes": 739640
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_carrinho",
+   "arquivo": "cenario-jardim/jd_carrinho.glb",
+   "bytes": 526420
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_tronco",
+   "arquivo": "cenario-jardim/jd_tronco.glb",
+   "bytes": 632872
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_redoma",
+   "arquivo": "cenario-jardim/jd_redoma.glb",
+   "bytes": 653652
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_canteiro",
+   "arquivo": "cenario-jardim/jd_canteiro.glb",
+   "bytes": 411132
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_vaso",
+   "arquivo": "cenario-jardim/jd_vaso.glb",
+   "bytes": 586964
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_coluna_vidro",
+   "arquivo": "cenario-jardim/jd_coluna_vidro.glb",
+   "bytes": 479288
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_cipo",
+   "arquivo": "cenario-jardim/jd_cipo.glb",
+   "bytes": 534168
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_estatua",
+   "arquivo": "cenario-jardim/jd_estatua.glb",
+   "bytes": 514956
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_cristal_p",
+   "arquivo": "cenario-jardim/jd_cristal_p.glb",
+   "bytes": 528896
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_cristal_g",
+   "arquivo": "cenario-jardim/jd_cristal_g.glb",
+   "bytes": 632860
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_raiz",
+   "arquivo": "cenario-jardim/jd_raiz.glb",
+   "bytes": 547812
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_poca",
+   "arquivo": "cenario-jardim/jd_poca.glb",
+   "bytes": 464888
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_escada",
+   "arquivo": "cenario-jardim/jd_escada.glb",
+   "bytes": 480200
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_estufa_arvore",
+   "arquivo": "cenario-jardim/jd_estufa_arvore.glb",
+   "bytes": 900304
+  },
+  {
+   "alvo": "MODELS",
    "chave": "q_frog",
    "arquivo": "models-monsters/q_frog.glb",
    "bytes": 581708
@@ -729,6 +819,6 @@
    "walk"
   ]
  },
- "totalBytes": 35903600,
- "totalBase64": 47871604
+ "totalBytes": 44537652,
+ "totalBase64": 59383692
 }

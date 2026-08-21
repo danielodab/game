@@ -481,7 +481,12 @@ var JOGO = (typeof window !== 'undefined')
     var larg = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
     if (!isFinite(hgt) || hgt <= 0.01) return;
     var k = target / hgt;
-    var teto = (limite == null ? CELL * 0.82 : limite);
+    // 0,82 -> 0,95 da casa. O teto existe para o prop nao invadir a casa do
+    // vizinho, e 0,82 era medo a mais: 0,95 x 2,0 = 1,90 m ainda cabe folgado
+    // nos 2,0 m da casa. A diferenca importa para peca naturalmente larga — a
+    // redoma de vidro quebrada tem 2,8 de largura para cada 1 de altura, e com
+    // o teto apertado ela encolhia para 0,58 m em vez dos 0,95 m do papel.
+    var teto = (limite == null ? CELL * 0.95 : limite);
     if (isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
     node.scale.multiplyScalar(k);
   }
@@ -507,6 +512,30 @@ var JOGO = (typeof window !== 'undefined')
       }
       n.material = Array.isArray(n.material) ? out : out[0];
     });
+  }
+
+  // ---------------------------------------------- CENÁRIO DO USUÁRIO (v3)
+  //
+  // Quando `JOGO.CENARIO[tema]` existe, as peças do Daniel entram no lugar das
+  // do acervo emprestado. Foi o que ele pediu ao notar que "as paredes estão num
+  // gráfico diferente do meu personagem": com o elenco todo sendo dele, o
+  // cenário virou a única coisa fora de tom.
+  //
+  // A escolha é por SEMENTE DA CASA, nunca aleatória: a mesma sala tem de nascer
+  // igual toda vez que for redesenhada, senão o barril troca de lugar quando um
+  // muro sobe e o jogador vê o cenário piscar.
+  function pecaUsuario(theme, papel, seed, alvoAlt) {
+    var cat = JOGO.CENARIO && JOGO.CENARIO[theme];
+    var lista = cat && cat[papel];
+    if (!lista || !lista.length || !M || !M.rawScene) return null;
+    var chave = lista[seed % lista.length];
+    var cena = null;
+    try { cena = M.rawScene(chave); } catch (e) { return null; }
+    if (!cena) return null;
+    var no = cena.clone(true);
+    no.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    if (alvoAlt) fitHeight(no, alvoAlt);
+    return no;
   }
 
   function buildBoardKit(st, pal, theme) {
@@ -551,28 +580,43 @@ var JOGO = (typeof window !== 'undefined')
       var k = tileKind(gridTile(st, x, y));
       var seed = hashXY(x, y);
       var node = null;
+      var naBorda = (x === 0 || y === 0 || x === w - 1 || y === h - 1);
       if (k === 'high') {
-        node = K.buildWall(theme, seed, {
-          mask: { n: isWall(x, y - 1), e: isWall(x + 1, y), s: isWall(x, y + 1), w: isWall(x - 1, y) },
-          border: (x === 0 || y === 0 || x === w - 1 || y === h - 1)
-        });
-        // Mesma razao do chao: a parede do kit tem bloco, argamassa e musgo
-        // desenhados na textura, e a cor chapada os apagava.
-        retint(node, pal.wall, 0.22, wallCache);
+        // As colunas do usuário são PILARES SOLTOS, e o anel de borda precisa de
+        // parede contínua (com encaixe de vizinho) para a sala ter muro. Então:
+        // pilar dele nas casas de dentro, parede do acervo na moldura.
+        var col = naBorda ? null : pecaUsuario(theme, 'alto', seed, WALL_H);
+        if (col) {
+          node = col;
+        } else {
+          node = K.buildWall(theme, seed, {
+            mask: { n: isWall(x, y - 1), e: isWall(x + 1, y), s: isWall(x, y + 1), w: isWall(x - 1, y) },
+            border: naBorda
+          });
+          // Mesma razao do chao: a parede do kit tem bloco, argamassa e musgo
+          // desenhados na textura, e a cor chapada os apagava.
+          retint(node, pal.wall, 0.22, wallCache);
+        }
       } else if (k === 'hole') {
         node = K.buildHole(theme, seed);
       } else if (k === 'low') {
         // obstáculo BAIXO: chão normal + engradado/barril. Bloqueia passagem,
         // NÃO bloqueia a visão — por isso é visivelmente mais baixo que a parede.
         node = K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
-        var prop = K.buildProp(theme, lowKinds[seed % lowKinds.length], seed);
         // ALTURA NORMALIZADA: o obstaculo tem de ler como "da para ver por
         // cima" e nunca competir com uma unidade (heroi ~2,05 de altura).
-        fitHeight(prop, 0.95);
+        var prop = pecaUsuario(theme, 'baixo', seed, 0.95);
+        if (!prop) {
+          prop = K.buildProp(theme, lowKinds[seed % lowKinds.length], seed);
+          fitHeight(prop, 0.95);
+        }
         prop.position.set(x * CELL, 0, y * CELL);
         lowNodes.push({ node: prop, x: x, y: y });
       } else if (k === 'deco') {
         node = K.buildTile(theme, 'deco', seed % 4);
+        // o enfeite de piso do usuário vai POR CIMA do ladrilho, sem colisão
+        var enf = pecaUsuario(theme, 'chao', seed, 0.25);
+        if (enf) { enf.position.set(x * CELL, 0.02, y * CELL); lowNodes.push({ node: enf, x: x, y: y }); }
       } else {
         node = K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
       }
@@ -598,8 +642,12 @@ var JOGO = (typeof window !== 'undefined')
         var edge = Math.min(tx, tz);
         var d = edge + CELL * (1.0 + ((hashXY(p, 3) % 100) / 100) * 1.6);
         var px = cxp + ca * d, pz = czp + sa * d;
-        var prop2 = K.buildProp(theme, kinds[(p * 7 + rr++) % kinds.length], p * 131 + 17);
-        fitHeight(prop2, 0.85 + ((hashXY(p, 5) % 100) / 100) * 0.9);
+        var altBorda = 0.85 + ((hashXY(p, 5) % 100) / 100) * 0.9;
+        var prop2 = pecaUsuario(theme, 'borda', p * 131 + 17, altBorda);
+        if (!prop2) {
+          prop2 = K.buildProp(theme, kinds[(p * 7 + rr++) % kinds.length], p * 131 + 17);
+          fitHeight(prop2, altBorda);
+        }
         prop2.position.set(px, 0, pz);
         staticG.add(prop2);
         padPos.push([px, 0.02, pz]);

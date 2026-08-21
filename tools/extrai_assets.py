@@ -45,7 +45,7 @@ MANIFESTO = os.path.join(DESTINO, 'manifest.json')
 
 # Os arquivos que participam. `fx-atlas.js` e `fx-placas.js` ficam de fora de
 # proposito: sao 0,8 MB somados, tem outro dono, e o ganho nao paga o conflito.
-FONTES = ['env-kit.js', 'models-anims.js', 'models-heroes.js', 'models-meshy.js', 'models-meshy-sum.js',
+FONTES = ['env-kit.js', 'models-anims.js', 'models-heroes.js', 'models-meshy.js', 'models-meshy-sum.js', 'cenario-jardim.js',
           'models-monsters.js', 'models-bosses.js', 'models-summons.js']
 
 # JOGO.MODELS['barbarian']='Z2xU...';   /   JOGO.ASSETS['barrel'] = 'Z2xU...';

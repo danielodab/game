@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o cenário da Estufa, peça por peça</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font-size:12px;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:3px 8px;text-align:right}
+  th{background:#1b222c;color:#8895a6} td.n{text-align:left;color:#cdd6e2}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  #app{position:absolute;left:-4000px;top:0;width:300px;height:300px}
+</style>
+</head>
+<body>
+<h1>O cenário da Estufa — peça por peça</h1>
+<div class="sub">As peças que o Daniel fez chegam numa escala qualquer e o jogo normaliza pela
+ALTURA. Esta página mede o que sai da normalização: se uma divisória vira 0,95 m e uma coluna
+vira 3,10 m, ou se o teto de largura está estrangulando a altura antes de ela chegar lá — que foi
+exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tamanho de um sapo.</div>
+<div id="summary">medindo…</div>
+<ul id="lista"></ul>
+<div id="tabela"></div>
+<div id="app"><canvas id="game-canvas"></canvas></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/cenario-jardim.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? '✓ ' : '✗ ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    if (!res.length) { s.className = 'fail'; s.textContent = 'FALHOU — nenhuma checagem rodou'; return; }
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = (mau ? 'FALHOU' : 'TUDO PASSOU') + ' — ' + (res.length - mau) +
+      ' de ' + res.length + ' checagens ok';
+  }
+
+  // papel -> altura que o briefing prometeu
+  var ALVO = { baixo: 0.95, alto: 3.10, chao: 0.25, borda: 1.30 };
+  var CELL = 2.0;
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2;
+    try { new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas') }); }
+    catch (e) { return check('WebGL', false, e.message); }
+
+    var erro = null;
+    try { M.load(function (e) { if (e) erro = e.message || String(e); }); } catch (e) { erro = e.message; }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false; try { ok = M.isReady(); } catch (e) {}
+      if (!ok && !erro && Date.now() - t0 < 200000) return setTimeout(espera, 250);
+      check('os modelos carregaram', !!ok, erro || '');
+      mede();
+    })();
+
+    // a MESMA conta do renderizador, para a medida valer o que o jogo faz
+    function normaliza(no, alvo, limite) {
+      no.updateMatrixWorld(true);
+      var bb = new THREE.Box3().setFromObject(no);
+      var h = bb.max.y - bb.min.y;
+      var larg = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
+      if (!isFinite(h) || h <= 0.01) return null;
+      var k = alvo / h;
+      var teto = (limite == null ? CELL * 0.95 : limite);
+      if (isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
+      no.scale.multiplyScalar(k);
+      no.updateMatrixWorld(true);
+      var bb2 = new THREE.Box3().setFromObject(no);
+      return { alt: bb2.max.y - bb2.min.y,
+               larg: Math.max(bb2.max.x - bb2.min.x, bb2.max.z - bb2.min.z),
+               cruaAlt: h, cruaLarg: larg };
+    }
+
+    function mede() {
+      var cat = JOGO.CENARIO && JOGO.CENARIO.garden;
+      check('DATA do cenário da Estufa existe', !!cat);
+      if (!cat) return fecha();
+
+      var linhas = [], curtas = [], semModelo = [];
+      Object.keys(ALVO).forEach(function (papel) {
+        (cat[papel] || []).forEach(function (chave) {
+          var cena = null;
+          try { cena = M.rawScene(chave); } catch (e) {}
+          if (!cena) { semModelo.push(chave); return; }
+          var m = normaliza(cena.clone(true), ALVO[papel]);
+          if (!m) { semModelo.push(chave + ' (caixa vazia)'); return; }
+          // PEÇA LARGA PERDE ALTURA, E ISSO É CORRETO. O teto de largura existe
+          // para o objeto não invadir a casa do vizinho; quando a peça é
+          // naturalmente mais larga do que alta — uma redoma quebrada, uma poça —
+          // é a altura que tem de ceder. Cobrar 0,95 m dela seria cobrar que ela
+          // transbordasse. O que NÃO pode é encolher a ponto de sumir: abaixo de
+          // 60% do papel a peça deixa de ler como obstáculo.
+          if (m.alt < ALVO[papel] * 0.60)
+            curtas.push(chave + ' ' + m.alt.toFixed(2) + '/' + ALVO[papel].toFixed(2));
+          linhas.push({ chave: chave, papel: papel, alvo: ALVO[papel],
+                        alt: m.alt, larg: m.larg,
+                        razao: m.cruaLarg / m.cruaAlt,
+                        nome: (JOGO.CENARIO_NOME || {})[chave] || chave });
+        });
+      });
+
+      check('todas as peças têm modelo carregado', semModelo.length === 0, semModelo.join(', '));
+      check('há 15 peças no cenário', linhas.length === 15, linhas.length + ' peças');
+      check('nenhuma peça encolhe abaixo de 60% do papel',
+            curtas.length === 0, curtas.join(' · '));
+      check('nenhuma peça passa da casa (2,0 m de lado)',
+            linhas.every(function (l) { return l.larg <= CELL + 0.01; }),
+            linhas.filter(function (l) { return l.larg > CELL + 0.01; })
+                  .map(function (l) { return l.chave + ' ' + l.larg.toFixed(2); }).join(', '));
+
+      var h = '<table><tr><th class="n">peça</th><th>papel</th><th>alvo</th>' +
+              '<th>altura</th><th>largura</th><th>larg/alt cru</th></tr>';
+      linhas.sort(function (a, b) { return b.alvo - a.alvo || b.alt - a.alt; });
+      linhas.forEach(function (l) {
+        var bom = (l.alvo - l.alt) <= 0.10;
+        h += '<tr><td class="n">' + l.nome + '</td><td>' + l.papel + '</td>' +
+             '<td>' + l.alvo.toFixed(2) + '</td>' +
+             '<td class="' + (bom ? 'ok' : 'no') + '">' + l.alt.toFixed(2) + '</td>' +
+             '<td>' + l.larg.toFixed(2) + '</td>' +
+             '<td>' + l.razao.toFixed(2) + '</td></tr>';
+      });
+      document.getElementById('tabela').innerHTML = h + '</table>';
+      fecha();
+    }
+  });
+})();
+</script>
+</body>
+</html>
