@@ -276,6 +276,13 @@ var JOGO = (typeof window !== 'undefined')
   // convidado sumiria da fusao sem erro nenhum.
   M.CLASS_MARK = {
     sumo:       { model: 'barbarian', head: 'Barbarian_Hat', cape: 'Barbarian_Cape', hand: '1H_Axe' },
+    // A BESTA NAO E DESCUIDO. O Cacador usa espingarda de dois canos, e a
+    // espingarda esta MODELADA no corpo Meshy dele — mas `CLASS_MARK` e o que
+    // as FUSOES herdam, e o corpo fundido e do KayKit, cujo acervo tem
+    // exatamente cinco armas: machado, machado auxiliar, besta, varinha e
+    // cajado. Nao ha arma de fogo nenhuma. A besta e a unica peca de longo
+    // alcance que existe, entao ela fica — e fica anotado, para ninguem
+    // "consertar" isto depois procurando uma espingarda que o acervo nao tem.
     arqueiro:   { model: 'rogue',     head: null,            cape: 'Rogue_Cape',     hand: '1H_Crossbow' },
     bruxo:      { model: 'mage',      head: 'Mage_Hat',      cape: 'Mage_Cape',      hand: '1H_Wand' },
     espadachim: { model: 'rogue',     head: null,            cape: 'Rogue_Cape',     hand: 'Knife_Offhand' },

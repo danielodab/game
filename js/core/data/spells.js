@@ -410,13 +410,13 @@ JOGO.DATA.spells = {
    * ====================================================================== */
 
   'arqueiro-neutro-1': {
-    id: 'arqueiro-neutro-1', name: 'Flecha Anotada', element: 'neutro', classId: 'arqueiro', unlockLevel: 0,
+    id: 'arqueiro-neutro-1', name: 'Tiro Anotado', element: 'neutro', classId: 'arqueiro', unlockLevel: 0,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 2, max: 7, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'neutro', min: 18, max: 24 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
     description: '18–24 de dano neutro e 1 marca no alvo (cada marca aumenta em 5% todo o dano que ele receber). Duas vezes por turno.',
-    flavor: 'A flecha não é a cobrança. É só o registro no caderno.',
+    flavor: 'O tiro não é a cobrança. É só o registro no caderno.',
     fxKey: 'markShot'
   },
   'arqueiro-neutro-2': {
@@ -440,15 +440,20 @@ JOGO.DATA.spells = {
     fxKey: 'markCollect'
   },
 
-  /* --- ARQUEIRO · FOGO: a marca queima; a conta explode --- */
+  /* O ID CONTINUA `arqueiro-*` DE PROPOSITO. A classe virou CAÇADOR quando a arte
+   mudou, mas o id aparece em save, em tabela de dano e em `baseSpells`, e
+   renomeá-lo custaria migração de save para não mudar nada que o jogador veja.
+   O que o jogador lê — nome, descrição e sabor — fala de espingarda. */
+
+/* --- CAÇADOR · FOGO: a marca queima; a conta explode --- */
   'arqueiro-fogo-5': {
-    id: 'arqueiro-fogo-5', name: 'Flecha Incendiária', element: 'fogo', classId: 'arqueiro', unlockLevel: 5,
+    id: 'arqueiro-fogo-5', name: 'Carga Incendiária', element: 'fogo', classId: 'arqueiro', unlockLevel: 5,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 2, max: 7, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'fogo', min: 20, max: 26 }, { type: 'poison', element: 'fogo', min: 5, max: 8, duration: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
     description: '20–26 de fogo, queimadura de 5–8 por 2 turnos e 1 marca.',
-    flavor: 'A ponta é embebida na resina que sobrou da Estufa. Cheira a fim de tarde.',
+    flavor: 'O cartucho é socado com a resina que sobrou da Estufa. Cheira a fim de tarde.',
     fxKey: 'emberArrow'
   },
   'arqueiro-fogo-10': {
@@ -457,7 +462,7 @@ JOGO.DATA.spells = {
     range: { min: 3, max: 8, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 1 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'fogo', min: 24, max: 30 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
-    description: 'Três flechas em leque: 24–30 de fogo em raio 1 e 1 marca em cada atingido. Marcar o grupo todo é o plano.',
+    description: 'Três tiros em leque: 24–30 de fogo em raio 1 e 1 marca em cada atingido. Marcar o grupo todo é o plano.',
     flavor: 'Contabilidade em massa.',
     fxKey: 'markVolley'
   },
@@ -487,24 +492,24 @@ JOGO.DATA.spells = {
     range: { min: 3, max: 9, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'fogo', min: 40, max: 48 }, { type: 'poison', element: 'fogo', min: 10, max: 14, duration: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
-    description: 'Dezenas de flechas em brasa caem em raio 2: 40–48 de fogo, queimadura de 10–14 por 2 turnos e 1 marca em todos.',
+    description: 'Dezenas de bagos em brasa caem em raio 2: 40–48 de fogo, queimadura de 10–14 por 2 turnos e 1 marca em todos.',
     flavor: 'Chove fogo num mundo que não vê chuva há mil anos. Justiça poética duvidosa.',
     fxKey: 'emberRain'
   },
   'arqueiro-fogo-30': {
-    id: 'arqueiro-fogo-30', name: 'Aljava do Sol Morto', element: 'fogo', classId: 'arqueiro', unlockLevel: 30,
+    id: 'arqueiro-fogo-30', name: 'Cartucheira do Sol Morto', element: 'fogo', classId: 'arqueiro', unlockLevel: 30,
     paCost: 6, cooldown: 4, castsPerTurn: 1,
     range: { min: 2, max: 9, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'fogo', min: 62, max: 74 }, { type: 'detonateMarks', mult: 20 }, { type: 'poison', element: 'fogo', min: 16, max: 20, duration: 3 } ],
-    description: 'Esvazia a aljava inteira em raio 2: 62–74 de fogo, 20 de dano por marca acumulada em cada alvo e queimadura de 16–20 por 3 turnos.',
-    flavor: 'Guardava uma flecha do tempo em que ainda havia sol. Guardou até agora.',
+    description: 'Esvazia a cartucheira inteira em raio 2: 62–74 de fogo, 20 de dano por marca acumulada em cada alvo e queimadura de 16–20 por 3 turnos.',
+    flavor: 'Guardava um cartucho do tempo em que ainda havia sol. Guardou até agora.',
     fxKey: 'deadSunQuiver'
   },
 
-  /* --- ARQUEIRO · ÁGUA: arpoa, puxa e se alimenta --- */
+  /* --- CAÇADOR · ÁGUA: arpoa, puxa e se alimenta --- */
   'arqueiro-agua-5': {
-    id: 'arqueiro-agua-5', name: 'Flecha-Arpão', element: 'agua', classId: 'arqueiro', unlockLevel: 5,
+    id: 'arqueiro-agua-5', name: 'Tiro-Arpão', element: 'agua', classId: 'arqueiro', unlockLevel: 5,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 2, max: 7, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -549,7 +554,7 @@ JOGO.DATA.spells = {
     range: { min: 3, max: 9, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'agua', min: 38, max: 46, lifesteal: true }, { type: 'pull', tiles: 2 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
-    description: 'Uma nuvem de flechas geladas em raio 2: 38–46 com roubo de vida, puxa 2 células e marca todos os atingidos.',
+    description: 'Uma nuvem de chumbo gelado em raio 2: 38–46 com roubo de vida, puxa 2 células e marca todos os atingidos.',
     flavor: 'Junta o rebanho antes de cobrar. Sempre foi mais eficiente.',
     fxKey: 'coldRain'
   },
@@ -564,9 +569,9 @@ JOGO.DATA.spells = {
     fxKey: 'markedTide'
   },
 
-  /* --- ARQUEIRO · TERRA: flecha-menir, peso e raiz --- */
+  /* --- CAÇADOR · TERRA: bala-menir, peso e raiz --- */
   'arqueiro-terra-5': {
-    id: 'arqueiro-terra-5', name: 'Flecha de Sílex', element: 'terra', classId: 'arqueiro', unlockLevel: 5,
+    id: 'arqueiro-terra-5', name: 'Chumbo de Sílex', element: 'terra', classId: 'arqueiro', unlockLevel: 5,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 2, max: 7, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -591,8 +596,8 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 7, line: true, los: true, movable: false },
     aoe: { shape: 'line', size: 7 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'terra', min: 30, max: 38 }, { type: 'mark', value: 5, duration: 4, max: 5 } ],
-    description: 'A flecha atravessa a fila inteira: 30–38 de terra e 1 marca em cada corpo do caminho.',
-    flavor: 'Besta de dois pés, corda de tendão de raiz. Não pede licença.',
+    description: 'A bala atravessa a fila inteira: 30–38 de terra e 1 marca em cada corpo do caminho.',
+    flavor: 'Cano de dois palmos, coronha de raiz seca. Não pede licença.',
     fxKey: 'piercingShot'
   },
   'arqueiro-terra-15': {
@@ -611,12 +616,12 @@ JOGO.DATA.spells = {
     range: { min: 2, max: 8, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'terra', min: 36, max: 44 }, { type: 'root', duration: 2 }, { type: 'mark', value: 5, duration: 4, max: 5 } ],
-    description: 'Flechas do tamanho de postes caem em raio 2: 36–44 de terra, 0 PP por 2 turnos e 1 marca em todos.',
-    flavor: 'Ninguém entende como ele carrega essas coisas na aljava. Ninguém pergunta.',
+    description: 'Menires do tamanho de postes caem em raio 2: 36–44 de terra, 0 PP por 2 turnos e 1 marca em todos.',
+    flavor: 'Ninguém entende como ele carrega essas coisas na cartucheira. Ninguém pergunta.',
     fxKey: 'menhirVolley'
   },
   'arqueiro-terra-30': {
-    id: 'arqueiro-terra-30', name: 'Flecha-Menir', element: 'terra', classId: 'arqueiro', unlockLevel: 30,
+    id: 'arqueiro-terra-30', name: 'Bala-Menir', element: 'terra', classId: 'arqueiro', unlockLevel: 30,
     paCost: 6, cooldown: 4, castsPerTurn: 1,
     range: { min: 2, max: 9, line: true, los: true, movable: false },
     aoe: { shape: 'line', size: 9 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -626,9 +631,9 @@ JOGO.DATA.spells = {
     fxKey: 'menhirShot'
   },
 
-  /* --- ARQUEIRO · AR: o tiro que salta --- */
+  /* --- CAÇADOR · AR: o tiro que salta --- */
   'arqueiro-ar-5': {
-    id: 'arqueiro-ar-5', name: 'Flecha de Vento', element: 'ar', classId: 'arqueiro', unlockLevel: 5,
+    id: 'arqueiro-ar-5', name: 'Carga de Vento', element: 'ar', classId: 'arqueiro', unlockLevel: 5,
     paCost: 2, cooldown: 0, castsPerTurn: 2,
     range: { min: 2, max: 8, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -644,11 +649,11 @@ JOGO.DATA.spells = {
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'chain', jumps: 2, falloff: 0.3, element: 'ar', min: 22, max: 28 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
     description: '22–28 de ar que saltam para mais 2 inimigos próximos (−30% a cada salto) e marcam o primeiro alvo.',
-    flavor: 'A flecha ricocheteia no teto de pedra. O teto, pelo menos, serve para isso.',
+    flavor: 'O chumbo ricocheteia no teto de pedra. O teto, pelo menos, serve para isso.',
     fxKey: 'skipShot'
   },
   'arqueiro-ar-12': {
-    id: 'arqueiro-ar-12', name: 'Flecha Rodopiante', element: 'ar', classId: 'arqueiro', unlockLevel: 12,
+    id: 'arqueiro-ar-12', name: 'Chumbo Rodopiante', element: 'ar', classId: 'arqueiro', unlockLevel: 12,
     paCost: 3, cooldown: 0, castsPerTurn: 2,
     range: { min: 2, max: 8, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
@@ -668,13 +673,13 @@ JOGO.DATA.spells = {
     fxKey: 'chainCollect'
   },
   'arqueiro-ar-20': {
-    id: 'arqueiro-ar-20', name: 'Vendaval de Setas', element: 'ar', classId: 'arqueiro', unlockLevel: 20,
+    id: 'arqueiro-ar-20', name: 'Vendaval de Chumbo', element: 'ar', classId: 'arqueiro', unlockLevel: 20,
     paCost: 5, cooldown: 2, castsPerTurn: 1,
     range: { min: 3, max: 9, line: false, los: true, movable: false },
     aoe: { shape: 'circle', size: 2 }, needsEmptyTile: false, targetSide: 'enemy',
     effects: [ { type: 'damage', element: 'ar', min: 36, max: 44 }, { type: 'push', tiles: 3 }, { type: 'mark', value: 5, duration: 3, max: 5 } ],
-    description: 'Um vendaval de setas em raio 2: 36–44 de ar, 3 células de arremesso e 1 marca em cada alvo.',
-    flavor: 'Metade das flechas erra de propósito, só para fazer vento.',
+    description: 'Um vendaval de chumbo em raio 2: 36–44 de ar, 3 células de arremesso e 1 marca em cada alvo.',
+    flavor: 'Metade do chumbo erra de propósito, só para fazer vento.',
     fxKey: 'arrowGale'
   },
   'arqueiro-ar-30': {
