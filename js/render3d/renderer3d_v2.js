@@ -2132,12 +2132,25 @@ var JOGO = (typeof window !== 'undefined')
   // que e a informacao que o jogador precisa ler.
   var MURO_MODELO = 'muro-escudo';
 
-  function tingeMuro(no, cor) {
+  // TINGIR É MISTURAR, NUNCA SUBSTITUIR.
+  //
+  // Escrito com `color.copy(cor)`, isto apagava o desenho inteiro: o escudo do
+  // Minotauro chegou com textura de madeira, rebite e brasão e virou uma chapa
+  // laranja lisa. É o mesmo erro que já tinha lavado o chão e as paredes — o
+  // material do modelo não tem cor de base, TUDO vem do atlas, e a cor do
+  // material MULTIPLICA esse atlas. Escrever cor chapada em cima é jogar a
+  // arte fora.
+  //
+  // A caixa provisória continuava precisando da cor cheia (ela não tem
+  // textura), então quem faz a mistura é esta função e a força depende de o
+  // corpo ter desenho ou não.
+  function tingeMuro(no, cor, forca) {
+    var k = (forca == null) ? 0.45 : forca;
     no.traverse(function (o) {
       if (!o.isMesh || !o.material) return;
       var m = o.material.clone();
-      if (m.color) m.color.copy(cor);
-      if (m.emissive) { m.emissive.copy(cor); m.emissiveIntensity = 0.16; }
+      if (m.color) m.color.lerp(cor, k);
+      if (m.emissive) { m.emissive.copy(cor); m.emissiveIntensity = 0.12; }
       o.material = m;
       o.castShadow = true;
       o.receiveShadow = true;
@@ -2150,7 +2163,9 @@ var JOGO = (typeof window !== 'undefined')
         var cena = M.rawScene(MURO_MODELO);
         if (cena) {
           var no = cena.clone(true);
-          tingeMuro(no, cor);
+          // 0,45: forte o bastante para o jogador ler o elemento de longe, leve
+          // o bastante para a madeira e o brasão do escudo sobreviverem.
+          tingeMuro(no, cor, 0.45);
           // encaixa no porte da casa, seja qual for a escala em que veio
           var cx = new THREE.Box3().setFromObject(no);
           var tam = cx.getSize(new THREE.Vector3());
@@ -2159,6 +2174,11 @@ var JOGO = (typeof window !== 'undefined')
                            MURO_LARG / Math.max(0.001, tam.z));
           if (isFinite(k) && k > 0) no.scale.setScalar(k);
           no.position.y = -cx.min.y * (no.scale.y || 1);
+
+          // NÃO GIRAR. Tentei virar a face pelo lado mais largo da caixa e o
+          // resultado foi o oposto: o escudo já nasce encarando para fora, e o
+          // quarto de volta pôs o VERSO — que é liso — para a câmera, fazendo a
+          // peça ler como um bloco. Medido nos dois sentidos, com foto.
           return no;
         }
       }

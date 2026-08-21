@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-21T12:15:28",
+ "gerado": "2026-08-21T12:27:25",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -575,6 +575,12 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "muro-escudo",
+   "arquivo": "muro-escudo/muro-escudo.glb",
+   "bytes": 758816
+  },
+  {
+   "alvo": "MODELS",
    "chave": "q_frog",
    "arquivo": "models-monsters/q_frog.glb",
    "bytes": 581708
@@ -864,6 +870,6 @@
    "walk"
   ]
  },
- "totalBytes": 49494440,
- "totalBase64": 65992752
+ "totalBytes": 50253256,
+ "totalBase64": 67004508
 }
