@@ -573,6 +573,82 @@ var JOGO = (typeof window !== 'undefined')
     return berco;
   }
 
+  // MURO EM FIADAS — como se levanta parede de verdade.
+  //
+  // Os modulos de muro do Daniel sao 2x mais largos que altos (razao 1,45 a
+  // 2,25): proporcao de MURETA. Esticar um deles ate 3,10 m de altura o poria
+  // com 4,5 a 7,0 m de largura — tres casas de largura para tapar uma — e
+  // limitar a largura, que era o que o codigo fazia antes, deixava a altura
+  // cair junto. Como as quatro razoes sao diferentes, o mesmo teto de largura
+  // devolvia alturas diferentes, e o Daniel via um muro do tamanho de um vaso
+  // ao lado de outro inteiro.
+  //
+  // Um bloco 2:1 nao e parede fracassada: e FIADA. Parede ganha altura
+  // empilhando fiada sobre fiada, sem esticar pedra nenhuma. Entao:
+  //
+  //   1. a largura vale exatamente UMA CASA — sem vao entre casas, sem
+  //      transbordo para o piso livre;
+  //   2. o numero de fiadas aproxima a altura do alvo;
+  //   3. uma correcao so em Y fecha o alvo exato — 16% no pior caso, o que em
+  //      pedra ninguem enxerga, contra os 3,3x que uma fiada so exigiria.
+  //
+  // Todo muro sai com a MESMA altura, que era o pedido.
+  function muroEmFiadas(theme, papel, seed, alturaAlvo, largura) {
+    var cat = JOGO.CENARIO && JOGO.CENARIO[theme];
+    var lista = cat && cat[papel];
+    // `M` so e preenchido em `R.init`, e esta funcao nao precisa do
+    // renderizador de pe — so do registro de modelos. Resolver aqui a deixa
+    // utilizavel por quem mede sem montar uma cena inteira.
+    var mods = M || JOGO.Models3D2;
+    if (!lista || !lista.length || !mods || !mods.rawScene) return null;
+    var chave = lista[seed % lista.length];
+    var cena = null;
+    try { cena = mods.rawScene(chave); } catch (e) { return null; }
+    if (!cena) return null;
+
+    var base = cena.clone(true);
+    base.updateMatrixWorld(true);
+    var cx = new THREE.Box3().setFromObject(base);
+    var larg = Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z);
+    var alt = cx.max.y - cx.min.y;
+    if (!isFinite(larg) || larg < 0.01 || !isFinite(alt) || alt < 0.01) return null;
+
+    // escala UNIFORME que poe a peca com a largura de uma casa
+    var k = largura / larg;
+    var altFiada = alt * k;
+
+    // quantas fiadas chegam mais perto do alvo (pelo menos uma)
+    var n = Math.max(1, Math.round(alturaAlvo / altFiada));
+    // e a correcao que falta, so em Y
+    var corrige = alturaAlvo / (altFiada * n);
+
+    var berco = new THREE.Group();
+    for (var i = 0; i < n; i++) {
+      var fiada = (i === 0) ? base : cena.clone(true);
+      fiada.scale.set(k, k * corrige, k);
+      fiada.updateMatrixWorld(true);
+      var cf = new THREE.Box3().setFromObject(fiada);
+      // assenta cada fiada em cima da anterior, e centra — mesma razao de
+      // `pecaUsuario`: o importador de glTF nao garante peca centrada nem com
+      // a base em zero, e supor isso ja enterrou peca antes.
+      if (isFinite(cf.min.y)) fiada.position.y -= cf.min.y;
+      var mx = (cf.min.x + cf.max.x) / 2, mz = (cf.min.z + cf.max.z) / 2;
+      if (isFinite(mx)) fiada.position.x -= mx;
+      if (isFinite(mz)) fiada.position.z -= mz;
+      fiada.position.y += i * altFiada * corrige;
+      fiada.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      berco.add(fiada);
+    }
+    berco.userData.fiadas = n;
+    berco.userData.altura = alturaAlvo;
+    return berco;
+  }
+
+  // Exposto para o teste MEDIR o muro, e nao so conferir que a funcao existe.
+  // A regra que interessa — "todos da mesma altura e altos" — so se verifica
+  // com regua, entao a regua precisa alcancar a peca.
+  R.muroEmFiadas = muroEmFiadas;
+
   // A FILEIRA A QUE ESTA CASA PERTENCE.
   //
   // Devolve {semente, eixo}: a semente é a mesma para toda a corrida (para que
@@ -679,26 +755,17 @@ var JOGO = (typeof window !== 'undefined')
         if (!col && filaA.comp >= 3 && (filaA.i % 4) === 2) {
           col = pecaUsuario(theme, 'pilar', filaA.semente, WALL_H);
         }
-        // O TETO DE LARGURA DOBRA DENTRO DE UM TRECHO DE PAREDE.
+        // TODO MURO COM A MESMA ALTURA, E ALTO — em fiadas.
         //
-        // Os módulos do Daniel são 2x mais largos que altos — proporção de muro
-        // baixo. Com o teto de uma casa, mirar 3,10 m de altura dava 0,95 m: a
-        // largura estrangulava antes. Era isso que ele via em "os muros devem
-        // ser grandes, só os pilares são".
+        // Antes o teto de LARGURA mandava na ALTURA: os quatro módulos têm
+        // razões diferentes (1,45 a 2,25), então o mesmo teto devolvia alturas
+        // de 1,78 a 2,76 m, e na ponta de um trecho o teto caía pela metade e o
+        // muro encolhia mais. Era isso o "um do tamanho de um vaso".
         //
-        // A folga estava ali e eu não usava: numa FILEIRA, a casa vizinha também
-        // é parede. Transbordar não invade nada — só faz os módulos se
-        // sobreporem, que é o que deixa a parede contínua. Só na ponta do trecho
-        // é que o teto de uma casa ainda vale.
-        //
-        // Com duas casas de teto os quatro muros ficam entre 1,78 e 2,76 m.
-        // Para os 3,10 m cheios o módulo teria de ser modelado quase tão alto
-        // quanto largo — está anotado no briefing.
-        if (!col) {
-          var pontaA = (filaA.comp === 1 || filaA.i === 0 || filaA.i === filaA.comp - 1);
-          col = pecaUsuario(theme, 'alto', filaA.semente, WALL_H,
-                            pontaA ? CELL * 0.95 : CELL * 1.9);
-        }
+        // Agora a largura vale sempre uma casa e a ALTURA é que é fixa, obtida
+        // empilhando fiadas (ver `muroEmFiadas`). Não há mais caso de ponta:
+        // ponta e miolo têm exatamente a mesma medida, que é o pedido.
+        if (!col) col = muroEmFiadas(theme, 'alto', filaA.semente, WALL_H, CELL);
         if (col) {
           node = col;
           // só o MURO gira para o eixo do trecho; pilar é simétrico e sotaque é
@@ -733,7 +800,15 @@ var JOGO = (typeof window !== 'undefined')
           // escolheria o mesmo enfeite e o charme viraria padrão
           prop = pecaUsuario(theme, 'sotaque', fila.semente + fila.i * 7, 0.95);
         }
-        if (!prop) prop = pecaUsuario(theme, 'baixo', fila.semente, 0.95);
+        // UMA FIADA, e nao um muro espremido.
+        //
+        // `alto` e `baixo` dividem os mesmos quatro módulos, e antes o baixo
+        // era a arte de muro achatada a 0,95 m — um muro do tamanho de um vaso,
+        // literalmente. Com fiadas a diferença passa a significar alguma coisa:
+        // a parede tem três, a mureta tem uma. Mesmo material, mesma lógica, e
+        // a largura de uma casa nos dois — o que de quebra fecha o vão de ~60 cm
+        // que o «muro tomado pelo mato» deixava numa corrida.
+        if (!prop) prop = muroEmFiadas(theme, 'baixo', fila.semente, LOW_H, CELL);
         if (!prop) {
           prop = K.buildProp(theme, lowKinds[fila.semente % lowKinds.length], fila.semente);
           fitHeight(prop, 0.95);

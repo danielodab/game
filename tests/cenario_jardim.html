@@ -41,7 +41,8 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
     'assets/embedded/env-kit.js','js/render3d/models3d.js',
     'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
     'assets/embedded/cenario-jardim.js',
-    'js/render3d/models3d_v2.js'];
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js',
+    'js/render3d/renderer3d_v2.js'];
   for (var i = 0; i < arquivos.length; i++)
     document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
 </script>
@@ -75,9 +76,15 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
     // Cada papel e a altura que o renderizador pede dele. `sotaque_alto` e
   // `pilar` medem o mesmo que a parede: eles OCUPAM casa de parede, um como
   // pontuacao e o outro como enfeite, e teriam de ter o porte dela.
-  var ALVO = { alto: 3.10, pilar: 3.10, sotaque_alto: 3.10,
-               baixo: 0.95, sotaque: 0.95, chao: 0.25, borda: 1.30 };
   var CELL = 2.0;
+  // OS ALVOS SAO OS DO JOGO, nao numeros meus. `WALL_H` e `LOW_H` moram em
+  // renderer3d_v2.js como CELL x 1,55 e CELL x 0,46; repeti-los como 3,10 e
+  // 0,95 fazia o teste medir um alvo que o jogo nao usa — a mureta era cobrada
+  // em 0,95 e desenhada em 0,92. Um teste que mede outra coisa passa quando
+  // deveria reprovar.
+  var WALL_H = CELL * 1.55, LOW_H = CELL * 0.46;
+  var ALVO = { alto: WALL_H, pilar: WALL_H, sotaque_alto: WALL_H,
+               baixo: LOW_H, sotaque: 0.95, chao: 0.25, borda: 1.30 };
 
   window.addEventListener('DOMContentLoaded', function () {
     var M = JOGO.Models3D2;
@@ -131,6 +138,32 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
                cruaAlt: h, cruaLarg: larg };
     }
 
+    /* Mede uma peca do jeito que o jogo a monta: em fiadas.
+     *
+     * Preciso da CHAVE especifica e `muroEmFiadas` escolhe pela semente, entao
+     * procuro a semente que cai na peca que quero. E feio, mas e honesto: a
+     * alternativa seria o teste montar a peca por conta propria, e ai ele
+     * estaria conferindo a si mesmo em vez do jogo. */
+    function medeFiadas(papel, chave, alvo) {
+      var R = window.JOGO && JOGO.Renderer;
+      if (!R || !R.muroEmFiadas) return null;
+      var lista = (JOGO.CENARIO.garden || {})[papel] || [];
+      var semente = lista.indexOf(chave);
+      if (semente < 0) return null;
+      var g = R.muroEmFiadas('garden', papel, semente, alvo, CELL);
+      if (!g) return null;
+      g.updateMatrixWorld(true);
+      var b = new THREE.Box3().setFromObject(g);
+      if (!isFinite(b.min.y)) return null;
+      var alt = b.max.y - b.min.y;
+      var larg = Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
+      return { alt: alt, larg: larg, base: b.min.y,
+               desvio: Math.max(Math.abs(b.min.x + b.max.x) / 2,
+                                Math.abs(b.min.z + b.max.z) / 2),
+               fiadas: g.userData.fiadas,
+               cruaAlt: alt, cruaLarg: larg };
+    }
+
     function mede() {
       var cat = JOGO.CENARIO && JOGO.CENARIO.garden;
       check('DATA do cenário da Estufa existe', !!cat);
@@ -142,8 +175,17 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
           var cena = null;
           try { cena = M.rawScene(chave); } catch (e) {}
           if (!cena) { semModelo.push(chave); return; }
-          var teto = (papel === 'alto') ? CELL * 1.9 : null;
-          var m = normaliza(cena.clone(true), ALVO[papel], teto);
+          // MURO E MURETA MEDEM PELO CAMINHO DE VERDADE.
+          //
+          // Os dois passaram a ser montados em FIADAS pelo renderizador, e
+          // medi-los aqui por outra conta seria medir uma coisa que o jogo nao
+          // desenha. `R.muroEmFiadas` e a mesma funcao que a sala chama.
+          var m;
+          if (papel === 'alto' || papel === 'baixo') {
+            m = medeFiadas(papel, chave, ALVO[papel]);
+          } else {
+            m = normaliza(cena.clone(true), ALVO[papel], null);
+          }
           if (!m) { semModelo.push(chave + ' (caixa vazia)'); return; }
           // A PAREDE MEDE COM O TETO QUE O JOGO DÁ A ELA. Dentro de um trecho o
       // renderizador libera duas casas de largura, porque a casa vizinha também
@@ -164,7 +206,7 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
             curtas.push(chave + ' ' + m.alt.toFixed(2) + '/' + ALVO[papel].toFixed(2));
           linhas.push({ chave: chave, papel: papel, alvo: ALVO[papel], base: m.base,
                         desvio: m.desvio,
-                        alt: m.alt, larg: m.larg,
+                        alt: m.alt, larg: m.larg, fiadas: m.fiadas,
                         razao: m.cruaLarg / m.cruaAlt,
                         nome: (JOGO.CENARIO_NOME || {})[chave] || chave });
         });
@@ -198,27 +240,56 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       // A PAREDE TEM DE PASSAR DE UM HERÓI. É o que a separa de uma mureta: se
       // um Minotauro de 2,62 m vê por cima dela, ela não bloqueia visão, e a
       // regra do jogo diz que bloqueia.
-      // RUÍNA PODE SER BAIXA — e só ela. Uma peça chamada "muro desabado" tem
-      // de ser mais baixa que as outras três; é o desenho dela. Fica como
-      // exceção NOMEADA em vez de eu afrouxar a régua para todo mundo: assim um
-      // muro novo que chegar curto ainda reprova.
-      var RUINA_OK = { jd_muro_ruina: 1 };
-      var paredes = linhas.filter(function (l) { return l.papel === 'alto' || l.papel === 'pilar'; });
-      var baixas = paredes.filter(function (l) {
-        return l.alt < 1.75 && !RUINA_OK[l.chave];
-      });
-      check('toda parede passa da altura do menor herói (1,75 m)',
-            paredes.length > 0 && baixas.length === 0,
-            baixas.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + ' m'; }).join(' · '));
-      // mesmo a ruína não pode virar mureta: o que a separa de uma divisória é
-      // ainda ser claramente mais alta que os 0,95 m dela.
-      var ruinas = paredes.filter(function (l) { return RUINA_OK[l.chave]; });
-      check('mesmo a ruína continua lendo como parede (> 1,5 m)',
-            ruinas.every(function (l) { return l.alt > 1.5; }),
-            ruinas.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + ' m'; }).join(' · '));
+      // TODO MURO COM A MESMA ALTURA — a regra que o Daniel pediu, cobrada
+      // exata em vez de por faixa.
+      //
+      // A régua velha era "passa de 1,75 m", com uma exceção nomeada para a
+      // ruína, que não alcançava. Aquilo era o melhor possível enquanto a
+      // LARGURA mandava na altura: as quatro razões são diferentes, então o
+      // mesmo teto devolvia alturas diferentes e só dava para cobrar um piso.
+      //
+      // Com fiadas a altura é escolhida, não sofrida. Então a régua fecha, e a
+      // exceção sai junto: exceção que sobrevive ao problema que a justificava
+      // vira mentira no teste. Se a ruína voltar a ficar curta, agora reprova.
+      var muros = linhas.filter(function (l) { return l.papel === 'alto'; });
+      var fora = muros.filter(function (l) { return Math.abs(l.alt - ALVO.alto) > 0.02; });
+      check('TODO muro tem exatamente a mesma altura (' + ALVO.alto.toFixed(2) + ' m)',
+            muros.length > 0 && fora.length === 0,
+            fora.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + ' m'; }).join(' · '));
+
+      // e a largura tem de ser de UMA CASA: mais estreito abre vão na corrida,
+      // mais largo transborda para o piso livre na ponta do trecho.
+      var largFora = muros.filter(function (l) { return Math.abs(l.larg - CELL) > 0.05; });
+      check('todo muro ocupa exatamente uma casa de largura',
+            muros.length > 0 && largFora.length === 0,
+            largFora.map(function (l) { return l.chave + ' ' + l.larg.toFixed(2) + ' m'; }).join(' · '));
+
+      // A MURETA TAMBÉM É UNIFORME, e é uma fiada só. O que separa muro de
+      // mureta deixa de ser "espremi um" e passa a ser "três fiadas contra uma".
+      var muretas = linhas.filter(function (l) { return l.papel === 'baixo'; });
+      var mFora = muretas.filter(function (l) { return Math.abs(l.alt - ALVO.baixo) > 0.02; });
+      check('toda mureta tem a mesma altura (' + ALVO.baixo.toFixed(2) + ' m)',
+            muretas.length > 0 && mFora.length === 0,
+            mFora.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + ' m'; }).join(' · '));
+      // `every` de lista VAZIA devolve true: sem o teste de tamanho esta
+      // checagem passaria justamente quando nenhum muro foi medido, que e o
+      // caso em que ela mais precisa gritar.
+      check('a mureta é UMA fiada e o muro é mais de uma',
+            muretas.length > 0 && muros.length > 0 &&
+            muretas.every(function (l) { return l.fiadas === 1; }) &&
+            muros.every(function (l) { return l.fiadas >= 2; }),
+            'mureta ' + muretas.map(function (l) { return l.fiadas; }).join('/') +
+            ' · muro ' + muros.map(function (l) { return l.fiadas; }).join('/'));
+
+      // e o muro tem de passar de um herói, que é o que o separa de decoração
+      check('todo muro passa da altura do maior herói (2,62 m)',
+            muros.length > 0 && muros.every(function (l) { return l.alt > 2.62; }),
+            muros.map(function (l) { return l.alt.toFixed(2); }).join(', '));
 
       // a parede pode passar da casa DE PROPÓSITO (ver acima); as outras não
-      var naCasa = linhas.filter(function (l) { return l.papel !== 'alto'; });
+      // `alto` e `baixo` saem desta conta: os dois são montados em fiadas com a
+      // largura fixada em uma casa, e já têm régua própria logo acima.
+      var naCasa = linhas.filter(function (l) { return l.papel !== 'alto' && l.papel !== 'baixo'; });
       check('nenhuma peça de casa única passa dos 2,0 m',
             naCasa.every(function (l) { return l.larg <= CELL + 0.01; }),
             naCasa.filter(function (l) { return l.larg > CELL + 0.01; })
