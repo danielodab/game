@@ -263,6 +263,50 @@ quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da
               alvos2.length + ' casas no alcance · ' + (st.walls || []).length + ' muros de pé');
       }
 
+      // ?mira — mede se o escudo REALMENTE encara o inimigo, em vez de eu julgar
+      // pela foto. Numa câmera isométrica um escudo virado para o leste aparece
+      // de canto, e "de canto" pode ser tanto o certo quanto o errado: só a
+      // conta separa os dois casos. Compara-se a NORMAL da face com a direção do
+      // alvo; se o cosseno entre elas for perto de 1, ele encara.
+      if (location.href.indexOf('mira') >= 0) {
+        var L2 = [];
+        try {
+          var cena = JOGO.Renderer.scene();
+          (st.walls || []).forEach(function (w) {
+            var alvo = null, dist = 1e9;
+            st.units.forEach(function (u) {
+              if (!u.alive || u.offBoard || u.side === w.side) return;
+              var d = Math.abs(u.x - w.x) + Math.abs(u.y - w.y);
+              if (d < dist) { dist = d; alvo = u; }
+            });
+            // acha o nó do muro pela posição no mundo
+            var pw = JOGO.Renderer.world(w.x, w.y, 0), no = null;
+            cena.traverse(function (o) {
+              if (no || !o.isGroup) return;
+              if (Math.abs(o.position.x - pw.x) < 0.01 &&
+                  Math.abs(o.position.z - pw.z) < 0.01 && o.children.length) no = o;
+            });
+            if (!no) { L2.push('muro ' + w.x + ',' + w.y + ': nó não achado'); return; }
+            var n0 = new THREE.Vector3(0, 0, 1).applyQuaternion(no.quaternion).setY(0).normalize();
+            var dv = alvo ? new THREE.Vector3(alvo.x - w.x, 0, alvo.y - w.y).normalize()
+                          : new THREE.Vector3(0, 0, 1);
+            var cos = n0.dot(dv);
+            L2.push('muro ' + w.x + ',' + w.y +
+                    ' · alvo ' + (alvo ? alvo.name + ' ' + alvo.x + ',' + alvo.y : 'nenhum') +
+                    ' · giro ' + (no.rotation.y * 180 / Math.PI).toFixed(0) + '°' +
+                    ' · cos ' + cos.toFixed(2) +
+                    (cos > 0.85 ? '  ENCARA' : (cos < -0.85 ? '  DE COSTAS' : '  DE LADO')));
+          });
+        } catch (e) { L2.push('erro: ' + e.message); }
+        diz('mira: ' + L2.length + ' muro(s)');
+        var ul3 = document.getElementById('lista');
+        L2.forEach(function (a) {
+          var li = document.createElement('li'); li.className = 'pass'; li.textContent = a;
+          ul3.appendChild(li);
+        });
+        return;
+      }
+
       // `?fica` deixa as pedras de pé e para aqui: é o modo de tirar retrato,
       // porque o teste normal termina com o quadro já limpo.
       // ?transp — lista toda malha TRANSLUCIDA da cena. Existe porque um

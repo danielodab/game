@@ -2175,10 +2175,19 @@ var JOGO = (typeof window !== 'undefined')
           if (isFinite(k) && k > 0) no.scale.setScalar(k);
           no.position.y = -cx.min.y * (no.scale.y || 1);
 
-          // NÃO GIRAR. Tentei virar a face pelo lado mais largo da caixa e o
-          // resultado foi o oposto: o escudo já nasce encarando para fora, e o
-          // quarto de volta pôs o VERSO — que é liso — para a câmera, fazendo a
-          // peça ler como um bloco. Medido nos dois sentidos, com foto.
+          // DE QUE LADO FICA A FACE.
+          //
+          // Um escudo é largo e fino, e a face é perpendicular ao eixo mais
+          // FINO — isso é geometria da peça, não convenção de exportador, então
+          // vale para qualquer escudo que chegar depois. Guardo aqui e quem
+          // posiciona o muro usa: `rotation.y` some com o quarto de volta
+          // quando a peça já nasce com a face no eixo Z.
+          //
+          // Tentei duas vezes acertar isto com número fixo — girando pelo lado
+          // mais LARGO (pôs o verso para a câmera) e não girando (deixou o
+          // escudo de perfil, uma lasca vertical). Deduzir do modelo é o que
+          // para de errar.
+          no.userData.faceEmX = (tam.x < tam.z);
           return no;
         }
       }
@@ -2211,14 +2220,60 @@ var JOGO = (typeof window !== 'undefined')
 
     g.userData.pedra = pedra;
     g.userData.faixa = faixa;
+    // repassa a face para quem vai mirar o muro no inimigo
+    g.userData.faceOffset = (pedra.userData && pedra.userData.faceEmX) ? Math.PI / 2 : 0;
     return g;
+  }
+
+  // PARA QUEM O ESCUDO OLHA.
+  //
+  // O inimigo vivo mais perto da casa do muro, medido no tabuleiro e não na
+  // tela. `state.walls` guarda o `side` de quem ergueu, então "inimigo" aqui é
+  // simplesmente o lado contrário — serve tanto para o Minotauro do jogador
+  // quanto para um monstro que erga muro um dia.
+  function alvoDoMuro(st, w) {
+    if (!st || !st.units) return null;
+    var melhor = null, dist = 1e9;
+    for (var i = 0; i < st.units.length; i++) {
+      var u = st.units[i];
+      if (!u.alive || u.offBoard) continue;
+      if (u.side === w.side) continue;
+      var d = Math.abs(u.x - w.x) + Math.abs(u.y - w.y);
+      if (d < dist) { dist = d; melhor = u; }
+    }
+    return melhor;
+  }
+
+  // O ÂNGULO, com a correção de face do modelo.
+  //
+  // A correção de face NÃO mora aqui: ela é deduzida do próprio modelo, na
+  // montagem (ver `faceEmX` em `corpoDoMuro`), e somada por quem posiciona.
+  function anguloDoMuro(st, w) {
+    var alvo = alvoDoMuro(st, w);
+    var dx, dz;
+    if (alvo) {
+      dx = alvo.x - w.x;
+      dz = alvo.y - w.y;
+    } else {
+      // ninguém do outro lado: encara o meio do tabuleiro, que é para onde a
+      // briga acontece, em vez de uma direção qualquer
+      dx = (st.grid.w - 1) / 2 - w.x;
+      dz = (st.grid.h - 1) / 2 - w.y;
+    }
+    if (!dx && !dz) return 0;
+    return Math.atan2(dx, dz);
   }
 
   function rebuildWalls(st) {
     var lista = (st && st.walls) || [];
     var sig = '';
     for (var i = 0; i < lista.length; i++) {
-      sig += lista[i].x + ',' + lista[i].y + ':' + (lista[i].element || '') + ';';
+      // O ALVO ENTRA NA ASSINATURA. Sem isso o muro só seria remontado quando
+      // a LISTA mudasse, e o escudo continuaria encarando o lugar onde o bicho
+      // estava quando ele subiu — ficaria de perfil assim que o inimigo andasse.
+      var av = alvoDoMuro(st, lista[i]);
+      sig += lista[i].x + ',' + lista[i].y + ':' + (lista[i].element || '') +
+             ':' + (av ? av.x + '_' + av.y : '-') + ';';
     }
     if (sig === wallSig) return;
     wallSig = sig;
@@ -2227,10 +2282,16 @@ var JOGO = (typeof window !== 'undefined')
     for (i = 0; i < lista.length; i++) {
       var w = lista[i], k = w.x + ',' + w.y;
       vivos[k] = 1;
-      if (wallNodes[k]) continue;
+      if (wallNodes[k]) {
+        // já está de pé: só reapruma a mira, sem refazer a subida
+        wallNodes[k].rotation.y = anguloDoMuro(st, w) +
+                                  (wallNodes[k].userData.faceOffset || 0);
+        continue;
+      }
       var node = montaMuro(w.element || 'neutro');
       var p = R.world(w.x, w.y, 0);
       node.position.set(p.x, 0, p.z);
+      node.rotation.y = anguloDoMuro(st, w) + (node.userData.faceOffset || 0);
       node.userData.t0 = nowT;        // nasce afundada e sobe
       scene.add(node);
       wallNodes[k] = node;
