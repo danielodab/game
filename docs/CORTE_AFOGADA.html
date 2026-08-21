@@ -1,0 +1,618 @@
+<title>Corte Afogada</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prata&family=Karla:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+  :root {
+    /* A cisterna: água parada, sal, e uma única coisa quente na sala —
+       o lampião que o Afogadiço nunca soltou. */
+    --agua:      #f0eee6;   /* chapa de sal seco */
+    --agua-2:    #e4e1d6;
+    --carta:     #fbfaf6;
+    --tinta:     #16211f;
+    --tinta-2:   #5c6f6b;   /* cinza puxado para o verde, não neutro */
+    --risco:     #cdc9bb;
+    --lampiao:   #a8791a;   /* latão do lampião afogado */
+    --lampiao-f: #8a6212;
+    --vidro:     #4a7f88;   /* luz atravessando água */
+    --perola:    #9a8f7a;
+    --fundo-cod: #eceadf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --agua:      #0c1417;
+      --agua-2:    #101c20;
+      --carta:     #14201f;
+      --tinta:     #dde8e4;
+      --tinta-2:   #839994;
+      --risco:     #26383a;
+      --lampiao:   #d6a83c;
+      --lampiao-f: #f0c869;
+      --vidro:     #7fb8c0;
+      --perola:    #b9ad93;
+      --fundo-cod: #0a1315;
+    }
+  }
+  :root[data-theme="dark"] {
+    --agua:      #0c1417;
+    --agua-2:    #101c20;
+    --carta:     #14201f;
+    --tinta:     #dde8e4;
+    --tinta-2:   #839994;
+    --risco:     #26383a;
+    --lampiao:   #d6a83c;
+    --lampiao-f: #f0c869;
+    --vidro:     #7fb8c0;
+    --perola:    #b9ad93;
+    --fundo-cod: #0a1315;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--agua);
+    color: var(--tinta);
+    font: 400 16px/1.65 Karla, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .env { max-width: 60rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+  /* ---------------------------------------------------------- abertura */
+  .capa { border-bottom: 1px solid var(--risco); padding-bottom: 2rem; margin-bottom: 2.5rem; }
+  .sobrenome {
+    font: 700 11px/1 "JetBrains Mono", monospace;
+    letter-spacing: .18em; text-transform: uppercase;
+    color: var(--lampiao); margin: 0 0 1rem;
+  }
+  h1 {
+    font: 400 clamp(2.4rem, 7vw, 4rem)/1.02 Prata, Georgia, serif;
+    margin: 0 0 1rem; text-wrap: balance; letter-spacing: -0.01em;
+  }
+  .linha-fina {
+    font-size: 1.05rem; color: var(--tinta-2); max-width: 40rem; margin: 0;
+  }
+
+  /* ------------------------------------------------------- a regra dura */
+  .regra {
+    background: var(--carta);
+    border-left: 3px solid var(--lampiao);
+    padding: 1.4rem 1.6rem;
+    margin: 2.5rem 0;
+  }
+  .regra h2 {
+    font: 400 1.35rem/1.2 Prata, Georgia, serif;
+    margin: 0 0 .6rem;
+  }
+  .regra p { margin: 0 0 .8rem; }
+  .regra p:last-child { margin-bottom: 0; }
+
+  h2.secao {
+    font: 400 1.6rem/1.2 Prata, Georgia, serif;
+    margin: 3.5rem 0 .4rem; text-wrap: balance;
+  }
+  .secao-nota { color: var(--tinta-2); margin: 0 0 1.5rem; max-width: 40rem; }
+
+  /* ------------------------------------------------------------ a régua */
+  .regua { margin: 1.5rem 0 0; }
+  .regua-linha {
+    display: grid; grid-template-columns: 11rem 1fr 4rem;
+    align-items: center; gap: .8rem;
+    padding: .3rem 0; border-bottom: 1px solid var(--risco);
+  }
+  .regua-nome { font-size: .88rem; font-weight: 500; }
+  .regua-barra { position: relative; height: 16px; background: var(--agua-2); }
+  .regua-barra i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--vidro); display: block; }
+  .regua-barra i.chefe { background: var(--lampiao); }
+  .regua-m {
+    font: 400 .8rem/1 "JetBrains Mono", monospace;
+    color: var(--tinta-2); text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .regua-heroi {
+    position: absolute; top: -3px; bottom: -3px; width: 2px;
+    background: var(--tinta); opacity: .55;
+  }
+
+  /* ------------------------------------------------------------- bichos */
+  .bicho {
+    background: var(--carta);
+    border: 1px solid var(--risco);
+    padding: 1.6rem;
+    margin: 1.2rem 0;
+    display: grid; grid-template-columns: 1fr 15rem; gap: 1.8rem;
+  }
+  @media (max-width: 46rem) { .bicho { grid-template-columns: 1fr; gap: 1.2rem; } }
+
+  .bicho h3 {
+    font: 400 1.5rem/1.15 Prata, Georgia, serif;
+    margin: 0 0 .1rem;
+  }
+  .bicho .jogo {
+    font: 400 .78rem/1 "JetBrains Mono", monospace;
+    color: var(--tinta-2); margin: 0 0 1rem; letter-spacing: .02em;
+  }
+  .bicho p { margin: 0 0 .9rem; }
+  .bicho p:last-child { margin-bottom: 0; }
+
+  .rot {
+    font: 700 10px/1 "JetBrains Mono", monospace;
+    letter-spacing: .14em; text-transform: uppercase;
+    color: var(--lampiao); display: block; margin: 1.1rem 0 .35rem;
+  }
+
+  /* o problema do rig, que é o miolo deste documento */
+  .virada {
+    background: var(--agua-2);
+    padding: .9rem 1rem;
+    border-top: 2px solid var(--vidro);
+    margin: 1rem 0 0;
+  }
+  .virada .rot { margin-top: 0; color: var(--vidro); }
+  .virada p { font-size: .95rem; }
+
+  /* coluna de especificação */
+  .spec { font: 400 .85rem/1.6 "JetBrains Mono", monospace; }
+  .spec dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .1rem .8rem; }
+  .spec dt { color: var(--tinta-2); }
+  .spec dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .spec .alt { font-size: 1.5rem; color: var(--lampiao-f); font-weight: 700; line-height: 1.2; }
+  .spec hr { border: 0; border-top: 1px solid var(--risco); margin: .9rem 0; }
+  .spec ul { margin: 0; padding-left: 1.1rem; }
+  .spec li { margin-bottom: .25rem; }
+
+  .selo {
+    display: inline-block; font: 700 9px/1 "JetBrains Mono", monospace;
+    letter-spacing: .12em; text-transform: uppercase;
+    padding: .35rem .5rem; margin-bottom: .9rem;
+  }
+  .selo.gente { background: var(--agua-2); color: var(--tinta-2); }
+  .selo.vira  { background: var(--vidro); color: var(--agua); }
+  .selo.chefe { background: var(--lampiao); color: var(--agua); }
+
+  .fecho {
+    margin-top: 3.5rem; padding-top: 1.5rem;
+    border-top: 1px solid var(--risco); color: var(--tinta-2); font-size: .95rem;
+  }
+  .fecho h2 { font: 400 1.3rem/1.2 Prata, Georgia, serif; color: var(--tinta); margin: 0 0 .6rem; }
+  code {
+    font: 400 .85em/1 "JetBrains Mono", monospace;
+    background: var(--fundo-cod); padding: .15em .35em;
+  }
+  em { color: var(--tinta); font-style: italic; }
+  a { color: var(--vidro); }
+  :focus-visible { outline: 2px solid var(--lampiao); outline-offset: 2px; }
+</style>
+
+<div class="env">
+
+<header class="capa">
+  <p class="sobrenome">Soterra · segundo fecho · nove criaturas</p>
+  <h1>A Corte Afogada</h1>
+  <p class="linha-fina">O reservatório que matou a sede do mundo antigo — e depois bebeu seus
+  donos. Nove bichos para modelar, todos já escritos no jogo: o que segue é o que cada um precisa
+  ser em 3D para caber no que ele já faz em combate.</p>
+</header>
+
+<section class="regra">
+  <h2>A única regra que muda tudo</h2>
+  <p><strong>Todo bicho tem de ser humanoide.</strong> Não é gosto meu: o esqueleto do Meshy que
+  você usa tem 24 ossos de gente, e a biblioteca de animação dele é de gente. Um bicho de quatro
+  patas — ou sem pata nenhuma — só consegue o clipe de andar, e passa a briga inteira deslizando
+  parado. Foi por isso que o sapo do Xamã virou <em>sapo de pé</em>.</p>
+  <p>Aqui isso pesa mais que na Estufa, porque <strong>sete dos nove são bicho de água</strong>:
+  uma enguia, uma água-viva, um caranguejo, um pássaro e duas gotas. Nenhum deles tem ombro. A
+  parte mais útil de cada ficha abaixo é a caixa <span style="color:var(--vidro);font-weight:700">COMO
+  VIRA GENTE</span> — é ali que a criatura ganha braço, quadril e coluna sem deixar de ser o que a
+  descrição promete.</p>
+  <p>O truque que funciona: não humanize o bicho. <em>Vista</em> o bicho num corpo. A Moreia não
+  vira um homem-enguia — ela vira um mergulhador cuja cabeça é a enguia.</p>
+</section>
+
+<h2 class="secao">A escada de porte</h2>
+<p class="secao-nota">A altura sai da descrição que já está escrita no jogo, não do meu gosto. A
+linha escura é o herói a 2,05 m; modele contra ela.</p>
+
+<div class="regua" id="regua"></div>
+
+<h2 class="secao">Os nove</h2>
+<p class="secao-nota">Cada ficha tem três coisas: o que a criatura é, como ela vira gente, e o que
+as animações dela precisam vender. Essa última importa mais do que parece — a animação de ataque é
+a única frase que o bicho diz sobre si em campo.</p>
+
+<article class="bicho">
+  <div>
+    <span class="selo chefe">chefe · já é gente</span>
+    <h3>Baronesa Salmoura</h3>
+    <p class="jogo"><code>boss-baroness</code> · água · 360 PV · fixação 46</p>
+    <p>Um vestido de baile do século passado preenchido por água escura e viva, com um colar de
+    pérolas boiando onde deveria haver um pescoço. Recebe visitas puxando-as para perto — e
+    engolindo a sala inteira.</p>
+    <p>A peça mais importante dela é o <strong>vazio</strong>: não há corpo dentro do vestido, há
+    água. O tecido tem de ter volume de gente sem ter carne — as mangas cheias, o colarinho aberto
+    para o nada, e a água escura fazendo a forma por dentro. O colar de pérolas boia na altura em
+    que um pescoço estaria, e é ele que diz onde está a cabeça que não existe.</p>
+    <div class="virada">
+      <span class="rot">como vira gente</span>
+      <p>Esta é a mais fácil: um vestido de baile <em>já</em> tem forma humana. Modele o vestido
+      cheio, com braços de água saindo das mangas, e deixe a saia longa cobrindo onde estariam as
+      pernas — o rig anda por baixo e ninguém precisa ver o pé. É o mesmo golpe que fantasma de
+      jogo usa há trinta anos, e funciona porque a saia esconde exatamente o que é difícil.</p>
+    </div>
+  </div>
+  <div class="spec">
+    <div class="alt">2,95 m</div>
+    <hr>
+    <dl>
+      <dt>elemento</dt><dd>água</dd>
+      <dt>papel</dt><dd>chefe</dd>
+      <dt>fixação</dt><dd>46 · a maior</dd>
+      <dt>imune</dt><dd>empurrão</dd>
+      <dt>fúria</dt><dd>abaixo de 35%</dd>
+    </dl>
+    <hr>
+    <span class="rot">as animações têm de vender</span>
+    <ul>
+      <li><b>Puxar</b> — ela traz a vítima para perto; o gesto é de convite, não de soco</li>
+      <li><b>Engolir</b> — o ataque de área é a sala inteira subindo de água</li>
+      <li><b>Fúria</b> — abaixo de 35% o vestido perde a compostura e a água transborda</li>
+      <li>Ela nunca corre. Maré não corre.</li>
+    </ul>
+  </div>
+</article>
+
+<article class="bicho">
+  <div>
+    <span class="selo vira">precisa virar gente</span>
+    <h3>Salmourão</h3>
+    <p class="jogo"><code>brine-golem</code> · água · 105 PV · fixação 34</p>
+    <p>Um colosso de sal cristalizado em camadas, com um coração de água escura visível no peito.
+    Lento como maré baixa, imparável como maré alta. Quanto mais quebra, mais afiado fica.</p>
+    <p>O sal cresce em <strong>camadas</strong>, não em blocos: pense em crosta de tacho, em
+    estalactite, em coisa que se acumulou pingando. As camadas devem correr na horizontal, como se
+    a água tivesse subido e baixado mil vezes em cima dele. O coração de água escura no peito é a
+    única parte que se mexe sozinha, e é para onde o jogador vai olhar.</p>
+    <div class="virada">
+      <span class="rot">como vira gente</span>
+      <p>Já é quase: colosso é forma de gente grande. O cuidado é não fazer um boneco de pedra
+      genérico. <em>Sal não é pedra</em> — é translúcido nas bordas, quebra em placa e não em
+      lasca, e a luz atravessa a crosta fina. Ombros largos, quadris curtos, braços pesados e
+      pernas grossas demais para correr: o jogo já diz que ele é o mais lento da sala.</p>
+    </div>
+  </div>
+  <div class="spec">
+    <div class="alt">2,43 m</div>
+    <hr>
+    <dl>
+      <dt>elemento</dt><dd>água</dd>
+      <dt>papel</dt><dd>tanque</dd>
+      <dt>iniciativa</dt><dd>15 · a pior</dd>
+      <dt>esquiva</dt><dd>2 · nenhuma</dd>
+      <dt>imune</dt><dd>empurrão</dd>
+      <dt>fúria</dt><dd>abaixo de 50%</dd>
+    </dl>
+    <hr>
+    <span class="rot">as animações têm de vender</span>
+    <ul>
+      <li><b>Peso.</b> Cada passo tem de custar. Ele é o mais lento do jogo e isso é a graça dele</li>
+      <li><b>Levar dano sem recuar</b> — é imune a empurrão; o corpo balança e volta</li>
+      <li><b>Fúria a 50%</b> — as rachaduras é que ficam afiadas, então o gesto é de <em>abrir</em></li>
+    </ul>
+  </div>
+</article>
+
+<article class="bicho">
+  <div>
+    <span class="selo vira">precisa virar gente</span>
+    <h3>Moreia-Flauta</h3>
+    <p class="jogo"><code>moray-piper</code> · água · 65 PV · iniciativa 60</p>
+    <p>Uma enguia de dois metros cujo crânio perfurado assobia quando ela respira. Ergue-se da água
+    como um ponto de interrogação, cospe jatos em linha reta e fisga presas com a língua-arpão.</p>
+    <p>O crânio perfurado é a ideia inteira: os furos são <strong>buracos de flauta</strong>, e o
+    som sai deles quando ela respira. Modele os furos grandes o bastante para se ver de longe, em
+    fileira ao longo do maxilar. A pele é de enguia — lisa, escura em cima, pálida embaixo, sempre
+    molhada.</p>
+    <div class="virada">
+      <span class="rot">como vira gente</span>
+      <p>A palavra-chave está na própria descrição: <em>ergue-se como um ponto de interrogação</em>.
+      Já é uma postura vertical. Dê a ela um torso de mergulhador longo e magro, dois braços finos
+      com membrana entre os dedos, e mantenha a cabeça de enguia inteira em cima. As pernas ficam
+      juntas numa cauda-saia larga — mesmo truque da Baronesa: o rig anda por baixo, a cauda
+      esconde o pé.</p>
+    </div>
+  </div>
+  <div class="spec">
+    <div class="alt">2,07 m</div>
+    <hr>
+    <dl>
+      <dt>elemento</dt><dd>água</dd>
+      <dt>papel</dt><dd>alcance</dd>
+      <dt>iniciativa</dt><dd>60 · rápida</dd>
+      <dt>esquiva</dt><dd>18</dd>
+    </dl>
+    <hr>
+    <span class="rot">as animações têm de vender</span>
+    <ul>
+      <li><b>Jato em linha</b> — o corpo inteiro endireita, do chão à ponta, e cospe</li>
+      <li><b>Língua-arpão</b> — o gancho que puxa a presa; o gesto começa na cabeça, não no braço</li>
+      <li>Respirar visivelmente no <em>parado</em>: é aí que a flauta assobia</li>
+    </ul>
+  </div>
+</article>
+
+<article class="bicho">
+  <div>
+    <span class="selo gente">já é gente</span>
+    <h3>Afogadiço</h3>
+    <p class="jogo"><code>drowned-porter</code> · água · 75 PV · fixação 20</p>
+    <p>Um carregador da cisterna que nunca soltou seu lampião. Pele cinza-esverdeada, inchada de
+    água, algas no lugar do cabelo. Morde para beber o calor que perdeu.</p>
+    <p>Ele é o retrato do lugar: era gente, trabalhava aqui, e continua no expediente. O
+    <strong>lampião</strong> é a peça — a única luz quente da sala inteira, e ele não solta nem
+    para atacar. Isso resolve a mão esquerda dele em todas as animações: ela está ocupada, sempre.</p>
+    <p>Inchado de água significa <em>volume errado nos lugares errados</em>: dedos grossos demais,
+    tornozelos sumidos, roupa colada. As algas no lugar do cabelo devem pingar.</p>
+    <div class="virada">
+      <span class="rot">como vira gente</span>
+      <p>Já é. Modele um homem comum e depois deixe a água trabalhar nele. O erro a evitar é fazer
+      zumbi genérico: ele não está apodrecido, está <em>encharcado</em>. Pele lisa e brilhante, não
+      seca e rasgada.</p>
+    </div>
+  </div>
+  <div class="spec">
+    <div class="alt">1,80 m</div>
+    <hr>
+    <dl>
+      <dt>elemento</dt><dd>água</dd>
+      <dt>papel</dt><dd>corpo a corpo</dd>
+      <dt>PA</dt><dd>6 · muitos</dd>
+      <dt>iniciativa</dt><dd>40</dd>
+    </dl>
+    <hr>
+    <span class="rot">as animações têm de vender</span>
+    <ul>
+      <li><b>A mordida</b> — ele morde para <em>beber o calor</em>; é fome, não raiva</li>
+      <li><b>O lampião nunca cai</b> — nem no ataque, nem ao levar dano, nem na morte</li>
+      <li>Andar de quem carrega peso há tempo demais</li>
+    </ul>
+  </div>
+</article>
+
+<article class="bicho">
+  <div>
+    <span class="selo vira">precisa virar gente</span>
+    <h3>Água-Viva-Lustre</h3>
+    <p class="jogo"><code>lantern-jelly</code> · água · 60 PV · aura de regeneração</p>
+    <p>Uma água-viva do tamanho de um lustre, flutuando a um palmo do chão, tentáculos como franjas
+    de cristal. Sua luz cura os afogados — apague-a primeiro.</p>
+    <p>Ela é a peça mais perigosa da sala e não bate em ninguém: cura tudo à volta num raio de 2
+    casas. O jogador precisa <strong>reconhecer isso de longe</strong>, então a luz dela tem de ser
+    a coisa mais visível do tabuleiro depois da Baronesa. Franjas de cristal, não tentáculos
+    carnudos — ela é lustre antes de ser bicho.</p>
+    <div class="virada">
+      <span class="rot">como vira gente</span>
+      <p>A mais difícil das nove, e a solução é a mesma da Baronesa levada ao extremo: o
+      <strong>sino da água-viva é o vestido</strong>. Suspenda-o na altura do peito, com dois
+      braços finos de cristal saindo dos lados e as franjas caindo até o chão como saia comprida.
+      A cabeça é o topo do sino, com a luz acesa dentro. Ela flutua um palmo do chão — então o
+      clipe de andar dela vai parecer deslizar, e desta vez isso está <em>certo</em>.</p>
+    </div>
+  </div>
+  <div class="spec">
+    <div class="alt">1,71 m</div>
+    <hr>
+    <dl>
+      <dt>elemento</dt><dd>água</dd>
+      <dt>papel</dt><dd>suporte · cura</dd>
+      <dt>aura</dt><dd>+8 PV · raio 2</dd>
+      <dt>fixação</dt><dd>6 · quase nula</dd>
+    </dl>
+    <hr>
+    <span class="rot">as animações têm de vender</span>
+    <ul>
+      <li><b>A luz é o ataque.</b> Ela cura pulsando; o gesto é o sino inflando e soltando</li>
+      <li><b>Apagar ao morrer</b> — a luz some antes do corpo cair. É a deixa do jogador</li>
+      <li>Nunca toca no chão, nem parada, nem morta</li>
+    </ul>
+  </div>
+</article>
+
+<article class="bicho">
+  <div>
+    <span class="selo vira">precisa virar gente</span>
+    <h3>Caranguejo de Sumidouro</h3>
+    <p class="jogo"><code>sump-crab</code> · terra · 85 PV · fixação 32</p>
+    <p>Um caranguejo do tamanho de uma mesa, com carapaça de pedra encrostada de sal e uma pinça
+    desproporcional que ele arrasta pelo chão. Vive no ralo por onde a cisterna esvazia — e
+    considera aquilo propriedade privada.</p>
+    <p>É o único de <strong>terra</strong> nesta sala de água, e isso tem de aparecer: carapaça de
+    pedra encrostada, sal seco nas juntas, cor de rocha e não de casca. A pinça desproporcional é a
+    silhueta dele — grande a ponto de ser desconfortável, arrastada porque ele não consegue erguer.</p>
+    <div class="virada">
+      <span class="rot">como vira gente</span>
+      <p>Caranguejo é o pior caso: dez pernas e nenhuma coluna. Vire-o de pé sobre <strong>duas</strong>
+      pernas traseiras, tronco levantado e a carapaça virando peitoral e ombreira — armadura, não
+      corpo. Os outros pares de pata encolhem e viram detalhe no peito e no quadril, sem função de
+      andar. Um braço fica normal; o outro é a pinça gigante que ele arrasta. Essa assimetria já
+      conta a história inteira sem uma linha de texto.</p>
+    </div>
+  </div>
+  <div class="spec">
+    <div class="alt">1,53 m</div>
+    <hr>
+    <dl>
+      <dt>elemento</dt><dd>terra · único da sala</dd>
+      <dt>papel</dt><dd>guarda</dd>
+      <dt>fixação</dt><dd>32 · prende</dd>
+      <dt>esquiva</dt><dd>4</dd>
+      <dt>imune</dt><dd>empurrão</dd>
+    </dl>
+    <hr>
+    <span class="rot">as animações têm de vender</span>
+    <ul>
+      <li><b>A pinça arrastando</b> — em toda animação, inclusive parado</li>
+      <li><b>Guardar</b> — ele tem um feitiço de defesa; a pinça vira escudo à frente</li>
+      <li>Largo mais que alto. Ele ocupa a passagem, e é para isso que serve</li>
+    </ul>
+  </div>
+</article>
+
+<article class="bicho">
+  <div>
+    <span class="selo vira">precisa virar gente</span>
+    <h3>Gota-Gorda</h3>
+    <p class="jogo"><code>fat-drop</code> · água · 70 PV · racha em duas</p>
+    <p>Uma gota d'água do tamanho de um barril, com uma boca larga e nenhum outro traço. Ao morrer,
+    parte-se em duas Gotinhas.</p>
+    <p>O corpo é <strong>água segurada por nada</strong> — tensão superficial e teimosia. Superfície
+    lisa, reflexo de tudo em volta, e a boca larga como um corte na superfície que não vaza. Nada de
+    olho: a boca sozinha assusta mais.</p>
+    <div class="virada">
+      <span class="rot">como vira gente</span>
+      <p>Não force braço e perna numa gota — fica bonequinho. Faça o contrário: mantenha a gota
+      <strong>inteira</strong> e deixe o rig por dentro, com dois bracinhos curtos de água saindo
+      dos lados e o corpo apoiado numa base larga que faz as vezes de perna. Quando o esqueleto
+      andar, o corpo <em>balança</em> como água num saco. A deformação é a animação.</p>
+    </div>
+  </div>
+  <div class="spec">
+    <div class="alt">1,53 m</div>
+    <hr>
+    <dl>
+      <dt>elemento</dt><dd>água</dd>
+      <dt>papel</dt><dd>corpo a corpo</dd>
+      <dt>ao morrer</dt><dd>vira 2 Gotinhas</dd>
+      <dt>PA</dt><dd>3</dd>
+    </dl>
+    <hr>
+    <span class="rot">as animações têm de vender</span>
+    <ul>
+      <li><b>A morte é a mais importante</b> — ela racha em duas, então o corpo tem de
+      <em>separar</em>, não desabar</li>
+      <li><b>Baque</b> — o ataque é o corpo inteiro caindo em cima</li>
+      <li>Balanço constante no parado: água nunca fica quieta</li>
+    </ul>
+  </div>
+</article>
+
+<article class="bicho">
+  <div>
+    <span class="selo vira">precisa virar gente</span>
+    <h3>Cantarola-de-Névoa</h3>
+    <p class="jogo"><code>mist-warbler</code> · ar · 55 PV · esquiva 28</p>
+    <p>Um pássaro sem penas, feito do vapor que sobe da água parada, com um bico longo por onde a
+    cisterna assobia. Canta para os afogados e sopra os vivos para dentro dos canais.</p>
+    <p>Sem penas significa que <strong>não há superfície</strong>: o corpo é vapor com forma, denso
+    no meio e desmanchando nas pontas. O bico é a única parte sólida — longo, curvo, de osso ou
+    metal, e é dele que sai o som. É o único de <strong>ar</strong> na sala, e o mais rápido de
+    todos.</p>
+    <div class="virada">
+      <span class="rot">como vira gente</span>
+      <p>Pássaro de pé é fácil — já foi meio caminho na Estufa. Corpo ereto e magro, dois braços
+      finos que terminam em <strong>asas curtas demais para voar</strong> (ele sopra, não voa), e o
+      bico longo saindo de uma cabeça pequena. As pernas ficam finas e de joelho invertido, que é
+      a única licença de bicho que vale a pena manter: joelho de pássaro num corpo de gente lê como
+      <em>errado de propósito</em>, e é isso que ele é.</p>
+    </div>
+  </div>
+  <div class="spec">
+    <div class="alt">1,35 m</div>
+    <hr>
+    <dl>
+      <dt>elemento</dt><dd>ar · único da sala</dd>
+      <dt>papel</dt><dd>suporte · empurra</dd>
+      <dt>iniciativa</dt><dd>68 · a maior</dd>
+      <dt>esquiva</dt><dd>28 · a maior</dd>
+      <dt>PP</dt><dd>4 · anda muito</dd>
+    </dl>
+    <hr>
+    <span class="rot">as animações têm de vender</span>
+    <ul>
+      <li><b>Soprar</b> — o ataque empurra; o corpo se enche e esvazia pelo bico</li>
+      <li><b>Cantar</b> — o outro feitiço é canto, e canto é de cabeça erguida, parado</li>
+      <li>Ele é o mais rápido do jogo: tudo nele começa antes e termina antes</li>
+    </ul>
+  </div>
+</article>
+
+<article class="bicho">
+  <div>
+    <span class="selo vira">precisa virar gente</span>
+    <h3>Gotinha</h3>
+    <p class="jogo"><code>droplet</code> · água · 25 PV · nasce aos pares</p>
+    <p>Pequena, redonda, indignada.</p>
+    <p>Três palavras, e as três importam. Ela nasce quando a Gota-Gorda morre, sempre em dupla, e o
+    jogador vai ver <strong>muitas</strong> ao mesmo tempo. A leitura tem de funcionar a 60 pixels
+    de altura: silhueta redonda, boca grande, e uma postura de quem está com raiva de algo muito
+    maior que ela.</p>
+    <div class="virada">
+      <span class="rot">como vira gente</span>
+      <p>Mesma receita da Gota-Gorda, encolhida — e é bom que seja literalmente o mesmo modelo em
+      escala menor, porque isso conta a história do racha sem explicar nada. A diferença fica na
+      <strong>postura</strong>: a Mãe é pesada e mole, a Gotinha é tensa e para cima. Indignação é
+      queixo erguido e ombro subido, mesmo num bicho sem queixo nem ombro.</p>
+    </div>
+  </div>
+  <div class="spec">
+    <div class="alt">0,76 m</div>
+    <hr>
+    <dl>
+      <dt>elemento</dt><dd>água</dd>
+      <dt>papel</dt><dd>enxame</dd>
+      <dt>PV</dt><dd>25 · o menor</dd>
+      <dt>vem de</dt><dd>Gota-Gorda</dd>
+    </dl>
+    <hr>
+    <span class="rot">as animações têm de vender</span>
+    <ul>
+      <li><b>Pressa.</b> Tudo nela é rápido demais para o tamanho</li>
+      <li><b>Espirrar</b> — o ataque é o corpo inteiro se atirando</li>
+      <li>Morrer é <em>estourar</em>, não cair</li>
+    </ul>
+  </div>
+</article>
+
+<section class="fecho">
+  <h2>O que eu faço quando os arquivos chegarem</h2>
+  <p>Mande as pastas como mandou as da Estufa — uma por criatura, com
+  <code>idle</code>, <code>walk</code>, <code>attack</code>, <code>hit</code> e <code>death</code>.
+  <strong>Corrida não precisa</strong>: o motor já usa o andar no lugar dela sozinho, e duplicar o
+  clipe só engorda o arquivo.</p>
+  <p>Duas coisas que a Estufa ensinou e que valem repetir. Primeira: o Meshy costuma <em>trocar</em>
+  o conteúdo de <code>attack.glb</code> e <code>hit.glb</code> — em oito das nove da Estufa o
+  ataque estava no arquivo de hit. Eu confiro arquivo por arquivo antes de implantar, então não
+  precisa se preocupar com isso na exportação. Segunda: confira que os cinco arquivos são mesmo
+  <em>diferentes</em> — o Seiveiro veio com três cópias do mesmo idle e ficou sem ataque.</p>
+  <p>O porte eu aplico a partir da tabela acima, e o teste mede se bateu.</p>
+</section>
+
+</div>
+
+<script>
+  // A régua é desenhada a partir dos mesmos números das fichas — escrever a
+  // barra à mão deixaria os dois lados livres para discordar em silêncio.
+  var BICHOS = [
+    ['Baronesa Salmoura',        2.95, true],
+    ['Salmourão',                2.43, false],
+    ['Moreia-Flauta',            2.07, false],
+    ['— herói',                  2.05, null],
+    ['Afogadiço',                1.80, false],
+    ['Água-Viva-Lustre',         1.71, false],
+    ['Caranguejo de Sumidouro',  1.53, false],
+    ['Gota-Gorda',               1.53, false],
+    ['Cantarola-de-Névoa',       1.35, false],
+    ['Gotinha',                  0.76, false]
+  ];
+  var MAX = 3.0;
+  var alvo = document.getElementById('regua');
+  BICHOS.forEach(function (b) {
+    var linha = document.createElement('div');
+    linha.className = 'regua-linha';
+    var pct = (b[1] / MAX * 100).toFixed(1);
+    var barra = b[2] === null
+      ? '<span class="regua-heroi" style="left:' + pct + '%"></span>'
+      : '<i class="' + (b[2] ? 'chefe' : '') + '" style="width:' + pct + '%"></i>';
+    linha.innerHTML =
+      '<span class="regua-nome"' + (b[2] === null ? ' style="opacity:.6"' : '') + '>' + b[0] + '</span>' +
+      '<span class="regua-barra">' + barra + '</span>' +
+      '<span class="regua-m">' + b[1].toFixed(2) + ' m</span>';
+    alvo.appendChild(linha);
+  });
+</script>

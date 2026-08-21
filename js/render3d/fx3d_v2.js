@@ -613,6 +613,177 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   }
 
+  /* ------------------------------------------------------------- FILME
+   *
+   * Efeito ANIMADO quadro a quadro, contra o tile parado que o resto do arquivo
+   * usa. A folha e 4x4 de 128 px, uma por (tipo, elemento), embutida em
+   * `JOGO.FX_ANIM` — ver tools/embute_fx_anim.py para como ela e feita.
+   *
+   * Cinco tipos, e os cinco vieram do que o pacote realmente tem, nao de uma
+   * lista que eu quisesse ter:
+   *
+   *   estouro  bola de fogo abrindo         chama  coluna de fogo subindo
+   *   baque    espalhamento rasteiro        anel   toro que cresce
+   *   onda     risco que atravessa
+   *
+   * A COR DO ELEMENTO VEM DE TINTA, e isso e uma correcao. Eu tinha escrito
+   * aqui que nao ia tingir porque havia "uma folha por elemento" — o pacote
+   * anuncia cinco variacoes de cor e eu supus cinco matizes. Medindo, sao TRES:
+   * `fire` e `fire+smoke` sao o mesmo laranja, `blueish_flame` e `blueish_smoke`
+   * o mesmo verde-azulado, e `magic` a lavanda. Com o mapa de cinco, `terra`
+   * saia laranja IDENTICO a `fogo` — dois elementos indistinguiveis na tela.
+   *
+   * Entao entram so as tres matizes de verdade (15 folhas em vez de 25, 399 KB
+   * em vez de 606) e a identidade de elemento sai da tabela `TINTA` abaixo.
+   */
+  /* elemento -> [folha, multiplicador por canal]
+   *
+   * O multiplicador e a razao entre a cor do elemento em js/core/data/elements.js
+   * e a cor MEDIA MEDIDA da folha. Os dois lados sao numeros que ja existiam:
+   *
+   *   fogo   #ff8c3a / fire          (189,128,75)  -> 1.35, 1.09, 0.77
+   *   terra  #9bd06a / fire          (189,128,75)  -> 0.82, 1.62, 1.41
+   *   agua   #57c8ec / blueish_flame ( 31,154,116) -> 2.40, 1.11, 1.74
+   *   ar     #c8b6ff / magic         (137,128,173) -> 1.46, 1.42, 1.47
+   *   neutro #d8dee4 / magic         (137,128,173) -> 1.58, 1.73, 1.32
+   *
+   * Fator ACIMA DE 1 e proposital e funciona: `material.color` multiplica a
+   * textura no shader e nao ha corte antes da escrita final, entao um valor
+   * maior que 1 CLAREIA o canal em vez de saturar. Sem isso a agua nunca sairia
+   * do verde-azulado da folha, porque multiplicar so sabe escurecer.
+   *
+   * A folha e escolhida por CARATER e nao por matiz: fogo e terra sao materia
+   * solida aquecida (mesma folha, tintas opostas); agua, ar e neutro sao vapor.
+   */
+  var TINTA = {
+    fogo:   ['fire',          1.35, 1.09, 0.77],
+    terra:  ['fire',          0.82, 1.62, 1.41],
+    agua:   ['blueish_flame', 2.40, 1.11, 1.74],
+    ar:     ['magic',         1.46, 1.42, 1.47],
+    neutro: ['magic',         1.58, 1.73, 1.32]
+  };
+
+  var ANIM_TEX = {}, ANIM_N = 4, filmes = [];
+  var MAX_FILMES = 14;        // mesmo espirito do teto de placas
+
+  function animTexture(chave) {
+    if (ANIM_TEX[chave] !== undefined) return ANIM_TEX[chave];
+    var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ANIM : null;
+    if (!A || !A[chave]) { ANIM_TEX[chave] = null; return null; }
+    var img = new Image();
+    var tex = new THREE.Texture(img);
+    img.onload = function () { tex.needsUpdate = true; };
+    img.src = 'data:image/jpeg;base64,' + A[chave];
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    // sRGB, COMO TODA TEXTURA DAQUI. Sem isto o three trata a folha como se ela
+    // ja estivesse em linear e clareia tudo na saida: o laranja do fogo saia
+    // AMARELO, o azul da agua saia ciano, e fogo e terra ficavam iguais na tela.
+    // Eu culpei o aditivo primeiro e baixei a opacidade — a cor nao mudou, o que
+    // provou que o problema era outro. E espaco de cor.
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    ANIM_N = (typeof JOGO !== 'undefined' && JOGO.FX_ANIM_GRADE) || 4;
+    ANIM_TEX[chave] = tex;
+    return tex;
+  }
+
+  /* Ha folha para este tipo neste elemento?
+   * Exposto porque o teste precisa saber a diferenca entre "o efeito nao
+   * apareceu" e "nao existe folha para esta combinacao" — sao defeitos
+   * diferentes e a foto nao distingue os dois. */
+  FX.temFilme = function (tipo, el) {
+    var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ANIM : null;
+    var t = TINTA[el || 'neutro'] || TINTA.neutro;
+    return !!(A && A[tipo + ':' + t[0]]);
+  };
+  FX.tintaDe = function (el) { return TINTA[el] || TINTA.neutro; };
+
+  /* o.tipo   estouro|chama|baque|anel|onda
+   * o.el     fogo|agua|terra|ar|neutro  (cai em neutro se nao houver folha)
+   * o.pos    THREE.Vector3
+   * o.tam    largura em metros (a altura acompanha, o quadro e quadrado)
+   * o.dur    segundos da animacao inteira
+   * o.modo   'bilhete' (de pe, encarando a camera) | 'chao' (deitado)  */
+  function filme(o) {
+    if (!attached || !o || !o.pos) return null;
+    if (filmes.length > MAX_FILMES) return null;
+    geosPlaca();
+    var el = o.el || 'neutro';
+    var t = TINTA[el] || TINTA.neutro;
+    var tex = animTexture(o.tipo + ':' + t[0]);
+    if (!tex) return null;
+
+    // CLONE POR FILME. A textura clonada divide a imagem — nao custa memoria de
+    // video de verdade — mas tem offset proprio. Sem isso, dois filmes ao mesmo
+    // tempo brigariam pelo mesmo offset e piscariam juntos.
+    var t2 = tex.clone();
+    t2.needsUpdate = true;
+    t2.repeat.set(1 / ANIM_N, 1 / ANIM_N);
+
+    var mat = new THREE.MeshBasicMaterial({
+      map: t2, transparent: true, depthWrite: false,
+      // `setRGB` aceita valor acima de 1 e o shader nao corta antes da escrita
+      // final: e assim que a agua sai do verde-azulado da folha para o azul do
+      // elemento. Multiplicar so sabe escurecer; aqui precisa clarear.
+      color: new THREE.Color().setRGB(t[1], t[2], t[3]),
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      // 0,62 E NAO 1. Mistura aditiva soma no que ja esta na tela, e a folha
+      // pre-multiplicada ja e clara: a 1 o laranja do fogo estourava para
+      // AMARELO, o azul da agua para ciano, e a fumaca escura do `terra` sumia —
+      // fogo e terra ficavam identicos na tela, que e o oposto do motivo de
+      // haver cinco cores. A 0,62 cada elemento volta a ter a cor que o autor
+      // rendeu. Medido com foto, nao chutado.
+      opacity: (o.op == null ? 0.62 : o.op)
+    });
+    var m = new THREE.Mesh(o.modo === 'chao' ? geoChao : geoBil, mat);
+    m.frustumCulled = false;
+    m.renderOrder = (o.modo === 'chao' ? 9 : 14);
+    var tam = o.tam || 3;
+    if (o.modo === 'chao') m.scale.set(tam, 1, tam); else m.scale.set(tam, tam, 1);
+    m.position.copy(o.pos);
+    fxG.add(m);
+    filmes.push({ m: m, mat: mat, tex: t2, t: 0,
+                  dur: o.dur || 0.62, modo: o.modo || 'bilhete',
+                  cresce: o.cresce || 0, tam: tam,
+                  ang: o.ang || 0, op: (o.op == null ? 0.62 : o.op) });
+    return true;
+  }
+  FX.filme = filme;
+
+  function updateFilmes(dt) {
+    for (var i = filmes.length - 1; i >= 0; i--) {
+      var f = filmes[i];
+      f.t += dt;
+      var k = f.t / f.dur;
+      if (k >= 1) {
+        fxG.remove(f.m); f.mat.dispose(); f.tex.dispose(); filmes.splice(i, 1); continue;
+      }
+      var total = ANIM_N * ANIM_N;
+      var q = Math.min(total - 1, Math.floor(k * total));
+      var cc = q % ANIM_N, rr = Math.floor(q / ANIM_N);
+      // flipY do three poe v=0 no rodape: a linha `rr`, contada de cima,
+      // comeca em (N-1-rr)/N. Mesma conta da placa, mesmo motivo.
+      f.tex.offset.set(cc / ANIM_N, (ANIM_N - 1 - rr) / ANIM_N);
+      if (f.cresce) {
+        var e = 1 + f.cresce * k;
+        if (f.modo === 'chao') f.m.scale.set(f.tam * e, 1, f.tam * e);
+        else f.m.scale.set(f.tam * e, f.tam * e, 1);
+      }
+      if (f.modo === 'bilhete' && camera) {
+        f.m.quaternion.copy(camera.quaternion);
+        if (f.ang) f.m.rotateZ(f.ang);
+      }
+    }
+  }
+
+  function limpaFilmes() {
+    for (var i = filmes.length - 1; i >= 0; i--) {
+      fxG.remove(filmes[i].m); filmes[i].mat.dispose(); filmes[i].tex.dispose();
+    }
+    filmes.length = 0;
+  }
+
   function updatePlacas(dt) {
     for (var i = placas.length - 1; i >= 0; i--) {
       var p = placas[i];
@@ -1347,8 +1518,46 @@ var JOGO = (typeof window !== 'undefined')
     scorch(dest, col, 1.6, 5);
   }
 
+  /* CAMADA ANIMADA POR FAMILIA — [tipo de folha, modo, tamanho em metros,
+   * duracao, quanto cresce durante a animacao].
+   *
+   * Nove das 21 familias. As outras doze ficam de fora porque nao ha folha que
+   * sirva: `flecha`, `feixe` e `bola` sao PROJETEIS (o filme e uma explosao
+   * parada no lugar, nao um tiro que viaja) e `piscar`, `gancho` e `escudo`
+   * pedem formas que este pacote nao tem. Meia integracao honesta e melhor que
+   * uma inteira forcada — e quando a folha certa aparecer, a linha entra aqui.
+   */
+  var FILME_FAM = {
+    meteoro:   ['estouro', 'bilhete', 5.2, 0.55, 0.35],
+    estouro:   ['estouro', 'bilhete', 4.2, 0.50, 0.30],
+    anel:      ['anel',    'chao',    5.0, 0.62, 0.55],
+    terremoto: ['baque',   'chao',    5.4, 0.60, 0.40],
+    onda:      ['onda',    'bilhete', 3.6, 0.42, 0.25],
+    investida: ['onda',    'bilhete', 3.0, 0.38, 0.20],
+    aura:      ['chama',   'bilhete', 2.6, 0.80, 0.10],
+    cura:      ['anel',    'chao',    3.2, 0.70, 0.30],
+    invocacao: ['anel',    'chao',    3.4, 0.66, 0.45]
+  };
+
   /* Escolhe e toca o desenho da familia. */
   function tocaFamilia(fam, from, dest, el, el2, sp) {
+    // O FILME ENTRA POR CIMA, nao no lugar. O desenho de particula e placa de
+    // cada familia foi ajustado ao longo de muitas correcoes; trocar tudo por
+    // filme seria jogar isso fora so para ganhar movimento.
+    var ff = FILME_FAM[fam];
+    if (ff && dest) {
+      var alto = (ff[1] === 'chao') ? 0.06 : 1.05;
+      filme({ tipo: ff[0], el: el, modo: ff[1], tam: ff[2], dur: ff[3], cresce: ff[4],
+              pos: v3(dest.x, (dest.y || 0) + alto, dest.z) });
+      // ELEMENTO SECUNDARIO, quando a fusao gera feitico de dois elementos.
+      // Menor e um pouco atrasado, para ler como o segundo elemento CHEGANDO
+      // e nao como dois efeitos disputando o mesmo instante.
+      if (el2 && el2 !== el) {
+        filme({ tipo: ff[0], el: el2, modo: ff[1], tam: ff[2] * 0.72, dur: ff[3],
+                cresce: ff[4], op: 0.44,
+                pos: v3(dest.x, (dest.y || 0) + alto + (ff[1] === 'chao' ? 0.02 : 0.5), dest.z) });
+      }
+    }
     switch (fam) {
       case 'meteoro':   meteoro(dest, el, el2, !!(sp && sp.unlockLevel >= 20)); break;
       case 'chuva':     chuva(dest, el, el2, 7); break;
@@ -1738,6 +1947,7 @@ var JOGO = (typeof window !== 'undefined')
     if (freezeT > 0) freezeT -= (realDt == null ? dt : realDt);
     ajustaEscalaPonto();
     updatePlacas(dt);
+    updateFilmes(dt);
     updateShots(dt);
     updateFlashes(dt);
     updateRings(dt);
@@ -1771,6 +1981,7 @@ var JOGO = (typeof window !== 'undefined')
     for (var t = floaters.length - 1; t >= 0; t--) { fxG.remove(floaters[t].sp); floaters[t].sp.material.dispose(); }
     floaters.length = 0;
     limpaPlacas();
+    limpaFilmes();
     FX.clearDecals();
     limpaTexCache();          // as texturas dos numeros vao embora com a sala
     shakeAmp = 0; shakeOut.x = 0; shakeOut.y = 0; freezeT = 0;

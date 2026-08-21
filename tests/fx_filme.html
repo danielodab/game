@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — os efeitos animados, tipo por elemento</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:940px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  canvas{display:block;border:1px solid #2b3542;background:#07090c;margin-top:10px}
+  #tiras img{border:1px solid #2b3542;margin:4px 4px 0 0;display:inline-block}
+  .leg{font:11px monospace;color:#8895a6;margin-top:6px}
+</style>
+</head>
+<body>
+<h1>Os efeitos animados — cinco tipos, cinco elementos</h1>
+<div class="sub">Até agora todo efeito era um tile <em>parado</em> tingido por código: aparecia e sumia,
+e a explosão acontecia na imaginação do jogador. Estas são folhas 4×4 de render volumétrico, uma por
+tipo e por elemento — 25 ao todo. Esta página dispara as 25 de uma vez numa grade e fotografa a
+animação em quatro momentos, porque efeito animado não se julga por número.</div>
+<div id="summary">montando…</div>
+<ul id="lista"></ul>
+<canvas id="cena" width="1100" height="240"></canvas>
+
+<div id="tiras"></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js',
+    'js/core/data/elements.js',
+    'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js',
+    'assets/embedded/fx-anim.js',
+    'js/render3d/fx3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = mau ? (mau + ' de ' + res.length + ' falharam')
+                        : ('tudo passou (' + res.length + ')');
+    window.__done = true; window.__fail = mau;
+  }
+
+  var TIPOS = ['estouro', 'chama', 'baque', 'anel', 'onda'];
+  var ELS   = ['fogo', 'agua', 'terra', 'ar', 'neutro'];
+  var DUR = 1.6;                    // devagar de propósito: quero VER os quadros
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var FX = window.JOGO && JOGO.FX;
+    if (!FX || !window.THREE) { check('FX e THREE carregaram', false); return fecha(); }
+
+    var A = JOGO.FX_ANIM || {};
+    check('as folhas animadas estão embutidas', Object.keys(A).length > 0,
+          Object.keys(A).length + ' folhas');
+
+    // TODA combinação tem de existir. Uma que falte não dá erro: o efeito cai
+    // no neutro e ninguém percebe que a água está soando... digo, brilhando
+    // laranja. Por isso a cobertura é cobrada, não conferida de olho.
+    // A COBERTURA É COBRADA PELO CAMINHO DO JOGO, não pelas chaves cruas.
+    // As chaves são `tipo:folha` (três folhas) e o elemento chega lá por uma
+    // tabela de tinta; conferir chave crua testaria o arquivo, não o despacho.
+    // `FX.temFilme` é o que o jogo pergunta, então é o que o teste pergunta.
+    var faltando = [];
+    TIPOS.forEach(function (t) {
+      ELS.forEach(function (e) { if (!FX.temFilme(t, e)) faltando.push(t + '/' + e); });
+    });
+    check('há filme para cada tipo em cada elemento (25 combinações)',
+          faltando.length === 0, faltando.join(', '));
+
+    // E A TINTA TEM DE SEPARAR OS ELEMENTOS. Dois elementos com a mesma folha e
+    // a mesma tinta desenham a mesma coisa — foi exatamente o defeito que me
+    // pegou (terra saía laranja idêntico a fogo). Cobro a distância entre as
+    // cores finais, não a existência da tabela.
+    var iguais = [];
+    for (var a = 0; a < ELS.length; a++) {
+      for (var b = a + 1; b < ELS.length; b++) {
+        var ta = FX.tintaDe(ELS[a]), tb = FX.tintaDe(ELS[b]);
+        if (ta[0] !== tb[0]) continue;              // folhas diferentes já separam
+        var d = Math.abs(ta[1] - tb[1]) + Math.abs(ta[2] - tb[2]) + Math.abs(ta[3] - tb[3]);
+        if (d < 0.35) iguais.push(ELS[a] + '≈' + ELS[b] + ' (' + d.toFixed(2) + ')');
+      }
+    }
+    check('nenhum par de elementos desenha a mesma cor',
+          iguais.length === 0, iguais.join(', '));
+
+    // ---- cena mínima. Não subo o renderizador inteiro: `FX._attach` só precisa
+    // de THREE, uma cena, uma câmera e um grupo, e montar isso à mão deixa o
+    // teste medindo o FX em vez de medir o renderizador junto.
+    var cv = document.getElementById('cena');
+    var glr = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+    glr.setClearColor(0x07090c, 1);
+    // O jogo desenha em sRGB; um teste que desenha em linear mostraria cores
+    // que o jogador nunca vê, e eu julgaria a arte pela foto errada.
+    if (THREE.sRGBEncoding != null) glr.outputEncoding = THREE.sRGBEncoding;
+    var scene = new THREE.Scene();
+    var cam = new THREE.PerspectiveCamera(42, cv.width / cv.height, 0.1, 200);
+    cam.position.set(0, 0, 21); cam.lookAt(0, 0, 0);
+    var fxG = new THREE.Group(); scene.add(fxG);
+    FX._attach({ THREE: THREE, scene: scene, camera: cam, fx: fxG, renderer: glr });
+
+    var PASSO = 5.2;
+    function disparaTudo() {
+      var n = 0;
+      TIPOS.forEach(function (t, i) {
+        ELS.forEach(function (e, j) {
+          var p = new THREE.Vector3((j - 2) * PASSO, (2 - i) * PASSO * 0.86, 0);
+          if (FX.filme({ tipo: t, el: e, pos: p, tam: 4.6, dur: DUR, modo: 'bilhete' })) n++;
+        });
+      });
+      return n;
+    }
+
+    var n1 = disparaTudo();
+    // O teto de filmes simultâneos existe para um feitiço de área não encher a
+    // cena; 25 de uma vez é acima dele DE PROPÓSITO, e o teto tem de segurar.
+    check('o teto de filmes simultâneos segura', n1 > 0 && n1 <= 15,
+          n1 + ' filmes aceitos de 25 pedidos');
+
+    // ---- o filme ANDA? Um efeito animado que fica no primeiro quadro é
+    // exatamente o tile parado que eu estava tentando substituir, e a foto não
+    // acusa. Meço o offset da textura antes e depois de rodar o relógio.
+    FX.reset();
+    var p0 = new THREE.Vector3(0, 0, 0);
+    FX.filme({ tipo: 'estouro', el: 'fogo', pos: p0, tam: 4, dur: 1.0 });
+    var alvo = null;
+    fxG.traverse(function (o) { if (o.isMesh && o.material && o.material.map) alvo = o; });
+    var off0 = alvo ? alvo.material.map.offset.clone() : null;
+    FX.update(0.5, 0.5);
+    var off1 = alvo ? alvo.material.map.offset.clone() : null;
+    check('o filme avança de quadro (não congela no primeiro)',
+          !!(off0 && off1) && (off0.x !== off1.x || off0.y !== off1.y),
+          off0 ? ('de ' + off0.x.toFixed(2) + ',' + off0.y.toFixed(2) +
+                  ' para ' + off1.x.toFixed(2) + ',' + off1.y.toFixed(2)) : 'sem malha');
+
+    // ---- e some quando acaba: efeito que fica pendurado vira sujeira na tela
+    FX.update(1.2, 1.2);
+    var sobrou = 0;
+    fxG.traverse(function (o) { if (o.isMesh) sobrou++; });
+    check('o filme some quando a animação acaba', sobrou === 0, sobrou + ' malhas penduradas');
+
+    // ---- agora a parte que só o olho julga: UM TIPO POR FOTO.
+    //
+    // Disparar as 25 de uma vez batia no teto de filmes simultâneos e duas
+    // linhas inteiras nunca apareciam. O teto está certo — era o teste que
+    // pedia o impossível e fotografava o resultado como se fosse o jogo.
+    var tiras = document.getElementById('tiras');
+    var ti = 0;
+
+    function fotografaTipo(tipo, quando, feito) {
+      FX.reset();
+      ELS.forEach(function (e, j) {
+        FX.filme({ tipo: tipo, el: e, pos: new THREE.Vector3((j - 2) * PASSO, 0, 0),
+                   tam: 5.4, dur: DUR, modo: 'bilhete' });
+      });
+      var t = 0, ultimo = performance.now(), tirou = false;
+      (function passo(agora) {
+        var dt = Math.min((agora - ultimo) / 1000, 0.04);
+        ultimo = agora; t += dt;
+        FX.update(dt, dt);
+        glr.render(scene, cam);
+        if (!tirou && t >= quando * DUR) {
+          tirou = true;
+          var cap = document.createElement('div');
+          var img = new Image();
+          img.src = cv.toDataURL('image/jpeg', 0.88);
+          img.width = 1080;
+          cap.innerHTML = '<div class="leg">' + tipo +
+            ' — fogo · água · terra · ar · neutro (em ' + Math.round(quando * 100) + '%)</div>';
+          cap.appendChild(img);
+          tiras.appendChild(cap);
+          return feito();
+        }
+        if (t < DUR) return setTimeout(function(){ passo(performance.now()); }, 16);
+        feito();
+      })(performance.now());
+    }
+
+    (function proximoTipo() {
+      if (ti >= TIPOS.length) {
+        check('saiu uma foto por tipo', tiras.children.length === TIPOS.length,
+              tiras.children.length + ' de ' + TIPOS.length);
+        return fecha();
+      }
+      fotografaTipo(TIPOS[ti++], 0.42, proximoTipo);
+    })();
+  });
+})();
+</script>
+</body>
+</html>
