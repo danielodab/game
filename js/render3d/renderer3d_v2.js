@@ -43,6 +43,23 @@ var JOGO = (typeof window !== 'undefined')
   // -------------------------------------------------------------- constantes
   var CELL = 2.0;
   var WALL_H = CELL * 1.55;           // obstáculo ALTO: bloqueia passagem e visão
+  /* LARGURA DA PEÇA DE MURO — uma casa e MEIA, não uma.
+   *
+   * Com exatamente uma casa, peça nenhuma encostava na seguinte e um trecho de
+   * muro lia como CERCA DE ESTACAS: lascas verticais com vão entre elas. Eu
+   * tinha travado em uma casa argumentando que "o muro tem de dizer qual casa
+   * bloqueia" — e confundi o que ele precisa COMUNICAR com o que ele precisa
+   * MEDIR. A casa bloqueada já é dita pelo tabuleiro: o realce, o caminho que a
+   * unidade não percorre, a mira que para ali.
+   *
+   * Meia casa de sobra faz cada peça cobrir 1,00 m da vizinha, e a fileira
+   * fecha. E como a ALTURA é fixa em WALL_H, alargar REDUZ o esticão vertical
+   * em vez de aumentá-lo: de 2,25–3,48× para 1,50–2,32× nos quatro módulos.
+   *
+   * Por que não 1,7 casa, que distorceria ainda menos: o balanço numa peça
+   * isolada passaria de 0,70 m e cobriria parte da casa vizinha — aí o muro
+   * mentiria sobre onde está, que é o problema que eu queria evitar no começo. */
+  var LARG_MURO = CELL * 1.5;
   var LOW_H = CELL * 0.46;            // obstáculo BAIXO: bloqueia passagem, não a visão
   var HOLE_D = CELL * 1.2;
   var ANIM_WATCHDOG = 3.0;
@@ -659,6 +676,7 @@ var JOGO = (typeof window !== 'undefined')
   // A regra que interessa — "todos da mesma altura e altos" — so se verifica
   // com regua, entao a regua precisa alcancar a peca.
   R.muroDaCasa = muroDaCasa;
+  R.LARG_MURO = LARG_MURO;
 
   // A FILEIRA A QUE ESTA CASA PERTENCE.
   //
@@ -769,6 +787,10 @@ var JOGO = (typeof window !== 'undefined')
           // Ele e o unico alto com proporcao de coisa alta (razao 0,69), entao
           // quase nao estica — mas o teto de largura antigo o parava em 2,76 m,
           // e num trecho de parede uniforme 34 cm de diferenca aparecem.
+          // O PILAR FICA EM UMA CASA, e não em `LARG_MURO`. Ele tem razão
+          // 0,69 — proporção de coisa alta — e a uma casa já sai com 1,07× de
+          // esticão, praticamente sem distorção. Alargá-lo o viraria um bloco,
+          // e pilar existe para NÃO ser bloco: ele pontua a parede.
           col = muroDaCasa(theme, 'pilar', filaA.semente, WALL_H, CELL);
         }
         // TODO MURO COM A MESMA ALTURA, E ALTO — em fiadas.
@@ -781,7 +803,7 @@ var JOGO = (typeof window !== 'undefined')
         // Agora a largura vale sempre uma casa e a ALTURA é fixa, obtida
         // aumentando a peça (ver `muroDaCasa`). Não há mais caso de ponta:
         // ponta e miolo têm exatamente a mesma medida, que é o pedido.
-        if (!col) col = muroDaCasa(theme, 'alto', filaA.semente, WALL_H, CELL);
+        if (!col) col = muroDaCasa(theme, 'alto', filaA.semente, WALL_H, LARG_MURO);
         if (col) {
           node = col;
           // só o MURO gira para o eixo do trecho; pilar é simétrico e sotaque é
@@ -825,7 +847,7 @@ var JOGO = (typeof window !== 'undefined')
         // «muro tomado pelo mato» deixava numa corrida. Como estes módulos já
         // são baixos por natureza, aqui quase não há esticão: é o muro ALTO que
         // paga esse preço.
-        if (!prop) prop = muroDaCasa(theme, 'baixo', fila.semente, LOW_H, CELL);
+        if (!prop) prop = muroDaCasa(theme, 'baixo', fila.semente, LOW_H, LARG_MURO);
         if (!prop) {
           prop = K.buildProp(theme, lowKinds[fila.semente % lowKinds.length], fila.semente);
           fitHeight(prop, 0.95);

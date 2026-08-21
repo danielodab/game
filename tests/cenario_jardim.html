@@ -150,7 +150,8 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       var lista = (JOGO.CENARIO.garden || {})[papel] || [];
       var semente = lista.indexOf(chave);
       if (semente < 0) return null;
-      var g = R.muroDaCasa('garden', papel, semente, alvo, CELL);
+      var larg = (papel === 'pilar') ? CELL : (R.LARG_MURO || CELL);
+      var g = R.muroDaCasa('garden', papel, semente, alvo, larg);
       if (!g) return null;
       g.updateMatrixWorld(true);
       var b = new THREE.Box3().setFromObject(g);
@@ -182,7 +183,10 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
           // desenha. `R.muroDaCasa` e a mesma funcao que a sala chama.
           var m;
           if (papel === 'alto' || papel === 'baixo' || papel === 'pilar') {
-            m = medeMuro(papel, chave, ALVO[papel]);
+            // MEDE COM A LARGURA QUE O JOGO USA. Medir o muro em CELL enquanto
+        // o jogo o desenha em LARG_MURO seria medir outra peça — o teste
+        // passaria enquanto a tela estivesse errada.
+        m = medeMuro(papel, chave, ALVO[papel]);
           } else {
             m = normaliza(cena.clone(true), ALVO[papel], null);
           }
@@ -254,6 +258,7 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       // O PILAR ENTRA NA MESMA RÉGUA. Ele pontua a parede, então nasce lado a
       // lado com o muro — e foi assim que a diferença apareceu: o muro fechava
       // em 3,10 m e o pilar parava em 2,76 m, 34 cm que se veem.
+      var R2 = window.JOGO && JOGO.Renderer;
       var muros = linhas.filter(function (l) {
         return l.papel === 'alto' || l.papel === 'pilar';
       });
@@ -264,10 +269,23 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
 
       // e a largura tem de ser de UMA CASA: mais estreito abre vão na corrida,
       // mais largo transborda para o piso livre na ponta do trecho.
-      var largFora = muros.filter(function (l) { return Math.abs(l.larg - CELL) > 0.05; });
-      check('todo muro ocupa exatamente uma casa de largura',
-            muros.length > 0 && largFora.length === 0,
-            largFora.map(function (l) { return l.chave + ' ' + l.larg.toFixed(2) + ' m'; }).join(' · '));
+      // A FILEIRA TEM DE FECHAR. Com exatamente uma casa, peça nenhuma
+      // encostava na seguinte e um trecho de muro lia como cerca de estacas —
+      // foi o que o Daniel viu. Agora cada peça passa da própria casa, e a
+      // sobra é o que faz a fileira virar parede.
+      //
+      // O teto existe pelo motivo oposto: peça larga demais numa casa ISOLADA
+      // cobre a vizinha e o muro mente sobre onde está.
+      var LARG = (typeof R2 !== 'undefined' && R2 && R2.LARG_MURO) || CELL * 1.5;
+      var soAlto = muros.filter(function (l) { return l.papel === 'alto'; });
+      var estreitos = soAlto.filter(function (l) { return l.larg < CELL * 1.2; });
+      check('todo muro passa da própria casa (a fileira fecha)',
+            soAlto.length > 0 && estreitos.length === 0,
+            estreitos.map(function (l) { return l.chave + ' ' + l.larg.toFixed(2) + ' m'; }).join(' · '));
+      var largos = soAlto.filter(function (l) { return l.larg > CELL * 1.6; });
+      check('nenhum muro cobre a casa vizinha (teto de 1,6 casa)',
+            largos.length === 0,
+            largos.map(function (l) { return l.chave + ' ' + l.larg.toFixed(2) + ' m'; }).join(' · '));
 
       // A MURETA TAMBÉM É UNIFORME, e é uma fiada só. O que separa muro de
       // mureta deixa de ser "espremi um" e passa a ser "três fiadas contra uma".
@@ -286,8 +304,11 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       // `every` de lista VAZIA devolve true: sem o teste de tamanho esta
       // checagem passaria justamente quando nenhum muro foi medido, que é o
       // caso em que ela mais precisa gritar.
-      var demais = muros.filter(function (l) { return l.estica > 3.5; });
-      check('o esticão fica dentro do aceitável (≤ 3,5×)',
+      // O TETO DO ESTICÃO APERTA DE 3,5 PARA 2,5. Alargar a peça reduziu a
+      // distorção de 2,25–3,48× para 1,50–2,32×; deixar a régua em 3,5 seria
+      // manter folga para um defeito que já não existe.
+      var demais = muros.filter(function (l) { return l.estica > 2.5; });
+      check('o esticão fica dentro do aceitável (≤ 2,5×)',
             muros.length > 0 && demais.length === 0,
             'muro ' + muros.map(function (l) { return l.estica.toFixed(1) + '×'; }).join(' / ') +
             ' · mureta ' + muretas.map(function (l) { return l.estica.toFixed(1) + '×'; }).join(' / '));
@@ -296,11 +317,10 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       // UMA PEÇA SÓ. O berço do muro tem exatamente um filho; mais que um
       // significa que alguém voltou a empilhar, e foi disso que o Daniel
       // reclamou de olho.
-      var R2 = window.JOGO && JOGO.Renderer;
       var empilhados = [];
       if (R2 && R2.muroDaCasa) {
         for (var sd = 0; sd < 4; sd++) {
-          var gg = R2.muroDaCasa('garden', 'alto', sd, ALVO.alto, CELL);
+          var gg = R2.muroDaCasa('garden', 'alto', sd, ALVO.alto, LARG);
           if (gg && gg.children.length !== 1) empilhados.push(sd + ':' + gg.children.length);
         }
       }

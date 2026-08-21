@@ -91,6 +91,23 @@
   td.par a:hover { text-decoration: underline; }
   td.par i { display: block; height: 3px; margin-bottom: .25rem; }
 
+  table.escada { border-collapse: collapse; font: 400 12px/1.3 "JetBrains Mono", monospace; }
+  table.escada td, table.escada th {
+    border-bottom: 1px solid var(--fio); padding: .5rem .7rem; text-align: left;
+  }
+  table.escada th { color: var(--tinta-2); font-weight: 700; font-size: 10px;
+                    letter-spacing: .12em; text-transform: uppercase; }
+  table.escada td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  table.escada tr.zerado td { color: var(--tinta-2); }
+  .pilha { display: flex; gap: 3px; }
+  .pilha b { width: 13px; height: 13px; display: block; border-radius: 2px; }
+  .pilha b.aberto { opacity: .26; }
+  .selo-feito {
+    float: right; font: 700 9px/1 "JetBrains Mono", monospace;
+    letter-spacing: .1em; text-transform: uppercase;
+    background: var(--tinta); color: var(--carta); padding: .32rem .5rem;
+  }
+
   /* ------------------------------------------------------------- os cards */
   .grade { display: grid; gap: 1rem; }
   .fus {
@@ -163,6 +180,13 @@
   quatro braços e dois conjuntos de roupa fazem monstro de colagem, não fusão.</p>
 </section>
 
+<h2 class="secao">O caminho, por corpo-base</h2>
+<p class="secao-nota">Ordenando as sete pelo porte, cada classe é a base das fusões com todas as
+que estão <em>abaixo</em> dela — e a conta fecha exata em 21. O Ladino nunca é base porque é o
+menor de todos: ele sempre doa.</p>
+
+<div class="rolo"><table class="escada" id="escada"></table></div>
+
 <h2 class="secao">As 21, de uma vez</h2>
 <p class="secao-nota">Vinte e uma é exatamente o triângulo de uma grade 7×7 — a diagonal é vazia
 porque classe não funde consigo mesma, e a metade de baixo repetiria a de cima. A barra de cor em
@@ -226,19 +250,19 @@ entra pela peça que ela doa.</p>
       faz:'Os dois no mesmo lugar, e ninguém sai. A dupla que decide onde a luta acontece.',
       corpo:'As duas metades mais pesadas do jogo, e o risco é virar uma bola. Minotauro como base pelos chifres, mas com a MUSCULATURA do Bárbaro e as pernas curtas dele — um corpo largo, não alto. Um machado numa mão, o escudo na outra, e a capa surrada do Bárbaro por cima do lombo. É uma porta com pernas.' },
 
-    { p:['arqueiro','sumo'], nome:'Balista de Carne', verbos:'ACUMULAR + PRENDER', base:'sumo',
+    { feito:1, p:['arqueiro','sumo'], nome:'Balista de Carne', verbos:'ACUMULAR + PRENDER', base:'sumo',
       faz:'Cerco: projétil pesado que empurra, arpéu que puxa, âncora que segura.',
       corpo:'Corpo do Bárbaro, e a espingarda do Caçador vira uma BALISTA de ombro — grande demais para uma pessoa normal, do tamanho certo para ele. O casaco de pele por cima da capa. Um machado fica no cinto, sem uso: ele não precisa mais chegar perto.' },
-    { p:['bruxo','sumo'], nome:'Colosso Arcano', verbos:'ESTOURAR + PRENDER', base:'sumo',
+    { feito:1, p:['bruxo','sumo'], nome:'Colosso Arcano', verbos:'ESTOURAR + PRENDER', base:'sumo',
       faz:'Nada é lançado: tudo é IRRADIADO do próprio corpo. Devolve o golpe a quem bate.',
       corpo:'Corpo do Bárbaro com runas ACESAS gravadas na pele — nos ombros, no peito, nos antebraços. Sem cajado e sem chapéu: a magia dele não passa por objeto, passa pelo corpo. A barba branca do Bruxo numa cara de Bárbaro é a única pista de que há um velho ali dentro.' },
     { p:['curandeiro','sumo'], nome:'Baluarte Compassivo', verbos:'RESTAURAR + PRENDER', base:'sumo',
       faz:'Escudo grande, provocar, e PUXAR O ALIADO para trás da muralha.',
       corpo:'Corpo do Bárbaro, mas com um dos machados trocado por um escudo largo de madeira e a mão livre ESTENDIDA para trás — o gesto de puxar alguém. Os frascos do Curandeiro no cinto e a luz do cajado presa no ombro, virada para os aliados e não para a frente.' },
-    { p:['espadachim','sumo'], nome:'Investida Titânica', verbos:'SUMIR + PRENDER', base:'sumo',
+    { feito:1, p:['espadachim','sumo'], nome:'Investida Titânica', verbos:'SUMIR + PRENDER', base:'sumo',
       faz:'Peso em movimento: investe de longe, agarra, gira e arremessa.',
       corpo:'Corpo do Bárbaro numa postura de CORRIDA parada — tronco inclinado, um pé à frente, como quem já vai. Machados fora: as mãos estão abertas para agarrar. As adagas do Ladino ficam presas nos antebraços, viradas para trás, sem uso na investida.' },
-    { p:['invocador','sumo'], nome:'Fortaleza Viva', verbos:'INVOCAR + PRENDER', base:'sumo',
+    { feito:1, p:['invocador','sumo'], nome:'Fortaleza Viva', verbos:'INVOCAR + PRENDER', base:'sumo',
       faz:'O tanque que invoca: provoca, ergue ídolos e reparte escudo com o grupo.',
       corpo:'Corpo do Bárbaro carregando um ÍDOLO de pedra nas costas — pesado, amarrado com correia, do tamanho de uma criança. O grimório do Xamã aberto e preso ao peito por um cinto, para as duas mãos ficarem livres. A capa vira um manto de couro cru.' },
 
@@ -270,10 +294,36 @@ entra pela peça que ela doa.</p>
     { p:['curandeiro','espadachim'], nome:'Bisturi Dançante', verbos:'RESTAURAR + SUMIR', base:'curandeiro',
       faz:'Velocidade, roubo de vida e limpeza; barato e sem parar.',
       corpo:'Corpo do Curandeiro afinado e leve, em postura de meio-passo — nunca parado. O cajado vira curto, de uma mão, e a outra mão tem uma LÂMINA fina de cirurgia, não uma adaga de briga. Frascos presos ao antebraço em fileira, como instrumentos.' },
-    { p:['bruxo','espadachim'], nome:'Lâmina Rúnica', verbos:'ESTOURAR + SUMIR', base:'espadachim',
+    { p:['bruxo','espadachim'], nome:'Lâmina Rúnica', verbos:'ESTOURAR + SUMIR', base:'bruxo',
       faz:'Pisca pelo campo deixando estouro na chegada, com veneno arcano.',
-      corpo:'A única fusão baseada no MENOR corpo do jogo, e por isso a que mais precisa crescer para chegar aos 3 m — alongue as pernas e o tronco em vez de engrossar. Duas adagas com runas acesas na lâmina, roupa preta com fio de luz nas costuras, e nenhum chapéu. O Bruxo aqui entra só pela luz.' }
+      corpo:'O corpo do Bruxo DESENCURVADO — ele passa a vida torto sobre o cajado, e aqui ele se endireita. Sem chapéu e sem cajado: duas adagas com runas acesas na lâmina, roupa preta do Ladino com fio de luz nas costuras, e a barba branca curta. É o velho que aprendeu a correr.<br><br><strong>Se preferir, esta aceita o caminho oposto:</strong> corpo do Ladino esticado até os 3 m — alongando pernas e tronco em vez de engrossar — com o Bruxo entrando só pela luz nas lâminas. Das 21, é a única em que as duas metades têm porte quase igual (1,80 contra 1,75), então a escolha é sua e nenhuma das duas está errada.' }
   ];
+
+  // ------------------------------------------------------------------ escada
+  // A escada nao e desenhada a mao: ela CONTA as fichas, entao ela nao pode
+  // discordar do resto da pagina. Se uma ficha mudar de base, a escada muda.
+  (function () {
+    var t = document.getElementById('escada');
+    var h = '<tr><th>classe</th><th>altura</th><th>é base de</th><th>progresso</th><th class="n">falta</th></tr>';
+    ORDEM.forEach(function (c) {
+      var C = CLASSES[c];
+      var minhas = FUS.filter(function (f) { return f.base === c; });
+      var prontas = minhas.filter(function (f) { return f.feito; }).length;
+      var pilha = minhas.map(function (f) {
+        return '<b class="' + (f.feito ? '' : 'aberto') + '" style="background:' + C.cor + '"></b>';
+      }).join('');
+      h += '<tr' + (minhas.length ? '' : ' class="zerado"') + '>' +
+           '<td>' + C.nome + '</td>' +
+           '<td class="n">' + C.alt.toFixed(2) + ' m</td>' +
+           '<td class="n">' + minhas.length + '</td>' +
+           '<td><div class="pilha">' + (pilha || '—') + '</div></td>' +
+           '<td class="n">' + (minhas.length - prontas) + '</td></tr>';
+    });
+    var falta = FUS.filter(function (f) { return !f.feito; }).length;
+    h += '<tr><th>total</th><th></th><th class="n">' + FUS.length + '</th><th></th>' +
+         '<th class="n">' + falta + '</th></tr>';
+    t.innerHTML = h;
+  })();
 
   // ---------------------------------------------------------------- a matriz
   (function () {
@@ -320,7 +370,7 @@ entra pela peça que ela doa.</p>
           '<div class="barra"><span style="background:' + a.cor + '"></span>' +
           '<span style="background:' + c.cor + '"></span></div>' +
           '<div class="corpo">' +
-          '<h3>' + f.nome + '</h3>' +
+          '<h3>' + (f.feito ? '<span class="selo-feito">pronta</span>' : '') + f.nome + '</h3>' +
           '<p class="quem">' + a.nome + ' + ' + c.nome +
           '  ·  base: ' + CLASSES[b].nome + '  ·  doa: ' + outro.nome + '</p>' +
           '<p class="verbos">' + f.verbos + '</p>' +
