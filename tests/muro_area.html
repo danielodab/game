@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o muro cobre a área que promete</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:940px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font:11px monospace;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:3px 7px;text-align:left}
+  th{background:#1a2029;color:#8895a6}
+  pre.mapa{font:11px/1.1 monospace;background:#0b0d10;border:1px solid #2b3542;
+           padding:6px;margin:0;display:inline-block}
+  .cel{color:#4a5866} .muro{color:#c9873a;font-weight:700} .cast{color:#7fb0e0}
+</style>
+</head>
+<body>
+<h1>O muro cobre a área que promete</h1>
+<div class="sub">«Muralha» diz «três muros em linha, corta a sala em duas»; o jogo erguia <em>um</em>, no
+centro. São oito feitiços assim — todos os de nível 15 e 30 do Minotauro, metade do verbo BARRAR
+dele. Não dava erro nenhum: só entregava menos que o escrito. Esta página confere o número de muros
+contra a ÁREA declarada em cada feitiço, e não contra um número que eu tenha decorado.</div>
+<div id="summary">medindo…</div>
+<ul id="lista"></ul>
+<table id="tab"></table>
+<div id="mapas" style="margin-top:12px"></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = mau ? (mau + ' de ' + res.length + ' falharam')
+                        : ('tudo passou (' + res.length + ')');
+    window.__done = true; window.__fail = mau;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var E = window.JOGO && JOGO.Engine, D = window.JOGO && JOGO.DATA;
+    if (!E || !D) { check('engine carregou', false); return fecha(); }
+
+    var N = 11, C = 5;      // tabuleiro 11×11, alvo bem no meio
+    // Sala SINTÉTICA de propósito: quero medir a regra do feitiço, não a sorte
+    // do desenho de uma sala. Num mapa de verdade um obstáculo no caminho faria
+    // o número cair por motivo legítimo, e aí o teste não distinguiria «a área
+    // está errada» de «tinha pedra ali».
+    function tabuleiro() {
+      var tiles = [];
+      for (var y = 0; y < N; y++) {
+        var linha = [];
+        for (var x = 0; x < N; x++) linha.push({ type: 'floor' });
+        tiles.push(linha);
+      }
+      return { grid: { w: N, h: N, tiles: tiles }, walls: [], traps: [], units: [],
+               phase: 'playing', dungeonId: 'greenhouse', roomIndex: 0, round: 1, events: [] };
+    }
+
+    // TODOS os feitiços com efeito de muro, achados nos dados — não uma lista
+    // que eu tenha escrito à mão. Um feitiço de muro novo entra no teste
+    // sozinho; uma lista decorada deixaria o novo sem cobertura e ninguém veria.
+    var comMuro = Object.keys(D.spells).filter(function (id) {
+      var sp = D.spells[id], efs = sp.effects || [];
+      return efs.some(function (e) { return e.type === 'wall'; });
+    });
+    check('há feitiços de muro nos dados', comMuro.length > 0, comMuro.length + ' feitiços');
+
+    var linhas = [], erradas = [], semNada = [];
+    comMuro.forEach(function (id) {
+      var sp = D.spells[id];
+      var st = tabuleiro();
+      var caster = { uid: 1, name: 'Minotauro', side: 'player', x: 1, y: C, alive: true,
+                     hp: 100, pa: 9, pp: 3, effects: [], classId: 'minotauro', element: 'terra' };
+      st.units.push(caster);
+      E.events = st.events;
+
+      // QUANTAS CASAS A ÁREA DECLARA. Esta é a régua, e ela vem do próprio
+      // motor de área do jogo — não de uma conta minha sobre `shape` e `size`.
+      // Se eu recalculasse a área aqui, estaria comparando duas implementações
+      // minhas e as duas poderiam estar erradas juntas.
+      var alvo = E.aoeTiles(st, sp, caster.x, caster.y, C, C) || [];
+      var livres = alvo.filter(function (t) {
+        var cel = st.grid.tiles[t.y] && st.grid.tiles[t.y][t.x];
+        return cel && cel.type === 'floor' && !E.unitAt(st, t.x, t.y);
+      });
+
+      try { E.applyEffects(st, caster, sp, C, C, {}); } catch (e) {
+        erradas.push(sp.name + ' (estourou: ' + e.message + ')'); return;
+      }
+      var subiu = st.walls.length;
+      if (subiu !== livres.length) {
+        erradas.push(sp.name + ': ' + subiu + ' muro(s) para ' + livres.length + ' casa(s) livre(s)');
+      }
+      if (subiu === 0) semNada.push(sp.name);
+      linhas.push({ id: id, nome: sp.name, forma: sp.aoe ? (sp.aoe.shape + ' ' + sp.aoe.size) : '—',
+                    livres: livres.length, muros: subiu, st: st, area: alvo,
+                    desc: (sp.description || '').slice(0, 52) });
+    });
+
+    check('todo feitiço ergue um muro em CADA casa livre da sua área',
+          erradas.length === 0, erradas.join(' · '));
+    check('nenhum feitiço de muro sai sem erguer nada',
+          semNada.length === 0, semNada.join(', '));
+
+    // e a regra que dá nome ao defeito: quem tem área maior que uma casa TEM de
+    // erguer mais de um. É esta que teria pegado o bug original.
+    var deArea = linhas.filter(function (l) { return l.livres > 1; });
+    var soUm = deArea.filter(function (l) { return l.muros <= 1; });
+    check('feitiço de ÁREA ergue mais de um muro (o defeito original)',
+          deArea.length > 0 && soUm.length === 0,
+          soUm.map(function (l) { return l.nome; }).join(', ') ||
+          (deArea.length + ' feitiços de área conferidos'));
+
+    // e não pode transbordar: muro fora da área declarada seria pior que faltar
+    var fora = [];
+    linhas.forEach(function (l) {
+      // A ÁREA DE ANTES, guardada no laço acima. Recalcular aqui era erro meu:
+      // depois do feitiço as casas viraram muro, e `aoeTiles` para em obstáculo
+      // — a área recalculada sai menor que a original e o teste acusava
+      // transbordo onde não havia. Medir o estado depois da jogada para julgar
+      // a jogada é medir a consequência, não a regra.
+      var dentro = {};
+      (l.area || []).forEach(function (t) { dentro[t.x + ',' + t.y] = 1; });
+      l.st.walls.forEach(function (w) {
+        if (!dentro[w.x + ',' + w.y]) fora.push(l.nome + ' em ' + w.x + ',' + w.y);
+      });
+    });
+    check('nenhum muro nasce FORA da área declarada', fora.length === 0, fora.join(' · '));
+
+    // ---- tabela + desenho das áreas
+    var h = '<tr><th>feitiço</th><th>área</th><th>casas livres</th><th>muros</th><th>promete</th></tr>';
+    linhas.sort(function (a, b) { return b.muros - a.muros; });
+    linhas.forEach(function (l) {
+      h += '<tr><td>' + l.nome + '</td><td>' + l.forma + '</td><td>' + l.livres +
+           '</td><td>' + l.muros + '</td><td>' + l.desc + '</td></tr>';
+    });
+    document.getElementById('tab').innerHTML = h;
+
+    var m = '';
+    linhas.filter(function (l) { return l.muros > 1; }).forEach(function (l) {
+      var mapa = {};
+      l.st.walls.forEach(function (w) { mapa[w.x + ',' + w.y] = 1; });
+      var txt = '';
+      for (var y = 1; y < N - 1; y++) {
+        for (var x = 1; x < N - 1; x++) {
+          if (x === C && y === C && mapa[x + ',' + y]) txt += '<span class="muro">▣</span> ';
+          else if (mapa[x + ',' + y]) txt += '<span class="muro">█</span> ';
+          else txt += '<span class="cel">·</span> ';
+        }
+        txt += '\n';
+      }
+      m += '<div style="display:inline-block;margin:0 14px 12px 0;vertical-align:top">' +
+           '<b>' + l.nome + '</b> <span style="color:#8895a6">(' + l.forma + ' → ' +
+           l.muros + ' muros)</span><br><pre class="mapa">' + txt + '</pre></div>';
+    });
+    document.getElementById('mapas').innerHTML = m;
+
+    fecha();
+  });
+})();
+</script>
+</body>
+</html>

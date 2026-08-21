@@ -1752,43 +1752,80 @@ var JOGO = (typeof window !== 'undefined')
          *   · nao sobe em celula OCUPADA, senao a unidade fica presa dentro da
          *     pedra sem ter como sair;
          *   · guarda o tipo anterior e devolve ao expirar. */
-        case 'wall':
-          if (isFloor(state, x, y) && !Engine.unitAt(state, x, y)) {
+        case 'wall': {
+          /* A AREA INTEIRA, e nao so o centro.
+           *
+           * `tiles` ja vem calculado la em cima e todo efeito de UNIDADE o usa.
+           * Este aqui usava o `x, y` do centro, entao "Muralha", que promete
+           * "tres muros em linha", erguia um. Sao OITO feiticos assim — todos
+           * os de nivel 15 e 30 do Minotauro, metade do verbo BARRAR dele. Nao
+           * dava erro: so entregava menos do que a descricao dizia.
+           *
+           * Cada casa e testada por si, com as mesmas regras de sempre. Um muro
+           * em linha que encosta numa parede pula aquela casa em vez de falhar
+           * inteiro. */
+          var elMuro = eff.element || spell.element || 'neutro';
+          var durMuro = eff.duration || 3;
+          var subiram = 0;
+          for (var wt = 0; wt < tiles.length; wt++) {
+            var wx2 = tiles[wt].x, wy2 = tiles[wt].y;
+            if (!isFloor(state, wx2, wy2) || Engine.unitAt(state, wx2, wy2)) continue;
             var jaTem = false;
             for (var wi = 0; wi < state.walls.length; wi++) {
-              if (state.walls[wi].x === x && state.walls[wi].y === y) { jaTem = true; break; }
+              if (state.walls[wi].x === wx2 && state.walls[wi].y === wy2) { jaTem = true; break; }
             }
-            if (!jaTem) {
-              var cel = tileAt(state, x, y);
-              // O ELEMENTO fica guardado no muro, nao so no evento. O
-              // renderizador desenha a pedra pela lista `state.walls` (um muro
-              // dura varios turnos e o evento passa uma vez so), e sem isso ele
-              // nao teria como saber de que cor pintar o que ja estava de pe —
-              // mesmo problema que a armadilha teve, resolvido do mesmo jeito.
-              state.walls.push({ x: x, y: y, antes: cel.type, deco: !!cel.deco,
-                                 ownerUid: caster.uid, side: caster.side,
-                                 element: eff.element || spell.element || 'neutro',
-                                 remaining: eff.duration || 3 });
-              cel.type = 'wall';
-              cel.deco = false;
-              cel.invocado = true;
-              emit({ type: 'wallRaised', uid: caster.uid, x: x, y: y,
-                     element: eff.element || spell.element || 'neutro',
-                     duration: eff.duration || 3 });
-              log(caster.name + ' ergue um muro.');
-            }
+            if (jaTem) continue;
+            var cel = tileAt(state, wx2, wy2);
+            if (!cel) continue;
+            // O ELEMENTO fica guardado no muro, nao so no evento. O
+            // renderizador desenha a pedra pela lista `state.walls` (um muro
+            // dura varios turnos e o evento passa uma vez so), e sem isso ele
+            // nao teria como saber de que cor pintar o que ja estava de pe —
+            // mesmo problema que a armadilha teve, resolvido do mesmo jeito.
+            state.walls.push({ x: wx2, y: wy2, antes: cel.type, deco: !!cel.deco,
+                               ownerUid: caster.uid, side: caster.side,
+                               element: elMuro, remaining: durMuro });
+            cel.type = 'wall';
+            cel.deco = false;
+            cel.invocado = true;
+            emit({ type: 'wallRaised', uid: caster.uid, x: wx2, y: wy2,
+                   element: elMuro, duration: durMuro });
+            subiram++;
           }
+          // DIZER QUANTOS SUBIRAM. Quem esperava tres e ve "ergue 2 muros"
+          // entende na hora que uma casa estava ocupada; antes so via menos
+          // pedra e nao tinha como saber por que.
+          if (subiram === 1) log(caster.name + ' ergue um muro.');
+          else if (subiram > 1) log(caster.name + ' ergue ' + subiram + ' muros.');
+          else log(caster.name + ' não acha onde erguer o muro.');
           break;
+        }
 
-        case 'trap':
-          if (isFloor(state, x, y)) {
-            var trap = { x: x, y: y, trapId: eff.trapId, ownerUid: caster.uid,
+        case 'trap': {
+          /* MESMA CORRECAO DO MURO: a armadilha e efeito de CASA e tambem
+           * ignorava a area. Hoje nenhum feitico de armadilha tem area maior
+           * que uma casa, entao isto nao muda nada AGORA — `tiles` vem com uma
+           * casa so e o laco roda uma vez.
+           *
+           * Arrumo junto assim mesmo porque o defeito e o mesmo e esta na mesma
+           * familia de efeito: deixar so um dos dois certo e plantar a mesma
+           * armadilha para quem escrever um feitico de armadilha em linha
+           * depois, e essa pessoa nao vai desconfiar do engine — vai desconfiar
+           * do proprio feitico. */
+          var nArm = 0;
+          for (var tt = 0; tt < tiles.length; tt++) {
+            var tx2 = tiles[tt].x, ty2 = tiles[tt].y;
+            if (!isFloor(state, tx2, ty2)) continue;
+            var trap = { x: tx2, y: ty2, trapId: eff.trapId, ownerUid: caster.uid,
                          side: caster.side, remaining: eff.duration || 3 };
             state.traps.push(trap);
-            emit({ type: 'trapSet', uid: caster.uid, trapId: eff.trapId, x: x, y: y });
-            log(caster.name + ' arma uma armadilha.');
+            emit({ type: 'trapSet', uid: caster.uid, trapId: eff.trapId, x: tx2, y: ty2 });
+            nArm++;
           }
+          if (nArm === 1) log(caster.name + ' arma uma armadilha.');
+          else if (nArm > 1) log(caster.name + ' arma ' + nArm + ' armadilhas.');
           break;
+        }
 
         case 'weatherShift':
           setWeather(state, eff.weather);
