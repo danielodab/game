@@ -29,9 +29,12 @@ ORIGENS = [
 ]
 
 # arquivo -> (chave, nome, papel)
-#   baixo   = MÓDULO de divisória (0,95 m), o muro que se enfileira
-#   sotaque = enfeite que entra UMA vez no meio de uma fileira, como charme
-#   alto    = coluna (3,10 m) · chao = enfeite de piso · borda = fora da arena
+#   alto         = MÓDULO de parede (3,10 m), o muro que se enfileira
+#   pilar        = pontuação da parede: entra a cada 4 casas, nunca constrói
+#   sotaque_alto = enfeite alto que entra UMA vez por trecho longo de parede
+#   baixo        = MÓDULO de divisória (0,95 m)
+#   sotaque      = enfeite baixo, UMA vez por fileira de divisória
+#   chao         = enfeite de piso · borda = fora da arena
 #
 # OS MÓDULOS DE MURO CHEGARAM. Enquanto não havia nenhum, as seis peças
 # decorativas eram duplicadas em `baixo` — alguma coisa tinha de segurar a
@@ -51,19 +54,19 @@ PECAS = [
     # não empilhou várias — e cada uma já nasce como um trecho de alvenaria de
     # ponta a ponta, larga o dobro da altura. É o que `baixo` sempre quis: cinco
     # cópias lado a lado leem como uma barreira, não como cinco objetos.
-    ("muro_com_pilastra_inteiro_01.glb", "jd_muro_pilastra", "Muro de pilastras inteiro",    "baixo"),
-    ("muro_com_pilastra_furado_01.glb",  "jd_muro_brecha",   "Muro de pilastras com brecha", "baixo"),
-    ("muro_sem_pilastra_furado_01.glb",  "jd_muro_ruina",    "Muro desabado em ruína",       "baixo"),
-    ("muros_com_mato_01.glb",            "jd_muro_mato",     "Muro tomado pelo mato",        "baixo"),
+    ("muro_com_pilastra_inteiro_01.glb", "jd_muro_pilastra", "Muro de pilastras inteiro",    "alto"),
+    ("muro_com_pilastra_furado_01.glb",  "jd_muro_brecha",   "Muro de pilastras com brecha", "alto"),
+    ("muro_sem_pilastra_furado_01.glb",  "jd_muro_ruina",    "Muro desabado em ruína",       "alto"),
+    ("muros_com_mato_01.glb",            "jd_muro_mato",     "Muro tomado pelo mato",        "alto"),
 
-    ("itens_jardim_03.glb",   "jd_coluna_vidro", "Coluna de vidro da estufa",         "alto"),
-    ("itens_jardim_04.glb",   "jd_cipo",         "Cipó grosso na estaca",             "alto"),
-    ("itens_jardim_3_03.glb", "jd_estatua",      "Estátua de jardineiro musgosa",     "alto"),
+    ("itens_jardim_03.glb",   "jd_coluna_vidro", "Coluna de vidro da estufa",         "sotaque_alto"),
+    ("itens_jardim_04.glb",   "jd_cipo",         "Cipó grosso na estaca",             "sotaque_alto"),
+    ("itens_jardim_3_03.glb", "jd_estatua",      "Estátua de jardineiro musgosa",     "sotaque_alto"),
     # o pilar sai da folha com o entulho que caiu ao pé dele, e fica: o vão entre
     # a coluna e as pedras é menor que a folga, e a ruína ao pé combina com a
     # Estufa Soterrada. O preço é a caixa mais larga, que rouba um pouco da
     # altura na normalização — 2,8 m em vez de 3,1 m, ainda bem acima do herói.
-    ("pilar_01.glb",          "jd_pilar",        "Pilar de pedra com entulho ao pé",  "alto"),
+    ("pilar_01.glb",          "jd_pilar",        "Pilar de pedra com entulho ao pé",  "pilar"),
 
     ("itens_jardim2_02.glb",  "jd_cristal_p",    "Cristais pequenos no chão",         "chao"),
     ("itens_jardim_4_02.glb", "jd_cristal_g",    "Afloramento de cristais",           "chao"),
@@ -104,7 +107,8 @@ def main():
         "JOGO.CENARIO_NOME = JOGO.CENARIO_NOME || {};",
     ]
 
-    papeis = {"baixo": [], "alto": [], "chao": [], "borda": [], "sotaque": []}
+    papeis = {"baixo": [], "alto": [], "pilar": [], "sotaque": [],
+              "sotaque_alto": [], "chao": [], "borda": []}
     total, faltando = 0, []
     for arq, chave, nome, papel in PECAS:
         caminho = None
@@ -119,6 +123,13 @@ def main():
         linhas.append("JOGO.MODELS['%s']='%s';" % (chave, b64))
         linhas.append("JOGO.CENARIO_NOME['%s']=%s;" % (chave, json.dumps(nome, ensure_ascii=False)))
         papeis[papel].append(chave)
+        # O MESMO MÓDULO SERVE ALTO E BAIXO, e isso não é muleta: é como se faz
+        # arte de fase. Um "muro de pilastras" a 3,10 m é parede; o mesmo módulo
+        # a 0,95 m é MURETA, que é exatamente o que a casa de divisória pede.
+        # Sem isso, `baixo` ficaria vazio e as divisórias voltariam para os
+        # barris emprestados — que é do que o Daniel reclamou no começo.
+        if papel == "alto":
+            papeis["baixo"].append(chave)
         # Aqui havia um `if papel == "sotaque": papeis["baixo"].append(chave)`.
         # Era muleta enquanto `baixo` estava vazio, e saiu com a chegada dos
         # muros: enfeite repetido casa a casa não é divisória, é entulho.
@@ -129,7 +140,7 @@ def main():
     io.open(SAIDA, "w", encoding="utf-8", newline="\n").write("\n".join(linhas))
 
     print("=== CENÁRIO DA ESTUFA ===")
-    for p in ("baixo", "alto", "sotaque", "chao", "borda"):
+    for p in ("alto", "pilar", "sotaque_alto", "baixo", "sotaque", "chao", "borda"):
         print("  %-6s %d: %s" % (p, len(papeis[p]), ", ".join(papeis[p])))
     print("  binário %.2f MB · arquivo %.2f MB"
           % (total / 1048576.0, os.path.getsize(SAIDA) / 1048576.0))

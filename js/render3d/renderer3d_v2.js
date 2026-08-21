@@ -666,10 +666,46 @@ var JOGO = (typeof window !== 'undefined')
         // `fileiraDe` serve para os dois casos: numa borda o trecho corre pela
         // aresta, no miolo corre pelo `##`. A conta é a mesma.
         var filaA = fileiraDe(st, x, y, isWall);
-        var col = pecaUsuario(theme, 'alto', filaA.semente, WALL_H);
+        // A GRAMÁTICA DA PAREDE: muro, muro, PILAR, muro, muro.
+        //
+        // O pilar pontua, não constrói — uma parede feita só de pilares vira
+        // colunata, que foi o que o Daniel viu. E o enfeite alto (estátua,
+        // coluna de vidro) entra UMA vez por trecho longo, pelo mesmo motivo do
+        // sotaque de baixo: dois enfeites iguais colados ficam estranhos.
+        var col = null;
+        if (ehSotaque(filaA)) {
+          col = pecaUsuario(theme, 'sotaque_alto', filaA.semente + filaA.i * 7, WALL_H);
+        }
+        if (!col && filaA.comp >= 3 && (filaA.i % 4) === 2) {
+          col = pecaUsuario(theme, 'pilar', filaA.semente, WALL_H);
+        }
+        // O TETO DE LARGURA DOBRA DENTRO DE UM TRECHO DE PAREDE.
+        //
+        // Os módulos do Daniel são 2x mais largos que altos — proporção de muro
+        // baixo. Com o teto de uma casa, mirar 3,10 m de altura dava 0,95 m: a
+        // largura estrangulava antes. Era isso que ele via em "os muros devem
+        // ser grandes, só os pilares são".
+        //
+        // A folga estava ali e eu não usava: numa FILEIRA, a casa vizinha também
+        // é parede. Transbordar não invade nada — só faz os módulos se
+        // sobreporem, que é o que deixa a parede contínua. Só na ponta do trecho
+        // é que o teto de uma casa ainda vale.
+        //
+        // Com duas casas de teto os quatro muros ficam entre 1,78 e 2,76 m.
+        // Para os 3,10 m cheios o módulo teria de ser modelado quase tão alto
+        // quanto largo — está anotado no briefing.
+        if (!col) {
+          var pontaA = (filaA.comp === 1 || filaA.i === 0 || filaA.i === filaA.comp - 1);
+          col = pecaUsuario(theme, 'alto', filaA.semente, WALL_H,
+                            pontaA ? CELL * 0.95 : CELL * 1.9);
+        }
         if (col) {
           node = col;
-          if (filaA.eixo === 'z' && filaA.comp > 1) col.rotation.y = Math.PI / 2;
+          // só o MURO gira para o eixo do trecho; pilar é simétrico e sotaque é
+          // objeto largado ali — girar o faria parecer parte da alvenaria.
+          if (filaA.eixo === 'z' && filaA.comp > 1 && !ehSotaque(filaA)) {
+            col.rotation.y = Math.PI / 2;
+          }
         } else {
           node = K.buildWall(theme, seed, {
             mask: { n: isWall(x, y - 1), e: isWall(x + 1, y), s: isWall(x, y + 1), w: isWall(x - 1, y) },

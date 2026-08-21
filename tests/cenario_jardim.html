@@ -72,7 +72,11 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
   // fileira, então tem de ler na mesma linha do muro que o cerca. Sem esta
   // linha as seis peças decorativas sairiam da medição inteiras — foi o que
   // quase aconteceu quando elas deixaram de ser duplicadas em `baixo`.
-  var ALVO = { baixo: 0.95, alto: 3.10, sotaque: 0.95, chao: 0.25, borda: 1.30 };
+    // Cada papel e a altura que o renderizador pede dele. `sotaque_alto` e
+  // `pilar` medem o mesmo que a parede: eles OCUPAM casa de parede, um como
+  // pontuacao e o outro como enfeite, e teriam de ter o porte dela.
+  var ALVO = { alto: 3.10, pilar: 3.10, sotaque_alto: 3.10,
+               baixo: 0.95, sotaque: 0.95, chao: 0.25, borda: 1.30 };
   var CELL = 2.0;
 
   window.addEventListener('DOMContentLoaded', function () {
@@ -138,15 +142,25 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
           var cena = null;
           try { cena = M.rawScene(chave); } catch (e) {}
           if (!cena) { semModelo.push(chave); return; }
-          var m = normaliza(cena.clone(true), ALVO[papel]);
+          var teto = (papel === 'alto') ? CELL * 1.9 : null;
+          var m = normaliza(cena.clone(true), ALVO[papel], teto);
           if (!m) { semModelo.push(chave + ' (caixa vazia)'); return; }
-          // PEÇA LARGA PERDE ALTURA, E ISSO É CORRETO. O teto de largura existe
+          // A PAREDE MEDE COM O TETO QUE O JOGO DÁ A ELA. Dentro de um trecho o
+      // renderizador libera duas casas de largura, porque a casa vizinha também
+      // é parede e transbordar só faz os módulos se sobreporem. Medir com o teto
+      // de uma casa aqui reprovaria uma peça que na tela está certa.
+      // PEÇA LARGA PERDE ALTURA, E ISSO É CORRETO. O teto de largura existe
           // para o objeto não invadir a casa do vizinho; quando a peça é
           // naturalmente mais larga do que alta — uma redoma quebrada, uma poça —
           // é a altura que tem de ceder. Cobrar 0,95 m dela seria cobrar que ela
           // transbordasse. O que NÃO pode é encolher a ponto de sumir: abaixo de
           // 60% do papel a peça deixa de ler como obstáculo.
-          if (m.alt < ALVO[papel] * 0.60)
+          // A PAREDE NÃO ENTRA NESTA CONTA. Para ela os 3,10 m não são alvo
+          // alcançável e sim TETO: os módulos do Daniel são 2x mais largos que
+          // altos, e a altura que sai da largura disponível é a altura certa
+          // deles. Quem cobra a parede é a checagem de "passa de um herói",
+          // logo abaixo, que é a regra de verdade.
+          if (papel !== 'alto' && m.alt < ALVO[papel] * 0.60)
             curtas.push(chave + ' ' + m.alt.toFixed(2) + '/' + ALVO[papel].toFixed(2));
           linhas.push({ chave: chave, papel: papel, alvo: ALVO[papel], base: m.base,
                         desvio: m.desvio,
@@ -161,7 +175,7 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
       // é cru de propósito: ele existe para gritar quando uma peça SOME — chave
       // renomeada na tabela, arquivo que não foi copiado, papel escrito errado.
       // Nada disso dá erro na tela; só a contagem pega.
-      check('há 20 peças no cenário', linhas.length === 20, linhas.length + ' peças');
+      check('há 24 medições de peça no cenário', linhas.length === 24, linhas.length + ' peças');
       check('nenhuma peça encolhe abaixo de 60% do papel',
             curtas.length === 0, curtas.join(' · '));
       // ENTERRADA OU FLUTUANDO. Uma peça cuja base não está no zero afunda no
@@ -181,9 +195,33 @@ exatamente o que aconteceu na primeira tentativa, com as colunas nascendo do tam
             tortas.length === 0,
             tortas.map(function (l) { return l.chave + ' ' + l.desvio.toFixed(2) + ' m fora'; }).join(' · '));
 
-      check('nenhuma peça passa da casa (2,0 m de lado)',
-            linhas.every(function (l) { return l.larg <= CELL + 0.01; }),
-            linhas.filter(function (l) { return l.larg > CELL + 0.01; })
+      // A PAREDE TEM DE PASSAR DE UM HERÓI. É o que a separa de uma mureta: se
+      // um Minotauro de 2,62 m vê por cima dela, ela não bloqueia visão, e a
+      // regra do jogo diz que bloqueia.
+      // RUÍNA PODE SER BAIXA — e só ela. Uma peça chamada "muro desabado" tem
+      // de ser mais baixa que as outras três; é o desenho dela. Fica como
+      // exceção NOMEADA em vez de eu afrouxar a régua para todo mundo: assim um
+      // muro novo que chegar curto ainda reprova.
+      var RUINA_OK = { jd_muro_ruina: 1 };
+      var paredes = linhas.filter(function (l) { return l.papel === 'alto' || l.papel === 'pilar'; });
+      var baixas = paredes.filter(function (l) {
+        return l.alt < 1.75 && !RUINA_OK[l.chave];
+      });
+      check('toda parede passa da altura do menor herói (1,75 m)',
+            paredes.length > 0 && baixas.length === 0,
+            baixas.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + ' m'; }).join(' · '));
+      // mesmo a ruína não pode virar mureta: o que a separa de uma divisória é
+      // ainda ser claramente mais alta que os 0,95 m dela.
+      var ruinas = paredes.filter(function (l) { return RUINA_OK[l.chave]; });
+      check('mesmo a ruína continua lendo como parede (> 1,5 m)',
+            ruinas.every(function (l) { return l.alt > 1.5; }),
+            ruinas.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + ' m'; }).join(' · '));
+
+      // a parede pode passar da casa DE PROPÓSITO (ver acima); as outras não
+      var naCasa = linhas.filter(function (l) { return l.papel !== 'alto'; });
+      check('nenhuma peça de casa única passa dos 2,0 m',
+            naCasa.every(function (l) { return l.larg <= CELL + 0.01; }),
+            naCasa.filter(function (l) { return l.larg > CELL + 0.01; })
                   .map(function (l) { return l.chave + ' ' + l.larg.toFixed(2); }).join(', '));
 
       var h = '<table><tr><th class="n">peça</th><th>papel</th><th>alvo</th>' +
