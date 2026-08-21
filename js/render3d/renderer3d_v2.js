@@ -538,6 +538,25 @@ var JOGO = (typeof window !== 'undefined')
     return no;
   }
 
+  // A FILEIRA A QUE ESTA CASA PERTENCE.
+  //
+  // Devolve {semente, eixo}: a semente é a mesma para toda a corrida (para que
+  // todas as casas usem a MESMA peça) e o eixo diz se a barreira corre em X ou
+  // em Z (para girar a peça e não deixar buraco entre uma casa e a seguinte).
+  //
+  // Casa isolada continua sendo casa isolada — aí a semente é dela mesma e
+  // qualquer peça serve.
+  function fileiraDe(st, x, y, ehBaixo) {
+    var x0 = x, x1 = x, y0 = y, y1 = y;
+    while (ehBaixo(x0 - 1, y)) x0--;
+    while (ehBaixo(x1 + 1, y)) x1++;
+    while (ehBaixo(x, y0 - 1)) y0--;
+    while (ehBaixo(x, y1 + 1)) y1++;
+    var compX = x1 - x0 + 1, compZ = y1 - y0 + 1;
+    if (compX >= compZ) return { semente: hashXY(x0, y), eixo: 'x', comp: compX };
+    return { semente: hashXY(x, y0), eixo: 'z', comp: compZ };
+  }
+
   function buildBoardKit(st, pal, theme) {
     var K = kit();
     if (!K) return false;
@@ -572,6 +591,10 @@ var JOGO = (typeof window !== 'undefined')
       if (x2 < 0 || y2 < 0 || x2 >= w || y2 >= h) return false;
       return tileKind(gridTile(st, x2, y2)) === 'high';
     }
+    function isLow(x2, y2) {
+      if (x2 < 0 || y2 < 0 || x2 >= w || y2 >= h) return false;
+      return tileKind(gridTile(st, x2, y2)) === 'low';
+    }
     var lowKinds = LOW_PROPS[theme] || LOW_PROPS.garden;
     var lowNodes = [];
     var wallCache = {};
@@ -585,7 +608,10 @@ var JOGO = (typeof window !== 'undefined')
         // As colunas do usuário são PILARES SOLTOS, e o anel de borda precisa de
         // parede contínua (com encaixe de vizinho) para a sala ter muro. Então:
         // pilar dele nas casas de dentro, parede do acervo na moldura.
-        var col = naBorda ? null : pecaUsuario(theme, 'alto', seed, WALL_H);
+        // O mesmo vale para a parede de dentro: `##` é um trecho de muro, não
+        // duas estátuas soltas. A peça vem da fileira.
+        var filaA = naBorda ? null : fileiraDe(st, x, y, isWall);
+        var col = filaA ? pecaUsuario(theme, 'alto', filaA.semente, WALL_H) : null;
         if (col) {
           node = col;
         } else {
@@ -600,17 +626,25 @@ var JOGO = (typeof window !== 'undefined')
       } else if (k === 'hole') {
         node = K.buildHole(theme, seed);
       } else if (k === 'low') {
-        // obstáculo BAIXO: chão normal + engradado/barril. Bloqueia passagem,
+        // obstáculo BAIXO: chão normal + a peça da DIVISÓRIA. Bloqueia passagem,
         // NÃO bloqueia a visão — por isso é visivelmente mais baixo que a parede.
         node = K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
+        // A peça sai da FILEIRA, não da casa: cinco casas seguidas usam a mesma
+        // e leem como uma barreira só. Sorteando por casa, uma corrida de cinco
+        // virava cinco objetos diferentes — entulho, não divisória.
+        var fila = fileiraDe(st, x, y, isLow);
         // ALTURA NORMALIZADA: o obstaculo tem de ler como "da para ver por
         // cima" e nunca competir com uma unidade (heroi ~2,05 de altura).
-        var prop = pecaUsuario(theme, 'baixo', seed, 0.95);
+        var prop = pecaUsuario(theme, 'baixo', fila.semente, 0.95);
         if (!prop) {
-          prop = K.buildProp(theme, lowKinds[seed % lowKinds.length], seed);
+          prop = K.buildProp(theme, lowKinds[fila.semente % lowKinds.length], fila.semente);
           fitHeight(prop, 0.95);
         }
         prop.position.set(x * CELL, 0, y * CELL);
+        // GIRA PARA O EIXO DA FILEIRA. Uma peça mais larga que funda, posta numa
+        // corrida vertical sem girar, deixa vão entre uma casa e a seguinte — a
+        // barreira fica furada justamente onde devia barrar.
+        if (fila.eixo === 'z' && fila.comp > 1) prop.rotation.y = Math.PI / 2;
         lowNodes.push({ node: prop, x: x, y: y });
       } else if (k === 'deco') {
         node = K.buildTile(theme, 'deco', seed % 4);
