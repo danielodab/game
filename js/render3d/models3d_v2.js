@@ -291,17 +291,32 @@ var JOGO = (typeof window !== 'undefined')
   //   2. esqueletos KayKit (mesma família visual dos heróis) para humanoides;
   //   3. criaturas Quaternius (CC0, animadas) para bichos.
   var MONSTER_LOOK = {
-    // --- Flora Voraz (Estufa) - trepadeiras, esporos e carrapichos
-    'thorn-lasher':   { model: 'q_snake',        scale: 1.00 },
-    'pollen-puff':    { model: 'q_frog',         scale: 0.85 },
-    'burr-mother':    { model: 'q_spider',       scale: 1.05 },
-    'sap-shaman':     { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.00 },
-    'sprout-feral':   { model: 'q_frog',         scale: 0.78 },
-    'burrlet':        { model: 'q_spider',       scale: 0.58 },
-    'boss-gardener':  { model: 'q_mushnub',     scale: 1.75 },   // era veado palido
-    // --- Enxame da Estufa
-    'lantern-wasp':   { model: 'q_wasp',         scale: 0.95 },
-    'dew-strider':    { model: 'q_spider',       scale: 0.85 },
+    // --- Flora Voraz + Enxame (Estufa) — A ARTE E DO USUARIO (v3).
+    //
+    // Os nove sairam do Meshy, todos humanoides. Antes eram emprestados: sapo,
+    // aranha e cobra do Quaternius e um esqueleto mago do KayKit fazendo o
+    // papel de toco de arvore. Agora sao as criaturas do bestiario.
+    //
+    // A ESCALA SAI DA DESCRICAO EM `js/core/data/monsters.js`, nao de gosto.
+    // Conta: altura = 1,80 m x escala (chefe: 2,95 m x escala). O metro anotado
+    // ao lado de cada linha e o resultado, para conferir sem refazer a conta.
+    //
+    // Sem `show:` em lugar nenhum: aquilo era guarda-roupa do KayKit, e pedir
+    // malha que nao existe falha EM SILENCIO (foi o que pegou o Sumo).
+    'thorn-lasher':   { model: 'thorn-lasher',   scale: 1.00 },  // 1,80 m — chicote enraizado, nao sai do lugar
+    'dew-strider':    { model: 'dew-strider',    scale: 0.90 },  // 1,62 m — "pernas finissimas"
+    'sap-shaman':     { model: 'sap-shaman',     scale: 0.85 },  // 1,53 m — "toco de arvore corcunda"
+    'pollen-puff':    { model: 'pollen-puff',    scale: 0.70 },  // 1,26 m — bola de polen com perninhas
+    'burr-mother':    { model: 'burr-mother',    scale: 0.60 },  // 1,08 m — "do tamanho de um cao"
+    'sprout-feral':   { model: 'sprout-feral',   scale: 0.55 },  // 0,99 m — "muda recem-germinada"
+    'lantern-wasp':   { model: 'lantern-wasp',   scale: 0.50 },  // 0,90 m — "do tamanho de um gato"
+    'burrlet':        { model: 'burrlet',        scale: 0.34 },  // 0,61 m — "metade" da Mae
+    // A JARDINEIRA CAI DE 5,16 m PARA 2,95 m, e isso e conserto: a descricao
+    // dela diz "um vulto de TRES METROS", e o 1,75 antigo era compensacao por
+    // `q_mushnub` ser um cogumelo pequeno demais para o papel. Com modelo feito
+    // sob medida a compensacao nao faz falta. Os outros chefes seguem em 1,75
+    // porque ainda usam arte emprestada e ainda precisam do estirao.
+    'boss-gardener':  { model: 'boss-gardener',  scale: 1.00 },  // 2,95 m — "um vulto de tres metros"
     // --- Corte Afogada (Cisterna)
     'drowned-porter': { model: 'skeleton_warrior', show: ['Skeleton_Blade'], scale: 1.05 },
     'moray-piper':    { model: 'q_snake',        scale: 1.10 },
