@@ -13,6 +13,12 @@ var JOGO = (typeof window !== 'undefined')
       var ev = engine.events.shift();
       if (JOGO.Renderer && JOGO.Renderer.handleEvent) JOGO.Renderer.handleEvent(ev);
       if (JOGO.FX && JOGO.FX.handleEvent) JOGO.FX.handleEvent(ev);
+      // O SOM entra na mesma fila que o desenho, e de proposito: assim ele
+      // escuta o jogo em vez de precisar de gancho proprio espalhado pelo
+      // engine. `JOGO.Audio` engole tudo em silencio ate o usuario tocar na
+      // pagina (trava de autoplay) e nunca levanta excecao — um bipe nao pode
+      // derrubar o laco principal.
+      if (JOGO.Audio && JOGO.Audio.handleEvent) JOGO.Audio.handleEvent(ev);
       if (JOGO.UI && JOGO.UI.handleEvent) JOGO.UI.handleEvent(ev);
       if (JOGO.Game && JOGO.Game.handleEvent) JOGO.Game.handleEvent(ev);
     }

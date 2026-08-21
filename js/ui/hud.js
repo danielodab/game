@@ -953,6 +953,19 @@ var JOGO = (typeof window !== 'undefined')
     var top = el('div', 'bt-top');
     bt.room = el('div', 'bt-room');
     top.appendChild(bt.room);
+
+    // INTERRUPTOR DE SOM. Fica no topo, junto do nome da sala, porque vale para
+    // a partida inteira e nao para o turno. Nao guarda estado proprio: quem
+    // lembra e `JOGO.Audio`, que grava em localStorage — o botao so mostra.
+    if (JOGO.Audio) {
+      bt.som = btn(JOGO.Audio.isMudo() ? '🔇' : '🔊', 'bt-som', function () {
+        JOGO.Audio.setMudo(!JOGO.Audio.isMudo());
+        bt.som.textContent = JOGO.Audio.isMudo() ? '🔇' : '🔊';
+        bt.som.title = JOGO.Audio.isMudo() ? 'som desligado' : 'som ligado';
+      });
+      bt.som.title = JOGO.Audio.isMudo() ? 'som desligado' : 'som ligado';
+      top.appendChild(bt.som);
+    }
     bt.timeline = el('div', 'bt-timeline');
     top.appendChild(bt.timeline);
     s.appendChild(top);

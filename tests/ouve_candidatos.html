@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — medir os sons candidatos</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:900px}
+  pre{font:11px monospace;background:#0b0d10;border:1px solid #2b3542;padding:8px;overflow:auto;max-height:70vh}
+</style>
+</head>
+<body>
+<h1>Medir os sons candidatos — porque eu não consigo ouvi-los</h1>
+<div class="sub">Escolher som por nome de arquivo é chute. Esta página decodifica cada candidato com a
+WebAudio e mede o que dá para medir sem ouvido: duração, energia, e sobretudo o <em>rumo do brilho</em> —
+o centroide espectral no primeiro terço contra o último. Um jingle de vitória sobe; um de derrota
+desce. Não substitui ouvir, mas troca chute por evidência.</div>
+<pre id="saida">medindo…</pre>
+
+<script>
+(function () {
+  'use strict';
+  var C = new (window.AudioContext || window.webkitAudioContext)();
+  var saida = document.getElementById('saida');
+
+  // centroide espectral de um pedaço: onde está o "peso" do brilho.
+  // Uso uma DFT grosseira em 24 faixas — não preciso de precisão, preciso de
+  // saber se o som SOBE ou DESCE, e para isso a tendência basta.
+  function centroide(dados, ini, fim, taxa) {
+    var N = 2048, passo = Math.max(1, Math.floor((fim - ini) / 8));
+    var somaP = 0, somaPF = 0;
+    for (var off = ini; off + N < fim; off += passo) {
+      for (var k = 2; k < 40; k++) {
+        var re = 0, im = 0, w = 2 * Math.PI * k / N;
+        for (var n = 0; n < N; n += 4) {
+          var v = dados[off + n];
+          re += v * Math.cos(w * n); im -= v * Math.sin(w * n);
+        }
+        var p = re * re + im * im, f = k * taxa / N;
+        somaP += p; somaPF += p * f;
+      }
+    }
+    return somaP > 0 ? somaPF / somaP : 0;
+  }
+
+  function analisa(nome, buf) {
+    var d = buf.getChannelData(0), n = d.length, taxa = buf.sampleRate;
+    var rms = 0, pico = 0, iPico = 0;
+    for (var i = 0; i < n; i++) {
+      var a = Math.abs(d[i]); rms += d[i] * d[i];
+      if (a > pico) { pico = a; iPico = i; }
+    }
+    rms = Math.sqrt(rms / n);
+    var t = Math.floor(n / 3);
+    var c1 = centroide(d, 0, t, taxa), c2 = centroide(d, n - t, n, taxa);
+    return {
+      nome: nome, dur: buf.duration, rms: rms, pico: pico,
+      picoEm: iPico / n,                       // 0 = ataque na frente, 1 = no fim
+      brilhoIni: c1, brilhoFim: c2,
+      rumo: c1 > 0 ? (c2 - c1) / c1 : 0        // >0 sobe, <0 desce
+    };
+  }
+
+  // A lista vem de um arquivo para a página não precisar ser reescrita a cada
+  // rodada de candidatos — quem monta a lista é `tools/lista_candidatos.py`.
+  var LISTA = [], feitos = [], i = 0;
+  fetch('_candidatos_som.json' + (location.search || ''))
+    .then(function (r) { return r.json(); })
+    .then(function (l) { LISTA = l; proximo(); })
+    .catch(function (e) { saida.textContent = 'não achei a lista: ' + e.message; });
+
+  function proximo() {
+    if (i >= LISTA.length) { pronto(); return; }
+    var url = LISTA[i++];
+    fetch(url).then(function (r) { return r.arrayBuffer(); })
+      .then(function (ab) { return C.decodeAudioData(ab); })
+      .then(function (buf) { feitos.push(analisa(url.split('/').pop(), buf)); })
+      .catch(function (e) { feitos.push({ nome: url.split('/').pop(), erro: e.message }); })
+      .then(function () { saida.textContent = 'medindo… ' + i + '/' + LISTA.length; proximo(); });
+  }
+
+  function pronto() {
+    window.__resultado = feitos;
+    var l = feitos.slice().sort(function (a, b) { return (b.rumo || -9) - (a.rumo || -9); });
+    var txt = 'nome                       dur    rms   picoEm  brilho ini→fim   rumo\n';
+    l.forEach(function (r) {
+      if (r.erro) { txt += r.nome + '  ERRO: ' + r.erro + '\n'; return; }
+      txt += r.nome.padEnd(26) + ' ' + r.dur.toFixed(2) + 's ' +
+             r.rms.toFixed(3) + '  ' + r.picoEm.toFixed(2) + '   ' +
+             Math.round(r.brilhoIni).toString().padStart(5) + '→' +
+             Math.round(r.brilhoFim).toString().padStart(5) + '   ' +
+             (r.rumo >= 0 ? '+' : '') + r.rumo.toFixed(2) + '\n';
+    });
+    saida.textContent = txt;
+    window.__done = true;
+  }
+})();
+</script>
+</body>
+</html>
