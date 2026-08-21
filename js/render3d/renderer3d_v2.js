@@ -460,12 +460,30 @@ var JOGO = (typeof window !== 'undefined')
     return '#' + c.getHexString();
   }
   // normaliza a altura de uma peca de cenario (o kit vem em escalas variadas)
-  function fitHeight(node, target) {
+  // ESCALA PELA ALTURA, MAS SEM ESTOURAR A CASA.
+  //
+  // Escalar só pela altura funciona para prop alto e estreito (barril, caixote)
+  // e QUEBRA para prop baixo e largo. A mesa do KayKit é o caso: ela nasce mais
+  // larga do que alta, e esticá-la até 0,95 m de altura levava o tampo a mais de
+  // 2,6 m de lado — uma laje pálida e chapada, maior que a própria casa,
+  // pairando a quase um metro do chão. Foi o "quadrado transparente em cima dos
+  // itens de divisória": não era transparente nem era um quadrado solto, era o
+  // tampo inflado.
+  //
+  // Agora a altura continua sendo o alvo, mas a LARGURA tem teto: o prop nunca
+  // passa de `limite` (padrão: a casa inteira menos uma folga). Quando os dois
+  // brigam, ganha o menor — melhor um móvel mais baixo do que um que invade a
+  // casa do vizinho.
+  function fitHeight(node, target, limite) {
     node.updateMatrixWorld(true);
     var bb = new THREE.Box3().setFromObject(node);
     var hgt = bb.max.y - bb.min.y;
+    var larg = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
     if (!isFinite(hgt) || hgt <= 0.01) return;
-    node.scale.multiplyScalar(target / hgt);
+    var k = target / hgt;
+    var teto = (limite == null ? CELL * 0.82 : limite);
+    if (isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
+    node.scale.multiplyScalar(k);
   }
 
   // Um único material clonado por material de origem: mantém o merge por
@@ -512,7 +530,12 @@ var JOGO = (typeof window !== 'undefined')
         return tileKind(gridTile(st, cx, cy)) !== 'hole';
       });
       var gcache = {};
-      retint(ground, lighten(pal.floor2, 0.42), 0.55, gcache);
+      // 0,55 -> 0,34. O material do KayKit nao tem cor de base: TUDO vem do
+      // atlas de textura, entao tingir e MULTIPLICAR o desenho por uma cor
+      // chapada. A 0,55 o chao perdia a pedra, a junta e o desgaste e virava um
+      // campo liso — foi o "parece sem acabamento". A 0,34 a paleta do calabouco
+      // ainda manda no clima e o desenho da textura sobrevive por baixo.
+      retint(ground, lighten(pal.floor2, 0.42), 0.34, gcache);
       staticG.add(ground);
     } catch (e) {}
 
@@ -533,7 +556,9 @@ var JOGO = (typeof window !== 'undefined')
           mask: { n: isWall(x, y - 1), e: isWall(x + 1, y), s: isWall(x, y + 1), w: isWall(x - 1, y) },
           border: (x === 0 || y === 0 || x === w - 1 || y === h - 1)
         });
-        retint(node, pal.wall, 0.34, wallCache);
+        // Mesma razao do chao: a parede do kit tem bloco, argamassa e musgo
+        // desenhados na textura, e a cor chapada os apagava.
+        retint(node, pal.wall, 0.22, wallCache);
       } else if (k === 'hole') {
         node = K.buildHole(theme, seed);
       } else if (k === 'low') {

@@ -102,7 +102,7 @@ quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da
         ['minotauro', 'sumo'].forEach(function (c) {
           var h = P.hero(c); if (h) h.level = 30;
         });
-        G.startRun(['minotauro', 'sumo'], 'greenhouse');
+        G.startRun(['minotauro', 'sumo'], (location.href.indexOf('cisterna')>=0) ? 'cistern' : 'greenhouse');
       } catch (e) { return diz('não desci: ' + e.message); }
       setTimeout(roda, 500);
     })();
@@ -263,6 +263,75 @@ quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da
 
       // `?fica` deixa as pedras de pé e para aqui: é o modo de tirar retrato,
       // porque o teste normal termina com o quadro já limpo.
+      // ?transp — lista toda malha TRANSLUCIDA da cena. Existe porque um
+      // quadrado palido apareceu em volta dos moveis e eu nao conseguia dizer
+      // de quem era so olhando o codigo: ha quatro candidatos (grade, disco de
+      // contato, topo de obstaculo, decalque de evento) e todos sao quads
+      // claros deitados no chao.
+      // ?pick=x,y — dispara um raio da camera pelo pixel dado e conta o que
+      // encontrou, com a cadeia de pais. E a unica forma honesta de saber de
+      // quem e um pixel quando o tabuleiro foi FUNDIDO em poucas malhas: ler o
+      // codigo so lista candidatos, o raio responde.
+      var mp = /pick=(\d+),(\d+)/.exec(location.href);
+      if (mp) {
+        var achou = [];
+        try {
+          var cena = JOGO.Renderer.scene(), cam = JOGO.Renderer.camera();
+          var cv = document.getElementById('game-canvas');
+          var nx = (parseInt(mp[1], 10) / cv.clientWidth) * 2 - 1;
+          var ny = -(parseInt(mp[2], 10) / cv.clientHeight) * 2 + 1;
+          var rc = new THREE.Raycaster();
+          rc.setFromCamera({ x: nx, y: ny }, cam);
+          var hits = rc.intersectObject(cena, true);
+          hits.slice(0, 6).forEach(function (hi) {
+            var o = hi.object, cadeia = [];
+            for (var n2 = o; n2; n2 = n2.parent) cadeia.push(n2.name || n2.type);
+            var mt = Array.isArray(o.material) ? o.material[0] : o.material;
+            achou.push('d=' + hi.distance.toFixed(2) + ' y=' + hi.point.y.toFixed(2) +
+              ' | ' + cadeia.slice(0, 5).join(' < ') +
+              ' | cor=' + (mt && mt.color ? '#' + mt.color.getHexString() : '-') +
+              ' tex=' + (mt && mt.map ? 'sim' : 'nao') +
+              ' transp=' + (mt ? !!mt.transparent : '?'));
+          });
+          if (!hits.length) achou.push('o raio nao acertou nada');
+        } catch (e) { achou.push('erro: ' + e.message); }
+        diz('raio em ' + mp[1] + ',' + mp[2] + ' — ' + achou.length + ' acerto(s)');
+        var ul2 = document.getElementById('lista');
+        achou.forEach(function (a) {
+          var li = document.createElement('li'); li.className = 'pass'; li.textContent = a;
+          ul2.appendChild(li);
+        });
+        return;
+      }
+
+      if (location.href.indexOf('transp') >= 0) {
+        var achados = [];
+        try {
+          var cena = JOGO.Renderer.scene();   // R.scene é FUNÇÃO, não propriedade
+          cena.traverse(function (o) {
+            if (!o.isMesh && !o.isInstancedMesh) return;
+            var mats = Array.isArray(o.material) ? o.material : [o.material];
+            mats.forEach(function (m) {
+              if (!m || !m.transparent || m.opacity >= 0.99) return;
+              var cx = new THREE.Box3().setFromObject(o);
+              var t = cx.getSize(new THREE.Vector3());
+              achados.push((o.isInstancedMesh ? 'INST×' + o.count + ' ' : '') +
+                (o.name || o.type) + ' op=' + m.opacity.toFixed(2) +
+                ' cor=' + (m.color ? '#' + m.color.getHexString() : '-') +
+                ' tam=' + t.x.toFixed(1) + '×' + t.y.toFixed(1) + '×' + t.z.toFixed(1) +
+                ' y=' + cx.min.y.toFixed(2) + ' ro=' + o.renderOrder);
+            });
+          });
+        } catch (e) { achados.push('erro: ' + e.message); }
+        diz('translúcidos: ' + achados.length);
+        var ul = document.getElementById('lista');
+        achados.forEach(function (a) {
+          var li = document.createElement('li'); li.className = 'pass'; li.textContent = a;
+          ul.appendChild(li);
+        });
+        return;
+      }
+
       if (location.href.indexOf('fica') >= 0) {
         passos(20, 0.033);
         diz('pedras de pé para retrato — ' + (st.walls || []).length + ' muros');
