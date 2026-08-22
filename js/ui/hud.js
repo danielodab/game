@@ -559,6 +559,8 @@ var JOGO = (typeof window !== 'undefined')
     var who = selHeroes.map(className).join(' e ') || '—';
     s.appendChild(header('Onde descer', 'Grupo: ' + esc(who), 'heroSelect'));
     var body = el('div', 'ui-body');
+    var selDif = seletorDif();
+    if (selDif) body.appendChild(selDif);
     var list = el('div', 'dg-list');
     body.appendChild(list);
     s.appendChild(body);
@@ -898,7 +900,58 @@ var JOGO = (typeof window !== 'undefined')
     else foot.appendChild(btn('Próxima sala', 'btn-primary', function () {
       if (!safe(function () { return G().nextRoom(); }, false)) toast('Não deu para avançar.');
     }));
+    // O seletor vai ANTES do rodape: a escolha e sobre a proxima sala, e tem de
+    // ser vista antes do botao que leva a ela.
+    if (!fim) {
+      var selDif2 = seletorDif();
+      if (selDif2) s.appendChild(selDif2);
+    }
     s.appendChild(foot);
+  }
+
+  /* SELETOR DE DIFICULDADE — o mesmo nas duas telas que levam a uma sala.
+   *
+   * Mostra o CUSTO e o PREMIO lado a lado, porque escolher sem os dois numeros
+   * e escolher no escuro: "+40% vida, +35% dano" contra "+60% xp, +50% drop".
+   * Sem isso o jogador so ve tres palavras e chuta.
+   *
+   * A escolha vai direto para `Game.setDificuldade`, que a guarda entre sessoes.
+   * A tela nao mantem estado proprio — dois donos do mesmo dado divergem, e o
+   * que diverge aqui apareceria como "escolhi dificil e veio normal". */
+  function seletorDif() {
+    var G2 = G();
+    var D = (JOGO.DATA && JOGO.DATA.dificuldades) || {};
+    if (!G2 || !G2.setDificuldade || !D.normal) return null;
+
+    var caixa = el('div', 'dif-caixa');
+    var rot = el('div', 'dif-rot', 'Dificuldade desta sala');
+    caixa.appendChild(rot);
+    var linha = el('div', 'dif-linha');
+
+    ['facil', 'normal', 'dificil'].forEach(function (id) {
+      var d = D[id];
+      if (!d) return;
+      var b = el('button', 'dif-op' + (G2.dificuldade === id ? ' is-sel' : ''));
+      b.type = 'button';
+      b.appendChild(el('span', 'dif-icone', d.icone || ''));
+      b.appendChild(el('span', 'dif-nome', d.nome || id));
+      // o custo e o premio, um em cima do outro
+      var custo = Math.round((d.vida - 1) * 100), premio = Math.round((d.xp - 1) * 100);
+      b.appendChild(el('span', 'dif-num',
+        (custo === 0 ? 'monstros iguais' : (custo > 0 ? '+' : '') + custo + '% de vida')));
+      b.appendChild(el('span', 'dif-num dif-premio',
+        (premio === 0 ? 'xp normal' : (premio > 0 ? '+' : '') + premio + '% de xp')));
+      b.title = d.resumo || '';
+      tap(b, function () {
+        G2.setDificuldade(id);
+        var irmaos = linha.querySelectorAll('.dif-op');
+        for (var i = 0; i < irmaos.length; i++) irmaos[i].classList.remove('is-sel');
+        b.classList.add('is-sel');
+      });
+      linha.appendChild(b);
+    });
+    caixa.appendChild(linha);
+    return caixa;
   }
 
   function rwBlock(title, node) {

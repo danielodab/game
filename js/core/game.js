@@ -229,6 +229,30 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ------------------------------------------------------------- fluxo de run
+  /* A DIFICULDADE ESCOLHIDA. Chave propria no armazenamento: dificuldade nao e
+   * progresso — misturar as duas faria um save corrompido levar a preferencia
+   * junto, e faria a preferencia participar de qualquer migracao de save. */
+  var CHAVE_DIF = 'soterra-dificuldade';
+  Game.dificuldade = (function () {
+    try {
+      var v = window.localStorage && window.localStorage.getItem(CHAVE_DIF);
+      var D = (JOGO.DATA && JOGO.DATA.dificuldades) || {};
+      if (v && D[v]) return v;
+    } catch (e) {}
+    return (JOGO.DATA && JOGO.DATA.dificuldadePadrao) || 'normal';
+  })();
+  Game.setDificuldade = function (id) {
+    var D = (JOGO.DATA && JOGO.DATA.dificuldades) || {};
+    if (!D[id]) return false;
+    Game.dificuldade = id;
+    try { if (window.localStorage) window.localStorage.setItem(CHAVE_DIF, id); } catch (e) {}
+    return true;
+  };
+  Game.difAtual = function () {
+    var D = (JOGO.DATA && JOGO.DATA.dificuldades) || {};
+    return D[Game.dificuldade] || D.normal || { vida: 1, dano: 1, clima: 1, xp: 1, drop: 1 };
+  };
+
   Game.startRun = function (heroIds, dungeonId) {
     if (!validParty(heroIds) || !validDungeon(dungeonId)) return false;
     Game.party = heroIds.slice();
@@ -241,7 +265,7 @@ var JOGO = (typeof window !== 'undefined')
     carryHp = null;
     resetAiState();
     resetTimer(true);
-    Game.state = E().createBattle(dungeonId, 0, partyPayload());
+    Game.state = E().createBattle(dungeonId, 0, partyPayload(), { dificuldade: Game.dificuldade });
     setScreen('battle');
     return true;
   };
@@ -255,7 +279,7 @@ var JOGO = (typeof window !== 'undefined')
     Game.mustEndTurn = false;
     resetAiState();
     resetTimer(true);
-    Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload());
+    Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload(), { dificuldade: Game.dificuldade });
     // [G1] vivos curam 50% do PV perdido; mortos revivem com 30% do hpMax
     if (carryHp && Game.state && Game.state.units) {
       for (var i = 0; i < Game.state.units.length; i++) {
@@ -506,7 +530,14 @@ var JOGO = (typeof window !== 'undefined')
       var def = monsters[u.defId];
       if (def && typeof def.xp === 'number') xpTotal += def.xp;
     }
-    var xpGanho = Math.floor(xpTotal / partySize);
+    /* A DIFICULDADE ENTRA AQUI, sobre o total ja somado.
+     *
+     * `DATA.leveling` esta congelada por coordenacao com o `xp` dos monstros, e
+     * o multiplicador nao encosta nela: a economia base fica intacta e o que
+     * muda e so o que ESTA sala pagou. Uma sala jogada no dificil paga 60% mais
+     * pela mesma lista de mortos. */
+    var difSala = E().dif(st);
+    var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1));
 
     // cartas do chefe: acumulam na coleção e podem virar estrela (§9-B)
     var cards = [];
@@ -541,7 +572,7 @@ var JOGO = (typeof window !== 'undefined')
 
     var drops = [], pets = [];
     if (prog && prog.rollDrops) {
-      try { drops = prog.rollDrops(Game.dungeonId, Game.roomIndex, partySize) || []; }
+      try { drops = prog.rollDrops(Game.dungeonId, Game.roomIndex, partySize, difSala.drop) || []; }
       catch (err) { drops = []; }
     }
     if (prog && prog.rollPet) {
@@ -560,6 +591,8 @@ var JOGO = (typeof window !== 'undefined')
       xpMult: xpMult,            // multiplicador aplicado a cada herói (§9-D)
       xpPorHeroi: xpPorHeroi,    // o que cada herói realmente recebeu
       levelUps: levelUps,
+      dificuldade: difSala.id || 'normal',
+      difNome: difSala.nome || 'Normal',
       drops: drops,
       pets: pets,
       cards: cards,

@@ -23,6 +23,32 @@ JOGO.DATA.unlockTiers = [5, 10, 12, 15, 20, 30];
  * `base` vale do nivel 1 em diante; cada nivel em `degraus` soma +1 ao chegar.
  * Um item que conceda +1 deve somar em `bonus` na unidade (ver `Engine.summonCap`).
  */
+/* DIFICULDADE POR SALA. Chave propria: `DATA.leveling` esta congelada por
+ * coordenacao com o `xp` dos monstros, e estes multiplicadores entram DEPOIS,
+ * sobre o valor ja somado — nada muda na economia base.
+ *
+ * O PREMIO SOBE MAIS QUE O CUSTO, de proposito: dificil cobra +40% de vida e
+ * +35% de dano e paga +60% de xp e +50% de drop. Se o premio subisse na mesma
+ * proporcao do custo, ninguem escolheria dificil — e modo que ninguem escolhe e
+ * trabalho jogado fora. Facil desce menos do que sobe (-25% de ameaca contra
+ * -30% de xp): quem pede folga paga por ela.
+ *
+ * `clima` multiplica SO a parte que machuca. Multiplicar tambem a que cura
+ * faria o dificil curar mais — simetria que parece elegante e e errada.
+ */
+JOGO.DATA.dificuldades = {
+  facil:   { id: 'facil',   nome: 'Fácil',   icone: '○',
+             vida: 0.75, dano: 0.75, clima: 0.60, xp: 0.70, drop: 0.70,
+             resumo: 'Monstros mais fracos e clima brando. Paga menos.' },
+  normal:  { id: 'normal',  nome: 'Normal',  icone: '◐',
+             vida: 1.00, dano: 1.00, clima: 1.00, xp: 1.00, drop: 1.00,
+             resumo: 'O jogo como foi calibrado.' },
+  dificil: { id: 'dificil', nome: 'Difícil', icone: '●',
+             vida: 1.40, dano: 1.35, clima: 1.60, xp: 1.60, drop: 1.50,
+             resumo: 'Monstros mais duros e clima cruel. Paga bem mais.' }
+};
+JOGO.DATA.dificuldadePadrao = 'normal';
+
 JOGO.DATA.summonCap = {
   base: 1,
   degraus: [15, 30]

@@ -166,6 +166,15 @@ var JOGO = (typeof window !== 'undefined')
 
   function DATA() { return JOGO.DATA || {}; }
 
+  /* OS MULTIPLICADORES DA SALA. Devolve sempre um objeto util — uma batalha
+   * antiga, salva antes desta funcao existir, cai em `normal` e nao quebra. */
+  Engine.dif = function (state) {
+    var D = DATA().dificuldades || {};
+    var id = (state && state.dificuldade) || DATA().dificuldadePadrao || 'normal';
+    return D[id] || D.normal ||
+           { id: 'normal', vida: 1, dano: 1, clima: 1, xp: 1, drop: 1 };
+  };
+
   // --------------------------------------------------------------- RNG
   function hashStr(s) {
     var h = 2166136261;
@@ -445,7 +454,12 @@ var JOGO = (typeof window !== 'undefined')
     var els = unitElements(u);
     var amount = 0;
     if (w.favors && els.indexOf(w.favors) >= 0) amount += Engine.WEATHER_TICK;
-    if (w.harms && els.indexOf(w.harms) >= 0) amount -= Engine.WEATHER_TICK;
+    // O MULTIPLICADOR ENTRA SO NO LADO QUE MACHUCA. Multiplicar tambem o que
+    // cura faria o dificil CURAR mais — simetria que parece elegante no codigo
+    // e e o oposto do que dificil significa.
+    if (w.harms && els.indexOf(w.harms) >= 0) {
+      amount -= Math.max(1, Math.round(Engine.WEATHER_TICK * (Engine.dif(state).clima || 1)));
+    }
     if (amount === 0) return;                    // clima indiferente: sem evento
     if (amount > 0) {
       var gain = Math.min(amount, u.hpMax - u.hp);
@@ -505,6 +519,11 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // --------------------------------------------------------------- criação
+  function vidaDe(state, side, base) {
+    if (side !== 'enemy' || !base) return base;
+    return Math.max(1, Math.round(base * (Engine.dif(state).vida || 1)));
+  }
+
   function makeUnit(state, def, kind, side, x, y, opts) {
     opts = opts || {};
     state._uidCounter++;
@@ -520,7 +539,10 @@ var JOGO = (typeof window !== 'undefined')
       side: side,
       name: opts.name || def.name,
       x: x, y: y,
-      hp: st.hp, hpMax: st.hp,
+      // VIDA VEZES A DIFICULDADE, e SO no lado inimigo. Invocacao de heroi
+      // usa o mesmo `makeUnit`, e escalar por `kind` em vez de por `side`
+      // engordaria o rebanho do proprio jogador junto com o inimigo.
+      hp: vidaDe(state, side, st.hp), hpMax: vidaDe(state, side, st.hp),
       pa: st.pa, paMax: st.pa,
       pp: st.pp, ppMax: st.pp,        // v2: PP (Pontos de Passos)
       initiative: st.initiative || 0,
@@ -628,7 +650,8 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   }
 
-  Engine.createBattle = function (dungeonId, roomIndex, party) {
+  Engine.createBattle = function (dungeonId, roomIndex, party, opts) {
+    opts = opts || {};
     var dungeon = getDungeon(dungeonId);
     if (!dungeon) throw new Error('Engine.createBattle: calabouço desconhecido: ' + dungeonId);
     var room = dungeon.rooms[roomIndex];
@@ -668,6 +691,12 @@ var JOGO = (typeof window !== 'undefined')
     var state = {
       dungeonId: dungeonId,
       roomIndex: roomIndex,
+      /* A DIFICULDADE E DA SALA, nao da partida. O jogador escolhe ao entrar em
+       * cada uma, entao ela vive no estado da batalha — e uma sala salva
+       * carrega junto a dificuldade em que foi jogada, sem depender de nada
+       * fora dela. Batalha antiga, salva antes disto existir, cai em `normal`
+       * por `Engine.dif`. */
+      dificuldade: opts.dificuldade || DATA().dificuldadePadrao || 'normal',
       round: 1,
       phase: 'playing',
       grid: { w: w, h: h, tiles: tiles },
@@ -1124,6 +1153,21 @@ var JOGO = (typeof window !== 'undefined')
 
   // Aplica dano já calculado: escudo absorve antes do PV. Retorna a perda de PV.
   function dealDamage(state, target, amount, element, sourceUid, noReflect) {
+    /* DANO VEZES A DIFICULDADE, e so quando quem bate e INIMIGO.
+     *
+     * Aqui, e nao no calculo de cada feitico, porque `dealDamage` e o funil por
+     * onde TODO dano passa — veneno, armadilha, reflexo e explosao de morte
+     * inclusive. Escalar no calculo pegaria so os feiticos, e o dificil ficaria
+     * pela metade sem ninguem perceber.
+     *
+     * Dano de clima nao passa por aqui (ele mexe em `hp` direto), e e escalado
+     * no proprio `weatherTick`. */
+    if (sourceUid && amount > 0) {
+      var quem = Engine.findUnit(state, sourceUid);
+      if (quem && quem.side === 'enemy') {
+        amount = Math.max(1, Math.round(amount * (Engine.dif(state).dano || 1)));
+      }
+    }
     if (!target.alive || amount <= 0) {
       if (target.alive) emit({ type: 'damage', uid: target.uid, amount: 0, element: element });
       return 0;

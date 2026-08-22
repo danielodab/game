@@ -1600,7 +1600,7 @@ var JOGO = (typeof window !== 'undefined')
     return { pool: pool, itemBased: false };
   }
 
-  Progress.rollDrops = function (dungeonId, roomIndex, partySize) {
+  Progress.rollDrops = function (dungeonId, roomIndex, partySize, multDrop) {
     if (!Progress.state) Progress.load();
     var luck = luckFor(partySize);
     var built = lootPool(dungeonId, roomIndex, luck);
@@ -1613,6 +1613,17 @@ var JOGO = (typeof window !== 'undefined')
     if (built.itemBased) {
       var LW = D().lootWeights;
       var nd = (isObj(LW) && isObj(LW.noDrop)) ? num(LW.noDrop[dungeonId], 0) : 0;
+      /* A DIFICULDADE MEXE NO PESO DE "NADA", e nao no numero de sorteios.
+       *
+       * Este peso E a taxa de drop: ele e o que faz ~metade dos sorteios sairem
+       * vazios. Dividi-lo por 1,5 e exatamente "50% mais drop", e a conta
+       * continua valendo para toda a tabela de raridade — as pecas boas
+       * continuam raras em relacao as ruins, so sai "nada" com menos frequencia.
+       *
+       * Somar sorteios teria sido a saida obvia e estaria errada: 1,5 sorteio
+       * nao existe, e arredondar para 2 daria +100% em vez de +50%. */
+      var md = (typeof multDrop === 'number' && isFinite(multDrop) && multDrop > 0) ? multDrop : 1;
+      if (md !== 1 && nd > 0) nd = nd / md;
       if (nd > 0) pool = pool.concat([{ id: NO_DROP, w: nd }]);
     }
 
