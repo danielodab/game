@@ -688,6 +688,12 @@ var JOGO = (typeof window !== 'undefined')
   // A regra que interessa — "todos da mesma altura e altos" — so se verifica
   // com regua, entao a regua precisa alcancar a peca.
   R.muroDaCasa = muroDaCasa;
+  /* Exposto para o teste conferir o DESPACHO, e nao so que os seis modelos
+   * existem. Sao perguntas diferentes: um escudo pode estar carregado e mesmo
+   * assim nunca ser escolhido — a tabela erra, o `defId` nao chega, ou o
+   * `hasModel` reprova —, e nesse caso o jogador ve o escudo padrao sem que
+   * nada acuse. */
+  R.modeloDoMuro = modeloDoMuro;
   R.LARG_MURO = LARG_MURO;
 
   // A FILEIRA A QUE ESTA CASA PERTENCE.
@@ -2314,7 +2320,28 @@ var JOGO = (typeof window !== 'undefined')
   // faixa acesa e limpeza continuam valendo para os dois casos. Enquanto o
   // modelo nao existe, a caixa segura o lugar: ela ja diz "o caminho fechou",
   // que e a informacao que o jogador precisa ler.
-  var MURO_MODELO = 'muro-escudo';
+  /* O ESCUDO DEIXOU DE SER UM SO.
+   *
+   * Era constante: todo feitico de muro de toda classe usava a mesma peca. O
+   * Daniel modelou um escudo POR DUPLA do Minotauro, entao a constante virou
+   * tabela chaveada pelo `defId` de quem ergueu (`fus:a+b`, ordem alfabetica).
+   *
+   * Quem nao estiver aqui — as outras 15 duplas, e o Minotauro sozinho — cai no
+   * `MURO_PADRAO`, que e o escudo original. Nenhuma delas perde nada. */
+  var MURO_PADRAO = 'muro-escudo';
+  var MURO_POR_FUSAO = {
+    'fus:arqueiro+minotauro':   'muro_arqueiro_minotauro',
+    'fus:bruxo+minotauro':      'muro_bruxo_minotauro',
+    'fus:curandeiro+minotauro': 'muro_curandeiro_minotauro',
+    'fus:espadachim+minotauro': 'muro_espadachim_minotauro',
+    'fus:invocador+minotauro':  'muro_invocador_minotauro',
+    'fus:minotauro+sumo':       'muro_minotauro_sumo'
+  };
+  function modeloDoMuro(defId) {
+    var k = defId && MURO_POR_FUSAO[defId];
+    if (k && M && M.hasModel && M.hasModel(k)) return k;
+    return MURO_PADRAO;
+  }
 
   // TINGIR É MISTURAR, NUNCA SUBSTITUIR.
   //
@@ -2341,10 +2368,11 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
 
-  function corpoDoMuro(cor) {
+  function corpoDoMuro(cor, chave) {
+    chave = chave || MURO_PADRAO;
     try {
-      if (M && M.hasModel && M.hasModel(MURO_MODELO)) {
-        var cena = M.rawScene(MURO_MODELO);
+      if (M && M.hasModel && M.hasModel(chave)) {
+        var cena = M.rawScene(chave);
         if (cena) {
           var no = cena.clone(true);
           // 0,45: forte o bastante para o jogador ler o elemento de longe, leve
@@ -2387,10 +2415,10 @@ var JOGO = (typeof window !== 'undefined')
     return pedra;
   }
 
-  function montaMuro(el) {
+  function montaMuro(el, defId) {
     var cor = col3(R.elementColor(el));
     var g = new THREE.Group();
-    var pedra = corpoDoMuro(cor);
+    var pedra = corpoDoMuro(cor, modeloDoMuro(defId));
     g.add(pedra);
 
     // Uma faixa acesa na base: diz "isto foi invocado, nao e parede da sala".
@@ -2457,6 +2485,7 @@ var JOGO = (typeof window !== 'undefined')
       // estava quando ele subiu — ficaria de perfil assim que o inimigo andasse.
       var av = alvoDoMuro(st, lista[i]);
       sig += lista[i].x + ',' + lista[i].y + ':' + (lista[i].element || '') +
+             ':' + (lista[i].defId || '-') +
              ':' + (av ? av.x + '_' + av.y : '-') + ';';
     }
     if (sig === wallSig) return;
@@ -2472,7 +2501,7 @@ var JOGO = (typeof window !== 'undefined')
                                   (wallNodes[k].userData.faceOffset || 0);
         continue;
       }
-      var node = montaMuro(w.element || 'neutro');
+      var node = montaMuro(w.element || 'neutro', w.defId);
       var p = R.world(w.x, w.y, 0);
       node.position.set(p.x, 0, p.z);
       node.rotation.y = anguloDoMuro(st, w) + (node.userData.faceOffset || 0);

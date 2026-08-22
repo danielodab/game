@@ -307,6 +307,12 @@ var JOGO = (typeof window !== 'undefined')
      * fusao que o chama. Ele domina o tabuleiro sem competir com o dono.
      */
     'fus-bulwark-idol': { model: 'fus_idolo_escora', scale: 1.31 },
+    /* O MURO-VIGIA e do MURO VIVO (Invocador + Minotauro). Mesmo porte do
+     * Idolo-Escora, silhueta oposta: um entope a passagem pela LARGURA, o outro
+     * e uma parede que anda. As duas nunca dividem tela — fundido, o Xama perde
+     * as invocacoes dele —, entao a diferenca serve a quem MODELA, para nao
+     * repetir a mesma silhueta duas vezes. */
+    'fus-wall-watcher': { model: 'fus_muro_vigia', scale: 1.31 },
 
     // --- Flora Voraz + Enxame (Estufa) — A ARTE E DO USUARIO (v3).
     //
@@ -897,7 +903,13 @@ var JOGO = (typeof window !== 'undefined')
     'bruxo+sumo':       'fus_bruxo_sumo',
     'curandeiro+sumo':  'fus_curandeiro_sumo',
     'espadachim+sumo':  'fus_espadachim_sumo',
-    'invocador+sumo':   'fus_invocador_sumo'
+    'invocador+sumo':   'fus_invocador_sumo',
+    'arqueiro+minotauro':   'fus_arqueiro_minotauro',
+    'bruxo+minotauro':      'fus_bruxo_minotauro',
+    'curandeiro+minotauro': 'fus_curandeiro_minotauro',
+    'espadachim+minotauro': 'fus_espadachim_minotauro',
+    'invocador+minotauro':  'fus_invocador_minotauro',
+    'minotauro+sumo':       'fus_minotauro_sumo'
   };
 
   function fusionLook(defId) {

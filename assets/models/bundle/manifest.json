@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-21T22:43:22",
+ "gerado": "2026-08-22T14:19:17",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -467,6 +467,84 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "fus_arqueiro_minotauro",
+   "arquivo": "models-fusoes-minotauro/fus_arqueiro_minotauro.glb",
+   "bytes": 1381512
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_bruxo_minotauro",
+   "arquivo": "models-fusoes-minotauro/fus_bruxo_minotauro.glb",
+   "bytes": 1282520
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_curandeiro_minotauro",
+   "arquivo": "models-fusoes-minotauro/fus_curandeiro_minotauro.glb",
+   "bytes": 1253724
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_espadachim_minotauro",
+   "arquivo": "models-fusoes-minotauro/fus_espadachim_minotauro.glb",
+   "bytes": 1168212
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_invocador_minotauro",
+   "arquivo": "models-fusoes-minotauro/fus_invocador_minotauro.glb",
+   "bytes": 1445664
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_minotauro_sumo",
+   "arquivo": "models-fusoes-minotauro/fus_minotauro_sumo.glb",
+   "bytes": 1193444
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_muro_vigia",
+   "arquivo": "models-fusoes-minotauro/fus_muro_vigia.glb",
+   "bytes": 1050524
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "muro_arqueiro_minotauro",
+   "arquivo": "models-fusoes-minotauro/muro_arqueiro_minotauro.glb",
+   "bytes": 713060
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "muro_bruxo_minotauro",
+   "arquivo": "models-fusoes-minotauro/muro_bruxo_minotauro.glb",
+   "bytes": 827020
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "muro_curandeiro_minotauro",
+   "arquivo": "models-fusoes-minotauro/muro_curandeiro_minotauro.glb",
+   "bytes": 766632
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "muro_espadachim_minotauro",
+   "arquivo": "models-fusoes-minotauro/muro_espadachim_minotauro.glb",
+   "bytes": 758816
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "muro_invocador_minotauro",
+   "arquivo": "models-fusoes-minotauro/muro_invocador_minotauro.glb",
+   "bytes": 721276
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "muro_minotauro_sumo",
+   "arquivo": "models-fusoes-minotauro/muro_minotauro_sumo.glb",
+   "bytes": 694844
+  },
+  {
+   "alvo": "MODELS",
    "chave": "fus_arqueiro_sumo",
    "arquivo": "models-fusoes-sumo/fus_arqueiro_sumo.glb",
    "bytes": 1408788
@@ -827,6 +905,61 @@
   }
  ],
  "meshyClips": {
+  "fus_arqueiro_minotauro": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_bruxo_minotauro": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_curandeiro_minotauro": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_espadachim_minotauro": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_invocador_minotauro": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_minotauro_sumo": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_muro_vigia": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
   "fus_arqueiro_sumo": [
    "HitReact",
    "attack",
@@ -1068,6 +1201,6 @@
    "walk"
   ]
  },
- "totalBytes": 69038968,
- "totalBase64": 92052148
+ "totalBytes": 82296216,
+ "totalBase64": 109728492
 }

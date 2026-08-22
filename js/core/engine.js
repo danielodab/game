@@ -1880,8 +1880,16 @@ var JOGO = (typeof window !== 'undefined')
             // dura varios turnos e o evento passa uma vez so), e sem isso ele
             // nao teria como saber de que cor pintar o que ja estava de pe —
             // mesmo problema que a armadilha teve, resolvido do mesmo jeito.
+            /* `defId` GUARDADO NO MURO, e nao so o `ownerUid`.
+             *
+             * O escudo agora tem arte por fusao, e quem desenha precisa saber
+             * QUAL fusao o ergueu. Buscar pelo uid nao serve: o dono pode
+             * morrer antes de o muro cair, e ai a busca devolveria nada e o
+             * escudo trocaria de arte no meio da vida dele — na frente do
+             * jogador, sem erro nenhum no console. */
             state.walls.push({ x: wx2, y: wy2, antes: cel.type, deco: !!cel.deco,
                                ownerUid: caster.uid, side: caster.side,
+                               defId: caster.defId || null,
                                element: elMuro, remaining: durMuro });
             cel.type = 'wall';
             cel.deco = false;

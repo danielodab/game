@@ -1132,7 +1132,7 @@ JOGO.DATA = JOGO.DATA || {};
     { tier: 0, formName: 'Sentinela', paCost: 3, cooldown: 0, castsPerTurn: 1,
       range: rng(1, 4), aoe: aoe('single', 0), needsEmptyTile: true, targetSide: 'any',
       riderMode: 'support',
-      mechanic: [sm('fus-bulwark-idol'), d('@A', 13, 18)],
+      mechanic: [sm('fus-wall-watcher'), d('@A', 13, 18)],
       description: 'Crava o ídolo onde o caminho precisa de dono, e a cravada abre o chão de quem estava do lado.',
       fxShape: 'summonFx' },
     { tier: 5, formName: 'Guarita', paCost: 3, cooldown: 2, castsPerTurn: 1,
@@ -1144,7 +1144,7 @@ JOGO.DATA = JOGO.DATA || {};
     { tier: 10, formName: 'Vigia', paCost: 4, cooldown: 3, castsPerTurn: 1,
       range: rng(1, 5), aoe: aoe('single', 0), needsEmptyTile: true, targetSide: 'any',
       riderMode: 'support',
-      mechanic: [sm('fus-bulwark-idol'), d('@A', 18, 24), sh(50, 2)],
+      mechanic: [sm('fus-wall-watcher'), d('@A', 18, 24), sh(50, 2)],
       description: 'O ídolo sobe do chão já escudado, e o solavanco da subida derruba quem estava em cima.',
       fxShape: 'summonFx' },
     { tier: 12, formName: 'Paliçada', paCost: 4, cooldown: 3, castsPerTurn: 1,
@@ -1162,13 +1162,13 @@ JOGO.DATA = JOGO.DATA || {};
     { tier: 20, formName: 'Guarnição', paCost: 5, cooldown: 4, castsPerTurn: 1,
       range: rng(1, 5), aoe: aoe('single', 0), needsEmptyTile: true, targetSide: 'any',
       riderMode: 'support',
-      mechanic: [sm('fus-bulwark-idol'), wl(3), d('@A', 22, 29), sh(75, 3)],
+      mechanic: [sm('fus-wall-watcher'), wl(3), d('@A', 22, 29), sh(75, 3)],
       description: 'Ídolo, muro e escudo de uma vez, e o chão racha embaixo de quem estava na passagem.',
       fxShape: 'summonFx' },
     { tier: 30, formName: 'Fortaleza', paCost: 5, cooldown: 5, castsPerTurn: 1,
       range: rng(0, 0), aoe: aoe('ring', 2), needsEmptyTile: false, targetSide: 'self',
       riderMode: 'support',
-      mechanic: [wl(4), sm('fus-bulwark-idol'), d('@B', 28, 37), sh(100, 4)],
+      mechanic: [wl(4), sm('fus-wall-watcher'), d('@B', 28, 37), sh(100, 4)],
       description: 'Fecha o anel, crava o ídolo dentro dele e derruba a muralha sobre quem ficou fora: a fortaleza tem guarnição, muro e portão.',
       fxShape: 'summonFx' }
   ];
@@ -1312,7 +1312,15 @@ JOGO.DATA = JOGO.DATA || {};
       'A sombra da fusão descolada do chão, com meia lâmina e nenhum rosto. Anda meio passo à frente do original.'),
     'fus-bulwark-idol': summonDef('fus-bulwark-idol', 'Ídolo-Escora', 75, 6, 1, 15, 'melee',
       ['fus-idol-slam'], [{ type: 'pushImmune' }],
-      'Meio pilar entalhado com a cara das duas classes fundidas. Fica no caminho — é o trabalho inteiro dele.')
+      'Meio pilar entalhado com a cara das duas classes fundidas. Fica no caminho — é o trabalho inteiro dele.'),
+    /* O MURO-VIGIA é do MURO VIVO (Invocador + Minotauro), e existe porque o
+     * Ídolo-Escora passou a ser exclusivo da dupla do Bárbaro. Os números são
+     * IGUAIS aos dele de propósito: esta rodada troca identidade, não
+     * equilíbrio — misturar as duas coisas faria qualquer defeito que
+     * aparecesse depois ter dois suspeitos em vez de um. */
+    'fus-wall-watcher': summonDef('fus-wall-watcher', 'Muro-Vigia', 75, 6, 1, 15, 'melee',
+      ['fus-idol-slam'], [{ type: 'pushImmune' }],
+      'Um naco de muralha em pé, com uma fenda vertical de onde dois olhos observam. Fechado é parede; aberto, é dono da passagem.')
   };
 
   // =========================================================================
