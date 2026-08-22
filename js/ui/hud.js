@@ -976,6 +976,23 @@ var JOGO = (typeof window !== 'undefined')
       bt.cam.classList.add('is-off');
       top.appendChild(bt.cam);
     }
+
+    // CADEADO DA CÂMERA. Fechado, arrastar e a roda não mexem mais no
+    // enquadramento — tocar numa casa continua funcionando, porque isso é
+    // jogar. Ao contrário do recentrar, este fica SEMPRE visível: ele é um
+    // ESTADO que o jogador precisa poder ler de relance, não uma ação.
+    if (JOGO.Renderer && JOGO.Renderer.travarCamera) {
+      bt.trava = btn(JOGO.Renderer.cameraTravada() ? '\uD83D\uDD12' : '\uD83D\uDD13',
+                     'bt-trava', function () {
+        var t = JOGO.Renderer.travarCamera();
+        bt.trava.textContent = t ? '\uD83D\uDD12' : '\uD83D\uDD13';
+        bt.trava.title = t ? 'câmera travada — toque para soltar'
+                           : 'travar a câmera nesta posição';
+        bt.trava.classList.toggle('is-on', t);
+      });
+      bt.trava.title = 'travar a câmera nesta posição';
+      top.appendChild(bt.trava);
+    }
     bt.timeline = el('div', 'bt-timeline');
     top.appendChild(bt.timeline);
     s.appendChild(top);
@@ -2659,7 +2676,12 @@ var JOGO = (typeof window !== 'undefined')
     // ela volta ao lugar. Botao que fica na tela sem nunca fazer nada ensina a
     // ser ignorado — e ai nao e visto quando faz falta.
     if (bt && bt.cam && JOGO.Renderer && JOGO.Renderer.cameraManual) {
-      bt.cam.classList.toggle('is-off', !JOGO.Renderer.cameraManual());
+      // Some também quando a câmera está TRAVADA: dois botões lado a lado
+      // dizendo coisas opostas — «não mexa» e «mexa de volta» — são uma
+      // escolha que ninguém quer ter de fazer. Travado, o caminho de volta
+      // é destravar, que é uma decisão só.
+      var travada = JOGO.Renderer.cameraTravada && JOGO.Renderer.cameraTravada();
+      bt.cam.classList.toggle('is-off', travada || !JOGO.Renderer.cameraManual());
     }
 
     paintBattle(false);

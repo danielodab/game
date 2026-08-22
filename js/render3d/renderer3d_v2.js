@@ -115,7 +115,12 @@ var JOGO = (typeof window !== 'undefined')
     // NAO mexe no enquadramento — senao cada reconstrucao de tabuleiro desfaria
     // o que ele acabou de fazer. `ultimaSala` desliga o sinalizador na troca de
     // sala, onde reenquadrar e ajuda e nao roubo.
-    manual: false, ultimaSala: null
+    manual: false, ultimaSala: null,
+    // CADEADO: trava a ENTRADA, nao o enquadramento. Tocar numa casa continua
+    // funcionando (isso e jogar) e a troca de sala continua reenquadrando
+    // (senao o jogador olharia para o vazio ao lado do tabuleiro novo).
+    // Fechado, arrastar e girar a roda nao fazem nada.
+    travada: false
   };
   var rotAnim = null;                 // giro de 90° animado (§9-E)
   var camFocus = null;                // foco cinematográfico (fusão)
@@ -1333,6 +1338,11 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
   R.cameraManual = function () { return !!cam.manual; };
+  R.travarCamera = function (liga) {
+    cam.travada = (liga == null) ? !cam.travada : !!liga;
+    return cam.travada;
+  };
+  R.cameraTravada = function () { return !!cam.travada; };
 
   R.rotate = function (dir) {
     if (rotAnim) return false;
@@ -1453,17 +1463,24 @@ var JOGO = (typeof window !== 'undefined')
         if (a && b) {
           var d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
           var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-          cam.manual = true;
-          cam.dist = clamp(cam.dist * (pinch.dist / d), cam.minDist, cam.maxDist);
-          // dois dedos deslizando = DESLOCAR o pivô no plano do chão
-          panBy(mx - pinch.mx, my - pinch.my);
-          pinch.dist = d; pinch.mx = mx; pinch.my = my;
-          updateCamera();
+          // TRAVADA: nao mexe, mas ACOMPANHA os dedos. Sem atualizar o
+          // registro de posicao, o primeiro movimento depois de destravar
+          // saltaria pela diferenca acumulada com o cadeado fechado.
+          if (cam.travada) {
+            pinch.dist = d; pinch.mx = mx; pinch.my = my;
+          } else {
+            cam.manual = true;
+            cam.dist = clamp(cam.dist * (pinch.dist / d), cam.minDist, cam.maxDist);
+            // dois dedos deslizando = DESLOCAR o pivô no plano do chão
+            panBy(mx - pinch.mx, my - pinch.my);
+            pinch.dist = d; pinch.mx = mx; pinch.my = my;
+            updateCamera();
+          }
         }
       } else if (drag && drag.id === e.pointerId) {
         var dx = p.x - drag.px, dy = p.y - drag.py;
         if (!drag.moved && Math.hypot(p.x - rec.sx, p.y - rec.sy) > TAP_PX) drag.moved = true;
-        if (drag.moved) {
+        if (drag.moved && !cam.travada) {
           cam.manual = true;               // o jogador assumiu: fitCamera recua
           if (drag.desloca) {
             panBy(dx, dy);                 // direito/meio: percorre o campo
@@ -1505,6 +1522,7 @@ var JOGO = (typeof window !== 'undefined')
     canvas.addEventListener('wheel', function (e) {
       if (overUI(e)) return;
       e.preventDefault();
+      if (cam.travada) return;
       cam.manual = true;
       cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0011), cam.minDist, cam.maxDist);
       updateCamera();
