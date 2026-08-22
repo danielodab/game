@@ -14,6 +14,20 @@ JOGO.DATA = JOGO.DATA || {};
 /* Níveis em que cada caminho elemental libera seu próximo feitiço (ordem fixa). */
 JOGO.DATA.unlockTiers = [5, 10, 12, 15, 20, 30];
 
+/* TETO DE INVOCACOES SIMULTANEAS.
+ *
+ * Chave PROPRIA, e nao um campo dentro de `leveling`: aquela tabela esta
+ * congelada por coordenacao com o `xp` dos monstros, e encostar nela obriga uma
+ * rodada coordenada que isto aqui nao precisa.
+ *
+ * `base` vale do nivel 1 em diante; cada nivel em `degraus` soma +1 ao chegar.
+ * Um item que conceda +1 deve somar em `bonus` na unidade (ver `Engine.summonCap`).
+ */
+JOGO.DATA.summonCap = {
+  base: 1,
+  degraus: [15, 30]
+};
+
 JOGO.DATA.leveling = {
   maxLevel: 30,
 

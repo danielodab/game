@@ -1218,6 +1218,37 @@ var JOGO = (typeof window !== 'undefined')
     if (idx + 1 <= state.activeIdx) state.activeIdx++;
   }
 
+  /* QUANTAS INVOCACOES ESTA UNIDADE PODE SUSTENTAR AO MESMO TEMPO.
+   *
+   * Base 1, +1 a cada degrau de nivel alcancado (15 e 30 por padrao), mais o
+   * que um item conceder em `unit.summonBonus`. Monstro nao tem teto: chefe que
+   * planta cria — a Jardineira e seus Brotinhos — ja e controlado por recarga e
+   * pela duracao da sala, e por-lhe teto mudaria desenho de chefe.
+   */
+  Engine.summonCap = function (unit) {
+    if (!unit) return 0;
+    if (!unit.classId && unit.kind !== 'fusion') return 99;   // monstro: sem teto
+    var C = (DATA().summonCap) || { base: 1, degraus: [15, 30] };
+    var n = C.base || 1;
+    var deg = C.degraus || [];
+    for (var i = 0; i < deg.length; i++) if ((unit.level || 1) >= deg[i]) n++;
+    return n + (unit.summonBonus || 0);
+  };
+
+  /* As invocacoes VIVAS desta unidade, da mais antiga para a mais nova.
+   * `uid` cresce a cada unidade criada, entao ordenar por ele e ordenar por
+   * idade sem precisar guardar carimbo de tempo. */
+  Engine.summonsOf = function (state, unit) {
+    var out = [];
+    if (!state || !unit) return out;
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.kind === 'summon' && u.alive && !u.offBoard && u.summonerUid === unit.uid) out.push(u);
+    }
+    out.sort(function (a, b) { return a.uid - b.uid; });
+    return out;
+  };
+
   function spawnMonsterUnit(state, monsterId, x, y, kind, side, summonerUid) {
     var def = Engine.monster(monsterId);
     if (!def) return null;
@@ -1682,6 +1713,29 @@ var JOGO = (typeof window !== 'undefined')
 
         case 'summon':
           if (!Engine.unitAt(state, x, y) && isFloor(state, x, y)) {
+            /* O TETO, E A MAIS ANTIGA SAINDO PARA ABRIR VAGA.
+             *
+             * Mato ANTES de invocar, senao a contagem ficaria um a mais durante
+             * o instante em que as duas coexistem — e um traco de morte que
+             * olhasse o tabuleiro veria um corpo que ja nao devia estar la.
+             *
+             * MORRE DE VERDADE (processDeath roda inteiro), ao contrario do que
+             * acontece na fusao. La as invocacoes SAEM sem disparar traco,
+             * porque a explosao seria colateral de uma jogada cujo custo o
+             * jogador nao teria como prever. Aqui ele escolheu conjurar estando
+             * no teto, e a consequencia e aprendivel — de quebra nasce uma
+             * jogada de verdade: invocar o CAO DE BRASA (explodeOnDeath, 20 de
+             * fogo em raio 1) ao lado do inimigo e depois substitui-lo detona a
+             * bomba de proposito.
+             */
+            var teto = Engine.summonCap(caster);
+            var minhas = Engine.summonsOf(state, caster);
+            while (minhas.length >= teto && minhas.length > 0) {
+              var velha = minhas.shift();
+              log(velha.name + ' se desfaz para abrir vaga.');
+              velha.hp = 0;
+              processDeath(state, velha);
+            }
             var su = spawnMonsterUnit(state, eff.monsterId, x, y, 'summon', caster.side, caster.uid);
             if (su) log(caster.name + ' invoca ' + su.name + '.');
           }
