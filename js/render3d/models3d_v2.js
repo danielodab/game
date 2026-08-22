@@ -298,6 +298,16 @@ var JOGO = (typeof window !== 'undefined')
   //   2. esqueletos KayKit (mesma família visual dos heróis) para humanoides;
   //   3. criaturas Quaternius (CC0, animadas) para bichos.
   var MONSTER_LOOK = {
+    /* INVOCACOES DE FUSAO. Ate agora as cinco caiam todas no
+     * `MONSTER_FALLBACK` — o esqueletinho generico —, entao cinco criaturas
+     * diferentes nas regras viravam um boneco so na tela. Esta e a primeira com
+     * arte propria; as outras quatro entram aqui quando chegarem.
+     *
+     * 1,31 x 1,80 m = 2,36 m: mais alto que o heroi de 2,05 e mais baixo que a
+     * fusao que o chama. Ele domina o tabuleiro sem competir com o dono.
+     */
+    'fus-bulwark-idol': { model: 'fus_idolo_escora', scale: 1.31 },
+
     // --- Flora Voraz + Enxame (Estufa) — A ARTE E DO USUARIO (v3).
     //
     // Os nove sairam do Meshy, todos humanoides. Antes eram emprestados: sapo,
@@ -876,9 +886,47 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   }
 
+  /* DUPLAS COM CORPO PROPRIO — arte do Daniel, nao composicao.
+   *
+   * A chave e o par de classes em ordem ALFABETICA (contrato §4), que e a mesma
+   * que `Fusion.pairKey` monta. As duplas que NAO estiverem aqui continuam
+   * compostas pelo caminho de sempre, logo abaixo.
+   */
+  var FUSION_MODEL = {
+    'arqueiro+sumo':    'fus_arqueiro_sumo',
+    'bruxo+sumo':       'fus_bruxo_sumo',
+    'curandeiro+sumo':  'fus_curandeiro_sumo',
+    'espadachim+sumo':  'fus_espadachim_sumo',
+    'invocador+sumo':   'fus_invocador_sumo'
+  };
+
   function fusionLook(defId) {
     var pair = String(defId).slice(4).split('+');
     var a = pair[0], b = pair[1];
+
+    /* CORPO PROPRIO, quando existe. Entra ANTES da composicao e devolve um look
+     * limpo: sem `grafts`, sem `show`, sem `build`. Aquilo era guarda-roupa e
+     * escala de osso do KayKit, e pedir malha que nao existe falha EM SILENCIO
+     * — foi o que pegou o Sumo quando ele trocou de modelo.
+     *
+     * `scale: 1.00` porque o alvo de porte da fusao (3,00 m) ja e a altura que
+     * estes corpos devem ter. A composicao usa 1,26 porque precisa esticar um
+     * corpo de heroi ate parecer fusao; um corpo modelado como fusao nao precisa.
+     */
+    var proprio = FUSION_MODEL[a + '+' + b];
+    if (proprio && (JOGO.MODELS || {})[proprio]) {
+      var lpa = classLook(a), lpb = classLook(b);
+      return {
+        model: proprio, scale: 1.00, fusion: true,
+        hostClass: a, guestClass: b,
+        tint: lpa ? lpa.tint : null,
+        accent: lpb ? lpb.accent : (lpa ? lpa.accent : null),
+        mixTint: lpb ? lpb.tint : null,
+        grafts: [],
+        concept: 'corpo de fusao proprio (' + a + ' + ' + b + ')'
+      };
+    }
+
     var la = classLook(a), lb = classLook(b);
     if (!la && !lb) return null;
     if (!la) { la = lb; a = b; lb = null; }

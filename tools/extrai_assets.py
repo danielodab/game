@@ -45,8 +45,22 @@ MANIFESTO = os.path.join(DESTINO, 'manifest.json')
 
 # Os arquivos que participam. `fx-atlas.js` e `fx-placas.js` ficam de fora de
 # proposito: sao 0,8 MB somados, tem outro dono, e o ganho nao paga o conflito.
-FONTES = ['env-kit.js', 'models-anims.js', 'models-heroes.js', 'models-meshy.js', 'models-meshy-sum.js', 'cenario-jardim.js', 'muro-escudo.js',
-          'models-monsters.js', 'models-bosses.js', 'models-summons.js']
+# A LISTA SE DERIVA DA PASTA, e nao e escrita a mao.
+#
+# Ela ERA escrita a mao, e o modo de falhar era silencioso e caro: quem
+# acrescentasse um embutido novo tinha de lembrar de vir aqui, e esquecer nao
+# dava erro nenhum — o modelo simplesmente caia no substituto generico quando o
+# jogo rodasse SERVIDO, enquanto continuava certo em `file://` e em toda pagina
+# de teste (que carregam o embutido direto). Foi exatamente o que aconteceu com
+# os nove monstros da Estufa: implantados, testados, aprovados, e invisiveis no
+# jogo servido por meio dia.
+#
+# Varrer a pasta e seguro: quem nao tiver `JOGO.MODELS`/`JOGO.ASSETS` dentro
+# devolve zero itens e e pulado sozinho (`sons.js`, `fx-atlas.js`, `fx-anim.js`
+# e `fx-placas.js` caem nesse caso).
+def _fontes():
+    todos = [f for f in os.listdir(ORIGEM) if f.endswith('.js')] if os.path.isdir(ORIGEM) else []
+    return sorted(todos)
 
 # JOGO.MODELS['barbarian']='Z2xU...';   /   JOGO.ASSETS['barrel'] = 'Z2xU...';
 RE_ITEM = re.compile(
@@ -108,7 +122,7 @@ def principal(conferir=False):
     escritos = 0
     faltando = []
 
-    for nome in FONTES:
+    for nome in _fontes():
         caminho = os.path.join(ORIGEM, nome)
         if not os.path.isfile(caminho):
             print('  (pulando %s — nao existe)' % nome)

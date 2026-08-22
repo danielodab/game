@@ -1,8 +1,128 @@
 {
- "gerado": "2026-08-21T12:27:25",
+ "gerado": "2026-08-21T22:43:22",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
+  {
+   "alvo": "MODELS",
+   "chave": "jd_regador",
+   "arquivo": "cenario-jardim/jd_regador.glb",
+   "bytes": 739640
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_carrinho",
+   "arquivo": "cenario-jardim/jd_carrinho.glb",
+   "bytes": 526420
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_tronco",
+   "arquivo": "cenario-jardim/jd_tronco.glb",
+   "bytes": 632872
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_redoma",
+   "arquivo": "cenario-jardim/jd_redoma.glb",
+   "bytes": 653652
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_canteiro",
+   "arquivo": "cenario-jardim/jd_canteiro.glb",
+   "bytes": 411132
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_vaso",
+   "arquivo": "cenario-jardim/jd_vaso.glb",
+   "bytes": 586964
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_muro_pilastra",
+   "arquivo": "cenario-jardim/jd_muro_pilastra.glb",
+   "bytes": 708232
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_muro_brecha",
+   "arquivo": "cenario-jardim/jd_muro_brecha.glb",
+   "bytes": 696208
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_muro_ruina",
+   "arquivo": "cenario-jardim/jd_muro_ruina.glb",
+   "bytes": 756988
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_muro_mato",
+   "arquivo": "cenario-jardim/jd_muro_mato.glb",
+   "bytes": 953804
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_coluna_vidro",
+   "arquivo": "cenario-jardim/jd_coluna_vidro.glb",
+   "bytes": 479288
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_cipo",
+   "arquivo": "cenario-jardim/jd_cipo.glb",
+   "bytes": 534168
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_estatua",
+   "arquivo": "cenario-jardim/jd_estatua.glb",
+   "bytes": 514956
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_pilar",
+   "arquivo": "cenario-jardim/jd_pilar.glb",
+   "bytes": 627264
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_cristal_p",
+   "arquivo": "cenario-jardim/jd_cristal_p.glb",
+   "bytes": 528896
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_cristal_g",
+   "arquivo": "cenario-jardim/jd_cristal_g.glb",
+   "bytes": 632860
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_raiz",
+   "arquivo": "cenario-jardim/jd_raiz.glb",
+   "bytes": 547812
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_poca",
+   "arquivo": "cenario-jardim/jd_poca.glb",
+   "bytes": 464888
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_escada",
+   "arquivo": "cenario-jardim/jd_escada.glb",
+   "bytes": 480200
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "jd_estufa_arvore",
+   "arquivo": "cenario-jardim/jd_estufa_arvore.glb",
+   "bytes": 900304
+  },
   {
    "alvo": "ASSETS",
    "chave": "banner_blue",
@@ -305,6 +425,84 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "q_mushnub",
+   "arquivo": "models-bosses/q_mushnub.glb",
+   "bytes": 163392
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_glub",
+   "arquivo": "models-bosses/q_glub.glb",
+   "bytes": 236380
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_bluedemon",
+   "arquivo": "models-bosses/q_bluedemon.glb",
+   "bytes": 644208
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_alpaking",
+   "arquivo": "models-bosses/q_alpaking.glb",
+   "bytes": 273764
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_goleling",
+   "arquivo": "models-bosses/q_goleling.glb",
+   "bytes": 311000
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_ghostskull",
+   "arquivo": "models-bosses/q_ghostskull.glb",
+   "bytes": 349616
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "q_yeti",
+   "arquivo": "models-bosses/q_yeti.glb",
+   "bytes": 651656
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_arqueiro_sumo",
+   "arquivo": "models-fusoes-sumo/fus_arqueiro_sumo.glb",
+   "bytes": 1408788
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_bruxo_sumo",
+   "arquivo": "models-fusoes-sumo/fus_bruxo_sumo.glb",
+   "bytes": 1137564
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_curandeiro_sumo",
+   "arquivo": "models-fusoes-sumo/fus_curandeiro_sumo.glb",
+   "bytes": 1366924
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_espadachim_sumo",
+   "arquivo": "models-fusoes-sumo/fus_espadachim_sumo.glb",
+   "bytes": 1107604
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_invocador_sumo",
+   "arquivo": "models-fusoes-sumo/fus_invocador_sumo.glb",
+   "bytes": 1202732
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_idolo_escora",
+   "arquivo": "models-fusoes-sumo/fus_idolo_escora.glb",
+   "bytes": 1129352
+  },
+  {
+   "alvo": "MODELS",
    "chave": "barbarian",
    "arquivo": "models-heroes/barbarian.glb",
    "bytes": 334384
@@ -359,45 +557,57 @@
   },
   {
    "alvo": "MODELS",
-   "chave": "meshy_sumo",
-   "arquivo": "models-meshy/meshy_sumo.glb",
-   "bytes": 1091988
+   "chave": "boss-gardener",
+   "arquivo": "models-meshy-jardim/boss-gardener.glb",
+   "bytes": 1297004
   },
   {
    "alvo": "MODELS",
-   "chave": "meshy_invocador",
-   "arquivo": "models-meshy/meshy_invocador.glb",
-   "bytes": 1421332
+   "chave": "dew-strider",
+   "arquivo": "models-meshy-jardim/dew-strider.glb",
+   "bytes": 1097692
   },
   {
    "alvo": "MODELS",
-   "chave": "meshy_espadachim",
-   "arquivo": "models-meshy/meshy_espadachim.glb",
-   "bytes": 1130948
+   "chave": "sprout-feral",
+   "arquivo": "models-meshy-jardim/sprout-feral.glb",
+   "bytes": 1112924
   },
   {
    "alvo": "MODELS",
-   "chave": "meshy_minotauro",
-   "arquivo": "models-meshy/meshy_minotauro.glb",
-   "bytes": 1131236
+   "chave": "pollen-puff",
+   "arquivo": "models-meshy-jardim/pollen-puff.glb",
+   "bytes": 1334440
   },
   {
    "alvo": "MODELS",
-   "chave": "meshy_curandeiro",
-   "arquivo": "models-meshy/meshy_curandeiro.glb",
-   "bytes": 1405560
+   "chave": "burrlet",
+   "arquivo": "models-meshy-jardim/burrlet.glb",
+   "bytes": 1483100
   },
   {
    "alvo": "MODELS",
-   "chave": "meshy_arqueiro",
-   "arquivo": "models-meshy/meshy_arqueiro.glb",
-   "bytes": 1214292
+   "chave": "burr-mother",
+   "arquivo": "models-meshy-jardim/burr-mother.glb",
+   "bytes": 1675840
   },
   {
    "alvo": "MODELS",
-   "chave": "meshy_bruxo",
-   "arquivo": "models-meshy/meshy_bruxo.glb",
-   "bytes": 1107700
+   "chave": "sap-shaman",
+   "arquivo": "models-meshy-jardim/sap-shaman.glb",
+   "bytes": 952140
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "thorn-lasher",
+   "arquivo": "models-meshy-jardim/thorn-lasher.glb",
+   "bytes": 1154360
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "lantern-wasp",
+   "arquivo": "models-meshy-jardim/lantern-wasp.glb",
+   "bytes": 1325248
   },
   {
    "alvo": "MODELS",
@@ -455,129 +665,45 @@
   },
   {
    "alvo": "MODELS",
-   "chave": "jd_regador",
-   "arquivo": "cenario-jardim/jd_regador.glb",
-   "bytes": 739640
+   "chave": "meshy_sumo",
+   "arquivo": "models-meshy/meshy_sumo.glb",
+   "bytes": 1091988
   },
   {
    "alvo": "MODELS",
-   "chave": "jd_carrinho",
-   "arquivo": "cenario-jardim/jd_carrinho.glb",
-   "bytes": 526420
+   "chave": "meshy_invocador",
+   "arquivo": "models-meshy/meshy_invocador.glb",
+   "bytes": 1421332
   },
   {
    "alvo": "MODELS",
-   "chave": "jd_tronco",
-   "arquivo": "cenario-jardim/jd_tronco.glb",
-   "bytes": 632872
+   "chave": "meshy_espadachim",
+   "arquivo": "models-meshy/meshy_espadachim.glb",
+   "bytes": 1130948
   },
   {
    "alvo": "MODELS",
-   "chave": "jd_redoma",
-   "arquivo": "cenario-jardim/jd_redoma.glb",
-   "bytes": 653652
+   "chave": "meshy_minotauro",
+   "arquivo": "models-meshy/meshy_minotauro.glb",
+   "bytes": 1131236
   },
   {
    "alvo": "MODELS",
-   "chave": "jd_canteiro",
-   "arquivo": "cenario-jardim/jd_canteiro.glb",
-   "bytes": 411132
+   "chave": "meshy_curandeiro",
+   "arquivo": "models-meshy/meshy_curandeiro.glb",
+   "bytes": 1405560
   },
   {
    "alvo": "MODELS",
-   "chave": "jd_vaso",
-   "arquivo": "cenario-jardim/jd_vaso.glb",
-   "bytes": 586964
+   "chave": "meshy_arqueiro",
+   "arquivo": "models-meshy/meshy_arqueiro.glb",
+   "bytes": 1214292
   },
   {
    "alvo": "MODELS",
-   "chave": "jd_muro_pilastra",
-   "arquivo": "cenario-jardim/jd_muro_pilastra.glb",
-   "bytes": 708232
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_muro_brecha",
-   "arquivo": "cenario-jardim/jd_muro_brecha.glb",
-   "bytes": 696208
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_muro_ruina",
-   "arquivo": "cenario-jardim/jd_muro_ruina.glb",
-   "bytes": 756988
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_muro_mato",
-   "arquivo": "cenario-jardim/jd_muro_mato.glb",
-   "bytes": 953804
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_coluna_vidro",
-   "arquivo": "cenario-jardim/jd_coluna_vidro.glb",
-   "bytes": 479288
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_cipo",
-   "arquivo": "cenario-jardim/jd_cipo.glb",
-   "bytes": 534168
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_estatua",
-   "arquivo": "cenario-jardim/jd_estatua.glb",
-   "bytes": 514956
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_pilar",
-   "arquivo": "cenario-jardim/jd_pilar.glb",
-   "bytes": 627264
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_cristal_p",
-   "arquivo": "cenario-jardim/jd_cristal_p.glb",
-   "bytes": 528896
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_cristal_g",
-   "arquivo": "cenario-jardim/jd_cristal_g.glb",
-   "bytes": 632860
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_raiz",
-   "arquivo": "cenario-jardim/jd_raiz.glb",
-   "bytes": 547812
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_poca",
-   "arquivo": "cenario-jardim/jd_poca.glb",
-   "bytes": 464888
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_escada",
-   "arquivo": "cenario-jardim/jd_escada.glb",
-   "bytes": 480200
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "jd_estufa_arvore",
-   "arquivo": "cenario-jardim/jd_estufa_arvore.glb",
-   "bytes": 900304
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "muro-escudo",
-   "arquivo": "muro-escudo/muro-escudo.glb",
-   "bytes": 758816
+   "chave": "meshy_bruxo",
+   "arquivo": "models-meshy/meshy_bruxo.glb",
+   "bytes": 1107700
   },
   {
    "alvo": "MODELS",
@@ -653,48 +779,6 @@
   },
   {
    "alvo": "MODELS",
-   "chave": "q_mushnub",
-   "arquivo": "models-bosses/q_mushnub.glb",
-   "bytes": 163392
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "q_glub",
-   "arquivo": "models-bosses/q_glub.glb",
-   "bytes": 236380
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "q_bluedemon",
-   "arquivo": "models-bosses/q_bluedemon.glb",
-   "bytes": 644208
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "q_alpaking",
-   "arquivo": "models-bosses/q_alpaking.glb",
-   "bytes": 273764
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "q_goleling",
-   "arquivo": "models-bosses/q_goleling.glb",
-   "bytes": 311000
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "q_ghostskull",
-   "arquivo": "models-bosses/q_ghostskull.glb",
-   "bytes": 349616
-  },
-  {
-   "alvo": "MODELS",
-   "chave": "q_yeti",
-   "arquivo": "models-bosses/q_yeti.glb",
-   "bytes": 651656
-  },
-  {
-   "alvo": "MODELS",
    "chave": "q_hywirl",
    "arquivo": "models-summons/q_hywirl.glb",
    "bytes": 317228
@@ -734,10 +818,16 @@
    "chave": "q_birb",
    "arquivo": "models-summons/q_birb.glb",
    "bytes": 648736
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "muro-escudo",
+   "arquivo": "muro-escudo/muro-escudo.glb",
+   "bytes": 758816
   }
  ],
  "meshyClips": {
-  "meshy_sumo": [
+  "fus_arqueiro_sumo": [
    "HitReact",
    "attack",
    "death",
@@ -745,17 +835,7 @@
    "run",
    "walk"
   ],
-  "meshy_invocador": [
-   "Dodge",
-   "attack",
-   "death",
-   "hit",
-   "idle",
-   "run",
-   "walk"
-  ],
-  "meshy_espadachim": [
-   "Dodge",
+  "fus_bruxo_sumo": [
    "HitReact",
    "attack",
    "death",
@@ -763,8 +843,7 @@
    "run",
    "walk"
   ],
-  "meshy_minotauro": [
-   "Dodge",
+  "fus_curandeiro_sumo": [
    "HitReact",
    "attack",
    "death",
@@ -772,7 +851,7 @@
    "run",
    "walk"
   ],
-  "meshy_curandeiro": [
+  "fus_espadachim_sumo": [
    "HitReact",
    "attack",
    "death",
@@ -780,8 +859,7 @@
    "run",
    "walk"
   ],
-  "meshy_arqueiro": [
-   "Dodge",
+  "fus_invocador_sumo": [
    "HitReact",
    "attack",
    "death",
@@ -789,12 +867,72 @@
    "run",
    "walk"
   ],
-  "meshy_bruxo": [
+  "fus_idolo_escora": [
+   "HitReact",
    "attack",
    "death",
-   "hit",
    "idle",
-   "run",
+   "walk"
+  ],
+  "boss-gardener": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "dew-strider": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "sprout-feral": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "pollen-puff": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "burrlet": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "burr-mother": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "sap-shaman": [
+   "death",
+   "idle",
+   "walk"
+  ],
+  "thorn-lasher": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "lantern-wasp": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
    "walk"
   ],
   "sum_familiar": [
@@ -868,8 +1006,68 @@
    "idle",
    "run",
    "walk"
+  ],
+  "meshy_sumo": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "meshy_invocador": [
+   "Dodge",
+   "attack",
+   "death",
+   "hit",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "meshy_espadachim": [
+   "Dodge",
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "meshy_minotauro": [
+   "Dodge",
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "meshy_curandeiro": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "meshy_arqueiro": [
+   "Dodge",
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "meshy_bruxo": [
+   "attack",
+   "death",
+   "hit",
+   "idle",
+   "run",
+   "walk"
   ]
  },
- "totalBytes": 50253256,
- "totalBase64": 67004508
+ "totalBytes": 69038968,
+ "totalBase64": 92052148
 }
