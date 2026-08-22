@@ -936,7 +936,16 @@ var JOGO = (typeof window !== 'undefined')
     return {
       // `show` opcional aqui tambem: o anfitriao pode ser um corpo do Meshy,
       // que nao tem malha para ligar ou desligar (ver classLook).
-      model: lh.model, show: (lh.show || []).slice(), scale: 1.26,
+      // 1,26 -> 1,00: a fusao COMPOSTA passa a medir os mesmos 3,00 m que a de
+      // corpo proprio. Com 1,26 ela saia em 3,78 m, e o resultado era invertido:
+      // a fusao do BARBARO — a maior classe do jogo, 2,62 m — era a MENOR de
+      // todas, porque foi a primeira a ganhar corpo modelado no porte certo.
+      //
+      // 3,00 m e o alvo declarado em `targetH` e o numero para o qual o Daniel
+      // modelou; multiplicar por 1,26 em cima dele desfazia a propria regra.
+      // As compostas sao provisorias e somem conforme a arte chega — quem manda
+      // e o numero que a arte respeita.
+      model: lh.model, show: (lh.show || []).slice(), scale: 1.00,
       build: lh.build || null, headTilt: lh.headTilt || 0,
       tint: lh.tint, accent: lg ? lg.accent : lh.accent,
       mixTint: lg ? lg.tint : null,
