@@ -108,7 +108,14 @@ var JOGO = (typeof window !== 'undefined')
     minDist: 7, maxDist: 52,
     minTilt: 0.30, maxTilt: 1.35,
     pivot: new THREE.Vector3(0, 0, 0),
-    panX: 0, panZ: 0
+    panX: 0, panZ: 0,
+    // O JOGADOR ASSUMIU A CAMERA? Ligado no primeiro deslocamento, giro,
+    // inclinacao ou zoom feito por ele. Enquanto estiver ligado, `fitCamera`
+    // atualiza o que depende da sala (distancia minima/maxima, pivo, nevoa) mas
+    // NAO mexe no enquadramento — senao cada reconstrucao de tabuleiro desfaria
+    // o que ele acabou de fazer. `ultimaSala` desliga o sinalizador na troca de
+    // sala, onde reenquadrar e ajuda e nao roubo.
+    manual: false, ultimaSala: null
   };
   var rotAnim = null;                 // giro de 90° animado (§9-E)
   var camFocus = null;                // foco cinematográfico (fusão)
@@ -1164,6 +1171,23 @@ var JOGO = (typeof window !== 'undefined')
     cam.minDist = Math.max(5, span * 0.16);
     cam.maxDist = span * 2.0;
     cam.pivot.set(0, CELL * 0.4, 0);
+
+    /* SALA NOVA SOLTA A CAMERA; a mesma sala, nao.
+     *
+     * `fitCamera` roda dentro de `buildBoard`, e o tabuleiro e reconstruido
+     * sempre que a `roomKey` muda — o que acontece VARIAS vezes dentro da mesma
+     * luta. Cada reconstrucao reenquadrava e desfazia o que o jogador tinha
+     * acabado de fazer: era isso que dava a sensacao de a camera "sempre voltar
+     * para quem esta jogando".
+     *
+     * Numa sala NOVA reenquadrar e ajuda, nao roubo — o contexto mudou e ninguem
+     * quer atravessar a porta olhando para o lugar errado. Entao o controle
+     * manual e devolvido ali, e so ali.
+     */
+    var salaAgora = String(st && st.dungeonId) + '|' + String(st && st.roomIndex);
+    if (salaAgora !== cam.ultimaSala) { cam.ultimaSala = salaAgora; cam.manual = false; }
+    if (cam.manual) return;              // o jogador esta dirigindo: nao encoste
+
     cam.panX = 0; cam.panZ = 0;
 
     var focus = actionBounds(st);
@@ -1298,6 +1322,18 @@ var JOGO = (typeof window !== 'undefined')
     var q = Math.round((cam.ang + Math.PI / 4) / (Math.PI / 2));
     return ((q % 4) + 4) % 4;
   };
+  /* VOLTAR AO ENQUADRAMENTO DA SALA.
+   *
+   * Camera livre sem volta e camera perdida, e quem se perde nao volta sozinho.
+   * Devolve o controle a `fitCamera` e reconstroi o enquadramento na hora. */
+  R.recentrar = function () {
+    cam.manual = false;
+    var st = state();
+    if (st && st.grid) { fitCamera(st); updateCamera(); }
+    return true;
+  };
+  R.cameraManual = function () { return !!cam.manual; };
+
   R.rotate = function (dir) {
     if (rotAnim) return false;
     var to = cam.ang + (dir < 0 ? -1 : 1) * Math.PI / 2;
@@ -1385,7 +1421,16 @@ var JOGO = (typeof window !== 'undefined')
                             tipo: e.pointerType || 'mouse' };
       ptrCount++;
       if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (er) {} }
-      if (ptrCount === 1) { drag = { id: e.pointerId, moved: false, px: p.x, py: p.y }; pinch = null; }
+      if (ptrCount === 1) {
+        // BOTAO DIREITO (2) E MEIO (1) DESLOCAM; o esquerdo continua orbitando.
+        // O esquerdo ja tem dois trabalhos — toque curto seleciona a casa,
+        // arrasto orbita — e tomar o arrasto dele tiraria a orbita de quem ja a
+        // tem na memoria muscular. O menu de contexto do canvas ja estava
+        // desligado, entao o direito estava sobrando.
+        var desloca = (e.button === 2 || e.button === 1);
+        drag = { id: e.pointerId, moved: false, px: p.x, py: p.y, desloca: desloca };
+        pinch = null;
+      }
       else if (ptrCount === 2) {
         drag = null;
         var ids = Object.keys(ptrs);
@@ -1408,6 +1453,7 @@ var JOGO = (typeof window !== 'undefined')
         if (a && b) {
           var d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
           var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          cam.manual = true;
           cam.dist = clamp(cam.dist * (pinch.dist / d), cam.minDist, cam.maxDist);
           // dois dedos deslizando = DESLOCAR o pivô no plano do chão
           panBy(mx - pinch.mx, my - pinch.my);
@@ -1418,9 +1464,14 @@ var JOGO = (typeof window !== 'undefined')
         var dx = p.x - drag.px, dy = p.y - drag.py;
         if (!drag.moved && Math.hypot(p.x - rec.sx, p.y - rec.sy) > TAP_PX) drag.moved = true;
         if (drag.moved) {
-          // ÓRBITA LIVRE: horizontal gira, vertical inclina
-          cam.ang -= dx * 0.007;
-          cam.tilt = clamp(cam.tilt - dy * 0.005, cam.minTilt, cam.maxTilt);
+          cam.manual = true;               // o jogador assumiu: fitCamera recua
+          if (drag.desloca) {
+            panBy(dx, dy);                 // direito/meio: percorre o campo
+          } else {
+            // ÓRBITA LIVRE: horizontal gira, vertical inclina
+            cam.ang -= dx * 0.007;
+            cam.tilt = clamp(cam.tilt - dy * 0.005, cam.minTilt, cam.maxTilt);
+          }
           updateCamera();
         }
         drag.px = p.x; drag.py = p.y;
@@ -1454,6 +1505,7 @@ var JOGO = (typeof window !== 'undefined')
     canvas.addEventListener('wheel', function (e) {
       if (overUI(e)) return;
       e.preventDefault();
+      cam.manual = true;
       cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0011), cam.minDist, cam.maxDist);
       updateCamera();
     }, { passive: false });

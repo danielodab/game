@@ -966,6 +966,16 @@ var JOGO = (typeof window !== 'undefined')
       bt.som.title = JOGO.Audio.isMudo() ? 'som desligado' : 'som ligado';
       top.appendChild(bt.som);
     }
+
+    // RECENTRAR A CAMERA. Camera livre sem volta e camera perdida — e quem se
+    // perde no meio de uma sala de 27x23 nao volta sozinho. So aparece quando o
+    // jogador REALMENTE mexeu: botao que nunca faz nada ensina a ser ignorado.
+    if (JOGO.Renderer && JOGO.Renderer.recentrar) {
+      bt.cam = btn('⌖', 'bt-cam', function () { JOGO.Renderer.recentrar(); });
+      bt.cam.title = 'recentrar a camera';
+      bt.cam.classList.add('is-off');
+      top.appendChild(bt.cam);
+    }
     bt.timeline = el('div', 'bt-timeline');
     top.appendChild(bt.timeline);
     s.appendChild(top);
@@ -2643,6 +2653,15 @@ var JOGO = (typeof window !== 'undefined')
       if (miraT <= 0) miraEl.classList.remove('is-on');
     }
     if (current !== 'battle') return;
+
+    // O RECENTRAR SO APARECE QUANDO HA O QUE RECENTRAR. Ele nasce escondido e
+    // surge no instante em que o jogador mexe na camera; some de novo quando
+    // ela volta ao lugar. Botao que fica na tela sem nunca fazer nada ensina a
+    // ser ignorado — e ai nao e visto quando faz falta.
+    if (bt && bt.cam && JOGO.Renderer && JOGO.Renderer.cameraManual) {
+      bt.cam.classList.toggle('is-off', !JOGO.Renderer.cameraManual());
+    }
+
     paintBattle(false);
     paintTimer();
   };
