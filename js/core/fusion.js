@@ -449,6 +449,44 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
 
+    /* AS INVOCAÇÕES DOS DOIS SAEM DO TABULEIRO.
+     *
+     * Sem isto o Invocador enchia o campo com as nove dele e só então fundia —
+     * a fusão herdava tudo mais a invocação própria, e fundir deixava de ser
+     * troca para virar acúmulo. A ficção bate com o equilíbrio: a invocação
+     * existe porque alguém a sustenta, e os dois conjuradores acabaram de
+     * deixar de existir como seres separados.
+     *
+     * SAEM, NÃO MORREM, e a diferença não é de gosto. `processDeath` dispara os
+     * traços de morte, e o CÃO DE BRASA tem `explodeOnDeath` — 20 de fogo em
+     * raio 1. Matar de verdade faria fundir ao lado do próprio cão queimar o
+     * próprio time, numa jogada que o jogador escolheu e por um motivo que ele
+     * não tem como deduzir. Então saem como a metade B já sai: sem evento de
+     * morte, sem XP, sem traço disparado. Na tela o bicho some do mesmo jeito.
+     *
+     * PET NÃO ENTRA NISTO (ver o laço acima): pet acompanha o dono, invocação é
+     * sustentada por ele. São coisas diferentes e continuam diferentes.
+     */
+    var saiu = 0;
+    for (var v = 0; v < state.units.length; v++) {
+      var iv = state.units[v];
+      if (!iv || iv.kind !== 'summon' || !iv.alive || iv.offBoard) continue;
+      // `summonerUid`, NAO `ownerUid`. Quem invoca grava em `summonerUid`
+      // (ver `spawnMonsterUnit` em engine.js); `ownerUid` e do PET. Escrevi
+      // `ownerUid` de primeira, copiando o laço dos pets logo acima, e o teste
+      // mostrou as duas invocações vivas depois de fundir.
+      if (iv.summonerUid !== a.uid && iv.summonerUid !== b.uid) continue;
+      iv.alive = false;
+      iv.offBoard = true;
+      iv.hp = 0;
+      saiu++;
+      E().emit({ type: 'death', uid: iv.uid });   // o desenho precisa retirá-la
+    }
+    if (saiu) {
+      E().log(saiu === 1 ? 'A invocação se desfaz com a fusão.'
+                           : ('As ' + saiu + ' invocações se desfazem com a fusão.'));
+    }
+
     E().emit({ type: 'fusion', uid: a.uid, from: fromUids, classPair: kKey,
                elemPair: eKey, level: level, defId: a.defId, spells: ids.slice() });
     E().emit({ type: 'shield', uid: a.uid, amount: Fusion.BONUS_SHIELD });
