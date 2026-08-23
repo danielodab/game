@@ -331,6 +331,30 @@ var JOGO = (typeof window !== 'undefined')
     }, true);
     window.addEventListener('resize', function () { hideTip(); });
 
+    /* ATALHOS DE TECLADO, à moda MMORPG — o primeiro listener de tecla do
+     * jogo. I abre o saco de QUALQUER lugar (a aba Inventário já é o menu de
+     * MMORPG: o herói com as setas, o equipamento vestido, a grade do saco) —
+     * e fecha, se já está aberto. ESC fecha a ficha aberta.
+     * Digitar num campo NUNCA dispara atalho: o i de um nome no meio da
+     * palavra não pode abrir o saco. Ctrl/Alt/Meta também não — Ctrl+I é do
+     * navegador, não nosso. */
+    document.addEventListener('keydown', function (ev) {
+      if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
+      var alvo = ev.target;
+      if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' ||
+                   alvo.isContentEditable)) return;
+      var k = String(ev.key || '').toLowerCase();
+      if (k === 'escape') {
+        if (sheetName) { closeSheet(); ev.preventDefault(); }
+        return;
+      }
+      if (k === 'i') {
+        ev.preventDefault();
+        if (sheetName === 'party' && partyTab === 'inventario') closeSheet();
+        else openSheet('inventory');
+      }
+    });
+
     UI.showScreen(safe(function () { return G().screen; }, 'menu'));
     return UI;
   };
@@ -724,7 +748,7 @@ var JOGO = (typeof window !== 'undefined')
     quem.appendChild(moedasEl);
     top.appendChild(quem);
     var acts = el('div', 'hub-acts');
-    acts.appendChild(btn('Personagens', 'btn-mini', function () { openSheet('party'); }));
+    acts.appendChild(btn('Personagens <span class="tecla">I</span>', 'btn-mini', function () { openSheet('party'); }));
     acts.appendChild(btn('Menu', 'btn-mini btn-ghost', function () { navTo('menu'); }));
     top.appendChild(acts);
     s.appendChild(top);
@@ -1876,6 +1900,10 @@ var JOGO = (typeof window !== 'undefined')
     sheetName = 'party';
     var def = partyTabDef(partyTab);
     var body = sheetShell('Personagens', def.sub);
+    // larga SEMPRE (não só no inventário): alargar ao trocar de aba faria a
+    // ficha pular de tamanho debaixo do dedo
+    var painelP = sheetEl.querySelector('.sheet-panel');
+    if (painelP) painelP.classList.add('sheet-larga');
 
     var tabs = el('div', 'pt-tabs');
     PARTY_TABS.forEach(function (t) {
@@ -2250,15 +2278,24 @@ var JOGO = (typeof window !== 'undefined')
       var pilha0 = pilhaDe(preselect);
       if (pilha0) invSel = { itemId: pilha0.itemId, level: pilha0.level, stars: pilha0.stars };
     }
-    body.appendChild(heroCarousel(hid));
-    if (hid) body.appendChild(equipRow(hid));
-    body.appendChild(pickBar(hid));
-    body.appendChild(invFilterTabs());
+    /* O desenho clássico de MMORPG: o PERSONAGEM à esquerda — retrato com as
+     * setas ‹ ›, nível, e o equipamento vestido em boneco — e o SACO à
+     * direita. No estreito as colunas voltam a ser pilha (CSS). */
+    var duo = el('div', 'pt-mmo');
+    var ladoHeroi = el('div', 'pt-mmo-heroi');
+    ladoHeroi.appendChild(heroCarousel(hid));
+    if (hid) ladoHeroi.appendChild(equipRow(hid));
+    var ladoSaco = el('div', 'pt-mmo-saco');
+    ladoSaco.appendChild(pickBar(hid));
+    ladoSaco.appendChild(invFilterTabs());
     var g = invGrid(hid);
     if (g.dataset && g.dataset.vazio) {
-      body.appendChild(el('p', 'inv-dica', g.dataset.vazio));
+      ladoSaco.appendChild(el('p', 'inv-dica', g.dataset.vazio));
     }
-    body.appendChild(g);
+    ladoSaco.appendChild(g);
+    duo.appendChild(ladoHeroi);
+    duo.appendChild(ladoSaco);
+    body.appendChild(duo);
   }
 
   function pilhaDe(itemId) {
