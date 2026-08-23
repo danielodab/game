@@ -1971,13 +1971,15 @@ var JOGO = (typeof window !== 'undefined')
       leg.appendChild(t);
     });
     body.appendChild(leg);
+    body.appendChild(el('p', 'hs-hint',
+      'Toque num feitiço para ler a descrição completa.'));
 
     // ---- tronco: o que a classe tem de saída, valha qual elemento valer
     var base = (def.baseSpells || def.spells || []);
     if (base.length) {
       body.appendChild(el('h3', 'hs-sec', 'Tronco · todo ' + className(cid) + ' tem'));
-      var tronco = el('div', 'tree-trunk');
-      base.forEach(function (sid) { tronco.appendChild(celulaDoFeitico(sid, 1, 'aberto')); });
+      var tronco = el('div', 'arv-tronco');
+      base.forEach(function (sid) { tronco.appendChild(chipDoTronco(sid)); });
       body.appendChild(tronco);
     }
 
@@ -1991,18 +1993,11 @@ var JOGO = (typeof window !== 'undefined')
         'Depois da escolha, ela é permanente.'));
     }
 
-    var grade = el('div', 'tree-grid');
-    var cab = el('div', 'tree-row is-head');
-    cab.appendChild(el('div', 'tree-lv', 'Nv'));
-    TREE_ELEMS.forEach(function (e) {
-      var c = el('div', 'tree-el', esc(ELEM_PT[e] || e));
-      c.style.setProperty('--ec', elemColor(e));
-      if (escolhido && e !== escolhido) c.classList.add('is-descartado');
-      cab.appendChild(c);
-    });
-    grade.appendChild(cab);
-
-    // o "próximo" é o degrau mais baixo ainda fechado — um por galho
+    /* A ÁRVORE de verdade: quatro COLUNAS verticais, uma por elemento, cada
+     * uma tingida pela cor dele — cabeçalho colorido, nós encadeados por um
+     * FIO. O degrau vai num SELO em cada nó (Nv 3), não numa régua à
+     * esquerda: régua alinhada obrigava casas vazias tracejadas onde o galho
+     * não tem feitiço, e a grade lia como planilha, não como árvore. */
     var proximo = {};
     var degraus = tiersDaClasse(def);
     TREE_ELEMS.forEach(function (e) {
@@ -2011,14 +2006,17 @@ var JOGO = (typeof window !== 'undefined')
       }
     });
 
-    degraus.forEach(function (lv) {
-      var linha = el('div', 'tree-row');
-      var marca = el('div', 'tree-lv', String(lv));
-      if (nivel >= lv) marca.classList.add('is-passou');
-      linha.appendChild(marca);
-      TREE_ELEMS.forEach(function (e) {
+    var arv = el('div', 'arv');
+    TREE_ELEMS.forEach(function (e) {
+      var col = el('div', 'arv-col');
+      col.style.setProperty('--ec', elemColor(e));
+      if (escolhido && e !== escolhido) col.classList.add('is-descartada');
+      if (escolhido && e === escolhido) col.classList.add('is-atual');
+      col.appendChild(el('div', 'arv-cab', esc(ELEM_PT[e] || e)));
+      var fio = el('div', 'arv-fio');
+      degraus.forEach(function (lv) {
         var sid = feiticoDoDegrau(def, e, lv);
-        if (!sid) { linha.appendChild(el('div', 'tree-cell is-vazio')); return; }
+        if (!sid) return;              // degrau sem feitiço NESTE galho: nada de casa vazia
         // Sem elemento escolhido NADA do galho está aberto, mesmo que o nível
         // já dê: o feitiço só entra na mão depois da escolha.
         var estado;
@@ -2026,33 +2024,62 @@ var JOGO = (typeof window !== 'undefined')
         else if (escolhido && nivel >= lv) estado = 'aberto';
         else if (proximo[e] === lv) estado = 'proximo';
         else estado = 'trancado';
-        linha.appendChild(celulaDoFeitico(sid, lv, estado));
+        fio.appendChild(noDaArvore(sid, lv, estado));
       });
-      grade.appendChild(linha);
+      col.appendChild(fio);
+      arv.appendChild(col);
     });
-    body.appendChild(grade);
+    body.appendChild(arv);
   }
 
-  /* Uma casa da árvore. Mostra o suficiente para decidir sem abrir nada —
-   * nome, custo e o que faz — porque no celular não existe passar o mouse. */
-  function celulaDoFeitico(sid, lv, estado) {
-    var d2 = spellDef(sid);
-    var cel = el('div', 'tree-cell is-' + estado);
-    if (d2 && d2.element) cel.style.setProperty('--ec', elemColor(d2.element));
-    cel.appendChild(art('spellIcon', [d2 || sid, 34], 34,
-      estado === 'aberto' ? '' : 'silhouette'));
-    cel.appendChild(el('div', 'tree-nm', esc(spellName(d2, sid))));
-    if (d2) {
-      var ficha = (d2.paCost || 0) + ' PA';
-      if (d2.range) ficha += ' · ' + (d2.range.min || 0) + '–' + (d2.range.max || 0);
-      if (d2.aoe && d2.aoe.shape && d2.aoe.shape !== 'single') {
-        ficha += ' · ' + d2.aoe.shape + (d2.aoe.size ? ' ' + d2.aoe.size : '');
-      }
-      cel.appendChild(el('div', 'tree-n', esc(ficha)));
-      if (d2.description) cel.appendChild(el('p', 'tree-d', esc(d2.description)));
-      tipOn(cel, spellName(d2, sid), spellTipBody(d2, sid), elemColor(d2.element));
+  /* A ficha CURTA de um feitiço: custo, alcance, área. É o que cabe num nó
+   * sem virar muro de texto — a descrição completa vive no tooltip, que abre
+   * por toque (o aviso debaixo da legenda ensina). */
+  function fichaCurta(d2) {
+    if (!d2) return '';
+    var f = (d2.paCost || 0) + ' PA';
+    if (d2.range) f += ' · ' + (d2.range.min || 0) + '–' + (d2.range.max || 0);
+    if (d2.aoe && d2.aoe.shape && d2.aoe.shape !== 'single') {
+      f += ' · ' + d2.aoe.shape + (d2.aoe.size ? ' ' + d2.aoe.size : '');
     }
-    return cel;
+    return f;
+  }
+
+  /* Um NÓ do galho: ícone num anel da cor do elemento, nome, ficha curta e o
+   * SELO do degrau — dourado quando é "o próximo", que é o que o jogador
+   * procura na árvore. */
+  function noDaArvore(sid, lv, estado) {
+    var d2 = spellDef(sid);
+    var no = el('div', 'arv-no is-' + estado);
+    if (d2 && d2.element) no.style.setProperty('--ec', elemColor(d2.element));
+    var anel = el('div', 'arv-anel');
+    anel.appendChild(art('spellIcon', [d2 || sid, 40], 40,
+      estado === 'aberto' ? '' : 'silhouette'));
+    no.appendChild(anel);
+    var tx = el('div', 'arv-tx');
+    tx.appendChild(el('div', 'arv-nm', esc(spellName(d2, sid))));
+    var f = fichaCurta(d2);
+    if (f) tx.appendChild(el('div', 'arv-fi', esc(f)));
+    no.appendChild(tx);
+    no.appendChild(el('span', 'arv-lv', 'Nv ' + lv));
+    if (d2) tipOn(no, spellName(d2, sid), spellTipBody(d2, sid), elemColor(d2.element));
+    return no;
+  }
+
+  /* Um chip do TRONCO: todo mundo da classe tem, então não há estado — só
+   * ícone, nome e ficha curta, lado a lado. */
+  function chipDoTronco(sid) {
+    var d2 = spellDef(sid);
+    var chip = el('div', 'arv-chip');
+    if (d2 && d2.element) chip.style.setProperty('--ec', elemColor(d2.element));
+    chip.appendChild(art('spellIcon', [d2 || sid, 34], 34));
+    var tx = el('div', 'arv-tx');
+    tx.appendChild(el('div', 'arv-nm', esc(spellName(d2, sid))));
+    var f = fichaCurta(d2);
+    if (f) tx.appendChild(el('div', 'arv-fi', esc(f)));
+    chip.appendChild(tx);
+    if (d2) tipOn(chip, spellName(d2, sid), spellTipBody(d2, sid), elemColor(d2.element));
+    return chip;
   }
 
   // -------------------------------------------------------------- COLEÇÃO
