@@ -539,6 +539,22 @@ var JOGO = (typeof window !== 'undefined')
     var difSala = E().dif(st);
     var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1));
 
+    /* VINTENS — a moeda, derivada do MESMO xpTotal.
+     *
+     * 0,30 por ponto de xp, vezes o multiplicador de drop da dificuldade.
+     * Amarrar ao xp herda toda a calibragem de economia ja feita: monstro que
+     * paga mais xp paga mais vintem, sala funda paga mais que rasa — sem uma
+     * segunda tabela para manter em paralelo.
+     *
+     * SEM dividir por partySize: a carteira e DO GRUPO. E uma so, e e o que
+     * permite banco e troca sem contabilidade por personagem. */
+    var moedasGanhas = Math.floor(xpTotal * 0.30 * (difSala.drop || 1));
+    if (moedasGanhas > 0 && JOGO.DB && JOGO.DB.ganharMoedas) {
+      // e-assincrono e o resultado nao bloqueia a tela de recompensa: o numero
+      // ganho vem no payload; o TOTAL a tela busca por conta propria no DB.
+      try { JOGO.DB.ganharMoedas(moedasGanhas); } catch (e) {}
+    }
+
     // cartas do chefe: acumulam na coleção e podem virar estrela (§9-B)
     var cards = [];
     if (prog && prog.rollCards) {
@@ -591,6 +607,7 @@ var JOGO = (typeof window !== 'undefined')
       xpMult: xpMult,            // multiplicador aplicado a cada herói (§9-D)
       xpPorHeroi: xpPorHeroi,    // o que cada herói realmente recebeu
       levelUps: levelUps,
+      moedas: moedasGanhas,
       dificuldade: difSala.id || 'normal',
       difNome: difSala.nome || 'Normal',
       drops: drops,

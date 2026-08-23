@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a conta local (DB)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:940px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>A conta local — o banco de dados que um dia vira servidor</h1>
+<div class="sub">Toda a vida «online» do jogo (moedas, cofre, históricos) passa por <code>JOGO.DB</code>,
+cuja API é assíncrona DE PROPÓSITO: quando o servidor chegar, troca-se o miolo e nenhum chamador
+percebe. Esta página cobra as regras — inclusive a de que nenhuma resposta pode chegar síncrona,
+porque um chamador que dependa disso quebraria exatamente no dia da migração.</div>
+<div id="summary">medindo…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  document.write('<scr' + 'ipt src="../js/core/db.js' + window.__V + '"><\/scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = mau ? (mau + ' de ' + res.length + ' falharam')
+                        : ('tudo passou (' + res.length + ')');
+    window.__done = true; window.__fail = mau;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var DB = window.JOGO && JOGO.DB;
+    if (!DB) { check('JOGO.DB carregou', false); return fecha(); }
+
+    // A REGRA CENTRAL: resposta nunca é síncrona. Se `.then` rodar antes desta
+    // linha seguinte, alguém "otimizou" o Promise.resolve para retorno direto —
+    // e todo chamador que passasse a depender disso quebraria na migração.
+    var sincrona = true;
+    DB._zerar().then(function () { sincrona = false; });
+    check('nenhuma resposta chega síncrona', sincrona === true,
+          'o .then só pode rodar na microtarefa');
+
+    DB._zerar()
+      .then(function () { return DB.jogador(); })
+      .then(function (j) {
+        check('a conta nasce com id e sem nome', !!j.id && j.nome === null, 'id=' + j.id);
+        return DB.batizar('  Daniel do Fundo  ');
+      })
+      .then(function (r) {
+        check('batizar apara espaços e aceita', r.ok && r.nome === 'Daniel do Fundo', r.nome);
+        return DB.batizar('');
+      })
+      .then(function (r) {
+        check('nome vazio é recusado', !r.ok, r.erro);
+        return DB.ganharMoedas(120);
+      })
+      .then(function (r) {
+        check('ganhar 120 vinténs', r.ok && r.moedas === 120);
+        return DB.gastarMoedas(200);
+      })
+      .then(function (r) {
+        check('gastar mais do que tem é recusado SEM debitar', !r.ok && r.moedas === 120, r.erro);
+        return DB.depositarMoedas(70);
+      })
+      .then(function (r) {
+        check('depósito move 70 (bolso 50 · cofre 70)', r.ok && r.carteira === 50 && r.banco === 70);
+        return DB.sacarMoedas(999);
+      })
+      .then(function (r) {
+        check('saque acima do cofre é recusado', !r.ok, r.erro);
+        return DB.depositarItem({ itemId: 'gh-wasp-sting', level: 3, stars: 1 });
+      })
+      .then(function (r) {
+        check('item entra no cofre', r.ok && r.total === 1);
+        return DB.sacarItem(0);
+      })
+      .then(function (r) {
+        // A FORMA sobrevive à viagem: nível e estrelas voltam como entraram.
+        // Guardar só o id devolveria um item pior do que o depositado.
+        check('o item volta INTEIRO (nível e estrelas)',
+              r.ok && r.item.itemId === 'gh-wasp-sting' && r.item.level === 3 && r.item.stars === 1);
+        return DB.sacarItem(0);
+      })
+      .then(function (r) {
+        check('sacar do cofre vazio é recusado', !r.ok, r.erro);
+        return DB.registrarPvp({ oponente: 'Fulano', minhaDupla: ['sumo', 'invocador'],
+                                 duplaDele: ['minotauro', 'bruxo'], resultado: 'vitoria', clima: 'chuva' });
+      })
+      .then(function () { return DB.historicoPvp(); })
+      .then(function (h) {
+        check('o histórico de PvP guarda a partida com as duas duplas',
+              h.length === 1 && h[0].minhaDupla.length === 2 && h[0].duplaDele.length === 2 &&
+              h[0].clima === 'chuva');
+        // PERSISTÊNCIA DE VERDADE: o que foi gravado sobrevive fora do cache em
+        // memória. Leio o localStorage cru e confiro — sem isto o teste passaria
+        // com um DB que nunca grava nada.
+        var cru = null;
+        try { cru = JSON.parse(localStorage.getItem('soterra-conta-v1')); } catch (e) {}
+        check('os dados estão de fato no disco', !!cru &&
+              cru.carteira.moedas === 50 && cru.banco.moedas === 70 &&
+              cru.jogador.nome === 'Daniel do Fundo',
+              cru ? ('bolso=' + cru.carteira.moedas + ' cofre=' + cru.banco.moedas) : 'nada gravado');
+        // SANEAMENTO: um save corrompido à mão não pode derrubar o jogo
+        localStorage.setItem('soterra-conta-v1', '{"jogador":{"id":"x"},"carteira":{"moedas":"muitas"}');
+        return DB._recarregar();   // derruba o cache SEM gravar: o próximo
+                                   // acesso lê o lixo do disco, como num boot
+      })
+      .then(function () { return DB.moedas(); })
+      .then(function (m) {
+        check('save corrompido não derruba (renasce limpo)', typeof m === 'number', 'moedas=' + m);
+        fecha();
+      })
+      .catch(function (e) {
+        check('a corrente de promessas não estoura', false, e && e.message);
+        fecha();
+      });
+  });
+})();
+</script>
+</body>
+</html>

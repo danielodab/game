@@ -295,7 +295,7 @@ var JOGO = (typeof window !== 'undefined')
   // ==========================================================================
   // ESQUELETO
   // ==========================================================================
-  var SCREEN_NAMES = ['menu', 'heroSelect', 'dungeonSelect', 'elementChoice',
+  var SCREEN_NAMES = ['menu', 'heroSelect', 'hub', 'dungeonSelect', 'elementChoice',
                       'battle', 'roomClear', 'dungeonComplete', 'defeat'];
 
   UI.init = function () {
@@ -340,6 +340,8 @@ var JOGO = (typeof window !== 'undefined')
     hideTip();
     if (name !== 'battle') closeSheet();
     current = name;
+    // o laço de desenho do Acampamento não pode continuar rodando escondido
+    if (name !== 'hub' && JOGO.Hub && JOGO.Hub.sair) JOGO.Hub.sair();
     for (var k in screens) {
       if (screens.hasOwnProperty(k)) screens[k].classList.toggle('is-on', k === name);
     }
@@ -351,6 +353,7 @@ var JOGO = (typeof window !== 'undefined')
     battleSig = '';
     if (name === 'menu') buildMenu();
     else if (name === 'heroSelect') buildHeroSelect();
+    else if (name === 'hub') buildHub();
     else if (name === 'dungeonSelect') buildDungeonSelect();
     else if (name === 'elementChoice') buildElementChoice(data);
     else if (name === 'battle') { logLines = []; buildBattle(); }
@@ -438,7 +441,7 @@ var JOGO = (typeof window !== 'undefined')
     var cnt = el('span', 'foot-count', '');
     var go = btn('Confirmar', 'btn-primary', function () {
       if (!selHeroes.length) { toast('Escolha ao menos um herói.'); return; }
-      navTo('dungeonSelect');
+      navTo('hub');
     });
     foot.appendChild(cnt);
     foot.appendChild(go);
@@ -702,6 +705,104 @@ var JOGO = (typeof window !== 'undefined')
   // ==========================================================================
   // TELAS: RECOMPENSA E DERROTA
   // ==========================================================================
+  /* O ACAMPAMENTO — a tela do mapa aberto.
+   *
+   * O 3D é do JOGO.Hub; aqui mora só a camada de interface: a barra com nome e
+   * vinténs, o pedido de nome na primeira visita, e o painel que aparece quando
+   * o herói se APROXIMA de um lugar. A regra do painel é a do mundo: nada abre
+   * por menu — o corpo anda até o portal, e a porta aparece quando se chega.
+   */
+  function buildHub() {
+    var s = screens.hub;
+    clear(s);
+
+    var top = el('div', 'hub-top');
+    var quem = el('div', 'hub-quem');
+    var nomeEl = el('span', 'hub-nome', '…');
+    var moedasEl = el('span', 'hub-moedas', '');
+    quem.appendChild(nomeEl);
+    quem.appendChild(moedasEl);
+    top.appendChild(quem);
+    var acts = el('div', 'hub-acts');
+    acts.appendChild(btn('Personagens', 'btn-mini', function () { openSheet('party'); }));
+    acts.appendChild(btn('Menu', 'btn-mini btn-ghost', function () { navTo('menu'); }));
+    top.appendChild(acts);
+    s.appendChild(top);
+
+    var mundo = el('div', 'hub-mundo');
+    s.appendChild(mundo);
+
+    var painel = el('div', 'hub-painel is-off');
+    s.appendChild(painel);
+
+    function pintaConta() {
+      if (!JOGO.DB) { nomeEl.textContent = ''; return; }
+      JOGO.DB.jogador().then(function (j) {
+        if (!j.nome) { nomeEl.textContent = '—'; pedeNome(); }
+        else nomeEl.textContent = j.nome;
+      });
+      JOGO.DB.moedas().then(function (m) {
+        moedasEl.textContent = m + (m === 1 ? ' vintém' : ' vinténs');
+      });
+    }
+
+    /* O NOME, pedido UMA vez. É a primeira peça de identidade pública — chat,
+     * troca e PvP vão usá-lo — e pedir na entrada do acampamento (e não num
+     * formulário de opções) é o que dá o cheiro de jogo online. */
+    function pedeNome() {
+      clear(painel);
+      painel.classList.remove('is-off');
+      painel.appendChild(el('h3', null, 'Como te chamam no fundo?'));
+      var inp = document.createElement('input');
+      inp.className = 'hub-input';
+      inp.maxLength = 24;
+      inp.placeholder = 'seu nome no acampamento';
+      painel.appendChild(inp);
+      painel.appendChild(btn('É assim que me chamam', 'btn-primary btn-block', function () {
+        JOGO.DB.batizar(inp.value).then(function (r) {
+          if (!r.ok) { toast('Diz um nome.'); return; }
+          painel.classList.add('is-off');
+          pintaConta();
+        });
+      }));
+      setTimeout(function () { try { inp.focus(); } catch (e) {} }, 60);
+    }
+
+    if (JOGO.Hub) JOGO.Hub.aoAproximar = function (lugar) {
+      if (!lugar) { painel.classList.add('is-off'); return; }
+      clear(painel);
+      painel.classList.remove('is-off');
+      if (lugar.tipo === 'portal') {
+        painel.appendChild(el('h3', null, esc(lugar.nome)));
+        var sd = seletorDif();
+        if (sd) painel.appendChild(sd);
+        painel.appendChild(btn('Descer', 'btn-primary btn-block', function () {
+          var ok = safe(function () { return G().startRun(selHeroes.slice(), lugar.id); }, false);
+          if (!ok) toast('Não deu para começar essa descida.');
+        }));
+      } else if (lugar.tipo === 'banco') {
+        painel.appendChild(el('h3', null, 'Banco do Acampamento'));
+        painel.appendChild(el('p', 'hub-nota',
+          'O que está no cofre não desce com você — e por isso nunca se perde.'));
+        painel.appendChild(btn('Abrir o cofre', 'btn-primary btn-block', function () {
+          openSheet('banco');
+        }));
+      } else if (lugar.tipo === 'arena') {
+        painel.appendChild(el('h3', null, 'Arena de Duelos'));
+        painel.appendChild(el('p', 'hub-nota',
+          'Ainda selada. Os duelos chegam com a Rede: cada um escolhe a própria ' +
+          'dupla sem ver a do outro, e o clima da arena é sorteado.'));
+        if (JOGO.DB) JOGO.DB.historicoPvp().then(function (h) {
+          painel.appendChild(el('p', 'hub-nota', h.length + ' duelo(s) na conta.'));
+        });
+      }
+    };
+
+    var entrou = JOGO.Hub && JOGO.Hub.entrar(mundo, selHeroes[0] || 'sumo');
+    if (!entrou) mundo.appendChild(el('p', 'empty', 'O acampamento precisa do modo 3D.'));
+    pintaConta();
+  }
+
   function buildRewards(name, data) {
     var s = screens[name];
     clear(s);
@@ -811,6 +912,23 @@ var JOGO = (typeof window !== 'undefined')
 
     var drops = lastRewards.drops || [];
     if (drops.length) {
+    if (lastRewards.moedas > 0) {
+      box.appendChild(rwBlock('Vinténs', (function () {
+        var w = el('div', 'rw-moedas');
+        var g = lastRewards.moedas || 0;
+        w.appendChild(el('span', 'rw-moedas-ganho',
+          '+' + g + (g === 1 ? ' vintém' : ' vinténs')));
+        // o TOTAL vem do DB, assincrono — a tela nasce sem ele e preenche
+        // quando a resposta chega, como fara quando o DB for um servidor
+        var tot = el('span', 'rw-moedas-total', '…');
+        if (JOGO.DB && JOGO.DB.moedas) {
+          JOGO.DB.moedas().then(function (m) { tot.textContent = 'no bolso: ' + m; });
+        } else tot.textContent = '';
+        w.appendChild(tot);
+        return w;
+      })()));
+    }
+
       box.appendChild(rwBlock('Saque', (function () {
         var w = el('div', 'rw-items');
         drops.forEach(function (d) {
@@ -896,7 +1014,7 @@ var JOGO = (typeof window !== 'undefined')
       }));
     }
     foot.appendChild(btn('Inventário', 'btn-ghost', function () { openSheet('inventory'); }));
-    if (fim) foot.appendChild(btn('Voltar ao acampamento', 'btn-primary', function () { navTo('menu'); }));
+    if (fim) foot.appendChild(btn('Voltar ao acampamento', 'btn-primary', function () { navTo('hub'); }));
     else foot.appendChild(btn('Próxima sala', 'btn-primary', function () {
       if (!safe(function () { return G().nextRoom(); }, false)) toast('Não deu para avançar.');
     }));
@@ -1442,6 +1560,107 @@ var JOGO = (typeof window !== 'undefined')
     sheetName = null;
     hideTip();
   }
+  /* O BANCO — bolso de um lado, cofre do outro.
+   *
+   * Toda leitura vem do DB por Promise e a ficha REDESENHA quando a resposta
+   * chega: e o mesmo desenho que vai valer quando o DB for um servidor, entao
+   * a ficha ja nasce sabendo esperar. Nenhum numero aqui e lido de cache
+   * proprio — dois donos do mesmo saldo divergem, e saldo divergente num jogo
+   * com moeda e o tipo de defeito que jogador percebe na hora.
+   *
+   * ITENS: depositar tira UMA unidade da pilha do inventario (o save solo, do
+   * Progress) e poe no cofre (o DB) com nivel e estrelas — a forma inteira
+   * viaja, senao o jogador sacaria um item pior do que guardou. Item EQUIPADO
+   * nao aparece aqui: o inventario ja e so o saco solto.
+   */
+  function sheetBanco() {
+    sheetName = 'banco';
+    var body = sheetShell('Banco do Acampamento',
+      'O que está no cofre não desce com você — e por isso nunca se perde.');
+    var DBc = JOGO.DB;
+    if (!DBc) { body.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
+
+    var caixa = el('div', 'bk-caixa');
+    body.appendChild(caixa);
+
+    Promise.all([DBc.moedas(), DBc.banco()]).then(function (r) {
+      var bolso = r[0], cofre = r[1];
+      clear(caixa);
+
+      // ---- as moedas, lado a lado
+      var moedas = el('div', 'bk-moedas');
+      var ladoBolso = el('div', 'bk-lado');
+      ladoBolso.appendChild(el('h3', null, 'No bolso'));
+      ladoBolso.appendChild(el('div', 'bk-valor', String(bolso)));
+      var ladoCofre = el('div', 'bk-lado');
+      ladoCofre.appendChild(el('h3', null, 'No cofre'));
+      ladoCofre.appendChild(el('div', 'bk-valor', String(cofre.moedas)));
+      moedas.appendChild(ladoBolso);
+
+      var meio = el('div', 'bk-meio');
+      [[10, 'guardar'], [100, 'guardar'], [-10, 'sacar'], [-100, 'sacar']].forEach(function (par) {
+        var n2 = Math.abs(par[0]);
+        var b = btn((par[0] > 0 ? '→ ' : '← ') + n2, 'btn-mini', function () {
+          var op = par[0] > 0 ? DBc.depositarMoedas(n2) : DBc.sacarMoedas(n2);
+          op.then(function (res) {
+            if (!res.ok) toast(res.erro || 'não deu');
+            sheetBanco();                       // redesenha com os saldos novos
+          });
+        });
+        meio.appendChild(b);
+      });
+      moedas.appendChild(meio);
+      moedas.appendChild(ladoCofre);
+      caixa.appendChild(moedas);
+
+      // ---- itens do inventario (para guardar)
+      var pilhas = safe(function () { return P().invStacks(); }, []);
+      caixa.appendChild(el('h3', 'bk-tit', 'No saco (' + pilhas.length + ')'));
+      var lin1 = el('div', 'bk-itens');
+      if (!pilhas.length) lin1.appendChild(el('p', 'inv-dica', 'O saco está vazio.'));
+      pilhas.forEach(function (pi) {
+        var d2 = (D().items || {})[pi.itemId] || {};
+        var row = el('div', 'bk-item');
+        row.appendChild(el('span', null,
+          (d2.name || pi.itemId) + (pi.level > 1 ? ' +' + pi.level : '') +
+          (pi.count > 1 ? ' ×' + pi.count : '')));
+        row.appendChild(btn('guardar', 'btn-mini', function () {
+          // tira UMA unidade da pilha: o indice real esta em pi.indices[0]
+          var st2 = P().state;
+          var entrada = st2.inventory[pi.indices[0]];
+          if (!entrada) { toast('essa peça já saiu'); sheetBanco(); return; }
+          st2.inventory.splice(pi.indices[0], 1);
+          safe(function () { P().save(); }, null);
+          DBc.depositarItem(entrada).then(function () { sheetBanco(); });
+        }));
+        lin1.appendChild(row);
+      });
+      caixa.appendChild(lin1);
+
+      // ---- itens do cofre (para sacar)
+      caixa.appendChild(el('h3', 'bk-tit', 'No cofre (' + cofre.itens.length + ')'));
+      var lin2 = el('div', 'bk-itens');
+      if (!cofre.itens.length) lin2.appendChild(el('p', 'inv-dica', 'O cofre está vazio.'));
+      cofre.itens.forEach(function (it, idx) {
+        var d3 = (D().items || {})[it.itemId] || {};
+        var row = el('div', 'bk-item');
+        row.appendChild(el('span', null,
+          (d3.name || it.itemId) + (it.level > 1 ? ' +' + it.level : '')));
+        row.appendChild(btn('sacar', 'btn-mini', function () {
+          DBc.sacarItem(idx).then(function (res) {
+            if (!res.ok) { toast(res.erro || 'não deu'); sheetBanco(); return; }
+            var st3 = P().state;
+            st3.inventory.push(res.item);
+            safe(function () { P().save(); }, null);
+            sheetBanco();
+          });
+        }));
+        lin2.appendChild(row);
+      });
+      caixa.appendChild(lin2);
+    });
+  }
+
   function sheetShell(title, sub) {
     clear(sheetEl);
     var panel = el('div', 'sheet-panel');
@@ -1481,6 +1700,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'spells') sheetParty('feiticos', arg);
     else if (name === 'heroSheet') sheetHero(arg);
     else if (name === 'battleMenu') sheetBattleMenu();
+    else if (name === 'banco') sheetBanco();
     else closeSheet();
   }
   UI.openSheet = openSheet;
