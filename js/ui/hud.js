@@ -1560,23 +1560,119 @@ var JOGO = (typeof window !== 'undefined')
     sheetName = null;
     hideTip();
   }
-  /* O BANCO — bolso de um lado, cofre do outro.
+  /* O BANCO — agora do jeito do DOFUS, a pedido: o saco do grupo de um lado,
+   * o cofre do outro, as DUAS grades na mesma tela, e a peça ATRAVESSA —
+   * arrastada com o mouse ou o dedo, ou com dois toques rápidos. O dinheiro
+   * tem campo DIGITADO: "guardar 500" é uma intenção que os quatro botões de
+   * ±10/±100 nunca expressaram.
    *
    * Toda leitura vem do DB por Promise e a ficha REDESENHA quando a resposta
-   * chega: e o mesmo desenho que vai valer quando o DB for um servidor, entao
-   * a ficha ja nasce sabendo esperar. Nenhum numero aqui e lido de cache
-   * proprio — dois donos do mesmo saldo divergem, e saldo divergente num jogo
-   * com moeda e o tipo de defeito que jogador percebe na hora.
+   * chega: é o mesmo desenho que vai valer quando o DB for um servidor, então
+   * a ficha já nasce sabendo esperar. Nenhum número aqui é lido de cache
+   * próprio — dois donos do mesmo saldo divergem, e saldo divergente num jogo
+   * com moeda é o tipo de defeito que jogador percebe na hora.
    *
-   * ITENS: depositar tira UMA unidade da pilha do inventario (o save solo, do
-   * Progress) e poe no cofre (o DB) com nivel e estrelas — a forma inteira
-   * viaja, senao o jogador sacaria um item pior do que guardou. Item EQUIPADO
-   * nao aparece aqui: o inventario ja e so o saco solto.
+   * ITENS: cada viagem leva UMA unidade da pilha, e a forma inteira — nível e
+   * estrelas — viaja junto, senão o jogador sacaria um item pior do que
+   * guardou. Item EQUIPADO não aparece: o inventário já é só o saco solto.
+   * No cofre, iguais empilham com ×N como na grade do inventário, guardando
+   * os índices reais de cada unidade para o saque.
    */
+  var bancoQtd = '';               // o valor digitado sobrevive ao redesenho
+
+  /* A célula é a MESMA da grade do inventário (ig-cell): icone, raridade,
+   * forja, estrelas, ×N. O que ela ganha aqui é o ARRASTO: pointer capture
+   * prende o dedo à célula, um fantasma com o nome segue o cursor, a coluna
+   * de destino acende (is-alvo), e soltar sobre ela transfere. Menos de 8 px
+   * de movimento é toque — e o segundo toque em menos de 350 ms também
+   * transfere. */
+  function bancoCelula(pilha, lado, transferir) {
+    var it = itemDef(pilha.itemId) || {};
+    var cell = el('div', 'ig-cell bk2-cel ' + starClass(pilha.stars));
+    markRarity(cell, it.rarity);
+    var plate = el('span', 'ig-plate');
+    plate.appendChild(art('itemIcon', [pilha.itemId, 44], 44));
+    cell.appendChild(plate);
+    if (pilha.count > 1) cell.appendChild(el('span', 'ig-n', '×' + pilha.count));
+    if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
+    if (pilha.stars) cell.appendChild(starPips(pilha.stars));
+    cell.appendChild(el('span', 'ig-nm', esc(it.name || pilha.itemId)));
+    tipOn(cell, it.name || pilha.itemId,
+      itemTipBody(pilha.itemId, pilha.level, pilha.stars), rarColor(it.rarity));
+
+    var draga = null;
+    function limpaAlvo() {
+      var m = document.querySelector('.bk2-col.is-alvo');
+      if (m) m.classList.remove('is-alvo');
+    }
+    cell.addEventListener('pointerdown', function (ev) {
+      ev.preventDefault();
+      draga = { x: ev.clientX, y: ev.clientY, fantasma: null };
+      try { cell.setPointerCapture(ev.pointerId); } catch (e) {}
+    });
+    cell.addEventListener('pointermove', function (ev) {
+      if (!draga) return;
+      if (!draga.fantasma && Math.hypot(ev.clientX - draga.x, ev.clientY - draga.y) > 8) {
+        draga.fantasma = el('div', 'bk2-fantasma', esc(it.name || pilha.itemId));
+        draga.fantasma.style.borderColor = rarColor(it.rarity);
+        document.body.appendChild(draga.fantasma);
+        var alvo = document.querySelector(
+          '.bk2-col[data-lado="' + (lado === 'saco' ? 'cofre' : 'saco') + '"]');
+        if (alvo) alvo.classList.add('is-alvo');
+      }
+      if (draga.fantasma) {
+        draga.fantasma.style.left = ev.clientX + 'px';
+        draga.fantasma.style.top = ev.clientY + 'px';
+      }
+    });
+    cell.addEventListener('pointerup', function (ev) {
+      if (!draga) return;
+      var arrastou = !!draga.fantasma;
+      if (draga.fantasma) draga.fantasma.remove();
+      draga = null;
+      limpaAlvo();
+      if (arrastou) {
+        // o fantasma tem pointer-events:none, então o ponto enxerga o que há
+        // DEBAIXO dele — a coluna onde o jogador soltou
+        var sob = document.elementFromPoint(ev.clientX, ev.clientY);
+        var col = sob && sob.closest ? sob.closest('.bk2-col') : null;
+        if (col && col.dataset.lado && col.dataset.lado !== lado) transferir();
+        return;
+      }
+      var agora = Date.now();
+      if (cell.__toque && agora - cell.__toque < 350) { cell.__toque = 0; transferir(); }
+      else cell.__toque = agora;
+    });
+    cell.addEventListener('pointercancel', function () {
+      if (draga && draga.fantasma) draga.fantasma.remove();
+      draga = null;
+      limpaAlvo();
+    });
+    return cell;
+  }
+
+  /* Grade FIXA como a do inventário: as casas vazias mostram quanto ainda
+   * cabe, e sempre sobra ao menos uma fileira — uma grade cheia até a borda
+   * diz "não cabe mais", e cabe. */
+  function bancoGrade(pilhas, lado, aoTransferir) {
+    var grid = el('div', 'bk2-grid');
+    pilhas.forEach(function (pi) {
+      grid.appendChild(bancoCelula(pi, lado, function () { aoTransferir(pi); }));
+    });
+    var alvo = Math.max(12, Math.ceil((pilhas.length + 1) / 4) * 4);
+    for (var vz = pilhas.length; vz < alvo; vz++) {
+      grid.appendChild(el('div', 'ig-cell is-vazia bk2-cel'));
+    }
+    return grid;
+  }
+
   function sheetBanco() {
     sheetName = 'banco';
     var body = sheetShell('Banco do Acampamento',
       'O que está no cofre não desce com você — e por isso nunca se perde.');
+    // duas grades em 720px viram espremido; a ficha do banco alarga
+    var painel = sheetEl.querySelector('.sheet-panel');
+    if (painel) painel.classList.add('sheet-larga');
     var DBc = JOGO.DB;
     if (!DBc) { body.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
 
@@ -1587,7 +1683,7 @@ var JOGO = (typeof window !== 'undefined')
       var bolso = r[0], cofre = r[1];
       clear(caixa);
 
-      // ---- as moedas, lado a lado
+      // ---- O DINHEIRO: bolso | quantia digitada + guardar/sacar | cofre
       var moedas = el('div', 'bk-moedas');
       var ladoBolso = el('div', 'bk-lado');
       ladoBolso.appendChild(el('h3', null, 'No bolso'));
@@ -1595,69 +1691,102 @@ var JOGO = (typeof window !== 'undefined')
       var ladoCofre = el('div', 'bk-lado');
       ladoCofre.appendChild(el('h3', null, 'No cofre'));
       ladoCofre.appendChild(el('div', 'bk-valor', String(cofre.moedas)));
-      moedas.appendChild(ladoBolso);
 
-      var meio = el('div', 'bk-meio');
-      [[10, 'guardar'], [100, 'guardar'], [-10, 'sacar'], [-100, 'sacar']].forEach(function (par) {
-        var n2 = Math.abs(par[0]);
-        var b = btn((par[0] > 0 ? '→ ' : '← ') + n2, 'btn-mini', function () {
-          var op = par[0] > 0 ? DBc.depositarMoedas(n2) : DBc.sacarMoedas(n2);
-          op.then(function (res) {
-            if (!res.ok) toast(res.erro || 'não deu');
-            sheetBanco();                       // redesenha com os saldos novos
-          });
+      var meio = el('div', 'bk-meio bk2-meio');
+      var campo = document.createElement('input');
+      campo.type = 'number'; campo.min = '1'; campo.step = '1';
+      campo.placeholder = 'quantia';
+      campo.className = 'bk2-qtd';
+      campo.value = bancoQtd;
+      campo.addEventListener('input', function () { bancoQtd = campo.value; });
+      meio.appendChild(campo);
+
+      function quantia() {
+        var n2 = Math.floor(Number(campo.value));
+        if (!isFinite(n2) || n2 <= 0) { toast('digite a quantia'); campo.focus(); return 0; }
+        return n2;
+      }
+      function moveMoedas(op) {
+        op.then(function (res) {
+          if (!res.ok) toast(res.erro || 'não deu');
+          else bancoQtd = '';              // deu certo: o campo limpa, como no Dofus
+          sheetBanco();
         });
-        meio.appendChild(b);
-      });
+      }
+      var linhaB = el('div', 'bk2-botoes');
+      linhaB.appendChild(btn('Guardar →', 'btn-mini', function () {
+        var n2 = quantia(); if (n2) moveMoedas(DBc.depositarMoedas(n2));
+      }));
+      linhaB.appendChild(btn('← Sacar', 'btn-mini', function () {
+        var n2 = quantia(); if (n2) moveMoedas(DBc.sacarMoedas(n2));
+      }));
+      meio.appendChild(linhaB);
+      var linhaT = el('div', 'bk2-botoes');
+      linhaT.appendChild(btn('tudo →', 'btn-mini bk2-tudo', function () {
+        if (bolso > 0) moveMoedas(DBc.depositarMoedas(bolso));
+        else toast('o bolso está vazio');
+      }));
+      linhaT.appendChild(btn('← tudo', 'btn-mini bk2-tudo', function () {
+        if (cofre.moedas > 0) moveMoedas(DBc.sacarMoedas(cofre.moedas));
+        else toast('o cofre está vazio');
+      }));
+      meio.appendChild(linhaT);
+
+      moedas.appendChild(ladoBolso);
       moedas.appendChild(meio);
       moedas.appendChild(ladoCofre);
       caixa.appendChild(moedas);
 
-      // ---- itens do inventario (para guardar)
-      var pilhas = safe(function () { return P().invStacks(); }, []);
-      caixa.appendChild(el('h3', 'bk-tit', 'No saco (' + pilhas.length + ')'));
-      var lin1 = el('div', 'bk-itens');
-      if (!pilhas.length) lin1.appendChild(el('p', 'inv-dica', 'O saco está vazio.'));
-      pilhas.forEach(function (pi) {
-        var d2 = (D().items || {})[pi.itemId] || {};
-        var row = el('div', 'bk-item');
-        row.appendChild(el('span', null,
-          (d2.name || pi.itemId) + (pi.level > 1 ? ' +' + pi.level : '') +
-          (pi.count > 1 ? ' ×' + pi.count : '')));
-        row.appendChild(btn('guardar', 'btn-mini', function () {
-          // tira UMA unidade da pilha: o indice real esta em pi.indices[0]
-          var st2 = P().state;
-          var entrada = st2.inventory[pi.indices[0]];
-          if (!entrada) { toast('essa peça já saiu'); sheetBanco(); return; }
-          st2.inventory.splice(pi.indices[0], 1);
-          safe(function () { P().save(); }, null);
-          DBc.depositarItem(entrada).then(function () { sheetBanco(); });
-        }));
-        lin1.appendChild(row);
-      });
-      caixa.appendChild(lin1);
+      // ---- AS DUAS GRADES, lado a lado — o desenho do Dofus
+      caixa.appendChild(el('p', 'inv-dica',
+        'Arraste uma peça de uma grade para a outra — cada viagem leva uma unidade. ' +
+        'Dois toques rápidos também transferem.'));
 
-      // ---- itens do cofre (para sacar)
-      caixa.appendChild(el('h3', 'bk-tit', 'No cofre (' + cofre.itens.length + ')'));
-      var lin2 = el('div', 'bk-itens');
-      if (!cofre.itens.length) lin2.appendChild(el('p', 'inv-dica', 'O cofre está vazio.'));
-      cofre.itens.forEach(function (it, idx) {
-        var d3 = (D().items || {})[it.itemId] || {};
-        var row = el('div', 'bk-item');
-        row.appendChild(el('span', null,
-          (d3.name || it.itemId) + (it.level > 1 ? ' +' + it.level : '')));
-        row.appendChild(btn('sacar', 'btn-mini', function () {
-          DBc.sacarItem(idx).then(function (res) {
-            if (!res.ok) { toast(res.erro || 'não deu'); sheetBanco(); return; }
-            var st3 = P().state;
-            st3.inventory.push(res.item);
-            safe(function () { P().save(); }, null);
-            sheetBanco();
-          });
-        }));
-        lin2.appendChild(row);
+      var pilhas = safe(function () { return P().invStacks(); }, [])
+        .filter(function (s2) { return !!itemDef(s2.itemId); });
+      var unidadesSaco = 0;
+      pilhas.forEach(function (pi) { unidadesSaco += pi.count; });
+
+      // o cofre empilha iguais como o inventário, com os índices reais juntos
+      var mapa2 = {}, pilhasCofre = [];
+      cofre.itens.forEach(function (it2, idx) {
+        var ch = it2.itemId + '|' + (it2.level || 0) + '|' + (it2.stars || 0);
+        if (mapa2[ch]) { mapa2[ch].count++; mapa2[ch].indices.push(idx); return; }
+        mapa2[ch] = { itemId: it2.itemId, level: it2.level || 0,
+                      stars: it2.stars || 0, count: 1, indices: [idx] };
+        pilhasCofre.push(mapa2[ch]);
       });
-      caixa.appendChild(lin2);
+
+      var duplo = el('div', 'bk2-duplo');
+
+      var colSaco = el('div', 'bk2-col');
+      colSaco.dataset.lado = 'saco';
+      colSaco.appendChild(el('h3', 'bk-tit', 'No saco (' + unidadesSaco + ')'));
+      colSaco.appendChild(bancoGrade(pilhas, 'saco', function (pi) {
+        var st2 = P().state;
+        var entrada = st2.inventory[pi.indices[0]];
+        if (!entrada) { toast('essa peça já saiu'); sheetBanco(); return; }
+        st2.inventory.splice(pi.indices[0], 1);
+        safe(function () { P().save(); }, null);
+        DBc.depositarItem(entrada).then(function () { sheetBanco(); });
+      }));
+
+      var colCofre = el('div', 'bk2-col');
+      colCofre.dataset.lado = 'cofre';
+      colCofre.appendChild(el('h3', 'bk-tit', 'No cofre (' + cofre.itens.length + ')'));
+      colCofre.appendChild(bancoGrade(pilhasCofre, 'cofre', function (pi) {
+        DBc.sacarItem(pi.indices[0]).then(function (res) {
+          if (!res.ok) { toast(res.erro || 'não deu'); sheetBanco(); return; }
+          var st3 = P().state;
+          st3.inventory.push(res.item);
+          safe(function () { P().save(); }, null);
+          sheetBanco();
+        });
+      }));
+
+      duplo.appendChild(colSaco);
+      duplo.appendChild(colCofre);
+      caixa.appendChild(duplo);
     });
   }
 

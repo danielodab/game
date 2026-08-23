@@ -99,6 +99,17 @@ porque um chamador que dependa disso quebraria exatamente no dia da migração.<
         // Guardar só o id devolveria um item pior do que o depositado.
         check('o item volta INTEIRO (nível e estrelas)',
               r.ok && r.item.itemId === 'gh-wasp-sting' && r.item.level === 3 && r.item.stars === 1);
+        // NÍVEL ZERO é um valor, não ausência: um `|| 1` no depósito fez o
+        // cofre devolver peça sem forja como +1 — forja de graça, pega aqui.
+        return DB.depositarItem({ itemId: 'gh-wasp-sting', level: 0, stars: 0 });
+      })
+      .then(function (r) {
+        check('item sem forja entra no cofre', r.ok && r.total === 1);
+        return DB.sacarItem(0);
+      })
+      .then(function (r) {
+        check('nível 0 volta 0 — o cofre não forja de graça',
+              r.ok && r.item.level === 0 && r.item.stars === 0);
         return DB.sacarItem(0);
       })
       .then(function (r) {

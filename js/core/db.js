@@ -176,7 +176,10 @@ var JOGO = (typeof window !== 'undefined')
   DB.depositarItem = function (entrada) {
     var d = carrega();
     if (!entrada || !entrada.itemId) return responde({ ok: false, erro: 'item inválido' });
-    d.banco.itens.push({ itemId: entrada.itemId, level: entrada.level || 1, stars: entrada.stars || 0 });
+    // `|| 0`, não `|| 1`: nível 0 é UM VALOR (peça sem forja), e o `|| 1`
+    // fazia o cofre devolver a peça mais forte do que entrou — forja de graça,
+    // que ainda por cima quebrava o empilhamento (0 e 1 não agrupam).
+    d.banco.itens.push({ itemId: entrada.itemId, level: entrada.level || 0, stars: entrada.stars || 0 });
     grava();
     return responde({ ok: true, total: d.banco.itens.length });
   };
