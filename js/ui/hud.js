@@ -2341,28 +2341,54 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ---- carrossel de heróis: SÓ os liberados, com seta para os lados
+  /* Depois de mexer na dupla: se o LÍDER mudou e o Acampamento está na tela,
+   * ele renasce com o corpo novo andando (Hub.entrar troca o corpo; a ficha
+   * fecha, porque o que o jogador quer ver agora é o herói lá fora). Nas
+   * trocas que não mudam quem anda, a ficha só redesenha. */
+  function duplaMudou(liderAntes) {
+    var liderAgora = selHeroes[0] || null;
+    if (current === 'hub' && liderAgora && liderAgora !== liderAntes) {
+      UI.showScreen('hub');
+      toast(className(liderAgora) + ' agora anda no acampamento.', 'good');
+    } else {
+      sheetParty(partyTab);
+    }
+  }
+
   function heroCarousel(hid) {
     var lista = partyHeroes();
-    var wrap = el('div', 'pt-hero');
+    var wrap = el('div', 'pt-hero-caixa');
     if (!lista.length || !hid) {
       wrap.appendChild(el('p', 'empty', 'Nenhuma classe liberada ainda. As cartas dos chefes abrem as outras.'));
       return wrap;
     }
-    var i = lista.indexOf(hid);
     var h = hero(hid) || {};
     var cid = h.classId || hid;
     var info = cardInfo(cid);
     var stats = effStats(hid) || (classDef(cid) || {}).stats || {};
 
-    function vai(passo) {
-      partyHero = lista[(i + passo + lista.length) % lista.length];
-      invSel = null;
-      sheetParty(partyTab);        // a seta troca de HERÓI, não de aba
-    }
-    var ant = btn('‹', 'btn-icon pt-nav', function () { vai(-1); });
-    var pro = btn('›', 'btn-icon pt-nav', function () { vai(1); });
-    if (lista.length < 2) { ant.classList.add('is-off'); pro.classList.add('is-off'); }
-    wrap.appendChild(ant);
+    /* TROCAR DE PERSONAGEM À VISTA ("aqui eu devo conseguir trocar o
+     * personagem de alguma maneira..."): os retratos de TODOS os liberados
+     * numa fileira clicável. O ativo acende; os da dupla levam um ponto
+     * dourado. As setas ‹ › que faziam isso eram duas barras anônimas nas
+     * bordas — afordância que precisa de legenda não é afordância. */
+    var fila = el('div', 'pt-fila');
+    lista.forEach(function (outro) {
+      var oh = hero(outro) || {};
+      var ocid = oh.classId || outro;
+      var chip = el('button', 'pt-retrato' + (outro === hid ? ' is-on' : ''));
+      chip.type = 'button';
+      chip.appendChild(art('unit', [ocid, { element: oh.element || 'neutro', dir: 0, scale: 0.42 }], 44));
+      chip.appendChild(el('span', 'pt-retrato-nm', esc(className(ocid))));
+      if (selHeroes.indexOf(outro) >= 0) chip.appendChild(el('i', 'pt-na-dupla'));
+      tap(chip, function () {
+        partyHero = outro;
+        invSel = null;
+        sheetParty(partyTab);
+      });
+      fila.appendChild(chip);
+    });
+    wrap.appendChild(fila);
 
     var card = el('div', 'pt-hero-card');
     var pic = el('div', 'pt-hero-pic');
@@ -2384,13 +2410,39 @@ var JOGO = (typeof window !== 'undefined')
       '<span class="s-pp">' + (stats.pp || 0) + ' PP</span>' +
       '<span>' + (stats.power || 0) + ' poder</span>' +
       '<span>' + (stats.dodge || 0) + ' esq.</span>'));
-    col.appendChild(el('div', 'pt-hero-n', (i + 1) + ' de ' + lista.length + ' liberado' +
-      (lista.length === 1 ? '' : 's')));
+    /* O LUGAR NA DUPLA, dito e mudável daqui — sem voltar à tela de seleção. */
+    var naDupla = selHeroes.indexOf(hid);
+    var acoes = el('div', 'pt-dupla');
+    if (naDupla === 0) {
+      acoes.appendChild(el('span', 'pt-dupla-tag is-lider', 'Na dupla · anda no acampamento'));
+    } else if (naDupla > 0) {
+      acoes.appendChild(el('span', 'pt-dupla-tag', 'Na dupla'));
+      acoes.appendChild(btn('Andar com este no acampamento', 'btn-mini', function () {
+        var antes = selHeroes[0] || null;
+        selHeroes.splice(naDupla, 1);
+        selHeroes.unshift(hid);
+        duplaMudou(antes);
+      }));
+    } else if (selHeroes.length < 2) {
+      acoes.appendChild(btn('Entrar na dupla', 'btn-mini', function () {
+        var antes = selHeroes[0] || null;
+        selHeroes.push(hid);
+        duplaMudou(antes);
+      }));
+    } else {
+      selHeroes.forEach(function (quem, qi) {
+        acoes.appendChild(btn('Entrar no lugar de ' + esc(className(quem)), 'btn-mini', function () {
+          var antes = selHeroes[0] || null;
+          selHeroes[qi] = hid;
+          duplaMudou(antes);
+        }));
+      });
+    }
+    col.appendChild(acoes);
     card.appendChild(col);
     var ficha = btn('Ficha', 'btn-mini pt-ficha', function () { openSheet('heroSheet', hid); });
     card.appendChild(ficha);
     wrap.appendChild(card);
-    wrap.appendChild(pro);
     return wrap;
   }
 

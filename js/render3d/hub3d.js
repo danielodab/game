@@ -451,9 +451,15 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (heroi) heroi.classId = classId;
     ajusta();
-    rodando = true;
-    ultimoT = performance.now();
-    requestAnimationFrame(quadro);
+    /* Reentrar com o hub JA NA TELA (trocou o líder da dupla pela ficha) não
+     * passa pelo sair() — e um segundo requestAnimationFrame aqui abriria um
+     * SEGUNDO laço, dobrando o render para sempre. Só se inicia um laço
+     * quando não há laço: o vivo continua e apanha o herói novo sozinho. */
+    if (!rodando) {
+      rodando = true;
+      ultimoT = performance.now();
+      requestAnimationFrame(quadro);
+    }
     return true;
   };
 
