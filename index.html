@@ -107,7 +107,16 @@
 
     // Os embutidos que VIRARAM ARQUIVO (tools/extrai_assets.py). `fx-atlas.js` e
     // `fx-placas.js` continuam embutidos de propósito: somam 0,8 MB e têm outro dono.
-    var EMBUTIDO = /^assets\/embedded\/(env-kit|models-)/;
+    // `muro-escudo` nasceu DEPOIS da regra e ficou de fora: o caminho servido
+    // o lia em dobro (base64 parseado E binario baixado pelo bundle). Entra.
+    //
+    // `cenario-jardim` TAMBEM e lido em dobro (16 MB), mas NAO pode entrar
+    // aqui: alem dos modelos, ele define as tabelas JOGO.CENARIO e
+    // CENARIO_NOME, que o bundle nao carrega — cortar o arquivo cortaria as
+    // tabelas e o cenario da Estufa sumiria no jogo servido. O conserto de
+    // verdade e o extrai_assets separar tabela de modelo num arquivo proprio;
+    // ate la, os 16 MB em dobro sao o preco de nao quebrar nada.
+    var EMBUTIDO = /^assets\/embedded\/(env-kit|models-|muro-)/;
     var B = window.JOGO && window.JOGO.Bundle;
 
     function escreve(lista) {
@@ -117,10 +126,45 @@
     }
 
     // ---- CAMINHO 1: dois cliques no index.html (file://) --------------------
-    // `fetch`/XHR de .glb é bloqueado aqui. Continua exatamente como sempre foi:
-    // os 27,9 MB de base64 entram como código. É lento, e é o preço de abrir sem
-    // servidor — que o usuário faz questão de manter.
-    if (!B || !B.servido) { escreve(arquivos); return; }
+    // `fetch`/XHR de .glb é bloqueado aqui, então os embutidos entram como
+    // código — hoje 110 MB de base64. É lento, e é o preço de abrir sem
+    // servidor, que o usuário faz questão de manter.
+    //
+    // O que NÃO pode é pagar esse preço NO ESCURO: ficou uma tela preta de
+    // minutos e o usuário concluiu que o jogo quebrou ("não abriu nada") —
+    // quando ele estava carregando, sem um pixel de aviso. A #carga que o
+    // caminho servido sempre teve passa a aparecer aqui também, e entre um
+    // arquivo pesado e o próximo um script de uma linha move a barra: o
+    // navegador pinta entre scripts, então o progresso anda de verdade.
+    if (!B || !B.servido) {
+      var cx1 = document.getElementById('carga');
+      if (cx1) cx1.hidden = false;
+      var PESADO = /^assets\/embedded\//;
+      var pesados = [], i1;
+      for (i1 = 0; i1 < arquivos.length; i1++) {
+        if (PESADO.test(arquivos[i1])) pesados.push(arquivos[i1]);
+      }
+      window.__cargaPasso = function (nome, idx, total) {
+        var b1 = document.getElementById('carga-barra');
+        var t1 = document.getElementById('carga-txt');
+        if (b1) b1.style.width = Math.round(100 * idx / total) + '%';
+        if (t1) t1.textContent = 'lendo ' + nome + ' (' + idx + ' de ' + total + ')';
+      };
+      var visto = 0;
+      for (i1 = 0; i1 < arquivos.length; i1++) {
+        var f1 = arquivos[i1];
+        if (PESADO.test(f1)) {
+          visto++;
+          document.write('<scr' + 'ipt>__cargaPasso(' +
+            JSON.stringify(f1.split('/').pop()) + ',' + visto + ',' + pesados.length +
+            ')<\/scr' + 'ipt>');
+        }
+        document.write('<scr' + 'ipt src="' + f1 + window.__V + '"><\/scr' + 'ipt>');
+      }
+      document.write('<scr' + 'ipt>(function(){var c=document.getElementById("carga");' +
+        'if(c)c.hidden=true;window.__BOOT_MS=Date.now()-window.__T0;})()<\/scr' + 'ipt>');
+      return;
+    }
 
     // ---- CAMINHO 2: servido (http://, e o https://localhost do APK) ---------
     // Fase A (vendor + regra de jogo) desce JÁ, enquanto os 21 MB de modelo
