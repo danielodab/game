@@ -39,8 +39,20 @@ var JOGO = (typeof window !== 'undefined')
   var raycaster = null, chao = null;
   var relogio = 0;
 
-  var VEL = 4.2;                    // m/s — passeio, não corrida de batalha
+  /* ANDAR ou CORRER decide-se pela DISTÂNCIA: até 4 m é um passo (chegar ao
+   * portal do lado), acima disso o corpo corre — com o clipe `run` que toda
+   * classe tem. Um mundo aberto onde se atravessa o mapa a passo de tabuleiro
+   * parece um menu com chão. */
+  var VEL_ANDA = 3.2, VEL_CORRE = 6.0, DIST_CORRIDA = 4.0;
   var RAIO_MAPA = 26;
+
+  /* A câmera 3D: a MESMA gramática da batalha — arrastar orbita e inclina,
+   * roda dá zoom, toque curto age. Orbita em volta DO HERÓI: no mapa aberto o
+   * corpo é a âncora, e deslocar o pivô para longe do próprio personagem é se
+   * perder num minimapa. */
+  var cam = { ang: 0.0, tilt: 0.95, dist: 16,
+              minDist: 7, maxDist: 30, minTilt: 0.35, maxTilt: 1.25 };
+  var TAP_PX = 6;                   // o mesmo limiar clique/arrasto da batalha
 
   // ---------------------------------------------------------------- utilidades
   function M2() { return JOGO.Models3D2 || null; }
@@ -260,9 +272,15 @@ var JOGO = (typeof window !== 'undefined')
     heroi.alvo = destino.clone();
     heroi.alvo.y = 0;
     aoChegar = chegada || null;
-    if (!heroi.andando) {
+    var d = Math.hypot(heroi.alvo.x - heroi.node.position.x,
+                       heroi.alvo.z - heroi.node.position.z);
+    var corre = d > DIST_CORRIDA;
+    heroi.vel = corre ? VEL_CORRE : VEL_ANDA;
+    var clipe = corre ? 'run' : 'walk';
+    if (!heroi.andando || heroi.clipe !== clipe) {
       heroi.andando = true;
-      try { heroi.node.userData.play('walk', { fade: 0.15 }); } catch (e) {}
+      heroi.clipe = clipe;
+      try { heroi.node.userData.play(clipe, { fade: 0.15 }); } catch (e) {}
     }
   }
 
@@ -282,10 +300,11 @@ var JOGO = (typeof window !== 'undefined')
         if (dist < 0.12) {
           heroi.alvo = null;
           heroi.andando = false;
+          heroi.clipe = null;
           try { heroi.node.userData.play('idle', { fade: 0.18 }); } catch (e) {}
           if (aoChegar) { var f = aoChegar; aoChegar = null; f(); }
         } else {
-          var passo = Math.min(dist, VEL * dt);
+          var passo = Math.min(dist, (heroi.vel || VEL_ANDA) * dt);
           p.x += dx / dist * passo;
           p.z += dz / dist * passo;
           heroi.node.rotation.y = Math.atan2(dx, dz);
@@ -293,10 +312,15 @@ var JOGO = (typeof window !== 'undefined')
       }
       try { if (heroi.node.userData.mixer) heroi.node.userData.mixer.update(dt); } catch (e) {}
 
-      // câmera de passeio: segue o herói de cima e de trás, sem controles —
-      // o acampamento é pequeno e a leitura importa mais que a liberdade aqui
-      camera.position.set(heroi.node.position.x, 15.5, heroi.node.position.z + 13.5);
-      camera.lookAt(heroi.node.position.x, 1.2, heroi.node.position.z - 2.5);
+      // câmera ORBITAL centrada no herói: o jogador gira, inclina e aproxima;
+      // o corpo é sempre a âncora. Esférica clássica: tilt 0 = de cima.
+      var hp = heroi.node.position;
+      var st2 = Math.sin(cam.tilt), ct2 = Math.cos(cam.tilt);
+      camera.position.set(
+        hp.x + Math.sin(cam.ang) * st2 * cam.dist,
+        1.2 + ct2 * cam.dist,
+        hp.z + Math.cos(cam.ang) * st2 * cam.dist);
+      camera.lookAt(hp.x, 1.6, hp.z);
     }
 
     // aviso de proximidade: quem escuta decide o que mostrar
@@ -312,6 +336,39 @@ var JOGO = (typeof window !== 'undefined')
   var ultimoPerto = null;
 
   // ------------------------------------------------------------------ entrada
+  /* O botão esquerdo tem DOIS trabalhos, divididos pelo mesmo limiar da
+   * batalha: mexeu menos de TAP_PX e soltou = clique (anda até o ponto);
+   * passou do limiar = ÓRBITA, e o clique não dispara no soltar. A roda dá
+   * zoom. É a gramática que o jogador já aprendeu no tabuleiro. */
+  var arrasto = null;
+
+  function aoApertar(ev) {
+    if (!canvas) return;
+    arrasto = { x: ev.clientX, y: ev.clientY, moveu: false };
+    ev.preventDefault();
+  }
+  function aoMover(ev) {
+    if (!arrasto) return;
+    var dx = ev.clientX - arrasto.x, dy = ev.clientY - arrasto.y;
+    if (!arrasto.moveu && Math.hypot(dx, dy) > TAP_PX) arrasto.moveu = true;
+    if (arrasto.moveu) {
+      cam.ang -= dx * 0.007;
+      cam.tilt = Math.max(cam.minTilt, Math.min(cam.maxTilt, cam.tilt - dy * 0.005));
+    }
+    arrasto.x = ev.clientX; arrasto.y = ev.clientY;
+  }
+  function aoSoltar(ev) {
+    if (!arrasto) return;
+    var foiTap = !arrasto.moveu;
+    arrasto = null;
+    if (foiTap) aoClicar(ev);
+  }
+  function aoRodar(ev) {
+    ev.preventDefault();
+    cam.dist = Math.max(cam.minDist, Math.min(cam.maxDist,
+      cam.dist * Math.exp(ev.deltaY * 0.0012)));
+  }
+
   function aoClicar(ev) {
     if (!renderer || !camera || !chao) return;
     var r = canvas.getBoundingClientRect();
@@ -377,7 +434,12 @@ var JOGO = (typeof window !== 'undefined')
       if (THREE.sRGBEncoding != null) renderer.outputEncoding = THREE.sRGBEncoding;
       raycaster = new THREE.Raycaster();
       montaCena();
-      canvas.addEventListener('pointerdown', aoClicar);
+      canvas.style.touchAction = 'none';
+      canvas.addEventListener('pointerdown', aoApertar);
+      canvas.addEventListener('pointermove', aoMover);
+      canvas.addEventListener('pointerup', aoSoltar);
+      canvas.addEventListener('pointercancel', function () { arrasto = null; });
+      canvas.addEventListener('wheel', aoRodar, { passive: false });
       window.addEventListener('resize', ajusta);
     } else if (canvas.parentElement !== container) {
       container.appendChild(canvas);
@@ -398,5 +460,25 @@ var JOGO = (typeof window !== 'undefined')
   Hub.sair = function () {
     rodando = false;               // o rAF morre sozinho no próximo quadro
     ultimoPerto = null;
+  };
+
+  /* A presença em rede vai mandar FANTASMAS andarem pelo mesmo caminho do
+   * herói — o destino chega por mensagem, não por clique. E o próprio defeito
+   * "não está correndo" só é testável se o teste puder LER o que o herói faz:
+   * até aqui tudo era privado e a única prova era o olho. */
+  Hub.irPara = function (x, z) {
+    if (!heroi || !THREE) return false;
+    andarAte(new THREE.Vector3(x, 0, z), null);
+    return true;
+  };
+  Hub._estado = function () {
+    return {
+      pos: heroi ? { x: +heroi.node.position.x.toFixed(2),
+                     z: +heroi.node.position.z.toFixed(2) } : null,
+      andando: heroi ? !!heroi.andando : null,
+      clipe: heroi ? (heroi.clipe || 'idle') : null,
+      vel: heroi ? (heroi.vel || 0) : null,
+      cam: { ang: +cam.ang.toFixed(3), tilt: +cam.tilt.toFixed(3), dist: +cam.dist.toFixed(2) }
+    };
   };
 })();
