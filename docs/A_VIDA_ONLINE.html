@@ -1,0 +1,260 @@
+<meta charset="utf-8">
+<title>A Vida Online do Soterra</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Karla:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+  :root {
+    /* Subsolo aceso: o acampamento é o único lugar quente do mundo enterrado. */
+    --fundo:   #f2efe9;
+    --carta:   #fdfcf9;
+    --tinta:   #191d1a;
+    --tinta-2: #5f6a62;
+    --fio:     #d8d3c8;
+    --fio-2:   #e9e5dc;
+    --fogo:    #b7791f;   /* a fogueira do acampamento */
+    --rede:    #3d7a86;   /* o que chega com a Rede */
+    --ok:      #4a7d4a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fundo:   #131714;
+      --carta:   #1b201c;
+      --tinta:   #e7eae5;
+      --tinta-2: #93a096;
+      --fio:     #2e352f;
+      --fio-2:   #242a25;
+      --fogo:    #e0a33c;
+      --rede:    #6fb3c0;
+      --ok:      #7fae7f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --fundo:   #131714;
+    --carta:   #1b201c;
+    --tinta:   #e7eae5;
+    --tinta-2: #93a096;
+    --fio:     #2e352f;
+    --fio-2:   #242a25;
+    --fogo:    #e0a33c;
+    --rede:    #6fb3c0;
+    --ok:      #7fae7f;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fundo); color: var(--tinta);
+    font: 400 16px/1.62 Karla, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .env { max-width: 60rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+  .eyebrow {
+    font: 700 11px/1 "JetBrains Mono", monospace;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: var(--tinta-2); margin: 0 0 1rem;
+  }
+  h1 {
+    font: 600 clamp(2.3rem, 6.5vw, 3.7rem)/1.02 Spectral, Georgia, serif;
+    margin: 0 0 1rem; letter-spacing: -0.015em; text-wrap: balance;
+  }
+  .fina { font-size: 1.05rem; color: var(--tinta-2); max-width: 42rem; margin: 0 0 2.5rem; }
+
+  h2 {
+    font: 600 1.55rem/1.15 Spectral, Georgia, serif;
+    margin: 3rem 0 .4rem; text-wrap: balance;
+  }
+  .nota { color: var(--tinta-2); margin: 0 0 1.2rem; max-width: 42rem; }
+
+  .selo {
+    display: inline-block; font: 700 10px/1 "JetBrains Mono", monospace;
+    letter-spacing: .12em; text-transform: uppercase;
+    padding: .3rem .55rem; border-radius: 3px; vertical-align: 2px; margin-left: .5rem;
+  }
+  .selo.pronto { background: var(--ok); color: var(--fundo); }
+  .selo.rede   { background: var(--rede); color: var(--fundo); }
+
+  .bloco {
+    background: var(--carta); border: 1px solid var(--fio);
+    padding: 1.3rem 1.5rem; margin: 1rem 0; border-radius: 6px;
+  }
+  .bloco h3 { font: 600 1.15rem/1.2 Spectral, Georgia, serif; margin: 0 0 .5rem; }
+  .bloco p { margin: 0 0 .75rem; }
+  .bloco p:last-child { margin-bottom: 0; }
+
+  pre {
+    background: var(--fio-2); border: 1px solid var(--fio); border-radius: 6px;
+    padding: .9rem 1.1rem; overflow-x: auto;
+    font: 400 12.5px/1.55 "JetBrains Mono", monospace; margin: .8rem 0;
+  }
+  code {
+    font: 400 .87em "JetBrains Mono", monospace;
+    background: var(--fio-2); padding: .12em .35em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; }
+
+  table { border-collapse: collapse; font-size: .92rem; margin: .8rem 0; width: 100%; }
+  th, td { border-bottom: 1px solid var(--fio); padding: .5rem .7rem; text-align: left; vertical-align: top; }
+  th { font: 700 10.5px/1.3 "JetBrains Mono", monospace; letter-spacing: .1em;
+       text-transform: uppercase; color: var(--tinta-2); }
+  .rolo { overflow-x: auto; }
+
+  em { color: var(--tinta); }
+  strong { font-weight: 700; }
+  .destaque { border-left: 3px solid var(--fogo); }
+  .futuro { border-left: 3px solid var(--rede); }
+</style>
+
+<div class="env">
+
+<p class="eyebrow">Soterra · arquitetura · 23 ago 2026</p>
+<h1>A Vida Online do Soterra</h1>
+<p class="fina">O jogo ganhou um lugar — o Acampamento — e as fundações de moeda, banco e conta.
+Este documento registra o que <strong>já existe</strong>, as decisões que sustentam tudo, e o
+desenho exato do que chega com a camada de Rede: chat, troca, presença e PvP às cegas. Está
+escrito para que qualquer sessão futura construa em cima sem redescobrir os porquês.</p>
+
+<h2>A regra que paga tudo <span class="selo pronto">em vigor</span></h2>
+<div class="bloco destaque">
+  <h3>Nenhum dado «de servidor» é lido de forma síncrona. Nunca.</h3>
+  <p>Toda a vida online — moedas, cofre, identidade, históricos — passa por <code>JOGO.DB</code>
+  (<code>js/core/db.js</code>), cuja API devolve <em>Promise</em> mesmo sendo, hoje, um embrulho de
+  localStorage. O teste <code>tests/conta_db.html</code> cobra isso como regra: se alguém
+  «otimizar» para retorno direto, o teste quebra hoje — e não no dia da migração, quando cada
+  chamador dependente de resposta síncrona quebraria junto.</p>
+  <p>A consequência prática: <strong>trocar o local pelo servidor é reescrever o miolo de um
+  arquivo</strong>. Os chamadores — recompensa, banco, barra do acampamento — já vivem no mundo
+  assíncrono e não mudam uma linha.</p>
+</div>
+
+<div class="bloco">
+  <h3>A fronteira: Progress é solo, DB é mundo</h3>
+  <p><code>Progress</code> (save v2) guarda o que é do jogador sozinho: heróis, níveis, inventário,
+  cartas. Ele continua local para sempre. <code>JOGO.DB</code> guarda o que num jogo online mora no
+  servidor: identidade pública, carteira, cofre, históricos de duelo e troca. Quando o servidor
+  chegar, um lado fica e o outro viaja — e a linha entre os dois já está riscada.</p>
+</div>
+
+<h2>As tabelas da conta <span class="selo pronto">em vigor</span></h2>
+<p class="nota">A forma que o servidor herdará, funcionando hoje em <code>soterra-conta-v1</code>:</p>
+<pre><code>jogador   { id, nome, criadoEm }                    identidade pública (chat, troca, PvP)
+carteira  { moedas }                                 vinténs no bolso — do GRUPO, não por herói
+banco     { moedas, itens[{itemId, level, stars}] }  o cofre; o item viaja INTEIRO
+pvp       [{ id, oponente, minhaDupla, duplaDele, resultado, clima, quando }]
+trocas    [{ id, com, dei[], recebi[], quando }]</code></pre>
+
+<div class="bloco">
+  <h3>Vinténs — as decisões</h3>
+  <p><strong>O nome não é Lume</strong>: Lume já é a categoria de relíquia acesa dos itens, e moeda
+  homônima confundiria dois sistemas. Vintém é a moeda arcaica do mundo antigo, desenterrada.</p>
+  <p><strong>O valor deriva do XP da sala</strong> — <code>xpTotal × 0,30 × drop da
+  dificuldade</code>. Amarrar ao XP herda de graça a calibragem de economia inteira: monstro que
+  paga mais XP paga mais vintém, sala funda paga mais que rasa, chefe paga mais que bicho. Uma
+  segunda tabela de valores teria de ser mantida em paralelo com a primeira para sempre.</p>
+  <p><strong>A carteira é do grupo</strong>, sem divisão por herói — é o que permite banco e troca
+  sem contabilidade por personagem.</p>
+</div>
+
+<h2>O Acampamento <span class="selo pronto">em vigor</span></h2>
+<p class="nota">O primeiro pedaço do jogo que é um lugar, não uma tela
+(<code>js/render3d/hub3d.js</code>).</p>
+<div class="bloco">
+  <p><strong>Chão sem grade</strong>, seis portais em arco — ler da esquerda para a direita é ler a
+  progressão dos Fechos —, o banco montado com peças do próprio kit, a arena já de pé (selada), e
+  o cenário do Daniel em volta. Renderizador próprio e pequeno: o de batalha é grade até o osso, e
+  esticá-lo para os dois mundos sujaria os dois.</p>
+  <p><strong>Andar é clicar; a ação acontece na chegada.</strong> Clicar no portal faz o herói ir
+  até ele — o painel de descida (com o seletor de dificuldade) só abre quando o corpo chega. É a
+  diferença entre um mundo e um menu, e é a regra para tudo o que entrar no mapa: banco, arena,
+  outros jogadores.</p>
+  <p><strong>O nome é pedido na entrada</strong>, uma vez, e vira a identidade pública da conta.
+  Fluxo novo: heróis → Acampamento → portal → batalha. «Voltar ao acampamento», que existia desde
+  a v2 apontando para o menu, finalmente é literal.</p>
+</div>
+
+<h2>A camada de Rede <span class="selo rede">próxima fase</span></h2>
+<p class="nota">Tudo abaixo é desenho fechado, ainda não construído. A ordem é deliberada:
+transporte → presença → chat → troca → PvP.</p>
+
+<div class="bloco futuro">
+  <h3>Transporte em dois degraus — e o primeiro não precisa de servidor</h3>
+  <p><code>JOGO.Rede</code> nasce com dois miolos trocáveis, mesma mensagem nos dois:</p>
+  <p><strong>Degrau 1 — BroadcastChannel:</strong> duas abas do mesmo navegador se enxergam sem
+  servidor nenhum. É multiplayer <em>real</em> na mesma máquina: abre-se o jogo duas vezes, cada
+  aba é um jogador, e chat, presença, troca e duelo funcionam de verdade — testáveis em casa, hoje,
+  com o servidor de teste que já roda.</p>
+  <p><strong>Degrau 2 — WebSocket:</strong> um servidor pequeno com as mesmas mensagens. O protocolo
+  não muda; muda quem carrega o envelope.</p>
+<pre><code>mensagem = { tipo,        // 'oi' | 'tchau' | 'pos' | 'chat' | 'troca:*' | 'duelo:*'
+             de,          // jogador.id (o nome vai junto no 'oi')
+             para,        // id | null (null = todos)
+             dados,       // o corpo, por tipo
+             quando }     // Date.now() de quem enviou</code></pre>
+</div>
+
+<div class="bloco futuro">
+  <h3>Presença — os outros no mapa</h3>
+  <p>Cada aba anuncia <code>oi</code> ao entrar no Acampamento e <code>pos</code> (posição + para
+  onde anda) a cada meio segundo. Quem recebe desenha um <em>fantasma</em>: o corpo da classe do
+  outro, andando pelo mesmo mapa, com o nome flutuando. Sem resposta por 3 segundos, o fantasma
+  esmaece; <code>tchau</code> o remove. A interpolação é local — o mapa é pequeno e meio segundo de
+  atraso não aparece num passeio.</p>
+</div>
+
+<div class="bloco futuro">
+  <h3>Troca — nunca parcial</h3>
+  <p>Três fases, e a regra que importa é a última: <code>troca:proposta</code> (aberta ao lado do
+  outro no mapa) → <code>troca:oferta</code> (cada um TRAVA sua lista de itens e vinténs; mexeu,
+  destrava a confirmação do outro) → <code>troca:confirma</code> dos DOIS → executa. A execução
+  debita e credita <em>as duas pontas de uma vez</em> e grava em <code>trocas</code> nas duas
+  contas. Não existe estado em que um deu e o outro não — se qualquer mensagem se perder no meio, a
+  troca inteira expira sem efeito.</p>
+</div>
+
+<div class="bloco futuro">
+  <h3>PvP às cegas — o detalhe que o define</h3>
+  <p>«Ninguém vê a dupla do outro; será surpresa para os dois.» O protocolo garante isso por
+  <em>compromisso</em>, não por confiança:</p>
+  <p><code>duelo:desafio</code> → <code>duelo:aceite</code> → cada lado envia
+  <code>duelo:compromisso</code> com o <strong>resumo criptográfico</strong> (hash) da própria
+  dupla — não a dupla. Só quando os DOIS compromissos chegaram, cada lado envia
+  <code>duelo:revela</code> com a dupla aberta; quem receber uma dupla cujo hash não bate com o
+  compromisso descarta o duelo. Ninguém consegue esperar a escolha do outro para escolher a sua.</p>
+  <p><strong>O clima da arena é sorteado da semente da partida</strong> (id do desafio), que os dois
+  lados conhecem — os dois sorteiam o mesmo clima sem ninguém mandar nele. A batalha roda no motor
+  que já existe com uma bandeira <code>state.pvp</code>: a IA não joga pelo lado inimigo; os turnos
+  alternam entre humanos. O resultado grava em <code>pvp</code> nas duas contas.</p>
+  <p>A arena já está de pé no Acampamento, selada, dizendo exatamente isto.</p>
+</div>
+
+<h2>As fases</h2>
+<div class="rolo"><table>
+  <tr><th>fase</th><th>o quê</th><th>estado</th></tr>
+  <tr><td>1</td><td>Conta local (DB), vinténs, banco, Acampamento com portais e dificuldade</td>
+      <td><strong>pronta — 23 ago 2026</strong></td></tr>
+  <tr><td>2</td><td><code>JOGO.Rede</code> com BroadcastChannel: presença (fantasmas no mapa) e chat entre duas abas</td>
+      <td>desenhada</td></tr>
+  <tr><td>3</td><td>Troca em três fases; PvP às cegas com compromisso, clima sorteado e <code>state.pvp</code> no motor</td>
+      <td>desenhada</td></tr>
+  <tr><td>4</td><td>Servidor pequeno (WebSocket): o miolo do DB e da Rede trocam; protocolo intacto</td>
+      <td>desenhada</td></tr>
+</table></div>
+
+<h2>O que o Daniel pode criar de arte para o Acampamento</h2>
+<p class="nota">A v1 usa peças que já existiam. Cada uma destas substitui uma peça provisória sem
+mexer em código:</p>
+<div class="rolo"><table>
+  <tr><th>peça</th><th>hoje</th><th>observação</th></tr>
+  <tr><td><strong>Portal</strong> (1 modelo, tingido por Fecho — ou 6 próprios)</td>
+      <td>anel de toro + miolo aceso</td>
+      <td>alto o bastante para um herói de 2,05 m atravessar; o miolo pulsa</td></tr>
+  <tr><td><strong>O banco</strong> (banca, tenda ou guichê)</td>
+      <td>mesa + baú + moedas do kit</td><td>uma peça só, ~2–3 m</td></tr>
+  <tr><td><strong>A arena</strong> (círculo de duelo)</td>
+      <td>anel no chão + barreiras</td><td>pode nascer «selada» — corrente, lacre</td></tr>
+  <tr><td><strong>A fogueira central</strong></td><td>não existe</td>
+      <td>o coração do acampamento; ponto de encontro natural dos fantasmas</td></tr>
+  <tr><td><strong>Chão do acampamento</strong></td><td>disco liso</td>
+      <td>terra batida, trilhas ligando fogueira → portais → banco</td></tr>
+</table></div>
+
+</div>
