@@ -916,12 +916,20 @@ var JOGO = (typeof window !== 'undefined')
     'arqueiro+bruxo':       'fus_arqueiro_bruxo',
     'arqueiro+curandeiro':  'fus_arqueiro_curandeiro',
     'arqueiro+espadachim':  'fus_arqueiro_espadachim',
-    'arqueiro+invocador':   'fus_arqueiro_invocador'
+    'arqueiro+invocador':   'fus_arqueiro_invocador',
+    'bruxo+curandeiro':     'fus_bruxo_curandeiro',
+    'curandeiro+espadachim': 'fus_curandeiro_espadachim'
   };
 
   function fusionLook(defId) {
     var pair = String(defId).slice(4).split('+');
     var a = pair[0], b = pair[1];
+    /* A chave de FUSION_MODEL é ALFABÉTICA (contrato §4, o mesmo que
+     * Fusion.pairKey monta) — mas nem todo chamador manda o par ordenado: a
+     * galeria de testes pergunta na ordem das classes ('fus:sumo+arqueiro') e
+     * TODA a fileira do Bárbaro saía composta em silêncio, meses depois do
+     * corpo próprio existir. Ordenar aqui blinda qualquer chamador. */
+    if (a > b) { var tr0 = a; a = b; b = tr0; }
 
     /* CORPO PROPRIO, quando existe. Entra ANTES da composicao e devolve um look
      * limpo: sem `grafts`, sem `show`, sem `build`. Aquilo era guarda-roupa e

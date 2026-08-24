@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-24T09:32:58",
+ "gerado": "2026-08-24T12:54:54",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -497,6 +497,18 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "fus_bruxo_curandeiro",
+   "arquivo": "models-fusoes-curandeira/fus_bruxo_curandeiro.glb",
+   "bytes": 1258472
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_curandeiro_espadachim",
+   "arquivo": "models-fusoes-curandeira/fus_curandeiro_espadachim.glb",
+   "bytes": 1318012
+  },
+  {
+   "alvo": "MODELS",
    "chave": "fus_arqueiro_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_arqueiro_minotauro.glb",
    "bytes": 1381512
@@ -973,6 +985,22 @@
    "death",
    "idle"
   ],
+  "fus_bruxo_curandeiro": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_curandeiro_espadachim": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
   "fus_arqueiro_minotauro": [
    "HitReact",
    "attack",
@@ -1269,6 +1297,6 @@
    "walk"
   ]
  },
- "totalBytes": 88516344,
- "totalBase64": 118022000
+ "totalBytes": 91092828,
+ "totalBase64": 121457316
 }
