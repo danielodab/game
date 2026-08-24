@@ -33,8 +33,9 @@ var JOGO = (typeof window !== 'undefined')
   var container = null, canvas = null;
   var rodando = false, ultimoT = 0;
 
-  var heroi = null;                 // { node, mixer, alvo, andando, plaquinha }
+  var heroi = null;                 // { node, mixer, alvo, andando, plaquinha, plaquinhaTitulo }
   var nomeJogador = null;           // o nome batizado no DB, para a plaquinha
+  var tituloJogador = null;         // o título de conquista, pendurado abaixo do nome
   var lugares = [];                 // { id, tipo, pos, raio, node, rotulo }
   var aoChegar = null;              // callback pendente da caminhada atual
   var raycaster = null, chao = null;
@@ -266,7 +267,7 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(node);
     heroi = { node: node, alvo: null, andando: false };
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
-    if (nomeJogador) pendura(nomeJogador);
+    if (nomeJogador) pendura(nomeJogador, tituloJogador);
   }
 
   /* O NOME ACIMA DA CABEÇA — a primeira marca de jogo online que o corpo
@@ -274,21 +275,31 @@ var JOGO = (typeof window !== 'undefined')
    * da cabeça"). A plaquinha é FILHA do nó do herói: anda, corre e troca de
    * corpo junto, sem uma linha no tique — e sprite sempre encara a câmera.
    * Os fantasmas da rede vão pendurar a deles por este mesmo caminho. */
-  function pendura(nome) {
+  function pendura(nome, titulo) {
     if (!heroi || !THREE) return;
-    if (heroi.plaquinha) {
-      heroi.node.remove(heroi.plaquinha);
+    ['plaquinha', 'plaquinhaTitulo'].forEach(function (campo) {
+      if (!heroi[campo]) return;
+      heroi.node.remove(heroi[campo]);
       try {
-        heroi.plaquinha.material.map.dispose();
-        heroi.plaquinha.material.dispose();
+        heroi[campo].material.map.dispose();
+        heroi[campo].material.dispose();
       } catch (e) {}
-      heroi.plaquinha = null;
-    }
+      heroi[campo] = null;
+    });
     if (!nome) return;
+    var alto = (heroi.node.userData.height || 2.1);
     var sp = rotulo(nome, '#f0ead8', 0.42);
-    sp.position.y = (heroi.node.userData.height || 2.1) + 0.5;
+    sp.position.y = alto + (titulo ? 0.66 : 0.5);
     heroi.node.add(sp);
     heroi.plaquinha = sp;
+    // o TÍTULO de conquista: linha menor e dourada, abaixo do nome — é a
+    // recompensa social do quadro de missões, visível de longe
+    if (titulo) {
+      var st2 = rotulo(titulo, '#e8c25a', 0.30);
+      st2.position.y = alto + 0.38;
+      heroi.node.add(st2);
+      heroi.plaquinhaTitulo = st2;
+    }
   }
 
   // -------------------------------------------------------------- a caminhada
@@ -499,9 +510,10 @@ var JOGO = (typeof window !== 'undefined')
    * até aqui tudo era privado e a única prova era o olho. */
   /* Quem sabe o nome é o DB, e quem fala com o DB é a HUD (pintaConta e o
    * batismo): ela empurra o nome para cá. Vazio tira a plaquinha. */
-  Hub.nomeia = function (nome) {
+  Hub.nomeia = function (nome, titulo) {
     nomeJogador = String(nome || '').trim() || null;
-    pendura(nomeJogador);
+    tituloJogador = String(titulo || '').trim() || null;
+    pendura(nomeJogador, tituloJogador);
   };
   Hub.irPara = function (x, z) {
     if (!heroi || !THREE) return false;
@@ -514,7 +526,9 @@ var JOGO = (typeof window !== 'undefined')
                      z: +heroi.node.position.z.toFixed(2) } : null,
       andando: heroi ? !!heroi.andando : null,
       nome: nomeJogador,
+      titulo: tituloJogador,
       plaquinha: !!(heroi && heroi.plaquinha),
+      plaquinhaTitulo: !!(heroi && heroi.plaquinhaTitulo),
       clipe: heroi ? (heroi.clipe || 'idle') : null,
       vel: heroi ? (heroi.vel || 0) : null,
       cam: { ang: +cam.ang.toFixed(3), tilt: +cam.tilt.toFixed(3), dist: +cam.dist.toFixed(2) }

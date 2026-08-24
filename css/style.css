@@ -1502,6 +1502,25 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
               color: #77808d; margin-bottom: 4px; }
 .rw-desafio.is-cumprido { color: #e8c25a; }
 
+/* ------------------------------------------------- QUADRO DE MISSÕES */
+.ms-caixa { display: flex; flex-direction: column; gap: 8px; }
+.ms-linha { display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border: 1px solid var(--line2); border-radius: 10px;
+            background: rgba(255,255,255,.03); }
+.ms-linha.is-feita { border-color: rgba(232,194,90,.5); }
+.ms-tx { flex: 1 1 auto; min-width: 0; }
+.ms-nome { font-size: 13px; color: var(--text); }
+.ms-titulo { font: 700 10px var(--ui-sans, system-ui); letter-spacing: .05em;
+             text-transform: uppercase; color: #e8c25a; margin-left: 6px; }
+.ms-barra { height: 6px; margin: 5px 0 3px; border-radius: 4px;
+            background: rgba(0,0,0,.4); overflow: hidden; }
+.ms-barra i { display: block; height: 100%; background: #e8c25a; border-radius: 4px; }
+.ms-prog { font: 600 10.5px var(--ui-sans, system-ui); color: var(--dim); }
+.ms-premio { font: 700 12px var(--ui-sans, system-ui); color: var(--dim); }
+.ms-pago { font: 700 11px var(--ui-sans, system-ui); color: #7fe08a; }
+.ms-titulos { display: flex; flex-wrap: wrap; gap: 6px; }
+.ms-titulos .is-on { outline: 2px solid var(--gold); }
+
 /* ------------------------------------------------------------ ACAMPAMENTO */
 /* SO COM .is-on — a regra que eu quebrei e que apagou o jogo inteiro.
    Toda .ui-screen nasce escondida e so aparece quando o showScreen poe .is-on.

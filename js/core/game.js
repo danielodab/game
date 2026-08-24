@@ -606,6 +606,23 @@ var JOGO = (typeof window !== 'undefined')
       } catch (err) { pets = []; }
     }
 
+    /* O QUADRO DE MISSÕES ouve a vitória por evento explícito — este é o único
+     * lugar que sabe, ao mesmo tempo, a dificuldade, o desafio e se havia
+     * fusão viva. Fire-and-forget: recompensa não espera missão. */
+    if (JOGO.Missoes && JOGO.Missoes.registra) {
+      var comFusao = false;
+      for (i = 0; i < st.units.length; i++) {
+        var uf = st.units[i];
+        if (uf.side === 'player' && uf.kind === 'fusion' && uf.alive) comFusao = true;
+      }
+      try {
+        JOGO.Missoes.registra({ tipo: 'vitoria', dungeon: Game.dungeonId,
+          dificuldade: difSala.id || 'normal',
+          desafioCumprido: !!(desafioSala && desafioSala.cumprido),
+          fundido: comFusao });
+      } catch (e) {}
+    }
+
     var elementChoices = Game.elementChoices();
 
     if (prog && prog.save) { try { prog.save(); } catch (err) { /* sem storage */ } }

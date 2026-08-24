@@ -57,9 +57,11 @@ var JOGO = (typeof window !== 'undefined')
   function vazio() {
     return {
       versao: 1,
-      jogador: { id: novoId(), nome: null, criadoEm: agora() },
+      jogador: { id: novoId(), nome: null, titulo: null, criadoEm: agora() },
       carteira: { moedas: 0 },
       banco: { moedas: 0, itens: [] },
+      missoes: null,                 // { dia, lista } — quem re-sorteia é JOGO.Missoes
+      conquistas: {},                // { id: { prog, pago } }
       pvp: [],
       trocas: []
     };
@@ -86,6 +88,11 @@ var JOGO = (typeof window !== 'undefined')
           if (!Array.isArray(d.banco.itens)) d.banco.itens = [];
           if (!Array.isArray(d.pvp)) d.pvp = [];
           if (!Array.isArray(d.trocas)) d.trocas = [];
+          // contas de antes das missões ganham as tabelas sem perder nada
+          if (d.missoes !== null && typeof d.missoes !== 'object') d.missoes = null;
+          if (d.missoes === undefined) d.missoes = null;
+          if (!d.conquistas || typeof d.conquistas !== 'object') d.conquistas = {};
+          if (d.jogador.titulo === undefined) d.jogador.titulo = null;
           dados = d;
           return dados;
         }
@@ -110,7 +117,10 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------- identidade
   DB.jogador = function () {
     var d = carrega();
-    return responde({ id: d.jogador.id, nome: d.jogador.nome, criadoEm: d.jogador.criadoEm });
+    // cópia campo a campo: TODO campo novo do jogador precisa entrar aqui —
+    // o `titulo` ficou de fora um dia e sumiu sem erro nenhum (o teste pegou)
+    return responde({ id: d.jogador.id, nome: d.jogador.nome,
+                      titulo: d.jogador.titulo || null, criadoEm: d.jogador.criadoEm });
   };
 
   DB.batizar = function (nome) {
@@ -195,6 +205,37 @@ var JOGO = (typeof window !== 'undefined')
     var item = d.banco.itens.splice(indice, 1)[0];
     grava();
     return responde({ ok: true, item: item, total: d.banco.itens.length });
+  };
+
+  // ----------------------------------------------------------------- missões
+  /* O DB guarda; quem SABE de missão (sorteio, alvos, prêmios) é JOGO.Missoes.
+   * A fronteira importa: no servidor, estas quatro chamadas viram endpoints e
+   * a validação muda de lado sem mexer no resto. */
+  DB.missoes = function () {
+    var d = carrega();
+    return responde(d.missoes ? JSON.parse(JSON.stringify(d.missoes)) : null);
+  };
+  DB.salvarMissoes = function (obj) {
+    var d = carrega();
+    d.missoes = obj ? JSON.parse(JSON.stringify(obj)) : null;
+    grava();
+    return responde({ ok: true });
+  };
+  DB.conquistas = function () {
+    var d = carrega();
+    return responde(JSON.parse(JSON.stringify(d.conquistas || {})));
+  };
+  DB.salvarConquistas = function (obj) {
+    var d = carrega();
+    d.conquistas = obj ? JSON.parse(JSON.stringify(obj)) : {};
+    grava();
+    return responde({ ok: true });
+  };
+  DB.definirTitulo = function (titulo) {
+    var d = carrega();
+    d.jogador.titulo = (typeof titulo === 'string' && titulo.trim()) ? titulo.trim() : null;
+    grava();
+    return responde({ ok: true, titulo: d.jogador.titulo });
   };
 
   // --------------------------------------------------------------- históricos

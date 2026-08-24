@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o quadro de missões</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>O quadro de missões — diárias, conquistas, títulos</h1>
+<div class="sub">Cobra o sorteio do trio semeado pela DATA (mesmo dia = mesmo trio, dia novo =
+quadro novo com progresso zerado e conquistas intactas), o progresso por evento explícito, o
+prêmio que só sai uma vez, e o título que a conquista destrava.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/db.js', 'js/core/missoes.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra ? ' — <code>' + String(extra) + '</code>' : '');
+    lista.appendChild(li);
+  }
+
+  var DB = JOGO.DB, Ms = JOGO.Missoes;
+  var DIA1 = '2026-08-24', DIA2 = '2026-08-25';
+
+  DB._zerar()
+    .then(function () { return Ms.carregar(DIA1); })
+    .then(function (q1) {
+      check('o dia abre com um trio de diárias', q1 && q1.lista.length === Ms.POR_DIA,
+            q1 && q1.lista.map(function (m) { return m.id; }).join(','));
+      return Ms.carregar(DIA1).then(function (q2) {
+        check('recarregar o MESMO dia não re-sorteia',
+              JSON.stringify(q2.lista.map(function (m) { return m.id; })) ===
+              JSON.stringify(q1.lista.map(function (m) { return m.id; })));
+        return q1;
+      });
+    })
+    .then(function (q1) {
+      // uma vitória no difícil, com desafio cumprido e fusão em campo:
+      // anda em TODA diária de vitória do trio e nas conquistas
+      return Ms.registra({ tipo: 'vitoria', dificuldade: 'dificil',
+                           desafioCumprido: true, fundido: true }, DIA1)
+        .then(function (q) {
+          var andou = 0;
+          q.lista.forEach(function (mi) { if (mi.prog > 0) andou++; });
+          check('a vitória anda nas diárias que falam de vitória', andou > 0,
+                q.lista.map(function (m) { return m.id + '=' + m.prog; }).join(' '));
+          check('a conquista "vença fundido" termina de primeira',
+                q.conquistas['c-fusao'] && q.conquistas['c-fusao'].prog >= 1);
+          check('a de 5 difíceis anda 1 de 5',
+                q.conquistas['c-dificil5'] && q.conquistas['c-dificil5'].prog === 1);
+          return q;
+        });
+    })
+    .then(function () {
+      // o deposito de 120 no cofre: bate o limiar da c-cofre100 de uma vez
+      return Ms.registra({ tipo: 'deposito', valor: 120, cofreTotal: 120 }, DIA1);
+    })
+    .then(function (q) {
+      check('o limiar "100 no cofre" fecha com um depósito grande',
+            q.conquistas['c-cofre100'] && q.conquistas['c-cofre100'].prog >= 1);
+      // reivindicar a conquista da fusao: paga 30 e da o titulo
+      return DB.moedas().then(function (antes) {
+        return Ms.reivindicar('c-fusao', DIA1).then(function (r) {
+          check('reivindicar paga o prêmio em vinténs',
+                r.ok && r.premio === 30 && r.moedas === antes + 30,
+                JSON.stringify(r));
+          check('a conquista entrega o título', r.titulo === 'o Fundido', r.titulo);
+          return Ms.reivindicar('c-fusao', DIA1);
+        });
+      });
+    })
+    .then(function (r2) {
+      check('o prêmio NÃO sai duas vezes', !r2.ok && /já/.test(r2.erro || ''), r2.erro);
+      return Ms.reivindicar('c-dificil5', DIA1);
+    })
+    .then(function (r3) {
+      check('missão inacabada não paga', !r3.ok, r3.erro);
+      return Ms.titulos();
+    })
+    .then(function (ts) {
+      check('a lista de títulos ganhos tem os das conquistas feitas',
+            ts.indexOf('o Fundido') >= 0 && ts.indexOf('o Poupador') >= 0 &&
+            ts.indexOf('o Temerário') < 0, ts.join(' · '));
+      return DB.definirTitulo('o Fundido');
+    })
+    .then(function (rt) {
+      check('o título escolhido fica na conta', rt.ok && rt.titulo === 'o Fundido');
+      return DB.jogador();
+    })
+    .then(function (j) {
+      check('jogador() devolve o título junto do nome', j.titulo === 'o Fundido');
+      // A VIRADA DO DIA: trio novo, progresso zerado, conquistas INTACTAS
+      return Ms.carregar(DIA2);
+    })
+    .then(function (q2) {
+      var zerado = q2.lista.every(function (m) { return m.prog === 0 && !m.pago; });
+      check('o dia novo zera o progresso das diárias', zerado && q2.dia === DIA2,
+            q2.lista.map(function (m) { return m.id + '=' + m.prog; }).join(' '));
+      check('as conquistas atravessam a virada do dia',
+            q2.conquistas['c-fusao'] && q2.conquistas['c-fusao'].prog >= 1 &&
+            q2.conquistas['c-fusao'].pago === true);
+      // e o disco de verdade: recarrega a conta do zero e o quadro persiste
+      return DB._recarregar ? DB._recarregar() : null;
+    })
+    .then(function () { return Ms.carregar(DIA2); })
+    .then(function (q3) {
+      check('tudo sobrevive à releitura do disco',
+            q3.dia === DIA2 && q3.conquistas['c-fusao'] &&
+            q3.conquistas['c-fusao'].pago === true);
+    })
+    .catch(function (e) {
+      check('a corrente de promessas não estoura', false, e && (e.message || e));
+    })
+    .then(function () {
+      var sum = document.getElementById('summary');
+      sum.className = falhas ? 'fail' : 'allpass';
+      sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                               : ('tudo passou (' + total + ')');
+      window.__pronto = true;
+    });
+})();
+</script>
+</body>
+</html>

@@ -748,6 +748,7 @@ var JOGO = (typeof window !== 'undefined')
     quem.appendChild(moedasEl);
     top.appendChild(quem);
     var acts = el('div', 'hub-acts');
+    acts.appendChild(btn('Missões', 'btn-mini', function () { openSheet('missoes'); }));
     acts.appendChild(btn('Personagens <span class="tecla">I</span>', 'btn-mini', function () { openSheet('party'); }));
     acts.appendChild(btn('Menu', 'btn-mini btn-ghost', function () { navTo('menu'); }));
     top.appendChild(acts);
@@ -764,8 +765,9 @@ var JOGO = (typeof window !== 'undefined')
       JOGO.DB.jogador().then(function (j) {
         if (!j.nome) { nomeEl.textContent = '—'; pedeNome(); }
         else nomeEl.textContent = j.nome;
-        // a plaquinha acima da cabeça acompanha: nome novo, batismo, ou nada
-        if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(j.nome || '');
+        // a plaquinha acima da cabeça acompanha: nome, batismo — e o TÍTULO
+        // de conquista, quando o jogador pendurou um
+        if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(j.nome || '', j.titulo || '');
       });
       JOGO.DB.moedas().then(function (m) {
         moedasEl.textContent = m + (m === 1 ? ' vintém' : ' vinténs');
@@ -1751,16 +1753,23 @@ var JOGO = (typeof window !== 'undefined')
         if (!isFinite(n2) || n2 <= 0) { toast('digite a quantia'); campo.focus(); return 0; }
         return n2;
       }
-      function moveMoedas(op) {
+      function moveMoedas(op, valorDeposito) {
         op.then(function (res) {
           if (!res.ok) toast(res.erro || 'não deu');
-          else bancoQtd = '';              // deu certo: o campo limpa, como no Dofus
+          else {
+            bancoQtd = '';                 // deu certo: o campo limpa, como no Dofus
+            // depósito conta para as missões ("guarde N no cofre") — saque não
+            if (valorDeposito && JOGO.Missoes && JOGO.Missoes.registra) {
+              JOGO.Missoes.registra({ tipo: 'deposito', valor: valorDeposito,
+                                      cofreTotal: res.banco || 0 });
+            }
+          }
           sheetBanco();
         });
       }
       var linhaB = el('div', 'bk2-botoes');
       linhaB.appendChild(btn('Guardar →', 'btn-mini', function () {
-        var n2 = quantia(); if (n2) moveMoedas(DBc.depositarMoedas(n2));
+        var n2 = quantia(); if (n2) moveMoedas(DBc.depositarMoedas(n2), n2);
       }));
       linhaB.appendChild(btn('← Sacar', 'btn-mini', function () {
         var n2 = quantia(); if (n2) moveMoedas(DBc.sacarMoedas(n2));
@@ -1768,7 +1777,7 @@ var JOGO = (typeof window !== 'undefined')
       meio.appendChild(linhaB);
       var linhaT = el('div', 'bk2-botoes');
       linhaT.appendChild(btn('tudo →', 'btn-mini bk2-tudo', function () {
-        if (bolso > 0) moveMoedas(DBc.depositarMoedas(bolso));
+        if (bolso > 0) moveMoedas(DBc.depositarMoedas(bolso), bolso);
         else toast('o bolso está vazio');
       }));
       linhaT.appendChild(btn('← tudo', 'btn-mini bk2-tudo', function () {
@@ -1835,6 +1844,94 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
 
+  /* O QUADRO DE MISSÕES — diárias em cima, conquistas embaixo, e o seletor
+   * de título no pé. Toda leitura vem de JOGO.Missoes por Promise e a ficha
+   * redesenha quando a resposta chega, como o banco. */
+  function sheetMissoes() {
+    sheetName = 'missoes';
+    var body = sheetShell('Quadro de Missões',
+      'As diárias mudam a cada dia; as conquistas ficam. Prêmio em vinténs — e as conquistas dão TÍTULO.');
+    var Ms = JOGO.Missoes;
+    if (!Ms) { body.appendChild(el('p', 'inv-dica', 'O quadro não carregou.')); return; }
+
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+
+    Promise.all([Ms.carregar(), Ms.titulos(),
+                 JOGO.DB ? JOGO.DB.jogador() : Promise.resolve({})])
+      .then(function (r) {
+        var quadro = r[0], titulos = r[1] || [], jog = r[2] || {};
+        clear(caixa);
+        if (!quadro) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
+
+        function linha(id, def, st2) {
+          var row = el('div', 'ms-linha' + (st2.prog >= def.alvo ? ' is-feita' : ''));
+          var tx = el('div', 'ms-tx');
+          tx.appendChild(el('div', 'ms-nome', esc(def.texto) +
+            (def.titulo ? ' <span class="ms-titulo">título: ' + esc(def.titulo) + '</span>' : '')));
+          var barra = el('div', 'ms-barra');
+          var cheio = el('i', null, '');
+          cheio.style.width = Math.min(100, Math.round(100 * st2.prog / def.alvo)) + '%';
+          barra.appendChild(cheio);
+          tx.appendChild(barra);
+          tx.appendChild(el('div', 'ms-prog', st2.prog + ' de ' + def.alvo));
+          row.appendChild(tx);
+          if (st2.pago) {
+            row.appendChild(el('span', 'ms-pago', '✓ recebido'));
+          } else if (st2.prog >= def.alvo) {
+            row.appendChild(btn('Receber ' + def.premio + 'v', 'btn-mini btn-gold', function () {
+              Ms.reivindicar(id).then(function (res) {
+                if (!res.ok) { toast(res.erro || 'não deu'); }
+                else {
+                  toast('+' + res.premio + ' vinténs' +
+                        (res.titulo ? ' · título novo: ' + res.titulo : ''), 'good');
+                }
+                sheetMissoes();
+              });
+            }));
+          } else {
+            row.appendChild(el('span', 'ms-premio', def.premio + 'v'));
+          }
+          return row;
+        }
+
+        caixa.appendChild(el('h3', 'bk-tit', 'Diárias de hoje (' + quadro.dia + ')'));
+        quadro.lista.forEach(function (mi) {
+          var def = Ms.DIARIAS[mi.id];
+          if (def) caixa.appendChild(linha(mi.id, def, mi));
+        });
+
+        caixa.appendChild(el('h3', 'bk-tit', 'Conquistas'));
+        Object.keys(Ms.CONQUISTAS).forEach(function (id) {
+          var def = Ms.CONQUISTAS[id];
+          var st2 = quadro.conquistas[id] || { prog: 0, pago: false };
+          caixa.appendChild(linha(id, def, st2));
+        });
+
+        // ---- o seletor de título: só os ganhos aparecem
+        caixa.appendChild(el('h3', 'bk-tit', 'Título na plaquinha'));
+        if (!titulos.length) {
+          caixa.appendChild(el('p', 'inv-dica',
+            'Nenhum título ainda — as conquistas com "título:" dão um.'));
+        } else {
+          var fila = el('div', 'ms-titulos');
+          ['— sem título —'].concat(titulos).forEach(function (t, ti) {
+            var valor = ti === 0 ? null : t;
+            var ativo = (jog.titulo || null) === valor;
+            fila.appendChild(btn(esc(t), 'btn-mini' + (ativo ? ' is-on' : ''), function () {
+              JOGO.DB.definirTitulo(valor).then(function (res) {
+                if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(jog.nome || '', res.titulo || '');
+                toast(res.titulo ? 'Agora você é ' + jog.nome + ', ' + res.titulo + '.'
+                                 : 'Sem título — só o nome.', 'good');
+                sheetMissoes();
+              });
+            }));
+          });
+          caixa.appendChild(fila);
+        }
+      });
+  }
+
   function sheetShell(title, sub) {
     clear(sheetEl);
     var panel = el('div', 'sheet-panel');
@@ -1875,6 +1972,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'heroSheet') sheetHero(arg);
     else if (name === 'battleMenu') sheetBattleMenu();
     else if (name === 'banco') sheetBanco();
+    else if (name === 'missoes') sheetMissoes();
     else closeSheet();
   }
   UI.openSheet = openSheet;
