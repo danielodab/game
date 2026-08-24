@@ -918,7 +918,8 @@ var JOGO = (typeof window !== 'undefined')
     'arqueiro+espadachim':  'fus_arqueiro_espadachim',
     'arqueiro+invocador':   'fus_arqueiro_invocador',
     'bruxo+curandeiro':     'fus_bruxo_curandeiro',
-    'curandeiro+espadachim': 'fus_curandeiro_espadachim'
+    'curandeiro+espadachim': 'fus_curandeiro_espadachim',
+    'bruxo+espadachim':     'fus_bruxo_espadachim'
   };
 
   function fusionLook(defId) {

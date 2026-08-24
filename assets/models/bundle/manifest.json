@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-24T12:54:54",
+ "gerado": "2026-08-24T14:10:02",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -464,6 +464,12 @@
    "chave": "q_yeti",
    "arquivo": "models-bosses/q_yeti.glb",
    "bytes": 651656
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_bruxo_espadachim",
+   "arquivo": "models-fusao-bruxo-ladino/fus_bruxo_espadachim.glb",
+   "bytes": 1143132
   },
   {
    "alvo": "MODELS",
@@ -947,6 +953,14 @@
   }
  ],
  "meshyClips": {
+  "fus_bruxo_espadachim": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
   "fus_arqueiro_bruxo": [
    "HitReact",
    "attack",
@@ -1297,6 +1311,6 @@
    "walk"
   ]
  },
- "totalBytes": 91092828,
- "totalBase64": 121457316
+ "totalBytes": 92235960,
+ "totalBase64": 122981492
 }
