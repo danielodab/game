@@ -174,10 +174,12 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
-  /* O MERCADINHO: a barraca espelha o banco do outro lado do arco — mesa,
-   * caixotes e barril do kit. É o HDV local; a ficha abre ao se aproximar. */
+  /* O MERCADINHO: a barraca fecha o triângulo do sul — Banco a sudeste,
+   * Arena a sudoeste, Mercadinho no MEIO-SUL, atrás de onde o herói nasce.
+   * (A primeira posição escolhida espelhava o banco... em cima da ARENA, e
+   * os dois letreiros viraram um borrão — a foto do Daniel pegou.) */
   function montaMercado() {
-    var px = -RAIO_MAPA * 0.55, pz = RAIO_MAPA * 0.30;
+    var px = 0, pz = RAIO_MAPA * 0.62;
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
