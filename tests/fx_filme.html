@@ -36,6 +36,7 @@ animação em quatro momentos, porque efeito animado não se julga por número.<
     'js/core/data/elements.js',
     'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js',
     'assets/embedded/fx-anim.js',
+    'assets/embedded/fx-cgheven.js',
     'js/render3d/fx3d_v2.js'];
   for (var i = 0; i < arquivos.length; i++)
     document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
@@ -129,6 +130,13 @@ animação em quatro momentos, porque efeito animado não se julga por número.<
       });
       return n;
     }
+
+    // ---- AS FOLHAS ASSINADAS (CGHEVEN): quatro tipos de folha única, sem
+    // tinta de elemento. temFilme tem de vê-las pela MESMA pergunta do jogo.
+    var ASSINADAS = ['escudo', 'portal', 'tornado', 'muzzle'];
+    var semAssinada = ASSINADAS.filter(function (t) { return !FX.temFilme(t, 'neutro'); });
+    check('as quatro folhas assinadas respondem ao temFilme',
+          semAssinada.length === 0, semAssinada.join(', '));
 
     var n1 = disparaTudo();
     // O teto de filmes simultâneos existe para um feitiço de área não encher a

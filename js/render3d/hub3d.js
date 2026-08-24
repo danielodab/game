@@ -58,6 +58,27 @@ var JOGO = (typeof window !== 'undefined')
   var TAP_PX = 6;                   // o mesmo limiar clique/arrasto da batalha
 
   // ---------------------------------------------------------------- utilidades
+  /* O FILME DO PORTAL (CGHEVEN, folha 4x4 de 16 quadros): UMA textura para os
+   * seis portais — todos giram no mesmo quadro, e o tique avança o offset uma
+   * vez só. A tinta do Fecho continua no material; a folha dá o redemoinho. */
+  var texPortal = null, TEX_PORTAL_N = 4;
+  function texturaPortal() {
+    if (texPortal !== null) return texPortal || null;
+    var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ANIM : null;
+    if (!A || !A['portal:unico'] || !THREE) { texPortal = false; return null; }
+    var img = new Image();
+    var tex = new THREE.Texture(img);
+    img.onload = function () { tex.needsUpdate = true; };
+    img.src = 'data:image/jpeg;base64,' + A['portal:unico'];
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    tex.repeat.set(1 / TEX_PORTAL_N, 1 / TEX_PORTAL_N);
+    texPortal = tex;
+    return tex;
+  }
+
   function M2() { return JOGO.Models3D2 || null; }
   function K() { return JOGO.Models3D || null; }
 
@@ -149,10 +170,16 @@ var JOGO = (typeof window !== 'undefined')
       );
       aro.position.y = 2.1;
       g.add(aro);
+      var tp = texturaPortal();
       var miolo = new THREE.Mesh(
         new THREE.CircleGeometry(1.5, 32),
-        new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.42,
-                                      side: THREE.DoubleSide, depthWrite: false })
+        // com o filme: aditivo tingido pela cor do Fecho — cada portal
+        // redemoinha na própria cor; sem ele, o disco chapado de sempre
+        tp ? new THREE.MeshBasicMaterial({ map: tp, color: cor, transparent: true,
+                                           opacity: 0.85, blending: THREE.AdditiveBlending,
+                                           side: THREE.DoubleSide, depthWrite: false })
+           : new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.42,
+                                           side: THREE.DoubleSide, depthWrite: false })
       );
       miolo.position.y = 2.1;
       g.add(miolo);
@@ -384,10 +411,21 @@ var JOGO = (typeof window !== 'undefined')
 
   function tique(dt) {
     relogio += dt;
-    // os miolos dos portais respiram — é o único movimento do mundo, e basta
+    // o FILME dos portais: um passo de offset por quadro serve os seis miolos
+    // (mesma conta de linha/coluna do updateFilmes do fx3d — flipY do three)
+    if (texPortal) {
+      var qp = Math.floor(relogio * 13) % (TEX_PORTAL_N * TEX_PORTAL_N);
+      var cc = qp % TEX_PORTAL_N, rr = Math.floor(qp / TEX_PORTAL_N);
+      texPortal.offset.set(cc / TEX_PORTAL_N, (TEX_PORTAL_N - 1 - rr) / TEX_PORTAL_N);
+    }
     for (var i = 0; i < lugares.length; i++) {
       var l = lugares[i];
-      if (l.miolo) l.miolo.material.opacity = 0.34 + Math.sin(relogio * 1.8 + i) * 0.10;
+      if (!l.miolo) continue;
+      // com filme a respiração é sutil (o movimento já vem dele); sem filme,
+      // a respiração de sempre é o único movimento do mundo
+      l.miolo.material.opacity = texPortal
+        ? 0.78 + Math.sin(relogio * 1.8 + i) * 0.07
+        : 0.34 + Math.sin(relogio * 1.8 + i) * 0.10;
     }
 
     if (heroi) {

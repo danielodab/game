@@ -695,7 +695,8 @@ var JOGO = (typeof window !== 'undefined')
   FX.temFilme = function (tipo, el) {
     var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ANIM : null;
     var t = TINTA[el || 'neutro'] || TINTA.neutro;
-    return !!(A && A[tipo + ':' + t[0]]);
+    // a MESMA queda do filme(): folha por paleta, senão a assinada `:unico`
+    return !!(A && (A[tipo + ':' + t[0]] || A[tipo + ':unico']));
   };
   FX.tintaDe = function (el) { return TINTA[el] || TINTA.neutro; };
 
@@ -712,6 +713,15 @@ var JOGO = (typeof window !== 'undefined')
     var el = o.el || 'neutro';
     var t = TINTA[el] || TINTA.neutro;
     var tex = animTexture(o.tipo + ':' + t[0]);
+    // FOLHA ASSINADA: os filmes do CGHEVEN vem numa cor autoral (escudo
+    // dourado, portal laranja) e existem so como `tipo:unico`. Entram com
+    // tinta BRANCA — tingir por elemento destruiria a assinatura, que e
+    // exatamente o que elas trazem de melhor.
+    var assinada = false;
+    if (!tex) {
+      tex = animTexture(o.tipo + ':unico');
+      assinada = !!tex;
+    }
     if (!tex) return null;
 
     // CLONE POR FILME. A textura clonada divide a imagem — nao custa memoria de
@@ -726,7 +736,8 @@ var JOGO = (typeof window !== 'undefined')
       // `setRGB` aceita valor acima de 1 e o shader nao corta antes da escrita
       // final: e assim que a agua sai do verde-azulado da folha para o azul do
       // elemento. Multiplicar so sabe escurecer; aqui precisa clarear.
-      color: new THREE.Color().setRGB(t[1], t[2], t[3]),
+      color: assinada ? new THREE.Color(1, 1, 1)
+                      : new THREE.Color().setRGB(t[1], t[2], t[3]),
       blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
       // 0,62 E NAO 1. Mistura aditiva soma no que ja esta na tela, e a folha
       // pre-multiplicada ja e clara: a 1 o laranja do fogo estourava para
@@ -1521,12 +1532,14 @@ var JOGO = (typeof window !== 'undefined')
   /* CAMADA ANIMADA POR FAMILIA — [tipo de folha, modo, tamanho em metros,
    * duracao, quanto cresce durante a animacao].
    *
-   * Nove das 21 familias. As outras doze ficam de fora porque nao ha folha que
-   * sirva: `flecha`, `feixe` e `bola` sao PROJETEIS (o filme e uma explosao
-   * parada no lugar, nao um tiro que viaja) e `piscar`, `gancho` e `escudo`
-   * pedem formas que este pacote nao tem. Meia integracao honesta e melhor que
-   * uma inteira forcada — e quando a folha certa aparecer, a linha entra aqui.
-   */
+   * Doze das 21 familias. `flecha`, `feixe` e `bola` sao PROJETEIS (o filme e
+   * uma explosao parada, nao um tiro que viaja — mas a flecha ganhou o clarao
+   * de BOCA na origem, ver tocaFamilia) e `piscar` e `gancho` seguem sem
+   * folha que sirva. Meia integracao honesta e melhor que uma inteira forcada.
+   *
+   * As folhas `unico` (CGHEVEN, CC0) entraram em 24/08: o `escudo` que este
+   * comentario esperava, o `cone` de vento virou tornado de verdade, e a
+   * `invocacao` agora ABRE UM PORTAL no chao — a criatura chega por ele. */
   var FILME_FAM = {
     meteoro:   ['estouro', 'bilhete', 5.2, 0.55, 0.35],
     estouro:   ['estouro', 'bilhete', 4.2, 0.50, 0.30],
@@ -1536,7 +1549,9 @@ var JOGO = (typeof window !== 'undefined')
     investida: ['onda',    'bilhete', 3.0, 0.38, 0.20],
     aura:      ['chama',   'bilhete', 2.6, 0.80, 0.10],
     cura:      ['anel',    'chao',    3.2, 0.70, 0.30],
-    invocacao: ['anel',    'chao',    3.4, 0.66, 0.45]
+    escudo:    ['escudo',  'bilhete', 3.0, 0.60, 0.15],
+    cone:      ['tornado', 'bilhete', 4.0, 0.66, 0.25],
+    invocacao: ['portal',  'chao',    3.4, 0.72, 0.30]
   };
 
   /* Escolhe e toca o desenho da familia. */
@@ -1544,6 +1559,13 @@ var JOGO = (typeof window !== 'undefined')
     // O FILME ENTRA POR CIMA, nao no lugar. O desenho de particula e placa de
     // cada familia foi ajustado ao longo de muitas correcoes; trocar tudo por
     // filme seria jogar isso fora so para ganhar movimento.
+    // O CLARAO DE BOCA: a familia `flecha` (o tiro do Cacador, o Chumbo do
+    // Totem) ganha o muzzle NA ORIGEM — curto, pequeno, na altura da arma.
+    // O projetil continua sendo particula; o clarao e o instante do disparo.
+    if (fam === 'flecha' && from) {
+      filme({ tipo: 'muzzle', el: el, modo: 'bilhete', tam: 1.7, dur: 0.30,
+              cresce: 0.1, pos: v3(from.x, (from.y || 0) + 1.15, from.z) });
+    }
     var ff = FILME_FAM[fam];
     if (ff && dest) {
       var alto = (ff[1] === 'chao') ? 0.06 : 1.05;
