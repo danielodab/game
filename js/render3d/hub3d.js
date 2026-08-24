@@ -83,6 +83,32 @@ var JOGO = (typeof window !== 'undefined')
    * todo corpo que carrega fogo — o tique avança o offset de cada paleta uma
    * vez só, e todas as chamas da praça ardem no mesmo quadro. */
   var texChamas = {}, TEX_CHAMA_N = 4;
+  var texBrilhos = {};
+  var COR_BRILHO = { fire: '#ff9a4a', blueish_flame: '#5fe6cd', magic: '#c9a6ff' };
+  /* O HALO da chama: um gradiente radial desenhado em canvas, tingido pela
+   * paleta — o fogo passa a ILUMINAR o entorno, nao so a existir. */
+  function texturaBrilho(paleta) {
+    if (texBrilhos[paleta] !== undefined) return texBrilhos[paleta] || null;
+    if (!THREE) { texBrilhos[paleta] = false; return null; }
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    var g = cv.getContext('2d');
+    var gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+    gr.addColorStop(0, COR_BRILHO[paleta] || '#ffb45f');
+    gr.addColorStop(0.55, 'rgba(120,80,40,0.25)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+    var tex = new THREE.Texture(cv);
+    tex.needsUpdate = true;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texBrilhos[paleta] = tex;
+    return tex;
+  }
+  function poeQuadro(tex, q) {
+    tex.offset.set((q % TEX_CHAMA_N) / TEX_CHAMA_N,
+      (TEX_CHAMA_N - 1 - Math.floor(q / TEX_CHAMA_N)) / TEX_CHAMA_N);
+  }
   function texturaChama(paleta) {
     if (texChamas[paleta] !== undefined) return texChamas[paleta] || null;
     var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ANIM : null;
@@ -368,6 +394,12 @@ var JOGO = (typeof window !== 'undefined')
       } catch (e) {}
       corpo[campo] = null;
     });
+    ['chamaGlow', 'chamaInner'].forEach(function (campo) {
+      if (!corpo[campo]) return;
+      corpo.node.remove(corpo[campo]);
+      try { corpo[campo].material.dispose(); } catch (e) {}
+      corpo[campo] = null;
+    });
     if (corpo.chamaCoroa) {
       corpo.chamaCoroa.forEach(function (m2) {
         corpo.node.remove(m2);
@@ -375,6 +407,11 @@ var JOGO = (typeof window !== 'undefined')
       });
       corpo.chamaCoroa = null;
     }
+    if (corpo.chamaTexs) {
+      corpo.chamaTexs.forEach(function (t2) { try { t2.dispose(); } catch (e) {} });
+      corpo.chamaTexs = null;
+    }
+    corpo.chamaFase = null;
     if (!nome) return;
     var alto = (corpo.node.userData.height || 2.1);
     var sp = rotulo(nome, '#f0ead8', 0.42);
@@ -394,33 +431,67 @@ var JOGO = (typeof window !== 'undefined')
     // Sprite não serve (não anima folha); é um bilhete aditivo que o tique
     // vira para a câmera junto com o offset da paleta.
     if (brasaTier && brasaTier.tam) {
-      var texC = texturaChama(brasaTier.paleta || 'fire');
-      if (texC) {
+      var texBase = texturaChama(brasaTier.paleta || 'fire');
+      if (texBase) {
         var baseY = alto + (titulo ? 0.66 : 0.5) + 0.42;
-        var matC = new THREE.MeshBasicMaterial({
-          map: texC, transparent: true, depthWrite: false,
-          blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-          opacity: 0.9
-        });
-        var chamaG = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matC);
         var tamC = brasaTier.tam;
-        chamaG.scale.set(tamC, tamC, 1);
+        // FASE PROPRIA: cada fogo da praca arde no seu tempo — sincronizado
+        // era luz de arvore de natal, nao fogo
+        corpo.chamaFase = Math.random() * 13;
+        corpo.chamaTexs = [];
+        function novaChama(escala, opac) {
+          var t2 = texBase.clone();
+          t2.needsUpdate = true;
+          corpo.chamaTexs.push(t2);
+          var m2 = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+            new THREE.MeshBasicMaterial({
+              map: t2, transparent: true, depthWrite: false,
+              blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+              opacity: opac
+            }));
+          m2.scale.set(escala, escala, 1);
+          corpo.node.add(m2);
+          return m2;
+        }
+
+        // o HALO atras de tudo, pulsando devagar no tique
+        var texG = texturaBrilho(brasaTier.paleta || 'fire');
+        if (texG) {
+          var glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+            new THREE.MeshBasicMaterial({
+              map: texG, transparent: true, depthWrite: false,
+              blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+              opacity: 0.3
+            }));
+          glow.scale.set(tamC * 2.1, tamC * 2.1, 1);
+          glow.position.y = baseY + tamC * 0.35;
+          corpo.node.add(glow);
+          corpo.chamaGlow = glow;
+        }
+
+        var chamaG = novaChama(tamC, 0.9);
         chamaG.position.y = baseY + tamC * 0.35;
-        corpo.node.add(chamaG);
         corpo.chamaBrasa = chamaG;
-        // A COROA DE FOGO e uma coroa DE VERDADE: duas pontas menores em
-        // arco ladeiam o fogo central — tres fogos violetas, visiveis do
-        // outro lado da praca. E o degrau que so o 1o do placar carrega.
+        corpo.chamaTam = tamC;
+        corpo.chamaBaseY = baseY;
+
+        // LABAREDA e COROA ganham um MIOLO interno menor e mais rapido —
+        // duas camadas defasadas leem como profundidade, nao como adesivo
+        if (brasaTier.id === 'labareda' || brasaTier.coroa) {
+          var inner = novaChama(tamC * 0.55, 0.75);
+          inner.position.y = baseY + tamC * 0.28;
+          corpo.chamaInner = inner;
+        }
+
+        // A COROA: as duas pontas ORBITAM a cabeca devagar — uma coroa
+        // girando, e o degrau que so o 1o do placar carrega
         if (brasaTier.coroa) {
           corpo.chamaCoroa = [];
-          [-1, 1].forEach(function (ld) {
-            var m2 = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matC.clone());
-            m2.material.opacity = 0.8;
-            var t2 = tamC * 0.55;
-            m2.scale.set(t2, t2, 1);
-            m2.position.set(ld * tamC * 0.42, baseY + tamC * 0.16, 0);
-            corpo.node.add(m2);
-            corpo.chamaCoroa.push(m2);
+          [0, 1].forEach(function (i2) {
+            var m3 = novaChama(tamC * 0.5, 0.8);
+            m3.position.set(0, baseY + tamC * 0.16, 0);
+            m3.userData.orbita = i2 * Math.PI;   // pontas opostas
+            corpo.chamaCoroa.push(m3);
           });
         }
       }
@@ -483,28 +554,52 @@ var JOGO = (typeof window !== 'undefined')
       var cc = qp % TEX_PORTAL_N, rr = Math.floor(qp / TEX_PORTAL_N);
       texPortal.offset.set(cc / TEX_PORTAL_N, (TEX_PORTAL_N - 1 - rr) / TEX_PORTAL_N);
     }
-    // as chamas da Brasa: um offset por paleta serve toda a praça
-    for (var pk in texChamas) {
-      if (!texChamas.hasOwnProperty(pk) || !texChamas[pk]) continue;
-      var qc = Math.floor(relogio * 14) % (TEX_CHAMA_N * TEX_CHAMA_N);
-      texChamas[pk].offset.set((qc % TEX_CHAMA_N) / TEX_CHAMA_N,
-        (TEX_CHAMA_N - 1 - Math.floor(qc / TEX_CHAMA_N)) / TEX_CHAMA_N);
-    }
-    // e cada chama encara a câmera (bilhete manual: só a volta do eixo Y)
+    // O FOGO VIVO: cada corpo com fase propria — quadro, tremulacao, halo
+    // pulsando, miolo defasado e a orbita da Coroa, tudo num passo so
     if (camera) {
-      var viraChama = function (corpoC) {
+      var TOTAL_Q = TEX_CHAMA_N * TEX_CHAMA_N;
+      var animaFogo = function (corpoC) {
         if (!corpoC || !corpoC.chamaBrasa) return;
+        var fase = corpoC.chamaFase || 0;
+        var tamF = corpoC.chamaTam || 1;
         var giro = Math.atan2(camera.position.x - corpoC.node.position.x,
                               camera.position.z - corpoC.node.position.z) -
                    corpoC.node.rotation.y;
+
+        // quadro proprio (a fase desloca) + tremulacao de escala (~7%)
+        if (corpoC.chamaTexs) {
+          for (var ti = 0; ti < corpoC.chamaTexs.length; ti++) {
+            var ritmo = ti === 0 ? 14 : 19;      // o miolo e as pontas ardem mais rapido
+            poeQuadro(corpoC.chamaTexs[ti],
+              Math.floor(relogio * ritmo + fase * 7 + ti * 5) % TOTAL_Q);
+          }
+        }
+        var treme = 1 + 0.07 * Math.sin(relogio * 9 + fase);
+        corpoC.chamaBrasa.scale.set(tamF * treme, tamF * treme, 1);
         corpoC.chamaBrasa.rotation.y = giro;
+
+        if (corpoC.chamaGlow) {
+          corpoC.chamaGlow.material.opacity = 0.26 + 0.09 * Math.sin(relogio * 2.3 + fase);
+          corpoC.chamaGlow.rotation.y = giro;
+        }
+        if (corpoC.chamaInner) {
+          var t2 = tamF * 0.55 * (1 + 0.10 * Math.sin(relogio * 13 + fase + 2));
+          corpoC.chamaInner.scale.set(t2, t2, 1);
+          corpoC.chamaInner.rotation.y = giro;
+        }
         if (corpoC.chamaCoroa) {
-          corpoC.chamaCoroa.forEach(function (m2) { m2.rotation.y = giro; });
+          var raio = tamF * 0.48;
+          corpoC.chamaCoroa.forEach(function (m3) {
+            var ang = relogio * 1.1 + (m3.userData.orbita || 0) + fase;
+            m3.position.x = Math.cos(ang) * raio;
+            m3.position.z = Math.sin(ang) * raio;
+            m3.rotation.y = giro;
+          });
         }
       };
-      viraChama(heroi);
+      animaFogo(heroi);
       for (var fk2 in fantasmas) {
-        if (fantasmas.hasOwnProperty(fk2)) viraChama(fantasmas[fk2]);
+        if (fantasmas.hasOwnProperty(fk2)) animaFogo(fantasmas[fk2]);
       }
     }
     for (var i = 0; i < lugares.length; i++) {
