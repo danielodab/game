@@ -270,6 +270,36 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  /* O DUELO DE TREINO: duas duplas da MESMA conta, no mesmo teclado. As
+   * escolhas às cegas são da ficha; aqui só se monta a arena. */
+  Game.startDuel = function (duplaA, duplaB) {
+    if (!duplaA || !duplaA.length || !duplaB || !duplaB.length) return false;
+    Game.party = duplaA.slice();
+    Game.dungeonId = null;               // duelo não pertence a calabouço
+    Game.roomIndex = 0;
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    carryHp = null;
+    resetAiState();
+    resetTimer(true);
+    var prog = P();
+    function payloadDe(ids) {
+      if (prog && prog.battleParty) {
+        try {
+          var pl = prog.battleParty(ids);
+          if (pl && pl.length) return pl;
+        } catch (e) {}
+      }
+      return ids.slice();
+    }
+    Game.state = E().createDuel(payloadDe(duplaA), payloadDe(duplaB), {});
+    Game._duplas = { a: duplaA.slice(), b: duplaB.slice() };
+    setScreen('battle');
+    return true;
+  };
+
   Game.nextRoom = function () {
     if (Game.screen !== 'roomClear' || !Game.dungeonId) return false;
     Game.roomIndex++;
@@ -306,7 +336,11 @@ var JOGO = (typeof window !== 'undefined')
    * controle do jogo até o fim da batalha (barra de feitiços vazia, cliques
    * ignorados e a IA jogando no lugar do jogador). */
   function isPlayerUnit(u) {
-    return !!u && u.side === 'player' && (u.kind === 'hero' || u.kind === 'fusion');
+    if (!u || (u.kind !== 'hero' && u.kind !== 'fusion')) return false;
+    if (u.side === 'player') return true;
+    // DUELO (hotseat): o lado enemy também é gente — o teclado passa de mão
+    // e a IA fica só com mascotes e invocações dos dois lados
+    return !!(Game.state && Game.state.pvp && u.side === 'enemy');
   }
   Game.isPlayerUnit = isPlayerUnit;      // a UI usa para decidir o que desenhar
 
@@ -670,6 +704,35 @@ var JOGO = (typeof window !== 'undefined')
 
   function handleBattleOver() {
     if (!Game.state || Game.screen !== 'battle') return;
+
+    /* DUELO: nada de xp, saque ou moeda — o prêmio é o resultado. O treino
+     * entra no histórico de PvP, e a Brasa é só MOSTRADA ("se valesse"):
+     * Elo contra si mesmo é fábrica de fumaça, e fumaça não é brasa. */
+    if (Game.state.pvp) {
+      resetAiState();
+      resetTimer(true);
+      Game.selectedSpellId = null;
+      Game.mustEndTurn = false;
+      Game.pendingFusion = null;
+      var venceuA = Game.state.phase === 'won';
+      var duplas = Game._duplas || { a: [], b: [] };
+      var seValesse = null;
+      try {
+        if (JOGO.Brasa) seValesse = JOGO.Brasa.elo(1000, 1000, true).delta;
+      } catch (e) {}
+      if (JOGO.DB && JOGO.DB.registrarPvp) {
+        try {
+          JOGO.DB.registrarPvp({ oponente: 'treino (mesmo teclado)',
+            minhaDupla: duplas.a, duplaDele: duplas.b,
+            resultado: venceuA ? 'vitoria-ladoA' : 'vitoria-ladoB',
+            clima: Game.state.weather });
+        } catch (e2) {}
+      }
+      setScreen('duelFim', { venceuA: venceuA, duplaA: duplas.a, duplaB: duplas.b,
+                             clima: Game.state.weather, seValesse: seValesse });
+      return;
+    }
+
     if (Game.state.phase === 'won') {
       // [G10] PV para a próxima sala. A unidade FUNDIDA também precisa entrar
       // na conta: sem isso, quem venceu a sala fundido chegava à seguinte com

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a arena de duelos (motor)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>A arena — dois lados humanos, clima sorteado, sem prêmio de PvE</h1>
+<div class="sub">Cobra o createDuel: quatro heróis de verdade (dois por lado), state.pvp, SEM
+desafio de sala, clima sorteado do rng semeado (mesma semente = mesmo clima), pilares que bloqueiam
+a linha de visão, o lado B conjurando pelo MESMO caminho público do lado A, e a vitória fechando a
+batalha sem tocar em xp.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra ? ' — <code>' + String(extra) + '</code>' : '');
+    lista.appendChild(li);
+  }
+
+  var E = JOGO.Engine;
+  function duelo(seed) {
+    return E.createDuel(
+      [{ classId: 'sumo' }, { classId: 'curandeiro' }],
+      [{ classId: 'bruxo' }, { classId: 'espadachim' }],
+      { seed: seed == null ? 7 : seed });
+  }
+  function lado(st, side) {
+    return st.units.filter(function (u) { return u.side === side; });
+  }
+
+  // ------------------------------------------------------------- a fundação
+  var st = duelo();
+  check('quatro heróis, dois por lado, todos kind hero',
+        lado(st, 'player').length === 2 && lado(st, 'enemy').length === 2 &&
+        st.units.every(function (u) { return u.kind === 'hero'; }),
+        st.units.map(function (u) { return u.side + ':' + u.defId; }).join(' '));
+  check('o estado é PvP e NÃO tem desafio de sala',
+        st.pvp === true && !st.desafio);
+  check('o clima saiu do sorteio (e é um clima de verdade)',
+        ['calmo', 'chuva', 'estiagem', 'vendaval', 'tremor'].indexOf(st.weather) >= 0,
+        st.weather);
+  var st2 = duelo();
+  check('a mesma semente sorteia o MESMO clima', st2.weather === st.weather,
+        st.weather + ' × ' + st2.weather);
+  var stOutra = duelo(99);
+  check('sementes diferentes podem sortear clima diferente (rng vivo)',
+        typeof stOutra.weather === 'string');
+
+  // ------------------------------------------------------- os pilares valem
+  check('os dois pilares estão de pé (4,4) e (8,4)',
+        st.grid.tiles[4][4].type === 'wall' && st.grid.tiles[4][8].type === 'wall');
+  check('o pilar bloqueia a linha de visão de (2,4) a (6,4)',
+        E.los(st, 2, 4, 6, 4) === false);
+  check('fora do pilar a visão passa', E.los(st, 2, 3, 6, 3) === true);
+
+  // ---------------------------------- o lado B age pelo MESMO caminho público
+  // o ESPADACHIM, não o bruxo: o mago tem alcance mínimo 2 e a bancada o
+  // colava no alvo — o corpo a corpo é o teste justo da casa adjacente
+  var b0 = lado(st, 'enemy')[1];
+  var a0 = lado(st, 'player')[0];
+  b0.pa = 12; b0.cooldowns = {}; b0.castsThisTurn = {};
+  // adjacente ao alvo, num chão livre
+  a0.x = 6; a0.y = 6; b0.x = 7; b0.y = 6;
+  var feriu = false;
+  for (var i = 0; i < b0.spells.length && !feriu; i++) {
+    var sp = E.spell(b0.spells[i]);
+    if (!sp || !sp.effects || !sp.effects.some(function (e2) { return e2.type === 'damage'; })) continue;
+    var tx = sp.targetSide === 'self' ? b0.x : a0.x;
+    var ty = sp.targetSide === 'self' ? b0.y : a0.y;
+    if (E.validTargetCell(st, b0, sp, tx, ty)) {
+      var antes = a0.hp;
+      if (E.cast(st, b0.uid, sp.id, tx, ty)) feriu = a0.hp < antes;
+    }
+  }
+  check('o lado B conjura e fere o lado A pelo caminho público', feriu,
+        'hp do A: ' + a0.hp);
+
+  // ------------------------------------------------------------- a vitória
+  var stV = duelo();
+  var inimigos = lado(stV, 'enemy');
+  inimigos[1].alive = false; inimigos[1].hp = 0;
+  var alvoV = inimigos[0];
+  alvoV.hp = 1;
+  var atacante = lado(stV, 'player')[0];
+  atacante.pa = 12; atacante.cooldowns = {}; atacante.castsThisTurn = {};
+  atacante.x = 6; atacante.y = 6; alvoV.x = 7; alvoV.y = 6;
+  var matou = false;
+  for (var k = 0; k < atacante.spells.length && !matou; k++) {
+    var spk = E.spell(atacante.spells[k]);
+    if (!spk || !spk.effects || !spk.effects.some(function (e3) { return e3.type === 'damage'; })) continue;
+    var tk = spk.targetSide === 'self' ? atacante.x : alvoV.x;
+    var tyk = spk.targetSide === 'self' ? atacante.y : alvoV.y;
+    if (E.validTargetCell(stV, atacante, spk, tk, tyk)) {
+      if (E.cast(stV, atacante.uid, spk.id, tk, tyk)) matou = !alvoV.alive;
+    }
+  }
+  check('derrubar o último do lado B fecha a batalha em won',
+        matou && stV.phase === 'won', 'phase=' + stV.phase);
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>

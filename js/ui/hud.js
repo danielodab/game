@@ -295,7 +295,7 @@ var JOGO = (typeof window !== 'undefined')
   // ==========================================================================
   // ESQUELETO
   // ==========================================================================
-  var SCREEN_NAMES = ['menu', 'heroSelect', 'hub', 'dungeonSelect', 'elementChoice',
+  var SCREEN_NAMES = ['menu', 'heroSelect', 'hub', 'dungeonSelect', 'elementChoice', 'duelFim',
                       'battle', 'roomClear', 'dungeonComplete', 'defeat'];
 
   UI.init = function () {
@@ -380,6 +380,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'hub') buildHub();
     else if (name === 'dungeonSelect') buildDungeonSelect();
     else if (name === 'elementChoice') buildElementChoice(data);
+    else if (name === 'duelFim') buildDuelFim(data);
     else if (name === 'battle') { logLines = []; buildBattle(); }
     else if (name === 'roomClear' || name === 'dungeonComplete') buildRewards(name, data);
     else if (name === 'defeat') buildDefeat();
@@ -842,7 +843,10 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(el('p', 'hub-nota',
           'Ainda selada. Os duelos chegam com a Rede: cada um escolhe a própria ' +
           'dupla sem ver a do outro, e o clima da arena é sorteado.'));
-        painel.appendChild(btn('Ver o Placar', 'btn-primary btn-block', function () {
+        painel.appendChild(btn('Duelo de treino (mesmo teclado)', 'btn-primary btn-block', function () {
+          openSheet('duelo');
+        }));
+        painel.appendChild(btn('Ver o Placar', 'btn-ghost btn-block', function () {
           openSheet('placar');
         }));
         if (JOGO.DB) JOGO.DB.historicoPvp().then(function (h) {
@@ -2226,6 +2230,94 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
 
+  /* O DUELO DE TREINO — a escolha ÀS CEGAS em três fases no mesmo teclado:
+   * A escolhe a dupla, a ficha ESCONDE e pede o teclado, B escolhe, começa.
+   * Ninguém vê a dupla do outro: a surpresa é a regra desde o desenho. */
+  var dueloFase = null;            // { fase: 'A'|'passe'|'B', duplaA, escolha }
+  function sheetDuelo() {
+    sheetName = 'duelo';
+    if (!dueloFase) dueloFase = { fase: 'A', duplaA: null, escolha: [] };
+    var f = dueloFase;
+    var body = sheetShell('Arena — duelo de treino',
+      f.fase === 'A' ? 'Jogador A: escolha a sua dupla. O B não olha.' :
+      f.fase === 'passe' ? 'Dupla escondida. Passe o teclado.' :
+      'Jogador B: escolha a sua dupla. A dupla do A está escondida.');
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+
+    if (f.fase === 'passe') {
+      caixa.appendChild(el('p', 'du-passe', '🤝'));
+      caixa.appendChild(el('p', 'inv-dica',
+        'A dupla do Jogador A está guardada. Agora o Jogador B escolhe a dele.'));
+      caixa.appendChild(btn('Sou o Jogador B — escolher', 'btn-primary btn-block', function () {
+        f.fase = 'B'; f.escolha = [];
+        sheetDuelo();
+      }));
+      return;
+    }
+
+    var livres = Object.keys(classes()).filter(isUnlocked);
+    var fila = el('div', 'av-fila');
+    livres.forEach(function (cid) {
+      var card = el('button', 'av-carta' + (f.escolha.indexOf(cid) >= 0 ? ' is-on' : ''));
+      card.type = 'button';
+      card.appendChild(art('portrait', [cid, { size: 168 }], 84, 'av-pic'));
+      card.appendChild(el('span', 'av-nome', esc(className(cid))));
+      tap(card, function () {
+        var i = f.escolha.indexOf(cid);
+        if (i >= 0) f.escolha.splice(i, 1);
+        else if (f.escolha.length < 2) f.escolha.push(cid);
+        else { toast('A dupla é de dois.'); return; }
+        sheetDuelo();
+      });
+      fila.appendChild(card);
+    });
+    caixa.appendChild(fila);
+
+    var pronto = f.escolha.length === 2;
+    var rotuloBt = f.fase === 'A' ? 'Esconder e passar o teclado' : 'Começar o duelo';
+    var bt2 = btn(rotuloBt, 'btn-primary btn-block' + (pronto ? '' : ' is-off'), function () {
+      if (!pronto) return;
+      if (f.fase === 'A') {
+        f.duplaA = f.escolha.slice();
+        f.fase = 'passe'; f.escolha = [];
+        sheetDuelo();
+      } else {
+        var a = f.duplaA.slice(), b = f.escolha.slice();
+        dueloFase = null;
+        closeSheet();
+        var ok = safe(function () { return G().startDuel(a, b); }, false);
+        if (!ok) toast('a arena não abriu');
+      }
+    });
+    caixa.appendChild(bt2);
+  }
+
+  /* O FIM DO DUELO: quem venceu, o clima, e quanto a Brasa teria pago —
+   * treino não acende fogo, mas mostra a conta para dar gosto do que vem. */
+  function buildDuelFim(data) {
+    var s = screens.duelFim;
+    clear(s);
+    data = data || {};
+    var box = el('div', 'game-over du-fim');
+    box.appendChild(el('h1', null, data.venceuA ? 'O Lado A venceu!' : 'O Lado B venceu!'));
+    var nomes = function (ids) {
+      return (ids || []).map(function (c) { return className(c); }).join(' e ');
+    };
+    box.appendChild(el('p', 'game-sub',
+      'Lado A: ' + esc(nomes(data.duplaA)) + ' · Lado B: ' + esc(nomes(data.duplaB)) +
+      ' · clima: ' + esc(data.clima || 'calmo')));
+    if (data.seValesse != null) {
+      box.appendChild(el('p', 'du-valeria',
+        'Se valesse a Brasa, o vencedor levaria +' + data.seValesse +
+        ' pontos. O fogo de verdade acende em duelo contra outra conta.'));
+    }
+    box.appendChild(btn('Voltar ao Acampamento', 'btn-primary btn-block', function () {
+      navTo('hub');
+    }));
+    s.appendChild(box);
+  }
+
   function sheetShell(title, sub) {
     clear(sheetEl);
     var panel = el('div', 'sheet-panel');
@@ -2269,6 +2361,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'missoes') sheetMissoes();
     else if (name === 'mercado') sheetMercado();
     else if (name === 'placar') sheetPlacar();
+    else if (name === 'duelo') sheetDuelo();
     else closeSheet();
   }
   UI.openSheet = openSheet;

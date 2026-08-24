@@ -1007,6 +1007,95 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  // ------------------------------------------------------------------- duelo
+  /* A ARENA (PvP hotseat). Uma sala propria, montada a mao: bordas de muro,
+   * dois pilares no meio (a linha de visao PRECISA ter o que bloquear numa
+   * arena, senao vira tiroteio de esquina a esquina), e os DOIS lados como
+   * herois de verdade — quem os conduz e decisao do Game (state.pvp).
+   *
+   * SEM desafio de sala: o contrato do desafio e PvE (+xp/+saque), e duelo
+   * nao paga nem xp nem saque. O clima e SORTEADO no proprio rng do estado:
+   * a mesma dupla de duplas com a mesma semente repete o clima — testavel. */
+  Engine.createDuel = function (duplaA, duplaB, opts) {
+    opts = opts || {};
+    if (!duplaA || !duplaA.length || !duplaB || !duplaB.length) {
+      throw new Error('Engine.createDuel: duplas vazias');
+    }
+    var w = 13, h = 9;
+    var tiles = [];
+    for (var y = 0; y < h; y++) {
+      tiles.push([]);
+      for (var x = 0; x < w; x++) {
+        var borda = (x === 0 || y === 0 || x === w - 1 || y === h - 1);
+        var pilar = (y === 4 && (x === 4 || x === 8));
+        tiles[y].push({ type: (borda || pilar) ? 'wall' : 'floor',
+                        deco: !borda && !pilar && ((x * 3 + y) % 7 === 0) });
+      }
+    }
+
+    var state = {
+      dungeonId: opts.cenario || 'greenhouse',   // o tema visual da arena v1
+      roomIndex: 0,
+      pvp: true,
+      dificuldade: 'normal',                     // multiplicadores neutros
+      round: 1,
+      phase: 'playing',
+      grid: { w: w, h: h, tiles: tiles },
+      units: [],
+      order: [],
+      activeIdx: 0,
+      weather: 'calmo',
+      tileEventsActive: [],
+      traps: [],
+      walls: [],
+      pendingFusion: null,
+      _weatherIdx: 0,
+      _uidCounter: 0,
+      _rng: hashStr('duelo:' + (opts.seed != null ? String(opts.seed) : String(Date.now())))
+    };
+
+    // o CLIMA da arena e sorteado — pedido de design desde o primeiro desenho
+    var cyc = weatherCycle(state);
+    state.weather = cyc[Math.floor(nextRand(state) * cyc.length)] || 'calmo';
+    state._weatherIdx = Math.max(0, cyc.indexOf(state.weather));
+
+    function poeLado(dupla, side, colX) {
+      var vagasY = [3, 5, 2, 6];
+      for (var i = 0; i < dupla.length && i < 2; i++) {
+        var pd = dupla[i];
+        var cls = (DATA().classes && DATA().classes[pd.classId]) || null;
+        if (!cls) throw new Error('Engine.createDuel: classe desconhecida: ' + pd.classId);
+        var st = heroStats(pd, cls);
+        var unit = makeUnit(state, cls, 'hero', side, colX, vagasY[i], {
+          stats: st,
+          spells: pd.spells || cls.baseSpells || cls.spells || [],
+          element: pd.element || 'neutro',
+          level: pd.level || 1,
+          classId: pd.classId,
+          heroId: pd.heroId || pd.classId,
+          name: pd.name || cls.name
+        });
+        state.units.push(unit);
+      }
+    }
+    poeLado(duplaA, 'player', 2);
+    poeLado(duplaB, 'enemy', w - 3);
+
+    var sorted = state.units.slice().sort(function (a, b) {
+      if (b.initiative !== a.initiative) return b.initiative - a.initiative;
+      return a._birth - b._birth;
+    });
+    for (var i2 = 0; i2 < sorted.length; i2++) state.order.push(sorted[i2].uid);
+    state.activeIdx = 0;
+
+    Engine.state = state;
+    emit({ type: 'battleStart', state: state });
+    log('Arena de Duelos — clima: ' + state.weather + '. Que vença o mais fundo.');
+    emit({ type: 'roundStart', round: 1 });
+    startTurn(state, 0);
+    return state;
+  };
+
   // --------------------------------------------------------------- desafios
   /* O DESAFIO DA SALA (a moda Dofus): um contrato opcional sorteado por
    * batalha, com o rng SEMEADO da sala — mesma sala e mesmo grupo, mesmo
