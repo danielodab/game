@@ -787,12 +787,13 @@ var JOGO = (typeof window !== 'undefined')
         if (j.avatar && JOGO.Hub && JOGO.Hub.entrar) {
           JOGO.Hub.entrar(mundo, j.avatar);
         }
-        // a plaquinha: nome, título — e a CHAMA DA BRASA, quando há fogo.
-        // Fagulha (o degrau de entrada) não acende: chama é conquista.
+        // a plaquinha: nome, título — e a CHAMA DA BRASA. A Fagulha é uma
+        // faísca de vagalume, mas SÓ para quem já pisou na arena: quem nunca
+        // lutou segue sem fogo nenhum — a ausência também diz algo.
         var tier = null;
         if (brasa && JOGO.Brasa) {
           tier = JOGO.Brasa.tierDe(brasa.pts, souTopoDaArena());
-          if (tier && tier.min === 0) tier = null;
+          if (tier && tier.min === 0 && !(brasa.partidas > 0)) tier = null;
         }
         if (JOGO.Hub && JOGO.Hub.nomeia) {
           JOGO.Hub.nomeia(j.nome || '', j.titulo || '', tier);
@@ -888,7 +889,9 @@ var JOGO = (typeof window !== 'undefined')
     if (JOGO.Rede && entrou) {
       var R = JOGO.Rede;
       if (JOGO.DB.brasaVer) {
-        JOGO.DB.brasaVer().then(function (bz) { if (bz) resumoBrasaPts = bz.pts; });
+        JOGO.DB.brasaVer().then(function (bz) {
+          if (bz) { resumoBrasaPts = bz.pts; resumoBrasaPartidas = bz.partidas || 0; }
+        });
       }
       JOGO.DB.jogador().then(function (j) {
         var e0 = (JOGO.Hub._estado && JOGO.Hub._estado()) || {};
@@ -2882,11 +2885,12 @@ var JOGO = (typeof window !== 'undefined')
       classes2[hh.classId || hid] = lv;
       total += lv;
     });
-    return { classes: classes2, total: total, brasa: resumoBrasaPts };
+    return { classes: classes2, total: total,
+             brasa: resumoBrasaPts, partidas: resumoBrasaPartidas };
   }
   /* os pontos de brasa entram no resumo por fora (são assíncronos no DB);
    * buildHub os carrega antes de ligar a Rede */
-  var resumoBrasaPts = 1000;
+  var resumoBrasaPts = 1000, resumoBrasaPartidas = 0;
 
   function paresDeAvatar() {
     var ids = Object.keys(classes()).filter(isUnlocked).sort();

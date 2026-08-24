@@ -727,7 +727,8 @@ var JOGO = (typeof window !== 'undefined')
     if (perfil && perfil.resumo && typeof perfil.resumo.brasa === 'number' &&
         JOGO.Brasa && JOGO.Brasa.tierDe) {
       tierF = JOGO.Brasa.tierDe(perfil.resumo.brasa, false);
-      if (tierF && tierF.min === 0) tierF = null;    // Fagulha não acende ainda
+      // a mesma regra do herói: a faísca da Fagulha é de quem JÁ lutou
+      if (tierF && tierF.min === 0 && !(perfil.resumo.partidas > 0)) tierF = null;
     }
     penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF);
     return true;

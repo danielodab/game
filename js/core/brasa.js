@@ -40,7 +40,7 @@ var JOGO = (typeof window !== 'undefined')
    * presa no portao caia na Labareda. Agora: laranja -> azulada -> violeta ->
    * e a Coroa e uma COROA literal: tres fogos em arco sobre a cabeca. */
   B.TIERS = [
-    { id: 'fagulha',  nome: 'Fagulha',       min: 0,    paleta: 'fire',          tam: 0.45 },
+    { id: 'fagulha',  nome: 'Fagulha',       min: 0,    paleta: 'fire',          tam: 0.22 },
     { id: 'brasa',    nome: 'Brasa',         min: 1150, paleta: 'fire',          tam: 0.75 },
     { id: 'chama',    nome: 'Chama',         min: 1350, paleta: 'blueish_flame', tam: 1.00 },
     { id: 'labareda', nome: 'Labareda',      min: 1550, paleta: 'magic',         tam: 1.30 },

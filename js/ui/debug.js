@@ -233,8 +233,14 @@ var JOGO = (typeof window !== 'undefined')
         infoBr.textContent = 'Brasa: ' + bz.pts + ' pts — ' + t.nome;
       });
     }
-    function poeBrasa(pts) {
-      JOGO.DB.definirBrasa(pts).then(function () {
+    function poeBrasa(pts, partidas) {
+      var cadeia = (partidas != null)
+        ? JOGO.DB.definirBrasa(pts, partidas)
+        : JOGO.DB.brasaVer().then(function (bz) {
+            // cravar um degrau conta como já ter lutado: a Fagulha ACENDE
+            return JOGO.DB.definirBrasa(pts, Math.max(1, bz.partidas));
+          });
+      cadeia.then(function () {
         pintaBrasa();
         // se o Acampamento está na tela, renasce para a chama trocar JÁ
         try {
@@ -242,6 +248,11 @@ var JOGO = (typeof window !== 'undefined')
         } catch (e) {}
       });
     }
+    var bZero = el('button', 'dbg-b', 'Nunca lutou (zera)');
+    bZero.type = 'button';
+    bZero.title = 'Volta a 1000 pontos com ZERO partidas — sem fogo nenhum';
+    bZero.onclick = function () { poeBrasa(1000, 0); };
+    linhaBr.appendChild(bZero);
     [['Fagulha', 1000], ['Brasa', 1200], ['Chama', 1400],
      ['Labareda', 1600], ['Coroa', 1900]].forEach(function (par) {
       var bT = el('button', 'dbg-b', par[0] + ' (' + par[1] + ')');
