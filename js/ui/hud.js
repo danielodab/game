@@ -764,6 +764,8 @@ var JOGO = (typeof window !== 'undefined')
       JOGO.DB.jogador().then(function (j) {
         if (!j.nome) { nomeEl.textContent = '—'; pedeNome(); }
         else nomeEl.textContent = j.nome;
+        // a plaquinha acima da cabeça acompanha: nome novo, batismo, ou nada
+        if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(j.nome || '');
       });
       JOGO.DB.moedas().then(function (m) {
         moedasEl.textContent = m + (m === 1 ? ' vintém' : ' vinténs');

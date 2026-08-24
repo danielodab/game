@@ -33,7 +33,8 @@ var JOGO = (typeof window !== 'undefined')
   var container = null, canvas = null;
   var rodando = false, ultimoT = 0;
 
-  var heroi = null;                 // { node, mixer, alvo, andando }
+  var heroi = null;                 // { node, mixer, alvo, andando, plaquinha }
+  var nomeJogador = null;           // o nome batizado no DB, para a plaquinha
   var lugares = [];                 // { id, tipo, pos, raio, node, rotulo }
   var aoChegar = null;              // callback pendente da caminhada atual
   var raycaster = null, chao = null;
@@ -67,7 +68,7 @@ var JOGO = (typeof window !== 'undefined')
 
   /* Rótulo flutuante: um sprite com texto desenhado em canvas. É o mesmo truque
    * dos números de dano — barato e legível de qualquer ângulo. */
-  function rotulo(texto, cor) {
+  function rotulo(texto, cor, escala) {
     var cv = document.createElement('canvas');
     cv.width = 512; cv.height = 128;
     var g = cv.getContext('2d');
@@ -80,7 +81,8 @@ var JOGO = (typeof window !== 'undefined')
     tex.needsUpdate = true;
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
     var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-    sp.scale.set(6.4, 1.6, 1);
+    var e = escala || 1;
+    sp.scale.set(6.4 * e, 1.6 * e, 1);
     return sp;
   }
 
@@ -264,6 +266,29 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(node);
     heroi = { node: node, alvo: null, andando: false };
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
+    if (nomeJogador) pendura(nomeJogador);
+  }
+
+  /* O NOME ACIMA DA CABEÇA — a primeira marca de jogo online que o corpo
+   * carrega ("como o jogo será online, o nome do usuario deve aparecer acima
+   * da cabeça"). A plaquinha é FILHA do nó do herói: anda, corre e troca de
+   * corpo junto, sem uma linha no tique — e sprite sempre encara a câmera.
+   * Os fantasmas da rede vão pendurar a deles por este mesmo caminho. */
+  function pendura(nome) {
+    if (!heroi || !THREE) return;
+    if (heroi.plaquinha) {
+      heroi.node.remove(heroi.plaquinha);
+      try {
+        heroi.plaquinha.material.map.dispose();
+        heroi.plaquinha.material.dispose();
+      } catch (e) {}
+      heroi.plaquinha = null;
+    }
+    if (!nome) return;
+    var sp = rotulo(nome, '#f0ead8', 0.42);
+    sp.position.y = (heroi.node.userData.height || 2.1) + 0.5;
+    heroi.node.add(sp);
+    heroi.plaquinha = sp;
   }
 
   // -------------------------------------------------------------- a caminhada
@@ -472,6 +497,12 @@ var JOGO = (typeof window !== 'undefined')
    * herói — o destino chega por mensagem, não por clique. E o próprio defeito
    * "não está correndo" só é testável se o teste puder LER o que o herói faz:
    * até aqui tudo era privado e a única prova era o olho. */
+  /* Quem sabe o nome é o DB, e quem fala com o DB é a HUD (pintaConta e o
+   * batismo): ela empurra o nome para cá. Vazio tira a plaquinha. */
+  Hub.nomeia = function (nome) {
+    nomeJogador = String(nome || '').trim() || null;
+    pendura(nomeJogador);
+  };
   Hub.irPara = function (x, z) {
     if (!heroi || !THREE) return false;
     andarAte(new THREE.Vector3(x, 0, z), null);
@@ -482,6 +513,8 @@ var JOGO = (typeof window !== 'undefined')
       pos: heroi ? { x: +heroi.node.position.x.toFixed(2),
                      z: +heroi.node.position.z.toFixed(2) } : null,
       andando: heroi ? !!heroi.andando : null,
+      nome: nomeJogador,
+      plaquinha: !!(heroi && heroi.plaquinha),
       clipe: heroi ? (heroi.clipe || 'idle') : null,
       vel: heroi ? (heroi.vel || 0) : null,
       cam: { ang: +cam.ang.toFixed(3), tilt: +cam.tilt.toFixed(3), dist: +cam.dist.toFixed(2) }
