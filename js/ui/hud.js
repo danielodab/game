@@ -764,9 +764,22 @@ var JOGO = (typeof window !== 'undefined')
     function pintaConta() {
       if (!JOGO.DB) { nomeEl.textContent = ''; return; }
       Promise.all([JOGO.DB.jogador(),
-                   JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null)])
+                   JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null),
+                   JOGO.DB.placarLista ? JOGO.DB.placarLista() : Promise.resolve([])])
         .then(function (rj) {
-        var j = rj[0], brasa = rj[1];
+        var j = rj[0], brasa = rj[1], fotos = rj[2] || [];
+        // o TOPO da arena calculado AQUI, na hora — sozinho na praca = topo.
+        // Antes ele vinha do cache da ficha do placar, que so enchia ao
+        // VISITAR o placar: a Coroa caia em Labareda e "so tinha 1 efeito".
+        if (brasa) {
+          var maiorVizinho = -1;
+          fotos.forEach(function (f2) {
+            if (f2.id === j.id) return;
+            if (f2.resumo && typeof f2.resumo.brasa === 'number' &&
+                f2.resumo.brasa > maiorVizinho) maiorVizinho = f2.resumo.brasa;
+          });
+          topoArenaCache = { souEu: brasa.pts >= maiorVizinho };
+        }
         if (!j.nome) { nomeEl.textContent = '—'; pedeNome(); }
         else nomeEl.textContent = j.nome;
         // O AVATAR: a conta pode vestir uma fusão do guarda-roupa — o

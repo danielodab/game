@@ -35,13 +35,17 @@ var JOGO = (typeof window !== 'undefined')
   B.K = 24;
 
   /* paleta = a folha de chama que o hub acende; tam = escala do fogo. */
+  /* CADA degrau com cara propria — "so tem 1 efeito" foi o veredito da
+   * primeira versao, em que dois degraus dividiam a paleta azulada e a Coroa
+   * presa no portao caia na Labareda. Agora: laranja -> azulada -> violeta ->
+   * e a Coroa e uma COROA literal: tres fogos em arco sobre a cabeca. */
   B.TIERS = [
     { id: 'fagulha',  nome: 'Fagulha',       min: 0,    paleta: 'fire',          tam: 0.45 },
-    { id: 'brasa',    nome: 'Brasa',         min: 1150, paleta: 'fire',          tam: 0.70 },
-    { id: 'chama',    nome: 'Chama',         min: 1350, paleta: 'blueish_flame', tam: 0.95 },
-    { id: 'labareda', nome: 'Labareda',      min: 1550, paleta: 'blueish_flame', tam: 1.25 },
-    { id: 'coroa',    nome: 'Coroa de Fogo', min: 1800, paleta: 'magic',         tam: 1.60,
-      exigeTopo: true }
+    { id: 'brasa',    nome: 'Brasa',         min: 1150, paleta: 'fire',          tam: 0.75 },
+    { id: 'chama',    nome: 'Chama',         min: 1350, paleta: 'blueish_flame', tam: 1.00 },
+    { id: 'labareda', nome: 'Labareda',      min: 1550, paleta: 'magic',         tam: 1.30 },
+    { id: 'coroa',    nome: 'Coroa de Fogo', min: 1800, paleta: 'magic',         tam: 1.55,
+      coroa: true, exigeTopo: true }
   ];
 
   /* O degrau dos pontos. `ehTopo` = este jogador é o 1º do placar da arena;

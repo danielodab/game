@@ -368,6 +368,13 @@ var JOGO = (typeof window !== 'undefined')
       } catch (e) {}
       corpo[campo] = null;
     });
+    if (corpo.chamaCoroa) {
+      corpo.chamaCoroa.forEach(function (m2) {
+        corpo.node.remove(m2);
+        try { m2.material.dispose(); } catch (e) {}
+      });
+      corpo.chamaCoroa = null;
+    }
     if (!nome) return;
     var alto = (corpo.node.userData.height || 2.1);
     var sp = rotulo(nome, '#f0ead8', 0.42);
@@ -389,6 +396,7 @@ var JOGO = (typeof window !== 'undefined')
     if (brasaTier && brasaTier.tam) {
       var texC = texturaChama(brasaTier.paleta || 'fire');
       if (texC) {
+        var baseY = alto + (titulo ? 0.66 : 0.5) + 0.42;
         var matC = new THREE.MeshBasicMaterial({
           map: texC, transparent: true, depthWrite: false,
           blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
@@ -397,9 +405,24 @@ var JOGO = (typeof window !== 'undefined')
         var chamaG = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matC);
         var tamC = brasaTier.tam;
         chamaG.scale.set(tamC, tamC, 1);
-        chamaG.position.y = alto + (titulo ? 0.66 : 0.5) + 0.42 + tamC * 0.35;
+        chamaG.position.y = baseY + tamC * 0.35;
         corpo.node.add(chamaG);
         corpo.chamaBrasa = chamaG;
+        // A COROA DE FOGO e uma coroa DE VERDADE: duas pontas menores em
+        // arco ladeiam o fogo central — tres fogos violetas, visiveis do
+        // outro lado da praca. E o degrau que so o 1o do placar carrega.
+        if (brasaTier.coroa) {
+          corpo.chamaCoroa = [];
+          [-1, 1].forEach(function (ld) {
+            var m2 = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matC.clone());
+            m2.material.opacity = 0.8;
+            var t2 = tamC * 0.55;
+            m2.scale.set(t2, t2, 1);
+            m2.position.set(ld * tamC * 0.42, baseY + tamC * 0.16, 0);
+            corpo.node.add(m2);
+            corpo.chamaCoroa.push(m2);
+          });
+        }
       }
     }
   }
@@ -470,11 +493,13 @@ var JOGO = (typeof window !== 'undefined')
     // e cada chama encara a câmera (bilhete manual: só a volta do eixo Y)
     if (camera) {
       var viraChama = function (corpoC) {
-        if (corpoC && corpoC.chamaBrasa) {
-          corpoC.chamaBrasa.rotation.y =
-            Math.atan2(camera.position.x - corpoC.node.position.x,
-                       camera.position.z - corpoC.node.position.z) -
-            corpoC.node.rotation.y;
+        if (!corpoC || !corpoC.chamaBrasa) return;
+        var giro = Math.atan2(camera.position.x - corpoC.node.position.x,
+                              camera.position.z - corpoC.node.position.z) -
+                   corpoC.node.rotation.y;
+        corpoC.chamaBrasa.rotation.y = giro;
+        if (corpoC.chamaCoroa) {
+          corpoC.chamaCoroa.forEach(function (m2) { m2.rotation.y = giro; });
         }
       };
       viraChama(heroi);
@@ -740,6 +765,8 @@ var JOGO = (typeof window !== 'undefined')
       nome: nomeJogador,
       titulo: tituloJogador,
       chama: !!(heroi && heroi.chamaBrasa),
+      chamaCoroa: !!(heroi && heroi.chamaCoroa && heroi.chamaCoroa.length === 2),
+      chamaPaleta: brasaDoHeroi ? (brasaDoHeroi.paleta || null) : null,
       chamaTier: brasaDoHeroi ? (brasaDoHeroi.id || null) : null,
       corpo: (heroi && heroi.node.userData && heroi.node.userData.look &&
               heroi.node.userData.look.model) || null,
