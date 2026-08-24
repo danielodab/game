@@ -217,6 +217,76 @@ var JOGO = (typeof window !== 'undefined')
     }
     corpo.appendChild(linhaFx);
 
+    // --- A BRASA: para VER cada degrau da chama sem jogar 60 duelos.
+    // Grava na CONTA (soterra-conta-v1), não no save — o "Desfazer tudo"
+    // não devolve a brasa; o botão Fagulha é o zero dela.
+    var linhaBr = el('div', 'dbg-acoes');
+    linhaBr.appendChild(el('span', 'dbg-info', 'Brasa: …'));
+    var infoBr = linhaBr.firstChild;
+    function pintaBrasa() {
+      if (!JOGO.DB || !JOGO.DB.brasaVer || !JOGO.Brasa) {
+        infoBr.textContent = 'Brasa: sem conta';
+        return;
+      }
+      JOGO.DB.brasaVer().then(function (bz) {
+        var t = JOGO.Brasa.tierDe(bz.pts, true);   // aqui o topo é suposto: é bancada
+        infoBr.textContent = 'Brasa: ' + bz.pts + ' pts — ' + t.nome;
+      });
+    }
+    function poeBrasa(pts) {
+      JOGO.DB.definirBrasa(pts).then(function () {
+        pintaBrasa();
+        // se o Acampamento está na tela, renasce para a chama trocar JÁ
+        try {
+          if (document.querySelector('.screen-hub.is-on')) JOGO.UI.showScreen('hub');
+        } catch (e) {}
+      });
+    }
+    [['Fagulha', 1000], ['Brasa', 1200], ['Chama', 1400],
+     ['Labareda', 1600], ['Coroa', 1900]].forEach(function (par) {
+      var bT = el('button', 'dbg-b', par[0] + ' (' + par[1] + ')');
+      bT.type = 'button';
+      bT.title = 'Crava ' + par[1] + ' pontos de Brasa — a chama na cabeça troca na hora';
+      bT.onclick = function () { poeBrasa(par[1]); };
+      linhaBr.appendChild(bT);
+    });
+    corpo.appendChild(linhaBr);
+
+    var linhaBr2 = el('div', 'dbg-acoes');
+    var bVit = el('button', 'dbg-b dbg-b-ok', 'Vitória de arena (Elo real)');
+    bVit.type = 'button';
+    bVit.title = 'Aplica a conta de Elo de uma vitória contra um adversário de pontos IGUAIS';
+    bVit.onclick = function () {
+      JOGO.DB.brasaVer().then(function (bz) {
+        var r = JOGO.Brasa.elo(bz.pts, bz.pts, true);
+        JOGO.DB.definirBrasa(r.pts, bz.partidas + 1).then(function () {
+          pintaBrasa();
+          try {
+            if (document.querySelector('.screen-hub.is-on')) JOGO.UI.showScreen('hub');
+          } catch (e) {}
+        });
+      });
+    };
+    linhaBr2.appendChild(bVit);
+    var bDer = el('button', 'dbg-b dbg-b-warn', 'Derrota de arena (Elo real)');
+    bDer.type = 'button';
+    bDer.onclick = function () {
+      JOGO.DB.brasaVer().then(function (bz) {
+        var r = JOGO.Brasa.elo(bz.pts, bz.pts, false);
+        JOGO.DB.definirBrasa(r.pts, bz.partidas + 1).then(function () {
+          pintaBrasa();
+          try {
+            if (document.querySelector('.screen-hub.is-on')) JOGO.UI.showScreen('hub');
+          } catch (e) {}
+        });
+      });
+    };
+    linhaBr2.appendChild(bDer);
+    linhaBr2.appendChild(el('span', 'dbg-info',
+      'a chama aparece na cabeça no Acampamento; o ranking, no Placar da Arena'));
+    corpo.appendChild(linhaBr2);
+    pintaBrasa();
+
     corpo.appendChild(el('p', 'dbg-aviso',
       'Este painel grava no save de verdade. Ao abrir, uma cópia foi guardada — ' +
       '"Desfazer tudo" devolve tudo como estava. O caminho elemental abre no nível ' +
