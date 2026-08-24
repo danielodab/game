@@ -667,6 +667,8 @@ var JOGO = (typeof window !== 'undefined')
       andando: heroi ? !!heroi.andando : null,
       nome: nomeJogador,
       titulo: tituloJogador,
+      corpo: (heroi && heroi.node.userData && heroi.node.userData.look &&
+              heroi.node.userData.look.model) || null,
       plaquinha: !!(heroi && heroi.plaquinha),
       plaquinhaTitulo: !!(heroi && heroi.plaquinhaTitulo),
       clipe: heroi ? (heroi.clipe || 'idle') : null,

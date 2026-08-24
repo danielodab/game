@@ -765,6 +765,11 @@ var JOGO = (typeof window !== 'undefined')
       JOGO.DB.jogador().then(function (j) {
         if (!j.nome) { nomeEl.textContent = '—'; pedeNome(); }
         else nomeEl.textContent = j.nome;
+        // O AVATAR: a conta pode vestir uma fusão do guarda-roupa — o
+        // re-entrar troca o corpo (e o guarda do laço segura o rAF único)
+        if (j.avatar && JOGO.Hub && JOGO.Hub.entrar) {
+          JOGO.Hub.entrar(mundo, j.avatar);
+        }
         // a plaquinha acima da cabeça acompanha: nome, batismo — e o TÍTULO
         // de conquista, quando o jogador pendurou um
         if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(j.nome || '', j.titulo || '');
@@ -855,9 +860,11 @@ var JOGO = (typeof window !== 'undefined')
       JOGO.DB.jogador().then(function (j) {
         var e0 = (JOGO.Hub._estado && JOGO.Hub._estado()) || {};
         var pos = e0.pos || { x: 0, z: 9 };
+        // `classe` no protocolo sempre foi APARÊNCIA — agora pode ser uma
+        // fusão do guarda-roupa; o fantasma do outro lado veste igual
         var ligou = R.entrar({ id: j.id, nome: j.nome || 'Sem Nome',
                                titulo: j.titulo || '',
-                               classe: selHeroes[0] || 'sumo',
+                               classe: j.avatar || selHeroes[0] || 'sumo',
                                x: pos.x, z: pos.z });
         if (!ligou) return;                    // file://: o jogo segue solo
 
@@ -2176,7 +2183,9 @@ var JOGO = (typeof window !== 'undefined')
     { id: 'feiticos', nome: 'Feitiços',
       sub: 'A árvore inteira da classe: o tronco que todos têm e os quatro galhos elementais.' },
     { id: 'colecao', nome: 'Coleção',
-      sub: 'Cartas de chefe liberam classes e, depois, viram estrelas permanentes.' }
+      sub: 'Cartas de chefe liberam classes e, depois, viram estrelas permanentes.' },
+    { id: 'avatar', nome: 'Avatar',
+      sub: 'O corpo com que você anda no Acampamento. Cada dupla de classes liberadas põe a fusão no guarda-roupa.' }
   ];
 
   function partyTabDef(id) {
@@ -2220,6 +2229,7 @@ var JOGO = (typeof window !== 'undefined')
     if (partyTab === 'forja') forgeBody(body, arg);
     else if (partyTab === 'colecao') collectionBody(body, arg);
     else if (partyTab === 'feiticos') spellTreeBody(body, arg);
+    else if (partyTab === 'avatar') avatarBody(body);
     else inventoryBody(body, arg);
   }
   // ------------------------------------------------- ÁRVORE DE FEITIÇOS
@@ -2626,6 +2636,68 @@ var JOGO = (typeof window !== 'undefined')
     duo.appendChild(ladoHeroi);
     duo.appendChild(ladoSaco);
     body.appendChild(duo);
+  }
+
+  // ------------------------------------------------- O GUARDA-ROUPA (avatar)
+  /* Toda dupla de classes LIBERADAS oferece o corpo da fusão; o padrão é o
+   * líder da dupla. A escolha grava na conta e, se o Acampamento está na
+   * tela, ele renasce com o corpo novo na hora — ver é o ponto. */
+  function paresDeAvatar() {
+    var ids = Object.keys(classes()).filter(isUnlocked).sort();
+    var fora = [];
+    for (var a = 0; a < ids.length; a++) {
+      for (var b = a + 1; b < ids.length; b++) {
+        fora.push('fus:' + ids[a] + '+' + ids[b]);
+      }
+    }
+    return fora;
+  }
+  function nomeDoPar(defId) {
+    var par = String(defId).slice(4).split('+');
+    return className(par[0]) + ' + ' + className(par[1]);
+  }
+
+  function avatarBody(body) {
+    var caixa = el('div', 'av-caixa');
+    body.appendChild(caixa);
+    var DBc = JOGO.DB;
+    if (!DBc) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
+
+    DBc.jogador().then(function (j) {
+      clear(caixa);
+      var atual = j.avatar || null;
+
+      function cartao(valor, rotulo, defIdRetrato) {
+        var card = el('button', 'av-carta' + ((atual === valor) ? ' is-on' : ''));
+        card.type = 'button';
+        card.appendChild(art('portrait', [defIdRetrato, { size: 168 }], 84, 'av-pic'));
+        card.appendChild(el('span', 'av-nome', esc(rotulo)));
+        if (valor) card.appendChild(el('span', 'av-porte', '3,00 m'));
+        tap(card, function () {
+          DBc.definirAvatar(valor).then(function (res) {
+            toast(res.avatar
+              ? 'Agora você anda como ' + nomeDoPar(res.avatar) + '.'
+              : 'De volta ao corpo do líder.', 'good');
+            // se o Acampamento está na tela, o corpo troca AGORA — ver é o ponto
+            if (current === 'hub') UI.showScreen('hub');
+            else sheetParty('avatar');
+          });
+        });
+        return card;
+      }
+
+      var fila = el('div', 'av-fila');
+      var lider = selHeroes[0] || ensurePartyHero() || 'sumo';
+      fila.appendChild(cartao(null, 'Seu líder — ' + className(lider), lider));
+      paresDeAvatar().forEach(function (defId) {
+        fila.appendChild(cartao(defId, nomeDoPar(defId), defId));
+      });
+      caixa.appendChild(fila);
+      if (fila.children.length === 1) {
+        caixa.appendChild(el('p', 'inv-dica',
+          'Liberou duas classes? A fusão delas entra aqui.'));
+      }
+    });
   }
 
   function pilhaDe(itemId) {

@@ -1521,6 +1521,19 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .ms-titulos { display: flex; flex-wrap: wrap; gap: 6px; }
 .ms-titulos .is-on { outline: 2px solid var(--gold); }
 
+/* ------------------------------------------------- O GUARDA-ROUPA (avatar) */
+.av-fila { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+.av-carta {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 9px 6px; border: 1px solid var(--line2); border-radius: 12px;
+  background: rgba(255,255,255,.03); cursor: pointer; font: inherit; color: var(--text);
+}
+.av-carta.is-on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.av-pic canvas { display: block; border-radius: 10px; }
+.av-nome { font-size: 11.5px; line-height: 1.25; text-align: center; color: #dbe4ee; }
+.av-porte { font: 700 10px var(--ui-sans, system-ui); letter-spacing: .05em;
+            color: var(--dim); }
+
 /* ------------------------------------------------- MERCADINHO */
 .mc-bolso { font-size: 13px; color: var(--dim); margin: 0 0 4px; }
 .mc-bolso b { color: #e8c25a; }

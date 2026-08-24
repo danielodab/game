@@ -114,6 +114,18 @@ porque um chamador que dependa disso quebraria exatamente no dia da migração.<
       })
       .then(function (r) {
         check('sacar do cofre vazio é recusado', !r.ok, r.erro);
+        return DB.definirAvatar('fus:bruxo+curandeiro');
+      })
+      .then(function (r) {
+        check('o avatar de fusão grava na conta', r.ok && r.avatar === 'fus:bruxo+curandeiro');
+        return DB.jogador();
+      })
+      .then(function (j) {
+        check('jogador() devolve o avatar junto do nome', j.avatar === 'fus:bruxo+curandeiro');
+        return DB.definirAvatar('sumo');   // só fus: vale; classe pura vira null
+      })
+      .then(function (r) {
+        check('avatar que não é fusão volta ao líder (null)', r.ok && r.avatar === null);
         return DB.registrarPvp({ oponente: 'Fulano', minhaDupla: ['sumo', 'invocador'],
                                  duplaDele: ['minotauro', 'bruxo'], resultado: 'vitoria', clima: 'chuva' });
       })

@@ -57,7 +57,7 @@ var JOGO = (typeof window !== 'undefined')
   function vazio() {
     return {
       versao: 1,
-      jogador: { id: novoId(), nome: null, titulo: null, criadoEm: agora() },
+      jogador: { id: novoId(), nome: null, titulo: null, avatar: null, criadoEm: agora() },
       carteira: { moedas: 0 },
       banco: { moedas: 0, itens: [] },
       missoes: null,                 // { dia, lista } — quem re-sorteia é JOGO.Missoes
@@ -96,6 +96,7 @@ var JOGO = (typeof window !== 'undefined')
           if (d.mercado !== null && typeof d.mercado !== 'object') d.mercado = null;
           if (d.mercado === undefined) d.mercado = null;
           if (d.jogador.titulo === undefined) d.jogador.titulo = null;
+          if (d.jogador.avatar === undefined) d.jogador.avatar = null;
           dados = d;
           return dados;
         }
@@ -123,7 +124,8 @@ var JOGO = (typeof window !== 'undefined')
     // cópia campo a campo: TODO campo novo do jogador precisa entrar aqui —
     // o `titulo` ficou de fora um dia e sumiu sem erro nenhum (o teste pegou)
     return responde({ id: d.jogador.id, nome: d.jogador.nome,
-                      titulo: d.jogador.titulo || null, criadoEm: d.jogador.criadoEm });
+                      titulo: d.jogador.titulo || null,
+                      avatar: d.jogador.avatar || null, criadoEm: d.jogador.criadoEm });
   };
 
   DB.batizar = function (nome) {
@@ -234,6 +236,17 @@ var JOGO = (typeof window !== 'undefined')
     grava();
     return responde({ ok: true });
   };
+  /* O AVATAR do Acampamento: null = o corpo do líder da dupla; senão um
+   * defId de fusão ('fus:a+b'). Quem valida se as classes estão liberadas é
+   * a FICHA (que sabe de Progress); o DB só guarda a escolha. */
+  DB.definirAvatar = function (avatar) {
+    var d = carrega();
+    d.jogador.avatar = (typeof avatar === 'string' && avatar.indexOf('fus:') === 0)
+      ? avatar : null;
+    grava();
+    return responde({ ok: true, avatar: d.jogador.avatar });
+  };
+
   DB.definirTitulo = function (titulo) {
     var d = carrega();
     d.jogador.titulo = (typeof titulo === 'string' && titulo.trim()) ? titulo.trim() : null;
