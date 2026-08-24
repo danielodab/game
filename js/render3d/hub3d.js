@@ -689,6 +689,19 @@ var JOGO = (typeof window !== 'undefined')
     var my = -((ev.clientY - r.top) / r.height) * 2 + 1;
     raycaster.setFromCamera({ x: mx, y: my }, camera);
 
+    // antes de tudo, os FANTASMAS: tocar num jogador é o gesto social —
+    // convida para a TROCA (a HUD decide o que fazer com o toque)
+    if (Hub.aoTocarFantasma) {
+      for (var fk3 in fantasmas) {
+        if (!fantasmas.hasOwnProperty(fk3)) continue;
+        var hitsF = raycaster.intersectObject(fantasmas[fk3].node, true);
+        if (hitsF && hitsF.length) {
+          try { Hub.aoTocarFantasma(fk3); } catch (e) {}
+          return;
+        }
+      }
+    }
+
     // primeiro os LUGARES (clicar no portal anda até ele)…
     for (var i = 0; i < lugares.length; i++) {
       var hits = raycaster.intersectObject(lugares[i].node, true);
@@ -805,6 +818,7 @@ var JOGO = (typeof window !== 'undefined')
    * (mandaAndar/andaCorpo); o pulso corrige deriva grande sem teleporte
    * nervoso. A HUD é quem traduz eventos da Rede nestas chamadas. */
   Hub.aoAndar = null;
+  Hub.aoTocarFantasma = null;
   Hub.fantasmaEntra = function (id, perfil) {
     if (!scene || fantasmas[id]) return false;
     var m2 = M2();

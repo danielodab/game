@@ -906,7 +906,46 @@ var JOGO = (typeof window !== 'undefined')
         if (!ligou) return;                    // file://: o jogo segue solo
 
         JOGO.Hub.aoAndar = function (x, z) { R.mover(x, z); };
+        // a TROCA: o toque num fantasma convida; o convite pergunta aqui
+        if (JOGO.Troca) {
+          JOGO.Hub.aoTocarFantasma = function (id) {
+            if (JOGO.Troca.convidar(id)) {
+              toast('Convite de troca enviado. Esperando o outro lado…');
+              openSheet('troca');
+            } else toast('já há uma troca aberta');
+          };
+          JOGO.Troca.aoConvite = function (c) {
+            clear(painel);
+            painel.classList.remove('is-off');
+            painel.appendChild(el('h3', null, 'Troca'));
+            painel.appendChild(el('p', 'hub-nota',
+              esc(c.nome) + ' quer trocar com você.'));
+            painel.appendChild(btn('Aceitar', 'btn-primary btn-block', function () {
+              JOGO.Troca.responder(true);
+              painel.classList.add('is-off');
+              openSheet('troca');
+            }));
+            painel.appendChild(btn('Agora não', 'btn-ghost btn-block', function () {
+              JOGO.Troca.responder(false);
+              painel.classList.add('is-off');
+            }));
+          };
+          JOGO.Troca.aoMudar = function (est) {
+            if (sheetName === 'troca') sheetTroca();
+            if (est && est.fase === 'feita') {
+              closeSheet();
+              toast(est.resultado === 'mesma-conta'
+                ? 'Troca encerrada — mesma conta nas duas abas: nada se move. Entre contas, tudo se move.'
+                : 'Troca feita! O que veio já está no saco.', 'good');
+            }
+          };
+        }
+
         R.aoEvento = function (ev) {
+          if (ev.tipo === 'troca' && JOGO.Troca) {
+            JOGO.Troca.aoEvento(ev);
+            return;
+          }
           if (ev.tipo === 'entrou') {
             JOGO.Hub.fantasmaEntra(ev.id, ev);
             chatLinha(null, ev.nome + ' chegou ao acampamento.');
@@ -2165,6 +2204,115 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
 
+  /* A MESA DE TROCA — duas colunas à la Dofus: a minha oferta (editável) e
+   * a dele (espelho). Travar quando satisfeito; os dois travados liberam o
+   * Confirmar; QUALQUER mudança destrava os dois. A ficha só desenha o que
+   * JOGO.Troca diz — o estado mora lá, e a Rede o carrega. */
+  function sheetTroca() {
+    sheetName = 'troca';
+    var est = JOGO.Troca ? JOGO.Troca.estado() : null;
+    var body = sheetShell('Mesa de Troca',
+      est ? ('Com ' + (est.nomePar || '?') +
+             (est.mesmaConta ? ' — MESMA CONTA: o fluxo anda, nada se move.' : '')) : '');
+    if (!est) {
+      body.appendChild(el('p', 'inv-dica', 'Nenhuma troca aberta. Toque num jogador na praça.'));
+      return;
+    }
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+
+    if (est.fase === 'convidei') {
+      caixa.appendChild(el('p', 'inv-dica', 'Convite enviado. Esperando ' + esc(est.nomePar) + '…'));
+      caixa.appendChild(btn('Cancelar', 'btn-ghost btn-block', function () {
+        JOGO.Troca.cancelar(); closeSheet();
+      }));
+      return;
+    }
+    if (est.fase !== 'aberta') { closeSheet(); return; }
+
+    function ladoCaixa(rotulo, lado, editavel) {
+      var cx = el('div', 'tr-lado' + (lado.travada ? ' is-travada' : ''));
+      cx.appendChild(el('h3', 'bk-tit', rotulo +
+        (lado.travada ? ' 🔒' : '') + (lado.confirmada ? ' ✓' : '')));
+      var linha = el('div', 'tr-itens');
+      if (!lado.itens.length) linha.appendChild(el('p', 'inv-dica', 'nada ainda'));
+      lado.itens.forEach(function (of, idx) {
+        var d2 = (D().items || {})[of.itemId] || {};
+        var chip = el('button', 'tr-item');
+        chip.type = 'button';
+        chip.appendChild(art('itemIcon', [of.itemId, 30], 30));
+        chip.appendChild(el('span', null, esc(d2.name || of.itemId) +
+          (of.level ? ' +' + of.level : '') + (of.stars ? ' ★' + of.stars : '')));
+        if (editavel) {
+          chip.title = 'tirar da mesa';
+          tap(chip, function () { JOGO.Troca.tiraItem(idx); });
+        }
+        linha.appendChild(chip);
+      });
+      cx.appendChild(linha);
+      cx.appendChild(el('p', 'tr-moedas', lado.moedas + ' vinténs'));
+      return cx;
+    }
+
+    var duplo = el('div', 'bk2-duplo');
+    duplo.appendChild(ladoCaixa('Você dá', est.minha, true));
+    duplo.appendChild(ladoCaixa(esc(est.nomePar) + ' dá', est.dele, false));
+    caixa.appendChild(duplo);
+
+    // ---- por moedas na mesa
+    var linhaM = el('div', 'bk2-botoes');
+    var campoM = document.createElement('input');
+    campoM.type = 'number'; campoM.min = '0'; campoM.step = '1';
+    campoM.className = 'bk2-qtd'; campoM.placeholder = 'vinténs';
+    campoM.value = est.minha.moedas || '';
+    linhaM.appendChild(campoM);
+    linhaM.appendChild(btn('Pôr vinténs', 'btn-mini', function () {
+      var n2 = Math.floor(Number(campoM.value || 0));
+      if (isFinite(n2) && n2 >= 0) JOGO.Troca.porMoedas(n2);
+    }));
+    caixa.appendChild(linhaM);
+
+    // ---- o saco, para por itens
+    caixa.appendChild(el('h3', 'bk-tit', 'Seu saco — toque para pôr na mesa'));
+    var pilhas = safe(function () { return P().invStacks(); }, [])
+      .filter(function (s2) { return !!itemDef(s2.itemId); });
+    var linhaS = el('div', 'tr-itens');
+    if (!pilhas.length) linhaS.appendChild(el('p', 'inv-dica', 'O saco está vazio.'));
+    pilhas.forEach(function (pi) {
+      var it = itemDef(pi.itemId) || {};
+      var chip = el('button', 'tr-item');
+      chip.type = 'button';
+      chip.appendChild(art('itemIcon', [pi.itemId, 30], 30));
+      chip.appendChild(el('span', null, esc(it.name || pi.itemId) +
+        (pi.count > 1 ? ' ×' + pi.count : '')));
+      tap(chip, function () {
+        JOGO.Troca.porItem({ itemId: pi.itemId, level: pi.level, stars: pi.stars });
+      });
+      linhaS.appendChild(chip);
+    });
+    caixa.appendChild(linhaS);
+
+    // ---- travar · confirmar · cancelar
+    var acoes = el('div', 'bk2-botoes');
+    if (!est.minha.travada) {
+      acoes.appendChild(btn('Travar minha oferta', 'btn-primary', function () {
+        JOGO.Troca.travar();
+      }));
+    } else if (est.minha.travada && est.dele.travada && !est.minha.confirmada) {
+      acoes.appendChild(btn('CONFIRMAR a troca', 'btn-gold', function () {
+        JOGO.Troca.confirmar();
+      }));
+    } else if (est.minha.confirmada) {
+      acoes.appendChild(el('span', 'ms-pago', 'esperando o outro confirmar…'));
+    } else {
+      acoes.appendChild(el('span', 'inv-dica', 'travado — esperando o outro travar'));
+    }
+    acoes.appendChild(btn('Cancelar', 'btn-ghost', function () {
+      JOGO.Troca.cancelar(); closeSheet();
+    }));
+    caixa.appendChild(acoes);
+  }
+
   /* O PLACAR — os níveis de todo mundo que já cruzou a sua praça, você
    * incluído. A aba Arena espera a Brasa (os duelos): promessa dita, não
    * escondida. */
@@ -2377,6 +2525,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'missoes') sheetMissoes();
     else if (name === 'mercado') sheetMercado();
     else if (name === 'placar') sheetPlacar();
+    else if (name === 'troca') sheetTroca();
     else if (name === 'duelo') sheetDuelo();
     else closeSheet();
   }

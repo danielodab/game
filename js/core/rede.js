@@ -20,6 +20,9 @@ var JOGO = (typeof window !== 'undefined')
  *                                               ANDA o caminho, não teleporta)
  *   pulso  { de, x, z }                         correção periódica de posição
  *   chat   { de, nome, texto }                  conversa
+ *   troca  { de, para, acao, dados }            o canal da TROCA: só o
+ *          destinatário processa; as ações (convite, oferta, tranca,
+ *          confirma...) são assunto de JOGO.Troca — a Rede só carrega
  *   tchau  { de }                               saí
  *
  * PRESENÇA POR PULSO: cada par manda `pulso` a cada 2s; quem fica 8s calado
@@ -105,6 +108,12 @@ var JOGO = (typeof window !== 'undefined')
       if (pares[m.de]) pares[m.de].visto = agora();
       avisa({ tipo: 'chat', id: m.de, nome: m.nome || (pares[m.de] || {}).nome || '?',
               texto: String(m.texto || '').slice(0, 240) });
+    } else if (m.t === 'troca') {
+      // só o destinatário processa — a praça inteira ouve, um responde
+      if (m.para === eu.id) {
+        if (pares[m.de]) pares[m.de].visto = agora();
+        avisa({ tipo: 'troca', de: m.de, acao: m.acao, dados: m.dados || null });
+      }
     } else if (m.t === 'tchau') {
       if (pares[m.de]) {
         delete pares[m.de];
@@ -162,6 +171,15 @@ var JOGO = (typeof window !== 'undefined')
     eu.x = x; eu.z = z;
     manda('alvo', { x: x, z: z });
   };
+
+  /* O canal da troca: um verbo só, com a ação dentro — quem sabe de troca
+   * é JOGO.Troca; a Rede carrega o envelope. */
+  R.trocaManda = function (para, acao, dados) {
+    if (!eu || !para) return false;
+    manda('troca', { para: para, acao: acao, dados: dados || null });
+    return true;
+  };
+  R.meuId = function () { return eu ? eu.id : null; };
 
   R.falar = function (texto) {
     if (!eu) return false;
