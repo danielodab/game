@@ -67,10 +67,13 @@ pagam na TENTATIVA, não no sucesso.</div>
   check('+3 é zona segura (chance 100%)', !i3.arriscado && i3.chance === 1);
   armaPeca(5);
   var i5 = P.upgradeInfo(0);
-  check('+5 é arriscado com 65%', i5.arriscado && Math.abs(i5.chance - 0.65) < 1e-9);
+  check('+5 é arriscado com 60%', i5.arriscado && Math.abs(i5.chance - 0.60) < 1e-9);
+  armaPeca(7);
+  var i7 = P.upgradeInfo(0);
+  check('+7 despenca para 30%', i7.arriscado && Math.abs(i7.chance - 0.30) < 1e-9);
   armaPeca(9);
   var i9 = P.upgradeInfo(0);
-  check('+9 é o degrau mais duro (25%)', i9.arriscado && Math.abs(i9.chance - 0.25) < 1e-9);
+  check('a última batida é um muro de 5%', i9.arriscado && Math.abs(i9.chance - 0.05) < 1e-9);
 
   // ------------------------------------------------------- zona segura: sobe
   armaPeca(4);

@@ -816,7 +816,8 @@ JOGO.DATA = JOGO.DATA || {};
     // o RISCO: a partir deste nível a batida rola o dado (chance por nível
     // ATUAL); falhou, desce um. A âncora segura.
     riskFrom: 5,
-    chances: { 5: 0.65, 6: 0.55, 7: 0.45, 8: 0.35, 9: 0.25 },
+    // recalibrada pelo usuário (24/08): o topo é um muro — 5% na última batida
+    chances: { 5: 0.60, 6: 0.50, 7: 0.30, 8: 0.15, 9: 0.05 },
     guardStone: 'stone-anchor',
     // quanto cada CHEFE paga de âncora ao cair (só chefes; mais fundo, mais)
     guardDropByDungeon: {
