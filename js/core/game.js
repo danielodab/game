@@ -537,7 +537,14 @@ var JOGO = (typeof window !== 'undefined')
      * muda e so o que ESTA sala pagou. Uma sala jogada no dificil paga 60% mais
      * pela mesma lista de mortos. */
     var difSala = E().dif(st);
-    var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1));
+    /* O DESAFIO CUMPRIDO paga +25% de XP e de saque — multiplicador ao lado
+     * do da dificuldade, no mesmo lugar, pela mesma razão: a economia base
+     * (DATA.leveling, congelada) não é tocada; o que muda é o que ESTA sala
+     * pagou. */
+    var desafioSala = st.desafio || null;
+    var bonusDesafio = (desafioSala && desafioSala.cumprido)
+      ? (1 + (E().DESAFIO_BONUS || 0.25)) : 1;
+    var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio);
 
     /* VINTENS — a moeda, derivada do MESMO xpTotal.
      *
@@ -548,7 +555,7 @@ var JOGO = (typeof window !== 'undefined')
      *
      * SEM dividir por partySize: a carteira e DO GRUPO. E uma so, e e o que
      * permite banco e troca sem contabilidade por personagem. */
-    var moedasGanhas = Math.floor(xpTotal * 0.30 * (difSala.drop || 1));
+    var moedasGanhas = Math.floor(xpTotal * 0.30 * (difSala.drop || 1) * bonusDesafio);
     if (moedasGanhas > 0 && JOGO.DB && JOGO.DB.ganharMoedas) {
       // e-assincrono e o resultado nao bloqueia a tela de recompensa: o numero
       // ganho vem no payload; o TOTAL a tela busca por conta propria no DB.
@@ -588,7 +595,8 @@ var JOGO = (typeof window !== 'undefined')
 
     var drops = [], pets = [];
     if (prog && prog.rollDrops) {
-      try { drops = prog.rollDrops(Game.dungeonId, Game.roomIndex, partySize, difSala.drop) || []; }
+      try { drops = prog.rollDrops(Game.dungeonId, Game.roomIndex, partySize,
+                                   (difSala.drop || 1) * bonusDesafio) || []; }
       catch (err) { drops = []; }
     }
     if (prog && prog.rollPet) {
@@ -610,6 +618,9 @@ var JOGO = (typeof window !== 'undefined')
       moedas: moedasGanhas,
       dificuldade: difSala.id || 'normal',
       difNome: difSala.nome || 'Normal',
+      desafio: desafioSala ? { id: desafioSala.id, nome: desafioSala.nome,
+                               texto: desafioSala.texto,
+                               cumprido: !!desafioSala.cumprido } : null,
       drops: drops,
       pets: pets,
       cards: cards,

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o desafio da sala (motor)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>O desafio da sala — as cinco regras, cobradas no motor</h1>
+<div class="sub">Cada batalha sorteia UM desafio com o rng semeado da própria sala. Esta página
+cobra o sorteio (determinístico), os cinco contratos um a um pelos FUNIS (dano que fura escudo,
+passos somados, primeira morte de monstro, virada da rodada 6, fusão viva na vitória), e o
+veredito — tudo sem desenhar um pixel.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra ? ' — <code>' + String(extra) + '</code>' : '');
+    lista.appendChild(li);
+  }
+
+  var E = JOGO.Engine;
+
+  function batalha() {
+    // grupo fixo, sala fixa: o rng é semeado por (dungeon:sala:grupo)
+    return E.createBattle('greenhouse', 0,
+      [{ classId: 'sumo' }, { classId: 'invocador' }], { dificuldade: 'normal' });
+  }
+  function heroi(st, n) {
+    var vistos = 0;
+    for (var i = 0; i < st.units.length; i++) {
+      if (st.units[i].kind === 'hero') { if (vistos === (n || 0)) return st.units[i]; vistos++; }
+    }
+    return null;
+  }
+  function monstros(st) {
+    return st.units.filter(function (u) {
+      return u.side === 'enemy' && u.kind === 'monster' && u.alive;
+    });
+  }
+  /* Uma casa livre ao lado, para teleportar peças de teste. */
+  function vaga(st, x, y) {
+    var D = [[1,0],[-1,0],[0,1],[0,-1]];
+    for (var i = 0; i < D.length; i++) {
+      var nx = x + D[i][0], ny = y + D[i][1];
+      if (nx>=0 && ny>=0 && nx<st.grid.w && ny<st.grid.h &&
+          st.grid.tiles[ny][nx].type === 'floor' && !E.unitAt(st, nx, ny)) return { x:nx, y:ny };
+    }
+    return null;
+  }
+  /* Poe o desafio que o cenario pede — o sorteio é do motor, mas os funis leem
+   * o estado, e o teste tem o direito de armar o estado (mesmo seam do clima). */
+  function armaDesafio(st, id, extra) {
+    var base = { id: id, nome: E.DESAFIOS[id].nome, texto: E.DESAFIOS[id].texto,
+                 vivo: true, cumprido: false, passos: 0,
+                 alvoUid: null, alvoNome: null, executado: false };
+    if (extra) for (var k in extra) base[k] = extra[k];
+    st.desafio = base;
+    return base;
+  }
+  /* Um golpe garantido: teleporta o agressor para o lado do alvo, enche o PA
+   * e conjura o primeiro feitiço de dano dele pelo caminho público. */
+  function golpe(st, agressor, alvo, opts) {
+    opts = opts || {};
+    var v = vaga(st, alvo.x, alvo.y);
+    if (!v) return 'sem casa livre';
+    agressor.x = v.x; agressor.y = v.y;
+    agressor.pa = 12; agressor.cooldowns = {}; agressor.castsThisTurn = {};
+    for (var i = 0; i < agressor.spells.length; i++) {
+      var sp = E.spell(agressor.spells[i]);
+      if (!sp || !sp.effects) continue;
+      var fere = sp.effects.some ? sp.effects.some(function (e) { return e.type === 'damage'; })
+                                 : false;
+      if (!fere) continue;
+      // feitiço de área no PRÓPRIO corpo (Brado): conjura-se na própria casa
+      // e a área alcança o vizinho — o alvo da célula é o conjurador
+      var tx = sp.targetSide === 'self' ? agressor.x : alvo.x;
+      var ty = sp.targetSide === 'self' ? agressor.y : alvo.y;
+      if (E.validTargetCell(st, agressor, sp, tx, ty)) {
+        var antes = alvo.hp;
+        if (E.cast(st, agressor.uid, sp.id, tx, ty)) {
+          if (opts.semFerir) return null;          // conjurar já basta (escudo)
+          return alvo.hp < antes || !alvo.alive ? null : 'golpe não feriu (' + sp.id + ')';
+        }
+      }
+    }
+    return 'nenhum feitiço de dano alcançou';
+  }
+
+  // ------------------------------------------------ 1) sorteio + determinismo
+  var st1 = batalha();
+  check('a batalha nasce com um desafio sorteado',
+        !!(st1.desafio && E.DESAFIOS[st1.desafio.id]),
+        st1.desafio && (st1.desafio.id + ' — ' + st1.desafio.texto));
+  var st2 = batalha();
+  check('mesma sala e mesmo grupo sorteiam o MESMO desafio (rng semeado)',
+        st2.desafio && st2.desafio.id === st1.desafio.id,
+        st1.desafio.id + ' × ' + (st2.desafio && st2.desafio.id));
+
+  // ------------------------------------------------ 2) intocado
+  (function () {
+    var st = batalha();
+    var d = armaDesafio(st, 'intocado');
+    var h = heroi(st, 0), ms = monstros(st);
+    var erro = golpe(st, ms[0], h);
+    check('intocado: golpe inimigo que fere herói PERDE o desafio',
+          !erro && d.vivo === false, erro || ('vivo=' + d.vivo));
+
+    // e escudo que segura tudo NAO perde
+    var stB = batalha();
+    var dB = armaDesafio(stB, 'intocado');
+    var hB = heroi(stB, 0), msB = monstros(stB);
+    hB.effects.push({ type: 'shield', remaining: 9999 });
+    if (E.recomputeShield) E.recomputeShield(hB); else hB.shield = 9999;
+    var hpAntes = hB.hp;
+    var erroB = golpe(stB, msB[0], hB, { semFerir: true });
+    check('intocado: golpe TODO absorvido pelo escudo não perde',
+          !erroB && hB.hp === hpAntes && dB.vivo === true,
+          erroB || ('hp ' + hpAntes + '→' + hB.hp + ' vivo=' + dB.vivo));
+  })();
+
+  // ------------------------------------------------ 3) estátua
+  (function () {
+    var st = batalha();
+    var d = armaDesafio(st, 'estatua');
+    var h = heroi(st, 0);
+    h.pp = 30;
+    var andou = 0, guard = 0;
+    while (andou <= 6 && guard++ < 40) {
+      var v = vaga(st, h.x, h.y);
+      if (!v) break;
+      if (E.move(st, h.uid, v.x, v.y)) andou++;
+      else break;
+    }
+    check('estátua: a sétima célula andada perde o desafio',
+          andou >= 7 && d.passos >= 7 && d.vivo === false,
+          'passos=' + d.passos + ' vivo=' + d.vivo);
+  })();
+
+  // ------------------------------------------------ 4) executor
+  (function () {
+    var st = batalha();
+    var ms = monstros(st);
+    if (ms.length < 2) { check('executor: sala tem 2+ monstros', false, ms.length); return; }
+    var d = armaDesafio(st, 'executor', { alvoUid: ms[0].uid, alvoNome: ms[0].name });
+    var h = heroi(st, 0);
+    ms[1].hp = 1;                              // o ERRADO morre primeiro
+    var erro = golpe(st, h, ms[1]);
+    check('executor: o monstro errado caindo primeiro perde',
+          !erro && !ms[1].alive && d.vivo === false, erro || ('vivo=' + d.vivo));
+
+    var stB = batalha();
+    var msB = monstros(stB);
+    var dB = armaDesafio(stB, 'executor', { alvoUid: msB[0].uid, alvoNome: msB[0].name });
+    var hB = heroi(stB, 0);
+    msB[0].hp = 1;                             // o CERTO morre primeiro
+    var erroB = golpe(stB, hB, msB[0]);
+    check('executor: o alvo certo caindo primeiro mantém o desafio vivo',
+          !erroB && !msB[0].alive && dB.vivo === true, erroB || ('vivo=' + dB.vivo));
+  })();
+
+  // ------------------------------------------------ 5) relâmpago
+  (function () {
+    var st = batalha();
+    var d = armaDesafio(st, 'relampago');
+    var guard = 0;
+    while (st.round < 6 && guard++ < 200) E.endTurn(st);
+    check('relâmpago: a virada para a rodada 6 perde o desafio',
+          st.round >= 6 && d.vivo === false,
+          'round=' + st.round + ' vivo=' + d.vivo);
+  })();
+
+  // ------------------------------------------------ 6) o veredito na vitória
+  (function () {
+    // vitoria SEM fusao, desafio simples vivo => cumprido.
+    // ESTÁTUA, não intocado: o monstro da Estufa EXPLODE ao morrer e fere o
+    // herói adjacente — o intocado se perderia LEGITIMAMENTE (o motor está
+    // certo; foi a primeira rodada deste teste que provou a interação).
+    var st = batalha();
+    var d = armaDesafio(st, 'estatua');
+    var ms = monstros(st);
+    var h = heroi(st, 0);
+    for (var i = 1; i < ms.length; i++) { ms[i].alive = false; ms[i].hp = 0; }
+    ms[0].hp = 1;
+    var erro = golpe(st, h, ms[0]);
+    check('vitória com o contrato vivo marca CUMPRIDO',
+          !erro && st.phase === 'won' && d.cumprido === true,
+          erro || ('phase=' + st.phase + ' cumprido=' + d.cumprido));
+
+    // vitoria sem fusao com desafio FUNDIDO => nao cumprido
+    var stB = batalha();
+    var dB = armaDesafio(stB, 'fundido');
+    var msB = monstros(stB);
+    var hB = heroi(stB, 0);
+    for (var j = 1; j < msB.length; j++) { msB[j].alive = false; msB[j].hp = 0; }
+    msB[0].hp = 1;
+    var erroB = golpe(stB, hB, msB[0]);
+    check('fundido: vencer SEM fusão em campo não cumpre',
+          !erroB && stB.phase === 'won' && dB.cumprido === false,
+          erroB || ('phase=' + stB.phase + ' cumprido=' + dB.cumprido));
+
+    // vitoria FUNDIDO de verdade: declara + resolve a fusao, depois vence
+    var stC = batalha();
+    var dC = armaDesafio(stC, 'fundido');
+    var hA = heroi(stC, 0), hB2 = heroi(stC, 1);
+    var v = vaga(stC, hA.x, hA.y);
+    if (v) { hB2.x = v.x; hB2.y = v.y; }
+    var pode = JOGO.Fusion.canFuse(stC, hA.uid, hB2.uid);
+    var fundiu = false;
+    if (pode && pode.ok !== false) {
+      JOGO.Fusion.declare(stC, hA.uid, hB2.uid);
+      fundiu = !!JOGO.Fusion.resolve(stC);
+    }
+    if (!fundiu) {
+      check('fundido: fusão de teste montou', false,
+            JSON.stringify(pode));
+    } else {
+      var msC = monstros(stC);
+      var fus = null;
+      for (var f = 0; f < stC.units.length; f++) {
+        if (stC.units[f].kind === 'fusion' && stC.units[f].alive) fus = stC.units[f];
+      }
+      for (var k = 1; k < msC.length; k++) { msC[k].alive = false; msC[k].hp = 0; }
+      msC[0].hp = 1;
+      var erroC = fus ? golpe(stC, fus, msC[0]) : 'sem unidade fundida';
+      check('fundido: vencer FUNDIDO cumpre o contrato',
+            !erroC && stC.phase === 'won' && dC.cumprido === true,
+            erroC || ('phase=' + stC.phase + ' cumprido=' + dC.cumprido));
+    }
+  })();
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>

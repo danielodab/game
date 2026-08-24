@@ -1482,6 +1482,26 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 }
 
 
+/* ------------------------------------------------- DESAFIO DA SALA
+   O contrato opcional à moda Dofus: dourado enquanto vale, riscado
+   quando se perde. O chip vive na linha da sala, no topo da batalha. */
+.desafio-chip {
+  display: inline-block; margin-left: 8px; padding: 2px 9px;
+  font: 700 11px var(--ui-sans, system-ui); letter-spacing: .04em;
+  border-radius: 9px; cursor: default;
+}
+.desafio-chip.is-vivo {
+  color: #e8c25a; border: 1px solid rgba(232,194,90,.65);
+  background: rgba(232,194,90,.10);
+}
+.desafio-chip.is-perdido {
+  color: #77808d; border: 1px solid #333b46;
+  text-decoration: line-through; opacity: .8;
+}
+.rw-desafio { display: block; font: 700 13px var(--ui-sans, system-ui);
+              color: #77808d; margin-bottom: 4px; }
+.rw-desafio.is-cumprido { color: #e8c25a; }
+
 /* ------------------------------------------------------------ ACAMPAMENTO */
 /* SO COM .is-on — a regra que eu quebrei e que apagou o jogo inteiro.
    Toda .ui-screen nasce escondida e so aparece quando o showScreen poe .is-on.

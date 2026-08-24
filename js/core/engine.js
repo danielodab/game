@@ -767,6 +767,8 @@ var JOGO = (typeof window !== 'undefined')
     // v2: pets entram junto do dono, em célula livre adjacente
     for (i = 0; i < pets.length; i++) spawnPet(state, pets[i].ownerUnit, pets[i].petId);
 
+    sorteiaDesafio(state);
+
     Engine.state = state;
     emit({ type: 'battleStart', state: state });
     log(dungeon.name + ' — ' + room.name);
@@ -969,6 +971,14 @@ var JOGO = (typeof window !== 'undefined')
     u.x = x; u.y = y;
     emit({ type: 'move', uid: uid, path: path });
 
+    // desafio ESTÁTUA: cada célula andada por herói/fusão conta; empurrão e
+    // puxão NÃO passam por aqui e não contam — ser jogado não é andar
+    if (state.desafio && state.desafio.vivo && state.desafio.id === 'estatua' &&
+        u.side === 'player' && (u.kind === 'hero' || u.kind === 'fusion')) {
+      state.desafio.passos += path.length;
+      if (state.desafio.passos > 6) desafioFalha(state, 'o grupo andou demais');
+    }
+
     // v2: pisa em armadilhas e eventos de terreno ao longo do caminho
     for (var i = 0; i < path.length; i++) {
       if (!u.alive || state.phase !== 'playing') break;
@@ -996,6 +1006,72 @@ var JOGO = (typeof window !== 'undefined')
     }
     return true;
   };
+
+  // --------------------------------------------------------------- desafios
+  /* O DESAFIO DA SALA (a moda Dofus): um contrato opcional sorteado por
+   * batalha, com o rng SEMEADO da sala — mesma sala e mesmo grupo, mesmo
+   * desafio, e o teste confere isso. Cumpriu e venceu: +25% de XP e de saque
+   * (o multiplicador vive em game.js, junto do da dificuldade).
+   *
+   * A avaliacao mora nos MESMOS funis da dificuldade: dealDamage (intocado),
+   * Engine.move (estatua), processDeath (executor), virada de rodada
+   * (relampago) e checkBattleEnd (fundido + veredito final). Regra de motor,
+   * nao de interface. */
+  var DESAFIOS = {
+    intocado:  { nome: 'Intocado',
+                 texto: 'Nenhum herói leva dano de golpe inimigo.' },
+    relampago: { nome: 'Relâmpago',
+                 texto: 'Vença até o fim da rodada 5.' },
+    executor:  { nome: 'Executor',
+                 texto: 'Derrube {alvo} antes de qualquer outro monstro.' },
+    estatua:   { nome: 'Estátua',
+                 texto: 'Os heróis andam no máximo 6 células, somando a luta inteira.' },
+    fundido:   { nome: 'Fundido',
+                 texto: 'Vença com uma fusão viva em campo.' }
+  };
+  Engine.DESAFIOS = DESAFIOS;
+  Engine.DESAFIO_BONUS = 0.25;
+
+  function sorteiaDesafio(state) {
+    var ids = ['intocado', 'relampago', 'executor', 'estatua', 'fundido'];
+    var id = ids[Math.floor(nextRand(state) * ids.length)];
+    var d = { id: id, nome: DESAFIOS[id].nome, texto: DESAFIOS[id].texto,
+              vivo: true, cumprido: false, passos: 0,
+              alvoUid: null, alvoNome: null, executado: false };
+    if (id === 'executor') {
+      var monstros = [], m;
+      for (var i = 0; i < state.units.length; i++) {
+        m = state.units[i];
+        if (m.side === 'enemy' && m.alive && m.kind === 'monster' && !m.boss) monstros.push(m);
+      }
+      if (!monstros.length) {
+        for (i = 0; i < state.units.length; i++) {
+          m = state.units[i];
+          if (m.side === 'enemy' && m.alive && m.kind === 'monster') monstros.push(m);
+        }
+      }
+      var alvo = monstros.length
+        ? monstros[Math.floor(nextRand(state) * monstros.length)] : null;
+      if (!alvo) {
+        // sala sem monstro (bancada de teste): o executor nao tem sentido
+        d.id = 'relampago'; d.nome = DESAFIOS.relampago.nome; d.texto = DESAFIOS.relampago.texto;
+      } else {
+        d.alvoUid = alvo.uid; d.alvoNome = alvo.name;
+        d.texto = d.texto.replace('{alvo}', alvo.name);
+      }
+    }
+    state.desafio = d;
+    emit({ type: 'desafio', id: d.id, nome: d.nome, texto: d.texto });
+    log('Desafio da sala: ' + d.nome + ' — ' + d.texto);
+  }
+
+  function desafioFalha(state, motivo) {
+    var d = state.desafio;
+    if (!d || !d.vivo) return;
+    d.vivo = false;
+    emit({ type: 'desafioFalhou', id: d.id });
+    log('O desafio ' + d.nome + ' se perde' + (motivo ? ' — ' + motivo : '') + '.');
+  }
 
   // --------------------------------------------------------------- feitiços
   function canCastNow(state, unit, spell) {
@@ -1191,6 +1267,15 @@ var JOGO = (typeof window !== 'undefined')
       recomputeShield(target);
     }
     var hpLoss = amount - absorbed;
+    // desafio INTOCADO: só falha se um golpe de INIMIGO ferir um herói/fusão
+    // de verdade — escudo que segura tudo não quebra o contrato, de propósito:
+    // defender bem é a jogada que o desafio quer ensinar.
+    if (hpLoss > 0 && sourceUid && state.desafio && state.desafio.vivo &&
+        state.desafio.id === 'intocado' && target.side === 'player' &&
+        (target.kind === 'hero' || target.kind === 'fusion')) {
+      var qd2 = Engine.findUnit(state, sourceUid);
+      if (qd2 && qd2.side === 'enemy') desafioFalha(state, target.name + ' foi ferido');
+    }
     target.hp = Math.max(0, target.hp - hpLoss);
     emit({ type: 'damage', uid: target.uid, amount: amount, element: element,
            absorbed: absorbed, hpLoss: hpLoss, sourceUid: sourceUid || null });
@@ -1311,6 +1396,16 @@ var JOGO = (typeof window !== 'undefined')
     emit({ type: 'death', uid: unit.uid });
     log(unit.name + ' morre.');
 
+    // desafio EXECUTOR: a PRIMEIRA morte de monstro decide. Invocação inimiga
+    // caindo antes não conta — não é culpa do jogador o que o inimigo chama.
+    if (state.desafio && state.desafio.vivo && state.desafio.id === 'executor' &&
+        unit.side === 'enemy' && unit.kind === 'monster' && !state.desafio.executado) {
+      state.desafio.executado = true;
+      if (unit.uid !== state.desafio.alvoUid) {
+        desafioFalha(state, unit.name + ' caiu antes de ' + state.desafio.alvoNome);
+      }
+    }
+
     // v2: fusão que morre some de vez (não devolve os dois)
     if (unit.kind === 'fusion' && JOGO.Fusion && JOGO.Fusion.split) {
       JOGO.Fusion.split(state, unit.uid);
@@ -1367,6 +1462,28 @@ var JOGO = (typeof window !== 'undefined')
       log('A Descida foi derrotada...');
     } else if (!enemyAlive) {
       state.phase = 'won';
+      // o VEREDITO do desafio, antes do battleEnd: quem ouve o fim já ouve
+      // o desafio decidido. `fundido` só se avalia aqui (é um estado final);
+      // os outros quatro são o próprio `vivo` que os funis mantiveram.
+      var dz = state.desafio;
+      if (dz) {
+        if (dz.id === 'fundido') {
+          dz.cumprido = false;
+          for (var fz = 0; fz < state.units.length; fz++) {
+            var uz = state.units[fz];
+            if (uz.alive && !uz.offBoard && uz.side === 'player' && uz.kind === 'fusion') {
+              dz.cumprido = true; break;
+            }
+          }
+          if (!dz.cumprido) dz.vivo = false;
+        } else {
+          dz.cumprido = !!dz.vivo;
+        }
+        if (dz.cumprido) {
+          emit({ type: 'desafioCumprido', id: dz.id });
+          log('Desafio cumprido: ' + dz.nome + '! O prêmio cresce.');
+        }
+      }
       emit({ type: 'battleEnd', winner: 'player' });
       log('Sala limpa!');
     }
@@ -2190,6 +2307,12 @@ var JOGO = (typeof window !== 'undefined')
       if (state.activeIdx >= state.order.length) {
         state.activeIdx = 0;
         state.round++;
+        // desafio RELÂMPAGO: começou a rodada 6, o contrato já era — avisar
+        // AGORA, não no fim, para o jogador parar de jogar em função dele
+        if (state.desafio && state.desafio.vivo && state.desafio.id === 'relampago' &&
+            state.round > 5) {
+          desafioFalha(state, 'a rodada 5 passou');
+        }
         emit({ type: 'roundStart', round: state.round });
         onRoundStart(state);                            // v2
         if (state.phase !== 'playing') return;

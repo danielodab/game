@@ -941,6 +941,13 @@ var JOGO = (typeof window !== 'undefined')
     if (lastRewards.moedas > 0) {
       box.appendChild(rwBlock('Vinténs', (function () {
         var w = el('div', 'rw-moedas');
+        if (lastRewards.desafio) {
+          var dsf = lastRewards.desafio;
+          w.appendChild(el('span',
+            'rw-desafio' + (dsf.cumprido ? ' is-cumprido' : ''),
+            dsf.cumprido ? '☆ ' + esc(dsf.nome) + ' cumprido · +25%'
+                         : '☆ ' + esc(dsf.nome) + ' se perdeu'));
+        }
         var g = lastRewards.moedas || 0;
         w.appendChild(el('span', 'rw-moedas-ganho',
           '+' + g + (g === 1 ? ' vintém' : ' vinténs')));
@@ -1311,6 +1318,18 @@ var JOGO = (typeof window !== 'undefined')
       bt.room.appendChild(wc);
     }
     bt.room.appendChild(el('span', 'round-chip', 'Rodada ' + s.round));
+    // O DESAFIO DA SALA: dourado enquanto vale, riscado quando se perde.
+    // Mora aqui porque esta linha já é redesenhada a cada atualização.
+    if (s.desafio) {
+      var dch = el('span', 'desafio-chip' + (s.desafio.vivo ? ' is-vivo' : ' is-perdido'),
+        '☆ ' + esc(s.desafio.nome));
+      tipOn(dch, 'Desafio: ' + s.desafio.nome,
+        esc(s.desafio.texto) + '<br>' +
+        (s.desafio.vivo ? 'Valendo: +25% de XP e saque na vitória.'
+                        : 'Perdido nesta luta — a sala paga o de sempre.'),
+        s.desafio.vivo ? '#e8c25a' : '#8895a6');
+      bt.room.appendChild(dch);
+    }
   }
 
   function paintTimeline(s) {
