@@ -63,6 +63,7 @@ var JOGO = (typeof window !== 'undefined')
       missoes: null,                 // { dia, lista } — quem re-sorteia é JOGO.Missoes
       conquistas: {},                // { id: { prog, pago } }
       mercado: null,                 // { dia, ofertas } — quem semeia é JOGO.Mercado
+      placar: {},                    // id -> última foto de cada vizinho visto
       pvp: [],
       trocas: []
     };
@@ -95,6 +96,7 @@ var JOGO = (typeof window !== 'undefined')
           if (!d.conquistas || typeof d.conquistas !== 'object') d.conquistas = {};
           if (d.mercado !== null && typeof d.mercado !== 'object') d.mercado = null;
           if (d.mercado === undefined) d.mercado = null;
+          if (!d.placar || typeof d.placar !== 'object') d.placar = {};
           if (d.jogador.titulo === undefined) d.jogador.titulo = null;
           if (d.jogador.avatar === undefined) d.jogador.avatar = null;
           dados = d;
@@ -266,6 +268,34 @@ var JOGO = (typeof window !== 'undefined')
     d.mercado = obj ? JSON.parse(JSON.stringify(obj)) : null;
     grava();
     return responde({ ok: true });
+  };
+
+  // ------------------------------------------------------------------- placar
+  /* A última FOTO de cada vizinho que a Rede já viu: nome, título e o resumo
+   * da conta (classes com níveis, total). É o que faz o placar funcionar
+   * antes do servidor — e quando ele chegar, esta tabela vira a resposta
+   * dele, com a mesma cara. */
+  DB.placarAnota = function (id, dados) {
+    if (!id || !dados) return responde({ ok: false, erro: 'foto vazia' });
+    var d = carrega();
+    d.placar[String(id)] = {
+      nome: dados.nome || '?', titulo: dados.titulo || '',
+      resumo: dados.resumo ? JSON.parse(JSON.stringify(dados.resumo)) : null,
+      visto: agora()
+    };
+    grava();
+    return responde({ ok: true });
+  };
+  DB.placarLista = function () {
+    var d = carrega();
+    var fora = [];
+    Object.keys(d.placar).forEach(function (id) {
+      var e = d.placar[id];
+      fora.push({ id: id, nome: e.nome, titulo: e.titulo,
+                  resumo: e.resumo ? JSON.parse(JSON.stringify(e.resumo)) : null,
+                  visto: e.visto });
+    });
+    return responde(fora);
   };
 
   // --------------------------------------------------------------- históricos

@@ -832,6 +832,9 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(el('p', 'hub-nota',
           'Ainda selada. Os duelos chegam com a Rede: cada um escolhe a própria ' +
           'dupla sem ver a do outro, e o clima da arena é sorteado.'));
+        painel.appendChild(btn('Ver o Placar', 'btn-primary btn-block', function () {
+          openSheet('placar');
+        }));
         if (JOGO.DB) JOGO.DB.historicoPvp().then(function (h) {
           painel.appendChild(el('p', 'hub-nota', h.length + ' duelo(s) na conta.'));
         });
@@ -865,6 +868,7 @@ var JOGO = (typeof window !== 'undefined')
         var ligou = R.entrar({ id: j.id, nome: j.nome || 'Sem Nome',
                                titulo: j.titulo || '',
                                classe: j.avatar || selHeroes[0] || 'sumo',
+                               resumo: safe(resumoDaConta, null),
                                x: pos.x, z: pos.z });
         if (!ligou) return;                    // file://: o jogo segue solo
 
@@ -873,6 +877,12 @@ var JOGO = (typeof window !== 'undefined')
           if (ev.tipo === 'entrou') {
             JOGO.Hub.fantasmaEntra(ev.id, ev);
             chatLinha(null, ev.nome + ' chegou ao acampamento.');
+            // a foto do vizinho vai para o PLACAR — é assim que o ranking
+            // local se enche: de todo mundo que já cruzou a praça
+            if (ev.resumo && JOGO.DB.placarAnota) {
+              JOGO.DB.placarAnota(ev.id, { nome: ev.nome, titulo: ev.titulo,
+                                           resumo: ev.resumo });
+            }
           } else if (ev.tipo === 'alvo') {
             JOGO.Hub.fantasmaAlvo(ev.id, ev.x, ev.z);
           } else if (ev.tipo === 'pulso') {
@@ -2122,6 +2132,58 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
 
+  /* O PLACAR — os níveis de todo mundo que já cruzou a sua praça, você
+   * incluído. A aba Arena espera a Brasa (os duelos): promessa dita, não
+   * escondida. */
+  function sheetPlacar() {
+    sheetName = 'placar';
+    var body = sheetShell('Placar do Acampamento',
+      'Todo jogador que já cruzou a sua praça deixa a foto da conta aqui.');
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+    if (!JOGO.DB) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
+
+    Promise.all([JOGO.DB.jogador(), JOGO.DB.placarLista()]).then(function (r) {
+      var eu2 = r[0], lista = r[1] || [];
+      clear(caixa);
+
+      var linhas = [{ id: eu2.id, nome: (eu2.nome || 'Você'), titulo: eu2.titulo || '',
+                      resumo: safe(resumoDaConta, { classes: {}, total: 0 }), sou: true }];
+      lista.forEach(function (e2) {
+        if (e2.id === eu2.id) return;              // a minha linha é a viva, não a foto
+        linhas.push(e2);
+      });
+      linhas.sort(function (a, b) {
+        return ((b.resumo && b.resumo.total) || 0) - ((a.resumo && a.resumo.total) || 0);
+      });
+
+      caixa.appendChild(el('h3', 'bk-tit', 'Níveis (' + linhas.length +
+        (linhas.length === 1 ? ' conta' : ' contas') + ')'));
+      linhas.forEach(function (e2, i) {
+        var row = el('div', 'pl-linha' + (e2.sou ? ' is-eu' : ''));
+        row.appendChild(el('span', 'pl-pos', '#' + (i + 1)));
+        var tx = el('div', 'ms-tx');
+        tx.appendChild(el('div', 'ms-nome', esc(e2.nome) +
+          (e2.titulo ? ' <span class="ms-titulo">' + esc(e2.titulo) + '</span>' : '') +
+          (e2.sou ? ' <span class="pl-eu">você</span>' : '')));
+        var det = [];
+        var cls = (e2.resumo && e2.resumo.classes) || {};
+        Object.keys(cls).forEach(function (cid) {
+          det.push(esc(className(cid)) + ' ' + cls[cid]);
+        });
+        tx.appendChild(el('div', 'ms-prog', det.length ? det.join(' · ') : 'conta recém-nascida'));
+        row.appendChild(tx);
+        row.appendChild(el('span', 'pl-total', String((e2.resumo && e2.resumo.total) || 0)));
+        caixa.appendChild(row);
+      });
+
+      caixa.appendChild(el('h3', 'bk-tit', 'Arena'));
+      caixa.appendChild(el('p', 'inv-dica',
+        'A Brasa acende com os duelos — em breve: quem vence na arena carrega ' +
+        'uma chama acima do nome, e ela cresce com o ranking.'));
+    });
+  }
+
   function sheetShell(title, sub) {
     clear(sheetEl);
     var panel = el('div', 'sheet-panel');
@@ -2164,6 +2226,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'banco') sheetBanco();
     else if (name === 'missoes') sheetMissoes();
     else if (name === 'mercado') sheetMercado();
+    else if (name === 'placar') sheetPlacar();
     else closeSheet();
   }
   UI.openSheet = openSheet;
@@ -2642,6 +2705,20 @@ var JOGO = (typeof window !== 'undefined')
   /* Toda dupla de classes LIBERADAS oferece o corpo da fusão; o padrão é o
    * líder da dupla. A escolha grava na conta e, se o Acampamento está na
    * tela, ele renasce com o corpo novo na hora — ver é o ponto. */
+  /* A foto da conta para o PLACAR: classes liberadas com nível, e a soma.
+   * É o que viaja no oi/eco da Rede e o que a ficha do placar mostra. */
+  function resumoDaConta() {
+    var classes2 = {}, total = 0;
+    heroIds().forEach(function (hid) {
+      var hh = hero(hid);
+      if (!hh || !isUnlocked(hh.classId || hid)) return;
+      var lv = hh.level || 1;
+      classes2[hh.classId || hid] = lv;
+      total += lv;
+    });
+    return { classes: classes2, total: total };
+  }
+
   function paresDeAvatar() {
     var ids = Object.keys(classes()).filter(isUnlocked).sort();
     var fora = [];

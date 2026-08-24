@@ -1534,6 +1534,18 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .av-porte { font: 700 10px var(--ui-sans, system-ui); letter-spacing: .05em;
             color: var(--dim); }
 
+/* ------------------------------------------------- PLACAR */
+.pl-linha { display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border: 1px solid var(--line2); border-radius: 10px;
+            background: rgba(255,255,255,.03); }
+.pl-linha.is-eu { border-color: rgba(232,194,90,.5); }
+.pl-pos { font: 800 14px var(--ui-sans, system-ui); color: var(--dim); min-width: 30px; }
+.pl-eu { font: 700 9.5px var(--ui-sans, system-ui); letter-spacing: .06em;
+         text-transform: uppercase; color: #0d1116; background: var(--gold);
+         border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
+.pl-total { font: 800 16px var(--ui-serif, Georgia); color: #e8c25a;
+            font-variant-numeric: tabular-nums; }
+
 /* ------------------------------------------------- MERCADINHO */
 .mc-bolso { font-size: 13px; color: var(--dim); margin: 0 0 4px; }
 .mc-bolso b { color: #e8c25a; }

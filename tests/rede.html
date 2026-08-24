@@ -75,7 +75,8 @@ varredura dos calados com relógio injetado.</div>
   }
 
   var ligou = R.entrar({ id: 'ana', nome: 'Ana', titulo: 'a Temerária',
-                         classe: 'curandeiro', x: 3, z: 7 });
+                         classe: 'curandeiro', x: 3, z: 7,
+                         resumo: { classes: { curandeiro: 4 }, total: 4 } });
   check('entrar liga o canal', ligou === true && R.ligado());
 
   respiro()
@@ -85,9 +86,12 @@ varredura dos calados com relógio injetado.</div>
             ois.length === 1 && ois[0].de === 'ana' && ois[0].nome === 'Ana' &&
             ois[0].classe === 'curandeiro' && ois[0].x === 3,
             JSON.stringify(ois[0] || null));
+      check('o oi carrega o resumo da conta (para o placar)',
+            ois[0] && ois[0].resumo && ois[0].resumo.total === 4);
       // o par se apresenta: Bento entra
       par.postMessage({ t: 'oi', de: 'bento', nome: 'Bento', titulo: '',
-                        classe: 'sumo', x: -2, z: 4 });
+                        classe: 'sumo', resumo: { classes: { sumo: 7 }, total: 7 },
+                        x: -2, z: 4 });
       return respiro();
     })
     .then(function () {
@@ -95,6 +99,8 @@ varredura dos calados com relógio injetado.</div>
       check('o oi do outro vira evento entrou',
             entrou.length === 1 && entrou[0].id === 'bento' && entrou[0].classe === 'sumo',
             JSON.stringify(entrou[0] || null));
+      check('o entrou entrega o resumo do vizinho',
+            entrou[0] && entrou[0].resumo && entrou[0].resumo.total === 7);
       var ecos = doPar('eco');
       check('o eco apresenta quem JÁ ESTAVA ao recém-chegado',
             ecos.length === 1 && ecos[0].de === 'ana' && ecos[0].nome === 'Ana',

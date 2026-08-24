@@ -114,6 +114,17 @@ porque um chamador que dependa disso quebraria exatamente no dia da migração.<
       })
       .then(function (r) {
         check('sacar do cofre vazio é recusado', !r.ok, r.erro);
+        return DB.placarAnota('viz-1', { nome: 'Bento', titulo: 'o Temerário',
+                                         resumo: { classes: { sumo: 7 }, total: 7 } });
+      })
+      .then(function (r) {
+        check('a foto do vizinho entra no placar', r.ok);
+        return DB.placarLista();
+      })
+      .then(function (l) {
+        check('o placar lista a foto com nome, título e total',
+              l.length === 1 && l[0].nome === 'Bento' && l[0].resumo.total === 7 &&
+              typeof l[0].visto === 'number');
         return DB.definirAvatar('fus:bruxo+curandeiro');
       })
       .then(function (r) {

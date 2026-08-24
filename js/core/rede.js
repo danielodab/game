@@ -12,8 +12,10 @@ var JOGO = (typeof window !== 'undefined')
  * fronteira.
  *
  * O PROTOCOLO (mensagens pequenas, JSON puro):
- *   oi     { de, nome, titulo, classe, x, z }   entrei — quem está aí?
- *   eco    { de, nome, titulo, classe, x, z }   resposta ao oi (só para o novo)
+ *   oi     { de, nome, titulo, classe, resumo, x, z }   entrei — quem está aí?
+ *   eco    { de, nome, titulo, classe, resumo, x, z }   resposta ao oi
+ *          (`resumo` = a foto da conta para o PLACAR: classes com níveis e
+ *           total — muda raro, então só viaja no oi/eco, não no pulso)
  *   alvo   { de, x, z }                         vou andar até ali (o fantasma
  *                                               ANDA o caminho, não teleporta)
  *   pulso  { de, x, z }                         correção periódica de posição
@@ -67,10 +69,12 @@ var JOGO = (typeof window !== 'undefined')
     var novo = !pares[m.de];
     pares[m.de] = { nome: m.nome || '?', titulo: m.titulo || '',
                     classe: m.classe || 'sumo',
+                    resumo: m.resumo || null,
                     x: m.x || 0, z: m.z || 0, visto: agora() };
     if (novo) {
       avisa({ tipo: 'entrou', id: m.de, nome: pares[m.de].nome,
               titulo: pares[m.de].titulo, classe: pares[m.de].classe,
+              resumo: pares[m.de].resumo,
               x: pares[m.de].x, z: pares[m.de].z });
     }
     return novo;
@@ -84,7 +88,7 @@ var JOGO = (typeof window !== 'undefined')
       // o eco apresenta a MIM para o recém-chegado — sem ele, quem entra
       // por último não veria ninguém que já estava
       manda('eco', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
-                     x: eu.x, z: eu.z });
+                     resumo: eu.resumo, x: eu.x, z: eu.z });
     } else if (m.t === 'eco') {
       conhece(m);
     } else if (m.t === 'alvo') {
@@ -129,8 +133,11 @@ var JOGO = (typeof window !== 'undefined')
     canal.onmessage = aoMensagem;
     eu = { id: perfil.id || ('anon-' + Math.random().toString(36).slice(2, 8)),
            nome: perfil.nome || '?', titulo: perfil.titulo || '',
-           classe: perfil.classe || 'sumo', x: perfil.x || 0, z: perfil.z || 0 };
-    manda('oi', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe, x: eu.x, z: eu.z });
+           classe: perfil.classe || 'sumo',
+           resumo: perfil.resumo || null,
+           x: perfil.x || 0, z: perfil.z || 0 };
+    manda('oi', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
+                  resumo: eu.resumo, x: eu.x, z: eu.z });
     timerPulso = setInterval(function () {
       manda('pulso', { x: eu.x, z: eu.z });
       R._varre();
@@ -168,7 +175,8 @@ var JOGO = (typeof window !== 'undefined')
     var fora = [];
     Object.keys(pares).forEach(function (id) {
       var p = pares[id];
-      fora.push({ id: id, nome: p.nome, titulo: p.titulo, classe: p.classe, x: p.x, z: p.z });
+      fora.push({ id: id, nome: p.nome, titulo: p.titulo, classe: p.classe,
+                  resumo: p.resumo || null, x: p.x, z: p.z });
     });
     return fora;
   };
