@@ -834,6 +834,75 @@ var JOGO = (typeof window !== 'undefined')
     };
 
     var entrou = JOGO.Hub && JOGO.Hub.entrar(mundo, selHeroes[0] || 'sumo');
+
+    /* A REDE GANHA CORPO: entrar no Acampamento liga a presença (perfil do
+     * DB), os eventos da Rede viram fantasmas de corpo inteiro, e quem já
+     * estava é reconstruído de pares() — voltar da batalha não apaga
+     * ninguém. O chat mora no canto: Enter fala, as últimas oito linhas
+     * ficam. Em file:// a Rede é no-op e nada disto aparece. */
+    var chatLog = null;
+    function chatLinha(quem, texto, cor) {
+      if (!chatLog) return;
+      var li = el('div', 'hub-chat-linha');
+      li.innerHTML = (quem ? '<b style="color:' + (cor || '#e8c25a') + '">' +
+        esc(quem) + ':</b> ' : '') + esc(texto);
+      chatLog.appendChild(li);
+      while (chatLog.children.length > 8) chatLog.removeChild(chatLog.firstChild);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+    if (JOGO.Rede && entrou) {
+      var R = JOGO.Rede;
+      JOGO.DB.jogador().then(function (j) {
+        var e0 = (JOGO.Hub._estado && JOGO.Hub._estado()) || {};
+        var pos = e0.pos || { x: 0, z: 9 };
+        var ligou = R.entrar({ id: j.id, nome: j.nome || 'Sem Nome',
+                               titulo: j.titulo || '',
+                               classe: selHeroes[0] || 'sumo',
+                               x: pos.x, z: pos.z });
+        if (!ligou) return;                    // file://: o jogo segue solo
+
+        JOGO.Hub.aoAndar = function (x, z) { R.mover(x, z); };
+        R.aoEvento = function (ev) {
+          if (ev.tipo === 'entrou') {
+            JOGO.Hub.fantasmaEntra(ev.id, ev);
+            chatLinha(null, ev.nome + ' chegou ao acampamento.');
+          } else if (ev.tipo === 'alvo') {
+            JOGO.Hub.fantasmaAlvo(ev.id, ev.x, ev.z);
+          } else if (ev.tipo === 'pulso') {
+            JOGO.Hub.fantasmaPulso(ev.id, ev.x, ev.z);
+          } else if (ev.tipo === 'chat') {
+            chatLinha(ev.nome, ev.texto);
+          } else if (ev.tipo === 'saiu') {
+            JOGO.Hub.fantasmaSai(ev.id);
+          }
+        };
+        // quem ja estava na praca antes de mim (ou de eu voltar da batalha)
+        R.pares().forEach(function (par) {
+          JOGO.Hub.fantasmaEntra(par.id, par);
+        });
+
+        // ---- o chat do canto
+        var chat = el('div', 'hub-chat');
+        chatLog = el('div', 'hub-chat-log');
+        chat.appendChild(chatLog);
+        var ci = document.createElement('input');
+        ci.className = 'hub-chat-input';
+        ci.maxLength = 240;
+        ci.placeholder = 'diga algo… (Enter)';
+        ci.addEventListener('keydown', function (evk) {
+          if (evk.key === 'Enter') {
+            var t = ci.value.trim();
+            if (t && R.falar(t)) {
+              chatLinha(j.nome || 'você', t, '#9bd06a');
+              ci.value = '';
+            }
+          } else if (evk.key === 'Escape') { ci.blur(); }
+          evk.stopPropagation();               // o i digitado aqui não abre o saco
+        });
+        chat.appendChild(ci);
+        mundo.appendChild(chat);
+      });
+    }
     if (!entrou) mundo.appendChild(el('p', 'empty', 'O acampamento precisa do modo 3D.'));
     pintaConta();
   }

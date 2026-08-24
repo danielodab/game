@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a Rede (presença e chat entre abas)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>A Rede — o protocolo inteiro, com um par de mentira no mesmo documento</h1>
+<div class="sub">BroadcastChannel entrega a QUALQUER outro canal do mesmo nome — inclusive um
+segundo canal nesta mesma página, que aqui banca o "outro jogador". Cobra o oi/eco (quem entra por
+último vê quem já estava), o alvo que faz o fantasma ANDAR, o chat com o corte de 240, o tchau, e a
+varredura dos calados com relógio injetado.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  document.write('<scr'+'ipt src="../js/core/rede.js'+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra ? ' — <code>' + String(extra) + '</code>' : '');
+    lista.appendChild(li);
+  }
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  }
+  function respiro() {                     // BroadcastChannel entrega em tarefa
+    return new Promise(function (res) { setTimeout(res, 60); });
+  }
+
+  var R = JOGO.Rede;
+  if (typeof BroadcastChannel === 'undefined') {
+    check('BroadcastChannel existe neste navegador', false, 'ambiente sem canal');
+    fim();
+    return;
+  }
+
+  // o OUTRO jogador: um canal cru no mesmo documento
+  var par = new BroadcastChannel('soterra-rede-v1');
+  var caixaDoPar = [];
+  par.onmessage = function (ev) { caixaDoPar.push(ev.data); };
+  function doPar(tipo) {
+    return caixaDoPar.filter(function (m) { return m.t === tipo; });
+  }
+
+  var eventos = [];
+  R.aoEvento = function (ev) { eventos.push(ev); };
+  function meus(tipo) {
+    return eventos.filter(function (e) { return e.tipo === tipo; });
+  }
+
+  var ligou = R.entrar({ id: 'ana', nome: 'Ana', titulo: 'a Temerária',
+                         classe: 'curandeiro', x: 3, z: 7 });
+  check('entrar liga o canal', ligou === true && R.ligado());
+
+  respiro()
+    .then(function () {
+      var ois = doPar('oi');
+      check('o oi de apresentação chega ao outro lado',
+            ois.length === 1 && ois[0].de === 'ana' && ois[0].nome === 'Ana' &&
+            ois[0].classe === 'curandeiro' && ois[0].x === 3,
+            JSON.stringify(ois[0] || null));
+      // o par se apresenta: Bento entra
+      par.postMessage({ t: 'oi', de: 'bento', nome: 'Bento', titulo: '',
+                        classe: 'sumo', x: -2, z: 4 });
+      return respiro();
+    })
+    .then(function () {
+      var entrou = meus('entrou');
+      check('o oi do outro vira evento entrou',
+            entrou.length === 1 && entrou[0].id === 'bento' && entrou[0].classe === 'sumo',
+            JSON.stringify(entrou[0] || null));
+      var ecos = doPar('eco');
+      check('o eco apresenta quem JÁ ESTAVA ao recém-chegado',
+            ecos.length === 1 && ecos[0].de === 'ana' && ecos[0].nome === 'Ana',
+            JSON.stringify(ecos[0] || null));
+      check('pares() lista o Bento',
+            R.pares().length === 1 && R.pares()[0].id === 'bento');
+      // Bento anda
+      par.postMessage({ t: 'alvo', de: 'bento', x: 10, z: -5 });
+      return respiro();
+    })
+    .then(function () {
+      var alvos = meus('alvo');
+      check('o alvo do outro vira evento (o fantasma ANDA, não teleporta)',
+            alvos.length === 1 && alvos[0].x === 10 && alvos[0].z === -5);
+      // Bento fala — com um texto acima do corte
+      var longo = new Array(300).join('a');
+      par.postMessage({ t: 'chat', de: 'bento', nome: 'Bento', texto: longo });
+      return respiro();
+    })
+    .then(function () {
+      var falas = meus('chat');
+      check('o chat chega com o corte de 240',
+            falas.length === 1 && falas[0].texto.length === 240 && falas[0].nome === 'Bento');
+      // eu ando e falo: o par tem de receber
+      R.mover(1, 2);
+      R.falar('  olá, praça!  ');
+      return respiro();
+    })
+    .then(function () {
+      var alvos = doPar('alvo');
+      var falas = doPar('chat');
+      check('mover chega do outro lado como alvo',
+            alvos.length === 1 && alvos[0].x === 1 && alvos[0].z === 2);
+      check('falar apara as pontas e chega',
+            falas.length === 1 && falas[0].texto === 'olá, praça!');
+      // o tchau educado
+      par.postMessage({ t: 'tchau', de: 'bento' });
+      return respiro();
+    })
+    .then(function () {
+      check('o tchau vira saiu e some de pares()',
+            meus('saiu').length === 1 && R.pares().length === 0);
+      // a varredura dos calados: Bento volta e cala
+      par.postMessage({ t: 'oi', de: 'bento', nome: 'Bento', classe: 'sumo', x: 0, z: 0 });
+      return respiro();
+    })
+    .then(function () {
+      check('o Bento voltou', R.pares().length === 1);
+      R._varre(Date.now() + R.SUMICO_MS + 1000);
+      check('a varredura derruba quem não pulsa',
+            R.pares().length === 0 && meus('saiu').length === 2);
+      // a despedida da própria Rede
+      R.sair();
+      return respiro();
+    })
+    .then(function () {
+      var tchaus = doPar('tchau');
+      check('sair manda o tchau educado e desliga',
+            tchaus.length === 1 && !R.ligado());
+      par.close();
+    })
+    .catch(function (e) {
+      check('a corrente não estoura', false, e && (e.message || e));
+    })
+    .then(fim);
+})();
+</script>
+</body>
+</html>

@@ -37,6 +37,7 @@ var JOGO = (typeof window !== 'undefined')
   var nomeJogador = null;           // o nome batizado no DB, para a plaquinha
   var tituloJogador = null;         // o título de conquista, pendurado abaixo do nome
   var lugares = [];                 // { id, tipo, pos, raio, node, rotulo }
+  var fantasmas = {};               // id da Rede -> corpo igual ao do heroi
   var aoChegar = null;              // callback pendente da caminhada atual
   var raycaster = null, chao = null;
   var relogio = 0;
@@ -304,49 +305,79 @@ var JOGO = (typeof window !== 'undefined')
    * da cabeça"). A plaquinha é FILHA do nó do herói: anda, corre e troca de
    * corpo junto, sem uma linha no tique — e sprite sempre encara a câmera.
    * Os fantasmas da rede vão pendurar a deles por este mesmo caminho. */
-  function pendura(nome, titulo) {
-    if (!heroi || !THREE) return;
+  /* Pendura nome (e título) em QUALQUER corpo — herói ou fantasma. */
+  function penduraEm(corpo, nome, titulo) {
+    if (!corpo || !THREE) return;
     ['plaquinha', 'plaquinhaTitulo'].forEach(function (campo) {
-      if (!heroi[campo]) return;
-      heroi.node.remove(heroi[campo]);
+      if (!corpo[campo]) return;
+      corpo.node.remove(corpo[campo]);
       try {
-        heroi[campo].material.map.dispose();
-        heroi[campo].material.dispose();
+        corpo[campo].material.map.dispose();
+        corpo[campo].material.dispose();
       } catch (e) {}
-      heroi[campo] = null;
+      corpo[campo] = null;
     });
     if (!nome) return;
-    var alto = (heroi.node.userData.height || 2.1);
+    var alto = (corpo.node.userData.height || 2.1);
     var sp = rotulo(nome, '#f0ead8', 0.42);
     sp.position.y = alto + (titulo ? 0.66 : 0.5);
-    heroi.node.add(sp);
-    heroi.plaquinha = sp;
+    corpo.node.add(sp);
+    corpo.plaquinha = sp;
     // o TÍTULO de conquista: linha menor e dourada, abaixo do nome — é a
     // recompensa social do quadro de missões, visível de longe
     if (titulo) {
       var st2 = rotulo(titulo, '#e8c25a', 0.30);
       st2.position.y = alto + 0.38;
-      heroi.node.add(st2);
-      heroi.plaquinhaTitulo = st2;
+      corpo.node.add(st2);
+      corpo.plaquinhaTitulo = st2;
+    }
+  }
+  function pendura(nome, titulo) { penduraEm(heroi, nome, titulo); }
+
+  // -------------------------------------------------------------- a caminhada
+  /* UM passo de caminhada para QUALQUER corpo (herói ou fantasma): mesmo
+   * limiar de chegada, mesma velocidade, mesma virada. Devolve true no
+   * quadro em que o corpo chega. */
+  function andaCorpo(corpo, dt) {
+    if (!corpo.alvo) return false;
+    var p = corpo.node.position;
+    var dx = corpo.alvo.x - p.x, dz = corpo.alvo.z - p.z;
+    var dist = Math.hypot(dx, dz);
+    if (dist < 0.12) {
+      corpo.alvo = null;
+      corpo.andando = false;
+      corpo.clipe = null;
+      try { corpo.node.userData.play('idle', { fade: 0.18 }); } catch (e) {}
+      return true;
+    }
+    var passo = Math.min(dist, (corpo.vel || VEL_ANDA) * dt);
+    p.x += dx / dist * passo;
+    p.z += dz / dist * passo;
+    corpo.node.rotation.y = Math.atan2(dx, dz);
+    return false;
+  }
+
+  /* Manda um corpo andar: decide andar/correr pela distância e troca o
+   * clipe — a MESMA regra para herói e fantasma. */
+  function mandaAndar(corpo, x, z) {
+    corpo.alvo = new THREE.Vector3(x, 0, z);
+    var d = Math.hypot(x - corpo.node.position.x, z - corpo.node.position.z);
+    var corre = d > DIST_CORRIDA;
+    corpo.vel = corre ? VEL_CORRE : VEL_ANDA;
+    var clipe = corre ? 'run' : 'walk';
+    if (!corpo.andando || corpo.clipe !== clipe) {
+      corpo.andando = true;
+      corpo.clipe = clipe;
+      try { corpo.node.userData.play(clipe, { fade: 0.15 }); } catch (e) {}
     }
   }
 
-  // -------------------------------------------------------------- a caminhada
   function andarAte(destino, chegada) {
     if (!heroi) return;
-    heroi.alvo = destino.clone();
-    heroi.alvo.y = 0;
     aoChegar = chegada || null;
-    var d = Math.hypot(heroi.alvo.x - heroi.node.position.x,
-                       heroi.alvo.z - heroi.node.position.z);
-    var corre = d > DIST_CORRIDA;
-    heroi.vel = corre ? VEL_CORRE : VEL_ANDA;
-    var clipe = corre ? 'run' : 'walk';
-    if (!heroi.andando || heroi.clipe !== clipe) {
-      heroi.andando = true;
-      heroi.clipe = clipe;
-      try { heroi.node.userData.play(clipe, { fade: 0.15 }); } catch (e) {}
-    }
+    mandaAndar(heroi, destino.x, destino.z);
+    // a Rede fica sabendo: os outros mandam o fantasma DESTE corpo andar
+    if (Hub.aoAndar) { try { Hub.aoAndar(destino.x, destino.z); } catch (e) {} }
   }
 
   function tique(dt) {
@@ -358,24 +389,17 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     if (heroi) {
-      if (heroi.alvo) {
-        var p = heroi.node.position;
-        var dx = heroi.alvo.x - p.x, dz = heroi.alvo.z - p.z;
-        var dist = Math.hypot(dx, dz);
-        if (dist < 0.12) {
-          heroi.alvo = null;
-          heroi.andando = false;
-          heroi.clipe = null;
-          try { heroi.node.userData.play('idle', { fade: 0.18 }); } catch (e) {}
-          if (aoChegar) { var f = aoChegar; aoChegar = null; f(); }
-        } else {
-          var passo = Math.min(dist, (heroi.vel || VEL_ANDA) * dt);
-          p.x += dx / dist * passo;
-          p.z += dz / dist * passo;
-          heroi.node.rotation.y = Math.atan2(dx, dz);
-        }
-      }
+      var chegou = andaCorpo(heroi, dt);
+      if (chegou && aoChegar) { var f = aoChegar; aoChegar = null; f(); }
       try { if (heroi.node.userData.mixer) heroi.node.userData.mixer.update(dt); } catch (e) {}
+
+      // os FANTASMAS andam pelo mesmo verbo do herói
+      for (var fk in fantasmas) {
+        if (!fantasmas.hasOwnProperty(fk)) continue;
+        var fcorpo = fantasmas[fk];
+        andaCorpo(fcorpo, dt);
+        try { if (fcorpo.node.userData.mixer) fcorpo.node.userData.mixer.update(dt); } catch (e) {}
+      }
 
       // câmera ORBITAL centrada no herói: o jogador gira, inclina e aproxima;
       // o corpo é sempre a âncora. Esférica clássica: tilt 0 = de cima.
@@ -531,6 +555,12 @@ var JOGO = (typeof window !== 'undefined')
   Hub.sair = function () {
     rodando = false;               // o rAF morre sozinho no próximo quadro
     ultimoPerto = null;
+    // os corpos dos fantasmas saem de cena; a REDE continua ligada — ao
+    // voltar ao Acampamento a HUD os reconstrói de Rede.pares()
+    for (var fk in fantasmas) {
+      if (fantasmas.hasOwnProperty(fk)) scene.remove(fantasmas[fk].node);
+    }
+    fantasmas = {};
   };
 
   /* A presença em rede vai mandar FANTASMAS andarem pelo mesmo caminho do
@@ -544,6 +574,47 @@ var JOGO = (typeof window !== 'undefined')
     tituloJogador = String(titulo || '').trim() || null;
     pendura(nomeJogador, tituloJogador);
   };
+  /* OS FANTASMAS — os outros jogadores da Rede, de corpo inteiro no mapa.
+   * Entram com classe, nome e título; andam pelo MESMO verbo do herói
+   * (mandaAndar/andaCorpo); o pulso corrige deriva grande sem teleporte
+   * nervoso. A HUD é quem traduz eventos da Rede nestas chamadas. */
+  Hub.aoAndar = null;
+  Hub.fantasmaEntra = function (id, perfil) {
+    if (!scene || fantasmas[id]) return false;
+    var m2 = M2();
+    if (!m2) return false;
+    var node = null;
+    var classe = (perfil && perfil.classe) || 'sumo';
+    try { node = m2.unit(classe, { classId: classe }); } catch (e) {}
+    if (!node) return false;
+    node.position.set((perfil && perfil.x) || 0, 0, (perfil && perfil.z) || RAIO_MAPA * 0.35);
+    scene.add(node);
+    var corpo = { node: node, alvo: null, andando: false };
+    fantasmas[id] = corpo;
+    try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
+    penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '');
+    return true;
+  };
+  Hub.fantasmaAlvo = function (id, x, z) {
+    var corpo = fantasmas[id];
+    if (corpo) mandaAndar(corpo, x, z);
+  };
+  Hub.fantasmaPulso = function (id, x, z) {
+    var corpo = fantasmas[id];
+    if (!corpo || corpo.alvo) return;          // andando, deixa chegar
+    var p = corpo.node.position;
+    if (Math.hypot(x - p.x, z - p.z) > 2.0) {  // deriva grande: anda até lá
+      mandaAndar(corpo, x, z);
+    }
+  };
+  Hub.fantasmaSai = function (id) {
+    var corpo = fantasmas[id];
+    if (!corpo) return;
+    scene.remove(corpo.node);
+    delete fantasmas[id];
+  };
+  Hub.fantasmas = function () { return Object.keys(fantasmas); };
+
   Hub.irPara = function (x, z) {
     if (!heroi || !THREE) return false;
     andarAte(new THREE.Vector3(x, 0, z), null);
