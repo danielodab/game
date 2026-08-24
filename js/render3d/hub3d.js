@@ -79,6 +79,28 @@ var JOGO = (typeof window !== 'undefined')
     return tex;
   }
 
+  /* AS CHAMAS DA BRASA: uma textura por paleta de chama, compartilhada por
+   * todo corpo que carrega fogo — o tique avança o offset de cada paleta uma
+   * vez só, e todas as chamas da praça ardem no mesmo quadro. */
+  var texChamas = {}, TEX_CHAMA_N = 4;
+  function texturaChama(paleta) {
+    if (texChamas[paleta] !== undefined) return texChamas[paleta] || null;
+    var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ANIM : null;
+    var chave = 'chama:' + paleta;
+    if (!A || !A[chave] || !THREE) { texChamas[paleta] = false; return null; }
+    var img = new Image();
+    var tex = new THREE.Texture(img);
+    img.onload = function () { tex.needsUpdate = true; };
+    img.src = 'data:image/jpeg;base64,' + A[chave];
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    tex.repeat.set(1 / TEX_CHAMA_N, 1 / TEX_CHAMA_N);
+    texChamas[paleta] = tex;
+    return tex;
+  }
+
   function M2() { return JOGO.Models3D2 || null; }
   function K() { return JOGO.Models3D || null; }
 
@@ -326,7 +348,7 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(node);
     heroi = { node: node, alvo: null, andando: false };
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
-    if (nomeJogador) pendura(nomeJogador, tituloJogador);
+    if (nomeJogador) pendura(nomeJogador, tituloJogador, brasaDoHeroi);
   }
 
   /* O NOME ACIMA DA CABEÇA — a primeira marca de jogo online que o corpo
@@ -335,9 +357,9 @@ var JOGO = (typeof window !== 'undefined')
    * corpo junto, sem uma linha no tique — e sprite sempre encara a câmera.
    * Os fantasmas da rede vão pendurar a deles por este mesmo caminho. */
   /* Pendura nome (e título) em QUALQUER corpo — herói ou fantasma. */
-  function penduraEm(corpo, nome, titulo) {
+  function penduraEm(corpo, nome, titulo, brasaTier) {
     if (!corpo || !THREE) return;
-    ['plaquinha', 'plaquinhaTitulo'].forEach(function (campo) {
+    ['plaquinha', 'plaquinhaTitulo', 'chamaBrasa'].forEach(function (campo) {
       if (!corpo[campo]) return;
       corpo.node.remove(corpo[campo]);
       try {
@@ -360,8 +382,28 @@ var JOGO = (typeof window !== 'undefined')
       corpo.node.add(st2);
       corpo.plaquinhaTitulo = st2;
     }
+    // A CHAMA DA BRASA — o lugar das asas de nação, do jeito do SOTERRA:
+    // o fogo da arena arde ACIMA do nome, na paleta e no tamanho do tier.
+    // Sprite não serve (não anima folha); é um bilhete aditivo que o tique
+    // vira para a câmera junto com o offset da paleta.
+    if (brasaTier && brasaTier.tam) {
+      var texC = texturaChama(brasaTier.paleta || 'fire');
+      if (texC) {
+        var matC = new THREE.MeshBasicMaterial({
+          map: texC, transparent: true, depthWrite: false,
+          blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+          opacity: 0.9
+        });
+        var chamaG = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matC);
+        var tamC = brasaTier.tam;
+        chamaG.scale.set(tamC, tamC, 1);
+        chamaG.position.y = alto + (titulo ? 0.66 : 0.5) + 0.42 + tamC * 0.35;
+        corpo.node.add(chamaG);
+        corpo.chamaBrasa = chamaG;
+      }
+    }
   }
-  function pendura(nome, titulo) { penduraEm(heroi, nome, titulo); }
+  function pendura(nome, titulo, brasaTier) { penduraEm(heroi, nome, titulo, brasaTier); }
 
   // -------------------------------------------------------------- a caminhada
   /* UM passo de caminhada para QUALQUER corpo (herói ou fantasma): mesmo
@@ -417,6 +459,28 @@ var JOGO = (typeof window !== 'undefined')
       var qp = Math.floor(relogio * 13) % (TEX_PORTAL_N * TEX_PORTAL_N);
       var cc = qp % TEX_PORTAL_N, rr = Math.floor(qp / TEX_PORTAL_N);
       texPortal.offset.set(cc / TEX_PORTAL_N, (TEX_PORTAL_N - 1 - rr) / TEX_PORTAL_N);
+    }
+    // as chamas da Brasa: um offset por paleta serve toda a praça
+    for (var pk in texChamas) {
+      if (!texChamas.hasOwnProperty(pk) || !texChamas[pk]) continue;
+      var qc = Math.floor(relogio * 14) % (TEX_CHAMA_N * TEX_CHAMA_N);
+      texChamas[pk].offset.set((qc % TEX_CHAMA_N) / TEX_CHAMA_N,
+        (TEX_CHAMA_N - 1 - Math.floor(qc / TEX_CHAMA_N)) / TEX_CHAMA_N);
+    }
+    // e cada chama encara a câmera (bilhete manual: só a volta do eixo Y)
+    if (camera) {
+      var viraChama = function (corpoC) {
+        if (corpoC && corpoC.chamaBrasa) {
+          corpoC.chamaBrasa.rotation.y =
+            Math.atan2(camera.position.x - corpoC.node.position.x,
+                       camera.position.z - corpoC.node.position.z) -
+            corpoC.node.rotation.y;
+        }
+      };
+      viraChama(heroi);
+      for (var fk2 in fantasmas) {
+        if (fantasmas.hasOwnProperty(fk2)) viraChama(fantasmas[fk2]);
+      }
     }
     for (var i = 0; i < lugares.length; i++) {
       var l = lugares[i];
@@ -609,10 +673,12 @@ var JOGO = (typeof window !== 'undefined')
    * até aqui tudo era privado e a única prova era o olho. */
   /* Quem sabe o nome é o DB, e quem fala com o DB é a HUD (pintaConta e o
    * batismo): ela empurra o nome para cá. Vazio tira a plaquinha. */
-  Hub.nomeia = function (nome, titulo) {
+  var brasaDoHeroi = null;         // o tier da chama ({paleta, tam, nome})
+  Hub.nomeia = function (nome, titulo, brasaTier) {
     nomeJogador = String(nome || '').trim() || null;
     tituloJogador = String(titulo || '').trim() || null;
-    pendura(nomeJogador, tituloJogador);
+    brasaDoHeroi = brasaTier || null;
+    pendura(nomeJogador, tituloJogador, brasaDoHeroi);
   };
   /* OS FANTASMAS — os outros jogadores da Rede, de corpo inteiro no mapa.
    * Entram com classe, nome e título; andam pelo MESMO verbo do herói
@@ -632,7 +698,13 @@ var JOGO = (typeof window !== 'undefined')
     var corpo = { node: node, alvo: null, andando: false };
     fantasmas[id] = corpo;
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
-    penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '');
+    var tierF = null;
+    if (perfil && perfil.resumo && typeof perfil.resumo.brasa === 'number' &&
+        JOGO.Brasa && JOGO.Brasa.tierDe) {
+      tierF = JOGO.Brasa.tierDe(perfil.resumo.brasa, false);
+      if (tierF && tierF.min === 0) tierF = null;    // Fagulha não acende ainda
+    }
+    penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF);
     return true;
   };
   Hub.fantasmaAlvo = function (id, x, z) {
@@ -667,6 +739,8 @@ var JOGO = (typeof window !== 'undefined')
       andando: heroi ? !!heroi.andando : null,
       nome: nomeJogador,
       titulo: tituloJogador,
+      chama: !!(heroi && heroi.chamaBrasa),
+      chamaTier: brasaDoHeroi ? (brasaDoHeroi.id || null) : null,
       corpo: (heroi && heroi.node.userData && heroi.node.userData.look &&
               heroi.node.userData.look.model) || null,
       plaquinha: !!(heroi && heroi.plaquinha),

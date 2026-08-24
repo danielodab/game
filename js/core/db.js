@@ -57,7 +57,8 @@ var JOGO = (typeof window !== 'undefined')
   function vazio() {
     return {
       versao: 1,
-      jogador: { id: novoId(), nome: null, titulo: null, avatar: null, criadoEm: agora() },
+      jogador: { id: novoId(), nome: null, titulo: null, avatar: null,
+                 brasa: { pts: 1000, partidas: 0 }, criadoEm: agora() },
       carteira: { moedas: 0 },
       banco: { moedas: 0, itens: [] },
       missoes: null,                 // { dia, lista } — quem re-sorteia é JOGO.Missoes
@@ -99,6 +100,9 @@ var JOGO = (typeof window !== 'undefined')
           if (!d.placar || typeof d.placar !== 'object') d.placar = {};
           if (d.jogador.titulo === undefined) d.jogador.titulo = null;
           if (d.jogador.avatar === undefined) d.jogador.avatar = null;
+          if (!d.jogador.brasa || typeof d.jogador.brasa.pts !== 'number') {
+            d.jogador.brasa = { pts: 1000, partidas: 0 };
+          }
           dados = d;
           return dados;
         }
@@ -238,6 +242,23 @@ var JOGO = (typeof window !== 'undefined')
     grava();
     return responde({ ok: true });
   };
+  /* A BRASA: os pontos de arena. O DB guarda; a conta de Elo, os degraus e
+   * a regra da Coroa moram em JOGO.Brasa. */
+  DB.brasaVer = function () {
+    var d = carrega();
+    return responde({ pts: d.jogador.brasa.pts, partidas: d.jogador.brasa.partidas });
+  };
+  DB.definirBrasa = function (pts, partidas) {
+    var d = carrega();
+    if (typeof pts === 'number' && isFinite(pts)) d.jogador.brasa.pts = Math.round(pts);
+    if (typeof partidas === 'number' && isFinite(partidas)) {
+      d.jogador.brasa.partidas = Math.max(0, Math.floor(partidas));
+    }
+    grava();
+    return responde({ ok: true, pts: d.jogador.brasa.pts,
+                      partidas: d.jogador.brasa.partidas });
+  };
+
   /* O AVATAR do Acampamento: null = o corpo do líder da dupla; senão um
    * defId de fusão ('fus:a+b'). Quem valida se as classes estão liberadas é
    * a FICHA (que sabe de Progress); o DB só guarda a escolha. */

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a Brasa (o ranking da arena)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>A Brasa — Elo, degraus, e o portão duplo da Coroa</h1>
+<div class="sub">Cobra a conta de Elo (vencer o mais fraco paga quase nada; perder devolve o que
+subiu; o piso segura o fundo), os cinco degraus pelos pontos, a regra de que a COROA exige pontos E
+o 1º lugar do placar, e a subida realista: quantas vitórias contra iguais até o topo — tem de ser
+MUITAS, porque o pedido foi "difícil de alcançar".</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/db.js', 'js/core/brasa.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra ? ' — <code>' + String(extra) + '</code>' : '');
+    lista.appendChild(li);
+  }
+
+  var B = JOGO.Brasa, DB = JOGO.DB;
+
+  // ------------------------------------------------------------------- Elo
+  var iguais = B.elo(1000, 1000, true);
+  check('vencer um igual paga metade do K', iguais.delta === 12, iguais.delta);
+  var fraco = B.elo(1600, 1000, true);
+  check('vencer quem vale MENOS paga quase nada', fraco.delta <= 1 && fraco.delta >= 0, fraco.delta);
+  var forte = B.elo(1000, 1600, true);
+  check('vencer quem vale MAIS paga quase o K inteiro', forte.delta >= 22, forte.delta);
+  var queda = B.elo(1000, 1000, false);
+  check('perder de um igual desce o mesmo tanto', queda.delta === -12, queda.delta);
+  var fundo = B.elo(805, 1000, false);
+  check('o piso de 800 segura o fundo', fundo.pts === 800, fundo.pts);
+
+  // ------------------------------------------------------------------ degraus
+  check('1000 pontos é Fagulha', B.tierDe(1000, false).id === 'fagulha');
+  check('1200 é Brasa · 1400 é Chama · 1600 é Labareda',
+        B.tierDe(1200, false).id === 'brasa' &&
+        B.tierDe(1400, false).id === 'chama' &&
+        B.tierDe(1600, false).id === 'labareda');
+
+  // -------------------------------------------------- o portão duplo da Coroa
+  check('1900 pontos SEM o topo do placar fica em Labareda',
+        B.tierDe(1900, false).id === 'labareda');
+  check('1900 pontos COM o topo vira Coroa de Fogo',
+        B.tierDe(1900, true).id === 'coroa');
+  check('o topo do placar SEM os pontos não vira Coroa',
+        B.tierDe(1400, true).id === 'chama');
+
+  // --------------------------------- a subida é longa DE PROPÓSITO (o pedido)
+  var pts = B.INICIAL, vitorias = 0;
+  while (pts < 1800 && vitorias < 500) {
+    pts = B.elo(pts, pts, true).pts;   // sempre contra um IGUAL — o caso justo
+    vitorias++;
+  }
+  check('chegar aos pontos de Coroa contra iguais leva 60+ vitórias SEGUIDAS',
+        vitorias >= 60, vitorias + ' vitórias');
+  var d1 = B.elo(1780, 1780, false).pts;
+  check('uma derrota perto do topo desce um degrau inteiro de esforço',
+        1780 - d1 >= 10, 1780 - d1);
+
+  // ------------------------------------------------------------- o DB guarda
+  DB._zerar()
+    .then(function () { return DB.brasaVer(); })
+    .then(function (bz) {
+      check('a conta nasce com 1000 pontos e 0 partidas',
+            bz.pts === 1000 && bz.partidas === 0, JSON.stringify(bz));
+      return DB.definirBrasa(1234, 7);
+    })
+    .then(function () { return DB._recarregar ? DB._recarregar() : null; })
+    .then(function () { return DB.brasaVer(); })
+    .then(function (bz) {
+      check('a brasa sobrevive à releitura do disco',
+            bz.pts === 1234 && bz.partidas === 7, JSON.stringify(bz));
+    })
+    .catch(function (e) { check('a corrente não estoura', false, e && (e.message || e)); })
+    .then(function () {
+      var sum = document.getElementById('summary');
+      sum.className = falhas ? 'fail' : 'allpass';
+      sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                               : ('tudo passou (' + total + ')');
+      window.__pronto = true;
+    });
+})();
+</script>
+</body>
+</html>

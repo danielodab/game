@@ -762,7 +762,10 @@ var JOGO = (typeof window !== 'undefined')
 
     function pintaConta() {
       if (!JOGO.DB) { nomeEl.textContent = ''; return; }
-      JOGO.DB.jogador().then(function (j) {
+      Promise.all([JOGO.DB.jogador(),
+                   JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null)])
+        .then(function (rj) {
+        var j = rj[0], brasa = rj[1];
         if (!j.nome) { nomeEl.textContent = '—'; pedeNome(); }
         else nomeEl.textContent = j.nome;
         // O AVATAR: a conta pode vestir uma fusão do guarda-roupa — o
@@ -770,9 +773,16 @@ var JOGO = (typeof window !== 'undefined')
         if (j.avatar && JOGO.Hub && JOGO.Hub.entrar) {
           JOGO.Hub.entrar(mundo, j.avatar);
         }
-        // a plaquinha acima da cabeça acompanha: nome, batismo — e o TÍTULO
-        // de conquista, quando o jogador pendurou um
-        if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(j.nome || '', j.titulo || '');
+        // a plaquinha: nome, título — e a CHAMA DA BRASA, quando há fogo.
+        // Fagulha (o degrau de entrada) não acende: chama é conquista.
+        var tier = null;
+        if (brasa && JOGO.Brasa) {
+          tier = JOGO.Brasa.tierDe(brasa.pts, souTopoDaArena());
+          if (tier && tier.min === 0) tier = null;
+        }
+        if (JOGO.Hub && JOGO.Hub.nomeia) {
+          JOGO.Hub.nomeia(j.nome || '', j.titulo || '', tier);
+        }
       });
       JOGO.DB.moedas().then(function (m) {
         moedasEl.textContent = m + (m === 1 ? ' vintém' : ' vinténs');
@@ -860,6 +870,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (JOGO.Rede && entrou) {
       var R = JOGO.Rede;
+      if (JOGO.DB.brasaVer) {
+        JOGO.DB.brasaVer().then(function (bz) { if (bz) resumoBrasaPts = bz.pts; });
+      }
       JOGO.DB.jogador().then(function (j) {
         var e0 = (JOGO.Hub._estado && JOGO.Hub._estado()) || {};
         var pos = e0.pos || { x: 0, z: 9 };
@@ -2177,10 +2190,39 @@ var JOGO = (typeof window !== 'undefined')
         caixa.appendChild(row);
       });
 
-      caixa.appendChild(el('h3', 'bk-tit', 'Arena'));
-      caixa.appendChild(el('p', 'inv-dica',
-        'A Brasa acende com os duelos — em breve: quem vence na arena carrega ' +
-        'uma chama acima do nome, e ela cresce com o ranking.'));
+      caixa.appendChild(el('h3', 'bk-tit', 'Arena — a Brasa'));
+      JOGO.DB.brasaVer().then(function (bz) {
+        var arena = [{ id: eu2.id, nome: (eu2.nome || 'Você'), sou: true,
+                       pts: bz ? bz.pts : 1000 }];
+        lista.forEach(function (e2) {
+          if (e2.id === eu2.id) return;
+          if (e2.resumo && typeof e2.resumo.brasa === 'number') {
+            arena.push({ id: e2.id, nome: e2.nome, pts: e2.resumo.brasa });
+          }
+        });
+        arena.sort(function (a, b) { return b.pts - a.pts; });
+        anotaTopoArena(arena.map(function (a) {
+          return { id: a.id, resumo: { brasa: a.pts } };
+        }), eu2.id);
+        arena.forEach(function (a, i) {
+          var tier = JOGO.Brasa
+            ? JOGO.Brasa.tierDe(a.pts, i === 0) : null;
+          var row = el('div', 'pl-linha' + (a.sou ? ' is-eu' : ''));
+          row.appendChild(el('span', 'pl-pos', '#' + (i + 1)));
+          var tx = el('div', 'ms-tx');
+          tx.appendChild(el('div', 'ms-nome', esc(a.nome) +
+            (a.sou ? ' <span class="pl-eu">você</span>' : '')));
+          tx.appendChild(el('div', 'ms-prog', tier ? tier.nome : '—'));
+          row.appendChild(tx);
+          row.appendChild(el('span', 'pl-total', String(a.pts)));
+          caixa.appendChild(row);
+        });
+        caixa.appendChild(el('p', 'inv-dica',
+          'Elo de verdade: ganhar de quem vale menos paga quase nada, e a Coroa ' +
+          'de Fogo exige os pontos E o 1º lugar — não é um número, é um reinado. ' +
+          'A Brasa acende em duelo contra OUTRA conta; o duelo de treino mostra ' +
+          'quanto valeria.'));
+      });
     });
   }
 
@@ -2707,6 +2749,24 @@ var JOGO = (typeof window !== 'undefined')
    * tela, ele renasce com o corpo novo na hora — ver é o ponto. */
   /* A foto da conta para o PLACAR: classes liberadas com nível, e a soma.
    * É o que viaja no oi/eco da Rede e o que a ficha do placar mostra. */
+  /* O PORTÃO DA COROA: só o 1º do placar da arena carrega a Coroa de Fogo.
+   * A resposta vem do último placar LIDO (cache síncrono): quem acabou de
+   * virar topo vê a Coroa na próxima visita ao Acampamento — atraso de uma
+   * tela, e o portão continua de pé. */
+  var topoArenaCache = null;         // { souEu } da última leitura do placar
+  function souTopoDaArena() {
+    return !!(topoArenaCache && topoArenaCache.souEu);
+  }
+  function anotaTopoArena(linhas, meuId) {
+    var melhor = null;
+    linhas.forEach(function (e2) {
+      var pts = (e2.resumo && typeof e2.resumo.brasa === 'number') ? e2.resumo.brasa : null;
+      if (pts === null) return;
+      if (!melhor || pts > melhor.pts) melhor = { id: e2.id, pts: pts };
+    });
+    topoArenaCache = { souEu: !!(melhor && melhor.id === meuId) };
+  }
+
   function resumoDaConta() {
     var classes2 = {}, total = 0;
     heroIds().forEach(function (hid) {
@@ -2716,8 +2776,11 @@ var JOGO = (typeof window !== 'undefined')
       classes2[hh.classId || hid] = lv;
       total += lv;
     });
-    return { classes: classes2, total: total };
+    return { classes: classes2, total: total, brasa: resumoBrasaPts };
   }
+  /* os pontos de brasa entram no resumo por fora (são assíncronos no DB);
+   * buildHub os carrega antes de ligar a Rede */
+  var resumoBrasaPts = 1000;
 
   function paresDeAvatar() {
     var ids = Object.keys(classes()).filter(isUnlocked).sort();
