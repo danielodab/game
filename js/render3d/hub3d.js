@@ -119,6 +119,7 @@ var JOGO = (typeof window !== 'undefined')
 
     montaPortais();
     montaBanco();
+    montaMercado();
     montaArena();
     montaEnfeites();
   }
@@ -170,6 +171,34 @@ var JOGO = (typeof window !== 'undefined')
       lugares.push({ id: dg.id, tipo: 'portal', nome: dg.name || dg.id,
                      pos: new THREE.Vector3(px, 0, pz), raio: 3.4, node: g, miolo: miolo });
     }
+  }
+
+  /* O MERCADINHO: a barraca espelha o banco do outro lado do arco — mesa,
+   * caixotes e barril do kit. É o HDV local; a ficha abre ao se aproximar. */
+  function montaMercado() {
+    var px = -RAIO_MAPA * 0.55, pz = RAIO_MAPA * 0.30;
+    var g = new THREE.Group();
+    var kit = K();
+    if (kit && kit.buildProp) {
+      try {
+        // só chaves que EXISTEM no kit do jardim: crates (plural!), barrel,
+        // bottle — 'crate' e 'table' não existem lá e sairiam nulos calados
+        var balcao = kit.buildProp('garden', 'crates', 9); if (balcao) g.add(balcao);
+        var pilha2 = kit.buildProp('garden', 'crates', 4);
+        if (pilha2) { pilha2.position.set(-1.25, 0, 0.55); g.add(pilha2); }
+        var barril = kit.buildProp('garden', 'barrel', 6);
+        if (barril) { barril.position.set(1.3, 0, 0.5); g.add(barril); }
+        var garrafa = kit.buildProp('garden', 'bottle', 7);
+        if (garrafa) { garrafa.position.set(0.15, 0.7, 0.1); g.add(garrafa); }
+      } catch (e) {}
+    }
+    var r = rotulo('Mercadinho', '#9bd06a');
+    r.position.y = 3.2;
+    g.add(r);
+    g.position.set(px, 0, pz);
+    scene.add(g);
+    lugares.push({ id: 'mercado', tipo: 'mercado', nome: 'Mercadinho',
+                   pos: new THREE.Vector3(px, 0, pz), raio: 3.0, node: g });
   }
 
   /* O BANCO: mesa, baú e moedas do próprio kit — as peças já existiam. */

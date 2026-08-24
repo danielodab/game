@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o Mercadinho</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>O Mercadinho — o balcão, o mercador-fantasma e a taxa</h1>
+<div class="sub">Cobra a banca do dia semeada pela data (mesmo dia = mesma banca; dia novo troca
+as ofertas do MERCADOR e preserva as do JOGADOR), o anúncio, a compra que debita e repassa menos a
+taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/db.js','js/core/mercado.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra ? ' — <code>' + String(extra) + '</code>' : '');
+    lista.appendChild(li);
+  }
+
+  var DB = JOGO.DB, Mc = JOGO.Mercado;
+  var DIA1 = '2026-08-24', DIA2 = '2026-08-25';
+  var minhaOferta = null;
+
+  DB._zerar()
+    .then(function () { return Mc.abrir(DIA1); })
+    .then(function (m1) {
+      check('a banca do dia abre com as ofertas do mercador',
+            m1 && m1.ofertas.length === Mc.POR_DIA,
+            m1 && m1.ofertas.length + ' ofertas');
+      var precosOk = m1.ofertas.every(function (o) { return o.preco >= 1 && o.vendedor === 'mercador'; });
+      check('toda oferta do mercador tem preço e dono certos', precosOk);
+      return Mc.abrir(DIA1).then(function (m2) {
+        check('reabrir o MESMO dia não troca a banca',
+              JSON.stringify(m2.ofertas.map(function (o) { return o.id; })) ===
+              JSON.stringify(m1.ofertas.map(function (o) { return o.id; })));
+        return m1;
+      });
+    })
+    .then(function () {
+      // anuncia uma peça do jogador por 100
+      return Mc.anunciar({ itemId: 'gh-wasp-sting', level: 2, stars: 1 }, 100, DIA1);
+    })
+    .then(function (r) {
+      check('o anúncio entra no balcão', r.ok, JSON.stringify(r));
+      return Mc.anunciar({ itemId: 'gh-wasp-sting' }, 0, DIA1);
+    })
+    .then(function (r) {
+      check('preço fora da régua é recusado', !r.ok, r.erro);
+      // sem vinténs: comprar tem de falhar SEM tirar a oferta
+      return Mc.abrir(DIA1);
+    })
+    .then(function (m) {
+      minhaOferta = m.ofertas.filter(function (o) { return o.vendedor === 'jogador'; })[0];
+      check('a oferta do jogador está no balcão', !!minhaOferta && minhaOferta.preco === 100);
+      return Mc.comprar(minhaOferta.id, DIA1);
+    })
+    .then(function (r) {
+      check('bolso vazio não compra', !r.ok, r.erro);
+      return DB.ganharMoedas(300);
+    })
+    .then(function () { return Mc.comprar(minhaOferta.id, DIA1); })
+    .then(function (r) {
+      // compra da PRÓPRIA oferta: paga 100, repassa 95 — o ralo leva 5
+      check('a compra debita o preço e devolve a peça',
+            r.ok && r.pagou === 100 && r.item && r.item.itemId === 'gh-wasp-sting' &&
+            r.item.level === 2 && r.item.stars === 1, JSON.stringify(r));
+      check('a venda do jogador repassa o preço MENOS a taxa de 5%',
+            r.ok && r.repasse === 95, 'repasse=' + r.repasse);
+      return DB.moedas();
+    })
+    .then(function (m) {
+      check('o ralo ficou com a diferença (300−100+95=295)', m === 295, m);
+      return Mc.comprar(minhaOferta.id, DIA1);
+    })
+    .then(function (r) {
+      check('oferta vendida não vende duas vezes', !r.ok, r.erro);
+      // retirar: anuncia outra e puxa de volta
+      return Mc.anunciar({ itemId: 'gh-widow-shears', level: 0, stars: 0 }, 50, DIA1);
+    })
+    .then(function () { return Mc.abrir(DIA1); })
+    .then(function (m) {
+      var of = m.ofertas.filter(function (o) { return o.vendedor === 'jogador'; })[0];
+      return Mc.retirar(of.id, DIA1).then(function (r) {
+        check('retirar devolve a peça sem mexer no bolso',
+              r.ok && r.item.itemId === 'gh-widow-shears', JSON.stringify(r));
+        return Mc.retirar(m.ofertas[0].id, DIA1);
+      });
+    })
+    .then(function (r) {
+      check('a banca do mercador não se retira', !r.ok, r.erro);
+      // a virada do dia: mercador troca, jogador fica
+      return Mc.anunciar({ itemId: 'gh-firefly-crown' }, 77, DIA1);
+    })
+    .then(function () { return Mc.abrir(DIA1); })
+    .then(function (m1) {
+      var idsMercador1 = m1.ofertas.filter(function (o) { return o.vendedor === 'mercador'; })
+                                   .map(function (o) { return o.id; });
+      return Mc.abrir(DIA2).then(function (m2) {
+        var idsMercador2 = m2.ofertas.filter(function (o) { return o.vendedor === 'mercador'; })
+                                     .map(function (o) { return o.id; });
+        var minhas = m2.ofertas.filter(function (o) { return o.vendedor === 'jogador'; });
+        check('o dia novo troca a banca do mercador',
+              JSON.stringify(idsMercador1) !== JSON.stringify(idsMercador2));
+        check('as ofertas do jogador atravessam a virada do dia',
+              minhas.length === 1 && minhas[0].preco === 77,
+              minhas.map(function (o) { return o.itemId + '@' + o.preco; }).join(','));
+      });
+    })
+    .then(function () { return DB._recarregar ? DB._recarregar() : null; })
+    .then(function () { return Mc.abrir(DIA2); })
+    .then(function (m) {
+      var minhas = m.ofertas.filter(function (o) { return o.vendedor === 'jogador'; });
+      check('o balcão sobrevive à releitura do disco', minhas.length === 1 && m.dia === DIA2);
+      var regua = Mc.precoSugerido('gh-wasp-sting', 2, 1);
+      check('a régua de preço cresce com forja e estrela',
+            regua > Mc.precoSugerido('gh-wasp-sting', 0, 0), regua);
+    })
+    .catch(function (e) {
+      check('a corrente de promessas não estoura', false, e && (e.message || e));
+    })
+    .then(function () {
+      var sum = document.getElementById('summary');
+      sum.className = falhas ? 'fail' : 'allpass';
+      sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                               : ('tudo passou (' + total + ')');
+      window.__pronto = true;
+    });
+})();
+</script>
+</body>
+</html>

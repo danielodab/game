@@ -815,6 +815,13 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(btn('Abrir o cofre', 'btn-primary btn-block', function () {
           openSheet('banco');
         }));
+      } else if (lugar.tipo === 'mercado') {
+        painel.appendChild(el('h3', null, 'Mercadinho do Acampamento'));
+        painel.appendChild(el('p', 'hub-nota',
+          'Peças à venda — as suas e as do mercador. Toda venda sua paga 5% de taxa.'));
+        painel.appendChild(btn('Abrir o balcão', 'btn-primary btn-block', function () {
+          openSheet('mercado');
+        }));
       } else if (lugar.tipo === 'arena') {
         painel.appendChild(el('h3', null, 'Arena de Duelos'));
         painel.appendChild(el('p', 'hub-nota',
@@ -1932,6 +1939,113 @@ var JOGO = (typeof window !== 'undefined')
       });
   }
 
+  /* O MERCADINHO — o balcão de compra em cima, a venda do saco embaixo.
+   * Toda leitura vem de JOGO.Mercado por Promise, redesenho a cada resposta,
+   * como o banco. A peça comprada entra no saco AQUI (o módulo devolve; a
+   * ficha guarda) — mesmo contrato do saque do cofre. */
+  var mercadoPreco = '';           // o preço digitado sobrevive ao redesenho
+
+  function sheetMercado() {
+    sheetName = 'mercado';
+    var body = sheetShell('Mercadinho do Acampamento',
+      'As ofertas do mercador trocam a cada dia; as suas ficam até vender. Venda paga 5% de taxa.');
+    var Mc = JOGO.Mercado;
+    if (!Mc) { body.appendChild(el('p', 'inv-dica', 'O mercado não carregou.')); return; }
+
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+
+    Promise.all([Mc.abrir(), JOGO.DB.moedas()]).then(function (r) {
+      var mc = r[0], bolso = r[1];
+      clear(caixa);
+      if (!mc) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
+
+      caixa.appendChild(el('p', 'mc-bolso', 'No bolso: <b>' + bolso + '</b> ' +
+        (bolso === 1 ? 'vintém' : 'vinténs')));
+
+      // ---- o balcão: tudo à venda, as do jogador marcadas
+      caixa.appendChild(el('h3', 'bk-tit', 'À venda (' + mc.ofertas.length + ')'));
+      if (!mc.ofertas.length) caixa.appendChild(el('p', 'inv-dica', 'O balcão amanheceu vazio.'));
+      mc.ofertas.forEach(function (of) {
+        var it = (D().items || {})[of.itemId] || {};
+        var row = el('div', 'mc-linha' + (of.vendedor === 'jogador' ? ' is-minha' : ''));
+        var ic = el('span', 'mc-ic');
+        ic.appendChild(art('itemIcon', [of.itemId, 34], 34));
+        row.appendChild(ic);
+        var tx = el('div', 'ms-tx');
+        tx.appendChild(el('div', 'ms-nome', esc(it.name || of.itemId) +
+          (of.level ? ' +' + of.level : '') + (of.stars ? ' ★' + of.stars : '')));
+        tx.appendChild(el('div', 'ms-prog',
+          of.vendedor === 'jogador' ? 'sua oferta' : 'do mercador'));
+        row.appendChild(tx);
+        row.appendChild(el('span', 'mc-preco', of.preco + 'v'));
+        if (of.vendedor === 'jogador') {
+          row.appendChild(btn('Retirar', 'btn-mini', function () {
+            Mc.retirar(of.id).then(function (res) {
+              if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
+              P().state.inventory.push(res.item);
+              safe(function () { P().save(); }, null);
+              toast('A peça voltou para o saco.', 'good');
+              sheetMercado();
+            });
+          }));
+        } else {
+          var bC = btn('Comprar', 'btn-mini btn-gold', function () {
+            Mc.comprar(of.id).then(function (res) {
+              if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
+              P().state.inventory.push(res.item);
+              safe(function () { P().save(); }, null);
+              toast('−' + res.pagou + ' vinténs — a peça é sua.', 'good');
+              sheetMercado();
+            });
+          });
+          if (bolso < of.preco) bC.classList.add('is-off');
+          row.appendChild(bC);
+        }
+        caixa.appendChild(row);
+      });
+
+      // ---- vender do saco: pilha + preço digitado com sugestão da régua
+      var pilhas = safe(function () { return P().invStacks(); }, [])
+        .filter(function (s2) { return !!itemDef(s2.itemId); });
+      caixa.appendChild(el('h3', 'bk-tit', 'Vender do saco (' + pilhas.length + ')'));
+      if (!pilhas.length) caixa.appendChild(el('p', 'inv-dica', 'O saco está vazio.'));
+      pilhas.forEach(function (pi) {
+        var it = itemDef(pi.itemId) || {};
+        var row = el('div', 'mc-linha');
+        var ic = el('span', 'mc-ic');
+        ic.appendChild(art('itemIcon', [pi.itemId, 34], 34));
+        row.appendChild(ic);
+        var tx = el('div', 'ms-tx');
+        tx.appendChild(el('div', 'ms-nome', esc(it.name || pi.itemId) +
+          (pi.level ? ' +' + pi.level : '') + (pi.stars ? ' ★' + pi.stars : '') +
+          (pi.count > 1 ? ' ×' + pi.count : '')));
+        var sugerido = Mc.precoSugerido(pi.itemId, pi.level, pi.stars);
+        tx.appendChild(el('div', 'ms-prog', 'a régua sugere ' + sugerido + 'v'));
+        row.appendChild(tx);
+        var campo = document.createElement('input');
+        campo.type = 'number'; campo.min = '1'; campo.step = '1';
+        campo.className = 'bk2-qtd mc-qtd';
+        campo.placeholder = String(sugerido);
+        row.appendChild(campo);
+        row.appendChild(btn('Anunciar', 'btn-mini', function () {
+          var preco = Math.floor(Number(campo.value || sugerido));
+          var st2 = P().state;
+          var entrada = st2.inventory[pi.indices[0]];
+          if (!entrada) { toast('essa peça já saiu'); sheetMercado(); return; }
+          Mc.anunciar(entrada, preco).then(function (res) {
+            if (!res.ok) { toast(res.erro || 'não deu'); return; }
+            st2.inventory.splice(pi.indices[0], 1);
+            safe(function () { P().save(); }, null);
+            toast('No balcão por ' + preco + 'v.', 'good');
+            sheetMercado();
+          });
+        }));
+        caixa.appendChild(row);
+      });
+    });
+  }
+
   function sheetShell(title, sub) {
     clear(sheetEl);
     var panel = el('div', 'sheet-panel');
@@ -1973,6 +2087,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'battleMenu') sheetBattleMenu();
     else if (name === 'banco') sheetBanco();
     else if (name === 'missoes') sheetMissoes();
+    else if (name === 'mercado') sheetMercado();
     else closeSheet();
   }
   UI.openSheet = openSheet;

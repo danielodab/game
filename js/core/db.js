@@ -62,6 +62,7 @@ var JOGO = (typeof window !== 'undefined')
       banco: { moedas: 0, itens: [] },
       missoes: null,                 // { dia, lista } — quem re-sorteia é JOGO.Missoes
       conquistas: {},                // { id: { prog, pago } }
+      mercado: null,                 // { dia, ofertas } — quem semeia é JOGO.Mercado
       pvp: [],
       trocas: []
     };
@@ -92,6 +93,8 @@ var JOGO = (typeof window !== 'undefined')
           if (d.missoes !== null && typeof d.missoes !== 'object') d.missoes = null;
           if (d.missoes === undefined) d.missoes = null;
           if (!d.conquistas || typeof d.conquistas !== 'object') d.conquistas = {};
+          if (d.mercado !== null && typeof d.mercado !== 'object') d.mercado = null;
+          if (d.mercado === undefined) d.mercado = null;
           if (d.jogador.titulo === undefined) d.jogador.titulo = null;
           dados = d;
           return dados;
@@ -236,6 +239,20 @@ var JOGO = (typeof window !== 'undefined')
     d.jogador.titulo = (typeof titulo === 'string' && titulo.trim()) ? titulo.trim() : null;
     grava();
     return responde({ ok: true, titulo: d.jogador.titulo });
+  };
+
+  // ------------------------------------------------------------------ mercado
+  /* Mesma fronteira das missões: o DB guarda o balcão inteiro, quem sabe de
+   * preço, taxa e mercador-fantasma é JOGO.Mercado. */
+  DB.mercadoLer = function () {
+    var d = carrega();
+    return responde(d.mercado ? JSON.parse(JSON.stringify(d.mercado)) : null);
+  };
+  DB.mercadoGravar = function (obj) {
+    var d = carrega();
+    d.mercado = obj ? JSON.parse(JSON.stringify(obj)) : null;
+    grava();
+    return responde({ ok: true });
   };
 
   // --------------------------------------------------------------- históricos

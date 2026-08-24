@@ -1521,6 +1521,21 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .ms-titulos { display: flex; flex-wrap: wrap; gap: 6px; }
 .ms-titulos .is-on { outline: 2px solid var(--gold); }
 
+/* ------------------------------------------------- MERCADINHO */
+.mc-bolso { font-size: 13px; color: var(--dim); margin: 0 0 4px; }
+.mc-bolso b { color: #e8c25a; }
+.mc-linha { display: flex; align-items: center; gap: 10px;
+            padding: 7px 10px; border: 1px solid var(--line2); border-radius: 10px;
+            background: rgba(255,255,255,.03); }
+.mc-linha.is-minha { border-color: rgba(232,194,90,.45); }
+.mc-ic { flex: 0 0 auto; display: block; padding: 2px; border-radius: 8px;
+         background: rgba(6,9,13,.55); }
+.mc-ic canvas { display: block; border-radius: 6px; }
+.mc-preco { font: 700 14px var(--ui-sans, system-ui); color: #e8c25a;
+            font-variant-numeric: tabular-nums; }
+.mc-qtd { width: 84px; }
+.btn-mini.is-off { opacity: .4; pointer-events: none; }
+
 /* ------------------------------------------------------------ ACAMPAMENTO */
 /* SO COM .is-on — a regra que eu quebrei e que apagou o jogo inteiro.
    Toda .ui-screen nasce escondida e so aparece quando o showScreen poe .is-on.
