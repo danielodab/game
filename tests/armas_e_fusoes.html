@@ -35,7 +35,7 @@ o corpo é do anfitrião.</div>
     'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
     'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
     'assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
-    'assets/embedded/models-meshy-jardim.js','assets/embedded/models-fusoes-sumo.js','assets/embedded/models-fusoes-minotauro.js','assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js','js/render3d/models3d_v2.js'];
+    'assets/embedded/models-meshy-jardim.js','assets/embedded/models-fusoes-sumo.js','assets/embedded/models-fusoes-minotauro.js','assets/embedded/models-fusoes-cacador.js','assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js','js/render3d/models3d_v2.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
 </script>
 
@@ -196,17 +196,26 @@ o corpo é do anfitrião.</div>
         pousa(node);
         var p = pecas(node);
 
-        // A REGRA que a fusão tem de cumprir: a marca do convidado precisa
-        // aparecer. Conferir na foto não serve — o teste cobra a peça.
+        // A REGRA que a fusão COMPOSTA tem de cumprir: a marca do convidado
+        // precisa aparecer. Conferir na foto não serve — o teste cobra a peça.
+        //
+        // FUSÃO COM CORPO PRÓPRIO (arte do Daniel, model fus_*) fica ISENTA,
+        // pelo mesmo motivo da isenção meshy_ das classes lá em cima: o corpo
+        // é UM só, esculpido — não há peça de convidado para pendurar, e
+        // cobrar marca de composição reprovaria exatamente o modelo certo.
+        // (Era isto que reprovava as cinco duplas do Minotauro.)
+        var proprio = /^fus_/.test((M.lookFor(id, {}) || {}).model || '');
         var doConvidado = 0;
-        [par[0], par[1]].forEach(function (c) {
-          var mk = MARK[c] || {};
-          [mk.head, mk.cape, mk.hand].forEach(function (m) {
-            if (m && p.indexOf(m) >= 0) doConvidado++;
+        if (!proprio) {
+          [par[0], par[1]].forEach(function (c) {
+            var mk = MARK[c] || {};
+            [mk.head, mk.cape, mk.hand].forEach(function (m) {
+              if (m && p.indexOf(m) >= 0) doConvidado++;
+            });
           });
-        });
-        if (doConvidado < 2) {
-          problemas.push(PT[par[0]] + '+' + PT[par[1]] + ': só ' + doConvidado + ' marca(s)');
+          if (doConvidado < 2) {
+            problemas.push(PT[par[0]] + '+' + PT[par[1]] + ': só ' + doConvidado + ' marca(s)');
+          }
         }
 
         // punho com mais de uma peça = arma atravessada na arma

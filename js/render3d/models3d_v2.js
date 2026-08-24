@@ -313,6 +313,9 @@ var JOGO = (typeof window !== 'undefined')
      * as invocacoes dele —, entao a diferenca serve a quem MODELA, para nao
      * repetir a mesma silhueta duas vezes. */
     'fus-wall-watcher': { model: 'fus_muro_vigia', scale: 1.31 },
+    // o idle do totem NAO tem clipe (arquivo veio sem animacao) e esta certo
+    // assim: objeto fincado descansa parado; resolve() devolve null sem drama
+    'fus-arrow-turret': { model: 'fus_totem_espoleta', scale: 1.31 },
 
     // --- Flora Voraz + Enxame (Estufa) — A ARTE E DO USUARIO (v3).
     //
@@ -909,7 +912,11 @@ var JOGO = (typeof window !== 'undefined')
     'curandeiro+minotauro': 'fus_curandeiro_minotauro',
     'espadachim+minotauro': 'fus_espadachim_minotauro',
     'invocador+minotauro':  'fus_invocador_minotauro',
-    'minotauro+sumo':       'fus_minotauro_sumo'
+    'minotauro+sumo':       'fus_minotauro_sumo',
+    'arqueiro+bruxo':       'fus_arqueiro_bruxo',
+    'arqueiro+curandeiro':  'fus_arqueiro_curandeiro',
+    'arqueiro+espadachim':  'fus_arqueiro_espadachim',
+    'arqueiro+invocador':   'fus_arqueiro_invocador'
   };
 
   function fusionLook(defId) {

@@ -78,7 +78,7 @@ JOGO.DATA = JOGO.DATA || {};
     'arqueiro+bruxo':      { name: 'Artilharia Arcana',   line: 'Magia de longuíssimo alcance: marca o campo inteiro de longe e detona as marcas em área.' },
     'arqueiro+curandeiro': { name: 'Arco Votivo',          line: 'Flechas que atravessam a fila em linha reta e devolvem ao corpo fundido cada gota que tiram.' },
     'arqueiro+espadachim': { name: 'Caçador de Sombras',   line: 'Atira do breu, salta para cima do alvo marcado e executa: invisibilidade + reposicionamento + marcas.' },
-    'arqueiro+invocador':  { name: 'Torreta Viva',         line: 'Planta torres de aljava e cravos-armadilha; os tiros saltam entre os presos.' },
+    'arqueiro+invocador':  { name: 'Torreta Viva',         line: 'Planta totens atiradores e cravos-armadilha; os tiros saltam entre os presos.' },
     'arqueiro+sumo':       { name: 'Balista de Carne',     line: 'Cerco: projéteis pesados que empurram, arpéus que puxam e uma âncora que ninguém tira do lugar.' },
     'bruxo+curandeiro':    { name: 'Praga Piedosa',        line: 'Transfusão: tudo que tira do inimigo vira vida própria; benção de um lado, apodrecimento do outro.' },
     'bruxo+espadachim':    { name: 'Lâmina Rúnica',        line: 'Pisca pelo campo deixando explosões nas partidas e chegadas, com veneno arcano na lâmina.' },
@@ -385,7 +385,7 @@ JOGO.DATA = JOGO.DATA || {};
       range: rng(1, 4), aoe: aoe('single', 0), needsEmptyTile: true, targetSide: 'any',
       riderMode: 'support',
       mechanic: [sm('fus-arrow-turret')],
-      description: 'A fusão finca um feixe de flechas no chão e sopra: o feixe abre os olhos e vira torre.',
+      description: 'A fusão finca o totem no chão e sopra: o olho abre e os dois canos procuram alvo.',
       fxShape: 'summonFx' },
     { tier: 10, formName: 'Piquete', paCost: 4, cooldown: 2, castsPerTurn: 1,
       range: rng(1, 6), aoe: aoe('cross', 2), needsEmptyTile: false, targetSide: 'enemy',
@@ -397,7 +397,7 @@ JOGO.DATA = JOGO.DATA || {};
       range: rng(1, 5), aoe: aoe('circle', 1), needsEmptyTile: true, targetSide: 'any',
       riderMode: 'offense',
       mechanic: [tr('fus-trap-arrow', 4), d('@B', 12, 17)],
-      description: 'Um cravo de aljava enterrado com a ponta para cima, esperando o passo errado — e a martelada que o enterra já espalha lascas na vizinhança.',
+      description: 'Um cravo de caça enterrado com a ponta para cima, esperando o passo errado — e a martelada que o enterra já espalha lascas na vizinhança.',
       fxShape: 'summonFx' },
     { tier: 15, formName: 'Fosso', paCost: 4, cooldown: 3, castsPerTurn: 1,
       range: rng(1, 5), aoe: aoe('circle', 1), needsEmptyTile: true, targetSide: 'any',
@@ -415,7 +415,7 @@ JOGO.DATA = JOGO.DATA || {};
       range: rng(1, 5), aoe: aoe('circle', 1), needsEmptyTile: true, targetSide: 'any',
       riderMode: 'offense',
       mechanic: [sm('fus-arrow-turret'), tr('fus-trap-arrow', 5), d('@B', 18, 25)],
-      description: 'A fusão despeja um arsenal inteiro numa célula só: sobe torre, some cravo no chão e o estouro da entrega já castiga a vizinhança.',
+      description: 'A fusão despeja um arsenal inteiro numa célula só: sobe o totem, some cravo no chão e o estouro da entrega já castiga a vizinhança.',
       fxShape: 'summonFx' }
   ];
 
@@ -1241,7 +1241,7 @@ JOGO.DATA = JOGO.DATA || {};
   DATA.fusionSpells = {
     'fus-trap-arrow': payload('fus-trap-arrow', 'Cravo de Aljava',
       [d('neutro', 16, 22), rt(1)],
-      'A armadilha de aljava dispara de baixo para cima e prega o pé de quem pisou.', 'burst'),
+      'A armadilha de caça dispara de baixo para cima e prega o pé de quem pisou.', 'burst'),
     'fus-trap-hex': payload('fus-trap-hex', 'Selo Rúnico',
       [d('neutro', 14, 19), pz('neutro', 6, 9, 2)],
       'O selo desenhado no chão acende ao ser pisado e continua roendo depois.', 'debuff'),
@@ -1253,8 +1253,8 @@ JOGO.DATA = JOGO.DATA || {};
       'Um espinho invisível deixado na sombra: entra fácil e demora a sair.', 'poisonCloud'),
 
     'fus-turret-shot': (function () {
-      var s = payload('fus-turret-shot', 'Tiro de Torre', [d('neutro', 12, 16)],
-        'A torre de aljava dispara sozinha em quem entrar no alcance.', 'bolt');
+      var s = payload('fus-turret-shot', 'Chumbo do Totem', [d('neutro', 12, 16)],
+        'O totem dispara os dois canos sozinho em quem entrar no alcance.', 'bolt');
       s.paCost = 3; s.castsPerTurn = 2; s.range = rng(1, 6);
       return s;
     })(),
@@ -1298,9 +1298,9 @@ JOGO.DATA = JOGO.DATA || {};
   }
 
   DATA.fusionSummons = {
-    'fus-arrow-turret': summonDef('fus-arrow-turret', 'Torre de Aljava', 40, 6, 0, 30, 'ranged',
+    'fus-arrow-turret': summonDef('fus-arrow-turret', 'Totem-Espoleta', 40, 6, 0, 30, 'ranged',
       ['fus-turret-shot'], [{ type: 'pushImmune' }],
-      'Um tripé de flechas espetadas no chão que criou vontade própria: gira devagar, mira sempre e não anda.'),
+      'Um totem de caça com um olho acordado e dois canos saindo da boca: gira devagar, mira sempre e não anda.'),
     'fus-hex-effigy': summonDef('fus-hex-effigy', 'Efígie Rúnica', 45, 6, 2, 40, 'ranged',
       ['fus-effigy-hex'], [],
       'Boneco de cera e giz com runas escritas de trás para frente. Aponta o dedo e o alvo sente o dedo.'),

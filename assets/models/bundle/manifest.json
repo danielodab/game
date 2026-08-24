@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-22T14:19:17",
+ "gerado": "2026-08-24T09:32:58",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -467,6 +467,36 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "fus_arqueiro_bruxo",
+   "arquivo": "models-fusoes-cacador/fus_arqueiro_bruxo.glb",
+   "bytes": 1200144
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_arqueiro_curandeiro",
+   "arquivo": "models-fusoes-cacador/fus_arqueiro_curandeiro.glb",
+   "bytes": 1473596
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_arqueiro_espadachim",
+   "arquivo": "models-fusoes-cacador/fus_arqueiro_espadachim.glb",
+   "bytes": 1204572
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_arqueiro_invocador",
+   "arquivo": "models-fusoes-cacador/fus_arqueiro_invocador.glb",
+   "bytes": 1212424
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_totem_espoleta",
+   "arquivo": "models-fusoes-cacador/fus_totem_espoleta.glb",
+   "bytes": 1129392
+  },
+  {
+   "alvo": "MODELS",
    "chave": "fus_arqueiro_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_arqueiro_minotauro.glb",
    "bytes": 1381512
@@ -905,6 +935,44 @@
   }
  ],
  "meshyClips": {
+  "fus_arqueiro_bruxo": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_arqueiro_curandeiro": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_arqueiro_espadachim": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_arqueiro_invocador": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_totem_espoleta": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle"
+  ],
   "fus_arqueiro_minotauro": [
    "HitReact",
    "attack",
@@ -1201,6 +1269,6 @@
    "walk"
   ]
  },
- "totalBytes": 82296216,
- "totalBase64": 109728492
+ "totalBytes": 88516344,
+ "totalBase64": 118022000
 }
