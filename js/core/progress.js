@@ -1270,6 +1270,16 @@ var JOGO = (typeof window !== 'undefined')
   // ================================================ estrelas de item (fusão) [D18]
   /* Situação da fusão da variante que está em `invIndex`: quantas cópias
    * idênticas existem, quantas faltam e se dá para fundir agora. */
+  /* A fusão aceita níveis de forja MISTOS desde 24/08 (pedido do usuário):
+   * a regra antiga (três cópias no MESMO nível) era a guarda contra herdar
+   * forja de graça, mas virou parede com a forja arriscada — três +10 a 5%
+   * cada é pedir três lendas. A guarda agora é a MATEMÁTICA: o resultado sai
+   * na MÉDIA dos três, arredondada para baixo (um +10 com dois +0 vira +3 —
+   * a média cobra o contrabando sozinha).
+   *
+   * A escolha das três: a cópia CLICADA entra sempre (clicou, é ela) e as
+   * duas de MAIOR nível entre as demais completam — o melhor negócio para o
+   * jogador, sem consumir nada que ele não veja: a ficha mostra a conta. */
   Progress.fuseInfo = function (invIndex) {
     var st = Progress.state;
     if (!st) return null;
@@ -1277,39 +1287,50 @@ var JOGO = (typeof window !== 'undefined')
     if (!isObj(alvo)) return null;
     var cfg = starItemCfg();
     var stars = num(alvo.stars, 0), level = num(alvo.level, 0);
-    var iguais = [];
+    var outras = [];
     for (var i = 0; i < st.inventory.length; i++) {
+      if (i === invIndex) continue;
       var e = st.inventory[i];
-      if (e.itemId === alvo.itemId && num(e.level, 0) === level && num(e.stars, 0) === stars) {
-        iguais.push(i);
+      if (e.itemId === alvo.itemId && num(e.stars, 0) === stars) {
+        outras.push({ index: i, level: num(e.level, 0) });
       }
     }
+    outras.sort(function (a, b) { return b.level - a.level; });
+    var escolhidas = [{ index: invIndex, level: level }]
+      .concat(outras.slice(0, Math.max(0, cfg.copies - 1)));
+    var copias = outras.length + 1;
     var maxed = stars >= cfg.max;
+    var pode = !maxed && copias >= cfg.copies;
+    var nivelResultado = level;
+    if (pode) {
+      var soma = 0;
+      for (var k2 = 0; k2 < cfg.copies; k2++) soma += escolhidas[k2].level;
+      nivelResultado = Math.floor(soma / cfg.copies);
+    }
     return {
       itemId: alvo.itemId, level: level, stars: stars,
-      copias: iguais.length, precisa: cfg.copies,
-      faltam: maxed ? 0 : Math.max(0, cfg.copies - iguais.length),
+      copias: copias, precisa: cfg.copies,
+      faltam: maxed ? 0 : Math.max(0, cfg.copies - copias),
       maxed: maxed,
       proxima: maxed ? stars : stars + 1,
-      pode: !maxed && iguais.length >= cfg.copies
+      pode: pode,
+      escolhidas: pode ? escolhidas.slice(0, cfg.copies) : [],
+      niveisEscolhidos: pode ? escolhidas.slice(0, cfg.copies).map(function (c) {
+        return c.level; }) : [],
+      nivelResultado: nivelResultado
     };
   };
 
-  /* Funde `FUSE_COPIES` cópias IDÊNTICAS numa só com +1 estrela. As três têm de
-   * ter o MESMO nível de forja — é o que impede herdar forja de graça [D18].
-   * Devolve a cópia nova (com o índice novo) ou null. */
+  /* Consome as três ESCOLHIDAS (a clicada + as duas melhores) e cria a peça
+   * com +1 estrela no nível da média para baixo. Devolve a cópia nova. */
   Progress.fuseItem = function (invIndex) {
     var info = Progress.fuseInfo(invIndex);
     if (!info || !info.pode) return null;
     var st = Progress.state;
-    var alvos = [];
-    for (var i = 0; i < st.inventory.length && alvos.length < info.precisa; i++) {
-      var e = st.inventory[i];
-      if (e.itemId === info.itemId && num(e.level, 0) === info.level &&
-          num(e.stars, 0) === info.stars) alvos.push(i);
-    }
-    for (var k = alvos.length - 1; k >= 0; k--) st.inventory.splice(alvos[k], 1);
-    var nova = { itemId: info.itemId, level: info.level, stars: info.stars + 1 };
+    var indices = info.escolhidas.map(function (c) { return c.index; });
+    indices.sort(function (a, b) { return b - a; });
+    for (var k = 0; k < indices.length; k++) st.inventory.splice(indices[k], 1);
+    var nova = { itemId: info.itemId, level: info.nivelResultado, stars: info.stars + 1 };
     st.inventory.push(nova);
     Progress.save();
     return { itemId: nova.itemId, level: nova.level, stars: nova.stars,

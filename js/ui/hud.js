@@ -3347,13 +3347,19 @@ var JOGO = (typeof window !== 'undefined')
     var fu = safe(function () { return P().fuseInfo(pilha.index); }, null);
     if (fu && !fu.maxed) {
       var podeFundir = fu.pode;
-      acts.appendChild(btn(podeFundir ? 'Fundir ' + fu.precisa + ' → ★' + fu.proxima
-                                      : 'faltam ' + fu.faltam + ' p/ ★' + fu.proxima,
+      // A CONTA VISÍVEL: os níveis das três que vão e o nível que sai — a
+      // média para baixo cobra o contrabando, e ninguém funde sem ver.
+      var rotuloF = podeFundir
+        ? 'Fundir +' + fu.niveisEscolhidos.join(' +') + ' → ★' + fu.proxima +
+          ' +' + fu.nivelResultado
+        : 'faltam ' + fu.faltam + ' p/ ★' + fu.proxima;
+      acts.appendChild(btn(rotuloF,
         'btn-mini btn-gold' + (podeFundir ? '' : ' is-off'), function () {
           var nova = safe(function () { return P().fuseItem(pilha.index); }, null);
           if (nova) {
             invSel = { itemId: nova.itemId, level: nova.level, stars: nova.stars };
-            toast('Fundiu ' + fu.precisa + ' iguais: agora é ★' + nova.stars + '!', 'good');
+            toast('Fundiu ' + fu.precisa + ': agora é ★' + nova.stars +
+                  ' +' + nova.level + ' (a média das três).', 'good');
           }
           sheetParty('inventario');
         }));
@@ -3601,7 +3607,7 @@ var JOGO = (typeof window !== 'undefined')
     panel.appendChild(track);
     panel.appendChild(el('div', 'forge-legend',
       '<b>Pedra</b> +0–2 Comum · +3–5 Raro · +6–9 Supremo · +10 Magnífico ' +
-      '<span class="fg-sep">|</span> <b>Estrela</b> vem de fundir 3 iguais no inventário ' +
+      '<span class="fg-sep">|</span> <b>Estrela</b> vem de fundir 3 cópias (níveis livres — sai a média para baixo) ' +
       '<span class="fg-sep">|</span> do <b>+5</b> em diante a batida pode falhar e regredir — a <b>Âncora</b> segura'));
 
     // prévia do ganho (com as estrelas já dentro da conta)
