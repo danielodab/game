@@ -3507,12 +3507,14 @@ var JOGO = (typeof window !== 'undefined')
     }
     return safe(function () { return P().upgradeInfo(alvo.index); }, null);
   }
-  function forjar(alvo) {
+  var forjaComGuarda = false;      // a escolha da Âncora sobrevive ao redesenho
+  function forjar(alvo, usarGuarda) {
     if (!alvo) return false;
     if (alvo.kind === 'worn') {
-      return safe(function () { return P().upgradeWorn(alvo.heroId, slotRaw(alvo.slot)); }, false);
+      return safe(function () {
+        return P().upgradeWorn(alvo.heroId, slotRaw(alvo.slot), usarGuarda); }, false);
     }
-    return safe(function () { return P().upgradeItem(alvo.index); }, false);
+    return safe(function () { return P().upgradeItem(alvo.index, usarGuarda); }, false);
   }
 
   function forgeBody(body, preselect) {
@@ -3599,7 +3601,8 @@ var JOGO = (typeof window !== 'undefined')
     panel.appendChild(track);
     panel.appendChild(el('div', 'forge-legend',
       '<b>Pedra</b> +0–2 Comum · +3–5 Raro · +6–9 Supremo · +10 Magnífico ' +
-      '<span class="fg-sep">|</span> <b>Estrela</b> vem de fundir 3 iguais no inventário'));
+      '<span class="fg-sep">|</span> <b>Estrela</b> vem de fundir 3 iguais no inventário ' +
+      '<span class="fg-sep">|</span> do <b>+5</b> em diante a batida pode falhar e regredir — a <b>Âncora</b> segura'));
 
     // prévia do ganho (com as estrelas já dentro da conta)
     var prev = el('div', 'forge-prev');
@@ -3626,15 +3629,48 @@ var JOGO = (typeof window !== 'undefined')
           '</b>' + (sd2 ? ' (' + (ELEM_PT[sd2.element] || sd2.element) + ')' : '') +
           '. Monstros desse elemento derrubam.'));
       }
+      // O RISCO, dito antes da batida: a chance e o preço da falha — e a
+      // Âncora, quando há alguma no saco, com a escolha nas mãos do jogador.
+      if (info.arriscado) {
+        var pct = Math.round(info.chance * 100);
+        panel.appendChild(el('p', 'forge-risco',
+          'Batida arriscada: <b>' + pct + '%</b> de subir — falhou, ' +
+          (forjaComGuarda && info.guardas > 0
+            ? 'a <b>Âncora segura</b> em +' + lv2 + '.'
+            : 'a peça <b>volta para +' + Math.max(0, lv2 - 1) + '</b>.')));
+        var linhaG = el('label', 'forge-guarda' + (info.guardas > 0 ? '' : ' is-off'));
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = forjaComGuarda && info.guardas > 0;
+        cb.disabled = info.guardas < 1;
+        cb.addEventListener('change', function () {
+          forjaComGuarda = cb.checked;
+          sheetParty('forja');
+        });
+        linhaG.appendChild(cb);
+        linhaG.appendChild(el('span', null,
+          'Pôr a <b>Âncora de Forja</b> junto (' + info.guardas + ' no saco)' +
+          (info.guardas < 1 ? ' — só os chefes mais fundos derrubam' : '')));
+        panel.appendChild(linhaG);
+      }
       var go = btn('Forjar para +' + (lv2 + 1), 'btn-primary btn-block' + (info.temPedras ? '' : ' is-off'), function () {
-        var ok = forjar(atual);
-        if (ok) {
-          toast('Forjado: +' + (lv2 + 1) + ' ' + tierOf(lv2 + 1) + '!', 'good');
-          forgeTarget = { kind: atual.kind, itemId: atual.itemId, level: lv2 + 1, stars: atual.stars,
+        var usarG = info.arriscado && forjaComGuarda && info.guardas > 0;
+        var fim = forjar(atual, usarG);
+        if (fim) {
+          var nivelNovo = (typeof fim === 'object') ? fim.nivel : lv2 + 1;
+          var como = (typeof fim === 'object') ? fim.resultado : 'subiu';
+          if (como === 'subiu') {
+            toast('Forjado: +' + nivelNovo + ' ' + tierOf(nivelNovo) + '!', 'good');
+          } else if (como === 'segurou') {
+            toast('A batida falhou — a Âncora segurou em +' + nivelNovo + '.', 'good');
+          } else {
+            toast('A batida falhou: a peça voltou para +' + nivelNovo + '.');
+          }
+          forgeTarget = { kind: atual.kind, itemId: atual.itemId, level: nivelNovo, stars: atual.stars,
                           heroId: atual.heroId, slot: atual.slot };
           if (invSel && invSel.itemId === atual.itemId && invSel.level === lv2 &&
               invSel.stars === atual.stars && atual.kind === 'bag') {
-            invSel = { itemId: atual.itemId, level: lv2 + 1, stars: atual.stars };
+            invSel = { itemId: atual.itemId, level: nivelNovo, stars: atual.stars };
           }
           sheetParty('forja');
         } else toast('Pedras insuficientes.');

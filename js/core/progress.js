@@ -339,7 +339,14 @@ var JOGO = (typeof window !== 'undefined')
       bonusPerLevel: num(u.bonusPerLevel, UPGRADE_DEFAULT.bonusPerLevel),
       stoneCost: u.stoneCost,
       // atributos que NÃO escalam com o nível de forja (§9-B / items.js) [D11]
-      nonScalingKeys: isArray(u.nonScalingKeys) ? u.nonScalingKeys : UPGRADE_DEFAULT.nonScalingKeys
+      nonScalingKeys: isArray(u.nonScalingKeys) ? u.nonScalingKeys : UPGRADE_DEFAULT.nonScalingKeys,
+      // A FORJA ARRISCADA — cópia campo a campo: TODO campo novo do
+      // DATA.upgrade precisa entrar AQUI, senão some sem erro nenhum (foi o
+      // que engoliu riskFrom/chances/guardStone no dia em que nasceram; o
+      // teste da forja pegou — mesmo golpe do CLASS_LOOK e do titulo).
+      riskFrom: num(u.riskFrom, 99),
+      chances: isObj(u.chances) ? u.chances : {},
+      guardStone: (typeof u.guardStone === 'string') ? u.guardStone : null
     };
   }
 
@@ -1400,11 +1407,49 @@ var JOGO = (typeof window !== 'undefined')
                custo: 0, stoneId: stoneId, temPedras: false, maxed: true };
     }
     var custo = Math.max(0, Math.floor(num(up.stoneCost[level], 0)));
+    // O RISCO da batida: até riskFrom-1 é seguro; dali em diante a chance
+    // vem da tabela e a falha REGRIDE — a menos que a Âncora vá junto.
+    var riskFrom = num(up.riskFrom, 99);
+    var arriscado = level >= riskFrom;
+    var chance = arriscado
+      ? Math.max(0.05, Math.min(1, num((up.chances || {})[level], 0.25)))
+      : 1;
+    var guardaId = up.guardStone || null;
     return {
       itemId: itemId, level: level, stars: estrelas, tierName: tierNameFor(level),
       custo: custo, stoneId: stoneId,
-      temPedras: Progress.stoneCount(stoneId) >= custo, maxed: false
+      temPedras: Progress.stoneCount(stoneId) >= custo, maxed: false,
+      arriscado: arriscado, chance: chance,
+      guardaId: guardaId,
+      guardas: guardaId ? Progress.stoneCount(guardaId) : 0
     };
+  }
+
+  /* O DADO da forja, com o seam para o teste cravar o resultado. */
+  Progress._forjaRng = null;
+  function rolaForja() {
+    var fn = Progress._forjaRng || Math.random;
+    return fn();
+  }
+  /* Consome a Âncora quando ela vai junto (batida arriscada + escolha). */
+  function pagaGuarda(info, usarGuarda) {
+    if (!info.arriscado || !usarGuarda) return { usou: false, ok: true };
+    if (!info.guardaId || info.guardas < 1) return { usou: false, ok: false };
+    var st = Progress.state;
+    if (!isObj(st.stones)) st.stones = {};
+    st.stones[info.guardaId] = Progress.stoneCount(info.guardaId) - 1;
+    return { usou: true, ok: true };
+  }
+  /* O desfecho de uma batida: subiu, segurou (âncora) ou caiu. */
+  function desfecho(info, usarGuarda) {
+    var guarda = pagaGuarda(info, usarGuarda);
+    if (!guarda.ok) return null;                       // pediu âncora sem ter
+    if (!info.arriscado || rolaForja() < info.chance) {
+      return { resultado: 'subiu', nivel: info.level + 1 };
+    }
+    return guarda.usou
+      ? { resultado: 'segurou', nivel: info.level }
+      : { resultado: 'caiu', nivel: Math.max(0, info.level - 1) };
   }
 
   Progress.upgradeInfo = function (invIndex) {
@@ -1427,23 +1472,33 @@ var JOGO = (typeof window !== 'undefined')
     st.stones[info.stoneId] = Progress.stoneCount(info.stoneId) - info.custo;
     return true;
   }
-  Progress.upgradeWorn = function (heroId, slot) {
+  Progress.upgradeWorn = function (heroId, slot, usarGuarda) {
     var h = Progress.hero(heroId);
     var info = Progress.upgradeInfoWorn(heroId, slot);
-    if (!h || !info || !pagaPedras(info)) return false;
+    if (!h || !info) return false;
+    // a Âncora se valida ANTES de cobrar as pedras: recusar depois de pagar
+    // seria cobrar a batida que não houve (o teste pegou a ordem errada)
+    if (usarGuarda && info.arriscado && (!info.guardaId || info.guardas < 1)) return false;
+    if (!pagaPedras(info)) return false;
+    var fim = desfecho(info, usarGuarda);
+    if (!fim) return false;
     if (!isObj(h.itemVar)) h.itemVar = emptyVars();
     var v = isObj(h.itemVar[slot]) ? h.itemVar[slot] : { level: 0, stars: 0 };
-    h.itemVar[slot] = { level: info.level + 1, stars: num(v.stars, 0) };
+    h.itemVar[slot] = { level: fim.nivel, stars: num(v.stars, 0) };
     Progress.save();
-    return true;
+    return fim;
   };
 
-  Progress.upgradeItem = function (invIndex) {
+  Progress.upgradeItem = function (invIndex, usarGuarda) {
     var info = Progress.upgradeInfo(invIndex);
-    if (!info || !pagaPedras(info)) return false;
-    Progress.state.inventory[invIndex].level = info.level + 1;  // determinístico
+    if (!info) return false;
+    if (usarGuarda && info.arriscado && (!info.guardaId || info.guardas < 1)) return false;
+    if (!pagaPedras(info)) return false;
+    var fim = desfecho(info, usarGuarda);
+    if (!fim) return false;
+    Progress.state.inventory[invIndex].level = fim.nivel;
     Progress.save();
-    return true;
+    return fim;
   };
 
   // ======================================================== stats efetivos [D13]

@@ -776,13 +776,25 @@ JOGO.DATA = JOGO.DATA || {};
       id: 'stone-slate', name: 'Lasca da Lousa', element: 'neutro',
       description: 'Um caco do céu que virou pedra. Não é de elemento nenhum porque é de tudo ao mesmo tempo — serve em qualquer forja.',
       iconKey: 'stone-slate'
+    },
+    // A ÂNCORA: não forja nada sozinha — vai JUNTO da pedra do elemento e
+    // segura o nível quando a batida falha. `element: 'forja'` de propósito:
+    // fora do mapa elemento→pedra, nenhum item a consome como pedra comum.
+    'stone-anchor': {
+      id: 'stone-anchor', name: 'Âncora de Forja', element: 'forja',
+      description: 'Um dente de bigorna arrancado inteiro, pesado como culpa. Preso à peça durante a batida, não deixa o nível escorregar para trás — só os chefes mais fundos carregam um.',
+      iconKey: 'stone-anchor'
     }
   };
 
   // =========================================================================
-  // FORJA — evolução determinística até +10 (nunca quebra, nunca regride).
+  // FORJA — até o +5 é o degrau seguro de sempre (determinístico). DALI EM
+  // DIANTE a batida pode FALHAR e o nível REGRIDE um degrau (+5 falhado vira
+  // +4) — pedido do usuário: "a forja não pode ser tão fácil". A ÂNCORA DE
+  // FORJA (stone-anchor), posta JUNTO das pedras, segura a queda: falhou,
+  // ficou onde estava. Ela só dropa de CHEFE, e os mais fundos pagam mais.
   // Cada nível soma 12% dos bônus BASE do item: +10 = 1 + 0,12*10 = 2,2× o item.
-  // Custo total do +0 ao +10: 107 pedras.
+  // Custo total do +0 ao +10: 107 pedras (sem contar as batidas perdidas).
   //
   // ATENÇÃO, LÓGICA: `nonScalingKeys` — os bônus de PA e PP NUNCA escalam com o
   // nível de forja. São pontos de ação inteiros e o teto do §8 continua valendo
@@ -800,7 +812,17 @@ JOGO.DATA = JOGO.DATA || {};
     ],
     bonusPerLevel: 0.12,
     stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25],
-    nonScalingKeys: ['pa', 'pp']
+    nonScalingKeys: ['pa', 'pp'],
+    // o RISCO: a partir deste nível a batida rola o dado (chance por nível
+    // ATUAL); falhou, desce um. A âncora segura.
+    riskFrom: 5,
+    chances: { 5: 0.65, 6: 0.55, 7: 0.45, 8: 0.35, 9: 0.25 },
+    guardStone: 'stone-anchor',
+    // quanto cada CHEFE paga de âncora ao cair (só chefes; mais fundo, mais)
+    guardDropByDungeon: {
+      greenhouse: 0.08, cistern: 0.12, emberlock: 0.16,
+      windscaffold: 0.20, quakemine: 0.24, brokenheart: 0.30
+    }
   };
 
   // =========================================================================

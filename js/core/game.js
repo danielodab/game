@@ -542,6 +542,22 @@ var JOGO = (typeof window !== 'undefined')
       ganho[sid] = (ganho[sid] || 0) + qtd;
       algum = true;
     }
+    // A ÂNCORA DE FORJA: só CHEFE derruba, e os mais fundos pagam mais —
+    // é a pedra que segura o nível na batida arriscada (DATA.upgrade)
+    var upCfg = (D() && D().upgrade) || {};
+    var taxas = upCfg.guardDropByDungeon || {};
+    for (i = 0; i < units.length; i++) {
+      var ub = units[i];
+      if (ub.side !== 'enemy' || ub.alive) continue;
+      var db2 = monsters[ub.defId];
+      if (!db2 || !db2.boss) continue;
+      var taxa = num(taxas[Game.dungeonId], 0);
+      if (taxa > 0 && Math.random() < taxa) {
+        ganho[upCfg.guardStone || 'stone-anchor'] =
+          (ganho[upCfg.guardStone || 'stone-anchor'] || 0) + 1;
+        algum = true;
+      }
+    }
     if (algum && prog && prog.addStones) {
       for (var sid2 in ganho) {
         if (!ganho.hasOwnProperty(sid2)) continue;

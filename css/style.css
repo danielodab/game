@@ -1541,6 +1541,14 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .screen-duelFim.is-on { display: flex; align-items: center; justify-content: center; }
 .btn-primary.is-off { opacity: .45; pointer-events: none; }
 
+/* ------------------------------------------------- FORJA ARRISCADA */
+.forge-risco { font: 600 13px var(--ui-sans, system-ui); color: #ffcf5c;
+               margin: 8px 0 4px; }
+.forge-guarda { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px;
+                font: 13px var(--ui-sans, system-ui); color: var(--text); cursor: pointer; }
+.forge-guarda.is-off { color: var(--dim); }
+.forge-guarda input { width: 16px; height: 16px; accent-color: #e8c25a; }
+
 /* ------------------------------------------------- MESA DE TROCA */
 .tr-lado { border: 1px solid var(--line2); border-radius: 12px; padding: 8px 10px;
            background: rgba(0,0,0,.18); }

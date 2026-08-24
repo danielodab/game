@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a forja arriscada</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>A forja arriscada — o dado, a queda, e a Âncora que segura</h1>
+<div class="sub">Do +5 em diante a batida rola o dado: falhou, a peça REGRIDE um nível — a menos
+que a Âncora de Forja vá junto. Esta página crava o dado pelo seam (Progress._forjaRng) e cobra os
+sete desfechos: zona segura ignora o dado; sucesso sobe; falha cai; falha com Âncora segura; a
+Âncora se consome na batida (junto, como pedido); pedir Âncora sem ter é recusado; e as pedras se
+pagam na TENTATIVA, não no sucesso.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra ? ' — <code>' + String(extra) + '</code>' : '');
+    lista.appendChild(li);
+  }
+
+  var P = JOGO.Progress;
+  P.load();
+
+  // a peça de bancada e as pedras: a Garra é de água (Lágrima de Cisterna)
+  function armaPeca(nivel) {
+    P.state.inventory = [{ itemId: 'gh-firefly-crown', level: nivel, stars: 0 }];
+    P.state.stones = { 'stone-tear': 500, 'stone-anchor': 0 };
+  }
+  function dado(v) { P._forjaRng = function () { return v; }; }
+  function nivel() { return P.state.inventory[0].level; }
+  function pedras() { return P.stoneCount('stone-tear'); }
+  function ancoras() { return P.stoneCount('stone-anchor'); }
+
+  // ------------------------------------------------------------- a informação
+  armaPeca(3);
+  var i3 = P.upgradeInfo(0);
+  check('+3 é zona segura (chance 100%)', !i3.arriscado && i3.chance === 1);
+  armaPeca(5);
+  var i5 = P.upgradeInfo(0);
+  check('+5 é arriscado com 65%', i5.arriscado && Math.abs(i5.chance - 0.65) < 1e-9);
+  armaPeca(9);
+  var i9 = P.upgradeInfo(0);
+  check('+9 é o degrau mais duro (25%)', i9.arriscado && Math.abs(i9.chance - 0.25) < 1e-9);
+
+  // ------------------------------------------------------- zona segura: sobe
+  armaPeca(4);
+  dado(0.99);                                     // o pior dado possível
+  var r1 = P.upgradeItem(0);
+  check('na zona segura nem o pior dado derruba (+4 → +5)',
+        r1 && r1.resultado === 'subiu' && nivel() === 5, JSON.stringify(r1));
+
+  // ------------------------------------------- arriscado: sucesso e a queda
+  armaPeca(5);
+  dado(0.5);                                      // 0,5 < 0,65: sobe
+  var r2 = P.upgradeItem(0);
+  check('batida arriscada com dado bom sobe (+5 → +6)',
+        r2 && r2.resultado === 'subiu' && nivel() === 6);
+
+  armaPeca(5);
+  var antes = pedras();
+  dado(0.9);                                      // 0,9 ≥ 0,65: falha
+  var r3 = P.upgradeItem(0);
+  check('a falha REGRIDE (+5 → +4) — o pedido do usuário ao pé da letra',
+        r3 && r3.resultado === 'caiu' && nivel() === 4, JSON.stringify(r3));
+  check('as pedras se pagam na TENTATIVA, não no sucesso',
+        pedras() === antes - i5.custo, pedras() + ' de ' + antes);
+
+  // --------------------------------------------------------- a Âncora segura
+  armaPeca(5);
+  P.state.stones['stone-anchor'] = 2;
+  dado(0.9);
+  var r4 = P.upgradeItem(0, true);
+  check('a falha COM a Âncora SEGURA o nível (+5 fica +5)',
+        r4 && r4.resultado === 'segurou' && nivel() === 5, JSON.stringify(r4));
+  check('a Âncora se consumiu na batida', ancoras() === 1, ancoras());
+
+  dado(0.1);
+  var r5 = P.upgradeItem(0, true);
+  check('no sucesso a Âncora TAMBÉM vai (ela entra junto, como pedido)',
+        r5 && r5.resultado === 'subiu' && nivel() === 6 && ancoras() === 0);
+
+  // ------------------------------------------------- âncora sem ter: recusa
+  armaPeca(7);
+  dado(0.9);
+  var n7 = nivel(), p7 = pedras();
+  var r6 = P.upgradeItem(0, true);
+  check('pedir a Âncora sem ter NENHUMA é recusado sem gastar nada',
+        r6 === false && nivel() === n7 && pedras() === p7);
+
+  // -------------------------------------------------- fundo do poço: +5 → +4… e +0 não cai abaixo
+  armaPeca(0);
+  dado(0.99);
+  P.state.inventory[0].level = 0;
+  var r7 = P.upgradeItem(0);
+  check('+0 continua seguro como sempre (sobe)', r7 && r7.resultado === 'subiu');
+
+  P._forjaRng = null;
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>
