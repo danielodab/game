@@ -34,23 +34,27 @@ var JOGO = (typeof window !== 'undefined')
   B.PISO = 800;
   B.K = 24;
 
-  /* paleta = a folha de chama que o hub acende; tam = escala do fogo. */
-  /* CADA degrau com cara propria — "so tem 1 efeito" foi o veredito da
-   * primeira versao, em que dois degraus dividiam a paleta azulada e a Coroa
-   * presa no portao caia na Labareda. Agora: laranja -> azulada -> violeta ->
-   * e a Coroa e uma COROA literal: tres fogos em arco sobre a cabeca. */
+  /* A ESCADA SÃO AS DEZ COROAS DO USUÁRIO (24/08): arte própria por nível
+   * (assets_ok/ranking_pvp, embutida em coroas-pvp.js), pendurada acima da
+   * cabeça NO LUGAR das chamas. O Elo continua o mesmo; o degrau de cima
+   * continua REINADO: os pontos E o 1º do placar. `nivel` é a chave da arte
+   * (COROAS_PVP['n'+nivel]); `tam` é a escala do bilhete na praça. */
   B.TIERS = [
-    { id: 'fagulha',  nome: 'Fagulha',       min: 0,    paleta: 'fire',          tam: 0.22 },
-    { id: 'brasa',    nome: 'Brasa',         min: 1150, paleta: 'fire',          tam: 0.75 },
-    { id: 'chama',    nome: 'Chama',         min: 1350, paleta: 'blueish_flame', tam: 1.00 },
-    { id: 'labareda', nome: 'Labareda',      min: 1550, paleta: 'magic',         tam: 1.30 },
-    { id: 'coroa',    nome: 'Coroa de Fogo', min: 1800, paleta: 'magic',         tam: 1.55,
-      coroa: true, exigeTopo: true }
+    { id: 'n1',  nivel: 1,  nome: 'Coroa I',    min: 0,    tam: 0.52 },
+    { id: 'n2',  nivel: 2,  nome: 'Coroa II',   min: 1100, tam: 0.56 },
+    { id: 'n3',  nivel: 3,  nome: 'Coroa III',  min: 1200, tam: 0.60 },
+    { id: 'n4',  nivel: 4,  nome: 'Coroa IV',   min: 1300, tam: 0.64 },
+    { id: 'n5',  nivel: 5,  nome: 'Coroa V',    min: 1400, tam: 0.68 },
+    { id: 'n6',  nivel: 6,  nome: 'Coroa VI',   min: 1500, tam: 0.74 },
+    { id: 'n7',  nivel: 7,  nome: 'Coroa VII',  min: 1600, tam: 0.80 },
+    { id: 'n8',  nivel: 8,  nome: 'Coroa VIII', min: 1700, tam: 0.86 },
+    { id: 'n9',  nivel: 9,  nome: 'Coroa IX',   min: 1800, tam: 0.94 },
+    { id: 'n10', nivel: 10, nome: 'Coroa X',    min: 1900, tam: 1.05, exigeTopo: true }
   ];
 
   /* O degrau dos pontos. `ehTopo` = este jogador é o 1º do placar da arena;
-   * sem o topo, quem tem pontos de Coroa fica em Labareda — a Coroa não é
-   * um número, é um REINADO. */
+   * sem o topo, quem tem pontos de Coroa X fica na IX — o topo não é um
+   * número, é um REINADO. */
   B.tierDe = function (pts, ehTopo) {
     pts = (typeof pts === 'number' && isFinite(pts)) ? pts : B.INICIAL;
     var melhor = B.TIERS[0];

@@ -253,8 +253,8 @@ var JOGO = (typeof window !== 'undefined')
     bZero.title = 'Volta a 1000 pontos com ZERO partidas — sem fogo nenhum';
     bZero.onclick = function () { poeBrasa(1000, 0); };
     linhaBr.appendChild(bZero);
-    [['Fagulha', 1000], ['Brasa', 1200], ['Chama', 1400],
-     ['Labareda', 1600], ['Coroa', 1900]].forEach(function (par) {
+    [['Coroa I', 1000], ['Coroa III', 1200], ['Coroa V', 1400],
+     ['Coroa VII', 1600], ['Coroa X', 1900]].forEach(function (par) {
       var bT = el('button', 'dbg-b', par[0] + ' (' + par[1] + ')');
       bT.type = 'button';
       bT.title = 'Crava ' + par[1] + ' pontos de Brasa — a chama na cabeça troca na hora';

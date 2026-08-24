@@ -79,51 +79,24 @@ var JOGO = (typeof window !== 'undefined')
     return tex;
   }
 
-  /* AS CHAMAS DA BRASA: uma textura por paleta de chama, compartilhada por
-   * todo corpo que carrega fogo — o tique avança o offset de cada paleta uma
-   * vez só, e todas as chamas da praça ardem no mesmo quadro. */
-  var texChamas = {}, TEX_CHAMA_N = 4;
-  var texBrilhos = {};
-  var COR_BRILHO = { fire: '#ff9a4a', blueish_flame: '#5fe6cd', magic: '#c9a6ff' };
-  /* O HALO da chama: um gradiente radial desenhado em canvas, tingido pela
-   * paleta — o fogo passa a ILUMINAR o entorno, nao so a existir. */
-  function texturaBrilho(paleta) {
-    if (texBrilhos[paleta] !== undefined) return texBrilhos[paleta] || null;
-    if (!THREE) { texBrilhos[paleta] = false; return null; }
-    var cv = document.createElement('canvas');
-    cv.width = cv.height = 128;
-    var g = cv.getContext('2d');
-    var gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
-    gr.addColorStop(0, COR_BRILHO[paleta] || '#ffb45f');
-    gr.addColorStop(0.55, 'rgba(120,80,40,0.25)');
-    gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr;
-    g.fillRect(0, 0, 128, 128);
-    var tex = new THREE.Texture(cv);
-    tex.needsUpdate = true;
-    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
-    texBrilhos[paleta] = tex;
-    return tex;
-  }
-  function poeQuadro(tex, q) {
-    tex.offset.set((q % TEX_CHAMA_N) / TEX_CHAMA_N,
-      (TEX_CHAMA_N - 1 - Math.floor(q / TEX_CHAMA_N)) / TEX_CHAMA_N);
-  }
-  function texturaChama(paleta) {
-    if (texChamas[paleta] !== undefined) return texChamas[paleta] || null;
-    var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ANIM : null;
-    var chave = 'chama:' + paleta;
-    if (!A || !A[chave] || !THREE) { texChamas[paleta] = false; return null; }
+  /* AS COROAS DO RANKING PVP — a arte do usuário (10 níveis, PNG com alfa,
+   * coroas-pvp.js). Uma textura por nível, compartilhada por todo corpo que
+   * carrega aquela coroa. */
+  var texCoroas = {};
+  function texturaCoroa(nivel) {
+    var chave = 'n' + nivel;
+    if (texCoroas[chave] !== undefined) return texCoroas[chave] || null;
+    var A = (typeof JOGO !== 'undefined') ? JOGO.COROAS_PVP : null;
+    if (!A || !A[chave] || !THREE) { texCoroas[chave] = false; return null; }
     var img = new Image();
     var tex = new THREE.Texture(img);
     img.onload = function () { tex.needsUpdate = true; };
-    img.src = 'data:image/jpeg;base64,' + A[chave];
+    img.src = 'data:image/png;base64,' + A[chave];
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
     tex.generateMipmaps = false;
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
-    tex.repeat.set(1 / TEX_CHAMA_N, 1 / TEX_CHAMA_N);
-    texChamas[paleta] = tex;
+    texCoroas[chave] = tex;
     return tex;
   }
 
@@ -385,7 +358,7 @@ var JOGO = (typeof window !== 'undefined')
   /* Pendura nome (e título) em QUALQUER corpo — herói ou fantasma. */
   function penduraEm(corpo, nome, titulo, brasaTier) {
     if (!corpo || !THREE) return;
-    ['plaquinha', 'plaquinhaTitulo', 'chamaBrasa'].forEach(function (campo) {
+    ['plaquinha', 'plaquinhaTitulo'].forEach(function (campo) {
       if (!corpo[campo]) return;
       corpo.node.remove(corpo[campo]);
       try {
@@ -394,24 +367,11 @@ var JOGO = (typeof window !== 'undefined')
       } catch (e) {}
       corpo[campo] = null;
     });
-    ['chamaGlow', 'chamaInner'].forEach(function (campo) {
-      if (!corpo[campo]) return;
-      corpo.node.remove(corpo[campo]);
-      try { corpo[campo].material.dispose(); } catch (e) {}
-      corpo[campo] = null;
-    });
-    if (corpo.chamaCoroa) {
-      corpo.chamaCoroa.forEach(function (m2) {
-        corpo.node.remove(m2);
-        try { m2.material.dispose(); } catch (e) {}
-      });
-      corpo.chamaCoroa = null;
+    if (corpo.coroaPvp) {
+      corpo.node.remove(corpo.coroaPvp);
+      try { corpo.coroaPvp.material.dispose(); } catch (e) {}
+      corpo.coroaPvp = null;
     }
-    if (corpo.chamaTexs) {
-      corpo.chamaTexs.forEach(function (t2) { try { t2.dispose(); } catch (e) {} });
-      corpo.chamaTexs = null;
-    }
-    corpo.chamaFase = null;
     if (!nome) return;
     var alto = (corpo.node.userData.height || 2.1);
     var sp = rotulo(nome, '#f0ead8', 0.42);
@@ -430,70 +390,27 @@ var JOGO = (typeof window !== 'undefined')
     // o fogo da arena arde ACIMA do nome, na paleta e no tamanho do tier.
     // Sprite não serve (não anima folha); é um bilhete aditivo que o tique
     // vira para a câmera junto com o offset da paleta.
-    if (brasaTier && brasaTier.tam) {
-      var texBase = texturaChama(brasaTier.paleta || 'fire');
-      if (texBase) {
-        var baseY = alto + (titulo ? 0.66 : 0.5) + 0.42;
-        var tamC = brasaTier.tam;
-        // FASE PROPRIA: cada fogo da praca arde no seu tempo — sincronizado
-        // era luz de arvore de natal, nao fogo
-        corpo.chamaFase = Math.random() * 13;
-        corpo.chamaTexs = [];
-        function novaChama(escala, opac) {
-          var t2 = texBase.clone();
-          t2.needsUpdate = true;
-          corpo.chamaTexs.push(t2);
-          var m2 = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
-            new THREE.MeshBasicMaterial({
-              map: t2, transparent: true, depthWrite: false,
-              blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-              opacity: opac
-            }));
-          m2.scale.set(escala, escala, 1);
-          corpo.node.add(m2);
-          return m2;
-        }
-
-        // o HALO atras de tudo, pulsando devagar no tique
-        var texG = texturaBrilho(brasaTier.paleta || 'fire');
-        if (texG) {
-          var glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
-            new THREE.MeshBasicMaterial({
-              map: texG, transparent: true, depthWrite: false,
-              blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-              opacity: 0.3
-            }));
-          glow.scale.set(tamC * 2.1, tamC * 2.1, 1);
-          glow.position.y = baseY + tamC * 0.35;
-          corpo.node.add(glow);
-          corpo.chamaGlow = glow;
-        }
-
-        var chamaG = novaChama(tamC, 0.9);
-        chamaG.position.y = baseY + tamC * 0.35;
-        corpo.chamaBrasa = chamaG;
-        corpo.chamaTam = tamC;
-        corpo.chamaBaseY = baseY;
-
-        // LABAREDA e COROA ganham um MIOLO interno menor e mais rapido —
-        // duas camadas defasadas leem como profundidade, nao como adesivo
-        if (brasaTier.id === 'labareda' || brasaTier.coroa) {
-          var inner = novaChama(tamC * 0.55, 0.75);
-          inner.position.y = baseY + tamC * 0.28;
-          corpo.chamaInner = inner;
-        }
-
-        // A COROA: as duas pontas ORBITAM a cabeca devagar — uma coroa
-        // girando, e o degrau que so o 1o do placar carrega
-        if (brasaTier.coroa) {
-          corpo.chamaCoroa = [];
-          [0, 1].forEach(function (i2) {
-            var m3 = novaChama(tamC * 0.5, 0.8);
-            m3.position.set(0, baseY + tamC * 0.16, 0);
-            m3.userData.orbita = i2 * Math.PI;   // pontas opostas
-            corpo.chamaCoroa.push(m3);
-          });
-        }
+    // A COROA DO RANKING — a arte do usuário, no lugar das chamas ("essa
+    // coroa ficará acima da cabeça ao invés das chamas"). Bilhete PNG
+    // transparente flutuando acima do nome, com bob suave no tique; o
+    // tamanho cresce com o nível. A regra do novato mora na HUD (só
+    // aparece depois da primeira partida).
+    if (brasaTier && brasaTier.nivel) {
+      var texK = texturaCoroa(brasaTier.nivel);
+      if (texK) {
+        var tamK = brasaTier.tam || 0.6;
+        var coroa = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+          new THREE.MeshBasicMaterial({
+            map: texK, transparent: true, depthWrite: false,
+            side: THREE.DoubleSide
+          }));
+        coroa.scale.set(tamK, tamK, 1);
+        var baseK = alto + (titulo ? 0.66 : 0.5) + 0.34 + tamK * 0.45;
+        coroa.position.y = baseK;
+        coroa.userData.baseY = baseK;
+        coroa.userData.fase = Math.random() * 9;
+        corpo.node.add(coroa);
+        corpo.coroaPvp = coroa;
       }
     }
   }
@@ -554,52 +471,20 @@ var JOGO = (typeof window !== 'undefined')
       var cc = qp % TEX_PORTAL_N, rr = Math.floor(qp / TEX_PORTAL_N);
       texPortal.offset.set(cc / TEX_PORTAL_N, (TEX_PORTAL_N - 1 - rr) / TEX_PORTAL_N);
     }
-    // O FOGO VIVO: cada corpo com fase propria — quadro, tremulacao, halo
-    // pulsando, miolo defasado e a orbita da Coroa, tudo num passo so
+    // A COROA encara a câmera e flutua de leve — realeza não balança muito
     if (camera) {
-      var TOTAL_Q = TEX_CHAMA_N * TEX_CHAMA_N;
-      var animaFogo = function (corpoC) {
-        if (!corpoC || !corpoC.chamaBrasa) return;
-        var fase = corpoC.chamaFase || 0;
-        var tamF = corpoC.chamaTam || 1;
-        var giro = Math.atan2(camera.position.x - corpoC.node.position.x,
-                              camera.position.z - corpoC.node.position.z) -
-                   corpoC.node.rotation.y;
-
-        // quadro proprio (a fase desloca) + tremulacao de escala (~7%)
-        if (corpoC.chamaTexs) {
-          for (var ti = 0; ti < corpoC.chamaTexs.length; ti++) {
-            var ritmo = ti === 0 ? 14 : 19;      // o miolo e as pontas ardem mais rapido
-            poeQuadro(corpoC.chamaTexs[ti],
-              Math.floor(relogio * ritmo + fase * 7 + ti * 5) % TOTAL_Q);
-          }
-        }
-        var treme = 1 + 0.07 * Math.sin(relogio * 9 + fase);
-        corpoC.chamaBrasa.scale.set(tamF * treme, tamF * treme, 1);
-        corpoC.chamaBrasa.rotation.y = giro;
-
-        if (corpoC.chamaGlow) {
-          corpoC.chamaGlow.material.opacity = 0.26 + 0.09 * Math.sin(relogio * 2.3 + fase);
-          corpoC.chamaGlow.rotation.y = giro;
-        }
-        if (corpoC.chamaInner) {
-          var t2 = tamF * 0.55 * (1 + 0.10 * Math.sin(relogio * 13 + fase + 2));
-          corpoC.chamaInner.scale.set(t2, t2, 1);
-          corpoC.chamaInner.rotation.y = giro;
-        }
-        if (corpoC.chamaCoroa) {
-          var raio = tamF * 0.48;
-          corpoC.chamaCoroa.forEach(function (m3) {
-            var ang = relogio * 1.1 + (m3.userData.orbita || 0) + fase;
-            m3.position.x = Math.cos(ang) * raio;
-            m3.position.z = Math.sin(ang) * raio;
-            m3.rotation.y = giro;
-          });
-        }
+      var viraCoroa = function (corpoC) {
+        if (!corpoC || !corpoC.coroaPvp) return;
+        var m = corpoC.coroaPvp;
+        m.rotation.y = Math.atan2(camera.position.x - corpoC.node.position.x,
+                                  camera.position.z - corpoC.node.position.z) -
+                       corpoC.node.rotation.y;
+        m.position.y = m.userData.baseY +
+                       Math.sin(relogio * 1.6 + (m.userData.fase || 0)) * 0.05;
       };
-      animaFogo(heroi);
+      viraCoroa(heroi);
       for (var fk2 in fantasmas) {
-        if (fantasmas.hasOwnProperty(fk2)) animaFogo(fantasmas[fk2]);
+        if (fantasmas.hasOwnProperty(fk2)) viraCoroa(fantasmas[fk2]);
       }
     }
     for (var i = 0; i < lugares.length; i++) {
@@ -806,7 +691,7 @@ var JOGO = (typeof window !== 'undefined')
    * até aqui tudo era privado e a única prova era o olho. */
   /* Quem sabe o nome é o DB, e quem fala com o DB é a HUD (pintaConta e o
    * batismo): ela empurra o nome para cá. Vazio tira a plaquinha. */
-  var brasaDoHeroi = null;         // o tier da chama ({paleta, tam, nome})
+  var brasaDoHeroi = null;         // o tier da coroa ({nivel, tam, nome})
   Hub.nomeia = function (nome, titulo, brasaTier) {
     nomeJogador = String(nome || '').trim() || null;
     tituloJogador = String(titulo || '').trim() || null;
@@ -874,10 +759,8 @@ var JOGO = (typeof window !== 'undefined')
       andando: heroi ? !!heroi.andando : null,
       nome: nomeJogador,
       titulo: tituloJogador,
-      chama: !!(heroi && heroi.chamaBrasa),
-      chamaCoroa: !!(heroi && heroi.chamaCoroa && heroi.chamaCoroa.length === 2),
-      chamaPaleta: brasaDoHeroi ? (brasaDoHeroi.paleta || null) : null,
-      chamaTier: brasaDoHeroi ? (brasaDoHeroi.id || null) : null,
+      coroaVisivel: !!(heroi && heroi.coroaPvp),
+      coroaNivel: brasaDoHeroi ? (brasaDoHeroi.nivel || null) : null,
       corpo: (heroi && heroi.node.userData && heroi.node.userData.look &&
               heroi.node.userData.look.model) || null,
       plaquinha: !!(heroi && heroi.plaquinha),
