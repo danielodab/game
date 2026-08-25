@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — os 90 ícones do usuário</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  h2{font:700 14px Georgia,serif;margin:16px 0 6px;color:#ffd98a}
+  .grade{display:flex;flex-wrap:wrap;gap:8px}
+  .cel{width:86px;display:flex;flex-direction:column;align-items:center;gap:3px;
+       padding:6px 2px;background:#171c23;border:1px solid #262d38;border-radius:10px}
+  .cel span{font-size:8.5px;color:#8895a6;text-align:center;word-break:break-all}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>Os 90 ícones de item — a arte do usuário em cada célula</h1>
+<div class="sub">A página espera as 90 imagens decodificarem, cobra que o embrulho do Art.itemIcon
+está servindo a ARTE (e não o procedural) para todas, e desenha a grade inteira por calabouço —
+porque ícone se julga com o olho, no tamanho da célula.</div>
+<div id="summary">decodificando…</div>
+<ul id="lista"></ul>
+<div id="grades"></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/render2d/art.js',
+    'assets/embedded/icones-itens.js','js/render2d/icones_itens.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var DGS = { gh: 'Estufa', ci: 'Cisterna', em: 'Fecho de Brasa',
+              av: 'Andaimes', mt: 'Mina', cp: 'Coração' };
+
+  var ids = Object.keys(JOGO.ICONES_ITENS || {});
+  check('as 90 artes estão embutidas', ids.length === 90, ids.length + ' artes');
+
+  var t0 = Date.now();
+  (function espera() {
+    // pronto quando o embrulho serve arte para TODOS (o procedural devolve
+    // __res do mkCanvas; o embrulhado marca __anchor e é quadrado exato)
+    var A = JOGO.Art;
+    var faltamArt = ids.filter(function (id) {
+      var cv = A.itemIcon(id, 64);
+      // a arte embrulhada tem cache próprio: pedir de novo devolve o MESMO
+      return A.itemIcon(id, 64) !== cv;
+    });
+    if (faltamArt.length && Date.now() - t0 < 30000) return setTimeout(espera, 300);
+    check('o embrulho serve a ARTE (cache próprio) para todos',
+          faltamArt.length === 0, faltamArt.length + ' ainda no procedural');
+
+    // conteúdo de verdade: o canvas tem pixels opacos E transparência (alfa)
+    var semPixel = [], semAlfa = [];
+    ids.forEach(function (id) {
+      var cv = JOGO.Art.itemIcon(id, 64);
+      var g = cv.getContext('2d');
+      var px = g.getImageData(0, 0, cv.width, cv.height).data;
+      var opacos = 0, transp = 0;
+      for (var i = 3; i < px.length; i += 16) {
+        if (px[i] > 200) opacos++;
+        else if (px[i] < 20) transp++;
+      }
+      if (opacos < 50) semPixel.push(id);
+      if (transp < 50) semAlfa.push(id);
+    });
+    check('toda arte tem corpo (pixels opacos)', semPixel.length === 0, semPixel.join(','));
+    check('toda arte tem respiro (transparência em volta)', semAlfa.length === 0, semAlfa.join(','));
+
+    // ---- a grade, por calabouço
+    var grades = document.getElementById('grades');
+    Object.keys(DGS).forEach(function (pref) {
+      var doDg = ids.filter(function (id) { return id.indexOf(pref + '-') === 0; }).sort();
+      var h2 = document.createElement('h2');
+      h2.textContent = DGS[pref] + ' (' + doDg.length + ')';
+      grades.appendChild(h2);
+      var grade = document.createElement('div');
+      grade.className = 'grade';
+      doDg.forEach(function (id) {
+        var cel = document.createElement('div');
+        cel.className = 'cel';
+        cel.appendChild(JOGO.Art.node(JOGO.Art.itemIcon(id, 64), 64));
+        var sp = document.createElement('span');
+        sp.textContent = id;
+        cel.appendChild(sp);
+        grade.appendChild(cel);
+      });
+      grades.appendChild(grade);
+    });
+
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  })();
+})();
+</script>
+</body>
+</html>
