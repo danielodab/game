@@ -270,6 +270,16 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  /* O POÇO SEM FUNDO (25/08): a torre infinita. JOGO.Poco monta o calabouço
+   * sintético e as salas (sempre uma à frente); daqui é um startRun normal
+   * no id 'poco', com a escalada aplicada no estado logo depois. */
+  Game.startPoco = function (heroIds) {
+    if (!JOGO.Poco || !JOGO.Poco.preparar(2)) return false;
+    if (!Game.startRun(heroIds, JOGO.Poco.ID)) return false;
+    JOGO.Poco.escalaEstado(Game.state, 1);
+    return true;
+  };
+
   /* O DUELO DE TREINO: duas duplas da MESMA conta, no mesmo teclado. As
    * escolhas às cegas são da ficha; aqui só se monta a arena. */
   Game.startDuel = function (duplaA, duplaB) {
@@ -303,6 +313,8 @@ var JOGO = (typeof window !== 'undefined')
   Game.nextRoom = function () {
     if (Game.screen !== 'roomClear' || !Game.dungeonId) return false;
     Game.roomIndex++;
+    // O POÇO: a sala seguinte nasce ANTES de o pé chegar nela
+    if (Game.dungeonId === 'poco' && JOGO.Poco) JOGO.Poco.preparar(Game.roomIndex + 2);
     Game.selectedSpellId = null;
     Game.hoverTile = null;
     Game.pendingFusion = null;
@@ -310,6 +322,9 @@ var JOGO = (typeof window !== 'undefined')
     resetAiState();
     resetTimer(true);
     Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload(), { dificuldade: Game.dificuldade });
+    if (Game.dungeonId === 'poco' && JOGO.Poco) {
+      JOGO.Poco.escalaEstado(Game.state, Game.roomIndex + 1);
+    }
     // [G1] vivos curam 50% do PV perdido; mortos revivem com 30% do hpMax
     if (carryHp && Game.state && Game.state.units) {
       for (var i = 0; i < Game.state.units.length; i++) {
@@ -594,7 +609,11 @@ var JOGO = (typeof window !== 'undefined')
     var desafioSala = st.desafio || null;
     var bonusDesafio = (desafioSala && desafioSala.cumprido)
       ? (1 + (E().DESAFIO_BONUS || 0.25)) : 1;
-    var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio);
+    /* O POÇO paga na moeda da escalada (25/08): o mesmo fator que engordou
+     * os inimigos multiplica o XP — andar 11 rende o dobro do andar 1. */
+    var fatorPoco = (Game.dungeonId === 'poco' && JOGO.Poco)
+      ? JOGO.Poco.fator(Game.roomIndex + 1) : 1;
+    var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio * fatorPoco);
 
     /* VINTENS — a moeda, derivada do MESMO xpTotal.
      *
@@ -641,6 +660,11 @@ var JOGO = (typeof window !== 'undefined')
           levelUps.push({ heroId: heroId, niveis: gained, novoNivel: hero ? hero.level : null });
         }
       }
+    }
+
+    // O POÇO anota o andar limpo (25/08): melhor da semana + recorde da conta
+    if (Game.dungeonId === 'poco' && JOGO.DB && JOGO.DB.pocoAnota && JOGO.Poco) {
+      try { JOGO.DB.pocoAnota(Game.roomIndex + 1, JOGO.Poco.semanaDe()); } catch (ep) {}
     }
 
     var drops = [], pets = [];

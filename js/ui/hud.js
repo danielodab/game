@@ -926,9 +926,22 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(btn('Duelo de treino (mesmo teclado)', 'btn-primary btn-block', function () {
           openSheet('duelo');
         }));
+        // O POÇO SEM FUNDO (25/08): a torre infinita mora na arena
+        painel.appendChild(btn('Descer ao Poço sem Fundo', 'btn-warn btn-block', function () {
+          if (!selHeroes.length) { toast('Escolha sua dupla primeiro.'); return; }
+          if (!safe(function () { return G().startPoco(selHeroes.slice()); }, false)) {
+            toast('O Poço não abriu.');
+          }
+        }));
         painel.appendChild(btn('Ver o Placar', 'btn-ghost btn-block', function () {
           openSheet('placar');
         }));
+        if (JOGO.DB.pocoVer) JOGO.DB.pocoVer().then(function (pv) {
+          if (pv && (pv.recorde > 0 || pv.semanaMelhor > 0)) {
+            painel.appendChild(el('p', 'hub-nota', 'Poço: andar <b>' + pv.semanaMelhor +
+              '</b> na semana · recorde <b>' + pv.recorde + '</b>.'));
+          }
+        });
         if (JOGO.DB) JOGO.DB.historicoPvp().then(function (h) {
           painel.appendChild(el('p', 'hub-nota', h.length + ' duelo(s) na conta.'));
         });
@@ -962,6 +975,9 @@ var JOGO = (typeof window !== 'undefined')
             resumoGaleria = bz.galeria || null;
           }
         });
+      }
+      if (JOGO.DB.pocoVer) {
+        JOGO.DB.pocoVer().then(function (pv) { resumoPoco = pv || null; });
       }
       JOGO.DB.jogador().then(function (j) {
         var e0 = (JOGO.Hub._estado && JOGO.Hub._estado()) || {};
@@ -1106,8 +1122,13 @@ var JOGO = (typeof window !== 'undefined')
     clear(s);
     lastRewards = data || {};
     var fim = name === 'dungeonComplete';
-    s.appendChild(header(fim ? 'Calabouço vencido' : 'Sala limpa',
-      fim ? 'O fundo desta descida está seu.' : 'Respire. A próxima é pior.'));
+    // no POÇO (25/08) a tela fala em andares — e ele nunca "completa"
+    var noPoco = safe(function () { return G().dungeonId === 'poco'; }, false);
+    var andarPoco = noPoco ? safe(function () { return G().roomIndex + 1; }, 0) : 0;
+    s.appendChild(header(
+      noPoco ? 'Andar ' + andarPoco + ' vencido' : (fim ? 'Calabouço vencido' : 'Sala limpa'),
+      noPoco ? 'O Poço continua. Ele sempre continua.'
+             : (fim ? 'O fundo desta descida está seu.' : 'Respire. A próxima é pior.')));
 
     var body = el('div', 'ui-body');
     var box = el('div', 'rw-box');
@@ -1329,8 +1350,15 @@ var JOGO = (typeof window !== 'undefined')
       }));
     }
     foot.appendChild(btn('Inventário', 'btn-ghost', function () { openSheet('inventory'); }));
+    if (noPoco) {
+      // subir É vitória: o recorde já foi anotado a cada andar limpo
+      foot.appendChild(btn('Subir (o recorde fica)', 'btn-ghost', function () {
+        safe(function () { return G().restart(); }, null);
+        navTo('hub');
+      }));
+    }
     if (fim) foot.appendChild(btn('Voltar ao acampamento', 'btn-primary', function () { navTo('hub'); }));
-    else foot.appendChild(btn('Próxima sala', 'btn-primary', function () {
+    else foot.appendChild(btn(noPoco ? 'Descer mais um andar' : 'Próxima sala', 'btn-primary', function () {
       if (!safe(function () { return G().nextRoom(); }, false)) toast('Não deu para avançar.');
     }));
     // O seletor vai ANTES do rodape: a escolha e sobre a proxima sala, e tem de
@@ -2474,9 +2502,10 @@ var JOGO = (typeof window !== 'undefined')
     if (!JOGO.DB) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
 
     Promise.all([JOGO.DB.jogador(), JOGO.DB.placarLista(),
-                 JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null)])
+                 JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null),
+                 JOGO.DB.pocoVer ? JOGO.DB.pocoVer() : Promise.resolve(null)])
     .then(function (r) {
-      var eu2 = r[0], lista = r[1] || [], bz = r[2];
+      var eu2 = r[0], lista = r[1] || [], bz = r[2], pv = r[3];
       clear(caixa);
 
       // A TEMPORADA (25/08): qual é, quando vira, e a GALERIA das já vividas
@@ -2493,6 +2522,10 @@ var JOGO = (typeof window !== 'undefined')
             });
             return '<b>' + nomeC + '</b> (T' + t2 + ')';
           }).join(' · ');
+        }
+        if (pv && (pv.recorde > 0 || pv.semanaMelhor > 0)) {
+          linhaT += '<br>Poço sem Fundo: andar <b>' + pv.semanaMelhor +
+            '</b> nesta semana · recorde da conta <b>' + pv.recorde + '</b>';
         }
         caixa.appendChild(el('p', 'placar-temporada', linhaT));
       }
@@ -3284,11 +3317,12 @@ var JOGO = (typeof window !== 'undefined')
     });
     return { classes: classes2, total: total,
              brasa: resumoBrasaPts, partidas: resumoBrasaPartidas,
-             galeria: resumoGaleria };
+             galeria: resumoGaleria, poco: resumoPoco };
   }
   /* os pontos de brasa entram no resumo por fora (são assíncronos no DB);
    * buildHub os carrega antes de ligar a Rede */
-  var resumoBrasaPts = 1000, resumoBrasaPartidas = 0, resumoGaleria = null;
+  var resumoBrasaPts = 1000, resumoBrasaPartidas = 0, resumoGaleria = null,
+      resumoPoco = null;
 
   function paresDeAvatar() {
     var ids = Object.keys(classes()).filter(isUnlocked).sort();
@@ -4471,6 +4505,12 @@ var JOGO = (typeof window !== 'undefined')
       });
       col.appendChild(el('div', 'perfil-galeria',
         'galeria: já alcançou <b>' + esc(nomeG) + '</b>'));
+    }
+    // o Poço sem Fundo (25/08): o quão fundo essa pessoa já foi
+    if (r.poco && (r.poco.recorde > 0 || r.poco.semanaMelhor > 0)) {
+      col.appendChild(el('div', 'perfil-poco',
+        'Poço: andar <b>' + (r.poco.semanaMelhor || 0) + '</b> na semana · recorde <b>' +
+        (r.poco.recorde || 0) + '</b>'));
     }
     col.appendChild(el('div', 'perfil-total',
       'nível somado: <b>' + (r.total || 0) + '</b>'));

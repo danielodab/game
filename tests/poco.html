@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o Poço sem Fundo</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>O Poço sem Fundo — palcos emprestados, elenco misturado, PV escalando</h1>
+<div class="sub">preparar(n) gera salas com layouts REAIS e monstros de ids REAIS misturados entre
+calabouços (a arte segue o defId); a cada 5 andares entra um chefe; escalaEstado engorda o PV
+dos inimigos no estado; o recorde é semanal + da conta (DB.pocoAnota).</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/poco.js','js/core/db.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var Po = JOGO.Poco;
+
+  // 1. o calabouço sintético nasce e cresce sob demanda
+  check('preparar(12) cria o poço com 12 salas', Po.preparar(12) === true);
+  var dg = null;
+  JOGO.DATA.dungeons.forEach(function (d2) { if (d2.id === 'poco') dg = d2; });
+  check('o poço está em DATA.dungeons com 12 salas', !!dg && dg.rooms.length === 12);
+  check('preparar(5) depois de 12 não encolhe', Po.preparar(5) === true && dg.rooms.length === 12);
+
+  // 2. toda sala tem palco real e elenco de ids REAIS
+  var idsOk = true, temSpawnP = true, dungeonsVistos = {};
+  dg.rooms.forEach(function (r) {
+    if (!r.layout || !r.layout.join('').match(/P/)) temSpawnP = false;
+    Object.keys(r.monsters).forEach(function (le) {
+      var m = JOGO.DATA.monsters[r.monsters[le]];
+      if (!m) idsOk = false;
+      else dungeonsVistos[m.dungeonId || '?'] = 1;
+    });
+  });
+  check('toda sala tem spawns de herói (P)', temSpawnP);
+  check('todo monstro sorteado é um id real', idsOk);
+  check('12 andares misturam monstros de 2+ calabouços',
+        Object.keys(dungeonsVistos).length >= 2,
+        Object.keys(dungeonsVistos).join(','));
+
+  // 3. chefe de 5 em 5
+  var chefeNo5 = false, chefeNo10 = false, chefeFora = false;
+  dg.rooms.forEach(function (r, i2) {
+    var andar = i2 + 1, temChefe = false;
+    Object.keys(r.monsters).forEach(function (le) {
+      var m = JOGO.DATA.monsters[r.monsters[le]];
+      if (m && m.boss) temChefe = true;
+    });
+    if (andar === 5 && temChefe) chefeNo5 = true;
+    if (andar === 10 && temChefe) chefeNo10 = true;
+    if (andar % 5 !== 0 && temChefe) chefeFora = true;
+  });
+  check('andares 5 e 10 têm chefe; os outros não', chefeNo5 && chefeNo10 && !chefeFora);
+
+  // 4. a escalada no estado (só inimigos, só PV)
+  var estado = { units: [
+    { side: 'enemy', hp: 100, hpMax: 100 },
+    { side: 'enemy', hp: 40, hpMax: 60 },
+    { side: 'player', hp: 80, hpMax: 80 }
+  ] };
+  var quantos = Po.escalaEstado(estado, 11);          // fator 2.0
+  check('andar 11 dobra o PV dos inimigos (e enche)',
+        quantos === 2 && estado.units[0].hpMax === 200 && estado.units[0].hp === 200 &&
+        estado.units[1].hpMax === 120 && estado.units[1].hp === 120);
+  check('o herói não é tocado', estado.units[2].hpMax === 80 && estado.units[2].hp === 80);
+  check('o fator do andar 1 é 1 (sem susto na porta)', Po.fator(1) === 1);
+
+  // 5. o recorde: semanal + da conta
+  JOGO.DB.pocoAnota(4, 10).then(function (r1) {
+    check('anotar o andar 4 na semana 10', r1.ok && r1.semanaMelhor === 4 && r1.recorde === 4);
+    return JOGO.DB.pocoAnota(2, 10);
+  }).then(function (r2) {
+    check('andar 2 depois do 4 não regride nada', r2.semanaMelhor === 4 && r2.recorde === 4);
+    return JOGO.DB.pocoAnota(3, 11);
+  }).then(function (r3) {
+    check('semana nova reabre o placar semanal e guarda o recorde',
+          r3.semanaMelhor === 3 && r3.recorde === 4);
+    var sb = JOGO.SaveSandbox.check();
+    check('o disco de verdade continua intocado', sb.ok);
+
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  });
+})();
+</script>
+</body>
+</html>

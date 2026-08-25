@@ -1328,6 +1328,7 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .perfil-classe span { color: var(--pa); font-weight: 700; }
 .hub-tit { font-size: 12px; color: var(--gold); font-style: normal; }
 .perfil-galeria { font-size: 12px; color: #cfa94e; }
+.perfil-poco { font-size: 12px; color: #9fb2c8; }
 .hub-dia {
   margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 12px;
   color: #ffe9a8; background: rgba(230,181,60,.12);

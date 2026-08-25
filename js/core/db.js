@@ -63,6 +63,7 @@ var JOGO = (typeof window !== 'undefined')
       versao: 1,
       jogador: { id: novoId(), nome: null, titulo: null, avatar: null,
                  brasa: { pts: 1000, partidas: 0, temporada: null, galeria: {} },
+                 poco: { recorde: 0, semanaId: null, semanaMelhor: 0 },
                  criadoEm: agora() },
       carteira: { moedas: 0 },
       banco: { moedas: 0, itens: [] },
@@ -114,6 +115,10 @@ var JOGO = (typeof window !== 'undefined')
           if (d.jogador.brasa.temporada === undefined) d.jogador.brasa.temporada = null;
           if (!d.jogador.brasa.galeria || typeof d.jogador.brasa.galeria !== 'object') {
             d.jogador.brasa.galeria = {};
+          }
+          // e as de antes do POÇO (25/08) ganham o recorde zerado
+          if (!d.jogador.poco || typeof d.jogador.poco.recorde !== 'number') {
+            d.jogador.poco = { recorde: 0, semanaId: null, semanaMelhor: 0 };
           }
           dados = d;
           return dados;
@@ -324,6 +329,33 @@ var JOGO = (typeof window !== 'undefined')
     d.mercado = obj ? JSON.parse(JSON.stringify(obj)) : null;
     grava();
     return responde({ ok: true });
+  };
+
+  // ------------------------------------------------------------------- poço
+  /* O POÇO SEM FUNDO (25/08): o andar mais fundo — da SEMANA (o placar que
+   * reabre toda segunda de época) e da vida da conta. Quem sabe que semana é
+   * hoje é JOGO.Poco; o DB só compara e guarda. */
+  DB.pocoVer = function () {
+    var d = carrega();
+    var p = d.jogador.poco;
+    return responde({ recorde: p.recorde, semanaId: p.semanaId,
+                      semanaMelhor: p.semanaMelhor });
+  };
+  DB.pocoAnota = function (andar, semanaId) {
+    if (typeof andar !== 'number' || !isFinite(andar) || andar < 1) {
+      return responde({ ok: false });
+    }
+    var d = carrega();
+    var p = d.jogador.poco;
+    if (semanaId != null && p.semanaId !== semanaId) {
+      p.semanaId = semanaId;                 // semana nova: o placar reabre
+      p.semanaMelhor = 0;
+    }
+    andar = Math.floor(andar);
+    if (andar > p.semanaMelhor) p.semanaMelhor = andar;
+    if (andar > p.recorde) p.recorde = andar;
+    grava();
+    return responde({ ok: true, recorde: p.recorde, semanaMelhor: p.semanaMelhor });
   };
 
   // ---------------------------------------------------------------- mutados
