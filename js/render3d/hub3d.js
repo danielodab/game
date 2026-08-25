@@ -165,6 +165,8 @@ var JOGO = (typeof window !== 'undefined')
     montaBanco();
     montaMercado();
     montaArena();
+    enfeitesPlantados = false;       // cena nova, moitas novas
+    enfeitesTentativas = 0;
     montaEnfeites();
   }
 
@@ -310,31 +312,101 @@ var JOGO = (typeof window !== 'undefined')
 
   /* Vida em volta: meia dúzia das peças de cenário do usuário, espalhadas com
    * semente fixa — o acampamento nasce igual toda vez. */
+  /* OS ENFEITES v2 (25/08: "muito jogados e minúsculos"): cenografia em vez
+   * de espalhamento. Nada de peça solitária de 1,4 m perdida no gramado —
+   * MOITAS de 3-4 peças, com uma ÂNCORA de porte (3-4 m) e satélites
+   * encostados nela em rotações vivas: agrupamento lê como intenção, tamanho
+   * lê como mundo. As moitas moram no anel externo (entre os portais) e em
+   * três bolsões internos, SEMPRE longe dos lugares de porta — banco,
+   * mercado, arena e portais têm raio de conversa, e enfeite ali vira ruído
+   * de toque. Determinístico: a praça é a mesma em toda visita. */
+  /* A CORRIDA DO KIT (defeito antigo, pego em 25/08): os GLBs do cenário
+   * podem abrir DEPOIS do build da praça — rawScene devolve null e quem
+   * perdia a corrida ganhava praça pelada (era por isso que os enfeites ora
+   * apareciam, ora não). A sonda espera o kit abrir e replanta uma vez só. */
+  var enfeitesPlantados = false, enfeitesTentativas = 0;
+  function agendaEnfeites() {
+    if (enfeitesPlantados || enfeitesTentativas > 40) return;
+    enfeitesTentativas++;
+    setTimeout(montaEnfeites, 500);
+  }
   function montaEnfeites() {
+    if (enfeitesPlantados || !scene) return;
     var m2 = M2();
     var cat = JOGO.CENARIO && JOGO.CENARIO.garden;
-    if (!m2 || !cat) return;
+    if (!m2 || !cat) { agendaEnfeites(); return; }
     var pecas = (cat.sotaque || []).concat(cat.borda || []);
     if (!pecas.length) return;
-    for (var i = 0; i < 8; i++) {
-      var chave = pecas[(i * 5 + 3) % pecas.length];
+    var sonda = null;
+    try { sonda = m2.rawScene(pecas[0]); } catch (e) {}
+    if (!sonda) { agendaEnfeites(); return; }
+    enfeitesPlantados = true;
+
+    /* Altura-alvo POR PEÇA: o acervo do jardim é prop de tabuleiro (0,17 a
+     * 0,49 de altura natural) e um alvo único fazia a REDOMA virar um ovo de
+     * 4 metros. Árvore pode ser árvore; regador não pode ser prédio. */
+    var ALVO = {
+      jd_estufa_arvore: 4.4, jd_escada: 2.6, jd_tronco: 1.6, jd_carrinho: 1.4,
+      jd_canteiro: 1.2, jd_vaso: 1.2, jd_regador: 1.0, jd_redoma: 0.9
+    };
+    function planta(chave, mult, x, z, rot) {
       var cena = null;
       try { cena = m2.rawScene(chave); } catch (e) {}
-      if (!cena) continue;
+      if (!cena) return null;
       var no = cena.clone(true);
-      // porte de enfeite; assenta pelo pé, mesma receita do tabuleiro
       no.updateMatrixWorld(true);
       var cx = new THREE.Box3().setFromObject(no);
       var alt = cx.max.y - cx.min.y;
-      if (alt > 0.01) no.scale.setScalar(Math.min(2.2, 1.4 / alt) * (1 + (i % 3) * 0.35));
+      if (alt > 0.01) no.scale.setScalar(((ALVO[chave] || 1.0) * (mult || 1)) / alt);
+      no.rotation.y = rot || 0;
       no.updateMatrixWorld(true);
-      cx = new THREE.Box3().setFromObject(no);
-      no.position.y = -cx.min.y;
-      var ang = 0.55 + i * 0.72;
-      no.position.x = Math.sin(ang) * RAIO_MAPA * (0.82 + (i % 2) * 0.08);
-      no.position.z = Math.cos(ang) * RAIO_MAPA * (0.82 + (i % 2) * 0.08);
+      cx = new THREE.Box3().setFromObject(no);   // assenta pelo pé, como sempre
+      no.position.set(x, -cx.min.y, z);
       scene.add(no);
+      return no;
     }
+    function longeDosLugares(x, z) {
+      for (var j = 0; j < lugares.length; j++) {
+        var dx = x - lugares[j].pos.x, dz = z - lugares[j].pos.z;
+        if (Math.hypot(dx, dz) < (lugares[j].raio || 3) + 3) return false;
+      }
+      return true;
+    }
+
+    /* As moitas: no anel externo a âncora é a ÁRVORE (a única peça com porte
+     * de âncora — a variação de altura e rotação disfarça a repetição); nos
+     * bolsões internos, composições "de trabalho" do jardim: escada apoiada,
+     * carrinho com canteiro, tronco caído. */
+    var SATELITES = ['jd_tronco', 'jd_vaso', 'jd_canteiro', 'jd_regador',
+                     'jd_redoma', 'jd_carrinho'];
+    var moitas = [];
+    for (var v = 0; v < 8; v++) {
+      moitas.push({ ang: 0.39 + v * (Math.PI / 4),
+                    raio: RAIO_MAPA * (0.84 + (v % 2) * 0.06),
+                    anc: 'jd_estufa_arvore', mult: 1 + (v % 3) * 0.14 });
+    }
+    [['jd_escada', 0.9], ['jd_carrinho', 2.6], ['jd_tronco', 4.4]]
+      .forEach(function (par) {
+        moitas.push({ ang: par[1], raio: RAIO_MAPA * 0.56,
+                      anc: par[0], mult: 1 });
+      });
+
+    var pi = 0;
+    moitas.forEach(function (mo, mi) {
+      var cx0 = Math.sin(mo.ang) * mo.raio;
+      var cz0 = Math.cos(mo.ang) * mo.raio;
+      if (!longeDosLugares(cx0, cz0)) return;          // porta é porta
+      planta(mo.anc, mo.mult, cx0, cz0, mi * 1.7);
+      var sats = 2 + (mi % 2);
+      for (var s2 = 0; s2 < sats; s2++) {
+        var a3 = mi * 2.1 + s2 * (Math.PI * 2 / sats) + 0.7;
+        planta(SATELITES[pi++ % SATELITES.length],
+               1 + (s2 % 2) * 0.25,
+               cx0 + Math.sin(a3) * (1.5 + s2 * 0.5),
+               cz0 + Math.cos(a3) * (1.5 + s2 * 0.5),
+               a3 * 2.3);
+      }
+    });
   }
 
   // ------------------------------------------------------------------ o herói

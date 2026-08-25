@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: as moitas do Acampamento</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): os enfeites v2 — o herói CAMINHA até uma moita
+     do anel externo, para a foto sair de perto (25/08: "muito jogados e
+     minúsculos" → moitas com âncora de porte e satélites encostados). -->
+<iframe id="f" src="../index.html?prova-enfeites"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      w.JOGO.DB.batizar('Jardineiro').then(function () {
+        w.JOGO.UI.showScreen('hub');
+        setTimeout(function () {
+          // tira o cartão do Tutor da frente da foto
+          var b = d.querySelector('.tutor-caixa .btn-primary');
+          if (b) b.click();
+          setTimeout(function () { window.__pronto = true; }, 1200);
+        }, 1500);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>
