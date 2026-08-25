@@ -429,9 +429,13 @@ var JOGO = (typeof window !== 'undefined')
 
     var acts = el('div', 'menu-acts');
     acts.appendChild(btn('Descer', 'btn-primary btn-big', function () { navTo('heroSelect'); }));
-    // [U6] UMA porta para tudo que é dos personagens: inventário, forja e
-    // coleção viraram abas lá dentro em vez de três botões soltos aqui.
-    acts.appendChild(btn('Personagens', 'btn-ghost btn-big', function () { openSheet('party'); }));
+    // [25/08] o menu único "Personagens" foi dividido a pedido: cada ficha
+    // tem porta própria — aqui numa fileira compacta, no Acampamento o cais.
+    var fichas = el('div', 'menu-fichas');
+    PARTY_TABS.forEach(function (t) {
+      fichas.appendChild(btn(t.nome, 'btn-mini btn-ghost', function () { sheetParty(t.id); }));
+    });
+    acts.appendChild(fichas);
     box.appendChild(acts);
     box.appendChild(stonesStrip());
 
@@ -749,8 +753,6 @@ var JOGO = (typeof window !== 'undefined')
     quem.appendChild(moedasEl);
     top.appendChild(quem);
     var acts = el('div', 'hub-acts');
-    acts.appendChild(btn('Missões', 'btn-mini', function () { openSheet('missoes'); }));
-    acts.appendChild(btn('Personagens <span class="tecla">I</span>', 'btn-mini', function () { openSheet('party'); }));
     acts.appendChild(btn('Menu', 'btn-mini btn-ghost', function () { navTo('menu'); }));
     top.appendChild(acts);
     s.appendChild(top);
@@ -760,6 +762,29 @@ var JOGO = (typeof window !== 'undefined')
 
     var painel = el('div', 'hub-painel is-off');
     s.appendChild(painel);
+
+    /* O CAIS (pedido do usuário, 25/08): "queria dividir o menu… pode ser um
+     * menu inferior centralizado". Cada ficha com porta própria, sempre à
+     * mão, à moda MMORPG — e as Missões, que moravam soltas no topo, descem
+     * para cá. O painel de aproximação mora um degrau acima para não taparem
+     * um ao outro (css .hub-painel). */
+    var dock = el('div', 'hub-dock');
+    [{ ic: '🎒', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
+     { ic: '🔨', rot: 'Forja', abre: 'forge' },
+     { ic: '📖', rot: 'Feitiços', abre: 'spells' },
+     { ic: '🃏', rot: 'Coleção', abre: 'collection' },
+     { ic: '🎭', rot: 'Avatar', abre: 'avatar' },
+     { ic: '📜', rot: 'Missões', abre: 'missoes' }
+    ].forEach(function (d) {
+      var b = el('button', 'hub-dock-b');
+      b.type = 'button';
+      b.appendChild(el('span', 'hd-ic', d.ic));
+      b.appendChild(el('span', 'hd-rot', d.rot +
+        (d.tecla ? ' <span class="tecla">' + d.tecla + '</span>' : '')));
+      tap(b, function () { openSheet(d.abre); });
+      dock.appendChild(b);
+    });
+    s.appendChild(dock);
 
     function pintaConta() {
       if (!JOGO.DB) { nomeEl.textContent = ''; return; }
@@ -2513,14 +2538,16 @@ var JOGO = (typeof window !== 'undefined')
   function openSheet(name, arg) {
     sheetName = name;
     lastSheetArg = arg;          // guardado para UI.repaint() saber o que reabrir
-    // As três telas de meta viraram ABAS de "Personagens" [U6]. Os nomes antigos
-    // continuam valendo como atalho para a aba certa: o menu de pausa, a ficha
-    // do herói e as páginas de teste chamam por eles.
+    // [U6 desfeito a pedido, 25/08] As fichas de meta voltaram a ser MENUS
+    // SEPARADOS — "tudo centralizado em um menu só" ficou ruim de usar. Os
+    // nomes antigos continuam valendo ('party' abre a última ficha visitada);
+    // o cais do Acampamento e o menu inicial chamam cada porta pelo nome.
     if (name === 'party') sheetParty(null, arg);
     else if (name === 'collection') sheetParty('colecao', arg);
     else if (name === 'inventory') sheetParty('inventario', arg);
     else if (name === 'forge') sheetParty('forja', arg);
     else if (name === 'spells') sheetParty('feiticos', arg);
+    else if (name === 'avatar') sheetParty('avatar', arg);
     else if (name === 'heroSheet') sheetHero(arg);
     else if (name === 'battleMenu') sheetBattleMenu();
     else if (name === 'banco') sheetBanco();
@@ -2535,11 +2562,13 @@ var JOGO = (typeof window !== 'undefined')
   UI.closeSheet = closeSheet;
 
   // ==========================================================================
-  // TELA "PERSONAGENS" — inventário · forja · coleção como ABAS [U6]
+  // AS FICHAS DE META — inventário · forja · feitiços · coleção · avatar
   // ==========================================================================
-  // Três botões soltos no menu viravam três telas que falavam do mesmo assunto:
-  // o que os heróis vestem. Agora é uma tela só, e a aba do inventário traz o
-  // HERÓI junto (carrossel + espaços), que é onde o item vai parar.
+  // Já foram abas de uma tela "Personagens" única [U6]; o usuário achou ruim
+  // "tudo centralizado em um menu só" (25/08) e cada ficha virou um MENU
+  // PRÓPRIO, aberto pelo cais (a barra inferior do Acampamento) ou pela
+  // fileira do menu inicial. PARTY_TABS segue sendo a lista canônica: o nome
+  // e o subtítulo de cada ficha, e a ordem em que as portas aparecem.
   var PARTY_TABS = [
     { id: 'inventario', nome: 'Inventário',
       sub: 'Um saco só para o grupo. Toque numa peça para vestir no herói ao lado.' },
@@ -2576,20 +2605,11 @@ var JOGO = (typeof window !== 'undefined')
     if (tab) partyTab = tab;
     sheetName = 'party';
     var def = partyTabDef(partyTab);
-    var body = sheetShell('Personagens', def.sub);
-    // larga SEMPRE (não só no inventário): alargar ao trocar de aba faria a
-    // ficha pular de tamanho debaixo do dedo
+    var body = sheetShell(def.nome, def.sub);
+    // larga SEMPRE: os saltos internos (saco → forja, ficha → inventário)
+    // não podem fazer o painel pular de tamanho debaixo do dedo
     var painelP = sheetEl.querySelector('.sheet-panel');
     if (painelP) painelP.classList.add('sheet-larga');
-
-    var tabs = el('div', 'pt-tabs');
-    PARTY_TABS.forEach(function (t) {
-      tabs.appendChild(btn(t.nome, 'btn-tab' + (t.id === partyTab ? ' is-on' : ''), function () {
-        partyTab = t.id;
-        sheetParty(t.id);
-      }));
-    });
-    body.appendChild(tabs);
 
     if (partyTab === 'forja') forgeBody(body, arg);
     else if (partyTab === 'colecao') collectionBody(body, arg);
@@ -4010,7 +4030,10 @@ var JOGO = (typeof window !== 'undefined')
   function sheetBattleMenu() {
     var body = sheetShell('Pausa');
     var acts = el('div', 'menu-acts');
-    acts.appendChild(btn('Personagens', 'btn-ghost', function () { openSheet('party'); }));
+    // com o menu dividido, a pausa aponta para as duas fichas que importam
+    // no meio da luta: o saco e a árvore de feitiços
+    acts.appendChild(btn('Inventário', 'btn-ghost', function () { openSheet('inventory'); }));
+    acts.appendChild(btn('Feitiços', 'btn-ghost', function () { openSheet('spells'); }));
     acts.appendChild(btn('Abandonar a descida', 'btn-warn', function () {
       confirmSheet('Abandonar?', 'O que você já ganhou fica. A sala em curso se perde.', function () {
         safe(function () { G().restart(); }, null);

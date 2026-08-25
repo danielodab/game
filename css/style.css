@@ -1151,9 +1151,6 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
   border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 4px;
   vertical-align: 1px;
 }
-.pt-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-.pt-tabs .btn-tab { flex: 1 1 auto; min-width: 92px; }
-
 /* ---- o trocador de heróis: retratos clicáveis + a ficha do ativo */
 .pt-hero-caixa { display: flex; flex-direction: column; gap: 8px; }
 .pt-fila { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1633,7 +1630,9 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 
 /* ------------------------------------------------- O CHAT DO ACAMPAMENTO */
 .hub-chat {
-  position: absolute; left: 12px; bottom: 12px; width: min(340px, 60vw);
+  /* acima do cais (.hub-dock): os dois moram no rodapé e não podem brigar */
+  position: absolute; left: 12px; bottom: calc(var(--sa-b, 0px) + 72px);
+  width: min(340px, 60vw);
   display: flex; flex-direction: column; gap: 6px; z-index: 5;
 }
 .hub-chat-log {
@@ -1675,7 +1674,8 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .hub-mundo { position: absolute; inset: 0; }
 .hub-canvas { width: 100%; height: 100%; display: block; }
 .hub-painel {
-  position: absolute; left: 50%; bottom: calc(var(--sa-b, 0px) + 16px);
+  /* um degrau acima do cais (.hub-dock), para não taparem um ao outro */
+  position: absolute; left: 50%; bottom: calc(var(--sa-b, 0px) + 96px);
   transform: translateX(-50%);
   width: min(420px, calc(100% - 24px));
   background: rgba(14,18,14,.94);
@@ -1692,3 +1692,34 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
   border-radius: 6px; color: inherit; font: inherit; padding: 9px 10px; outline: none;
 }
 .hub-input:focus { border-color: #c9a227; }
+
+/* ---- O CAIS: o menu inferior centralizado do Acampamento (pedido 25/08).
+   O "Personagens" de abas foi dividido: cada ficha de meta tem porta própria
+   aqui, sempre à mão, à moda MMORPG. */
+.hub-dock {
+  position: absolute; left: 50%; bottom: calc(var(--sa-b, 0px) + 10px);
+  transform: translateX(-50%); z-index: 5;
+  display: flex; gap: 2px; padding: 6px 8px;
+  background: rgba(10,13,10,.9); border: 1px solid rgba(240,234,216,.16);
+  border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+  max-width: calc(100% - 16px);
+}
+.hub-dock-b {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  min-width: 58px; padding: 6px 7px 5px; cursor: pointer;
+  background: none; border: 0; border-radius: 10px;
+  color: #cfd8e2; font: 600 10.5px/1 var(--ui-sans);
+}
+.hub-dock-b:hover { background: rgba(255,255,255,.08); color: #fff; }
+.hub-dock-b:active { transform: translateY(1px); }
+.hub-dock-b .hd-ic { font-size: 19px; line-height: 1; }
+@media (max-width: 480px) {
+  .hub-dock { gap: 0; padding: 5px 4px; }
+  .hub-dock-b { min-width: 46px; padding: 5px 4px 4px; font-size: 9.5px; }
+  .hub-dock-b .hd-ic { font-size: 17px; }
+  .hub-dock-b .tecla { display: none; }
+}
+
+/* a fileira de fichas do menu inicial (o "Personagens" dividido) */
+.menu-fichas { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.menu-fichas .btn { flex: 1 1 auto; }
