@@ -237,6 +237,17 @@ var JOGO = (typeof window !== 'undefined')
       return;
     }
 
+    // 1b) O SACO TEM FUNDO (25/08): o que vem tem de caber no lugar do que
+    // vai. Sem vaga, a troca cai como no caso do item sumido — melhor cair
+    // do que estourar o limite por uma porta lateral.
+    var limite = (prog.bagLimit) ? prog.bagLimit() : Infinity;
+    if (inv.length - indices.length + st.dele.itens.length > limite) {
+      manda('cancela', {});
+      st = null;
+      avisa();
+      return;
+    }
+
     var meusItens = st.minha.itens.slice();
     var moedasVao = st.minha.moedas;
     var itensVem = st.dele.itens.slice();

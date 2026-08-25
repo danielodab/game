@@ -594,6 +594,15 @@ JOGO.DATA = JOGO.DATA || {};
   };
 
   // =========================================================================
+  // O SACO TEM FUNDO (pedido do usuário, 25/08): limite de UNIDADES no
+  // inventário, crescendo com as classes liberadas:
+  //     limite = base + perClass × classes liberadas
+  // Duas classes de início → 80; as seis → 160. O transbordo é o cofre do
+  // banco — o limite existe para dar valor à viagem até ele.
+  // =========================================================================
+  DATA.bag = { base: 40, perClass: 20 };
+
+  // =========================================================================
   // CONJUNTOS ELEMENTAIS — 2 por calabouço, 4 peças (pa/pp/vida/especial).
   // O elemento é o dos monstros que derrubam as peças.
   // Bônus progressivos (2/3/4 peças) que premiam o elemento e crescem com a

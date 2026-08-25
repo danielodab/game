@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o fundo do saco</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>O fundo do saco — limite que cresce com as classes</h1>
+<div class="sub">limite = base + perClass × classes liberadas (DATA.bag). As portas de entrada barram
+(addItem, tirar, banco/mercado via bagFree); equipar e fundir nunca precisam de vaga. Drop com o
+saco cheio fica para trás e viaja em <code>drops.perdidos</code> para a tela de recompensa avisar.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var P = JOGO.Progress;
+  P.reset();
+  var cfg = JOGO.DATA.bag;
+  var lib = P.state.unlockedClasses.length;
+  var lim = P.bagLimit();
+
+  // 1. a fórmula
+  check('limite = base + perClass × liberadas', lim === cfg.base + cfg.perClass * lib,
+        lim + ' com ' + lib + ' classes');
+
+  // 2. encher até o fundo
+  var voltas = 0;
+  while (voltas < 500 && P.addItem('gh-widow-shears')) voltas++;
+  check('o saco enche exatamente até o limite', P.state.inventory.length === lim,
+        P.state.inventory.length + ' de ' + lim);
+  check('a peça seguinte é recusada', P.addItem('gh-widow-shears') === false);
+
+  // 3. equipar NÃO precisa de vaga (tira do saco; a devolvida entra no lugar)
+  var hid = P.heroIds()[0];
+  var pilha = P.invStacks().filter(function (s) { return s.itemId === 'gh-widow-shears'; })[0];
+  var okEq = P.equip(hid, 'gh-widow-shears', pilha.index);
+  check('equipar com o saco cheio funciona (libera 1 vaga)',
+        okEq && P.state.inventory.length === lim - 1);
+  check('a vaga aberta aceita 1 peça de novo', P.addItem('gh-seed-pouch') === true &&
+        P.state.inventory.length === lim);
+
+  // 4. tirar SEM vaga é recusado; com vaga, volta
+  check('tirar com o saco cheio é recusado (fica vestida)',
+        P.unequip(hid, 'punho') === false && !!P.hero(hid).items.punho);
+  P.state.inventory.pop(); P.save();
+  check('com 1 vaga, tirar volta a funcionar',
+        P.unequip(hid, 'punho') === true && P.state.inventory.length === lim);
+
+  // 5. fundir nunca precisa de vaga: 3 viram 1 (líquido −2)
+  var p2 = P.invStacks().filter(function (s) {
+    return s.itemId === 'gh-widow-shears' && s.stars === 0;
+  })[0];
+  var nova = P.fuseItem(p2.index);
+  check('fundir com o saco cheio funciona (3 → 1)',
+        !!nova && nova.stars === 1 && P.state.inventory.length === lim - 2);
+
+  // 6. drop com o saco cheio fica para trás, com a lista dos perdidos
+  while (P.addItem('gh-widow-shears')) {}          // reenche
+  var perdidos = 0, ganhos = 0;
+  for (var r = 0; r < 40; r++) {
+    var d = P.rollDrops('greenhouse', 0, 1, 1) || [];
+    ganhos += d.length;
+    if (d.perdidos) perdidos += d.perdidos.length;
+  }
+  check('com o saco cheio, nenhum drop entra', ganhos === 0 &&
+        P.state.inventory.length === P.bagLimit(), ganhos + ' entraram');
+  check('o que ficou para trás é relatado (drops.perdidos)', perdidos > 0,
+        perdidos + ' perdidos em 40 salas');
+
+  // 7. liberar classe AUMENTA o limite — e abre vaga na hora
+  var todas = Object.keys(JOGO.DATA.classes || {});
+  var trancada = null;
+  for (var t = 0; t < todas.length; t++) {
+    if (P.state.unlockedClasses.indexOf(todas[t]) < 0) { trancada = todas[t]; break; }
+  }
+  var limAntes = P.bagLimit();
+  P.unlockClass(trancada);
+  check('liberar classe sobe o limite em perClass',
+        P.bagLimit() === limAntes + cfg.perClass,
+        trancada + ': ' + limAntes + ' → ' + P.bagLimit());
+  check('a vaga nova aceita peça', P.addItem('gh-widow-shears') === true);
+
+  // 8. nada disso tocou o disco de verdade
+  var sb = JOGO.SaveSandbox.check();
+  check('o disco de verdade continua intocado', sb.ok, JSON.stringify(sb.disco));
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>

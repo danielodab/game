@@ -1184,6 +1184,16 @@ var JOGO = (typeof window !== 'undefined')
       })()));
     }
 
+    // O SACO ENCHEU no meio da descida (25/08): o que ficou para trás é
+    // dito com nome — perda calada viraria bug report, não regra de jogo.
+    if (drops.perdidos && drops.perdidos.length) {
+      box.appendChild(el('p', 'rw-perdidos', '⚠ O saco encheu — ficou para trás: <b>' +
+        drops.perdidos.map(function (id) {
+          var it2 = itemDef(id);
+          return esc((it2 && it2.name) || id);
+        }).join(', ') + '</b>. Guarde peças no cofre do banco antes de descer.'));
+    }
+
     var stones = lastRewards.stones || {};
     var anyStone = false; for (var sk in stones) { if (stones.hasOwnProperty(sk)) anyStone = true; }
     if (anyStone) {
@@ -2029,7 +2039,9 @@ var JOGO = (typeof window !== 'undefined')
 
       var colSaco = el('div', 'bk2-col');
       colSaco.dataset.lado = 'saco';
-      colSaco.appendChild(el('h3', 'bk-tit', 'No saco (' + unidadesSaco + ')'));
+      var limSaco = safe(function () { return P().bagLimit(); }, 0);
+      colSaco.appendChild(el('h3', 'bk-tit', 'No saco (' + unidadesSaco +
+        (limSaco ? ' / ' + limSaco : '') + ')'));
       colSaco.appendChild(bancoGrade(pilhas, 'saco', function (pi) {
         var st2 = P().state;
         var entrada = st2.inventory[pi.indices[0]];
@@ -2043,6 +2055,11 @@ var JOGO = (typeof window !== 'undefined')
       colCofre.dataset.lado = 'cofre';
       colCofre.appendChild(el('h3', 'bk-tit', 'No cofre (' + cofre.itens.length + ')'));
       colCofre.appendChild(bancoGrade(pilhasCofre, 'cofre', function (pi) {
+        // o saco tem fundo (25/08): sacar do cofre só com vaga
+        if (!safe(function () { return P().bagFree(1); }, true)) {
+          toast('O saco está cheio — não cabe mais nada.');
+          return;
+        }
         DBc.sacarItem(pi.indices[0]).then(function (res) {
           if (!res.ok) { toast(res.erro || 'não deu'); sheetBanco(); return; }
           var st3 = P().state;
@@ -2188,6 +2205,10 @@ var JOGO = (typeof window !== 'undefined')
         row.appendChild(el('span', 'mc-preco', of.preco + 'v'));
         if (of.vendedor === 'jogador') {
           row.appendChild(btn('Retirar', 'btn-mini', function () {
+            if (!safe(function () { return P().bagFree(1); }, true)) {
+              toast('O saco está cheio — não cabe mais nada.');
+              return;
+            }
             Mc.retirar(of.id).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
               P().state.inventory.push(res.item);
@@ -2198,6 +2219,10 @@ var JOGO = (typeof window !== 'undefined')
           }));
         } else {
           var bC = btn('Comprar', 'btn-mini btn-gold', function () {
+            if (!safe(function () { return P().bagFree(1); }, true)) {
+              toast('O saco está cheio — não cabe mais nada.');
+              return;
+            }
             Mc.comprar(of.id).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
               P().state.inventory.push(res.item);
@@ -3070,6 +3095,18 @@ var JOGO = (typeof window !== 'undefined')
       invElemFiltro = e2;
       sheetParty('inventario');
     }));
+    // O FUNDO DO SACO à vista (25/08): unidades / limite, amarelando perto
+    // do fim e avermelhando cheio — e a regra dita, para o limite não
+    // parecer castigo: ele cresce com as classes.
+    var lot = safe(function () {
+      return { n: P().state.inventory.length, max: P().bagLimit() };
+    }, null);
+    if (lot) {
+      ladoSaco.appendChild(el('div',
+        'inv-lotacao' + (lot.n >= lot.max ? ' is-cheio'
+                        : (lot.n >= lot.max * 0.85 ? ' is-quase' : '')),
+        'Saco: <b>' + lot.n + ' / ' + lot.max + '</b> — o limite cresce ao liberar classes'));
+    }
     var g = invGrid(hid);
     if (g.dataset && g.dataset.vazio) {
       ladoSaco.appendChild(el('p', 'inv-dica', g.dataset.vazio));
@@ -3326,6 +3363,8 @@ var JOGO = (typeof window !== 'undefined')
           if (ok) {
             invSel = { itemId: itemId, level: lv, stars: sr };     // volta selecionada na grade
             toast('Voltou para o inventário.', 'good');
+          } else if (!safe(function () { return P().bagFree(1); }, true)) {
+            toast('O saco está cheio — a peça fica vestida.');
           }
           sheetParty('inventario');
         }));
@@ -3857,6 +3896,18 @@ var JOGO = (typeof window !== 'undefined')
         ce.appendChild(el('p', 'fc-nota', 'Três cópias no saco: <b>+' +
           fu.niveisEscolhidos.join(' +') + '</b> viram <b>★' + fu.proxima +
           ' +' + fu.nivelResultado + '</b>.'));
+        // A PRÉVIA DO FUNDIR (pedido 25/08: "não consigo ver a previsão") —
+        // a mesma leitura agora → depois do cartão da Pedra, com a estrela
+        // nova e o nível médio já dentro da conta.
+        var prevE = el('div', 'forge-prev');
+        prevE.appendChild(el('div', 'fp-col', '<i>agora ' +
+          (atual.stars ? '★' + atual.stars + ' ' : '') + '+' + lv2 + '</i>' +
+          bonusPreview(it2, lv2, atual.stars)));
+        prevE.appendChild(el('div', 'fp-arrow', '→'));
+        prevE.appendChild(el('div', 'fp-col fp-next', '<i>★' + fu.proxima +
+          ' +' + fu.nivelResultado + '</i>' +
+          bonusPreview(it2, fu.nivelResultado, fu.proxima)));
+        ce.appendChild(prevE);
         ce.appendChild(btn('Fundir → ★' + fu.proxima + ' +' + fu.nivelResultado,
           'btn-gold btn-block', function () {
             var nova = safe(function () { return P().fuseItem(atual.index); }, null);
@@ -3876,6 +3927,16 @@ var JOGO = (typeof window !== 'undefined')
           ? 'Faltam <b>' + fu.faltam + '</b> cópias iguais'
           : 'Falta <b>1</b> cópia igual') +
           ' no saco para a ★' + fu.proxima + '.'));
+        // mesmo sem as cópias, a prévia mostra O QUE a estrela renderia
+        // neste nível — é o que faz valer a caça às outras duas
+        var prevF = el('div', 'forge-prev');
+        prevF.appendChild(el('div', 'fp-col', '<i>agora ' +
+          (atual.stars ? '★' + atual.stars + ' ' : '') + '+' + lv2 + '</i>' +
+          bonusPreview(it2, lv2, atual.stars)));
+        prevF.appendChild(el('div', 'fp-arrow', '→'));
+        prevF.appendChild(el('div', 'fp-col fp-next', '<i>★' + fu.proxima +
+          ' (no +' + lv2 + ')</i>' + bonusPreview(it2, lv2, fu.proxima)));
+        ce.appendChild(prevF);
       }
     }
     cards.appendChild(ce);

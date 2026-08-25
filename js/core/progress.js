@@ -1205,10 +1205,27 @@ var JOGO = (typeof window !== 'undefined')
     return best;
   }
 
+  /* O FUNDO DO SACO (pedido do usuário, 25/08): limite de UNIDADES que
+   * cresce com as classes liberadas — limite = base + perClass × liberadas
+   * (DATA.bag). Quem barra é cada porta de ENTRADA (addItem, unequip, troca,
+   * banco, mercado); equipar e fundir nunca precisam de vaga, porque o
+   * líquido deles é zero ou negativo. */
+  Progress.bagLimit = function () {
+    var cfg = D().bag || {};
+    var n = (Progress.state && isArray(Progress.state.unlockedClasses))
+          ? Progress.state.unlockedClasses.length : 0;
+    return num(cfg.base, 40) + num(cfg.perClass, 20) * n;
+  };
+  Progress.bagFree = function (quantas) {
+    if (!Progress.state) return false;
+    return Progress.state.inventory.length + (quantas || 1) <= Progress.bagLimit();
+  };
+
   /* Entra no saco único. Repetido agora vira CÓPIA (matéria da fusão) [D7]. */
   Progress.addItem = function (itemId) {
     if (!Progress.state || typeof itemId !== 'string') return false;
     if (!itemDef(itemId)) return false;
+    if (!Progress.bagFree(1)) return false;             // o saco tem fundo
     Progress.state.inventory.push({ itemId: itemId, level: 0, stars: 0 });
     Progress.save();
     return true;
@@ -1266,6 +1283,7 @@ var JOGO = (typeof window !== 'undefined')
     if (indexOf(SLOTS, slot) < 0) return false;
     var h = ensureHero(heroId);
     if (!h || !h.items[slot]) return false;
+    if (!Progress.bagFree(1)) return false;              // sem vaga, fica vestida
     devolveAoSaco(h, slot);                                      // a MESMA cópia volta
     syncSpells(heroId);
     Progress.save();
@@ -1713,8 +1731,13 @@ var JOGO = (typeof window !== 'undefined')
     for (var r = 0; r < rolls; r++) {
       var chosen = pickWeighted(pool);
       if (!chosen || chosen === NO_DROP) continue;      // saiu "nada"
-      drops.push(chosen);
-      Progress.addItem(chosen);            // repetido vira CÓPIA (fusão) [D7][D18]
+      if (Progress.addItem(chosen)) {      // repetido vira CÓPIA (fusão) [D7][D18]
+        drops.push(chosen);
+      } else {
+        // o saco encheu no meio da descida: a peça fica para trás, e a lista
+        // viaja como propriedade do array para a tela de recompensa AVISAR
+        drops.perdidos = (drops.perdidos || []).concat([chosen]);
+      }
     }
     Progress.save();
     return drops;
