@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — temporadas da Brasa</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>Temporadas — o Elo comprime, a coroa vai para a galeria</h1>
+<div class="sub">Brasa faz a conta (temporadaDe, comprime); o DB grava a virada (brasaVirar) e a
+galeria é permanente. Conta antiga ganha só o carimbo, sem punição. E os campos novos têm de
+SAIR do brasaVer — a cópia campo a campo já engoliu coisas caladas.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/brasa.js', 'js/core/db.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var B = JOGO.Brasa, DIA = 86400000;
+
+  // 1. o calendário
+  check('a época abre na temporada 1', B.temporadaDe(B.EPOCA) === 1);
+  check('o dia 41 ainda é temporada 1', B.temporadaDe(B.EPOCA + 41 * DIA) === 1);
+  check('o dia 42 vira temporada 2', B.temporadaDe(B.EPOCA + 42 * DIA) === 2);
+  check('viraEmDias conta o resto', B.viraEmDias(B.EPOCA + 40 * DIA) === 2);
+
+  // 2. a compressão: volta ao meio, piso segura
+  check('1800 comprime para 1400', B.comprime(1800) === 1400);
+  check('1000 fica 1000', B.comprime(1000) === 1000);
+  check('820 sobe para 910 (o meio também puxa de baixo)', B.comprime(820) === 910);
+  check('o piso segura', B.comprime(0) === B.PISO);
+
+  // 3. a virada no DB
+  JOGO.DB.brasaVer().then(function (b0) {
+    check('conta nova: temporada null e galeria vazia (brasaVer os devolve)',
+          b0.temporada === null && b0.galeria && Object.keys(b0.galeria).length === 0);
+    // sobe os pontos e carimba a T3 SEM comprimir (conta de antes das temporadas)
+    return JOGO.DB.definirBrasa(1800, 9);
+  }).then(function () {
+    return JOGO.DB.brasaVirar({ temporada: 3, pts: 1800, galeriaDe: null, nivel: null });
+  }).then(function (r1) {
+    check('o carimbo vira sem mexer nos pontos', r1.ok && r1.virou && r1.pts === 1800);
+    return JOGO.DB.brasaVirar({ temporada: 3, pts: 999 });
+  }).then(function (r2) {
+    check('virar de novo na MESMA temporada é no-op', r2.ok && r2.virou === false);
+    // a virada de verdade: T3 → T4, comprime e anota a coroa da T3
+    return JOGO.DB.brasaVirar({ temporada: 4, pts: B.comprime(1800), galeriaDe: 3, nivel: 9 });
+  }).then(function (r3) {
+    check('a virada comprime os pontos', r3.ok && r3.virou && r3.pts === 1400);
+    return JOGO.DB.brasaVer();
+  }).then(function (b1) {
+    check('a galeria guarda a coroa da temporada fechada',
+          b1.temporada === 4 && b1.galeria['3'] === 9,
+          JSON.stringify(b1.galeria));
+    var sb = JOGO.SaveSandbox.check();
+    check('o disco de verdade continua intocado', sb.ok);
+
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  });
+})();
+</script>
+</body>
+</html>

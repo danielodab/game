@@ -62,7 +62,8 @@ var JOGO = (typeof window !== 'undefined')
     return {
       versao: 1,
       jogador: { id: novoId(), nome: null, titulo: null, avatar: null,
-                 brasa: { pts: 1000, partidas: 0 }, criadoEm: agora() },
+                 brasa: { pts: 1000, partidas: 0, temporada: null, galeria: {} },
+                 criadoEm: agora() },
       carteira: { moedas: 0 },
       banco: { moedas: 0, itens: [] },
       missoes: null,                 // { dia, lista } — quem re-sorteia é JOGO.Missoes
@@ -107,7 +108,12 @@ var JOGO = (typeof window !== 'undefined')
           if (d.jogador.titulo === undefined) d.jogador.titulo = null;
           if (d.jogador.avatar === undefined) d.jogador.avatar = null;
           if (!d.jogador.brasa || typeof d.jogador.brasa.pts !== 'number') {
-            d.jogador.brasa = { pts: 1000, partidas: 0 };
+            d.jogador.brasa = { pts: 1000, partidas: 0, temporada: null, galeria: {} };
+          }
+          // contas de antes das TEMPORADAS (25/08) ganham os campos novos
+          if (d.jogador.brasa.temporada === undefined) d.jogador.brasa.temporada = null;
+          if (!d.jogador.brasa.galeria || typeof d.jogador.brasa.galeria !== 'object') {
+            d.jogador.brasa.galeria = {};
           }
           dados = d;
           return dados;
@@ -252,7 +258,30 @@ var JOGO = (typeof window !== 'undefined')
    * a regra da Coroa moram em JOGO.Brasa. */
   DB.brasaVer = function () {
     var d = carrega();
-    return responde({ pts: d.jogador.brasa.pts, partidas: d.jogador.brasa.partidas });
+    // cópia campo a campo: temporada e galeria entraram em 25/08 — campo
+    // novo da brasa TEM de entrar aqui, senão some calado (a armadilha)
+    var g = {}, b = d.jogador.brasa;
+    for (var k in b.galeria) if (b.galeria.hasOwnProperty(k)) g[k] = b.galeria[k];
+    return responde({ pts: b.pts, partidas: b.partidas,
+                      temporada: b.temporada, galeria: g });
+  };
+
+  /* A VIRADA DE TEMPORADA (25/08). Quem faz a CONTA é JOGO.Brasa (comprime,
+   * temporadaDe); o DB só grava o que o chamador decidiu: o carimbo da
+   * temporada nova, os pontos (comprimidos ou não) e, quando houve coroa,
+   * a entrada na GALERIA — permanente, uma por temporada fechada. */
+  DB.brasaVirar = function (v) {
+    if (!v || typeof v.temporada !== 'number') return responde({ ok: false });
+    var d = carrega();
+    var b = d.jogador.brasa;
+    if (b.temporada === v.temporada) return responde({ ok: true, virou: false });
+    if (typeof v.pts === 'number' && isFinite(v.pts)) b.pts = Math.round(v.pts);
+    if (v.galeriaDe != null && typeof v.nivel === 'number') {
+      b.galeria[String(v.galeriaDe)] = v.nivel;
+    }
+    b.temporada = v.temporada;
+    grava();
+    return responde({ ok: true, virou: true, pts: b.pts });
   };
   DB.definirBrasa = function (pts, partidas) {
     var d = carrega();

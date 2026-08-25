@@ -58,20 +58,20 @@ MUITAS, porque o pedido foi "difícil de alcançar".</div>
   var fundo = B.elo(805, 1000, false);
   check('o piso de 800 segura o fundo', fundo.pts === 800, fundo.pts);
 
-  // ------------------------------------------------------------------ degraus
-  check('1000 pontos é Fagulha', B.tierDe(1000, false).id === 'fagulha');
-  check('1200 é Brasa · 1400 é Chama · 1600 é Labareda',
-        B.tierDe(1200, false).id === 'brasa' &&
-        B.tierDe(1400, false).id === 'chama' &&
-        B.tierDe(1600, false).id === 'labareda');
+  // ---- degraus: desde faa7d4d a escada são as DEZ COROAS do usuário
+  check('1000 pontos é Coroa I', B.tierDe(1000, false).id === 'n1');
+  check('1200 é Coroa III · 1400 é V · 1600 é VII',
+        B.tierDe(1200, false).id === 'n3' &&
+        B.tierDe(1400, false).id === 'n5' &&
+        B.tierDe(1600, false).id === 'n7');
 
-  // -------------------------------------------------- o portão duplo da Coroa
-  check('1900 pontos SEM o topo do placar fica em Labareda',
-        B.tierDe(1900, false).id === 'labareda');
-  check('1900 pontos COM o topo vira Coroa de Fogo',
-        B.tierDe(1900, true).id === 'coroa');
-  check('o topo do placar SEM os pontos não vira Coroa',
-        B.tierDe(1400, true).id === 'chama');
+  // ------------------------------------------------ o portão duplo da Coroa X
+  check('1900 pontos SEM o topo do placar fica na Coroa IX',
+        B.tierDe(1900, false).id === 'n9');
+  check('1900 pontos COM o topo vira Coroa X',
+        B.tierDe(1900, true).id === 'n10');
+  check('o topo do placar SEM os pontos não vira Coroa X',
+        B.tierDe(1400, true).id === 'n5');
 
   // --------------------------------- a subida é longa DE PROPÓSITO (o pedido)
   var pts = B.INICIAL, vitorias = 0;

@@ -1327,6 +1327,11 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 }
 .perfil-classe span { color: var(--pa); font-weight: 700; }
 .hub-tit { font-size: 12px; color: var(--gold); font-style: normal; }
+.perfil-galeria { font-size: 12px; color: #cfa94e; }
+.placar-temporada {
+  margin: 0 0 8px; padding: 7px 11px; border-radius: 9px; font-size: 12px;
+  background: rgba(230,181,60,.08); border: 1px solid rgba(230,181,60,.35);
+}
 
 /* TRAJES (25/08): duas fotos de equipamento por herói */
 .pt-trajes { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }

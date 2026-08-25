@@ -819,6 +819,28 @@ var JOGO = (typeof window !== 'undefined')
           });
           topoArenaCache = { souEu: brasa.pts >= maiorVizinho };
         }
+        /* A VIRADA DE TEMPORADA (25/08), aplicada na entrada da praça: conta
+         * de antes das temporadas ganha só o carimbo (sem punir); virada de
+         * verdade comprime os pontos e manda a coroa para a GALERIA. */
+        if (brasa && JOGO.Brasa && JOGO.Brasa.temporadaDe && JOGO.DB.brasaVirar) {
+          var tempAtual = JOGO.Brasa.temporadaDe(Date.now());
+          if (brasa.temporada !== tempAtual) {
+            var soCarimbo = (brasa.temporada == null);
+            var tierAntes = JOGO.Brasa.tierDe(brasa.pts, souTopoDaArena());
+            JOGO.DB.brasaVirar({
+              temporada: tempAtual,
+              pts: soCarimbo ? brasa.pts : JOGO.Brasa.comprime(brasa.pts),
+              galeriaDe: soCarimbo ? null : brasa.temporada,
+              nivel: (!soCarimbo && brasa.partidas > 0 && tierAntes) ? tierAntes.nivel : null
+            }).then(function (rv) {
+              if (rv && rv.virou && !soCarimbo) {
+                toast('Nova temporada da arena! A coroa foi para a galeria e os pontos comprimiram.', 'good');
+              }
+              pintaConta();
+            });
+            return;                       // repinta com a temporada carimbada
+          }
+        }
         if (!j.nome) { nomeEl.textContent = '—'; pedeNome(); }
         else nomeEl.textContent = j.nome;
         // O AVATAR: a conta pode vestir uma fusão do guarda-roupa — o
@@ -929,7 +951,11 @@ var JOGO = (typeof window !== 'undefined')
       var R = JOGO.Rede;
       if (JOGO.DB.brasaVer) {
         JOGO.DB.brasaVer().then(function (bz) {
-          if (bz) { resumoBrasaPts = bz.pts; resumoBrasaPartidas = bz.partidas || 0; }
+          if (bz) {
+            resumoBrasaPts = bz.pts;
+            resumoBrasaPartidas = bz.partidas || 0;
+            resumoGaleria = bz.galeria || null;
+          }
         });
       }
       JOGO.DB.jogador().then(function (j) {
@@ -2442,9 +2468,29 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(caixa);
     if (!JOGO.DB) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
 
-    Promise.all([JOGO.DB.jogador(), JOGO.DB.placarLista()]).then(function (r) {
-      var eu2 = r[0], lista = r[1] || [];
+    Promise.all([JOGO.DB.jogador(), JOGO.DB.placarLista(),
+                 JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null)])
+    .then(function (r) {
+      var eu2 = r[0], lista = r[1] || [], bz = r[2];
       clear(caixa);
+
+      // A TEMPORADA (25/08): qual é, quando vira, e a GALERIA das já vividas
+      if (JOGO.Brasa && JOGO.Brasa.temporadaDe) {
+        var linhaT = 'Temporada <b>' + JOGO.Brasa.temporadaDe(Date.now()) +
+          '</b> da arena · vira em <b>' + JOGO.Brasa.viraEmDias(Date.now()) + '</b> dia(s)';
+        var gal = (bz && bz.galeria) || {};
+        var tGal = Object.keys(gal).sort(function (a, b2) { return a - b2; });
+        if (tGal.length) {
+          linhaT += ' · galeria: ' + tGal.map(function (t2) {
+            var nomeC = 'Coroa ' + gal[t2];
+            (JOGO.Brasa.TIERS || []).forEach(function (tr) {
+              if (tr.nivel === gal[t2]) nomeC = tr.nome;
+            });
+            return '<b>' + nomeC + '</b> (T' + t2 + ')';
+          }).join(' · ');
+        }
+        caixa.appendChild(el('p', 'placar-temporada', linhaT));
+      }
 
       var linhas = [{ id: eu2.id, nome: (eu2.nome || 'Você'), titulo: eu2.titulo || '',
                       resumo: safe(resumoDaConta, { classes: {}, total: 0 }), sou: true }];
@@ -3232,11 +3278,12 @@ var JOGO = (typeof window !== 'undefined')
       total += lv;
     });
     return { classes: classes2, total: total,
-             brasa: resumoBrasaPts, partidas: resumoBrasaPartidas };
+             brasa: resumoBrasaPts, partidas: resumoBrasaPartidas,
+             galeria: resumoGaleria };
   }
   /* os pontos de brasa entram no resumo por fora (são assíncronos no DB);
    * buildHub os carrega antes de ligar a Rede */
-  var resumoBrasaPts = 1000, resumoBrasaPartidas = 0;
+  var resumoBrasaPts = 1000, resumoBrasaPartidas = 0, resumoGaleria = null;
 
   function paresDeAvatar() {
     var ids = Object.keys(classes()).filter(isUnlocked).sort();
@@ -4407,6 +4454,18 @@ var JOGO = (typeof window !== 'undefined')
     } else {
       col.appendChild(el('div', 'perfil-coroa is-sem',
         (r.partidas > 0 ? (r.brasa || '?') + ' pts na arena' : 'nunca pisou na arena')));
+    }
+    // a GALERIA de temporadas (25/08): a melhor coroa que a conta já teve
+    var gal = r.galeria || {};
+    var melhorG = 0;
+    Object.keys(gal).forEach(function (t2) { if (gal[t2] > melhorG) melhorG = gal[t2]; });
+    if (melhorG > 0) {
+      var nomeG = 'Coroa ' + melhorG;
+      ((JOGO.Brasa && JOGO.Brasa.TIERS) || []).forEach(function (tr) {
+        if (tr.nivel === melhorG) nomeG = tr.nome;
+      });
+      col.appendChild(el('div', 'perfil-galeria',
+        'galeria: já alcançou <b>' + esc(nomeG) + '</b>'));
     }
     col.appendChild(el('div', 'perfil-total',
       'nível somado: <b>' + (r.total || 0) + '</b>'));

@@ -34,6 +34,26 @@ var JOGO = (typeof window !== 'undefined')
   B.PISO = 800;
   B.K = 24;
 
+  /* TEMPORADAS (pedido 25/08): a cada 6 semanas o Elo COMPRIME de volta ao
+   * meio (não zera — quem subiu continua na frente, mas a escada volta a
+   * valer), e a coroa da temporada que fechou vai para a GALERIA da conta,
+   * permanente. A época 1 começa no dia em que a Brasa nasceu. */
+  B.TEMPORADA_DIAS = 42;
+  B.EPOCA = Date.UTC(2026, 7, 24);            // 24/08/2026
+  B.temporadaDe = function (ts) {
+    ts = (typeof ts === 'number' && isFinite(ts)) ? ts : Date.now();
+    return 1 + Math.max(0, Math.floor((ts - B.EPOCA) / (86400000 * B.TEMPORADA_DIAS)));
+  };
+  B.viraEmDias = function (ts) {
+    ts = (typeof ts === 'number' && isFinite(ts)) ? ts : Date.now();
+    var fim = B.EPOCA + B.temporadaDe(ts) * 86400000 * B.TEMPORADA_DIAS;
+    return Math.max(0, Math.ceil((fim - ts) / 86400000));
+  };
+  B.comprime = function (pts) {
+    pts = (typeof pts === 'number' && isFinite(pts)) ? pts : B.INICIAL;
+    return Math.max(B.PISO, B.INICIAL + Math.round((pts - B.INICIAL) * 0.5));
+  };
+
   /* A ESCADA SÃO AS DEZ COROAS DO USUÁRIO (24/08): arte própria por nível
    * (assets_ok/ranking_pvp, embutida em coroas-pvp.js), pendurada acima da
    * cabeça NO LUGAR das chamas. O Elo continua o mesmo; o degrau de cima
