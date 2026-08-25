@@ -66,6 +66,8 @@ var JOGO = (typeof window !== 'undefined')
   var invElemFiltro = 'todos';
   var forjaElemFiltro = 'todos';
   var bancoElemFiltro = 'todos';
+  var invBusca = '';               // busca por nome (25/08) — vive entre redesenhos
+  var bancoBusca = '';
   var elemChoiceHero = null;
   // ---- tela "Personagens" [U6]
   var partyTab = 'inventario';     // aba corrente: inventario | forja | colecao
@@ -2031,6 +2033,12 @@ var JOGO = (typeof window !== 'undefined')
         bancoElemFiltro = e2;
         sheetBanco();
       }));
+      // busca ao vivo nas DUAS grades (o `duplo` é atribuído logo abaixo,
+      // antes de qualquer tecla poder chegar)
+      caixa.appendChild(buscaInput(bancoBusca, function (t) {
+        bancoBusca = t;
+        aplicaBusca(duplo, t);
+      }));
       if (bancoElemFiltro !== 'todos') {
         pilhas = pilhas.filter(function (pi) { return passaElemento(pi.itemId, bancoElemFiltro); });
         pilhasCofre = pilhasCofre.filter(function (pi) { return passaElemento(pi.itemId, bancoElemFiltro); });
@@ -2072,6 +2080,7 @@ var JOGO = (typeof window !== 'undefined')
       duplo.appendChild(colSaco);
       duplo.appendChild(colCofre);
       caixa.appendChild(duplo);
+      if (bancoBusca) aplicaBusca(duplo, bancoBusca);
     });
   }
 
@@ -3108,10 +3117,15 @@ var JOGO = (typeof window !== 'undefined')
         'Saco: <b>' + lot.n + ' / ' + lot.max + '</b> — o limite cresce ao liberar classes'));
     }
     var g = invGrid(hid);
+    ladoSaco.appendChild(buscaInput(invBusca, function (t) {
+      invBusca = t;
+      aplicaBusca(g, t);
+    }));
     if (g.dataset && g.dataset.vazio) {
       ladoSaco.appendChild(el('p', 'inv-dica', g.dataset.vazio));
     }
     ladoSaco.appendChild(g);
+    if (invBusca) aplicaBusca(g, invBusca);
     duo.appendChild(ladoHeroi);
     duo.appendChild(ladoSaco);
     body.appendChild(duo);
@@ -3435,6 +3449,8 @@ var JOGO = (typeof window !== 'undefined')
       (pilha.level ? ' · pedra <b>+' + pilha.level + '</b> ' + esc(tierOf(pilha.level)) : '') +
       (pilha.stars ? ' · estrela <b>★' + pilha.stars + '</b>' : '')));
     tx.appendChild(el('div', 'inv-pick-b', esc(itemBonusText(it, pilha.level, pilha.stars))));
+    var cmp = comparaComVestida(pilha.itemId, pilha.level, pilha.stars, hid);
+    if (cmp) tx.appendChild(el('div', 'inv-pick-cmp', cmp));
     if (it && it.grantsSpell) {
       var sp = spellDef(it.grantsSpell);
       tx.appendChild(el('div', 'inv-pick-sp', 'Concede <b>' + esc(spellName(sp, it.grantsSpell)) + '</b>' +
@@ -3497,6 +3513,83 @@ var JOGO = (typeof window !== 'undefined')
         }));
     });
     return tabs;
+  }
+
+  /* COMPARAR COM A VESTIDA (pedido 25/08): o delta entre a peça escolhida e
+   * a que o herói do carrossel usa no MESMO espaço — verde ganha, vermelho
+   * perde. Some quando o espaço está vazio (aí tudo é ganho) ou quando a
+   * escolhida É a vestida. */
+  function comparaComVestida(itemId, lv, sr, hid) {
+    if (!hid) return null;
+    var it = itemDef(itemId);
+    if (!it) return null;
+    var canon = slotOf(itemId);
+    var v = safe(function () { return P().equippedVar(hid, slotRaw(canon)); }, null);
+    if (!v || !v.itemId) return null;
+    if (v.itemId === itemId && (v.level || 0) === (lv || 0) && (v.stars || 0) === (sr || 0)) return null;
+    var atual = itemDef(v.itemId);
+    if (!atual) return null;
+    function tabela(def, mult) {
+      var m = {}, b = def.bonuses || {};
+      for (var k in b) {
+        if (!b.hasOwnProperty(k)) continue;
+        if (k === 'resists') {
+          for (var e in b.resists) {
+            if (b.resists.hasOwnProperty(e)) m['r:' + e] = Math.round(b.resists[e] * mult);
+          }
+        } else if (k === 'pa' || k === 'pp') m[k] = b[k];
+        else m[k] = Math.round(b[k] * mult);
+      }
+      return m;
+    }
+    var nova = tabela(it, itemMult(lv, sr));
+    var velha = tabela(atual, itemMult(v.level || 0, v.stars || 0));
+    var chaves = {}, k2, out = [];
+    for (k2 in nova) if (nova.hasOwnProperty(k2)) chaves[k2] = 1;
+    for (k2 in velha) if (velha.hasOwnProperty(k2)) chaves[k2] = 1;
+    var NOME = { hp: 'PV', pa: 'PA', pp: 'PP', power: 'poder',
+                 initiative: 'inic.', dodge: 'esq.', lock: 'fix.' };
+    for (k2 in chaves) {
+      if (!chaves.hasOwnProperty(k2)) continue;
+      var d = (nova[k2] || 0) - (velha[k2] || 0);
+      if (!d) continue;
+      var rot = k2.indexOf('r:') === 0
+        ? '% ' + (ELEM_PT[k2.slice(2)] || k2.slice(2)) : ' ' + (NOME[k2] || k2);
+      out.push('<em class="' + (d > 0 ? 'cmp-mais' : 'cmp-menos') + '">' +
+               (d > 0 ? '+' : '') + d + rot + '</em>');
+    }
+    if (!out.length) return null;
+    return 'contra a vestida (' + esc(atual.name) + '): ' + out.join(' · ');
+  }
+
+  /* BUSCA POR NOME (pedido 25/08): filtra AO VIVO escondendo células — nada
+   * de redesenhar a ficha a cada tecla, o campo perderia o foco. O estado
+   * sobrevive ao redesenho e é reaplicado na grade nova. */
+  function normaliza(s) {
+    s = String(s || '').toLowerCase();
+    try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+    return s;
+  }
+  function aplicaBusca(raiz, termo) {
+    if (!raiz) return;
+    var t = normaliza(termo);
+    raiz.querySelectorAll('.ig-cell').forEach(function (c) {
+      if (c.classList.contains('is-vazia')) return;
+      var nm = c.querySelector('.ig-nm');
+      c.classList.toggle('is-fora-busca',
+        !!t && (!nm || normaliza(nm.textContent).indexOf(t) < 0));
+    });
+  }
+  function buscaInput(valor, aoTexto) {
+    var w = el('div', 'inv-busca');
+    var i2 = document.createElement('input');
+    i2.type = 'search';
+    i2.placeholder = 'buscar por nome…';
+    i2.className = 'inv-busca-campo';
+    i2.value = valor || '';
+    i2.addEventListener('input', function () { aoTexto(i2.value); });
+    w.appendChild(i2);
+    return w;
   }
 
   /* A fileira dos ELEMENTOS (pedido 25/08: "nos menus onde aparecem os itens
