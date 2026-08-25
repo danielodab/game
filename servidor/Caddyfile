@@ -1,0 +1,12 @@
+# O Caddy na frente de tudo no VPS (HTTPS automático via Let's Encrypt).
+# Troque jogo.exemplo.com.br pelo domínio real apontado para o VPS.
+#
+#   /var/www/soterra  = o jogo (cliente estático)
+#   /ws               = o Relé (servidor/rele.py via systemd, porta 8791)
+
+jogo.exemplo.com.br {
+	root * /var/www/soterra
+	encode zstd gzip
+	file_server
+	reverse_proxy /ws 127.0.0.1:8791
+}

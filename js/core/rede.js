@@ -5,11 +5,19 @@ var JOGO = (typeof window !== 'undefined')
 
 /* O QUE ISTO É
  * ============
- * A fase 2 de docs/A_VIDA_ONLINE.html: dois SOTERRA abertos na mesma máquina
- * se VEEM no Acampamento — fantasma andando, nome na cabeça, chat — usando
- * BroadcastChannel como transporte. Quando o servidor chegar, troca-se o
- * transporte por WebSocket e o protocolo continua o mesmo: este módulo é a
- * fronteira.
+ * A fase 2 de docs/A_VIDA_ONLINE.html: jogadores se VEEM no Acampamento —
+ * fantasma andando, nome na cabeça, chat. O protocolo é um só; o TRANSPORTE
+ * são dois, escolhidos sozinhos (urlDoRele):
+ *
+ *   CANAL  BroadcastChannel — abas do mesmo navegador (dev local, file://
+ *          servido em localhost). Foi o primeiro transporte e segue vivo.
+ *   WS     WebSocket até o RELÉ (servidor/rele.py, um carteiro burro que
+ *          repassa cada mensagem aos demais — a MESMA semântica do canal).
+ *          Entra em cena quando o jogo está num servidor de verdade
+ *          (hostname que não é localhost → wss://<host>/ws), ou forçado
+ *          por `?rede=ws://...` na URL (é como as provas testam). Se o relé
+ *          não responder, cai para o canal sem drama; se cair DEPOIS de
+ *          ligado, reconecta sozinho e se reapresenta com um novo `oi`.
  *
  * O PROTOCOLO (mensagens pequenas, JSON puro):
  *   oi     { de, nome, titulo, classe, resumo, x, z }   entrei — quem está aí?
@@ -31,7 +39,8 @@ var JOGO = (typeof window !== 'undefined')
  *
  * ONDE NÃO FUNCIONA: em file:// cada aba pode ser uma origem opaca e o canal
  * não cruza — o módulo vira um no-op silencioso e o jogo segue solo. Servido
- * (http://), que é o caminho do multiplayer, funciona inteiro.
+ * (http://), que é o caminho do multiplayer, funciona inteiro — e com o relé
+ * no ar, funciona entre MÁQUINAS.
  */
 (function () {
   'use strict';
@@ -43,10 +52,85 @@ var JOGO = (typeof window !== 'undefined')
   R.PULSO_MS = 2000;
   R.SUMICO_MS = 8000;
 
-  var canal = null;
+  var canal = null;                 // o transporte vivo: { tipo:'canal'|'ws', envia(obj), fecha() }
   var eu = null;                    // { id, nome, titulo, classe, x, z }
   var pares = {};                   // id -> { nome, titulo, classe, x, z, visto }
   var timerPulso = null;
+
+  /* Qual relé esta janela deve procurar. `?rede=ws://...` manda em tudo
+   * (dev e provas); página servida fora de localhost procura o relé na
+   * própria origem (/ws, atrás do Caddy); localhost e file:// ficam no
+   * canal de abas de sempre. */
+  function urlDoRele() {
+    try {
+      var m = /[?&]rede=(wss?:\/\/[^&\s]+)/.exec(String(window.location.search || ''));
+      if (m) return decodeURIComponent(m[1]);
+      var p = window.location.protocol;
+      if (p !== 'http:' && p !== 'https:') return null;
+      var h = window.location.hostname;
+      if (h === 'localhost' || h === '127.0.0.1' || h === '') return null;
+      return (p === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws';
+    } catch (e) { return null; }
+  }
+
+  function transporteCanal() {
+    if (typeof BroadcastChannel === 'undefined') return null;   // file:// solo
+    var bc;
+    try { bc = new BroadcastChannel(CANAL); } catch (e) { return null; }
+    bc.onmessage = aoMensagem;
+    return {
+      tipo: 'canal',
+      envia: function (o) { try { bc.postMessage(o); } catch (e) {} },
+      fecha: function () { try { bc.close(); } catch (e) {} }
+    };
+  }
+
+  /* O WebSocket até o relé. Mensagens de antes do abrir esperam na fila;
+   * `aoFalhar` dispara se a PRIMEIRA conexão não vingar (o chamador cai
+   * para o canal); queda depois de aberto reconecta a cada 4s e chama
+   * `aoReligar` (o chamador se reapresenta com um `oi` novo). */
+  function transporteWs(url, aoFalhar, aoReligar) {
+    var ws = null, abriu = false, fechado = false, fila = [];
+    function conecta(deNovo) {
+      try { ws = new WebSocket(url); } catch (e) { falha(); return; }
+      ws.onopen = function () {
+        var primeira = !abriu;
+        abriu = true;
+        while (fila.length) { try { ws.send(fila.shift()); } catch (e) { break; } }
+        if (!primeira && aoReligar) aoReligar();
+      };
+      ws.onmessage = function (ev) {
+        var m = null;
+        try { m = JSON.parse(String(ev.data)); } catch (e) { return; }
+        aoMensagem({ data: m });
+      };
+      ws.onclose = ws.onerror = function () {
+        if (fechado) return;
+        if (!abriu) { falha(); return; }
+        // já esteve ligado: o relé caiu ou a rede piscou — insiste
+        setTimeout(function () { if (!fechado) conecta(true); }, 4000);
+      };
+    }
+    function falha() {
+      if (fechado) return;
+      fechado = true;
+      if (aoFalhar) aoFalhar();
+    }
+    conecta(false);
+    return {
+      tipo: 'ws',
+      envia: function (o) {
+        var s;
+        try { s = JSON.stringify(o); } catch (e) { return; }
+        if (ws && ws.readyState === 1) { try { ws.send(s); } catch (e) {} }
+        else if (fila.length < 50) fila.push(s);
+      },
+      fecha: function () {
+        fechado = true;
+        try { if (ws) ws.close(); } catch (e) {}
+      }
+    };
+  }
 
   /* A HUD pendura aqui UM ouvinte de eventos já digeridos:
    *   { tipo:'entrou', id, nome, titulo, classe, x, z }
@@ -64,12 +148,22 @@ var JOGO = (typeof window !== 'undefined')
     corpo = corpo || {};
     corpo.t = tipo;
     corpo.de = eu.id;
-    try { canal.postMessage(corpo); } catch (e) {}
+    canal.envia(corpo);
+  }
+  /* O `oi` de apresentação — sai na entrada, na queda para o canal e na
+   * reconexão do ws (para os pares, um `oi` repetido é só um re-conhece). */
+  function apresenta() {
+    if (!eu) return;
+    manda('oi', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
+                  resumo: eu.resumo, x: eu.x, z: eu.z });
   }
   function agora() { return Date.now(); }
 
   function conhece(m) {
-    var novo = !pares[m.de];
+    var atual = pares[m.de];
+    // "novo" também cobre quem foi visto SÓ por pulso (guardado sem nome,
+    // calado): o anúncio de entrada espera a mensagem que traz o nome
+    var novo = !atual || !atual.nome;
     pares[m.de] = { nome: m.nome || '?', titulo: m.titulo || '',
                     classe: m.classe || 'sumo',
                     resumo: m.resumo || null,
@@ -98,8 +192,14 @@ var JOGO = (typeof window !== 'undefined')
       if (pares[m.de]) { pares[m.de].visto = agora(); }
       avisa({ tipo: 'alvo', id: m.de, x: m.x, z: m.z });
     } else if (m.t === 'pulso') {
-      if (!pares[m.de]) { conhece(m); }
-      else {
+      if (!pares[m.de]) {
+        /* pulso de DESCONHECIDO (oi perdido, ou o par expirou numa aba de
+         * fundo desacelerada): nada de anunciar "? chegou" — guarda calado
+         * e se apresenta, porque o oi provoca o eco que traz o nome. */
+        pares[m.de] = { nome: null, titulo: '', classe: 'sumo', resumo: null,
+                        x: m.x || 0, z: m.z || 0, visto: agora() };
+        apresenta();
+      } else {
         pares[m.de].visto = agora();
         pares[m.de].x = m.x; pares[m.de].z = m.z;
       }
@@ -136,17 +236,25 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------- superfície
   R.entrar = function (perfil) {
-    if (typeof BroadcastChannel === 'undefined') return false;   // file:// solo
     if (canal) R.sair();
-    try { canal = new BroadcastChannel(CANAL); } catch (e) { canal = null; return false; }
-    canal.onmessage = aoMensagem;
+    var url = urlDoRele();
+    if (url) {
+      canal = transporteWs(url,
+        function () {           // o relé não respondeu: vida entre abas
+          if (!eu) return;      // já saímos nesse meio-tempo
+          canal = transporteCanal();
+          apresenta();
+        },
+        function () { apresenta(); });   // religou (apresenta é no-op sem eu)
+    }
+    if (!canal) canal = transporteCanal();
+    if (!canal) return false;                                    // file:// solo
     eu = { id: perfil.id || ('anon-' + Math.random().toString(36).slice(2, 8)),
            nome: perfil.nome || '?', titulo: perfil.titulo || '',
            classe: perfil.classe || 'sumo',
            resumo: perfil.resumo || null,
            x: perfil.x || 0, z: perfil.z || 0 };
-    manda('oi', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
-                  resumo: eu.resumo, x: eu.x, z: eu.z });
+    apresenta();
     timerPulso = setInterval(function () {
       manda('pulso', { x: eu.x, z: eu.z });
       R._varre();
@@ -157,7 +265,7 @@ var JOGO = (typeof window !== 'undefined')
   R.sair = function () {
     if (canal) {
       manda('tchau', {});
-      try { canal.close(); } catch (e) {}
+      canal.fecha();
     }
     canal = null;
     if (timerPulso) { clearInterval(timerPulso); timerPulso = null; }
@@ -193,12 +301,14 @@ var JOGO = (typeof window !== 'undefined')
     var fora = [];
     Object.keys(pares).forEach(function (id) {
       var p = pares[id];
+      if (!p.nome) return;             // visto só por pulso: sem apresentação ainda
       fora.push({ id: id, nome: p.nome, titulo: p.titulo, classe: p.classe,
                   resumo: p.resumo || null, x: p.x, z: p.z });
     });
     return fora;
   };
   R.ligado = function () { return !!canal; };
+  R.transporte = function () { return canal ? canal.tipo : null; };
 
   // aba fechando: despedida educada (a varredura pega quem não conseguir)
   if (typeof window !== 'undefined') {

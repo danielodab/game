@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o Relé carregando a praça</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1216}
+  #faixa{position:fixed;top:0;left:0;right:0;z-index:9;text-align:center;
+         font:600 13px system-ui;color:#ffd98a;background:rgba(9,12,16,.9);padding:5px}
+  .lado{position:absolute;top:28px;bottom:0;width:50%}
+  .lado+.lado{left:50%;border-left:2px solid #2a323d}
+  iframe{width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): dois SOTERRA de contas diferentes, os dois
+     FORÇADOS ao transporte ws (?rede=ws://127.0.0.1:8791). Se os fantasmas
+     aparecerem, foi o RELÉ (servidor/rele.py) que carregou — a faixa de
+     cima imprime o transporte que cada lado está usando de verdade. -->
+<div id="faixa">esperando…</div>
+<div class="lado"><iframe id="a" src="../index.html?rede=ws://127.0.0.1:8791&prova-rele"></iframe></div>
+<div class="lado"><iframe id="b" src="../index.html?rede=ws://127.0.0.1:8791&conta=2"></iframe></div>
+<script>
+function prepara(fid, nome) {
+  return new Promise(function (res) {
+    var f = document.getElementById(fid);
+    f.onload = function () {
+      var w = f.contentWindow, d = w.document;
+      var t0 = Date.now();
+      (function espera() {
+        var menu = d.querySelector('.screen-menu.is-on');
+        if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+        w.JOGO.DB.batizar(nome).then(function () {
+          w.JOGO.UI.showScreen('hub');
+          res(w);
+        });
+      })();
+    };
+  });
+}
+Promise.all([prepara('a', 'Ana'), prepara('b', 'Bia')]).then(function (ws) {
+  setTimeout(function () {
+    document.getElementById('faixa').textContent =
+      'transporte — esquerda: ' + ws[0].JOGO.Rede.transporte() +
+      ' · direita: ' + ws[1].JOGO.Rede.transporte() +
+      ' · pares vistos: ' + ws[0].JOGO.Rede.pares().length + '/' + ws[1].JOGO.Rede.pares().length;
+    window.__pronto = true;
+  }, 5000);
+});
+</script>
+</body>
+</html>
