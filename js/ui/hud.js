@@ -3097,6 +3097,37 @@ var JOGO = (typeof window !== 'undefined')
     var ladoHeroi = el('div', 'pt-mmo-heroi');
     ladoHeroi.appendChild(heroCarousel(hid));
     if (hid) ladoHeroi.appendChild(equipRow(hid));
+    // TRAJES (25/08): duas fotos do equipamento por herói — vestir com um
+    // toque, guardar o atual com outro
+    if (hid) {
+      var tr = el('div', 'pt-trajes');
+      tr.appendChild(el('span', 'pt-trajes-rot', 'Trajes:'));
+      [1, 2].forEach(function (n) {
+        var tem = safe(function () {
+          var hh = hero(hid);
+          return !!(hh && hh.trajes && hh.trajes['t' + n]);
+        }, false);
+        var b = btn('Vestir ' + n, 'btn-mini' + (tem ? '' : ' is-off'), function () {
+          var r = safe(function () { return P().wearTraje(hid, n); }, null);
+          if (!r) return;
+          toast(r.faltas
+            ? 'Traje ' + n + ': ' + r.faltas + ' peça(s) não estavam no saco.'
+            : 'Traje ' + n + ' vestido.', r.faltas ? undefined : 'good');
+          sheetParty('inventario');
+        });
+        if (!tem) b.title = 'Guarde o traje ' + n + ' primeiro';
+        tr.appendChild(b);
+      });
+      tr.appendChild(el('span', 'pt-trajes-rot', 'guardar o atual em:'));
+      [1, 2].forEach(function (n) {
+        tr.appendChild(btn(String(n), 'btn-mini btn-ghost', function () {
+          safe(function () { return P().saveTraje(hid, n); }, false);
+          toast('Equipamento atual guardado como traje ' + n + '.', 'good');
+          sheetParty('inventario');
+        }));
+      });
+      ladoHeroi.appendChild(tr);
+    }
     var ladoSaco = el('div', 'pt-mmo-saco');
     ladoSaco.appendChild(pickBar(hid));
     ladoSaco.appendChild(invFilterTabs());

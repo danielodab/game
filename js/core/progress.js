@@ -584,6 +584,28 @@ var JOGO = (typeof window !== 'undefined')
           }
         }
         if (typeof src.pet === 'string' && petDef(src.pet)) h.pet = src.pet;
+        /* TRAJES (25/08): fotos do equipamento por herói (itemIds por
+         * espaço). Campo NOVO do herói — sem esta cópia ele sumiria calado
+         * no load (a armadilha do campo a campo, mais uma vez). */
+        if (isObj(src.trajes)) {
+          var tj = {};
+          for (var tnome in src.trajes) {
+            if (!src.trajes.hasOwnProperty(tnome) || !isObj(src.trajes[tnome])) continue;
+            var foto = {}, temFoto = false;
+            for (var ts in src.trajes[tnome]) {
+              if (!src.trajes[tnome].hasOwnProperty(ts)) continue;
+              var tslot = SLOT_ALIASES[ts] || ts;
+              var tid = src.trajes[tnome][ts];
+              if (indexOf(SLOTS, tslot) < 0 || typeof tid !== 'string') continue;
+              var tdef = itemDef(tid);
+              if (!tdef || tdef.slot !== tslot) continue;
+              foto[tslot] = tid;
+              temFoto = true;
+            }
+            if (temFoto) tj[tnome] = foto;
+          }
+          h.trajes = tj;
+        }
         st.heroes[hid] = h;
         if (!seenClass[cls]) { seenClass[cls] = true; st.unlockedClasses.push(cls); }
       }
@@ -1278,6 +1300,38 @@ var JOGO = (typeof window !== 'undefined')
     if (isObj(h.itemVar)) h.itemVar[slot] = null;
     return true;
   }
+
+  /* TRAJES (pedido 25/08, "conjuntos de equipamento"): a foto dos 4 espaços
+   * do herói, guardada por número (t1/t2). Vestir usa o equip de sempre —
+   * a troca espaço a espaço não precisa de vaga; só "ficar sem nada num
+   * espaço" pede lugar no saco, e o unequip barra sozinho. */
+  Progress.saveTraje = function (heroId, n) {
+    var h = ensureHero(heroId);
+    if (!h || (n !== 1 && n !== 2)) return false;
+    if (!isObj(h.trajes)) h.trajes = {};
+    var foto = {};
+    for (var i = 0; i < SLOTS.length; i++) {
+      if (h.items[SLOTS[i]]) foto[SLOTS[i]] = h.items[SLOTS[i]];
+    }
+    h.trajes['t' + n] = foto;
+    Progress.save();
+    return true;
+  };
+  Progress.wearTraje = function (heroId, n) {
+    var h = ensureHero(heroId);
+    var foto = h && isObj(h.trajes) ? h.trajes['t' + n] : null;
+    if (!foto) return null;
+    var trocas = 0, faltas = 0;
+    for (var i = 0; i < SLOTS.length; i++) {
+      var slot = SLOTS[i];
+      var alvo = foto[slot] || null;
+      if ((h.items[slot] || null) === alvo) continue;
+      var ok = alvo ? Progress.equip(heroId, alvo)     // melhor cópia livre
+                    : Progress.unequip(heroId, slot);  // pede vaga no saco
+      if (ok) trocas++; else faltas++;
+    }
+    return { trocas: trocas, faltas: faltas };
+  };
 
   Progress.unequip = function (heroId, slot) {
     if (indexOf(SLOTS, slot) < 0) return false;

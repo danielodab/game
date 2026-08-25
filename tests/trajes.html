@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — trajes de equipamento</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>Trajes — duas fotos de equipamento por herói</h1>
+<div class="sub">saveTraje fotografa os espaços; wearTraje veste espaço a espaço pelo equip de sempre
+(troca não pede vaga; esvaziar espaço pede). E o campo novo tem de SOBREVIVER ao load —
+a cópia campo a campo do herói já engoliu titulo e avatar caladas.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var P = JOGO.Progress;
+  P.reset();
+  var hid = P.heroIds()[0];
+
+  // duas peças de punho e uma de passo
+  P.addItem('gh-widow-shears');            // punho (terra)
+  P.addItem('gh-wasp-sting');              // punho
+  P.addItem('gh-vine-stirrups');           // passo
+
+  // traje 1: tesoura + estribos
+  P.equip(hid, 'gh-widow-shears');
+  P.equip(hid, 'gh-vine-stirrups');
+  check('guardar o traje 1', P.saveTraje(hid, 1) === true);
+
+  // traje 2: vespa no punho, passo VAZIO
+  P.equip(hid, 'gh-wasp-sting');
+  P.unequip(hid, 'passo');
+  check('guardar o traje 2', P.saveTraje(hid, 2) === true);
+
+  // vestir o 1 de volta: punho troca, passo veste
+  var r1 = P.wearTraje(hid, 1);
+  var h = P.hero(hid);
+  check('vestir o traje 1 troca punho e veste passo',
+        !!r1 && r1.faltas === 0 && h.items.punho === 'gh-widow-shears' &&
+        h.items.passo === 'gh-vine-stirrups',
+        JSON.stringify(r1));
+
+  // vestir o 2: punho vira vespa, passo ESVAZIA (volta ao saco)
+  var r2 = P.wearTraje(hid, 2);
+  h = P.hero(hid);
+  check('vestir o traje 2 esvazia o passo',
+        !!r2 && r2.faltas === 0 && h.items.punho === 'gh-wasp-sting' && !h.items.passo);
+
+  // cópia sumida = falta relatada (vende-se a tesoura, traje 1 manca)
+  var inv = P.state.inventory;
+  for (var i2 = inv.length - 1; i2 >= 0; i2--) {
+    if (inv[i2].itemId === 'gh-widow-shears') inv.splice(i2, 1);
+  }
+  P.save();
+  var r3 = P.wearTraje(hid, 1);
+  h = P.hero(hid);
+  check('peça sumida vira falta (e o resto veste)',
+        !!r3 && r3.faltas === 1 && h.items.punho === 'gh-wasp-sting' &&
+        h.items.passo === 'gh-vine-stirrups',
+        JSON.stringify(r3));
+
+  // traje inexistente
+  check('vestir traje nunca guardado devolve null', P.wearTraje(hid, 2) !== null &&
+        P.wearTraje('sumo' === hid ? 'arqueiro' : 'sumo', 1) === null);
+
+  // A ARMADILHA: o campo novo sobrevive ao load?
+  P.state = null;
+  P.load();
+  var h2 = P.hero(hid);
+  check('trajes SOBREVIVEM ao load (cópia campo a campo)',
+        !!(h2 && h2.trajes && h2.trajes.t1 && h2.trajes.t1.punho === 'gh-widow-shears' &&
+           h2.trajes.t2 && !h2.trajes.t2.passo),
+        h2 && h2.trajes ? Object.keys(h2.trajes).join(',') : 'sem trajes');
+
+  var sb = JOGO.SaveSandbox.check();
+  check('o disco de verdade continua intocado', sb.ok);
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>

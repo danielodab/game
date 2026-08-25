@@ -1311,6 +1311,10 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .fc-estrela { border-style: dashed; border-color: rgba(230,181,60,.45); }
 .fc-nota { margin: 0; font-size: 12px; color: var(--text); line-height: 1.5; }
 
+/* TRAJES (25/08): duas fotos de equipamento por herói */
+.pt-trajes { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.pt-trajes-rot { font-size: 11px; color: var(--dim); }
+
 /* COMPARAR COM A VESTIDA (25/08): verde ganha, vermelho perde */
 .inv-pick-cmp { font-size: 11.5px; color: var(--dim); }
 .inv-pick-cmp em { font-style: normal; font-weight: 700; }
