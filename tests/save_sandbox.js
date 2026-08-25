@@ -39,13 +39,24 @@ var JOGO = (typeof window !== 'undefined')
 (function () {
   'use strict';
 
+  /* A blindagem é POR PREFIXO desde o Banco de Contas (25/08): além do save
+   * solo, existem a conta ('soterra-conta-v1'), o registro de contas
+   * ('soterra-contas-v1') e as variantes por conta (':<id>' no fim) — uma
+   * lista fixa deixaria a próxima chave nova furar o disco de novo (a conta
+   * furou por meses). KEYS segue sendo as duas do relatório do check(). */
   var KEYS = ['soterra-save-v2', 'soterra-save-v1'];
   var shadow = {};          // o "disco" de mentira
   var disco0 = {};          // o que havia no disco de verdade ao instalar
   var on = false;
   var raw = { get: null, set: null, remove: null };
 
-  function isMine(k) { return KEYS.indexOf(String(k)) >= 0; }
+  function isMine(k) { return String(k).indexOf('soterra-') === 0; }
+  /* Chave do jogo ainda não vista: entra na sombra com o valor REAL do disco
+   * (leitura realista), e daí em diante só a sombra muda. */
+  function sombraDe(k) {
+    if (shadow[k] === undefined) shadow[k] = raw.get(k);
+    return shadow[k];
+  }
 
   try {
     if (typeof window !== 'undefined' && window.localStorage &&
@@ -66,15 +77,15 @@ var JOGO = (typeof window !== 'undefined')
       }
 
       Storage.prototype.setItem = function (k, v) {
-        if (isMine(k)) { shadow[k] = String(v); return; }
+        if (isMine(k)) { sombraDe(k); shadow[k] = String(v); return; }
         return _set.apply(this, arguments);
       };
       Storage.prototype.getItem = function (k) {
-        if (isMine(k)) { var v = shadow[k]; return v === undefined ? null : v; }
+        if (isMine(k)) { var v = sombraDe(k); return v === undefined ? null : v; }
         return _get.apply(this, arguments);
       };
       Storage.prototype.removeItem = function (k) {
-        if (isMine(k)) { shadow[k] = null; return; }
+        if (isMine(k)) { sombraDe(k); shadow[k] = null; return; }
         return _rm.apply(this, arguments);
       };
 

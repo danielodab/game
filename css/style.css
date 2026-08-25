@@ -1723,3 +1723,17 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 /* a fileira de fichas do menu inicial (o "Personagens" dividido) */
 .menu-fichas { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .menu-fichas .btn { flex: 1 1 auto; }
+
+/* ---- O BANCO DE CONTAS (25/08): a lista da ficha de Contas */
+.contas-lista { display: flex; flex-direction: column; gap: 6px; }
+.conta-linha {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; cursor: pointer; text-align: left;
+  background: rgba(255,255,255,.04); color: var(--text);
+  border: 1px solid var(--line2); border-radius: 10px; font: inherit;
+}
+.conta-linha b { font-family: var(--ui-serif); font-size: 14px; }
+.conta-linha span { font-size: 11px; color: var(--dim); }
+.conta-linha.is-on { border-color: var(--gold); }
+.conta-linha.is-on span { color: var(--gold); }
+.contas-nota { font-size: 12px; color: var(--dim); line-height: 1.5; }

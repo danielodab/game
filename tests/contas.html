@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o Banco de Contas</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>O Banco de Contas — duas janelas, dois jogadores</h1>
+<div class="sub">A página finge ser a janela da conta <b>b</b> (replaceState antes do contas.js),
+e cobra: a conta da URL vale, as chaves de db/progress ganham o sufixo, a conta nua fica intacta,
+o registro cresce, e a blindagem por prefixo do save_sandbox segura TUDO que é soterra-* fora do disco.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  // a "URL da segunda janela", ANTES de contas.js decidir a conta
+  try { history.replaceState('', '', '?conta=b'); } catch (e) {}
+  // o disco REAL do registro antes de qualquer coisa (para o teste 11)
+  window.__regDisco0 = JOGO.SaveSandbox.realSave('soterra-contas-v1');
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/contas.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/db.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  }
+
+  var C = JOGO.Contas;
+
+  // 1. a conta da URL vale, e as chaves ganham o sufixo
+  check('a conta da janela vem da URL (?conta=b)', C && C.ativa() === 'b',
+        C ? C.ativa() : 'sem Contas');
+  check('a chave do cofre ganha o sufixo', C.chaveConta() === 'soterra-conta-v1:b', C.chaveConta());
+  check('a chave do save solo ganha o sufixo', C.chaveSave() === 'soterra-save-v2:b', C.chaveSave());
+  check('o Progress usa a chave da conta', JOGO.Progress.SAVE_KEY === 'soterra-save-v2:b',
+        JOGO.Progress.SAVE_KEY);
+
+  // 2. o registro conhece a recém-chegada e não perdeu a principal
+  var ids = C.lista().map(function (c) { return c.id; });
+  check('o registro ganhou a conta b', ids.indexOf('b') >= 0, ids.join(','));
+  check('a principal continua no registro', ids.indexOf('principal') >= 0, ids.join(','));
+
+  // 3. uma conta "principal" de mentira no lugar da nua; a conta b não a toca
+  localStorage.setItem('soterra-conta-v1',
+    JSON.stringify({ versao: 1,
+      jogador: { id: 'jPRINCIPAL', nome: 'Dono', titulo: null, avatar: null,
+                 brasa: { pts: 1000, partidas: 0 }, criadoEm: 1 },
+      carteira: { moedas: 77 }, banco: { moedas: 0, itens: [] },
+      missoes: null, conquistas: {}, mercado: null, placar: {}, pvp: [], trocas: [] }));
+
+  JOGO.DB.jogador().then(function (j) {
+    check('a conta b tem id PRÓPRIO (não o da principal)',
+          !!j.id && j.id !== 'jPRINCIPAL', j.id);
+    check('o cofre da b nasceu na chave sufixada',
+          !!localStorage.getItem('soterra-conta-v1:b'), null);
+    var nua = JSON.parse(localStorage.getItem('soterra-conta-v1'));
+    check('a conta principal ficou intacta (77 moedas do Dono)',
+          nua.jogador.id === 'jPRINCIPAL' && nua.carteira.moedas === 77, null);
+
+    // 4. criar conta pelo registro
+    var antes = C.lista().length;
+    var novo = C.cria('Teste');
+    check('cria() devolve id e o registro cresce',
+          !!novo && C.lista().length === antes + 1, novo);
+
+    // 5. a blindagem por prefixo: NADA disso tocou o disco de verdade
+    var sb = JOGO.SaveSandbox.check();
+    check('o disco de verdade continua intocado (blindagem por prefixo)', sb.ok, JSON.stringify(sb.disco));
+    check('o registro de contas também ficou só na sombra',
+          JOGO.SaveSandbox.realSave('soterra-contas-v1') === window.__regDisco0, null);
+
+    fim();
+  });
+})();
+</script>
+</body>
+</html>

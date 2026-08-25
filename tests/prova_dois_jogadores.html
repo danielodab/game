@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: dois jogadores na mesma máquina</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1216}
+  .lado{position:absolute;top:0;bottom:0;width:50%}
+  .lado+.lado{left:50%;border-left:2px solid #2a323d}
+  iframe{width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto, não teste): DOIS SOTERRA lado a lado — a conta
+     principal e a ?conta=2 — cada um batiza seu nome e entra no Acampamento.
+     O BroadcastChannel cruza os dois iframes (mesma origem), então cada
+     praça deve mostrar o FANTASMA do outro, com o nome na cabeça. É o teste
+     de dois jogadores do Banco de Contas (25/08). -->
+<div class="lado"><iframe id="a" src="../index.html?prova-2p"></iframe></div>
+<div class="lado"><iframe id="b" src="../index.html?conta=2"></iframe></div>
+<script>
+function prepara(fid, nome) {
+  return new Promise(function (res) {
+    var f = document.getElementById(fid);
+    f.onload = function () {
+      var w = f.contentWindow, d = w.document;
+      var t0 = Date.now();
+      (function espera() {
+        var menu = d.querySelector('.screen-menu.is-on');
+        if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+        w.JOGO.DB.batizar(nome).then(function () {
+          w.JOGO.UI.showScreen('hub');
+          res(w);
+        });
+      })();
+    };
+  });
+}
+Promise.all([prepara('a', 'Ana'), prepara('b', 'Bia')]).then(function () {
+  // tempo para o oi/eco da Rede e para o corpo do fantasma carregar
+  setTimeout(function () { window.__pronto = true; }, 5000);
+});
+</script>
+</body>
+</html>

@@ -174,7 +174,12 @@ var JOGO = (typeof window !== 'undefined')
   var Progress = {};
   JOGO.Progress = Progress;
 
-  var KEY = 'soterra-save-v2';
+  /* A chave é DA CONTA DA JANELA (contas.js, carregado antes): 'principal'
+   * usa a nua de sempre, as outras ganham ':<id>' — dois jogadores na mesma
+   * máquina são duas janelas com contas diferentes, cada uma com seu save.
+   * Sem o Banco de Contas (páginas de teste), a chave nua. */
+  var KEY = (JOGO.Contas && JOGO.Contas.chaveSave)
+    ? JOGO.Contas.chaveSave() : 'soterra-save-v2';
   // §9-C: os 4 espaços ganharam nome próprio (nada de nomes de planilha)
   var SLOTS = ['punho', 'passo', 'casca', 'lume'];
   // saves antigos (v2.0/v2.1) guardavam os ids velhos — migração automática

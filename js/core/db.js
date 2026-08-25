@@ -41,7 +41,11 @@ var JOGO = (typeof window !== 'undefined')
   var DB = {};
   JOGO.DB = DB;
 
-  var CHAVE = 'soterra-conta-v1';
+  /* A chave é DA CONTA DA JANELA: o Banco de Contas (contas.js, carregado
+   * antes) decide — 'principal' usa a chave nua de sempre, as outras ganham
+   * ':<id>'. Sem ele (páginas de teste que só carregam o db), a nua. */
+  var CHAVE = (JOGO.Contas && JOGO.Contas.chaveConta)
+    ? JOGO.Contas.chaveConta() : 'soterra-conta-v1';
 
   // -------------------------------------------------------------- o estado
   var dados = null;

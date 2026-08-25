@@ -436,6 +436,13 @@ var JOGO = (typeof window !== 'undefined')
       fichas.appendChild(btn(t.nome, 'btn-mini btn-ghost', function () { sheetParty(t.id); }));
     });
     acts.appendChild(fichas);
+    // o Banco de Contas (25/08): qual conta ESTA janela é, e a porta para
+    // trocar/criar — duas janelas com contas diferentes = dois jogadores
+    var rotuloConta = safe(function () { return JOGO.Contas.rotulo(); }, null);
+    if (rotuloConta) {
+      acts.appendChild(btn('Conta: <b>' + esc(rotuloConta) + '</b>', 'btn-mini btn-ghost',
+        function () { openSheet('contas'); }));
+    }
     box.appendChild(acts);
     box.appendChild(stonesStrip());
 
@@ -2550,6 +2557,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'avatar') sheetParty('avatar', arg);
     else if (name === 'heroSheet') sheetHero(arg);
     else if (name === 'battleMenu') sheetBattleMenu();
+    else if (name === 'contas') sheetContas();
     else if (name === 'banco') sheetBanco();
     else if (name === 'missoes') sheetMissoes();
     else if (name === 'mercado') sheetMercado();
@@ -4025,6 +4033,44 @@ var JOGO = (typeof window !== 'undefined')
     if (!pets.length) g.appendChild(el('p', 'empty', 'Nenhum bicho no saco.'));
     body.appendChild(g);
     body.appendChild(btn('Voltar', 'btn-ghost btn-block', volta));
+  }
+
+  /* O BANCO DE CONTAS (pedido do usuário, 25/08). Cada conta tem id próprio,
+   * seu save solo e seu cofre; trocar é recarregar a página com `?conta=` na
+   * URL — a conta é decidida no boot, antes de db/progress carregarem. A
+   * ficha também ensina o teste de DOIS JOGADORES: duas janelas, duas contas. */
+  function sheetContas() {
+    var body = sheetShell('Contas',
+      'Cada conta tem seu save e seu cofre. Trocar recarrega a página.');
+    sheetName = 'contas';
+    var C = JOGO.Contas;
+    if (!C) { body.appendChild(el('p', 'empty', 'O Banco de Contas não carregou.')); return; }
+    var atual = C.ativa();
+    var caixa = el('div', 'contas-lista');
+    C.lista().forEach(function (c) {
+      var linha = el('button', 'conta-linha' + (c.id === atual ? ' is-on' : ''));
+      linha.type = 'button';
+      linha.appendChild(el('b', null, esc(c.rotulo || c.id)));
+      linha.appendChild(el('span', null,
+        c.id === atual ? 'esta janela' : 'tocar para trocar'));
+      tap(linha, function () {
+        if (c.id === atual) return;
+        confirmSheet('Trocar para “' + esc(c.rotulo || c.id) + '”?',
+          'A página recarrega com a outra conta. O que está aberto agora não se perde — cada conta guarda o seu.',
+          function () { C.trocar(c.id); });
+      });
+      caixa.appendChild(linha);
+    });
+    body.appendChild(caixa);
+    body.appendChild(btn('Criar conta nova', 'btn-primary btn-block', function () {
+      var id = safe(function () { return C.cria(); }, null);
+      if (id) C.trocar(id);
+    }));
+    body.appendChild(el('p', 'contas-nota',
+      '<b>Dois jogadores na mesma máquina:</b> deixe esta janela numa conta, abra ' +
+      'OUTRA janela do mesmo navegador no mesmo endereço e troque lá para outra ' +
+      'conta — os dois se veem no Acampamento (fantasma, chat, troca, arena). ' +
+      'Atalho: abrir a segunda janela já com <b>?conta=2</b> no fim do endereço.'));
   }
 
   function sheetBattleMenu() {
