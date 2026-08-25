@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o Tutor</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  .btn{font:inherit}
+</style>
+</head>
+<body>
+<h1>O Tutor — um cartão por tela, e só na primeira vez</h1>
+<div class="sub">"Entendi" cala aquela tela para sempre; "Não mostrar dicas" cala todas.
+O gancho embrulha UI.showScreen; a persistência é por conta (sufixo do Banco de Contas)
+e fica na sombra do sandbox como toda chave soterra-*.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  // uma UI de mentira ANTES do tutor: o embrulho tem de encontrá-la
+  var JOGO = window.JOGO = window.JOGO || {};
+  window.__telasPintadas = [];
+  JOGO.UI = { showScreen: function (nome) { window.__telasPintadas.push(nome); } };
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/contas.js', 'js/ui/tutor.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+  function caixa() { return document.querySelector('.tutor-caixa'); }
+
+  var T = JOGO.Tutor;
+  T._zera();
+
+  // o embrulho pode demorar um tique (retry de 150ms)
+  var t0 = Date.now();
+  (function espera() {
+    if (!JOGO.UI.__tutorWrapped && Date.now() - t0 < 5000) return setTimeout(espera, 100);
+    check('o embrulho pegou o UI.showScreen', JOGO.UI.__tutorWrapped === true);
+
+    // 1. primeira visita mostra o cartão (e a tela de verdade pintou)
+    JOGO.UI.showScreen('battle');
+    check('a tela pinta E o cartão aparece',
+          window.__telasPintadas[0] === 'battle' && !!caixa());
+    check('o cartão fala da batalha', caixa().textContent.indexOf('30s') >= 0);
+
+    // 2. "Entendi" cala aquela tela para sempre
+    var b1 = caixa().querySelector('.btn-primary');
+    b1.click();
+    check('Entendi fecha o cartão', !caixa());
+    JOGO.UI.showScreen('battle');
+    check('a batalha nunca mais pede', !caixa());
+
+    // 3. outra tela ainda mostra o dela
+    JOGO.UI.showScreen('hub');
+    check('o Acampamento mostra o próprio cartão', !!caixa() &&
+          caixa().textContent.indexOf('cais') >= 0);
+
+    // 4. fechar SEM ler (troca de tela) faz o cartão voltar depois
+    JOGO.UI.showScreen('roomClear');
+    JOGO.UI.showScreen('hub');
+    check('quem não clicou Entendi vê o cartão de novo', !!caixa() &&
+          caixa().textContent.indexOf('cais') >= 0);
+
+    // 5. "Não mostrar dicas" mata todas
+    var b2 = caixa().querySelector('.btn-ghost');
+    b2.click();
+    JOGO.UI.showScreen('heroSelect');
+    check('Não mostrar dicas cala tudo', !caixa());
+
+    // 6. tela sem dica nunca mostra nada
+    T._zera();
+    JOGO.UI.showScreen('defeat');
+    check('tela sem dica não ganha cartão', !caixa());
+
+    var sb = JOGO.SaveSandbox.check();
+    check('o disco de verdade continua intocado', sb.ok);
+
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  })();
+})();
+</script>
+</body>
+</html>
