@@ -893,6 +893,11 @@ var JOGO = (typeof window !== 'undefined')
       painel.classList.remove('is-off');
       if (lugar.tipo === 'portal') {
         painel.appendChild(el('h3', null, esc(lugar.nome)));
+        // O CALABOUÇO DO DIA (25/08): o portal em promoção se anuncia
+        if (JOGO.Diario && JOGO.Diario.ehHoje && JOGO.Diario.ehHoje(lugar.id)) {
+          painel.appendChild(el('p', 'hub-dia',
+            '☀ <b>Calabouço do dia</b> — +50% de saque até a meia-noite'));
+        }
         var sd = seletorDif();
         if (sd) painel.appendChild(sd);
         painel.appendChild(btn('Descer', 'btn-primary btn-block', function () {

@@ -645,8 +645,11 @@ var JOGO = (typeof window !== 'undefined')
 
     var drops = [], pets = [];
     if (prog && prog.rollDrops) {
+      // O CALABOUÇO DO DIA (25/08): o portal marcado paga +50% de saque
+      var bonusDia = (JOGO.Diario && JOGO.Diario.ehHoje &&
+                      JOGO.Diario.ehHoje(Game.dungeonId)) ? JOGO.Diario.BONUS_DROP : 1;
       try { drops = prog.rollDrops(Game.dungeonId, Game.roomIndex, partySize,
-                                   (difSala.drop || 1) * bonusDesafio) || []; }
+                                   (difSala.drop || 1) * bonusDesafio * bonusDia) || []; }
       catch (err) { drops = []; }
     }
     if (prog && prog.rollPet) {

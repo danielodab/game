@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o Calabouço do Dia</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>O Calabouço do Dia — determinístico pela data, revezando de verdade</h1>
+<div class="sub">A data local é a semente: o dia inteiro dá o MESMO calabouço, o mês reveza
+entre vários, e o id sorteado sempre existe na tabela.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/diario.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var Dd = JOGO.Diario;
+  var DIA = 86400000;
+  var meiodia = new Date(2026, 7, 25, 12, 0, 0).getTime();
+
+  // 1. o dia inteiro é o MESMO calabouço
+  var manha = new Date(2026, 7, 25, 0, 1, 0).getTime();
+  var noite = new Date(2026, 7, 25, 23, 59, 0).getTime();
+  check('o dia inteiro dá o mesmo calabouço',
+        Dd.hoje(manha).dungeonId === Dd.hoje(noite).dungeonId,
+        Dd.hoje(meiodia).dungeonId);
+
+  // 2. o mês reveza: 30 dias tocam vários calabouços
+  var vistos = {};
+  for (var d2 = 0; d2 < 30; d2++) vistos[Dd.hoje(meiodia + d2 * DIA).dungeonId] = 1;
+  var quantos = Object.keys(vistos).length;
+  check('30 dias revezam entre 3+ calabouços', quantos >= 3, quantos + ' diferentes');
+
+  // 3. o sorteado é sempre um ID REAL (não índice — o '0' já escapou uma vez)
+  var validos = {};
+  Object.keys(JOGO.DATA.dungeons).forEach(function (k) {
+    var dg = JOGO.DATA.dungeons[k];
+    validos[(dg && dg.id) ? dg.id : k] = 1;
+  });
+  var todosOk = true, exemplo = null;
+  for (var d3 = 0; d3 < 60; d3++) {
+    var h = Dd.hoje(meiodia + d3 * DIA);
+    if (!h || !validos[h.dungeonId] || /^\d+$/.test(h.dungeonId)) todosOk = false;
+    if (!exemplo && h) exemplo = h.dungeonId;
+  }
+  check('60 dias seguidos, todo sorteado é um id real', todosOk, exemplo);
+
+  // 4. ehHoje casa com hoje
+  var hj = Dd.hoje(meiodia).dungeonId;
+  check('ehHoje casa com o sorteio', Dd.ehHoje(hj, meiodia) === true &&
+        Dd.ehHoje('nao-existe', meiodia) === false);
+
+  // 5. o bônus anunciado
+  check('o bônus é +50% de saque', Dd.BONUS_DROP === 1.5 &&
+        Dd.hoje(meiodia).bonusDrop === 1.5);
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>
