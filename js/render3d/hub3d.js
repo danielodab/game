@@ -41,6 +41,7 @@ var JOGO = (typeof window !== 'undefined')
   var aoChegar = null;              // callback pendente da caminhada atual
   var raycaster = null, chao = null;
   var relogio = 0;
+  var tAvalia = 0;                  // relógio da avaliação do teto de fantasmas
 
   /* ANDAR ou CORRER decide-se pela DISTÂNCIA: até 4 m é um passo (chegar ao
    * portal do lado), acima disso o corpo corre — com o clipe `run` que toda
@@ -484,7 +485,7 @@ var JOGO = (typeof window !== 'undefined')
       };
       viraCoroa(heroi);
       for (var fk2 in fantasmas) {
-        if (fantasmas.hasOwnProperty(fk2)) viraCoroa(fantasmas[fk2]);
+        if (fantasmas.hasOwnProperty(fk2)) viraCoroa(fantasmas[fk2].corpo);
       }
       // A AURA respira: o anel gira devagar, as labaredas sobem e somem
       var pulsaAura = function (corpoA) {
@@ -503,7 +504,7 @@ var JOGO = (typeof window !== 'undefined')
       };
       pulsaAura(heroi);
       for (var fk2b in fantasmas) {
-        if (fantasmas.hasOwnProperty(fk2b)) pulsaAura(fantasmas[fk2b]);
+        if (fantasmas.hasOwnProperty(fk2b)) pulsaAura(fantasmas[fk2b].corpo);
       }
     }
     for (var i = 0; i < lugares.length; i++) {
@@ -521,13 +522,18 @@ var JOGO = (typeof window !== 'undefined')
       if (chegou && aoChegar) { var f = aoChegar; aoChegar = null; f(); }
       try { if (heroi.node.userData.mixer) heroi.node.userData.mixer.update(dt); } catch (e) {}
 
-      // os FANTASMAS andam pelo mesmo verbo do herói
+      // os FANTASMAS COM CORPO andam pelo mesmo verbo do herói; os sem corpo
+      // são só dado e não custam nada aqui
       for (var fk in fantasmas) {
         if (!fantasmas.hasOwnProperty(fk)) continue;
-        var fcorpo = fantasmas[fk];
+        var fcorpo = fantasmas[fk].corpo;
+        if (!fcorpo) continue;
         andaCorpo(fcorpo, dt);
         try { if (fcorpo.node.userData.mixer) fcorpo.node.userData.mixer.update(dt); } catch (e) {}
       }
+      // o TETO reavalia de tempos em tempos quem merece corpo
+      tAvalia += dt;
+      if (tAvalia > 1.2) { tAvalia = 0; avaliaCorpos(); }
 
       // câmera ORBITAL centrada no herói: o jogador gira, inclina e aproxima;
       // o corpo é sempre a âncora. Esférica clássica: tilt 0 = de cima.
@@ -598,7 +604,8 @@ var JOGO = (typeof window !== 'undefined')
     if (Hub.aoTocarFantasma) {
       for (var fk3 in fantasmas) {
         if (!fantasmas.hasOwnProperty(fk3)) continue;
-        var hitsF = raycaster.intersectObject(fantasmas[fk3].node, true);
+        if (!fantasmas[fk3].corpo) continue;     // sem corpo, sem toque
+        var hitsF = raycaster.intersectObject(fantasmas[fk3].corpo.node, true);
         if (hitsF && hitsF.length) {
           try { Hub.aoTocarFantasma(fk3); } catch (e) {}
           return;
@@ -699,7 +706,9 @@ var JOGO = (typeof window !== 'undefined')
     // os corpos dos fantasmas saem de cena; a REDE continua ligada — ao
     // voltar ao Acampamento a HUD os reconstrói de Rede.pares()
     for (var fk in fantasmas) {
-      if (fantasmas.hasOwnProperty(fk)) scene.remove(fantasmas[fk].node);
+      if (fantasmas.hasOwnProperty(fk) && fantasmas[fk].corpo) {
+        scene.remove(fantasmas[fk].corpo.node);
+      }
     }
     fantasmas = {};
   };
@@ -772,24 +781,32 @@ var JOGO = (typeof window !== 'undefined')
     return !!heroi;
   };
 
-  /* OS FANTASMAS — os outros jogadores da Rede, de corpo inteiro no mapa.
-   * Entram com classe, nome e título; andam pelo MESMO verbo do herói
-   * (mandaAndar/andaCorpo); o pulso corrige deriva grande sem teleporte
-   * nervoso. A HUD é quem traduz eventos da Rede nestas chamadas. */
+  /* OS FANTASMAS — os outros jogadores da Rede. Desde o TETO (pedido 25/08,
+   * "opção 1"): a praça aceita QUALQUER número de conectados, mas corpo 3D
+   * só os TETO_FANTASMAS mais próximos do herói. Todo par vira um REGISTRO
+   * ({perfil, x, z, corpo}); quem está no teto ganha o corpo inteiro (GLB,
+   * nome, coroa, aura), quem está longe vive como DADO — a posição continua
+   * andando no papel, e chegar perto materializa. A avaliação roda a cada
+   * ~1,2s com HISTERESE e uma troca por vez: instanciar GLB custa caro, e a
+   * fronteira do teto não pode virar pisca-pisca de corpos. */
   Hub.aoAndar = null;
   Hub.aoTocarFantasma = null;
-  Hub.fantasmaEntra = function (id, perfil) {
-    if (!scene || fantasmas[id]) return false;
+  Hub.TETO_FANTASMAS = 20;
+  var MARGEM_TROCA = 2.0;           // só larga o corpo quem ficou 2m atrás do corte
+
+  function materializa(reg) {
+    if (!reg || reg.corpo || !scene) return false;
     var m2 = M2();
     if (!m2) return false;
     var node = null;
+    var perfil = reg.perfil;
     var classe = (perfil && perfil.classe) || 'sumo';
     try { node = m2.unit(classe, { classId: classe }); } catch (e) {}
     if (!node) return false;
-    node.position.set((perfil && perfil.x) || 0, 0, (perfil && perfil.z) || RAIO_MAPA * 0.35);
+    node.position.set(reg.x, 0, reg.z);
     scene.add(node);
     var corpo = { node: node, alvo: null, andando: false };
-    fantasmas[id] = corpo;
+    reg.corpo = corpo;
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
     var tierF = null;
     if (perfil && perfil.resumo && typeof perfil.resumo.brasa === 'number' &&
@@ -801,26 +818,94 @@ var JOGO = (typeof window !== 'undefined')
     penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF);
     if (perfil && perfil.aura) acendeAura(corpo, true);   // a vaidade é pública
     return true;
+  }
+  function desmaterializa(reg) {
+    if (!reg || !reg.corpo) return;
+    var p = reg.corpo.node.position;
+    reg.x = p.x;                        // o dado herda o último passo do corpo
+    reg.z = p.z;
+    scene.remove(reg.corpo.node);
+    reg.corpo = null;
+  }
+
+  /* A decisão PURA (testável sem 3D): dado [{id, dist, temCorpo}], quem
+   * ganha corpo e quem larga — no máximo `porVez` de cada, e ninguém larga
+   * sem estar FOLGADAMENTE atrás do corte (histerese). */
+  Hub._escolheCorpos = function (lista, teto, margem, porVez) {
+    porVez = porVez || 1;
+    var orden = lista.slice().sort(function (a, b) { return a.dist - b.dist; });
+    var corte = orden.length > teto ? orden[teto - 1] : null;
+    var entra = [], sai = [];
+    for (var i = 0; i < orden.length; i++) {
+      var f = orden[i];
+      if (i < teto) {
+        if (!f.temCorpo && entra.length < porVez) entra.push(f.id);
+      } else if (f.temCorpo && sai.length < porVez &&
+                 (!corte || f.dist > corte.dist + margem)) {
+        sai.push(f.id);
+      }
+    }
+    return { entra: entra, sai: sai };
+  };
+
+  function avaliaCorpos() {
+    if (!heroi) return;
+    var hp = heroi.node.position;
+    var lista = [];
+    for (var id in fantasmas) {
+      if (!fantasmas.hasOwnProperty(id)) continue;
+      var reg = fantasmas[id];
+      var fx = reg.corpo ? reg.corpo.node.position.x : reg.x;
+      var fz = reg.corpo ? reg.corpo.node.position.z : reg.z;
+      lista.push({ id: id, dist: Math.hypot(fx - hp.x, fz - hp.z),
+                   temCorpo: !!reg.corpo });
+    }
+    var d = Hub._escolheCorpos(lista, Hub.TETO_FANTASMAS, MARGEM_TROCA, 1);
+    for (var s = 0; s < d.sai.length; s++) desmaterializa(fantasmas[d.sai[s]]);
+    for (var e2 = 0; e2 < d.entra.length; e2++) materializa(fantasmas[d.entra[e2]]);
+  }
+
+  Hub.fantasmaEntra = function (id, perfil) {
+    if (!scene || fantasmas[id]) return false;
+    var reg = { perfil: perfil || {},
+                x: (perfil && perfil.x) || 0,
+                z: (perfil && perfil.z) || RAIO_MAPA * 0.35,
+                corpo: null };
+    fantasmas[id] = reg;
+    // dentro do teto? corpo na hora — acima dele, espera a avaliação decidir
+    if (Hub._corposAtivos() < Hub.TETO_FANTASMAS) materializa(reg);
+    return true;
   };
   Hub.fantasmaAlvo = function (id, x, z) {
-    var corpo = fantasmas[id];
-    if (corpo) mandaAndar(corpo, x, z);
+    var reg = fantasmas[id];
+    if (!reg) return;
+    if (reg.corpo) mandaAndar(reg.corpo, x, z);
+    else { reg.x = x; reg.z = z; }               // sem corpo, anda no papel
   };
   Hub.fantasmaPulso = function (id, x, z) {
-    var corpo = fantasmas[id];
-    if (!corpo || corpo.alvo) return;          // andando, deixa chegar
-    var p = corpo.node.position;
-    if (Math.hypot(x - p.x, z - p.z) > 2.0) {  // deriva grande: anda até lá
-      mandaAndar(corpo, x, z);
+    var reg = fantasmas[id];
+    if (!reg) return;
+    if (!reg.corpo) { reg.x = x; reg.z = z; return; }
+    if (reg.corpo.alvo) return;                  // andando, deixa chegar
+    var p = reg.corpo.node.position;
+    if (Math.hypot(x - p.x, z - p.z) > 2.0) {    // deriva grande: anda até lá
+      mandaAndar(reg.corpo, x, z);
     }
   };
   Hub.fantasmaSai = function (id) {
-    var corpo = fantasmas[id];
-    if (!corpo) return;
-    scene.remove(corpo.node);
+    var reg = fantasmas[id];
+    if (!reg) return;
+    if (reg.corpo) scene.remove(reg.corpo.node);
     delete fantasmas[id];
   };
   Hub.fantasmas = function () { return Object.keys(fantasmas); };
+  Hub._corposAtivos = function () {              // painel de teste e provas
+    var n = 0;
+    for (var k in fantasmas) {
+      if (fantasmas.hasOwnProperty(k) && fantasmas[k].corpo) n++;
+    }
+    return n;
+  };
 
   Hub.irPara = function (x, z) {
     if (!heroi || !THREE) return false;

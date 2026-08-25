@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o teto de fantasmas</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>O teto de fantasmas — a decisão pura de quem merece corpo</h1>
+<div class="sub">Hub._escolheCorpos([{id,dist,temCorpo}], teto, margem, porVez): os mais próximos
+ganham corpo, com HISTERESE (ninguém larga sem estar folgadamente atrás do corte) e no máximo
+uma troca por vez — a fronteira não pode virar pisca-pisca de GLB.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  document.write('<scr'+'ipt src="../js/render3d/hub3d.js'+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var esc = JOGO.Hub._escolheCorpos;
+  check('a decisão pura existe (sem precisar de 3D)', typeof esc === 'function');
+  check('o teto padrão é 20', JOGO.Hub.TETO_FANTASMAS === 20);
+
+  function f(id, dist, temCorpo) { return { id: id, dist: dist, temCorpo: !!temCorpo }; }
+
+  // 1. praça pequena: todo mundo ganha corpo (um por avaliação)
+  var d1 = esc([f('a', 3), f('b', 5)], 20, 2, 1);
+  check('abaixo do teto, quem não tem corpo entra (1 por vez)',
+        d1.entra.length === 1 && d1.entra[0] === 'a' && d1.sai.length === 0);
+
+  // 2. cheio: o mais próximo SEM corpo entra; o de fora COM corpo e folga sai
+  var cheio = [];
+  for (var i = 0; i < 20; i++) cheio.push(f('c' + i, 4 + i * 0.1, true));
+  cheio.push(f('perto', 1, false));            // furou o teto por proximidade
+  cheio.push(f('longe', 30, true));            // corpo velho, longe do corte
+  var d2 = esc(cheio, 20, 2, 1);
+  check('o recém-próximo entra e o distante larga o corpo',
+        d2.entra[0] === 'perto' && d2.sai[0] === 'longe');
+
+  // 3. HISTERESE: quem está só um passo atrás do corte NÃO larga
+  var beira = [];
+  for (var j = 0; j < 20; j++) beira.push(f('d' + j, 5, true));
+  beira.push(f('beirada', 6.5, true));         // 1,5 atrás do corte — margem é 2
+  var d3 = esc(beira, 20, 2, 1);
+  check('na beirada (dentro da margem), ninguém larga o corpo',
+        d3.sai.length === 0, JSON.stringify(d3));
+
+  // 4. porVez segura a avalanche: 30 sem corpo, entra UM
+  var trinta = [];
+  for (var k = 0; k < 30; k++) trinta.push(f('e' + k, k, false));
+  var d4 = esc(trinta, 20, 2, 1);
+  check('30 sem corpo: entra exatamente 1 por avaliação', d4.entra.length === 1);
+
+  // 5. lista vazia e teto maior que a praça não quebram
+  var d5 = esc([], 20, 2, 1);
+  check('praça vazia não quebra', d5.entra.length === 0 && d5.sai.length === 0);
+
+  var sb = JOGO.SaveSandbox.check();
+  check('o disco de verdade continua intocado', sb.ok);
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>
