@@ -640,6 +640,24 @@ var JOGO = (typeof window !== 'undefined')
 
     var stones = collectStones(st.units, monsters, prog);
 
+    /* OS SELOS DO COLECIONADOR (25/08): SÓ chefe derruba, e derruba o selo
+     * do PRÓPRIO elemento (os seis chefes cobrem os cinco; no Poço eles
+     * revezam). A chance é UMA e mora em DATA.selos — calibragem do dono. */
+    var selosGanhos = {};
+    var cfgSelos = (JOGO.DATA && JOGO.DATA.selos) || null;
+    if (cfgSelos && prog && prog.addSelo) {
+      for (i = 0; i < st.units.length; i++) {
+        var us = st.units[i];
+        if (us.side !== 'enemy' || us.alive) continue;
+        var ds2 = monsters[us.defId];
+        if (!ds2 || !ds2.boss || !ds2.element) continue;
+        if (Math.random() >= num(cfgSelos.chance, 0.5)) continue;
+        if (prog.addSelo(ds2.element, 1)) {
+          selosGanhos[ds2.element] = (selosGanhos[ds2.element] || 0) + 1;
+        }
+      }
+    }
+
     // [G9] rendimento decrescente por herói (§9-D): conteúdo fácil paga menos.
     // Vale só para XP — item, pedra e carta seguem suas próprias raridades.
     var levelUps = [], xpMult = {}, xpPorHeroi = {};
@@ -719,6 +737,7 @@ var JOGO = (typeof window !== 'undefined')
       pets: pets,
       cards: cards,
       stones: stones,
+      selos: selosGanhos,
       elementChoices: elementChoices
     };
   }

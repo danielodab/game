@@ -1311,6 +1311,33 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .fc-estrela { border-style: dashed; border-color: rgba(230,181,60,.45); }
 .fc-nota { margin: 0; font-size: 12px; color: var(--text); line-height: 1.5; }
 
+/* O COLECIONADOR DE SELOS (25/08): a moeda dos chefes e a roleta */
+.colec-caixa {
+  margin-top: 14px; padding: 11px 13px; border-radius: 12px;
+  border: 1px dashed rgba(230,181,60,.5); background: rgba(230,181,60,.06);
+  display: flex; flex-direction: column; gap: 9px;
+}
+.colec-selos { display: flex; flex-wrap: wrap; gap: 6px; }
+.colec-selo {
+  display: flex; align-items: center; gap: 5px; padding: 5px 10px;
+  border-radius: 999px; font-size: 12px; color: var(--ec, var(--text));
+  background: color-mix(in srgb, var(--ec, #888) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ec, #888) 45%, transparent);
+}
+.colec-selo.is-cheio { box-shadow: 0 0 8px color-mix(in srgb, var(--ec, #888) 55%, transparent); }
+.colec-elem { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.colec-roleta { display: flex; gap: 8px; justify-content: center; padding: 6px 0 2px; }
+.colec-peca {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 7px 6px; border-radius: 10px; border: 2px solid var(--line2);
+  background: rgba(6,9,13,.5); font-size: 9.5px; color: var(--dim);
+  max-width: 86px; text-align: center; transition: border-color .05s, box-shadow .05s;
+}
+.colec-peca.is-on { border-color: var(--gold); color: var(--gold);
+  box-shadow: 0 0 14px rgba(255,196,77,.5); }
+.rw-selo .selo-moeda { font-size: 26px; color: var(--ec, #fff); line-height: 1;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--ec, #fff) 70%, transparent); }
+
 /* O TUTOR (25/08): um cartão de primeira visita por tela */
 .tutor-caixa {
   position: fixed; left: 50%; bottom: calc(var(--sa-b, 0px) + 108px);

@@ -647,6 +647,24 @@ var JOGO = (typeof window !== 'undefined')
         if (q > 0) st.stones[id] = q;
       }
     }
+
+    // ---- os SELOS dos chefes (25/08) — campo novo: a cópia campo a campo
+    // engoliria calada sem estas linhas (a armadilha de sempre)
+    st.selos = {};
+    if (isObj(raw.selos)) {
+      var els2 = elements();
+      for (id in raw.selos) {
+        if (!raw.selos.hasOwnProperty(id)) continue;
+        if (indexOf(els2, id) < 0) continue;
+        var qs = Math.floor(num(raw.selos[id], 0));
+        if (qs > 0) st.selos[id] = qs;
+      }
+    }
+    if (raw.petSelosDado === true) st.petSelosDado = true;
+    if (typeof raw.seloElemento === 'string' &&
+        indexOf(elements(), raw.seloElemento) >= 0) {
+      st.seloElemento = raw.seloElemento;
+    }
     return st;
   }
 
@@ -712,6 +730,7 @@ var JOGO = (typeof window !== 'undefined')
     Progress.state = st;
     for (var hid in st.heroes) if (st.heroes.hasOwnProperty(hid)) syncSpells(hid);
     syncUnlocksFromCards();
+    aplicaSeloElemento();          // o elemento escolhido do Traje volta a valer
     return Progress.state;
   };
 
@@ -1285,6 +1304,7 @@ var JOGO = (typeof window !== 'undefined')
     h.itemVar[it.slot] = { level: num(copia.level, 0), stars: num(copia.stars, 0) };
     syncSpells(heroId);
     Progress.save();
+    premioDoColecionador();              // o Traje fechado concede o pet (1x)
     return true;
   };
 
@@ -1464,6 +1484,123 @@ var JOGO = (typeof window !== 'undefined')
     if (!st || !isObj(st.stones)) return 0;
     return Math.max(0, Math.floor(num(st.stones[stoneId], 0)));
   };
+
+  // ========================================== os SELOS do Colecionador (25/08)
+  /* A moeda dos chefes: uma por elemento, só chefe derruba (game.js rola a
+   * chance de DATA.selos). 10 de cada = um giro na roleta = UMA peça do
+   * Traje do Colecionador. Fechar as 4 vestidas concede o pet exclusivo, uma
+   * vez por conta (petSelosDado). */
+  Progress.addSelo = function (elemento, n) {
+    var st = Progress.state;
+    if (!st || indexOf(elements(), elemento) < 0) return false;
+    var amount = Math.floor(num(n, 1));
+    if (amount <= 0) return false;
+    if (!isObj(st.selos)) st.selos = {};
+    st.selos[elemento] = Math.max(0, Math.floor(num(st.selos[elemento], 0))) + amount;
+    Progress.save();
+    return true;
+  };
+  Progress.selosVer = function () {
+    var st = Progress.state;
+    var fora = {}, els = elements();
+    for (var i = 0; i < els.length; i++) {
+      fora[els[i]] = (st && isObj(st.selos)) ? Math.floor(num(st.selos[els[i]], 0)) : 0;
+    }
+    return fora;
+  };
+  Progress.roletaPronta = function () {
+    var cfg = D().selos || {};
+    var precisa = Math.max(1, Math.floor(num(cfg.porGiro, 10)));
+    var tem = Progress.selosVer(), els = elements();
+    for (var i = 0; i < els.length; i++) if (tem[els[i]] < precisa) return false;
+    return true;
+  };
+  /* seam de teste, como o da forja: injete para tirar o acaso da roleta */
+  Progress._roletaRng = null;
+  Progress.giraRoleta = function () {
+    var st = Progress.state;
+    var cfg = D().selos || {};
+    var sd = (D().sets || {})[cfg.setId];
+    if (!st || !sd || !isArray(sd.pieces) || !sd.pieces.length) return null;
+    if (!Progress.roletaPronta()) return null;
+    if (!Progress.bagFree(1)) return null;              // o prêmio precisa caber
+    var precisa = Math.max(1, Math.floor(num(cfg.porGiro, 10)));
+    var els = elements();
+    for (var i = 0; i < els.length; i++) {
+      st.selos[els[i]] -= precisa;                       // paga ANTES de girar
+    }
+    var rnd = (typeof Progress._roletaRng === 'function') ? Progress._roletaRng() : Math.random();
+    var itemId = sd.pieces[Math.min(sd.pieces.length - 1,
+                                    Math.floor(rnd * sd.pieces.length))];
+    st.inventory.push({ itemId: itemId, level: 0, stars: 0 });
+    Progress.save();
+    return { itemId: itemId };
+  };
+
+  /* O ELEMENTO DO TRAJE é ESCOLHA DA CONTA (pedido 25/08: "esse set raro
+   * poderá escolher o elemento dele"). A escolha reescreve os DEFS do traje
+   * NESTA janela: set e peças respondem pelo elemento escolhido — filtro por
+   * elemento, pedra de forja e as resists de peça nascidas 'neutro' vão
+   * re-chaveadas juntas. Os bônus de conjunto já são pentaelementais e não
+   * mudam. Persistida no save; reaplicada no load. */
+  Progress.seloElemento = function () {
+    return (Progress.state && Progress.state.seloElemento) || 'neutro';
+  };
+  Progress.escolheSeloElemento = function (elemento) {
+    var st = Progress.state;
+    if (!st || indexOf(elements(), elemento) < 0) return false;
+    st.seloElemento = elemento;
+    Progress.save();
+    aplicaSeloElemento();
+    return true;
+  };
+  function aplicaSeloElemento() {
+    var cfg = D().selos;
+    var sd = cfg && (D().sets || {})[cfg.setId];
+    if (!sd) return;
+    var alvo = Progress.seloElemento();
+    sd.element = alvo;
+    for (var i = 0; i < sd.pieces.length; i++) {
+      var it = (D().items || {})[sd.pieces[i]];
+      if (!it) continue;
+      it.element = alvo;
+      if (it.bonuses && it.bonuses.resists) {
+        if (!it.__resistsBase) it.__resistsBase = it.bonuses.resists;
+        var novo = {}, base = it.__resistsBase;
+        for (var k in base) {
+          if (!base.hasOwnProperty(k)) continue;
+          novo[k === 'neutro' ? alvo : k] = base[k];
+        }
+        it.bonuses.resists = novo;
+      }
+    }
+  }
+  Progress._aplicaSeloElemento = aplicaSeloElemento;   // o load chama; o teste espia
+
+  /* O TRAJE FECHADO concede o pet (uma vez): chamado pelo equip. */
+  function premioDoColecionador() {
+    var st = Progress.state;
+    var cfg = D().selos || {};
+    var sd = (D().sets || {})[cfg.setId];
+    if (!st || st.petSelosDado || !sd || !sd.pet || !petDef(sd.pet)) return;
+    var vestidas = 0;
+    for (var i = 0; i < sd.pieces.length; i++) {
+      var pid = sd.pieces[i];
+      for (var hid in st.heroes) {
+        if (!st.heroes.hasOwnProperty(hid)) continue;
+        var h = st.heroes[hid];
+        var achou = false;
+        for (var s = 0; s < SLOTS.length; s++) {
+          if (h.items && h.items[SLOTS[s]] === pid) achou = true;
+        }
+        if (achou) { vestidas++; break; }
+      }
+    }
+    if (vestidas < sd.pieces.length) return;
+    st.petSelosDado = true;                    // marca ANTES: o addPet pode recusar
+    Progress.addPet(sd.pet);                   // (pet já no saco = só a marca fica)
+    Progress.save();
+  }
 
   function tierNameFor(level) {
     var tiers = upgradeCfg().tiers;

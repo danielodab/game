@@ -155,7 +155,7 @@ var JOGO = (typeof window !== 'undefined')
   function apresenta() {
     if (!eu) return;
     manda('oi', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
-                  resumo: eu.resumo, x: eu.x, z: eu.z });
+                  resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z });
   }
   function agora() { return Date.now(); }
 
@@ -167,11 +167,12 @@ var JOGO = (typeof window !== 'undefined')
     pares[m.de] = { nome: m.nome || '?', titulo: m.titulo || '',
                     classe: m.classe || 'sumo',
                     resumo: m.resumo || null,
+                    aura: m.aura === true,
                     x: m.x || 0, z: m.z || 0, visto: agora() };
     if (novo) {
       avisa({ tipo: 'entrou', id: m.de, nome: pares[m.de].nome,
               titulo: pares[m.de].titulo, classe: pares[m.de].classe,
-              resumo: pares[m.de].resumo,
+              resumo: pares[m.de].resumo, aura: pares[m.de].aura,
               x: pares[m.de].x, z: pares[m.de].z });
     }
     return novo;
@@ -253,6 +254,7 @@ var JOGO = (typeof window !== 'undefined')
            nome: perfil.nome || '?', titulo: perfil.titulo || '',
            classe: perfil.classe || 'sumo',
            resumo: perfil.resumo || null,
+           aura: perfil.aura === true,          // o Traje do Colecionador fechado
            x: perfil.x || 0, z: perfil.z || 0 };
     apresenta();
     timerPulso = setInterval(function () {
@@ -322,7 +324,7 @@ var JOGO = (typeof window !== 'undefined')
       var p = pares[id];
       if (!p.nome) return;             // visto só por pulso: sem apresentação ainda
       fora.push({ id: id, nome: p.nome, titulo: p.titulo, classe: p.classe,
-                  resumo: p.resumo || null, x: p.x, z: p.z });
+                  resumo: p.resumo || null, aura: p.aura === true, x: p.x, z: p.z });
     });
     return fora;
   };

@@ -859,6 +859,8 @@ var JOGO = (typeof window !== 'undefined')
         if (JOGO.Hub && JOGO.Hub.nomeia) {
           JOGO.Hub.nomeia(j.nome || '', j.titulo || '', tier);
         }
+        // A AURA do Traje do Colecionador fechado (25/08)
+        if (JOGO.Hub && JOGO.Hub.aura) JOGO.Hub.aura(safe(temAuraSelos, false));
       });
       JOGO.DB.moedas().then(function (m) {
         moedasEl.textContent = m + (m === 1 ? ' vintém' : ' vinténs');
@@ -988,6 +990,7 @@ var JOGO = (typeof window !== 'undefined')
                                titulo: j.titulo || '',
                                classe: j.avatar || selHeroes[0] || 'sumo',
                                resumo: safe(resumoDaConta, null),
+                               aura: safe(temAuraSelos, false),
                                x: pos.x, z: pos.z });
         if (!ligou) return;                    // file://: o jogo segue solo
 
@@ -1294,6 +1297,25 @@ var JOGO = (typeof window !== 'undefined')
           var cell = el('div', 'rw-item');
           cell.appendChild(art('stoneIcon', [sid, 48], 48));
           cell.appendChild(el('span', null, '+' + stones[sid] + ' ' + esc((sd && sd.name) || sid)));
+          w.appendChild(cell);
+        }
+        return w;
+      })()));
+    }
+
+    // OS SELOS DE CHEFE (25/08): a moeda do Colecionador, um ❂ por elemento
+    var selosG = lastRewards.selos || {};
+    var algumSelo = false;
+    for (var slk in selosG) { if (selosG.hasOwnProperty(slk)) algumSelo = true; }
+    if (algumSelo) {
+      box.appendChild(rwBlock('Selos de chefe', (function () {
+        var w = el('div', 'rw-items');
+        for (var se in selosG) {
+          if (!selosG.hasOwnProperty(se)) continue;
+          var cell = el('div', 'rw-item rw-selo');
+          cell.style.setProperty('--ec', elemColor(se));
+          cell.appendChild(el('b', 'selo-moeda', '❂'));
+          cell.appendChild(el('span', null, '+' + selosG[se] + ' Selo de ' + (ELEM_PT[se] || se)));
           w.appendChild(cell);
         }
         return w;
@@ -2378,6 +2400,86 @@ var JOGO = (typeof window !== 'undefined')
         }));
         caixa.appendChild(row);
       });
+
+      /* O COLECIONADOR DE SELOS (25/08): o NPC que não regateia. Só chefes
+       * derrubam selos; 10 de cada elemento compram UM giro na roleta — uma
+       * peça do Traje do Colecionador. A animação NÃO decide nada: o giro
+       * (Progress.giraRoleta) resolve primeiro, a roleta só conta a história
+       * parando na casa certa. */
+      var cfgSel = D().selos;
+      if (cfgSel && P().selosVer) {
+        var colec = el('div', 'colec-caixa');
+        colec.appendChild(el('h3', 'bk-tit', 'O Colecionador de Selos'));
+        colec.appendChild(el('p', 'inv-dica',
+          'Só chefes derrubam selos — um por elemento. <b>' + cfgSel.porGiro +
+          ' de cada</b> compram um giro na roleta: uma peça do <b>Traje do Colecionador</b>. ' +
+          'Peça repetida vira matéria de estrela.'));
+        var saldo = safe(function () { return P().selosVer(); }, {});
+        var fila = el('div', 'colec-selos');
+        ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e3) {
+          var chip = el('div', 'colec-selo' +
+            ((saldo[e3] || 0) >= cfgSel.porGiro ? ' is-cheio' : ''));
+          chip.style.setProperty('--ec', elemColor(e3));
+          chip.innerHTML = '❂ <b>' + (saldo[e3] || 0) + '</b>/' + cfgSel.porGiro +
+            ' ' + esc(ELEM_PT[e3] || e3);
+          fila.appendChild(chip);
+        });
+        colec.appendChild(fila);
+        // O ELEMENTO DO TRAJE é seu (pedido 25/08): escolha — e troque — aqui.
+        // A escolha reescreve o traje inteiro: filtro, pedra de forja, resists.
+        var elAtual = safe(function () { return P().seloElemento(); }, 'neutro');
+        var filaEl = el('div', 'colec-elem');
+        filaEl.appendChild(el('span', 'pt-trajes-rot', 'O traje responde por:'));
+        ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e4) {
+          var b4 = btn(ELEM_PT[e4] || e4,
+            'btn-tab bt-elem' + (elAtual === e4 ? ' is-on' : ''), function () {
+              safe(function () { return P().escolheSeloElemento(e4); }, false);
+              toast('O Traje do Colecionador agora responde por ' + (ELEM_PT[e4] || e4) + '.', 'good');
+              sheetMercado();
+            });
+          b4.style.setProperty('--ec', elemColor(e4));
+          filaEl.appendChild(b4);
+        });
+        colec.appendChild(filaEl);
+        var pronta = safe(function () { return P().roletaPronta(); }, false);
+        colec.appendChild(btn('Girar a roleta', 'btn-gold btn-block' + (pronta ? '' : ' is-off'),
+          function () {
+            var r2 = safe(function () { return P().giraRoleta(); }, null);
+            if (!r2) {
+              toast(!safe(function () { return P().bagFree(1); }, true)
+                ? 'O saco está cheio — abra espaço para o prêmio.'
+                : 'Faltam selos para o giro.');
+              return;
+            }
+            var sd3 = setDef(cfgSel.setId);
+            var pecas = (sd3 && sd3.pieces) || [];
+            var alvoIdx = Math.max(0, pecas.indexOf(r2.itemId));
+            var faixa = el('div', 'colec-roleta');
+            var cels = pecas.map(function (pid) {
+              var c2 = el('div', 'colec-peca');
+              c2.appendChild(art('itemIcon', [pid, 48], 48));
+              c2.appendChild(el('span', null, esc((itemDef(pid) || {}).name || pid)));
+              faixa.appendChild(c2);
+              return c2;
+            });
+            colec.appendChild(faixa);
+            var passo = 0, ultimo = 12 + alvoIdx;      // dá as voltas e para no alvo
+            (function roda() {
+              cels.forEach(function (c3, i4) {
+                c3.classList.toggle('is-on', i4 === (passo % cels.length));
+              });
+              if (passo >= ultimo) {
+                toast('A roleta parou: ' + esc((itemDef(r2.itemId) || {}).name) +
+                      '! Já está no saco.', 'good');
+                setTimeout(function () { sheetMercado(); }, 900);
+                return;
+              }
+              passo++;
+              setTimeout(roda, 60 + passo * 16);        // desacelera até parar
+            })();
+          }));
+        caixa.appendChild(colec);
+      }
     });
   }
 
@@ -3107,6 +3209,13 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   }
 
+  /* o Traje do Colecionador está FECHADO? (acende a aura e viaja na Rede) */
+  function temAuraSelos() {
+    var cfg = D().selos;
+    if (!cfg || !cfg.setId) return false;
+    return setEquippedCount(cfg.setId) >= setPieceCount(cfg.setId);
+  }
+
   // quantas peças do conjunto estão equipadas (por qualquer herói)
   function setEquippedCount(setId) {
     var sd = setDef(setId);
@@ -3633,6 +3742,11 @@ var JOGO = (typeof window !== 'undefined')
         if (!ok) { toast('Não deu para equipar essa peça.'); }
         else {
           toast(esc((it && it.name) || 'Peça') + ' no ' + (SLOT_PT[canon] || 'espaço') + '.', 'good');
+          // o Traje do Colecionador FECHOU nesta peça? A aura acende agora
+          if (it && D().selos && it.setId === D().selos.setId && safe(temAuraSelos, false)) {
+            toast('O Traje do Colecionador FECHOU — a aura acende na praça e o Selinho se junta a você!', 'good');
+            if (JOGO.Hub && JOGO.Hub.aura) safe(function () { JOGO.Hub.aura(true); }, null);
+          }
           if (pilha.count <= 1) invSel = null;
         }
         sheetParty('inventario');

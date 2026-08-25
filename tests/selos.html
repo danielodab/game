@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — os Selos do Colecionador</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>Os Selos — a moeda dos chefes, a roleta, o elemento escolhido e o pet</h1>
+<div class="sub">addSelo/selosVer/roletaPronta/giraRoleta (com o seam de RNG); 10 de cada pagam UMA
+peça do Traje do Colecionador; o elemento do traje é escolha da conta (reescreve set e peças,
+re-chaveia resists e SOBREVIVE ao load); fechar as 4 vestidas concede o pet UMA vez.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  try { localStorage.removeItem('soterra-save-v2'); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var P = JOGO.Progress;
+  P.reset();
+  var cfg = JOGO.DATA.selos;
+  var sd = JOGO.DATA.sets[cfg.setId];
+
+  // 1. os dados do traje
+  check('o traje existe com 4 peças, uma por espaço',
+        !!sd && sd.pieces.length === 4);
+  check('o Lume do traje concede feitiço próprio',
+        JOGO.DATA.items['sl-selo-primeiro'].grantsSpell === 'is-cinco-selos' &&
+        !!JOGO.DATA.itemSpells['is-cinco-selos']);
+  check('as peças estão FORA dos pools de saque',
+        sd.pieces.every(function (id) {
+          var it = JOGO.DATA.items[id];
+          return !it.dungeonId && it.dropWeight === 0;
+        }));
+  check('o pet exclusivo existe e não dropa',
+        !!JOGO.DATA.pets['pet-colecionador'] &&
+        JOGO.DATA.pets['pet-colecionador'].dropWeight === 0);
+
+  // 2. a moeda
+  check('addSelo soma por elemento', P.addSelo('fogo', 3) && P.selosVer().fogo === 3);
+  check('elemento inventado é recusado', P.addSelo('sombra', 1) === false);
+  check('sem 10 de cada, a roleta não gira',
+        P.roletaPronta() === false && P.giraRoleta() === null);
+
+  // 3. o giro (com o seam de RNG apontando para a 3ª peça)
+  ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e2) {
+    P.addSelo(e2, 20);
+  });
+  P._roletaRng = function () { return 0.6; };          // 0.6*4 = índice 2
+  var alvoEsperado = sd.pieces[2];
+  var giro = P.giraRoleta();
+  check('o giro entrega a peça que o RNG mandou',
+        !!giro && giro.itemId === alvoEsperado, giro && giro.itemId);
+  var depois = P.selosVer();
+  check('o giro cobra 10 de CADA elemento',
+        depois.fogo === 13 && depois.agua === 10 && depois.neutro === 10,
+        JSON.stringify(depois));
+  check('a peça caiu no saco',
+        P.invStacks().some(function (s) { return s.itemId === alvoEsperado; }));
+
+  // 4. o elemento do traje é escolha da conta
+  check('nasce neutro', P.seloElemento() === 'neutro' &&
+        JOGO.DATA.items['sl-cetro'].element === 'neutro');
+  P.escolheSeloElemento('fogo');
+  check('escolher FOGO reescreve set e peças',
+        sd.element === 'fogo' && JOGO.DATA.items['sl-botas'].element === 'fogo');
+  check('as resists nascidas neutras seguem o elemento',
+        JOGO.DATA.items['sl-cofre'].bonuses.resists.fogo === 10 &&
+        JOGO.DATA.items['sl-cofre'].bonuses.resists.neutro === undefined);
+  P.state = null; P.load();
+  check('a escolha SOBREVIVE ao load (e é reaplicada)',
+        P.seloElemento() === 'fogo' && JOGO.DATA.items['sl-cetro'].element === 'fogo');
+
+  // 5. fechar as 4 vestidas concede o pet, UMA vez
+  var hid = P.heroIds()[0];
+  P._roletaRng = function () { return 0; };
+  ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e3) { P.addSelo(e3, 40); });
+  // gira até ter as 4 peças distintas (RNG dirigido: 0, 0.3, 0.6, 0.9)
+  [0.05, 0.3, 0.6, 0.9].forEach(function (r2) {
+    P._roletaRng = function () { return r2; };
+    P.giraRoleta();
+  });
+  sd.pieces.forEach(function (pid) { P.equip(hid, pid); });
+  check('as 4 vestidas concedem o pet exclusivo',
+        P.state.pets.indexOf('pet-colecionador') >= 0 && P.state.petSelosDado === true);
+  var petsAntes = P.state.pets.length;
+  P.unequip(hid, 'punho');
+  P.equip(hid, 'sl-cetro');
+  check('fechar de novo NÃO duplica o pet', P.state.pets.length === petsAntes);
+
+  var sb = JOGO.SaveSandbox.check();
+  check('o disco de verdade continua intocado', sb.ok);
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>

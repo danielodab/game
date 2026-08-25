@@ -486,6 +486,25 @@ var JOGO = (typeof window !== 'undefined')
       for (var fk2 in fantasmas) {
         if (fantasmas.hasOwnProperty(fk2)) viraCoroa(fantasmas[fk2]);
       }
+      // A AURA respira: o anel gira devagar, as labaredas sobem e somem
+      var pulsaAura = function (corpoA) {
+        if (!corpoA || !corpoA.aura) return;
+        for (var ai = 0; ai < corpoA.aura.children.length; ai++) {
+          var ch = corpoA.aura.children[ai];
+          if (ch.isSprite) {
+            var f2 = (relogio * 0.45 + (ch.userData.fase || 0)) % 1.0;
+            ch.position.y = 0.7 + f2 * 1.0;
+            ch.material.opacity = 0.34 * (1 - f2);
+          } else {
+            ch.material.opacity = 0.28 + Math.sin(relogio * 2.1) * 0.09;
+            ch.rotation.z = relogio * 0.35;
+          }
+        }
+      };
+      pulsaAura(heroi);
+      for (var fk2b in fantasmas) {
+        if (fantasmas.hasOwnProperty(fk2b)) pulsaAura(fantasmas[fk2b]);
+      }
     }
     for (var i = 0; i < lugares.length; i++) {
       var l = lugares[i];
@@ -698,6 +717,61 @@ var JOGO = (typeof window !== 'undefined')
     brasaDoHeroi = brasaTier || null;
     pendura(nomeJogador, tituloJogador, brasaDoHeroi);
   };
+  /* A AURA DO COLECIONADOR (pedido 25/08): o Traje fechado acende "um fogo
+   * quase transparente e branco" — um ANEL no chão e três labaredas macias
+   * subindo do corpo. Tudo canvas + aditivo, sem textura externa; o tique
+   * pulsa. Vale para o herói (Hub.aura) e para fantasmas com perfil.aura —
+   * a vaidade tem de ser PÚBLICA, senão não é vaidade. */
+  var texAuraDisco = null, texAuraChama = null;
+  function fazTexRadial(stops) {
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    var g2 = cv.getContext('2d');
+    var gr = g2.createRadialGradient(64, 64, 4, 64, 64, 62);
+    for (var i = 0; i < stops.length; i++) gr.addColorStop(stops[i][0], stops[i][1]);
+    g2.fillStyle = gr;
+    g2.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(cv);
+  }
+  function acendeAura(corpo, liga) {
+    if (!corpo || !THREE) return;
+    if (!liga) {
+      if (corpo.aura) { corpo.node.remove(corpo.aura); corpo.aura = null; }
+      return;
+    }
+    if (corpo.aura) return;
+    if (!texAuraDisco) {
+      texAuraDisco = fazTexRadial([[0, 'rgba(255,255,255,0)'],
+        [0.55, 'rgba(255,255,255,0.5)'], [0.75, 'rgba(255,255,255,0.16)'],
+        [1, 'rgba(255,255,255,0)']]);
+      texAuraChama = fazTexRadial([[0, 'rgba(255,255,255,0.85)'],
+        [0.5, 'rgba(255,250,240,0.25)'], [1, 'rgba(255,255,255,0)']]);
+    }
+    var g = new THREE.Group();
+    var disco = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.2, 2.2),
+      new THREE.MeshBasicMaterial({ map: texAuraDisco, transparent: true, opacity: 0.34,
+        depthWrite: false, blending: THREE.AdditiveBlending }));
+    disco.rotation.x = -Math.PI / 2;
+    disco.position.y = 0.05;
+    g.add(disco);
+    for (var f = 0; f < 3; f++) {
+      var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: texAuraChama,
+        transparent: true, opacity: 0.32, depthWrite: false,
+        blending: THREE.AdditiveBlending, color: 0xffffff }));
+      sp.scale.set(0.5, 1.05, 1);
+      sp.position.set(Math.cos(f * 2.1) * 0.35, 0.9, Math.sin(f * 2.1) * 0.35);
+      sp.userData.fase = f * 0.33;
+      g.add(sp);
+    }
+    corpo.node.add(g);
+    corpo.aura = g;
+  }
+  Hub.aura = function (liga) {
+    acendeAura(heroi, !!liga);
+    return !!heroi;
+  };
+
   /* OS FANTASMAS — os outros jogadores da Rede, de corpo inteiro no mapa.
    * Entram com classe, nome e título; andam pelo MESMO verbo do herói
    * (mandaAndar/andaCorpo); o pulso corrige deriva grande sem teleporte
@@ -725,6 +799,7 @@ var JOGO = (typeof window !== 'undefined')
       if (tierF && tierF.min === 0 && !(perfil.resumo.partidas > 0)) tierF = null;
     }
     penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF);
+    if (perfil && perfil.aura) acendeAura(corpo, true);   // a vaidade é pública
     return true;
   };
   Hub.fantasmaAlvo = function (id, x, z) {

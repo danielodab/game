@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o balcão do Colecionador</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): o Colecionador no Mercadinho — selos cheios,
+     elemento escolhido em FOGO e a roleta parada no prêmio (25/08). -->
+<iframe id="f" src="../index.html?prova-colec"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e2) { P.addSelo(e2, 14); });
+      P.escolheSeloElemento('fogo');
+      w.JOGO.UI.openSheet('mercado');
+      setTimeout(function () {
+        var colec = d.querySelector('.colec-caixa');
+        if (colec) colec.scrollIntoView();
+        var bG = null;
+        colec.querySelectorAll('.btn').forEach(function (b) {
+          if (/Girar/.test(b.textContent)) bG = b;
+        });
+        if (bG) bG.click();
+        setTimeout(function () { window.__pronto = true; }, 2600);
+      }, 900);
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

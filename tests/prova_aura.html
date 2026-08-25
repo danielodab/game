@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a aura do Colecionador</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): o Traje do Colecionador fechado acende o fogo
+     branco quase transparente — anel no chão, labaredas no corpo (25/08). -->
+<iframe id="f" src="../index.html?prova-aura"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      var hid = P.heroIds()[0];
+      ['sl-cetro', 'sl-botas', 'sl-cofre', 'sl-selo-primeiro'].forEach(function (id) {
+        P.addItem(id);
+        P.equip(hid, id);
+      });
+      w.JOGO.DB.batizar('Colecionador').then(function () {
+        w.JOGO.UI.showScreen('hub');
+        setTimeout(function () { window.__pronto = true; }, 2500);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>
