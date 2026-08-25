@@ -215,6 +215,13 @@ var JOGO = (typeof window !== 'undefined')
         if (pares[m.de]) pares[m.de].visto = agora();
         avisa({ tipo: 'troca', de: m.de, acao: m.acao, dados: m.dados || null });
       }
+    } else if (m.t === 'guilda') {
+      // o envelope da GUILDA (25/08): convite e aceite — mesmo desenho da troca
+      if (m.para === eu.id) {
+        if (pares[m.de]) pares[m.de].visto = agora();
+        avisa({ tipo: 'guilda', de: m.de, nome: (pares[m.de] || {}).nome || '?',
+                acao: m.acao, dados: m.dados || null });
+      }
     } else if (m.t === 'tchau') {
       if (pares[m.de]) {
         delete pares[m.de];
@@ -287,6 +294,11 @@ var JOGO = (typeof window !== 'undefined')
   R.trocaManda = function (para, acao, dados) {
     if (!eu || !para) return false;
     manda('troca', { para: para, acao: acao, dados: dados || null });
+    return true;
+  };
+  R.guildaManda = function (para, acao, dados) {
+    if (!eu || !para) return false;
+    manda('guilda', { para: para, acao: acao, dados: dados || null });
     return true;
   };
   R.meuId = function () { return eu ? eu.id : null; };

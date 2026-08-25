@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a ficha da Guilda</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): a ficha da Guilda com cofre cheio, um bônus
+     vivo e o banco de empréstimos com peças (25/08). -->
+<iframe id="f" src="../index.html?prova-guilda"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      var Gd = w.JOGO.Guilda;
+      w.JOGO.DB.batizar('Capitã Ana').then(function () {
+        return w.JOGO.DB.jogador();
+      }).then(function (j) {
+        Gd.contaAtiva(j.id, j.nome);
+        return Gd.criar('Os Soterrados', '🔥');
+      }).then(function () {
+        var fila = Promise.resolve();
+        for (var t = 0; t < 40; t++) fila = fila.then(function () { return Gd.registraTreino(); });
+        return fila;
+      }).then(function () {
+        return Gd.compraBonus('drop');
+      }).then(function () {
+        return Gd.bancoDepositar({ itemId: 'gh-widow-shears', level: 4, stars: 1 });
+      }).then(function () {
+        return Gd.bancoDepositar({ itemId: 'em-forge-grate', level: 0, stars: 0 });
+      }).then(function () {
+        w.JOGO.Progress.addItem('av-kite-crest');
+        w.JOGO.UI.openSheet('guilda');
+        setTimeout(function () { window.__pronto = true; }, 1800);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

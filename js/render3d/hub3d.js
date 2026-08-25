@@ -165,6 +165,7 @@ var JOGO = (typeof window !== 'undefined')
     montaBanco();
     montaMercado();
     montaArena();
+    montaSede();
     enfeitesPlantados = false;       // cena nova, moitas novas
     enfeitesTentativas = 0;
     montaEnfeites();
@@ -308,6 +309,46 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(g);
     lugares.push({ id: 'arena', tipo: 'arena', nome: 'Arena',
                    pos: new THREE.Vector3(px, 0, pz), raio: 3.4, node: g });
+  }
+
+  /* A SEDE DAS GUILDAS (25/08): o estandarte a leste. O lugar existe ANTES
+   * da casa própria — a casa 3D de cada guilda vem com a fase do lobby;
+   * hoje a porta abre a ficha da guilda. */
+  function montaSede() {
+    var px = RAIO_MAPA * 0.62, pz = -RAIO_MAPA * 0.04;
+    var g = new THREE.Group();
+    var mastro = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.09, 0.13, 4.4, 8),
+      new THREE.MeshBasicMaterial({ color: 0x6b5136 }));
+    mastro.position.y = 2.2;
+    g.add(mastro);
+    var cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 128;
+    var g2 = cv.getContext('2d');
+    g2.fillStyle = 'rgba(24,18,10,0.92)';
+    g2.fillRect(0, 0, 256, 128);
+    g2.strokeStyle = '#c9a227';
+    g2.lineWidth = 6;
+    g2.strokeRect(3, 3, 250, 122);
+    g2.fillStyle = '#ffd98a';
+    g2.textAlign = 'center';
+    g2.font = '700 44px Georgia';
+    g2.fillText('⚑', 128, 52);
+    g2.font = '700 30px Georgia';
+    g2.fillText('GUILDAS', 128, 100);
+    var bandeira = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.4, 1.2),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv),
+        side: THREE.DoubleSide, transparent: true }));
+    bandeira.position.set(1.25, 3.6, 0);
+    g.add(bandeira);
+    var r = rotulo('Sede das Guildas', '#d8b25e');
+    r.position.y = 5.0;
+    g.add(r);
+    g.position.set(px, 0, pz);
+    scene.add(g);
+    lugares.push({ id: 'sede', tipo: 'sede', nome: 'Sede das Guildas',
+                   pos: new THREE.Vector3(px, 0, pz), raio: 3.2, node: g });
   }
 
   /* Vida em volta: meia dúzia das peças de cenário do usuário, espalhadas com

@@ -947,6 +947,13 @@ var JOGO = (typeof window !== 'undefined')
         if (JOGO.DB) JOGO.DB.historicoPvp().then(function (h) {
           painel.appendChild(el('p', 'hub-nota', h.length + ' duelo(s) na conta.'));
         });
+      } else if (lugar.tipo === 'sede') {
+        painel.appendChild(el('h3', null, 'Sede das Guildas'));
+        painel.appendChild(el('p', 'hub-nota',
+          'O estandarte dos clãs. A casa própria de cada guilda vem com o lobby — por ora, a ficha resolve tudo.'));
+        painel.appendChild(btn('Abrir a ficha da guilda', 'btn-primary btn-block', function () {
+          openSheet('guilda');
+        }));
       }
     };
 
@@ -980,6 +987,14 @@ var JOGO = (typeof window !== 'undefined')
       }
       if (JOGO.DB.pocoVer) {
         JOGO.DB.pocoVer().then(function (pv) { resumoPoco = pv || null; });
+      }
+      if (JOGO.Guilda) {
+        JOGO.DB.jogador().then(function (j2) {
+          JOGO.Guilda.contaAtiva(j2.id, j2.nome || 'Sem Nome');
+          return JOGO.Guilda.minha();
+        }).then(function (mg) {
+          resumoGuilda = mg ? { nome: mg.nome, emblema: mg.emblema } : null;
+        });
       }
       JOGO.DB.jogador().then(function (j) {
         var e0 = (JOGO.Hub._estado && JOGO.Hub._estado()) || {};
@@ -1024,6 +1039,18 @@ var JOGO = (typeof window !== 'undefined')
               } else toast('já há uma troca aberta');
             }));
           }
+          // CONVIDAR PARA A GUILDA (25/08): só o líder vê o botão
+          if (JOGO.Guilda) {
+            JOGO.Guilda.minha().then(function (mg) {
+              if (!mg || !mg.souLider || painel.classList.contains('is-off')) return;
+              painel.insertBefore(btn('Convidar para a ' + mg.emblema + ' ' + esc(mg.nome),
+                'btn-ghost btn-block', function () {
+                  painel.classList.add('is-off');
+                  R.guildaManda(id, 'convite', { gid: mg.id, nome: mg.nome, emblema: mg.emblema });
+                  toast('Convite de guilda enviado.');
+                }), painel.lastChild);
+            });
+          }
           var mudo = !!mutados[id];
           painel.appendChild(btn(mudo ? 'Devolver a voz no chat' : 'Silenciar no chat',
             'btn-ghost btn-block', function () {
@@ -1067,6 +1094,32 @@ var JOGO = (typeof window !== 'undefined')
         R.aoEvento = function (ev) {
           if (ev.tipo === 'troca' && JOGO.Troca) {
             JOGO.Troca.aoEvento(ev);
+            return;
+          }
+          // O CONVITE DE GUILDA (25/08): chega pela praça, decide-se no painel
+          if (ev.tipo === 'guilda') {
+            if (ev.acao === 'convite' && ev.dados && JOGO.Guilda) {
+              clear(painel);
+              painel.classList.remove('is-off');
+              painel.appendChild(el('h3', null, 'Convite de guilda'));
+              painel.appendChild(el('p', 'hub-nota', esc(ev.nome) + ' te chama para a <b>' +
+                esc(ev.dados.emblema || '⚑') + ' ' + esc(ev.dados.nome || '?') + '</b>.'));
+              painel.appendChild(btn('Aceitar', 'btn-primary btn-block', function () {
+                JOGO.Guilda.entrar(ev.dados.gid).then(function (res) {
+                  painel.classList.add('is-off');
+                  toast(res.ok ? 'Bem-vindo à ' + ev.dados.nome + '!' : (res.erro || 'não deu'),
+                        res.ok ? 'good' : undefined);
+                  R.guildaManda(ev.de, 'resposta', { ok: !!res.ok });
+                });
+              }));
+              painel.appendChild(btn('Agora não', 'btn-ghost btn-block', function () {
+                painel.classList.add('is-off');
+                R.guildaManda(ev.de, 'resposta', { ok: false });
+              }));
+            } else if (ev.acao === 'resposta') {
+              toast(ev.dados && ev.dados.ok ? ev.nome + ' entrou na guilda!'
+                                            : ev.nome + ' recusou o convite.');
+            }
             return;
           }
           if (ev.tipo === 'entrou') {
@@ -2829,6 +2882,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'battleMenu') sheetBattleMenu();
     else if (name === 'contas') sheetContas();
     else if (name === 'perfil') sheetPerfil(arg);
+    else if (name === 'guilda') sheetGuilda();
     else if (name === 'banco') sheetBanco();
     else if (name === 'missoes') sheetMissoes();
     else if (name === 'mercado') sheetMercado();
@@ -3426,12 +3480,12 @@ var JOGO = (typeof window !== 'undefined')
     });
     return { classes: classes2, total: total,
              brasa: resumoBrasaPts, partidas: resumoBrasaPartidas,
-             galeria: resumoGaleria, poco: resumoPoco };
+             galeria: resumoGaleria, poco: resumoPoco, guilda: resumoGuilda };
   }
   /* os pontos de brasa entram no resumo por fora (são assíncronos no DB);
    * buildHub os carrega antes de ligar a Rede */
   var resumoBrasaPts = 1000, resumoBrasaPartidas = 0, resumoGaleria = null,
-      resumoPoco = null;
+      resumoPoco = null, resumoGuilda = null;
 
   function paresDeAvatar() {
     var ids = Object.keys(classes()).filter(isUnlocked).sort();
@@ -4620,6 +4674,11 @@ var JOGO = (typeof window !== 'undefined')
       col.appendChild(el('div', 'perfil-galeria',
         'galeria: já alcançou <b>' + esc(nomeG) + '</b>'));
     }
+    // a guilda (25/08): o clã com que essa pessoa anda
+    if (r.guilda && r.guilda.nome) {
+      col.appendChild(el('div', 'perfil-guilda',
+        esc(r.guilda.emblema || '⚑') + ' <b>' + esc(r.guilda.nome) + '</b>'));
+    }
     // o Poço sem Fundo (25/08): o quão fundo essa pessoa já foi
     if (r.poco && (r.poco.recorde > 0 || r.poco.semanaMelhor > 0)) {
       col.appendChild(el('div', 'perfil-poco',
@@ -4643,6 +4702,227 @@ var JOGO = (typeof window !== 'undefined')
     });
     body.appendChild(el('h3', 'perfil-h', 'Classes liberadas'));
     body.appendChild(tem ? caixa : el('p', 'empty', 'nada que a Rede saiba contar'));
+  }
+
+  /* A GUILDA (pedido 25/08): a ficha inteira — criar, membros, cofre com os
+   * bônus do líder, o banco de empréstimos e o ranking das guildas da
+   * máquina. A conta da janela entra no espelho do Guilda antes de tudo
+   * (o DB é assíncrono; o resto da ficha depende dele). */
+  var GUILDA_EMBLEMAS = ['⚑', '🛡️', '🔥', '💧', '🌿', '🌪️', '⭐', '💀'];
+  var guildaEmblemaEscolhido = '⚑';
+  function sheetGuilda() {
+    var body = sheetShell('Guilda',
+      'Cofre que só o líder gasta, bônus para todos, e um banco de empréstimos entre membros.');
+    sheetName = 'guilda';
+    var Gd = JOGO.Guilda;
+    if (!Gd || !JOGO.DB) { body.appendChild(el('p', 'empty', 'A guilda não carregou.')); return; }
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+
+    var contaJ = null;               // sobrevive ao primeiro .then (o banco usa)
+    JOGO.DB.jogador().then(function (j) {
+      contaJ = j;
+      Gd.contaAtiva(j.id, j.nome || 'Sem Nome');
+      return Promise.all([Gd.minha(), Gd.lista()]);
+    }).then(function (r) {
+      var g = r[0], ranking = r[1] || [];
+      clear(caixa);
+
+      if (!g) {
+        // ---- SEM GUILDA: fundar uma, ou esperar convite na praça
+        caixa.appendChild(el('p', 'inv-dica',
+          'Funde a sua — ou espere um convite: líderes convidam tocando no seu fantasma na praça.'));
+        var fila = el('div', 'guilda-emblemas');
+        GUILDA_EMBLEMAS.forEach(function (em) {
+          var b = btn(em, 'btn-mini' + (guildaEmblemaEscolhido === em ? ' btn-gold' : ' btn-ghost'),
+            function () { guildaEmblemaEscolhido = em; sheetGuilda(); });
+          fila.appendChild(b);
+        });
+        caixa.appendChild(fila);
+        var inp = document.createElement('input');
+        inp.className = 'hub-input';
+        inp.maxLength = 24;
+        inp.placeholder = 'nome da guilda';
+        caixa.appendChild(inp);
+        caixa.appendChild(btn('Fundar a guilda', 'btn-primary btn-block', function () {
+          Gd.criar(inp.value, guildaEmblemaEscolhido).then(function (res) {
+            if (!res.ok) { toast(res.erro || 'não deu'); return; }
+            toast('A ' + res.guilda.emblema + ' ' + res.guilda.nome + ' existe — e você a lidera.', 'good');
+            sheetGuilda();
+          });
+        }));
+      } else {
+        // ---- A FICHA
+        var cab = el('div', 'guilda-cab');
+        cab.appendChild(el('span', 'guilda-emblema', esc(g.emblema)));
+        var ct = el('div', 'guilda-cab-t');
+        ct.appendChild(el('h3', null, esc(g.nome) + ' <i>nível ' + g.nivel + '</i>'));
+        var alvoNivel = 60 * g.nivel * (g.nivel + 1) / 2;
+        var baseNivel = g.nivel > 1 ? 60 * (g.nivel - 1) * g.nivel / 2 : 0;
+        ct.appendChild(bar('bar-xp', (g.xp - baseNivel) / Math.max(1, alvoNivel - baseNivel),
+          'XP da guilda ' + g.xp + ' / ' + alvoNivel));
+        ct.appendChild(el('span', 'guilda-sub', g.membros.length + ' membro(s) · ' +
+          g.treinos + ' treino(s) na arena'));
+        cab.appendChild(ct);
+        caixa.appendChild(cab);
+
+        var lm = el('div', 'guilda-membros');
+        g.membros.forEach(function (m) {
+          lm.appendChild(el('span', 'guilda-membro' + (m.id === g.liderId ? ' is-lider' : ''),
+            (m.id === g.liderId ? '⚑ ' : '') + esc(m.nome)));
+        });
+        caixa.appendChild(lm);
+
+        // ---- O COFRE: a moeda da guilda, que só o líder gasta
+        var cofre = el('div', 'guilda-cofre');
+        cofre.appendChild(el('h3', 'bk-tit', 'Cofre da guilda — <b>' + g.moedas + '</b> marcas'));
+        cofre.appendChild(el('p', 'inv-dica',
+          'Marcas nascem das competições da guilda (o treino paga ' + Gd.MOEDA_TREINO +
+          '; a competição de verdade chega com o servidor). Só o líder gasta — em bônus de 24h para TODOS.'));
+        ['drop', 'xp'].forEach(function (tipo) {
+          var rot = tipo === 'drop' ? '+15% de saque' : '+15% de XP';
+          var ate = g.bonus && g.bonus[tipo];
+          var vivo = ate && ate > Date.now();
+          var linha = el('div', 'guilda-bonus' + (vivo ? ' is-vivo' : ''));
+          linha.appendChild(el('span', null, '<b>' + rot + '</b>' +
+            (vivo ? ' · vivo por mais ' + Math.ceil((ate - Date.now()) / 3600000) + 'h' : '')));
+          if (g.souLider) {
+            linha.appendChild(btn((vivo ? 'Estender' : 'Comprar') + ' (' + Gd.CUSTO_BONUS + ')',
+              'btn-mini' + (g.moedas >= Gd.CUSTO_BONUS ? ' btn-gold' : ' is-off'), function () {
+                Gd.compraBonus(tipo).then(function (res) {
+                  toast(res.ok ? 'O bônus de ' + rot + ' vale para toda a guilda!' : (res.erro || 'não deu'),
+                        res.ok ? 'good' : undefined);
+                  sheetGuilda();
+                });
+              }));
+          }
+          cofre.appendChild(linha);
+        });
+        caixa.appendChild(cofre);
+
+        // ---- O BANCO DE EMPRÉSTIMOS
+        var bg = el('div', 'guilda-banco');
+        bg.appendChild(el('h3', 'bk-tit', 'Banco da guilda'));
+        bg.appendChild(el('p', 'inv-dica',
+          'Deposite do saco; qualquer membro pega <b>emprestado</b> (um por vez) e devolve uma cópia ' +
+          'IGUAL. O dono retira de vez quando a peça está livre.'));
+        Gd.bancoLista().then(function (itens) {
+          if (!itens.length) bg.appendChild(el('p', 'inv-dica', 'O cofre de peças está vazio.'));
+          itens.forEach(function (e2, idx) {
+            var it = itemDef(e2.itemId) || {};
+            var row = el('div', 'mc-linha');
+            var ic = el('span', 'mc-ic');
+            ic.appendChild(art('itemIcon', [e2.itemId, 34], 34));
+            row.appendChild(ic);
+            var tx = el('div', 'ms-tx');
+            tx.appendChild(el('div', 'ms-nome', esc(it.name || e2.itemId) +
+              (e2.level ? ' +' + e2.level : '') + (e2.stars ? ' ★' + e2.stars : '')));
+            tx.appendChild(el('div', 'ms-prog', 'de ' + esc(e2.donoNome || '?') +
+              (e2.emprestadoPara ? ' · emprestada a ' + esc(e2.tomadorNome || '?') : ' · livre')));
+            row.appendChild(tx);
+            if (e2.emprestadoPara === contaJ.id) {
+              row.appendChild(btn('Devolver', 'btn-mini', function () {
+                var inv = P().state.inventory, achou = -1;
+                for (var v2 = 0; v2 < inv.length; v2++) {
+                  if (inv[v2].itemId === e2.itemId && (inv[v2].level || 0) === (e2.level || 0) &&
+                      (inv[v2].stars || 0) === (e2.stars || 0)) { achou = v2; break; }
+                }
+                if (achou < 0) { toast('Devolva uma cópia IGUAL (a emprestada mudou na forja?).'); return; }
+                Gd.bancoDevolver(idx).then(function (res) {
+                  if (!res.ok) { toast(res.erro || 'não deu'); sheetGuilda(); return; }
+                  inv.splice(achou, 1);
+                  safe(function () { P().save(); }, null);
+                  toast('Devolvida. Obrigado em nome da guilda.', 'good');
+                  sheetGuilda();
+                });
+              }));
+            } else if (!e2.emprestadoPara) {
+              row.appendChild(btn(e2.dono === contaJ.id ? 'Retirar' : 'Pegar emprestado', 'btn-mini', function () {
+                if (!safe(function () { return P().bagFree(1); }, true)) {
+                  toast('O saco está cheio — não cabe mais nada.');
+                  return;
+                }
+                Gd.bancoPegar(idx).then(function (res) {
+                  if (!res.ok) { toast(res.erro || 'não deu'); sheetGuilda(); return; }
+                  P().state.inventory.push({ itemId: e2.itemId, level: e2.level || 0,
+                                             stars: e2.stars || 0 });
+                  safe(function () { P().save(); }, null);
+                  toast(res.definitivo ? 'Sua peça voltou para o saco.' :
+                        'Emprestada — devolva uma cópia igual quando puder.', 'good');
+                  sheetGuilda();
+                });
+              }));
+            }
+            bg.appendChild(row);
+          });
+
+          // depositar do saco
+          var pilhas = safe(function () { return P().invStacks(); }, [])
+            .filter(function (s2) { return !!itemDef(s2.itemId); });
+          if (pilhas.length) {
+            bg.appendChild(el('h3', 'bk-tit', 'Depositar do saco'));
+            pilhas.forEach(function (pi) {
+              var it2 = itemDef(pi.itemId) || {};
+              var row2 = el('div', 'mc-linha');
+              var ic2 = el('span', 'mc-ic');
+              ic2.appendChild(art('itemIcon', [pi.itemId, 34], 34));
+              row2.appendChild(ic2);
+              var tx2 = el('div', 'ms-tx');
+              tx2.appendChild(el('div', 'ms-nome', esc(it2.name || pi.itemId) +
+                (pi.level ? ' +' + pi.level : '') + (pi.stars ? ' ★' + pi.stars : '') +
+                (pi.count > 1 ? ' ×' + pi.count : '')));
+              row2.appendChild(tx2);
+              row2.appendChild(btn('Depositar', 'btn-mini', function () {
+                var st2 = P().state;
+                var entrada = st2.inventory[pi.indices[0]];
+                if (!entrada) { toast('essa peça já saiu'); sheetGuilda(); return; }
+                Gd.bancoDepositar(entrada).then(function (res) {
+                  if (!res.ok) { toast(res.erro || 'não deu'); return; }
+                  st2.inventory.splice(pi.indices[0], 1);
+                  safe(function () { P().save(); }, null);
+                  toast('No cofre de peças da guilda.', 'good');
+                  sheetGuilda();
+                });
+              }));
+              bg.appendChild(row2);
+            });
+          }
+          caixa.appendChild(bg);
+
+          caixa.appendChild(btn('Sair da guilda', 'btn-warn btn-block', function () {
+            confirmSheet('Sair da ' + g.nome + '?',
+              g.membros.length === 1
+                ? 'Você é o último membro — a guilda se dissolve.'
+                : 'A liderança passa ao membro mais antigo, se for sua.', function () {
+                Gd.sair().then(function (res) {
+                  toast(res.ok ? 'Você saiu da guilda.' : (res.erro || 'não deu'));
+                  openSheet('guilda');
+                });
+              });
+          }));
+
+          // ---- o ranking, no pé
+          if (ranking.length) {
+            caixa.appendChild(el('h3', 'bk-tit', 'Ranking das guildas'));
+            ranking.forEach(function (rg, ri) {
+              caixa.appendChild(el('div', 'guilda-rank' + (g && rg.id === g.id ? ' is-minha' : ''),
+                '<b>' + (ri + 1) + 'º</b> ' + esc(rg.emblema) + ' ' + esc(rg.nome) +
+                ' · nível ' + rg.nivel + ' · ' + rg.xp + ' XP · ' + rg.membros + ' membro(s)'));
+            });
+          }
+        });
+      }
+
+      // sem guilda o ranking também aparece
+      if (!g && ranking.length) {
+        caixa.appendChild(el('h3', 'bk-tit', 'Ranking das guildas'));
+        ranking.forEach(function (rg, ri) {
+          caixa.appendChild(el('div', 'guilda-rank',
+            '<b>' + (ri + 1) + 'º</b> ' + esc(rg.emblema) + ' ' + esc(rg.nome) +
+            ' · nível ' + rg.nivel + ' · ' + rg.xp + ' XP · ' + rg.membros + ' membro(s)'));
+        });
+      }
+    });
   }
 
   function sheetBattleMenu() {

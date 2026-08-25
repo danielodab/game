@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a Guilda</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>A Guilda — cofre do líder, bônus de 24h e o banco de empréstimos</h1>
+<div class="sub">O registro é UM por máquina ('soterra-guilda-v1', sem sufixo de conta — o servidor
+de mentira local). Duas contas entram trocando o espelho contaAtiva. Bônus expira pelo relógio
+injetável; empréstimo é um por conta; o dono retira de vez; o último a sair dissolve.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  try { localStorage.removeItem('soterra-guilda-v1'); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/guilda.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var G = JOGO.Guilda;
+  var relogio = 1000000;
+  G._agora = function () { return relogio; };
+
+  // Ana funda
+  G.contaAtiva('cANA', 'Ana');
+  var gid = null;
+  G.criar('Os Soterrados', '🔥').then(function (r1) {
+    gid = r1.ok ? r1.guilda.id : null;
+    check('Ana funda a guilda e vira líder', r1.ok && r1.guilda.liderId === 'cANA');
+    return G.criar('Outra', '⚑');
+  }).then(function (r2) {
+    check('uma guilda por conta', r2.ok === false);
+    // Bia entra
+    G.contaAtiva('cBIA', 'Bia');
+    return G.entrar(gid);
+  }).then(function (r3) {
+    check('Bia entra pelo convite', r3.ok && r3.guilda.membros.length === 2);
+    // treinos rendem xp e moeda
+    var fila = Promise.resolve();
+    for (var t = 0; t < 30; t++) fila = fila.then(function () { return G.registraTreino(); });
+    return fila;
+  }).then(function () {
+    return G.minha();
+  }).then(function (g1) {
+    check('30 treinos rendem 180 XP e 30 marcas',
+          g1.xp === 180 && g1.moedas === 30, g1.xp + ' xp, ' + g1.moedas + ' marcas');
+    // a escada: nível 2 aos 60, nível 3 aos 180, nível 4 aos 360…
+    check('a escada sobe caro (180 XP = nível 3 cravado)', g1.nivel === 3 &&
+          G.nivelDe(0) === 1 && G.nivelDe(59) === 1 && G.nivelDe(60) === 2 &&
+          G.nivelDe(1000) > g1.nivel);
+    // Bia (não líder) tenta gastar o cofre
+    return G.compraBonus('drop');
+  }).then(function (r4) {
+    check('só o líder gasta o cofre', r4.ok === false);
+    G.contaAtiva('cANA', 'Ana');
+    return G.compraBonus('drop');
+  }).then(function (r5) {
+    check('o líder compra o bônus de saque (25 marcas)', r5.ok === true);
+    check('o bônus está VIVO para qualquer membro', G.bonusAtivo('drop') === true &&
+          G.bonusAtivo('xp') === false);
+    relogio += 25 * 3600 * 1000;                       // 25h depois
+    check('o bônus MORRE em 24h', G.bonusAtivo('drop') === false);
+    return G.minha();
+  }).then(function (g2) {
+    check('a compra descontou do cofre', g2.moedas === 5);
+    // o banco de empréstimos
+    return G.bancoDepositar({ itemId: 'gh-widow-shears', level: 3, stars: 1 });
+  }).then(function () {
+    G.contaAtiva('cBIA', 'Bia');
+    return G.bancoPegar(0);
+  }).then(function (r6) {
+    check('Bia pega emprestado (não é retirada)', r6.ok && r6.definitivo === false);
+    G.contaAtiva('cANA', 'Ana');                    // a SEGUNDA peça é da Ana:
+    return G.bancoDepositar({ itemId: 'gh-wasp-sting', level: 0, stars: 0 });
+  }).then(function () {
+    G.contaAtiva('cBIA', 'Bia');                    // …e a Bia tenta pegá-la
+    return G.bancoPegar(1);
+  }).then(function (r7) {
+    check('segundo empréstimo da mesma conta é recusado', r7.ok === false);
+    return G.sair();
+  }).then(function (r8) {
+    check('sair devendo empréstimo é barrado', r8.ok === false);
+    return G.bancoDevolver(0);
+  }).then(function (r9) {
+    check('devolver liberta', r9.ok === true);
+    G.contaAtiva('cANA', 'Ana');
+    return G.bancoPegar(0);
+  }).then(function (r10) {
+    check('o dono retira a própria peça DE VEZ', r10.ok && r10.definitivo === true);
+    // saída e herança
+    return G.sair();
+  }).then(function (r11) {
+    check('Ana sai; a liderança passa à Bia', r11.ok === true);
+    G.contaAtiva('cBIA', 'Bia');
+    return G.minha();
+  }).then(function (g3) {
+    check('Bia herdou a liderança', !!g3 && g3.souLider === true);
+    return G.sair();
+  }).then(function () {
+    return G.lista();
+  }).then(function (lst) {
+    check('o último a sair dissolve a guilda', lst.length === 0);
+    var sb = JOGO.SaveSandbox.check();
+    check('o disco de verdade continua intocado', sb.ok);
+
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  });
+})();
+</script>
+</body>
+</html>

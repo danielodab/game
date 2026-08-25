@@ -613,7 +613,11 @@ var JOGO = (typeof window !== 'undefined')
      * os inimigos multiplica o XP — andar 11 rende o dobro do andar 1. */
     var fatorPoco = (Game.dungeonId === 'poco' && JOGO.Poco)
       ? JOGO.Poco.fator(Game.roomIndex + 1) : 1;
-    var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio * fatorPoco);
+    // o BÔNUS DE GUILDA comprado pelo líder (25/08): +15% de XP por 24h
+    var fatorGuildaXp = (JOGO.Guilda && JOGO.Guilda.bonusAtivo && JOGO.Guilda.bonusAtivo('xp'))
+      ? JOGO.Guilda.BONUS_FATOR : 1;
+    var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
+                             fatorPoco * fatorGuildaXp);
 
     /* VINTENS — a moeda, derivada do MESMO xpTotal.
      *
@@ -690,8 +694,11 @@ var JOGO = (typeof window !== 'undefined')
       // O CALABOUÇO DO DIA (25/08): o portal marcado paga +50% de saque
       var bonusDia = (JOGO.Diario && JOGO.Diario.ehHoje &&
                       JOGO.Diario.ehHoje(Game.dungeonId)) ? JOGO.Diario.BONUS_DROP : 1;
+      // e o bônus de guilda de SAQUE, no mesmo funil dos outros (25/08)
+      var bonusGuilda = (JOGO.Guilda && JOGO.Guilda.bonusAtivo && JOGO.Guilda.bonusAtivo('drop'))
+        ? JOGO.Guilda.BONUS_FATOR : 1;
       try { drops = prog.rollDrops(Game.dungeonId, Game.roomIndex, partySize,
-                                   (difSala.drop || 1) * bonusDesafio * bonusDia) || []; }
+                                   (difSala.drop || 1) * bonusDesafio * bonusDia * bonusGuilda) || []; }
       catch (err) { drops = []; }
     }
     if (prog && prog.rollPet) {
@@ -789,6 +796,11 @@ var JOGO = (typeof window !== 'undefined')
             resultado: venceuA ? 'vitoria-ladoA' : 'vitoria-ladoB',
             clima: Game.state.weather });
         } catch (e2) {}
+      }
+      // A GUILDA bebe do treino (25/08) — pouco de propósito: a competição
+      // de verdade (2 jogadores pela Rede) chega com o servidor
+      if (JOGO.Guilda && JOGO.Guilda.registraTreino) {
+        try { JOGO.Guilda.registraTreino(); } catch (eg) {}
       }
       setScreen('duelFim', { venceuA: venceuA, duplaA: duplas.a, duplaB: duplas.b,
                              clima: Game.state.weather, seValesse: seValesse });
