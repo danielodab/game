@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — moderação do chat</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>Moderação mínima — o filtro e os silenciados</h1>
+<div class="sub">R.filtra: palavrão vira asteriscos por PALAVRA INTEIRA, sem acento e sem pontuação —
+e palavra limpa que carrega palavrão no meio passa ilesa. DB.mutar/mutados: o silêncio
+sobrevive por id de conta.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/rede.js', 'js/core/db.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var F = JOGO.Rede.filtra;
+
+  check('palavrão vira asteriscos', F('que merda hein') === 'que m**** hein', F('que merda hein'));
+  check('acento e pontuação não escondem', F('pôrra!') === 'p****!', F('pôrra!'));
+  check('maiúsculas não escondem', F('CARALHO') === 'C******', F('CARALHO'));
+  check('palavra limpa passa ilesa', F('computador de cume') === 'computador de cume');
+  check('palavrão por inteiro cai, no meio da frase',
+        F('vai se foda-se tudo') === 'vai se f****** tudo', F('vai se foda-se tudo'));
+  check('frase limpa fica idêntica',
+        F('vendo Tesourão +5 por 30 vinténs') === 'vendo Tesourão +5 por 30 vinténs');
+  check('vazio e nulo não quebram', F('') === '' && F(null) === '');
+
+  // ---- os silenciados
+  JOGO.DB.mutar('j123', 'Fulano', true).then(function (r1) {
+    check('mutar grava', r1.ok && r1.total === 1);
+    return JOGO.DB.mutados();
+  }).then(function (lst) {
+    check('mutados lista o calado', lst.length === 1 && lst[0].id === 'j123' &&
+          lst[0].nome === 'Fulano');
+    return JOGO.DB.mutar('j123', 'Fulano', false);
+  }).then(function () {
+    return JOGO.DB.mutados();
+  }).then(function (lst2) {
+    check('desmutar devolve a voz', lst2.length === 0);
+    var sb = JOGO.SaveSandbox.check();
+    check('o disco de verdade continua intocado', sb.ok);
+
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  });
+})();
+</script>
+</body>
+</html>

@@ -297,6 +297,25 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  /* O FILTRO DO CHAT (moderação mínima, 25/08): palavrão vira asteriscos —
+   * por PALAVRA INTEIRA e sem acento ("pôrra!" cai, "computador" não, mesmo
+   * carregando "puta" no meio). Puro de propósito: a página de teste chama
+   * direto. A lista é curta e pesada; refinamento vem com o servidor. */
+  var PALAVROES = ['merda', 'bosta', 'caralho', 'porra', 'puta', 'puto',
+    'putinha', 'fdp', 'foda', 'fodase', 'fudido', 'buceta', 'cu', 'cuzao',
+    'arrombado', 'arrombada', 'viado', 'vagabunda', 'desgracado', 'krl', 'vsf', 'pqp'];
+  R.filtra = function (texto) {
+    return String(texto || '').split(/(\s+)/).map(function (tk) {
+      var miolo = tk.replace(/^[^0-9A-Za-zÀ-ÿ]+|[^0-9A-Za-zÀ-ÿ]+$/g, '');
+      if (!miolo) return tk;
+      var norm = miolo.toLowerCase();
+      try { norm = norm.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+      norm = norm.replace(/[^a-z0-9]/g, '');
+      if (PALAVROES.indexOf(norm) < 0) return tk;
+      return tk.replace(miolo, miolo.charAt(0) + new Array(miolo.length).join('*'));
+    }).join('');
+  };
+
   R.pares = function () {
     var fora = [];
     Object.keys(pares).forEach(function (id) {

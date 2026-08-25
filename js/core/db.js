@@ -69,6 +69,7 @@ var JOGO = (typeof window !== 'undefined')
       conquistas: {},                // { id: { prog, pago } }
       mercado: null,                 // { dia, ofertas } — quem semeia é JOGO.Mercado
       placar: {},                    // id -> última foto de cada vizinho visto
+      mutados: [],                   // [{id, nome}] — silenciados no chat (25/08)
       pvp: [],
       trocas: []
     };
@@ -102,6 +103,7 @@ var JOGO = (typeof window !== 'undefined')
           if (d.mercado !== null && typeof d.mercado !== 'object') d.mercado = null;
           if (d.mercado === undefined) d.mercado = null;
           if (!d.placar || typeof d.placar !== 'object') d.placar = {};
+          if (!Array.isArray(d.mutados)) d.mutados = [];
           if (d.jogador.titulo === undefined) d.jogador.titulo = null;
           if (d.jogador.avatar === undefined) d.jogador.avatar = null;
           if (!d.jogador.brasa || typeof d.jogador.brasa.pts !== 'number') {
@@ -293,6 +295,25 @@ var JOGO = (typeof window !== 'undefined')
     d.mercado = obj ? JSON.parse(JSON.stringify(obj)) : null;
     grava();
     return responde({ ok: true });
+  };
+
+  // ---------------------------------------------------------------- mutados
+  /* OS SILENCIADOS (moderação mínima, 25/08): quem você calou no chat, por
+   * id de conta — sobrevive à sessão. A HUD guarda um espelho síncrono para
+   * não consultar Promise a cada mensagem. */
+  DB.mutados = function () {
+    var d = carrega();
+    return responde(d.mutados.map(function (m) { return { id: m.id, nome: m.nome || '' }; }));
+  };
+  DB.mutar = function (id, nome, sim) {
+    if (!id) return responde({ ok: false });
+    var d = carrega();
+    var i = -1;
+    for (var k = 0; k < d.mutados.length; k++) if (d.mutados[k].id === id) i = k;
+    if (sim && i < 0) d.mutados.push({ id: id, nome: String(nome || '') });
+    if (!sim && i >= 0) d.mutados.splice(i, 1);
+    grava();
+    return responde({ ok: true, total: d.mutados.length });
   };
 
   // ------------------------------------------------------------------- placar

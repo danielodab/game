@@ -945,14 +945,48 @@ var JOGO = (typeof window !== 'undefined')
         if (!ligou) return;                    // file://: o jogo segue solo
 
         JOGO.Hub.aoAndar = function (x, z) { R.mover(x, z); };
-        // a TROCA: o toque num fantasma convida; o convite pergunta aqui
+        /* O ENCONTRO (25/08): tocar num fantasma abre o painel da pessoa —
+         * perfil, troca e silêncio — em vez de disparar convite direto. */
+        var mutados = {};
+        if (JOGO.DB.mutados) {
+          JOGO.DB.mutados().then(function (lst) {
+            (lst || []).forEach(function (m) { mutados[m.id] = true; });
+          });
+        }
+        JOGO.Hub.aoTocarFantasma = function (id) {
+          var par = null;
+          R.pares().forEach(function (p2) { if (p2.id === id) par = p2; });
+          if (!par) return;
+          clear(painel);
+          painel.classList.remove('is-off');
+          painel.appendChild(el('h3', null, esc(par.nome) +
+            (par.titulo ? ' <i class="hub-tit">' + esc(par.titulo) + '</i>' : '')));
+          painel.appendChild(btn('Ver perfil', 'btn-primary btn-block', function () {
+            painel.classList.add('is-off');
+            openSheet('perfil', par);
+          }));
+          if (JOGO.Troca) {
+            painel.appendChild(btn('Propor troca', 'btn-ghost btn-block', function () {
+              painel.classList.add('is-off');
+              if (JOGO.Troca.convidar(id)) {
+                toast('Convite de troca enviado. Esperando o outro lado…');
+                openSheet('troca');
+              } else toast('já há uma troca aberta');
+            }));
+          }
+          var mudo = !!mutados[id];
+          painel.appendChild(btn(mudo ? 'Devolver a voz no chat' : 'Silenciar no chat',
+            'btn-ghost btn-block', function () {
+              mutados[id] = !mudo;
+              if (JOGO.DB.mutar) JOGO.DB.mutar(id, par.nome, !mudo);
+              toast(!mudo ? par.nome + ' silenciado.' : par.nome + ' de volta ao chat.');
+              painel.classList.add('is-off');
+            }));
+          painel.appendChild(btn('Fechar', 'btn-ghost btn-block', function () {
+            painel.classList.add('is-off');
+          }));
+        };
         if (JOGO.Troca) {
-          JOGO.Hub.aoTocarFantasma = function (id) {
-            if (JOGO.Troca.convidar(id)) {
-              toast('Convite de troca enviado. Esperando o outro lado…');
-              openSheet('troca');
-            } else toast('já há uma troca aberta');
-          };
           JOGO.Troca.aoConvite = function (c) {
             clear(painel);
             painel.classList.remove('is-off');
@@ -999,7 +1033,8 @@ var JOGO = (typeof window !== 'undefined')
           } else if (ev.tipo === 'pulso') {
             JOGO.Hub.fantasmaPulso(ev.id, ev.x, ev.z);
           } else if (ev.tipo === 'chat') {
-            chatLinha(ev.nome, ev.texto);
+            if (mutados[ev.id]) return;               // silenciado: nem uma linha
+            chatLinha(ev.nome, R.filtra ? R.filtra(ev.texto) : ev.texto);
           } else if (ev.tipo === 'saiu') {
             JOGO.Hub.fantasmaSai(ev.id);
           }
@@ -2607,6 +2642,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'heroSheet') sheetHero(arg);
     else if (name === 'battleMenu') sheetBattleMenu();
     else if (name === 'contas') sheetContas();
+    else if (name === 'perfil') sheetPerfil(arg);
     else if (name === 'banco') sheetBanco();
     else if (name === 'missoes') sheetMissoes();
     else if (name === 'mercado') sheetMercado();
@@ -4336,6 +4372,59 @@ var JOGO = (typeof window !== 'undefined')
       'OUTRA janela do mesmo navegador no mesmo endereço e troque lá para outra ' +
       'conta — os dois se veem no Acampamento (fantasma, chat, troca, arena). ' +
       'Atalho: abrir a segunda janela já com <b>?conta=2</b> no fim do endereço.'));
+  }
+
+  /* O PERFIL PÚBLICO (pedido 25/08): a ficha de outro jogador da praça —
+   * tudo o que o `resumo` da Rede carrega: classes com níveis, total, brasa
+   * (com a coroa do degrau) e partidas. É o que transforma um boneco andando
+   * em uma pessoa. `par` vem de R.pares() pelo toque no fantasma. */
+  function sheetPerfil(par) {
+    if (!par) { closeSheet(); return; }
+    var body = sheetShell(par.nome || 'Jogador',
+      par.titulo ? '«' + par.titulo + '»' : 'jogador da praça');
+    sheetName = 'perfil';
+    var r = par.resumo || {};
+
+    var topo = el('div', 'perfil-topo');
+    topo.appendChild(art('unit', [par.classe, { element: 'neutro', dir: 0, scale: 0.7 }], 110));
+    var col = el('div', 'perfil-col');
+
+    // a coroa da arena — o mesmo portão do novato da plaquinha
+    var tier = null;
+    if (JOGO.Brasa && typeof r.brasa === 'number') {
+      tier = JOGO.Brasa.tierDe(r.brasa, false);
+      if (tier && tier.min === 0 && !(r.partidas > 0)) tier = null;
+    }
+    if (tier && JOGO.COROAS_PVP && JOGO.COROAS_PVP[tier.id]) {
+      var lc = el('div', 'perfil-coroa');
+      var img = document.createElement('img');
+      img.src = 'data:image/png;base64,' + JOGO.COROAS_PVP[tier.id];
+      img.alt = tier.nome;
+      lc.appendChild(img);
+      lc.appendChild(el('span', null, '<b>' + esc(tier.nome) + '</b> · ' +
+        r.brasa + ' pts · ' + (r.partidas || 0) + ' partida' + ((r.partidas || 0) === 1 ? '' : 's')));
+      col.appendChild(lc);
+    } else {
+      col.appendChild(el('div', 'perfil-coroa is-sem',
+        (r.partidas > 0 ? (r.brasa || '?') + ' pts na arena' : 'nunca pisou na arena')));
+    }
+    col.appendChild(el('div', 'perfil-total',
+      'nível somado: <b>' + (r.total || 0) + '</b>'));
+    topo.appendChild(col);
+    body.appendChild(topo);
+
+    var cls = r.classes || {};
+    var tem = false;
+    var caixa = el('div', 'perfil-classes');
+    Object.keys(cls).sort(function (a, b) { return cls[b] - cls[a]; }).forEach(function (cid) {
+      tem = true;
+      var row = el('div', 'perfil-classe');
+      row.appendChild(el('b', null, esc(className(cid))));
+      row.appendChild(el('span', null, 'Nv ' + cls[cid]));
+      caixa.appendChild(row);
+    });
+    body.appendChild(el('h3', 'perfil-h', 'Classes liberadas'));
+    body.appendChild(tem ? caixa : el('p', 'empty', 'nada que a Rede saiba contar'));
   }
 
   function sheetBattleMenu() {
