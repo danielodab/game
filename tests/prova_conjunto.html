@@ -38,7 +38,7 @@ f.onload = function () {
       setTimeout(function () {
         var bf = null;
         d.querySelectorAll('.inv-pick .btn').forEach(function (b) {
-          if (/Fundir na forja/.test(b.textContent)) bf = b;
+          if (/Levar à forja/.test(b.textContent)) bf = b;
         });
         if (bf) bf.click();
         setTimeout(function () { window.__pronto = true; }, 250);

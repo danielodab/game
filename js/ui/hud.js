@@ -61,6 +61,11 @@ var JOGO = (typeof window !== 'undefined')
   var sheetEl = null, sheetName = null, lastSheetArg = null;
   var lastRewards = null;
   var invFilter = 'todos';
+  /* filtros por ELEMENTO (pedido 25/08: "facilita a busca") — um por ficha,
+   * porque cada uma guarda a própria busca entre redesenhos */
+  var invElemFiltro = 'todos';
+  var forjaElemFiltro = 'todos';
+  var bancoElemFiltro = 'todos';
   var elemChoiceHero = null;
   // ---- tela "Personagens" [U6]
   var partyTab = 'inventario';     // aba corrente: inventario | forja | colecao
@@ -2010,6 +2015,16 @@ var JOGO = (typeof window !== 'undefined')
         pilhasCofre.push(mapa2[ch]);
       });
 
+      // o filtro por elemento vale para AS DUAS grades de uma vez — quem
+      // procura a peça de água não quer caçá-la em dois lugares
+      caixa.appendChild(elemTabs(bancoElemFiltro, function (e2) {
+        bancoElemFiltro = e2;
+        sheetBanco();
+      }));
+      if (bancoElemFiltro !== 'todos') {
+        pilhas = pilhas.filter(function (pi) { return passaElemento(pi.itemId, bancoElemFiltro); });
+        pilhasCofre = pilhasCofre.filter(function (pi) { return passaElemento(pi.itemId, bancoElemFiltro); });
+      }
       var duplo = el('div', 'bk2-duplo');
 
       var colSaco = el('div', 'bk2-col');
@@ -2581,7 +2596,7 @@ var JOGO = (typeof window !== 'undefined')
     { id: 'inventario', nome: 'Inventário',
       sub: 'Um saco só para o grupo. Toque numa peça para vestir no herói ao lado.' },
     { id: 'forja', nome: 'Forja',
-      sub: 'Pedras sobem a peça até +10 (do +5 em diante com risco) — e só aqui se fundem 3 cópias em estrela.' },
+      sub: 'Escolha a peça em cima; embaixo, cada caminho no seu cartão — a Pedra sobe o nível, a Estrela funde 3 cópias.' },
     { id: 'feiticos', nome: 'Feitiços',
       sub: 'A árvore inteira da classe: o tronco que todos têm e os quatro galhos elementais.' },
     { id: 'colecao', nome: 'Coleção',
@@ -3051,6 +3066,10 @@ var JOGO = (typeof window !== 'undefined')
     var ladoSaco = el('div', 'pt-mmo-saco');
     ladoSaco.appendChild(pickBar(hid));
     ladoSaco.appendChild(invFilterTabs());
+    ladoSaco.appendChild(elemTabs(invElemFiltro, function (e2) {
+      invElemFiltro = e2;
+      sheetParty('inventario');
+    }));
     var g = invGrid(hid);
     if (g.dataset && g.dataset.vazio) {
       ladoSaco.appendChild(el('p', 'inv-dica', g.dataset.vazio));
@@ -3411,25 +3430,19 @@ var JOGO = (typeof window !== 'undefined')
         sheetParty('inventario');
       }));
     }
+    // UMA porta só para a forja (reorganização 25/08: "Forjar" e "Fundir na
+    // forja" eram dois botões indo ao MESMO lugar — confundia). Quando há
+    // fusão pronta, o rótulo adianta a boa notícia e o botão fica dourado.
     var fu = safe(function () { return P().fuseInfo(pilha.index); }, null);
-    if (fu && !fu.maxed) {
-      // FUNDIR MORA NA FORJA (pedido do usuário, 24/08): o saco só ANUNCIA —
-      // o botão leva à página da forja, e é LÁ que a batida acontece.
-      var rotuloF = fu.pode
-        ? 'Fundir na forja → ★' + fu.proxima
-        : 'faltam ' + fu.faltam + ' p/ ★' + fu.proxima;
-      acts.appendChild(btn(rotuloF,
-        'btn-mini btn-gold' + (fu.pode ? '' : ' is-off'), function () {
+    var fi = safe(function () { return P().upgradeInfo(pilha.index); }, null);
+    var fundePronto = !!(fu && !fu.maxed && fu.pode);
+    if ((fi && !fi.maxed) || (fu && !fu.maxed)) {
+      acts.appendChild(btn(
+        fundePronto ? 'Levar à forja — dá ★' + fu.proxima + '!' : 'Levar à forja',
+        'btn-mini' + (fundePronto ? ' btn-gold' : ''), function () {
           forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
           sheetParty('forja');
         }));
-    }
-    var fi = safe(function () { return P().upgradeInfo(pilha.index); }, null);
-    if (fi && !fi.maxed) {
-      acts.appendChild(btn('Forjar', 'btn-mini', function () {
-        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
-        sheetParty('forja');
-      }));
     }
     wrap.appendChild(acts);
     return wrap;
@@ -3445,6 +3458,27 @@ var JOGO = (typeof window !== 'undefined')
         }));
     });
     return tabs;
+  }
+
+  /* A fileira dos ELEMENTOS (pedido 25/08: "nos menus onde aparecem os itens
+   * precisa ter uma forma de filtrar por elemento"): filtra qualquer grade
+   * de itens pelo elemento da peça — inventário, forja e banco usam a mesma.
+   * Cada chip acende com a cor do próprio elemento. */
+  var ELEM_FILTROS = ['todos', 'fogo', 'agua', 'terra', 'ar', 'neutro'];
+  function elemTabs(atual, aoMudar) {
+    var tabs = el('div', 'inv-tabs elem-tabs');
+    ELEM_FILTROS.forEach(function (e2) {
+      var b = btn(e2 === 'todos' ? 'Todos' : ELEM_PT[e2],
+        'btn-tab bt-elem' + (atual === e2 ? ' is-on' : ''), function () { aoMudar(e2); });
+      if (e2 !== 'todos') b.style.setProperty('--ec', elemColor(e2));
+      tabs.appendChild(b);
+    });
+    return tabs;
+  }
+  function passaElemento(itemId, filtro) {
+    if (filtro === 'todos') return true;
+    var it = itemDef(itemId);
+    return ((it && it.element) || 'neutro') === filtro;
   }
 
   // ---- A GRADE. Iguais empilham num espaço só, com ×N.
@@ -3469,6 +3503,7 @@ var JOGO = (typeof window !== 'undefined')
     pilhas.forEach(function (pilha) {
       var canon = slotOf(pilha.itemId);
       if (invFilter !== 'todos' && canon !== invFilter) return;
+      if (!passaElemento(pilha.itemId, invElemFiltro)) return;
       mostrou++;
       var it = itemDef(pilha.itemId);
       var sel = invSel && invSel.itemId === pilha.itemId && invSel.level === pilha.level &&
@@ -3515,11 +3550,14 @@ var JOGO = (typeof window !== 'undefined')
       partyHeroes().forEach(function (id) {
         SLOTS.forEach(function (c) { if (heroItem(hero(id), c)) vestidas++; });
       });
-      grid.dataset.vazio = vestidas
-        ? (invFilter === 'todos'
-            ? 'Tudo o que você tem já está vestido.'
-            : 'Nenhuma peça de ' + SLOT_PT[invFilter] + ' no saco.')
-        : 'Saco vazio. Os calabouços resolvem isso.';
+      grid.dataset.vazio = invElemFiltro !== 'todos'
+        ? 'Nada de ' + (ELEM_PT[invElemFiltro] || invElemFiltro) +
+          (invFilter !== 'todos' ? ' em ' + SLOT_PT[invFilter] : '') + ' no saco.'
+        : vestidas
+          ? (invFilter === 'todos'
+              ? 'Tudo o que você tem já está vestido.'
+              : 'Nenhuma peça de ' + SLOT_PT[invFilter] + ' no saco.')
+          : 'Saco vazio. Os calabouços resolvem isso.';
     }
     grid.dataset.cheio = mostrou + ' de ' + alvo;
     return grid;
@@ -3632,24 +3670,54 @@ var JOGO = (typeof window !== 'undefined')
     if (!atual) atual = alvos[0];
     forgeTarget = atual;
 
-    var pick = el('div', 'forge-pick');
-    alvos.forEach(function (alvo) {
+    /* A ESCOLHA DA PEÇA, em grupos com nome (reorganização 25/08: "forjar e
+     * upgrade está meio confuso" — a fileira única de miniaturas sem nome
+     * misturava saco e vestidas). Cada célula é a MESMA da grade do
+     * inventário — ícone, nome, ×N, forja, estrelas, ❖ — porque leitura já
+     * aprendida não se reensina. */
+    function celDe(alvo) {
       var it = itemDef(alvo.itemId);
-      var c = el('button', 'forge-thumb ' + starClass(alvo.stars) +
-                            (mesmoAlvo(alvo, atual) ? ' is-on' : ''));
+      var c = el('button', 'ig-cell fg-cel ' + starClass(alvo.stars) +
+                            (mesmoAlvo(alvo, atual) ? ' is-sel' : ''));
       c.type = 'button';
       markRarity(c, it.rarity);
-      c.appendChild(art('itemIcon', [alvo.itemId, 44], 44));
-      if (alvo.level) c.appendChild(el('span', 'ig-lv', '+' + alvo.level));
+      var plate = el('span', 'ig-plate');
+      plate.appendChild(art('itemIcon', [alvo.itemId, 44], 44));
+      var bs = setBadge(alvo.itemId, true);
+      if (bs) plate.appendChild(bs);
+      c.appendChild(plate);
       if (alvo.count > 1) c.appendChild(el('span', 'ig-n', '×' + alvo.count));
+      if (alvo.level) c.appendChild(el('span', 'ig-lv', '+' + alvo.level));
+      if (alvo.stars) c.appendChild(starPips(alvo.stars));
       if (alvo.kind === 'worn') {
         c.appendChild(el('span', 'fg-worn',
           esc(className((hero(alvo.heroId) || {}).classId || alvo.heroId).slice(0, 3))));
       }
+      c.appendChild(el('span', 'ig-nm', esc(it.name)));
       tap(c, function () { forgeTarget = alvo; sheetParty('forja'); });
-      pick.appendChild(c);
+      return c;
+    }
+    body.appendChild(elemTabs(forjaElemFiltro, function (e2) {
+      forjaElemFiltro = e2;
+      sheetParty('forja');
+    }));
+    var doSaco = alvos.filter(function (a) {
+      return a.kind === 'bag' && passaElemento(a.itemId, forjaElemFiltro);
     });
-    body.appendChild(pick);
+    var vestidas = alvos.filter(function (a) {
+      return a.kind === 'worn' && passaElemento(a.itemId, forjaElemFiltro);
+    });
+    if (!doSaco.length && !vestidas.length) {
+      body.appendChild(el('p', 'inv-dica', 'Nada de ' +
+        (ELEM_PT[forjaElemFiltro] || forjaElemFiltro) + ' para forjar — o filtro está ligado.'));
+    }
+    [[doSaco, 'No saco'], [vestidas, 'Vestidas']].forEach(function (par) {
+      if (!par[0].length) return;
+      body.appendChild(el('h4', 'fg-grupo', par[1] + ' (' + par[0].length + ')'));
+      var grade = el('div', 'forge-pick');
+      par[0].forEach(function (a) { grade.appendChild(celDe(a)); });
+      body.appendChild(grade);
+    });
 
     var it2 = itemDef(atual.itemId);
     var lv2 = atual.level;
@@ -3678,31 +3746,36 @@ var JOGO = (typeof window !== 'undefined')
     head.appendChild(ht);
     panel.appendChild(head);
 
-    // trilha 0..10 com os tiers marcados — a trilha da PEDRA, que é outra coisa
-    // da trilha da ESTRELA (esta não tem degrau nomeado, tem cor de fundo).
+    /* OS DOIS CAMINHOS, um cartão para cada (reorganização 25/08): a PEDRA
+     * (nível, pedras, risco, Âncora) e a ESTRELA (fundir cópias) são regras
+     * diferentes e moravam empilhadas numa parede só, com uma legenda densa
+     * tentando explicar tudo. Agora cada caminho tem sua parede, com a
+     * própria regra escrita no alto — e a legenda morreu. */
+    var cards = el('div', 'forge-cards');
+
+    // ===== cartão A PEDRA
+    var cp = el('div', 'forge-card fc-pedra');
+    cp.appendChild(el('h4', null, 'A Pedra' +
+      '<i>sobe o nível com pedras do elemento · +0–2 Comum · +3–5 Raro · +6–9 Supremo · +10 Magnífico</i>'));
     var maxLv = upgradeCfg().maxLevel || 10;
     var track = el('div', 'forge-track');
     for (var i3 = 0; i3 <= maxLv; i3++) {
       var stp = el('i', 'fg-step ' + tierClass(i3) + (i3 <= lv2 ? ' is-on' : '') + (i3 === lv2 + 1 ? ' is-next' : ''));
       track.appendChild(stp);
     }
-    panel.appendChild(track);
-    panel.appendChild(el('div', 'forge-legend',
-      '<b>Pedra</b> +0–2 Comum · +3–5 Raro · +6–9 Supremo · +10 Magnífico ' +
-      '<span class="fg-sep">|</span> <b>Estrela</b> vem de fundir 3 cópias (níveis livres — sai a média para baixo) ' +
-      '<span class="fg-sep">|</span> do <b>+5</b> em diante a batida pode falhar e regredir — a <b>Âncora</b> segura'));
-
+    cp.appendChild(track);
     // prévia do ganho (com as estrelas já dentro da conta)
-    var prev = el('div', 'forge-prev');
-    prev.appendChild(el('div', 'fp-col', '<i>agora</i>' + bonusPreview(it2, lv2, atual.stars)));
-    prev.appendChild(el('div', 'fp-arrow', '→'));
-    prev.appendChild(el('div', 'fp-col fp-next', '<i>+' + (lv2 + 1) + '</i>' + bonusPreview(it2, lv2 + 1, atual.stars)));
-    if (lv2 < maxLv) panel.appendChild(prev);
-
+    if (lv2 < maxLv) {
+      var prev = el('div', 'forge-prev');
+      prev.appendChild(el('div', 'fp-col', '<i>agora</i>' + bonusPreview(it2, lv2, atual.stars)));
+      prev.appendChild(el('div', 'fp-arrow', '→'));
+      prev.appendChild(el('div', 'fp-col fp-next', '<i>+' + (lv2 + 1) + '</i>' + bonusPreview(it2, lv2 + 1, atual.stars)));
+      cp.appendChild(prev);
+    }
     if (!info) {
-      panel.appendChild(el('p', 'empty', 'A forja ainda não está disponível.'));
+      cp.appendChild(el('p', 'empty', 'A forja ainda não está disponível.'));
     } else if (info.maxed) {
-      panel.appendChild(el('p', 'forge-max', 'No máximo: <b>Magnífico +' + maxLv + '</b>.'));
+      cp.appendChild(el('p', 'forge-max', 'No máximo: <b>Magnífico +' + maxLv + '</b>.'));
     } else {
       var sd2 = stoneDefs()[info.stoneId];
       var have = stoneCount(info.stoneId);
@@ -3710,9 +3783,9 @@ var JOGO = (typeof window !== 'undefined')
       cost.appendChild(art('stoneIcon', [info.stoneId, 38], 38));
       cost.appendChild(el('span', null, '<b>' + have + ' / ' + info.custo + '</b> ' +
         esc((sd2 && sd2.name) || info.stoneId)));
-      panel.appendChild(cost);
+      cp.appendChild(cost);
       if (!info.temPedras) {
-        panel.appendChild(el('p', 'forge-short',
+        cp.appendChild(el('p', 'forge-short',
           'Faltam <b>' + (info.custo - have) + '</b> de <b>' + esc((sd2 && sd2.name) || info.stoneId) +
           '</b>' + (sd2 ? ' (' + (ELEM_PT[sd2.element] || sd2.element) + ')' : '') +
           '. Monstros desse elemento derrubam.'));
@@ -3721,7 +3794,7 @@ var JOGO = (typeof window !== 'undefined')
       // Âncora, quando há alguma no saco, com a escolha nas mãos do jogador.
       if (info.arriscado) {
         var pct = Math.round(info.chance * 100);
-        panel.appendChild(el('p', 'forge-risco',
+        cp.appendChild(el('p', 'forge-risco',
           'Batida arriscada: <b>' + pct + '%</b> de subir — falhou, ' +
           (forjaComGuarda && info.guardas > 0
             ? 'a <b>Âncora segura</b> em +' + lv2 + '.'
@@ -3739,7 +3812,7 @@ var JOGO = (typeof window !== 'undefined')
         linhaG.appendChild(el('span', null,
           'Pôr a <b>Âncora de Forja</b> junto (' + info.guardas + ' no saco)' +
           (info.guardas < 1 ? ' — só os chefes mais fundos derrubam' : '')));
-        panel.appendChild(linhaG);
+        cp.appendChild(linhaG);
       }
       var go = btn('Forjar para +' + (lv2 + 1), 'btn-primary btn-block' + (info.temPedras ? '' : ' is-off'), function () {
         var usarG = info.arriscado && forjaComGuarda && info.guardas > 0;
@@ -3763,44 +3836,51 @@ var JOGO = (typeof window !== 'undefined')
           sheetParty('forja');
         } else toast('Pedras insuficientes.');
       });
-      panel.appendChild(go);
+      cp.appendChild(go);
     }
+    cards.appendChild(cp);
 
-    // A ESTRELA MORA AQUI (pedido do usuário, 24/08: "só na página da forja
-    // dá para fundir"). Três cópias do MESMO item no saco viram +1 estrela,
-    // no nível médio (para baixo). Só peça do SACO funde — a vestida está
-    // fora da pilha. O saco apenas aponta para cá.
-    if (atual.kind === 'bag') {
+    // ===== cartão A ESTRELA (fundir mora na forja desde 24/08)
+    var ce = el('div', 'forge-card fc-estrela');
+    ce.appendChild(el('h4', null, 'A Estrela' +
+      '<i>3 cópias iguais do saco viram ★ — no nível médio, para baixo</i>'));
+    if (atual.kind === 'worn') {
+      ce.appendChild(el('p', 'fc-nota', 'Para fundir, a peça precisa estar no <b>saco</b> — ' +
+        'as cópias soltas é que se juntam. Esta está vestida.'));
+    } else {
       var fu = safe(function () { return P().fuseInfo(atual.index); }, null);
-      if (fu && !fu.maxed) {
-        var fus = el('div', 'forge-fusao');
-        if (fu.pode) {
-          fus.appendChild(el('p', null, 'Três cópias no saco. Fundir <b>+' +
-            fu.niveisEscolhidos.join(' +') + '</b> vira <b>★' + fu.proxima +
-            ' +' + fu.nivelResultado + '</b> — a média, para baixo.'));
-          fus.appendChild(btn('Fundir → ★' + fu.proxima + ' +' + fu.nivelResultado,
-            'btn-gold btn-block', function () {
-              var nova = safe(function () { return P().fuseItem(atual.index); }, null);
-              if (nova) {
-                toast('Fundiu ' + fu.precisa + ': agora é ★' + nova.stars +
-                      ' +' + nova.level + ' (a média das três).', 'good');
-                forgeTarget = { kind: 'bag', itemId: nova.itemId,
-                                level: nova.level, stars: nova.stars };
-                if (invSel && invSel.itemId === atual.itemId) {
-                  invSel = { itemId: nova.itemId, level: nova.level, stars: nova.stars };
-                }
+      if (!fu || fu.maxed) {
+        ce.appendChild(el('p', 'fc-nota', atual.stars >= 3
+          ? 'No topo: <b>★3</b>. Daqui não sobe mais.'
+          : 'Esta peça não funde.'));
+      } else if (fu.pode) {
+        ce.appendChild(el('p', 'fc-nota', 'Três cópias no saco: <b>+' +
+          fu.niveisEscolhidos.join(' +') + '</b> viram <b>★' + fu.proxima +
+          ' +' + fu.nivelResultado + '</b>.'));
+        ce.appendChild(btn('Fundir → ★' + fu.proxima + ' +' + fu.nivelResultado,
+          'btn-gold btn-block', function () {
+            var nova = safe(function () { return P().fuseItem(atual.index); }, null);
+            if (nova) {
+              toast('Fundiu ' + fu.precisa + ': agora é ★' + nova.stars +
+                    ' +' + nova.level + ' (a média das três).', 'good');
+              forgeTarget = { kind: 'bag', itemId: nova.itemId,
+                              level: nova.level, stars: nova.stars };
+              if (invSel && invSel.itemId === atual.itemId) {
+                invSel = { itemId: nova.itemId, level: nova.level, stars: nova.stars };
               }
-              sheetParty('forja');
-            }));
-        } else {
-          fus.appendChild(el('p', null, (fu.faltam > 1
-            ? 'Estrela: faltam <b>' + fu.faltam + '</b> cópias iguais'
-            : 'Estrela: falta <b>1</b> cópia igual') +
-            ' no saco para fundir rumo à ★' + fu.proxima + '.'));
-        }
-        panel.appendChild(fus);
+            }
+            sheetParty('forja');
+          }));
+      } else {
+        ce.appendChild(el('p', 'fc-nota', (fu.faltam > 1
+          ? 'Faltam <b>' + fu.faltam + '</b> cópias iguais'
+          : 'Falta <b>1</b> cópia igual') +
+          ' no saco para a ★' + fu.proxima + '.'));
       }
     }
+    cards.appendChild(ce);
+
+    panel.appendChild(cards);
     body.appendChild(panel);
   }
 
