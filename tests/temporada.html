@@ -23,6 +23,9 @@ SAIR do brasaVer — a cópia campo a campo já engoliu coisas caladas.</div>
 
 <script src="save_sandbox.js"></script>
 <script>
+  // conta VIRGEM: o teste cobra "temporada null" de conta nova — zera a
+  // conta na SOMBRA antes de o db carregar (o disco real fica intacto)
+  try { localStorage.removeItem('soterra-conta-v1'); } catch (e) {}
   window.__V = '?v=' + Date.now();
   var arqs = ['js/core/brasa.js', 'js/core/db.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');

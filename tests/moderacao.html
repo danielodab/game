@@ -23,6 +23,9 @@ sobrevive por id de conta.</div>
 
 <script src="save_sandbox.js"></script>
 <script>
+  // conta VIRGEM: a sombra do sandbox nasce do disco real (leitura realista),
+  // e este teste conta mutados do zero — então zera a conta ANTES do db
+  try { localStorage.removeItem('soterra-conta-v1'); } catch (e) {}
   window.__V = '?v=' + Date.now();
   var arqs = ['js/core/rede.js', 'js/core/db.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');

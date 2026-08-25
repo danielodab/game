@@ -25,6 +25,8 @@ o histórico registrado; e a troca que CAI quando ofereci o que já não tenho.<
 
 <script src="save_sandbox.js"></script>
 <script>
+  // conta VIRGEM na sombra: o teste depende de carteira/tabelas do zero
+  try { localStorage.removeItem('soterra-conta-v1'); localStorage.removeItem('soterra-save-v2'); } catch (e) {}
   window.__V = '?v=' + Date.now();
   var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
     'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
