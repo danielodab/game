@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o ❖ do conjunto e a fusão na forja</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto, não teste): abre o jogo de verdade num iframe,
+     enche o saco com peças do Traje da Flora Voraz, veste duas, abre o
+     inventário e toca no ❖ de um espaço vestido — a foto sai com o painel
+     do conjunto aberto. Roda no headless (perfil limpo, save novo). -->
+<iframe id="f" src="../index.html?prova-conjunto"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      P.addItem('gh-widow-shears'); P.addItem('gh-widow-shears'); P.addItem('gh-widow-shears');
+      P.addItem('gh-vine-stirrups'); P.addItem('gh-trellis-guard'); P.addItem('gh-seed-pouch');
+      P.addStones('stone-root', 30);
+      var hid = P.heroIds()[0];
+      var s2 = P.invStacks().filter(function (s) { return s.itemId === 'gh-vine-stirrups'; })[0];
+      P.equip(hid, 'gh-vine-stirrups', s2.index);
+      var s3 = P.invStacks().filter(function (s) { return s.itemId === 'gh-trellis-guard'; })[0];
+      P.equip(hid, 'gh-trellis-guard', s3.index);
+      w.JOGO.UI.openSheet('inventory');
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+    setTimeout(function () {
+      // toca na pilha ×3 (a única com ig-n) e depois no "Fundir na forja"
+      var cel = d.querySelector('.inv-big .ig-cell .ig-n');
+      if (cel) cel.closest('.ig-cell').click();
+      setTimeout(function () {
+        var bf = null;
+        d.querySelectorAll('.inv-pick .btn').forEach(function (b) {
+          if (/Fundir na forja/.test(b.textContent)) bf = b;
+        });
+        if (bf) bf.click();
+        setTimeout(function () { window.__pronto = true; }, 250);
+      }, 250);
+    }, 250);
+  })();
+};
+</script>
+</body>
+</html>

@@ -1804,6 +1804,8 @@ var JOGO = (typeof window !== 'undefined')
     markRarity(cell, it.rarity);
     var plate = el('span', 'ig-plate');
     plate.appendChild(art('itemIcon', [pilha.itemId, 44], 44));
+    var bset = setBadge(pilha.itemId, true);   // mudo: o gesto da célula é o arrasto
+    if (bset) plate.appendChild(bset);
     cell.appendChild(plate);
     if (pilha.count > 1) cell.appendChild(el('span', 'ig-n', '×' + pilha.count));
     if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
@@ -2542,7 +2544,7 @@ var JOGO = (typeof window !== 'undefined')
     { id: 'inventario', nome: 'Inventário',
       sub: 'Um saco só para o grupo. Toque numa peça para vestir no herói ao lado.' },
     { id: 'forja', nome: 'Forja',
-      sub: 'Pedras sobem a peça até +10. Determinístico: nunca quebra, nunca regride.' },
+      sub: 'Pedras sobem a peça até +10 (do +5 em diante com risco) — e só aqui se fundem 3 cópias em estrela.' },
     { id: 'feiticos', nome: 'Feitiços',
       sub: 'A árvore inteira da classe: o tronco que todos têm e os quatro galhos elementais.' },
     { id: 'colecao', nome: 'Coleção',
@@ -2901,7 +2903,8 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (it.setId) {
       var sd = setDef(it.setId);
-      out += '<br>Conjunto: <b>' + esc((sd && sd.name) || it.setId) + '</b>';
+      out += '<br>Conjunto: <b>' + esc((sd && sd.name) || it.setId) + '</b> · ' +
+             setEquippedCount(it.setId) + '/' + setPieceCount(it.setId) + ' vestidas';
     }
     if (it.description) out += '<br>' + esc(it.description);
     return out;
@@ -2928,6 +2931,35 @@ var JOGO = (typeof window !== 'undefined')
     var items = D().items || {}, n = 0;
     for (var k in items) if (items.hasOwnProperty(k) && items[k].setId === setId) n++;
     return n || 4;
+  }
+  // quantas cópias (somando pilhas) existem no SACO — para o painel do conjunto
+  function bagCountOf(itemId) {
+    var pilhas = safe(function () { return P().invStacks(); }, []);
+    var n = 0;
+    for (var i = 0; i < pilhas.length; i++) {
+      if (pilhas[i].itemId === itemId) n += (pilhas[i].count || 1);
+    }
+    return n;
+  }
+
+  /* O ❖ DO CONJUNTO (pedido do usuário, 24/08): toda peça de traje ganha o
+   * símbolo no canto inferior do ícone. Cinza = nenhum bônus valendo, azul =
+   * 2+ vestidas (bônus ativo), dourado = traje fechado. Tocar abre o painel
+   * com as peças e os bônus; `mudo` desliga o toque onde a célula já tem
+   * gesto próprio (o arrasto do banco) — lá o símbolo é só leitura. */
+  function setBadge(itemId, mudo) {
+    var it = itemDef(itemId);
+    var sd = it && it.setId ? setDef(it.setId) : null;
+    if (!sd || !sd.bonuses) return null;
+    var n = setEquippedCount(it.setId);
+    var cls = n >= setPieceCount(it.setId) ? ' is-cheio' : (n >= 2 ? ' is-meio' : '');
+    var bg = el('span', 'ig-set' + cls + (mudo ? ' is-mudo' : ''), '❖');
+    if (!mudo) {
+      tap(bg, function () {
+        showTip(bg, sd.name || it.setId, setTipBody(it.setId), elemColor(sd.element));
+      });
+    }
+    return bg;
   }
 
   // ------------------------------------------------------------ INVENTÁRIO
@@ -3235,6 +3267,7 @@ var JOGO = (typeof window !== 'undefined')
       var ic = el('div', 'pt-slot-ic');
       ic.appendChild(it ? art('itemIcon', [itemId, 46], 46) : art('slotIcon', [canon, 46], 46));
       if (lv) ic.appendChild(el('span', 'ig-lv', '+' + lv));
+      if (it) { var bs2 = setBadge(itemId); if (bs2) ic.appendChild(bs2); }
       cell.appendChild(ic);
       cell.appendChild(el('span', 'pt-slot-nm', SLOT_PT[canon]));
       cell.appendChild(el('span', 'pt-slot-it', it ? esc(it.name) : 'vazio'));
@@ -3303,6 +3336,8 @@ var JOGO = (typeof window !== 'undefined')
     ic.appendChild(art('itemIcon', [pilha.itemId, 52], 52));
     if (pilha.count > 1) ic.appendChild(el('span', 'ig-n', '×' + pilha.count));
     if (pilha.level) ic.appendChild(el('span', 'ig-lv', '+' + pilha.level));
+    var bsp = setBadge(pilha.itemId);
+    if (bsp) ic.appendChild(bsp);
     wrap.appendChild(ic);
 
     var tx = el('div', 'inv-pick-tx');
@@ -3321,8 +3356,12 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (it && it.setId) {
       var sd = setDef(it.setId);
-      tx.appendChild(el('div', 'inv-pick-set', 'Conjunto <b>' + esc((sd && sd.name) || it.setId) + '</b> · ' +
-        setEquippedCount(it.setId) + '/' + setPieceCount(it.setId) + ' vestidas'));
+      var lnSet = el('div', 'inv-pick-set is-toque', 'Conjunto <b>' + esc((sd && sd.name) || it.setId) + '</b> · ' +
+        setEquippedCount(it.setId) + '/' + setPieceCount(it.setId) + ' vestidas · <u>ver</u>');
+      tap(lnSet, function () {
+        showTip(lnSet, (sd && sd.name) || it.setId, setTipBody(it.setId), elemColor(sd && sd.element));
+      });
+      tx.appendChild(lnSet);
     }
     var donos = safe(function () { return P().equippedByAll(pilha.itemId); }, []);
     if (donos.length) {
@@ -3346,22 +3385,15 @@ var JOGO = (typeof window !== 'undefined')
     }
     var fu = safe(function () { return P().fuseInfo(pilha.index); }, null);
     if (fu && !fu.maxed) {
-      var podeFundir = fu.pode;
-      // A CONTA VISÍVEL: os níveis das três que vão e o nível que sai — a
-      // média para baixo cobra o contrabando, e ninguém funde sem ver.
-      var rotuloF = podeFundir
-        ? 'Fundir +' + fu.niveisEscolhidos.join(' +') + ' → ★' + fu.proxima +
-          ' +' + fu.nivelResultado
+      // FUNDIR MORA NA FORJA (pedido do usuário, 24/08): o saco só ANUNCIA —
+      // o botão leva à página da forja, e é LÁ que a batida acontece.
+      var rotuloF = fu.pode
+        ? 'Fundir na forja → ★' + fu.proxima
         : 'faltam ' + fu.faltam + ' p/ ★' + fu.proxima;
       acts.appendChild(btn(rotuloF,
-        'btn-mini btn-gold' + (podeFundir ? '' : ' is-off'), function () {
-          var nova = safe(function () { return P().fuseItem(pilha.index); }, null);
-          if (nova) {
-            invSel = { itemId: nova.itemId, level: nova.level, stars: nova.stars };
-            toast('Fundiu ' + fu.precisa + ': agora é ★' + nova.stars +
-                  ' +' + nova.level + ' (a média das três).', 'good');
-          }
-          sheetParty('inventario');
+        'btn-mini btn-gold' + (fu.pode ? '' : ' is-off'), function () {
+          forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
+          sheetParty('forja');
         }));
     }
     var fi = safe(function () { return P().upgradeInfo(pilha.index); }, null);
@@ -3418,6 +3450,8 @@ var JOGO = (typeof window !== 'undefined')
       markRarity(cell, it.rarity);
       var plate = el('span', 'ig-plate');
       plate.appendChild(art('itemIcon', [pilha.itemId, 54], 54));
+      var bs1 = setBadge(pilha.itemId);
+      if (bs1) plate.appendChild(bs1);
       cell.appendChild(plate);
       if (pilha.count > 1) cell.appendChild(el('span', 'ig-n', '×' + pilha.count));
       if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
@@ -3463,18 +3497,38 @@ var JOGO = (typeof window !== 'undefined')
     return grid;
   }
 
+  /* O PAINEL DO CONJUNTO: cada peça com sua situação (vestida / no saco /
+   * faltando, com o ícone) e os degraus de bônus 2/3/4 — os que já valem
+   * levam ✓. Os ícones entram por toDataURL porque o tooltip é innerHTML. */
   function setTipBody(setId) {
     var sd = setDef(setId);
     if (!sd) return 'Conjunto ' + esc(setId) + '.';
     var n = setEquippedCount(setId);
     var out = '<i>' + esc(ELEM_PT[sd.element] || sd.element || '') + ' · ' +
-              setPieceCount(setId) + ' peças</i>';
+              n + '/' + setPieceCount(setId) + ' vestidas</i>';
+    out += '<span class="tip-set-pcs">';
+    (sd.pieces || []).forEach(function (pid) {
+      var pit = itemDef(pid) || {};
+      var vest = !!equippedBy(pid);
+      var saco = !vest && bagCountOf(pid) > 0;
+      var url = safe(function () { return A().itemIcon(pid, 22).toDataURL(); }, '');
+      out += '<em class="tip-set-pc ' + (vest ? 'is-vest' : (saco ? 'is-saco' : 'is-falta')) + '">' +
+             (url ? '<img src="' + url + '" alt="">' : '') + esc(pit.name || pid) +
+             '<b>' + (vest ? 'vestida' : (saco ? 'no saco' : 'faltando')) + '</b></em>';
+    });
+    out += '</span>';
     var b = sd.bonuses || {};
     ['2', '3', '4'].forEach(function (k) {
       if (!b[k]) return;
-      out += '<br>' + (n >= +k ? '<b>' : '') + k + ' peças: ' + esc(bonusText(b[k])) + (n >= +k ? ' ✓</b>' : '');
+      var vale = n >= +k;
+      out += '<br>' + (vale ? '<b>' : '') + k + ' peças: ' + esc(bonusText(b[k]));
+      if (b[k].grantsSpell) {
+        var sp = spellDef(b[k].grantsSpell);
+        out += ' + feitiço ' + esc(spellName(sp, b[k].grantsSpell));
+      }
+      out += (vale ? ' ✓</b>' : '');
     });
-    if (sd.description) out += '<br>' + esc(sd.description);
+    if (sd.description) out += '<br><i>' + esc(sd.description) + '</i>';
     return out;
   }
 
@@ -3682,6 +3736,42 @@ var JOGO = (typeof window !== 'undefined')
         } else toast('Pedras insuficientes.');
       });
       panel.appendChild(go);
+    }
+
+    // A ESTRELA MORA AQUI (pedido do usuário, 24/08: "só na página da forja
+    // dá para fundir"). Três cópias do MESMO item no saco viram +1 estrela,
+    // no nível médio (para baixo). Só peça do SACO funde — a vestida está
+    // fora da pilha. O saco apenas aponta para cá.
+    if (atual.kind === 'bag') {
+      var fu = safe(function () { return P().fuseInfo(atual.index); }, null);
+      if (fu && !fu.maxed) {
+        var fus = el('div', 'forge-fusao');
+        if (fu.pode) {
+          fus.appendChild(el('p', null, 'Três cópias no saco. Fundir <b>+' +
+            fu.niveisEscolhidos.join(' +') + '</b> vira <b>★' + fu.proxima +
+            ' +' + fu.nivelResultado + '</b> — a média, para baixo.'));
+          fus.appendChild(btn('Fundir → ★' + fu.proxima + ' +' + fu.nivelResultado,
+            'btn-gold btn-block', function () {
+              var nova = safe(function () { return P().fuseItem(atual.index); }, null);
+              if (nova) {
+                toast('Fundiu ' + fu.precisa + ': agora é ★' + nova.stars +
+                      ' +' + nova.level + ' (a média das três).', 'good');
+                forgeTarget = { kind: 'bag', itemId: nova.itemId,
+                                level: nova.level, stars: nova.stars };
+                if (invSel && invSel.itemId === atual.itemId) {
+                  invSel = { itemId: nova.itemId, level: nova.level, stars: nova.stars };
+                }
+              }
+              sheetParty('forja');
+            }));
+        } else {
+          fus.appendChild(el('p', null, (fu.faltam > 1
+            ? 'Estrela: faltam <b>' + fu.faltam + '</b> cópias iguais'
+            : 'Estrela: falta <b>1</b> cópia igual') +
+            ' no saco para fundir rumo à ★' + fu.proxima + '.'));
+        }
+        panel.appendChild(fus);
+      }
     }
     body.appendChild(panel);
   }

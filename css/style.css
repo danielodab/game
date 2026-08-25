@@ -1248,6 +1248,7 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 /* a placa escura é o que garante que a borda de raridade continue visível
    mesmo sobre o fundo amarelo do ★3 */
 .ig-plate {
+  position: relative;                 /* âncora do ❖ de conjunto no canto */
   display: block; padding: 3px; border-radius: 11px; background: rgba(6,9,13,.55);
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.5);
 }
@@ -1267,6 +1268,48 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 }
 .forge-thumb .ig-n, .forge-thumb .ig-lv, .inv-pick-ic .ig-n, .inv-pick-ic .ig-lv,
 .pt-slot-ic .ig-lv { top: -6px; }
+
+/* ---- ❖ DO CONJUNTO (pedido do usuário, 24/08): a peça pertence a um traje
+   com bônus. Fica no canto inferior do ícone; tocar abre o painel com as
+   peças (vestida / no saco / faltando) e os bônus de 2/3/4.
+   Cinza = nenhum bônus valendo · azul = 2+ vestidas · dourado = fechado. */
+.ig-set {
+  position: absolute; right: 1px; bottom: 1px; z-index: 2;
+  width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; color: #9fb2c8; cursor: pointer;
+  background: rgba(6,9,13,.78); border: 1px solid var(--line2); border-radius: 7px;
+  text-shadow: 0 1px 2px rgba(0,0,0,.8);
+}
+.ig-set.is-meio  { color: #6fc1ff; border-color: rgba(111,193,255,.5); }
+.ig-set.is-cheio { color: var(--gold); border-color: var(--gold-dim);
+                   box-shadow: 0 0 8px rgba(255,208,110,.35); }
+.ig-set.is-mudo  { pointer-events: none; }   /* no banco a célula é do arrasto */
+.inv-pick-ic .ig-set, .pt-slot-ic .ig-set { right: -4px; bottom: -4px; }
+.inv-pick-set.is-toque { cursor: pointer; }
+.inv-pick-set.is-toque u { color: var(--gold); }
+
+/* as peças dentro do painel do conjunto (tooltip) */
+.ui-tip .tip-set-pcs { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 2px; }
+.ui-tip .tip-set-pc {
+  display: flex; align-items: center; gap: 6px;
+  font-style: normal; font-size: 11.5px; color: var(--text);
+}
+.ui-tip .tip-set-pc img { width: 20px; height: 20px; border-radius: 5px;
+  background: rgba(255,255,255,.06); }
+.ui-tip .tip-set-pc b { margin-left: auto; font: 700 10px var(--ui-sans); }
+.ui-tip .tip-set-pc.is-vest b { color: #7fe08a; }
+.ui-tip .tip-set-pc.is-saco b { color: #6fc1ff; }
+.ui-tip .tip-set-pc.is-falta { color: var(--dim); }
+.ui-tip .tip-set-pc.is-falta b { color: #77808c; }
+.ui-tip .tip-set-pc.is-falta img { opacity: .45; filter: grayscale(.6); }
+
+/* ---- FUNDIR MORA NA FORJA (pedido do usuário): o bloco da estrela */
+.forge-fusao {
+  margin-top: 10px; padding: 9px 11px; border-radius: 10px;
+  border: 1px dashed rgba(230,181,60,.45); background: rgba(230,181,60,.07);
+}
+.forge-fusao p { margin: 0 0 7px; font-size: 12px; color: var(--text); }
+.forge-fusao p:last-child { margin-bottom: 0; }
 
 /* ---- ESTRELAS DE ITEM (fundir 3 iguais). Sem nome de degrau: só COR DE FUNDO,
    como o usuário pediu. ★1 cinza · ★2 azul · ★3 amarelo. A raridade continua
