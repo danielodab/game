@@ -82,7 +82,7 @@ sala é reprovação, zero também.</div>
   // declara `chao_alt` porque lustre caido e barril tombado a 25 cm viravam
   // miniatura — o teste cobra o numero que o jogo usa.
   var WALL_H = CELL * 1.55, LOW_H = CELL * 0.46;
-  var ALVO = { alto: WALL_H, sotaque_alto: WALL_H,
+  var ALVO = { alto: WALL_H, pilar: WALL_H, sotaque_alto: WALL_H,
                baixo: LOW_H, sotaque: 0.95, chao: 0.50, borda: 1.30 };
 
   window.addEventListener('DOMContentLoaded', function () {
@@ -140,7 +140,10 @@ sala é reprovação, zero também.</div>
       var semente = lista.indexOf(chave);
       if (semente < 0) return null;
       var larg = (R.LARG_MURO || CELL);
-      var g = R.muroDaCasa('cistern', papel, semente, alvo, larg);
+      // o PILAR ocupa UMA casa (é pontuação, não fileira); muro e mureta
+      // ocupam LARG_MURO para a corrida fechar — a mesma conta da sala
+      var g = R.muroDaCasa('cistern', papel, semente, alvo,
+                           papel === 'pilar' ? CELL : larg);
       if (!g) return null;
       g.updateMatrixWorld(true);
       var b = new THREE.Box3().setFromObject(g);
@@ -166,8 +169,10 @@ sala é reprovação, zero também.</div>
       check('o `marco` é o aquário, e só ele',
             (cat.marco || []).length === 1 && cat.marco[0] === 'cs_aquario',
             (cat.marco || []).join(', '));
-      check('o `pilar` está vazio (pilares.crdownload veio quebrado — dívida)',
-            (cat.pilar || []).length === 0, (cat.pilar || []).join(', '));
+      // a dívida do pilares.crdownload FOI PAGA (30/08): a folha refeita
+      // trazia dois pilares gêmeos — a parede volta a ser pontuada
+      check('o `pilar` tem os dois gêmeos da corte',
+            (cat.pilar || []).length === 2, (cat.pilar || []).join(', '));
       check('o `chao_alt` declara meio metro', cat.chao_alt === 0.5, String(cat.chao_alt));
 
       var linhas = [], curtas = [], semModelo = [];
@@ -177,7 +182,7 @@ sala é reprovação, zero também.</div>
           try { cena = M.rawScene(chave); } catch (e) {}
           if (!cena) { semModelo.push(chave); return; }
           var m;
-          if (papel === 'alto' || papel === 'baixo') {
+          if (papel === 'alto' || papel === 'baixo' || papel === 'pilar') {
             m = medeMuro(papel, chave, ALVO[papel]);
           } else {
             m = normaliza(cena.clone(true), ALVO[papel], null);
@@ -206,9 +211,10 @@ sala é reprovação, zero também.</div>
       }
 
       check('todas as peças têm modelo carregado', semModelo.length === 0, semModelo.join(', '));
-      // 2 alto + 3 sotaque_alto + 2 baixo + 4 sotaque + 2 chao + 4 borda = 17.
-      // O número é cru de propósito: ele grita quando uma peça SOME.
-      check('há 17 medições de peça no cenário', linhas.length === 17, linhas.length + ' peças');
+      // 2 alto + 2 pilar + 3 sotaque_alto + 2 baixo + 4 sotaque + 2 chao +
+      // 4 borda = 19. O número é cru de propósito: ele grita quando uma
+      // peça SOME.
+      check('há 19 medições de peça no cenário', linhas.length === 19, linhas.length + ' peças');
       check('nenhuma peça encolhe abaixo de 60% do papel',
             curtas.length === 0, curtas.join(' · '));
 
@@ -243,6 +249,19 @@ sala é reprovação, zero também.</div>
       var largos = muros.filter(function (l) { return l.larg > CELL * 1.6; });
       check('nenhum muro cobre a casa vizinha (teto de 1,6 casa)', largos.length === 0,
             largos.map(function (l) { return l.chave + ' ' + l.larg.toFixed(2) + ' m'; }).join(' · '));
+
+      // O PILAR: altura cravada na parede e ESGUIO — a regra nova diz que ele
+      // nunca engorda além da arte (kh ≤ kv), então numa casa de 2,0 m ele sai
+      // com ~1,0 m de largura e o vão é dos muros vizinhos, que passam meia
+      // casa para cada lado. Pilar de 2 m de largura seria a régua acusando
+      // que a trava não agiu e o bloco voltou.
+      var pilares = linhas.filter(function (l) { return l.papel === 'pilar'; });
+      var pFora = pilares.filter(function (l) {
+        return Math.abs(l.alt - ALVO.pilar) > 0.02 || l.larg > CELL * 0.75;
+      });
+      check('os pilares fecham a altura da parede e seguem esguios (larg ≤ 1,5 m)',
+            pilares.length === 2 && pFora.length === 0,
+            pilares.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + '×' + l.larg.toFixed(2); }).join(' · '));
 
       var muretas = linhas.filter(function (l) { return l.papel === 'baixo'; });
       var mFora = muretas.filter(function (l) { return Math.abs(l.alt - ALVO.baixo) > 0.02; });
@@ -305,7 +324,9 @@ sala é reprovação, zero também.</div>
         // arquitetura da sala, não enfeite.
         var enfeites = 0;
         Object.keys(porChave).forEach(function (ch) {
-          if (ch === 'cs_muro_inteiro' || ch === 'cs_muro_brecha' || ch === 'cs_aquario') return;
+          if (ch === 'cs_muro_inteiro' || ch === 'cs_muro_brecha' ||
+              ch === 'cs_pilar_a' || ch === 'cs_pilar_b' ||
+              ch === 'cs_aquario') return;
           enfeites += porChave[ch];
         });
         // A CONTA DO "NÃO POLUA": 18 enfeites são da BORDA, fora da arena.

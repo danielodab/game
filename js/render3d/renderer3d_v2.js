@@ -670,6 +670,14 @@ var JOGO = (typeof window !== 'undefined')
 
     var kh = largura / larg;          // horizontal: uma casa
     var kv = alturaAlvo / alt;        // vertical: a altura cheia
+    // O PILAR NUNCA ENGORDA ALÉM DA ARTE. A largura de uma casa serve ao
+    // MURO, que precisa fechar a fileira; o pilar do jardim tem razão 0,69 e
+    // a conta dava quase uniforme por sorte. O pilar da Cisterna tem razão
+    // 0,32 — esticado a uma casa ele dobraria de gordura e viraria bloco, e
+    // pilar existe para NÃO ser bloco. `kh ≤ kv` mantém a proporção: o vão
+    // que sobra na casa é coberto pelos muros vizinhos, que passam meia casa
+    // para cada lado (LARG_MURO). No jardim o teto não chega a agir.
+    if (papel === 'pilar') kh = Math.min(kh, kv);
     // O MURO COM PILARES NAS PONTAS mente na caixa: no módulo da Cisterna o
     // pilar toca 100% da altura e o CORPO fica em 52% — normalizado pela caixa
     // a 3,10 m, o corpo sai a 1,6 m e um herói de 2,05 vê por cima do muro que

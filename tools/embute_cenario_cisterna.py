@@ -30,9 +30,12 @@ ORIGENS = [
 
 # arquivo -> (chave, nome, papel)
 #   alto         = MÓDULO de parede (3,10 m), o muro que se enfileira
-#   pilar        = pontuação da parede — SEM PEÇA: `pilares.crdownload` veio
-#                  incompleto do navegador (dívida anotada). Sem pilar no
-#                  catálogo a parede sai uniforme, que é o comportamento certo.
+#   pilar        = pontuação da parede, a cada 4 casas de trecho longo. A
+#                  dívida do `pilares.crdownload` FOI PAGA (30/08): o arquivo
+#                  chegou inteiro e a folha trazia DOIS pilares gêmeos,
+#                  recortados pelo separa_cenario em PASTA ISOLADA — rodá-lo
+#                  na pasta dos muros regravaria o _separado inteiro e
+#                  renumeraria peças que a tabela já cita pelo nome.
 #   marco        = o aquário, UMA vez por sala
 #   sotaque_alto = enfeite alto, UMA vez por trecho longo de parede
 #   baixo        = MÓDULO de divisória (0,95 m) — os altos servem, achatados
@@ -41,6 +44,9 @@ ORIGENS = [
 PECAS = [
     ("muro_inteiro.glb", "cs_muro_inteiro", "Muro de pedra da cisterna",        "alto"),
     ("muro_furado.glb",  "cs_muro_brecha",  "Muro da cisterna com brecha",      "alto"),
+
+    ("pilar_01.glb",     "cs_pilar_a",      "Pilar da corte, gêmeo primeiro",   "pilar"),
+    ("pilar_02.glb",     "cs_pilar_b",      "Pilar da corte, gêmeo segundo",    "pilar"),
 
     ("aquario.glb",      "cs_aquario",      "Aquário da corte, com peixes",     "marco"),
 

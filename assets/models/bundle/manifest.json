@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-30T19:56:48",
+ "gerado": "2026-08-30T20:28:41",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -14,6 +14,18 @@
    "chave": "cs_muro_brecha",
    "arquivo": "cenario-cisterna/cs_muro_brecha.glb",
    "bytes": 887296
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_pilar_a",
+   "arquivo": "cenario-cisterna/cs_pilar_a.glb",
+   "bytes": 593948
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_pilar_b",
+   "arquivo": "cenario-cisterna/cs_pilar_b.glb",
+   "bytes": 587188
   },
   {
    "alvo": "MODELS",
@@ -1650,6 +1662,6 @@
    "walk"
   ]
  },
- "totalBytes": 123160736,
- "totalBase64": 164214580
+ "totalBytes": 124341872,
+ "totalBase64": 165789432
 }
