@@ -1,8 +1,80 @@
 {
- "gerado": "2026-08-30T16:20:59",
+ "gerado": "2026-08-30T19:56:48",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
+  {
+   "alvo": "MODELS",
+   "chave": "cs_muro_inteiro",
+   "arquivo": "cenario-cisterna/cs_muro_inteiro.glb",
+   "bytes": 950468
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_muro_brecha",
+   "arquivo": "cenario-cisterna/cs_muro_brecha.glb",
+   "bytes": 887296
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_aquario",
+   "arquivo": "cenario-cisterna/cs_aquario.glb",
+   "bytes": 1140664
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_estandarte",
+   "arquivo": "cenario-cisterna/cs_estandarte.glb",
+   "bytes": 405644
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_luminaria",
+   "arquivo": "cenario-cisterna/cs_luminaria.glb",
+   "bytes": 520612
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_espelho",
+   "arquivo": "cenario-cisterna/cs_espelho.glb",
+   "bytes": 455684
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_trono",
+   "arquivo": "cenario-cisterna/cs_trono.glb",
+   "bytes": 601844
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_sal",
+   "arquivo": "cenario-cisterna/cs_sal.glb",
+   "bytes": 564068
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_poco_lirio",
+   "arquivo": "cenario-cisterna/cs_poco_lirio.glb",
+   "bytes": 618484
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_fonte",
+   "arquivo": "cenario-cisterna/cs_fonte.glb",
+   "bytes": 625544
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_lustre",
+   "arquivo": "cenario-cisterna/cs_lustre.glb",
+   "bytes": 680028
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cs_barril",
+   "arquivo": "cenario-cisterna/cs_barril.glb",
+   "bytes": 547356
+  },
   {
    "alvo": "MODELS",
    "chave": "jd_regador",
@@ -122,6 +194,66 @@
    "chave": "jd_estufa_arvore",
    "arquivo": "cenario-jardim/jd_estufa_arvore.glb",
    "bytes": 900304
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n1",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n1.glb",
+   "bytes": 503840
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n2",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n2.glb",
+   "bytes": 504332
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n3",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n3.glb",
+   "bytes": 504184
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n4",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n4.glb",
+   "bytes": 501704
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n5",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n5.glb",
+   "bytes": 507056
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n6",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n6.glb",
+   "bytes": 565808
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n7",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n7.glb",
+   "bytes": 571220
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n8",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n8.glb",
+   "bytes": 579300
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n9",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n9.glb",
+   "bytes": 592400
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_pvp_n10",
+   "arquivo": "coroas-pvp-3d/coroa_pvp_n10.glb",
+   "bytes": 666640
   },
   {
    "alvo": "ASSETS",
@@ -719,6 +851,60 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "drowned-porter",
+   "arquivo": "models-meshy-cisterna/drowned-porter.glb",
+   "bytes": 1360600
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "moray-piper",
+   "arquivo": "models-meshy-cisterna/moray-piper.glb",
+   "bytes": 1129800
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "lantern-jelly",
+   "arquivo": "models-meshy-cisterna/lantern-jelly.glb",
+   "bytes": 1173168
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "brine-golem",
+   "arquivo": "models-meshy-cisterna/brine-golem.glb",
+   "bytes": 1043144
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fat-drop",
+   "arquivo": "models-meshy-cisterna/fat-drop.glb",
+   "bytes": 1054240
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "droplet",
+   "arquivo": "models-meshy-cisterna/droplet.glb",
+   "bytes": 1028100
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sump-crab",
+   "arquivo": "models-meshy-cisterna/sump-crab.glb",
+   "bytes": 1219904
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mist-warbler",
+   "arquivo": "models-meshy-cisterna/mist-warbler.glb",
+   "bytes": 1099004
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "boss-baroness",
+   "arquivo": "models-meshy-cisterna/boss-baroness.glb",
+   "bytes": 1131048
+  },
+  {
+   "alvo": "MODELS",
    "chave": "boss-gardener",
    "arquivo": "models-meshy-jardim/boss-gardener.glb",
    "bytes": 1297004
@@ -1198,6 +1384,78 @@
    "run",
    "walk"
   ],
+  "drowned-porter": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "moray-piper": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "lantern-jelly": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "brine-golem": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fat-drop": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "droplet": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "sump-crab": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "mist-warbler": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "boss-baroness": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
   "boss-gardener": [
    "HitReact",
    "attack",
@@ -1392,6 +1650,6 @@
    "walk"
   ]
  },
- "totalBytes": 99427552,
- "totalBase64": 132570292
+ "totalBytes": 123160736,
+ "totalBase64": 164214580
 }

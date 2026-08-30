@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — as dez coroas do ranking em 3D</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font:11px monospace;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:2px 8px;text-align:right}
+  th{background:#1a2029;color:#8895a6}
+</style>
+</head>
+<body>
+<h1>As dez coroas do ranking — modelo 3D por patente, na medida do tier</h1>
+<div class="sub">A praça pendurava um bilhete PNG; agora cada patente tem coroa de VERDADE
+(coroas-pvp-3d.js), montada por <code>Hub._modeloCoroa</code> — o mesmo caminho do jogo. A prova
+cobra: as dez carregam, cada uma sai com o diâmetro do seu tier (o <code>tam</code> da escada da
+Brasa), assentada e centrada, e a pompa CRESCE — a Coroa X é mais alta em proporção que a I,
+senão houve troca de ordem no recorte (que não dá erro nenhum, só a coroa errada na cabeça).</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+<table id="tab"></table>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'assets/embedded/coroas-pvp-3d.js',
+    'js/core/brasa.js',
+    'js/render3d/models3d_v2.js',
+    'js/render3d/hub3d.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = mau ? (mau + ' de ' + res.length + ' falharam')
+                        : ('tudo passou (' + res.length + ')');
+    window.__done = true;
+    window.__fail = mau;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2, Hub = JOGO.Hub, B = JOGO.Brasa;
+    check('módulos de pé (Models3D2, Hub, Brasa)', !!(M && Hub && B));
+    check('a montagem da praça está exposta', typeof Hub._modeloCoroa === 'function');
+    if (!M || !Hub || typeof Hub._modeloCoroa !== 'function') return fecha();
+
+    var erro = null;
+    try { M.load(function (e) { if (e) erro = e.message || String(e); }); } catch (e) { erro = e.message; }
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false; try { ok = M.isReady(); } catch (e) {}
+      if (!ok && !erro && Date.now() - t0 < 90000) return setTimeout(espera, 250);
+      check('os modelos carregaram', !!ok, erro || '');
+      mede();
+    })();
+
+    function mede() {
+      var linhas = [], semModelo = [], foraMedida = [], tortas = [];
+      for (var n = 1; n <= 10; n++) {
+        var tier = null;
+        for (var i = 0; i < B.TIERS.length; i++)
+          if (B.TIERS[i].nivel === n) tier = B.TIERS[i];
+        var tam = (tier && tier.tam) || 0.6;
+        var g = Hub._modeloCoroa(n, tam);
+        if (!g) { semModelo.push('n' + n); continue; }
+        g.updateMatrixWorld(true);
+        var bb = new THREE.Box3().setFromObject(g);
+        var larg = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
+        var alt = bb.max.y - bb.min.y;
+        var alvo = tam * 0.72;
+        if (Math.abs(larg - alvo) > alvo * 0.05)
+          foraMedida.push('n' + n + ' ' + larg.toFixed(2) + '/' + alvo.toFixed(2));
+        if (Math.abs(bb.min.y) > 0.02 ||
+            Math.abs((bb.min.x + bb.max.x) / 2) > 0.03 ||
+            Math.abs((bb.min.z + bb.max.z) / 2) > 0.03)
+          tortas.push('n' + n);
+        linhas.push({ n: n, tam: tam, larg: larg, alt: alt, razao: alt / larg });
+      }
+      check('as DEZ patentes têm coroa 3D', linhas.length === 10,
+            semModelo.length ? ('faltou ' + semModelo.join(',')) : '');
+      check('cada coroa sai no diâmetro do seu tier (tam × 0,72 ± 5%)',
+            foraMedida.length === 0, foraMedida.join(' · '));
+      check('toda coroa assenta no zero e fica centrada', tortas.length === 0, tortas.join(','));
+
+      if (linhas.length === 10) {
+        // a POMPA cresce: a X é proporcionalmente bem mais alta que a I. Se o
+        // recorte trocasse a ordem das folhas, esta razão denunciaria.
+        var r1 = linhas[0].razao, r10 = linhas[9].razao;
+        check('a Coroa X é mais pomposa que a I (razão alt/larg ≥ 1,6×)',
+              r10 >= r1 * 1.6, 'I=' + r1.toFixed(2) + ' X=' + r10.toFixed(2));
+        // e o diâmetro cresce com a patente, porque o `tam` do tier cresce
+        check('o diâmetro cresce da I à X',
+              linhas[9].larg > linhas[0].larg,
+              linhas[0].larg.toFixed(2) + ' → ' + linhas[9].larg.toFixed(2));
+      }
+      // patente sem modelo cai fora sem drama (o chamador põe o bilhete PNG)
+      check('nível inexistente devolve null (fallback do bilhete)',
+            Hub._modeloCoroa(99, 0.6) === null);
+
+      var h = '<tr><th>coroa</th><th>tam do tier</th><th>diâmetro</th><th>altura</th><th>alt/larg</th></tr>';
+      linhas.forEach(function (l) {
+        h += '<tr><td>n' + l.n + '</td><td>' + l.tam.toFixed(2) + '</td><td>' +
+             l.larg.toFixed(2) + '</td><td>' + l.alt.toFixed(2) + '</td><td>' +
+             l.razao.toFixed(2) + '</td></tr>';
+      });
+      document.getElementById('tab').innerHTML = h;
+      fecha();
+    }
+  });
+})();
+</script>
+</body>
+</html>

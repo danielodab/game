@@ -500,33 +500,73 @@ var JOGO = (typeof window !== 'undefined')
       corpo.node.add(st2);
       corpo.plaquinhaTitulo = st2;
     }
-    // A CHAMA DA BRASA — o lugar das asas de nação, do jeito do SOTERRA:
-    // o fogo da arena arde ACIMA do nome, na paleta e no tamanho do tier.
-    // Sprite não serve (não anima folha); é um bilhete aditivo que o tique
-    // vira para a câmera junto com o offset da paleta.
     // A COROA DO RANKING — a arte do usuário, no lugar das chamas ("essa
-    // coroa ficará acima da cabeça ao invés das chamas"). Bilhete PNG
-    // transparente flutuando acima do nome, com bob suave no tique; o
-    // tamanho cresce com o nível. A regra do novato mora na HUD (só
-    // aparece depois da primeira partida).
+    // coroa ficará acima da cabeça ao invés das chamas"). AGORA EM 3D
+    // (30/08): as dez coroas viraram modelo (coroas-pvp-3d.js) e a de cada
+    // corpo flutua e GIRA devagar acima do nome — coroa de verdade não é
+    // adesivo que encara a câmera. O bilhete PNG continua como fallback
+    // (e no perfil 2D). A regra do novato mora na HUD.
     if (brasaTier && brasaTier.nivel) {
-      var texK = texturaCoroa(brasaTier.nivel);
-      if (texK) {
-        var tamK = brasaTier.tam || 0.6;
-        var coroa = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
-          new THREE.MeshBasicMaterial({
-            map: texK, transparent: true, depthWrite: false,
-            side: THREE.DoubleSide
-          }));
-        coroa.scale.set(tamK, tamK, 1);
-        var baseK = alto + (titulo ? 0.66 : 0.5) + 0.34 + tamK * 0.45;
-        coroa.position.y = baseK;
-        coroa.userData.baseY = baseK;
+      var tamK = brasaTier.tam || 0.6;
+      var coroa = modeloCoroa(brasaTier.nivel, tamK);
+      if (coroa) {
+        var baseK3 = alto + (titulo ? 0.66 : 0.5) + 0.34;
+        coroa.position.y = baseK3;
+        coroa.userData.baseY = baseK3;
         coroa.userData.fase = Math.random() * 9;
+        coroa.userData.gira3d = true;
         corpo.node.add(coroa);
         corpo.coroaPvp = coroa;
+      } else {
+        var texK = texturaCoroa(brasaTier.nivel);
+        if (texK) {
+          var bilhete = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+            new THREE.MeshBasicMaterial({
+              map: texK, transparent: true, depthWrite: false,
+              side: THREE.DoubleSide
+            }));
+          bilhete.scale.set(tamK, tamK, 1);
+          var baseK = alto + (titulo ? 0.66 : 0.5) + 0.34 + tamK * 0.45;
+          bilhete.position.y = baseK;
+          bilhete.userData.baseY = baseK;
+          bilhete.userData.fase = Math.random() * 9;
+          corpo.node.add(bilhete);
+          corpo.coroaPvp = bilhete;
+        }
       }
     }
+  }
+
+  /* A COROA EM 3D: clone do modelo da patente, normalizado pela LARGURA —
+   * coroa é aro, não torre; o `tam` do tier (que era o lado do bilhete) vira
+   * o diâmetro, um dedo menor. Assenta e centra aqui pelo mesmo motivo de
+   * `pecaUsuario`: o arquivo não promete base no zero nem centro no eixo.
+   * Os materiais são do TEMPLATE (clone compartilha) — quem remover a coroa
+   * não deve descartá-los, e o try/catch do cleanup já ignora Group. */
+  function modeloCoroa(nivel, tam) {
+    var M2 = (typeof JOGO !== 'undefined') ? JOGO.Models3D2 : null;
+    // `THREE` do módulo só é preenchido no init da praça; a PROVA chama esta
+    // função sem levantar o Hub inteiro, então resolve-se pelo global também.
+    var T = THREE || (typeof window !== 'undefined' ? window.THREE : null);
+    if (!M2 || !M2.rawScene || !T) return null;
+    var cena = null;
+    try { cena = M2.rawScene('coroa_pvp_n' + nivel); } catch (e) {}
+    if (!cena) return null;
+    var no = cena.clone(true);
+    no.updateMatrixWorld(true);
+    var bb = new T.Box3().setFromObject(no);
+    var larg = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
+    if (!isFinite(larg) || larg < 0.001) return null;
+    no.scale.multiplyScalar((tam * 0.72) / larg);
+    var berco = new T.Group();
+    berco.add(no);
+    no.updateMatrixWorld(true);
+    var cb = new T.Box3().setFromObject(no);
+    if (isFinite(cb.min.y)) no.position.y -= cb.min.y;
+    var mx = (cb.min.x + cb.max.x) / 2, mz = (cb.min.z + cb.max.z) / 2;
+    if (isFinite(mx)) no.position.x -= mx;
+    if (isFinite(mz)) no.position.z -= mz;
+    return berco;
   }
   function pendura(nome, titulo, brasaTier) { penduraEm(heroi, nome, titulo, brasaTier); }
 
@@ -585,14 +625,19 @@ var JOGO = (typeof window !== 'undefined')
       var cc = qp % TEX_PORTAL_N, rr = Math.floor(qp / TEX_PORTAL_N);
       texPortal.offset.set(cc / TEX_PORTAL_N, (TEX_PORTAL_N - 1 - rr) / TEX_PORTAL_N);
     }
-    // A COROA encara a câmera e flutua de leve — realeza não balança muito
+    // A COROA flutua de leve — realeza não balança muito. A 3D GIRA devagar
+    // (modelo tem todos os lados); o bilhete PNG encara a câmera, como antes.
     if (camera) {
       var viraCoroa = function (corpoC) {
         if (!corpoC || !corpoC.coroaPvp) return;
         var m = corpoC.coroaPvp;
-        m.rotation.y = Math.atan2(camera.position.x - corpoC.node.position.x,
-                                  camera.position.z - corpoC.node.position.z) -
-                       corpoC.node.rotation.y;
+        if (m.userData.gira3d) {
+          m.rotation.y = relogio * 0.5 + (m.userData.fase || 0);
+        } else {
+          m.rotation.y = Math.atan2(camera.position.x - corpoC.node.position.x,
+                                    camera.position.z - corpoC.node.position.z) -
+                         corpoC.node.rotation.y;
+        }
         m.position.y = m.userData.baseY +
                        Math.sin(relogio * 1.6 + (m.userData.fase || 0)) * 0.05;
       };
@@ -944,6 +989,9 @@ var JOGO = (typeof window !== 'undefined')
   /* A decisão PURA (testável sem 3D): dado [{id, dist, temCorpo}], quem
    * ganha corpo e quem larga — no máximo `porVez` de cada, e ninguém larga
    * sem estar FOLGADAMENTE atrás do corte (histerese). */
+  // exposto para a PROVA das coroas medir o que a praça pendura de verdade
+  Hub._modeloCoroa = modeloCoroa;
+
   Hub._escolheCorpos = function (lista, teto, margem, porVez) {
     porVez = porVez || 1;
     var orden = lista.slice().sort(function (a, b) { return a.dist - b.dist; });
