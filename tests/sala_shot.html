@@ -36,7 +36,8 @@
     'js/core/progress.js', 'js/core/game.js',
     'assets/embedded/env-kit.js', 'js/render3d/models3d.js',
     'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
-    'assets/embedded/models-meshy-jardim.js','assets/embedded/models-fusoes-sumo.js','assets/embedded/models-fusoes-minotauro.js','assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'assets/embedded/models-meshy-jardim.js','assets/embedded/models-meshy-cisterna.js','assets/embedded/models-fusoes-sumo.js','assets/embedded/models-fusoes-minotauro.js','assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'assets/embedded/cenario-jardim.js','assets/embedded/cenario-cisterna.js',
     'js/render3d/models3d_v2.js', 'js/render3d/fx3d_v2.js', 'js/render3d/renderer3d_v2.js',
     'js/render2d/art.js', 'js/render3d/portraits3d.js',
     'js/ui/hud.js'
@@ -86,10 +87,17 @@
       if (Q.semUI !== '1' && JOGO.UI && JOGO.UI.init) JOGO.UI.init();
       if (JOGO.Game.init) JOGO.Game.init();
 
-      var t0 = Date.now();
+      var tentativas = 0;
       (function espera() {
         var pronto = !JOGO.Models3D2 || !JOGO.Models3D2.isReady || JOGO.Models3D2.isReady();
-        if (!pronto && Date.now() - t0 < 20000) return setTimeout(espera, 100);
+        // O ENV-KIT TAMBÉM: sem ele `buildBoardKit` cai no procedural e a foto
+        // sai de blocos lisos, mentindo sobre o cenário.
+        var v1 = !JOGO.Models3D || !JOGO.Models3D.isReady || JOGO.Models3D.isReady();
+        pronto = pronto && v1;
+        // POR TENTATIVAS, NUNCA POR Date.now: no headless o relógio corre em
+        // TEMPO VIRTUAL e 20 s "passam" em milissegundos reais — o prazo
+        // estourava antes de o decode dos GLBs (trabalho real) terminar.
+        if (!pronto && ++tentativas < 2300) return setTimeout(espera, 100);
 
         JOGO.Progress.reset();
         var ids = JOGO.Progress.heroIds().slice(0, 2);

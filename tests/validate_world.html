@@ -370,7 +370,10 @@
     if (!check('DATA.stones existe (items.js, Criativo Fusão)', !!D.stones)) { return; }
     var byEl = {};
     keys(D.stones).forEach(function (s) { byEl[D.stones[s].element] = s; });
-    check('DATA.stones tem 5 pedras', keys(D.stones).length === 5, keys(D.stones).length + '');
+    // 5 de elemento + a ÂNCORA DE FORJA (element 'forja', segura o nível na
+    // batida falhada — rodada da forja de risco). A régua velha dizia 5 e
+    // reprovava uma pedra legítima.
+    check('DATA.stones tem 6 pedras (5 de elemento + a Âncora)', keys(D.stones).length === 6, keys(D.stones).length + '');
     ELEMENTS.forEach(function (e) {
       check('DATA.stones: existe pedra de ' + e, !!byEl[e]);
       var sources = monIds.filter(function (i) {

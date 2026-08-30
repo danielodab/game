@@ -613,6 +613,10 @@ var JOGO = (typeof window !== 'undefined')
     var cz2 = (cxb.min.z + cxb.max.z) / 2;
     if (isFinite(cx2)) no.position.x -= cx2;
     if (isFinite(cz2)) no.position.z -= cz2;
+    // a chave fica anotada para o TESTE poder varrer a cena montada e contar
+    // quantas vezes cada peça entrou — é como se cobra "o marco é ÚNICO".
+    berco.userData.chave = chave;
+    berco.userData.papel = papel;
     return berco;
   }
 
@@ -666,6 +670,22 @@ var JOGO = (typeof window !== 'undefined')
 
     var kh = largura / larg;          // horizontal: uma casa
     var kv = alturaAlvo / alt;        // vertical: a altura cheia
+    // O MURO COM PILARES NAS PONTAS mente na caixa: no módulo da Cisterna o
+    // pilar toca 100% da altura e o CORPO fica em 52% — normalizado pela caixa
+    // a 3,10 m, o corpo sai a 1,6 m e um herói de 2,05 vê por cima do muro que
+    // a regra diz bloquear visão. Com `alto_corpo: 'auto'` no catálogo, o alvo
+    // passa a ser o CORPO da peça — medido por ela mesma, porque a fração muda
+    // de módulo para módulo (o inteiro tem corpo a 52%, a brecha a 88%) — com
+    // teto de 1,7× a altura para os pilares não virarem agulha. O jardim não
+    // declara nada e nada muda lá.
+    var frCorpo = 1;
+    if (papel === 'alto' && cat && cat.alto_corpo === 'auto') {
+      var fr = fracaoCorpo(chave, no);
+      if (fr > 0.3 && fr < 0.97) {
+        frCorpo = fr;
+        kv = Math.min(alturaAlvo / (alt * fr), (alturaAlvo * 1.7) / alt);
+      }
+    }
     no.scale.set(kh, kv, kh);
     no.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
@@ -681,7 +701,47 @@ var JOGO = (typeof window !== 'undefined')
     if (isFinite(mz)) no.position.z -= mz;
     berco.userData.altura = alturaAlvo;
     berco.userData.estica = kv / kh;   // o quanto foi esticado, para o teste ver
+    berco.userData.chave = chave;
+    berco.userData.papel = papel;
+    berco.userData.caixa = alt * kv;          // a caixa REAL depois do esticão
+    berco.userData.corpo = alt * kv * frCorpo; // onde o corpo do muro chega
     return berco;
+  }
+
+  // A FRAÇÃO DO CORPO de um módulo de muro: mediana das alturas máximas por
+  // coluna ao longo do maior eixo horizontal. Pilar de ponta é minoria de
+  // colunas, então a mediana devolve o corpo; num módulo uniforme (jardim) ela
+  // encosta em 1,0 e a normalização pelo corpo vira a normalização de sempre.
+  // Medido UMA vez por chave — varrer 15 mil vértices toda montagem custaria.
+  var fracaoCache = {};
+  function fracaoCorpo(chave, no) {
+    if (fracaoCache[chave] != null) return fracaoCache[chave];
+    no.updateMatrixWorld(true);
+    var bb = new THREE.Box3().setFromObject(no);
+    var alt = bb.max.y - bb.min.y;
+    var dx = bb.max.x - bb.min.x, dz = bb.max.z - bb.min.z;
+    var eixoX = dx >= dz;
+    var ini = eixoX ? bb.min.x : bb.min.z;
+    var comp = Math.max(eixoX ? dx : dz, 1e-6);
+    var NB = 40, topo = new Array(NB), v = new THREE.Vector3();
+    no.traverse(function (o) {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+      var pos = o.geometry.attributes.position;
+      for (var i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i); o.localToWorld(v);
+        var c = eixoX ? v.x : v.z;
+        var b = Math.min(NB - 1, Math.max(0, Math.floor((c - ini) / comp * NB)));
+        var y = v.y - bb.min.y;
+        if (topo[b] == null || y > topo[b]) topo[b] = y;
+      }
+    });
+    var cheios = [];
+    for (var b2 = 0; b2 < NB; b2++) if (topo[b2] != null) cheios.push(topo[b2]);
+    cheios.sort(function (a, b3) { return a - b3; });
+    var fr = (cheios.length && alt > 0.01)
+      ? cheios[Math.floor(cheios.length / 2)] / alt : 1;
+    fracaoCache[chave] = fr;
+    return fr;
   }
 
   // Exposto para o teste MEDIR o muro, e nao so conferir que a funcao existe.
@@ -771,6 +831,27 @@ var JOGO = (typeof window !== 'undefined')
     var lowNodes = [];
     var wallCache = {};
 
+    // O MARCO: a peça que só existe UMA vez por sala.
+    //
+    // Regra do Daniel para o aquário da Cisterna: "o item que é um aquário deve
+    // ficar em somente um por sala". `sotaque_alto` não serve — ele entra uma
+    // vez POR TRECHO, e uma sala tem vários trechos de muro. Então o papel
+    // `marco` pega a PRIMEIRA casa de sotaque da varredura e trava. A varredura
+    // é y depois x, sempre na mesma ordem, e a casa de sotaque sai da semente
+    // da fileira — mesma sala, mesmo lugar, toda vez. Tema sem `marco` no
+    // catálogo (o jardim) cai no sotaque comum e nada muda.
+    var marcoPosto = false;
+
+    // O RELATÓRIO DA MONTAGEM, para o teste. Varrer a cena depois não serve:
+    // as malhas estáticas são FUNDIDAS por material e os berços somem no
+    // merge. Quem sabe quantas vezes cada peça entrou é quem as pôs — então o
+    // montador anota e expõe, e a prova da regra do marco lê daqui.
+    var usoPecas = {};
+    function anota(no) {
+      var ch = no && no.userData && no.userData.chave;
+      if (ch) usoPecas[ch] = (usoPecas[ch] || 0) + 1;
+    }
+
     for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
       var k = tileKind(gridTile(st, x, y));
       var seed = hashXY(x, y);
@@ -796,8 +877,17 @@ var JOGO = (typeof window !== 'undefined')
         // coluna de vidro) entra UMA vez por trecho longo, pelo mesmo motivo do
         // sotaque de baixo: dois enfeites iguais colados ficam estranhos.
         var col = null;
+        var ehMarco = false;
         if (ehSotaque(filaA)) {
-          col = pecaUsuario(theme, 'sotaque_alto', filaA.semente + filaA.i * 7, WALL_H);
+          if (!marcoPosto) {
+            // O TETO LARGO E DELIBERADO: o aquário é um tanque mais largo que
+            // alto (razão ~1,6). Com o teto padrão de 0,95 casa ele encolhia a
+            // 1,2 m — porte de móvel. A 1,7 casas ele sai com ~2,1 m de altura
+            // e lê como a vitrine monumental que o marco pede.
+            col = pecaUsuario(theme, 'marco', filaA.semente + filaA.i * 7, WALL_H, CELL * 1.7);
+            if (col) { marcoPosto = true; ehMarco = true; }
+          }
+          if (!col) col = pecaUsuario(theme, 'sotaque_alto', filaA.semente + filaA.i * 7, WALL_H);
         }
         if (!col && filaA.comp >= 3 && (filaA.i % 4) === 2) {
           // O PILAR PELO MESMO CAMINHO, senao fica 34 cm abaixo dos muros.
@@ -824,9 +914,12 @@ var JOGO = (typeof window !== 'undefined')
         if (!col) col = muroDaCasa(theme, 'alto', filaA.semente, WALL_H, LARG_MURO);
         if (col) {
           node = col;
+          anota(col);
           // só o MURO gira para o eixo do trecho; pilar é simétrico e sotaque é
           // objeto largado ali — girar o faria parecer parte da alvenaria.
-          if (filaA.eixo === 'z' && filaA.comp > 1 && !ehSotaque(filaA)) {
+          // O MARCO gira JUNTO com a parede: o aquário é vitrine embutida no
+          // muro, e atravessado ele invadiria a sala.
+          if (filaA.eixo === 'z' && filaA.comp > 1 && (!ehSotaque(filaA) || ehMarco)) {
             col.rotation.y = Math.PI / 2;
           }
         } else {
@@ -870,6 +963,7 @@ var JOGO = (typeof window !== 'undefined')
           prop = K.buildProp(theme, lowKinds[fila.semente % lowKinds.length], fila.semente);
           fitHeight(prop, 0.95);
         }
+        anota(prop);
         prop.position.set(x * CELL, 0, y * CELL);
         // GIRA PARA O EIXO DA FILEIRA. Uma peça mais larga que funda, posta numa
         // corrida vertical sem girar, deixa vão entre uma casa e a seguinte — a
@@ -882,9 +976,13 @@ var JOGO = (typeof window !== 'undefined')
         lowNodes.push({ node: prop, x: x, y: y });
       } else if (k === 'deco') {
         node = K.buildTile(theme, 'deco', seed % 4);
-        // o enfeite de piso do usuário vai POR CIMA do ladrilho, sem colisão
-        var enf = pecaUsuario(theme, 'chao', seed, 0.25);
-        if (enf) { enf.position.set(x * CELL, 0.02, y * CELL); lowNodes.push({ node: enf, x: x, y: y }); }
+        // o enfeite de piso do usuário vai POR CIMA do ladrilho, sem colisão.
+        // A ALTURA vem do catálogo (`chao_alt`) quando o tema declara: os 25 cm
+        // do jardim servem para flor e cristal, mas o lustre caído e o barril
+        // tombado da Cisterna a 25 cm viravam miniatura de brinquedo.
+        var catChao = JOGO.CENARIO && JOGO.CENARIO[theme];
+        var enf = pecaUsuario(theme, 'chao', seed, (catChao && catChao.chao_alt) || 0.25);
+        if (enf) { anota(enf); enf.position.set(x * CELL, 0.02, y * CELL); lowNodes.push({ node: enf, x: x, y: y }); }
       } else {
         node = K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
       }
@@ -925,6 +1023,7 @@ var JOGO = (typeof window !== 'undefined')
           prop2 = K.buildProp(theme, kinds[(p * 7 + rr++) % kinds.length], p * 131 + 17);
           fitHeight(prop2, altBorda, tetoBorda);
         }
+        anota(prop2);
         prop2.position.set(px, 0, pz);
         staticG.add(prop2);
         padPos.push([px, 0.02, pz]);
@@ -982,6 +1081,9 @@ var JOGO = (typeof window !== 'undefined')
 
     boardG.add(envG);
     boardMeshes.push(envG);
+    // o relatório fica exposto DEPOIS de a sala inteira montar, nunca no meio:
+    // teste que lesse um parcial acharia um aquário "faltando" que ainda vinha.
+    R.ultimaMontagem = usoPecas;
     return true;
   }
 

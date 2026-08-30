@@ -351,16 +351,20 @@ var JOGO = (typeof window !== 'undefined')
     // sob medida a compensacao nao faz falta. Os outros chefes seguem em 1,75
     // porque ainda usam arte emprestada e ainda precisam do estirao.
     'boss-gardener':  { model: 'boss-gardener',  scale: 1.00 },  // 2,95 m — "um vulto de tres metros"
-    // --- Corte Afogada (Cisterna)
-    'drowned-porter': { model: 'skeleton_warrior', show: ['Skeleton_Blade'], scale: 1.05 },
-    'moray-piper':    { model: 'q_snake',        scale: 1.10 },
-    'lantern-jelly':  { model: 'q_frog',         scale: 0.92 },
-    'brine-golem':    { model: 'skeleton_warrior', show: ['Skeleton_Shield_Large_A'], scale: 1.30 },
-    'fat-drop':       { model: 'q_frog',         scale: 0.95 },
-    'droplet':        { model: 'q_frog',         scale: 0.55 },
-    'sump-crab':      { model: 'q_spider',       scale: 0.95 },
-    'mist-warbler':   { model: 'q_wasp',         scale: 0.80 },
-    'boss-baroness':  { model: 'q_glub',        scale: 1.75 },   // era esqueleto mago
+    // --- Corte Afogada (Cisterna) — A ARTE E DO USUARIO (30/08).
+    //
+    // Os nove sairam do Meshy, Baronesa inclusa. Antes eram emprestados (cobra,
+    // sapo, aranha, esqueletos). A escala sai da DESCRICAO em monsters.js, conta
+    // de sempre: altura = 1,80 m x escala (chefe: 2,95 m x escala).
+    'drowned-porter': { model: 'drowned-porter', scale: 1.03 },  // 1,85 m — carregador inchado de agua
+    'moray-piper':    { model: 'moray-piper',    scale: 1.11 },  // 2,00 m — "enguia de dois metros"
+    'lantern-jelly':  { model: 'lantern-jelly',  scale: 0.78 },  // 1,40 m — "do tamanho de um lustre"
+    'brine-golem':    { model: 'brine-golem',    scale: 1.44 },  // 2,59 m — "um colosso de sal"
+    'fat-drop':       { model: 'fat-drop',       scale: 0.72 },  // 1,30 m — "do tamanho de um barril"
+    'droplet':        { model: 'droplet',        scale: 0.44 },  // 0,79 m — "pequena, redonda, indignada"
+    'sump-crab':      { model: 'sump-crab',      scale: 0.67 },  // 1,21 m — "do tamanho de uma mesa"
+    'mist-warbler':   { model: 'mist-warbler',   scale: 0.72 },  // 1,30 m — passaro de vapor
+    'boss-baroness':  { model: 'boss-baroness',  scale: 1.00 },  // 2,95 m — o vestido de baile e a sala e dele
     // --- Prole da Fornalha (Fecho de Brasa)
     'ember-imp':      { model: 'skeleton_minion', scale: 0.82 },
     'walking-anvil':  { model: 'q_bull',         scale: 1.05 },

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — os nove da Corte Afogada</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font:11px monospace;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:2px 6px;text-align:left}
+  th{background:#1a2029;color:#8895a6}
+  td.cai{color:#f88} td.ok{color:#8fc79b}
+  #app{position:absolute;left:-4000px;top:0;width:520px;height:640px}
+  canvas#game-canvas{width:520px;height:640px;display:block}
+  #tira{margin-top:12px;border:1px solid #2b3542;background:#0b0d10}
+</style>
+</head>
+<body>
+<h1>Os nove da Corte Afogada — arte do usuário, porte da descrição</h1>
+<div class="sub">Mesma prova do bestiário da Estufa, agora para a Cisterna: cada monstro diz de que
+tamanho é no próprio texto do jogo — a Moreia é «uma enguia de dois metros», o Salmourão «um
+colosso», a Água-Viva «do tamanho de um lustre», o Caranguejo «do tamanho de uma mesa». A página
+confere o porte contra o texto e se cada papel de animação achou clipe <em>próprio</em> — um bicho
+que ataca parado não dá erro nenhum, só fica errado. Neste lote o raio-X não achou falta nenhuma,
+então não há exceção registrada: os nove são cobrados por inteiro.</div>
+<div id="summary">montando…</div>
+<ul id="lista"></ul>
+<table id="tab"></table>
+<canvas id="tira" width="1180" height="470"></canvas>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js',
+    'assets/embedded/models-meshy-cisterna.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js',
+    'assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = mau ? (mau + ' de ' + res.length + ' falharam')
+                        : ('tudo passou (' + res.length + ')');
+    window.__done = true;
+    window.__fail = mau;
+  }
+
+  // id -> altura que a DESCRIÇÃO pede, em metros.
+  // A conta é altura = alvo do papel × escala (1,80 m comum, 2,95 m chefe), e os
+  // números saem de `js/core/data/monsters.js`, não de gosto meu.
+  var BICHOS = [
+    ['boss-baroness',  2.95, 'o vestido de baile que é a dona da sala'],
+    ['brine-golem',    2.59, '«um colosso de sal»'],
+    ['moray-piper',    2.00, '«uma enguia de dois metros»'],
+    ['drowned-porter', 1.85, 'carregador inchado de água'],
+    ['lantern-jelly',  1.40, '«do tamanho de um lustre»'],
+    ['fat-drop',       1.30, '«do tamanho de um barril»'],
+    ['mist-warbler',   1.30, 'pássaro de vapor de água parada'],
+    ['sump-crab',      1.21, '«do tamanho de uma mesa»'],
+    ['droplet',        0.79, '«pequena, redonda, indignada»']
+  ];
+  var PAPEIS = ['idle', 'walk', 'attack', 'hit', 'die'];
+
+  // Neste lote NÃO há falta conhecida: o raio-X conferiu os 54 arquivos e cada
+  // papel tem clipe próprio (o `attack.glb` guardava a REAÇÃO e o `hit.glb` o
+  // ataque — a troca está corrigida no embutidor, pela oitava vez).
+  var FALTA_CONHECIDA = {};
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var D = window.JOGO && JOGO.DATA;
+    var M = window.JOGO && JOGO.Models3D2;
+    if (!D || !M) { check('os módulos carregaram', false, 'JOGO.DATA/Models3D2 ausentes'); return fecha(); }
+
+    var cena = new THREE.Scene();
+    try { M.load(function () {}); } catch (e) { check('M.load', false, e.message); }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try { ok = M && M.isReady(); } catch (e) {}
+      if (!ok && Date.now() - t0 < 90000) return setTimeout(espera, 250);
+      check('os modelos carregaram', !!ok, ok ? '' : 'estourou o tempo');
+      mede();
+    })();
+
+    function mede() {
+      var linhas = [], semModelo = [], caindo = [], foraDoPorte = [], surpresa = [];
+
+      BICHOS.forEach(function (par) {
+        var id = par[0], alvo = par[1], porque = par[2];
+        var mon = (D.monsters || {})[id];
+        if (!mon) { semModelo.push(id + ' (não existe em DATA.monsters)'); return; }
+
+        var ehChefe = !!mon.boss;
+        var look = null, obj = null;
+        try { look = M.lookFor(id, {}); } catch (e) {}
+        try { obj = M.unit(id, { boss: ehChefe }); } catch (e) {}
+        if (!obj) { semModelo.push(id + ' (não montou)'); return; }
+
+        // O MODELO É O DELE? O substituto genérico aparece SEM ERRO NENHUM
+        // quando a chave não existe. A chave do modelo é o próprio id.
+        if (!look || look.model !== id) semModelo.push(id + ' → ' + (look && look.model));
+
+        // MEDIR DEPOIS DE POSADO: a pose de repouso do arquivo não é a pose que
+        // o jogador vê. O mixer é que põe o corpo de pé.
+        try {
+          obj.userData.play('idle', { fade: 0 });
+          obj.userData.mixer.update(0.6);
+        } catch (e2) {}
+        obj.updateMatrixWorld(true);
+
+        // CADA PAPEL ACHOU CLIPE PRÓPRIO? Se `attack` devolve o mesmo que
+        // `idle`, é porque não existe ataque e o bicho ataca parado.
+        var doIdle = null;
+        try { doIdle = obj.userData.clipFor('idle'); } catch (e) {}
+        var mapa = {}, quaisCaem = [];
+        PAPEIS.forEach(function (p) {
+          var c = null;
+          try { c = obj.userData.clipFor(p); } catch (e) {}
+          mapa[p] = c;
+          if (p !== 'idle' && (!c || c === doIdle)) quaisCaem.push(p);
+        });
+
+        var conhecidas = FALTA_CONHECIDA[id] || [];
+        var novas = quaisCaem.filter(function (p) { return conhecidas.indexOf(p) < 0; });
+        if (novas.length) caindo.push(id + ': ' + novas.join(','));
+        conhecidas.forEach(function (p) {
+          if (quaisCaem.indexOf(p) < 0) surpresa.push(id + '.' + p + ' já funciona');
+        });
+
+        var h = (obj.userData && obj.userData.height) || 0;
+        if (Math.abs(h - alvo) > 0.20)
+          foraDoPorte.push(id + ' ' + h.toFixed(2) + ' m (pedia ' + alvo.toFixed(2) + ')');
+
+        linhas.push({ id: id, nome: mon.name, el: mon.element, h: h, alvo: alvo,
+                      porque: porque, chefe: ehChefe, modelo: look && look.model,
+                      mapa: mapa, cai: quaisCaem, larg: (obj.userData.radius || 0.35) * 2 });
+        cena.remove(obj);
+      });
+
+      check('os nove monstros existem e montam', linhas.length === BICHOS.length,
+            (BICHOS.length - linhas.length) + ' faltando');
+      check('todos usam a arte do usuário, não o modelo emprestado',
+            semModelo.length === 0, semModelo.join(' · '));
+      check('nenhum papel cai no idle (lote sem falta conhecida)',
+            caindo.length === 0, caindo.join(' · '));
+      check('nenhuma exceção velha registrada', surpresa.length === 0, surpresa.join(' · '));
+      check('o porte bate com a descrição (±20 cm)',
+            foraDoPorte.length === 0, foraDoPorte.join(' · '));
+
+      if (!linhas.length) { return fecha(); }
+
+      // ---- a escada tem de LER, não só existir
+      var ordenado = linhas.slice().sort(function (a, b) { return b.h - a.h; });
+      check('a BARONESA é a mais alta da sala', ordenado[0].id === 'boss-baroness',
+            'a mais alta é ' + ordenado[0].id + ' com ' + ordenado[0].h.toFixed(2) + ' m');
+
+      // A régua da Estufa (chefe ≥ 1,5× o resto) NÃO vale aqui, e é de
+      // propósito: o Salmourão é «um colosso» POR TEXTO — ele disputa a
+      // silhueta com a chefe e a sala fica mais interessante por isso. As
+      // réguas então são: a Baronesa manda, o colosso vem logo atrás, e os
+      // dois cabem embaixo da parede de 3,10 m.
+      var chefe = linhas.filter(function (m) { return m.chefe; })[0];
+      var golem = linhas.filter(function (m) { return m.id === 'brine-golem'; })[0];
+      if (chefe && golem) {
+        check('o Salmourão é o segundo colosso (2,40–2,80 m)',
+              golem.h >= 2.40 && golem.h <= 2.80, golem.h.toFixed(2) + ' m');
+        check('a chefe ainda passa o colosso', chefe.h > golem.h,
+              chefe.h.toFixed(2) + ' vs ' + golem.h.toFixed(2));
+        check('a chefe cabe na sala (abaixo da parede de 3,10 m)', chefe.h < 3.10,
+              chefe.h.toFixed(2) + ' m');
+      }
+
+      // «estoure-a e ela vira duas gotas MENORES»: a cria lê como fração
+      var gota = linhas.filter(function (m) { return m.id === 'fat-drop'; })[0];
+      var gotinha = linhas.filter(function (m) { return m.id === 'droplet'; })[0];
+      if (gota && gotinha) {
+        check('a Gotinha lê como cria da Gota (entre 45% e 70% dela)',
+              gotinha.h >= gota.h * 0.45 && gotinha.h <= gota.h * 0.70,
+              (gotinha.h / gota.h * 100).toFixed(0) + '% da Gota');
+      }
+
+      // ninguém pode sumir no tabuleiro: uma casa mede 2,0 m
+      var menor = ordenado[ordenado.length - 1];
+      check('nenhum monstro fica pequeno demais para ser visto (> 0,50 m)',
+            menor.h > 0.50, menor.id + ' com ' + menor.h.toFixed(2) + ' m');
+
+      tabela(linhas);
+      desenha(document.getElementById('tira').getContext('2d'), linhas);
+      fecha();
+    }
+
+    function tabela(linhas) {
+      var t = document.getElementById('tab');
+      var h = '<tr><th>monstro</th><th>elem</th><th>altura</th><th>pedia</th><th>por quê</th>';
+      PAPEIS.forEach(function (p) { h += '<th>' + p + '</th>'; });
+      h += '</tr>';
+      linhas.forEach(function (m) {
+        h += '<tr><td>' + m.nome + '</td><td>' + m.el + '</td>' +
+             '<td>' + m.h.toFixed(2) + ' m</td><td>' + m.alvo.toFixed(2) + '</td>' +
+             '<td>' + m.porque + '</td>';
+        PAPEIS.forEach(function (p) {
+          var caiu = m.cai.indexOf(p) >= 0;
+          var nome = (m.mapa[p] || '—').replace(/^Armature\|/, '').replace(/\|baselayer$/, '');
+          h += '<td class="' + (caiu ? 'cai' : 'ok') + '">' + nome + '</td>';
+        });
+        h += '</tr>';
+      });
+      t.innerHTML = h;
+    }
+
+    // ---- a tira: os nove na MESMA régua, com o chão alinhado
+    function desenha(g, linhas) {
+      var W = 1180, H = 470, PISO = H - 34, ESC = 118;   // px por metro
+      g.fillStyle = '#0b0d10'; g.fillRect(0, 0, W, H);
+
+      [[2.05, 'herói', '#3a4652'], [3.10, 'parede', '#4a2a2a'], [2.0, 'casa', '#26313c']]
+      .forEach(function (r) {
+        var y = PISO - r[0] * ESC;
+        g.strokeStyle = r[2]; g.setLineDash([4, 5]); g.beginPath();
+        g.moveTo(0, y); g.lineTo(W, y); g.stroke(); g.setLineDash([]);
+        g.fillStyle = r[2]; g.font = '10px monospace';
+        g.fillText(r[1] + ' ' + r[0].toFixed(2) + ' m', 6, y - 4);
+      });
+      g.strokeStyle = '#2b3542'; g.beginPath();
+      g.moveTo(0, PISO); g.lineTo(W, PISO); g.stroke();
+
+      var col = W / linhas.length;
+      linhas.forEach(function (m, i) {
+        var cx = col * (i + 0.5);
+        var alt = (m.h || 0) * ESC;
+        var lg = Math.max(16, (m.larg || 0.7) * ESC * 0.55);
+        g.fillStyle = m.chefe ? '#c9873a' : (m.el === 'agua' ? '#4a7d96'
+                    : m.el === 'ar' ? '#6f8f5a' : '#6b5a42');
+        g.fillRect(cx - lg / 2, PISO - alt, lg, alt);
+        g.fillStyle = '#e8eef6'; g.font = '11px system-ui'; g.textAlign = 'center';
+        g.fillText(m.nome, cx, PISO + 16);
+        g.fillStyle = m.chefe ? '#ffd08a' : '#8895a6';
+        g.font = '11px monospace';
+        g.fillText((m.h || 0).toFixed(2) + ' m', cx, PISO - alt - 6);
+        g.textAlign = 'left';
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>
