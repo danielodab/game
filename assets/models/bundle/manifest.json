@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-24T14:10:02",
+ "gerado": "2026-08-30T16:20:59",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -629,6 +629,42 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "fus_bruxo_invocador",
+   "arquivo": "models-fusoes-xama/fus_bruxo_invocador.glb",
+   "bytes": 1217372
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_efigie_runica",
+   "arquivo": "models-fusoes-xama/fus_efigie_runica.glb",
+   "bytes": 1106728
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_curandeiro_invocador",
+   "arquivo": "models-fusoes-xama/fus_curandeiro_invocador.glb",
+   "bytes": 1261420
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_guarda_flor",
+   "arquivo": "models-fusoes-xama/fus_guarda_flor.glb",
+   "bytes": 1039884
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_espadachim_invocador",
+   "arquivo": "models-fusoes-xama/fus_espadachim_invocador.glb",
+   "bytes": 1447772
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fus_gemeo_breu",
+   "arquivo": "models-fusoes-xama/fus_gemeo_breu.glb",
+   "bytes": 1118416
+  },
+  {
+   "alvo": "MODELS",
    "chave": "barbarian",
    "arquivo": "models-heroes/barbarian.glb",
    "bytes": 334384
@@ -1117,6 +1153,51 @@
    "idle",
    "walk"
   ],
+  "fus_bruxo_invocador": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_efigie_runica": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_curandeiro_invocador": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_guarda_flor": [
+   "HitReact",
+   "attack",
+   "idle"
+  ],
+  "fus_espadachim_invocador": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
+  "fus_gemeo_breu": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
+  ],
   "boss-gardener": [
    "HitReact",
    "attack",
@@ -1311,6 +1392,6 @@
    "walk"
   ]
  },
- "totalBytes": 92235960,
- "totalBase64": 122981492
+ "totalBytes": 99427552,
+ "totalBase64": 132570292
 }

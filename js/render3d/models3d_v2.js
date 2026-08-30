@@ -316,6 +316,14 @@ var JOGO = (typeof window !== 'undefined')
     // o idle do totem NAO tem clipe (arquivo veio sem animacao) e esta certo
     // assim: objeto fincado descansa parado; resolve() devolve null sem drama
     'fus-arrow-turret': { model: 'fus_totem_espoleta', scale: 1.31 },
+    /* As TRES invocacoes das fusoes do Xama (30/08). Escala pela descricao,
+     * como sempre (altura = 1,80 m x escala):
+     *   Efigie: boneco de cera — pequeno mas legivel no tabuleiro.
+     *   Guarda-Flor: "do tamanho de um cao".
+     *   Gemeo de Breu: a sombra da PROPRIA fusao — porte de gente. */
+    'fus-hex-effigy':   { model: 'fus_efigie_runica', scale: 0.66 },  // 1,19 m
+    'fus-bloom-warden': { model: 'fus_guarda_flor',   scale: 0.58 },  // 1,04 m
+    'fus-shade-twin':   { model: 'fus_gemeo_breu',    scale: 1.06 },  // 1,91 m
 
     // --- Flora Voraz + Enxame (Estufa) — A ARTE E DO USUARIO (v3).
     //
@@ -919,7 +927,11 @@ var JOGO = (typeof window !== 'undefined')
     'arqueiro+invocador':   'fus_arqueiro_invocador',
     'bruxo+curandeiro':     'fus_bruxo_curandeiro',
     'curandeiro+espadachim': 'fus_curandeiro_espadachim',
-    'bruxo+espadachim':     'fus_bruxo_espadachim'
+    'bruxo+espadachim':     'fus_bruxo_espadachim',
+    // as TRES do Xama (30/08) — com estas, as 21 duplas tem corpo proprio
+    'bruxo+invocador':      'fus_bruxo_invocador',
+    'curandeiro+invocador': 'fus_curandeiro_invocador',
+    'espadachim+invocador': 'fus_espadachim_invocador'
   };
 
   function fusionLook(defId) {

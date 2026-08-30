@@ -15,11 +15,12 @@
 </head>
 <body>
 <h1>As Obras de Fusão — o que as duplas com o Xamã põem em campo</h1>
-<div class="sub">As invocações EXCLUSIVAS de fusão, cada uma na arte própria do usuário: o Ídolo-Escora
-(Bárbaro+Xamã), o Muro-Vigia (Minotauro+Xamã) e o Totem-Espoleta (Caçador+Xamã). A página cobra o que
-a foto não mostra: modelo próprio (não o esqueleto substituto), papel de animação com clipe próprio, e
-— no caso do Totem, que tem 0 PP e um idle SINTETIZADO no embutidor — que o descanso NÃO caia no
-clipe de ataque, senão ele agacha em loop parado.</div>
+<div class="sub">As invocações EXCLUSIVAS de fusão, cada uma na arte própria do usuário: Ídolo-Escora
+(Bárbaro+Xamã), Muro-Vigia (Minotauro+Xamã), Totem-Espoleta (Caçador+Xamã) — e, desde 30/08, as três
+que FECHAM o quadro: Efígie Rúnica (Bruxo+Xamã), Guarda-Flor (Curandeiro+Xamã) e Gêmeo de Breu
+(Ladino+Xamã). A página cobra o que a foto não mostra: modelo próprio (não o esqueleto substituto),
+papel de animação com clipe próprio, e que o descanso NÃO caia no clipe de ataque (a armadilha que o
+Totem ensinou).</div>
 <div id="st">rodando…</div>
 <canvas id="fObras" class="folha"></canvas>
 <canvas id="cv" width="300" height="360"></canvas>
@@ -34,7 +35,8 @@ clipe de ataque, senão ele agacha em loop parado.</div>
     'js/core/data/items_extra.js','js/core/engine.js','js/core/progress.js',
     'assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
     'assets/embedded/models-fusoes-sumo.js','assets/embedded/models-fusoes-minotauro.js',
-    'assets/embedded/models-fusoes-cacador.js','assets/embedded/models-summons.js','js/render3d/models3d_v2.js'];
+    'assets/embedded/models-fusoes-cacador.js','assets/embedded/models-fusoes-xama.js',
+    'assets/embedded/models-summons.js','js/render3d/models3d_v2.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
 </script>
 
@@ -46,7 +48,11 @@ clipe de ataque, senão ele agacha em loop parado.</div>
   var OBRAS = [
     ['fus-bulwark-idol',  'fus_idolo_escora',   true],
     ['fus-wall-watcher',  'fus_muro_vigia',     true],
-    ['fus-arrow-turret',  'fus_totem_espoleta', true]
+    ['fus-arrow-turret',  'fus_totem_espoleta', true],
+    // as três do Xamã (30/08) — Efígie, Guarda-Flor e Gêmeo fecham o quadro
+    ['fus-hex-effigy',    'fus_efigie_runica',  true],
+    ['fus-bloom-warden',  'fus_guarda_flor',    true],
+    ['fus-shade-twin',    'fus_gemeo_breu',     true]
   ];
   var POSES = ['idle', 'attack'];
 
