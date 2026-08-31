@@ -52,6 +52,26 @@
 
   --ui-serif: Georgia, 'Times New Roman', serif;
   --ui-sans:  system-ui, 'Segoe UI', Roboto, -apple-system, Arial, sans-serif;
+  /* usada desde a rodada do banco e NUNCA declarada — caía em Courier */
+  --ui-mono:  'Cascadia Mono', Consolas, 'Roboto Mono', monospace;
+
+  /* A RAMPA DE OURO (30/08). O levantamento achou NOVE dourados sólidos e 28
+   * alfas dizendo a mesma coisa — Dofus é reconhecível porque o ouro é UM.
+   * Regra nova usa a rampa; regra velha migra quando for tocada. */
+  --gold-2:   #e8c25a;   /* o ouro de moeda/valor (era o mais repetido à mão) */
+  --gold-3:   #c9a227;   /* o ouro de filete/borda ornamentada */
+  --gold-a08: rgba(255, 196, 77, .08);
+  --gold-a14: rgba(255, 196, 77, .14);
+  --gold-a22: rgba(255, 196, 77, .22);
+
+  /* raios com nome — havia 17 valores soltos de border-radius no arquivo */
+  --rad-g:    16px;      /* painel grande */
+  --rad-m:    12px;      /* caixa / cartão */
+  --rad-p:    9px;       /* chip / botão pequeno */
+
+  /* O RELEVO DE CAIXA da casa: luz em cima, sombra embaixo — o truque barato
+   * que dá volume de MMORPG a uma superfície chapada. Uma sombra, um nome. */
+  --relevo:   inset 0 1px 0 rgba(255,255,255,.06), inset 0 -1px 0 rgba(0,0,0,.5);
 }
 
 /* ------------------------------------------------------------------ básico */
@@ -208,13 +228,25 @@ i, em { font-style: normal; color: var(--dim); }
   color: #241a06; text-shadow: 0 1px 0 rgba(255,255,255,.25);
   box-shadow: 0 2px 0 #7a4f0c, 0 4px 14px rgba(232,169,58,.24);
 }
+/* a PELE do mini vem ANTES das variantes de cor: na ordem antiga um
+ * `btn-mini btn-gold` perderia o dourado para o gradiente do mini */
+.btn-mini {
+  min-height: 44px; padding: 10px 12px; font-size: 13px; border-radius: var(--rad-p);
+  font-family: var(--ui-sans); font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid var(--line2); color: var(--text);
+  background: linear-gradient(180deg, var(--panel3), var(--panel2));
+  cursor: pointer; user-select: none;
+}
 .btn-gold { border-color: var(--gold-dim); color: var(--gold); background: rgba(255,196,77,.1); }
 .btn-ghost { background: rgba(255,255,255,.04); }
 .btn-warn { border-color: #7a2b28; color: #ff9a8a; background: rgba(224,90,106,.12); }
 .btn-big { font-size: 17px; padding: 16px 26px; min-height: 56px; }
 .btn-block { width: 100%; }
-/* mesmo os botões "pequenos" respeitam o alvo de 44 px do contrato §0 */
-.btn-mini { min-height: 44px; padding: 10px 12px; font-size: 13px; border-radius: 8px; }
+/* (a pele do .btn-mini mora ANTES das variantes de cor, lá em cima — desde
+ * 30/08 ela existe porque `el('button','btn-mini')` sem a base `.btn` saía
+ * como botão BRANCO de sistema em cima da arte do herói; a foto do dono
+ * pegou. Aqui não sobra nada: as medidas foram junto.) */
 .btn-icon { min-width: var(--tap); padding: 10px; font-size: 18px; }
 .btn-back { font-size: 24px; line-height: 1; }
 .btn.is-off { opacity: .4; filter: grayscale(.7); cursor: default; }
@@ -749,24 +781,39 @@ i, em { font-style: normal; color: var(--dim); }
   backdrop-filter: blur(2px);
 }
 .ui-sheet.is-on { display: flex; }
+/* O PERGAMINHO (30/08): a ficha deixou de ser "div arredondada". Borda
+ * escura por fora, FILETE dourado por dentro e um fio de luz no topo — o
+ * gesto de moldura dos MMORPGs, numa regra só (todas as ~15 fichas nascem
+ * do mesmo sheetShell). */
 .sheet-panel {
   width: 100%; max-width: 720px; max-height: 92vh;
   display: flex; flex-direction: column;
   border-radius: 18px 18px 0 0;
   background: linear-gradient(180deg, var(--panel2), var(--ink2));
-  border: 1px solid var(--line2); border-bottom: none;
-  box-shadow: 0 -12px 40px rgba(0,0,0,.6);
+  border: 1px solid #070a0e; border-bottom: none;
+  box-shadow: 0 -12px 40px rgba(0,0,0,.6),
+              inset 0 0 0 1px var(--gold-a14),
+              inset 0 1px 0 rgba(255,255,255,.05);
   animation: sheetUp .18s ease;
 }
 @keyframes sheetUp { from { transform: translateY(24px); opacity: .4; } }
+/* o cabeçalho ganhou faixa própria: véu dourado que morre no meio, filete
+ * na base, e o losango de ourivesaria antes do título */
 .sheet-head {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 14px var(--pad) 10px;
-  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--gold-a08), transparent);
+  border-bottom: 1px solid var(--gold-dim);
+  box-shadow: 0 1px 0 rgba(0,0,0,.55);
+  border-radius: 18px 18px 0 0;
   flex: 0 0 auto;
 }
 .sheet-head-txt { flex: 1 1 auto; min-width: 0; }
 .sheet-head h2 { font-size: 19px; color: var(--gold); }
+.sheet-head h2::before {
+  content: '◆'; color: var(--gold-3); font-size: 11px;
+  margin-right: 7px; vertical-align: 2px;
+}
 .sheet-head p { font-size: 12.5px; color: var(--dim); margin-top: 3px; line-height: 1.4; }
 .btn-close { align-self: flex-start; }
 .sheet-body {
@@ -1172,9 +1219,47 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .pt-dupla-tag.is-lider { background: rgba(232,194,90,.12); }
 .pt-hero-card {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border: 1px solid var(--line2); border-radius: 12px;
-  background: rgba(255,255,255,.035); flex-wrap: wrap;
+  padding: 8px 10px; border: 1px solid var(--line2); border-radius: var(--rad-m);
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  box-shadow: var(--relevo); flex-wrap: wrap;
 }
+
+/* O CARROSSEL DA DUPLA (30/08): a foto grande do herói numa MOLDURA de
+ * retrato — placa escura, filete dourado, luz de cima — com as setas ao
+ * lado e o botão de troca assentado no pé da moldura como uma plaquinha.
+ * Antes era tudo cssText inline no hud.js, fora do alcance do design. */
+.pt-carrossel {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; margin: 6px 0;
+}
+.pt-moldura {
+  position: relative; width: 172px; height: 196px;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--gold-dim); border-radius: var(--rad-m);
+  background: radial-gradient(ellipse at 50% 30%, #232b36 0%, #10151b 78%);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.65),
+              inset 0 14px 26px rgba(0,0,0,.35),
+              0 4px 14px rgba(0,0,0,.4);
+}
+.pt-moldura .pt-dupla-tag {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  background: rgba(10,13,10,.85);
+}
+.pt-troca {
+  position: absolute; bottom: -1px; left: 50%; transform: translate(-50%, 40%);
+  min-height: 34px; padding: 6px 12px; font-size: 12px;
+  border-color: var(--gold-dim); color: var(--gold);
+  background: linear-gradient(180deg, #2a2415, #171207);
+  box-shadow: 0 3px 10px rgba(0,0,0,.5);
+}
+.pt-seta { font-size: 24px; line-height: 1; padding: 12px 10px; }
+.pt-mais {
+  min-width: 64px; height: 130px; font-size: 34px; color: var(--dim);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px dashed rgba(255,255,255,.14); border-radius: var(--rad-m);
+  background: rgba(255,255,255,.02); cursor: pointer;
+}
+.pt-mais:active { transform: translateY(1px); }
 .pt-hero-pic { flex: 0 0 auto; }
 .pt-hero-pic canvas { display: block; }
 .pt-hero-txt { flex: 1 1 130px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -1237,7 +1322,9 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
   font: inherit; text-align: center;
 }
 .ig-cell:active { transform: translateY(1px) scale(.985); }
-.ig-cell.is-sel { outline: 2px solid var(--gold); outline-offset: 1px; }
+/* seleção na LÍNGUA ÚNICA da casa (30/08): anel dourado + halo — o mesmo
+ * sinal do hero-card, para o jogador aprender UM aviso e vê-lo em toda tela */
+.ig-cell.is-sel { box-shadow: 0 0 0 2px var(--gold), 0 0 16px var(--gold-a22); }
 /* a placa escura é o que garante que a borda de raridade continue visível
    mesmo sobre o fundo amarelo do ★3 */
 .ig-plate {
@@ -1301,8 +1388,10 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
    cada caminho com a própria regra escrita no alto — a legenda densa morreu */
 .forge-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
 .forge-card {
-  padding: 10px 12px; border-radius: 12px;
-  border: 1px solid var(--line2); background: rgba(255,255,255,.03);
+  padding: 10px 12px; border-radius: var(--rad-m);
+  border: 1px solid var(--line2);
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  box-shadow: var(--relevo);
   display: flex; flex-direction: column; gap: 9px;
 }
 .forge-card h4 { margin: 0; font: 700 14px var(--ui-serif); color: var(--gold); }
@@ -1326,14 +1415,17 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 }
 .guilda-membro.is-lider { border-color: var(--gold-dim); color: var(--gold); }
 .guilda-cofre, .guilda-banco {
-  margin-top: 10px; padding: 10px 12px; border-radius: 11px;
-  border: 1px solid var(--line2); background: rgba(255,255,255,.03);
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--rad-m);
+  border: 1px solid var(--line2);
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  box-shadow: var(--relevo);
   display: flex; flex-direction: column; gap: 7px;
 }
 .guilda-bonus {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 7px 10px; border-radius: 9px; font-size: 12.5px;
+  padding: 7px 10px; border-radius: var(--rad-p); font-size: 12.5px;
   background: rgba(255,255,255,.04); border: 1px solid var(--line2);
+  box-shadow: var(--relevo);
 }
 .guilda-bonus.is-vivo { border-color: rgba(127,224,138,.5); }
 .guilda-bonus.is-vivo b { color: #7fe08a; }
@@ -1625,8 +1717,10 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .bk-valor { font: 700 26px/1 var(--ui-serif, Georgia); color: #e8c25a;
             font-variant-numeric: tabular-nums; }
 .bk-meio { display: flex; flex-direction: column; gap: 4px; }
-.bk-tit { font: 600 12px/1 var(--ui-sans, system-ui); letter-spacing: .06em;
-          text-transform: uppercase; opacity: .7; margin: 6px 0 2px; }
+/* o título de seção UNIFICADO (30/08): dourado como o .hs-sec — a opacidade
+ * cinza fazia o banco/guilda parecerem de outro jogo */
+.bk-tit { font: 600 12px/1 var(--ui-sans); letter-spacing: .1em;
+          text-transform: uppercase; color: var(--gold); margin: 6px 0 2px; }
 /* O banco à moda Dofus: o saco e o cofre em DUAS grades lado a lado, células
    iguais às do inventário, e a peça atravessa ARRASTADA — o fantasma segue o
    cursor e a coluna de destino acende. O dinheiro tem campo digitado. */
@@ -1644,8 +1738,9 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .bk2-botoes { display: flex; gap: 6px; justify-content: center; }
 .bk2-tudo { opacity: .75; }
 .bk2-duplo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
-.bk2-col { border: 1px solid var(--line2); border-radius: 12px; padding: 8px;
-           background: rgba(0,0,0,.18); }
+.bk2-col { border: 1px solid var(--line2); border-radius: var(--rad-m); padding: 8px;
+           background: linear-gradient(180deg, rgba(0,0,0,.22), rgba(0,0,0,.12));
+           box-shadow: var(--relevo); }
 .bk2-col.is-alvo { border-color: var(--gold);
                    box-shadow: 0 0 0 1px var(--gold), inset 0 0 18px rgba(232,194,90,.22); }
 .bk2-grid { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
@@ -1690,8 +1785,9 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 /* ------------------------------------------------- QUADRO DE MISSÕES */
 .ms-caixa { display: flex; flex-direction: column; gap: 8px; }
 .ms-linha { display: flex; align-items: center; gap: 10px;
-            padding: 8px 10px; border: 1px solid var(--line2); border-radius: 10px;
-            background: rgba(255,255,255,.03); }
+            padding: 8px 10px; border: 1px solid var(--line2); border-radius: var(--rad-p);
+            background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+            box-shadow: var(--relevo); }
 .ms-linha.is-feita { border-color: rgba(232,194,90,.5); }
 .ms-tx { flex: 1 1 auto; min-width: 0; }
 .ms-nome { font-size: 13px; color: var(--text); }
@@ -1748,8 +1844,9 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 
 /* ------------------------------------------------- PLACAR */
 .pl-linha { display: flex; align-items: center; gap: 10px;
-            padding: 8px 10px; border: 1px solid var(--line2); border-radius: 10px;
-            background: rgba(255,255,255,.03); }
+            padding: 8px 10px; border: 1px solid var(--line2); border-radius: var(--rad-p);
+            background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+            box-shadow: var(--relevo); }
 .pl-linha.is-eu { border-color: rgba(232,194,90,.5); }
 .pl-pos { font: 800 14px var(--ui-sans, system-ui); color: var(--dim); min-width: 30px; }
 .pl-eu { font: 700 9.5px var(--ui-sans, system-ui); letter-spacing: .06em;
@@ -1762,8 +1859,9 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .mc-bolso { font-size: 13px; color: var(--dim); margin: 0 0 4px; }
 .mc-bolso b { color: #e8c25a; }
 .mc-linha { display: flex; align-items: center; gap: 10px;
-            padding: 7px 10px; border: 1px solid var(--line2); border-radius: 10px;
-            background: rgba(255,255,255,.03); }
+            padding: 8px 10px; border: 1px solid var(--line2); border-radius: var(--rad-p);
+            background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+            box-shadow: var(--relevo); }
 .mc-linha.is-minha { border-color: rgba(232,194,90,.45); }
 .mc-ic { flex: 0 0 auto; display: block; padding: 2px; border-radius: 8px;
          background: rgba(6,9,13,.55); }
@@ -1841,22 +1939,36 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 /* ---- O CAIS: o menu inferior centralizado do Acampamento (pedido 25/08).
    O "Personagens" de abas foi dividido: cada ficha de meta tem porta própria
    aqui, sempre à mão, à moda MMORPG. */
+/* O CAIS (30/08): é a peça de interface mais vista do jogo e merecia a
+ * moldura — filete dourado interno e relevo. Cada botão agora tem placa
+ * própria, e a ABA ABERTA acende com `.is-on` (o :hover sozinho era
+ * invisível no celular, contra o contrato das linhas 5-6). */
 .hub-dock {
   position: absolute; left: 50%; bottom: calc(var(--sa-b, 0px) + 10px);
   transform: translateX(-50%); z-index: 5;
-  display: flex; gap: 2px; padding: 6px 8px;
-  background: rgba(10,13,10,.9); border: 1px solid rgba(240,234,216,.16);
-  border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+  display: flex; gap: 3px; padding: 7px 9px;
+  background: linear-gradient(180deg, rgba(16,20,16,.96), rgba(8,11,8,.94));
+  border: 1px solid #070a0e;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5),
+              inset 0 0 0 1px var(--gold-a14),
+              inset 0 1px 0 rgba(255,255,255,.05);
   max-width: calc(100% - 16px);
 }
 .hub-dock-b {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   min-width: 58px; padding: 6px 7px 5px; cursor: pointer;
-  background: none; border: 0; border-radius: 10px;
+  background: rgba(255,255,255,.03); border: 1px solid transparent;
+  border-radius: 10px;
   color: #cfd8e2; font: 600 10.5px/1 var(--ui-sans);
 }
 .hub-dock-b:hover { background: rgba(255,255,255,.08); color: #fff; }
 .hub-dock-b:active { transform: translateY(1px); }
+.hub-dock-b.is-on {
+  background: var(--gold-a14); border-color: var(--gold-dim);
+  color: var(--gold);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
 .hub-dock-b .hd-ic { font-size: 19px; line-height: 1; }
 @media (max-width: 480px) {
   .hub-dock { gap: 0; padding: 5px 4px; }

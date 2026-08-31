@@ -786,6 +786,9 @@ var JOGO = (typeof window !== 'undefined')
      * para cá. O painel de aproximação mora um degrau acima para não taparem
      * um ao outro (css .hub-painel). */
     var dock = el('div', 'hub-dock');
+    // o cais agora ACENDE a aba aberta (30/08): sem isso, no celular o menu
+    // principal não dizia onde o jogador estava
+    dockBotoes = {};
     [{ ic: '🎒', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
      { ic: '🔨', rot: 'Forja', abre: 'forge' },
      { ic: '📖', rot: 'Feitiços', abre: 'spells' },
@@ -800,6 +803,7 @@ var JOGO = (typeof window !== 'undefined')
         (d.tecla ? ' <span class="tecla">' + d.tecla + '</span>' : '')));
       tap(b, function () { openSheet(d.abre); });
       dock.appendChild(b);
+      dockBotoes[d.abre] = b;
     });
     s.appendChild(dock);
 
@@ -2037,10 +2041,21 @@ var JOGO = (typeof window !== 'undefined')
   // ==========================================================================
   // FOLHAS (modais): coleção · inventário · forja · ficha do herói
   // ==========================================================================
+  /* os botões do cais, por nome de porta — preenchido no buildHub; o
+   * openSheet/closeSheet acendem e apagam a aba correspondente */
+  var dockBotoes = {};
+  function marcaDock(name) {
+    for (var k in dockBotoes) {
+      if (!dockBotoes.hasOwnProperty(k)) continue;
+      dockBotoes[k].classList.toggle('is-on', !!name && k === name);
+    }
+  }
+
   function closeSheet() {
     if (!sheetEl) return;
     sheetEl.classList.remove('is-on');
     sheetName = null;
+    marcaDock(null);
     hideTip();
   }
   /* O BANCO — agora do jeito do DOFUS, a pedido: o saco do grupo de um lado,
@@ -2960,6 +2975,7 @@ var JOGO = (typeof window !== 'undefined')
   function openSheet(name, arg) {
     sheetName = name;
     lastSheetArg = arg;          // guardado para UI.repaint() saber o que reabrir
+    marcaDock(name);             // o cais acende a aba aberta (30/08)
     // [U6 desfeito a pedido, 25/08] As fichas de meta voltaram a ser MENUS
     // SEPARADOS — "tudo centralizado em um menu só" ficou ruim de usar. Os
     // nomes antigos continuam valendo ('party' abre a última ficha visitada);
@@ -3696,16 +3712,13 @@ var JOGO = (typeof window !== 'undefined')
      * adiciona o segundo quando se desceu sozinho, e o botão de troca mora
      * no canto inferior da própria foto — como o dono desenhou. */
     var naDupla = lista.indexOf(hid);
+    // todo o visual mora no CSS agora (.pt-carrossel/.pt-moldura/.pt-troca):
+    // foi daqui que saiu o botão branco de sistema da foto do dono
     var care = el('div', 'pt-carrossel');
-    care.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:10px;margin:6px 0';
 
     function setaPara(dirN) {
       var alvo = lista[(naDupla + dirN + lista.length) % lista.length];
-      var b = el('button', 'btn-mini btn-ghost');
-      b.type = 'button';
-      b.textContent = dirN > 0 ? '›' : '‹';
-      b.style.cssText = 'font-size:26px;line-height:1;padding:14px 10px';
-      tap(b, function () {
+      var b = btn(dirN > 0 ? '›' : '‹', 'btn-mini btn-ghost pt-seta', function () {
         partyHero = alvo;
         invSel = null;
         duplaTrocaAberta = null;
@@ -3715,21 +3728,13 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (lista.length > 1) care.appendChild(setaPara(-1));
 
-    // a FOTO grande, com o selo de avatar e o botão de troca no pé
-    var moldura = el('div', 'pt-hero-pic');
-    moldura.style.cssText = 'position:relative;width:170px;height:190px;display:flex;' +
-                            'align-items:center;justify-content:center';
+    // a FOTO grande na moldura, com o selo de avatar e a troca no pé
+    var moldura = el('div', 'pt-moldura');
     moldura.appendChild(art('unit', [cid, { element: h.element || 'neutro', dir: 0, scale: 0.95 }], 160));
     if (!soltos && naDupla === 0) {
-      var selo = el('span', 'pt-dupla-tag is-lider', 'AVATAR');
-      selo.style.cssText = 'position:absolute;top:2px;left:50%;transform:translateX(-50%)';
-      moldura.appendChild(selo);
+      moldura.appendChild(el('span', 'pt-dupla-tag is-lider', 'AVATAR'));
     }
-    var trocaB = el('button', 'btn-mini');
-    trocaB.type = 'button';
-    trocaB.textContent = '⇄ Trocar';
-    trocaB.style.cssText = 'position:absolute;bottom:0;left:50%;transform:translateX(-50%)';
-    tap(trocaB, function () {
+    var trocaB = btn('⇄ Trocar', 'btn-mini pt-troca', function () {
       duplaTrocaAberta = (duplaTrocaAberta === naDupla) ? null : naDupla;
       sheetParty(partyTab);
     });
@@ -3740,9 +3745,8 @@ var JOGO = (typeof window !== 'undefined')
 
     // desceu sozinho? o "+" convida o segundo
     if (!soltos && dupla.length === 1 && partyHeroes().length > 1) {
-      var mais = el('button', 'pt-retrato');
+      var mais = el('button', 'pt-mais');
       mais.type = 'button';
-      mais.style.cssText = 'min-width:64px;height:120px;font-size:34px;color:#8895a6';
       mais.textContent = '+';
       mais.title = 'Adicionar o segundo da dupla';
       tap(mais, function () {
