@@ -156,6 +156,32 @@ var JOGO = (typeof window !== 'undefined')
       };
     }
 
+    // ---------------------------------------------------------------- o BICHO
+    // `Art.petIcon` seguia 2D mesmo depois de os seis pets ganharem corpo
+    // próprio (31/08, pedido: "melhore a imagem do pet no inventário") — o
+    // wrap do `unit` não o cobria porque é outra função. Mesmo molde: o
+    // retrato 3D de corpo inteiro quando o modelo está de pé, o desenho 2D
+    // de emergência quando não está.
+    var originalPet = A.petIcon;
+    if (originalPet) {
+      A.petIcon = function (petId, size) {
+        var M2 = JOGO.Models3D2;
+        if (M2 && M2.isReady && M2.isReady()) {
+          var cv = null;
+          try {
+            cv = M2.portrait(petId, { size: Math.max(128, (size || 56) * 2),
+                                      corpoInteiro: true, kind: 'pet' });
+          } catch (e) { cv = null; }
+          if (cv) {
+            cv.__res = 1;
+            cv.__anchor = [0.5, 0.5];
+            return cv;
+          }
+        }
+        return originalPet.call(A, petId, size);
+      };
+    }
+
     A.__portrait3dWrapped = true;
     wrapped = true;
     return true;
