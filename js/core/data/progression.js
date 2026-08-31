@@ -202,17 +202,20 @@ JOGO.DATA.leveling = {
  * Calibragem (supondo 1–2 cartas por sala de chefe): invocador libera em ~10–18 descidas do
  * calabouço 1; bruxo em ~15–28 do calabouço 2; espadachim em ~30–57 do calabouço 3;
  * arqueiro, o troféu da coleção, em ~40–78 descidas dos calabouços 4–5. As 5 estrelas
- * (mais 90 cartas excedentes) são conteúdo de fim de jogo. */
+ * são conteúdo de fim de jogo — a escada é a do dono (30/08): cada degrau
+ * custa 5, +10, +20, +30 e +45 cartas excedentes (acumulado 5/15/35/65/110),
+ * "para conseguir estrela é difícil". E da ★3 em diante a estrela também
+ * LIBERA ELEMENTO EXTRA para a classe (ver DATA.stars.elementSlots). */
 JOGO.DATA.cards = {
-  sumo:       { unlockCost:  0, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 30, 55, 90] },
-  curandeiro: { unlockCost:  0, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 30, 55, 90] },
-  invocador:  { unlockCost: 10, dropWeight: 16, minDungeon: 1, starCosts: [5, 15, 30, 55, 90] },
-  bruxo:      { unlockCost: 10, dropWeight: 16, minDungeon: 2, starCosts: [5, 15, 30, 55, 90] },
-  espadachim: { unlockCost: 20, dropWeight: 24, minDungeon: 3, starCosts: [5, 15, 30, 55, 90] },
-  arqueiro:   { unlockCost: 25, dropWeight: 32, minDungeon: 4, starCosts: [5, 15, 30, 55, 90] },
+  sumo:       { unlockCost:  0, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 35, 65, 110] },
+  curandeiro: { unlockCost:  0, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 35, 65, 110] },
+  invocador:  { unlockCost: 10, dropWeight: 16, minDungeon: 1, starCosts: [5, 15, 35, 65, 110] },
+  bruxo:      { unlockCost: 10, dropWeight: 16, minDungeon: 2, starCosts: [5, 15, 35, 65, 110] },
+  espadachim: { unlockCost: 20, dropWeight: 24, minDungeon: 3, starCosts: [5, 15, 35, 65, 110] },
+  arqueiro:   { unlockCost: 25, dropWeight: 32, minDungeon: 4, starCosts: [5, 15, 35, 65, 110] },
   // O Minotauro e o mais caro: entra no 5o calabouco, depois de o jogador ja
   // ter sentido falta de alguem que segure a linha.
-  minotauro:  { unlockCost: 30, dropWeight: 36, minDungeon: 5, starCosts: [5, 15, 30, 55, 90] }
+  minotauro:  { unlockCost: 30, dropWeight: 36, minDungeon: 5, starCosts: [5, 15, 35, 65, 110] }
 };
 
 /* ESTRELAS — bônus fixos e permanentes por classe, somados em Progress.effectiveStats.
@@ -228,5 +231,10 @@ JOGO.DATA.stars = {
     3: { pp: 1 },
     4: { hp: 25, dodge: 10 },
     5: { pa: 1 }
-  }
+  },
+  /* ELEMENTOS POR ESTRELA (30/08): "da terceira estrela em diante o jogador
+   * poderá escolher outro elemento" — ★3 libera o 2º caminho elemental (da
+   * escolha dele), ★4 o 3º, ★5 o 4º. A tabela diz quantos CAMINHOS a classe
+   * pode ter por número de estrelas; quem cobra é Progress.elementSlots. */
+  elementSlots: { 0: 1, 1: 1, 2: 1, 3: 2, 4: 3, 5: 4 }
 };

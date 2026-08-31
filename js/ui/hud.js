@@ -1422,7 +1422,19 @@ var JOGO = (typeof window !== 'undefined')
         var w = el('div', 'rw-cards');
         cards.forEach(function (c) {
           var cell = el('div', 'rw-card');
-          cell.appendChild(art('cardIcon', [c.classId, 104, 146], 104));
+          // A CARTA COM A CARA DO PERSONAGEM (30/08, pedido do dono): a
+          // moldura de carta fica, o miolo é o retrato de corpo inteiro —
+          // quem dropa a carta do Minotauro VÊ o Minotauro.
+          var carta = el('div', 'rw-card-foto');
+          carta.style.cssText = 'width:104px;height:146px;border:2px solid #c9a227;' +
+            'border-radius:10px;background:linear-gradient(180deg,#1a2029,#0e1319);' +
+            'display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative';
+          carta.appendChild(art('unit', [c.classId, { element: 'neutro', dir: 0, scale: 0.62 }], 96));
+          var nomeCarta = el('span', null, esc(className(c.classId)));
+          nomeCarta.style.cssText = 'position:absolute;bottom:4px;left:0;right:0;text-align:center;' +
+            'font-size:11px;color:#e8c25a;text-shadow:0 1px 3px #000;pointer-events:none';
+          carta.appendChild(nomeCarta);
+          cell.appendChild(carta);
           var t = el('div', 'rw-card-t');
           t.appendChild(el('b', null, '+' + (c.amount || 1) + ' ' + esc(c.name || className(c.classId))));
           var ci = cardInfo(c.classId);
@@ -2113,9 +2125,48 @@ var JOGO = (typeof window !== 'undefined')
         return;
       }
       var agora = Date.now();
-      if (cell.__toque && agora - cell.__toque < 350) { cell.__toque = 0; transferir(); }
-      else cell.__toque = agora;
+      // O TERCEIRO TOQUE ABRE A QUANTIDADE (30/08, pedido: "ao dar 3 cliques
+      // no item... deve aparecer a quantidade que ele quer transferir").
+      // O gesto de sempre fica: dois toques movem UMA; quem emenda o
+      // terceiro está dizendo "quero mais" — e ganha o campo.
+      if (cell.__toque && agora - cell.__toque < 420) {
+        cell.__seq = (cell.__seq || 1) + 1;
+        cell.__toque = agora;
+        if (cell.__seq === 2) transferir();
+        else if (cell.__seq >= 3) {
+          cell.__seq = 0; cell.__toque = 0;
+          if (pilha.count > 1) abreQuantidade();
+        }
+      } else { cell.__toque = agora; cell.__seq = 1; }
     });
+
+    // o mini-campo da quantidade, ancorado na própria célula
+    function abreQuantidade() {
+      var velho = document.querySelector('.bk2-qtd-pop');
+      if (velho) velho.remove();
+      var pop = el('div', 'bk2-qtd-pop');
+      pop.style.cssText = 'position:absolute;left:50%;top:-8px;transform:translate(-50%,-100%);' +
+        'background:#151b24;border:1px solid #c9a227;border-radius:8px;padding:8px;z-index:60;' +
+        'display:flex;gap:6px;align-items:center;box-shadow:0 6px 18px rgba(0,0,0,.55)';
+      var inp = document.createElement('input');
+      inp.type = 'number'; inp.min = '1'; inp.max = String(pilha.count);
+      inp.value = String(pilha.count);
+      inp.style.cssText = 'width:64px;background:#0e1319;color:#e8eef6;border:1px solid #2b3542;' +
+        'border-radius:6px;padding:5px 7px;font:13px system-ui';
+      pop.appendChild(inp);
+      var ok = el('button', 'btn-mini btn-gold', 'Mover');
+      ok.type = 'button';
+      tap(ok, function () {
+        var n = Math.max(1, Math.min(pilha.count, Math.floor(Number(inp.value) || 1)));
+        pop.remove();
+        transferir(n);
+      });
+      pop.appendChild(ok);
+      cell.style.position = 'relative';
+      cell.appendChild(pop);
+      inp.focus();
+      inp.select();
+    }
     cell.addEventListener('pointercancel', function () {
       if (draga && draga.fantasma) draga.fantasma.remove();
       draga = null;
@@ -4563,6 +4614,57 @@ var JOGO = (typeof window !== 'undefined')
       }));
     }
 
+    // ---- OS CAMINHOS ELEMENTAIS POR ESTRELA (30/08): "da terceira estrela
+    // em diante o jogador poderá escolher outro elemento" — ★3 abre a 2ª
+    // vaga, ★4 a 3ª, ★5 a 4ª. O ativo acende; liberado troca com um toque
+    // (os feitiços do caminho trocam juntos); vaga aberta escolhe; o resto
+    // mostra a estrela que falta.
+    if (h.element !== 'neutro') {
+      body.appendChild(el('h3', 'hs-sec', 'Caminhos elementais'));
+      var liberados = safe(function () { return P().heroElements(heroId); }, [h.element]);
+      var vagas = safe(function () { return P().elementSlots(heroId); }, 1);
+      var filaEl = el('div', 'guilda-emblemas');
+      ['fogo', 'agua', 'terra', 'ar'].forEach(function (e3) {
+        var def3 = classDef(cid);
+        if (def3 && def3.paths && !def3.paths[e3]) return;   // classe sem esse caminho
+        var tem = liberados.indexOf(e3) >= 0;
+        var ativo = h.element === e3;
+        var podeAbrir = !tem && liberados.length < vagas;
+        // a vaga N abre na estrela N+1 (2ª vaga → ★3, 3ª → ★4, 4ª → ★5)
+        var rot = (ELEM_PT[e3] || e3) + (ativo ? ' · ATIVO' : tem ? '' :
+                  podeAbrir ? ' · liberar' : ' · ★' + Math.min(5, vagas + 2));
+        var b3 = btn(rot, 'btn-mini ' + (ativo ? 'btn-gold' : tem ? 'btn-primary' : 'btn-ghost'),
+          function () {
+            if (ativo) return;
+            if (tem) {
+              if (safe(function () { return P().trocaElemento(heroId, e3); }, false)) {
+                toast('O caminho de ' + (ELEM_PT[e3] || e3) + ' assumiu — feitiços trocados.', 'good');
+                sheetHero(heroId);
+              }
+              return;
+            }
+            if (!podeAbrir) {
+              var alvoEstrela = { 2: 3, 3: 4, 4: 5 }[liberados.length + 1] || 3;
+              toast('A ★' + alvoEstrela + ' da classe libera a próxima vaga — junte cartas.');
+              return;
+            }
+            confirmSheet('Liberar o caminho de ' + (ELEM_PT[e3] || e3) + '?',
+              'A escolha é permanente — a vaga veio das estrelas da classe.', function () {
+                if (safe(function () { return P().liberaElemento(heroId, e3); }, false)) {
+                  toast('Caminho de ' + (ELEM_PT[e3] || e3) + ' liberado!', 'good');
+                  sheetHero(heroId);
+                } else toast('não deu');
+              });
+          });
+        b3.style.setProperty('--ec', elemColor(e3));
+        filaEl.appendChild(b3);
+      });
+      body.appendChild(filaEl);
+      body.appendChild(el('p', 'inv-dica',
+        'Vagas de caminho: <b>' + liberados.length + ' / ' + vagas + '</b> — ' +
+        '★3 abre a 2ª, ★4 a 3ª, ★5 a 4ª. Trocar o ativo troca os feitiços do caminho.'));
+    }
+
     // ---- equipamento: 4 espaços + pet (adendo v2.2)
     body.appendChild(el('h3', 'hs-sec', 'Equipamento'));
     var slots = el('div', 'hs-slots');
@@ -4975,19 +5077,125 @@ var JOGO = (typeof window !== 'undefined')
         cab.appendChild(ct);
         caixa.appendChild(cab);
 
+        // ---- MEMBROS E CARGOS (30/08): líder ⚑, oficiais ★, membros. O
+        // líder promove e rebaixa daqui; oficial ganha a chave do cofre.
         var lm = el('div', 'guilda-membros');
         g.membros.forEach(function (m) {
-          lm.appendChild(el('span', 'guilda-membro' + (m.id === g.liderId ? ' is-lider' : ''),
-            (m.id === g.liderId ? '⚑ ' : '') + esc(m.nome)));
+          var ehLider = m.cargo === 'lider';
+          var ehOficial = m.cargo === 'oficial';
+          var chip = el('span', 'guilda-membro' + (ehLider ? ' is-lider' : ''),
+            (ehLider ? '⚑ ' : ehOficial ? '★ ' : '') + esc(m.nome) +
+            (ehOficial ? ' <i>oficial</i>' : ''));
+          if (g.souLider && !ehLider) {
+            var bAcao = btn(ehOficial ? '▾' : '▴', 'btn-mini btn-ghost', function () {
+              var op = ehOficial ? Gd.rebaixar(m.id) : Gd.promover(m.id);
+              op.then(function (res) {
+                toast(res.ok
+                  ? (res.cargo === 'oficial'
+                      ? esc(m.nome) + ' agora é oficial — ganhou a chave do cofre.'
+                      : esc(m.nome) + ' voltou a membro.')
+                  : (res.erro || 'não deu'), res.ok ? 'good' : undefined);
+                sheetGuilda();
+              });
+            });
+            bAcao.title = ehOficial ? 'Rebaixar a membro' : 'Promover a oficial';
+            chip.appendChild(bAcao);
+          }
+          lm.appendChild(chip);
         });
         caixa.appendChild(lm);
 
-        // ---- O COFRE: a moeda da guilda, que só o líder gasta
+        // ---- A OFERENDA (30/08): "a guild upa conforme os usuários doam
+        // xp" — vinténs da conta viram XP da guilda, 2 por 1. Qualquer
+        // membro doa; o dreno de moeda é o preço da vaidade coletiva.
+        var of = el('div', 'guilda-oferenda');
+        of.style.cssText = 'display:flex;gap:8px;align-items:center;margin:8px 0';
+        var ofInp = document.createElement('input');
+        ofInp.type = 'number'; ofInp.min = '2'; ofInp.step = '2';
+        ofInp.placeholder = 'vinténs';
+        ofInp.className = 'hub-input';
+        ofInp.style.cssText = 'width:110px;margin:0';
+        of.appendChild(ofInp);
+        of.appendChild(btn('Doar à guilda (2 vinténs = 1 XP)', 'btn-mini btn-gold', function () {
+          var v = Math.floor(Number(ofInp.value) || 0);
+          if (v < 2) { toast('doe ao menos 2 vinténs'); return; }
+          v -= v % 2;
+          JOGO.DB.gastarMoedas(v).then(function (res) {
+            if (!res.ok) { toast(res.erro || 'vinténs insuficientes'); return; }
+            Gd.doarXp(v / 2).then(function (r2) {
+              toast(r2.ok ? 'A guilda recebeu ' + (v / 2) + ' XP — nível ' + r2.nivel + '.'
+                          : (r2.erro || 'não deu'), r2.ok ? 'good' : undefined);
+              sheetGuilda();
+            });
+          });
+        }));
+        caixa.appendChild(of);
+
+        // ---- A PORTA E O DÍZIMO (30/08): governo do líder. A porta decide
+        // se a sede aceita qualquer um ou só pedido; o dízimo é a % do XP
+        // que cada membro doa à guilda no fim de cada sala.
+        if (g.souLider) {
+          var gov = el('div', 'guilda-governo');
+          gov.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0';
+          var portaAtual = g.porta === 'convite' ? 'convite' : 'aberta';
+          gov.appendChild(btn('Porta: ' + (portaAtual === 'convite' ? 'por convite' : 'aberta') + ' ⇄',
+            'btn-mini btn-ghost', function () {
+              Gd.definirPorta(portaAtual === 'convite' ? 'aberta' : 'convite').then(function (res) {
+                toast(res.ok ? 'A porta agora é ' +
+                      (res.porta === 'convite' ? 'por convite.' : 'aberta.') : (res.erro || 'não deu'),
+                      res.ok ? 'good' : undefined);
+                sheetGuilda();
+              });
+            }));
+          var dzInp = document.createElement('input');
+          dzInp.type = 'number'; dzInp.min = '0'; dzInp.max = String(Gd.DIZIMO_MAX || 25);
+          dzInp.value = String(g.dizimo || 0);
+          dzInp.className = 'hub-input';
+          dzInp.style.cssText = 'width:70px;margin:0';
+          gov.appendChild(el('span', 'inv-dica', 'dízimo de XP:'));
+          gov.appendChild(dzInp);
+          gov.appendChild(btn('% definir', 'btn-mini btn-gold', function () {
+            Gd.definirDizimo(Math.floor(Number(dzInp.value) || 0)).then(function (res) {
+              toast(res.ok ? 'Dízimo em ' + res.dizimo + '% — cada membro doa essa fatia do XP.'
+                           : (res.erro || 'não deu'), res.ok ? 'good' : undefined);
+              sheetGuilda();
+            });
+          }));
+          caixa.appendChild(gov);
+        } else if (g.dizimo > 0) {
+          caixa.appendChild(el('p', 'inv-dica',
+            'Dízimo da guilda: <b>' + g.dizimo + '%</b> do XP de cada sala vira XP da guilda.'));
+        }
+
+        // ---- A FILA DE PEDIDOS: líder e oficiais decidem quem entra
+        var fila = g.pedidos || [];
+        if (fila.length && (g.meuCargo === 'lider' || g.meuCargo === 'oficial')) {
+          var fp = el('div', 'guilda-pedidos');
+          fp.appendChild(el('h3', 'bk-tit', 'Pedidos de entrada (' + fila.length + ')'));
+          fila.forEach(function (p) {
+            var lp = el('div', 'guilda-rank');
+            lp.appendChild(el('span', null, esc(p.nome)));
+            lp.appendChild(btn('Aceitar', 'btn-mini btn-primary', function () {
+              Gd.aceitarPedido(p.id).then(function (res) {
+                toast(res.ok ? esc(p.nome) + ' entrou na guilda!' : (res.erro || 'não deu'),
+                      res.ok ? 'good' : undefined);
+                sheetGuilda();
+              });
+            }));
+            lp.appendChild(btn('Recusar', 'btn-mini btn-ghost', function () {
+              Gd.recusarPedido(p.id).then(function () { sheetGuilda(); });
+            }));
+            fp.appendChild(lp);
+          });
+          caixa.appendChild(fp);
+        }
+
+        // ---- O COFRE: a moeda da guilda — líder e oficiais gastam
         var cofre = el('div', 'guilda-cofre');
         cofre.appendChild(el('h3', 'bk-tit', 'Cofre da guilda — <b>' + g.moedas + '</b> marcas'));
         cofre.appendChild(el('p', 'inv-dica',
           'Marcas nascem das competições da guilda (o treino paga ' + Gd.MOEDA_TREINO +
-          '; a competição de verdade chega com o servidor). Só o líder gasta — em bônus de 24h para TODOS.'));
+          '; a competição de verdade chega com o servidor). Líder e oficiais gastam — em bônus de 24h para TODOS.'));
         ['drop', 'xp'].forEach(function (tipo) {
           var rot = tipo === 'drop' ? '+15% de saque' : '+15% de XP';
           var ate = g.bonus && g.bonus[tipo];
@@ -5136,13 +5344,28 @@ var JOGO = (typeof window !== 'undefined')
         });
       }
 
-      // sem guilda o ranking também aparece
+      // sem guilda o ranking também aparece — e é a PORTA DE ENTRADA
+      // (30/08): guilda aberta entra na hora; a de convite recebe o pedido
       if (!g && ranking.length) {
-        caixa.appendChild(el('h3', 'bk-tit', 'Ranking das guildas'));
+        caixa.appendChild(el('h3', 'bk-tit', 'Guildas do acampamento'));
         ranking.forEach(function (rg, ri) {
-          caixa.appendChild(el('div', 'guilda-rank',
+          var linha = el('div', 'guilda-rank');
+          linha.appendChild(el('span', null,
             '<b>' + (ri + 1) + 'º</b> ' + esc(rg.emblema) + ' ' + esc(rg.nome) +
-            ' · nível ' + rg.nivel + ' · ' + rg.xp + ' XP · ' + rg.membros + ' membro(s)'));
+            ' · nível ' + rg.nivel + ' · ' + rg.membros + ' membro(s) · porta ' +
+            (rg.porta === 'convite' ? 'por convite' : 'aberta')));
+          linha.appendChild(btn(rg.porta === 'convite' ? 'Pedir para entrar' : 'Entrar',
+            'btn-mini ' + (rg.porta === 'convite' ? 'btn-ghost' : 'btn-primary'), function () {
+              var op = rg.porta === 'convite' ? Gd.pedirEntrada(rg.id) : Gd.entrar(rg.id);
+              op.then(function (res) {
+                if (!res.ok) { toast(res.erro || 'não deu'); return; }
+                toast(res.entrou === false
+                  ? 'Pedido enviado — o líder da ' + rg.nome + ' decide.'
+                  : 'Bem-vindo à ' + rg.nome + '!', 'good');
+                sheetGuilda();
+              });
+            }));
+          caixa.appendChild(linha);
         });
       }
     });

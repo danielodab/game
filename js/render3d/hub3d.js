@@ -339,7 +339,10 @@ var JOGO = (typeof window !== 'undefined')
 
   /* O BANCO: mesa, baú e moedas do próprio kit — as peças já existiam. */
   function montaBanco() {
-    var px = RAIO_MAPA * 0.60, pz = RAIO_MAPA * 0.25;
+    // o cofre foi para o CANTO sudeste: em (0.60, 0.25) ele nascia a 4,8 m
+    // da Sede — dois prédios de 12-14 m de largura, um DENTRO do outro
+    // (a foto do dono pegou a fortaleza engolindo a cúpula)
+    var px = RAIO_MAPA * 0.78, pz = RAIO_MAPA * 0.42;
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {

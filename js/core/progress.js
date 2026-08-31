@@ -333,7 +333,10 @@ var JOGO = (typeof window !== 'undefined')
   function starsCfg() {
     var s = D().stars;
     if (!isObj(s) || !isObj(s.bonuses)) return STARS_DEFAULT;
-    return { max: num(s.max, 5), bonuses: s.bonuses };
+    // `elementSlots` (30/08): a cópia campo a campo engoliria a tabela das
+    // vagas de caminho — a mesma armadilha do sanitize, do lado do DATA
+    return { max: num(s.max, 5), bonuses: s.bonuses,
+             elementSlots: isObj(s.elementSlots) ? s.elementSlots : null };
   }
   function upgradeCfg() {
     var u = D().upgrade;
@@ -553,6 +556,24 @@ var JOGO = (typeof window !== 'undefined')
           if (indexOf(els, src.element) >= 0 && pathOk &&
               h.level >= leveling().elementChoiceLevel) {
             h.element = src.element;
+          }
+        }
+        // os CAMINHOS LIBERADOS por estrela (30/08) — campo novo: a cópia
+        // campo a campo engoliria a lista calada (a armadilha de sempre).
+        // Só entram elementos válidos com caminho na classe; o ativo, quando
+        // escolhido, sempre faz parte.
+        if (h.element !== DEFAULT_ELEMENT) {
+          h.elements = [h.element];
+          if (isArray(src.elements)) {
+            var defE = classDef(cls);
+            for (var se = 0; se < src.elements.length; se++) {
+              var elx = src.elements[se];
+              if (typeof elx !== 'string' || elx === DEFAULT_ELEMENT) continue;
+              if (indexOf(els, elx) < 0) continue;
+              if (indexOf(h.elements, elx) >= 0) continue;
+              if (defE && defE.paths && !isArray(defE.paths[elx])) continue;
+              h.elements.push(elx);
+            }
           }
         }
         if (isObj(src.items)) {
@@ -1020,6 +1041,58 @@ var JOGO = (typeof window !== 'undefined')
     if (indexOf(elements(), element) < 0) return false;
     var def = classDef(h.classId);
     if (def && def.paths && !isArray(def.paths[element])) return false;
+    h.element = element;
+    h.elements = [element];              // o 1º caminho da lista de liberados
+    syncSpells(heroId);
+    Progress.save();
+    return true;
+  };
+
+  /* ============================== ELEMENTOS EXTRAS POR ESTRELA (30/08) [D6b]
+   * "Da terceira estrela em diante o jogador poderá escolher outro elemento":
+   * ★3 libera o 2º caminho, ★4 o 3º, ★5 o 4º (DATA.stars.elementSlots). A
+   * lista de caminhos liberados mora em `hero.elements`; `hero.element`
+   * continua sendo o ATIVO — os feitiços derivam dele, então trocar o ativo
+   * troca o caminho inteiro na hora (spellsFor é dinâmico). Liberação é
+   * permanente; a troca do ativo é livre entre os liberados (no Acampamento,
+   * pela ficha — em batalha ninguém chama isto). */
+  function elementosDe(h) {
+    if (!isArray(h.elements)) {
+      h.elements = (h.element && h.element !== DEFAULT_ELEMENT) ? [h.element] : [];
+    }
+    return h.elements;
+  }
+  Progress.elementSlots = function (heroId) {
+    var h = Progress.hero(heroId);
+    if (!h) return 0;
+    var tabela = starsCfg().elementSlots || {};
+    var stars = Progress.cardInfo(h.classId || heroId).stars;
+    return Math.max(1, Math.floor(num(tabela[stars], 1)));
+  };
+  Progress.heroElements = function (heroId) {
+    var h = Progress.hero(heroId);
+    return h ? elementosDe(h).slice() : [];
+  };
+  Progress.liberaElemento = function (heroId, element) {
+    var h = Progress.hero(heroId);
+    if (!h) return false;
+    var lista = elementosDe(h);
+    if (!lista.length) return false;           // o 1º vem do chooseElement (nv5)
+    if (typeof element !== 'string' || element === DEFAULT_ELEMENT) return false;
+    if (indexOf(elements(), element) < 0) return false;
+    if (indexOf(lista, element) >= 0) return false;
+    if (lista.length >= Progress.elementSlots(heroId)) return false;
+    var def = classDef(h.classId);
+    if (def && def.paths && !isArray(def.paths[element])) return false;
+    lista.push(element);
+    Progress.save();
+    return true;
+  };
+  Progress.trocaElemento = function (heroId, element) {
+    var h = Progress.hero(heroId);
+    if (!h) return false;
+    if (indexOf(elementosDe(h), element) < 0) return false;
+    if (h.element === element) return true;
     h.element = element;
     syncSpells(heroId);
     Progress.save();

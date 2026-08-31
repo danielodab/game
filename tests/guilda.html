@@ -113,6 +113,41 @@ injetável; empréstimo é um por conta; o dono retira de vez; o último a sair 
     return G.bancoPegar(0);
   }).then(function (r10) {
     check('o dono retira a própria peça DE VEZ', r10.ok && r10.definitivo === true);
+
+    /* CARGOS E OFERENDA (30/08): a Ana lidera, a Bia é membro. Promoção é
+     * poder do líder; oficial ganha a chave do cofre; a doação de XP é de
+     * qualquer um — e sobe o nível da guilda. */
+    G.contaAtiva('cBIA', 'Bia');
+    return G.promover('cBIA');
+  }).then(function (rc) {
+    check('membro raso não promove ninguém', rc.ok === false);
+    G.contaAtiva('cANA', 'Ana');
+    return G.promover('cBIA');
+  }).then(function (rp) {
+    check('o líder promove a Bia a oficial', rp.ok === true && rp.cargo === 'oficial');
+    return G.minha();
+  }).then(function (gf) {
+    var bia = gf.membros.filter(function (m) { return m.id === 'cBIA'; })[0];
+    check('a foto resolve os cargos (líder e oficial)',
+          gf.meuCargo === 'lider' && bia && bia.cargo === 'oficial');
+    var xpAntes = gf.xp;
+    return G.doarXp(30).then(function (rd) {
+      check('a oferenda soma XP na guilda', rd.ok === true && rd.xp === xpAntes + 30,
+            xpAntes + ' → ' + rd.xp);
+      return G.doarXp(-5);
+    });
+  }).then(function (rneg) {
+    check('doação negativa é recusada', rneg.ok === false);
+    // oficial rebaixada perde a chave do cofre
+    return G.rebaixar('cBIA');
+  }).then(function (rr) {
+    check('o líder rebaixa a oficial', rr.ok === true);
+    G.contaAtiva('cBIA', 'Bia');
+    return G.compraBonus('xp');
+  }).then(function (rb) {
+    check('membro raso esbarra na permissão do cofre',
+          rb.ok === false && /líder|oficia/i.test(rb.erro || ''), rb.erro);
+    G.contaAtiva('cANA', 'Ana');
     // saída e herança
     return G.sair();
   }).then(function (r11) {

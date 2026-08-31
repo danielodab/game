@@ -682,7 +682,17 @@ var JOGO = (typeof window !== 'undefined')
 
     // [G9] rendimento decrescente por herói (§9-D): conteúdo fácil paga menos.
     // Vale só para XP — item, pedra e carta seguem suas próprias raridades.
+    // O DÍZIMO DA GUILDA (30/08): o líder define a % do XP que cada membro
+    // doa — o desconto é REAL (o herói fica com o resto) e a soma vai para a
+    // guilda no mesmo funil, fire-and-forget como os vinténs.
     var levelUps = [], xpMult = {}, xpPorHeroi = {};
+    var dizimoPct = 0, dizimoSoma = 0;
+    try {
+      if (JOGO.Guilda && JOGO.Guilda.dizimoAtual) {
+        dizimoPct = num(JOGO.Guilda.dizimoAtual(), 0);
+      }
+    } catch (ed) { dizimoPct = 0; }
+    if (!(dizimoPct > 0 && dizimoPct <= 50)) dizimoPct = 0;
     if (prog && prog.addXp) {
       for (var h = 0; h < Game.party.length; h++) {
         var heroId = Game.party[h];
@@ -691,6 +701,11 @@ var JOGO = (typeof window !== 'undefined')
         catch (err) { mult = 1; }
         if (typeof mult !== 'number' || !isFinite(mult) || mult < 0) mult = 1;
         var xpHeroi = Math.floor(xpGanho * mult);
+        if (dizimoPct > 0 && xpHeroi > 0) {
+          var doa = Math.floor(xpHeroi * dizimoPct / 100);
+          dizimoSoma += doa;
+          xpHeroi -= doa;
+        }
         xpMult[heroId] = mult;
         xpPorHeroi[heroId] = xpHeroi;
         var gained = 0;
@@ -700,6 +715,9 @@ var JOGO = (typeof window !== 'undefined')
           levelUps.push({ heroId: heroId, niveis: gained, novoNivel: hero ? hero.level : null });
         }
       }
+    }
+    if (dizimoSoma > 0) {
+      try { JOGO.Guilda.doarXp(dizimoSoma); } catch (eg) {}
     }
 
     // O POÇO anota o andar limpo (25/08): melhor da semana + recorde da conta
@@ -764,6 +782,7 @@ var JOGO = (typeof window !== 'undefined')
       stones: stones,
       selos: selosGanhos,
       insignias: insigniasGanhas,
+      dizimo: dizimoSoma > 0 ? { pct: dizimoPct, doado: dizimoSoma } : null,
       elementChoices: elementChoices
     };
   }

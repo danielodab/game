@@ -110,6 +110,25 @@ var JOGO = (typeof window !== 'undefined')
     return JSON.parse(JSON.stringify(g));
   }
 
+  /* OS CARGOS (30/08): líder, oficial e membro. O líder continua sendo
+   * `liderId` (a verdade única de sempre); `cargo` no registro do membro só
+   * guarda 'oficial' — quem não tem nada é membro raso. As permissões:
+   *   gastar o COFRE (bônus): líder e oficiais;
+   *   promover/rebaixar: só o líder;
+   *   doar XP e usar o banco: todo mundo. */
+  function cargoDe(g, id) {
+    if (!g) return null;
+    if (g.liderId === id) return 'lider';
+    for (var i = 0; i < g.membros.length; i++) {
+      if (g.membros[i].id === id) return g.membros[i].cargo === 'oficial' ? 'oficial' : 'membro';
+    }
+    return null;
+  }
+  function podeGastarCofre(g, id) {
+    var c = cargoDe(g, id);
+    return c === 'lider' || c === 'oficial';
+  }
+
   // ------------------------------------------------------------ vida da guilda
   /* O PREÇO DA FUNDAÇÃO cobra do Progress (as insígnias dos chefes). A
    * cobrança vem DEPOIS de toda validação — fundação recusada não pode
@@ -145,7 +164,8 @@ var JOGO = (typeof window !== 'undefined')
     }
     var g = { id: novoId(), nome: nome, emblema: String(emblema || '⚑').slice(0, 4),
               liderId: conta.id, membros: [{ id: conta.id, nome: conta.nome }],
-              xp: 0, moedas: 0, bonus: {}, banco: [], treinos: 0, criadaEm: agora() };
+              xp: 0, moedas: 0, bonus: {}, banco: [], treinos: 0, criadaEm: agora(),
+              porta: 'aberta', dizimo: 0, pedidos: [] };
     d.guildas[g.id] = g;
     d.porConta[conta.id] = g.id;
     grava(d);
@@ -159,7 +179,164 @@ var JOGO = (typeof window !== 'undefined')
     var f = foto(g);
     f.nivel = G.nivelDe(g.xp);
     f.souLider = !!(conta && g.liderId === conta.id);
+    f.meuCargo = conta ? cargoDe(g, conta.id) : null;
+    // cada membro sai com o cargo RESOLVIDO (o líder pelo liderId)
+    for (var mi = 0; mi < f.membros.length; mi++) {
+      f.membros[mi].cargo = cargoDe(g, f.membros[mi].id);
+    }
     return responde(f);
+  };
+
+  // ------------------------------------------------------------------ cargos
+  G.promover = function (idAlvo) {
+    if (!conta) return responde({ ok: false });
+    var d = le();
+    var g = minhaG(d);
+    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder promove' });
+    if (idAlvo === conta.id) return responde({ ok: false, erro: 'você já lidera' });
+    for (var i = 0; i < g.membros.length; i++) {
+      if (g.membros[i].id !== idAlvo) continue;
+      if (g.membros[i].cargo === 'oficial') return responde({ ok: false, erro: 'já é oficial' });
+      g.membros[i].cargo = 'oficial';
+      grava(d);
+      return responde({ ok: true, cargo: 'oficial' });
+    }
+    return responde({ ok: false, erro: 'não é membro' });
+  };
+  G.rebaixar = function (idAlvo) {
+    if (!conta) return responde({ ok: false });
+    var d = le();
+    var g = minhaG(d);
+    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder rebaixa' });
+    for (var i = 0; i < g.membros.length; i++) {
+      if (g.membros[i].id !== idAlvo) continue;
+      if (g.membros[i].cargo !== 'oficial') return responde({ ok: false, erro: 'já é membro raso' });
+      delete g.membros[i].cargo;
+      grava(d);
+      return responde({ ok: true, cargo: 'membro' });
+    }
+    return responde({ ok: false, erro: 'não é membro' });
+  };
+
+  /* A PORTA E OS PEDIDOS (30/08): "os usuários na sede podem ver as guildas
+   * existentes e pedir para participar OU caso a guild seja aberta ele já
+   * entra". A guilda nasce ABERTA; o líder fecha para 'convite' e a fila de
+   * pedidos passa a existir — líder e oficiais aceitam ou recusam. */
+  function portaDe(g) { return g.porta === 'convite' ? 'convite' : 'aberta'; }
+  function pedidosDe(g) {
+    if (!Array.isArray(g.pedidos)) g.pedidos = [];
+    return g.pedidos;
+  }
+  G.definirPorta = function (modo) {
+    if (modo !== 'aberta' && modo !== 'convite') return responde({ ok: false, erro: 'modo desconhecido' });
+    if (!conta) return responde({ ok: false });
+    var d = le();
+    var g = minhaG(d);
+    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder mexe na porta' });
+    g.porta = modo;
+    grava(d);
+    return responde({ ok: true, porta: modo });
+  };
+  G.pedirEntrada = function (gid) {
+    if (!conta) return responde({ ok: false, erro: 'sem conta' });
+    var d = le();
+    if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
+    var g = d.guildas[gid];
+    if (!g) return responde({ ok: false, erro: 'essa guilda não existe mais' });
+    if (portaDe(g) === 'aberta') {
+      // porta aberta não tem fila: pedir É entrar
+      g.membros.push({ id: conta.id, nome: conta.nome });
+      d.porConta[conta.id] = gid;
+      grava(d);
+      return responde({ ok: true, entrou: true, guilda: foto(g) });
+    }
+    var fila = pedidosDe(g);
+    for (var i = 0; i < fila.length; i++) {
+      if (fila[i].id === conta.id) return responde({ ok: false, erro: 'seu pedido já está na fila' });
+    }
+    fila.push({ id: conta.id, nome: conta.nome, em: agora() });
+    grava(d);
+    return responde({ ok: true, entrou: false, pedidoFeito: true });
+  };
+  G.aceitarPedido = function (idAlvo) {
+    if (!conta) return responde({ ok: false });
+    var d = le();
+    var g = minhaG(d);
+    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!podeGastarCofre(g, conta.id)) {
+      return responde({ ok: false, erro: 'só líder e oficiais aceitam pedidos' });
+    }
+    var fila = pedidosDe(g);
+    for (var i = 0; i < fila.length; i++) {
+      if (fila[i].id !== idAlvo) continue;
+      var p = fila.splice(i, 1)[0];
+      if (d.porConta[p.id]) {                 // já achou outra casa nesse meio-tempo
+        grava(d);
+        return responde({ ok: false, erro: 'essa conta já entrou noutra guilda' });
+      }
+      g.membros.push({ id: p.id, nome: p.nome });
+      d.porConta[p.id] = g.id;
+      grava(d);
+      return responde({ ok: true, membro: { id: p.id, nome: p.nome } });
+    }
+    return responde({ ok: false, erro: 'pedido não está mais na fila' });
+  };
+  G.recusarPedido = function (idAlvo) {
+    if (!conta) return responde({ ok: false });
+    var d = le();
+    var g = minhaG(d);
+    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!podeGastarCofre(g, conta.id)) {
+      return responde({ ok: false, erro: 'só líder e oficiais recusam pedidos' });
+    }
+    var fila = pedidosDe(g);
+    for (var i = 0; i < fila.length; i++) {
+      if (fila[i].id === idAlvo) { fila.splice(i, 1); grava(d); return responde({ ok: true }); }
+    }
+    return responde({ ok: false, erro: 'pedido não está mais na fila' });
+  };
+
+  /* O DÍZIMO (30/08): "o líder define a % de doação de xp de cada um" — a
+   * taxa vale para todo membro, o desconto acontece no funil de XP do
+   * game.js (que consulta `dizimoAtual` SÍNCRONO, como o bonusAtivo). */
+  G.DIZIMO_MAX = 25;
+  G.definirDizimo = function (pct) {
+    if (!conta) return responde({ ok: false });
+    pct = Math.floor(pct);
+    if (!isFinite(pct) || pct < 0 || pct > G.DIZIMO_MAX) {
+      return responde({ ok: false, erro: 'o dízimo vai de 0 a ' + G.DIZIMO_MAX + '%' });
+    }
+    var d = le();
+    var g = minhaG(d);
+    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder define o dízimo' });
+    g.dizimo = pct;
+    grava(d);
+    return responde({ ok: true, dizimo: pct });
+  };
+  G.dizimoAtual = function () {
+    var d = le();
+    var g = minhaG(d);
+    var p = g ? Math.floor(g.dizimo || 0) : 0;
+    return (isFinite(p) && p > 0) ? Math.min(p, G.DIZIMO_MAX) : 0;
+  };
+
+  /* A OFERENDA (30/08): "a guild upa conforme os usuários doam xp" — o core
+   * recebe XP já convertida (a HUD cobra os vinténs da conta ANTES; a taxa
+   * de conversão é dela). Qualquer membro doa. */
+  G.doarXp = function (n) {
+    if (!conta) return responde({ ok: false });
+    n = Math.floor(n);
+    if (!isFinite(n) || n <= 0) return responde({ ok: false, erro: 'quantia inválida' });
+    var d = le();
+    var g = minhaG(d);
+    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    g.xp += n;
+    grava(d);
+    return responde({ ok: true, xp: g.xp, nivel: G.nivelDe(g.xp) });
   };
 
   G.lista = function () {
@@ -169,7 +346,8 @@ var JOGO = (typeof window !== 'undefined')
       if (!d.guildas.hasOwnProperty(gid)) continue;
       var g = d.guildas[gid];
       fora.push({ id: g.id, nome: g.nome, emblema: g.emblema, xp: g.xp,
-                  nivel: G.nivelDe(g.xp), membros: g.membros.length });
+                  nivel: G.nivelDe(g.xp), membros: g.membros.length,
+                  porta: portaDe(g) });
     }
     fora.sort(function (a, b) { return b.xp - a.xp; });
     return responde(fora);
@@ -181,6 +359,11 @@ var JOGO = (typeof window !== 'undefined')
     if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
     var g = d.guildas[gid];
     if (!g) return responde({ ok: false, erro: 'essa guilda não existe mais' });
+    // porta fechada (30/08): entrar direto só em guilda ABERTA — na de
+    // convite o caminho é a fila (pedirEntrada) ou o convite da praça
+    if (portaDe(g) === 'convite') {
+      return responde({ ok: false, erro: 'a guilda é por convite — peça para entrar' });
+    }
     g.membros.push({ id: conta.id, nome: conta.nome });
     d.porConta[conta.id] = gid;
     grava(d);
@@ -231,7 +414,10 @@ var JOGO = (typeof window !== 'undefined')
     var d = le();
     var g = minhaG(d);
     if (!g) return responde({ ok: false, erro: 'sem guilda' });
-    if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder gasta o cofre' });
+    // cargos (30/08): oficiais também administram o cofre
+    if (!podeGastarCofre(g, conta.id)) {
+      return responde({ ok: false, erro: 'só líder e oficiais gastam o cofre' });
+    }
     if (g.moedas < G.CUSTO_BONUS) return responde({ ok: false, erro: 'cofre insuficiente' });
     g.moedas -= G.CUSTO_BONUS;
     var base = Math.max(agora(), g.bonus[tipo] || 0);   // comprar de novo ESTENDE

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a escada de estrelas e os caminhos extras</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>A escada nova de estrelas — e os caminhos elementais que elas abrem</h1>
+<div class="sub">A escada é a do dono (30/08): cada estrela custa 5, +10, +20, +30 e +45 cartas
+excedentes (acumulado 5/15/35/65/110) — «para conseguir estrela é difícil». E da ★3 em diante a
+estrela LIBERA CAMINHO: ★3 abre a 2ª vaga de elemento, ★4 a 3ª, ★5 a 4ª. Liberar é permanente,
+trocar o ativo troca os feitiços do caminho na hora — e a lista tem de sobreviver ao load.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  try { localStorage.removeItem('soterra-save-v2'); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var P = JOGO.Progress;
+  P.reset();
+  var HID = 'sumo';                          // nasce liberado, unlockCost 0
+  P.hero(HID);                               // garante a ficha
+
+  function daCartas(n) { P.state.cards[HID] = n; P.save(); }
+  function estrelas() { return P.cardInfo(HID).stars; }
+
+  // 1. A ESCADA: 5 / 15 / 35 / 65 / 110 acumuladas (5, +10, +20, +30, +45)
+  daCartas(4);   check('4 cartas ainda não dão estrela', estrelas() === 0, '★' + estrelas());
+  daCartas(5);   check('a 1ª estrela custa 5', estrelas() === 1, '★' + estrelas());
+  daCartas(14);  check('14 não fecham a 2ª', estrelas() === 1, '★' + estrelas());
+  daCartas(15);  check('a 2ª fecha em 15 (deu +10)', estrelas() === 2, '★' + estrelas());
+  daCartas(34);  check('34 não fecham a 3ª', estrelas() === 2, '★' + estrelas());
+  daCartas(35);  check('a 3ª fecha em 35 (deu +20)', estrelas() === 3, '★' + estrelas());
+  daCartas(65);  check('a 4ª fecha em 65 (deu +30)', estrelas() === 4, '★' + estrelas());
+  daCartas(109); check('109 não fecham a 5ª', estrelas() === 4, '★' + estrelas());
+  daCartas(110); check('a 5ª fecha em 110 (deu +45)', estrelas() === 5, '★' + estrelas());
+
+  // 2. AS VAGAS DE CAMINHO por estrela: 1 até ★2; ★3=2; ★4=3; ★5=4
+  daCartas(15);
+  check('até a ★2 há UMA vaga de caminho', P.elementSlots(HID) === 1, String(P.elementSlots(HID)));
+  daCartas(35);
+  check('a ★3 abre a 2ª vaga', P.elementSlots(HID) === 2, String(P.elementSlots(HID)));
+  daCartas(65);
+  check('a ★4 abre a 3ª', P.elementSlots(HID) === 3, String(P.elementSlots(HID)));
+  daCartas(110);
+  check('a ★5 abre a 4ª', P.elementSlots(HID) === 4, String(P.elementSlots(HID)));
+
+  // 3. LIBERAR E TROCAR — o 1º caminho vem do nível 5 (chooseElement)
+  daCartas(35);                                          // ★3: 2 vagas
+  check('sem o 1º caminho escolhido, não se libera extra',
+        P.liberaElemento(HID, 'agua') === false);
+  P.addXp(HID, 999);                                     // nível de sobra
+  check('a escolha do nível 5 continua funcionando', P.chooseElement(HID, 'fogo') === true);
+  check('o 1º caminho entrou na lista', P.heroElements(HID).join(',') === 'fogo');
+  check('liberar o 2º caminho com a ★3 funciona', P.liberaElemento(HID, 'agua') === true);
+  check('a lista tem os dois', P.heroElements(HID).join(',') === 'fogo,agua');
+  check('repetido é recusado', P.liberaElemento(HID, 'agua') === false);
+  check('a 3ª vaga NÃO abre na ★3', P.liberaElemento(HID, 'ar') === false);
+  daCartas(65);                                          // ★4: 3 vagas
+  check('com a ★4 a 3ª vaga abre', P.liberaElemento(HID, 'ar') === true);
+
+  var antes = P.spellsFor(HID).join('|');
+  check('trocar o ativo para o caminho liberado funciona', P.trocaElemento(HID, 'agua') === true);
+  var depois = P.spellsFor(HID).join('|');
+  check('os feitiços TROCARAM junto com o caminho', antes !== depois);
+  check('o ativo agora é água', P.hero(HID).element === 'agua');
+  check('trocar para caminho NÃO liberado é recusado', P.trocaElemento(HID, 'terra') === false);
+
+  // 4. A ARMADILHA: a lista sobrevive ao load
+  P.load();
+  check('a lista de caminhos SOBREVIVE ao load',
+        P.heroElements(HID).join(',') === 'agua,fogo,ar' ||
+        P.heroElements(HID).join(',') === 'fogo,agua,ar',
+        P.heroElements(HID).join(','));
+  check('o ativo sobrevive ao load', P.hero(HID).element === 'agua');
+
+  // 5. lixo no disco não vira caminho
+  var d2 = JSON.parse(localStorage.getItem(P.SAVE_KEY || 'soterra-save-v2'));
+  d2.heroes[HID].elements = ['fogo', 'plasma', 'agua', 'agua'];
+  localStorage.setItem(P.SAVE_KEY || 'soterra-save-v2', JSON.stringify(d2));
+  P.load();
+  var lim = P.heroElements(HID);
+  check('elemento inventado e repetido caem no load',
+        lim.indexOf('plasma') < 0 && lim.filter(function (x) { return x === 'agua'; }).length === 1,
+        lim.join(','));
+
+  var s = document.getElementById('summary');
+  s.className = falhas ? 'fail' : 'allpass';
+  s.textContent = falhas ? (falhas + ' de ' + total + ' falharam')
+                         : ('tudo passou (' + total + ')');
+  window.__done = true;
+  window.__fail = falhas;
+})();
+</script>
+</body>
+</html>

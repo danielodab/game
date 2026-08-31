@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: os caminhos elementais por estrela</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): a ficha do herói com a seção de CAMINHOS
+     ELEMENTAIS (30/08) — o ativo aceso, o liberado clicável, a vaga aberta
+     pela ★4 e o cadeado com a estrela que falta. -->
+<iframe id="f" src="../index.html?prova-caminhos"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      P.hero('sumo');
+      P.state.cards.sumo = 65;              // ★4: três vagas de caminho
+      P.addXp('sumo', 999);                 // nível de sobra para o nv5
+      P.save();
+      P.chooseElement('sumo', 'fogo');      // o 1º caminho, como no jogo
+      P.liberaElemento('sumo', 'agua');     // o 2º, pago pela ★3
+      w.JOGO.DB.batizar('Andarilha').then(function () {
+        w.JOGO.UI.showScreen('hub');
+        w.JOGO.UI.openSheet('heroSheet', 'sumo');
+        setTimeout(function () { window.__pronto = true; }, 2000);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>
