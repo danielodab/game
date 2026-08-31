@@ -958,6 +958,15 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(btn('Abrir a ficha da guilda', 'btn-primary btn-block', function () {
           openSheet('guilda');
         }));
+      } else if (lugar.tipo === 'forja') {
+        // A BARRACA DO FERREIRO (30/08): a forja ganhou endereço na praça —
+        // a bigorna continua no cais para quem prefere o atalho
+        painel.appendChild(el('h3', null, 'Forja do Acampamento'));
+        painel.appendChild(el('p', 'hub-nota',
+          'Ponha a peça na bancada, a pedra do elemento ao lado — e bata o martelo.'));
+        painel.appendChild(btn('Chegar na bancada', 'btn-primary btn-block', function () {
+          openSheet('forge');
+        }));
       }
     };
 
@@ -4261,11 +4270,34 @@ var JOGO = (typeof window !== 'undefined')
     } else {
       var sd2 = stoneDefs()[info.stoneId];
       var have = stoneCount(info.stoneId);
-      var cost = el('div', 'forge-cost' + (info.temPedras ? '' : ' is-short'));
-      cost.appendChild(art('stoneIcon', [info.stoneId, 38], 38));
-      cost.appendChild(el('span', null, '<b>' + have + ' / ' + info.custo + '</b> ' +
-        esc((sd2 && sd2.name) || info.stoneId)));
-      cp.appendChild(cost);
+      // A BANCADA DO FERREIRO (30/08, pedido: "o personagem coloca o item e
+      // a pedra e forja"): a peça num encaixe, a pedra do elemento no outro,
+      // a seta diz no que vira. A linha de custo virou gesto de ofício.
+      function encaixe(icone, rot, curto) {
+        var cx = el('div', 'forge-cost' + (curto ? ' is-short' : ''));
+        cx.style.cssText = 'flex-direction:column;align-items:center;gap:4px;' +
+                           'padding:10px 14px;min-width:86px;text-align:center';
+        cx.appendChild(icone);
+        cx.appendChild(el('span', null, rot));
+        return cx;
+      }
+      var banca = el('div', 'forge-banca');
+      banca.style.cssText = 'display:flex;align-items:center;justify-content:center;' +
+                            'gap:10px;margin:10px 0;flex-wrap:wrap';
+      banca.appendChild(encaixe(art('itemIcon', [atual.itemId, 46], 46),
+        '<b>' + esc((it2 && it2.name) || atual.itemId) + '</b>' + (lv2 ? ' +' + lv2 : ''), false));
+      var mais = el('span', null, '+');
+      mais.style.cssText = 'font-size:22px;color:#8895a6';
+      banca.appendChild(mais);
+      banca.appendChild(encaixe(art('stoneIcon', [info.stoneId, 46], 46),
+        '<b>' + have + ' / ' + info.custo + '</b> ' + esc((sd2 && sd2.name) || info.stoneId),
+        !info.temPedras));
+      var seta = el('span', null, '→');
+      seta.style.cssText = 'font-size:22px;color:#e8c25a';
+      banca.appendChild(seta);
+      banca.appendChild(encaixe(art('itemIcon', [atual.itemId, 46], 46),
+        '<b>+' + (lv2 + 1) + '</b> ' + esc(tierOf(lv2 + 1)), false));
+      cp.appendChild(banca);
       if (!info.temPedras) {
         cp.appendChild(el('p', 'forge-short',
           'Faltam <b>' + (info.custo - have) + '</b> de <b>' + esc((sd2 && sd2.name) || info.stoneId) +
@@ -4296,7 +4328,8 @@ var JOGO = (typeof window !== 'undefined')
           (info.guardas < 1 ? ' — só os chefes mais fundos derrubam' : '')));
         cp.appendChild(linhaG);
       }
-      var go = btn('Forjar para +' + (lv2 + 1), 'btn-primary btn-block' + (info.temPedras ? '' : ' is-off'), function () {
+      var go = btn('🔨 Bater o martelo — vira +' + (lv2 + 1),
+                   'btn-primary btn-block' + (info.temPedras ? '' : ' is-off'), function () {
         var usarG = info.arriscado && forjaComGuarda && info.guardas > 0;
         var fim = forjar(atual, usarG);
         if (fim) {

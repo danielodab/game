@@ -20,6 +20,9 @@ PECAS = [
     ("cofre.glb",          "praca_banco",    "O Banco (cofre-fortaleza)"),
     ("comercio.glb",       "praca_mercado",  "O Mercadinho"),
     ("sede.glb",           "praca_sede",     "A Sede das Guildas"),
+    # a barraca do ferreiro: o hub já espera `praca_forja` — enquanto o
+    # arquivo não existe, sai como FALTANDO e o lugar segue nos provisórios
+    ("forja.glb",          "praca_forja",    "A Forja (barraca do ferreiro)"),
 ]
 
 

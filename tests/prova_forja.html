@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a bancada do ferreiro</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): a ficha da forja com a BANCADA (30/08) — a peça
+     num encaixe, a pedra do elemento no outro, a seta dizendo no que vira,
+     e o martelo para bater. -->
+<iframe id="f" src="../index.html?prova-forja"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      P.addItem('ci-brine-cuirass');            // peça de água da Cisterna
+      P.state.stones['stone-tear'] = 7;         // pedras de água na algibeira
+      P.save();
+      w.JOGO.DB.batizar('Ferreira').then(function () {
+        w.JOGO.UI.showScreen('hub');
+        w.JOGO.UI.openSheet('forge');
+        setTimeout(function () { window.__pronto = true; }, 2000);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

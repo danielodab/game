@@ -230,6 +230,7 @@ var JOGO = (typeof window !== 'undefined')
     montaMercado();
     montaArena();
     montaSede();
+    montaForja();
     // as CONSTRUÇÕES do usuário (árvore, arena, banco, mercado, sede) vestem
     // os volumes acima quando os GLBs abrirem — a sonda de sempre
     construcoesPlantadas = false;
@@ -365,7 +366,9 @@ var JOGO = (typeof window !== 'undefined')
    * lugar precisa nascer antes do sistema — quem entra no acampamento tem de
    * ver onde o PvP vai acontecer. O painel dela diz o que está vindo. */
   function montaArena() {
-    var px = -RAIO_MAPA * 0.60, pz = RAIO_MAPA * 0.25;
+    // subiu um degrau ao norte quando o coliseu cresceu (teto 24 m):
+    // na posição antiga a arquibancada engolia a tenda do Mercadinho
+    var px = -RAIO_MAPA * 0.62, pz = RAIO_MAPA * 0.10;
     var g = new THREE.Group();
     var anel = new THREE.Mesh(
       new THREE.RingGeometry(2.4, 3.1, 40),
@@ -387,8 +390,37 @@ var JOGO = (typeof window !== 'undefined')
     g.add(r);
     g.position.set(px, 0, pz);
     scene.add(g);
+    // o raio acompanha o coliseu de 24 m: 13 do centro = um passo da parede
     lugares.push({ id: 'arena', tipo: 'arena', nome: 'Arena',
-                   pos: new THREE.Vector3(px, 0, pz), raio: 7.0, node: g });
+                   pos: new THREE.Vector3(px, 0, pz), raio: 13.0, node: g });
+  }
+
+  /* A FORJA (30/08): a barraca do ferreiro ganhou endereço na praça — o
+   * jogador chega, põe a peça e a pedra na bancada e bate. Enquanto a arte
+   * da barraca não chega, mesa + tocha + barril seguram o lugar (o mesmo
+   * contrato dos outros: a sonda veste com `praca_forja` quando existir). */
+  function montaForja() {
+    var px = RAIO_MAPA * 0.35, pz = RAIO_MAPA * 0.52;
+    var g = new THREE.Group();
+    var kit = K();
+    if (kit && kit.buildProp) {
+      try {
+        var mesa = kit.buildProp('garden', 'table', 8); if (mesa) g.add(mesa);
+        var tocha1 = kit.buildProp('garden', 'torch', 3);
+        if (tocha1) { tocha1.position.set(-1.3, 0, 0.4); g.add(tocha1); }
+        var tocha2 = kit.buildProp('garden', 'torch', 9);
+        if (tocha2) { tocha2.position.set(1.3, 0, 0.4); g.add(tocha2); }
+        var barril2 = kit.buildProp('garden', 'barrel', 12);
+        if (barril2) { barril2.position.set(1.6, 0, -0.8); g.add(barril2); }
+      } catch (e) {}
+    }
+    var r = rotulo('Forja', '#e0955a');
+    r.position.y = 3.2;
+    g.add(r);
+    g.position.set(px, 0, pz);
+    scene.add(g);
+    lugares.push({ id: 'forja', tipo: 'forja', nome: 'Forja',
+                   pos: new THREE.Vector3(px, 0, pz), raio: 5.0, node: g });
   }
 
   /* A SEDE DAS GUILDAS (25/08): o estandarte a leste. O lugar existe ANTES
@@ -463,8 +495,12 @@ var JOGO = (typeof window !== 'undefined')
     var OBRAS = {
       mercado: { chave: 'praca_mercado', alvoAlt: 6.5, teto: 11 },
       banco:   { chave: 'praca_banco',   alvoAlt: 8.0, teto: 12 },
-      arena:   { chave: 'praca_arena',   alvoAlt: 5.2, teto: 15 },
-      sede:    { chave: 'praca_sede',    alvoAlt: 9.5, teto: 14 }
+      // "muito maior, mais imponente" (30/08): o coliseu quase dobrou —
+      // é a segunda silhueta do mapa, atrás só da Árvore-Mundo
+      arena:   { chave: 'praca_arena',   alvoAlt: 9.5, teto: 24 },
+      sede:    { chave: 'praca_sede',    alvoAlt: 9.5, teto: 14 },
+      // a barraca do ferreiro veste quando a arte chegar (embute_praca)
+      forja:   { chave: 'praca_forja',   alvoAlt: 6.0, teto: 10 }
     };
     function montaObra(chave, alvoAlt, teto, rotY) {
       var cena = null;
