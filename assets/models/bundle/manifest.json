@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-30T20:54:02",
+ "gerado": "2026-08-30T21:46:01",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -1169,6 +1169,12 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "praca_forja",
+   "arquivo": "models-praca/praca_forja.glb",
+   "bytes": 825436
+  },
+  {
+   "alvo": "MODELS",
    "chave": "q_hywirl",
    "arquivo": "models-summons/q_hywirl.glb",
    "bytes": 317228
@@ -1692,6 +1698,6 @@
    "walk"
   ]
  },
- "totalBytes": 129541884,
- "totalBase64": 172722784
+ "totalBytes": 130367320,
+ "totalBase64": 173823368
 }

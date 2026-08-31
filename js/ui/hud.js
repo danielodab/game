@@ -470,7 +470,9 @@ var JOGO = (typeof window !== 'undefined')
   function buildHeroSelect() {
     var s = screens.heroSelect;
     clear(s);
-    s.appendChild(header('Quem desce', 'Escolha 1 ou 2 heróis. Sozinho, a sorte de saque é máxima.', 'menu'));
+    s.appendChild(header('Quem desce',
+      'Escolha 1 ou 2 heróis — o PRIMEIRO é o seu avatar e anda no Acampamento. ' +
+      'Sozinho, a sorte de saque é máxima.', 'menu'));
 
     var body = el('div', 'ui-body');
     var luck = el('div', 'luck-panel');
@@ -568,7 +570,8 @@ var JOGO = (typeof window !== 'undefined')
         '<span class="s-pp">' + (st.pp || 0) + ' PP</span>'));
       var acts = el('div', 'hero-acts');
       acts.appendChild(btn('Ficha', 'btn-mini', function () { openSheet('heroSheet', cid); }));
-      var pick = btn(idx >= 0 ? 'Escolhido ' + (idx + 1) : 'Escolher', 'btn-mini ' + (idx >= 0 ? 'btn-primary' : ''), function () {
+      var pick = btn(idx === 0 ? '① Avatar' : idx > 0 ? '② Escolhido' : 'Escolher',
+                     'btn-mini ' + (idx >= 0 ? 'btn-primary' : ''), function () {
         var i = selHeroes.indexOf(cid);
         if (i >= 0) selHeroes.splice(i, 1);
         else if (selHeroes.length >= 2) { toast('O grupo é de no máximo 2 heróis.'); return; }
@@ -2965,8 +2968,15 @@ var JOGO = (typeof window !== 'undefined')
       return !!h && isUnlocked(h.classId || hid);
     });
   }
+  /* O carrossel navega SÓ A DUPLA (30/08: "o inventário está meio confuso
+   * com todos os personagens") — quem não desce não aparece vestindo peça.
+   * Sem dupla escolhida (página de teste, atalho), cai nos liberados. */
+  function duplaViva() {
+    return selHeroes.filter(function (hid) { return !!hero(hid); });
+  }
   function ensurePartyHero() {
-    var lista = partyHeroes();
+    var lista = duplaViva();
+    if (!lista.length) lista = partyHeroes();
     if (!lista.length) { partyHero = null; return null; }
     if (partyHero === null || lista.indexOf(partyHero) < 0) partyHero = lista[0];
     return partyHero;
@@ -3613,8 +3623,13 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  /* O slot em troca: null fechado; 0/1 = trocar o membro; 'add' = pôr o 2º */
+  var duplaTrocaAberta = null;
+
   function heroCarousel(hid) {
-    var lista = partyHeroes();
+    var dupla = duplaViva();
+    var soltos = !dupla.length;               // página sem dupla: liberados
+    var lista = soltos ? partyHeroes() : dupla;
     var wrap = el('div', 'pt-hero-caixa');
     if (!lista.length || !hid) {
       wrap.appendChild(el('p', 'empty', 'Nenhuma classe liberada ainda. As cartas dos chefes abrem as outras.'));
@@ -3625,33 +3640,97 @@ var JOGO = (typeof window !== 'undefined')
     var info = cardInfo(cid);
     var stats = effStats(hid) || (classDef(cid) || {}).stats || {};
 
-    /* TROCAR DE PERSONAGEM À VISTA ("aqui eu devo conseguir trocar o
-     * personagem de alguma maneira..."): os retratos de TODOS os liberados
-     * numa fileira clicável. O ativo acende; os da dupla levam um ponto
-     * dourado. As setas ‹ › que faziam isso eram duas barras anônimas nas
-     * bordas — afordância que precisa de legenda não é afordância. */
-    var fila = el('div', 'pt-fila');
-    lista.forEach(function (outro) {
-      var oh = hero(outro) || {};
-      var ocid = oh.classId || outro;
-      var chip = el('button', 'pt-retrato' + (outro === hid ? ' is-on' : ''));
-      chip.type = 'button';
-      chip.appendChild(art('unit', [ocid, { element: oh.element || 'neutro', dir: 0, scale: 0.42 }], 44));
-      chip.appendChild(el('span', 'pt-retrato-nm', esc(className(ocid))));
-      if (selHeroes.indexOf(outro) >= 0) chip.appendChild(el('i', 'pt-na-dupla'));
-      tap(chip, function () {
-        partyHero = outro;
+    /* SÓ A DUPLA NO INVENTÁRIO (30/08): a fileira com os sete confundia.
+     * Agora a foto é GRANDE, a seta passa para o outro da dupla, o "+"
+     * adiciona o segundo quando se desceu sozinho, e o botão de troca mora
+     * no canto inferior da própria foto — como o dono desenhou. */
+    var naDupla = lista.indexOf(hid);
+    var care = el('div', 'pt-carrossel');
+    care.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:10px;margin:6px 0';
+
+    function setaPara(dirN) {
+      var alvo = lista[(naDupla + dirN + lista.length) % lista.length];
+      var b = el('button', 'btn-mini btn-ghost');
+      b.type = 'button';
+      b.textContent = dirN > 0 ? '›' : '‹';
+      b.style.cssText = 'font-size:26px;line-height:1;padding:14px 10px';
+      tap(b, function () {
+        partyHero = alvo;
         invSel = null;
+        duplaTrocaAberta = null;
         sheetParty(partyTab);
       });
-      fila.appendChild(chip);
+      return b;
+    }
+    if (lista.length > 1) care.appendChild(setaPara(-1));
+
+    // a FOTO grande, com o selo de avatar e o botão de troca no pé
+    var moldura = el('div', 'pt-hero-pic');
+    moldura.style.cssText = 'position:relative;width:170px;height:190px;display:flex;' +
+                            'align-items:center;justify-content:center';
+    moldura.appendChild(art('unit', [cid, { element: h.element || 'neutro', dir: 0, scale: 0.95 }], 160));
+    if (!soltos && naDupla === 0) {
+      var selo = el('span', 'pt-dupla-tag is-lider', 'AVATAR');
+      selo.style.cssText = 'position:absolute;top:2px;left:50%;transform:translateX(-50%)';
+      moldura.appendChild(selo);
+    }
+    var trocaB = el('button', 'btn-mini');
+    trocaB.type = 'button';
+    trocaB.textContent = '⇄ Trocar';
+    trocaB.style.cssText = 'position:absolute;bottom:0;left:50%;transform:translateX(-50%)';
+    tap(trocaB, function () {
+      duplaTrocaAberta = (duplaTrocaAberta === naDupla) ? null : naDupla;
+      sheetParty(partyTab);
     });
-    wrap.appendChild(fila);
+    moldura.appendChild(trocaB);
+    care.appendChild(moldura);
+
+    if (lista.length > 1) care.appendChild(setaPara(1));
+
+    // desceu sozinho? o "+" convida o segundo
+    if (!soltos && dupla.length === 1 && partyHeroes().length > 1) {
+      var mais = el('button', 'pt-retrato');
+      mais.type = 'button';
+      mais.style.cssText = 'min-width:64px;height:120px;font-size:34px;color:#8895a6';
+      mais.textContent = '+';
+      mais.title = 'Adicionar o segundo da dupla';
+      tap(mais, function () {
+        duplaTrocaAberta = (duplaTrocaAberta === 'add') ? null : 'add';
+        sheetParty(partyTab);
+      });
+      care.appendChild(mais);
+    }
+    wrap.appendChild(care);
+
+    // o SELETOR da troca: os liberados de fora da dupla, um clique resolve
+    if (duplaTrocaAberta !== null && !soltos) {
+      var fora = partyHeroes().filter(function (o) { return dupla.indexOf(o) < 0; });
+      var fila = el('div', 'pt-fila');
+      if (!fora.length) {
+        fila.appendChild(el('p', 'inv-dica', 'Não há outra classe liberada para pôr aqui.'));
+      }
+      fora.forEach(function (outro) {
+        var oh = hero(outro) || {};
+        var ocid = oh.classId || outro;
+        var chip = el('button', 'pt-retrato');
+        chip.type = 'button';
+        chip.appendChild(art('unit', [ocid, { element: oh.element || 'neutro', dir: 0, scale: 0.42 }], 44));
+        chip.appendChild(el('span', 'pt-retrato-nm', esc(className(ocid))));
+        tap(chip, function () {
+          var antes = selHeroes[0] || null;
+          if (duplaTrocaAberta === 'add') selHeroes.push(outro);
+          else selHeroes[duplaTrocaAberta] = outro;
+          duplaTrocaAberta = null;
+          partyHero = outro;
+          invSel = null;
+          duplaMudou(antes);
+        });
+        fila.appendChild(chip);
+      });
+      wrap.appendChild(fila);
+    }
 
     var card = el('div', 'pt-hero-card');
-    var pic = el('div', 'pt-hero-pic');
-    pic.appendChild(art('unit', [cid, { element: h.element || 'neutro', dir: 0, scale: 0.6 }], 84));
-    card.appendChild(pic);
 
     var col = el('div', 'pt-hero-txt');
     col.appendChild(el('div', 'pt-hero-nm', esc(className(cid))));

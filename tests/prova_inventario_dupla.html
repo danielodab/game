@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o inventário da dupla</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): o inventário mostra SÓ A DUPLA (30/08) — foto
+     grande com selo de AVATAR no primeiro, seta para o outro, botão ⇄ de
+     troca no pé da foto. Com ?um=1 desce sozinho e o "+" convida o segundo. -->
+<iframe id="f" src="../index.html?prova-inv"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      var um = /[?&]um=1/.test(location.search);
+      w.JOGO.DB.batizar('Provadora').then(function () {
+        // ids REAIS e liberados no save virgem (sumo e arqueiro); o
+        // arqueiro primeiro prova que o AVATAR é a ordem da escolha
+        w.JOGO.UI.selection(um ? ['arqueiro'] : ['arqueiro', 'sumo']);
+        w.JOGO.UI.showScreen('hub');
+        w.JOGO.UI.openSheet('inventory');
+        setTimeout(function () { window.__pronto = true; }, 2000);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>
