@@ -47,15 +47,22 @@ var JOGO = (typeof window !== 'undefined')
    * portal do lado), acima disso o corpo corre — com o clipe `run` que toda
    * classe tem. Um mundo aberto onde se atravessa o mapa a passo de tabuleiro
    * parece um menu com chão. */
-  var VEL_ANDA = 3.2, VEL_CORRE = 6.0, DIST_CORRIDA = 4.0;
-  var RAIO_MAPA = 26;
+  /* A PRAÇA CRESCEU E VIROU QUADRADA (30/08, pedido: "faça o mapa um pouco
+   * maior e quadrado... preciso que ele fique grande"). `RAIO_MAPA` passou a
+   * ser o MEIO-LADO do quadrado (lado = 80 m, antes era um disco de r=26).
+   * O passo subiu junto — atravessar 80 m no passo antigo levava 13 s e
+   * parecia um menu com chão. */
+  var VEL_ANDA = 3.8, VEL_CORRE = 7.5, DIST_CORRIDA = 4.0;
+  var RAIO_MAPA = 40;
+  /* o tronco da Árvore-Mundo é SÓLIDO: quem anda desliza por fora dele */
+  var TRONCO_RAIO = 4.6;
 
   /* A câmera 3D: a MESMA gramática da batalha — arrastar orbita e inclina,
    * roda dá zoom, toque curto age. Orbita em volta DO HERÓI: no mapa aberto o
    * corpo é a âncora, e deslocar o pivô para longe do próprio personagem é se
-   * perder num minimapa. */
-  var cam = { ang: 0.0, tilt: 0.95, dist: 16,
-              minDist: 7, maxDist: 30, minTilt: 0.35, maxTilt: 1.25 };
+   * perder num minimapa. maxDist acompanhou o mapa novo. */
+  var cam = { ang: 0.0, tilt: 0.95, dist: 20,
+              minDist: 7, maxDist: 48, minTilt: 0.35, maxTilt: 1.25 };
   var TAP_PX = 6;                   // o mesmo limiar clique/arrasto da batalha
 
   // ---------------------------------------------------------------- utilidades
@@ -104,6 +111,44 @@ var JOGO = (typeof window !== 'undefined')
   function M2() { return JOGO.Models3D2 || null; }
   function K() { return JOGO.Models3D || null; }
 
+  /* AS LAJOTAS DA PRAÇA (30/08): textura procedural de pedras cinza com
+   * junta escura, em padrão corrido (cada fileira desloca meia lajota).
+   * O tom de cada pedra sai de um hash do índice — nada de Math.random,
+   * a praça é a mesma em toda visita. Um tile de 256px cobre 4×4 m e se
+   * repete: em 80 m são 20 repetições, longe o bastante para o olho não
+   * pegar o carimbo. */
+  var texLajotas = null;
+  function texturaLajotas() {
+    if (texLajotas) return texLajotas;
+    var cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 256;
+    var g = cv.getContext('2d');
+    g.fillStyle = '#3f4348';                       // a junta, escura
+    g.fillRect(0, 0, 256, 256);
+    var NL = 4, lado = 256 / NL, junta = 5;
+    for (var jj = 0; jj < NL; jj++) {
+      var desloca = (jj % 2) * (lado / 2);         // padrão corrido
+      for (var ii = -1; ii <= NL; ii++) {
+        var h = ((ii * 7 + jj * 13 + 5) * 2654435761) % 100;
+        var tom = 108 + (h % 26) - 12;             // cinza 96..122
+        g.fillStyle = 'rgb(' + tom + ',' + (tom + 2) + ',' + (tom + 5) + ')';
+        g.fillRect(ii * lado + desloca + junta / 2, jj * lado + junta / 2,
+                   lado - junta, lado - junta);
+        // um fio de luz na borda de cima: leitura de pedra, não de ladrilho
+        g.fillStyle = 'rgba(255,255,255,0.07)';
+        g.fillRect(ii * lado + desloca + junta / 2, jj * lado + junta / 2,
+                   lado - junta, 3);
+      }
+    }
+    var tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(RAIO_MAPA / 2, RAIO_MAPA / 2);
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texLajotas = tex;
+    return tex;
+  }
+
   function corDoTema(tema) {
     // a cor de cada Fecho no portal: aproveita as cores de elemento do jogo
     var mapa = { garden: '#6fae53', cistern: '#4a7d96', forge: '#d4553f',
@@ -112,13 +157,27 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   /* Rótulo flutuante: um sprite com texto desenhado em canvas. É o mesmo truque
-   * dos números de dano — barato e legível de qualquer ângulo. */
-  function rotulo(texto, cor, escala) {
+   * dos números de dano — barato e legível de qualquer ângulo.
+   * `op.placa` desenha o texto DENTRO de um retângulo com borda — o pedido do
+   * dono para o nome do personagem ("deve aparecer dentro de algum
+   * retângulo"). O desenho é o da bandeira da Sede: fundo escuro, filete
+   * dourado. A largura da placa abraça o texto, não o canvas inteiro —
+   * placa de nome curto não pode parecer um outdoor. */
+  function rotulo(texto, cor, escala, op) {
     var cv = document.createElement('canvas');
     cv.width = 512; cv.height = 128;
     var g = cv.getContext('2d');
     g.font = '600 44px Georgia, serif';
     g.textAlign = 'center';
+    if (op && op.placa) {
+      var larg = Math.min(492, Math.ceil(g.measureText(texto).width) + 56);
+      var x0 = (512 - larg) / 2;
+      g.fillStyle = op.fundo || 'rgba(24,18,10,0.88)';
+      g.fillRect(x0, 18, larg, 92);
+      g.strokeStyle = op.borda || '#c9a227';
+      g.lineWidth = 5;
+      g.strokeRect(x0 + 2.5, 20.5, larg - 5, 87);
+    }
     g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 10;
     g.fillStyle = cor || '#f0ead8';
     g.fillText(texto, 256, 78);
@@ -135,37 +194,47 @@ var JOGO = (typeof window !== 'undefined')
   function montaCena() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0d1512);
-    scene.fog = new THREE.Fog(0x0d1512, RAIO_MAPA * 0.9, RAIO_MAPA * 2.1);
+    // névoa recalibrada para o mapa grande: no ajuste antigo ela engoliria
+    // metade da praça nova antes de o jogador dar dez passos
+    scene.fog = new THREE.Fog(0x0d1512, RAIO_MAPA * 1.4, RAIO_MAPA * 3.4);
 
     scene.add(new THREE.HemisphereLight(0xcfe8d8, 0x1a2420, 0.95));
     var sol = new THREE.DirectionalLight(0xffe9c4, 1.05);
     sol.position.set(12, 22, 8);
     scene.add(sol);
 
-    // O CHÃO SEM GRADE — o pedido literal. Um disco de terra batida; o
-    // acabamento vem da luz e da névoa, não de textura de célula.
+    // O CHÃO SEM GRADE — agora QUADRADO e de LAJOTAS CINZA (pedido 30/08:
+    // "o chão cinza como se fosse lajotas"). A textura é desenhada em canvas
+    // na hora — pedras de tons variados com junta escura, padrão corrido —
+    // e se repete pela praça inteira. Determinística: a mesma praça em toda
+    // visita, como tudo aqui.
     chao = new THREE.Mesh(
-      new THREE.CircleGeometry(RAIO_MAPA, 56),
-      new THREE.MeshStandardMaterial({ color: 0x2c3a2c, roughness: 1 })
+      new THREE.PlaneGeometry(RAIO_MAPA * 2, RAIO_MAPA * 2),
+      new THREE.MeshStandardMaterial({ map: texturaLajotas(), roughness: 1 })
     );
     chao.rotation.x = -Math.PI / 2;
     scene.add(chao);
-    // uma borda mais escura, para o mundo não terminar num fio duro
-    var borda = new THREE.Mesh(
-      new THREE.RingGeometry(RAIO_MAPA * 0.94, RAIO_MAPA, 56),
+    // o mundo em volta, mais escuro, para a praça não terminar num fio duro
+    var fundo = new THREE.Mesh(
+      new THREE.PlaneGeometry(RAIO_MAPA * 5, RAIO_MAPA * 5),
       new THREE.MeshBasicMaterial({ color: 0x121a14 })
     );
-    borda.rotation.x = -Math.PI / 2;
-    borda.position.y = 0.01;
-    scene.add(borda);
+    fundo.rotation.x = -Math.PI / 2;
+    fundo.position.y = -0.02;
+    scene.add(fundo);
 
-    camera = new THREE.PerspectiveCamera(46, 1, 0.1, 220);
+    camera = new THREE.PerspectiveCamera(46, 1, 0.1, 300);
 
     montaPortais();
     montaBanco();
     montaMercado();
     montaArena();
     montaSede();
+    // as CONSTRUÇÕES do usuário (árvore, arena, banco, mercado, sede) vestem
+    // os volumes acima quando os GLBs abrirem — a sonda de sempre
+    construcoesPlantadas = false;
+    construcoesTentativas = 0;
+    montaConstrucoes();
     enfeitesPlantados = false;       // cena nova, moitas novas
     enfeitesTentativas = 0;
     montaEnfeites();
@@ -182,10 +251,15 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < n; i++) {
       var dg = lista[i];
       if (!dg || !dg.id) continue;
-      // arco de -55° a +55°, ao norte (z negativo), a 3/4 do raio
-      var ang = (-0.96 + (1.92 * i / Math.max(1, n - 1)));
-      var px = Math.sin(ang) * RAIO_MAPA * 0.74;
-      var pz = -Math.cos(ang) * RAIO_MAPA * 0.74;
+      // arco de -63° a +63°, ao norte (z negativo), a 3/4 do meio-lado.
+      // No mapa antigo sobrava 0,5 m entre as zonas de conversa de dois
+      // portais vizinhos — era a queixa dos "portais colados". Agora cada
+      // vizinho fica a ~13 m do outro, com espaço para o cantinho temático
+      // — e os extremos não descem tanto a ponto de a Sede e a Arena os
+      // taparem da câmera padrão.
+      var ang = (-1.10 + (2.20 * i / Math.max(1, n - 1)));
+      var px = Math.sin(ang) * RAIO_MAPA * 0.75;
+      var pz = -Math.cos(ang) * RAIO_MAPA * 0.75;
       var cor = new THREE.Color(corDoTema(dg.theme));
 
       var g = new THREE.Group();
@@ -220,9 +294,13 @@ var JOGO = (typeof window !== 'undefined')
 
       g.position.set(px, 0, pz);
       g.lookAt(0, 0, 0);              // o portal encara o centro do acampamento
+      // no mapa grande o portal do porte antigo virava miniatura; o grupo
+      // inteiro sobe 1,3× — aro, base e rótulo juntos, proporção preservada
+      g.scale.setScalar(1.3);
       scene.add(g);
       lugares.push({ id: dg.id, tipo: 'portal', nome: dg.name || dg.id,
-                     pos: new THREE.Vector3(px, 0, pz), raio: 3.4, node: g, miolo: miolo });
+                     tema: dg.theme || null,
+                     pos: new THREE.Vector3(px, 0, pz), raio: 4.2, node: g, miolo: miolo });
     }
   }
 
@@ -231,7 +309,9 @@ var JOGO = (typeof window !== 'undefined')
    * (A primeira posição escolhida espelhava o banco... em cima da ARENA, e
    * os dois letreiros viraram um borrão — a foto do Daniel pegou.) */
   function montaMercado() {
-    var px = 0, pz = RAIO_MAPA * 0.62;
+    // a tenda saiu do meio-sul: ali ela nascia DENTRO da câmera inicial
+    // (que fica às costas do herói) e o toldo tomava a primeira tela
+    var px = -RAIO_MAPA * 0.50, pz = RAIO_MAPA * 0.58;
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -253,12 +333,12 @@ var JOGO = (typeof window !== 'undefined')
     g.position.set(px, 0, pz);
     scene.add(g);
     lugares.push({ id: 'mercado', tipo: 'mercado', nome: 'Mercadinho',
-                   pos: new THREE.Vector3(px, 0, pz), raio: 3.0, node: g });
+                   pos: new THREE.Vector3(px, 0, pz), raio: 6.0, node: g });
   }
 
   /* O BANCO: mesa, baú e moedas do próprio kit — as peças já existiam. */
   function montaBanco() {
-    var px = RAIO_MAPA * 0.55, pz = RAIO_MAPA * 0.30;
+    var px = RAIO_MAPA * 0.60, pz = RAIO_MAPA * 0.25;
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -278,14 +358,14 @@ var JOGO = (typeof window !== 'undefined')
     g.position.set(px, 0, pz);
     scene.add(g);
     lugares.push({ id: 'banco', tipo: 'banco', nome: 'Banco',
-                   pos: new THREE.Vector3(px, 0, pz), raio: 3.0, node: g });
+                   pos: new THREE.Vector3(px, 0, pz), raio: 6.0, node: g });
   }
 
   /* A ARENA: o círculo de duelo, ainda selado. Existe DESDE JÁ no mapa porque o
    * lugar precisa nascer antes do sistema — quem entra no acampamento tem de
    * ver onde o PvP vai acontecer. O painel dela diz o que está vindo. */
   function montaArena() {
-    var px = -RAIO_MAPA * 0.55, pz = RAIO_MAPA * 0.30;
+    var px = -RAIO_MAPA * 0.60, pz = RAIO_MAPA * 0.25;
     var g = new THREE.Group();
     var anel = new THREE.Mesh(
       new THREE.RingGeometry(2.4, 3.1, 40),
@@ -308,14 +388,16 @@ var JOGO = (typeof window !== 'undefined')
     g.position.set(px, 0, pz);
     scene.add(g);
     lugares.push({ id: 'arena', tipo: 'arena', nome: 'Arena',
-                   pos: new THREE.Vector3(px, 0, pz), raio: 3.4, node: g });
+                   pos: new THREE.Vector3(px, 0, pz), raio: 7.0, node: g });
   }
 
   /* A SEDE DAS GUILDAS (25/08): o estandarte a leste. O lugar existe ANTES
    * da casa própria — a casa 3D de cada guilda vem com a fase do lobby;
    * hoje a porta abre a ficha da guilda. */
   function montaSede() {
-    var px = RAIO_MAPA * 0.62, pz = -RAIO_MAPA * 0.04;
+    // afastada do extremo leste do arco: a fortaleza tapava o portal do
+    // Coração Partido na câmera padrão (mesma coluna de visada)
+    var px = RAIO_MAPA * 0.55, pz = RAIO_MAPA * 0.14;
     var g = new THREE.Group();
     var mastro = new THREE.Mesh(
       new THREE.CylinderGeometry(0.09, 0.13, 4.4, 8),
@@ -348,7 +430,89 @@ var JOGO = (typeof window !== 'undefined')
     g.position.set(px, 0, pz);
     scene.add(g);
     lugares.push({ id: 'sede', tipo: 'sede', nome: 'Sede das Guildas',
-                   pos: new THREE.Vector3(px, 0, pz), raio: 3.2, node: g });
+                   pos: new THREE.Vector3(px, 0, pz), raio: 6.5, node: g });
+  }
+
+  /* AS CONSTRUÇÕES DA PRAÇA (30/08): a arte do usuário veste os lugares. Os
+   * volumes provisórios (caixotes do banco, anel da arena, bandeira da sede)
+   * continuam nascendo primeiro — são síncronos e seguram o clique — e a
+   * sonda os troca pelo GLB quando `models-praca.js` abrir, preservando o
+   * RÓTULO de cada lugar (ele sobe para o teto do prédio novo).
+   * A ÁRVORE-MUNDO entra aqui também: grande e em destaque no MEIO do mapa,
+   * como pedido — os seis climas dos calabouços nos galhos dela. */
+  var construcoesPlantadas = false, construcoesTentativas = 0;
+  var ARVORE_ALT = 17;
+  function agendaConstrucoes() {
+    // 400 pelo mesmo motivo do agendaEnfeites: o relógio virtual do
+    // headless queimava o limite antes de o decode real terminar
+    if (construcoesPlantadas || construcoesTentativas > 400) return;
+    construcoesTentativas++;
+    setTimeout(montaConstrucoes, 500);
+  }
+  function montaConstrucoes() {
+    if (construcoesPlantadas || !scene) return;
+    var m2 = M2();
+    var sonda = null;
+    try { sonda = m2 && m2.rawScene && m2.rawScene('praca_arvore'); } catch (e) {}
+    if (!sonda) { agendaConstrucoes(); return; }
+    construcoesPlantadas = true;
+
+    /* alvoAlt = altura da construção; teto = largura máxima antes de a
+     * altura ceder (a ARENA é um coliseu deitado: mais larga que alta por
+     * natureza, e é a largura que manda nela). */
+    var OBRAS = {
+      mercado: { chave: 'praca_mercado', alvoAlt: 6.5, teto: 11 },
+      banco:   { chave: 'praca_banco',   alvoAlt: 8.0, teto: 12 },
+      arena:   { chave: 'praca_arena',   alvoAlt: 5.2, teto: 15 },
+      sede:    { chave: 'praca_sede',    alvoAlt: 9.5, teto: 14 }
+    };
+    function montaObra(chave, alvoAlt, teto, rotY) {
+      var cena = null;
+      try { cena = m2.rawScene(chave); } catch (e) {}
+      if (!cena) return null;
+      var no = cena.clone(true);
+      // a ROTAÇÃO entra ANTES da medição: centrar primeiro e girar depois
+      // deslocaria o centro junto — o mesmo tombo de eixo de sempre
+      no.rotation.y = rotY || 0;
+      no.updateMatrixWorld(true);
+      var cx = new THREE.Box3().setFromObject(no);
+      var alt = cx.max.y - cx.min.y;
+      var larg = Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z);
+      if (!isFinite(alt) || alt < 0.01) return null;
+      var k = alvoAlt / alt;
+      if (isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
+      no.scale.multiplyScalar(k);
+      no.updateMatrixWorld(true);
+      cx = new THREE.Box3().setFromObject(no);
+      no.position.y -= cx.min.y;                        // assenta pelo pé
+      no.position.x -= (cx.min.x + cx.max.x) / 2;       // e centra na casa
+      no.position.z -= (cx.min.z + cx.max.z) / 2;
+      return { no: no, alt: cx.max.y - cx.min.y };
+    }
+
+    for (var i = 0; i < lugares.length; i++) {
+      var lg = lugares[i];
+      var obra = OBRAS[lg.tipo];
+      if (!obra) continue;
+      // o prédio ENCARA o centro da praça, como os portais
+      var feito = montaObra(obra.chave, obra.alvoAlt, obra.teto,
+                            Math.atan2(-lg.pos.x, -lg.pos.z));
+      if (!feito) continue;
+      // fora os volumes provisórios; o RÓTULO fica e sobe para o teto
+      var rot = null;
+      for (var c = lg.node.children.length - 1; c >= 0; c--) {
+        var filho = lg.node.children[c];
+        if (filho.isSprite) { rot = filho; continue; }
+        lg.node.remove(filho);
+      }
+      lg.node.add(feito.no);
+      if (rot) rot.position.y = feito.alt + 1.4;
+    }
+
+    // A ÁRVORE-MUNDO: o coração do mapa. Não é `lugar` (não abre painel) —
+    // é o marco que amarra os seis climas; o tronco é sólido (TRONCO_RAIO).
+    var arv = montaObra('praca_arvore', ARVORE_ALT, 30, 2.4);
+    if (arv) scene.add(arv.no);
   }
 
   /* Vida em volta: meia dúzia das peças de cenário do usuário, espalhadas com
@@ -367,7 +531,11 @@ var JOGO = (typeof window !== 'undefined')
    * apareciam, ora não). A sonda espera o kit abrir e replanta uma vez só. */
   var enfeitesPlantados = false, enfeitesTentativas = 0;
   function agendaEnfeites() {
-    if (enfeitesPlantados || enfeitesTentativas > 40) return;
+    // 400 tentativas, não 40: no headless o relógio é VIRTUAL e as 40
+    // queimavam em segundos reais, antes de o decode dos GLBs terminar —
+    // a foto saía de praça pelada. Em tempo real nada muda: planta na
+    // primeira tentativa em que o kit abriu.
+    if (enfeitesPlantados || enfeitesTentativas > 400) return;
     enfeitesTentativas++;
     setTimeout(montaEnfeites, 500);
   }
@@ -448,6 +616,53 @@ var JOGO = (typeof window !== 'undefined')
                a3 * 2.3);
       }
     });
+
+    /* OS CANTINHOS TEMÁTICOS DOS PORTAIS (30/08, pedido: "perto de cada um
+     * deles coloque elementos daquele mapa"). Cada portal com catálogo de
+     * cenário próprio ganha um pedaço do SEU calabouço ao pé: duas muretas
+     * flanqueando, uma peça alta e um enfeite atrás. Hoje só o Jardim
+     * (garden) e a Água (cistern) têm catálogo — "os outros deixa sem até
+     * eu criar". Determinístico, como tudo na praça. */
+    function plantaTema(chave, altAlvo, teto, x, z, rot) {
+      var cena = null;
+      try { cena = m2.rawScene(chave); } catch (e) {}
+      if (!cena) return null;
+      var no = cena.clone(true);
+      no.rotation.y = rot || 0;
+      no.updateMatrixWorld(true);
+      var cx = new THREE.Box3().setFromObject(no);
+      var alt = cx.max.y - cx.min.y;
+      var larg = Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z);
+      if (!isFinite(alt) || alt <= 0.01) return null;
+      var k = altAlvo / alt;
+      if (teto && isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
+      no.scale.multiplyScalar(k);
+      no.updateMatrixWorld(true);
+      cx = new THREE.Box3().setFromObject(no);
+      no.position.set(x - (cx.min.x + cx.max.x) / 2, -cx.min.y,
+                      z - (cx.min.z + cx.max.z) / 2);
+      scene.add(no);
+      return no;
+    }
+    lugares.forEach(function (lg, li) {
+      if (lg.tipo !== 'portal' || !lg.tema) return;
+      var catT = JOGO.CENARIO && JOGO.CENARIO[lg.tema];
+      if (!catT) return;
+      var px2 = lg.pos.x, pz2 = lg.pos.z;
+      var r0 = Math.max(0.01, Math.hypot(px2, pz2));
+      var ux = px2 / r0, uz = pz2 / r0;      // radial: para FORA do centro
+      var tx = -uz, tz = ux;                 // tangencial: ao longo do arco
+      var rotT = Math.atan2(tx, tz);         // a mureta corre com o arco
+      var muro = (catT.alto || [])[li % Math.max(1, (catT.alto || []).length)];
+      var altoP = (catT.sotaque_alto || [])[li % Math.max(1, (catT.sotaque_alto || []).length)];
+      var enfP = (catT.sotaque || [])[li % Math.max(1, (catT.sotaque || []).length)];
+      if (muro) {
+        plantaTema(muro, 1.05, 4.6, px2 + tx * 4.2 + ux * 1.2, pz2 + tz * 4.2 + uz * 1.2, rotT);
+        plantaTema(muro, 1.05, 4.6, px2 - tx * 4.2 + ux * 1.2, pz2 - tz * 4.2 + uz * 1.2, rotT);
+      }
+      if (altoP) plantaTema(altoP, 2.8, 2.4, px2 + ux * 3.4 + tx * 2.3, pz2 + uz * 3.4 + tz * 2.3, li * 1.3);
+      if (enfP) plantaTema(enfP, 1.2, 2.2, px2 + ux * 3.1 - tx * 2.3, pz2 + uz * 3.1 - tz * 2.3, li * 2.1);
+    });
   }
 
   // ------------------------------------------------------------------ o herói
@@ -461,7 +676,7 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(node);
     heroi = { node: node, alvo: null, andando: false };
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
-    if (nomeJogador) pendura(nomeJogador, tituloJogador, brasaDoHeroi);
+    if (nomeJogador) pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
   }
 
   /* O NOME ACIMA DA CABEÇA — a primeira marca de jogo online que o corpo
@@ -469,10 +684,13 @@ var JOGO = (typeof window !== 'undefined')
    * da cabeça"). A plaquinha é FILHA do nó do herói: anda, corre e troca de
    * corpo junto, sem uma linha no tique — e sprite sempre encara a câmera.
    * Os fantasmas da rede vão pendurar a deles por este mesmo caminho. */
-  /* Pendura nome (e título) em QUALQUER corpo — herói ou fantasma. */
-  function penduraEm(corpo, nome, titulo, brasaTier) {
+  /* Pendura nome (e título, e a GUILDA) em QUALQUER corpo — herói ou
+   * fantasma. Desde 30/08 o NOME vem numa PLACA (retângulo com filete
+   * dourado, pedido do dono) e a guilda — emblema + nome — numa placa menor
+   * ACIMA dele. A coroa do ranking flutua acima de tudo. */
+  function penduraEm(corpo, nome, titulo, brasaTier, guilda) {
     if (!corpo || !THREE) return;
-    ['plaquinha', 'plaquinhaTitulo'].forEach(function (campo) {
+    ['plaquinha', 'plaquinhaTitulo', 'plaquinhaGuilda'].forEach(function (campo) {
       if (!corpo[campo]) return;
       corpo.node.remove(corpo[campo]);
       try {
@@ -488,7 +706,8 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (!nome) return;
     var alto = (corpo.node.userData.height || 2.1);
-    var sp = rotulo(nome, '#f0ead8', 0.42);
+    var temGuilda = !!(guilda && guilda.nome);
+    var sp = rotulo(nome, '#f0ead8', 0.42, { placa: true });
     sp.position.y = alto + (titulo ? 0.66 : 0.5);
     corpo.node.add(sp);
     corpo.plaquinha = sp;
@@ -500,6 +719,18 @@ var JOGO = (typeof window !== 'undefined')
       corpo.node.add(st2);
       corpo.plaquinhaTitulo = st2;
     }
+    // A PLACA DA GUILDA: emblema + nome, acima do nome do personagem — a
+    // bandeira que o corpo carrega ("com seu logo da guild e nome da guild
+    // em cima"). Placa própria, um degrau menor que a do nome.
+    var altoGuilda = 0;
+    if (temGuilda) {
+      var gtx = (guilda.emblema || '⚑') + ' ' + guilda.nome;
+      var sg = rotulo(gtx, '#ffd98a', 0.30, { placa: true, borda: '#8a6f2e' });
+      sg.position.y = alto + (titulo ? 0.66 : 0.5) + 0.52;
+      corpo.node.add(sg);
+      corpo.plaquinhaGuilda = sg;
+      altoGuilda = 0.52;
+    }
     // A COROA DO RANKING — a arte do usuário, no lugar das chamas ("essa
     // coroa ficará acima da cabeça ao invés das chamas"). AGORA EM 3D
     // (30/08): as dez coroas viraram modelo (coroas-pvp-3d.js) e a de cada
@@ -510,7 +741,8 @@ var JOGO = (typeof window !== 'undefined')
       var tamK = brasaTier.tam || 0.6;
       var coroa = modeloCoroa(brasaTier.nivel, tamK);
       if (coroa) {
-        var baseK3 = alto + (titulo ? 0.66 : 0.5) + 0.34;
+        // a coroa sobe um degrau quando há placa de guilda no caminho
+        var baseK3 = alto + (titulo ? 0.66 : 0.5) + 0.34 + altoGuilda;
         coroa.position.y = baseK3;
         coroa.userData.baseY = baseK3;
         coroa.userData.fase = Math.random() * 9;
@@ -526,7 +758,7 @@ var JOGO = (typeof window !== 'undefined')
               side: THREE.DoubleSide
             }));
           bilhete.scale.set(tamK, tamK, 1);
-          var baseK = alto + (titulo ? 0.66 : 0.5) + 0.34 + tamK * 0.45;
+          var baseK = alto + (titulo ? 0.66 : 0.5) + 0.34 + altoGuilda + tamK * 0.45;
           bilhete.position.y = baseK;
           bilhete.userData.baseY = baseK;
           bilhete.userData.fase = Math.random() * 9;
@@ -568,7 +800,9 @@ var JOGO = (typeof window !== 'undefined')
     if (isFinite(mz)) no.position.z -= mz;
     return berco;
   }
-  function pendura(nome, titulo, brasaTier) { penduraEm(heroi, nome, titulo, brasaTier); }
+  function pendura(nome, titulo, brasaTier, guilda) {
+    penduraEm(heroi, nome, titulo, brasaTier, guilda);
+  }
 
   // -------------------------------------------------------------- a caminhada
   /* UM passo de caminhada para QUALQUER corpo (herói ou fantasma): mesmo
@@ -589,6 +823,15 @@ var JOGO = (typeof window !== 'undefined')
     var passo = Math.min(dist, (corpo.vel || VEL_ANDA) * dt);
     p.x += dx / dist * passo;
     p.z += dz / dist * passo;
+    // o TRONCO da Árvore-Mundo é sólido: passo que entra nele é empurrado
+    // radialmente para a borda — na prática o corpo DESLIZA contornando o
+    // tronco, sem travar (o alvo continua o mesmo e o próximo passo tenta
+    // de novo, um pouco mais adiante na tangente).
+    var dTr = Math.hypot(p.x, p.z);
+    if (dTr < TRONCO_RAIO && dTr > 0.01) {
+      var kTr = TRONCO_RAIO / dTr;
+      p.x *= kTr; p.z *= kTr;
+    }
     corpo.node.rotation.y = Math.atan2(dx, dz);
     return false;
   }
@@ -784,11 +1027,17 @@ var JOGO = (typeof window !== 'undefined')
     var no = raycaster.intersectObject(chao);
     if (no && no.length) {
       var p = no[0].point;
-      // não deixa sair do mapa
-      var d = Math.hypot(p.x, p.z);
-      if (d > RAIO_MAPA * 0.92) {
-        var k = (RAIO_MAPA * 0.92) / d;
-        p.x *= k; p.z *= k;
+      // não deixa sair do mapa — o clamp virou POR EIXO com a praça quadrada
+      // (o radial de antes cortava os cantos, que agora são chão de verdade)
+      var lim = RAIO_MAPA * 0.94;
+      p.x = Math.max(-lim, Math.min(lim, p.x));
+      p.z = Math.max(-lim, Math.min(lim, p.z));
+      // e o tronco da Árvore-Mundo não é destino: alvo dentro dele é
+      // empurrado para a borda — o resto do desvio acontece no passo
+      var dT = Math.hypot(p.x, p.z);
+      if (dT < TRONCO_RAIO + 0.4) {
+        var kT = (TRONCO_RAIO + 0.4) / Math.max(0.01, dT);
+        p.x *= kT; p.z *= kT;
       }
       andarAte(p, null);
     }
@@ -876,13 +1125,19 @@ var JOGO = (typeof window !== 'undefined')
    * "não está correndo" só é testável se o teste puder LER o que o herói faz:
    * até aqui tudo era privado e a única prova era o olho. */
   /* Quem sabe o nome é o DB, e quem fala com o DB é a HUD (pintaConta e o
-   * batismo): ela empurra o nome para cá. Vazio tira a plaquinha. */
+   * batismo): ela empurra o nome para cá. Vazio tira a plaquinha.
+   * ARGUMENTO `undefined` PRESERVA o que já está pendurado (30/08): a ficha
+   * de missões chamava nomeia(nome, titulo) e APAGAVA a coroa sem querer, e
+   * a guilda carrega numa promise que chega depois do resto — cada pedaço
+   * agora atualiza só o que trouxe. `null` explícito continua limpando. */
   var brasaDoHeroi = null;         // o tier da coroa ({nivel, tam, nome})
-  Hub.nomeia = function (nome, titulo, brasaTier) {
-    nomeJogador = String(nome || '').trim() || null;
-    tituloJogador = String(titulo || '').trim() || null;
-    brasaDoHeroi = brasaTier || null;
-    pendura(nomeJogador, tituloJogador, brasaDoHeroi);
+  var guildaDoHeroi = null;        // a placa da guilda ({nome, emblema})
+  Hub.nomeia = function (nome, titulo, brasaTier, guilda) {
+    if (nome !== undefined) nomeJogador = String(nome || '').trim() || null;
+    if (titulo !== undefined) tituloJogador = String(titulo || '').trim() || null;
+    if (brasaTier !== undefined) brasaDoHeroi = brasaTier || null;
+    if (guilda !== undefined) guildaDoHeroi = guilda || null;
+    pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
   };
   /* A AURA DO COLECIONADOR (pedido 25/08): o Traje fechado acende "um fogo
    * quase transparente e branco" — um ANEL no chão e três labaredas macias
@@ -973,7 +1228,10 @@ var JOGO = (typeof window !== 'undefined')
       // a mesma regra do herói: a faísca da Fagulha é de quem JÁ lutou
       if (tierF && tierF.min === 0 && !(perfil.resumo.partidas > 0)) tierF = null;
     }
-    penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF);
+    // a GUILDA do fantasma já viaja dentro do resumo do perfil (a Rede não
+    // precisou mudar) — a placa dele nasce igual à do herói
+    var guildaF = (perfil && perfil.resumo && perfil.resumo.guilda) || null;
+    penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF, guildaF);
     if (perfil && perfil.aura) acendeAura(corpo, true);   // a vaidade é pública
     return true;
   }
@@ -1073,6 +1331,15 @@ var JOGO = (typeof window !== 'undefined')
     andarAte(new THREE.Vector3(x, 0, z), null);
     return true;
   };
+  /* câmera por fora, SÓ para as páginas de prova enquadrarem a foto — o
+   * jogador continua com a órbita de arrastar/roda de sempre */
+  Hub._cam = function (o) {
+    if (!o) return;
+    if (o.dist != null) cam.dist = Math.max(cam.minDist, Math.min(cam.maxDist, o.dist));
+    if (o.tilt != null) cam.tilt = Math.max(cam.minTilt, Math.min(cam.maxTilt, o.tilt));
+    if (o.ang != null) cam.ang = o.ang;
+  };
+
   Hub._estado = function () {
     return {
       pos: heroi ? { x: +heroi.node.position.x.toFixed(2),
@@ -1086,6 +1353,9 @@ var JOGO = (typeof window !== 'undefined')
               heroi.node.userData.look.model) || null,
       plaquinha: !!(heroi && heroi.plaquinha),
       plaquinhaTitulo: !!(heroi && heroi.plaquinhaTitulo),
+      plaquinhaGuilda: !!(heroi && heroi.plaquinhaGuilda),
+      construcoes: !!construcoesPlantadas,
+      enfeites: !!enfeitesPlantados,
       clipe: heroi ? (heroi.clipe || 'idle') : null,
       vel: heroi ? (heroi.vel || 0) : null,
       cam: { ang: +cam.ang.toFixed(3), tilt: +cam.tilt.toFixed(3), dist: +cam.dist.toFixed(2) }

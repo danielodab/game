@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-30T20:28:41",
+ "gerado": "2026-08-30T20:54:02",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -1139,6 +1139,36 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "praca_arvore",
+   "arquivo": "models-praca/praca_arvore.glb",
+   "bytes": 1094116
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "praca_arena",
+   "arquivo": "models-praca/praca_arena.glb",
+   "bytes": 1130532
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "praca_banco",
+   "arquivo": "models-praca/praca_banco.glb",
+   "bytes": 1070220
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "praca_mercado",
+   "arquivo": "models-praca/praca_mercado.glb",
+   "bytes": 946764
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "praca_sede",
+   "arquivo": "models-praca/praca_sede.glb",
+   "bytes": 958380
+  },
+  {
+   "alvo": "MODELS",
    "chave": "q_hywirl",
    "arquivo": "models-summons/q_hywirl.glb",
    "bytes": 317228
@@ -1662,6 +1692,6 @@
    "walk"
   ]
  },
- "totalBytes": 124341872,
- "totalBase64": 165789432
+ "totalBytes": 129541884,
+ "totalBase64": 172722784
 }
