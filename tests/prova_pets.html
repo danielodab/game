@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a ninhada em fila (com o herói de régua)</title>
+<style>
+  html,body{margin:0;background:#10151b;height:100%;overflow:hidden}
+  #cv{display:block;width:100%;height:100%}
+  #st{position:absolute;left:8px;top:6px;font:12px monospace;color:#8f8;
+      background:#000a;padding:3px 7px;border-radius:4px}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="st">montando…</div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js',
+    'assets/embedded/models-pets.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var st = document.getElementById('st');
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2;
+    var canvas = document.getElementById('cv');
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true,
+                                            preserveDrawingBuffer: true });
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    if (THREE.sRGBEncoding != null) renderer.outputEncoding = THREE.sRGBEncoding;
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x18202a);
+    scene.add(new THREE.HemisphereLight(0xcfe8d8, 0x1a2420, 1.0));
+    var sol = new THREE.DirectionalLight(0xffe9c4, 1.1);
+    sol.position.set(6, 10, 8);
+    scene.add(sol);
+    var chao = new THREE.Mesh(new THREE.PlaneGeometry(30, 10),
+      new THREE.MeshStandardMaterial({ color: 0x2c3a2c, roughness: 1 }));
+    chao.rotation.x = -Math.PI / 2;
+    scene.add(chao);
+
+    var camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 1.7, 8.6);
+    camera.lookAt(0, 0.8, 0);
+
+    var erro = null;
+    try { M.load(function (e) { if (e) erro = e.message || String(e); }); } catch (e) { erro = e.message; }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false; try { ok = M.isReady(); } catch (e) {}
+      if (!ok && !erro && Date.now() - t0 < 240000) return setTimeout(espera, 250);
+      if (!ok) { st.textContent = 'ERRO: ' + (erro || 'tempo'); return; }
+      monta();
+    })();
+
+    function monta() {
+      // o HERÓI DE RÉGUA na ponta: a regra do dono é "menor que os
+      // personagens", e régua boa fica NA FOTO
+      var FILA = [
+        { id: 'sumo', opts: { classId: 'sumo' } },
+        { id: 'pet-emberling' }, { id: 'pet-snapvine' }, { id: 'pet-galehawk' },
+        { id: 'pet-dewling' }, { id: 'pet-lodestone' }, { id: 'pet-heartshard' }
+      ];
+      var x0 = -4.8, passo = 1.6, corpos = [];
+      FILA.forEach(function (f, i) {
+        var obj = null;
+        try { obj = M.unit(f.id, f.opts || {}); } catch (e) {}
+        if (!obj) return;
+        obj.position.set(x0 + i * passo, 0, 0);
+        obj.rotation.y = 0.3;
+        scene.add(obj);
+        try { obj.userData.play('idle', { fade: 0 }); } catch (e) {}
+        corpos.push(obj);
+      });
+      // bombeia uns quadros para os idles saírem da pose T
+      for (var q = 0; q < 40; q++) {
+        corpos.forEach(function (c) {
+          try { c.userData.mixer.update(1 / 30); } catch (e) {}
+        });
+      }
+      renderer.render(scene, camera);
+      st.textContent = 'PASS — ' + corpos.length + ' corpos (herói + ' + (corpos.length - 1) + ' pets)';
+      window.__pronto = true;
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — os seis pets, arte do usuário</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font:11px monospace;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:2px 6px;text-align:left}
+  th{background:#1a2029;color:#8895a6}
+  td.cai{color:#f88} td.ok{color:#8fc79b}
+  #app{position:absolute;left:-4000px;top:0;width:520px;height:640px}
+  canvas#game-canvas{width:520px;height:640px;display:block}
+</style>
+</head>
+<body>
+<h1>Os seis pets — pequenos de verdade, com clipe próprio</h1>
+<div class="sub">A regra do dono: «o pet precisa ser pequeno, menor que os personagens». Aqui se
+cobra: os seis montam com a arte PRÓPRIA (adeus velociraptor), todos entre 0,45 e 1,00 m — bem
+abaixo do herói de 2,05 —, e cada papel de animação com clipe próprio. Falta conhecida: o ataque
+do Rasga-Ar não veio no lote (o hit dele era um segundo idle) — cobrada como exceção nomeada,
+que grita se um dia for consertada sem tirar a linha daqui.</div>
+<div id="summary">montando…</div>
+<ul id="lista"></ul>
+<table id="tab"></table>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js',
+    'assets/embedded/models-pets.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js',
+    'assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = mau ? (mau + ' de ' + res.length + ' falharam')
+                        : ('tudo passou (' + res.length + ')');
+    window.__done = true;
+    window.__fail = mau;
+  }
+
+  // id -> altura da regra (1,80 × escala do PET_LOOK) e o apelido de porte
+  var PETS = [
+    ['pet-emberling',  0.68, 'Brasinha — gato gordo'],
+    ['pet-snapvine',   0.79, 'Bocarra — o vaso'],
+    ['pet-galehawk',   0.77, 'Rasga-Ar — águia baixa'],
+    ['pet-dewling',    0.76, 'Borbulha — cão sentado'],
+    ['pet-lodestone',  0.61, 'Pedrinha-Guia — atarracado'],
+    ['pet-heartshard', 0.68, 'Caco Vivo — raposinha']
+  ];
+  var PAPEIS = ['idle', 'walk', 'attack', 'hit', 'die'];
+  // o ataque do Rasga-Ar NÃO veio no lote (o hit era Idle_03) — a exceção
+  // sai daqui no dia em que o re-export chegar, e o teste cobra o contrário
+  var FALTA_CONHECIDA = { 'pet-galehawk': ['attack'] };
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var D = window.JOGO && JOGO.DATA;
+    var M = window.JOGO && JOGO.Models3D2;
+    if (!D || !M) { check('os módulos carregaram', false); return fecha(); }
+
+    try { M.load(function () {}); } catch (e) { check('M.load', false, e.message); }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try { ok = M && M.isReady(); } catch (e) {}
+      if (!ok && Date.now() - t0 < 90000) return setTimeout(espera, 250);
+      check('os modelos carregaram', !!ok, ok ? '' : 'estourou o tempo');
+      mede();
+    })();
+
+    function mede() {
+      var linhas = [], semModelo = [], caindo = [], surpresa = [], foraDoPorte = [];
+      PETS.forEach(function (par) {
+        var id = par[0], alvo = par[1], porque = par[2];
+        var pd = (D.pets || {})[id];
+        if (!pd) { semModelo.push(id + ' (não existe em DATA.pets)'); return; }
+        var look = null, obj = null;
+        try { look = M.lookFor(id, { kind: 'pet' }); } catch (e) {}
+        try { obj = M.unit(id, { kind: 'pet' }); } catch (e) {}
+        if (!obj) { semModelo.push(id + ' (não montou)'); return; }
+        if (!look || look.model !== id) semModelo.push(id + ' → ' + (look && look.model));
+
+        try {
+          obj.userData.play('idle', { fade: 0 });
+          obj.userData.mixer.update(0.6);
+        } catch (e2) {}
+        obj.updateMatrixWorld(true);
+
+        var doIdle = null;
+        try { doIdle = obj.userData.clipFor('idle'); } catch (e) {}
+        var mapa = {}, quaisCaem = [];
+        PAPEIS.forEach(function (p) {
+          var c = null;
+          try { c = obj.userData.clipFor(p); } catch (e) {}
+          mapa[p] = c;
+          if (p !== 'idle' && (!c || c === doIdle)) quaisCaem.push(p);
+        });
+        var conhecidas = FALTA_CONHECIDA[id] || [];
+        var novas = quaisCaem.filter(function (p) { return conhecidas.indexOf(p) < 0; });
+        if (novas.length) caindo.push(id + ': ' + novas.join(','));
+        conhecidas.forEach(function (p) {
+          if (quaisCaem.indexOf(p) < 0) surpresa.push(id + '.' + p + ' já funciona');
+        });
+
+        var h = (obj.userData && obj.userData.height) || 0;
+        if (Math.abs(h - alvo) > 0.15)
+          foraDoPorte.push(id + ' ' + h.toFixed(2) + ' m (pedia ' + alvo.toFixed(2) + ')');
+        linhas.push({ id: id, nome: pd.name, h: h, alvo: alvo, porque: porque,
+                      mapa: mapa, cai: quaisCaem });
+      });
+
+      check('os seis pets existem e montam', linhas.length === PETS.length,
+            (PETS.length - linhas.length) + ' faltando');
+      check('todos usam a arte do usuário (o velociraptor morreu)',
+            semModelo.length === 0, semModelo.join(' · '));
+      check('nenhum papel cai no idle fora da falta conhecida',
+            caindo.length === 0, caindo.join(' · '));
+      check('a falta conhecida continua faltando (senão a exceção está velha)',
+            surpresa.length === 0, surpresa.join(' · '));
+      check('o porte bate com a regra (±15 cm)', foraDoPorte.length === 0,
+            foraDoPorte.join(' · '));
+      // A REGRA DO DONO, cobrada com régua: TODO pet menor que 1 m — menos
+      // da METADE do herói de 2,05 m. Pet do tamanho de gente não é pet.
+      var grandes = linhas.filter(function (l) { return l.h >= 1.0; });
+      check('todo pet é PEQUENO (abaixo de 1,00 m; herói tem 2,05)',
+            linhas.length > 0 && grandes.length === 0,
+            grandes.map(function (l) { return l.id + ' ' + l.h.toFixed(2); }).join(' · '));
+      var minusculos = linhas.filter(function (l) { return l.h < 0.45; });
+      check('e nenhum some no tabuleiro (acima de 0,45 m)',
+            minusculos.length === 0,
+            minusculos.map(function (l) { return l.id + ' ' + l.h.toFixed(2); }).join(' · '));
+
+      var t = document.getElementById('tab');
+      var html = '<tr><th>pet</th><th>altura</th><th>pedia</th><th>porte</th>';
+      PAPEIS.forEach(function (p) { html += '<th>' + p + '</th>'; });
+      html += '</tr>';
+      linhas.forEach(function (l) {
+        html += '<tr><td>' + l.nome + '</td><td>' + l.h.toFixed(2) + '</td>' +
+                '<td>' + l.alvo.toFixed(2) + '</td><td>' + l.porque + '</td>';
+        PAPEIS.forEach(function (p) {
+          var caiu = l.cai.indexOf(p) >= 0;
+          var nome = (l.mapa[p] || '—').replace(/^Armature\|/, '').replace(/\|baselayer$/, '');
+          html += '<td class="' + (caiu ? 'cai' : 'ok') + '">' + nome + '</td>';
+        });
+        html += '</tr>';
+      });
+      t.innerHTML = html;
+      fecha();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -184,7 +184,7 @@ JOGO.DATA = JOGO.DATA || {};
 
     'pet-lodestone': {
       id: 'pet-lodestone', name: 'Pedrinha-Guia', element: 'neutro',
-      description: 'Um seixo cinza do tamanho de um punho, liso demais para ser natural, que flutua na altura do ombro do dono girando devagar. Tem um sulco em espiral gravado na superfície com pó de ferro preso dentro, que se reorganiza como uma bússola conforme o perigo muda de lado. Emite um zumbido baixo e constante, e brilha em pulsos brancos quando abençoa alguém. Nunca toca o chão; quando o dono cai, ela desce até a altura do peito dele e zumbe mais alto.',
+      description: 'Um filhote de golem do tamanho de um gato atarracado, de pedra lisa com musgo nas juntas e olhos de cristal branco cheios de lealdade. No peito, um sulco em espiral com pó de ferro gira como uma bússola viva, apontando o perigo antes de todo mundo. Três pedrinhas orbitam ao redor dele como filhotinhos. Senta como cachorro esperando ordem, e quando abençoa alguém a espiral pulsa em luz branca.',
       bonuses: { power: 10, initiative: 10, resists: { neutro: 10 } },
       behavior: 'support', range: 3, followDistance: 2,
       spells: ['pet-guide-hum'],
@@ -193,7 +193,7 @@ JOGO.DATA = JOGO.DATA || {};
 
     'pet-heartshard': {
       id: 'pet-heartshard', name: 'Caco Vivo', element: 'neutro',
-      description: 'Um estilhaço do Coração Partido do tamanho de uma mão aberta, feito de um material que parece vidro fumê por fora e brasa por dentro. Flutua na diagonal, sempre inclinado, cercado por seis lasquinhas menores que orbitam em ritmos diferentes. Muda de cor conforme o clima da sala: azul na chuva, âmbar na estiagem, verde no tremor, branco no vendaval. Quando protege alguém, as seis lasquinhas se espalham e formam uma redoma curta; depois voltam devagar, uma a uma.',
+      description: 'Uma raposinha de vidro fumê do tamanho de um gato, com um coração de brasa multicolorida pulsando visível no peito — um estilhaço do próprio Coração Partido, que criou corpo e criou apego. A cauda termina em lascas de cristal soltas, e seis lasquinhas orbitam ao redor dela em ritmos diferentes, como um cortejo. O coração muda de cor com o clima da sala; quando protege alguém, as seis lasquinhas disparam e formam uma redoma curta, depois voltam uma a uma.',
       bonuses: { hp: 15, power: 6, resists: { fogo: 5, agua: 5, terra: 5, ar: 5, neutro: 5 } },
       behavior: 'support', range: 4, followDistance: 2,
       spells: ['pet-shard-ward', 'pet-shard-echo'],

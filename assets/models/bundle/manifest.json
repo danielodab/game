@@ -1,5 +1,5 @@
 {
- "gerado": "2026-08-30T21:46:01",
+ "gerado": "2026-08-31T11:59:38",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -1139,6 +1139,42 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "pet-emberling",
+   "arquivo": "models-pets/pet-emberling.glb",
+   "bytes": 1253272
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pet-snapvine",
+   "arquivo": "models-pets/pet-snapvine.glb",
+   "bytes": 1094764
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pet-galehawk",
+   "arquivo": "models-pets/pet-galehawk.glb",
+   "bytes": 1102752
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pet-dewling",
+   "arquivo": "models-pets/pet-dewling.glb",
+   "bytes": 1097916
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pet-lodestone",
+   "arquivo": "models-pets/pet-lodestone.glb",
+   "bytes": 1163636
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pet-heartshard",
+   "arquivo": "models-pets/pet-heartshard.glb",
+   "bytes": 1255384
+  },
+  {
+   "alvo": "MODELS",
    "chave": "praca_arvore",
    "arquivo": "models-praca/praca_arvore.glb",
    "bytes": 1094116
@@ -1696,8 +1732,49 @@
    "idle",
    "run",
    "walk"
+  ],
+  "pet-emberling": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "pet-snapvine": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "pet-galehawk": [
+   "HitReact",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "pet-dewling": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "pet-lodestone": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
+  ],
+  "pet-heartshard": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "walk"
   ]
  },
- "totalBytes": 130367320,
- "totalBase64": 173823368
+ "totalBytes": 137335044,
+ "totalBase64": 183113676
 }

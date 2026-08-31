@@ -453,13 +453,20 @@ var JOGO = (typeof window !== 'undefined')
   };
   M.MONSTER_FALLBACK = { model: 'skeleton_minion', scale: 1.0 };
 
+  // OS PETS SÃO DO USUÁRIO (31/08) — os seis do Meshy aposentam o
+  // velociraptor, a cobra, a vespa, o sapo, a aranha e a raposa
+  // emprestados. A regra do dono: "o pet precisa ser pequeno, menor que os
+  // personagens" — todos entre 0,61 e 0,80 m (herói: 2,05 m).
+  // ATENÇÃO À CONTA: a base de PET no unit() é 1,20 m, não os 1,80 dos
+  // monstros (linha do targetH) — altura = 1,20 m × escala. A primeira
+  // leva usou 1,80 e três pets bateram no PISO de medição de 0,60 m.
   M.PET_LOOK = {
-    'pet-emberling': { model: 'q_velociraptor', scale: 0.86 },
-    'pet-snapvine': { model: 'q_snake', scale: 0.95 },
-    'pet-galehawk': { model: 'q_wasp', scale: 0.90 },
-    'pet-dewling': { model: 'q_frog', scale: 0.88 },
-    'pet-lodestone': { model: 'q_spider', scale: 0.84 },
-    'pet-heartshard': { model: 'q_fox', scale: 0.88 }
+    'pet-emberling':  { model: 'pet-emberling',  scale: 0.57 },  // 0,68 m — "gato gordo"
+    'pet-snapvine':   { model: 'pet-snapvine',   scale: 0.66 },  // 0,79 m — o vaso e a bocarra
+    'pet-galehawk':   { model: 'pet-galehawk',   scale: 0.64 },  // 0,77 m — águia em voo baixo
+    'pet-dewling':    { model: 'pet-dewling',    scale: 0.63 },  // 0,76 m — "cão sentado"
+    'pet-lodestone':  { model: 'pet-lodestone',  scale: 0.51 },  // 0,61 m — filhote atarracado
+    'pet-heartshard': { model: 'pet-heartshard', scale: 0.57 }   // 0,68 m — raposinha de vidro
   };
 
   // ------------------------------------------------------------ decodificação
