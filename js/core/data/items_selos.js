@@ -51,6 +51,17 @@ var JOGO = (typeof window !== 'undefined')
     setId: 'sl-set-colecionador'
   };
 
+  /* A INSÍGNIA DE FUNDAÇÃO (30/08): a moeda que cria GUILDAS. Só chefe
+   * derruba (o mesmo funil dos selos em game.js) e 10 pagam a fundação —
+   * pedido do dono: "para criar guild tem que dropar moeda especial que só
+   * caem dos boss, precisa juntar 10". A chance é a mesma dos selos: ~20
+   * chefes por guilda — bem mais leve que a roleta (10 de CADA elemento),
+   * porque fundar é o COMEÇO da vida de guilda, não o prêmio dela. */
+  DATA.insignias = {
+    chance: 0.5,
+    porGuilda: 10
+  };
+
   function rng(min, max, line, los) {
     return { min: min, max: max, line: line === true, los: los !== false, movable: false };
   }

@@ -665,6 +665,10 @@ var JOGO = (typeof window !== 'undefined')
         indexOf(elements(), raw.seloElemento) >= 0) {
       st.seloElemento = raw.seloElemento;
     }
+    // ---- a INSÍGNIA DE FUNDAÇÃO (30/08) — a mesma armadilha: sem esta
+    // linha o sanitize engoliria o saldo calado no primeiro reload
+    var qi = Math.floor(num(raw.insignias, 0));
+    if (qi > 0) st.insignias = qi;
     return st;
   }
 
@@ -1535,6 +1539,35 @@ var JOGO = (typeof window !== 'undefined')
     st.inventory.push({ itemId: itemId, level: 0, stars: 0 });
     Progress.save();
     return { itemId: itemId };
+  };
+
+  // ==================================== a INSÍGNIA DE FUNDAÇÃO (30/08)
+  /* A moeda que funda GUILDAS: só chefe derruba (game.js rola a chance de
+   * DATA.insignias, o mesmo funil dos selos) e 10 delas pagam a fundação
+   * (JOGO.Guilda.criar cobra daqui). Contador ÚNICO, não por elemento —
+   * uma guilda não tem elemento. */
+  Progress.addInsignia = function (n) {
+    var st = Progress.state;
+    if (!st) return false;
+    var amount = Math.floor(num(n, 1));
+    if (amount <= 0) return false;
+    st.insignias = Math.max(0, Math.floor(num(st.insignias, 0))) + amount;
+    Progress.save();
+    return true;
+  };
+  Progress.insigniasVer = function () {
+    var st = Progress.state;
+    return st ? Math.max(0, Math.floor(num(st.insignias, 0))) : 0;
+  };
+  Progress.gastaInsignias = function (n) {
+    var st = Progress.state;
+    var preco = Math.floor(num(n, 0));
+    if (!st || preco <= 0) return false;
+    var tem = Math.max(0, Math.floor(num(st.insignias, 0)));
+    if (tem < preco) return false;
+    st.insignias = tem - preco;
+    Progress.save();
+    return true;
   };
 
   /* O ELEMENTO DO TRAJE é ESCOLHA DA CONTA (pedido 25/08: "esse set raro

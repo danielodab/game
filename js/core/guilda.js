@@ -48,6 +48,11 @@ var JOGO = (typeof window !== 'undefined')
   G.CUSTO_BONUS = 25;
   G.BONUS_MS = 24 * 3600 * 1000;
   G.BONUS_FATOR = 1.15;
+  /* fundar custa INSÍGNIAS DE FUNDAÇÃO (30/08): a moeda que só chefe
+   * derruba (DATA.insignias, funil em game.js, saldo no Progress). O
+   * número oficial mora em DATA.insignias.porGuilda; este é o reserva
+   * para páginas que carregam a guilda sem o DATA. */
+  G.CUSTO_CRIAR = 10;
 
   /* relógio injetável (teste de expiração de bônus) */
   G._agora = null;
@@ -106,12 +111,38 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ------------------------------------------------------------ vida da guilda
+  /* O PREÇO DA FUNDAÇÃO cobra do Progress (as insígnias dos chefes). A
+   * cobrança vem DEPOIS de toda validação — fundação recusada não pode
+   * comer moeda — e só quando o Progress está de pé: as páginas de teste
+   * que carregam guilda.js sozinha continuam fundando de graça, que é o
+   * ambiente delas; no jogo o Progress sempre existe. */
+  function precoCriar() {
+    var cfg = (typeof JOGO !== 'undefined' && JOGO.DATA && JOGO.DATA.insignias) || null;
+    var n = cfg && typeof cfg.porGuilda === 'number' ? Math.floor(cfg.porGuilda) : G.CUSTO_CRIAR;
+    return n > 0 ? n : G.CUSTO_CRIAR;
+  }
+  function cofreInsignias() {
+    var P = (typeof JOGO !== 'undefined') ? JOGO.Progress : null;
+    return (P && typeof P.insigniasVer === 'function' &&
+            typeof P.gastaInsignias === 'function') ? P : null;
+  }
   G.criar = function (nome, emblema) {
     if (!conta) return responde({ ok: false, erro: 'sem conta' });
     nome = String(nome || '').trim().slice(0, 24);
     if (!nome) return responde({ ok: false, erro: 'diga um nome' });
     var d = le();
     if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
+    var P = cofreInsignias();
+    if (P) {
+      var preco = precoCriar();
+      if (P.insigniasVer() < preco) {
+        return responde({ ok: false, erro: 'faltam insígnias: ' +
+                          P.insigniasVer() + '/' + preco + ' — só chefe derruba' });
+      }
+      if (!P.gastaInsignias(preco)) {
+        return responde({ ok: false, erro: 'as insígnias escaparam da mão' });
+      }
+    }
     var g = { id: novoId(), nome: nome, emblema: String(emblema || '⚑').slice(0, 4),
               liderId: conta.id, membros: [{ id: conta.id, nome: conta.nome }],
               xp: 0, moedas: 0, bonus: {}, banco: [], treinos: 0, criadaEm: agora() };

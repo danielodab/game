@@ -857,7 +857,11 @@ var JOGO = (typeof window !== 'undefined')
           if (tier && tier.min === 0 && !(brasa.partidas > 0)) tier = null;
         }
         if (JOGO.Hub && JOGO.Hub.nomeia) {
-          JOGO.Hub.nomeia(j.nome || '', j.titulo || '', tier);
+          // o 4º arg é a GUILDA: a placa com emblema+nome acima do jogador.
+          // `resumoGuilda` pode ainda não ter carregado (corrida com o
+          // carregamento da guilda) — aí vai null e o refresco de quem
+          // funda/entra chama nomeia de novo só com a guilda.
+          JOGO.Hub.nomeia(j.nome || '', j.titulo || '', tier, resumoGuilda);
         }
         // A AURA do Traje do Colecionador fechado (25/08)
         if (JOGO.Hub && JOGO.Hub.aura) JOGO.Hub.aura(safe(temAuraSelos, false));
@@ -994,6 +998,11 @@ var JOGO = (typeof window !== 'undefined')
           return JOGO.Guilda.minha();
         }).then(function (mg) {
           resumoGuilda = mg ? { nome: mg.nome, emblema: mg.emblema } : null;
+          // a plaquinha pode ter sido pendurada ANTES desta resposta — a
+          // corrida de sempre. Os undefined preservam nome/título/coroa.
+          if (resumoGuilda && JOGO.Hub && JOGO.Hub.nomeia) {
+            try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
+          }
         });
       }
       JOGO.DB.jogador().then(function (j) {
@@ -1371,6 +1380,26 @@ var JOGO = (typeof window !== 'undefined')
           cell.appendChild(el('span', null, '+' + selosG[se] + ' Selo de ' + (ELEM_PT[se] || se)));
           w.appendChild(cell);
         }
+        return w;
+      })()));
+    }
+
+    // A INSÍGNIA DE FUNDAÇÃO (30/08): a outra moeda de chefe — 10 fundam
+    // uma guilda. Bloco irmão dos selos, com o saldo junto do ganho para o
+    // jogador saber quanto falta sem abrir a ficha.
+    var insigniasG = lastRewards.insignias || 0;
+    if (insigniasG > 0) {
+      box.appendChild(rwBlock('Insígnia de fundação', (function () {
+        var w = el('div', 'rw-items');
+        var cell = el('div', 'rw-item rw-selo');
+        cell.style.setProperty('--ec', '#c9a227');
+        cell.appendChild(el('b', 'selo-moeda', '⚜'));
+        var saldo = 0;
+        try { saldo = P().insigniasVer(); } catch (e) {}
+        var meta = (JOGO.DATA && JOGO.DATA.insignias && JOGO.DATA.insignias.porGuilda) || 10;
+        cell.appendChild(el('span', null, '+' + insigniasG + ' Insígnia — ' +
+                            saldo + '/' + meta + ' para fundar uma guilda'));
+        w.appendChild(cell);
         return w;
       })()));
     }
@@ -4708,8 +4737,36 @@ var JOGO = (typeof window !== 'undefined')
    * bônus do líder, o banco de empréstimos e o ranking das guildas da
    * máquina. A conta da janela entra no espelho do Guilda antes de tudo
    * (o DB é assíncrono; o resto da ficha depende dele). */
-  var GUILDA_EMBLEMAS = ['⚑', '🛡️', '🔥', '💧', '🌿', '🌪️', '⭐', '💀'];
+  var GUILDA_EMBLEMAS = ['⚑', '🛡️', '🔥', '💧', '🌿', '🌪️', '⭐', '💀',
+                         '⚔️', '🐺', '🦅', '🐍', '👑', '⚒️', '🌙', '⚓'];
   var guildaEmblemaEscolhido = '⚑';
+  /* O rascunho do nome vive FORA da ficha: clicar num emblema repinta a
+   * ficha inteira e recria o <input> — sem isto, o nome digitado sumia. */
+  var guildaNomeRascunho = '';
+  /* O GERADOR DE NOMES (30/08): "dê bastante opção de criação de nome".
+   * 20 × 20 = 400 combinações com o cheiro do mundo enterrado; o sorteio
+   * mostra 4 por vez e o ↻ re-sorteia — clicar numa põe no input, que
+   * continua livre para escrever qualquer outra coisa. */
+  var GUILDA_NOMES_A = ['Lâminas', 'Filhos', 'Guarda', 'Coro', 'Mãos', 'Olhos',
+    'Sombras', 'Herdeiros', 'Vigias', 'Cães', 'Corvos', 'Reis', 'Ecos',
+    'Chamas', 'Raízes', 'Presas', 'Martelos', 'Escudos', 'Andarilhos', 'Sentinelas'];
+  var GUILDA_NOMES_B = ['do Fundo', 'da Lousa', 'da Brasa', 'do Poço',
+    'da Cisterna', 'da Estufa', 'do Coração', 'da Descida', 'do Turno',
+    'do Vento', 'da Salmoura', 'do Mundo Enterrado', 'da Forja', 'do Sal',
+    'do Breu', 'da Maré', 'do Andaime', 'da Mina', 'da Aurora Cega', 'do Último Fecho'];
+  function sorteiaNomesGuilda(n) {
+    var fora = [], usados = {};
+    var guarda = 0;
+    while (fora.length < (n || 4) && guarda++ < 80) {
+      var a = GUILDA_NOMES_A[Math.floor(Math.random() * GUILDA_NOMES_A.length)];
+      var b = GUILDA_NOMES_B[Math.floor(Math.random() * GUILDA_NOMES_B.length)];
+      var nome = a + ' ' + b;
+      if (usados[nome]) continue;
+      usados[nome] = true;
+      fora.push(nome);
+    }
+    return fora;
+  }
   function sheetGuilda() {
     var body = sheetShell('Guilda',
       'Cofre que só o líder gasta, bônus para todos, e um banco de empréstimos entre membros.');
@@ -4732,6 +4789,21 @@ var JOGO = (typeof window !== 'undefined')
         // ---- SEM GUILDA: fundar uma, ou esperar convite na praça
         caixa.appendChild(el('p', 'inv-dica',
           'Funde a sua — ou espere um convite: líderes convidam tocando no seu fantasma na praça.'));
+
+        // O PREÇO: 10 insígnias de fundação, a moeda que só chefe derruba.
+        // O saldo aparece aqui para o jogador saber quanto falta ANTES de
+        // escolher nome — a recusa do core vira toast, mas ninguém gosta de
+        // batizar uma guilda que não pode pagar.
+        var precoIns = (JOGO.DATA && JOGO.DATA.insignias && JOGO.DATA.insignias.porGuilda) || 10;
+        var saldoIns = 0;
+        try { saldoIns = P().insigniasVer(); } catch (e) {}
+        var podePagar = saldoIns >= precoIns;
+        var linhaIns = el('p', 'inv-dica',
+          '⚜ <b>' + saldoIns + '/' + precoIns + '</b> insígnias de fundação — ' +
+          (podePagar ? 'dá para fundar!' : 'só chefe derruba, uma por queda.'));
+        linhaIns.style.color = podePagar ? '#7fe08a' : '#c9a227';
+        caixa.appendChild(linhaIns);
+
         var fila = el('div', 'guilda-emblemas');
         GUILDA_EMBLEMAS.forEach(function (em) {
           var b = btn(em, 'btn-mini' + (guildaEmblemaEscolhido === em ? ' btn-gold' : ' btn-ghost'),
@@ -4743,11 +4815,36 @@ var JOGO = (typeof window !== 'undefined')
         inp.className = 'hub-input';
         inp.maxLength = 24;
         inp.placeholder = 'nome da guilda';
+        inp.value = guildaNomeRascunho;
+        inp.oninput = function () { guildaNomeRascunho = inp.value; };
         caixa.appendChild(inp);
-        caixa.appendChild(btn('Fundar a guilda', 'btn-primary btn-block', function () {
+
+        // as SUGESTÕES: quatro nomes sorteados, um clique põe no input
+        var sug = el('div', 'guilda-sugestoes');
+        function pintaSugestoes() {
+          clear(sug);
+          sorteiaNomesGuilda(4).forEach(function (nome) {
+            sug.appendChild(btn(nome, 'btn-mini btn-ghost', function () {
+              guildaNomeRascunho = nome;
+              inp.value = nome;
+            }));
+          });
+          sug.appendChild(btn('↻ outros nomes', 'btn-mini btn-gold', pintaSugestoes));
+        }
+        pintaSugestoes();
+        caixa.appendChild(sug);
+
+        caixa.appendChild(btn('Fundar a guilda  (⚜ ' + precoIns + ')', 'btn-primary btn-block', function () {
           Gd.criar(inp.value, guildaEmblemaEscolhido).then(function (res) {
             if (!res.ok) { toast(res.erro || 'não deu'); return; }
+            guildaNomeRascunho = '';
             toast('A ' + res.guilda.emblema + ' ' + res.guilda.nome + ' existe — e você a lidera.', 'good');
+            // a plaquinha da praça ganha a placa da guilda na hora — os
+            // undefined preservam nome/título/coroa que já estão pendurados
+            resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+            if (JOGO.Hub && JOGO.Hub.nomeia) {
+              try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
+            }
             sheetGuilda();
           });
         }));
@@ -4800,92 +4897,106 @@ var JOGO = (typeof window !== 'undefined')
         });
         caixa.appendChild(cofre);
 
-        // ---- O BANCO DE EMPRÉSTIMOS
+        // ---- O BANCO DE EMPRÉSTIMOS — DUAS GRADES, como o cofre do Banco
+        // (pedido 30/08: "igual ao cofre a maneira de transferir itens...
+        // abre o inventário e o inventário da guild"). O gesto é o mesmo:
+        // arrasto ou dois toques. As REGRAS de empréstimo continuam do core:
+        //   saco → banco: DEVOLVE se você devia aquele item; senão DEPOSITA;
+        //   banco → saco: sua peça volta DE VEZ; a dos outros sai EMPRESTADA
+        //   (uma por conta); peça emprestada a alguém não sai.
         var bg = el('div', 'guilda-banco');
         bg.appendChild(el('h3', 'bk-tit', 'Banco da guilda'));
         bg.appendChild(el('p', 'inv-dica',
-          'Deposite do saco; qualquer membro pega <b>emprestado</b> (um por vez) e devolve uma cópia ' +
-          'IGUAL. O dono retira de vez quando a peça está livre.'));
+          'Arraste (ou dois toques) entre o saco e o banco, como no cofre. ' +
+          'Peça de outro dono sai <b>emprestada</b> — uma por vez — e se devolve ' +
+          'arrastando uma cópia igual de volta.'));
         Gd.bancoLista().then(function (itens) {
-          if (!itens.length) bg.appendChild(el('p', 'inv-dica', 'O cofre de peças está vazio.'));
-          itens.forEach(function (e2, idx) {
-            var it = itemDef(e2.itemId) || {};
-            var row = el('div', 'mc-linha');
-            var ic = el('span', 'mc-ic');
-            ic.appendChild(art('itemIcon', [e2.itemId, 34], 34));
-            row.appendChild(ic);
-            var tx = el('div', 'ms-tx');
-            tx.appendChild(el('div', 'ms-nome', esc(it.name || e2.itemId) +
-              (e2.level ? ' +' + e2.level : '') + (e2.stars ? ' ★' + e2.stars : '')));
-            tx.appendChild(el('div', 'ms-prog', 'de ' + esc(e2.donoNome || '?') +
-              (e2.emprestadoPara ? ' · emprestada a ' + esc(e2.tomadorNome || '?') : ' · livre')));
-            row.appendChild(tx);
-            if (e2.emprestadoPara === contaJ.id) {
-              row.appendChild(btn('Devolver', 'btn-mini', function () {
-                var inv = P().state.inventory, achou = -1;
-                for (var v2 = 0; v2 < inv.length; v2++) {
-                  if (inv[v2].itemId === e2.itemId && (inv[v2].level || 0) === (e2.level || 0) &&
-                      (inv[v2].stars || 0) === (e2.stars || 0)) { achou = v2; break; }
-                }
-                if (achou < 0) { toast('Devolva uma cópia IGUAL (a emprestada mudou na forja?).'); return; }
-                Gd.bancoDevolver(idx).then(function (res) {
-                  if (!res.ok) { toast(res.erro || 'não deu'); sheetGuilda(); return; }
-                  inv.splice(achou, 1);
-                  safe(function () { P().save(); }, null);
-                  toast('Devolvida. Obrigado em nome da guilda.', 'good');
-                  sheetGuilda();
-                });
-              }));
-            } else if (!e2.emprestadoPara) {
-              row.appendChild(btn(e2.dono === contaJ.id ? 'Retirar' : 'Pegar emprestado', 'btn-mini', function () {
-                if (!safe(function () { return P().bagFree(1); }, true)) {
-                  toast('O saco está cheio — não cabe mais nada.');
-                  return;
-                }
-                Gd.bancoPegar(idx).then(function (res) {
-                  if (!res.ok) { toast(res.erro || 'não deu'); sheetGuilda(); return; }
-                  P().state.inventory.push({ itemId: e2.itemId, level: e2.level || 0,
-                                             stars: e2.stars || 0 });
-                  safe(function () { P().save(); }, null);
-                  toast(res.definitivo ? 'Sua peça voltou para o saco.' :
-                        'Emprestada — devolva uma cópia igual quando puder.', 'good');
-                  sheetGuilda();
-                });
-              }));
-            }
-            bg.appendChild(row);
-          });
+          // a ficha da guilda alarga como a do banco: duas grades pedem chão
+          var painelG = sheetEl.querySelector('.sheet-panel');
+          if (painelG) painelG.classList.add('sheet-larga');
 
-          // depositar do saco
           var pilhas = safe(function () { return P().invStacks(); }, [])
             .filter(function (s2) { return !!itemDef(s2.itemId); });
-          if (pilhas.length) {
-            bg.appendChild(el('h3', 'bk-tit', 'Depositar do saco'));
-            pilhas.forEach(function (pi) {
-              var it2 = itemDef(pi.itemId) || {};
-              var row2 = el('div', 'mc-linha');
-              var ic2 = el('span', 'mc-ic');
-              ic2.appendChild(art('itemIcon', [pi.itemId, 34], 34));
-              row2.appendChild(ic2);
-              var tx2 = el('div', 'ms-tx');
-              tx2.appendChild(el('div', 'ms-nome', esc(it2.name || pi.itemId) +
-                (pi.level ? ' +' + pi.level : '') + (pi.stars ? ' ★' + pi.stars : '') +
-                (pi.count > 1 ? ' ×' + pi.count : '')));
-              row2.appendChild(tx2);
-              row2.appendChild(btn('Depositar', 'btn-mini', function () {
-                var st2 = P().state;
-                var entrada = st2.inventory[pi.indices[0]];
-                if (!entrada) { toast('essa peça já saiu'); sheetGuilda(); return; }
-                Gd.bancoDepositar(entrada).then(function (res) {
-                  if (!res.ok) { toast(res.erro || 'não deu'); return; }
-                  st2.inventory.splice(pi.indices[0], 1);
-                  safe(function () { P().save(); }, null);
-                  toast('No cofre de peças da guilda.', 'good');
-                  sheetGuilda();
-                });
-              }));
-              bg.appendChild(row2);
+          var unidadesSaco = 0;
+          pilhas.forEach(function (pu) { unidadesSaco += pu.count; });
+
+          // no banco cada ENTRADA é uma pilha própria (count 1): dono e
+          // estado de empréstimo são por peça — empilhar mentiria
+          var pilhasBanco = itens.map(function (e2, idx) {
+            return { itemId: e2.itemId, level: e2.level || 0, stars: e2.stars || 0,
+                     count: 1, indices: [idx], entrada: e2 };
+          });
+
+          var duplo = el('div', 'bk2-duplo');
+          var colSaco = el('div', 'bk2-col');
+          colSaco.dataset.lado = 'saco';
+          colSaco.appendChild(el('h3', 'bk-tit', 'No saco (' + unidadesSaco + ')'));
+          colSaco.appendChild(bancoGrade(pilhas, 'saco', function (pi) {
+            var st2 = P().state;
+            var entrada = st2.inventory[pi.indices[0]];
+            if (!entrada) { toast('essa peça já saiu'); sheetGuilda(); return; }
+            // DEVOLUÇÃO PELO GESTO: se você deve ESTE item ao banco, levar a
+            // cópia até lá é devolver — não criar um segundo depósito
+            var devIdx = -1;
+            for (var d2 = 0; d2 < itens.length; d2++) {
+              var eb = itens[d2];
+              if (eb.emprestadoPara === contaJ.id && eb.itemId === entrada.itemId &&
+                  (eb.level || 0) === (entrada.level || 0) &&
+                  (eb.stars || 0) === (entrada.stars || 0)) { devIdx = d2; break; }
+            }
+            var op = (devIdx >= 0) ? Gd.bancoDevolver(devIdx) : Gd.bancoDepositar(entrada);
+            op.then(function (res) {
+              if (!res.ok) { toast(res.erro || 'não deu'); sheetGuilda(); return; }
+              st2.inventory.splice(pi.indices[0], 1);
+              safe(function () { P().save(); }, null);
+              toast(devIdx >= 0 ? 'Devolvida. Obrigado em nome da guilda.'
+                                : 'No banco da guilda.', 'good');
+              sheetGuilda();
             });
+          }));
+
+          var colBanco = el('div', 'bk2-col');
+          colBanco.dataset.lado = 'cofre';
+          colBanco.appendChild(el('h3', 'bk-tit', 'Banco da guilda (' + itens.length + ')'));
+          colBanco.appendChild(bancoGrade(pilhasBanco, 'cofre', function (pi) {
+            var e2 = pi.entrada;
+            if (e2.emprestadoPara && e2.emprestadoPara !== contaJ.id) {
+              toast('Emprestada a ' + (e2.tomadorNome || 'alguém') + ' — espere devolver.');
+              return;
+            }
+            if (e2.emprestadoPara === contaJ.id) {
+              toast('Essa já está com você — devolva arrastando a cópia do saco.');
+              return;
+            }
+            if (!safe(function () { return P().bagFree(1); }, true)) {
+              toast('O saco está cheio — não cabe mais nada.');
+              return;
+            }
+            Gd.bancoPegar(pi.indices[0]).then(function (res) {
+              if (!res.ok) { toast(res.erro || 'não deu'); sheetGuilda(); return; }
+              P().state.inventory.push({ itemId: e2.itemId, level: e2.level || 0,
+                                         stars: e2.stars || 0 });
+              safe(function () { P().save(); }, null);
+              toast(res.definitivo ? 'Sua peça voltou para o saco.' :
+                    'Emprestada — devolva uma cópia igual quando puder.', 'good');
+              sheetGuilda();
+            });
+          }));
+
+          duplo.appendChild(colSaco);
+          duplo.appendChild(colBanco);
+          bg.appendChild(duplo);
+
+          // o extrato: quem deve o quê — a grade não conta essa história
+          var emprestadas = itens.filter(function (e3) { return !!e3.emprestadoPara; });
+          if (emprestadas.length) {
+            var ext = el('p', 'inv-dica');
+            ext.innerHTML = emprestadas.map(function (e3) {
+              var it3 = itemDef(e3.itemId) || {};
+              return '⚑ <b>' + esc(it3.name || e3.itemId) + '</b> de ' +
+                     esc(e3.donoNome || '?') + ' está com ' + esc(e3.tomadorNome || '?');
+            }).join(' · ');
+            bg.appendChild(ext);
           }
           caixa.appendChild(bg);
 

@@ -23,6 +23,8 @@ f.onload = function () {
         return w.JOGO.DB.jogador();
       }).then(function (j) {
         Gd.contaAtiva(j.id, j.nome);
+        // fundar custa 10 insígnias de chefe desde 30/08 — a prova as paga
+        w.JOGO.Progress.addInsignia(10);
         return Gd.criar('Os Soterrados', '🔥');
       }).then(function () {
         var fila = Promise.resolve();

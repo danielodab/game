@@ -126,6 +126,45 @@ injetável; empréstimo é um por conta; o dono retira de vez; o último a sair 
     return G.lista();
   }).then(function (lst) {
     check('o último a sair dissolve a guilda', lst.length === 0);
+
+    /* O PREÇO DA FUNDAÇÃO (30/08): 10 insígnias de chefe. Tudo acima rodou
+     * SEM JOGO.Progress — o ambiente de teste puro funda de graça, que é o
+     * comportamento combinado. Agora entra um Progress de mentira e a
+     * cobrança tem de valer: recusa sem saldo (sem comer moeda), cobra as
+     * 10 na fundação, e some junto com o mock. */
+    var saldo = 0;
+    JOGO.Progress = {
+      insigniasVer: function () { return saldo; },
+      gastaInsignias: function (n) {
+        if (saldo < n) return false;
+        saldo -= n; return true;
+      }
+    };
+    G.contaAtiva('cCARA', 'Cara');
+    saldo = 7;
+    return G.criar('Os Sem Teto', '⚑');
+  }).then(function (rc1) {
+    check('fundar sem as 10 insígnias é recusado', rc1.ok === false &&
+          /ins/i.test(rc1.erro || ''), rc1.erro);
+    return JOGO.Progress.insigniasVer();
+  }).then(function (s1) {
+    check('a fundação recusada NÃO come moeda', s1 === 7, 'saldo ' + s1);
+    JOGO.Progress.gastaInsignias(-0);       // nada — só mantém a cadeia legível
+    return G.criar('Filhos da Lousa', '💀');
+  }).then(function (rc2) {
+    check('com 7/10 continua recusando', rc2.ok === false);
+    // completa as 10 e funda
+    JOGO.Progress = {
+      insigniasVer: function () { return 10; },
+      gastaInsignias: function (n) { return n === 10; }
+    };
+    return G.criar('Filhos da Lousa', '💀');
+  }).then(function (rc3) {
+    check('com 10 insígnias a fundação SAI e cobra o preço cheio',
+          rc3.ok === true && rc3.guilda.nome === 'Filhos da Lousa');
+    delete JOGO.Progress;                    // o mock não vaza para ninguém
+    return G.sair();
+  }).then(function () {
     var sb = JOGO.SaveSandbox.check();
     check('o disco de verdade continua intocado', sb.ok);
 

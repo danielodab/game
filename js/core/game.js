@@ -662,6 +662,24 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
 
+    /* A INSÍGNIA DE FUNDAÇÃO (30/08): o bloco irmão dos selos — SÓ chefe
+     * derruba, sorteio próprio (DATA.insignias), e 10 fundam uma guilda.
+     * Sorteio separado de propósito: um chefe pode pagar selo E insígnia na
+     * mesma queda, ou nenhum dos dois — moedas com donos diferentes não
+     * dividem a mesma rolagem. */
+    var insigniasGanhas = 0;
+    var cfgIns = (JOGO.DATA && JOGO.DATA.insignias) || null;
+    if (cfgIns && prog && prog.addInsignia) {
+      for (i = 0; i < st.units.length; i++) {
+        var ui2 = st.units[i];
+        if (ui2.side !== 'enemy' || ui2.alive) continue;
+        var ds3 = monsters[ui2.defId];
+        if (!ds3 || !ds3.boss) continue;
+        if (Math.random() >= num(cfgIns.chance, 0.5)) continue;
+        if (prog.addInsignia(1)) insigniasGanhas++;
+      }
+    }
+
     // [G9] rendimento decrescente por herói (§9-D): conteúdo fácil paga menos.
     // Vale só para XP — item, pedra e carta seguem suas próprias raridades.
     var levelUps = [], xpMult = {}, xpPorHeroi = {};
@@ -745,6 +763,7 @@ var JOGO = (typeof window !== 'undefined')
       cards: cards,
       stones: stones,
       selos: selosGanhos,
+      insignias: insigniasGanhas,
       elementChoices: elementChoices
     };
   }

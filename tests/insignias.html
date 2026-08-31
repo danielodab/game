@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a Insígnia de Fundação</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>A Insígnia de Fundação — a moeda que cria guildas</h1>
+<div class="sub">Só chefe derruba (o funil dos selos em game.js) e 10 pagam a fundação de uma
+guilda. Aqui se prova a MOEDA: soma, consulta, gasto que recusa sem saldo, e a armadilha de
+sempre — o campo tem de SOBREVIVER ao load, senão o sanitize engole o saldo calado no primeiro
+reload. A cobrança na fundação em si é provada em tests/guilda.html.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  try { localStorage.removeItem('soterra-save-v2'); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var P = JOGO.Progress;
+  P.reset();
+
+  // 1. a calibragem existe e diz 10
+  var cfg = JOGO.DATA.insignias;
+  check('DATA.insignias existe com chance e porGuilda', !!cfg &&
+        typeof cfg.chance === 'number' && cfg.porGuilda === 10,
+        JSON.stringify(cfg));
+  check('a chance fica na faixa "nem fácil nem impossível" (0,2–0,8)',
+        cfg.chance >= 0.2 && cfg.chance <= 0.8, String(cfg.chance));
+
+  // 2. a moeda soma e consulta
+  check('a conta nasce sem insígnia', P.insigniasVer() === 0);
+  check('addInsignia soma', P.addInsignia(1) && P.addInsignia(3) && P.insigniasVer() === 4);
+  check('quantia zero ou negativa é recusada',
+        !P.addInsignia(0) && !P.addInsignia(-5) && P.insigniasVer() === 4);
+
+  // 3. o gasto cobra de verdade
+  check('gastar mais do que tem é recusado e NÃO desconta',
+        !P.gastaInsignias(10) && P.insigniasVer() === 4);
+  check('gastar dentro do saldo desconta', P.gastaInsignias(3) && P.insigniasVer() === 1);
+  check('gasto de zero é recusado', !P.gastaInsignias(0) && P.insigniasVer() === 1);
+
+  // 4. A ARMADILHA: o saldo sobrevive ao load (sanitize conhece o campo)
+  P.addInsignia(6);                        // saldo 7, salvo no disco do sandbox
+  var bruto = localStorage.getItem(P.SAVE_KEY || 'soterra-save-v2');
+  check('o campo está no disco', !!bruto && bruto.indexOf('insignias') >= 0);
+  P.load();
+  check('o saldo SOBREVIVE ao load (o sanitize não engoliu)',
+        P.insigniasVer() === 7, 'depois do load: ' + P.insigniasVer());
+
+  // 5. lixo no disco não vira saldo
+  var d2 = JSON.parse(localStorage.getItem(P.SAVE_KEY || 'soterra-save-v2'));
+  d2.insignias = -99;
+  localStorage.setItem(P.SAVE_KEY || 'soterra-save-v2', JSON.stringify(d2));
+  P.load();
+  check('saldo negativo no disco vira zero', P.insigniasVer() === 0,
+        'virou ' + P.insigniasVer());
+
+  var s = document.getElementById('summary');
+  s.className = falhas ? 'fail' : 'allpass';
+  s.textContent = falhas ? (falhas + ' de ' + total + ' falharam')
+                         : ('tudo passou (' + total + ')');
+  window.__done = true;
+  window.__fail = falhas;
+})();
+</script>
+</body>
+</html>
