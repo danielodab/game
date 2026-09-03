@@ -14,6 +14,13 @@
 <script>
 var f = document.getElementById('f');
 f.onload = function () {
+  // roda uma vez só; e ATENÇÃO ao fotografar: o perfil do Chrome headless
+  // guarda o save entre fotos (o index NÃO é sandboxado) — na segunda foto o
+  // traje já estava vestido e a prova empurrava cópias novas no saco. Por
+  // isso o guarda abaixo olha também o que o herói já veste; e a foto limpa
+  // pede --user-data-dir novo.
+  if (window.__rodou) return;
+  window.__rodou = true;
   var w = f.contentWindow, d = w.document;
   var voltas = 0;
   (function espera() {
@@ -22,9 +29,12 @@ f.onload = function () {
     try {
       var P = w.JOGO.Progress;
       var PECAS = ['sl-cetro', 'sl-botas', 'sl-cofre', 'sl-selo-primeiro'];
+      var h = P.hero('sumo');
       PECAS.forEach(function (id) {
+        var slot = w.JOGO.DATA.items[id].slot;
+        var vestida = !!(h && h.items && h.items[slot] === id);
         var noSaco = P.state.inventory.some(function (e) { return e.itemId === id; });
-        if (!noSaco) P.state.inventory.push({ itemId: id, level: 0, stars: 0 });
+        if (!vestida && !noSaco) P.state.inventory.push({ itemId: id, level: 0, stars: 0 });
       });
       PECAS.forEach(function (id) { try { P.equip('sumo', id); } catch (e) {} });
       if (P.save) P.save();
