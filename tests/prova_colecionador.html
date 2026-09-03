@@ -32,6 +32,14 @@ f.onload = function () {
         w.JOGO.UI.selection(['sumo']);
         w.JOGO.UI.showScreen('hub');
         w.JOGO.UI.openSheet('inventory');
+        // fecha o cartão do Tutor, que cobre duas das quatro peças na foto
+        setTimeout(function () {
+          try {
+            [].slice.call(d.querySelectorAll('button')).filter(function (b2) {
+              return /Entendi/.test(b2.textContent);
+            })[0].click();
+          } catch (e3) {}
+        }, 1200);
         setTimeout(function () { window.__pronto = true; }, 2500);
       });
     } catch (e) { document.title = 'ERRO ' + e.message; }
