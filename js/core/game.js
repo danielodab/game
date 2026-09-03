@@ -253,7 +253,7 @@ var JOGO = (typeof window !== 'undefined')
     return D[Game.dificuldade] || D.normal || { vida: 1, dano: 1, clima: 1, xp: 1, drop: 1 };
   };
 
-  Game.startRun = function (heroIds, dungeonId) {
+  Game.startRun = function (heroIds, dungeonId, opts) {
     if (!validParty(heroIds) || !validDungeon(dungeonId)) return false;
     Game.party = heroIds.slice();
     Game.dungeonId = dungeonId;
@@ -265,8 +265,19 @@ var JOGO = (typeof window !== 'undefined')
     carryHp = null;
     resetAiState();
     resetTimer(true);
-    Game.state = E().createBattle(dungeonId, 0, partyPayload(), { dificuldade: Game.dificuldade });
-    setScreen('battle');
+    // `opts.direto` é o caminho antigo (bancadas de teste): batalha na hora,
+    // sem antessala nem escolha de posição
+    if (opts && opts.direto) {
+      Game.state = E().createBattle(dungeonId, 0, partyPayload(), { dificuldade: Game.dificuldade });
+      setScreen('battle');
+      return true;
+    }
+    /* A ANTESSALA (03/09, pedido do dono): "todo fim de batalha deve abrir em
+     * um mapa da sala; os usuários que estão no calabouço naquela sala se
+     * encontram naquele mapa — podem fazer trocas, seguir para a batalha ou
+     * sair". A descida começa nela; a batalha só nasce em entrarNaSala. */
+    Game.state = null;
+    setScreen('antessala', Game.salaInfo());
     return true;
   };
 
@@ -276,7 +287,9 @@ var JOGO = (typeof window !== 'undefined')
   Game.startPoco = function (heroIds) {
     if (!JOGO.Poco || !JOGO.Poco.preparar(2)) return false;
     if (!Game.startRun(heroIds, JOGO.Poco.ID)) return false;
-    JOGO.Poco.escalaEstado(Game.state, 1);
+    // 03/09: com a antessala no meio o estado ainda não existe aqui — a
+    // escalada do andar acontece ao ENTRAR na sala (entrarNaSala)
+    if (Game.state) JOGO.Poco.escalaEstado(Game.state, 1);
     return true;
   };
 
@@ -321,7 +334,25 @@ var JOGO = (typeof window !== 'undefined')
     Game.mustEndTurn = false;
     resetAiState();
     resetTimer(true);
-    Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload(), { dificuldade: Game.dificuldade });
+    // 03/09: a sala seguinte abre na ANTESSALA; o PV carregado espera lá
+    Game.state = null;
+    setScreen('antessala', Game.salaInfo());
+    return true;
+  };
+
+  /* ENTRAR NA SALA (03/09): da antessala para a batalha — que nasce em
+   * `placing`, com as quatro casas para o jogador escolher onde o principal
+   * nasce. O PV carregado da sala anterior entra aqui. */
+  Game.entrarNaSala = function () {
+    if (Game.screen !== 'antessala' || !Game.dungeonId) return false;
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    resetAiState();
+    resetTimer(true);
+    Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload(),
+                                  { dificuldade: Game.dificuldade, escolhePosicao: true });
     if (Game.dungeonId === 'poco' && JOGO.Poco) {
       JOGO.Poco.escalaEstado(Game.state, Game.roomIndex + 1);
     }
@@ -340,6 +371,55 @@ var JOGO = (typeof window !== 'undefined')
     carryHp = null;
     setScreen('battle');
     return true;
+  };
+
+  /* SAIR DO CALABOUÇO pela antessala: "depois terá que começar do zero" —
+   * a descida se perde e o jogo volta ao menu (a HUD leva ao Acampamento). */
+  Game.abandonar = function () {
+    if (Game.screen !== 'antessala') return false;
+    Game.init();
+    return true;
+  };
+
+  function dungeonDefDe(dungeonId) {
+    var ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
+    var lista = Array.isArray(ds) ? ds : Object.keys(ds).map(function (k) { return ds[k]; });
+    for (var k = 0; k < lista.length; k++) if (lista[k] && lista[k].id === dungeonId) return lista[k];
+    return null;
+  }
+  /* Quem espera na sala — "mostrará os monstros ao confirmar a batalha":
+   * [{id, name, qtd, boss, element}] lido do layout (letras → room.monsters). */
+  Game.monstrosDaSala = function (dungeonId, roomIndex) {
+    var d = dungeonDefDe(dungeonId);
+    var room = d && d.rooms ? d.rooms[roomIndex] : null;
+    if (!room || !room.layout) return [];
+    var cont = {}, ordem = [];
+    for (var y = 0; y < room.layout.length; y++) {
+      for (var x = 0; x < room.layout[y].length; x++) {
+        var ch = room.layout[y].charAt(x);
+        if (ch < 'a' || ch > 'z') continue;
+        var mid = room.monsters ? room.monsters[ch] : null;
+        if (!mid) continue;
+        if (!cont[mid]) { cont[mid] = 0; ordem.push(mid); }
+        cont[mid]++;
+      }
+    }
+    return ordem.map(function (mid) {
+      var md = null;
+      try { md = E().monster(mid); } catch (e) { md = null; }
+      return { id: mid, name: (md && md.name) || mid, qtd: cont[mid],
+               boss: !!(md && md.boss), element: (md && md.element) || 'neutro' };
+    });
+  };
+  /* O que a antessala precisa saber da sala atual. */
+  Game.salaInfo = function () {
+    var d = dungeonDefDe(Game.dungeonId);
+    var n = (d && d.rooms) ? d.rooms.length : 3;
+    var room = (d && d.rooms) ? d.rooms[Game.roomIndex] : null;
+    return { dungeonId: Game.dungeonId, roomIndex: Game.roomIndex, total: n,
+             nome: (room && room.name) || ('Sala ' + (Game.roomIndex + 1)),
+             tema: (d && d.theme) || null, calabouco: (d && d.name) || Game.dungeonId,
+             monstros: Game.monstrosDaSala(Game.dungeonId, Game.roomIndex) };
   };
 
   Game.restart = function () { Game.init(); };
@@ -433,6 +513,8 @@ var JOGO = (typeof window !== 'undefined')
 
   Game.onTileClicked = function (x, y) {
     if (Game.screen !== 'battle' || !Game.state) return;
+    // 03/09: na escolha da posição, o toque numa casa dourada nasce ali
+    if (Game.state.phase === 'placing') { E().place(Game.state, x, y); return; }
     if (Game.state.phase !== 'playing' || !Game.isPlayerTurn()) return;
     var u = E().activeUnit(Game.state);
     if (!u) return;
@@ -923,6 +1005,7 @@ var JOGO = (typeof window !== 'undefined')
   Game.update = function (dt) {
     var d = tickDelta(dt);
     if (Game.screen !== 'battle' || !Game.state) return;
+    if (Game.state.phase === 'placing') return;   // 03/09: esperando o toque na casa
 
     if (Game.state.phase !== 'playing') { handleBattleOver(); return; }
 

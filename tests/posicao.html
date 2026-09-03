@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a antessala, a escolha da posição e as travas de fusão</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- Pedido do dono (03/09): "todo fim de batalha deve abrir em um mapa da
+     sala… seguir para a batalha (que mostrará os monstros ao confirmar) ou
+     sair (depois terá que começar do zero)"; "a posição no início da batalha
+     o usuário que escolhe: 4 opções aleatórias; com 2 personagens o segundo
+     nasce aleatoriamente"; "com o GM jamais pode dar fusão, nem um usuário
+     fundir com outro". Aqui: o motor, o game.js e o fusion.js — sem tela. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  // a chave do GM pelo cofre sandboxado: a classe gm existe nesta página
+  try { localStorage.setItem('soterra-gm-v1', JSON.stringify({ ligado: true, pa: 12, pp: 8, spells: [] })); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/contas.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/gm.js','js/core/db.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'js/core/game.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var E = JOGO.Engine, P = JOGO.Progress, G = JOGO.Game, F = JOGO.Fusion, GM = JOGO.GM;
+  function herois(st) { return st.units.filter(function (u) { return u.kind === 'hero' && u.side === 'player'; }); }
+  function monstros(st) { return st.units.filter(function (u) { return u.side === 'enemy' && u.alive; }); }
+  function manh(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
+  function eventos(tipo) { return E.events.filter(function (e) { return e.type === tipo; }); }
+
+  // ================================================= a escolha da posição
+  P.reset();
+  P.addPetCards('pet-snapvine', 5);
+  P.equipPet('sumo', 'pet-snapvine');
+  var party = P.battleParty(['sumo', 'curandeiro']);
+  E.events.length = 0;
+  var st = E.createBattle('greenhouse', 0, party, { escolhePosicao: true });
+  check('a batalha nasce em placing, com a escolha guardada no estado',
+        st.phase === 'placing' && !!st.placement && st.placement.uid === herois(st)[0].uid);
+  var op = E.placementOptions(st);
+  check('há QUATRO opções, todas distintas', op.length === 4 &&
+        new Set(op.map(function (c) { return c.x + ',' + c.y; })).size === 4, JSON.stringify(op));
+  var chao = op.every(function (c) { return st.grid.tiles[c.y][c.x].type === 'floor'; });
+  var longe = op.every(function (c) { return monstros(st).every(function (m) { return manh(c, m) >= 3; }); });
+  var livres = op.every(function (c) { return !st.units.some(function (u) { return u.alive && u.kind !== 'hero' && u.x === c.x && u.y === c.y; }); });
+  check('as quatro são chão, a 3+ passos de todo monstro e livres', chao && longe && livres);
+  check('battleStart saiu, mas a rodada 1 NÃO começou ainda',
+        eventos('battleStart').length === 1 && eventos('roundStart').length === 0 && eventos('placement').length === 1);
+  check('tocar fora das opções não faz nada', E.place(st, 0, 0) === false && st.phase === 'placing');
+  var principal = herois(st)[0], segundo = herois(st)[1];
+  var escolha = op[2];
+  var okP = E.place(st, escolha.x, escolha.y);
+  check('tocar numa opção nasce ali e a rodada 1 começa', okP === true && st.phase === 'playing' &&
+        principal.x === escolha.x && principal.y === escolha.y && eventos('roundStart').length === 1 && !st.placement);
+  var naZona = st.placement === null && !(segundo.x === escolha.x && segundo.y === escolha.y) &&
+               st.grid.tiles[segundo.y][segundo.x].type === 'floor';
+  check('o segundo herói nasceu noutra casa livre de chão', naZona, segundo.x + ',' + segundo.y);
+  var pets = st.units.filter(function (u) { return u.kind === 'pet'; });
+  check('o pet renasceu colado ao dono (adjacente)', pets.length === 1 && manh(pets[0], principal) === 1,
+        pets.length ? pets[0].x + ',' + pets[0].y + ' vs ' + principal.x + ',' + principal.y : 'sem pet');
+  var placed = eventos('placed')[0];
+  check('o evento placed lista quem mudou de casa', !!placed && placed.uid === principal.uid &&
+        placed.moves.some(function (m) { return m.uid === principal.uid; }));
+  check('depois de nascer, place recusa', E.place(st, escolha.x, escolha.y) === false);
+  // determinismo: a mesma sala e o mesmo grupo dão as mesmas quatro
+  var st2 = E.createBattle('greenhouse', 0, P.battleParty(['sumo', 'curandeiro']), { escolhePosicao: true });
+  check('as quatro opções são determinísticas (RNG da sala)',
+        JSON.stringify(E.placementOptions(st2)) === JSON.stringify(op));
+  var st3 = E.createBattle('greenhouse', 0, P.battleParty(['sumo']), {});
+  check('sem escolhePosicao a batalha nasce jogando, como sempre', st3.phase === 'playing' && !st3.placement);
+
+  // ================================================= o game.js: antessala
+  G.init();
+  var ok1 = G.startRun(['sumo', 'curandeiro'], 'greenhouse');
+  check('startRun abre a ANTESSALA, sem batalha', ok1 === true && G.screen === 'antessala' && G.state === null);
+  var info = G.salaInfo();
+  check('salaInfo diz o calabouço, a sala e quem espera',
+        info.dungeonId === 'greenhouse' && info.roomIndex === 0 && info.total >= 3 &&
+        info.monstros.length > 0 && info.monstros.every(function (m) { return m.name && m.qtd > 0; }),
+        JSON.stringify(info.monstros));
+  var chefe = G.monstrosDaSala('greenhouse', 2);
+  check('a sala do chefe lista o chefe como chefe', chefe.some(function (m) { return m.boss; }));
+  check('entrar na batalha só a partir da antessala (toque na casa depois)',
+        G.entrarNaSala() === true && G.screen === 'battle' && G.state.phase === 'placing');
+  check('update em placing não faz nada (nem IA, nem cronômetro)',
+        (function () { G.update(5); return G.state.phase === 'placing'; })());
+  var opG = E.placementOptions(G.state);
+  G.onTileClicked(opG[0].x, opG[0].y);
+  check('o toque na casa dourada pelo game.js nasce e começa', G.state.phase === 'playing' &&
+        herois(G.state)[0].x === opG[0].x && herois(G.state)[0].y === opG[0].y);
+  check('entrarNaSala fora da antessala é recusado', G.entrarNaSala() === false);
+  // vitória → roomClear → nextRoom → antessala da sala 2
+  monstros(G.state).forEach(function (m) { m.hp = 0; m.alive = false; });
+  G.state.phase = 'won';
+  G.update(0.1);
+  check('a vitória vai para a sala limpa', G.screen === 'roomClear');
+  check('Próxima sala abre a ANTESSALA da sala 2, sem batalha',
+        G.nextRoom() === true && G.screen === 'antessala' && G.roomIndex === 1 && G.state === null);
+  check('sair da antessala zera a descida (começa do zero)',
+        G.abandonar() === true && G.screen === 'menu' && G.state === null && G.dungeonId === null);
+  check('abandonar fora da antessala é recusado', G.abandonar() === false);
+  check('o caminho direto (bancadas antigas) continua: startRun direto = batalha',
+        G.startRun(['sumo'], 'greenhouse', { direto: true }) === true && G.screen === 'battle' && G.state.phase === 'playing');
+
+  // ================================================= as travas de fusão
+  G.init();
+  var pf = P.battleParty(['sumo', 'curandeiro']);
+  check('o grupo leva a conta de cada herói', pf.every(function (p) { return p.conta === JOGO.Contas.ativa(); }));
+  var sf = E.createBattle('greenhouse', 0, pf, {});
+  var hA = herois(sf)[0], hB = herois(sf)[1];
+  // cola os dois
+  hB.x = hA.x + 1; hB.y = hA.y;
+  check('dois heróis da MESMA conta, colados, podem fundir', F.canFuse(sf, hA.uid, hB.uid) === true);
+  var contaB = hB.conta;
+  hB.conta = 'outra-conta';
+  check('heróis de CONTAS diferentes NÃO fundem (co-op de amanhã)', F.canFuse(sf, hA.uid, hB.uid) === false);
+  hB.conta = contaB;
+  check('… e voltam a poder quando a conta é a mesma', F.canFuse(sf, hA.uid, hB.uid) === true);
+  check('o Mestre existe nesta página (chave pelo cofre)', GM.ativo() === true && !!JOGO.DATA.classes.gm);
+  var pg = P.battleParty(['gm', 'sumo']);
+  var sg = E.createBattle('greenhouse', 0, pg, {});
+  var gU = herois(sg)[0], sU = herois(sg)[1];
+  sU.x = gU.x + 1; sU.y = gU.y;
+  check('o Mestre JAMAIS funde, mesmo colado ao parceiro', F.canFuse(sg, gU.uid, sU.uid) === false &&
+        F.canFuse(sg, sU.uid, gU.uid) === false);
+  var fundido = 0;
+  for (var k = 0; k < 40; k++) {
+    var sk = E.createBattle('greenhouse', k % 3, P.battleParty(['gm', 'sumo']), {});
+    if (sk.desafio && sk.desafio.id === 'fundido') fundido++;
+  }
+  check('com o Mestre no grupo o desafio Fundido nunca é sorteado (40 salas)', fundido === 0, fundido + ' vezes');
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+  window.__done = true; window.__fail = falhas;
+})();
+</script>
+</body>
+</html>

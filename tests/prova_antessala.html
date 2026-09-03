@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a antessala e a escolha da posição</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto), 03/09. Três quadros do mesmo caminho:
+       (sem parâmetro) a ANTESSALA da sala 1 da Estufa: o pátio murado no
+                       tema, a porta ao norte, a saída ao sul, o herói;
+       ?porta=1        o herói já na porta: o painel com os monstros da sala;
+       ?placing=1      dentro da batalha, em placing: as quatro casas douradas.
+     ?dist=&tilt=&ang= enquadram a foto na antessala. -->
+<iframe id="f" src="../index.html?prova-antessala"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      var G = w.JOGO.Game, E = w.JOGO.Engine;
+      w.JOGO.DB.batizar('Explorador').then(function () {
+        w.JOGO.UI.selection(['sumo', 'curandeiro']);
+        var ok = G.startRun(['sumo', 'curandeiro'], 'greenhouse');
+        if (!ok || G.screen !== 'antessala') { document.title = 'ERRO sem antessala'; window.__pronto = true; return; }
+        if (Q.placing) {
+          // direto para a batalha em placing
+          setTimeout(function () {
+            G.entrarNaSala();
+            setTimeout(function () {
+              var opc = E.placementOptions(G.state);
+              if (!opc.length) document.title = 'ERRO sem opções';
+              try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e3) {}
+              setTimeout(function () { window.__pronto = true; }, 1500);
+            }, 1500);
+          }, 1500);
+          return;
+        }
+        var v2 = 0;
+        (function aguarda() {
+          var e2 = null;
+          try { e2 = w.JOGO.Hub._estado(); } catch (err) {}
+          if ((e2 && e2.sala) || ++v2 > 200) {
+            if (!e2 || !e2.sala) document.title = 'ERRO o hub não está na sala';
+            try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e3) {}
+            if (Q.porta && w.JOGO.Hub.irPara) {
+              // anda até a porta (norte): o painel dos monstros abre ao chegar.
+              // No headless o passo a passo do rAF não é confiável — então o
+              // painel também é aberto pela mesma porta que a proximidade usa
+              w.JOGO.Hub.irPara(0, -8.0);
+              setTimeout(function () {
+                try { w.JOGO.Hub.aoAproximar({ id: 'porta', tipo: 'porta', nome: 'Para a batalha' }); } catch (e5) {}
+              }, 3000);
+              setTimeout(function () {
+                if (w.JOGO.Hub._cam) w.JOGO.Hub._cam({ dist: 9, tilt: 9 });
+                // o painel mora no iframe: o título conta se ele abriu com os monstros
+                var painelOk = !!d.querySelector('.hub-painel:not(.is-off) .sala-monstro');
+                var entrarOk = [].slice.call(d.querySelectorAll('.hub-painel button')).some(function (b3) { return /Entrar na batalha/.test(b3.textContent); });
+                document.title = (painelOk && entrarOk) ? 'PORTA OK' : ('PORTA SEM PAINEL ' + JSON.stringify(w.JOGO.Hub._estado().pos));
+                setTimeout(function () { window.__pronto = true; }, 800);
+              }, 4500);
+              return;
+            }
+            if (w.JOGO.Hub._cam && (Q.dist || Q.tilt || Q.ang != null)) {
+              w.JOGO.Hub._cam({ dist: parseFloat(Q.dist), tilt: parseFloat(Q.tilt), ang: Q.ang != null ? parseFloat(Q.ang) : null });
+            }
+            // os muros do tema chegam por sonda: um respiro para eles
+            setTimeout(function () { window.__pronto = true; }, 2500);
+            return;
+          }
+          setTimeout(aguarda, 400);
+        })();
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; window.__pronto = true; }
+  })();
+};
+</script>
+</body>
+</html>

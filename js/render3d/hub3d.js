@@ -37,6 +37,12 @@ var JOGO = (typeof window !== 'undefined')
   var nomeJogador = null;           // o nome batizado no DB, para a plaquinha
   var tituloJogador = null;         // o título de conquista, pendurado abaixo do nome
   var lugares = [];                 // { id, tipo, pos, raio, node, rotulo }
+  // A ANTESSALA (03/09): a mesma máquina da praça monta o PÁTIO de uma sala
+  // do calabouço — null = praça; 'garden:1' = antessala da sala 2 da Estufa
+  var RAIO_SALA = 15;
+  var salaAtual = null, salaCfg = null, salaPlantada = false, salaTentativas = 0;
+  function chaveSala(s) { return s.dungeonId + ':' + s.roomIndex; }
+  function raioAtual() { return salaAtual ? RAIO_SALA : RAIO_MAPA; }
   var fantasmas = {};               // id da Rede -> corpo igual ao do heroi
   var bicho = null;                 // o PET do avatar: { node, alvo, andando, petId, semCorrida }
   var aoChegar = null;              // callback pendente da caminhada atual
@@ -197,7 +203,7 @@ var JOGO = (typeof window !== 'undefined')
     scene.background = new THREE.Color(0x0d1512);
     // névoa recalibrada para o mapa grande: no ajuste antigo ela engoliria
     // metade da praça nova antes de o jogador dar dez passos
-    scene.fog = new THREE.Fog(0x0d1512, RAIO_MAPA * 1.4, RAIO_MAPA * 3.4);
+    scene.fog = new THREE.Fog(0x0d1512, raioAtual() * 1.4, raioAtual() * 3.4);
 
     scene.add(new THREE.HemisphereLight(0xcfe8d8, 0x1a2420, 0.95));
     var sol = new THREE.DirectionalLight(0xffe9c4, 1.05);
@@ -210,14 +216,14 @@ var JOGO = (typeof window !== 'undefined')
     // e se repete pela praça inteira. Determinística: a mesma praça em toda
     // visita, como tudo aqui.
     chao = new THREE.Mesh(
-      new THREE.PlaneGeometry(RAIO_MAPA * 2, RAIO_MAPA * 2),
+      new THREE.PlaneGeometry(raioAtual() * 2, raioAtual() * 2),
       new THREE.MeshStandardMaterial({ map: texturaLajotas(), roughness: 1 })
     );
     chao.rotation.x = -Math.PI / 2;
     scene.add(chao);
     // o mundo em volta, mais escuro, para a praça não terminar num fio duro
     var fundo = new THREE.Mesh(
-      new THREE.PlaneGeometry(RAIO_MAPA * 5, RAIO_MAPA * 5),
+      new THREE.PlaneGeometry(raioAtual() * 5, raioAtual() * 5),
       new THREE.MeshBasicMaterial({ color: 0x121a14 })
     );
     fundo.rotation.x = -Math.PI / 2;
@@ -225,6 +231,9 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(fundo);
 
     camera = new THREE.PerspectiveCamera(46, 1, 0.1, 300);
+
+    // a antessala é OUTRA cena: pátio murado, porta e saída — sem praça
+    if (salaAtual) { montaSala(); return; }
 
     montaPortais();
     montaBanco();
@@ -240,6 +249,142 @@ var JOGO = (typeof window !== 'undefined')
     enfeitesPlantados = false;       // cena nova, moitas novas
     enfeitesTentativas = 0;
     montaEnfeites();
+  }
+
+  /* A ANTESSALA: um pátio pequeno da sala, murado no tema do calabouço, com
+   * a PORTA para a batalha ao norte e a SAÍDA ao sul. Os muros do tema vêm
+   * do kit do cenário (garden/cistern…) por sonda, como as construções da
+   * praça; sem kit, blocos de pedra na cor do tema. */
+  function montaSala() {
+    var R = RAIO_SALA;
+    var cor = new THREE.Color(corDoTema(salaCfg && salaCfg.tema));
+    // a porta: o mesmo arco dos portais, aceso na cor do tema
+    var g = new THREE.Group();
+    var aro = new THREE.Mesh(
+      new THREE.TorusGeometry(1.7, 0.26, 12, 40),
+      new THREE.MeshStandardMaterial({ color: 0x5a5348, roughness: 0.9 })
+    );
+    aro.position.y = 2.1;
+    g.add(aro);
+    var miolo = new THREE.Mesh(
+      new THREE.CircleGeometry(1.5, 32),
+      new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.55,
+                                    side: THREE.DoubleSide, depthWrite: false })
+    );
+    miolo.position.y = 2.1;
+    g.add(miolo);
+    var base = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.9, 2.2, 0.5, 24),
+      new THREE.MeshStandardMaterial({ color: 0x4a443c, roughness: 1 })
+    );
+    base.position.y = 0.25;
+    g.add(base);
+    var r = rotulo('Para a batalha', '#f0ead8');
+    r.position.y = 4.4;
+    g.add(r);
+    g.position.set(0, 0, -R * 0.72);
+    g.lookAt(0, 0, 0);
+    g.scale.setScalar(1.3);
+    scene.add(g);
+    lugares.push({ id: 'porta', tipo: 'porta', nome: 'Para a batalha',
+                   pos: new THREE.Vector3(0, 0, -R * 0.72), raio: 4.2, node: g, miolo: miolo });
+    // a saída: dois degraus de pedra ao sul
+    var s = new THREE.Group();
+    var degrau = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 1.6),
+                                new THREE.MeshStandardMaterial({ color: 0x4a443c, roughness: 1 }));
+    degrau.position.y = 0.25;
+    s.add(degrau);
+    var degrau2 = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 1.0),
+                                 new THREE.MeshStandardMaterial({ color: 0x3e3931, roughness: 1 }));
+    degrau2.position.set(0, 0.75, 0.6);
+    s.add(degrau2);
+    // o rótulo é um sprite de tamanho fixo: perto da câmera (a saída fica
+    // do lado do herói) ele enchia a tela — menor, e a saída vai para o LESTE,
+    // fora da linha câmera→herói→porta
+    var r2 = rotulo('Sair do calabouço', '#d8cfb8');
+    r2.position.y = 2.6;
+    r2.scale.multiplyScalar(0.55);
+    s.add(r2);
+    s.position.set(R * 0.82, 0, R * 0.30);
+    s.rotation.y = -Math.PI / 2;
+    scene.add(s);
+    lugares.push({ id: 'saida', tipo: 'saida', nome: 'Sair do calabouço',
+                   pos: new THREE.Vector3(R * 0.82, 0, R * 0.30), raio: 3.6, node: s });
+    salaPlantada = false;
+    salaTentativas = 0;
+    plantaSala();
+  }
+  function plantaPeca(chave, altAlvo, teto, x, z, rot) {
+    var m2 = M2(), cena = null;
+    if (!m2) return null;
+    try { cena = m2.rawScene(chave); } catch (e) {}
+    if (!cena) return null;
+    var no = cena.clone(true);
+    no.rotation.y = rot || 0;
+    no.updateMatrixWorld(true);
+    var cx = new THREE.Box3().setFromObject(no);
+    var alt = cx.max.y - cx.min.y;
+    var larg = Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z);
+    if (!isFinite(alt) || alt <= 0.01) return null;
+    var k = altAlvo / alt;
+    if (teto && isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
+    no.scale.multiplyScalar(k);
+    no.updateMatrixWorld(true);
+    cx = new THREE.Box3().setFromObject(no);
+    no.position.set(x - (cx.min.x + cx.max.x) / 2, -cx.min.y, z - (cx.min.z + cx.max.z) / 2);
+    scene.add(no);
+    return no;
+  }
+  function plantaSala() {
+    if (salaPlantada || !salaAtual || salaTentativas > 400) return;
+    var m2 = M2();
+    var minha = salaAtual;
+    if (!m2 || !m2.isReady || !m2.isReady()) {
+      salaTentativas++;
+      setTimeout(function () { if (salaAtual === minha) plantaSala(); }, 250);
+      return;
+    }
+    if (salaPlantada || !scene) return;
+    salaPlantada = true;
+    var R = RAIO_SALA, tema = salaCfg && salaCfg.tema;
+    var cat = (JOGO.CENARIO && tema) ? JOGO.CENARIO[tema] : null;
+    var muros = (cat && cat.alto) || [];
+    var n = 0;
+    // os quatro lados, um muro a cada 4,6 m; o vão do norte é a porta e o
+    // do sul é a saída
+    for (var lado = 0; lado < 4; lado++) {
+      for (var k = -3; k <= 3; k++) {
+        if ((lado === 0 || lado === 2) && k === 0) continue;
+        var tt = k * 4.6;
+        var x = (lado === 1) ? R * 0.96 : (lado === 3) ? -R * 0.96 : tt;
+        var z = (lado === 0) ? -R * 0.96 : (lado === 2) ? R * 0.96 : tt;
+        var rot = (lado === 0 || lado === 2) ? 0 : Math.PI / 2;
+        var chave = muros.length ? muros[(n++) % muros.length] : null;
+        var no = chave ? plantaPeca(chave, 3.1, 4.8, x, z, rot) : null;
+        if (!no) {
+          var bloco = new THREE.Mesh(
+            new THREE.BoxGeometry(4.4, 3.0, 1.0),
+            new THREE.MeshStandardMaterial({ color: new THREE.Color(corDoTema(tema)).multiplyScalar(0.45), roughness: 1 })
+          );
+          bloco.position.set(x, 1.5, z);
+          bloco.rotation.y = rot;
+          scene.add(bloco);
+        }
+      }
+    }
+  }
+  /* Trocar de cena (praça ↔ sala, sala ↔ sala): fantasmas e lugares saem,
+   * o herói e o bicho renascem na cena nova pelo caminho de sempre. */
+  function refazCena() {
+    for (var fk in fantasmas) {
+      if (fantasmas.hasOwnProperty(fk) && fantasmas[fk].corpo) scene.remove(fantasmas[fk].corpo.node);
+    }
+    fantasmas = {};
+    lugares.length = 0;
+    ultimoPerto = null;
+    heroi = null;
+    bicho = null;
+    montaCena();
   }
 
   /* OS SEIS PORTAIS, num arco ao norte — "lado a lado", como pedido. Cada um é
@@ -712,7 +857,7 @@ var JOGO = (typeof window !== 'undefined')
     var node = null;
     try { node = m2.unit(classId || 'sumo', { classId: classId || 'sumo' }); } catch (e) {}
     if (!node) return;
-    node.position.set(0, 0, RAIO_MAPA * 0.35);
+    node.position.set(0, 0, raioAtual() * 0.35);
     scene.add(node);
     heroi = { node: node, alvo: null, andando: false };
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
@@ -925,7 +1070,7 @@ var JOGO = (typeof window !== 'undefined')
     // tronco, sem travar (o alvo continua o mesmo e o próximo passo tenta
     // de novo, um pouco mais adiante na tangente).
     var dTr = Math.hypot(p.x, p.z);
-    if (dTr < TRONCO_RAIO && dTr > 0.01) {
+    if (!salaAtual && dTr < TRONCO_RAIO && dTr > 0.01) {
       var kTr = TRONCO_RAIO / dTr;
       p.x *= kTr; p.z *= kTr;
     }
@@ -1127,13 +1272,14 @@ var JOGO = (typeof window !== 'undefined')
       var p = no[0].point;
       // não deixa sair do mapa — o clamp virou POR EIXO com a praça quadrada
       // (o radial de antes cortava os cantos, que agora são chão de verdade)
-      var lim = RAIO_MAPA * 0.94;
+      var lim = raioAtual() * 0.94;
       p.x = Math.max(-lim, Math.min(lim, p.x));
       p.z = Math.max(-lim, Math.min(lim, p.z));
       // e o tronco da Árvore-Mundo não é destino: alvo dentro dele é
       // empurrado para a borda — o resto do desvio acontece no passo
+      // (na antessala não há árvore)
       var dT = Math.hypot(p.x, p.z);
-      if (dT < TRONCO_RAIO + 0.4) {
+      if (!salaAtual && dT < TRONCO_RAIO + 0.4) {
         var kT = (TRONCO_RAIO + 0.4) / Math.max(0.01, dT);
         p.x *= kT; p.z *= kT;
       }
@@ -1163,10 +1309,17 @@ var JOGO = (typeof window !== 'undefined')
   /* aoAproximar(lugar|null) — o hud pendura aqui o painel de portal/banco/arena */
   Hub.aoAproximar = null;
 
-  Hub.entrar = function (cont, classId) {
+  Hub.entrar = function (cont, classId, opts) {
     THREE = window.THREE;
     if (!THREE) return false;
     container = cont;
+    // A ANTESSALA (03/09): a cena é a da praça ou a de UMA sala do calabouço;
+    // trocar de sala (ou voltar à praça) refaz a cena inteira
+    var salaNova = (opts && opts.sala) ? chaveSala(opts.sala) : null;
+    var trocouSala = salaNova !== salaAtual;
+    var jaTinha = !!renderer;
+    salaAtual = salaNova;
+    salaCfg = (opts && opts.sala) || null;
     if (!renderer) {
       canvas = document.createElement('canvas');
       canvas.className = 'hub-canvas';
@@ -1186,6 +1339,7 @@ var JOGO = (typeof window !== 'undefined')
     } else if (canvas.parentElement !== container) {
       container.appendChild(canvas);
     }
+    if (jaTinha && trocouSala) refazCena();
     if (!heroi) montaHeroi(classId);
     else if (classId && heroi.classId !== classId) {
       // trocou de herói entre visitas: o corpo acompanha
@@ -1387,7 +1541,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!scene || fantasmas[id]) return false;
     var reg = { perfil: perfil || {},
                 x: (perfil && perfil.x) || 0,
-                z: (perfil && perfil.z) || RAIO_MAPA * 0.35,
+                z: (perfil && perfil.z) || raioAtual() * 0.35,
                 corpo: null };
     fantasmas[id] = reg;
     // dentro do teto? corpo na hora — acima dele, espera a avaliação decidir
@@ -1417,6 +1571,7 @@ var JOGO = (typeof window !== 'undefined')
     delete fantasmas[id];
   };
   Hub.fantasmas = function () { return Object.keys(fantasmas); };
+  Hub.salaAtual = function () { return salaAtual; };
   Hub._corposAtivos = function () {              // painel de teste e provas
     var n = 0;
     for (var k in fantasmas) {
@@ -1447,6 +1602,7 @@ var JOGO = (typeof window !== 'undefined')
       bicho: bicho ? { id: bicho.petId, x: +bicho.node.position.x.toFixed(2),
                        z: +bicho.node.position.z.toFixed(2), andando: !!bicho.andando,
                        clipe: bicho.clipe || 'idle' } : null,
+      sala: salaAtual,                    // 03/09: null = praça
       nome: nomeJogador,
       titulo: tituloJogador,
       coroaVisivel: !!(heroi && heroi.coroaPvp),

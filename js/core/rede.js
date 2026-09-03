@@ -155,7 +155,7 @@ var JOGO = (typeof window !== 'undefined')
   function apresenta() {
     if (!eu) return;
     manda('oi', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
-                  resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z });
+                  resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z, sala: eu.sala });
   }
   function agora() { return Date.now(); }
 
@@ -164,16 +164,25 @@ var JOGO = (typeof window !== 'undefined')
     // "novo" também cobre quem foi visto SÓ por pulso (guardado sem nome,
     // calado): o anúncio de entrada espera a mensagem que traz o nome
     var novo = !atual || !atual.nome;
+    var salaAntes = atual ? (atual.sala || null) : null;
     pares[m.de] = { nome: m.nome || '?', titulo: m.titulo || '',
                     classe: m.classe || 'sumo',
                     resumo: m.resumo || null,
                     aura: m.aura === true,
+                    sala: m.sala || null,       // 03/09: a antessala em que ele está (null = praça)
                     x: m.x || 0, z: m.z || 0, visto: agora() };
     if (novo) {
       avisa({ tipo: 'entrou', id: m.de, nome: pares[m.de].nome,
               titulo: pares[m.de].titulo, classe: pares[m.de].classe,
               resumo: pares[m.de].resumo, aura: pares[m.de].aura,
+              sala: pares[m.de].sala,
               x: pares[m.de].x, z: pares[m.de].z });
+    } else if (salaAntes !== pares[m.de].sala) {
+      // trocou de sala (desceu, subiu, saiu): quem escuta some ou mostra o corpo
+      avisa({ tipo: 'mudouSala', id: m.de, nome: pares[m.de].nome,
+              titulo: pares[m.de].titulo, classe: pares[m.de].classe,
+              resumo: pares[m.de].resumo, aura: pares[m.de].aura,
+              sala: pares[m.de].sala, x: pares[m.de].x, z: pares[m.de].z });
     }
     return novo;
   }
@@ -186,7 +195,7 @@ var JOGO = (typeof window !== 'undefined')
       // o eco apresenta a MIM para o recém-chegado — sem ele, quem entra
       // por último não veria ninguém que já estava
       manda('eco', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
-                     resumo: eu.resumo, x: eu.x, z: eu.z });
+                     resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z, sala: eu.sala });
     } else if (m.t === 'eco') {
       conhece(m);
     } else if (m.t === 'alvo') {
@@ -203,8 +212,16 @@ var JOGO = (typeof window !== 'undefined')
       } else {
         pares[m.de].visto = agora();
         pares[m.de].x = m.x; pares[m.de].z = m.z;
+        var salaP = m.sala || null;
+        if (pares[m.de].nome && (pares[m.de].sala || null) !== salaP) {
+          pares[m.de].sala = salaP;
+          avisa({ tipo: 'mudouSala', id: m.de, nome: pares[m.de].nome,
+                  titulo: pares[m.de].titulo, classe: pares[m.de].classe,
+                  resumo: pares[m.de].resumo, aura: pares[m.de].aura,
+                  sala: salaP, x: m.x, z: m.z });
+        }
       }
-      avisa({ tipo: 'pulso', id: m.de, x: m.x, z: m.z });
+      avisa({ tipo: 'pulso', id: m.de, x: m.x, z: m.z, sala: m.sala || null });
     } else if (m.t === 'chat') {
       if (pares[m.de]) pares[m.de].visto = agora();
       avisa({ tipo: 'chat', id: m.de, nome: m.nome || (pares[m.de] || {}).nome || '?',
@@ -262,10 +279,11 @@ var JOGO = (typeof window !== 'undefined')
            classe: perfil.classe || 'sumo',
            resumo: perfil.resumo || null,
            aura: perfil.aura === true,          // o Traje do Colecionador fechado
+           sala: perfil.sala || null,           // 03/09: null = praça; 'garden:1' = antessala
            x: perfil.x || 0, z: perfil.z || 0 };
     apresenta();
     timerPulso = setInterval(function () {
-      manda('pulso', { x: eu.x, z: eu.z });
+      manda('pulso', { x: eu.x, z: eu.z, sala: eu.sala });
       R._varre();
     }, R.PULSO_MS);
     return true;
@@ -336,9 +354,24 @@ var JOGO = (typeof window !== 'undefined')
       var p = pares[id];
       if (!p.nome) return;             // visto só por pulso: sem apresentação ainda
       fora.push({ id: id, nome: p.nome, titulo: p.titulo, classe: p.classe,
-                  resumo: p.resumo || null, aura: p.aura === true, x: p.x, z: p.z });
+                  resumo: p.resumo || null, aura: p.aura === true,
+                  sala: p.sala || null, x: p.x, z: p.z });
     });
     return fora;
+  };
+  /* A SALA (03/09): a antessala em que EU estou — quem escuta só materializa
+   * o fantasma de quem está na mesma. Mudar de sala re-apresenta (o oi leva
+   * a sala nova e provoca o eco dos outros). */
+  R.minhaSala = function () { return eu ? (eu.sala || null) : null; };
+  R.mudaSala = function (sala) {
+    if (!eu) return false;
+    eu.sala = sala || null;
+    apresenta();
+    return true;
+  };
+  R.paresNaSala = function () {
+    var minha = R.minhaSala();
+    return R.pares().filter(function (p) { return (p.sala || null) === minha; });
   };
   R.ligado = function () { return !!canal; };
   R.transporte = function () { return canal ? canal.tipo : null; };

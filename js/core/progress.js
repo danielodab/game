@@ -2299,6 +2299,9 @@ var JOGO = (typeof window !== 'undefined')
         element: h.element || DEFAULT_ELEMENT,
         level: h.level,
         spells: Progress.spellsFor(heroId),
+        // a CONTA dona do herói (03/09): a fusão só é permitida entre
+        // unidades da mesma conta — hoje sempre a desta janela
+        conta: (JOGO.Contas && JOGO.Contas.ativa) ? JOGO.Contas.ativa() : 'principal',
         pet: h.pet || null,
         petLevel: h.pet ? Progress.petLevel(h.pet) : 0,   // 03/09: o corpo do pet escala
         petMult: h.pet ? Progress.petMult(h.pet) : 1,

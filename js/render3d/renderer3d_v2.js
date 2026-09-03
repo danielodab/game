@@ -2176,6 +2176,15 @@ var JOGO = (typeof window !== 'undefined')
 
     var spellId = g && g.selectedSpellId;
     var hv = g && g.hoverTile;
+    // A ESCOLHA DA POSIÇÃO (03/09): as quatro casas douradas antes da rodada 1
+    if (st.phase === 'placing' && st.placement && st.placement.options) {
+      var opc = st.placement.options;
+      for (var oi = 0; oi < opc.length; oi++) {
+        var sobre = !!(hv && hv.x === opc[oi].x && hv.y === opc[oi].y);
+        ovTile(opc[oi].x, opc[oi].y, '#ffc44d', sobre ? 0.72 : 0.50, 0.15, sobre ? 1.0 : 0.92);
+      }
+      return;
+    }
 
     if (!spellId) {
       var reach = safe(function () { return en.reachable ? en.reachable(st, active.uid) : null; }, null);
@@ -3041,6 +3050,15 @@ var JOGO = (typeof window !== 'undefined')
 
       case 'teleport':
         animQ.push({ kind: 'teleport', uid: ev.uid, fx: ev.fromX, fy: ev.fromY, tx: ev.toX, ty: ev.toY, t: 0, dur: 0.44, age: 0 });
+        break;
+
+      case 'placed':
+        // 03/09: cada herói que mudou de casa na escolha da posição some e
+        // reaparece na casa nova — o mesmo verbo do teletransporte
+        (ev.moves || []).forEach(function (mv) {
+          animQ.push({ kind: 'teleport', uid: mv.uid, fx: mv.fromX, fy: mv.fromY,
+                       tx: mv.toX, ty: mv.toY, t: 0, dur: 0.44, age: 0 });
+        });
         break;
 
       case 'summon':

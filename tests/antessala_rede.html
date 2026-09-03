@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a Rede por sala (quem está na mesma antessala)</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- A ANTESSALA (03/09): "os usuários que estão no calabouço naquela sala se
+     encontram naquele mapa". A presença da Rede carrega a SALA; quem escuta
+     só dá corpo a quem está na mesma. Um segundo canal no mesmo documento
+     banca os outros jogadores (como em rede.html). -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/rede.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  var R = JOGO.Rede;
+  if (!window.BroadcastChannel) { check('BroadcastChannel existe', false); return fecha(); }
+  var outro = new BroadcastChannel('soterra-rede-v1');       // os outros jogadores
+  var ouvidos = [], vistos = [];
+  outro.onmessage = function (ev) { ouvidos.push(ev.data); };
+  R.aoEvento = function (ev) { vistos.push(ev); };
+
+  check('entrar com a sala grava a minha sala', R.entrar({ id: 'eu', nome: 'Eu', sala: 'greenhouse:0' }) === true &&
+        R.minhaSala() === 'greenhouse:0');
+
+  // os vizinhos se apresentam: um na MINHA sala, um noutra, um na praça
+  outro.postMessage({ t: 'oi', de: 'ana', nome: 'Ana', classe: 'sumo', x: 1, z: 2, sala: 'greenhouse:0' });
+  outro.postMessage({ t: 'oi', de: 'bento', nome: 'Bento', classe: 'bruxo', x: 3, z: 4, sala: 'greenhouse:1' });
+  outro.postMessage({ t: 'oi', de: 'cris', nome: 'Cris', classe: 'arqueiro', x: 5, z: 6 });
+
+  var voltas = 0;
+  (function espera() {
+    if (R.pares().length < 3 && ++voltas < 80) return setTimeout(espera, 50);
+    var pares = R.pares();
+    check('os três chegaram, cada um com a sua sala', pares.length === 3 &&
+          pares.every(function (p) { return p.id !== 'ana' || p.sala === 'greenhouse:0'; }) &&
+          pares.every(function (p) { return p.id !== 'bento' || p.sala === 'greenhouse:1'; }) &&
+          pares.every(function (p) { return p.id !== 'cris' || p.sala === null; }));
+    var naSala = R.paresNaSala().map(function (p) { return p.id; });
+    check('paresNaSala só devolve quem está na MINHA sala (a Ana)', naSala.length === 1 && naSala[0] === 'ana', naSala.join(','));
+    var entrouEv = vistos.filter(function (e) { return e.tipo === 'entrou'; });
+    check('o evento entrou carrega a sala de cada um', entrouEv.length === 3 &&
+          entrouEv.every(function (e) { return e.id !== 'bento' || e.sala === 'greenhouse:1'; }));
+    check('o meu oi (e o eco) levam a sala', ouvidos.some(function (m) { return m.t === 'oi' && m.de === 'eu' && m.sala === 'greenhouse:0'; }) &&
+          ouvidos.some(function (m) { return m.t === 'eco' && m.de === 'eu' && m.sala === 'greenhouse:0'; }));
+
+    // desço para a sala 2: re-apresento com a sala nova (o canal entrega
+    // depois — espera o oi chegar do outro lado)
+    var antes = ouvidos.length;
+    R.mudaSala('greenhouse:1');
+    var vM = 0;
+    (function esperaOi() {
+      var chegou = ouvidos.slice(antes).some(function (m) { return m.t === 'oi' && m.sala === 'greenhouse:1'; });
+      if (!chegou && ++vM < 80) return setTimeout(esperaOi, 50);
+      check('mudaSala troca a minha sala e re-apresenta com ela', R.minhaSala() === 'greenhouse:1' && chegou);
+      var agora2 = R.paresNaSala().map(function (p) { return p.id; });
+      check('agora só o Bento está comigo', agora2.length === 1 && agora2[0] === 'bento', agora2.join(','));
+      depoisDaMudanca();
+    })();
+  })();
+  function depoisDaMudanca() {
+
+    // a Ana desce também: o eco dela vem com a sala nova → mudouSala
+    outro.postMessage({ t: 'eco', de: 'ana', nome: 'Ana', classe: 'sumo', x: 1, z: 2, sala: 'greenhouse:1' });
+    var v2 = 0;
+    (function espera2() {
+      var mudou = vistos.filter(function (e) { return e.tipo === 'mudouSala' && e.id === 'ana'; });
+      if (!mudou.length && ++v2 < 80) return setTimeout(espera2, 50);
+      check('quem troca de sala dispara mudouSala com a sala nova',
+            mudou.length === 1 && mudou[0].sala === 'greenhouse:1');
+      var agora3 = R.paresNaSala().map(function (p) { return p.id; }).sort();
+      check('e passa a contar na minha sala', agora3.join(',') === 'ana,bento', agora3.join(','));
+      // o pulso também carrega a sala: a Cris sobe da praça para a minha sala
+      outro.postMessage({ t: 'pulso', de: 'cris', x: 5, z: 6, sala: 'greenhouse:1' });
+      var v3 = 0;
+      (function espera3() {
+        var mc = vistos.filter(function (e) { return e.tipo === 'mudouSala' && e.id === 'cris'; });
+        if (!mc.length && ++v3 < 80) return setTimeout(espera3, 50);
+        check('o pulso com sala nova também avisa mudouSala', mc.length === 1 && mc[0].sala === 'greenhouse:1');
+        check('voltar à praça é mudaSala(null)', R.mudaSala(null) === true && R.minhaSala() === null &&
+              R.paresNaSala().length === 0);
+        try { R.sair(); outro.close(); } catch (e) {}
+        fecha();
+      })();
+    })();
+  }
+})();
+</script>
+</body>
+</html>

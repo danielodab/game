@@ -572,6 +572,7 @@ var JOGO = (typeof window !== 'undefined')
       behavior: opts.behavior || null, // v2: comportamento do pet
       range: opts.range || 0,          // v2: alcance de ação do pet
       followDistance: opts.followDistance || 0, // v2
+      conta: opts.conta || null,       // 03/09: a conta dona — fusão só entre os seus
       fusionIntent: null,              // v2
       _birth: state._uidCounter
     };
@@ -741,6 +742,7 @@ var JOGO = (typeof window !== 'undefined')
         level: p.level || 1,
         classId: p.classId || def.id,
         heroId: p.heroId || def.id,
+        conta: p.conta || null,            // 03/09: viaja do grupo para a unidade
         name: p.name || def.name
       });
       state.units.push(unit);
@@ -774,9 +776,129 @@ var JOGO = (typeof window !== 'undefined')
     Engine.state = state;
     emit({ type: 'battleStart', state: state });
     log(dungeon.name + ' — ' + room.name);
+
+    // A ESCOLHA DA POSIÇÃO (03/09, pedido do dono): "a posição no início da
+    // batalha o usuário que escolhe. O jogo dá 4 opções aleatórias… quando
+    // estiver com 2 personagens, o segundo nasce aleatoriamente; ele só
+    // escolhe a posição do principal". A batalha nasce em `placing`: os
+    // heróis já estão nos P do layout (é o que a cena mostra), as quatro
+    // casas douradas esperam o toque, e a rodada 1 só começa em Engine.place.
+    if (opts.escolhePosicao) {
+      state.phase = 'placing';
+      state.placement = montaEscolha(state, heroSpawns, pets);
+      emit({ type: 'placement', uid: state.placement.uid, options: state.placement.options.slice() });
+      return state;
+    }
+
     emit({ type: 'roundStart', round: 1 });
     startTurn(state, 0);
     return state;
+  };
+
+  // ------------------------------------------------- a escolha da posição
+  /* A ZONA DO JOGADOR: chão livre a até 3 passos de qualquer P do layout e a
+   * 3 ou mais de todo monstro. Dela saem as QUATRO opções (sorteio pelo RNG
+   * da sala — determinístico e testável) e, depois, a casa do segundo herói. */
+  function zonaDoJogador(state, heroSpawns) {
+    var w = state.grid.w, h = state.grid.h, out = [];
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var t = state.grid.tiles[y][x];
+        if (!t || t.type !== 'floor') continue;
+        var perto = false, i;
+        for (i = 0; i < heroSpawns.length; i++) {
+          if (Math.abs(heroSpawns[i].x - x) + Math.abs(heroSpawns[i].y - y) <= 3) perto = true;
+        }
+        if (!perto) continue;
+        var longe = true;
+        for (i = 0; i < state.units.length; i++) {
+          var u = state.units[i];
+          if (u.side !== 'enemy' || !u.alive) continue;
+          if (Math.abs(u.x - x) + Math.abs(u.y - y) < 3) longe = false;
+        }
+        if (!longe) continue;
+        out.push({ x: x, y: y });
+      }
+    }
+    return out;
+  }
+  function casaLivre(state, x, y, ignoraUid) {
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (!u.alive || u.offBoard || u.uid === ignoraUid) continue;
+      if (u.x === x && u.y === y) return false;
+    }
+    return true;
+  }
+  function montaEscolha(state, heroSpawns, pets) {
+    var herois = [], i;
+    for (i = 0; i < state.units.length; i++) {
+      if (state.units[i].kind === 'hero' && state.units[i].side === 'player') herois.push(state.units[i]);
+    }
+    var principal = herois[0];
+    var zona = zonaDoJogador(state, heroSpawns);
+    // embaralha pelo RNG da sala e tira quatro (a casa atual do principal
+    // conta como livre; a zona nunca deixa a lista vazia)
+    var bolsa = zona.filter(function (c) { return casaLivre(state, c.x, c.y, principal.uid); });
+    for (var k = bolsa.length - 1; k > 0; k--) {
+      var j = Math.floor(nextRand(state) * (k + 1));
+      var tmp = bolsa[k]; bolsa[k] = bolsa[j]; bolsa[j] = tmp;
+    }
+    var options = bolsa.slice(0, 4);
+    if (!options.length) options = [{ x: principal.x, y: principal.y }];
+    return {
+      uid: principal.uid,
+      options: options,
+      zona: zona,
+      pets: pets.map(function (p) { return { ownerUid: p.ownerUnit.uid, petId: p.petId, extra: p }; })
+    };
+  }
+  Engine.placementOptions = function (state) {
+    return (state && state.placement && state.placement.options) ? state.placement.options.slice() : [];
+  };
+  /* O toque numa das quatro casas: o principal vai para lá, o segundo herói
+   * nasce ao acaso na zona (nunca na mesma casa), os pets renascem colados
+   * aos donos, e SÓ ENTÃO a rodada 1 começa. Devolve false se a casa não é
+   * uma das opções. */
+  Engine.place = function (state, x, y) {
+    if (!state || state.phase !== 'placing' || !state.placement) return false;
+    var pl = state.placement, ok = false, i;
+    for (i = 0; i < pl.options.length; i++) if (pl.options[i].x === x && pl.options[i].y === y) ok = true;
+    if (!ok) return false;
+    var principal = Engine.findUnit(state, pl.uid);
+    if (!principal) return false;
+    var moves = [];
+    // os pets saem antes: ocupam casas e renascem no fim, colados aos donos
+    for (i = state.units.length - 1; i >= 0; i--) {
+      if (state.units[i].kind === 'pet') state.units.splice(i, 1);
+    }
+    if (principal.x !== x || principal.y !== y) {
+      moves.push({ uid: principal.uid, fromX: principal.x, fromY: principal.y, toX: x, toY: y });
+      principal.x = x; principal.y = y;
+    }
+    for (i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.kind !== 'hero' || u.side !== 'player' || u.uid === principal.uid) continue;
+      var casas = pl.zona.filter(function (c) {
+        return !(c.x === x && c.y === y) && casaLivre(state, c.x, c.y, u.uid);
+      });
+      if (!casas.length) continue;
+      var c2 = casas[Math.floor(nextRand(state) * casas.length)];
+      if (c2.x !== u.x || c2.y !== u.y) {
+        moves.push({ uid: u.uid, fromX: u.x, fromY: u.y, toX: c2.x, toY: c2.y });
+        u.x = c2.x; u.y = c2.y;
+      }
+    }
+    for (i = 0; i < pl.pets.length; i++) {
+      var dono = Engine.findUnit(state, pl.pets[i].ownerUid);
+      if (dono) spawnPet(state, dono, pl.pets[i].petId, pl.pets[i].extra);
+    }
+    state.placement = null;
+    state.phase = 'playing';
+    emit({ type: 'placed', uid: pl.uid, x: x, y: y, moves: moves });
+    emit({ type: 'roundStart', round: 1 });
+    startTurn(state, 0);
+    return true;
   };
 
   // --------------------------------------------------------- v2: pets
@@ -1132,6 +1254,15 @@ var JOGO = (typeof window !== 'undefined')
 
   function sorteiaDesafio(state) {
     var ids = ['intocado', 'relampago', 'executor', 'estatua', 'fundido'];
+    // 03/09: "com o GM jamais pode dar a possibilidade de fusão" — com o
+    // Mestre no grupo o desafio Fundido nem entra na roda
+    for (var gi = 0; gi < state.units.length; gi++) {
+      var gu = state.units[gi];
+      if (gu.kind === 'hero' && gu.side === 'player' && gu.classId === 'gm') {
+        ids = ids.filter(function (d0) { return d0 !== 'fundido'; });
+        break;
+      }
+    }
     var id = ids[Math.floor(nextRand(state) * ids.length)];
     var d = { id: id, nome: DESAFIOS[id].nome, texto: DESAFIOS[id].texto,
               vivo: true, cumprido: false, passos: 0,

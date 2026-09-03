@@ -304,6 +304,12 @@ var JOGO = (typeof window !== 'undefined')
     var a = E().findUnit(state, uidA), b = E().findUnit(state, uidB);
     if (!isFusable(a) || !isFusable(b)) return false;
     if (a.side !== b.side) return false;
+    // 03/09, pedido do dono: "com o GM jamais pode dar a possibilidade de
+    // fusão" e "usuário só pode fundir com seus personagens" — o Mestre não
+    // funde, e duas unidades de CONTAS diferentes (co-op, um dia) tampouco.
+    // A conta viaja do grupo (Progress.battleParty) para a unidade.
+    if (a.classId === 'gm' || b.classId === 'gm') return false;
+    if ((a.conta || null) !== (b.conta || null)) return false;
     if (manhattan(a.x, a.y, b.x, b.y) !== 1) return false;
     if (state.pendingFusion) return false;
     if (a.fusionIntent || b.fusionIntent) return false;

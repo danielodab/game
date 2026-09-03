@@ -1922,6 +1922,21 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .hub-moedas { font: 400 12px/1 var(--ui-mono, monospace); color: #e8c25a; }
 .hub-acts { display: flex; gap: 6px; }
 .hub-mundo { position: absolute; inset: 0; }
+/* A ANTESSALA (03/09): a placa da sala no topo e a lista de quem espera */
+.hub-sala-tag { font: 700 12px var(--ui-sans); color: #f0e6c8; margin-left: 10px;
+  padding: 3px 9px; border: 1px solid var(--gold-a22, rgba(255,196,77,.22)); border-radius: 8px;
+  background: rgba(20,16,8,.55); }
+.sala-monstros { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 8px; }
+.sala-monstro { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); }
+.sala-monstro.is-boss { color: var(--gold-2, #e8c25a); }
+.sala-monstro canvas { flex: none; }
+/* A ESCOLHA DA POSIÇÃO (03/09): a faixa e a barra apagada */
+.bt-placing { position: absolute; left: 50%; top: 82px; transform: translateX(-50%);
+  max-width: 520px; padding: 9px 16px; border-radius: 10px; z-index: 6; text-align: center;
+  background: rgba(20,16,8,.86); border: 1px solid var(--gold, #ffc44d); color: #f0e6c8;
+  font: 400 14px var(--ui-sans); box-shadow: 0 6px 20px rgba(0,0,0,.45); }
+.bt-placing b { color: var(--gold, #ffc44d); }
+.screen-battle.is-placing .bt-bottom { opacity: .22; pointer-events: none; }
 .hub-canvas { width: 100%; height: 100%; display: block; }
 .hub-painel {
   /* um degrau acima do cais (.hub-dock), para não taparem um ao outro */

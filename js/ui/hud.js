@@ -323,7 +323,7 @@ var JOGO = (typeof window !== 'undefined')
   // ESQUELETO
   // ==========================================================================
   var SCREEN_NAMES = ['menu', 'heroSelect', 'hub', 'dungeonSelect', 'elementChoice', 'duelFim',
-                      'battle', 'roomClear', 'dungeonComplete', 'defeat'];
+                      'battle', 'roomClear', 'dungeonComplete', 'defeat', 'antessala'];
 
   UI.init = function () {
     root = document.getElementById('ui-root');
@@ -406,7 +406,9 @@ var JOGO = (typeof window !== 'undefined')
     battleSig = '';
     if (name === 'menu') buildMenu();
     else if (name === 'heroSelect') buildHeroSelect();
-    else if (name === 'hub') buildHub();
+    else if (name === 'hub') buildHub(null);
+    // A ANTESSALA (03/09): a mesma máquina da praça, no pátio da sala
+    else if (name === 'antessala') buildHub(data || safe(function () { return G().salaInfo(); }, null));
     else if (name === 'dungeonSelect') buildDungeonSelect();
     else if (name === 'elementChoice') buildElementChoice(data);
     else if (name === 'duelFim') buildDuelFim(data);
@@ -789,9 +791,18 @@ var JOGO = (typeof window !== 'undefined')
    * o herói se APROXIMA de um lugar. A regra do painel é a do mundo: nada abre
    * por menu — o corpo anda até o portal, e a porta aparece quando se chega.
    */
-  function buildHub() {
-    var s = screens.hub;
+  function buildHub(sala) {
+    var s = sala ? screens.antessala : screens.hub;
     clear(s);
+    var chaveSala = sala ? (sala.dungeonId + ':' + sala.roomIndex) : null;
+    function perguntaSair() {
+      confirmSheet('Sair do calabouço?',
+        'O que você já limpou não fica guardado — a próxima descida começa da primeira sala.',
+        function () {
+          safe(function () { return G().abandonar(); }, false);
+          navTo('hub');
+        });
+    }
 
     var top = el('div', 'hub-top');
     var quem = el('div', 'hub-quem');
@@ -801,7 +812,15 @@ var JOGO = (typeof window !== 'undefined')
     quem.appendChild(moedasEl);
     top.appendChild(quem);
     var acts = el('div', 'hub-acts');
-    acts.appendChild(btn('Menu', 'btn-mini btn-ghost', function () { navTo('menu'); }));
+    if (sala) {
+      // a placa da sala no lugar do Menu: daqui só se sai pela saída do
+      // pátio ou por este botão — sempre com a pergunta
+      quem.appendChild(el('span', 'hub-sala-tag', esc(sala.calabouco || '') + ' · sala ' +
+        (sala.roomIndex + 1) + '/' + (sala.total || '?') + ' — ' + esc(sala.nome || '')));
+      acts.appendChild(btn('Sair do calabouço', 'btn-mini btn-ghost', perguntaSair));
+    } else {
+      acts.appendChild(btn('Menu', 'btn-mini btn-ghost', function () { navTo('menu'); }));
+    }
     top.appendChild(acts);
     s.appendChild(top);
 
@@ -951,6 +970,30 @@ var JOGO = (typeof window !== 'undefined')
           var ok = safe(function () { return G().startRun(selHeroes.slice(), lugar.id); }, false);
           if (!ok) toast('Não deu para começar essa descida.');
         }));
+      } else if (lugar.tipo === 'porta') {
+        // A PORTA DA SALA (03/09): "seguir para a batalha (que mostrará os
+        // monstros ao confirmar)" — quem espera, a dificuldade, e a entrada
+        painel.appendChild(el('h3', null, esc((sala && sala.nome) || 'A sala')));
+        var lista = el('div', 'sala-monstros');
+        ((sala && sala.monstros) || []).forEach(function (m) {
+          var c = el('div', 'sala-monstro' + (m.boss ? ' is-boss' : ''));
+          c.appendChild(art('unit', [m.id, { element: m.element || 'neutro', dir: 0, scale: 0.5 }], 44));
+          c.appendChild(el('span', null, esc(m.name) + (m.qtd > 1 ? ' ×' + m.qtd : '') +
+            (m.boss ? ' — <b>chefe</b>' : '')));
+          lista.appendChild(c);
+        });
+        if (!lista.childNodes.length) lista.appendChild(el('p', 'hub-nota', 'Ninguém à vista… ainda.'));
+        painel.appendChild(lista);
+        var sd2 = seletorDif();
+        if (sd2) painel.appendChild(sd2);
+        painel.appendChild(btn('Entrar na batalha', 'btn-primary btn-block', function () {
+          if (!safe(function () { return G().entrarNaSala(); }, false)) toast('Não deu para entrar na sala.');
+        }));
+      } else if (lugar.tipo === 'saida') {
+        painel.appendChild(el('h3', null, 'Sair do calabouço'));
+        painel.appendChild(el('p', 'hub-nota',
+          'A descida se perde: da próxima vez você começa da primeira sala.'));
+        painel.appendChild(btn('Sair', 'btn-warn btn-block', perguntaSair));
       } else if (lugar.tipo === 'banco') {
         painel.appendChild(el('h3', null, 'Banco do Acampamento'));
         painel.appendChild(el('p', 'hub-nota',
@@ -1011,7 +1054,9 @@ var JOGO = (typeof window !== 'undefined')
       }
     };
 
-    var entrou = JOGO.Hub && JOGO.Hub.entrar(mundo, selHeroes[0] || 'sumo');
+    var entrou = JOGO.Hub && JOGO.Hub.entrar(mundo, selHeroes[0] || 'sumo',
+      sala ? { sala: { dungeonId: sala.dungeonId, roomIndex: sala.roomIndex,
+                       tema: sala.tema || null, nome: sala.nome || '' } } : null);
 
     /* A REDE GANHA CORPO: entrar no Acampamento liga a presença (perfil do
      * DB), os eventos da Rede viram fantasmas de corpo inteiro, e quem já
@@ -1065,6 +1110,7 @@ var JOGO = (typeof window !== 'undefined')
                                classe: j.avatar || selHeroes[0] || 'sumo',
                                resumo: safe(resumoDaConta, null),
                                aura: safe(temAuraSelos, false),
+                               sala: chaveSala,          // 03/09: a antessala (null = praça)
                                x: pos.x, z: pos.z });
         if (!ligou) return;                    // file://: o jogo segue solo
 
@@ -1182,13 +1228,24 @@ var JOGO = (typeof window !== 'undefined')
             return;
           }
           if (ev.tipo === 'entrou') {
+            // só quem está NA MESMA SALA ganha corpo (03/09); os outros ficam
+            // no papel, na lista da Rede
+            if ((ev.sala || null) !== chaveSala) return;
             JOGO.Hub.fantasmaEntra(ev.id, ev);
-            chatLinha(null, ev.nome + ' chegou ao acampamento.');
+            chatLinha(null, ev.nome + (chaveSala ? ' chegou à sala.' : ' chegou ao acampamento.'));
             // a foto do vizinho vai para o PLACAR — é assim que o ranking
             // local se enche: de todo mundo que já cruzou a praça
             if (ev.resumo && JOGO.DB.placarAnota) {
               JOGO.DB.placarAnota(ev.id, { nome: ev.nome, titulo: ev.titulo,
                                            resumo: ev.resumo });
+            }
+          } else if (ev.tipo === 'mudouSala') {
+            // 03/09: desceu para outra sala (some) ou chegou à minha (aparece)
+            if ((ev.sala || null) === chaveSala) {
+              JOGO.Hub.fantasmaEntra(ev.id, ev);
+              chatLinha(null, ev.nome + (chaveSala ? ' chegou à sala.' : ' voltou ao acampamento.'));
+            } else {
+              JOGO.Hub.fantasmaSai(ev.id);
             }
           } else if (ev.tipo === 'alvo') {
             JOGO.Hub.fantasmaAlvo(ev.id, ev.x, ev.z);
@@ -1201,8 +1258,9 @@ var JOGO = (typeof window !== 'undefined')
             JOGO.Hub.fantasmaSai(ev.id);
           }
         };
-        // quem ja estava na praca antes de mim (ou de eu voltar da batalha)
+        // quem ja estava na praca (ou nesta sala) antes de mim
         R.pares().forEach(function (par) {
+          if ((par.sala || null) !== chaveSala) return;
           JOGO.Hub.fantasmaEntra(par.id, par);
         });
 
@@ -1801,7 +1859,24 @@ var JOGO = (typeof window !== 'undefined')
     paintSpells(s);
     paintFusion(s);
     paintTimer();
+    paintPlacement(s);
     avisaMoldura();
+  }
+
+  /* A ESCOLHA DA POSIÇÃO (03/09): em `placing` a batalha mostra a faixa e
+   * apaga a barra de ações — o toque numa casa dourada é a única entrada. */
+  function paintPlacement(s) {
+    var placing = s.phase === 'placing';
+    screens.battle.classList.toggle('is-placing', placing);
+    if (placing && !bt.placing) {
+      bt.placing = el('div', 'bt-placing',
+        '<b>Escolha onde nascer</b> — toque numa das quatro casas douradas. ' +
+        'O segundo herói nasce ao acaso perto de você.');
+      screens.battle.appendChild(bt.placing);
+    } else if (!placing && bt.placing) {
+      bt.placing.remove();
+      bt.placing = null;
+    }
   }
 
   /* Diz ao renderizador quanto da tela a HUD está tapando.
