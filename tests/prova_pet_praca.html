@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o bicho ao lado do dono na praça</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): o Selinho (corpo do dono, 03/09) andando ao lado
+     do Bárbaro no Acampamento — "ele deve no mapa geral andar ao lado do
+     dono sempre acompanhando". ?dist=&tilt=&ang= enquadram; ?pet=<id> troca
+     o bicho (padrão: pet-colecionador). O título vira ERRO se o bicho não
+     nascer perto do dono. -->
+<iframe id="f" src="../index.html?prova-pet-praca"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var PET = Q.pet || 'pet-colecionador';
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      if (!P.petOwned(PET)) P.addPetCards(PET, 5);   // as 5 cartas: o bicho é seu
+      P.equipPet('sumo', PET);
+      w.JOGO.DB.batizar('Dono do Bicho').then(function () {
+        w.JOGO.UI.selection(['sumo']);
+        w.JOGO.UI.showScreen('hub');
+        var v2 = 0;
+        (function aguarda() {
+          var e2 = null;
+          try { e2 = w.JOGO.Hub._estado(); } catch (err) {}
+          if ((e2 && e2.construcoes && e2.enfeites && e2.bicho) || ++v2 > 200) {
+            if (!e2 || !e2.bicho) { document.title = 'ERRO sem bicho na praça'; window.__pronto = true; return; }
+            var dx = e2.bicho.x - e2.pos.x, dz = e2.bicho.z - e2.pos.z;
+            var dist = Math.hypot(dx, dz);
+            if (dist > 2.5) document.title = 'ERRO bicho longe do dono: ' + dist.toFixed(2) + ' m';
+            if (w.JOGO.Hub._cam && (Q.dist || Q.tilt || Q.ang != null)) {
+              w.JOGO.Hub._cam({ dist: parseFloat(Q.dist), tilt: parseFloat(Q.tilt), ang: Q.ang != null ? parseFloat(Q.ang) : null });
+            }
+            try {
+              [].slice.call(d.querySelectorAll('button')).filter(function (b2) {
+                return /Entendi/.test(b2.textContent);
+              })[0].click();
+            } catch (e3) {}
+            setTimeout(function () { window.__pronto = true; }, 1500);
+            return;
+          }
+          setTimeout(aguarda, 400);
+        })();
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

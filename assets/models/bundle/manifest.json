@@ -1,5 +1,5 @@
 {
- "gerado": "2026-09-03T12:25:29",
+ "gerado": "2026-09-03T15:24:02",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -1181,6 +1181,12 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "pet-colecionador",
+   "arquivo": "models-pets/pet-colecionador.glb",
+   "bytes": 1135996
+  },
+  {
+   "alvo": "MODELS",
    "chave": "praca_arvore",
    "arquivo": "models-praca/praca_arvore.glb",
    "bytes": 1094116
@@ -1787,8 +1793,16 @@
    "death",
    "idle",
    "walk"
+  ],
+  "pet-colecionador": [
+   "HitReact",
+   "attack",
+   "death",
+   "idle",
+   "run",
+   "walk"
   ]
  },
- "totalBytes": 138481376,
- "totalBase64": 184642120
+ "totalBytes": 139617372,
+ "totalBase64": 186156784
 }

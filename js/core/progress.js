@@ -196,7 +196,26 @@ var JOGO = (typeof window !== 'undefined')
   var NO_DROP = ' nada';    // entrada virtual de "nenhum item" no sorteio
   // chance de o chefe derrubar carta, por tamanho do grupo (1 ou 2) [D9]
   var CARD_CHANCE = [0.60, 0.60, 0.50];
-  var PET_CHANCE = 0.25;                 // chance base de pet no chefe [D12]
+  var PET_CHANCE = 0.25;                 // chance base de pet no chefe [D12] (LEGADO: o jogo usa cartas)
+  // ---- PETS COM NÍVEL E CARTAS (03/09, pedido do dono): "conforme seu level,
+  // seu bônus e dano/buff aumenta"; "o drop deve ser difícil e deve dropar
+  // CARTAS dos pets"; "dropou 5 cartas pega o pet; gastando 10 fica com 1
+  // estrela; +15 duas; +20 três"; "até o level 10 no máximo". A régua
+  // inteira mora aqui, como a das estrelas de item.
+  var PET_MAX_LEVEL = 10;
+  // XP ACUMULADA por nível (1..10) = 60% da tabela do herói nos mesmos
+  // degraus — e o pet recebe 60% do XP do dono: sobe NO MESMO RITMO do dono
+  // até o 10 (acompanha, não corre na frente).
+  var PET_XP_TABLE = [0, 9, 24, 45, 75, 117, 177, 261, 369, 507];
+  var PET_XP_SHARE = 0.6;
+  var PET_UNLOCK_COST = 5;               // 5 cartas: o pet é seu
+  var PET_STAR_COSTS = [10, 25, 45];     // excedentes acumulados: +10, +15, +20
+  var PET_MAX_STARS = 3;
+  var PET_CARD_CHANCE = 0.12;            // por chefe, × sorte do grupo, teto 0,5
+  var PET_LEVEL_STEP = 0.10;             // bônus ao dono: +10% por nível acima do 1
+  var PET_STAR_STEP = 0.15;              // e +15% por estrela
+  var PET_POWER_PER_LEVEL = 10;          // poder do CORPO em batalha (dano/cura/buff)
+  var PET_POWER_PER_STAR = 15;
   var PA_ITEM_CAP = 1, PP_ITEM_CAP = 1;  // sanidade do contrato §8 [D7]
   var UNLOCK_COST_FALLBACK = 10;         // dado ainda sem `unlockCost` [D9]
 
@@ -465,7 +484,8 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function freshState() {
-    var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {} };
+    var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {},
+               petCards: {}, petXp: {} };
     var cs = classes(), id;
     for (id in cs) {
       if (!cs.hasOwnProperty(id)) continue;
@@ -480,7 +500,8 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------ saneamento [D2]
   function sanitize(raw) {
     if (!isObj(raw)) return null;
-    var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {} };
+    var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {},
+               petCards: {}, petXp: {} };
     var cs = classes(), i, id;
     var hasClasses = keys(cs).length > 0;
     var up = upgradeCfg();
@@ -643,6 +664,33 @@ var JOGO = (typeof window !== 'undefined')
             indexOf(st.pets, raw.pets[i]) < 0) st.pets.push(raw.pets[i]);
       }
     }
+    // ---- cartas e XP dos PETS (03/09) — a armadilha da cópia campo a campo:
+    // sem estas linhas o saneamento engoliria nível e cartas no 1º reload
+    if (isObj(raw.petCards)) {
+      for (id in raw.petCards) {
+        if (!raw.petCards.hasOwnProperty(id) || !petDef(id)) continue;
+        var npc = Math.floor(num(raw.petCards[id], 0));
+        if (npc > 0) st.petCards[id] = npc;
+      }
+    }
+    if (isObj(raw.petXp)) {
+      for (id in raw.petXp) {
+        if (!raw.petXp.hasOwnProperty(id) || !petDef(id)) continue;
+        var npx = Math.floor(num(raw.petXp[id], 0));
+        if (npx > 0) st.petXp[id] = Math.min(npx, PET_XP_TABLE[PET_XP_TABLE.length - 1]);
+      }
+    }
+    // pet que já é seu (no saco ou vestido — saves de antes das cartas) conta
+    // como as 5 cartas pagas: a régua das estrelas parte do mesmo zero
+    (function () {
+      var seus = st.pets.slice();
+      for (var hid2 in st.heroes) {
+        if (st.heroes.hasOwnProperty(hid2) && st.heroes[hid2].pet) seus.push(st.heroes[hid2].pet);
+      }
+      for (var k2 = 0; k2 < seus.length; k2++) {
+        if (num(st.petCards[seus[k2]], 0) < PET_UNLOCK_COST) st.petCards[seus[k2]] = PET_UNLOCK_COST;
+      }
+    })();
 
     // ---- cartas: objeto {classId:n} ou array antiga (conta repetições)
     if (isArray(raw.cards)) {
@@ -1712,7 +1760,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (vestidas < sd.pieces.length) return;
     st.petSelosDado = true;                    // marca ANTES: o addPet pode recusar
-    Progress.addPet(sd.pet);                   // (pet já no saco = só a marca fica)
+    // as 5 cartas pagas de uma vez: o pet entra no saco pela mesma porta dos
+    // outros (03/09) — e a régua das estrelas dele parte do mesmo zero
+    Progress.addPetCards(sd.pet, PET_UNLOCK_COST);
     Progress.save();
   }
 
@@ -1945,7 +1995,8 @@ var JOGO = (typeof window !== 'undefined')
     // ---- pet
     if (h.pet) {
       var pd = petDef(h.pet);
-      if (pd) applyBonuses(out, pd.bonuses, true, 1);
+      // o nível e as estrelas do pet MULTIPLICAM o que ele dá ao dono (03/09)
+      if (pd) applyBonuses(out, pd.bonuses, true, Progress.petMult(h.pet));
     }
 
     // ---- estrelas da classe (fixas e permanentes) [D9]
@@ -2078,6 +2129,159 @@ var JOGO = (typeof window !== 'undefined')
     return chosen;
   };
 
+  // ============================================ PETS: nível, cartas e estrelas (03/09)
+  /* "Quero melhorar para os pets terem levels também e conforme seu level, seu
+   * bônus e dano/buff aumenta" + "o esquema de liberação igual de personagem":
+   * cartas que caem do chefe (só do pet daquele calabouço, e é difícil), 5
+   * cartas = o pet, e as excedentes viram estrela (10 / +15 / +20, ★ máx 3).
+   * O nível vem de XP: o pet vestido recebe uma fatia do XP do dono a cada
+   * vitória, até o 10. Nível e estrelas MULTIPLICAM os bônus ao dono
+   * (petMult) e dão poder ao CORPO em batalha (petPower: dano, cura e buff
+   * dos feitiços do pet). Tudo vive em state.petCards e state.petXp. */
+  function petOwned(petId) {
+    var st = Progress.state;
+    if (!st) return false;
+    if (indexOf(st.pets, petId) >= 0) return true;
+    for (var hid in st.heroes) {
+      if (st.heroes.hasOwnProperty(hid) && st.heroes[hid].pet === petId) return true;
+    }
+    return false;
+  }
+  function petCardsOwned(petId) {
+    var st = Progress.state;
+    return (st && isObj(st.petCards)) ? Math.max(0, Math.floor(num(st.petCards[petId], 0))) : 0;
+  }
+  function petXpOf(petId) {
+    var st = Progress.state;
+    return (st && isObj(st.petXp)) ? Math.max(0, Math.floor(num(st.petXp[petId], 0))) : 0;
+  }
+  function petLevelForXp(xp) {
+    var lv = 1;
+    for (var i = 0; i < PET_XP_TABLE.length && i < PET_MAX_LEVEL; i++) {
+      if (xp >= PET_XP_TABLE[i]) lv = i + 1;
+    }
+    return lv;
+  }
+  function petStarsOf(petId) {
+    var surplus = Math.max(0, petCardsOwned(petId) - PET_UNLOCK_COST);
+    var stars = 0;
+    for (var i = 0; i < PET_STAR_COSTS.length && i < PET_MAX_STARS; i++) {
+      if (surplus >= PET_STAR_COSTS[i]) stars = i + 1;
+    }
+    return stars;
+  }
+  Progress.PET_MAX_LEVEL = PET_MAX_LEVEL;
+  Progress.PET_MAX_STARS = PET_MAX_STARS;
+  Progress.PET_UNLOCK_COST = PET_UNLOCK_COST;
+  Progress.PET_STAR_COSTS = PET_STAR_COSTS.slice();
+  Progress.PET_XP_TABLE = PET_XP_TABLE.slice();
+  Progress.petOwned = function (petId) {
+    return typeof petId === 'string' && !!petDef(petId) && petOwned(petId);
+  };
+  Progress.petLevel = function (petId) {
+    return petDef(petId) ? petLevelForXp(petXpOf(petId)) : 1;
+  };
+  Progress.petXpInfo = function (petId) {
+    if (!petDef(petId)) return null;
+    var xp = petXpOf(petId), level = petLevelForXp(xp);
+    var max = level >= PET_MAX_LEVEL;
+    var base = PET_XP_TABLE[level - 1], next = max ? null : PET_XP_TABLE[level];
+    return { petId: petId, xp: xp, level: level, max: max, maxLevel: PET_MAX_LEVEL,
+             next: next, faltam: max ? 0 : Math.max(0, next - xp),
+             frac: max ? 1 : Math.max(0, Math.min(1, (xp - base) / Math.max(1, next - base))) };
+  };
+  /* Soma XP a um pet que é seu; devolve quantos níveis subiu (teto 10). */
+  Progress.addPetXp = function (petId, amount) {
+    var st = Progress.state;
+    if (!st || !petDef(petId) || !petOwned(petId)) return 0;
+    var amt = Math.floor(num(amount, 0));
+    if (!(amt > 0)) return 0;
+    if (!isObj(st.petXp)) st.petXp = {};
+    var before = petLevelForXp(petXpOf(petId));
+    st.petXp[petId] = Math.min(petXpOf(petId) + amt, PET_XP_TABLE[PET_MAX_LEVEL - 1]);
+    Progress.save();
+    return petLevelForXp(st.petXp[petId]) - before;
+  };
+  /* O pet vestido recebe uma FATIA do XP que o dono acabou de ganhar. Devolve
+   * {petId, xp, niveis, novoNivel} ou null (sem pet / sem ganho). */
+  Progress.addPetXpFromOwner = function (heroId, ownerXp) {
+    var h = Progress.hero(heroId);
+    if (!h || !h.pet) return null;
+    var fatia = Math.floor(num(ownerXp, 0) * PET_XP_SHARE);
+    if (fatia <= 0) return null;
+    var niveis = Progress.addPetXp(h.pet, fatia);
+    return { petId: h.pet, xp: fatia, niveis: niveis, novoNivel: Progress.petLevel(h.pet) };
+  };
+  Progress.petCardInfo = function (petId) {
+    var pd = petDef(petId);
+    if (!pd) return null;
+    var cards = petCardsOwned(petId), stars = petStarsOf(petId);
+    var surplus = Math.max(0, cards - PET_UNLOCK_COST);
+    var next = null;
+    if (stars < Math.min(PET_MAX_STARS, PET_STAR_COSTS.length)) {
+      next = { star: stars + 1, faltam: Math.max(0, PET_STAR_COSTS[stars] - surplus) };
+    }
+    return { petId: petId, name: pd.name, cards: cards, unlocked: petOwned(petId),
+             unlockCost: PET_UNLOCK_COST, stars: stars, maxStars: PET_MAX_STARS, next: next,
+             level: Progress.petLevel(petId), mult: Progress.petMult(petId) };
+  };
+  /* Soma cartas de um pet (nunca decresce); ao chegar em 5 o pet entra no
+   * saco de bichos. Devolve o petCardInfo resultante. */
+  Progress.addPetCards = function (petId, n) {
+    var st = Progress.state;
+    if (!st || !petDef(petId)) return null;
+    var amount = Math.floor(num(n, 0));
+    if (amount > 0) {
+      if (!isObj(st.petCards)) st.petCards = {};
+      st.petCards[petId] = petCardsOwned(petId) + amount;
+      if (st.petCards[petId] >= PET_UNLOCK_COST && !petOwned(petId)) Progress.addPet(petId);
+      Progress.save();
+    }
+    return Progress.petCardInfo(petId);
+  };
+  /* O multiplicador dos BÔNUS que o pet dá ao dono: nível e estrelas. */
+  Progress.petMult = function (petId) {
+    if (!petDef(petId)) return 1;
+    var lv = Progress.petLevel(petId), s = petStarsOf(petId);
+    return +((1 + PET_LEVEL_STEP * (lv - 1)) * (1 + PET_STAR_STEP * s)).toFixed(4);
+  };
+  /* O poder extra do CORPO do pet em batalha (dano, cura e buff dos feitiços
+   * dele): +10 por nível acima do 1, +15 por estrela. */
+  Progress.petPower = function (petId) {
+    if (!petDef(petId)) return 0;
+    return PET_POWER_PER_LEVEL * (Progress.petLevel(petId) - 1) +
+           PET_POWER_PER_STAR * petStarsOf(petId);
+  };
+  /* Cartas de PET do chefe: só o chefe, só o pet DAQUELE calabouço, chance
+   * baixa de propósito ("o drop deve ser difícil"). Devolve [] ou
+   * [{petId, name, amount, cards, unlockCost, unlocked, novoPet, stars,
+   * starUp, next}]. Substitui o rollPet, que entregava o bicho inteiro. */
+  Progress.rollPetCards = function (dungeonId, roomIndex, partySize) {
+    if (!Progress.state) Progress.load();
+    if (!isBossRoom(dungeonId, roomIndex)) return [];
+    var all = D().pets || {}, depth = dungeonIndex(dungeonId), pool = [];
+    for (var id in all) {
+      if (!all.hasOwnProperty(id)) continue;
+      var p = all[id];
+      if (!p || num(p.dropWeight, 0) <= 0) continue;
+      var dd = p.dropDungeon;
+      if (typeof dd === 'string' && dd !== dungeonId) continue;
+      if (typeof dd === 'number' && depth < dd) continue;
+      if (petStarsOf(id) >= PET_MAX_STARS) continue;   // ★3: carta não tem para onde ir
+      pool.push({ id: id, w: num(p.dropWeight, 0) });
+    }
+    if (!pool.length) return [];
+    if (Math.random() >= Math.min(0.5, PET_CARD_CHANCE * luckFor(partySize))) return [];
+    var chosen = pickWeighted(pool);
+    if (!chosen) return [];
+    var antes = Progress.petCardInfo(chosen);
+    var depois = Progress.addPetCards(chosen, 1);
+    return [{ petId: chosen, name: depois.name, amount: 1, cards: depois.cards,
+              unlockCost: depois.unlockCost, unlocked: depois.unlocked,
+              novoPet: !antes.unlocked && depois.unlocked,
+              stars: depois.stars, starUp: depois.stars - antes.stars, next: depois.next }];
+  };
+
   // ========================================================= grupo de batalha
   /* Formato consumido por Engine.createBattle. Grupo de 1 ou 2 (§9-B):
    * heróis inválidos são ignorados e o excedente é cortado. */
@@ -2096,6 +2300,9 @@ var JOGO = (typeof window !== 'undefined')
         level: h.level,
         spells: Progress.spellsFor(heroId),
         pet: h.pet || null,
+        petLevel: h.pet ? Progress.petLevel(h.pet) : 0,   // 03/09: o corpo do pet escala
+        petMult: h.pet ? Progress.petMult(h.pet) : 1,
+        petPower: h.pet ? Progress.petPower(h.pet) : 0,
         items: clone(h.items),
         itemVar: clone(h.itemVar || {}),          // forja e ★ da cópia em uso [D18]
         stars: Progress.cardInfo(h.classId).stars,

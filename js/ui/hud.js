@@ -124,6 +124,26 @@ var JOGO = (typeof window !== 'undefined')
   function setDef(id) { return (D().sets && D().sets[id]) || null; }
   function stoneDefs() { return D().stones || {}; }
   function petDef(id) { return (D().pets && D().pets[id]) || null; }
+  // ---- PETS COM NÍVEL E CARTAS (03/09): os mesmos helpers das classes
+  function petCardInfo(pid) {
+    return safe(function () { return P().petCardInfo(pid); }, null) ||
+           { petId: pid, cards: 0, unlockCost: 5, stars: 0, maxStars: 3, unlocked: false,
+             level: 1, mult: 1, next: null };
+  }
+  function petXpInfo(pid) {
+    return safe(function () { return P().petXpInfo(pid); }, null) ||
+           { level: 1, xp: 0, next: null, faltam: 0, frac: 0, max: false, maxLevel: 10 };
+  }
+  // 'Nv 3 ★★' — o rótulo curto do bicho, para os slots e o seletor
+  function petNivelTxt(pid) {
+    var i = petCardInfo(pid);
+    return 'Nv ' + i.level + (i.stars ? ' ' + new Array(i.stars + 1).join('★') : '');
+  }
+  function petStarRow(n, size) {
+    var w = el('span', 'star-row');
+    for (var i = 0; i < 3; i++) w.appendChild(art('starIcon', [i < n, size || 14], size || 14));
+    return w;
+  }
   function dungeons() { return D().dungeons || []; }
   function starsCfg() { return D().stars || { max: 5, bonuses: {} }; }
   function upgradeCfg() { return D().upgrade || { maxLevel: 10, tiers: [], stoneCost: [] }; }
@@ -1454,6 +1474,53 @@ var JOGO = (typeof window !== 'undefined')
           t.appendChild(starRow(ci.stars, 14));
           if (c.starUp) t.appendChild(el('span', 'rw-starup', '★ Nova estrela!'));
           cell.appendChild(t);
+          w.appendChild(cell);
+        });
+        return w;
+      })()));
+    }
+
+    // CARTAS DE BICHO (03/09): a carta com a cara do bicho, como a de classe
+    var petCards = lastRewards.petCards || [];
+    if (petCards.length) {
+      box.appendChild(rwBlock('Cartas de bicho', (function () {
+        var w = el('div', 'rw-cards');
+        petCards.forEach(function (c) {
+          var cell = el('div', 'rw-card');
+          var carta = el('div', 'rw-card-foto');
+          carta.style.cssText = 'width:104px;height:146px;border:2px solid #c9a227;' +
+            'border-radius:10px;background:linear-gradient(180deg,#1a2029,#0e1319);' +
+            'display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative';
+          carta.appendChild(art('petIcon', [c.petId, 96], 96));
+          var nomeCarta = el('span', null, esc(c.name || c.petId));
+          nomeCarta.style.cssText = 'position:absolute;bottom:4px;left:0;right:0;text-align:center;' +
+            'font-size:11px;color:#e8c25a;text-shadow:0 1px 3px #000;pointer-events:none';
+          carta.appendChild(nomeCarta);
+          cell.appendChild(carta);
+          var t = el('div', 'rw-card-t');
+          t.appendChild(el('b', null, '+' + (c.amount || 1) + ' ' + esc(c.name || c.petId)));
+          var pci = petCardInfo(c.petId);
+          t.appendChild(el('span', null, pci.unlocked
+            ? 'É seu · ' + pci.cards + ' cartas'
+            : pci.cards + ' / ' + pci.unlockCost + ' para o bicho'));
+          t.appendChild(petStarRow(pci.stars, 14));
+          if (c.starUp) t.appendChild(el('span', 'rw-starup', '★ Nova estrela!'));
+          if (c.novoPet) t.appendChild(el('span', 'rw-starup', 'O bicho é seu!'));
+          cell.appendChild(t);
+          w.appendChild(cell);
+        });
+        return w;
+      })()));
+    }
+    var petUps = lastRewards.petLevelUps || [];
+    if (petUps.length) {
+      box.appendChild(rwBlock('O bicho cresceu', (function () {
+        var w = el('div', 'rw-items');
+        petUps.forEach(function (u) {
+          var pdu = petDef(u.petId);
+          var cell = el('div', 'rw-item');
+          cell.appendChild(art('petIcon', [u.petId, 52], 52));
+          cell.appendChild(el('span', null, esc((pdu && pdu.name) || u.petId) + ' → Nv ' + u.novoNivel));
           w.appendChild(cell);
         });
         return w;
@@ -3312,6 +3379,61 @@ var JOGO = (typeof window !== 'undefined')
       list.appendChild(row);
     });
     body.appendChild(list);
+
+    // ---- OS BICHOS (03/09): cartas, estrelas (máx 3) e nível (máx 10) de
+    // cada pet — a mesma gramática das classes, na mesma tela
+    var pdefs = D().pets || {};
+    var pids = Object.keys(pdefs);
+    if (pids.length) {
+      var hb = el('h3', 'col-sub', 'Bichos');
+      hb.style.cssText = 'margin:14px 0 6px;font:700 15px Georgia,serif;color:var(--gold-2,#e8c25a)';
+      body.appendChild(hb);
+      body.appendChild(el('p', 'col-role', 'Cartas de bicho caem só do chefe — e é difícil. ' +
+        '5 cartas: o bicho é seu. Depois, +10 / +15 / +20 viram estrelas; o nível sobe com o XP do dono, até o 10.'));
+      var lp = el('div', 'col-list');
+      var custos = safe(function () { return P().PET_STAR_COSTS; }, null) || [10, 25, 45];
+      pids.forEach(function (pid) {
+        var pdx = pdefs[pid], info = petCardInfo(pid), xi = petXpInfo(pid);
+        var row = el('div', 'col-row' + (info.unlocked ? '' : ' is-locked'));
+        var pic = el('div', 'col-pic');
+        pic.appendChild(art('petIcon', [pid, 92], 92));
+        if (!info.unlocked) pic.classList.add('silhouette');
+        row.appendChild(pic);
+        var txt = el('div', 'col-txt');
+        var h3 = el('h3', null, esc(pdx.name));
+        if (info.unlocked) h3.appendChild(el('span', 'chip chip-ok', 'Nv ' + info.level));
+        txt.appendChild(h3);
+        txt.appendChild(el('p', 'col-role', esc(bonusText(pdx.bonuses)) +
+          (info.mult > 1 ? ' × ' + info.mult.toFixed(2) : '')));
+        if (!info.unlocked) {
+          var faltamP = Math.max(0, info.unlockCost - info.cards);
+          txt.appendChild(bar('bar-card', info.unlockCost ? info.cards / info.unlockCost : 0,
+            info.cards + ' / ' + info.unlockCost + ' cartas'));
+          txt.appendChild(el('p', 'col-faltam', 'Faltam <b>' + faltamP + '</b> carta' +
+            (faltamP === 1 ? '' : 's') + ' para o bicho.'));
+        } else {
+          txt.appendChild(bar('bar-xp', xi.frac, xi.max ? 'Nv 10 — no topo' : 'Nv ' + xi.level + ' · faltam ' + xi.faltam + ' XP'));
+          txt.appendChild(el('div', 'col-cards', '<b>' + info.cards + '</b> cartas guardadas'));
+        }
+        var tr = el('div', 'star-track');
+        for (var s2 = 0; s2 < info.maxStars; s2++) {
+          var on2 = s2 < info.stars;
+          var stp2 = el('div', 'star-step' + (on2 ? ' is-on' : '') +
+                        (info.next && info.next.star === s2 + 1 ? ' is-next' : ''));
+          stp2.appendChild(art('starIcon', [on2, 26], 26));
+          stp2.appendChild(el('span', 'star-b', '+15% bônus'));
+          tipOn(stp2, '★' + (s2 + 1), 'Custa <b>' + custos[s2] + '</b> cartas além das 5 do bicho.<br>' +
+            'Dá: +15% nos bônus ao dono e +15 de poder ao corpo dele.', on2 ? '#ffc44d' : '#8b93a0');
+          tr.appendChild(stp2);
+        }
+        txt.appendChild(tr);
+        if (info.next) txt.appendChild(el('p', 'col-next', 'Faltam <b>' + info.next.faltam + '</b> cartas para a ★' + info.next.star + '.'));
+        else txt.appendChild(el('p', 'col-next is-max', 'Todas as estrelas conquistadas.'));
+        row.appendChild(txt);
+        lp.appendChild(row);
+      });
+      body.appendChild(lp);
+    }
     if (focusId) {
       var f = list.querySelector('.is-focus');
       if (f && f.scrollIntoView) f.scrollIntoView({ block: 'center' });
@@ -3895,7 +4017,7 @@ var JOGO = (typeof window !== 'undefined')
     cic.appendChild(pd ? art('petIcon', [pid, 46], 46) : el('div', 'pet-empty', '☾'));
     cp.appendChild(cic);
     cp.appendChild(el('span', 'pt-slot-nm', 'Bicho'));
-    cp.appendChild(el('span', 'pt-slot-it', pd ? esc(pd.name) : 'nenhum'));
+    cp.appendChild(el('span', 'pt-slot-it', pd ? esc(pd.name) + ' · ' + petNivelTxt(pid) : 'nenhum'));
     cp.appendChild(el('span', 'pt-slot-b', pd ? esc(bonusText(pd.bonuses)) : 'age depois do dono'));
     var pets = ownedPets();
     if (pd) {
@@ -4718,7 +4840,7 @@ var JOGO = (typeof window !== 'undefined')
       ic.appendChild(pd ? art('petIcon', [pid, 52], 52) : el('div', 'pet-empty', '☾'));
       cell.appendChild(ic);
       cell.appendChild(el('span', 'hs-slot-nm', 'Bicho'));
-      cell.appendChild(el('span', 'hs-slot-it', pd ? esc(pd.name) : 'nenhum'));
+      cell.appendChild(el('span', 'hs-slot-it', pd ? esc(pd.name) + ' · ' + petNivelTxt(pid) : 'nenhum'));
       if (pd) tipOn(ic, pd.name, esc(pd.description || '') + '<br><i>' + esc(bonusText(pd.bonuses)) + '</i>',
         elemColor(pd.element));
       var pets = ownedPets();
@@ -4832,6 +4954,7 @@ var JOGO = (typeof window !== 'undefined')
       c.type = 'button';
       c.appendChild(art('petIcon', [pid, 56], 56));
       c.appendChild(el('b', null, esc((pd && pd.name) || pid)));
+      c.appendChild(el('span', null, petNivelTxt(pid)));
       c.appendChild(el('span', null, esc(bonusText(pd && pd.bonuses))));
       tap(c, function () {
         safe(function () { P().equipPet(heroId, pid); }, null);

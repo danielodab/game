@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a Coleção com os bichos</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): a aba Coleção com a seção "Bichos" (03/09) —
+     cartas, estrelas (máx 3) e nível (máx 10) de cada pet. A conta de prova
+     tem a Bocarra ★2 no nível 6, a Brasinha com 3 de 5 cartas e o Selinho
+     no saco. -->
+<iframe id="f" src="../index.html?prova-pets-colecao"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      P.addPetCards('pet-snapvine', 5 + 25);       // Bocarra ★2
+      P.addPetXp('pet-snapvine', 120);             // nível 6 (117)
+      P.addPetCards('pet-emberling', 3);           // Brasinha a caminho
+      P.addPetCards('pet-colecionador', 5);        // Selinho no saco
+      P.equipPet('sumo', 'pet-snapvine');
+      w.JOGO.UI.selection(['sumo']);
+      w.JOGO.UI.openSheet('collection');
+      setTimeout(function () {
+        var body = d.querySelector('.sheet-panel') || d.body;
+        // rola até a seção dos bichos
+        var h3s = [].slice.call(d.querySelectorAll('h3')).filter(function (h) { return /^Bichos$/.test(h.textContent); });
+        if (h3s[0] && h3s[0].scrollIntoView) h3s[0].scrollIntoView({ block: 'start' });
+        if (!h3s.length) document.title = 'ERRO sem seção Bichos';
+        setTimeout(function () { window.__pronto = true; }, 800);
+      }, 1500);
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

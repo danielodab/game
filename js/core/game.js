@@ -686,6 +686,7 @@ var JOGO = (typeof window !== 'undefined')
     // doa — o desconto é REAL (o herói fica com o resto) e a soma vai para a
     // guilda no mesmo funil, fire-and-forget como os vinténs.
     var levelUps = [], xpMult = {}, xpPorHeroi = {};
+    var petXp = {}, petLevelUps = [];   // 03/09: a fatia do pet e os níveis dele
     var dizimoPct = 0, dizimoSoma = 0;
     try {
       if (JOGO.Guilda && JOGO.Guilda.dizimoAtual) {
@@ -714,6 +715,13 @@ var JOGO = (typeof window !== 'undefined')
           var hero = prog.hero ? prog.hero(heroId) : null;
           levelUps.push({ heroId: heroId, niveis: gained, novoNivel: hero ? hero.level : null });
         }
+        // o pet vestido leva a fatia dele do XP (03/09) — e pode subir de nível
+        if (prog.addPetXpFromOwner) {
+          try {
+            var pxp = prog.addPetXpFromOwner(heroId, xpHeroi);
+            if (pxp) { petXp[heroId] = pxp; if (pxp.niveis > 0) petLevelUps.push(pxp); }
+          } catch (err3) {}
+        }
       }
     }
     if (dizimoSoma > 0) {
@@ -737,11 +745,14 @@ var JOGO = (typeof window !== 'undefined')
                                    (difSala.drop || 1) * bonusDesafio * bonusDia * bonusGuilda) || []; }
       catch (err) { drops = []; }
     }
-    if (prog && prog.rollPet) {
-      try {
-        var pet = prog.rollPet(Game.dungeonId, Game.roomIndex, partySize);
-        if (pet) pets.push(pet);
-      } catch (err) { pets = []; }
+    /* CARTAS DE PET (03/09): o chefe não entrega mais o bicho inteiro — derruba
+     * UMA carta do pet daquele calabouço, e com 5 o pet é seu (a gramática das
+     * cartas de personagem). `pets` segue listando o bicho NOVO para a tela. */
+    var petCards = [];
+    if (prog && prog.rollPetCards) {
+      try { petCards = prog.rollPetCards(Game.dungeonId, Game.roomIndex, partySize) || []; }
+      catch (err) { petCards = []; }
+      for (i = 0; i < petCards.length; i++) if (petCards[i].novoPet) pets.push(petCards[i].petId);
     }
 
     /* O QUADRO DE MISSÕES ouve a vitória por evento explícito — este é o único
@@ -778,6 +789,9 @@ var JOGO = (typeof window !== 'undefined')
                                cumprido: !!desafioSala.cumprido } : null,
       drops: drops,
       pets: pets,
+      petCards: petCards,        // 03/09: as cartas de bicho do chefe
+      petXp: petXp,              // a fatia do pet, por herói
+      petLevelUps: petLevelUps,  // [{petId, niveis, novoNivel}]
       cards: cards,
       stones: stones,
       selos: selosGanhos,

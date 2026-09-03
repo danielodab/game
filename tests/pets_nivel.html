@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — pets com nível, cartas e estrelas</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- O pedido do dono (03/09): "os pets terem levels também e conforme seu
+     level, seu bônus e dano/buff aumenta"; "o drop deve ser difícil e deve
+     dropar CARTAS dos pets"; "dropou 5 cartas pega o pet; gastando 10 fica
+     com 1 estrela; +15 duas; +20 três"; "até o level 10 no máximo". -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var P = JOGO.Progress, E = JOGO.Engine, D = JOGO.DATA;
+  var PLANTA = 'pet-snapvine';      // Bocarra, da Estufa (greenhouse)
+  var BRASA = 'pet-emberling';      // Brasinha, do Fecho de Brasa
+  function temNoSaco(pid) { return P.state.pets.indexOf(pid) >= 0; }
+
+  // ---- a régua
+  check('a régua do dono: nível máx 10, 5 cartas para o bicho, estrelas em 10/25/45 (+10, +15, +20)',
+        P.PET_MAX_LEVEL === 10 && P.PET_UNLOCK_COST === 5 &&
+        P.PET_STAR_COSTS.join(',') === '10,25,45' && P.PET_MAX_STARS === 3);
+  check('a tabela de XP do pet tem 10 degraus crescentes',
+        P.PET_XP_TABLE.length === 10 && P.PET_XP_TABLE.every(function (v, i, a) { return i === 0 || v > a[i - 1]; }));
+
+  // ---- cartas → o bicho
+  P.reset();
+  var i4 = P.addPetCards(PLANTA, 4);
+  check('4 cartas: o bicho ainda NÃO é seu', !temNoSaco(PLANTA) && i4.unlocked === false && i4.cards === 4);
+  var i5 = P.addPetCards(PLANTA, 1);
+  check('a 5ª carta entrega o bicho no saco', temNoSaco(PLANTA) && i5.unlocked === true && i5.stars === 0);
+  check('cartas de pet inexistente são recusadas', P.addPetCards('pet-nada', 3) === null);
+
+  // ---- estrelas pelas cartas excedentes
+  var s1 = P.addPetCards(PLANTA, 9);
+  check('9 excedentes: ainda sem estrela (faltam 1)', s1.stars === 0 && s1.next && s1.next.star === 1 && s1.next.faltam === 1);
+  s1 = P.addPetCards(PLANTA, 1);
+  check('10 excedentes: ★1', s1.stars === 1, 'cartas ' + s1.cards);
+  var s2 = P.addPetCards(PLANTA, 15);
+  check('+15: ★2', s2.stars === 2, 'cartas ' + s2.cards);
+  var s3 = P.addPetCards(PLANTA, 20);
+  check('+20: ★3 — o teto', s3.stars === 3 && s3.next === null, 'cartas ' + s3.cards);
+  var s4 = P.addPetCards(PLANTA, 100);
+  check('cartas além do ★3 acumulam sem quarta estrela', s4.stars === 3 && s4.cards === 150);
+  check('★3 no nível 1 vale 1,45× nos bônus e +45 de poder ao corpo',
+        P.petMult(PLANTA) === 1.45 && P.petPower(PLANTA) === 45, P.petMult(PLANTA) + ' / ' + P.petPower(PLANTA));
+
+  // ---- XP e nível
+  P.reset();
+  P.addPetCards(BRASA, 5);
+  check('XP em pet que não é seu é recusado', P.addPetXp(PLANTA, 50) === 0 && P.petLevel(PLANTA) === 1);
+  check('8 XP: ainda nível 1 (o degrau 2 é 9)', P.addPetXp(BRASA, 8) === 0 && P.petLevel(BRASA) === 1);
+  check('o 9º XP sobe para o nível 2', P.addPetXp(BRASA, 1) === 1 && P.petLevel(BRASA) === 2);
+  var xi = P.petXpInfo(BRASA);
+  check('petXpInfo diz o próximo degrau (24) e o que falta (15)', xi.level === 2 && xi.next === 24 && xi.faltam === 15);
+  var subiu = P.addPetXp(BRASA, 100000);
+  check('XP enorme trava no nível 10 e o XP no topo da tabela',
+        P.petLevel(BRASA) === 10 && subiu === 8 && P.state.petXp[BRASA] === P.PET_XP_TABLE[9]);
+  check('no topo, mais XP não muda nada', P.addPetXp(BRASA, 50) === 0 && P.petXpInfo(BRASA).max === true);
+  check('nível 10 sem estrela vale 1,9× e +90 de poder',
+        P.petMult(BRASA) === 1.9 && P.petPower(BRASA) === 90);
+
+  // ---- a fatia do dono
+  P.reset();
+  P.addPetCards(PLANTA, 5);
+  check('o Bárbaro veste a Bocarra', P.equipPet('sumo', PLANTA) === true);
+  var r = P.addPetXpFromOwner('sumo', 100);
+  check('o pet leva 60% do XP do dono (100 → 60) e chega ao nível 4 (degrau 45)',
+        !!r && r.xp === 60 && r.petId === PLANTA && r.novoNivel === 4 && r.niveis === 3,
+        JSON.stringify(r));
+  check('herói sem pet: sem fatia', P.addPetXpFromOwner('curandeiro', 100) === null);
+
+  // ---- o bônus ao dono multiplica
+  var hpNv4 = P.effectiveStats('sumo').hp;
+  P.addPetXp(PLANTA, 100000);                       // nível 10
+  var hpNv10 = P.effectiveStats('sumo').hp;
+  // Bocarra dá +25 PV: nível 4 = ×1,3 (33), nível 10 = ×1,9 (48) → 15 a mais
+  check('o +25 PV da Bocarra cresce com o nível (nv4 → nv10 = +15 PV)',
+        hpNv10 - hpNv4 === 15, hpNv4 + ' → ' + hpNv10);
+
+  // ---- o grupo leva o pet escalado para a batalha
+  var party = P.battleParty(['sumo']);
+  check('battleParty carrega nível, multiplicador e poder do pet',
+        party[0].pet === PLANTA && party[0].petLevel === 10 && party[0].petMult === 1.9 && party[0].petPower === 90);
+  var st = E.createBattle('greenhouse', 0, party);
+  var petU = st.units.filter(function (u) { return u.kind === 'pet'; })[0];
+  check('na batalha o corpo do pet tem 1,9× de vida (40 → 76), +90 de poder e nível 10',
+        !!petU && petU.hpMax === 76 && petU.power === 90 && petU.level === 10,
+        petU ? petU.hpMax + '/' + petU.power + '/' + petU.level : 'sem pet');
+
+  // ---- as cartas caem só do chefe, só do pet do calabouço, e é difícil
+  P.reset();
+  var rnd = Math.random;
+  Math.random = function () { return 0; };
+  check('fora da sala do chefe não cai carta', P.rollPetCards('greenhouse', 0, 1).length === 0);
+  var c1 = P.rollPetCards('greenhouse', 2, 1);
+  check('no chefe da Estufa cai UMA carta da Bocarra (pet DAQUELE calabouço)',
+        c1.length === 1 && c1[0].petId === PLANTA && c1[0].amount === 1 && c1[0].cards === 1 && !c1[0].novoPet);
+  for (var k = 0; k < 3; k++) P.rollPetCards('greenhouse', 2, 1);
+  var c5 = P.rollPetCards('greenhouse', 2, 1);
+  check('a 5ª carta avisa: o bicho é seu', c5.length === 1 && c5[0].novoPet === true && temNoSaco(PLANTA));
+  Math.random = function () { return 0.99; };
+  check('com a sorte contra, nada cai (a chance é baixa de propósito)', P.rollPetCards('greenhouse', 2, 1).length === 0);
+  // sozinho a chance é 0,12 × 2,4 = 0,288 (o teto de 0,5 fica longe): 0,28 cai, 0,29 não
+  Math.random = function () { return 0.28; };
+  check('sozinho (sorte 2,4×) a chance é 0,288: em 0,28 cai', P.rollPetCards('greenhouse', 2, 1).length === 1);
+  Math.random = function () { return 0.29; };
+  check('e em 0,29 não cai — a chance é mesmo baixa', P.rollPetCards('greenhouse', 2, 1).length === 0);
+  Math.random = function () { return 0; };
+  P.addPetCards(PLANTA, 200);
+  check('pet ★3: as cartas dele param de cair', P.rollPetCards('greenhouse', 2, 1).length === 0);
+  Math.random = rnd;
+  check('o rollPet antigo continua existindo (legado dos testes), mas o jogo não o usa',
+        typeof P.rollPet === 'function');
+
+  // ---- o save guarda cartas e XP; save antigo com pet ganha as 5 cartas
+  P.reset();
+  P.addPetCards(BRASA, 12);
+  P.addPetXp(BRASA, 30);
+  P.save(); P.load();
+  check('cartas e XP sobrevivem ao save/load', P.state.petCards[BRASA] === 12 && P.state.petXp[BRASA] === 30);
+  P.state.pets.push(PLANTA);                       // como um save de antes das cartas
+  delete P.state.petCards[PLANTA];
+  P.save(); P.load();
+  check('pet de save antigo (sem cartas) passa a valer as 5 cartas pagas',
+        P.state.petCards[PLANTA] === 5 && P.petCardInfo(PLANTA).unlocked === true);
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+  window.__done = true; window.__fail = falhas;
+})();
+</script>
+</body>
+</html>

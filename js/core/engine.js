@@ -744,7 +744,9 @@ var JOGO = (typeof window !== 'undefined')
         name: p.name || def.name
       });
       state.units.push(unit);
-      if (p.pet) pets.push({ ownerUnit: unit, petId: p.pet });
+      // 03/09: nível, multiplicador e poder do pet viajam com o grupo
+      if (p.pet) pets.push({ ownerUnit: unit, petId: p.pet, level: p.petLevel || 1,
+                             mult: p.petMult || 1, power: p.petPower || 0 });
     }
     for (i = 0; i < monsterSpawns.length; i++) {
       var ms = monsterSpawns[i];
@@ -765,7 +767,7 @@ var JOGO = (typeof window !== 'undefined')
     state.activeIdx = 0;
 
     // v2: pets entram junto do dono, em célula livre adjacente
-    for (i = 0; i < pets.length; i++) spawnPet(state, pets[i].ownerUnit, pets[i].petId);
+    for (i = 0; i < pets.length; i++) spawnPet(state, pets[i].ownerUnit, pets[i].petId, pets[i]);
 
     sorteiaDesafio(state);
 
@@ -778,16 +780,21 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // --------------------------------------------------------- v2: pets
-  function spawnPet(state, owner, petId) {
+  /* `extra` (03/09) traz o nível do pet e o que ele vale: `mult` engorda a
+   * vida do corpo, `power` entra no poder (e por ele no dano, na cura e nos
+   * buffs dos feitiços do pet — ver petCastMult). Sem `extra` = nível 1. */
+  function spawnPet(state, owner, petId, extra) {
     var pd = (DATA().pets || {})[petId];
     if (!pd) return null;
     var cells = freeAdjacentCells(state, owner.x, owner.y, 1);
     if (!cells.length) return null;
     var base = pd.stats || {};
+    var ex = extra || {};
+    var mult = (typeof ex.mult === 'number' && ex.mult > 0) ? ex.mult : 1;
     var st = {
-      hp: base.hp || 40, pa: base.pa || 3, pp: base.pp || 3,
+      hp: Math.round((base.hp || 40) * mult), pa: base.pa || 3, pp: base.pp || 3,
       initiative: base.initiative || owner.initiative,
-      power: base.power || 0, dodge: base.dodge || 0, lock: base.lock || 0,
+      power: (base.power || 0) + (ex.power || 0), dodge: base.dodge || 0, lock: base.lock || 0,
       resists: base.resists || {}
     };
     var u = makeUnit(state, { id: pd.id, name: pd.name, spells: pd.spells || [] },
@@ -797,10 +804,12 @@ var JOGO = (typeof window !== 'undefined')
         element: pd.element || 'neutro',
         ownerUid: owner.uid,
         petId: pd.id,
+        level: ex.level || 1,
         behavior: pd.behavior || 'attack',
         range: pd.range || 1,
         followDistance: pd.followDistance || Engine.PET_FOLLOW_DEFAULT
       });
+    u.petMult = mult;
     state.units.push(u);
     emit({ type: 'petSpawn', unit: u, ownerUid: owner.uid });
     return u;
@@ -1816,6 +1825,10 @@ var JOGO = (typeof window !== 'undefined')
     // v2.2/v2.3: calculado UMA vez por conjuração — depende do conjurador e do
     // feitiço, não do alvo. Inclui buffs, bônus elemental e fúria da sala.
     var castPower = Engine.castPower(state, caster, spell);
+    // 03/09: o PODER do pet (nível e estrelas) escala também a cura, o escudo
+    // e o buff dos feitiços DELE — pelo mesmo número que já escala o dano.
+    // Só para pets: mexer nisso para heróis mudaria o balanço das curas.
+    var petMult = (caster.kind === 'pet') ? (100 + castPower) / 100 : 1;
 
     function unitsInTiles(includeCaster) {
       var list = [];
@@ -1857,7 +1870,7 @@ var JOGO = (typeof window !== 'undefined')
         case 'heal':
           targets = unitsInTiles(true);
           for (t = 0; t < targets.length; t++) {
-            applyHeal(state, targets[t], rollInt(state, eff.min, eff.max));
+            applyHeal(state, targets[t], Math.round(rollInt(state, eff.min, eff.max) * petMult));
           }
           break;
 
@@ -1865,11 +1878,12 @@ var JOGO = (typeof window !== 'undefined')
           targets = unitsInTiles(true);
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
-            applied = { type: 'shield', value: eff.value, remaining: eff.value,
+            var vSh = Math.round(eff.value * petMult);
+            applied = { type: 'shield', value: vSh, remaining: vSh,
                         duration: eff.duration, sourceUid: caster.uid };
             u.effects.push(applied);
             recomputeShield(u);
-            emit({ type: 'shield', uid: u.uid, amount: eff.value });
+            emit({ type: 'shield', uid: u.uid, amount: vSh });
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
           }
           break;
@@ -1878,13 +1892,14 @@ var JOGO = (typeof window !== 'undefined')
           targets = unitsInTiles(true);
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
-            applied = { type: 'buff', stat: eff.stat, value: eff.value,
+            var vBf = Math.round(eff.value * petMult);
+            applied = { type: 'buff', stat: eff.stat, value: vBf,
                         duration: eff.duration, sourceUid: caster.uid };
             u.effects.push(applied);
             // ajuste imediato para buffs de recursos valerem já neste turno
-            if (eff.stat === 'pa') u.pa = Math.max(0, u.pa + eff.value);
-            if (eff.stat === 'pp') u.pp = Math.max(0, u.pp + eff.value);
-            if (eff.stat === 'initiative') u.initiative += eff.value; // não reordena
+            if (eff.stat === 'pa') u.pa = Math.max(0, u.pa + vBf);
+            if (eff.stat === 'pp') u.pp = Math.max(0, u.pp + vBf);
+            if (eff.stat === 'initiative') u.initiative += vBf; // não reordena
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
           }
           break;

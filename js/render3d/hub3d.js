@@ -38,6 +38,7 @@ var JOGO = (typeof window !== 'undefined')
   var tituloJogador = null;         // o título de conquista, pendurado abaixo do nome
   var lugares = [];                 // { id, tipo, pos, raio, node, rotulo }
   var fantasmas = {};               // id da Rede -> corpo igual ao do heroi
+  var bicho = null;                 // o PET do avatar: { node, alvo, andando, petId, semCorrida }
   var aoChegar = null;              // callback pendente da caminhada atual
   var raycaster = null, chao = null;
   var relogio = 0;
@@ -718,6 +719,63 @@ var JOGO = (typeof window !== 'undefined')
     if (nomeJogador) pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
   }
 
+  // ------------------------------------------------------------------ o bicho
+  /* O PET DO AVATAR anda ao lado do dono (03/09: "ele deve no mapa geral andar
+   * ao lado do dono sempre acompanhando"). É um corpo como outro qualquer —
+   * anda pelo mesmo andaCorpo — com um alvo que é o OMBRO do herói: um ponto
+   * atrás e à direita, que gira com ele. Perto do ponto ele para e respira;
+   * longe, anda; muito longe (o dono correu), corre. Pet sem clipe de corrida
+   * (os seis antigos não trouxeram) anda em velocidade de corrida. */
+  var BICHO_LADO = 1.35, BICHO_ANG = 2.35, BICHO_FOLGA = 0.9;
+  function petDoAvatar(classId) {
+    var P = JOGO.Progress;
+    if (!P || !P.hero) return null;
+    var h = null;
+    try { h = P.hero(classId || (heroi && heroi.classId) || 'sumo'); } catch (e) {}
+    return (h && h.pet) || null;
+  }
+  function ombroDoDono() {
+    var hp = heroi.node.position, a = heroi.node.rotation.y + BICHO_ANG;
+    return { x: hp.x + Math.sin(a) * BICHO_LADO, z: hp.z + Math.cos(a) * BICHO_LADO };
+  }
+  function montaBicho(petId) {
+    if (bicho) { scene.remove(bicho.node); bicho = null; }
+    if (!petId || !heroi) return;
+    var m2 = M2();
+    if (!m2) return;
+    var node = null;
+    try { node = m2.unit(petId, { kind: 'pet' }); } catch (e) {}
+    if (!node) return;
+    var alvo = ombroDoDono();
+    node.position.set(alvo.x, 0, alvo.z);
+    node.rotation.y = heroi.node.rotation.y;
+    scene.add(node);
+    var semCorrida = true;
+    try {
+      var cr = node.userData.clipFor('run'), ci = node.userData.clipFor('idle');
+      semCorrida = !cr || cr === ci;
+    } catch (e) {}
+    bicho = { node: node, alvo: null, andando: false, petId: petId, semCorrida: semCorrida };
+    try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
+  }
+  /* O bicho segue o que a ficha diz: vestiu/soltou pet no inventário, o corpo
+   * da praça troca sozinho (chamado ao entrar e a cada reavaliação do teto). */
+  function sincronizaBicho() {
+    if (!heroi) return;
+    var pid = petDoAvatar(heroi.classId);
+    if ((bicho ? bicho.petId : null) !== pid) montaBicho(pid);
+  }
+  function segueDono(dt) {
+    if (!bicho || !heroi) return;
+    var alvo = ombroDoDono();
+    var p = bicho.node.position;
+    var d = Math.hypot(alvo.x - p.x, alvo.z - p.z);
+    // parte quando o ombro fugiu; enquanto anda, persegue o ombro que se move
+    if (d > BICHO_FOLGA || (bicho.alvo && d > 0.25)) mandaAndar(bicho, alvo.x, alvo.z);
+    andaCorpo(bicho, dt);
+    try { if (bicho.node.userData.mixer) bicho.node.userData.mixer.update(dt); } catch (e) {}
+  }
+
   /* O NOME ACIMA DA CABEÇA — a primeira marca de jogo online que o corpo
    * carrega ("como o jogo será online, o nome do usuario deve aparecer acima
    * da cabeça"). A plaquinha é FILHA do nó do herói: anda, corre e troca de
@@ -882,7 +940,7 @@ var JOGO = (typeof window !== 'undefined')
     var d = Math.hypot(x - corpo.node.position.x, z - corpo.node.position.z);
     var corre = d > DIST_CORRIDA;
     corpo.vel = corre ? VEL_CORRE : VEL_ANDA;
-    var clipe = corre ? 'run' : 'walk';
+    var clipe = (corre && !corpo.semCorrida) ? 'run' : 'walk';
     if (!corpo.andando || corpo.clipe !== clipe) {
       corpo.andando = true;
       corpo.clipe = clipe;
@@ -961,6 +1019,7 @@ var JOGO = (typeof window !== 'undefined')
       var chegou = andaCorpo(heroi, dt);
       if (chegou && aoChegar) { var f = aoChegar; aoChegar = null; f(); }
       try { if (heroi.node.userData.mixer) heroi.node.userData.mixer.update(dt); } catch (e) {}
+      segueDono(dt);                 // o bicho atrás do ombro do dono
 
       // os FANTASMAS COM CORPO andam pelo mesmo verbo do herói; os sem corpo
       // são só dado e não custam nada aqui
@@ -973,7 +1032,7 @@ var JOGO = (typeof window !== 'undefined')
       }
       // o TETO reavalia de tempos em tempos quem merece corpo
       tAvalia += dt;
-      if (tAvalia > 1.2) { tAvalia = 0; avaliaCorpos(); }
+      if (tAvalia > 1.2) { tAvalia = 0; avaliaCorpos(); sincronizaBicho(); }
 
       // câmera ORBITAL centrada no herói: o jogador gira, inclina e aproxima;
       // o corpo é sempre a âncora. Esférica clássica: tilt 0 = de cima.
@@ -1133,6 +1192,7 @@ var JOGO = (typeof window !== 'undefined')
       scene.remove(heroi.node); heroi = null; montaHeroi(classId);
     }
     if (heroi) heroi.classId = classId;
+    sincronizaBicho();
     ajusta();
     /* Reentrar com o hub JA NA TELA (trocou o líder da dupla pela ficha) não
      * passa pelo sair() — e um segundo requestAnimationFrame aqui abriria um
@@ -1384,6 +1444,9 @@ var JOGO = (typeof window !== 'undefined')
       pos: heroi ? { x: +heroi.node.position.x.toFixed(2),
                      z: +heroi.node.position.z.toFixed(2) } : null,
       andando: heroi ? !!heroi.andando : null,
+      bicho: bicho ? { id: bicho.petId, x: +bicho.node.position.x.toFixed(2),
+                       z: +bicho.node.position.z.toFixed(2), andando: !!bicho.andando,
+                       clipe: bicho.clipe || 'idle' } : null,
       nome: nomeJogador,
       titulo: tituloJogador,
       coroaVisivel: !!(heroi && heroi.coroaPvp),

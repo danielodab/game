@@ -29,7 +29,7 @@ var JOGO = (typeof window !== 'undefined')
  *
  * ARTE: os 4 ícones chegaram em 03/09 (pasta icones itens/raro — cavaleiro
  * BRANCO e OURO; os ids ficaram, os nomes que o jogador lê mudaram para
- * casar com a arte). Falta o corpo do pet 'pet-colecionador' — até lá,
+ * casar com a arte). O corpo do pet 'pet-colecionador' chegou em 03/09 —
  * ícone procedural e corpo no fallback composto.
  *
  * FORA DOS POOLS DE SAQUE: dungeonId null e dropWeight 0 — estas peças só
@@ -155,7 +155,7 @@ var JOGO = (typeof window !== 'undefined')
 
   DATA.pets['pet-colecionador'] = {
     id: 'pet-colecionador', name: 'Selinho', element: 'neutro',
-    description: 'Uma moedinha de pernas curtas e um olho só, que gira o próprio corpo para "mostrar a outra face" quando está feliz. Carrega um selo em miniatura como quem carrega um escudo de família. CORPO PROVISÓRIO: a arte do usuário ainda vem — até lá, o fallback composto veste o papel.',
+    description: 'Um filhote de leão branco de juba dourada que anda em pé, com um medalhão de ouro no pescoço — o Selo Primeiro em miniatura. Quando está feliz, vira o medalhão para "mostrar a outra face". Não morde: cobra.',
     bonuses: { power: 6, hp: 15, initiative: 6, resists: { neutro: 8 } },
     behavior: 'attack', range: 3, followDistance: 2,
     spells: ['pet-selo-clarao'],

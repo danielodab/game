@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Traz os SEIS PETS do Daniel (Meshy) — e aposenta os bichos emprestados
+"""Traz os SETE PETS do Daniel (Meshy) — o Selinho chegou em 03/09 — e aposenta os bichos emprestados
 do Quaternius que faziam as vezes deles (velociraptor, cobra, vespa...).
 
 Rodar:
@@ -65,6 +65,16 @@ PETS = [
         "hit": "attack",        # Sword_Judgment: as lasquinhas disparam
         "attack": "HitReact",
         "death": "death",
+    }),
+    # O SELINHO (03/09): o pet do Traje do Colecionador — filhote de leão
+    # branco em pé (rig humanoide, por isso veio com ataque). Pasta "Pets"
+    # (maiúscula, Windows não liga) e "Selinho Attack.glb" com A maiúsculo.
+    # Veio com run: entra — no acampamento ele CORRE atrás do dono.
+    ("pet-colecionador", "Selinho", "Selinho", {
+        "idle": "idle", "walk": "walk", "run": "run",
+        "hit": "attack",        # Triple_Combo_Attack: as três patadas
+        "Attack": "HitReact",   # Slap_Reaction
+        "death": "death",       # Fall_Dead_from_Abdominal_Injury
     }),
 ]
 

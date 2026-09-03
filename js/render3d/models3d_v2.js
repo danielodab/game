@@ -475,7 +475,8 @@ var JOGO = (typeof window !== 'undefined')
     'pet-galehawk':   { model: 'pet-galehawk',   scale: 0.64 },  // 0,77 m — águia em voo baixo
     'pet-dewling':    { model: 'pet-dewling',    scale: 0.63 },  // 0,76 m — "cão sentado"
     'pet-lodestone':  { model: 'pet-lodestone',  scale: 0.51 },  // 0,61 m — filhote atarracado
-    'pet-heartshard': { model: 'pet-heartshard', scale: 0.57 }   // 0,68 m — raposinha de vidro
+    'pet-heartshard': { model: 'pet-heartshard', scale: 0.57 },  // 0,68 m — raposinha de vidro
+    'pet-colecionador': { model: 'pet-colecionador', scale: 0.60 } // 0,72 m — o leãozinho em pé (03/09)
   };
 
   // ------------------------------------------------------------ decodificação
