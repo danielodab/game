@@ -31,7 +31,8 @@ var JOGO = (typeof window !== 'undefined')
   JOGO.GM = GM;
 
   var CHAVE = 'mestre-do-fundo';          // <== a sua senha; troque aqui
-  var STORE = 'soterra-gm-v1';
+  // POR CONTA (03/09): a conta do Mestre guarda o seu; a principal usa a chave nua de sempre
+  var STORE = 'soterra-gm-v1' + ((JOGO.Contas && JOGO.Contas.sufixo) ? JOGO.Contas.sufixo() : '');
 
   function armazem() {
     try { if (typeof window !== 'undefined' && window.localStorage) return window.localStorage; }
@@ -58,11 +59,31 @@ var JOGO = (typeof window !== 'undefined')
     var m = /[?&]gm=([^&]+)/.exec(window.location.search || '');
     if (!m) return;
     var v = decodeURIComponent(m[1]);
-    if (v === CHAVE) { cfg.ligado = true; gravaConfig(cfg); }
+    if (v === CHAVE) {
+      cfg.ligado = true; gravaConfig(cfg);
+      // a chave também REGISTRA a conta do Mestre na lista de Contas (03/09)
+      if (JOGO.Contas && JOGO.Contas.criaMestre) JOGO.Contas.criaMestre();
+    }
     else if (v === 'off') { cfg.ligado = false; gravaConfig(cfg); }
   })();
 
-  GM.ativo = function () { return cfg.ligado === true; };
+  /* A CONTA DO MESTRE liga o modo sozinha (03/09: "uma conta local onde eu
+   * seleciono e já vem o GM"): a conta 'mestre' MARCADA no registro — e só a
+   * chave (ou o botão com o modo já ligado) marca. */
+  function contaMestre() {
+    var C = JOGO.Contas;
+    return !!(C && C.ativa && C.ativa() === C.MESTRE && C.ehMestre && C.ehMestre(C.MESTRE));
+  }
+  GM.contaMestre = contaMestre;
+  GM.ativo = function () { return cfg.ligado === true || contaMestre(); };
+  /* Prepara a conta do Mestre na primeira visita — aparelha (Panóplia e os
+   * quatro caminhos) e marca no cofre dela. A HUD chama no boot; idempotente. */
+  GM.prepararConta = function () {
+    if (!contaMestre() || cfg.aparelhado === true) return false;
+    if (!JOGO.Progress || !GM.aparelha()) return false;
+    cfg.aparelhado = true; gravaConfig(cfg);
+    return true;
+  };
 
   // -------------------------------------------------- a configuração do GM
   GM.paPp = function () {

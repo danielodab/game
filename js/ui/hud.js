@@ -334,6 +334,8 @@ var JOGO = (typeof window !== 'undefined')
     }
     clear(root);
     root.className = 'ui-root';
+    // A CONTA DO MESTRE (03/09) já nasce aparelhada — idempotente, custa nada
+    if (JOGO.GM && JOGO.GM.prepararConta) safe(function () { return JOGO.GM.prepararConta(); }, null);
 
     for (var i = 0; i < SCREEN_NAMES.length; i++) {
       var n = SCREEN_NAMES[i];
@@ -496,6 +498,9 @@ var JOGO = (typeof window !== 'undefined')
   function buildHeroSelect() {
     var s = screens.heroSelect;
     clear(s);
+    // A CONTA DO MESTRE já vem com o Mestre escolhido como avatar (03/09)
+    if (!selHeroes.length && JOGO.GM && JOGO.GM.contaMestre &&
+        safe(function () { return JOGO.GM.contaMestre(); }, false) && hero('gm')) selHeroes = ['gm'];
     s.appendChild(header('Quem desce',
       'Escolha 1 ou 2 heróis — o PRIMEIRO é o seu avatar e anda no Acampamento. ' +
       'Sozinho, a sorte de saque é máxima.', 'menu'));
@@ -4992,6 +4997,7 @@ var JOGO = (typeof window !== 'undefined')
       var linha = el('button', 'conta-linha' + (c.id === atual ? ' is-on' : ''));
       linha.type = 'button';
       linha.appendChild(el('b', null, esc(c.rotulo || c.id)));
+      if (C.ehMestre && C.ehMestre(c.id)) linha.appendChild(el('span', 'chip chip-ok', 'GM'));
       linha.appendChild(el('span', null,
         c.id === atual ? 'esta janela' : 'tocar para trocar'));
       tap(linha, function () {
@@ -5007,6 +5013,15 @@ var JOGO = (typeof window !== 'undefined')
       var id = safe(function () { return C.cria(); }, null);
       if (id) C.trocar(id);
     }));
+    // A CONTA DO MESTRE (03/09): só aparece com o modo GM já ligado nesta
+    // máquina (a chave também a registra sozinha — este é o caminho manual)
+    if (JOGO.GM && safe(function () { return JOGO.GM.ativo(); }, false) && C.criaMestre &&
+        !(C.ehMestre && C.ehMestre(C.MESTRE))) {
+      body.appendChild(btn('⚔ Criar a conta do Mestre do Fundo', 'btn-gold btn-block', function () {
+        var idM = safe(function () { return C.criaMestre(); }, null);
+        if (idM) C.trocar(idM);
+      }));
+    }
     body.appendChild(el('p', 'contas-nota',
       '<b>Dois jogadores na mesma máquina:</b> deixe esta janela numa conta, abra ' +
       'OUTRA janela do mesmo navegador no mesmo endereço e troque lá para outra ' +

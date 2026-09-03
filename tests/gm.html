@@ -18,7 +18,9 @@
 <h1>O Game Master — sem a chave NADA existe; com ela, o mundo obedece</h1>
 <div class="sub">Esta página nasce SEM a chave e prova a ausência: nem classe, nem feitiço, nem
 cofre sem fundo. Depois abre o mundo ligado num iframe (com <code>?gm=&lt;chave&gt;</code>) e
-soma as provas de lá — inclusive o Julgamento matando a sala inteira numa batalha REAL.</div>
+soma as provas de lá — inclusive o Julgamento matando a sala inteira numa batalha REAL. Depois
+abre a CONTA DO MESTRE (03/09: <code>?conta=mestre</code> marcada no registro liga o modo sozinha) e,
+por fim, o curioso que digita o mesmo endereço SEM a marca — e continua sem nada.</div>
 <div id="summary">rodando…</div>
 <ul id="lista"></ul>
 
@@ -64,26 +66,35 @@ soma as provas de lá — inclusive o Julgamento matando a sala inteira numa bat
   JOGO.DB.moedas().then(function (m) {
     check('o cofre é o normal da conta (sem fundo falso)', m !== 999999, String(m));
 
-    // ---- o mundo LIGADO, num iframe com a chave na URL
-    var fr = document.createElement('iframe');
-    var carregou = false;
-    fr.onload = function () { carregou = true; };
-    fr.src = 'gm_ligado.html?gm=mestre-do-fundo&v=' + Date.now();
-    document.body.appendChild(fr);
-    var t0 = Date.now();
-    (function espera() {
-      var w = fr.contentWindow;
-      var pronto = false;
-      try { pronto = carregou && w.__done === true; } catch (e) {}
-      if (!pronto && Date.now() - t0 < 60000) return setTimeout(espera, 500);
-      if (!pronto) { check('o mundo ligado respondeu', false, 'estourou o tempo'); return fecha(); }
-      var f2 = 0, t2 = 0;
-      try { f2 = w.__fail || 0; t2 = w.__total || 0; } catch (e2) {}
-      check('o mundo ligado rodou as próprias provas', t2 > 0, t2 + ' checks lá dentro');
-      check('e TODAS passaram lá dentro', f2 === 0, f2 + ' falhas: ' +
-            (function () { try { return (w.__erros || []).join(' · '); } catch (e3) { return '?'; } })());
-      fecha();
-    })();
+    // ---- os mundos num iframe, um depois do outro: o LIGADO pela chave, a
+    // CONTA DO MESTRE (marcada, sem chave) e o curioso que digita ?conta=mestre
+    // sem a marca. Espera por voltas, não por relógio (tempo virtual do headless).
+    function somaIframe(src, rotulo, depois) {
+      var fr = document.createElement('iframe');
+      var carregou = false;
+      fr.onload = function () { carregou = true; };
+      fr.src = src + (src.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
+      document.body.appendChild(fr);
+      var voltas = 0;
+      (function espera() {
+        var w = fr.contentWindow;
+        var pronto = false;
+        try { pronto = carregou && w.__done === true; } catch (e) {}
+        if (!pronto && ++voltas < 200) return setTimeout(espera, 500);
+        if (!pronto) { check(rotulo + ' respondeu', false, 'estourou o tempo'); return depois(); }
+        var f2 = 0, t2 = 0;
+        try { f2 = w.__fail || 0; t2 = w.__total || 0; } catch (e2) {}
+        check(rotulo + ' rodou as próprias provas', t2 > 0, t2 + ' checks lá dentro');
+        check(rotulo + ': TODAS passaram lá dentro', f2 === 0, f2 + ' falhas: ' +
+              (function () { try { return (w.__erros || []).join(' · '); } catch (e3) { return '?'; } })());
+        depois();
+      })();
+    }
+    somaIframe('gm_ligado.html?gm=mestre-do-fundo', 'o mundo ligado pela chave', function () {
+      somaIframe('gm_conta.html?conta=mestre', 'a conta do Mestre (marcada, sem chave)', function () {
+        somaIframe('gm_conta.html?conta=mestre&semMarca=1', 'o curioso sem a marca', fecha);
+      });
+    });
   });
 })();
 </script>

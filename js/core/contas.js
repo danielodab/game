@@ -94,6 +94,31 @@ var JOGO = (typeof window !== 'undefined')
     return id;
   };
 
+  /* A CONTA DO MESTRE (03/09: "quero que crie uma conta local onde eu
+   * seleciono e já vem o GM"): id fixo 'mestre', marcada com `mestre: true`
+   * no registro. SÓ nasce pela chave do GM (o portão do gm.js chama
+   * criaMestre) ou pelo botão da ficha de Contas, que só aparece com o modo
+   * já ligado. Um `?conta=mestre` digitado sem a chave cria uma conta comum
+   * de id 'mestre', SEM a marca — e o gm.js não liga nada por ela. */
+  C.MESTRE = 'mestre';
+  C.ehMestre = function (id) {
+    var alvo = id || ativa, lst = leReg().lista;
+    for (var i = 0; i < lst.length; i++) if (lst[i].id === alvo) return lst[i].mestre === true;
+    return false;
+  };
+  C.criaMestre = function () {
+    var r = leReg(), achou = null;
+    for (var i = 0; i < r.lista.length; i++) if (r.lista[i].id === C.MESTRE) achou = r.lista[i];
+    if (!achou) {
+      achou = { id: C.MESTRE, rotulo: 'Mestre do Fundo', criadaEm: agora() };
+      r.lista.push(achou);
+    }
+    achou.mestre = true;
+    if (!achou.rotulo || achou.rotulo === C.MESTRE) achou.rotulo = 'Mestre do Fundo';
+    gravaReg(r);
+    return C.MESTRE;
+  };
+
   /* Trocar é NAVEGAR: a conta é decidida no boot, então a troca escreve a
    * escolha no registro e recarrega a página com `?conta=` na URL — a URL é
    * a verdade DESTA janela; as outras janelas não mudam. */

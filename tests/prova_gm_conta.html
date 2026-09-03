@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a conta do Mestre do Fundo</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto), em DUAS fotos com o MESMO perfil do Chrome:
+     1) sem parâmetro: abre o jogo com a chave — a chave registra a conta
+        "Mestre do Fundo" — e mostra a ficha de Contas com ela na lista;
+     2) ?entra=1: abre o jogo JÁ NA CONTA do Mestre (sem chave) e mostra a
+        escolha de heróis com o Mestre escolhido e aparelhado. -->
+<iframe id="f"></iframe>
+<script>
+var ENTRA = /[?&]entra=1/.test(location.search);
+var f = document.getElementById('f');
+f.src = ENTRA ? '../index.html?prova-gm-conta&conta=mestre'
+              : '../index.html?prova-gm-conta&gm=mestre-do-fundo';
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      if (ENTRA) {
+        if (!w.JOGO.GM.contaMestre()) document.title = 'ERRO a conta não é a do Mestre';
+        w.JOGO.UI.showScreen('heroSelect');
+      } else {
+        w.JOGO.UI.openSheet('contas');
+      }
+      setTimeout(function () { window.__pronto = true; }, 1500);
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

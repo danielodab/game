@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a conta do Mestre</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}</style>
+</head>
+<body>
+<!-- Aberta pelo tests/gm.html com ?conta=mestre na URL e SEM a chave:
+     (a) com a conta MARCADA no registro (semeado aqui antes do contas.js),
+         o modo GM liga sozinho e a conta nasce aparelhada;
+     (b) com &semMarca=1, o registro NÃO tem a marca: um "?conta=mestre"
+         digitado por curioso cria uma conta comum e o GM continua morto. -->
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  var SEM_MARCA = /[?&]semMarca=1/.test(location.search);
+  if (!SEM_MARCA) {
+    // o registro de contas com a conta do Mestre MARCADA — o que a chave faz
+    try {
+      localStorage.setItem('soterra-contas-v1', JSON.stringify({ ativa: 'mestre', lista: [
+        { id: 'principal', rotulo: 'Principal', criadaEm: 1 },
+        { id: 'mestre', rotulo: 'Mestre do Fundo', criadaEm: 2, mestre: true }
+      ] }));
+    } catch (e) {}
+  }
+  window.__V = '&v=' + Date.now();
+  var arqs = ['js/core/contas.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/gm.js','js/core/db.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+'?x=1'+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  window.__fail = 0; window.__total = 0; window.__erros = [];
+  function check(nome, ok, extra) {
+    window.__total++;
+    if (!ok) { window.__fail++; window.__erros.push(nome + (extra ? ' (' + extra + ')' : '')); }
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'ok  ' : 'X   ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var C = JOGO.Contas, GM = JOGO.GM, P = JOGO.Progress;
+  check('a janela está na conta mestre (?conta=mestre)', C.ativa() === 'mestre');
+  check('não há chave nenhuma na URL', !/[?&]gm=/.test(location.search));
+
+  if (SEM_MARCA) {
+    check('SEM a marca: a conta mestre existe como conta comum', C.lista().some(function (c) { return c.id === 'mestre'; }));
+    check('SEM a marca: ehMestre é falso', C.ehMestre('mestre') === false);
+    check('SEM a marca: o modo GM continua DESLIGADO', GM.ativo() === false);
+    check('SEM a marca: a classe do Mestre NÃO existe', !JOGO.DATA.classes.gm);
+    check('SEM a marca: prepararConta não faz nada', GM.prepararConta() === false);
+  } else {
+    check('a conta está marcada como a do Mestre', C.ehMestre('mestre') === true && C.rotulo() === 'Mestre do Fundo');
+    check('o modo GM liga SOZINHO pela conta, sem chave', GM.ativo() === true && GM.contaMestre() === true);
+    check('a classe do Mestre existe e nasce liberada',
+          !!JOGO.DATA.classes.gm && JOGO.DATA.classes.gm.startsUnlocked === true);
+    check('o herói gm existe no save da conta', !!P.hero('gm'));
+    check('prepararConta aparelha na primeira visita', GM.prepararConta() === true);
+    check('… e não repete na segunda', GM.prepararConta() === false);
+    var noSaco = P.state.inventory.filter(function (e) { return e.itemId.indexOf('gm-') === 0; }).length;
+    check('a Panóplia está no saco e os quatro caminhos abertos',
+          noSaco === 4 && P.heroElements('gm').length === 4, noSaco + ' peças');
+    check('a configuração do GM tem cofre PRÓPRIO da conta (chave com :mestre)',
+          GM.definePaPp(11, 7) === true &&
+          !!(function () { try { return localStorage.getItem('soterra-gm-v1:mestre'); } catch (e) { return null; } })());
+    check('e a chave nua da conta principal ficou intocada',
+          (function () { try { return localStorage.getItem('soterra-gm-v1'); } catch (e) { return null; } })() === null);
+    check('criaMestre é idempotente (não duplica a linha)',
+          C.criaMestre() === 'mestre' && C.lista().filter(function (c) { return c.id === 'mestre'; }).length === 1);
+  }
+  JOGO.DB.moedas().then(function (m) {
+    if (SEM_MARCA) check('SEM a marca: o cofre é o normal', m !== 999999, String(m));
+    else check('o cofre da conta do Mestre não tem fundo', m === 999999, String(m));
+    window.__done = true;
+  });
+})();
+</script>
+</body>
+</html>
