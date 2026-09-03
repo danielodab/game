@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Embute os 90 icones de item do usuario (fundo removido por ele).
+"""Embute os icones de item do usuario (90 do jogo + a Panoplia do Mestre) (fundo removido por ele).
 
   python tools/embute_icones_itens.py
 
@@ -22,6 +22,12 @@ LADO = 128
 TORTOS = {
     "av-hangman": "av-hangman-lamp",
     "gh-pollen-slipperr": "gh-pollen-slippers",
+    # A PANOPLIA DO MESTRE (31/08): a pasta GM veio com nomes livres em
+    # portugues, um arquivo por peca — o mapa da a cada um o id do set
+    "Elmo": "gm-elmo",
+    "botas": "gm-grevas",
+    "couraça": "gm-couraca",
+    "espada": "gm-espadao",
 }
 
 linhas = [

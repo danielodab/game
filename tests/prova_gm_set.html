@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a Panóplia do Mestre vestida</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): o Mestre com as quatro peças vestidas e os
+     ícones da arte do dono (pasta icones itens/GM) no inventário. -->
+<iframe id="f" src="../index.html?prova-gm-set&gm=mestre-do-fundo"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      w.JOGO.GM.aparelha();
+      ['gm-espadao', 'gm-grevas', 'gm-couraca', 'gm-elmo'].forEach(function (id) {
+        try { P.equip('gm', id); } catch (e) {}
+      });
+      w.JOGO.DB.batizar('O Mestre').then(function () {
+        w.JOGO.UI.selection(['gm']);
+        w.JOGO.UI.showScreen('hub');
+        w.JOGO.UI.openSheet('inventory');
+        setTimeout(function () { window.__pronto = true; }, 2500);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

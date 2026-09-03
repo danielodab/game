@@ -53,10 +53,12 @@ porque ícone se julga com o olho, no tamanho da célula.</div>
   }
 
   var DGS = { gh: 'Estufa', ci: 'Cisterna', em: 'Fecho de Brasa',
-              av: 'Andaimes', mt: 'Mina', cp: 'Coração' };
+              av: 'Andaimes', mt: 'Mina', cp: 'Coração', gm: 'Panóplia do Mestre' };
 
   var ids = Object.keys(JOGO.ICONES_ITENS || {});
-  check('as 90 artes estão embutidas', ids.length === 90, ids.length + ' artes');
+  // 90 do jogo + as 4 da Panóplia do Mestre (31/08) — o número é cru de
+  // propósito: ele grita quando uma arte SOME ou entra sem querer
+  check('as 94 artes estão embutidas (90 + a Panóplia do Mestre)', ids.length === 94, ids.length + ' artes');
 
   var t0 = Date.now();
   (function espera() {
