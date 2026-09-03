@@ -2,36 +2,38 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>prova: o balcão do Colecionador</title>
+<title>prova: o Traje do Colecionador vestido</title>
 <style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
 </head>
 <body>
-<!-- PÁGINA DE PROVA (foto): o Colecionador no Mercadinho — selos cheios,
-     elemento escolhido em FOGO e a roleta parada no prêmio (25/08). -->
-<iframe id="f" src="../index.html?prova-colec"></iframe>
+<!-- PÁGINA DE PROVA (foto): o Bárbaro com as quatro peças do Traje do
+     Colecionador vestidas (03/09) — a arte do cavaleiro branco e ouro da
+     pasta icones itens/raro nos slots, com os nomes novos (Lâmina Alva,
+     Grevas de Marfim, Couraça do Cavaleiro Branco, Selo Primeiro). -->
+<iframe id="f" src="../index.html?prova-colecionador"></iframe>
 <script>
 var f = document.getElementById('f');
 f.onload = function () {
   var w = f.contentWindow, d = w.document;
-  var t0 = Date.now();
+  var voltas = 0;
   (function espera() {
     var menu = d.querySelector('.screen-menu.is-on');
-    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
     try {
       var P = w.JOGO.Progress;
-      ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e2) { P.addSelo(e2, 14); });
-      P.escolheSeloElemento('fogo');
-      w.JOGO.UI.openSheet('mercado');
-      setTimeout(function () {
-        var colec = d.querySelector('.colec-caixa');
-        if (colec) colec.scrollIntoView();
-        var bG = null;
-        colec.querySelectorAll('.btn').forEach(function (b) {
-          if (/Girar/.test(b.textContent)) bG = b;
-        });
-        if (bG) bG.click();
-        setTimeout(function () { window.__pronto = true; }, 2600);
-      }, 900);
+      var PECAS = ['sl-cetro', 'sl-botas', 'sl-cofre', 'sl-selo-primeiro'];
+      PECAS.forEach(function (id) {
+        var noSaco = P.state.inventory.some(function (e) { return e.itemId === id; });
+        if (!noSaco) P.state.inventory.push({ itemId: id, level: 0, stars: 0 });
+      });
+      PECAS.forEach(function (id) { try { P.equip('sumo', id); } catch (e) {} });
+      if (P.save) P.save();
+      w.JOGO.DB.batizar('Colecionador').then(function () {
+        w.JOGO.UI.selection(['sumo']);
+        w.JOGO.UI.showScreen('hub');
+        w.JOGO.UI.openSheet('inventory');
+        setTimeout(function () { window.__pronto = true; }, 2500);
+      });
     } catch (e) { document.title = 'ERRO ' + e.message; }
   })();
 };

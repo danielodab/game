@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>SOTERRA 3.0 — os 90 ícones do usuário</title>
+<title>SOTERRA 3.0 — os 98 ícones do usuário</title>
 <style>
   body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
   h1{font-size:15px;margin:0 0 2px}
@@ -19,8 +19,8 @@
 </style>
 </head>
 <body>
-<h1>Os 90 ícones de item — a arte do usuário em cada célula</h1>
-<div class="sub">A página espera as 90 imagens decodificarem, cobra que o embrulho do Art.itemIcon
+<h1>Os 98 ícones de item — a arte do usuário em cada célula</h1>
+<div class="sub">A página espera as 98 imagens decodificarem, cobra que o embrulho do Art.itemIcon
 está servindo a ARTE (e não o procedural) para todas, e desenha a grade inteira por calabouço —
 porque ícone se julga com o olho, no tamanho da célula.</div>
 <div id="summary">decodificando…</div>
@@ -53,12 +53,20 @@ porque ícone se julga com o olho, no tamanho da célula.</div>
   }
 
   var DGS = { gh: 'Estufa', ci: 'Cisterna', em: 'Fecho de Brasa',
-              av: 'Andaimes', mt: 'Mina', cp: 'Coração', gm: 'Panóplia do Mestre' };
+              av: 'Andaimes', mt: 'Mina', cp: 'Coração', gm: 'Panóplia do Mestre',
+              sl: 'Traje do Colecionador' };
 
   var ids = Object.keys(JOGO.ICONES_ITENS || {});
-  // 90 do jogo + as 4 da Panóplia do Mestre (31/08) — o número é cru de
-  // propósito: ele grita quando uma arte SOME ou entra sem querer
-  check('as 94 artes estão embutidas (90 + a Panóplia do Mestre)', ids.length === 94, ids.length + ' artes');
+  // 90 do jogo + 4 da Panóplia do Mestre (31/08) + 4 do Traje do Colecionador
+  // (03/09) — o número é cru de propósito: ele grita quando uma arte SOME ou
+  // entra sem querer
+  check('as 98 artes estão embutidas (90 + Panóplia + Colecionador)', ids.length === 98, ids.length + ' artes');
+  // a colisão de nomes (botas/couraça/espada existem nas pastas GM e raro):
+  // cada set tem de ter as SUAS quatro, e nenhuma pode ter engolido a outra
+  var sl = ['sl-cetro', 'sl-botas', 'sl-cofre', 'sl-selo-primeiro'];
+  var gm = ['gm-espadao', 'gm-grevas', 'gm-couraca', 'gm-elmo'];
+  check('o Colecionador tem as quatro peças com arte', sl.every(function (id) { return ids.indexOf(id) >= 0; }));
+  check('e a Panóplia continua com as quatro dela', gm.every(function (id) { return ids.indexOf(id) >= 0; }));
 
   var t0 = Date.now();
   (function espera() {

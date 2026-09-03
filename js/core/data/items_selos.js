@@ -27,8 +27,9 @@ var JOGO = (typeof window !== 'undefined')
  * todo Lume). Fechar as 4 peças acende a AURA (fogo branco quase
  * transparente, chão e corpo — hub3d) e concede o PET exclusivo, uma vez.
  *
- * ARTE PENDENTE (o usuário vai criar): os 4 ícones (sl-cetro, sl-botas,
- * sl-cofre, sl-selo-primeiro) e o corpo do pet 'pet-colecionador' — até lá,
+ * ARTE: os 4 ícones chegaram em 03/09 (pasta icones itens/raro — cavaleiro
+ * BRANCO e OURO; os ids ficaram, os nomes que o jogador lê mudaram para
+ * casar com a arte). Falta o corpo do pet 'pet-colecionador' — até lá,
  * ícone procedural e corpo no fallback composto.
  *
  * FORA DOS POOLS DE SAQUE: dungeonId null e dropWeight 0 — estas peças só
@@ -94,28 +95,28 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   peca({
-    id: 'sl-cetro', name: 'Cetro de Selos', slot: 'punho',
+    id: 'sl-cetro', name: 'Lâmina Alva', slot: 'punho',
     bonuses: { pa: 1, power: 24 },
-    description: 'Um cabo de balança antiga com os cinco selos soldados no topo. Pesa exatamente o que a mão precisar que pese.',
+    description: 'Uma espada longa de aço branco-perolado, com um fio de luz dourada correndo pelo centro e a guarda em asas de ouro. Pesa exatamente o que a mão precisar que pese.',
     flavor: 'Já cobrou dívidas de coisas maiores que você.'
   });
   peca({
-    id: 'sl-botas', name: 'Botas do Cambista', slot: 'passo',
+    id: 'sl-botas', name: 'Grevas de Marfim', slot: 'passo',
     bonuses: { pp: 1, dodge: 14, initiative: 12 },
-    description: 'Solas forradas de moedas fora de circulação. Quem as veste chega antes do preço subir.',
+    description: 'Placas de aço branco com joelheiras de ouro em filigrana e solas forradas de moedas fora de circulação. Quem as veste chega antes do preço subir.',
     flavor: 'O primeiro passo é sempre o lucro.'
   });
   peca({
-    id: 'sl-cofre', name: 'Cofre Peitoral', slot: 'casca',
+    id: 'sl-cofre', name: 'Couraça do Cavaleiro Branco', slot: 'casca',
     bonuses: { hp: 60, lock: 12, resists: { neutro: 10 } },
-    description: 'Um cofre achatado a marteladas até virar couraça. A fechadura ainda funciona; ninguém nunca achou a chave.',
-    flavor: 'O que ele guarda agora é você.'
+    description: 'Peitoral de aço branco-perolado com ombreiras de ouro em asas e o brasão das cinco chamas no peito. Por dentro ainda é um cofre: a fechadura funciona e ninguém nunca achou a chave.',
+    flavor: 'O que ela guarda agora é você.'
   });
   peca({
-    id: 'sl-selo-primeiro', name: 'O Selo Primeiro', slot: 'lume',
+    id: 'sl-selo-primeiro', name: 'Selo Primeiro', slot: 'lume',
     grantsSpell: 'is-cinco-selos',
     bonuses: { power: 14, hp: 24, initiative: 10 },
-    description: 'A moeda que pagou a primeira dívida do mundo enterrado. Não tem cara nem coroa: tem os cinco elementos, um em cada borda, e o silêncio no meio.',
+    description: 'Um medalhão de ouro maciço, cravejado de cristais brancos, com um halo que gira devagar. É a moeda que pagou a primeira dívida do mundo enterrado: não tem cara nem coroa, tem os cinco elementos, um em cada borda, e o silêncio no meio.',
     flavor: 'Toda moeda desce. Esta desceu primeiro.'
   });
 
