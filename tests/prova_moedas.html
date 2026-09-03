@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: as moedas desenhadas</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): a arte do dono nas moedas (03/09) — o vintém ao
+     lado do saldo no topo do Acampamento e no bolso do Mercadinho, e os
+     cinco selos de chefe nos chips do Colecionador. ?tela=recompensa mostra
+     a tela de recompensa com selo, insígnia e vintém ganhos. -->
+<iframe id="f" src="../index.html?prova-moedas"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      P.addSelo('fogo', 12); P.addSelo('agua', 4); P.addSelo('terra', 7);
+      P.addSelo('ar', 10); P.addSelo('neutro', 1);
+      P.addInsignia(3);
+      P.state.stones['stone-ember'] = 5; P.state.stones['stone-tear'] = 2; P.save();
+      w.JOGO.DB.ganharMoedas(1250);
+      w.JOGO.DB.batizar('Cambista').then(function () {
+        w.JOGO.UI.selection(['sumo']);
+        w.JOGO.UI.showScreen('hub');
+        setTimeout(function () {
+          w.JOGO.UI.openSheet('mercado');
+          setTimeout(function () {
+            try {
+              [].slice.call(d.querySelectorAll('button')).filter(function (b2) {
+                return /Entendi/.test(b2.textContent);
+              })[0].click();
+            } catch (e3) {}
+            // rola até o Colecionador (os chips dos selos)
+            var alvo = d.querySelector('.colec-selos');
+            if (alvo && alvo.scrollIntoView) alvo.scrollIntoView({ block: 'center' });
+            setTimeout(function () { window.__pronto = true; }, 800);
+          }, 1800);
+        }, 1200);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

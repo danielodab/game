@@ -900,7 +900,10 @@ var JOGO = (typeof window !== 'undefined')
         if (JOGO.Hub && JOGO.Hub.aura) JOGO.Hub.aura(safe(temAuraSelos, false));
       });
       JOGO.DB.moedas().then(function (m) {
-        moedasEl.textContent = m + (m === 1 ? ' vintém' : ' vinténs');
+        // a moeda desenhada antes do número (arte do dono, 03/09)
+        clear(moedasEl);
+        moedasEl.appendChild(art('vintemIcon', [16], 16, 'moeda-inline'));
+        moedasEl.appendChild(document.createTextNode(m + (m === 1 ? ' vintém' : ' vinténs')));
       });
     }
 
@@ -1349,8 +1352,9 @@ var JOGO = (typeof window !== 'undefined')
                          : '☆ ' + esc(dsf.nome) + ' se perdeu'));
         }
         var g = lastRewards.moedas || 0;
-        w.appendChild(el('span', 'rw-moedas-ganho',
-          '+' + g + (g === 1 ? ' vintém' : ' vinténs')));
+        var ganhoM = el('span', 'rw-moedas-ganho', '+' + g + (g === 1 ? ' vintém' : ' vinténs'));
+        ganhoM.insertBefore(art('vintemIcon', [18], 18, 'moeda-inline'), ganhoM.firstChild);
+        w.appendChild(ganhoM);
         // o TOTAL vem do DB, assincrono — a tela nasce sem ele e preenche
         // quando a resposta chega, como fara quando o DB for um servidor
         var tot = el('span', 'rw-moedas-total', '…');
@@ -1418,7 +1422,7 @@ var JOGO = (typeof window !== 'undefined')
           if (!selosG.hasOwnProperty(se)) continue;
           var cell = el('div', 'rw-item rw-selo');
           cell.style.setProperty('--ec', elemColor(se));
-          cell.appendChild(el('b', 'selo-moeda', '❂'));
+          cell.appendChild(art('seloIcon', [se, 30], 30, 'selo-moeda-img'));   // a arte do dono (03/09)
           cell.appendChild(el('span', null, '+' + selosG[se] + ' Selo de ' + (ELEM_PT[se] || se)));
           w.appendChild(cell);
         }
@@ -1435,7 +1439,7 @@ var JOGO = (typeof window !== 'undefined')
         var w = el('div', 'rw-items');
         var cell = el('div', 'rw-item rw-selo');
         cell.style.setProperty('--ec', '#c9a227');
-        cell.appendChild(el('b', 'selo-moeda', '⚜'));
+        cell.appendChild(art('insigniaIcon', [30], 30, 'selo-moeda-img'));   // a arte do dono (03/09)
         var saldo = 0;
         try { saldo = P().insigniasVer(); } catch (e) {}
         var meta = (JOGO.DATA && JOGO.DATA.insignias && JOGO.DATA.insignias.porGuilda) || 10;
@@ -2542,8 +2546,10 @@ var JOGO = (typeof window !== 'undefined')
       clear(caixa);
       if (!mc) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
 
-      caixa.appendChild(el('p', 'mc-bolso', 'No bolso: <b>' + bolso + '</b> ' +
-        (bolso === 1 ? 'vintém' : 'vinténs')));
+      var pBolso = el('p', 'mc-bolso', 'No bolso: <b>' + bolso + '</b> ' +
+        (bolso === 1 ? 'vintém' : 'vinténs'));
+      pBolso.insertBefore(art('vintemIcon', [18], 18, 'moeda-inline'), pBolso.firstChild);
+      caixa.appendChild(pBolso);
 
       // ---- o balcão: tudo à venda, as do jogador marcadas
       caixa.appendChild(el('h3', 'bk-tit', 'À venda (' + mc.ofertas.length + ')'));
@@ -2653,8 +2659,9 @@ var JOGO = (typeof window !== 'undefined')
           var chip = el('div', 'colec-selo' +
             ((saldo[e3] || 0) >= cfgSel.porGiro ? ' is-cheio' : ''));
           chip.style.setProperty('--ec', elemColor(e3));
-          chip.innerHTML = '❂ <b>' + (saldo[e3] || 0) + '</b>/' + cfgSel.porGiro +
-            ' ' + esc(ELEM_PT[e3] || e3);
+          chip.appendChild(art('seloIcon', [e3, 18], 18, 'selo-inline'));
+          chip.appendChild(el('span', null, '<b>' + (saldo[e3] || 0) + '</b>/' + cfgSel.porGiro +
+            ' ' + esc(ELEM_PT[e3] || e3)));
           fila.appendChild(chip);
         });
         colec.appendChild(fila);
@@ -2762,7 +2769,9 @@ var JOGO = (typeof window !== 'undefined')
         linha.appendChild(chip);
       });
       cx.appendChild(linha);
-      cx.appendChild(el('p', 'tr-moedas', lado.moedas + ' vinténs'));
+      var pTr = el('p', 'tr-moedas', lado.moedas + ' vinténs');
+      pTr.insertBefore(art('vintemIcon', [16], 16, 'moeda-inline'), pTr.firstChild);
+      cx.appendChild(pTr);
       return cx;
     }
 
@@ -5147,8 +5156,9 @@ var JOGO = (typeof window !== 'undefined')
         try { saldoIns = P().insigniasVer(); } catch (e) {}
         var podePagar = saldoIns >= precoIns;
         var linhaIns = el('p', 'inv-dica',
-          '⚜ <b>' + saldoIns + '/' + precoIns + '</b> insígnias de fundação — ' +
+          '<b>' + saldoIns + '/' + precoIns + '</b> insígnias de fundação — ' +
           (podePagar ? 'dá para fundar!' : 'só chefe derruba, uma por queda.'));
+        linhaIns.insertBefore(art('insigniaIcon', [18], 18, 'selo-inline'), linhaIns.firstChild);
         linhaIns.style.color = podePagar ? '#7fe08a' : '#c9a227';
         caixa.appendChild(linhaIns);
 
@@ -5182,7 +5192,7 @@ var JOGO = (typeof window !== 'undefined')
         pintaSugestoes();
         caixa.appendChild(sug);
 
-        caixa.appendChild(btn('Fundar a guilda  (⚜ ' + precoIns + ')', 'btn-primary btn-block', function () {
+        caixa.appendChild(btn('Fundar a guilda  (' + precoIns + ' insígnias)', 'btn-primary btn-block', function () {
           Gd.criar(inp.value, guildaEmblemaEscolhido).then(function (res) {
             if (!res.ok) { toast(res.erro || 'não deu'); return; }
             guildaNomeRascunho = '';

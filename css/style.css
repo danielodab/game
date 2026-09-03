@@ -1464,6 +1464,12 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
   box-shadow: 0 0 14px rgba(255,196,77,.5); }
 .rw-selo .selo-moeda { font-size: 26px; color: var(--ec, #fff); line-height: 1;
   text-shadow: 0 0 10px color-mix(in srgb, var(--ec, #fff) 70%, transparent); }
+/* AS MOEDAS DESENHADAS (03/09): selo, insígnia e vintém com a arte do dono
+   no lugar dos caracteres ❂ ⚜ — o halo do elemento fica, a arte entra */
+.rw-selo .selo-moeda-img { flex: none; display: block;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--ec, #fff) 70%, transparent)); }
+.selo-inline, .moeda-inline { display: inline-block; vertical-align: -3px; margin-right: 5px; }
+.hub-moedas .moeda-inline { vertical-align: -4px; margin-right: 4px; }
 
 /* O TUTOR (25/08): um cartão de primeira visita por tela */
 .tutor-caixa {
