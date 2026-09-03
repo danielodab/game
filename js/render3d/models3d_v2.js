@@ -247,7 +247,16 @@ var JOGO = (typeof window !== 'undefined')
             concept: 'Minotauro de escudo enorme, que ergue muro no chao' },
     invocador: { model: 'meshy_invocador', show: ['Spellbook_open', '1H_Wand', 'Mage_Cape'],
             scale: 1.00, tint: '#3f8f8a', accent: '#8ff0d8', weapon: '1H_Wand',
-            concept: 'Xamã de grimório aberto e varinha, sem chapéu' }
+            concept: 'Xamã de grimório aberto e varinha, sem chapéu' },
+    // MESTRE DO FUNDO (03/09) — o Cavaleiro Negro do dono, corpo do Meshy.
+    // A classe `gm` só existe com a chave (js/core/gm.js); o look é fixo e
+    // inofensivo sem ela. O motor normaliza todo herói a 2,05 m ANTES da
+    // escala (targetH em finalizaUnidade), então o 1,67 m cru do Meshy não
+    // conta: 1,04 leva a ~2,13 m — acima do Caçador (2,05), abaixo do Bárbaro.
+    // Impõe sem sair da escada. tint/accent = palette da classe (vinho e ouro).
+    gm: { model: 'meshy_gm',
+            scale: 1.04, tint: '#8a1f2d', accent: '#c9a227',
+            concept: 'Cavaleiro negro de espadão às costas, armadura fechada e olhar de dono' }
   };
 
   // ------------------------------------------------------- MARCAS DE CLASSE
