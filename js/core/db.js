@@ -161,7 +161,14 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // -------------------------------------------------------------- a carteira
+  /* O GAME MASTER (31/08) tem o cofre sem fundo: com a chave do GM virada,
+   * o saldo responde alto e o gasto nunca falha nem desconta. Sem a chave,
+   * nada muda — e no servidor este privilégio migra para a conta assinada. */
+  function bolsoSemFundo() {
+    return !!(JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo());
+  }
   DB.moedas = function () {
+    if (bolsoSemFundo()) return responde(999999);
     return responde(carrega().carteira.moedas);
   };
 
@@ -174,6 +181,7 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   DB.gastarMoedas = function (n) {
+    if (bolsoSemFundo()) return responde({ ok: true, moedas: 999999 });
     var d = carrega();
     n = Math.max(0, Math.floor(n || 0));
     if (d.carteira.moedas < n) return responde({ ok: false, erro: 'vinténs insuficientes', moedas: d.carteira.moedas });

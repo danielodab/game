@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o Painel do Mestre</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): o Painel do Mestre (31/08) — PA/PP à escolha,
+     aparelhar, e o grimório com qualquer feitiço do jogo. Só existe com a
+     chave do dono na URL. -->
+<iframe id="f" src="../index.html?prova-gm&gm=mestre-do-fundo"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    try {
+      w.JOGO.GM.alternaSpell('sumo-fogo-5');
+      w.JOGO.GM.aparelha();
+      w.JOGO.UI.openSheet('gm');
+      setTimeout(function () { window.__pronto = true; }, 1500);
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

@@ -436,6 +436,12 @@ var JOGO = (typeof window !== 'undefined')
 
     var acts = el('div', 'menu-acts');
     acts.appendChild(btn('Descer', 'btn-primary btn-big', function () { navTo('heroSelect'); }));
+    // O GAME MASTER (31/08): o botão só EXISTE com a chave do dono virada
+    if (JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()) {
+      acts.appendChild(btn('⚔ Painel do Mestre', 'btn-gold btn-big', function () {
+        openSheet('gm');
+      }));
+    }
     // [25/08] o menu único "Personagens" foi dividido a pedido: cada ficha
     // tem porta própria — aqui numa fileira compacta, no Acampamento o cais.
     var fichas = el('div', 'menu-fichas');
@@ -2980,6 +2986,7 @@ var JOGO = (typeof window !== 'undefined')
     // SEPARADOS — "tudo centralizado em um menu só" ficou ruim de usar. Os
     // nomes antigos continuam valendo ('party' abre a última ficha visitada);
     // o cais do Acampamento e o menu inicial chamam cada porta pelo nome.
+    if (name === 'gm') { sheetGM(); return; }
     if (name === 'party') sheetParty(null, arg);
     else if (name === 'collection') sheetParty('colecao', arg);
     else if (name === 'inventory') sheetParty('inventario', arg);
@@ -5373,6 +5380,109 @@ var JOGO = (typeof window !== 'undefined')
         });
       }
     });
+  }
+
+  /* O PAINEL DO MESTRE (31/08): só existe com a chave do dono. PA/PP à
+   * escolha, o set e os quatro caminhos com um toque, e o GRIMÓRIO —
+   * qualquer feitiço do jogo entra na barra do GM. O Julgamento vai sempre. */
+  var gmBusca = '';
+  function sheetGM() {
+    var GMod = JOGO.GM;
+    if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
+    var body = sheetShell('Painel do Mestre',
+      'O mundo é seu. PA/PP à sua palavra, o grimório inteiro à mão, e o cofre sem fundo.');
+    sheetName = 'gm';
+
+    var pp3 = GMod.paPp();
+    var linhaP = el('div', 'guilda-governo');
+    linhaP.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+    function campoNum(valor) {
+      var i2 = document.createElement('input');
+      i2.type = 'number'; i2.min = '1'; i2.max = '30';
+      i2.value = String(valor);
+      i2.className = 'hub-input';
+      i2.style.cssText = 'width:64px;margin:0';
+      return i2;
+    }
+    var inPa = campoNum(pp3.pa), inPp = campoNum(pp3.pp);
+    linhaP.appendChild(el('span', 'inv-dica', 'PA:'));
+    linhaP.appendChild(inPa);
+    linhaP.appendChild(el('span', 'inv-dica', 'PP:'));
+    linhaP.appendChild(inPp);
+    linhaP.appendChild(btn('Aplicar', 'btn-mini btn-gold', function () {
+      GMod.definePaPp(inPa.value, inPp.value);
+      toast('O Mestre decidiu: ' + GMod.paPp().pa + ' PA e ' + GMod.paPp().pp + ' PP.', 'good');
+    }));
+    linhaP.appendChild(btn('Aparelhar o Mestre', 'btn-mini btn-primary', function () {
+      if (GMod.aparelha()) toast('Panóplia no saco e os quatro caminhos abertos.', 'good');
+      else toast('não deu — o Progress não respondeu');
+    }));
+    body.appendChild(linhaP);
+    body.appendChild(el('p', 'inv-dica',
+      'O cofre não tem fundo: todo preço se paga sozinho enquanto a chave estiver virada. ' +
+      'Escolha o <b>Mestre do Fundo</b> na tela Quem Desce para levá-lo à batalha.'));
+
+    // ---- o GRIMÓRIO
+    body.appendChild(el('h3', 'hs-sec', 'Grimório — qualquer feitiço do jogo'));
+    var fontes = [JOGO.DATA.spells, JOGO.DATA.monsterSpells, JOGO.DATA.petSpells, JOGO.DATA.itemSpells];
+    var todos = [];
+    fontes.forEach(function (src) {
+      if (!src) return;
+      for (var id in src) {
+        if (src.hasOwnProperty(id) && src[id] && src[id].name && id !== 'gm-julgamento') {
+          todos.push(src[id]);
+        }
+      }
+    });
+    todos.sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); });
+    var escolhidos = GMod.grimorio().length - 1;      // sem contar o Julgamento
+    body.appendChild(el('p', 'inv-dica',
+      '<b>' + escolhidos + '</b> escolhido(s) + o Julgamento do Mestre (sempre na barra). ' +
+      todos.length + ' feitiços no acervo — busque e toque para ligar/desligar.'));
+    var busca = document.createElement('input');
+    busca.className = 'hub-input';
+    busca.placeholder = 'buscar feitiço por nome...';
+    busca.value = gmBusca;
+    body.appendChild(busca);
+    var listaEl = el('div', 'ms-caixa');
+    body.appendChild(listaEl);
+
+    function pinta() {
+      clear(listaEl);
+      var t = (gmBusca || '').toLowerCase();
+      var vistas = 0;
+      for (var i = 0; i < todos.length; i++) {
+        var sp = todos[i];
+        var casa = !t || (sp.name || '').toLowerCase().indexOf(t) >= 0 ||
+                   (sp.id || '').toLowerCase().indexOf(t) >= 0;
+        if (!casa) continue;
+        if (++vistas > 40) {
+          listaEl.appendChild(el('p', 'inv-dica', '… e mais — afine a busca.'));
+          break;
+        }
+        (function (sp2) {
+          var tem = GMod.temSpell(sp2.id);
+          var row = el('div', 'ms-linha' + (tem ? ' is-feita' : ''));
+          var tx = el('div', 'ms-tx');
+          tx.appendChild(el('div', 'ms-nome', esc(sp2.name) +
+            ' <i>· ' + (ELEM_PT[sp2.element] || sp2.element || '?') + ' · ' +
+            (sp2.paCost || 0) + ' PA</i>'));
+          if (sp2.description) {
+            tx.appendChild(el('div', 'ms-prog', esc(String(sp2.description).slice(0, 90))));
+          }
+          row.appendChild(tx);
+          row.appendChild(btn(tem ? 'Tirar' : 'Pôr na barra',
+            'btn-mini ' + (tem ? 'btn-ghost' : 'btn-gold'), function () {
+              GMod.alternaSpell(sp2.id);
+              sheetGM();
+            }));
+          listaEl.appendChild(row);
+        })(sp);
+      }
+      if (!vistas) listaEl.appendChild(el('p', 'empty', 'Nada com esse nome no acervo.'));
+    }
+    busca.addEventListener('input', function () { gmBusca = busca.value; pinta(); });
+    pinta();
   }
 
   function sheetBattleMenu() {

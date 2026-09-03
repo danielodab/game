@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o mundo com a chave do Mestre virada</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}</style>
+</head>
+<body>
+<!-- Aberta pelo tests/gm.html COM ?gm=<chave> na URL: aqui o modo GM está
+     LIGADO e os poderes são provados de verdade — batalha inclusa. -->
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '&v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/gm.js','js/core/db.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+'?x=1'+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  window.__fail = 0; window.__total = 0; window.__erros = [];
+  function check(nome, ok, extra) {
+    window.__total++;
+    if (!ok) { window.__fail++; window.__erros.push(nome + (extra ? ' (' + extra + ')' : '')); }
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'ok  ' : 'X   ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+
+  var GM = JOGO.GM, P = JOGO.Progress, E = JOGO.Engine;
+  check('a chave da URL ligou o modo', GM.ativo() === true);
+  check('a classe do Mestre existe e nasce liberada',
+        !!JOGO.DATA.classes.gm && JOGO.DATA.classes.gm.startsUnlocked === true);
+  check('a classe NÃO declara caminhos (qualquer elemento serve)',
+        JOGO.DATA.classes.gm.paths === undefined);
+  var jz = JOGO.DATA.spells['gm-julgamento'];
+  check('o Julgamento existe: 99999 de dano, círculo 99, alcance 99 sem visão',
+        !!jz && jz.effects[0].min === 99999 && jz.aoe.size === 99 &&
+        jz.range.max === 99 && jz.range.los === false);
+  check('a Panóplia do Mestre existe (4 peças, conjunto próprio)',
+        !!JOGO.DATA.items['gm-espadao'] && !!JOGO.DATA.items['gm-elmo'] &&
+        !!JOGO.DATA.sets['gm-set-mestre']);
+
+  P.reset();
+  check('PA/PP são a palavra do Mestre', GM.definePaPp(15, 9) === true &&
+        JOGO.DATA.classes.gm.stats.pa === 15 && JOGO.DATA.classes.gm.stats.pp === 9);
+  var h = P.hero('gm');
+  check('a ficha do Mestre nasce', !!h && h.classId === 'gm');
+  var st1 = P.effectiveStats ? P.effectiveStats('gm') : null;
+  check('os stats efetivos obedecem (15 PA / 9 PP)',
+        !!st1 && st1.pa === 15 && st1.pp === 9,
+        st1 ? st1.pa + '/' + st1.pp : 'sem effectiveStats');
+
+  GM.alternaSpell('sumo-fogo-5');
+  GM.alternaSpell('arqueiro-ar-10');
+  var gr = P.spellsFor('gm');
+  check('o grimório entra na barra com o Julgamento junto',
+        gr.indexOf('gm-julgamento') === 0 && gr.indexOf('sumo-fogo-5') > 0 &&
+        gr.indexOf('arqueiro-ar-10') > 0, gr.join(','));
+
+  check('aparelhar dá o set e os quatro caminhos', GM.aparelha() === true &&
+        P.heroElements('gm').length === 4 &&
+        P.state.inventory.filter(function (e) { return e.itemId.indexOf('gm-') === 0; }).length === 4);
+
+  JOGO.DB.moedas().then(function (m) {
+    check('o cofre não tem fundo', m === 999999, String(m));
+    return JOGO.DB.gastarMoedas(888888);
+  }).then(function (r) {
+    check('gastar nunca falha nem desconta', r.ok === true && r.moedas === 999999);
+
+    // ---- A BATALHA REAL: o Julgamento mata a sala inteira
+    var party = P.battleParty(['gm']);
+    var st = E.createBattle('greenhouse', 0, party);
+    check('a batalha monta com o Mestre', !!st && st.units.some(function (u) {
+      return u.side === 'player';
+    }));
+    var gmU = st.units.filter(function (u) { return u.side === 'player'; })[0];
+    // força o turno do Mestre (a iniciativa 99 já deve pôr, mas cravamos)
+    var iu = st.order.indexOf(gmU.uid);
+    if (iu >= 0) st.turnIndex = iu;
+    var vivosAntes = st.units.filter(function (u) { return u.side === 'enemy' && u.alive; }).length;
+    check('há monstros de pé antes do golpe', vivosAntes > 0, String(vivosAntes));
+    var casted = E.cast(st, gmU.uid, 'gm-julgamento', gmU.x, gmU.y);
+    check('o Julgamento conjura', casted === true);
+    var vivosDepois = st.units.filter(function (u) { return u.side === 'enemy' && u.alive; }).length;
+    check('TODOS os monstros da sala morreram', vivosDepois === 0,
+          vivosAntes + ' → ' + vivosDepois);
+
+    try { localStorage.removeItem('soterra-gm-v1'); } catch (e) {}
+    window.__done = true;
+  });
+})();
+</script>
+</body>
+</html>

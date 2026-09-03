@@ -1126,13 +1126,21 @@ var JOGO = (typeof window !== 'undefined')
     if (!h) return [];
     var def = classDef(h.classId);
     var out = [], i;
-    if (def && isArray(def.baseSpells)) {
-      for (i = 0; i < def.baseSpells.length; i++) out.push(def.baseSpells[i]);
-    }
-    if (def && def.paths && h.element !== DEFAULT_ELEMENT && isArray(def.paths[h.element])) {
-      var path = def.paths[h.element];
-      for (i = 0; i < path.length; i++) {
-        if (h.level >= pathUnlockLevel(path[i], i)) out.push(path[i]);
+    // O GAME MASTER (31/08): o grimório do dono substitui base+caminho — ele
+    // escolhe QUALQUER feitiço do jogo na ficha do GM, e o Julgamento vai
+    // sempre junto. Sem a chave do GM, este ramo não existe (classe 'gm'
+    // sem def não chega aqui). Itens/conjunto continuam somando abaixo.
+    if (h.classId === 'gm' && JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()) {
+      out = JOGO.GM.grimorio();
+    } else {
+      if (def && isArray(def.baseSpells)) {
+        for (i = 0; i < def.baseSpells.length; i++) out.push(def.baseSpells[i]);
+      }
+      if (def && def.paths && h.element !== DEFAULT_ELEMENT && isArray(def.paths[h.element])) {
+        var path = def.paths[h.element];
+        for (i = 0; i < path.length; i++) {
+          if (h.level >= pathUnlockLevel(path[i], i)) out.push(path[i]);
+        }
       }
     }
     var lume = h.items && h.items[SPELL_SLOT];      // o espaço 'lume' concede feitiço
