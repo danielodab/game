@@ -559,7 +559,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     // A ÂNCORA DE FORJA: só CHEFE derruba, e os mais fundos pagam mais —
     // é a pedra que segura o nível na batida arriscada (DATA.upgrade)
-    var upCfg = (D() && D().upgrade) || {};
+    // `D()` não existe neste arquivo — era um ReferenceError a CADA vitória
+    // (03/09: o Julgamento do Mestre TRAVOU o jogo na tela de batalha)
+    var upCfg = (JOGO.DATA && JOGO.DATA.upgrade) || {};
     var taxas = upCfg.guardDropByDungeon || {};
     for (i = 0; i < units.length; i++) {
       var ub = units[i];

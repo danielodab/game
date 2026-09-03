@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o Julgamento do Mestre numa batalha de verdade</title>
+<style>html,body{margin:0;height:100%;background:#0f1216;color:#e8eef6;font:12px monospace}
+iframe{width:100%;height:80%;border:0} #log{padding:8px;white-space:pre-wrap}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (03/09): o dono usou o Julgamento e o jogo TRAVOU. Aqui a
+     batalha é a de verdade (index com a chave): o Mestre desce na Estufa,
+     conjura o Julgamento pela mesma porta do clique (Game.onTileClicked) e a
+     página anota o que aconteceu — fase, tela, erros de JS — em #log e no
+     título. Se em 60 voltas a tela de recompensa não abrir, é o travamento. -->
+<iframe id="f" src="../index.html?prova-gm-batalha&gm=mestre-do-fundo"></iframe>
+<div id="summary">rodando…</div>
+<div id="log">esperando…</div>
+<script>
+var f = document.getElementById('f'), log = document.getElementById('log');
+var linhas = [], erros = [];
+function anota(s) { linhas.push(s); log.textContent = linhas.join('\n'); }
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  w.addEventListener('error', function (e) { erros.push('ERRO ' + e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno); });
+  var ce = w.console.error;
+  w.console.error = function () { erros.push('console.error ' + [].slice.call(arguments).join(' ')); try { ce.apply(w.console, arguments); } catch (e) {} };
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      var G = w.JOGO.Game, E = w.JOGO.Engine, GM = w.JOGO.GM;
+      GM.aparelha();
+      w.JOGO.UI.selection(['gm']);
+      var ok = G.startRun(['gm'], 'greenhouse');
+      anota('startRun: ' + ok);
+      var v2 = 0;
+      (function aguardaBatalha() {
+        if (!(G.screen === 'battle' && G.state && G.state.phase === 'playing') && ++v2 < 100) return setTimeout(aguardaBatalha, 400);
+        var st = G.state;
+        var gmU = st.units.filter(function (u) { return u.side === 'player'; })[0];
+        var inimigos = st.units.filter(function (u) { return u.side === 'enemy' && u.alive; }).length;
+        anota('batalha: ' + st.units.length + ' unidades, ' + inimigos + ' inimigos vivos, ativo=' + (E.activeUnit(st) || {}).name);
+        // força o turno do Mestre se a iniciativa não deu
+        var iu = st.order.indexOf(gmU.uid);
+        if (iu >= 0 && E.activeUnit(st).uid !== gmU.uid) { st.turnIndex = iu; anota('turno forçado para o Mestre'); }
+        // ?foto=1: para aqui, na batalha, para fotografar o cartão do herói
+        if (/[?&]foto=1/.test(location.search)) {
+          try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e3) {}
+          anota('foto da batalha'); document.title = 'FOTO';
+          setTimeout(function () { window.__pronto = true; }, 1500);
+          return;
+        }
+        G.selectSpell('gm-julgamento');
+        anota('feitiço selecionado: ' + G.selectedSpellId);
+        G.onTileClicked(gmU.x, gmU.y);
+        var vivos = st.units.filter(function (u) { return u.side === 'enemy' && u.alive; }).length;
+        anota('depois do clique: fase=' + st.phase + ' inimigos vivos=' + vivos + ' selecionado=' + G.selectedSpellId);
+        var v3 = 0;
+        (function aguardaFim() {
+          var tela = d.querySelector('.ui-screen.is-on');
+          var nome = tela ? tela.className.replace('ui-screen', '').replace('is-on', '').trim() : '?';
+          var fase = G.state ? G.state.phase : 'sem estado';
+          if (/roomClear|dungeonComplete|rewards/.test(nome) || ++v3 > 60) {
+            anota('fim: volta ' + v3 + ' · tela=' + nome + ' · fase=' + fase + ' · screen=' + G.screen);
+            anota('erros: ' + (erros.length ? erros.join(' | ') : 'nenhum'));
+            var okFim = /roomClear|dungeonComplete|rewards/.test(nome) && !erros.length;
+            document.title = (okFim ? 'OK ' : 'TRAVOU ') + nome + (erros.length ? ' ERROS' : '');
+            // a prova também é SUÍTE da bateria: a vitória tem de virar recompensa sem erro
+            var sum = document.getElementById('summary');
+            sum.textContent = okFim ? 'tudo passou (1)' : 'FALHOU — a vitória não virou recompensa: ' + nome + ' ' + erros.join(' | ');
+            sum.className = okFim ? 'allpass' : 'fail';
+            window.__done = true; window.__fail = okFim ? 0 : 1;
+            window.__pronto = true;
+            return;
+          }
+          setTimeout(aguardaFim, 250);
+        })();
+      })();
+    } catch (e) {
+      anota('EXCEÇÃO ' + e.message + '\n' + e.stack); document.title = 'ERRO ' + e.message;
+      var sum2 = document.getElementById('summary');
+      sum2.textContent = 'FALHOU — ' + e.message; sum2.className = 'fail';
+      window.__done = true; window.__fail = 1; window.__pronto = true;
+    }
+  })();
+};
+</script>
+</body>
+</html>

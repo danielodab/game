@@ -658,7 +658,8 @@ i, em { font-style: normal; color: var(--dim); }
   position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
   font: 700 10px var(--ui-sans); color: var(--xp);
 }
-.ba-res { display: flex; gap: 12px; margin-top: 3px; }
+/* PA em cima, PP embaixo (pedido do dono, 03/09) — antes lado a lado */
+.ba-res { display: flex; flex-direction: column; gap: 2px; margin-top: 3px; }
 .res { display: flex; align-items: center; gap: 5px; min-height: 22px; }
 .res-lb { font: 700 10.5px var(--ui-sans); color: var(--dim); }
 .pa-res .res-lb { color: var(--pa); }
