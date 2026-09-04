@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — as chances de saque, medidas</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px} .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  table{border-collapse:collapse;font:12px monospace;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:3px 8px;text-align:right} th{background:#1a2029;color:#8895a6}
+  td:first-child,th:first-child{text-align:left}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px;background:#16241b;color:#7fe08a}
+</style>
+</head>
+<body>
+<h1>As chances de saque — medidas por sorteio, não supostas</h1>
+<div class="sub">Para cada calabouço, sala comum (1 sorteio) e sala do chefe (2 sorteios), sozinho (sorte 2,4×)
+e em dupla (1,6×): quantas vezes em 100 sai ALGUMA peça, e de cada raridade. Monte Carlo de 20 000
+sorteios por linha sobre o Progress de verdade (o saco é esvaziado a cada sorteio para não travar).</div>
+<div id="summary">medindo…</div>
+<div id="tabs"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var P = JOGO.Progress, D = JOGO.DATA;
+  var N = 20000;
+  var ds = Array.isArray(D.dungeons) ? D.dungeons : Object.keys(D.dungeons).map(function (k) { return D.dungeons[k]; });
+  var out = document.getElementById('tabs');
+  var html = '<table><tr><th>calabouço</th><th>sala</th><th>grupo</th><th>peça/sorteio</th><th>comum</th><th>raro</th><th>épico</th><th>lendário</th><th>sorteios/sala</th></tr>';
+  ds.forEach(function (dg) {
+    if (!dg || !dg.id || dg.id === 'poco') return;
+    var last = (dg.rooms || []).length - 1;
+    [[0, 'comum'], [last, 'chefe']].forEach(function (par) {
+      [1, 2].forEach(function (grupo) {
+        var cont = { comum: 0, raro: 0, epico: 0, lendario: 0 }, pecas = 0, rolls = par[0] === last ? 2 : 1;
+        for (var k = 0; k < N; k++) {
+          P.reset();
+          var d2 = P.rollDrops(dg.id, par[0], grupo, 1) || [];
+          for (var j = 0; j < d2.length; j++) {
+            pecas++;
+            var it = D.items[d2[j]];
+            if (it && cont[it.rarity] !== undefined) cont[it.rarity]++;
+          }
+        }
+        var tot = N * rolls;
+        function pc(x) { return (100 * x / tot).toFixed(1) + '%'; }
+        html += '<tr><td>' + dg.name + '</td><td>' + par[1] + '</td><td>' + (grupo === 1 ? 'sozinho' : 'dupla') + '</td>' +
+          '<td><b>' + pc(pecas) + '</b></td><td>' + pc(cont.comum) + '</td><td>' + pc(cont.raro) + '</td>' +
+          '<td>' + pc(cont.epico) + '</td><td>' + pc(cont.lendario) + '</td><td>' + rolls + '</td></tr>';
+      });
+    });
+  });
+  html += '</table>';
+  out.innerHTML = html;
+  // as peças por calabouço, por raridade
+  var porDg = {};
+  Object.keys(D.items).forEach(function (id) {
+    var it = D.items[id];
+    if (!it || !it.dungeonId || !(it.dropWeight > 0)) return;
+    porDg[it.dungeonId] = porDg[it.dungeonId] || { comum: 0, raro: 0, epico: 0, lendario: 0 };
+    porDg[it.dungeonId][it.rarity] = (porDg[it.dungeonId][it.rarity] || 0) + 1;
+  });
+  var h2 = '<table><tr><th>calabouço</th><th>comuns</th><th>raros</th><th>épicos</th><th>lendários</th><th>peso do nada</th></tr>';
+  Object.keys(porDg).forEach(function (k) {
+    var c = porDg[k];
+    h2 += '<tr><td>' + k + '</td><td>' + c.comum + '</td><td>' + c.raro + '</td><td>' + c.epico + '</td><td>' + c.lendario + '</td><td>' + Math.round((D.lootWeights.noDrop || {})[k] || 0) + '</td></tr>';
+  });
+  h2 += '</table>';
+  out.innerHTML += h2;
+  document.getElementById('summary').textContent = 'medido: ' + N + ' sorteios por linha';
+  window.__pronto = true; window.__done = true; window.__fail = 0;
+})();
+</script>
+</body>
+</html>
