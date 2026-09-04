@@ -1876,6 +1876,22 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .mc-preco { font: 700 14px var(--ui-sans, system-ui); color: #e8c25a;
             font-variant-numeric: tabular-nums; }
 .mc-qtd { width: 84px; }
+/* O MERCADINHO POR ABAS (03/09): Comprar / Vender / Meus anúncios / Colecionador */
+.mc-abas { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.mc-filtros { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+.mc-filtro-rot { font: 700 10.5px var(--ui-sans); color: var(--dim); text-transform: uppercase;
+  letter-spacing: .04em; min-width: 62px; }
+.mc-chip { padding: 3px 9px; font-size: 11.5px; border: 1px solid var(--line, #2b3542);
+  background: rgba(255,255,255,.03); color: var(--dim); border-radius: 999px; }
+.mc-chip.is-on { color: var(--gold, #ffc44d); border-color: var(--gold-a22, rgba(255,196,77,.35));
+  background: var(--gold-a08, rgba(255,196,77,.08)); }
+.mc-lista { margin-top: 6px; }
+.mc-resumo { font-size: 12px; color: var(--dim); margin: 4px 0 8px; }
+.mc-resumo b { color: var(--text); }
+.mc-taxa { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15;
+  font: 400 11px var(--ui-sans); color: var(--dim); min-width: 74px; }
+.mc-taxa b { color: #7fe08a; font-size: 12.5px; }
+.mc-taxa small { font-size: 10px; color: var(--dim); }
 .btn-mini.is-off { opacity: .4; pointer-events: none; }
 
 /* ------------------------------------------------- O CHAT DO ACAMPAMENTO */

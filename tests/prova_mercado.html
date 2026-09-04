@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o Mercadinho por abas</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto), 03/09: o Mercadinho redesenhado — Comprar com
+     busca e filtros, Vender com a taxa à vista, Meus anúncios enxuto.
+     ?aba=comprar|vender|meus|colec · ?slot=passo ?rar=raro ?q=texto filtram. -->
+<iframe id="f" src="../index.html?prova-mercado"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress, Mc = w.JOGO.Mercado;
+      // um saco com peças de vários espaços e raridades, e dois anúncios meus
+      ['gh-wasp-sting', 'gh-moss-treads', 'gh-chitin-vest', 'gh-hive-lantern', 'ci-pearl-mail',
+       'em-brand-iron', 'gh-widow-shears', 'gh-widow-shears'].forEach(function (id) { P.addItem(id); });
+      w.JOGO.DB.ganharMoedas(120);
+      w.JOGO.DB.batizar('Cambista').then(function () {
+        return Mc.abrir();
+      }).then(function () {
+        var st = P.state;
+        var i1 = st.inventory.findIndex(function (e) { return e.itemId === 'gh-widow-shears'; });
+        return Mc.anunciar(st.inventory[i1], 85).then(function () {
+          st.inventory.splice(i1, 1);
+          var i2 = st.inventory.findIndex(function (e) { return e.itemId === 'ci-pearl-mail'; });
+          return Mc.anunciar(st.inventory[i2], 140).then(function () { st.inventory.splice(i2, 1); P.save(); });
+        });
+      }).then(function () {
+        w.JOGO.UI.selection(['sumo']);
+        w.JOGO.UI.showScreen('hub');
+        setTimeout(function () {
+          w.JOGO.UI.openSheet('mercado');
+          setTimeout(function () {
+            var rot = { comprar: /^Comprar/, vender: /^Vender/, meus: /^Meus an/, colec: /^Colecionador/ }[Q.aba || 'comprar'];
+            var abas = [].slice.call(d.querySelectorAll('.mc-abas button'));
+            var alvo = abas.filter(function (b) { return rot.test(b.textContent.trim()); })[0];
+            if (alvo) alvo.click();
+            setTimeout(function () {
+              function chip(rotulo) {
+                var c = [].slice.call(d.querySelectorAll('.mc-chip')).filter(function (b) { return b.textContent.trim() === rotulo; })[0];
+                if (c) c.click();
+              }
+              if (Q.slot) chip({ punho: 'Punho', passo: 'Passo', casca: 'Casca', lume: 'Lume' }[Q.slot]);
+              if (Q.rar) chip({ comum: 'Comum', raro: 'Raro', epico: 'Épico', lendario: 'Lendário' }[Q.rar]);
+              setTimeout(function () {
+                if (Q.q) {
+                  var inp = d.querySelector('.sheet-panel input.hub-input');
+                  if (inp) { inp.value = Q.q; inp.dispatchEvent(new w.Event('input')); }
+                }
+                try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e3) {}
+                setTimeout(function () { window.__pronto = true; }, 1200);
+              }, 700);
+            }, 700);
+          }, 1500);
+        }, 1200);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; window.__pronto = true; }
+  })();
+};
+</script>
+</body>
+</html>

@@ -241,6 +241,7 @@ var JOGO = (typeof window !== 'undefined')
     montaArena();
     montaSede();
     montaForja();
+    montaLoteria();
     // as CONSTRUÇÕES do usuário (árvore, arena, banco, mercado, sede) vestem
     // os volumes acima quando os GLBs abrirem — a sonda de sempre
     construcoesPlantadas = false;
@@ -570,6 +571,53 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(g);
     lugares.push({ id: 'forja', tipo: 'forja', nome: 'Forja',
                    pos: new THREE.Vector3(px, 0, pz), raio: 5.0, node: g });
+  }
+
+  /* A BARRAQUINHA DA SORTE (03/09, pedido do dono: "deveria ter uma
+   * barraquinha de loteria só para esse giro da sorte"): a roleta dos selos
+   * saiu do Mercadinho e ganhou endereço — uma tenda listrada a sudoeste,
+   * entre o Mercadinho e o herói. Corpo de primitivas até a arte dele
+   * chegar (o prompt foi dado); o lugar e a ficha já são os definitivos. */
+  function montaLoteria() {
+    var px = -RAIO_MAPA * 0.22, pz = RAIO_MAPA * 0.66;
+    var g = new THREE.Group();
+    // o balcão
+    var balcao = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 1.2),
+                                new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.9 }));
+    balcao.position.set(0, 0.5, 0.6);
+    g.add(balcao);
+    // os quatro postes e o telhado de lona listrada (canvas)
+    var poste = new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 1 });
+    [[-1.5, -0.7], [1.5, -0.7], [-1.5, 1.1], [1.5, 1.1]].forEach(function (p) {
+      var m = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.6, 8), poste);
+      m.position.set(p[0], 1.3, p[1]);
+      g.add(m);
+    });
+    var cv = document.createElement('canvas');
+    cv.width = 128; cv.height = 32;
+    var ctx = cv.getContext('2d');
+    for (var i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#e8c25a' : '#a4232b'; ctx.fillRect(i * 16, 0, 16, 32); }
+    var tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping; tex.repeat.set(2, 1);
+    var lona = new THREE.Mesh(new THREE.ConeGeometry(2.6, 1.4, 4, 1, true),
+                              new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, side: THREE.DoubleSide }));
+    lona.position.set(0, 3.2, 0.2);
+    lona.rotation.y = Math.PI / 4;
+    g.add(lona);
+    // a roda da sorte, pendurada na frente
+    var roda = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.12, 12),
+                              new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }));
+    roda.rotation.x = Math.PI / 2;
+    roda.position.set(0, 1.9, -0.3);
+    g.add(roda);
+    var r = rotulo('Barraquinha da Sorte', '#ffd98a');
+    r.position.y = 4.4;
+    g.add(r);
+    g.position.set(px, 0, pz);
+    g.lookAt(0, 0, RAIO_MAPA * 0.35);        // encara o herói
+    scene.add(g);
+    lugares.push({ id: 'loteria', tipo: 'loteria', nome: 'Barraquinha da Sorte',
+                   pos: new THREE.Vector3(px, 0, pz), raio: 4.0, node: g, roda: roda });
   }
 
   /* A SEDE DAS GUILDAS (25/08): o estandarte a leste. O lugar existe ANTES

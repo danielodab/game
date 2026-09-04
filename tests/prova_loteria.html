@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a Barraquinha da Sorte</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto), 03/09: a Barraquinha da Sorte na praça (sem
+     parâmetro: a tenda, com o painel de aproximação aberto) e a ficha da
+     roleta (?ficha=1), com selos no bolso e uma peça já no saco. -->
+<iframe id="f" src="../index.html?prova-loteria"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      var P = w.JOGO.Progress;
+      P.addSelo('fogo', 9); P.addSelo('agua', 4); P.addSelo('terra', 7); P.addSelo('ar', 3); P.addSelo('neutro', 1);
+      P.addItem('sl-botas');                  // uma peça já no saco: a roleta não a repete
+      w.JOGO.DB.batizar('Sortudo').then(function () {
+        w.JOGO.UI.selection(['sumo']);
+        w.JOGO.UI.showScreen('hub');
+        var v2 = 0;
+        (function aguarda() {
+          var e2 = null;
+          try { e2 = w.JOGO.Hub._estado(); } catch (err) {}
+          if ((e2 && e2.construcoes && e2.enfeites) || ++v2 > 200) {
+            try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e3) {}
+            if (Q.ficha) {
+              w.JOGO.UI.openSheet('loteria');
+              setTimeout(function () { window.__pronto = true; }, 1800);
+              return;
+            }
+            // anda até a barraquinha (sudoeste) e abre o painel pela porta da proximidade
+            if (w.JOGO.Hub.irPara) w.JOGO.Hub.irPara(-8.8 + 3.2, 26.4 - 1.5);
+            setTimeout(function () {
+              try { w.JOGO.Hub.aoAproximar({ id: 'loteria', tipo: 'loteria', nome: 'Barraquinha da Sorte' }); } catch (e5) {}
+              if (w.JOGO.Hub._cam) w.JOGO.Hub._cam({ dist: 12, tilt: 9, ang: 2.6 });
+              setTimeout(function () { window.__pronto = true; }, 1200);
+            }, 3500);
+            return;
+          }
+          setTimeout(aguarda, 400);
+        })();
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; window.__pronto = true; }
+  })();
+};
+</script>
+</body>
+</html>

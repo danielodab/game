@@ -1042,6 +1042,17 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(btn('Abrir a ficha da guilda', 'btn-primary btn-block', function () {
           openSheet('guilda');
         }));
+      } else if (lugar.tipo === 'loteria') {
+        // A BARRAQUINHA DA SORTE (03/09): a roleta dos selos mora aqui
+        painel.appendChild(el('h3', null, 'Barraquinha da Sorte'));
+        var sl = safe(function () { return P().roletaSaldo(); }, null);
+        painel.appendChild(el('p', 'hub-nota', sl
+          ? (sl.giros > 0 ? '<b>' + sl.total + '</b> selos no bolso — <b>' + sl.giros + '</b> giro(s) da sorte.'
+                          : '<b>' + sl.total + '</b> selos no bolso — faltam <b>' + sl.faltam + '</b> para um giro.')
+          : 'A roleta do Traje do Colecionador.'));
+        painel.appendChild(btn('Girar a sorte', 'btn-primary btn-block', function () {
+          openSheet('loteria');
+        }));
       } else if (lugar.tipo === 'forja') {
         // A BARRACA DO FERREIRO (30/08): a forja ganhou endereço na praça —
         // a bigorna continua no cais para quem prefere o atalho
@@ -2613,10 +2624,23 @@ var JOGO = (typeof window !== 'undefined')
    * ficha guarda) — mesmo contrato do saque do cofre. */
   var mercadoPreco = '';           // o preço digitado sobrevive ao redesenho
 
+  /* O MERCADINHO (03/09, pedido do dono): "pesquisa melhor por filtro; um
+   * local onde eu consiga ver o que eu anunciei de forma simplificada; uma
+   * parte para buscar itens de forma geral; taxa de 5% do valor da venda".
+   * Quatro abas — Comprar (busca + filtros de espaço, raridade, vendedor e
+   * ordem), Vender (o saco com a régua e a TAXA à vista antes de anunciar),
+   * Meus anúncios (só o seu, com o que recebe depois da taxa) e o
+   * Colecionador (selos e roleta). A taxa é a do módulo: 5%, mínimo 1. */
+  var mcAba = 'comprar';
+  var mcFiltro = { q: '', slot: 'todos', rar: 'todas', origem: 'todos', ordem: 'preco' };
+  function mcTaxa(preco) {
+    var Mc = JOGO.Mercado;
+    return Math.max(1, Math.ceil(preco * ((Mc && Mc.TAXA) || 0.05)));
+  }
   function sheetMercado() {
     sheetName = 'mercado';
     var body = sheetShell('Mercadinho do Acampamento',
-      'As ofertas do mercador trocam a cada dia; as suas ficam até vender. Venda paga 5% de taxa.');
+      'As ofertas do mercador trocam a cada dia; as suas ficam até vender. Toda venda paga 5% de taxa.');
     var Mc = JOGO.Mercado;
     if (!Mc) { body.appendChild(el('p', 'inv-dica', 'O mercado não carregou.')); return; }
 
@@ -2627,43 +2651,107 @@ var JOGO = (typeof window !== 'undefined')
       var mc = r[0], bolso = r[1];
       clear(caixa);
       if (!mc) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
+      var ofertas = mc.ofertas || [];
+      var minhas = ofertas.filter(function (of) { return of.vendedor === 'jogador'; });
+      var deOutros = ofertas.filter(function (of) { return of.vendedor !== 'jogador'; });
 
       var pBolso = el('p', 'mc-bolso', 'No bolso: <b>' + bolso + '</b> ' +
         (bolso === 1 ? 'vintém' : 'vinténs'));
       pBolso.insertBefore(art('vintemIcon', [18], 18, 'moeda-inline'), pBolso.firstChild);
       caixa.appendChild(pBolso);
 
-      // ---- o balcão: tudo à venda, as do jogador marcadas
-      caixa.appendChild(el('h3', 'bk-tit', 'À venda (' + mc.ofertas.length + ')'));
-      if (!mc.ofertas.length) caixa.appendChild(el('p', 'inv-dica', 'O balcão amanheceu vazio.'));
-      mc.ofertas.forEach(function (of) {
-        var it = (D().items || {})[of.itemId] || {};
-        var row = el('div', 'mc-linha' + (of.vendedor === 'jogador' ? ' is-minha' : ''));
+      // ---- as abas
+      var abas = el('div', 'mc-abas');
+      [['comprar', 'Comprar (' + deOutros.length + ')'], ['vender', 'Vender'],
+       ['meus', 'Meus anúncios (' + minhas.length + ')']].forEach(function (par) {
+        abas.appendChild(btn(par[1], 'btn-mini' + (mcAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
+          mcAba = par[0]; sheetMercado();
+        }));
+      });
+      caixa.appendChild(abas);
+
+      // ---- a barra de filtros (Comprar e Vender)
+      function chips(rotulo, chave, opcoes) {
+        var linha = el('div', 'mc-filtros');
+        linha.appendChild(el('span', 'mc-filtro-rot', rotulo));
+        opcoes.forEach(function (op) {
+          var b = btn(op[1], 'btn-mini mc-chip' + (mcFiltro[chave] === op[0] ? ' is-on' : ''), function () {
+            mcFiltro[chave] = op[0]; sheetMercado();
+          });
+          linha.appendChild(b);
+        });
+        return linha;
+      }
+      function barraFiltros(comOrigem) {
+        var busca = document.createElement('input');
+        busca.className = 'hub-input';
+        busca.placeholder = 'buscar por nome...';
+        busca.value = mcFiltro.q;
+        busca.addEventListener('input', function () { mcFiltro.q = busca.value; pinta(); });
+        caixa.appendChild(busca);
+        caixa.appendChild(chips('Espaço', 'slot', [['todos', 'Tudo'], ['punho', 'Punho'], ['passo', 'Passo'], ['casca', 'Casca'], ['lume', 'Lume']]));
+        caixa.appendChild(chips('Raridade', 'rar', [['todas', 'Todas'], ['comum', 'Comum'], ['raro', 'Raro'], ['epico', 'Épico'], ['lendario', 'Lendário']]));
+        if (comOrigem) {
+          caixa.appendChild(chips('Vendedor', 'origem', [['todos', 'Todos'], ['mercador', 'Mercador'], ['jogadores', 'Jogadores']]));
+          caixa.appendChild(chips('Ordem', 'ordem', [['preco', 'Preço ↑'], ['precoDesc', 'Preço ↓'], ['nome', 'Nome'], ['raridade', 'Raridade']]));
+        }
+      }
+      var ORDEM_RAR = { comum: 0, raro: 1, epico: 2, lendario: 3 };
+      function passaFiltro(itemId) {
+        var it = itemDef(itemId) || {};
+        var tq = (mcFiltro.q || '').toLowerCase();
+        if (tq && (it.name || itemId).toLowerCase().indexOf(tq) < 0) return false;
+        if (mcFiltro.slot !== 'todos' && slotOf(itemId) !== mcFiltro.slot) return false;
+        if (mcFiltro.rar !== 'todas' && (it.rarity || 'comum') !== mcFiltro.rar) return false;
+        return true;
+      }
+      function linhaItem(itemId, level, stars, sub) {
+        var it = itemDef(itemId) || {};
+        var row = el('div', 'mc-linha');
         var ic = el('span', 'mc-ic');
-        ic.appendChild(art('itemIcon', [of.itemId, 34], 34));
+        ic.appendChild(art('itemIcon', [itemId, 34], 34));
         row.appendChild(ic);
         var tx = el('div', 'ms-tx');
-        tx.appendChild(el('div', 'ms-nome', esc(it.name || of.itemId) +
-          (of.level ? ' +' + of.level : '') + (of.stars ? ' ★' + of.stars : '')));
-        tx.appendChild(el('div', 'ms-prog',
-          of.vendedor === 'jogador' ? 'sua oferta' : 'do mercador'));
+        tx.appendChild(el('div', 'ms-nome', esc(it.name || itemId) +
+          (level ? ' +' + level : '') + (stars ? ' ★' + stars : '')));
+        tx.appendChild(el('div', 'ms-prog', esc(SLOT_PT[slotOf(itemId)] || '') + ' · ' +
+          esc(RAR_PT[it.rarity] || it.rarity || '') + (sub ? ' · ' + sub : '')));
         row.appendChild(tx);
-        row.appendChild(el('span', 'mc-preco', of.preco + 'v'));
-        if (of.vendedor === 'jogador') {
-          row.appendChild(btn('Retirar', 'btn-mini', function () {
-            if (!safe(function () { return P().bagFree(1); }, true)) {
-              toast('O saco está cheio — não cabe mais nada.');
-              return;
-            }
-            Mc.retirar(of.id).then(function (res) {
-              if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
-              P().state.inventory.push(res.item);
-              safe(function () { P().save(); }, null);
-              toast('A peça voltou para o saco.', 'good');
-              sheetMercado();
-            });
-          }));
-        } else {
+        return row;
+      }
+      var listaEl = null;
+
+      function pinta() {
+        if (!listaEl) return;
+        clear(listaEl);
+        if (mcAba === 'comprar') pintaComprar();
+        else if (mcAba === 'vender') pintaVender();
+        else if (mcAba === 'meus') pintaMeus();
+      }
+
+      // ---- COMPRAR: o balcão dos outros, filtrado e ordenado
+      function pintaComprar() {
+        var lista = deOutros.filter(function (of) {
+          if (!passaFiltro(of.itemId)) return false;
+          if (mcFiltro.origem === 'mercador' && of.vendedor !== 'mercador') return false;
+          if (mcFiltro.origem === 'jogadores' && of.vendedor === 'mercador') return false;
+          return true;
+        });
+        lista.sort(function (a, b) {
+          var ia = itemDef(a.itemId) || {}, ib = itemDef(b.itemId) || {};
+          if (mcFiltro.ordem === 'precoDesc') return b.preco - a.preco;
+          if (mcFiltro.ordem === 'nome') return (ia.name || '').localeCompare(ib.name || '');
+          if (mcFiltro.ordem === 'raridade') return (ORDEM_RAR[ib.rarity] || 0) - (ORDEM_RAR[ia.rarity] || 0) || a.preco - b.preco;
+          return a.preco - b.preco;
+        });
+        listaEl.appendChild(el('p', 'mc-resumo', '<b>' + lista.length + '</b> à venda' +
+          (lista.length !== deOutros.length ? ' (de ' + deOutros.length + ')' : '') +
+          ' · ' + deOutros.filter(function (o) { return o.vendedor === 'mercador'; }).length + ' do mercador'));
+        if (!lista.length) listaEl.appendChild(el('p', 'inv-dica', 'Nada com esses filtros.'));
+        lista.forEach(function (of) {
+          var row = linhaItem(of.itemId, of.level, of.stars,
+            of.vendedor === 'mercador' ? 'do mercador' : 'de ' + esc(of.vendedorNome || 'jogador'));
+          row.appendChild(el('span', 'mc-preco', of.preco + 'v'));
           var bC = btn('Comprar', 'btn-mini btn-gold', function () {
             if (!safe(function () { return P().bagFree(1); }, true)) {
               toast('O saco está cheio — não cabe mais nada.');
@@ -2677,64 +2765,125 @@ var JOGO = (typeof window !== 'undefined')
               sheetMercado();
             });
           });
-          if (bolso < of.preco) bC.classList.add('is-off');
+          if (bolso < of.preco) { bC.classList.add('is-off'); bC.title = 'faltam ' + (of.preco - bolso) + ' vinténs'; }
           row.appendChild(bC);
-        }
-        caixa.appendChild(row);
-      });
+          listaEl.appendChild(row);
+        });
+      }
 
-      // ---- vender do saco: pilha + preço digitado com sugestão da régua
-      var pilhas = safe(function () { return P().invStacks(); }, [])
-        .filter(function (s2) { return !!itemDef(s2.itemId); });
-      caixa.appendChild(el('h3', 'bk-tit', 'Vender do saco (' + pilhas.length + ')'));
-      if (!pilhas.length) caixa.appendChild(el('p', 'inv-dica', 'O saco está vazio.'));
-      pilhas.forEach(function (pi) {
-        var it = itemDef(pi.itemId) || {};
-        var row = el('div', 'mc-linha');
-        var ic = el('span', 'mc-ic');
-        ic.appendChild(art('itemIcon', [pi.itemId, 34], 34));
-        row.appendChild(ic);
-        var tx = el('div', 'ms-tx');
-        tx.appendChild(el('div', 'ms-nome', esc(it.name || pi.itemId) +
-          (pi.level ? ' +' + pi.level : '') + (pi.stars ? ' ★' + pi.stars : '') +
-          (pi.count > 1 ? ' ×' + pi.count : '')));
-        var sugerido = Mc.precoSugerido(pi.itemId, pi.level, pi.stars);
-        tx.appendChild(el('div', 'ms-prog', 'a régua sugere ' + sugerido + 'v'));
-        row.appendChild(tx);
-        var campo = document.createElement('input');
-        campo.type = 'number'; campo.min = '1'; campo.step = '1';
-        campo.className = 'bk2-qtd mc-qtd';
-        campo.placeholder = String(sugerido);
-        row.appendChild(campo);
-        row.appendChild(btn('Anunciar', 'btn-mini', function () {
-          var preco = Math.floor(Number(campo.value || sugerido));
-          var st2 = P().state;
-          var entrada = st2.inventory[pi.indices[0]];
-          if (!entrada) { toast('essa peça já saiu'); sheetMercado(); return; }
-          Mc.anunciar(entrada, preco).then(function (res) {
-            if (!res.ok) { toast(res.erro || 'não deu'); return; }
-            st2.inventory.splice(pi.indices[0], 1);
-            safe(function () { P().save(); }, null);
-            toast('No balcão por ' + preco + 'v.', 'good');
-            sheetMercado();
-          });
-        }));
-        caixa.appendChild(row);
-      });
+      // ---- VENDER: o saco com a régua e a taxa antes de anunciar
+      function pintaVender() {
+        var pilhas = safe(function () { return P().invStacks(); }, [])
+          .filter(function (s2) { return !!itemDef(s2.itemId) && passaFiltro(s2.itemId); });
+        listaEl.appendChild(el('p', 'mc-resumo', '<b>' + pilhas.length + '</b> no saco · a taxa de 5% sai do preço na hora da venda'));
+        if (!pilhas.length) listaEl.appendChild(el('p', 'inv-dica', 'Nada no saco com esses filtros.'));
+        pilhas.forEach(function (pi) {
+          var sugerido = Mc.precoSugerido(pi.itemId, pi.level, pi.stars);
+          var row = linhaItem(pi.itemId, pi.level, pi.stars,
+            (pi.count > 1 ? '×' + pi.count + ' · ' : '') + 'a régua sugere ' + sugerido + 'v');
+          var campo = document.createElement('input');
+          campo.type = 'number'; campo.min = '1'; campo.step = '1';
+          campo.className = 'bk2-qtd mc-qtd';
+          campo.placeholder = String(sugerido);
+          var taxaEl = el('span', 'mc-taxa', '');
+          function mostraTaxa() {
+            var preco = Math.floor(Number(campo.value || sugerido)) || 0;
+            if (preco <= 0) { taxaEl.textContent = ''; return; }
+            var tx = mcTaxa(preco);
+            taxaEl.innerHTML = 'recebe <b>' + (preco - tx) + 'v</b><small>taxa ' + tx + 'v</small>';
+          }
+          campo.addEventListener('input', mostraTaxa);
+          mostraTaxa();
+          row.appendChild(campo);
+          row.appendChild(taxaEl);
+          row.appendChild(btn('Anunciar', 'btn-mini btn-gold', function () {
+            var preco = Math.floor(Number(campo.value || sugerido));
+            var st2 = P().state;
+            var entrada = st2.inventory[pi.indices[0]];
+            if (!entrada) { toast('essa peça já saiu'); sheetMercado(); return; }
+            Mc.anunciar(entrada, preco).then(function (res) {
+              if (!res.ok) { toast(res.erro || 'não deu'); return; }
+              st2.inventory.splice(pi.indices[0], 1);
+              safe(function () { P().save(); }, null);
+              toast('No balcão por ' + preco + 'v — você recebe ' + (preco - mcTaxa(preco)) + 'v na venda.', 'good');
+              sheetMercado();
+            });
+          }));
+          listaEl.appendChild(row);
+        });
+      }
 
-      /* O COLECIONADOR DE SELOS (25/08): o NPC que não regateia. Só chefes
-       * derrubam selos; 10 de cada elemento compram UM giro na roleta — uma
-       * peça do Traje do Colecionador. A animação NÃO decide nada: o giro
-       * (Progress.giraRoleta) resolve primeiro, a roleta só conta a história
-       * parando na casa certa. */
-      var cfgSel = D().selos;
-      if (cfgSel && P().selosVer) {
+      // ---- MEUS ANÚNCIOS: só o seu, enxuto, com o que recebe
+      function pintaMeus() {
+        var totalPreco = 0, totalTaxa = 0;
+        minhas.forEach(function (of) { totalPreco += of.preco; totalTaxa += mcTaxa(of.preco); });
+        listaEl.appendChild(el('p', 'mc-resumo', minhas.length
+          ? '<b>' + minhas.length + '</b> anúncio(s) · ' + totalPreco + 'v anunciados · recebe <b>' +
+            (totalPreco - totalTaxa) + 'v</b> depois da taxa (' + totalTaxa + 'v)'
+          : 'Você não tem nada anunciado. Vá em <b>Vender</b> para pôr uma peça no balcão.'));
+        minhas.forEach(function (of) {
+          var row = linhaItem(of.itemId, of.level, of.stars, 'sua oferta');
+          row.classList.add('is-minha');
+          var pr = el('span', 'mc-preco', of.preco + 'v');
+          row.appendChild(pr);
+          row.appendChild(el('span', 'mc-taxa', 'recebe <b>' + (of.preco - mcTaxa(of.preco)) + 'v</b><small>taxa ' + mcTaxa(of.preco) + 'v</small>'));
+          row.appendChild(btn('Retirar', 'btn-mini', function () {
+            if (!safe(function () { return P().bagFree(1); }, true)) {
+              toast('O saco está cheio — não cabe mais nada.');
+              return;
+            }
+            Mc.retirar(of.id).then(function (res) {
+              if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
+              P().state.inventory.push(res.item);
+              safe(function () { P().save(); }, null);
+              toast('A peça voltou para o saco.', 'good');
+              sheetMercado();
+            });
+          }));
+          listaEl.appendChild(row);
+        });
+      }
+
+      if (mcAba === 'comprar' || mcAba === 'vender') {
+        barraFiltros(mcAba === 'comprar');
+        listaEl = el('div', 'mc-lista');
+        caixa.appendChild(listaEl);
+        pinta();
+      } else {
+        if (mcAba !== 'meus') mcAba = 'meus';
+        listaEl = el('div', 'mc-lista');
+        caixa.appendChild(listaEl);
+        pinta();
+      }
+      caixa.appendChild(el('p', 'inv-dica', 'A roleta dos selos mudou de endereço: fica na <b>Barraquinha da Sorte</b>, na praça.'));
+    });
+  }
+
+  /* A BARRAQUINHA DA SORTE (03/09): a roleta do Traje do Colecionador saiu
+   * do Mercadinho e ganhou tenda própria na praça. A regra nova (aprovada
+   * pelo dono depois da medição): 10 selos DE QUALQUER ELEMENTO compram um
+   * giro, e a roleta NÃO repete peça até fechar as 4. A animação NÃO decide
+   * nada: o giro (Progress.giraRoleta) resolve primeiro, a roleta só conta a
+   * história parando na casa certa. */
+  function sheetLoteria() {
+    sheetName = 'loteria';
+    var body = sheetShell('Barraquinha da Sorte',
+      'Só chefes derrubam selos. Dez selos, de qualquer elemento, compram um giro — e a roleta não repete peça até fechar o traje.');
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+    (function pintaColecionador() {
+        var cfgSel = D().selos;
+        if (!cfgSel || !P().selosVer) { caixa.appendChild(el('p', 'inv-dica', 'A barraquinha não abriu.')); return; }
         var colec = el('div', 'colec-caixa');
-        colec.appendChild(el('h3', 'bk-tit', 'O Colecionador de Selos'));
+        colec.appendChild(el('h3', 'bk-tit', 'A roleta do Traje do Colecionador'));
+        var sl = safe(function () { return P().roletaSaldo(); }, { total: 0, precisa: cfgSel.porGiro, faltam: cfgSel.porGiro, giros: 0 });
+        var faltamP = safe(function () { return P().roletaFaltamPecas(); }, []);
         colec.appendChild(el('p', 'inv-dica',
-          'Só chefes derrubam selos — um por elemento. <b>' + cfgSel.porGiro +
-          ' de cada</b> compram um giro na roleta: uma peça do <b>Traje do Colecionador</b>. ' +
-          'Peça repetida vira matéria de estrela.'));
+          '<b>' + sl.total + '</b> selos no bolso · <b>' + cfgSel.porGiro + '</b> por giro · ' +
+          (sl.giros > 0 ? '<b>' + sl.giros + '</b> giro(s) prontos' : 'faltam <b>' + sl.faltam + '</b> para o próximo') +
+          (faltamP.length ? ' · ainda faltam <b>' + faltamP.length + '</b> peça(s): ' +
+            esc(faltamP.map(function (pid) { return (itemDef(pid) || {}).name || pid; }).join(', '))
+          : ' · <b>traje fechado</b> — a repetida vira matéria de estrela')));
         var saldo = safe(function () { return P().selosVer(); }, {});
         var fila = el('div', 'colec-selos');
         ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e3) {
@@ -2757,7 +2906,7 @@ var JOGO = (typeof window !== 'undefined')
             'btn-tab bt-elem' + (elAtual === e4 ? ' is-on' : ''), function () {
               safe(function () { return P().escolheSeloElemento(e4); }, false);
               toast('O Traje do Colecionador agora responde por ' + (ELEM_PT[e4] || e4) + '.', 'good');
-              sheetMercado();
+              sheetLoteria();
             });
           b4.style.setProperty('--ec', elemColor(e4));
           filaEl.appendChild(b4);
@@ -2792,8 +2941,8 @@ var JOGO = (typeof window !== 'undefined')
               });
               if (passo >= ultimo) {
                 toast('A roleta parou: ' + esc((itemDef(r2.itemId) || {}).name) +
-                      '! Já está no saco.', 'good');
-                setTimeout(function () { sheetMercado(); }, 900);
+                      (r2.repetida ? ' — repetida, matéria de estrela.' : '! Já está no saco.'), 'good');
+                setTimeout(function () { sheetLoteria(); }, 900);
                 return;
               }
               passo++;
@@ -2801,8 +2950,7 @@ var JOGO = (typeof window !== 'undefined')
             })();
           }));
         caixa.appendChild(colec);
-      }
-    });
+    })();
   }
 
   /* A MESA DE TROCA — duas colunas à la Dofus: a minha oferta (editável) e
@@ -3160,6 +3308,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'banco') sheetBanco();
     else if (name === 'missoes') sheetMissoes();
     else if (name === 'mercado') sheetMercado();
+    else if (name === 'loteria') sheetLoteria();
     else if (name === 'placar') sheetPlacar();
     else if (name === 'troca') sheetTroca();
     else if (name === 'duelo') sheetDuelo();

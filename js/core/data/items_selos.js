@@ -48,7 +48,7 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------- a calibragem
   DATA.selos = {
     chance: 0.5,                    // por chefe morto — "nem fácil nem impossível"
-    porGiro: 10,                    // 10 de CADA elemento por giro
+    porGiro: 10,                    // 10 selos SOMADOS, de qualquer elemento, por giro (03/09)
     setId: 'sl-set-colecionador'
   };
 

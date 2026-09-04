@@ -1641,12 +1641,37 @@ var JOGO = (typeof window !== 'undefined')
     }
     return fora;
   };
-  Progress.roletaPronta = function () {
+  /* A REGRA DO GIRO (03/09, aprovada pelo dono depois da medição: "pode
+   * manter esses 10 giros"): o giro custa `porGiro` selos DE QUALQUER
+   * ELEMENTO (somados), pagos das pilhas maiores primeiro — e a roleta NUNCA
+   * repete uma peça que você já tem (no saco ou vestida) até fechar as 4;
+   * com as 4 fechadas, a repetida vira matéria de estrela. Antes eram 10 de
+   * CADA elemento e sorteio cego: ~800 descidas para fechar o traje. */
+  Progress.roletaSaldo = function () {
     var cfg = D().selos || {};
     var precisa = Math.max(1, Math.floor(num(cfg.porGiro, 10)));
-    var tem = Progress.selosVer(), els = elements();
-    for (var i = 0; i < els.length; i++) if (tem[els[i]] < precisa) return false;
-    return true;
+    var tem = Progress.selosVer(), els = elements(), total = 0;
+    for (var i = 0; i < els.length; i++) total += tem[els[i]];
+    return { total: total, precisa: precisa, faltam: Math.max(0, precisa - total),
+             giros: Math.floor(total / precisa) };
+  };
+  Progress.roletaPronta = function () {
+    return Progress.roletaSaldo().faltam === 0;
+  };
+  /* as peças do traje que você AINDA NÃO tem — a roleta sorteia entre elas */
+  Progress.roletaFaltamPecas = function () {
+    var st = Progress.state;
+    var cfg = D().selos || {};
+    var sd = (D().sets || {})[cfg.setId];
+    if (!st || !sd || !isArray(sd.pieces)) return [];
+    var tem = {};
+    for (var i = 0; i < st.inventory.length; i++) tem[st.inventory[i].itemId] = true;
+    for (var hid in st.heroes) {
+      if (!st.heroes.hasOwnProperty(hid)) continue;
+      var h = st.heroes[hid];
+      for (var s = 0; s < SLOTS.length; s++) if (h.items && h.items[SLOTS[s]]) tem[h.items[SLOTS[s]]] = true;
+    }
+    return sd.pieces.filter(function (pid) { return !tem[pid]; });
   };
   /* seam de teste, como o da forja: injete para tirar o acaso da roleta */
   Progress._roletaRng = null;
@@ -1657,17 +1682,25 @@ var JOGO = (typeof window !== 'undefined')
     if (!st || !sd || !isArray(sd.pieces) || !sd.pieces.length) return null;
     if (!Progress.roletaPronta()) return null;
     if (!Progress.bagFree(1)) return null;              // o prêmio precisa caber
-    var precisa = Math.max(1, Math.floor(num(cfg.porGiro, 10)));
-    var els = elements();
-    for (var i = 0; i < els.length; i++) {
-      st.selos[els[i]] -= precisa;                       // paga ANTES de girar
+    var precisa = Progress.roletaSaldo().precisa;
+    // paga ANTES de girar: das pilhas maiores primeiro, de qualquer elemento
+    var els = elements().slice().sort(function (a, b) {
+      return num(st.selos[b], 0) - num(st.selos[a], 0);
+    });
+    var resta = precisa;
+    for (var i = 0; i < els.length && resta > 0; i++) {
+      var tira = Math.min(resta, Math.max(0, Math.floor(num(st.selos[els[i]], 0))));
+      st.selos[els[i]] = Math.max(0, Math.floor(num(st.selos[els[i]], 0))) - tira;
+      resta -= tira;
     }
+    var candidatas = Progress.roletaFaltamPecas();
+    var fechou = candidatas.length === 0;
+    if (fechou) candidatas = sd.pieces.slice();          // as 4 fechadas: repetida vira estrela
     var rnd = (typeof Progress._roletaRng === 'function') ? Progress._roletaRng() : Math.random();
-    var itemId = sd.pieces[Math.min(sd.pieces.length - 1,
-                                    Math.floor(rnd * sd.pieces.length))];
+    var itemId = candidatas[Math.min(candidatas.length - 1, Math.floor(rnd * candidatas.length))];
     st.inventory.push({ itemId: itemId, level: 0, stars: 0 });
     Progress.save();
-    return { itemId: itemId };
+    return { itemId: itemId, repetida: fechou };
   };
 
   // ==================================== a INSÍGNIA DE FUNDAÇÃO (30/08)

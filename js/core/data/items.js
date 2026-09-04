@@ -584,7 +584,11 @@ JOGO.DATA = JOGO.DATA || {};
     legendRatio: 0.022,     // peso total dos lendários=  2,20% do peso total dos comuns
                             // (4 peças dividindo essa fatia ⇒ cada uma é mais
                             //  rara que o épico, e fechar as 4 leva ~60 descidas)
-    emptyRatio: 1.4706,     // peso do "nada"          = 147% do peso total dos comuns
+    // 03/09, pedido do dono: "o drop de itens geral deve ficar mais difícil,
+    // não deve ser tão fácil". O "nada" dobrou: de 147% para 300% do peso das
+    // comuns — medido em tests/prob_saque.html: sala comum 40% → 25% de sair
+    // peça, chefe (por sorteio, sozinho) 50% → 33%, dupla 47% → 30%.
+    emptyRatio: 3.0,        // peso do "nada"          = 300% do peso total dos comuns
     keyFactor: 0.5,
     luck: { solo: 2.4, dupla: 1.6 },
     // expoente da Sorte de Saque por raridade. O lendário divide o expoente do

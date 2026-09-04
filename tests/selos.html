@@ -15,7 +15,7 @@
 </head>
 <body>
 <h1>Os Selos — a moeda dos chefes, a roleta, o elemento escolhido e o pet</h1>
-<div class="sub">addSelo/selosVer/roletaPronta/giraRoleta (com o seam de RNG); 10 de cada pagam UMA
+<div class="sub">addSelo/selosVer/roletaPronta/giraRoleta (com o seam de RNG); 10 selos de qualquer elemento pagam UMA
 peça do Traje do Colecionador; o elemento do traje é escolha da conta (reescreve set e peças,
 re-chaveia resists e SOBREVIVE ao load); fechar as 4 vestidas concede o pet UMA vez.</div>
 <div id="summary">rodando…</div>
@@ -69,8 +69,12 @@ re-chaveia resists e SOBREVIVE ao load); fechar as 4 vestidas concede o pet UMA 
   // 2. a moeda
   check('addSelo soma por elemento', P.addSelo('fogo', 3) && P.selosVer().fogo === 3);
   check('elemento inventado é recusado', P.addSelo('sombra', 1) === false);
-  check('sem 10 de cada, a roleta não gira',
-        P.roletaPronta() === false && P.giraRoleta() === null);
+  check('sem 10 selos somados, a roleta não gira',
+        P.roletaPronta() === false && P.giraRoleta() === null && P.roletaSaldo().faltam === 7);
+  // 03/09: 10 selos DE QUALQUER ELEMENTO bastam — 7 de fogo mais 3 de água
+  P.addSelo('fogo', 4); P.addSelo('agua', 3);
+  check('10 selos somados (7 fogo + 3 água) bastam para um giro',
+        P.roletaPronta() === true && P.roletaSaldo().giros === 1);
 
   // 3. o giro (com o seam de RNG apontando para a 3ª peça)
   ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e2) {
@@ -82,8 +86,9 @@ re-chaveia resists e SOBREVIVE ao load); fechar as 4 vestidas concede o pet UMA 
   check('o giro entrega a peça que o RNG mandou',
         !!giro && giro.itemId === alvoEsperado, giro && giro.itemId);
   var depois = P.selosVer();
-  check('o giro cobra 10 de CADA elemento',
-        depois.fogo === 13 && depois.agua === 10 && depois.neutro === 10,
+  // fogo tinha 27 (a maior pilha) e água 23: os 10 saem só da maior
+  check('o giro cobra 10 no total, das pilhas maiores primeiro',
+        depois.fogo === 17 && depois.agua === 23 && depois.neutro === 20,
         JSON.stringify(depois));
   check('a peça caiu no saco',
         P.invStacks().some(function (s) { return s.itemId === alvoEsperado; }));
@@ -105,11 +110,21 @@ re-chaveia resists e SOBREVIVE ao load); fechar as 4 vestidas concede o pet UMA 
   var hid = P.heroIds()[0];
   P._roletaRng = function () { return 0; };
   ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e3) { P.addSelo(e3, 40); });
-  // gira até ter as 4 peças distintas (RNG dirigido: 0, 0.3, 0.6, 0.9)
-  [0.05, 0.3, 0.6, 0.9].forEach(function (r2) {
-    P._roletaRng = function () { return r2; };
-    P.giraRoleta();
-  });
+  // 03/09: a roleta NÃO repete peça até fechar as 4 — três giros com o RNG
+  // sempre em 0 (a primeira candidata) fecham as três que faltam
+  var faltavam = P.roletaFaltamPecas().length;
+  var giros = [];
+  for (var gi = 0; gi < 3; gi++) {
+    P._roletaRng = function () { return 0; };
+    giros.push(P.giraRoleta());
+  }
+  check('faltavam 3 peças e três giros (RNG sempre 0) fecharam as quatro, sem repetir',
+        faltavam === 3 && giros.every(function (g) { return g && g.repetida === false; }) &&
+        P.roletaFaltamPecas().length === 0 &&
+        new Set(giros.map(function (g) { return g.itemId; })).size === 3);
+  var extra = P.giraRoleta();
+  check('com as 4 fechadas, o giro seguinte é repetida (matéria de estrela)',
+        !!extra && extra.repetida === true && sd.pieces.indexOf(extra.itemId) >= 0);
   sd.pieces.forEach(function (pid) { P.equip(hid, pid); });
   check('as 4 vestidas concedem o pet exclusivo',
         P.state.pets.indexOf('pet-colecionador') >= 0 && P.state.petSelosDado === true);
