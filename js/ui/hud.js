@@ -3329,7 +3329,7 @@ var JOGO = (typeof window !== 'undefined')
     { id: 'inventario', nome: 'Inventário',
       sub: 'Um saco só para o grupo. Toque numa peça para vestir no herói ao lado.' },
     { id: 'forja', nome: 'Forja',
-      sub: 'Escolha a peça em cima; embaixo, cada caminho no seu cartão — a Pedra sobe o nível, a Estrela funde 3 cópias.' },
+      sub: 'Arraste a peça para a bancada, escolha a pedra na prateleira e bata o martelo. Embaixo, a Estrela funde 3 cópias.' },
     { id: 'feiticos', nome: 'Feitiços',
       sub: 'A árvore inteira da classe: o tronco que todos têm e os quatro galhos elementais.' },
     { id: 'colecao', nome: 'Coleção',
@@ -4638,39 +4638,227 @@ var JOGO = (typeof window !== 'undefined')
     return safe(function () { return P().upgradeItem(alvo.index, usarGuarda); }, false);
   }
 
+  /* A BANCADA DE ARRASTAR (03/09, pedido do dono: "o usuário arrasta seu
+   * item para um local e seleciona a pedra que deseja fazer o craft"). Três
+   * encaixes — a PEÇA, a PEDRA e o RESULTADO — no alto da Forja; a peça vem
+   * arrastada da grade (ou tocada, no celular), a pedra vem arrastada ou
+   * tocada na prateleira. A bancada diz o que falta em cada passo: sem peça,
+   * sem pedra, pedra errada, pedras a menos, risco — e só então o martelo.
+   * A Âncora de Forja não entra no encaixe: tocá-la na prateleira liga/desliga
+   * "vai junto" (ela segura o nível numa batida arriscada). */
+  var forjaPedra = null;           // a pedra escolhida na bancada (id da pedra)
   function forgeBody(body, preselect) {
-    // estoque de pedras
-    var stock = el('div', 'forge-stock');
     var defs = stoneDefs(), k;
+    var up = upgradeCfg();
+    var maxLv = up.maxLevel || 10;
+    var anchorId = up.guardStone || 'stone-anchor';
+    var alvos = forgeAlvos();
+    if (preselect && typeof preselect === 'object') forgeTarget = preselect;
+    var atual = null, i;
+    for (i = 0; i < alvos.length; i++) if (mesmoAlvo(alvos[i], forgeTarget)) { atual = alvos[i]; break; }
+    forgeTarget = atual;                       // pode ser null: bancada vazia
+    var it2 = atual ? itemDef(atual.itemId) : null;
+    var lv2 = atual ? atual.level : 0;
+    var info = atual ? forgeInfoDe(atual) : null;
+    var pedraCerta = (info && !info.maxed) ? info.stoneId : null;
+    var sdCerta = pedraCerta ? defs[pedraCerta] : null;
+    if (forjaPedra && !defs[forjaPedra]) forjaPedra = null;
+
+    function dados(e) {
+      try { return JSON.parse(e.dataTransfer.getData('text/plain') || 'null'); } catch (err) { return null; }
+    }
+    function aceitaDrop(slot, tipoEsperado, aoCair) {
+      slot.addEventListener('dragover', function (e) { e.preventDefault(); slot.classList.add('is-over'); });
+      slot.addEventListener('dragleave', function () { slot.classList.remove('is-over'); });
+      slot.addEventListener('drop', function (e) {
+        e.preventDefault(); slot.classList.remove('is-over');
+        var d = dados(e);
+        if (!d || d.tipo !== tipoEsperado) return;
+        aoCair(d);
+      });
+    }
+    function arrastavel(node, carga) {
+      node.setAttribute('draggable', 'true');
+      node.addEventListener('dragstart', function (e) {
+        try { e.dataTransfer.setData('text/plain', JSON.stringify(carga)); e.dataTransfer.effectAllowed = 'move'; } catch (err) {}
+        node.classList.add('is-dragging');
+      });
+      node.addEventListener('dragend', function () { node.classList.remove('is-dragging'); });
+    }
+    function escolhePedra(id) {
+      if (id === anchorId) {
+        // a Âncora não é a pedra da batida: ela VAI JUNTO
+        forjaComGuarda = !forjaComGuarda;
+        toast(forjaComGuarda ? 'A Âncora de Forja vai junto na próxima batida.' : 'A Âncora fica na prateleira.');
+      } else {
+        forjaPedra = (forjaPedra === id) ? null : id;
+      }
+      sheetParty('forja');
+    }
+
+    // ===== A BANCADA
+    var banca = el('div', 'forge-banca2' + (atual ? ' ' + tierClass(lv2) : ''));
+
+    var sPeca = el('div', 'fg-slot fg-slot-peca' + (atual ? ' has' : ''));
+    if (atual) {
+      sPeca.appendChild(art('itemIcon', [atual.itemId, 56], 56));
+      sPeca.appendChild(el('b', null, esc((it2 && it2.name) || atual.itemId) + (lv2 ? ' +' + lv2 : '')));
+      sPeca.appendChild(el('span', null, (atual.stars ? '★' + atual.stars + ' · ' : '') +
+        esc(tierOf(lv2)) + (atual.kind === 'worn'
+          ? ' · vestida por ' + esc(className((hero(atual.heroId) || {}).classId || atual.heroId))
+          : ' · no saco' + (atual.count > 1 ? ' ×' + atual.count : ''))));
+      tap(sPeca, function () { forgeTarget = null; sheetParty('forja'); });
+      tipOn(sPeca, 'A peça na bancada', 'Toque para tirar da bancada. Arraste outra da grade para trocar.', '#e8c25a');
+    } else {
+      sPeca.appendChild(el('span', 'fg-slot-ic', '⤓'));
+      sPeca.appendChild(el('b', null, 'A peça'));
+      sPeca.appendChild(el('span', null, 'arraste da grade — ou toque numa'));
+    }
+    aceitaDrop(sPeca, 'peca', function (d) {
+      var alvo = alvos[d.idx];
+      if (!alvo) return;
+      forgeTarget = alvo; sheetParty('forja');
+    });
+    banca.appendChild(sPeca);
+
+    var mais = el('span', 'fg-op', '+');
+    banca.appendChild(mais);
+
+    var errada = !!(forjaPedra && pedraCerta && forjaPedra !== pedraCerta);
+    var sPedra = el('div', 'fg-slot fg-slot-pedra' + (forjaPedra ? ' has' : '') + (errada ? ' is-errada' : ''));
+    if (forjaPedra) {
+      var sdE = defs[forjaPedra] || {};
+      var temN = stoneCount(forjaPedra);
+      sPedra.appendChild(art('stoneIcon', [forjaPedra, 56], 56));
+      sPedra.appendChild(el('b', null, esc(sdE.name || forjaPedra)));
+      sPedra.appendChild(el('span', null, (info && !info.maxed && !errada)
+        ? '<b>' + temN + ' / ' + info.custo + '</b> para esta batida'
+        : temN + ' na prateleira'));
+      tap(sPedra, function () { forjaPedra = null; sheetParty('forja'); });
+      tipOn(sPedra, 'A pedra na bancada', 'Toque para devolver à prateleira.', '#e8c25a');
+    } else {
+      sPedra.appendChild(el('span', 'fg-slot-ic', '◈'));
+      sPedra.appendChild(el('b', null, 'A pedra'));
+      sPedra.appendChild(el('span', null, sdCerta
+        ? 'esta peça pede <b>' + esc(sdCerta.name) + '</b>'
+        : 'toque ou arraste da prateleira'));
+    }
+    aceitaDrop(sPedra, 'pedra', function (d) { escolhePedra(d.id); });
+    banca.appendChild(sPedra);
+
+    var seta = el('span', 'fg-op fg-seta', '→');
+    banca.appendChild(seta);
+
+    var sRes = el('div', 'fg-slot fg-slot-res' + (atual && info && !info.maxed ? ' has' : ''));
+    if (atual && info && !info.maxed) {
+      sRes.appendChild(art('itemIcon', [atual.itemId, 56], 56));
+      sRes.appendChild(el('b', null, '+' + (lv2 + 1) + ' ' + esc(tierOf(lv2 + 1))));
+      sRes.appendChild(el('span', null, bonusPreview(it2, lv2 + 1, atual.stars)));
+    } else if (atual && info && info.maxed) {
+      sRes.appendChild(el('span', 'fg-slot-ic', '✦'));
+      sRes.appendChild(el('b', null, 'No máximo'));
+      sRes.appendChild(el('span', null, 'Magnífico +' + maxLv));
+    } else {
+      sRes.appendChild(el('span', 'fg-slot-ic', '?'));
+      sRes.appendChild(el('b', null, 'O resultado'));
+      sRes.appendChild(el('span', null, 'aparece aqui'));
+    }
+    banca.appendChild(sRes);
+    body.appendChild(banca);
+
+    // a trilha de níveis e o estado da bancada
+    if (atual) {
+      var track = el('div', 'forge-track');
+      for (var i3 = 0; i3 <= maxLv; i3++) {
+        track.appendChild(el('i', 'fg-step ' + tierClass(i3) + (i3 <= lv2 ? ' is-on' : '') + (i3 === lv2 + 1 ? ' is-next' : '')));
+      }
+      body.appendChild(track);
+    }
+    var estado = el('div', 'fg-estado');
+    var pronto = false, usarG = false;
+    if (!atual) {
+      estado.appendChild(el('p', 'inv-dica', 'Ponha uma peça na bancada: arraste da grade abaixo ou toque nela.'));
+    } else if (!info) {
+      estado.appendChild(el('p', 'empty', 'A forja ainda não está disponível.'));
+    } else if (info.maxed) {
+      estado.appendChild(el('p', 'forge-max', 'No máximo: <b>Magnífico +' + maxLv + '</b>. Esta peça não sobe mais.'));
+    } else if (!forjaPedra) {
+      estado.appendChild(el('p', 'inv-dica', 'Agora a pedra: esta peça pede <b>' + esc((sdCerta || {}).name || pedraCerta) +
+        '</b>' + (sdCerta ? ' (' + esc(ELEM_PT[sdCerta.element] || sdCerta.element) + ')' : '') +
+        ' — está acesa na prateleira. Você tem <b>' + stoneCount(pedraCerta) + '</b>, a batida leva <b>' + info.custo + '</b>.'));
+    } else if (errada) {
+      var sdX = defs[forjaPedra] || {};
+      estado.appendChild(el('p', 'forge-short', 'Pedra errada: <b>' + esc(sdX.name || forjaPedra) + '</b> é de ' +
+        esc(ELEM_PT[sdX.element] || sdX.element || '?') + '; esta peça pede <b>' + esc((sdCerta || {}).name || pedraCerta) + '</b>.'));
+    } else if (!info.temPedras) {
+      estado.appendChild(el('p', 'forge-short', 'Faltam <b>' + (info.custo - stoneCount(pedraCerta)) + '</b> de <b>' +
+        esc((sdCerta || {}).name || pedraCerta) + '</b>. Monstros de ' +
+        esc(ELEM_PT[(sdCerta || {}).element] || '') + ' derrubam.'));
+    } else {
+      pronto = true;
+      usarG = !!(info.arriscado && forjaComGuarda && info.guardas > 0);
+      if (info.arriscado) {
+        var pct = Math.round(info.chance * 100);
+        estado.appendChild(el('p', 'forge-risco', 'Batida arriscada: <b>' + pct + '%</b> de subir — falhou, ' +
+          (usarG ? 'a <b>Âncora segura</b> em +' + lv2 + '.' : 'a peça <b>volta para +' + Math.max(0, lv2 - 1) + '</b>.') +
+          (info.guardas > 0 ? (usarG ? ' <i>(Âncora junto — toque nela para tirar)</i>' : ' <i>Toque na Âncora da prateleira para levá-la junto (' + info.guardas + ' no saco).</i>')
+                            : ' <i>Sem Âncora no saco — só os chefes mais fundos derrubam.</i>')));
+      } else {
+        estado.appendChild(el('p', 'inv-dica', 'Batida segura: <b>' + stoneCount(pedraCerta) + '</b> ' +
+          esc((sdCerta || {}).name || pedraCerta) + ' na prateleira, a batida leva <b>' + info.custo + '</b>.'));
+      }
+    }
+    body.appendChild(estado);
+    if (atual && info && !info.maxed) {
+      var go = btn('🔨 Bater o martelo — vira +' + (lv2 + 1), 'btn-primary btn-block' + (pronto ? '' : ' is-off'), function () {
+        if (!pronto) { toast(!forjaPedra ? 'Escolha a pedra primeiro.' : (errada ? 'Essa não é a pedra desta peça.' : 'Pedras insuficientes.')); return; }
+        var fim = forjar(atual, usarG);
+        if (fim) {
+          var nivelNovo = (typeof fim === 'object') ? fim.nivel : lv2 + 1;
+          var como = (typeof fim === 'object') ? fim.resultado : 'subiu';
+          if (como === 'subiu') toast('Forjado: +' + nivelNovo + ' ' + tierOf(nivelNovo) + '!', 'good');
+          else if (como === 'segurou') toast('A batida falhou — a Âncora segurou em +' + nivelNovo + '.', 'good');
+          else toast('A batida falhou: a peça voltou para +' + nivelNovo + '.');
+          forgeTarget = { kind: atual.kind, itemId: atual.itemId, level: nivelNovo, stars: atual.stars,
+                          heroId: atual.heroId, slot: atual.slot };
+          if (invSel && invSel.itemId === atual.itemId && invSel.level === lv2 &&
+              invSel.stars === atual.stars && atual.kind === 'bag') {
+            invSel = { itemId: atual.itemId, level: nivelNovo, stars: atual.stars };
+          }
+          sheetParty('forja');
+        } else toast('Pedras insuficientes.');
+      });
+      body.appendChild(go);
+    }
+
+    // ===== A PRATELEIRA: as pedras, arrastáveis; a certa acesa; a Âncora liga/desliga
+    body.appendChild(el('h4', 'fg-grupo', 'A prateleira de pedras'));
+    var stock = el('div', 'forge-stock');
     for (k in defs) {
       if (!defs.hasOwnProperty(k)) continue;
       var n = stoneCount(k);
-      var chip = el('div', 'stone-chip' + (n ? '' : ' is-empty'));
+      var chip = el('div', 'stone-chip' + (n ? '' : ' is-empty') +
+        (k === pedraCerta ? ' is-certa' : '') + (k === forjaPedra ? ' is-sel' : '') +
+        (k === anchorId && forjaComGuarda ? ' is-sel' : ''));
       chip.appendChild(art('stoneIcon', [k, 40], 40));
       chip.appendChild(el('span', 'stone-n', String(n)));
-      chip.appendChild(el('span', 'stone-nm', esc(defs[k].name)));
-      tipOn(chip, defs[k].name, esc(defs[k].description || ''), elemColor(defs[k].element));
+      chip.appendChild(el('span', 'stone-nm', esc(defs[k].name) + (k === anchorId ? (forjaComGuarda ? ' · vai junto' : ' · opcional') : '')));
+      tipOn(chip, defs[k].name, esc(defs[k].description || '') +
+        (k === anchorId ? '<br><i>Toque para levar junto na batida arriscada.</i>' : '<br><i>Toque ou arraste para a bancada.</i>'),
+        elemColor(defs[k].element));
+      if (n) { arrastavel(chip, { tipo: 'pedra', id: k }); }
+      (function (id2) { tap(chip, function () { escolhePedra(id2); }); })(k);
       stock.appendChild(chip);
     }
     body.appendChild(stock);
 
-    var alvos = forgeAlvos();
     if (!alvos.length) {
       body.appendChild(el('p', 'empty', 'Nenhuma peça para forjar — nem no saco, nem vestida.'));
       return;
     }
-    if (preselect && typeof preselect === 'object') forgeTarget = preselect;
-    var atual = null, i;
-    for (i = 0; i < alvos.length; i++) if (mesmoAlvo(alvos[i], forgeTarget)) { atual = alvos[i]; break; }
-    if (!atual) atual = alvos[0];
-    forgeTarget = atual;
 
-    /* A ESCOLHA DA PEÇA, em grupos com nome (reorganização 25/08: "forjar e
-     * upgrade está meio confuso" — a fileira única de miniaturas sem nome
-     * misturava saco e vestidas). Cada célula é a MESMA da grade do
-     * inventário — ícone, nome, ×N, forja, estrelas, ❖ — porque leitura já
-     * aprendida não se reensina. */
-    function celDe(alvo) {
+    // ===== A GRADE: as peças, arrastáveis para a bancada (toque também põe)
+    function celDe(alvo, idx) {
       var it = itemDef(alvo.itemId);
       var c = el('button', 'ig-cell fg-cel ' + starClass(alvo.stars) +
                             (mesmoAlvo(alvo, atual) ? ' is-sel' : ''));
@@ -4689,6 +4877,7 @@ var JOGO = (typeof window !== 'undefined')
           esc(className((hero(alvo.heroId) || {}).classId || alvo.heroId).slice(0, 3))));
       }
       c.appendChild(el('span', 'ig-nm', esc(it.name)));
+      arrastavel(c, { tipo: 'peca', idx: idx });
       tap(c, function () { forgeTarget = alvo; sheetParty('forja'); });
       return c;
     }
@@ -4696,11 +4885,10 @@ var JOGO = (typeof window !== 'undefined')
       forjaElemFiltro = e2;
       sheetParty('forja');
     }));
-    var doSaco = alvos.filter(function (a) {
-      return a.kind === 'bag' && passaElemento(a.itemId, forjaElemFiltro);
-    });
-    var vestidas = alvos.filter(function (a) {
-      return a.kind === 'worn' && passaElemento(a.itemId, forjaElemFiltro);
+    var doSaco = [], vestidas = [];
+    alvos.forEach(function (a, idx) {
+      if (!passaElemento(a.itemId, forjaElemFiltro)) return;
+      if (a.kind === 'bag') doSaco.push([a, idx]); else vestidas.push([a, idx]);
     });
     if (!doSaco.length && !vestidas.length) {
       body.appendChild(el('p', 'inv-dica', 'Nada de ' +
@@ -4710,156 +4898,12 @@ var JOGO = (typeof window !== 'undefined')
       if (!par[0].length) return;
       body.appendChild(el('h4', 'fg-grupo', par[1] + ' (' + par[0].length + ')'));
       var grade = el('div', 'forge-pick');
-      par[0].forEach(function (a) { grade.appendChild(celDe(a)); });
+      par[0].forEach(function (pa) { grade.appendChild(celDe(pa[0], pa[1])); });
       body.appendChild(grade);
     });
 
-    var it2 = itemDef(atual.itemId);
-    var lv2 = atual.level;
-    var info = forgeInfoDe(atual);
-
-    var panel = el('div', 'forge-panel ' + tierClass(lv2) + ' ' + starClass(atual.stars));
-    var head = el('div', 'forge-head');
-    head.appendChild(art('itemIcon', [atual.itemId, 72], 72));
-    var ht = el('div', 'forge-head-t');
-    ht.appendChild(el('h3', null, esc((it2 && it2.name) || atual.itemId) + (lv2 ? ' <b>+' + lv2 + '</b>' : '')));
-    ht.appendChild(el('span', 'forge-tier-nm', esc(tierOf(lv2)) + ' · ' + esc(SLOT_PT[slotOf(atual.itemId)] || '')));
-    if (atual.stars) {
-      var se = el('span', 'fg-stars ' + starClass(atual.stars));
-      se.appendChild(starPips(atual.stars));
-      se.appendChild(el('span', null, 'de fundir iguais'));
-      ht.appendChild(se);
-    }
-    if (it2 && it2.element) {
-      var ec = el('span', 'elem-badge e-' + it2.element, ELEM_PT[it2.element] || it2.element);
-      ec.style.setProperty('--ec', elemColor(it2.element));
-      ht.appendChild(ec);
-    }
-    ht.appendChild(el('span', 'fg-onde', atual.kind === 'worn'
-      ? 'vestida por <b>' + esc(className((hero(atual.heroId) || {}).classId || atual.heroId)) + '</b>'
-      : 'no saco' + (atual.count > 1 ? ' · ×' + atual.count + ' (sobe UMA cópia)' : '')));
-    head.appendChild(ht);
-    panel.appendChild(head);
-
-    /* OS DOIS CAMINHOS, um cartão para cada (reorganização 25/08): a PEDRA
-     * (nível, pedras, risco, Âncora) e a ESTRELA (fundir cópias) são regras
-     * diferentes e moravam empilhadas numa parede só, com uma legenda densa
-     * tentando explicar tudo. Agora cada caminho tem sua parede, com a
-     * própria regra escrita no alto — e a legenda morreu. */
-    var cards = el('div', 'forge-cards');
-
-    // ===== cartão A PEDRA
-    var cp = el('div', 'forge-card fc-pedra');
-    cp.appendChild(el('h4', null, 'A Pedra' +
-      '<i>sobe o nível com pedras do elemento · +0–2 Comum · +3–5 Raro · +6–9 Supremo · +10 Magnífico</i>'));
-    var maxLv = upgradeCfg().maxLevel || 10;
-    var track = el('div', 'forge-track');
-    for (var i3 = 0; i3 <= maxLv; i3++) {
-      var stp = el('i', 'fg-step ' + tierClass(i3) + (i3 <= lv2 ? ' is-on' : '') + (i3 === lv2 + 1 ? ' is-next' : ''));
-      track.appendChild(stp);
-    }
-    cp.appendChild(track);
-    // prévia do ganho (com as estrelas já dentro da conta)
-    if (lv2 < maxLv) {
-      var prev = el('div', 'forge-prev');
-      prev.appendChild(el('div', 'fp-col', '<i>agora</i>' + bonusPreview(it2, lv2, atual.stars)));
-      prev.appendChild(el('div', 'fp-arrow', '→'));
-      prev.appendChild(el('div', 'fp-col fp-next', '<i>+' + (lv2 + 1) + '</i>' + bonusPreview(it2, lv2 + 1, atual.stars)));
-      cp.appendChild(prev);
-    }
-    if (!info) {
-      cp.appendChild(el('p', 'empty', 'A forja ainda não está disponível.'));
-    } else if (info.maxed) {
-      cp.appendChild(el('p', 'forge-max', 'No máximo: <b>Magnífico +' + maxLv + '</b>.'));
-    } else {
-      var sd2 = stoneDefs()[info.stoneId];
-      var have = stoneCount(info.stoneId);
-      // A BANCADA DO FERREIRO (30/08, pedido: "o personagem coloca o item e
-      // a pedra e forja"): a peça num encaixe, a pedra do elemento no outro,
-      // a seta diz no que vira. A linha de custo virou gesto de ofício.
-      function encaixe(icone, rot, curto) {
-        var cx = el('div', 'forge-cost' + (curto ? ' is-short' : ''));
-        cx.style.cssText = 'flex-direction:column;align-items:center;gap:4px;' +
-                           'padding:10px 14px;min-width:86px;text-align:center';
-        cx.appendChild(icone);
-        cx.appendChild(el('span', null, rot));
-        return cx;
-      }
-      var banca = el('div', 'forge-banca');
-      banca.style.cssText = 'display:flex;align-items:center;justify-content:center;' +
-                            'gap:10px;margin:10px 0;flex-wrap:wrap';
-      banca.appendChild(encaixe(art('itemIcon', [atual.itemId, 46], 46),
-        '<b>' + esc((it2 && it2.name) || atual.itemId) + '</b>' + (lv2 ? ' +' + lv2 : ''), false));
-      var mais = el('span', null, '+');
-      mais.style.cssText = 'font-size:22px;color:#8895a6';
-      banca.appendChild(mais);
-      banca.appendChild(encaixe(art('stoneIcon', [info.stoneId, 46], 46),
-        '<b>' + have + ' / ' + info.custo + '</b> ' + esc((sd2 && sd2.name) || info.stoneId),
-        !info.temPedras));
-      var seta = el('span', null, '→');
-      seta.style.cssText = 'font-size:22px;color:#e8c25a';
-      banca.appendChild(seta);
-      banca.appendChild(encaixe(art('itemIcon', [atual.itemId, 46], 46),
-        '<b>+' + (lv2 + 1) + '</b> ' + esc(tierOf(lv2 + 1)), false));
-      cp.appendChild(banca);
-      if (!info.temPedras) {
-        cp.appendChild(el('p', 'forge-short',
-          'Faltam <b>' + (info.custo - have) + '</b> de <b>' + esc((sd2 && sd2.name) || info.stoneId) +
-          '</b>' + (sd2 ? ' (' + (ELEM_PT[sd2.element] || sd2.element) + ')' : '') +
-          '. Monstros desse elemento derrubam.'));
-      }
-      // O RISCO, dito antes da batida: a chance e o preço da falha — e a
-      // Âncora, quando há alguma no saco, com a escolha nas mãos do jogador.
-      if (info.arriscado) {
-        var pct = Math.round(info.chance * 100);
-        cp.appendChild(el('p', 'forge-risco',
-          'Batida arriscada: <b>' + pct + '%</b> de subir — falhou, ' +
-          (forjaComGuarda && info.guardas > 0
-            ? 'a <b>Âncora segura</b> em +' + lv2 + '.'
-            : 'a peça <b>volta para +' + Math.max(0, lv2 - 1) + '</b>.')));
-        var linhaG = el('label', 'forge-guarda' + (info.guardas > 0 ? '' : ' is-off'));
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = forjaComGuarda && info.guardas > 0;
-        cb.disabled = info.guardas < 1;
-        cb.addEventListener('change', function () {
-          forjaComGuarda = cb.checked;
-          sheetParty('forja');
-        });
-        linhaG.appendChild(cb);
-        linhaG.appendChild(el('span', null,
-          'Pôr a <b>Âncora de Forja</b> junto (' + info.guardas + ' no saco)' +
-          (info.guardas < 1 ? ' — só os chefes mais fundos derrubam' : '')));
-        cp.appendChild(linhaG);
-      }
-      var go = btn('🔨 Bater o martelo — vira +' + (lv2 + 1),
-                   'btn-primary btn-block' + (info.temPedras ? '' : ' is-off'), function () {
-        var usarG = info.arriscado && forjaComGuarda && info.guardas > 0;
-        var fim = forjar(atual, usarG);
-        if (fim) {
-          var nivelNovo = (typeof fim === 'object') ? fim.nivel : lv2 + 1;
-          var como = (typeof fim === 'object') ? fim.resultado : 'subiu';
-          if (como === 'subiu') {
-            toast('Forjado: +' + nivelNovo + ' ' + tierOf(nivelNovo) + '!', 'good');
-          } else if (como === 'segurou') {
-            toast('A batida falhou — a Âncora segurou em +' + nivelNovo + '.', 'good');
-          } else {
-            toast('A batida falhou: a peça voltou para +' + nivelNovo + '.');
-          }
-          forgeTarget = { kind: atual.kind, itemId: atual.itemId, level: nivelNovo, stars: atual.stars,
-                          heroId: atual.heroId, slot: atual.slot };
-          if (invSel && invSel.itemId === atual.itemId && invSel.level === lv2 &&
-              invSel.stars === atual.stars && atual.kind === 'bag') {
-            invSel = { itemId: atual.itemId, level: nivelNovo, stars: atual.stars };
-          }
-          sheetParty('forja');
-        } else toast('Pedras insuficientes.');
-      });
-      cp.appendChild(go);
-    }
-    cards.appendChild(cp);
-
-    // ===== cartão A ESTRELA (fundir mora na forja desde 24/08)
+    // ===== A ESTRELA (fundir 3 cópias) — a outra trilha, só com peça na bancada
+    if (!atual) return;
     var ce = el('div', 'forge-card fc-estrela');
     ce.appendChild(el('h4', null, 'A Estrela' +
       '<i>3 cópias iguais do saco viram ★ — no nível médio, para baixo</i>'));
@@ -4876,9 +4920,6 @@ var JOGO = (typeof window !== 'undefined')
         ce.appendChild(el('p', 'fc-nota', 'Três cópias no saco: <b>+' +
           fu.niveisEscolhidos.join(' +') + '</b> viram <b>★' + fu.proxima +
           ' +' + fu.nivelResultado + '</b>.'));
-        // A PRÉVIA DO FUNDIR (pedido 25/08: "não consigo ver a previsão") —
-        // a mesma leitura agora → depois do cartão da Pedra, com a estrela
-        // nova e o nível médio já dentro da conta.
         var prevE = el('div', 'forge-prev');
         prevE.appendChild(el('div', 'fp-col', '<i>agora ' +
           (atual.stars ? '★' + atual.stars + ' ' : '') + '+' + lv2 + '</i>' +
@@ -4907,8 +4948,6 @@ var JOGO = (typeof window !== 'undefined')
           ? 'Faltam <b>' + fu.faltam + '</b> cópias iguais'
           : 'Falta <b>1</b> cópia igual') +
           ' no saco para a ★' + fu.proxima + '.'));
-        // mesmo sem as cópias, a prévia mostra O QUE a estrela renderia
-        // neste nível — é o que faz valer a caça às outras duas
         var prevF = el('div', 'forge-prev');
         prevF.appendChild(el('div', 'fp-col', '<i>agora ' +
           (atual.stars ? '★' + atual.stars + ' ' : '') + '+' + lv2 + '</i>' +
@@ -4919,10 +4958,7 @@ var JOGO = (typeof window !== 'undefined')
         ce.appendChild(prevF);
       }
     }
-    cards.appendChild(ce);
-
-    panel.appendChild(cards);
-    body.appendChild(panel);
+    body.appendChild(ce);
   }
 
   // prévia de bônus de uma peça num certo degrau das DUAS trilhas [D18]

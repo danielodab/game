@@ -942,6 +942,37 @@ i, em { font-style: normal; color: var(--dim); }
 
 /* ---------------------------------------------------------------- forja */
 .forge-stock { display: flex; gap: 6px; flex-wrap: wrap; }
+/* A BANCADA DE ARRASTAR (03/09): peça + pedra → resultado, no alto da Forja */
+.forge-banca2 { display: flex; align-items: stretch; justify-content: center; gap: 8px;
+  flex-wrap: wrap; padding: 12px 8px; border-radius: var(--rad);
+  background: linear-gradient(180deg, rgba(255,196,77,.05), rgba(0,0,0,.18));
+  border: 1px solid var(--line); }
+.forge-banca2.t-supremo { border-color: var(--gold-dim); }
+.forge-banca2.t-magnifico { border-color: #7a3068; }
+.fg-slot { width: 128px; min-height: 124px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px; padding: 8px 6px; border-radius: 12px; text-align: center;
+  border: 2px dashed var(--line2, #3a4452); background: rgba(255,255,255,.03); color: var(--dim);
+  font-size: 11px; line-height: 1.3; cursor: pointer; transition: border-color .15s, background .15s; }
+.fg-slot b { color: var(--text); font-size: 12.5px; }
+.fg-slot.has { border-style: solid; border-color: var(--gold-a22, rgba(255,196,77,.35)); color: var(--dim); }
+.fg-slot.has b { color: var(--gold, #ffc44d); }
+.fg-slot.is-over { border-color: var(--gold, #ffc44d); background: var(--gold-a14, rgba(255,196,77,.14)); }
+.fg-slot.is-errada { border-color: #a4232b; }
+.fg-slot.is-errada b { color: #ff9a8a; }
+.fg-slot-res.has { border-color: rgba(127,224,138,.45); }
+.fg-slot-res.has b { color: #7fe08a; }
+.fg-slot canvas { display: block; border-radius: 10px; }
+.fg-slot-ic { font-size: 26px; color: var(--dim); opacity: .7; }
+.fg-op { align-self: center; font-size: 24px; color: #8895a6; }
+.fg-op.fg-seta { color: var(--gold, #e8c25a); }
+.fg-estado { margin: 6px 0; }
+.fg-estado p { margin: 0; }
+.stone-chip[draggable="true"], .ig-cell[draggable="true"] { cursor: grab; }
+.stone-chip.is-dragging, .ig-cell.is-dragging { opacity: .45; }
+.stone-chip.is-certa { border-color: var(--gold, #ffc44d);
+  box-shadow: 0 0 10px var(--gold-a22, rgba(255,196,77,.35)); }
+.stone-chip.is-sel { background: var(--gold-a14, rgba(255,196,77,.14)); border-color: var(--gold, #ffc44d); }
+.stone-chip.is-sel .stone-nm { color: var(--gold, #ffc44d); }
 /* a escolha da peça na Forja (reorganização 25/08): células IGUAIS às da
    grade do inventário, em grupos "No saco" / "Vestidas" — a fileira de
    miniaturas sem nome morreu */

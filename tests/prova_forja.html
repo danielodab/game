@@ -2,33 +2,85 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>prova: a bancada do ferreiro</title>
+<title>prova: a bancada de arrastar da Forja</title>
 <style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
 </head>
 <body>
-<!-- PÁGINA DE PROVA (foto): a ficha da forja com a BANCADA (30/08) — a peça
-     num encaixe, a pedra do elemento no outro, a seta dizendo no que vira,
-     e o martelo para bater. -->
+<!-- PÁGINA DE PROVA (foto), 03/09: a Forja com a BANCADA DE ARRASTAR — a
+     peça vem arrastada da grade para o encaixe, a pedra vem da prateleira,
+     o resultado aparece e o martelo acende. Os arrastos são disparados como
+     DragEvent de verdade (com DataTransfer), pela mesma porta do mouse.
+       (sem parâmetro) a bancada vazia
+       ?peca=1        a peça arrastada para o encaixe (a pedra certa acesa)
+       ?pedra=1       peça + pedra certa: martelo aceso
+       ?errada=1      peça + pedra ERRADA: a bancada recusa
+     O título diz BANCADA OK / BANCADA FALHOU. -->
 <iframe id="f" src="../index.html?prova-forja"></iframe>
 <script>
 var f = document.getElementById('f');
 f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
   var w = f.contentWindow, d = w.document;
-  var t0 = Date.now();
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  function arrasta(origem, destino) {
+    var dt = new w.DataTransfer();
+    origem.dispatchEvent(new w.DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    destino.dispatchEvent(new w.DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    destino.dispatchEvent(new w.DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    origem.dispatchEvent(new w.DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  }
+  function chipDe(nome) {
+    return [].slice.call(d.querySelectorAll('.stone-chip')).filter(function (c) { return c.textContent.indexOf(nome) >= 0; })[0];
+  }
+  var voltas = 0;
   (function espera() {
     var menu = d.querySelector('.screen-menu.is-on');
-    if (!menu && Date.now() - t0 < 40000) return setTimeout(espera, 800);
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
     try {
       var P = w.JOGO.Progress;
       P.addItem('ci-brine-cuirass');            // peça de água da Cisterna
-      P.state.stones['stone-tear'] = 7;         // pedras de água na algibeira
+      P.addItem('gh-wasp-sting');
+      P.state.stones['stone-tear'] = 7;         // pedras de água na prateleira
+      P.state.stones['stone-ember'] = 5;        // e de fogo, para errar
+      P.state.stones['stone-anchor'] = 1;
       P.save();
       w.JOGO.DB.batizar('Ferreira').then(function () {
         w.JOGO.UI.showScreen('hub');
         w.JOGO.UI.openSheet('forge');
-        setTimeout(function () { window.__pronto = true; }, 2000);
+        setTimeout(function () {
+          try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e3) {}
+          if (!Q.peca && !Q.pedra && !Q.errada) { document.title = 'BANCADA VAZIA'; window.__pronto = true; return; }
+          // 1) a peça: a célula da Couraça de Salmoura → o encaixe da peça
+          var cel = [].slice.call(d.querySelectorAll('.fg-cel')).filter(function (c) { return /Salmoura/.test(c.textContent); })[0];
+          var slotPeca = d.querySelector('.fg-slot-peca');
+          if (!cel || !slotPeca) { document.title = 'BANCADA FALHOU sem célula/encaixe'; window.__pronto = true; return; }
+          arrasta(cel, slotPeca);
+          setTimeout(function () {
+            var temPeca = !!d.querySelector('.fg-slot-peca.has');
+            var certaAcesa = !!chipDe('Lágrima') && chipDe('Lágrima').classList.contains('is-certa');
+            if (Q.peca) {
+              document.title = (temPeca && certaAcesa) ? 'BANCADA OK' : ('BANCADA FALHOU peca=' + temPeca + ' certa=' + certaAcesa);
+              window.__pronto = true; return;
+            }
+            // 2) a pedra: o chip da prateleira → o encaixe da pedra
+            var chip = chipDe(Q.errada ? 'Brasa' : 'Lágrima');
+            var slotPedra = d.querySelector('.fg-slot-pedra');
+            arrasta(chip, slotPedra);
+            setTimeout(function () {
+              var temPedra = !!d.querySelector('.fg-slot-pedra.has');
+              var errada = !!d.querySelector('.fg-slot-pedra.is-errada');
+              var martelo = [].slice.call(d.querySelectorAll('.sheet-panel button')).filter(function (b) { return /Bater o martelo/.test(b.textContent); })[0];
+              var aceso = !!martelo && !martelo.classList.contains('is-off');
+              var ok = Q.errada ? (temPedra && errada && !aceso) : (temPedra && !errada && aceso);
+              document.title = ok ? 'BANCADA OK' : ('BANCADA FALHOU pedra=' + temPedra + ' errada=' + errada + ' martelo=' + aceso);
+              window.__pronto = true;
+            }, 900);
+          }, 900);
+        }, 2000);
       });
-    } catch (e) { document.title = 'ERRO ' + e.message; }
+    } catch (e) { document.title = 'ERRO ' + e.message; window.__pronto = true; }
   })();
 };
 </script>
