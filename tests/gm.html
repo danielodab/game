@@ -62,6 +62,8 @@ por fim, o curioso que digita o mesmo endereço SEM a marca — e continua sem n
   check('a classe do Mestre NÃO existe', !JOGO.DATA.classes.gm);
   check('o Julgamento NÃO existe', !JOGO.DATA.spells['gm-julgamento']);
   check('as peças do set NÃO existem', !JOGO.DATA.items['gm-espadao']);
+  check('a Caixa do Mestre está fechada (03/09)', JOGO.GM.pegaItem('gh-wasp-sting') === false &&
+        JOGO.GM.pegaSet('gh-set-hive') === 0 && JOGO.GM.pegaPet('pet-galehawk', true) === false);
 
   JOGO.DB.moedas().then(function (m) {
     check('o cofre é o normal da conta (sem fundo falso)', m !== 999999, String(m));

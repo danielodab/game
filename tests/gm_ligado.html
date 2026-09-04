@@ -68,6 +68,22 @@
         P.heroElements('gm').length === 4 &&
         P.state.inventory.filter(function (e) { return e.itemId.indexOf('gm-') === 0; }).length === 4);
 
+  // ---- A CAIXA DO MESTRE (03/09): qualquer item, conjunto ou bicho
+  var antesN = P.state.inventory.length;
+  check('a Caixa entrega qualquer item do jogo no saco',
+        GM.pegaItem('gh-wasp-sting') === true && P.state.inventory.length === antesN + 1 &&
+        P.state.inventory[P.state.inventory.length - 1].itemId === 'gh-wasp-sting');
+  check('item inexistente é recusado', GM.pegaItem('nada-disso') === false);
+  var setId = Object.keys(JOGO.DATA.sets).filter(function (s) { return s !== 'gm-set-mestre'; })[0];
+  var pecas = JOGO.DATA.sets[setId].pieces.length;
+  check('a Caixa entrega um conjunto inteiro (' + setId + ')', GM.pegaSet(setId) === pecas &&
+        P.state.inventory.length === antesN + 1 + pecas);
+  check('a Caixa entrega um bicho (as 5 cartas pagas)', GM.pegaPet('pet-galehawk', false) === true &&
+        P.petCardInfo('pet-galehawk').unlocked === true && P.petCardInfo('pet-galehawk').stars === 0);
+  check('… e no topo: ★3 e nível 10', GM.pegaPet('pet-dewling', true) === true &&
+        P.petCardInfo('pet-dewling').stars === 3 && P.petLevel('pet-dewling') === 10);
+  check('bicho inexistente é recusado', GM.pegaPet('pet-nada', true) === false);
+
   JOGO.DB.moedas().then(function (m) {
     check('o cofre não tem fundo', m === 999999, String(m));
     return JOGO.DB.gastarMoedas(888888);

@@ -39,6 +39,19 @@ f.onload = function () {
               var opc = E.placementOptions(G.state);
               if (!opc.length) document.title = 'ERRO sem opções';
               try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e3) {}
+              if (Q.clique) {
+                // ?clique=1: bate na casa pela porta do CLIQUE do renderizador
+                // (isBusy, modo toque) — o que o dono faz com o mouse
+                setTimeout(function () {
+                  var R = w.JOGO.Renderer;
+                  var h0 = G.state.units.filter(function (u) { return u.kind === 'hero'; })[0];
+                  R._tapCasa(opc[1].x, opc[1].y, Q.clique === 'dedo' ? 'touch' : 'mouse');
+                  var nasceu = G.state.phase === 'playing' && h0.x === opc[1].x && h0.y === opc[1].y;
+                  document.title = nasceu ? 'CLIQUE OK' : ('CLIQUE FALHOU fase=' + G.state.phase + ' busy=' + R.isBusy());
+                  setTimeout(function () { window.__pronto = true; }, 1200);
+                }, 2500);
+                return;
+              }
               setTimeout(function () { window.__pronto = true; }, 1500);
             }, 1500);
           }, 1500);

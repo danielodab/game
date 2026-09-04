@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a Caixa do Mestre</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto): a Caixa do Mestre (03/09) — a ficha exclusiva
+     do GM com todos os itens, conjuntos e bichos do jogo para pegar.
+     ?aba=sets ou ?aba=bichos muda a aba. Só existe com a chave. -->
+<iframe id="f" src="../index.html?prova-gm-caixa&gm=mestre-do-fundo"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      w.JOGO.GM.aparelha();
+      w.JOGO.UI.selection(['gm']);
+      w.JOGO.UI.openSheet('gmcaixa');
+      if (Q.aba) {
+        setTimeout(function () {
+          var rot = { sets: 'Conjuntos', bichos: 'Bichos', itens: 'Itens' }[Q.aba] || 'Itens';
+          [].slice.call(d.querySelectorAll('.sheet-panel button')).filter(function (b) { return b.textContent.trim() === rot; })[0].click();
+        }, 800);
+      }
+      setTimeout(function () { window.__pronto = true; }, 2500);
+    } catch (e) { document.title = 'ERRO ' + e.message; }
+  })();
+};
+</script>
+</body>
+</html>

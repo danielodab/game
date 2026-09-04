@@ -223,6 +223,51 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  // ------------------------------------------------------ A CAIXA DO MESTRE
+  /* 03/09, pedido do dono: "o GM pode abrir uma caixa para pegar qualquer
+   * item do jogo pra ele equipar; terá um menu exclusivo para pegar pet ou
+   * set para seu inventário". Tudo entra pela mesma porta do aparelha —
+   * direto no saco, sem fundo e sem sorteio — e só com a chave virada. */
+  function saco() {
+    var P = JOGO.Progress;
+    return (GM.ativo() && P && P.state && P.state.inventory) ? P.state.inventory : null;
+  }
+  GM.pegaItem = function (itemId) {
+    var inv = saco();
+    var def = JOGO.DATA && JOGO.DATA.items && JOGO.DATA.items[itemId];
+    if (!inv || !def) return false;
+    inv.push({ itemId: itemId, level: 0, stars: 0 });
+    if (JOGO.Progress.save) JOGO.Progress.save();
+    return true;
+  };
+  GM.pegaSet = function (setId) {
+    var inv = saco();
+    var sd = JOGO.DATA && JOGO.DATA.sets && JOGO.DATA.sets[setId];
+    if (!inv || !sd || !sd.pieces) return 0;
+    var n = 0;
+    for (var i = 0; i < sd.pieces.length; i++) {
+      if (JOGO.DATA.items[sd.pieces[i]]) { inv.push({ itemId: sd.pieces[i], level: 0, stars: 0 }); n++; }
+    }
+    if (n && JOGO.Progress.save) JOGO.Progress.save();
+    return n;
+  };
+  /* O bicho entra pelas cartas (as 5 pagas de uma vez); `topo` leva as
+   * cartas ao ★3 e o XP ao nível 10 — o Mestre não espera. */
+  GM.pegaPet = function (petId, topo) {
+    var P = JOGO.Progress;
+    if (!GM.ativo() || !P || !P.addPetCards) return false;
+    var pd = JOGO.DATA && JOGO.DATA.pets && JOGO.DATA.pets[petId];
+    if (!pd) return false;
+    var info = P.petCardInfo(petId);
+    if (!info.unlocked) P.addPetCards(petId, P.PET_UNLOCK_COST || 5);
+    if (topo) {
+      var faltam = (P.PET_UNLOCK_COST || 5) + (P.PET_STAR_COSTS ? P.PET_STAR_COSTS[P.PET_STAR_COSTS.length - 1] : 45) - P.petCardInfo(petId).cards;
+      if (faltam > 0) P.addPetCards(petId, faltam);
+      P.addPetXp(petId, 1000000);
+    }
+    return true;
+  };
+
   if (GM.ativo()) {
     injetaClasse();
     injetaJulgamento();

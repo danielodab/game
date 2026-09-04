@@ -1710,9 +1710,18 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function doTap(sx, sy, tipo) {
-    var g = game(); if (!g || !g.onTileClicked) return;
     if (R.isBusy()) return;
-    var t = tileFromScreen(sx, sy);
+    tapCasa(tileFromScreen(sx, sy), tipo);
+  }
+  /* O toque numa CASA (já resolvida da tela): a mesma porta do clique, exposta
+   * para as páginas de prova baterem na casa sem projetar pixels. */
+  R._tapCasa = function (x, y, tipo) { if (!R.isBusy()) tapCasa({ x: x, y: y }, tipo || 'mouse'); };
+  function tapCasa(t, tipo) {
+    var g = game(); if (!g || !g.onTileClicked || !t) return;
+    // na ESCOLHA DA POSIÇÃO (03/09) o toque é direto, também no dedo: não há
+    // mira nem feitiço — a casa dourada é o único alvo
+    var stT = state();
+    if (stT && stT.phase === 'placing') { g.onTileClicked(t.x, t.y); return; }
 
     if (!modoToque(tipo)) { g.onTileClicked(t.x, t.y); return; }
 
@@ -2164,6 +2173,19 @@ var JOGO = (typeof window !== 'undefined')
     ovUsed = 0;
     var g = game(), en = engine();
     var D = DATA();
+    // A ESCOLHA DA POSIÇÃO (03/09): as quatro casas douradas antes da rodada 1.
+    // ANTES da guarda de fase/turno — em placing não é turno de ninguém, e a
+    // guarda apagava as casas (o dono clicava às cegas e nada nascia).
+    if (st && st.phase === 'placing' && st.placement && st.placement.options) {
+      var hv0 = g && g.hoverTile;
+      var opc = st.placement.options;
+      for (var oi = 0; oi < opc.length; oi++) {
+        var sobre = !!(hv0 && hv0.x === opc[oi].x && hv0.y === opc[oi].y);
+        ovTile(opc[oi].x, opc[oi].y, '#ffc44d', sobre ? 0.85 : 0.62, 0.16, sobre ? 1.0 : 0.94);
+      }
+      hideRestOverlay();
+      return;
+    }
     if (!st || st.phase !== 'playing') { hideRestOverlay(); return; }
     var active = safe(function () { return en && en.activeUnit ? en.activeUnit(st) : null; }, null);
     if (!active) { hideRestOverlay(); return; }
@@ -2176,15 +2198,6 @@ var JOGO = (typeof window !== 'undefined')
 
     var spellId = g && g.selectedSpellId;
     var hv = g && g.hoverTile;
-    // A ESCOLHA DA POSIÇÃO (03/09): as quatro casas douradas antes da rodada 1
-    if (st.phase === 'placing' && st.placement && st.placement.options) {
-      var opc = st.placement.options;
-      for (var oi = 0; oi < opc.length; oi++) {
-        var sobre = !!(hv && hv.x === opc[oi].x && hv.y === opc[oi].y);
-        ovTile(opc[oi].x, opc[oi].y, '#ffc44d', sobre ? 0.72 : 0.50, 0.15, sobre ? 1.0 : 0.92);
-      }
-      return;
-    }
 
     if (!spellId) {
       var reach = safe(function () { return en.reachable ? en.reachable(st, active.uid) : null; }, null);

@@ -1970,7 +1970,9 @@ var JOGO = (typeof window !== 'undefined')
 
   function paintActive(s) {
     clear(bt.active);
-    var u = activeUnit();
+    // na ESCOLHA DA POSIÇÃO (03/09) o cartão é do SEU principal — a fila de
+    // iniciativa ainda não começou, e mostrar um monstro ali confundia
+    var u = (s && s.phase === 'placing' && s.placement) ? unitByUid(s.placement.uid) : activeUnit();
     if (!u) return;
     bt.active.className = 'bt-active ' + (u.side === 'hero' ? 's-hero' : 's-enemy');
     var pic = el('div', 'ba-pic');
@@ -3143,6 +3145,7 @@ var JOGO = (typeof window !== 'undefined')
     // nomes antigos continuam valendo ('party' abre a última ficha visitada);
     // o cais do Acampamento e o menu inicial chamam cada porta pelo nome.
     if (name === 'gm') { sheetGM(); return; }
+    if (name === 'gmcaixa') { sheetGMCaixa(); return; }
     if (name === 'party') sheetParty(null, arg);
     else if (name === 'collection') sheetParty('colecao', arg);
     else if (name === 'inventory') sheetParty('inventario', arg);
@@ -5609,6 +5612,125 @@ var JOGO = (typeof window !== 'undefined')
    * escolha, o set e os quatro caminhos com um toque, e o GRIMÓRIO —
    * qualquer feitiço do jogo entra na barra do GM. O Julgamento vai sempre. */
   var gmBusca = '';
+  /* A CAIXA DO MESTRE (03/09, pedido do dono): "o GM pode abrir uma caixa
+   * para pegar qualquer item do jogo pra ele equipar; terá um menu exclusivo
+   * para pegar pet ou set para seu inventário". Três abas — Itens, Conjuntos,
+   * Bichos — com busca; tudo entra direto no saco. Só com a chave virada. */
+  var gmCaixaAba = 'itens', gmCaixaBusca = '';
+  function sheetGMCaixa() {
+    var GMod = JOGO.GM;
+    if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
+    var body = sheetShell('A Caixa do Mestre',
+      'Qualquer item, conjunto ou bicho do jogo — direto para o saco, sem sorteio.');
+    sheetName = 'gmcaixa';
+
+    var abas = el('div', 'inv-filtros');
+    abas.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
+    [['itens', 'Itens'], ['sets', 'Conjuntos'], ['bichos', 'Bichos']].forEach(function (par) {
+      var b = btn(par[1], 'btn-mini' + (gmCaixaAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
+        gmCaixaAba = par[0]; sheetGMCaixa();
+      });
+      abas.appendChild(b);
+    });
+    body.appendChild(abas);
+    var busca = document.createElement('input');
+    busca.className = 'hub-input';
+    busca.placeholder = 'buscar por nome...';
+    busca.value = gmCaixaBusca;
+    body.appendChild(busca);
+    var listaEl = el('div', 'ms-caixa');
+    body.appendChild(listaEl);
+    var D0 = D();
+
+    function linha(icone, titulo, sub, rotuloBtn, aoPegar) {
+      var row = el('div', 'ms-linha');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 4px;border-bottom:1px solid var(--line,#262d38)';
+      row.appendChild(icone);
+      var txt = el('div', null);
+      txt.style.cssText = 'flex:1 1 auto;min-width:0';
+      txt.appendChild(el('b', null, esc(titulo)));
+      txt.appendChild(el('div', 'inv-dica', sub));
+      row.appendChild(txt);
+      row.appendChild(btn(rotuloBtn, 'btn-mini btn-gold', aoPegar));
+      return row;
+    }
+    function pinta() {
+      clear(listaEl);
+      var tq = (gmCaixaBusca || '').toLowerCase();
+      var vistas = 0, TETO = 48;
+      function passa(nome, id) {
+        return !tq || (nome || '').toLowerCase().indexOf(tq) >= 0 || (id || '').toLowerCase().indexOf(tq) >= 0;
+      }
+      function corta() {
+        if (++vistas > TETO) { listaEl.appendChild(el('p', 'inv-dica', '… e mais — afine a busca.')); return true; }
+        return false;
+      }
+      if (gmCaixaAba === 'itens') {
+        var ids = Object.keys(D0.items || {}).sort(function (a, b) {
+          return (D0.items[a].name || a).localeCompare(D0.items[b].name || b);
+        });
+        for (var i = 0; i < ids.length; i++) {
+          var it = D0.items[ids[i]];
+          if (!it || !passa(it.name, ids[i])) continue;
+          if (corta()) break;
+          (function (id2, it2) {
+            var sub = esc(SLOT_PT[slotOf(id2)] || '') + ' · ' + esc(RAR_PT[it2.rarity] || it2.rarity || '') +
+                      (it2.setId ? ' · ' + esc((setDef(it2.setId) || {}).name || it2.setId) : '') +
+                      ' · ' + esc(bonusText(it2.bonuses));
+            listaEl.appendChild(linha(art('itemIcon', [id2, 40], 40), it2.name || id2, sub, 'Pegar', function () {
+              if (GMod.pegaItem(id2)) toast(it2.name + ' está no saco.', 'good');
+              else toast('não deu');
+            }));
+          })(ids[i], it);
+        }
+      } else if (gmCaixaAba === 'sets') {
+        var sids = Object.keys(D0.sets || {}).sort(function (a, b) {
+          return (D0.sets[a].name || a).localeCompare(D0.sets[b].name || b);
+        });
+        for (var s = 0; s < sids.length; s++) {
+          var sd = D0.sets[sids[s]];
+          if (!sd || !passa(sd.name, sids[s])) continue;
+          if (corta()) break;
+          (function (sid2, sd2) {
+            var pecas = (sd2.pieces || []).map(function (pid) { return (itemDef(pid) || {}).name || pid; });
+            var ic = art('itemIcon', [(sd2.pieces || [])[0], 40], 40);
+            listaEl.appendChild(linha(ic, sd2.name || sid2,
+              pecas.length + ' peças: ' + esc(pecas.join(', ')), 'Pegar o conjunto', function () {
+                var n = GMod.pegaSet(sid2);
+                toast(n ? (sd2.name + ': ' + n + ' peças no saco.') : 'não deu', n ? 'good' : undefined);
+              }));
+          })(sids[s], sd);
+        }
+      } else {
+        var pids = Object.keys(D0.pets || {}).sort(function (a, b) {
+          return (D0.pets[a].name || a).localeCompare(D0.pets[b].name || b);
+        });
+        for (var p = 0; p < pids.length; p++) {
+          var pd = D0.pets[pids[p]];
+          if (!pd || !passa(pd.name, pids[p])) continue;
+          if (corta()) break;
+          (function (pid2, pd2) {
+            var info = petCardInfo(pid2);
+            var sub = esc(bonusText(pd2.bonuses)) + ' · ' + (info.unlocked ? 'é seu — ' + petNivelTxt(pid2) : 'não é seu');
+            var row = linha(art('petIcon', [pid2, 40], 40), pd2.name || pid2, sub, 'Pegar', function () {
+              if (GMod.pegaPet(pid2, false)) { toast(pd2.name + ' está no saco de bichos.', 'good'); sheetGMCaixa(); }
+              else toast('não deu');
+            });
+            row.appendChild(btn('★3 nv10', 'btn-mini btn-primary', function () {
+              if (GMod.pegaPet(pid2, true)) { toast(pd2.name + ' no topo: ★3, nível 10.', 'good'); sheetGMCaixa(); }
+              else toast('não deu');
+            }));
+            listaEl.appendChild(row);
+          })(pids[p], pd);
+        }
+      }
+      if (!vistas) listaEl.appendChild(el('p', 'inv-dica', 'Nada com esse nome.'));
+    }
+    busca.addEventListener('input', function () { gmCaixaBusca = busca.value; pinta(); });
+    pinta();
+    body.appendChild(btn('Voltar ao Painel do Mestre', 'btn-ghost btn-block', function () { openSheet('gm'); }));
+  }
+
   function sheetGM() {
     var GMod = JOGO.GM;
     if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
@@ -5641,6 +5763,10 @@ var JOGO = (typeof window !== 'undefined')
       else toast('não deu — o Progress não respondeu');
     }));
     body.appendChild(linhaP);
+    // A CAIXA DO MESTRE (03/09): qualquer item, conjunto ou bicho do jogo
+    body.appendChild(btn('📦 Abrir a Caixa do Mestre — itens, conjuntos e bichos', 'btn-gold btn-block', function () {
+      openSheet('gmcaixa');
+    }));
     body.appendChild(el('p', 'inv-dica',
       'O cofre não tem fundo: todo preço se paga sozinho enquanto a chave estiver virada. ' +
       'Escolha o <b>Mestre do Fundo</b> na tela Quem Desce para levá-lo à batalha.'));
