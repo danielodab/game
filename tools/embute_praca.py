@@ -23,6 +23,7 @@ PECAS = [
     # a barraca do ferreiro: o hub já espera `praca_forja` — enquanto o
     # arquivo não existe, sai como FALTANDO e o lugar segue nos provisórios
     ("forja.glb",          "praca_forja",    "A Forja (barraca do ferreiro)"),
+    ("tenda_sorte.glb",    "praca_loteria",  "A Barraquinha da Sorte (a roleta dos selos)"),
 ]
 
 

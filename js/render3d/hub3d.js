@@ -614,7 +614,8 @@ var JOGO = (typeof window !== 'undefined')
     r.position.y = 4.4;
     g.add(r);
     g.position.set(px, 0, pz);
-    g.lookAt(0, 0, RAIO_MAPA * 0.35);        // encara o herói
+    // sem girar o grupo: a obra do dono encara o centro pelo montaObra, como
+    // as outras construções (a roda das primitivas já nasce virada para lá)
     scene.add(g);
     lugares.push({ id: 'loteria', tipo: 'loteria', nome: 'Barraquinha da Sorte',
                    pos: new THREE.Vector3(px, 0, pz), raio: 4.0, node: g, roda: roda });
@@ -697,7 +698,9 @@ var JOGO = (typeof window !== 'undefined')
       arena:   { chave: 'praca_arena',   alvoAlt: 9.5, teto: 24 },
       sede:    { chave: 'praca_sede',    alvoAlt: 9.5, teto: 14 },
       // a barraca do ferreiro veste quando a arte chegar (embute_praca)
-      forja:   { chave: 'praca_forja',   alvoAlt: 6.0, teto: 10 }
+      forja:   { chave: 'praca_forja',   alvoAlt: 6.0, teto: 10 },
+      // a tenda da sorte (03/09): a arte do dono veste as primitivas
+      loteria: { chave: 'praca_loteria', alvoAlt: 5.5, teto: 9 }
     };
     function montaObra(chave, alvoAlt, teto, rotY) {
       var cena = null;

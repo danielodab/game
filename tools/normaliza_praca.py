@@ -25,6 +25,7 @@ ARQUIVOS = {
     "sede.glb": "sede.glb",
     # a barraca do ferreiro: quando o dono puser o arquivo, entra sozinha
     "forja.glb": "forja.glb",
+    "tenda sorte.glb": "tenda_sorte.glb",     # a Barraquinha da Sorte (03/09)
 }
 
 if not os.path.isdir(DEST):

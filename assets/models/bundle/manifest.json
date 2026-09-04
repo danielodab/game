@@ -1,5 +1,5 @@
 {
- "gerado": "2026-09-03T15:24:02",
+ "gerado": "2026-09-04T08:08:17",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -1223,6 +1223,12 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "praca_loteria",
+   "arquivo": "models-praca/praca_loteria.glb",
+   "bytes": 929892
+  },
+  {
+   "alvo": "MODELS",
    "chave": "q_hywirl",
    "arquivo": "models-summons/q_hywirl.glb",
    "bytes": 317228
@@ -1803,6 +1809,6 @@
    "walk"
   ]
  },
- "totalBytes": 139617372,
- "totalBase64": 186156784
+ "totalBytes": 140547264,
+ "totalBase64": 187396640
 }
