@@ -30,7 +30,9 @@ var JOGO = (typeof window !== 'undefined')
   M.POR_DIA = 6;               // quantas ofertas o mercador-fantasma pendura
   M.PRECO_MAX = 9999;
 
-  var BASE_RARIDADE = { comum: 18, raro: 40, epico: 85, lendario: 150 };
+  // 08/09: "o drop de itens bons seja MUITO difícil" — o preço acompanha:
+  // raro vale seis vezes, épico vinte, lendário cinquenta comuns
+  var BASE_RARIDADE = { comum: 18, raro: 120, epico: 400, lendario: 900 };
 
   function DB() { return JOGO.DB || null; }
   function DATA() { return JOGO.DATA || {}; }
@@ -70,12 +72,24 @@ var JOGO = (typeof window !== 'undefined')
 
   /* A banca do dia do mercador-fantasma, semeada pela data. */
   function bancaDoDia(dia) {
-    var itens = Object.keys(DATA().items || {});
-    if (!itens.length) return [];
+    // 08/09: o mercador vende só o que CAI — peça de calabouço com peso de
+    // saque — e nunca épico nem lendário (isso se conquista); raro é 1 em 8.
+    // Antes ele tirava qualquer id da tabela, à toa: épico a 85 vinténs.
+    var todos = DATA().items || {};
+    var comuns = [], raros = [];
+    Object.keys(todos).forEach(function (id) {
+      var it = todos[id];
+      if (!it || !it.dungeonId || !(it.dropWeight > 0)) return;
+      if (it.rarity === 'raro') raros.push(id);
+      else if (!it.rarity || it.rarity === 'comum') comuns.push(id);
+    });
+    if (!comuns.length && !raros.length) return [];
     var rnd = rngDe('mercado:' + dia);
     var fora = [];
     for (var i = 0; i < M.POR_DIA; i++) {
-      var itemId = itens[Math.floor(rnd() * itens.length)];
+      var deRaro = raros.length && (rnd() < 0.125 || !comuns.length);
+      var lista = deRaro ? raros : comuns;
+      var itemId = lista[Math.floor(rnd() * lista.length)];
       var level = rnd() < 0.35 ? 1 + Math.floor(rnd() * 3) : 0;
       var stars = rnd() < 0.15 ? 1 : 0;
       var jitter = 0.85 + rnd() * 0.35;        // ±~20% da régua

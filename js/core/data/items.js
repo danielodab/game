@@ -579,11 +579,17 @@ JOGO.DATA = JOGO.DATA || {};
   // =========================================================================
   DATA.lootWeights = {
     comum: 1000,            // peso de referência de uma comum não-chave
-    rareRatio: 0.1654,      // peso total dos raros    = 16,54% do peso total dos comuns
-    epicRatio: 0.012765,    // peso total dos épicos   =  1,28% do peso total dos comuns
-    legendRatio: 0.022,     // peso total dos lendários=  2,20% do peso total dos comuns
+    // 08/09, pedido do dono: "preciso que o drop de itens bons seja MUITO
+    // difícil". As três fatias boas caíram para menos de um terço (raro
+    // 16,5% → 5%, épico 1,28% → 0,25%, lendário 2,2% → 0,6% do peso das
+    // comuns). Medido em tests/prob_saque.html, sozinho, por sorteio do
+    // chefe: raro ~3%, épico ~0,35%, lendário ~0,8% — um raro a cada ~17
+    // descidas, um épico a cada ~140, o traje lendário inteiro em ~250.
+    rareRatio: 0.05,        // peso total dos raros    =  5,00% do peso total dos comuns
+    epicRatio: 0.0025,      // peso total dos épicos   =  0,25% do peso total dos comuns
+    legendRatio: 0.006,     // peso total dos lendários=  0,60% do peso total dos comuns
                             // (4 peças dividindo essa fatia ⇒ cada uma é mais
-                            //  rara que o épico, e fechar as 4 leva ~60 descidas)
+                            //  rara que o épico; fechar as 4 leva ~250 descidas)
     // 03/09, pedido do dono: "o drop de itens geral deve ficar mais difícil,
     // não deve ser tão fácil". O "nada" dobrou: de 147% para 300% do peso das
     // comuns — medido em tests/prob_saque.html: sala comum 40% → 25% de sair
