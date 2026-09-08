@@ -957,7 +957,12 @@ var JOGO = (typeof window !== 'undefined')
       if (!lugar) { painel.classList.add('is-off'); return; }
       clear(painel);
       painel.classList.remove('is-off');
-      if (lugar.tipo === 'portal') {
+      if (lugar.tipo === 'portal' && lugar.fechado) {
+        // 08/09: o portal trancado — sem descida; as peças dele caem nos abertos
+        painel.appendChild(el('h3', null, esc(lugar.nome)));
+        painel.appendChild(el('p', 'hub-nota', '<b style="color:#ff8a8a">Portal fechado</b> — este calabouço ainda está sendo escavado. ' +
+          'Enquanto isso, as peças dele aparecem nos calabouços abertos.'));
+      } else if (lugar.tipo === 'portal') {
         painel.appendChild(el('h3', null, esc(lugar.nome)));
         // O CALABOUÇO DO DIA (25/08): o portal em promoção se anuncia
         if (JOGO.Diario && JOGO.Diario.ehHoje && JOGO.Diario.ehHoje(lugar.id)) {

@@ -436,7 +436,21 @@ var JOGO = (typeof window !== 'undefined')
       );
       base.position.y = 0.25;
       g.add(base);
-      var r = rotulo(dg.name || dg.id, '#f0ead8');
+      // O PORTAL FECHADO (08/09): existe, mas com um X VERMELHO no miolo e o
+      // miolo apagado — a HUD não oferece a descida (lugar.fechado)
+      var fechado = !!(JOGO.DATA.portalFechado && JOGO.DATA.portalFechado(dg.id));
+      if (fechado) {
+        miolo.material.color = new THREE.Color(0x3a3f44);
+        miolo.material.opacity = 0.28;
+        var matX = new THREE.MeshBasicMaterial({ color: 0xff2e2e });
+        [Math.PI / 4, -Math.PI / 4].forEach(function (rz) {
+          var barra = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.3, 0.12), matX);
+          barra.position.set(0, 2.1, 0.08);
+          barra.rotation.z = rz;
+          g.add(barra);
+        });
+      }
+      var r = rotulo((dg.name || dg.id) + (fechado ? ' — fechado' : ''), fechado ? '#ff8a8a' : '#f0ead8');
       r.position.y = 4.4;
       g.add(r);
 
@@ -447,7 +461,7 @@ var JOGO = (typeof window !== 'undefined')
       g.scale.setScalar(1.3);
       scene.add(g);
       lugares.push({ id: dg.id, tipo: 'portal', nome: dg.name || dg.id,
-                     tema: dg.theme || null,
+                     tema: dg.theme || null, fechado: fechado,
                      pos: new THREE.Vector3(px, 0, pz), raio: 4.2, node: g, miolo: miolo });
     }
   }

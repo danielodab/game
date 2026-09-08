@@ -60,6 +60,8 @@ var JOGO = (typeof window !== 'undefined')
     var fora = [];
     (D().dungeons || []).forEach(function (dg) {
       if (!dg || dg.id === Po.ID) return;
+      // 08/09: calabouço de portal FECHADO não empresta palco ao Poço
+      if (D().portalFechado && D().portalFechado(dg.id)) return;
       (dg.rooms || []).forEach(function (r) {
         if (r && r.layout && r.monsters) fora.push(r);
       });
@@ -77,6 +79,8 @@ var JOGO = (typeof window !== 'undefined')
       var m = ms[id];
       if (!m || !m.stats || typeof m.stats.hp !== 'number') return;
       if (m.summonOnly) return;
+      // 08/09: monstro de calabouço fechado (sem arte) fica fora do elenco
+      if (m.dungeonId && D().portalFechado && D().portalFechado(m.dungeonId)) return;
       if (soChefes ? !m.boss : !!m.boss) return;
       fora.push(id);
     });

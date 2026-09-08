@@ -211,6 +211,8 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function validDungeon(dungeonId) {
+    // 08/09: portal FECHADO não desce — nem por atalho de teste
+    if (JOGO.DATA && JOGO.DATA.portalFechado && JOGO.DATA.portalFechado(dungeonId)) return false;
     var ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
     for (var i = 0; i < ds.length; i++) if (ds[i] && ds[i].id === dungeonId) return true;
     return false;

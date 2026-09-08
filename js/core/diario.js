@@ -33,7 +33,10 @@ var JOGO = (typeof window !== 'undefined')
     var fora = [];
     Object.keys(dgs).forEach(function (k) {
       var d = dgs[k];
-      fora.push((d && d.id) ? d.id : k);
+      var id = (d && d.id) ? d.id : k;
+      // 08/09: portal fechado não vira Calabouço do Dia
+      if (JOGO.DATA.portalFechado && JOGO.DATA.portalFechado(id)) return;
+      fora.push(id);
     });
     return fora;
   }

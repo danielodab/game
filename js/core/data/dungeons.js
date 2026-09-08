@@ -1025,3 +1025,15 @@ JOGO.DATA = JOGO.DATA || {};
 
 // __FIM_DOS_CALABOUCOS__ (novos calabouços entram acima desta linha)
 })(JOGO.DATA);
+
+/* OS PORTAIS FECHADOS (08/09, pedido do dono): "colocar nos 3 portais que
+ * ainda não tenho os itens e monstros criados para ficarem fechados — eles
+ * existirem, mas com um X vermelho no meio, impedindo o acesso". Enquanto a
+ * arte de um calabouço não chega, o portal fica na praça, trancado: sem
+ * descida, fora do Calabouço do Dia e fora dos palcos do Poço — e as PEÇAS
+ * dele VAZAM para os calabouços abertos (Progress.lootPool), para o saque não
+ * ficar só nos dois temas prontos. Abrir é tirar o id desta lista. */
+JOGO.DATA.portaisFechados = ['windscaffold', 'quakemine', 'brokenheart'];
+JOGO.DATA.portalFechado = function (id) {
+  return (JOGO.DATA.portaisFechados || []).indexOf(id) >= 0;
+};

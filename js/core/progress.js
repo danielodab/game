@@ -2057,21 +2057,38 @@ var JOGO = (typeof window !== 'undefined')
    * `dropWeight` e `minRoom` calibrados pelo Criativo — é essa escala que o
    * peso de "nada" (`lootWeights.noDrop`) acompanha. Só na ausência deles cai
    * na `dungeon.lootTable` da v2.1 (e aí, sem "nada", para não desequilibrar). */
+  /* O VAZAMENTO DOS PORTAIS FECHADOS (08/09): as peças de um calabouço
+   * trancado (DATA.portaisFechados) caem nos calabouços ABERTOS, com metade
+   * do peso e as mesmas regras de sala (épico/lendário só no chefe). A
+   * chance de sair peça não muda — o rollDrops engorda o "nada" na mesma
+   * proporção — só o que sai fica mais variado. Abriu o portal, o vazamento
+   * dele para sozinho. */
+  var VAZAMENTO = 0.5;
   function lootPool(dungeonId, roomIndex, luck) {
     var room = num(roomIndex, 0);
     var items = D().items || {};
     var pool = [], usouItens = false, id, it, w;
+    var proprio = 0, vazado = 0;
+    var fechado = D().portalFechado || function () { return false; };
+    var estouFechado = fechado(dungeonId);
     for (id in items) {
       if (!items.hasOwnProperty(id)) continue;
       it = items[id];
-      if (!it || it.dungeonId !== dungeonId) continue;
+      if (!it || !it.dungeonId) continue;
+      var meu = it.dungeonId === dungeonId;
+      var vaza = !meu && !estouFechado && fechado(it.dungeonId);
+      if (!meu && !vaza) continue;
       if (num(it.dropWeight, 0) <= 0) continue;
-      usouItens = true;
+      if (meu) usouItens = true;
       if (room < num(it.minRoom, 0)) continue;          // épico/lendário: só no chefe
       w = num(it.dropWeight, 0) * Math.pow(luck, luckExponent(it.rarity));
-      if (w > 0) pool.push({ id: id, w: w });
+      if (vaza) w *= VAZAMENTO;
+      if (w > 0) {
+        pool.push({ id: id, w: w, vazado: vaza });
+        if (vaza) vazado += w; else proprio += w;
+      }
     }
-    if (usouItens) return { pool: pool, itemBased: true };
+    if (usouItens) return { pool: pool, itemBased: true, proprio: proprio, vazado: vazado };
 
     var dungeon = dungeonDef(dungeonId);
     var table = dungeon && dungeon.lootTable;
@@ -2088,6 +2105,11 @@ var JOGO = (typeof window !== 'undefined')
     return { pool: pool, itemBased: false };
   }
 
+  Progress.lootPoolInfo = function (dungeonId, roomIndex, partySize) {
+    var b0 = lootPool(dungeonId, roomIndex, luckFor(partySize));
+    return { itens: b0.pool.map(function (e) { return { id: e.id, w: e.w, vazado: !!e.vazado }; }),
+             proprio: b0.proprio || 0, vazado: b0.vazado || 0 };
+  };
   Progress.rollDrops = function (dungeonId, roomIndex, partySize, multDrop) {
     if (!Progress.state) Progress.load();
     var luck = luckFor(partySize);
@@ -2112,6 +2134,8 @@ var JOGO = (typeof window !== 'undefined')
        * nao existe, e arredondar para 2 daria +100% em vez de +50%. */
       var md = (typeof multDrop === 'number' && isFinite(multDrop) && multDrop > 0) ? multDrop : 1;
       if (md !== 1 && nd > 0) nd = nd / md;
+      // o VAZAMENTO não muda a chance de sair peça: o "nada" cresce junto
+      if (nd > 0 && built.vazado > 0 && built.proprio > 0) nd *= (built.proprio + built.vazado) / built.proprio;
       if (nd > 0) pool = pool.concat([{ id: NO_DROP, w: nd }]);
     }
 
