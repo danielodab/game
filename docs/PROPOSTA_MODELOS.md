@@ -345,16 +345,16 @@ Atribuição não é obrigatória. Creditamos assim mesmo, como já se faz em `d
 ---
 ---
 
-# PARTE II — A DIREÇÃO "DOFUS": ESPÉCIES DIFERENTES, NÃO PROPORÇÕES DIFERENTES
+# PARTE II — A DIREÇÃO DAS ESPÉCIES: ESPÉCIES DIFERENTES, NÃO PROPORÇÕES DIFERENTES
 
 **Status: EM PESQUISA (documento sendo escrito enquanto a investigação corre).**
 Data: 2026-08-18, sessão da tarde. Nenhum arquivo do jogo foi alterado.
 
 ## II.0 O que mudou no pedido
 
-Palavras do usuário: *"pense no Dofus.. os personagens são humanoides mas são classes
-totalmente diferentes. cada um com uma característica. POR EXEMPLO: Sram é esqueleto,
-Ecaflip é um gato humanoide, Cra um elfo."*
+O pedido do usuário, em resumo: os personagens são humanoides, mas de classes
+totalmente diferentes, cada um com uma característica — por exemplo, um esqueleto,
+um gato humanoide, um elfo.
 
 Isto **invalida a recomendação da Parte I**. A Opção A (remix do KayKit + passe de proporções)
 entrega seis corpos com massas diferentes, mas todos continuam sendo **o mesmo humano de
@@ -383,7 +383,7 @@ Quaternius, Kenney, KayKit/Kay Lousberg, Mixamo e Blender Studio, com os termos 
 | Mixamo | tem não-humanos e retargeting automático | licença Adobe **não permite redistribuir o asset**; aqui os modelos vão embutidos em base64 no repositório, então está fora |
 | Sketchfab CC0 avulsos | dá para achar gato, elfo, esqueleto | **cada um com rig próprio**, o que daria 6 bancos de animação e 15 fusões atravessando 6 convenções |
 
-**Conclusão da busca:** não existe, em CC0/CC-BY, um "Dofus kit" com gato, elfo e esqueleto
+**Conclusão da busca:** não existe, em CC0/CC-BY, um kit pronto com gato, elfo e esqueleto
 prontos no mesmo rig. O que existe e chega perto é **um** pacote — e ele é bom.
 
 ### A licença, colada da fonte

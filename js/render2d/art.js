@@ -3,7 +3,7 @@ var JOGO = (typeof window !== 'undefined')
   : (globalThis.JOGO = globalThis.JOGO || {});
 
 // ============================================================================
-// JOGO.Art — arte procedural 2D, estilo DOFUS 1.29. Dono: Designer Arte.
+// JOGO.Art — arte procedural 2D, isométrica e de traço limpo. Dono: Designer Arte.
 //
 // Tudo é desenhado em canvas offscreen e devolvido como <canvas>; o Renderer
 // converte com PIXI.Texture.from(canvas). Todo resultado é CACHEADO por chave.
@@ -98,7 +98,7 @@ var JOGO = (typeof window !== 'undefined')
     for (i = 0; i < 3; i++) o[i] = m + (v[i] - m) * (1 + k);
     return toHex(o[0], o[1], o[2]);
   }
-  // CONTORNO (revisão v4): o Dofus não usa preto pesado. O contorno é a própria
+  // CONTORNO (revisão v4): nada de preto pesado. O contorno é a própria
   // cor de preenchimento, mais escura e DESSATURADA — some onde a forma já se
   // separa por cor e nunca "suja" o desenho.
   function lineOf(c) { return vivid(sh(c, -0.42), -0.28); }
@@ -282,7 +282,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ---------------------------------------------------------------- NANQUIM
-  // TRAÇO DE ESPESSURA VARIÁVEL (revisão v5, pela referência do Dofus).
+  // TRAÇO DE ESPESSURA VARIÁVEL (revisão v5, pela referência de arte).
   // `stroke()` com lineWidth dá linha uniforme — é o que deixava o boneco com
   // cara de marionete. Aqui a linha é uma FORMA PREENCHIDA: nasce fina, engrossa
   // no meio e afina na outra ponta, como pincel de nanquim.
@@ -414,7 +414,7 @@ var JOGO = (typeof window !== 'undefined')
   // Puxa DATA.classes[id].palette quando existir; senão usa o padrão daqui.
   // O elemento tinge a cor principal sem destruir a identidade da classe.
   // ==========================================================================
-  // PALETA (revisão v4): sóbria e HARMÔNICA, como a referência do Dofus —
+  // PALETA (revisão v4): sóbria e HARMÔNICA, como a referência de arte —
   // verde-oliva, laranja-queimado, creme e couro. Duas cores dominantes
   // (`main` + `cloth`) e UMA de destaque (`accent`). Nada de saturação de
   // desenho infantil.
@@ -987,7 +987,7 @@ var JOGO = (typeof window !== 'undefined')
 
   // ==========================================================================
   // VESTUÁRIO EM CAMADAS (revisão v4)
-  // A referência do Dofus carrega o personagem pela ROUPA, não pelo corpo:
+  // A referência de arte carrega o personagem pela ROUPA, não pelo corpo:
   // bandana com pontas caídas, faixa com nó e pontas soltas, enfaixamento de
   // antebraço e canela, bainha dobrada, cinto com bolsinhas. Cada classe usa de
   // 3 a 5 destas peças.
@@ -1187,7 +1187,7 @@ var JOGO = (typeof window !== 'undefined')
   // CORPO — peças compartilhadas (braços, pernas, mãos, pés, rosto)
   //
   // PROPORÇÃO (reescrita v3): cartoon exagerado de ~3 CABEÇAS de altura, do
-  // jeito do Dofus 1.29 — cabeça grande, tronco compacto, pernas curtas e
+  // jeito dos táticos 2D clássicos — cabeça grande, tronco compacto, pernas curtas e
   // grossas, MÃOS E PÉS GRANDES. É o exagero que dá carisma e legibilidade em
   // 96 px de tela. Nada de proporção realista.
   //
@@ -1384,8 +1384,8 @@ var JOGO = (typeof window !== 'undefined')
   // Cada plano devolve ÂNCORAS; o resto (acessórios, elemento, fusão) se apoia
   // nelas, o que permite montar qualquer combinação sem redesenhar nada.
   // ==========================================================================
-  // RIG — esqueleto paramétrico de ~5 CABEÇAS (revisão v4, pela referência do
-  // Dofus). Corpo ESGUIO E ADULTO: pernas longas, tronco enxuto, cabeça só um
+  // RIG — esqueleto paramétrico de ~5 CABEÇAS (revisão v4, pela referência de
+  // arte). Corpo ESGUIO E ADULTO: pernas longas, tronco enxuto, cabeça só um
   // pouco maior que o realista — nada de chibi de bebê. Mãos e pés continuam
   // generosos (saem do raio da cabeça), porque é o que dá leitura de desenho.
   // O Sumô é a exceção declarada: ~4 cabeças e corpo largo e pesado.
@@ -1816,7 +1816,7 @@ var JOGO = (typeof window !== 'undefined')
   // O movimento é CINEMÁTICO, não um desenho novo por quadro: cada quadro
   // recalcula os ângulos das juntas (coxa/canela, ombro/cotovelo) e reposiciona
   // as âncoras. Por isso a perna anda de verdade e a arma acompanha a mão.
-  // Poucos quadros e leitura clara, como no Dofus 1.29.
+  // Poucos quadros e leitura clara.
   // ==========================================================================
   var POSE = {
     idle:     { frames: 8, loop: true,  fps: 6,  name: 'Parado' },

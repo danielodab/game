@@ -7,7 +7,7 @@
 
 ## Veredito: **APROVADO**
 
-O jogo cumpre integralmente o pedido do usuário: tabuleiro tático por turnos em grade isométrica no espírito Dofus/Wakfu, 5 raças originais com identidade forte, 23 monstros mecanicamente distintos, 3 calabouços × 3 salas com personalidade própria, câmera 360° por arrasto com personagens **direcionais de verdade** (frente/perfil/costas aparecem ao girar — exatamente o que o usuário exigiu na rejeição da arte v1), FX com carga/impacto/hit-stop, HUD completa e bonita, zero erros de console e desempenho com folga. Verifiquei tudo isso de forma independente — suítes, fluxo E2E jogado por mim com cliques DOM reais, câmera com eventos reais de mouse, e evidência visual em mais de 20 screenshots — e não encontrei nenhum defeito bloqueante.
+O jogo cumpre integralmente o pedido do usuário: tabuleiro tático por turnos em grade isométrica no espírito dos táticos isométricos clássicos, 5 raças originais com identidade forte, 23 monstros mecanicamente distintos, 3 calabouços × 3 salas com personalidade própria, câmera 360° por arrasto com personagens **direcionais de verdade** (frente/perfil/costas aparecem ao girar — exatamente o que o usuário exigiu na rejeição da arte v1), FX com carga/impacto/hit-stop, HUD completa e bonita, zero erros de console e desempenho com folga. Verifiquei tudo isso de forma independente — suítes, fluxo E2E jogado por mim com cliques DOM reais, câmera com eventos reais de mouse, e evidência visual em mais de 20 screenshots — e não encontrei nenhum defeito bloqueante.
 
 ---
 
@@ -38,7 +38,7 @@ Não confiei apenas nos relatórios anteriores; refiz ao menos uma verificação
 - A premissa ("o céu virou pedra; o mundo É os calabouços") é original e resolve com elegância a restrição de design "só calabouços" — o lore justifica a estrutura do jogo em vez de decorá-la.
 - As 5 raças são genuinamente originais (povo-sino, povo-vela, povo-fungo, povo-vitral, povo-fole) e desenhadas **silhueta-primeiro**, com paletas e traços raciais que viram mecânica de verdade nos kits dos heróis.
 - Papéis táticos sem sobreposição (tanque/assassina/invocadora/suporte/controle) e cada um dos 23 monstros responde a "o que ele faz de diferente?" — torretas `pushImmune`, bombas que explodem ao morrer, divisores, curandeiros com aura, atirador que fica invisível, atiradora que só acerta em linha e te puxa de volta para ela. Os 3 chefes têm gimmicks distintos e legíveis (a poda / o baile / a fornalha que respira).
-- As salas ensinam conceitos deliberadamente (flanco, prioridade de alvo, empurrão contra buracos, formação) — design de calabouço à altura da referência Dofus/Wakfu.
+- As salas ensinam conceitos deliberadamente (flanco, prioridade de alvo, empurrão contra buracos, formação) — design de calabouço à altura das referências do gênero.
 - O GDD é excepcional: inclui direção de arte acionável (§6) e racional de balanceamento (§7) que os outros agentes claramente usaram.
 - Desconto mínimo: a duplicidade `theme`/`id` (B7) nasceu aqui.
 
@@ -54,7 +54,7 @@ Não confiei apenas nos relatórios anteriores; refiz ao menos uma verificação
 - Os 3 temas têm personalidade imediata: Estufa (verde-dourado, vagalumes, sebes), Cisterna (azul profundo, buracos d'água luminosos, águas-vivas), Fecho de Brasa (piso-grelha rubro, topo das muretas em brasa — correção B3 confirmada em `v2_emberlock_ax0.png`, legível mesmo no ângulo axial que era o problema).
 - FX: círculo de conjuração + antecipação, bursts elementais, números de dano fortes, nova em área com anel, shake proporcional e micro hit-stop — o combate tem "peso" (`v2_fx_*.png`, `v3_fx_impacto.png`).
 - Silhuetas: pinte tudo de preto e Repique ainda é uma cúpula, Estopim uma gota com chama, Morela um guarda-chuva — o teste do GDD passa. Chefes 2–3× maiores com adereço memorável (martelo-chaminé do Magno).
-- Descontos honestos: o traço "fofinho/chibi" é mais simples que o acabamento de um Dofus comercial (proporções muito parecidas entre monstros pequenos; Cinzento e Monte de Escória são as fichas menos legíveis do elenco); em zoom padrão alguns detalhes direcionais ficam sutis. Nada disso compromete identidade ou leitura tática.
+- Descontos honestos: o traço "fofinho/chibi" é mais simples que o acabamento de um tático comercial (proporções muito parecidas entre monstros pequenos; Cinzento e Monte de Escória são as fichas menos legíveis do elenco); em zoom padrão alguns detalhes direcionais ficam sutis. Nada disso compromete identidade ou leitura tática.
 
 ### 2.4 Agente Designer — UI/HUD — **8,5/10**
 - Telas pré-batalha bonitas e informativas: cards de herói com retrato animado, papel, stats, traço racial e chips de feitiço; cards de calabouço com arte temática, dificuldade em pips e nome do guardião ("Os Fechos Doentes" é um belo título de tela).
@@ -82,7 +82,7 @@ Sugestão de custo zero (não exigência): uma linha no cabeçalho de `engine.js
 Ampliei a evidência: rodei mais 3 tentativas IA×IA na Câmara do Coração (partys toll+rose+wick, toll+morel+rose, wick+morel+whistle) — 3 derrotas, com Magno terminando em 384, 243 e **150**/420 HP. Somadas às 3 do orquestrador, são 6 derrotas de IA. Minha análise:
 - **O auto-play subestima o jogador humano por construção**: a IA de heróis não usa teleporte/swap (documentado em ai.js), não concentra fogo, não protege a retaguarda dos empurrões do `m-bellows-blast` e não prioriza o Ferreiro. As mesmas IAs venceram as 8 demais salas (incluindo 2 chefes) em todas as execuções registradas — o gap é específico do topo da curva.
 - **O orçamento numérico fecha para um humano**: um time focado (ex.: Repique+Rosácea+Sibilo) entrega ~100–120 de dano/rodada no chefe após controlar os lacaios (Sibilo ignora as resistências de fogo/terra da família), contra 420 HP → ~6–8 rodadas, dentro do TTK de chefe previsto no GDD (6–9); a mitigação do time (provocação + escudos 25/35 + curas 24–30×2 + redoma) cobre o output pré-enrage de Magno (~50–70/rodada). O enrage a 50% (+40) cria a corrida final tensa — que é o design declarado.
-- **Contexto de gênero**: chefe final do calabouço "difícil" punir composição errada (Estopim, de fogo, contra família com 25–40 de resistência a fogo) é profundidade à la Dofus, não defeito.
+- **Contexto de gênero**: chefe final do calabouço "difícil" punir composição errada (Estopim, de fogo, contra família com 25–40 de resistência a fogo) é profundidade de gênero, não defeito.
 **Recomendação (não exigência):** um playtest humano do Magno antes de qualquer distribuição; se ele se provar impossível, o ajuste fino é uma alavanca pequena em `js/core/data.js` (dono: Criativo — ex.: HP 420→390 ou enrage +40→+30).
 
 ### 3.3 B7 — `theme` ≠ `id` nos calabouços · **NÃO BLOQUEIA**
@@ -139,7 +139,7 @@ String mágica duplicada (`garden`/`greenhouse`, `forge`/`emberlock`) tratada em
 A v3 abandona o turntable paramétrico contínuo (a causa raiz das poses borrachudas) por **4 direções discretas**: 2 vistas desenhadas (3/4 frontal e 3/4 traseira), espelhadas para SE/SW/NE/NW, assadas em cache offscreen; troca por snap de quadrante com histerese ±0,1 rad e micro-crossfade ≤80 ms; idle apenas por transform (bob/sway/breath sobre o cache — a forma nunca deforma); overlays só de partículas/brilhos ("nunca a forma", `sprites.js`).
 
 O que vi nos screenshots:
-- **Desenhos limpos nas 4 direções, sem nenhuma pose borrachuda** — são ilustrações estáticas bem acabadas, não poses interpoladas (`gallery_top/full`, `zoom_heroes1`). O problema da v2 era estrutural (ângulos intermediários deformavam membros); na v3 ângulos intermediários **não existem** — entre os limiares o desenho fica parado, como em Dofus/Wakfu.
+- **Desenhos limpos nas 4 direções, sem nenhuma pose borrachuda** — são ilustrações estáticas bem acabadas, não poses interpoladas (`gallery_top/full`, `zoom_heroes1`). O problema da v2 era estrutural (ângulos intermediários deformavam membros); na v3 ângulos intermediários **não existem** — entre os limiares o desenho fica parado, como nos isométricos de referência.
 - **As costas são desenhos de verdade, no nível da frente v2**: placa de memória no capacete do Repique, capuz de cera escorrida do Estopim, painéis de vitral emplumados da Rosácea, tanque com correia em X do Sibilo (`zoom_morela_col`); nos chefes, o laço fúnebre da Jardineira, a amarração do espartilho da Baronesa e a escotilha acorrentada do Magno (`gallery_bosses`, `gallery_magno_portraits`) — os detalhes direcionais que elogiei na v2 sobreviveram à mudança de técnica.
 - **Troca pré/pós-snap limpa** (`g_presnap`/`g_postsnap`): mesmas vistas coerentes dos dois lados do limiar, sem imagem dupla, sem deformação, personagens consistentes com a rotação do tabuleiro.
 - Em jogo, as trocas frente/costas acontecem onde deviam ao girar (Baronesa de frente em `c_a1` e de costas em `c_a3`; Magno idem em `e_a1`/`e_a2`).
@@ -171,7 +171,7 @@ O que vi nos screenshots:
 
 ## R5. Nota revisada — Arte/FX
 
-**8,5 → 9,0.** A v3 não é um remendo: é a técnica certa para o estilo (vistas desenhadas + snap, como os isométricos de referência), e resolve as duas reclamações pela causa raiz — pose borrachuda ficou impossível por construção, e o tabuleiro está literalmente ancorado no mundo (deriva 0,00 px). O acabamento das costas está no nível das frentes, os detalhes direcionais que davam identidade na v2 foram preservados, e o cenário aterrado com props de mundo dá ao campo a leitura de "lugar" que faltava. O que segura o 10: o desconto herdado das fichas pequenas (frente/costas sutis) e o traço chibi mais simples que um Dofus comercial — limitações de escopo já aceitas, não defeitos novos.
+**8,5 → 9,0.** A v3 não é um remendo: é a técnica certa para o estilo (vistas desenhadas + snap, como os isométricos de referência), e resolve as duas reclamações pela causa raiz — pose borrachuda ficou impossível por construção, e o tabuleiro está literalmente ancorado no mundo (deriva 0,00 px). O acabamento das costas está no nível das frentes, os detalhes direcionais que davam identidade na v2 foram preservados, e o cenário aterrado com props de mundo dá ao campo a leitura de "lugar" que faltava. O que segura o 10: o desconto herdado das fichas pequenas (frente/costas sutis) e o traço chibi mais simples que um tático comercial — limitações de escopo já aceitas, não defeitos novos.
 
 ## R6. Veredito da reauditoria
 

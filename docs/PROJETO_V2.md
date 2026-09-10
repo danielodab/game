@@ -10,8 +10,8 @@ O detalhamento técnico (esquemas e APIs exatas) está em `CONTRACT_V2.md`.
 | Decisão | Escolha | Porquê |
 |---|---|---|
 | Motor gráfico | **PixiJS 7.4.2** (WebGL 2D, `vendor/pixi.min.js`, 456 KB) | Renderizador 2D mais rápido da web, usado em jogos mobile de produção. Faz batching automático (milhares de sprites a 60 fps em celular), tem suporte nativo a toque e escala de resolução. Não é um framework opinativo: mantemos nosso motor de regras intacto. |
-| Estilo visual | **Dofus 1.29** — isométrico 2D, traço limpo, cores chapadas, animação de desenho ocidental | Pedido do usuário. Leve, legível em tela pequena e barato de produzir em volume (o jogo terá centenas de combinações visuais). |
-| Câmera | Isométrica fixa com zoom e arrasto de deslocamento (pan) | Dofus 1.29 não gira a câmera. Simplifica tudo e é o que funciona em celular. |
+| Estilo visual | **Tático isométrico 2D** — traço limpo, cores chapadas, animação de desenho ocidental | Pedido do usuário. Leve, legível em tela pequena e barato de produzir em volume (o jogo terá centenas de combinações visuais). |
+| Câmera | Isométrica fixa com zoom e arrasto de deslocamento (pan) | Sem girar a câmera, tudo fica mais simples, e é o que funciona em celular. |
 | Mobile desde o início | Entrada por toque, layout responsivo, alvos ≥ 44 px, nada dependente de *hover* | Requisito de escalabilidade futura. |
 | Linha 3D anterior | Preservada no Git (tag `v1-3d`) | Nada se perde; pode voltar como opção. |
 
@@ -233,7 +233,7 @@ Tudo é executado nesta sequência, com equipes trabalhando em paralelo dentro d
 | **0** | Fundação: PixiJS, contrato técnico v2, esqueleto de dados | Orquestrador ✅ |
 | **1** | **Conteúdo**: classes e 162 feitiços · mundo (elementos, climas, monstros, 6 calabouços, terreno) · fusões, pets e itens | 3 agentes Criativos |
 | **2** | **Motor**: clima, esquiva/fixação, fusão, pets, armadilhas, eventos de terreno, cronômetro · progressão, caminho elemental, cartas, inventário | 2 agentes de Lógica |
-| **3** | **Apresentação**: renderizador PixiJS isométrico, entrada por toque, câmera · arte estilo Dofus 1.29 (classes, fusões, monstros, pets, cenários), interface mobile | 2 agentes Designers |
+| **3** | **Apresentação**: renderizador PixiJS isométrico, entrada por toque, câmera · arte 2D isométrica (classes, fusões, monstros, pets, cenários), interface mobile | 2 agentes Designers |
 | **4** | Integração, QA de regressão e veredito | Orquestrador → Revisor → Chefe |
 
 As fases 1, 2 e 3 começam **juntas**: o contrato técnico define os formatos com precisão suficiente

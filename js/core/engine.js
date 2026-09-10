@@ -1228,7 +1228,7 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // --------------------------------------------------------------- desafios
-  /* O DESAFIO DA SALA (a moda Dofus): um contrato opcional sorteado por
+  /* O DESAFIO DA SALA: um contrato opcional sorteado por
    * batalha, com o rng SEMEADO da sala — mesma sala e mesmo grupo, mesmo
    * desafio, e o teste confere isso. Cumpriu e venceu: +25% de XP e de saque
    * (o multiplicador vive em game.js, junto do da dificuldade).

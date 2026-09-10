@@ -333,7 +333,7 @@ Esta seção **substitui** o que a contrariar nas anteriores.
 
 ### Os 4 espaços de equipamento ganham nome próprio
 Os ids `pa`/`pp`/`vida`/`especial` são **substituídos** (nada de nomes de planilha, e nada que
-imite o Dofus). Novos ids de `slot`, em todo o projeto:
+imite outro jogo). Novos ids de `slot`, em todo o projeto:
 
 | slot (id) | Nome exibido | O que é | Bônus que carrega |
 |---|---|---|---|

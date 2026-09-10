@@ -1,4 +1,4 @@
-// A Troca — itens e vinténs de mão em mão, à moda Dofus (dono: lógica).
+// A Troca — itens e vinténs de mão em mão (dono: lógica).
 var JOGO = (typeof window !== 'undefined')
   ? (window.JOGO = window.JOGO || {})
   : (globalThis.JOGO = globalThis.JOGO || {});
@@ -7,7 +7,7 @@ var JOGO = (typeof window !== 'undefined')
  * ============
  * O terceiro pilar da visão online ("se ver, conversar por chat, fazer troca
  * de itens") — os dois primeiros já existem; este fecha o tripé. A janela é
- * a do Dofus: cada lado monta a oferta (itens do saco + vinténs), TRAVA
+ * a clássica: cada lado monta a oferta (itens do saco + vinténs), TRAVA
  * quando está satisfeito, e com os dois travados vem o CONFIRMAR. Qualquer
  * mudança em qualquer oferta DESTRAVA os dois — ninguém troca o que não viu.
  *

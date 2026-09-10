@@ -5,7 +5,7 @@ var JOGO = (typeof window !== 'undefined')
 
 /* O QUE ISTO É
  * ============
- * O lugar das asas de nação do Dofus, do jeito do SOTERRA: quem luta na
+ * A insígnia da arena, do jeito do SOTERRA: quem luta na
  * arena carrega uma CHAMA acima do nome, e ela cresce e muda de cor com o
  * ranking. Cinco degraus:
  *

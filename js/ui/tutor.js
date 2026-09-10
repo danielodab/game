@@ -5,8 +5,8 @@ var JOGO = (typeof window !== 'undefined')
 
 /* O QUE ISTO É
  * ============
- * Onboarding mínimo (pacote 25/08): o jogo assumia que todo mundo conhece
- * Dofus. Agora cada TELA importante mostra UM cartão na primeira visita —
+ * Onboarding mínimo (pacote 25/08): o jogo assumia que todo mundo já jogou
+ * um tático por turnos. Agora cada TELA importante mostra UM cartão na primeira visita —
  * escolha de heróis, Acampamento, batalha, sala limpa — dispensado com
  * "Entendi" (aquela tela nunca mais pede) ou com "Não mostrar dicas" (mata
  * todas). Sem setinhas nem trilhos: o cartão diz o essencial e sai da

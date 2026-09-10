@@ -4,7 +4,7 @@ var JOGO = (typeof window !== 'undefined')
 
 // ============================================================================
 // JOGO.Renderer v3 — LUGAR fixo + personagens em DIREÇÕES DISCRETAS:
-//   · Unidades estilo Dofus/Wakfu: 2 vistas desenhadas (3/4 frontal/traseira)
+//   · Unidades em vistas desenhadas: 2 vistas (3/4 frontal/traseira)
 //     espelhadas → 4 direções aparentes (SE/SW/NE/NW), cacheadas em offscreen
 //     (Sprites.drawDir). Troca por SNAP com histerese + micro-crossfade ≤80ms.
 //     Idle anima por transform (bob/sway/respiração) + partículas sobre o cache.

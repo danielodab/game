@@ -1675,7 +1675,7 @@ var JOGO = (typeof window !== 'undefined')
    * conserto, quem joga no telefone gasta o PA às cegas — larga a explosão sem
    * nunca ter visto o desenho dela.
    *
-   * A saída é a mesma do Dofus Touch: o primeiro toque MIRA (acende o caminho,
+   * A saída é a clássica dos táticos no celular: o primeiro toque MIRA (acende o caminho,
    * o alcance e a área, exatamente o que o mouse acendia), o segundo toque na
    * MESMA casa CONFIRMA. Tocar em outra casa só muda a mira — nunca dispara.
    *

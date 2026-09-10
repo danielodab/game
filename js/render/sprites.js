@@ -3518,7 +3518,7 @@ var JOGO = (typeof window !== 'undefined')
 })();
 
 // ============================================================================
-// PARTE 6 — DIREÇÕES DISCRETAS estilo Dofus/Wakfu (cache por personagem×vista)
+// PARTE 6 — DIREÇÕES DISCRETAS (cache por personagem×vista)
 //
 // Cada personagem tem 2 vistas DESENHADAS (3/4 frontal e 3/4 traseira, em yaws
 // canônicos FIXOS), espelhadas horizontalmente → 4 direções aparentes

@@ -14,7 +14,7 @@ var JOGO = (typeof window !== 'undefined')
 //   Renderer.project(x, y [, z]) -> {x, y, s, d}     (coordenadas de TELA)
 //   Renderer.setCamera({zoom, panX, panY})
 //
-// Câmera: isométrica FIXA (losangos, sem rotação — padrão Dofus 1.29).
+// Câmera: isométrica FIXA (losangos, sem rotação).
 //   arrastar = PAN · roda/pinça = ZOOM clampado · toque curto = ação na célula.
 //   Entrada unificada por pointerdown/pointermove/pointerup (mouse == toque).
 //
@@ -552,7 +552,7 @@ var JOGO = (typeof window !== 'undefined')
     var z = Math.min(W * pad / (b.x1 - b.x0), H * pad / (b.y1 - b.y0));
     // MOBILE: caber a sala inteira deixaria a célula com ~36 px — menor que o
     // alvo de toque de 44 px do contrato. Preferimos começar aproximado e
-    // deixar o jogador arrastar (é o que o Dofus faz no celular).
+    // deixar o jogador arrastar (é o que funciona no celular).
     var small = Math.min(W, H) < 620;
     var minTilePx = small ? 58 : 44;
     var didZoomIn = false;
@@ -881,7 +881,7 @@ var JOGO = (typeof window !== 'undefined')
     }).join('');
   }
 
-  // desenha um bonequinho estilizado (Dofus-like simplificado) na caixa
+  // desenha um bonequinho estilizado (simplificado) na caixa
   // x ∈ [-bw/2, bw/2], y ∈ [-bh, 0] — pés na origem.
   function placeholderUnit(u) {
     var pal = paletteFor(u);
@@ -2558,7 +2558,7 @@ var JOGO = (typeof window !== 'undefined')
       case 'move':
         v2 = getVis(a.uid);
         if (!v2) { done = true; break; }
-        // 4,4 células/s: rápido como no Dofus, mas devagar o bastante para ver o passo
+        // 4,4 células/s: rápido, mas devagar o bastante para ver o passo
         a.k += dt * 4.4;
         while (a.k >= 1 && a.seg < a.path.length) { a.k -= 1; a.seg++; }
         var from;

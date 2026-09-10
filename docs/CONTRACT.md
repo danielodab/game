@@ -1,6 +1,6 @@
 # CONTRATO TÉCNICO DO PROJETO — leia antes de escrever qualquer código
 
-Jogo tático por turnos em grade isométrica (estilo Dofus/Wakfu), focado em calabouços (sem mundo aberto).
+Jogo tático por turnos em grade isométrica, focado em calabouços (sem mundo aberto).
 100% HTML5 + JavaScript puro (sem bibliotecas externas, sem imagens — toda arte é desenhada em canvas por código).
 O jogo deve abrir direto via `file://` (sem servidor), portanto **NÃO usar ES modules** — apenas scripts clássicos e globais.
 

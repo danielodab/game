@@ -6,7 +6,7 @@ var JOGO = (typeof window !== 'undefined')
 /* O QUE ISTO É
  * ============
  * O mercado de itens do Acampamento (item 3 da lista de MMORPG) — a versão
- * local-primeiro do Hôtel de Vente do Dofus: jogador ANUNCIA uma peça com
+ * local-primeiro de uma casa de leilões: jogador ANUNCIA uma peça com
  * preço, outro COMPRA. As ofertas moram no JOGO.DB; quando o servidor chegar,
  * anunciar/comprar viram endpoints e a validação muda de lado.
  *

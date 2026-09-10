@@ -150,8 +150,8 @@ não existe — o dedo não paira, e o primeiro contato já é o clique.
 
 Agora, quando o ponteiro é dedo: **o primeiro toque mira** (acende alcance,
 alvos, área e caminho, exatamente o que o mouse acendia) e **o segundo toque na
-mesma casa confirma**. Tocar em outra casa só muda a mira. É a solução do Dofus
-Touch, e está em `js/render3d/renderer3d_v2.js` (`doTap` / `R.mira`).
+mesma casa confirma**. Tocar em outra casa só muda a mira. É a solução clássica
+dos táticos no celular, e está em `js/render3d/renderer3d_v2.js` (`doTap` / `R.mira`).
 
 Com mouse, um clique continua agindo de primeira — `tests/toque.html` prova as
 duas coisas.

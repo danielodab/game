@@ -1,6 +1,6 @@
 # SOTERRA 2.0 — Ecos do Mundo Enterrado
 
-Jogo tático de calabouço por turnos, em grade, inspirado em Dofus/Wakfu.
+Jogo tático de calabouço por turnos, em grade, com fusão de heróis.
 Roda no navegador, **abrindo `index.html` direto do disco** — sem servidor, sem
 build, sem instalação.
 

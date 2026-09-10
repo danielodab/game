@@ -34,7 +34,7 @@ var JOGO = (typeof window !== 'undefined')
   var W = 2, H = 2;
 
   var CELL = 2;        // sincronizado com Models3D.CELL no init
-  var HOP_RATE = 5.2;  // SALTITOS por segundo (movimento Dofus-like, não deslizar)
+  var HOP_RATE = 5.2;  // SALTITOS por segundo (movimento aos saltinhos, não deslizar)
   var HOP_H = 0.34;    // altura do arco do saltito
   var CAST_DUR = 0.66; // conjuração com antecipação → lançamento → follow-through
   var ANIM_WATCHDOG = 3.0;
@@ -797,7 +797,7 @@ var JOGO = (typeof window !== 'undefined')
     var rec = {
       obj: built,
       su: su,
-      baseScale: su.boss ? 1.22 : 1.34,     // presença Dofus-like na célula
+      baseScale: su.boss ? 1.22 : 1.34,     // presença forte na célula
       vis: {
         x: su.x, y: su.y, z: 0,
         yaw: 0, targetYaw: 0,

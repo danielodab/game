@@ -344,7 +344,7 @@ Uma tela só — **Personagens** — com quatro abas:
 
 ### A grade
 
-**Fixa**, como no Dofus: **48 casas** no mínimo, crescendo de doze em doze para
+**Fixa**: **48 casas** no mínimo, crescendo de doze em doze para
 nunca terminar numa fileira quebrada. As casas vazias continuam visíveis — é
 delas que vem a leitura de "quanto ainda cabe".
 
