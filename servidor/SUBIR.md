@@ -1,150 +1,229 @@
-# Subir o SOTERRA no VPS (Hostinger KVM4)
+# Subir o SOTERRA na Hostinger (VPS KVM)
 
-O que sobe: o **jogo** (cliente estático, jogável no navegador de qualquer
-PC), o **site** (landing, ranking e a página de conta, em `site/`), o **Relé**
-(os jogadores se veem no Acampamento: fantasma, chat, troca) e a **API** (a
-conta no servidor — login de verdade, o mesmo save em qualquer máquina, e o
-registro de instâncias que impede item duplicado).
+Sobem quatro coisas de uma vez: o **jogo** (estático, abre em qualquer
+navegador), o **site** (landing, ranking e conta, em `site/`), o **Relé** (os
+jogadores se veem no Acampamento) e a **API** (a conta no servidor: login, o
+mesmo save em qualquer máquina e o registro de cada peça, que impede item
+duplicado).
 
-## O que é preciso antes
+São duas partes: alguns cliques no hPanel (uma vez só) e **um comando** no
+Windows (toda vez que quiser subir uma versão nova).
 
-1. Um **domínio** (ou subdomínio) com registro A apontando para o IP do VPS —
-   o HTTPS automático do Caddy precisa dele, e `wss://` + PWA + Play Store
-   (TWA) exigem HTTPS.
-2. Acesso **SSH** ao VPS (usuário com sudo).
-3. Portas **80 e 443 livres** (ou o Caddyfile convive com o que já estiver lá).
+---
 
-## O passo a passo (Ubuntu/Debian)
+## Parte 1 — no hPanel (uma vez)
 
-A ordem importa pouco entre relé e API, mas o Caddy vai por último: ele é
-quem liga o domínio ao que já estiver de pé.
+### 1. O VPS
 
-```bash
-# 1. dependências (a API não precisa de nada além do python3 que já vem)
-sudo apt update
-sudo apt install -y caddy python3 python3-websockets rsync
+- VPS → **Sistema operacional** → o **puro, sem painel**: **Ubuntu 24.04**.
+  Nada de CloudPanel, cPanel, Docker ou "Ubuntu com …": o instalador cuida de
+  tudo, e um painel disputaria as portas 80 e 443 com ele. (O 22.04 também
+  funciona com o instalador, mas o 24.04 é o recomendado.)
+- Defina a **senha de root** quando o hPanel pedir. É ela que o Windows vai pedir.
+- Em VPS → **Visão geral**, anote o **IP** (ex.: `181.215.1.2`) e o
+  **hostname** (ex.: `srv123456.hstgr.cloud`).
+- Teste o acesso no PowerShell: `ssh root@IP-DO-VPS`. Na primeira vez ele
+  pergunta se confia no servidor (responda `yes`) e depois pede a senha.
+  `exit` para sair.
 
-# 2. o jogo + o site (rodar NA SUA MÁQUINA, da pasta do jogo).
-#    A pasta site/ VAI junto (é a landing); servidor/ fica de fora — e, dentro
-#    dela, servidor/dados nunca sai da sua máquina (é o banco de testes local).
-rsync -av --delete \
-  --exclude '.git' --exclude 'tests' --exclude 'tools' --exclude 'docs' \
-  --exclude 'servidor' --exclude 'servidor/dados' --exclude 'unity' \
-  ./  usuario@IP-DO-VPS:/var/www/soterra/
+### 2. O firewall (se você criar um)
 
-# 3. o relé (no VPS)
-sudo mkdir -p /opt/soterra
-sudo cp servidor/rele.py /opt/soterra/
-sudo cp servidor/soterra-rele.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now soterra-rele
-systemctl status soterra-rele        # deve dizer "o Relé escuta em ..."
+O firewall do hPanel (VPS → **Segurança** → **Firewall**) fica fora do VPS e,
+depois de ativado, **bloqueia tudo o que não tiver regra**. Um firewall vazio
+derruba o SSH, o site e o certificado.
 
-# 4. a API (no VPS)
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin soterra
-sudo cp servidor/api.py /opt/soterra/
-sudo cp servidor/soterra-api.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now soterra-api
-systemctl status soterra-api         # deve dizer "a API escuta em http://127.0.0.1:8300"
-curl -s http://127.0.0.1:8300/api/saude   # {"ok": true, "contas": 0, "agora": ...}
+Se for usar (é recomendado), crie antes três regras **Aceitar**, protocolo
+**TCP**, origem **qualquer**, nas portas **22**, **80** e **443**, e ative.
+Mudou uma regra depois? Clique em **Sincronizar**. Não abra mais nada: a API
+(8300) e o Relé (8791) só escutam dentro do VPS e chegam pelo Caddy.
 
-# 5. o Caddy (no VPS) — edite o domínio no Caddyfile antes
-sudo cp servidor/Caddyfile /etc/caddy/Caddyfile
-sudo systemctl reload caddy
+Sem firewall criado, nada é bloqueado.
+
+### 3. O endereço
+
+Escolha por onde o jogo vai abrir:
+
+| Você tem | Endereço | O que fazer no DNS |
+|---|---|---|
+| um domínio, e quer um subdomínio | `jogo.seudominio.com.br` | criar um registro **A**, nome `jogo`, apontando para o IP |
+| um domínio, e quer ele inteiro | `seudominio.com.br` e `www.seudominio.com.br` | apagar os registros A, AAAA e CNAME de `@` e de `www` (são o estacionamento da Hostinger) e criar **A** `@` → IP e **A** `www` → IP |
+| nenhum domínio ainda | o hostname `srv123456.hstgr.cloud` | nada: a Hostinger já publica esse nome, e ele tem HTTPS de verdade |
+| só o IP | `181.215.1.2` | nada, mas fica **sem HTTPS** (sem cadeado). Provisório |
+
+O DNS fica em **Domínios** → seu domínio → **Gerenciar** → **DNS /
+Nameservers**. Isso vale quando o domínio usa os nameservers da Hostinger, que
+é o padrão de domínio comprado lá.
+
+Antes de subir, confira no PowerShell contra um resolvedor público:
+
+```powershell
+nslookup jogo.seudominio.com.br 8.8.8.8
 ```
 
-Pronto: `https://SEU-DOMINIO` abre a landing (`/site/`), `https://SEU-DOMINIO/index.html`
-abre o jogo, `https://SEU-DOMINIO/api/saude` responde pela API, e dois PCs
-diferentes entram no Acampamento e se veem (a Rede acha o relé sozinha em
-`wss://<host>/ws`).
+A resposta tem de ser o IP do VPS. Pode levar de minutos a algumas horas.
+Se subir antes, não tem problema: o instalador avisa, e o HTTPS sai sozinho
+quando o DNS chegar.
 
-### Sobre a API e o banco
+---
 
-- O banco é UM arquivo SQLite: `/var/lib/soterra/soterra.db` (mais os
-  companheiros `-wal` e `-shm` do modo WAL). O `StateDirectory=soterra` no
-  service faz o systemd criar `/var/lib/soterra` com dono `soterra` na
-  primeira subida; se preferir à mão: `sudo mkdir -p /var/lib/soterra && sudo chown soterra:soterra /var/lib/soterra`.
-- **Backup** = copiar esse arquivo com o serviço parado, ou, sem parar,
-  `sqlite3 /var/lib/soterra/soterra.db ".backup /root/soterra-$(date +%F).db"`.
-- Senhas nunca ficam em claro (pbkdf2-sha256, 200 mil voltas, sal por conta).
-- O que a API guarda de cada conta: o save (Progress + DB local, como JSON
-  opaco), o registro de instâncias (`itens`: cada iid, de quem é, vivo/fora),
-  o resumo para o ranking, e a trilha de auditoria (`eventos`: cadastro,
-  login, iids nascidos, saves recusados). Para olhar por dentro:
-  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db 'select tipo, dados from eventos order by id desc limit 20'`.
-- Para dar o modo Mestre a uma conta no servidor:
-  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "update contas set gm=1 where nome='SEU-NOME'"`.
-  Banir: `... set banido=1 ...` (a sessão dela passa a levar 403).
+## Parte 2 — no Windows (toda vez que subir)
+
+O pacote é o **último commit**. O que não foi commitado não vai, e o script avisa.
+
+No PowerShell, na pasta do jogo:
+
+```powershell
+python tools/sobe_vps.py IP-DO-VPS jogo.seudominio.com.br
+```
+
+Com o domínio inteiro, passe o `www` também. Ele passa a levar ao endereço
+principal, porque a sessão do site e do jogo mora num endereço só:
+
+```powershell
+python tools/sobe_vps.py IP-DO-VPS seudominio.com.br www.seudominio.com.br
+```
+
+Sem domínio:
+
+```powershell
+python tools/sobe_vps.py IP-DO-VPS srv123456.hstgr.cloud
+```
+
+O que acontece (de 5 a 10 minutos na primeira vez):
+
+1. **Monta o pacote**, de uns 133 MB: o jogo, o site e o servidor. Ficam de
+   fora os testes, as ferramentas, a arte fora do git e os embutidos que o
+   jogo servido não usa.
+2. **Manda por `scp`**, que já vem no Windows. Pede a senha de root.
+3. **Roda `servidor/instala.sh` no VPS**, que pede a senha de novo e:
+   - instala Python, websockets, sqlite3 e o Caddy (do repositório oficial do Caddy);
+   - põe o jogo e o site em `/var/www/soterra`;
+   - sobe o Relé e a API como serviços do systemd, que renascem sozinhos e
+     voltam quando o VPS reinicia;
+   - escreve o Caddyfile com o seu endereço, confere e recarrega;
+   - agenda o backup diário do banco;
+   - no fim, diz se está tudo de pé e se o DNS já aponta para o VPS.
+
+Quando terminar, o site abre em `https://SEU-ENDERECO` e o jogo em
+`https://SEU-ENDERECO/index.html`. O certificado HTTPS sai no primeiro acesso,
+em até um minuto.
+
+**Atualizar depois**: commit e o **mesmo comando**. Jogo, site, API e relé
+são trocados; o banco (`/var/lib/soterra`) nunca é tocado.
+
+**Sem digitar senha** (opcional). No PowerShell, uma vez só:
+
+```powershell
+ssh-keygen -t ed25519
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh root@IP-DO-VPS "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+```
+
+---
+
+## Se algo der errado
+
+| Sintoma | Causa provável | O que fazer |
+|---|---|---|
+| `ssh: connect ... timed out` | IP errado, ou o firewall do hPanel sem a porta 22 | conferir o IP na Visão geral; regra 22 e Sincronizar |
+| o instalador termina com "Algo não subiu" | um serviço caiu; o log aparece logo acima | rodar de novo; se repetir, guardar o log |
+| "AVISO: … ainda não existe no DNS" ou "aponta para outro IP" | o registro A não propagou, ou está errado | `nslookup ENDERECO 8.8.8.8`; o HTTPS sai sozinho depois |
+| o site não abre em https | DNS, ou o firewall sem 80 e 443 | no VPS: `journalctl -u caddy -n 50 --no-pager` |
+| o jogo abre, mas ninguém se vê no Acampamento | o Relé | no VPS: `systemctl status soterra-rele` |
+
+Para ver tudo de uma vez, no VPS (`ssh root@IP-DO-VPS`):
+
+```bash
+systemctl status soterra-api soterra-rele caddy --no-pager
+journalctl -u soterra-api -f        # cadastros, trocas, saves recusados
+curl -s https://SEU-ENDERECO/api/saude
+```
+
+---
+
+## Administrar (no VPS)
+
+- **Backup**: todo dia, sozinho, em `/var/backups/soterra/`, com os últimos 14
+  guardados. Para fazer um na hora: `/etc/cron.daily/soterra-backup`. Para
+  trazer um para o seu PC, no PowerShell:
+  `scp root@IP-DO-VPS:/var/backups/soterra/soterra-AAAA-MM-DD.db .`
+  O hPanel também guarda cópias do VPS inteiro, no menu de backups do VPS.
+- **O banco** é um arquivo SQLite só: `/var/lib/soterra/soterra.db` (mais os
+  companheiros `-wal` e `-shm`). Senhas nunca ficam em claro (pbkdf2-sha256,
+  200 mil voltas, sal por conta). Mexa nele sempre como o usuário `soterra`,
+  como nos comandos abaixo: o root criaria arquivos que a API não consegue gravar.
+- **Dar o modo Mestre** a uma conta:
+  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "update contas set gm=1 where nome='SEU-NOME'"`
+- **Banir**: o mesmo com `set banido=1`. A sessão dela passa a levar 403.
+- **Olhar a trilha de auditoria** (cadastros, logins, peças nascidas, saves recusados):
+  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db 'select tipo, dados from eventos order by id desc limit 20'`
+
+---
 
 ## O jogo e a Nuvem (o lado do cliente)
 
 - **Uma sessão só**: o site grava `localStorage['soterra-sessao']` ao entrar
   ou criar conta; o jogo (`js/core/sessao.js`) lê a mesma chave. Como site e
-  jogo vivem na mesma origem (o Caddy serve os dois), logar em
+  jogo vivem no mesmo endereço (o Caddy serve os dois), logar em
   `/site/conta.html` já deixa `/index.html` logado.
-- **O que a Nuvem faz** (`js/core/nuvem.js`): ao abrir, GET `/api/save` — se
-  o servidor tem versão mais nova (ou a conta é outra), o save de lá entra e a
+- **O que a Nuvem faz** (`js/core/nuvem.js`): ao abrir, GET `/api/save`. Se o
+  servidor tem versão mais nova (ou a conta é outra), o save de lá entra e a
   página recarrega uma vez; senão o local sobe. Depois, toda gravação local
-  (Progress e DB) sobe 3 s depois num PUT com `versao` + `nascimentos`. Um
-  409 de versão (outra máquina gravou antes) faz o servidor mandar; um 409 de
-  instância (linha duplicada, peça consumida que voltou) PARA a subida e a
-  Ficha de Contas mostra a mensagem, com o botão "Tentar de novo".
-- **O número de série**: toda cópia de item tem `iid` (progress.js cunha em
-  saque, roleta, forja, Caixa do Mestre, balcão do mercador, cofre da guilda;
+  sobe 3 s depois num PUT com `versao` e `nascimentos`. Nada sobe antes de o
+  servidor responder o primeiro GET: com a API fora do ar no boot, o jogo
+  continua local e sobe quando ela voltar. Um 409 de versão (outra máquina
+  gravou antes) faz o servidor mandar. Um 409 de instância (linha duplicada,
+  peça consumida que voltou) para a subida, e a Ficha de Contas mostra a
+  mensagem com o botão "Tentar de novo". O 502 do Caddy (API reiniciando) é
+  tratado como "fora": tenta de novo sozinho.
+- **O número de série**: toda cópia de item tem `iid`. O progress.js cunha em
+  saque, roleta, forja, Caixa do Mestre, balcão do mercador e cofre da guilda;
   equipar, devolver, cofre pessoal, balcão do jogador e troca carregam a
-  MESMA série). Save antigo ganha carimbo `legado` uma vez; série repetida
-  colada à mão no save SOME no saneamento em vez de ganhar número novo.
+  mesma série. Save antigo ganha carimbo `legado` uma vez; série repetida
+  colada à mão no save some no saneamento, em vez de ganhar número novo.
 - **Conta trocada na mesma máquina**: se o registro local é de outra conta e o
-  servidor não tem nada da nova, o disco é limpo e a nova começa do zero —
-  o save da conta anterior continua no cartório dela.
+  servidor não tem nada da nova, o disco é limpo e a nova começa do zero. O
+  save da conta anterior continua no servidor, na conta dela.
 - **Na Ficha de Contas** (menu → Contas) fica a caixa "Nuvem": logado como
-  quem, versão do save, "em dia"/"subindo…"/erro, "Sincronizar agora",
-  "Sair da nuvem" — ou o botão "Entrar ou criar conta", que abre o site.
-- **Provas**: `tests/instancias.html` (a série por cópia), `tests/nuvem.html`
-  (o protocolo, contra um cartório de mentira), `python tests/nuvem_viva.py`
-  (o cliente contra a API de verdade, conta descartável) e
-  `python tests/servidor_api.py` (a API por dentro).
-- **Em casa, sem Caddy**: o jogo em `http://127.0.0.1:8200/index.html?api=http://127.0.0.1:8300`
-  (a base fica lembrada em `localStorage['soterra-api-base']`); o site do
-  disco já aponta para a API de casa sozinho.
+  quem, versão do save, "em dia" / "subindo…" / erro, "Sincronizar agora",
+  "Sair da nuvem", ou o botão "Entrar ou criar conta", que abre o site.
 
-## Atualizar depois
-
-- **Jogo ou site**: só o passo 2 de novo (o rsync). Relé, API e Caddy ficam quietos.
-- **API**: `sudo cp servidor/api.py /opt/soterra/ && sudo systemctl restart soterra-api`.
-  O banco fica onde está; o esquema é criado com `IF NOT EXISTS`, então uma
-  versão nova da API sobe por cima do banco antigo.
-- **Relé**: `sudo cp servidor/rele.py /opt/soterra/ && sudo systemctl restart soterra-rele`.
-
-## Conferir que está tudo de pé
-
-```bash
-journalctl -u soterra-rele -f      # "entrou ... na praça: N" a cada jogador
-journalctl -u soterra-api -f       # "cadastro: nome (#id)", "troca feita: ..."
-curl -s https://SEU-DOMINIO/api/saude
-curl -s https://SEU-DOMINIO/api/ranking | head -c 300
-```
+---
 
 ## Testar em casa, sem VPS
 
 ```bash
-python servidor/rele.py            # ws://127.0.0.1:8791
-python servidor/api.py             # http://127.0.0.1:8300, banco em servidor/dados/
-python tests/servidor_api.py       # a prova da API (sobe uma cópia própria numa porta livre)
+python servidor/rele.py              # ws://127.0.0.1:8791
+python servidor/api.py               # http://127.0.0.1:8300, banco em servidor/dados/
+python tests/servidor_api.py         # a API por dentro
+python tests/nuvem_viva.py           # o jogo contra a API de verdade (conta descartável)
+python tests/rele_prova.py           # o relé, nos dois caminhos do websockets
+python tests/pacote_servido.py       # o pacote do VPS, servido sozinho, abre o jogo e o site
+python tools/sobe_vps.py --so-pacote # só monta e mede o pacote
 ```
 
 Abra `site/conta.html` do disco: o site descobre que está em `file://` e fala
 com `http://127.0.0.1:8300` sozinho (ou force com `?api=http://host:porta`).
-O jogo em duas janelas com `?rede=ws://127.0.0.1:8791` (contas diferentes)
-prova o relé.
+O jogo em `http://127.0.0.1:8200/index.html?api=http://127.0.0.1:8300` fala
+com a API de casa (a base fica lembrada em `localStorage['soterra-api-base']`).
+Em duas janelas com `?rede=ws://127.0.0.1:8791` (contas diferentes), prova o relé.
+
+---
 
 ## Notas
 
-- O relé é um carteiro **burro de propósito** (não valida nada) — certo para
+- O relé é um carteiro **burro de propósito** (não valida nada), certo para
   jogar entre amigos. A API é a autoridade das contas e das instâncias de
-  item; o que ainda NÃO é validado no servidor é o sorteio do saque (o cliente
-  diz o que nasceu, e o servidor só garante que nasceu uma vez).
-- O peso: o cliente tem ~129 MB (GLBs em base64). Funciona, mas a primeira
-  carga é longa; a migração base64→arquivos reais + service worker é o
-  próximo passo natural depois desta subida.
+  item. O que ainda **não** é validado no servidor é o sorteio do saque: o
+  cliente diz o que nasceu, e o servidor só garante que nasceu uma vez.
+- O que a revisão de 10/09 separou como endurecimento (não impede a subida):
+  o cadastro não tem freio por IP (atrás do Caddy a API só vê 127.0.0.1, então
+  um robô pode criar contas em série); o log de acesso do Caddy vem desligado
+  (não fica o IP de quem entrou); o relé roda sem a jaula do systemd que a API tem.
+- A subida não passa pelo GitHub. O remoto `origin` está bem atrás desta
+  máquina (o último push foi em 18/08); atualizá-lo é outra decisão.
+- A landing do site tem 16 molduras esperando fotos em `site/img/` (a lista de
+  nomes está no começo de `site/index.html`). Enquanto não existirem, aparece
+  a inicial num fundo dourado.
+- O peso: a primeira visita de cada jogador baixa os modelos do bundle
+  (`assets/models/bundle/`). A migração para um service worker que guarde
+  isso é o próximo passo natural depois desta subida.

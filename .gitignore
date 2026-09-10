@@ -35,3 +35,7 @@ assets/packs/
 # entregues; a analise esta versionada em docs/PROPOSTA_MODELOS.md.
 # Se a troca for aprovada, o que entrar vai para assets/models/ e assets/embedded/.
 assets/candidatos/
+
+# Python (ferramentas e provas)
+__pycache__/
+*.pyc

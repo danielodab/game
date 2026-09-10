@@ -2,9 +2,18 @@
 # -*- coding: utf-8 -*-
 """Sobe o SOTERRA para o VPS (Hostinger KVM) — do Windows, sem rsync.
 
-    python tools/sobe_vps.py IP-DO-VPS SEU-DOMINIO
-    python tools/sobe_vps.py IP-DO-VPS SEU-DOMINIO --usuario ubuntu   (se não entrar como root)
-    python tools/sobe_vps.py --so-pacote                               (só monta o pacote, para conferir)
+    python tools/sobe_vps.py IP-DO-VPS ENDERECO [OUTROS-NOMES...]
+
+    ENDERECO      por onde o jogo abre: jogo.seudominio.com.br, ou (sem domínio)
+                  o hostname do VPS srv123456.hstgr.cloud, ou o próprio IP
+                  (sem HTTPS). OUTROS-NOMES levam ao principal (www.…).
+    --usuario U   usuário do SSH (padrão root, como a Hostinger entrega)
+    --so-pacote   só monta o pacote e diz o tamanho, sem mandar nada
+
+Exemplos:
+    python tools/sobe_vps.py 181.215.1.2 jogo.seudominio.com.br
+    python tools/sobe_vps.py 181.215.1.2 seudominio.com.br www.seudominio.com.br
+    python tools/sobe_vps.py 181.215.1.2 srv123456.hstgr.cloud
 
 O que faz:
   1. Monta o pacote com o que está COMMITADO (git archive do último commit),
@@ -33,7 +42,8 @@ except Exception:
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FORA = ['tests', 'tools', 'docs', '.claude', 'unity',
         'assets/embedded/models-*', 'assets/embedded/env-kit*', 'assets/embedded/muro-*']
-RE_DOMINIO = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$')
+RE_NOME = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$')
+RE_IP = re.compile(r'^[0-9]{1,3}(\.[0-9]{1,3}){3}$')
 RE_HOST = re.compile(r'^[A-Za-z0-9.:-]+$')
 RE_USUARIO = re.compile(r'^[a-z_][a-z0-9_-]*$')
 
@@ -67,13 +77,14 @@ def roda(cmd):
     print('> ' + ' '.join(cmd))
     r = subprocess.run(cmd)
     if r.returncode != 0:
-        sys.exit('parou aqui (código %d). Nada foi apagado no VPS; é só rodar de novo.' % r.returncode)
+        sys.exit('parou aqui (código %d). O banco do VPS não foi tocado; é só rodar de novo.' % r.returncode)
 
 
 def main():
     ap = argparse.ArgumentParser(description='Sobe o SOTERRA para o VPS')
     ap.add_argument('host', nargs='?', help='o IP do VPS (hPanel → VPS → Visão geral)')
-    ap.add_argument('dominio', nargs='?', help='o domínio apontado para o VPS, ou o hostname srvNNNNNN.hstgr.cloud')
+    ap.add_argument('enderecos', nargs='*',
+                    help='o endereço principal (domínio, srvNNNNNN.hstgr.cloud ou o IP) e nomes extras (www.…)')
     ap.add_argument('--usuario', default='root', help='usuário do SSH (padrão: root, como a Hostinger entrega)')
     ap.add_argument('--porta-ssh', type=int, default=22)
     ap.add_argument('--so-pacote', action='store_true', help='só monta o pacote e diz o tamanho')
@@ -83,10 +94,15 @@ def main():
     if a.so_pacote:
         monta(pacote)
         return
-    if not a.host or not a.dominio:
-        ap.error('informe o IP do VPS e o domínio (ou --so-pacote)')
-    if not RE_HOST.match(a.host) or not RE_DOMINIO.match(a.dominio) or not RE_USUARIO.match(a.usuario):
-        ap.error('IP, domínio ou usuário com caractere estranho')
+    if not a.host or not a.enderecos:
+        ap.error('informe o IP do VPS e o endereço (ou --so-pacote)')
+    if not RE_HOST.match(a.host) or not RE_USUARIO.match(a.usuario):
+        ap.error('IP ou usuário com caractere estranho')
+    for e in a.enderecos:
+        if not RE_NOME.match(e):
+            ap.error('endereço estranho: %s' % e)
+    if any(RE_IP.match(e) for e in a.enderecos[1:]) or (RE_IP.match(a.enderecos[0]) and len(a.enderecos) > 1):
+        ap.error('o IP só pode ser o único endereço (sem nomes extras)')
 
     monta(pacote)
     alvo = '%s@%s' % (a.usuario, a.host)
@@ -98,9 +114,10 @@ def main():
     remoto = ('set -e; rm -rf /tmp/soterra-pacote; mkdir -p /tmp/soterra-pacote; '
               'tar -xzf /tmp/soterra-pacote.tar.gz -C /tmp/soterra-pacote; '
               '%sbash /tmp/soterra-pacote/servidor/instala.sh %s; '
-              'rm -rf /tmp/soterra-pacote /tmp/soterra-pacote.tar.gz' % (sudo, a.dominio))
+              'rm -rf /tmp/soterra-pacote /tmp/soterra-pacote.tar.gz' % (sudo, ' '.join(a.enderecos)))
     roda(['ssh', '-t'] + opcoes + ['-p', str(a.porta_ssh), alvo, remoto])
-    print('\nFeito. Abra https://%s' % a.dominio)
+    esquema = 'http://' if RE_IP.match(a.enderecos[0]) else 'https://'
+    print('\nFeito. O site: %s%s   O jogo: %s%s/index.html' % (esquema, a.enderecos[0], esquema, a.enderecos[0]))
 
 
 if __name__ == '__main__':
