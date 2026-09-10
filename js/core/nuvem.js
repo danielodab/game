@@ -30,6 +30,11 @@
 
   var ligada = false, timer = null, subindo = false, sujo = false;
   var versao = 0, erro = null, ultimaSubida = 0, parada = false, saveCru = null, historico = [];
+  /* `puxou`: esta página já ouviu do servidor em que versão o save está.
+   * Antes disso NADA sobe — subir às cegas mandava versão 0, o servidor
+   * respondia 409 com o save DELE, e o jogo local (feito com a API fora do
+   * ar no boot) era apagado pelo save velho. */
+  var puxou = false, timerPuxa = null, enganchado = false;
 
   function S() { return JOGO.Sessao || null; }
   function P() { return JOGO.Progress || null; }
@@ -143,10 +148,32 @@
       };
     }
     if (DB()) DB().aoGravar = function () { N.agendar(); };
+    if (enganchado) return;                        // os ouvintes da página entram uma vez só
+    enganchado = true;
     try {
       document.addEventListener('visibilitychange', function () { if (document.hidden) N.descarrega(); });
       window.addEventListener('pagehide', function () { N.descarrega(); });
     } catch (e) {}
+  }
+
+  /* A pendência vai para o registro local. Antes do 1º puxar, versão e dono
+   * ficam como estavam: são o que esta máquina viu da última vez, e é com
+   * eles que o próximo puxar decide (a conta pode até ser outra). */
+  function marcaSujo() {
+    if (puxou) { gravaRegistro(versao, S().contaId(), true); return; }
+    var rg = leRegistro();
+    gravaRegistro(rg.versao, rg.conta, true);
+  }
+  function agendaPuxar() {
+    if (timerPuxa || !ligada) return;
+    timerPuxa = setTimeout(function () { timerPuxa = null; N.puxar(); }, N.RETENTA_MS);
+  }
+  /* Fora do ar (rede) ou reiniciando (o Caddy responde 502/503 enquanto a
+   * API sobe): não é recusa, é esperar e tentar de novo. */
+  function foraDoAr(r) {
+    if (r.status === 0) return r.erro || 'o servidor está fora (não respondeu)';
+    if (r.status >= 500) return 'o servidor está fora do ar ou reiniciando (HTTP ' + r.status + ')';
+    return r.erro || ('HTTP ' + r.status);
   }
 
   N.iniciar = function () {
@@ -160,7 +187,7 @@
   N.agendar = function () {
     if (!ligada || parada) return;
     sujo = true;
-    gravaRegistro(versao, S().contaId(), true);
+    marcaSujo();
     if (timer) return;
     timer = setTimeout(function () { timer = null; N.empurrar(); }, N.ESPERA_MS);
   };
@@ -177,11 +204,22 @@
     if (!s || !s.ativa()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
     return s.api('/api/save').then(function (r) {
       if (!r.ok) {
-        if (r.status === 401 || r.status === 403) { s.esquece(); ligada = false; }
-        erro = r.erro || ('HTTP ' + r.status);
-        avisa('erro', { erro: erro, status: r.status });
+        if (r.status === 401 || r.status === 403) {
+          s.esquece(); ligada = false;
+          erro = r.erro || ('HTTP ' + r.status);
+          avisa('erro', { erro: erro, status: r.status });
+          return r;
+        }
+        // fora do ar, reiniciando ou mal configurado: tenta de novo sozinho,
+        // e até conseguir nada sobe (ver `puxou`)
+        erro = foraDoAr(r);
+        avisa('fora', { erro: erro, status: r.status });
+        agendaPuxar();
         return r;
       }
+      puxou = true;
+      if (timerPuxa) { clearTimeout(timerPuxa); timerPuxa = null; }
+      if (!parada) erro = null;
       var reg = leRegistro();
       var cid = s.contaId();
       var mesmaConta = reg.conta === cid;
@@ -215,6 +253,12 @@
     var s = S();
     if (!ligada || parada || !s || !s.ativa()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
     if (subindo) { sujo = true; return Promise.resolve({ ok: false, erro: 'já subindo' }); }
+    if (!puxou) {                                  // sem a versão do servidor, subir seria às cegas
+      sujo = true;
+      marcaSujo();
+      agendaPuxar();
+      return Promise.resolve({ ok: false, erro: 'esperando o servidor' });
+    }
     subindo = true;
     sujo = false;
     var corpo = montaCorpo();
@@ -246,8 +290,8 @@
         avisa('erro', { erro: erro, status: r.status });
         return r;
       }
-      if (r.status === 0) {                          // servidor fora: fica sujo e tenta depois
-        erro = r.erro;
+      if (r.status === 0 || r.status >= 500) {      // fora, ou reiniciando (502 do Caddy): fica sujo e tenta depois
+        erro = foraDoAr(r);
         sujo = true;
         gravaRegistro(versao, s.contaId(), true);
         avisa('fora', { erro: erro });
@@ -282,8 +326,10 @@
   N.sair = function () {
     var s = S();
     if (timer) { clearTimeout(timer); timer = null; }
+    if (timerPuxa) { clearTimeout(timerPuxa); timerPuxa = null; }
     ligada = false;
     parada = false;
+    puxou = false;
     if (DB()) DB().aoGravar = null;
     return s ? s.sair() : Promise.resolve({ ok: true });
   };

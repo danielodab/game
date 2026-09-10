@@ -87,6 +87,10 @@
     var body = pedido.body ? JSON.parse(pedido.body) : null;
     srv.chamadas.push({ url: url, method: pedido.method, body: body, auth: pedido.headers.Authorization });
     if (srv.fora) return Promise.reject(new Error('fora'));
+    if (pedido.method === 'PUT' && srv.quebra502 > 0) {      // o Caddy enquanto a API reinicia
+      srv.quebra502--;
+      return Promise.resolve({ status: 502, json: function () { return Promise.reject(new Error('html do Caddy')); } });
+    }
     var quem = srv.tokens[String(pedido.headers.Authorization || '').replace('Bearer ', '')] || null;
     if (/\/api\/(save|troca|logout)/.test(url) && !quem) {
       return resp(401, { ok: false, erro: 'sem sessão' });
@@ -242,6 +246,44 @@
       return ate(function () { return srv.versao === vAntes + 1; }, 2500);
     }).then(function (ok3) {
       check('o servidor voltou: a Nuvem tenta de novo sozinha e sobe', ok3 && N.estado().erro === null);
+    });
+  }).then(function () {
+    // ------------------------------------------------------ M. o boot com o servidor fora (10/09)
+    // Antes, a 1ª gravação subia com versão 0, o servidor respondia 409 com o
+    // save DELE e o jogo feito com a API fora era apagado. Agora nada sobe
+    // antes do 1º puxar, e o registro local não zera.
+    var vServ = srv.versao;
+    var putsAntes = 0;
+    return N.sair().then(function () {
+      S.guarda({ token: 'tok-1', conta: { id: 7, nome: 'Dan' } });
+      srv.fora = true;
+      putsAntes = puts().length;
+      return N.iniciar();
+    }).then(function () {
+      P.addItem(espada);
+      window.__novo = P.state.inventory[P.state.inventory.length - 1].iid;
+      return espera(300);
+    }).then(function () {
+      var reg = null;
+      try { reg = JSON.parse(localStorage.getItem('soterra-nuvem-v1') || 'null'); } catch (e) {}
+      check('servidor fora no boot: nenhuma subida às cegas', puts().length === putsAntes,
+            (puts().length - putsAntes) + ' PUTs');
+      check('o registro local guarda a versão que esta máquina viu (não zera) e marca a pendência',
+            !!reg && reg.versao === vServ && reg.conta === 7 && reg.sujo === true, JSON.stringify(reg));
+      check('a interface fica sabendo que o servidor está fora', eventos.indexOf('fora') >= 0 && !!N.estado().erro);
+      srv.fora = false;
+      return ate(function () { return srv.versao === vServ + 1; }, 2500);
+    }).then(function (ok) {
+      var noServ = ((srv.progress && srv.progress.inventory) || []).some(function (e) { return e.iid === window.__novo; });
+      check('o servidor voltou: puxa sozinho, vê a pendência e SOBE a peça nova (nada perdido)',
+            ok && noServ && P.state.inventory.some(function (e) { return e.iid === window.__novo; }));
+      srv.quebra502 = 1;
+      var v0 = srv.versao;
+      P.addItem(espada);
+      return ate(function () { return srv.versao === v0 + 1; }, 2500).then(function (ok2) {
+        check('502 no meio da subida (API reiniciando): tenta de novo sozinha e sobe', ok2 && N.estado().erro === null,
+              String(N.estado().erro));
+      });
     });
   }).then(function () {
     // ------------------------------------------------------ I. a troca no cartório

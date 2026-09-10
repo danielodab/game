@@ -1,4 +1,5 @@
-# O Caddy na frente de tudo no VPS (HTTPS automático via Let's Encrypt).
+# SOTERRA — o Caddy na frente de tudo no VPS (HTTPS automático via Let's Encrypt).
+# servidor/instala.sh troca jogo.exemplo.com.br pelo domínio que você passar.
 # Troque jogo.exemplo.com.br pelo domínio real apontado para o VPS.
 #
 #   /                 → redireciona para /site/ (a landing pública)

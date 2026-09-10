@@ -1,0 +1,6 @@
+# O que roda no VPS (Linux) tem fim de linha LF sempre — mesmo com
+# core.autocrlf=true no Windows. Sem isto o bash lê o instala.sh com \r no
+# fim de cada linha ("$'\r': command not found") e para no primeiro comando.
+*.sh        text eol=lf
+*.service   text eol=lf
+Caddyfile   text eol=lf
