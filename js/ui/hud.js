@@ -60,6 +60,8 @@ var JOGO = (typeof window !== 'undefined')
   var tipEl = null, tipOwner = null;
   var sheetEl = null, sheetName = null, lastSheetArg = null;
   var lastRewards = null;
+  // os dados das telas que o UI.repaint precisa redesenhar iguais (10/09)
+  var lastElementChoice, lastDuelFim;
   var invFilter = 'todos';
   /* filtros por ELEMENTO (pedido 25/08: "facilita a busca") — um por ficha,
    * porque cada uma guarda a própria busca entre redesenhos */
@@ -703,6 +705,7 @@ var JOGO = (typeof window !== 'undefined')
   // TELA: ESCOLHA DE ELEMENTO (nível 5) — a tela que explica por que importa
   // ==========================================================================
   function buildElementChoice(data) {
+    lastElementChoice = data;
     var s = screens.elementChoice;
     clear(s);
     var pend = (data && data.heroIds) || safe(function () { return G().elementChoices(); }, []);
@@ -823,6 +826,13 @@ var JOGO = (typeof window !== 'undefined')
     }
     top.appendChild(acts);
     s.appendChild(top);
+
+    /* OS EVENTOS DO MUNDO (10/09): a faixa do que o Mestre ligou, logo abaixo
+     * do topo do Acampamento. Some quando não há nada no ar e repinta quando a
+     * agenda muda — com UM ouvinte só: esta tela é remontada a cada entrada. */
+    var faixaEv = sala ? null : el('div', 'hub-evento is-off');
+    if (faixaEv) s.appendChild(faixaEv);
+    ligaFaixaEventos(faixaEv);
 
     var mundo = el('div', 'hub-mundo');
     s.appendChild(mundo);
@@ -965,10 +975,15 @@ var JOGO = (typeof window !== 'undefined')
       } else if (lugar.tipo === 'portal') {
         painel.appendChild(el('h3', null, esc(lugar.nome)));
         // O CALABOUÇO DO DIA (25/08): o portal em promoção se anuncia
-        if (JOGO.Diario && JOGO.Diario.ehHoje && JOGO.Diario.ehHoje(lugar.id)) {
+        var ehDia = !!(JOGO.Diario && JOGO.Diario.ehHoje && JOGO.Diario.ehHoje(lugar.id));
+        if (ehDia) {
+          // 10/09: o número vem do Diario — era um "+50%" escrito à mão
           painel.appendChild(el('p', 'hub-dia',
-            '☀ <b>Calabouço do dia</b> — +50% de saque até a meia-noite'));
+            '☀ <b>Calabouço do dia</b> — +' + Math.round((JOGO.Diario.BONUS_DROP - 1) * 100) +
+            '% de saque até a meia-noite'));
         }
+        // OS EVENTOS DO MUNDO que valem AQUI (10/09): os gerais e os deste portal
+        linhasEventoPortal(lugar.id, ehDia).forEach(function (p) { painel.appendChild(p); });
         var sd = seletorDif();
         if (sd) painel.appendChild(sd);
         painel.appendChild(btn('Descer', 'btn-primary btn-block', function () {
@@ -1306,6 +1321,92 @@ var JOGO = (typeof window !== 'undefined')
     pintaConta();
   }
 
+  /* ------------------------------------------------ OS EVENTOS DO MUNDO (10/09)
+   * A faixa do Acampamento, as linhas do painel do portal e os chips da tela
+   * de recompensa leem a agenda (js/core/agenda.js). Tudo defensivo: sem o
+   * módulo, nada disto aparece e nada quebra. */
+  var soltaFaixaEventos = null;
+  function paginaEventos() {
+    // a página do site, relativa ao jogo (raiz/site/eventos.html), como Sessao.paginaConta
+    var raiz = String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');
+    return raiz + 'site/eventos.html';
+  }
+  // "✦ XP ×2 — Quinta do XP · termina em 5 h"
+  /* "só na Estufa Soterrada", "só no Poço sem Fundo": o nome do calabouço vem
+   * com o artigo, e a contração é a do português (o site faz igual). */
+  function soEm(id) {
+    var n = String(JOGO.Agenda.nomeCalabouco(id) || id);
+    var m = /^(A|O|As|Os) (.*)$/.exec(n);
+    return 'só ' + (m ? { A: 'na', O: 'no', As: 'nas', Os: 'nos' }[m[1]] + ' ' + m[2] : 'em ' + n);
+  }
+  function linhaEvento(e, agoraMs, comLugar) {
+    var Ag = JOGO.Agenda;
+    var termina = 'termina em ' + Ag.falta(e.fim * 1000 - agoraMs);
+    var lugar = (comLugar && e.calabouco) ? ' · ' + esc(soEm(e.calabouco)) : '';
+    if (e.tipo === 'aviso') {
+      return '📣 <b>' + esc(e.titulo) + '</b>' + (e.texto ? ' — ' + esc(e.texto) : '') + lugar + ' · ' + termina;
+    }
+    return '✦ <b>' + esc(Ag.rotulo(e)) + '</b> — ' + esc(e.titulo) + lugar + ' · ' + termina;
+  }
+  function pintaFaixaEventos(faixa) {
+    var Ag = JOGO.Agenda;
+    if (!faixa || !Ag || !Ag.ativos) return;
+    clear(faixa);
+    var ativos = safe(function () { return Ag.ativos(); }, []) || [];
+    if (!ativos.length) { faixa.classList.add('is-off'); return; }
+    faixa.classList.remove('is-off');
+    var agoraMs = safe(function () { return Ag.agora(); }, Date.now());
+    ativos.slice(0, 3).forEach(function (e) {
+      faixa.appendChild(el('span', 'hub-evento-item', linhaEvento(e, agoraMs, true)));
+    });
+    if (ativos.length > 3) faixa.appendChild(el('span', 'hub-evento-item', '+' + (ativos.length - 3) + ' outros'));
+    var a = el('a', 'hub-evento-link', 'ver o calendário');
+    a.href = paginaEventos();
+    a.target = '_blank';
+    a.rel = 'noopener';
+    faixa.appendChild(a);
+  }
+  function ligaFaixaEventos(faixa) {
+    var Ag = JOGO.Agenda;
+    if (soltaFaixaEventos) { try { soltaFaixaEventos(); } catch (e) {} soltaFaixaEventos = null; }
+    if (!faixa || !Ag || !Ag.aoMudar) return;
+    pintaFaixaEventos(faixa);
+    soltaFaixaEventos = Ag.aoMudar(function () { if (faixa.isConnected) pintaFaixaEventos(faixa); });
+    // ao entrar, busca de novo se a última tentativa tiver mais de 60 s
+    // (em casa, só com sessão ou API apontada — Agenda.refresca decide)
+    if (Ag.refresca) {
+      Ag.refresca(60000).then(function (r) {
+        if (r && !r.pulou && faixa.isConnected) pintaFaixaEventos(faixa);
+      });
+    }
+  }
+  /* uma linha por evento no ar que vale neste portal (o aviso geral mora na
+   * faixa); saque junto do Calabouço do Dia não soma: vale o maior (D2) */
+  function linhasEventoPortal(dungeonId, ehDia) {
+    var Ag = JOGO.Agenda;
+    if (!Ag || !Ag.valemEm) return [];
+    var agoraMs = safe(function () { return Ag.agora(); }, Date.now());
+    var evs = safe(function () { return Ag.valemEm(dungeonId); }, []) || [];
+    return evs.filter(function (e) { return e.tipo !== 'aviso' || e.calabouco; }).map(function (e) {
+      var txt = linhaEvento(e, agoraMs, false);
+      if (e.tipo === 'saque' && ehDia) txt += ' · junto do Calabouço do Dia, <b>vale o maior</b> (não somam)';
+      return el('p', 'hub-evento-linha', txt);
+    });
+  }
+  /* o chip do evento que PESOU nesta sala, no bloco que ele multiplicou —
+   * a recompensa diz por que veio mais (game.js devolve `eventos`) */
+  function chipsEvento(tipo) {
+    var evs = ((lastRewards && lastRewards.eventos) || []).filter(function (e) { return e && e.tipo === tipo; });
+    if (!evs.length) return null;
+    var w = el('div', 'rw-eventos');
+    evs.forEach(function (e) {
+      var rot = safe(function () { return JOGO.Agenda.rotulo(e); }, null) ||
+                (String(e.tipo) + ' ×' + String(e.fator).replace('.', ','));
+      w.appendChild(el('span', 'rw-evento', '✦ ' + esc(e.titulo || 'Evento do mundo') + ' · ' + esc(rot)));
+    });
+    return w;
+  }
+
   function buildRewards(name, data) {
     var s = screens[name];
     clear(s);
@@ -1376,6 +1477,8 @@ var JOGO = (typeof window !== 'undefined')
       } else {
         w.appendChild(el('div', 'rw-xp-n is-cut', 'XP por herói'));
       }
+      var chXp = chipsEvento('xp');          // 10/09: o evento do mundo de XP
+      if (chXp) w.appendChild(chXp);
 
       if (algumCorte) {
         w.appendChild(el('div', 'rw-xp-why',
@@ -1419,7 +1522,9 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     var drops = lastRewards.drops || [];
-    if (drops.length) {
+    /* 10/09: o bloco dos Vinténs morava DENTRO do `if (drops.length)` desde
+     * 23/08 — sala sem peça (três em quatro, pela régua do saque) escondia a
+     * moeda ganha, o chip do desafio e agora o do evento. Ele saiu para fora. */
     if (lastRewards.moedas > 0) {
       box.appendChild(rwBlock('Vinténs', (function () {
         var w = el('div', 'rw-moedas');
@@ -1430,6 +1535,8 @@ var JOGO = (typeof window !== 'undefined')
             dsf.cumprido ? '☆ ' + esc(dsf.nome) + ' cumprido · +25%'
                          : '☆ ' + esc(dsf.nome) + ' se perdeu'));
         }
+        var chV = chipsEvento('vintem');     // 10/09: o evento do mundo de vinténs
+        if (chV) w.appendChild(chV);
         var g = lastRewards.moedas || 0;
         var ganhoM = el('span', 'rw-moedas-ganho', '+' + g + (g === 1 ? ' vintém' : ' vinténs'));
         ganhoM.insertBefore(art('vintemIcon', [18], 18, 'moeda-inline'), ganhoM.firstChild);
@@ -1445,6 +1552,7 @@ var JOGO = (typeof window !== 'undefined')
       })()));
     }
 
+    if (drops.length) {
       box.appendChild(rwBlock('Saque', (function () {
         var w = el('div', 'rw-items');
         drops.forEach(function (d) {
@@ -1459,7 +1567,13 @@ var JOGO = (typeof window !== 'undefined')
           }
           w.appendChild(cell);
         });
-        return w;
+        // 10/09: o evento de saque, só quando ele venceu o Calabouço do Dia
+        var chS = chipsEvento('saque');
+        if (!chS) return w;
+        var comChipS = el('div', 'rw-saque');
+        comChipS.appendChild(chS);
+        comChipS.appendChild(w);
+        return comChipS;
       })()));
     }
 
@@ -1486,7 +1600,13 @@ var JOGO = (typeof window !== 'undefined')
           cell.appendChild(el('span', null, '+' + stones[sid] + ' ' + esc((sd && sd.name) || sid)));
           w.appendChild(cell);
         }
-        return w;
+        // 10/09: o evento de pedras (só as elementais; a Âncora fica fora)
+        var chP = chipsEvento('pedras');
+        if (!chP) return w;
+        var comChipP = el('div', 'rw-pedras');
+        comChipP.appendChild(chP);
+        comChipP.appendChild(w);
+        return comChipP;
       })()));
     }
 
@@ -2180,6 +2300,13 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   }
 
+  /* os números da fusão vêm do motor dela (10/09, decisão D7): a HUD dizia
+   * "+2 PA" e a fusão dá +4 — texto copiado à mão envelhece calado */
+  function fusaoNum(k, def) {
+    var F = JOGO.Fusion;
+    return (F && typeof F[k] === 'number' && isFinite(F[k])) ? F[k] : def;
+  }
+
   // botão de FUSÃO com prévia do resultado
   function paintFusion(s) {
     clear(bt.fusion);
@@ -2201,8 +2328,9 @@ var JOGO = (typeof window !== 'undefined')
     cell.appendChild(t);
     tap(cell, function () {
       confirmSheet('Fundir os dois heróis?',
-        'Vira <b>uma única unidade</b>: vida somada, +2 PA, +1 PP, +50 de escudo e feitiços de fusão. ' +
-        'Custa 2 PA e <b>encerra o turno</b>. Se um deles se afastar antes do fim, não acontece nada.',
+        'Vira <b>uma única unidade</b>: vida somada, +' + fusaoNum('BONUS_PA', 4) + ' PA, +' +
+        fusaoNum('BONUS_PP', 1) + ' PP, +' + fusaoNum('BONUS_SHIELD', 50) + ' de escudo e feitiços de fusão. ' +
+        'Custa ' + fusaoNum('FUSION_PA_COST', 2) + ' PA e <b>encerra o turno</b>. Se um deles se afastar antes do fim, não acontece nada.',
         function () {
           var ok = safe(function () { return G().declareFusion(pr.uidA, pr.uidB); }, false);
           if (!ok) toast('A fusão não pôde ser declarada.');
@@ -2233,7 +2361,7 @@ var JOGO = (typeof window !== 'undefined')
     marcaDock(null);
     hideTip();
   }
-  /* O BANCO — agora do jeito do DOFUS, a pedido: o saco do grupo de um lado,
+  /* O BANCO — agora do jeito pedido: o saco do grupo de um lado,
    * o cofre do outro, as DUAS grades na mesma tela, e a peça ATRAVESSA —
    * arrastada com o mouse ou o dedo, ou com dois toques rápidos. O dinheiro
    * tem campo DIGITADO: "guardar 500" é uma intenção que os quatro botões de
@@ -2424,7 +2552,7 @@ var JOGO = (typeof window !== 'undefined')
         op.then(function (res) {
           if (!res.ok) toast(res.erro || 'não deu');
           else {
-            bancoQtd = '';                 // deu certo: o campo limpa, como no Dofus
+            bancoQtd = '';                 // deu certo: o campo limpa
             // depósito conta para as missões ("guarde N no cofre") — saque não
             if (valorDeposito && JOGO.Missoes && JOGO.Missoes.registra) {
               JOGO.Missoes.registra({ tipo: 'deposito', valor: valorDeposito,
@@ -2458,7 +2586,7 @@ var JOGO = (typeof window !== 'undefined')
       moedas.appendChild(ladoCofre);
       caixa.appendChild(moedas);
 
-      // ---- AS DUAS GRADES, lado a lado — o desenho do Dofus
+      // ---- AS DUAS GRADES, lado a lado
       caixa.appendChild(el('p', 'inv-dica',
         'Arraste uma peça de uma grade para a outra — cada viagem leva uma unidade. ' +
         'Dois toques rápidos também transferem.'));
@@ -2959,7 +3087,7 @@ var JOGO = (typeof window !== 'undefined')
     })();
   }
 
-  /* A MESA DE TROCA — duas colunas à la Dofus: a minha oferta (editável) e
+  /* A MESA DE TROCA — duas colunas: a minha oferta (editável) e
    * a dele (espelho). Travar quando satisfeito; os dois travados liberam o
    * Confirmar; QUALQUER mudança destrava os dois. A ficha só desenha o que
    * JOGO.Troca diz — o estado mora lá, e a Rede o carrega. */
@@ -3242,6 +3370,7 @@ var JOGO = (typeof window !== 'undefined')
   /* O FIM DO DUELO: quem venceu, o clima, e quanto a Brasa teria pago —
    * treino não acende fogo, mas mostra a conta para dar gosto do que vem. */
   function buildDuelFim(data) {
+    lastDuelFim = data;
     var s = screens.duelFim;
     clear(s);
     data = data || {};
@@ -3300,6 +3429,7 @@ var JOGO = (typeof window !== 'undefined')
     // o cais do Acampamento e o menu inicial chamam cada porta pelo nome.
     if (name === 'gm') { sheetGM(); return; }
     if (name === 'gmcaixa') { sheetGMCaixa(); return; }
+    if (name === 'gmagenda') { sheetGMAgenda(); return; }   // 10/09: os eventos do mundo
     if (name === 'party') sheetParty(null, arg);
     else if (name === 'collection') sheetParty('colecao', arg);
     else if (name === 'inventory') sheetParty('inventario', arg);
@@ -4527,10 +4657,10 @@ var JOGO = (typeof window !== 'undefined')
       });
       grid.appendChild(cell);
     });
-    // ---- GRADE FIXA (pedido do usuário, com a foto do Dofus na mão)
+    // ---- GRADE FIXA (pedido do usuário, com uma foto de referência na mão)
     // Antes a grade desenhava UMA célula por pilha existente, então ela encolhia
     // e crescia conforme o saco: com três itens virava uma tirinha de três
-    // quadrados, e a tela inteira dançava a cada peça equipada. No Dofus a grade
+    // quadrados, e a tela inteira dançava a cada peça equipada. Na referência a grade
     // é FIXA — os espaços vazios continuam lá, e é isso que dá a leitura de
     // "quanto ainda cabe".
     //
@@ -5965,6 +6095,320 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(btn('Voltar ao Painel do Mestre', 'btn-ghost btn-block', function () { openSheet('gm'); }));
   }
 
+  /* OS EVENTOS DO MUNDO (10/09, pedido do dono: "eventos ligados pelo jogo +
+   * calendário automático, mostrados no site"). Três abas no molde da Caixa:
+   * AGORA (liga já, por N horas), AGENDAR (começo e fim na hora de Brasília)
+   * e CALENDÁRIO (as regras de toda semana, o que está no ar e o que vem, e
+   * os 14 dias com o Calabouço do Dia). Quem grava é o SERVIDOR, e só para a
+   * conta com a marca de Mestre (contas.gm = 1): sem essa sessão — a chave
+   * local abre a ficha, mas não liga evento de ninguém — ou com o servidor
+   * fora, a ficha fica só de leitura e diz o que falta. Os tetos são os da
+   * agenda (xp 2 · vintém 1,5 · pedras 2 · saque 1,5 · aviso 1). */
+  var gmAgendaAba = 'agora';
+  var gmAgendaRasc = { tipo: 'xp', mult: 2, cal: '', titulo: '', texto: '', horas: 2,
+                       ini: '', fim: '', dias: [6], hora: '10:00', durH: 12 };
+  var AG_MULTS = [1.1, 1.25, 1.5, 2];
+  var AG_DICA = {
+    xp: 'Toda sala paga mais experiência (o corte por herói, o dízimo e o pet herdam).',
+    vintem: 'Toda sala paga mais vinténs.',
+    pedras: 'Mais pedras de forja ELEMENTAIS — a Âncora fica fora.',
+    saque: 'Sai peça com mais frequência; a proporção entre as raridades não muda. Junto do Calabouço do Dia, vale o maior.',
+    aviso: 'Só um anúncio no jogo e no site, sem mexer em nada.'
+  };
+  function sheetGMAgenda() {
+    var GMod = JOGO.GM, Ag = JOGO.Agenda;
+    if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
+    var body = sheetShell('Eventos do mundo',
+      'Liga agora, agenda ou põe no calendário de toda semana — vale para todos os jogadores, no jogo e no site.');
+    sheetName = 'gmagenda';
+    function voltar() {
+      body.appendChild(btn('Voltar ao Painel do Mestre', 'btn-ghost btn-block', function () { openSheet('gm'); }));
+    }
+    if (!Ag || !Ag.fator) {
+      body.appendChild(el('p', 'inv-dica', 'A agenda do mundo não carregou nesta página.'));
+      voltar();
+      return;
+    }
+    var S = JOGO.Sessao;
+    var comMarca = !!safe(function () { return S.ativa() && S.conta() && S.conta().gm === true; }, false);
+    var servidor = !!safe(function () { return Ag.noAr(); }, false);
+    var pode = comMarca && servidor;
+    function dois(n) { return (n < 10 ? '0' : '') + n; }
+
+    var abas = el('div', 'inv-filtros ag-abas');
+    abas.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
+    [['agora', 'Agora'], ['agendar', 'Agendar'], ['calendario', 'Calendário']].forEach(function (par) {
+      abas.appendChild(btn(par[1], 'btn-mini ag-aba' + (gmAgendaAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
+        gmAgendaAba = par[0];
+        sheetGMAgenda();
+      }));
+    });
+    body.appendChild(abas);
+
+    if (!comMarca) body.appendChild(el('p', 'ag-nota', esc(Ag.NOTA_MESTRE)));
+    else if (!servidor) {
+      body.appendChild(el('p', 'ag-nota', 'O servidor está fora (ou ainda não conhece os eventos do mundo): ' +
+        'a lista abaixo é a última que chegou, só para leitura.'));
+    }
+
+    // sem a marca ou sem servidor, todo botão que grava fica desligado
+    function desliga(b) { if (!pode) { b.disabled = true; b.classList.add('is-off'); } return b; }
+    // a resposta do servidor: o erro dele vai inteiro para o toast; a ficha repinta
+    function resposta(r, okMsg) {
+      if (r && r.ok) toast(okMsg, 'good');
+      else toast((r && r.erro) || 'não deu — o servidor não respondeu');
+      if (sheetName === 'gmagenda' || sheetName == null) openSheet('gmagenda');
+    }
+    function campo(txt, controle) {
+      var w = el('label', 'ag-campo');
+      w.appendChild(el('span', 'inv-dica', esc(txt)));
+      w.appendChild(controle);
+      return w;
+    }
+    function seletor(opcoes, valor, aoMudar) {
+      var sel = document.createElement('select');
+      sel.className = 'hub-input ag-sel';
+      opcoes.forEach(function (o) {
+        var op = document.createElement('option');
+        op.value = String(o[0]);
+        op.textContent = o[1];
+        if (String(o[0]) === String(valor)) op.selected = true;
+        sel.appendChild(op);
+      });
+      sel.addEventListener('change', function () { aoMudar(sel.value); });
+      return sel;
+    }
+    function entrada(tipo, valor, aoMudar, attrs) {
+      var i = document.createElement(tipo === 'textarea' ? 'textarea' : 'input');
+      if (tipo !== 'textarea') i.type = tipo;
+      i.className = 'hub-input ag-in';
+      i.value = (valor == null) ? '' : String(valor);
+      for (var k in (attrs || {})) if (attrs.hasOwnProperty(k)) i.setAttribute(k, attrs[k]);
+      i.addEventListener('input', function () { aoMudar(i.value); });
+      i.addEventListener('keydown', function (ev) { ev.stopPropagation(); });   // o "i" digitado aqui não abre o saco
+      return i;
+    }
+    function multsDe(tipo) {
+      var teto = Ag.TETOS[tipo] || 1;
+      return AG_MULTS.filter(function (m) { return m <= teto + 1e-9 && m > 1; });
+    }
+    // tipo, multiplicador (filtrado pelo teto do tipo), calabouço, título e texto
+    function camposComuns(form) {
+      var R = gmAgendaRasc;
+      if (!Ag.TETOS[R.tipo]) R.tipo = 'xp';
+      form.appendChild(campo('Tipo', seletor(Ag.TIPOS.map(function (t) {
+        return [t, Ag.NOMES[t] + (Ag.TETOS[t] > 1 ? ' (até ' + Ag.fmtFator(Ag.TETOS[t]) + ')' : '')];
+      }), R.tipo, function (v) {
+        R.tipo = v;
+        sheetGMAgenda();
+      })));
+      var ms = multsDe(R.tipo);
+      if (ms.length) {
+        if (ms.indexOf(Number(R.mult)) < 0) R.mult = ms[ms.length - 1];
+        form.appendChild(campo('Multiplicador', seletor(ms.map(function (m) { return [m, Ag.fmtFator(m)]; }),
+          R.mult, function (v) { R.mult = Number(v); })));
+      }
+      form.appendChild(el('p', 'inv-dica ag-dica', esc(AG_DICA[R.tipo] || '')));
+      form.appendChild(campo('Calabouço', seletor([['', 'Todos os calabouços']].concat(
+        Ag.calaboucosDoPainel().map(function (id) { return [id, Ag.nomeCalabouco(id)]; })),
+        R.cal, function (v) { R.cal = v; })));
+      form.appendChild(campo('Título (3 a 60 letras)', entrada('text', R.titulo, function (v) { R.titulo = v; },
+        { maxlength: '60', placeholder: 'Quinta do XP' })));
+      form.appendChild(campo('Texto (opcional, até 280)', entrada('textarea', R.texto, function (v) { R.texto = v; },
+        { maxlength: '280', rows: '2', placeholder: 'Toda sala paga o dobro de experiência.' })));
+    }
+    function corpoComum() {
+      var R = gmAgendaRasc;
+      var c = { tipo: R.tipo, calabouco: R.cal || null,
+                titulo: String(R.titulo || '').trim(), texto: String(R.texto || '').trim() };
+      if (R.tipo !== 'aviso') c.multiplicador = Number(R.mult);
+      return c;
+    }
+    function tituloOk() {
+      var t = String(gmAgendaRasc.titulo || '').trim();
+      if (t.length < 3 || t.length > 60) { toast('O título precisa de 3 a 60 letras.'); return false; }
+      return true;
+    }
+    // uma lista de eventos; o pontual ganha "encerrar" (no ar) ou "cancelar" (futuro)
+    function listaEventos(titulo, evs, vazio) {
+      body.appendChild(el('h3', 'hs-sec', esc(titulo)));
+      var caixa = el('div', 'ms-caixa ag-lista');
+      if (!evs.length) caixa.appendChild(el('p', 'inv-dica', esc(vazio)));
+      var agoraMs = Ag.agora();
+      evs.forEach(function (e) {
+        var noArAgora = e.inicio * 1000 <= agoraMs;
+        var row = el('div', 'ms-linha ag-linha');
+        row.setAttribute('data-evento', e.id);
+        var tx = el('div', 'ms-tx');
+        tx.appendChild(el('div', 'ms-nome', '<b>' + esc(e.titulo) + '</b> <i>· ' + esc(Ag.rotulo(e)) +
+          ' · ' + esc(Ag.nomeCalabouco(e.calabouco)) + '</i>'));
+        var quando = noArAgora
+          ? 'no ar · termina em ' + Ag.falta(e.fim * 1000 - agoraMs) + ' (' + Ag.quando(e.fim) + ')'
+          : Ag.quando(e.inicio) + ' → ' + Ag.quando(e.fim) + ' (Brasília)';
+        tx.appendChild(el('div', 'ms-prog', esc(quando) + (e.origem === 'calendario' ? ' · da regra semanal' : '') +
+          (e.texto ? ' — ' + esc(e.texto) : '')));
+        row.appendChild(tx);
+        var alvo = Ag.alvoDe(e);
+        if (alvo && alvo.alvo === 'evento') {
+          row.appendChild(desliga(btn(noArAgora ? 'Encerrar' : 'Cancelar', 'btn-mini btn-ghost ag-cancela', function () {
+            confirmSheet(noArAgora ? 'Encerrar o evento agora?' : 'Cancelar o evento?',
+              '<b>' + esc(e.titulo) + '</b> (' + esc(Ag.rotulo(e)) + ') sai do ar para todo mundo. ' +
+              'Não há como desfazer — dá para ligar de novo.',
+              function () {
+                Ag.cancelar(alvo.alvo, alvo.id).then(function (r) {
+                  resposta(r, noArAgora ? 'Evento encerrado.' : 'Evento cancelado.');
+                });
+              });
+          })));
+        }
+        caixa.appendChild(row);
+      });
+      body.appendChild(caixa);
+    }
+
+    var R = gmAgendaRasc;
+    if (gmAgendaAba === 'agora') {
+      body.appendChild(el('h3', 'hs-sec', 'Ligar agora'));
+      var fA = el('div', 'ag-form');
+      camposComuns(fA);
+      fA.appendChild(campo('Duração em horas (1 a 168)', entrada('number', R.horas, function (v) { R.horas = v; },
+        { min: '1', max: '168', step: '1' })));
+      body.appendChild(fA);
+      body.appendChild(desliga(btn('Ligar agora', 'btn-gold btn-block ag-envia', function () {
+        if (!tituloOk()) return;
+        var h = Math.floor(Number(R.horas));
+        if (!(h >= 1 && h <= 168)) { toast('A duração vai de 1 a 168 horas.'); return; }
+        var c = corpoComum();
+        // sem `inicio`: o servidor liga no relógio DELE. As 168 h cheias perdem
+        // 2 min para não passar dos 7 dias por um desvio de relógio de segundos.
+        c.fim = Math.floor(Ag.agora() / 1000) + h * 3600 - (h >= 168 ? 120 : 0);
+        Ag.criar(c).then(function (r) { resposta(r, 'Evento no ar: ' + c.titulo + '.'); });
+      })));
+      listaEventos('No ar agora', Ag.ativos(), 'Nenhum evento no ar.');
+    } else if (gmAgendaAba === 'agendar') {
+      body.appendChild(el('h3', 'hs-sec', 'Agendar (hora de Brasília)'));
+      var fB = el('div', 'ag-form');
+      camposComuns(fB);
+      if (!R.ini || !R.fim) {
+        var cheia = Math.ceil(Ag.agora() / 3600000) * 3600;            // a próxima hora cheia
+        R.ini = Ag.paraBrasilia(cheia + 3600);
+        R.fim = Ag.paraBrasilia(cheia + 5 * 3600);
+      }
+      fB.appendChild(campo('Começa', entrada('datetime-local', R.ini, function (v) { R.ini = v; })));
+      fB.appendChild(campo('Termina', entrada('datetime-local', R.fim, function (v) { R.fim = v; })));
+      body.appendChild(fB);
+      body.appendChild(desliga(btn('Agendar', 'btn-gold btn-block ag-envia', function () {
+        if (!tituloOk()) return;
+        var ini = Ag.deBrasilia(R.ini), fim = Ag.deBrasilia(R.fim);
+        if (ini == null || fim == null) { toast('Diga quando começa e quando termina.'); return; }
+        if (!(fim > ini)) { toast('O fim tem de vir depois do começo.'); return; }
+        if (fim - ini > 7 * 86400) { toast('Um evento dura no máximo 7 dias.'); return; }
+        var c = corpoComum();
+        c.inicio = ini;
+        c.fim = fim;
+        Ag.criar(c).then(function (r) { resposta(r, 'Evento agendado: ' + c.titulo + '.'); });
+      })));
+      listaEventos('Agendados', Ag.proximos().filter(function (e) { return e.origem !== 'calendario'; }),
+        'Nada agendado.');
+    } else {
+      body.appendChild(el('h3', 'hs-sec', 'Nova regra de toda semana'));
+      var fC = el('div', 'ag-form');
+      camposComuns(fC);
+      var dias = el('div', 'ag-dias');
+      Ag.DIA_CURTO.forEach(function (nome, d) {
+        var on = R.dias.indexOf(d) >= 0;
+        dias.appendChild(btn(nome, 'btn-mini ag-dia-b' + (on ? ' btn-gold' : ' btn-ghost'), function () {
+          var i = R.dias.indexOf(d);
+          if (i >= 0) R.dias.splice(i, 1); else R.dias.push(d);
+          sheetGMAgenda();
+        }));
+      });
+      var wDias = el('div', 'ag-campo');          // div, não label: o toque no rótulo apertaria o domingo
+      wDias.appendChild(el('span', 'inv-dica', 'Dias'));
+      wDias.appendChild(dias);
+      fC.appendChild(wDias);
+      fC.appendChild(campo('Hora de Brasília', entrada('time', R.hora, function (v) { R.hora = v; })));
+      fC.appendChild(campo('Duração em horas (¼ a 24)', entrada('number', R.durH, function (v) { R.durH = v; },
+        { min: '0.25', max: '24', step: '0.25' })));
+      body.appendChild(fC);
+      body.appendChild(desliga(btn('Pôr no calendário', 'btn-gold btn-block ag-envia', function () {
+        if (!tituloOk()) return;
+        if (!R.dias.length) { toast('Escolha pelo menos um dia.'); return; }
+        if (!/^\d{2}:\d{2}$/.test(String(R.hora || ''))) { toast('A hora vai no formato 10:00.'); return; }
+        var dur = Math.round(Number(R.durH) * 60);
+        if (!(dur >= 15 && dur <= 1440)) { toast('A duração vai de 15 minutos a 24 horas.'); return; }
+        var c = corpoComum();
+        c.dias = R.dias.slice().sort(function (a, b) { return a - b; });
+        c.hora = R.hora;
+        c.duracaoMin = dur;
+        c.vigenteDe = null;
+        c.vigenteAte = null;
+        Ag.criarRegra(c).then(function (r) { resposta(r, 'No calendário: ' + Ag.textoRegra(c) + '.'); });
+      })));
+
+      body.appendChild(el('h3', 'hs-sec', 'Toda semana'));
+      var cr = el('div', 'ms-caixa ag-lista');
+      var rs = Ag.regras();
+      if (!rs.length) cr.appendChild(el('p', 'inv-dica', 'Nenhuma regra no calendário.'));
+      rs.forEach(function (rg) {
+        var row = el('div', 'ms-linha ag-linha');
+        row.setAttribute('data-regra', String(rg.id));
+        var tx = el('div', 'ms-tx');
+        tx.appendChild(el('div', 'ms-nome', '<b>' + esc(rg.titulo) + '</b> <i>· ' + esc(Ag.rotulo(rg)) +
+          ' · ' + esc(Ag.nomeCalabouco(rg.calabouco)) + '</i>'));
+        tx.appendChild(el('div', 'ms-prog', esc(Ag.textoRegra(rg))));
+        row.appendChild(tx);
+        row.appendChild(desliga(btn('Cancelar', 'btn-mini btn-ghost ag-cancela', function () {
+          confirmSheet('Tirar a regra do calendário?',
+            '<b>' + esc(rg.titulo) + '</b> para de acontecer — e a ocorrência que estiver no ar sai junto.',
+            function () {
+              Ag.cancelar('regra', rg.id).then(function (r) { resposta(r, 'Regra cancelada.'); });
+            });
+        })));
+        cr.appendChild(row);
+      });
+      body.appendChild(cr);
+
+      listaEventos('No ar agora', Ag.ativos(), 'Nenhum evento no ar.');
+      listaEventos('Próximos 14 dias', Ag.proximos(), 'Nada nos próximos 14 dias.');
+
+      // os 14 dias pelo relógio LOCAL: é por ele que o Calabouço do Dia sorteia (diario.js)
+      body.appendChild(el('h3', 'hs-sec', 'Os próximos 14 dias'));
+      var grade = el('div', 'ag-dias14');
+      var todos = Ag.ativos().concat(Ag.proximos());
+      var meio0 = new Date(Ag.agora());
+      meio0.setHours(12, 0, 0, 0);
+      for (var d14 = 0; d14 < 14; d14++) {
+        var meio = new Date(meio0.getTime() + d14 * 86400000);
+        var ini0 = new Date(meio.getTime()); ini0.setHours(0, 0, 0, 0);
+        var fim0 = ini0.getTime() + 86400000;
+        var ts14 = meio.getTime();
+        var doDia = safe(function () { return JOGO.Diario.hoje(ts14); }, null);
+        var evs14 = todos.filter(function (e) { return e.inicio * 1000 < fim0 && e.fim * 1000 > ini0.getTime(); });
+        var linha14 = el('div', 'ag-dia14' + (d14 === 0 ? ' is-hoje' : ''));
+        linha14.appendChild(el('b', null, Ag.DIA_CURTO[meio.getDay()] + ' ' + dois(meio.getDate()) + '/' + dois(meio.getMonth() + 1)));
+        linha14.appendChild(el('span', 'ag-dia14-dia',
+          doDia ? '☀ ' + esc(Ag.nomeCalabouco(doDia.dungeonId)) + ' — Calabouço do Dia' : '—'));
+        if (evs14.length) {
+          linha14.appendChild(el('span', 'ag-dia14-ev', evs14.map(function (e) {
+            return esc(Ag.rotulo(e)) + ' · ' + esc(e.titulo);
+          }).join(' | ')));
+        }
+        grade.appendChild(linha14);
+      }
+      body.appendChild(grade);
+    }
+
+    // ao abrir, busca de novo se a última tentativa tiver mais de 60 s
+    // (em casa, só com sessão ou API apontada — Agenda.refresca decide)
+    if (Ag.refresca) {
+      Ag.refresca(60000).then(function (r) {
+        if (r && !r.pulou && sheetName === 'gmagenda' && (r.mudou || !!r.ok !== servidor)) sheetGMAgenda();
+      });
+    }
+    voltar();
+  }
+
   function sheetGM() {
     var GMod = JOGO.GM;
     if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
@@ -6000,6 +6444,10 @@ var JOGO = (typeof window !== 'undefined')
     // A CAIXA DO MESTRE (03/09): qualquer item, conjunto ou bicho do jogo
     body.appendChild(btn('📦 Abrir a Caixa do Mestre — itens, conjuntos e bichos', 'btn-gold btn-block', function () {
       openSheet('gmcaixa');
+    }));
+    // OS EVENTOS DO MUNDO (10/09): XP, vinténs, pedras, saque ou aviso para todos os jogadores
+    body.appendChild(btn('📅 Eventos do mundo: ligar agora, agendar, calendário', 'btn-gold btn-block', function () {
+      openSheet('gmagenda');
     }));
     body.appendChild(el('p', 'inv-dica',
       'O cofre não tem fundo: todo preço se paga sozinho enquanto a chave estiver virada. ' +
@@ -6185,7 +6633,14 @@ var JOGO = (typeof window !== 'undefined')
    * errado, era o desenho CERTO chegando tarde demais para ser usado. */
   UI.repaint = function () {
     var eraNome = sheetName, eraArg = lastSheetArg;
-    try { if (current && screens[current]) UI.showScreen(current); } catch (e) {}
+    // 10/09: com os dados que a tela já tinha. Sem eles, o redesenho de quando os
+    // modelos 3D terminam de carregar zerava a recompensa (+0 XP, sem os chips
+    // dos eventos) — o ganho de verdade já estava aplicado; o erro era só de tela.
+    var dados;
+    if (current === 'roomClear' || current === 'dungeonComplete') dados = lastRewards;
+    else if (current === 'elementChoice') dados = lastElementChoice;
+    else if (current === 'duelFim') dados = lastDuelFim;
+    try { if (current && screens[current]) UI.showScreen(current, dados); } catch (e) {}
     if (eraNome && eraNome !== 'confirm') {
       try { openSheet(eraNome, eraArg); } catch (e2) {}
     }

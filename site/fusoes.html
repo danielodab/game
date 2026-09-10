@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fusões — SOTERRA</title>
+<meta name="description" content="As fusões do SOTERRA: como dois heróis viram um corpo só, o que cada dupla faz, as formas de cada uma e as misturas de elemento.">
+<script>document.write('<link rel="stylesheet" href="site.css?v=' + Date.now() + '">');</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
+<!--
+  Fusões (10/09). A página inteira é montada por fusoes.js a partir dos
+  arquivos do PRÓPRIO jogo, servidos da mesma origem:
+    ../js/core/data/elements.js   elementos, rivalidades e climas
+    ../js/core/data/classes.js    nome, papel e cor das classes
+    ../js/core/data/fusions.js    duplas, formas, misturas e obras de fusão
+    ../js/core/fusion.js          as regras (JOGO.Fusion) e o spellsFor
+  Nenhum número é copiado: se o jogo mudar, a página muda junto. Os retratos
+  (img/fusao-<a>-<b>.webp, img/obra-<id>.webp) podem ainda não existir — a
+  moldura mostra a inicial no lugar.
+  Link direto para uma dupla: fusoes.html#dupla=arqueiro+bruxo&elementos=agua+ar&nivel=30
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="eventos.html">Eventos</a>
+      <a href="fusoes.html" aria-current="page">Fusões</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="conta.html">Conta</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<section class="secao" id="o-que-e">
+  <div class="miolo">
+    <h2>O que é fusão</h2>
+    <p class="sub">Dois heróis viram um corpo só, com nome, forma e feitiços que nenhum dos dois tem sozinho. Os números desta página saem do próprio jogo.</p>
+    <div class="regras-fusao" id="fu-regras"><div class="estado">carregando as regras do jogo…</div></div>
+  </div>
+</section>
+
+<section class="secao" id="duplas">
+  <div class="miolo">
+    <h2>As duplas</h2>
+    <p class="sub" id="fu-duplas-sub">Cada dupla de classes tem corpo, nome e formas próprias, que abrem conforme o nível da fusão. Escolha uma para ver as formas e os feitiços com os elementos que quiser.</p>
+    <div class="grade grade-duplas" id="fu-duplas"></div>
+    <div class="dupla-detalhe" id="fu-detalhe" hidden></div>
+  </div>
+</section>
+
+<section class="secao" id="misturas">
+  <div class="miolo">
+    <h2>As misturas de elemento</h2>
+    <p class="sub">A dupla de classes decide a forma do feitiço; a mistura dos dois elementos decide o sobrenome, o dano extra e o efeito que vem junto. Os números do efeito extra são os de base: no feitiço, a força da fusão (o nível e a dupla) multiplica dano, veneno, cura e escudo — escolha uma dupla acima para ver os números certos.</p>
+    <div class="grade" id="fu-misturas"></div>
+    <div class="rivalidades" id="fu-rivais"></div>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
+</footer>
+
+<script>
+/* 10/09: tudo desta página sai dos arquivos do próprio jogo (mesma origem);
+ * a marca ?v= é a do jogo, o instante da carga, para nunca mostrar um número
+ * velho depois de uma mudança de balanço. */
+(function (v) {
+  ['site.js', '../js/core/data/elements.js', '../js/core/data/classes.js', '../js/core/data/fusions.js',
+   '../js/core/fusion.js', 'fusoes.js'].forEach(function (s) {
+    document.write('<script src="' + s + v + '"><\/script>');
+  });
+})('?v=' + Date.now());
+</script>
+</body>
+</html>

@@ -78,7 +78,20 @@ mudam alguns rótulos.
   Nuvem confere a marca com o servidor a cada abertura: a sua conta vira o
   Mestre (Cavaleiro Negro, Panóplia, Caixa) sem chave no endereço.
 - **Outros comandos** no Terminal: `admin` (a ajuda), `admin banir "NOME"`,
-  `admin eventos 50`, `admin backup`.
+  `admin eventos 50`, `admin agenda`, `admin backup`.
+- **Eventos do mundo** (XP em dobro, Maré da Cisterna…): quem liga é o
+  Mestre, no jogo, em Painel do Mestre → **Eventos do mundo**: ligar agora,
+  agendar, ou uma regra semanal do calendário automático, sempre em hora de
+  Brasília. O servidor confere a marca de Mestre da conta a cada pedido
+  (`POST /api/eventos…`); nenhuma outra conta cria nada. Todo mundo vê em
+  `/site/eventos.html`, na faixa do Acampamento e no painel do portal (a
+  leitura, `GET /api/eventos`, é pública). Cada tipo tem teto (XP ×2, vinténs
+  ×1,5, pedras ×2, saque ×1,5, aviso sem multiplicar), dois eventos do mesmo
+  tipo não se somam (vale o maior) e nenhum mexe na raridade das peças; o
+  saque do evento também não soma com o Calabouço do Dia. Cancelar não apaga
+  (fica a trilha). No Terminal, `admin agenda` lista o que está marcado e as
+  regras vigentes, com hora de Brasília; `admin eventos` mostra quem ligou e
+  quem cancelou (`agenda-evento`, `agenda-regra`, `agenda-cancela`).
 - **Atualizar**: todo push no `main` refaz o deploy sozinho (Advanced → Auto
   deploy = Deploy on push). O contêiner velho só sai quando o novo está
   saudável; se o novo falhar, o velho continua no ar.

@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SOTERRA — Ecos do Mundo Enterrado</title>
 <meta name="description" content="SOTERRA é um jogo tático por turnos, só de calabouços: dupla com fusão de classes, Acampamento online, arena PvP com as dez Coroas, pets e guildas. Jogue no navegador.">
-<link rel="stylesheet" href="site.css">
+<script>
+  // 10/09: a folha leva a marca do instante da carga, como o código do jogo
+  // (index.html da raiz). Com as seções novas, um site.css velho no cache
+  // deixaria o calendário e as fusões sem roupa até o navegador revalidar.
+  document.write('<link rel="stylesheet" href="site.css?v=' + Date.now() + '">');
+</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
 <!--
   A landing pública. Mora em /site/ no VPS; a raiz do domínio cai aqui (redir
   do Caddy) e o jogo fica em /index.html — por isso o botão "Jogar" aponta
@@ -13,15 +19,23 @@
   abrindo a pasta do disco).
 
   FOTOS: as molduras abaixo esperam arquivos em site/img/. Enquanto não
-  existirem, o onerror do <img> liga a moldura de fallback (fundo dourado com
-  a inicial). Nomes esperados:
+  existirem, o onerror do <img> liga a moldura de fallback (fundo com a
+  inicial). Nomes esperados:
     img/capa.jpg
-    img/classe-barbaro.jpg   img/classe-cacador.jpg   img/classe-bruxo.jpg
-    img/classe-ladino.jpg    img/classe-curandeira.jpg img/classe-xama.jpg
-    img/classe-minotauro.jpg
+    img/classe-<id>.webp     os retratos tirados dos modelos do jogo por
+                             tools/retratos_site.py (10/09), pelo ID da classe:
+                             sumo, arqueiro, bruxo, espadachim, curandeiro,
+                             invocador, minotauro. Quadrados, corpo inteiro,
+                             fundo escuro na cor da classe.
+    img/fusao-<a>-<b>.webp   as duplas em destaque, o par em ordem alfabética
     img/calabouco-estufa.jpg img/calabouco-cisterna.jpg img/calabouco-fecho.jpg
     img/calabouco-andaimes.jpg img/calabouco-mina.jpg img/calabouco-coracao.jpg
     img/guildas.jpg          img/arena.jpg
+
+  DADOS DO JOGO (10/09): os eventos, as fusões e o melhor de cada classe leem
+  os arquivos do PRÓPRIO jogo (../js/core/...), servidos da mesma origem: os
+  nomes e as cores das classes, os calabouços, o Calabouço do Dia e as regras
+  da fusão. Nenhum número da fusão é copiado aqui.
 -->
 </head>
 <body>
@@ -31,7 +45,9 @@
     <a class="marca" href="index.html">SOTERRA</a>
     <nav>
       <a href="#classes">Classes</a>
+      <a href="fusoes.html">Fusões</a>
       <a href="#calaboucos">Calabouços</a>
+      <a href="eventos.html">Eventos</a>
       <a href="#guildas">Guildas</a>
       <a href="#arena">Arena</a>
       <a href="ranking.html">Ranking</a>
@@ -52,7 +68,7 @@
     <div class="filete"></div>
     <p class="pitch">
       Quando a Grande Lousa desceu, o mundo inteiro ficou lá embaixo — e continua vivo.
-      Um jogo <b>tático por turnos</b>, ao estilo Dofus, feito só de calabouços:
+      Um jogo <b>tático por turnos</b>, feito só de calabouços:
       desça em dupla, funda duas classes numa só, e volte ao Acampamento com o que sobreviveu.
     </p>
     <div class="botoes">
@@ -63,15 +79,41 @@
   </div>
 </section>
 
+<!-- ============ eventos do mundo ============ -->
+<!-- 10/09: o que o Mestre do Fundo ligou (vem de /api/eventos) e o Calabouço
+     do Dia, que o site calcula sozinho com os dados do próprio jogo — por isso
+     esta seção continua útil com o servidor fora. -->
+<section class="secao" id="eventos">
+  <div class="miolo">
+    <h2>Eventos do mundo</h2>
+    <p class="sub">De tempo em tempo o Mestre do Fundo acende um bônus: mais experiência, mais vinténs, mais pedras de forja ou um pouco mais de saque. Nenhum evento mexe na raridade das peças. <a href="eventos.html">Ver o calendário completo →</a></p>
+    <div class="eventos-capa">
+      <div class="caixa-evento">
+        <h3>Agora</h3>
+        <div class="lista-agora" id="ev-agora"><div class="estado">carregando…</div></div>
+      </div>
+      <div class="caixa-evento">
+        <h3>Calabouço do Dia <small>hoje e os próximos 6 dias</small></h3>
+        <ul class="lista-dia" id="ev-dia"></ul>
+      </div>
+      <div class="caixa-evento">
+        <h3>Em breve</h3>
+        <ul class="lista-eventos" id="ev-proximos"><li class="apoio">carregando…</li></ul>
+        <p class="mais"><a href="eventos.html">Todos os eventos →</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ o que é ============ -->
 <section class="secao" id="oquee">
   <div class="miolo">
     <h2>O que é</h2>
     <p class="sub">Grade, pontos de ação e de passos, linha de visão, quatro elementos que se rivalizam e cinco climas que mudam a sala. Nada de mundo aberto: cada portal é um calabouço de salas encadeadas, com chefe no fim e saque que é <b>muito</b> difícil de conseguir.</p>
     <div class="grade">
-      <div class="destaque"><div class="glifo">⚔</div><h3>Tático por turnos</h3><p>Estilo Dofus: posição vale mais que número. Cada célula, cada turno, cada PA conta.</p></div>
+      <div class="destaque"><div class="glifo">⚔</div><h3>Tático por turnos</h3><p>Posição vale mais que número. Cada célula, cada turno, cada PA conta.</p></div>
       <div class="destaque"><div class="glifo">⛓</div><h3>Só calabouços</h3><p>Portais no Acampamento, salas encadeadas, chefe no fim. Sem grind de campo: desceu, é sério.</p></div>
-      <div class="destaque"><div class="glifo">⚗</div><h3>Dupla com fusão</h3><p>Dois heróis descem juntos — e podem se fundir numa forma nova, com corpo, feitiços e caminhos próprios.</p></div>
+      <a class="destaque" href="fusoes.html"><div class="glifo">⚗</div><h3>Dupla com fusão</h3><p>Dois heróis descem juntos — e podem se fundir numa forma nova, com corpo, feitiços e caminhos próprios. <span class="mais">Ver as fusões →</span></p></a>
       <div class="destaque"><div class="glifo">⛺</div><h3>Acampamento online</h3><p>A praça viva: chat, troca de itens entre contas, mercadinho, banco, forja e a sede da sua guilda.</p></div>
       <div class="destaque"><div class="glifo">♛</div><h3>Arena e as dez Coroas</h3><p>PvP por Elo. Sua patente é uma das dez Coroas — e a décima só cabe na cabeça do primeiro do placar.</p></div>
       <div class="destaque"><div class="glifo">🐾</div><h3>Pets com nível</h3><p>Cada calabouço esconde um bicho. Ele sobe de nível com você, ganha estrelas e age depois do dono.</p></div>
@@ -81,40 +123,54 @@
 </section>
 
 <!-- ============ classes ============ -->
+<!-- 10/09: os retratos são quadrados (.foto.retrato) e vêm dos modelos do jogo;
+     o data-classe deixa o script pintar a moldura de reserva na cor da classe. -->
 <section class="secao" id="classes">
   <div class="miolo">
     <h2>Classes</h2>
     <p class="sub">Sete jeitos de descer. Todas começam com feitiços neutros e escolhem o caminho elemental no nível 5; as estrelas abrem os caminhos seguintes.</p>
     <div class="grade">
       <div class="cartao">
-        <div class="foto" data-letra="B"><img src="img/classe-barbaro.jpg" alt="Bárbaro" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="foto retrato" data-letra="B" data-classe="sumo"><img src="img/classe-sumo.webp" alt="Bárbaro" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Tanque</span><h3>Bárbaro</h3><p>Corpanzil, capa surrada e um machado de duas mãos: ocupa o gargalo e não sai dele. Provoca, prende, empurra e cobra caro cada célula.</p></div>
       </div>
       <div class="cartao">
-        <div class="foto" data-letra="C"><img src="img/classe-cacador.jpg" alt="Caçador" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="foto retrato" data-letra="C" data-classe="arqueiro"><img src="img/classe-arqueiro.webp" alt="Caçador" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Atirador</span><h3>Caçador</h3><p>Chapéu de aba larga e espingarda de dois canos. Cada tiro deixa uma marca; quem tem marcas demais recebe a conta toda de uma vez.</p></div>
       </div>
       <div class="cartao">
-        <div class="foto" data-letra="B"><img src="img/classe-bruxo.jpg" alt="Bruxo" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="foto retrato" data-letra="B" data-classe="bruxo"><img src="img/classe-bruxo.webp" alt="Bruxo" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Mago</span><h3>Bruxo</h3><p>Áreas de média e longa distância, maldições que trabalham sozinhas e controle do terreno. Apaga salas inteiras — se sobreviver à conjuração.</p></div>
       </div>
       <div class="cartao">
-        <div class="foto" data-letra="L"><img src="img/classe-ladino.jpg" alt="Ladino" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="foto retrato" data-letra="L" data-classe="espadachim"><img src="img/classe-espadachim.webp" alt="Ladino" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Assassino</span><h3>Ladino</h3><p>Duas adagas, velocidade, invisibilidade e veneno. Entra pelo flanco, corta duas vezes e some antes da resposta. Morre depressa se errar a janela.</p></div>
       </div>
       <div class="cartao">
-        <div class="foto" data-letra="C"><img src="img/classe-curandeira.jpg" alt="Curandeira" onerror="this.parentNode.classList.add('sem-foto')"></div>
-        <div class="corpo"><span class="papel">Suporte</span><h3>Curandeira</h3><p>Devolve vida e abençoa quem luta. O que ela faz, e ninguém mais faz, é manter o grupo de pé por mais um turno.</p></div>
+        <div class="foto retrato" data-letra="C" data-classe="curandeiro"><img src="img/classe-curandeiro.webp" alt="Curandeiro" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><span class="papel">Suporte</span><h3>Curandeiro</h3><p>Devolve vida e abençoa quem luta. O que ele faz, e ninguém mais faz, é manter o grupo de pé por mais um turno.</p></div>
       </div>
       <div class="cartao">
-        <div class="foto" data-letra="X"><img src="img/classe-xama.jpg" alt="Xamã" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="foto retrato" data-letra="X" data-classe="invocador"><img src="img/classe-invocador.webp" alt="Xamã" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Invocador</span><h3>Xamã</h3><p>Grimório aberto numa das mãos: invoca criaturas que tancam e mordem, arma armadilhas e fortalece quem está perto. Sozinho é frágil; nunca está sozinho.</p></div>
       </div>
       <div class="cartao">
-        <div class="foto" data-letra="M"><img src="img/classe-minotauro.jpg" alt="Minotauro" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="foto retrato" data-letra="M" data-classe="minotauro"><img src="img/classe-minotauro.webp" alt="Minotauro" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Guardião</span><h3>Minotauro</h3><p>Grande demais para desviar, teimoso demais para recuar. Ergue muro onde não havia caminho e põe o próprio escudo na frente de quem sangra. Não mata: decide por onde o outro anda.</p></div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ============ fusões ============ -->
+<!-- 10/09: as regras em quatro linhas, lidas de JOGO.Fusion, e quatro duplas
+     em destaque; o resto mora em fusoes.html. -->
+<section class="secao" id="fusoes">
+  <div class="miolo">
+    <h2>Fusões</h2>
+    <p class="sub">Dois heróis lado a lado viram um corpo só, com nome, forma e feitiços que nenhum dos dois tem sozinho. <a href="fusoes.html">Ver todas as duplas e as misturas →</a></p>
+    <ul class="regras-curtas" id="fu-regras"><li class="apoio">carregando as regras do jogo…</li></ul>
+    <div class="grade" id="fu-destaques"></div>
   </div>
 </section>
 
@@ -191,8 +247,8 @@
 <section class="secao" id="ranking">
   <div class="miolo">
     <h2>Ranking</h2>
-    <p class="sub">Os cinco primeiros de cada placar. <a href="ranking.html">Ver o ranking completo →</a></p>
-    <div class="tres">
+    <p class="sub">Os cinco primeiros de cada placar e o melhor herói de cada classe. <a href="ranking.html">Ver o ranking completo →</a></p>
+    <div class="tres quatro">
       <div>
         <h3>Jogadores <small>por experiência</small></h3>
         <div class="tabela-caixa"><table><thead><tr><th>#</th><th>Nome</th><th class="num">XP</th><th class="num">Nível</th></tr></thead>
@@ -208,6 +264,11 @@
         <div class="tabela-caixa"><table><thead><tr><th>#</th><th>Guilda</th><th class="num">Membros</th><th class="num">XP</th></tr></thead>
           <tbody id="rk-guildas"></tbody></table><div class="estado" id="es-guildas">carregando…</div></div>
       </div>
+      <div>
+        <h3>O melhor de cada classe <small>por XP na classe</small></h3>
+        <div class="tabela-caixa"><table><thead><tr><th>Classe</th><th>Quem</th><th class="num">Nível</th></tr></thead>
+          <tbody id="rk-classes"></tbody></table><div class="estado" id="es-classes">carregando…</div></div>
+      </div>
     </div>
   </div>
 </section>
@@ -216,35 +277,147 @@
   <div class="miolo">
     <span class="marca">SOTERRA</span>
     Ecos do Mundo Enterrado · um jogo tático de calabouços, jogado no navegador.
-    <br><a href="conta.html">Criar conta</a> · <a href="conta.html#entrar">Entrar</a> · <a href="ranking.html">Ranking</a> · <a href="../index.html">Jogar</a>
+    <br><a href="conta.html">Criar conta</a> · <a href="conta.html#entrar">Entrar</a> · <a href="eventos.html">Eventos</a> · <a href="fusoes.html">Fusões</a> · <a href="ranking.html">Ranking</a> · <a href="../index.html">Jogar</a>
   </div>
 </footer>
 
-<script src="site.js"></script>
 <script>
-/* O ranking da landing: os 5 primeiros de cada placar, vindos de /api/ranking.
- * Sem servidor (ou com ele fora) as três caixas dizem isso, sem quebrar o resto. */
+/* 10/09: o site lê os dados do PRÓPRIO jogo, da mesma origem, em vez de uma
+ * cópia que envelhece. A marca ?v= é a mesma do jogo: o instante da carga,
+ * para o navegador nunca servir um dado velho depois de uma mudança. */
+(function (v) {
+  ['site.js', '../js/core/data/classes.js', '../js/core/data/dungeons.js', '../js/core/diario.js',
+   '../js/core/data/fusions.js', '../js/core/fusion.js'].forEach(function (s) {
+    document.write('<script src="' + s + v + '"><\/script>');
+  });
+})('?v=' + Date.now());
+</script>
+<script>
 (function () {
   var E = SITE.esc, N = SITE.num;
+  var JG = window.JOGO || {}, DATA = JG.DATA || {}, CLASSES = DATA.classes || {};
+  function $(id) { return document.getElementById(id); }
+  function ehClasse(id) { return id !== 'gm' && Object.prototype.hasOwnProperty.call(CLASSES, id); }
+  function nomeClasse(id) { return ehClasse(id) ? CLASSES[id].name : String(id); }
+  function corClasse(id) { return (ehClasse(id) && CLASSES[id].palette && CLASSES[id].palette.primary) || ''; }
+
+  /* ---- a moldura de reserva dos retratos pega a cor da classe no jogo ---- */
+  [].forEach.call(document.querySelectorAll('.foto[data-classe]'), function (f) {
+    var c = corClasse(f.getAttribute('data-classe'));
+    if (c) f.style.setProperty('--cor', c);
+  });
+
+  /* ---- eventos do mundo ----------------------------------------------------
+   * O Calabouço do Dia sai do jogo e não depende do servidor; o que o Mestre
+   * ligou vem de /api/eventos. A contagem anda a cada 30 s, e o evento que
+   * vence com a página aberta sai sozinho (SITE.agenda usa o relógio). */
+  var agenda = null, lida = false, msg = '';
+  function desenhaDia() {
+    var hoje = SITE.agora(), linhas = [];
+    for (var i = 0; i < 7; i++) {
+      var meio = SITE.inicioDoDia(hoje, i) + 12 * 3600;
+      var d = SITE.diaDoCalabouco(meio);
+      if (!d) continue;
+      linhas.push('<li' + (i === 0 ? ' class="hoje"' : '') + ' data-calabouco-dia="' + E(d.id) + '">' +
+        '<span class="quando">' + (i === 0 ? 'hoje' : E(SITE.dia(meio))) + '</span>' +
+        '<span>' + E(d.nome) + (i === 0 ? ' <small>+' + d.bonus + '% de saque</small>' : '') + '</span></li>');
+    }
+    $('ev-dia').innerHTML = linhas.join('') || '<li class="apoio">não deu para ler os calabouços do jogo</li>';
+  }
+  function desenhaEventos() {
+    desenhaDia();
+    if (!lida) return;
+    if (!agenda) {
+      $('ev-agora').innerHTML = '<div class="estado fora">' + E(msg) + '</div>';
+      $('ev-proximos').innerHTML = '<li class="apoio">sem o servidor, sem a agenda</li>';
+      return;
+    }
+    var ag = SITE.agenda(agenda);
+    $('ev-agora').innerHTML = ag.ativos.length ? ag.ativos.map(SITE.cartaoEvento).join('')
+      : '<div class="estado">Nenhum evento no ar agora.</div>';
+    $('ev-proximos').innerHTML = ag.proximos.length ? ag.proximos.slice(0, 3).map(SITE.linhaEvento).join('')
+      : '<li class="apoio">nada marcado por enquanto</li>';
+  }
+  SITE.api('/api/eventos', { semToken: true }).then(function (r) {
+    lida = true;
+    if (r.ok) { SITE.acertaRelogio(r.agora); agenda = r; }
+    else {
+      msg = r.status === 0 ? 'O servidor está fora — os eventos voltam com ele. O Calabouço do Dia, ao lado, não depende dele.'
+        : r.status === 404 ? 'A agenda de eventos ainda não chegou a este servidor.'
+        : (r.erro || 'Não deu para ler os eventos.');
+    }
+    desenhaEventos();
+  });
+  desenhaDia();
+  setInterval(desenhaEventos, 30000);
+
+  /* ---- fusões: as regras lidas de JOGO.Fusion e quatro duplas em destaque ---- */
+  (function () {
+    var F = JG.Fusion, formas = DATA.fusionForms || {}, idents = DATA.fusionIdentities || {};
+    var misturas = DATA.fusionBlends || {};
+    if (!F || !Object.keys(formas).length) {
+      $('fu-regras').innerHTML = '<li class="apoio">não deu para ler as regras do jogo agora — a <a href="fusoes.html">página das fusões</a> explica tudo</li>';
+      return;
+    }
+    var nMisturas = Object.keys(misturas).filter(function (k) { return !misturas[k].mirrorOf; }).length;
+    $('fu-regras').innerHTML = [
+      '<b>Lado a lado</b>, sem diagonal: dois heróis seus. Pet e invocação não fundem.',
+      '<b>Quem declara paga ' + F.FUSION_PA_COST + ' PA</b>, e a fusão sai no fim do turno se os dois ainda estiverem colados.',
+      '<b>Vida somada, +' + F.BONUS_PA + ' PA e +' + F.BONUS_PP + ' PP</b>, com escudo de ' + F.BONUS_SHIELD + ' até o fim da batalha.',
+      '<b>Feitiços próprios</b>: a forma vem das duas classes e o sabor da mistura dos elementos — ' +
+        Object.keys(formas).length + ' duplas, ' + nMisturas + ' misturas.'
+    ].map(function (t) { return '<li>' + t + '</li>'; }).join('');
+    // quatro duplas que mostram o leque: de longe, cuidando, sumindo e barrando
+    var DESTAQUES = ['arqueiro+bruxo', 'curandeiro+sumo', 'espadachim+invocador', 'minotauro+sumo'];
+    $('fu-destaques').innerHTML = DESTAQUES.filter(function (k) { return formas[k]; }).map(function (k) {
+      var par = k.split('+'), idt = idents[k] || {};
+      var ab = nomeClasse(par[0]) + ' + ' + nomeClasse(par[1]), nome = idt.name || ab;
+      return '<a class="cartao dupla" href="fusoes.html#dupla=' + k + '">' +
+        '<div class="foto retrato dupla-foto" data-letra="' + E(SITE.inicial(SITE.semArtigo(nome))) + '"' +
+        SITE.estiloCores(corClasse(par[0]), corClasse(par[1])) + '>' +
+        '<img src="' + SITE.img('fusao', k) + '" alt="' + E(nome) + '" loading="lazy" onerror="SITE.semFoto(this)"></div>' +
+        '<div class="corpo"><span class="papel">' + E(ab) + '</span><h3>' + E(nome) + '</h3>' +
+        (idt.line ? '<p>' + E(idt.line) + '</p>' : '') + '</div></a>';
+    }).join('');
+  })();
+
+  /* ---- ranking: os 5 primeiros de cada placar e o melhor de cada classe ----
+   * Sem servidor (ou com ele fora) as caixas dizem isso, sem quebrar o resto. */
   function linhas(id, lista, celulas) {
-    var corpo = document.getElementById('rk-' + id), estado = document.getElementById('es-' + id);
+    var corpo = $('rk-' + id), estado = $('es-' + id);
     if (!lista.length) { estado.textContent = 'ninguém ainda — seja o primeiro'; return; }
     estado.style.display = 'none';
     corpo.innerHTML = lista.slice(0, 5).map(function (r, i) {
       return '<tr class="top' + (i + 1) + '"><td class="pos">' + (i + 1) + '</td>' + celulas(r) + '</tr>';
     }).join('');
   }
+  /* o 1º de cada classe em porClasse; um servidor antigo (sem porClasse) só
+   * ganha um aviso, o resto do ranking segue igual */
+  function melhores(r) {
+    var corpo = $('rk-classes'), es = $('es-classes');
+    var ordem = Object.keys(CLASSES).filter(ehClasse);
+    if (!ordem.length) ordem = (r.classes || []).filter(function (id) { return /^[a-z]+$/.test(id) && id !== 'gm'; });
+    if (!r.porClasse || !ordem.length) { es.textContent = 'o placar por classe chega com a próxima versão do servidor'; return; }
+    es.style.display = 'none';
+    corpo.innerHTML = ordem.map(function (id) {
+      var top = (r.porClasse[id] || [])[0];
+      var busto = SITE.busto({ src: SITE.img('classe', id, true), letra: SITE.inicial(nomeClasse(id)), cor: corClasse(id) });
+      return '<tr><td class="nome">' + busto + E(nomeClasse(id)) + '</td>' +
+        (top ? '<td>' + E(top.nome) + '</td><td class="num">' + N(top.nivel) + '</td>'
+             : '<td class="apoio">ninguém ainda</td><td class="num apoio">—</td>') + '</tr>';
+    }).join('');
+  }
   SITE.api('/api/ranking', { semToken: true }).then(function (r) {
     if (!r.ok) {
-      ['jogadores', 'pvp', 'guildas'].forEach(function (id) {
-        var es = document.getElementById('es-' + id);
+      ['jogadores', 'pvp', 'guildas', 'classes'].forEach(function (id) {
+        var es = $('es-' + id);
         es.className = 'estado fora';
         es.textContent = r.status === 0 ? 'o servidor está fora — o ranking volta com ele' : (r.erro || 'não deu para ler o ranking');
       });
       return;
     }
     linhas('jogadores', r.jogadores || [], function (j) {
-      return '<td class="nome">' + E(j.nome) + '</td><td class="num">' + N(j.xpTotal) + '</td><td class="num">' + N(j.nivelMax) + '</td>';
+      return '<td class="nome">' + SITE.bustoJogador(j) + E(j.nome) + '</td><td class="num">' + N(j.xpTotal) + '</td><td class="num">' + N(j.nivelMax) + '</td>';
     });
     linhas('pvp', r.pvp || [], function (p) {
       return '<td class="nome">' + E(p.nome) + '</td><td class="num">' + N(p.brasa) + '</td><td class="num">' + N(p.partidas) + '</td>';
@@ -252,6 +425,7 @@
     linhas('guildas', r.guildas || [], function (g) {
       return '<td class="nome"><span class="emblema">' + E(g.emblema || '') + '</span>' + E(g.nome) + '</td><td class="num">' + N(g.membros) + '</td><td class="num">' + N(g.xpTotal) + '</td>';
     });
+    melhores(r);
   });
 })();
 </script>

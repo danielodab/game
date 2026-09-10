@@ -178,7 +178,8 @@ JOGO.DATA.classes = {
     id: 'minotauro',
     name: 'Minotauro',
     role: 'guardiao',
-    description: 'Grande demais para desviar e teimoso demais para recuar. Ergue muro onde nao havia caminho e poe o proprio escudo na frente de quem esta sangrando. Nao mata: decide por onde o outro pode andar.',
+    // acentos restaurados (10/09, decisão D6 do dono): o site lê este texto direto
+    description: 'Grande demais para desviar e teimoso demais para recuar. Ergue muro onde não havia caminho e põe o próprio escudo na frente de quem está sangrando. Não mata: decide por onde o outro pode andar.',
     palette: { primary: '#8a6a4f', secondary: '#3a2e26', accent: '#d9c39a' },
     startsUnlocked: false,
     lore: 'Puseram o Minotauro para guardar a passagem porque ninguém mais coubera nela. Ele não conta os anos: conta as pedras que já ergueu e as que ainda vai erguer. Diz que labirinto não é para perder ninguém — é para que quem entrar tenha de escolher, e escolher devagar.',

@@ -4,8 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ranking — SOTERRA</title>
-<link rel="stylesheet" href="site.css">
-<!-- As três tabelas completas (até 50 linhas cada), lendo /api/ranking. -->
+<script>document.write('<link rel="stylesheet" href="site.css?v=' + Date.now() + '">');</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
+<!-- As três tabelas completas (até 50 linhas cada), lendo /api/ranking.
+     10/09: o placar POR CLASSE (7 abas; uma linha por conta, com a melhor ficha
+     dela naquela classe) e a miniatura de cada jogador: o avatar de fusão que
+     ele escolheu no jogo, ou o busto da classe do seu melhor herói. Os nomes
+     das classes e dos elementos vêm do próprio jogo (../js/core/data/). A aba
+     segue o endereço (#classe=sumo), como as abas da conta. -->
 </head>
 <body>
 
@@ -14,7 +20,9 @@
     <a class="marca" href="index.html">SOTERRA</a>
     <nav>
       <a href="index.html">Início</a>
-      <a href="ranking.html">Ranking</a>
+      <a href="eventos.html">Eventos</a>
+      <a href="fusoes.html">Fusões</a>
+      <a href="ranking.html" aria-current="page">Ranking</a>
       <a href="conta.html">Conta</a>
       <a class="jogar" href="../index.html">Jogar</a>
     </nav>
@@ -26,7 +34,7 @@
   <div class="miolo">
     <h2>Ranking</h2>
     <p class="sub">Quem desceu mais fundo, quem manda na arena e quais guildas somam mais experiência. Atualiza a cada save que chega ao servidor.
-      <button type="button" class="btn" id="bt-atualizar" style="padding:6px 12px;font-size:13.5px;margin-left:8px">atualizar</button></p>
+      <button type="button" class="btn btn-mini" id="bt-atualizar">atualizar</button></p>
 
     <div class="tres larga">
       <div>
@@ -54,6 +62,16 @@
         </div>
       </div>
     </div>
+
+    <div class="por-classe" id="por-classe">
+      <h3>Por classe <small>o melhor herói de cada conta, classe por classe</small></h3>
+      <div class="abas abas-classe" id="abas-classe" role="tablist"></div>
+      <div class="tabela-caixa">
+        <table><thead><tr><th>#</th><th>Nome</th><th class="num">Nível</th><th class="num">XP</th><th>Elemento</th></tr></thead>
+          <tbody id="rk-classe"></tbody></table>
+        <div class="estado" id="es-classe">carregando…</div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -61,11 +79,28 @@
   <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
 </footer>
 
-<script src="site.js"></script>
+<script>
+/* 10/09: os nomes das classes e dos elementos saem dos dados do próprio jogo
+ * (mesma origem); a marca ?v= é a do jogo, o instante da carga. */
+(function (v) {
+  ['site.js', '../js/core/data/elements.js', '../js/core/data/classes.js'].forEach(function (s) {
+    document.write('<script src="' + s + v + '"><\/script>');
+  });
+})('?v=' + Date.now());
+</script>
 <script>
 (function () {
   var E = SITE.esc, N = SITE.num;
-  var IDS = ['jogadores', 'pvp', 'guildas'];
+  var DATA = (window.JOGO && JOGO.DATA) || {};
+  var CLASSES = DATA.classes || {}, ELEM = DATA.elementInfo || {};
+  var IDS = ['jogadores', 'pvp', 'guildas', 'classe'];
+  var ultimo = null;       // a última resposta boa: trocar de aba só redesenha a tabela
+
+  function ehClasse(id) { return id !== 'gm' && Object.prototype.hasOwnProperty.call(CLASSES, id); }
+  function nomeClasse(id) { return ehClasse(id) ? CLASSES[id].name : String(id); }
+  function corClasse(id) { return (ehClasse(id) && CLASSES[id].palette && CLASSES[id].palette.primary) || ''; }
+  var ordem = Object.keys(CLASSES).filter(ehClasse);
+  var aba = ordem[0] || null;
 
   function estado(id, texto, classe) {
     var es = document.getElementById('es-' + id);
@@ -84,6 +119,52 @@
     }).join('');
   }
 
+  /* o elemento do herói com o nome e a cor do jogo; um id que o jogo não
+   * conhece vira Neutro, como o servidor já faz */
+  function elemento(id) {
+    var info = ELEM[id] || ELEM.neutro;
+    return info ? '<span class="elem" style="--cor:' + info.color + '">' + E(info.name) + '</span>' : 'Neutro';
+  }
+
+  /* ---- as abas por classe ---- */
+  function montaAbas() {
+    var caixa = document.getElementById('abas-classe');
+    caixa.innerHTML = ordem.map(function (id) {
+      return '<button type="button" role="tab" data-classe="' + E(id) + '">' +
+        SITE.busto({ src: SITE.img('classe', id, true), letra: SITE.inicial(nomeClasse(id)), cor: corClasse(id) }) +
+        '<span>' + E(nomeClasse(id)) + '</span></button>';
+    }).join('');
+    caixa.addEventListener('click', function (ev) {
+      var bt = ev.target.closest ? ev.target.closest('button[data-classe]') : null;
+      if (bt) escolhe(bt.getAttribute('data-classe'), true);
+    });
+  }
+  function escolhe(id, gravaNoEndereco) {
+    if (!ehClasse(id)) id = ordem[0];
+    aba = id;
+    [].forEach.call(document.querySelectorAll('#abas-classe button'), function (b) {
+      var sim = b.getAttribute('data-classe') === id;
+      b.classList.toggle('ligada', sim);
+      b.setAttribute('aria-selected', sim ? 'true' : 'false');
+    });
+    if (gravaNoEndereco && history.replaceState) history.replaceState(null, '', '#classe=' + id);
+    desenhaClasse();
+  }
+  function abaDoHash() { var m = /^#classe=([a-z]+)/.exec(location.hash); return m ? m[1] : null; }
+  window.addEventListener('hashchange', function () { escolhe(abaDoHash(), false); });
+
+  function desenhaClasse() {
+    if (!ultimo) return;                 // carregando ou servidor fora: o estado já diz
+    if (!ultimo.porClasse) {
+      document.getElementById('rk-classe').innerHTML = '';
+      estado('classe', 'o placar por classe chega com a próxima versão do servidor');
+      return;
+    }
+    tabela('classe', ultimo.porClasse[aba] || [], function (h) {
+      return '<td class="nome">' + E(h.nome) + '</td><td class="num">' + N(h.nivel) + '</td><td class="num">' + N(h.xp) + '</td><td>' + elemento(h.elemento) + '</td>';
+    });
+  }
+
   function carrega() {
     IDS.forEach(function (id) { estado(id, 'carregando…'); });
     var bt = document.getElementById('bt-atualizar');
@@ -91,12 +172,14 @@
     SITE.api('/api/ranking', { semToken: true }).then(function (r) {
       bt.disabled = false;
       if (!r.ok) {
+        ultimo = null;
         var msg = r.status === 0 ? 'o servidor está fora — tente de novo daqui a pouco' : (r.erro || 'não deu para ler o ranking');
         IDS.forEach(function (id) { estado(id, msg, 'fora'); });
         return;
       }
+      ultimo = r;
       tabela('jogadores', r.jogadores || [], function (j) {
-        return '<td class="nome">' + E(j.nome) + '</td><td class="num">' + N(j.xpTotal) + '</td><td class="num">' + N(j.nivelMax) + '</td><td class="num">' + N(j.classes) + '</td>';
+        return '<td class="nome">' + SITE.bustoJogador(j) + E(j.nome) + '</td><td class="num">' + N(j.xpTotal) + '</td><td class="num">' + N(j.nivelMax) + '</td><td class="num">' + N(j.classes) + '</td>';
       });
       tabela('pvp', r.pvp || [], function (p) {
         return '<td class="nome">' + E(p.nome) + '</td><td class="num">' + N(p.brasa) + '</td><td class="num">' + N(p.partidas) + '</td>';
@@ -104,9 +187,12 @@
       tabela('guildas', r.guildas || [], function (g) {
         return '<td class="nome"><span class="emblema">' + E(g.emblema || '') + '</span>' + E(g.nome) + '</td><td class="num">' + N(g.membros) + '</td><td class="num">' + N(g.xpTotal) + '</td>';
       });
+      desenhaClasse();
     });
   }
 
+  montaAbas();
+  escolhe(abaDoHash(), false);
   document.getElementById('bt-atualizar').addEventListener('click', carrega);
   carrega();
 })();

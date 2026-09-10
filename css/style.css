@@ -4,7 +4,7 @@
    Regras da casa (CONTRATO §0 e §9):
      · alvo de toque nunca menor que 44 px;
      · nada de informação escondida atrás de :hover — tooltip é por toque;
-     · o traço acompanha a arte: cor chapada, contorno escuro, cara de Dofus 1.29;
+     · o traço acompanha a arte: cor chapada, contorno escuro, cara de tático 2D clássico;
      · o canvas do jogo fica embaixo; a UI é uma camada que só captura o toque
        onde realmente tem controle (ver .screen-battle).
    ========================================================================== */
@@ -56,7 +56,7 @@
   --ui-mono:  'Cascadia Mono', Consolas, 'Roboto Mono', monospace;
 
   /* A RAMPA DE OURO (30/08). O levantamento achou NOVE dourados sólidos e 28
-   * alfas dizendo a mesma coisa — Dofus é reconhecível porque o ouro é UM.
+   * alfas dizendo a mesma coisa — a interface é reconhecível porque o ouro é UM.
    * Regra nova usa a rampa; regra velha migra quando for tocada. */
   --gold-2:   #e8c25a;   /* o ouro de moeda/valor (era o mais repetido à mão) */
   --gold-3:   #c9a227;   /* o ouro de filete/borda ornamentada */
@@ -1541,6 +1541,48 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
   color: #ffe9a8; background: rgba(230,181,60,.12);
   border: 1px solid rgba(230,181,60,.4);
 }
+/* OS EVENTOS DO MUNDO (10/09): a faixa do Acampamento com o que o Mestre
+   ligou (some quando não há nada no ar), a linha do evento no painel do
+   portal e a ficha do Mestre (gmagenda). Azul-céu para não confundir com o
+   dourado do Calabouço do Dia — os dois aparecem juntos no mesmo painel. */
+.hub-evento {
+  position: absolute; left: 50%; top: calc(var(--sa-t, 0px) + 52px);
+  transform: translateX(-50%); z-index: 4;
+  width: max-content; max-width: min(620px, calc(100% - 24px));
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 12px;
+  padding: 6px 12px; border-radius: 10px; font-size: 12px; line-height: 1.35;
+  color: #d8ecff; background: rgba(10,18,28,.82);
+  border: 1px solid rgba(120,180,240,.45); box-shadow: 0 6px 18px rgba(0,0,0,.35);
+}
+.hub-evento.is-off { display: none; }
+.hub-evento b { color: #9fd3ff; }
+.hub-evento-link { color: #ffe9a8; text-decoration: underline; white-space: nowrap; }
+.hub-evento-linha {
+  margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 12px;
+  color: #d8ecff; background: rgba(120,180,240,.10);
+  border: 1px solid rgba(120,180,240,.40);
+}
+.hub-evento-linha b { color: #9fd3ff; }
+.ag-nota {
+  margin: 0 0 8px; padding: 8px 11px; border-radius: 9px; font-size: 12.5px; line-height: 1.45;
+  color: #ffe9a8; background: rgba(230,181,60,.10); border: 1px solid rgba(230,181,60,.45);
+}
+.ag-form {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 12px; margin-bottom: 8px;
+}
+.ag-campo { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ag-campo .hub-input { width: 100%; box-sizing: border-box; margin: 0; }
+.ag-dica { grid-column: 1 / -1; margin: 0; }
+.ag-dias { display: flex; flex-wrap: wrap; gap: 4px; }
+.ag-envia[disabled], .ag-cancela[disabled] { opacity: .45; cursor: not-allowed; }
+.ag-dias14 { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+.ag-dia14 {
+  display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 2px 10px;
+  padding: 5px 9px; border: 1px solid var(--line2, #262d38); border-radius: 8px; font-size: 12px;
+}
+.ag-dia14.is-hoje { border-color: var(--gold, #ffc44d); }
+.ag-dia14-ev { grid-column: 2; color: #9fd3ff; }
 .placar-temporada {
   margin: 0 0 8px; padding: 7px 11px; border-radius: 9px; font-size: 12px;
   background: rgba(230,181,60,.08); border: 1px solid rgba(230,181,60,.35);
@@ -1759,7 +1801,7 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
  * cinza fazia o banco/guilda parecerem de outro jogo */
 .bk-tit { font: 600 12px/1 var(--ui-sans); letter-spacing: .1em;
           text-transform: uppercase; color: var(--gold); margin: 6px 0 2px; }
-/* O banco à moda Dofus: o saco e o cofre em DUAS grades lado a lado, células
+/* O banco: o saco e o cofre em DUAS grades lado a lado, células
    iguais às do inventário, e a peça atravessa ARRASTADA — o fantasma segue o
    cursor e a coluna de destino acende. O dinheiro tem campo digitado. */
 .sheet-panel.sheet-larga { max-width: 940px; }
@@ -1801,7 +1843,7 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 
 
 /* ------------------------------------------------- DESAFIO DA SALA
-   O contrato opcional à moda Dofus: dourado enquanto vale, riscado
+   O contrato opcional: dourado enquanto vale, riscado
    quando se perde. O chip vive na linha da sala, no topo da batalha. */
 .desafio-chip {
   display: inline-block; margin-left: 8px; padding: 2px 9px;
@@ -1819,6 +1861,14 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .rw-desafio { display: block; font: 700 13px var(--ui-sans, system-ui);
               color: #77808d; margin-bottom: 4px; }
 .rw-desafio.is-cumprido { color: #e8c25a; }
+/* O EVENTO DO MUNDO que pesou nesta sala (10/09): o chip mora no bloco que
+   ele multiplicou — XP, vinténs, pedras ou saque */
+.rw-eventos { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 2px 0 6px; }
+.rw-evento {
+  display: inline-block; padding: 2px 9px; border-radius: 9px;
+  font: 700 12px var(--ui-sans, system-ui); color: #9fd3ff;
+  border: 1px solid rgba(120,180,240,.55); background: rgba(120,180,240,.10);
+}
 
 /* ------------------------------------------------- QUADRO DE MISSÕES */
 .ms-caixa { display: flex; flex-direction: column; gap: 8px; }

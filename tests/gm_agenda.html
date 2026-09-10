@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a ficha dos Eventos do mundo no Painel do Mestre</title>
+<style>html,body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace}
+iframe{width:1100px;height:760px;border:0;display:block}
+#summary{padding:6px 10px;border-radius:6px;margin:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+#log{padding:8px;white-space:pre-wrap}</style>
+</head>
+<body>
+<!-- A FICHA gmagenda (10/09) no jogo INTEIRO: o index num quadro, com a chave
+     do Mestre e o save na memória (?sandbox=1), e o servidor de mentira no
+     gancho Sessao._fetch. Sem sessão do site a ficha é só leitura, com a nota;
+     com a sessão marcada (gm:true) o POST de 201 põe o evento na lista. Espera
+     por VOLTAS, nunca pelo relógio (o tempo virtual do headless dispara). -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<iframe id="f"></iframe>
+<script>
+(function () {
+  'use strict';
+  var f = document.getElementById('f'), logEl = document.getElementById('log');
+  var falhas = 0, total = 0, linhas = [];
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : ''));
+    logEl.textContent = linhas.join('\n');
+  }
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas; window.__pronto = true;
+  }
+  var AGORA = 1789041600;                       // qui 10/09/2026 09:00 de Brasília
+  function exemplo() {
+    return {
+      ok: true, agora: AGORA, fusoMin: -180, janelaDias: 14,
+      tetos: { xp: 2.0, vintem: 1.5, pedras: 2.0, saque: 1.5, aviso: 1.0 },
+      ativos: [{ id: 'e12', origem: 'pontual', regra: null, tipo: 'xp', multiplicador: 2.0, calabouco: null,
+                 titulo: 'Quinta do XP', texto: 'Toda sala paga o dobro de experiência.', inicio: 1789038000, fim: 1789092000 }],
+      proximos: [{ id: 'r3@1789218000', origem: 'calendario', regra: 3, tipo: 'saque', multiplicador: 1.5,
+                   calabouco: 'cistern', titulo: 'Maré da Cisterna', texto: '', inicio: 1789218000, fim: 1789261200 }],
+      regras: [{ id: 3, tipo: 'saque', multiplicador: 1.5, calabouco: 'cistern', titulo: 'Maré da Cisterna', texto: '',
+                 dias: [6], hora: '10:00', duracaoMin: 720, vigenteDe: null, vigenteAte: null }],
+      fatores: { geral: { xp: 2.0 }, porCalabouco: {} }
+    };
+  }
+  function clica(b) { if (b) b.click(); }
+  function esperaAte(fn, max) {
+    return new Promise(function (pronto) {
+      var v = 0;
+      (function volta() {
+        var r = false;
+        try { r = !!fn(); } catch (e) { r = false; }
+        if (r) return pronto(true);
+        if (++v >= max) return pronto(false);
+        setTimeout(volta, 250);
+      })();
+    });
+  }
+
+  f.onload = function () {
+    if (window.__rodou) return;
+    window.__rodou = true;
+    var w = f.contentWindow, d = w.document;
+    var erros = [];
+    w.addEventListener('error', function (e) { erros.push(e.message + ' @' + String(e.filename || '').split('/').pop() + ':' + e.lineno); });
+    var voltas = 0;
+    (function espera() {
+      var menu = d.querySelector('.screen-menu.is-on');
+      var ok = !!(menu && w.JOGO && w.JOGO.UI && w.JOGO.UI.openSheet && w.JOGO.Agenda);
+      if (!ok && ++voltas < 150) return setTimeout(espera, 800);
+      if (!ok) { check('o jogo abriu no menu com a agenda carregada', false, 'estourou as voltas'); return fim(); }
+      try { roda(w, d, erros); }
+      catch (e) { check('a prova não lançou exceção', false, e.message); fim(); }
+    })();
+  };
+  f.src = '../index.html?sandbox=1&gm=mestre-do-fundo&prova-gm-agenda&v=' + Date.now();
+
+  function roda(w, d, erros) {
+    var J = w.JOGO, S = J.Sessao, Ag = J.Agenda, UI = J.UI;
+    check('o index carregou a agenda (depois do Diario)', typeof Ag.fator === 'function' && !!J.Diario);
+    check('o modo Mestre está ligado pela chave local', !!J.GM && J.GM.ativo() === true);
+    S.esquece();
+    Ag._agora = function () { return AGORA * 1000; };
+
+    // ---- o servidor de mentira
+    var mundo = exemplo(), chamadas = [], fora = false, seq = 100;
+    function http(st, j) {
+      return Promise.resolve({ status: st, json: function () { return Promise.resolve(JSON.parse(JSON.stringify(j))); } });
+    }
+    S._fetch = function (url, pedido) {
+      var corpo = pedido.body ? JSON.parse(pedido.body) : null;
+      var auth = (pedido.headers || {}).Authorization || null;
+      chamadas.push({ url: url, method: pedido.method, auth: auth, body: corpo });
+      if (fora) return Promise.reject(new Error('rede fora'));
+      if (pedido.method === 'GET' && /\/api\/eventos$/.test(url)) return http(200, mundo);
+      if (pedido.method !== 'POST') return http(404, { ok: false, erro: 'rota desconhecida' });
+      if (!auth) return http(401, { ok: false, erro: 'entre primeiro' });
+      if (/\/api\/eventos$/.test(url)) {
+        var novo = { id: 'e' + (++seq), origem: 'pontual', regra: null, tipo: corpo.tipo,
+                     multiplicador: corpo.multiplicador || 1, calabouco: corpo.calabouco || null, titulo: corpo.titulo,
+                     texto: corpo.texto || '', inicio: corpo.inicio || AGORA, fim: corpo.fim };
+        (novo.inicio <= AGORA ? mundo.ativos : mundo.proximos).push(novo);
+        return http(201, { ok: true, evento: novo });
+      }
+      if (/\/api\/eventos\/cancelar$/.test(url)) {
+        var alvo = 'e' + corpo.id, antes = mundo.ativos.length + mundo.proximos.length;
+        mundo.ativos = mundo.ativos.filter(function (e) { return e.id !== alvo; });
+        mundo.proximos = mundo.proximos.filter(function (e) { return e.id !== alvo; });
+        return http(200, { ok: true, cancelado: mundo.ativos.length + mundo.proximos.length < antes });
+      }
+      return http(404, { ok: false, erro: 'rota desconhecida' });
+    };
+    function posts() { return chamadas.filter(function (c) { return c.method === 'POST'; }); }
+    function painel() { return d.querySelector('.sheet-panel'); }
+    function aba(nome) {
+      return [].slice.call(painel().querySelectorAll('.ag-aba')).filter(function (b) { return b.textContent.trim() === nome; })[0];
+    }
+
+    Ag.atualizar().then(function (r) {
+      check('a agenda buscou no servidor de mentira', r.ok === true && Ag.noAr() === true, JSON.stringify(r));
+
+      // ---- 1. sem sessão: só leitura, com a nota
+      UI.openSheet('gmagenda');
+      var p = painel();
+      var h2 = p && p.querySelector('.sheet-head h2');
+      check('openSheet("gmagenda") abre a ficha "Eventos do mundo"', !!h2 && /Eventos do mundo/.test(h2.textContent));
+      var nomes = [].slice.call(p.querySelectorAll('.ag-aba')).map(function (b) { return b.textContent.trim(); });
+      check('as três abas: Agora, Agendar, Calendário', nomes.join('|') === 'Agora|Agendar|Calendário', nomes.join('|'));
+      var nota = p.querySelector('.ag-nota');
+      check('sem sessão aparece a nota do Mestre',
+            !!nota && nota.textContent.indexOf('Para ligar evento, entre no site com a conta do Mestre: o servidor confere a marca.') >= 0,
+            nota && nota.textContent);
+      var envia = p.querySelector('.ag-envia');
+      check('sem sessão o botão de ligar fica desligado', !!envia && envia.disabled === true);
+      var linhaE12 = p.querySelector('[data-evento="e12"]');
+      check('a lista aparece só para leitura: a Quinta do XP no ar, com "Encerrar" desligado',
+            !!linhaE12 && /Quinta do XP/.test(linhaE12.textContent) && linhaE12.querySelector('.ag-cancela').disabled === true);
+
+      clica(aba('Calendário'));
+      p = painel();
+      check('Calendário: a regra da Cisterna em texto', /Todo sábado, 10:00–22:00 \(Brasília\)/.test(p.textContent));
+      var dias = [].slice.call(p.querySelectorAll('.ag-dia14'));
+      check('Calendário: 14 dias, cada um com o Calabouço do Dia', dias.length === 14 &&
+            dias.every(function (x) { return /Calabouço do Dia/.test(x.textContent); }), String(dias.length));
+      var fechados = (J.DATA.portaisFechados || []).map(function (id) { return Ag.nomeCalabouco(id); });
+      check('Calendário: o Calabouço do Dia nunca é portal fechado', dias.every(function (x) {
+        return fechados.every(function (nm) { return x.textContent.indexOf(nm) < 0; });
+      }), fechados.join(', '));
+      var selCal = [].slice.call(p.querySelectorAll('select.ag-sel')).filter(function (s2) {
+        return [].slice.call(s2.options).some(function (o) { return o.value === 'poco'; });
+      })[0];
+      var ofertas = selCal ? [].slice.call(selCal.options).map(function (o) { return o.value; }) : [];
+      check('o seletor de calabouço oferece "todos", os abertos e o Poço — nenhum fechado',
+            ofertas[0] === '' && ofertas.indexOf('poco') > 0 && ofertas.indexOf('greenhouse') > 0 &&
+            ofertas.every(function (id) { return !id || id === 'poco' || !J.DATA.portalFechado(id); }), ofertas.join(','));
+      clica(aba('Agendar'));
+      check('Agendar: início e fim em datetime-local', painel().querySelectorAll('input[type="datetime-local"]').length === 2);
+
+      // ---- 2. a marca do Mestre, mas o servidor fora: só leitura também
+      S.guarda({ token: 'tok-m', conta: { id: 1, nome: 'Dono', gm: true } });
+      fora = true;
+      return Ag.atualizar();
+    }).then(function () {
+      UI.openSheet('gmagenda');
+      var p = painel();
+      var nota = p.querySelector('.ag-nota');
+      check('com a marca e o servidor fora: a nota diz que o servidor está fora, e os botões desligam',
+            !!nota && /servidor está fora/.test(nota.textContent) && p.querySelector('.ag-envia').disabled === true);
+      fora = false;
+      return Ag.atualizar();
+    }).then(function () {
+      // ---- 3. a marca e o servidor no ar: liga de verdade
+      UI.openSheet('gmagenda');
+      clica(aba('Agora'));
+      var p = painel();
+      check('com a sessão do Mestre: sem nota, e o botão de ligar liga', !p.querySelector('.ag-nota') &&
+            p.querySelector('.ag-envia').disabled === false);
+      var selTipo = p.querySelector('select.ag-sel');               // o primeiro é o Tipo
+      selTipo.value = 'pedras';
+      selTipo.dispatchEvent(new w.Event('change'));                 // o tipo repinta a ficha
+      p = painel();
+      var tit = p.querySelector('input.ag-in[type="text"]');
+      tit.value = 'Sábado de Pedra';
+      tit.dispatchEvent(new w.Event('input'));
+      var n0 = posts().length;
+      clica(p.querySelector('.ag-envia'));
+      return esperaAte(function () {
+        var p2 = painel();
+        return p2 && /Sábado de Pedra/.test(p2.textContent) && /Eventos do mundo/.test(p2.textContent);
+      }, 80).then(function (apareceu) {
+        var c = posts()[posts().length - 1] || {};
+        check('o POST foi um só, com Authorization, sem início (liga agora) e fim = agora + 2 h',
+              posts().length === n0 + 1 && c.auth === 'Bearer tok-m' && /\/api\/eventos$/.test(c.url) &&
+              c.body.tipo === 'pedras' && c.body.multiplicador === 2 && c.body.inicio === undefined &&
+              c.body.fim === AGORA + 2 * 3600 && c.body.titulo === 'Sábado de Pedra', JSON.stringify(c.body));
+        check('o 201 faz o evento aparecer na lista da ficha', apareceu);
+        check('... e ele já vale na agenda: pedras ×2', Ag.fator('pedras', 'greenhouse') === 2);
+      });
+    }).then(function () {
+      // ---- 4. encerrar a Quinta do XP (com a pergunta antes)
+      var b = painel().querySelector('[data-evento="e12"] .ag-cancela');
+      check('com a sessão, "Encerrar" fica ligado', !!b && b.disabled === false && /Encerrar/.test(b.textContent));
+      clica(b);
+      var conf = [].slice.call(d.querySelectorAll('.sheet-panel button')).filter(function (x) { return /Confirmar/.test(x.textContent); })[0];
+      check('encerrar pergunta antes', !!conf);
+      clica(conf);
+      return esperaAte(function () {
+        var p2 = painel();
+        return p2 && /Eventos do mundo/.test(p2.textContent) && !p2.querySelector('[data-evento="e12"]');
+      }, 80).then(function (saiu) {
+        var c = posts()[posts().length - 1] || {};
+        check('encerrar: POST /api/eventos/cancelar {alvo:"evento", id:12}',
+              /\/api\/eventos\/cancelar$/.test(c.url) && c.body.alvo === 'evento' && c.body.id === 12, JSON.stringify(c.body));
+        check('... e a Quinta do XP saiu da lista', saiu);
+        check('... e da agenda: o XP volta a 1', Ag.fator('xp', 'greenhouse') === 1);
+      });
+    }).then(function () {
+      // ---- 5. o que o JOGADOR vê: a faixa no Acampamento, o painel do portal e
+      // os chips da recompensa. O nome vem antes: sem ele a praça pede o nome
+      // e o pedido toma o painel do portal.
+      UI.closeSheet();
+      return J.DB.batizar('Mestre da Prova').then(function () {
+        UI.showScreen('hub');
+        return esperaAte(function () {
+          var nm = d.querySelector('.screen-hub .hub-nome');
+          return nm && nm.textContent === 'Mestre da Prova';
+        }, 60);
+      }).then(function () {
+        var fx = d.querySelector('.screen-hub .hub-evento');
+        var link = fx && fx.querySelector('a');
+        check('Acampamento: a faixa mostra o evento no ar, quanto falta e o link do calendário',
+              !!fx && !fx.classList.contains('is-off') && /Pedras de forja ×2/.test(fx.textContent) &&
+              /Sábado de Pedra/.test(fx.textContent) && /termina em 2 h/.test(fx.textContent) &&
+              !!link && /site\/eventos\.html$/.test(link.getAttribute('href')), fx && fx.textContent);
+        // o Mestre liga mais um (saque só na Estufa): a faixa repinta sozinha, pelo aoMudar
+        mundo.ativos.push({ id: 'e300', origem: 'pontual', regra: null, tipo: 'saque', multiplicador: 1.5,
+                            calabouco: 'greenhouse', titulo: 'Chuva de Peças', texto: '', inicio: AGORA - 60, fim: AGORA + 3600 });
+        return Ag.atualizar();
+      }).then(function () {
+        var fx = d.querySelector('.screen-hub .hub-evento');
+        check('a faixa repinta sozinha quando a agenda muda (aoMudar), e diz onde vale',
+              !!fx && /Chuva de Peças/.test(fx.textContent) && /só na Estufa Soterrada/.test(fx.textContent), fx && fx.textContent);
+        // o portal da Estufa, sendo ele o Calabouço do Dia: o saque do evento não soma
+        var ehOrig = J.Diario.ehHoje;
+        J.Diario.ehHoje = function (id) { return id === 'greenhouse'; };
+        J.Hub.aoAproximar({ tipo: 'portal', id: 'greenhouse', nome: 'A Estufa Soterrada' });
+        var pn = d.querySelector('.screen-hub .hub-painel');
+        var dia = pn && pn.querySelector('.hub-dia');
+        var linhas = pn ? [].slice.call(pn.querySelectorAll('.hub-evento-linha')).map(function (x) { return x.textContent; }) : [];
+        check('portal: o "+50%" do Dia vem do Diario, não do texto', !!dia && /\+50% de saque/.test(dia.textContent), dia && dia.textContent);
+        check('portal: uma linha por evento que vale ali (o geral e o da Estufa)',
+              linhas.length === 2 && linhas.some(function (t) { return /Sábado de Pedra/.test(t); }) &&
+              linhas.some(function (t) { return /Chuva de Peças/.test(t); }), linhas.join(' | '));
+        check('portal: saque do evento junto do Calabouço do Dia diz "vale o maior"',
+              linhas.some(function (t) { return /Chuva de Peças/.test(t) && /vale o maior/.test(t); }));
+        J.Diario.ehHoje = ehOrig;
+        J.Hub.aoAproximar({ tipo: 'portal', id: 'cistern', nome: 'A Cisterna dos Afogados' });
+        pn = d.querySelector('.screen-hub .hub-painel');
+        check('portal da Cisterna: o evento da Estufa não aparece, o geral sim',
+              !!pn && !/Chuva de Peças/.test(pn.textContent) && /Sábado de Pedra/.test(pn.textContent), pn && pn.textContent);
+        // a tela de recompensa de uma sala SEM peça: os Vinténs aparecem, com o chip
+        UI.showScreen('roomClear', { xpGanho: 40, xpMult: {}, xpPorHeroi: {}, levelUps: [], moedas: 12,
+          drops: [], stones: {}, selos: {}, insignias: 0, cards: [], pets: [], petCards: [], petXp: {}, petLevelUps: [],
+          desafio: null, dizimo: null, elementChoices: [],
+          eventos: [{ id: 'e12', titulo: 'Quinta do XP', tipo: 'xp', fator: 2 },
+                    { id: 'e7', titulo: 'Vintém Dobrado', tipo: 'vintem', fator: 1.5 }] });
+        var tela = d.querySelector('.screen-roomClear') || d;
+        var blocos = [].slice.call(tela.querySelectorAll('.rw-block'));
+        function bloco(t) { return blocos.filter(function (b) { var h = b.querySelector('h3'); return h && h.textContent === t; })[0]; }
+        var bXp = bloco('Experiência'), bV = bloco('Vinténs');
+        check('recompensa: o chip do evento no bloco de XP', !!bXp && !!bXp.querySelector('.rw-evento') &&
+              /Quinta do XP · XP ×2/.test(bXp.querySelector('.rw-evento').textContent), bXp && bXp.textContent);
+        check('recompensa: sala sem peça ainda mostra os Vinténs, com o chip do evento',
+              !!bV && /Vintém Dobrado · Vinténs ×1,5/.test(bV.textContent) && !bloco('Saque'), bV ? bV.textContent : 'sem o bloco');
+        // o redesenho de quando os modelos 3D terminam de carregar não zera a tela (10/09)
+        UI.repaint();
+        tela = d.querySelector('.screen-roomClear') || d;
+        blocos = [].slice.call(tela.querySelectorAll('.rw-block'));
+        bXp = bloco('Experiência');
+        check('recompensa: depois do UI.repaint o chip do evento continua no bloco de XP',
+              !!bXp && !!bXp.querySelector('.rw-evento') && /Quinta do XP · XP ×2/.test(bXp.querySelector('.rw-evento').textContent),
+              bXp && bXp.textContent);
+      });
+    }).then(function () {
+      check('nenhum erro de JS no jogo durante a prova', erros.length === 0, erros.join(' | '));
+      S.esquece();
+      fim();
+    }, function (e) {
+      check('a prova não lançou exceção', false, e && e.message);
+      fim();
+    });
+  }
+})();
+</script>
+</body>
+</html>

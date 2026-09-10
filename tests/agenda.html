@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — os Eventos do mundo (a agenda)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>Os Eventos do mundo — o cache da agenda, os tetos e a janela</h1>
+<div class="sub">JOGO.Agenda (10/09) contra um servidor de mentira que responde exatamente o exemplo do
+contrato (seção 1.3 do plano): servidor fora e 404 dão fator 1; a janela [início, fim) vale pelo relógio do
+SERVIDOR, sem nova busca; eventos do mesmo tipo não se multiplicam; os tetos prendem; o cache sobrevive ao
+recarregar sem estender o que venceu; e a escrita do Mestre vai com o token.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  // começa do zero: sem cache da agenda, sem sessão, sem API lembrada (tudo na sombra do sandbox)
+  try { ['soterra-agenda-v1', 'soterra-sessao', 'soterra-api-base'].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/sessao.js','js/core/diario.js','js/core/agenda.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__pronto = true; window.__done = true; window.__fail = falhas;
+  }
+
+  var S = JOGO.Sessao;
+  var Ag = JOGO.Agenda;
+  var AGORA = 1789041600;          // qui 10/09/2026 09:00 de Brasília — o "agora" do exemplo do contrato
+  // o exemplo da seção 1.3, sempre uma cópia nova
+  function exemplo() {
+    return {
+      ok: true, agora: AGORA, fusoMin: -180, janelaDias: 14,
+      tetos: { xp: 2.0, vintem: 1.5, pedras: 2.0, saque: 1.5, aviso: 1.0 },
+      ativos: [
+        { id: 'e12', origem: 'pontual', regra: null, tipo: 'xp', multiplicador: 2.0,
+          calabouco: null, titulo: 'Quinta do XP', texto: 'Toda sala paga o dobro de experiência.',
+          inicio: 1789038000, fim: 1789092000 }
+      ],
+      proximos: [
+        { id: 'r3@1789218000', origem: 'calendario', regra: 3, tipo: 'saque', multiplicador: 1.5,
+          calabouco: 'cistern', titulo: 'Maré da Cisterna', texto: '',
+          inicio: 1789218000, fim: 1789261200 }
+      ],
+      regras: [
+        { id: 3, tipo: 'saque', multiplicador: 1.5, calabouco: 'cistern', titulo: 'Maré da Cisterna',
+          texto: '', dias: [6], hora: '10:00', duracaoMin: 720, vigenteDe: null, vigenteAte: null }
+      ],
+      fatores: { geral: { xp: 2.0 }, porCalabouco: {} }
+    };
+  }
+  function ev(id, tipo, m, cal) {
+    return { id: id, origem: 'pontual', regra: null, tipo: tipo, multiplicador: m, calabouco: cal,
+             titulo: 'teste ' + id, texto: '', inicio: AGORA - 600, fim: AGORA + 3600 };
+  }
+  function resposta(ativos, extra) {
+    var r = { ok: true, agora: AGORA, ativos: ativos, proximos: [], regras: [] };
+    for (var k in (extra || {})) if (extra.hasOwnProperty(k)) r[k] = extra[k];
+    return r;
+  }
+
+  // ---- o servidor de mentira (Sessao._fetch é o gancho dos testes)
+  var chamadas = [];
+  var modo = 'fora';
+  function http(status, json) {
+    return Promise.resolve({ status: status, json: function () { return Promise.resolve(JSON.parse(JSON.stringify(json))); } });
+  }
+  S._fetch = function (url, pedido) {
+    var corpo = pedido.body ? JSON.parse(pedido.body) : null;
+    chamadas.push({ url: url, method: pedido.method, auth: (pedido.headers || {}).Authorization || null, body: corpo });
+    if (modo === 'fora') return Promise.reject(new Error('rede fora'));
+    if (modo === '404') return http(404, { ok: false, erro: 'rota desconhecida' });
+    if (modo === '403' && pedido.method === 'POST') return http(403, { ok: false, erro: 'só o Mestre do Fundo mexe nos eventos do mundo' });
+    if (pedido.method === 'GET' && /\/api\/eventos$/.test(url)) return http(200, exemplo());
+    if (pedido.method === 'POST' && /\/api\/eventos$/.test(url)) {
+      var novo = { id: 'e77', origem: 'pontual', regra: null, tipo: corpo.tipo, multiplicador: corpo.multiplicador,
+                   calabouco: corpo.calabouco || null, titulo: corpo.titulo, texto: corpo.texto || '',
+                   inicio: corpo.inicio || AGORA, fim: corpo.fim };
+      return http(201, { ok: true, evento: novo });
+    }
+    if (pedido.method === 'POST' && /\/api\/eventos\/regras$/.test(url)) {
+      var rg = {}; for (var k in corpo) rg[k] = corpo[k]; rg.id = 8;
+      return http(201, { ok: true, regra: rg, proximas: [] });
+    }
+    if (pedido.method === 'POST' && /\/api\/eventos\/cancelar$/.test(url)) return http(200, { ok: true, cancelado: true });
+    return http(404, { ok: false, erro: 'rota desconhecida' });
+  };
+  function ultimoPost() { return chamadas.filter(function (c) { return c.method === 'POST'; }).pop() || {}; }
+
+  var TODOS_TIPOS = ['xp', 'vintem', 'pedras', 'saque', 'aviso', 'drop', 'lixo'];
+  var LUGARES = [undefined, null, 'greenhouse', 'cistern', 'emberlock', 'poco'];
+  function todosUm() {
+    for (var i = 0; i < TODOS_TIPOS.length; i++)
+      for (var j = 0; j < LUGARES.length; j++)
+        if (Ag.fator(TODOS_TIPOS[i], LUGARES[j]) !== 1) return false;
+    return Ag.fator() === 1;
+  }
+  function relogio(seg) { Ag._agora = function () { return seg * 1000; }; }
+
+  relogio(AGORA);
+  var passo = Promise.resolve();
+
+  // 1. servidor fora
+  passo = passo.then(function () {
+    modo = 'fora';
+    return Ag.atualizar().then(function (r) {
+      check('servidor fora: atualizar resolve (não rejeita) com status 0', !!r && r.ok === false && r.status === 0, JSON.stringify(r));
+      check('servidor fora: todo fator dá 1, em todo calabouço, sem exceção', todosUm());
+      check('servidor fora: nada no ar e nada por vir', Ag.ativos().length === 0 && Ag.proximos().length === 0);
+      check('servidor fora: a agenda sabe que o servidor não respondeu', Ag.noAr() === false);
+    });
+  });
+
+  // 2. servidor velho (a rota ainda não existe)
+  passo = passo.then(function () {
+    modo = '404';
+    return Ag.atualizar().then(function (r) {
+      check('servidor velho (404): sem mudança e todo fator 1', r.status === 404 && r.ok === false && todosUm(), JSON.stringify(r));
+    });
+  });
+
+  // 3. o exemplo do contrato
+  passo = passo.then(function () {
+    modo = 'ok';
+    return Ag.atualizar().then(function (r) {
+      var c = chamadas[chamadas.length - 1];
+      check('a busca é GET /api/eventos, SEM token', c.method === 'GET' && /\/api\/eventos$/.test(c.url) && c.auth === null, c.method + ' ' + c.url);
+      check('resposta boa: ok e a lista mudou', r.ok === true && r.mudou === true && Ag.noAr() === true);
+      check("fator('xp','greenhouse') == 2 — a Quinta do XP vale em todo calabouço", Ag.fator('xp', 'greenhouse') === 2);
+      check("fator('xp') sem calabouço também dá 2", Ag.fator('xp') === 2 && Ag.fator('xp', null) === 2);
+      check('os outros tipos seguem em 1 agora', Ag.fator('vintem', 'cistern') === 1 && Ag.fator('saque', 'cistern') === 1 &&
+            Ag.fator('pedras', 'greenhouse') === 1 && Ag.fator('aviso') === 1);
+      var at = Ag.ativos(), px = Ag.proximos();
+      check('ativos: a Quinta do XP; próximos: a Maré da Cisterna', at.length === 1 && at[0].id === 'e12' && at[0].fator === 2 &&
+            px.length === 1 && px[0].id === 'r3@1789218000', at.map(function (e) { return e.id; }) + ' / ' + px.map(function (e) { return e.id; }));
+      var rg = Ag.regras();
+      check('a regra chegou no formato do contrato', rg.length === 1 && rg[0].id === 3 && rg[0].dias.join() === '6' &&
+            rg[0].hora === '10:00' && rg[0].duracaoMin === 720 && rg[0].calabouco === 'cistern');
+    });
+  });
+
+  // 4. a Maré da Cisterna no tempo — sem nova busca
+  passo = passo.then(function () {
+    var n0 = chamadas.length;
+    var INI = 1789218000, FIM = 1789261200;
+    function em(s) { relogio(s); return Ag.fator('saque', 'cistern'); }
+    var v = [em(INI - 1), em(INI), em(INI + 3600), em(FIM - 1), em(FIM), em(FIM + 60)];
+    check('a Maré da Cisterna: 1 antes, 1,5 do início até o último segundo, 1 no fim e depois',
+          v.join('/') === '1/1.5/1.5/1.5/1/1', v.join(' / '));
+    check('... e nenhuma busca nova para isso', chamadas.length === n0);
+    relogio(INI + 3600);
+    check('evento de um calabouço não vaza para outro (nem para "sem calabouço")',
+          Ag.fator('saque', 'greenhouse') === 1 && Ag.fator('saque', null) === 1 && Ag.fator('saque', 'poco') === 1 &&
+          Ag.fator('saque', 'cistern') === 1.5);
+    check('no meio da Maré a Quinta do XP já acabou — a janela vence sozinha',
+          Ag.fator('xp', 'cistern') === 1 && Ag.ativos().length === 1 && Ag.ativos()[0].id === 'r3@1789218000');
+    check('os que valem num portal: a Maré na Cisterna, nada na Estufa',
+          Ag.valemEm('cistern').length === 1 && Ag.valemEm('greenhouse').length === 0);
+    relogio(AGORA);
+  });
+
+  // 5. vale o maior; os tetos; tipo desconhecido; abaixo de 1
+  passo = passo.then(function () {
+    Ag._injeta(resposta([ev('e1', 'xp', 1.5, null), ev('e2', 'xp', 2, null), ev('e3', 'xp', 1.25, 'greenhouse'),
+                         ev('e4', 'vintem', 1.25, null), ev('e5', 'vintem', 1.5, 'cistern')]));
+    check('três eventos de XP no ar: vale o maior, não o produto', Ag.fator('xp', 'greenhouse') === 2 && Ag.fator('xp', 'cistern') === 2);
+    check('vintém 1,25 geral + 1,5 só na Cisterna: 1,5 lá, 1,25 no resto',
+          Ag.fator('vintem', 'cistern') === 1.5 && Ag.fator('vintem', 'greenhouse') === 1.25);
+    var vc = Ag.vencedor('vintem', 'cistern');
+    check('o vencedor da Cisterna é o de 1,5 (é ele que a recompensa cita)', !!vc && vc.id === 'e5' && vc.fator === 1.5);
+    Ag._injeta(resposta([ev('e1', 'xp', 1.5, null), ev('e2', 'xp', 1.25, null)]));
+    check('xp 1,5 + xp 1,25 dá 1,5 (e não 1,875)', Ag.fator('xp') === 1.5);
+    Ag._injeta(resposta([ev('e1', 'xp', 9, null), ev('e2', 'drop', 3, null), ev('e3', 'vintem', 0.5, null),
+                         ev('e4', 'saque', 7, 'cistern'), ev('e5', 'aviso', 5, null), ev('e6', 'pedras', 'muito', null)],
+                        { fatores: { geral: { xp: 9, drop: 3, saque: 9 }, porCalabouco: {} } }));
+    check('servidor mandando XP ×9: preso no teto, dá 2', Ag.fator('xp') === 2);
+    check('tipo desconhecido ("drop") é ignorado — nem fator, nem lista',
+          Ag.fator('drop') === 1 && !Ag.ativos().some(function (e) { return e.tipo === 'drop'; }));
+    check('multiplicador abaixo de 1 dá 1 (evento nunca tira)', Ag.fator('vintem') === 1);
+    check('saque ×7 na Cisterna: 1,5, o teto do saque', Ag.fator('saque', 'cistern') === 1.5 && Ag.fator('saque') === 1);
+    check('aviso nunca multiplica', Ag.fator('aviso') === 1);
+    check('multiplicador que não é número vira 1', Ag.fator('pedras') === 1);
+    check('o `fatores` pronto do servidor NÃO é usado: o jogo recalcula da lista', Ag.fator('saque', 'greenhouse') === 1);
+    check('os tetos são os do contrato', JSON.stringify(Ag.TETOS) === JSON.stringify({ xp: 2, vintem: 1.5, pedras: 2, saque: 1.5, aviso: 1 }));
+  });
+
+  // 6. o relógio é o do servidor
+  passo = passo.then(function () {
+    relogio(AGORA);                                  // o relógio DAQUI
+    Ag._injeta({ ok: true, agora: AGORA + 3600, proximos: [], regras: [], ativos: [
+      { id: 'e40', origem: 'pontual', regra: null, tipo: 'xp', multiplicador: 2, calabouco: null,
+        titulo: 'Começou faz meia hora', texto: '', inicio: AGORA + 1800, fim: AGORA + 7200 }] });
+    check('com o servidor 1 h à frente, a agenda anda no relógio dele', Ag.agora() === (AGORA + 3600) * 1000, String(Ag.agora()));
+    check('evento que o relógio daqui ainda não começou, mas o do servidor sim: vale', Ag.fator('xp') === 2);
+    Ag._injeta({ ok: true, agora: AGORA - 3600, proximos: [], regras: [], ativos: [
+      { id: 'e41', origem: 'pontual', regra: null, tipo: 'xp', multiplicador: 2, calabouco: null,
+        titulo: 'Daqui a meia hora', texto: '', inicio: AGORA - 1800, fim: AGORA + 7200 }] });
+    check('relógio daqui adiantado 1 h não liga o evento antes da hora do servidor',
+          Ag.fator('xp') === 1 && Ag.proximos().length === 1 && Ag.ativos().length === 0);
+  });
+
+  // 7. o cache: o módulo recarregado com a rede fora
+  passo = passo.then(function () {
+    relogio(AGORA);
+    Ag._injeta(exemplo());
+    var cru = null;
+    try { cru = JSON.parse(localStorage.getItem('soterra-agenda-v1')); } catch (e) {}
+    check('o cache mora em soterra-agenda-v1 (sem sufixo de conta)', !!cru && cru.lista.length === 2 && cru.regras.length === 1);
+    modo = 'fora';
+    var velho = JOGO.Agenda;
+    return new Promise(function (pronto) {
+      var sc = document.createElement('script');
+      sc.src = '../js/core/agenda.js' + window.__V + '-recarga';
+      sc.onload = function () { pronto(true); };
+      sc.onerror = function () { pronto(false); };
+      document.body.appendChild(sc);
+    }).then(function (carregou) {
+      Ag = JOGO.Agenda;
+      check('o módulo recarregou (é outro objeto)', carregou && Ag !== velho);
+      relogio(AGORA);
+      return Ag.atualizar();
+    }).then(function (r) {
+      check('recarregado com a rede fora: a busca falha e a lista fica', r.status === 0 && Ag.ativos().length === 1 && Ag.ativos()[0].id === 'e12');
+      check('... e o fator é o do cache', Ag.fator('xp', 'cistern') === 2);
+      relogio(1789092000 + 1);
+      check('o evento vencido continua vencido (cache velho não estende)', Ag.fator('xp') === 1 && Ag.ativos().length === 0);
+      check('... e o que vem (a Maré) segue na lista', Ag.proximos().length === 1 && Ag.proximos()[0].id === 'r3@1789218000');
+      relogio(AGORA);
+    });
+  });
+
+  // 8. aoMudar
+  passo = passo.then(function () {
+    relogio(AGORA);
+    Ag._injeta(exemplo());                          // assenta a assinatura antes de escutar
+    var n = 0;
+    var solta = Ag.aoMudar(function () { n++; });
+    Ag._injeta(exemplo());
+    var n1 = n;
+    var B = exemplo(); B.ativos[0].multiplicador = 1.5;
+    Ag._injeta(B);
+    var n2 = n;
+    Ag._injeta(B);
+    var n3 = n;
+    solta();
+    Ag._injeta(exemplo());
+    check('aoMudar: quieto quando nada muda, dispara quando muda, e solta', n1 === 0 && n2 === 1 && n3 === 1 && n === 1,
+          [n1, n2, n3, n].join('/'));
+    // a Quinta do XP sai do ar só com o tempo, sem busca nova: quem vê é o
+    // tique de 1 min do módulo (aqui chamado na hora, pelo _confere)
+    var m = 0;
+    var solta2 = Ag.aoMudar(function () { m++; });
+    Ag._confere();
+    var m0 = m;
+    relogio(1789092000 + 1);
+    Ag._confere();
+    var m1 = m;
+    Ag._confere();
+    solta2();
+    check('aoMudar também dispara quando um evento sai do ar (uma vez só)', m0 === 0 && m1 === 1 && m === 1, [m0, m1, m].join('/'));
+    relogio(AGORA);
+    Ag._confere();
+  });
+
+  // 9. a escrita do Mestre
+  passo = passo.then(function () {
+    modo = 'ok';
+    S.esquece();
+    var n0 = chamadas.length;
+    return Ag.criar({ tipo: 'xp', multiplicador: 2, titulo: 'Sem sessão', fim: AGORA + 3600 }).then(function (r) {
+      check('sem sessão: criar nem sai de casa e devolve a nota do Mestre',
+            r.ok === false && r.status === 401 && chamadas.length === n0 && /conta do Mestre/.test(r.erro || ''), r.erro);
+      S.guarda({ token: 'tok-m', conta: { id: 1, nome: 'Dono', gm: true } });
+      return Ag.criar({ tipo: 'pedras', multiplicador: 2, calabouco: null, titulo: 'Sábado de Pedra', texto: '', fim: AGORA + 7200 });
+    }).then(function (r) {
+      var c = ultimoPost();
+      check('criar: POST /api/eventos com Authorization Bearer e sem início (liga agora)',
+            /\/api\/eventos$/.test(c.url) && c.auth === 'Bearer tok-m' && c.body.tipo === 'pedras' && c.body.inicio === undefined,
+            c.method + ' ' + c.url + ' ' + c.auth);
+      var get = chamadas[chamadas.length - 1];
+      check('criar: 201 volta ok, e a agenda busca de novo (GET sem token)',
+            r.ok === true && r.status === 201 && get.method === 'GET' && get.auth === null);
+      return Ag.criarRegra({ tipo: 'saque', multiplicador: 1.5, calabouco: 'cistern', titulo: 'Maré da Cisterna', texto: '',
+                             dias: [6], hora: '10:00', duracaoMin: 720, vigenteDe: null, vigenteAte: null });
+    }).then(function (r) {
+      var c = ultimoPost();
+      check('criarRegra: POST /api/eventos/regras com Authorization',
+            /\/api\/eventos\/regras$/.test(c.url) && c.auth === 'Bearer tok-m' && c.body.dias.join() === '6' && r.ok === true);
+      return Ag.cancelar('evento', 'e12');
+    }).then(function (r) {
+      var c = ultimoPost();
+      check('cancelar um evento: POST /api/eventos/cancelar {alvo:"evento", id:12}',
+            /\/api\/eventos\/cancelar$/.test(c.url) && c.auth === 'Bearer tok-m' && c.body.alvo === 'evento' && c.body.id === 12 && r.ok === true,
+            JSON.stringify(c.body));
+      return Ag.cancelar('regra', 3);
+    }).then(function (r) {
+      var c = ultimoPost();
+      check('cancelar a regra: {alvo:"regra", id:3}', c.body.alvo === 'regra' && c.body.id === 3 && r.ok === true);
+      check('o id da lista vira alvo: "e12" é evento, "r3@…" é a regra 3',
+            JSON.stringify(Ag.alvoDe({ id: 'e12' })) === '{"alvo":"evento","id":12}' &&
+            JSON.stringify(Ag.alvoDe('r3@1789218000')) === '{"alvo":"regra","id":3}');
+      modo = '403';
+      return Ag.criar({ tipo: 'xp', multiplicador: 2, titulo: 'Curioso', fim: AGORA + 3600 });
+    }).then(function (r) {
+      check('conta sem a marca: o 403 do servidor chega inteiro em r.erro (a HUD mostra no toast)',
+            r.ok === false && r.status === 403 && r.erro === 'só o Mestre do Fundo mexe nos eventos do mundo', r.erro);
+      S.esquece();
+      modo = 'ok';
+    });
+  });
+
+  // 9b. a busca AUTOMÁTICA em casa (file://): só com sessão ou com API apontada —
+  // senão o 127.0.0.1:8300 fora pintaria o console de vermelho a cada 10 min
+  passo = passo.then(function () {
+    modo = 'ok';
+    S.esquece();
+    try { localStorage.removeItem('soterra-api-base'); } catch (e) {}
+    var n0 = chamadas.length;
+    return Ag.refresca(0).then(function (r) {
+      check('em casa (file://), sem sessão nem API apontada, a busca automática não sai',
+            location.protocol !== 'file:' || (r.pulou === true && chamadas.length === n0), JSON.stringify(r));
+      S.guarda({ token: 'tok-m', conta: { id: 1, nome: 'Dono', gm: true } });
+      return Ag.refresca(0);
+    }).then(function (r) {
+      check('com sessão do site, a busca automática vai', r.pulou !== true && r.ok === true && chamadas.length === n0 + 1);
+      return Ag.refresca(60000);
+    }).then(function (r) {
+      check('... e não se repete antes da idade pedida (60 s)', r.pulou === true && chamadas.length === n0 + 1);
+      S.esquece();
+      try { localStorage.setItem('soterra-api-base', 'http://127.0.0.1:8300'); } catch (e) {}
+      return Ag.refresca(0);
+    }).then(function (r) {
+      check('com uma API apontada (?api=, lembrada pelo Sessao), vai também', r.pulou !== true && chamadas.length === n0 + 2);
+      try { localStorage.removeItem('soterra-api-base'); } catch (e) {}
+      return Ag.atualizar();
+    }).then(function (r) {
+      check('a busca PEDIDA (atualizar) vai sempre, mesmo sem sessão nem API', chamadas.length === n0 + 3 && r.ok === true);
+    });
+  });
+
+  // 10. as palavras (a HUD e a faixa usam estas)
+  passo = passo.then(function () {
+    check('×2, ×1,5, ×1,25', Ag.fmtFator(2) === '×2' && Ag.fmtFator(1.5) === '×1,5' && Ag.fmtFator(1.25) === '×1,25');
+    check('o rótulo: "XP ×2" e "Aviso"', Ag.rotulo(exemplo().ativos[0]) === 'XP ×2' && Ag.rotulo({ tipo: 'aviso', multiplicador: 1 }) === 'Aviso');
+    var tr = Ag.textoRegra(exemplo().regras[0]);
+    check('a regra em texto: "Todo sábado, 10:00–22:00 (Brasília)"', tr === 'Todo sábado, 10:00–22:00 (Brasília)', tr);
+    var tm = Ag.textoRegra({ dias: [5, 6], hora: '22:00', duracaoMin: 240 });
+    check('a que atravessa a meia-noite: "Às sextas e aos sábados, 22:00–02:00"', tm === 'Às sextas e aos sábados, 22:00–02:00 (Brasília)', tm);
+    check('a hora é a de Brasília: o agora do contrato é "qui 10/09 09:00"', Ag.quando(AGORA) === 'qui 10/09 09:00', Ag.quando(AGORA));
+    check('datetime-local ⇄ epoch, lido em Brasília', Ag.deBrasilia('2026-09-12T10:00') === 1789218000 &&
+          Ag.paraBrasilia(1789218000) === '2026-09-12T10:00', String(Ag.deBrasilia('2026-09-12T10:00')));
+    check('termina em: "14 h" e "3 h 20 min"', Ag.falta(14 * 3600000) === '14 h' && Ag.falta(200 * 60000) === '3 h 20 min');
+    var cp = Ag.calaboucosDoPainel();
+    check('o painel do Mestre só oferece portal aberto, e o Poço',
+          cp.indexOf('poco') >= 0 && cp.indexOf('greenhouse') >= 0 &&
+          cp.every(function (id) { return id === 'poco' || !JOGO.DATA.portalFechado(id); }), cp.join(','));
+    check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+  });
+
+  passo.then(fim, function (e) { check('a suíte não lançou exceção', false, e && (e.message + ' ' + e.stack)); fim(); });
+})();
+</script>
+</body>
+</html>

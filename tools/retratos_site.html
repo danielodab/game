@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Retratos do site</title>
+<!--
+  tools/retratos_site.html — a câmera dos retratos do site (10/09).
+
+  POR QUE EXISTE
+  O site mostra as 7 classes e as 21 fusões com a arte do Daniel, e não há
+  arte 2D delas: a única fonte é o próprio 3D do jogo. Esta página carrega os
+  corpos embutidos, chama `Models3D2.portrait` do jeito que ele é hoje (fundo
+  escuro na cor da classe, sem mexer no motor, decisão D9) e manda cada foto
+  para o tools/retratos_site.py, que grava em site/img/.
+
+  DOIS MODOS
+    ?lote=<nome>&vez=<ficha>   fotografa um lote e grava. Lotes: classes,
+                               fus-sumo, fus-minotauro, fus-cacador,
+                               fus-curandeira, fus-bruxo-ladino, fus-xama e
+                               obras (opcional). Aberta por file:// ou sem o
+                               .py, só mostra as fotos, sem gravar nada.
+    ?ver=1                     a FOLHA DE CONFERÊNCIA: tudo de site/img/ numa
+                               grade, com o tamanho de cada arquivo e o alerta
+                               do que falta. O dono aprova antes do commit (D12).
+
+  AS TRÊS TRAVAS (o motor não avisa quando erra)
+    1. Corpo que não carregou: sem o `fus_<a>_<b>` o `fusionLook` COMPÕE uma
+       fusão calado (models3d_v2.js:977-978), e sem o GLB decodificado o
+       `M.unit` cai no esqueletinho reserva. Aqui o lote confere o modelo
+       ANTES (JOGO.MODELS) e DEPOIS (o `lookFor` tem de vestir exatamente
+       aquele corpo, e o `M.load` não pode ter devolvido erro).
+    2. Foto vazia: se o miolo da imagem sair quase liso (só o gradiente do
+       fundo), a foto é recusada. Um autoteste com um fundo sem figura prova
+       que a trava pega.
+    3. Espera por CONTAGEM de voltas, nunca por Date.now(): no headless o
+       relógio virtual corre à frente e a espera por tempo estoura (a mesma
+       armadilha do sala_shot e das sondas da praça).
+
+  Cada foto sai com o DOBRO do tamanho e é reduzida na hora (`&ss=2`): a borda
+  da figura fica limpa sem mexer no motor.
+-->
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.45 system-ui,'Segoe UI',Roboto,Arial,sans-serif;padding:14px 16px}
+  h1{font:600 20px Georgia,'Times New Roman',serif;color:#ffc44d;margin:0 0 4px}
+  pre{background:#151a21;padding:10px;border-radius:8px;font-size:12px;white-space:pre-wrap;margin:8px 0}
+  #summary{font-weight:600;margin:6px 0}
+  #fotos{display:flex;flex-wrap:wrap;gap:8px}
+  #fotos figure{margin:0;text-align:center;font-size:11px;color:#aab4c3}
+  #fotos canvas{display:block;width:128px;height:128px;border-radius:6px}
+  /* folha de conferência */
+  body.folha pre#out{display:none}
+  .topo{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;border-bottom:1px solid rgba(255,196,77,.3);padding-bottom:6px}
+  .topo .nota{color:#aab4c3;font-size:12px}
+  h2{font:600 15px Georgia,'Times New Roman',serif;color:#ffc44d;margin:12px 0 7px}
+  h2 small{font:400 12px system-ui,sans-serif;color:#aab4c3;margin-left:8px}
+  .grade{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+  .carta{background:#151a21;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:6px}
+  .carta.falta{border-color:#ff7a6b;background:#2a1714}
+  .carta.alerta{border-color:#ffb347}
+  .quadro{position:relative;aspect-ratio:1/1;background:#1b222b;border-radius:6px;overflow:hidden}
+  .quadro img.inteiro{display:block;width:100%;height:100%}
+  .quadro img.busto{position:absolute;right:5px;bottom:5px;width:34%;border-radius:50%;border:2px solid #ffc44d;box-shadow:0 1px 5px #000;background:#1b222b}
+  .quadro .vazio{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ff7a6b;font-weight:600}
+  .nome{font-weight:600;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sub{color:#aab4c3;font-size:11px;line-height:1.35}
+  .al{color:#ff7a6b;font-size:11px}
+  .al.leve{color:#ffb347}
+  .ok{color:#7ee2a8}
+  .extras{color:#aab4c3;font-size:12px}
+</style>
+</head>
+<body>
+<h1 id="titulo">Retratos do site</h1>
+<div id="summary">rodando…</div>
+<pre id="out"></pre>
+<div id="fotos"></div>
+<div id="folha"></div>
+
+<script src="../tests/save_sandbox.js"></script>
+<script>
+  /* A CARGA. A lista é a de tests/retrato_probe.html:20-26 (three, GLTFLoader,
+   * data/*, engine, progress e os corpos das classes), mais UM arquivo de
+   * fusões por lote e, por último, o motor. `M.load` decodifica TODOS os
+   * JOGO.MODELS carregados, então cada lote carrega só o que fotografa.
+   * O `?v=` é quebra-cache (o painel do navegador cacheia JS sem dó); o
+   * Date.now() aqui não serve para esperar nada. */
+  (function () {
+    var q = {};
+    location.search.replace(/^\?/, '').split('&').forEach(function (p) {
+      if (!p) return;
+      var i = p.indexOf('=');
+      var k = decodeURIComponent(i < 0 ? p : p.slice(0, i));
+      q[k] = i < 0 ? '' : decodeURIComponent(p.slice(i + 1).replace(/\+/g, ' '));
+    });
+    window.__Q = q;
+    var BASE = ['vendor/three.min.js', 'vendor/GLTFLoader.js',
+      'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
+      'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+      'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js', 'js/core/data/items_extra.js',
+      'js/core/engine.js', 'js/core/progress.js',
+      'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js', 'assets/embedded/models-meshy.js'];
+    var FUS = {
+      'fus-sumo':         'assets/embedded/models-fusoes-sumo.js',
+      'fus-minotauro':    'assets/embedded/models-fusoes-minotauro.js',
+      'fus-cacador':      'assets/embedded/models-fusoes-cacador.js',
+      'fus-curandeira':   'assets/embedded/models-fusoes-curandeira.js',
+      'fus-bruxo-ladino': 'assets/embedded/models-fusao-bruxo-ladino.js',
+      'fus-xama':         'assets/embedded/models-fusoes-xama.js'
+    };
+    var LOTES = { classes: [] };
+    for (var k in FUS) LOTES[k] = [FUS[k]];
+    // as 6 obras moram nos arquivos do Bárbaro, do Minotauro, do Caçador e do Xamã
+    LOTES.obras = [FUS['fus-sumo'], FUS['fus-minotauro'], FUS['fus-cacador'], FUS['fus-xama']];
+    window.__LOTES = LOTES;
+
+    var arqs = [];
+    if (q.ver) arqs = ['js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/fusions.js'];
+    else if (LOTES.hasOwnProperty(q.lote)) arqs = BASE.concat(LOTES[q.lote], ['js/render3d/models3d_v2.js']);
+    var V = '?v=' + Date.now();
+    for (var i = 0; i < arqs.length; i++) document.write('<scr' + 'ipt src="../' + arqs[i] + V + '"></scr' + 'ipt>');
+  })();
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var Q = window.__Q || {};
+  var OUT = document.getElementById('out');
+  var SUM = document.getElementById('summary');
+  var servido = /^https?:$/.test(location.protocol);
+  var VEZ = Q.vez || '';
+
+  /* Tamanhos do contrato (plano §1.8). A faixa de peso é a mesma que o .py
+   * confere no fim — as duas mudam juntas. O teto é o do plano (400 KB); o
+   * PISO sai do tamanho. O plano pedia 8 KB para tudo, pensando em PNG; em
+   * WebP q 0,9 um busto de 128 px de verdade pesa 3 a 6 KB. Medido em 10/09:
+   * o fundo SEM figura pesa até 1,1 KB em 128 px, 1,7 em 256, 2,6 em 384 e
+   * 3,9 em 512 — o piso é o dobro disso, arredondado. */
+  var TAM = { classe: 512, fusao: 384, obra: 256, busto: 128 };
+  var PISO_KB = { 128: 2, 256: 3, 384: 5, 512: 8 }, TETO_KB = 400;
+  var SS = Math.max(1, Math.min(3, parseInt(Q.ss, 10) || 2));
+  var MAX_VOLTAS = 4000, VOLTA_MS = 100;   // ~400 s de espera real, contada em voltas
+  // Trava da foto vazia: o miolo só com o fundo tem desvio baixo E quase
+  // nenhuma borda; a figura mais lisa do elenco passa longe dos dois.
+  var MIOLO = { desvioMin: 10, bordasMin: 0.02, degrau: 14 };
+
+  var linhas = [], avisos = [], terminou = false;
+  function log(s) {
+    linhas.push(s);
+    OUT.textContent = linhas.join('\n');
+    if (servido && Q.lote) postJSON('/__log', { linha: s }).catch(function () {});
+  }
+  function postJSON(rota, obj) {
+    return fetch(rota + '?vez=' + encodeURIComponent(VEZ), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj)
+    }).then(function (r) { return r.json(); });
+  }
+
+  // ------------------------------------------------------------ quem existe
+  function classes() {
+    var C = (JOGO.DATA && JOGO.DATA.classes) || {};
+    // o Mestre (gm) é secreto: fora do site e fora do ranking
+    return Object.keys(C).filter(function (id) { return id !== 'gm' && /^[a-z0-9]+$/.test(id); });
+  }
+  function pares(ids) {
+    var o = ids.slice().sort(), out = [];      // par em ordem ALFABÉTICA, como o Fusion.pairKey
+    for (var i = 0; i < o.length; i++) for (var j = i + 1; j < o.length; j++) out.push([o[i], o[j]]);
+    return out;
+  }
+  function obras() {
+    var S = (JOGO.DATA && JOGO.DATA.fusionSummons) || {};
+    return Object.keys(S).filter(function (id) { return /^[a-z0-9-]+$/.test(id); });
+  }
+  function nomeClasse(id) {
+    var C = (JOGO.DATA && JOGO.DATA.classes) || {};
+    return (C[id] && C[id].name) || id;
+  }
+
+  function motorGL() {
+    try {
+      var c = document.createElement('canvas');
+      var gl = c.getContext('webgl2') || c.getContext('webgl');
+      if (!gl) return 'sem WebGL';
+      var x = gl.getExtension('WEBGL_debug_renderer_info');
+      var r = String(x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+      var lose = gl.getExtension('WEBGL_lose_context');
+      if (lose) lose.loseContext();
+      return r;
+    } catch (e) { return 'sem WebGL (' + e.message + ')'; }
+  }
+
+  // ------------------------------------------------------------ o que o lote fotografa
+  function alvosDoLote(lote) {
+    var M = JOGO.Models3D2, MOD = JOGO.MODELS || {}, alvos = [], erros = [];
+    if (lote === 'classes') {
+      classes().forEach(function (id) {
+        var modelo = 'meshy_' + id;
+        if (!MOD[modelo]) { erros.push('o corpo ' + modelo + ' não carregou (assets/embedded/models-meshy.js)'); return; }
+        alvos.push({ nome: 'classe-' + id, def: id, tam: TAM.classe, inteiro: true, modelo: modelo });
+        alvos.push({ nome: 'classe-' + id + '-busto', def: id, tam: TAM.busto, inteiro: false, modelo: modelo });
+      });
+      if (!alvos.length && !erros.length) erros.push('nenhuma classe em JOGO.DATA.classes');
+    } else if (lote === 'obras') {
+      obras().forEach(function (id) {
+        var lk = M.lookFor(id), modelo = lk && lk.model;
+        if (!modelo || !MOD[modelo]) { erros.push('a obra ' + id + ' não tem corpo carregado (' + modelo + ')'); return; }
+        alvos.push({ nome: 'obra-' + id, def: id, tam: TAM.obra, inteiro: true, modelo: modelo });
+      });
+      if (!alvos.length && !erros.length) erros.push('nenhuma obra em JOGO.DATA.fusionSummons');
+    } else {
+      pares(classes()).forEach(function (p) {
+        var modelo = 'fus_' + p[0] + '_' + p[1];
+        if (!MOD[modelo]) return;                 // é de outro lote
+        var def = 'fus:' + p[0] + '+' + p[1];
+        alvos.push({ nome: 'fusao-' + p[0] + '-' + p[1], def: def, tam: TAM.fusao, inteiro: true, modelo: modelo });
+        alvos.push({ nome: 'fusao-' + p[0] + '-' + p[1] + '-busto', def: def, tam: TAM.busto, inteiro: false, modelo: modelo });
+      });
+      if (!alvos.length) erros.push('nenhum corpo fus_* carregou neste lote (o arquivo de fusões falhou?)');
+    }
+    return { alvos: alvos, erros: erros };
+  }
+
+  // ------------------------------------------------------------ a foto
+  function fotografa(a) {
+    var M = JOGO.Models3D2;
+    // trava 1: o motor tem de vestir EXATAMENTE o corpo esperado — senão ele
+    // compõe um corpo calado e a foto sai com a cara de outra coisa
+    var lk = M.lookFor(a.def);
+    if (!lk || lk.model !== a.modelo) {
+      throw new Error(a.nome + ': o motor vestiria ' + (lk ? lk.model : 'nada') + ' em vez de ' + a.modelo + ' (composição calada)');
+    }
+    if (lk.headSwap && !(JOGO.MODELS || {})[lk.headSwap.model]) {
+      throw new Error(a.nome + ': a cabeça trocada (' + lk.headSwap.model + ') não carregou (models-heroes.js)');
+    }
+    // no busto, o quadro passa pelo embrulho (ver quadroDeBusto); a câmera, a
+    // luz, o fundo e o halo continuam sendo do motor
+    var orig = M.portraitFraming, como = 'motor', cru;
+    if (!a.inteiro) {
+      M.portraitFraming = function (node, corpoInteiro) {
+        if (corpoInteiro) return orig(node, true);
+        var r = quadroDeBusto(orig, node);
+        como = r.como;
+        return r.f;
+      };
+    }
+    try { cru = M.portrait(a.def, { size: a.tam * SS, corpoInteiro: a.inteiro }); }
+    finally { M.portraitFraming = orig; }
+    a.como = a.inteiro ? 'inteiro' : como;
+    if (!cru) throw new Error(a.nome + ': M.portrait devolveu nulo');
+    if (a.como === 'corpo') {
+      var av = a.nome + ': o motor não mediu a cabeça, e o busto saiu de corpo inteiro';
+      avisos.push(av); log('AVISO · ' + av);
+    }
+    if (SS === 1) return cru;
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = a.tam;
+    var g = cv.getContext('2d');
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(cru, 0, 0, a.tam, a.tam);
+    return cv;
+  }
+
+  /* O BUSTO QUE O MOTOR NÃO DÁ. `portraitFraming` só enquadra busto quando o
+   * corpo "está de pé" pela geometria (models3d_v2.js:1729-1732): cabeça no
+   * alto da silhueta E corpo mais alto que largo. Medido em 10/09, 19 dos 28
+   * corpos reprovam: em 6 a arma erguida passa da cabeça (o martelo do
+   * Bárbaro, o cajado do Bruxo), em 13 a pose ou a arma alarga a caixa (a
+   * espingarda do Caçador, o escudo do Minotauro). O "busto" saía de corpo
+   * inteiro, uma mancha de 36 px no ranking.
+   *
+   * Sem mexer no motor: durante a foto de busto a página embrulha
+   * `M.portraitFraming` (o `M.portrait` o chama pelo objeto) e, quando o motor
+   * reprova, devolve o quadro da CABEÇA com a mesma régua do busto dele (1,6
+   * cabeça de altura e 0,2 de ar em cima, models3d_v2.js:1551-1553). O FOV
+   * sai do próprio quadro de corpo inteiro (half/dist), sem copiar a
+   * constante. Quem passa no teste do motor fica com o busto do motor. */
+  var BUSTO = { ar: 0.20, cabecas: 1.60, folga: 1.25 };
+  function quadroDeBusto(orig, node) {
+    var f = orig(node, false);
+    if (!f || f.upright) return { f: f, como: 'motor' };
+    var cab = cabecaMedida(f, node);
+    if (!cab) return { f: f, como: 'corpo' };
+    var ref = orig(node, true);
+    var tanH = (ref && ref.dist > 0) ? ref.half / ref.dist : Math.tan(Math.PI / 12);
+    var topo = cab.topo + cab.alt * BUSTO.ar;
+    var base = Math.max(f.box.min.y, topo - cab.alt * (BUSTO.cabecas + BUSTO.ar));
+    var meia = Math.max((topo - base) / 2, cab.larg * BUSTO.folga / 2);
+    return { como: cab.como, f: {
+      half: meia, cy: (topo + base) / 2, upright: true, headH: cab.alt,
+      // a profundidade da cabeça afasta um pouco a câmera: o que fica mais
+      // perto dela sai maior e escaparia pela borda (a mesma conta do motor)
+      dist: meia / tanH + cab.prof * 0.45, tx: cab.x, tz: cab.z,
+      box: f.box, head: f.head, gear: f.gear, top: topo, bottom: base } };
+  }
+  function cabecaMedida(f, node) {
+    var H = f.box.max.y - f.box.min.y, s = new THREE.Vector3(), c = new THREE.Vector3();
+    if (!f.head.isEmpty()) {
+      f.head.getSize(s);
+      if (s.y >= H * 0.10) {                // crânio medido pelos vértices do motor
+        f.head.getCenter(c);
+        return { topo: f.head.max.y, alt: s.y, larg: Math.max(s.x, s.z), prof: Math.min(s.x, s.z),
+                 x: c.x, z: c.z, como: 'cabeça' };
+      }
+    }
+    /* Sem crânio medido, o busto fica de corpo inteiro (com aviso). Hoje só o
+     * Colosso Arcano (fus:bruxo+sumo) cai aqui: o rig dele tem o osso `Head`
+     * na altura dos ombros (2,63 m, com o `head_end` 5 cm acima e o braço
+     * direito em 2,71 m), então nem os vértices nem os ossos dizem onde a
+     * cabeça está. Chutar o quadro seria pior que mostrar a figura inteira. */
+    return null;
+  }
+
+  /* Trava 2: o miolo (os 40% do meio) não pode sair quase liso. Mede o maior
+   * desvio-padrão entre os três canais e a fração de pixels com degrau forte
+   * para o vizinho. O fundo do retrato é um gradiente suave: desvio de poucos
+   * pontos e zero borda. Só recusa quando as DUAS medidas dizem "liso". */
+  function medeMiolo(cv) {
+    var s = cv.width, x0 = Math.round(s * 0.30), w = Math.max(8, Math.round(s * 0.40));
+    var d = cv.getContext('2d').getImageData(x0, x0, w, w).data;
+    var n = w * w, sm = [0, 0, 0], sq = [0, 0, 0], bordas = 0, i, c;
+    for (i = 0; i < d.length; i += 4) {
+      for (c = 0; c < 3; c++) { sm[c] += d[i + c]; sq[c] += d[i + c] * d[i + c]; }
+      var px = (i / 4) % w;
+      if (px < w - 1) {
+        var l0 = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+        var l1 = d[i + 4] * 0.299 + d[i + 5] * 0.587 + d[i + 6] * 0.114;
+        if (Math.abs(l1 - l0) > MIOLO.degrau) bordas++;
+      }
+    }
+    var desvio = 0;
+    for (c = 0; c < 3; c++) {
+      var m = sm[c] / n;
+      desvio = Math.max(desvio, Math.sqrt(Math.max(0, sq[c] / n - m * m)));
+    }
+    var fr = bordas / n;
+    return { desvio: desvio, bordas: fr, liso: desvio < MIOLO.desvioMin && fr < MIOLO.bordasMin };
+  }
+  // o autoteste pinta um fundo como o do motor (gradientBg + vinheta,
+  // models3d_v2.js:1603-1612) com a cor mais clara que o darkenBg admite
+  function fundoSemFigura(s) {
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = s;
+    var c = cv.getContext('2d');
+    var g = c.createRadialGradient(s * 0.5, s * 0.40, s * 0.05, s * 0.5, s * 0.5, s * 0.74);
+    g.addColorStop(0, 'hsl(8,63%,32%)'); g.addColorStop(1, 'hsl(8,69%,11%)');
+    c.fillStyle = g; c.fillRect(0, 0, s, s);
+    var v = c.createRadialGradient(s * 0.5, s * 0.5, s * 0.26, s * 0.5, s * 0.5, s * 0.74);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.62)');
+    c.fillStyle = v; c.fillRect(0, 0, s, s);
+    return cv;
+  }
+
+  function grava(nome, cv) {
+    var url = cv.toDataURL('image/webp', 0.9), ext = 'webp';
+    if (url.indexOf('data:image/webp') !== 0) {
+      url = cv.toDataURL('image/png'); ext = 'png';
+      var av = nome + ': este navegador não codifica WebP; saiu PNG (mais pesado)';
+      avisos.push(av); log('AVISO · ' + av);
+    }
+    var bin = atob(url.slice(url.indexOf(',') + 1)), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var arq = nome + '.' + ext;
+    if (!servido) return Promise.resolve({ ok: true, arquivo: arq, bytes: bytes.length, local: true });
+    return fetch('/__grava?vez=' + encodeURIComponent(VEZ) + '&nome=' + encodeURIComponent(arq), {
+      method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: bytes
+    }).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok || !j.ok) throw new Error(arq + ': o gravador recusou (' + (j.erro || r.status) + ')');
+        return j;
+      });
+    });
+  }
+
+  function mostra(a, cv, m) {
+    var f = document.createElement('figure');
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    c.getContext('2d').drawImage(cv, 0, 0, 128, 128);
+    var t = document.createElement('figcaption');
+    t.textContent = a.nome + ' · desvio ' + m.desvio.toFixed(0) + ' · bordas ' + (m.bordas * 100).toFixed(0) + '%';
+    f.appendChild(c); f.appendChild(t);
+    document.getElementById('fotos').appendChild(f);
+  }
+
+  // ------------------------------------------------------------ o lote
+  var motor = '';
+  function fim(ok, erros, gravados) {
+    if (terminou) return;
+    terminou = true;
+    gravados = gravados || [];
+    erros = erros || [];
+    SUM.textContent = ok ? ('tudo passou (' + gravados.length + ' fotos' + (servido ? ' gravadas' : ', nada gravado: sem o retratos_site.py') + ')')
+                         : ('FALHOU — ' + erros.join(' · '));
+    SUM.style.color = ok ? '#7ee2a8' : '#ff7a6b';
+    document.title = ok ? 'PRONTO' : 'FALHOU';
+    erros.forEach(function (e) { log('ERRO · ' + e); });
+    if (servido) {
+      postJSON('/__fim', { lote: Q.lote, ok: ok, erros: erros, avisos: avisos, gravados: gravados, motor: motor })
+        .catch(function () {});
+    }
+  }
+
+  function rodaLote(lote) {
+    var M = JOGO.Models3D2;
+    if (!window.__LOTES.hasOwnProperty(lote)) {
+      return fim(false, ['lote desconhecido: "' + lote + '" (use ' + Object.keys(window.__LOTES).join(', ') + ')']);
+    }
+    if (typeof THREE === 'undefined' || !M || !M.portrait) return fim(false, ['o motor 3D não carregou (vendor/three.min.js ou js/render3d/models3d_v2.js)']);
+    motor = motorGL();
+    document.getElementById('titulo').textContent = 'Retratos do site · lote ' + lote;
+    log('lote ' + lote + ' · WebGL: ' + motor + ' · supersampling ' + SS + '×');
+    if (/^sem WebGL/.test(motor)) return fim(false, ['o navegador não deu WebGL: ' + motor]);
+
+    // autoteste da trava 2, com o mesmo tamanho do busto (o caso mais apertado)
+    var vazio = medeMiolo(fundoSemFigura(TAM.busto)), vazio2 = medeMiolo(fundoSemFigura(TAM.classe));
+    if (!vazio.liso || !vazio2.liso) {
+      return fim(false, ['a trava da foto vazia não reconhece um fundo sem figura (desvio ' +
+        vazio.desvio.toFixed(1) + '/' + vazio2.desvio.toFixed(1) + ', bordas ' + (vazio.bordas * 100).toFixed(1) + '%)']);
+    }
+    log('autoteste: um fundo sem figura é recusado (desvio ' + vazio2.desvio.toFixed(1) + ', bordas ' + (vazio2.bordas * 100).toFixed(1) + '%)');
+
+    var pre = alvosDoLote(lote);
+    if (pre.erros.length) return fim(false, pre.erros);
+    log(pre.alvos.length + ' fotos a tirar: ' + pre.alvos.filter(function (a) { return !/-busto$/.test(a.nome); })
+      .map(function (a) { return a.nome; }).join(', '));
+
+    var voltas = 0, pronto = false, erro = null;
+    M.load(function (err) { pronto = true; erro = err || null; });
+    (function espera() {
+      if (!pronto) {
+        if (++voltas > MAX_VOLTAS) return fim(false, ['os modelos não ficaram prontos em ' + MAX_VOLTAS + ' voltas']);
+        if (voltas % 50 === 0) log('  decodificando os modelos… (volta ' + voltas + ')');
+        return setTimeout(espera, VOLTA_MS);
+      }
+      // qualquer GLB que não abriu derruba o lote: o M.unit trocaria o corpo
+      // que faltou pelo esqueletinho reserva sem avisar
+      if (erro) return fim(false, ['um GLB não abriu no M.load: ' + (erro.message || erro)]);
+      log('modelos prontos em ' + voltas + ' voltas');
+      segue(pre.alvos);
+    })();
+  }
+
+  function segue(alvos) {
+    var gravados = [], i = 0;
+    (function proximo() {
+      if (terminou) return;
+      if (i >= alvos.length) return fim(true, [], gravados);
+      var a = alvos[i++], cv, m;
+      try {
+        cv = fotografa(a);
+        m = medeMiolo(cv);
+        if (m.liso) {
+          throw new Error(a.nome + ': foto recusada, o miolo saiu quase liso (desvio ' + m.desvio.toFixed(1) +
+                          ', bordas ' + (m.bordas * 100).toFixed(1) + '%): a figura não apareceu');
+        }
+      } catch (e) { return fim(false, [e.message || String(e)], gravados); }
+      mostra(a, cv, m);
+      grava(a.nome, cv).then(function (j) {
+        gravados.push({ nome: j.arquivo, bytes: j.bytes });
+        log('  ' + j.arquivo + ' · ' + (j.bytes / 1024).toFixed(1) + ' KB · miolo: desvio ' + m.desvio.toFixed(0) +
+            ', bordas ' + (m.bordas * 100).toFixed(0) + '%' + (a.inteiro ? '' : ' · quadro: ' + a.como));
+        setTimeout(proximo, 0);
+      }, function (e) { fim(false, [e.message || String(e)], gravados); });
+    })();
+  }
+
+  // ------------------------------------------------------------ a folha
+  function kb(b) { return (b / 1024).toFixed(1).replace('.', ',') + ' KB'; }
+  function el(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+
+  function folha() {
+    document.body.className = 'folha';
+    document.title = 'Folha dos retratos';
+    document.getElementById('titulo').style.display = 'none';    // a folha tem o título dela
+    var D = JOGO.DATA || {}, F = D.fusionIdentities || {}, S = D.fusionSummons || {};
+    var grupos = [
+      { titulo: 'Classes', nota: 'corpo inteiro 512 px · busto 128 px', itens: classes().map(function (id) {
+        return { arq: 'classe-' + id, busto: 'classe-' + id + '-busto', tam: TAM.classe, nome: nomeClasse(id), sub: id };
+      }) },
+      { titulo: 'Fusões', nota: 'corpo inteiro 384 px · busto 128 px · par em ordem alfabética', itens: pares(classes()).map(function (p) {
+        var k = p[0] + '+' + p[1], idt = F[k];
+        return { arq: 'fusao-' + p[0] + '-' + p[1], busto: 'fusao-' + p[0] + '-' + p[1] + '-busto', tam: TAM.fusao,
+                 nome: (idt && idt.name) || (nomeClasse(p[0]) + ' + ' + nomeClasse(p[1])), sub: k };
+      }) },
+      { titulo: 'Obras de fusão', nota: 'opcionais · 256 px', opcional: true, itens: obras().map(function (id) {
+        return { arq: 'obra-' + id, tam: TAM.obra, nome: (S[id] && S[id].name) || id, sub: id, opcional: true };
+      }) }
+    ];
+    var pega = servido ? fetch('/__lista').then(function (r) { return r.json(); }).catch(function () { return null; })
+                       : Promise.resolve(null);
+    pega.then(function (j) { monta(grupos, j && j.ok ? j.arquivos : null); });
+  }
+
+  function monta(grupos, lista) {
+    var raiz = document.getElementById('folha');
+    var peso = {};                     // nome do arquivo -> bytes (só servido pelo .py)
+    (lista || []).forEach(function (a) { peso[a.nome] = a.bytes; });
+    var conta = { tem: 0, falta: [], fora: [], total: 0, vistos: {} };
+
+    var topo = el('div', 'topo');
+    topo.appendChild(el('h1', null, 'Folha dos retratos'));
+    var resumo = el('div', 'nota');
+    topo.appendChild(resumo);
+    raiz.appendChild(topo);
+
+    function arquivoDe(base) {
+      if (!lista) return { nome: base + '.webp', bytes: null, sabido: false };
+      if (peso[base + '.webp'] != null) return { nome: base + '.webp', bytes: peso[base + '.webp'], sabido: true };
+      if (peso[base + '.png'] != null) return { nome: base + '.png', bytes: peso[base + '.png'], sabido: true };
+      return null;
+    }
+    function confereTam(img, esperado, alertas, carta, rot) {
+      img.addEventListener('load', function () {
+        if (img.naturalWidth !== esperado || img.naturalHeight !== esperado) {
+          alertas.appendChild(el('div', 'al', rot + ' saiu ' + img.naturalWidth + '×' + img.naturalHeight + ', esperado ' + esperado));
+          carta.classList.add('alerta');
+        }
+      });
+    }
+
+    grupos.forEach(function (gr) {
+      var h = el('h2', null, gr.titulo);
+      h.appendChild(el('small', null, gr.nota));
+      raiz.appendChild(h);
+      var grade = el('div', 'grade');
+      raiz.appendChild(grade);
+      gr.itens.forEach(function (it) {
+        var carta = el('div', 'carta'), quadro = el('div', 'quadro'), alertas = el('div');
+        var inteiro = arquivoDe(it.arq), busto = it.busto ? arquivoDe(it.busto) : null;
+        var partes = [];
+        [[inteiro, it.arq, it.tam, 'foto'], [busto, it.busto, TAM.busto, 'busto']].forEach(function (x) {
+          if (!x[1]) return;
+          if (!x[0]) {
+            if (!it.opcional) conta.falta.push(x[1]);
+            partes.push(x[3] + ' falta');
+            alertas.appendChild(el('div', it.opcional ? 'al leve' : 'al', 'falta ' + x[1] + '.webp'));
+            carta.classList.add(it.opcional ? 'alerta' : 'falta');
+            return;
+          }
+          conta.vistos[x[0].nome] = true;
+          if (x[0].sabido) {
+            conta.tem++; conta.total += x[0].bytes;
+            var piso = (PISO_KB[x[2]] || 8) * 1024;
+            if (x[0].bytes < piso || x[0].bytes > TETO_KB * 1024) {
+              conta.fora.push(x[0].nome);
+              alertas.appendChild(el('div', 'al', x[0].nome + ' com ' + kb(x[0].bytes) + ' (fora da faixa)'));
+              carta.classList.add('alerta');
+            }
+            partes.push((x[3] === 'foto' ? x[2] + ' px ' : 'busto ') + kb(x[0].bytes) + (/\.png$/.test(x[0].nome) ? ' (png)' : ''));
+          }
+        });
+        if (inteiro) {
+          var im = el('img', 'inteiro');
+          im.alt = it.nome;
+          im.src = '../site/img/' + inteiro.nome;
+          if (!inteiro.sabido) im.onerror = function () { quadro.appendChild(el('div', 'vazio', 'sem foto')); carta.classList.add('falta'); };
+          confereTam(im, it.tam, alertas, carta, 'a foto');
+          quadro.appendChild(im);
+        } else {
+          quadro.appendChild(el('div', 'vazio', 'sem foto'));
+        }
+        if (busto) {
+          var ib = el('img', 'busto');
+          ib.alt = it.nome + ' (busto)';
+          ib.src = '../site/img/' + busto.nome;
+          if (!busto.sabido) ib.onerror = function () { ib.style.display = 'none'; };
+          confereTam(ib, TAM.busto, alertas, carta, 'o busto');
+          quadro.appendChild(ib);
+        }
+        carta.appendChild(quadro);
+        carta.appendChild(el('div', 'nome', it.nome));
+        carta.appendChild(el('div', 'sub', it.sub + (partes.length ? ' · ' + partes.join(' · ') : '')));
+        carta.appendChild(alertas);
+        grade.appendChild(carta);
+      });
+    });
+
+    var extras = (lista || []).filter(function (a) { return !conta.vistos[a.nome]; });
+    if (extras.length) {
+      raiz.appendChild(el('h2', null, 'Outros arquivos em site/img/'));
+      raiz.appendChild(el('div', 'extras', extras.map(function (a) { return a.nome + ' (' + kb(a.bytes) + ')'; }).join(' · ')));
+    }
+
+    var txt;
+    if (lista) {
+      txt = conta.tem + ' arquivos conferidos · ' + (conta.total / 1024 / 1024).toFixed(2).replace('.', ',') + ' MB no total';
+      txt += conta.falta.length ? ' · FALTAM ' + conta.falta.length + ': ' + conta.falta.join(', ') : ' · nenhum obrigatório faltando';
+      if (conta.fora.length) txt += ' · fora da faixa de peso: ' + conta.fora.join(', ');
+    } else {
+      txt = 'aberta sem o retratos_site.py: as fotos aparecem, o peso de cada arquivo não';
+    }
+    resumo.textContent = txt + ' · aprovar de olho antes do commit (D12)';
+    SUM.textContent = 'folha pronta: ' + txt;
+    SUM.style.display = 'none';
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    try {
+      if (Q.ver) return folha();
+      if (!Q.lote) {
+        SUM.textContent = 'use ?lote=<nome> (classes, fus-sumo, fus-minotauro, fus-cacador, fus-curandeira, fus-bruxo-ladino, fus-xama, obras) ou ?ver=1';
+        return;
+      }
+      rodaLote(Q.lote);
+    } catch (e) {
+      fim(false, ['a página estourou: ' + (e && e.message || e)]);
+    }
+  });
+})();
+</script>
+</body>
+</html>

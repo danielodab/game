@@ -623,9 +623,39 @@ var JOGO = (typeof window !== 'undefined')
     return el;
   }
 
+  /* OS EVENTOS DO MUNDO (10/09): o fator de cada tipo vem da agenda
+   * (js/core/agenda.js), já preso nos tetos e lido NA HORA da recompensa —
+   * um instante só (`ts`) para todos os tipos da mesma sala. Defensivo de
+   * ponta a ponta: sem o módulo (as páginas de teste que não o carregam) ou
+   * com erro, o fator é 1 e o funil é exatamente o de antes. */
+  function agendaAgora() {
+    try { return (JOGO.Agenda && JOGO.Agenda.agora) ? JOGO.Agenda.agora() : undefined; }
+    catch (e) { return undefined; }
+  }
+  function fAg(tipo, ts) {
+    try {
+      var v = (JOGO.Agenda && JOGO.Agenda.fator) ? JOGO.Agenda.fator(tipo, Game.dungeonId, ts) : 1;
+      return (typeof v === 'number' && isFinite(v) && v > 1) ? v : 1;
+    } catch (e) { return 1; }
+  }
+  // o evento que pesou, para a tela de recompensa dizer QUAL foi
+  function evAg(tipo, fator, ts) {
+    var v = null;
+    try { v = (JOGO.Agenda && JOGO.Agenda.vencedor) ? JOGO.Agenda.vencedor(tipo, Game.dungeonId, ts) : null; }
+    catch (e) { v = null; }
+    return { id: v ? v.id : null, titulo: v ? v.titulo : '', tipo: tipo, fator: fator };
+  }
+
   // pedras derrubadas pelos inimigos mortos desta sala [G5]
-  function collectStones(units, monsters, prog) {
+  // `fPedras` (10/09) é o fator do evento do mundo de pedras. Só as pedras
+  // ELEMENTAIS multiplicam — a Âncora fica fora, é a pedra rara da forja — e
+  // o arredondamento é SORTEADO: floor(q·f + U) tem média exata q·f. Mas o
+  // sorteio a mais só existe COM evento: sem ele, a contagem de Math.random
+  // (e portanto todo o resto da sala) é a de sempre.
+  var pedrasComEvento = false;
+  function collectStones(units, monsters, prog, fPedras) {
     var ganho = {}, i, algum = false;
+    pedrasComEvento = false;
     for (i = 0; i < units.length; i++) {
       var u = units[i];
       if (u.side !== 'enemy' || u.alive) continue;
@@ -636,6 +666,10 @@ var JOGO = (typeof window !== 'undefined')
       var min = Math.max(0, Math.floor(num(sd.min, 1)));
       var max = Math.max(min, Math.floor(num(sd.max, min)));
       var qtd = min + Math.floor(Math.random() * (max - min + 1));
+      if (fPedras > 1 && qtd > 0) {
+        qtd = Math.floor(qtd * fPedras + Math.random());
+        pedrasComEvento = true;
+      }
       if (qtd <= 0) continue;
       var sid = stoneIdFor(def.element);
       ganho[sid] = (ganho[sid] || 0) + qtd;
@@ -702,8 +736,13 @@ var JOGO = (typeof window !== 'undefined')
     // o BÔNUS DE GUILDA comprado pelo líder (25/08): +15% de XP por 24h
     var fatorGuildaXp = (JOGO.Guilda && JOGO.Guilda.bonusAtivo && JOGO.Guilda.bonusAtivo('xp'))
       ? JOGO.Guilda.BONUS_FATOR : 1;
+    /* O EVENTO DO MUNDO de XP (10/09) entra no mesmo produto, por ÚLTIMO: o
+     * corte por herói, o dízimo e a fatia do pet herdam sozinhos. Sem evento
+     * o fator é 1, e ×1 no fim do produto não mexe em bit nenhum. */
+    var tAg = agendaAgora();
+    var fEvXp = fAg('xp', tAg);
     var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
-                             fatorPoco * fatorGuildaXp);
+                             fatorPoco * fatorGuildaXp * fEvXp);
 
     /* VINTENS — a moeda, derivada do MESMO xpTotal.
      *
@@ -714,7 +753,9 @@ var JOGO = (typeof window !== 'undefined')
      *
      * SEM dividir por partySize: a carteira e DO GRUPO. E uma so, e e o que
      * permite banco e troca sem contabilidade por personagem. */
-    var moedasGanhas = Math.floor(xpTotal * 0.30 * (difSala.drop || 1) * bonusDesafio);
+    // o evento de VINTÉNS (10/09), teto 1,5: mais moeda só compra do mercador, que vende comum e raro
+    var fEvVintem = fAg('vintem', tAg);
+    var moedasGanhas = Math.floor(xpTotal * 0.30 * (difSala.drop || 1) * bonusDesafio * fEvVintem);
     if (moedasGanhas > 0 && JOGO.DB && JOGO.DB.ganharMoedas) {
       // e-assincrono e o resultado nao bloqueia a tela de recompensa: o numero
       // ganho vem no payload; o TOTAL a tela busca por conta propria no DB.
@@ -728,7 +769,8 @@ var JOGO = (typeof window !== 'undefined')
       catch (err) { cards = []; }
     }
 
-    var stones = collectStones(st.units, monsters, prog);
+    var fEvPedras = fAg('pedras', tAg);   // 10/09: só as elementais; a Âncora fica fora
+    var stones = collectStones(st.units, monsters, prog, fEvPedras);
 
     /* OS SELOS DO COLECIONADOR (25/08): SÓ chefe derruba, e derruba o selo
      * do PRÓPRIO elemento (os seis chefes cobrem os cinco; no Poço eles
@@ -820,15 +862,24 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     var drops = [], pets = [];
+    var fSaque = 1, saqueDoEvento = false;
     if (prog && prog.rollDrops) {
       // O CALABOUÇO DO DIA (25/08): o portal marcado paga +50% de saque
       var bonusDia = (JOGO.Diario && JOGO.Diario.ehHoje &&
                       JOGO.Diario.ehHoje(Game.dungeonId)) ? JOGO.Diario.BONUS_DROP : 1;
+      /* O EVENTO DE SAQUE (10/09) NÃO EMPILHA com o Dia: vale o maior dos
+       * dois (decisão D2 do dono), e o teto absoluto do saque segue nos
+       * 3,23× de sempre (difícil × desafio × Dia × guilda). É o único tipo
+       * que aumenta as peças boas por hora: divide o peso do "nada" e nunca
+       * mexe na proporção entre as raridades. */
+      fSaque = fAg('saque', tAg);
+      var bonusSaque = Math.max(bonusDia, fSaque);
+      saqueDoEvento = fSaque > bonusDia;
       // e o bônus de guilda de SAQUE, no mesmo funil dos outros (25/08)
       var bonusGuilda = (JOGO.Guilda && JOGO.Guilda.bonusAtivo && JOGO.Guilda.bonusAtivo('drop'))
         ? JOGO.Guilda.BONUS_FATOR : 1;
       try { drops = prog.rollDrops(Game.dungeonId, Game.roomIndex, partySize,
-                                   (difSala.drop || 1) * bonusDesafio * bonusDia * bonusGuilda) || []; }
+                                   (difSala.drop || 1) * bonusDesafio * bonusSaque * bonusGuilda) || []; }
       catch (err) { drops = []; }
     }
     /* CARTAS DE PET (03/09): o chefe não entrega mais o bicho inteiro — derruba
@@ -860,6 +911,14 @@ var JOGO = (typeof window !== 'undefined')
 
     var elementChoices = Game.elementChoices();
 
+    /* os eventos do mundo que PESARAM nesta sala, para a tela dizer por quê
+     * (10/09) — no saque, só quando o evento venceu o Dia */
+    var eventos = [];
+    if (fEvXp > 1 && xpGanho > 0) eventos.push(evAg('xp', fEvXp, tAg));
+    if (fEvVintem > 1 && moedasGanhas > 0) eventos.push(evAg('vintem', fEvVintem, tAg));
+    if (fEvPedras > 1 && pedrasComEvento) eventos.push(evAg('pedras', fEvPedras, tAg));
+    if (saqueDoEvento) eventos.push(evAg('saque', fSaque, tAg));
+
     if (prog && prog.save) { try { prog.save(); } catch (err) { /* sem storage */ } }
 
     return {
@@ -883,6 +942,7 @@ var JOGO = (typeof window !== 'undefined')
       selos: selosGanhos,
       insignias: insigniasGanhas,
       dizimo: dizimoSoma > 0 ? { pct: dizimoPct, doado: dizimoSoma } : null,
+      eventos: eventos,          // 10/09: [{id, titulo, tipo, fator}] — os eventos do mundo que pesaram
       elementChoices: elementChoices
     };
   }

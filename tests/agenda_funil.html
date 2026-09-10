@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — os Eventos do mundo no funil de recompensa</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>Os Eventos do mundo no funil — computeRewards de verdade, Math.random semeado</h1>
+<div class="sub">O game.js e o progress.js reais, com as fixtures e o dublê de Engine (com dif()) de
+tests/test_progress_v2.html. A vitória é a de lá: matar os inimigos, fase 'won', battleEnd. O Math.random é
+um gerador semeado com CONTADOR: sem evento, o resultado e o número de sorteios têm de ser idênticos com o
+módulo ausente, presente e vazio, ou presente com eventos que não valem ali.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  // sem cache de agenda de verdade (a sombra do sandbox começa pelo disco)
+  try { localStorage.removeItem('soterra-agenda-v1'); localStorage.removeItem('soterra-sessao'); } catch (e) {}
+</script>
+
+<!-- ============================ 1) FIXTURES E DUBLÊS (de test_progress_v2) === -->
+<script>
+(function () {
+  'use strict';
+  var JOGO = window.JOGO = window.JOGO || {};
+  var DATA = JOGO.DATA = JOGO.DATA || {};
+
+  DATA.elements = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
+  DATA.rivals = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
+  DATA.unlockTiers = [5, 10, 12, 15, 20, 30];
+  DATA.leveling = {
+    maxLevel: 30,
+    xpTable: [
+      0, 60, 145, 270, 440,
+      670, 980, 1390, 1925, 2620,
+      3505, 4620, 6010, 7720, 9800,
+      12305, 15290, 18810, 22915, 27655,
+      33065, 39175, 46010, 53570, 61850,
+      70830, 80465, 90695, 101450, 112640
+    ],
+    perLevel: { hp: 5, power: 3 },
+    perLevelElement: { hp: 5, elemPower: 3 },
+    xpFalloff: { graceLevels: 4, factorPerLevel: 0.75, floor: 0.10 },
+    defenseByRole: {
+      tanque:    { dodge: 15, lock: 70 },
+      atirador:  { dodge: 54, lock: 39 },
+      assassino: { dodge: 40, lock: 10 },
+      mago:      { dodge: 10, lock: 1 },
+      suporte:   { dodge: 49, lock: 5 },
+      invocador: { dodge: 12, lock: 44 }
+    },
+    elementChoiceLevel: 5
+  };
+
+  var STAR_COSTS = [5, 15, 30, 55, 90];
+  DATA.stars = {
+    max: 5,
+    bonuses: { 1: { hp: 15 }, 2: { power: 8 }, 3: { pp: 1 }, 4: { hp: 25, dodge: 10 }, 5: { pa: 1 } }
+  };
+  DATA.stones = {
+    'st-neutro': { id: 'st-neutro', name: 'Seixo Cinzento', element: 'neutro', description: '—', iconKey: 'stone' },
+    'st-fogo':   { id: 'st-fogo',   name: 'Brasa Dura',     element: 'fogo',   description: '—', iconKey: 'stone' },
+    'st-agua':   { id: 'st-agua',   name: 'Lágrima Densa',  element: 'agua',   description: '—', iconKey: 'stone' },
+    'st-terra':  { id: 'st-terra',  name: 'Núcleo de Raiz', element: 'terra',  description: '—', iconKey: 'stone' },
+    'st-ar':     { id: 'st-ar',     name: 'Sopro Preso',    element: 'ar',     description: '—', iconKey: 'stone' },
+    // 10/09: a Âncora, com o elemento 'forja' dos dados reais (nenhum monstro é de 'forja')
+    'stone-anchor': { id: 'stone-anchor', name: 'Âncora de Forja', element: 'forja', description: '—', iconKey: 'stone-anchor' }
+  };
+  DATA.upgrade = {
+    maxLevel: 10,
+    tiers: [{ from: 0, to: 2, name: 'Comum' }, { from: 3, to: 5, name: 'Raro' },
+            { from: 6, to: 9, name: 'Supremo' }, { from: 10, to: 10, name: 'Magnífico' }],
+    bonusPerLevel: 0.12,
+    stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25],
+    nonScalingKeys: ['pa', 'pp'],
+    // 10/09: todo chefe destas fixtures paga a Âncora (taxa 1) — é ela que o evento de pedras NÃO pode tocar
+    guardStone: 'stone-anchor',
+    guardDropByDungeon: { 't-dung-0': 1, 't-dung-1': 1 }
+  };
+
+  var PATH_ELEMENTS = ['fogo', 'agua', 'terra', 'ar'];
+  var TIERS = DATA.unlockTiers;
+  var SPEC = [
+    { id: 't-tanque', name: 'Tanque de Teste', role: 'tanque', startsUnlocked: true,
+      cardRarity: 'comum', unlockCost: 0, dropWeight: 6, minDungeon: 0,
+      stats: { hp: 150, pa: 6, pp: 3, initiative: 15, power: 0, dodge: 5, lock: 40 } },
+    { id: 't-cura', name: 'Curandeira de Teste', role: 'suporte', startsUnlocked: true,
+      cardRarity: 'raro', unlockCost: 0, dropWeight: 18, minDungeon: 0,
+      stats: { hp: 110, pa: 6, pp: 3, initiative: 55, power: 0, dodge: 20, lock: 5 } },
+    { id: 't-arco', name: 'Arqueiro de Teste', role: 'atirador', startsUnlocked: false,
+      cardRarity: 'comum', unlockCost: 25, dropWeight: 10, minDungeon: 0,
+      stats: { hp: 100, pa: 6, pp: 3, initiative: 70, power: 0, dodge: 25, lock: 10 } }
+  ];
+  DATA.classes = {};
+  DATA.spells = {};
+  DATA.cards = {};
+  function zeroResists() { return { fogo: 0, agua: 0, terra: 0, ar: 0, neutro: 0 }; }
+  function makeSpell(id, element, unlockLevel, classId) {
+    DATA.spells[id] = {
+      id: id, name: id, element: element, classId: classId, unlockLevel: unlockLevel,
+      paCost: 3, cooldown: 0, castsPerTurn: 0,
+      range: { min: 1, max: 6, line: false, los: true, movable: false },
+      aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+      effects: [{ type: 'damage', element: element, min: 10, max: 14 }],
+      description: 'feitiço de teste', flavor: '—', fxKey: 'test'
+    };
+    return id;
+  }
+  for (var s = 0; s < SPEC.length; s++) {
+    var c = SPEC[s];
+    var base = [];
+    for (var b = 1; b <= 3; b++) base.push(makeSpell(c.id + '-neutro-' + b, 'neutro', 0, c.id));
+    var paths = {};
+    for (var e = 0; e < PATH_ELEMENTS.length; e++) {
+      var el = PATH_ELEMENTS[e];
+      paths[el] = [];
+      for (var t = 0; t < TIERS.length; t++) paths[el].push(makeSpell(c.id + '-' + el + '-' + TIERS[t], el, TIERS[t], c.id));
+    }
+    var stats = c.stats;
+    stats.resists = zeroResists();
+    DATA.classes[c.id] = {
+      id: c.id, name: c.name, role: c.role, description: 'classe de teste', lore: '—',
+      palette: { primary: '#888', secondary: '#444', accent: '#fff' },
+      stats: stats, baseSpells: base, paths: paths,
+      startsUnlocked: c.startsUnlocked, cardRarity: c.cardRarity
+    };
+    DATA.cards[c.id] = { unlockCost: c.unlockCost, dropWeight: c.dropWeight, minDungeon: c.minDungeon, starCosts: STAR_COSTS.slice() };
+  }
+  makeSpell('t-feitico-item', 'neutro', 0, null);
+
+  DATA.sets = {};
+  DATA.lootWeights = {
+    comum: 1000,
+    luckExponent: { comum: 0, raro: 1, epico: 2, lendario: 2 },
+    noDrop: { 't-dung-0': 3000, 't-dung-1': 3000 }
+  };
+  DATA.items = {};
+  function item(o) {
+    var minRoom = (o.rarity === 'epico' || o.rarity === 'lendario') ? 2 : (o.rarity === 'raro' ? 1 : 0);
+    DATA.items[o.id] = {
+      id: o.id, name: o.name, slot: o.slot, rarity: o.rarity, dungeonId: o.dungeonId || 't-dung-0',
+      element: o.element || 'neutro', setId: o.setId || null,
+      dropWeight: (o.dropWeight === undefined) ? 0 : o.dropWeight,
+      minRoom: (o.minRoom === undefined) ? minRoom : o.minRoom,
+      bonuses: o.bonuses || {}, grantsSpell: o.grantsSpell || null,
+      description: o.description || '—', flavor: '—', iconKey: 'test'
+    };
+  }
+  item({ id: 't-peito-vida', name: 'Peitoral de Casca', slot: 'casca', rarity: 'comum', element: 'terra',
+    dropWeight: 1000, bonuses: { hp: 40, resists: { fogo: 10 } } });
+  item({ id: 't-bota-pp', name: 'Botas Ligeiras', slot: 'passo', rarity: 'raro', element: 'agua',
+    dropWeight: 100, minRoom: 0, bonuses: { pp: 1, dodge: 5 } });
+  item({ id: 't-relic-especial', name: 'Relíquia Cantante', slot: 'lume', rarity: 'raro', element: 'neutro',
+    dropWeight: 100, bonuses: { power: 10 }, grantsSpell: 't-feitico-item' });
+
+  DATA.pets = {
+    't-pet-fogo': { id: 't-pet-fogo', name: 'Brasinha', element: 'fogo', description: '—',
+      bonuses: { hp: 10, pa: 1, power: 5, resists: { fogo: 5 } },
+      behavior: 'attack', range: 3, spells: [], followDistance: 2,
+      dropDungeon: 't-dung-0', dropWeight: 10 }
+  };
+
+  DATA.monsters = {
+    't-grunt': { id: 't-grunt', name: 'Capanga', family: 'Teste', element: 'fogo', description: '—',
+      stats: { hp: 50, pa: 6, pp: 3, initiative: 10, power: 0, dodge: 0, lock: 0, resists: zeroResists() },
+      spells: [], ai: 'melee', traits: [], boss: false, summonOnly: false, xp: 30,
+      stoneDrop: { chance: 1, min: 2, max: 2 } },
+    't-chefe': { id: 't-chefe', name: 'Chefe de Teste', family: 'Teste', element: 'terra', description: '—',
+      stats: { hp: 200, pa: 8, pp: 3, initiative: 20, power: 10, dodge: 0, lock: 20, resists: zeroResists() },
+      spells: [], ai: 'melee', traits: [], boss: true, summonOnly: false, xp: 90,
+      stoneDrop: { chance: 1, min: 5, max: 5 } },
+    // 10/09: pedra com faixa (2 a 6) — é aqui que o sorteio da quantidade entra
+    't-garimpo': { id: 't-garimpo', name: 'Garimpeiro', family: 'Teste', element: 'agua', description: '—',
+      stats: { hp: 60, pa: 6, pp: 3, initiative: 10, power: 0, dodge: 0, lock: 0, resists: zeroResists() },
+      spells: [], ai: 'melee', traits: [], boss: false, summonOnly: false, xp: 40,
+      stoneDrop: { chance: 0.7, min: 2, max: 6 } }
+  };
+
+  function room(n) { return { name: n, weather: 'calmo', layout: ['#####', '#P.a#', '#####'],
+    monsters: { a: 't-grunt' }, sceneryTheme: 'teste' }; }
+  var CARD_DROPS = [{ classId: 't-cura', weight: 1 }, { classId: 't-arco', weight: 1 }];
+  function dung(id, name, idx, extra) {
+    var d = { id: id, name: name, theme: 'teste', description: '—', difficulty: idx + 1,
+      order: idx + 1, recommendedLevel: [3, 7][idx], palette: {}, defaultWeather: 'calmo',
+      weatherShiftEveryRounds: 0, tileEventRate: 0, lootTable: [], cardDrops: CARD_DROPS,
+      rooms: [room('s1'), room('s2'), room('chefe')] };
+    for (var k in (extra || {})) if (extra.hasOwnProperty(k)) d[k] = extra[k];
+    return d;
+  }
+  DATA.dungeons = [
+    dung('t-dung-0', 'Cova Rasa', 0, {
+      lootTable: [{ itemId: 't-peito-vida', weight: 30, minRoom: 0 },
+                  { itemId: 't-bota-pp', weight: 10, minRoom: 0 },
+                  { itemId: 't-relic-especial', weight: 5, minRoom: 2 }] }),
+    dung('t-dung-1', 'Segundo Fecho', 1, {
+      lootTable: [{ itemId: 't-peito-vida', weight: 30, minRoom: 0 }] })
+  ];
+
+  // ====================================================== DUBLÊ DE ENGINE ====
+  var Engine = { events: [] };
+  Engine.calls = { createBattle: 0, move: 0, cast: 0, endTurn: 0 };
+  Engine.lastParty = null;
+  Engine.inimigos = ['t-grunt', 't-grunt'];       // 10/09: quem está na sala (a prova escolhe)
+  Engine.DESAFIO_BONUS = 0.25;
+  Engine.reset = function () {
+    Engine.events.length = 0;
+    Engine.calls = { createBattle: 0, move: 0, cast: 0, endTurn: 0 };
+    Engine.lastParty = null;
+  };
+  /* O CONTRATO de dificuldade do Engine real (engine.js): o Game pede os
+   * multiplicadores da sala por aqui (`E().dif(st)` em computeRewards). */
+  Engine.dif = function (state) {
+    var dd = (JOGO.DATA && JOGO.DATA.dificuldades) || {};
+    var id = (state && state.dificuldade) || (JOGO.DATA && JOGO.DATA.dificuldadePadrao) || 'normal';
+    return dd[id] || dd.normal || { id: 'normal', vida: 1, dano: 1, clima: 1, xp: 1, drop: 1 };
+  };
+  Engine.createBattle = function (dungeonId, roomIndex, party) {
+    Engine.calls.createBattle++;
+    Engine.lastParty = party;
+    var st = { phase: 'playing', dungeonId: dungeonId, roomIndex: roomIndex,
+               grid: { w: 12, h: 12 }, units: [], turnIdx: 0, round: 1, weather: 'calmo' };
+    for (var i = 0; i < party.length; i++) {
+      var p = party[i];
+      st.units.push({ uid: 'H' + i, kind: 'hero', side: 'player', heroId: p.heroId || p, defId: p.classId || p,
+        alive: true, hp: 100, hpMax: 100, x: 1 + i, y: 1, pa: 6, pp: 3, spells: p.spells || [], fused: false });
+    }
+    for (var k = 0; k < Engine.inimigos.length; k++) {
+      st.units.push({ uid: 'E' + k, kind: 'monster', side: 'enemy', defId: Engine.inimigos[k],
+        alive: true, hp: 50, hpMax: 50, x: 8 + k, y: 8, pa: 6, pp: 3, spells: [] });
+    }
+    return st;
+  };
+  Engine.activeUnit = function (st) { return (st && st.units[st.turnIdx]) || null; };
+  Engine.byUid = function (st, uid) {
+    for (var i = 0; i < st.units.length; i++) if (st.units[i].uid === uid) return st.units[i];
+    return null;
+  };
+  Engine.endTurn = function (st) {
+    Engine.calls.endTurn++;
+    var n = st.units.length, guard = 0;
+    do { st.turnIdx = (st.turnIdx + 1) % n; guard++; } while (!st.units[st.turnIdx].alive && guard <= n);
+    return true;
+  };
+  Engine.unitAt = function () { return null; };
+  Engine.move = function () { Engine.calls.move++; return true; };
+  Engine.castTargets = function () { return []; };
+  Engine.cast = function () { Engine.calls.cast++; return true; };
+  JOGO.Engine = Engine;
+
+  JOGO.Fusion = { canFuse: function () { return false; }, declare: function () { return false; } };
+  JOGO.AI = { planTurn: function () { return [{ action: 'end' }]; } };
+})();
+</script>
+
+<!-- ================ 2) CÓDIGO SOB TESTE ==================================== -->
+<script>
+(function () {
+  var v = '?v=' + Date.now();
+  ['js/core/progress.js', 'js/core/game.js', 'js/core/sessao.js', 'js/core/agenda.js'].forEach(function (a) {
+    document.write('<scr' + 'ipt src="../' + a + v + '"></scr' + 'ipt>');
+  });
+})();
+</script>
+
+<!-- ============================== 3) SUÍTE ================================= -->
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+
+  var P = JOGO.Progress, G = JOGO.Game, E = JOGO.Engine, AG = JOGO.Agenda;
+  var TANK = 't-tanque';
+  var AGORA = 1789041600;                         // qui 10/09/2026 09:00 de Brasília
+  AG._agora = function () { return AGORA * 1000; };
+  AG._limpa(true);
+
+  // ---- espiões: a moeda creditada, o multDrop do saque, a tela de recompensa
+  var creditos = [], multVisto = null, ultimoDado = null;
+  JOGO.DB = { ganharMoedas: function (n) { creditos.push(n); return Promise.resolve({ ok: true, moedas: n }); } };
+  var rollOrig = P.rollDrops;
+  P.rollDrops = function (d, r, n, m) { multVisto = m; return rollOrig.apply(P, arguments); };
+  var diaHoje = null;
+  JOGO.Diario = { BONUS_DROP: 1.5, ehHoje: function (id) { return id === diaHoje; } };
+  JOGO.UI = { showScreen: function (name, data) { if (data && data.xpGanho !== undefined) ultimoDado = data; } };
+
+  // ---- o acaso com contador: mulberry32 semeado
+  var acasoReal = Math.random, contagem = 0;
+  function semeia(seed) {
+    var a = seed >>> 0;
+    contagem = 0;
+    Math.random = function () {
+      contagem++;
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function ev(id, tipo, m, cal, ini, fim) {
+    return { id: id, origem: 'pontual', regra: null, tipo: tipo, multiplicador: m, calabouco: cal || null,
+             titulo: 'Evento ' + id, texto: '', inicio: ini || (AGORA - 600), fim: fim || (AGORA + 3600) };
+  }
+  // eventos que NÃO valem em nenhuma sala destas fixtures agora: outro calabouço, futuro, aviso
+  var NAO_VALEM = [ev('e90', 'saque', 1.5, 'cistern'), ev('e91', 'xp', 2, 'greenhouse'), ev('e92', 'aviso', 1, null),
+                   ev('e93', 'pedras', 2, null, AGORA + 600, AGORA + 7200), ev('e94', 'vintem', 1.5, null, AGORA + 60, AGORA + 120)];
+
+  /* uma vitória de sala, de ponta a ponta (fresh → startRun direto → mata →
+   * battleEnd). Conta os Math.random SÓ da recompensa. */
+  function vence(o) {
+    o = o || {};
+    creditos = []; multVisto = null; ultimoDado = null;
+    diaHoje = o.dia || null;
+    E.inimigos = o.inimigos || ['t-grunt', 't-grunt'];
+    if (o.semAgenda) delete JOGO.Agenda;
+    else { JOGO.Agenda = AG; AG._injeta({ ok: true, agora: AGORA, ativos: o.eventos || [], proximos: [], regras: [] }); }
+    var gastos = -1;
+    semeia(typeof o.seed === 'number' ? o.seed : 1);
+    try {
+      P.reset(); E.reset(); G.init();
+      if (!G.startRun([TANK], o.dungeon || 't-dung-0', { direto: true })) throw new Error('startRun recusou');
+      for (var i = 0; i < G.state.units.length; i++) {
+        if (G.state.units[i].side === 'enemy') { G.state.units[i].alive = false; G.state.units[i].hp = 0; }
+      }
+      G.state.phase = 'won';
+      var n0 = contagem;
+      G.handleEvent({ type: 'battleEnd' });
+      gastos = contagem - n0;
+    } finally {
+      Math.random = acasoReal;
+      JOGO.Agenda = AG;
+    }
+    return { dado: ultimoDado || {}, randoms: gastos, credito: creditos.slice(), mult: multVisto };
+  }
+  // o que a sala pagou, sem o `eventos` (que só existe para a tela)
+  function projeta(r) {
+    var d = r.dado;
+    return JSON.stringify({
+      xp: d.xpGanho, xpPor: d.xpPorHeroi, mult: d.xpMult, moedas: d.moedas, stones: d.stones,
+      drops: (d.drops || []).map(function (x) { return typeof x === 'string' ? x : (x.itemId || x.id); }),
+      cards: (d.cards || []).map(function (c) { return c.classId + ':' + c.amount; }),
+      selos: d.selos, insignias: d.insignias, pets: d.pets,
+      petCards: (d.petCards || []).map(function (p) { return p.petId; }),
+      levelUps: d.levelUps, credito: r.credito, multDrop: r.mult, randoms: r.randoms
+    });
+  }
+  function tipos(r) { return (r.dado.eventos || []).map(function (e) { return e.tipo; }).join(','); }
+
+  try {
+    // ---------------------------------------------------------------- 1. sem evento
+    var BASE = vence({ semAgenda: true, seed: 1 });
+    check('a linha de base é a de hoje: 2 capangas de 30 xp, solo → 60 XP, 18 vinténs, 4 pedras de fogo',
+          BASE.dado.xpGanho === 60 && BASE.dado.moedas === Math.floor(60 * 0.30) && BASE.credito[0] === 18 &&
+          BASE.dado.stones['st-fogo'] === 4 && BASE.mult === 1, projeta(BASE));
+    var iguais = true, primeiroDiferente = '';
+    var CENAS = [
+      { inimigos: ['t-grunt', 't-grunt'] },
+      { inimigos: ['t-grunt', 't-garimpo', 't-chefe'] },
+      { inimigos: ['t-garimpo', 't-garimpo', 't-chefe'], dia: 't-dung-0' },
+      { inimigos: ['t-chefe'], dungeon: 't-dung-1' }
+    ];
+    for (var sd = 1; sd <= 8; sd++) {
+      for (var ci = 0; ci < CENAS.length; ci++) {
+        var cena = CENAS[ci];
+        function com(extra) {
+          var o = { seed: sd, inimigos: cena.inimigos, dia: cena.dia, dungeon: cena.dungeon };
+          for (var k in extra) o[k] = extra[k];
+          return vence(o);
+        }
+        var a = com({ semAgenda: true }), b = com({ eventos: [] }), c = com({ eventos: NAO_VALEM });
+        if (projeta(a) !== projeta(b) || projeta(a) !== projeta(c) || (b.dado.eventos || []).length || (c.dado.eventos || []).length) {
+          iguais = false;
+          if (!primeiroDiferente) primeiroDiferente = 'semente ' + sd + ' cena ' + ci + ': ' + projeta(a) + ' ≠ ' + projeta(c);
+        }
+      }
+    }
+    check('SEM EVENTO: resultado e contagem de Math.random idênticos — módulo ausente × vazio × eventos que não valem aqui (8 sementes × 4 salas)',
+          iguais, primeiroDiferente);
+    var semMod = vence({ semAgenda: true, seed: 3, inimigos: ['t-grunt', 't-garimpo', 't-chefe'] });
+    check('sem o módulo o retorno traz eventos: [] (a tela não quebra)', Array.isArray(semMod.dado.eventos) && semMod.dado.eventos.length === 0);
+
+    // ---------------------------------------------------------------- 2. XP
+    var XP2 = vence({ seed: 1, eventos: [ev('e1', 'xp', 2, null)] });
+    check('com XP ×2, xpGanho dobra em relação à linha de base (60 → 120)', XP2.dado.xpGanho === 2 * BASE.dado.xpGanho,
+          BASE.dado.xpGanho + ' → ' + XP2.dado.xpGanho);
+    check('... e o herói recebe o dobro de verdade (xpPorHeroi)', XP2.dado.xpPorHeroi[TANK] === 2 * BASE.dado.xpPorHeroi[TANK]);
+    check('... sem sorteio a mais nem a menos', XP2.randoms === BASE.randoms, XP2.randoms + ' × ' + BASE.randoms);
+    check('... e o retorno cita o evento que pesou', tipos(XP2) === 'xp' && XP2.dado.eventos[0].fator === 2 &&
+          XP2.dado.eventos[0].id === 'e1' && XP2.dado.eventos[0].titulo === 'Evento e1', JSON.stringify(XP2.dado.eventos));
+    var XP9 = vence({ seed: 1, eventos: [ev('e1', 'xp', 9, null)] });
+    check('XP ×9 vindo do servidor: o funil paga ×2 (o teto)', XP9.dado.xpGanho === 120);
+    var XPfora = vence({ seed: 1, eventos: [ev('e1', 'xp', 2, 'cistern')] });
+    check('XP ×2 da Cisterna não pesa na Cova Rasa', XPfora.dado.xpGanho === 60 && tipos(XPfora) === '');
+
+    // ---------------------------------------------------------------- 3. vinténs
+    var V15 = vence({ seed: 1, eventos: [ev('e2', 'vintem', 1.5, null)] });
+    check('com vintém ×1,5, DB.ganharMoedas recebe o valor ×1,5 (18 → 27)',
+          V15.credito.length === 1 && V15.credito[0] === Math.floor(60 * 0.30 * 1 * 1 * 1.5) && V15.credito[0] === 27 &&
+          V15.dado.moedas === 27, JSON.stringify(V15.credito));
+    check('... o XP fica como estava, e o retorno cita o evento', V15.dado.xpGanho === 60 && tipos(V15) === 'vintem');
+
+    // ---------------------------------------------------------------- 4. saque
+    var SD = vence({ seed: 2, dia: 't-dung-0', eventos: [] });
+    var SDev = vence({ seed: 2, dia: 't-dung-0', eventos: [ev('e3', 'saque', 1.5, null)] });
+    check('saque 1,5 num calabouço que é o do Dia: rollDrops recebe o MESMO multDrop de sem evento',
+          SD.mult === 1.5 && SDev.mult === SD.mult, SD.mult + ' × ' + SDev.mult);
+    check('... a sala inteira sai igual, e o evento não é citado (o Dia venceu)', projeta(SD) === projeta(SDev) && tipos(SDev) === '');
+    var SD125 = vence({ seed: 2, dia: 't-dung-0', eventos: [ev('e3', 'saque', 1.25, 'cistern'), ev('e4', 'saque', 1.25, null)] });
+    check('saque 1,25 com o Dia 1,5: vale o maior (1,5, e não 1,875)', SD125.mult === 1.5);
+    var Sfora = vence({ seed: 2, eventos: [ev('e3', 'saque', 1.5, null)] });
+    check('saque 1,5 fora do Dia: o multDrop vai a 1,5 e o retorno cita o evento', Sfora.mult === 1.5 && tipos(Sfora) === 'saque');
+    var S9 = vence({ seed: 2, eventos: [ev('e3', 'saque', 9, null)] });
+    check('saque ×9 vindo do servidor: preso em 1,5', S9.mult === 1.5);
+    var SB = vence({ seed: 2, eventos: [] });
+    check('... e o saque não gasta sorteio a mais (mesma contagem com e sem evento)', Sfora.randoms === SB.randoms,
+          Sfora.randoms + ' × ' + SB.randoms);
+
+    // ---------------------------------------------------------------- 5. pedras
+    var SALA_P = ['t-grunt', 't-grunt', 't-chefe'];
+    var PB = vence({ seed: 5, inimigos: SALA_P, eventos: [] });
+    var P2 = vence({ seed: 5, inimigos: SALA_P, eventos: [ev('e5', 'pedras', 2, null)] });
+    check('linha de base das pedras: 4 de fogo, 5 de terra e 1 Âncora do chefe',
+          PB.dado.stones['st-fogo'] === 4 && PB.dado.stones['st-terra'] === 5 && PB.dado.stones['stone-anchor'] === 1,
+          JSON.stringify(PB.dado.stones));
+    check('com pedras ×2 (acaso semeado), a quantidade das elementais dobra: 8 de fogo, 10 de terra',
+          P2.dado.stones['st-fogo'] === 8 && P2.dado.stones['st-terra'] === 10, JSON.stringify(P2.dado.stones));
+    check('... e a Âncora fica igual (1)', P2.dado.stones['stone-anchor'] === PB.dado.stones['stone-anchor']);
+    check('... com UM sorteio a mais por pilha de pedra elemental (o arredondamento), e nenhum outro',
+          P2.randoms === PB.randoms + 3, P2.randoms + ' = ' + PB.randoms + ' + 3?');
+    check('... e o resto da sala segue igual (XP, moeda, saque)', P2.dado.xpGanho === PB.dado.xpGanho &&
+          P2.dado.moedas === PB.dado.moedas && P2.mult === PB.mult && tipos(P2) === 'pedras');
+    // o arredondamento sorteado mantém a média: 5 × 1,5 = 7,5 → 7 ou 8, metade cada
+    var soma = 0, n = 0, viu7 = false, viu8 = false, fora = false;
+    for (var sm = 100; sm < 500; sm++) {
+      var r15 = vence({ seed: sm, inimigos: ['t-chefe'], eventos: [ev('e6', 'pedras', 1.5, null)] });
+      var q = r15.dado.stones['st-terra'];
+      if (q === 7) viu7 = true; else if (q === 8) viu8 = true; else fora = true;
+      soma += q; n++;
+    }
+    check('pedras ×1,5 sobre 5: sai 7 ou 8, e a média de 400 salas fica em 7,5 (±0,1)',
+          viu7 && viu8 && !fora && Math.abs(soma / n - 7.5) <= 0.1, (soma / n).toFixed(3));
+
+    // ---------------------------------------------------------------- 6. o retorno
+    var TUDO = [ev('ex', 'xp', 2, null), ev('ev', 'vintem', 1.5, null), ev('ep', 'pedras', 2, null), ev('es', 'saque', 1.5, null)];
+    var T1 = vence({ seed: 7, inimigos: SALA_P, eventos: TUDO });
+    check('os quatro tipos no ar, fora do Dia: o retorno lista os quatro que pesaram', tipos(T1) === 'xp,vintem,pedras,saque', tipos(T1));
+    var T2 = vence({ seed: 7, inimigos: SALA_P, dia: 't-dung-0', eventos: TUDO });
+    check('... no calabouço do Dia, o saque sai da lista (o Dia venceu)', tipos(T2) === 'xp,vintem,pedras', tipos(T2));
+
+    // ---------------------------------------------------------------- 7. módulo quebrado não derruba a sala
+    var fatorOrig = AG.fator;
+    AG.fator = function () { throw new Error('agenda quebrada de propósito'); };
+    var QB = vence({ seed: 1, eventos: [ev('e1', 'xp', 2, null)] });
+    AG.fator = fatorOrig;
+    check('agenda que lança exceção: o funil paga como sem evento', projeta(QB) === projeta(BASE), projeta(QB));
+  } catch (err) {
+    Math.random = acasoReal;
+    check('a suíte não lançou exceção', false, err.message + ' | ' + String(err.stack).split('\n')[1]);
+  }
+
+  check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+  window.__pronto = true; window.__done = true; window.__fail = falhas;
+})();
+</script>
+</body>
+</html>

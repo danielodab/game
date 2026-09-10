@@ -70,6 +70,8 @@ var JOGO = (typeof window !== 'undefined')
       try { if (JOGO.Game && JOGO.Game.init) JOGO.Game.init(); } catch (e) { console.error('Game.init falhou:', e); }
       // A NUVEM (10/09): com sessão do site, o save do cartório entra (e sobe) daqui
       try { if (JOGO.Nuvem && JOGO.Nuvem.iniciar) JOGO.Nuvem.iniciar(); } catch (e) { console.error('Nuvem.iniciar falhou:', e); }
+      // OS EVENTOS DO MUNDO (10/09): a agenda lê o cache, busca o que o Mestre ligou e repete a cada 10 min
+      try { if (JOGO.Agenda && JOGO.Agenda.iniciar) JOGO.Agenda.iniciar(); } catch (e) { console.error('Agenda.iniciar falhou:', e); }
       requestAnimationFrame(frame);
     }
   });

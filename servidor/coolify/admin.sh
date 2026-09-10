@@ -8,13 +8,14 @@
 #   admin banir "NOME"         bane a conta (a sessão dela passa a levar 403)
 #   admin desbanir "NOME"      tira o banimento
 #   admin eventos [N]          a trilha de auditoria, os N últimos (20 se omitir)
+#   admin agenda               os eventos do mundo marcados e as regras do calendário
 #   admin backup               faz um backup agora, em /dados/backups
 # Depois de marcar ou tirar a marca de Mestre, a pessoa sai e entra de novo no site.
 # =============================================================================
 set -eu
 BANCO=/dados/soterra.db
 
-ajuda() { sed -n '4,12p' "$0" | sed 's/^# \{0,1\}//'; }
+ajuda() { sed -n '4,13p' "$0" | sed 's/^# \{0,1\}//'; }
 sql() { su-exec soterra sqlite3 "$BANCO" "$@"; }
 texto() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 marca() {   # marca COLUNA VALOR NOME MENSAGEM
@@ -50,6 +51,15 @@ case "$acao" in
     n="${2:-20}"
     case "$n" in ''|*[!0-9]*) echo "N tem de ser um número"; exit 1 ;; esac
     sql -header -column "select e.id, datetime(e.criado_em, 'unixepoch') as quando, coalesce(c.nome, '-') as conta, e.tipo, substr(coalesce(e.dados, ''), 1, 90) as dados from eventos e left join contas c on c.id = e.conta_id order by e.id desc limit $n" ;;
+  agenda)
+    # só leitura (10/09): quem liga e cancela é o Mestre, pelo jogo. As tabelas
+    # nascem quando a API nova sobe; antes disso, nada a mostrar.
+    [ "$(sql "select count(*) from sqlite_master where type = 'table' and name = 'agenda_eventos'")" = "1" ] || { echo "este banco ainda não tem a agenda: a API nova cria as tabelas quando sobe"; exit 1; }
+    echo "Eventos pontuais no ar ou marcados (hora de Brasília):"
+    sql -header -column "select id, tipo, multiplicador as mult, coalesce(calabouco, 'todos') as calabouco, titulo, datetime(inicio, 'unixepoch', '-3 hours') as inicio, datetime(fim, 'unixepoch', '-3 hours') as fim from agenda_eventos where cancelado_em is null and fim > cast(strftime('%s', 'now') as integer) order by inicio"
+    echo
+    echo "Regras do calendário automático (dias: 0 = domingo ... 6 = sábado; hora de Brasília):"
+    sql -header -column "select id, tipo, multiplicador as mult, coalesce(calabouco, 'todos') as calabouco, titulo, dias, printf('%02d:%02d', hora_min / 60, hora_min % 60) as hora, duracao_min as minutos, coalesce(datetime(vigente_de, 'unixepoch', '-3 hours'), '-') as de, coalesce(datetime(vigente_ate, 'unixepoch', '-3 hours'), '-') as ate from agenda_regras where cancelado_em is null and (vigente_ate is null or vigente_ate > cast(strftime('%s', 'now') as integer)) order by id" ;;
   *)
     echo "não conheço \"$acao\""; ajuda; exit 1 ;;
 esac

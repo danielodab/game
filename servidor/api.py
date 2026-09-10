@@ -16,6 +16,10 @@ O QUE ELA NÃO É: não valida o saque — nesta fase é o CLIENTE quem sorteia 
 manda `nascimentos`; o servidor só garante que o que nasceu uma vez não vira
 dois. Regras de sorteio no servidor são a fase seguinte.
 
+DESDE 10/09 ela também guarda os EVENTOS DO MUNDO (a "agenda": XP em dobro,
+Maré da Cisterna…, ligados pelo Mestre e lidos por todos em /api/eventos) e o
+RANKING POR CLASSE (a melhor ficha de cada classe de cada conta, com o avatar).
+
 NO VPS ela fica atrás do Caddy (https://<dominio>/api/* → 127.0.0.1:8300; ver
 Caddyfile e soterra-api.service ao lado), irmã do Relé. Em casa, roda direto e
 o site aponta com `?api=http://127.0.0.1:8300`.
@@ -24,16 +28,19 @@ Só biblioteca padrão de propósito: http.server, sqlite3, hashlib, secrets,
 hmac, json. Nada para instalar no VPS além do python3.
 """
 import argparse
+import contextlib
 import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import re
 import secrets
 import sqlite3
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -51,6 +58,41 @@ TROCA_GRACA = 10 * 60            # item recém-recebido não é varrido por 10 m
 PBKDF2_VOLTAS = 200_000
 ORIGENS = {'saque', 'roleta', 'mercador', 'caixa', 'forja', 'troca', 'banco', 'legado'}
 RE_IID = re.compile(r'^[\x21-\x7e]{1,64}$')    # ASCII visível, sem espaço — o cliente gera 'j' + base36
+
+# ---- os eventos do mundo e o ranking por classe (10/09) ---------------------
+# No código a palavra é "agenda": "evento" já tem dono aqui (a trilha de
+# auditoria, tabela `eventos`). Para o público, as rotas são /api/eventos.
+# Cinco tipos, cada um com TETO; eventos do mesmo tipo não se multiplicam (vale
+# o maior). Nenhum mexe na raridade das peças, na Âncora, nos selos, nas
+# insígnias nem nas cartas: "o drop de itens bons deve ser MUITO difícil".
+# Quem calcula a recompensa é o cliente (a mesma confiança do saque, ver o
+# topo): o teto segura erro de digitação do Mestre, não trapaça.
+# js/core/agenda.js tem a cópia destes números.
+AGENDA_TETOS = {'xp': 2.0, 'vintem': 1.5, 'pedras': 2.0, 'saque': 1.5, 'aviso': 1.0}
+# os calabouços que um evento pode mirar (null = todos). O servidor não sabe
+# quais portais estão fechados — isso mora em dungeons.js, e uma terceira cópia
+# ficaria velha. Evento num portal fechado só não tem efeito: ninguém desce lá.
+CALABOUCOS = ('greenhouse', 'cistern', 'emberlock', 'windscaffold', 'quakemine', 'brokenheart', 'poco')
+CLASSES_RANK = ('sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro', 'invocador', 'minotauro')  # ordem de classes.js
+CLASSE_RENOMEADA = {'curandeira': 'curandeiro'}   # como no progress.js: save antigo ainda chama assim
+XP_MAX = 28180                   # o último degrau da xpTable (progression.js); o teste pega a deriva
+NIVEL_MAX = 30
+ELEMENTOS = ('neutro', 'fogo', 'agua', 'terra', 'ar')
+# O relógio de parede é o de Brasília com deslocamento FIXO: o contêiner não
+# instala tzdata (zoneinfo falharia) e o Brasil não tem horário de verão desde 2019.
+FUSO_MIN = -180
+FUSO = timezone(timedelta(minutes=FUSO_MIN))
+JANELA_DIAS = 14                 # o GET mostra as próximas duas semanas
+PROXIMOS_MAX = 50
+EVENTO_TITULO = (3, 60)          # caracteres, depois do strip
+EVENTO_TEXTO = 280
+EVENTO_FOLGA = 60                # um início até 1 min no passado ainda é "agora" (relógio do cliente)
+EVENTO_ANTECEDENCIA = 180 * 86400
+EVENTO_DURACAO = 7 * 86400
+EVENTOS_MARCADOS_MAX = 50        # pontuais que ainda não acabaram, fora os cancelados
+REGRAS_MAX = 20                  # regras vigentes
+REGRA_DURACAO = (15, 1440)       # minutos: de um quarto de hora a um dia inteiro
+RE_HORA = re.compile(r'^(\d{1,2}):(\d{2})$')
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS contas(
@@ -106,9 +148,68 @@ CREATE TABLE IF NOT EXISTS eventos(
   dados     TEXT,
   criado_em INTEGER NOT NULL
 );
+-- os eventos do mundo (10/09). Cancelar grava cancelado_em e nunca apaga: a
+-- linha fica como trilha. O público nunca vê criado_por, criado_em nem o cancelado.
+CREATE TABLE IF NOT EXISTS agenda_eventos(
+  id            INTEGER PRIMARY KEY,
+  tipo          TEXT NOT NULL,
+  multiplicador REAL NOT NULL DEFAULT 1,
+  calabouco     TEXT,
+  titulo        TEXT NOT NULL,
+  texto         TEXT,
+  inicio        INTEGER NOT NULL,
+  fim           INTEGER NOT NULL,
+  criado_por    INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+  criado_em     INTEGER NOT NULL,
+  cancelado_em  INTEGER,
+  CHECK (fim > inicio)
+);
+CREATE INDEX IF NOT EXISTS agenda_eventos_janela ON agenda_eventos(fim, inicio);
+-- o calendário automático: dias da semana ("0,6"; 0 = domingo, como o getDay
+-- do JS), hora de Brasília em minutos e duração. O servidor expande no GET.
+CREATE TABLE IF NOT EXISTS agenda_regras(
+  id            INTEGER PRIMARY KEY,
+  tipo          TEXT NOT NULL,
+  multiplicador REAL NOT NULL DEFAULT 1,
+  calabouco     TEXT,
+  titulo        TEXT NOT NULL,
+  texto         TEXT,
+  dias          TEXT NOT NULL,
+  hora_min      INTEGER NOT NULL,
+  duracao_min   INTEGER NOT NULL,
+  vigente_de    INTEGER,
+  vigente_ate   INTEGER,
+  criado_por    INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+  criado_em     INTEGER NOT NULL,
+  cancelado_em  INTEGER
+);
+-- o ranking por classe (10/09): a melhor ficha de cada classe da conta. Tabelas
+-- novas em vez de colunas em `resumos`: sem ALTER, o contêiner velho e o novo
+-- sobem juntos no mesmo banco (rolling update do Coolify) sem "duplicate column".
+CREATE TABLE IF NOT EXISTS resumos_classe(
+  conta_id      INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  classe        TEXT NOT NULL,
+  heroi_id      TEXT NOT NULL,
+  nivel         INTEGER NOT NULL DEFAULT 1,
+  xp            INTEGER NOT NULL DEFAULT 0,
+  elemento      TEXT,
+  atualizado_em INTEGER NOT NULL,
+  PRIMARY KEY (conta_id, classe)
+);
+CREATE INDEX IF NOT EXISTS resumos_classe_rank ON resumos_classe(classe, xp DESC);
+CREATE TABLE IF NOT EXISTS resumos_extra(
+  conta_id      INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
+  avatar        TEXT,
+  classe        TEXT,
+  atualizado_em INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS migracoes(
+  nome          TEXT PRIMARY KEY,
+  feita_em      INTEGER NOT NULL
+);
 """
 
-# rota → (método da Api, precisa de conta?)
+# rota → (método da Api, precisa de conta?[, só do Mestre?])
 ROTAS = {
     ('POST', '/api/cadastro'): ('cadastro', False),
     ('POST', '/api/login'):    ('login', False),
@@ -119,6 +220,13 @@ ROTAS = {
     ('POST', '/api/troca'):    ('troca', True),
     ('GET',  '/api/ranking'):  ('ranking', False),
     ('GET',  '/api/saude'):    ('saude', False),
+    # os eventos do mundo (10/09): ler é público; criar, agendar e cancelar só a
+    # conta que o servidor marcou (contas.gm = 1). POST, e não DELETE nem id no
+    # caminho: `despacha` casa o caminho exato e o DELETE chega sem corpo.
+    ('GET',  '/api/eventos'):          ('eventos_ler', False),
+    ('POST', '/api/eventos'):          ('evento_criar', True, True),
+    ('POST', '/api/eventos/regras'):   ('regra_criar', True, True),
+    ('POST', '/api/eventos/cancelar'): ('evento_cancelar', True, True),
 }
 
 
@@ -231,6 +339,303 @@ def lista_de_iids(v, campo):
     return saida
 
 
+# ---- o ranking por classe (10/09) ---------------------------------------------
+def limita(v, lo, hi):
+    """Número do save preso em [lo, hi]; bool, texto, nulo, NaN e infinito
+    viram `lo` (o json do Python aceita Infinity, e o int() dele estouraria)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return lo
+    if isinstance(v, float) and not math.isfinite(v):
+        return lo
+    return int(max(lo, min(hi, v)))
+
+
+def classe_do_heroi(hid, h):
+    """A classe de uma ficha: `classId`; sem ele, a chave antes do '#' ('sumo#2'
+    é a segunda ficha do Bárbaro), renomeada como no progress.js. None para
+    'gm' (o Mestre do Fundo não disputa ranking) e para classe que o jogo não tem."""
+    c = h.get('classId')
+    if not isinstance(c, str) or not c:
+        c = hid.split('#', 1)[0] if isinstance(hid, str) else ''
+    c = CLASSE_RENOMEADA.get(c, c)
+    return c if c in CLASSES_RANK else None
+
+
+def herois_por_classe(progress):
+    """{classe: (heroi_id, nivel, xp, elemento)} com a MELHOR ficha de cada
+    classe da conta (maior xp, depois maior nível): uma linha por conta no
+    ranking, mesmo com 'sumo' e 'sumo#2'. Os números vêm do cliente e são presos
+    nas réguas do jogo: xp gigante vira o teto, nível 99 vira 30, elemento
+    desconhecido vira neutro."""
+    melhores = {}
+    herois = progress.get('heroes') if isinstance(progress, dict) else None
+    if not isinstance(herois, dict):
+        return melhores
+    for hid, h in herois.items():
+        if not isinstance(h, dict):
+            continue
+        classe = classe_do_heroi(hid, h)
+        if classe is None:
+            continue
+        xp = limita(h.get('xp'), 0, XP_MAX)
+        nivel = limita(h.get('level'), 1, NIVEL_MAX)
+        elemento = h.get('element') if h.get('element') in ELEMENTOS else 'neutro'
+        atual = melhores.get(classe)
+        if atual is None or (xp, nivel) > (atual[2], atual[1]):
+            melhores[classe] = (str(hid)[:64], nivel, xp, elemento)
+    return melhores
+
+
+def classe_principal(por_classe):
+    """A classe do herói de maior xp da conta (o retrato dela no ranking), ou None.
+    Empate: vale a ordem de classes.js (o max devolve o primeiro)."""
+    candidatas = [c for c in CLASSES_RANK if c in por_classe]
+    if not candidatas:
+        return None
+    return max(candidatas, key=lambda c: (por_classe[c][2], por_classe[c][1]))
+
+
+def avatar_publico(db):
+    """O avatar que o jogador escolheu (DB.jogador.avatar = 'fus:a+b'), só se for
+    uma fusão de verdade: duas classes diferentes, as duas do jogo, nunca 'gm'.
+    O par sai em ordem alfabética, como as chaves de fusions.js e os nomes dos
+    retratos do site. O DB do cliente (DB.definirAvatar) não confere nada disso."""
+    jog = db.get('jogador') if isinstance(db, dict) else None
+    avatar = jog.get('avatar') if isinstance(jog, dict) else None
+    if not isinstance(avatar, str) or not avatar.startswith('fus:'):
+        return None
+    par = avatar[4:].split('+')
+    if len(par) != 2:
+        return None
+    a, b = sorted(CLASSE_RENOMEADA.get(p, p) for p in par)
+    if a == b or a not in CLASSES_RANK or b not in CLASSES_RANK:
+        return None
+    return 'fus:%s+%s' % (a, b)
+
+
+# ---- os eventos do mundo (10/09) ------------------------------------------------
+def data_local(t):
+    """O dia do calendário de Brasília em que cai o instante t (epoch em segundos)."""
+    return datetime.fromtimestamp(t, FUSO).date()
+
+
+def _numero(v):
+    """Número de verdade (int ou float finito, nunca bool), ou None."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    if isinstance(v, float) and not math.isfinite(v):
+        return None
+    return v
+
+
+def _num_br(x):
+    return ('%g' % x).replace('.', ',')
+
+
+def _instante(v, campo):
+    """Epoch em segundos vindo do cliente (o JS pode mandar fração)."""
+    n = _numero(v)
+    if n is None or not 0 <= n < 1e11:
+        raise Recusa(400, '%s precisa ser um instante em segundos (epoch)' % campo)
+    return int(n)
+
+
+def _valida_base(corpo):
+    """O que o evento pontual e a regra têm em comum: tipo, multiplicador,
+    calabouço, título e texto. Devolve o dicionário já normalizado."""
+    tipo = corpo.get('tipo')
+    if not isinstance(tipo, str) or tipo not in AGENDA_TETOS:
+        raise Recusa(400, 'tipo de evento desconhecido: use xp, vintem, pedras, saque ou aviso')
+    teto = AGENDA_TETOS[tipo]
+    m = corpo.get('multiplicador')
+    if tipo == 'aviso':
+        # o aviso é só um anúncio no jogo e no site: não multiplica nada
+        if m is not None and (_numero(m) is None or m != 1):
+            raise Recusa(400, 'o aviso não multiplica nada: mande multiplicador 1 ou nenhum')
+        m = 1.0
+    else:
+        n = _numero(m)
+        m = round(float(n), 2) if n is not None and abs(n) < 1e6 else None
+        if m is None or not 1 < m <= teto:
+            raise Recusa(400, 'o multiplicador de %s é um número de mais de 1 até %s' % (tipo, _num_br(teto)))
+    calabouco = corpo.get('calabouco')
+    if calabouco == '':
+        calabouco = None                 # o "todos" de um <select> pode chegar vazio
+    if calabouco is not None and calabouco not in CALABOUCOS:
+        raise Recusa(400, 'calabouço desconhecido: use null (todos) ou um de %s' % ', '.join(CALABOUCOS))
+    titulo = corpo.get('titulo')
+    titulo = titulo.strip() if isinstance(titulo, str) else ''
+    if not EVENTO_TITULO[0] <= len(titulo) <= EVENTO_TITULO[1]:
+        raise Recusa(400, 'o título precisa ter de %d a %d caracteres' % EVENTO_TITULO)
+    texto = corpo.get('texto')
+    if texto is None:
+        texto = ''
+    if not isinstance(texto, str):
+        raise Recusa(400, 'o texto do evento precisa ser um texto')
+    texto = texto.strip()
+    if len(texto) > EVENTO_TEXTO:
+        raise Recusa(400, 'o texto do evento vai até %d caracteres' % EVENTO_TEXTO)
+    return {'tipo': tipo, 'multiplicador': m, 'calabouco': calabouco, 'titulo': titulo, 'texto': texto}
+
+
+def valida_evento(corpo, t):
+    """O corpo de POST /api/eventos conferido e normalizado. Sem `inicio`, o
+    evento liga agora ("ligar agora" do painel do Mestre)."""
+    ev = _valida_base(corpo)
+    inicio = t if corpo.get('inicio') is None else _instante(corpo.get('inicio'), 'inicio')
+    fim = _instante(corpo.get('fim'), 'fim')
+    if inicio < t - EVENTO_FOLGA:
+        raise Recusa(400, 'o início já passou (para ligar agora, não mande inicio)')
+    if inicio > t + EVENTO_ANTECEDENCIA:
+        raise Recusa(400, 'o início pode ser marcado até %d dias à frente' % (EVENTO_ANTECEDENCIA // 86400))
+    if fim <= inicio:
+        raise Recusa(400, 'o fim precisa vir depois do início')
+    if fim - inicio > EVENTO_DURACAO:
+        raise Recusa(400, 'um evento dura no máximo %d dias' % (EVENTO_DURACAO // 86400))
+    ev.update(inicio=inicio, fim=fim)
+    return ev
+
+
+def valida_regra(corpo):
+    """O corpo de POST /api/eventos/regras: dias da semana (0 = domingo …
+    6 = sábado, como o getDay do JS), hora de Brasília "HH:MM" e duração em
+    minutos (15 a 1440; sexta 22:00 com 240 min atravessa a meia-noite).
+    Devolve a regra normalizada, a mesma forma que `regra_da_linha` lê do banco."""
+    rg = _valida_base(corpo)
+    dias = corpo.get('dias')
+    if (not isinstance(dias, list) or not dias
+            or any(isinstance(d, bool) or not isinstance(d, int) or not 0 <= d <= 6 for d in dias)
+            or len(set(dias)) != len(dias)):
+        raise Recusa(400, 'dias precisa ser uma lista de 0 (domingo) a 6 (sábado), sem repetir')
+    hora = corpo.get('hora')
+    casou = RE_HORA.match(hora) if isinstance(hora, str) else None
+    if not casou or int(casou.group(1)) > 23 or int(casou.group(2)) > 59:
+        raise Recusa(400, 'hora precisa ser "HH:MM", de 00:00 a 23:59 (hora de Brasília)')
+    dur = _numero(corpo.get('duracaoMin'))
+    if dur is None or dur != int(dur) or not REGRA_DURACAO[0] <= dur <= REGRA_DURACAO[1]:
+        raise Recusa(400, 'duracaoMin precisa ser um número inteiro de %d a %d' % REGRA_DURACAO)
+    de = None if corpo.get('vigenteDe') is None else _instante(corpo.get('vigenteDe'), 'vigenteDe')
+    ate = None if corpo.get('vigenteAte') is None else _instante(corpo.get('vigenteAte'), 'vigenteAte')
+    if de is not None and ate is not None and ate <= de:
+        raise Recusa(400, 'vigenteAte precisa vir depois de vigenteDe')
+    rg.update(dias=sorted(dias), hora_min=int(casou.group(1)) * 60 + int(casou.group(2)),
+              duracao_min=int(dur), vigente_de=de, vigente_ate=ate)
+    return rg
+
+
+def id_do_alvo(alvo, v):
+    """O id a cancelar: o número (12), ou o id público como sai no GET ('e12',
+    'r3@1789218000') — o painel pode devolver o que leu, sem desmontar."""
+    if isinstance(v, int) and not isinstance(v, bool) and 0 < v < 2 ** 53:
+        return v
+    casou = re.match(r'^%s?(\d{1,15})(@\d+)?$' % ('e' if alvo == 'evento' else 'r'), v) if isinstance(v, str) else None
+    if casou is None or (casou.group(2) and alvo != 'regra'):
+        raise Recusa(400, 'id precisa ser o número do evento ou da regra')
+    return int(casou.group(1))
+
+
+def _linha_valida(r):
+    """Linha da agenda que o GET mostra: tipo e calabouço conhecidos (uma linha
+    mexida à mão no sqlite com tipo torto fica de fora, não quebra o site)."""
+    return r['tipo'] in AGENDA_TETOS and (r['calabouco'] is None or r['calabouco'] in CALABOUCOS)
+
+
+def _mult_lido(tipo, m):
+    """O multiplicador como sai do banco, preso de novo em [1, teto]: um valor
+    torto gravado à mão não vira "XP ×9" no site."""
+    n = _numero(m)
+    return round(min(AGENDA_TETOS[tipo], max(1.0, float(n) if n is not None else 1.0)), 2)
+
+
+def evento_publico(r):
+    """Um evento pontual como sai no GET (sem criado_por, criado_em nem cancelado_em)."""
+    return {'id': 'e%d' % r['id'], 'origem': 'pontual', 'regra': None, 'tipo': r['tipo'],
+            'multiplicador': _mult_lido(r['tipo'], r['multiplicador']), 'calabouco': r['calabouco'],
+            'titulo': r['titulo'], 'texto': r['texto'] or '', 'inicio': r['inicio'], 'fim': r['fim']}
+
+
+def regra_da_linha(r):
+    """Uma linha de agenda_regras na forma normalizada (a de valida_regra, com id)."""
+    return {'id': r['id'], 'tipo': r['tipo'], 'multiplicador': _mult_lido(r['tipo'], r['multiplicador']),
+            'calabouco': r['calabouco'], 'titulo': r['titulo'], 'texto': r['texto'] or '',
+            'dias': sorted({int(d) for d in (r['dias'] or '').split(',') if d.strip().isdigit() and int(d) <= 6}),
+            'hora_min': r['hora_min'], 'duracao_min': r['duracao_min'],
+            'vigente_de': r['vigente_de'], 'vigente_ate': r['vigente_ate']}
+
+
+def regra_publica(rg):
+    """A regra (forma normalizada) como o site e o jogo leem."""
+    return {'id': rg['id'], 'tipo': rg['tipo'], 'multiplicador': rg['multiplicador'], 'calabouco': rg['calabouco'],
+            'titulo': rg['titulo'], 'texto': rg['texto'], 'dias': list(rg['dias']),
+            'hora': '%02d:%02d' % divmod(rg['hora_min'], 60), 'duracaoMin': rg['duracao_min'],
+            'vigenteDe': rg['vigente_de'], 'vigenteAte': rg['vigente_ate']}
+
+
+def expande_regra(regra, de, ate):
+    """As ocorrências de uma regra semanal (forma normalizada) que cruzam
+    [de, ate), em ordem de início, no formato de um item de `ativos`.
+
+    Percorre os dias de Brasília desde a VÉSPERA de `de` — a ocorrência que
+    começou ontem pode estar no ar: sexta 22:00 + 240 min vai até sábado
+    02:00 — até o dia de `ate`. A vigência corta: a ocorrência é o pedaço da
+    janela semanal que cai dentro de [vigente_de, vigente_ate)."""
+    dias = set(regra['dias'])
+    duracao = regra['duracao_min'] * 60
+    v_de, v_ate = regra.get('vigente_de'), regra.get('vigente_ate')
+    saida = []
+    d = data_local(de) - timedelta(days=1)
+    ultimo = data_local(ate)
+    while d <= ultimo:
+        # Python conta a semana da segunda (0); o contrato, como o JS, do domingo (0)
+        if (d.weekday() + 1) % 7 in dias:
+            ini = int(datetime(d.year, d.month, d.day, tzinfo=FUSO).timestamp()) + regra['hora_min'] * 60
+            fim = ini + duracao
+            if v_de is not None:
+                ini = max(ini, v_de)
+            if v_ate is not None:
+                fim = min(fim, v_ate)
+            if ini < fim and fim > de and ini < ate:
+                saida.append({'id': 'r%d@%d' % (regra['id'], ini), 'origem': 'calendario', 'regra': regra['id'],
+                              'tipo': regra['tipo'], 'multiplicador': regra['multiplicador'],
+                              'calabouco': regra['calabouco'], 'titulo': regra['titulo'],
+                              'texto': regra.get('texto') or '', 'inicio': ini, 'fim': fim})
+        d += timedelta(days=1)
+    return saida
+
+
+def resolve_fatores(lista, t):
+    """A regra de resolução resolvida no instante t — a mesma conta que o jogo
+    (agenda.js) faz na hora da recompensa:
+        fator(tipo, calabouço) = min(TETO, max(1, maior multiplicador entre os
+        eventos no ar daquele tipo, gerais ou daquele calabouço))
+    Do mesmo tipo, vale o maior (xp ×1,5 com xp ×2 dá 2, nunca 3). `geral` é o
+    que vale em todo calabouço; `porCalabouco` só lista quem tem evento próprio,
+    com o geral já somado pelo max. Fator 1 não aparece: não muda nada."""
+    geral, proprio = {}, {}
+    for e in lista:
+        tipo, m = e.get('tipo'), _numero(e.get('multiplicador'))
+        if not isinstance(tipo, str) or tipo not in AGENDA_TETOS or m is None:
+            continue
+        if not e['inicio'] <= t < e['fim']:
+            continue
+        alvo = geral if e.get('calabouco') is None else proprio.setdefault(e['calabouco'], {})
+        alvo[tipo] = max(alvo.get(tipo, 1.0), m)
+
+    def preso(tipo, m):
+        return round(min(AGENDA_TETOS[tipo], max(1.0, m)), 2)
+
+    saida_geral = {tipo: preso(tipo, m) for tipo, m in geral.items() if preso(tipo, m) > 1}
+    por_calabouco = {}
+    for calabouco, tipos in proprio.items():
+        junto = dict(saida_geral)
+        for tipo, m in tipos.items():
+            junto[tipo] = preso(tipo, max(m, geral.get(tipo, 1.0)))
+        junto = {tipo: f for tipo, f in junto.items() if f > 1}
+        if junto:
+            por_calabouco[calabouco] = junto
+    return {'geral': saida_geral, 'porCalabouco': por_calabouco}
+
+
 # ---- o cartório -------------------------------------------------------------
 class Api:
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
@@ -249,12 +654,31 @@ class Api:
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self.intencoes = {}      # (de, para) → {dou, recebo, em}            (idem: expira em 120 s)
+        self._migra_resumos_v2()
 
     # -- miudezas -------------------------------------------------------------
     def _evento(self, conta_id, tipo, dados):
         self.con.execute("INSERT INTO eventos(conta_id, tipo, dados, criado_em) VALUES (?, ?, ?, ?)",
                          (conta_id, tipo, json.dumps(dados, ensure_ascii=False) if dados is not None else None,
                           agora()))
+
+    @contextlib.contextmanager
+    def _escrita(self):
+        """Uma transação de escrita com a trava entre processos já pega (BEGIN
+        IMMEDIATE, como no salvar): quem conta um limite e insere não se
+        entrelaça com o contêiner vizinho no rolling update. Commit no fim;
+        qualquer erro (Recusa inclusive) desfaz tudo."""
+        with self.tranca:
+            if self.con.in_transaction:
+                self.con.rollback()
+            self.con.execute("BEGIN IMMEDIATE")
+            try:
+                yield
+                self.con.commit()
+            except BaseException:
+                if self.con.in_transaction:
+                    self.con.rollback()
+                raise
 
     def _abre_sessao(self, conta_id):
         token = secrets.token_hex(32)
@@ -286,14 +710,19 @@ class Api:
         rota = ROTAS.get((metodo, caminho))
         if rota is None:
             raise Recusa(404, 'rota desconhecida')
-        nome, precisa_conta = rota
+        nome, precisa_conta = rota[0], rota[1]
+        so_mestre = len(rota) > 2 and rota[2]
         conta = None
-        if precisa_conta:
+        if precisa_conta or so_mestre:
             conta = self.conta_do_token(token)
             if conta is None:
                 raise Recusa(401, 'faça login (token ausente ou vencido)')
             if conta['banido']:
                 raise Recusa(403, 'conta banida')
+            # a marca é do SERVIDOR (contas.gm, lida do banco a cada pedido): o
+            # `gm` que o cliente guardou do login é só uma cópia (10/09)
+            if so_mestre and not conta['gm']:
+                raise Recusa(403, 'só o Mestre do Fundo mexe nos eventos do mundo')
         return getattr(self, nome)(conta, corpo)
 
     # -- conta ------------------------------------------------------------------
@@ -530,7 +959,9 @@ class Api:
         return 200, {'ok': True, 'versao': nova, 'registrados': len(registrar)}
 
     def _resumo(self, cid, conta, progress, db, t):
-        """(d) a foto pública da conta, para o ranking — recalculada a cada save."""
+        """(d) a foto pública da conta, para o ranking — recalculada a cada save.
+        Tudo é calculado antes da primeira escrita: um save torto não deixa
+        metade das tabelas atualizada."""
         xp_total = nivel_max = classes = 0
         herois = progress.get('heroes') if isinstance(progress, dict) else None
         if isinstance(herois, dict):
@@ -545,11 +976,51 @@ class Api:
         brasa = jog.get('brasa') if isinstance(jog.get('brasa'), dict) else {}
         guilda = jog.get('guilda') if isinstance(jog.get('guilda'), dict) else {}
         nome = texto_ou_nulo(jog.get('nome')) or conta['nome']
+        por_classe = herois_por_classe(progress)
+        avatar, principal = avatar_publico(db), classe_principal(por_classe)
         self.con.execute(
             "INSERT OR REPLACE INTO resumos(conta_id, nome, xp_total, nivel_max, classes, brasa_pts, brasa_partidas, "
             "guilda_nome, guilda_emblema, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (cid, nome, xp_total, nivel_max, classes, inteiro(brasa.get('pts')), inteiro(brasa.get('partidas')),
              texto_ou_nulo(guilda.get('nome')), texto_ou_nulo(guilda.get('emblema'), 16), t))
+        # (e) o ranking por classe (10/09): a melhor ficha de cada classe. Apagar e
+        # regravar: um save sem a classe (a ficha foi apagada) tira a linha dela.
+        self.con.execute("DELETE FROM resumos_classe WHERE conta_id = ?", (cid,))
+        self.con.executemany(
+            "INSERT INTO resumos_classe(conta_id, classe, heroi_id, nivel, xp, elemento, atualizado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(cid, classe, hid, nivel, xp, elemento, t) for classe, (hid, nivel, xp, elemento) in por_classe.items()])
+        # (f) o retrato da conta no ranking: o avatar escolhido (conferido) e a classe principal
+        self.con.execute(
+            "INSERT OR REPLACE INTO resumos_extra(conta_id, avatar, classe, atualizado_em) VALUES (?, ?, ?, ?)",
+            (cid, avatar, principal, t))
+
+    def _migra_resumos_v2(self):
+        """Preenche resumos_classe e resumos_extra das contas que já existiam
+        antes de 10/09 (sem isso, a conta só entraria no ranking por classe no
+        próximo save). Roda uma vez por banco: o marcador em `migracoes` sai na
+        mesma transação. No rolling update do Coolify dois processos sobem
+        juntos no mesmo banco: o BEGIN IMMEDIATE faz o segundo esperar a trava
+        e encontrar o marcador. Save torto fica de fora sem derrubar o boot."""
+        feitas = tortas = 0
+        with self._escrita():
+            if self.con.execute("SELECT 1 FROM migracoes WHERE nome = 'resumos-v2'").fetchone():
+                return
+            linhas = self.con.execute(
+                "SELECT c.*, s.progress AS save_progress, s.db AS save_db, s.atualizado_em AS save_em "
+                "FROM saves s JOIN contas c ON c.id = s.conta_id ORDER BY c.id").fetchall()
+            for r in linhas:
+                try:
+                    progress = json.loads(r['save_progress']) if r['save_progress'] else None
+                    db = json.loads(r['save_db']) if r['save_db'] else None
+                    self._resumo(r['id'], r, progress, db, r['save_em'])
+                    feitas += 1
+                except Exception:              # JSON quebrado, número que o sqlite não guarda…
+                    tortas += 1
+                    log.info("migração resumos-v2: o save da conta #%d ficou de fora (entra no próximo save)",
+                             r['id'])
+            self.con.execute("INSERT INTO migracoes(nome, feita_em) VALUES ('resumos-v2', ?)", (agora(),))
+        log.info("migração resumos-v2: %d contas no ranking por classe, %d saves tortos", feitas, tortas)
 
     # -- troca entre contas ----------------------------------------------------------
     def troca(self, conta, corpo):
@@ -601,7 +1072,8 @@ class Api:
     def ranking(self, conta, corpo):
         with self.tranca:
             jogadores = self.con.execute(
-                "SELECT r.nome, r.xp_total, r.nivel_max, r.classes FROM resumos r JOIN contas c ON c.id = r.conta_id "
+                "SELECT r.nome, r.xp_total, r.nivel_max, r.classes, x.avatar, x.classe FROM resumos r "
+                "JOIN contas c ON c.id = r.conta_id LEFT JOIN resumos_extra x ON x.conta_id = r.conta_id "
                 "WHERE c.banido = 0 ORDER BY r.xp_total DESC, r.nivel_max DESC, r.nome COLLATE NOCASE LIMIT 50").fetchall()
             pvp = self.con.execute(
                 "SELECT r.nome, r.brasa_pts, r.brasa_partidas FROM resumos r JOIN contas c ON c.id = r.conta_id "
@@ -611,19 +1083,137 @@ class Api:
                 "SUM(r.xp_total) AS xp FROM resumos r JOIN contas c ON c.id = r.conta_id "
                 "WHERE c.banido = 0 AND r.guilda_nome IS NOT NULL AND r.guilda_nome != '' "
                 "GROUP BY r.guilda_nome COLLATE NOCASE ORDER BY xp DESC, membros DESC LIMIT 50").fetchall()
+            # o melhor de cada classe (10/09): uma linha por conta (a melhor ficha
+            # daquela classe, escolhida no _resumo), sem banidas; as 7 chaves sempre
+            por_classe = {classe: self.con.execute(
+                "SELECT r.nome, rc.nivel, rc.xp, rc.elemento FROM resumos_classe rc "
+                "JOIN resumos r ON r.conta_id = rc.conta_id JOIN contas c ON c.id = rc.conta_id "
+                "WHERE c.banido = 0 AND rc.classe = ? "
+                "ORDER BY rc.xp DESC, rc.nivel DESC, r.nome COLLATE NOCASE LIMIT 50", (classe,)).fetchall()
+                for classe in CLASSES_RANK}
         return 200, {
             'ok': True,
             'jogadores': [{'nome': r['nome'], 'xpTotal': r['xp_total'], 'nivelMax': r['nivel_max'],
-                           'classes': r['classes']} for r in jogadores],
+                           'classes': r['classes'], 'avatar': r['avatar'], 'classe': r['classe']}
+                          for r in jogadores],
             'pvp': [{'nome': r['nome'], 'brasa': r['brasa_pts'], 'partidas': r['brasa_partidas']} for r in pvp],
             'guildas': [{'nome': r['nome'], 'emblema': r['emblema'], 'membros': r['membros'],
                          'xpTotal': r['xp']} for r in guildas],
+            'classes': list(CLASSES_RANK),
+            'porClasse': {classe: [{'nome': r['nome'], 'nivel': r['nivel'], 'xp': r['xp'],
+                                    'elemento': r['elemento'] if r['elemento'] in ELEMENTOS else 'neutro'}
+                                   for r in linhas] for classe, linhas in por_classe.items()},
         }
 
     def saude(self, conta, corpo):
         with self.tranca:
             n = self.con.execute("SELECT COUNT(*) FROM contas").fetchone()[0]
         return 200, {'ok': True, 'contas': n, 'agora': agora()}
+
+    # -- os eventos do mundo (10/09) ------------------------------------------------------
+    def eventos_ler(self, conta, corpo):
+        """GET público: o que está no ar, os eventos pontuais marcados (todos: são
+        no máximo EVENTOS_MARCADOS_MAX, até 180 dias à frente), as ocorrências do
+        calendário semanal das próximas duas semanas e as regras. O jogo recalcula o fator na hora da recompensa a
+        partir de `ativos` e `proximos`; `fatores` é conveniência do site."""
+        t = agora()
+        ate = t + JANELA_DIAS * 86400
+        with self.tranca:
+            pontuais = self.con.execute(
+                "SELECT id, tipo, multiplicador, calabouco, titulo, texto, inicio, fim FROM agenda_eventos "
+                "WHERE cancelado_em IS NULL AND fim > ?", (t,)).fetchall()
+            linhas = self.con.execute(
+                "SELECT * FROM agenda_regras WHERE cancelado_em IS NULL "
+                "AND (vigente_ate IS NULL OR vigente_ate > ?) ORDER BY id", (t,)).fetchall()
+        lista = [evento_publico(r) for r in pontuais if _linha_valida(r)]
+        regras = [regra_da_linha(r) for r in linhas if _linha_valida(r)]
+        for rg in regras:
+            lista.extend(expande_regra(rg, t, ate))
+        # tudo em `lista` termina depois de agora: começou = está no ar
+        ativos = sorted((e for e in lista if e['inicio'] <= t), key=lambda e: (e['fim'], e['inicio'], e['id']))
+        # 10/09: os pontuais vêm todos, marcados até 180 dias à frente — é por aqui
+        # que o painel do Mestre os lista e os cancela (antes, um evento a mais de
+        # 14 dias sumia da lista logo depois de criado). O teto vale só para as
+        # ocorrências do calendário, para uma regra diária não empurrar os marcados.
+        ordem = lambda e: (e['inicio'], e['fim'], e['id'])
+        futuros = [e for e in lista if e['inicio'] > t]
+        cal = sorted((e for e in futuros if e.get('origem') == 'calendario'), key=ordem)[:PROXIMOS_MAX]
+        proximos = sorted([e for e in futuros if e.get('origem') != 'calendario'] + cal, key=ordem)
+        return 200, {'ok': True, 'agora': t, 'fusoMin': FUSO_MIN, 'janelaDias': JANELA_DIAS,
+                     'tetos': dict(AGENDA_TETOS), 'ativos': ativos, 'proximos': proximos,
+                     'regras': [regra_publica(rg) for rg in regras], 'fatores': resolve_fatores(ativos, t)}
+
+    def evento_criar(self, conta, corpo):
+        """O Mestre liga um evento pontual: agora (sem `inicio`) ou agendado."""
+        t = agora()
+        ev = valida_evento(corpo, t)
+        with self._escrita():
+            marcados = self.con.execute(
+                "SELECT COUNT(*) FROM agenda_eventos WHERE cancelado_em IS NULL AND fim > ?", (t,)).fetchone()[0]
+            if marcados >= EVENTOS_MARCADOS_MAX:
+                raise Recusa(400, 'já há %d eventos marcados: cancele algum antes de criar outro' % marcados)
+            cur = self.con.execute(
+                "INSERT INTO agenda_eventos(tipo, multiplicador, calabouco, titulo, texto, inicio, fim, criado_por, "
+                "criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (ev['tipo'], ev['multiplicador'], ev['calabouco'], ev['titulo'], ev['texto'], ev['inicio'],
+                 ev['fim'], conta['id'], t))
+            ev['id'] = cur.lastrowid
+            self._evento(conta['id'], 'agenda-evento',
+                         {'id': ev['id'], 'tipo': ev['tipo'], 'multiplicador': ev['multiplicador'],
+                          'calabouco': ev['calabouco'], 'titulo': ev['titulo'], 'inicio': ev['inicio'],
+                          'fim': ev['fim']})
+        log.info("agenda: evento #%d (%s ×%s) ligado por #%d", ev['id'], ev['tipo'], ev['multiplicador'],
+                 conta['id'])
+        return 201, {'ok': True, 'evento': evento_publico(ev)}
+
+    def regra_criar(self, conta, corpo):
+        """O Mestre marca uma regra do calendário automático (toda semana)."""
+        t = agora()
+        rg = valida_regra(corpo)
+        with self._escrita():
+            vigentes = self.con.execute(
+                "SELECT COUNT(*) FROM agenda_regras WHERE cancelado_em IS NULL "
+                "AND (vigente_ate IS NULL OR vigente_ate > ?)", (t,)).fetchone()[0]
+            if vigentes >= REGRAS_MAX:
+                raise Recusa(400, 'já há %d regras no calendário: cancele alguma antes de criar outra' % vigentes)
+            cur = self.con.execute(
+                "INSERT INTO agenda_regras(tipo, multiplicador, calabouco, titulo, texto, dias, hora_min, duracao_min, "
+                "vigente_de, vigente_ate, criado_por, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (rg['tipo'], rg['multiplicador'], rg['calabouco'], rg['titulo'], rg['texto'],
+                 ','.join(str(d) for d in rg['dias']), rg['hora_min'], rg['duracao_min'], rg['vigente_de'],
+                 rg['vigente_ate'], conta['id'], t))
+            rg['id'] = cur.lastrowid
+            publica = regra_publica(rg)
+            self._evento(conta['id'], 'agenda-regra',
+                         {'id': rg['id'], 'tipo': rg['tipo'], 'multiplicador': rg['multiplicador'],
+                          'calabouco': rg['calabouco'], 'titulo': rg['titulo'], 'dias': publica['dias'],
+                          'hora': publica['hora'], 'duracaoMin': rg['duracao_min']})
+        log.info("agenda: regra #%d (%s ×%s, dias %s às %s) marcada por #%d", rg['id'], rg['tipo'],
+                 rg['multiplicador'], publica['dias'], publica['hora'], conta['id'])
+        # as próximas 3 (a que já estiver no ar entra): cinco semanas bastam para
+        # achar 3 de uma regra de um dia só
+        de = max(t, rg['vigente_de'] or t)
+        return 201, {'ok': True, 'regra': publica, 'proximas': expande_regra(rg, de, de + 35 * 86400)[:3]}
+
+    def evento_cancelar(self, conta, corpo):
+        """Cancelar não apaga: grava cancelado_em. Cancelar a regra derruba também
+        a ocorrência que estiver no ar; "encerrar agora" um evento pontual é isto
+        mesmo. Já cancelado: 200 com cancelado=false (o painel pode repetir)."""
+        alvo = corpo.get('alvo')
+        if alvo not in ('evento', 'regra'):
+            raise Recusa(400, 'alvo precisa ser "evento" ou "regra"')
+        num = id_do_alvo(alvo, corpo.get('id'))
+        tabela = 'agenda_eventos' if alvo == 'evento' else 'agenda_regras'
+        with self._escrita():
+            r = self.con.execute("SELECT id, titulo, cancelado_em FROM %s WHERE id = ?" % tabela, (num,)).fetchone()
+            if r is None:
+                raise Recusa(404, 'evento não encontrado' if alvo == 'evento' else 'regra não encontrada')
+            if r['cancelado_em'] is not None:
+                return 200, {'ok': True, 'cancelado': False}
+            self.con.execute("UPDATE %s SET cancelado_em = ? WHERE id = ?" % tabela, (agora(), num))
+            self._evento(conta['id'], 'agenda-cancela', {'alvo': alvo, 'id': num, 'titulo': r['titulo']})
+        log.info("agenda: %s #%d cancelado por #%d", alvo, num, conta['id'])
+        return 200, {'ok': True, 'cancelado': True}
 
 
 # ---- o atendente HTTP ----------------------------------------------------------------

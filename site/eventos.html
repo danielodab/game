@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eventos do mundo — SOTERRA</title>
+<meta name="description" content="Os eventos do mundo do SOTERRA: o que está no ar agora, o calendário dos próximos dias, o Calabouço do Dia e o que cada tipo de evento faz.">
+<script>document.write('<link rel="stylesheet" href="site.css?v=' + Date.now() + '">');</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
+<!--
+  Eventos do mundo (10/09). O que o Mestre do Fundo ligou vem de
+  GET /api/eventos (público, sem conta):
+    - `ativos` e `proximos` são recalculados aqui pelo relógio do SERVIDOR
+      (SITE.agenda): um evento que acaba com a página aberta sai sozinho do
+      "Agora". A contagem anda a cada 30 s e a lista é buscada de novo a cada
+      5 min;
+    - `regras` é o calendário automático ("todo sábado…"), em hora de Brasília.
+  O Calabouço do Dia NÃO vem do servidor: sai de JOGO.Diario.hoje com os dados
+  do próprio jogo (../js/core/), e por isso o calendário continua de pé com a
+  API fora. Quem valida e prende os multiplicadores é o servidor, e o jogo
+  prende de novo; o site só mostra, e também não passa do teto.
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="eventos.html" aria-current="page">Eventos</a>
+      <a href="fusoes.html">Fusões</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="conta.html">Conta</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<section class="secao">
+  <div class="miolo">
+    <h2>Eventos do mundo</h2>
+    <p class="sub">O que o Mestre do Fundo acendeu, o que vem aí e o Calabouço do Dia. Os horários estão no relógio do seu aparelho.
+      <button type="button" class="btn btn-mini" id="bt-atualizar">atualizar</button></p>
+    <div class="aviso" id="ev-aviso"></div>
+    <div class="grade grade-eventos" id="ev-agora"><div class="estado">carregando…</div></div>
+  </div>
+</section>
+
+<section class="secao" id="calendario-secao">
+  <div class="miolo">
+    <h2>Próximos 14 dias</h2>
+    <p class="sub">Cada dia mostra os eventos que passam por ele e, com a estrela, o Calabouço do Dia. A borda dourada é hoje.</p>
+    <div class="calendario" id="calendario"></div>
+  </div>
+</section>
+
+<section class="secao" id="toda-semana">
+  <div class="miolo">
+    <h2>Toda semana</h2>
+    <p class="sub">O calendário automático: eventos que voltam sozinhos, sempre no mesmo dia e na mesma hora de Brasília.</p>
+    <ul class="lista-regras" id="ev-regras"><li class="apoio">carregando…</li></ul>
+  </div>
+</section>
+
+<section class="secao" id="tipos">
+  <div class="miolo">
+    <h2>O que cada tipo faz</h2>
+    <p class="sub">São só cinco tipos, e cada um tem um teto. Dois eventos do mesmo tipo não se multiplicam: vale o maior. Um evento vale para todos os calabouços ou só para um, e o de um calabouço não vaza para outro.</p>
+    <div class="tabela-caixa">
+      <table class="tabela-tipos">
+        <thead><tr><th>Tipo</th><th>O que muda</th><th class="num">Teto</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip-tipo t-xp">XP</span></td>
+              <td>Toda sala paga mais experiência. O corte por herói, o dízimo da guilda e a parte do pet vêm junto, na mesma proporção.</td>
+              <td class="num" data-teto="xp">—</td></tr>
+          <tr><td><span class="chip-tipo t-vintem">Vinténs</span></td>
+              <td>Mais vinténs no fim de cada sala. O mercador continua o mesmo: só vende peça comum e rara.</td>
+              <td class="num" data-teto="vintem">—</td></tr>
+          <tr><td><span class="chip-tipo t-pedras">Pedras</span></td>
+              <td>Mais pedras de forja elementais caindo dos monstros. A Âncora, a pedra rara, fica de fora.</td>
+              <td class="num" data-teto="pedras">—</td></tr>
+          <tr><td><span class="chip-tipo t-saque">Saque</span></td>
+              <td>Sai peça com mais frequência: o sorteio do "nada" pesa menos. A proporção entre comum, raro, épico e lendário fica igual. Não soma com o Calabouço do Dia: no calabouço do dia, vale o maior dos dois.</td>
+              <td class="num" data-teto="saque">—</td></tr>
+          <tr><td><span class="chip-tipo t-aviso">Aviso</span></td>
+              <td>Só um recado do Mestre, no jogo e aqui. Não mexe em número nenhum.</td>
+              <td class="num" data-teto="aviso">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota-forte">Importante: nenhum evento mexe na raridade das peças. A sorte, a lista do que pode cair e a proporção entre as raridades são as mesmas de sempre. Também ficam de fora a Âncora, os selos, as insígnias e as cartas de classe e de pet.</p>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
+</footer>
+
+<script>
+/* 10/09: os calabouços e o Calabouço do Dia vêm dos arquivos do próprio jogo
+ * (mesma origem); a marca ?v= é a do jogo, o instante da carga. */
+(function (v) {
+  ['site.js', '../js/core/data/dungeons.js', '../js/core/diario.js'].forEach(function (s) {
+    document.write('<script src="' + s + v + '"><\/script>');
+  });
+})('?v=' + Date.now());
+</script>
+<script>
+(function () {
+  var E = SITE.esc;
+  var DIAS = 14;                // a janela do calendário (a do servidor também é de 14)
+  var resposta = null;          // a última resposta boa de /api/eventos
+  var lida = false;             // já houve ao menos uma tentativa
+  function $(id) { return document.getElementById(id); }
+
+  function aviso(texto) {
+    var a = $('ev-aviso');
+    a.className = 'aviso' + (texto ? ' erro' : '');
+    a.textContent = texto || '';
+  }
+
+  /* ---- Agora: os eventos no ar e o Calabouço do Dia ---- */
+  function cartaoDia(ag) {
+    var agora = SITE.agora(), d = SITE.diaDoCalabouco(agora);
+    if (!d) return '';
+    var saqueAqui = ag.ativos.some(function (e) { return e.tipo === 'saque' && (!e.calabouco || e.calabouco === d.id); });
+    return '<div class="evento dia-do-calabouco" data-calabouco-dia="' + E(d.id) + '">' +
+      '<div class="evento-topo"><span class="chip-tipo t-saque">Saque +' + d.bonus + '%</span>' +
+      '<span class="etiqueta aberto">Hoje</span></div>' +
+      '<h4>Calabouço do Dia: ' + E(d.nome) + '</h4>' +
+      '<p>Todo dia um calabouço aberto paga mais saque, e ele troca à meia-noite.' +
+      (saqueAqui ? ' Hoje há evento de saque valendo aqui também: os dois não somam, vale o maior.' : '') + '</p>' +
+      '<div class="evento-pe"><span>' + E(SITE.onde(d.id)) + '</span>' +
+      '<span class="falta">' + E(SITE.falta(SITE.inicioDoDia(agora, 1), 'troca em')) + '</span></div></div>';
+  }
+  function desenhaAgora(ag) {
+    var html = ag.ativos.map(SITE.cartaoEvento).join('');
+    if (!ag.ativos.length) {
+      var prox = ag.proximos[0];
+      html += '<div class="evento vazio"><h4>' +
+        (!lida ? 'carregando a agenda…' : resposta ? 'Nenhum evento no ar agora.' : 'Sem a agenda do servidor.') + '</h4>' +
+        (prox ? '<p>O próximo: <b>' + E(prox.titulo) + '</b> (' + E(SITE.fator(prox.tipo, prox.mult)) + '), ' +
+                E(SITE.quando(prox.inicio)) + ' — ' + E(SITE.falta(prox.inicio, 'começa em')) + '.</p>' : '') +
+        '</div>';
+    }
+    $('ev-agora').innerHTML = html + cartaoDia(ag);
+  }
+
+  /* ---- os próximos 14 dias: 7 colunas × 2 linhas, a partir de hoje ---- */
+  function faixaNoDia(e, ini, fim) {
+    var comecou = e.inicio <= ini, segue = e.fim >= fim;
+    if (comecou && segue) return 'o dia todo';
+    if (comecou) return 'até ' + SITE.hora(e.fim);
+    if (segue) return 'desde ' + SITE.hora(e.inicio);
+    return SITE.hora(e.inicio) + '–' + SITE.hora(e.fim);
+  }
+  function desenhaCalendario(ag) {
+    var agora = SITE.agora(), html = '';
+    for (var i = 0; i < DIAS; i++) {
+      var ini = SITE.inicioDoDia(agora, i), fim = SITE.inicioDoDia(agora, i + 1);
+      var dt = new Date(ini * 1000);
+      var chave = dt.getFullYear() + '-' + (dt.getMonth() + 1) + '-' + dt.getDate();
+      var d = SITE.diaDoCalabouco(ini + 12 * 3600);
+      var partes = SITE.dia(ini).split(', ');
+      var doDia = ag.todos.filter(function (e) { return e.inicio < fim && e.fim > ini; })
+                          .sort(function (a, b) { return a.inicio - b.inicio; });
+      html += '<div class="dia' + (i === 0 ? ' hoje' : '') + '" data-dia="' + chave + '"' +
+        (d ? ' data-calabouco-dia="' + E(d.id) + '"' : '') + '>' +
+        '<div class="dia-cab"><b>' + E(partes[0]) + '</b> ' + E(partes[1] || '') +
+        (i === 0 ? ' <span class="hoje-marca">hoje</span>' : '') + '</div>' +
+        (d ? '<div class="dia-calabouco" title="Calabouço do Dia: +' + d.bonus + '% de saque">★ ' + E(SITE.semArtigo(d.nome)) + '</div>' : '') +
+        (doDia.length ? '<ul class="dia-eventos">' + doDia.map(function (e) {
+          return '<li><span class="chip-tipo t-' + e.tipo + '">' + E(SITE.fator(e.tipo, e.mult)) + '</span> ' + E(e.titulo) +
+            '<small>' + E(faixaNoDia(e, ini, fim)) + ' · ' + E(SITE.onde(e.calabouco)) + '</small></li>';
+        }).join('') + '</ul>' : '') +
+        '</div>';
+    }
+    $('calendario').innerHTML = html;
+  }
+
+  /* ---- Toda semana: as regras do calendário automático ---- */
+  function desenhaRegras() {
+    var ul = $('ev-regras');
+    if (!resposta) {
+      ul.innerHTML = '<li class="apoio">' + (lida ? 'sem o servidor, sem o calendário automático' : 'carregando…') + '</li>';
+      return;
+    }
+    var tetos = resposta.tetos || {};
+    var regras = (Array.isArray(resposta.regras) ? resposta.regras : []).filter(function (r) {
+      return r && SITE.TIPOS.indexOf(r.tipo) >= 0 && SITE.textoRegra(r);
+    });
+    if (!regras.length) { ul.innerHTML = '<li class="apoio">Nenhum evento semanal por enquanto.</li>'; return; }
+    ul.innerHTML = regras.map(function (r) {
+      var m = Number(r.multiplicador), teto = Number(tetos[r.tipo]);
+      if (!isFinite(m) || m < 1) m = 1;
+      if (teto >= 1 && m > teto) m = teto;
+      return '<li class="regra"><div><span class="chip-tipo t-' + r.tipo + '">' + E(SITE.fator(r.tipo, m)) + '</span> ' +
+        '<b>' + E(r.titulo) + '</b></div>' +
+        '<div class="regra-quando">' + E(SITE.textoRegra(r)) + ' · ' + E(SITE.onde(r.calabouco)) + '</div>' +
+        (r.texto ? '<p>' + E(r.texto) + '</p>' : '') + '</li>';
+    }).join('');
+  }
+
+  /* ---- os tetos: o número vem do servidor, que é quem manda nele ---- */
+  function desenhaTetos() {
+    var tetos = (resposta && resposta.tetos) || {};
+    [].forEach.call(document.querySelectorAll('[data-teto]'), function (td) {
+      var t = td.getAttribute('data-teto'), v = Number(tetos[t]);
+      td.textContent = t === 'aviso' ? 'só o recado' : (v >= 1 ? '×' + SITE.decimal(v) : '—');
+    });
+  }
+
+  function desenha() {
+    var ag = SITE.agenda(resposta || {});
+    desenhaAgora(ag);
+    desenhaCalendario(ag);
+    desenhaRegras();
+    desenhaTetos();
+  }
+
+  function carrega() {
+    var bt = $('bt-atualizar');
+    bt.disabled = true;
+    SITE.api('/api/eventos', { semToken: true }).then(function (r) {
+      bt.disabled = false;
+      lida = true;
+      if (r.ok) {
+        SITE.acertaRelogio(r.agora);
+        resposta = r;
+        aviso('');
+      } else {
+        // a última resposta boa fica: a agenda é recalculada pelo relógio,
+        // então ela continua certa por um bom tempo sem nova busca
+        aviso(r.status === 0 ? 'O servidor está fora — a agenda volta com ele. O Calabouço do Dia não depende do servidor e segue abaixo.'
+          : r.status === 404 ? 'A agenda de eventos ainda não chegou a este servidor. O Calabouço do Dia segue abaixo.'
+          : (r.erro || 'Não deu para ler a agenda.'));
+      }
+      desenha();
+    });
+  }
+
+  $('bt-atualizar').addEventListener('click', carrega);
+  desenha();                            // o Dia e as 14 células já saem sem o servidor
+  carrega();
+  setInterval(desenha, 30000);          // a contagem anda; o evento vencido sai sozinho
+  setInterval(carrega, 5 * 60 * 1000);  // e a lista é buscada de novo
+})();
+</script>
+</body>
+</html>

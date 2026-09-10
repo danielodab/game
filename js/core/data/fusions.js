@@ -70,8 +70,11 @@ JOGO.DATA = JOGO.DATA || {};
   function ws(w) { return { type: 'weatherShift', weather: w }; }
 
   // =========================================================================
-  // 1. IDENTIDADE DAS 15 DUPLAS — o que a soma das duas classes faz de único
+  // 1. IDENTIDADE DAS 21 DUPLAS — o que a soma das duas classes faz de único
   // =========================================================================
+  // As 6 do Minotauro (10/09, decisão D5 do dono) vêm dos comentários de cada
+  // bloco lá embaixo, só com os acentos de volta: o site mostra nome e frase
+  // de toda dupla (site/fusoes.html), e sem elas diria "Minotauro + X".
 
 
   DATA.fusionIdentities = {
@@ -89,7 +92,13 @@ JOGO.DATA = JOGO.DATA || {};
     'curandeiro+sumo':     { name: 'Baluarte Compassivo',  line: 'Muralha que se cura batendo: arrasta o inimigo para dentro do alcance, bebe o que arranca e reparte o excedente com quem sangra.' },
     'espadachim+invocador':{ name: 'Sombra Multiplicada',  line: 'A própria sombra corta primeiro; depois vêm os espinhos escondidos e os gêmeos de breu — veneno de três lugares ao mesmo tempo.' },
     'espadachim+sumo':     { name: 'Investida Titânica',   line: 'Peso em movimento: investe de longe, agarra, gira e arremessa — e o chão fica marcado.' },
-    'invocador+sumo':      { name: 'Fortaleza Viva',       line: 'Tanque que invoca: o brado machuca e provoca a sala inteira, os ídolos de escora caem batendo e o resto do grupo vai coberto de escudo.' }
+    'invocador+sumo':      { name: 'Fortaleza Viva',       line: 'Tanque que invoca: o brado machuca e provoca a sala inteira, os ídolos de escora caem batendo e o resto do grupo vai coberto de escudo.' },
+    'arqueiro+minotauro':  { name: 'A Seteira',            line: 'Ele atira e continua coberto. O muro não é obstáculo para quem o ergueu — é a janela por onde ele mira.' },
+    'bruxo+minotauro':     { name: 'A Cratera',            line: 'A explosão deixa borda. O que sobra da área vira parede.' },
+    'curandeiro+minotauro':{ name: 'O Abrigo',             line: 'O muro cura quem se encosta. Guardar e cuidar viram a mesma coisa — e esta é a dupla mais defensiva do jogo.' },
+    'espadachim+minotauro':{ name: 'A Emboscada',          line: 'Some e deixa muro no lugar onde estava. O inimigo bate na pedra procurando o que já não está lá.' },
+    'invocador+minotauro': { name: 'O Muro Vivo',          line: 'A pedra tem alguém dentro. Barra E ataca.' },
+    'minotauro+sumo':      { name: 'O Portão',             line: 'Os dois no mesmo lugar, e ninguém sai. A dupla que decide onde a luta acontece.' }
   };
 
   // =========================================================================
@@ -969,13 +978,16 @@ JOGO.DATA = JOGO.DATA || {};
       mechanic: [d('@A', 20, 27), dm(1.6)],
       description: 'Detona de longe tudo o que foi marcado, e a pedra em volta devolve o estouro para dentro.',
       fxShape: 'burst' },
+    // 10/09: este fica SEM acento de propósito — 'Bastião' já é a forma tier 20
+    // de arqueiro+sumo, e o validate_fusion cobra os 147 nomes únicos. O nome
+    // novo desta forma é decisão do dono (os outros 6 acentos voltaram, D6).
     { tier: 20, formName: 'Bastiao', paCost: 5, cooldown: 4, castsPerTurn: 1,
       range: rng(1, 6), aoe: aoe('ring', 2), needsEmptyTile: false, targetSide: 'any',
       riderMode: 'support',
       mechanic: [wl(3), sh(85, 3), bf('power', 25, 3)],
       description: 'Um anel de pedra à distância, e você no meio: ninguém chega, e todo tiro seu sai mais fundo.',
       fxShape: 'shieldFx' },
-    { tier: 30, formName: 'Assedio', paCost: 5, cooldown: 5, castsPerTurn: 1,
+    { tier: 30, formName: 'Assédio', paCost: 5, cooldown: 5, castsPerTurn: 1,
       range: rng(2, 8), aoe: aoe('ring', 2), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
       mechanic: [wl(3), d('@B', 26, 34), dm(2.0), mk(5, 3, 5)],
@@ -986,7 +998,7 @@ JOGO.DATA = JOGO.DATA || {};
   // --- BRUXO + MINOTAURO — A Cratera ------------------------------------
   // ESTOURAR + BARRAR: a explosao deixa borda. O que sobra da area vira parede.
   F['bruxo+minotauro'] = [
-    { tier: 0, formName: 'Rebentacao', paCost: 3, cooldown: 0, castsPerTurn: 2,
+    { tier: 0, formName: 'Rebentação', paCost: 3, cooldown: 0, castsPerTurn: 2,
       range: rng(1, 5), aoe: aoe('circle', 1), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
       mechanic: [d('@A', 15, 20), ps(1)],
@@ -1022,7 +1034,7 @@ JOGO.DATA = JOGO.DATA || {};
       mechanic: [wl(3), d('@B', 24, 32), rt(1)],
       description: 'Levanta a arquibancada em volta deles e derruba o teto dentro: presos, e sem plateia.',
       fxShape: 'nova' },
-    { tier: 30, formName: 'Vulcao', paCost: 5, cooldown: 5, castsPerTurn: 1,
+    { tier: 30, formName: 'Vulcão', paCost: 5, cooldown: 5, castsPerTurn: 1,
       range: rng(1, 6), aoe: aoe('circle', 3), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
       mechanic: [d('@A', 30, 40), pz('@B', 9, 13, 3), wl(2), ps(2)],
@@ -1064,13 +1076,13 @@ JOGO.DATA = JOGO.DATA || {};
       mechanic: [wl(3), d('@B', 19, 26), hl(18, 24)],
       description: 'Três pedras sobem na linha: fere quem estava nela e devolve fôlego a quem estava atrás.',
       fxShape: 'heal' },
-    { tier: 20, formName: 'Hospicio', paCost: 5, cooldown: 4, castsPerTurn: 1,
+    { tier: 20, formName: 'Hospício', paCost: 5, cooldown: 4, castsPerTurn: 1,
       range: rng(0, 5), aoe: aoe('circle', 2), needsEmptyTile: false, targetSide: 'ally',
       riderMode: 'support',
       mechanic: [d('@A', 24, 32), hl(28, 37), sh(80, 3)],
       description: 'A onda sai de dentro do abrigo: machuca quem cercava e cura e escuda quem estava dentro.',
       fxShape: 'heal' },
-    { tier: 30, formName: 'Santuario', paCost: 5, cooldown: 5, castsPerTurn: 1,
+    { tier: 30, formName: 'Santuário', paCost: 5, cooldown: 5, castsPerTurn: 1,
       range: rng(0, 0), aoe: aoe('ring', 2), needsEmptyTile: false, targetSide: 'self',
       riderMode: 'support',
       mechanic: [wl(4), hl(36, 48), sh(110, 4), rg(14, 19, 4), cl(['poison', 'root'])],
@@ -1118,7 +1130,7 @@ JOGO.DATA = JOGO.DATA || {};
       mechanic: [iv(2), sh(70, 2), bf('power', 30, 2)],
       description: 'Some por dois turnos, com a pedra guardando as costas e a lâmina pesando mais.',
       fxShape: 'veil' },
-    { tier: 30, formName: 'Dedalo', paCost: 5, cooldown: 5, castsPerTurn: 1,
+    { tier: 30, formName: 'Dédalo', paCost: 5, cooldown: 5, castsPerTurn: 1,
       range: rng(1, 5), aoe: aoe('cross', 2), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
       mechanic: [wl(3), iv(1), d('@B', 32, 42), rt(1)],
