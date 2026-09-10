@@ -2061,5 +2061,11 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .conta-linha b { font-family: var(--ui-serif); font-size: 14px; }
 .conta-linha span { font-size: 11px; color: var(--dim); }
 .conta-linha.is-on { border-color: var(--gold); }
+/* a Nuvem na Ficha de Contas (10/09) */
+.nuvem-caixa { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); }
+.nuvem-titulo { margin: 0 0 4px; font-family: var(--ui-serif); font-size: 14px; color: var(--gold); }
+.nuvem-botoes { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.nuvem-botoes .btn { flex: 1; }
+.nuvem-caixa a.btn { display: block; text-align: center; text-decoration: none; margin-top: 8px; }
 .conta-linha.is-on span { color: var(--gold); }
 .contas-nota { font-size: 12px; color: var(--dim); line-height: 1.5; }

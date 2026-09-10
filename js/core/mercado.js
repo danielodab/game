@@ -135,6 +135,7 @@ var JOGO = (typeof window !== 'undefined')
         id: 'jg-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e6).toString(36),
         vendedor: 'jogador',
         itemId: entrada.itemId, level: entrada.level || 0, stars: entrada.stars || 0,
+        iid: (typeof entrada.iid === 'string' && entrada.iid) ? entrada.iid : null,   // a série (10/09)
         preco: preco
       });
       return db.mercadoGravar(mc).then(function () {
@@ -167,7 +168,7 @@ var JOGO = (typeof window !== 'undefined')
           cadeia = cadeia.then(function () { return db.ganharMoedas(repasse); });
         }
         return cadeia.then(function () {
-          return { ok: true, item: { itemId: of.itemId, level: of.level, stars: of.stars },
+          return { ok: true, item: { itemId: of.itemId, level: of.level, stars: of.stars, iid: of.iid || null },
                    pagou: of.preco, repasse: repasse };
         });
       });
@@ -188,7 +189,7 @@ var JOGO = (typeof window !== 'undefined')
       if (of.vendedor !== 'jogador') return { ok: false, erro: 'a banca do mercador não é sua' };
       mc.ofertas.splice(idx, 1);
       return db.mercadoGravar(mc).then(function () {
-        return { ok: true, item: { itemId: of.itemId, level: of.level, stars: of.stars } };
+        return { ok: true, item: { itemId: of.itemId, level: of.level, stars: of.stars, iid: of.iid || null } };
       });
     });
   };

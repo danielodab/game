@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conta — SOTERRA</title>
+<link rel="stylesheet" href="site.css">
+<!--
+  Cadastro e login em duas abas (#entrar abre a segunda). A validação do
+  cliente espelha a do servidor (servidor/api.py) só para dar resposta na
+  hora — quem manda é o servidor, e o erro dele aparece na tela como veio.
+  Sucesso guarda 'soterra-sessao' = {token, conta:{id, nome, gm}} e leva ao
+  jogo (../index.html = /index.html em produção).
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="conta.html">Conta</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<div class="miolo">
+  <div class="conta-caixa">
+    <div class="abas">
+      <button type="button" id="aba-criar" class="ligada">Criar conta</button>
+      <button type="button" id="aba-entrar">Entrar</button>
+    </div>
+
+    <!-- já logado: em vez dos formulários -->
+    <div class="painel" id="painel-logado">
+      <h3 style="margin-top:18px">Você já está dentro</h3>
+      <p class="apoio" id="logado-texto"></p>
+      <a class="btn btn-ouro" href="../index.html">Jogar</a>
+      <button type="button" class="btn" id="bt-sair-aqui">Sair desta conta</button>
+    </div>
+
+    <form class="painel ligado" id="painel-criar" novalidate>
+      <label for="c-nome">Nome de jogador</label>
+      <input type="text" id="c-nome" autocomplete="username" maxlength="20" required>
+      <p class="dica">3 a 20 caracteres: letras, dígitos, espaço, _ ou -. É o nome que aparece na praça e no ranking.</p>
+      <label for="c-email">E-mail</label>
+      <input type="email" id="c-email" autocomplete="email" required>
+      <label for="c-senha">Senha</label>
+      <input type="password" id="c-senha" autocomplete="new-password" minlength="8" required>
+      <p class="dica">Pelo menos 8 caracteres.</p>
+      <label for="c-senha2">Repita a senha</label>
+      <input type="password" id="c-senha2" autocomplete="new-password" required>
+      <div class="aviso" id="c-aviso"></div>
+      <button type="submit" class="btn btn-ouro" id="c-bt">Criar conta e jogar</button>
+      <div class="rodape-conta"><span class="apoio">Já tem conta?</span><a href="#entrar" id="ir-entrar">Entrar</a></div>
+    </form>
+
+    <form class="painel" id="painel-entrar" novalidate>
+      <label for="e-login">Nome ou e-mail</label>
+      <input type="text" id="e-login" autocomplete="username" required>
+      <label for="e-senha">Senha</label>
+      <input type="password" id="e-senha" autocomplete="current-password" required>
+      <div class="aviso" id="e-aviso"></div>
+      <button type="submit" class="btn btn-ouro" id="e-bt">Entrar</button>
+      <div class="rodape-conta">
+        <a href="#" class="desligado" id="esqueci" aria-disabled="true" title="em breve">esqueci a senha</a>
+        <a href="#criar" id="ir-criar">Criar conta</a>
+      </div>
+      <div class="aviso" id="esqueci-aviso"></div>
+    </form>
+  </div>
+</div>
+
+<footer class="rodape">
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
+</footer>
+
+<script src="site.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---- abas ---- */
+  function aba(qual) {
+    var criar = qual === 'criar';
+    $('aba-criar').classList.toggle('ligada', criar);
+    $('aba-entrar').classList.toggle('ligada', !criar);
+    $('painel-criar').classList.toggle('ligado', criar);
+    $('painel-entrar').classList.toggle('ligado', !criar);
+    if (history.replaceState) history.replaceState(null, '', '#' + (criar ? 'criar' : 'entrar'));
+  }
+  $('aba-criar').addEventListener('click', function () { aba('criar'); });
+  $('aba-entrar').addEventListener('click', function () { aba('entrar'); });
+  $('ir-entrar').addEventListener('click', function (ev) { ev.preventDefault(); aba('entrar'); });
+  $('ir-criar').addEventListener('click', function (ev) { ev.preventDefault(); aba('criar'); });
+  function abaDoHash() { return /^#entrar/.test(location.hash) ? 'entrar' : 'criar'; }
+  window.addEventListener('hashchange', function () { aba(abaDoHash()); });
+  if (abaDoHash() === 'entrar') aba('entrar');
+
+  /* ---- já logado? ---- */
+  function mostraLogado() {
+    var s = SITE.sessao();
+    var logado = !!s;
+    $('painel-logado').classList.toggle('ligado', logado);
+    document.querySelector('.abas').style.display = logado ? 'none' : '';
+    if (logado) {
+      $('painel-criar').classList.remove('ligado');
+      $('painel-entrar').classList.remove('ligado');
+      $('logado-texto').textContent = 'Sessão de ' + s.conta.nome + '. O jogo usa esta conta em qualquer máquina.';
+    } else {
+      aba(abaDoHash());
+    }
+  }
+  $('bt-sair-aqui').addEventListener('click', function () { SITE.sair(); mostraLogado(); });
+  mostraLogado();
+
+  /* ---- avisos e validação ---- */
+  function aviso(id, texto, tipo) {
+    var el = $(id);
+    el.className = 'aviso' + (texto ? ' ' + (tipo || 'erro') : '');
+    el.textContent = texto || '';
+  }
+  function marca(input, ruim) { input.classList.toggle('invalido', !!ruim); }
+  function nomeValido(n) {
+    return n === n.trim() && n.length >= 3 && n.length <= 20 && /^[\p{L}\p{N} _-]+$/u.test(n);
+  }
+
+  function entrou(r) {
+    // o que o jogo vai ler: token + a conta enxuta
+    SITE.guarda({ token: r.token, conta: { id: r.conta.id, nome: r.conta.nome, gm: !!r.conta.gm } });
+    location.href = '../index.html';
+  }
+
+  /* ---- criar conta ---- */
+  $('painel-criar').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var nome = $('c-nome').value, email = $('c-email').value.trim(),
+        senha = $('c-senha').value, senha2 = $('c-senha2').value;
+    var erro = null;
+    marca($('c-nome'), !nomeValido(nome));
+    marca($('c-email'), email.indexOf('@') < 1);
+    marca($('c-senha'), senha.length < 8);
+    marca($('c-senha2'), senha2 !== senha);
+    if (!nomeValido(nome)) erro = 'Nome: 3 a 20 caracteres (letras, dígitos, espaço, _ ou -), sem espaço nas pontas.';
+    else if (email.indexOf('@') < 1) erro = 'Esse e-mail não parece um e-mail.';
+    else if (senha.length < 8) erro = 'A senha precisa ter pelo menos 8 caracteres.';
+    else if (senha2 !== senha) erro = 'As duas senhas não batem.';
+    if (erro) { aviso('c-aviso', erro); return; }
+
+    aviso('c-aviso', 'Criando a conta…', 'neutro');
+    $('c-bt').disabled = true;
+    SITE.api('/api/cadastro', { method: 'POST', semToken: true, body: { nome: nome, email: email, senha: senha } })
+      .then(function (r) {
+        $('c-bt').disabled = false;
+        if (!r.ok) { aviso('c-aviso', r.erro || 'não deu para criar a conta'); return; }
+        aviso('c-aviso', 'Conta criada! Entrando no jogo…', 'certo');
+        entrou(r);
+      });
+  });
+
+  /* ---- entrar ---- */
+  $('painel-entrar').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var login = $('e-login').value.trim(), senha = $('e-senha').value;
+    marca($('e-login'), !login);
+    marca($('e-senha'), !senha);
+    if (!login || !senha) { aviso('e-aviso', 'Informe o nome (ou e-mail) e a senha.'); return; }
+    aviso('e-aviso', 'Entrando…', 'neutro');
+    $('e-bt').disabled = true;
+    SITE.api('/api/login', { method: 'POST', semToken: true, body: { login: login, senha: senha } })
+      .then(function (r) {
+        $('e-bt').disabled = false;
+        if (!r.ok) { aviso('e-aviso', r.erro || 'não deu para entrar'); return; }
+        aviso('e-aviso', 'Bem-vindo de volta, ' + r.conta.nome + '.', 'certo');
+        entrou(r);
+      });
+  });
+
+  /* ---- esqueci a senha: ainda não existe ---- */
+  $('esqueci').addEventListener('click', function (ev) {
+    ev.preventDefault();
+    aviso('esqueci-aviso', 'Recuperação de senha: em breve. Por enquanto, fale com o dono do servidor.', 'neutro');
+  });
+})();
+</script>
+</body>
+</html>

@@ -214,7 +214,7 @@ var JOGO = (typeof window !== 'undefined')
       var tem = h.items && (h.items.punho === id || h.items.passo === id ||
                             h.items.casca === id || h.items.lume === id);
       var noSaco = P.state.inventory.some(function (e) { return e.itemId === id; });
-      if (!tem && !noSaco) P.state.inventory.push({ itemId: id, level: 0, stars: 0 });
+      if (!tem && !noSaco) P.state.inventory.push(P.novaCopia ? P.novaCopia(id, 'caixa') : { itemId: id, level: 0, stars: 0 });
     });
     // todos os caminhos, de nascença — o privilégio do dono
     h.element = h.element !== 'neutro' ? h.element : 'fogo';
@@ -236,7 +236,7 @@ var JOGO = (typeof window !== 'undefined')
     var inv = saco();
     var def = JOGO.DATA && JOGO.DATA.items && JOGO.DATA.items[itemId];
     if (!inv || !def) return false;
-    inv.push({ itemId: itemId, level: 0, stars: 0 });
+    inv.push(JOGO.Progress.novaCopia ? JOGO.Progress.novaCopia(itemId, 'caixa') : { itemId: itemId, level: 0, stars: 0 });
     if (JOGO.Progress.save) JOGO.Progress.save();
     return true;
   };
@@ -246,7 +246,10 @@ var JOGO = (typeof window !== 'undefined')
     if (!inv || !sd || !sd.pieces) return 0;
     var n = 0;
     for (var i = 0; i < sd.pieces.length; i++) {
-      if (JOGO.DATA.items[sd.pieces[i]]) { inv.push({ itemId: sd.pieces[i], level: 0, stars: 0 }); n++; }
+      if (JOGO.DATA.items[sd.pieces[i]]) {
+        inv.push(JOGO.Progress.novaCopia ? JOGO.Progress.novaCopia(sd.pieces[i], 'caixa') : { itemId: sd.pieces[i], level: 0, stars: 0 });
+        n++;
+      }
     }
     if (n && JOGO.Progress.save) JOGO.Progress.save();
     return n;

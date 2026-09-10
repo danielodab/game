@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ranking — SOTERRA</title>
+<link rel="stylesheet" href="site.css">
+<!-- As três tabelas completas (até 50 linhas cada), lendo /api/ranking. -->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="conta.html">Conta</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<section class="secao">
+  <div class="miolo">
+    <h2>Ranking</h2>
+    <p class="sub">Quem desceu mais fundo, quem manda na arena e quais guildas somam mais experiência. Atualiza a cada save que chega ao servidor.
+      <button type="button" class="btn" id="bt-atualizar" style="padding:6px 12px;font-size:13.5px;margin-left:8px">atualizar</button></p>
+
+    <div class="tres larga">
+      <div>
+        <h3>Jogadores <small>por experiência total</small></h3>
+        <div class="tabela-caixa">
+          <table><thead><tr><th>#</th><th>Nome</th><th class="num">XP total</th><th class="num">Nível máx.</th><th class="num">Classes</th></tr></thead>
+            <tbody id="rk-jogadores"></tbody></table>
+          <div class="estado" id="es-jogadores">carregando…</div>
+        </div>
+      </div>
+      <div>
+        <h3>Arena <small>por Brasa — só quem já duelou</small></h3>
+        <div class="tabela-caixa">
+          <table><thead><tr><th>#</th><th>Nome</th><th class="num">Brasa</th><th class="num">Partidas</th></tr></thead>
+            <tbody id="rk-pvp"></tbody></table>
+          <div class="estado" id="es-pvp">carregando…</div>
+        </div>
+      </div>
+      <div>
+        <h3>Guildas <small>por XP somada dos membros</small></h3>
+        <div class="tabela-caixa">
+          <table><thead><tr><th>#</th><th>Guilda</th><th class="num">Membros</th><th class="num">XP</th></tr></thead>
+            <tbody id="rk-guildas"></tbody></table>
+          <div class="estado" id="es-guildas">carregando…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
+</footer>
+
+<script src="site.js"></script>
+<script>
+(function () {
+  var E = SITE.esc, N = SITE.num;
+  var IDS = ['jogadores', 'pvp', 'guildas'];
+
+  function estado(id, texto, classe) {
+    var es = document.getElementById('es-' + id);
+    es.className = 'estado' + (classe ? ' ' + classe : '');
+    es.style.display = '';
+    es.textContent = texto;
+  }
+
+  function tabela(id, lista, celulas) {
+    var corpo = document.getElementById('rk-' + id);
+    corpo.innerHTML = '';
+    if (!lista.length) { estado(id, 'ninguém ainda — seja o primeiro'); return; }
+    document.getElementById('es-' + id).style.display = 'none';
+    corpo.innerHTML = lista.map(function (r, i) {
+      return '<tr class="top' + (i + 1) + '"><td class="pos">' + (i + 1) + '</td>' + celulas(r) + '</tr>';
+    }).join('');
+  }
+
+  function carrega() {
+    IDS.forEach(function (id) { estado(id, 'carregando…'); });
+    var bt = document.getElementById('bt-atualizar');
+    bt.disabled = true;
+    SITE.api('/api/ranking', { semToken: true }).then(function (r) {
+      bt.disabled = false;
+      if (!r.ok) {
+        var msg = r.status === 0 ? 'o servidor está fora — tente de novo daqui a pouco' : (r.erro || 'não deu para ler o ranking');
+        IDS.forEach(function (id) { estado(id, msg, 'fora'); });
+        return;
+      }
+      tabela('jogadores', r.jogadores || [], function (j) {
+        return '<td class="nome">' + E(j.nome) + '</td><td class="num">' + N(j.xpTotal) + '</td><td class="num">' + N(j.nivelMax) + '</td><td class="num">' + N(j.classes) + '</td>';
+      });
+      tabela('pvp', r.pvp || [], function (p) {
+        return '<td class="nome">' + E(p.nome) + '</td><td class="num">' + N(p.brasa) + '</td><td class="num">' + N(p.partidas) + '</td>';
+      });
+      tabela('guildas', r.guildas || [], function (g) {
+        return '<td class="nome"><span class="emblema">' + E(g.emblema || '') + '</span>' + E(g.nome) + '</td><td class="num">' + N(g.membros) + '</td><td class="num">' + N(g.xpTotal) + '</td>';
+      });
+    });
+  }
+
+  document.getElementById('bt-atualizar').addEventListener('click', carrega);
+  carrega();
+})();
+</script>
+</body>
+</html>

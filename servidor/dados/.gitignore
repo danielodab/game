@@ -1,0 +1,4 @@
+# A API (../api.py) grava o banco aqui quando roda em casa. Banco vivo nunca
+# vai para o git — nem para o rsync de subida (SUBIR.md exclui servidor/dados).
+*
+!.gitignore

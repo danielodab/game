@@ -115,7 +115,8 @@ var JOGO = (typeof window !== 'undefined')
   T.porItem = function (entrada) {
     if (!st || st.fase !== 'aberta' || !entrada || !entrada.itemId) return false;
     st.minha.itens.push({ itemId: entrada.itemId,
-                          level: entrada.level || 0, stars: entrada.stars || 0 });
+                          level: entrada.level || 0, stars: entrada.stars || 0,
+                          iid: (typeof entrada.iid === 'string' && entrada.iid) ? entrada.iid : null });
     ofertaMudou();
     return true;
   };
@@ -225,8 +226,10 @@ var JOGO = (typeof window !== 'undefined')
       for (var i = 0; i < inv.length; i++) {
         if (indices.indexOf(i) >= 0) continue;
         var e2 = inv[i];
+        // com série, é ELA que casa (10/09); sem, a forma inteira
+        if (of.iid) { if (e2.iid === of.iid) { indices.push(i); return false; } continue; }
         if (e2.itemId === of.itemId && (e2.level || 0) === (of.level || 0) &&
-            (e2.stars || 0) === (of.stars || 0)) { indices.push(i); return false; }
+            (e2.stars || 0) === (of.stars || 0) && !e2.iid) { indices.push(i); return false; }
       }
       return true;
     });
@@ -258,9 +261,24 @@ var JOGO = (typeof window !== 'undefined')
     indices.sort(function (a, b) { return b - a; });
     indices.forEach(function (i) { inv.splice(i, 1); });
     itensVem.forEach(function (of) {
-      inv.push({ itemId: of.itemId, level: of.level || 0, stars: of.stars || 0 });
+      // a série do parceiro vem junto: no cartório a posse muda pela rota de troca
+      var e3 = { itemId: of.itemId, level: of.level || 0, stars: of.stars || 0 };
+      if (of.iid) e3.iid = of.iid; else if (prog.carimba) e3 = prog.carimba(e3, 'troca');
+      inv.push(e3);
     });
     try { prog.save(); } catch (e) {}
+    // A NUVEM (10/09): os dois lados registram a intenção espelhada no cartório;
+    // sem sessão (ou sem a conta do parceiro na presença) fica só o local.
+    try {
+      var N = JOGO.Nuvem, Rd = R();
+      var parNuvem = null;
+      if (Rd && Rd.pares) Rd.pares().forEach(function (p) { if (p.id === par) parNuvem = p.nuvem || null; });
+      if (N && N.troca && parNuvem) {
+        N.troca(parNuvem,
+                meusItens.map(function (o) { return o.iid; }).filter(Boolean),
+                itensVem.map(function (o) { return o.iid; }).filter(Boolean));
+      }
+    } catch (e4) {}
 
     // 3) as moedas pelo funil de sempre, e o histórico
     var cadeia = Promise.resolve({ ok: true });

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a Nuvem contra a API de verdade</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- A PROVA VIVA (10/09): js/core/nuvem.js falando com servidor/api.py DE
+     VERDADE (quem sobe a API é tests/nuvem_viva.py, numa porta livre e num
+     banco descartável; esta página recebe `?api=http://127.0.0.1:PORTA`).
+     Conta descartável criada pela própria página — nome e senha aleatórios,
+     que morrem com o banco temporário. O que se cobra: cadastro → primeira
+     subida → o cartório tem as séries → a linha duplicada é recusada →
+     a instância consumida não volta → "outra máquina" puxa o save. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/db.js','js/core/mercado.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js','js/core/nuvem.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function ate(cond, ms) {
+    ms = ms || 4000;
+    return new Promise(function (r) {
+      var t0 = 0;
+      (function volta() {
+        if (cond()) return r(true);
+        if ((t0 += 20) > ms) return r(false);
+        setTimeout(volta, 20);
+      })();
+    });
+  }
+  var D = JOGO.DATA, P = JOGO.Progress, S = JOGO.Sessao, N = JOGO.Nuvem;
+  var espada = null;
+  Object.keys(D.items).forEach(function (id) { if (!espada && D.items[id].slot === 'punho') espada = id; });
+  var eventos = [];
+  window.addEventListener('soterra:nuvem', function (ev) { eventos.push(ev.detail.tipo + (ev.detail.erro ? ':' + ev.detail.erro : '')); });
+  N.semRecarga = true;
+  N.ESPERA_MS = 30;
+
+  S.esquece();
+  var nome = 'prova' + Date.now().toString(36).slice(-7);
+  var senha = 'p-' + Math.random().toString(36).slice(2, 14);
+  check('a API está apontada (' + S.base() + ')', /^https?:\/\//.test(S.base()));
+  S.api('/api/saude', { semToken: true }).then(function (r) {
+    check('a API responde em /api/saude', r.ok === true, JSON.stringify(r));
+    return S.cadastrar(nome, nome + '@prova.local', senha);
+  }).then(function (r) {
+    check('cadastro de conta descartável (' + nome + ')', r.ok && r.token && r.conta && S.ativa(), r.erro);
+    P.reset();
+    P.addItem(espada); P.addItem(espada); P.addItem(espada);
+    return N.iniciar();
+  }).then(function () {
+    return ate(function () { return N.estado().versao === 1; });
+  }).then(function (ok) {
+    check('primeira subida: versão 1, sem erro', ok && N.estado().erro === null, JSON.stringify(N.estado()));
+    check('a fila de nascimentos esvaziou', P.state.nascimentos.length === 0);
+    return S.api('/api/save');
+  }).then(function (r) {
+    var inv = (r.progress && r.progress.inventory) || [];
+    check('o cartório guarda o save com as 3 séries', r.ok && inv.length === 3 && inv.every(function (e) { return /^j/.test(e.iid); }));
+    // ---- a linha duplicada
+    P.state.inventory.push(JSON.parse(JSON.stringify(P.state.inventory[0])));
+    P.save();
+    return ate(function () { return N.estado().parada; });
+  }).then(function (ok) {
+    check('a linha duplicada é RECUSADA pela API de verdade (a subida para)', ok && /duplicada/.test(N.estado().erro || ''), N.estado().erro);
+    P.state.inventory.pop();
+    return N.retomar().then(function () { return ate(function () { return N.estado().versao === 2 && !N.estado().parada; }); });
+  }).then(function (ok) {
+    check('sem a duplicada, retomar sobe (versão 2)', ok, JSON.stringify(N.estado()));
+    // ---- a instância consumida não volta
+    window.__vendida = P.state.inventory[0];
+    P.state.inventory.splice(0, 1);
+    P.save();
+    return ate(function () { return N.estado().versao === 3; });
+  }).then(function (ok) {
+    check('a peça vendida sobe como consumida (versão 3)', ok);
+    P.state.inventory.push(window.__vendida);
+    P.save();
+    return ate(function () { return N.estado().parada; });
+  }).then(function (ok) {
+    check('o "backup restaurado" com a peça consumida é RECUSADO', ok && /consumida/.test(N.estado().erro || ''), N.estado().erro);
+    P.state.inventory = P.state.inventory.filter(function (e) { return e.iid !== window.__vendida.iid; });
+    return N.retomar().then(function () { return ate(function () { return N.estado().versao === 4 && !N.estado().parada; }); });
+  }).then(function (ok) {
+    check('retomar sem a peça fantasma: versão 4', ok, JSON.stringify(N.estado()));
+    // ---- "outra máquina": sem registro local, com a mesma sessão
+    var st = JSON.parse(JSON.stringify(P.state));
+    return N.sair().then(function () {                 // esta máquina sai da nuvem
+      localStorage.removeItem('soterra-nuvem-v1');     // a outra: sem registro e sem save
+      localStorage.removeItem(JOGO.Contas.chaveSave());
+      P.reset();
+      check('a outra máquina começa vazia', P.state.inventory.length === 0);
+      return S.entrar(nome, senha);                    // e entra com a mesma conta
+    }).then(function (r) {
+      check('login na outra máquina', r.ok && S.ativa(), r.erro);
+      return N.iniciar();
+    }).then(function () { return { antes: st }; });
+  }).then(function (info) {
+    check('a outra máquina PUXA o save do cartório (2 peças, versão 4)',
+          P.state.inventory.length === 2 && N.estado().versao === 4 &&
+          P.state.inventory.map(function (e) { return e.iid; }).join() === info.antes.inventory.map(function (e) { return e.iid; }).join());
+    return N.sair();
+  }).then(function () {
+    check('sair da nuvem esquece a sessão', !S.ativa());
+    check('nenhum evento de erro inesperado', !eventos.some(function (e) { return /^erro/.test(e); }), eventos.join(' | '));
+    check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+    fecha();
+  }).catch(function (e) {
+    check('o fluxo não estoura', false, String(e && (e.stack || e.message) || e));
+    fecha();
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,12 +1,27 @@
 # O Caddy na frente de tudo no VPS (HTTPS automático via Let's Encrypt).
 # Troque jogo.exemplo.com.br pelo domínio real apontado para o VPS.
 #
-#   /var/www/soterra  = o jogo (cliente estático)
+#   /                 → redireciona para /site/ (a landing pública)
+#   /site/*           = as páginas públicas (site/ do repositório)
+#   /index.html etc.  = o jogo (cliente estático, na raiz de /var/www/soterra)
+#   /api/*            = a API de contas (servidor/api.py via systemd, porta 8300)
 #   /ws               = o Relé (servidor/rele.py via systemd, porta 8791)
 
 jogo.exemplo.com.br {
 	root * /var/www/soterra
 	encode zstd gzip
-	file_server
+
+	# A raiz cai na landing. O jogo continua em /index.html — quem já tem o
+	# link direto não sente nada. Só o caminho "/" exato é redirecionado.
+	redir / /site/ 302
+
+	# A API: o Caddy termina o HTTPS e repassa em claro para o localhost.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8300
+	}
+
+	# O Relé (WebSocket) — como já era.
 	reverse_proxy /ws 127.0.0.1:8791
+
+	file_server
 }

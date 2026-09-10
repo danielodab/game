@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a Nuvem: o save no cartório</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- A NUVEM (10/09): o protocolo entre js/core/nuvem.js e servidor/api.py,
+     provado contra um cartório de mentira que segue as MESMAS regras da API
+     (versão, nascimentos, instância duplicada/desconhecida/consumida). O
+     servidor de verdade é provado por tests/servidor_api.py; aqui o que se
+     cobra é o CLIENTE: puxar ao abrir, subir a cada gravação, esvaziar a
+     fila, o 409 de versão (o servidor manda), a recusa que para a subida
+     e o botão de tentar de novo, o servidor fora que volta sozinho. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/db.js','js/core/mercado.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js','js/core/nuvem.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ate(cond, ms) {
+    ms = ms || 1500;
+    return new Promise(function (r) {
+      var t0 = 0;
+      (function volta() {
+        if (cond()) return r(true);
+        if ((t0 += 10) > ms) return r(false);
+        setTimeout(volta, 10);
+      })();
+    });
+  }
+
+  var D = JOGO.DATA, P = JOGO.Progress, DB = JOGO.DB, S = JOGO.Sessao, N = JOGO.Nuvem;
+  var espada = null;
+  Object.keys(D.items).forEach(function (id) { if (!espada && D.items[id].slot === 'punho') espada = id; });
+
+  // ---------------------------------------------------------- o cartório de mentira
+  var srv = { versao: 0, progress: null, db: null, itens: {}, conta: 7, fora: false, chamadas: [], token: 'tok-1',
+              tokens: { 'tok-1': 7, 'tok-2': 8 }, outros: {} };
+  function saveDe(conta) { return conta === 7 ? srv : (srv.outros[conta] = srv.outros[conta] || { versao: 0, progress: null, db: null }); }
+  function resp(status, obj) {
+    return Promise.resolve({ status: status, json: function () { return Promise.resolve(obj); } });
+  }
+  function colhe(progress, db) {
+    var out = [];
+    ((progress && progress.inventory) || []).forEach(function (e) { if (e && e.iid) out.push(e.iid); });
+    var hs = (progress && progress.heroes) || {};
+    Object.keys(hs).forEach(function (h) {
+      var iv = hs[h] && hs[h].itemVar;
+      if (iv) Object.keys(iv).forEach(function (s) { if (iv[s] && iv[s].iid) out.push(iv[s].iid); });
+    });
+    ((db && db.banco && db.banco.itens) || []).forEach(function (e) { if (e && e.iid) out.push(e.iid); });
+    ((db && db.mercado && db.mercado.ofertas) || []).forEach(function (o) { if (o && o.vendedor === 'jogador' && o.iid) out.push(o.iid); });
+    return out;
+  }
+  S._fetch = function (url, pedido) {
+    var body = pedido.body ? JSON.parse(pedido.body) : null;
+    srv.chamadas.push({ url: url, method: pedido.method, body: body, auth: pedido.headers.Authorization });
+    if (srv.fora) return Promise.reject(new Error('fora'));
+    var quem = srv.tokens[String(pedido.headers.Authorization || '').replace('Bearer ', '')] || null;
+    if (/\/api\/(save|troca|logout)/.test(url) && !quem) {
+      return resp(401, { ok: false, erro: 'sem sessão' });
+    }
+    var sv = saveDe(quem);
+    if (/\/api\/save$/.test(url) && pedido.method === 'GET') {
+      return resp(200, { ok: true, versao: sv.versao, progress: sv.progress, db: sv.db });
+    }
+    if (/\/api\/save$/.test(url) && pedido.method === 'PUT') {
+      if (body.versao !== sv.versao) {
+        return resp(409, { ok: false, erro: 'save desatualizado', versao: sv.versao, progress: sv.progress, db: sv.db });
+      }
+      var nasc = {};
+      (body.nascimentos || []).forEach(function (n) { nasc[n.iid] = n; });
+      var noSave = {}, dup = null;
+      colhe(body.progress, body.db).forEach(function (iid) { if (noSave[iid]) dup = iid; noSave[iid] = true; });
+      if (dup) return resp(409, { ok: false, erro: 'instância duplicada no save: ' + dup });
+      var registrar = [];
+      for (var iid in noSave) {
+        var r = srv.itens[iid];
+        if (!r) { if (!nasc[iid]) return resp(409, { ok: false, erro: 'instância desconhecida: ' + iid }); registrar.push(iid); }
+        else if (r.conta !== quem) return resp(403, { ok: false, erro: 'instância de outra conta: ' + iid });
+        else if (r.estado === 'fora') return resp(409, { ok: false, erro: 'instância já consumida: ' + iid });
+      }
+      Object.keys(nasc).forEach(function (iid) { if (!noSave[iid] && !srv.itens[iid]) registrar.push(iid); });
+      registrar.forEach(function (iid) { srv.itens[iid] = { conta: quem, estado: 'vivo', origem: nasc[iid].origem }; });
+      Object.keys(srv.itens).forEach(function (iid) { if (srv.itens[iid].conta === quem && !noSave[iid]) srv.itens[iid].estado = 'fora'; });
+      sv.versao++;
+      sv.progress = body.progress; sv.db = body.db;
+      return resp(200, { ok: true, versao: sv.versao, registrados: registrar.length });
+    }
+    if (/\/api\/troca$/.test(url)) return resp(200, { ok: true, feita: false, aguardando: true });
+    if (/\/api\/logout$/.test(url)) return resp(200, { ok: true });
+    return resp(404, { ok: false, erro: 'rota?' });
+  };
+  function puts() { return srv.chamadas.filter(function (c) { return c.method === 'PUT'; }); }
+  var eventos = [];
+  window.addEventListener('soterra:nuvem', function (ev) { eventos.push(ev.detail.tipo); });
+
+  N.semRecarga = true;
+  N.ESPERA_MS = 40;
+  N.RETENTA_MS = 80;
+
+  // ---------------------------------------------------------- sem sessão: nada acontece
+  P.reset();
+  P.addItem(espada);
+  N.iniciar().then(function (r) {
+    check('sem sessão, iniciar não faz nada (nem fala com o servidor)', r.ok === false && srv.chamadas.length === 0);
+    check('sem sessão o estado diz "sem sessão"', N.estado().sessao === false && N.estado().ligada === false);
+
+    // ------------------------------------------------------ A. a primeira subida
+    S.guarda({ token: 'tok-1', conta: { id: 7, nome: 'Dan' } });
+    P.reset();
+    P.addItem(espada); P.addItem(espada); P.addItem(espada);
+    return N.iniciar();
+  }).then(function () {
+    var g = srv.chamadas.filter(function (c) { return c.method === 'GET'; });
+    check('ao abrir, a Nuvem PUXA (GET /api/save com o token)', g.length === 1 && g[0].auth === 'Bearer tok-1');
+    var p1 = puts()[0];
+    check('o servidor vazio: o local SOBE (PUT com versao 0)', !!p1 && p1.body.versao === 0);
+    check('o PUT leva progress, db e os 3 nascimentos de saque', p1 && p1.body.progress && p1.body.db &&
+          p1.body.nascimentos.length === 3 && p1.body.nascimentos.every(function (n) { return n.origem === 'saque' && n.itemId === espada; }));
+    check('o cartório registrou 3 instâncias vivas', Object.keys(srv.itens).length === 3);
+    check('a versão local acompanha (1) e a fila esvaziou', N.estado().versao === 1 && P.state.nascimentos.length === 0);
+    check('o estado mostra a sessão e sem erro', N.estado().sessao && N.estado().conta.nome === 'Dan' && N.estado().erro === null);
+
+    // ------------------------------------------------------ B. cada gravação sobe (com espera)
+    P.addItem(espada);
+    return ate(function () { return srv.versao === 2; });
+  }).then(function (ok) {
+    check('uma cópia nova: a gravação local sobe sozinha (versão 2)', ok);
+    var p2 = puts()[1];
+    check('o segundo PUT leva só o nascimento novo', p2 && p2.body.nascimentos.length === 1 && p2.body.versao === 1);
+    check('4 instâncias vivas no cartório', Object.keys(srv.itens).length === 4);
+
+    // ------------------------------------------------------ C. equipar/desequipar não nasce nada
+    var hid = P.state.unlockedClasses[0];
+    P.equip(hid, espada, 0);
+    return ate(function () { return srv.versao === 3; }).then(function () {
+      P.unequip(hid, 'punho');
+      return ate(function () { return srv.versao === 4; });
+    });
+  }).then(function (ok) {
+    var semNasc = puts().slice(2).every(function (p) { return p.body.nascimentos.length === 0; });
+    check('equipar e devolver sobem sem nascimento e sem recusa', ok && semNasc && N.estado().erro === null);
+    check('4 instâncias, todas vivas', Object.keys(srv.itens).filter(function (k) { return srv.itens[k].estado === 'vivo'; }).length === 4);
+
+    // ------------------------------------------------------ D. vender: a instância morre no cartório
+    var vendida = P.state.inventory[0].iid;
+    P.state.inventory.splice(0, 1);
+    P.save();
+    return ate(function () { return srv.versao === 5; }).then(function (ok2) {
+      check('a cópia que saiu do save fica "fora" no cartório', ok2 && srv.itens[vendida] && srv.itens[vendida].estado === 'fora');
+      // e voltar com ela (o save "restaurado do backup") é recusado
+      P.state.inventory.push({ itemId: espada, level: 0, stars: 0, iid: vendida });
+      P.save();
+      return ate(function () { return N.estado().parada; });
+    }).then(function (ok3) {
+      check('trazer de volta a instância consumida: o cartório recusa e a subida PARA', ok3 && /consumida/.test(N.estado().erro || ''), N.estado().erro);
+      check('o evento "recusado" saiu para a interface', eventos.indexOf('recusado') >= 0);
+      // o jogador tira a peça fantasma e pede para tentar de novo
+      P.state.inventory = P.state.inventory.filter(function (e) { return e.iid !== vendida; });
+      return N.retomar();
+    }).then(function () {
+      return ate(function () { return srv.versao === 6 && !N.estado().parada; });
+    });
+  }).then(function (ok) {
+    check('retomar: sem a peça fantasma o save sobe de novo (versão 6)', ok && N.estado().erro === null);
+
+    // ------------------------------------------------------ E. o servidor tem save mais novo (outra máquina)
+    var deLa = JSON.parse(JSON.stringify(srv.progress));
+    deLa.inventory = [{ itemId: espada, level: 4, stars: 0, iid: 'jzz-outra' }];
+    srv.itens['jzz-outra'] = { conta: 7, estado: 'vivo' };
+    srv.progress = deLa;
+    srv.versao = 10;
+    return N.puxar();
+  }).then(function () {
+    check('puxar com versão maior lá: o save de lá vira o de cá',
+          P.state.inventory.length === 1 && P.state.inventory[0].iid === 'jzz-outra' && P.state.inventory[0].level === 4);
+    check('a versão local passa a 10 e o evento "puxou" saiu', N.estado().versao === 10 && eventos.indexOf('puxou') >= 0);
+
+    // ------------------------------------------------------ F. o 409 de versão: outra máquina gravou antes
+    var outra = JSON.parse(JSON.stringify(srv.progress));
+    outra.inventory.push({ itemId: espada, level: 0, stars: 0, iid: 'jzz-outra2' });
+    srv.itens['jzz-outra2'] = { conta: 7, estado: 'vivo' };
+    srv.progress = outra;
+    srv.versao = 20;                                     // gravado por outra máquina, sem esta saber
+    P.addItem(espada);
+    return ate(function () { return N.estado().versao === 20; });
+  }).then(function (ok) {
+    check('PUT desatualizado (409 com versao): o servidor MANDA e o save de lá entra', ok &&
+          P.state.inventory.length === 2 && P.state.inventory.some(function (e) { return e.iid === 'jzz-outra2'; }));
+    check('o evento "desatualizado" saiu', eventos.indexOf('desatualizado') >= 0);
+
+    // ------------------------------------------------------ G. a linha duplicada à mão (sem passar pelo saneamento)
+    P.state.inventory.push({ itemId: espada, level: 0, stars: 0, iid: 'jzz-outra' });
+    P.save();
+    return ate(function () { return N.estado().parada; });
+  }).then(function (ok) {
+    check('instância duplicada no save: 409 sem versão → a subida para com a mensagem', ok && /duplicada/.test(N.estado().erro || ''), N.estado().erro);
+    P.state.inventory.pop();
+    return N.retomar().then(function () { return ate(function () { return !N.estado().parada && N.estado().erro === null; }); });
+  }).then(function (ok) {
+    check('tirada a duplicada, retomar volta ao normal', ok);
+
+    // ------------------------------------------------------ H. o servidor fora — e de volta
+    var vAntes = srv.versao;
+    srv.fora = true;
+    P.addItem(espada);
+    return ate(function () { return eventos.indexOf('fora') >= 0; }).then(function (ok2) {
+      check('servidor fora: o evento "fora" sai e a gravação fica pendente', ok2 && N.estado().pendente && N.estado().erro);
+      srv.fora = false;
+      return ate(function () { return srv.versao === vAntes + 1; }, 2500);
+    }).then(function (ok3) {
+      check('o servidor voltou: a Nuvem tenta de novo sozinha e sobe', ok3 && N.estado().erro === null);
+    });
+  }).then(function () {
+    // ------------------------------------------------------ I. a troca no cartório
+    return N.troca(9, ['jzz-outra'], ['jabc']).then(function (r) {
+      var c = srv.chamadas[srv.chamadas.length - 1];
+      check('troca: POST /api/troca com {com, dou, recebo}', r.ok && /\/api\/troca$/.test(c.url) &&
+            c.body.com === 9 && c.body.dou[0] === 'jzz-outra' && c.body.recebo[0] === 'jabc');
+    });
+  }).then(function () {
+    // ------------------------------------------------------ J. a fila podada: o que morreu antes de subir não sobe
+    var nBefore = puts().length;
+    var eNova = P.novaCopia(espada, 'saque');          // cunhada e nunca posta no saco
+    P.save();
+    return ate(function () { return puts().length > nBefore; }).then(function () {
+      var ultimo = puts()[puts().length - 1];
+      check('nascimento de cópia que não está em lugar nenhum não sobe (podado)',
+            !ultimo.body.nascimentos.some(function (n) { return n.iid === eNova.iid; }));
+    });
+  }).then(function () {
+    // ------------------------------------------------------ L. a conta TROCOU nesta máquina
+    // o registro local é da conta 7; entra a 8, que não tem nada no cartório:
+    // o save da 7 (que está no disco) NÃO pode subir como se fosse da 8
+    var tinha = P.state.inventory.length;
+    S.guarda({ token: 'tok-2', conta: { id: 8, nome: 'Bia' } });
+    return N.iniciar().then(function () {
+      return ate(function () { return srv.outros[8] && srv.outros[8].versao === 1; });
+    }).then(function (ok) {
+      check('conta trocada + cartório vazio para ela: o local da conta anterior some e a nova sobe LIMPA',
+            ok && tinha > 0 && P.state.inventory.length === 0 && srv.outros[8].progress.inventory.length === 0,
+            'tinha ' + tinha + ' → ' + P.state.inventory.length);
+      check('nenhuma instância da conta 7 foi parar na 8',
+            Object.keys(srv.itens).every(function (k) { return srv.itens[k].conta !== 8; }) && eventos.indexOf('limpou') >= 0);
+      check('e o save da conta 7 no cartório ficou como estava', srv.progress && srv.progress.inventory.length === tinha);
+    });
+  }).then(function () {
+    // ------------------------------------------------------ K. o token que morreu
+    S.guarda({ token: 'tok-velho', conta: { id: 7, nome: 'Dan' } });
+    return N.puxar();
+  }).then(function () {
+    check('401 do cartório: a sessão local é esquecida', !S.ativa());
+    return N.sair();
+  }).then(function () {
+    check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+    fecha();
+  }).catch(function (e) {
+    check('o fluxo não estoura', false, String(e && (e.stack || e.message) || e));
+    fecha();
+  });
+})();
+</script>
+</body>
+</html>

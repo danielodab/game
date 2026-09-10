@@ -133,7 +133,25 @@ var JOGO = (typeof window !== 'undefined')
   function grava() {
     var s = armazem();
     try { if (s && dados) s.setItem(CHAVE, JSON.stringify(dados)); } catch (e) {}
+    // A NUVEM (10/09) pendura aqui: toda gravação local agenda a subida
+    try { if (typeof DB.aoGravar === 'function') DB.aoGravar(); } catch (e2) {}
   }
+
+  /* A FOTO INTEIRA da conta, para a Nuvem subir; e o caminho de volta, quando
+   * o servidor tem uma mais nova (passa pelo mesmo saneamento de `carrega`). */
+  DB.exportar = function () {
+    var d = carrega();
+    try { return JSON.parse(JSON.stringify(d)); } catch (e) { return null; }
+  };
+  DB.recarregar = function () { dados = null; return carrega(); };
+  DB.importar = function (obj) {
+    if (!obj || typeof obj !== 'object') return false;
+    var s = armazem();
+    try { if (s) s.setItem(CHAVE, JSON.stringify(obj)); } catch (e) { return false; }
+    dados = null;
+    carrega();
+    return true;
+  };
 
   /* Toda resposta sai por aqui: um tique de microtarefa, nunca síncrona.
    * Não é firula — chamador que funcionasse por depender de resposta síncrona
@@ -225,7 +243,9 @@ var JOGO = (typeof window !== 'undefined')
     // `|| 0`, não `|| 1`: nível 0 é UM VALOR (peça sem forja), e o `|| 1`
     // fazia o cofre devolver a peça mais forte do que entrou — forja de graça,
     // que ainda por cima quebrava o empilhamento (0 e 1 não agrupam).
-    d.banco.itens.push({ itemId: entrada.itemId, level: entrada.level || 0, stars: entrada.stars || 0 });
+    var dep = { itemId: entrada.itemId, level: entrada.level || 0, stars: entrada.stars || 0 };
+    if (typeof entrada.iid === 'string' && entrada.iid) dep.iid = entrada.iid;   // a série viaja junto (10/09)
+    d.banco.itens.push(dep);
     grava();
     return responde({ ok: true, total: d.banco.itens.length });
   };

@@ -68,6 +68,8 @@ var JOGO = (typeof window !== 'undefined')
     if (rendererOk) {
       try { if (JOGO.UI && JOGO.UI.init) JOGO.UI.init(); } catch (e) { console.error('UI.init falhou:', e); }
       try { if (JOGO.Game && JOGO.Game.init) JOGO.Game.init(); } catch (e) { console.error('Game.init falhou:', e); }
+      // A NUVEM (10/09): com sessão do site, o save do cartório entra (e sobe) daqui
+      try { if (JOGO.Nuvem && JOGO.Nuvem.iniciar) JOGO.Nuvem.iniciar(); } catch (e) { console.error('Nuvem.iniciar falhou:', e); }
       requestAnimationFrame(frame);
     }
   });

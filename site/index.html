@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA — Ecos do Mundo Enterrado</title>
+<meta name="description" content="SOTERRA é um jogo tático por turnos, só de calabouços: dupla com fusão de classes, Acampamento online, arena PvP com as dez Coroas, pets e guildas. Jogue no navegador.">
+<link rel="stylesheet" href="site.css">
+<!--
+  A landing pública. Mora em /site/ no VPS; a raiz do domínio cai aqui (redir
+  do Caddy) e o jogo fica em /index.html — por isso o botão "Jogar" aponta
+  para ../index.html (resolve para /index.html em produção e funciona também
+  abrindo a pasta do disco).
+
+  FOTOS: as molduras abaixo esperam arquivos em site/img/. Enquanto não
+  existirem, o onerror do <img> liga a moldura de fallback (fundo dourado com
+  a inicial). Nomes esperados:
+    img/capa.jpg
+    img/classe-barbaro.jpg   img/classe-cacador.jpg   img/classe-bruxo.jpg
+    img/classe-ladino.jpg    img/classe-curandeira.jpg img/classe-xama.jpg
+    img/classe-minotauro.jpg
+    img/calabouco-estufa.jpg img/calabouco-cisterna.jpg img/calabouco-fecho.jpg
+    img/calabouco-andaimes.jpg img/calabouco-mina.jpg img/calabouco-coracao.jpg
+    img/guildas.jpg          img/arena.jpg
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="#classes">Classes</a>
+      <a href="#calaboucos">Calabouços</a>
+      <a href="#guildas">Guildas</a>
+      <a href="#arena">Arena</a>
+      <a href="ranking.html">Ranking</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<!-- ============ a capa ============ -->
+<section class="capa">
+  <div class="foto foto-capa">
+    <img src="img/capa.jpg" alt="" onerror="this.parentNode.classList.add('sem-foto')">
+  </div>
+  <div class="miolo">
+    <h1>SOTERRA</h1>
+    <div class="lema">Ecos do Mundo Enterrado</div>
+    <div class="filete"></div>
+    <p class="pitch">
+      Quando a Grande Lousa desceu, o mundo inteiro ficou lá embaixo — e continua vivo.
+      Um jogo <b>tático por turnos</b>, ao estilo Dofus, feito só de calabouços:
+      desça em dupla, funda duas classes numa só, e volte ao Acampamento com o que sobreviveu.
+    </p>
+    <div class="botoes">
+      <a class="btn btn-ouro" href="conta.html">Criar conta</a>
+      <a class="btn btn-borda" href="conta.html#entrar">Entrar</a>
+      <a class="btn" href="../index.html">Jogar</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ o que é ============ -->
+<section class="secao" id="oquee">
+  <div class="miolo">
+    <h2>O que é</h2>
+    <p class="sub">Grade, pontos de ação e de passos, linha de visão, quatro elementos que se rivalizam e cinco climas que mudam a sala. Nada de mundo aberto: cada portal é um calabouço de salas encadeadas, com chefe no fim e saque que é <b>muito</b> difícil de conseguir.</p>
+    <div class="grade">
+      <div class="destaque"><div class="glifo">⚔</div><h3>Tático por turnos</h3><p>Estilo Dofus: posição vale mais que número. Cada célula, cada turno, cada PA conta.</p></div>
+      <div class="destaque"><div class="glifo">⛓</div><h3>Só calabouços</h3><p>Portais no Acampamento, salas encadeadas, chefe no fim. Sem grind de campo: desceu, é sério.</p></div>
+      <div class="destaque"><div class="glifo">⚗</div><h3>Dupla com fusão</h3><p>Dois heróis descem juntos — e podem se fundir numa forma nova, com corpo, feitiços e caminhos próprios.</p></div>
+      <div class="destaque"><div class="glifo">⛺</div><h3>Acampamento online</h3><p>A praça viva: chat, troca de itens entre contas, mercadinho, banco, forja e a sede da sua guilda.</p></div>
+      <div class="destaque"><div class="glifo">♛</div><h3>Arena e as dez Coroas</h3><p>PvP por Elo. Sua patente é uma das dez Coroas — e a décima só cabe na cabeça do primeiro do placar.</p></div>
+      <div class="destaque"><div class="glifo">🐾</div><h3>Pets com nível</h3><p>Cada calabouço esconde um bicho. Ele sobe de nível com você, ganha estrelas e age depois do dono.</p></div>
+      <div class="destaque"><div class="glifo">❂</div><h3>Roleta do Colecionador</h3><p>Selos dos chefes giram a roleta do Traje do Colecionador — o conjunto com elemento à sua escolha.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ classes ============ -->
+<section class="secao" id="classes">
+  <div class="miolo">
+    <h2>Classes</h2>
+    <p class="sub">Sete jeitos de descer. Todas começam com feitiços neutros e escolhem o caminho elemental no nível 5; as estrelas abrem os caminhos seguintes.</p>
+    <div class="grade">
+      <div class="cartao">
+        <div class="foto" data-letra="B"><img src="img/classe-barbaro.jpg" alt="Bárbaro" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><span class="papel">Tanque</span><h3>Bárbaro</h3><p>Corpanzil, capa surrada e um machado de duas mãos: ocupa o gargalo e não sai dele. Provoca, prende, empurra e cobra caro cada célula.</p></div>
+      </div>
+      <div class="cartao">
+        <div class="foto" data-letra="C"><img src="img/classe-cacador.jpg" alt="Caçador" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><span class="papel">Atirador</span><h3>Caçador</h3><p>Chapéu de aba larga e espingarda de dois canos. Cada tiro deixa uma marca; quem tem marcas demais recebe a conta toda de uma vez.</p></div>
+      </div>
+      <div class="cartao">
+        <div class="foto" data-letra="B"><img src="img/classe-bruxo.jpg" alt="Bruxo" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><span class="papel">Mago</span><h3>Bruxo</h3><p>Áreas de média e longa distância, maldições que trabalham sozinhas e controle do terreno. Apaga salas inteiras — se sobreviver à conjuração.</p></div>
+      </div>
+      <div class="cartao">
+        <div class="foto" data-letra="L"><img src="img/classe-ladino.jpg" alt="Ladino" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><span class="papel">Assassino</span><h3>Ladino</h3><p>Duas adagas, velocidade, invisibilidade e veneno. Entra pelo flanco, corta duas vezes e some antes da resposta. Morre depressa se errar a janela.</p></div>
+      </div>
+      <div class="cartao">
+        <div class="foto" data-letra="C"><img src="img/classe-curandeira.jpg" alt="Curandeira" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><span class="papel">Suporte</span><h3>Curandeira</h3><p>Devolve vida e abençoa quem luta. O que ela faz, e ninguém mais faz, é manter o grupo de pé por mais um turno.</p></div>
+      </div>
+      <div class="cartao">
+        <div class="foto" data-letra="X"><img src="img/classe-xama.jpg" alt="Xamã" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><span class="papel">Invocador</span><h3>Xamã</h3><p>Grimório aberto numa das mãos: invoca criaturas que tancam e mordem, arma armadilhas e fortalece quem está perto. Sozinho é frágil; nunca está sozinho.</p></div>
+      </div>
+      <div class="cartao">
+        <div class="foto" data-letra="M"><img src="img/classe-minotauro.jpg" alt="Minotauro" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><span class="papel">Guardião</span><h3>Minotauro</h3><p>Grande demais para desviar, teimoso demais para recuar. Ergue muro onde não havia caminho e põe o próprio escudo na frente de quem sangra. Não mata: decide por onde o outro anda.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ calabouços ============ -->
+<section class="secao" id="calaboucos">
+  <div class="miolo">
+    <h2>Calabouços</h2>
+    <p class="sub">Seis portais no Acampamento. Dois estão abertos; os outros quatro ainda estão em escavação — as peças deles já vazam, aos poucos, para os abertos.</p>
+    <div class="grade grade-larga">
+      <div class="cartao">
+        <div class="foto" data-letra="E"><span class="etiqueta aberto">Portal aberto</span><img src="img/calabouco-estufa.jpg" alt="A Estufa Soterrada" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><h3>A Estufa Soterrada</h3><p>A estufa real do mundo antigo, selada com o jardim ainda vivo lá dentro. Séculos no escuro ensinaram as plantas a caçar; vagalumes presos em redomas fazem as vezes de sol.</p></div>
+      </div>
+      <div class="cartao">
+        <div class="foto" data-letra="C"><span class="etiqueta aberto">Portal aberto</span><img src="img/calabouco-cisterna.jpg" alt="A Cisterna dos Afogados" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><h3>A Cisterna dos Afogados</h3><p>O reservatório que matou a sede do mundo antigo — e depois bebeu seus donos. A corte afogada ainda dá bailes na água parada, e o reflexo às vezes se mexe primeiro.</p></div>
+      </div>
+      <div class="cartao fechado">
+        <div class="foto" data-letra="F"><span class="etiqueta escavacao">Em escavação</span><img src="img/calabouco-fecho.jpg" alt="O Fecho de Brasa" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><h3>O Fecho de Brasa</h3><p>O último Fecho, forjado ao redor da primeira chama do mundo. Aqui a estiagem não é clima, é arquitetura — e o maior portão já construído acordou com ciúme do próprio fogo.</p></div>
+      </div>
+      <div class="cartao fechado">
+        <div class="foto" data-letra="A"><span class="etiqueta escavacao">Em escavação</span><img src="img/calabouco-andaimes.jpg" alt="Os Andaimes do Vento" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><h3>Os Andaimes do Vento</h3><p>Quinze andares de andaime amarrado com corda sobre um vazio que ninguém mediu. Cair não é derrota tática: é o chão da sala não existir.</p></div>
+      </div>
+      <div class="cartao fechado">
+        <div class="foto" data-letra="M"><span class="etiqueta escavacao">Em escavação</span><img src="img/calabouco-mina.jpg" alt="A Mina Trêmula" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><h3>A Mina Trêmula</h3><p>A mina que cavava para cima, tentando furar a Lousa por baixo. Os mineiros continuam trabalhando; ninguém teve coragem de dizer a eles que o turno acabou.</p></div>
+      </div>
+      <div class="cartao fechado">
+        <div class="foto" data-letra="♥"><span class="etiqueta escavacao">Em escavação</span><img src="img/calabouco-coracao.jpg" alt="O Coração Partido" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><h3>O Coração Partido</h3><p>Rachou em quatro quartos que batem fora de compasso — brasa, água, pedra e ar — e cada batida joga a sala num clima. É o fim da Descida, e a Lousa está ouvindo.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ guildas ============ -->
+<section class="secao" id="guildas">
+  <div class="miolo lado-a-lado">
+    <div>
+      <h2>Guildas</h2>
+      <p class="apoio">Fundar uma guilda custa dez Insígnias de Fundação — só chefe deixa cair. Depois disso ela tem sede na praça, emblema na plaquinha de cada membro e um cofre que trabalha para todos.</p>
+      <ul>
+        <li><b>Cargos</b>: líder, oficiais e membros; porta aberta ou por convite.</li>
+        <li><b>Cofre e bônus</b>: o líder acende 24 h de +15% de saque e XP para a guilda inteira.</li>
+        <li><b>Banco de empréstimos</b>: pega uma peça emprestada, devolve uma cópia igual.</li>
+        <li><b>Oferenda e dízimo</b>: vinténs viram XP da guilda; o líder define a fatia (até 25%).</li>
+        <li><b>Ranking de guildas</b>: a soma da experiência de quem veste o emblema.</li>
+      </ul>
+    </div>
+    <div class="foto" data-letra="G"><img src="img/guildas.jpg" alt="A sede da guilda na praça" onerror="this.parentNode.classList.add('sem-foto')"></div>
+  </div>
+</section>
+
+<!-- ============ arena ============ -->
+<section class="secao" id="arena">
+  <div class="miolo lado-a-lado">
+    <div class="foto" data-letra="♛"><img src="img/arena.jpg" alt="A arena do Acampamento" onerror="this.parentNode.classList.add('sem-foto')"></div>
+    <div>
+      <h2>Arena</h2>
+      <p class="apoio">Duelo às cegas em três fases: cada lado se compromete com a jogada antes de ver a do outro. A Brasa é o seu Elo; a patente é uma das <b>dez Coroas</b>, que giram em 3D sobre a sua cabeça na praça.</p>
+      <ul>
+        <li><b>Temporadas</b> de 42 dias: a Brasa comprime ao meio, a galeria de Coroas fica para sempre.</li>
+        <li><b>Coroa X</b>: 1900 pontos <i>e</i> o primeiro lugar do placar. Só um a veste por vez.</li>
+        <li><b>Duelo de treino</b> na mesma máquina, sem mexer na Brasa — para aprender a arena.</li>
+        <li><b>Poço sem Fundo</b>: o calabouço infinito, com recorde semanal, na porta ao lado.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ranking ============ -->
+<section class="secao" id="ranking">
+  <div class="miolo">
+    <h2>Ranking</h2>
+    <p class="sub">Os cinco primeiros de cada placar. <a href="ranking.html">Ver o ranking completo →</a></p>
+    <div class="tres">
+      <div>
+        <h3>Jogadores <small>por experiência</small></h3>
+        <div class="tabela-caixa"><table><thead><tr><th>#</th><th>Nome</th><th class="num">XP</th><th class="num">Nível</th></tr></thead>
+          <tbody id="rk-jogadores"></tbody></table><div class="estado" id="es-jogadores">carregando…</div></div>
+      </div>
+      <div>
+        <h3>Arena <small>por Brasa</small></h3>
+        <div class="tabela-caixa"><table><thead><tr><th>#</th><th>Nome</th><th class="num">Brasa</th><th class="num">Partidas</th></tr></thead>
+          <tbody id="rk-pvp"></tbody></table><div class="estado" id="es-pvp">carregando…</div></div>
+      </div>
+      <div>
+        <h3>Guildas <small>por XP somada</small></h3>
+        <div class="tabela-caixa"><table><thead><tr><th>#</th><th>Guilda</th><th class="num">Membros</th><th class="num">XP</th></tr></thead>
+          <tbody id="rk-guildas"></tbody></table><div class="estado" id="es-guildas">carregando…</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="miolo">
+    <span class="marca">SOTERRA</span>
+    Ecos do Mundo Enterrado · um jogo tático de calabouços, jogado no navegador.
+    <br><a href="conta.html">Criar conta</a> · <a href="conta.html#entrar">Entrar</a> · <a href="ranking.html">Ranking</a> · <a href="../index.html">Jogar</a>
+  </div>
+</footer>
+
+<script src="site.js"></script>
+<script>
+/* O ranking da landing: os 5 primeiros de cada placar, vindos de /api/ranking.
+ * Sem servidor (ou com ele fora) as três caixas dizem isso, sem quebrar o resto. */
+(function () {
+  var E = SITE.esc, N = SITE.num;
+  function linhas(id, lista, celulas) {
+    var corpo = document.getElementById('rk-' + id), estado = document.getElementById('es-' + id);
+    if (!lista.length) { estado.textContent = 'ninguém ainda — seja o primeiro'; return; }
+    estado.style.display = 'none';
+    corpo.innerHTML = lista.slice(0, 5).map(function (r, i) {
+      return '<tr class="top' + (i + 1) + '"><td class="pos">' + (i + 1) + '</td>' + celulas(r) + '</tr>';
+    }).join('');
+  }
+  SITE.api('/api/ranking', { semToken: true }).then(function (r) {
+    if (!r.ok) {
+      ['jogadores', 'pvp', 'guildas'].forEach(function (id) {
+        var es = document.getElementById('es-' + id);
+        es.className = 'estado fora';
+        es.textContent = r.status === 0 ? 'o servidor está fora — o ranking volta com ele' : (r.erro || 'não deu para ler o ranking');
+      });
+      return;
+    }
+    linhas('jogadores', r.jogadores || [], function (j) {
+      return '<td class="nome">' + E(j.nome) + '</td><td class="num">' + N(j.xpTotal) + '</td><td class="num">' + N(j.nivelMax) + '</td>';
+    });
+    linhas('pvp', r.pvp || [], function (p) {
+      return '<td class="nome">' + E(p.nome) + '</td><td class="num">' + N(p.brasa) + '</td><td class="num">' + N(p.partidas) + '</td>';
+    });
+    linhas('guildas', r.guildas || [], function (g) {
+      return '<td class="nome"><span class="emblema">' + E(g.emblema || '') + '</span>' + E(g.nome) + '</td><td class="num">' + N(g.membros) + '</td><td class="num">' + N(g.xpTotal) + '</td>';
+    });
+  });
+})();
+</script>
+</body>
+</html>

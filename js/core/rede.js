@@ -155,7 +155,7 @@ var JOGO = (typeof window !== 'undefined')
   function apresenta() {
     if (!eu) return;
     manda('oi', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
-                  resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z, sala: eu.sala });
+                  resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z, sala: eu.sala, nuvem: eu.nuvem });
   }
   function agora() { return Date.now(); }
 
@@ -168,6 +168,7 @@ var JOGO = (typeof window !== 'undefined')
     pares[m.de] = { nome: m.nome || '?', titulo: m.titulo || '',
                     classe: m.classe || 'sumo',
                     resumo: m.resumo || null,
+                    nuvem: m.nuvem || null,           // a conta no cartório (10/09)
                     aura: m.aura === true,
                     sala: m.sala || null,       // 03/09: a antessala em que ele está (null = praça)
                     x: m.x || 0, z: m.z || 0, visto: agora() };
@@ -195,7 +196,7 @@ var JOGO = (typeof window !== 'undefined')
       // o eco apresenta a MIM para o recém-chegado — sem ele, quem entra
       // por último não veria ninguém que já estava
       manda('eco', { nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
-                     resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z, sala: eu.sala });
+                     resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z, sala: eu.sala, nuvem: eu.nuvem });
     } else if (m.t === 'eco') {
       conhece(m);
     } else if (m.t === 'alvo') {
@@ -280,6 +281,7 @@ var JOGO = (typeof window !== 'undefined')
            resumo: perfil.resumo || null,
            aura: perfil.aura === true,          // o Traje do Colecionador fechado
            sala: perfil.sala || null,           // 03/09: null = praça; 'garden:1' = antessala
+           nuvem: perfil.nuvem || ((JOGO.Sessao && JOGO.Sessao.contaId) ? JOGO.Sessao.contaId() : null),
            x: perfil.x || 0, z: perfil.z || 0 };
     apresenta();
     timerPulso = setInterval(function () {
@@ -354,7 +356,7 @@ var JOGO = (typeof window !== 'undefined')
       var p = pares[id];
       if (!p.nome) return;             // visto só por pulso: sem apresentação ainda
       fora.push({ id: id, nome: p.nome, titulo: p.titulo, classe: p.classe,
-                  resumo: p.resumo || null, aura: p.aura === true,
+                  resumo: p.resumo || null, aura: p.aura === true, nuvem: p.nuvem || null,
                   sala: p.sala || null, x: p.x, z: p.z });
     });
     return fora;

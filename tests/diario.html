@@ -59,7 +59,13 @@ entre vários, e o id sorteado sempre existe na tabela.</div>
   var vistos = {};
   for (var d2 = 0; d2 < 30; d2++) vistos[Dd.hoje(meiodia + d2 * DIA).dungeonId] = 1;
   var quantos = Object.keys(vistos).length;
-  check('30 dias revezam entre 3+ calabouços', quantos >= 3, quantos + ' diferentes');
+  // 10/09: só a Estufa e a Cisterna estão abertas — o revezamento é entre os
+  // portais ABERTOS (os fechados não entram no Dia); com 3+ abertos, cobra 3+
+  var abertos = (JOGO.DATA.dungeons || []).filter(function (dg) {
+    return dg && dg.id !== 'poco' && !(JOGO.DATA.portalFechado && JOGO.DATA.portalFechado(dg.id));
+  }).length;
+  check('30 dias revezam entre os portais abertos (' + abertos + ' abertos)', quantos >= Math.min(3, abertos) && quantos >= 2,
+        quantos + ' diferentes');
 
   // 3. o sorteado é sempre um ID REAL (não índice — o '0' já escapou uma vez)
   var validos = {};

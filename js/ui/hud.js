@@ -2522,7 +2522,7 @@ var JOGO = (typeof window !== 'undefined')
         DBc.sacarItem(pi.indices[0]).then(function (res) {
           if (!res.ok) { toast(res.erro || 'não deu'); sheetBanco(); return; }
           var st3 = P().state;
-          st3.inventory.push(res.item);
+          st3.inventory.push(P().carimba ? P().carimba(res.item, 'banco') : res.item);
           safe(function () { P().save(); }, null);
           sheetBanco();
         });
@@ -2764,7 +2764,8 @@ var JOGO = (typeof window !== 'undefined')
             }
             Mc.comprar(of.id).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
-              P().state.inventory.push(res.item);
+              // a banca do fantasma cunha (origem mercador); a oferta do jogador traz a série
+              P().state.inventory.push(P().carimba ? P().carimba(res.item, 'mercador') : res.item);
               safe(function () { P().save(); }, null);
               toast('−' + res.pagou + ' vinténs — a peça é sua.', 'good');
               sheetMercado();
@@ -2839,7 +2840,7 @@ var JOGO = (typeof window !== 'undefined')
             }
             Mc.retirar(of.id).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
-              P().state.inventory.push(res.item);
+              P().state.inventory.push(P().carimba ? P().carimba(res.item, 'legado') : res.item);
               safe(function () { P().save(); }, null);
               toast('A peça voltou para o saco.', 'good');
               sheetMercado();
@@ -5290,6 +5291,42 @@ var JOGO = (typeof window !== 'undefined')
         if (idM) C.trocar(idM);
       }));
     }
+    // A NUVEM (10/09): o save no cartório do servidor — logado pelo site, o
+    // jogo puxa ao abrir e sobe a cada gravação; aqui só o estado e as portas.
+    var Sx = JOGO.Sessao, Nx = JOGO.Nuvem;
+    if (Sx && Nx) {
+      var estN = safe(function () { return Nx.estado(); }, null) || {};
+      var caixaN = el('div', 'nuvem-caixa');
+      caixaN.appendChild(el('h3', 'nuvem-titulo', '☁ Nuvem'));
+      if (estN.sessao && estN.conta) {
+        var txtN = 'Logado como <b>' + esc(estN.conta.nome || '?') + '</b> · save versão ' + (estN.versao || 0);
+        if (estN.erro) txtN += '<br><span class="chip chip-diff">' + esc(estN.erro) + '</span>';
+        else if (estN.pendente || estN.subindo) txtN += ' · <span class="chip">subindo…</span>';
+        else if (estN.ultimaSubida) txtN += ' · <span class="chip chip-ok">em dia</span>';
+        caixaN.appendChild(el('p', 'contas-nota', txtN));
+        var linhaN = el('div', 'nuvem-botoes');
+        linhaN.appendChild(btn(estN.parada ? 'Tentar de novo' : 'Sincronizar agora', 'btn-primary', function () {
+          var pN = estN.parada ? Nx.retomar() : Nx.iniciar();
+          pN.then(function () { if (sheetName === 'contas') sheetContas(); });
+        }));
+        linhaN.appendChild(btn('Sair da nuvem', '', function () {
+          confirmSheet('Sair da nuvem?',
+            'O save desta máquina fica como está, e o do servidor também. Para voltar, entre de novo pelo site.',
+            function () { Nx.sair().then(function () { sheetContas(); }); });
+        }));
+        caixaN.appendChild(linhaN);
+      } else {
+        caixaN.appendChild(el('p', 'contas-nota',
+          'Sem conta no servidor: o save vive só nesta máquina. Crie a conta ou entre pelo site — ' +
+          'o jogo passa a guardar o save lá e abre o mesmo em qualquer PC.'));
+        var aN = el('a', 'btn btn-primary btn-block', 'Entrar ou criar conta');
+        aN.href = safe(function () { return Sx.paginaConta(); }, 'site/conta.html');
+        aN.target = '_blank';
+        aN.rel = 'noopener';
+        caixaN.appendChild(aN);
+      }
+      body.appendChild(caixaN);
+    }
     body.appendChild(el('p', 'contas-nota',
       '<b>Dois jogadores na mesma máquina:</b> deixe esta janela numa conta, abra ' +
       'OUTRA janela do mesmo navegador no mesmo endereço e troque lá para outra ' +
@@ -5721,8 +5758,10 @@ var JOGO = (typeof window !== 'undefined')
             }
             Gd.bancoPegar(pi.indices[0]).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetGuilda(); return; }
-              P().state.inventory.push({ itemId: e2.itemId, level: e2.level || 0,
-                                         stars: e2.stars || 0 });
+              // o cofre da guilda é local: o que sai dele é cópia NOVA no cartório (origem banco)
+              P().state.inventory.push(P().novaCopia
+                ? P().novaCopia(e2.itemId, 'banco', e2.level || 0, e2.stars || 0)
+                : { itemId: e2.itemId, level: e2.level || 0, stars: e2.stars || 0 });
               safe(function () { P().save(); }, null);
               toast(res.definitivo ? 'Sua peça voltou para o saco.' :
                     'Emprestada — devolva uma cópia igual quando puder.', 'good');

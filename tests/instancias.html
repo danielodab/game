@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a instância: um número de série por cópia</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- Pedido do dono (10/09): "banco de dados para armazenar absolutamente
+     tudo, inclusive os ids de cada item, evitando hackers duplicarem os
+     itens". A metade do cliente: toda cópia de item nasce com `iid` (o
+     cartório do servidor registra), a fila `nascimentos` guarda o que ainda
+     não subiu, equipar/forjar/devolver carregam a MESMA série, fundir mata
+     as consumidas e cunha uma nova, o save antigo ganha carimbo 'legado' uma
+     vez, e a série repetida à mão SOME em vez de ganhar número novo. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/db.js','js/core/mercado.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  var D = JOGO.DATA, P = JOGO.Progress, DB = JOGO.DB, Mc = JOGO.Mercado;
+  var RE = /^j[0-9a-z]+-[0-9a-z]+$/;
+  function ids() { return Object.keys(D.items); }
+  function primeiraPeca(slot) {
+    var out = null;
+    ids().forEach(function (id) { if (!out && D.items[id].slot === slot) out = id; });
+    return out;
+  }
+
+  // ---- 1. o estado novo tem a fila; a cópia nova tem série e origem
+  P.reset();
+  check('o estado novo traz a fila de nascimentos vazia', Array.isArray(P.state.nascimentos) && P.state.nascimentos.length === 0);
+  var espada = primeiraPeca('punho');
+  var vistos = {}, unicos = true, comSerie = true;
+  for (var k = 0; k < 30; k++) {
+    P.addItem(espada);
+    var e = P.state.inventory[P.state.inventory.length - 1];
+    if (!e.iid || !RE.test(e.iid)) comSerie = false;
+    if (vistos[e.iid]) unicos = false;
+    vistos[e.iid] = true;
+  }
+  check('30 cópias novas: todas com série no formato do cartório (j…-…)', comSerie, P.state.inventory[0].iid);
+  check('30 séries, nenhuma repetida', unicos);
+  check('cada cópia nova entra na fila como nascimento de saque',
+        P.state.nascimentos.length === 30 && P.state.nascimentos.every(function (n) { return n.origem === 'saque' && n.itemId === espada && RE.test(n.iid); }));
+  P.addItem(espada, 'roleta');
+  check('a origem viaja (roleta)', P.state.nascimentos[30].origem === 'roleta');
+  check('origem desconhecida vira legado (o cartório só aceita as dele)',
+        (P.addItem(espada, 'magica'), P.state.nascimentos[31].origem === 'legado'));
+  check('novaCopia recusa item que não existe', P.novaCopia('nao-existe', 'saque') === null);
+  var nc = P.novaCopia(espada, 'caixa', 3, 1);
+  check('novaCopia entrega {itemId, level, stars, iid} sem pôr no saco sozinha',
+        nc && nc.itemId === espada && nc.level === 3 && nc.stars === 1 && RE.test(nc.iid) &&
+        P.state.inventory.every(function (x) { return x.iid !== nc.iid; }) &&
+        P.state.nascimentos.some(function (n) { return n.iid === nc.iid && n.origem === 'caixa'; }));
+
+  // ---- 2. equipar, devolver, forjar: a MESMA série
+  P.reset();
+  P.addItem(espada);
+  var serie = P.state.inventory[0].iid;
+  var hid = P.state.unlockedClasses[0];
+  var ok = P.equip(hid, espada, 0);
+  var v = P.state.heroes[hid].itemVar.punho;
+  check('equipar leva a série da cópia para o espaço do herói', ok && v && v.iid === serie && P.state.inventory.length === 0);
+  var no = P.iidsNoSave();
+  check('iidsNoSave enxerga a série no espaço do herói', no.length === 1 && no[0].iid === serie && no[0].onde === hid + '.punho');
+  check('não nasceu cópia nova ao equipar', P.state.nascimentos.length === 1);
+  P.unequip(hid, 'punho');
+  check('devolver ao saco traz a MESMA série de volta',
+        P.state.inventory.length === 1 && P.state.inventory[0].iid === serie && P.state.nascimentos.length === 1);
+
+  // ---- 3. a fusão de estrela mata as consumidas e cunha uma nova (origem forja)
+  P.reset();
+  for (k = 0; k < 3; k++) P.addItem(espada);
+  var antes = P.state.inventory.map(function (x) { return x.iid; });
+  var podeM = P.canMergeItem(espada, 0);
+  var rm = podeM && podeM.pode !== false ? P.mergeItem(espada, 0) : null;
+  if (rm && rm.ok) {
+    var depois = P.state.inventory.map(function (x) { return x.iid; });
+    check('fundir 3 → 1★: as três séries somem e uma NOVA nasce',
+          depois.length === 1 && antes.indexOf(depois[0]) < 0 && RE.test(depois[0]));
+    check('a estrela nova está na fila como nascimento de forja',
+          P.state.nascimentos.some(function (n) { return n.iid === depois[0] && n.origem === 'forja'; }));
+  } else {
+    check('fundir 3 → 1★ (canMergeItem recusou: ' + JSON.stringify(podeM) + ')', false);
+  }
+
+  // ---- 4. o save antigo: carimbo 'legado' uma vez; série repetida some
+  var raw = JSON.parse(JSON.stringify(P.state));
+  raw.inventory = [espada, { itemId: espada, level: 2, stars: 0 }, { itemId: espada, level: 0, stars: 0, count: 2 }];
+  raw.nascimentos = [];
+  raw.heroes[hid].items.punho = espada;
+  raw.heroes[hid].itemVar = { punho: { level: 1, stars: 0 } };
+  localStorage.setItem(JOGO.Contas.chaveSave(), JSON.stringify(raw));
+  P.load();
+  var inv = P.state.inventory;
+  check('save antigo: as 4 cópias do saco ganham série', inv.length === 4 && inv.every(function (x) { return RE.test(x.iid); }));
+  check('save antigo: o espaço do herói ganha série', RE.test((P.state.heroes[hid].itemVar.punho || {}).iid || ''));
+  check('cada carimbo é um nascimento de origem legado',
+        P.state.nascimentos.length === 5 && P.state.nascimentos.every(function (n) { return n.origem === 'legado'; }));
+  var todos = inv.map(function (x) { return x.iid; }).concat([P.state.heroes[hid].itemVar.punho.iid]);
+  check('as 5 séries carimbadas são distintas', todos.filter(function (x, i) { return todos.indexOf(x) === i; }).length === 5);
+  P.save();
+  P.load();
+  check('recarregar NÃO carimba de novo (a série já está no disco)', P.state.nascimentos.length === 5 &&
+        P.state.inventory.map(function (x) { return x.iid; }).join() === inv.map(function (x) { return x.iid; }).join());
+  // a linha copiada à mão
+  raw = JSON.parse(JSON.stringify(P.state));
+  var dup = raw.inventory[0];
+  raw.inventory.push({ itemId: dup.itemId, level: dup.level, stars: dup.stars, iid: dup.iid });
+  raw.inventory.push({ itemId: dup.itemId, level: dup.level, stars: dup.stars, iid: dup.iid });
+  localStorage.setItem(JOGO.Contas.chaveSave(), JSON.stringify(raw));
+  P.load();
+  check('a cópia com série REPETIDA (colada à mão no save) some em vez de ganhar série nova',
+        P.state.inventory.length === 4 && P.state.inventory.filter(function (x) { return x.iid === dup.iid; }).length === 1 &&
+        P.state.nascimentos.length === 5);
+  // a série repetida no espaço do herói também some
+  raw = JSON.parse(JSON.stringify(P.state));
+  raw.heroes[hid].itemVar.punho.iid = raw.inventory[1].iid;
+  localStorage.setItem(JOGO.Contas.chaveSave(), JSON.stringify(raw));
+  P.load();
+  check('série repetida no espaço do herói: o espaço fica vazio, o saco fica com a dele',
+        !P.state.heroes[hid].items.punho && P.state.inventory.length === 4);
+
+  // ---- 5. a fila: limpar e podar
+  P.reset();
+  for (k = 0; k < 5; k++) P.addItem(espada);
+  var fila = P.nascimentos();
+  check('nascimentos() é uma cópia com 5', fila.length === 5 && fila !== P.state.nascimentos);
+  P.limpaNascimentos([fila[0].iid, fila[1].iid]);
+  check('limpaNascimentos tira os registrados', P.state.nascimentos.length === 3);
+  var morto = fila[2].iid;                            // "vendeu" a terceira: some do saco e de todo lugar
+  var noCofre = fila[3].iid;                          // a quarta foi para o cofre (mora no DB)
+  P.state.inventory = P.state.inventory.filter(function (x) { return x.iid !== noCofre && x.iid !== morto; });
+  var vivosDB = {}; vivosDB[noCofre] = true;
+  var podados = P.podaNascimentos(vivosDB);
+  check('podar tira o que morreu antes de subir e mantém o que está no cofre (DB)',
+        podados === 1 && P.state.nascimentos.length === 2 &&
+        P.state.nascimentos.some(function (n) { return n.iid === noCofre; }) &&
+        !P.state.nascimentos.some(function (n) { return n.iid === morto; }));
+  var teto = P.state.nascimentos.length;
+  for (k = 0; k < 450; k++) P.novaCopia(espada, 'saque');
+  check('a fila tem teto (400): não incha para sempre', P.state.nascimentos.length === 400, String(P.state.nascimentos.length));
+
+  // ---- 6. carimba: mantém a série que vem; cunha a que falta com a origem dada
+  P.reset();
+  var c1 = P.carimba({ itemId: espada, level: 1, stars: 0, iid: 'jabc-def' }, 'banco');
+  check('carimba mantém a série que a cópia traz (cofre, oferta) sem novo nascimento',
+        c1 && c1.iid === 'jabc-def' && c1.level === 1 && P.state.nascimentos.length === 0,
+        JSON.stringify(c1) + ' fila=' + P.state.nascimentos.length);
+  var c2 = P.carimba({ itemId: espada, level: 0, stars: 0 }, 'mercador');
+  check('carimba cunha a que chega sem série, com a origem dada (mercador)',
+        c2 && RE.test(c2.iid) && P.state.nascimentos.length === 1 && P.state.nascimentos[0].origem === 'mercador');
+
+  // ---- 7. o cofre e o balcão carregam a série (assíncronos)
+  P.reset();
+  P.addItem(espada);
+  var s1 = P.state.inventory[0].iid;
+  var entrada = P.state.inventory.splice(0, 1)[0];
+  DB.depositarItem(entrada).then(function () {
+    return DB.sacarItem(0);
+  }).then(function (res) {
+    check('o cofre devolve a cópia com a MESMA série', res.ok && res.item && res.item.iid === s1);
+    var foto = DB.exportar();
+    check('DB.exportar entrega a foto inteira (carteira, banco, jogador)', foto && foto.banco && foto.carteira && foto.jogador);
+    foto.carteira.moedas = 777;
+    check('DB.importar aplica a foto (e carrega() passa a lê-la)', DB.importar(foto) === true);
+    return DB.jogador ? DB.jogador() : null;
+  }).then(function () {
+    var foto2 = DB.exportar();
+    check('a foto importada ficou (moedas 777)', foto2 && foto2.carteira.moedas === 777, String(foto2 && foto2.carteira.moedas));
+    P.addItem(espada);
+    var s2 = P.state.inventory[0].iid;
+    var ent2 = P.state.inventory.splice(0, 1)[0];
+    return Mc.anunciar(ent2, 50).then(function (r) {
+      check('o balcão aceita a oferta e guarda a série', r.ok, r.erro);
+      return Mc.abrir();
+    }).then(function (mc) {
+      var of = mc.ofertas.filter(function (o) { return o.vendedor === 'jogador'; })[0];
+      check('a oferta do jogador no balcão carrega o iid', of && of.iid === s2);
+      return Mc.retirar(of.id);
+    }).then(function (r2) {
+      check('retirar devolve a cópia com a MESMA série', r2.ok && r2.item && r2.item.iid === s2);
+      var gancho = 0;
+      DB.aoGravar = function () { gancho++; };
+      return DB.ganharMoedas ? DB.ganharMoedas(1).then(function () { check('DB.aoGravar dispara a cada gravação local', gancho >= 1); }) : null;
+    });
+  }).catch(function (e) {
+    check('o fluxo assíncrono do cofre/balcão não estoura', false, String(e && e.message || e));
+  }).then(function () {
+    check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+    fecha();
+  });
+})();
+</script>
+</body>
+</html>

@@ -233,6 +233,46 @@ var JOGO = (typeof window !== 'undefined')
    * sozinhas de tanto jogar, enquanto pedra o jogador cava. */     // somado ao multiplicador da forja
   var MAX_COPIES = 99;                        // teto por variante ao sanear save
 
+  /* A INSTÂNCIA (10/09): cada cópia de item carrega um `iid` — o número de
+   * série que o cartório (servidor/api.py) registra na primeira gravação e
+   * nunca mais aceita em dois lugares, nem de volta depois de consumido. É o
+   * que impede "copiar o save e ficar com dois". Toda cópia NOVA passa por
+   * `cunha` (com a origem que o servidor conhece); o que já existia no disco
+   * ganha carimbo 'legado' no saneamento, uma vez só. `nascimentos` é a fila
+   * do que nasceu e o servidor ainda não viu — a Nuvem (nuvem.js) esvazia. */
+  var IID_ORIGENS = { saque: 1, roleta: 1, mercador: 1, caixa: 1, forja: 1, troca: 1, banco: 1, legado: 1 };
+  var NASC_TETO = 400;
+  function novoIid() {
+    var r = '';
+    try {
+      var c = (typeof crypto !== 'undefined' && crypto.getRandomValues) ? crypto : null;
+      if (c) { var b = new Uint32Array(2); c.getRandomValues(b); r = b[0].toString(36) + b[1].toString(36); }
+    } catch (e) { r = ''; }
+    if (!r) r = Math.floor(Math.random() * 2147483647).toString(36) + Math.floor(Math.random() * 2147483647).toString(36);
+    return 'j' + Date.now().toString(36) + '-' + r;
+  }
+  function registraNascimento(st, iid, itemId, origem) {
+    if (!st) return;
+    if (!isArray(st.nascimentos)) st.nascimentos = [];
+    st.nascimentos.push({ iid: iid, itemId: itemId, origem: IID_ORIGENS[origem] ? origem : 'legado', t: Date.now() });
+    if (st.nascimentos.length > NASC_TETO) st.nascimentos.splice(0, st.nascimentos.length - NASC_TETO);
+  }
+  /* A cópia nova, já com número de série e registrada na fila. */
+  function cunha(st, itemId, origem, level, stars) {
+    var e = { itemId: itemId, level: Math.max(0, Math.floor(num(level, 0))),
+              stars: Math.max(0, Math.floor(num(stars, 0))), iid: novoIid() };
+    registraNascimento(st, e.iid, itemId, origem);
+    return e;
+  }
+  /* O número de série de uma variante já existente — ou um carimbo 'legado'
+   * quando ela veio de antes da instância. */
+  function serieDe(v, itemId) {
+    if (v && typeof v.iid === 'string' && v.iid) return v.iid;
+    var id = novoIid();
+    registraNascimento(Progress.state, id, itemId, 'legado');
+    return id;
+  }
+
   // Padrões do ADENDO v2.1, usados enquanto os arquivos de dados não chegam.
   var STAR_COSTS_DEFAULT = [5, 15, 30, 55, 90];
   var STARS_DEFAULT = {
@@ -485,7 +525,7 @@ var JOGO = (typeof window !== 'undefined')
 
   function freshState() {
     var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {},
-               petCards: {}, petXp: {} };
+               petCards: {}, petXp: {}, nascimentos: [] };
     var cs = classes(), id;
     for (id in cs) {
       if (!cs.hasOwnProperty(id)) continue;
@@ -501,7 +541,7 @@ var JOGO = (typeof window !== 'undefined')
   function sanitize(raw) {
     if (!isObj(raw)) return null;
     var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {},
-               petCards: {}, petXp: {} };
+               petCards: {}, petXp: {}, nascimentos: [] };
     var cs = classes(), i, id;
     var hasClasses = keys(cs).length > 0;
     var up = upgradeCfg();
@@ -527,18 +567,44 @@ var JOGO = (typeof window !== 'undefined')
      * `{itemId, level}` (v2.1, uma entrada por item) e `{itemId, level, stars,
      * count}` (a de agora). `count` existe para o save não inchar quando o
      * jogador acumular 27 cópias mirando uma ★3. */
-    function pushItem(itemId, level, stars, count) {
+    if (isArray(raw.nascimentos)) {
+      for (i = 0; i < raw.nascimentos.length; i++) {
+        var nb = raw.nascimentos[i];
+        if (isObj(nb) && typeof nb.iid === 'string' && nb.iid && typeof nb.itemId === 'string') {
+          st.nascimentos.push({ iid: nb.iid, itemId: nb.itemId,
+                                origem: IID_ORIGENS[nb.origem] ? nb.origem : 'legado', t: num(nb.t, 0) });
+        }
+      }
+      if (st.nascimentos.length > NASC_TETO) st.nascimentos.splice(0, st.nascimentos.length - NASC_TETO);
+    }
+    /* O NÚMERO DE SÉRIE (10/09): a cópia sem iid é de antes da instância e
+     * ganha carimbo 'legado' (uma vez — o próximo save já o traz). A cópia com
+     * série REPETIDA some: é o "copiar a linha do saco" feito à mão, e
+     * lavá-la com série nova seria abrir a porta que o cartório fecha. */
+    var iidVistos = {};
+    function serieLegado(itemId) {
+      var id = novoIid();
+      registraNascimento(st, id, itemId, 'legado');
+      return id;
+    }
+    function pushItem(itemId, level, stars, count, iid) {
       if (typeof itemId !== 'string' || !itemDef(itemId)) return;
       var lv = clampLevel(level);
       var sr = clampStars(stars);
       var n = Math.max(1, Math.min(MAX_COPIES, Math.floor(num(count, 1))));
-      for (var c = 0; c < n; c++) st.inventory.push({ itemId: itemId, level: lv, stars: sr });
+      var serie = (typeof iid === 'string' && iid) ? iid : null;
+      if (serie && iidVistos[serie]) return;                    // série repetida: some
+      for (var c = 0; c < n; c++) {
+        var s = (c === 0 && serie) ? serie : serieLegado(itemId);
+        iidVistos[s] = true;
+        st.inventory.push({ itemId: itemId, level: lv, stars: sr, iid: s });
+      }
     }
     if (isArray(raw.inventory)) {
       for (i = 0; i < raw.inventory.length; i++) {
         var entry = raw.inventory[i];
-        if (typeof entry === 'string') pushItem(entry, 0, 0, 1);
-        else if (isObj(entry)) pushItem(entry.itemId, entry.level, entry.stars, entry.count);
+        if (typeof entry === 'string') pushItem(entry, 0, 0, 1, null);
+        else if (isObj(entry)) pushItem(entry.itemId, entry.level, entry.stars, entry.count, entry.iid);
       }
     }
     /* Tira do saco a melhor cópia de um item (mais estrelas, depois mais forja).
@@ -554,7 +620,7 @@ var JOGO = (typeof window !== 'undefined')
       }
       if (best < 0) return null;
       var taken = st.inventory.splice(best, 1)[0];
-      return { level: taken.level, stars: taken.stars };
+      return { level: taken.level, stars: taken.stars, iid: taken.iid };
     }
 
     // ---- heróis
@@ -615,13 +681,17 @@ var JOGO = (typeof window !== 'undefined')
             var v = srcVars && isObj(srcVars[rawSlot] || srcVars[slot])
                   ? (srcVars[rawSlot] || srcVars[slot]) : null;
             if (v) {
+              var serieV = (typeof v.iid === 'string' && v.iid) ? v.iid : null;
+              if (serieV && iidVistos[serieV]) continue;          // série repetida: some
+              if (!serieV) serieV = serieLegado(itId);
+              iidVistos[serieV] = true;
               h.items[slot] = itId;
-              h.itemVar[slot] = { level: clampLevel(v.level), stars: clampStars(v.stars) };
+              h.itemVar[slot] = { level: clampLevel(v.level), stars: clampStars(v.stars), iid: serieV };
             } else {
               if (equippedSeen[itId]) continue;    // exclusividade do modelo antigo
               equippedSeen[itId] = true;
               h.items[slot] = itId;
-              h.itemVar[slot] = takeFromBag(itId) || { level: 0, stars: 0 };
+              h.itemVar[slot] = takeFromBag(itId) || { level: 0, stars: 0, iid: serieLegado(itId) };
             }
           }
         }
@@ -1322,7 +1392,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     // a peça que sobe é uma nova entrada, sem forja (a forja não se herda:
     // as três consumidas tinham de estar em +0, cobrado no `canMergeItem`)
-    st.inventory.push({ itemId: itemId, level: 0, stars: alvo + 1 });
+    st.inventory.push(cunha(st, itemId, 'forja', 0, alvo + 1));
     Progress.save();
     return { ok: true, stars: alvo + 1, usadas: usadas };
   };
@@ -1396,13 +1466,85 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   /* Entra no saco único. Repetido agora vira CÓPIA (matéria da fusão) [D7]. */
-  Progress.addItem = function (itemId) {
+  Progress.addItem = function (itemId, origem) {
     if (!Progress.state || typeof itemId !== 'string') return false;
     if (!itemDef(itemId)) return false;
     if (!Progress.bagFree(1)) return false;             // o saco tem fundo
-    Progress.state.inventory.push({ itemId: itemId, level: 0, stars: 0 });
+    Progress.state.inventory.push(cunha(Progress.state, itemId, origem || 'saque', 0, 0));
     Progress.save();
     return true;
+  };
+
+  /* A INSTÂNCIA para quem está fora deste arquivo (Caixa do Mestre, cofre,
+   * balcão, troca): a cópia nova já numerada e na fila de nascimentos —
+   * quem chama a põe onde quiser (o saco, o cofre). */
+  Progress.novaCopia = function (itemId, origem, level, stars) {
+    if (!Progress.state || typeof itemId !== 'string' || !itemDef(itemId)) return null;
+    return cunha(Progress.state, itemId, origem, level, stars);
+  };
+  /* Carimba uma cópia que CHEGOU de fora: mantém o número de série que ela
+   * traz (cofre, oferta do jogador, troca) ou cunha um com a origem dada
+   * (banca do mercador-fantasma, cofre da guilda). */
+  Progress.carimba = function (entrada, origem) {
+    if (!Progress.state || !entrada || typeof entrada.itemId !== 'string') return null;
+    if (typeof entrada.iid === 'string' && entrada.iid) {
+      return { itemId: entrada.itemId, level: Math.max(0, Math.floor(num(entrada.level, 0))),
+               stars: Math.max(0, Math.floor(num(entrada.stars, 0))), iid: entrada.iid };
+    }
+    return cunha(Progress.state, entrada.itemId, origem || 'legado', entrada.level, entrada.stars);
+  };
+  Progress.nascimentos = function () {
+    var st = Progress.state;
+    return (st && isArray(st.nascimentos)) ? st.nascimentos.slice() : [];
+  };
+  /* Tira da fila o que o cartório já registrou (NÃO salva: a Nuvem grava
+   * pelo save cru para não disparar outra subida). */
+  Progress.limpaNascimentos = function (iids) {
+    var st = Progress.state;
+    if (!st || !isArray(st.nascimentos) || !isArray(iids)) return 0;
+    var fora = {};
+    for (var i = 0; i < iids.length; i++) fora[iids[i]] = true;
+    var antes = st.nascimentos.length;
+    st.nascimentos = st.nascimentos.filter(function (n) { return !fora[n.iid]; });
+    return antes - st.nascimentos.length;
+  };
+  /* Poda: nascimento cujo iid não está mais em lugar nenhum (nem no save,
+   * nem nos lugares que `vivos` lista — cofre, balcão) morreu antes de o
+   * cartório o ver, e não precisa subir. É o que mantém a fila curta. */
+  Progress.podaNascimentos = function (vivos) {
+    var st = Progress.state;
+    if (!st || !isArray(st.nascimentos)) return 0;
+    var fica = {};
+    var k;
+    if (isObj(vivos)) for (k in vivos) if (vivos.hasOwnProperty(k) && vivos[k]) fica[k] = true;
+    var meus = Progress.iidsNoSave();
+    for (k = 0; k < meus.length; k++) fica[meus[k].iid] = true;
+    var antes = st.nascimentos.length;
+    st.nascimentos = st.nascimentos.filter(function (n) { return !!fica[n.iid]; });
+    return antes - st.nascimentos.length;
+  };
+  /* Todo número de série que o save carrega: saco e espaços dos heróis
+   * (o cofre e o balcão moram no DB — a Nuvem soma). */
+  Progress.iidsNoSave = function () {
+    var st = Progress.state, fora = [];
+    if (!st) return fora;
+    var i;
+    for (i = 0; i < (st.inventory || []).length; i++) {
+      var e = st.inventory[i];
+      if (e && typeof e.iid === 'string' && e.iid) fora.push({ iid: e.iid, itemId: e.itemId, onde: 'saco' });
+    }
+    for (var hid in st.heroes) {
+      if (!st.heroes.hasOwnProperty(hid)) continue;
+      var h = st.heroes[hid];
+      if (!h || !isObj(h.itemVar)) continue;
+      for (var slot in h.itemVar) {
+        var v = h.itemVar[slot];
+        if (h.itemVar.hasOwnProperty(slot) && isObj(v) && typeof v.iid === 'string' && v.iid) {
+          fora.push({ iid: v.iid, itemId: h.items ? h.items[slot] : null, onde: hid + '.' + slot });
+        }
+      }
+    }
+    return fora;
   };
 
   Progress.addPet = function (petId) {
@@ -1434,7 +1576,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!isObj(h.itemVar)) h.itemVar = emptyVars();
     devolveAoSaco(h, it.slot);                                   // o anterior fica livre
     h.items[it.slot] = itemId;
-    h.itemVar[it.slot] = { level: num(copia.level, 0), stars: num(copia.stars, 0) };
+    h.itemVar[it.slot] = { level: num(copia.level, 0), stars: num(copia.stars, 0), iid: serieDe(copia, itemId) };
     syncSpells(heroId);
     Progress.save();
     premioDoColecionador();              // o Traje fechado concede o pet (1x)
@@ -1447,7 +1589,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!itId) return false;
     var v = (isObj(h.itemVar) && isObj(h.itemVar[slot])) ? h.itemVar[slot] : null;
     Progress.state.inventory.push({
-      itemId: itId, level: v ? num(v.level, 0) : 0, stars: v ? num(v.stars, 0) : 0
+      itemId: itId, level: v ? num(v.level, 0) : 0, stars: v ? num(v.stars, 0) : 0,
+      iid: serieDe(v, itId)
     });
     h.items[slot] = null;
     if (isObj(h.itemVar)) h.itemVar[slot] = null;
@@ -1560,7 +1703,7 @@ var JOGO = (typeof window !== 'undefined')
     var indices = info.escolhidas.map(function (c) { return c.index; });
     indices.sort(function (a, b) { return b - a; });
     for (var k = 0; k < indices.length; k++) st.inventory.splice(indices[k], 1);
-    var nova = { itemId: info.itemId, level: info.nivelResultado, stars: info.stars + 1 };
+    var nova = cunha(st, info.itemId, 'forja', info.nivelResultado, info.stars + 1);
     st.inventory.push(nova);
     Progress.save();
     return { itemId: nova.itemId, level: nova.level, stars: nova.stars,
@@ -1698,7 +1841,7 @@ var JOGO = (typeof window !== 'undefined')
     if (fechou) candidatas = sd.pieces.slice();          // as 4 fechadas: repetida vira estrela
     var rnd = (typeof Progress._roletaRng === 'function') ? Progress._roletaRng() : Math.random();
     var itemId = candidatas[Math.min(candidatas.length - 1, Math.floor(rnd * candidatas.length))];
-    st.inventory.push({ itemId: itemId, level: 0, stars: 0 });
+    st.inventory.push(cunha(st, itemId, 'roleta', 0, 0));
     Progress.save();
     return { itemId: itemId, repetida: fechou };
   };
@@ -1916,7 +2059,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!fim) return false;
     if (!isObj(h.itemVar)) h.itemVar = emptyVars();
     var v = isObj(h.itemVar[slot]) ? h.itemVar[slot] : { level: 0, stars: 0 };
-    h.itemVar[slot] = { level: fim.nivel, stars: num(v.stars, 0) };
+    h.itemVar[slot] = { level: fim.nivel, stars: num(v.stars, 0), iid: serieDe(v, h.items[slot]) };
     Progress.save();
     return fim;
   };

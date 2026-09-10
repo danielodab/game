@@ -1,0 +1,222 @@
+/* site.css — a roupa das páginas públicas do SOTERRA (landing, ranking, conta).
+ *
+ * Tema escuro dourado, o mesmo do jogo (css/ do cliente): fundo quase preto,
+ * texto claro, dourado #ffc44d nos títulos e nas bordas que importam, serifa
+ * (Georgia) nos títulos como no menu do jogo. Sem framework, sem fonte externa:
+ * o site tem de abrir rápido num celular e não depender de CDN nenhuma. */
+
+:root {
+  --fundo:     #0f1216;
+  --fundo-2:   #151a21;                  /* cartões, cabeçalho */
+  --fundo-3:   #1b222b;                  /* campos, linhas de tabela alternadas */
+  --texto:     #e8eef6;
+  --texto-2:   #aab4c3;                  /* parágrafo de apoio */
+  --ouro:      #ffc44d;
+  --ouro-2:    #e8c25a;
+  --ouro-esc:  #7a5a1c;
+  --ouro-a10:  rgba(255, 196, 77, .10);
+  --ouro-a18:  rgba(255, 196, 77, .18);
+  --ouro-a30:  rgba(255, 196, 77, .30);
+  --erro:      #ff7a6b;
+  --certo:     #7ee2a8;
+  --linha:     rgba(255, 255, 255, .08);
+  --serif:     Georgia, 'Times New Roman', 'Noto Serif', serif;
+  --sans:      system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --raio:      12px;
+  --largura:   1080px;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--fundo); color: var(--texto);
+  font: 16px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--ouro-2); text-decoration: none; }
+a:hover { color: var(--ouro); text-decoration: underline; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 600; margin: 0; letter-spacing: .01em; color: var(--ouro); }
+h2 { font-size: 30px; }
+h3 { font-size: 19px; color: var(--texto); }
+p { margin: 0 0 12px; }
+.apoio { color: var(--texto-2); }
+.centro { text-align: center; }
+
+.miolo { max-width: var(--largura); margin: 0 auto; padding: 0 20px; }
+
+/* ---- o topo comum ------------------------------------------------------- */
+.topo {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(15, 18, 22, .92); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--ouro-a18);
+}
+.topo .miolo { display: flex; align-items: center; gap: 18px; min-height: 58px; }
+.marca {
+  font-family: var(--serif); font-size: 22px; letter-spacing: .22em; color: var(--ouro);
+  text-shadow: 0 0 18px rgba(255, 196, 77, .25);
+}
+.marca:hover { text-decoration: none; }
+.topo nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.topo nav a, .sessao a, .sessao button {
+  padding: 6px 10px; border-radius: 8px; color: var(--texto-2); font-size: 14.5px; font-weight: 600;
+  background: none; border: 0; cursor: pointer; font-family: var(--sans);
+}
+.topo nav a:hover, .sessao button:hover { color: var(--ouro); background: var(--ouro-a10); text-decoration: none; }
+.topo nav a.jogar { color: var(--ouro); border: 1px solid var(--ouro-esc); background: var(--ouro-a10); }
+.sessao { display: flex; align-items: center; gap: 2px; font-size: 14.5px; color: var(--texto-2); white-space: nowrap; }
+.sessao b { color: var(--texto); }
+
+/* ---- botões e campos ---------------------------------------------------- */
+.btn {
+  display: inline-block; padding: 12px 22px; border-radius: 10px; border: 1px solid var(--linha);
+  background: var(--fundo-3); color: var(--texto); font: 600 15.5px var(--sans); cursor: pointer;
+  transition: transform .08s, background .15s, border-color .15s;
+}
+.btn:hover { text-decoration: none; border-color: var(--ouro-esc); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-ouro { color: #1a1204; background: linear-gradient(180deg, #ffe6a8, var(--ouro)); border-color: var(--ouro-2); }
+.btn-ouro:hover { background: linear-gradient(180deg, #fff0c4, #ffd06a); }
+.btn-borda { color: var(--ouro); background: var(--ouro-a10); border-color: var(--ouro-esc); }
+.btn[disabled] { opacity: .55; cursor: wait; transform: none; }
+
+label { display: block; font-size: 13.5px; color: var(--texto-2); margin: 12px 0 4px; }
+input[type=text], input[type=email], input[type=password] {
+  width: 100%; padding: 11px 12px; border-radius: 9px; border: 1px solid var(--linha);
+  background: var(--fundo-3); color: var(--texto); font: 15.5px var(--sans); outline: none;
+}
+input:focus { border-color: var(--ouro-esc); box-shadow: 0 0 0 3px var(--ouro-a10); }
+input.invalido { border-color: var(--erro); }
+.dica { font-size: 12.5px; color: var(--texto-2); margin: 4px 0 0; }
+.aviso { margin: 12px 0 0; padding: 10px 12px; border-radius: 9px; font-size: 14px; display: none; }
+.aviso.erro  { display: block; color: var(--erro);  background: rgba(255, 122, 107, .10); border: 1px solid rgba(255, 122, 107, .35); }
+.aviso.certo { display: block; color: var(--certo); background: rgba(126, 226, 168, .10); border: 1px solid rgba(126, 226, 168, .35); }
+.aviso.neutro{ display: block; color: var(--texto-2); background: var(--fundo-3); border: 1px solid var(--linha); }
+
+/* ---- cartões e seções --------------------------------------------------- */
+.secao { padding: 64px 0; border-top: 1px solid var(--linha); }
+.secao > .miolo > h2 { margin-bottom: 8px; }
+.secao > .miolo > h2::before { content: '◆ '; font-size: .6em; vertical-align: middle; color: var(--ouro-esc); }
+.secao .sub { color: var(--texto-2); max-width: 720px; margin-bottom: 28px; }
+
+.grade { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.grade-larga { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.cartao {
+  background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio);
+  overflow: hidden; display: flex; flex-direction: column;
+  transition: border-color .15s, transform .15s;
+}
+.cartao:hover { border-color: var(--ouro-a30); transform: translateY(-2px); }
+.cartao .corpo { padding: 14px 16px 18px; }
+.cartao .corpo p { font-size: 14px; color: var(--texto-2); margin: 6px 0 0; }
+.papel { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ouro-2); }
+
+/* A foto: um <img> com a arte de site/img/. Quando o arquivo ainda não existe
+ * (o dono vai pôr as fotos depois), o onerror do <img> põe .sem-foto no pai e
+ * a moldura mostra um fundo ornamentado com a inicial no lugar — nada de
+ * ícone quebrado. */
+.foto {
+  position: relative; aspect-ratio: 16 / 10; overflow: hidden;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 196, 77, .18), transparent 55%),
+    radial-gradient(ellipse at 80% 90%, rgba(255, 196, 77, .10), transparent 50%),
+    linear-gradient(160deg, #1d232c, #0f1216);
+}
+.foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.foto.sem-foto img { display: none; }
+.foto::after {
+  content: attr(data-letra); position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+  font: 600 64px var(--serif); color: var(--ouro); opacity: .55; text-shadow: 0 2px 0 #000, 0 0 30px rgba(255, 196, 77, .35);
+}
+.foto.sem-foto::after { display: flex; }
+.foto.sem-foto::before {
+  content: ''; position: absolute; inset: 10px; border: 1px solid var(--ouro-a18); border-radius: 8px;
+}
+.foto .etiqueta {
+  position: absolute; left: 10px; top: 10px; z-index: 1; padding: 3px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em; background: rgba(0, 0, 0, .55); color: var(--texto);
+  border: 1px solid var(--linha);
+}
+.foto .etiqueta.aberto { color: var(--certo); border-color: rgba(126, 226, 168, .4); }
+.foto .etiqueta.escavacao { color: var(--ouro-2); border-color: var(--ouro-esc); }
+.cartao.fechado .foto img { filter: grayscale(.6) brightness(.6); }
+
+/* ---- a capa da landing -------------------------------------------------- */
+.capa {
+  position: relative; padding: 88px 0 72px; text-align: center; overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 196, 77, .16), transparent 60%),
+    linear-gradient(180deg, #11151b, var(--fundo));
+}
+.capa .foto-capa { position: absolute; inset: 0; z-index: 0; opacity: .32; }
+.capa .foto-capa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.capa .foto-capa.sem-foto img { display: none; }
+.capa .miolo { position: relative; z-index: 1; }
+.capa h1 {
+  font-size: clamp(44px, 9vw, 84px); letter-spacing: .24em; line-height: 1;
+  text-shadow: 0 2px 0 #000, 0 0 40px rgba(255, 196, 77, .3);
+}
+.capa .lema { font-family: var(--serif); font-size: clamp(18px, 3vw, 26px); color: var(--texto); letter-spacing: .06em; margin: 10px 0 18px; }
+.capa .pitch { max-width: 640px; margin: 0 auto 30px; color: var(--texto-2); font-size: 17px; }
+.capa .filete { width: 160px; height: 2px; margin: 0 auto 22px; background: linear-gradient(90deg, transparent, var(--ouro), transparent); }
+.botoes { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* ---- destaques (o que é) ------------------------------------------------ */
+.destaque { padding: 18px; background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio); }
+.destaque .glifo { font-size: 26px; color: var(--ouro); line-height: 1; margin-bottom: 8px; }
+.destaque h3 { font-size: 17px; margin-bottom: 4px; }
+.destaque p { font-size: 14px; color: var(--texto-2); margin: 0; }
+
+/* ---- guildas / arena: texto + foto ----------------------------------------- */
+.lado-a-lado { display: grid; gap: 28px; grid-template-columns: 1.1fr 1fr; align-items: center; }
+.lado-a-lado .foto { border-radius: var(--raio); border: 1px solid var(--linha); }
+.lado-a-lado ul { padding-left: 20px; color: var(--texto-2); }
+.lado-a-lado li { margin: 6px 0; }
+.lado-a-lado li b { color: var(--texto); }
+@media (max-width: 760px) { .lado-a-lado { grid-template-columns: 1fr; } }
+
+/* ---- tabelas de ranking ----------------------------------------------------- */
+.tabela-caixa { overflow-x: auto; background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio); }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+th, td { padding: 10px 14px; text-align: left; white-space: nowrap; }
+th { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ouro-2); border-bottom: 1px solid var(--ouro-a18); }
+tbody tr:nth-child(odd) { background: rgba(255, 255, 255, .02); }
+tbody tr:hover { background: var(--ouro-a10); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.pos { color: var(--texto-2); width: 44px; }
+tr.top1 td.pos, tr.top1 td.nome { color: var(--ouro); font-weight: 700; }
+tr.top2 td.pos, tr.top3 td.pos { color: var(--ouro-2); }
+.estado { padding: 22px; text-align: center; color: var(--texto-2); font-size: 14.5px; }
+.estado.fora { color: var(--erro); }
+.tres { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+/* a página do ranking (50 linhas, 5 colunas): tabelas largas, 2 por fileira no PC */
+.tres.larga { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+.tres h3 { margin-bottom: 10px; }
+.tres h3 small { color: var(--texto-2); font-weight: 400; font-family: var(--sans); font-size: 13px; margin-left: 6px; }
+.emblema { display: inline-block; min-width: 1.4em; text-align: center; margin-right: 6px; }
+
+/* ---- a página da conta ------------------------------------------------------ */
+.conta-caixa { max-width: 460px; margin: 48px auto; background: var(--fundo-2); border: 1px solid var(--ouro-a18); border-radius: var(--raio); overflow: hidden; }
+.abas { display: flex; border-bottom: 1px solid var(--linha); }
+.abas button {
+  flex: 1; padding: 14px; border: 0; background: none; color: var(--texto-2); cursor: pointer;
+  font: 600 15px var(--serif); letter-spacing: .04em; border-bottom: 2px solid transparent;
+}
+.abas button.ligada { color: var(--ouro); border-bottom-color: var(--ouro); background: var(--ouro-a10); }
+.painel { padding: 8px 24px 26px; display: none; }
+.painel.ligado { display: block; }
+.painel .btn { width: 100%; margin-top: 18px; }
+.rodape-conta { display: flex; justify-content: space-between; margin-top: 12px; font-size: 13.5px; }
+a.desligado { color: var(--texto-2); opacity: .7; cursor: not-allowed; text-decoration: line-through; }
+a.desligado:hover { color: var(--texto-2); }
+
+/* ---- o rodapé ---------------------------------------------------------------- */
+.rodape { padding: 32px 0 40px; border-top: 1px solid var(--linha); color: var(--texto-2); font-size: 13.5px; text-align: center; }
+.rodape .marca { font-size: 16px; display: block; margin-bottom: 8px; }
+
+@media (max-width: 600px) {
+  .topo .miolo { gap: 10px; }
+  .topo nav a { padding: 6px 7px; font-size: 13.5px; }
+  .secao { padding: 44px 0; }
+  h2 { font-size: 25px; }
+  .capa { padding: 60px 0 48px; }
+}
