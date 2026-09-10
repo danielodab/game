@@ -66,8 +66,22 @@ passo() { printf '\n== %s\n' "$*"; }
 
 passo "1/6 dependências (python3, websockets, sqlite3, rsync, cron, Caddy)"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -q
-apt-get install -y -q python3 python3-websockets sqlite3 rsync cron curl ca-certificates gnupg
+# VPS recém-criado: nos primeiros minutos o Ubuntu se atualiza sozinho
+# (apt-daily / unattended-upgrades) e segura a trava do apt — e o apt-get,
+# diferente do apt, não espera. O install espera a trava do dpkg por até
+# 15 min; o update (cuja trava não segue esse prazo) tenta de novo.
+APT="apt-get -o DPkg::Lock::Timeout=900"
+atualiza_listas() {
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    $APT update -q && return 0
+    echo "  o apt está ocupado (o Ubuntu se atualizando sozinho?) — tento de novo em 15 s"
+    sleep 15
+  done
+  return 1
+}
+atualiza_listas
+$APT install -y -q python3 python3-websockets sqlite3 rsync cron curl ca-certificates gnupg
 if ! command -v caddy >/dev/null 2>&1; then
   # o repositório OFICIAL do Caddy (caddyserver.com/docs/install): o Ubuntu
   # 22.04 não tem o pacote, e o do 24.04 é uma versão de 2022
@@ -76,8 +90,8 @@ if ! command -v caddy >/dev/null 2>&1; then
   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
     > /etc/apt/sources.list.d/caddy-stable.list
   chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update -q
-  apt-get install -y -q caddy
+  atualiza_listas
+  $APT install -y -q caddy
 fi
 
 passo "2/6 o jogo e o site em $WEB"
@@ -156,9 +170,13 @@ fi
 if [ "$COM_HTTPS" = 1 ]; then
   MEUS="$(hostname -I 2>/dev/null || true)"
   for n in "$PRINCIPAL" "${EXTRAS[@]}"; do
-    RESOLVE="$(getent ahostsv4 "$n" 2>/dev/null | awk 'NR==1 {print $1}')"
+    # `|| true`: o getent sai com 2 quando o nome não existe, e o pipefail +
+    # set -e matariam o instalador aqui — em vez de avisar, que é o combinado
+    RESOLVE="$(getent ahostsv4 "$n" 2>/dev/null | awk 'NR==1 {print $1}' || true)"
     if [ -z "$RESOLVE" ]; then
       echo "  AVISO: $n ainda não existe no DNS — o HTTPS sai sozinho quando existir"
+    elif [ "${RESOLVE#127.}" != "$RESOLVE" ]; then
+      echo "  DNS: $n resolve aqui pelo /etc/hosts — confira de fora: nslookup $n 8.8.8.8"
     elif ! printf ' %s ' $MEUS | grep -q " $RESOLVE "; then
       echo "  AVISO: $n aponta para $RESOLVE, mas este VPS é: $MEUS — acerte o registro A"
     else

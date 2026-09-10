@@ -75,7 +75,19 @@ var JOGO = (typeof window !== 'undefined')
     return !!(C && C.ativa && C.ativa() === C.MESTRE && C.ehMestre && C.ehMestre(C.MESTRE));
   }
   GM.contaMestre = contaMestre;
-  GM.ativo = function () { return cfg.ligado === true || contaMestre(); };
+  /* NO AR (10/09): a chave mora neste arquivo, que o servidor entrega a todo
+   * mundo — então, com sessão do site, o modo Mestre só vale na conta que o
+   * servidor marcou (contas.gm = 1, que o login traz na sessão). Quem achar a
+   * chave fica sem a Caixa, e o servidor recusa peça de origem 'caixa' de
+   * conta sem a marca (api.py). Sem sessão, é o jogo local de sempre. */
+  function sessaoPermite() {
+    var S = JOGO.Sessao;
+    if (!S || !S.ativa || !S.ativa()) return true;
+    var c = S.conta();
+    return !!(c && c.gm === true);
+  }
+  GM.sessaoPermite = sessaoPermite;
+  GM.ativo = function () { return (cfg.ligado === true || contaMestre()) && sessaoPermite(); };
   /* Prepara a conta do Mestre na primeira visita — aparelha (Panóplia e os
    * quatro caminhos) e marca no cofre dela. A HUD chama no boot; idempotente. */
   GM.prepararConta = function () {

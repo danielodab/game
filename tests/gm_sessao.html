@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o modo Mestre com sessão do servidor</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- NO AR (10/09): a chave do modo Mestre mora em js/core/gm.js, que o
+     servidor entrega a todo mundo. Pedido do dono: "só eu vou possuir isso".
+     Com sessão do site, o modo só liga na conta que o servidor marcou
+     (contas.gm = 1, que o login traz); sem sessão, o jogo local de sempre.
+     A outra metade (o servidor recusar peça de origem 'caixa' de conta sem a
+     marca) está em tests/servidor_api.py. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  // o modo Mestre já ligado, como a chave deixaria, ANTES do gm.js carregar
+  try { localStorage.setItem('soterra-gm-v1', JSON.stringify({ ligado: true, pa: 12, pp: 8, spells: [] })); } catch (e) {}
+  try { localStorage.removeItem('soterra-sessao'); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/gm.js','js/core/db.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var GM = JOGO.GM, S = JOGO.Sessao, P = JOGO.Progress;
+  var algum = null;
+  Object.keys(JOGO.DATA.items).forEach(function (id) { if (!algum) algum = id; });
+  if (P && P.reset) P.reset();
+
+  check('os módulos carregaram (GM e Sessão)', !!GM && !!S && typeof GM.ativo === 'function');
+  check('sem sessão do site: o modo Mestre local liga como sempre', GM.ativo() === true);
+
+  S.guarda({ token: 'tok-x', conta: { id: 5, nome: 'Curioso' } });
+  check('com sessão de uma conta SEM a marca: o modo Mestre não liga', GM.ativo() === false);
+  check('e a Caixa não entrega nada', GM.pegaItem(algum) === false);
+
+  S.guarda({ token: 'tok-x', conta: { id: 5, nome: 'Curioso', gm: false } });
+  check('marca gm:false explícita: continua desligado', GM.ativo() === false);
+
+  S.guarda({ token: 'tok-m', conta: { id: 1, nome: 'Dono', gm: true } });
+  check('com sessão da conta marcada pelo servidor (gm:true): liga', GM.ativo() === true);
+  var antes = (P && P.state && P.state.inventory) ? P.state.inventory.length : 0;
+  check('e a Caixa entrega a peça (com número de série de origem caixa)',
+        GM.pegaItem(algum) === true && P.state.inventory.length === antes + 1 &&
+        (P.state.nascimentos || []).some(function (n) { return n.origem === 'caixa' && n.itemId === algum; }));
+
+  S.esquece();
+  check('saiu da sessão: volta ao jogo local de sempre', GM.ativo() === true);
+
+  check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+  window.__done = true; window.__fail = falhas;
+})();
+</script>
+</body>
+</html>

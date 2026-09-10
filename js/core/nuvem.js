@@ -66,9 +66,14 @@
     try { window.dispatchEvent(new CustomEvent('soterra:nuvem', { detail: det })); } catch (e) {}
   }
 
+  function naPrincipal() {
+    var Cx = JOGO.Contas;
+    return !(Cx && Cx.ativa && Cx.ativa() !== 'principal');
+  }
+
   N.estado = function () {
     var s = S();
-    return { ligada: ligada, sessao: !!(s && s.ativa()), conta: s ? s.conta() : null,
+    return { ligada: ligada, sessao: !!(s && s.ativa()), conta: s ? s.conta() : null, principal: naPrincipal(),
              versao: versao, erro: erro, parada: parada, pendente: sujo || !!timer,
              subindo: subindo, ultimaSubida: ultimaSubida };
   };
@@ -179,6 +184,11 @@
   N.iniciar = function () {
     var s = S();
     if (!s || !s.ativa() || !s.disponivel() || !P()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
+    // A Nuvem vale só na conta Principal desta máquina. As outras contas locais
+    // (Criar conta nova, ?conta=2, a do Mestre local) servem para testar dois
+    // jogadores num PC; a sessão do site é do navegador inteiro, e subi-las na
+    // MESMA conta do servidor faria uma apagar o jogo da outra.
+    if (!naPrincipal()) return Promise.resolve({ ok: false, erro: 'conta local' });
     if (!ligada) { engancha(); ligada = true; }
     parada = false;
     return N.puxar();

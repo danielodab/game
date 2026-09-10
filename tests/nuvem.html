@@ -141,6 +141,18 @@
     check('sem sessão, iniciar não faz nada (nem fala com o servidor)', r.ok === false && srv.chamadas.length === 0);
     check('sem sessão o estado diz "sem sessão"', N.estado().sessao === false && N.estado().ligada === false);
 
+    // ------------------------------------------------------ 0. só a conta Principal sobe (10/09)
+    var ativaReal = JOGO.Contas.ativa;
+    JOGO.Contas.ativa = function () { return '2'; };
+    S.guarda({ token: 'tok-1', conta: { id: 7, nome: 'Dan' } });
+    return N.iniciar().then(function (r0) {
+      check('numa conta local que não é a Principal, a Nuvem não liga (nem fala com o servidor)',
+            r0.ok === false && r0.erro === 'conta local' && srv.chamadas.length === 0 &&
+            N.estado().principal === false && N.estado().ligada === false);
+      JOGO.Contas.ativa = ativaReal;
+      S.esquece();
+    });
+  }).then(function () {
     // ------------------------------------------------------ A. a primeira subida
     S.guarda({ token: 'tok-1', conta: { id: 7, nome: 'Dan' } });
     P.reset();

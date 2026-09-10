@@ -389,6 +389,8 @@ class Api:
         with self.tranca:
             self._evento(conta_id, 'save-recusado', {'status': status, 'erro': erro})
             self.con.commit()
+        # também no journal (journalctl -u soterra-api): é onde o dono olha primeiro
+        log.info("save recusado: #%d HTTP %d — %.300s", conta_id, status, erro)
         raise Recusa(status, erro, **extra)
 
     def salvar(self, conta, corpo):
@@ -418,6 +420,13 @@ class Api:
             if not isinstance(item_id, str) or len(item_id) > 64:
                 raise Recusa(400, 'itemId inválido em nascimento')
             nascimentos.setdefault(n['iid'], (item_id, n['origem']))
+
+        # (a') A CAIXA DO MESTRE (10/09): peça de origem 'caixa' só nasce na conta
+        # que o servidor marcou (contas.gm = 1). A chave do modo Mestre mora no
+        # js/core/gm.js, que é servido a todo mundo: quem a achar não registra nada.
+        if not conta['gm'] and any(o == 'caixa' for _, o in nascimentos.values()):
+            self._recusa_save(cid, 403, 'a Caixa do Mestre é só da conta do Mestre '
+                                        '(peça de origem caixa numa conta sem a marca)')
 
         # (b) o mesmo iid não pode estar em dois lugares do save
         no_save = {}

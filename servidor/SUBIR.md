@@ -125,6 +125,7 @@ type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh root@IP-DO-VPS "mkdir -p ~/.ssh 
 | Sintoma | Causa provável | O que fazer |
 |---|---|---|
 | `ssh: connect ... timed out` | IP errado, ou o firewall do hPanel sem a porta 22 | conferir o IP na Visão geral; regra 22 e Sincronizar |
+| o passo 1/6 fica parado ("o apt está ocupado" ou "Waiting for cache lock") | VPS recém-criado: o Ubuntu está se atualizando sozinho | esperar; o instalador tenta de novo sozinho por uns 15 minutos |
 | o instalador termina com "Algo não subiu" | um serviço caiu; o log aparece logo acima | rodar de novo; se repetir, guardar o log |
 | "AVISO: … ainda não existe no DNS" ou "aponta para outro IP" | o registro A não propagou, ou está errado | `nslookup ENDERECO 8.8.8.8`; o HTTPS sai sozinho depois |
 | o site não abre em https | DNS, ou o firewall sem 80 e 443 | no VPS: `journalctl -u caddy -n 50 --no-pager` |
@@ -151,9 +152,19 @@ curl -s https://SEU-ENDERECO/api/saude
   companheiros `-wal` e `-shm`). Senhas nunca ficam em claro (pbkdf2-sha256,
   200 mil voltas, sal por conta). Mexa nele sempre como o usuário `soterra`,
   como nos comandos abaixo: o root criaria arquivos que a API não consegue gravar.
-- **Dar o modo Mestre** a uma conta:
-  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "update contas set gm=1 where nome='SEU-NOME'"`
-- **Banir**: o mesmo com `set banido=1`. A sessão dela passa a levar 403.
+- **O modo Mestre no ar**. A chave de `js/core/gm.js` fica legível para
+  qualquer um (o arquivo é servido a todo mundo), então no ar ela sozinha não
+  vale: com sessão do site, o modo Mestre só liga na conta que o servidor
+  marcou, e o servidor recusa peça da Caixa de qualquer outra conta. Para ser
+  o Mestre:
+  1. crie a sua conta pelo site;
+  2. no VPS, marque-a:
+     `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "update contas set gm=1 where nome='SEU-NOME'"`
+  3. no site, **saia e entre de novo** (a sessão pega a marca no login);
+  4. abra uma vez `https://SEU-ENDERECO/index.html?gm=SUA-CHAVE` (`?gm=off` desliga).
+  Para tirar a marca, o mesmo comando com `gm=0`.
+- **Banir** uma conta (a sessão dela passa a levar 403):
+  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "update contas set banido=1 where nome='NOME'"`
 - **Olhar a trilha de auditoria** (cadastros, logins, peças nascidas, saves recusados):
   `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db 'select tipo, dados from eventos order by id desc limit 20'`
 
@@ -183,6 +194,10 @@ curl -s https://SEU-ENDERECO/api/saude
 - **Conta trocada na mesma máquina**: se o registro local é de outra conta e o
   servidor não tem nada da nova, o disco é limpo e a nova começa do zero. O
   save da conta anterior continua no servidor, na conta dela.
+- **Só a conta Principal sobe**: as outras contas locais do jogo ("Criar conta
+  nova", `?conta=2`, a conta local do Mestre) ficam só na máquina. A sessão do
+  site vale para o navegador inteiro, e subir duas contas locais na mesma conta
+  do servidor faria uma apagar o jogo da outra.
 - **Na Ficha de Contas** (menu → Contas) fica a caixa "Nuvem": logado como
   quem, versão do save, "em dia" / "subindo…" / erro, "Sincronizar agora",
   "Sair da nuvem", ou o botão "Entrar ou criar conta", que abre o site.

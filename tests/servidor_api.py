@@ -18,6 +18,7 @@ import json
 import os
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -346,6 +347,21 @@ class ProvaDaApi(unittest.TestCase):
         self.assertIn('desconhecida', r['erro'])
         # com o nascimento declarado, passa
         status, r = c.salva(0, *save_com(['m-1']), nascimentos=nasce('m-1', origem='roleta'))
+        self.assertEqual(status, 200, r)
+
+    def test_caixa_so_do_mestre(self):
+        """No ar, a chave do modo Mestre é pública (js/core/gm.js é servido a
+        todo mundo): peça de origem 'caixa' só nasce na conta marcada gm=1."""
+        c = self.novo('Curioso Caixa')
+        status, r = c.salva(0, *save_com(['cx-1']), nascimentos=nasce('cx-1', origem='caixa'))
+        self.assertEqual(status, 403, r)
+        self.assertIn('Caixa do Mestre', r['erro'])
+        # a marca é do servidor (o sqlite no VPS): com ela, a mesma subida passa
+        banco = sqlite3.connect(os.path.join(self.pasta, 'dados', 'soterra.db'))
+        banco.execute("UPDATE contas SET gm = 1 WHERE id = ?", (c.conta['id'],))
+        banco.commit()
+        banco.close()
+        status, r = c.salva(0, *save_com(['cx-1']), nascimentos=nasce('cx-1', origem='caixa'))
         self.assertEqual(status, 200, r)
 
     # -- troca -------------------------------------------------------------------------

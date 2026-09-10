@@ -5298,7 +5298,11 @@ var JOGO = (typeof window !== 'undefined')
       var estN = safe(function () { return Nx.estado(); }, null) || {};
       var caixaN = el('div', 'nuvem-caixa');
       caixaN.appendChild(el('h3', 'nuvem-titulo', '☁ Nuvem'));
-      if (estN.sessao && estN.conta) {
+      if (estN.sessao && estN.principal === false) {
+        caixaN.appendChild(el('p', 'contas-nota',
+          'A Nuvem vale só na conta <b>Principal</b> desta máquina. Esta conta é local: ' +
+          'o save dela fica só aqui (serve para testar dois jogadores no mesmo PC).'));
+      } else if (estN.sessao && estN.conta) {
         var txtN = 'Logado como <b>' + esc(estN.conta.nome || '?') + '</b> · save versão ' + (estN.versao || 0);
         if (estN.erro) txtN += '<br><span class="chip chip-diff">' + esc(estN.erro) + '</span>';
         else if (estN.pendente || estN.subindo) txtN += ' · <span class="chip">subindo…</span>';
