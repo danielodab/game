@@ -36,7 +36,18 @@
     try { if (valor === null) s.removeItem(chave); else s.setItem(chave, valor); } catch (e) {}
   }
 
+  /* NO AR (página servida por um domínio de verdade) a API é SEMPRE a mesma
+   * origem: um link com `?api=` de fora mandaria senha e token para outro
+   * servidor, e o valor ficaria gravado. Lá o ?api= é ignorado e o que estiver
+   * lembrado é apagado. Em casa (file://, localhost, 127.0.0.1) ele vale. */
+  S.ehLocal = function (proto, host) {
+    return proto === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+  };
   S.base = function () {
+    if (!S.ehLocal(location.protocol, location.hostname)) {
+      gravaLocal(S.CHAVE_API, null);
+      return '';
+    }
     var m = /[?&]api=([^&]+)/.exec(location.search || '');
     if (m) {
       var pedida = decodeURIComponent(m[1]).replace(/\/+$/, '');

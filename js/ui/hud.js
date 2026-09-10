@@ -5304,6 +5304,7 @@ var JOGO = (typeof window !== 'undefined')
           'o save dela fica só aqui (serve para testar dois jogadores no mesmo PC).'));
       } else if (estN.sessao && estN.conta) {
         var txtN = 'Logado como <b>' + esc(estN.conta.nome || '?') + '</b> · save versão ' + (estN.versao || 0);
+        if (estN.conta.gm === true) txtN += ' <span class="chip chip-ok">Mestre do Fundo</span>';
         if (estN.erro) txtN += '<br><span class="chip chip-diff">' + esc(estN.erro) + '</span>';
         else if (estN.pendente || estN.subindo) txtN += ' · <span class="chip">subindo…</span>';
         else if (estN.ultimaSubida) txtN += ' · <span class="chip chip-ok">em dia</span>';

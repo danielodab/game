@@ -65,9 +65,23 @@
         GM.pegaItem(algum) === true && P.state.inventory.length === antes + 1 &&
         (P.state.nascimentos || []).some(function (n) { return n.origem === 'caixa' && n.itemId === algum; }));
 
+  check('a conta marcada pelo servidor É a conta do Mestre (avatar e Panóplia vêm sozinhos)',
+        GM.contaMestre() === true && GM.mestreDoServidor() === true);
+  S.guarda({ token: 'tok-x', conta: { id: 5, nome: 'Curioso' } });
+  check('conta sem a marca não é a conta do Mestre', GM.contaMestre() === false && GM.mestreDoServidor() === false);
   S.esquece();
   check('saiu da sessão: volta ao jogo local de sempre', GM.ativo() === true);
 
+  // ---- NO AR (servido por um domínio): só a conta marcada pelo servidor
+  GM._noAr = true;
+  S.esquece();
+  check('no ar, sem sessão, a chave pública não liga o modo Mestre', GM.ativo() === false);
+  S.guarda({ token: 'tok-x', conta: { id: 5, nome: 'Curioso' } });
+  check('no ar, conta sem a marca: desligado (nem Caixa, nem painel de teste)', GM.ativo() === false && GM.pegaItem(algum) === false);
+  S.guarda({ token: 'tok-m', conta: { id: 1, nome: 'Dono', gm: true } });
+  check('no ar, a conta marcada pelo servidor: ligado', GM.ativo() === true);
+  GM._noAr = undefined;
+  S.esquece();
   check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
   var sum = document.getElementById('summary');
   sum.className = falhas ? 'fail' : 'allpass';

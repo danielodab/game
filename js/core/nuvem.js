@@ -191,8 +191,28 @@
     if (!naPrincipal()) return Promise.resolve({ ok: false, erro: 'conta local' });
     if (!ligada) { engancha(); ligada = true; }
     parada = false;
-    return N.puxar();
+    return confereConta(s).then(function (mudou) {
+      if (mudou && !N.semRecarga) return { ok: true, recarregando: true };
+      return N.puxar();
+    });
   };
+
+  /* A MARCA DE MESTRE mora no servidor (contas.gm). A sessão guardada no login
+   * pode estar velha: o dono rodou `admin mestre` depois de entrar, ou alguém
+   * editou o localStorage. Confere a cada abertura em /api/eu; se mudou, grava
+   * e recarrega a página uma vez, para o jogo nascer com o modo certo. */
+  function confereConta(s) {
+    return s.api('/api/eu').then(function (r) {
+      if (!r || !r.ok || !r.conta || typeof r.conta.id !== 'number') return false;
+      var atual = s.conta() || {};
+      var gm = r.conta.gm === true;
+      if ((atual.gm === true) === gm && atual.nome === r.conta.nome && atual.id === r.conta.id) return false;
+      s.guarda({ token: s.token(), conta: { id: r.conta.id, nome: r.conta.nome, gm: gm } });
+      avisa('conta', { gm: gm });
+      if (!N.semRecarga) { try { location.reload(); } catch (e) {} }
+      return true;
+    });
+  }
 
   N.agendar = function () {
     if (!ligada || parada) return;

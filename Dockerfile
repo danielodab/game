@@ -19,13 +19,17 @@ RUN apk add --no-cache python3 py3-websockets sqlite su-exec tini \
 # os embutidos que o jogo servido não carrega: ele busca assets/models/bundle)
 COPY . /srv/soterra
 RUN mkdir -p /app \
+ && rm -f /srv/soterra/Dockerfile /srv/soterra/.dockerignore /srv/soterra/docker-compose.yaml \
+          /srv/soterra/docker-compose.yml /srv/soterra/.env \
  && mv /srv/soterra/servidor /app/servidor \
  && chmod 755 /app/servidor/coolify/*.sh \
  && ln -s /app/servidor/coolify/admin.sh /usr/local/bin/admin \
  && chmod -R a+rX /srv/soterra /app
 
 EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+# intervalo curto: no deploy o Coolify espera o contêiner novo ficar saudável
+# por cerca de 1 min, e com 30 s a primeira sonda já chegava no limite
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -qO- http://127.0.0.1/api/saude >/dev/null || exit 1
 
 ENTRYPOINT ["/sbin/tini", "--"]

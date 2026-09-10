@@ -6,8 +6,88 @@ jogadores se veem no Acampamento) e a **API** (a conta no servidor: login, o
 mesmo save em qualquer máquina e o registro de cada peça, que impede item
 duplicado).
 
-São duas partes: alguns cliques no hPanel (uma vez só) e **um comando** no
-Windows (toda vez que quiser subir uma versão nova).
+Há dois caminhos:
+
+- **O VPS já roda o Coolify** (com outras aplicações): siga a parte
+  **No Coolify**, logo abaixo. NÃO rode o `instala.sh` nele — ele se recusa,
+  porque disputaria as portas 80 e 443 com o proxy do Coolify.
+- **VPS limpo**: siga as Partes 1 e 2 (alguns cliques no hPanel, uma vez só,
+  e **um comando** no Windows a cada subida).
+
+---
+
+## No Coolify (VPS que já roda o Coolify)
+
+O jogo entra como mais uma aplicação, num contêiner só (`Dockerfile` na raiz):
+o Caddy de dentro separa arquivos, `/api` e `/ws`; a API e o Relé rodam como
+usuário `soterra`; o banco mora em `/dados`, que TEM de ser um volume
+persistente (sem ele o contêiner se recusa a subir, de propósito). Os nomes de
+menu abaixo são os do Coolify v4.3.19 (setembro de 2026); versões mais velhas
+mudam alguns rótulos.
+
+### 1. O DNS (exemplo: `soterra.viidoo.io` na IONOS)
+
+1. My IONOS → **Domains & SSL** → na linha do `viidoo.io`, o menu de três
+   pontos em **Actions** → **DNS**.
+2. **Add record** → **A** → **Host name** `soterra` (só o rótulo) → **Points
+   to** o IP do VPS → **Save**. Não crie o subdomínio em "Subdomains" e não
+   crie AAAA: o Let's Encrypt prefere o IPv6 e falha se ele apontar para outro
+   lugar.
+3. Confira no PowerShell (o Coolify consulta o 1.1.1.1):
+   `nslookup soterra.viidoo.io 1.1.1.1` tem de responder o IP do VPS.
+
+### 2. O acesso ao repositório privado (uma vez)
+
+- **Sources** → **+ Add** → Name (ex.: `github-daniel`), Organization vazio →
+  **Continue** → Webhook endpoint **Use an instance endpoint** → **Register
+  with GitHub** → no GitHub, **Create GitHub App** → de volta ao Coolify,
+  **Install repositories** → **Only select repositories** → `game` → **Install**.
+- Se já existir um GitHub App das outras aplicações, não crie outro: no
+  GitHub, Settings → Applications → Installed GitHub Apps → Configure →
+  Repository access → acrescente o `game`.
+
+### 3. A aplicação
+
+1. **Projects** → **New project** `SOTERRA` → ambiente **production** →
+   **+ New** → **Git Repository (with GitHub App)** → o servidor → o App →
+   o repositório → **Load repository** → branch `main` → Build pack
+   **Dockerfile** → **Continue**. O Continue não faz deploy: dá tempo de
+   ajustar tudo antes.
+2. **General**: **Ports exposes** = `80` (o padrão é 3000 e dá Bad Gateway).
+   **Port mappings** VAZIO (80 e 443 são do proxy das outras aplicações).
+3. **Domains**: apague o endereço `sslip.io` que o Coolify preencheu e ponha
+   `https://soterra.viidoo.io` (com o `https://`: é o que faz o Coolify tirar o
+   certificado).
+4. **Persistent Storage** → **Add mount** → **Volume mount** → Name
+   `soterra-dados`, Source Path vazio, Destination Path `/dados`. Mais seguro
+   ainda contra apagar a aplicação sem querer: **Directory mount** com Source
+   Path `/var/lib/soterra/dados` e Destination `/dados` (a pasta do VPS
+   sobrevive a qualquer coisa que se faça com a aplicação).
+5. Não mexa em **Healthcheck** (o do Dockerfile é o que vale) nem no nome de
+   contêiner fixo (ele desligaria o deploy sem queda).
+6. **Deploy** → acompanhe em **Deployment Logs**.
+
+### 4. Depois do primeiro deploy
+
+- **Backup diário**: **Scheduled Tasks** → **New scheduled task** → Name
+  `backup`, Schedule `0 4 * * *`, Command `/app/servidor/coolify/backup.sh`,
+  Container vazio → **Add task** → **Execute now** para testar. As cópias
+  ficam em `/dados/backups`, com data e hora, as dos últimos 14 dias.
+- **Ser o Mestre**: crie a sua conta pelo site; no **Terminal** da aplicação,
+  `admin contas` e depois `admin mestre "SEU-NOME"`; abra o jogo de novo. A
+  Nuvem confere a marca com o servidor a cada abertura: a sua conta vira o
+  Mestre (Cavaleiro Negro, Panóplia, Caixa) sem chave no endereço.
+- **Outros comandos** no Terminal: `admin` (a ajuda), `admin banir "NOME"`,
+  `admin eventos 50`, `admin backup`.
+- **Atualizar**: todo push no `main` refaz o deploy sozinho (Advanced → Auto
+  deploy = Deploy on push). O contêiner velho só sai quando o novo está
+  saudável; se o novo falhar, o velho continua no ar.
+- **Não perca o banco**: nunca apague a aplicação com "delete volumes"
+  marcado (o banco e as cópias vão juntos). Em Servers → Docker Cleanup,
+  deixe **Keep unused volumes**. Baixe uma cópia de `/dados/backups` de vez em
+  quando, ou ligue Automation → Backups com destino S3.
+- **Logs**: Runtime Logs (o jogo, a API, o Relé), Deployment Logs (o build),
+  Servers → Proxy → Logs (o certificado).
 
 ---
 
@@ -141,7 +221,7 @@ curl -s https://SEU-ENDERECO/api/saude
 
 ---
 
-## Administrar (no VPS)
+## Administrar (no VPS limpo; no Coolify, use o comando `admin` no Terminal)
 
 - **Backup**: todo dia, sozinho, em `/var/backups/soterra/`, com os últimos 14
   guardados. Para fazer um na hora: `/etc/cron.daily/soterra-backup`. Para

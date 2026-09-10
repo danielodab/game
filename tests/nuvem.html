@@ -66,7 +66,7 @@
 
   // ---------------------------------------------------------- o cartório de mentira
   var srv = { versao: 0, progress: null, db: null, itens: {}, conta: 7, fora: false, chamadas: [], token: 'tok-1',
-              tokens: { 'tok-1': 7, 'tok-2': 8 }, outros: {} };
+              tokens: { 'tok-1': 7, 'tok-2': 8 }, outros: {}, gm: {} };
   function saveDe(conta) { return conta === 7 ? srv : (srv.outros[conta] = srv.outros[conta] || { versao: 0, progress: null, db: null }); }
   function resp(status, obj) {
     return Promise.resolve({ status: status, json: function () { return Promise.resolve(obj); } });
@@ -122,6 +122,9 @@
       sv.progress = body.progress; sv.db = body.db;
       return resp(200, { ok: true, versao: sv.versao, registrados: registrar.length });
     }
+    if (/\/api\/eu$/.test(url)) {
+      return resp(200, { ok: true, conta: { id: quem, nome: ({ 7: 'Dan', 8: 'Bia' })[quem], gm: srv.gm[quem] === true } });
+    }
     if (/\/api\/troca$/.test(url)) return resp(200, { ok: true, feita: false, aguardando: true });
     if (/\/api\/logout$/.test(url)) return resp(200, { ok: true });
     return resp(404, { ok: false, erro: 'rota?' });
@@ -159,7 +162,7 @@
     P.addItem(espada); P.addItem(espada); P.addItem(espada);
     return N.iniciar();
   }).then(function () {
-    var g = srv.chamadas.filter(function (c) { return c.method === 'GET'; });
+    var g = srv.chamadas.filter(function (c) { return c.method === 'GET' && /\/api\/save$/.test(c.url); });
     check('ao abrir, a Nuvem PUXA (GET /api/save com o token)', g.length === 1 && g[0].auth === 'Bearer tok-1');
     var p1 = puts()[0];
     check('o servidor vazio: o local SOBE (PUT com versao 0)', !!p1 && p1.body.versao === 0);
@@ -296,6 +299,22 @@
         check('502 no meio da subida (API reiniciando): tenta de novo sozinha e sobe', ok2 && N.estado().erro === null,
               String(N.estado().erro));
       });
+    });
+  }).then(function () {
+    // ------------------------------------------------------ N. a marca de Mestre vem do servidor (10/09)
+    check('a sessão da Nuvem começa sem a marca', !(S.conta() || {}).gm);
+    srv.gm[7] = true;                                  // o dono rodou `admin mestre` no servidor
+    return N.iniciar().then(function () {
+      check('ao abrir, a Nuvem confere /api/eu e a sessão passa a trazer a marca de Mestre',
+            (S.conta() || {}).gm === true && eventos.indexOf('conta') >= 0 &&
+            srv.chamadas.some(function (c) { return /\/api\/eu$/.test(c.url); }));
+      srv.gm[7] = false;                               // `admin tirar-mestre`
+      return N.iniciar();
+    }).then(function () {
+      check('tirada a marca no servidor, a sessão perde a marca na próxima abertura', (S.conta() || {}).gm === false);
+      check('no ar, ?api= é ignorado (só vale em casa: file://, localhost, 127.0.0.1)',
+            S.ehLocal('https:', 'soterra.viidoo.io') === false && S.ehLocal('http:', '127.0.0.1') === true &&
+            S.ehLocal('file:', '') === true && S.ehLocal('http:', 'localhost') === true);
     });
   }).then(function () {
     // ------------------------------------------------------ I. a troca no cartório

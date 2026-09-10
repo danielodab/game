@@ -59,7 +59,7 @@ var JOGO = (typeof window !== 'undefined')
     var m = /[?&]gm=([^&]+)/.exec(window.location.search || '');
     if (!m) return;
     var v = decodeURIComponent(m[1]);
-    if (v === CHAVE) {
+    if (v === CHAVE && !noAr()) {      // no ar, a chave (pública) não liga nada
       cfg.ligado = true; gravaConfig(cfg);
       // a chave também REGISTRA a conta do Mestre na lista de Contas (03/09)
       if (JOGO.Contas && JOGO.Contas.criaMestre) JOGO.Contas.criaMestre();
@@ -70,11 +70,23 @@ var JOGO = (typeof window !== 'undefined')
   /* A CONTA DO MESTRE liga o modo sozinha (03/09: "uma conta local onde eu
    * seleciono e já vem o GM"): a conta 'mestre' MARCADA no registro — e só a
    * chave (ou o botão com o modo já ligado) marca. */
+  /* A MARCA DO SERVIDOR (10/09): no ar, a conta do site marcada com `admin
+   * mestre` (contas.gm = 1) É a conta do Mestre: Cavaleiro Negro já escolhido,
+   * Panóplia e Caixa, sem chave no endereço. A sessão traz a marca, e a Nuvem
+   * a confere com o servidor a cada abertura (nuvem.js, confereConta). */
+  function mestreDoServidor() {
+    var S = JOGO.Sessao;
+    if (!S || !S.ativa || !S.ativa()) return false;
+    var c = S.conta();
+    return !!(c && c.gm === true);
+  }
   function contaMestre() {
     var C = JOGO.Contas;
-    return !!(C && C.ativa && C.ativa() === C.MESTRE && C.ehMestre && C.ehMestre(C.MESTRE));
+    var local = !!(C && C.ativa && C.ativa() === C.MESTRE && C.ehMestre && C.ehMestre(C.MESTRE));
+    return local || mestreDoServidor();
   }
   GM.contaMestre = contaMestre;
+  GM.mestreDoServidor = mestreDoServidor;
   /* NO AR (10/09): a chave mora neste arquivo, que o servidor entrega a todo
    * mundo — então, com sessão do site, o modo Mestre só vale na conta que o
    * servidor marcou (contas.gm = 1, que o login traz na sessão). Quem achar a
@@ -87,7 +99,24 @@ var JOGO = (typeof window !== 'undefined')
     return !!(c && c.gm === true);
   }
   GM.sessaoPermite = sessaoPermite;
-  GM.ativo = function () { return (cfg.ligado === true || contaMestre()) && sessaoPermite(); };
+  /* NO AR (10/09, "a opção teste só deve estar disponível para mim"): servido
+   * por um domínio de verdade, a chave deste arquivo é pública. Lá o modo
+   * Mestre, e o painel de teste que depende dele, vale SÓ para a conta que o
+   * servidor marcou. A chave e a conta local do Mestre ficam para testar em
+   * casa (file://, localhost). `GM._noAr` força o modo nas provas. */
+  function noAr() {
+    if (typeof GM._noAr === 'boolean') return GM._noAr;
+    try {
+      var S = JOGO.Sessao;
+      if (S && S.ehLocal && typeof location !== 'undefined') return !S.ehLocal(location.protocol, location.hostname);
+    } catch (e) {}
+    return false;
+  }
+  GM.noAr = noAr;
+  GM.ativo = function () {
+    if (noAr()) return mestreDoServidor();
+    return (cfg.ligado === true || contaMestre()) && sessaoPermite();
+  };
   /* Prepara a conta do Mestre na primeira visita — aparelha (Panóplia e os
    * quatro caminhos) e marca no cofre dela. A HUD chama no boot; idempotente. */
   GM.prepararConta = function () {

@@ -3,10 +3,10 @@
 # SOTERRA no Coolify: administrar o banco de dentro do contêiner.
 # No painel do Coolify, abra o Terminal da aplicação e rode:
 #   admin contas               lista as contas
-#   admin mestre NOME          marca a conta como Mestre (gm=1)
-#   admin tirar-mestre NOME    tira a marca de Mestre
-#   admin banir NOME           bane a conta (a sessão dela passa a levar 403)
-#   admin desbanir NOME        tira o banimento
+#   admin mestre "NOME"        marca a conta como Mestre (gm=1)
+#   admin tirar-mestre "NOME"  tira a marca de Mestre
+#   admin banir "NOME"         bane a conta (a sessão dela passa a levar 403)
+#   admin desbanir "NOME"      tira o banimento
 #   admin eventos [N]          a trilha de auditoria, os N últimos (20 se omitir)
 #   admin backup               faz um backup agora, em /dados/backups
 # Depois de marcar ou tirar a marca de Mestre, a pessoa sai e entra de novo no site.
@@ -25,6 +25,12 @@ marca() {   # marca COLUNA VALOR NOME MENSAGEM
 
 acao="${1:-}"
 nome="${2:-}"
+case "$acao" in
+  mestre|tirar-mestre|banir|desbanir)
+    # nome com espaço sem aspas viraria DOIS argumentos, e o comando agiria
+    # sobre outra conta (a do primeiro pedaço)
+    [ $# -eq 2 ] || { echo "o NOME vai inteiro, num argumento só; com espaço, entre aspas: admin $acao \"Ana Clara\""; exit 1; } ;;
+esac
 if [ -z "$acao" ] || [ "$acao" = "ajuda" ]; then ajuda; exit 0; fi
 if [ "$acao" = "backup" ]; then exec /app/servidor/coolify/backup.sh; fi
 [ -f "$BANCO" ] || { echo "ainda não há banco em $BANCO (ninguém se cadastrou ainda?)"; exit 1; }

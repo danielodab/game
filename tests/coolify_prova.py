@@ -143,6 +143,13 @@ def main():
           all(c in api for c in ['gm         INTEGER', 'banido     INTEGER', 'criado_em INTEGER']) and
           'set $1 = $2 where nome' in admin and 'e.criado_em' in admin)
 
+    check('o healthcheck responde rápido (o deploy do Coolify espera ~1 min)',
+          '--interval=10s' in df and '--start-period=20s' in df)
+    check('a pasta servida não guarda o Dockerfile nem o compose que o Coolify reescreve',
+          'rm -f /srv/soterra/Dockerfile' in df and '/srv/soterra/docker-compose.yaml' in df and '/srv/soterra/.env' in df)
+    check('o admin exige o NOME inteiro num argumento só', '[ $# -eq 2 ]' in admin)
+    check('o backup leva data e hora (um de tarde não apaga o da madrugada)',
+          'date +%F-%H%M%S' in ler('servidor/coolify/backup.sh'))
     falhas = RESULTADOS.count(False)
     print('RESUMO: ' + ('tudo passou (%d)' % len(RESULTADOS) if not falhas else 'FALHOU — %d de %d' % (falhas, len(RESULTADOS))))
     return 1 if falhas else 0

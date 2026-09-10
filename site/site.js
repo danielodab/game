@@ -32,6 +32,11 @@
   }
 
   SITE.base = function () {
+    // NO AR a API é sempre a mesma origem: um link com ?api= de fora mandaria a
+    // senha para outro servidor (e ficaria gravado). Só em casa o ?api= vale.
+    var h = location.hostname;
+    var local = location.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1';
+    if (!local) { gravaLocal(CHAVE_API, null); return ''; }
     var m = /[?&]api=([^&]+)/.exec(location.search);
     if (m) {
       var pedida = decodeURIComponent(m[1]).replace(/\/+$/, '');

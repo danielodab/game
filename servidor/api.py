@@ -439,81 +439,94 @@ class Api:
             no_save[iid] = onde
 
         with self.tranca:
-            atual = self.con.execute("SELECT versao, progress, db FROM saves WHERE conta_id = ?", (cid,)).fetchone()
-            versao_atual = atual['versao'] if atual else 0
-            # (a) só grava por cima da versão que o cliente viu; senão devolve
-            # a atual para ele fundir e tentar de novo
-            if versao != versao_atual:
-                self._recusa_save(cid, 409, 'save desatualizado: o servidor está na versão %d' % versao_atual,
-                                  versao=versao_atual,
-                                  progress=json.loads(atual['progress']) if atual and atual['progress'] else None,
-                                  db=json.loads(atual['db']) if atual and atual['db'] else None)
+            # A TRAVA ENTRE PROCESSOS (10/09): no deploy do Coolify o contêiner
+            # velho e o novo usam este banco juntos por alguns segundos. A tranca
+            # acima só vale dentro de UM processo; o BEGIN IMMEDIATE pega a trava
+            # de escrita do SQLite ANTES de ler a versão, e o outro processo espera
+            # (até 5 s, o timeout da conexão) em vez de gravar por cima.
+            if self.con.in_transaction:
+                self.con.rollback()
+            self.con.execute("BEGIN IMMEDIATE")
+            try:
+                atual = self.con.execute("SELECT versao, progress, db FROM saves WHERE conta_id = ?", (cid,)).fetchone()
+                versao_atual = atual['versao'] if atual else 0
+                # (a) só grava por cima da versão que o cliente viu; senão devolve
+                # a atual para ele fundir e tentar de novo
+                if versao != versao_atual:
+                    self._recusa_save(cid, 409, 'save desatualizado: o servidor está na versão %d' % versao_atual,
+                                      versao=versao_atual,
+                                      progress=json.loads(atual['progress']) if atual and atual['progress'] else None,
+                                      db=json.loads(atual['db']) if atual and atual['db'] else None)
 
-            # (c) o registro: o que o servidor já sabe de cada iid citado
-            conhecidos = {}
-            todos = list(set(no_save) | set(nascimentos))
-            for i in range(0, len(todos), 400):                 # lotes: o SQLite limita variáveis por consulta
-                lote = todos[i:i + 400]
-                for r in self.con.execute("SELECT iid, conta_id, estado FROM itens WHERE iid IN (%s)"
-                                          % ','.join('?' * len(lote)), lote):
-                    conhecidos[r['iid']] = (r['conta_id'], r['estado'])
+                # (c) o registro: o que o servidor já sabe de cada iid citado
+                conhecidos = {}
+                todos = list(set(no_save) | set(nascimentos))
+                for i in range(0, len(todos), 400):                 # lotes: o SQLite limita variáveis por consulta
+                    lote = todos[i:i + 400]
+                    for r in self.con.execute("SELECT iid, conta_id, estado FROM itens WHERE iid IN (%s)"
+                                              % ','.join('?' * len(lote)), lote):
+                        conhecidos[r['iid']] = (r['conta_id'], r['estado'])
 
-            registrar = []
-            for iid, onde in no_save.items():
-                dono = conhecidos.get(iid)
-                if dono is None:
-                    if iid not in nascimentos:
-                        self._recusa_save(cid, 409, 'instância desconhecida: %s (%s) não nasceu neste servidor'
+                registrar = []
+                for iid, onde in no_save.items():
+                    dono = conhecidos.get(iid)
+                    if dono is None:
+                        if iid not in nascimentos:
+                            self._recusa_save(cid, 409, 'instância desconhecida: %s (%s) não nasceu neste servidor'
+                                              % (iid, onde))
+                        item_id, origem = nascimentos[iid]
+                        registrar.append((iid, item_id, origem))
+                    elif dono[0] != cid:
+                        self._recusa_save(cid, 403, 'instância de outra conta: %s (%s) — troca só pela rota de troca'
                                           % (iid, onde))
-                    item_id, origem = nascimentos[iid]
-                    registrar.append((iid, item_id, origem))
-                elif dono[0] != cid:
-                    self._recusa_save(cid, 403, 'instância de outra conta: %s (%s) — troca só pela rota de troca'
-                                      % (iid, onde))
-                elif dono[1] == 'fora':
-                    self._recusa_save(cid, 409, 'instância já consumida: %s (%s) saiu do jogo e não volta'
-                                      % (iid, onde))
-            # nascimento que NEM está no save: nasceu e morreu antes de salvar
-            # (vendido ao mercador na mesma sessão). Registra mesmo assim — a
-            # varredura abaixo o marca 'fora' e ele não pode voltar depois.
-            for iid, (item_id, origem) in nascimentos.items():
-                if iid in no_save:
-                    continue
-                dono = conhecidos.get(iid)
-                if dono is None:
-                    registrar.append((iid, item_id, origem))
-                elif dono[0] != cid:
-                    self._recusa_save(cid, 403, 'instância de outra conta: %s' % iid)
+                    elif dono[1] == 'fora':
+                        self._recusa_save(cid, 409, 'instância já consumida: %s (%s) saiu do jogo e não volta'
+                                          % (iid, onde))
+                # nascimento que NEM está no save: nasceu e morreu antes de salvar
+                # (vendido ao mercador na mesma sessão). Registra mesmo assim — a
+                # varredura abaixo o marca 'fora' e ele não pode voltar depois.
+                for iid, (item_id, origem) in nascimentos.items():
+                    if iid in no_save:
+                        continue
+                    dono = conhecidos.get(iid)
+                    if dono is None:
+                        registrar.append((iid, item_id, origem))
+                    elif dono[0] != cid:
+                        self._recusa_save(cid, 403, 'instância de outra conta: %s' % iid)
 
-            t = agora()
-            na_hora = self.con.execute("SELECT COUNT(*) FROM itens WHERE conta_id = ? AND criado_em > ?",
-                                       (cid, t - 3600)).fetchone()[0]
-            if na_hora + len(registrar) > NASC_POR_HORA:
-                self._recusa_save(cid, 429, 'instâncias demais na última hora (máximo %d)' % NASC_POR_HORA)
+                t = agora()
+                na_hora = self.con.execute("SELECT COUNT(*) FROM itens WHERE conta_id = ? AND criado_em > ?",
+                                           (cid, t - 3600)).fetchone()[0]
+                if na_hora + len(registrar) > NASC_POR_HORA:
+                    self._recusa_save(cid, 429, 'instâncias demais na última hora (máximo %d)' % NASC_POR_HORA)
 
-            # daqui para baixo só escrita — nenhuma recusa depois disso
-            self.con.executemany(
-                "INSERT INTO itens(iid, conta_id, item_id, origem, criado_em, estado) VALUES (?, ?, ?, ?, ?, 'vivo')",
-                [(iid, cid, item_id, origem, t) for iid, item_id, origem in registrar])
-            # varredura: instância viva desta conta que sumiu do save foi
-            # consumida (fundida, vendida, forjada). Exceção: o que chegou por
-            # troca há pouco — o cliente pode ainda não ter posto no save
-            # (um PUT que já estava a caminho), e marcar 'fora' o apagaria.
-            vivos = self.con.execute(
-                "SELECT iid FROM itens WHERE conta_id = ? AND estado = 'vivo' "
-                "AND NOT (origem = 'troca' AND criado_em > ?)", (cid, t - TROCA_GRACA)).fetchall()
-            consumidos = [(r['iid'],) for r in vivos if r['iid'] not in no_save]
-            self.con.executemany("UPDATE itens SET estado = 'fora' WHERE iid = ?", consumidos)
+                # daqui para baixo só escrita — nenhuma recusa depois disso
+                self.con.executemany(
+                    "INSERT INTO itens(iid, conta_id, item_id, origem, criado_em, estado) VALUES (?, ?, ?, ?, ?, 'vivo')",
+                    [(iid, cid, item_id, origem, t) for iid, item_id, origem in registrar])
+                # varredura: instância viva desta conta que sumiu do save foi
+                # consumida (fundida, vendida, forjada). Exceção: o que chegou por
+                # troca há pouco — o cliente pode ainda não ter posto no save
+                # (um PUT que já estava a caminho), e marcar 'fora' o apagaria.
+                vivos = self.con.execute(
+                    "SELECT iid FROM itens WHERE conta_id = ? AND estado = 'vivo' "
+                    "AND NOT (origem = 'troca' AND criado_em > ?)", (cid, t - TROCA_GRACA)).fetchall()
+                consumidos = [(r['iid'],) for r in vivos if r['iid'] not in no_save]
+                self.con.executemany("UPDATE itens SET estado = 'fora' WHERE iid = ?", consumidos)
 
-            nova = versao_atual + 1
-            self.con.execute(
-                "INSERT OR REPLACE INTO saves(conta_id, progress, db, versao, atualizado_em) VALUES (?, ?, ?, ?, ?)",
-                (cid, json.dumps(progress, ensure_ascii=False) if progress is not None else None,
-                 json.dumps(db, ensure_ascii=False) if db is not None else None, nova, t))
-            self._resumo(cid, conta, progress, db, t)
-            if registrar:
-                self._evento(cid, 'nascimentos', {'versao': nova, 'iids': [r[0] for r in registrar]})
-            self.con.commit()
+                nova = versao_atual + 1
+                self.con.execute(
+                    "INSERT OR REPLACE INTO saves(conta_id, progress, db, versao, atualizado_em) VALUES (?, ?, ?, ?, ?)",
+                    (cid, json.dumps(progress, ensure_ascii=False) if progress is not None else None,
+                     json.dumps(db, ensure_ascii=False) if db is not None else None, nova, t))
+                self._resumo(cid, conta, progress, db, t)
+                if registrar:
+                    self._evento(cid, 'nascimentos', {'versao': nova, 'iids': [r[0] for r in registrar]})
+                self.con.commit()
+            except BaseException:
+                if self.con.in_transaction:
+                    self.con.rollback()
+                raise
         return 200, {'ok': True, 'versao': nova, 'registrados': len(registrar)}
 
     def _resumo(self, cid, conta, progress, db, t):

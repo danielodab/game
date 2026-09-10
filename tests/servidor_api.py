@@ -22,6 +22,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import urllib.error
@@ -363,6 +364,54 @@ class ProvaDaApi(unittest.TestCase):
         banco.close()
         status, r = c.salva(0, *save_com(['cx-1']), nascimentos=nasce('cx-1', origem='caixa'))
         self.assertEqual(status, 200, r)
+
+    def test_dois_processos_no_mesmo_banco(self):
+        """No deploy do Coolify o contêiner velho e o novo usam o MESMO banco por
+        alguns segundos. Dois PUTs com a mesma versão, um em cada processo, ao
+        mesmo tempo: só um pode passar; o outro leva 409 (antes, os dois
+        passavam e um save sumia)."""
+        porta2 = porta_livre()
+        log2 = open(os.path.join(self.pasta, 'api2.log'), 'w', encoding='utf-8')
+        proc2 = subprocess.Popen([sys.executable, API, '--porta', str(porta2),
+                                  '--banco', os.path.join(self.pasta, 'dados', 'soterra.db')],
+                                 stdout=log2, stderr=subprocess.STDOUT)
+        try:
+            base2 = 'http://127.0.0.1:%d' % porta2
+            limite = time.time() + 15
+            while time.time() < limite:
+                try:
+                    with urllib.request.urlopen(base2 + '/api/saude', timeout=1) as r:
+                        if r.status == 200:
+                            break
+                except Exception:
+                    time.sleep(0.15)
+            c = self.novo('Dupla Via')
+            c2 = Cliente(base2)
+            c2.token, c2.conta = c.token, c.conta
+            status, r = c.salva(0, *save_com(['dv-0']), nascimentos=nasce('dv-0'))
+            self.assertEqual(status, 200, r)
+            versao = r['versao']
+            for rodada in range(8):
+                res = []
+
+                def vai(cli, iid):
+                    res.append(cli.salva(versao, *save_com(['dv-0', iid]), nascimentos=nasce(iid))[0])
+
+                t1 = threading.Thread(target=vai, args=(c, 'dv-a%d' % rodada))
+                t2 = threading.Thread(target=vai, args=(c2, 'dv-b%d' % rodada))
+                t1.start(); t2.start(); t1.join(); t2.join()
+                self.assertEqual(sorted(res), [200, 409], 'rodada %d: %r' % (rodada, res))
+                status, r = c.pede('GET', '/api/save')
+                self.assertEqual(status, 200, r)
+                self.assertEqual(r['versao'], versao + 1, 'rodada %d' % rodada)
+                versao = r['versao']
+        finally:
+            proc2.terminate()
+            try:
+                proc2.wait(5)
+            except subprocess.TimeoutExpired:
+                proc2.kill()
+            log2.close()
 
     # -- troca -------------------------------------------------------------------------
     def test_troca_espelhada(self):

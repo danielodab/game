@@ -162,7 +162,9 @@ var JOGO = (typeof window !== 'undefined')
         try { P().addStones(s, 50); } catch (e) {}
       });
       Object.keys(D().items || {}).forEach(function (i) {
-        try { P().addItem(i); P().addItem(i); P().addItem(i); } catch (e) {}
+        // origem 'caixa' (10/09): o servidor só registra peça da Caixa na conta
+        // marcada como Mestre; de qualquer outra, a subida é recusada
+        try { P().addItem(i, 'caixa'); P().addItem(i, 'caixa'); P().addItem(i, 'caixa'); } catch (e) {}
       });
       Object.keys(D().pets || {}).forEach(function (p) {
         try { P().addPet(p); } catch (e) {}
@@ -389,6 +391,12 @@ var JOGO = (typeof window !== 'undefined')
     document.body.appendChild(b);
   }
 
+  function bloqueado() {
+    var G = JOGO.GM;
+    var noAr = !!(G && G.noAr && G.noAr());
+    return noAr && !(G && G.ativo && G.ativo());
+  }
+
   if (typeof window !== 'undefined') {
     var liga = function () {
       if (!JOGO.Progress || !JOGO.DATA || !JOGO.DATA.classes) { setTimeout(liga, 200); return; }
@@ -396,6 +404,10 @@ var JOGO = (typeof window !== 'undefined')
       // "desfazer" devolve o save como estava quando você abriu o jogo. Tirando
       // no clique, o que já tivesse sido mudado antes ficava para trás — no
       // primeiro teste as classes continuaram liberadas depois de desfazer.
+      // SÓ O MESTRE (10/09: "a opção teste só deve estar disponível para mim").
+      // No ar, o painel dá níveis, pedras e itens: só a conta que o servidor
+      // marcou o vê. Em casa (file://, localhost) continua como sempre.
+      if (bloqueado()) return;
       guardaCopia();
       botao();
     };
@@ -403,6 +415,7 @@ var JOGO = (typeof window !== 'undefined')
     else liga();
   }
 
-  JOGO.Debug = { modoEfeitos: ligaModo, abrir: function () { monta(); guardaCopia(); desenha(); painel.classList.add('is-on'); },
+  JOGO.Debug = { modoEfeitos: ligaModo, bloqueado: bloqueado,
+                 abrir: function () { if (bloqueado()) return false; monta(); guardaCopia(); desenha(); painel.classList.add('is-on'); return true; },
                  desfazer: desfaz, poeNivel: poeNivel };
 })();
