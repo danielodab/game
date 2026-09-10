@@ -41,10 +41,11 @@
   }
   var D = JOGO.DATA, P = JOGO.Progress, G = JOGO.Game, Dd = JOGO.Diario, Po = JOGO.Poco;
   var FECHADOS = D.portaisFechados || [];
-  check('três portais estão fechados: Andaimes, Mina e Coração', FECHADOS.length === 3 &&
+  check('quatro portais estão fechados: Fecho, Andaimes, Mina e Coração (10/09: só os dois primeiros abertos)',
+        FECHADOS.length === 4 && D.portalFechado('emberlock') &&
         D.portalFechado('windscaffold') && D.portalFechado('quakemine') && D.portalFechado('brokenheart'));
-  check('a Estufa, a Cisterna e o Fecho seguem abertos',
-        !D.portalFechado('greenhouse') && !D.portalFechado('cistern') && !D.portalFechado('emberlock'));
+  check('a Estufa e a Cisterna seguem abertas',
+        !D.portalFechado('greenhouse') && !D.portalFechado('cistern'));
 
   // ---- a descida
   G.init();

@@ -1019,7 +1019,16 @@ var JOGO = (typeof window !== 'undefined')
   function monsterLook(defId) {
     var D = DATA();
     var md = (D.monsters && D.monsters[defId]) || null;
-    var base = MONSTER_LOOK[defId] ||
+    // 10/09, preparando os lotes dos portais fechados: um monstro cujo kit
+    // PRÓPRIO já está embutido (JOGO.MODELS[defId], pelo embute_monstros.py)
+    // veste o próprio corpo mesmo sem linha no MONSTER_LOOK — a linha só
+    // entra depois, para acertar o porte (scale). Sem kit, a família e o
+    // esqueleto emprestado seguem como sempre.
+    // (no SERVIDO os base64 não existem — o manifesto do bundle enche
+    // JOGO.MESHY_CLIPS; vale qualquer um dos dois)
+    var temKit = !!((JOGO.MODELS && JOGO.MODELS[defId]) || (JOGO.MESHY_CLIPS && JOGO.MESHY_CLIPS[defId]));
+    var proprio = temKit ? { model: defId, scale: 1 } : null;
+    var base = MONSTER_LOOK[defId] || proprio ||
                (md && md.family && M.FAMILY_LOOK[md.family]) ||
                M.MONSTER_FALLBACK;
     var boss = !!(md && md.boss);

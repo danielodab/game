@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o bestiário de um calabouço</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font:11px monospace;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:2px 6px;text-align:left}
+  th{background:#1a2029;color:#8895a6}
+  td.cai{color:#f88} td.ok{color:#8fc79b}
+  #app{position:absolute;left:-4000px;top:0;width:520px;height:640px}
+  canvas#game-canvas{width:520px;height:640px;display:block}
+</style>
+</head>
+<body>
+<h1 id="titulo">O bestiário — kit próprio, clipe por papel, porte</h1>
+<div class="sub">O BESTIÁRIO GENÉRICO (10/09): <code>?calabouco=&lt;id&gt;</code> carrega
+<code>assets/embedded/models-meshy-&lt;id&gt;.js</code> e cobra, para cada monstro daquele calabouço: o
+kit é o PRÓPRIO (o look aponta para o id, não para um esqueleto emprestado), cada papel de animação
+tem clipe próprio (idle, andar, ataque, reação, morte — correr é bem-vindo), o porte fica entre 0,7 e
+3,6 m e o chefe é o maior. É a régua dos lotes dos portais fechados: quando o lote chega e esta
+página fica verde, o portal pode abrir.</div>
+<div id="summary">montando…</div>
+<ul id="lista"></ul>
+<table id="tab"></table>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<script src="save_sandbox.js"></script>
+<script>
+  var CAL = (/[?&]calabouco=([a-z]+)/.exec(location.search) || [])[1] || 'cistern';
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js',
+    // os dois lotes antigos têm nome em português; os novos saem pelo id (embute_monstros.py)
+    'assets/embedded/models-meshy-' + ({ greenhouse: 'jardim', cistern: 'cisterna' }[CAL] || CAL) + '.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js',
+    'assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = mau ? (mau + ' de ' + res.length + ' falharam') : ('tudo passou (' + res.length + ')');
+    window.__done = true; window.__fail = mau;
+  }
+  var PAPEIS = ['idle', 'walk', 'attack', 'hit', 'die'];
+  window.addEventListener('DOMContentLoaded', function () {
+    var D = window.JOGO && JOGO.DATA;
+    var M = window.JOGO && JOGO.Models3D2;
+    if (!D || !M) { check('os módulos carregaram', false); return fecha(); }
+    var dg = null;
+    (Array.isArray(D.dungeons) ? D.dungeons : []).forEach(function (d) { if (d && d.id === CAL) dg = d; });
+    document.getElementById('titulo').textContent = 'O bestiário de ' + ((dg && dg.name) || CAL);
+    var ids = Object.keys(D.monsters || {}).filter(function (id) { return D.monsters[id].dungeonId === CAL; });
+    check('o calabouço existe e tem monstros no catálogo', !!dg && ids.length > 0, ids.length + ' monstros');
+    // no servido os base64 não vêm: o manifesto do bundle enche JOGO.MESHY_CLIPS
+    var kit = ids.filter(function (id) { return !!((JOGO.MODELS || {})[id] || (JOGO.MESHY_CLIPS || {})[id]); });
+    check('o kit do lote está embutido para TODOS (' + kit.length + '/' + ids.length + ')', kit.length === ids.length,
+          ids.filter(function (id) { return kit.indexOf(id) < 0; }).join(','));
+    try { M.load(function () {}); } catch (e) {}
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+    var voltas = 0;
+    (function espera() {
+      var ok = false;
+      try { ok = M.isReady(); } catch (e) {}
+      if (!ok && ++voltas < 400) return setTimeout(espera, 250);
+      check('os modelos carregaram', !!ok);
+      mede();
+    })();
+    function mede() {
+      var linhas = [], semKit = [], caem = [], fora = [], chefeH = 0, outrosH = 0;
+      ids.forEach(function (id) {
+        var md = D.monsters[id], look = null, obj = null;
+        try { look = M.lookFor(id); } catch (e) {}
+        try { obj = M.unit(id); } catch (e) {}
+        if (!obj) { semKit.push(id + ' (não montou)'); return; }
+        if (!look || look.model !== id) semKit.push(id + ' → ' + (look && look.model));
+        try { obj.userData.play('idle', { fade: 0 }); obj.userData.mixer.update(0.6); } catch (e) {}
+        var doIdle = null; try { doIdle = obj.userData.clipFor('idle'); } catch (e) {}
+        var mapa = {}, quais = [];
+        PAPEIS.forEach(function (p) {
+          var c = null; try { c = obj.userData.clipFor(p); } catch (e) {}
+          mapa[p] = c;
+          if (p !== 'idle' && (!c || c === doIdle)) quais.push(p);
+        });
+        if (quais.length) caem.push(id + ': ' + quais.join(','));
+        var h = (obj.userData && obj.userData.height) || 0;
+        if (h < 0.7 || h > 3.6) fora.push(id + ' ' + h.toFixed(2) + ' m');
+        if (md.boss) chefeH = Math.max(chefeH, h); else outrosH = Math.max(outrosH, h);
+        linhas.push({ id: id, nome: md.name, boss: !!md.boss, h: h, mapa: mapa, cai: quais });
+      });
+      check('todos usam o kit PRÓPRIO (nenhum esqueleto emprestado)', semKit.length === 0, semKit.join(' · '));
+      check('nenhum papel cai no idle', caem.length === 0, caem.join(' · '));
+      check('todo porte entre 0,7 e 3,6 m', fora.length === 0, fora.join(' · '));
+      check('o chefe é o maior da sala', chefeH > 0 && chefeH >= outrosH, chefeH.toFixed(2) + ' vs ' + outrosH.toFixed(2));
+      var t = document.getElementById('tab');
+      var html = '<tr><th>monstro</th><th>altura</th>';
+      PAPEIS.forEach(function (p) { html += '<th>' + p + '</th>'; });
+      html += '</tr>';
+      linhas.forEach(function (l) {
+        html += '<tr><td>' + l.nome + (l.boss ? ' (chefe)' : '') + '</td><td>' + l.h.toFixed(2) + '</td>';
+        PAPEIS.forEach(function (p) {
+          html += '<td class="' + (l.cai.indexOf(p) >= 0 ? 'cai' : 'ok') + '">' + (l.mapa[p] || '—') + '</td>';
+        });
+        html += '</tr>';
+      });
+      t.innerHTML = html;
+      fecha();
+    }
+  });
+})();
+</script>
+</body>
+</html>

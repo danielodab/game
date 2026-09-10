@@ -1,0 +1,157 @@
+{
+  "calabouco": "windscaffold",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\Os Andaimes do Vento\\monstros",
+  "saida": "assets/embedded/models-meshy-windscaffold.js",
+  "monstros": [
+    {
+      "id": "plank-shrike",
+      "nome": "Picanço-de-Tábua",
+      "boss": false,
+      "pasta": "Picanço-de-Tábua",
+      "prefixo": "Picanço-de-Tábua",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "gust-gremlin",
+      "nome": "Gremlin de Rajada",
+      "boss": false,
+      "pasta": "Gremlin de Rajada",
+      "prefixo": "Gremlin de Rajada",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "rope-hanger",
+      "nome": "Enforca-Corda",
+      "boss": false,
+      "pasta": "Enforca-Corda",
+      "prefixo": "Enforca-Corda",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "kite-serpent",
+      "nome": "Serpe-Pipa",
+      "boss": false,
+      "pasta": "Serpe-Pipa",
+      "prefixo": "Serpe-Pipa",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "ballast-golem",
+      "nome": "Golem de Lastro",
+      "boss": false,
+      "pasta": "Golem de Lastro",
+      "prefixo": "Golem de Lastro",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "whistle-choir",
+      "nome": "Coro-Assobio",
+      "boss": false,
+      "pasta": "Coro-Assobio",
+      "prefixo": "Coro-Assobio",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "mote-swarm",
+      "nome": "Enxame de Motes",
+      "boss": false,
+      "pasta": "Enxame de Motes",
+      "prefixo": "Enxame de Motes",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "mote-bit",
+      "nome": "Motinho",
+      "boss": false,
+      "pasta": "Motinho",
+      "prefixo": "Motinho",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "nail-sprite",
+      "nome": "Pregolim",
+      "boss": false,
+      "pasta": "Pregolim",
+      "prefixo": "Pregolim",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "boss-windwright",
+      "nome": "Cambota, o Mestre-de-Obras",
+      "boss": true,
+      "pasta": "Cambota, o Mestre-de-Obras",
+      "prefixo": "Cambota, o Mestre-de-Obras",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    }
+  ]
+}

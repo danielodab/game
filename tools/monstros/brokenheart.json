@@ -1,0 +1,157 @@
+{
+  "calabouco": "brokenheart",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\O Coracao Partido\\monstros",
+  "saida": "assets/embedded/models-meshy-brokenheart.js",
+  "monstros": [
+    {
+      "id": "cinder-herald",
+      "nome": "Arauto de Brasa",
+      "boss": false,
+      "pasta": "Arauto de Brasa",
+      "prefixo": "Arauto de Brasa",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "tide-herald",
+      "nome": "Arauto de Maré",
+      "boss": false,
+      "pasta": "Arauto de Maré",
+      "prefixo": "Arauto de Maré",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "stone-herald",
+      "nome": "Arauto de Alicerce",
+      "boss": false,
+      "pasta": "Arauto de Alicerce",
+      "prefixo": "Arauto de Alicerce",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "gale-herald",
+      "nome": "Arauto de Vendaval",
+      "boss": false,
+      "pasta": "Arauto de Vendaval",
+      "prefixo": "Arauto de Vendaval",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "null-warden",
+      "nome": "Zelador Nulo",
+      "boss": false,
+      "pasta": "Zelador Nulo",
+      "prefixo": "Zelador Nulo",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "mirror-twin",
+      "nome": "Gêmeo-Espelho",
+      "boss": false,
+      "pasta": "Gêmeo-Espelho",
+      "prefixo": "Gêmeo-Espelho",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "mirror-sliver",
+      "nome": "Estilha-Espelho",
+      "boss": false,
+      "pasta": "Estilha-Espelho",
+      "prefixo": "Estilha-Espelho",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "weather-mote",
+      "nome": "Mote do Tempo",
+      "boss": false,
+      "pasta": "Mote do Tempo",
+      "prefixo": "Mote do Tempo",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "heartroot",
+      "nome": "Raiz-do-Coração",
+      "boss": false,
+      "pasta": "Raiz-do-Coração",
+      "prefixo": "Raiz-do-Coração",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "boss-riftheart",
+      "nome": "O Coração Partido",
+      "boss": true,
+      "pasta": "O Coração Partido",
+      "prefixo": "O Coração Partido",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    }
+  ]
+}

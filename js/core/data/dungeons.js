@@ -1033,7 +1033,9 @@ JOGO.DATA = JOGO.DATA || {};
  * descida, fora do Calabouço do Dia e fora dos palcos do Poço — e as PEÇAS
  * dele VAZAM para os calabouços abertos (Progress.lootPool), para o saque não
  * ficar só nos dois temas prontos. Abrir é tirar o id desta lista. */
-JOGO.DATA.portaisFechados = ['windscaffold', 'quakemine', 'brokenheart'];
+// 10/09: "somente dois portais devem estar liberados, os dois primeiros" —
+// o Fecho de Brasa fecha também até os monstros dele chegarem
+JOGO.DATA.portaisFechados = ['emberlock', 'windscaffold', 'quakemine', 'brokenheart'];
 JOGO.DATA.portalFechado = function (id) {
   return (JOGO.DATA.portaisFechados || []).indexOf(id) >= 0;
 };

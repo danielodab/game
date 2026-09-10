@@ -1,0 +1,142 @@
+{
+  "calabouco": "cistern",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\A Corte Afogada\\monstros",
+  "saida": "assets/embedded/models-meshy-cistern.js",
+  "monstros": [
+    {
+      "id": "drowned-porter",
+      "nome": "Afogadiço",
+      "boss": false,
+      "pasta": "Afogadiço",
+      "prefixo": "Afogadiço",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "moray-piper",
+      "nome": "Moreia-Flauta",
+      "boss": false,
+      "pasta": "Moreia-Flauta",
+      "prefixo": "Moreia-Flauta",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "lantern-jelly",
+      "nome": "Água-Viva-Lustre",
+      "boss": false,
+      "pasta": "Água-Viva-Lustre",
+      "prefixo": "Água-Viva-Lustre",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "brine-golem",
+      "nome": "Salmourão",
+      "boss": false,
+      "pasta": "Salmourão",
+      "prefixo": "Salmourão",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "fat-drop",
+      "nome": "Gota-Gorda",
+      "boss": false,
+      "pasta": "Gota-Gorda",
+      "prefixo": "Gota-Gorda",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "droplet",
+      "nome": "Gotinha",
+      "boss": false,
+      "pasta": "Gotinha",
+      "prefixo": "Gotinha",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "sump-crab",
+      "nome": "Caranguejo de Sumidouro",
+      "boss": false,
+      "pasta": "Caranguejo de Sumidouro",
+      "prefixo": "Caranguejo de Sumidouro",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "mist-warbler",
+      "nome": "Cantarola-de-Névoa",
+      "boss": false,
+      "pasta": "Cantarola-de-Névoa",
+      "prefixo": "Cantarola-de-Névoa",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "boss-baroness",
+      "nome": "Baronesa Salmoura",
+      "boss": true,
+      "pasta": "Baronesa Salmoura",
+      "prefixo": "Baronesa Salmoura",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    }
+  ]
+}

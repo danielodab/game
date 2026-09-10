@@ -1,0 +1,157 @@
+{
+  "calabouco": "quakemine",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\A Mina Tremula\\monstros",
+  "saida": "assets/embedded/models-meshy-quakemine.js",
+  "monstros": [
+    {
+      "id": "pick-revenant",
+      "nome": "Assombro de Picareta",
+      "boss": false,
+      "pasta": "Assombro de Picareta",
+      "prefixo": "Assombro de Picareta",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "firedamp-wisp",
+      "nome": "Fogaréu de Grisu",
+      "boss": false,
+      "pasta": "Fogaréu de Grisu",
+      "prefixo": "Fogaréu de Grisu",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "cave-jaw",
+      "nome": "Bocarra",
+      "boss": false,
+      "pasta": "Bocarra",
+      "prefixo": "Bocarra",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "crystal-chanter",
+      "nome": "Cantor de Cristal",
+      "boss": false,
+      "pasta": "Cantor de Cristal",
+      "prefixo": "Cantor de Cristal",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "sinkhole-worm",
+      "nome": "Verme de Abatimento",
+      "boss": false,
+      "pasta": "Verme de Abatimento",
+      "prefixo": "Verme de Abatimento",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "ore-tumbler",
+      "nome": "Rolo de Minério",
+      "boss": false,
+      "pasta": "Rolo de Minério",
+      "prefixo": "Rolo de Minério",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "ore-chip",
+      "nome": "Lasca de Veio",
+      "boss": false,
+      "pasta": "Lasca de Veio",
+      "prefixo": "Lasca de Veio",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "shaft-bat",
+      "nome": "Morcego-de-Poço",
+      "boss": false,
+      "pasta": "Morcego-de-Poço",
+      "prefixo": "Morcego-de-Poço",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "damp-seeper",
+      "nome": "Escorrência",
+      "boss": false,
+      "pasta": "Escorrência",
+      "prefixo": "Escorrência",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "boss-deepknock",
+      "nome": "Batepedra, o Que Bate Embaixo",
+      "boss": true,
+      "pasta": "Batepedra, o Que Bate Embaixo",
+      "prefixo": "Batepedra, o Que Bate Embaixo",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "calabouco": "emberlock",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\O Fecho de Brasa\\monstros",
+  "saida": "assets/embedded/models-meshy-emberlock.js",
+  "monstros": [
+    {
+      "id": "ember-imp",
+      "nome": "Tição",
+      "boss": false,
+      "pasta": "Tição",
+      "prefixo": "Tição",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "walking-anvil",
+      "nome": "Bigorna Ambulante",
+      "boss": false,
+      "pasta": "Bigorna Ambulante",
+      "prefixo": "Bigorna Ambulante",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "ash-wraith",
+      "nome": "Cinzento",
+      "boss": false,
+      "pasta": "Cinzento",
+      "prefixo": "Cinzento",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "slag-mound",
+      "nome": "Monte de Escória",
+      "boss": false,
+      "pasta": "Monte de Escória",
+      "prefixo": "Monte de Escória",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "faceless-smith",
+      "nome": "Ferreiro Sem-Rosto",
+      "boss": false,
+      "pasta": "Ferreiro Sem-Rosto",
+      "prefixo": "Ferreiro Sem-Rosto",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "quench-hound",
+      "nome": "Cão-de-Têmpera",
+      "boss": false,
+      "pasta": "Cão-de-Têmpera",
+      "prefixo": "Cão-de-Têmpera",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "chain-hauler",
+      "nome": "Puxa-Corrente",
+      "boss": false,
+      "pasta": "Puxa-Corrente",
+      "prefixo": "Puxa-Corrente",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "spark-whelp",
+      "nome": "Fagulha",
+      "boss": false,
+      "pasta": "Fagulha",
+      "prefixo": "Fagulha",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "slag-bit",
+      "nome": "Escorinha",
+      "boss": false,
+      "pasta": "Escorinha",
+      "prefixo": "Escorinha",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    },
+    {
+      "id": "boss-heartforge",
+      "nome": "Magno, o Acendedor",
+      "boss": true,
+      "pasta": "Magno, o Acendedor",
+      "prefixo": "Magno, o Acendedor",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack",
+        "hit": "hit",
+        "death": "death"
+      }
+    }
+  ]
+}

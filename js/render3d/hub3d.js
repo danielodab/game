@@ -215,11 +215,7 @@ var JOGO = (typeof window !== 'undefined')
     // na hora — pedras de tons variados com junta escura, padrão corrido —
     // e se repete pela praça inteira. Determinística: a mesma praça em toda
     // visita, como tudo aqui.
-    chao = new THREE.Mesh(
-      new THREE.PlaneGeometry(raioAtual() * 2, raioAtual() * 2),
-      new THREE.MeshStandardMaterial({ map: texturaLajotas(), roughness: 1 })
-    );
-    chao.rotation.x = -Math.PI / 2;
+    chao = montaChao();
     scene.add(chao);
     // o mundo em volta, mais escuro, para a praça não terminar num fio duro
     var fundo = new THREE.Mesh(
@@ -388,6 +384,65 @@ var JOGO = (typeof window !== 'undefined')
     montaCena();
   }
 
+  /* O CHÃO (10/09, pedido do dono: "o mapa está muito quadrado, fica
+   * estranho"): a praça deixou de ser um quadrado — é uma SUPERELIPSE
+   * (|x/R|^n + |z/R|^n = 1, n = 3,2: um quadrado de cantos bem redondos),
+   * com um MEIO-FIO de pedra escura correndo a borda inteira. A antessala
+   * continua quadrada: é um pátio murado. A mesma curva prende a caminhada
+   * (dentroDoMapa), então ninguém anda no escuro além do meio-fio. */
+  var MAPA_N = 3.2;
+  function raioNaDirecao(ang) {
+    // o raio da superelipse naquela direção (para a curva e para o clamp)
+    var c = Math.cos(ang), s = Math.sin(ang);
+    return raioAtual() / Math.pow(Math.pow(Math.abs(c), MAPA_N) + Math.pow(Math.abs(s), MAPA_N), 1 / MAPA_N);
+  }
+  function dentroDoMapa(p, folga) {
+    var lim = folga || 0.94;
+    if (salaAtual) {
+      var l = raioAtual() * lim;
+      p.x = Math.max(-l, Math.min(l, p.x));
+      p.z = Math.max(-l, Math.min(l, p.z));
+      return p;
+    }
+    var ang = Math.atan2(p.z, p.x);
+    var rmax = raioNaDirecao(ang) * lim;
+    var r = Math.hypot(p.x, p.z);
+    if (r > rmax) { p.x *= rmax / r; p.z *= rmax / r; }
+    return p;
+  }
+  function montaChao() {
+    var mat = new THREE.MeshStandardMaterial({ map: texturaLajotas(), roughness: 1 });
+    if (salaAtual) {
+      var quad = new THREE.Mesh(new THREE.PlaneGeometry(raioAtual() * 2, raioAtual() * 2), mat);
+      quad.rotation.x = -Math.PI / 2;
+      return quad;
+    }
+    var forma = new THREE.Shape(), N = 128, pontos = [];
+    for (var i = 0; i < N; i++) {
+      var a = (i / N) * Math.PI * 2, rr = raioNaDirecao(a);
+      var x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+      pontos.push(new THREE.Vector3(x, 0, y));
+      if (i === 0) forma.moveTo(x, y); else forma.lineTo(x, y);
+    }
+    forma.closePath();
+    var geo = new THREE.ShapeGeometry(forma, 1);
+    // a lajota se repete a cada 4 m, como no quadrado de antes (uv = mundo/4)
+    var uv = geo.attributes.uv, pos = geo.attributes.position;
+    for (var k = 0; k < uv.count; k++) uv.setXY(k, pos.getX(k) / 4, pos.getY(k) / 4);
+    uv.needsUpdate = true;
+    var grupo = new THREE.Group();
+    var piso = new THREE.Mesh(geo, mat);
+    piso.rotation.x = -Math.PI / 2;
+    grupo.add(piso);
+    // o meio-fio: um tubo de pedra fechado pela borda toda
+    var curva = new THREE.CatmullRomCurve3(pontos, true, 'catmullrom', 0.5);
+    var tubo = new THREE.Mesh(new THREE.TubeGeometry(curva, 256, 0.42, 8, true),
+                              new THREE.MeshStandardMaterial({ color: 0x2f3338, roughness: 1 }));
+    tubo.position.y = 0.05;
+    grupo.add(tubo);
+    return grupo;
+  }
+
   /* OS SEIS PORTAIS, num arco ao norte — "lado a lado", como pedido. Cada um é
    * um anel de pedra com o miolo aceso na cor do Fecho e o nome flutuando em
    * cima. A ordem é a ordem de profundidade dos calabouços: ler o arco da
@@ -473,7 +528,7 @@ var JOGO = (typeof window !== 'undefined')
   function montaMercado() {
     // a tenda saiu do meio-sul: ali ela nascia DENTRO da câmera inicial
     // (que fica às costas do herói) e o toldo tomava a primeira tela
-    var px = -RAIO_MAPA * 0.50, pz = RAIO_MAPA * 0.58;
+    var px = -RAIO_MAPA * 0.60, pz = RAIO_MAPA * 0.50;   // a rua das barracas (10/09)
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -503,7 +558,7 @@ var JOGO = (typeof window !== 'undefined')
     // o cofre foi para o CANTO sudeste: em (0.60, 0.25) ele nascia a 4,8 m
     // da Sede — dois prédios de 12-14 m de largura, um DENTRO do outro
     // (a foto do dono pegou a fortaleza engolindo a cúpula)
-    var px = RAIO_MAPA * 0.78, pz = RAIO_MAPA * 0.42;
+    var px = RAIO_MAPA * 0.70, pz = RAIO_MAPA * 0.40;
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -532,7 +587,7 @@ var JOGO = (typeof window !== 'undefined')
   function montaArena() {
     // subiu um degrau ao norte quando o coliseu cresceu (teto 24 m):
     // na posição antiga a arquibancada engolia a tenda do Mercadinho
-    var px = -RAIO_MAPA * 0.62, pz = RAIO_MAPA * 0.10;
+    var px = -RAIO_MAPA * 0.64, pz = RAIO_MAPA * 0.04;
     var g = new THREE.Group();
     var anel = new THREE.Mesh(
       new THREE.RingGeometry(2.4, 3.1, 40),
@@ -564,7 +619,7 @@ var JOGO = (typeof window !== 'undefined')
    * da barraca não chega, mesa + tocha + barril seguram o lugar (o mesmo
    * contrato dos outros: a sonda veste com `praca_forja` quando existir). */
   function montaForja() {
-    var px = RAIO_MAPA * 0.35, pz = RAIO_MAPA * 0.52;
+    var px = RAIO_MAPA * 0.30, pz = RAIO_MAPA * 0.68;    // a rua das barracas (10/09)
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -593,7 +648,7 @@ var JOGO = (typeof window !== 'undefined')
    * entre o Mercadinho e o herói. Corpo de primitivas até a arte dele
    * chegar (o prompt foi dado); o lugar e a ficha já são os definitivos. */
   function montaLoteria() {
-    var px = -RAIO_MAPA * 0.22, pz = RAIO_MAPA * 0.66;
+    var px = -RAIO_MAPA * 0.26, pz = RAIO_MAPA * 0.70;   // a rua das barracas (10/09)
     var g = new THREE.Group();
     // o balcão
     var balcao = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 1.2),
@@ -641,7 +696,7 @@ var JOGO = (typeof window !== 'undefined')
   function montaSede() {
     // afastada do extremo leste do arco: a fortaleza tapava o portal do
     // Coração Partido na câmera padrão (mesma coluna de visada)
-    var px = RAIO_MAPA * 0.55, pz = RAIO_MAPA * 0.14;
+    var px = RAIO_MAPA * 0.62, pz = RAIO_MAPA * 0.06;
     var g = new THREE.Group();
     var mastro = new THREE.Mesh(
       new THREE.CylinderGeometry(0.09, 0.13, 4.4, 8),
@@ -832,40 +887,37 @@ var JOGO = (typeof window !== 'undefined')
       return true;
     }
 
-    /* As moitas: no anel externo a âncora é a ÁRVORE (a única peça com porte
-     * de âncora — a variação de altura e rotação disfarça a repetição); nos
-     * bolsões internos, composições "de trabalho" do jardim: escada apoiada,
-     * carrinho com canteiro, tronco caído. */
-    var SATELITES = ['jd_tronco', 'jd_vaso', 'jd_canteiro', 'jd_regador',
-                     'jd_redoma', 'jd_carrinho'];
-    var moitas = [];
-    for (var v = 0; v < 8; v++) {
-      moitas.push({ ang: 0.39 + v * (Math.PI / 4),
-                    raio: RAIO_MAPA * (0.84 + (v % 2) * 0.06),
-                    anc: 'jd_estufa_arvore', mult: 1 + (v % 3) * 0.14 });
-    }
-    [['jd_escada', 0.9], ['jd_carrinho', 2.6], ['jd_tronco', 4.4]]
-      .forEach(function (par) {
-        moitas.push({ ang: par[1], raio: RAIO_MAPA * 0.56,
-                      anc: par[0], mult: 1 });
-      });
-
-    var pi = 0;
-    moitas.forEach(function (mo, mi) {
-      var cx0 = Math.sin(mo.ang) * mo.raio;
-      var cz0 = Math.cos(mo.ang) * mo.raio;
-      if (!longeDosLugares(cx0, cz0)) return;          // porta é porta
-      planta(mo.anc, mo.mult, cx0, cz0, mi * 1.7);
-      var sats = 2 + (mi % 2);
-      for (var s2 = 0; s2 < sats; s2++) {
-        var a3 = mi * 2.1 + s2 * (Math.PI * 2 / sats) + 0.7;
-        planta(SATELITES[pi++ % SATELITES.length],
-               1 + (s2 % 2) * 0.25,
-               cx0 + Math.sin(a3) * (1.5 + s2 * 0.5),
-               cz0 + Math.cos(a3) * (1.5 + s2 * 0.5),
-               a3 * 2.3);
-      }
+    /* OS ENFEITES COM ENDEREÇO (10/09, pedido do dono: "tem uns itens
+     * aleatórios no mapa, preciso que organize eles"). Nada de anel
+     * sorteado: cada peça tem um lugar com sentido —
+     *   · seis ÁRVORES: os quatro cantos redondos da praça e as duas que
+     *     ladeiam a chegada do herói ao sul, cada uma com um vaso ao pé;
+     *   · a BANCADA DO MERCADO: carrinho e canteiro encostados no
+     *     Mercadinho; a ESCADA apoiada na Sede; TRONCO e REGADOR na Forja;
+     *   · duas REDOMAS simétricas ao pé da Árvore-Mundo.
+     * Tudo fora do raio de conversa dos lugares (longeDosLugares). */
+    var R = RAIO_MAPA;
+    var ARVORES = [[-0.74, -0.74], [0.74, -0.74], [-0.74, 0.74], [0.74, 0.74], [-0.16, 0.92], [0.16, 0.92]];
+    ARVORES.forEach(function (a, i) {
+      var x = a[0] * R, z = a[1] * R;
+      if (!longeDosLugares(x, z)) return;
+      planta('jd_estufa_arvore', 1 + (i % 3) * 0.12, x, z, i * 1.1);
+      planta('jd_vaso', 1.1, x + Math.sin(i * 1.3) * 1.6, z + Math.cos(i * 1.3) * 1.6, i * 0.7);
     });
+    function aoLadoDe(id, dx, dz) {
+      for (var j = 0; j < lugares.length; j++) if (lugares[j].id === id) {
+        return { x: lugares[j].pos.x + dx, z: lugares[j].pos.z + dz };
+      }
+      return null;
+    }
+    var pM = aoLadoDe('mercado', -5.6, 1.2);
+    if (pM) { planta('jd_carrinho', 1, pM.x, pM.z, 0.6); planta('jd_canteiro', 1, pM.x + 1.6, pM.z + 1.3, 1.9); }
+    var pS = aoLadoDe('sede', 0.8, 6.2);
+    if (pS) planta('jd_escada', 1, pS.x, pS.z, 2.4);
+    var pF = aoLadoDe('forja', 5.4, 0.6);
+    if (pF) { planta('jd_tronco', 1, pF.x, pF.z, 0.9); planta('jd_regador', 1, pF.x + 1.2, pF.z - 1.4, 2.2); }
+    planta('jd_redoma', 1, -TRONCO_RAIO - 1.4, 1.2, 0.4);
+    planta('jd_redoma', 1, TRONCO_RAIO + 1.4, -1.2, 2.0);
 
     /* OS CANTINHOS TEMÁTICOS DOS PORTAIS (30/08, pedido: "perto de cada um
      * deles coloque elementos daquele mapa"). Cada portal com catálogo de
@@ -894,24 +946,44 @@ var JOGO = (typeof window !== 'undefined')
       scene.add(no);
       return no;
     }
+    /* 10/09, pedido do dono: "os itens ao lado dos portais liberados,
+     * principalmente os muros, estão muito pequenos; esse cenário ao redor
+     * desses portais deve estar mais dentro do tema". Só os portais ABERTOS
+     * ganham cantinho — e ele virou um pedaço de verdade do calabouço: três
+     * muros altos (3,1 m, o mesmo porte da batalha) num arco atrás do portal,
+     * dois pilares flanqueando a boca, duas peças altas nas pontas, dois
+     * enfeites e uma peça de chão na frente. Portal fechado fica pelado: o
+     * X vermelho já diz tudo. */
     lugares.forEach(function (lg, li) {
-      if (lg.tipo !== 'portal' || !lg.tema) return;
+      if (lg.tipo !== 'portal' || !lg.tema || lg.fechado) return;
       var catT = JOGO.CENARIO && JOGO.CENARIO[lg.tema];
       if (!catT) return;
       var px2 = lg.pos.x, pz2 = lg.pos.z;
       var r0 = Math.max(0.01, Math.hypot(px2, pz2));
       var ux = px2 / r0, uz = pz2 / r0;      // radial: para FORA do centro
       var tx = -uz, tz = ux;                 // tangencial: ao longo do arco
-      var rotT = Math.atan2(tx, tz);         // a mureta corre com o arco
-      var muro = (catT.alto || [])[li % Math.max(1, (catT.alto || []).length)];
-      var altoP = (catT.sotaque_alto || [])[li % Math.max(1, (catT.sotaque_alto || []).length)];
-      var enfP = (catT.sotaque || [])[li % Math.max(1, (catT.sotaque || []).length)];
-      if (muro) {
-        plantaTema(muro, 1.05, 4.6, px2 + tx * 4.2 + ux * 1.2, pz2 + tz * 4.2 + uz * 1.2, rotT);
-        plantaTema(muro, 1.05, 4.6, px2 - tx * 4.2 + ux * 1.2, pz2 - tz * 4.2 + uz * 1.2, rotT);
+      var rotT = Math.atan2(tx, tz);         // o muro corre com o arco
+      function pega(lista, k) { return (lista && lista.length) ? lista[(li + k) % lista.length] : null; }
+      // os três muros do fundo, num arco de 5 m atrás do portal
+      [[-5.2, 2.2, rotT + 0.35], [0, 3.4, rotT], [5.2, 2.2, rotT - 0.35]].forEach(function (m, k) {
+        var muro = pega(catT.alto, k);
+        if (muro) plantaTema(muro, 3.1, 7.0, px2 + tx * m[0] + ux * m[1], pz2 + tz * m[0] + uz * m[1], m[2]);
+      });
+      // os pilares na boca do portal
+      var pilar = pega(catT.pilar, 0);
+      if (pilar) {
+        plantaTema(pilar, 3.4, 2.0, px2 + tx * 3.0 - ux * 0.6, pz2 + tz * 3.0 - uz * 0.6, rotT);
+        plantaTema(pilar, 3.4, 2.0, px2 - tx * 3.0 - ux * 0.6, pz2 - tz * 3.0 - uz * 0.6, rotT);
       }
-      if (altoP) plantaTema(altoP, 2.8, 2.4, px2 + ux * 3.4 + tx * 2.3, pz2 + uz * 3.4 + tz * 2.3, li * 1.3);
-      if (enfP) plantaTema(enfP, 1.2, 2.2, px2 + ux * 3.1 - tx * 2.3, pz2 + uz * 3.1 - tz * 2.3, li * 2.1);
+      // as peças altas nas pontas do arco
+      var alto1 = pega(catT.sotaque_alto, 0), alto2 = pega(catT.sotaque_alto, 1);
+      if (alto1) plantaTema(alto1, 3.2, 3.0, px2 + tx * 7.6 + ux * 0.4, pz2 + tz * 7.6 + uz * 0.4, li * 1.3);
+      if (alto2) plantaTema(alto2, 3.2, 3.0, px2 - tx * 7.6 + ux * 0.4, pz2 - tz * 7.6 + uz * 0.4, li * 2.1);
+      // dois enfeites e a peça de chão na frente, fora da pista do portal
+      var enf1 = pega(catT.sotaque, 0), enf2 = pega(catT.sotaque, 2), chaoP = pega(catT.chao, 0);
+      if (enf1) plantaTema(enf1, 1.6, 2.6, px2 + tx * 4.6 - ux * 2.6, pz2 + tz * 4.6 - uz * 2.6, li * 0.8);
+      if (enf2) plantaTema(enf2, 1.6, 2.6, px2 - tx * 4.6 - ux * 2.6, pz2 - tz * 4.6 - uz * 2.6, li * 1.7);
+      if (chaoP) plantaTema(chaoP, 0.7, 2.4, px2 + tx * 1.2 - ux * 4.4, pz2 + tz * 1.2 - uz * 4.4, li * 0.5);
     });
   }
 
@@ -1332,14 +1404,12 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
     // …depois o chão: andar até o ponto
-    var no = raycaster.intersectObject(chao);
+    var no = raycaster.intersectObject(chao, true);
     if (no && no.length) {
       var p = no[0].point;
       // não deixa sair do mapa — o clamp virou POR EIXO com a praça quadrada
       // (o radial de antes cortava os cantos, que agora são chão de verdade)
-      var lim = raioAtual() * 0.94;
-      p.x = Math.max(-lim, Math.min(lim, p.x));
-      p.z = Math.max(-lim, Math.min(lim, p.z));
+      dentroDoMapa(p, 0.94);
       // e o tronco da Árvore-Mundo não é destino: alvo dentro dele é
       // empurrado para a borda — o resto do desvio acontece no passo
       // (na antessala não há árvore)
