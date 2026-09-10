@@ -1,0 +1,26 @@
+# SOTERRA no Coolify: o Caddy DE DENTRO do contêiner.
+# O domínio e o HTTPS são do proxy do Coolify, que entrega aqui em HTTP na
+# porta 80. Este Caddy só separa o tráfego: arquivos do jogo e do site, a API
+# de contas e o Relé, que rodam no mesmo contêiner (ver entrada.sh).
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	root * /srv/soterra
+	encode zstd gzip
+
+	# a raiz cai na landing; o jogo continua em /index.html
+	redir / /site/ 302
+
+	# a API de contas (servidor/api.py)
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8300
+	}
+
+	# o Relé (servidor/rele.py), em WebSocket
+	reverse_proxy /ws 127.0.0.1:8791
+
+	file_server
+}

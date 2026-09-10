@@ -40,7 +40,7 @@ except Exception:
     pass
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FORA = ['tests', 'tools', 'docs', '.claude', 'unity',
+FORA = ['tests', 'tools', 'docs', '.claude', 'unity', 'servidor/dados',
         'assets/embedded/models-*', 'assets/embedded/env-kit*', 'assets/embedded/muro-*']
 RE_NOME = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$')
 RE_IP = re.compile(r'^[0-9]{1,3}(\.[0-9]{1,3}){3}$')

@@ -1,0 +1,21 @@
+# O que NÃO entra na imagem do SOTERRA (Dockerfile). É a mesma lista do
+# pacote do VPS (tools/sobe_vps.py): o jogo servido não precisa de nada disto.
+.git
+.claude
+tests
+tools
+docs
+unity
+www
+node_modules
+android
+ios
+servidor/dados
+assets/candidatos
+assets/packs
+assets/embedded/models-*
+assets/embedded/env-kit*
+assets/embedded/muro-*
+assets/embedded/sprites-*
+**/__pycache__
+**/*.pyc

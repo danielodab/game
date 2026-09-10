@@ -53,6 +53,20 @@ if [ ! -r /etc/os-release ] || ! grep -Eq '^ID(_LIKE)?=.*(ubuntu|debian)' /etc/o
   echo "este instalador é para Ubuntu (ou Debian)"
   exit 1
 fi
+# Um VPS com Coolify (ou outro painel) já tem um proxy nas portas 80 e 443.
+# Instalar o Caddy aqui disputaria as portas com ele e, depois de um
+# reinício, podia derrubar todas as outras aplicações. Nesse caso, suba pelo
+# Coolify: servidor/SUBIR.md, parte "No Coolify".
+if [ -d /data/coolify ] || { command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^coolify'; }; then
+  echo "Este VPS tem o Coolify. O instalador disputaria as portas 80 e 443 com ele"
+  echo "e derrubaria as outras aplicações. Suba pelo Coolify: servidor/SUBIR.md, parte \"No Coolify\"."
+  exit 1
+fi
+if ! command -v caddy >/dev/null 2>&1 && command -v ss >/dev/null 2>&1    && [ -n "$(ss -Hltn '( sport = :80 or sport = :443 )' 2>/dev/null)" ]; then
+  echo "Outro programa já escuta na porta 80 ou 443 deste VPS (um painel, um nginx...)."
+  echo "O instalador não vai disputar com ele. Veja quem é: ss -ltnp '( sport = :80 or sport = :443 )'"
+  exit 1
+fi
 
 PACOTE="$(cd "$(dirname "$0")/.." && pwd)"
 WEB=/var/www/soterra
