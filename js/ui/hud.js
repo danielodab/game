@@ -1250,7 +1250,7 @@ var JOGO = (typeof window !== 'undefined')
         // O AVATAR: a conta pode vestir uma fusão do guarda-roupa — o
         // re-entrar troca o corpo (e o guarda do laço segura o rAF único)
         if (j.avatar && JOGO.Hub && JOGO.Hub.entrar) {
-          JOGO.Hub.entrar(mundo, j.avatar);
+          JOGO.Hub.entrar(mundo, j.avatar, { sala: sala });
         }
         // a plaquinha: nome, título — e a CHAMA DA BRASA. A Fagulha é uma
         // faísca de vagalume, mas SÓ para quem já pisou na arena: quem nunca
