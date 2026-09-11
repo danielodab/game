@@ -1275,11 +1275,29 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
                 "SELECT r.nome, r.brasa_pts, r.brasa_partidas FROM resumos r JOIN contas c ON c.id = r.conta_id "
                 "WHERE c.banido = 0 AND c.gm = 0 AND r.brasa_partidas > 0 "
                 "ORDER BY r.brasa_pts DESC, r.nome COLLATE NOCASE LIMIT 50").fetchall()
+            # 11/09: a guilda agora mora no servidor (guilda.py). O ranking lê
+            # da tabela guildas + guilda_membros e soma o XP dos membros via
+            # resumos. Guildas que só existem no save antigo (resumos.guilda_nome)
+            # também aparecem, sem duplicar, via UNION.
             guildas = self.con.execute(
-                "SELECT r.guilda_nome AS nome, MAX(r.guilda_emblema) AS emblema, COUNT(*) AS membros, "
-                "SUM(r.xp_total) AS xp FROM resumos r JOIN contas c ON c.id = r.conta_id "
-                "WHERE c.banido = 0 AND c.gm = 0 AND r.guilda_nome IS NOT NULL AND r.guilda_nome != '' "
-                "GROUP BY r.guilda_nome COLLATE NOCASE ORDER BY xp DESC, membros DESC LIMIT 50").fetchall()
+                "SELECT nome, emblema, membros, xp FROM ("
+                "  SELECT g.nome AS nome, g.emblema AS emblema, COUNT(m.conta_id) AS membros, "
+                "    COALESCE(SUM(r.xp_total), 0) AS xp "
+                "  FROM guildas g "
+                "  JOIN guilda_membros m ON m.guilda_id = g.id "
+                "  JOIN contas c ON c.id = m.conta_id "
+                "  LEFT JOIN resumos r ON r.conta_id = m.conta_id "
+                "  WHERE c.banido = 0 AND c.gm = 0 "
+                "  GROUP BY g.id "
+                "  UNION ALL "
+                "  SELECT r2.guilda_nome AS nome, MAX(r2.guilda_emblema) AS emblema, COUNT(*) AS membros, "
+                "    SUM(r2.xp_total) AS xp "
+                "  FROM resumos r2 JOIN contas c2 ON c2.id = r2.conta_id "
+                "  WHERE c2.banido = 0 AND c2.gm = 0 "
+                "    AND r2.guilda_nome IS NOT NULL AND r2.guilda_nome != '' "
+                "    AND r2.guilda_nome NOT IN (SELECT nome FROM guildas) "
+                "  GROUP BY r2.guilda_nome COLLATE NOCASE "
+                ") ORDER BY xp DESC, membros DESC LIMIT 50").fetchall()
             # o melhor de cada classe (10/09): uma linha por conta (a melhor ficha
             # daquela classe, escolhida no _resumo), sem banidas nem a equipe; as 7 chaves sempre
             por_classe = {classe: self.con.execute(
