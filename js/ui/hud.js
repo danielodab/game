@@ -6433,7 +6433,8 @@ var JOGO = (typeof window !== 'undefined')
       var p = new Path2D(pathStr);
       g.fillStyle = fg || '#ffffff';
       g.save();
-      g.scale(w/100, h/100);
+      g.translate(w*0.2, h*0.2);
+      g.scale(w*0.6/100, h*0.6/100);
       g.fill(p);
       g.restore();
     } else if (sym) {
