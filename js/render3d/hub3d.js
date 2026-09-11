@@ -170,24 +170,63 @@ var JOGO = (typeof window !== 'undefined')
    * retângulo"). O desenho é o da bandeira da Sede: fundo escuro, filete
    * dourado. A largura da placa abraça o texto, não o canvas inteiro —
    * placa de nome curto não pode parecer um outdoor. */
+  function drawShieldCanvas(g, x, y, size, bg, fg, sym) {
+    var h = size, w = size;
+    g.save();
+    g.translate(x, y);
+    g.fillStyle = bg;
+    g.beginPath();
+    g.moveTo(w*0.1, h*0.1);
+    g.lineTo(w*0.9, h*0.1);
+    g.lineTo(w*0.9, h*0.5);
+    g.bezierCurveTo(w*0.9, h*0.8, w*0.5, h*0.95, w*0.5, h*0.95);
+    g.bezierCurveTo(w*0.5, h*0.95, w*0.1, h*0.8, w*0.1, h*0.5);
+    g.closePath();
+    g.fill();
+    g.lineWidth = w*0.06; g.strokeStyle = '#1d1a14'; g.stroke();
+    g.fillStyle = fg;
+    g.shadowColor = 'transparent'; g.shadowBlur = 0;
+    g.font = Math.floor(h*0.5) + 'px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(sym, w*0.5, h*0.48);
+    g.restore();
+  }
+
   function rotulo(texto, cor, escala, op) {
     var cv = document.createElement('canvas');
     cv.width = 512; cv.height = 128;
     var g = cv.getContext('2d');
     g.font = '600 44px Georgia, serif';
-    g.textAlign = 'center';
+    
+    var escudoParts = (op && op.escudo) ? op.escudo.split('|') : null;
+    var paddingShield = escudoParts ? 56 : 0;
+    var textW = Math.ceil(g.measureText(texto).width);
+    var larg = Math.min(492, textW + 56 + paddingShield);
+    var x0 = (512 - larg) / 2;
+
     if (op && op.placa) {
-      var larg = Math.min(492, Math.ceil(g.measureText(texto).width) + 56);
-      var x0 = (512 - larg) / 2;
       g.fillStyle = op.fundo || 'rgba(24,18,10,0.88)';
       g.fillRect(x0, 18, larg, 92);
       g.strokeStyle = op.borda || '#c9a227';
       g.lineWidth = op.traco || 5;
       g.strokeRect(x0 + 2.5, 20.5, larg - 5, 87);
     }
+    
+    if (escudoParts && escudoParts.length >= 4) {
+      drawShieldCanvas(g, x0 + 16, 32, 64, escudoParts[1], escudoParts[2], escudoParts[3]);
+    }
+
     g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 10;
     g.fillStyle = cor || '#f0ead8';
-    g.fillText(texto, 256, 78);
+    
+    if (escudoParts) {
+      g.textAlign = 'left';
+      g.fillText(texto, x0 + 20 + paddingShield, 78);
+    } else {
+      g.textAlign = 'center';
+      g.fillText(texto, 256, 78);
+    }
+
     var tex = new THREE.Texture(cv);
     tex.needsUpdate = true;
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
@@ -1340,8 +1379,14 @@ var JOGO = (typeof window !== 'undefined')
     // em cima"). Placa própria, um degrau menor que a do nome.
     var altoGuilda = 0;
     if (temGuilda) {
-      var gtx = (guilda.emblema || '⚑') + ' ' + guilda.nome;
-      var sg = rotulo(gtx, '#ffd98a', 0.30, { placa: true, borda: '#8a6f2e' });
+      var gtx = guilda.nome;
+      var codEscudo = null;
+      if (guilda.emblema && guilda.emblema.indexOf('shield|') === 0) {
+        codEscudo = guilda.emblema;
+      } else {
+        gtx = (guilda.emblema || '⚑') + ' ' + guilda.nome;
+      }
+      var sg = rotulo(gtx, '#ffd98a', 0.30, { placa: true, borda: '#8a6f2e', escudo: codEscudo });
       sg.position.y = alto + (titulo ? 0.66 : 0.5) + 0.52;
       corpo.node.add(sg);
       corpo.plaquinhaGuilda = sg;

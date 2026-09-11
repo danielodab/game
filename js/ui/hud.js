@@ -1180,18 +1180,23 @@ var JOGO = (typeof window !== 'undefined')
     // principal não dizia onde o jogador estava
     dockBotoes = {};
     [{ ic: '🎒', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
-     { ic: '🔨', rot: 'Forja', abre: 'forge' },
      { ic: '📖', rot: 'Feitiços', abre: 'spells' },
      { ic: '🃏', rot: 'Coleção', abre: 'collection' },
      { ic: '🎭', rot: 'Avatar', abre: 'avatar' },
-     { ic: '📜', rot: 'Missões', abre: 'missoes' }
+     { ic: '📜', rot: 'Missões', abre: 'missoes' },
+     { ic: '🛡️', rot: 'Guilda', abre: 'guilda_remoto' } // Adicionado para acesso remoto
     ].forEach(function (d) {
       var b = el('button', 'hub-dock-b');
       b.type = 'button';
       b.appendChild(el('span', 'hd-ic', d.ic));
       b.appendChild(el('span', 'hd-rot', d.rot +
         (d.tecla ? ' <span class="tecla">' + d.tecla + '</span>' : '')));
-      tap(b, function () { openSheet(d.abre); });
+      if (d.abre === 'guilda_remoto') {
+        tap(b, function () { openSheet('guilda', true); });
+        b.style.display = 'none'; // Escondido até carregar a conta
+      } else {
+        tap(b, function () { openSheet(d.abre); });
+      }
       dock.appendChild(b);
       dockBotoes[d.abre] = b;
     });
@@ -1268,6 +1273,12 @@ var JOGO = (typeof window !== 'undefined')
           // funda/entra chama nomeia de novo só com a guilda.
           JOGO.Hub.nomeia(j.nome || '', j.titulo || '', tier, resumoGuilda);
         }
+        
+        // Exibe o botão da guilda no dock se o jogador estiver em uma guilda
+        if (dockBotoes['guilda_remoto']) {
+          dockBotoes['guilda_remoto'].style.display = (resumoGuilda && resumoGuilda.nome) ? '' : 'none';
+        }
+
         // A AURA do Traje do Colecionador fechado (25/08)
         if (JOGO.Hub && JOGO.Hub.aura) JOGO.Hub.aura(safe(temAuraSelos, false));
       });
@@ -3996,7 +4007,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'battleMenu') sheetBattleMenu();
     else if (name === 'contas') sheetContas();
     else if (name === 'perfil') sheetPerfil(arg);
-    else if (name === 'guilda') sheetGuilda();
+    else if (name === 'guilda') sheetGuilda(arg);
     else if (name === 'banco') sheetBanco();
     else if (name === 'missoes') sheetMissoes();
     else if (name === 'mercado') sheetMercado();
@@ -6383,9 +6394,45 @@ var JOGO = (typeof window !== 'undefined')
     }
     return fora;
   }
+  function drawShieldCanvas(cv, bg, fg, sym) {
+    var g = cv.getContext('2d');
+    var w = cv.width, h = cv.height;
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = bg;
+    g.beginPath();
+    g.moveTo(w*0.1, h*0.1);
+    g.lineTo(w*0.9, h*0.1);
+    g.lineTo(w*0.9, h*0.5);
+    g.bezierCurveTo(w*0.9, h*0.8, w*0.5, h*0.95, w*0.5, h*0.95);
+    g.bezierCurveTo(w*0.5, h*0.95, w*0.1, h*0.8, w*0.1, h*0.5);
+    g.closePath();
+    g.fill();
+    g.lineWidth = w*0.06; g.strokeStyle = '#1d1a14'; g.stroke();
+    g.fillStyle = fg;
+    g.font = Math.floor(h*0.5) + 'px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(sym, w*0.5, h*0.48);
+  }
+
+  function elShield(code, size) {
+    var cv = document.createElement('canvas');
+    cv.width = size; cv.height = size;
+    var parts = String(code || '').split('|');
+    if (parts[0] === 'shield' && parts.length >= 4) {
+      drawShieldCanvas(cv, parts[1], parts[2], parts[3]);
+      return cv;
+    }
+    // fallback emoji antigo
+    var sp = el('span', null, code);
+    sp.style.cssText = 'display:inline-block;width:'+size+'px;text-align:center;font-size:'+(size*0.7)+'px;';
+    return sp;
+  }
+
   function sheetGuilda() {
-    var body = sheetShell('Guilda',
-      'Cofre que só o líder gasta, bônus para todos, e um banco de empréstimos entre membros.');
+    var remoto = !!lastSheetArg;
+    var body = sheetShell('Guilda', remoto 
+      ? 'Lista de membros e informações do clã. O cofre e o banco só abrem na Sede.'
+      : 'Cofre que só o líder gasta, bônus para todos, e um banco de empréstimos entre membros.');
     sheetName = 'guilda';
     var Gd = JOGO.Guilda;
     if (!Gd || !JOGO.DB) { body.appendChild(el('p', 'empty', 'A guilda não carregou.')); return; }
@@ -6437,12 +6484,40 @@ var JOGO = (typeof window !== 'undefined')
         linhaIns.style.color = podePagar ? '#7fe08a' : '#c9a227';
         caixa.appendChild(linhaIns);
 
+        if (guildaEmblemaEscolhido === '?' || guildaEmblemaEscolhido.indexOf('shield|') !== 0) {
+          guildaEmblemaEscolhido = 'shield|#b40426|#ffffff|⚔️';
+        }
+        var curParts = guildaEmblemaEscolhido.split('|');
+
         var fila = el('div', 'guilda-emblemas');
-        GUILDA_EMBLEMAS.forEach(function (em) {
-          var b = btn(em, 'btn-mini' + (guildaEmblemaEscolhido === em ? ' btn-gold' : ' btn-ghost'),
-            function () { guildaEmblemaEscolhido = em; sheetGuilda(); });
-          fila.appendChild(b);
-        });
+        fila.style.cssText = 'display:flex; flex-direction:column; gap:8px; align-items:center; margin-bottom:12px;';
+        
+        var preview = elShield(guildaEmblemaEscolhido, 64);
+        fila.appendChild(preview);
+
+        function pickRow(arr, idxToSet) {
+          var row = el('div', 'guilda-emblemas-row');
+          row.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; justify-content:center;';
+          arr.forEach(function (v) {
+            var b = btn(idxToSet < 3 ? '' : v, 'btn-mini' + (curParts[idxToSet] === v ? ' btn-gold' : ' btn-ghost'), function () {
+              curParts[idxToSet] = v;
+              guildaEmblemaEscolhido = curParts.join('|');
+              sheetGuilda();
+            });
+            if (idxToSet < 3) {
+              b.style.background = v;
+              b.style.width = '24px'; b.style.height = '24px';
+              b.style.border = (curParts[idxToSet] === v ? '2px solid var(--gold)' : '2px solid transparent');
+            }
+            row.appendChild(b);
+          });
+          return row;
+        }
+
+        fila.appendChild(pickRow(['#b40426', '#3b4cc0', '#3a8040', '#e8a825', '#333333', '#ffffff', '#8a2be2'], 1));
+        fila.appendChild(pickRow(['#ffffff', '#000000', '#e8a825'], 2));
+        fila.appendChild(pickRow(['⚔️', '👑', '★', '🐉', '🦅', '🦁', '☠', '⚜', '⚓', '🌲'], 3));
+
         caixa.appendChild(fila);
         var inp = document.createElement('input');
         inp.className = 'hub-input';
@@ -6486,7 +6561,9 @@ var JOGO = (typeof window !== 'undefined')
         var euId = (g.eu != null) ? g.eu : contaJ.id;
         // ---- A FICHA
         var cab = el('div', 'guilda-cab');
-        cab.appendChild(el('span', 'guilda-emblema', esc(g.emblema)));
+        var emblemaPlaca = elShield(g.emblema, 48);
+        emblemaPlaca.className = 'guilda-emblema';
+        cab.appendChild(emblemaPlaca);
         var ct = el('div', 'guilda-cab-t');
         ct.appendChild(el('h3', null, esc(g.nome) + ' <i>nível ' + g.nivel + '</i>'));
         var alvoNivel = 60 * g.nivel * (g.nivel + 1) / 2;
@@ -6529,28 +6606,30 @@ var JOGO = (typeof window !== 'undefined')
         // ---- A OFERENDA (30/08): "a guild upa conforme os usuários doam
         // xp" — vinténs da conta viram XP da guilda, 2 por 1. Qualquer
         // membro doa; o dreno de moeda é o preço da vaidade coletiva.
-        var of = el('div', 'guilda-oferenda');
-        of.style.cssText = 'display:flex;gap:8px;align-items:center;margin:8px 0';
-        var ofInp = document.createElement('input');
-        ofInp.type = 'number'; ofInp.min = '2'; ofInp.step = '2';
-        ofInp.placeholder = 'vinténs';
-        ofInp.className = 'hub-input';
-        ofInp.style.cssText = 'width:110px;margin:0';
-        of.appendChild(ofInp);
-        of.appendChild(btn('Doar à guilda (2 vinténs = 1 XP)', 'btn-mini btn-gold', function () {
-          var v = Math.floor(Number(ofInp.value) || 0);
-          if (v < 2) { toast('doe ao menos 2 vinténs'); return; }
-          v -= v % 2;
-          JOGO.DB.gastarMoedas(v).then(function (res) {
-            if (!res.ok) { toast(res.erro || 'vinténs insuficientes'); return; }
-            Gd.doarXp(v / 2).then(function (r2) {
-              toast(r2.ok ? 'A guilda recebeu ' + (v / 2) + ' XP — nível ' + r2.nivel + '.'
-                          : (r2.erro || 'não deu'), r2.ok ? 'good' : undefined);
-              sheetGuilda();
+        if (!remoto) {
+          var of = el('div', 'guilda-oferenda');
+          of.style.cssText = 'display:flex;gap:8px;align-items:center;margin:8px 0';
+          var ofInp = document.createElement('input');
+          ofInp.type = 'number'; ofInp.min = '2'; ofInp.step = '2';
+          ofInp.placeholder = 'vinténs';
+          ofInp.className = 'hub-input';
+          ofInp.style.cssText = 'width:110px;margin:0';
+          of.appendChild(ofInp);
+          of.appendChild(btn('Doar à guilda (2 vinténs = 1 XP)', 'btn-mini btn-gold', function () {
+            var v = Math.floor(Number(ofInp.value) || 0);
+            if (v < 2) { toast('doe ao menos 2 vinténs'); return; }
+            v -= v % 2;
+            JOGO.DB.gastarMoedas(v).then(function (res) {
+              if (!res.ok) { toast(res.erro || 'vinténs insuficientes'); return; }
+              Gd.doarXp(v / 2).then(function (r2) {
+                toast(r2.ok ? 'A guilda recebeu ' + (v / 2) + ' XP — nível ' + r2.nivel + '.'
+                            : (r2.erro || 'não deu'), r2.ok ? 'good' : undefined);
+                sheetGuilda();
+              });
             });
-          });
-        }));
-        caixa.appendChild(of);
+          }));
+          caixa.appendChild(of);
+        }
 
         // ---- A PORTA E O DÍZIMO (30/08): governo do líder. A porta decide
         // se a sede aceita qualquer um ou só pedido; o dízimo é a % do XP
@@ -6612,31 +6691,34 @@ var JOGO = (typeof window !== 'undefined')
         }
 
         // ---- O COFRE: a moeda da guilda — líder e oficiais gastam
-        var cofre = el('div', 'guilda-cofre');
-        cofre.appendChild(el('h3', 'bk-tit', 'Cofre da guilda — <b>' + g.moedas + '</b> marcas'));
-        cofre.appendChild(el('p', 'inv-dica',
-          'Marcas nascem das competições da guilda (o treino paga ' + Gd.MOEDA_TREINO +
-          '; a competição de verdade chega com o servidor). Líder e oficiais gastam — em bônus de 24h para TODOS.'));
-        ['drop', 'xp'].forEach(function (tipo) {
-          var rot = tipo === 'drop' ? '+15% de saque' : '+15% de XP';
-          var ate = g.bonus && g.bonus[tipo];
-          var vivo = ate && ate > Date.now();
-          var linha = el('div', 'guilda-bonus' + (vivo ? ' is-vivo' : ''));
-          linha.appendChild(el('span', null, '<b>' + rot + '</b>' +
-            (vivo ? ' · vivo por mais ' + Math.ceil((ate - Date.now()) / 3600000) + 'h' : '')));
-          if (g.souLider) {
-            linha.appendChild(btn((vivo ? 'Estender' : 'Comprar') + ' (' + Gd.CUSTO_BONUS + ')',
-              'btn-mini' + (g.moedas >= Gd.CUSTO_BONUS ? ' btn-gold' : ' is-off'), function () {
-                Gd.compraBonus(tipo).then(function (res) {
-                  toast(res.ok ? 'O bônus de ' + rot + ' vale para toda a guilda!' : (res.erro || 'não deu'),
-                        res.ok ? 'good' : undefined);
-                  sheetGuilda();
-                });
-              }));
-          }
-          cofre.appendChild(linha);
-        });
-        caixa.appendChild(cofre);
+        // ---- O COFRE: a moeda da guilda — líder e oficiais gastam
+        if (!remoto) {
+          var cofre = el('div', 'guilda-cofre');
+          cofre.appendChild(el('h3', 'bk-tit', 'Cofre da guilda — <b>' + g.moedas + '</b> marcas'));
+          cofre.appendChild(el('p', 'inv-dica',
+            'Marcas nascem das competições da guilda (o treino paga ' + Gd.MOEDA_TREINO +
+            '; a competição de verdade chega com o servidor). Líder e oficiais gastam — em bônus de 24h para TODOS.'));
+          ['drop', 'xp'].forEach(function (tipo) {
+            var rot = tipo === 'drop' ? '+15% de saque' : '+15% de XP';
+            var ate = g.bonus && g.bonus[tipo];
+            var vivo = ate && ate > Date.now();
+            var linha = el('div', 'guilda-bonus' + (vivo ? ' is-vivo' : ''));
+            linha.appendChild(el('span', null, '<b>' + rot + '</b>' +
+              (vivo ? ' · vivo por mais ' + Math.ceil((ate - Date.now()) / 3600000) + 'h' : '')));
+            if (g.souLider) {
+              linha.appendChild(btn((vivo ? 'Estender' : 'Comprar') + ' (' + Gd.CUSTO_BONUS + ')',
+                'btn-mini' + (g.moedas >= Gd.CUSTO_BONUS ? ' btn-gold' : ' is-off'), function () {
+                  Gd.compraBonus(tipo).then(function (res) {
+                    toast(res.ok ? 'O bônus de ' + rot + ' vale para toda a guilda!' : (res.erro || 'não deu'),
+                          res.ok ? 'good' : undefined);
+                    sheetGuilda();
+                  });
+                }));
+            }
+            cofre.appendChild(linha);
+          });
+          caixa.appendChild(cofre);
+        }
 
         // ---- O BANCO DE EMPRÉSTIMOS — DUAS GRADES, como o cofre do Banco
         // (pedido 30/08: "igual ao cofre a maneira de transferir itens...
@@ -6646,7 +6728,8 @@ var JOGO = (typeof window !== 'undefined')
         //   banco → saco: sua peça volta DE VEZ; a dos outros sai EMPRESTADA
         //   (uma por conta); peça emprestada a alguém não sai.
         var bg = el('div', 'guilda-banco');
-        bg.appendChild(el('h3', 'bk-tit', 'Banco da guilda'));
+        if (!remoto) {
+          bg.appendChild(el('h3', 'bk-tit', 'Banco da guilda'));
         bg.appendChild(el('p', 'inv-dica',
           'Arraste (ou dois toques) entre o saco e o banco, como no cofre. ' +
           'Peça de outro dono sai <b>emprestada</b> — uma por vez — e se devolve ' +
@@ -6769,6 +6852,9 @@ var JOGO = (typeof window !== 'undefined')
             });
           }
         });
+        } else {
+          caixa.appendChild(el('p', 'inv-dica', 'Para acessar o Banco da Guilda e o Cofre, dirija-se à Sede da Guilda no acampamento.'));
+        }
       }
 
       // sem guilda o ranking também aparece — e é a PORTA DE ENTRADA
