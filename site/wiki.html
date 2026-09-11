@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wiki do SOTERRA</title>
+<meta name="description" content="A wiki do SOTERRA: classes, feitiços, calabouços, monstros, itens, conjuntos, pets e as regras do jogo, lidos direto dos arquivos do próprio jogo.">
+<script>
+  // a folha e os scripts com o hash do build (o mapa de js/versao.js); sem
+  // mapa (em casa), o carimbo ?t= do instante: ver o comentário em site/index.html
+  if (location.protocol !== 'file:') {
+    document.write('<script src="../js/versao.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+<script>
+  window.SITE_URL = function (s) {
+    var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
+    var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
+    var chave = s.indexOf('../') === 0 ? s.slice(3) : 'site/' + s;
+    return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
+  };
+  document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+  document.write('<link rel="stylesheet" href="' + SITE_URL('wiki.css') + '">');
+</script>
+<noscript><link rel="stylesheet" href="site.css"><link rel="stylesheet" href="wiki.css"></noscript>
+<!--
+  A wiki (11/09). Como a página das fusões, é montada inteira por wiki.js a
+  partir dos arquivos do PRÓPRIO jogo, servidos da mesma origem:
+    ../js/core/data/*.js    classes, feitiços, monstros, calabouços, itens,
+                            conjuntos, pets, forja, níveis, climas
+    ../js/core/*.js         os módulos sem tela: engine (o clima), fusion,
+                            missoes, diario, poco, guilda, mercado, brasa
+  Nenhum número é copiado: se o jogo mudar, a wiki muda junto. Os ícones dos
+  itens são miniaturas em img/item-<id>.webp (tools/icones_site.py).
+  Links diretos: wiki.html#/classe/sumo, #/calabouco/greenhouse,
+  #/item/gh-widow-shears, #/busca/jardineira, #/sistemas/forja…
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="eventos.html">Eventos</a>
+      <a href="fusoes.html">Fusões</a>
+      <a href="wiki.html" aria-current="page">Wiki</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="loja.html">Loja</a>
+      <a href="conta.html">Conta</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<div class="miolo wiki">
+  <aside class="wk-lado">
+    <form class="wk-busca" id="wk-busca" role="search">
+      <input type="search" id="wk-q" placeholder="Buscar na wiki…" aria-label="Buscar na wiki" autocomplete="off">
+    </form>
+    <nav class="wk-menu" id="wk-menu" aria-label="Seções da wiki">
+      <a href="#/" data-sec="inicio">Início</a>
+      <a href="#/classes" data-sec="classes">Classes</a>
+      <a href="#/feiticos" data-sec="feiticos">Feitiços</a>
+      <a href="#/calaboucos" data-sec="calaboucos">Calabouços</a>
+      <a href="#/bestiario" data-sec="bestiario">Bestiário</a>
+      <a href="#/itens" data-sec="itens">Itens</a>
+      <a href="#/conjuntos" data-sec="conjuntos">Conjuntos</a>
+      <a href="#/pets" data-sec="pets">Pets</a>
+      <a href="fusoes.html">Fusões</a>
+      <a href="#/sistemas" data-sec="sistemas">Regras</a>
+    </nav>
+  </aside>
+  <main class="wk-conteudo" id="wk-conteudo">
+    <div class="estado">carregando a wiki…</div>
+  </main>
+</div>
+
+<footer class="rodape">
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
+</footer>
+
+<script>
+/* 11/09: tudo desta página sai dos arquivos do próprio jogo (mesma origem),
+ * na MESMA ordem em que o jogo os carrega (index.html): o rodapé de items.js
+ * carimba o nível de uso dos pets, então pets.js vem antes; items_extra.js e
+ * items_selos.js depois de items.js. Cada um com o hash do conteúdo. */
+(function () {
+  ['site.js',
+   '../js/core/data/elements.js', '../js/core/data/classes.js', '../js/core/data/spells.js',
+   '../js/core/data/progression.js', '../js/core/data/monsters.js', '../js/core/data/dungeons.js',
+   '../js/core/data/fusions.js', '../js/core/data/pets.js', '../js/core/data/items.js',
+   '../js/core/data/items_extra.js', '../js/core/data/items_selos.js',
+   '../js/core/engine.js', '../js/core/fusion.js', '../js/core/missoes.js', '../js/core/diario.js',
+   '../js/core/poco.js', '../js/core/guilda.js', '../js/core/mercado.js', '../js/core/brasa.js',
+   'wiki.js'].forEach(function (s) {
+    document.write('<script src="' + SITE_URL(s) + '"><\/script>');
+  });
+})();
+</script>
+</body>
+</html>

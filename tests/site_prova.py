@@ -86,7 +86,7 @@ RESULTADOS = []
 PEDIDOS = []          # (caminho, código) do servidor de arquivos
 CONSULTAS = []        # (caminho, query) de cada pedido ao servidor de arquivos
 PEDIDOS_API = []      # (variante, método, caminho, código) das APIs falsas
-PAGINAS = ['index.html', 'conta.html', 'eventos.html', 'fusoes.html', 'loja.html', 'ranking.html', 'mestre.html']
+PAGINAS = ['index.html', 'conta.html', 'eventos.html', 'fusoes.html', 'loja.html', 'ranking.html', 'mestre.html', 'wiki.html']
 
 
 def check(nome, ok, extra=''):
@@ -314,6 +314,10 @@ def img_no_contrato(p):
     m = re.match(r'^/site/img/classe-([a-z]+)(-busto)?\.webp$', p)
     if m:
         return m.group(1) in CLASSES
+    # 11/09: as miniaturas da wiki (tools/icones_site.py) — e nunca a Panóplia do Mestre
+    m = re.match(r'^/site/img/(item|extra)-([a-z0-9]+(-[a-z0-9]+)*)\.webp$', p)
+    if m:
+        return not m.group(2).startswith('gm-')
     return bool(re.match(r'^/site/img/(obra-fus(-[a-z]+)+\.webp|equipe-cavaleiro(-busto)?\.webp|'
                          r'(capa|guildas|arena|calabouco-[a-z]+)\.jpg)$', p))
 
@@ -463,6 +467,108 @@ def prova_fusoes(abre):
           'Trombada Infernal' in det and 'Curral Infernal' in det and 'Ferrolho Infernal' not in det)
     check('fusões: elemento puro diz o bônus do jogo', 'Elemento puro: ×' in texto(h))
     limpo('fusões (minotauro+sumo)', h)
+
+
+def conta_itens_dados():
+    """quantas peças os arquivos de dados declaram, pelo id: o prefixo de calabouço
+    (gh- ci- em- av- mt- cp-) ou do Colecionador (sl-), fora os conjuntos (-set-).
+    Pelo id, e não pela fábrica: items_extra.js tem item() e loose() (as avulsas),
+    e items_selos.js tem peca()."""
+    ids = set()
+    for f in ('js/core/data/items.js', 'js/core/data/items_extra.js', 'js/core/data/items_selos.js'):
+        ids |= set(re.findall(r"\bid:\s*'((?:gh|ci|em|av|mt|cp|sl)-(?!set-)[a-z0-9-]+)'", le(f)))
+    return len(ids)
+
+
+def prova_wiki(abre):
+    """11/09: a wiki — tudo lido dos arquivos do jogo; os números esperados aqui
+    também saem deles, nunca copiados."""
+    textos = []
+
+    def pega(ancora=''):
+        h = abre('wiki.html', 'cheia', ancora)
+        textos.append(texto(h))
+        return h
+
+    h = pega()
+    check('wiki: o início abre com as seções', 'Wiki do SOTERRA' in texto(h) and 'href="#/classes"' in h and 'href="#/sistemas"' in h)
+    limpo('wiki (início)', h)
+    menu_ok('wiki', h)
+    lidos = {p for p, c in PEDIDOS if c == '200'}
+    faltam = [f for f in ('/js/core/data/spells.js', '/js/core/data/monsters.js', '/js/core/data/dungeons.js',
+                          '/js/core/data/items.js', '/js/core/data/items_extra.js', '/js/core/data/items_selos.js',
+                          '/js/core/data/pets.js', '/js/core/engine.js', '/js/core/brasa.js') if f not in lidos]
+    check('wiki: leu os dados do próprio jogo', not faltam, ', '.join(faltam))
+
+    h = pega('#/classes')
+    cls = set(re.findall(r'data-classe="([a-z]+)"', sem_codigo(h)))
+    check('wiki: as %d classes' % len(CLASSES), cls == set(CLASSES), ' '.join(sorted(cls)))
+
+    fonte = le('js/core/data/classes.js')
+    bloco_sumo = re.search(r"(?s)\n  sumo: \{(.*?)\n  \},", fonte).group(1)
+    ids_sumo = set(re.findall(r"'(sumo-[a-z]+-\d+)'", bloco_sumo))
+    h = pega('#/classe/sumo')
+    feit = set(re.findall(r'<article class="wk-feitico" data-feitico="(sumo-[a-z]+-\d+)"', h))
+    check('wiki: o Bárbaro com os %d feitiços da classe (os neutros e os 4 caminhos)' % len(ids_sumo),
+          feit == ids_sumo and 'Machadada de Ferro' in texto(h), '%d de %d' % (len(feit), len(ids_sumo)))
+    check('wiki: o Bárbaro mostra as fusões da classe (uma por outra classe)',
+          len(set(re.findall(r'href="fusoes\.html#dupla=([a-z]+\+[a-z]+)"', h))) == len(CLASSES) - 1)
+    limpo('wiki (Bárbaro)', h)
+
+    h = pega('#/calabouco/greenhouse')
+    t = texto(h)
+    mapas = re.findall(r'<div class="wk-mapa" data-mapa="', h)
+    check('wiki: a Estufa com as 3 salas desenhadas e o chefe', len(mapas) == 3 and 'O Vestíbulo das Heras' in t and 'A Jardineira-Viúva' in t,
+          '%d mapas' % len(mapas))
+    check('wiki: nenhuma chance de saque à vista (MOSTRA_CHANCES desligado)', 'peso no sorteio' not in t)
+    limpo('wiki (Estufa)', h)
+    h = pega('#/calabouco/' + FECHADOS[0])
+    check('wiki: calabouço de portal fechado sai "Em breve", sem salas', 'Em breve' in texto(h) and 'data-mapa=' not in sem_codigo(h))
+
+    h = pega('#/bestiario')
+    grupos = set(re.findall(r'<h2><a href="#/calabouco/([a-z]+)"', h))
+    check('wiki: o bestiário só abre os calabouços abertos', bool(grupos) and not (grupos & set(FECHADOS)), ' '.join(sorted(grupos)))
+    limpo('wiki (bestiário)', h)
+    golpes = re.search(r"(?s)'boss-gardener':\s*\{.*?spells:\s*\[([^\]]*)\]", le('js/core/data/monsters.js')).group(1)
+    n_golpes = len(re.findall(r"'m-[a-z0-9-]+'", golpes))
+    h = pega('#/monstro/boss-gardener')
+    t = texto(h)
+    check('wiki: a Jardineira-Viúva com a ficha, os traços e os %d golpes' % n_golpes,
+          'A Jardineira-Viúva' in t and 'não pode ser empurrado' in t and 'fúria' in t and
+          len(re.findall(r'data-feitico="m-', h)) == n_golpes)
+    limpo('wiki (chefe)', h)
+
+    esperado = conta_itens_dados()
+    h = pega('#/itens')
+    itens = set(re.findall(r'data-item="([a-z0-9-]+)"', sem_codigo(h)))
+    check('wiki: a lista de itens tem as %d peças dos dados' % esperado, len(itens) == esperado, '%d' % len(itens))
+    check('wiki: nada da Panóplia do Mestre', not any(i.startswith('gm-') for i in itens))
+    limpo('wiki (itens)', h)
+    h = pega('#/itens?espaco=passo&raridade=raro')
+    filtrados = set(re.findall(r'data-item="([a-z0-9-]+)"', sem_codigo(h)))
+    check('wiki: o filtro do endereço (passo, raro) corta a lista', 0 < len(filtrados) < len(itens), '%d' % len(filtrados))
+    nivel = re.search(r'greenhouse:\s*\{\s*comum:\s*\d+,\s*raro:\s*\d+,\s*epico:\s*(\d+)', le('js/core/data/items.js')).group(1)
+    h = pega('#/item/gh-widow-shears')
+    t = texto(h)
+    check('wiki: o Tesourão da Viúva: +1 PA, o conjunto e o nível de uso %s' % nivel,
+          'Tesourão da Viúva' in t and '+1 PA' in t and 'Traje da Flora Voraz' in t and ('nível ' + nivel) in t)
+    check('wiki: o ícone do item vem da miniatura (img/item-<id>.webp)', 'src="img/item-gh-widow-shears.webp"' in h)
+    limpo('wiki (item)', h)
+
+    h = pega('#/busca/jardineira')
+    check('wiki: a busca acha a Jardineira-Viúva', 'A Jardineira-Viúva' in texto(h) and 'data-tipo="Chefe"' in h)
+
+    tique = re.search(r'Engine\.WEATHER_TICK\s*=\s*(\d+)', le('js/core/engine.js')).group(1)
+    teto = re.search(r'(?s)DATA\.upgrade\s*=\s*\{\s*maxLevel:\s*(\d+)', le('js/core/data/items.js')).group(1)
+    h = pega('#/sistemas')
+    t = texto(h)
+    check('wiki: o clima diz o tique lido do motor (%s PV)' % tique, ('ganha %s PV' % tique) in t)
+    check('wiki: a forja com a última batida (+%d → +%s)' % (int(teto) - 1, teto), ('+%d → +%s' % (int(teto) - 1, teto)) in t)
+    check('wiki: as coroas da Arena, da primeira à última', 'Coroa I ' in t + ' ' and 'Coroa X' in t)
+    limpo('wiki (regras)', h)
+    check('wiki: o número do clima não está escrito no código da wiki', not re.search(r'ganha\s*%s\s*PV' % tique, le('site/wiki.js')))
+    check('wiki: nenhum outro jogo citado', not any('dofus' in x.lower() for x in textos) and
+          not any('dofus' in le(f).lower() for f in ('site/wiki.js', 'site/wiki.html', 'site/wiki.css')))
 
 
 def prova_index(abre):
@@ -825,6 +931,7 @@ def main():
         prova_eventos(abre)
         prova_ranking(abre)
         prova_fusoes(abre)
+        prova_wiki(abre)
         prova_index(abre)
         prova_loja(abre)
         prova_mestre(abre)
