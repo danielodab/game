@@ -1070,6 +1070,49 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
   }
+  /* A COROA SOB DEMANDA (11/09, "coroas em 3d girando sumiu"). No jogo servido
+   * as dez coroas não descem no boot (grupo 'coroas' do manifesto), e a
+   * pré-busca as deixava por ÚLTIMO, depois dos calabouços: a plaquinha montava
+   * antes, com o bilhete PNG, e nunca mais trocava. Agora a coroa que falta é
+   * pedida na hora (Bundle.pede: baixa e abre já, ~0,5 MB) e, quando o
+   * Models3D2 a abre (aoChegar), o bilhete vira a coroa 3D que gira, no mesmo
+   * lugar — no herói e nos fantasmas. Em casa (file://) as dez já estão
+   * abertas e nada disto acontece. */
+  var ouveCoroas = false;
+  function esperaCoroa(nivel) {
+    var m2 = M2(), Bd = JOGO.Bundle;
+    if (!m2 || !m2.aoChegar) return;
+    if (!ouveCoroas) {
+      ouveCoroas = true;
+      m2.aoChegar(function () { try { trocaCoroasQueChegaram(); } catch (eT) {} });
+    }
+    try { if (Bd && Bd.pede) Bd.pede(['coroa_pvp_n' + nivel]); } catch (eP) {}
+  }
+  function trocaCoroa(corpo) {
+    var e = corpo && corpo.coroaEspera;
+    if (!e) return;
+    var coroa = modeloCoroa(e.nivel, e.tam);
+    if (!coroa) return;                   // ainda não abriu: a próxima leva tenta de novo
+    if (corpo.coroaPvp) {
+      corpo.node.remove(corpo.coroaPvp);
+      // a textura do bilhete é do cache (texturaCoroa): só a geometria e o material saem
+      try { corpo.coroaPvp.geometry.dispose(); corpo.coroaPvp.material.dispose(); } catch (e2) {}
+    }
+    coroa.position.y = e.base3d;
+    coroa.userData.baseY = e.base3d;
+    coroa.userData.fase = Math.random() * 9;
+    coroa.userData.gira3d = true;
+    corpo.node.add(coroa);
+    corpo.coroaPvp = coroa;
+    corpo.coroaEspera = null;
+  }
+  function trocaCoroasQueChegaram() {
+    if (!scene) return;
+    trocaCoroa(heroi);
+    for (var id in fantasmas) {
+      if (fantasmas.hasOwnProperty(id) && fantasmas[id].corpo) trocaCoroa(fantasmas[id].corpo);
+    }
+  }
   /* O herói troca de corpo sem sair do lugar: posição, rumo, a caminhada
    * (o `aoChegar` dela mora fora do herói e continua valendo), a aura, as
    * placas (montaHeroi pendura de novo) e o bicho. */
@@ -1173,6 +1216,7 @@ var JOGO = (typeof window !== 'undefined')
       try { corpo.coroaPvp.material.dispose(); } catch (e) {}
       corpo.coroaPvp = null;
     }
+    corpo.coroaEspera = null;
     if (!nome) return;
     var alto = (corpo.node.userData.height || 2.1);
     var temGuilda = !!(guilda && guilda.nome);
@@ -1237,6 +1281,11 @@ var JOGO = (typeof window !== 'undefined')
           corpo.node.add(bilhete);
           corpo.coroaPvp = bilhete;
         }
+        // 11/09: no jogo servido a coroa 3D pode não ter descido ainda — o
+        // bilhete segura o lugar e vira a 3D quando ela abrir (esperaCoroa)
+        corpo.coroaEspera = { nivel: brasaTier.nivel, tam: tamK,
+                              base3d: alto + (titulo ? 0.66 : 0.5) + 0.34 + altoGuilda };
+        esperaCoroa(brasaTier.nivel);
       }
     }
   }
@@ -1862,6 +1911,9 @@ var JOGO = (typeof window !== 'undefined')
       titulo: tituloJogador,
       coroaVisivel: !!(heroi && heroi.coroaPvp),
       coroaNivel: brasaDoHeroi ? (brasaDoHeroi.nivel || null) : null,
+      // 11/09: a coroa é o modelo 3D que gira (e não o bilhete PNG de reserva)?
+      coroa3d: !!(heroi && heroi.coroaPvp && heroi.coroaPvp.userData && heroi.coroaPvp.userData.gira3d),
+      coroaGiro: (heroi && heroi.coroaPvp) ? +heroi.coroaPvp.rotation.y.toFixed(3) : null,
       corpo: (heroi && heroi.node.userData && heroi.node.userData.look &&
               heroi.node.userData.look.model) || null,
       plaquinha: !!(heroi && heroi.plaquinha),

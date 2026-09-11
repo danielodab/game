@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a coroa 3D na praça, no jogo servido</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:1280px;height:720px;border:0;background:#000}
+  #saida{position:fixed;left:1280px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- A COROA 3D NA PRAÇA (11/09, "coroas em 3d girando sumiu"). No jogo SERVIDO
+     as dez coroas não descem no boot (grupo 'coroas' do manifesto) e a
+     pré-busca as deixava por último: a plaquinha montava com o bilhete PNG de
+     reserva e nunca trocava. Esta prova abre o index.html de verdade por HTTP
+     (o caminho servido, com o bundle e a carga sob demanda — nunca por
+     file://, onde tudo vem embutido e aberto) e cobra, logo depois do
+     Acampamento montar, antes da pré-busca: a patente entra na plaquinha, a
+     coroa que faltava é pedida na hora e vira o modelo 3D que GIRA; e uma
+     segunda patente também. ?larg=&alt= para outro tamanho. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('  · ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  function passo(ms) { return new Promise(function (r) { setTimeout(r, ms || 50); }); }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+
+  var mL = /[?&]larg=(\d+)/.exec(location.search), mA = /[?&]alt=(\d+)/.exec(location.search);
+  var LARG = mL ? +mL[1] : 1280, ALT = mA ? +mA[1] : 720;
+  var quadro = document.getElementById('tela');
+  quadro.style.width = LARG + 'px';
+  quadro.style.height = ALT + 'px';
+  document.getElementById('saida').style.left = LARG + 'px';
+  quadro.src = '../index.html?' + (LARG < 820 ? 'mobile=1&' : '') + 'sandbox=1&snap=1&coroa-praca';
+  var w, J, U, H, M2;
+
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Renderer && J.Renderer.isReady() &&
+                  J.UI && J.Hub && J.Hub._estado && J.Bundle && J.Brasa && J.DB);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s');
+      return setTimeout(espera, 250);
+    }
+    w = quadro.contentWindow; U = J.UI; H = J.Hub; M2 = J.Models3D2;
+    var servido = !!(J.Bundle.sobDemanda && J.Bundle.sobDemanda());
+    diz('o jogo abriu em ' + Math.round((Date.now() - t0) / 1000) + ' s · ' + location.protocol + ' · ' +
+        (servido ? 'jogo SERVIDO, carga sob demanda' : 'tudo aberto no boot'));
+    check('o jogo está no caminho servido (bundle com carga sob demanda), o que esta prova cobra', servido || location.protocol === 'file:');
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    if (!ids.length) { P.createHero('sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    U.selection(ids.slice(0, 1));
+    J.DB.batizar('Ana').then(praca).then(function () { fim(); })
+      .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
+  })();
+
+  function coroa(nivel) {
+    var k = 'coroa_pvp_n' + nivel;
+    var antes = !!(M2.decodificado && M2.decodificado(k));
+    diz('patente ' + nivel + ': o modelo ' + (antes ? 'já estava aberto' : 'ainda não tinha descido'));
+    var tier = null;
+    (J.Brasa.TIERS || []).forEach(function (t) { if (t.nivel === nivel) tier = t; });
+    H.nomeia('Ana', '', tier, null);
+    var e0 = H._estado();
+    check('patente ' + nivel + ': a plaquinha ganha a coroa na hora (a 3D, ou o bilhete de reserva enquanto ela desce)',
+          e0.coroaVisivel && e0.coroaNivel === nivel, JSON.stringify({ visivel: e0.coroaVisivel, nivel: e0.coroaNivel, d3: e0.coroa3d }));
+    var t1 = Date.now();
+    return ate(function () { return H._estado().coroa3d; }, 30000).then(function (ok) {
+      check('patente ' + nivel + ': a coroa vira o modelo 3D', ok, (ok ? Math.round((Date.now() - t1) / 100) / 10 + ' s' : 'continuou o bilhete PNG'));
+      var g1 = H._estado().coroaGiro;
+      return passo(600).then(function () {
+        var g2 = H._estado().coroaGiro;
+        check('patente ' + nivel + ': e gira', ok && g1 !== null && g2 !== null && g1 !== g2, g1 + ' → ' + g2);
+      });
+    });
+  }
+
+  function praca() {
+    U.showScreen('hub');
+    return ate(function () { var e = H._estado(); return !!(e && e.pos && e.plaquinha); }, 30000).then(function (ok) {
+      check('(o Acampamento abriu, com o herói e a plaquinha)', ok, U.telaAtual && U.telaAtual());
+      if (!ok) throw new Error('sem a praça, não há plaquinha');
+      return coroa(4);
+    }).then(function () {
+      return coroa(8);
+    }).then(function () {
+      // a coroa some sem patente e volta com ela (a mesma porta da HUD)
+      H.nomeia('Ana', '', null, null);
+      check('sem patente, a coroa sai', !H._estado().coroaVisivel);
+      var t4 = null;
+      (J.Brasa.TIERS || []).forEach(function (t) { if (t.nivel === 4) t4 = t; });
+      H.nomeia('Ana', '', t4, null);
+      check('de volta a uma patente já aberta: a coroa 3D na hora, sem bilhete', H._estado().coroa3d);
+      // para a foto: a câmera perto e baixa, a coroa contra o fundo
+      try { if (H._cam) H._cam({ dist: 7, tilt: 0.45 }); } catch (e) {}
+      return passo(800);
+    });
+  }
+})();
+</script>
+</body>
+</html>

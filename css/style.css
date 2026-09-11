@@ -181,7 +181,7 @@ i, em { font-style: normal; color: var(--dim); }
 
 .ui-head {
   display: flex; align-items: center; gap: var(--gap);
-  padding: 10px var(--pad);
+  padding: 10px calc(var(--pad) + var(--canto, 0px)) 10px var(--pad);
   border-bottom: 1px solid var(--line);
   background: rgba(11,13,16,.86);
   flex: 0 0 auto;
@@ -583,7 +583,7 @@ i, em { font-style: normal; color: var(--dim); }
    altura para o ajuste de retrato no celular, e um filho a mais no fluxo
    mudaria a conta. */
 .bt-som {
-  position: absolute; top: 6px; right: 10px;
+  position: absolute; top: 6px; right: calc(10px + var(--canto, 0px));   /* --canto: o botão de tela cheia */
   min-width: 0; padding: 2px 7px; font-size: 15px; line-height: 1.3;
   opacity: 0.7; z-index: 3;
 }
@@ -591,7 +591,7 @@ i, em { font-style: normal; color: var(--dim); }
 /* Recentrar: ao lado do som. Some quando a camera ja esta no lugar — botao que
    nunca faz nada ensina a ser ignorado, e ai nao serve quando fizer falta. */
 .bt-cam {
-  position: absolute; top: 6px; right: 52px;
+  position: absolute; top: 6px; right: calc(52px + var(--canto, 0px));
   min-width: 0; padding: 2px 7px; font-size: 15px; line-height: 1.3;
   opacity: 0.7; z-index: 3; transition: opacity .18s;
 }
@@ -600,17 +600,33 @@ i, em { font-style: normal; color: var(--dim); }
 /* Cadeado: SEMPRE visível, porque é estado e não ação — o jogador precisa
    poder ler de relance se a câmera está presa. Fechado, acende. */
 .bt-trava {
-  position: absolute; top: 6px; right: 96px;
+  position: absolute; top: 6px; right: calc(96px + var(--canto, 0px));
   min-width: 0; padding: 2px 7px; font-size: 15px; line-height: 1.3;
   opacity: 0.7; z-index: 3;
 }
 .bt-trava:hover { opacity: 1; }
 .bt-trava.is-on { opacity: 1; box-shadow: 0 0 0 1px #c9a227 inset; }
+/* A linha da sala (nome, clima, rodada, desafio). 11/09: BLOCO, e não flex,
+   para o espaço reservado à direita valer só na PRIMEIRA linha: é ali, no
+   alto, que moram o cadeado, o recentrar, o som e o botão de tela cheia. O
+   selo que não cabe desce para a segunda linha, que é inteira — antes ele ia
+   para debaixo do cadeado (no celular em pé). O nome longo encurta com "…". */
 .bt-room {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  font-family: var(--ui-serif); font-size: 14px;
+  display: block;
+  font-family: var(--ui-serif); font-size: 14px; line-height: 22px;
   text-shadow: 0 2px 6px #000;
 }
+.bt-room::before { content: ''; float: right; height: 22px; width: calc(130px + var(--canto, 0px)); }
+.bt-room > * { display: inline-block; vertical-align: middle; margin: 0 6px 4px 0; }
+.bt-room > b {
+  max-width: calc(100% - 136px - var(--canto, 0px));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* no celular EM PÉ a linha da sala ocupa duas: os ícones do canto ficam na
+   altura da primeira, para não caírem em cima dos selos da segunda */
+html.celular.retrato .bt-top .bt-som,
+html.celular.retrato .bt-top .bt-cam,
+html.celular.retrato .bt-top .bt-trava { min-height: 28px; height: 28px; top: 5px; }
 .weather-chip, .round-chip {
   padding: 3px 9px; border-radius: 999px; font: 600 11px var(--ui-sans);
   background: rgba(10,13,17,.82); border: 1px solid var(--line2); color: var(--dim);
@@ -634,7 +650,8 @@ i, em { font-style: normal; color: var(--dim); }
 .tl-boss { position: absolute; top: 0; right: 2px; font-size: 11px; color: var(--gold); }
 
 .bt-left {
-  position: absolute; left: calc(8px + var(--sa-l)); top: calc(112px + var(--sa-t));
+  /* 11/09: 54 px da borda — a faixa da esquerda é da barra do tempo do turno */
+  position: absolute; left: calc(54px + var(--sa-l)); top: calc(112px + var(--sa-t));
   display: flex; flex-direction: column; gap: 6px;
   max-width: min(62vw, 300px);
 }
@@ -665,19 +682,47 @@ i, em { font-style: normal; color: var(--dim); }
 .pa-res .res-lb { color: var(--pa); }
 .pp-res .res-lb { color: var(--pp); }
 
+/* O TEMPO DO TURNO NA LATERAL (11/09, pedido do dono). Uma barra de pé na borda
+   esquerda, do topo da coluna até a barra de baixo (o `bottom` vem da HUD, pela
+   altura medida dela): esvazia de cima para baixo enquanto o turno corre, com a
+   contagem regressiva em cima. Metade gasta, laranja; nos últimos 5 s, vermelha e
+   pulsando; acabados os segundos do turno, azul — é o tempo guardado que corre.
+   Não segura o toque: a casa de baixo continua jogável. */
 .bt-timer {
-  align-self: flex-start;
-  padding: 6px 10px; border-radius: 10px;
-  background: rgba(10,13,17,.88); border: 1px solid var(--line2);
-  min-width: 120px;
+  position: absolute; left: calc(8px + var(--sa-l)); top: calc(112px + var(--sa-t)); bottom: 150px;
+  width: 40px; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  transition: opacity .2s;
 }
-.bt-timer.is-idle { opacity: .5; }
-.bt-timer.is-low .tm-num { color: var(--bad); animation: pulse .7s ease-in-out infinite; }
+.screen-battle .bt-timer { pointer-events: none; }
+.tm-num {
+  width: 100%; padding: 4px 0; border-radius: 9px; text-align: center;
+  font: 700 15px var(--ui-serif); color: var(--gold); line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  background: rgba(10,13,17,.9); border: 1px solid var(--line2);
+  box-shadow: 0 4px 14px rgba(0,0,0,.45);
+}
+.tm-track {
+  position: relative; flex: 1 1 auto; width: 14px; min-height: 48px;
+  border-radius: 999px; overflow: hidden;
+  background: rgba(10,13,17,.85); border: 1px solid var(--line2);
+  box-shadow: 0 4px 14px rgba(0,0,0,.45);
+}
+.tm-track i {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 100%;
+  transform-origin: 50% 100%; will-change: transform;
+  background: linear-gradient(90deg, rgba(255,255,255,.25), rgba(255,255,255,0) 60%), var(--tm-cor, var(--gold));
+  box-shadow: 0 0 10px var(--tm-cor, var(--gold));
+}
+.bt-timer.is-meio { --tm-cor: #ff9d3a; }
+.bt-timer.is-low { --tm-cor: var(--bad); }
+.bt-timer.is-banco { --tm-cor: var(--xp); }
+.bt-timer.is-banco .tm-num { color: var(--xp); }
+.bt-timer.is-low .tm-num { color: var(--bad); border-color: var(--bad); animation: pulse .7s ease-in-out infinite; }
+.bt-timer.is-idle { opacity: .45; }
 @keyframes pulse { 50% { opacity: .45; } }
-.tm-num { font: 700 17px var(--ui-serif); color: var(--gold); line-height: 1.1; }
-.tm-track { height: 5px; border-radius: 3px; background: #0a0d11; overflow: hidden; margin-top: 3px; }
-.tm-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--bad), var(--gold)); }
-.tm-bank { margin-top: 3px; font: 600 10.5px var(--ui-sans); color: var(--xp); }
+.tm-bank { font: 700 11px var(--ui-sans); color: var(--xp); text-shadow: 0 1px 3px #000; cursor: help; }
+.screen-battle .tm-bank { pointer-events: auto; }
 
 .bt-log {
   position: absolute; right: calc(8px + var(--sa-r)); top: calc(112px + var(--sa-t));
@@ -1102,7 +1147,7 @@ i, em { font-style: normal; color: var(--dim); }
 }
 /* retrato baixinho (iPhone SE): o HUD encolhe em vez de empurrar */
 @media (max-height: 700px) {
-  .bt-left { top: calc(100px + var(--sa-t)); }
+  .bt-left, .bt-timer { top: calc(100px + var(--sa-t)); }
   .bt-log { top: calc(100px + var(--sa-t)); }
   .spell { width: 64px; min-height: 78px; }
   .game-title { font-size: clamp(32px, 11vw, 48px); }
@@ -1110,6 +1155,7 @@ i, em { font-style: normal; color: var(--dim); }
 /* paisagem no celular: painéis mais baixos, feitiços mais compactos */
 @media (orientation: landscape) and (max-height: 500px) {
   .bt-left { top: calc(84px + var(--sa-t)); flex-direction: row; align-items: flex-start; max-width: 70vw; }
+  .bt-timer { top: calc(84px + var(--sa-t)); }
   .bt-log { display: none; }
   .spell { width: 60px; min-height: 70px; }
   .sp-name { display: none; }
@@ -1163,10 +1209,51 @@ i, em { font-style: normal; color: var(--dim); }
    caía EM CIMA dele e roubava o toque que encerra o turno. Sobe para o topo,
    onde a barra da sala tem folga, e encolhe. */
 html.celular .dbg-abrir {
-  right: 6px; bottom: auto; top: calc(4px + var(--sa-t));
+  right: calc(6px + var(--canto, 0px)); bottom: auto; top: calc(4px + var(--sa-t));
   padding: 5px 8px; font-size: 11px; opacity: .55;
 }
 html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
+
+/* --------------------------------------------------------------------------
+   A TELA CHEIA (11/09, pedido do dono) — js/ui/tela_cheia.js
+   O botão do canto de cima à direita: ⛶ entra, ✕ sai. Preso ao <body>, fora
+   do #ui-root (que não recebe toque), por cima de tudo e dentro da área
+   segura, em pé e deitado. `--canto` é o pedaço do canto que ele ocupa: quem
+   morava ali chega para a esquerda (o som, o recentrar e o cadeado da
+   batalha, o "Menu" do Acampamento, o fim dos cabeçalhos, o botão de teste
+   no celular).
+   -------------------------------------------------------------------------- */
+html.tem-canto { --canto: 44px; }
+html.toque.tem-canto { --canto: 50px; }
+.tc-botao {
+  position: fixed; top: calc(6px + var(--sa-t)); right: calc(6px + var(--sa-r)); z-index: 9500;
+  width: 34px; height: 34px; padding: 0; display: grid; place-items: center;
+  border-radius: 9px; border: 1px solid var(--line2); cursor: pointer;
+  background: rgba(10,13,17,.78); color: var(--gold);
+  box-shadow: 0 4px 14px rgba(0,0,0,.45); opacity: .82;
+  -webkit-tap-highlight-color: transparent;
+}
+html.toque .tc-botao { width: 40px; height: 40px; }
+.tc-botao:hover, .tc-botao:focus-visible { opacity: 1; }
+.tc-botao svg {
+  display: block; width: 18px; height: 18px;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.tc-botao.is-cheia { color: #f0ead8; border-color: rgba(240,234,216,.3); }
+.tc-ajuda {
+  position: fixed; top: calc(48px + var(--sa-t)); right: calc(6px + var(--sa-r)); z-index: 9501;
+  width: min(330px, calc(100vw - 12px - var(--sa-l) - var(--sa-r)));
+  padding: 12px 14px; border-radius: 12px;
+  font: 13px/1.45 var(--ui-sans); color: var(--text);
+  background: rgba(12,15,19,.97); border: 1px solid rgba(255,196,77,.3);
+  box-shadow: 0 10px 30px rgba(0,0,0,.6);
+}
+.tc-ajuda[hidden] { display: none; }
+html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
+.tc-ajuda b { color: var(--gold); }
+.tc-ajuda p { margin: 6px 0; }
+.tc-ajuda ul { margin: 6px 0 10px; padding-left: 18px; }
+.tc-ajuda li { margin: 3px 0; }
 .dbg-painel {
   position: fixed; inset: auto 10px 52px 10px; max-width: 640px; margin: 0 auto;
   max-height: 76vh; overflow: auto; z-index: 9001; display: none;
@@ -2027,7 +2114,7 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .hub-top {
   position: absolute; top: 0; left: 0; right: 0; z-index: 4;
   display: flex; align-items: center; justify-content: space-between;
-  padding: calc(var(--sa-t, 0px) + 8px) 12px 8px;
+  padding: calc(var(--sa-t, 0px) + 8px) calc(12px + var(--canto, 0px)) 8px 12px;
   background: linear-gradient(rgba(8,10,8,.82), rgba(8,10,8,0));
   pointer-events: none;
 }
@@ -2052,6 +2139,7 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
   font: 400 14px var(--ui-sans); box-shadow: 0 6px 20px rgba(0,0,0,.45); }
 .bt-placing b { color: var(--gold, #ffc44d); }
 .screen-battle.is-placing .bt-bottom { opacity: .22; pointer-events: none; }
+.screen-battle.is-placing .bt-timer { opacity: .22; }
 .hub-canvas { width: 100%; height: 100%; display: block; }
 .hub-painel {
   /* um degrau acima do cais (.hub-dock), para não taparem um ao outro */

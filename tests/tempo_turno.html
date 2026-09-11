@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a barra do tempo do turno na lateral</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:390px;height:844px;border:0;background:#000}
+  #saida{position:fixed;left:390px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- A BARRA DO TEMPO DO TURNO (11/09, pedido do dono: "na lateral do jogo
+     apareça a barra do tempo do turno passando e o tempo decrescendo"). O
+     index.html de verdade num quadro — 390x844 por padrão, o retrato do
+     celular; ?larg=1280&alt=720 para a tela do computador —, com o save na
+     memória (?sandbox=1). O relógio do cronômetro é o de mentira do
+     Game._setClock: a prova anda o tempo na mão, sem esperar. Cobra:
+       - a barra mora na borda esquerda, de pé, fora da coluna do cartão da
+         unidade ativa, acima da barra de baixo, e deixa o toque passar;
+       - o número desce e a barra esvazia com os segundos do turno; laranja da
+         metade para baixo, vermelha nos últimos 5 s;
+       - com tempo guardado, o "+Ns" à parte e, acabados os segundos do turno,
+         a barra azul do banco;
+       - na vez do monstro, apagada.
+     Os números esperados saem do próprio Game (turnTime), não daqui. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('  · ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+
+  var mL = /[?&]larg=(\d+)/.exec(location.search), mA = /[?&]alt=(\d+)/.exec(location.search);
+  var LARG = mL ? +mL[1] : 390, ALT = mA ? +mA[1] : 844;
+  var quadro = document.getElementById('tela');
+  quadro.style.width = LARG + 'px';
+  quadro.style.height = ALT + 'px';
+  document.getElementById('saida').style.left = LARG + 'px';
+  quadro.src = '../index.html?' + (LARG < 820 ? 'mobile=1&' : '') + 'sandbox=1&snap=1&tempo-turno';
+  var w, doc, J, G, U;
+
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Models3D && J.Models3D.isReady() &&
+                  J.Renderer && J.Renderer.isReady() && J.UI && J.Game && J.Game._setClock);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s');
+      return setTimeout(espera, 250);
+    }
+    w = quadro.contentWindow; doc = quadro.contentDocument;
+    G = J.Game; U = J.UI;
+    diz('o jogo abriu em ' + Math.round((Date.now() - t0) / 1000) + ' s · viewport ' + w.innerWidth + 'x' + w.innerHeight);
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    while (ids.length < 2) { P.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    U.selection(ids.slice(0, 2));
+    batalha().then(function () { fim(); })
+      .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
+  })();
+
+  function batalha() {
+    check('o quadro tem o tamanho pedido e o save está blindado', w.innerWidth === LARG && w.innerHeight === ALT &&
+          !!(J.SaveSandbox && J.SaveSandbox.check().ok), w.innerWidth + 'x' + w.innerHeight);
+    var ok = G.startRun(U.selection().slice(), 'greenhouse');
+    return ate(function () { return U.telaAtual() === 'antessala'; }, 30000).then(function (naAnt) {
+      if (!ok || !naAnt) throw new Error('a descida não chegou à antessala (' + U.telaAtual() + ')');
+      G.entrarNaSala();
+      return ate(function () { return U.telaAtual() === 'battle' && G.state && !!doc.querySelector('.screen-battle .bt-bottom'); }, 30000);
+    }).then(function (naLuta) {
+      if (!naLuta) throw new Error('a batalha não abriu');
+      var st = G.state;
+      var opc = (J.Engine.placementOptions ? J.Engine.placementOptions(st) : (st.placement && st.placement.options)) || [];
+      if (opc[0]) G.onTileClicked(opc[0].x, opc[0].y);
+      return ate(function () { return G.state.phase === 'playing'; }, 15000);
+    }).then(function (jogando) {
+      if (!jogando) throw new Error('a batalha não saiu da colocação');
+      provas();
+    });
+  }
+
+  function provas() {
+    var st = G.state, T = G.turnTime;
+    var herois = st.units.filter(function (u) { return u.side === 'player' && u.kind === 'hero' && u.alive; });
+    var bicho = st.units.filter(function (u) { return u.side === 'enemy' && u.alive; })[0];
+    var relogio = 1000;
+    G._setClock(function () { return relogio; });
+    function anda(seg) { relogio += seg; G.update(0); U.update(0.016); }
+    function vez(u) { st.activeIdx = st.order.indexOf(u.uid); }
+
+    // ---- o turno do primeiro herói, sem banco
+    vez(herois[0]);
+    G.banked = 0;
+    anda(0);
+    var tm = doc.querySelector('.screen-battle .bt-timer');
+    if (!tm) { check('a barra do tempo existe na tela da batalha', false); return; }
+    var num = tm.querySelector('.tm-num'), trilho = tm.querySelector('.tm-track'), fil = tm.querySelector('.tm-track i');
+    var banco = tm.querySelector('.tm-bank');
+    function escala() { var m = /scaleY\(([\d.]+)\)/.exec(fil ? fil.style.transform : ''); return m ? +m[1] : -1; }
+    function perto(a, b) { return Math.abs(a - b) < 0.02; }
+    var r = tm.getBoundingClientRect(), rt = trilho.getBoundingClientRect();
+    var rl = doc.querySelector('.screen-battle .bt-left').getBoundingClientRect();
+    var rb = doc.querySelector('.screen-battle .bt-bottom').getBoundingClientRect();
+    diz('barra em ' + Math.round(r.left) + '..' + Math.round(r.right) + ' x ' + Math.round(r.top) + '..' + Math.round(r.bottom) +
+        ' · trilho ' + Math.round(rt.width) + 'x' + Math.round(rt.height) + ' · cartão a partir de x=' + Math.round(rl.left) +
+        ' · barra de baixo a partir de y=' + Math.round(rb.top));
+    check('a barra mora na lateral esquerda da tela, fora da coluna do cartão', !tm.closest('.bt-left') && r.left <= 24 && r.left >= 0,
+          'left=' + Math.round(r.left));
+    check('é de pé: o trilho é bem mais alto que largo', rt.height >= 120 && rt.height >= 4 * rt.width,
+          Math.round(rt.width) + 'x' + Math.round(rt.height));
+    check('não tapa o cartão da unidade ativa', r.right <= rl.left + 0.5, Math.round(r.right) + ' ≤ ' + Math.round(rl.left));
+    check('termina acima da barra de baixo (o "Encerrar turno")', r.bottom <= rb.top + 0.5, Math.round(r.bottom) + ' ≤ ' + Math.round(rb.top));
+    var no = doc.elementFromPoint(rt.left + rt.width / 2, rt.top + rt.height / 2);
+    check('deixa o toque passar para o tabuleiro (o meio do trilho não é dela)', !!no && !tm.contains(no),
+          no ? no.tagName + '.' + String(no.className || '').split(' ')[0] : '(nada)');
+
+    check('no começo do turno: ' + T + 's e a barra cheia', num.textContent === T + 's' && escala() > 0.99 && !/is-idle/.test(tm.className),
+          num.textContent + ' · ' + escala() + ' · ' + tm.className);
+    var a1 = T / 3;
+    anda(a1);
+    check('passado 1/3 do turno: o número desce e a barra fica em 2/3', num.textContent === Math.ceil(T - a1) + 's' && perto(escala(), 2 / 3) &&
+          !/is-meio|is-low/.test(tm.className), num.textContent + ' · ' + escala() + ' · ' + tm.className);
+    var a2 = T * 0.6;
+    anda(a2 - a1);
+    check('passado 60%: laranja (menos da metade)', num.textContent === Math.ceil(T - a2) + 's' && perto(escala(), 0.4) && /is-meio/.test(tm.className),
+          num.textContent + ' · ' + escala() + ' · ' + tm.className);
+    var a3 = T - 4;
+    anda(a3 - a2);
+    check('nos últimos segundos: vermelha e pulsando', num.textContent === '4s' && /is-low/.test(tm.className) && perto(escala(), 4 / T),
+          num.textContent + ' · ' + tm.className);
+    check('sem banco, nada de "+Ns"', banco.hidden && !banco.textContent);
+
+    // ---- o turno do segundo herói, com tempo guardado
+    if (herois[1]) {
+      var B = 12;
+      vez(herois[1]);
+      G.banked = B;
+      anda(0);
+      check('com tempo guardado: o número soma o banco e o "+' + B + 's" aparece à parte',
+            num.textContent === (T + B) + 's' && banco.textContent === '+' + B + 's' && !banco.hidden && escala() > 0.99,
+            num.textContent + ' · ' + banco.textContent + ' · ' + escala());
+      anda(T / 2);
+      check('...e a barra esvazia pelos segundos do turno, não pelo total', perto(escala(), 0.5), String(escala()));
+      anda(T / 2 + 1);
+      check('acabados os segundos do turno, a barra vira o banco (azul) e esvazia',
+            /is-banco/.test(tm.className) && num.textContent === (B - 1) + 's' && perto(escala(), (B - 1) / B) && banco.hidden,
+            num.textContent + ' · ' + escala() + ' · ' + tm.className);
+    } else diz('só um herói no grupo: o turno com banco ficou de fora');
+
+    // ---- a vez do monstro (tudo síncrono: a IA não chega a jogar)
+    if (bicho) {
+      vez(bicho);
+      U.update(0.016);
+      check('na vez do monstro a barra fica apagada', /is-idle/.test(tm.className), tm.className);
+    }
+
+    // a foto: o primeiro herói no meio do turno, com banco
+    vez(herois[0]);
+    G.banked = 12;
+    anda(0);
+    anda(T * 0.55);
+    diz('para a foto: ' + num.textContent + ' · ' + tm.className);
+  }
+})();
+</script>
+</body>
+</html>

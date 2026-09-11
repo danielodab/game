@@ -2402,13 +2402,29 @@ var JOGO = (typeof window !== 'undefined')
     top.appendChild(bt.timeline);
     s.appendChild(top);
 
-    // ---- coluna esquerda: unidade ativa + cronômetro
+    // ---- coluna esquerda: unidade ativa
     var left = el('div', 'bt-left');
     bt.active = el('div', 'bt-active');
     left.appendChild(bt.active);
-    bt.timer = el('div', 'bt-timer');
-    left.appendChild(bt.timer);
     s.appendChild(left);
+
+    // ---- o tempo do turno: a barra de pé na lateral esquerda (11/09, pedido do
+    // dono). Montada uma vez; o paintTimer só mexe no número, na altura e na cor.
+    bt.timer = el('div', 'bt-timer');
+    bt.tmNum = el('div', 'tm-num');
+    bt.tmTrack = el('div', 'tm-track');
+    bt.tmFill = el('i');
+    bt.tmTrack.appendChild(bt.tmFill);
+    bt.tmBank = el('div', 'tm-bank');
+    bt.tmBank.hidden = true;
+    var gT = G();
+    tipOn(bt.tmBank, 'Tempo guardado',
+      'O que você não gasta no turno vai para o banco (máx. ' + ((gT && gT.bankMax) || 120) +
+      's) e é usado quando os ' + ((gT && gT.turnTime) || 30) + 's acabarem.', '#9fd8ff');
+    bt.timer.appendChild(bt.tmNum);
+    bt.timer.appendChild(bt.tmTrack);
+    bt.timer.appendChild(bt.tmBank);
+    s.appendChild(bt.timer);
 
     // ---- log compacto (fechado por padrão; toque abre)
     bt.log = el('div', 'bt-log');
@@ -2419,6 +2435,7 @@ var JOGO = (typeof window !== 'undefined')
 
     // ---- barra de baixo: feitiços + ações
     var bottom = el('div', 'bt-bottom');
+    bt.bottomBar = bottom;                // o pé da barra do tempo fica logo acima dela
     bt.fusion = el('div', 'bt-fusion');
     bottom.appendChild(bt.fusion);
     bt.spells = el('div', 'bt-spells');
@@ -2702,32 +2719,37 @@ var JOGO = (typeof window !== 'undefined')
     return n ? row : null;
   }
 
+  /* O TEMPO DO TURNO NA LATERAL (11/09, pedido do dono: "na lateral do jogo
+   * apareça a barra do tempo do turno passando e o tempo decrescendo"). Roda a
+   * cada quadro (UI.update). A barra ESVAZIA com os segundos do turno; o tempo
+   * guardado aparece à parte ("+12s") e, acabados os segundos do turno, a barra
+   * vira o banco (azul) e esvazia de novo. Antes a barra media o total contra
+   * os 30 s e ficava cheia enquanto houvesse banco — parecia parada. */
   function paintTimer() {
     pintaEspera();                        // 11/09: o relógio estimado da vez do parceiro
-    if (!bt.timer) return;
+    if (!bt.timer || !bt.tmNum) return;
     var g = G();
     if (!g) return;
-    var isMine = safe(function () { return g.isPlayerTurn(); }, false);
-    var left = safe(function () { return g.timeLeft(); }, 0);
-    var banked = g.banked || 0;
+    var isMine = !!safe(function () { return g.isPlayerTurn(); }, false);
+    var left = Math.max(0, safe(function () { return g.timeLeft(); }, 0) || 0);
+    var banked = Math.max(0, g.banked || 0);
     var turn = g.turnTime || 30;
-    var pct = Math.max(0, Math.min(1, left / turn));
-    clear(bt.timer);
-    bt.timer.className = 'bt-timer' + (isMine ? '' : ' is-idle') + (left <= 5 && isMine ? ' is-low' : '');
-    var t = el('div', 'tm-num', String(Math.ceil(left)) + 's');
-    bt.timer.appendChild(t);
-    var trk = el('div', 'tm-track');
-    var fil = el('i');
-    fil.style.width = (pct * 100) + '%';
-    trk.appendChild(fil);
-    bt.timer.appendChild(trk);
-    if (banked > 0) {
-      var bk = el('div', 'tm-bank', '+' + Math.round(banked) + 's guardados');
-      tipOn(bk, 'Tempo guardado',
-        'O que você não gasta no turno vai para o banco (máx. ' + (g.bankMax || 120) +
-        's) e é usado quando os ' + turn + 's acabarem.', '#9fd8ff');
-      bt.timer.appendChild(bk);
-    }
+    var doTurno = left - banked;          // o que ainda resta dos segundos do turno
+    var noBanco = isMine && doTurno <= 0 && banked > 0;
+    var pct = Math.max(0, Math.min(1, noBanco ? left / banked : doTurno / turn));
+    var cls = 'bt-timer' + (isMine ? '' : ' is-idle') + (noBanco ? ' is-banco' : '') +
+              (isMine && left <= 5 ? ' is-low' : (isMine && !noBanco && pct <= 0.5 ? ' is-meio' : ''));
+    if (bt.timer.className !== cls) bt.timer.className = cls;
+    var txt = Math.ceil(left) + 's';
+    if (bt.tmNum.textContent !== txt) bt.tmNum.textContent = txt;
+    bt.tmFill.style.transform = 'scaleY(' + pct.toFixed(4) + ')';
+    var bk = (banked > 0 && !noBanco) ? '+' + Math.round(banked) + 's' : '';
+    if (bt.tmBank.textContent !== bk) { bt.tmBank.textContent = bk; bt.tmBank.hidden = !bk; }
+    // o pé da barra fica logo acima da barra de baixo, pela altura MEDIDA dela
+    // (no celular ela cresce com a fusão): nunca por cima do "Encerrar turno"
+    var hb = bt.bottomBar ? bt.bottomBar.offsetHeight : 0;
+    var pe = hb ? (hb + 10) + 'px' : '';
+    if (bt.timer.style.bottom !== pe) bt.timer.style.bottom = pe;
   }
 
   function paintSpells(s) {

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a tela cheia (o ⛶ e o ✕ do canto)</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:390px;height:844px;border:0;background:#000}
+  #saida{position:fixed;left:390px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- A TELA CHEIA (11/09, pedido do dono: "tanto para celular ou pc colocar
+     tela cheia o jogo e um x no canto para fechar o modo tela cheia; cel deve
+     funcionar nas orientações retrato e paisagem"). O index.html de verdade
+     num quadro — 390x844 por padrão (celular em pé); ?larg=844&alt=390&movel=1
+     (celular deitado); ?larg=1280&alt=720 (computador) —, com o save na
+     memória. Dentro do quadro a API de tela cheia é de MENTIRA (quadro sem
+     allowfullscreen não entra de verdade, e a prova nem poderia): ela anota o
+     pedido e dispara o fullscreenchange, como o navegador. Cobra:
+       - o botão mora no canto de cima à direita, preso ao <body>;
+       - ⛶ pede a tela cheia (com a barra do navegador escondida) e vira ✕;
+         o ✕ sai; sair por fora (o Esc) também volta o botão;
+       - sem a API (o Safari do iPhone), o ⛶ explica o "Adicionar à Tela de
+         Início" e o "Entendi" fecha;
+       - nada do jogo fica por baixo do botão: o "Menu" do Acampamento, o
+         "Sair do calabouço" da antessala, o som e o cadeado da batalha, o
+         botão de teste;
+       - o aparelho virando no meio da batalha (o quadro troca de lado): o
+         botão vai para o novo canto e o jogo ocupa a tela nova. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('  · ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  function passo(ms) { return new Promise(function (r) { setTimeout(r, ms || 50); }); }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+
+  var mL = /[?&]larg=(\d+)/.exec(location.search), mA = /[?&]alt=(\d+)/.exec(location.search);
+  var LARG = mL ? +mL[1] : 390, ALT = mA ? +mA[1] : 844;
+  var MOVEL = /[?&]movel=1/.test(location.search) || LARG < 820;
+  var quadro = document.getElementById('tela');
+  function tamanho(l, a) {
+    quadro.style.width = l + 'px';
+    quadro.style.height = a + 'px';
+    document.getElementById('saida').style.left = l + 'px';
+  }
+  tamanho(LARG, ALT);
+  quadro.src = '../index.html?' + (MOVEL ? 'mobile=1&' : '') + 'sandbox=1&snap=1&tela-cheia';
+  var w, doc, J, G, U, b;
+
+  // ---- a API de tela cheia de mentira, dentro do quadro
+  var cheiaFalsa = null, suporte = true, pedidos = [], saidas = 0;
+  function mentira() {
+    // as variantes webkit também: o Chrome ainda as expõe, e o quadro da MESMA
+    // origem pode entrar em tela cheia de verdade (a política padrão é 'self')
+    ['fullscreenElement', 'webkitFullscreenElement'].forEach(function (k) {
+      Object.defineProperty(doc, k, { configurable: true, get: function () { return cheiaFalsa; } });
+    });
+    ['fullscreenEnabled', 'webkitFullscreenEnabled'].forEach(function (k) {
+      Object.defineProperty(doc, k, { configurable: true, get: function () { return suporte; } });
+    });
+    doc.documentElement.requestFullscreen = function (op) {
+      pedidos.push(op || null);
+      cheiaFalsa = doc.documentElement;
+      doc.dispatchEvent(new w.Event('fullscreenchange'));
+      return w.Promise.resolve();
+    };
+    doc.exitFullscreen = function () {
+      saidas++;
+      cheiaFalsa = null;
+      doc.dispatchEvent(new w.Event('fullscreenchange'));
+      return w.Promise.resolve();
+    };
+  }
+  function ret(e) { return e ? e.getBoundingClientRect() : null; }
+  function visivel(e) {
+    if (!e) return false;
+    var r = e.getBoundingClientRect(), cs = w.getComputedStyle(e);
+    return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity > 0.05;
+  }
+  function cruza(a, c) {
+    return a.left < c.right - 0.5 && c.left < a.right - 0.5 && a.top < c.bottom - 0.5 && c.top < a.bottom - 0.5;
+  }
+  function txt(r) { return r ? Math.round(r.left) + '..' + Math.round(r.right) + ' x ' + Math.round(r.top) + '..' + Math.round(r.bottom) : '-'; }
+  function noCanto(nome) {
+    var r = ret(b);
+    check(nome + ': o botão está no canto de cima à direita, dentro da tela',
+          !!r && r.right <= w.innerWidth + 0.5 && w.innerWidth - r.right <= 24 && r.top >= 0 && r.top <= 24 && r.width >= 30 && r.height >= 30,
+          txt(r) + ' · tela ' + w.innerWidth + 'x' + w.innerHeight);
+  }
+  function naoTapa(nome, sel) {
+    var alvos = [].slice.call(doc.querySelectorAll(sel)).filter(visivel);
+    var rb = ret(b), batem = alvos.filter(function (e) { return cruza(rb, ret(e)); });
+    check(nome + ' não fica por baixo do botão do canto', alvos.length > 0 && !batem.length,
+          alvos.length ? alvos.map(function (e) { return (e.textContent || e.className).trim().slice(0, 18) + ' ' + txt(ret(e)); }).join(' | ') + ' · botão ' + txt(rb)
+                       : '(nenhum ' + sel + ' visível)');
+  }
+
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Models3D && J.Models3D.isReady() &&
+                  J.Renderer && J.Renderer.isReady() && J.UI && J.Game && J.TelaCheia);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s');
+      return setTimeout(espera, 250);
+    }
+    w = quadro.contentWindow; doc = quadro.contentDocument;
+    G = J.Game; U = J.UI;
+    diz('o jogo abriu em ' + Math.round((Date.now() - t0) / 1000) + ' s · viewport ' + w.innerWidth + 'x' + w.innerHeight +
+        (MOVEL ? ' · celular' : ' · computador'));
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    while (ids.length < 2) { P.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    U.selection(ids.slice(0, 2));
+    oBotao().then(acampamento).then(batalha).then(vira)
+      .then(function () { fim(); })
+      .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
+  })();
+
+  // ====================================================== o botão, no menu
+  function oBotao() {
+    b = doc.querySelector('body > .tc-botao');
+    check('o botão de tela cheia existe, preso ao <body> (fora do #ui-root)', !!b && b.parentNode === doc.body);
+    if (!b) throw new Error('sem o botão, o resto não tem o que provar');
+    noCanto('no menu');
+    check('fora da tela cheia ele diz "Tela cheia" (⛶) e reserva o canto', b.getAttribute('aria-label') === 'Tela cheia' &&
+          !b.classList.contains('is-cheia') && doc.documentElement.classList.contains('tem-canto'));
+    mentira();
+    b.click();
+    check('o toque pede a tela cheia, com a barra do navegador escondida', pedidos.length === 1 && !!pedidos[0] && pedidos[0].navigationUI === 'hide',
+          JSON.stringify(pedidos));
+    check('dentro dela o botão vira ✕ "Sair da tela cheia"', b.classList.contains('is-cheia') &&
+          b.getAttribute('aria-label') === 'Sair da tela cheia' && doc.documentElement.classList.contains('tela-cheia'));
+    noCanto('na tela cheia');
+    b.click();
+    check('o ✕ sai da tela cheia e o botão volta a ⛶', saidas === 1 && !b.classList.contains('is-cheia') &&
+          !doc.documentElement.classList.contains('tela-cheia'));
+    // sair POR FORA (o Esc do computador, o gesto do celular): o navegador só avisa
+    cheiaFalsa = doc.documentElement; doc.dispatchEvent(new w.Event('fullscreenchange'));
+    var entrou = b.classList.contains('is-cheia');
+    cheiaFalsa = null; doc.dispatchEvent(new w.Event('fullscreenchange'));
+    check('sair por fora (o Esc) também volta o botão', entrou && !b.classList.contains('is-cheia'));
+    // sem a API: o caminho do iPhone
+    suporte = false;
+    b.click();
+    var aj = doc.querySelector('body > .tc-ajuda');
+    check('sem a API (o Safari do iPhone), o ⛶ explica o "Adicionar à Tela de Início"', !!aj && !aj.hidden &&
+          /Adicionar à Tela de Início/.test(aj.textContent) && pedidos.length === 1);
+    if (aj) {
+      var ra = ret(aj);
+      check('a explicação cabe na tela', ra.left >= 0 && ra.right <= w.innerWidth + 0.5 && ra.bottom <= w.innerHeight + 0.5, txt(ra));
+      aj.querySelector('.tc-ok').click();
+      check('"Entendi" fecha a explicação', aj.hidden);
+    }
+    suporte = true;
+    b.click();                                   // de volta à tela cheia para o resto da prova
+    check('(de novo na tela cheia para as telas do jogo)', b.classList.contains('is-cheia'));
+    return passo(100);
+  }
+
+  // ====================================================== o Acampamento
+  function acampamento() {
+    U.showScreen('hub');
+    return ate(function () { return !!doc.querySelector('.screen-hub.is-on .hub-acts button'); }, 30000).then(function (ok) {
+      check('(o Acampamento abriu)', ok, U.telaAtual());
+      noCanto('no Acampamento');
+      naoTapa('o "Menu" do Acampamento', '.screen-hub.is-on .hub-acts button');
+      var dbg = doc.querySelector('.dbg-abrir');
+      if (dbg && visivel(dbg)) naoTapa('o botão de teste', '.dbg-abrir');
+    });
+  }
+
+  // ====================================================== a antessala e a batalha
+  function batalha() {
+    var ok = G.startRun(U.selection().slice(), 'greenhouse');
+    return ate(function () { return U.telaAtual() === 'antessala' && !!doc.querySelector('.screen-antessala.is-on .hub-acts button'); }, 30000).then(function (naAnt) {
+      if (!ok || !naAnt) throw new Error('a descida não chegou à antessala (' + U.telaAtual() + ')');
+      naoTapa('o "Sair do calabouço" da antessala', '.screen-antessala.is-on .hub-acts button');
+      G.entrarNaSala();
+      return ate(function () { return U.telaAtual() === 'battle' && G.state && !!doc.querySelector('.screen-battle .bt-bottom'); }, 30000);
+    }).then(function (naLuta) {
+      if (!naLuta) throw new Error('a batalha não abriu');
+      var st = G.state;
+      var opc = (J.Engine.placementOptions ? J.Engine.placementOptions(st) : (st.placement && st.placement.options)) || [];
+      if (opc[0]) G.onTileClicked(opc[0].x, opc[0].y);
+      return ate(function () { return G.state.phase === 'playing'; }, 15000);
+    }).then(function () {
+      U.update(0.016);
+      noCanto('na batalha');
+      naoTapa('o som e o cadeado da batalha', '.screen-battle .bt-som, .screen-battle .bt-trava');
+      var chips = [].slice.call(doc.querySelectorAll('.screen-battle .bt-room > *')).filter(visivel);
+      var cantos = [b].concat([].slice.call(doc.querySelectorAll('.screen-battle .bt-som, .screen-battle .bt-trava')).filter(visivel));
+      var sob = [];
+      chips.forEach(function (c) { cantos.forEach(function (k) { if (cruza(ret(c), ret(k))) sob.push((c.textContent || '').trim().slice(0, 16) + ' × ' + (k.className || '').split(' ')[0]); }); });
+      diz('linha da sala: ' + chips.map(function (c) { return (c.textContent || '').trim().slice(0, 16) + ' ' + txt(ret(c)); }).join(' | '));
+      check('o nome da sala e os selos (clima, rodada) não ficam por baixo dos botões do canto', !sob.length, sob.join(' ; '));
+      var dbg = doc.querySelector('.dbg-abrir');
+      if (dbg && visivel(dbg)) naoTapa('o botão de teste', '.dbg-abrir');
+      return passo(100);
+    });
+  }
+
+  // ====================================================== o aparelho vira
+  function tela() {
+    var cs = [].slice.call(doc.querySelectorAll('canvas')).filter(visivel);
+    cs.sort(function (a, c) { var ra = ret(a), rc = ret(c); return rc.width * rc.height - ra.width * ra.height; });
+    return cs[0] || null;
+  }
+  function vira() {
+    var L2 = ALT, A2 = LARG;
+    diz('o aparelho vira: ' + LARG + 'x' + ALT + ' → ' + L2 + 'x' + A2);
+    tamanho(L2, A2);
+    return ate(function () { return w.innerWidth === L2 && w.innerHeight === A2; }, 5000).then(function () {
+      return passo(600);
+    }).then(function () {
+      U.update(0.016);
+      check('virado, o quadro tem o tamanho novo', w.innerWidth === L2 && w.innerHeight === A2, w.innerWidth + 'x' + w.innerHeight);
+      noCanto('virado');
+      var c = tela(), rc = ret(c);
+      check('virado, o jogo ocupa a tela nova inteira (o canvas acompanha)', !!c && Math.abs(rc.width - L2) <= 2 && Math.abs(rc.height - A2) <= 2,
+            c ? Math.round(rc.width) + 'x' + Math.round(rc.height) : '(sem canvas)');
+      naoTapa('virado, o som e o cadeado', '.screen-battle .bt-som, .screen-battle .bt-trava');
+      check('virado, continua na tela cheia (✕)', b.classList.contains('is-cheia'));
+      tamanho(LARG, ALT);
+      return ate(function () { return w.innerWidth === LARG && w.innerHeight === ALT; }, 5000);
+    }).then(function () {
+      return passo(600);
+    }).then(function () {
+      U.update(0.016);
+      var c = tela(), rc = ret(c);
+      check('e de volta: o botão no canto e o jogo na tela inteira', !!c && Math.abs(rc.width - LARG) <= 2 && Math.abs(rc.height - ALT) <= 2 &&
+            w.innerWidth - ret(b).right <= 24, c ? Math.round(rc.width) + 'x' + Math.round(rc.height) : '');
+    });
+  }
+})();
+</script>
+</body>
+</html>
