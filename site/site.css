@@ -154,6 +154,7 @@ select:focus { border-color: var(--ouro-esc); box-shadow: 0 0 0 3px var(--ouro-a
 .etiqueta.aberto { color: var(--certo); border-color: rgba(126, 226, 168, .4); }
 .etiqueta.escavacao { color: var(--ouro-2); border-color: var(--ouro-esc); }
 .cartao.fechado .foto img { filter: grayscale(.6) brightness(.6); }
+.cartao .corpo p.cal-chefe { color: var(--ouro-2); font-size: 13px; }   /* 11/09: o nome do chefe do portal aberto */
 
 /* 10/09: O RETRATO do jogo (tools/retratos_site) é quadrado e de corpo
  * inteiro. Na moldura 16:10 com `cover` ele perdia a cabeça e os pés;

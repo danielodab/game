@@ -1566,8 +1566,13 @@ var JOGO = (typeof window !== 'undefined')
           grade.appendChild(bMsg);
           if (!sala && Gp()) {
             var cheio = (grupoEstado() || {}).fase === 'formado';
-            grade.appendChild(btn(ehMeuPar ? 'Já está no seu grupo' : (cheio ? 'Você já está num grupo' : 'Chamar para o grupo'),
-              'btn-ghost' + (cheio ? ' is-apagado' : ''), function () {
+            // 11/09 (pedido do dono): o Mestre entra em grupo, mas só ele chama — no painel dele o botão avisa
+            var soMestre = par.mestre === true && !ehMeuPar &&
+                           !safe(function () { return JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo(); }, false);
+            grade.appendChild(btn(ehMeuPar ? 'Já está no seu grupo'
+                                           : (soMestre ? 'Só o Mestre chama para o grupo' : (cheio ? 'Você já está num grupo' : 'Chamar para o grupo')),
+              'btn-ghost' + ((cheio || soMestre) ? ' is-apagado' : ''), function () {
+                if (soMestre) { toast(textoMotivo('so-mestre-chama', null)); return; }
                 if (cheio) { toast(ehMeuPar ? par.nome + ' já está no seu grupo.' : textoMotivo('em-grupo', null)); return; }
                 var r = safe(function () { return Gp().convidar(id); }, null);
                 if (r && r.ok) { fecha(); toast('Convite enviado a ' + par.nome + '. Esperando a resposta…'); }
@@ -1604,12 +1609,18 @@ var JOGO = (typeof window !== 'undefined')
           // CONVIDAR PARA A GUILDA (25/08): só quem lidera a guilda vê o botão
           if (JOGO.Guilda) {
             JOGO.Guilda.minha().then(function (mg) {
-              if (!mg || !mg.souLider || painel.classList.contains('is-off') || !grade.isConnected) return;
+              // 11/09: líder e oficiais convidam (os mesmos que aceitam pedidos)
+              if (!mg || !(mg.souLider || mg.meuCargo === 'oficial') || painel.classList.contains('is-off') || !grade.isConnected) return;
               grade.insertBefore(btn('Convidar para a ' + mg.emblema + ' ' + esc(mg.nome),
                 'btn-ghost pn-largo', function () {
                   fecha();
-                  R.guildaManda(id, 'convite', { gid: mg.id, nome: mg.nome, emblema: mg.emblema });
-                  toast('Convite de guilda enviado.');
+                  // 11/09: com a guilda no servidor, o convite é da CONTA dela (a que o relé
+                  // conferiu, o `nuvem` da presença) — sem ele o "aceitar" do outro lado não entra
+                  JOGO.Guilda.convidar(par.nuvem).then(function (rc) {
+                    if (!rc || !rc.ok) { toast((rc && rc.erro) || 'não deu para convidar'); return; }
+                    R.guildaManda(id, 'convite', { gid: mg.id, nome: mg.nome, emblema: mg.emblema });
+                    toast('Convite de guilda enviado.');
+                  });
                 }), bSil);
             });
           }
@@ -1678,10 +1689,17 @@ var JOGO = (typeof window !== 'undefined')
               painel.appendChild(el('p', 'hub-nota', esc(ev.nome) + ' te chama para a <b>' +
                 esc(ev.dados.emblema || '⚑') + ' ' + esc(ev.dados.nome || '?') + '</b>.'));
               painel.appendChild(btn('Aceitar', 'btn-primary btn-block', function () {
-                JOGO.Guilda.entrar(ev.dados.gid).then(function (res) {
+                // 11/09: é o CONVITE que abre a porta (antes o entrar batia na porta fechada)
+                JOGO.Guilda.entrar(ev.dados.gid, { convite: true }).then(function (res) {
                   painel.classList.add('is-off');
                   toast(res.ok ? 'Bem-vindo à ' + ev.dados.nome + '!' : (res.erro || 'não deu'),
                         res.ok ? 'good' : undefined);
+                  if (res.ok && res.guilda) {               // a placa da guilda sobe na hora
+                    resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+                    if (JOGO.Hub && JOGO.Hub.nomeia) {
+                      try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
+                    }
+                  }
                   R.guildaManda(ev.de, 'resposta', { ok: !!res.ok });
                 });
               }));
@@ -1721,7 +1739,10 @@ var JOGO = (typeof window !== 'undefined')
             JOGO.Hub.fantasmaPulso(ev.id, ev.x, ev.z);
           } else if (ev.tipo === 'chat') {
             if (mutados[ev.id]) return;               // silenciado: nem uma linha
-            chatLinha(ev.nome, R.filtra ? R.filtra(ev.texto) : ev.texto);
+            var textoC = R.filtra ? R.filtra(ev.texto) : ev.texto;
+            chatLinha(ev.nome, textoC);
+            // 11/09 (pedido do dono): a frase sobe num balão em cima de quem falou
+            safe(function () { return JOGO.Hub.fala(ev.id, textoC); }, null);
           } else if (ev.tipo === 'saiu') {
             JOGO.Hub.fantasmaSai(ev.id);
           }
@@ -1757,6 +1778,7 @@ var JOGO = (typeof window !== 'undefined')
               else toast(textoMotivo(rs ? rs.motivo : 'privado', null));
             } else if (t && R.falar(t)) {
               chatLinha(j.nome || 'você', t, '#9bd06a');
+              safe(function () { return JOGO.Hub.fala(null, t); }, null);   // 11/09: o meu balão também
               ci.value = '';
             }
           } else if (evk.key === 'Escape') {
@@ -3684,7 +3706,26 @@ var JOGO = (typeof window !== 'undefined')
       chip.appendChild(el('span', null, esc(it.name || pi.itemId) +
         (pi.count > 1 ? ' ×' + pi.count : '') + nvTxt(pi.itemId)));
       tap(chip, function () {
-        JOGO.Troca.porItem({ itemId: pi.itemId, level: pi.level, stars: pi.stars });
+        // 11/09 (a troca "bugada" no ar): vai à mesa a PEÇA do saco, com o número
+        // de série. Só com a forma (item, forja, estrelas), a execução procurava
+        // uma cópia SEM série — no ar toda peça tem série — e a troca caía no fim
+        var inv = safe(function () { return P().state.inventory; }, null) || [];
+        var mesa = ((JOGO.Troca.estado() || {}).minha || {}).itens || [];
+        var naMesa = {}, pular = 0;
+        mesa.forEach(function (o) {
+          if (o.iid) naMesa[o.iid] = true;
+          else if (o.itemId === pi.itemId && (o.level || 0) === pi.level && (o.stars || 0) === pi.stars) pular++;
+        });
+        var peca = null;
+        for (var k = 0; k < (pi.indices || []).length && !peca; k++) {
+          var e = inv[pi.indices[k]];
+          if (!e) continue;
+          if (e.iid) { if (!naMesa[e.iid]) peca = e; }
+          else if (pular > 0) pular--;
+          else peca = e;
+        }
+        if (!peca) { toast('Todas as cópias dessa peça já estão na mesa.'); return; }
+        JOGO.Troca.porItem({ itemId: peca.itemId, level: peca.level || 0, stars: peca.stars || 0, iid: peca.iid || null });
       });
       linhaS.appendChild(chip);
     });
@@ -6255,6 +6296,22 @@ var JOGO = (typeof window !== 'undefined')
         // ---- SEM GUILDA: fundar uma, ou esperar convite na praça
         caixa.appendChild(el('p', 'inv-dica',
           'Funde a sua — ou espere um convite: líderes convidam tocando no seu fantasma na praça.'));
+        // 11/09: a guilda de antes (a do navegador) sobe para o servidor sem pagar de novo
+        var antiga = Gd.guildaLocalLiderada ? Gd.guildaLocalLiderada() : null;
+        if (antiga) {
+          caixa.appendChild(btn('Trazer a ' + antiga.emblema + ' ' + antiga.nome + ' para o servidor (sem pagar de novo)',
+            'btn-gold btn-block', function () {
+              Gd.migrarLocal().then(function (res) {
+                if (!res.ok) { toast(res.erro || 'não deu'); return; }
+                resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+                if (JOGO.Hub && JOGO.Hub.nomeia) {
+                  try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
+                }
+                toast('A ' + res.guilda.emblema + ' ' + res.guilda.nome + ' agora mora no servidor — chame os membros de novo.', 'good');
+                sheetGuilda();
+              });
+            }));
+        }
 
         // O PREÇO: 10 insígnias de fundação, a moeda que só chefe derruba.
         // O saldo aparece aqui para o jogador saber quanto falta ANTES de
@@ -6316,6 +6373,8 @@ var JOGO = (typeof window !== 'undefined')
           });
         }));
       } else {
+        // 11/09: quem sou eu na ficha — no servidor, a CONTA (g.eu); em casa, o jogador local
+        var euId = (g.eu != null) ? g.eu : contaJ.id;
         // ---- A FICHA
         var cab = el('div', 'guilda-cab');
         cab.appendChild(el('span', 'guilda-emblema', esc(g.emblema)));
@@ -6513,7 +6572,7 @@ var JOGO = (typeof window !== 'undefined')
             var devIdx = -1;
             for (var d2 = 0; d2 < itens.length; d2++) {
               var eb = itens[d2];
-              if (eb.emprestadoPara === contaJ.id && eb.itemId === entrada.itemId &&
+              if (eb.emprestadoPara === euId && eb.itemId === entrada.itemId &&
                   (eb.level || 0) === (entrada.level || 0) &&
                   (eb.stars || 0) === (entrada.stars || 0)) { devIdx = d2; break; }
             }
@@ -6533,11 +6592,11 @@ var JOGO = (typeof window !== 'undefined')
           colBanco.appendChild(el('h3', 'bk-tit', 'Banco da guilda (' + itens.length + ')'));
           colBanco.appendChild(bancoGrade(pilhasBanco, 'cofre', function (pi) {
             var e2 = pi.entrada;
-            if (e2.emprestadoPara && e2.emprestadoPara !== contaJ.id) {
+            if (e2.emprestadoPara && e2.emprestadoPara !== euId) {
               toast('Emprestada a ' + (e2.tomadorNome || 'alguém') + ' — espere devolver.');
               return;
             }
-            if (e2.emprestadoPara === contaJ.id) {
+            if (e2.emprestadoPara === euId) {
               toast('Essa já está com você — devolva arrastando a cópia do saco.');
               return;
             }
@@ -6547,10 +6606,14 @@ var JOGO = (typeof window !== 'undefined')
             }
             Gd.bancoPegar(pi.indices[0]).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetGuilda(); return; }
-              // o cofre da guilda é local: o que sai dele é cópia NOVA no cartório (origem banco)
-              P().state.inventory.push(P().novaCopia
-                ? P().novaCopia(e2.itemId, 'banco', e2.level || 0, e2.stars || 0)
-                : { itemId: e2.itemId, level: e2.level || 0, stars: e2.stars || 0 });
+              // a emprestada é cópia NOVA no cartório (origem banco). 11/09: a SUA peça,
+              // retirada de vez, volta com a série dela — no servidor ela ficou guardada
+              // no banco da guilda, sem ser varrida do cartório
+              var volta = (res.definitivo && e2.iid)
+                ? { itemId: e2.itemId, level: e2.level || 0, stars: e2.stars || 0, iid: e2.iid }
+                : (P().novaCopia ? P().novaCopia(e2.itemId, 'banco', e2.level || 0, e2.stars || 0)
+                                 : { itemId: e2.itemId, level: e2.level || 0, stars: e2.stars || 0 });
+              P().state.inventory.push(volta);
               safe(function () { P().save(); }, null);
               toast(res.definitivo ? 'Sua peça voltou para o saco.' :
                     'Emprestada — devolva uma cópia igual quando puder.', 'good');

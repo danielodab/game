@@ -39,11 +39,15 @@ var calas = [];                               // 11/09 (achado 21): o R.cala que
 var sala = null, trocaEstado = null;
 JOGO.Rede = {
   _id: 'ana', _cx: 'cxana01', _privado: true, _recusa: null, _falha: null,
+  _mestres: {},                               // 11/09: quem o relé conferiu como o Mestre (o mestre:true da presença)
   meuId: function () { return this._id; },
   meuCx: function () { return this._cx; },
   minhaSala: function () { return sala; },
   nomeDe: function (id) { return NOMES[id] || ('Aventureiro-' + String(id).slice(0, 4)); },
-  pares: function () { return [{ id: 'bia', nome: 'Bia' }, { id: 'cris', nome: 'Cris' }]; },
+  pares: function () {
+    var m = this._mestres || {};
+    return [{ id: 'bia', nome: 'Bia', mestre: m.bia === true }, { id: 'cris', nome: 'Cris', mestre: m.cris === true }];
+  },
   ouvir: function (tipo, fn) {
     (ouvintes[tipo] = ouvintes[tipo] || []).push(fn);
     return function () { ouvintes[tipo] = (ouvintes[tipo] || []).filter(function (f) { return f !== fn; }); };
@@ -180,7 +184,7 @@ JOGO.DATA = {
     avisos.length = 0; convites.length = 0; desafios.length = 0; subidas.length = 0; linhasSu.length = 0;
     Co.cfg.length = 0; Co.sumiu.length = 0; Co.voltou.length = 0; Co.duelos.length = 0;
     Gm.screen = 'hub'; Gm.dungeonId = null; Gm.state = null; Gm.runs.length = 0;
-    R._id = 'ana'; R._cx = 'cxana01'; R._privado = true; R._falha = null; R._recusa = null; R._transporte = null;
+    R._id = 'ana'; R._cx = 'cxana01'; R._privado = true; R._falha = null; R._recusa = null; R._transporte = null; R._mestres = {};
     sala = null; trocaEstado = null;
     Gr.defineHeroi('sumo');
   }
@@ -291,11 +295,28 @@ JOGO.DATA = {
     chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-4444', chave: 'k', versao: 'dev:sig1' } });
     check('com uma troca aberta recusa com "troca"', ult('grupo', 'resposta').dados.motivo === 'troca');
     trocaEstado = null;
+    // 11/09 (pedido do dono): o Mestre ENTRA em grupo com o Cavaleiro Negro, mas só ele chama
     Gr.defineHeroi('gm');
     chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-5555', chave: 'k', versao: 'dev:sig1' } });
-    check('com o Mestre do Fundo recusa com "mestre"', ult('grupo', 'resposta').dados.motivo === 'mestre');
-    check('e o Mestre também não convida', Gr.convidar('bia').motivo === 'mestre');
+    check('com o Mestre do Fundo, o convite de outro é recusado: "só o Mestre chama"', ult('grupo', 'resposta').dados.motivo === 'so-mestre-chama',
+          ult('grupo', 'resposta').dados.motivo);
+    var rMe = Gr.convidar('bia');
+    check('...e o Mestre CHAMA: o convite sai, com o herói dele', rMe.ok === true && ult('grupo', 'convite').para === 'bia' &&
+          ult('grupo', 'convite').dados.heroi.classId === 'gm', JSON.stringify(rMe));
     Gr.defineHeroi('sumo');
+    reset();
+    R._mestres = { bia: true };
+    var nSaidas = saidas.length, rSo = Gr.convidar('bia');
+    check('chamar o Mestre conferido nem sai daqui ("só o Mestre chama")', !rSo.ok && rSo.motivo === 'so-mestre-chama' && saidas.length === nSaidas,
+          JSON.stringify(rSo));
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite',
+                     dados: { gid: 'bia-6666', chave: 'k', versao: 'dev:sig1', heroi: { classId: 'gm', element: 'fogo', level: 30 } } });
+    check('o convite do Mestre conferido chega para responder', convites.length === 1 && Gr.estado().fase === 'convidado');
+    reset();
+    chega('grupo', { de: 'cris', cx: 'cxcris1', acao: 'convite',
+                     dados: { gid: 'cris-7777', chave: 'k', versao: 'dev:sig1', heroi: { classId: 'gm', element: 'fogo', level: 30 } } });
+    check('o herói do Mestre sem o Mestre conferido pelo relé é recusado ("mestre-falso")', convites.length === 0 &&
+          ult('grupo', 'resposta').dados.motivo === 'mestre-falso');
     reset();
     Gr.convidar('bia');
     chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { gid: ult('grupo', 'convite').dados.gid, ok: false, motivo: 'versao' } });

@@ -170,8 +170,14 @@
   function iconeItem(it, tam) {
     return icone('item-' + it.id, it.name, (tam || '') + (RARIDADE[it.rarity] ? ' r-' + it.rarity : ''));
   }
-  function bustoMonstro(m) { return SITE.busto({ letra: SITE.inicial(SITE.semArtigo(m.name)), cor: corEl(m.element) }); }
-  function bustoPet(p) { return SITE.busto({ letra: SITE.inicial(p.name), cor: corEl(p.element) }); }
+  /* 11/09: o retrato do próprio 3D do jogo (tools/retratos_site.py, o quadro da
+   * linha do tempo da batalha); a invocação de fusão usa a foto da obra dela.
+   * Sem o arquivo, a moldura cai na inicial, como antes. */
+  function bustoMonstro(m) {
+    var src = /^fus-/.test(m.id) ? SITE.img('obra', m.id) : SITE.img('monstro', m.id);
+    return SITE.busto({ src: src, letra: SITE.inicial(SITE.semArtigo(m.name)), cor: corEl(m.element) });
+  }
+  function bustoPet(p) { return SITE.busto({ src: SITE.img('pet', p.id), letra: SITE.inicial(p.name), cor: corEl(p.element) }); }
 
   /* ---- os efeitos ------------------------------------------------------------------- */
   var EFEITO = {
@@ -386,7 +392,7 @@
     ];
     var h = '<h1>Wiki do SOTERRA</h1>' +
       '<p class="wk-sub">Tudo o que o jogo sabe, lido dos arquivos do próprio jogo: se um número muda lá, muda aqui no mesmo dia. Use a busca ou escolha uma seção.</p>';
-    if (dia) h += '<p class="wk-chips"><span class="wk-selo dia">Calabouço do Dia: ' + E(dia.nome) + ' (+' + dia.bonus + '% de saque)</span></p>';
+    if (dia) h += '<p class="wk-chips"><span class="wk-selo wk-dia">Calabouço do Dia: ' + E(dia.nome) + ' (+' + dia.bonus + '% de saque)</span></p>';
     h += '<div class="wk-grade">' + cartoes.map(function (c) {
       return '<a class="wk-cartao grande" href="' + c[0] + '"><b>' + E(c[1]) + '</b><span class="apoio">' + E(c[2]) + '</span></a>';
     }).join('') + '</div>';
@@ -635,7 +641,7 @@
     var fechado = FECHADO(d.id);
     return '<a class="wk-cartao grande" href="' + rota('calabouco', d.id) + '" data-calabouco="' + E(d.id) + '">' +
       '<b>' + E(d.name) + '</b><span class="wk-chips">' + (fechado ? '<span class="wk-selo fechado">Em breve</span>' : '<span class="wk-selo aberto">Aberto</span>') +
-      (dia && dia.id === d.id ? '<span class="wk-selo dia">Calabouço do Dia</span>' : '') +
+      (dia && dia.id === d.id ? '<span class="wk-selo wk-dia">Calabouço do Dia</span>' : '') +
       '<span class="wk-selo">nível ' + num(d.recommendedLevel) + '</span></span>' +
       '<span class="apoio">' + E(d.description) + '</span></a>';
   }
@@ -658,7 +664,7 @@
     var h = trilha([['#/calaboucos', 'Calabouços']], d.name);
     h += '<header class="wk-cabeca"><div class="wk-cabeca-tx"><h1>' + E(d.name) + '</h1><p class="wk-chips">' +
       (fechado ? '<span class="wk-selo fechado">Em breve</span>' : '<span class="wk-selo aberto">Aberto</span>') +
-      (dia && dia.id === id ? '<span class="wk-selo dia">Calabouço do Dia: +' + dia.bonus + '% de saque</span>' : '') +
+      (dia && dia.id === id ? '<span class="wk-selo wk-dia">Calabouço do Dia: +' + dia.bonus + '% de saque</span>' : '') +
       '<span class="wk-selo">nível recomendado ' + num(d.recommendedLevel) + '</span>' +
       '<span class="wk-selo">clima: ' + E(nomeClima(d.defaultWeather)) + '</span></p><p>' + E(d.description) + '</p></div></header>';
     if (fechado) {

@@ -304,7 +304,11 @@ def limpo(nome, h):
 def menu_ok(nome, h):
     m = re.search(r'(?s)<nav>(.*?)</nav>', h)
     nav = m.group(1) if m else ''
-    check(nome + ': o menu tem Eventos, Fusões e Loja', 'eventos.html' in nav and 'fusoes.html' in nav and 'loja.html' in nav)
+    check(nome + ': o menu tem Eventos, Wiki e Loja', 'eventos.html' in nav and 'wiki.html' in nav and 'loja.html' in nav)
+    # 11/09 (pedido do dono): classes, fusões e calabouços moram na wiki e na
+    # landing — fora do menu do topo
+    check(nome + ': o menu não tem Classes, Fusões nem Calabouços',
+          not re.search(r'href="(?:index\.html)?#(?:classes|calaboucos)"|href="fusoes\.html"', nav))
 
 
 def img_no_contrato(p):
@@ -318,6 +322,9 @@ def img_no_contrato(p):
     m = re.match(r'^/site/img/(item|extra)-([a-z0-9]+(-[a-z0-9]+)*)\.webp$', p)
     if m:
         return not m.group(2).startswith('gm-')
+    # 11/09: os retratos dos bichos (tools/retratos_site.py): monstro, capa do chefe e pet
+    if re.match(r'^/site/img/(monstro|pet)-[a-z0-9]+(-[a-z0-9]+)*\.webp$', p):
+        return True
     return bool(re.match(r'^/site/img/(obra-fus(-[a-z]+)+\.webp|equipe-cavaleiro(-busto)?\.webp|'
                          r'(capa|guildas|arena|calabouco-[a-z]+)\.jpg)$', p))
 
@@ -529,6 +536,15 @@ def prova_wiki(abre):
     grupos = set(re.findall(r'<h2><a href="#/calabouco/([a-z]+)"', h))
     check('wiki: o bestiário só abre os calabouços abertos', bool(grupos) and not (grupos & set(FECHADOS)), ' '.join(sorted(grupos)))
     limpo('wiki (bestiário)', h)
+    # 11/09: o retrato de cada bicho vem do 3D do jogo (tools/retratos_site.py);
+    # a invocação de fusão usa a foto da obra. Todo arquivo pedido existe.
+    corpo = sem_codigo(h)
+    fotos = re.findall(r'data-monstro="([a-z0-9-]+)"><span class="busto[^"]*"[^>]*><img src="img/((?:monstro|obra)-[a-z0-9-]+\.webp)"', corpo)
+    cartoes = re.findall(r'data-monstro="([a-z0-9-]+)"', corpo)
+    sem_arq = [f for _, f in fotos if not os.path.exists(os.path.join(RAIZ, 'site', 'img', f))]
+    check('wiki: cada monstro do bestiário com o retrato do jogo, e o arquivo existe',
+          bool(cartoes) and len(fotos) == len(cartoes) and not sem_arq,
+          '%d fotos em %d cartões%s' % (len(fotos), len(cartoes), ('; faltam ' + ', '.join(sem_arq[:5])) if sem_arq else ''))
     golpes = re.search(r"(?s)'boss-gardener':\s*\{.*?spells:\s*\[([^\]]*)\]", le('js/core/data/monsters.js')).group(1)
     n_golpes = len(re.findall(r"'m-[a-z0-9-]+'", golpes))
     h = pega('#/monstro/boss-gardener')
@@ -536,6 +552,7 @@ def prova_wiki(abre):
     check('wiki: a Jardineira-Viúva com a ficha, os traços e os %d golpes' % n_golpes,
           'A Jardineira-Viúva' in t and 'não pode ser empurrado' in t and 'fúria' in t and
           len(re.findall(r'data-feitico="m-', h)) == n_golpes)
+    check('wiki: a Jardineira-Viúva com o retrato do jogo no cabeçalho', 'src="img/monstro-boss-gardener.webp"' in h)
     limpo('wiki (chefe)', h)
 
     esperado = conta_itens_dados()
@@ -554,6 +571,23 @@ def prova_wiki(abre):
           'Tesourão da Viúva' in t and '+1 PA' in t and 'Traje da Flora Voraz' in t and ('nível ' + nivel) in t)
     check('wiki: o ícone do item vem da miniatura (img/item-<id>.webp)', 'src="img/item-gh-widow-shears.webp"' in h)
     limpo('wiki (item)', h)
+
+    h = pega('#/pets')
+    corpo = sem_codigo(h)
+    fotos = re.findall(r'data-pet="([a-z0-9-]+)"><span class="busto[^"]*"[^>]*><img src="img/(pet-[a-z0-9-]+\.webp)"', corpo)
+    cartoes = re.findall(r'data-pet="([a-z0-9-]+)"', corpo)
+    sem_arq = [f for _, f in fotos if not os.path.exists(os.path.join(RAIZ, 'site', 'img', f))]
+    check('wiki: cada pet com o retrato do jogo, e o arquivo existe',
+          bool(cartoes) and len(fotos) == len(cartoes) and not sem_arq,
+          '%d fotos em %d cartões%s' % (len(fotos), len(cartoes), ('; faltam ' + ', '.join(sem_arq[:5])) if sem_arq else ''))
+    limpo('wiki (pets)', h)
+    # 11/09: o selo do Calabouço do Dia usava a classe .dia, que o site.css já
+    # dá às células do calendário (min-height 128 px) — virou um balão oval no
+    # ar. Nenhum modificador dos selos da wiki pode ter regra solta no site.css.
+    css = le('site/site.css')
+    mods = set(re.findall(r'wk-(?:selo|el|rar|nivel) ([a-z][a-z0-9-]*)', le('site/wiki.js')))
+    colide = sorted(m for m in mods if re.search(r'(?:^|[\s,>+~}])\.' + re.escape(m) + r'(?![\w-])', css, re.M))
+    check('wiki: nenhum selo da wiki pega regra do site.css pela classe (o .dia virou balão)', bool(mods) and not colide, ', '.join(colide))
 
     h = pega('#/busca/jardineira')
     check('wiki: a busca acha a Jardineira-Viúva', 'A Jardineira-Viúva' in texto(h) and 'data-tipo="Chefe"' in h)
@@ -577,13 +611,24 @@ def prova_index(abre):
     te = texto(ev)
     check('landing (cheia): #eventos com o evento no ar e a contagem', 'Quinta do XP' in te and 'termina em' in te)
     ids = dias_do_calabouco(ev)
-    check('landing (cheia): o Dia de hoje e dos próximos 6, sem portal fechado',
-          len(ids) == 7 and not (set(ids) & set(FECHADOS)), ' '.join(ids))
+    # 11/09 (pedido do dono): só o Dia de HOJE; a semana fica no calendário de eventos.html
+    check('landing (cheia): só o Calabouço do Dia de hoje, de portal aberto e com o link da wiki',
+          len(ids) == 1 and ids[0] not in FECHADOS and ('href="wiki.html#/calabouco/%s"' % ids[0]) in ev, ' '.join(ids))
     check('landing (cheia): o próximo evento em "Em breve"', 'Maré da Cisterna' in te)
-    fotos = re.findall(r'<div class="foto retrato"[^>]*data-classe="([a-z]+)"[^>]*><img src="img/classe-([a-z]+)\.webp"', h)
-    check('landing (cheia): os 7 cartões de classe com o retrato quadrado pelo id',
-          len(fotos) == 7 and all(a == b for a, b in fotos) and sorted(b for a, b in fotos) == sorted(CLASSES),
-          ' '.join(b for a, b in fotos))
+    fotos = re.findall(r'<a class="cartao" href="wiki\.html#/classe/([a-z]+)">\s*<div class="foto retrato"[^>]*data-classe="([a-z]+)"'
+                       r'[^>]*><img src="img/classe-([a-z]+)\.webp"', h)
+    check('landing (cheia): os 7 cartões de classe com o retrato quadrado pelo id, e cada um leva à wiki',
+          len(fotos) == 7 and all(a == b == c for a, b, c in fotos) and sorted(c for a, b, c in fotos) == sorted(CLASSES),
+          ' '.join(c for a, b, c in fotos))
+    # 11/09: o portal aberto mostra o chefe (a capa larga do retratos_site) e leva à wiki
+    ca = secao(h, 'calaboucos')
+    abertos = [d for d in re.findall(r"^    id: '([a-z]+)',", le('js/core/data/dungeons.js'), re.M) if d not in FECHADOS]
+    capas = re.findall(r'<a class="cartao" href="wiki\.html#/calabouco/([a-z]+)">\s*<div class="foto"[^>]*>\s*'
+                       r'<span class="etiqueta aberto">[^<]*</span>\s*<img src="img/(monstro-boss-[a-z0-9-]+-capa\.webp)"', ca)
+    sem = [f for _, f in capas if not os.path.exists(os.path.join(RAIZ, 'site', 'img', f))]
+    check('landing (cheia): cada portal aberto com a capa do chefe e o link da wiki',
+          bool(abertos) and sorted(c for c, _ in capas) == sorted(abertos) and not sem,
+          'capas: %s · abertos: %s%s' % (' '.join(c for c, _ in capas), ' '.join(abertos), ('; faltam ' + ', '.join(sem)) if sem else ''))
     tc = texto(secao(h, 'classes'))
     check('landing (cheia): Curandeiro (D1), e o pronome dele', 'Curandeiro' in tc and 'Curandeira' not in tc and 'O que ele faz' in tc)
     fu = secao(h, 'fusoes')
@@ -605,8 +650,8 @@ def prova_index(abre):
 
     h = abre('index.html', 'fora')
     ev = secao(h, 'eventos')
-    check('landing (fora): a nota do servidor fora e o Dia',
-          'servidor está fora' in texto(ev) and len(dias_do_calabouco(ev)) == 7)
+    check('landing (fora): a nota do servidor fora e o Dia de hoje',
+          'servidor está fora' in texto(ev) and len(dias_do_calabouco(ev)) == 1)
     limpo('landing (fora)', h)
 
     h = abre('conta.html', 'cheia')

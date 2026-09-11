@@ -373,15 +373,17 @@ var JOGO = (typeof window !== 'undefined')
     return responde(fora);
   };
 
-  G.entrar = function (gid) {
+  G.entrar = function (gid, op) {
     if (!conta) return responde({ ok: false, erro: 'sem conta' });
     var d = le();
     if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
     var g = d.guildas[gid];
     if (!g) return responde({ ok: false, erro: 'essa guilda não existe mais' });
     // porta fechada (30/08): entrar direto só em guilda ABERTA — na de
-    // convite o caminho é a fila (pedirEntrada) ou o convite da praça
-    if (portaDe(g) === 'convite') {
+    // convite o caminho é a fila (pedirEntrada) ou o convite da praça. 11/09:
+    // o convite da praça ({ convite: true }) entra — antes ele batia nesta
+    // porta e o "aceitar" não levava a lugar nenhum
+    if (portaDe(g) === 'convite' && !(op && op.convite === true)) {
       return responde({ ok: false, erro: 'a guilda é por convite — peça para entrar' });
     }
     g.membros.push({ id: conta.id, nome: conta.nome });
@@ -504,5 +506,146 @@ var JOGO = (typeof window !== 'undefined')
     delete e.tomadorNome;
     grava(d);
     return responde({ ok: true });
+  };
+
+  /* ================================================================ A GUILDA NO SERVIDOR (11/09)
+   * Pedido do dono ("Guilda no servidor"): com sessão (a conta do site), o
+   * registro mora no cartório (servidor/guilda.py, /api/guilda/*) — o convite
+   * entre duas máquinas passa a funcionar, e cofre, banco e bônus são de
+   * todos. Sem sessão (em casa, nas bancadas) segue o registro local acima.
+   * A HUD não muda de conversa: as mesmas funções, as mesmas respostas (os
+   * ids de membro viram os das CONTAS; a ficha traz `eu`). O que o game.js
+   * lê SÍNCRONO (bonusAtivo, dizimoAtual) vem da última ficha do servidor,
+   * renovada em segundo plano quando passa de FICHA_MS. */
+  G._servidor = null;                  // provas: true/false força; null = pela sessão
+  G.noServidor = function () {
+    if (typeof G._servidor === 'boolean') return G._servidor;
+    try { var S = JOGO.Sessao; return !!(S && S.ativa && S.ativa() && S.api); } catch (e) { return false; }
+  };
+  var FICHA_MS = 5 * 60 * 1000;
+  var ficha = null, fichaEm = 0, fichaPedida = false;
+  function guardaFicha(f) { ficha = f || null; fichaEm = Date.now(); }
+  function pede(rota, corpo) {
+    var op = corpo === undefined ? {} : { method: 'POST', body: corpo };
+    return JOGO.Sessao.api(rota, op).then(function (r) {
+      r = (r && typeof r === 'object') ? r : { ok: false };
+      if (r.ok && Object.prototype.hasOwnProperty.call(r, 'guilda')) guardaFicha(r.guilda);
+      if (!r.ok && !r.erro) r.erro = r.status === 0 ? 'o servidor está fora (não respondeu)' : 'não deu';
+      return r;
+    });
+  }
+  function renova() {
+    if (fichaPedida) return;
+    fichaPedida = true;
+    pede('/api/guilda/minha').then(function () { fichaPedida = false; }, function () { fichaPedida = false; });
+  }
+  G._ficha = function () { return ficha; };               // provas
+  var local = {};
+  ['criar', 'minha', 'promover', 'rebaixar', 'definirPorta', 'pedirEntrada', 'aceitarPedido', 'recusarPedido',
+   'definirDizimo', 'dizimoAtual', 'doarXp', 'lista', 'entrar', 'sair', 'registraTreino', 'compraBonus',
+   'bonusAtivo', 'bancoDepositar', 'bancoLista', 'bancoPegar', 'bancoDevolver'].forEach(function (k) { local[k] = G[k]; });
+  G._local = local;
+  function peloServidor(nome, fn) {
+    G[nome] = function () {
+      return G.noServidor() ? fn.apply(null, arguments) : local[nome].apply(G, arguments);
+    };
+  }
+
+  peloServidor('minha', function () {
+    return pede('/api/guilda/minha').then(function (r) { return r.ok ? (r.guilda || null) : ficha; });
+  });
+  peloServidor('lista', function () {
+    return pede('/api/guilda/lista').then(function (r) { return r.ok ? (r.guildas || []) : []; });
+  });
+  peloServidor('criar', function (nome, emblema) {
+    nome = String(nome || '').trim().slice(0, 24);
+    if (!nome) return responde({ ok: false, erro: 'diga um nome' });
+    var recusa = nomeDeEquipe(nome);
+    if (recusa) return responde({ ok: false, erro: recusa });
+    var P = cofreInsignias(), preco = precoCriar();
+    if (P && P.insigniasVer() < preco) {
+      return responde({ ok: false, erro: 'faltam insígnias: ' + P.insigniasVer() + '/' + preco + ' — só chefe derruba' });
+    }
+    return pede('/api/guilda/criar', { nome: nome, emblema: String(emblema || '⚑').slice(0, 4) }).then(function (r) {
+      if (r.ok && P) P.gastaInsignias(preco);       // a cobrança vem DEPOIS do sim: fundação recusada não come insígnia
+      return r;
+    });
+  });
+  peloServidor('entrar', function (gid) { return pede('/api/guilda/entrar', { gid: gid }); });
+  peloServidor('pedirEntrada', function (gid) { return pede('/api/guilda/pedir', { gid: gid }); });
+  peloServidor('aceitarPedido', function (id) { return pede('/api/guilda/pedido', { conta: id, aceitar: true }); });
+  peloServidor('recusarPedido', function (id) { return pede('/api/guilda/pedido', { conta: id, aceitar: false }); });
+  peloServidor('promover', function (id) { return pede('/api/guilda/cargo', { conta: id, cargo: 'oficial' }); });
+  peloServidor('rebaixar', function (id) { return pede('/api/guilda/cargo', { conta: id, cargo: 'membro' }); });
+  peloServidor('definirPorta', function (modo) { return pede('/api/guilda/porta', { modo: modo }); });
+  peloServidor('definirDizimo', function (pct) { return pede('/api/guilda/dizimo', { pct: Math.floor(Number(pct)) }); });
+  peloServidor('doarXp', function (n) {
+    n = Math.floor(n);
+    if (!isFinite(n) || n <= 0) return responde({ ok: false, erro: 'quantia inválida' });
+    return pede('/api/guilda/doar', { xp: n }).then(function (r) { if (r.ok && ficha) ficha.xp = r.xp; return r; });
+  });
+  peloServidor('registraTreino', function () { return pede('/api/guilda/treino', {}); });
+  peloServidor('compraBonus', function (tipo) { return pede('/api/guilda/bonus', { tipo: tipo }); });
+  peloServidor('sair', function () {
+    return pede('/api/guilda/sair', {}).then(function (r) { if (r.ok) guardaFicha(null); return r; });
+  });
+  peloServidor('bancoLista', function () {
+    var vem = ficha ? responde(ficha) : G.minha();
+    return vem.then(function (f) { return JSON.parse(JSON.stringify((f && f.banco) || [])); });
+  });
+  peloServidor('bancoDepositar', function (item) {
+    if (!item || !item.itemId) return responde({ ok: false });
+    return pede('/api/guilda/banco/depositar', { item: { itemId: item.itemId, level: item.level || 0,
+      stars: item.stars || 0, iid: (typeof item.iid === 'string' && item.iid) ? item.iid : null } });
+  });
+  // a HUD fala por POSIÇÃO na lista que ela desenhou (a da última ficha); o servidor, pelo id da vaga
+  function vagaDe(idx) { var b = (ficha && ficha.banco) || []; return b[idx] || null; }
+  peloServidor('bancoPegar', function (idx) {
+    var v = vagaDe(idx);
+    return v ? pede('/api/guilda/banco/pegar', { id: v.id }) : responde({ ok: false, erro: 'essa peça já saiu' });
+  });
+  peloServidor('bancoDevolver', function (idx) {
+    var v = vagaDe(idx);
+    return v ? pede('/api/guilda/banco/devolver', { id: v.id }) : responde({ ok: false, erro: 'essa vaga sumiu' });
+  });
+  /* SÍNCRONOS (o game.js, no meio da recompensa): da última ficha */
+  peloServidor('bonusAtivo', function (tipo) {
+    if (Date.now() - fichaEm > FICHA_MS) renova();
+    return !!(ficha && ficha.bonus && ficha.bonus[tipo] && ficha.bonus[tipo] > agora());
+  });
+  peloServidor('dizimoAtual', function () {
+    if (Date.now() - fichaEm > FICHA_MS) renova();
+    var p = ficha ? Math.floor(ficha.dizimo || 0) : 0;
+    return (isFinite(p) && p > 0) ? Math.min(p, G.DIZIMO_MAX) : 0;
+  });
+
+  /* O CONVITE DA PRAÇA (11/09): líder e oficiais convidam a CONTA de quem está
+   * na praça (o `nuvem` da presença, que o relé conferiu). Sem servidor, o
+   * convite é o de sempre (e o `entrar` com { convite: true } passa a porta). */
+  G.convidar = function (contaAlvo) {
+    if (!G.noServidor()) return responde({ ok: true, local: true });
+    if (typeof contaAlvo !== 'number' || !(contaAlvo > 0)) {
+      return responde({ ok: false, erro: 'essa pessoa precisa entrar na conta para receber convite de guilda' });
+    }
+    return pede('/api/guilda/convidar', { conta: contaAlvo });
+  };
+
+  /* A GUILDA DE ANTES (11/09): quem fundou uma guilda no navegador, antes do
+   * servidor, leva o nome e o emblema para lá sem pagar as insígnias de novo
+   * (o XP, o cofre e o banco ficam na máquina; os membros entram por convite).
+   * Só o líder, só uma vez. */
+  G.guildaLocalLiderada = function () {
+    if (!G.noServidor() || !conta) return null;
+    var g = minhaG(le());
+    if (!g || g.liderId !== conta.id || g.migrada) return null;
+    return { nome: g.nome, emblema: g.emblema };
+  };
+  G.migrarLocal = function () {
+    var a = G.guildaLocalLiderada();
+    if (!a) return responde({ ok: false, erro: 'nada para trazer' });
+    return pede('/api/guilda/criar', { nome: a.nome, emblema: a.emblema }).then(function (r) {
+      if (r.ok) { var d = le(), g = minhaG(d); if (g) { g.migrada = true; grava(d); } }
+      return r;
+    });
   };
 })();

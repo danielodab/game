@@ -48,10 +48,12 @@
 .wk-selo { color: var(--texto-2); background: var(--fundo-3); }
 .wk-selo.aberto { color: var(--certo); border-color: rgba(126, 226, 168, .4); }
 .wk-selo.fechado { color: var(--erro); border-color: rgba(255, 122, 107, .4); }
-.wk-selo.dia, .wk-selo.chefe { color: var(--ouro); border-color: var(--ouro-esc); background: var(--ouro-a10); }
-.wk-selo.dia { white-space: normal; }       /* o nome do calabouço é longo: no celular quebra a linha */
+/* 11/09: .wk-dia, e não .dia — o site.css dá .dia às células do calendário
+ * (min-height 128 px), e o selo virava um balão oval */
+.wk-selo.wk-dia, .wk-selo.chefe { color: var(--ouro); border-color: var(--ouro-esc); background: var(--ouro-a10); }
+.wk-selo.wk-dia { white-space: normal; }    /* o nome do calabouço é longo: no celular quebra a linha */
 .wk-nivel { color: var(--ouro-2); border-color: var(--ouro-esc); }
-.wk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.wk-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 10px; }
 
 /* ---- cartões de lista --------------------------------------------------------- */
 .wk-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 12px 0; }
@@ -70,7 +72,7 @@ a.wk-cartao:hover { border-color: var(--ouro-esc); text-decoration: none; transf
 /* ---- o cabeçalho de uma página de detalhe ------------------------------------ */
 .wk-cabeca { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 8px; }
 .wk-cabeca .busto { flex: none; width: 116px; height: 116px; }
-/* a inicial da moldura sem foto (monstros e pets ainda não têm retrato): no tamanho do busto */
+/* a inicial da moldura sem foto (retrato que ainda não existe): no tamanho do busto */
 .wk-cartao .busto::after { font-size: 22px; }
 .wk-cabeca .busto::after { font-size: 48px; }
 .wk-cabeca-tx { min-width: 0; }

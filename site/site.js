@@ -520,6 +520,9 @@
     if (tipo === 'classe' && ID_OK.test(String(id))) nome = String(id);
     else if (tipo === 'fusao') { var p = SITE.parDe(id); if (p) nome = p.join('-'); }
     else if (tipo === 'obra' && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(id))) nome = String(id);
+    // 11/09: os bichos da wiki (tools/retratos_site.py); o pet sem o "pet-" do id
+    else if (tipo === 'monstro' && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(id))) nome = String(id);
+    else if (tipo === 'pet' && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(id))) nome = String(id).replace(/^pet-/, '');
     return nome ? 'img/' + tipo + '-' + nome + (busto ? '-busto' : '') + '.webp' : '';
   };
   /* O onerror de toda foto gerada por script: tenta a reserva (o busto da

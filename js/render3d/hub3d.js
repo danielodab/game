@@ -197,6 +197,106 @@ var JOGO = (typeof window !== 'undefined')
     return sp;
   }
 
+  /* O BALÃO DE FALA (11/09, pedido do dono: "quando mandar mensagem deve
+   * aparecer um balão em cima do personagem"). A frase do chat da praça sobe
+   * num balão claro acima de tudo o que o corpo carrega (placa, guilda,
+   * coroa) e some sozinha em BALAO_S; frase nova troca a velha. Até 3
+   * linhas — o resto vira reticências (a frase inteira fica no chat). */
+  var BALAO_S = 6;
+  function balaoSprite(texto) {
+    var cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 256;
+    var g = cv.getContext('2d');
+    g.font = '600 34px system-ui, "Segoe UI", Roboto, sans-serif';
+    var LARG = 440, MAXL = 3;
+    var palavras = String(texto || '').replace(/\s+/g, ' ').trim().split(' ');
+    var linhas = [], atual = '', cortou = false;
+    for (var i = 0; i < palavras.length; i++) {
+      var tenta = atual ? atual + ' ' + palavras[i] : palavras[i];
+      if (g.measureText(tenta).width <= LARG) { atual = tenta; continue; }
+      if (atual) linhas.push(atual);
+      atual = palavras[i];
+      while (g.measureText(atual).width > LARG && atual.length > 1) {   // palavra sem fim: corta no meio
+        var n = atual.length;
+        while (n > 1 && g.measureText(atual.slice(0, n)).width > LARG) n--;
+        linhas.push(atual.slice(0, n));
+        atual = atual.slice(n);
+      }
+      if (linhas.length >= MAXL) { cortou = true; break; }
+    }
+    if (!cortou && atual) linhas.push(atual);
+    if (linhas.length > MAXL) { linhas.length = MAXL; cortou = true; }
+    if (cortou) {
+      var ult = linhas[MAXL - 1] || '';
+      while (ult && g.measureText(ult + '…').width > LARG) ult = ult.slice(0, -1);
+      linhas[MAXL - 1] = ult + '…';
+    }
+    var passo = 42, h = linhas.length * passo + 30, larg = 0;
+    for (var k = 0; k < linhas.length; k++) larg = Math.max(larg, g.measureText(linhas[k]).width);
+    larg = Math.min(496, Math.max(110, larg + 52));
+    var x0 = (512 - larg) / 2, y0 = 256 - 28 - h, r = 22;
+    g.beginPath();
+    g.moveTo(x0 + r, y0);
+    g.arcTo(x0 + larg, y0, x0 + larg, y0 + h, r);
+    g.arcTo(x0 + larg, y0 + h, x0, y0 + h, r);
+    g.arcTo(x0, y0 + h, x0, y0, r);
+    g.arcTo(x0, y0, x0 + larg, y0, r);
+    g.closePath();
+    g.fillStyle = 'rgba(250,246,236,0.96)';
+    g.strokeStyle = 'rgba(46,36,20,0.9)';
+    g.lineWidth = 4;
+    g.fill();
+    g.stroke();
+    // o rabinho, no meio de baixo, apontando para a cabeça (cobre o traço da borda)
+    g.beginPath();
+    g.moveTo(256 - 17, y0 + h - 3); g.lineTo(256, y0 + h + 24); g.lineTo(256 + 17, y0 + h - 3);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    g.moveTo(256 - 17, y0 + h); g.lineTo(256, y0 + h + 24); g.lineTo(256 + 17, y0 + h);
+    g.stroke();
+    g.fillStyle = '#1d1a14';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    for (var j = 0; j < linhas.length; j++) g.fillText(linhas[j], 256, y0 + 15 + passo * (j + 0.5));
+    var tex = new THREE.Texture(cv);
+    tex.needsUpdate = true;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    sp.scale.set(3.2, 1.6, 1);
+    sp.center.set(0.5, 0);         // a ponta de baixo (o rabinho) fica no ponto: o balão cresce para cima
+    sp.renderOrder = 5;
+    return sp;
+  }
+  /* o alto do que o corpo carrega: a placa do nome, a da guilda e a coroa */
+  function topoDoCorpo(corpo) {
+    var topo = (corpo.node.userData.height || 2.1) + 0.2;
+    [corpo.plaquinha, corpo.plaquinhaGuilda].forEach(function (s) {
+      if (s) topo = Math.max(topo, s.position.y + s.scale.y * 0.5);
+    });
+    if (corpo.coroaPvp) {
+      var bc = corpo.coroaPvp.userData.baseY;
+      topo = Math.max(topo, (typeof bc === 'number' ? bc : corpo.coroaPvp.position.y) + 0.45);
+    }
+    return topo;
+  }
+  function tiraBalao(corpo) {
+    if (!corpo || !corpo.balao) return;
+    corpo.node.remove(corpo.balao);
+    try { corpo.balao.material.map.dispose(); corpo.balao.material.dispose(); } catch (e) {}
+    corpo.balao = null;
+  }
+  function falaEm(corpo, texto) {
+    if (!corpo || !corpo.node || !THREE || !String(texto || '').trim()) return false;
+    tiraBalao(corpo);
+    var sp = balaoSprite(texto);
+    sp.position.y = topoDoCorpo(corpo) + 0.08;
+    corpo.node.add(sp);
+    corpo.balao = sp;
+    corpo.balaoAte = relogio + BALAO_S;
+    return true;
+  }
+
   // ------------------------------------------------------------------- a cena
   function montaCena() {
     scene = new THREE.Scene();
@@ -1382,6 +1482,17 @@ var JOGO = (typeof window !== 'undefined')
 
   function tique(dt) {
     relogio += dt;
+    // 11/09: o balão de fala some sozinho (o último segundo esmaece)
+    var somaBalao = function (corpoB) {
+      if (!corpoB || !corpoB.balao) return;
+      var resta = corpoB.balaoAte - relogio;
+      if (resta <= 0) { tiraBalao(corpoB); return; }
+      corpoB.balao.material.opacity = Math.min(1, resta);
+    };
+    somaBalao(heroi);
+    for (var fb in fantasmas) {
+      if (fantasmas.hasOwnProperty(fb)) somaBalao(fantasmas[fb].corpo);
+    }
     // o FILME dos portais: um passo de offset por quadro serve os seis miolos
     // (mesma conta de linha/coluna do updateFilmes do fx3d — flipY do three)
     if (texPortal) {
@@ -1901,6 +2012,18 @@ var JOGO = (typeof window !== 'undefined')
     delete fantasmas[id];
   };
   Hub.fantasmas = function () { return Object.keys(fantasmas); };
+  /* 11/09: o BALÃO DE FALA — `id` da Rede (um fantasma com corpo) ou null
+   * (eu). False quando não há corpo à vista (acima do teto, noutra sala). */
+  Hub.fala = function (id, texto) {
+    var corpo = id ? (fantasmas[id] && fantasmas[id].corpo) : heroi;
+    return falaEm(corpo, texto);
+  };
+  Hub._balao = function (id) {                   // provas: o balão de um corpo, ou null
+    var c = id ? (fantasmas[id] && fantasmas[id].corpo) : heroi;
+    if (!c || !c.balao) return null;
+    return { y: c.balao.position.y, topo: topoDoCorpo(c), opacidade: c.balao.material.opacity,
+             resta: c.balaoAte - relogio };
+  };
   Hub.salaAtual = function () { return salaAtual; };
   Hub._corposAtivos = function () {              // painel de teste e provas
     var n = 0;

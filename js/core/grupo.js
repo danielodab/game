@@ -190,6 +190,15 @@ var JOGO = (typeof window !== 'undefined')
     return safe(function () { return JOGO.Progress.hero(hid).classId === 'gm'; }, false);
   }
   function temHeroi(hid) { return !!(hid && safe(function () { return JOGO.Progress.hero(hid); }, null)); }
+  /* 11/09 (pedido do dono): o Mestre ENTRA em grupo com o Cavaleiro Negro, mas
+   * só ele chama. "É o Mestre" = o mestre:true da presença, que a Rede só põe
+   * quando confia no relé — nunca o que veio escrito no convite. */
+  function mestreConferido(id) {
+    return safe(function () {
+      var r = R();
+      return !!(id && r && r.pares && r.pares().some(function (p) { return p && p.id === id && p.mestre === true; }));
+    }, false);
+  }
   function lerMeuNome() {
     var DB = JOGO.DB;
     if (!DB || typeof DB.jogador !== 'function') return;
@@ -215,7 +224,7 @@ var JOGO = (typeof window !== 'undefined')
     if (tela() !== 'hub' || minhaSala()) return 'ocupado';
     if (paraGrupo) {
       if (!temHeroi(meuHeroiId)) return 'sem-heroi';
-      if (ehMestre(meuHeroiId)) return 'mestre';
+      if (ehMestre(meuHeroiId)) return 'so-mestre-chama';   // 11/09: o Mestre entra em grupo, mas é ele quem chama
     } else if (!heroisDeDuelo().length) return 'sem-heroi';
     return null;
   }
@@ -227,8 +236,7 @@ var JOGO = (typeof window !== 'undefined')
     if (trocaAberta()) return 'troca';
     if (dst.fase !== 'livre') return 'ocupado';
     if (!temHeroi(meuHeroiId)) return 'sem-heroi';
-    if (ehMestre(meuHeroiId)) return 'mestre';
-    return null;
+    return null;                     // 11/09: o Mestre no grupo segue (e desce) como qualquer um
   }
   Grupo.podeSeguir = function () {
     var m = motivoPodeSeguir();
@@ -266,7 +274,9 @@ var JOGO = (typeof window !== 'undefined')
     'em-grupo': '{n} já está num grupo.',
     'troca': '{n} está numa troca.',
     'versao': 'Vocês estão em versões diferentes do jogo — recarreguem a página.',
-    'mestre': 'O Mestre do Fundo não entra em grupo nem em duelo.',
+    'mestre': 'O Mestre do Fundo não entra em duelo.',
+    'so-mestre-chama': 'O Mestre do Fundo é quem chama para o grupo.',
+    'mestre-falso': 'Esse Mestre do Fundo não foi conferido pelo servidor.',
     'sem-heroi': '{n} não tem herói escolhido.',
     'portal': 'Esse calabouço não abre agora.',
     'poco': 'O Poço é só para quem desce sozinho — por enquanto.',
@@ -284,7 +294,9 @@ var JOGO = (typeof window !== 'undefined')
     'em-grupo': 'Você já está num grupo.',
     'troca': 'Feche a troca aberta antes.',
     'sem-heroi': 'Escolha um herói primeiro.',
-    'mestre': 'O Mestre do Fundo não entra em grupo nem em duelo.',
+    'mestre': 'O Mestre do Fundo não entra em duelo.',
+    'so-mestre-chama': 'O Mestre do Fundo é quem chama para o grupo.',
+    'mestre-falso': 'Esse Mestre do Fundo não foi conferido pelo servidor.',
     'nao-lider': 'Só quem lidera escolhe o calabouço.',
     'sem-grupo': 'Você não está num grupo.',
     'privado': 'Mensagem particular precisa do servidor da Rede.',
@@ -477,7 +489,9 @@ var JOGO = (typeof window !== 'undefined')
     if (trocaAberta()) return { ok: false, motivo: 'troca' };
     if (tela() !== 'hub' || minhaSala()) return { ok: false, motivo: 'em-batalha' };
     if (!temHeroi(meuHeroiId)) return { ok: false, motivo: 'sem-heroi' };
-    if (ehMestre(meuHeroiId)) return { ok: false, motivo: 'mestre' };
+    // 11/09 (pedido do dono): o Mestre chama para o grupo; chamar o Mestre
+    // conferido nem sai daqui — só ele pede grupo
+    if (mestreConferido(id) && !ehMestre(meuHeroiId)) return { ok: false, motivo: 'so-mestre-chama' };
     var gid = eu() + '-' + aleat(4), chave = aleat(8);
     if (!manda('grupo', id, 'convite', { gid: gid, chave: chave, heroi: heroiResumo(meuHeroiId),
                                           versao: versao() })) {
@@ -607,6 +621,8 @@ var JOGO = (typeof window !== 'undefined')
       if (st.pendente && st.pendente.gid === d.gid) return;          // reenvio
       if (st.fase === 'formado' && st.gid === d.gid) return;
       var mot = mutado(de) ? 'ocupado' : (String(d.versao || '') !== versao() ? 'versao' : motivoOcupado(true));
+      // 11/09: convite com o herói do Mestre só do Mestre que o relé conferiu
+      if (!mot && d.heroi && String(d.heroi.classId || '') === 'gm' && !mestreConferido(de)) mot = 'mestre-falso';
       if (mot) {
         manda('grupo', de, 'resposta', { gid: String(d.gid).slice(0, 48), ok: false, motivo: mot }, ev.cx);
         return;

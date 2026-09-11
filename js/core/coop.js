@@ -105,6 +105,30 @@ var JOGO = (typeof window !== 'undefined')
   function D() { return JOGO.DATA || {}; }
   function num(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
   function clone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
+  /* 11/09: O MESTRE NO GRUPO (pedido do dono, com o Cavaleiro Negro) */
+  function gmAtivo() {
+    try { return !!(JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()); } catch (e) { return false; }
+  }
+  /* o Mestre que o RELÉ conferiu: o mestre:true da presença (a Rede só o põe
+   * quando confia no relé) — nunca o que veio escrito no envelope */
+  function mestreConferido(id) {
+    var r = R();
+    if (!id || !r || typeof r.pares !== 'function') return false;
+    try { return r.pares().some(function (p) { return p && p.id === id && p.mestre === true; }); }
+    catch (e) { return false; }
+  }
+  /* a ficha do Mestre entra no DATA desta página só para a batalha (o
+   * validaPayload já exigiu o Mestre conferido); sai na sala seguinte, com o
+   * grupo desfeito fora da batalha, ou na volta à praça (game.js) */
+  function emprestaFichas(party) {
+    var Gm = JOGO.GM;
+    if (!Gm || !Gm.emprestaFicha) return;
+    (party || []).forEach(function (p) { if (p && p.classId === 'gm' && p.ficha) Gm.emprestaFicha(p.ficha); });
+  }
+  function devolveFichas() {
+    var Gm = JOGO.GM;
+    try { if (Gm && Gm.devolveFicha) Gm.devolveFicha(); } catch (e) {}
+  }
 
   // ------------------------------------------------------------ estado
   var cfg = null;       // o grupo que o grupo.js configurou: { gid, lider, eu, parceiro:{ id, cx, heroi, nome } }
@@ -311,12 +335,14 @@ var JOGO = (typeof window !== 'undefined')
              nome: (porId[dg].name || dg) + ' — sala ' + (ri + 1) + (room.name ? ' (' + room.name + ')' : '') };
   };
 
-  /* O MEU herói no formato do motor, com o `dono`. Null para o Mestre. */
+  /* O MEU herói no formato do motor, com o `dono`. O Mestre (11/09) só com o
+   * modo ligado nesta página, e com a FICHA junto (a classe e os feitiços
+   * gm-*): o motor do parceiro não os tem. */
   Coop.payloadMeu = function (heroId) {
     var P = JOGO.Progress;
     if (!P || !P.battleParty || !P.hero) return null;
     var h = P.hero(heroId);
-    if (!h || h.classId === 'gm') return null;
+    if (!h || (h.classId === 'gm' && !gmAtivo())) return null;
     var lst = null;
     try { lst = P.battleParty([heroId]); } catch (e) { lst = null; }
     var p = lst && lst[0];
@@ -324,6 +350,12 @@ var JOGO = (typeof window !== 'undefined')
     p = clone(p);
     delete p.items; delete p.itemVar;      // o motor não lê; só pesariam na ata
     p.dono = meuId();
+    if (p.classId === 'gm') {
+      var fi = null;
+      try { fi = JOGO.GM.fichaDoGrupo(p.spells || []); } catch (e2) { fi = null; }
+      if (!fi) return null;
+      p.ficha = fi;
+    }
     return p;
   };
 
@@ -365,10 +397,34 @@ var JOGO = (typeof window !== 'undefined')
     }
     return isFinite(+s.hp) && +s.hp >= 1;
   }
-  function validaPayload(p) {
+  /* O MESTRE NO GRUPO (11/09): o herói dele só passa do Mestre que o relé
+   * conferiu — ou o meu, com o modo ligado aqui —, e com a ficha certa: a
+   * classe 'gm' e só feitiços gm-* nela; os outros feitiços, os do jogo. */
+  function validaMestre(p) {
+    if (!p.dono || !(p.dono === meuId() ? gmAtivo() : mestreConferido(p.dono))) return false;
+    var fi = p.ficha;
+    if (!fi || typeof fi !== 'object' || !fi.classe || fi.classe.id !== 'gm' ||
+        !fi.feiticos || typeof fi.feiticos !== 'object') return false;
+    for (var k in fi.feiticos) {
+      if (!Object.prototype.hasOwnProperty.call(fi.feiticos, k)) continue;
+      var f = fi.feiticos[k];
+      if (!/^gm-/.test(k) || !f || f.classId !== 'gm' || Object.prototype.toString.call(f.effects) !== '[object Array]') return false;
+    }
+    if (typeof p.level !== 'number' || p.level !== Math.floor(p.level) || p.level < 1 || p.level > 99) return false;
+    var sp = p.spells || [], e = E();
+    if (Object.prototype.toString.call(sp) !== '[object Array]') return false;
+    for (var i = 0; i < sp.length; i++) {
+      if (typeof sp[i] !== 'string') return false;
+      if (/^gm-/.test(sp[i])) { if (!Object.prototype.hasOwnProperty.call(fi.feiticos, sp[i])) return false; }
+      else if (e && !e.spell(sp[i])) return false;
+    }
+    return statsSaos(p.stats);
+  }
+  function validaPayload(p, op) {
     if (!p || typeof p !== 'object') return false;
+    if (p.classId === 'gm') return !(op && op.semMestre) && validaMestre(p);   // no duelo, o Mestre segue fora
     var cls = (D().classes || {})[p.classId];
-    if (!cls || p.classId === 'gm') return false;
+    if (!cls) return false;
     var teto = num((D().leveling || {}).maxLevel, 30);
     // o nível é um inteiro de verdade: '99' em texto passava na conferência como 1 e valia 99 no motor
     if (typeof p.level !== 'number' || p.level !== Math.floor(p.level) || p.level < 1 || p.level > teto) return false;
@@ -387,7 +443,7 @@ var JOGO = (typeof window !== 'undefined')
   Coop._validaPayload = validaPayload;
   function okDupla(x) {
     if (!x || Object.prototype.toString.call(x) !== '[object Array]' || x.length < 1 || x.length > 2) return false;
-    for (var i = 0; i < x.length; i++) if (!validaPayload(x[i])) return false;
+    for (var i = 0; i < x.length; i++) if (!validaPayload(x[i], { semMestre: true })) return false;
     return true;
   }
   function novaSemente() { return Math.floor(Math.random() * 4294967296) >>> 0; }
@@ -397,6 +453,9 @@ var JOGO = (typeof window !== 'undefined')
     if (!info || !info.parceiro || !info.parceiro.id) {
       var tinha = cfg;
       cfg = null;
+      // 11/09: o grupo desfeito fora da batalha devolve a ficha do Mestre; na
+      // batalha ela fica (o herói dele segue com a IA até o fim da sala)
+      if (!emBatalha()) devolveFichas();
       if (S.tipo === 'grupo') {
         if (emBatalha()) {
           // o grupo se desfez com a batalha em curso: o herói do outro fica com a IA
@@ -717,6 +776,7 @@ var JOGO = (typeof window !== 'undefined')
   /* O Game chama ao chegar na antessala de uma descida em grupo. */
   Coop.naAntessala = function () {
     if (!Coop.emGrupo()) return;
+    devolveFichas();                            // 11/09: a ficha da sala passada sai; a ata nova empresta de novo
     S.tipo = 'grupo';
     S.fase = 'antessala';
     S.bid = null; S.fila = {}; S.log = {}; S.hashes = {}; S.foto = null; S.antes = {};
@@ -823,6 +883,7 @@ var JOGO = (typeof window !== 'undefined')
     iniciaBatalha(d.bid);
     S.ata = d;
     S.chamando = false;
+    emprestaFichas(d.party);                    // 11/09: o Mestre no grupo (a ficha, só para a batalha)
     if (!g._criaDaAta || !g._criaDaAta(d)) { S.bid = null; S.ata = null; return; }
     S.fase = 'placing';
     S.dentroRepProx = agora() + Coop.ATA_MS;
@@ -856,6 +917,7 @@ var JOGO = (typeof window !== 'undefined')
     var ata = S.ata;
     iniciaBatalha(ata.bid);
     S.ata = ata;
+    emprestaFichas(ata.party);                  // 11/09: o Mestre no grupo (a ficha, só para a batalha)
     if (!g._criaDaAta || !g._criaDaAta(ata)) {
       S.bid = null;
       avisa('Não deu para abrir a sala.', 'aviso');

@@ -106,6 +106,19 @@ var JOGO = (typeof window !== 'undefined')
   }
   var MOTIVO_DE_LA = 'Troca cancelada: o cartório não conferiu uma das contas, e peça com número de série ' +
                      'só muda de mão por lá. Recarreguem a página e tentem de novo.';
+  /* 11/09: o porquê que o OUTRO lado lê quando a troca cai no fim */
+  var MOTIVOS_DE_LA = {
+    cartorio: MOTIVO_DE_LA,
+    falta: 'Troca cancelada: uma peça da mesa do outro lado não estava mais no saco dele.',
+    saco: 'Troca cancelada: o saco do outro lado não tinha espaço para o que ia.'
+  };
+  function caiComMotivo(codigo, motivo) {
+    manda('cancela', { motivo: codigo });
+    st.fase = 'cancelada';
+    st.motivo = motivo;
+    avisa();
+    st = null;
+  }
   /* a troca cai com o porquê: a HUD mostra (fase 'cancelada'), o outro lado ouve o cancela */
   function caiSemCartorio(motivo) {
     manda('cancela', { motivo: 'cartorio' });
@@ -156,11 +169,28 @@ var JOGO = (typeof window !== 'undefined')
     avisa();
   }
 
+  /* 11/09 (a troca "bugada" no ar): sem série dita, a mesa leva a da primeira
+   * cópia do saco com a mesma forma que ainda não está nela. Só com a forma, a
+   * execução procurava uma cópia SEM série — no ar toda peça tem série — e a
+   * troca caía no fim, calada. */
+  function serieLivre(entrada) {
+    var prog = P(), inv = (prog && prog.state && prog.state.inventory) || [];
+    var usadas = {};
+    st.minha.itens.forEach(function (o) { if (o.iid) usadas[o.iid] = true; });
+    for (var i = 0; i < inv.length; i++) {
+      var e = inv[i];
+      if (!e || !e.iid || usadas[e.iid] || e.itemId !== entrada.itemId) continue;
+      if ((e.level || 0) === (entrada.level || 0) && (e.stars || 0) === (entrada.stars || 0)) return e.iid;
+    }
+    return null;
+  }
   T.porItem = function (entrada) {
     if (!st || st.fase !== 'aberta' || !entrada || !entrada.itemId) return false;
+    var iid = (typeof entrada.iid === 'string' && entrada.iid) ? entrada.iid : serieLivre(entrada);
+    // a mesma peça (a mesma série) não vai à mesa duas vezes
+    if (iid && st.minha.itens.some(function (o) { return o.iid === iid; })) return false;
     st.minha.itens.push({ itemId: entrada.itemId,
-                          level: entrada.level || 0, stars: entrada.stars || 0,
-                          iid: (typeof entrada.iid === 'string' && entrada.iid) ? entrada.iid : null });
+                          level: entrada.level || 0, stars: entrada.stars || 0, iid: iid });
     ofertaMudou();
     return true;
   };
@@ -240,9 +270,10 @@ var JOGO = (typeof window !== 'undefined')
       st.dele.confirmada = true;
       talvezExecuta();
     } else if (ev.acao === 'cancela') {
-      if (ev.dados && ev.dados.motivo === 'cartorio') {   // o lado de lá viu que o cartório não espelharia
+      var cod = ev.dados && ev.dados.motivo;
+      if (cod && MOTIVOS_DE_LA.hasOwnProperty(cod)) {   // o lado de lá caiu no fim, e disse o porquê
         st.fase = 'cancelada';
-        st.motivo = MOTIVO_DE_LA;
+        st.motivo = MOTIVOS_DE_LA[cod];
         avisa();
       }
       st = null;
@@ -288,10 +319,10 @@ var JOGO = (typeof window !== 'undefined')
       }
       return true;
     });
+    // 11/09: a troca que cai no fim diz o porquê, dos DOIS lados (antes a
+    // janela só fechava, e no ar parecia defeito)
     if (falta) {
-      manda('cancela', {});
-      st = null;
-      avisa();
+      caiComMotivo('falta', 'Troca cancelada: uma peça que você pôs na mesa não está mais no seu saco.');
       return;
     }
 
@@ -300,9 +331,7 @@ var JOGO = (typeof window !== 'undefined')
     // do que estourar o limite por uma porta lateral.
     var limite = (prog.bagLimit) ? prog.bagLimit() : Infinity;
     if (inv.length - indices.length + st.dele.itens.length > limite) {
-      manda('cancela', {});
-      st = null;
-      avisa();
+      caiComMotivo('saco', 'Troca cancelada: o seu saco não tem espaço para o que vem.');
       return;
     }
 

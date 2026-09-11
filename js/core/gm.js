@@ -383,6 +383,49 @@ var JOGO = (typeof window !== 'undefined')
     return !!(r && r.ok);
   };
 
+  /* O MESTRE NO GRUPO (11/09, pedido do dono: "o GM pode fazer parte de um
+   * grupo.. mas só ele pode pedir grupo", com o Cavaleiro Negro). Na batalha em
+   * dupla os DOIS motores rodam a mesma batalha — e o do parceiro não tem a
+   * classe do Mestre nem o Julgamento (sem a chave nada existe). O herói do
+   * Mestre viaja com a FICHA (a classe e os feitiços gm-* do grimório); o
+   * parceiro só a aceita do Mestre que o relé conferiu (coop.js), empresta
+   * para a batalha e devolve depois (a sala seguinte, o grupo desfeito, a
+   * volta à praça). Fora disso, nesta página, continua não existindo. */
+  GM.fichaDoGrupo = function (spells) {
+    var D = JOGO.DATA;
+    if (!GM.ativo() || !D || !D.classes || !D.classes.gm) return null;
+    var fe = {};
+    (spells || []).forEach(function (id) {
+      if (typeof id === 'string' && /^gm-/.test(id) && D.spells && D.spells[id]) fe[id] = JSON.parse(JSON.stringify(D.spells[id]));
+    });
+    return { classe: JSON.parse(JSON.stringify(D.classes.gm)), feiticos: fe };
+  };
+  var emprestado = null;           // o que ESTA página tomou emprestado: { classe, feiticos: [ids] }
+  GM.emprestaFicha = function (ficha) {
+    var D = JOGO.DATA;
+    if (!D || !D.classes || !D.spells || !ficha || !ficha.classe || ficha.classe.id !== 'gm') return false;
+    if (GM.ativo()) return true;                 // o próprio Mestre já tem tudo
+    emprestado = emprestado || { classe: false, feiticos: [] };
+    if (!D.classes.gm) { D.classes.gm = JSON.parse(JSON.stringify(ficha.classe)); emprestado.classe = true; }
+    var fe = ficha.feiticos || {};
+    for (var k in fe) {
+      if (!Object.prototype.hasOwnProperty.call(fe, k) || !/^gm-/.test(k) || D.spells[k]) continue;
+      D.spells[k] = JSON.parse(JSON.stringify(fe[k]));
+      emprestado.feiticos.push(k);
+    }
+    return true;
+  };
+  GM.devolveFicha = function () {
+    var D = JOGO.DATA, tinha = !!emprestado;
+    if (emprestado && D) {
+      if (emprestado.classe && D.classes) delete D.classes.gm;
+      emprestado.feiticos.forEach(function (k) { if (D.spells) delete D.spells[k]; });
+    }
+    emprestado = null;
+    return tinha;
+  };
+  GM.fichaEmprestada = function () { return !!emprestado; };
+
   if (GM.ativo()) {
     injetaClasse();
     injetaJulgamento();

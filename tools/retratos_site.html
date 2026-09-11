@@ -21,6 +21,10 @@
                                .py, só mostra as fotos, sem gravar nada.
                                equipe (10/09, opcional): o Cavaleiro Negro
                                (meshy_gm) da caixa da equipe no ranking.
+                               bichos-estufa, bichos-cisterna,
+                               bichos-invocacoes e pets (11/09): os retratos
+                               da wiki, com o quadro do próprio motor, e a
+                               capa larga de cada chefe para a landing.
     ?ver=1                     a FOLHA DE CONFERÊNCIA: tudo de site/img/ numa
                                grade, com o tamanho de cada arquivo e o alerta
                                do que falta. O dono aprova antes do commit (D12).
@@ -69,6 +73,8 @@
   .al.leve{color:#ffb347}
   .ok{color:#7ee2a8}
   .extras{color:#aab4c3;font-size:12px}
+  .carta.larga{grid-column:span 2}
+  .carta.larga .quadro{aspect-ratio:16/10}
 </style>
 </head>
 <body>
@@ -99,6 +105,8 @@
       'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
       'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
       'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js', 'js/core/data/items_extra.js',
+      // 11/09: o Selinho (pet-colecionador) nasce aqui, e não no pets.js
+      'js/core/data/items_selos.js',
       'js/core/engine.js', 'js/core/progress.js',
       'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js', 'assets/embedded/models-meshy.js'];
     var FUS = {
@@ -115,13 +123,31 @@
     LOTES.obras = [FUS['fus-sumo'], FUS['fus-minotauro'], FUS['fus-cacador'], FUS['fus-xama']];
     // o corpo do Mestre (a classe gm só existe com a chave; o look do motor é fixo)
     LOTES.equipe = ['assets/embedded/models-gm.js'];
+    /* 11/09: os BICHOS da wiki. Cada lote fotografa quem veste um corpo do
+     * arquivo DELE — os monstros dos calabouços abertos, as invocações do Xamã,
+     * os pets — e, de cada chefe, a capa larga da landing. O sporeling ainda
+     * veste o sapo emprestado (models-monsters.js). */
+    var BICHOS = {
+      'bichos-estufa':     ['assets/embedded/models-meshy-jardim.js'],
+      'bichos-cisterna':   ['assets/embedded/models-meshy-cisterna.js'],
+      'bichos-invocacoes': ['assets/embedded/models-meshy-sum.js', 'assets/embedded/models-monsters.js'],
+      'pets':              ['assets/embedded/models-pets.js']
+    };
+    for (var b in BICHOS) LOTES[b] = BICHOS[b];
     window.__LOTES = LOTES;
+    window.__BICHOS = BICHOS;
 
-    var arqs = [];
-    if (q.ver) arqs = ['js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/fusions.js'];
-    else if (LOTES.hasOwnProperty(q.lote)) arqs = BASE.concat(LOTES[q.lote], ['js/render3d/models3d_v2.js']);
     var V = '?v=' + Date.now();
-    for (var i = 0; i < arqs.length; i++) document.write('<scr' + 'ipt src="../' + arqs[i] + V + '"></scr' + 'ipt>');
+    function escreve(lista) {
+      for (var i = 0; i < lista.length; i++) document.write('<scr' + 'ipt src="../' + lista[i] + V + '"></scr' + 'ipt>');
+    }
+    if (q.ver) escreve(['js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/fusions.js']);
+    else if (LOTES.hasOwnProperty(q.lote)) {
+      escreve(BASE);
+      // o que a BASE já trouxe: o lote dos bichos só fotografa os corpos do arquivo dele
+      document.write('<scr' + 'ipt>window.__chavesBase = Object.keys((window.JOGO && JOGO.MODELS) || {});</scr' + 'ipt>');
+      escreve(LOTES[q.lote].concat(['js/render3d/models3d_v2.js']));
+    }
   })();
 </script>
 
@@ -140,8 +166,10 @@
    * WebP q 0,9 um busto de 128 px de verdade pesa 3 a 6 KB. Medido em 10/09:
    * o fundo SEM figura pesa até 1,1 KB em 128 px, 1,7 em 256, 2,6 em 384 e
    * 3,9 em 512 — o piso é o dobro disso, arredondado. */
-  var TAM = { classe: 512, fusao: 384, obra: 256, busto: 128 };
-  var PISO_KB = { 128: 2, 256: 3, 384: 5, 512: 8 }, TETO_KB = 400;
+  var TAM = { classe: 512, fusao: 384, obra: 256, busto: 128, bicho: 256 };
+  // 11/09: a capa do chefe na landing, 16:10 como a moldura .foto dos calabouços
+  var CAPA = { larg: 768, alt: 480 };
+  var PISO_KB = { 128: 2, 256: 3, 384: 5, 480: 6, 512: 8 }, TETO_KB = 400;
   var SS = Math.max(1, Math.min(3, parseInt(Q.ss, 10) || 2));
   var MAX_VOLTAS = 4000, VOLTA_MS = 100;   // ~400 s de espera real, contada em voltas
   // Trava da foto vazia: o miolo só com o fundo tem desvio baixo E quase
@@ -222,6 +250,32 @@
         alvos.push({ nome: 'obra-' + id, def: id, tam: TAM.obra, inteiro: true, modelo: modelo });
       });
       if (!alvos.length && !erros.length) erros.push('nenhuma obra em JOGO.DATA.fusionSummons');
+    } else if (window.__BICHOS.hasOwnProperty(lote)) {
+      var D = JOGO.DATA || {}, daBase = window.__chavesBase || [], novos = {};
+      Object.keys(MOD).forEach(function (k) { if (daBase.indexOf(k) < 0) novos[k] = true; });
+      if (lote === 'pets') {
+        // no inventário do jogo o pet sai de corpo inteiro: aqui também
+        Object.keys(D.pets || {}).forEach(function (id) {
+          var lk = M.lookFor(id, { kind: 'pet' });
+          if (lk && novos[lk.model]) {
+            alvos.push({ nome: 'pet-' + id.replace(/^pet-/, ''), def: id, tam: TAM.bicho, inteiro: true, modelo: lk.model, kind: 'pet' });
+          }
+        });
+      } else {
+        Object.keys(D.monsters || {}).forEach(function (id) {
+          var m = D.monsters[id], lk = M.lookFor(id);
+          if (/^fus-/.test(id) || !lk || !novos[lk.model]) return;     // as obras de fusão já têm foto
+          // o sapo emprestado veste também bichos dos portais fechados: das
+          // invocações, só quem não mora em calabouço (é o que a wiki mostra)
+          if (lote === 'bichos-invocacoes' && m.dungeonId) return;
+          // o quadro do MOTOR: o mesmo retrato da linha do tempo da batalha
+          alvos.push({ nome: 'monstro-' + id, def: id, tam: TAM.bicho, inteiro: false, doMotor: true, modelo: lk.model, boss: !!m.boss });
+          if (m.boss) {
+            alvos.push({ nome: 'monstro-' + id + '-capa', def: id, tam: CAPA.alt, larg: CAPA.larg, inteiro: true, modelo: lk.model, boss: true });
+          }
+        });
+      }
+      if (!alvos.length) erros.push('nenhum bicho do lote tem corpo em ' + window.__BICHOS[lote].join(', ') + ' (o arquivo falhou?)');
     } else {
       pares(classes()).forEach(function (p) {
         var modelo = 'fus_' + p[0] + '_' + p[1];
@@ -250,7 +304,8 @@
     // no busto, o quadro passa pelo embrulho (ver quadroDeBusto); a câmera, a
     // luz, o fundo e o halo continuam sendo do motor
     var orig = M.portraitFraming, como = 'motor', cru;
-    if (!a.inteiro) {
+    // os bichos (doMotor) ficam com o quadro do próprio motor, o da batalha
+    if (!a.inteiro && !a.doMotor) {
       M.portraitFraming = function (node, corpoInteiro) {
         if (corpoInteiro) return orig(node, true);
         var r = quadroDeBusto(orig, node, a.regua);
@@ -258,7 +313,7 @@
         return r.f;
       };
     }
-    try { cru = M.portrait(a.def, { size: a.tam * SS, corpoInteiro: a.inteiro }); }
+    try { cru = M.portrait(a.def, { size: a.tam * SS, corpoInteiro: a.inteiro, boss: !!a.boss, kind: a.kind || null }); }
     finally { M.portraitFraming = orig; }
     a.como = a.inteiro ? 'inteiro' : como;
     if (!cru) throw new Error(a.nome + ': M.portrait devolveu nulo');
@@ -273,6 +328,22 @@
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
     g.drawImage(cru, 0, 0, a.tam, a.tam);
+    return cv;
+  }
+
+  /* A CAPA LARGA do chefe (landing, moldura 16:10): o retrato quadrado no meio
+   * e, dos lados, a primeira e a última coluna dele esticadas. O fundo do motor
+   * é gradiente com vinheta — escuro e liso na borda —, então a faixa continua
+   * o fundo sem emenda à vista. */
+  function capaLarga(sq, larg) {
+    var alt = sq.height, x0 = Math.round((larg - alt) / 2);
+    var cv = document.createElement('canvas');
+    cv.width = larg; cv.height = alt;
+    var g = cv.getContext('2d');
+    g.imageSmoothingEnabled = true;
+    g.drawImage(sq, 0, 0, 1, alt, 0, 0, x0 + 1, alt);
+    g.drawImage(sq, alt - 1, 0, 1, alt, x0 + alt - 1, 0, larg - x0 - alt + 1, alt);
+    g.drawImage(sq, x0, 0);
     return cv;
   }
 
@@ -391,8 +462,9 @@
   function mostra(a, cv, m) {
     var f = document.createElement('figure');
     var c = document.createElement('canvas');
-    c.width = c.height = 128;
-    c.getContext('2d').drawImage(cv, 0, 0, 128, 128);
+    c.height = 128; c.width = Math.round(128 * cv.width / cv.height);   // a capa do chefe é larga
+    c.style.width = c.width + 'px';
+    c.getContext('2d').drawImage(cv, 0, 0, c.width, 128);
     var t = document.createElement('figcaption');
     t.textContent = a.nome + ' · desvio ' + m.desvio.toFixed(0) + ' · bordas ' + (m.bordas * 100).toFixed(0) + '%';
     f.appendChild(c); f.appendChild(t);
@@ -470,6 +542,7 @@
           throw new Error(a.nome + ': foto recusada, o miolo saiu quase liso (desvio ' + m.desvio.toFixed(1) +
                           ', bordas ' + (m.bordas * 100).toFixed(1) + '%): a figura não apareceu');
         }
+        if (a.larg) cv = capaLarga(cv, a.larg);     // a trava mediu o quadrado; a capa só estica o fundo
       } catch (e) { return fim(false, [e.message || String(e)], gravados); }
       mostra(a, cv, m);
       grava(a.nome, cv).then(function (j) {
@@ -601,6 +674,28 @@
       });
     });
 
+    // 11/09: os bichos da wiki (monstros, capas dos chefes e pets), pela lista do servidor
+    var bichos = (lista || []).filter(function (a) { return /^(monstro|pet)-/.test(a.nome); });
+    if (bichos.length) {
+      var hb = el('h2', null, 'Bichos da wiki');
+      hb.appendChild(el('small', null, 'monstros e pets 256 px (o quadro do motor) · capa do chefe ' + CAPA.larg + '×' + CAPA.alt));
+      raiz.appendChild(hb);
+      var gb = el('div', 'grade');
+      raiz.appendChild(gb);
+      bichos.forEach(function (a) {
+        conta.vistos[a.nome] = true;
+        var carta = el('div', 'carta' + (/-capa\./.test(a.nome) ? ' larga' : '')), quadro = el('div', 'quadro');
+        var im = el('img', 'inteiro');
+        im.alt = a.nome;
+        im.src = '../site/img/' + a.nome;
+        quadro.appendChild(im);
+        carta.appendChild(quadro);
+        carta.appendChild(el('div', 'nome', a.nome.replace(/\.(webp|png)$/, '')));
+        carta.appendChild(el('div', 'sub', kb(a.bytes)));
+        gb.appendChild(carta);
+      });
+    }
+
     var extras = (lista || []).filter(function (a) { return !conta.vistos[a.nome]; });
     if (extras.length) {
       raiz.appendChild(el('h2', null, 'Outros arquivos em site/img/'));
@@ -624,7 +719,8 @@
     try {
       if (Q.ver) return folha();
       if (!Q.lote) {
-        SUM.textContent = 'use ?lote=<nome> (classes, fus-sumo, fus-minotauro, fus-cacador, fus-curandeira, fus-bruxo-ladino, fus-xama, obras, equipe) ou ?ver=1';
+        SUM.textContent = 'use ?lote=<nome> (classes, fus-sumo, fus-minotauro, fus-cacador, fus-curandeira, fus-bruxo-ladino, fus-xama, obras, equipe, ' +
+                          'bichos-estufa, bichos-cisterna, bichos-invocacoes, pets) ou ?ver=1';
         return;
       }
       rodaLote(Q.lote);

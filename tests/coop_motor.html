@@ -96,6 +96,8 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
       document.write('<scr' + 'ipt src="' + B + 'game.js' + V + '"></scr' + 'ipt>');
       document.write('<scr' + 'ipt>window.__instalaRede();</scr' + 'ipt>');
     }
+    // 11/09: o gm.js (sem a chave não liga nada) — a ficha do Mestre no grupo mora nele
+    if (window.__FILHO !== 'motor') document.write('<scr' + 'ipt src="' + D0 + 'gm.js' + V + '"></scr' + 'ipt>');
     if (window.__FILHO !== 'motor') document.write('<scr' + 'ipt src="' + B + 'coop.js' + V + '"></scr' + 'ipt>');
     if (window.__FILHO === 'cliente') {
       document.write('<scr' + 'ipt>JOGO.Coop._semIntervalo = true; JOGO.Coop._agora = function () { return window.parent.__relogio.t; };' +
@@ -568,9 +570,30 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     secao('— a assinatura dos dados e o payload');
     check('Coop.assinatura: 8 hex e estável', /^[0-9a-f]{8}$/.test(C.assinatura()) && C.assinatura() === C.assinatura(), C.assinatura());
     check('a assinatura do motor-filho (outro iframe, mesmos dados) é a mesma', !M1 || !M1.JOGO.Coop || M1.JOGO.Coop.assinatura() === C.assinatura());
-    check('payload do Mestre é recusado; feitiço desconhecido também', !C._validaPayload({ classId: 'gm', level: 1, spells: [] }) &&
+    check('payload do Mestre sem ficha e sem dono conferido é recusado; feitiço desconhecido também', !C._validaPayload({ classId: 'gm', level: 1, spells: [] }) &&
           !C._validaPayload({ classId: 'sumo', level: 1, spells: ['feitico-que-nao-existe'] }) &&
           C._validaPayload({ classId: 'sumo', level: 1, spells: spellsDe('sumo', 'terra') }));
+    // 11/09 (pedido do dono): o Mestre entra em grupo com o Cavaleiro Negro — o
+    // herói dele viaja com a FICHA, e só vale do Mestre que o relé conferiu
+    var fichaT = { classe: { id: 'gm', name: 'Mestre do Fundo', stats: { hp: 999, pa: 12, pp: 8 } },
+                   feiticos: { 'gm-julgamento': { id: 'gm-julgamento', name: 'Julgamento do Mestre', classId: 'gm', element: 'neutro',
+                                                  paCost: 1, range: { min: 0, max: 99 }, aoe: { shape: 'circle', size: 99 }, targetSide: 'enemy',
+                                                  effects: [{ type: 'damage', element: 'neutro', min: 99999, max: 99999 }] } } };
+    var pm = { classId: 'gm', level: 30, spells: ['gm-julgamento'], stats: { hp: 1799, pa: 14, pp: 10 }, dono: 'mestre1', ficha: fichaT };
+    var semRede = !JOGO.Rede, Rd = JOGO.Rede || (JOGO.Rede = {}), paresAntes = Rd.pares, meuAntes = Rd.meuId;
+    Rd.pares = function () { return [{ id: 'mestre1', mestre: true }, { id: 'impostor', mestre: false }]; };
+    Rd.meuId = function () { return 'eu1'; };
+    check('11/09: o payload do Mestre CONFERIDO pelo relé, com a ficha, passa (o GM entra em grupo)', C._validaPayload(pm) === true);
+    check('...sem a ficha, com feitiço gm-* fora dela, ou de quem o relé não conferiu, não passa',
+          !C._validaPayload(Object.assign({}, pm, { ficha: null })) &&
+          !C._validaPayload(Object.assign({}, pm, { spells: ['gm-outro'] })) &&
+          !C._validaPayload(Object.assign({}, pm, { dono: 'impostor' })));
+    check('...e no duelo o Mestre segue fora', C._validaPayload(pm, { semMestre: true }) === false);
+    if (semRede) delete JOGO.Rede; else { Rd.pares = paresAntes; Rd.meuId = meuAntes; }
+    var Gm2 = JOGO.GM, DD = JOGO.DATA;
+    check('a ficha emprestada põe a classe e o Julgamento no DATA desta página, e a devolução tira',
+          !!Gm2 && !DD.classes.gm && Gm2.emprestaFicha(fichaT) === true && !!DD.classes.gm && !!DD.spells['gm-julgamento'] &&
+          Gm2.devolveFicha() === true && !DD.classes.gm && !DD.spells['gm-julgamento']);
   }
 
   // ================================================================== K. dois clientes de verdade
@@ -1544,6 +1567,87 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     check('nenhum erro de script nos dois clientes (R)', !erros.length, erros.slice(0, 4).join(' | '));
   }
 
+  /* G · O MESTRE NO GRUPO (11/09, pedido do dono: "o GM pode fazer parte de um
+   * grupo.. mas só ele pode pedir grupo", com o Cavaleiro Negro). A Ana é o
+   * Mestre: o modo ligado SÓ no cliente dela, com a classe e o Julgamento
+   * injetados como o gm.js faz com a chave. A Bia não tem nada disso. A ata
+   * leva a FICHA; a Bia só a aceita porque o relé (a presença) conferiu a Ana,
+   * empresta para a batalha — que corre em lockstep — e devolve na volta. */
+  function secaoMestre(A, B) {
+    secao('G · o Mestre no grupo: o Cavaleiro Negro desce em dupla (a ficha viaja na ata)');
+    erros.length = 0;
+    filtro = null;
+    var CLS = { id: 'gm', name: 'Mestre do Fundo', role: 'game master',
+                palette: { primary: '#8a1f2d', secondary: '#15161c', accent: '#c9a227' },
+                stats: { hp: 999, pa: 12, pp: 8, initiative: 99, power: 50, dodge: 30, lock: 50,
+                         resists: { fogo: 50, agua: 50, terra: 50, ar: 50, neutro: 50 } },
+                baseSpells: [], startsUnlocked: true, cardRarity: 'lendario' };
+    var JULG = { id: 'gm-julgamento', name: 'Julgamento do Mestre', element: 'neutro', classId: 'gm', unlockLevel: 0,
+                 paCost: 1, cooldown: 0, castsPerTurn: 1, range: { min: 0, max: 99, line: false, los: false, movable: false },
+                 aoe: { shape: 'circle', size: 99 }, needsEmptyTile: false, targetSide: 'enemy',
+                 effects: [{ type: 'damage', element: 'neutro', min: 99999, max: 99999 }], fxKey: 'nova' };
+    var GA = A.JOGO.GM, ativoAntes = GA.ativo, RB = B.JOGO.Rede, paresAntes = RB.pares;
+    GA.ativo = function () { return true; };
+    A.JOGO.DATA.classes.gm = JSON.parse(JSON.stringify(CLS));
+    A.JOGO.DATA.spells['gm-julgamento'] = JSON.parse(JSON.stringify(JULG));
+    RB.pares = function () { return [{ id: 'ana', nome: 'Ana', mestre: true }]; };   // o relé conferiu a Ana
+    try {
+      prep(A, 'ana', 'cxa', [['gm', 'fogo', 30]]);
+      prep(B, 'bia', 'cxb', [['curandeiro', 'agua', 30]]);
+      var ana = cli.ana, bia = cli.bia;
+      var hg = ana.J.Progress.hero('gm');
+      if (hg && (hg.spells || []).indexOf('gm-julgamento') < 0) hg.spells = ['gm-julgamento'].concat(hg.spells || []);
+      var pm = ana.J.Coop.payloadMeu('gm');
+      check('G1 · o herói do Mestre sai com a FICHA (a classe e o Julgamento) — o motor da parceira não os tem',
+            !!pm && pm.classId === 'gm' && !!pm.ficha && !!pm.ficha.feiticos['gm-julgamento'] &&
+            (pm.spells || []).indexOf('gm-julgamento') >= 0 && !bia.J.DATA.classes.gm && !bia.J.DATA.spells['gm-julgamento'],
+            pm ? JSON.stringify(pm.spells) : 'sem payload');
+      ana.J.Coop._piloto({ joga: true, casa: 1 });
+      bia.J.Coop._piloto({ joga: true });
+      var okD = desce('greenhouse', 7717);
+      check('G2 · o Mestre desce em grupo com o Cavaleiro Negro, e a porta dele acende com o `pronto` da parceira',
+            okD && tela('ana') === 'antessala' && tela('bia') === 'antessala' && ana.J.Coop.podeEntrar().ok,
+            JSON.stringify(ana.J.Coop.podeEntrar()));
+      ana.J.Coop.entrar();
+      ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
+      var meio = { tela: tela('bia'), classe: !!bia.J.DATA.classes.gm, julg: !!bia.J.DATA.spells['gm-julgamento'],
+                   emprestada: !!(bia.J.GM && bia.J.GM.fichaEmprestada()) };
+      check('G3 · a parceira aceita a ata (o relé conferiu o Mestre) e empresta a ficha só para a batalha',
+            meio.tela === 'battle' && meio.classe && meio.julg && meio.emprestada, JSON.stringify(meio));
+      ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+      var hi = hashesIguais('ana', 'bia');
+      var ds = ana.J.Coop.sessao().dessinc + bia.J.Coop.sessao().dessinc;
+      check('G4 · a batalha com o Cavaleiro Negro corre em lockstep: o MESMO hash em todo turno e no fim',
+            hi.n >= 1 && !hi.dif.length && final('ana') === final('bia') && ds === 0,
+            hi.n + ' turnos · ' + tela('ana') + '/' + tela('bia') + ' · dessinc ' + ds +
+            (hi.dif.length ? ' · difere em ' + hi.dif.slice(0, 5).join(',') : ''));
+      bia.J.Game._saiDaRede();
+      check('G5 · a volta à praça devolve a ficha: na parceira, fora da batalha, o Mestre volta a não existir',
+            !bia.J.DATA.classes.gm && !bia.J.DATA.spells['gm-julgamento'] && !(bia.J.GM && bia.J.GM.fichaEmprestada()));
+      // de novo, mas agora o relé NÃO conferiu a Ana (a presença sem mestre:true)
+      RB.pares = function () { return [{ id: 'ana', nome: 'Ana', mestre: false }]; };
+      prep(A, 'ana', 'cxa', [['gm', 'fogo', 30]]);
+      prep(B, 'bia', 'cxb', [['curandeiro', 'agua', 30]]);
+      ana = cli.ana; bia = cli.bia;
+      hg = ana.J.Progress.hero('gm');
+      if (hg && (hg.spells || []).indexOf('gm-julgamento') < 0) hg.spells = ['gm-julgamento'].concat(hg.spells || []);
+      ana.J.Coop._piloto({ joga: true, casa: 1 });
+      bia.J.Coop._piloto({ joga: true });
+      desce('greenhouse', 7717);
+      ana.J.Coop.entrar();
+      ate(function () { return tela('bia') === 'battle'; }, 60);
+      check('G6 · sem o Mestre conferido pelo relé, a parceira recusa a ata e nada do Mestre entra no motor dela',
+            tela('bia') === 'antessala' && !bia.J.DATA.classes.gm && !bia.J.DATA.spells['gm-julgamento'],
+            tela('bia') + ' · avisos: ' + bia.avisos.join(' | '));
+      check('nenhum erro de script nos dois clientes (G)', !erros.length, erros.slice(0, 4).join(' | '));
+    } finally {
+      GA.ativo = ativoAntes;
+      delete A.JOGO.DATA.classes.gm;
+      delete A.JOGO.DATA.spells['gm-julgamento'];
+      if (paresAntes) RB.pares = paresAntes; else delete RB.pares;
+    }
+  }
+
   // ------------------------------------------------------------------ a ordem
   function fim() {
     var sum = document.getElementById('summary');
@@ -1574,6 +1678,7 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
             if (quer('M')) fila.push(etapa(function () { secaoMotor(M1); }));
             if (quer('K')) fila.push(etapa(function () { secaoK(A, B); }));
             if (quer('R')) fila.push(etapa(function () { secaoRevisao(A, B); }));
+            if (quer('G')) fila.push(etapa(function () { secaoMestre(A, B); }));   // 11/09: o Mestre no grupo
             (function roda(i) { if (i >= fila.length) return fim(); fila[i](function () { roda(i + 1); }); })(0);
           });
         });

@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 """Os retratos do site, fotografados do próprio 3D do jogo (10/09).
 
-    python tools/retratos_site.py                     # os 7 lotes
+    python tools/retratos_site.py                     # os 11 lotes (classes, fusões e bichos)
     python tools/retratos_site.py --lote classes      # só um lote (pode repetir)
+    python tools/retratos_site.py --lote pets         # um dos 4 lotes dos bichos da wiki (11/09)
     python tools/retratos_site.py --obras             # soma o lote das 6 obras de fusão
     python tools/retratos_site.py --lote equipe       # o Cavaleiro Negro da caixa da equipe (ranking)
     python tools/retratos_site.py --motor gpu         # headless com a placa de vídeo
@@ -50,6 +51,15 @@ assets/embedded/models-gm.js) para a caixa "Equipe do SOTERRA" do ranking:
 equipe-cavaleiro.webp (512 px) e equipe-cavaleiro-busto.webp (128 px), no
 mesmo estilo das classes. Só roda quando pedido; a conferência dele também.
 
+Os BICHOS da wiki (11/09): os lotes bichos-estufa, bichos-cisterna,
+bichos-invocacoes e pets fotografam monstros e pets com o quadro do próprio
+motor (o retrato da linha do tempo da batalha; o pet, de corpo inteiro como
+no inventário), 256 px: monstro-<id>.webp e pet-<id sem o "pet-">.webp. De
+cada chefe sai também a capa larga da landing, monstro-<id>-capa.webp
+(768×480, a moldura 16:10 dos calabouços). As invocações das fusões usam a
+foto do lote obras. A conferência sabe quem esperar pelas chaves de
+JOGO.MODELS dos arquivos embutidos e pelos monstros sem calabouço.
+
 tools/ não vai para o contêiner (.dockerignore); site/img/ vai.
 """
 import argparse
@@ -75,15 +85,18 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.normpath(os.path.join(AQUI, '..'))
 IMG = os.path.join(RAIZ, 'site', 'img')
 PAGINA = 'tools/retratos_site.html'
-NOME_OK = re.compile(r'^(classe|fusao|obra|equipe)-[a-z0-9-]+(-busto)?\.(webp|png)$')
-LOTES = ['classes', 'fus-sumo', 'fus-minotauro', 'fus-cacador', 'fus-curandeira', 'fus-bruxo-ladino', 'fus-xama']
+NOME_OK = re.compile(r'^(classe|fusao|obra|equipe|monstro|pet)-[a-z0-9-]+(-busto)?\.(webp|png)$')
+# 11/09: os bichos da wiki — monstros dos portais abertos, invocações do Xamã e pets
+LOTES_BICHOS = ['bichos-estufa', 'bichos-cisterna', 'bichos-invocacoes', 'pets']
+LOTES = ['classes', 'fus-sumo', 'fus-minotauro', 'fus-cacador', 'fus-curandeira', 'fus-bruxo-ladino', 'fus-xama'] + LOTES_BICHOS
 LOTE_OBRAS = 'obras'
 LOTE_EQUIPE = 'equipe'           # o Cavaleiro Negro (meshy_gm): a caixa da equipe no ranking
 TEMPO_LOTE = 600                 # segundos por lote, com folga: o maior lote decodifica ~30 MB de GLB
 KB = 1024
-PISO_KB = {128: 2, 256: 3, 384: 5, 512: 8}   # o mesmo da página (PISO_KB); ver o docstring
+PISO_KB = {128: 2, 256: 3, 384: 5, 480: 6, 512: 8}   # o mesmo da página (PISO_KB); ver o docstring
 TETO_KB = 400
-TAM = {'classe': 512, 'fusao': 384, 'obra': 256, 'busto': 128}   # plano §1.8
+TAM = {'classe': 512, 'fusao': 384, 'obra': 256, 'busto': 128, 'bicho': 256}   # plano §1.8 (+ bicho, 11/09)
+CAPA = (768, 480)                # a capa do chefe na landing: 16:10, como a moldura .foto
 MAX_POST = 4 * 1024 * KB
 CHROMES = [
     r'C:\Program Files\Google\Chrome\Application\chrome.exe',
@@ -135,6 +148,36 @@ def esperados(com_obras, com_equipe=False):
         out += [('obra-%s' % o, TAM['obra']) for o in ids_das_obras()]
     if com_equipe:
         out += [('equipe-cavaleiro', TAM['classe']), ('equipe-cavaleiro-busto', TAM['busto'])]
+    return out
+
+
+def chaves_modelo(arquivo):
+    """As chaves de JOGO.MODELS de um arquivo embutido (o nome de cada corpo)."""
+    with open(os.path.join(RAIZ, 'assets', 'embedded', arquivo), encoding='utf-8') as f:
+        return sorted(set(re.findall(r"JOGO\.MODELS\['([a-z0-9_-]+)'\]\s*=", f.read())))
+
+
+def invocacoes_sem_calabouco():
+    """Os monstros de monsters.js sem dungeonId (as invocações do Xamã): a wiki
+    mostra todos, e o lote bichos-invocacoes fotografa cada um."""
+    with open(os.path.join(RAIZ, 'js', 'core', 'data', 'monsters.js'), encoding='utf-8') as f:
+        fonte = f.read()
+    # só bloco com ficha (stats): os golpes m-* moram no mesmo arquivo e não têm calabouço
+    return [i for i, corpo in re.findall(r"(?s)\n    '([a-z0-9-]+)': \{(.*?)\n    \}", fonte)
+            if re.search(r'\bstats\s*:', corpo) and 'dungeonId' not in corpo]
+
+
+def esperados_bichos():
+    """[(nome sem extensão, (largura, altura))] dos bichos da wiki (11/09). Os
+    corpos da Estufa e da Cisterna têm o nome do monstro que os veste."""
+    out = []
+    donos = chaves_modelo('models-meshy-jardim.js') + chaves_modelo('models-meshy-cisterna.js')
+    for i in sorted(set(donos + invocacoes_sem_calabouco())):
+        out.append(('monstro-' + i, (TAM['bicho'], TAM['bicho'])))
+        if i.startswith('boss-'):
+            out.append(('monstro-%s-capa' % i, CAPA))
+    for p in chaves_modelo('models-pets.js'):
+        out.append(('pet-' + re.sub(r'^pet-', '', p), (TAM['bicho'], TAM['bicho'])))
     return out
 
 
@@ -337,13 +380,13 @@ def roda_lote(chrome, motor, base, lote, ss):
 
 
 def foto_folha(chrome, base, destino):
-    """A folha de conferência em PNG, 1400×1800, pelo Chrome headless."""
+    """A folha de conferência em PNG, 1400×3600 (com os bichos, 11/09), pelo Chrome headless."""
     perfil = tempfile.mkdtemp(prefix='soterra-retratos-folha-')
     destino = os.path.abspath(destino)
     os.makedirs(os.path.dirname(destino) or '.', exist_ok=True)
     if os.path.exists(destino):
         os.remove(destino)
-    cmd = [chrome, '--headless=new', '--hide-scrollbars', '--window-size=1400,1800',
+    cmd = [chrome, '--headless=new', '--hide-scrollbars', '--window-size=1400,3600',
            '--virtual-time-budget=20000', '--screenshot=' + destino] + COMUNS + \
           ['--user-data-dir=' + perfil, base + PAGINA + '?ver=1']
     try:
@@ -360,7 +403,9 @@ def foto_folha(chrome, base, destino):
 # ----------------------------------------------------------------- a conferência
 def confere(com_obras, com_equipe=False):
     faltas, fora, duplas, total, n = [], [], [], 0, 0
-    for base, lado in esperados(com_obras, com_equipe):
+    lista = esperados(com_obras, com_equipe) + esperados_bichos()
+    for base, lado in lista:
+        larg, alt = lado if isinstance(lado, tuple) else (lado, lado)     # a capa do chefe é larga
         achados = [base + e for e in ('.webp', '.png') if os.path.exists(os.path.join(IMG, base + e))]
         if not achados:
             faltas.append(base)
@@ -376,13 +421,13 @@ def confere(com_obras, com_equipe=False):
         total += tam
         ext = arq.rsplit('.', 1)[1]
         dim = dimensoes(cabeca)
-        if not (PISO_KB[lado] * KB <= tam <= TETO_KB * KB):
-            fora.append('%s (%.1f KB; piso %d KB em %d px)' % (arq, tam / KB, PISO_KB[lado], lado))
+        if not (PISO_KB[alt] * KB <= tam <= TETO_KB * KB):
+            fora.append('%s (%.1f KB; piso %d KB em %d px)' % (arq, tam / KB, PISO_KB[alt], alt))
         elif not formato_ok(cabeca, ext):
             fora.append('%s (não é %s de verdade)' % (arq, ext.upper()))
-        elif dim != (lado, lado):
-            fora.append('%s (%s, esperado %d×%d)' % (arq, '%d×%d' % dim if dim else 'sem medida', lado, lado))
-    esp = len(esperados(com_obras, com_equipe))
+        elif dim != (larg, alt):
+            fora.append('%s (%s, esperado %d×%d)' % (arq, '%d×%d' % dim if dim else 'sem medida', larg, alt))
+    esp = len(lista)
     print('== conferência de site/img/: %d de %d arquivos, %.2f MB no total' % (n, esp, total / KB / KB))
     if faltas:
         print('   FALTAM %d: %s' % (len(faltas), ', '.join(faltas)))

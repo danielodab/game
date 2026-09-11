@@ -47,11 +47,14 @@
     'tempo_turno',  // 11/09: a barra do tempo do turno na lateral (index de verdade a 390x844, relógio de mentira)
     'tela_cheia',  // 11/09: o ⛶/✕ do canto (API de tela cheia de mentira), retrato, paisagem e o aparelho virando
     'coroa_praca',  // 11/09: a coroa 3D da praça no jogo SERVIDO (pedida na hora, o bilhete vira 3D e gira)
-    'toque_jogador'  // 11/09: tocar no CORPO de outro jogador (clique de verdade no canvas) abre o painel dele
+    'toque_jogador',  // 11/09: tocar no CORPO de outro jogador (clique de verdade no canvas) abre o painel dele
+    'balao_praca',  // 11/09: a frase do chat sobe num balão em cima de quem falou (e some sozinha)
+    'guilda_servidor'  // 11/09: com sessão, a guilda fala com /api/guilda/* (a prova do servidor é tests/guilda_api.py)
   ];
   /* o prazo por suíte: 120 s, e mais para quem abre o index inteiro
    * (essas se dão 110 s só para o jogo abrir) */
-  var PRAZO = { grupo_hud: 300000, tempo_turno: 300000, tela_cheia: 300000, coroa_praca: 300000, toque_jogador: 300000 };
+  var PRAZO = { grupo_hud: 300000, tempo_turno: 300000, tela_cheia: 300000, coroa_praca: 300000, toque_jogador: 300000,
+                balao_praca: 300000 };
   var tab = document.getElementById('tab');
   var linhas = {};
   SUITES.forEach(function (s) {

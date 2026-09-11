@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a Guilda falando com o servidor</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>A Guilda no servidor — o js/core/guilda.js com sessão</h1>
+<div class="sub">11/09 (pedido do dono: "Guilda no servidor"). Com sessão, cada função da guilda vira um
+pedido a /api/guilda/* (servidor/guilda.py, provado em tests/guilda_api.py); aqui a Sessão é de mentira
+e só registra o que o jogo pediu. Cobra: a rota e o corpo de cada gesto; o bônus e o dízimo SÍNCRONOS
+lidos da última ficha; o banco pela posição virando o id da vaga; o convite pela conta que o relé
+conferiu; a fundação que só cobra as insígnias depois do "sim"; a guilda de antes subindo sem pagar;
+e, sem sessão, o registro local de sempre.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  try { localStorage.removeItem('soterra-guilda-v1'); } catch (e) {}
+  // a Sessão de mentira: guarda cada pedido e responde o que a prova deixou em `respostas`
+  window.__pedidos = [];
+  window.__respostas = {};
+  window.JOGO = window.JOGO || {};
+  JOGO.Sessao = {
+    ativa: function () { return true; },
+    api: function (rota, op) {
+      var corpo = op && op.body !== undefined ? JSON.parse(JSON.stringify(op.body)) : undefined;
+      window.__pedidos.push({ rota: rota, metodo: (op && op.method) || 'GET', corpo: corpo });
+      var r = window.__respostas[rota];
+      if (typeof r === 'function') r = r(corpo);
+      return Promise.resolve(JSON.parse(JSON.stringify(r || { ok: false, status: 404, erro: 'rota sem resposta' })));
+    }
+  };
+  window.__gastou = 0;
+  window.__insignias = 12;
+  JOGO.Progress = {
+    insigniasVer: function () { return window.__insignias; },
+    gastaInsignias: function (n) { window.__gastou += n; window.__insignias -= n; return true; }
+  };
+  document.write('<scr' + 'ipt src="../js/core/guilda.js?v=' + Date.now() + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+  function fim() {
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  var G = JOGO.Guilda, P = window.__pedidos, R = window.__respostas;
+  function ult() { return P[P.length - 1] || {}; }
+  var AGORA = Date.now();
+  var FICHA = { id: 7, nome: 'Os Soterrados', emblema: '⚔', liderId: 11, eu: 11, souLider: true, meuCargo: 'lider',
+                membros: [{ id: 11, nome: 'Ana', cargo: 'lider' }, { id: 12, nome: 'Bia', cargo: 'membro' }],
+                xp: 90, nivel: 2, moedas: 30, bonus: { drop: 0, xp: AGORA + 3600000 }, treinos: 1, porta: 'convite',
+                dizimo: 12, pedidos: [],
+                banco: [{ id: 501, itemId: 'gh-wasp-sting', level: 0, stars: 0, iid: 'jA', dono: 11, emprestadoPara: null },
+                        { id: 502, itemId: 'gh-moss-treads', level: 1, stars: 0, iid: null, dono: 12, emprestadoPara: null }] };
+
+  check('com sessão, a guilda fala com o servidor (noServidor)', G.noServidor() === true);
+  R['/api/guilda/minha'] = { ok: true, guilda: FICHA };
+  G.minha().then(function (f) {
+    check('minha(): GET /api/guilda/minha, e a ficha vem inteira', ult().rota === '/api/guilda/minha' && ult().metodo === 'GET' &&
+          f && f.id === 7 && f.eu === 11 && f.membros.length === 2);
+    check('o bônus e o dízimo SÍNCRONOS (o game.js) saem da última ficha', G.bonusAtivo('xp') === true &&
+          G.bonusAtivo('drop') === false && G.dizimoAtual() === 12);
+    var n = P.length;
+    G.bonusAtivo('xp');
+    check('...sem pedido novo enquanto a ficha é recente', P.length === n);
+    R['/api/guilda/entrar'] = { ok: true, entrou: true, guilda: FICHA };
+    return G.entrar(7, { convite: true });
+  }).then(function (r) {
+    check('entrar pelo convite: POST /api/guilda/entrar {gid} (é o servidor que confere o convite)',
+          r.ok && ult().rota === '/api/guilda/entrar' && ult().metodo === 'POST' && ult().corpo.gid === 7);
+    return G.convidar(undefined);
+  }).then(function (r) {
+    check('convidar quem não tem conta conferida (sem `nuvem`) nem sai daqui', !r.ok && /precisa entrar na conta/.test(r.erro) &&
+          ult().rota === '/api/guilda/entrar');
+    R['/api/guilda/convidar'] = { ok: true, gid: 7 };
+    return G.convidar(42);
+  }).then(function (r) {
+    check('convidar a CONTA: POST /api/guilda/convidar {conta}', r.ok && ult().rota === '/api/guilda/convidar' && ult().corpo.conta === 42);
+    R['/api/guilda/banco/pegar'] = { ok: true, definitivo: false, item: { itemId: 'gh-moss-treads' }, guilda: FICHA };
+    return G.bancoPegar(1);
+  }).then(function (r) {
+    check('o banco pela POSIÇÃO (a HUD) vira o id da vaga (o servidor)', r.ok && ult().rota === '/api/guilda/banco/pegar' &&
+          ult().corpo.id === 502);
+    return G.bancoPegar(9);
+  }).then(function (r) {
+    check('...e posição que não existe nem sai daqui', !r.ok && ult().rota === '/api/guilda/banco/pegar' && ult().corpo.id === 502);
+    R['/api/guilda/banco/depositar'] = function (c) { return { ok: true, total: 3, guilda: FICHA, eco: c }; };
+    return G.bancoDepositar({ itemId: 'gh-seed-pod', level: 3, stars: 1, iid: 'jX' });
+  }).then(function (r) {
+    check('depositar leva a peça com a série', r.ok && ult().corpo.item.iid === 'jX' && ult().corpo.item.level === 3);
+    R['/api/guilda/doar'] = { ok: true, xp: 190, nivel: 3 };
+    return G.doarXp(100.7);
+  }).then(function (r) {
+    check('doar XP: POST /api/guilda/doar {xp} inteiro', r.ok && ult().corpo.xp === 100 && G._ficha().xp === 190);
+    R['/api/guilda/criar'] = { ok: false, status: 409, erro: 'já existe uma guilda com esse nome' };
+    return G.criar('Nome Tomado', '🔥');
+  }).then(function (r) {
+    check('fundar recusado pelo servidor NÃO cobra as insígnias', !r.ok && window.__gastou === 0 && ult().rota === '/api/guilda/criar');
+    window.__insignias = 3;
+    var n = P.length;
+    return G.criar('Pobre', '🔥').then(function (r2) {
+      check('...e sem insígnias nem pede ao servidor', !r2.ok && /faltam insígnias/.test(r2.erro) && P.length === n);
+      window.__insignias = 12;
+      R['/api/guilda/criar'] = function (c) { var f = JSON.parse(JSON.stringify(FICHA)); f.nome = c.nome; return { ok: true, guilda: f }; };
+      return G.criar('Nova Casa', '🔥');
+    });
+  }).then(function (r) {
+    check('fundar aceito cobra as insígnias DEPOIS do sim', r.ok && window.__gastou === 10 && window.__insignias === 2);
+    // a guilda de antes: fundada no navegador, antes do servidor
+    G._servidor = false;
+    G.contaAtiva('cANA', 'Ana');
+    return G.criar('A de Antes', '🌿');
+  }).then(function (r) {
+    check('(sem servidor, o registro local de sempre funda)', r.ok && r.guilda.nome === 'A de Antes' && window.__gastou === 20);
+    G._servidor = true;
+    var a = G.guildaLocalLiderada();
+    check('com o servidor, a guilda de antes aparece para subir', !!a && a.nome === 'A de Antes' && a.emblema === '🌿');
+    return G.migrarLocal();
+  }).then(function (r) {
+    check('...e sobe sem pagar de novo (POST criar com o nome e o emblema dela)', r.ok && ult().rota === '/api/guilda/criar' &&
+          ult().corpo.nome === 'A de Antes' && window.__gastou === 20);
+    check('...uma vez só', G.guildaLocalLiderada() === null);
+    R['/api/guilda/minha'] = { ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' };
+    return G.minha();
+  }).then(function (f) {
+    check('servidor fora: minha() devolve a última ficha', !!f && f.id === 7);
+    R['/api/guilda/sair'] = { ok: true, dissolveu: false };
+    return G.sair();
+  }).then(function (r) {
+    check('sair limpa a ficha: o bônus síncrono se apaga', r.ok && G._ficha() === null && G.bonusAtivo('xp') === false &&
+          G.dizimoAtual() === 0);
+    G._servidor = false;
+    var n = P.length;
+    return G.minha().then(function (f) {
+      check('sem sessão, nada vai ao servidor (a guilda local responde)', P.length === n && !!f && f.nome === 'A de Antes');
+    });
+  }).then(fim, function (e) { check('a prova estourou', false, e && (e.stack || e.message) || String(e)); fim(); });
+})();
+</script>
+</body>
+</html>

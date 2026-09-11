@@ -68,6 +68,7 @@ from loja import ESQUEMA_LOJA, LojaMixin
 from mestre import FRASE_SO_MESTRE, MestreMixin
 from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova
 from comum import le_consulta   # a consulta da URL (?id=, ?data.id=): o painel do Mestre e o aviso do Mercado Pago
+from guilda import ESQUEMA_GUILDA, GuildaMixin   # 11/09: a guilda no servidor (antes morava em cada navegador)
 import nomes                     # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
 log = logging.getLogger("api")
@@ -287,6 +288,25 @@ ROTAS = {
     ('POST', '/api/mestre/alerta/visto'):      ('mestre_alerta_visto', True, True, FRASE_SO_MESTRE),
     # o botão "conferir no Mercado Pago" da ficha (o aviso perdido, o servidor mal configurado, o teto de 24 h)
     ('POST', '/api/mestre/pagamento/conferir'): ('mestre_pagamento_conferir', True, True, FRASE_SO_MESTRE),
+    # a guilda no servidor (11/09, guilda.py): tudo com conta — a guilda é de contas.
+    # O convite entre máquinas só funciona daqui (antes a guilda morava em cada navegador)
+    ('GET',  '/api/guilda/minha'):            ('guilda_minha', True),
+    ('GET',  '/api/guilda/lista'):            ('guilda_lista', True),
+    ('POST', '/api/guilda/criar'):            ('guilda_criar', True),
+    ('POST', '/api/guilda/entrar'):           ('guilda_entrar', True),
+    ('POST', '/api/guilda/pedir'):            ('guilda_pedir', True),
+    ('POST', '/api/guilda/pedido'):           ('guilda_pedido', True),
+    ('POST', '/api/guilda/convidar'):         ('guilda_convidar', True),
+    ('POST', '/api/guilda/porta'):            ('guilda_porta', True),
+    ('POST', '/api/guilda/cargo'):            ('guilda_cargo', True),
+    ('POST', '/api/guilda/dizimo'):           ('guilda_dizimo', True),
+    ('POST', '/api/guilda/doar'):             ('guilda_doar', True),
+    ('POST', '/api/guilda/bonus'):            ('guilda_bonus', True),
+    ('POST', '/api/guilda/treino'):           ('guilda_treino', True),
+    ('POST', '/api/guilda/sair'):             ('guilda_sair', True),
+    ('POST', '/api/guilda/banco/depositar'):  ('guilda_banco_depositar', True),
+    ('POST', '/api/guilda/banco/pegar'):      ('guilda_banco_pegar', True),
+    ('POST', '/api/guilda/banco/devolver'):   ('guilda_banco_devolver', True),
 }
 
 
@@ -642,7 +662,7 @@ def versao_da_regra():
         return '0'
 
 
-class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin):
+class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -662,6 +682,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin):
         self.con.executescript(ESQUEMA)
         # Fase C: só tabelas novas (e um índice) — o rolling update segue seguro
         self.con.executescript(ESQUEMA_CONTA + ESQUEMA_LOJA + ESQUEMA_PAGAMENTO)   # a loja antes: o pagamento a cita
+        self.con.executescript(ESQUEMA_GUILDA)   # 11/09: a guilda (guilda.py) — só tabelas novas, como a Fase C
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)
@@ -1020,9 +1041,13 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin):
                 # consumida (fundida, vendida, forjada). Exceção: o que chegou por
                 # troca há pouco — o cliente pode ainda não ter posto no save
                 # (um PUT que já estava a caminho), e marcar 'fora' o apagaria.
+                # 11/09: e o que está GUARDADO no banco da guilda (guilda.py): saiu
+                # do save do dono, mas não do jogo
                 vivos = self.con.execute(
                     "SELECT iid FROM itens WHERE conta_id = ? AND estado = 'vivo' "
-                    "AND NOT (origem = 'troca' AND criado_em > ?)", (cid, t - TROCA_GRACA)).fetchall()
+                    "AND NOT (origem = 'troca' AND criado_em > ?) "
+                    "AND iid NOT IN (SELECT iid FROM guilda_banco WHERE iid IS NOT NULL AND dono_id = ?)",
+                    (cid, t - TROCA_GRACA, cid)).fetchall()
                 consumidos = [(r['iid'],) for r in vivos if r['iid'] not in no_save]
                 self.con.executemany("UPDATE itens SET estado = 'fora' WHERE iid = ?", consumidos)
 

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o balão de fala em cima de quem falou</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:1280px;height:720px;border:0;background:#000}
+  #saida{position:fixed;left:1280px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- O BALÃO DE FALA (11/09, pedido do dono: "quando mandar mensagem deve
+     aparecer um balão em cima do personagem"). O index.html de verdade num
+     quadro (1280x720; ?larg=390&alt=844 para o celular), com o save na memória
+     e uma Rede de mentira por cima da de verdade: a Bia "está" na praça. A
+     frase chega pelo mesmo R.aoEvento que a Rede usa, e a minha sai pela caixa
+     do chat com Enter, como o jogador faz. Cobra:
+       - a frase da Bia vira balão em cima dela, acima da placa do nome;
+       - a minha frase vira balão em cima do meu herói;
+       - frase nova troca a velha (um balão por corpo);
+       - o balão some sozinho (6 s), esmaecendo no fim;
+       - quem eu silenciei não ganha linha nem balão;
+       - frase comprida não derruba nada (vira reticências no balão).
+     No fim deixa os dois balões na tela, para a foto. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('  · ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  function passo(ms) { return new Promise(function (r) { setTimeout(r, ms || 50); }); }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+
+  var mL = /[?&]larg=(\d+)/.exec(location.search), mA = /[?&]alt=(\d+)/.exec(location.search);
+  var LARG = mL ? +mL[1] : 1280, ALT = mA ? +mA[1] : 720;
+  var quadro = document.getElementById('tela');
+  quadro.style.width = LARG + 'px';
+  quadro.style.height = ALT + 'px';
+  document.getElementById('saida').style.left = LARG + 'px';
+  quadro.src = '../index.html?' + (LARG < 820 ? 'mobile=1&' : '') + 'sandbox=1&snap=1&balao-praca';
+  var w, doc, J, U, H, R;
+  var perfilBia = { id: 'bia', nome: 'Bia', titulo: '', classe: 'arqueiro', sala: null, x: 0, z: 0 };
+  var naPraca = [];
+
+  /* a Rede de mentira, por cima da de verdade (como a toque_jogador) */
+  function dubleRede() {
+    R = J.Rede;
+    R.entrar = function () { return true; };
+    R.meuId = function () { return 'ana'; };
+    R.meuCx = function () { return 'cxana'; };
+    R.minhaSala = function () { return null; };
+    R.pares = function () { return naPraca.slice(); };
+    R.nomeDe = function (id) { return id === 'bia' ? 'Bia' : 'Aventureiro'; };
+    R.privado = function () { return true; };
+    R.dirige = function () { return true; };
+    R.sussurrar = function () { return true; };
+    R.ultimaRecusa = function () { return null; };
+    R.vigia = function () {}; R.solta = function () {};
+    R.trocaManda = function () {};
+    R.falar = function () { return true; };
+    R.mover = function () {};
+    R.guildaManda = function () {};
+    R.estadoConexao = function () { return 'ligado'; };
+    R.transporte = function () { return 'ws'; };
+  }
+  function chatTexto() { var l = doc.querySelector('.hub-chat-log'); return l ? l.textContent : ''; }
+  function fala(texto) { R.aoEvento({ tipo: 'chat', id: 'bia', nome: 'Bia', texto: texto }); }
+  function digita(texto) {
+    var ci = doc.querySelector('.hub-chat-input');
+    if (!ci) return false;
+    ci.value = texto;
+    ci.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    return true;
+  }
+  function painel() { return doc.querySelector('.screen-hub.is-on .hub-painel'); }
+  function botao(rot) {
+    var p = painel(), achado = null;
+    if (!p) return null;
+    [].forEach.call(p.querySelectorAll('button'), function (b) { if (!achado && (b.textContent || '').trim() === rot) achado = b; });
+    return achado;
+  }
+  function toca(pt) {
+    var cv = doc.querySelector('canvas.hub-canvas');
+    if (!cv || !pt) return false;
+    var base = { clientX: pt.x, clientY: pt.y, bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, button: 0, pointerType: 'mouse' };
+    cv.dispatchEvent(new w.PointerEvent('pointerdown', base));
+    cv.dispatchEvent(new w.PointerEvent('pointerup', base));
+    return true;
+  }
+  function b2s(b) { return b ? ('y ' + b.y.toFixed(2) + ' · topo ' + b.topo.toFixed(2) + ' · resta ' + b.resta.toFixed(1) + ' s · opacidade ' + b.opacidade.toFixed(2)) : 'sem balão'; }
+
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Renderer && J.Renderer.isReady() &&
+                  J.UI && J.Hub && J.Hub.fala && J.Hub._balao && J.Rede && J.DB);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s (ou falta o Hub.fala)');
+      return setTimeout(espera, 250);
+    }
+    w = quadro.contentWindow; doc = quadro.contentDocument; U = J.UI; H = J.Hub;
+    diz('o jogo abriu em ' + Math.round((Date.now() - t0) / 1000) + ' s · ' + w.innerWidth + 'x' + w.innerHeight);
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    if (!ids.length) { P.createHero('sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    U.selection(ids.slice(0, 1));
+    dubleRede();
+    J.DB.batizar('Ana').then(praca).then(function () { fim(); })
+      .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
+  })();
+
+  function praca() {
+    U.showScreen('hub');
+    return ate(function () { var e = H._estado(); return !!(e && e.pos && typeof R.aoEvento === 'function'); }, 30000).then(function (ok) {
+      check('(o Acampamento abriu, com a Rede ouvindo)', ok);
+      if (!ok) throw new Error('sem a praça');
+      // a Bia a 3 m à frente do herói (a câmera nasce às costas dele)
+      var hp = H._estado().pos;
+      perfilBia.x = hp.x + 1.2; perfilBia.z = hp.z - 3.0;
+      naPraca = [perfilBia];
+      H.fantasmaSai('bia');
+      H.fantasmaEntra('bia', perfilBia);
+      return ate(function () { return !!H._corpoFantasma('bia'); }, 20000);
+    }).then(function (temCorpo) {
+      check('(a Bia tem corpo na praça)', temCorpo);
+      fala('oi, Ana! vamos descer?');
+      var b = H._balao('bia');
+      check('a frase da Bia sobe num balão em cima dela', !!b && chatTexto().indexOf('vamos descer') >= 0, b2s(b));
+      check('...acima da placa do nome (e de tudo o que ela carrega)', !!b && b.y >= b.topo, b2s(b));
+      digita('bora, Bia');
+      var eu = H._balao(null);
+      check('a MINHA frase (Enter no chat) sobe num balão em cima do meu herói', !!eu && chatTexto().indexOf('bora, Bia') >= 0, b2s(eu));
+      return passo(1500);
+    }).then(function () {
+      var antes = H._balao('bia');
+      fala('mudei de ideia');
+      var depois = H._balao('bia');
+      check('frase nova troca a velha: um balão só, com o prazo cheio de novo', !!antes && !!depois && depois.resta > antes.resta,
+            'antes ' + b2s(antes) + ' · depois ' + b2s(depois));
+      fala(new Array(40).join('palavra comprida demais ') + 'fim');
+      check('frase comprida não derruba nada (o balão existe; o resto fica no chat)', !!H._balao('bia'));
+      return passo(5450);                        // o último segundo esmaece
+    }).then(function () {
+      var quase = H._balao('bia');
+      check('perto do fim o balão esmaece', !!quase && quase.opacidade < 1, b2s(quase));
+      return ate(function () { return !H._balao('bia') && !H._balao(null); }, 3000);
+    }).then(function (sumiram) {
+      check('o balão some sozinho (6 s), o dela e o meu', sumiram, 'bia: ' + b2s(H._balao('bia')) + ' · eu: ' + b2s(H._balao(null)));
+      // silenciar a Bia pelo painel dela (o toque de verdade no corpo)
+      toca(H._naTela('bia', 'corpo'));
+      var bs = botao('Silenciar');
+      if (bs) bs.click();
+      var linhaAntes = chatTexto().length;
+      fala('você não me ouve');
+      check('quem eu silenciei não ganha linha nem balão', !!bs && !H._balao('bia') && chatTexto().indexOf('você não me ouve') < 0,
+            bs ? '' : 'sem o botão Silenciar no painel');
+      // devolve a voz (para a foto)
+      toca(H._naTela('bia', 'corpo'));
+      var bv = botao('Devolver a voz');
+      if (bv) bv.click();
+      var p = painel();
+      if (p) p.classList.add('is-off');
+      void linhaAntes;
+      // a foto: os dois falando
+      fala('olha o meu balão aqui em cima!');
+      digita('e o meu também');
+      return passo(700);
+    });
+  }
+})();
+</script>
+</body>
+</html>

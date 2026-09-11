@@ -60,11 +60,10 @@
 <header class="topo">
   <div class="miolo">
     <a class="marca" href="index.html">SOTERRA</a>
+    <!-- 11/09 (pedido do dono): Classes, Fusões e Calabouços saem do menu —
+         moram na wiki, e a landing leva a ela pelos cartões -->
     <nav>
-      <a href="#classes">Classes</a>
-      <a href="fusoes.html">Fusões</a>
       <a href="wiki.html">Wiki</a>
-      <a href="#calaboucos">Calabouços</a>
       <a href="eventos.html">Eventos</a>
       <a href="#guildas">Guildas</a>
       <a href="#arena">Arena</a>
@@ -101,7 +100,8 @@
 <!-- ============ eventos do mundo ============ -->
 <!-- 10/09: o que o Mestre do Fundo ligou (vem de /api/eventos) e o Calabouço
      do Dia, que o site calcula sozinho com os dados do próprio jogo — por isso
-     esta seção continua útil com o servidor fora. -->
+     esta seção continua útil com o servidor fora. 11/09 (pedido do dono): aqui
+     só o Dia de HOJE; a semana inteira fica no calendário de eventos.html. -->
 <section class="secao" id="eventos">
   <div class="miolo">
     <h2>Eventos do mundo</h2>
@@ -112,7 +112,7 @@
         <div class="lista-agora" id="ev-agora"><div class="estado">carregando…</div></div>
       </div>
       <div class="caixa-evento">
-        <h3>Calabouço do Dia <small>hoje e os próximos 6 dias</small></h3>
+        <h3>Calabouço do Dia</h3>
         <ul class="lista-dia" id="ev-dia"></ul>
       </div>
       <div class="caixa-evento">
@@ -147,36 +147,37 @@
 <section class="secao" id="classes">
   <div class="miolo">
     <h2>Classes</h2>
-    <p class="sub">Sete jeitos de descer. Todas começam com feitiços neutros e escolhem o caminho elemental no nível 5; as estrelas abrem os caminhos seguintes.</p>
+    <p class="sub">Sete jeitos de descer. Todas começam com feitiços neutros e escolhem o caminho elemental no nível 5; as estrelas abrem os caminhos seguintes. <a href="wiki.html#/classes">Ver as classes na wiki →</a></p>
+    <!-- 11/09: cada cartão leva à página da classe na wiki (feitiços, números, fusões) -->
     <div class="grade">
-      <div class="cartao">
+      <a class="cartao" href="wiki.html#/classe/sumo">
         <div class="foto retrato" data-letra="B" data-classe="sumo"><img src="img/classe-sumo.webp" alt="Bárbaro" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Tanque</span><h3>Bárbaro</h3><p>Corpanzil, capa surrada e um machado de duas mãos: ocupa o gargalo e não sai dele. Provoca, prende, empurra e cobra caro cada célula.</p></div>
-      </div>
-      <div class="cartao">
+      </a>
+      <a class="cartao" href="wiki.html#/classe/arqueiro">
         <div class="foto retrato" data-letra="C" data-classe="arqueiro"><img src="img/classe-arqueiro.webp" alt="Caçador" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Atirador</span><h3>Caçador</h3><p>Chapéu de aba larga e espingarda de dois canos. Cada tiro deixa uma marca; quem tem marcas demais recebe a conta toda de uma vez.</p></div>
-      </div>
-      <div class="cartao">
+      </a>
+      <a class="cartao" href="wiki.html#/classe/bruxo">
         <div class="foto retrato" data-letra="B" data-classe="bruxo"><img src="img/classe-bruxo.webp" alt="Bruxo" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Mago</span><h3>Bruxo</h3><p>Áreas de média e longa distância, maldições que trabalham sozinhas e controle do terreno. Apaga salas inteiras — se sobreviver à conjuração.</p></div>
-      </div>
-      <div class="cartao">
+      </a>
+      <a class="cartao" href="wiki.html#/classe/espadachim">
         <div class="foto retrato" data-letra="L" data-classe="espadachim"><img src="img/classe-espadachim.webp" alt="Ladino" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Assassino</span><h3>Ladino</h3><p>Duas adagas, velocidade, invisibilidade e veneno. Entra pelo flanco, corta duas vezes e some antes da resposta. Morre depressa se errar a janela.</p></div>
-      </div>
-      <div class="cartao">
+      </a>
+      <a class="cartao" href="wiki.html#/classe/curandeiro">
         <div class="foto retrato" data-letra="C" data-classe="curandeiro"><img src="img/classe-curandeiro.webp" alt="Curandeiro" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Suporte</span><h3>Curandeiro</h3><p>Devolve vida e abençoa quem luta. O que ele faz, e ninguém mais faz, é manter o grupo de pé por mais um turno.</p></div>
-      </div>
-      <div class="cartao">
+      </a>
+      <a class="cartao" href="wiki.html#/classe/invocador">
         <div class="foto retrato" data-letra="X" data-classe="invocador"><img src="img/classe-invocador.webp" alt="Xamã" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Invocador</span><h3>Xamã</h3><p>Grimório aberto numa das mãos: invoca criaturas que tancam e mordem, arma armadilhas e fortalece quem está perto. Sozinho é frágil; nunca está sozinho.</p></div>
-      </div>
-      <div class="cartao">
+      </a>
+      <a class="cartao" href="wiki.html#/classe/minotauro">
         <div class="foto retrato" data-letra="M" data-classe="minotauro"><img src="img/classe-minotauro.webp" alt="Minotauro" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><span class="papel">Guardião</span><h3>Minotauro</h3><p>Grande demais para desviar, teimoso demais para recuar. Ergue muro onde não havia caminho e põe o próprio escudo na frente de quem sangra. Não mata: decide por onde o outro anda.</p></div>
-      </div>
+      </a>
     </div>
   </div>
 </section>
@@ -197,16 +198,18 @@
 <section class="secao" id="calaboucos">
   <div class="miolo">
     <h2>Calabouços</h2>
-    <p class="sub">Seis portais no Acampamento. Dois estão abertos; os outros quatro ainda estão em escavação — as peças deles já vazam, aos poucos, para os abertos.</p>
+    <p class="sub">Seis portais no Acampamento. Dois estão abertos; os outros quatro ainda estão em escavação — as peças deles já vazam, aos poucos, para os abertos. <a href="wiki.html#/calaboucos">Ver os calabouços na wiki →</a></p>
     <div class="grade grade-larga">
-      <div class="cartao">
-        <div class="foto" data-letra="E"><span class="etiqueta aberto">Portal aberto</span><img src="img/calabouco-estufa.jpg" alt="A Estufa Soterrada" onerror="this.parentNode.classList.add('sem-foto')"></div>
-        <div class="corpo"><h3>A Estufa Soterrada</h3><p>A estufa real do mundo antigo, selada com o jardim ainda vivo lá dentro. Séculos no escuro ensinaram as plantas a caçar; vagalumes presos em redomas fazem as vezes de sol.</p></div>
-      </div>
-      <div class="cartao">
-        <div class="foto" data-letra="C"><span class="etiqueta aberto">Portal aberto</span><img src="img/calabouco-cisterna.jpg" alt="A Cisterna dos Afogados" onerror="this.parentNode.classList.add('sem-foto')"></div>
-        <div class="corpo"><h3>A Cisterna dos Afogados</h3><p>O reservatório que matou a sede do mundo antigo — e depois bebeu seus donos. A corte afogada ainda dá bailes na água parada, e o reflexo às vezes se mexe primeiro.</p></div>
-      </div>
+      <!-- 11/09 (pedido do dono): o portal aberto mostra o CHEFE — a capa larga
+           tirada do 3D do jogo (tools/retratos_site.py) — e leva à wiki -->
+      <a class="cartao" href="wiki.html#/calabouco/greenhouse">
+        <div class="foto" data-letra="E"><span class="etiqueta aberto">Portal aberto</span><img src="img/monstro-boss-gardener-capa.webp" alt="A Jardineira-Viúva, a chefe da Estufa Soterrada" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><h3>A Estufa Soterrada</h3><p>A estufa real do mundo antigo, selada com o jardim ainda vivo lá dentro. Séculos no escuro ensinaram as plantas a caçar; vagalumes presos em redomas fazem as vezes de sol.</p><p class="cal-chefe">Chefe: A Jardineira-Viúva</p></div>
+      </a>
+      <a class="cartao" href="wiki.html#/calabouco/cistern">
+        <div class="foto" data-letra="C"><span class="etiqueta aberto">Portal aberto</span><img src="img/monstro-boss-baroness-capa.webp" alt="Baronesa Salmoura, a chefe da Cisterna dos Afogados" loading="lazy" onerror="this.parentNode.classList.add('sem-foto')"></div>
+        <div class="corpo"><h3>A Cisterna dos Afogados</h3><p>O reservatório que matou a sede do mundo antigo — e depois bebeu seus donos. A corte afogada ainda dá bailes na água parada, e o reflexo às vezes se mexe primeiro.</p><p class="cal-chefe">Chefe: Baronesa Salmoura</p></div>
+      </a>
       <div class="cartao fechado">
         <div class="foto" data-letra="F"><span class="etiqueta escavacao">Em escavação</span><img src="img/calabouco-fecho.jpg" alt="O Fecho de Brasa" onerror="this.parentNode.classList.add('sem-foto')"></div>
         <div class="corpo"><h3>O Fecho de Brasa</h3><p>O último Fecho, forjado ao redor da primeira chama do mundo. Aqui a estiagem não é clima, é arquitetura — e o maior portão já construído acordou com ciúme do próprio fogo.</p></div>
@@ -332,16 +335,11 @@
    * vence com a página aberta sai sozinho (SITE.agenda usa o relógio). */
   var agenda = null, lida = false, msg = '';
   function desenhaDia() {
-    var hoje = SITE.agora(), linhas = [];
-    for (var i = 0; i < 7; i++) {
-      var meio = SITE.inicioDoDia(hoje, i) + 12 * 3600;
-      var d = SITE.diaDoCalabouco(meio);
-      if (!d) continue;
-      linhas.push('<li' + (i === 0 ? ' class="hoje"' : '') + ' data-calabouco-dia="' + E(d.id) + '">' +
-        '<span class="quando">' + (i === 0 ? 'hoje' : E(SITE.dia(meio))) + '</span>' +
-        '<span>' + E(d.nome) + (i === 0 ? ' <small>+' + d.bonus + '% de saque</small>' : '') + '</span></li>');
-    }
-    $('ev-dia').innerHTML = linhas.join('') || '<li class="apoio">não deu para ler os calabouços do jogo</li>';
+    var d = SITE.diaDoCalabouco(SITE.inicioDoDia(SITE.agora(), 0) + 12 * 3600);
+    $('ev-dia').innerHTML = d
+      ? '<li class="hoje" data-calabouco-dia="' + E(d.id) + '"><span class="quando">hoje</span>' +
+        '<span><a href="wiki.html#/calabouco/' + E(d.id) + '">' + E(d.nome) + '</a> <small>+' + d.bonus + '% de saque</small></span></li>'
+      : '<li class="apoio">não deu para ler os calabouços do jogo</li>';
   }
   function desenhaEventos() {
     desenhaDia();

@@ -142,6 +142,11 @@ var JOGO = (typeof window !== 'undefined')
 
   function setScreen(name, data) {
     Game.screen = name;
+    // 11/09: de volta à praça (ou ao menu), a ficha do Mestre emprestada para a
+    // batalha em grupo sai do DATA desta página (js/core/gm.js)
+    if ((name === 'hub' || name === 'menu') && JOGO.GM && JOGO.GM.devolveFicha) {
+      try { JOGO.GM.devolveFicha(); } catch (e0) {}
+    }
     if (JOGO.UI && JOGO.UI.showScreen) {
       try { JOGO.UI.showScreen(name, data); } catch (err) { /* nunca crashar por UI */ }
     }
@@ -527,7 +532,10 @@ var JOGO = (typeof window !== 'undefined')
     if (!heroIds || heroIds.length !== 1 || dungeonId === 'poco') return false;
     var prog = P(), h = null;
     try { h = prog && prog.hero ? prog.hero(heroIds[0]) : null; } catch (e) { h = null; }
-    return !!h && h.classId !== 'gm';
+    // 11/09 (pedido do dono): o Mestre desce em grupo — só com o modo ligado aqui
+    if (!h) return false;
+    if (h.classId !== 'gm') return true;
+    try { return !!(JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()); } catch (e2) { return false; }
   }
   function comParceiro(ids) {
     var c = C(), cp = null;
