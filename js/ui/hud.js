@@ -62,7 +62,8 @@ var JOGO = (typeof window !== 'undefined')
   var lastRewards = null;
   // os dados das telas que o UI.repaint precisa redesenhar iguais (10/09)
   var lastElementChoice, lastDuelFim;
-  var invFilter = 'todos';
+  var invMainTab = 'equip';              // a aba principal do inventário
+  var invFilter = 'todos';               // a sub-aba de espaço de equipamento
   /* filtros por ELEMENTO (pedido 25/08: "facilita a busca") — um por ficha,
    * porque cada uma guarda a própria busca entre redesenhos */
   var invElemFiltro = 'todos';
@@ -5092,15 +5093,35 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function invFilterTabs() {
-    var tabs = el('div', 'inv-tabs');
-    ['todos'].concat(SLOTS).forEach(function (f) {
-      tabs.appendChild(btn(f === 'todos' ? 'Tudo' : SLOT_PT[f],
-        'btn-tab' + (invFilter === f ? ' is-on' : ''), function () {
-          invFilter = f;
-          sheetParty('inventario');
-        }));
+    var cont = el('div', 'inv-tabs-container');
+    
+    // As abas principais (categorias)
+    var mTabs = el('div', 'inv-tabs inv-tabs-main');
+    [{ id: 'equip', rot: 'Equipamentos' },
+     { id: 'pedras', rot: 'Pedras' },
+     { id: 'cons', rot: 'Consumíveis' },
+     { id: 'pets', rot: 'Pets' }].forEach(function (t) {
+      mTabs.appendChild(btn(t.rot, 'btn-tab' + (invMainTab === t.id ? ' is-on' : ''), function () {
+        invMainTab = t.id;
+        invSel = null;
+        sheetParty('inventario');
+      }));
     });
-    return tabs;
+    cont.appendChild(mTabs);
+
+    // As sub-abas (espaços), apenas visíveis quando em Equipamentos
+    if (invMainTab === 'equip') {
+      var tabs = el('div', 'inv-tabs inv-tabs-sub');
+      ['todos'].concat(SLOTS).forEach(function (f) {
+        tabs.appendChild(btn(f === 'todos' ? 'Tudo' : SLOT_PT[f],
+          'btn-tab' + (invFilter === f ? ' is-on' : ''), function () {
+            invFilter = f;
+            sheetParty('inventario');
+          }));
+      });
+      cont.appendChild(tabs);
+    }
+    return cont;
   }
 
   /* COMPARAR COM A VESTIDA (pedido 25/08): o delta entre a peça escolhida e
@@ -5207,48 +5228,134 @@ var JOGO = (typeof window !== 'undefined')
   var INV_CELULAS_MIN = 48;
 
   function invGrid(hid) {
-    var pilhas = safe(function () { return P().invStacks(); }, []);
     var grid = el('div', 'inv-big');
-    var ordem = {};
-    SLOTS.forEach(function (s, i) { ordem[s] = i; });
-    pilhas = pilhas.filter(function (s) { return !!itemDef(s.itemId); });
-    pilhas.sort(function (a, b) {
-      var sa = ordem[slotOf(a.itemId)], sb = ordem[slotOf(b.itemId)];
-      if (sa !== sb) return sa - sb;
-      if (a.stars !== b.stars) return b.stars - a.stars;
-      if (a.level !== b.level) return b.level - a.level;
-      return String((itemDef(a.itemId) || {}).name || '').localeCompare(String((itemDef(b.itemId) || {}).name || ''));
-    });
     var mostrou = 0;
-    pilhas.forEach(function (pilha) {
-      var canon = slotOf(pilha.itemId);
-      if (invFilter !== 'todos' && canon !== invFilter) return;
-      if (!passaElemento(pilha.itemId, invElemFiltro)) return;
-      mostrou++;
-      var it = itemDef(pilha.itemId);
-      var sel = invSel && invSel.itemId === pilha.itemId && invSel.level === pilha.level &&
-                invSel.stars === pilha.stars;
-      var cell = el('button', 'ig-cell ' + starClass(pilha.stars) + (sel ? ' is-sel' : ''));
-      cell.type = 'button';
-      markRarity(cell, it.rarity);
-      marcaTranca(cell, hid, pilha.itemId);
-      var plate = el('span', 'ig-plate');
-      plate.appendChild(art('itemIcon', [pilha.itemId, 54], 54));
-      var bs1 = setBadge(pilha.itemId);
-      if (bs1) plate.appendChild(bs1);
-      cell.appendChild(plate);
-      if (pilha.count > 1) cell.appendChild(el('span', 'ig-n', '×' + pilha.count));
-      if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
-      if (pilha.stars) cell.appendChild(starPips(pilha.stars));
-      cell.appendChild(el('span', 'ig-nm', esc(it.name)));
-      var nvG = nvBadge(pilha.itemId);
-      if (nvG) cell.appendChild(nvG);
-      tap(cell, function () {
-        invSel = sel ? null : { itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
-        sheetParty('inventario');
+    
+    if (invMainTab === 'equip') {
+      var pilhas = safe(function () { return P().invStacks(); }, []);
+      var ordem = {};
+      SLOTS.forEach(function (s, i) { ordem[s] = i; });
+      pilhas = pilhas.filter(function (s) { return !!itemDef(s.itemId); });
+      pilhas.sort(function (a, b) {
+        var sa = ordem[slotOf(a.itemId)], sb = ordem[slotOf(b.itemId)];
+        if (sa !== sb) return sa - sb;
+        if (a.stars !== b.stars) return b.stars - a.stars;
+        if (a.level !== b.level) return b.level - a.level;
+        return String((itemDef(a.itemId) || {}).name || '').localeCompare(String((itemDef(b.itemId) || {}).name || ''));
       });
-      grid.appendChild(cell);
-    });
+      pilhas.forEach(function (pilha) {
+        var canon = slotOf(pilha.itemId);
+        if (invFilter !== 'todos' && canon !== invFilter) return;
+        if (!passaElemento(pilha.itemId, invElemFiltro)) return;
+        mostrou++;
+        var it = itemDef(pilha.itemId);
+        var sel = invSel && invSel.itemId === pilha.itemId && invSel.level === pilha.level &&
+                  invSel.stars === pilha.stars;
+        var cell = el('button', 'ig-cell ' + starClass(pilha.stars) + (sel ? ' is-sel' : ''));
+        cell.type = 'button';
+        markRarity(cell, it.rarity);
+        marcaTranca(cell, hid, pilha.itemId);
+        var plate = el('span', 'ig-plate');
+        plate.appendChild(art('itemIcon', [pilha.itemId, 54], 54));
+        var bs1 = setBadge(pilha.itemId);
+        if (bs1) plate.appendChild(bs1);
+        cell.appendChild(plate);
+        if (pilha.count > 1) cell.appendChild(el('span', 'ig-n', '×' + pilha.count));
+        if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
+        if (pilha.stars) cell.appendChild(starPips(pilha.stars));
+        cell.appendChild(el('span', 'ig-nm', esc(it.name)));
+        var nvG = nvBadge(pilha.itemId);
+        if (nvG) cell.appendChild(nvG);
+        tap(cell, function () {
+          invSel = sel ? null : { itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
+          sheetParty('inventario');
+        });
+        grid.appendChild(cell);
+      });
+    } else if (invMainTab === 'pedras') {
+      var defs = stoneDefs();
+      var ks = Object.keys(defs).sort();
+      ks.forEach(function (k) {
+        var n = stoneCount(k);
+        if (n <= 0) return;
+        if (!passaElemento(k, invElemFiltro)) return;
+        mostrou++;
+        var cell = el('button', 'ig-cell is-pedra');
+        cell.type = 'button';
+        var plate = el('span', 'ig-plate');
+        plate.appendChild(art('stoneIcon', [k, 54], 54));
+        cell.appendChild(plate);
+        cell.appendChild(el('span', 'ig-n', String(n)));
+        cell.appendChild(el('span', 'ig-nm', esc(defs[k].name)));
+        tap(cell, function () {
+          toast(defs[k].name + ': ' + (defs[k].description || 'Usada na forja.'));
+        });
+        grid.appendChild(cell);
+      });
+    } else if (invMainTab === 'cons') {
+      var pg = safe(function () { return P().pergaminhos(); }, null) || {};
+      if (pg.xp) {
+        mostrou++;
+        var cxp = el('button', 'ig-cell is-cons');
+        cxp.type = 'button';
+        var plateXp = el('span', 'ig-plate');
+        plateXp.appendChild(el('span', 'perg-glifo ig-perg', '❦'));
+        cxp.appendChild(plateXp);
+        cxp.appendChild(el('span', 'ig-n', '×' + pg.xp));
+        cxp.appendChild(el('span', 'ig-nm', 'Pergaminho da Sabedoria'));
+        tap(cxp, function () { lerSabedoria(function () { sheetParty('inventario'); }); });
+        grid.appendChild(cxp);
+      }
+      if (pg.elemento) {
+        mostrou++;
+        var cel = el('button', 'ig-cell is-cons');
+        cel.type = 'button';
+        var plateEl = el('span', 'ig-plate');
+        plateEl.appendChild(el('span', 'perg-glifo ig-perg', '↺'));
+        cel.appendChild(plateEl);
+        cel.appendChild(el('span', 'ig-n', '×' + pg.elemento));
+        cel.appendChild(el('span', 'ig-nm', 'Pergaminho da Reescrita'));
+        tap(cel, function () { toast('A Reescrita é usada no painel de Caminhos Elementais, dentro da ficha do herói.'); });
+        grid.appendChild(cel);
+      }
+    } else if (invMainTab === 'pets') {
+      var pets = safe(function () { return P().state.pets || []; }, []);
+      var pdefs = D().pets || {};
+      // agrupar pets iguais para não encher a tela (mostrar quantidade)
+      var pmap = {};
+      pets.forEach(function (pid) { pmap[pid] = (pmap[pid] || 0) + 1; });
+      var pks = Object.keys(pmap).sort(function (a, b) {
+        return String((pdefs[a]||{}).name).localeCompare(String((pdefs[b]||{}).name));
+      });
+      pks.forEach(function (pid) {
+        mostrou++;
+        var pdef = pdefs[pid];
+        var n = pmap[pid];
+        var cp = el('button', 'ig-cell is-pet');
+        cp.type = 'button';
+        markRarity(cp, 'epic');
+        var plateP = el('span', 'ig-plate');
+        plateP.appendChild(art('petIcon', [pid, 54], 54));
+        cp.appendChild(plateP);
+        if (n > 1) cp.appendChild(el('span', 'ig-n', '×' + n));
+        cp.appendChild(el('span', 'ig-nm', esc(pdef ? pdef.name : pid)));
+        tap(cp, function () {
+          if (!hid) return;
+          confirmSheet('Equipar ' + (pdef ? pdef.name : pid) + '?',
+            'Deseja equipar este companheiro no herói atual?', function () {
+              var ok = safe(function () { return P().equipPet(hid, pid); }, false);
+              if (ok) {
+                toast('Companheiro equipado.', 'good');
+                sheetParty('inventario');
+              } else {
+                toast('Não foi possível equipar o companheiro.');
+              }
+            });
+        });
+        grid.appendChild(cp);
+      });
+    }
+
     // ---- GRADE FIXA (pedido do usuário, com uma foto de referência na mão)
     // Antes a grade desenhava UMA célula por pilha existente, então ela encolhia
     // e crescia conforme o saco: com três itens virava uma tirinha de três
@@ -5273,14 +5380,16 @@ var JOGO = (typeof window !== 'undefined')
       partyHeroes().forEach(function (id) {
         SLOTS.forEach(function (c) { if (heroItem(hero(id), c)) vestidas++; });
       });
-      grid.dataset.vazio = invElemFiltro !== 'todos'
-        ? 'Nada de ' + (ELEM_PT[invElemFiltro] || invElemFiltro) +
-          (invFilter !== 'todos' ? ' em ' + SLOT_PT[invFilter] : '') + ' no saco.'
-        : vestidas
-          ? (invFilter === 'todos'
-              ? 'Tudo o que você tem já está vestido.'
-              : 'Nenhuma peça de ' + SLOT_PT[invFilter] + ' no saco.')
-          : 'Saco vazio. Os calabouços resolvem isso.';
+      grid.dataset.vazio = invMainTab !== 'equip'
+        ? 'Nenhum item desta categoria no momento.'
+        : invElemFiltro !== 'todos'
+          ? 'Nada de ' + (ELEM_PT[invElemFiltro] || invElemFiltro) +
+            (invFilter !== 'todos' ? ' em ' + SLOT_PT[invFilter] : '') + ' no saco.'
+          : vestidas
+            ? (invFilter === 'todos'
+                ? 'Tudo o que você tem já está vestido.'
+                : 'Nenhuma peça de ' + SLOT_PT[invFilter] + ' no saco.')
+            : 'Saco vazio. Os calabouços resolvem isso.';
     }
     grid.dataset.cheio = mostrou + ' de ' + alvo;
     return grid;
