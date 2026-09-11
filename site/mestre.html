@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Mestre — SOTERRA</title>
+<script>
+  // a folha e os scripts com o hash do build (o mapa de js/versao.js); sem
+  // mapa (em casa), o carimbo ?t= do instante: ver o comentário em site/index.html
+  if (location.protocol !== 'file:') {
+    document.write('<script src="../js/versao.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+<script>
+  window.SITE_URL = function (s) {
+    var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
+    var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
+    var chave = s.indexOf('../') === 0 ? s.slice(3) : 'site/' + s;
+    return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
+  };
+  document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
+<!--
+  O painel do Mestre do Fundo (10/09). O script mora em mestre.js.
+  Só a conta com a marca de Mestre (contas.gm, no servidor) abre: sem sessão
+  a página pede para entrar e não chama nada; com sessão, GET /api/eu decide,
+  e qualquer 403 das rotas /api/mestre/* fecha o painel. O link "Mestre" do
+  menu é posto e tirado pelo site.js conforme a marca da sessão.
+  O painel busca qualquer conta (a busca vai no corpo do POST: e-mail nunca
+  na URL), abre a ficha (#conta=N no endereço), dá de presente uma classe, um
+  item da loja ou vinténs (o presente é um pedido da loja com preço 0, pelo
+  mesmo caminho da compra), cancela o que ainda não saiu e mostra os alertas
+  de pagamento. Nenhum preço mora aqui: o catálogo vem do servidor.
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="eventos.html">Eventos</a>
+      <a href="fusoes.html">Fusões</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="loja.html">Loja</a>
+      <a href="conta.html">Conta</a>
+      <a href="mestre.html" data-mestre aria-current="page">Mestre</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<section class="secao mestre">
+  <div class="miolo">
+    <h2>Painel do Mestre</h2>
+    <p class="sub">Busque qualquer conta e dê presentes: uma classe, um item da loja ou vinténs. O presente anda pelo mesmo caminho da loja e chega quando o jogo daquela conta abrir logado; até lá, dá para cancelar.</p>
+
+    <div class="ms-portao" id="ms-portao" data-portao="carregando"><p>carregando…</p></div>
+
+    <div id="ms-painel" hidden>
+      <div class="ms-colunas">
+        <div class="ms-lado">
+          <section class="bloco" id="ms-busca-bloco">
+            <h3>Buscar conta</h3>
+            <form id="ms-busca" novalidate autocomplete="off">
+              <label for="ms-q">Nome, e-mail inteiro ou #número da conta</label>
+              <div class="ms-linha">
+                <input type="text" id="ms-q" maxlength="120" autocomplete="off" spellcheck="false">
+                <button type="submit" class="btn btn-ouro" id="ms-buscar">Buscar</button>
+              </div>
+            </form>
+            <ul class="lista-pedidos ms-resultados" id="ms-resultados"></ul>
+            <p class="apoio" id="ms-mais" hidden>Há mais contas: refine a busca.</p>
+          </section>
+
+          <section class="bloco" id="ms-alertas-bloco">
+            <div class="pedidos-cab"><h3>Alertas de pagamento</h3><small class="apoio" id="ms-alertas-total"></small></div>
+            <p class="apoio">Estornos, contestações e pagamentos estranhos: o servidor avisa, e quem decide é o dono.</p>
+            <ul class="lista-pedidos" id="ms-alertas"></ul>
+          </section>
+        </div>
+
+        <section class="bloco ms-ficha" id="ms-ficha" hidden>
+          <div class="pedidos-cab">
+            <h3 id="ms-ficha-nome">Conta</h3>
+            <button type="button" class="btn btn-mini" id="ms-atualizar">atualizar</button>
+            <button type="button" class="btn btn-mini" id="ms-fechar">fechar</button>
+          </div>
+          <p class="estado" id="ms-ficha-estado">abrindo a ficha…</p>
+          <div id="ms-ficha-corpo" hidden>
+            <dl class="dados" id="ms-dados"></dl>
+
+            <h4>Classes que já tem</h4>
+            <ul class="ms-classes" id="ms-classes"></ul>
+
+            <h4>Dar vinténs</h4>
+            <form id="ms-vintens-form" class="ms-linha" novalidate autocomplete="off">
+              <label for="ms-vintens" class="ms-escondido">Vinténs de presente</label>
+              <input type="number" id="ms-vintens" min="1" max="100000" step="1" inputmode="numeric" placeholder="quantos vinténs">
+              <button type="submit" class="btn btn-ouro" id="ms-dar-vintens">Dar vinténs</button>
+            </form>
+            <p class="dica" id="ms-vintens-nota"></p>
+
+            <h4>Liberar</h4>
+            <div id="ms-liberar"></div>
+
+            <h4>Presentes desta conta</h4>
+            <ul class="lista-pedidos" id="ms-presentes-conta"></ul>
+
+            <h4>Pacotes pagos</h4>
+            <ul class="lista-pedidos" id="ms-pagamentos"></ul>
+
+            <h4>Alertas desta conta</h4>
+            <ul class="lista-pedidos" id="ms-alertas-conta"></ul>
+          </div>
+        </section>
+      </div>
+
+      <section class="bloco ms-ultimos">
+        <div class="pedidos-cab"><h3>Últimos presentes</h3></div>
+        <ul class="lista-pedidos" id="ms-presentes"></ul>
+      </section>
+    </div>
+
+    <div class="aviso flutua" id="ms-aviso" role="status"></div>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
+</footer>
+
+<script>
+/* o nome e a cor das classes vêm do próprio jogo (classes.js, mesma origem);
+ * cada arquivo com o hash do conteúdo (SITE_URL, no topo) */
+(function () {
+  ['site.js', '../js/core/data/classes.js', 'mestre.js'].forEach(function (s) {
+    document.write('<script src="' + SITE_URL(s) + '"><\/script>');
+  });
+})();
+</script>
+</body>
+</html>

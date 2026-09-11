@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — um jogador sem tela (multijogador)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#cfe0f0;font:11px/1.35 monospace;padding:6px}
+  #estado{white-space:pre-wrap}
+</style>
+</head>
+<body>
+<!-- UM JOGADOR SEM TELA (frente PROVAS, 11/09). O SOTERRA de verdade sem a
+     HUD e sem o renderizador: os dados, a conta, a Rede, o motor, o Game, o
+     Coop e o Grupo, na ordem do index.html. As provas de dois jogadores
+     (tests/multijogador_prova.py) põem dois destes lado a lado, cada um no seu
+     iframe, ligados ao relé de verdade.
+
+       ?rede=ws://127.0.0.1:P   o relé (sem ele, a Rede cai no canal de abas)
+       ?conta=a                 a conta desta janela; o save fica em memória
+                                (save_sandbox.js: o disco não é tocado)
+       ?nome=Ana                o nome batizado
+       ?heroi=sumo              o herói principal (o que desce em grupo)
+       ?nivel=15                os dois heróis do começo sobem até este nível
+       ?x=0&z=9                 onde a pessoa está na praça
+
+     O que a HUD faria, a página faz: pendura os callbacks do Grupo, do Duelo,
+     dos Sussurros e do Coop; chama o R.entrar na praça e na antessala (com a
+     sala, como o buildHub); e anda o Game.update num setInterval. Quem "toca
+     nos botões" é a página de fora, por window.cliente e pelo JOGO do iframe. -->
+<div id="estado">carregando…</div>
+<script src="save_sandbox.js"></script>
+<script>
+  (function () {
+    var Q = {};
+    location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+    window.__Q = Q;
+    window.__erros = [];
+    window.addEventListener('error', function (ev) {
+      window.__erros.push(String(ev.message) + ' @' + String(ev.filename || '').replace(/^.*\//, '').replace(/\?.*$/, '') +
+                          ':' + ev.lineno);
+    });
+    var V = '?v=' + Date.now();
+    var arqs = [
+      'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
+      'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+      'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js',
+      'js/core/data/items_extra.js', 'js/core/data/items_selos.js',
+      'js/core/contas.js', 'js/core/sessao.js', 'js/core/gm.js', 'js/core/nomes.js', 'js/core/db.js',
+      'js/core/missoes.js', 'js/core/diario.js', 'js/core/agenda.js', 'js/core/poco.js',
+      'js/core/guilda.js', 'js/core/mercado.js',
+      Q.duble ? 'tests/rede_duble.js' : 'js/core/rede.js',
+      'js/core/brasa.js', 'js/core/troca.js',
+      'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
+      'js/core/progress.js', 'js/core/game.js',
+      'js/core/coop.js', 'js/core/grupo.js'
+    ];
+    for (var i = 0; i < arqs.length; i++) document.write('<scr' + 'ipt src="../' + arqs[i] + V + '"></scr' + 'ipt>');
+  })();
+</script>
+<script>
+(function () {
+  'use strict';
+  var Q = window.__Q;
+  var J = window.JOGO || {};
+  var G = J.Game, R = J.Rede, P = J.Progress, E = J.Engine;
+  var C = window.cliente = {
+    pronto: false, falhou: null,
+    id: null, nome: Q.nome || 'Ana', heroi: Q.heroi || 'sumo', nivel: Number(Q.nivel || 15),
+    tela: null, telas: [], dadosTela: {},
+    eventos: [], avisos: [], convites: [], desafios: [], sussurros: [], fusoes: [], subidas: [],
+    grupoMudou: 0, dueloMudou: 0, coopMudou: 0, entradas: [],
+    erros: window.__erros, piloto: null, casa: 0, salaRede: undefined, passos: 0
+  };
+  function erro(onde, e) {
+    C.erros.push(onde + ': ' + String((e && (e.stack || e.message)) || e).split('\n').slice(0, 3).join(' | '));
+  }
+  function seguro(fn, def) { try { return fn(); } catch (e) { return def; } }
+  function agora() { return Date.now(); }
+  function meuCx() { return seguro(function () { return R.meuCx ? R.meuCx() : null; }, null); }
+
+  // ------------------------------------------------ a HUD de mentira
+  // o Game.setScreen chama o UI.showScreen: aqui só se guarda a tela e o pacote
+  J.UI = J.UI || {};
+  J.UI.showScreen = function (nome, dados) {
+    C.tela = nome;
+    C.telas.push(nome);
+    if (C.telas.length > 300) C.telas.shift();
+    C.dadosTela[nome] = (dados === undefined) ? null : dados;
+    if (C.pronto) vigiaTela();                         // a HUD monta a praça/antessala na hora
+  };
+  J.UI.telaAtual = function () { return C.tela; };   // como a HUD: o 'hub' não existe no Game.screen
+  C.praca = function () {
+    // o "Voltar ao Acampamento" da HUD: o Game volta ao começo e a tela é a praça
+    try { if (!(G.abandonar && G.abandonar())) G.restart(); } catch (e) { erro('praca', e); }
+    J.UI.showScreen('hub');
+    vigiaTela();
+  };
+
+  // ------------------------------------------------ a Rede: praça e antessala
+  function perfil(sala) {
+    return { id: C.id, nome: C.nome, titulo: '', classe: C.heroi, resumo: null, aura: false,
+             sala: sala, x: Number(Q.x || 0), z: Number(Q.z || 9) };
+  }
+  function entra(sala) {
+    var ok = false;
+    try { ok = R.entrar(perfil(sala)); } catch (e) { erro('R.entrar', e); }
+    C.salaRede = sala;
+    C.entradas.push({ sala: sala, ok: ok, cx: meuCx(), t: agora() });
+    return ok;
+  }
+  var telaVista = null;
+  function vigiaTela() {
+    if (C.tela === telaVista) return;
+    telaVista = C.tela;
+    // o buildHub da HUD roda na praça e na antessala, e chama o R.entrar com a sala
+    if (C.tela === 'hub') entra(null);
+    else if (C.tela === 'antessala') entra(G.dungeonId + ':' + G.roomIndex);
+  }
+
+  // ------------------------------------------------ os callbacks que a HUD penduraria
+  function copia(o) { return seguro(function () { return JSON.parse(JSON.stringify(o)); }, null); }
+  function resumoEv(ev) {
+    var r = { tipo: ev.tipo, t: agora() };
+    ['de', 'id', 'cx', 'acao', 'para', 'paraCx', 'tipoMsg', 'ref', 'sala', 'nome', 'texto', 'mestre'].forEach(function (k) {
+      if (ev[k] !== undefined) r[k] = ev[k];
+    });
+    if (ev.dados && typeof ev.dados === 'object') {
+      r.d = {};
+      ['gid', 'did', 'bid', 'b', 'T', 'k', 'u', 'a', 'v', 'lider', 'ok', 'motivo', 'mot', 'novo'].forEach(function (k) {
+        if (ev.dados[k] !== undefined) r.d[k] = ev.dados[k];
+      });
+    }
+    return r;
+  }
+  function liga() {
+    var Gr = J.Grupo, Du = J.Duelo, Su = J.Sussurros, Co = J.Coop;
+    if (R.ouvir) R.ouvir('*', function (ev) { if (ev) C.eventos.push(resumoEv(ev)); });
+    if (Gr) {
+      Gr.aoMudar = function () { C.grupoMudou++; };
+      Gr.aoConvite = function (c) { C.convites.push(copia(c) || {}); };
+      Gr.aoAviso = function (texto, kind) { C.avisos.push({ texto: String(texto), kind: kind || null, t: agora() }); };
+      Gr.aoSubiu = function (motivo) { C.subidas.push({ motivo: motivo || null, t: agora() }); C.praca(); };
+      if (Gr.defineHeroi) { try { Gr.defineHeroi(C.heroi); } catch (e) { erro('defineHeroi', e); } }
+    }
+    if (Du) {
+      Du.aoMudar = function () { C.dueloMudou++; };
+      Du.aoDesafio = function (d) { C.desafios.push(copia(d) || {}); };
+    }
+    if (Su) Su.aoChegar = function (linha) { C.sussurros.push(copia(linha) || {}); };
+    if (Co) {
+      Co.aoMudar = function () { C.coopMudou++; };
+      Co.aoAviso = function (texto, kind) { C.avisos.push({ texto: String(texto), kind: kind || null, t: agora(), coop: true }); };
+      Co.aoFusaoPedida = function (f) { C.fusoes.push(copia(f) || {}); };
+    }
+  }
+
+  // ------------------------------------------------ o piloto
+  // o do Coop (o MEU herói joga pela AI.planTurn, pela porta local); sem ele,
+  // o da prova faz o mesmo pelos toques do Game (onTileClicked/selectSpell/endTurn)
+  C.pilota = function (op) {
+    op = op || { joga: true, casa: 0 };
+    C.casa = op.casa || 0;
+    if (J.Coop && typeof J.Coop._piloto === 'function') {
+      try { J.Coop._piloto(op); C.piloto = op.joga === false ? null : 'coop'; return C.piloto; } catch (e) { erro('_piloto', e); }
+    }
+    C.piloto = op.joga === false ? null : 'prova';
+    return C.piloto;
+  };
+  var plano = null, planoChave = null;
+  function pilotoDaProva() {
+    if (G.screen !== 'battle' || !G.state) return;
+    var st = G.state;
+    if (st.phase === 'placing') {
+      var op = seguro(function () { return E.placementOptions(st); }, []);
+      if (op && op.length) seguro(function () { G.onTileClicked(op[C.casa % op.length].x, op[C.casa % op.length].y); });
+      return;
+    }
+    if (st.phase !== 'playing' || !G.isPlayerTurn()) { plano = null; planoChave = null; return; }
+    var u = E.activeUnit(st);
+    if (!u) return;
+    var chave = u.uid + ':' + (st.turno !== undefined ? st.turno : st.round + '/' + st.activeIdx);
+    if (planoChave !== chave) {
+      planoChave = chave;
+      plano = seguro(function () { return J.AI.planTurn(st, u.uid) || []; }, []);
+    }
+    var a = plano.shift();
+    if (!a || a.action === 'end') { plano = []; seguro(function () { G.endTurn(); }); return; }
+    if (a.action === 'move') seguro(function () { G.onTileClicked(a.x, a.y); });
+    else if (a.action === 'cast') seguro(function () { G.selectSpell(a.spellId); G.onTileClicked(a.x, a.y); });
+  }
+
+  // ------------------------------------------------ o laço (no lugar do requestAnimationFrame)
+  var ultimo = 0;
+  C.passo = function () {
+    var t = agora();
+    var dt = ultimo ? Math.min(0.5, Math.max(0, (t - ultimo) / 1000)) : 0.05;
+    ultimo = t;
+    C.passos++;
+    try { G.update(dt); } catch (e) { erro('Game.update', e); }
+    if (C.piloto === 'prova') { try { pilotoDaProva(); } catch (e2) { erro('piloto', e2); } }
+    vigiaTela();
+    if (C.passos % 20 === 0) pinta();
+  };
+  C.para = function () {
+    clearInterval(C._laco);
+    C._laco = null;
+    try { if (R.sair) R.sair(); } catch (e) {}
+  };
+
+  // ------------------------------------------------ o resumo (para a página de fora e para o DOM)
+  C.resumo = function () {
+    var Gr = J.Grupo, Co = J.Coop, st = G.state;
+    return {
+      id: C.id, nome: C.nome, cx: meuCx(), tela: C.tela, screen: G.screen,
+      transporte: seguro(function () { return R.transporte(); }, null),
+      privado: seguro(function () { return R.privado ? R.privado() : null; }, null),
+      grupo: Gr ? seguro(function () { var e = Gr.estado(); return { fase: e.fase, lider: e.lider, v: e.v, n: (e.membros || []).length }; }, null) : null,
+      duelo: J.Duelo ? seguro(function () { var d = J.Duelo.estado(); return { fase: d.fase, eu: d.eu }; }, null) : null,
+      coop: Co ? seguro(function () { var s = Co.sessao(); return s && { tipo: s.tipo, fase: s.fase, dessinc: s.dessinc, ia: s.parceiroIA }; }, null) : null,
+      fase: st ? st.phase : null, turno: st ? st.turno : null,
+      hash: st ? seguro(function () { return E.hash(st); }, null) : null,
+      erros: C.erros.slice(-4)
+    };
+  };
+  function pinta() {
+    var el = document.getElementById('estado');
+    if (el) el.textContent = JSON.stringify(C.resumo(), null, 1);
+  }
+
+  // ------------------------------------------------ a subida
+  function sobeHerois() {
+    ['sumo', 'curandeiro'].forEach(function (h, i) {
+      if (!P.hero(h)) return;
+      for (var k = 0; k < 2000 && P.hero(h).level < C.nivel; k++) P.addXp(h, 400);
+      if (P.pendingElementChoice && P.pendingElementChoice(h)) {
+        var els = i === 0 ? ['fogo', 'terra', 'agua', 'ar'] : ['agua', 'ar', 'fogo', 'terra'];
+        for (var j = 0; j < els.length; j++) if (seguro(function () { return P.chooseElement(h, els[j]); }, false)) break;
+      }
+    });
+  }
+  function sobe() {
+    if (!G || !R || !P || !E || !J.DB) { C.falhou = 'faltou módulo do jogo'; pinta(); return; }
+    try { sobeHerois(); } catch (e) { erro('herois', e); }
+    J.DB.batizar(C.nome).then(function () { return J.DB.jogador(); }).then(function (j) {
+      C.id = j.id;
+      try { G.init(); } catch (e) { erro('Game.init', e); }
+      liga();
+      J.UI.showScreen('hub');       // a praça (a HUD mostra o Acampamento ao começar)
+      vigiaTela();
+      C._laco = setInterval(C.passo, 50);
+      C.pronto = true;
+      pinta();
+    }, function (e) { C.falhou = 'DB: ' + e; pinta(); });
+  }
+  sobe();
+})();
+</script>
+</body>
+</html>

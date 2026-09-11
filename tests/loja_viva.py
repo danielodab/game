@@ -14,7 +14,9 @@ carteira, compra pelas rotas como o site faria, e deixa os módulos do jogo
 mostrar entregue (e estornado, no caso sem saldo) com a carteira do servidor
 debitada.
 
-Se o servidor ainda não tiver as rotas da loja, a prova diz isso e sai com 2
+Loja 2 (10/09): as compras são as do catálogo v2 (pedras, o bônus de XP de 1
+dia, a insígnia e o pacote de 50 pedras; os preços vêm do catálogo). Se o
+servidor ainda não tiver o catálogo v2 da loja, a prova diz isso e sai com 2
 (pendência, não falha)."""
 import json
 import os
@@ -62,9 +64,12 @@ def espera_api(porta, segundos=15):
 
 
 def tem_loja(porta):
+    """O catálogo v2 da loja 2 (versão 2, com o bônus de XP, a insígnia e o pacote de 50 pedras)."""
     try:
         with urllib.request.urlopen('http://127.0.0.1:%d/api/loja/catalogo' % porta, timeout=3) as r:
-            return r.status == 200 and bool(json.loads(r.read().decode('utf-8')).get('itens'))
+            j = json.loads(r.read().decode('utf-8'))
+            skus = set(i.get('sku') for i in (j.get('itens') or []) if isinstance(i, dict))
+            return r.status == 200 and j.get('versao') == 2 and {'bonus-xp-1', 'insignia-1', 'pedras-agua-50'} <= skus
     except urllib.error.HTTPError:
         return False
     except Exception:
@@ -90,7 +95,8 @@ def main():
             print('a API não subiu na porta', porta)
             return 1
         if not tem_loja(porta):
-            print('PENDENTE: o servidor ainda não tem as rotas da loja (/api/loja/*) — a prova viva fica para a junção')
+            print('PENDENTE: o servidor ainda não tem o catálogo v2 da loja (bônus de XP, insígnias, pacotes de 50 '
+                  'pedras) — a prova viva fica para a junção')
             return 2
         perfil = os.path.join(pasta, 'perfil')
         url = 'file:///' + PAGINA.replace('\\', '/') + '?api=http://127.0.0.1:%d' % porta

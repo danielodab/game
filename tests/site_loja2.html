@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a loja 2 no site (pacotes, volta do pagamento, avatar)</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+#palco{position:absolute;left:-4000px;top:0;width:1000px;height:900px}</style>
+</head>
+<body>
+<!-- A PROVA DA LOJA 2 NO SITE (10/09), sem servidor nenhum, no molde de
+     tests/site_fase_c.html: as páginas de verdade (site/loja.html e
+     site/conta.html, com site.js, loja.js e conta.js) são escritas num iframe
+     com um window.fetch FALSO, que responde os JSON do contrato da loja 2
+     (seções 4.1, 4.2, 4.8 e 4.9 do plano) e anota cada pedido. O que se cobra:
+       - os pacotes de vinténs: "em breve" com os pagamentos desligados, e aí
+         NENHUM pedido a /api/pagamento/*; ligados, a confirmação, o POST
+         {pacote, idem} (16 hex, uma chave nova a cada clique, a mesma só depois
+         de um clique sem resposta) e a ida ao endereço do Mercado Pago (o
+         LOJA.vai, o location.assign da página, trocado por um dublê); um
+         endereço estranho NÃO navega; SITE.ehMercadoPago;
+       - a volta do Mercado Pago (?pagamento=17&volta=…&payment_id=…): um
+         POST /api/pagamento/conferir {id:17} e nada do que o Mercado Pago
+         pendurou na URL vai ao servidor; a URL fica limpa; a faixa diz o
+         estado; aberto ou em análise, a CONFERÊNCIA de novo a cada 10 s, até 6
+         vezes, e o botão "conferir" em "Seus pacotes" (conserto 11/09);
+       - o saldo com "A caminho"; sem save, a compra liberada pelo crédito a
+         caminho; os pedidos de pacote e de presente sem "cancelar"; as seções
+         na ordem do servidor; `limite: null` sem texto de limite;
+       - o avatar na conta: a grade com as opções do servidor, o clique grava
+         (POST /api/avatar), o 409 mostra a frase, o Mestre só vê o Cavaleiro;
+       - o menu cabe no celular (390 px), com o link "Mestre" na conta gm;
+       - nenhum fetch com e-mail na URL; nenhum preço (vinténs ou reais) no
+         HTML ou no JS do site.
+     A sessão do localStorage (a mesma chave do jogo) volta ao que era. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<div id="palco"></div>
+<script src="../site/site.js"></script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log'), palco = document.getElementById('palco');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ate(cond, ms) {
+    ms = ms || 3000;
+    return new Promise(function (r) {
+      var t = 0;
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) { ok = false; }
+        if (ok) return r(true);
+        if ((t += 20) > ms) return r(false);
+        setTimeout(volta, 20);
+      })();
+    });
+  }
+
+  var AGORA = Math.floor(Date.now() / 1000), DIA = 86400, HORA = 3600;
+  var BASE_SITE = new URL('../site/', location.href).href;
+  var CHAVE = 'soterra-sessao';
+  var sessaoAntes = null;
+  try { sessaoAntes = localStorage.getItem(CHAVE); } catch (e) { /* sem storage */ }
+  function lsSessao() { try { return JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch (e) { return 'erro'; } }
+  function copia(o) { return JSON.parse(JSON.stringify(o)); }
+  function junta(a, b) { var r = copia(a); Object.keys(b || {}).forEach(function (k) { r[k] = b[k]; }); return r; }
+
+  /* valores sintéticos desta prova (nenhum é de ninguém) */
+  var EMAIL = 'pia@exemplo.com';
+  var SESSAO = { token: 'tok-pia', conta: { id: 8, nome: 'Pia', gm: false } };
+  var SESSAO_MESTRE = { token: 'tok-mestre', conta: { id: 1, nome: 'Dono', gm: true } };
+  var MP_URL = 'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=123456-abc';
+  var MP_PARAMS = ['99887766', 'pref-abc-123', 'sot-17-9f2c0000aaaa1111', 'approved', 'payment_id', 'collection', 'merchant_order'];
+  var SAUDE = [200, { ok: true, contas: 3, agora: AGORA, correio: false }];
+
+  /* ---- o catálogo da loja 2 (a tabela da seção 3 do plano) ---- */
+  function catalogo2(ligado) {
+    function classe(id, nome, rar, cartas, preco) {
+      return { sku: 'classe-' + id, secao: 'personagens', tipo: 'classe', alvo: id, qtd: 1, nome: nome, raridade: rar, cartas: cartas,
+               descricao: 'Libera o ' + nome + ' na hora. Chega no nível 1.', preco: preco, limite: { grupo: 'classe-' + id, max: 1, dias: null } };
+    }
+    function bonus(dias, preco) {
+      return { sku: 'bonus-xp-' + dias, secao: 'bonus', tipo: 'bonus-xp', alvo: 'xp', qtd: dias, dias: dias,
+               nome: 'Bônus de XP — ' + dias + (dias === 1 ? ' dia' : ' dias'),
+               descricao: '+50% de experiência para o grupo por ' + dias + ' dia(s), contados no relógio do servidor a partir da entrega no jogo.',
+               preco: preco, limite: null };
+    }
+    function pedra(el, alvo, nome, qtd, preco) {
+      return { sku: 'pedras-' + el + (qtd === 50 ? '-50' : ''), secao: 'pedras', tipo: 'pedras', alvo: alvo, qtd: qtd, elemento: el,
+               nome: qtd + ' ' + nome, descricao: 'Pedras de forja.', preco: preco, limite: null };
+    }
+    var itens = [
+      classe('invocador', 'Xamã', 'raro', 10, 10000), classe('bruxo', 'Bruxo', 'raro', 10, 10000),
+      classe('espadachim', 'Ladino', 'epico', 20, 20000), classe('arqueiro', 'Caçador', 'epico', 25, 25000),
+      classe('minotauro', 'Minotauro', 'epico', 30, 30000),
+      bonus(1, 1500), bonus(3, 3900), bonus(7, 7900)
+    ];
+    [['agua', 'stone-tear', 'Lágrimas de Cisterna', 500, 2250], ['terra', 'stone-root', 'Grãos de Rocha-Mãe', 500, 2250],
+     ['ar', 'stone-breath', 'Sopros Engarrafados', 800, 3600], ['fogo', 'stone-ember', 'Brasas Coaguladas', 800, 3600],
+     ['neutro', 'stone-slate', 'Lascas da Lousa', 800, 3600]].forEach(function (p) { itens.push(pedra(p[0], p[1], p[2], 10, p[3])); });
+    [['agua', 'stone-tear', 'Lágrimas de Cisterna', 500, 2250], ['terra', 'stone-root', 'Grãos de Rocha-Mãe', 500, 2250],
+     ['ar', 'stone-breath', 'Sopros Engarrafados', 800, 3600], ['fogo', 'stone-ember', 'Brasas Coaguladas', 800, 3600],
+     ['neutro', 'stone-slate', 'Lascas da Lousa', 800, 3600]].forEach(function (p) { itens.push(pedra(p[0], p[1], p[2], 50, p[4])); });
+    itens.push({ sku: 'insignia-1', secao: 'guilda', tipo: 'insignias', alvo: 'fundacao', qtd: 1, nome: '1 Insígnia de Fundação',
+                 descricao: 'Uma Insígnia de Fundação, a que só os chefes derrubam. Dez fundam uma guilda.', preco: 500, limite: null });
+    itens.push({ sku: 'insignias-10', secao: 'guilda', tipo: 'insignias', alvo: 'fundacao', qtd: 10, nome: '10 Insígnias de Fundação',
+                 descricao: 'Dez Insígnias de Fundação: o bastante para fundar uma guilda.', preco: 4500, limite: null });
+    itens.push({ sku: 'pergaminho-elemento', secao: 'pergaminhos', tipo: 'pergaminho', alvo: 'elemento', qtd: 1, nome: 'Pergaminho da Reescrita',
+                 descricao: 'Troca um caminho elemental de um herói por outro.', preco: 5000, limite: { grupo: 'pergaminho-elemento', max: 1, dias: 30 } });
+    return { ok: true, versao: 2, itens: itens, pacotes: PACOTES, pagamento: { ligado: !!ligado, teste: false } };
+  }
+  var PACOTES = [
+    { id: 'pacote-1000', nome: 'Bolsa de 1.000 vinténs', vintens: 1000, centavos: 490, preco: 'R$ 4,90' },
+    { id: 'pacote-5500', nome: 'Saco de 5.500 vinténs', vintens: 5500, centavos: 1990, preco: 'R$ 19,90' },
+    { id: 'pacote-12000', nome: 'Arca de 12.000 vinténs', vintens: 12000, centavos: 3990, preco: 'R$ 39,90' },
+    { id: 'pacote-25000', nome: 'Tesouro de 25.000 vinténs', vintens: 25000, centavos: 7990, preco: 'R$ 79,90' }
+  ];
+  var NITENS = catalogo2(false).itens.length;
+  function minha2(extra) {
+    return junta({
+      ok: true,
+      saldo: { carteira: 12450, aCaminho: 0, reservado: 300, disponivel: 12150, semFundo: false, saveVersao: 57, saveEm: AGORA - 3 * HORA },
+      limites: {
+        'pergaminho-elemento': { usados: 0, max: 1, dias: 30, liberaEm: null },
+        'classe-invocador': { usados: 0, max: 1, dias: null, liberaEm: null }, 'classe-bruxo': { usados: 0, max: 1, dias: null, liberaEm: null },
+        'classe-espadachim': { usados: 0, max: 1, dias: null, liberaEm: null }, 'classe-arqueiro': { usados: 0, max: 1, dias: null, liberaEm: null },
+        'classe-minotauro': { usados: 0, max: 1, dias: null, liberaEm: null }
+      },
+      classes: { invocador: { liberada: false, cartas: 6 }, bruxo: { liberada: false, cartas: 2 }, espadachim: { liberada: false, cartas: 0 },
+                 arqueiro: { liberada: false, cartas: 0 }, minotauro: { liberada: false, cartas: 3 } },
+      pedidos: []
+    }, extra);
+  }
+  function pag(id, estado, extra) {
+    return junta({ id: id, pacote: 'pacote-5500', nome: 'Saco de 5.500 vinténs', vintens: 5500, centavos: 1990, preco: 'R$ 19,90',
+                   estado: estado, creditado: estado === 'aprovado', pedido: estado === 'aprovado' ? { id: 90, estado: 'pendente' } : null,
+                   criadoEm: AGORA - 600, atualizadoEm: AGORA - 60 }, extra);
+  }
+
+  /* ---- o palco: a página real num iframe, com o fetch falso ---- */
+  var TODOS = [];
+  function le(url) {
+    return new Promise(function (ok) {
+      var x = new XMLHttpRequest();
+      x.open('GET', url + (url.indexOf('?') < 0 ? '?v=' : '&v=') + Date.now());
+      x.onload = function () { ok((x.status === 200 || x.status === 0) && x.responseText ? x.responseText : null); };
+      x.onerror = function () { ok(null); };
+      try { x.send(); } catch (e) { ok(null); }
+    });
+  }
+  function fetchFalso(pagina, cena) {
+    return function (url, op) {
+      op = op || {};
+      var u = String(url), m = /\/api\/[^?#]*/.exec(u), corpo = null;
+      try { corpo = op.body ? JSON.parse(op.body) : null; } catch (e) { corpo = op.body; }
+      var reg = { pagina: pagina, url: u, metodo: op.method || 'GET', rota: m ? m[0] : u, corpo: corpo, bruto: op.body || '',
+                  auth: (op.headers && op.headers.Authorization) || null };
+      TODOS.push(reg);
+      cena.pedidos.push(reg);
+      var h = cena.rotas[reg.metodo + ' ' + reg.rota];
+      var resp = typeof h === 'function' ? h(corpo || {}, reg) : h;
+      if (resp === 'fora') return Promise.reject(new TypeError('Failed to fetch'));
+      if (!resp) resp = [404, { ok: false, erro: 'rota desconhecida' }];
+      var status = resp[0], json = copia(resp[1]);
+      return new Promise(function (ok) {
+        setTimeout(function () {
+          ok({ status: status, ok: status >= 200 && status < 300, json: function () { return Promise.resolve(json); } });
+        }, 4);
+      });
+    };
+  }
+  function canalFalso(cena) {
+    function Canal(nome) { this.nome = String(nome); }
+    Canal.prototype.postMessage = function (msg) { cena.canal.push({ nome: this.nome, msg: copia(msg) }); };
+    Canal.prototype.close = function () {};
+    Canal.prototype.addEventListener = function () {};
+    return Canal;
+  }
+  function abre(pagina, cena) {
+    cena.pedidos = [];
+    cena.canal = [];
+    return le(BASE_SITE + pagina).then(function (html) {
+      if (!html) throw new Error('não deu para ler site/' + pagina);
+      palco.innerHTML = '';
+      var fr = document.createElement('iframe');
+      fr.style.width = (cena.largura || 1000) + 'px';
+      fr.style.height = '900px';
+      fr.style.border = '0';
+      palco.appendChild(fr);
+      try {
+        if (cena.sessao) localStorage.setItem(CHAVE, JSON.stringify(cena.sessao));
+        else localStorage.removeItem(CHAVE);
+      } catch (e) { /* sem storage */ }
+      var d = fr.contentDocument;
+      d.open();
+      var w = fr.contentWindow;
+      w.fetch = fetchFalso(pagina, cena);
+      w.BroadcastChannel = canalFalso(cena);
+      try {
+        w.history.replaceState(null, '', w.location.href.split('#')[0].split('?')[0] + (cena.busca || '') + (cena.hash ? '#' + cena.hash : ''));
+      } catch (e) { cena.semEndereco = String(e); }
+      d.write(html.replace(/<head>/i, '<head><base href="' + BASE_SITE + '">'));
+      d.close();
+      return {
+        w: w, d: d, fr: fr,
+        $: function (id) { return d.getElementById(id); },
+        q: function (s) { return d.querySelector(s); },
+        qq: function (s) { return [].slice.call(d.querySelectorAll(s)); }
+      };
+    });
+  }
+  function visivel(el) {
+    if (!el || !el.ownerDocument) return false;
+    var w = el.ownerDocument.defaultView;
+    for (var e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (e.hidden) return false;
+      var cs = w.getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    }
+    return true;
+  }
+  function texto(el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  function pedidos(cena, metodo, rota) { return cena.pedidos.filter(function (p) { return p.metodo === metodo && p.rota === rota; }); }
+  function deRota(cena, prefixo) { return cena.pedidos.filter(function (p) { return p.rota.indexOf(prefixo) === 0; }); }
+  /* o location.assign da loja é o LOJA.vai: a prova troca por um dublê que só anota */
+  function segura(p, cena) {
+    cena.navegou = [];
+    return ate(function () { return p.w.LOJA && typeof p.w.LOJA.vai === 'function'; }).then(function (ok) {
+      if (ok) p.w.LOJA.vai = function (u) { cena.navegou.push(String(u)); };
+      return ok;
+    });
+  }
+  function lojaDe(p) {
+    return {
+      bt: function (sku) { return p.q('.produto[data-sku="' + sku + '"] [data-comprar]'); },
+      motivo: function (sku) { return texto(p.q('.produto[data-sku="' + sku + '"] .motivo')); },
+      cartao: function (sku) { return p.q('.produto[data-sku="' + sku + '"]'); },
+      linha: function (id) { return p.q('#lj-pedidos [data-pedido="' + id + '"]'); },
+      pacote: function (id) { return p.q('.pacote[data-pacote-id="' + id + '"]'); },
+      btPacote: function (id) { return p.q('button[data-pacote="' + id + '"]'); }
+    };
+  }
+  async function confirmaModal(p, sim) {
+    await ate(function () { return !!p.q('.modal'); });
+    var m = texto(p.q('.modal'));
+    var bt = p.q(sim ? '.modal [data-sim]' : '.modal [data-nao]');
+    if (bt) bt.click();
+    return m;
+  }
+
+  /* ======================================================================
+   * SITE.ehMercadoPago, direto
+   * ==================================================================== */
+  function unidades() {
+    var bons = ['https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=1-2',
+                'https://sandbox.mercadopago.com.br/checkout/v1/redirect?pref_id=1-2',
+                'https://mercadopago.com.br/checkout', 'https://www.mercadopago.com/checkout', 'https://mercadopago.com.br'];
+    var ruins = ['http://www.mercadopago.com.br/checkout', 'https://mercadopago.com.br.golpe.example/checkout',
+                 'https://golpemercadopago.com.br/checkout', 'https://golpe.example/?u=https://www.mercadopago.com.br',
+                 'https://www.mercadopago.com.br@golpe.example/', 'https://usuario@www.mercadopago.com.br/',
+                 'https://www.mercadopago.com.br:8443/checkout', '//www.mercadopago.com.br/checkout', 'javascript:alert(1)',
+                 'https://www.mercadopago.com.br.', 'https://www.mercadopago.com.ar/checkout', '', null, undefined, 42];
+    check('SITE.ehMercadoPago: aceita https do Mercado Pago (www., sandbox., .com e .com.br)',
+          typeof SITE.ehMercadoPago === 'function' && bons.every(function (u) { return SITE.ehMercadoPago(u) === true; }),
+          bons.filter(function (u) { return !SITE.ehMercadoPago(u); }).join(' | '));
+    check('SITE.ehMercadoPago: recusa http, host parecido, usuário, porta, sem esquema, javascript: e lixo',
+          ruins.every(function (u) { return SITE.ehMercadoPago(u) === false; }),
+          ruins.filter(function (u) { return SITE.ehMercadoPago(u) !== false; }).join(' | '));
+  }
+
+  /* ======================================================================
+   * os pacotes de vinténs
+   * ==================================================================== */
+  async function cenaEmBreve() {
+    var c = { sessao: SESSAO, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(false)],
+      'GET /api/loja/minha': function () { return [200, minha2()]; }
+    } };
+    var p = await abre('loja.html', c), L = lojaDe(p);
+    await ate(function () { return p.qq('.pacote').length === 4 && p.qq('[data-comprar]').length === NITENS; });
+    check('em breve: a caixa dos 4 pacotes aparece, com o selo "em breve"', visivel(p.$('lj-pacotes')) && p.qq('.pacote').length === 4 &&
+          !!p.q('#lj-pacotes [data-em-breve]') && /em breve/.test(texto(p.q('#lj-pacotes [data-em-breve]'))));
+    var ok = PACOTES.every(function (pc) {
+      var t = texto(L.pacote(pc.id));
+      return t.indexOf(pc.nome) >= 0 && t.indexOf(SITE.num(pc.vintens) + ' vinténs') >= 0 && t.indexOf(pc.preco) >= 0;
+    });
+    check('em breve: cada pacote com o nome, os vinténs e o preço em reais do servidor', ok, texto(L.pacote('pacote-5500')));
+    var bts = p.qq('#lj-pacotes button');
+    check('em breve: os botões desligados, dizendo "em breve", e nenhum botão de comprar pacote',
+          bts.length === 4 && bts.every(function (b) { return b.disabled && /em breve/.test(texto(b)); }) && !p.q('button[data-pacote]'));
+    bts.forEach(function (b) { b.click(); });
+    await espera(80);
+    check('em breve: nenhum pedido a /api/pagamento/* (nem a lista, nem o pacote)', !deRota(c, '/api/pagamento/').length && !p.q('.modal'),
+          deRota(c, '/api/pagamento/').map(function (x) { return x.metodo + ' ' + x.rota; }).join(', '));
+    check('em breve: "Seus pacotes" fica escondido', p.$('lj-pagamentos-caixa').hidden);
+    // as seções da loja 2, na ordem do servidor
+    var secoes = p.qq('.loja-secao').map(function (s) { return s.getAttribute('data-secao'); });
+    check('seções na ordem do servidor: personagens, bônus, pedras, guilda, pergaminhos',
+          secoes.join() === 'personagens,bonus,pedras,guilda,pergaminhos', secoes.join());
+    check('as ' + NITENS + ' ofertas do catálogo, cada uma com o preço do servidor',
+          p.qq('.produto').length === NITENS && texto(L.cartao('bonus-xp-7').querySelector('.preco')) === '7.900 vinténs' &&
+          texto(L.cartao('insignias-10').querySelector('.preco')) === '4.500 vinténs' &&
+          texto(L.cartao('classe-invocador').querySelector('.preco')) === '10.000 vinténs');
+    var bonus = p.q('.loja-secao[data-secao="bonus"]'), guilda = p.q('.loja-secao[data-secao="guilda"]');
+    check('Bônus de XP: o título e a frase "Não soma com outro bônus de XP; comprar de novo soma os dias. O prazo corre a partir da entrega no jogo."',
+          /Bônus de XP/.test(texto(bonus.querySelector('h3'))) &&
+          texto(bonus.querySelector('.sub')) === 'Não soma com outro bônus de XP; comprar de novo soma os dias. O prazo corre a partir da entrega no jogo.');
+    check('Guilda: "Dez Insígnias fundam uma guilda."', texto(guilda.querySelector('h3')) === 'Guilda' &&
+          texto(guilda.querySelector('.sub')) === 'Dez Insígnias fundam uma guilda.');
+    var semLimite = ['bonus-xp-1', 'bonus-xp-7', 'pedras-agua', 'pedras-fogo-50', 'insignia-1', 'insignias-10'];
+    check('limite: null não escreve limite nenhum (bônus, pedras, insígnias)',
+          semLimite.every(function (s) { return !L.cartao(s).querySelector('.limite'); }));
+    check('a Reescrita mantém "1 a cada 30 dias." e as classes "Compra única."',
+          /1 a cada 30 dias\./.test(texto(L.cartao('pergaminho-elemento'))) && /Compra única\./.test(texto(L.cartao('classe-bruxo'))));
+    check('a arte do bônus diz os dias (7 dias) e a das insígnias a quantidade (×10)',
+          texto(L.cartao('bonus-xp-7').querySelector('.arte-bonus .qtd')) === '7 dias' &&
+          texto(L.cartao('bonus-xp-1').querySelector('.arte-bonus .qtd')) === '1 dia' &&
+          texto(L.cartao('insignias-10').querySelector('.arte-insignia .qtd')) === '×10');
+    check('com save e saldo: o bônus de 7 dias e as 10 insígnias ligados; o Ladino não (faltam 7.850)',
+          !L.bt('bonus-xp-7').disabled && !L.bt('insignias-10').disabled && L.bt('classe-espadachim').disabled &&
+          /Faltam 7\.850 vinténs/.test(L.motivo('classe-espadachim')));
+    check('o saldo mostra "A caminho" (0 aqui) entre a carteira e o reservado',
+          texto(p.q('[data-saldo="aCaminho"]')) === '0' && p.qq('.saldo-numeros > div').length === 4 &&
+          p.qq('.saldo-numeros > div')[1].classList.contains('a-caminho'));
+    // comprar um bônus: a confirmação lembra que o prazo corre da entrega
+    L.bt('bonus-xp-7').click();
+    var m = await confirmaModal(p, false);
+    check('comprar o bônus: "Comprar Bônus de XP — 7 dias por 7.900 vinténs?" e o prazo a partir da entrega',
+          /Comprar Bônus de XP — 7 dias por 7\.900 vinténs\?/.test(m) && /prazo do bônus corre a partir da entrega no jogo/.test(m), m);
+  }
+
+  async function cenaPacotesSemSessao() {
+    var c = { rotas: { 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)] } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return p.qq('.pacote').length === 4; });
+    await espera(40);
+    check('ligado, sem sessão: "Entre para comprar" nos 4 pacotes, sem botão de pagamento',
+          p.qq('.pacote a[href="conta.html#entrar"]').length === 4 && !p.q('button[data-pacote]') && !p.q('#lj-pacotes [data-em-breve]'));
+    check('ligado, sem sessão: nenhum pedido a /api/pagamento/* nem a /api/loja/minha',
+          !deRota(c, '/api/pagamento/').length && !pedidos(c, 'GET', '/api/loja/minha').length);
+  }
+
+  async function cenaCompraPacote() {
+    var respostas = [
+      [201, { ok: true, pagamento: pag(17, 'aberto'), endereco: MP_URL }],
+      'fora',
+      [200, { ok: true, pagamento: pag(18, 'aberto'), endereco: MP_URL, repetido: true }],
+      [201, { ok: true, pagamento: pag(19, 'aberto'), endereco: 'https://mercadopago.com.br.golpe.example/checkout?pref_id=1' }],
+      [201, { ok: true, pagamento: pag(20, 'aberto'), endereco: 'http://www.mercadopago.com.br/checkout/v1/redirect?pref_id=1' }],
+      [429, { ok: false, erro: 'pedidos de pacote demais nesta hora (10)', liberaEm: AGORA + 1800 }],
+      [503, { ok: false, erro: 'os pacotes de vinténs chegam em breve', pagamento: false }]
+    ];
+    var c = { sessao: SESSAO, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)],
+      'GET /api/loja/minha': function () { return [200, minha2()]; },
+      'GET /api/pagamento/meus': [200, { ok: true, ligado: true, pagamentos: [] }],
+      'POST /api/pagamento/pacote': function () { return respostas.shift() || [500, { ok: false, erro: 'acabou o roteiro' }]; }
+    } };
+    var p = await abre('loja.html', c), L = lojaDe(p);
+    await ate(function () { return !!L.btPacote('pacote-5500') && !L.btPacote('pacote-5500').disabled; });
+    check('ligado, com sessão: "Comprar com Pix ou cartão" nos 4 pacotes', PACOTES.every(function (pc) {
+      var b = L.btPacote(pc.id); return b && !b.disabled && /Comprar com Pix ou cartão/.test(texto(b)); }));
+    check('a página guarda a ida ao Mercado Pago num lugar só (LOJA.vai)', await segura(p, c));
+    L.btPacote('pacote-5500').click();
+    var m = await confirmaModal(p, false);
+    check('a confirmação: "Comprar Saco de 5.500 vinténs por R$ 19,90?" e a ida ao Mercado Pago',
+          /Comprar Saco de 5\.500 vinténs por R\$ 19,90\?/.test(m) && /página do Mercado Pago/.test(m) &&
+          /quando o pagamento for aprovado/.test(m), m);
+    await espera(30);
+    check('"Voltar" na confirmação não pede nada', !pedidos(c, 'POST', '/api/pagamento/pacote').length);
+    L.btPacote('pacote-5500').click();
+    await confirmaModal(p, true);
+    await ate(function () { return c.navegou.length === 1; });
+    var p1 = pedidos(c, 'POST', '/api/pagamento/pacote')[0];
+    check('comprar: POST /api/pagamento/pacote {pacote, idem} (16 hex), com o token no cabeçalho',
+          !!p1 && p1.corpo.pacote === 'pacote-5500' && /^[0-9a-f]{16}$/.test(p1.corpo.idem) && Object.keys(p1.corpo).length === 2 &&
+          p1.auth === 'Bearer tok-pia', p1 && JSON.stringify(p1.corpo));
+    check('comprar: a página vai ao endereço do Mercado Pago que o servidor devolveu', c.navegou[0] === MP_URL, c.navegou.join(' | '));
+    // o servidor não responde: o próximo clique repete a mesma chave
+    await ate(function () { return L.btPacote('pacote-5500') && !L.btPacote('pacote-5500').disabled; });
+    L.btPacote('pacote-5500').click();
+    await confirmaModal(p, true);
+    await ate(function () { return /não respondeu/.test(texto(p.$('lj-aviso'))); });
+    var p2 = pedidos(c, 'POST', '/api/pagamento/pacote')[1];
+    check('um clique novo leva uma chave nova', !!p2 && /^[0-9a-f]{16}$/.test(p2.corpo.idem) && p2.corpo.idem !== p1.corpo.idem);
+    check('sem resposta: o aviso diz que a mesma chave vai de novo, e nada navega',
+          /a página repete a mesma chave/.test(texto(p.$('lj-aviso'))) && c.navegou.length === 1);
+    await ate(function () { return L.btPacote('pacote-5500') && !L.btPacote('pacote-5500').disabled; });
+    L.btPacote('pacote-5500').click();
+    await confirmaModal(p, true);
+    await ate(function () { return c.navegou.length === 2; });
+    var p3 = pedidos(c, 'POST', '/api/pagamento/pacote')[2];
+    check('depois do clique sem resposta, o mesmo pacote repete a MESMA chave', !!p3 && p3.corpo.idem === p2.corpo.idem);
+    // endereços estranhos não navegam
+    await ate(function () { return L.btPacote('pacote-1000') && !L.btPacote('pacote-1000').disabled; });
+    L.btPacote('pacote-1000').click();
+    await confirmaModal(p, true);
+    await ate(function () { return pedidos(c, 'POST', '/api/pagamento/pacote').length === 4 && /estranho/.test(texto(p.$('lj-aviso'))); });
+    var p4 = pedidos(c, 'POST', '/api/pagamento/pacote')[3];
+    check('outro pacote: chave nova (a repetida era do outro)', !!p4 && p4.corpo.pacote === 'pacote-1000' && p4.corpo.idem !== p3.corpo.idem);
+    check('endereço de outro host (mercadopago.com.br.golpe…) NÃO navega, e o aviso diz que nada foi cobrado',
+          c.navegou.length === 2 && /Endereço de pagamento estranho; nada foi cobrado/.test(texto(p.$('lj-aviso'))), texto(p.$('lj-aviso')));
+    await ate(function () { return L.btPacote('pacote-1000') && !L.btPacote('pacote-1000').disabled; });
+    L.btPacote('pacote-1000').click();
+    await confirmaModal(p, true);
+    await ate(function () { return pedidos(c, 'POST', '/api/pagamento/pacote').length === 5; });
+    await espera(40);
+    check('endereço http (sem o s) do Mercado Pago também NÃO navega', c.navegou.length === 2 && /estranho/.test(texto(p.$('lj-aviso'))));
+    await ate(function () { return L.btPacote('pacote-1000') && !L.btPacote('pacote-1000').disabled; });
+    L.btPacote('pacote-1000').click();
+    await confirmaModal(p, true);
+    await ate(function () { return /de novo em/.test(texto(p.$('lj-aviso'))); });
+    check('429: a frase do servidor com "de novo em 30 min"', /pedidos de pacote demais nesta hora \(10\) \(de novo em 30 min\)/.test(texto(p.$('lj-aviso'))),
+          texto(p.$('lj-aviso')));
+    await ate(function () { return L.btPacote('pacote-1000') && !L.btPacote('pacote-1000').disabled; });
+    L.btPacote('pacote-1000').click();
+    await confirmaModal(p, true);
+    await ate(function () { return !!p.q('#lj-pacotes [data-em-breve]'); });
+    check('503 com pagamento:false: os pacotes voltam a "em breve", sem botão de comprar',
+          !!p.q('#lj-pacotes [data-em-breve]') && !p.q('button[data-pacote]') && /chegam em breve/.test(texto(p.$('lj-aviso'))) &&
+          c.navegou.length === 2);
+  }
+
+  /* ======================================================================
+   * a volta do Mercado Pago
+   * ==================================================================== */
+  var BUSCA_VOLTA = '?pagamento=17&volta=aprovado&payment_id=99887766&collection_id=99887766&collection_status=approved' +
+                    '&status=approved&preference_id=pref-abc-123&external_reference=sot-17-9f2c0000aaaa1111&merchant_order_id=5544';
+  function semParamsDoMP(cena) {
+    return cena.pedidos.filter(function (x) {
+      var tudo = x.url + ' ' + x.bruto;
+      return MP_PARAMS.some(function (s) { return tudo.indexOf(s) >= 0; });
+    });
+  }
+  async function cenaVolta() {
+    var meus = 0;
+    var c = { sessao: SESSAO, busca: BUSCA_VOLTA, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)],
+      'GET /api/loja/minha': function () {
+        return [200, minha2({ saldo: { carteira: 12450, aCaminho: 5500, reservado: 300, disponivel: 17650, semFundo: false, saveVersao: 57, saveEm: AGORA - 3 * HORA },
+                              pedidos: [{ id: 90, sku: 'pacote-5500', nome: 'Saco de 5.500 vinténs', preco: 0, estado: 'pendente', motivo: null,
+                                          criadoEm: AGORA - 60, cancelavel: false, origem: 'pagamento', vintens: 5500 }] })];
+      },
+      'POST /api/pagamento/conferir': function () { return [200, { ok: true, pagamento: pag(17, 'aprovado') }]; },
+      'GET /api/pagamento/meus': function () {
+        meus++;
+        // a lista chega "atrasada" (o 17 ainda aberto): a conferência, mais nova, fica por cima
+        return [200, { ok: true, ligado: true, pagamentos: [pag(17, 'aberto'), pag(12, 'recusado', { criadoEm: AGORA - DIA })] }];
+      }
+    } };
+    var p = await abre('loja.html', c);
+    check('a prova conseguiu pôr ?pagamento=17&… no endereço da página', !c.semEndereco, c.semEndereco);
+    await ate(function () { return /Pagamento aprovado/.test(texto(p.$('lj-volta'))) && !!p.q('#lj-pagamentos [data-pagamento="17"]'); });
+    var cf = pedidos(c, 'POST', '/api/pagamento/conferir');
+    check('a volta: UM POST /api/pagamento/conferir, com só {id:17} no corpo e o token no cabeçalho',
+          cf.length === 1 && cf[0].corpo && cf[0].corpo.id === 17 && Object.keys(cf[0].corpo).length === 1 && cf[0].auth === 'Bearer tok-pia',
+          cf.length + ' · ' + JSON.stringify(cf[0] && cf[0].corpo));
+    check('a volta: nada do que o Mercado Pago pendurou na URL vai ao servidor (URL e corpo de todo pedido)',
+          !semParamsDoMP(c).length, semParamsDoMP(c).map(function (x) { return x.url; }).join(' | '));
+    check('a volta: o endereço fica limpo (sem ?pagamento, sem payment_id)', p.w.location.search === '' && p.w.location.href.indexOf('?') < 0,
+          p.w.location.href);
+    check('a faixa: "Pagamento aprovado: 5.500 vinténs a caminho do jogo"', visivel(p.$('lj-volta')) &&
+          /Pagamento aprovado: 5\.500 vinténs a caminho do jogo/.test(texto(p.$('lj-volta'))) && p.$('lj-volta').classList.contains('certo'),
+          texto(p.$('lj-volta')));
+    await ate(function () { return c.canal.length > 0 && pedidos(c, 'GET', '/api/loja/minha').length >= 2; });
+    check('aprovado: avisa o jogo aberto (BroadcastChannel) e relê o saldo', c.canal.some(function (x) { return x.msg && x.msg.tipo === 'comprou'; }) &&
+          pedidos(c, 'GET', '/api/loja/minha').length >= 2);
+    check('o saldo mostra os 5.500 a caminho', texto(p.q('[data-saldo="aCaminho"]')) === '5.500' && /A caminho: pacotes pagos e presentes/.test(texto(p.$('lj-saldo'))));
+    var l17 = texto(p.q('#lj-pagamentos [data-pagamento="17"]')), l12 = texto(p.q('#lj-pagamentos [data-pagamento="12"]'));
+    check('"Seus pacotes": o 17 como a conferência disse (aprovado, a caminho), o 12 não aprovado',
+          visivel(p.$('lj-pagamentos-caixa')) && /aprovado · a caminho do jogo/.test(l17) && /R\$ 19,90/.test(l17) && /não aprovado/.test(l12), l17 + ' / ' + l12);
+    var L = lojaDe(p);
+    check('o pedido do crédito: "pacote pago", sem cancelar', /pacote pago/.test(texto(L.linha(90))) && !L.linha(90).querySelector('[data-cancelar]'));
+    await espera(25000);
+    check('aprovado: /meus não é relida (uma leitura só, para a lista)', meus === 1, meus + ' leituras');
+    check('aprovado: nenhuma conferência a mais', pedidos(c, 'POST', '/api/pagamento/conferir').length === 1);
+  }
+
+  async function cenaVoltaPendente() {
+    var meus = 0, confere = 0;
+    var c = { sessao: SESSAO, busca: '?pagamento=21&volta=pendente&payment_id=99887766&status=in_process', rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)],
+      'GET /api/loja/minha': function () { return [200, minha2()]; },
+      // o Pix pago DEPOIS da volta: a 4ª conferência já acha o pagamento aprovado
+      'POST /api/pagamento/conferir': function () { confere++; return [200, { ok: true, pagamento: pag(21, confere >= 4 ? 'aprovado' : 'pendente') }]; },
+      'GET /api/pagamento/meus': function () { meus++; return [200, { ok: true, ligado: true, pagamentos: [pag(21, 'pendente')] }]; }
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return /Pagamento em análise/.test(texto(p.$('lj-volta'))); });
+    check('em análise: "Pagamento em análise (Pix aparece em instantes)"', /Pagamento em análise \(Pix aparece em instantes\)/.test(texto(p.$('lj-volta'))),
+          texto(p.$('lj-volta')));
+    await ate(function () { return /Pagamento aprovado/.test(texto(p.$('lj-volta'))); }, 60000);
+    check('em análise: a página CONFERE de novo a cada 10 s (o Pix pago depois da volta) até aprovar (1 da volta + 3), e a faixa vira aprovado',
+          confere === 4 && /Pagamento aprovado: 5\.500 vinténs a caminho do jogo/.test(texto(p.$('lj-volta'))), confere + ' conferências · ' + texto(p.$('lj-volta')));
+    var cfs = pedidos(c, 'POST', '/api/pagamento/conferir');
+    check('... cada conferência com só {id:21} no corpo', cfs.length === 4 && cfs.every(function (x) {
+      return x.corpo && x.corpo.id === 21 && Object.keys(x.corpo).length === 1; }));
+    check('... e "Seus pacotes" mostra o 21 aprovado (a conferência por cima da lista)',
+          /aprovado · a caminho do jogo/.test(texto(p.q('#lj-pagamentos [data-pagamento="21"]'))), texto(p.q('#lj-pagamentos [data-pagamento="21"]')));
+    await espera(25000);
+    check('aprovado: as conferências param, e /meus foi lida uma vez só (a lista)', confere === 4 && meus === 1,
+          confere + ' conferências, ' + meus + ' leituras');
+    check('em análise: nenhum parâmetro do Mercado Pago foi ao servidor', !semParamsDoMP(c).length);
+  }
+
+  async function cenaVoltaAberta() {
+    var meus = 0, confere = 0;
+    var c = { sessao: SESSAO, busca: '?pagamento=22&volta=pendente', rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)],
+      'GET /api/loja/minha': function () { return [200, minha2()]; },
+      'POST /api/pagamento/conferir': function () { confere++; return [200, { ok: true, pagamento: pag(22, 'aberto') }]; },
+      'GET /api/pagamento/meus': function () { meus++; return [200, { ok: true, ligado: true, pagamentos: [pag(22, 'aberto')] }]; }
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return /Esperando o Mercado Pago/.test(texto(p.$('lj-volta'))); });
+    check('aberto: "Esperando o Mercado Pago confirmar o pagamento"', /Esperando o Mercado Pago confirmar o pagamento/.test(texto(p.$('lj-volta'))));
+    await ate(function () { return confere >= 7; }, 90000);
+    await espera(30000);
+    check('aberto: a conferência no máximo 6 vezes depois da volta (7 no total), e para; /meus uma vez só',
+          confere === 7 && meus === 1, confere + ' conferências, ' + meus + ' leituras');
+    check('aberto: "Seus pacotes" mostra o botão "conferir" no pagamento aberto', !!p.q('#lj-pagamentos [data-pagamento="22"] [data-conferir="22"]'));
+    check('aberto: a faixa acaba dizendo que o pagamento aparece em "Seus pacotes"',
+          /ainda não mostrou o pagamento/.test(texto(p.$('lj-volta'))), texto(p.$('lj-volta')));
+  }
+
+  async function cenaVoltaRecusada() {
+    var meus = 0;
+    var c = { sessao: SESSAO, busca: '?pagamento=23&volta=falhou', rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)],
+      'GET /api/loja/minha': function () { return [200, minha2()]; },
+      'POST /api/pagamento/conferir': function () { return [200, { ok: true, pagamento: pag(23, 'recusado') }]; },
+      'GET /api/pagamento/meus': function () { meus++; return [200, { ok: true, ligado: true, pagamentos: [pag(23, 'recusado')] }]; }
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return /não foi aprovado/.test(texto(p.$('lj-volta'))); });
+    check('recusado: "O pagamento não foi aprovado; nada foi cobrado"', /O pagamento não foi aprovado; nada foi cobrado/.test(texto(p.$('lj-volta'))) &&
+          p.$('lj-volta').classList.contains('erro'));
+    await espera(15000);
+    check('recusado: nenhuma conferência a mais e sem releituras de /meus',
+          meus === 1 && pedidos(c, 'POST', '/api/pagamento/conferir').length === 1, meus + ' leituras');
+  }
+
+  async function cenaVoltaTorta() {
+    var c = { sessao: SESSAO, busca: '?pagamento=17abc&volta=aprovado&payment_id=99887766', rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)],
+      'GET /api/loja/minha': function () { return [200, minha2()]; },
+      'GET /api/pagamento/meus': [200, { ok: true, ligado: true, pagamentos: [] }]
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return p.qq('[data-comprar]').length === NITENS && pedidos(c, 'GET', '/api/pagamento/meus').length; });
+    await espera(40);
+    check('volta com número torto: nenhuma conferência, a faixa fica fechada e o endereço sai limpo',
+          !pedidos(c, 'POST', '/api/pagamento/conferir').length && p.$('lj-volta').hidden && p.w.location.search === '' &&
+          !semParamsDoMP(c).length);
+  }
+
+  async function cenaVoltaDesligado() {
+    var c = { sessao: SESSAO, busca: '?pagamento=17&volta=aprovado', rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(false)],
+      'GET /api/loja/minha': function () { return [200, minha2()]; }
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return !p.$('lj-volta').hidden && /desligados/.test(texto(p.$('lj-volta'))); });
+    check('volta com os pagamentos desligados: a faixa diz isso, e nenhum pedido a /api/pagamento/*',
+          /desligados agora/.test(texto(p.$('lj-volta'))) && !deRota(c, '/api/pagamento/').length && p.w.location.search === '');
+  }
+
+  async function cenaVoltaSemSessao() {
+    var c = { busca: '?pagamento=17&volta=aprovado&payment_id=99887766', rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)]
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return !p.$('lj-volta').hidden; });
+    check('volta sem sessão: pede para entrar, sem conferir nada, e o endereço sai limpo',
+          /Entre na sua conta para acompanhar o pagamento/.test(texto(p.$('lj-volta'))) && !deRota(c, '/api/pagamento/').length &&
+          p.w.location.search === '');
+  }
+
+  /* ======================================================================
+   * o saldo com "A caminho" e os pedidos com origem
+   * ==================================================================== */
+  async function cenaACaminho() {
+    var c = { sessao: SESSAO, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)],
+      'GET /api/loja/minha': function () {
+        return [200, minha2({
+          saldo: { carteira: 0, aCaminho: 12000, reservado: 0, disponivel: 12000, semFundo: false, saveVersao: 0, saveEm: null },
+          classes: { invocador: { liberada: false, cartas: 0 }, bruxo: { liberada: false, cartas: 0 }, espadachim: { liberada: false, cartas: 0 },
+                     arqueiro: { liberada: false, cartas: 0 }, minotauro: { liberada: false, cartas: 0 } },
+          pedidos: [{ id: 70, sku: 'pacote-12000', nome: 'Arca de 12.000 vinténs', preco: 0, estado: 'pendente', motivo: null,
+                      criadoEm: AGORA - 120, cancelavel: false, origem: 'pagamento', vintens: 12000 }]
+        })];
+      },
+      'GET /api/pagamento/meus': [200, { ok: true, ligado: true, pagamentos: [] }],
+      'POST /api/loja/comprar': function (b) {
+        return [201, { ok: true, saldo: { carteira: 0, aCaminho: 12000, reservado: 10000, disponivel: 2000 },
+                       pedido: { id: 71, sku: b.sku, nome: 'Xamã', preco: 10000, estado: 'pendente', motivo: null, criadoEm: AGORA, cancelavel: true } }];
+      }
+    } };
+    var p = await abre('loja.html', c), L = lojaDe(p);
+    await ate(function () { return p.qq('[data-comprar]').length === NITENS; });
+    check('saldo: "A caminho" 12.000 e o disponível 12.000, sem save', texto(p.q('[data-saldo="aCaminho"]')) === '12.000' &&
+          texto(p.q('[data-saldo="disponivel"]')) === '12.000' && texto(p.q('[data-saldo="carteira"]')) === '0');
+    var sd = texto(p.$('lj-saldo'));
+    check('saldo: a nota do "A caminho" e o aviso de que só ele conta sem save',
+          /A caminho: pacotes pagos e presentes que o jogo ainda não recebeu/.test(sd) &&
+          /O servidor ainda não viu a carteira do seu jogo: por enquanto, só os vinténs a caminho contam/.test(sd), sd.slice(0, 300));
+    check('sem save, com crédito a caminho: o Xamã (10.000) e o bônus de 7 dias ligados',
+          !L.bt('classe-invocador').disabled && !L.bt('bonus-xp-7').disabled && !L.motivo('classe-invocador'));
+    check('sem save, com crédito: o Ladino desliga pelo saldo ("Faltam 8.000 vinténs no disponível.")',
+          L.bt('classe-espadachim').disabled && L.motivo('classe-espadachim') === 'Faltam 8.000 vinténs no disponível.', L.motivo('classe-espadachim'));
+    check('sem save, com crédito: só a Reescrita espera o save (precisa de herói com caminho)',
+          L.bt('pergaminho-elemento').disabled && p.qq('.motivo[data-motivo="sem-save"]').length === 1 &&
+          /Reescrita precisa de um herói com caminho elemental/.test(L.motivo('pergaminho-elemento')));
+    L.bt('classe-invocador').click();
+    await confirmaModal(p, true);
+    await ate(function () { return pedidos(c, 'POST', '/api/loja/comprar').length === 1 && /Pedido feito/.test(texto(p.$('lj-aviso'))); });
+    var cp = pedidos(c, 'POST', '/api/loja/comprar')[0];
+    check('comprar sem save, com crédito: POST {sku:"classe-invocador", idem}', !!cp && cp.corpo.sku === 'classe-invocador' && /^[0-9a-f]{16}$/.test(cp.corpo.idem));
+    check('o crédito do pacote nos pedidos: "pacote pago", sem cancelar', /pacote pago/.test(texto(L.linha(70))) &&
+          !L.linha(70).querySelector('[data-cancelar]') && /esperando o jogo abrir/.test(texto(L.linha(70))));
+  }
+
+  async function cenaSemSaveSemCredito() {
+    var c = { sessao: SESSAO, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(false)],
+      'GET /api/loja/minha': [200, minha2({ saldo: { carteira: 0, aCaminho: 0, reservado: 0, disponivel: 0, semFundo: false, saveVersao: 0, saveEm: null } })]
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return p.qq('[data-comprar]').length === NITENS; });
+    check('sem save e sem crédito a caminho: todos desligados com o motivo sem-save',
+          p.qq('[data-comprar]').every(function (b) { return b.disabled; }) && p.qq('.motivo[data-motivo="sem-save"]').length === NITENS &&
+          /O servidor ainda não viu seus vinténs: abra o jogo logado nesta conta \(na conta Principal\)/.test(texto(p.$('lj-saldo'))));
+  }
+
+  async function cenaPedidosOrigem() {
+    var c = { sessao: SESSAO, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(false)],
+      'GET /api/loja/minha': [200, minha2({ pedidos: [
+        { id: 60, sku: 'pacote-5500', nome: 'Saco de 5.500 vinténs', preco: 0, estado: 'pendente', motivo: null, criadoEm: AGORA - 50, cancelavel: false, origem: 'pagamento', vintens: 5500 },
+        { id: 61, sku: 'classe-bruxo', nome: 'Bruxo', preco: 0, estado: 'pendente', motivo: null, criadoEm: AGORA - 40, cancelavel: false, origem: 'presente' },
+        { id: 62, sku: 'bonus-xp-1', nome: 'Bônus de XP — 1 dia', preco: 1500, estado: 'pendente', motivo: null, criadoEm: AGORA - 30, cancelavel: true },
+        { id: 63, sku: 'pacote-1000', nome: 'Bolsa de 1.000 vinténs', preco: 0, estado: 'estornado', motivo: 'item-invalido', criadoEm: AGORA - DIA, cancelavel: false, origem: 'pagamento', vintens: 1000 },
+        { id: 64, sku: 'presente-vintens', nome: '1.000 vinténs', preco: 0, estado: 'retirado', motivo: null, criadoEm: AGORA - 2 * DIA, retiradoEm: AGORA - 2 * DIA, cancelavel: false, origem: 'presente', vintens: 1000 },
+        { id: 65, sku: 'insignia-1', nome: '1 Insígnia de Fundação', preco: 500, estado: 'pendente', motivo: null, criadoEm: AGORA - 20, cancelavel: false }
+      ] })]
+    } };
+    var p = await abre('loja.html', c), L = lojaDe(p);
+    await ate(function () { return !!L.linha(60); });
+    check('pedido de pacote pago: "pacote pago", sem cancelar', /pacote pago/.test(texto(L.linha(60))) && !L.linha(60).querySelector('[data-cancelar]'));
+    check('presente do Mestre: "presente do Mestre", sem cancelar (nem o retirado há 2 dias)',
+          /presente do Mestre/.test(texto(L.linha(61))) && !L.linha(61).querySelector('[data-cancelar]') &&
+          /presente do Mestre/.test(texto(L.linha(64))) && !L.linha(64).querySelector('[data-cancelar]'));
+    check('compra comum pendente: com cancelar; e cancelavel:false do servidor tira o botão',
+          !!L.linha(62).querySelector('[data-cancelar]') && !L.linha(65).querySelector('[data-cancelar]'));
+    check('crédito de pacote recusado pelo jogo: "não entrou no jogo: o servidor manda de novo"',
+          /não entrou no jogo: o servidor manda de novo/.test(texto(L.linha(63))));
+    check('a classe chegando de presente: o botão desliga com "Essa classe está chegando como presente do Mestre."',
+          L.bt('classe-bruxo').disabled && L.motivo('classe-bruxo') === 'Essa classe está chegando como presente do Mestre.', L.motivo('classe-bruxo'));
+  }
+
+  async function cenaSeusPacotes() {
+    var c = { sessao: SESSAO, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)],
+      'GET /api/loja/minha': [200, minha2()],
+      'GET /api/pagamento/meus': [200, { ok: true, ligado: true, pagamentos: [
+        pag(31, 'aprovado', { pedido: { id: 80, estado: 'entregue' }, nome: 'Tesouro de 25.000 vinténs', vintens: 25000, preco: 'R$ 79,90' }),
+        pag(30, 'pendente'), pag(29, 'estornado', { creditado: true }), pag(28, 'falhou')
+      ] }],
+      'POST /api/pagamento/conferir': function (b) { return [200, { ok: true, pagamento: pag(b.id, 'aprovado') }]; }
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return p.qq('#lj-pagamentos [data-pagamento]').length === 4; });
+    function linha(id) { return texto(p.q('#lj-pagamentos [data-pagamento="' + id + '"]')); }
+    check('"Seus pacotes": os 4 pagamentos de /meus, com o estado em português',
+          visivel(p.$('lj-pagamentos-caixa')) && /aprovado · entregue no jogo/.test(linha(31)) && /25\.000 vinténs/.test(linha(31)) &&
+          /R\$ 79,90/.test(linha(31)) && /em análise/.test(linha(30)) && /estornado/.test(linha(29)) && /não abriu/.test(linha(28)),
+          [linha(31), linha(30)].join(' / '));
+    var gm = pedidos(c, 'GET', '/api/pagamento/meus')[0];
+    check('/meus com o token no cabeçalho e sem nada na URL', !!gm && gm.auth === 'Bearer tok-pia' && !/[?#]/.test(gm.url.replace(/^[a-z]+:\/\/[^/]*/i, '')));
+    // conserto 11/09: o "conferir" de quem pagou e fechou a aba (sem a volta do Mercado Pago)
+    check('"conferir" só no que está aberto ou em análise (o 30); nunca no aprovado, no estornado nem no que não abriu',
+          !!p.q('#lj-pagamentos [data-pagamento="30"] [data-conferir="30"]') && p.qq('#lj-pagamentos [data-conferir]').length === 1,
+          p.qq('#lj-pagamentos [data-conferir]').length + ' botões');
+    var nMinha = pedidos(c, 'GET', '/api/loja/minha').length;
+    p.q('#lj-pagamentos [data-conferir="30"]').click();
+    await ate(function () { return /aprovado/.test(linha(30)) && pedidos(c, 'GET', '/api/loja/minha').length > nMinha; });
+    var cf = pedidos(c, 'POST', '/api/pagamento/conferir');
+    check('"conferir": POST /api/pagamento/conferir com só {id:30} e o token; a linha vira aprovado e o botão some',
+          cf.length === 1 && cf[0].corpo && cf[0].corpo.id === 30 && Object.keys(cf[0].corpo).length === 1 && cf[0].auth === 'Bearer tok-pia' &&
+          /aprovado · a caminho do jogo/.test(linha(30)) && !p.q('#lj-pagamentos [data-conferir="30"]'), linha(30));
+    check('... o aviso "Pagamento aprovado" e o saldo relido (o crédito já conta no disponível)',
+          /Pagamento aprovado/.test(texto(p.$('lj-aviso'))) && pedidos(c, 'GET', '/api/loja/minha').length > nMinha, texto(p.$('lj-aviso')));
+  }
+
+  async function cenaMenuMestre() {
+    var c = { sessao: SESSAO_MESTRE, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(false)],
+      'GET /api/loja/minha': [200, minha2({ saldo: { carteira: 0, aCaminho: 0, reservado: 0, disponivel: 0, semFundo: true, saveVersao: 0, saveEm: null } })]
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return !!p.q('nav a[data-mestre]'); });
+    var a = p.q('nav a[href="mestre.html"]');
+    check('conta gm: o menu ganha "Mestre", logo antes do "Jogar"', !!a && a.hasAttribute('data-mestre') && texto(a) === 'Mestre' &&
+          a.nextElementSibling && a.nextElementSibling.classList.contains('jogar'));
+    var c2 = { sessao: SESSAO, rotas: { 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(false)], 'GET /api/loja/minha': [200, minha2()] } };
+    var p2 = await abre('loja.html', c2);
+    await ate(function () { return /minha conta/.test(texto(p2.$('sessao'))); });
+    check('conta comum: nenhum link "Mestre" no menu', !p2.q('nav a[href="mestre.html"]') && !p2.q('nav a[data-mestre]'));
+  }
+
+  /* ======================================================================
+   * o retrato no ranking (conta.html)
+   * ==================================================================== */
+  var CONTA = { id: 8, nome: 'Pia', email: EMAIL, criadoEm: AGORA - 40 * DIA, gm: false };
+  function respostaConta(extra) {
+    return junta({ ok: true, conta: copia(CONTA), correio: false,
+                   sessoes: [{ id: 'aa11bb22cc33', criadoEm: AGORA - DIA, ultimoUso: AGORA - 60, agente: 'Mozilla/5.0 (Windows NT 10.0) Chrome/140.0', ip: '189.34.*.*', estaAqui: true }],
+                   atividade: [{ tipo: 'login', em: AGORA - 60 }], trocaEmail: null }, extra);
+  }
+  function op(id) {
+    if (id.indexOf('classe:') === 0) return { id: id, tipo: 'classe', classe: id.slice(7) };
+    return { id: id, tipo: 'fusao', par: id.slice(4).split('+') };
+  }
+  var OPCOES = ['classe:sumo', 'classe:curandeiro', 'classe:bruxo', 'fus:bruxo+curandeiro', 'fus:bruxo+sumo', 'fus:curandeiro+sumo'].map(op);
+  async function cenaAvatar() {
+    var c = { sessao: SESSAO, hash: 'conta', rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/conta': function () { return [200, respostaConta()]; },
+      'GET /api/avatar': [200, { ok: true, escolhido: 'fus:bruxo+sumo', efetivo: { avatar: 'fus:bruxo+sumo', classe: 'sumo' },
+                                 opcoes: OPCOES, semSave: false, gm: false }],
+      'POST /api/avatar': function (b) {
+        if (b.avatar === 'classe:curandeiro') return [409, { ok: false, erro: 'esse retrato ainda não é seu: libere a classe no jogo' }];
+        var ef = b.avatar === null ? { avatar: 'fus:bruxo+sumo', classe: 'sumo' }
+          : /^classe:/.test(b.avatar) ? { avatar: null, classe: b.avatar.slice(7) } : { avatar: b.avatar, classe: 'sumo' };
+        return [200, { ok: true, escolhido: b.avatar, efetivo: ef }];
+      }
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return visivel(p.$('minha-conta')) && p.qq('#av-grade button[data-avatar]').length === 7; });
+    var ga = pedidos(c, 'GET', '/api/avatar'), gc = pedidos(c, 'GET', '/api/conta');
+    check('avatar: GET /api/avatar sai junto com /api/conta (antes da resposta dela), com o token',
+          ga.length === 1 && gc.length >= 1 && c.pedidos.indexOf(ga[0]) < c.pedidos.indexOf(gc[0]) + 2 && ga[0].auth === 'Bearer tok-pia',
+          c.pedidos.map(function (x) { return x.rota; }).join(', '));
+    check('avatar: o classes.js do jogo está na página (JOGO.DATA.classes)', !!(p.w.JOGO && p.w.JOGO.DATA && p.w.JOGO.DATA.classes &&
+          p.w.JOGO.DATA.classes.bruxo && p.w.JOGO.DATA.classes.bruxo.name === 'Bruxo'));
+    var bts = p.qq('#av-grade button[data-avatar]');
+    var ids = bts.map(function (b) { return b.getAttribute('data-avatar'); });
+    check('avatar: a grade com o automático e as 6 opções do servidor, na ordem dele',
+          ids.join() === ',classe:sumo,classe:curandeiro,classe:bruxo,fus:bruxo+curandeiro,fus:bruxo+sumo,fus:curandeiro+sumo', ids.join());
+    var nomes = bts.map(function (b) { return texto(b.querySelector('.av-nome')); });
+    check('avatar: os nomes vêm do jogo, e a fusão é "A + B"',
+          nomes[1] === 'Bárbaro' && nomes[3] === 'Bruxo' && nomes[4] === 'Bruxo + Curandeiro' && nomes[5] === 'Bruxo + Bárbaro' &&
+          /^Automático/.test(nomes[0]) && /o seu melhor herói/.test(nomes[0]), nomes.join(' | '));
+    function aperta() { return p.qq('#av-grade button[aria-pressed="true"]').map(function (b) { return b.getAttribute('data-avatar'); }); }
+    check('avatar: o atual marcado (aria-pressed) é o escolhido no servidor', aperta().join() === 'fus:bruxo+sumo', aperta().join());
+    check('avatar: os retratos de busto do site/img (classe e fusão, com a classe de reserva)',
+          !!p.q('#av-grade [data-avatar="classe:sumo"] img[src="img/classe-sumo-busto.webp"]') &&
+          !!p.q('#av-grade [data-avatar="fus:bruxo+sumo"] img[src="img/fusao-bruxo-sumo-busto.webp"][data-reserva="img/classe-bruxo-busto.webp"]'));
+    check('avatar: "No ranking agora: Bruxo + Bárbaro"', visivel(p.$('av-efetivo')) && /No ranking agora: Bruxo \+ Bárbaro/.test(texto(p.$('av-efetivo'))),
+          texto(p.$('av-efetivo')));
+    check('avatar: o texto do bloco', /O retrato aparece no ranking\. Libere classes no jogo para ganhar mais retratos\./.test(texto(p.$('av-texto'))));
+    p.q('#av-grade [data-avatar="fus:bruxo+sumo"]').click();
+    await espera(40);
+    check('avatar: clicar no atual não pede nada', !pedidos(c, 'POST', '/api/avatar').length);
+    p.q('#av-grade [data-avatar="classe:bruxo"]').click();
+    await ate(function () { return /Retrato trocado/.test(texto(p.$('av-aviso'))); });
+    var p1 = pedidos(c, 'POST', '/api/avatar')[0];
+    check('avatar: um clique → POST /api/avatar {avatar:"classe:bruxo"}, sem janelinha', !!p1 && p1.corpo.avatar === 'classe:bruxo' &&
+          Object.keys(p1.corpo).length === 1 && p1.auth === 'Bearer tok-pia' && !p.q('.modal'), p1 && JSON.stringify(p1.corpo));
+    check('avatar: "Retrato trocado: o ranking já mostra." e a marca muda', texto(p.$('av-aviso')) === 'Retrato trocado: o ranking já mostra.' &&
+          aperta().join() === 'classe:bruxo' && /No ranking agora: Bruxo$/.test(texto(p.$('av-efetivo'))), aperta().join() + ' · ' + texto(p.$('av-efetivo')));
+    p.q('#av-grade [data-avatar="classe:curandeiro"]').click();
+    await ate(function () { return /não é seu/.test(texto(p.$('av-aviso'))); });
+    check('avatar: 409 do servidor → a frase dele no aviso, e a marca não muda',
+          texto(p.$('av-aviso')) === 'esse retrato ainda não é seu: libere a classe no jogo' && aperta().join() === 'classe:bruxo',
+          texto(p.$('av-aviso')));
+    p.q('#av-grade [data-avatar=""]').click();
+    await ate(function () { return pedidos(c, 'POST', '/api/avatar').length === 3 && aperta().join() === ''; });
+    var p3 = pedidos(c, 'POST', '/api/avatar')[2];
+    check('avatar: o automático manda {avatar:null}', !!p3 && p3.corpo.avatar === null && Object.keys(p3.corpo).length === 1);
+  }
+
+  async function cenaAvatarMestre() {
+    var c = { sessao: { token: 'tok-mestre', conta: { id: 1, nome: 'Dono', gm: true } }, hash: 'conta', rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/conta': function () { return [200, respostaConta({ conta: { id: 1, nome: 'Dono', email: 'dono@exemplo.com', criadoEm: AGORA - DIA, gm: true } })]; },
+      'GET /api/avatar': [200, { ok: true, escolhido: null, efetivo: { avatar: null, classe: null }, opcoes: [{ id: 'gm', tipo: 'gm' }], semSave: true, gm: true }]
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return !!p.q('#av-grade [data-avatar-mestre]'); });
+    check('avatar do Mestre: só o Cavaleiro Negro, "o retrato do Mestre do Fundo", sem escolha',
+          /Cavaleiro Negro/.test(texto(p.q('[data-avatar-mestre]'))) && /o retrato do Mestre do Fundo/.test(texto(p.q('[data-avatar-mestre]'))) &&
+          !p.q('#av-grade button[data-avatar]'));
+    var fotoM = p.q('[data-avatar-mestre] img');
+    check('avatar do Mestre: o retrato é a arte do Cavaleiro Negro (a mesma da caixa "Equipe" do ranking), não o losango',
+          !!fotoM && fotoM.getAttribute('src') === 'img/equipe-cavaleiro-busto.webp' &&
+          fotoM.getAttribute('data-reserva') === 'img/equipe-cavaleiro.webp' && !!p.q('[data-avatar-mestre] .busto.gm'),
+          fotoM ? fotoM.outerHTML : '(sem img)');
+  }
+
+  async function cenaAvatar401() {
+    var c = { sessao: { token: 'tok-morto', conta: { id: 8, nome: 'Pia', gm: false } }, hash: 'conta', rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/conta': [401, { ok: false, erro: 'faça login (token ausente ou vencido)' }],
+      'GET /api/avatar': [401, { ok: false, erro: 'faça login (token ausente ou vencido)' }]
+    } };
+    var p = await abre('conta.html', c);
+    // o #caixa-fora nasce visível no HTML: a espera é pelo 401 ter chegado
+    await ate(function () {
+      return pedidos(c, 'GET', '/api/conta').length && pedidos(c, 'GET', '/api/avatar').length && lsSessao() === null && visivel(p.$('painel-entrar'));
+    });
+    check('avatar 401: a sessão some e as abas voltam, como a conta', lsSessao() === null && visivel(p.$('painel-entrar')) &&
+          !visivel(p.$('minha-conta')) && /Entre de novo/.test(texto(p.$('e-aviso'))), texto(p.$('e-aviso')));
+  }
+
+  async function cenaAvatarServidorVelho() {
+    var c = { sessao: SESSAO, hash: 'conta', rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/conta': function () { return [200, respostaConta()]; }
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return visivel(p.$('minha-conta')) && /ainda não chegou/.test(texto(p.$('av-grade'))); });
+    check('servidor sem /api/avatar: o bloco diz isso, e o resto da conta segue', /A escolha do retrato ainda não chegou a este servidor/.test(texto(p.$('av-grade'))) &&
+          /Pia/.test(texto(p.$('mc-dados'))));
+  }
+
+  async function cenaAvatarEscape() {
+    var MAU = '"><img src=x onerror="window.__xss=7">';
+    var c = { sessao: SESSAO, hash: 'conta', rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/conta': function () { return [200, respostaConta()]; },
+      'GET /api/avatar': [200, { ok: true, escolhido: MAU, efetivo: { avatar: MAU, classe: MAU },
+                                 opcoes: [{ id: MAU }, { id: 'classe:<b>' }, { id: 'gm' }, { id: 'fus:sumo+sumo' }, { id: 'classe:bruxo' }, null, 7],
+                                 semSave: false, gm: false }]
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return p.qq('#av-grade button[data-avatar]').length >= 1; });
+    await espera(60);
+    var ids = p.qq('#av-grade button[data-avatar]').map(function (b) { return b.getAttribute('data-avatar'); });
+    check('avatar: id fora da gramática (HTML, "gm" de conta comum, fusão consigo) não vira botão, e nada vira HTML',
+          ids.join() === ',classe:bruxo' && !p.q('img[src="x"]') && !p.w.__xss, ids.join());
+  }
+
+  /* ======================================================================
+   * o menu no celular (390 px)
+   * ==================================================================== */
+  function mede(p) {
+    var d = p.d, larg = d.documentElement.clientWidth, fora = [];
+    [].forEach.call(d.querySelectorAll('body *'), function (el) {
+      var r = el.getBoundingClientRect();
+      if (!r.width || r.right <= larg + 1) return;
+      for (var pai = el.parentElement; pai && pai !== d.body; pai = pai.parentElement) {
+        var s = p.w.getComputedStyle(pai).overflowX;
+        if (s === 'auto' || s === 'scroll' || s === 'hidden') return;
+      }
+      fora.push(el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + ' ' + Math.round(r.right));
+    });
+    var nav = d.querySelector('header.topo nav'), links = nav ? [].slice.call(nav.querySelectorAll('a')) : [];
+    var topos = links.map(function (a) { return Math.round(a.getBoundingClientRect().top); });
+    var topo = d.querySelector('header.topo').getBoundingClientRect();
+    return { larg: larg, rola: d.documentElement.scrollWidth, fora: fora, umaLinha: topos.every(function (t) { return t === topos[0]; }),
+             altura: Math.round(topo.height), links: links.length, navRola: nav ? p.w.getComputedStyle(nav).overflowX : '' };
+  }
+  async function cenaCelular() {
+    var paginas = [
+      ['loja.html', { 'GET /api/loja/catalogo': [200, catalogo2(true)],
+                      'GET /api/loja/minha': [200, minha2({ saldo: { carteira: 123450, aCaminho: 25000, reservado: 10000, disponivel: 138450, semFundo: true, saveVersao: 5, saveEm: AGORA } })],
+                      'GET /api/pagamento/meus': [200, { ok: true, ligado: true, pagamentos: [pag(31, 'aprovado'), pag(30, 'pendente')] }] }],
+      ['conta.html', { 'GET /api/conta': function () { return [200, respostaConta({ conta: { id: 1, nome: 'Dono do Fundo Muito Comprido', email: 'dono@exemplo.com', criadoEm: AGORA - DIA, gm: true } })]; },
+                       'GET /api/avatar': [200, { ok: true, escolhido: null, efetivo: { avatar: null, classe: null }, opcoes: [{ id: 'gm', tipo: 'gm' }], semSave: false, gm: true }] }],
+      ['mestre.html', { 'GET /api/eu': [200, { ok: true, conta: { id: 1, nome: 'Dono do Fundo Muito Comprido', email: 'dono@exemplo.com', criadoEm: AGORA, gm: true } }],
+                        'GET /api/mestre/presentes': [200, { ok: true, agora: AGORA, conta: null, presentes: [] }],
+                        'GET /api/mestre/alertas': [200, { ok: true, alertas: [] }],
+                        'GET /api/loja/catalogo': [200, catalogo2(true)] }]
+    ];
+    for (var i = 0; i < paginas.length; i++) {
+      var rotas = paginas[i][1];
+      rotas['GET /api/saude'] = SAUDE;
+      var c = { sessao: { token: 'tok-mestre', conta: { id: 1, nome: 'Dono do Fundo Muito Comprido', gm: true } }, largura: 390, rotas: rotas };
+      var p = await abre(paginas[i][0], c);
+      await ate(function () { return !!p.q('nav a[data-mestre]') && /sair/.test(texto(p.$('sessao'))); });
+      await espera(300);
+      var m = mede(p);
+      // o quadro tem 390 px; sem barra de rolagem por cima (a do Chrome de mesa come uns 15 px), a
+      // largura útil fica entre 360 e 390 — e aí a página não pode rolar de lado
+      check('celular 390 px (' + paginas[i][0] + ', conta gm): a página não rola de lado, nada vaza, o menu numa linha com o "Mestre" e o topo baixo',
+            m.larg >= 360 && m.larg <= 390 && m.rola <= m.larg && !m.fora.length && m.umaLinha && m.links >= 8 && m.altura <= 120 &&
+            m.navRola === 'auto', JSON.stringify(m).slice(0, 300));
+    }
+  }
+
+  /* ======================================================================
+   * as provas que olham tudo junto
+   * ==================================================================== */
+  function urlsLimpas() {
+    var ruins = TODOS.filter(function (x) {
+      var caminho = x.url.replace(/^[a-z]+:\/\/[^/]*/i, '');
+      var ficha = x.rota === '/api/mestre/conta' && /^\/api\/mestre\/conta\?id=\d+$/.test(caminho);
+      return (!ficha && /[?#]/.test(caminho)) || /@|%40/.test(x.url) || x.url.indexOf(EMAIL) >= 0;
+    });
+    check('nenhum fetch leva e-mail (ou coisa pendurada) na URL (' + TODOS.length + ' pedidos)', TODOS.length > 60 && !ruins.length,
+          ruins.slice(0, 3).map(function (r) { return r.url; }).join(' | '));
+    var get = TODOS.filter(function (x) { return x.metodo === 'GET' && x.corpo !== null; });
+    check('GET nenhum leva corpo', !get.length);
+  }
+
+  async function fontes() {
+    var arqs = ['loja.html', 'loja.js', 'conta.html', 'conta.js', 'site.js', 'mestre.html', 'mestre.js'], textos = {};
+    for (var i = 0; i < arqs.length; i++) textos[arqs[i]] = await le(BASE_SITE + arqs[i]);
+    check('li as fontes do site (loja, conta, site.js e o painel do Mestre)', arqs.every(function (a) { return !!textos[a]; }),
+          arqs.filter(function (a) { return !textos[a]; }).join(', '));
+    // os preços da tabela da loja 2 (vinténs), os pacotes em reais (texto e centavos) e os vinténs
+    // dos pacotes escritos com ponto. O 1000 cru fica de fora de propósito: é o milissegundo de um segundo.
+    var vintens = [10000, 20000, 25000, 30000, 1500, 3900, 7900, 500, 800, 2250, 3600, 4500, 5000];
+    var achados = [];
+    function procura(f) {
+      var re = new RegExp('(^|[^\\d.,])' + f.replace(/\./g, '\\.') + '(?![\\d.,])');
+      arqs.forEach(function (a) { if (re.test(textos[a] || '')) achados.push(a + ': ' + f); });
+    }
+    vintens.forEach(function (n) { procura(String(n)); procura(SITE.num(n)); });
+    PACOTES.forEach(function (pc) {
+      procura(String(pc.centavos));
+      procura(pc.preco.replace('R$ ', ''));
+      procura(SITE.num(pc.vintens));
+      if (pc.vintens !== 1000) procura(String(pc.vintens));
+    });
+    check('nenhum preço escrito no HTML ou no JS do site (vinténs da tabela, reais e centavos dos pacotes)', !achados.length, achados.join(', '));
+    check('a loja não diz mais "nada de dinheiro de verdade", e diz de onde vêm os vinténs',
+          !/nada de dinheiro de verdade/.test(textos['loja.html']) &&
+          /Os vinténs vêm das descidas ou dos pacotes \(Pix ou cartão, pelo Mercado Pago\)/.test(textos['loja.html']));
+    check('nenhuma página do site chama window.confirm', arqs.every(function (a) {
+      return !/\bconfirm\s*\(/.test((textos[a] || '').replace(/SITE\.confirma\s*\(/g, '')); }));
+    check('a navegação ao pagamento passa por SITE.ehMercadoPago antes do LOJA.vai',
+          /SITE\.ehMercadoPago\(r\.endereco\)/.test(textos['loja.js']) && textos['loja.js'].indexOf('SITE.ehMercadoPago(r.endereco)') < textos['loja.js'].lastIndexOf('LOJA.vai(r.endereco)'));
+  }
+
+  async function roda(nome, fn) {
+    try { await fn(); } catch (e) { check(nome + ': o roteiro não estoura', false, String(e && (e.stack || e.message) || e).slice(0, 300)); }
+  }
+
+  (async function () {
+    try {
+      await roda('unidades', unidades);
+      await roda('em breve', cenaEmBreve);
+      await roda('pacotes sem sessão', cenaPacotesSemSessao);
+      await roda('comprar pacote', cenaCompraPacote);
+      await roda('volta aprovada', cenaVolta);
+      await roda('volta em análise', cenaVoltaPendente);
+      await roda('volta aberta', cenaVoltaAberta);
+      await roda('volta recusada', cenaVoltaRecusada);
+      await roda('volta torta', cenaVoltaTorta);
+      await roda('volta desligada', cenaVoltaDesligado);
+      await roda('volta sem sessão', cenaVoltaSemSessao);
+      await roda('a caminho', cenaACaminho);
+      await roda('sem save sem crédito', cenaSemSaveSemCredito);
+      await roda('pedidos com origem', cenaPedidosOrigem);
+      await roda('seus pacotes', cenaSeusPacotes);
+      await roda('menu do Mestre', cenaMenuMestre);
+      await roda('avatar', cenaAvatar);
+      await roda('avatar do Mestre', cenaAvatarMestre);
+      await roda('avatar 401', cenaAvatar401);
+      await roda('avatar sem servidor', cenaAvatarServidorVelho);
+      await roda('avatar escape', cenaAvatarEscape);
+      await roda('celular', cenaCelular);
+      await roda('urls', urlsLimpas);
+      await roda('fontes', fontes);
+    } finally {
+      palco.innerHTML = '';
+      try {
+        if (sessaoAntes === null) localStorage.removeItem(CHAVE); else localStorage.setItem(CHAVE, sessaoAntes);
+      } catch (e) { /* sem storage */ }
+      fecha();
+    }
+  })();
+})();
+</script>
+</body>
+</html>

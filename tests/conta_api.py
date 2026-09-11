@@ -19,7 +19,9 @@ com o SMTP caído, e que o código nunca vai para o log.
 E o login que não conta quem tem conta (a mesma frase, o mesmo PBKDF2, o mesmo
 tempo e a mesma 11ª para o nome que não existe); os freios por IP que contam só
 as senhas ERRADAS, cada rota com senha no seu balde (40 logins certos do mesmo
-IP na hora passam); os tetos dos acertos, por conta; e o IPv6 contado pelo /64.
+IP na hora passam, e também 5 juntos com uma vaga só: quem acha o balde cheio
+de vagas ainda no PBKDF2 espera uma voltar); os tetos dos acertos, por conta;
+e o IPv6 contado pelo /64.
 """
 import http.client
 import ipaddress
@@ -883,6 +885,8 @@ class ProvaDaConta(unittest.TestCase):
             self.assertEqual((status, r['erro']), (429, 'logins demais nesta conta; tente de novo mais tarde'), senha)
             self.assertTrue(r['liberaEm'] > time.time(), r)
         self.assertEqual(login(vizinho)[0], 200)                        # do mesmo endereço, a outra conta entra
+        # barrados pela conta antes do PBKDF2, os dois do 61º não ficaram no balde do IP (o vizinho não paga)
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM limites WHERE chave = ?", 'login-ip:' + ip)[0][0], 0)
         # trocas de senha
         self.enche('senha-ok:%d' % c.conta['id'], 10)
         status, r = c.pede('POST', '/api/conta/senha', {'atual': SENHA, 'nova': 'teto-nova-9'})
@@ -971,6 +975,142 @@ class ProvaDaConta(unittest.TestCase):
         self.assertTrue(all(r['erro'] == 'tentativas demais deste endereço; tente de novo mais tarde'
                             for s, r in respostas if s == 429), respostas)
         self.assertEqual(self.sql("SELECT COUNT(*) FROM limites WHERE chave = ?", 'login-ip:' + ip)[0][0], 30)
+
+    def test_logins_certos_juntos_nao_se_trancam(self):
+        """A vaga do freio fica reservada durante o PBKDF2 e só volta quando a
+        senha bate. Então logins CERTOS disparados JUNTOS do mesmo endereço
+        ocupavam o balde ao mesmo tempo, e quem o achava cheio levava 429 com a
+        senha certa: justo o vizinho de CGNAT que o balde das erradas quer
+        proteger (a sonda da revisão: 45 juntos de um IP, 3 recusados). Agora,
+        com o balde cheio só por causa de vagas em voo, o pedido espera uma
+        voltar. Aqui, 29 erradas no balde (uma vaga livre) e 5 logins certos
+        juntos (a fila de conexões do http.server é 5): os 5 entram, e o balde
+        volta às 29. E a espera não abre a porta das erradas."""
+        from concurrent.futures import ThreadPoolExecutor
+        ip = '45.170.%d.%d' % (secrets.randbelow(200) + 1, secrets.randbelow(200) + 1)
+        vizinhos = [self.novo('Cgnat Junto') for _ in range(5)]
+        self.enche('login-ip:' + ip, 29)
+
+        def entra(c):
+            t0 = time.perf_counter()
+            status, r = Jogador(self.base, xff=ip).pede('POST', '/api/login', {'login': c.conta['nome'], 'senha': SENHA})
+            return status, r, time.perf_counter() - t0
+
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            respostas = list(ex.map(entra, vizinhos))
+        print('\n    5 logins certos juntos com 1 vaga livre: %s; o último em %.2f s'
+              % ([s for s, _, _ in respostas], max(d for _, _, d in respostas)), flush=True)
+        self.assertEqual([s for s, _, _ in respostas], [200] * 5, [r for _, r, _ in respostas])
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM limites WHERE chave = ?", 'login-ip:' + ip)[0][0], 29)
+        # a espera não abre a porta das erradas: a 30ª errada é conferida, e aí nem a senha certa passa
+        chute = {'login': vizinhos[0].conta['nome'], 'senha': 'chute-errado'}
+        self.assertEqual(Jogador(self.base, xff=ip).pede('POST', '/api/login', chute)[0], 401)
+        for senha in ('chute-errado', SENHA):
+            status, r = Jogador(self.base, xff=ip).pede('POST', '/api/login', {'login': chute['login'], 'senha': senha})
+            self.assertEqual((status, r['erro']), (429, 'tentativas demais deste endereço; tente de novo mais tarde'))
+            self.assertTrue(r['liberaEm'] > time.time() + 3000, r)      # cheio de erradas: a hora, não o minuto da fila
+
+    def test_fila_so_espera_vaga_em_voo(self):
+        """Por dentro (a Api neste processo, num banco à parte), as regras da
+        espera. Com o balde cheio, o pedido de senha só espera se parte das
+        linhas é de vagas EM VOO deste processo (um PBKDF2 correndo), e só
+        enquanto elas podem voltar. A em voo volta (a senha bateu): quem
+        esperava fica com a vaga. A em voo erra (a linha fica): quem esperava
+        leva o 429 de sempre, com o liberaEm da hora, sem ter gastado PBKDF2.
+        A fila tem teto (`maximo` por balde) e a espera também (VAGA_ESPERA):
+        passou disso, 429 com "de novo em 1 min". O cadastro conta todos e
+        nunca espera. E nada fica para trás no voo nem na fila."""
+        import threading
+        import api as api_mod
+        pasta = tempfile.mkdtemp(prefix='soterra-voo-')
+        a = api_mod.Api(os.path.join(pasta, 'soterra.db'))
+        espera_velha = conta_mod.VAGA_ESPERA
+        try:
+            ip, maximo, t = '45.171.%d.%d' % (secrets.randbelow(200) + 1, secrets.randbelow(200) + 1), 3, int(time.time())
+            corpo, chave, frase = {'_ip': ip}, 'login-ip:' + ip, conta_mod.FRASE_IP_SENHA
+
+            def freia(rotulo='login'):
+                t0 = time.monotonic()
+                try:
+                    vaga = a._freia_por_ip(corpo, rotulo, maximo, int(time.time()), frase, so_erradas=rotulo != 'cadastro')
+                except comum.Recusa as e:
+                    return e, time.monotonic() - t0
+                return vaga, time.monotonic() - t0
+
+            def resolve(vaga, bateu, atraso=0.3):
+                def vai():
+                    time.sleep(atraso)
+                    if bateu:
+                        with a._escrita():
+                            a._solta_vaga(vaga)
+                    a._pousa_vaga(vaga)
+                th = threading.Thread(target=vai)
+                th.start()
+                return th
+
+            def enche(n):
+                with a._escrita():
+                    a.con.execute("DELETE FROM limites WHERE chave = ?", (chave,))
+                    for _ in range(n):
+                        a._anota_limite(chave, t)
+
+            def de_novo_em_1_min(r):
+                return isinstance(r, comum.Recusa) and r.status == 429 and time.time() + 50 < r.extra['liberaEm'] <= time.time() + 61
+
+            enche(maximo - 1)                                              # 2 erradas...
+            voo, _ = freia()                                               # ...e 1 em voo: cheio
+            self.assertEqual((voo['voo'], a._em_voo), (True, {chave: 1}))
+            # a em voo volta (a senha bateu): quem esperava fica com a vaga
+            th = resolve(voo, True)
+            nova, espera = freia()
+            th.join()
+            self.assertIsInstance(nova, dict, nova)
+            self.assertTrue(0.25 <= espera < 3, espera)
+            self.assertEqual((a._em_voo, a._fila), ({chave: 1}, {}))
+            # a em voo erra (a linha fica): quem esperava leva o 429 da hora
+            th = resolve(nova, False)
+            r, espera = freia()
+            th.join()
+            self.assertIsInstance(r, comum.Recusa, r)
+            self.assertEqual((r.status, r.erro), (429, frase))
+            self.assertTrue(r.extra['liberaEm'] > time.time() + 3000, r.extra)
+            self.assertTrue(0.25 <= espera < 3, espera)
+            self.assertEqual((a._em_voo, a._fila), ({}, {}))
+            # cheio só de erradas: 429 na hora, sem esperar
+            r, espera = freia()
+            self.assertEqual((r.status, espera < 0.2), (429, True))
+            # fila cheia: 429 na hora, "de novo em 1 min"
+            enche(maximo - 1)
+            voo, _ = freia()
+            a._fila[chave] = maximo
+            r, espera = freia()
+            self.assertTrue(de_novo_em_1_min(r) and espera < 0.2, (r, espera))
+            del a._fila[chave]
+            # a espera tem teto: a em voo não volta a tempo (servidor atolado)
+            conta_mod.VAGA_ESPERA = 0.4
+            r, espera = freia()
+            self.assertTrue(de_novo_em_1_min(r) and 0.35 <= espera < 2, (r, espera))
+            self.assertEqual(a._fila, {})
+            a._pousa_vaga(voo)
+            a._pousa_vaga(voo)                                             # uma vez só
+            self.assertEqual(a._em_voo, {})
+            # o cadastro conta todos: não voa, e com o balde cheio não espera (nem com voo na chave dele)
+            vc, _ = freia('cadastro')
+            self.assertEqual((vc['voo'], a._em_voo), (False, {}))
+            with a._escrita():
+                for _ in range(maximo - 1):
+                    a._anota_limite('cadastro-ip:' + ip, t)
+            a._em_voo['cadastro-ip:' + ip] = 1
+            r, espera = freia('cadastro')
+            self.assertEqual((r.status, espera < 0.2), (429, True))
+            self.assertTrue(r.extra['liberaEm'] > time.time() + 3000, r.extra)
+            # IP privado: sem freio, sem voo
+            corpo['_ip'] = '10.1.2.3'
+            self.assertIsNone(freia()[0])
+        finally:
+            conta_mod.VAGA_ESPERA = espera_velha
+            a.con.close()
+            shutil.rmtree(pasta, ignore_errors=True)
 
     def test_fantasmas_nao_crescem_sem_fim(self):
         """A contagem das senhas erradas mora em memória, e agora conta também

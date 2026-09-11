@@ -41,6 +41,12 @@
  *   SITE.sair() avisa a página com o evento 'site:sessao', para a conta e a
  *   loja se redesenharem sem sessão; o topo ganhou "minha conta".
  *
+ * 10/09 — a loja 2 e o painel do Mestre:
+ *   SITE.cabecalho()       também põe (e tira) o link "Mestre" do menu, só com a
+ *                          marca gm da sessão (quem manda é o 403 do servidor).
+ *   SITE.ehMercadoPago(u)  o endereço de pagamento só é seguido se for https do
+ *                          Mercado Pago (mercadopago.com.br / .com e subdomínios).
+ *
  * Sem framework e sem CDN, no espírito do jogo (globais JOGO.*). */
 (function () {
   'use strict';
@@ -118,7 +124,28 @@
     });
   };
 
+  /* 10/09: o link "Mestre" (site/mestre.html) no menu do topo, antes do
+   * "Jogar", só com a marca gm da sessão local; sem ela, sai (o mestre.html
+   * traz o dele escrito, e ele também sai). A marca local é só cópia: quem
+   * manda é o servidor, que responde 403 a quem não é Mestre. */
+  function menuDoMestre(s) {
+    var nav = document.querySelector('header.topo nav');
+    if (!nav) return;
+    var ja = nav.querySelectorAll('a[data-mestre]');
+    if (s && s.conta && s.conta.gm) {
+      if (ja.length) return;
+      var a = document.createElement('a');
+      a.href = 'mestre.html';
+      a.setAttribute('data-mestre', '');
+      a.textContent = 'Mestre';
+      nav.insertBefore(a, nav.querySelector('a.jogar'));
+      return;
+    }
+    for (var i = 0; i < ja.length; i++) ja[i].parentNode.removeChild(ja[i]);
+  }
+
   SITE.cabecalho = function () {
+    menuDoMestre(SITE.sessao());
     var caixa = document.getElementById('sessao');
     if (!caixa) return;
     var s = SITE.sessao();
@@ -251,6 +278,22 @@
     });
   };
 
+  /* 10/09 — O ENDEREÇO DE PAGAMENTO. A loja só vai até o endereço que o
+   * servidor devolve se ele for do Mercado Pago: https, sem usuário nem porta,
+   * e o host mercadopago.com.br ou mercadopago.com (ou um subdomínio deles,
+   * como www. e sandbox.). Qualquer outra coisa não navega: um servidor
+   * enganado não leva o jogador a uma página de pagamento falsa. */
+  SITE.ehMercadoPago = function (url) {
+    var s = String(url == null ? '' : url);
+    var m = /^https:\/\/([a-z0-9.-]+)(?=[\/?#]|$)/i.exec(s);
+    if (!m || !/(^|\.)mercadopago\.com(\.br)?$/i.test(m[1]) || /\.\./.test(m[1])) return false;
+    try {
+      var u = new URL(s);
+      return u.protocol === 'https:' && !u.username && !u.password && !u.port &&
+        /(^|\.)mercadopago\.com(\.br)?$/.test(u.hostname);
+    } catch (e) { return true; }        // navegador sem URL(): a regra de cima já bastou
+  };
+
   /* ==========================================================================
    * 10/09 — EVENTOS DO MUNDO, RETRATOS E FUSÕES
    * ======================================================================== */
@@ -340,7 +383,7 @@
   function hhmm(min) { return dd(Math.floor(min / 60) % 24) + ':' + dd(min % 60); }
   function dataBrasilia(ts) {
     // o servidor guarda a regra no fuso fixo de −3 h (sem horário de verão)
-    var d = new Date((Number(ts) - 3 * 3600) * 1000);
+    var d = new Date((Number(ts) - 3 * 60 * 60) * 1000);
     return dd(d.getUTCDate()) + '/' + dd(d.getUTCMonth() + 1);
   }
   SITE.textoRegra = function (r) {

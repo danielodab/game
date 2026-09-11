@@ -182,7 +182,7 @@ var JOGO = (typeof window !== 'undefined')
       g.fillStyle = op.fundo || 'rgba(24,18,10,0.88)';
       g.fillRect(x0, 18, larg, 92);
       g.strokeStyle = op.borda || '#c9a227';
-      g.lineWidth = 5;
+      g.lineWidth = op.traco || 5;
       g.strokeRect(x0 + 2.5, 20.5, larg - 5, 87);
     }
     g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 10;
@@ -1034,6 +1034,59 @@ var JOGO = (typeof window !== 'undefined')
     heroi = { node: node, alvo: null, andando: false };
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
     if (nomeJogador) pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
+    esperaCorpo(heroi, classId || 'sumo');
+  }
+
+  /* SOB DEMANDA (conserto 10/09): no jogo servido o corpo PRÓPRIO de uma
+   * fusão ('fus:a+b' — o avatar, o fantasma que anda de fusão) não desce no
+   * boot. O corpo nasce com a fusão composta (visível) e pede o próprio;
+   * quando o Models3D2 o abre (aoChegar), troca na hora, no mesmo lugar.
+   * Em casa (file://) tudo já está aberto e nada disto acontece. */
+  var ouveCorpos = false;
+  function esperaCorpo(corpo, classId) {
+    var m2 = M2(), Bd = JOGO.Bundle;
+    var fk = (Bd && Bd.corpoDe) ? Bd.corpoDe(classId) : null;
+    corpo.esperaCorpo = (fk && m2 && !m2.hasModel(fk)) ? fk : null;
+    if (!corpo.esperaCorpo) return;
+    if (!ouveCorpos && m2.aoChegar) {
+      ouveCorpos = true;
+      m2.aoChegar(function () { try { trocaCorposQueChegaram(); } catch (eT) {} });
+    }
+    try { if (Bd.pede) Bd.pede([fk]); } catch (eP) {}
+  }
+  function trocaCorposQueChegaram() {
+    var m2 = M2();
+    if (!m2 || !scene) return;
+    if (heroi && heroi.esperaCorpo && m2.hasModel(heroi.esperaCorpo)) remontaHeroi();
+    for (var id in fantasmas) {
+      if (!fantasmas.hasOwnProperty(id)) continue;
+      var reg = fantasmas[id], c = reg.corpo;
+      if (!c || !c.esperaCorpo || !m2.hasModel(c.esperaCorpo)) continue;
+      var alvoF = c.alvo, ryF = c.node.rotation.y;
+      desmaterializa(reg);
+      if (materializa(reg) && reg.corpo) {
+        reg.corpo.node.rotation.y = ryF;
+        if (alvoF) mandaAndar(reg.corpo, alvoF.x, alvoF.z);
+      }
+    }
+  }
+  /* O herói troca de corpo sem sair do lugar: posição, rumo, a caminhada
+   * (o `aoChegar` dela mora fora do herói e continua valendo), a aura, as
+   * placas (montaHeroi pendura de novo) e o bicho. */
+  function remontaHeroi() {
+    var velho = heroi;
+    if (!velho) return;
+    var p = velho.node.position.clone(), ry = velho.node.rotation.y;
+    scene.remove(velho.node);
+    heroi = null;
+    montaHeroi(velho.classId);
+    if (!heroi) { heroi = velho; scene.add(velho.node); return; }
+    heroi.classId = velho.classId;
+    heroi.node.position.copy(p);
+    heroi.node.rotation.y = ry;
+    if (velho.aura) acendeAura(heroi, true);
+    if (velho.alvo) mandaAndar(heroi, velho.alvo.x, velho.alvo.z);
+    sincronizaBicho();
   }
 
   // ------------------------------------------------------------------ o bicho
@@ -1102,7 +1155,9 @@ var JOGO = (typeof window !== 'undefined')
    * fantasma. Desde 30/08 o NOME vem numa PLACA (retângulo com filete
    * dourado, pedido do dono) e a guilda — emblema + nome — numa placa menor
    * ACIMA dele. A coroa do ranking flutua acima de tudo. */
-  function penduraEm(corpo, nome, titulo, brasaTier, guilda) {
+  /* 11/09: `grupo` ('membro' | 'lider' | null) — o parceiro do meu grupo leva
+   * a placa de borda dourada grossa, com ◆ (ou ♛ se lidera) antes do nome. */
+  function penduraEm(corpo, nome, titulo, brasaTier, guilda, grupo) {
     if (!corpo || !THREE) return;
     ['plaquinha', 'plaquinhaTitulo', 'plaquinhaGuilda'].forEach(function (campo) {
       if (!corpo[campo]) return;
@@ -1121,7 +1176,10 @@ var JOGO = (typeof window !== 'undefined')
     if (!nome) return;
     var alto = (corpo.node.userData.height || 2.1);
     var temGuilda = !!(guilda && guilda.nome);
-    var sp = rotulo(nome, '#f0ead8', 0.42, { placa: true });
+    var sp = grupo
+      ? rotulo((grupo === 'lider' ? '♛ ' : '◆ ') + nome, '#ffe7a6', 0.42,
+               { placa: true, borda: '#ffcf3f', traco: 9, fundo: 'rgba(44,32,8,0.92)' })
+      : rotulo(nome, '#f0ead8', 0.42, { placa: true });
     sp.position.y = alto + (titulo ? 0.66 : 0.5);
     corpo.node.add(sp);
     corpo.plaquinha = sp;
@@ -1627,6 +1685,24 @@ var JOGO = (typeof window !== 'undefined')
    * fronteira do teto não pode virar pisca-pisca de corpos. */
   Hub.aoAndar = null;
   Hub.aoTocarFantasma = null;
+  /* A PLACA DE GRUPO (11/09): o parceiro do meu grupo ganha borda dourada e
+   * ◆ — ou ♛, se é quem lidera. O js/core/grupo.js chama ao formar, ao passar
+   * a liderança e ao desfazer (papel null). Fantasma sem corpo (acima do teto
+   * de 20) guarda a marca para quando materializar. */
+  var marcasGrupo = {};
+  Hub.marcaGrupo = function (id, papel) {
+    if (!id) return false;
+    if (papel === 'lider' || papel === 'membro') marcasGrupo[id] = papel;
+    else delete marcasGrupo[id];
+    var reg = fantasmas[id];
+    if (reg && reg.corpo) {
+      var pf = reg.perfil || {};
+      penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
+                marcasGrupo[id] || null);
+    }
+    return true;
+  };
+  Hub._marcaGrupo = function (id) { return marcasGrupo[id] || null; };   // provas
   Hub.TETO_FANTASMAS = 20;
   var MARGEM_TROCA = 2.0;           // só larga o corpo quem ficou 2m atrás do corte
 
@@ -1654,8 +1730,12 @@ var JOGO = (typeof window !== 'undefined')
     // a GUILDA do fantasma já viaja dentro do resumo do perfil (a Rede não
     // precisou mudar) — a placa dele nasce igual à do herói
     var guildaF = (perfil && perfil.resumo && perfil.resumo.guilda) || null;
-    penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF, guildaF);
+    reg.tierF = tierF;
+    reg.guildaF = guildaF;
+    penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF, guildaF,
+              marcasGrupo[reg.id] || null);
     if (perfil && perfil.aura) acendeAura(corpo, true);   // a vaidade é pública
+    esperaCorpo(corpo, classe);           // fusão: o corpo próprio vem vindo
     return true;
   }
   function desmaterializa(reg) {
@@ -1709,7 +1789,7 @@ var JOGO = (typeof window !== 'undefined')
 
   Hub.fantasmaEntra = function (id, perfil) {
     if (!scene || fantasmas[id]) return false;
-    var reg = { perfil: perfil || {},
+    var reg = { id: id, perfil: perfil || {},
                 x: (perfil && perfil.x) || 0,
                 z: (perfil && perfil.z) || raioAtual() * 0.35,
                 corpo: null };
@@ -1748,6 +1828,11 @@ var JOGO = (typeof window !== 'undefined')
       if (fantasmas.hasOwnProperty(k) && fantasmas[k].corpo) n++;
     }
     return n;
+  };
+  /* o modelo que o corpo de um fantasma veste (provas) */
+  Hub._corpoFantasma = function (id) {
+    var r = fantasmas[id], u = r && r.corpo && r.corpo.node.userData;
+    return (u && u.look && u.look.model) || null;
   };
 
   Hub.irPara = function (x, z) {

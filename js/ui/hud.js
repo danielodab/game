@@ -330,23 +330,100 @@ var JOGO = (typeof window !== 'undefined')
     toastT = 2.4;
   }
 
-  /* A LOJA DO SITE (Fase C, 10/09): o aviso de que um pedido chegou ou voltou
-   * (js/core/loja.js dispara 'soterra:loja'). A tira de recursos da tela
-   * aberta se repinta no lugar — sem fechar a ficha que estiver aberta. */
+  /* A LOJA DO SITE (Fase C, 10/09; loja 2): o aviso de que um pedido chegou
+   * ou voltou (js/core/loja.js dispara 'soterra:loja'). A tira de recursos da
+   * tela aberta se repinta no lugar — sem fechar a ficha que estiver aberta.
+   * O TEXTO sai de `UI.avisoLojaTexto(detail)` → {texto, tipo} | null, função
+   * PURA (as provas a chamam sem UI.init): a compra da loja, o PRESENTE DO
+   * MESTRE, o PACOTE PAGO de vinténs e, no bônus de XP, até quando ele vale. */
   var MOTIVO_LOJA = {
     'sem-saldo': 'vinténs insuficientes neste jogo',
     'classe-ja-liberada': 'a classe já estava liberada',
     'item-invalido': 'o item não existe nesta versão do jogo',
     'erro-local': 'a entrega falhou aqui; os vinténs voltaram'
   };
-  function avisoLoja(ev) {
-    var d = ev && ev.detail;
-    if (!d || typeof d !== 'object') return;
-    var nome = (d.pedido && d.pedido.nome) ? String(d.pedido.nome) : 'um pedido';
-    if (d.tipo === 'entregue') toast('Chegou da loja: ' + nome, 'good');
-    else if (d.tipo === 'recusado') toast('Pedido devolvido: ' + (MOTIVO_LOJA[d.motivo] || 'recusado') + ' (' + nome + ')');
-    safe(function () { refrescaRecursos(); return true; }, false);
+  // o presente do Mestre não tem vintém para voltar
+  var MOTIVO_PRESENTE = { 'erro-local': 'a entrega falhou aqui' };
+  // 12000 → "12.000"
+  function lojaMilhar(n) {
+    var v = Math.max(0, Math.floor(Number(n) || 0));
+    return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   }
+  // epoch em SEGUNDOS → "14/09 às 21:05" (no relógio de parede desta máquina)
+  function lojaQuando(seg) {
+    var d = new Date(Number(seg) * 1000);
+    if (!isFinite(d.getTime())) return '';
+    function z(n) { return (n < 10 ? '0' : '') + n; }
+    return z(d.getDate()) + '/' + z(d.getMonth() + 1) + ' às ' + z(d.getHours()) + ':' + z(d.getMinutes());
+  }
+  UI.avisoLojaTexto = function (d) {
+    if (!d || typeof d !== 'object' || (d.tipo !== 'entregue' && d.tipo !== 'recusado')) return null;
+    var ped = (d.pedido && typeof d.pedido === 'object') ? d.pedido : {};
+    var nome = ped.nome ? String(ped.nome) : 'um pedido';
+    var ent = (ped.entrega && typeof ped.entrega === 'object') ? ped.entrega : {};
+    var origem = (d.origem === 'presente' || ped.origem === 'presente') ? 'presente'
+      : ((d.origem === 'pagamento' || ped.origem === 'pagamento') ? 'pagamento' : 'loja');
+    if (d.tipo === 'entregue') {
+      var txt = (origem === 'pagamento') ? 'Chegaram ' + lojaMilhar(ent.qtd) + ' vinténs do seu pacote'
+        : (origem === 'presente' ? 'Presente do Mestre: ' : 'Chegou da loja: ') + nome;
+      if (ent.tipo === 'bonus-xp') {
+        var ate = (typeof d.ate === 'number' && d.ate > 0) ? d.ate : safe(function () { return P().bonusXpAte(); }, 0);
+        var quando = (ate > 0) ? lojaQuando(ate) : '';
+        if (quando) txt += ' — vale até ' + quando;
+      }
+      return { texto: txt, tipo: 'good' };
+    }
+    if (origem === 'pagamento') {
+      return { texto: 'O pacote de vinténs não entrou aqui: ele volta na próxima abertura (' + nome + ')', tipo: null };
+    }
+    var mot = (origem === 'presente' && MOTIVO_PRESENTE[d.motivo]) || MOTIVO_LOJA[d.motivo] || 'recusado';
+    return { texto: (origem === 'presente' ? 'Presente do Mestre devolvido: ' : 'Pedido devolvido: ') + mot + ' (' + nome + ')',
+             tipo: null };
+  };
+  /* Os avisos da loja em FILA (conserto da loja 2, 11/09): uma retirada entrega tudo de uma
+   * vez (o crédito do pacote e o personagem comprado com ele saem no mesmo
+   * milissegundo) e o toast troca o texto na hora — sem a fila, só o último
+   * aparecia. Cada um fica 3 s na tela; um toast de outra coisa no meio passa
+   * na frente e a fila segue depois.
+   * 11/09 (bateria): a fila não cresce sem fim. Uma retirada grande (a abertura
+   * depois de muitas compras e presentes) punha dezenas de avisos em fila, 3 s
+   * cada — minutos de toasts, um atrás do outro. Até LOJA_UM_A_UM esperam a vez
+   * um por um; o que passa disso vira UM aviso de resumo no fim da fila. */
+  var LOJA_AVISO_MS = 3200, LOJA_UM_A_UM = 3, filaLoja = [], lojaVez = null, lojaMostrados = [];
+  function somaResumoLoja(r, t) {
+    if (t.tipo === 'good') r.ok++; else r.volta++;
+    var partes = [];
+    if (r.ok) partes.push(r.ok === 1 ? 'Chegou mais 1 entrega da loja' : 'Chegaram mais ' + r.ok + ' entregas da loja');
+    if (r.volta) partes.push((r.ok ? 'e ' : '') + (r.volta === 1 ? '1 pedido foi devolvido' : r.volta + ' pedidos foram devolvidos'));
+    r.texto = partes.join(', ') + (r.volta ? ' — veja em "Seus pedidos", na loja do site.' : '.');
+    r.tipo = r.volta ? null : 'good';
+  }
+  function proximoLoja() {
+    var t = filaLoja.shift();
+    if (!t) { lojaVez = null; return; }
+    toast(t.texto, t.tipo || undefined);
+    toastT = 3;
+    lojaMostrados.push(t.texto);
+    if (lojaMostrados.length > 20) lojaMostrados.shift();
+    lojaVez = setTimeout(proximoLoja, LOJA_AVISO_MS);
+  }
+  function avisoLoja(ev) {
+    var t = safe(function () { return UI.avisoLojaTexto(ev && ev.detail); }, null);
+    if (!t) return;
+    safe(function () { refrescaRecursos(); return true; }, false);
+    var fimFila = filaLoja[filaLoja.length - 1];
+    if (fimFila && fimFila.resumo) somaResumoLoja(fimFila, t);          // o resumo que já espera soma mais um
+    else if (filaLoja.length >= LOJA_UM_A_UM) {
+      var r = { resumo: true, ok: 0, volta: 0, texto: '', tipo: null };
+      somaResumoLoja(r, t);
+      filaLoja.push(r);
+    } else filaLoja.push(t);
+    if (!lojaVez) proximoLoja();
+  }
+  // só as provas (tests/loja.html): o que já apareceu, o que espera a vez e se há um na tela
+  UI._avisosLoja = function () {
+    return { mostrados: lojaMostrados.slice(), fila: filaLoja.map(function (x) { return x.texto; }), ocupado: !!lojaVez };
+  };
   try { window.addEventListener('soterra:loja', avisoLoja); } catch (eLj) {}
 
   /* ------------------------------------------------------------ dica da MIRA
@@ -430,6 +507,18 @@ var JOGO = (typeof window !== 'undefined')
     root.appendChild(toastEl);
     miraEl = el('div', 'ui-mira');
     root.appendChild(miraEl);
+    // 11/09: o painel do grupo (canto direito) e o menu dos cartões — camadas
+    // fixas fora das telas, sobrevivem às trocas de tela; e os ganchos do
+    // Grupo, do Duelo, dos Sussurros e do Coop, pendurados uma vez
+    grupoLadoEl = el('div', 'grupo-lado');
+    root.appendChild(grupoLadoEl);
+    glMenuEl = el('div', 'gl-menu');
+    root.appendChild(glMenuEl);
+    document.addEventListener('click', function (ev) {
+      if (glMenuEl && glMenuEl.classList.contains('is-on') && !glMenuEl.contains(ev.target) &&
+          !(grupoLadoEl && grupoLadoEl.contains(ev.target))) fechaGlMenu();
+    }, true);
+    ligaSocial();
 
     document.addEventListener('click', function (ev) {
       if (tipOwner && tipEl && !tipEl.contains(ev.target) && !tipOwner.contains(ev.target)) hideTip();
@@ -491,6 +580,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'battle') { logLines = []; buildBattle(); }
     else if (name === 'roomClear' || name === 'dungeonComplete') buildRewards(name, data);
     else if (name === 'defeat') buildDefeat();
+    socialNaTela(name);
   };
 
   function navTo(name) { if (!safe(function () { return G().goTo(name); }, false)) UI.showScreen(name); }
@@ -569,17 +659,74 @@ var JOGO = (typeof window !== 'undefined')
     }
     return out;
   }
-  // a versão compacta, no topo do Acampamento (repinta a si mesma depois de ler)
+  // a versão compacta, no topo do Acampamento (repinta a si mesma depois de
+  // ler). Loja 2: a caixa é dos DOIS — o bônus de XP por tempo vem na frente,
+  // com o tempo que falta, repintado a cada minuto enquanto houver bônus e a
+  // caixa estiver na tela (fora dela, o relógio para sozinho)
   function hubPergaminhos() {
     var w = el('span', 'hub-perg');
+    var relogio = null;
+    function para() { if (relogio) { clearInterval(relogio); relogio = null; } }
     function pinta() {
       clear(w);
       var cs = pergaminhoChips(pinta, true);
+      var cb = bonusXpChip();
+      if (cb) cs.unshift(cb);
       for (var i = 0; i < cs.length; i++) w.appendChild(cs[i]);
       w.classList.toggle('is-off', !cs.length);
+      if (!cb) para();
+      else if (!relogio) {
+        relogio = setInterval(function () {
+          if (!w.isConnected) { para(); return; }
+          pinta();
+        }, BONUS_TIQUE_MS);
+      }
     }
     pinta();
     return w;
+  }
+  UI._hubPergaminhos = hubPergaminhos;   // só as provas (tests/loja.html): a caixa do topo do Acampamento
+
+  /* O BÔNUS DE XP POR TEMPO (loja 2, 10/09): o chip "✦ Bônus de XP ×1,5 ·
+   * 2 d 3 h". O tempo que falta é pelo relógio do SERVIDOR (JOGO.Agenda.agora;
+   * sem a agenda, o desta máquina) — o mesmo que o game.js usa na recompensa.
+   * Acabou o prazo, o chip some. Toque: a dica com a data e a regra. */
+  var BONUS_TIQUE_MS = 60 * 1000;
+  function bonusAgoraMs() {
+    var t = safe(function () { return JOGO.Agenda.agora(); }, NaN);
+    return (typeof t === 'number' && isFinite(t)) ? t : Date.now();
+  }
+  // "2 d 3 h", "5 h 20 min", "12 min", "menos de 1 min" (o que FALTA: arredonda para baixo)
+  function bonusFalta(ms) {
+    var min = Math.floor(Number(ms) / 60000);
+    if (!(min >= 1)) return 'menos de 1 min';
+    var d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), m = min % 60;
+    if (d > 0) return d + ' d' + (h ? ' ' + h + ' h' : '');
+    if (h > 0) return h + ' h' + (m ? ' ' + m + ' min' : '');
+    return m + ' min';
+  }
+  function bonusFmt(f) {
+    var n = Math.round(Number(f) * 100) / 100;
+    return '×' + String(isFinite(n) ? n : 1).replace('.', ',');
+  }
+  function bonusXpChip() {
+    var ate = safe(function () { return P().bonusXpAte(); }, 0);
+    if (!(ate > 0)) return null;
+    var falta = ate * 1000 - bonusAgoraMs();
+    if (!(falta > 0)) return null;
+    var fator = safe(function () { return D().bonusXp.fator; }, 1.5);
+    if (!(fator > 1)) fator = 1.5;
+    var c = el('button', 'perg-mini perg-chip perg-bonus');
+    c.type = 'button';
+    c.appendChild(el('span', 'perg-glifo', '✦'));
+    c.appendChild(el('span', 'stone-nm', 'Bônus de XP'));
+    c.appendChild(el('span', 'stone-n', bonusFmt(fator)));
+    c.appendChild(el('span', 'stone-nm', '· ' + bonusFalta(falta)));
+    c.title = 'Bônus de XP ' + bonusFmt(fator) + ' · ' + bonusFalta(falta);
+    tipOn(c, 'Bônus de XP ' + bonusFmt(fator),
+      '+' + Math.round((fator - 1) * 100) + '% de experiência para o grupo até ' + esc(lojaQuando(ate)) + '. ' +
+      'Não soma com o Pergaminho da Sabedoria; com evento de XP, os dois param em ×2.', '#e8c25a');
+    return c;
   }
   function lerSabedoria(aoMudar) {
     var pg = safe(function () { return P().pergaminhos(); }, null) || {};
@@ -970,6 +1117,13 @@ var JOGO = (typeof window !== 'undefined')
     clear(s);
     var chaveSala = sala ? (sala.dungeonId + ':' + sala.roomIndex) : null;
     function perguntaSair() {
+      // 11/09: a descida de grupo é dos dois (D16) — sair dela leva os dois
+      if (emGrupo()) {
+        confirmSheet('Sair do calabouço?', 'A descida acaba para vocês dois — o grupo continua.', function () {
+          safe(function () { Gp().subir('saiu'); return true; }, null);
+        });
+        return;
+      }
       confirmSheet('Sair do calabouço?',
         'O que você já limpou não fica guardado — a próxima descida começa da primeira sala.',
         function () {
@@ -1012,6 +1166,8 @@ var JOGO = (typeof window !== 'undefined')
 
     var painel = el('div', 'hub-painel is-off');
     s.appendChild(painel);
+    hubPainelEl = painel;          // 11/09: os convites e o painel do jogador desenham aqui
+    painelModo = null; painelLugar = null; painelPar = null; painelConv = null;
 
     /* O CAIS (pedido do usuário, 25/08): "queria dividir o menu… pode ser um
      * menu inferior centralizado". Cada ficha com porta própria, sempre à
@@ -1139,6 +1295,7 @@ var JOGO = (typeof window !== 'undefined')
     function pedeNome(aviso) {
       clear(painel);
       painel.classList.remove('is-off');
+      painelModo = 'nome';
       painel.appendChild(el('h3', null, 'Como te chamam no fundo?'));
       if (aviso) painel.appendChild(el('p', 'hub-nota hub-nome-aviso', esc(aviso)));
       var inp = document.createElement('input');
@@ -1157,9 +1314,13 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     if (JOGO.Hub) JOGO.Hub.aoAproximar = function (lugar) {
-      if (!lugar) { painel.classList.add('is-off'); return; }
+      // 11/09: o convite (grupo/duelo) em aberto não some por um passo
+      if (painelModo === 'convite' && !painel.classList.contains('is-off')) return;
+      if (!lugar) { painel.classList.add('is-off'); painelModo = null; painelLugar = null; return; }
       clear(painel);
       painel.classList.remove('is-off');
+      painelModo = 'lugar';
+      painelLugar = lugar;
       if (lugar.tipo === 'portal' && lugar.fechado) {
         // 08/09: o portal trancado — sem descida; as peças dele caem nos abertos
         painel.appendChild(el('h3', null, esc(lugar.nome)));
@@ -1177,12 +1338,15 @@ var JOGO = (typeof window !== 'undefined')
         }
         // OS EVENTOS DO MUNDO que valem AQUI (10/09): os gerais e os deste portal
         linhasEventoPortal(lugar.id, ehDia).forEach(function (p) { painel.appendChild(p); });
-        var sd = seletorDif();
-        if (sd) painel.appendChild(sd);
-        painel.appendChild(btn('Descer', 'btn-primary btn-block', function () {
-          var ok = safe(function () { return G().startRun(selHeroes.slice(), lugar.id); }, false);
-          if (!ok) toast('Não deu para começar essa descida.');
-        }));
+        if (emGrupo()) painelPortalGrupo(painel, lugar);   // 11/09: quem lidera desce com o outro
+        else {
+          var sd = seletorDif();
+          if (sd) painel.appendChild(sd);
+          painel.appendChild(btn('Descer', 'btn-primary btn-block', function () {
+            var ok = safe(function () { return G().startRun(selHeroes.slice(), lugar.id); }, false);
+            if (!ok) toast('Não deu para começar essa descida.');
+          }));
+        }
       } else if (lugar.tipo === 'porta') {
         // A PORTA DA SALA (03/09): "seguir para a batalha (que mostrará os
         // monstros ao confirmar)" — quem espera, a dificuldade, e a entrada
@@ -1197,11 +1361,14 @@ var JOGO = (typeof window !== 'undefined')
         });
         if (!lista.childNodes.length) lista.appendChild(el('p', 'hub-nota', 'Ninguém à vista… ainda.'));
         painel.appendChild(lista);
-        var sd2 = seletorDif();
-        if (sd2) painel.appendChild(sd2);
-        painel.appendChild(btn('Entrar na batalha', 'btn-primary btn-block', function () {
-          if (!safe(function () { return G().entrarNaSala(); }, false)) toast('Não deu para entrar na sala.');
-        }));
+        if (emGrupo()) painelPortaGrupo(painel);            // 11/09: a porta em grupo
+        else {
+          var sd2 = seletorDif();
+          if (sd2) painel.appendChild(sd2);
+          painel.appendChild(btn('Entrar na batalha', 'btn-primary btn-block', function () {
+            if (!safe(function () { return G().entrarNaSala(); }, false)) toast('Não deu para entrar na sala.');
+          }));
+        }
       } else if (lugar.tipo === 'saida') {
         painel.appendChild(el('h3', null, 'Sair do calabouço'));
         painel.appendChild(el('p', 'hub-nota',
@@ -1224,13 +1391,24 @@ var JOGO = (typeof window !== 'undefined')
       } else if (lugar.tipo === 'arena') {
         painel.appendChild(el('h3', null, 'Arena de Duelos'));
         painel.appendChild(el('p', 'hub-nota',
-          'Ainda selada. Os duelos chegam com a Rede: cada um escolhe a própria ' +
-          'dupla sem ver a do outro, e o clima da arena é sorteado.'));
+          'Para duelar com alguém, toque na pessoa na praça e escolha <b>Desafiar para duelo</b>. ' +
+          'Cada um leva a sua dupla, escolhida às cegas, numa sala sorteada.'));
+        // 11/09 (revisão): a volta para a ficha do duelo pela Rede que ficou para trás
+        var deA = safe(function () { return Dl().estado(); }, null);
+        if (deA && (deA.fase === 'escolhendo' || deA.fase === 'comprometido' || deA.fase === 'revelado')) {
+          painel.appendChild(btn('Voltar à escolha do duelo', 'btn-gold btn-block', function () { openSheet('dueloRede'); }));
+        }
         painel.appendChild(btn('Duelo de treino (mesmo teclado)', 'btn-primary btn-block', function () {
           openSheet('duelo');
         }));
         // O POÇO SEM FUNDO (25/08): a torre infinita mora na arena
-        painel.appendChild(btn('Descer ao Poço sem Fundo', 'btn-warn btn-block', function () {
+        if (emGrupo()) {
+          // 11/09 (D10): o Poço sorteia fora da semente — em grupo, só sozinho
+          painel.appendChild(btn('Descer ao Poço sem Fundo', 'btn-warn btn-block is-apagado', function () {
+            toast('O Poço é só para quem desce sozinho — por enquanto.');
+          }));
+          painel.appendChild(el('p', 'hub-nota', 'O Poço é só para quem desce sozinho — por enquanto.'));
+        } else painel.appendChild(btn('Descer ao Poço sem Fundo', 'btn-warn btn-block', function () {
           if (!selHeroes.length) { toast('Escolha sua dupla primeiro.'); return; }
           if (!safe(function () { return G().startPoco(selHeroes.slice()); }, false)) {
             toast('O Poço não abriu.');
@@ -1351,65 +1529,126 @@ var JOGO = (typeof window !== 'undefined')
           var par = null;
           R.pares().forEach(function (p2) { if (p2.id === id) par = p2; });
           if (!par) return;
+          painelJogador(par);
+        };
+        /* O PAINEL DO JOGADOR (11/09, pedido do dono): retrato, nome e título,
+         * e os gestos numa grade de 2 colunas — perfil, mensagem particular,
+         * grupo e duelo (só na praça), troca, guilda (só quem lidera a
+         * guilda) e silêncio. Na antessala, sem grupo nem duelo. */
+        function painelJogador(par) {
+          // 11/09 (revisão): o convite em aberto (grupo, duelo ou troca) não some por
+          // um toque noutra pessoa — no celular se anda tocando o chão da praça, e o
+          // convite de 30 s sumia da tela sem volta (quem chamou via "expirou")
+          if (painelModo === 'convite' && !painel.classList.contains('is-off')) { toast('Responda o convite antes.'); return; }
+          var id = par.id;
           clear(painel);
           painel.classList.remove('is-off');
-          painel.appendChild(el('h3', null, esc(par.nome) +
-            (par.titulo ? ' <i class="hub-tit">' + esc(par.titulo) + '</i>' : '')));
-          painel.appendChild(btn('Ver perfil', 'btn-primary btn-block', function () {
-            painel.classList.add('is-off');
+          painelModo = 'jogador';
+          painelPar = par;
+          function fecha() { painel.classList.add('is-off'); painelModo = null; }
+          var pg = parceiroG();
+          var ehMeuPar = !!(pg && pg.id === id);
+          cabecalhoPainel(painel, par.classe || 'sumo', 'neutro',
+            esc(par.nome) + (par.titulo ? ' <i class="hub-tit">' + esc(par.titulo) + '</i>' : ''),
+            ehMeuPar ? (souLider() ? '◆ no seu grupo' : '♛ lidera o seu grupo') : '');
+          var grade = el('div', 'pn-grade');
+          grade.appendChild(btn('Ver perfil', 'btn-primary', function () {
+            fecha();
             openSheet('perfil', par);
           }));
+          var pode = !!safe(function () { return Su().pode(); }, false);
+          var bMsg = btn('Mensagem particular', 'btn-ghost' + (pode ? '' : ' is-apagado'), function () {
+            if (!pode) { toast(textoMotivo('privado', null)); return; }
+            fecha();
+            armaSussurro(id, par.nome);
+          });
+          if (!pode) bMsg.title = 'precisa do servidor da Rede';
+          grade.appendChild(bMsg);
+          if (!sala && Gp()) {
+            var cheio = (grupoEstado() || {}).fase === 'formado';
+            grade.appendChild(btn(ehMeuPar ? 'Já está no seu grupo' : (cheio ? 'Você já está num grupo' : 'Chamar para o grupo'),
+              'btn-ghost' + (cheio ? ' is-apagado' : ''), function () {
+                if (cheio) { toast(ehMeuPar ? par.nome + ' já está no seu grupo.' : textoMotivo('em-grupo', null)); return; }
+                var r = safe(function () { return Gp().convidar(id); }, null);
+                if (r && r.ok) { fecha(); toast('Convite enviado a ' + par.nome + '. Esperando a resposta…'); }
+                else toast(textoMotivo(r ? r.motivo : 'ocupado', null));
+              }));
+          }
+          if (!sala && Dl()) {
+            grade.appendChild(btn('Desafiar para duelo', 'btn-ghost', function () {
+              var r = safe(function () { return Dl().desafiar(id); }, null);
+              if (r && r.ok) { fecha(); toast('Desafio enviado a ' + par.nome + '. Esperando a resposta…'); }
+              else toast(textoMotivo(r ? r.motivo : 'ocupado', null));
+            }));
+          }
           if (JOGO.Troca) {
-            painel.appendChild(btn('Propor troca', 'btn-ghost btn-block', function () {
-              painel.classList.add('is-off');
+            grade.appendChild(btn('Propor troca', 'btn-ghost', function () {
+              fecha();
               if (JOGO.Troca.convidar(id)) {
                 toast('Convite de troca enviado. Esperando o outro lado…');
                 openSheet('troca');
               } else toast('já há uma troca aberta');
             }));
           }
-          // CONVIDAR PARA A GUILDA (25/08): só o líder vê o botão
+          var mudo = !!mutados[id];
+          var bSil = btn(mudo ? 'Devolver a voz' : 'Silenciar', 'btn-ghost', function () {
+            mutados[id] = !mudo;
+            if (JOGO.DB.mutar) JOGO.DB.mutar(id, par.nome, !mudo);
+            safe(function () { Gp().mutado(id, !mudo); return true; }, null);
+            toast(!mudo ? par.nome + ' silenciado.' : par.nome + ' de volta ao chat.');
+            fecha();
+          });
+          grade.appendChild(bSil);
+          grade.appendChild(btn('Fechar', 'btn-ghost', fecha));
+          painel.appendChild(grade);
+          // CONVIDAR PARA A GUILDA (25/08): só quem lidera a guilda vê o botão
           if (JOGO.Guilda) {
             JOGO.Guilda.minha().then(function (mg) {
-              if (!mg || !mg.souLider || painel.classList.contains('is-off')) return;
-              painel.insertBefore(btn('Convidar para a ' + mg.emblema + ' ' + esc(mg.nome),
-                'btn-ghost btn-block', function () {
-                  painel.classList.add('is-off');
+              if (!mg || !mg.souLider || painel.classList.contains('is-off') || !grade.isConnected) return;
+              grade.insertBefore(btn('Convidar para a ' + mg.emblema + ' ' + esc(mg.nome),
+                'btn-ghost pn-largo', function () {
+                  fecha();
                   R.guildaManda(id, 'convite', { gid: mg.id, nome: mg.nome, emblema: mg.emblema });
                   toast('Convite de guilda enviado.');
-                }), painel.lastChild);
+                }), bSil);
             });
           }
-          var mudo = !!mutados[id];
-          painel.appendChild(btn(mudo ? 'Devolver a voz no chat' : 'Silenciar no chat',
-            'btn-ghost btn-block', function () {
-              mutados[id] = !mudo;
-              if (JOGO.DB.mutar) JOGO.DB.mutar(id, par.nome, !mudo);
-              toast(!mudo ? par.nome + ' silenciado.' : par.nome + ' de volta ao chat.');
-              painel.classList.add('is-off');
-            }));
-          painel.appendChild(btn('Fechar', 'btn-ghost btn-block', function () {
-            painel.classList.add('is-off');
-          }));
-        };
+        }
+        painelJogadorFn = painelJogador;
         if (JOGO.Troca) {
           JOGO.Troca.aoConvite = function (c) {
+            // 11/09 (revisão): um pedido de cada vez. Com um convite de grupo ou de
+            // duelo na tela, a troca é recusada (o grupo e o duelo já recusam quem
+            // está numa troca) — antes ela tomava o painel e o convite de 30 s sumia
+            // sem volta; e, se ficasse esperando, o "Aceitar" do grupo daria "troca"
+            if (painelModo === 'convite' && !painel.classList.contains('is-off')) {
+              safe(function () { JOGO.Troca.responder(false); return true; }, null);
+              toast(c.nome + ' quis trocar com você — recusado: responda antes o convite aberto.');
+              return;
+            }
             clear(painel);
             painel.classList.remove('is-off');
+            // o convite de troca também é CONVITE: o passo perto de um lugar e o toque
+            // noutra pessoa não o apagam, e o grupo/duelo que vence não o fecha
+            painelModo = 'convite';
+            painelConv = { tipo: 'troca', de: c.de };
             painel.appendChild(el('h3', null, 'Troca'));
             painel.appendChild(el('p', 'hub-nota',
               esc(c.nome) + ' quer trocar com você.'));
             painel.appendChild(btn('Aceitar', 'btn-primary btn-block', function () {
               JOGO.Troca.responder(true);
-              painel.classList.add('is-off');
+              fechaPainel();
               openSheet('troca');
             }));
             painel.appendChild(btn('Agora não', 'btn-ghost btn-block', function () {
               JOGO.Troca.responder(false);
-              painel.classList.add('is-off');
+              fechaPainel();
             }));
           };
           JOGO.Troca.aoMudar = function (est) {
+            // o convite de troca na tela sai quando a mesa dele acaba (aceita, recusada, cancelada)
+            if (painelModo === 'convite' && painelConv && painelConv.tipo === 'troca' &&
+                !(est && est.fase === 'convidado' && est.par === painelConv.de)) fechaPainel();
             if (sheetName === 'troca') sheetTroca();
             if (est && est.fase === 'cancelada' && est.motivo) {   // 10/09: a troca que o cartório não espelharia
               closeSheet();
@@ -1497,6 +1736,14 @@ var JOGO = (typeof window !== 'undefined')
         var chat = el('div', 'hub-chat');
         chatLog = el('div', 'hub-chat-log');
         chat.appendChild(chatLog);
+        // 11/09: a MENSAGEM PARTICULAR — as últimas linhas voltam a cada tela (o
+        // chat nasce vazio), e o chip "para Bia ✕" arma o sussurro
+        (safe(function () { return Su().lista(); }, []) || []).slice(-6).forEach(function (l) {
+          chatLog.appendChild(linhaSussurro(l));
+        });
+        var chip = el('div', 'chat-chip');
+        tap(chip, function () { chatAlvo = null; pintaChip(); });
+        chat.appendChild(chip);
         var ci = document.createElement('input');
         ci.className = 'hub-chat-input';
         ci.maxLength = 240;
@@ -1504,15 +1751,23 @@ var JOGO = (typeof window !== 'undefined')
         ci.addEventListener('keydown', function (evk) {
           if (evk.key === 'Enter') {
             var t = ci.value.trim();
-            if (t && R.falar(t)) {
+            if (t && chatAlvo) {
+              var rs = safe(function () { return Su().manda(chatAlvo.id, t); }, null);
+              if (rs && rs.ok) ci.value = '';
+              else toast(textoMotivo(rs ? rs.motivo : 'privado', null));
+            } else if (t && R.falar(t)) {
               chatLinha(j.nome || 'você', t, '#9bd06a');
               ci.value = '';
             }
-          } else if (evk.key === 'Escape') { ci.blur(); }
+          } else if (evk.key === 'Escape') {
+            if (chatAlvo) { chatAlvo = null; pintaChip(); } else ci.blur();
+          }
           evk.stopPropagation();               // o i digitado aqui não abre o saco
         });
         chat.appendChild(ci);
         mundo.appendChild(chat);
+        chatUI = { log: chatLog, input: ci, chip: chip };
+        pintaChip();
       });
     }
     if (!entrou) mundo.appendChild(el('p', 'empty', 'O acampamento precisa do modo 3D.'));
@@ -1607,7 +1862,14 @@ var JOGO = (typeof window !== 'undefined')
         txtEv = '❦ ' + esc(e.titulo || 'Pergaminho da Sabedoria') + ' · ' + esc(rot) +
                 ' · restam ' + Math.max(0, Math.floor(Number(e.restam) || 0)) + ' salas';
       }
-      w.appendChild(el('span', 'rw-evento' + (e.origem === 'pergaminho' ? ' rw-pergaminho' : ''), txtEv));
+      // o bônus de XP por tempo (loja 2), com o que ainda falta do prazo
+      if (e.origem === 'bonus-tempo') {
+        var faltaB = (Number(e.ate) || 0) * 1000 - bonusAgoraMs();
+        txtEv = '✦ ' + esc(e.titulo || 'Bônus de XP') + ' · ' + esc(bonusFmt(e.fator)) +
+                (faltaB > 0 ? ' · faltam ' + esc(bonusFalta(faltaB)) : '');
+      }
+      var realce = (e.origem === 'pergaminho' || e.origem === 'bonus-tempo') ? ' rw-pergaminho' : '';
+      w.appendChild(el('span', 'rw-evento' + realce, txtEv));
     });
     return w;
   }
@@ -1965,20 +2227,25 @@ var JOGO = (typeof window !== 'undefined')
       }));
     }
     foot.appendChild(btn('Inventário', 'btn-ghost', function () { openSheet('inventory'); }));
-    if (noPoco) {
-      // subir É vitória: o recorde já foi anotado a cada andar limpo
-      foot.appendChild(btn('Subir (o recorde fica)', 'btn-ghost', function () {
-        safe(function () { return G().restart(); }, null);
-        navTo('hub');
+    // 11/09: a descida de GRUPO tem rodapé próprio (4.8) — quem lidera abre a
+    // próxima sala, quem segue espera, e a dificuldade é de quem lidera (D9)
+    var rg = noPoco ? false : rodapeGrupo(foot, fim);
+    if (!rg) {
+      if (noPoco) {
+        // subir É vitória: o recorde já foi anotado a cada andar limpo
+        foot.appendChild(btn('Subir (o recorde fica)', 'btn-ghost', function () {
+          safe(function () { return G().restart(); }, null);
+          navTo('hub');
+        }));
+      }
+      if (fim) foot.appendChild(btn('Voltar ao acampamento', 'btn-primary', function () { navTo('hub'); }));
+      else foot.appendChild(btn(noPoco ? 'Descer mais um andar' : 'Próxima sala', 'btn-primary', function () {
+        if (!safe(function () { return G().nextRoom(); }, false)) toast('Não deu para avançar.');
       }));
     }
-    if (fim) foot.appendChild(btn('Voltar ao acampamento', 'btn-primary', function () { navTo('hub'); }));
-    else foot.appendChild(btn(noPoco ? 'Descer mais um andar' : 'Próxima sala', 'btn-primary', function () {
-      if (!safe(function () { return G().nextRoom(); }, false)) toast('Não deu para avançar.');
-    }));
     // O seletor vai ANTES do rodape: a escolha e sobre a proxima sala, e tem de
     // ser vista antes do botao que leva a ela.
-    if (!fim) {
+    if (!fim && (!rg || rg === 'lider')) {
       var selDif2 = seletorDif();
       if (selDif2) s.appendChild(selDif2);
     }
@@ -2020,6 +2287,8 @@ var JOGO = (typeof window !== 'undefined')
       b.title = d.resumo || '';
       tap(b, function () {
         G2.setDificuldade(id);
+        // 11/09 (revisão): em grupo, quem segue fica sabendo (vai no estado do grupo)
+        if (emGrupo() && souLider()) safe(function () { return Gp().avisaDificuldade(); }, null);
         var irmaos = linha.querySelectorAll('.dif-op');
         for (var i = 0; i < irmaos.length; i++) irmaos[i].classList.remove('is-sel');
         b.classList.add('is-sel');
@@ -2044,6 +2313,13 @@ var JOGO = (typeof window !== 'undefined')
     box.appendChild(el('h1', 'game-title defeat-title', 'Soterrados'));
     box.appendChild(el('p', 'game-sub', 'O calabouço ficou com o grupo. O que vocês já ganharam é seu — cartas, pedras e itens não se perdem.'));
     var acts = el('div', 'menu-acts');
+    var estD = grupoEstado();
+    if (emGrupo() || (estD && estD.descidaGrupo)) {     // 11/09: a derrota de grupo (4.8)
+      derrotaGrupo(acts);
+      box.appendChild(acts);
+      s.appendChild(box);
+      return;
+    }
     acts.appendChild(btn('Tentar de novo', 'btn-primary btn-big', function () {
       var ok = safe(function () { return G().startRun(selHeroes.slice(), G().dungeonId); }, false);
       if (!ok) navTo('heroSelect');
@@ -2168,7 +2444,7 @@ var JOGO = (typeof window !== 'undefined')
     var u = activeUnit();
     var parts = [s.round, s.activeIdx, s.weather, s.phase,
                  safe(function () { return G().selectedSpellId; }, ''),
-                 safe(function () { return G().canFuse().length; }, 0)];
+                 safe(function () { return G().canFuse().length; }, 0), coopSig()];
     for (var i = 0; i < s.units.length; i++) {
       var x = s.units[i];
       parts.push(x.uid + ':' + x.hp + ':' + x.pa + ':' + x.pp + ':' + (x.alive ? 1 : 0) +
@@ -2204,6 +2480,7 @@ var JOGO = (typeof window !== 'undefined')
     paintTimer();
     paintPlacement(s);
     avisaMoldura();
+    pintaGrupoLado();                     // 11/09: a vida no painel do grupo
   }
 
   /* A ESCOLHA DA POSIÇÃO (03/09): em `placing` a batalha mostra a faixa e
@@ -2212,9 +2489,7 @@ var JOGO = (typeof window !== 'undefined')
     var placing = s.phase === 'placing';
     screens.battle.classList.toggle('is-placing', placing);
     if (placing && !bt.placing) {
-      bt.placing = el('div', 'bt-placing',
-        '<b>Escolha onde nascer</b> — toque numa das quatro casas douradas. ' +
-        'O segundo herói nasce ao acaso perto de você.');
+      bt.placing = el('div', 'bt-placing', textoColocacao());
       screens.battle.appendChild(bt.placing);
     } else if (!placing && bt.placing) {
       bt.placing.remove();
@@ -2283,7 +2558,11 @@ var JOGO = (typeof window !== 'undefined')
       var u = unitByUid(uid);
       if (!u || !u.alive || u.offBoard) continue;
       shown++;
-      var cell = el('div', 'tl-unit ' + (u.side === 'hero' ? 's-hero' : 's-enemy') + (i === 0 ? ' is-now' : ''));
+      // 11/09: a cor vem do lado NA MINHA TELA (meu, do parceiro, inimigo) — e
+      // conserta o 'hero' que nunca batia (todo mundo saía vermelho)
+      var lado = ladoTela(u);
+      var cell = el('div', 'tl-unit ' + (lado === 'meu' ? 's-hero' : (lado === 'aliado' ? 's-parceiro' : 's-enemy')) +
+                           (i === 0 ? ' is-now' : ''));
       cell.appendChild(art('portrait', [u.defId, { element: u.element, size: 48 }], i === 0 ? 46 : 34));
       var hpPct = u.hpMax ? u.hp / u.hpMax : 0;
       var hb = el('div', 'tl-hp');
@@ -2292,7 +2571,7 @@ var JOGO = (typeof window !== 'undefined')
       hb.appendChild(hf);
       cell.appendChild(hb);
       if (u.boss) cell.appendChild(el('span', 'tl-boss', '♛'));
-      tipOn(cell, u.name || u.defId, unitTipBody(u), u.side === 'hero' ? '#7ef0d4' : '#ff9a7a');
+      tipOn(cell, u.name || u.defId, unitTipBody(u), lado === 'inimigo' ? '#ff9a7a' : (lado === 'aliado' ? '#9cc4ff' : '#7ef0d4'));
       bt.timeline.appendChild(cell);
     }
   }
@@ -2424,6 +2703,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function paintTimer() {
+    pintaEspera();                        // 11/09: o relógio estimado da vez do parceiro
     if (!bt.timer) return;
     var g = G();
     if (!g) return;
@@ -2455,7 +2735,7 @@ var JOGO = (typeof window !== 'undefined')
     var u = activeUnit();
     var mine = safe(function () { return G().isPlayerTurn(); }, false);
     if (!u || !mine) {
-      bt.spells.appendChild(el('div', 'bt-wait', u ? 'Turno de ' + esc(u.name || '') + '…' : 'Aguarde…'));
+      bt.spells.appendChild(esperaNaBarra(u));      // 11/09: "Vez de Bia — esperando o lance…"
       bt.endBtn.classList.add('is-off');
       return;
     }
@@ -2529,6 +2809,8 @@ var JOGO = (typeof window !== 'undefined')
     var cell = el('button', 'fusion-btn');
     cell.type = 'button';
     cell.appendChild(art('unit', [defId, { elements: [a.element, b.element], dir: 0, scale: 0.4 }], 60));
+    // 11/09: com o herói do PARCEIRO, a fusão é um pedido (os dois aceitam, D6)
+    if (pr.pedido) { celulaFusaoPedida(cell, pr, a, b, ca, cb); bt.fusion.appendChild(cell); return; }
     var t = el('div', 'fu-txt');
     t.appendChild(el('b', null, 'FUNDIR'));
     t.appendChild(el('span', null, esc(className(ca)) + ' + ' + esc(className(cb))));
@@ -3583,6 +3865,7 @@ var JOGO = (typeof window !== 'undefined')
     var s = screens.duelFim;
     clear(s);
     data = data || {};
+    if (data.rede) { duelFimRede(s, data); return; }      // 11/09: o duelo contra outra pessoa
     var box = el('div', 'game-over du-fim');
     box.appendChild(el('h1', null, data.venceuA ? 'O Lado A venceu!' : 'O Lado B venceu!'));
     var nomes = function (ids) {
@@ -3657,6 +3940,8 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'placar') sheetPlacar();
     else if (name === 'troca') sheetTroca();
     else if (name === 'duelo') sheetDuelo();
+    else if (name === 'dueloRede') sheetDueloRede();                       // 11/09: o duelo pela Rede
+    else if (name === 'sussurro') sheetSussurro(arg && arg.id, arg && arg.nome);   // 11/09: a mensagem particular
     else closeSheet();
   }
   UI.openSheet = openSheet;
@@ -4370,6 +4655,18 @@ var JOGO = (typeof window !== 'undefined')
       var fila = el('div', 'av-fila');
       var lider = selHeroes[0] || ensurePartyHero() || 'sumo';
       fila.appendChild(cartao(null, 'Seu líder — ' + className(lider), lider));
+      // SOB DEMANDA (10/09): no jogo servido o corpo próprio de cada fusão
+      // desce agora; até chegar, a composta segura o retrato — e a ficha se
+      // repinta quando algum chegar, se ainda estiver aberta
+      var Bav = JOGO.Bundle;
+      if (Bav && Bav.pede && Bav.corpoDe) {
+        try {
+          Bav.pede(paresDeAvatar().map(Bav.corpoDe), function (falhas, n) {
+            if (falhas.length < n && sheetName === 'party' && partyTab === 'avatar' &&
+                document.body.contains(caixa)) sheetParty('avatar');
+          });
+        } catch (eAv) {}
+      }
       paresDeAvatar().forEach(function (defId) {
         fila.appendChild(cartao(defId, nomeDoPar(defId), defId));
       });
@@ -4403,6 +4700,7 @@ var JOGO = (typeof window !== 'undefined')
    * trocas que não mudam quem anda, a ficha só redesenha. */
   function duplaMudou(liderAntes) {
     var liderAgora = selHeroes[0] || null;
+    avisaHeroiAoGrupo();                  // 11/09: o grupo leva o principal
     if (current === 'hub' && liderAgora && liderAgora !== liderAntes) {
       UI.showScreen('hub');
       toast(className(liderAgora) + ' agora anda no acampamento.', 'good');
@@ -5805,6 +6103,16 @@ var JOGO = (typeof window !== 'undefined')
     var r = par.resumo || {};
 
     var topo = el('div', 'perfil-topo');
+    // SOB DEMANDA: o corpo próprio da fusão do visitante desce agora, e a
+    // ficha se repinta quando ele chegar (se ainda for esta ficha)
+    var Bpf = JOGO.Bundle;
+    if (Bpf && Bpf.pede && Bpf.corpoDe) {
+      try {
+        Bpf.pede([Bpf.corpoDe(par.classe)], function (falhas) {
+          if (!falhas.length && sheetName === 'perfil' && document.body.contains(topo)) sheetPerfil(par);
+        });
+      } catch (ePf) {}
+    }
     topo.appendChild(art('unit', [par.classe, { element: 'neutro', dir: 0, scale: 0.7 }], 110));
     var col = el('div', 'perfil-col');
 
@@ -6847,14 +7155,952 @@ var JOGO = (typeof window !== 'undefined')
     // no meio da luta: o saco e a árvore de feitiços
     acts.appendChild(btn('Inventário', 'btn-ghost', function () { openSheet('inventory'); }));
     acts.appendChild(btn('Feitiços', 'btn-ghost', function () { openSheet('spells'); }));
-    acts.appendChild(btn('Abandonar a descida', 'btn-warn', function () {
-      confirmSheet('Abandonar?', 'O que você já ganhou fica. A sala em curso se perde.', function () {
-        safe(function () { G().restart(); }, null);
-        UI.showScreen('menu');
-      });
-    }));
+    var mr = modoRede();
+    if (mr === 'grupo') {
+      // 11/09: em grupo, sair da batalha é sair do grupo e da descida (D16)
+      acts.appendChild(btn('Sair do grupo e da descida', 'btn-warn', function () {
+        confirmSheet('Sair do grupo e da descida?',
+          'Seu herói segue com a IA até o fim desta sala, e você não recebe nada dela.', function () {
+            safe(function () { Cp().sairDaBatalha(); return true; }, null);
+            safe(function () { Gp().sair('saiu'); return true; }, null);
+            safe(function () { G().restart(); }, null);
+            UI.showScreen('menu');
+          });
+      }));
+    } else if (mr === 'duelo') {
+      acts.appendChild(btn('Desistir do duelo', 'btn-warn', function () {
+        confirmSheet('Desistir do duelo?', 'Conta como derrota.', function () {
+          safe(function () { Cp().desistir(); return true; }, null);
+        });
+      }));
+    } else {
+      acts.appendChild(btn('Abandonar a descida', 'btn-warn', function () {
+        confirmSheet('Abandonar?', 'O que você já ganhou fica. A sala em curso se perde.', function () {
+          safe(function () { G().restart(); }, null);
+          UI.showScreen('menu');
+        });
+      }));
+    }
     acts.appendChild(btn('Voltar à luta', 'btn-primary', closeSheet));
     body.appendChild(acts);
+  }
+
+  // ==========================================================================
+  // O GRUPO, O DUELO E A MENSAGEM PARTICULAR (11/09, pedido do dono de 10/09)
+  // ==========================================================================
+  /* A HUD só DESENHA: quem decide é o js/core/grupo.js (JOGO.Grupo, JOGO.Duelo,
+   * JOGO.Sussurros) e a batalha em dupla é do JOGO.Coop. Os callbacks deles são
+   * pendurados UMA vez, no UI.init (ligaSocial); o painel da praça
+   * (hubPainelEl) e o chat (chatUI) são os da tela aberta, renovados a cada
+   * buildHub. Tudo defensivo: sem os módulos, nada disto aparece.
+   * A forma de "líder" na tela é sempre a neutra, "quem lidera" (4.11). */
+  function Gp() { return JOGO.Grupo || null; }
+  function Dl() { return JOGO.Duelo || null; }
+  function Su() { return JOGO.Sussurros || null; }
+  function Cp() { return JOGO.Coop || null; }
+  function emGrupo() { return !!safe(function () { return Gp().emGrupo(); }, false); }
+  function souLider() { return !!safe(function () { return Gp().souLider(); }, false); }
+  function grupoEstado() { return safe(function () { return Gp().estado(); }, null); }
+  function parceiroG() { return safe(function () { return Gp().parceiro(); }, null); }
+  function nomeParceiro() {
+    var p = parceiroG();
+    if (p && p.nome) return p.nome;
+    var ses = coopSessao();
+    return (ses && ses.parceiro && ses.parceiro.nome) || 'o parceiro';
+  }
+  function coopSessao() { return safe(function () { return Cp().sessao(); }, null); }
+  function meuIdRede() { return safe(function () { return JOGO.Rede.meuId(); }, null); }
+  function textoMotivo(m, nome) {
+    return safe(function () { return Gp().textoMotivo(m, nome); }, null) || 'Não deu agora.';
+  }
+  /* o modo da batalha: 'grupo' | 'duelo' | null (o Game decide; sem ele, o grupo) */
+  function modoRede() {
+    var g = G();
+    if (g && typeof g.modoRede === 'function') return safe(function () { return g.modoRede(); }, null);
+    return (emGrupo() && safe(function () { return Gp().estado().descidaGrupo; }, null)) ? 'grupo' : null;
+  }
+  /* de que lado a unidade está NA MINHA TELA: 'meu' | 'aliado' | 'inimigo' */
+  function ladoTela(u) {
+    var g = G();
+    if (g && typeof g.ladoDaTela === 'function') {
+      var l = safe(function () { return g.ladoDaTela(u); }, null);
+      if (l) return l;
+    }
+    return (u && u.side === 'player') ? 'meu' : 'inimigo';
+  }
+  function donoDe(u) { return u ? safe(function () { return G().donoDe(u); }, null) : null; }
+  /* o nome de quem manda numa unidade (u.dono): eu, o parceiro do grupo ou o
+   * oponente do duelo */
+  function nomeDoDono(id) {
+    if (!id) return nomeParceiro();
+    var p = parceiroG();
+    if (p && p.id === id) return p.nome;
+    var ses = coopSessao();
+    if (ses && ses.parceiro && ses.parceiro.id === id && ses.parceiro.nome) return ses.parceiro.nome;
+    return safe(function () { return JOGO.Rede.nomeDe(id); }, null) || nomeParceiro();
+  }
+  function classeDoPar(id) {
+    var c = null;
+    safe(function () { JOGO.Rede.pares().forEach(function (p) { if (p.id === id) c = p.classe; }); return true; }, null);
+    return c || 'sumo';
+  }
+  function meuHeroiG() {
+    var hid = safe(function () { return Gp().meuHeroi(); }, null) || selHeroes[0] || null;
+    return hid ? (hero(hid) || { classId: hid, level: 1 }) : null;
+  }
+  function relogioTxt(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000));
+    return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+  }
+
+  // ---------------------------------------------------- o painel da praça
+  var hubPainelEl = null;          // o .hub-painel da tela aberta (buildHub)
+  var painelModo = null;           // 'lugar' | 'jogador' | 'convite' | 'nome' | null
+  var painelLugar = null;          // o último lugar aproximado (para repintar)
+  var painelPar = null;            // o jogador do painel aberto
+  var painelConv = null;           // { tipo:'grupo', gid } | { tipo:'duelo', did }
+  var painelJogadorFn = null;      // o desenhista do painel do jogador (vive no buildHub)
+  var chamandoPorta = 0;           // quando quem lidera tocou "Entrar na batalha com…"
+  /* 11/09 (revisão): "vivo" é o que está na tela ABERTA, não só no DOM. O buildHub
+   * limpa só a própria tela e o showScreen só troca a classe: o painel e o chat da
+   * praça (ou da antessala) seguem no DOM, escondidos, na batalha, na recompensa e
+   * na derrota — a mensagem particular virava linha num chat que ninguém via, e o
+   * "Mensagem particular" do cartão do grupo não abria ficha nenhuma. */
+  function naTelaAberta(n) { var s = screens[current]; return !!(n && n.isConnected && s && s.contains(n)); }
+  function painelVivo() { return naTelaAberta(hubPainelEl) ? hubPainelEl : null; }
+  function abrePainel(modo) {
+    var p = painelVivo();
+    if (!p) return null;
+    clear(p);
+    p.classList.remove('is-off');
+    painelModo = modo;
+    return p;
+  }
+  function fechaPainel() {
+    var p = painelVivo();
+    if (p) p.classList.add('is-off');
+    painelModo = null;
+    painelConv = null;
+  }
+  /* o painel aberto se redesenha quando o grupo muda (o botão do portal, a
+   * porta da antessala, os botões do painel do jogador) */
+  function repintaLugar() {
+    var p = painelVivo();
+    if (!p || p.classList.contains('is-off')) return;
+    if (painelModo === 'lugar' && painelLugar && JOGO.Hub && JOGO.Hub.aoAproximar) {
+      safe(function () { JOGO.Hub.aoAproximar(painelLugar); return true; }, null);
+    } else if (painelModo === 'jogador' && painelPar && painelJogadorFn) {
+      safe(function () { painelJogadorFn(painelPar); return true; }, null);
+    }
+  }
+  function cabecalhoPainel(p, classe, element, titulo, sub) {
+    var cab = el('div', 'pn-cab');
+    cab.appendChild(art('portrait', [classe || 'sumo', { element: element || 'neutro', size: 48 }], 40));
+    var tx = el('div', 'pn-cab-tx');
+    tx.appendChild(el('h3', null, titulo));
+    if (sub) tx.appendChild(el('span', 'pn-cab-sub', sub));
+    cab.appendChild(tx);
+    p.appendChild(cab);
+  }
+  function barraPrazo(expira, agoraFn) {
+    var b = el('div', 'conv-prazo');
+    var i = el('i');
+    var agora = safe(function () { return agoraFn(); }, Date.now());
+    i.style.animationDuration = Math.max(0, expira - agora) + 'ms';
+    b.appendChild(i);
+    return b;
+  }
+
+  /* O CONVITE DE GRUPO que chega (4.2): no mesmo painel da troca e da guilda */
+  function mostraConviteGrupo(c) {
+    var p = abrePainel('convite');
+    if (!p) { toast(c.nome + ' te chama para o grupo.'); return; }
+    painelConv = { tipo: 'grupo', gid: c.gid };
+    var h = c.heroi || {};
+    cabecalhoPainel(p, h.classId, h.element, '<b>' + esc(c.nome) + '</b> te chama para o grupo.',
+      h.classId ? esc(className(h.classId)) + ' · nv ' + (h.level || 1) : '');
+    var meu = meuHeroiG() || {};
+    p.appendChild(el('p', 'hub-nota', esc(c.nome) + ' lidera: escolhe o calabouço e abre as portas. ' +
+      'Você leva o seu herói principal: <b>' + esc(className(meu.classId || '')) + ' nv ' + (meu.level || 1) + '</b>.'));
+    p.appendChild(barraPrazo(c.expira, function () { return Gp()._agora(); }));
+    var duo = el('div', 'pn-duplo');
+    duo.appendChild(btn('Aceitar', 'btn-primary', function () {
+      var r = safe(function () { return Gp().responder(true); }, null);
+      fechaPainel();
+      if (r && r.ok) toast('Você entrou no grupo de ' + c.nome + '.', 'good');
+      else toast(textoMotivo(r ? r.motivo : 'expirou', null));
+    }));
+    duo.appendChild(btn('Agora não', 'btn-ghost', function () {
+      safe(function () { return Gp().responder(false); }, null);
+      fechaPainel();
+    }));
+    p.appendChild(duo);
+    if (sheetName) toast(c.nome + ' te chama para o grupo — veja o painel');
+  }
+  /* O DESAFIO que chega (4.2) */
+  function mostraDesafio(c) {
+    var p = abrePainel('convite');
+    if (!p) { toast(c.nome + ' te desafia para um duelo.'); return; }
+    painelConv = { tipo: 'duelo', did: c.did };
+    cabecalhoPainel(p, classeDoPar(c.id), 'neutro', '<b>' + esc(c.nome) + '</b> te desafia para um duelo.', '');
+    p.appendChild(el('p', 'hub-nota', 'Cada um leva a sua dupla, escolhida às cegas; a arena é sorteada entre ' +
+      'os calabouços abertos. Amistoso: a Brasa não muda.'));
+    p.appendChild(barraPrazo(c.expira, function () { return Dl()._agora(); }));
+    var duo = el('div', 'pn-duplo');
+    duo.appendChild(btn('Aceitar', 'btn-primary', function () {
+      var r = safe(function () { return Dl().responder(true); }, null);
+      fechaPainel();
+      if (!r || !r.ok) toast(textoMotivo(r ? r.motivo : 'expirou', null));
+    }));
+    duo.appendChild(btn('Agora não', 'btn-ghost', function () {
+      safe(function () { return Dl().responder(false); }, null);
+      fechaPainel();
+    }));
+    p.appendChild(duo);
+    if (sheetName) toast(c.nome + ' te desafia para um duelo — veja o painel');
+  }
+
+  /* O PORTAL em grupo (4.5): quem lidera desce com o outro; quem segue espera */
+  function painelPortalGrupo(p, lugar) {
+    var nome = nomeParceiro();
+    var est = grupoEstado() || {};
+    if (souLider()) {
+      var sd = seletorDif();
+      if (sd) p.appendChild(sd);
+      var meu = meuHeroiG() || {};
+      p.appendChild(el('p', 'hub-nota', 'Em grupo, cada um leva o seu herói principal: <b>' +
+        esc(className(meu.classId || '')) + ' nv ' + (meu.level || 1) + '</b>.'));
+      if (est.descendo && est.descendo.dungeonId === lugar.id) {
+        p.appendChild(btn('Chamando ' + esc(nome) + '…', 'btn-primary btn-block is-apagado', function () {}));
+        return;
+      }
+      p.appendChild(btn('Descer com ' + esc(nome), 'btn-primary btn-block', function () {
+        var r = safe(function () { return Gp().descer(lugar.id); }, null);
+        if (!r || !r.ok) toast(textoMotivo(r ? r.motivo : 'ocupado', r && r.motivo === 'sumido' ? nome : null));
+        else repintaLugar();
+      }));
+      return;
+    }
+    p.appendChild(el('p', 'hub-nota', 'Só quem lidera (<b>' + esc(nome) + '</b>) escolhe o calabouço.'));
+    var lnDif = linhaDifGrupo();                    // 11/09 (revisão): e a dificuldade, antes de descer
+    if (lnDif) p.appendChild(lnDif);
+    p.appendChild(btn('Descer', 'btn-primary btn-block is-apagado', function () {
+      toast('Só quem lidera (' + nome + ') escolhe o calabouço.');
+    }));
+    p.appendChild(btn('Sair do grupo para descer sozinho', 'btn-ghost btn-block', function () {
+      confirmSheet('Sair do grupo?', 'Você deixa o grupo de ' + esc(nome) + ' e volta a descer sozinho.', function () {
+        safe(function () { Gp().sair('saiu'); return true; }, null);
+        repintaLugar();
+      });
+    }));
+  }
+  /* A PORTA DA ANTESSALA em grupo (4.6): quem lidera abre quando o outro está
+   * pronto na porta; quem segue só espera */
+  function painelPortaGrupo(p) {
+    var nome = nomeParceiro();
+    if (!souLider()) {
+      // 11/09 (revisão): quem segue vê a dificuldade que vale (a da ata é a de quem lidera)
+      var lnDif = linhaDifGrupo();
+      if (lnDif) p.appendChild(lnDif);
+      p.appendChild(el('p', 'hub-nota', 'Quem abre a porta é quem lidera (<b>' + esc(nome) + '</b>). ' +
+        'Seu herói está pronto. <b style="color:#7fe08a">✓</b>'));
+      return;
+    }
+    var sd = seletorDif();
+    if (sd) p.appendChild(sd);
+    var pe = safe(function () { return Cp().podeEntrar(); }, null) || { ok: false, motivo: 'sem-pronto' };
+    var chamando = chamandoPorta && (Date.now() - chamandoPorta < 20000);
+    var espera = esperaPorta(nome);
+    if (chamando) p.appendChild(el('p', 'hub-nota', 'Chamando ' + esc(nome) + ' para a batalha…'));
+    else if (!pe.ok) {
+      p.appendChild(el('p', 'hub-nota hub-espera-par', pe.motivo === 'versao' ? esc(textoMotivo('versao', nome)) : esc(espera)));
+    }
+    p.appendChild(btn('Entrar na batalha com ' + esc(nome), 'btn-primary btn-block' + (pe.ok && !chamando ? '' : ' is-apagado'),
+      function () {
+        if (chamando) return;
+        if (!pe.ok) { toast(pe.motivo === 'versao' ? textoMotivo('versao', nome) : espera); return; }
+        var ok = safe(function () { return Cp().entrar(); }, false);
+        if (!ok) { toast('Não deu para chamar ' + nome + ' agora.'); return; }
+        chamandoPorta = Date.now();
+        repintaLugar();
+      }));
+  }
+
+  /* 11/09 (revisão): O QUE QUEM LIDERA ESPERA. Quem segue nunca anda até a porta:
+   * o `pronto` sai sozinho ao chegar na antessala (e se repete a cada 5 s). O que
+   * segura, da sala 2 em diante, é ainda estar na recompensa — "chegar à porta"
+   * mandava pedir no chat uma coisa que a outra pessoa não tinha como fazer. Onde
+   * ela está vem da presença da Rede: a antessala é uma sala, e só quem está nela
+   * tem a mesma chave (dungeonId:roomIndex) que a minha. */
+  function esperaPorta(nome) {
+    var pid = (parceiroG() || {}).id, parSala = null;
+    safe(function () { JOGO.Rede.pares().forEach(function (q) { if (q && q.id === pid) parSala = q.sala || null; }); return true; }, null);
+    var aqui = safe(function () { return G().dungeonId + ':' + G().roomIndex; }, '');
+    return (pid && parSala && parSala === aqui) ? 'Esperando ' + nome + ' ficar pronto(a)…'
+      : nome + ' ainda não entrou na antessala (na recompensa, é o botão "Seguir para a próxima sala").';
+  }
+  /* 11/09 (revisão): a dificuldade de quem lidera, para quem segue — ela chega no
+   * estado do grupo e no "descer"; a que vale na batalha é a da ata, a de quem lidera */
+  function linhaDifGrupo() {
+    var dif = (grupoEstado() || {}).descidaDif;
+    var cfg = dif ? ((JOGO.DATA && JOGO.DATA.dificuldades) || {})[dif] : null;
+    if (!cfg) return null;
+    var custo = Math.round(((cfg.vida || 1) - 1) * 100), premio = Math.round(((cfg.xp || 1) - 1) * 100);
+    var num = (custo === 0 && premio === 0) ? '' : ' — ' + (custo === 0 ? 'monstros iguais' : (custo > 0 ? '+' : '') + custo + '% de vida') +
+      ', ' + (premio === 0 ? 'xp normal' : (premio > 0 ? '+' : '') + premio + '% de xp');
+    return el('p', 'hub-nota hub-dif-lider', 'Dificuldade escolhida por quem lidera: <b>' + esc(cfg.nome || dif) + '</b>' + esc(num));
+  }
+
+  // ------------------------------------------------ o painel do grupo (P4)
+  var grupoLadoEl = null, glMenuEl = null, glSig = '', tickSocial = 0, ultConexao = null;
+  var GL_TELAS = ['hub', 'antessala', 'battle', 'roomClear', 'dungeonComplete', 'defeat'];
+  function unidadeDoMembro(m, s) {
+    if (!s || !s.units) return null;
+    var achada = null, i, u;
+    for (i = 0; i < s.units.length; i++) {
+      u = s.units[i];
+      if ((u.kind !== 'hero' && u.kind !== 'fusion') || !u.dono || u.dono !== m.id) continue;
+      if (!achada || (u.alive && !u.offBoard && !(achada.alive && !achada.offBoard))) achada = u;
+    }
+    if (achada || !m.eu) return achada;
+    // motor sem `dono` (fora de rede): o meu herói pelo heroId
+    var hid = safe(function () { return Gp().meuHeroi(); }, null);
+    for (i = 0; i < s.units.length; i++) {
+      u = s.units[i];
+      if (u.kind === 'hero' && hid && u.heroId === hid) return u;
+    }
+    return null;
+  }
+  function pintaGrupoLado() {
+    if (!grupoLadoEl) return;
+    var est = grupoEstado();
+    var vis = !!(est && est.fase === 'formado' && est.membros && est.membros.length === 2) &&
+              GL_TELAS.indexOf(current) >= 0;
+    grupoLadoEl.classList.toggle('is-on', vis);
+    // 11/09 (revisão): na batalha, na MINHA vez (e na colocação de quem escolhe a
+    // casa), o painel deixa o toque passar para o tabuleiro — no celular ele fica
+    // em cima da borda direita da sala, e o toque numa casa ali abria o menu do
+    // cartão em vez de mover ou mirar. Na vez do parceiro (ou de um monstro) os
+    // cartões voltam a ser tocáveis (o menu deles é a "Mensagem particular").
+    var passa = vis && current === 'battle' && !!safe(function () {
+      var g = G();
+      return g.isPlayerTurn() || (g.state && g.state.phase === 'placing' && (!g.podeColocar || g.podeColocar()));
+    }, false);
+    if (passa !== grupoLadoEl.classList.contains('is-passa')) {
+      grupoLadoEl.classList.toggle('is-passa', passa);
+      if (passa) fechaGlMenu();
+    }
+    if (!vis) {
+      if (glSig) { clear(grupoLadoEl); glSig = ''; }
+      fechaGlMenu();
+      return;
+    }
+    var naLuta = current === 'battle';
+    // na batalha o painel mora logo acima da barra de baixo, pela altura MEDIDA
+    // dela (no celular ela cresce com a fusão): nunca por cima do "Encerrar turno"
+    var base = naLuta && screens.battle ? screens.battle.querySelector('.bt-bottom') : null;
+    var hb = base ? Math.round(base.getBoundingClientRect().height) : 0;
+    grupoLadoEl.style.bottom = (naLuta && hb) ? (hb + 12) + 'px' : '';
+    var ses = naLuta ? coopSessao() : null;
+    var s = naLuta ? st() : null;
+    var ativa = naLuta ? activeUnit() : null;
+    var agoraG = safe(function () { return Gp()._agora(); }, Date.now());
+    var conexao = safe(function () { return JOGO.Rede.estadoConexao(); }, null);
+    var cartas = est.membros.map(function (m) {
+      var u = naLuta ? unidadeDoMembro(m, s) : null;
+      var fora = !m.eu && !m.on;
+      var voltando = fora && !m.saiu && m.sumidoDesde && (agoraG - m.sumidoDesde) < (est.graca || 15000);
+      return {
+        m: m, u: u, fora: fora, voltando: !!voltando, lider: m.id === est.lider,
+        ia: !!(u && u.ia) || (!m.eu && !!(ses && ses.parceiroIA)),
+        vez: !!(u && ativa && ativa.uid === u.uid),
+        semRede: !!m.eu && conexao === 'religando',
+        pv: u ? Math.round(100 * Math.max(0, u.hp) / Math.max(1, u.hpMax)) : null
+      };
+    });
+    var sig = current + '#' + cartas.map(function (c) {
+      var h = c.m.heroi || {};
+      return [c.m.id, c.m.nome, h.classId, h.element, h.level, c.fora, c.voltando, c.lider, c.ia, c.vez, c.semRede, c.pv].join(',');
+    }).join('|');
+    if (sig === glSig) return;
+    glSig = sig;
+    clear(grupoLadoEl);
+    cartas.forEach(function (c) { grupoLadoEl.appendChild(cartaoMembro(c)); });
+  }
+  function cartaoMembro(c) {
+    var m = c.m, h = m.heroi || {};
+    var card = el('button', 'gl-membro' + (c.lider ? ' is-lider' : '') + (c.vez ? ' is-vez' : '') + (c.fora ? ' is-fora' : ''));
+    card.type = 'button';
+    var pic = el('div', 'gl-pic');
+    pic.appendChild(art('portrait', [h.classId || 'sumo', { element: h.element || 'neutro', size: 40 }], 36));
+    if (c.lider) pic.appendChild(el('span', 'gl-coroa', '♛'));
+    pic.appendChild(el('i', 'gl-on' + ((c.fora || c.semRede) ? ' is-off' : (c.ia ? ' is-ia' : ''))));
+    card.appendChild(pic);
+    var tx = el('div', 'gl-tx');
+    var nome = String(m.nome || (m.eu ? 'Você' : '?'));
+    tx.appendChild(el('span', 'gl-nome', esc(nome.length > 12 ? nome.slice(0, 11) + '…' : nome)));
+    tx.appendChild(el('span', 'gl-nv', esc(className(h.classId || '')) + ' · nv ' + (h.level || 1)));
+    if (c.pv !== null) {
+      var vb = el('div', 'gl-vida');
+      var vi = el('i');
+      vi.style.width = Math.max(0, Math.min(100, c.pv)) + '%';
+      vb.appendChild(vi);
+      tx.appendChild(vb);
+    }
+    var selos = el('div', 'gl-selos');
+    if (c.vez) selos.appendChild(el('span', 'gl-selo s-vez', 'vez'));
+    if (c.ia) selos.appendChild(el('span', 'gl-selo s-ia', 'IA'));
+    if (c.voltando) selos.appendChild(el('span', 'gl-selo s-voltando', 'voltando…'));
+    else if (c.fora) selos.appendChild(el('span', 'gl-selo s-caiu', m.saiu ? 'saiu' : 'caiu'));
+    if (c.semRede) selos.appendChild(el('span', 'gl-selo s-caiu', 'sem conexão'));
+    if (selos.childNodes.length) tx.appendChild(selos);
+    card.appendChild(tx);
+    card.title = nome + (c.lider ? ' — lidera' : '');
+    tap(card, function () { abreGlMenu(m, card); });
+    return card;
+  }
+  function fechaGlMenu() {
+    if (glMenuEl) { glMenuEl.classList.remove('is-on'); glMenuEl.removeAttribute('data-de'); }
+  }
+  function confirmaSair(nome) {
+    var naAntessala = current === 'antessala';
+    confirmSheet('Sair do grupo?', naAntessala
+      ? 'A descida acaba para vocês dois e o grupo se desfaz.'
+      : 'Você deixa o grupo' + (nome ? ' de ' + esc(nome) : '') + '.', function () {
+        safe(function () { Gp().sair('saiu'); return true; }, null);
+      });
+  }
+  /* o menu de um cartão do painel do grupo (4.3) */
+  function abreGlMenu(m, card) {
+    if (!glMenuEl) return;
+    if (glMenuEl.classList.contains('is-on') && glMenuEl.getAttribute('data-de') === m.id) { fechaGlMenu(); return; }
+    clear(glMenuEl);
+    glMenuEl.setAttribute('data-de', m.id);
+    var est = grupoEstado() || {};
+    var naLuta = current === 'battle' || current === 'roomClear' || current === 'dungeonComplete';
+    glMenuEl.appendChild(el('h4', null, esc(m.nome || '') + (m.id === est.lider ? ' <span class="gl-coroa-t">♛</span>' : '')));
+    function op(rot, cls, fn) {
+      glMenuEl.appendChild(btn(rot, 'btn-mini ' + (cls || 'btn-ghost'), function () { fechaGlMenu(); fn(); }));
+    }
+    if (!m.eu) {
+      op('Mensagem particular', 'btn-ghost', function () { armaSussurro(m.id, m.nome); });
+      if (!naLuta && souLider()) {
+        op('Passar a liderança', 'btn-gold', function () {
+          var r = safe(function () { return Gp().passarLideranca(); }, null);
+          toast(r && r.ok ? m.nome + ' agora lidera o grupo.' : textoMotivo(r ? r.motivo : 'ocupado', r && r.motivo === 'sumido' ? m.nome : null),
+                r && r.ok ? 'good' : undefined);
+        });
+        op('Desfazer o grupo', 'btn-warn', function () { confirmaSair(null); });
+      } else if (!naLuta) {
+        op('Sair do grupo', 'btn-warn', function () { confirmaSair(m.nome); });
+      }
+    } else if (!naLuta) {
+      op('Sair do grupo', 'btn-warn', function () { confirmaSair(nomeParceiro()); });
+    } else {
+      glMenuEl.appendChild(el('p', 'hub-nota', 'Para sair da batalha, use o menu de pausa (☰).'));
+    }
+    op('Fechar', 'btn-ghost', function () {});
+    var r = card.getBoundingClientRect(), rr = root.getBoundingClientRect();
+    glMenuEl.style.top = Math.max(8, Math.min(rr.height - 250, r.top - rr.top)) + 'px';
+    glMenuEl.style.right = Math.max(8, rr.right - r.left + 8) + 'px';
+    glMenuEl.classList.add('is-on');
+  }
+
+  // ------------------------------------------- a mensagem particular (4.4)
+  var chatUI = null;               // { log, input, chip } do chat da tela aberta
+  var chatAlvo = null;             // { id, nome }: o sussurro armado no chat
+  var sussurroAlvo = null;         // o destinatário da ficha de sussurro
+  var suHist = null, suInput = null, suInputDe = null;   // a ficha aberta: o histórico e o campo (a linha nova entra sem redesenhar)
+  function chatVivo() { return (chatUI && naTelaAberta(chatUI.log)) ? chatUI : null; }
+  function linhaSussurro(l) {
+    var li = el('div', 'hub-chat-linha chat-sussurro' + (l.meu ? ' is-meu' : '') + (l.sistema ? ' is-falhou' : ''));
+    if (l.sistema) li.textContent = l.texto;
+    else if (l.meu) li.innerHTML = '→ <b>' + esc(l.nome) + ':</b> ' + esc(l.texto);
+    else li.innerHTML = '<b>' + esc(l.nome) + '</b> (particular): ' + esc(l.texto);
+    if (!l.meu && !l.sistema) {
+      li.title = 'toque para responder';
+      tap(li, function () { armaSussurro(l.de, l.nome); });
+    }
+    return li;
+  }
+  function chatSussurro(l) {
+    var c = chatVivo();
+    if (!c) return false;
+    c.log.appendChild(linhaSussurro(l));
+    while (c.log.children.length > 8) c.log.removeChild(c.log.firstChild);
+    c.log.scrollTop = c.log.scrollHeight;
+    return true;
+  }
+  function pintaChip() {
+    var c = chatVivo();
+    if (!c) return;
+    clear(c.chip);
+    c.chip.classList.toggle('is-on', !!chatAlvo);
+    c.input.classList.toggle('is-privado', !!chatAlvo);
+    c.input.placeholder = chatAlvo ? 'para ' + chatAlvo.nome + '… (Enter)' : 'diga algo… (Enter)';
+    if (!chatAlvo) return;
+    c.chip.appendChild(el('span', null, 'para'));
+    c.chip.appendChild(el('span', 'chat-chip-nm', esc(chatAlvo.nome)));
+    c.chip.appendChild(el('span', 'chat-chip-x', '✕'));
+  }
+  /* "Mensagem particular": no chat do canto com o chip; sem chat (batalha,
+   * recompensa), numa ficha pequena */
+  function armaSussurro(id, nome) {
+    if (!id) return;
+    if (!safe(function () { return Su().pode(); }, false)) { toast(textoMotivo('privado', null)); return; }
+    var c = chatVivo();
+    if (!c) { openSheet('sussurro', { id: id, nome: nome }); return; }
+    chatAlvo = { id: id, nome: nome || '?' };
+    pintaChip();
+    try { c.input.focus(); } catch (e) {}
+  }
+  /* A LINHA QUE CHEGA (ou a que eu mando: o Su().manda devolve a minha na hora).
+   * 11/09 (revisão): na ficha aberta com essa pessoa ela só ENTRA no histórico —
+   * redesenhar a ficha a cada linha apagava o que estava sendo digitado e, no
+   * celular, tirava do DOM o campo focado (o teclado fechava a cada envio). Fora
+   * da ficha: no chat do canto, se ele está na tela; e o toast COM o texto quando
+   * não há chat (batalha, recompensa, derrota) ou uma ficha está por cima dele. */
+  function aoSussurroChegou(l) {
+    if (!l) return;
+    if (sheetName === 'sussurro' && sussurroAlvo && suHist && suHist.isConnected &&
+        (l.de === sussurroAlvo.id || l.para === sussurroAlvo.id)) {
+      suHist.appendChild(linhaSussurro(l));
+      while (suHist.children.length > 8) suHist.removeChild(suHist.firstChild);
+      suHist.scrollTop = suHist.scrollHeight;
+      return;
+    }
+    var noChat = chatSussurro(l);
+    var tapado = noChat && !!sheetName;          // o chat está na tela, mas uma ficha o cobre
+    if (l.sistema) { if (!noChat || tapado) toast(l.texto, 'bad'); return; }
+    if (l.meu) return;
+    if (!noChat || tapado) avisoSussurro(l);
+  }
+  function avisoSussurro(l) {
+    var t = String(l.texto || '').replace(/\s+/g, ' ');
+    if (t.length > 90) t = t.slice(0, 89) + '…';
+    toast(l.nome + ' (particular): ' + t);
+    toastT = 5;                                  // dá para ler; a conversa inteira fica na ficha
+  }
+  function sheetSussurro(id, nome) {
+    if (id) sussurroAlvo = { id: id, nome: nome || '?' };
+    var a = sussurroAlvo;
+    if (!a) { closeSheet(); return; }
+    // o rascunho sobrevive a um redesenho da mesma ficha (o UI.repaint da volta dos modelos 3D)
+    var rascunho = (suInput && suInput.isConnected && suInputDe === a.id) ? suInput.value : '';
+    var body = sheetShell('Mensagem particular', 'para ' + esc(a.nome));
+    sheetName = 'sussurro';
+    var hist = el('div', 'hub-chat-log su-hist');
+    (safe(function () { return Su().lista(); }, []) || []).filter(function (l) {
+      return l.de === a.id || l.para === a.id;
+    }).slice(-8).forEach(function (l) { hist.appendChild(linhaSussurro(l)); });
+    body.appendChild(hist);
+    suHist = hist; suInput = null; suInputDe = null;
+    if (!safe(function () { return Su().pode(); }, false)) {
+      body.appendChild(el('p', 'inv-dica', esc(textoMotivo('privado', null))));
+      return;
+    }
+    var inp = document.createElement('input');
+    inp.className = 'hub-input su-input';
+    inp.maxLength = 240;
+    inp.placeholder = 'mensagem para ' + a.nome + '…';
+    inp.value = rascunho;
+    suInput = inp; suInputDe = a.id;
+    function manda() {
+      var r = safe(function () { return Su().manda(a.id, inp.value); }, null);
+      // síncrono, dentro do gesto: o campo é o MESMO e o teclado do celular não fecha
+      if (r && r.ok) { inp.value = ''; try { inp.focus(); } catch (e) {} }
+      else toast(textoMotivo(r ? r.motivo : 'privado', null));
+    }
+    inp.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') manda();
+      ev.stopPropagation();                 // o i digitado aqui não abre o saco
+    });
+    body.appendChild(inp);
+    body.appendChild(btn('Mandar', 'btn-primary btn-block', manda));
+    hist.scrollTop = hist.scrollHeight;
+    // no gesto que abriu a ficha (o toque em "Mensagem particular") o foco já abre o
+    // teclado do iOS; o setTimeout fica para quem chegou aqui por outro caminho
+    try { inp.focus(); } catch (e0) {}
+    setTimeout(function () { try { if (inp.isConnected && document.activeElement !== inp) inp.focus(); } catch (e) {} }, 60);
+  }
+
+  // -------------------------------------------------- a batalha em dupla
+  /* a faixa da colocação (4.7): em grupo, quem lidera toca a casa; quem segue assiste */
+  function textoColocacao() {
+    if (modoRede() === 'grupo') {
+      var nome = esc(nomeParceiro());
+      return souLider()
+        ? '<b>Escolha onde o grupo nasce</b> — toque numa das quatro casas douradas. O herói de ' + nome +
+          ' nasce ao acaso perto do seu.'
+        : 'Quem lidera (<b>' + nome + '</b>) escolhe onde o grupo nasce. O seu herói aparece ao lado.';
+    }
+    return '<b>Escolha onde nascer</b> — toque numa das quatro casas douradas. ' +
+           'O segundo herói nasce ao acaso perto de você.';
+  }
+  /* o que a barra de feitiços diz quando não é a minha vez: "Vez de Bia —
+   * esperando o lance… 0:23" (o relógio estimado do Coop), o herói que foi
+   * para a IA, ou o turno de sempre */
+  function esperaNaBarra(u) {
+    bt.espera = null;
+    if (!u) return el('div', 'bt-wait', 'Aguarde…');
+    if (modoRede() && (u.kind === 'hero' || u.kind === 'fusion')) {
+      if (donoDe(u) === 'parceiro') {
+        bt.espera = el('div', 'bt-wait bt-espera', '');
+        pintaEspera();
+        return bt.espera;
+      }
+      if (u.ia && u.dono && u.dono !== meuIdRede()) {
+        return el('div', 'bt-wait', 'O herói de ' + esc(nomeDoDono(u.dono)) + ' segue com a IA até o fim da sala.');
+      }
+    }
+    return el('div', 'bt-wait', 'Turno de ' + esc(u.name || '') + '…');
+  }
+  /* a fusão com o herói do PARCEIRO (3.9): pede, e o dono do outro aceita */
+  function celulaFusaoPedida(cell, pr, a, b, ca, cb) {
+    var nomeB = nomeDoDono(b.dono);
+    var ses = coopSessao();
+    var fp = ses && ses.fusaoPedida;
+    var esperando = !!(fp && fp.uidA === pr.uidA && fp.uidB === pr.uidB);
+    var t = el('div', 'fu-txt');
+    t.appendChild(el('b', null, esperando ? 'Esperando ' + esc(nomeB) + ' aceitar…' : 'Pedir fusão a ' + esc(nomeB)));
+    t.appendChild(el('span', null, esc(className(ca)) + ' + ' + esc(className(cb))));
+    cell.appendChild(t);
+    tap(cell, function () {
+      if (esperando) { toast('Esperando ' + nomeB + ' aceitar…'); return; }
+      var ok = safe(function () { return Cp().pedeFusao(pr.uidA, pr.uidB); }, false);
+      var seg = Math.round((safe(function () { return Cp().FUSAO_MS; }, 20000) || 20000) / 1000);
+      toast(ok ? 'Esperando ' + nomeB + ' aceitar… (' + seg + ' s)' : 'Não deu para pedir a fusão agora.');
+      battleSig = '';
+    });
+  }
+  /* a derrota numa descida de grupo (4.8) */
+  function derrotaGrupo(acts) {
+    var nome = nomeParceiro();
+    if (emGrupo() && souLider()) {
+      acts.appendChild(btn('Descer de novo com ' + esc(nome), 'btn-primary btn-big', function () {
+        var dg = safe(function () { return G().dungeonId; }, null);
+        var r = safe(function () { return Gp().descer(dg); }, null);
+        if (!r || !r.ok) toast(textoMotivo(r ? r.motivo : 'ocupado', r && r.motivo === 'sumido' ? nome : null));
+        else toast('Chamando ' + nome + '…');
+      }));
+    } else if (emGrupo()) {
+      acts.appendChild(btn('Esperando ' + esc(nome) + '…', 'btn-primary btn-big is-apagado', function () {
+        toast('Quem lidera (' + nome + ') decide se vocês descem de novo.');
+      }));
+    }
+    acts.appendChild(btn('Voltar ao acampamento', 'btn-ghost', function () {
+      safe(function () { G().restart(); }, null);
+      navTo('hub');
+    }));
+  }
+  function pintaEspera() {
+    if (!bt.espera || !bt.espera.isConnected) return;
+    var ses = coopSessao();
+    var u = activeUnit();
+    var nome = nomeDoDono(u && u.dono);
+    var resta = '';
+    if (ses && ses.esperando && ses.esperando.prazo) {
+      var agora = safe(function () { return Cp()._agora(); }, null) || Date.now();
+      resta = ' ' + relogioTxt(ses.esperando.prazo - agora);
+    }
+    var txt = '<b>Vez de ' + esc(nome) + '</b> — esperando o lance…' + resta;
+    if (bt.espera._txt !== txt) { bt.espera.innerHTML = txt; bt.espera._txt = txt; }
+  }
+  function coopSig() {
+    var ses = coopSessao();
+    if (!ses) return '';
+    var e = ses.esperando, f = ses.fusaoPedida;
+    return [ses.parceiroOn ? 1 : 0, ses.parceiroIA ? 1 : 0, ses.sincronizando ? 1 : 0, e ? e.uid : '',
+            f ? (f.uidA + '>' + f.uidB + '@' + f.de) : ''].join(':');
+  }
+  /* o pedido de fusão que chega (3.9): a ficha de confirmação, 20 s */
+  function sheetFusaoPedida(p) {
+    if (!p) return;
+    var body = sheetShell('Fusão com ' + esc(p.nome || nomeParceiro()));
+    sheetName = 'fusaoPedida';
+    var nome = esc(p.nome || nomeParceiro());
+    body.appendChild(el('p', 'confirm-txt', nome + ' quer fundir os heróis de vocês dois. A fusão fica com ' + nome +
+      ' até o fim da sala; você assiste. Aceitar?'));
+    if (p.expira) body.appendChild(barraPrazo(p.expira, function () { return Cp()._agora ? Cp()._agora() : Date.now(); }));
+    var acts = el('div', 'confirm-acts');
+    acts.appendChild(btn('Agora não', 'btn-ghost', function () {
+      safe(function () { Cp().respondeFusao(false); return true; }, null);
+      closeSheet();
+    }));
+    acts.appendChild(btn('Aceitar', 'btn-primary', function () {
+      safe(function () { Cp().respondeFusao(true); return true; }, null);
+      closeSheet();
+    }));
+    body.appendChild(acts);
+  }
+  var ultSes = null;
+  function aoCoopMudou(ses) {
+    var a = ultSes || {};
+    ultSes = ses ? { parceiroIA: !!ses.parceiroIA, sincronizando: !!ses.sincronizando,
+                     proximaLiberada: !!ses.proximaLiberada, prontoParceiro: !!ses.prontoParceiro,
+                     fase: ses.fase || null, fusaoPedida: !!ses.fusaoPedida } : null;
+    if (ses) {
+      var nome = (ses.parceiro && ses.parceiro.nome) || nomeParceiro();
+      if (!a.parceiroIA && ses.parceiroIA) toast('O herói de ' + nome + ' segue com a IA até o fim da sala.');
+      if (!a.sincronizando && ses.sincronizando) {
+        toast(ses.tipo === 'duelo' ? 'Sincronizando com ' + nome + '…' : 'Sincronizando com quem lidera…');
+      }
+      if (a.fusaoPedida && !ses.fusaoPedida && sheetName === 'fusaoPedida') closeSheet();
+    }
+    if (current === 'battle') battleSig = '';
+    pintaGrupoLado();
+    var b = ultSes || {};
+    if (current === 'antessala' && (a.prontoParceiro !== b.prontoParceiro || a.fase !== b.fase)) repintaLugar();
+    if (current === 'roomClear' && !!a.proximaLiberada !== !!b.proximaLiberada) buildRewards(current, lastRewards);
+  }
+
+  // ---------------------------------------- recompensa e derrota em grupo
+  /* o rodapé da recompensa numa descida de grupo (4.8). Devolve false (solo),
+   * 'fim', 'acabou', 'lider' ou 'parceiro'. */
+  function rodapeGrupo(foot, fim) {
+    var est = grupoEstado();
+    var rede = !!(lastRewards && lastRewards.rede) || !!(est && est.descidaGrupo);
+    if (!rede) return false;
+    var nome = emGrupo() ? nomeParceiro()
+             : ((est && est.ultimoParceiro && est.ultimoParceiro.nome) || 'O parceiro');
+    function voltaSo() {
+      safe(function () { G().restart(); return true; }, null);
+      navTo('hub');
+    }
+    if (fim) {
+      foot.appendChild(btn('Voltar ao acampamento', 'btn-primary', voltaSo));
+      return 'fim';
+    }
+    var acabou = !emGrupo() || !!(lastRewards && lastRewards.descidaAcabou) || !!(est && est.descidaAcabou);
+    if (acabou) {
+      foot.appendChild(el('p', 'foot-count', esc(nome) + ' não voltou — a descida acabou.'));
+      foot.appendChild(btn('Voltar ao Acampamento', 'btn-primary', voltaSo));
+      return 'acabou';
+    }
+    foot.appendChild(btn('Voltar ao acampamento', 'btn-ghost', function () {
+      confirmSheet('Voltar ao acampamento?', 'A descida acaba para vocês dois — o grupo continua.', function () {
+        safe(function () { Gp().subir('voltou'); return true; }, null);
+      });
+    }));
+    if (souLider()) {
+      foot.appendChild(btn('Próxima sala (com ' + esc(nome) + ')', 'btn-primary', function () {
+        if (!safe(function () { return Cp().proxima(); }, false)) toast('Não deu para avançar.');
+      }));
+      return 'lider';
+    }
+    var ses = coopSessao();
+    if (ses && ses.proximaLiberada) {
+      // 11/09 (revisão): quem lidera já está na antessala da próxima sala, esperando
+      foot.appendChild(el('p', 'foot-count', esc(nome) + ' abriu a próxima sala e espera você lá.'));
+      foot.appendChild(btn('Seguir para a próxima sala', 'btn-primary', function () {
+        if (!safe(function () { return Cp().seguir(); }, false)) toast('Não deu para seguir.');
+      }));
+    } else {
+      foot.appendChild(btn('Esperando ' + esc(nome) + ' abrir a próxima sala…', 'btn-primary is-apagado', function () {
+        toast('Quem lidera (' + nome + ') abre a próxima sala.');
+      }));
+    }
+    return 'parceiro';
+  }
+
+  // ------------------------------------------------ o duelo pela Rede (4.9)
+  var dueloEscolha = [], dueloDid = null, dueloRelogio = null;
+  function sheetDueloRede() {
+    var est = safe(function () { return Dl().estado(); }, null);
+    if (!est || est.fase === 'livre' || est.fase === 'desafiei' || est.fase === 'desafiado') {
+      if (sheetName === 'dueloRede') closeSheet();
+      return;
+    }
+    if (est.did !== dueloDid) { dueloDid = est.did; dueloEscolha = []; }
+    var nome = (est.oponente && est.oponente.nome) || 'o outro lado';
+    var body = sheetShell('Arena — duelo com ' + esc(nome), est.escolhi
+      ? 'A sua dupla está guardada.'
+      : 'Escolha 1 ou 2 heróis seus. ' + esc(nome) + ' não vê a sua dupla até as duas estarem escolhidas.');
+    sheetName = 'dueloRede';
+    var caixa = el('div', 'ms-caixa du-rede');
+    body.appendChild(caixa);
+    if (est.fase === 'batalha') {
+      caixa.appendChild(el('p', 'du-espera', 'Arena sorteada: <b>' + esc(est.arena ? est.arena.nome : '') + '</b>. Abrindo…'));
+      return;
+    }
+    function carta(hid, marcada, clicavel) {
+      var h = hero(hid) || {};
+      var cid = h.classId || hid;
+      var card = el('button', 'av-carta' + (marcada ? ' is-on' : ''));
+      card.type = 'button';
+      card.appendChild(art('portrait', [cid, { element: h.element || 'neutro', size: 168 }], 84, 'av-pic'));
+      card.appendChild(el('span', 'av-nome', esc(className(cid)) + '<small>nv ' + (h.level || 1) + '</small>'));
+      if (clicavel) {
+        tap(card, function () {
+          var i = dueloEscolha.indexOf(hid);
+          if (i >= 0) dueloEscolha.splice(i, 1);
+          else if (dueloEscolha.length < 2) dueloEscolha.push(hid);
+          else { toast('A dupla é de dois, no máximo.'); return; }
+          sheetDueloRede();
+        });
+      }
+      return card;
+    }
+    var fila = el('div', 'av-fila');
+    if (est.escolhi) {
+      (est.minhaDupla || []).forEach(function (hid) { fila.appendChild(carta(hid, true, false)); });
+      caixa.appendChild(fila);
+      caixa.appendChild(el('p', 'du-espera', est.eleEscolheu ? 'Revelando as duplas…'
+        : 'Esperando ' + esc(nome) + ' escolher… <b class="du-relogio"></b>'));
+    } else {
+      var herois = safe(function () { return Dl().herois(); }, []) || [];
+      dueloEscolha = dueloEscolha.filter(function (h) { return herois.indexOf(h) >= 0; });
+      herois.forEach(function (hid) { fila.appendChild(carta(hid, dueloEscolha.indexOf(hid) >= 0, true)); });
+      if (!herois.length) fila.appendChild(el('p', 'empty', 'Nenhum herói seu pode duelar.'));
+      caixa.appendChild(fila);
+      caixa.appendChild(el('p', 'du-espera', 'Tempo para escolher: <b class="du-relogio"></b>'));
+      var pronto = dueloEscolha.length >= 1;
+      caixa.appendChild(btn('Pronto' + (pronto ? ' (' + dueloEscolha.length + ')' : ''), 'btn-primary btn-block' + (pronto ? '' : ' is-off'), function () {
+        var r = safe(function () { return Dl().escolher(dueloEscolha.slice()); }, null);
+        if (!r || !r.ok) toast(textoMotivo(r ? r.motivo : 'ocupado', null));
+      }));
+    }
+    caixa.appendChild(btn('Desistir do duelo', 'btn-ghost btn-block', function () {
+      safe(function () { return Dl().cancelar('desistiu'); }, null);
+      closeSheet();
+    }));
+    function anda() {
+      var rel = sheetEl && sheetEl.querySelector('.du-relogio');
+      if (sheetName !== 'dueloRede' || !rel) { clearInterval(dueloRelogio); dueloRelogio = null; return; }
+      var e2 = safe(function () { return Dl().estado(); }, null);
+      var agora = safe(function () { return Dl()._agora(); }, Date.now());
+      rel.textContent = e2 && e2.prazo ? relogioTxt(e2.prazo - agora) : '';
+    }
+    if (dueloRelogio) clearInterval(dueloRelogio);
+    dueloRelogio = setInterval(anda, 500);
+    anda();
+  }
+  function aoDueloMudou(est) {
+    var p = painelVivo();
+    if (p && painelModo === 'convite' && painelConv && painelConv.tipo === 'duelo' &&
+        !(est && est.fase === 'desafiado' && est.did === painelConv.did)) fechaPainel();
+    var f = est ? est.fase : 'livre';
+    if (f === 'escolhendo' || f === 'comprometido' || f === 'revelado' || (f === 'batalha' && sheetName === 'dueloRede')) {
+      if (current === 'hub') openSheet('dueloRede');
+    } else if (sheetName === 'dueloRede') closeSheet();
+  }
+  function nomeClima(id) {
+    var w = (D().weathers && D().weathers[id]) || null;
+    return (w && w.name) || id || 'calmo';
+  }
+  function duelFimRede(s, data) {
+    var box = el('div', 'game-over du-fim du-rede');
+    var op = data.oponente || {};
+    var nomeOp = (typeof op === 'string' ? op : op.nome) || 'O outro lado';
+    var tit = data.contestado ? 'Duelo anulado.'
+            : (data.empate ? 'Empate.' : (data.venci ? 'Você venceu!' : nomeOp + ' venceu.'));
+    box.appendChild(el('h1', null, esc(tit)));
+    if (data.contestado) {
+      // 11/09 (revisão): as duas batalhas não bateram (ou chegou um lance/fim que não valia): sem vencedor
+      box.appendChild(el('p', 'game-sub', 'As duas batalhas não bateram — o duelo ficou sem vencedor.'));
+    } else if (data.wo) {
+      box.appendChild(el('p', 'game-sub', data.venci ? esc(nomeOp) + ' saiu da arena — vitória por W.O.'
+                                                     : 'Você ficou fora da arena — derrota por W.O.'));
+    } else if (data.desistencia) {
+      box.appendChild(el('p', 'game-sub', data.venci ? esc(nomeOp) + ' desistiu do duelo.' : 'Você desistiu do duelo.'));
+    }
+    var nomes = function (lista) {
+      return (lista || []).map(function (c) {
+        return className((c && typeof c === 'object') ? (c.classId || c.heroId) : c);
+      }).join(' e ');
+    };
+    box.appendChild(el('p', 'game-sub', 'Você: ' + esc(nomes(data.duplaMinha)) + ' · ' + esc(nomeOp) + ': ' +
+      esc(nomes(data.duplaDele))));
+    var ar = data.arena || {};
+    box.appendChild(el('p', 'game-sub', (ar.nome ? 'Arena: ' + esc(ar.nome) + ' · ' : '') + 'clima: ' + esc(nomeClima(data.clima))));
+    box.appendChild(el('p', 'du-valeria', 'Amistoso — a Brasa de verdade acende quando o servidor apitar o duelo.' +
+      (data.seValesse != null ? ' Se valesse: +' + esc(data.seValesse) + '.' : '')));
+    var ult = safe(function () { return Dl().ultimo(); }, null);
+    var opId = (op && op.id) || (ult && ult.id) || null;
+    var naPraca = !!opId && !!safe(function () {
+      return JOGO.Rede.pares().some(function (p) { return p.id === opId && !p.sala; });
+    }, false);
+    if (naPraca) {
+      box.appendChild(btn('Desafiar de novo', 'btn-gold btn-block', function () {
+        navTo('hub');
+        var r = safe(function () { return Dl().desafiar(opId); }, null);
+        toast(r && r.ok ? 'Desafio enviado a ' + nomeOp + '. Esperando a resposta…' : textoMotivo(r ? r.motivo : 'ocupado', null));
+      }));
+    }
+    box.appendChild(btn('Voltar ao Acampamento', 'btn-primary btn-block', function () { navTo('hub'); }));
+    s.appendChild(box);
+  }
+
+  // ------------------------------------------------ os ganchos, UMA vez
+  var grupoSigTela = '';
+  function aoGrupoMudou(est) {
+    var p = painelVivo();
+    if (p && painelModo === 'convite' && painelConv && painelConv.tipo === 'grupo' &&
+        !(est && est.pendente && !est.pendente.meu && est.pendente.gid === painelConv.gid)) fechaPainel();
+    pintaGrupoLado();
+    var sig = est ? [est.fase, est.lider, (est.membros || []).map(function (m) {
+      return m.id + (m.on ? 1 : 0) + ((m.heroi && m.heroi.classId) || '') + ((m.heroi && m.heroi.level) || '');
+    }).join(','), est.descendo ? 1 : 0, est.descidaGrupo, est.descidaAcabou, est.descidaDif || ''].join('|') : '';
+    if (sig === grupoSigTela) return;
+    grupoSigTela = sig;
+    if (current === 'hub' || current === 'antessala') repintaLugar();
+    else if (current === 'roomClear' || current === 'dungeonComplete') buildRewards(current, lastRewards);
+    else if (current === 'defeat') buildDefeat();
+    else if (current === 'battle') battleSig = '';
+  }
+  function ligaSocial() {
+    var Gr = Gp(), Du = Dl(), S = Su(), C = Cp();
+    if (Gr) {
+      Gr.aoMudar = aoGrupoMudou;
+      Gr.aoConvite = mostraConviteGrupo;
+      Gr.aoAviso = function (t, k) { toast(t, k); };
+      Gr.aoSubiu = function () {
+        closeSheet();
+        var t = safe(function () { return G().screen; }, '');
+        if (t === 'antessala') safe(function () { return G().abandonar(); }, false);
+        else if (t !== 'hub' && t !== 'menu' && t !== 'heroSelect') safe(function () { G().restart(); return true; }, null);
+        navTo('hub');
+      };
+    }
+    if (Du) { Du.aoMudar = aoDueloMudou; Du.aoDesafio = mostraDesafio; }
+    if (S) S.aoChegar = aoSussurroChegou;
+    if (C) {
+      C.aoMudar = aoCoopMudou;
+      C.aoFusaoPedida = sheetFusaoPedida;
+      // os avisos da batalha em dupla ("Bia caiu…", "Bia não respondeu"): toast,
+      // com a cor pelo tipo que o Coop manda ('ok' | 'aviso' | 'info')
+      C.aoAviso = function (t, k) { toast(t, k === 'ok' ? 'good' : (k === 'aviso' ? 'bad' : undefined)); };
+    }
+  }
+  function avisaHeroiAoGrupo() {
+    var Gr = Gp();
+    if (Gr && Gr.defineHeroi && selHeroes[0]) safe(function () { Gr.defineHeroi(selHeroes[0]); return true; }, null);
+  }
+  /* a cada tela: o herói principal ao grupo, o painel do canto, o menu fechado */
+  function socialNaTela(name) {
+    avisaHeroiAoGrupo();
+    if (name !== 'antessala') chamandoPorta = 0;
+    fechaGlMenu();
+    glSig = '';
+    pintaGrupoLado();
+  }
+  /* o tique de ~1 s do UI.update: o painel do canto (carência, conexão) */
+  function tiqueSocial(dt) {
+    tickSocial += (dt || 0.016);
+    if (tickSocial < 1) return;
+    tickSocial = 0;
+    pintaGrupoLado();
+    // 11/09 (revisão): a ficha da escolha do duelo fechada sem querer (o ✕, o toque
+    // no fundo escuro, outra ficha por cima) volta sozinha enquanto falta a minha
+    // dupla — ela só abria quando o estado MUDAVA, e o duelo morria no prazo de 90 s.
+    // Sair continua sendo o "Desistir do duelo" da própria ficha.
+    var de = safe(function () { return Dl().estado(); }, null);
+    if (current === 'hub' && !sheetName && de && de.fase === 'escolhendo' && !de.escolhi) openSheet('dueloRede');
+    var ec = safe(function () { return JOGO.Rede.estadoConexao(); }, null);
+    if (ec !== ultConexao) {
+      if (ec === 'religando' && (emGrupo() || modoRede())) toast('Sem conexão — tentando de novo…', 'bad');
+      ultConexao = ec;
+    }
   }
 
   // ==========================================================================
@@ -6915,6 +8161,9 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
     if (ev.type === 'fusion' || ev.type === 'turnStart' || ev.type === 'turnEnd') battleSig = '';
+    // 11/09 (revisão): o painel do grupo solta (ou volta a segurar) o toque na
+    // virada do turno, sem esperar o tique de 1 s
+    if (ev.type === 'turnStart' || ev.type === 'turnEnd') pintaGrupoLado();
   };
 
   // ==========================================================================
@@ -6929,6 +8178,7 @@ var JOGO = (typeof window !== 'undefined')
       miraT -= (dt || 0.016);
       if (miraT <= 0) miraEl.classList.remove('is-on');
     }
+    tiqueSocial(dt);
     if (current !== 'battle') return;
 
     // O RECENTRAR SO APARECE QUANDO HA O QUE RECENTRAR. Ele nasce escondido e
@@ -6972,8 +8222,9 @@ var JOGO = (typeof window !== 'undefined')
 
   // acesso para testes/galeria
   UI.screens = screens;
+  UI.telaAtual = function () { return current; };   // 11/09: o 'hub' não existe no Game.screen
   UI.selection = function (ids) {
-    if (ids) selHeroes = ids.slice(0, 2);
+    if (ids) { selHeroes = ids.slice(0, 2); avisaHeroiAoGrupo(); }
     return selHeroes.slice();
   };
   UI.toast = toast;

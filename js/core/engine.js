@@ -503,8 +503,11 @@ var JOGO = (typeof window !== 'undefined')
     };
   };
   // O poder da fúria é do lado INIMIGO: é a sala reagindo aos invasores.
+  // 11/09: no DUELO vale para os DOIS lados — só um lado ganhando força fazia
+  // o teto de rodadas decidir o PvP pela cor do time.
   Engine.furyPower = function (state, unit) {
-    if (!state || !unit || unit.side !== 'enemy') return 0;
+    if (!state || !unit) return 0;
+    if (unit.side !== 'enemy' && !state.pvp) return 0;
     return Engine.furyOf(state).power;
   };
   // O corte de cura vale para os DOIS lados (senão o empate só trocaria de mãos).
@@ -573,6 +576,8 @@ var JOGO = (typeof window !== 'undefined')
       range: opts.range || 0,          // v2: alcance de ação do pet
       followDistance: opts.followDistance || 0, // v2
       conta: opts.conta || null,       // 03/09: a conta dona — fusão só entre os seus
+      dono: opts.dono || null,         // 11/09: o jogador (id da Rede) que controla — lockstep
+      ia: false,                       // 11/09: herói de gente entregue à IA (quem caiu)
       fusionIntent: null,              // v2
       _birth: state._uidCounter
     };
@@ -714,7 +719,12 @@ var JOGO = (typeof window !== 'undefined')
       pendingFusion: null,                                           // v2
       _weatherIdx: 0,
       _uidCounter: 0,
-      _rng: hashStr(dungeonId + ':' + roomIndex + ':' + seedIds.join(','))
+      turno: 0,                                                      // 11/09: turnos começados
+      /* 11/09: com `opts.seed` (a semente que o líder sorteia a cada sala, na
+       * ata), o rng nasce dela; sem, a regra de sempre (sai dos ids). */
+      _rng: (opts.seed != null)
+        ? hashStr('sala:' + dungeonId + ':' + roomIndex + ':' + String(opts.seed))
+        : hashStr(dungeonId + ':' + roomIndex + ':' + seedIds.join(','))
     };
     var cyc = weatherCycle(state);
     var wi = cyc.indexOf(state.weather);
@@ -743,6 +753,7 @@ var JOGO = (typeof window !== 'undefined')
         classId: p.classId || def.id,
         heroId: p.heroId || def.id,
         conta: p.conta || null,            // 03/09: viaja do grupo para a unidade
+        dono: p.dono || null,              // 11/09: o jogador que o controla (rede)
         name: p.name || def.name
       });
       state.units.push(unit);
@@ -1182,6 +1193,7 @@ var JOGO = (typeof window !== 'undefined')
       pendingFusion: null,
       _weatherIdx: 0,
       _uidCounter: 0,
+      turno: 0,
       _rng: hashStr('duelo:' + (opts.seed != null ? String(opts.seed) : String(Date.now())))
     };
 
@@ -1204,6 +1216,7 @@ var JOGO = (typeof window !== 'undefined')
           level: pd.level || 1,
           classId: pd.classId,
           heroId: pd.heroId || pd.classId,
+          dono: pd.dono || null,
           name: pd.name || cls.name
         });
         state.units.push(unit);
@@ -1225,6 +1238,255 @@ var JOGO = (typeof window !== 'undefined')
     emit({ type: 'roundStart', round: 1 });
     startTurn(state, 0);
     return state;
+  };
+
+  // ------------------------------------------------ 11/09: o duelo pela Rede
+  /* A ARENA SORTEADA (duelo entre dois jogadores): uma sala DE VERDADE de um
+   * calabouço aberto — a grade do layout, sem monstros, sem pets e sem desafio
+   * (a regra do duelo de treino). A (quem desafiou) nasce nos P, em ordem de
+   * leitura; B nas duas casas de letra MAIS LONGE dos P (a maior distância
+   * mínima; desempate por y, depois x) — sem duas letras, no espelho dos P
+   * pelo centro. O clima sai do rng, como no treino; o rng nasce da sala e da
+   * semente dos dois (ninguém escolhe a semente sozinho: os sais estão presos
+   * nos compromissos). Os lados no ESTADO são sempre A='player', B='enemy' —
+   * a perspectiva de quem é B é só de tela (Game.meuLado/ladoDaTela). */
+  Engine.createDuelSala = function (dungeonId, roomIndex, duplaA, duplaB, opts) {
+    opts = opts || {};
+    var dungeon = getDungeon(dungeonId);
+    if (!dungeon) throw new Error('Engine.createDuelSala: calabouço desconhecido: ' + dungeonId);
+    var room = dungeon.rooms[roomIndex];
+    if (!room) throw new Error('Engine.createDuelSala: sala inválida: ' + roomIndex);
+    if (!duplaA || !duplaA.length || !duplaB || !duplaB.length) {
+      throw new Error('Engine.createDuelSala: duplas vazias');
+    }
+    var layout = room.layout, h = layout.length, w = layout[0].length;
+    var tiles = [], ps = [], letras = [], x, y, ch, i;
+    for (y = 0; y < h; y++) {
+      var row = [];
+      for (x = 0; x < w; x++) {
+        ch = layout[y].charAt(x);
+        if (ch === '#') row.push({ type: 'wall', deco: false });
+        else if (ch === '=') row.push({ type: 'cover', deco: false });
+        else if (ch === '~') row.push({ type: 'hole', deco: false });
+        else if (ch === ',') row.push({ type: 'floor', deco: true });
+        else row.push({ type: 'floor', deco: false });            // P e as letras viram chão
+        if (ch === 'P') ps.push({ x: x, y: y });
+        else if (ch >= 'a' && ch <= 'z') letras.push({ x: x, y: y });
+      }
+      tiles.push(row);
+    }
+    var state = {
+      dungeonId: dungeonId,
+      roomIndex: roomIndex,
+      pvp: true,
+      duelSala: true,
+      dificuldade: 'normal',
+      round: 1,
+      turno: 0,
+      phase: 'playing',
+      grid: { w: w, h: h, tiles: tiles },
+      units: [],
+      order: [],
+      activeIdx: 0,
+      weather: 'calmo',
+      tileEventsActive: [],
+      traps: [],
+      walls: [],
+      pendingFusion: null,
+      _weatherIdx: 0,
+      _uidCounter: 0,
+      _rng: hashStr('duelo:' + dungeonId + ':' + roomIndex + ':' + String(opts.seed != null ? opts.seed : 0))
+    };
+    var cyc = weatherCycle(state);
+    state.weather = cyc[Math.floor(nextRand(state) * cyc.length)] || 'calmo';
+    state._weatherIdx = Math.max(0, cyc.indexOf(state.weather));
+
+    var usadas = {};
+    function livre(c) {
+      return !!c && c.y >= 0 && c.y < h && c.x >= 0 && c.x < w &&
+             tiles[c.y][c.x].type === 'floor' && !usadas[c.x + ',' + c.y];
+    }
+    function toma(c) { usadas[c.x + ',' + c.y] = true; return { x: c.x, y: c.y }; }
+    var nA = Math.min(2, duplaA.length), nB = Math.min(2, duplaB.length);
+    var casasA = [];
+    for (i = 0; i < ps.length && casasA.length < nA; i++) if (livre(ps[i])) casasA.push(toma(ps[i]));
+    var cand = [];
+    for (i = 0; i < letras.length; i++) {
+      var dm = -1;
+      for (var j = 0; j < ps.length; j++) {
+        var dd = manhattan(letras[i].x, letras[i].y, ps[j].x, ps[j].y);
+        if (dm < 0 || dd < dm) dm = dd;
+      }
+      cand.push({ x: letras[i].x, y: letras[i].y, d: dm });
+    }
+    cand.sort(function (a, b) { return (b.d - a.d) || (a.y - b.y) || (a.x - b.x); });
+    var casasB = [];
+    for (i = 0; i < cand.length && casasB.length < nB; i++) if (livre(cand[i])) casasB.push(toma(cand[i]));
+    for (i = 0; i < ps.length && casasB.length < nB; i++) {
+      var esp = { x: w - 1 - ps[i].x, y: h - 1 - ps[i].y };
+      if (livre(esp)) casasB.push(toma(esp));
+    }
+    // último recurso (sala sem P ou sem chão livre onde se esperava): o chão
+    // livre mais perto da primeira casa do lado, em ordem de leitura
+    function completa(casas, n, perto) {
+      if (casas.length >= n) return;
+      var chao = [];
+      for (var yy = 0; yy < h; yy++) {
+        for (var xx = 0; xx < w; xx++) {
+          if (livre({ x: xx, y: yy })) chao.push({ x: xx, y: yy, d: perto ? manhattan(xx, yy, perto.x, perto.y) : 0 });
+        }
+      }
+      chao.sort(function (a, b) { return (a.d - b.d) || (a.y - b.y) || (a.x - b.x); });
+      for (var k = 0; k < chao.length && casas.length < n; k++) casas.push(toma(chao[k]));
+    }
+    completa(casasA, nA, casasA[0] || ps[0] || null);
+    completa(casasB, nB, casasB[0] || null);
+
+    function poe(dupla, side, casas) {
+      for (var q = 0; q < dupla.length && q < 2 && q < casas.length; q++) {
+        var pd = dupla[q];
+        var cls = (DATA().classes && DATA().classes[pd.classId]) || null;
+        if (!cls) throw new Error('Engine.createDuelSala: classe desconhecida: ' + pd.classId);
+        var st = heroStats(pd, cls);
+        state.units.push(makeUnit(state, cls, 'hero', side, casas[q].x, casas[q].y, {
+          stats: st,
+          spells: pd.spells || cls.baseSpells || cls.spells || [],
+          element: pd.element || 'neutro',
+          level: pd.level || 1,
+          classId: pd.classId,
+          heroId: pd.heroId || pd.classId,
+          conta: pd.conta || null,
+          dono: pd.dono || null,
+          name: pd.name || cls.name
+        }));
+      }
+    }
+    poe(duplaA, 'player', casasA);
+    poe(duplaB, 'enemy', casasB);
+
+    var sorted = state.units.slice().sort(function (a, b) {
+      if (b.initiative !== a.initiative) return b.initiative - a.initiative;
+      return a._birth - b._birth;
+    });
+    for (i = 0; i < sorted.length; i++) state.order.push(sorted[i].uid);
+    state.activeIdx = 0;
+
+    Engine.state = state;
+    emit({ type: 'battleStart', state: state });
+    log('Arena sorteada — ' + (dungeon.name || dungeonId) + ', ' + (room.name || ('sala ' + (roomIndex + 1))) +
+        '. Clima: ' + state.weather + '.');
+    emit({ type: 'roundStart', round: 1 });
+    startTurn(state, 0);
+    return state;
+  };
+
+  /* O FIM FORA DO FLUXO DO MOTOR: desistência e W.O. do duelo. `vencedor` é
+   * 'player' | 'enemy' | null (empate, só no PvP). */
+  Engine.encerra = function (state, vencedor, motivo) {
+    if (!state || (state.phase !== 'playing' && state.phase !== 'placing')) return false;
+    var w = (vencedor === 'player' || vencedor === 'enemy') ? vencedor : null;
+    if (!w && !state.pvp) w = 'enemy';
+    state.phase = w === 'player' ? 'won' : (w === 'enemy' ? 'lost' : 'empate');
+    state.placement = null;
+    emit({ type: 'battleEnd', winner: w, reason: motivo || null });
+    log(w ? 'A batalha foi encerrada (' + (motivo || 'fim') + ').' : 'A batalha terminou empatada.');
+    return true;
+  };
+
+  // ------------------------------------------- 11/09: hash, foto e restauração
+  /* O HASH DO ESTADO (FNV-1a de 32 bits, o mesmo `hashStr` da semente): tudo
+   * o que decide a batalha dali para a frente — rng, rodada, turno, vez, fase,
+   * clima, cada unidade (posição, PV, PA, PP, efeitos, recargas, `ia`, `dono`),
+   * armadilhas, muros, eventos do chão, fusão pendente, consentimento e o
+   * desafio. Número que não é finito entra vazio: a foto passa por JSON, e o
+   * JSON devolveria null — o hash de quem restaurou não pode mudar por isso. */
+  function nh(v) { return (typeof v === 'number' && isFinite(v)) ? v : ''; }
+  Engine.hash = function (st) {
+    if (!st || !st.units) return 0;
+    var p = [nh(st._rng), nh(st.round), nh(st.turno || 0), nh(st.activeIdx), st.phase, st.weather,
+             nh(st._uidCounter), (st.order || []).join(',')];
+    var i, j, u, ks, e, t;
+    for (i = 0; i < st.units.length; i++) {
+      u = st.units[i];
+      p.push(u.uid, u.kind, u.side, nh(u.x), nh(u.y), nh(u.hp), nh(u.hpMax), nh(u.pa), nh(u.pp),
+             nh(u.paMax), nh(u.ppMax), u.alive ? 1 : 0, u.offBoard ? 1 : 0, nh(u.shield),
+             u.ia ? 1 : 0, u.dono || '', u.fusionIntent || '', u.enraged ? 1 : 0);
+      var ef = u.effects || [];
+      for (j = 0; j < ef.length; j++) { e = ef[j]; p.push(e.type, nh(e.duration), nh(e.remaining || 0), nh(e.value || 0)); }
+      ks = Object.keys(u.cooldowns || {}).sort();
+      for (j = 0; j < ks.length; j++) p.push(ks[j] + '=' + nh(u.cooldowns[ks[j]]));
+      ks = Object.keys(u.castsThisTurn || {}).sort();
+      for (j = 0; j < ks.length; j++) p.push('c:' + ks[j] + '=' + nh(u.castsThisTurn[ks[j]]));
+    }
+    for (i = 0; i < (st.traps || []).length; i++) { t = st.traps[i]; p.push('T', nh(t.x), nh(t.y), nh(t.remaining)); }
+    for (i = 0; i < (st.walls || []).length; i++) { t = st.walls[i]; p.push('W', nh(t.x), nh(t.y), nh(t.remaining)); }
+    for (i = 0; i < (st.tileEventsActive || []).length; i++) {
+      t = st.tileEventsActive[i]; p.push('E', nh(t.x), nh(t.y), t.eventId, nh(t.remaining));
+    }
+    if (st.pendingFusion) p.push('F', st.pendingFusion.a, st.pendingFusion.b);
+    if (st.consentimento) p.push('C', st.consentimento.a, st.consentimento.b, nh(st.consentimento.T));
+    if (st.desafio) {
+      p.push('D', st.desafio.vivo ? 1 : 0, nh(st.desafio.passos), st.desafio.executado ? 1 : 0,
+             st.desafio.cumprido ? 1 : 0);
+    }
+    return hashStr(p.join('|'));
+  };
+
+  /* A FOTO: o JSON do estado SEM `grid.tiles` — no lugar, `gridStr` com 2
+   * caracteres por casa (o tipo e um dígito: 1 = enfeite, 2 = muro invocado).
+   * ~9 KB. Nunca em `placing` (o `placement` guarda referência de unidade). */
+  var CASA_LETRA = { floor: 'f', wall: 'w', cover: 'c', hole: 'h' };
+  var LETRA_CASA = { f: 'floor', w: 'wall', c: 'cover', h: 'hole' };
+  Engine.foto = function (st) {
+    if (!st || !st.grid || !st.grid.tiles || st.phase === 'placing') return null;
+    var g = st.grid, gs = [], y, x, t, ch, cheia = false;
+    for (y = 0; y < g.h; y++) {
+      for (x = 0; x < g.w; x++) {
+        t = (g.tiles[y] && g.tiles[y][x]) || {};
+        ch = CASA_LETRA[t.type];
+        if (!ch) { cheia = true; ch = 'f'; }
+        gs.push(ch, String((t.deco ? 1 : 0) | (t.invocado ? 2 : 0)));
+      }
+    }
+    var c = {}, k;
+    for (k in st) if (Object.prototype.hasOwnProperty.call(st, k) && k !== 'grid') c[k] = st[k];
+    if (cheia) c.grid = g;                               // casa de tipo novo: a grade inteira
+    else { c.grid = { w: g.w, h: g.h }; c.gridStr = gs.join(''); }
+    return JSON.stringify(c);
+  };
+  /* A RESTAURAÇÃO: remonta a grade, RE-REGISTRA os feitiços da fusão (moram no
+   * registro em memória — quem nunca viu a fusão divergia no turno seguinte),
+   * vira o estado do motor, esvazia a fila de eventos e avisa com battleStart
+   * (o desenho refaz a sala do estado atual). */
+  Engine.restaura = function (foto) {
+    var st = (typeof foto === 'string') ? JSON.parse(foto) : JSON.parse(JSON.stringify(foto));
+    if (st.gridStr != null && st.grid && !st.grid.tiles) {
+      var w = st.grid.w, h = st.grid.h, s = String(st.gridStr), tiles = [];
+      for (var y = 0; y < h; y++) {
+        var row = [];
+        for (var x = 0; x < w; x++) {
+          var i = (y * w + x) * 2, f = parseInt(s.charAt(i + 1), 10) || 0;
+          var t = { type: LETRA_CASA[s.charAt(i)] || 'floor', deco: !!(f & 1) };
+          if (f & 2) t.invocado = true;
+          row.push(t);
+        }
+        tiles.push(row);
+      }
+      st.grid = { w: w, h: h, tiles: tiles };
+    }
+    delete st.gridStr;
+    if (JOGO.Fusion && JOGO.Fusion.spellsFor) {
+      for (var u = 0; u < st.units.length; u++) {
+        var un = st.units[u];
+        if (un.kind !== 'fusion' || !un.classPair) continue;
+        var sp = JOGO.Fusion.spellsFor(un.classPair, un.elemPair, un.level) || [];
+        for (var q = 0; q < sp.length; q++) Engine.registerSpell(sp[q]);
+      }
+    }
+    Engine.state = st;
+    Engine.events.length = 0;
+    emit({ type: 'battleStart', state: st, restaurada: true });
+    return st;
   };
 
   // --------------------------------------------------------------- desafios
@@ -1593,9 +1855,10 @@ var JOGO = (typeof window !== 'undefined')
     return n + (unit.summonBonus || 0);
   };
 
-  /* As invocacoes VIVAS desta unidade, da mais antiga para a mais nova.
-   * `uid` cresce a cada unidade criada, entao ordenar por ele e ordenar por
-   * idade sem precisar guardar carimbo de tempo. */
+  /* As invocacoes VIVAS desta unidade, da mais antiga para a mais nova, pelo
+   * `_birth` (o contador de criacao). Ordenar pelo `uid` era 'u12' - 'u3' =
+   * NaN e o sort ficava por conta do navegador (11/09): no lockstep, dois
+   * clientes poderiam mandar embora invocacoes diferentes quando o teto enche. */
   Engine.summonsOf = function (state, unit) {
     var out = [];
     if (!state || !unit) return out;
@@ -1603,7 +1866,7 @@ var JOGO = (typeof window !== 'undefined')
       var u = state.units[i];
       if (u.kind === 'summon' && u.alive && !u.offBoard && u.summonerUid === unit.uid) out.push(u);
     }
-    out.sort(function (a, b) { return a.uid - b.uid; });
+    out.sort(function (a, b) { return (a._birth || 0) - (b._birth || 0); });
     return out;
   };
 
@@ -2459,6 +2722,10 @@ var JOGO = (typeof window !== 'undefined')
     if (guard > state.order.length + 2) return;
     var u = Engine.activeUnit(state);
     if (!u || !u.alive || u.offBoard) { advanceTurn(state, guard + 1); return; }
+    // 11/09 — O NÚMERO DO TURNO (o T dos lances da Rede). Conta só o turno que
+    // começa DE FATO, depois do salto de quem está morto ou fora do tabuleiro;
+    // `round + activeIdx` não serve: uma invocação empurra o activeIdx.
+    state.turno = (state.turno || 0) + 1;
 
     u.pa = Math.max(0, u.paMax + sumBuffs(u, 'pa'));
     u.pp = Math.max(0, u.ppMax + sumBuffs(u, 'pp'));
@@ -2469,6 +2736,31 @@ var JOGO = (typeof window !== 'undefined')
     runStartTicks(state, u);
 
     if (!u.alive) advanceTurn(state, guard + 1);
+  }
+
+  /* 11/09 — O TETO DE RODADAS NO DUELO. Na sala o teto é derrota (a sala cobra
+   * a demora); no PvP isso decidiria pela cor do time. Vence a MAIOR fração de
+   * vida somada (PV dos vivos / PV máximo dos heróis e fusões do lado, mortos
+   * contando 0); fração igual é EMPATE (fase 'empate', só no PvP). A conta é
+   * em produto cruzado de inteiros: ponto flutuante não decide resultado. */
+  function vidaDoLado(state, side) {
+    var hp = 0, max = 0;
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.side !== side || (u.kind !== 'hero' && u.kind !== 'fusion') || u.fusedInto) continue;
+      max += Math.max(0, u.hpMax || 0);
+      if (u.alive && !u.offBoard) hp += Math.max(0, u.hp || 0);
+    }
+    return { hp: hp, max: max };
+  }
+  function tetoDoDuelo(state, fcfg) {
+    var a = vidaDoLado(state, 'player'), b = vidaDoLado(state, 'enemy');
+    var ea = a.hp * Math.max(1, b.max), eb = b.hp * Math.max(1, a.max);
+    var winner = ea > eb ? 'player' : (eb > ea ? 'enemy' : null);
+    state.phase = winner === 'player' ? 'won' : (winner === 'enemy' ? 'lost' : 'empate');
+    emit({ type: 'furyTimeout', round: state.round, maxRounds: fcfg.maxRounds });
+    emit({ type: 'battleEnd', winner: winner, reason: 'fury' });
+    log(winner ? 'O tempo da arena acabou: vence quem tem mais vida.' : 'O tempo da arena acabou: empate.');
   }
 
   // v2: início de rodada — clima automático, armadilhas e eventos de terreno
@@ -2485,6 +2777,7 @@ var JOGO = (typeof window !== 'undefined')
       if (fury.rounds === 1) log('A sala se enfurece! Os inimigos ganham força a cada rodada.');
     }
     if (fcfg.maxRounds > 0 && state.round >= fcfg.maxRounds) {
+      if (state.pvp) { tetoDoDuelo(state, fcfg); return; }
       state.phase = 'lost';
       emit({ type: 'furyTimeout', round: state.round, maxRounds: fcfg.maxRounds });
       emit({ type: 'battleEnd', winner: 'enemy', reason: 'fury' });

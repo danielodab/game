@@ -210,27 +210,130 @@ conta e o global).
 
 ### 6. A loja de vinténs
 
-Em `/site/loja.html` o jogador troca vinténs do jogo por pergaminhos,
-pedras de forja e personagens. O servidor confere o saldo que o último save
-mostrou (só o bolso; o cofre não conta), reserva os vinténs e guarda o
-pedido. O jogo busca o pedido quando abre logado na conta Principal,
-desconta e entrega, e o save seguinte confirma ("entregue"). Se na hora da
-entrega faltarem vinténs no jogo, o pedido volta ("devolvido"). O Mestre
-compra sem gastar.
+Em `/site/loja.html` o jogador troca vinténs por personagens, bônus de XP
+(1, 3 e 7 dias), pedras de forja, Insígnias de Fundação (as "pedras de
+guilda": 10 fundam uma guilda) e o Pergaminho da Reescrita. O servidor confere
+o saldo que o último save mostrou (só o bolso; o cofre não conta) mais o que
+está **a caminho** (pacotes pagos e presentes de vinténs que o jogo ainda não
+recebeu), reserva os vinténs e guarda o pedido. O jogo busca o pedido quando
+abre logado na conta Principal, desconta e entrega, e o save seguinte
+confirma ("entregue"). Se na hora da entrega faltarem vinténs no jogo, o
+pedido volta ("devolvido"). O Mestre compra sem gastar.
 
-- **Preços e limites** moram só em `servidor/loja.py` (`CATALOGO`): o site e
-  o jogo leem do servidor, sem repetir número. Para mudar, edite ali, commit
-  e push (o deploy leva). Reveja a cada portal aberto: a renda por hora pode
-  dobrar.
+- **Preços** moram só em `servidor/loja.py` (`CATALOGO` e `PACOTES`, com a
+  conta da régua no comentário do topo): o site e o jogo leem do servidor, sem
+  repetir número. Para mudar, edite ali, commit e push (o deploy leva). Reveja
+  a cada portal aberto: a renda por hora pode quase dobrar.
+- **Sem janela de limite** nas pedras, no bônus de XP e nas insígnias: o preço
+  é o freio. Ficam os tetos contra abuso (5 pedidos abertos, 10 compras por
+  hora, 30 pedidos por hora), a compra única de cada classe e a Reescrita 1 a
+  cada 30 dias. Pacotes pagos e presentes do Mestre não contam nesses tetos.
+- **O bônus de XP** vale ×1,5 para o grupo; o prazo corre no relógio do
+  servidor a partir da ENTREGA no jogo, e comprar de novo soma os dias. Não se
+  multiplica com o Pergaminho da Sabedoria (que saiu da venda: o bônus o
+  substitui; quem já tem continua usando) e, com evento de XP, para em ×2.
 - **Fora da loja, de propósito**: a Âncora de Forja, equipamento, cartas
   avulsas, estrelas, selos, giros, pets, sorte de saque, bônus de guilda,
   XP direto e multiplicador de vinténs.
 - **No Terminal**: `admin loja` (os 30 últimos pedidos; `admin loja 100`
   para mais), `admin loja-cancelar ID` (só pedido pendente ou retirado: a
-  reserva sai e ele não vai mais para o jogo) e `admin eventos` (a trilha:
-  `loja-compra`, `loja-cancela`, `loja-entregue`, `loja-estorno`).
+  reserva sai e ele não vai mais para o jogo; **não** cancele o crédito de um
+  pacote pago — o sku começa com `pacote-` — senão o jogador perde o que
+  pagou) e `admin eventos` (a trilha: `loja-compra`, `loja-cancela`,
+  `loja-entregue`, `loja-estorno`, `presente-admin`, `pagamento-credito`,
+  `pagamento-estorno`, `avatar`).
 - **Pedido preso** (o jogo retirou e não confirmou em 24 h): o próprio
-  jogador pode cancelar no site.
+  jogador pode cancelar no site (menos o crédito de pacote e o presente).
+- **O painel do Mestre** (`/site/mestre.html`, só para a conta com a marca de
+  Mestre): busca qualquer conta (pelo nome, pelo e-mail inteiro ou pelo
+  `#número`), mostra a ficha e dá de **presente** uma classe, um item da loja
+  ou vinténs (até 100.000 por presente; 500.000 por dia). O presente é um
+  pedido de preço 0 que anda pelo mesmo caminho da compra; dá para cancelar
+  até o jogo buscar. Lá também aparecem os pagamentos (cada um com o botão
+  **conferir no Mercado Pago**) e os **alertas** de cada conta.
+- **O retrato no ranking**: na página da conta, o jogador escolhe o retrato
+  entre as classes que tem e as fusões delas; a conta do Mestre veste o
+  Cavaleiro Negro.
+
+### 7. Os pacotes de vinténs (Mercado Pago)
+
+Sem isto o jogo funciona igual: na loja os pacotes aparecem "em breve" e as
+rotas de pagamento respondem 503. Com isto, o jogador paga no Mercado Pago
+(Pix ou cartão; boleto e lotérica ficam fora), o servidor confere o pagamento
+na API do Mercado Pago e credita os vinténs UMA vez; eles aparecem "a caminho"
+no site (já dá para gastar) e entram na carteira quando o jogo abrir.
+
+Os pacotes (em `servidor/loja.py`, `PACOTES`): Bolsa de 1.000 vinténs por
+R$ 4,90 · Saco de 5.500 por R$ 19,90 · Arca de 12.000 por R$ 39,90 · Tesouro
+de 25.000 por R$ 79,90. Por conta: no máximo 10 pedidos de pacote por hora e
+R$ 400,00 em 24 h — no que se pede E no que credita. O link de pagamento vale
+2 h e aceita mais de um pagamento; o que passar do teto NÃO credita e vira o
+alerta "Pagamento acima do teto de 24 h" no painel do Mestre: você estorna no Mercado Pago ou,
+passadas as 24 h, aperta **conferir no Mercado Pago** na ficha e ele entra.
+
+1. **A conta de VENDEDOR** no Mercado Pago é a sua (CPF ou CNPJ e a conta
+   bancária que recebe). Nada disso passa pelo assistente.
+2. **Painel de desenvolvedor** (Suas integrações) → Criar aplicação
+   ("SOTERRA", Checkout Pro, pagamentos online).
+3. **Credenciais de TESTE primeiro**: o Access Token de teste e os usuários de
+   teste (vendedor e comprador) que o painel cria. As de PRODUÇÃO só depois de
+   ativar a conta e a aplicação (o painel pede os dados do negócio).
+4. **Webhooks** → Configurar notificações: URL
+   `https://soterra.viidoo.io/api/pagamento/aviso`, evento "Pagamentos" (e
+   "Contestações", se aparecer) → Salvar → copie a **assinatura secreta**. O
+   botão "Simular" do painel manda um aviso de mentira: a Runtime Logs tem de
+   mostrar `pagamento: aviso do Mercado Pago` e, com o id da simulação,
+   "não conhece o pagamento" (está certo). A preferência não leva
+   `notification_url`: todo aviso chega por este caminho, assinado.
+5. **As variáveis no Coolify** (Environment Variables; Runtime ligado, Build
+   DESLIGADO em todas; no token e na assinatura, marque **Is Literal**):
+
+   | Nome | Valor |
+   |---|---|
+   | `SOTERRA_MP_TOKEN` | o Access Token (o de produção começa com `APP_USR-`), colado por você |
+   | `SOTERRA_MP_SEGREDO` | a assinatura secreta do webhook, colada por você |
+   | `SOTERRA_ENDERECO` | `https://soterra.viidoo.io` (aqui é obrigatório: é a volta do navegador) |
+   | `SOTERRA_MP_TESTE` | `1`, só na fase de teste |
+
+   Salve e faça **Redeploy** (fecha o Terminal aberto). Se o token ou a
+   assinatura aparecerem por engano num chat, gere outros no painel do
+   Mercado Pago.
+6. **Conferir**: a Runtime Logs tem de mostrar
+   `pagamento: Mercado Pago (teste), volta em https://soterra.viidoo.io`
+   (`pagamento: DESLIGADO (falta …)` diz qual variável faltou); na loja, os
+   pacotes sem "em breve"; compre a Bolsa com o comprador de teste; os vinténs
+   aparecem "a caminho"; abra o jogo logado; a carteira sobe. No painel do
+   Mestre, a ficha da conta mostra o pagamento.
+7. **Produção**: troque o token pelo de produção, APAGUE `SOTERRA_MP_TESTE`,
+   Redeploy, faça UMA compra real da Bolsa (R$ 4,90) e estorne pelo painel do
+   Mercado Pago: tem de aparecer o alerta "estorno" no painel do Mestre.
+8. Sem as variáveis, tudo volta a "em breve" sem quebrar nada. Nunca deixe
+   `SOTERRA_MP_TESTE` junto com o token de produção por esquecimento: o
+   servidor não creditaria os pagamentos reais (e logaria `live_mode=True, e
+   o servidor está em modo teste: não credita`). Ele responde 503 a esses
+   avisos, e o Mercado Pago avisa de novo por um tempo: corrigida a variável
+   (Redeploy), os reenvios creditam. O que tiver passado disso, confira pelo
+   botão **conferir no Mercado Pago** da ficha da conta.
+
+Como o servidor segura o dinheiro: nunca credita pela volta do navegador nem
+pelo corpo do aviso — confere a assinatura e CONSULTA o pagamento na API do
+Mercado Pago; um crédito por pagamento (o id do Mercado Pago é a chave),
+mesmo com o aviso repetido ou chegando nos dois contêineres do deploy; nenhum
+dado pessoal vai ao Mercado Pago; o token e a assinatura nunca vão para o log.
+Se o jogo recusar um crédito pago, ele volta sozinho (até 3 vezes; depois vira
+alerta). **Estorno e contestação** não tiram vinténs do jogo: o crédito que o
+jogo ainda não confirmou é cancelado; o que já entrou vira **alerta** no painel
+do Mestre (e na Runtime Logs), e você decide (conversar, banir, `admin`). Uma
+**disputa aberta** no Mercado Pago (a reclamação ainda sem desfecho) só vira
+alerta: o crédito fica, e o desfecho chega depois (o estorno, que segue a regra
+acima, ou o pagamento de volta a aprovado). **Pago e sem vintém** (o aviso não
+chegou): o jogador tem o botão "conferir" em "Seus pacotes", e você, o
+**conferir no Mercado Pago** da ficha; os dois só consultam o Mercado Pago.
+
+**O que você decide, fora do código**: os termos da loja e a política de
+reembolso (o direito de arrependimento de 7 dias do CDC em compra pela
+internet; e o vintém já gasto ou entregue), nota fiscal/MEI, a idade mínima de
+quem compra, e o que fazer com uma conta de alerta.
 
 ---
 

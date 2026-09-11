@@ -29,9 +29,11 @@
   resposta na hora — quem manda é o servidor, e o erro dele aparece como veio.
   Cadastro e login guardam 'soterra-sessao' = {token, conta:{id, nome, gm}} e
   levam ao jogo (../index.html = /index.html em produção).
-  Com sessão: "Minha conta" (GET /api/conta) — os dados, trocar a senha,
-  trocar o e-mail com um código mandado ao e-mail ATUAL, as sessões abertas e
-  a atividade recente.
+  Com sessão: "Minha conta" (GET /api/conta) — os dados, o retrato que
+  aparece no ranking (GET/POST /api/avatar, 10/09: os retratos das classes que
+  a conta tem e das fusões delas; a conta do Mestre veste o Cavaleiro Negro),
+  trocar a senha, trocar o e-mail com um código mandado ao e-mail ATUAL, as
+  sessões abertas e a atividade recente.
   Endereços: conta.html#criar, #entrar, #esqueci e #conta. Só o estado da tela
   vai no endereço; e-mail, código e senha vão só no corpo do POST.
 -->
@@ -146,6 +148,14 @@
         </div>
       </section>
 
+      <section class="bloco" id="bl-avatar">
+        <h3>Retrato no ranking</h3>
+        <p class="apoio" id="av-texto">O retrato aparece no ranking. Libere classes no jogo para ganhar mais retratos.</p>
+        <p class="av-efetivo" id="av-efetivo" hidden></p>
+        <div class="av-grade" id="av-grade"><div class="estado">carregando os retratos…</div></div>
+        <div class="aviso" id="av-aviso"></div>
+      </section>
+
       <section class="bloco" id="bl-senha">
         <h3>Trocar a senha</h3>
         <form id="sn-form" novalidate>
@@ -222,9 +232,10 @@
 
 <script>
 /* cada arquivo com o hash do conteúdo (SITE_URL, no topo): um conta.js velho
- * no cache não pode falar com o servidor novo — mudou, muda o endereço */
+ * no cache não pode falar com o servidor novo — mudou, muda o endereço. O
+ * nome e a cor das classes (os retratos) vêm do próprio jogo (classes.js). */
 (function () {
-  ['site.js', 'conta.js'].forEach(function (s) {
+  ['site.js', '../js/core/data/classes.js', 'conta.js'].forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();

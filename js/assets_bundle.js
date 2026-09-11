@@ -64,6 +64,11 @@
 //                                    descida atras da #carga e chama deNovo depois
 //   JOGO.Bundle.plano(pedido)      — as chaves de modelo de uma descida
 //   JOGO.Bundle.preBusca()         — os calabouços ABERTOS em segundo plano
+//                                    (nao liga com Economia de Dados / 2G)
+//   JOGO.Bundle.pede(chaves, cb)   — baixa e abre JA, sem tela: o corpo do avatar,
+//                                    do fantasma, o guarda-roupa; devolve quantas buscou
+//   JOGO.Bundle.corpoDe(ap)        — o corpo proprio de uma aparencia 'fus:a+b' (ou null)
+//   JOGO.Bundle.adianta(chaves)    — pre-busca avulsa (fila baixa)
 //   JOGO.Bundle.tudo(cb)           — o que faltar, de uma vez (provas do pacote)
 //   JOGO.Bundle.injeta(lista,base,cb) — insere <script> em ordem garantida
 //   JOGO.Bundle.info()             — numeros da carga (para tests/carga.html)
@@ -166,17 +171,49 @@ var JOGO = (typeof window !== 'undefined')
   B.ligaPonte = ligaPonte;
 
   // ------------------------------------------------------------------- rede
-  function pega(url, tipo, ok, falha) {
-    var x = new XMLHttpRequest();
+  /* `prazo` (ms, opcional) e o vigia de download PARADO: se nada chegar
+   * nesse tempo — nem o primeiro byte, nem o seguinte —, o pedido e
+   * cancelado e cai como falha de rede (novas tentativas e, no fim, o aviso
+   * com os dois botoes). E prazo SEM PROGRESSO, nao de duracao: conexao
+   * lenta que continua pingando bytes nunca estoura; sinal que sumiu no
+   * tunel estoura. Sem ele, um download empacado deixava a #carga de pe
+   * para sempre, sem botao nenhum. Devolve o XHR: quem cancela chama
+   * abort(), que nao dispara nem `ok` nem `falha`. */
+  function pega(url, tipo, ok, falha, prazo) {
+    var x = new XMLHttpRequest(), vigia = null, acabou = false;
+    function para() {
+      acabou = true;
+      if (vigia) { clearTimeout(vigia); vigia = null; }
+    }
+    function arma() {
+      if (!prazo || acabou) return;
+      if (vigia) clearTimeout(vigia);
+      vigia = setTimeout(function () {
+        if (acabou) return;
+        para();
+        try { x.abort(); } catch (e) {}
+        falha(new Error(url + ' -> ' + prazo + ' ms sem receber nada'));
+      }, prazo);
+    }
     x.open('GET', url, true);
     if (tipo) x.responseType = tipo;
+    x.onprogress = arma;
     x.onload = function () {
+      if (acabou) return;
+      para();
       // file:// devolve status 0 com corpo valido; http devolve 200..299
       if (x.status === 0 ? !!x.response : (x.status >= 200 && x.status < 300)) ok(x.response);
       else falha(new Error(url + ' -> HTTP ' + x.status));
     };
-    x.onerror = function () { falha(new Error(url + ' -> falha de rede')); };
+    x.onerror = function () {
+      if (acabou) return;
+      para();
+      falha(new Error(url + ' -> falha de rede'));
+    };
+    x.onabort = para;
     x.send();
+    arma();
+    return x;
   }
 
   /* Baixa manifesto + binarios. opts: { base, progresso(feitos,total), pronto(err) } */
@@ -216,15 +253,16 @@ var JOGO = (typeof window !== 'undefined')
       (function vai(lista) {
         baixaLista(lista, progresso, function (falhas) {
           medida.msBinarios = agora() - t1;
-          if (!falhas.length) { pronto(null); return; }
+          if (!falhas.length) { fase = 'avulso'; pronto(null); return; }
           // as novas tentativas ja foram (ESPERAS): avisa e deixa o jogador escolher
           telaFalha('Não consegui baixar ' + falhas.length + (falhas.length > 1 ? ' modelos' : ' modelo') +
                     '. Confira a conexão.', function () { vai(falhas); }, function () {
+            fase = 'avulso';
             pronto(new Error(falhas.length + ' modelo(s) não desceram'));
           });
         });
       })(itens);
-    }, function (e) { pronto(e); });
+    }, function (e) { pronto(e); }, B.prazos.manifesto);
   };
 
   /* O endereco de um binario: o hash DO CONTEUDO dele (it.hash). O que nao
@@ -268,11 +306,19 @@ var JOGO = (typeof window !== 'undefined')
   var PARALELO_ALTA = 6, PARALELO_BAIXA = 1;
   // tres novas tentativas por modelo antes de desistir (a 4a falha avisa)
   var ESPERAS = [600, 1800, 4000];
-  var fase = 'boot';           // em qual fase cada byte desceu: boot | descida | pre
-  medida.porFase = { boot: { itens: 0, bytes: 0 }, descida: { itens: 0, bytes: 0 }, pre: { itens: 0, bytes: 0 } };
+  // o vigia de download PARADO (ms sem receber nenhum byte): estourou, conta
+  // como falha de rede. Exposto para as provas encurtarem a espera.
+  B.prazos = { parado: 20000, manifesto: 15000 };
+  var fase = 'boot';           // em qual fase cada byte desceu: boot | descida | pre | avulso
+  medida.porFase = { boot: { itens: 0, bytes: 0 }, descida: { itens: 0, bytes: 0 }, pre: { itens: 0, bytes: 0 },
+                     avulso: { itens: 0, bytes: 0 } };      // avulso: o que B.pede buscou fora de descida
   medida.grupos = {};          // grupo -> { itens, bytes } do manifesto
   medida.pre = { estado: 'parada', feitos: 0, total: 0 };
   medida.ganchos = [];         // cada vez que a descida esperou: { onde, faltavam, ms, falhou }
+  medida.vizinhos = [];        // o Poco: cada andar seguinte planejado cedo { sala, existia, chaves }
+  // o decodificador de folga: levas, as que sairam pelo prazo do rIC, modelos,
+  // e os ms de ESPERA (do agendar ao rIC disparar) e de ABRIR, somados
+  medida.decod = { levas: 0, porPrazo: 0, modelos: 0, esperaMs: 0, abrirMs: 0 };
 
   var forcaTudo = /[?&]carga=tudo/.test((typeof location !== 'undefined' && location.search) || '');
 
@@ -308,6 +354,10 @@ var JOGO = (typeof window !== 'undefined')
       if (alta) {                                   // o gancho passa na frente
         var j = filaBaixa.indexOf(it);
         if (j >= 0) { filaBaixa.splice(j, 1); filaAlta.push(it); gira(); }
+        // ja no ar pela fila baixa (um arquivo por vez, talvez parado ou
+        // esperando a proxima tentativa): larga esse voo e recomeca na alta —
+        // o gancho nao fica refem de um download de segundo plano
+        else if (voos[id] && !voos[id].alta) { voos[id].cancela(); filaAlta.push(it); gira(); }
       }
       return;
     }
@@ -322,11 +372,25 @@ var JOGO = (typeof window !== 'undefined')
       inicia(filaBaixa.shift(), false);
     }
   }
+  var voos = {};               // id -> o download no ar: { alta, cancela() }
   function inicia(it, alta) {
     var id = it.alvo + ':' + it.chave, tent = 0, minhaFase = alta ? fase : 'pre';
+    var cancelado = false, xhr = null, pausa = null;
     if (alta) vivosAlta++; else vivosBaixa++;
+    voos[id] = { alta: alta, cancela: function () {
+      // quem cancela reenfileira: aqui so solta a vaga, sem avisar ninguem
+      if (cancelado) return;
+      cancelado = true;
+      if (pausa) clearTimeout(pausa);
+      if (xhr) { try { xhr.abort(); } catch (e) {} }
+      if (alta) vivosAlta--; else vivosBaixa--;
+      delete voos[id];
+    } };
     (function tenta() {
-      pega(enderecoModelo(it), 'arraybuffer', function (buf) {
+      pausa = null;
+      if (cancelado) return;
+      xhr = pega(enderecoModelo(it), 'arraybuffer', function (buf) {
+        if (cancelado) return;
         guarda(it.alvo, it.chave, new Uint8Array(buf));
         medida.bytes += buf.byteLength;
         medida.itens++;
@@ -334,12 +398,14 @@ var JOGO = (typeof window !== 'undefined')
         pf.itens++; pf.bytes += buf.byteLength;
         fim(null);
       }, function (e) {
-        if (tent < ESPERAS.length) { setTimeout(tenta, ESPERAS[tent++]); return; }
+        if (cancelado) return;
+        if (tent < ESPERAS.length) { pausa = setTimeout(tenta, ESPERAS[tent++]); return; }
         medida.erros.push(String(e.message || e));
         fim(e);
-      });
+      }, B.prazos.parado);
     })();
     function fim(err) {
+      delete voos[id];
       if (alta) vivosAlta--; else vivosBaixa--;
       estado[id] = err ? 'falhou' : 'chegou';
       var fs = esperando[id] || [];
@@ -355,7 +421,8 @@ var JOGO = (typeof window !== 'undefined')
     for (var k in estado) if (Object.prototype.hasOwnProperty.call(estado, k)) n[estado[k]] = (n[estado[k]] || 0) + 1;
     return { ganchoAtivo: ganchoAtivo, filaAlta: filaAlta.length, filaBaixa: filaBaixa.length,
              vivosAlta: vivosAlta, vivosBaixa: vivosBaixa, paraDecodificar: paraDecodificar.length,
-             decodAgendada: decodAgendada, estados: n, garantidas: Object.keys(garantidas).length };
+             decodAgendada: decodAgendada, estados: n, garantidas: Object.keys(garantidas).length,
+             voos: Object.keys(voos).length };
   };
 
   /* Baixa uma lista de itens (prioridade alta) e chama pronto(falhas[]). */
@@ -399,7 +466,8 @@ var JOGO = (typeof window !== 'undefined')
   }
   function feitico(id) {
     var d = D();
-    return (d.spells && d.spells[id]) || (d.monsterSpells && d.monsterSpells[id]) || null;
+    return (d.spells && d.spells[id]) || (d.monsterSpells && d.monsterSpells[id]) ||
+           (d.itemSpells && d.itemSpells[id]) || (d.petSpells && d.petSpells[id]) || null;
   }
   function modeloDe(defId, opts) {
     var m2 = M2();
@@ -431,6 +499,18 @@ var JOGO = (typeof window !== 'undefined')
   }
   function daDupla(ids, fora) {
     var cls = (ids || []).map(classeDoHeroi);
+    // o que o GRIMORIO de cada heroi invoca: o Progress sabe o que ele leva
+    // (base, caminho, item, conjunto — e o Mestre, que leva QUALQUER feitico
+    // do jogo, sem classId nenhum)
+    (ids || []).forEach(function (hid) {
+      var P = JOGO.Progress, sps = [];
+      try { sps = (P && P.spellsFor) ? (P.spellsFor(hid) || []) : []; } catch (e) { sps = []; }
+      sps.forEach(function (sid) {
+        var inv = [];
+        invocacoes(feitico(sid), inv, 0);
+        inv.forEach(function (m) { doMonstro(m, fora); });
+      });
+    });
     cls.forEach(function (c) {
       var m = modeloDe(c, { classId: c });
       if (m) fora.push(m);
@@ -507,7 +587,9 @@ var JOGO = (typeof window !== 'undefined')
         }
         pronto(falhas);
       }
-      if (m2 && m2.novos) m2.novos(function () { fecha(); });
+      // abre SO o que esta descida usa — o resto que desceu em segundo plano
+      // continua com o decodificador de folga, nao atras da tela
+      if (m2 && m2.novos) m2.novos(function () { fecha(); }, chaves);
       else fecha();
     });
   }
@@ -588,6 +670,9 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------ o gancho
   var ganchoAtivo = false;
+  // o que o jogador mandou "seguir assim mesmo" sem: vale SO para a volta
+  // sincrona do deNovo — a proxima descida que precisar pede de novo
+  var pulaNaVolta = null;
   /* Chamado por Game.startRun / nextRoom / startDuel ANTES de a descida
    * mudar de tela. false: tudo na mao (ou em casa) — siga na hora. true: o
    * gancho segurou a descida e chama `deNovo` quando os modelos chegarem (ou
@@ -596,7 +681,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!B.sobDemanda()) return false;
     if (ganchoAtivo) return true;                   // um toque a mais no botao: ja estou nisso
     var chaves = B.plano(pedido);
-    var faltam = chaves.filter(function (k) { return !pronta(k); });
+    var faltam = chaves.filter(function (k) { return !pronta(k) && !(pulaNaVolta && pulaNaVolta[k]); });
     vizinhoDoPoco(pedido);
     if (!faltam.length) return false;
     ganchoAtivo = true;
@@ -607,7 +692,7 @@ var JOGO = (typeof window !== 'undefined')
     function roda() {
       fase = 'descida';
       garante(faltam, function (f, t) { telaAnda('baixando ' + nome + '…', f, t); }, function (falhas) {
-        fase = 'boot';
+        fase = 'avulso';
         if (!falhas.length) {
           registro.ms = Math.round(agora() - t0);
           ganchoAtivo = false;
@@ -618,12 +703,19 @@ var JOGO = (typeof window !== 'undefined')
         registro.falhou++;
         telaFalha('Não consegui baixar ' + falhas.length + (falhas.length > 1 ? ' modelos' : ' modelo') +
                   ' ' + deNome(nome) + '. Confira a conexão.', roda, function () {
-          // seguir assim mesmo: o que faltou vai de substituto, sem novo gancho
-          for (var i = 0; i < faltam.length; i++) garantidas[faltam[i]] = true;
+          // seguir assim mesmo: ESTA descida vai com os substitutos (a volta
+          // do deNovo e sincrona e cabe no try). O que faltou NAO fica
+          // condenado ate o F5: volta agora para a fila baixa, e a proxima
+          // descida que precisar dele pede de novo
+          var faltou = falhas.map(function (it) { return it.chave; });
+          pulaNaVolta = {};
+          for (var i = 0; i < faltou.length; i++) pulaNaVolta[faltou[i]] = true;
           registro.ms = Math.round(agora() - t0);
+          registro.seguiu = faltou.length;
           ganchoAtivo = false;
           telaFecha();
-          segue();
+          try { segue(); } finally { pulaNaVolta = null; }
+          preBuscaChaves(faltou.filter(function (k) { return !pronta(k); }));
         });
       });
     }
@@ -637,7 +729,7 @@ var JOGO = (typeof window !== 'undefined')
     try { roda(); }
     catch (e) {
       ganchoAtivo = false;
-      fase = 'boot';
+      fase = 'avulso';
       registro.erro = String((e && e.message) || e);
       telaFecha();
       if (typeof console !== 'undefined' && console.error) console.error('[Bundle] gancho:', e);
@@ -650,7 +742,17 @@ var JOGO = (typeof window !== 'undefined')
    * descendo em segundo plano. */
   function vizinhoDoPoco(pedido) {
     if (!pedido || pedido.dungeonId !== 'poco') return;
-    var prox = B.plano({ dungeonId: 'poco', sala: (pedido.sala || 0) + 1, party: [] });
+    var s = (pedido.sala || 0) + 1;
+    // o nextRoom so sorteia esse andar DEPOIS do gancho (preparar(roomIndex
+    // + 2) depois do ++), e o plano achava a sala vazia do 2o andar em
+    // diante. Sortear agora e o mesmo sorteio, so mais cedo: preparar so
+    // acrescenta o que falta, e a chamada do nextRoom vira no-op
+    try { if (JOGO.Poco && JOGO.Poco.preparar) JOGO.Poco.preparar(s + 1); } catch (e) {}
+    var dg = calabouco('poco');
+    var prox = B.plano({ dungeonId: 'poco', sala: s, party: [] });
+    medida.vizinhos.push({ sala: s, existia: !!(dg && dg.rooms && dg.rooms[s]), chaves: prox.length });
+    if (medida.vizinhos.length > 20) medida.vizinhos.shift();
+    if (economiaDeDados()) return;             // economia de dados: so o gancho baixa
     preBuscaChaves(prox);
   }
 
@@ -667,8 +769,13 @@ var JOGO = (typeof window !== 'undefined')
     var G = JOGO.Game;
     return !!(G && G.screen === 'battle');
   }
+  // Na praca o laco de quadros quase nao deixa folga: com prazo de 2,5 s o
+  // requestIdleCallback so saia pelo prazo (medido: 6 de 53 abertos em 90 s).
+  // Prazo curto; pelo prazo (a praca desenhando sem parar), um modelo — um
+  // tranco curto a cada 0,6 s; com folga de verdade (nenhum quadro na fila),
+  // ate tres de uma vez.
   function folga(fn) {
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 2500 });
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 600 });
     else setTimeout(fn, 250);
   }
   function decodificaDepois(chave) {
@@ -678,13 +785,25 @@ var JOGO = (typeof window !== 'undefined')
   function agendaDecodificacao() {
     if (decodAgendada || !paraDecodificar.length) return;
     decodAgendada = true;
-    folga(function () {
+    var tAgendou = agora();
+    folga(function (dl) {
       decodAgendada = false;
       var m2 = M2();
       // no meio da batalha, nem um quadro a menos: espera ela acabar
       if (!m2 || !m2.novos || emBatalha() || ganchoAtivo || decodPausada) { setTimeout(agendaDecodificacao, 1500); return; }
-      var ch = paraDecodificar.shift();
-      m2.novos(function () { agendaDecodificacao(); }, [ch]);
+      // o que o gancho de uma descida (ou o pede) ja abriu sai da fila sem
+      // gastar uma folga: senao cada um custava 0,6 s so para nada acontecer
+      if (m2.decodificado) paraDecodificar = paraDecodificar.filter(function (k) { return !m2.decodificado(k); });
+      if (!paraDecodificar.length) return;
+      var livre = 0;
+      try { livre = (dl && !dl.didTimeout && dl.timeRemaining) ? dl.timeRemaining() : 0; } catch (e) { livre = 0; }
+      var leva = paraDecodificar.splice(0, livre > 40 ? 3 : 1);
+      medida.decod.levas++;
+      medida.decod.modelos += leva.length;
+      if (dl && dl.didTimeout) medida.decod.porPrazo++;
+      medida.decod.esperaMs += Math.round(agora() - tAgendou);
+      var tAbre = agora();
+      m2.novos(function () { medida.decod.abrirMs += Math.round(agora() - tAbre); agendaDecodificacao(); }, leva);
     });
   }
   function preBuscaChaves(chaves) {
@@ -731,8 +850,21 @@ var JOGO = (typeof window !== 'undefined')
     fora.forEach(function (k) { if (k && !visto[k] && porChave[k]) { visto[k] = true; saida.push(k); } });
     return saida;
   };
+  /* ECONOMIA DE DADOS: o navegador diz que o plano e curto (Save-Data) ou a
+   * conexao e 2G. A pre-busca nao liga — sao uns 40 MB que o jogador talvez
+   * nunca use; cada calabouco desce so na hora de descer (o gancho). O
+   * preco: os cantinhos dos portais ficam sem cenario (hub3d so planta com
+   * todas as pecas). Reavaliada a cada chamada: a conexao pode melhorar. */
+  function economiaDeDados() {
+    var c = (typeof navigator !== 'undefined') &&
+            (navigator.connection || navigator.mozConnection || navigator.webkitConnection);
+    return !!(c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')));
+  }
+  B.economiaDeDados = economiaDeDados;
   B.preBusca = function () {
-    if (!B.sobDemanda() || medida.pre.estado !== 'parada') return;
+    if (!B.sobDemanda()) return;
+    if (medida.pre.estado !== 'parada' && medida.pre.estado !== 'economia') return;
+    if (economiaDeDados()) { medida.pre.estado = 'economia'; return; }
     // dois segundos de folga: a praca acabou de montar e desenha os primeiros
     // quadros sem ninguem disputando a rede nem o processador
     medida.pre.estado = 'marcada';
@@ -741,6 +873,42 @@ var JOGO = (typeof window !== 'undefined')
       medida.pre.t0 = Math.round(agora());
       preBuscaChaves(B.ordemDaPreBusca());
     }, 2000);
+  };
+
+  /* O corpo PROPRIO de uma aparencia de fusao ('fus:a+b'), ou null. O
+   * avatar e os fantasmas andam com a aparencia no campo `classe`. */
+  B.corpoDe = function (ap) {
+    var m = /^fus:([^+:]+)\+([^+:]+)$/.exec(String(ap || ''));
+    var m2 = M2();
+    return (m && m2 && m2.modeloDaFusao) ? m2.modeloDaFusao(m[1], m[2]) : null;
+  };
+  /* Baixa e ABRE ja (prioridade alta, sem tela) o que falta das chaves —
+   * para quem mostra modelo fora de uma descida: o corpo do avatar, o do
+   * fantasma, o guarda-roupa, o perfil. Devolve quantas foi buscar; com 0
+   * (tudo na mao, ou em casa) `cb` nem e chamado — nada chegou, nada a
+   * repintar. cb(falhas[] de chaves, pedidas). O que falhar volta para a
+   * fila baixa; quando chegar, o aoChegar do Models3D2 avisa. */
+  B.pede = function (chaves, cb) {
+    if (!B.sobDemanda()) return 0;
+    var visto = {}, ks = [];
+    (chaves || []).forEach(function (k) {
+      if (k && !visto[k] && porChave[k] && !pronta(k)) { visto[k] = true; ks.push(k); }
+    });
+    if (!ks.length) return 0;
+    garante(ks, null, function (falhas) {
+      var fk = falhas.map(function (it) { return it.chave; });
+      if (fk.length) preBuscaChaves(fk);
+      if (cb) {
+        try { cb(fk, ks.length); }
+        catch (e) { if (typeof console !== 'undefined' && console.error) console.error('[Bundle] pede:', e); }
+      }
+    });
+    return ks.length;
+  };
+  /* Pre-busca avulsa: as chaves vao para a fila baixa (um arquivo por vez,
+   * so com o gancho parado) e abrem na folga. */
+  B.adianta = function (chaves) {
+    if (B.sobDemanda()) preBuscaChaves(chaves || []);
   };
 
   /* Tudo o que falta, com prioridade, e decodificado — as provas do pacote

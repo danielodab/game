@@ -14,6 +14,8 @@ perfil NOVO e `?api=` apontando para a variante; o DOM final é conferido:
   - eventos.html: o evento no ar, "termina em", as 14 células, o texto da
     regra semanal, e o Calabouço do Dia nunca é portal fechado;
   - ranking.html#classe=sumo: 7 abas e a linha de Pia com 9.000;
+  - ranking.html: a caixa "Equipe do SOTERRA" (10/09) com o nome de cada
+    membro, escapado, e o retrato do Cavaleiro Negro; sem equipe, escondida;
   - fusoes.html: 21 duplas, 15 misturas, "+N PA" lido de Fusion.BONUS_PA
     (e escrito em lugar nenhum do site), e arqueiro+bruxo com água+ar mostra
     "Disparo Salgado", com números que mudam com o nível;
@@ -38,6 +40,13 @@ pelas regras dos dois Caddyfiles (a imitação de tests/carga_prova.py). Com o
 mapa, o ?v=<hash> é conferido por tests/pacote_servido.py. E o SUBIR.md tem de
 explicar o primeiro deploy com o cache por hash (o contêiner de antes não
 manda Cache-Control).
+
+Loja 2 e painel do Mestre (10/09): o catálogo da API falsa é o v2 (as seções
+na ordem do servidor, os pacotes de vinténs "em breve" com os pagamentos
+desligados — e aí nenhum pedido a /api/pagamento/*); site/mestre.html entra
+nas páginas conferidas: sem sessão, o portão pede para entrar, nenhum pedido
+à API, o link "Mestre" sai do menu, nada de undefined/NaN nem 404. As provas
+próprias estão em tests/site_loja2.html e tests/site_mestre.html.
 
 `--api-real` sobe a API de verdade com banco temporário, semeia por HTTP (conta,
 save com heróis, gm=1 gravado no sqlite como no teste da caixa, um evento e uma
@@ -77,7 +86,7 @@ RESULTADOS = []
 PEDIDOS = []          # (caminho, código) do servidor de arquivos
 CONSULTAS = []        # (caminho, query) de cada pedido ao servidor de arquivos
 PEDIDOS_API = []      # (variante, método, caminho, código) das APIs falsas
-PAGINAS = ['index.html', 'conta.html', 'eventos.html', 'fusoes.html', 'loja.html', 'ranking.html']
+PAGINAS = ['index.html', 'conta.html', 'eventos.html', 'fusoes.html', 'loja.html', 'ranking.html', 'mestre.html']
 
 
 def check(nome, ok, extra=''):
@@ -121,30 +130,44 @@ RANKING_CHEIA = json.loads(r'''
   "porClasse": {
     "sumo": [{"nome": "Pia, a Forte", "nivel": 22, "xp": 9000, "elemento": "fogo"}],
     "arqueiro": [], "bruxo": [], "espadachim": [], "curandeiro": [], "invocador": [], "minotauro": []
-  }
+  },
+  "equipe": [{"nome": "GM-ODA", "avatar": "gm"}, {"nome": "Tia <b>Nena</b> & Cia", "avatar": "gm"}]
 }
 ''')
 EVENTOS_VAZIA = dict(EVENTOS_CHEIA, ativos=[], proximos=[], regras=[], fatores={'geral': {}, 'porCalabouco': {}})
-RANKING_VAZIA = dict(RANKING_CHEIA, jogadores=[], pvp=[], guildas=[],
+# 10/09: a equipe (contas.gm = 1) sai à parte, só com nome e avatar; o 2º nome,
+# com HTML, prova que a página passa tudo pelo SITE.esc
+RANKING_VAZIA = dict(RANKING_CHEIA, jogadores=[], pvp=[], guildas=[], equipe=[],
                      porClasse={c: [] for c in RANKING_CHEIA['classes']})
 CLASSES = RANKING_CHEIA['classes']
 # Fase C: a saúde (sem correio: o "esqueci a senha" fica como antes) e o catálogo
 # da loja com os três exemplos da seção 1.5 do plano, sem tirar nem pôr
 SAUDE = {'ok': True, 'contas': 1, 'agora': EVENTOS_CHEIA['agora'], 'correio': False}
 CATALOGO_CHEIA = json.loads(r'''
-{"ok": true, "versao": 1, "itens": [
- {"sku": "pergaminho-xp", "secao": "pergaminhos", "tipo": "pergaminho", "alvo": "xp", "qtd": 1,
-  "nome": "Pergaminho da Sabedoria",
-  "descricao": "+50% de experiência para o grupo nas próximas 9 salas vencidas. Com um evento de XP no ar, os dois juntos param em ×2.",
-  "preco": 1500, "limite": {"grupo": "pergaminho-xp", "max": 1, "dias": 7}},
- {"sku": "pedras-agua", "secao": "pedras", "tipo": "pedras", "alvo": "stone-tear", "qtd": 10, "elemento": "agua",
-  "nome": "10 Lágrimas de Cisterna", "descricao": "…", "preco": 300, "limite": {"grupo": "pedras", "max": 5, "dias": 7}},
+{"ok": true, "versao": 2, "itens": [
  {"sku": "classe-invocador", "secao": "personagens", "tipo": "classe", "alvo": "invocador", "qtd": 1,
-  "nome": "Xamã", "raridade": "raro", "cartas": 10, "descricao": "Chega no nível 1.", "preco": 8000,
-  "limite": {"grupo": "classe-invocador", "max": 1, "dias": null}}
-]}
+  "nome": "Xamã", "raridade": "raro", "cartas": 10, "descricao": "Libera o Xamã na hora. Chega no nível 1.", "preco": 10000,
+  "limite": {"grupo": "classe-invocador", "max": 1, "dias": null}},
+ {"sku": "bonus-xp-1", "secao": "bonus", "tipo": "bonus-xp", "alvo": "xp", "qtd": 1, "dias": 1,
+  "nome": "Bônus de XP — 1 dia",
+  "descricao": "+50% de experiência para o grupo por 1 dia, contado no relógio do servidor a partir da entrega no jogo.",
+  "preco": 1500, "limite": null},
+ {"sku": "pedras-agua", "secao": "pedras", "tipo": "pedras", "alvo": "stone-tear", "qtd": 10, "elemento": "agua",
+  "nome": "10 Lágrimas de Cisterna", "descricao": "…", "preco": 500, "limite": null},
+ {"sku": "insignias-10", "secao": "guilda", "tipo": "insignias", "alvo": "fundacao", "qtd": 10,
+  "nome": "10 Insígnias de Fundação", "descricao": "Dez Insígnias de Fundação: o bastante para fundar uma guilda.",
+  "preco": 4500, "limite": null},
+ {"sku": "pergaminho-elemento", "secao": "pergaminhos", "tipo": "pergaminho", "alvo": "elemento", "qtd": 1,
+  "nome": "Pergaminho da Reescrita", "descricao": "Troca um caminho elemental de um herói por outro.", "preco": 5000,
+  "limite": {"grupo": "pergaminho-elemento", "max": 1, "dias": 30}}
+],
+ "pacotes": [
+  {"id": "pacote-1000", "nome": "Bolsa de 1.000 vinténs", "vintens": 1000, "centavos": 490, "preco": "R$ 4,90"},
+  {"id": "pacote-5500", "nome": "Saco de 5.500 vinténs", "vintens": 5500, "centavos": 1990, "preco": "R$ 19,90"}
+ ],
+ "pagamento": {"ligado": false, "teste": false}}
 ''')
-CATALOGO_VAZIA = {'ok': True, 'versao': 1, 'itens': []}
+CATALOGO_VAZIA = {'ok': True, 'versao': 2, 'itens': [], 'pacotes': [], 'pagamento': {'ligado': False, 'teste': False}}
 
 
 # ---- o que o jogo diz (lido dos arquivos dele, nunca copiado) -------------------
@@ -260,6 +283,16 @@ def bloco(h, tag, id_):
     return m.group(1) if m else ''
 
 
+def abertura(h, tag, id_):
+    """a tag de abertura do elemento, fora do código dos scripts (para ler o hidden)"""
+    m = re.search(r'<%s\b[^>]*\bid="%s"[^>]*>' % (tag, re.escape(id_)), sem_codigo(h))
+    return m.group(0) if m else ''
+
+
+def escondida(tag):
+    return bool(re.search(r'\shidden(=|\s|>)', tag))
+
+
 def limpo(nome, h):
     t = texto(h)
     ruins = sorted(set(re.findall(r'\b(undefined|NaN|null)\b', t)))
@@ -281,7 +314,8 @@ def img_no_contrato(p):
     m = re.match(r'^/site/img/classe-([a-z]+)(-busto)?\.webp$', p)
     if m:
         return m.group(1) in CLASSES
-    return bool(re.match(r'^/site/img/(obra-fus(-[a-z]+)+\.webp|(capa|guildas|arena|calabouco-[a-z]+)\.jpg)$', p))
+    return bool(re.match(r'^/site/img/(obra-fus(-[a-z]+)+\.webp|equipe-cavaleiro(-busto)?\.webp|'
+                         r'(capa|guildas|arena|calabouco-[a-z]+)\.jpg)$', p))
 
 
 def dias_do_calabouco(h):
@@ -357,6 +391,22 @@ def prova_ranking(abre):
           'img/fusao-bruxo-sumo-busto.webp' in jog and 'data-reserva="img/classe-sumo-busto.webp"' in jog)
     limpo('ranking (cheia)', h)
     menu_ok('ranking', h)
+    # a equipe (10/09): caixa própria, fora das tabelas, só o nome e o retrato
+    eq, tag = bloco(h, 'aside', 'equipe'), abertura(h, 'aside', 'equipe')
+    t_eq = texto(eq)
+    check('ranking (cheia): a caixa "Equipe do SOTERRA" aparece, com os dois nomes',
+          bool(tag) and not escondida(tag) and 'Equipe do SOTERRA' in t_eq and 'GM-ODA' in t_eq
+          and 'Tia <b>Nena</b> & Cia' in t_eq, t_eq[:120])
+    check('ranking (cheia): o nome da equipe passa pelo SITE.esc (o HTML do servidor vira texto)',
+          '&lt;b&gt;Nena&lt;/b&gt; &amp; Cia' in eq and '<b>' not in eq)
+    fotos = re.findall(r'<img[^>]*\ssrc="img/equipe-cavaleiro(?:-busto)?\.webp"', eq)
+    check('ranking (cheia): cada membro com o retrato do Cavaleiro Negro', len(fotos) == 2, '%d fotos' % len(fotos))
+    tem = all(os.path.exists(os.path.join(RAIZ, 'site', 'img', n))
+              for n in ('equipe-cavaleiro.webp', 'equipe-cavaleiro-busto.webp'))
+    check('ranking (cheia): o retrato existe em site/img e abriu (sem cair na moldura do ◆)',
+          tem and 'sem-foto' not in eq, 'arquivos: %s' % ('sim' if tem else 'FALTAM'))
+    tabelas = ' '.join(texto(bloco(h, 'tbody', 'rk-' + i)) for i in ('jogadores', 'pvp', 'guildas', 'classe'))
+    check('ranking (cheia): a equipe fica fora das tabelas', 'GM-ODA' not in tabelas and 'Nena' not in tabelas)
 
     h = abre('ranking.html', 'cheia', '#classe=bruxo')
     bt = re.search(r'<button[^>]*data-classe="bruxo"[^>]*>', h)
@@ -367,10 +417,14 @@ def prova_ranking(abre):
     check('ranking (vazia): 7 abas e ninguém ainda',
           len(re.findall(r'data-classe="', bloco(h, 'div', 'abas-classe'))) == 7 and 'ninguém ainda' in texto(h))
     limpo('ranking (vazia)', h)
+    tag = abertura(h, 'aside', 'equipe')
+    check('ranking (vazia): sem equipe, a caixa não aparece',
+          bool(tag) and escondida(tag) and 'membro' not in bloco(h, 'aside', 'equipe'), tag)
 
     h = abre('ranking.html', 'fora')
     check('ranking (fora): diz que o servidor está fora', 'servidor está fora' in texto(h))
     limpo('ranking (fora)', h)
+    check('ranking (fora): a caixa da equipe fica escondida', escondida(abertura(h, 'aside', 'equipe')))
 
 
 def prova_fusoes(abre):
@@ -457,13 +511,20 @@ def prova_index(abre):
 
 
 def prova_loja(abre):
-    """Fase C: a loja pública (sem sessão) com o catálogo do contrato"""
+    """Fase C e loja 2: a loja pública (sem sessão) com o catálogo v2 do contrato"""
     h = abre('loja.html', 'cheia')
     t = texto(h)
     secoes = re.findall(r'<section class="loja-secao" data-secao="([a-z]+)"', sem_codigo(h))
-    check('loja (cheia): as três seções, na ordem', secoes == ['pergaminhos', 'pedras', 'personagens'], ' '.join(secoes))
-    check('loja (cheia): os preços do servidor, com ponto de milhar', '1.500 vinténs' in t and '300 vinténs' in t and '8.000 vinténs' in t)
-    check('loja (cheia): sem sessão, "Entre para comprar"', t.count('Entre para comprar') >= 4)
+    check('loja (cheia): as cinco seções, na ordem do servidor', secoes == ['personagens', 'bonus', 'pedras', 'guilda', 'pergaminhos'],
+          ' '.join(secoes))
+    check('loja (cheia): os preços do servidor, com ponto de milhar',
+          '10.000 vinténs' in t and '1.500 vinténs' in t and '500 vinténs' in t and '4.500 vinténs' in t and '5.000 vinténs' in t)
+    check('loja (cheia): sem sessão, "Entre para comprar"', t.count('Entre para comprar') >= 5)
+    pac = bloco(h, 'section', 'lj-pacotes')
+    check('loja (cheia): os pacotes de vinténs "em breve", com o preço em reais do servidor',
+          'em breve' in texto(pac) and 'R$ 4,90' in texto(pac) and 'Bolsa de 1.000 vinténs' in texto(pac))
+    check('loja (cheia): com os pagamentos desligados, nenhum pedido a /api/pagamento/*',
+          not [c for v, m, c, cod in PEDIDOS_API if c.startswith('/api/pagamento/')])
     check('loja (cheia): o retrato do personagem pelo id da classe', 'src="img/classe-invocador.webp"' in h)
     limpo('loja (cheia)', h)
     menu_ok('loja', h)
@@ -475,6 +536,22 @@ def prova_loja(abre):
     h = abre('loja.html', 'fora')
     check('loja (fora): diz que o servidor está fora', 'servidor está fora' in texto(h))
     limpo('loja (fora)', h)
+
+
+def prova_mestre(abre):
+    """10/09: o painel do Mestre sem sessão — o portão, e nenhum pedido à API"""
+    antes = len(PEDIDOS_API)
+    h = abre('mestre.html', 'cheia')
+    t = texto(h)
+    check('mestre (sem sessão): o portão pede para entrar com a conta do Mestre',
+          'Entre com a conta do Mestre' in t and 'data-portao="fora"' in h)
+    check('mestre (sem sessão): nenhum pedido à API (nem /api/eu, nem /api/mestre/*)', len(PEDIDOS_API) == antes,
+          repr(PEDIDOS_API[antes:][:3]))
+    m = re.search(r'(?s)<nav>(.*?)</nav>', h)
+    check('mestre (sem sessão): o link "Mestre" sai do menu', bool(m) and 'mestre.html' not in m.group(1))
+    check('mestre: fora dos buscadores (noindex)', 'name="robots" content="noindex, nofollow"' in h)
+    limpo('mestre', h)
+    menu_ok('mestre', h)
 
 
 # ---- a integração com a API de verdade (--api-real) --------------------------------
@@ -520,7 +597,7 @@ def prova_api_real(chrome, pasta, site):
         st, r = pede(base, 'POST', '/api/cadastro', {'nome': 'Pia Forte', 'email': 'pia@soterra.test',
                                                      'senha': 'segredo-bom-8'})
         check('api real: a conta nasce', st == 201, str(r)[:120])
-        token, cid = r.get('token'), (r.get('conta') or {}).get('id')
+        token = r.get('token')
         herois = {'sumo': {'classId': 'sumo', 'xp': 5000, 'level': 15, 'element': 'fogo', 'items': {}, 'itemVar': {}},
                   'sumo#2': {'classId': 'sumo', 'xp': 9000, 'level': 22, 'element': 'fogo', 'items': {}, 'itemVar': {}},
                   'bruxo': {'classId': 'bruxo', 'xp': 2000, 'level': 8, 'items': {}, 'itemVar': {}}}
@@ -531,19 +608,25 @@ def prova_api_real(chrome, pasta, site):
         st, r = pede(base, 'PUT', '/api/save', {'versao': 0, 'progress': {'version': 22, 'inventory': [], 'heroes': herois},
                                                'db': db, 'nascimentos': []}, token)
         check('api real: o save de Pia entra', st == 200, str(r)[:120])
-        con = sqlite3.connect(banco)                           # a marca de Mestre é do sqlite, como no teste da caixa
-        con.execute('UPDATE contas SET gm = 1 WHERE id = ?', (cid,))
+        # o Mestre é OUTRA conta: desde 10/09 a equipe fica fora do ranking, e
+        # Pia tem de continuar nas tabelas. A marca é do sqlite, como no teste da caixa
+        st, r = pede(base, 'POST', '/api/cadastro', {'nome': 'Guia Firme', 'email': 'guia.firme@soterra.test',
+                                                     'senha': 'segredo-bom-8'})
+        check('api real: a conta do Mestre nasce', st == 201, str(r)[:120])
+        token_m, cid_m = r.get('token'), (r.get('conta') or {}).get('id')
+        con = sqlite3.connect(banco)
+        con.execute('UPDATE contas SET gm = 1 WHERE id = ?', (cid_m,))
         con.commit()
         con.close()
         agora = int(time.time())
         st, r = pede(base, 'POST', '/api/eventos', {'tipo': 'xp', 'multiplicador': 2, 'calabouco': None,
                                                    'titulo': 'Quinta do XP', 'texto': 'Toda sala paga o dobro de experiência.',
-                                                   'fim': agora + 14 * 3600}, token)
+                                                   'fim': agora + 14 * 3600}, token_m)
         check('api real: o Mestre liga um evento (201)', st == 201, '%s %s' % (st, str(r)[:120]))
         st, r = pede(base, 'POST', '/api/eventos/regras', {'tipo': 'saque', 'multiplicador': 1.5, 'calabouco': 'cistern',
                                                           'titulo': 'Maré da Cisterna', 'texto': '', 'dias': [6],
                                                           'hora': '10:00', 'duracaoMin': 720,
-                                                          'vigenteDe': None, 'vigenteAte': None}, token)
+                                                          'vigenteDe': None, 'vigenteAte': None}, token_m)
         check('api real: o Mestre cria a regra semanal (201)', st == 201, '%s %s' % (st, str(r)[:120]))
 
         h = dom(chrome, pasta, site + 'eventos.html?api=' + base)
@@ -559,6 +642,10 @@ def prova_api_real(chrome, pasta, site):
         check('api real: o avatar normalizado vira o busto da fusão',
               'img/fusao-bruxo-sumo-busto.webp' in bloco(h, 'tbody', 'rk-jogadores'))
         limpo('api real: ranking', h)
+        eq = texto(bloco(h, 'aside', 'equipe'))
+        check('api real: o Mestre sai na caixa da equipe, e só nela',
+              'Guia Firme' in eq and not escondida(abertura(h, 'aside', 'equipe'))
+              and 'Guia Firme' not in texto(bloco(h, 'tbody', 'rk-jogadores')), eq[:80])
         h = dom(chrome, pasta, site + 'index.html?api=' + base)
         check('api real: a landing mostra o evento no ar', 'Quinta do XP' in texto(secao(h, 'eventos')))
         limpo('api real: landing', h)
@@ -573,7 +660,7 @@ def prova_api_real(chrome, pasta, site):
 
 
 def prova_do_carimbo():
-    """As seis páginas pedem a folha e os scripts pelo mapa do build (SITE_URL,
+    """As páginas do site pedem a folha e os scripts pelo mapa do build (SITE_URL,
     com o hash de cada arquivo) e, sem mapa (em casa), pelo carimbo ?t= do
     instante — nunca o ?v= do instante, que o Caddy de antes das marcas guardava
     por um ano."""
@@ -586,8 +673,8 @@ def prova_do_carimbo():
             ruins.append(p + ': não pede pelo mapa (../js/versao.js e SITE_URL)')
         if len(re.findall(r"'\?v='\s*\+\s*mapa\[chave\]\s*:\s*'\?t='\s*\+\s*Date\.now\(\)", t)) != 1:
             ruins.append(p + ": sem mapa, o SITE_URL não cai no carimbo '?t=' + Date.now()")
-    check("as seis páginas pedem a folha e os scripts pelo mapa do build (SITE_URL) e, sem mapa, pelo carimbo ?t= "
-          "(nunca ?v=' + Date.now())", not ruins, '; '.join(ruins[:4]))
+    check("as %d páginas pedem a folha e os scripts pelo mapa do build (SITE_URL) e, sem mapa, pelo carimbo ?t= "
+          "(nunca ?v=' + Date.now())" % len(PAGINAS), not ruins, '; '.join(ruins[:4]))
 
 
 # ---- o cache: sem mapa (em casa), no ar (o Caddy novo) e o primeiro deploy ---------
@@ -740,6 +827,7 @@ def main():
         prova_fusoes(abre)
         prova_index(abre)
         prova_loja(abre)
+        prova_mestre(abre)
 
         faltas = sorted({p for p, c in PEDIDOS if c == '404' and not p.startswith('/site/img/') and p != '/favicon.ico'})
         check('nenhum arquivo pedido pelas páginas falta (0 × 404 fora de /site/img/)', not faltas, ', '.join(faltas[:6]))

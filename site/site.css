@@ -395,6 +395,26 @@ td .busto { margin-top: -6px; margin-bottom: -6px; }
 .abas-classe button { flex: 1 1 130px; display: flex; align-items: center; justify-content: center; padding: 10px 8px; font-size: 14.5px; }
 .abas-classe button .busto { width: 28px; height: 28px; margin-right: 7px; }
 .abas-classe + .tabela-caixa { border-top-left-radius: 0; border-top-right-radius: 0; }
+/* 10/09 (pedido do dono): a EQUIPE fora do ranking. A caixa "Equipe do
+ * SOTERRA" no alto da página: o nome de cada membro e o retrato do Cavaleiro
+ * Negro numa moldura quadrada (sem a foto, o ◆ sobre o vinho da classe do
+ * Mestre). O [hidden] tem de vencer o display da caixa. */
+.equipe-caixa {
+  margin: 0 0 28px; padding: 14px 18px 16px; background: var(--fundo-2);
+  border: 1px solid var(--ouro-a30); border-left: 3px solid var(--ouro-2); border-radius: var(--raio);
+}
+.equipe-caixa[hidden] { display: none; }
+.equipe-caixa h3 { margin-bottom: 12px; }
+.equipe-caixa h3::before { content: '◆ '; font-size: .7em; vertical-align: middle; color: var(--ouro); }
+.equipe-caixa h3 small { color: var(--texto-2); font-weight: 400; font-family: var(--sans); font-size: 13px; margin-left: 6px; }
+.equipe-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px 28px; }
+.equipe-lista .membro { display: flex; align-items: center; min-width: 0; }
+.equipe-lista .busto {
+  width: 64px; height: 64px; border-radius: 10px; margin-right: 12px;
+  border-color: var(--ouro-2); box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+}
+.equipe-lista .busto::after { font-size: 26px; color: var(--ouro); }
+.membro-nome { font: 700 17px var(--serif); color: var(--ouro); letter-spacing: .02em; overflow-wrap: anywhere; }
 .painel { padding: 8px 24px 26px; display: none; }
 .painel.ligado { display: block; }
 .painel .btn { width: 100%; margin-top: 18px; }
@@ -623,4 +643,140 @@ input.codigo { font: 600 22px/1 var(--sans); letter-spacing: .45em; text-align: 
   /* a tabela dos tipos cabe inteira na tela: a coluna do meio encolhe e quebra linha */
   .tabela-tipos td:nth-child(2) { min-width: 0; }
   .tabela-tipos th, .tabela-tipos td { padding: 10px 8px; }
+}
+
+/* ---- 10/09: a loja 2, o retrato no ranking e o painel do Mestre ----------------
+ * A caixa dos pacotes de vinténs (o preço em reais vem escrito pelo servidor),
+ * a faixa da volta do Mercado Pago, o "A caminho" no saldo, as artes do bônus
+ * de XP e das insígnias (só CSS e glifo, como a pedra), a grade de retratos da
+ * conta e o painel do Mestre. Nenhuma arte nova: os retratos são os de
+ * site/img/. No celular (390 px) tudo cabe numa coluna. */
+.saldo-numeros.quatro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.saldo-numeros .a-caminho { border-color: rgba(126, 226, 168, .35); }
+.saldo-numeros .a-caminho b { color: var(--certo); }
+.saldo-caixa li.nota-caminho { color: var(--texto); }
+
+.pacotes-caixa {
+  margin-top: 18px; background: var(--fundo-2); border: 1px solid var(--ouro-a18); border-radius: var(--raio);
+  padding: 16px 20px 18px;
+}
+.pacotes-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 4px; }
+.pacotes-cab h3 { color: var(--ouro); }
+.pacotes-caixa > .apoio { font-size: 14px; margin: 4px 0 12px; }
+.etiqueta.embreve { color: var(--ouro-2); border-color: var(--ouro-esc); background: var(--ouro-a10); }
+.etiqueta.modo-teste { color: #c8a2ff; border-color: rgba(200, 162, 255, .45); }
+.pacotes { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); }
+.pacote {
+  background: var(--fundo-3); border: 1px solid var(--linha); border-radius: 10px; overflow: hidden;
+  display: flex; flex-direction: column; min-width: 0;
+}
+.pacote .corpo { padding: 10px 14px 14px; display: flex; flex-direction: column; flex: 1; }
+.pacote h4 { font: 600 16px/1.3 var(--serif); color: var(--texto); margin: 0 0 4px; }
+.pacote-vintens { margin: 0; color: var(--texto-2); font-size: 14px; }
+.pacote-vintens b { font: 600 22px/1.2 var(--serif); color: var(--ouro); font-variant-numeric: tabular-nums; }
+.pacote .produto-pe { margin-top: auto; }
+.pacote .btn { padding: 8px 12px; font-size: 14px; }
+.preco-reais { font-size: 19px; }
+.pacote-arte {
+  height: 64px; display: flex; align-items: center; justify-content: center; gap: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(255, 196, 77, .22), transparent 70%), linear-gradient(160deg, #1d232c, #0f1216);
+}
+.pacote-arte .moeda {
+  width: 30px; height: 30px; border-radius: 50%; margin: 0 -5px; border: 2px solid #b9892a;
+  background: radial-gradient(circle at 36% 30%, #fff3c4, #ffc44d 45%, #a8781c);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+}
+.pacote-arte .moeda:nth-child(2) { transform: translateY(-6px); }
+
+.volta-pagamento {
+  margin: 0 0 16px; padding: 12px 14px; border-radius: 10px; font-size: 15px; font-weight: 600;
+  border: 1px solid var(--linha); background: var(--fundo-3); color: var(--texto);
+}
+.volta-pagamento.certo { color: var(--certo); border-color: rgba(126, 226, 168, .4); background: rgba(126, 226, 168, .08); }
+.volta-pagamento.erro { color: var(--erro); border-color: rgba(255, 122, 107, .4); background: rgba(255, 122, 107, .08); }
+.volta-pagamento.neutro { color: var(--ouro-2); border-color: var(--ouro-esc); background: var(--ouro-a10); }
+
+.arte-bonus { background: radial-gradient(ellipse at 50% 45%, rgba(255, 209, 102, .26), transparent 68%), linear-gradient(160deg, #1d232c, #0f1216); }
+.arte-bonus .glifo { color: #ffd166; }
+.arte-insignia { background: radial-gradient(ellipse at 50% 45%, rgba(200, 162, 255, .22), transparent 68%), linear-gradient(160deg, #1d232c, #0f1216); }
+.arte-insignia .glifo { color: #d9c4ff; text-shadow: 0 0 24px rgba(200, 162, 255, .4); }
+.lista-pedidos li.o-pagamento b, .lista-pedidos li.o-presente b { color: var(--ouro-2); }
+.g-aprovado .estado-pedido { color: var(--certo); }
+.g-pendente .estado-pedido, .g-aberto .estado-pedido { color: var(--ouro-2); }
+.g-recusado .estado-pedido, .g-estornado .estado-pedido, .g-falhou .estado-pedido { color: var(--erro); }
+
+/* o retrato no ranking (conta.html) */
+.av-grade { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); margin-top: 10px; }
+.av-op {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px 8px; min-width: 0;
+  background: var(--fundo-3); border: 1px solid var(--linha); border-radius: 10px; cursor: pointer;
+  color: var(--texto-2); font: 600 12.5px/1.25 var(--sans); text-align: center;
+  transition: border-color .15s, background .15s;
+}
+.av-op:hover { border-color: var(--ouro-esc); color: var(--texto); }
+.av-op[aria-pressed="true"] { border-color: var(--ouro); background: var(--ouro-a10); color: var(--ouro); box-shadow: 0 0 0 1px var(--ouro-a30); }
+.av-op[disabled] { opacity: .6; cursor: wait; }
+.av-op .busto, .av-mestre .busto, .av-efetivo .busto { width: 56px; height: 56px; margin: 0; }
+.av-op .busto::after, .av-mestre .busto::after { font-size: 22px; }
+.av-nome { overflow-wrap: anywhere; }
+.av-efetivo { display: flex; align-items: center; gap: 10px; margin: 6px 0 0; font-size: 14px; color: var(--texto-2); }
+.av-efetivo .busto { width: 36px; height: 36px; }
+.av-efetivo b { color: var(--texto); }
+.av-mestre { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.av-mestre b { display: block; color: var(--ouro); font-family: var(--serif); font-size: 17px; }
+.av-mestre small { color: var(--texto-2); }
+.busto.gm { background: radial-gradient(circle at 40% 30%, #3a3f4a, #0b0d10); border-color: var(--ouro); }
+
+/* o painel do Mestre (mestre.html) */
+.ms-portao { background: var(--fundo-2); border: 1px solid var(--ouro-a18); border-radius: var(--raio); padding: 16px 20px; }
+.ms-portao p { margin: 0 0 10px; color: var(--texto-2); }
+.ms-portao p b { color: var(--texto); }
+.ms-portao .fora { color: var(--erro); }
+.ms-colunas { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); align-items: start; }
+.ms-lado { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.ms-ultimos { margin-top: 18px; }
+.ms-linha { display: flex; gap: 8px; align-items: center; }
+.ms-linha input { flex: 1 1 auto; min-width: 0; }
+.ms-linha .btn { flex: none; padding: 10px 16px; }
+input[type=number] {
+  width: 100%; padding: 11px 12px; border-radius: 9px; border: 1px solid var(--linha);
+  background: var(--fundo-3); color: var(--texto); font: 15.5px var(--sans); outline: none;
+}
+.ms-escondido { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ms-ficha h4, .ms-grupo h4 { font: 600 16px var(--serif); color: var(--ouro); margin: 20px 0 6px; }
+.ms-grupo h4 { margin-top: 8px; }
+.ms-grupo h5 { margin: 12px 0 0; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ouro-2); }
+.ms-ficha .pedidos-cab, .ms-lado .pedidos-cab, .ms-ultimos .pedidos-cab { margin-top: 0; flex-wrap: wrap; }
+/* a lista vazia (a busca antes de buscar) não desenha a moldura */
+.lista-pedidos:empty { display: none; }
+/* no painel, o lado direito da linha (estado e botão) não encolhe por baixo do texto */
+.ms-lado .lista-pedidos .direita, .ms-ficha .lista-pedidos .direita, .ms-ultimos .lista-pedidos .direita { flex: 0 0 auto; max-width: 60%; }
+.ms-ficha .pedidos-cab h3 { margin-right: auto; overflow-wrap: anywhere; min-width: 0; }
+.ms-ficha .lista-pedidos, .ms-lado .lista-pedidos, .ms-ultimos .lista-pedidos { background: var(--fundo-3); }
+.ms-resultados li.aberta b { color: var(--ouro); }
+.ms-item .motivo { display: block; margin-top: 4px; font-size: 12.5px; color: var(--texto-2); }
+.ms-classes { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.ms-classes li { display: flex; align-items: center; font-size: 14px; }
+.etiqueta.banida { color: var(--erro); border-color: rgba(255, 122, 107, .45); font-size: 11px; padding: 1px 7px; }
+.lista-pedidos .etiqueta.marca-gm { font-size: 11px; padding: 1px 7px; border-color: var(--ouro-esc); }
+.ms-banida { color: var(--erro); }
+button.link {
+  background: none; border: 0; padding: 0; cursor: pointer; color: var(--ouro-2); font: inherit; font-weight: 600;
+}
+button.link:hover { color: var(--ouro); text-decoration: underline; }
+.lista-pedidos li.alerta.aberto b { color: var(--erro); }
+.lista-pedidos li.alerta.visto { opacity: .75; }
+
+@media (max-width: 900px) {
+  .ms-colunas { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .saldo-numeros.quatro { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pacotes-caixa { padding: 14px; }
+  .av-grade { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+  .av-op .busto { width: 48px; height: 48px; }
+  .ms-linha { flex-wrap: wrap; }
+  .ms-linha .btn { flex: 1 1 auto; }
+  /* no celular a linha quebra: o estado e o botão descem inteiros, sem aperto */
+  .ms-lado .lista-pedidos .direita, .ms-ficha .lista-pedidos .direita, .ms-ultimos .lista-pedidos .direita { max-width: none; }
 }

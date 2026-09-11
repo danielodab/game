@@ -79,6 +79,16 @@ var JOGO = (typeof window !== 'undefined')
  *      'elementChoice' (`Game.goTo`) e chama `Game.chooseElement`; quando não
  *      resta ninguém pendente, o jogo volta sozinho à tela anterior.
  *
+ * [G11] A BATALHA EM REDE (11/09, multijogador): grupo de 2 jogadores (cada um
+ *       com o SEU herói) e duelo pela Rede. Lockstep: o Coop (js/core/coop.js)
+ *       monta a mesma batalha nos dois clientes e só os lances de gente
+ *       viajam. Aqui: `donoDe`/`ladoDaTela`/`meuLado`, a PORTA ÚNICA (toda ação
+ *       local que chega ao motor vira lance, mesmo a que falha), o GANCHO DE
+ *       TURNO (depois de toda chamada ao motor, `Coop.aoTurno` se o
+ *       `state.turno` mudou), o relógio de PAREDE do meu turno, a batalha da
+ *       ata, o duelo em sala sorteada e a recompensa POR JOGADOR (partySize da
+ *       ata, XP só do meu herói). Fora de rede, `rede` é null e nada disto roda.
+ *
  * [G7] ROBUSTEZ v1 preservada: nada acessa Renderer/UI/Fusion/IA sem checar
  *      existência (headless roda liso); com Renderer, a IA executa 1 ação por
  *      vez, esperando `Renderer.isBusy() === false` e 250 ms entre ações; sem
@@ -118,11 +128,16 @@ var JOGO = (typeof window !== 'undefined')
   // internos do cronômetro
   var turnElapsed = 0, timerUid = null, lastTickSec = -1;
   var clockFn = null, lastClock = 0;
+  // [G11] a batalha em rede: quem sou eu nela e o gancho de turno
+  var rede = null;          // { tipo:'grupo'|'duelo', eu, lado:'A'|'B'|null, colocador }
+  var ultimoTurno = null;   // o state.turno visto por último (o gancho chama Coop.aoTurno quando muda)
+  var timerTurno = null, turnoIniMs = 0;   // o relógio de PAREDE do meu turno em rede
   // tela para onde voltar depois de 'elementChoice' [G6]
   var returnScreen = 'menu';
 
   function E() { return JOGO.Engine; }
   function P() { return JOGO.Progress; }
+  function C() { return JOGO.Coop || null; }
   function num(v, def) { return (typeof v === 'number' && isFinite(v)) ? v : def; }
 
   function setScreen(name, data) {
@@ -156,7 +171,11 @@ var JOGO = (typeof window !== 'undefined')
     resetAiState();
     resetTimer(true);
     returnScreen = 'menu';
+    rede = null; ultimoTurno = null; timerTurno = null;
     setScreen('menu');
+    // [G11] a batalha em rede acaba com a volta ao menu/Acampamento
+    var c = C();
+    if (c && c._gameInit) { try { c._gameInit(); } catch (e) {} }
   };
 
   // navegação pré-batalha para o UI
@@ -265,8 +284,13 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   Game.startRun = function (heroIds, dungeonId, opts) {
+    // [G11] `opts.grupo`: a descida em dupla pela Rede — 1 herói (o meu), nada
+    // de Poço nem de Mestre; os modelos do herói do parceiro vêm junto
+    var emGrupo = !!(opts && opts.grupo);
+    if (emGrupo && !podeDescerEmGrupo(heroIds, dungeonId)) return false;
     if (!validParty(heroIds) || !validDungeon(dungeonId)) return false;
-    if (!(opts && opts.direto) && seguraParaModelos({ dungeonId: dungeonId, party: heroIds, sala: 0 },
+    var pedidoModelos = { dungeonId: dungeonId, party: emGrupo ? comParceiro(heroIds) : heroIds, sala: 0 };
+    if (!(opts && opts.direto && !emGrupo) && seguraParaModelos(pedidoModelos,
         function () { Game.startRun(heroIds, dungeonId, opts); })) return true;
     Game.party = heroIds.slice();
     Game.dungeonId = dungeonId;
@@ -278,9 +302,11 @@ var JOGO = (typeof window !== 'undefined')
     carryHp = null;
     resetAiState();
     resetTimer(true);
+    rede = emGrupo ? { tipo: 'grupo', eu: meuIdRede(), lado: null, colocador: false } : null;
+    ultimoTurno = null; timerTurno = null;
     // `opts.direto` é o caminho antigo (bancadas de teste): batalha na hora,
     // sem antessala nem escolha de posição
-    if (opts && opts.direto) {
+    if (opts && opts.direto && !emGrupo) {
       Game.state = E().createBattle(dungeonId, 0, partyPayload(), { dificuldade: Game.dificuldade });
       setScreen('battle');
       return true;
@@ -291,6 +317,7 @@ var JOGO = (typeof window !== 'undefined')
      * sair". A descida começa nela; a batalha só nasce em entrarNaSala. */
     Game.state = null;
     setScreen('antessala', Game.salaInfo());
+    if (emGrupo) avisaAntessala();       // [G11] o parceiro manda o `pronto`
     return true;
   };
 
@@ -298,6 +325,10 @@ var JOGO = (typeof window !== 'undefined')
    * sintético e as salas (sempre uma à frente); daqui é um startRun normal
    * no id 'poco', com a escalada aplicada no estado logo depois. */
   Game.startPoco = function (heroIds) {
+    // [G11] o Poço é só para quem desce sozinho — por enquanto (sorteia com
+    // Math.random e mexe em DATA.dungeons: não cabe no lockstep)
+    var cp = C();
+    try { if (cp && cp.emGrupo && cp.emGrupo()) return false; } catch (e) {}
     if (!JOGO.Poco || !JOGO.Poco.preparar(2)) return false;
     if (!Game.startRun(heroIds, JOGO.Poco.ID)) return false;
     // 03/09: com a antessala no meio o estado ainda não existe aqui — a
@@ -313,6 +344,7 @@ var JOGO = (typeof window !== 'undefined')
     if (seguraParaModelos({ duplas: [duplaA, duplaB], duelo: true },
         function () { Game.startDuel(duplaA, duplaB); })) return true;
     Game.party = duplaA.slice();
+    rede = null; ultimoTurno = null; timerTurno = null;   // o treino é no mesmo teclado
     Game.dungeonId = null;               // duelo não pertence a calabouço
     Game.roomIndex = 0;
     Game.selectedSpellId = null;
@@ -340,7 +372,15 @@ var JOGO = (typeof window !== 'undefined')
 
   Game.nextRoom = function () {
     if (Game.screen !== 'roomClear' || !Game.dungeonId) return false;
-    if (seguraParaModelos({ dungeonId: Game.dungeonId, party: Game.party, sala: Game.roomIndex + 1 },
+    // [G11] em grupo o líder libera a sala seguinte (manda `proxima`) e o
+    // parceiro só segue depois dela; se a descida acabou, ninguém segue
+    var emGrupo = !!(rede && rede.tipo === 'grupo');
+    if (emGrupo) {
+      var cg = C();
+      if (!cg || !cg._liberaNextRoom || !cg._liberaNextRoom()) return false;
+    }
+    if (seguraParaModelos({ dungeonId: Game.dungeonId, party: emGrupo ? comParceiro(Game.party) : Game.party,
+                           sala: Game.roomIndex + 1 },
         function () { Game.nextRoom(); })) return true;
     Game.roomIndex++;
     // O POÇO: a sala seguinte nasce ANTES de o pé chegar nela
@@ -354,6 +394,7 @@ var JOGO = (typeof window !== 'undefined')
     // 03/09: a sala seguinte abre na ANTESSALA; o PV carregado espera lá
     Game.state = null;
     setScreen('antessala', Game.salaInfo());
+    if (emGrupo) avisaAntessala();
     return true;
   };
 
@@ -362,6 +403,12 @@ var JOGO = (typeof window !== 'undefined')
    * nasce. O PV carregado da sala anterior entra aqui. */
   Game.entrarNaSala = function () {
     if (Game.screen !== 'antessala' || !Game.dungeonId) return false;
+    // [G11] em grupo quem abre a porta é o líder, pela ata (Coop.entrar): a
+    // batalha dele nasce no `dentro` do parceiro, com a mesma semente
+    if (rede && rede.tipo === 'grupo') {
+      var ce = C();
+      try { return !!(ce && ce.entrar && ce.entrar()); } catch (e) { return false; }
+    }
     Game.selectedSpellId = null;
     Game.hoverTile = null;
     Game.pendingFusion = null;
@@ -441,18 +488,570 @@ var JOGO = (typeof window !== 'undefined')
 
   Game.restart = function () { Game.init(); };
 
+  // =====================================================================
+  // [G11] A BATALHA EM REDE (11/09) — grupo de 2 jogadores e duelo.
+  //
+  // O Game continua sendo a porta de TODA ação que chega ao motor. Em rede:
+  //  - cada herói/fusão tem `dono` (o id da Rede de quem o controla):
+  //    `donoDe(u)` diz 'eu' | 'parceiro' | 'ia', e `isPlayerUnit/isPlayerTurn`
+  //    viram "é meu" — a HUD e o desenho escondem barra e casas no turno do
+  //    outro sem mudar nada lá;
+  //  - a ação local vira LANCE: aplica no motor e o Coop manda — mesmo a que
+  //    falha (a esquiva que falha gasta sorteio);
+  //  - o turno do parceiro espera os lances dele (a fila do Coop), aplicados
+  //    pelo MESMO caminho; a IA roda igual nos dois clientes;
+  //  - depois de TODA chamada ao motor, se o `state.turno` mudou, o
+  //    Coop.aoTurno guarda o hash (e a foto do começo do turno);
+  //  - o meu turno anda pelo relógio de PAREDE (o setInterval do Coop); com a
+  //    aba escondida o Game anda "sem tela" (IA e lances sem esperar o desenho).
+  // Fora de rede, `rede` é null e todo caminho é o de sempre.
+  // =====================================================================
+  function meuIdRede() {
+    var c = C();
+    try { if (c && c.meuId) { var id = c.meuId(); if (id) return id; } } catch (e) {}
+    var r = JOGO.Rede;
+    try { return r && r.meuId ? r.meuId() : null; } catch (e2) { return null; }
+  }
+  function travadoRede() {
+    var c = C();
+    try { return !!(c && c.bloqueado && c.bloqueado()); } catch (e) { return false; }
+  }
+  function agoraMs() {
+    var c = C();
+    try { if (c && c._agora) { var t = +c._agora(); if (isFinite(t)) return t; } } catch (e) {}
+    return Date.now();
+  }
+  function podeDescerEmGrupo(heroIds, dungeonId) {
+    var c = C();
+    try { if (!c || !c.emGrupo || !c.emGrupo()) return false; } catch (e0) { return false; }
+    if (!heroIds || heroIds.length !== 1 || dungeonId === 'poco') return false;
+    var prog = P(), h = null;
+    try { h = prog && prog.hero ? prog.hero(heroIds[0]) : null; } catch (e) { h = null; }
+    return !!h && h.classId !== 'gm';
+  }
+  function comParceiro(ids) {
+    var c = C(), cp = null;
+    try { cp = c && c.classeParceiro ? c.classeParceiro() : null; } catch (e) { cp = null; }
+    return (cp && ids && ids.length) ? [ids[0], cp] : ids;
+  }
+  function avisaAntessala() {
+    var c = C();
+    if (c && c.naAntessala) { try { c.naAntessala(Game.salaInfo()); } catch (e) {} }
+  }
+  function partySizeRede() {
+    var c = C(), n = 2;
+    try { n = c && c.partySize ? c.partySize() : 2; } catch (e) { n = 2; }
+    return (typeof n === 'number' && isFinite(n) && n >= 1) ? n : 2;
+  }
+
+  Game.modoRede = function () { return rede ? rede.tipo : null; };
+  // o lado do estado que é MEU: no duelo, quem aceitou (B) é o lado 'enemy'
+  Game.meuLado = function () { return (rede && rede.tipo === 'duelo' && rede.lado === 'B') ? 'enemy' : 'player'; };
+  // na colocação em grupo só o líder toca (o herói do parceiro nasce pela semente)
+  Game.podeColocar = function () { return !rede || !!rede.colocador; };
+
+  function donoIdDe(u, fundo) {
+    if (!u || fundo > 4) return null;
+    if (u.kind === 'hero' || u.kind === 'fusion') return u.dono || null;
+    var st = Game.state;
+    if (!st) return null;
+    if (u.kind === 'pet' && u.ownerUid) return donoIdDe(E().findUnit(st, u.ownerUid), fundo + 1);
+    if (u.summonerUid) return donoIdDe(E().findUnit(st, u.summonerUid), fundo + 1);
+    return null;
+  }
+  Game.donoDe = function (u) {
+    if (!u) return 'ia';
+    if (!rede) return isPlayerUnitLocal(u) ? 'eu' : 'ia';
+    if (u.kind !== 'hero' && u.kind !== 'fusion') return 'ia';
+    if (u.ia || !u.dono) return 'ia';
+    return u.dono === rede.eu ? 'eu' : 'parceiro';
+  };
+  // a perspectiva de TELA (o estado é igual nos dois motores; só a cor muda)
+  Game.ladoDaTela = function (u) {
+    if (!u) return 'inimigo';
+    if (u.side !== Game.meuLado()) return 'inimigo';
+    if (rede) {
+      var d = donoIdDe(u, 0);
+      if (d && d !== rede.eu) return 'aliado';
+    }
+    return 'meu';
+  };
+
+  // o GANCHO DE TURNO: depois de toda chamada ao motor
+  function posMotor() {
+    if (!rede || !Game.state) return;
+    var t = Game.state.turno || 0;
+    if (t === ultimoTurno) return;
+    ultimoTurno = t;
+    var c = C();
+    if (c && c.aoTurno) { try { c.aoTurno(Game.state); } catch (e) {} }
+  }
+  // um lance no motor, sem mandar nada
+  function executa(l) {
+    var st = Game.state, ok = false;
+    if (!st || !l) return false;
+    try {
+      if (l.a === 'p') ok = !!E().place(st, l.x, l.y);
+      else if (l.a === 'm') ok = !!E().move(st, l.u, l.x, l.y);
+      else if (l.a === 'c') ok = !!E().cast(st, l.u, l.s, l.x, l.y);
+      else if (l.a === 'e') { if (st.phase === 'playing') E().endTurn(st); ok = true; }
+      else if (l.a === 'f') {
+        // o `f` que vem do OUTRO com o MEU herói de alvo só funde com o MEU sim
+        // (o Coop guarda o fusao-ok que eu dei): antes o lance escrevia o
+        // próprio consentimento, e um cliente alterado fundia o meu herói
+        var fa = E().findUnit(st, l.u), fb = E().findUnit(st, l.alvo), cf = C();
+        var deFora = !!(l.de && rede && l.de !== rede.eu);
+        var comOMeu = !!(fa && fb && rede && fb.dono === rede.eu && (fa.dono || null) !== (fb.dono || null));
+        if (deFora && comOMeu && !(cf && cf._eleConsentiu && cf._eleConsentiu(l.u, l.alvo))) ok = false;
+        else {
+          st.consentimento = { a: l.u, b: l.alvo, T: st.turno || 0 };
+          ok = !!(JOGO.Fusion && JOGO.Fusion.declare && JOGO.Fusion.declare(st, l.u, l.alvo));
+        }
+      }
+    } catch (e) { ok = false; }
+    return ok;
+  }
+  // os lances MEUS que voltaram para a fila depois de uma foto saem antes de um novo
+  function drenaMeus() {
+    var c = C();
+    if (!c || !c.proximoLance) return;
+    for (var n = 0; n < 64; n++) {
+      var st = Game.state;
+      if (!st || st.phase !== 'playing') return;
+      var u = E().activeUnit(st);
+      if (!u || Game.donoDe(u) !== 'eu') return;
+      var l = c.proximoLance(u.uid);
+      if (!l) return;
+      aplicaRemoto(l);
+    }
+  }
+  // A PORTA ÚNICA em rede: aplica e o Coop manda (a tentativa que falha também)
+  function aplicaLocal(l) {
+    if (!Game.state || !l) return false;
+    if (l.a !== 'p') {
+      drenaMeus();
+      if (!Game.state || Game.state.phase !== 'playing' || !Game.isPlayerTurn()) return false;
+    }
+    l.T = Game.state.turno || 0;
+    var ok = executa(l);
+    var c = C();
+    if (c && c.registra) { try { c.registra(l, ok); } catch (e) {} }
+    posMotor();
+    var st = Game.state;
+    // a sala só acaba com a batalha em dia: quem acabou de acusar a divergência
+    // espera a foto (o restauraFoto chama o fim, do estado certo)
+    if (st && st.phase !== 'playing' && st.phase !== 'placing' && !travadoRede()) handleBattleOver();
+    return ok;
+  }
+  // um lance que veio da fila (do outro, ou um meu reaplicado depois da foto)
+  function aplicaRemoto(l) {
+    if (l.a === 'e') { timerUid = null; timerTurno = null; }
+    var ok = executa(l);
+    posMotor();
+    var c = C();
+    if (c && c.aplicado) { try { c.aplicado(l, ok); } catch (e) {} }
+    var st = Game.state;
+    if (st && st.phase !== 'playing' && st.phase !== 'placing' && !travadoRede()) handleBattleOver();
+    return ok;
+  }
+
+  // o meu turno anda pelo relógio de PAREDE (não para com a aba escondida) —
+  // e PARA enquanto a batalha está travada (sincronizando, esperando o outro
+  // entrar): sem poder tocar em nada, o turno não pode correr
+  var relogioVisto = 0;
+  function congelaRelogio() {
+    if (!rede || timerTurno === null) return;
+    var ag = agoraMs();
+    if (relogioVisto) turnoIniMs += Math.max(0, ag - relogioVisto);
+    relogioVisto = ag;
+  }
+  function atualizaRelogioRede(soMede) {
+    var st = Game.state;
+    if (!rede || !st || st.phase !== 'playing') return;
+    var u = E().activeUnit(st);
+    if (!u || Game.donoDe(u) !== 'eu') return;
+    if (timerUid !== u.uid || timerTurno !== (st.turno || 0)) {
+      timerUid = u.uid; timerTurno = st.turno || 0;
+      turnoIniMs = agoraMs(); lastTickSec = -1; turnElapsed = 0;
+      relogioVisto = turnoIniMs;
+    }
+    if (travadoRede()) { congelaRelogio(); return; }
+    relogioVisto = agoraMs();
+    turnElapsed = Math.max(0, (agoraMs() - turnoIniMs) / 1000);
+    if (soMede) return;
+    emitTimerTick();
+    if (Game.timeLeft() <= 0) Game.endTurn();
+  }
+  Game._gastoRede = function () { return turnElapsed; };      // provas: o quanto do meu turno já correu
+
+  function updateRede(d, semTela) {
+    var st = Game.state, c = C();
+    if (travadoRede()) { congelaRelogio(); return; }
+    if (st.phase === 'placing') {
+      if (rede.colocador) { if (c && c._pilotoPasso) { try { c._pilotoPasso(); } catch (e) {} } }
+      else aplicaFila(semTela);
+      return;
+    }
+    if (st.phase !== 'playing') { handleBattleOver(); return; }
+    var u = E().activeUnit(st);
+    if (!u) return;
+    var dono = Game.donoDe(u);
+    if (dono === 'eu') {
+      resetAiState();
+      var l = (c && c.proximoLance) ? c.proximoLance(u.uid) : null;   // lance meu reaplicado depois da foto
+      if (l) { aplicaRemoto(l); return; }
+      if (Game.mustEndTurn) { Game.endTurn(); return; }                 // fusão declarada [G4]
+      atualizaRelogioRede(false);
+      if (Game.state === st && st.phase === 'playing' && c && c._pilotoPasso) {
+        try { c._pilotoPasso(); } catch (e2) {}
+      }
+      return;
+    }
+    timerUid = null;
+    if (dono === 'parceiro') { resetAiState(); aplicaFila(semTela); return; }
+    iaPasso(u, d, semTela);
+  }
+  // os lances do parceiro: um por quadro livre com o desenho; todos sem ele
+  function aplicaFila(semTela) {
+    var c = C();
+    if (!c || !c.proximoLance) return;
+    var ren = JOGO.Renderer;
+    var comTela = !semTela && !!(ren && ren.isBusy);
+    for (var n = 0; n < 500; n++) {
+      var st = Game.state;
+      if (!st) return;
+      if (st.phase !== 'playing' && st.phase !== 'placing') { handleBattleOver(); return; }
+      if (comTela && ren.isBusy()) return;
+      var u = null;
+      if (st.phase === 'placing') { if (rede.colocador) return; }
+      else {
+        u = E().activeUnit(st);
+        if (!u || Game.donoDe(u) !== 'parceiro') return;
+      }
+      var l = c.proximoLance(u ? u.uid : null);
+      if (!l) return;
+      aplicaRemoto(l);
+      if (comTela) return;
+    }
+  }
+  // a IA em rede: o MESMO plano, calculado no começo do turno da unidade,
+  // executado inteiro sem tela ou uma ação por quadro com tela (e, se a aba
+  // some no meio, o resto do mesmo plano — nunca um plano novo no meio)
+  function iaPasso(u, d, semTela) {
+    var ren = JOGO.Renderer;
+    var comTela = !semTela && !!(ren && ren.isBusy);
+    if (comTela) {
+      if (ren.isBusy()) { aiTimer = 0; return; }
+      aiTimer += d;
+      if (aiPlan && aiUid === u.uid && aiTimer < AI_ACTION_DELAY) return;
+      if (!aiPlan || aiUid !== u.uid) { aiPlan = getPlanFor(u.uid); aiIdx = 0; aiUid = u.uid; aiTimer = 0; return; }
+      iaUmaAcao(u);
+      return;
+    }
+    if (!aiPlan || aiUid !== u.uid) { aiPlan = getPlanFor(u.uid); aiIdx = 0; aiUid = u.uid; aiTimer = 0; }
+    for (var n = 0; n < 64 && aiPlan && aiUid === u.uid; n++) {
+      if (!iaUmaAcao(u)) break;
+    }
+  }
+  function iaUmaAcao(u) {
+    var st = Game.state;
+    if (aiIdx >= aiPlan.length) {
+      resetAiState();
+      if (st.phase === 'playing') { E().endTurn(st); posMotor(); }
+      if (Game.state && Game.state.phase !== 'playing' && !travadoRede()) handleBattleOver();
+      return false;
+    }
+    var action = aiPlan[aiIdx++];
+    execAction(action, u.uid);
+    posMotor();
+    aiTimer = 0;
+    if (action.action === 'end') resetAiState();
+    if (Game.state && Game.state.phase !== 'playing') {
+      resetAiState();
+      if (!travadoRede()) handleBattleOver();
+      return false;
+    }
+    return !!aiPlan;
+  }
+
+  // o PV da sala seguinte, com a chave `dono:heroId`; a fusão divide entre os dois
+  function carryRede(st) {
+    var out = {}, i, k, u;
+    for (i = 0; i < st.units.length; i++) {
+      u = st.units[i];
+      if (u.side !== 'player') continue;
+      if (u.kind === 'hero') {
+        if (u.fusedInto) continue;                 // a metade B de uma fusão conta pela fusão
+        out[(u.dono || '') + ':' + (u.heroId || u.defId)] = u.alive ? u.hp : 0;
+      } else if (u.kind === 'fusion') {
+        var from = u.fusedFrom || [], srcs = [];
+        for (k = 0; k < from.length; k++) { var s0 = E().findUnit(st, from[k]); if (s0) srcs.push(s0); }
+        if (!srcs.length) srcs = [u];
+        var parte = u.alive ? Math.max(1, Math.floor(u.hp / srcs.length)) : 0;
+        for (k = 0; k < srcs.length; k++) out[(srcs[k].dono || '') + ':' + (srcs[k].heroId || srcs[k].defId)] = parte;
+      }
+    }
+    return out;
+  }
+  function aplicaCarry(st, carry) {
+    if (!carry || !st || !st.units) return;
+    for (var i = 0; i < st.units.length; i++) {
+      var u = st.units[i];
+      if (u.kind !== 'hero') continue;
+      var prev = carry[(u.dono || '') + ':' + (u.heroId || u.defId)];
+      if (typeof prev !== 'number') continue;
+      // [G1] vivos curam 50% do PV perdido; mortos revivem com 30% do hpMax
+      if (prev > 0) u.hp = Math.min(u.hpMax, prev + Math.round((u.hpMax - prev) * 0.5));
+      else u.hp = Math.max(1, Math.round(u.hpMax * 0.3));
+    }
+  }
+  // o PV que o líder põe na próxima ata
+  Game._carry = function () { return (rede && carryHp) ? JSON.parse(JSON.stringify(carryHp)) : null; };
+
+  /* A BATALHA DA ATA (o Coop chama): a mesma semente, a mesma dificuldade, o
+   * mesmo grupo ao pé da letra e o mesmo PV carregado nos dois clientes. */
+  Game._criaDaAta = function (ata) {
+    if (!rede || rede.tipo !== 'grupo' || !ata || Game.screen !== 'antessala') return false;
+    if (ata.dungeonId !== Game.dungeonId || ata.roomIndex !== Game.roomIndex) return false;
+    var st;
+    try {
+      st = E().createBattle(ata.dungeonId, ata.roomIndex, JSON.parse(JSON.stringify(ata.party)),
+                            { seed: ata.semente, dificuldade: ata.dificuldade || 'normal', escolhePosicao: true });
+    } catch (e) { return false; }
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    resetAiState();
+    resetTimer(true);
+    timerTurno = null;
+    aplicaCarry(st, ata.carry);
+    carryHp = null;
+    Game.state = st;
+    rede.colocador = !!(ata.party && ata.party[0] && ata.party[0].dono === rede.eu);
+    ultimoTurno = st.turno || 0;
+    setScreen('battle');
+    return true;
+  };
+
+  /* O DUELO PELA REDE (o Coop chama depois da revelação): a sala sorteada,
+   * as duas duplas, a semente dos dois. `pronto` é chamado quando a batalha
+   * existe (os modelos podem segurar a descida um instante). */
+  Game._iniciaDueloRede = function (d, pronto) {
+    if (!d || !d.duplaA || !d.duplaB) return false;
+    function classes(dp) { return dp.map(function (p) { return p.classId; }); }
+    function ids(dp) { return dp.map(function (p) { return p.heroId || p.classId; }); }
+    if (seguraParaModelos({ dungeonId: d.dungeonId, sala: d.roomIndex, duelo: true,
+                            duplas: [classes(d.duplaA), classes(d.duplaB)] },
+        function () {
+          // os modelos chegaram: a arena só nasce se o duelo AINDA existe (a
+          // carga lenta pode ter passado do teto e o Coop ter cancelado)
+          var cd = C(), ses = null;
+          try { ses = (cd && cd.sessao) ? cd.sessao() : null; } catch (e0) { ses = null; }
+          if (ses && ses.tipo === 'duelo' && ses.bid === d.did) Game._iniciaDueloRede(d, pronto);
+        })) return true;
+    var st;
+    try {
+      st = E().createDuelSala(d.dungeonId, d.roomIndex, JSON.parse(JSON.stringify(d.duplaA)),
+                              JSON.parse(JSON.stringify(d.duplaB)), { seed: d.semente });
+    } catch (e) { return false; }
+    Game.party = ids(d.eu === 'B' ? d.duplaB : d.duplaA);
+    Game.dungeonId = null;               // duelo não pertence a calabouço
+    Game.roomIndex = 0;
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    carryHp = null;
+    resetAiState();
+    resetTimer(true);
+    timerTurno = null;
+    Game._duplas = { a: ids(d.duplaA), b: ids(d.duplaB) };
+    rede = { tipo: 'duelo', eu: d.meuId || meuIdRede(), lado: d.eu === 'B' ? 'B' : 'A', colocador: false,
+             arena: d.arena || null, oponente: d.oponente || '' };
+    Game.state = st;
+    ultimoTurno = null;
+    posMotor();                          // o duelo já nasce no turno 1: hash e foto dele
+    setScreen('battle');
+    if (typeof pronto === 'function') { try { pronto(); } catch (e2) {} }
+    return true;
+  };
+
+  // a porta do piloto automático das provas: um lance como se fosse um toque
+  Game._local = function (l) {
+    if (!rede || !Game.state || !l) return false;
+    if (l.a === 'e') { Game.endTurn(); return true; }
+    if (l.a === 'p') { Game.onTileClicked(l.x, l.y); return true; }
+    if (!Game.isPlayerTurn()) return false;
+    return aplicaLocal({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, alvo: l.alvo });
+  };
+  // o tique do Coop (500 ms): o relógio do meu turno; sem tela, o jogo anda
+  Game._tique = function (semTela) {
+    if (!rede || Game.screen !== 'battle' || !Game.state) return;
+    if (travadoRede()) { congelaRelogio(); return; }
+    if (semTela) { Game.update(0, true); return; }
+    atualizaRelogioRede(false);
+  };
+  /* A FOTO DE RESGATE (quem divergiu ou voltou): o estado vira o da foto e os
+   * lances do turno que ela já tinha são reaplicados; os que faltam (meus e
+   * do outro) o Coop devolveu à fila. Só na batalha (a sala que já acabou não
+   * se reescreve), cada lance da foto só se for do dono da vez, e o relógio
+   * do meu turno segue de onde estava se a vez e o turno são os mesmos. */
+  Game.restauraFoto = function (foto) {
+    if (!rede || !foto || !foto.estado || Game.screen !== 'battle') return false;
+    var antesUid = timerUid, antesT = timerTurno, antesIni = turnoIniMs;
+    var st;
+    try { st = E().restaura(foto.estado); } catch (e) { return false; }
+    // o `ia` que entrou depois da foto do começo do turno (a autoridade manda a lista)
+    var iaFoto = foto.ia || [];
+    for (var q = 0; q < iaFoto.length; q++) {
+      var ui = E().findUnit(st, iaFoto[q]);
+      if (ui && (ui.kind === 'hero' || ui.kind === 'fusion')) ui.ia = true;
+    }
+    Game.state = st;
+    resetAiState();
+    timerUid = null; timerTurno = null;
+    Game.selectedSpellId = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    ultimoTurno = st.turno || 0;
+    var c = C(), ls = foto.lances || [];
+    for (var i = 0; i < ls.length; i++) {
+      if (!(c && c._donoCerto && c._donoCerto(ls[i], Game.state))) break;
+      var ok = executa(ls[i]);
+      posMotor();
+      if (c && c.aplicado) { try { c.aplicado(ls[i], ok, true); } catch (e2) {} }
+    }
+    var vez = (Game.state.phase === 'playing') ? E().activeUnit(Game.state) : null;
+    if (vez && antesUid && antesT !== null && vez.uid === antesUid && (Game.state.turno || 0) === antesT) {
+      timerUid = antesUid; timerTurno = antesT; turnoIniMs = antesIni; relogioVisto = agoraMs();
+    }
+    // a fusão que EU declarei neste turno já está na foto: o turno ainda tem de acabar
+    var at = (Game.state.phase === 'playing') ? E().activeUnit(Game.state) : null;
+    if (at && Game.state.pendingFusion && Game.state.pendingFusion.a === at.uid && Game.donoDe(at) === 'eu') {
+      Game.mustEndTurn = true;
+    }
+    if (Game.state.phase !== 'playing' && Game.state.phase !== 'placing') handleBattleOver();
+    return true;
+  };
+  // o fim fora do fluxo do motor (desistência, W.O.)
+  Game._encerra = function (vencedor, motivo) {
+    if (!Game.state || !E().encerra) return false;
+    var ok = !!E().encerra(Game.state, vencedor, motivo);
+    if (ok) handleBattleOver();
+    return ok;
+  };
+  // o duelo que não começou: de volta ao Acampamento, sem resultado
+  Game._saiDaRede = function () {
+    rede = null; ultimoTurno = null; timerTurno = null;
+    Game.state = null;
+    carryHp = null;
+    resetAiState();
+    resetTimer(true);
+    Game.selectedSpellId = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    setScreen('hub');
+  };
+  // quem ficou (o líder caiu na colocação) passa a escolher a casa
+  Game._assumeColocacao = function () { if (rede) rede.colocador = true; };
+  // a ata que a líder não confirmou (a `cancela` dela): a parceira volta à
+  // antessala da mesma sala, e a próxima ata vale
+  Game._voltaAntessala = function () {
+    if (!rede || rede.tipo !== 'grupo' || Game.screen !== 'battle' || !Game.dungeonId) return false;
+    if (Game.state && Game.state.phase !== 'placing') return false;
+    Game.state = null;
+    resetAiState();
+    resetTimer(false);
+    timerTurno = null;
+    ultimoTurno = null;
+    Game.selectedSpellId = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    setScreen('antessala', Game.salaInfo());
+    avisaAntessala();
+    return true;
+  };
+
+  function marcaRecompensaRede(rewards) {
+    var c = C(), info = null;
+    try { info = (c && c.aoFim) ? c.aoFim({ fase: 'won', roomIndex: Game.roomIndex }) : null; } catch (e) { info = null; }
+    info = info || {};
+    rewards.rede = true;
+    rewards.lider = !!info.lider;
+    rewards.parceiroVoltou = info.parceiroVoltou !== false;
+    rewards.descidaAcabou = !!info.descidaAcabou;
+    return rewards;
+  }
+  function fimGrupoPerdido() {
+    var c = C(), info = null;
+    try { info = (c && c.aoFim) ? c.aoFim({ fase: 'lost', roomIndex: Game.roomIndex }) : null; } catch (e) { info = null; }
+    info = info || {};
+    return { rede: true, lider: !!info.lider, parceiroVoltou: info.parceiroVoltou !== false,
+             descidaAcabou: !!info.descidaAcabou };
+  }
+  /* O FIM DO DUELO EM REDE: venci pela perspectiva do MEU lado; o Coop manda o
+   * `fim` e anota no histórico (amistoso: a Brasa só mostra "se valesse"). */
+  function fimDueloRede() {
+    var st = Game.state;
+    resetAiState();
+    resetTimer(true);
+    Game.selectedSpellId = null;
+    Game.mustEndTurn = false;
+    Game.pendingFusion = null;
+    var lado = Game.meuLado(), fase = st.phase;
+    var empate = fase === 'empate';
+    var venci = !empate && ((fase === 'won' && lado === 'player') || (fase === 'lost' && lado === 'enemy'));
+    var venc = empate ? 'empate' : (fase === 'won' ? 'A' : 'B');
+    var h = 0;
+    try { h = E().hash(st); } catch (e) { h = 0; }
+    var c = C(), info = null;
+    try {
+      info = (c && c.aoFim) ? c.aoFim({ fase: fase, venc: venc, h: h, venci: venci, empate: empate,
+                                        clima: st.weather }) : null;
+    } catch (e2) { info = null; }
+    info = info || {};
+    var duplas = Game._duplas || { a: [], b: [] };
+    var seValesse = null;
+    try {
+      // amistoso: a Brasa só MOSTRA quanto seria, com os pontos dos dois (1000 sem dado)
+      if (JOGO.Brasa && JOGO.Brasa.elo && !empate) {
+        var ptsEu = (typeof info.ptsMeus === 'number') ? info.ptsMeus : 1000;
+        var ptsOutro = (typeof info.ptsDele === 'number') ? info.ptsDele : 1000;
+        seValesse = JOGO.Brasa.elo(ptsEu, ptsOutro, venci).delta;
+      }
+    } catch (e3) {}
+    setScreen('duelFim', {
+      rede: true, venci: venci, empate: empate, wo: !!info.wo, desistencia: !!info.desistencia,
+      contestado: !!info.contestado,       // anulado (divergência, lance ou fim forjado): sem vencedor
+      oponente: info.oponente || (rede && rede.oponente) || '',
+      duplaMinha: lado === 'player' ? duplas.a : duplas.b,
+      duplaDele: lado === 'player' ? duplas.b : duplas.a,
+      arena: info.arena || (rede && rede.arena) || null,
+      clima: st.weather, seValesse: seValesse,
+      // os campos do duelo de treino: a tela de hoje continua de pé
+      venceuA: fase === 'won', duplaA: duplas.a, duplaB: duplas.b
+    });
+  }
+
   /* [G10] QUEM O JOGADOR CONTROLA. Não basta ser do lado 'player': o pet e as
    * invocações são do lado do jogador e continuam sendo conduzidos pela IA
    * (contrato §5). O jogador controla o HERÓI e a UNIDADE FUNDIDA — a fusão é
    * o herói em outra forma, com feitiços próprios, e deixá-la de fora tirava o
    * controle do jogo até o fim da batalha (barra de feitiços vazia, cliques
    * ignorados e a IA jogando no lugar do jogador). */
-  function isPlayerUnit(u) {
+  function isPlayerUnitLocal(u) {
     if (!u || (u.kind !== 'hero' && u.kind !== 'fusion')) return false;
     if (u.side === 'player') return true;
     // DUELO (hotseat): o lado enemy também é gente — o teclado passa de mão
     // e a IA fica só com mascotes e invocações dos dois lados
     return !!(Game.state && Game.state.pvp && u.side === 'enemy');
+  }
+  // [G11] em rede, "do jogador" é "MEU" (o dono é o meu id e não está na IA),
+  // e nada é meu enquanto a batalha sincroniza ou o duelo espera os dois
+  function isPlayerUnit(u) {
+    if (rede) return Game.donoDe(u) === 'eu' && !travadoRede();
+    return isPlayerUnitLocal(u);
   }
   Game.isPlayerUnit = isPlayerUnit;      // a UI usa para decidir o que desenhar
 
@@ -531,7 +1130,13 @@ var JOGO = (typeof window !== 'undefined')
   Game.onTileClicked = function (x, y) {
     if (Game.screen !== 'battle' || !Game.state) return;
     // 03/09: na escolha da posição, o toque numa casa dourada nasce ali
-    if (Game.state.phase === 'placing') { E().place(Game.state, x, y); return; }
+    if (Game.state.phase === 'placing') {
+      if (!rede) { E().place(Game.state, x, y); return; }
+      // [G11] em grupo só o líder escolhe (o herói do parceiro nasce pela semente)
+      if (!rede.colocador || travadoRede()) return;
+      aplicaLocal({ a: 'p', x: x, y: y });
+      return;
+    }
     if (Game.state.phase !== 'playing' || !Game.isPlayerTurn()) return;
     var u = E().activeUnit(Game.state);
     if (!u) return;
@@ -542,7 +1147,10 @@ var JOGO = (typeof window !== 'undefined')
       catch (err) { targets = []; }
       for (var i = 0; i < targets.length; i++) {
         if (targets[i].x === x && targets[i].y === y) {
-          if (E().cast(Game.state, u.uid, Game.selectedSpellId, x, y)) Game.selectedSpellId = null;
+          var lancou = rede
+            ? aplicaLocal({ a: 'c', u: u.uid, s: Game.selectedSpellId, x: x, y: y })
+            : E().cast(Game.state, u.uid, Game.selectedSpellId, x, y);
+          if (lancou) Game.selectedSpellId = null;
           return;
         }
       }
@@ -552,7 +1160,10 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     if (E().unitAt(Game.state, x, y)) return;   // clique em unidade: nada
-    E().move(Game.state, u.uid, x, y);
+    // [G11] em rede a tentativa viaja mesmo quando falha (a esquiva que falha
+    // gasta sorteio e zera o PP: o outro motor precisa fazer o mesmo)
+    if (rede) aplicaLocal({ a: 'm', u: u.uid, x: x, y: y });
+    else E().move(Game.state, u.uid, x, y);
   };
 
   Game.onTileHover = function (x, y) {
@@ -570,6 +1181,15 @@ var JOGO = (typeof window !== 'undefined')
     Game.selectedSpellId = null;
     Game.mustEndTurn = false;
     Game.pendingFusion = null;
+    if (rede) {
+      // [G11] o fim do turno é um lance `e` (botão, tempo ou fusão declarada)
+      atualizaRelogioRede(true);
+      closeTurnTimer();
+      timerUid = null; timerTurno = null;
+      var ua = E().activeUnit(Game.state);
+      aplicaLocal({ a: 'e', u: ua ? ua.uid : null });
+      return;
+    }
     closeTurnTimer();
     timerUid = null;
     E().endTurn(Game.state);
@@ -594,27 +1214,50 @@ var JOGO = (typeof window !== 'undefined')
       if (b === a || b.uid === a.uid) continue;
       if (b.kind !== 'hero' || !b.alive || b.side !== a.side || b.fused) continue;
       if (!adjacent(a, b)) continue;
+      // [G11] o herói do PARCEIRO ao lado: a fusão só com os dois aceitando —
+      // o par vem com `pedido:true` (a HUD mostra "Pedir fusão a Bia")
+      var pedido = !!(rede && (a.dono || null) !== (b.dono || null));
+      if (pedido && b.ia) continue;
       if (F && F.canFuse) {
         var ok = false;
-        try { ok = !!F.canFuse(Game.state, a.uid, b.uid); } catch (e) { ok = false; }
+        try { ok = pedido ? canFuseComConsentimento(a.uid, b.uid) : !!F.canFuse(Game.state, a.uid, b.uid); }
+        catch (e) { ok = false; }
         if (!ok) continue;
       }
-      out.push({ uidA: a.uid, uidB: b.uid });
+      out.push(pedido ? { uidA: a.uid, uidB: b.uid, pedido: true } : { uidA: a.uid, uidB: b.uid });
     }
     return out;
   };
+  // pergunta ao Fusion "e se o outro aceitasse?" sem deixar rastro no estado
+  function canFuseComConsentimento(uidA, uidB) {
+    var st = Game.state;
+    var tinha = Object.prototype.hasOwnProperty.call(st, 'consentimento'), antes = st.consentimento;
+    st.consentimento = { a: uidA, b: uidB, T: st.turno || 0 };
+    try { return !!JOGO.Fusion.canFuse(st, uidA, uidB); }
+    finally { if (tinha) st.consentimento = antes; else delete st.consentimento; }
+  }
 
   Game.declareFusion = function (uidA, uidB) {
     var pairs = Game.canFuse();
-    var found = false;
+    var found = null;
     for (var i = 0; i < pairs.length; i++) {
-      if (pairs[i].uidA === uidA && pairs[i].uidB === uidB) { found = true; break; }
+      if (pairs[i].uidA === uidA && pairs[i].uidB === uidB) { found = pairs[i]; break; }
     }
     if (!found) return false;
     var F = JOGO.Fusion;
     if (!F || !F.declare) return false;
     var ok = false;
-    try { ok = !!F.declare(Game.state, uidA, uidB); } catch (e) { ok = false; }
+    if (rede) {
+      // [G11] com o parceiro, só depois do `fusao-ok` dele (o Coop guarda o sim);
+      // a declaração é um lance `f`, e o consentimento entra no estado dos dois
+      if (found.pedido) {
+        var cf = C();
+        if (!(cf && cf._consentido && cf._consentido(uidA, uidB))) return false;
+      }
+      ok = aplicaLocal({ a: 'f', u: uidA, alvo: uidB });
+    } else {
+      try { ok = !!F.declare(Game.state, uidA, uidB); } catch (e) { ok = false; }
+    }
     if (!ok) return false;
     Game.pendingFusion = { uidA: uidA, uidB: uidB };
     Game.mustEndTurn = true;            // resolução: Engine/Fusion no fim do turno
@@ -686,6 +1329,21 @@ var JOGO = (typeof window !== 'undefined')
     try { t = JOGO.Agenda && JOGO.Agenda.TETOS ? JOGO.Agenda.TETOS.xp : null; } catch (e) { t = null; }
     return (typeof t === 'number' && isFinite(t) && t >= 1) ? t : 2.0;
   }
+  /* O BÔNUS DE XP POR TEMPO (loja 2, 10/09): o fator dele NESTA sala. `ts` é
+   * o relógio do SERVIDOR que a agenda mede (ms); sem a agenda, o da máquina.
+   * Não olha nível (não tem carga a poupar). Defensivo como o pergaminho: sem
+   * o Progress novo, ou com erro, é 1 e o funil é exatamente o de antes. */
+  function bonusTempoXp(prog, ts) {
+    try {
+      if (!prog || !prog.fatorBonusXp) return 1;
+      // conserto da loja 2, 11/09: o prazo corre no relógio do SERVIDOR — sem ele medido NESTA
+      // página (a agenda sem resposta ainda, ou fora do ar), o bônus pago não pesa; senão o cache
+      // velho mais a hora do aparelho atrasada esticavam o prazo
+      if (!(JOGO.Agenda && typeof JOGO.Agenda.medido === 'function' && JOGO.Agenda.medido())) return 1;
+      var f = prog.fatorBonusXp((typeof ts === 'number' && isFinite(ts)) ? ts : Date.now());
+      return (typeof f === 'number' && isFinite(f) && f > 1) ? f : 1;
+    } catch (e) { return 1; }
+  }
 
   // pedras derrubadas pelos inimigos mortos desta sala [G5]
   // `fPedras` (10/09) é o fator do evento do mundo de pedras. Só as pedras
@@ -743,10 +1401,42 @@ var JOGO = (typeof window !== 'undefined')
     return ganho;
   }
 
+  /* A DUPLA PELA REDE NO SAQUE (11/09, achado 19 da revisão do multijogador).
+   * Cada cliente da dupla sorteava o saque inteiro de quem joga sozinho com
+   * dupla — e nada impede UMA pessoa de abrir dois navegadores (dois ids
+   * locais, ou duas contas), chamar a si mesma para o grupo e jogar a sala com
+   * um herói em cada janela: a mesma batalha, com o esforço de uma dupla solo,
+   * rendia DOIS sorteios de item, de cartas, de pedras, selos e insígnias e o
+   * dobro de vinténs (e a troca entre contas junta tudo numa só). A regra
+   * agora é a dupla render o que UMA dupla solo rende:
+   *   - o SAQUE da sala é um só para o grupo: a semente da ata (a mesma nos
+   *     dois motores) diz de quem é a vez (Coop.vezDoSaque), e só esse cliente
+   *     sorteia o item, as cartas, a carta de pet, as pedras, os selos e as
+   *     insígnias, com as chances de sempre de quem joga sozinho com dupla;
+   *   - os VINTÉNS se dividem: cada um leva FATOR_DUPLA (a metade);
+   *   - o XP já se dividia (xpTotal / 2, só no meu herói).
+   * Quem joga sozinho não muda em nada. Sem a vez da ata (o Coop sem ata),
+   * vale a metade da chance, pelo sorteio local. */
+  Game.FATOR_DUPLA = 0.5;
+  function vezDoSaqueRede() {
+    var c = C(), v = null;
+    try { v = (c && c.vezDoSaque) ? c.vezDoSaque() : null; } catch (e) { v = null; }
+    if (v === true || v === false) return { minha: v, pela: 'ata' };
+    return { minha: Math.random() < 0.5, pela: 'sorte' };
+  }
+
   function computeRewards() {
     var st = Game.state;
     var prog = P();
-    var partySize = Game.party.length || 1;
+    // [G11] em grupo pela Rede o grupo é o da ATA (2 heróis de gente), nunca o
+    // Game.party (que é só o meu): saque, cartas e XP com as MESMAS chances de
+    // quem joga sozinho com dupla — jogar em dupla não multiplica item bom
+    var partySize = (rede && rede.tipo === 'grupo') ? partySizeRede() : (Game.party.length || 1);
+    // 11/09 (achado 19): na dupla pela Rede a sala tem UM saque para o grupo (a
+    // vez da ata) e os vinténs se dividem; fora dela, nada muda (×1 no fim)
+    var saqueDupla = (rede && rede.tipo === 'grupo') ? vezDoSaqueRede() : null;
+    var rolaSaque = !saqueDupla || saqueDupla.minha;
+    var fDupla = saqueDupla ? Game.FATOR_DUPLA : 1;
     var monsters = (JOGO.DATA && JOGO.DATA.monsters) || {};
     var xpTotal = 0, i;
 
@@ -788,20 +1478,35 @@ var JOGO = (typeof window !== 'undefined')
      * juntos dão ×2,0. Dificuldade, desafio, Poço e guilda seguem por fora,
      * como sempre — o teto absoluto (4,6×) não sobe. Sem carga, fXp É fEvXp
      * (o mesmo número): o funil sem pergaminho não muda um bit. */
-    var fPerg = pergaminhoXp(prog);
-    var fXp = (fPerg > 1) ? Math.max(fEvXp, Math.min(tetoXp(), fEvXp * fPerg)) : fEvXp;
+    /* O BÔNUS DE XP POR TEMPO (loja 2, 10/09): 1, 3 ou 7 dias de ×1,5 no
+     * relógio do SERVIDOR — o mesmo instante `tAg` da agenda. Ele e o
+     * pergaminho NÃO se multiplicam: com o bônus no ar o pergaminho PAUSA
+     * (fPerg = 1: não multiplica nem gasta carga) e o bônus entra no lugar
+     * dele, pela mesma regra do teto. Sem bônus, fTempo = 1 e o funil é o de
+     * antes, bit a bit. */
+    var fTempo = bonusTempoXp(prog, tAg);
+    var fPerg = (fTempo > 1) ? 1 : pergaminhoXp(prog);
+    var fBonus = Math.max(fTempo, fPerg);
+    var fXp = (fBonus > 1) ? Math.max(fEvXp, Math.min(tetoXp(), fEvXp * fBonus)) : fEvXp;
     var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
                              fatorPoco * fatorGuildaXp * fXp);
     /* a carga só se gasta quando o pergaminho ACRESCENTOU XP nesta sala
-     * (o grupo ganhou mais do que ganharia sem ele) */
-    var pergaminhoSala = null;
+     * (o grupo ganhou mais do que ganharia sem ele); o bônus por tempo não
+     * tem carga — quando ele pesou, só se anota, para a tela dizer */
+    var pergaminhoSala = null, bonusTempoSala = null;
     if (fXp > fEvXp) {
       var xpSemPerg = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
                                  fatorPoco * fatorGuildaXp * fEvXp);
       if (xpGanho > xpSemPerg && xpGanho > 0) {
-        var restamPerg = 0;
-        try { restamPerg = prog.gastaCargaXp(); } catch (eP) { restamPerg = 0; }
-        pergaminhoSala = { fator: fXp / fEvXp, restam: restamPerg };
+        if (fPerg > 1) {
+          var restamPerg = 0;
+          try { restamPerg = prog.gastaCargaXp(); } catch (eP) { restamPerg = 0; }
+          pergaminhoSala = { fator: fXp / fEvXp, restam: restamPerg };
+        } else if (fTempo > 1) {
+          var ateBonus = 0;
+          try { ateBonus = prog.bonusXpAte(); } catch (eB) { ateBonus = 0; }
+          bonusTempoSala = { fator: fXp / fEvXp, ate: ateBonus };
+        }
       }
     }
 
@@ -816,7 +1521,7 @@ var JOGO = (typeof window !== 'undefined')
      * permite banco e troca sem contabilidade por personagem. */
     // o evento de VINTÉNS (10/09), teto 1,5: mais moeda só compra do mercador, que vende comum e raro
     var fEvVintem = fAg('vintem', tAg);
-    var moedasGanhas = Math.floor(xpTotal * 0.30 * (difSala.drop || 1) * bonusDesafio * fEvVintem);
+    var moedasGanhas = Math.floor(xpTotal * 0.30 * (difSala.drop || 1) * bonusDesafio * fEvVintem * fDupla);
     if (moedasGanhas > 0 && JOGO.DB && JOGO.DB.ganharMoedas) {
       // e-assincrono e o resultado nao bloqueia a tela de recompensa: o numero
       // ganho vem no payload; o TOTAL a tela busca por conta propria no DB.
@@ -825,20 +1530,22 @@ var JOGO = (typeof window !== 'undefined')
 
     // cartas do chefe: acumulam na coleção e podem virar estrela (§9-B)
     var cards = [];
-    if (prog && prog.rollCards) {
+    if (prog && prog.rollCards && rolaSaque) {
       try { cards = prog.rollCards(Game.dungeonId, Game.roomIndex, partySize) || []; }
       catch (err) { cards = []; }
     }
 
     var fEvPedras = fAg('pedras', tAg);   // 10/09: só as elementais; a Âncora fica fora
-    var stones = collectStones(st.units, monsters, prog, fEvPedras);
+    var stones = {};
+    if (rolaSaque) stones = collectStones(st.units, monsters, prog, fEvPedras);
+    else pedrasComEvento = false;         // achado 19: a vez do saque desta sala é do parceiro
 
     /* OS SELOS DO COLECIONADOR (25/08): SÓ chefe derruba, e derruba o selo
      * do PRÓPRIO elemento (os seis chefes cobrem os cinco; no Poço eles
      * revezam). A chance é UMA e mora em DATA.selos — calibragem do dono. */
     var selosGanhos = {};
     var cfgSelos = (JOGO.DATA && JOGO.DATA.selos) || null;
-    if (cfgSelos && prog && prog.addSelo) {
+    if (cfgSelos && prog && prog.addSelo && rolaSaque) {
       for (i = 0; i < st.units.length; i++) {
         var us = st.units[i];
         if (us.side !== 'enemy' || us.alive) continue;
@@ -858,7 +1565,7 @@ var JOGO = (typeof window !== 'undefined')
      * dividem a mesma rolagem. */
     var insigniasGanhas = 0;
     var cfgIns = (JOGO.DATA && JOGO.DATA.insignias) || null;
-    if (cfgIns && prog && prog.addInsignia) {
+    if (cfgIns && prog && prog.addInsignia && rolaSaque) {
       for (i = 0; i < st.units.length; i++) {
         var ui2 = st.units[i];
         if (ui2.side !== 'enemy' || ui2.alive) continue;
@@ -924,7 +1631,7 @@ var JOGO = (typeof window !== 'undefined')
 
     var drops = [], pets = [];
     var fSaque = 1, saqueDoEvento = false;
-    if (prog && prog.rollDrops) {
+    if (prog && prog.rollDrops && rolaSaque) {
       // O CALABOUÇO DO DIA (25/08): o portal marcado paga +50% de saque
       var bonusDia = (JOGO.Diario && JOGO.Diario.ehHoje &&
                       JOGO.Diario.ehHoje(Game.dungeonId)) ? JOGO.Diario.BONUS_DROP : 1;
@@ -947,7 +1654,7 @@ var JOGO = (typeof window !== 'undefined')
      * UMA carta do pet daquele calabouço, e com 5 o pet é seu (a gramática das
      * cartas de personagem). `pets` segue listando o bicho NOVO para a tela. */
     var petCards = [];
-    if (prog && prog.rollPetCards) {
+    if (prog && prog.rollPetCards && rolaSaque) {
       try { petCards = prog.rollPetCards(Game.dungeonId, Game.roomIndex, partySize) || []; }
       catch (err) { petCards = []; }
       for (i = 0; i < petCards.length; i++) if (petCards[i].novoPet) pets.push(petCards[i].petId);
@@ -981,6 +1688,11 @@ var JOGO = (typeof window !== 'undefined')
       eventos.push({ id: null, titulo: 'Pergaminho da Sabedoria', tipo: 'xp',
                      fator: pergaminhoSala.fator, origem: 'pergaminho', restam: pergaminhoSala.restam });
     }
+    // o bônus de XP por tempo que pesou (loja 2): o chip diz quanto ainda falta
+    if (bonusTempoSala) {
+      eventos.push({ id: null, titulo: 'Bônus de XP', tipo: 'xp', fator: bonusTempoSala.fator,
+                     origem: 'bonus-tempo', ate: bonusTempoSala.ate });
+    }
     if (fEvVintem > 1 && moedasGanhas > 0) eventos.push(evAg('vintem', fEvVintem, tAg));
     if (fEvPedras > 1 && pedrasComEvento) eventos.push(evAg('pedras', fEvPedras, tAg));
     if (saqueDoEvento) eventos.push(evAg('saque', fSaque, tAg));
@@ -993,6 +1705,7 @@ var JOGO = (typeof window !== 'undefined')
       xpPorHeroi: xpPorHeroi,    // o que cada herói realmente recebeu
       levelUps: levelUps,
       moedas: moedasGanhas,
+      saqueDupla: saqueDupla,    // 11/09 (achado 19): na dupla pela Rede, {minha, pela}: de quem foi a vez do saque; senão null
       dificuldade: difSala.id || 'normal',
       difNome: difSala.nome || 'Normal',
       desafio: desafioSala ? { id: desafioSala.id, nome: desafioSala.nome,
@@ -1010,6 +1723,7 @@ var JOGO = (typeof window !== 'undefined')
       dizimo: dizimoSoma > 0 ? { pct: dizimoPct, doado: dizimoSoma } : null,
       eventos: eventos,          // 10/09: [{id, titulo, tipo, fator}] — os eventos do mundo que pesaram
       pergaminho: pergaminhoSala, // Fase C: {fator, restam} quando o Pergaminho da Sabedoria gastou carga; senão null
+      bonusXp: bonusTempoSala,    // loja 2: {fator, ate} quando o bônus de XP por tempo pesou; senão null
       elementChoices: elementChoices
     };
   }
@@ -1038,17 +1752,26 @@ var JOGO = (typeof window !== 'undefined')
 
   function handleBattleOver() {
     if (!Game.state || Game.screen !== 'battle') return;
+    // [G11] no grupo, quem não é a autoridade confere o FIM da sala com ela (o
+    // hash do estado final) antes da recompensa; enquanto isso, segue na tela
+    // da batalha — o update chama de novo a cada quadro
+    if (rede && rede.tipo === 'grupo' && (Game.state.phase === 'won' || Game.state.phase === 'lost')) {
+      var cfim = C();
+      try { if (cfim && cfim.fimGrupo && !cfim.fimGrupo(Game.state)) return; } catch (efim) {}
+    }
 
     /* DUELO: nada de xp, saque ou moeda — o prêmio é o resultado. O treino
      * entra no histórico de PvP, e a Brasa é só MOSTRADA ("se valesse"):
      * Elo contra si mesmo é fábrica de fumaça, e fumaça não é brasa. */
     if (Game.state.pvp) {
+      if (rede && rede.tipo === 'duelo') { fimDueloRede(); return; }   // [G11]
       resetAiState();
       resetTimer(true);
       Game.selectedSpellId = null;
       Game.mustEndTurn = false;
       Game.pendingFusion = null;
       var venceuA = Game.state.phase === 'won';
+      var empateT = Game.state.phase === 'empate';   // 11/09: o teto de rodadas pode empatar
       var duplas = Game._duplas || { a: [], b: [] };
       var seValesse = null;
       try {
@@ -1058,7 +1781,7 @@ var JOGO = (typeof window !== 'undefined')
         try {
           JOGO.DB.registrarPvp({ oponente: 'treino (mesmo teclado)',
             minhaDupla: duplas.a, duplaDele: duplas.b,
-            resultado: venceuA ? 'vitoria-ladoA' : 'vitoria-ladoB',
+            resultado: empateT ? 'empate-treino' : (venceuA ? 'vitoria-ladoA' : 'vitoria-ladoB'),
             clima: Game.state.weather });
         } catch (e2) {}
       }
@@ -1067,7 +1790,7 @@ var JOGO = (typeof window !== 'undefined')
       if (JOGO.Guilda && JOGO.Guilda.registraTreino) {
         try { JOGO.Guilda.registraTreino(); } catch (eg) {}
       }
-      setScreen('duelFim', { venceuA: venceuA, duplaA: duplas.a, duplaB: duplas.b,
+      setScreen('duelFim', { venceuA: venceuA, empate: empateT, duplaA: duplas.a, duplaB: duplas.b,
                              clima: Game.state.weather, seValesse: seValesse });
       return;
     }
@@ -1079,7 +1802,9 @@ var JOGO = (typeof window !== 'undefined')
       // formaram (ela é a soma dos dois), lendo defensivamente os campos que o
       // Engine expuser — sem eles, cai no comportamento antigo.
       carryHp = {};
-      for (var i = 0; i < Game.state.units.length; i++) {
+      // [G11] em grupo a chave é `dono:heroId` (o heroId é a classe e colide)
+      if (rede && rede.tipo === 'grupo') carryHp = carryRede(Game.state);
+      else for (var i = 0; i < Game.state.units.length; i++) {
         var u = Game.state.units[i];
         if (u.kind === 'hero') {
           carryHp[u.heroId || u.defId] = u.alive ? u.hp : 0;
@@ -1101,6 +1826,7 @@ var JOGO = (typeof window !== 'undefined')
       for (var k = 0; k < ds.length; k++) if (ds[k] && ds[k].id === Game.dungeonId) d = ds[k];
       if (d && d.rooms && d.rooms.length) lastRoom = d.rooms.length - 1;
       returnScreen = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
+      if (rede && rede.tipo === 'grupo') marcaRecompensaRede(rewards);
       setScreen(returnScreen, rewards);
     } else if (Game.state.phase === 'lost') {
       resetAiState();
@@ -1109,7 +1835,8 @@ var JOGO = (typeof window !== 'undefined')
       Game.mustEndTurn = false;
       Game.pendingFusion = null;
       returnScreen = 'defeat';
-      setScreen('defeat');
+      if (rede && rede.tipo === 'grupo') setScreen('defeat', fimGrupoPerdido());
+      else setScreen('defeat');
     }
   }
 
@@ -1131,9 +1858,12 @@ var JOGO = (typeof window !== 'undefined')
     return plan;
   }
 
-  Game.update = function (dt) {
+  Game.update = function (dt, semTela) {
     var d = tickDelta(dt);
     if (Game.screen !== 'battle' || !Game.state) return;
+    // [G11] em rede a vez tem TRÊS donos (eu, o parceiro, a IA) e a colocação
+    // é do líder; `semTela` = aba escondida (o setInterval do Coop)
+    if (rede) { updateRede(d, !!semTela); return; }
     if (Game.state.phase === 'placing') return;   // 03/09: esperando o toque na casa
 
     if (Game.state.phase !== 'playing') { handleBattleOver(); return; }

@@ -561,6 +561,10 @@ var JOGO = (typeof window !== 'undefined')
     return st;
   }
 
+  // o fim do bônus de XP por tempo (loja 2) é epoch em SEGUNDOS: acima disto
+  // (o ano de 2096) é lixo — o sanitize e o Progress usam o mesmo teto
+  var BONUS_TETO_S = 4e9;
+
   // ------------------------------------------------------ saneamento [D2]
   function sanitize(raw) {
     if (!isObj(raw)) return null;
@@ -848,6 +852,13 @@ var JOGO = (typeof window !== 'undefined')
       var sx = Math.floor(num(raw.bonusXp.salas, 0));
       if (sx > 0) st.bonusXp = { salas: Math.min(pergCfg().tetoSalas, sx) };
     }
+    // ---- o BÔNUS DE XP POR TEMPO (loja 2, 10/09): o fim do prazo, em
+    // SEGUNDOS do relógio do servidor. A mesma armadilha: sem esta linha o
+    // load apagaria calado o bônus comprado. Só número finito entre 0 e o
+    // teto (guardado inteiro). O vencido FICA: quem decide se ele vale é o
+    // relógio do servidor na hora da recompensa, nunca o da máquina no load.
+    var bxa = num(raw.bonusXpAte, 0);
+    if (bxa > 0 && bxa < BONUS_TETO_S) st.bonusXpAte = Math.floor(bxa);
 
     // ---- NÍVEL DE USO [D19]: peça vestida acima do nível do herói volta ao
     // saco (MESMA série, mesmo level/stars) e pet acima volta à lista. É
@@ -2108,6 +2119,51 @@ var JOGO = (typeof window !== 'undefined')
     else delete st.bonusXp;
     Progress.save();
     return salas;
+  };
+
+  // ======================= o BÔNUS DE XP POR TEMPO (loja 2, 10/09)
+  /* 1, 3 ou 7 dias de +50% de XP (DATA.bonusXp.fator), comprados na loja do
+   * site (js/core/loja.js entrega; o preço mora só no servidor).
+   * `state.bonusXpAte` é o FIM do prazo em SEGUNDOS do relógio do SERVIDOR
+   * (só existe depois de uma compra; o sanitize o conhece — não confundir com
+   * `state.bonusXp = {salas}`, as cargas do Pergaminho da Sabedoria). A
+   * entrega traz o `agora` do servidor no instante da retirada: o prazo corre
+   * a partir da ENTREGA, e comprar de novo SOMA dias —
+   * ate = max(agora, ateAtual) + dias × 86400. Quem pergunta se vale é o
+   * game.js (computeRewards), com o relógio do servidor que a agenda mede. */
+  function bonusCfg() {
+    var c = isObj(D().bonusXp) ? D().bonusXp : {};
+    return { fator: Math.max(1, num(c.fator, 1.5)) };
+  }
+  Progress.bonusXpAte = function () {
+    var st = Progress.state;
+    var v = st ? num(st.bonusXpAte, 0) : 0;
+    return (v > 0 && v < BONUS_TETO_S) ? Math.floor(v) : 0;
+  };
+  /* soma `dias` (inteiro 1..366) a partir de `agoraS` (segundos do servidor)
+   * ou do fim atual, o que vier depois → {ok, ate} | {ok:false, motivo} */
+  Progress.addBonusXpDias = function (dias, agoraS) {
+    var st = Progress.state;
+    if (!st) return { ok: false, motivo: 'sem-save' };
+    if (!(typeof dias === 'number' && isFinite(dias) && Math.floor(dias) === dias && dias >= 1 && dias <= 366)) {
+      return { ok: false, motivo: 'dias' };
+    }
+    if (!(typeof agoraS === 'number' && isFinite(agoraS) && agoraS > 0 && agoraS < BONUS_TETO_S)) {
+      return { ok: false, motivo: 'relogio' };
+    }
+    var ate = Math.max(Math.floor(agoraS), Progress.bonusXpAte()) + dias * 86400;
+    if (ate >= BONUS_TETO_S) return { ok: false, motivo: 'teto' };
+    st.bonusXpAte = ate;
+    Progress.save();
+    return { ok: true, ate: ate };
+  };
+  /* o fator no instante `tsMs` (MILISSEGUNDOS do relógio do servidor; sem
+   * ele, o desta máquina): DATA.bonusXp.fator dentro do prazo, senão 1 */
+  Progress.fatorBonusXp = function (tsMs) {
+    var ate = Progress.bonusXpAte();
+    if (!ate) return 1;
+    var t = (typeof tsMs === 'number' && isFinite(tsMs)) ? tsMs : Date.now();
+    return (t / 1000 < ate) ? bonusCfg().fator : 1;
   };
 
   /* A REESCRITA: um caminho da lista sai e outro, que o herói não tem, entra

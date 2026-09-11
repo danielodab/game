@@ -9,14 +9,19 @@ temporária) e faz o que o site e o jogo fariam: o save sobe com a carteira, o
 site compra, o jogo retira, e o PUT do save confirma a entrega ou o estorno.
 As contas são sintéticas, criadas aqui.
 
-O que se prova: o catálogo público (sem as classes iniciais, sem o gm, sem a
-Âncora), a reserva (duas compras não gastam o mesmo vintém, nem em dois
+O que se prova: o catálogo público v2 (Loja 2, 10/09: personagens, bônus de XP
+por tempo, pedras de 10 e de 50, insígnias, a Reescrita e os pacotes em reais;
+sem as classes iniciais, sem o gm, sem a Âncora, sem o Pergaminho da
+Sabedoria), a reserva (duas compras não gastam o mesmo vintém, nem em dois
 processos no mesmo banco), o idem, retirar e cancelar, a confirmação dentro do
-save (e nada com versão velha), as regras de classe e de pergaminho, os
-limites (7 e 30 dias, 5 abertos, 10 por hora; o liberaEm só com o grupo
-cheio; o teto de 30 LINHAS por hora, em qualquer estado e para o Mestre
-também), o Mestre, e que o catálogo espelha os dados do jogo
-(progression.js, classes.js, items.js).
+save (e nada com versão velha), as regras de classe, de pergaminho e de bônus,
+os limites (só a Reescrita tem janela; a compra única das classes; 5 abertos,
+10 por hora; o teto de 30 LINHAS por hora, em qualquer estado e para o Mestre
+também), o Mestre, os CRÉDITOS a caminho (o saldo `aCaminho`, a compra sem save
+com crédito, a ordem no retirar, o cancelar recusado, os tetos que não os
+contam, a reemissão do crédito de pacote recusado), o `entrega.agora` só no
+bônus, e que o catálogo espelha os dados do jogo (progression.js, classes.js,
+items.js, items_selos.js).
 """
 import json
 import os
@@ -45,9 +50,17 @@ except Exception:
     pass
 
 DIA = 86400
-PRECOS = {'pergaminho-xp': 1500, 'pergaminho-elemento': 5000, 'pedras-agua': 300, 'pedras-terra': 300,
-          'pedras-ar': 450, 'pedras-fogo': 450, 'pedras-neutro': 450, 'classe-invocador': 8000,
-          'classe-bruxo': 8000, 'classe-espadachim': 20000, 'classe-arqueiro': 25000, 'classe-minotauro': 30000}
+PRECOS = {'classe-invocador': 10000, 'classe-bruxo': 10000, 'classe-espadachim': 20000, 'classe-arqueiro': 25000,
+          'classe-minotauro': 30000,
+          'bonus-xp-1': 1500, 'bonus-xp-3': 3900, 'bonus-xp-7': 7900,
+          'pedras-agua': 500, 'pedras-terra': 500, 'pedras-ar': 800, 'pedras-fogo': 800, 'pedras-neutro': 800,
+          'pedras-agua-50': 2250, 'pedras-terra-50': 2250, 'pedras-ar-50': 3600, 'pedras-fogo-50': 3600,
+          'pedras-neutro-50': 3600,
+          'insignia-1': 500, 'insignias-10': 4500,
+          'pergaminho-elemento': 5000}
+SECOES = ['personagens'] * 5 + ['bonus'] * 3 + ['pedras'] * 10 + ['guilda'] * 2 + ['pergaminhos']
+GRUPOS = {'pergaminho-elemento', 'classe-invocador', 'classe-bruxo', 'classe-espadachim', 'classe-arqueiro',
+          'classe-minotauro'}
 HEROI_FOGO = {'sumo': {'classId': 'sumo', 'xp': 900, 'level': 6, 'element': 'fogo', 'elements': ['fogo']}}
 
 
@@ -137,31 +150,104 @@ class ProvaDaLoja(unittest.TestCase):
     def pedido(self, c, pid):
         return [p for p in self.minha(c)['pedidos'] if p['id'] == pid][0]
 
+    def semeia_credito(self, c, vintens, origem='pagamento', mp_id=None, sku=None, estado='pendente', em=None):
+        """Um crédito como o pagamento.py (origem 'pagamento') ou o mestre.py (origem 'presente') gravaria."""
+        t = em or int(time.time())
+        b = sqlite3.connect(self.banco_arq)
+        try:
+            pid = b.execute(
+                "INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, idem, criado_em) VALUES (?, ?, ?, 0, ?, ?, ?)",
+                (c.conta['id'], sku or ('pacote-12000' if origem == 'pagamento' else 'presente-vintens'),
+                 json.dumps({'tipo': 'vintens', 'alvo': 'carteira', 'qtd': vintens}), estado,
+                 'mp:%s' % mp_id if mp_id else None, t)).lastrowid
+            b.execute("INSERT INTO loja_creditos(pedido_id, vintens, origem, mp_id, criado_em) VALUES (?, ?, ?, ?, ?)",
+                      (pid, vintens, origem, mp_id, t))
+            if origem == 'presente':
+                b.execute("INSERT INTO loja_presentes(pedido_id, por, criado_em) VALUES (?, NULL, ?)", (pid, t))
+            b.commit()
+        finally:
+            b.close()
+        return pid
+
+    def semeia_presente(self, c, sku='pedras-agua', estado='pendente', em=None):
+        item = loja_mod.POR_SKU[sku]
+        t = em or int(time.time())
+        b = sqlite3.connect(self.banco_arq)
+        try:
+            pid = b.execute(
+                "INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, criado_em) VALUES (?, ?, ?, 0, ?, ?)",
+                (c.conta['id'], sku, json.dumps(loja_mod.entrega_de(item)), estado, t)).lastrowid
+            b.execute("INSERT INTO loja_presentes(pedido_id, por, criado_em) VALUES (?, NULL, ?)", (pid, t))
+            b.commit()
+        finally:
+            b.close()
+        return pid
+
     # -- o catálogo ---------------------------------------------------------------------
     def test_catalogo_publico(self):
         status, r = Cliente(self.base).pede('GET', '/api/loja/catalogo', token=None)
         self.assertEqual(status, 200, r)
-        self.assertEqual((r['ok'], r['versao']), (True, 1))
+        self.assertEqual((r['ok'], r['versao']), (True, 2))
         itens = r['itens']
         self.assertEqual({i['sku']: i['preco'] for i in itens}, PRECOS)
-        self.assertEqual([i['secao'] for i in itens], ['pergaminhos'] * 2 + ['pedras'] * 5 + ['personagens'] * 5)
+        self.assertEqual([i['secao'] for i in itens], SECOES)
         alvos = {i['alvo'] for i in itens}
         for fora in ('sumo', 'curandeiro', 'curandeira', 'gm', 'stone-anchor'):
             self.assertNotIn(fora, alvos)
-        self.assertNotIn('ncora', json.dumps(itens, ensure_ascii=False))
+        texto = json.dumps(itens, ensure_ascii=False)
+        self.assertNotIn('ncora', texto)
+        self.assertNotIn('pergaminho-xp', texto)                  # o da Sabedoria saiu da venda
+        self.assertNotIn('Sabedoria', [i['nome'] for i in itens])
         for i in itens:
             self.assertTrue(isinstance(i['preco'], int) and i['preco'] > 0, i)
             self.assertTrue(i['nome'] and i['descricao'], i)
-            self.assertEqual(set(i['limite']), {'grupo', 'max', 'dias'})
-            self.assertIn(i['tipo'], ('pergaminho', 'pedras', 'classe'))
-        xp = [i for i in itens if i['sku'] == 'pergaminho-xp'][0]
-        self.assertEqual(xp['limite'], {'grupo': 'pergaminho-xp', 'max': 1, 'dias': 7})
-        self.assertIn('9 salas', xp['descricao'])
+            self.assertIn(i['tipo'], ('classe', 'bonus-xp', 'pedras', 'insignias', 'pergaminho'))
+            if i['limite'] is not None:
+                self.assertEqual(set(i['limite']), {'grupo', 'max', 'dias'})
+        # só a Reescrita tem janela; as classes, compra única; o resto, nenhum (o preço é o freio)
+        self.assertEqual({i['sku']: i['limite'] for i in itens if i['limite'] is not None and i['limite']['dias']},
+                         {'pergaminho-elemento': {'grupo': 'pergaminho-elemento', 'max': 1, 'dias': 30}})
+        for i in itens:
+            if i['tipo'] == 'classe':
+                self.assertEqual(i['limite'], {'grupo': i['sku'], 'max': 1, 'dias': None})
+            elif i['tipo'] != 'pergaminho':
+                self.assertIsNone(i['limite'], i['sku'])
         pedras = [i for i in itens if i['tipo'] == 'pedras']
-        self.assertTrue(all(i['qtd'] == 10 and i['limite'] == {'grupo': 'pedras', 'max': 5, 'dias': 7} for i in pedras))
+        self.assertEqual(sorted(i['qtd'] for i in pedras), [10] * 5 + [50] * 5)
+        for i in pedras:
+            dez = [j for j in pedras if j['alvo'] == i['alvo'] and j['qtd'] == 10][0]
+            if i['qtd'] == 50:                                    # 10% de desconto no pacote de 50
+                self.assertEqual(i['preco'], dez['preco'] * 5 * 9 // 10, i['sku'])
+                self.assertTrue(i['descricao'].startswith('Cinquenta'), i)
+            else:
+                self.assertTrue(i['descricao'].startswith('Dez'), i)
+        bonus = [i for i in itens if i['tipo'] == 'bonus-xp']
+        self.assertEqual([(i['qtd'], i['dias'], i['alvo']) for i in bonus], [(1, 1, 'xp'), (3, 3, 'xp'), (7, 7, 'xp')])
+        self.assertEqual([i['nome'] for i in bonus], ['Bônus de XP — 1 dia', 'Bônus de XP — 3 dias', 'Bônus de XP — 7 dias'])
+        for i in bonus:
+            self.assertIn('+50% de experiência', i['descricao'])
+            self.assertIn('relógio do servidor', i['descricao'])
+            self.assertIn('×2', i['descricao'])
+        ins = [i for i in itens if i['tipo'] == 'insignias']
+        self.assertEqual([(i['sku'], i['qtd'], i['alvo']) for i in ins], [('insignia-1', 1, 'fundacao'),
+                                                                          ('insignias-10', 10, 'fundacao')])
         xama = [i for i in itens if i['sku'] == 'classe-invocador'][0]
         self.assertEqual((xama['nome'], xama['raridade'], xama['cartas'], xama['limite']['dias']),
                          ('Xamã', 'raro', 10, None))
+        # a régua: personagem = 1.000 vinténs por carta do desbloqueio
+        for i in itens:
+            if i['tipo'] == 'classe':
+                self.assertEqual(i['preco'], 1000 * i['cartas'], i['sku'])
+        # os pacotes em reais, formatados pelo servidor; o pagamento desligado (esta API sobe sem as variáveis)
+        self.assertEqual(r['pacotes'], [
+            {'id': 'pacote-1000', 'nome': 'Bolsa de 1.000 vinténs', 'vintens': 1000, 'centavos': 490, 'preco': 'R$ 4,90'},
+            {'id': 'pacote-5500', 'nome': 'Saco de 5.500 vinténs', 'vintens': 5500, 'centavos': 1990, 'preco': 'R$ 19,90'},
+            {'id': 'pacote-12000', 'nome': 'Arca de 12.000 vinténs', 'vintens': 12000, 'centavos': 3990,
+             'preco': 'R$ 39,90'},
+            {'id': 'pacote-25000', 'nome': 'Tesouro de 25.000 vinténs', 'vintens': 25000, 'centavos': 7990,
+             'preco': 'R$ 79,90'}])
+        self.assertEqual(r['pagamento'], {'ligado': False, 'teste': False})
+        self.assertEqual(loja_mod.reais(123456), 'R$ 1.234,56')
 
     # -- comprar ------------------------------------------------------------------------
     def test_comprar_erros_basicos(self):
@@ -171,9 +257,13 @@ class ProvaDaLoja(unittest.TestCase):
         c = self.novo('Erro Basico')
         for corpo, erro in (({'sku': 'ancora', 'idem': idem()}, 'produto desconhecido'),
                             ({'sku': 'classe-sumo', 'idem': idem()}, 'produto desconhecido'),
+                            ({'sku': 'pergaminho-xp', 'idem': idem()}, 'produto desconhecido'),
+                            ({'sku': 'pacote-1000', 'idem': idem()}, 'produto desconhecido'),
+                            ({'sku': 'presente-vintens', 'idem': idem()}, 'produto desconhecido'),
                             ({'sku': None, 'idem': idem()}, 'produto desconhecido'),
                             ({'sku': 'pedras-agua'}, 'idem inválido (8 a 64 letras, dígitos, _ ou -)'),
                             ({'sku': 'pedras-agua', 'idem': 'curto'}, 'idem inválido (8 a 64 letras, dígitos, _ ou -)'),
+                            ({'sku': 'pedras-agua', 'idem': 'mp:12345678'}, 'idem inválido (8 a 64 letras, dígitos, _ ou -)'),
                             ({'sku': 'pedras-agua', 'idem': 'tem espaço aqui'}, 'idem inválido (8 a 64 letras, dígitos, _ ou -)'),
                             ({'sku': 'pedras-agua', 'idem': 'x' * 65}, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')):
             status, r = c.pede('POST', '/api/loja/comprar', corpo)
@@ -182,29 +272,29 @@ class ProvaDaLoja(unittest.TestCase):
         self.assertEqual((status, r['erro']), (409, 'o servidor ainda não viu seus vinténs: abra o jogo logado nesta '
                                                     'conta (na conta Principal)'))
         m = self.minha(c)
-        self.assertEqual(m['saldo'], {'carteira': 0, 'reservado': 0, 'disponivel': 0, 'semFundo': False,
+        self.assertEqual(m['saldo'], {'carteira': 0, 'reservado': 0, 'aCaminho': 0, 'disponivel': 0, 'semFundo': False,
                                       'saveVersao': 0, 'saveEm': None})
         self.assertEqual(m['pedidos'], [])
         self.assertEqual(m['classes'], {k: {'liberada': False, 'cartas': 0}
                                         for k in ('invocador', 'bruxo', 'espadachim', 'arqueiro', 'minotauro')})
-        self.assertEqual(set(m['limites']), {'pergaminho-xp', 'pergaminho-elemento', 'pedras', 'classe-invocador',
-                                             'classe-bruxo', 'classe-espadachim', 'classe-arqueiro', 'classe-minotauro'})
-        self.assertEqual(m['limites']['pedras'], {'usados': 0, 'max': 5, 'dias': 7, 'liberaEm': None})
+        self.assertEqual(set(m['limites']), GRUPOS)
+        self.assertEqual(m['limites']['pergaminho-elemento'], {'usados': 0, 'max': 1, 'dias': 30, 'liberaEm': None})
 
     def test_reserva(self):
         c = self.novo('Rosa Reserva')
-        r = self.sobe(c, carteira=10000)
+        self.sobe(c, carteira=12000)
         status, r = self.compra(c, 'classe-invocador')
         self.assertEqual(status, 201, r)
-        self.assertEqual((r['pedido']['preco'], r['pedido']['estado'], r['pedido']['nome']), (8000, 'pendente', 'Xamã'))
-        self.assertEqual({k: r['saldo'][k] for k in ('carteira', 'reservado', 'disponivel', 'semFundo')},
-                         {'carteira': 10000, 'reservado': 8000, 'disponivel': 2000, 'semFundo': False})
-        status, r = self.compra(c, 'classe-bruxo')            # 8.000 de novo: só há 2.000 livres
+        self.assertEqual((r['pedido']['preco'], r['pedido']['estado'], r['pedido']['nome']), (10000, 'pendente', 'Xamã'))
+        self.assertNotIn('origem', r['pedido'])
+        self.assertEqual({k: r['saldo'][k] for k in ('carteira', 'reservado', 'aCaminho', 'disponivel', 'semFundo')},
+                         {'carteira': 12000, 'reservado': 10000, 'aCaminho': 0, 'disponivel': 2000, 'semFundo': False})
+        status, r = self.compra(c, 'classe-bruxo')            # 10.000 de novo: só há 2.000 livres
         self.assertEqual((status, r['erro'], r['saldo']['disponivel']), (409, 'vinténs insuficientes', 2000))
         status, r = self.compra(c, 'pedras-agua')
-        self.assertEqual((status, r['saldo']['disponivel']), (201, 1700))
+        self.assertEqual((status, r['saldo']['disponivel']), (201, 1500))
         m = self.minha(c)
-        self.assertEqual((m['saldo']['reservado'], m['saldo']['disponivel']), (8300, 1700))
+        self.assertEqual((m['saldo']['reservado'], m['saldo']['disponivel']), (10500, 1500))
         self.assertEqual([p['sku'] for p in m['pedidos']], ['pedras-agua', 'classe-invocador'])     # o mais novo antes
         self.assertTrue(m['saldo']['saveVersao'] >= 1 and m['saldo']['saveEm'])
 
@@ -217,7 +307,7 @@ class ProvaDaLoja(unittest.TestCase):
         status, r2 = self.compra(c, 'pedras-terra', chave)     # o mesmo clique, de novo
         self.assertEqual(status, 200, r2)
         self.assertEqual(r2['pedido']['id'], r1['pedido']['id'])
-        self.assertEqual(r2['saldo']['reservado'], 300)
+        self.assertEqual(r2['saldo']['reservado'], 500)
         status, r = self.compra(c, 'pedras-ar', chave)
         self.assertEqual((status, r['erro']), (409, 'idem já usado em outro produto'))
         self.assertEqual(len(self.minha(c)['pedidos']), 1)
@@ -229,14 +319,14 @@ class ProvaDaLoja(unittest.TestCase):
     def test_retirar_e_cancelar(self):
         c = self.novo('Rita Retira')
         self.sobe(c, carteira=5000)
-        p1, p2 = self.comprou(c, 'pedras-agua'), self.comprou(c, 'pedras-terra')
+        p1, p2 = self.comprou(c, 'pedras-agua'), self.comprou(c, 'pedras-terra-50')
         status, r = c.pede('POST', '/api/loja/retirar', {})
         self.assertEqual(status, 200, r)
         self.assertEqual(r['pedidos'], [
-            {'id': p1['id'], 'sku': 'pedras-agua', 'nome': '10 Lágrimas de Cisterna', 'preco': 300,
+            {'id': p1['id'], 'sku': 'pedras-agua', 'nome': '10 Lágrimas de Cisterna', 'preco': 500,
              'entrega': {'tipo': 'pedras', 'alvo': 'stone-tear', 'qtd': 10}},
-            {'id': p2['id'], 'sku': 'pedras-terra', 'nome': '10 Grãos de Rocha-Mãe', 'preco': 300,
-             'entrega': {'tipo': 'pedras', 'alvo': 'stone-root', 'qtd': 10}}])
+            {'id': p2['id'], 'sku': 'pedras-terra-50', 'nome': '50 Grãos de Rocha-Mãe', 'preco': 2250,
+             'entrega': {'tipo': 'pedras', 'alvo': 'stone-root', 'qtd': 50}}])
         q1 = self.pedido(c, p1['id'])
         self.assertEqual((q1['estado'], q1['cancelavel']), ('retirado', False))
         self.assertLessEqual(abs(q1['retiradoEm'] - time.time()), 10)
@@ -247,13 +337,13 @@ class ProvaDaLoja(unittest.TestCase):
         self.assertTrue(self.pedido(c, p1['id'])['cancelavel'])
         status, r = c.pede('POST', '/api/loja/cancelar', {'id': p1['id']})
         self.assertEqual(status, 200, r)
-        self.assertEqual((r['pedido']['estado'], r['saldo']['reservado']), ('cancelado', 300))
+        self.assertEqual((r['pedido']['estado'], r['saldo']['reservado']), ('cancelado', 2250))
         self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': p1['id']})[1]['erro'], 'pedido já fechado')
         # pendente cancela e solta a reserva
         p3 = self.comprou(c, 'pedras-ar')
-        self.assertEqual(self.minha(c)['saldo']['reservado'], 750)
+        self.assertEqual(self.minha(c)['saldo']['reservado'], 3050)
         status, r = c.pede('POST', '/api/loja/cancelar', {'id': p3['id']})
-        self.assertEqual((status, r['saldo']['reservado']), (200, 300))
+        self.assertEqual((status, r['saldo']['reservado']), (200, 2250))
         # de outra conta, que não existe, torto
         d = self.novo('Rita Outra')
         self.assertEqual(d.pede('POST', '/api/loja/cancelar', {'id': p2['id']}), (404, {'ok': False, 'erro': 'pedido não encontrado'}))
@@ -273,11 +363,11 @@ class ProvaDaLoja(unittest.TestCase):
         p1, p2, p3 = (self.comprou(c, s) for s in ('pedras-agua', 'pedras-terra', 'pedras-ar'))
         q = self.comprou(d, 'pedras-agua')
         self.assertEqual(len(c.pede('POST', '/api/loja/retirar', {})[1]['pedidos']), 3)
-        # o jogo aplicou p1 (descontou 300), recusou p2 sem saldo e p3 com um motivo que não existe,
+        # o jogo aplicou p1 (descontou 500), recusou p2 sem saldo e p3 com um motivo que não existe,
         # e "aplicou" o pedido da outra conta (ignorado)
         anot = {'aplicadas': [p1['id'], q['id']],
                 'recusadas': [{'id': p2['id'], 'motivo': 'sem-saldo'}, {'id': p3['id'], 'motivo': 'inventado'}]}
-        r = self.sobe(c, carteira=1700, anotacao=anot)
+        r = self.sobe(c, carteira=1500, anotacao=anot)
         self.assertEqual(r['loja'], {'entregues': [p1['id']], 'estornados': [p2['id'], p3['id']]})
         m = self.minha(c)
         por_id = {p['id']: p for p in m['pedidos']}
@@ -285,25 +375,25 @@ class ProvaDaLoja(unittest.TestCase):
                          ('entregue', 'estornado', 'estornado'))
         self.assertEqual((por_id[p2['id']]['motivo'], por_id[p3['id']]['motivo']), ('sem-saldo', 'recusado'))
         self.assertTrue(por_id[p1['id']]['fechadoEm'])
-        self.assertEqual((m['saldo']['carteira'], m['saldo']['reservado']), (1700, 0))
+        self.assertEqual((m['saldo']['carteira'], m['saldo']['reservado']), (1500, 0))
         self.assertEqual(self.sql("SELECT versao_save FROM loja_pedidos WHERE id = ?", p1['id'])[0][0], r['versao'])
         self.assertEqual(self.pedido(d, q['id'])['estado'], 'pendente')       # o da outra conta ficou
         # a mesma anotação de novo: nada muda (já fechados)
-        self.assertEqual(self.sobe(c, carteira=1700, anotacao=anot)['loja'], {'entregues': [], 'estornados': []})
+        self.assertEqual(self.sobe(c, carteira=1500, anotacao=anot)['loja'], {'entregues': [], 'estornados': []})
         # um save sem anotação responde a loja vazia
-        self.assertEqual(self.sobe(c, carteira=1700)['loja'], {'entregues': [], 'estornados': []})
+        self.assertEqual(self.sobe(c, carteira=1500)['loja'], {'entregues': [], 'estornados': []})
         # PUT com versão velha: 409, e nada é confirmado
         p4 = self.comprou(c, 'pedras-fogo')
         versao = c.pede('GET', '/api/save')[1]['versao']
-        status, r = c.salva(versao - 1, *save_loja(carteira=1250, anotacao={'aplicadas': [p4['id']], 'recusadas': []}))
+        status, r = c.salva(versao - 1, *save_loja(carteira=700, anotacao={'aplicadas': [p4['id']], 'recusadas': []}))
         self.assertEqual(status, 409, r)
         self.assertEqual(self.pedido(c, p4['id'])['estado'], 'pendente')
-        status, r = c.salva(versao, *save_loja(carteira=1250, anotacao={'aplicadas': [p4['id']], 'recusadas': []}))
+        status, r = c.salva(versao, *save_loja(carteira=700, anotacao={'aplicadas': [p4['id']], 'recusadas': []}))
         self.assertEqual((status, r['loja']['entregues']), (200, [p4['id']]))
         # cancelado e depois aplicado mesmo assim (o jogo não soube): vira entregue, com o evento na trilha
-        p5 = self.comprou(c, 'pedras-neutro')
+        p5 = self.comprou(c, 'insignia-1')
         self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': p5['id']})[0], 200)
-        r = self.sobe(c, carteira=800, anotacao={'aplicadas': [p1['id'], p4['id'], p5['id']], 'recusadas': []})
+        r = self.sobe(c, carteira=200, anotacao={'aplicadas': [p1['id'], p4['id'], p5['id']], 'recusadas': []})
         self.assertEqual(r['loja']['entregues'], [p5['id']])
         tardio = self.sql("SELECT dados FROM eventos WHERE conta_id = ? AND tipo = 'loja-cancelamento-tardio'",
                           c.conta['id'])
@@ -311,7 +401,7 @@ class ProvaDaLoja(unittest.TestCase):
         # anotação torta nunca derruba o save
         for torta in ({'aplicadas': 'x', 'recusadas': 7}, {'aplicadas': [True, -1, 'a', 2 ** 60, None]},
                       {'recusadas': [5, {'id': 'x'}, {'motivo': 'sem-saldo'}]}, 'lixo', None):
-            db = save_loja(carteira=800)[1]
+            db = save_loja(carteira=200)[1]
             db['loja'] = torta
             versao = c.pede('GET', '/api/save')[1]['versao']
             status, r = c.salva(versao, save_loja()[0], db)
@@ -334,32 +424,35 @@ class ProvaDaLoja(unittest.TestCase):
         c.pede('POST', '/api/loja/retirar', {})
         self.assertEqual(self.compra(c, 'classe-invocador')[1]['erro'], 'já há um pedido dessa classe a caminho')
         # entregue, mas o save ainda não mostra a classe liberada: "já foi comprada"
-        r = self.sobe(c, carteira=92000, classes=('sumo', 'curandeiro', 'bruxo'),
+        r = self.sobe(c, carteira=90000, classes=('sumo', 'curandeiro', 'bruxo'),
                       anotacao={'aplicadas': [p['id']], 'recusadas': []})
         self.assertEqual(r['loja']['entregues'], [p['id']])
         status, r = self.compra(c, 'classe-invocador')
         self.assertEqual((status, r['erro']), (409, 'essa classe já foi comprada'))
-        self.sobe(c, carteira=92000, classes=('sumo', 'curandeiro', 'bruxo', 'invocador'))
+        self.sobe(c, carteira=90000, classes=('sumo', 'curandeiro', 'bruxo', 'invocador'))
         self.assertEqual(self.compra(c, 'classe-invocador')[1]['erro'], 'essa classe já está liberada')
         # estornada não conta: pode comprar de novo
         p2 = self.comprou(c, 'classe-minotauro')
-        self.sobe(c, carteira=92000, anotacao={'aplicadas': [], 'recusadas': [{'id': p2['id'], 'motivo': 'erro-local'}]})
+        self.sobe(c, carteira=90000, anotacao={'aplicadas': [], 'recusadas': [{'id': p2['id'], 'motivo': 'erro-local'}]})
         self.assertEqual(self.compra(c, 'classe-minotauro')[0], 201)
 
-    def test_pergaminhos(self):
+    def test_reescrita_e_bonus(self):
         gm_heroi = {'classId': 'gm', 'xp': comum.XP_MAX, 'level': 30, 'element': 'fogo',
                     'elements': ['fogo', 'agua', 'terra', 'ar']}
         c = self.novo('Neto Neutro')
         self.sobe(c, carteira=20000, herois={'sumo': {'classId': 'sumo', 'xp': 100, 'level': 3, 'element': 'neutro'},
                                              'gm': gm_heroi})
         self.assertEqual(self.compra(c, 'pergaminho-elemento')[1]['erro'], 'nenhum herói escolheu caminho elemental ainda')
-        self.assertEqual(self.compra(c, 'pergaminho-xp')[0], 201)
+        self.assertEqual(self.compra(c, 'bonus-xp-1')[0], 201)
+        self.assertEqual(self.compra(c, 'bonus-xp-1')[0], 201)             # sem janela: comprar de novo soma os dias
         t = self.novo('Tina Topo')
         self.sobe(t, carteira=20000, herois={'sumo': {'classId': 'sumo', 'xp': comum.XP_MAX, 'level': 30,
                                                       'element': 'agua', 'elements': ['agua']},
                                              'curandeira': {'xp': comum.XP_MAX + 500, 'level': 30},
                                              'gm': dict(gm_heroi, xp=10)})
-        self.assertEqual(self.compra(t, 'pergaminho-xp')[1]['erro'], 'todos os heróis já estão no nível 30')
+        # o bônus de XP com todos no nível 30 VENDE: no jogo ele ainda rende a fatia do pet e o dízimo
+        # (conserto 11/09; a recusa do nível 30 ficou só no Sabedoria, que tem carga a poupar e saiu da venda)
+        self.assertEqual(self.compra(t, 'bonus-xp-1')[0], 201)
         self.assertEqual(self.compra(t, 'pergaminho-elemento')[0], 201)
         # um caminho só na lista (o ativo voltou a neutro por um save antigo) também conta como escolhido
         e = self.novo('Elo Lista')
@@ -367,48 +460,59 @@ class ProvaDaLoja(unittest.TestCase):
                                                          'elements': ['terra']}})
         self.assertEqual(self.compra(e, 'pergaminho-elemento')[0], 201)
 
+    def test_pergaminho_da_sabedoria_fora_da_venda(self):
+        """O pedido antigo ainda aberto sai no retirar com o nome certo e é entregue normalmente."""
+        c = self.novo('Sabe Antigo')
+        self.sobe(c, carteira=5000)
+        t = int(time.time())
+        antigo = self.sql("INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, criado_em) "
+                          "VALUES (?, 'pergaminho-xp', ?, 1500, 'pendente', ?) RETURNING id", c.conta['id'],
+                          json.dumps({'tipo': 'pergaminho', 'alvo': 'xp', 'qtd': 1}), t - 3 * DIA)[0][0]
+        self.assertEqual(self.pedido(c, antigo)['nome'], 'Pergaminho da Sabedoria')
+        self.assertEqual(self.minha(c)['saldo']['reservado'], 1500)
+        r = c.pede('POST', '/api/loja/retirar', {})[1]
+        self.assertEqual(r['pedidos'], [{'id': antigo, 'sku': 'pergaminho-xp', 'nome': 'Pergaminho da Sabedoria',
+                                         'preco': 1500, 'entrega': {'tipo': 'pergaminho', 'alvo': 'xp', 'qtd': 1}}])
+        r = self.sobe(c, carteira=3500, anotacao={'aplicadas': [antigo], 'recusadas': []})
+        self.assertEqual(r['loja']['entregues'], [antigo])
+        self.assertEqual(self.compra(c, 'pergaminho-xp')[1]['erro'], 'produto desconhecido')
+
     # -- os limites ------------------------------------------------------------------------
-    def test_limite_de_7_e_30_dias(self):
+    def test_limite_da_reescrita(self):
         c = self.novo('Lia Limite')
         self.sobe(c, carteira=100000)
-        p = self.comprou(c, 'pergaminho-xp')
+        p = self.comprou(c, 'pergaminho-elemento')
         self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': p['id']})[0], 200)
-        p = self.comprou(c, 'pergaminho-xp')                     # cancelado não conta
-        self.sobe(c, carteira=98500, anotacao={'aplicadas': [p['id']], 'recusadas': []})
+        p = self.comprou(c, 'pergaminho-elemento')              # cancelado não conta
+        self.sobe(c, carteira=95000, anotacao={'aplicadas': [p['id']], 'recusadas': []})
         criado = self.sql("SELECT criado_em FROM loja_pedidos WHERE id = ?", p['id'])[0][0]
-        status, r = self.compra(c, 'pergaminho-xp')              # entregue conta
-        self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'limite deste produto: 1 a cada 7 dias', criado + 7 * DIA))
-        self.assertEqual(self.minha(c)['limites']['pergaminho-xp'],
-                         {'usados': 1, 'max': 1, 'dias': 7, 'liberaEm': criado + 7 * DIA})
-        self.sql("UPDATE loja_pedidos SET criado_em = criado_em - ? WHERE id = ?", 8 * DIA, p['id'])
-        self.assertEqual(self.compra(c, 'pergaminho-xp')[0], 201)
-        # a Reescrita: 1 a cada 30 dias
-        q = self.comprou(c, 'pergaminho-elemento')
-        status, r = self.compra(c, 'pergaminho-elemento')
-        self.assertEqual((status, r['erro']), (429, 'limite deste produto: 1 a cada 30 dias'))
-        self.sql("UPDATE loja_pedidos SET criado_em = criado_em - ? WHERE id = ?", 29 * DIA, q['id'])
+        status, r = self.compra(c, 'pergaminho-elemento')       # entregue conta
+        self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'limite deste produto: 1 a cada 30 dias', criado + 30 * DIA))
+        self.assertEqual(self.minha(c)['limites']['pergaminho-elemento'],
+                         {'usados': 1, 'max': 1, 'dias': 30, 'liberaEm': criado + 30 * DIA})
+        self.sql("UPDATE loja_pedidos SET criado_em = criado_em - ? WHERE id = ?", 29 * DIA, p['id'])
         self.assertEqual(self.compra(c, 'pergaminho-elemento')[0], 429)
-        self.sql("UPDATE loja_pedidos SET criado_em = criado_em - ? WHERE id = ?", 2 * DIA, q['id'])
+        self.sql("UPDATE loja_pedidos SET criado_em = criado_em - ? WHERE id = ?", 2 * DIA, p['id'])
         self.assertEqual(self.compra(c, 'pergaminho-elemento')[0], 201)
 
-    def test_limite_das_pedras(self):
+    def test_sem_janela_nas_pedras_bonus_e_insignias(self):
+        """Sem janela de 7 dias: o preço é o freio. Ficam os tetos de abuso (5 abertos)."""
         c = self.novo('Pepa Pedras')
         self.sobe(c, carteira=100000)
-        feitos = [self.comprou(c, s) for s in ('pedras-agua', 'pedras-terra', 'pedras-ar', 'pedras-fogo', 'pedras-neutro')]
-        mais_velho = min(r[0] for r in self.sql("SELECT criado_em FROM loja_pedidos WHERE conta_id = ?", c.conta['id']))
-        status, r = self.compra(c, 'pedras-agua')                # 5 pacotes somando os tipos
-        self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'limite deste produto: 5 a cada 7 dias',
-                                                              mais_velho + 7 * DIA))
-        lim = self.minha(c)['limites']['pedras']
-        self.assertEqual((lim['usados'], lim['max']), (5, 5))
-        # estornado não conta
-        self.sobe(c, carteira=100000, anotacao={'aplicadas': [], 'recusadas': [{'id': feitos[0]['id'], 'motivo': 'sem-saldo'}]})
-        self.assertEqual(self.compra(c, 'pedras-agua')[0], 201)
+        skus = ('pedras-agua', 'pedras-fogo-50', 'bonus-xp-7', 'insignias-10', 'insignia-1')
+        feitos = [self.comprou(c, s) for s in skus]
+        self.assertEqual(self.compra(c, 'pedras-agua')[1]['erro'], 'pedidos abertos demais (5)')
+        c.pede('POST', '/api/loja/retirar', {})
+        self.sobe(c, carteira=100000 - sum(PRECOS[s] for s in skus),
+                  anotacao={'aplicadas': [p['id'] for p in feitos], 'recusadas': []})
+        for s in skus:                                          # os mesmos de novo, na mesma semana
+            self.assertEqual(self.compra(c, s)[0], 201, s)
+        self.assertEqual(set(self.minha(c)['limites']), GRUPOS)   # nenhum grupo de pedras nem de bônus
 
     def test_limite_de_abertos_e_por_hora(self):
         c = self.novo('Abel Abertos')
         self.sobe(c, carteira=100000)
-        for s in ('pergaminho-xp', 'pergaminho-elemento', 'classe-invocador', 'classe-bruxo', 'pedras-agua'):
+        for s in ('bonus-xp-1', 'pergaminho-elemento', 'classe-invocador', 'classe-bruxo', 'pedras-agua'):
             self.comprou(c, s)
         status, r = self.compra(c, 'classe-espadachim')
         self.assertEqual((status, r['erro']), (429, 'pedidos abertos demais (5)'))
@@ -421,37 +525,31 @@ class ProvaDaLoja(unittest.TestCase):
                       "VALUES (?, 'teste-hora', '{}', 0, 'entregue', ?)", [(h.conta['id'], t - 100)] * 10)
         b.commit()
         b.close()
-        status, r = self.compra(h, 'pergaminho-xp')
+        status, r = self.compra(h, 'bonus-xp-1')
         self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'compras demais na última hora (10)', t - 100 + 3600))
         self.sql("UPDATE loja_pedidos SET estado = 'cancelado' WHERE conta_id = ? AND sku = 'teste-hora'", h.conta['id'])
-        self.assertEqual(self.compra(h, 'pergaminho-xp')[0], 201)
+        self.assertEqual(self.compra(h, 'bonus-xp-1')[0], 201)
 
     def test_libera_em_so_com_o_grupo_cheio(self):
         """liberaEm (contrato público de GET /api/loja/minha) só existe com o
-        grupo cheio: com 1 de 5 pacotes usados ele devolvia a data da 1ª compra
-        mais 7 dias — "limite atingido" para quem ainda pode comprar quatro."""
+        grupo cheio; sem janela (as classes), nunca."""
         c = self.novo('Vaga Livre')
         self.sobe(c, carteira=100000)
-        p = self.comprou(c, 'pedras-agua')
-        criado = self.sql("SELECT criado_em FROM loja_pedidos WHERE id = ?", p['id'])[0][0]
         lim = self.minha(c)['limites']
-        self.assertEqual(lim['pedras'], {'usados': 1, 'max': 5, 'dias': 7, 'liberaEm': None})
-        self.assertEqual(lim['pergaminho-xp'], {'usados': 0, 'max': 1, 'dias': 7, 'liberaEm': None})
-        feitos = [p] + [self.comprou(c, 'pedras-terra') for _ in range(3)]
-        q = self.comprou(c, 'pergaminho-xp')                         # grupo de 1: cheio na 1ª compra
+        self.assertEqual(lim['pergaminho-elemento'], {'usados': 0, 'max': 1, 'dias': 30, 'liberaEm': None})
+        q = self.comprou(c, 'pergaminho-elemento')                     # grupo de 1: cheio na 1ª compra
         criado_q = self.sql("SELECT criado_em FROM loja_pedidos WHERE id = ?", q['id'])[0][0]
+        x = self.comprou(c, 'classe-invocador')
         lim = self.minha(c)['limites']
-        self.assertEqual(lim['pedras'], {'usados': 4, 'max': 5, 'dias': 7, 'liberaEm': None})
-        self.assertEqual(lim['pergaminho-xp'], {'usados': 1, 'max': 1, 'dias': 7, 'liberaEm': criado_q + 7 * DIA})
-        self.assertEqual(lim['classe-invocador'], {'usados': 0, 'max': 1, 'dias': None, 'liberaEm': None})   # sem janela: nunca
-        # entregues continuam contando no grupo (e soltam a vaga dos 5 abertos)
-        self.sobe(c, carteira=98000, anotacao={'aplicadas': [x['id'] for x in feitos + [q]], 'recusadas': []})
-        self.assertEqual(self.minha(c)['limites']['pedras'], {'usados': 4, 'max': 5, 'dias': 7, 'liberaEm': None})
-        u = self.comprou(c, 'pedras-ar')                             # o 5º: cheio — a data é a da 1ª compra + 7 dias
-        self.assertEqual(self.minha(c)['limites']['pedras'], {'usados': 5, 'max': 5, 'dias': 7, 'liberaEm': criado + 7 * DIA})
-        # cancelar o 5º pacote abre a vaga: a data some de novo
-        self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': u['id']})[0], 200)
-        self.assertEqual(self.minha(c)['limites']['pedras'], {'usados': 4, 'max': 5, 'dias': 7, 'liberaEm': None})
+        self.assertEqual(lim['pergaminho-elemento'], {'usados': 1, 'max': 1, 'dias': 30, 'liberaEm': criado_q + 30 * DIA})
+        self.assertEqual(lim['classe-invocador'], {'usados': 1, 'max': 1, 'dias': None, 'liberaEm': None})   # sem janela
+        self.assertEqual(lim['classe-bruxo'], {'usados': 0, 'max': 1, 'dias': None, 'liberaEm': None})
+        # cancelar abre a vaga: a data some de novo
+        self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': q['id']})[0], 200)
+        self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': x['id']})[0], 200)
+        lim = self.minha(c)['limites']
+        self.assertEqual(lim['pergaminho-elemento'], {'usados': 0, 'max': 1, 'dias': 30, 'liberaEm': None})
+        self.assertEqual(lim['classe-invocador']['usados'], 0)
 
     def test_teto_de_linhas_por_hora(self):
         """Comprar e cancelar devolve a vaga das 10 compras por hora (de
@@ -464,7 +562,7 @@ class ProvaDaLoja(unittest.TestCase):
         t = int(time.time())
         b = sqlite3.connect(self.banco_arq)
         b.executemany("INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, criado_em, fechado_em) "
-                      "VALUES (?, 'pedras-agua', '{}', 300, ?, ?, ?)",
+                      "VALUES (?, 'pedras-agua', '{}', 500, ?, ?, ?)",
                       [(c.conta['id'], 'cancelado' if i % 2 else 'estornado', t - 100 - i, t - 90) for i in range(25)])
         b.commit()
         b.close()
@@ -472,7 +570,7 @@ class ProvaDaLoja(unittest.TestCase):
             p = self.comprou(c, 'pedras-agua')
             self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': p['id']})[0], 200)
         m = self.minha(c)
-        self.assertEqual((m['saldo']['reservado'], m['limites']['pedras']['usados']), (0, 0))   # nada aberto, nada gasto
+        self.assertEqual(m['saldo']['reservado'], 0)                 # nada aberto, nada gasto
         status, r = self.compra(c, 'pedras-agua')                    # a 31ª: 429 mesmo assim
         self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'pedidos demais na última hora (30)', t - 124 + 3600))
         self.assertEqual(self.sql("SELECT COUNT(*) FROM loja_pedidos WHERE conta_id = ?", c.conta['id'])[0][0], 30)
@@ -484,11 +582,11 @@ class ProvaDaLoja(unittest.TestCase):
         self.mestre(g)
         b = sqlite3.connect(self.banco_arq)
         b.executemany("INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, criado_em, fechado_em) "
-                      "VALUES (?, 'pergaminho-xp', '{}', 0, 'cancelado', ?, ?)", [(g.conta['id'], t - 50, t - 40)] * 29)
+                      "VALUES (?, 'bonus-xp-1', '{}', 0, 'cancelado', ?, ?)", [(g.conta['id'], t - 50, t - 40)] * 29)
         b.commit()
         b.close()
-        self.assertEqual(self.compra(g, 'pergaminho-xp')[0], 201)    # a 30ª
-        status, r = self.compra(g, 'pergaminho-xp')
+        self.assertEqual(self.compra(g, 'bonus-xp-1')[0], 201)       # a 30ª
+        status, r = self.compra(g, 'bonus-xp-1')
         self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'pedidos demais na última hora (30)', t - 50 + 3600))
 
     def test_mestre_compra_sem_saldo(self):
@@ -499,7 +597,7 @@ class ProvaDaLoja(unittest.TestCase):
         self.assertEqual(status, 201, r)
         self.assertEqual((r['pedido']['preco'], r['saldo']['semFundo'], r['saldo']['reservado']), (0, True, 0))
         for _ in range(2):                                      # sem limite de produto
-            self.assertEqual(self.compra(m, 'pergaminho-xp')[0], 201)
+            self.assertEqual(self.compra(m, 'pergaminho-elemento')[0], 201)
         # as regras do produto valem para ele também
         self.assertEqual(self.compra(m, 'classe-bruxo')[1]['erro'], 'essa classe já está liberada')
         self.assertTrue(self.minha(m)['saldo']['semFundo'])
@@ -507,6 +605,134 @@ class ProvaDaLoja(unittest.TestCase):
         m2 = self.novo('Guia Novo')
         self.mestre(m2)
         self.assertEqual(self.compra(m2, 'pedras-fogo')[0], 201)
+
+    # -- os créditos a caminho (pacote pago, presente de vinténs) ---------------------------------
+    def test_credito_a_caminho(self):
+        c = self.novo('Cris Credito')
+        cred = self.semeia_credito(c, 12000, mp_id='71000000001')
+        m = self.minha(c)
+        self.assertEqual(m['saldo'], {'carteira': 0, 'reservado': 0, 'aCaminho': 12000, 'disponivel': 12000,
+                                      'semFundo': False, 'saveVersao': 0, 'saveEm': None})
+        linha = m['pedidos'][0]
+        self.assertEqual({k: linha[k] for k in ('id', 'sku', 'nome', 'preco', 'estado', 'cancelavel', 'origem', 'vintens')},
+                         {'id': cred, 'sku': 'pacote-12000', 'nome': 'Arca de 12.000 vinténs', 'preco': 0,
+                          'estado': 'pendente', 'cancelavel': False, 'origem': 'pagamento', 'vintens': 12000})
+        # a conta nunca abriu o jogo (sem save) e compra com o vintém a caminho; a Reescrita, não
+        self.assertEqual(self.compra(c, 'pergaminho-elemento')[1]['erro'], 'nenhum herói escolheu caminho elemental ainda')
+        status, r = self.compra(c, 'classe-invocador')
+        self.assertEqual(status, 201, r)
+        self.assertEqual((r['saldo']['aCaminho'], r['saldo']['reservado'], r['saldo']['disponivel']), (12000, 10000, 2000))
+        status, r = self.compra(c, 'bonus-xp-3')
+        self.assertEqual((status, r['erro'], r['saldo']['disponivel']), (409, 'vinténs insuficientes', 2000))
+        # o crédito de pacote não se cancela pelo site
+        status, r = c.pede('POST', '/api/loja/cancelar', {'id': cred})
+        self.assertEqual((status, r['erro']), (409, 'vinténs de pacote não se cancelam: eles chegam quando o jogo abrir'))
+        # o retirar: o crédito (id menor) antes da compra; origem só no crédito
+        r = c.pede('POST', '/api/loja/retirar', {})[1]
+        self.assertEqual([p['id'] for p in r['pedidos']], sorted(p['id'] for p in r['pedidos']))
+        self.assertEqual(r['pedidos'][0], {'id': cred, 'sku': 'pacote-12000', 'nome': 'Arca de 12.000 vinténs', 'preco': 0,
+                                           'entrega': {'tipo': 'vintens', 'alvo': 'carteira', 'qtd': 12000},
+                                           'origem': 'pagamento'})
+        self.assertNotIn('origem', r['pedidos'][1])
+        # o jogo soma o crédito (0 → 12.000), paga o Xamã (→ 2.000) e o PUT fecha os dois
+        r = self.sobe(c, carteira=2000, classes=('sumo', 'curandeiro', 'invocador'),
+                      anotacao={'aplicadas': [p['id'] for p in r['pedidos']], 'recusadas': []})
+        self.assertEqual(len(r['loja']['entregues']), 2)
+        m = self.minha(c)
+        self.assertEqual({k: m['saldo'][k] for k in ('carteira', 'reservado', 'aCaminho', 'disponivel')},
+                         {'carteira': 2000, 'reservado': 0, 'aCaminho': 0, 'disponivel': 2000})
+        # o presente de vinténs: nome '<N> vinténs', origem presente, não se cancela pelo site
+        pres = self.semeia_credito(c, 1234, origem='presente')
+        p = self.pedido(c, pres)
+        self.assertEqual((p['nome'], p['origem'], p['vintens'], p['cancelavel']), ('1.234 vinténs', 'presente', 1234, False))
+        self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': pres})[1]['erro'], 'presente do Mestre: só o Mestre cancela')
+        self.assertEqual(self.minha(c)['saldo']['aCaminho'], 1234)
+        # o idem de um crédito não serve para uma compra (nem o 'mp:…', que nem passa na regra do idem)
+        self.sql("UPDATE loja_pedidos SET idem = 'presente-abc123' WHERE id = ?", pres)
+        self.assertEqual(self.compra(c, 'insignia-1', 'presente-abc123')[1]['erro'], 'idem já usado em outro produto')
+
+    def test_entrega_agora_so_no_bonus(self):
+        c = self.novo('Bia Bonus')
+        self.sobe(c, carteira=20000)
+        b3, pd = self.comprou(c, 'bonus-xp-3'), self.comprou(c, 'pedras-agua')
+        antes = int(time.time())
+        r = c.pede('POST', '/api/loja/retirar', {})[1]
+        depois = int(time.time())
+        por_id = {p['id']: p for p in r['pedidos']}
+        ent = por_id[b3['id']]['entrega']
+        self.assertEqual((ent['tipo'], ent['alvo'], ent['qtd']), ('bonus-xp', 'xp', 3))
+        self.assertTrue(antes <= ent['agora'] <= depois, ent)
+        self.assertNotIn('agora', por_id[pd['id']]['entrega'])
+        self.assertEqual(por_id[b3['id']]['nome'], 'Bônus de XP — 3 dias')
+        # o retirado que volta numa retirada seguinte leva o `agora` novo (o jogo aplica uma vez: anota o id)
+        self.sql("UPDATE loja_pedidos SET retirado_em = retirado_em - 100 WHERE id = ?", b3['id'])
+        time.sleep(1.1)
+        r2 = c.pede('POST', '/api/loja/retirar', {})[1]
+        self.assertGreater([p for p in r2['pedidos'] if p['id'] == b3['id']][0]['entrega']['agora'], ent['agora'])
+        # no banco a entrega continua congelada, sem o carimbo
+        self.assertEqual(json.loads(self.sql("SELECT entrega FROM loja_pedidos WHERE id = ?", b3['id'])[0][0]),
+                         {'tipo': 'bonus-xp', 'alvo': 'xp', 'qtd': 3})
+
+    def test_tetos_do_jogador_ignoram_creditos_e_presentes(self):
+        c = self.novo('Teto Extra')
+        self.sobe(c, carteira=100000)
+        t = int(time.time())
+        for i in range(6):                                           # 12 abertos que não são do jogador
+            self.semeia_credito(c, 1000, mp_id='7200000%04d' % i)
+            self.semeia_presente(c)
+        for i in range(30):                                          # e 30 linhas de presente na hora
+            self.semeia_presente(c, estado='cancelado', em=t - 60)
+        self.assertEqual(self.minha(c)['saldo']['aCaminho'], 6000)
+        feitos = [self.comprou(c, s) for s in ('pedras-agua', 'pedras-terra', 'pedras-ar', 'pedras-fogo', 'pedras-neutro')]
+        self.assertEqual(self.compra(c, 'insignia-1')[1]['erro'], 'pedidos abertos demais (5)')   # os 5 são dele
+        self.assertEqual(len(feitos), 5)
+
+    def test_credito_de_pacote_recusado_volta(self):
+        """D12: o jogo recusou o crédito de um pacote pago → 'estornado' e um crédito
+        novo (mesma quantia) no mesmo save, até 3 vezes; na 4ª, alerta para o Mestre.
+        O presente de vinténs recusado só fecha (não há dinheiro)."""
+        c = self.novo('Recu Sado')
+        self.sobe(c, carteira=0)
+        t = int(time.time())
+        b = sqlite3.connect(self.banco_arq)
+        try:
+            pg = b.execute("INSERT INTO pagamentos(conta_id, pacote, vintens, centavos, referencia, estado, criado_em, "
+                           "atualizado_em) VALUES (?, 'pacote-1000', 1000, 490, ?, 'aberto', ?, ?)",
+                           (c.conta['id'], 'sot-1-%s' % secrets.token_hex(8), t, t)).lastrowid
+            b.commit()
+        finally:
+            b.close()
+        atual = self.semeia_credito(c, 1000, mp_id='73000000001', sku='pacote-1000')
+        self.sql("INSERT INTO pagamentos_mp(mp_id, pagamento_id, status, valor_centavos, pedido_id, creditado_em, "
+                 "atualizado_em) VALUES ('73000000001', ?, 'approved', 490, ?, ?, ?)", pg, atual, t, t)
+        for vez in range(1, 4):
+            c.pede('POST', '/api/loja/retirar', {})
+            r = self.sobe(c, carteira=0, anotacao={'aplicadas': [], 'recusadas': [{'id': atual, 'motivo': 'item-invalido'}]})
+            self.assertEqual(r['loja']['estornados'], [atual])
+            self.assertEqual(len(r['loja']['reemitidos']), 1, r)
+            novo = r['loja']['reemitidos'][0]
+            self.assertGreater(novo, atual)
+            p = self.pedido(c, novo)
+            self.assertEqual((p['estado'], p['vintens'], p['origem'], p['nome']),
+                             ('pendente', 1000, 'pagamento', 'Bolsa de 1.000 vinténs'))
+            linha = self.sql("SELECT pedido_id, reemissoes FROM pagamentos_mp WHERE mp_id = '73000000001'")[0]
+            self.assertEqual((linha['pedido_id'], linha['reemissoes']), (novo, vez))
+            self.assertEqual(self.minha(c)['saldo']['aCaminho'], 1000)
+            atual = novo
+        # a 4ª recusa: fica estornado, e o Mestre ganha um alerta
+        c.pede('POST', '/api/loja/retirar', {})
+        r = self.sobe(c, carteira=0, anotacao={'aplicadas': [], 'recusadas': [{'id': atual, 'motivo': 'item-invalido'}]})
+        self.assertEqual(r['loja'], {'entregues': [], 'estornados': [atual]})
+        self.assertEqual(self.minha(c)['saldo']['aCaminho'], 0)
+        alertas = self.sql("SELECT tipo, dados FROM contas_alertas WHERE conta_id = ?", c.conta['id'])
+        self.assertEqual([a['tipo'] for a in alertas], ['credito-recusado'])
+        self.assertEqual(json.loads(alertas[0]['dados'])['pedido'], atual)
+        # o presente de vinténs recusado só fecha
+        pres = self.semeia_credito(c, 500, origem='presente')
+        c.pede('POST', '/api/loja/retirar', {})
+        r = self.sobe(c, carteira=0, anotacao={'aplicadas': [], 'recusadas': [{'id': pres, 'motivo': 'item-invalido'}]})
+        self.assertEqual(r['loja'], {'entregues': [], 'estornados': [pres]})
+        self.assertEqual(self.minha(c)['saldo']['aCaminho'], 0)
 
     # -- dois processos no mesmo banco (o rolling update do Coolify) -------------------------
     def test_dois_processos_no_mesmo_banco(self):
@@ -522,7 +748,7 @@ class ProvaDaLoja(unittest.TestCase):
             self.assertTrue(espera_api(base2, proc2), 'o segundo processo não subiu')
             for rodada in range(6):
                 c = self.novo('Dupla Loja')
-                self.sobe(c, carteira=10000)
+                self.sobe(c, carteira=12000)
                 c2 = Cliente(base2)
                 c2.token, c2.conta = c.token, c.conta
                 res = []
@@ -534,7 +760,7 @@ class ProvaDaLoja(unittest.TestCase):
                 t2 = threading.Thread(target=vai, args=(c2, 'classe-bruxo'))
                 t1.start(); t2.start(); t1.join(); t2.join()
                 self.assertEqual(sorted(s for s, _ in res), [201, 409], 'rodada %d: %r' % (rodada, res))
-                self.assertEqual(self.minha(c)['saldo']['reservado'], 8000)
+                self.assertEqual(self.minha(c)['saldo']['reservado'], 10000)
                 res.clear()
                 chave = idem()
                 t1 = threading.Thread(target=vai, args=(c, 'pedras-agua', chave))
@@ -559,7 +785,8 @@ class ProvaDaLoja(unittest.TestCase):
 
     def test_catalogo_espelha_dados(self):
         """No molde de test_xp_max_espelha_tabela: se o jogo mudar um custo em
-        cartas, uma raridade, quem nasce liberado ou uma pedra, isto grita."""
+        cartas, uma raridade, quem nasce liberado, uma pedra ou quantas insígnias
+        fundam uma guilda, isto grita."""
         prog = self.le('js/core/data/progression.js')
         cartas_bloco = prog[prog.index('JOGO.DATA.cards = {'):]
         cartas_bloco = cartas_bloco[:cartas_bloco.index('};')]
@@ -575,6 +802,7 @@ class ProvaDaLoja(unittest.TestCase):
         vendidas = {i['alvo']: i for i in loja_mod.CATALOGO if i['tipo'] == 'classe'}
         # à venda: exatamente as que não nascem liberadas (o gm nem é classe de classes.js)
         self.assertEqual(set(vendidas), {k for k, v in classes.items() if not v['nasce']})
+        self.assertEqual(set(comum.INICIAIS), {k for k, v in classes.items() if v['nasce']})
         for cid, item in vendidas.items():
             self.assertEqual(item['cartas'], custo[cid], cid)
             self.assertEqual(item['raridade'], classes[cid]['raridade'], cid)
@@ -587,11 +815,16 @@ class ProvaDaLoja(unittest.TestCase):
         vendidas = {i['alvo']: i['elemento'] for i in loja_mod.CATALOGO if i['tipo'] == 'pedras'}
         self.assertEqual(vendidas, {k: v for k, v in pedras.items() if k != 'stone-anchor'})
         self.assertEqual(set(vendidas.values()), set(comum.ELEMENTOS))
+        # as insígnias: 10 fundam uma guilda (DATA.insignias.porGuilda, items_selos.js)
+        selos = self.le('js/core/data/items_selos.js')
+        casou = re.search(r'DATA\.insignias\s*=\s*\{[^}]*porGuilda\s*:\s*(\d+)', selos)
+        self.assertIsNotNone(casou, 'DATA.insignias.porGuilda sumiu de items_selos.js')
+        self.assertEqual(int(casou.group(1)), loja_mod.INSIGNIAS_POR_GUILDA)
+        self.assertEqual(loja_mod.POR_SKU['insignias-10']['qtd'], loja_mod.INSIGNIAS_POR_GUILDA)
 
     def test_pergaminho_espelha_dados(self):
-        """DATA.pergaminhos (progression.js, da frente do jogo) contra o que o
-        catálogo promete na descrição. Se a frente do jogo ainda não entrou,
-        fica pulado — a junção roda de novo."""
+        """DATA.pergaminhos (progression.js) contra PERGAMINHO_XP: o jogo segue
+        lendo o Pergaminho da Sabedoria já comprado."""
         prog = self.le('js/core/data/progression.js')
         casou = re.search(r'DATA\.pergaminhos\s*=\s*\{(.*?)\};', prog, re.S)
         if casou is None:
@@ -600,6 +833,16 @@ class ProvaDaLoja(unittest.TestCase):
         xp = re.search(r'xp\s*:\s*\{([^}]*)\}', corpo).group(1)
         self.assertEqual(float(re.search(r'fator\s*:\s*([\d.]+)', xp).group(1)), loja_mod.PERGAMINHO_XP['fator'])
         self.assertEqual(int(re.search(r'salas\s*:\s*(\d+)', xp).group(1)), loja_mod.PERGAMINHO_XP['salas'])
+
+    def test_bonus_xp_espelha_dados(self):
+        """JOGO.DATA.bonusXp.fator (progression.js, da frente do jogo) == BONUS_XP
+        (a descrição promete +50%). Se a frente do jogo ainda não entrou, fica
+        pulado — a junção roda de novo."""
+        prog = self.le('js/core/data/progression.js')
+        casou = re.search(r'DATA\.bonusXp\s*=\s*\{([^}]*)\}', prog)
+        if casou is None:
+            self.skipTest('JOGO.DATA.bonusXp ainda não existe em progression.js')
+        self.assertEqual(float(re.search(r'fator\s*:\s*([\d.]+)', casou.group(1)).group(1)), loja_mod.BONUS_XP['fator'])
 
 
 if __name__ == '__main__':

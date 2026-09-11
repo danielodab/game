@@ -334,6 +334,9 @@ def main():
     ap = argparse.ArgumentParser(description='a segunda visita e o deploy descem quase nada')
     ap.add_argument('--head', action='store_true', help='o pacote do último commit (não o do disco)')
     ap.add_argument('--budget', type=int, default=90000, help='tempo virtual do Chrome em ms')
+    ap.add_argument('--por-cima', action='append', default=[], metavar='CAMINHO=ARQUIVO',
+                    help='troca um arquivo do pacote antes do build (com --head: o commit mais SO '
+                         'uma mudanca, sem as edicoes em andamento de outras rodadas); repetivel')
     a = ap.parse_args()
 
     for rel in ('servidor/coolify/Caddyfile', 'servidor/Caddyfile'):
@@ -350,6 +353,11 @@ def main():
         raiz, _, _, sv = ps.prepara(pasta, arvore=not a.head)
         if sv:
             print('  ' + sv)
+        okc, svc = ps.por_cima(raiz, a.por_cima)
+        if a.por_cima:
+            print('  ' + svc[:300])
+            if not okc:
+                return 1
         marcas = pasta_de_marcas(raiz)
         esperadas = marcas_esperadas(raiz)
         tem = marcas_em(marcas) if os.path.isdir(marcas) else set()

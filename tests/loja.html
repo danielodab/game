@@ -15,7 +15,14 @@ h2{font:700 12px monospace;color:#c9d4e2;margin:10px 0 2px}
      db.loja — as MESMAS regras do contrato 1.5/1.6. O servidor de verdade é
      provado por tests/loja_api.py; a ponta a ponta, por tests/loja_viva.py.
      Aqui se cobra o CLIENTE: quando busca (e quando não), o que aplica, o que
-     recusa, que nada entra duas vezes e que a anotação sobe e sobrevive. -->
+     recusa, que nada entra duas vezes e que a anotação sobe e sobrevive.
+     LOJA 2 (10/09, seções 7 a 11, na conta 8 do cartório): o presente do Mestre
+     (preço 0, a mesma entrega), o crédito de vinténs (pacote pago; entra antes
+     da compra feita com ele), o bônus de XP por tempo (o `agora` do servidor,
+     dias que somam), as insígnias, a origem de cada pedido e o texto do aviso
+     (UI.avisoLojaTexto, com a HUD carregada por último, sem UI.init).
+     CONSERTO (11/09, seção 12): os avisos da loja em fila — a retirada que
+     entrega tudo de uma vez não apaga o aviso anterior. -->
 <div id="summary">rodando…</div>
 <div id="log"></div>
 <script src="save_sandbox.js"></script>
@@ -26,7 +33,10 @@ h2{font:700 12px monospace;color:#c9d4e2;margin:10px 0 2px}
     'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
     'js/core/data/items_extra.js','js/core/data/items_selos.js',
     'js/core/contas.js','js/core/sessao.js','js/core/db.js','js/core/mercado.js',
-    'js/core/engine.js','js/core/fusion.js','js/core/progress.js','js/core/nuvem.js','js/core/loja.js'];
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js','js/core/nuvem.js','js/core/loja.js',
+    // loja 2: a HUD por ÚLTIMO e sem UI.init (tudo defensivo [U1]; sem init o toast é no-op) — só
+    // para provar UI.avisoLojaTexto e o chip do bônus de XP
+    'js/ui/hud.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
 </script>
 <script>
@@ -148,9 +158,32 @@ h2{font:700 12px monospace;color:#c9d4e2;margin:10px 0 2px}
     invocador: function (id) { return { id: id, sku: 'classe-invocador', nome: 'Xamã', preco: 8000, entrega: { tipo: 'classe', alvo: 'invocador', qtd: 1 } }; },
     bruxo: function (id) { return { id: id, sku: 'classe-bruxo', nome: 'Bruxo', preco: 50000, entrega: { tipo: 'classe', alvo: 'bruxo', qtd: 1 } }; }
   };
+  // loja 2 (10/09): o presente do Mestre, o crédito de vinténs, o bônus de XP por tempo e as insígnias
+  var T0 = 1789041600, avisoBonus = null;      // T0: um "agora" do servidor fixo (segundos)
+  PED.presente = function (id) {
+    return { id: id, sku: 'classe-invocador', nome: 'Xamã', preco: 0, origem: 'presente', entrega: { tipo: 'classe', alvo: 'invocador', qtd: 1 } };
+  };
+  PED.presentePedras = function (id) {
+    return { id: id, sku: 'pedras-fogo', nome: '10 Brasas Coaguladas', preco: 0, origem: 'presente', entrega: { tipo: 'pedras', alvo: FOGO, qtd: 10 } };
+  };
+  PED.credito = function (id, qtd, origem, nome) {
+    return { id: id, sku: origem === 'presente' ? 'presente-vintens' : 'pacote-12000', nome: nome || 'Arca de 12.000 vinténs',
+             preco: 0, origem: origem || 'pagamento', entrega: { tipo: 'vintens', alvo: 'carteira', qtd: qtd } };
+  };
+  PED.bruxo10 = function (id) { return { id: id, sku: 'classe-bruxo', nome: 'Bruxo', preco: 10000, entrega: { tipo: 'classe', alvo: 'bruxo', qtd: 1 } }; };
+  PED.bonus = function (id, dias, agora, alvo) {
+    var e = { tipo: 'bonus-xp', alvo: alvo || 'xp', qtd: dias };
+    if (agora !== undefined) e.agora = agora;
+    return { id: id, sku: 'bonus-xp-' + dias, nome: 'Bônus de XP — ' + dias + (dias === 1 ? ' dia' : ' dias'), preco: 100, entrega: e };
+  };
+  PED.insignias = function (id, qtd, alvo) {
+    return { id: id, sku: 'insignias-10', nome: '10 Insígnias de Fundação', preco: 100, entrega: { tipo: 'insignias', alvo: alvo || 'fundacao', qtd: qtd } };
+  };
 
   var avisos = [], nuvemEv = [];
   window.addEventListener('soterra:loja', function (ev) { avisos.push(ev.detail); });
+  var nAvisosLoja = 0;               // 11/09 (bateria): todos, para a seção 12 (o `avisos` é zerado no caminho)
+  window.addEventListener('soterra:loja', function () { nAvisosLoja++; });
   window.addEventListener('soterra:nuvem', function (ev) { nuvemEv.push(ev.detail.tipo); });
   function ultimoAviso() { return avisos[avisos.length - 1] || {}; }
 
@@ -422,6 +455,285 @@ h2{font:700 12px monospace;color:#c9d4e2;margin:10px 0 2px}
     return N.sair();
   }).then(function () {
     check('sem sessão de novo, a loja fica quieta', !S.ativa() && L.estado().pode === false);
+
+    // ================================================================ LOJA 2 (10/09)
+    secao('7. presente do Mestre (a mesma entrega, de preço 0) — a conta 8, do zero');
+    localStorage.removeItem('soterra-nuvem-v1');
+    localStorage.removeItem(C.chaveSave());
+    localStorage.removeItem(C.chaveConta());
+    P.reset();
+    DB.recarregar();
+    L._reinicia();
+    S.guarda({ token: 'tok-2', conta: { id: 8, nome: 'Bia', gm: false } });
+    return N.iniciar();
+  }).then(function () {
+    return ate(function () { return L.estado().liberada && !L.estado().buscando && !N.estado().pendente; }, 3000);
+  }).then(function (ok) {
+    check('a conta 8 começa vazia, com a Nuvem em dia e a loja liberada', ok && moedasReais() === 0 &&
+          !P.isClassUnlocked('invocador') && P.stoneCount(FOGO) === 0, JSON.stringify(L.estado()));
+    avisos.length = 0;
+    poePedido(8, PED.presente(71));
+    poePedido(8, PED.presentePedras(72));
+    return L.buscar();
+  }).then(function (r) {
+    var ci = P.cardInfo('invocador');
+    check('carteira 0: os dois presentes entram (preço 0) e a carteira segue 0',
+          r.ok && de(r, 71).ok === true && de(r, 72).ok === true && moedasReais() === 0, JSON.stringify(r.resultados));
+    check('... o Xamã liberado com as cartas no custo, e as 10 Brasas', P.isClassUnlocked('invocador') &&
+          ci.cards === ci.unlockCost && ci.stars === 0 && P.stoneCount(FOGO) === 10, JSON.stringify(ci));
+    check('... o aviso sai com detail.origem "presente" (e o pedido copiado com a origem)',
+          avisos.length === 2 && avisos.every(function (a) {
+            return a.tipo === 'entregue' && a.origem === 'presente' && a.pedido.origem === 'presente';
+          }), JSON.stringify(avisos.map(function (a) { return a.origem; })));
+    check('... o resultado e o histórico guardam a origem', de(r, 71).origem === 'presente' &&
+          L.estado().historico.some(function (h) { return h.id === 72 && h.tipo === 'entregue' && h.origem === 'presente'; }));
+    return DB.lojaVer();
+  }).then(function (a) {
+    check('... os dois ids anotados em aplicadas', a.aplicadas.indexOf(71) >= 0 && a.aplicadas.indexOf(72) >= 0, JSON.stringify(a));
+    return ate(function () { return pedido(71).estado === 'entregue' && pedido(72).estado === 'entregue'; }, 3000);
+  }).then(function (ok) {
+    check('... e o PUT seguinte fecha os dois (entregue)', ok, pedido(71).estado + ' / ' + pedido(72).estado);
+    poePedido(8, PED.presente(73));
+    return L.buscar();
+  }).then(function (r) {
+    check('presente de classe já liberada: recusa "classe-ja-liberada", com detail.origem "presente"',
+          r.ok && de(r, 73).motivo === 'classe-ja-liberada' && ultimoAviso().tipo === 'recusado' && ultimoAviso().origem === 'presente',
+          JSON.stringify(r.resultados));
+    return ate(function () { return pedido(73).estado === 'estornado'; }, 3000);
+  }).then(function (ok) {
+    check('... e o PUT estorna o presente', ok && pedido(73).motivo === 'classe-ja-liberada');
+
+    // ================================================================ vinténs
+    secao('8. o crédito de vinténs (pacote pago, presente de vinténs)');
+    avisos.length = 0;
+    poePedido(8, PED.credito(81, 12000));
+    poePedido(8, PED.bruxo10(82));               // comprada no site com o crédito ainda a caminho
+    return L.buscar();
+  }).then(function (r) {
+    check('na MESMA retirada, o crédito (12.000) entra antes da compra de 10.000 com a carteira em 0',
+          r.ok && de(r, 81).ok === true && de(r, 82).ok === true && P.isClassUnlocked('bruxo') && moedasReais() === 2000,
+          JSON.stringify(r.resultados) + ' carteira ' + moedasReais());
+    check('... os avisos em ordem: o crédito ("pagamento") e depois a compra ("loja")',
+          avisos.length === 2 && avisos[0].pedido.id === 81 && avisos[0].origem === 'pagamento' &&
+          avisos[1].pedido.id === 82 && avisos[1].origem === 'loja',
+          JSON.stringify(avisos.map(function (a) { return a.pedido.id + ':' + a.origem; })));
+    return DB.lojaVer();
+  }).then(function (a) {
+    check('... o crédito anotado em aplicadas', a.aplicadas.indexOf(81) >= 0 && a.aplicadas.indexOf(82) >= 0, JSON.stringify(a.aplicadas));
+    return Promise.all([L.aplicar(PED.credito(81, 12000)), DB.lojaCredita(81, 12000)]);
+  }).then(function (rs) {
+    check('o mesmo crédito de novo: "ja" pelo aplicar e {ja} pelo DB — a carteira não sobe',
+          rs[0].motivo === 'ja' && rs[1].ok === false && rs[1].ja === true && moedasReais() === 2000, JSON.stringify(rs));
+    return ate(function () { return pedido(81).estado === 'entregue' && pedido(82).estado === 'entregue'; }, 3000);
+  }).then(function (ok) {
+    check('... e o PUT fecha o crédito e a compra (entregue)', ok, pedido(81).estado + ' / ' + pedido(82).estado);
+    var gmReal = JOGO.GM;
+    JOGO.GM = { ativo: function () { return true; } };
+    return L.aplicar(PED.credito(83, 5000)).then(function (r) {
+      JOGO.GM = gmReal;
+      return DB.lojaVer().then(function (a) {
+        check('o Mestre (cofre sem fundo) recebe o crédito: anota sem somar', r.ok === true && moedasReais() === 2000 &&
+              a.aplicadas.indexOf(83) >= 0, JSON.stringify(r) + ' carteira ' + moedasReais());
+      });
+    });
+  }).then(function () {
+    var alvoTorto = PED.credito(88, 100);
+    alvoTorto.entrega.alvo = 'banco';
+    var tortos = [PED.credito(84, 0), PED.credito(85, 1.5), PED.credito(86, 10000001), PED.credito(87, '100'), alvoTorto];
+    return Promise.all(tortos.map(function (p) { return L.aplicar(p); }));
+  }).then(function (rs) {
+    return DB.lojaVer().then(function (a) {
+      check('quantia torta (0, 1,5, 10.000.001, texto) ou alvo que não é a carteira: "item-invalido", sem somar',
+            rs.every(function (r) { return r.motivo === 'item-invalido'; }) && moedasReais() === 2000 &&
+            [84, 85, 86, 87, 88].every(function (id) {
+              return a.recusadas.some(function (x) { return x.id === id && x.motivo === 'item-invalido'; });
+            }), JSON.stringify(rs.map(function (r) { return r.motivo; })));
+      return Promise.all([DB.lojaCredita(0, 10), DB.lojaCredita(89, -5), DB.lojaCredita(89, 2.5), DB.lojaCredita(89, 1e8)]);
+    });
+  }).then(function (rs) {
+    check('DB.lojaCredita recusa id e quantia tortos sem anotar nem somar',
+          rs.every(function (r) { return r.ok === false && !r.ja && !!r.erro; }) && moedasReais() === 2000, JSON.stringify(rs));
+    avisos.length = 0;
+    return L.aplicar(PED.credito(89, 1000, 'presente', '1.000 vinténs'));
+  }).then(function (r) {
+    check('o presente de vinténs do Mestre (o id que o DB recusou torto): +1.000, com detail.origem "presente"',
+          r.ok === true && r.origem === 'presente' && moedasReais() === 3000 && ultimoAviso().origem === 'presente', JSON.stringify(r));
+    var p = PED.agua(90);
+    p.origem = 'xyz';
+    return L.aplicar(p);
+  }).then(function (r) {
+    check('origem desconhecida ("xyz") é compra da loja: debita e o aviso diz "loja"', r.ok === true && r.origem === 'loja' &&
+          ultimoAviso().origem === 'loja' && moedasReais() === 2700, JSON.stringify(r));
+
+    // ================================================================ bônus
+    secao('9. o bônus de XP por tempo (o relógio do servidor, dias que somam)');
+    return L.aplicar(PED.bonus(101, 1, T0));
+  }).then(function (r) {
+    avisoBonus = ultimoAviso();
+    check('o bônus de 1 dia: fim = agora do servidor + 86.400 (e o aviso leva o fim)',
+          r.ok === true && r.ate === T0 + 86400 && P.bonusXpAte() === T0 + 86400 && avisoBonus.ate === T0 + 86400 &&
+          avisoBonus.tipo === 'entregue' && moedasReais() === 2600, JSON.stringify(r) + ' fim ' + P.bonusXpAte());
+    check('... vale dentro do prazo (pelo relógio que se pede) e não no fim',
+          P.fatorBonusXp(T0 * 1000) === 1.5 && P.fatorBonusXp((T0 + 86399) * 1000) === 1.5 && P.fatorBonusXp((T0 + 86400) * 1000) === 1);
+    return L.aplicar(PED.bonus(102, 3, T0 + 3600));
+  }).then(function (r) {
+    check('comprar de novo SOMA a partir do fim atual: +3 dias → fim = T0 + 4 dias', r.ok === true && P.bonusXpAte() === T0 + 4 * 86400,
+          String((P.bonusXpAte() - T0) / 86400));
+    return L.aplicar(PED.bonus(103, 7, T0 + 30 * 86400));
+  }).then(function (r) {
+    check('depois de vencido, a nova entrega conta do agora dela: fim = agora + 7 dias', r.ok === true && P.bonusXpAte() === T0 + 37 * 86400,
+          String((P.bonusXpAte() - T0) / 86400));
+    var m0 = moedasReais(), fim0 = P.bonusXpAte();
+    var tortos = [PED.bonus(104, 1), PED.bonus(105, 1, 0), PED.bonus(106, 1, -5), PED.bonus(107, 1, 'x'), PED.bonus(108, 1, 5e9),
+                  PED.bonus(109, 0, T0), PED.bonus(110, 367, T0), PED.bonus(111, 1.5, T0), PED.bonus(112, 1, T0, 'ouro')];
+    return Promise.all(tortos.map(function (p) { return L.aplicar(p); })).then(function (rs) {
+      check('sem o agora, agora torto, dias fora de 1..366 ou alvo que não é "xp": "item-invalido", nada muda',
+            rs.every(function (x) { return x.motivo === 'item-invalido'; }) && P.bonusXpAte() === fim0 && moedasReais() === m0,
+            JSON.stringify(rs.map(function (x) { return x.motivo; })));
+      P.save(); P.load();
+      check('o fim do bônus sobrevive ao load', P.bonusXpAte() === T0 + 37 * 86400, String(P.bonusXpAte()));
+    });
+  }).then(function () {
+    // ================================================================ insígnias
+    secao('10. as insígnias de fundação');
+    var i0 = P.insigniasVer();
+    return L.aplicar(PED.insignias(121, 10)).then(function (r) {
+      check('10 insígnias entram (+10)', r.ok === true && P.insigniasVer() === i0 + 10, i0 + ' → ' + P.insigniasVer());
+      return Promise.all([L.aplicar(PED.insignias(122, 0)), L.aplicar(PED.insignias(123, 1000)),
+                          L.aplicar(PED.insignias(124, 1, 'guilda'))]);
+    }).then(function (rs) {
+      check('quantidade fora de 1..999 ou alvo que não é "fundacao": "item-invalido"',
+            rs.every(function (x) { return x.motivo === 'item-invalido'; }) && P.insigniasVer() === i0 + 10, JSON.stringify(rs));
+    });
+  }).then(function () {
+    // ================================================================ o texto do aviso e o chip
+    secao('11. o texto do aviso (UI.avisoLojaTexto, sem UI.init) e o chip do bônus no Acampamento');
+    var U = JOGO.UI || {};
+    check('a HUD carregou (por último, sem init) e expõe UI.avisoLojaTexto', typeof U.avisoLojaTexto === 'function');
+    var T = function (d) { var t = U.avisoLojaTexto(d); return t ? t.texto : null; };
+    var tp = function (d) { var t = U.avisoLojaTexto(d); return t ? t.tipo : '?'; };
+    var lag = { nome: '10 Lágrimas de Cisterna', entrega: { tipo: 'pedras', alvo: AGUA, qtd: 10 } };
+    var xama = { nome: 'Xamã', origem: 'presente', entrega: { tipo: 'classe', alvo: 'invocador', qtd: 1 } };
+    var arca = { nome: 'Arca de 12.000 vinténs', origem: 'pagamento', entrega: { tipo: 'vintens', alvo: 'carteira', qtd: 12000 } };
+    check('compra entregue: "Chegou da loja: …" (bom)', T({ tipo: 'entregue', pedido: lag, origem: 'loja' }) === 'Chegou da loja: 10 Lágrimas de Cisterna' &&
+          tp({ tipo: 'entregue', pedido: lag, origem: 'loja' }) === 'good');
+    check('compra recusada: "Pedido devolvido: <motivo> (<nome>)", como antes',
+          T({ tipo: 'recusado', pedido: lag, motivo: 'sem-saldo', origem: 'loja' }) === 'Pedido devolvido: vinténs insuficientes neste jogo (10 Lágrimas de Cisterna)' &&
+          T({ tipo: 'recusado', pedido: lag, motivo: 'erro-local', origem: 'loja' }) === 'Pedido devolvido: a entrega falhou aqui; os vinténs voltaram (10 Lágrimas de Cisterna)' &&
+          tp({ tipo: 'recusado', pedido: lag, motivo: 'sem-saldo', origem: 'loja' }) === null);
+    check('presente entregue: "Presente do Mestre: Xamã" (bom)', T({ tipo: 'entregue', pedido: xama, origem: 'presente' }) === 'Presente do Mestre: Xamã' &&
+          tp({ tipo: 'entregue', pedido: xama, origem: 'presente' }) === 'good');
+    check('presente recusado: "Presente do Mestre devolvido: a classe já estava liberada (Xamã)"',
+          T({ tipo: 'recusado', pedido: xama, motivo: 'classe-ja-liberada', origem: 'presente' }) === 'Presente do Mestre devolvido: a classe já estava liberada (Xamã)');
+    check('... e no erro local, sem "os vinténs voltaram" (presente não tem vintém)',
+          T({ tipo: 'recusado', pedido: xama, motivo: 'erro-local', origem: 'presente' }) === 'Presente do Mestre devolvido: a entrega falhou aqui (Xamã)');
+    check('a origem só no pedido também vale (detail sem origem)', T({ tipo: 'entregue', pedido: xama }) === 'Presente do Mestre: Xamã');
+    check('pacote pago entregue: "Chegaram 12.000 vinténs do seu pacote" (bom)',
+          T({ tipo: 'entregue', pedido: arca, origem: 'pagamento' }) === 'Chegaram 12.000 vinténs do seu pacote' &&
+          tp({ tipo: 'entregue', pedido: arca, origem: 'pagamento' }) === 'good');
+    check('pacote pago recusado: "O pacote de vinténs não entrou aqui: ele volta na próxima abertura (…)"',
+          T({ tipo: 'recusado', pedido: arca, motivo: 'item-invalido', origem: 'pagamento' }) ===
+          'O pacote de vinténs não entrou aqui: ele volta na próxima abertura (Arca de 12.000 vinténs)');
+    check('presente de vinténs: "Presente do Mestre: 1.000 vinténs"',
+          T({ tipo: 'entregue', pedido: { nome: '1.000 vinténs', origem: 'presente', entrega: { tipo: 'vintens', alvo: 'carteira', qtd: 1000 } },
+              origem: 'presente' }) === 'Presente do Mestre: 1.000 vinténs');
+    var fimB = T0 + 7 * 86400, dB = new Date(fimB * 1000);
+    var z = function (n) { return (n < 10 ? '0' : '') + n; };
+    var quando = z(dB.getDate()) + '/' + z(dB.getMonth() + 1) + ' às ' + z(dB.getHours()) + ':' + z(dB.getMinutes());
+    var bon = { nome: 'Bônus de XP — 7 dias', entrega: { tipo: 'bonus-xp', alvo: 'xp', qtd: 7, agora: T0 } };
+    check('bônus entregue: o texto do caso + " — vale até dd/mm às hh:mm" (loja e presente)',
+          T({ tipo: 'entregue', pedido: bon, origem: 'loja', ate: fimB }) === 'Chegou da loja: Bônus de XP — 7 dias — vale até ' + quando &&
+          T({ tipo: 'entregue', pedido: bon, origem: 'presente', ate: fimB }) === 'Presente do Mestre: Bônus de XP — 7 dias — vale até ' + quando,
+          T({ tipo: 'entregue', pedido: bon, origem: 'loja', ate: fimB }));
+    check('o aviso de verdade do bônus (seção 9) vira "Chegou da loja: Bônus de XP — 1 dia — vale até …"',
+          !!avisoBonus && /^Chegou da loja: Bônus de XP — 1 dia — vale até \d\d\/\d\d às \d\d:\d\d$/.test(T(avisoBonus) || ''), T(avisoBonus));
+    check('sem detail, ou tipo que não é entregue/recusado: null', U.avisoLojaTexto(null) === null &&
+          U.avisoLojaTexto({ tipo: 'ignorado', pedido: lag }) === null);
+
+    // o chip do bônus no topo do Acampamento (a caixa dos pergaminhos), pelo relógio que o jogo tem
+    // (aqui sem a agenda: o desta máquina)
+    var agS = Math.floor(Date.now() / 1000);
+    P.state.bonusXpAte = agS + 2 * 86400 + 3 * 3600 + 30;
+    var cx = U._hubPergaminhos ? U._hubPergaminhos() : null;
+    var chip = cx ? cx.querySelector('.perg-bonus') : null;
+    var txt = chip ? chip.textContent : '';
+    check('com bônus no ar: o chip "✦ Bônus de XP ×1,5 · 2 d 3 h" na caixa do Acampamento', !!chip &&
+          txt.indexOf('✦') === 0 && txt.indexOf('Bônus de XP') > 0 && txt.indexOf('×1,5') > 0 && txt.indexOf('· 2 d 3 h') > 0 &&
+          !cx.classList.contains('is-off'), txt);
+    P.state.bonusXpAte = agS + 5 * 3600 + 20 * 60 + 30;
+    var t5 = ((U._hubPergaminhos().querySelector('.perg-bonus') || {}).textContent) || '';
+    P.state.bonusXpAte = agS + 12 * 60 + 30;
+    var t12 = ((U._hubPergaminhos().querySelector('.perg-bonus') || {}).textContent) || '';
+    P.state.bonusXpAte = agS + 30;
+    var t0 = ((U._hubPergaminhos().querySelector('.perg-bonus') || {}).textContent) || '';
+    check('... o tempo que falta: "5 h 20 min", "12 min", "menos de 1 min"', t5.indexOf('· 5 h 20 min') > 0 &&
+          t12.indexOf('· 12 min') > 0 && t0.indexOf('· menos de 1 min') > 0, [t5, t12, t0].join(' | '));
+    P.state.bonusXpAte = agS - 10;
+    var cxV = U._hubPergaminhos();
+    check('prazo vencido: o chip some, e sem pergaminho a caixa se esconde', !cxV.querySelector('.perg-bonus') &&
+          cxV.classList.contains('is-off'), cxV.outerHTML);
+    P.state.bonusXpAte = T0 + 37 * 86400;
+    P.save();
+
+    // ================================================================ 12. os avisos em fila (conserto 11/09)
+    secao('12. os avisos da loja em FILA: a retirada que entrega tudo de uma vez não apaga o aviso anterior');
+    check('a HUD expõe o gancho de prova UI._avisosLoja', typeof U._avisosLoja === 'function');
+    var A = function () { return U._avisosLoja ? U._avisosLoja() : { mostrados: [], fila: [], ocupado: false }; };
+    function avisa(d) { window.dispatchEvent(new CustomEvent('soterra:loja', { detail: d })); }
+    var m0 = 0;
+    // as entregas das seções anteriores também passaram pela fila: espera ela esvaziar.
+    // 11/09 (bateria): as seções 1 a 11 despejam dezenas de avisos (contados em `avisos`).
+    // Um por um, 3,2 s cada, eram minutos de toasts em fila — a suíte estourava o prazo
+    // da bateria e o jogador ficava preso numa fila de avisos. Agora até 3 esperam a
+    // vez e o resto vira UM resumo: a fila acaba em no máximo 5 avisos (~16 s)
+    var tFila = Date.now();
+    return ate(function () { var a = A(); return !a.fila.length && !a.ocupado; }, 20000).then(function (vazia) {
+      check('a fila das seções anteriores (' + nAvisosLoja + ' avisos da loja) acabou em no máximo 5 avisos (~16 s)', vazia,
+            Math.round((Date.now() - tFila) / 1000) + ' s · ' + JSON.stringify(A()));
+      m0 = A().mostrados.length;          // (a lista guarda os 20 últimos: a prova olha o FIM dela)
+      avisa({ tipo: 'entregue', pedido: arca, origem: 'pagamento' });
+      avisa({ tipo: 'entregue', pedido: xama, origem: 'presente' });
+      avisa({ tipo: 'entregue', pedido: lag, origem: 'loja' });
+      avisa({ tipo: 'ignorado', pedido: lag });                         // o que não é aviso não entra na fila
+      var a1 = A();
+      check('três entregas no mesmo instante: o 1º aparece na hora, os outros dois esperam a vez',
+            a1.mostrados.slice(-1).join(' | ') === 'Chegaram 12.000 vinténs do seu pacote' &&
+            a1.fila.join(' | ') === 'Presente do Mestre: Xamã | Chegou da loja: 10 Lágrimas de Cisterna' && a1.ocupado,
+            JSON.stringify(a1));
+      return espera(3400);
+    }).then(function () {
+      var a2 = A();
+      check('... uns 3 s depois, o 2º (e o 3º ainda espera)',
+            a2.mostrados.slice(-2).join(' | ') === 'Chegaram 12.000 vinténs do seu pacote | Presente do Mestre: Xamã' && a2.fila.length === 1,
+            JSON.stringify(a2));
+      return espera(3400);
+    }).then(function () {
+      var a3 = A();
+      check('... e depois o 3º: cada aviso uma vez, na ordem, e a fila acaba vazia',
+            a3.mostrados.slice(-3).join(' | ') ===
+            'Chegaram 12.000 vinténs do seu pacote | Presente do Mestre: Xamã | Chegou da loja: 10 Lágrimas de Cisterna' &&
+            a3.fila.length === 0, JSON.stringify(a3));
+      // 11/09 (bateria): a retirada GRANDE — 9 entregas e 1 devolução no mesmo instante
+      return ate(function () { var a = A(); return !a.fila.length && !a.ocupado; }, 8000);
+    }).then(function () {
+      var RESUMO = 'Chegaram mais 5 entregas da loja, e 1 pedido foi devolvido — veja em "Seus pedidos", na loja do site.';
+      for (var k = 0; k < 9; k++) avisa({ tipo: 'entregue', pedido: lag, origem: 'loja' });
+      avisa({ tipo: 'recusado', pedido: lag, motivo: 'sem-saldo', origem: 'loja' });
+      var a4 = A();
+      check('10 avisos no mesmo instante: 1 na tela, 3 esperam a vez um por um, e o resto vira UM resumo (com a devolução)',
+            a4.ocupado && a4.fila.length === 4 && a4.fila.slice(0, 3).join(' | ') ===
+            'Chegou da loja: 10 Lágrimas de Cisterna | Chegou da loja: 10 Lágrimas de Cisterna | Chegou da loja: 10 Lágrimas de Cisterna' &&
+            a4.fila[3] === RESUMO, JSON.stringify(a4));
+      var t4 = Date.now();
+      return ate(function () { var a = A(); return !a.fila.length && !a.ocupado; }, 20000).then(function (acabou) {
+        var a5 = A();
+        check('... e a fila inteira acaba em 5 avisos (~16 s), com o resumo por último',
+              acabou && a5.mostrados[a5.mostrados.length - 1] === RESUMO && a5.fila.length === 0,
+              Math.round((Date.now() - t4) / 1000) + ' s · ' + JSON.stringify(a5.mostrados.slice(-2)));
+        return N.sair();
+      });
+    });
+  }).then(function () {
     check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
     fecha();
   }).catch(function (e) {

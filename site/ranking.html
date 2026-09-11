@@ -26,7 +26,11 @@
      dela naquela classe) e a miniatura de cada jogador: o avatar de fusão que
      ele escolheu no jogo, ou o busto da classe do seu melhor herói. Os nomes
      das classes e dos elementos vêm do próprio jogo (../js/core/data/). A aba
-     segue o endereço (#classe=sumo), como as abas da conta. -->
+     segue o endereço (#classe=sumo), como as abas da conta.
+     10/09 (pedido do dono): a EQUIPE (contas.gm = 1) fica fora das tabelas e
+     aparece à parte, na caixa "Equipe do SOTERRA": só o nome de cada membro e
+     o retrato do Cavaleiro Negro (img/equipe-cavaleiro-busto.webp). Sem equipe
+     na resposta (ou com o servidor fora), a caixa fica escondida. -->
 </head>
 <body>
 
@@ -51,6 +55,11 @@
     <h2>Ranking</h2>
     <p class="sub">Quem desceu mais fundo, quem manda na arena e quais guildas somam mais experiência. Atualiza a cada save que chega ao servidor.
       <button type="button" class="btn btn-mini" id="bt-atualizar">atualizar</button></p>
+
+    <aside class="equipe-caixa" id="equipe" aria-labelledby="equipe-titulo" hidden>
+      <h3 id="equipe-titulo">Equipe do SOTERRA <small>quem cuida do mundo enterrado — fica fora do ranking</small></h3>
+      <ul class="equipe-lista" id="rk-equipe"></ul>
+    </aside>
 
     <div class="tres larga">
       <div>
@@ -181,6 +190,26 @@
     });
   }
 
+  /* ---- a equipe (pedido do dono, 10/09) ----
+   * Quem tem a marca de Mestre no servidor não entra nas tabelas: aparece aqui,
+   * só com o nome (tudo que vem do servidor passa pelo SITE.esc) e o retrato
+   * do Cavaleiro Negro (avatar 'gm'; o busto, com o corpo inteiro de reserva).
+   * Um avatar que o site não conhece fica na moldura com o ◆. Sem ninguém, ou
+   * com o servidor fora, a caixa some. */
+  var FOTO_EQUIPE = { gm: ['img/equipe-cavaleiro-busto.webp', 'img/equipe-cavaleiro.webp'] };
+  function desenhaEquipe(lista) {
+    var caixa = document.getElementById('equipe'), ul = document.getElementById('rk-equipe');
+    lista = (Array.isArray(lista) ? lista : []).filter(function (m) {
+      return m && m.nome != null && String(m.nome).trim() !== '';
+    });
+    ul.innerHTML = lista.map(function (m) {
+      var foto = Object.prototype.hasOwnProperty.call(FOTO_EQUIPE, m.avatar) ? FOTO_EQUIPE[m.avatar] : ['', ''];
+      return '<li class="membro">' + SITE.busto({ src: foto[0], reserva: foto[1], letra: '◆', cor: '#8a1f2d' }) +
+        '<span class="membro-nome">' + E(m.nome) + '</span></li>';
+    }).join('');
+    caixa.hidden = !lista.length;
+  }
+
   function carrega() {
     IDS.forEach(function (id) { estado(id, 'carregando…'); });
     var bt = document.getElementById('bt-atualizar');
@@ -189,11 +218,13 @@
       bt.disabled = false;
       if (!r.ok) {
         ultimo = null;
+        desenhaEquipe([]);
         var msg = r.status === 0 ? 'o servidor está fora — tente de novo daqui a pouco' : (r.erro || 'não deu para ler o ranking');
         IDS.forEach(function (id) { estado(id, msg, 'fora'); });
         return;
       }
       ultimo = r;
+      desenhaEquipe(r.equipe);
       tabela('jogadores', r.jogadores || [], function (j) {
         return '<td class="nome">' + SITE.bustoJogador(j) + E(j.nome) + '</td><td class="num">' + N(j.xpTotal) + '</td><td class="num">' + N(j.nivelMax) + '</td><td class="num">' + N(j.classes) + '</td>';
       });

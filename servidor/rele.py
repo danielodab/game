@@ -15,9 +15,16 @@ que chegou; cliente antigo em cache continua falando com ele):
   - o que não é JSON (objeto com `t` e `de`) de até 8 KB é descartado;
   - por conexão ele guarda o id (o primeiro `de`; outro `de` na mesma
     conexão é falsificação e cai), a sala e a última posição;
-  - DIRIGIDA (tem `para`: troca, guilda, e o oi/eco da apresentação): só
-    para o destino, se ele estiver ligado aqui; senão, como antes (troca e
-    guilda a todos; oi e eco à sala);
+  - DIRIGIDA (tem `para`: o oi/eco da apresentação): só para o destino, se
+    ele estiver ligado aqui; senão, à sala. Os DIRIGIDOS de verdade (11/09:
+    sussurro, grupo, duelo, batalha, troca e guilda) NUNCA recuam: sem
+    `para`, caem; destino ausente = ninguém recebe, e quem mandou ouve a
+    voz `ausente` (antes a troca e a guilda sem destino iam ao servidor
+    inteiro — numa mensagem particular, vazamento). Neles o relé carimba o
+    `cx` da conexão que mandou (sorteado por conexão, contado a ela no
+    anúncio) por cima do que o cliente pôs, e o `paraCx` entrega a UMA
+    conexão do id. O `vigia` (não repassado) anota quem quer saber quando
+    uma conexão cai: fechou, com tchau ou sem, cada vigia ouve `caiu` na hora;
   - PRESENÇA (oi, pulso, alvo): só para quem está na MESMA sala. A praça é
     a sala nula; quem nunca disse a sala (cliente de antes de 03/09) está
     na praça. A primeira sala que a conexão declara é só declaração; mudar
@@ -40,10 +47,12 @@ que chegou; cliente antigo em cache continua falando com ele):
     menos 5 s; e esse tchau paga o balde da difusão e o leque da conexão que
     caiu. Quem não passa some pela varredura do cliente (45 s);
   - LIMITES por conexão: 20 mensagens/s com rajada de 40; chat 1 por
-    segundo (rajada de 10: uma pessoa digitando não alcança, um robô sim);
+    segundo (rajada de 10: uma pessoa digitando não alcança, um robô sim),
+    e o sussurro paga o mesmo; convite de grupo e desafio de duelo, 1 a
+    cada 3 s (rajada de 3);
     oi para a sala inteira 1 a cada 5 s (rajada de 4) — e o MESMO balde
     paga toda difusão que não é pulso, alvo nem chat: o `para` que não acha
-    ninguém cai na sala (oi, eco) ou no servidor inteiro (troca, guilda), o
+    ninguém cai na sala (oi, eco), o
     `t` que o relé não conhece vai à sala, e mudar de sala na mesma conexão
     avisa as duas salas inteiras. Sem o balde, cada uma dessas portas
     espalhava à sala inteira a 20/s (medido: 17 a 20 vezes o oi); e no
@@ -59,6 +68,25 @@ que chegou; cliente antigo em cache continua falando com ele):
     rajada a cada volta (medido: 11.900 entregas/s de um cliente sem conta,
     numa praça de 100). IP privado ou ausente (em casa, nas provas) fica sem
     esse limite, como nos freios da API;
+  - A CAIXA DE ENTRADA de cada destino (11/09, achado 21 da revisão do
+    multijogador): o sussurro e o convite (de grupo, de duelo, de troca, de
+    guilda) pagam também um balde DE QUEM RECEBE, por endereço de quem manda
+    (o mesmo IP do limite de conexões novas; sem IP público, o id): o MESMO
+    balde que quem manda já paga (o do chat: 10 de uma vez, 1 por segundo; o
+    do convite: 3, depois 1 a cada 3 s) — uma conexão sozinha não sente
+    diferença nenhuma. Os baldes de quem MANDA nascem cheios a cada conexão, e cada conexão
+    nova vinha com um id novo — 20 conexões despejavam 200 sussurros numa
+    pessoa só. E o `cala` (não repassado): quem silencia alguém cala para si,
+    por 1 h, o endereço de onde vinham os sussurros e convites daquele id —
+    com id novo e conexão nova, o mesmo endereço segue calado. O que é calado
+    ou freado não chega e não volta como `ausente`;
+  - O ID SEM CONTA É DO APARELHO (11/09, achado 17): logo depois do anúncio o
+    cliente manda o segredo do aparelho ({t:'prova'}: nunca repassado, nunca
+    no log; o relé guarda só o sha256). Com o id preso a um aparelho, outra
+    conexão sem essa prova não fala nem ouve por ele — enquanto houver
+    conexão viva e por 10 min depois da última (a queda e a volta não abrem
+    brecha). O cliente antigo (sem prova) segue como antes, até um aparelho
+    com prova prender o id;
   - envelope torto que passe pelo _abre (um número que não cabe num float,
     o que for) é descartado com rastro no log — nunca derruba a conexão em
     silêncio.
@@ -90,12 +118,14 @@ cadeia de import logo abaixo.
 """
 import argparse
 import asyncio
+import hashlib
 import heapq
 import ipaddress
 import json
 import logging
 import math
 import os
+import secrets
 import time
 
 import rele_ident                               # a identidade na praça (10/09): o token, o Mestre e os nomes
@@ -155,12 +185,41 @@ TCHAU_APOS_S = 1.0 / OI_TAXA             # o tchau do relé só por quem se apre
 
 PRESENCA = ('oi', 'eco', 'pulso')        # os tipos que carregam a sala
 
+# -------------------------------- os dirigidos (11/09: o grupo, o duelo, a batalha em dupla)
+DIRIGIDOS = ('sussurro', 'grupo', 'duelo', 'batalha', 'troca', 'guilda')   # só ao destino, e NUNCA recuam
+CONVITE_TAXA, CONVITE_RAJADA = 1.0 / 3.0, 3.0   # convite de grupo e desafio de duelo: 1 a cada 3 s, rajada de 3
+VIGIA_MAX = 4                # alvos que uma conexão vigia (o 5º tira o mais antigo)
+VIGIAS_MAX = 16              # vigias de uma conexão (o 17º não entra)
+CX_MAX = 16                  # o `paraCx` (o relé sorteia 8 hex; no canal de abas a página sorteia 'l' + 7)
+REF_MAX = 24                 # o `ref` e a `acao` que voltam na voz `ausente` (e a acao no log)
+
+# ------------------- o id sem conta é do APARELHO (11/09, achado 17 da revisão do multijogador)
+PROVA_MIN, PROVA_LEN_MAX = 16, 64        # o segredo do aparelho (o rede.js manda 32 hex)
+PROVA_MEMORIA_S = 600.0                  # o relé lembra o aparelho do id por 10 min depois da última conexão
+PROVA_IDS_MAX = 65536                    # ids lembrados (cheio: saem os soltos mais antigos; os vivos nunca)
+
+# ------------------- a caixa de ENTRADA de cada destino e o `cala` (11/09, achado 21)
+# por destino e por endereço de quem manda, o MESMO balde que quem manda já
+# paga: a conversa de UMA conexão passa igual, e só a enxurrada de muitas
+# conexões (um id novo em cada) é que para. A proposta da revisão (5 e 2) era
+# mais apertada que o balde de quem manda — freava calada a conversa normal
+ENTRADA = {'sussurro': (CHAT_TAXA, CHAT_RAJADA),         # 10 de uma vez, 1 por segundo
+           'convite': (CONVITE_TAXA, CONVITE_RAJADA)}    # convite de grupo/troca/guilda e desafio: 3, depois 1 a cada 3 s
+ENTRADA_MAX = 64                         # remetentes com balde próprio por conexão (cheio: os novos dividem um)
+REMETENTES_MAX = 32                      # quem mandou sussurro/convite a esta conexão (id -> endereço), para o `cala`
+CALA_S = 3600.0                          # o silêncio por endereço dura 1 h (o IP muda de dono; o do cliente, por id, fica)
+CALA_MAX = 64                            # ids calados por pessoa (o 65º tira o que vence primeiro)
+CALADOS_MAX = 8192                       # pessoas com silêncio guardado no relé
+
 log = logging.getLogger("rele")
 PARES = {}                   # ws -> Par (todas as conexões vivas)
 POR_ID = {}                  # id -> set(Par) (a mesma conta em duas abas = dois Par)
 SALAS = {None: set()}        # sala -> set(Par); None = a praça
 CONTA = {'entrada': 0, 'envios': 0, 'descartes': 0, 'recusadas': 0}
 NOVAS = {}                   # chave do endereço (_chave_ip) -> Balde das conexões novas (_admite)
+PROVA = {}                   # 11/09 (achado 17): id sem conta -> sha256 da prova do aparelho que o prendeu
+SOLTOS = {}                  # id preso sem conexão viva -> quando a última saiu (a memória de PROVA_MEMORIA_S)
+CALADOS = {}                 # 11/09 (achado 21): id de quem silenciou -> {id calado: (até quando, endereços)}
 _NADA = object()
 VERIFICADOR = rele_ident.Verificador(None)   # liga_banco(--banco); sem banco ninguém é conferido
 
@@ -195,7 +254,9 @@ class Par:
     __slots__ = ('ws', 'id', 'sala', 'declarou', 'x', 'z', 'versao', 'vivo',
                  'balde', 'balde_chat', 'balde_oi', 'leque', 'devendo',
                  'n_pulsos', 'ult_novos', 'ult_antigos', 'despediu', 'descartes', 'descartes_t0',
-                 'conta', 'idents', 'freio_nome', 'apresentou', 'token', 'revista_em', 'falhas')
+                 'conta', 'idents', 'freio_nome', 'apresentou', 'token', 'revista_em', 'falhas',
+                 'cx', 'vigias', 'vigio', 'balde_convite',
+                 'prova_h', 'ipk', 'entrada', 'remetentes')
 
     def __init__(self, ws, agora):
         self.ws = ws
@@ -223,6 +284,14 @@ class Par:
         self.token = None            # o token conferido, SÓ na memória (nunca no log): a conferência de novo
         self.revista_em = 0.0        # quando conferir de novo (rele_ident.CACHE_S depois da última)
         self.falhas = 0              # conferências seguidas em que o banco não respondeu
+        self.cx = secrets.token_hex(4)   # 11/09: o id DESTA conexão (8 hex): o anúncio conta, os dirigidos levam carimbado
+        self.vigias = set()          # as conexões que querem saber quando esta cair (a voz `caiu`)
+        self.vigio = []              # as que esta vigia (até VIGIA_MAX, a mais antiga primeiro)
+        self.balde_convite = Balde(CONVITE_TAXA, CONVITE_RAJADA, agora)
+        self.prova_h = None          # 11/09 (achado 17): o sha256 da prova do aparelho ({t:'prova'}), se veio
+        self.ipk = None              # 11/09 (achado 21): o endereço de quem conectou (_chave_ip), para a caixa de entrada
+        self.entrada = {}            # (classe, remetente) -> Balde: a caixa de ENTRADA desta conexão
+        self.remetentes = {}         # id -> remetente de quem mandou sussurro/convite a ela (o `cala` acha por aqui)
 
 
 # ------------------------------------------------------------------ envelope
@@ -309,6 +378,7 @@ def _despeja(p):
         s.discard(p)
         if not s:
             del POR_ID[p.id]
+            _solta_id(p.id, time.monotonic())
     p.id = None
 
 
@@ -388,6 +458,296 @@ def _pulso(par, agora):
     return perto
 
 
+# ------------------------------------------------------------ os dirigidos (11/09)
+def _para_cx(m):
+    """O `paraCx` do envelope: None (qualquer conexão do id), o texto, ou
+    _NADA quando veio torto (o envelope cai)."""
+    c = m.get('paraCx')
+    if c is None or c == '':
+        return None
+    if isinstance(c, str) and len(c) <= CX_MAX:
+        return c
+    return _NADA
+
+
+def _curto(v):
+    return v[:REF_MAX] if isinstance(v, str) and v else None
+
+
+def _voz(par, obj):
+    """Uma voz do relé (sem `de`) a UMA conexão: o `ausente`."""
+    CONTA['envios'] += manda_a_todos([par.ws], json.dumps(obj, ensure_ascii=False, separators=(',', ':')))
+
+
+def _ausente(par, m, t, para, para_cx):
+    """Quem mandou fica sabendo que o destino não está — e qual conversa
+    falhou: o `ref`, o gid, o did ou o bid dos dados, e a `acao`."""
+    d = m.get('dados')
+    ref = None
+    if isinstance(d, dict):
+        for k in ('ref', 'gid', 'did', 'bid'):
+            ref = _curto(d.get(k))
+            if ref:
+                break
+    _voz(par, {'t': 'ausente', 'para': para, 'paraCx': para_cx, 'tipo': t,
+               'acao': _curto(m.get('acao')), 'ref': ref})
+
+
+def _dirigido(par, m, t, agora):
+    """Os DIRIGIDOS (11/09) — o sussurro (a mensagem particular), o grupo, o
+    duelo, a batalha em dupla, a troca e a guilda — e o `vigia`, que nem é
+    repassado. Só ao destino (à conexão `paraCx`, se veio), NUNCA recuando
+    para a sala nem para o servidor: sem `para` o envelope cai; destino
+    ausente = ninguém recebe, e quem mandou ouve a voz `ausente`. Antes, a
+    troca e a guilda sem destino iam ao servidor inteiro. O sussurro paga o
+    balde do chat; o convite de grupo e o desafio de duelo, o do convite; e
+    todos o geral. O carimbo do `cx` sai no trata, junto do da identidade."""
+    para = _para(m)
+    if para is None:
+        return None
+    para_cx = _para_cx(m)
+    if para_cx is _NADA:
+        return None
+    acao = m.get('acao')
+    if t == 'sussurro':
+        if not par.balde_chat.tira(agora):
+            return None
+    elif (t == 'grupo' and acao == 'convite') or (t == 'duelo' and acao == 'desafio'):
+        if not par.balde_convite.tira(agora):
+            return None
+    if not par.balde.tira(agora):
+        return None
+    alvos = _conexoes_do(para, par) or []
+    if para_cx is not None:
+        alvos = [p for p in alvos if p.cx == para_cx]
+    if t == 'vigia':
+        if m.get('solta') is True:
+            for p in alvos:
+                p.vigias.discard(par)
+                if p in par.vigio:
+                    par.vigio.remove(p)
+            return []
+        if not alvos:
+            _ausente(par, m, t, para, para_cx)
+            return []
+        for p in alvos:
+            if p in par.vigio or len(p.vigias) >= VIGIAS_MAX:
+                continue                             # já vigia; ou o alvo está cheio (o 17º não entra)
+            if len(par.vigio) >= VIGIA_MAX:
+                velho = par.vigio.pop(0)             # o 5º alvo tira o mais antigo
+                velho.vigias.discard(par)
+            par.vigio.append(p)
+            p.vigias.add(par)
+        return []
+    if not alvos:
+        _ausente(par, m, t, para, para_cx)
+        return []
+    classe = _classe_entrada(t, acao)
+    if classe is not None:
+        # 11/09 (achado 21): o que chega sem ser pedido paga também a caixa de
+        # ENTRADA de quem recebe, por endereço de quem manda (conexão nova e id
+        # novo não renovam), e o endereço que quem recebe calou não chega.
+        # Calado ou freado não volta como `ausente`: quem insiste não fica sabendo
+        chave = _remetente(par)
+        vivos = []
+        for p in alvos:
+            if _calado(p.id, chave, agora) or not _entrada(p, classe, chave, agora):
+                continue
+            _anota_remetente(p, par.id, chave)
+            vivos.append(p)
+        if not vivos:
+            return []
+        alvos = vivos
+    if not par.leque.tira(agora, len(alvos)):
+        return None
+    return alvos
+
+
+# ----------------------------- o id sem conta é do aparelho (11/09, achado 17)
+def _hash_prova(pv):
+    """O sha256 do segredo do aparelho (16 a 64 caracteres), ou None."""
+    if not isinstance(pv, str) or not (PROVA_MIN <= len(pv) <= PROVA_LEN_MAX):
+        return None
+    return hashlib.sha256(pv.encode('utf-8', 'replace')).hexdigest()
+
+
+def _prova(par, m, agora):
+    """O {t:'prova', de, prova}: o segredo do APARELHO, que o cliente guarda ao
+    lado do id (localStorage) e manda logo depois do anúncio, antes de
+    qualquer envelope. Nunca é repassado nem vai ao log: o relé guarda só o
+    sha256, na conexão (vale o primeiro). Quem já falou sem ele (o anúncio
+    chegou atrasado e a fila saiu antes) e está SOZINHO no id prende o id
+    agora. False = descartado (o segundo, o torto, sem balde)."""
+    if par.prova_h is not None or not par.balde.tira(agora):
+        return False
+    h = _hash_prova(m.get('prova'))
+    if h is None:
+        return False
+    par.prova_h = h
+    if (par.id is not None and par.conta is None and _dono(par.id) is None and PROVA.get(par.id) is None
+            and all(p is par for p in POR_ID.get(par.id, ()))):
+        _prende(par.id, h)
+    return True
+
+
+def _prende(id_, h):
+    if id_ not in PROVA and len(PROVA) >= PROVA_IDS_MAX:
+        _poda_provas(time.monotonic(), cheia=True)
+    PROVA[id_] = h
+    SOLTOS.pop(id_, None)
+
+
+def _aparelho_ok(par, de):
+    """O ID SEM CONTA É DO APARELHO (achado 17). O relé só amarrava um id a uma
+    conta quando alguém se identificava; o id de quem joga sem sessão (o do DB
+    local, que vai em todo oi e pulso) aceitava qualquer conexão nova com o
+    mesmo `de` — e o que ia a esse id sem paraCx ia a ela também: quem o
+    copiasse lia os sussurros, respondia o convite antes do dono e recebia a
+    `volta`. Agora o primeiro aparelho com prova prende o id: outra conexão
+    (com a prova de outro aparelho, ou sem prova) não entra nele enquanto
+    houver conexão viva, nem por PROVA_MEMORIA_S depois da última — a queda e
+    a volta em 3 a 5,5 s não abrem brecha. Id que nenhum aparelho prendeu (só
+    clientes antigos, sem prova) segue aberto, como antes."""
+    preso = PROVA.get(de)
+    if preso is None:
+        if par.prova_h is not None:
+            _prende(de, par.prova_h)
+        return True
+    return par.prova_h == preso
+
+
+def _solta_id(id_, agora):
+    """A última conexão do id saiu: o aparelho preso fica lembrado por PROVA_MEMORIA_S."""
+    if id_ in PROVA:
+        SOLTOS[id_] = agora
+
+
+def _poda_provas(agora, cheia=False):
+    """Esquece o aparelho do id solto há mais de PROVA_MEMORIA_S; cheia, também
+    a metade mais antiga dos soltos (os presos a conexões vivas nunca saem)."""
+    for k in [k for k, t0 in SOLTOS.items() if agora - t0 > PROVA_MEMORIA_S]:
+        del SOLTOS[k]
+        PROVA.pop(k, None)
+    if cheia and len(PROVA) >= PROVA_IDS_MAX and SOLTOS:
+        for k, _ in sorted(SOLTOS.items(), key=lambda kv: kv[1])[:max(1, len(SOLTOS) // 2)]:
+            del SOLTOS[k]
+            PROVA.pop(k, None)
+
+
+# --------------- a caixa de entrada de cada destino e o `cala` (11/09, achado 21)
+def _remetente(par):
+    """De onde vem um sussurro ou convite, para a caixa de entrada e o `cala`:
+    o endereço público de quem manda (o mesmo do limite de conexões novas;
+    IPv6 pelo /64) — trocar de conexão e de id não troca de endereço —, ou o
+    id, quando não há endereço público (em casa, nas provas)."""
+    return ('ip', par.ipk) if par.ipk else ('id', par.id)
+
+
+def _classe_entrada(t, acao):
+    """O que chega sem ser pedido paga a caixa de entrada de quem recebe."""
+    if t == 'sussurro':
+        return 'sussurro'
+    if (acao == 'convite' and t in ('grupo', 'troca', 'guilda')) or (t == 'duelo' and acao == 'desafio'):
+        return 'convite'
+    return None
+
+
+def _entrada(p, classe, chave, agora):
+    """Cabe mais um desta classe, deste remetente, na conexão `p`? O balde é
+    de QUEM RECEBE, por remetente — conexão nova não o renova. Cheio de
+    remetentes (ENTRADA_MAX), saem os de balde cheio (quem parou de mandar);
+    se ainda cheio, os novos dividem UM balde da classe: trocar de endereço
+    em rodízio não esvazia a caixa de ninguém."""
+    k = (classe, chave)
+    b = p.entrada.get(k)
+    if b is None:
+        if len(p.entrada) >= ENTRADA_MAX:
+            for kk in [kk for kk, x in p.entrada.items() if _cheio(x, agora)]:
+                del p.entrada[kk]
+        if len(p.entrada) >= ENTRADA_MAX:
+            k = (classe, '*')
+            b = p.entrada.get(k)
+        if b is None:
+            taxa, rajada = ENTRADA[classe]
+            b = p.entrada[k] = Balde(taxa, rajada, agora)
+    return b.tira(agora)
+
+
+def _anota_remetente(p, id_, chave):
+    """Quem mandou sussurro ou convite a esta conexão (id -> endereço): é por
+    aqui que o `cala` acha o endereço de um id que já nem está ligado."""
+    r = p.remetentes
+    r.pop(id_, None)
+    if len(r) >= REMETENTES_MAX:
+        del r[next(iter(r))]
+    r[id_] = chave
+
+
+def _calado(vitima, chave, agora):
+    """`vitima` (um id) calou este remetente, e o silêncio ainda vale?"""
+    c = CALADOS.get(vitima)
+    if not c:
+        return False
+    achou = False
+    for alvo in list(c):
+        ate, chaves = c[alvo]
+        if ate <= agora:
+            del c[alvo]
+        elif chave in chaves:
+            achou = True
+    if not c:
+        del CALADOS[vitima]
+    return achou
+
+
+def _cala(par, m, agora):
+    """O {t:'cala', de, para, solta?} (achado 21). O Silenciar do cliente é por
+    id, e quem abre uma conexão nova a cada envio tem um id novo a cada vez.
+    Então quem silencia alguém avisa o relé, e o ENDEREÇO de onde vinham os
+    sussurros e convites daquele id — o que chegou a esta pessoa (em qualquer
+    aba dela) e o das conexões vivas dele — fica calado para ela por CALA_S:
+    id novo e conexão nova, do mesmo endereço, seguem calados. O `solta`
+    devolve a voz. Nunca é repassado, e quem silencia não fica sabendo o
+    endereço de ninguém. Quem divide o endereço com o calado (a mesma casa, a
+    mesma rede do celular) também não chega a quem calou, durante a hora."""
+    alvo = _para(m)
+    if alvo is None or alvo == par.id or not par.balde.tira(agora):
+        return None
+    c = CALADOS.get(par.id)
+    if m.get('solta') is True:
+        if c and alvo in c:
+            del c[alvo]
+            if not c:
+                del CALADOS[par.id]
+        return []
+    chaves = {('id', alvo)}
+    for p in POR_ID.get(par.id, ()):
+        ch = p.remetentes.get(alvo)
+        if ch is not None:
+            chaves.add(ch)
+    for p in POR_ID.get(alvo, ()):
+        chaves.add(_remetente(p))
+    if c is None:
+        if len(CALADOS) >= CALADOS_MAX:
+            _poda_calados(agora)
+            if len(CALADOS) >= CALADOS_MAX:
+                return []                            # cheio: fica o silêncio por id do cliente
+        c = CALADOS[par.id] = {}
+    if alvo not in c and len(c) >= CALA_MAX:
+        del c[min(c, key=lambda a: c[a][0])]         # o que vence primeiro sai
+    c[alvo] = (agora + CALA_S, frozenset(chaves))
+    return []
+
+
+def _poda_calados(agora):
+    for v in list(CALADOS):
+        c = CALADOS[v]
+        for a in [a for a, (ate, _) in c.items() if ate <= agora]:
+            del c[a]
+        if not c:
+            del CALADOS[v]
+
+
 def _processa(par, m, agora):
     """Quem recebe o envelope `m` que `par` mandou: lista de Par (vazia =
     ninguém, sem culpa) ou None (descartado: falso, sem balde)."""
@@ -396,12 +756,19 @@ def _processa(par, m, agora):
         dono = _dono(de)
         if dono is not None and dono != _conta_id(par):
             return None                              # o id é de outra conta conferida (_arruma_id)
+        if dono is None and par.conta is None and not _aparelho_ok(par, de):
+            return None                              # 11/09 (achado 17): o id sem conta está preso a OUTRO aparelho
         par.id = de
         POR_ID.setdefault(de, set()).add(par)
+        SOLTOS.pop(de, None)
         if par.conta is not None:
             _arruma_id(par)                          # quem tinha o id sem conta perde a voz e o ouvido nele
     elif de != par.id:
         return None                                  # outro `de` na mesma conexão
+    if t == 'cala':
+        return _cala(par, m, agora)                  # 11/09 (achado 21): o silêncio por endereço; nunca é repassado
+    if t in DIRIGIDOS or t == 'vigia':
+        return _dirigido(par, m, t, agora)           # 11/09: só ao destino, sem recuo nenhum
     para = _para(m)
 
     # o eco que responde a um oi entregue não gasta balde nenhum
@@ -479,9 +846,18 @@ def _processa(par, m, agora):
         dest = _pulso(par, agora)
     elif t == 'alvo':
         dest = _perto(par, _da_sala(par))            # o clique de andar: só aos K mais próximos (o pulso ralo cuida dos distantes)
-    elif t == 'chat' or t == 'tchau':
+    elif t == 'tchau':
+        # 11/09 (revisão): o tchau de UMA aba com outra conexão do mesmo id
+        # viva não se espalha — a pessoa segue ali pela outra (a mesma regra
+        # do tchau do relé no _sai). Antes, fechar a aba extra tirava o jogador
+        # vivo do grupo e da batalha dos outros
+        if any(p is not par and p.vivo for p in POR_ID.get(par.id, ())):
+            par.despediu = True
+            return []
         dest = _de_todos(par)
-    elif para is not None:                           # troca, guilda, o que vier com destino
+    elif t == 'chat':
+        dest = _de_todos(par)
+    elif para is not None:                           # o que vier com destino (os DIRIGIDOS já foram, sem recuo)
         dest = _conexoes_do(para, par)
         if dest is None:
             if not par.balde_oi.tira(agora):
@@ -576,6 +952,21 @@ def _despede_por_ele(par, agora):
     return par.balde_oi.tira(agora) and par.leque.tira(agora, len(PARES))
 
 
+def _solta_vigias(par):
+    """A conexão caiu (11/09), com tchau ou sem: quem a vigiava ouve `caiu`
+    {id, cx} na hora — sem esperar varredura, nem o tchau, que só sai quando
+    cai a ÚLTIMA conexão do id e se ela se apresentou —, e ela sai da lista
+    de quem ela vigiava."""
+    for p in par.vigio:
+        p.vigias.discard(par)
+    par.vigio = []
+    vivos = [p for p in par.vigias if p.vivo]
+    par.vigias = set()
+    if vivos and par.id is not None:
+        msg = json.dumps({'t': 'caiu', 'id': par.id, 'cx': par.cx}, ensure_ascii=False, separators=(',', ':'))
+        CONTA['envios'] += manda_a_todos([p.ws for p in vivos], msg)
+
+
 def _sai(par, agora=None):
     par.vivo = False
     PARES.pop(par.ws, None)
@@ -584,6 +975,7 @@ def _sai(par, agora=None):
         s.discard(par)
         if not s and par.sala is not None:
             del SALAS[par.sala]
+    _solta_vigias(par)                               # 11/09: quem vigiava ouve `caiu` (com tchau ou sem)
     if par.id is None:
         return
     ids = POR_ID.get(par.id)
@@ -593,6 +985,7 @@ def _sai(par, agora=None):
     if ids:
         return                                       # a mesma conta segue noutra aba
     del POR_ID[par.id]
+    _solta_id(par.id, time.monotonic() if agora is None else agora)   # 11/09 (achado 17): o aparelho fica lembrado
     if not par.despediu and PARES and _despede_por_ele(par, time.monotonic() if agora is None else agora):
         # caiu sem tchau (aba morta, rede que some): o relé despede por ele
         msg = json.dumps({'t': 'tchau', 'de': par.id}, ensure_ascii=False, separators=(',', ':'))
@@ -762,7 +1155,8 @@ async def trata(ws, path=None):                 # path: assinatura antiga
     # conexão nasce com todos os baldes cheios, e reconectar em laço com um
     # `de` novo renovava a rajada a cada volta. A que passa do balde do IP
     # fecha com 1013 ("tente mais tarde"); o cliente tenta de novo em 4 s
-    if not _admite(_chave_ip(ws), time.monotonic()):
+    chave_ip = _chave_ip(ws)
+    if not _admite(chave_ip, time.monotonic()):
         CONTA['recusadas'] += 1
         try:
             await ws.close(1013, 'conexões novas demais deste endereço: tente de novo daqui a pouco')
@@ -772,8 +1166,9 @@ async def trata(ws, path=None):                 # path: assinatura antiga
     # o anúncio antes de tudo, com a marca que o cliente pôs no endereço: só
     # depois dele o cliente novo manda o token (rele_ident.py). O relé antigo
     # não se anuncia, e o anúncio que um par forjasse por ele não tem a marca
-    await _manda(ws, rele_ident.anuncio(VERIFICADOR.ligado, rele_ident.marca_do_caminho(_caminho(ws, path))))
-    par = Par(ws, time.monotonic())
+    par = Par(ws, time.monotonic())                  # antes do anúncio: ele conta à conexão o `cx` dela (11/09)
+    par.ipk = chave_ip                               # 11/09 (achado 21): o endereço, para a caixa de entrada de quem recebe
+    await _manda(ws, rele_ident.anuncio(VERIFICADOR.ligado, rele_ident.marca_do_caminho(_caminho(ws, path)), par.cx))
     PARES[ws] = par
     SALAS[None].add(par)
     log.info("entrou %s — conectados: %d", getattr(ws, "remote_address", "?"), len(PARES))
@@ -786,11 +1181,16 @@ async def trata(ws, path=None):                 # path: assinatura antiga
             CONTA['entrada'] += 1
             m = _abre(msg)
             ident = m is not None and m['t'] == 'ident'
+            prova = m is not None and m['t'] == 'prova'
             try:
                 if ident:
                     # o token: conferido e respondido só a quem mandou —
                     # NUNCA repassado, e nem ele nem o envelope vão ao log
                     dest = [] if await _ident(par, m, agora) else None
+                elif prova:
+                    # 11/09 (achado 17): o segredo do aparelho — nunca
+                    # repassado, e nem ele nem o envelope vão ao log
+                    dest = [] if _prova(par, m, agora) else None
                 else:
                     if m is not None and par.token is not None and agora >= par.revista_em:
                         await _revista(par)              # a sessão de novo: a revogada cai (rele_ident.CACHE_S)
@@ -805,15 +1205,26 @@ async def trata(ws, path=None):                 # path: assinatura antiga
                         # carimba só lê os veredictos. Re-serializa se mudou
                         if m['t'] in rele_ident.JULGADOS:
                             await rele_ident.prepara(m, par.conta, par.freio_nome)
+                        dirigido = m['t'] in DIRIGIDOS
+                        if dirigido:
+                            m['cx'] = par.cx             # 11/09: a conexão que mandou, por cima do que o cliente pôs
                         novo = rele_ident.carimba(m, par.conta, par.freio_nome, time.monotonic(), so_cache=True)
-                        if novo is not None:
-                            msg = json.dumps(novo, separators=(',', ':'))
+                        if novo is not None or dirigido:
+                            msg = json.dumps(m, separators=(',', ':'))
             except Exception as e:
                 # envelope torto que o _abre deixou passar: descarte com
                 # rastro — sem isto QUALQUER erro aqui dentro caía no
                 # `except` de fora e virava desconexão muda (1000, sem log)
                 if ident:
                     log.warning("o ident falhou (%s)", type(e).__name__)   # sem o envelope: ele leva o token
+                elif prova:
+                    log.warning("a prova do aparelho falhou (%s)", type(e).__name__)   # sem o envelope: ele leva o segredo
+                elif m is not None and m['t'] == 'sussurro':
+                    # a mensagem particular nunca vai ao log: nem o texto, nem o nome, nem o erro (que pode citá-los)
+                    log.warning("envelope derrubou o _processa (%s): t=sussurro", type(e).__name__)
+                elif m is not None and m['t'] in DIRIGIDOS:
+                    log.warning("envelope derrubou o _processa (%s): t=%s acao=%r, %d caracteres",
+                                type(e).__name__, m['t'], str(m.get('acao'))[:REF_MAX], len(msg))
                 else:
                     log.exception("envelope derrubou o _processa: %.200s", msg)
                 dest = None
@@ -855,6 +1266,8 @@ async def zelador(relatorio):
                         del d[a]
             for k in [k for k, b in NOVAS.items() if _cheio(b, agora)]:
                 del NOVAS[k]                         # endereço que parou de conectar: o balde já encheu
+            _poda_provas(agora)                      # 11/09: o aparelho do id solto há mais de 10 min
+            _poda_calados(agora)                     # 11/09: e o silêncio que venceu
         if relatorio > 0 and agora - ult_log >= relatorio:
             dt = agora - ult_log
             ent = CONTA['entrada'] - antes['entrada']

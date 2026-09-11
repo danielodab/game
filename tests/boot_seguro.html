@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a marca de abertura (onde a última parou, as três saídas e o vigia)</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+#palco iframe{width:560px;height:320px;border:1px solid #2b3542;margin:4px;background:#0b0d10}</style>
+</head>
+<body>
+<!-- Pedido (10/09): o dono viu a tela de carga parada em "montando a sala…"
+     com a barra cheia; a causa não foi isolada e passou sozinha. A resposta
+     não depende de saber a causa: a abertura deixa uma marca na aba
+     (sessionStorage 'soterra-boot'), a próxima diz onde a anterior parou e
+     oferece três saídas, e um vigia fala quando nada anda por 45 s.
+
+     Esta prova roda o <script id="boot-seguro"> e o carregador DE VERDADE,
+     lidos do index.html, num quadro com um Bundle de mentira (os scripts são
+     data: vazios; o js/main.js é o de verdade). O localStorage de cada quadro
+     fica na blindagem (save_sandbox.js, carregado DEPOIS da marca, como no
+     ?sandbox=1 do index): nenhum save de verdade é tocado.
+
+     ?inteiro=1 abre também o index.html inteiro (lento; servido ou em casa). -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<div id="palco"></div>
+<script>
+  // os métodos puros do Storage, ANTES da blindagem: a marca mora no
+  // sessionStorage desta aba, e a blindagem a desviaria para a sombra
+  window.__puro = { get: Storage.prototype.getItem, set: Storage.prototype.setItem, rm: Storage.prototype.removeItem };
+</script>
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log'), palco = document.getElementById('palco');
+  var falhas = 0, total = 0, onde = 'o começo', terminou = false, atual = null;
+  var INTEIRO = /[?&]inteiro=1/.test(location.search);
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra && !ok ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function secao(t) {
+    var d = document.createElement('div');
+    d.style.cssText = 'color:#e8c25a;margin-top:6px';
+    d.textContent = '— ' + t;
+    log.appendChild(d);
+    onde = t;
+  }
+
+  // ---- a sessão da aba, pelos métodos puros
+  var CH = 'soterra-boot', CHA = 'soterra-boot-antes', P = window.__puro;
+  function sLe(k) { try { return JSON.parse(P.get.call(sessionStorage, k) || 'null'); } catch (e) { return null; } }
+  function sGrava(k, v) { P.set.call(sessionStorage, k, JSON.stringify(v)); }
+  function sTira(k) { P.rm.call(sessionStorage, k); }
+  var guardados = { boot: P.get.call(sessionStorage, CH), antes: P.get.call(sessionStorage, CHA) };
+  function limpa() { sTira(CH); sTira(CHA); }
+
+  // ---- os arquivos de verdade
+  function le(url) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', url + '?t=' + Date.now(), false);
+      x.send();
+      return (x.status === 200 || (x.status === 0 && x.responseText)) ? x.responseText : null;
+    } catch (e) { return null; }
+  }
+  var IDX = le('../index.html'), MAIN = le('../js/main.js'), NUVEM = le('../js/core/nuvem.js');
+  var BLOCO = null, CARREGADOR = null, CARGA_HTML = null;
+  if (IDX) {
+    var mB = /<script id="boot-seguro">([\s\S]*?)<\/script>/.exec(IDX);
+    BLOCO = mB ? mB[1] : null;
+    (IDX.match(/<script>[\s\S]*?<\/script>/g) || []).forEach(function (s) {
+      if (s.indexOf('var arquivos = [') >= 0) CARREGADOR = s.replace(/^<script>/, '').replace(/<\/script>$/, '');
+    });
+    var mC = /<div id="carga" hidden>[\s\S]*?id="carga-txt"[^<]*<\/div>\s*<\/div>/.exec(IDX);
+    CARGA_HTML = mC ? mC[0] : null;
+  }
+
+  // ---- utilidades
+  function vis(w, el) { return !!el && w.getComputedStyle(el).display !== 'none' && !el.closest('[hidden]'); }
+  function textoAviso(w) {
+    var t = w.document.querySelector('#carga .carga-boot .carga-boot-txt');
+    return t ? t.textContent : null;
+  }
+  function ehAbertura(a) { return /^\[abertura\]/.test(a); }
+  function subseq(lista, alvo) {
+    var p = 0;
+    for (var i = 0; i < lista.length && p < alvo.length; i++) if (lista[i] === alvo[p]) p++;
+    return p === alvo.length;
+  }
+  function parada(extra) {
+    var m = { t: Date.now() - 1500, etapa: 'a montagem da sala', arquivo: 'js/render3d/hub3d.js', n: 1 };
+    for (var k in extra || {}) m[k] = extra[k];
+    return m;
+  }
+  function espera(cond, ms, cb) {
+    var t0 = Date.now();
+    (function olha() {
+      var ok = false;
+      try { ok = !!cond(); } catch (e) {}
+      if (ok) return cb(true);
+      if (Date.now() - t0 >= ms) return cb(false);
+      setTimeout(olha, 50);
+    })();
+  }
+  function erro(e) { check('sem exceção em "' + onde + '"', false, String((e && (e.stack || e.message)) || e).slice(0, 300)); }
+  // embrulha um callback assíncrono: a exceção vira falha e o passo segue
+  function T(fn) {
+    return function () {
+      try { return fn.apply(this, arguments); } catch (e) { erro(e); if (atual) atual(); }
+    };
+  }
+
+  /* O ambiente de mentira de um quadro, rodado DEPOIS da marca e ANTES do
+   * carregador: scripts viram data: vazios (o js/main.js pode ser o de
+   * verdade), o Bundle guarda os callbacks para a prova conduzir. */
+  function preparo(w, op) {
+    w.__T0 = Date.now();
+    w.__V = '?v=prova';
+    var DADOS = 'data:text/javascript,';
+    w.__url = function (f) {
+      if (f === 'js/main.js' && op.mainDeVerdade) return '../js/main.js';
+      if (op.foto && f === op.foto) return DADOS + encodeURIComponent('parent.__foto(window);') + '//' + f;
+      return DADOS + '//' + f;
+    };
+    w.__noPacote = function () { return true; };
+    w.JOGO = w.JOGO || {};
+    w.JOGO.Bundle = {
+      servido: !!op.servido,
+      diag: function () { return { vivosAlta: w.__vivos || 0 }; },
+      aquece: function () {},
+      busca: function (o) { w.__busca = o; },
+      injeta: function (l, b, cb) { w.__injeta = { lista: l, cb: cb }; }
+    };
+    if (op.bootQuebrado) {
+      var quebra = function () { throw new Error('marca quebrada de propósito'); };
+      w.__boot = { espera: quebra, etapa: quebra, modelos: quebra, passo: quebra, fim: quebra, carga: quebra };
+    }
+    if (op.semCarga) { var c = w.document.getElementById('carga'); if (c) c.hidden = false; }
+  }
+  var ESPIA = 'window.__avisos=[];(function(){var w=console.warn;console.warn=function(){' +
+    'var a=[].slice.call(arguments).join(" ");window.__avisos.push(a);try{w.apply(console,arguments)}catch(e){}};})();';
+
+  var nQ = 0;
+  function abre(op, pronto) {
+    op = op || {};
+    var fr = document.createElement('iframe');
+    fr.title = 'quadro ' + (++nQ) + ' — ' + onde;
+    var h = ['<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">',
+      '<script>' + ESPIA + '<\/script>',
+      '<script>window.__tb0=performance.now();<\/script>',
+      '<script id="boot-seguro">' + BLOCO + '<\/script>',
+      '<script>window.__tb1=performance.now();<\/script>',
+      '<script src="save_sandbox.js"><\/script>',
+      '</head><body style="margin:0;background:#0b0d10;color:#ddd;font:12px sans-serif"><div id="app">' + CARGA_HTML + '</div>'];
+    if (op.carregador || op.preparo) h.push('<script>(' + preparo.toString() + ')(window,' + JSON.stringify(op) + ');<\/script>');
+    if (op.carregador) h.push('<script>' + CARREGADOR + '<\/script>');
+    h.push('</body></html>');
+    fr.onload = function () { setTimeout(T(function () { pronto(fr.contentWindow, fr); }), 0); };
+    fr.srcdoc = h.join('\n');
+    palco.appendChild(fr);
+    return fr;
+  }
+  var SERVIDO = { carregador: true, servido: true, mainDeVerdade: true };
+  function injetaUm(w, f, cb) {
+    var s = w.document.createElement('script');
+    s.src = w.__url(f);
+    s.async = false;
+    s.onload = s.onerror = function () { setTimeout(cb, 0); };
+    w.document.head.appendChild(s);
+  }
+  function injetaAte(w, n, cb) {          // os n primeiros da fase B, um de cada vez
+    var l = w.__injeta.lista, i = 0;
+    (function vai() {
+      if (i >= Math.min(n, l.length)) return cb();
+      injetaUm(w, l[i++], T(vai));
+    })();
+  }
+  function limpaQuadros() { while (palco.firstChild) palco.removeChild(palco.firstChild); }
+
+  // ---- o roteiro, um passo depois do outro
+  var passos = [], iPasso = 0;
+  function passo(nome, fn, prazo) { passos.push({ nome: nome, fn: fn, prazo: prazo }); }
+  function segue() {
+    if (terminou) return;
+    if (iPasso >= passos.length) return fim();
+    var p = passos[iPasso++], foi = false, relogio = null;
+    secao(p.nome);
+    function next() {
+      if (foi) return;
+      foi = true;
+      if (relogio) clearTimeout(relogio);
+      limpaQuadros();
+      setTimeout(segue, 0);
+    }
+    atual = next;
+    relogio = setTimeout(function () { check('o passo terminou a tempo', false, p.nome); next(); }, p.prazo || 20000);
+    try { p.fn(next); } catch (e) { erro(e); next(); }
+  }
+  function fim() {
+    if (terminou) return;
+    terminou = true;
+    limpaQuadros();
+    // a sessão da aba volta a ser o que era
+    if (guardados.boot === null) sTira(CH); else P.set.call(sessionStorage, CH, guardados.boot);
+    if (guardados.antes === null) sTira(CHA); else P.set.call(sessionStorage, CHA, guardados.antes);
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true;
+    window.__fail = falhas;
+  }
+
+  // =================================================================== o texto
+  passo('o que está escrito: o bloco no topo, o carregador, o main.js e a nuvem', function (next) {
+    check('li o index.html, o js/main.js e o js/core/nuvem.js (servido, ou file:// com --allow-file-access-from-files)',
+          !!(IDX && MAIN && NUVEM));
+    check('o index.html tem o <script id="boot-seguro">, o carregador e a #carga', !!(BLOCO && CARREGADOR && CARGA_HTML));
+    if (!(IDX && BLOCO && CARREGADOR && CARGA_HTML && MAIN && NUVEM)) { iPasso = passos.length; return next(); }
+    var pB = IDX.indexOf('<script id="boot-seguro">');
+    check('a marca é o PRIMEIRO script da página (antes do cache e da blindagem do ?sandbox=1)',
+          pB > 0 && IDX.indexOf('<script') === pB && pB < IDX.indexOf('</head>') &&
+          pB < IDX.indexOf("window.__url('tests/save_sandbox.js')"));
+    check('a marca não faz rede nem escreve no documento (a abertura não espera por ela)',
+          !/XMLHttpRequest|fetch\(|sendBeacon|WebSocket|document\.write|importScripts/.test(BLOCO));
+    check('10 min de validade e 45 s de vigia', /VALIDADE_MS = 10 \* 60 \* 1000/.test(BLOCO) && /VIGIA_MS: 45000/.test(BLOCO));
+    check('o carregador fala com a marca por um embrulho que engole exceção',
+          /function boot\(metodo, a, b\) \{\s*try \{[^}]*window\.__boot[^}]*\} catch \(e\) \{\}/.test(CARREGADOR));
+    var ordemMain = ["marca('Renderer.init')", "marca('UI.init')", "marca('Game.init')", "marca('Nuvem.iniciar')",
+                     "marca('Agenda.iniciar')", "marca('a primeira tela')", 'terminou();'];
+    var pos = -1, emOrdem = true;
+    ordemMain.forEach(function (s) { var p = MAIN.indexOf(s, pos + 1); if (p < 0) emOrdem = false; else pos = p; });
+    check('o js/main.js anota Renderer.init → UI.init → Game.init → Nuvem.iniciar → Agenda.iniciar → a primeira tela → fim', emOrdem);
+    var linhas = NUVEM.split(/\r?\n/), recargas = 0, protegidas = 0;
+    for (var k = 0; k < linhas.length; k++) {
+      if (!/location\.reload\(\)/.test(linhas[k])) continue;
+      recargas++;
+      if (k > 0 && /window\.__boot\.recarregando\('nuvem'\)/.test(linhas[k - 1])) protegidas++;
+    }
+    check('js/core/nuvem.js: cada location.reload() tem, na linha de cima, a que tira a marca (' +
+          protegidas + ' de ' + recargas + ')', recargas >= 3 && protegidas === recargas);
+    next();
+  });
+
+  // ============================================= a abertura normal (servida)
+  passo('abertura servida sem marca: a marca anda com a abertura e some no fim', function (next) {
+    limpa();
+    abre(SERVIDO, function (w) {
+      var dt = w.__tb1 - w.__tb0;
+      check('o bloco roda em menos de 30 ms (' + dt.toFixed(1) + ' ms)', dt < 30);
+      var m = sLe(CH);
+      check('a marca {t, etapa, arquivo, n} já anda: o download dos modelos, n = 1',
+            m && m.etapa === 'o download dos modelos' && /^modelos /.test(m.arquivo) && m.n === 1 && typeof m.t === 'number',
+            JSON.stringify(m));
+      check('sem marca anterior: nenhum aviso e nada no console',
+            !w.document.querySelector('.carga-boot') && !w.__avisos.some(ehAbertura));
+      w.__busca.progresso(3, 8);
+      m = sLe(CH);
+      check('cada modelo que chega atualiza a marca (modelos 3/8)', m && m.arquivo === 'modelos 3/8', m && m.arquivo);
+      w.__busca.pronto(null);
+      var L = w.__injeta.lista, iMain = L.indexOf('js/main.js');
+      m = sLe(CH);
+      check('ao terminar os modelos: "a montagem da sala", à espera de ' + L[0],
+            m && m.etapa === 'a montagem da sala' && m.arquivo === L[0] &&
+            w.document.getElementById('carga-txt').textContent === 'montando a sala…', JSON.stringify(m));
+      check('o js/main.js é o último da fase B', iMain === L.length - 1, iMain + ' de ' + L.length);
+      injetaAte(w, iMain, T(function () {
+        m = sLe(CH);
+        check('cada script da fase B que chega move a marca (falta só o js/main.js)',
+              m && m.arquivo === 'js/main.js' && m.trilha && m.trilha.length > 0, m && m.arquivo);
+        injetaUm(w, 'js/main.js', T(function () {
+          m = sLe(CH);
+          var et = w.__boot.historico().map(function (x) { return x.etapa; });
+          check('os ganchos do js/main.js andam na ordem',
+                subseq(et, ['o começo', 'o download dos modelos', 'a montagem da sala', 'Renderer.init', 'UI.init',
+                            'Game.init', 'Nuvem.iniciar', 'Agenda.iniciar', 'a primeira tela']), et.join(' → '));
+          check('o fim do main.js sozinho não apaga (a #carga ainda está na frente)',
+                m && m.etapa === 'a primeira tela' && m.arquivo === 'js/main.js' && !w.__boot.estado().acabou);
+          w.__injeta.cb();
+          check('a #carga sai da frente: a marca some', sLe(CH) === null && w.document.getElementById('carga').hidden &&
+                w.__boot.estado().acabou && typeof w.__BOOT_MS === 'number');
+          injetaUm(w, 'js/depois.js', T(function () {
+            check('depois do fim, script nenhum regrava a marca', sLe(CH) === null);
+            next();
+          }));
+        }));
+      }));
+    });
+  });
+
+  // ================================ a parada, o aviso e as paradas seguidas
+  var X1 = null, X2 = null;
+  passo('uma abertura para na montagem da sala (a aba recarrega no meio)', function (next) {
+    limpa();
+    abre(SERVIDO, function (w) {
+      w.__busca.progresso(5, 10);
+      w.__busca.pronto(null);
+      injetaAte(w, 3, T(function () {
+        X1 = w.__injeta.lista[3];
+        var m = sLe(CH);
+        check('a marca fica: parou na montagem da sala, à espera de ' + X1 + ' (n = 1, t de agora)',
+              m && m.etapa === 'a montagem da sala' && m.arquivo === X1 && m.n === 1 && Math.abs(Date.now() - m.t) < 5000,
+              JSON.stringify(m));
+        next();                                   // o quadro sai sem terminar: é o F5 numa abertura parada
+      }));
+    });
+  });
+  passo('a abertura seguinte diz onde a anterior parou, sem esconder o progresso', function (next) {
+    abre(SERVIDO, function (w) {
+      var c = w.document.getElementById('carga'), av = w.document.querySelector('#carga .carga-boot');
+      var txt = textoAviso(w);
+      check('"A última abertura parou na montagem da sala (' + X1 + ')."',
+            txt === 'A última abertura parou na montagem da sala (' + X1 + ').', txt);
+      var bts = av ? [].map.call(av.querySelectorAll('button'), function (b) { return b.textContent; }) : [];
+      check('três saídas: Tentar de novo · Abrir sem o save deste navegador · Abrir numa conta local vazia',
+            bts.join('|') === 'Tentar de novo|Abrir sem o save deste navegador|Abrir numa conta local vazia', bts.join('|'));
+      var tx = w.document.getElementById('carga-txt'), tri = w.document.querySelector('.carga-trilho');
+      check('o progresso desta abertura segue à vista, ANTES do aviso',
+            !!av && !c.hidden && vis(w, tx) && vis(w, tri) && vis(w, av) &&
+            !!(tx.compareDocumentPosition(av) & 4) && !!(tri.compareDocumentPosition(av) & 4));
+      var aviso = w.__avisos.filter(ehAbertura)[0] || '';
+      check('console.warn com a marca da anterior', aviso.indexOf('"etapa":"a montagem da sala"') > 0 && aviso.indexOf(X1) > 0,
+            aviso.slice(0, 200));
+      var m = sLe(CH);
+      check('n = 2 (duas aberturas seguidas sem fim) e a marca guarda onde a outra parou',
+            w.__boot.estado().n === 2 && m && m.n === 2 && m.antes && m.antes.etapa === 'a montagem da sala' && m.antes.vezes === 1,
+            JSON.stringify(m && m.antes));
+      w.__busca.progresso(7, 10);
+      check('o progresso anda com o aviso na tela (modelos 7/10, barra 70%)',
+            tx.textContent === 'modelos 7/10' && w.document.getElementById('carga-barra').style.width === '70%' &&
+            !!w.document.querySelector('.carga-boot'));
+      w.__busca.pronto(null);
+      injetaAte(w, 1, T(function () { X2 = w.__injeta.lista[1]; next(); }));   // para de novo na mesma etapa
+    });
+  });
+  passo('a mesma etapa parou duas vezes seguidas: o texto diz; "Tentar de novo" limpa e recarrega', function (next) {
+    abre(SERVIDO, function (w) {
+      var txt = textoAviso(w);
+      check('"… parou na montagem da sala (' + X2 + '). Parou nessa mesma etapa duas vezes seguidas."',
+            txt === 'A última abertura parou na montagem da sala (' + X2 + '). Parou nessa mesma etapa duas vezes seguidas.', txt);
+      var rec = 0;
+      w.__boot._recarrega = function () { rec++; };
+      w.document.querySelector('.carga-boot .boot-tentar').click();
+      var a = sLe(CHA);
+      check('"Tentar de novo": a marca sai e a página recarrega uma vez', rec === 1 && sLe(CH) === null);
+      check('a conta das paradas segue para a próxima (vezes 2, n 3)',
+            a && a.n === 3 && a.antes && a.antes.etapa === 'a montagem da sala' && a.antes.vezes === 2, JSON.stringify(a));
+      next();
+    });
+  });
+  passo('depois de "Tentar de novo" não se avisa de novo; a abertura para outra vez', function (next) {
+    abre(SERVIDO, function (w) {
+      check('sem aviso depois de uma recarga pelos botões', !w.document.querySelector('.carga-boot') && !w.__avisos.some(ehAbertura));
+      var m = sLe(CH);
+      check('a conta seguiu: n = 4 e "antes" = duas vezes na montagem da sala',
+            w.__boot.estado().n === 4 && m && m.antes && m.antes.vezes === 2 && sLe(CHA) === null, JSON.stringify(m && m.antes));
+      w.__busca.pronto(null);
+      injetaAte(w, 2, T(next));
+    });
+  });
+  passo('a terceira parada seguida na mesma etapa; esta vai até o fim', function (next) {
+    abre(SERVIDO, function (w) {
+      var txt = textoAviso(w) || '';
+      check('o texto conta 3 vezes seguidas', / Parou nessa mesma etapa 3 vezes seguidas\.$/.test(txt), txt);
+      w.__busca.progresso(10, 10);
+      w.__busca.pronto(null);
+      injetaAte(w, w.__injeta.lista.length, T(function () {
+        w.__injeta.cb();
+        check('chegou ao fim: a marca e o aviso somem', sLe(CH) === null && !w.document.querySelector('.carga-boot') &&
+              w.__boot.estado().acabou);
+        next();
+      }));
+    });
+  });
+  passo('depois de uma abertura inteira, a próxima começa limpa', function (next) {
+    abre(SERVIDO, function (w) {
+      var m = sLe(CH);
+      check('sem aviso, n = 1, sem "antes"', !w.document.querySelector('.carga-boot') && w.__boot.estado().n === 1 && m && !m.antes);
+      next();
+    });
+  });
+  passo('etapa diferente não conta como repetida; a gramática de "em"', function (next) {
+    limpa();
+    sGrava(CH, parada({ etapa: 'Game.init', arquivo: 'js/main.js', n: 2, antes: { etapa: 'a montagem da sala', arquivo: 'x.js', vezes: 1 } }));
+    abre({ preparo: true, semCarga: true }, function (w) {
+      var txt = textoAviso(w);
+      check('"A última abertura parou em Game.init (js/main.js)." — sem "vezes seguidas"',
+            txt === 'A última abertura parou em Game.init (js/main.js).', txt);
+      check('n = 3', w.__boot.estado().n === 3);
+      next();
+    });
+  });
+
+  // ============================================================ a validade
+  passo('marca de mais de 10 min é velha: não avisa', function (next) {
+    limpa();
+    sGrava(CH, parada({ t: Date.now() - 11 * 60000, etapa: 'Game.init', arquivo: 'js/main.js' }));
+    abre({ preparo: true, semCarga: true }, function (w) {
+      check('11 min: sem aviso, sem console, n = 1',
+            !w.document.querySelector('.carga-boot') && !w.__avisos.some(ehAbertura) && w.__boot.estado().n === 1);
+      next();
+    });
+  });
+  passo('marca de 9 min ainda vale ("o começo" vira "no começo")', function (next) {
+    limpa();
+    sGrava(CH, parada({ t: Date.now() - 9 * 60000, etapa: 'o começo', arquivo: 'index.html' }));
+    abre({ preparo: true, semCarga: true }, function (w) {
+      var txt = textoAviso(w);
+      check('"A última abertura parou no começo (index.html)."', txt === 'A última abertura parou no começo (index.html).', txt);
+      next();
+    });
+  });
+
+  // ============================================================= as saídas
+  function contaDeProva(w, suf) {
+    w.JOGO.Contas = {
+      sufixo: function () { return suf; },
+      chaveSave: function () { return 'soterra-save-v2' + suf; },
+      chaveConta: function () { return 'soterra-conta-v1' + suf; }
+    };
+    var vals = {};
+    vals['soterra-save-v2' + suf] = '{"save":"da conta de prova"}';
+    vals['soterra-conta-v1' + suf] = '{"moedas":12}';
+    vals['soterra-nuvem-v1' + suf] = '{"versao":7,"conta":3,"sujo":false}';
+    for (var k in vals) w.localStorage.setItem(k, vals[k]);
+    w.localStorage.setItem('soterra-vizinha' + suf, 'fica');
+    return vals;
+  }
+  passo('"Abrir sem o save deste navegador" MOVE as chaves da conta ativa para :bak-<instante> e recarrega', function (next) {
+    limpa();
+    sGrava(CH, parada());
+    abre({ preparo: true, semCarga: true }, function (w) {
+      var suf = ':boot-prova-' + Date.now().toString(36), ls = w.localStorage;
+      var vals = contaDeProva(w, suf);
+      var principalAntes = ls.getItem('soterra-save-v2');
+      var rec = 0;
+      w.__boot._recarrega = function () { rec++; };
+      w.document.querySelector('.carga-boot .boot-sem-save').click();
+      var r = w.__boot.ultimaMudanca || {};
+      var copias = r.ok && r.movidas && r.movidas.length === 3 && r.movidas.every(function (mv) {
+        return ls.getItem(mv.de) === null && ls.getItem(mv.para) === vals[mv.de] && mv.para === mv.de + ':bak-' + r.carimbo;
+      });
+      check('save, conta e registro da nuvem viraram cópias <chave>:bak-<instante>, e os originais saíram',
+            copias, JSON.stringify(r.movidas));
+      check('o resto fica onde está (a vizinha e o save da principal)',
+            ls.getItem('soterra-vizinha' + suf) === 'fica' && ls.getItem('soterra-save-v2') === principalAntes);
+      check('recarregou uma vez e a marca saiu', rec === 1 && sLe(CH) === null);
+      check('nada disto tocou o disco de verdade (a prova roda na blindagem)',
+            w.JOGO.SaveSandbox.check().ok && P.get.call(localStorage, 'soterra-save-v2' + suf) === null &&
+            P.get.call(localStorage, 'soterra-save-v2' + suf + ':bak-' + r.carimbo) === null);
+      next();
+    });
+  });
+  passo('antes do JOGO.Contas chegar, as chaves vêm do registro (a mesma regra do contas.js)', function (next) {
+    limpa();
+    sGrava(CH, parada());
+    abre({ preparo: true, semCarga: true }, function (w) {
+      var ls = w.localStorage;
+      ls.setItem('soterra-contas-v1', JSON.stringify({ ativa: 'boot-prova2', lista: [{ id: 'principal' }, { id: 'boot-prova2' }] }));
+      var ks = w.__boot.chavesDoSave().join(',');
+      check('a ativa do registro (…:boot-prova2)',
+            ks === 'soterra-save-v2:boot-prova2,soterra-conta-v1:boot-prova2,soterra-nuvem-v1:boot-prova2', ks);
+      ls.setItem('soterra-contas-v1', JSON.stringify({ ativa: 'principal', lista: [{ id: 'principal' }] }));
+      ks = w.__boot.chavesDoSave().join(',');
+      check('a principal usa as chaves nuas', ks === 'soterra-save-v2,soterra-conta-v1,soterra-nuvem-v1', ks);
+      next();
+    });
+  });
+  passo('uma cópia que falha (armazenamento cheio): nada é apagado', function (next) {
+    limpa();
+    sGrava(CH, parada());
+    abre({ preparo: true, semCarga: true }, function (w) {
+      var suf = ':boot-prova-' + Date.now().toString(36), ls = w.localStorage;
+      var vals = contaDeProva(w, suf);
+      var SPw = w.Storage.prototype, orig = SPw.setItem, nBak = 0, primeira = null;
+      SPw.setItem = function (k, v) {
+        if (/:bak-/.test(k)) {
+          nBak++;
+          if (nBak === 2) { var e = new Error('cheio'); e.name = 'QuotaExceededError'; throw e; }
+          primeira = k;
+        }
+        return orig.apply(this, arguments);
+      };
+      var rec = 0;
+      w.__boot._recarrega = function () { rec++; };
+      try { w.document.querySelector('.carga-boot .boot-sem-save').click(); } finally { SPw.setItem = orig; }
+      var r = w.__boot.ultimaMudanca || {};
+      var intactos = Object.keys(vals).every(function (k) { return ls.getItem(k) === vals[k]; });
+      check('os originais ficam e a cópia que chegou a ser feita é desfeita',
+            r.ok === false && intactos && !!primeira && ls.getItem(primeira) === null, JSON.stringify(r));
+      var er = w.document.querySelector('.carga-boot-erro');
+      check('o aviso diz que o armazenamento está cheio e que nada foi apagado; não recarrega; a marca segue',
+            !!er && /cheio/.test(er.textContent) && /nada foi apagado/.test(er.textContent) && rec === 0 &&
+            sLe(CH) !== null && !w.__boot.estado().acabou, er && er.textContent);
+      next();
+    });
+  });
+  passo('"Abrir numa conta local vazia" vai para ?conta=seguro', function (next) {
+    limpa();
+    sGrava(CH, parada());
+    abre({ preparo: true, semCarga: true }, function (w) {
+      var foi = null;
+      w.__boot._navega = function (u) { foi = u; };
+      w.document.querySelector('.carga-boot .boot-vazia').click();
+      var a = sLe(CHA);
+      check('o endereço termina em ?conta=seguro, a marca sai e a conta das paradas segue',
+            /\?conta=seguro$/.test(foi || '') && sLe(CH) === null && a && a.antes && a.antes.etapa === 'a montagem da sala', foi);
+      next();
+    });
+  });
+
+  // ============================================================== o vigia
+  passo('o vigia: parado com a página respondendo → "Ainda abrindo — parado em …" com o Tentar de novo', function (next) {
+    limpa();
+    abre(SERVIDO, function (w) {
+      var c = w.document.getElementById('carga');
+      w.__boot.VIGIA_MS = 400;                  // 45 s na vida real
+      w.__vivos = 1;                            // um download no ar
+      w.__busca.progresso(2, 6);
+      setTimeout(T(function () {
+        check('download no ar (o Bundle tem o vigia dele): o da abertura não fala', !c.querySelector('.carga-vigia'));
+        w.__vivos = 0;
+        espera(function () { return !!c.querySelector('.carga-vigia'); }, 4000, T(function (ok) {
+          var t = ok ? c.querySelector('.carga-vigia-txt').textContent : '';
+          check('"Ainda abrindo — parado no download dos modelos (modelos 2/6)"',
+                t === 'Ainda abrindo — parado no download dos modelos (modelos 2/6)', t);
+          check('com um botão Tentar de novo e o console avisando',
+                c.querySelectorAll('.boot-tentar').length === 1 &&
+                w.__avisos.some(function (a) { return /^\[abertura\] ainda abrindo/.test(a); }));
+          w.__busca.progresso(3, 6);
+          check('algo andou (modelo 3/6): o aviso do vigia sai na hora', !c.querySelector('.carga-vigia'));
+          w.__busca.pronto(null);
+          var l = w.__injeta.lista;
+          injetaAte(w, 2, T(function () {
+            espera(function () { return !!c.querySelector('.carga-vigia'); }, 4000, T(function (ok2) {
+              var t2 = ok2 ? c.querySelector('.carga-vigia-txt').textContent : '';
+              check('"Ainda abrindo — parado na montagem da sala (' + l[2] + ')"',
+                    t2 === 'Ainda abrindo — parado na montagem da sala (' + l[2] + ')', t2);
+              var acoes = w.document.createElement('div');
+              acoes.className = 'carga-acoes';
+              acoes.innerHTML = '<button type="button">Tentar de novo</button>';
+              c.appendChild(acoes);                // a carga sob demanda perguntando algo
+              injetaUm(w, l[2], T(function () {
+                setTimeout(T(function () {
+                  check('com os botões da carga sob demanda na tela, o vigia não empilha outro aviso',
+                        !c.querySelector('.carga-vigia'));
+                  c.removeChild(acoes);
+                  espera(function () { return !!c.querySelector('.carga-vigia'); }, 4000, T(function (ok3) {
+                    var rec = 0;
+                    w.__boot._recarrega = function () { rec++; };
+                    if (ok3) c.querySelector('.carga-vigia .boot-tentar').click();
+                    var a = sLe(CHA);
+                    check('o Tentar de novo do vigia recarrega e conta ESTA parada (' + l[3] + ', vezes 1)',
+                          ok3 && rec === 1 && sLe(CH) === null && a && a.antes && a.antes.etapa === 'a montagem da sala' &&
+                          a.antes.arquivo === l[3] && a.antes.vezes === 1, JSON.stringify(a));
+                    next();
+                  }));
+                }), 1200);
+              }));
+            }));
+          }));
+        }));
+      }), 1200);
+    });
+  });
+
+  // ========================================== a nuvem recarrega de propósito
+  passo('a nuvem vai recarregar: __boot.recarregando(\'nuvem\') tira a marca antes', function (next) {
+    limpa();
+    abre(SERVIDO, function (w) {
+      w.__busca.pronto(null);
+      injetaAte(w, 2, T(function () {
+        check('antes: a marca está lá', !!sLe(CH));
+        w.__boot.recarregando('nuvem');
+        check('a marca sai na hora e a abertura para de anotar', sLe(CH) === null && w.__boot.estado().acabou);
+        injetaUm(w, w.__injeta.lista[2], T(function () {
+          check('script nenhum a regrava depois', sLe(CH) === null);
+          next();
+        }));
+      }));
+    });
+  });
+  passo('depois da recarga da nuvem a abertura não acusa parada', function (next) {
+    abre(SERVIDO, function (w) {
+      check('sem aviso, n = 1', !w.document.querySelector('.carga-boot') && w.__boot.estado().n === 1);
+      next();
+    });
+  });
+
+  // ==================================================== em casa (file://)
+  function passoCasa(nome, marcaAntes, fotoEm, confere) {
+    passo(nome, function (next) {
+      limpa();
+      if (marcaAntes) sGrava(CH, marcaAntes);
+      var foto = null;
+      window.__foto = function (w) {
+        var t = w.document.querySelector('#carga .carga-boot .carga-boot-txt');
+        foto = { marca: w.__boot.le(), aviso: t ? t.textContent : null,
+                 txt: (w.document.getElementById('carga-txt') || {}).textContent, visivel: !w.document.getElementById('carga').hidden };
+      };
+      abre({ carregador: true, servido: false, mainDeVerdade: true, foto: fotoEm }, function (w) {
+        espera(function () { return w.__boot.estado().acabou; }, 5000, T(function (ok) {
+          confere(w, foto, ok);
+          next();
+        }));
+      });
+    });
+  }
+  passoCasa('em casa (os embutidos): a mesma marca, e sem marca anterior nenhum aviso', null,
+    'assets/embedded/models-meshy-sum.js', function (w, foto, ok) {
+      check('no meio da leitura, a marca aponta o arquivo que está sendo lido (a leitura dos arquivos, n = 1)',
+            foto && foto.marca && foto.marca.etapa === 'a leitura dos arquivos' &&
+            foto.marca.arquivo === 'assets/embedded/models-meshy-sum.js' && foto.marca.n === 1, JSON.stringify(foto && foto.marca));
+      check('sem marca anterior, a #carga só mostra o progresso', foto && foto.visivel && foto.aviso === null &&
+            /^lendo models-meshy-sum\.js/.test(foto.txt || ''), JSON.stringify(foto));
+      var et = w.__boot.historico().map(function (x) { return x.etapa; });
+      check('a #carga sai antes do main.js; o fim dele fecha a abertura e a marca some',
+            ok && sLe(CH) === null && w.document.getElementById('carga').hidden && typeof w.__BOOT_MS === 'number');
+      check('as etapas em casa: o começo → a leitura dos arquivos → os passos do main.js',
+            subseq(et, ['o começo', 'a leitura dos arquivos', 'Renderer.init', 'UI.init', 'Game.init', 'Nuvem.iniciar',
+                        'Agenda.iniciar', 'a primeira tela']), et.join(' → ').slice(0, 300));
+    });
+  passoCasa('em casa com a marca de uma parada: o mesmo aviso, durante a leitura',
+    { t: Date.now(), etapa: 'a leitura dos arquivos', arquivo: 'assets/embedded/models-meshy.js', n: 1 },
+    'assets/embedded/models-pets.js', function (w, foto, ok) {
+      check('"A última abertura parou na leitura dos arquivos (assets/embedded/models-meshy.js)." com o progresso à vista',
+            foto && foto.visivel && foto.aviso === 'A última abertura parou na leitura dos arquivos (assets/embedded/models-meshy.js).' &&
+            /^lendo models-pets\.js/.test(foto.txt || ''), JSON.stringify(foto));
+      check('n = 2 no meio da leitura', foto && foto.marca && foto.marca.n === 2 && foto.marca.arquivo === 'assets/embedded/models-pets.js',
+            JSON.stringify(foto && foto.marca));
+      check('no fim, marca e aviso somem', ok && sLe(CH) === null && !w.document.querySelector('.carga-boot'));
+    });
+
+  // ============================================================ a robustez
+  passo('um js/main.js sem os ganchos (versão velha) não deixa marca para trás', function (next) {
+    limpa();
+    abre({ carregador: true, servido: true, mainDeVerdade: false }, function (w) {
+      w.__busca.pronto(null);
+      injetaAte(w, w.__injeta.lista.length, T(function () {
+        check('antes da #carga sair, a marca existe', !!sLe(CH));
+        w.__injeta.cb();
+        espera(function () { return w.__boot.estado().acabou; }, 2000, T(function (ok) {
+          check('a #carga fora basta: a marca some', ok && sLe(CH) === null);
+          next();
+        }));
+      }));
+    });
+  });
+  passo('uma marca que lança exceção não derruba o carregador', function (next) {
+    limpa();
+    abre({ carregador: true, servido: true, bootQuebrado: true }, function (w) {
+      var ok1 = !!w.__busca;
+      w.__busca.progresso(1, 2);
+      w.__busca.pronto(null);
+      var ok2 = !!w.__injeta;
+      if (ok2) w.__injeta.cb();
+      check('buscou, injetou e a #carga saiu, como sem marca nenhuma',
+            ok1 && ok2 && w.document.getElementById('carga').hidden &&
+            w.document.getElementById('carga-txt').textContent === 'montando a sala…');
+      next();
+    });
+  });
+
+  // ================================================ o index.html inteiro
+  if (INTEIRO) {
+    var SERV = location.protocol !== 'file:';
+    function abreIndex(cb) {
+      var fr = document.createElement('iframe');
+      fr.style.cssText = 'width:900px;height:560px';
+      fr.src = '../index.html?sandbox=1&prova-boot=' + Date.now();
+      palco.appendChild(fr);
+      cb(fr);
+    }
+    passo('o index.html inteiro (' + (SERV ? 'servido' : 'em casa') + '): abre até a primeira tela e a marca some', function (next) {
+      limpa();
+      abreIndex(function (fr) {
+        espera(function () { var w = fr.contentWindow; return w && w.__boot && w.__boot.estado().acabou; }, 900000, T(function (ok) {
+          var w = fr.contentWindow;
+          check('a abertura terminou', ok);
+          var et = ok ? w.__boot.historico().map(function (x) { return x.etapa; }) : [];
+          var alvo = (SERV ? ['o começo', 'o download dos modelos', 'a montagem da sala'] : ['o começo', 'a leitura dos arquivos'])
+            .concat(['Renderer.init', 'UI.init', 'Game.init', 'Nuvem.iniciar', 'Agenda.iniciar', 'a primeira tela']);
+          check('as etapas na ordem: ' + alvo.join(' → '), subseq(et, alvo), et.join(' → ').slice(0, 400));
+          check('a marca sumiu, a #carga saiu e nenhum aviso', ok && sLe(CH) === null && w.document.getElementById('carga').hidden &&
+                !w.document.querySelector('.carga-boot') && !w.document.querySelector('.carga-vigia'));
+          next();
+        }));
+      });
+    }, 1000000);
+    passo('o index.html inteiro com a marca de uma parada: o aviso aparece e a abertura segue até o fim', function (next) {
+      limpa();
+      sGrava(CH, parada());
+      abreIndex(function (fr) {
+        espera(function () { var w = fr.contentWindow; return w && w.document && w.document.querySelector('#carga .carga-boot'); },
+               120000, T(function (ok) {
+          var w = fr.contentWindow, t = ok ? textoAviso(w) : null, av = ok ? w.document.querySelector('#carga .carga-boot') : null;
+          check('o aviso aparece na #carga de verdade, visível',
+                t === 'A última abertura parou na montagem da sala (js/render3d/hub3d.js).' && av.offsetHeight > 0 &&
+                av.querySelectorAll('button').length === 3, t);
+          espera(function () { return w.__boot && w.__boot.estado().acabou; }, 900000, T(function (ok2) {
+            check('a abertura seguiu até o fim: aviso e marca somem', ok2 && sLe(CH) === null && !w.document.querySelector('.carga-boot'));
+            next();
+          }));
+        }));
+      });
+    }, 1100000);
+  }
+
+  setTimeout(function () {
+    if (!terminou) { check('a prova terminou a tempo', false, 'parou em: ' + onde); fim(); }
+  }, INTEIRO ? 2500000 : 110000);
+  segue();
+})();
+</script>
+</body>
+</html>

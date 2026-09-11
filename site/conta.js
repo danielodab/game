@@ -13,6 +13,14 @@
  * página esquece a sessão e mostra as abas. É o conserto do "você já está
  * dentro" que aparecia com token vencido.
  *
+ * O RETRATO NO RANKING (10/09): GET /api/avatar sai junto com a conta e traz
+ * as opções que o SERVIDOR aceita (os retratos das classes que a conta tem no
+ * último save, mais as iniciais, e as fusões de qualquer dupla delas), a
+ * escolha guardada e o que o ranking mostra agora. Um clique grava (POST
+ * /api/avatar {avatar}, `null` = automático, o melhor herói), sem janelinha;
+ * a recusa do servidor aparece como veio. A conta do Mestre só veste o
+ * Cavaleiro Negro. O nome das classes vem de ../js/core/data/classes.js.
+ *
  * O NOME DA CONTA NOVA passa pela lei dos nomes do jogo (../js/core/nomes.js,
  * que este arquivo carrega sob demanda): nome reservado à equipe (GM, Admin,
  * Administrador…) não sai da página. Sem a lei, o pedido sai como antes e o
@@ -35,6 +43,9 @@
   var relogio = 0;        // o intervalo que conta o "reenviar em …"
   var eqEmail = '';       // o e-mail do passo 1 do esqueci
   var tela = '';
+  var avatar = null;      // a última resposta boa de GET /api/avatar
+  var avatarErro = '';
+  var avOcupado = false;  // uma troca de retrato a caminho
 
   /* ---- avisos e validação miúda ---- */
   function aviso(id, texto, tipo) {
@@ -154,6 +165,8 @@
     SITE.cabecalho();
     dados = null;
     troca = null;
+    avatar = null;
+    avatarErro = '';
     mostra('entrar');
     aviso('e-aviso', texto, tipo || 'neutro');
   }
@@ -167,6 +180,7 @@
    * que a troca de e-mail estiver */
   function carregaConta(depois) {
     depois = depois || {};
+    if (!avatar) carregaAvatar();         // o retrato sai junto com a conta, uma vez
     if (!dados) {
       mostra('carregando');
       $('cc-texto').className = 'estado';
@@ -207,6 +221,119 @@
     desenhaEmail();
     desenhaSessoes();
     desenhaAtividade();
+    desenhaAvatar();
+  }
+
+  /* -- o retrato no ranking: as opções são as do servidor, e cada id é
+   * conferido pela gramática antes de virar botão ('classe:<id>',
+   * 'fus:<a>+<b>' e 'gm'; '' é o automático) */
+  var RE_AVATAR = /^(classe:[a-z][a-z0-9]*|fus:[a-z][a-z0-9]*\+[a-z][a-z0-9]*|gm)$/;
+  function classesDoJogo() { return (window.JOGO && JOGO.DATA && JOGO.DATA.classes) || {}; }
+  function nomeClasse(id) {
+    var C = classesDoJogo();
+    return (proprio(C, id) && C[id].name) || String(id == null ? '' : id);
+  }
+  function corClasse(id) {
+    var C = classesDoJogo();
+    return (proprio(C, id) && C[id].palette && C[id].palette.primary) || '';
+  }
+  /* o que um id de retrato mostra: {nome, foto} (null = id que o site não entende) */
+  function retrato(id) {
+    // o Mestre: a arte do Cavaleiro Negro, a MESMA da caixa "Equipe" do ranking (conserto 11/09), na moldura
+    // escura do .busto.gm; sem o arquivo, o ◆
+    if (id === 'gm') {
+      return { nome: 'Cavaleiro Negro', foto: SITE.busto({ src: 'img/equipe-cavaleiro-busto.webp', reserva: 'img/equipe-cavaleiro.webp',
+                                                          letra: '◆', cor: '#8a1f2d' }).replace('class="busto', 'class="busto gm') };
+    }
+    var m = /^classe:([a-z][a-z0-9]*)$/.exec(id || '');
+    if (m) {
+      var n = nomeClasse(m[1]);
+      return { nome: n, foto: SITE.busto({ src: SITE.img('classe', m[1], true), letra: SITE.inicial(n), cor: corClasse(m[1]) }) };
+    }
+    var par = /^fus:/.test(id || '') ? SITE.parDe(id) : null;
+    if (par) {
+      var a = nomeClasse(par[0]), b = nomeClasse(par[1]);
+      return { nome: a + ' + ' + b, foto: SITE.busto({ src: SITE.img('fusao', par, true), reserva: SITE.img('classe', par[0], true),
+                                                       letra: SITE.inicial(a), cor: corClasse(par[0]) }) };
+    }
+    return null;
+  }
+  function botaoAvatar(id, foto, nome, sub, atual) {
+    return '<button type="button" class="av-op" data-avatar="' + E(id) + '" aria-pressed="' + (atual ? 'true' : 'false') + '"' +
+      (avOcupado ? ' disabled' : '') + ' title="' + E(nome) + '">' + foto + '<span class="av-nome">' + E(nome) +
+      (sub ? '<br><small>' + E(sub) + '</small>' : '') + '</span></button>';
+  }
+  function carregaAvatar() {
+    return SITE.api('/api/avatar').then(function (r) {
+      if (r.status === 401) {
+        if (SITE.sessao()) sessaoMorta('A sessão desta página tinha vencido (ou foi encerrada em outro lugar). Entre de novo.');
+        return;
+      }
+      if (r.ok && Array.isArray(r.opcoes)) { avatar = r; avatarErro = ''; }
+      else {
+        avatar = null;
+        avatarErro = r.status === 0 ? 'O servidor está fora — os retratos voltam com ele.'
+          : r.status === 404 ? 'A escolha do retrato ainda não chegou a este servidor.'
+          : SITE.erro(r, 'não deu para ler os retratos');
+      }
+      desenhaAvatar();
+    });
+  }
+  function desenhaAvatar() {
+    var g = $('av-grade'), ef = $('av-efetivo'), txt = $('av-texto');
+    if (!avatar) {
+      ef.hidden = true;
+      g.innerHTML = '<div class="estado' + (avatarErro ? ' fora' : '') + '">' + E(avatarErro || 'carregando os retratos…') + '</div>';
+      return;
+    }
+    if (avatar.gm) {
+      txt.textContent = 'A conta do Mestre do Fundo aparece com o Cavaleiro Negro: ele não troca de retrato.';
+      ef.hidden = true;
+      g.innerHTML = '<div class="av-mestre" data-avatar-mestre>' + retrato('gm').foto +
+        '<div><b>Cavaleiro Negro</b><small>o retrato do Mestre do Fundo</small></div></div>';
+      return;
+    }
+    var ops = (Array.isArray(avatar.opcoes) ? avatar.opcoes : []).map(function (o) {
+      return o && typeof o.id === 'string' ? o.id : '';
+    }).filter(function (id, i, todos) { return RE_AVATAR.test(id) && id !== 'gm' && todos.indexOf(id) === i && !!retrato(id); });
+    var escolhido = typeof avatar.escolhido === 'string' ? avatar.escolhido : '';
+    var vale = !escolhido || ops.indexOf(escolhido) >= 0;
+    txt.textContent = 'O retrato aparece no ranking. Libere classes no jogo para ganhar mais retratos.' +
+      (avatar.semSave ? ' Sem save no servidor ainda: por enquanto, só os retratos das classes do começo.' : '') +
+      (vale ? '' : ' O retrato escolhido não vale mais (a classe saiu do seu save): o ranking usa o automático.');
+    var html = botaoAvatar('', '<span class="busto sem-foto" data-letra="✦"></span>', 'Automático', 'o seu melhor herói',
+                           !escolhido || !vale);
+    ops.forEach(function (id) {
+      var r = retrato(id);
+      html += botaoAvatar(id, r.foto, r.nome, '', id === escolhido);
+    });
+    g.innerHTML = html;
+    // o que o ranking mostra agora (o servidor diz; o busto é o mesmo do ranking)
+    var e = avatar.efetivo && typeof avatar.efetivo === 'object' ? avatar.efetivo : {};
+    var nomeConta = (dados && dados.conta && dados.conta.nome) || '';
+    var par = SITE.parDe(e.avatar);
+    var agora = par ? nomeClasse(par[0]) + ' + ' + nomeClasse(par[1])
+      : proprio(classesDoJogo(), e.classe) && e.classe !== 'gm' ? nomeClasse(e.classe) : 'a inicial do seu nome';
+    ef.innerHTML = SITE.bustoJogador({ avatar: e.avatar, classe: e.classe, nome: nomeConta }) +
+      '<span>No ranking agora: <b>' + E(agora) + '</b></span>';
+    ef.hidden = false;
+  }
+  function escolheAvatar(id) {
+    if (avOcupado || !avatar || avatar.gm) return;
+    avOcupado = true;
+    desenhaAvatar();
+    aviso('av-aviso', 'Trocando o retrato…', 'neutro');
+    SITE.api('/api/avatar', { method: 'POST', body: { avatar: id || null } }).then(function (r) {
+      avOcupado = false;
+      if (r.status === 401) { sessaoMorta('A sessão desta página tinha vencido. Entre de novo.'); return; }
+      if (!r.ok) { aviso('av-aviso', SITE.erro(r, 'não deu para trocar o retrato')); desenhaAvatar(); return; }
+      if (avatar) {
+        avatar.escolhido = typeof r.escolhido === 'string' ? r.escolhido : null;
+        if (r.efetivo && typeof r.efetivo === 'object') avatar.efetivo = r.efetivo;
+      }
+      desenhaAvatar();
+      aviso('av-aviso', 'Retrato trocado: o ranking já mostra.', 'certo');
+    });
   }
 
   /* -- trocar o e-mail: o passo 2 abre direto quando o servidor tem um pedido aberto */
@@ -360,6 +487,8 @@
     window.addEventListener('site:sessao', function () {
       dados = null;
       troca = null;
+      avatar = null;
+      avatarErro = '';
       mostra('entrar');
       aviso('e-aviso', 'Você saiu desta conta neste navegador.', 'neutro');
     });
@@ -589,6 +718,13 @@
       emOutro = true;
       aviso('em-aviso2', '');
       passoEmail(1);
+    });
+
+    /* -- o retrato no ranking: um clique grava (o atual não pede nada) */
+    $('av-grade').addEventListener('click', function (ev) {
+      var bt = ev.target.closest ? ev.target.closest('button[data-avatar]') : null;
+      if (!bt || bt.disabled || bt.getAttribute('aria-pressed') === 'true') return;
+      escolheAvatar(bt.getAttribute('data-avatar'));
     });
 
     /* -- sessões */

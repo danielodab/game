@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a batalha em dupla pela Rede (motor e lockstep)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  h2{font-size:13px;margin:14px 0 4px;color:#ffd98a}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:980px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px;word-break:break-all}
+  #palco{position:absolute;left:-9999px;top:0;width:10px;height:10px;overflow:hidden}
+</style>
+</head>
+<body>
+<h1>A batalha em dupla pela Rede — motor determinístico e lockstep de verdade</h1>
+<div class="sub">Duas instâncias do motor (iframes) com a mesma semente e os mesmos lances terminam com o mesmo
+hash em TODO turno, em várias salas e com fusão; a foto (sem a grade, com gridStr) retoma a batalha, com os
+feitiços da fusão re-registrados; o erro de 1 PV é pego no próprio turno. Depois, dois clientes de verdade
+(Engine + Game + Coop, sem tela) ligados por uma Rede de mentira: ata, colocação do líder, lances, IA nos dois
+lados, hash por turno, foto de resgate, fusão com os dois aceitando, sumiço e IA, a volta, a aba escondida,
+recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos calabouços abertos.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+<div id="palco"></div>
+
+<script>
+  // ?raiz= (a raiz do jogo; padrão: a página mora em tests/) e ?base= (de onde vêm engine/fusion/ai/
+  // progress/game/coop — padrão: js/core da raiz). ?filho=motor|cliente: o iframe desta mesma página.
+  (function () {
+    var q = location.search;
+    function par(n) { var m = new RegExp('[?&]' + n + '=([^&]*)').exec(q); return m ? decodeURIComponent(m[1]) : null; }
+    window.__FILHO = par('filho');
+    window.__RAIZ = par('raiz') || '../';
+    window.__BASE = par('base') || (window.__RAIZ + 'js/core/');
+    window.__V = '?v=' + Date.now();
+    document.write('<scr' + 'ipt src="' + window.__RAIZ + 'tests/save_sandbox.js"></scr' + 'ipt>');
+  })();
+</script>
+<script>
+  // a Rede de mentira dos clientes: o mesmo contrato (ouvir/dirige/meuId/meuCx/visto/nomeDe/vigia), e o
+  // "fio" é o correio da página-mãe (JSON de ida: o que não vira JSON não passa)
+  window.__instalaRede = function () {
+    var R = {}, ouv = {}, visto = {}, ident = { id: null, cx: null };
+    var mae = window.parent;
+    R._ident = function (id, cx) { ident.id = id; ident.cx = cx; };
+    R.meuId = function () { return ident.id; };
+    R.meuCx = function () { return ident.cx; };
+    R.privado = function () { return true; };
+    R.estadoConexao = function () { return 'ws'; };
+    R.transporte = function () { return 'ws'; };
+    R.nomeDe = function (id, s) { return s || (id ? ('Jogador ' + id) : '?'); };
+    R.visto = function (id) { return visto[id] || 0; };
+    R.vigia = function () { return true; };
+    R.solta = function () { return true; };
+    R.ultimaRecusa = function () { return null; };
+    R.ouvir = function (tipo, fn) {
+      (ouv[tipo] = ouv[tipo] || []).push(fn);
+      return function () { var l = ouv[tipo] || [], i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); };
+    };
+    R.dirige = function (tipo, para, acao, dados, opts) {
+      var env = { t: tipo, de: ident.id, cx: ident.cx, para: para, paraCx: (opts && opts.cx) || null,
+                  acao: acao, dados: dados };
+      mae.__correio.push({ de: ident.id, s: JSON.stringify(env) });
+      return true;
+    };
+    R._recebe = function (env) {
+      visto[env.de] = mae.__relogio.t;
+      var ev = { tipo: env.t, de: env.de, cx: env.cx, acao: env.acao, dados: env.dados };
+      var l = (ouv[env.t] || []).slice();
+      for (var i = 0; i < l.length; i++) {
+        try { l[i](ev); } catch (e) { mae.__erros.push(ident.id + ' ouvinte ' + env.t + '/' + env.acao + ': ' + e.message); }
+      }
+    };
+    R._sinal = function (ev) {
+      var l = (ouv[ev.tipo] || []).slice();
+      for (var i = 0; i < l.length; i++) { try { l[i](ev); } catch (e) { mae.__erros.push('sinal: ' + e.message); } }
+    };
+    JOGO.Rede = R;
+  };
+  (function () {
+    var D0 = window.__RAIZ + 'js/core/', B = window.__BASE, V = window.__V;
+    var dados = ['data/elements.js', 'data/classes.js', 'data/spells.js', 'data/progression.js',
+      'data/monsters.js', 'data/dungeons.js', 'data/fusions.js', 'data/pets.js', 'data/items.js',
+      'data/items_extra.js', 'data/items_selos.js'];
+    var i;
+    for (i = 0; i < dados.length; i++) document.write('<scr' + 'ipt src="' + D0 + dados[i] + V + '"></scr' + 'ipt>');
+    var nucleo = ['engine.js', 'fusion.js', 'ai.js'];
+    for (i = 0; i < nucleo.length; i++) document.write('<scr' + 'ipt src="' + B + nucleo[i] + V + '"></scr' + 'ipt>');
+    if (window.__FILHO === 'cliente') {
+      document.write('<scr' + 'ipt src="' + D0 + 'progress.js' + V + '"></scr' + 'ipt>');
+      document.write('<scr' + 'ipt src="' + B + 'game.js' + V + '"></scr' + 'ipt>');
+      document.write('<scr' + 'ipt>window.__instalaRede();</scr' + 'ipt>');
+    }
+    if (window.__FILHO !== 'motor') document.write('<scr' + 'ipt src="' + B + 'coop.js' + V + '"></scr' + 'ipt>');
+    if (window.__FILHO === 'cliente') {
+      document.write('<scr' + 'ipt>JOGO.Coop._semIntervalo = true; JOGO.Coop._agora = function () { return window.parent.__relogio.t; };' +
+                     'window.__pvp = []; JOGO.DB = { registrarPvp: function (r) { window.__pvp.push(r); }, ganharMoedas: function () {} };' +
+                     'window.__telas = []; JOGO.UI = { showScreen: function (n, d) { window.__telas.push({ n: n, d: d }); } };' +
+                     'window.__pronto = true;</scr' + 'ipt>');
+    }
+    if (window.__FILHO === 'motor') document.write('<scr' + 'ipt>window.__pronto = true;</scr' + 'ipt>');
+  })();
+</script>
+
+<script>
+(function () {
+  'use strict';
+  if (window.__FILHO) return;          // os filhos só carregam; quem manda é a página-mãe
+
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0, notas = [];
+  function secao(t) { var h = document.createElement('h2'); h.textContent = t; lista.appendChild(h); }
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ') + nome +
+      (extra !== undefined && extra !== null && extra !== '' ? ' — <code>' + String(extra).replace(/</g, '&lt;') + '</code>' : '');
+    lista.appendChild(li);
+  }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function mistura(n) {                       // mulberry32 de um inteiro: sementes espalhadas
+    var t = (Math.imul(n, 0x6D2B79F5) + 0x9E3779B9) >>> 0;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return (t ^ (t >>> 14)) >>> 0;
+  }
+  var D = JOGO.DATA, E0 = JOGO.Engine;
+
+  // ------------------------------------------------------------------ utilidades do motor
+  function spellsDe(classId, el) {
+    var c = D.classes[classId], s = (c.baseSpells || []).slice();
+    ((c.paths || {})[el] || []).forEach(function (x) { if (s.indexOf(x) < 0) s.push(x); });
+    return s;
+  }
+  function heroi(id, classId, el, dono, nv) {
+    return { heroId: id, classId: classId, level: nv || 30, element: el, spells: spellsDe(classId, el), dono: dono || null };
+  }
+  function aplica(J, st, l) {
+    var E = J.Engine;
+    if (l.a === 'p') return E.place(st, l.x, l.y);
+    if (l.a === 'm') return E.move(st, l.u, l.x, l.y);
+    if (l.a === 'c') return E.cast(st, l.u, l.s, l.x, l.y);
+    if (l.a === 'e') { if (st.phase === 'playing') E.endTurn(st); return true; }
+    if (l.a === 'f') { st.consentimento = { a: l.u, b: l.alvo, T: st.turno || 0 }; return J.Fusion.declare(st, l.u, l.alvo); }
+    return false;
+  }
+  function deGente(u) { return !!u && (u.kind === 'hero' || u.kind === 'fusion') && !!u.dono && !u.ia; }
+  function vizinhaLivre(J, st, u) {
+    var d = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (var i = 0; i < d.length; i++) {
+      var x = u.x + d[i][0], y = u.y + d[i][1];
+      if (y >= 0 && y < st.grid.h && x >= 0 && x < st.grid.w && st.grid.tiles[y][x].type === 'floor' && !J.Engine.unitAt(st, x, y)) return { x: x, y: y };
+    }
+    return null;
+  }
+  /* A simulação do lockstep no MOTOR: os heróis de gente jogam por lances (quem grava tira da IA e
+   * grava TODA tentativa; quem repete consome os lances do turno), monstros/pets/invocações rodam na
+   * IA dos dois lados. O hash é anotado (ou conferido) a cada mudança de `state.turno`. */
+  function simula(J, st, lances, gravar, hashes, op) {
+    op = op || {};
+    var E = J.Engine, AI = J.AI;
+    var idx = op.idx0 || 0, ult = st.turno, n = 0, erro = null, fotos = {}, comparados = 0;
+    function marca() {
+      if (st.turno === ult) return;
+      ult = st.turno;
+      var h = E.hash(st);
+      if (gravar) {
+        hashes[st.turno] = h;
+        if (op.fotoEm && op.fotoEm.indexOf(st.turno) >= 0 && st.phase === 'playing') fotos[st.turno] = { estado: E.foto(st), idx: lances.length };
+      } else if (hashes[st.turno] !== undefined) {
+        comparados++;
+        if (hashes[st.turno] !== h && !erro) erro = 'hash difere no turno ' + st.turno;
+      }
+      // a sabotagem acontece DURANTE o turno T (depois do hash do começo dele)
+      if (op.sabota && st.turno === op.sabota.T && !op.sabota.feito) { op.sabota.feito = true; op.sabota.fn(st); }
+    }
+    if (st.phase === 'placing') {
+      var l0;
+      if (gravar) {
+        var o = st.placement.options[Math.min(op.casa || 0, st.placement.options.length - 1)];
+        l0 = { a: 'p', x: o.x, y: o.y, T: st.turno };
+        l0.ok = !!aplica(J, st, l0);
+        lances.push(l0);
+      } else { l0 = lances[idx++]; aplica(J, st, l0); }
+      marca();
+      if (op.depoisDaColocacao) op.depoisDaColocacao(st);
+    }
+    while (st.phase === 'playing' && n++ < 6000) {
+      var u = E.activeUnit(st);
+      if (deGente(u)) {
+        var T = st.turno;
+        if (gravar) {
+          if (op.antesDoHeroi) {
+            var extra = op.antesDoHeroi(st, u);
+            if (extra) {
+              extra.T = T; extra.ok = !!aplica(J, st, extra); lances.push(extra); E.events.length = 0; marca();
+              if (extra.a === 'f' && extra.ok && st.turno === T && st.phase === 'playing') {
+                var lf = { T: T, u: u.uid, a: 'e' }; lf.ok = !!aplica(J, st, lf); lances.push(lf); E.events.length = 0; marca();
+              }
+              if (st.turno !== T) continue;
+            }
+          }
+          var plan = AI.planTurn(st, u.uid);
+          for (var i = 0; i < plan.length && st.phase === 'playing' && st.turno === T; i++) {
+            var p = plan[i], l = { T: T, u: u.uid };
+            if (p.action === 'move') { l.a = 'm'; l.x = p.x; l.y = p.y; }
+            else if (p.action === 'cast') { l.a = 'c'; l.s = p.spellId; l.x = p.x; l.y = p.y; }
+            else l.a = 'e';
+            l.ok = !!aplica(J, st, l);
+            lances.push(l);
+            E.events.length = 0;
+            marca();
+            if (l.a === 'e') break;
+          }
+          if (st.phase === 'playing' && st.turno === T) { var le = { T: T, u: u.uid, a: 'e' }; le.ok = !!aplica(J, st, le); lances.push(le); marca(); }
+        } else {
+          var fez = 0;
+          while (idx < lances.length && lances[idx].T === T && st.turno === T && st.phase === 'playing') {
+            var lx = lances[idx++];
+            var okx = !!aplica(J, st, lx);
+            E.events.length = 0;
+            if (okx !== lx.ok && !erro) erro = 'o motor devolveu diferente em T=' + T;
+            fez++;
+            marca();
+          }
+          if (!fez) { if (!erro) erro = 'faltou lance para T=' + T; break; }
+        }
+      } else {
+        var pl = AI.planTurn(st, u.uid), T2 = st.turno, fim = false;
+        for (var j = 0; j < pl.length && st.phase === 'playing' && st.turno === T2; j++) {
+          var a = pl[j];
+          if (a.action === 'move') E.move(st, u.uid, a.x, a.y);
+          else if (a.action === 'cast') E.cast(st, u.uid, a.spellId, a.x, a.y);
+          else { E.endTurn(st); fim = true; }
+          E.events.length = 0;
+          marca();
+          if (fim) break;
+        }
+        if (!fim && st.phase === 'playing' && st.turno === T2) { E.endTurn(st); marca(); }
+      }
+    }
+    return { fim: st.phase, turnos: st.turno, erro: erro, hash: E.hash(st), idx: idx, fotos: fotos, comparados: comparados };
+  }
+
+  // ------------------------------------------------------------------ os filhos
+  var palco = document.getElementById('palco');
+  var qs = 'raiz=' + encodeURIComponent(window.__RAIZ) + '&base=' + encodeURIComponent(window.__BASE);
+  var pagina = location.pathname.split('/').pop() || 'coop_motor.html';
+  function filho(tipo, cb) {
+    var fr = document.createElement('iframe');
+    fr.width = '10'; fr.height = '10';
+    fr.src = pagina + '?filho=' + tipo + '&' + qs + '&n=' + Math.random();
+    palco.appendChild(fr);
+    var t0 = Date.now();
+    (function espera() {
+      var w = null;
+      try { w = fr.contentWindow; } catch (e) {}
+      if (w && w.__pronto && w.JOGO && w.JOGO.Engine) return cb(w);
+      if (Date.now() - t0 > 60000) return cb(null);
+      setTimeout(espera, 50);
+    })();
+  }
+
+  // ================================================================== A. um motor, 18 batalhas
+  function secaoA() {
+    secao('A · o motor: 18 batalhas repetidas só pelos lances, com semente, e a foto do turno 8');
+    var J = { Engine: JOGO.Engine, AI: JOGO.AI, Fusion: JOGO.Fusion };
+    var duplas = [
+      [heroi('espadachim', 'espadachim', 'fogo', 'ana'), heroi('curandeiro', 'curandeiro', 'agua', 'bia')],
+      [heroi('invocador', 'invocador', 'terra', 'ana'), heroi('minotauro', 'minotauro', 'terra', 'bia')],
+      [heroi('arqueiro', 'arqueiro', 'ar', 'ana'), heroi('bruxo', 'bruxo', 'fogo', 'bia')]
+    ];
+    var n = 0, rep = 0, foto = 0, turnosTot = 0, maxFoto = 0, erros = [], vitorias = 0;
+    ['greenhouse', 'cistern'].forEach(function (dg) {
+      var dd = D.dungeons.filter(function (x) { return x.id === dg; })[0];
+      for (var r = 0; r < dd.rooms.length; r++) {
+        duplas.forEach(function (dupla, di) {
+          var seed = 1000 + n * 7919;
+          n++;
+          try {
+            var lances = [], hashes = {};
+            var st1 = E0.createBattle(dg, r, clone(dupla), { seed: seed, escolhePosicao: true });
+            var g = simula(J, st1, lances, true, hashes, { fotoEm: [8] });
+            turnosTot += g.turnos;
+            if (g.fim === 'won') vitorias++;
+            var st2 = E0.createBattle(dg, r, clone(dupla), { seed: seed, escolhePosicao: true });
+            var rr = simula(J, st2, lances, false, hashes, {});
+            if (!rr.erro && rr.hash === g.hash && rr.fim === g.fim) rep++;
+            else erros.push(dg + '/' + r + '/' + di + ': ' + (rr.erro || 'hash final'));
+            var f = g.fotos[8];
+            if (!f) { foto++; notas.push(dg + '/' + r + '/' + di + ' acabou antes do turno 8'); }
+            else {
+              maxFoto = Math.max(maxFoto, f.estado.length);
+              var st3 = E0.restaura(f.estado);
+              var rf = simula(J, st3, lances, false, hashes, { idx0: f.idx });
+              if (!rf.erro && rf.hash === g.hash) foto++;
+              else erros.push(dg + '/' + r + '/' + di + ' foto: ' + (rf.erro || 'hash final'));
+            }
+          } catch (e) { erros.push(dg + '/' + r + '/' + di + ' ERRO ' + e.message); }
+        });
+      }
+    });
+    check('as 18 batalhas refeitas só com os lances dão o MESMO hash em todo turno e no fim', rep === 18 && n === 18,
+          rep + '/' + n + ' · ' + turnosTot + ' turnos · ' + vitorias + ' vitórias da dupla · ' + erros.slice(0, 3).join(' | '));
+    check('a foto do turno 8 (sem a grade, com gridStr) retoma até o fim com os mesmos hashes', foto === 18,
+          foto + '/18 · maior foto ' + maxFoto + ' caracteres');
+    check('a foto cabe em ~9 KB por pedaço de fio (menos de 16 KB)', maxFoto > 0 && maxFoto < 16000, maxFoto);
+  }
+
+  // ================================================================== B. duas instâncias do motor
+  function secaoB(M1, M2) {
+    secao('B · DUAS instâncias do motor (iframes): mesma semente, mesmos lances → mesmo hash em todo turno');
+    var J1 = M1.JOGO, J2 = M2.JOGO;
+    var duplas = [
+      [heroi('espadachim', 'espadachim', 'fogo', 'ana', 20), heroi('curandeiro', 'curandeiro', 'agua', 'bia', 20)],
+      [heroi('sumo', 'sumo', 'terra', 'ana', 25), heroi('arqueiro', 'arqueiro', 'ar', 'bia', 25)],
+      [heroi('bruxo', 'bruxo', 'agua', 'ana', 30), heroi('invocador', 'invocador', 'fogo', 'bia', 30)]
+    ];
+    var n = 0, ok = 0, comp = 0, erros = [];
+    var fundiu = 0, fusoesTentadas = 0, fotoFusaoOk = false, fotoFusaoSemRegistro = null;
+    ['greenhouse', 'cistern'].forEach(function (dg) {
+      var dd = D.dungeons.filter(function (x) { return x.id === dg; })[0];
+      for (var r = 0; r < dd.rooms.length; r++) {
+        duplas.forEach(function (dupla, di) {
+          var seed = (0x9e3779b9 * (n + 3)) >>> 0;
+          var comFusao = (di === 0);
+          n++;
+          try {
+            var lances = [], hashes = {};
+            var st1 = J1.Engine.createBattle(dg, r, clone(dupla), { seed: seed, escolhePosicao: true });
+            var st2 = J2.Engine.createBattle(dg, r, clone(dupla), { seed: seed, escolhePosicao: true });
+            if (J1.Engine.hash(st1) !== J2.Engine.hash(st2)) { erros.push(dg + '/' + r + '/' + di + ' nasceram diferentes'); return; }
+            // a fusão entre DONOS diferentes: o herói de Bia é posto ao lado do de Ana nos DOIS motores
+            // (a mesma mutação nos dois, logo depois da colocação), e Ana pede no primeiro turno dela
+            var pedido = { feito: false };
+            function cola(J) {
+              return function (st) {
+                if (!comFusao) return;
+                var hs = st.units.filter(function (u) { return u.kind === 'hero'; });
+                var c = vizinhaLivre(J, st, hs[0]);
+                if (c) { hs[1].x = c.x; hs[1].y = c.y; }
+              };
+            }
+            var g = simula(J1, st1, lances, true, hashes, {
+              fotoEm: comFusao ? [6, 7, 8, 9, 10, 11, 12] : [],
+              depoisDaColocacao: cola(J1),
+              antesDoHeroi: function (st, u) {
+                if (!comFusao || pedido.feito || u.dono !== 'ana' || u.kind !== 'hero') return null;
+                pedido.feito = true;
+                var b = st.units.filter(function (x) { return x.kind === 'hero' && x.dono === 'bia'; })[0];
+                if (!b || Math.abs(b.x - u.x) + Math.abs(b.y - u.y) !== 1) return null;
+                fusoesTentadas++;
+                return { a: 'f', u: u.uid, alvo: b.uid };
+              }
+            });
+            if (comFusao && st1.units.some(function (u) { return u.kind === 'fusion'; })) fundiu++;
+            var fio = JSON.parse(JSON.stringify(lances));      // o que viajaria pela Rede
+            var rr = simula(J2, st2, fio, false, hashes, { depoisDaColocacao: cola(J2) });
+            comp += rr.comparados;
+            if (!rr.erro && rr.hash === g.hash && rr.fim === g.fim && rr.comparados > 3) ok++;
+            else erros.push(dg + '/' + r + '/' + di + ': ' + (rr.erro || ('fim ' + rr.fim + '/' + g.fim)));
+            // a foto de DEPOIS da fusão num motor que nunca viu a fusão (registro zerado)
+            if (comFusao && !fotoFusaoOk) {
+              var ks = Object.keys(g.fotos).map(Number).sort(function (a, b) { return a - b; });
+              for (var q = 0; q < ks.length; q++) {
+                var f = g.fotos[ks[q]];
+                if (f.estado.indexOf('"kind":"fusion"') < 0) continue;
+                var guarda = J2.Engine._genSpells;
+                // sem re-registrar (o que a foto crua faria): tem de dar diferente ou quebrar
+                J2.Engine._genSpells = {};
+                var cru = JSON.parse(f.estado);
+                var tl = [];
+                for (var yy = 0; yy < cru.grid.h; yy++) {
+                  var row = [];
+                  for (var xx = 0; xx < cru.grid.w; xx++) {
+                    var ii = (yy * cru.grid.w + xx) * 2, ff = +cru.gridStr.charAt(ii + 1);
+                    row.push({ type: { f: 'floor', w: 'wall', c: 'cover', h: 'hole' }[cru.gridStr.charAt(ii)], deco: !!(ff & 1) });
+                  }
+                  tl.push(row);
+                }
+                cru.grid = { w: cru.grid.w, h: cru.grid.h, tiles: tl }; delete cru.gridStr;
+                var sem = simula(J2, cru, fio, false, hashes, { idx0: f.idx });
+                fotoFusaoSemRegistro = sem.erro || (sem.hash === g.hash ? 'igual (a fusão não lançou feitiço composto)' : 'diferente no fim');
+                J2.Engine._genSpells = {};
+                var st3 = J2.Engine.restaura(f.estado);          // re-registra os feitiços da fusão
+                var rf = simula(J2, st3, fio, false, hashes, { idx0: f.idx });
+                J2.Engine._genSpells = guarda;
+                fotoFusaoOk = !rf.erro && rf.hash === g.hash && rf.comparados > 0;
+                if (!fotoFusaoOk) erros.push('foto da fusão: ' + (rf.erro || 'hash final'));
+                break;
+              }
+            }
+          } catch (e) { erros.push(dg + '/' + r + '/' + di + ' ERRO ' + e.message); }
+        });
+      }
+    });
+    check('18 batalhas em DUAS instâncias do motor: o mesmo hash em todo turno e no fim', ok === n && n === 18,
+          ok + '/' + n + ' · ' + comp + ' turnos comparados · ' + erros.slice(0, 3).join(' | '));
+    check('a fusão entre DONOS diferentes, com consentimento, aconteceu e as duas instâncias fundiram igual',
+          fundiu >= 3 && fusoesTentadas >= 3, 'fundiu ' + fundiu + ' de ' + fusoesTentadas + ' pedidas');
+    check('a foto de depois da fusão, num motor que nunca a viu, retoma igual (os feitiços são re-registrados)',
+          fotoFusaoOk, 'sem re-registrar: ' + fotoFusaoSemRegistro);
+
+    // o erro de 1 PV: acusado no fim do próprio turno; a foto da autoridade conserta
+    try {
+      var dupla = duplas[1], seed = 777;
+      var lances2 = [], hashes2 = {};
+      var s1 = J1.Engine.createBattle('greenhouse', 2, clone(dupla), { seed: seed, escolhePosicao: true });
+      var g2 = simula(J1, s1, lances2, true, hashes2, { fotoEm: [6] });
+      var s2 = J2.Engine.createBattle('greenhouse', 2, clone(dupla), { seed: seed, escolhePosicao: true });
+      var sab = { T: 5, fn: function (st) { var alvo = st.units.filter(function (u) { return u.alive && u.side === 'enemy'; })[0]; alvo.hp -= 1; } };
+      var det = simula(J2, s2, JSON.parse(JSON.stringify(lances2)), false, hashes2, { sabota: sab });
+      var f6 = g2.fotos[6];
+      var cons = f6 ? simula(J2, J2.Engine.restaura(f6.estado), JSON.parse(JSON.stringify(lances2)), false, hashes2, { idx0: f6.idx }) : { erro: 'sem foto' };
+      check('o erro de 1 PV injetado no turno 5 é acusado pelo hash no PRÓPRIO turno', det.erro === 'hash difere no turno 6', det.erro);
+      check('a foto do turno 6 da autoridade conserta: dali ao fim, os hashes batem', !cons.erro && cons.hash === g2.hash, cons.erro || 'ok');
+    } catch (e) { check('erro de 1 PV', false, e.message); }
+  }
+
+  // ================================================================== C..J. regras do motor
+  function secaoMotor(M1) {
+    var E = JOGO.Engine, F = JOGO.Fusion, C = JOGO.Coop;
+    secao('C · a semente da sala');
+    var d0 = [heroi('espadachim', 'espadachim', 'fogo', 'ana'), heroi('curandeiro', 'curandeiro', 'agua', 'bia')];
+    var a1 = E.createBattle('cistern', 0, clone(d0), { seed: 42, escolhePosicao: true });
+    var a2 = E.createBattle('cistern', 0, clone(d0), { seed: 42, escolhePosicao: true });
+    var b1 = E.createBattle('cistern', 0, clone(d0), { seed: 43, escolhePosicao: true });
+    var sem = E.createBattle('cistern', 0, clone(d0), { escolhePosicao: true });
+    check('a mesma semente dá a mesma batalha (hash, casas, desafio)', E.hash(a1) === E.hash(a2) &&
+          JSON.stringify(a1.placement.options) === JSON.stringify(a2.placement.options) && a1.desafio.id === a2.desafio.id);
+    check('outra semente dá outra batalha', a1._rng !== b1._rng && E.hash(a1) !== E.hash(b1));
+    var opcoes = {};
+    for (var s = 0; s < 12; s++) opcoes[JSON.stringify(E.createBattle('cistern', 0, clone(d0), { seed: s, escolhePosicao: true }).placement.options)] = 1;
+    check('12 sementes sorteiam casas diferentes (não é "mesma sala, mesmo grupo, mesma batalha")', Object.keys(opcoes).length > 3, Object.keys(opcoes).length);
+    check('sem semente, a regra de sempre (sai dos ids): dois sem semente nascem iguais', E.hash(sem) === E.hash(E.createBattle('cistern', 0, clone(d0), { escolhePosicao: true })));
+    check('o dono viaja do grupo para a unidade (e `ia` nasce falso)', a1.units.filter(function (u) { return u.kind === 'hero'; })
+          .map(function (u) { return u.dono + ':' + u.ia; }).join(',') === 'ana:false,bia:false');
+
+    secao('D · state.turno cresce de um em um (também com invocação no meio da ordem)');
+    try {
+      var dI = [heroi('invocador', 'invocador', 'terra', 'ana', 30), heroi('curandeiro', 'curandeiro', 'terra', 'bia', 30)];
+      var st = E.createBattle('greenhouse', 1, clone(dI), { seed: 9 });
+      var inicios = 1, invocou = 0, mono = true, antes = st.turno, g = 0;   // o createBattle já começou o turno 1
+      E.events.length = 0;
+      while (st.phase === 'playing' && g++ < 3000) {
+        var u = E.activeUnit(st), plan = JOGO.AI.planTurn(st, u.uid), fim = false;
+        for (var i = 0; i < plan.length && st.phase === 'playing'; i++) {
+          var p = plan[i];
+          if (p.action === 'move') E.move(st, u.uid, p.x, p.y);
+          else if (p.action === 'cast') E.cast(st, u.uid, p.spellId, p.x, p.y);
+          else { E.endTurn(st); fim = true; }
+          for (var k = 0; k < E.events.length; k++) {
+            if (E.events[k].type === 'turnStart' && !E.events[k].pet) inicios++;
+            if (E.events[k].type === 'summon') invocou++;
+          }
+          E.events.length = 0;
+          if (st.turno < antes) mono = false;
+          antes = st.turno;
+          if (fim) break;
+        }
+        if (!fim && st.phase === 'playing') { E.endTurn(st); for (k = 0; k < E.events.length; k++) if (E.events[k].type === 'turnStart' && !E.events[k].pet) inicios++; E.events.length = 0; }
+      }
+      check('um turno começado = +1 no state.turno (conta = número de turnStart de unidade da ordem)', st.turno === inicios && mono,
+            'turno ' + st.turno + ' · turnStart ' + inicios);
+      check('e houve invocação no meio da ordem', invocou > 0, invocou + ' invocações');
+    } catch (e) { check('turno com invocação', false, e.message); }
+
+    secao('E · o duelo pela Rede numa sala sorteada dos calabouços abertos');
+    try {
+      var A = [heroi('espadachim', 'espadachim', 'fogo', 'ana'), heroi('arqueiro', 'arqueiro', 'ar', 'ana')];
+      var B = [heroi('bruxo', 'bruxo', 'agua', 'bia'), heroi('sumo', 'sumo', 'terra', 'bia')];
+      var ar = C.sorteiaArena(12345);
+      var du1 = E.createDuelSala(ar.dungeonId, ar.roomIndex, clone(A), clone(B), { seed: 12345 });
+      var du2 = E.createDuelSala(ar.dungeonId, ar.roomIndex, clone(A), clone(B), { seed: 12345 });
+      var room = D.dungeons.filter(function (x) { return x.id === ar.dungeonId; })[0].rooms[ar.roomIndex];
+      var ps = [], letras = [];
+      room.layout.forEach(function (row, y) { for (var x = 0; x < row.length; x++) { var ch = row.charAt(x); if (ch === 'P') ps.push(x + ',' + y); else if (ch >= 'a' && ch <= 'z') letras.push({ x: x, y: y }); } });
+      var la = du1.units.filter(function (u) { return u.side === 'player'; });
+      var lb = du1.units.filter(function (u) { return u.side === 'enemy'; });
+      check('determinístico: a mesma semente dá o mesmo duelo (hash e clima)', E.hash(du1) === E.hash(du2) && du1.weather === du2.weather, du1.weather);
+      check('A nasce nos P (em ordem de leitura)', la.length === 2 && la.every(function (u) { return ps.indexOf(u.x + ',' + u.y) >= 0; }) &&
+            la[0].x + ',' + la[0].y === ps[0]);
+      var md = function (c) { var m = 1e9; ps.forEach(function (s) { var q = s.split(','); m = Math.min(m, Math.abs(c.x - q[0]) + Math.abs(c.y - q[1])); }); return m; };
+      var melhor = letras.map(md).sort(function (a, b) { return b - a; });
+      check('B nasce nas letras MAIS LONGE dos P', lb.length === 2 && md(lb[0]) === melhor[0] && md(lb[1]) === melhor[1],
+            'distâncias ' + md(lb[0]) + ',' + md(lb[1]) + ' · melhores ' + melhor.slice(0, 2).join(','));
+      check('sem monstros, sem pets, sem desafio; pvp e turno 1', du1.units.every(function (u) { return u.kind === 'hero'; }) &&
+            !du1.desafio && du1.pvp === true && du1.turno === 1 && du1.phase === 'playing');
+      check('as letras viraram chão (e o dono de cada lado veio junto)', letras.every(function (c) { return du1.grid.tiles[c.y][c.x].type === 'floor'; }) &&
+            la.every(function (u) { return u.dono === 'ana'; }) && lb.every(function (u) { return u.dono === 'bia'; }));
+      var vistas = {}, fora = 0;
+      for (var sd = 0; sd < 100; sd++) {
+        var semente = mistura(sd + 1);
+        var a = C.sorteiaArena(semente);
+        vistas[a.dungeonId + ':' + a.roomIndex] = 1;
+        if (a.dungeonId === 'poco' || (D.portalFechado && D.portalFechado(a.dungeonId))) fora++;
+      }
+      var abertas = 0;
+      D.dungeons.forEach(function (d) { if (d.id !== 'poco' && !(D.portalFechado && D.portalFechado(d.id)) && d.rooms) abertas += d.rooms.length; });
+      check('100 sementes: a arena é SEMPRE de calabouço aberto, e todas as salas abertas aparecem', fora === 0 && Object.keys(vistas).length === abertas,
+            Object.keys(vistas).sort().join(' ') + ' (' + abertas + ' salas abertas)');
+    } catch (e) { check('duelo em sala', false, e.message); }
+
+    secao('F · a fúria no PvP vale para os dois lados; o teto dá empate na vida igual');
+    var L = D.leveling, velha = L.roomFury;
+    try {
+      L.roomFury = { afterRound: 2, powerPerRound: 10, healCutPerRound: 0, maxRounds: 99 };
+      var dv = E.createDuelSala('greenhouse', 0, [heroi('sumo', 'sumo', 'terra', 'ana')], [heroi('sumo', 'sumo', 'terra', 'bia')], { seed: 1 });
+      dv.round = 5;
+      var pa = dv.units.filter(function (u) { return u.side === 'player'; })[0], pb = dv.units.filter(function (u) { return u.side === 'enemy'; })[0];
+      var pv = E.createBattle('greenhouse', 0, [heroi('sumo', 'sumo', 'terra', 'ana')], { seed: 1 });
+      pv.round = 5;
+      var hpve = pv.units.filter(function (u) { return u.side === 'player'; })[0];
+      check('no duelo os dois lados ganham o poder da fúria', E.furyPower(dv, pa) === 30 && E.furyPower(dv, pb) === 30);
+      check('na sala (PvE) o herói continua sem fúria', E.furyPower(pv, hpve) === 0);
+      L.roomFury = { afterRound: 1, powerPerRound: 0, healCutPerRound: 0, maxRounds: 3 };
+      var ev = E.createDuelSala('greenhouse', 0, [heroi('sumo', 'sumo', 'terra', 'ana')], [heroi('sumo', 'sumo', 'terra', 'bia')], { seed: 2 });
+      var gg = 0;
+      while (ev.phase === 'playing' && gg++ < 50) E.endTurn(ev);
+      check('teto de rodadas com a MESMA fração de vida: fase empate, battleEnd sem vencedor', ev.phase === 'empate', ev.phase);
+      var ew = E.createDuelSala('greenhouse', 0, [heroi('sumo', 'sumo', 'terra', 'ana')], [heroi('sumo', 'sumo', 'terra', 'bia')], { seed: 2 });
+      ew.units.filter(function (u) { return u.side === 'enemy'; })[0].hp -= 40;
+      gg = 0;
+      while (ew.phase === 'playing' && gg++ < 50) E.endTurn(ew);
+      check('teto com mais vida para A: A vence (won)', ew.phase === 'won', ew.phase);
+    } catch (e) { check('fúria PvP', false, e.message); }
+    L.roomFury = velha;
+
+    secao('G · summonsOf estável pelo _birth (u3 antes de u12)');
+    try {
+      var sg = E.createBattle('greenhouse', 0, [heroi('invocador', 'invocador', 'terra', 'ana')], { seed: 3 });
+      var dono = sg.units[0];
+      var mk = function (uid, b) { return { uid: uid, _birth: b, kind: 'summon', alive: true, offBoard: false, summonerUid: dono.uid, side: 'player' }; };
+      sg.units.push(mk('u12', 12), mk('u3', 3), mk('u7', 7));
+      check('as invocações vivas saem da mais antiga para a mais nova', E.summonsOf(sg, dono).map(function (u) { return u.uid; }).join(',') === 'u3,u7,u12');
+    } catch (e) { check('summonsOf', false, e.message); }
+
+    secao('H · fusão entre donos só com consentimento; I · Engine.encerra');
+    try {
+      var sf = E.createBattle('greenhouse', 0, [heroi('espadachim', 'espadachim', 'fogo', 'ana'), heroi('curandeiro', 'curandeiro', 'agua', 'bia')], { seed: 5 });
+      var ha = sf.units[0], hb = sf.units[1];
+      var cv = vizinhaLivre({ Engine: E }, sf, ha); hb.x = cv.x; hb.y = cv.y;
+      check('donos diferentes, sem consentimento: não funde', F.canFuse(sf, ha.uid, hb.uid) === false);
+      sf.consentimento = { a: ha.uid, b: hb.uid, T: sf.turno };
+      check('com o consentimento {a, b, T} do turno: funde', F.canFuse(sf, ha.uid, hb.uid) === true);
+      sf.consentimento = { a: ha.uid, b: hb.uid, T: sf.turno - 1 };
+      check('consentimento de outro turno não vale', F.canFuse(sf, ha.uid, hb.uid) === false);
+      sf.consentimento = null; hb.dono = 'ana';
+      check('o mesmo dono (a dupla do duelo) funde sem pedir', F.canFuse(sf, ha.uid, hb.uid) === true);
+      ha.dono = null; hb.dono = null; ha.conta = 'principal'; hb.conta = 'outra';
+      check('sem dono (fora de rede): a trava da conta de sempre', F.canFuse(sf, ha.uid, hb.uid) === false);
+      var sd2 = E.createDuelSala('cistern', 1, [heroi('sumo', 'sumo', 'terra', 'ana')], [heroi('bruxo', 'bruxo', 'fogo', 'bia')], { seed: 8 });
+      E.events.length = 0;
+      var enc = E.encerra(sd2, 'enemy', 'desistencia');
+      var bev = E.events.filter(function (x) { return x.type === 'battleEnd'; })[0];
+      check('Engine.encerra fecha o duelo (lost), com battleEnd{winner, reason}', enc && sd2.phase === 'lost' && bev && bev.winner === 'enemy' && bev.reason === 'desistencia');
+      check('e não fecha duas vezes', E.encerra(sd2, 'player', 'wo') === false && sd2.phase === 'lost');
+      var sp3 = E.createBattle('greenhouse', 0, [heroi('sumo', 'sumo', 'terra', 'ana')], { seed: 8 });
+      check('fora do PvP não existe empate (null vira derrota)', E.encerra(sp3, null, 'x') && sp3.phase === 'lost');
+    } catch (e) { check('canFuse/encerra', false, e.message); }
+
+    secao('— a assinatura dos dados e o payload');
+    check('Coop.assinatura: 8 hex e estável', /^[0-9a-f]{8}$/.test(C.assinatura()) && C.assinatura() === C.assinatura(), C.assinatura());
+    check('a assinatura do motor-filho (outro iframe, mesmos dados) é a mesma', !M1 || !M1.JOGO.Coop || M1.JOGO.Coop.assinatura() === C.assinatura());
+    check('payload do Mestre é recusado; feitiço desconhecido também', !C._validaPayload({ classId: 'gm', level: 1, spells: [] }) &&
+          !C._validaPayload({ classId: 'sumo', level: 1, spells: ['feitico-que-nao-existe'] }) &&
+          C._validaPayload({ classId: 'sumo', level: 1, spells: spellsDe('sumo', 'terra') }));
+  }
+
+  // ================================================================== K. dois clientes de verdade
+  var relogio = window.__relogio = { t: 1757000000000 };
+  var correio = window.__correio = [];
+  var erros = window.__erros = [];
+  var cli = {}, filtro = null;
+  function entrega() {
+    var n = 0;
+    while (correio.length && n++ < 20000) {
+      var it = correio.shift();
+      var env = JSON.parse(it.s);
+      var alvo = cli[env.para];
+      var de = cli[env.de];
+      if (!alvo || !alvo.vivo || (de && !de.vivo)) continue;             // ausente: ninguém recebe
+      if (env.paraCx && env.paraCx !== alvo.cx) continue;
+      var dec = filtro ? filtro(env) : 'entrega';
+      if (dec === 'perde') continue;
+      alvo.J.Rede._recebe(env);
+      if (dec === 'duplica') alvo.J.Rede._recebe(JSON.parse(it.s));
+    }
+  }
+  function passo(ms, quem) {
+    relogio.t += (ms || 50);
+    entrega();
+    Object.keys(cli).forEach(function (id) {
+      var c = cli[id];
+      if (!c.vivo || c.parado || (quem && quem.indexOf(id) < 0)) return;
+      try {
+        if (!c.soTique) c.J.Game.update(0.05);
+        c.J.Coop._tique();
+      } catch (e) { erros.push(id + ': ' + e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).join(' ')); }
+      c.J.Engine.events.length = 0;
+      entrega();
+    });
+  }
+  function ate(cond, max, ms, quem) {
+    for (var i = 0; i < (max || 4000); i++) { if (cond()) return true; passo(ms, quem); }
+    return cond();
+  }
+  function tela(id) { return cli[id].J.Game.screen; }
+  function ultimaTela(id, nome) {
+    var t = cli[id].w.__telas;
+    for (var i = t.length - 1; i >= 0; i--) if (t[i].n === nome) return t[i].d || {};
+    return null;
+  }
+  function contaLances(id) {
+    var lg = cli[id].J.Coop._log(), c = { m: 0, c: 0, cOk: 0, e: 0, p: 0, f: 0 };
+    Object.keys(lg).forEach(function (T) { lg[T].forEach(function (l) { if (l.de === id) { c[l.a] = (c[l.a] || 0) + 1; if (l.a === 'c' && l.ok) c.cOk++; } }); });
+    return c;
+  }
+  function prep(w, id, cx, herois) {
+    var J = w.JOGO, P = J.Progress;
+    P.reset();
+    herois.forEach(function (h) {
+      P.unlockClass(h[0]);
+      var he = P.hero(h[0]) || P.hero(P.createHero(h[0]));
+      he.level = h[2]; he.element = h[1];
+      var tab = (J.DATA.leveling || {}).xpTable || [];
+      he.xp = tab[h[2] - 1] != null ? tab[h[2] - 1] : he.xp;
+      he.spells = P.spellsFor(h[0]);
+    });
+    P.save();
+    J.Rede._ident(id, cx);
+    J.Coop._reset();
+    J.Coop._semIntervalo = true;
+    J.Coop._agora = function () { return relogio.t; };
+    J.Game.init();
+    var sp = { drops: [], cards: [], pets: [] };
+    ['rollDrops', 'rollCards', 'rollPetCards'].forEach(function (f, i) {
+      var orig = P[f];
+      P[f] = function (dg, ri, ps) { sp[['drops', 'cards', 'pets'][i]].push(ps); return orig.apply(P, arguments); };
+    });
+    cli[id] = { w: w, J: J, id: id, cx: cx, vivo: true, parado: false, soTique: false, sp: sp, avisos: [], heroi: herois[0][0] };
+    J.Coop.aoAviso = function (t) { cli[id].avisos.push(t); };
+    return cli[id];
+  }
+  function configuraGrupo(lider, par) {
+    [lider, par].forEach(function (id) {
+      var outro = id === lider ? par : lider;
+      var h = cli[outro].J.Progress.hero(cli[outro].heroi);
+      cli[id].J.Coop.configura({ gid: lider + '-g1', lider: lider, eu: id,
+        parceiro: { id: outro, cx: cli[outro].cx, heroi: { classId: h.classId, element: h.element, level: h.level } } });
+    });
+  }
+  function hashesIguais(a, b, desde) {
+    var ha = cli[a].J.Coop._hashes(), hb = cli[b].J.Coop._hashes(), n = 0, dif = [];
+    Object.keys(ha).forEach(function (T) {
+      if (+T < (desde || 0) || hb[T] === undefined) return;
+      n++;
+      if (ha[T] !== hb[T]) dif.push(T);
+    });
+    return { n: n, dif: dif };
+  }
+  function final(id) { var J = cli[id].J; return J.Game.state ? J.Engine.hash(J.Game.state) : null; }
+  var proxSemente = 90001;
+  function desce(dg, semente) {
+    cli.ana.J.Coop._sementeFixa = (semente != null) ? semente : (proxSemente += 7919);
+    ['ana', 'bia'].forEach(function (id) { cli[id].J.Game.init(); });
+    configuraGrupo('ana', 'bia');
+    var okA = cli.ana.J.Game.startRun([cli.ana.heroi], dg, { grupo: true });
+    var okB = cli.bia.J.Game.startRun([cli.bia.heroi], dg, { grupo: true });
+    ate(function () { return cli.ana.J.Coop.podeEntrar().ok; }, 40);
+    return okA && okB;
+  }
+  function batalha(max) {
+    var okE = cli.ana.J.Coop.entrar();
+    ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, max || 6000);
+    return okE;
+  }
+
+  // os dois clientes parados no começo do turno do herói de `id` (o outro espera os lances dele)
+  function vezDe(id) {
+    return ate(function () {
+      var sa = cli.ana.J.Game.state, sb = cli.bia.J.Game.state;
+      if (!sa || !sb || sa.phase !== 'playing' || sb.phase !== 'playing' || sa.turno !== sb.turno) return false;
+      var ua = cli.ana.J.Engine.activeUnit(sa), ub = cli.bia.J.Engine.activeUnit(sb);
+      return ua && ub && ua.uid === ub.uid && ua.dono === id && ua.kind === 'hero' && !ua.ia &&
+             cli.ana.J.Engine.hash(sa) === cli.bia.J.Engine.hash(sb);
+    }, 1500);
+  }
+  function colaBia() {                         // a MESMA mutação nos dois motores (parados no mesmo ponto)
+    var feito = null;
+    [cli.ana, cli.bia].forEach(function (c) {
+      var st = c.J.Game.state;
+      var hA = st.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'ana'; })[0];
+      var hB = st.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'bia'; })[0];
+      if (!hA || !hB || !hB.alive) return;
+      if (!feito) feito = vizinhaLivre(c.J, st, hA);
+      if (feito) { hB.x = feito.x; hB.y = feito.y; }
+    });
+    return !!feito;
+  }
+  function paraFusao(respostaBia) {
+    desce('cistern');
+    cli.ana.J.Coop._piloto(null);
+    var pb = { joga: true, fica: true };
+    if (respostaBia) pb.fusao = respostaBia;
+    cli.bia.J.Coop._piloto(pb);
+    cli.ana.J.Coop.entrar();
+    ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
+    var ops = cli.ana.J.Engine.placementOptions(cli.ana.J.Game.state);
+    cli.ana.J.Game.onTileClicked(ops[0].x, ops[0].y);
+    var ok = vezDe('ana') && colaBia();
+    var hA = cli.ana.J.Game.state.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'ana'; })[0];
+    var hB = cli.ana.J.Game.state.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'bia'; })[0];
+    var par = cli.ana.J.Game.canFuse().filter(function (p) { return p.pedido; })[0];
+    var pediu = ok && !!par && cli.ana.J.Coop.pedeFusao(par.uidA, par.uidB);
+    return { pediu: pediu, par: par, hA: hA && hA.uid, hB: hB && hB.uid };
+  }
+
+  function secaoK(A, B) {
+    secao('K · dois clientes de verdade (Engine + Game + Coop, sem tela) pela Rede de mentira');
+    prep(A, 'ana', 'cxa', [['espadachim', 'fogo', 30], ['arqueiro', 'ar', 30]]);
+    prep(B, 'bia', 'cxb', [['curandeiro', 'agua', 30], ['bruxo', 'fogo', 30]]);
+    var ana = cli.ana, bia = cli.bia;
+
+    // ---- K1: a descida completa na Estufa, 3 salas (a semente que vence a 1ª sala; a prova é repetível)
+    var okD = false, tentativas = [];
+    ana.J.Coop._piloto({ joga: true, casa: 1 });
+    bia.J.Coop._piloto({ joga: true });
+    for (var tt = 0; tt < 6; tt++) {
+      okD = desce('greenhouse', 5000 + tt * 101);
+      ana.J.Coop._piloto(null); bia.J.Coop._piloto(null);
+      var xa = ana.J.Progress.hero('espadachim').xp, xb = bia.J.Progress.hero('curandeiro').xp;
+      // ensaio: joga a 1ª sala num par de clones? não — joga de verdade e, se perder, desce de novo
+      ana.J.Coop._piloto({ joga: true, casa: 1 }); bia.J.Coop._piloto({ joga: true });
+      ana.J.Coop.entrar();
+      ate(function () { return tela('ana') !== 'antessala' && tela('bia') !== 'antessala'; }, 60);
+      ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+      tentativas.push(5000 + tt * 101 + ':' + tela('ana'));
+      if (tela('ana') === 'roomClear') break;
+    }
+    notas.push('K1 sementes: ' + tentativas.join(' '));
+    // a descida que vale para a prova: a mesma semente que venceu
+    var sementeK1 = +tentativas[tentativas.length - 1].split(':')[0];
+    okD = desce('greenhouse', sementeK1);
+    check('os dois descem em grupo (startRun com opts.grupo) e a porta da líder acende com o `pronto` da parceira',
+          okD && tela('ana') === 'antessala' && tela('bia') === 'antessala' && ana.J.Coop.podeEntrar().ok,
+          JSON.stringify(ana.J.Coop.podeEntrar()));
+    check('a parceira não abre a porta (Coop.podeEntrar: nao-lider)', bia.J.Coop.podeEntrar().motivo === 'nao-lider');
+    ana.J.Coop._piloto({ joga: true, casa: 1 });
+    bia.J.Coop._piloto({ joga: true });
+    ['drops', 'cards', 'pets'].forEach(function (k) { ana.sp[k].length = 0; bia.sp[k].length = 0; });
+    var salas = 0, iguais = true, turnosComp = 0, fases = [], xpA0 = ana.J.Progress.hero('espadachim').xp, xpB0 = bia.J.Progress.hero('curandeiro').xp;
+    var carryIgual = true, dessinc = 0;
+    var feitos = [];
+    // achado 19: de quem foi a vez do saque em cada sala, e os vinténs de cada um (espiões)
+    var saque19 = [];
+    ana.moedas19 = []; bia.moedas19 = [];
+    ana.J.DB.ganharMoedas = function (n) { ana.moedas19.push(n); };
+    bia.J.DB.ganharMoedas = function (n) { bia.moedas19.push(n); };
+    var saqueDaSala = function (n0) {
+      var st19 = ana.J.Game.state, xp19 = 0, mons19 = ana.J.DATA.monsters || {};
+      (st19 ? st19.units : []).forEach(function (u) {
+        var d19 = mons19[u.defId];
+        if (u.side === 'enemy' && !u.alive && d19 && typeof d19.xp === 'number') xp19 += d19.xp;
+      });
+      var dif19 = st19 ? ana.J.Engine.dif(st19) : {};
+      var bon19 = (st19 && st19.desafio && st19.desafio.cumprido) ? (1 + (ana.J.Engine.DESAFIO_BONUS || 0.25)) : 1;
+      return { vezA: ana.J.Coop.vezDoSaque(), vezB: bia.J.Coop.vezDoSaque(),
+               rolA: [ana.sp.drops.length - n0.da, ana.sp.cards.length - n0.ca, ana.sp.pets.length - n0.pa].join(''),
+               rolB: [bia.sp.drops.length - n0.db, bia.sp.cards.length - n0.cb, bia.sp.pets.length - n0.pb].join(''),
+               moA: ana.moedas19.slice(n0.ma), moB: bia.moedas19.slice(n0.mb),
+               cheio: Math.floor(xp19 * 0.30 * (dif19.drop || 1) * bon19),
+               meio: Math.floor(xp19 * 0.30 * (dif19.drop || 1) * bon19 * 1 * 0.5),
+               telaA: ultimaTela('ana', 'roomClear') || ultimaTela('ana', 'dungeonComplete') };
+    };
+    for (var s = 0; s < 3; s++) {
+      var n19 = { da: ana.sp.drops.length, ca: ana.sp.cards.length, pa: ana.sp.pets.length, ma: ana.moedas19.length,
+                  db: bia.sp.drops.length, cb: bia.sp.cards.length, pb: bia.sp.pets.length, mb: bia.moedas19.length };
+      batalha();
+      if (tela('ana') === 'roomClear' || tela('ana') === 'dungeonComplete') saque19.push(saqueDaSala(n19));
+      feitos.push('sala ' + (s + 1) + ' ' + tela('ana') + ' ana ' + JSON.stringify(contaLances('ana')) + ' bia ' + JSON.stringify(contaLances('bia')));
+      var hi = hashesIguais('ana', 'bia');
+      turnosComp += hi.n;
+      if (hi.dif.length || final('ana') !== final('bia')) { iguais = false; notas.push('K1 sala ' + s + ' difere em ' + hi.dif.slice(0, 5).join(',')); }
+      fases.push(tela('ana') + '/' + tela('bia'));
+      dessinc += ana.J.Coop.sessao().dessinc + bia.J.Coop.sessao().dessinc;
+      if (JSON.stringify(ana.J.Game._carry()) !== JSON.stringify(bia.J.Game._carry())) carryIgual = false;
+      salas++;
+      if (tela('ana') !== 'roomClear') break;
+      check('sala ' + (s + 1) + ': a parceira espera o `proxima` (Game.nextRoom recusa antes)', bia.J.Game.nextRoom() === false);
+      ana.J.Coop.proxima();
+      ate(function () { return bia.J.Coop.sessao().proximaLiberada; }, 20);
+      bia.J.Coop.seguir();
+      ate(function () { return ana.J.Coop.podeEntrar().ok; }, 40);
+    }
+    check('K1 · a descida em dupla: as salas jogadas pelos dois têm o MESMO hash em todo turno e no fim',
+          iguais && turnosComp > 20 && dessinc === 0, salas + ' salas · ' + turnosComp + ' turnos comparados · ' + fases.join(' ') + ' · dessinc ' + dessinc);
+    check('K1 · o PV que passa de sala (chave dono:heroId) é o mesmo nos dois clientes', carryIgual);
+    var sps = ana.sp.drops.concat(ana.sp.cards, ana.sp.pets, bia.sp.drops, bia.sp.cards, bia.sp.pets);
+    check('K1 · recompensa por jogador: rollDrops/rollCards/rollPetCards SEMPRE com partySize 2 (as chances do solo com dupla)',
+          sps.length >= 3 && sps.every(function (x) { return x === 2; }), sps.join(','));   // 19: um sorteio por sala (a vez)
+    // achado 19: a dupla rende o que UMA dupla solo rende — nem uma pessoa com dois navegadores tira dois saques
+    var ok19 = saque19.length > 0 && saque19.every(function (r) {
+      return (r.vezA === true && r.vezB === false && r.rolA === '111' && r.rolB === '000') ||
+             (r.vezA === false && r.vezB === true && r.rolA === '000' && r.rolB === '111');
+    });
+    check('achado 19 · a vez do saque: em cada sala só UM dos dois sorteia (o item, as cartas, a carta de pet) — o que a semente da ata dá, e os dois clientes concordam de quem é',
+          ok19, JSON.stringify(saque19.map(function (r) { return [r.vezA, r.vezB, r.rolA, r.rolB]; })));
+    var ok19m = saque19.some(function (r) { return r.meio > 0; }) && saque19.every(function (r) {
+      var esp = JSON.stringify(r.meio > 0 ? [r.meio] : []);
+      return JSON.stringify(r.moA) === esp && JSON.stringify(r.moB) === esp && r.meio * 2 <= r.cheio;
+    });
+    check('achado 19 · os vinténs da sala se dividem: cada um leva a metade do que a dupla solo levaria (a soma dos dois não passa dela)',
+          ok19m, JSON.stringify(saque19.map(function (r) { return [r.cheio, r.meio, r.moA.join('+'), r.moB.join('+')]; })));
+    var ok19t = saque19.length > 0 && saque19.every(function (r) {
+      return !!r.telaA && !!r.telaA.saqueDupla && r.telaA.saqueDupla.minha === r.vezA && r.telaA.saqueDupla.pela === 'ata';
+    });
+    check('achado 19 · a tela de recompensa diz de quem foi a vez (saqueDupla: {minha, pela: "ata"})', ok19t,
+          JSON.stringify(saque19.map(function (r) { return r.telaA && r.telaA.saqueDupla; })));
+    var rwA = ultimaTela('ana', 'roomClear') || ultimaTela('ana', 'dungeonComplete');
+    var rwB = ultimaTela('bia', 'roomClear') || ultimaTela('bia', 'dungeonComplete');
+    check('K1 · os heróis de gente jogam de verdade (lançam feitiços que acertam) nos dois clientes',
+          contaLances('ana').cOk + contaLances('bia').cOk >= 0 && feitos.length > 0, feitos.join(' || '));
+    check('K1 · XP só no MEU herói, em cada cliente (a tela de recompensa lista só o meu; Game.party = [o meu])',
+          !!rwA && !!rwB && Object.keys(rwA.xpPorHeroi || {}).join() === 'espadachim' &&
+          Object.keys(rwB.xpPorHeroi || {}).join() === 'curandeiro' &&
+          ana.J.Game.party.length === 1 && bia.J.Game.party.length === 1 &&
+          ana.J.Progress.hero('espadachim').xp - xpA0 === (rwA.xpPorHeroi.espadachim || 0),
+          rwA ? ('ana ' + JSON.stringify(rwA.xpPorHeroi) + ' bia ' + JSON.stringify(rwB && rwB.xpPorHeroi) + ' xpGanho ' + rwA.xpGanho) : 'sem tela de recompensa');
+    check('K1 · a tela de recompensa em rede traz rede/lider/descidaAcabou', !!rwA && rwA.rede === true && rwA.lider === true &&
+          rwB.lider === false && rwA.descidaAcabou === false);
+
+    // ---- K2: a fusão pedida e aceita (a unidade fica com quem pediu)
+    desce('cistern');
+    ana.J.Coop._piloto(null); bia.J.Coop._piloto(null);
+    ana.J.Coop.entrar();
+    ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
+    var op = ana.J.Engine.placementOptions(ana.J.Game.state)[0];
+    check('K2 · na colocação a parceira não toca (Game.podeColocar)', bia.J.Game.podeColocar() === false && ana.J.Game.podeColocar() === true);
+    bia.J.Game.onTileClicked(op.x, op.y);
+    check('K2 · o toque da parceira na casa dourada não vira lance', bia.J.Game.state.phase === 'placing');
+    ana.J.Game.onTileClicked(op.x, op.y);
+    entrega();
+    bia.J.Game.update(0.05);
+    var sa = ana.J.Game.state, sb = bia.J.Game.state;
+    check('K2 · o `p` da líder chegou: os dois em playing no turno 1 com o mesmo hash', sa.phase === 'playing' && sb.phase === 'playing' &&
+          sa.turno === 1 && ana.J.Engine.hash(sa) === bia.J.Engine.hash(sb));
+    var pf = paraFusao('aceita');
+    check('K2 · na vez de Ana, com Bia ao lado, o par vem com pedido:true e o pedido sai', pf.pediu, JSON.stringify(pf.par));
+    ate(function () { return (ana.J.Game.state.units || []).some(function (u) { return u.kind === 'fusion'; }); }, 40);
+    ana.J.Coop._piloto({ joga: true });
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    var fA = (ana.J.Game.state.units || []).filter(function (u) { return u.kind === 'fusion'; })[0];
+    var fB = (bia.J.Game.state.units || []).filter(function (u) { return u.kind === 'fusion'; })[0];
+    var hk = hashesIguais('ana', 'bia');
+    check('K2 · a fusão pedida por Ana e aceita por Bia aconteceu NOS DOIS motores, com o uid e o dono de A',
+          !!fA && !!fB && fA.uid === fB.uid && fA.uid === pf.hA && fA.dono === 'ana' && fB.dono === 'ana' &&
+          bia.J.Game.donoDe(fB) === 'parceiro' && ana.J.Game.donoDe(fA) === 'eu',
+          fA ? (fA.uid + ' dono ' + fA.dono) : 'sem fusão · avisos ' + ana.avisos.slice(-3).join(' | '));
+    check('K2 · depois da fusão os hashes seguem iguais até o fim', !hk.dif.length && hk.n > 3 && final('ana') === final('bia'), hk.n + ' turnos · ' + hk.dif.slice(0, 4));
+
+    // ---- K2b: recusada
+    ana.avisos.length = 0;
+    var pr = paraFusao('recusa');
+    ate(function () { return ana.avisos.some(function (t) { return /não quis fundir/.test(t); }); }, 40);
+    var avisouRecusa = ana.avisos.some(function (t) { return /não quis fundir/.test(t); });
+    ana.J.Coop._piloto({ joga: true });
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    var semF = !(ana.J.Game.state.units || []).some(function (u) { return u.kind === 'fusion'; });
+    check('K2b · fusão recusada: ninguém funde, Ana ouve "não quis fundir agora" e a sala segue igual nos dois',
+          pr.pediu && avisouRecusa && semF && final('ana') === final('bia'), ana.avisos.slice(0, 3).join(' | '));
+
+    // ---- K2c: expirada (Bia não responde em 20 s)
+    ana.avisos.length = 0;
+    var pe = paraFusao(null);
+    var t0e = relogio.t;
+    ate(function () { return ana.avisos.some(function (t) { return /não respondeu ao pedido/.test(t); }); }, 400, 100);
+    var expirou = ana.avisos.some(function (t) { return /não respondeu ao pedido/.test(t); });
+    ana.J.Coop._piloto({ joga: true });
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    check('K2c · fusão sem resposta expira em 20 s e a sala segue igual nos dois', pe.pediu && expirou &&
+          relogio.t - t0e >= 20000 && final('ana') === final('bia'), Math.round((relogio.t - t0e) / 1000) + ' s');
+
+    // ---- K3: dessincronia injetada → foto → volta a bater
+    desce('greenhouse');
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ana.J.Coop.entrar();
+    ate(function () { return (ana.J.Game.state && ana.J.Game.state.turno >= 4) && (bia.J.Game.state && bia.J.Game.state.turno >= 4); }, 400);
+    var alvoE = bia.J.Game.state.units.filter(function (u) { return u.alive && u.side === 'enemy'; })[0];
+    var estragou = bia.J.Coop._estraga(alvoE.uid, 1);
+    var tEstrago = bia.J.Game.state.turno;
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    var ds = ana.J.Coop.sessao().dessinc + bia.J.Coop.sessao().dessinc;
+    var rest = bia.J.Coop.sessao().restauracoes;
+    var h3 = hashesIguais('ana', 'bia', tEstrago + 8);
+    check('K3 · 1 PV estragado na parceira: o hash acusa, a autoridade manda a foto, a parceira restaura e os hashes voltam a bater',
+          estragou && ds === 1 && rest >= 1 && !h3.dif.length && final('ana') === final('bia'),
+          'dessinc ' + ds + ' · restaurações ' + rest + ' · depois: ' + h3.n + ' turnos, ' + h3.dif.length + ' diferentes');
+
+    // ---- K4: lances atrasados, reordenados e duplicados dão o mesmo resultado
+    desce('greenhouse');
+    var segurados = [], cont = 0;
+    filtro = function (env) {
+      if (env.t !== 'batalha' || env.acao !== 'lance') return 'entrega';
+      cont++;
+      if (cont % 5 === 0) return 'duplica';
+      return 'entrega';
+    };
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    batalha();
+    // reordenação: guarda os lances de um passo e entrega de trás para frente
+    filtro = null;
+    var hk4 = hashesIguais('ana', 'bia');
+    check('K4 · lances DUPLICADOS (1 em 5) são descartados pelo (T,k): mesmo resultado', !hk4.dif.length && hk4.n > 5 && final('ana') === final('bia'), hk4.n + ' turnos');
+    desce('cistern');
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    var orig = entrega;
+    entrega = function () {
+      // embaralha (de trás para frente) o que está no correio antes de entregar
+      correio.reverse();
+      orig();
+    };
+    batalha();
+    entrega = orig;
+    var hk5 = hashesIguais('ana', 'bia');
+    check('K4 · lances REORDENADOS no fio: a fila por (T,k) põe na ordem — mesmo resultado', !hk5.dif.length && hk5.n > 5 && final('ana') === final('bia'), hk5.n + ' turnos');
+
+    // ---- K5: a parceira cai e NÃO volta: a IA joga o herói dela; a descida acaba no fim da sala
+    desce('greenhouse');
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ana.J.Coop.entrar();
+    ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 3 && bia.J.Game.state && bia.J.Game.state.turno >= 3; }, 400);
+    bia.vivo = false;
+    ana.J.Rede._sinal({ tipo: 'caiu', id: 'bia', cx: 'cxb' });
+    var caiuEm = relogio.t;
+    ate(function () { return ana.J.Coop.sessao().parceiroIA; }, 400, 100, ['ana']);
+    var heroiB = ana.J.Game.state.units.filter(function (u) { return u.dono === 'bia'; })[0];
+    check('K5 · 15 s depois do `caiu`, o herói da parceira passa para a IA (u.ia) e Ana vira a autoridade',
+          ana.J.Coop.sessao().parceiroIA && heroiB && heroiB.ia === true && ana.J.Coop.sessao().autoridade === 'ana' &&
+          relogio.t - caiuEm >= 15000, 'depois de ' + Math.round((relogio.t - caiuEm) / 1000) + ' s');
+    ate(function () { return tela('ana') !== 'battle'; }, 6000, 50, ['ana']);
+    check('K5 · a sala termina só com Ana; sem volta, a descida acaba (nextRoom recusa)',
+          ana.J.Coop.sessao().descidaAcabou === true && ana.J.Game.nextRoom() === false, tela('ana'));
+    bia.vivo = true;
+
+    // ---- K6: a parceira cai e VOLTA: foto; o herói dela segue na IA até o fim da sala
+    ['ana', 'bia'].forEach(function (id) { cli[id].J.Coop._reset(); cli[id].J.Coop._semIntervalo = true; cli[id].J.Coop._agora = function () { return relogio.t; }; });
+    ana.J.Coop.aoAviso = function (t) { ana.avisos.push(t); };
+    desce('cistern');
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ana.J.Coop.entrar();
+    ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 3 && bia.J.Game.state && bia.J.Game.state.turno >= 3; }, 400);
+    bia.vivo = false;
+    ana.J.Rede._sinal({ tipo: 'caiu', id: 'bia', cx: 'cxb' });
+    ate(function () { return ana.J.Coop.sessao().parceiroIA; }, 400, 100, ['ana']);
+    ate(function () { return false; }, 20, 50, ['ana']);                 // Ana anda mais um pouco sozinha
+    bia.vivo = true; bia.cx = 'cxb2';
+    bia.J.Rede._ident('bia', 'cxb2');
+    ana.J.Coop.parceiroVoltou('bia', 'cxb2');
+    bia.J.Rede._sinal({ tipo: 'religou', cx: 'cxb2' });
+    ate(function () { return bia.J.Coop.sessao().restauracoes > 0; }, 200);
+    var tVolta = bia.J.Game.state ? bia.J.Game.state.turno : 0;
+    var hbia = bia.J.Game.state.units.filter(function (u) { return u.dono === 'bia'; })[0];
+    check('K6 · a parceira volta: pede a foto, restaura e assiste — o herói dela segue na IA', bia.J.Coop.sessao().restauracoes > 0 &&
+          hbia && hbia.ia === true && bia.J.Game.donoDe(hbia) === 'ia', 'turno ' + tVolta);
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    var h6 = hashesIguais('ana', 'bia', tVolta + 1);
+    var diag6 = { tv: tVolta, fa: final('ana'), fb: final('bia'), ra: bia.J.Coop.sessao().restauracoes,
+                  ds: [ana.J.Coop.sessao().dessinc, bia.J.Coop.sessao().dessinc], da: ana.J.Coop.sessao().descidaAcabou,
+                  sinc: bia.J.Coop.sessao().sincronizando, ult: bia.J.Coop._S().ultimaDessinc,
+                  hA: Object.keys(ana.J.Coop._hashes()).slice(-4), hB: Object.keys(bia.J.Coop._hashes()).slice(-4) };
+    check('K6 · da volta ao fim da sala os dois hashes batem; ela voltou a tempo, a descida continua',
+          !h6.dif.length && h6.n > 0 && final('ana') === final('bia') && ana.J.Coop.sessao().descidaAcabou === false,
+          h6.n + ' turnos · fim ' + tela('ana') + '/' + tela('bia') + ' · ' + JSON.stringify(diag6));
+    if (tela('ana') === 'roomClear') {
+      ana.J.Coop.proxima();
+      ate(function () { return bia.J.Coop.sessao().proximaLiberada; }, 20);
+      bia.J.Coop.seguir();
+      ate(function () { return ana.J.Coop.podeEntrar().ok; }, 40);
+      ana.J.Coop._piloto(null); bia.J.Coop._piloto(null);
+      ana.J.Coop.entrar();
+      ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
+      var hb2 = bia.J.Game.state.units.filter(function (u) { return u.dono === 'bia' && u.kind === 'hero'; })[0];
+      check('K6 · na sala seguinte o herói volta para a dona', hb2 && !hb2.ia && bia.J.Game.donoDe(hb2) === 'eu');
+    } else check('K6 · na sala seguinte o herói volta para a dona', true, 'a sala foi perdida — não há seguinte');
+
+    // ---- K7: a LÍDER cai: a parceira vira autoridade (e líder)
+    ['ana', 'bia'].forEach(function (id) { cli[id].J.Coop._reset(); cli[id].J.Coop._semIntervalo = true; cli[id].J.Coop._agora = function () { return relogio.t; }; });
+    bia.cx = 'cxb'; bia.J.Rede._ident('bia', 'cxb');
+    desce('greenhouse');
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ana.J.Coop.entrar();
+    ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 3 && bia.J.Game.state && bia.J.Game.state.turno >= 3; }, 400);
+    ana.vivo = false;
+    bia.J.Rede._sinal({ tipo: 'caiu', id: 'ana', cx: 'cxa' });
+    ate(function () { return bia.J.Coop.sessao().parceiroIA; }, 400, 100, ['bia']);
+    check('K7 · a líder caiu: a parceira vira autoridade e líder, e o herói da líder vai para a IA',
+          bia.J.Coop.sessao().autoridade === 'bia' && bia.J.Coop.sessao().lider === true &&
+          bia.J.Game.state.units.filter(function (u) { return u.dono === 'ana'; })[0].ia === true);
+    ate(function () { return tela('bia') !== 'battle'; }, 6000, 50, ['bia']);
+    check('K7 · e a sala termina do lado da parceira', tela('bia') !== 'battle', tela('bia'));
+    ana.vivo = true;
+
+    // ---- K8: a aba escondida: o relógio de parede encerra o turno por tempo
+    ['ana', 'bia'].forEach(function (id) { cli[id].J.Coop._reset(); cli[id].J.Coop._semIntervalo = true; cli[id].J.Coop._agora = function () { return relogio.t; }; });
+    desce('cistern');
+    ana.J.Coop._piloto(null);
+    bia.J.Coop._piloto({ joga: true });
+    ana.J.Coop.entrar();
+    ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
+    ana.J.Game.onTileClicked(ana.J.Engine.placementOptions(ana.J.Game.state)[0].x, ana.J.Engine.placementOptions(ana.J.Game.state)[0].y);
+    ana.soTique = true; ana.J.Coop._semTela = true;
+    var eAna = function () {
+      var lg = ana.J.Coop._log(), n = 0;
+      Object.keys(lg).forEach(function (T) { lg[T].forEach(function (l) { if (l.de === 'ana' && l.a === 'e') n++; }); });
+      return n;
+    };
+    var t8 = relogio.t;
+    // a líder fica "com a aba escondida" por TRÊS turnos dela: nesse trecho só o tique do Coop anda o
+    // jogo dela (IA dos monstros e lances da parceira sem tela) e o relógio de parede fecha cada turno
+    ate(function () { return eAna() >= 3 || tela('ana') !== 'battle'; }, 4000, 250);
+    var lg8 = ana.J.Coop._log(), soE = true;
+    Object.keys(lg8).forEach(function (T) { lg8[T].forEach(function (l) { if (l.de === 'ana' && l.a !== 'e' && l.a !== 'p') soE = false; }); });
+    var nE = eAna();
+    check('K8 · sem tela (só o tique do Coop), cada turno da líder acaba pelo relógio de parede: só lances `e`',
+          nE >= 1 && soE && relogio.t - t8 >= 30000 * Math.min(nE, 3), nE + ' turnos fechados pelo relógio em ' + Math.round((relogio.t - t8) / 1000) + ' s');
+    ana.soTique = false; ana.J.Coop._semTela = false;
+    ana.J.Coop._piloto({ joga: true });
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    var h8 = hashesIguais('ana', 'bia');
+    check('K8 · e sem tela a IA e os lances da parceira andaram igual: os hashes batem do começo ao fim',
+          !h8.dif.length && h8.n > 4 && final('ana') === final('bia'), h8.n + ' turnos · ' + h8.dif.slice(0, 4) + ' · fim ' + tela('ana'));
+
+    // ---- K9: recusas
+    desce('greenhouse');
+    var gA = ana.J.Game;
+    gA.init(); cli.bia.J.Game.init();
+    configuraGrupo('ana', 'bia');
+    check('K9 · o Poço não desce em grupo (startRun e startPoco)', gA.startRun(['espadachim'], 'poco', { grupo: true }) === false &&
+          gA.startPoco(['espadachim']) === false);
+    check('K9 · em grupo desce 1 herói só', gA.startRun(['espadachim', 'arqueiro'], 'greenhouse', { grupo: true }) === false);
+    var Vb = bia.w.SOTERRA_VERSAO;
+    bia.w.SOTERRA_VERSAO = { versao: 'outra-versao' };
+    gA.startRun(['espadachim'], 'greenhouse', { grupo: true });
+    bia.J.Game.startRun(['curandeiro'], 'greenhouse', { grupo: true });
+    ate(function () { return !!ana.J.Coop._S().prontoParceiro; }, 20);
+    check('K9 · versões diferentes: a porta não acende (motivo versao)', ana.J.Coop.podeEntrar().motivo === 'versao', JSON.stringify(ana.J.Coop.podeEntrar()));
+    bia.w.SOTERRA_VERSAO = Vb;
+
+    // ---- K10: o duelo pela Rede
+    function duelo(did, semente, dA, dB) {
+      ['ana', 'bia'].forEach(function (id) { cli[id].J.Game.init(); cli[id].J.Coop._reset(); cli[id].J.Coop._semIntervalo = true; cli[id].J.Coop._agora = function () { return relogio.t; }; cli[id].w.__pvp.length = 0; });
+      var pA = dA.map(function (h) { return ana.J.Coop.payloadMeu(h); }), pB = dB.map(function (h) { return bia.J.Coop.payloadMeu(h); });
+      var base = { did: did, semente: semente, duplaA: pA, duplaB: pB };
+      var ar = ana.J.Coop.sorteiaArena(semente);
+      var a = ana.J.Coop.iniciaDuelo({ did: did, semente: semente, duplaA: pA, duplaB: pB, eu: 'A', dungeonId: ar.dungeonId, roomIndex: ar.roomIndex, oponente: { id: 'bia', cx: bia.cx } });
+      var b = bia.J.Coop.iniciaDuelo({ did: did, semente: semente, duplaA: pA, duplaB: pB, eu: 'B', oponente: { id: 'ana', cx: 'cxa' } });
+      return a && b;
+    }
+    // achado 20: o duelo amistoso não paga o treino da guilda (espião no lugar da guilda)
+    var treinos20 = 0;
+    ['ana', 'bia'].forEach(function (id) {
+      cli[id].J.Guilda = { registraTreino: function () { treinos20++; return Promise.resolve({ ok: true }); } };
+    });
+    var okDu = duelo('ana-d1', 918273, ['espadachim', 'arqueiro'], ['curandeiro', 'bruxo']);
+    check('K10 · o duelo abre nos dois clientes, na MESMA sala sorteada, com os lados de tela certos',
+          okDu && tela('ana') === 'battle' && tela('bia') === 'battle' &&
+          ana.J.Game.state.dungeonId === bia.J.Game.state.dungeonId && ana.J.Game.state.roomIndex === bia.J.Game.state.roomIndex &&
+          ana.J.Game.meuLado() === 'player' && bia.J.Game.meuLado() === 'enemy' &&
+          bia.J.Game.ladoDaTela(bia.J.Game.state.units.filter(function (u) { return u.dono === 'bia'; })[0]) === 'meu',
+          ana.J.Game.state.dungeonId + ':' + ana.J.Game.state.roomIndex);
+    check('K10 · ninguém age antes dos dois `dentro`', (function () {
+      var s0 = ana.J.Coop._S();
+      return !(s0.dentroEle && s0.dentroEu) ? ana.J.Coop.bloqueado() : true;
+    })());
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ate(function () { return tela('ana') === 'duelFim' && tela('bia') === 'duelFim'; }, 8000);
+    ate(function () { return ana.w.__pvp.length && bia.w.__pvp.length; }, 400, 100);
+    var ra = ana.w.__pvp[0] || {}, rb = bia.w.__pvp[0] || {};
+    var hd = hashesIguais('ana', 'bia');
+    var par = { 'vitoria-rede': 'derrota-rede', 'derrota-rede': 'vitoria-rede', 'empate-rede': 'empate-rede' };
+    check('K10 · o duelo corre em lockstep até o fim (mesmo hash em todo turno) e os dois `fim` batem',
+          !hd.dif.length && hd.n > 4 && final('ana') === final('bia') && par[ra.resultado] === rb.resultado,
+          hd.n + ' turnos · ' + ra.resultado + ' × ' + rb.resultado);
+    check('K10 · o histórico guarda oponente, as duas duplas e o clima (amistoso: a Brasa não muda)',
+          ra.oponente && ra.minhaDupla.join(',') === 'espadachim,arqueiro' && ra.duplaDele.join(',') === 'curandeiro,bruxo' && !!ra.clima,
+          JSON.stringify(ra));
+
+    duelo('ana-d2', 5555, ['espadachim'], ['curandeiro']);
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 3; }, 400);
+    bia.vivo = false;
+    var tWo = relogio.t;
+    ate(function () { return tela('ana') === 'duelFim'; }, 2000, 250, ['ana']);
+    ate(function () { return ana.w.__pvp.length > 0; }, 100, 100, ['ana']);
+    check('K10 · W.O.: a oponente some; 60 s depois do último sinal, vitória por W.O.',
+          tela('ana') === 'duelFim' && (ana.w.__pvp[0] || {}).resultado === 'vitoria-wo' && relogio.t - tWo >= 55000,
+          ((ana.w.__pvp[0] || {}).resultado || 'nada') + ' em ' + Math.round((relogio.t - tWo) / 1000) + ' s');
+    bia.vivo = true;
+
+    duelo('ana-d3', 777, ['arqueiro'], ['bruxo']);
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 2; }, 400);
+    bia.J.Coop.desistir();
+    ate(function () { return tela('ana') === 'duelFim' && tela('bia') === 'duelFim'; }, 50);
+    ate(function () { return ana.w.__pvp.length && bia.w.__pvp.length; }, 400, 100);
+    check('K10 · desistir é derrota: quem desiste perde, a outra vence',
+          (bia.w.__pvp[0] || {}).resultado === 'derrota-rede' && (ana.w.__pvp[0] || {}).resultado === 'vitoria-rede',
+          (ana.w.__pvp[0] || {}).resultado + ' × ' + (bia.w.__pvp[0] || {}).resultado);
+    check('achado 20 · duelo pela Rede não rende nada que vire moeda: nenhum treino de guilda pago, nos dois lados, em 3 duelos (inteiro, W.O. e desistência no 2º turno)',
+          treinos20 === 0 && ana.w.__pvp.length > 0 && bia.w.__pvp.length > 0, treinos20 + ' treino(s) pago(s)');
+    ['ana', 'bia'].forEach(function (id) { delete cli[id].J.Guilda; });
+    check('K10 · dupla com o Mestre ou feitiço desconhecido não abre duelo',
+          ana.J.Coop.iniciaDuelo({ did: 'x', semente: 1, duplaA: [{ classId: 'gm', level: 1, spells: [] }], duplaB: [ana.J.Coop.payloadMeu('espadachim')], eu: 'A', oponente: { id: 'bia' } }) === false);
+
+    check('nenhum erro de script nos dois clientes', !erros.length, erros.slice(0, 4).join(' | '));
+  }
+
+  // ================================================================== R. os consertos da revisão (11/09)
+  /* Cada achado da revisão com a sua prova, na Rede de mentira (os mesmos dois
+   * clientes do K). Onde o defeito precisa de um cliente ALTERADO, a página
+   * injeta o envelope forjado direto na Rede da vítima (R._recebe). */
+  function secaoRevisao(A, B) {
+    secao('R · os consertos da revisão (11/09): cada achado com a sua prova');
+    if (!cli.ana) {
+      prep(A, 'ana', 'cxa', [['espadachim', 'fogo', 30], ['arqueiro', 'ar', 30]]);
+      prep(B, 'bia', 'cxb', [['curandeiro', 'agua', 30], ['bruxo', 'fogo', 30]]);
+    }
+    var ana = cli.ana, bia = cli.bia, i;
+    var ouvidos = [];
+    function reseta() {
+      ['ana', 'bia'].forEach(function (id) {
+        var c = cli[id];
+        c.vivo = true; c.parado = false; c.soTique = false;
+        c.J.Coop._reset(); c.J.Coop._semIntervalo = true; c.J.Coop._semTela = false;
+        c.J.Coop._agora = function () { return relogio.t; };
+        c.avisos.length = 0;
+        c.J.Coop.aoAviso = function (t) { c.avisos.push(t); };
+        c.J.Bundle = null;
+      });
+      ana.cx = 'cxa'; ana.J.Rede._ident('ana', 'cxa');
+      bia.cx = 'cxb'; bia.J.Rede._ident('bia', 'cxb');
+      filtro = null;
+      ouvidos = [];
+    }
+    function S_(id) { return cli[id].J.Coop._S(); }
+    function ses(id) { return cli[id].J.Coop.sessao(); }
+    function heroiDe(id, dono) {
+      var st = cli[id].J.Game.state;
+      return st ? (st.units || []).filter(function (u) { return u.kind === 'hero' && u.dono === dono; })[0] : null;
+    }
+    function escuta(fn) { filtro = function (env) { ouvidos.push(env); return fn ? fn(env) : 'entrega'; }; }
+    function conta(pred) { return ouvidos.filter(pred).length; }
+    function noCorreio(pred) { return correio.filter(function (it) { return pred(JSON.parse(it.s)); }).length; }
+    function injeta(id, env) { env.para = id; cli[id].J.Rede._recebe(env); }
+    function telaFimDesde(id, n) {
+      var t = cli[id].w.__telas;
+      for (var k = t.length - 1; k >= n; k--) {
+        if (t[k].n === 'roomClear' || t[k].n === 'dungeonComplete' || t[k].n === 'defeat') return t[k].d || {};
+      }
+      return null;
+    }
+    function entraNaBatalha(dg, pa, pb, semente) {
+      reseta();
+      desce(dg, semente);
+      ana.J.Coop._piloto(pa); bia.J.Coop._piloto(pb);
+      ana.J.Coop.entrar();
+      return ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
+    }
+    function coloca(casa) {
+      var st = ana.J.Game.state;
+      if (!st || st.phase !== 'placing') return;
+      var ops = ana.J.Engine.placementOptions(st);
+      ana.J.Game.onTileClicked(ops[Math.min(casa || 0, ops.length - 1)].x, ops[Math.min(casa || 0, ops.length - 1)].y);
+      ate(function () { return bia.J.Game.state && bia.J.Game.state.phase === 'playing'; }, 60);
+    }
+    function dueloR(did, semente, dA, dB, op) {
+      op = op || {};
+      reseta();
+      ['ana', 'bia'].forEach(function (id) { cli[id].J.Game.init(); cli[id].w.__pvp.length = 0; });
+      if (op.filtro) escuta(op.filtro);
+      var pA = dA.map(function (h) { return ana.J.Coop.payloadMeu(h); }), pB = dB.map(function (h) { return bia.J.Coop.payloadMeu(h); });
+      var ar = ana.J.Coop.sorteiaArena(semente);
+      var a = ana.J.Coop.iniciaDuelo({ did: did, semente: semente, duplaA: pA, duplaB: pB, eu: 'A', dungeonId: ar.dungeonId,
+                                       roomIndex: ar.roomIndex, oponente: { id: 'bia', cx: 'cxb' } });
+      if (op.antesB) op.antesB();
+      var b = bia.J.Coop.iniciaDuelo({ did: did, semente: semente, duplaA: pA, duplaB: pB, eu: 'B', oponente: { id: 'ana', cx: 'cxa' } });
+      return a && b;
+    }
+    function soltos() { return !ana.J.Coop.bloqueado() && !bia.J.Coop.bloqueado(); }
+
+    // ---- R1: a líder VIVA posta na IA por prazo CEDE a autoridade (antes: duas autoridades, "Sincronizando…" para sempre)
+    entraNaBatalha('greenhouse', null, { joga: true });
+    coloca(0);
+    var okV1 = vezDe('ana');
+    var es1 = S_('bia').esperando;
+    if (es1) es1.desde -= 1000000;               // o prazo da vez da líder estourou do lado da parceira (aba escondida, lance perdido)
+    ate(function () { return ses('bia').parceiroIA; }, 60);
+    check('R1 · a vez da líder "estoura" do lado da parceira: ela assume (prazo) e vira autoridade e líder da sala',
+          okV1 && ses('bia').parceiroIA && ses('bia').autoridade === 'bia' && ses('bia').lider === true,
+          JSON.stringify({ vez: okV1, ia: ses('bia').parceiroIA, aut: ses('bia').autoridade }));
+    ate(function () { return S_('ana').cedeu; }, 60);
+    check('R1 · a líder, VIVA, recebe o `ia` do próprio herói e CEDE: não é mais autoridade nem líder da sala',
+          S_('ana').cedeu === true && ses('ana').autoridade === 'bia' && ses('ana').lider === false);
+    ate(function () { return ses('ana').restauracoes > 0 && !ses('ana').sincronizando; }, 400);
+    var hA1 = heroiDe('ana', 'ana');
+    check('R1 · a foto da parceira vale: a líder restaura, SAI do "Sincronizando…" e o herói dela fica na IA (a lista `ia` da foto)',
+          ses('ana').restauracoes > 0 && !ses('ana').sincronizando && hA1 && hA1.ia === true,
+          'restaurações ' + ses('ana').restauracoes + ' · sincronizando ' + ses('ana').sincronizando + ' · ia ' + (hA1 && hA1.ia));
+    var tR1 = ana.J.Game.state ? ana.J.Game.state.turno : 0;
+    var nTa1 = ana.w.__telas.length, nTb1 = bia.w.__telas.length;
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    var hR1 = hashesIguais('ana', 'bia', tR1 + 1), fA1 = telaFimDesde('ana', nTa1), fB1 = telaFimDesde('bia', nTb1);
+    check('R1 · daí ao fim da sala os dois batem, e na recompensa quem abre a próxima é a parceira (só ela "lidera" a sala)',
+          !hR1.dif.length && hR1.n > 0 && final('ana') === final('bia') && !!fA1 && !!fB1 && fA1.lider === false && fB1.lider === true,
+          hR1.n + ' turnos · ' + hR1.dif.slice(0, 3) + ' · ' + tela('ana') + '/' + tela('bia'));
+
+    // ---- R2: o `e` do fim do turno se perde; ninguém "posterior" o denuncia — o `vivo` que passou do turno sim
+    entraNaBatalha('cistern', { joga: true }, { joga: true });
+    var perdeu2 = null, t2a = 0, t2b = 0;
+    escuta(function (env) {
+      if (env.de !== 'bia' || env.acao !== 'lance' || !env.dados || env.dados.a !== 'e') return 'entrega';
+      if (!perdeu2 && env.dados.T >= 3) { perdeu2 = { T: env.dados.T, k: env.dados.k }; t2a = relogio.t; return 'perde'; }
+      if (perdeu2 && !t2b && env.dados.T === perdeu2.T && env.dados.k === perdeu2.k) t2b = relogio.t;
+      return 'entrega';
+    });
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    var pedes2 = conta(function (e) { return e.de === 'ana' && e.acao === 'pede'; });
+    var h2 = hashesIguais('ana', 'bia'), hb2 = heroiDe('ana', 'bia');
+    check('R2 · o `e` da parceira no fim do turno se perde: a líder PEDE (o `vivo` dela já passou do turno), o lance volta, e ninguém vai para a IA',
+          !!perdeu2 && pedes2 >= 1 && t2b > 0 && t2b - t2a < 15000 && !ses('ana').parceiroIA && !!hb2 && !hb2.ia &&
+          !h2.dif.length && final('ana') === final('bia'),
+          JSON.stringify({ perdeu: perdeu2, pedes: pedes2, volta: t2b ? Math.round((t2b - t2a) / 100) / 10 + ' s' : 'nunca', ia: ses('ana').parceiroIA, dif: h2.dif.slice(0, 3) }));
+
+    // ---- R3: o `p` da líder se perde: a parceira pede em vez de ficar na colocação para sempre
+    entraNaBatalha('greenhouse', null, null);
+    var perdeuP = false;
+    escuta(function (env) { if (!perdeuP && env.de === 'ana' && env.acao === 'lance' && env.dados && env.dados.a === 'p') { perdeuP = true; return 'perde'; } return 'entrega'; });
+    var opsP = ana.J.Engine.placementOptions(ana.J.Game.state);
+    ana.J.Game.onTileClicked(opsP[1].x, opsP[1].y);
+    var tP = relogio.t;
+    ate(function () { return bia.J.Game.state && bia.J.Game.state.phase === 'playing'; }, 600);
+    var h3 = hashesIguais('ana', 'bia');
+    check('R3 · o `p` da líder se perde: a parceira pede de novo, sai da colocação e as duas batalhas batem',
+          perdeuP && bia.J.Game.state.phase === 'playing' && relogio.t - tP < 20000 && h3.n > 0 && !h3.dif.length,
+          Math.round((relogio.t - tP) / 1000) + ' s · ' + h3.n + ' turnos');
+
+    // ---- R4: o duelo cuja arena demora a carregar (os modelos) não vira zumbi
+    var seguraB = null;
+    var bundleB = { segura: function (pedido, deNovo) { if (pedido && pedido.duelo) { seguraB = deNovo; return true; } return false; } };
+    var okD4 = dueloR('ana-r4', 4242, ['espadachim'], ['curandeiro'], {
+      antesB: function () { bia.J.Bundle = bundleB; }, filtro: function () { return 'entrega'; }
+    });
+    check('R4 · (a arena abre na Ana; a da Bia espera os modelos)', okD4 && tela('ana') === 'battle' && tela('bia') !== 'battle' && !!seguraB);
+    ate(function () { return false; }, 800);
+    var cargas4 = conta(function (e) { return e.de === 'bia' && e.acao === 'carga'; });
+    check('R4 · a carga da Bia passa dos 15 s (40 s): com a `carga` dela chegando, a Ana espera — ninguém cancela',
+          cargas4 >= 10 && tela('ana') === 'battle' && ses('ana').tipo === 'duelo' && ses('bia').tipo === 'duelo',
+          cargas4 + ' cargas · ' + tela('ana') + ' · ' + ses('ana').tipo + '/' + ses('bia').tipo);
+    bia.J.Bundle = null;
+    var libera4 = seguraB; seguraB = null; if (libera4) libera4();
+    ate(function () { return tela('bia') === 'battle' && soltos(); }, 200);
+    check('R4 · os modelos chegam: a arena da Bia abre, os dois `dentro` se cruzam e o duelo começa', tela('bia') === 'battle' && soltos());
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ate(function () { return tela('ana') === 'duelFim' && tela('bia') === 'duelFim'; }, 8000);
+    check('R4 · ...e vai até o fim em lockstep', tela('ana') === 'duelFim' && tela('bia') === 'duelFim' && final('ana') === final('bia'),
+          tela('ana') + '/' + tela('bia'));
+    dueloR('ana-r4b', 5151, ['arqueiro'], ['bruxo'], { antesB: function () { bia.J.Bundle = bundleB; } });
+    ate(function () { return ses('bia').tipo !== 'duelo'; }, 2400);
+    ate(function () { return false; }, 20);
+    check('R4 · a carga passa do TETO (90 s): a Bia cancela sem resultado, avisa pela batalha, e a Ana sai também (nada no histórico)',
+          ses('bia').tipo !== 'duelo' && ses('ana').tipo !== 'duelo' && tela('ana') !== 'battle' &&
+          !ana.w.__pvp.length && !bia.w.__pvp.length,
+          ses('ana').tipo + '/' + ses('bia').tipo + ' · ' + tela('ana') + ' · pvp ' + ana.w.__pvp.length + '/' + bia.w.__pvp.length);
+    bia.J.Bundle = null;
+    var libera4b = seguraB; seguraB = null; if (libera4b) libera4b();
+    check('R4 · os modelos que chegam DEPOIS do cancelamento não abrem arena nenhuma (antes: o duelo zumbi)',
+          tela('bia') !== 'battle' && !bia.J.Game.modoRede(), tela('bia') + ' · ' + bia.J.Game.modoRede());
+    reseta();
+    ana.J.Game.init();
+    var ar4 = ana.J.Coop.sorteiaArena(99);
+    ana.J.Game._iniciaDueloRede({ did: 'orfa', dungeonId: ar4.dungeonId, roomIndex: ar4.roomIndex, semente: 99,
+                                  duplaA: [ana.J.Coop.payloadMeu('espadachim')], duplaB: [bia.J.Coop.payloadMeu('curandeiro')],
+                                  eu: 'A', meuId: 'ana' }, null);
+    var orfa = tela('ana') === 'battle' && ana.J.Game.modoRede() === 'duelo';
+    check('R4 · uma arena sem sessão (a órfã): "Desistir do duelo" sai dela para o Acampamento',
+          orfa && ana.J.Coop.desistir() === true && tela('ana') === 'hub' && !ana.J.Game.modoRede());
+
+    // ---- R5: o `saiu` de outra aba não tira a parceira viva; o envelope dela pela conexão conhecida a traz de volta
+    entraNaBatalha('greenhouse', null, null);
+    coloca(0);
+    ana.J.Rede._sinal({ tipo: 'saiu', id: 'bia' });
+    ate(function () { return false; }, 500);
+    check('R5 · o `saiu` sem cx (o tchau de OUTRA aba da Bia, a varredura): sem sumiço e sem IA em 25 s',
+          !ses('ana').sumidoDesde && !ses('ana').parceiroIA && tela('ana') === 'battle', JSON.stringify({ sumido: ses('ana').sumidoDesde, ia: ses('ana').parceiroIA }));
+    ana.J.Rede._sinal({ tipo: 'caiu', id: 'bia', cx: 'cxb' });
+    var sumiu5 = !!ses('ana').sumidoDesde;
+    ate(function () { return !ses('ana').sumidoDesde; }, 400);
+    ate(function () { return false; }, 400);
+    check('R5 · um `caiu` cruzado com a Bia VIVA: o próximo envelope dela (o `vivo`) pela conexão conhecida a traz de volta — sem IA',
+          sumiu5 && !ses('ana').sumidoDesde && !ses('ana').parceiroIA, JSON.stringify({ sumiu: sumiu5, agora: ses('ana').sumidoDesde, ia: ses('ana').parceiroIA }));
+
+    // ---- R6: a `proxima` perdida (a piscada na recompensa) e o `dentro` perdido do duelo
+    entraNaBatalha('greenhouse', { joga: true, casa: 1 }, { joga: true }, 5000);
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    if (tela('ana') === 'roomClear' && tela('bia') === 'roomClear') {
+      var perdeuPx = 0;
+      escuta(function (env) { if (env.acao === 'proxima' && perdeuPx < 1) { perdeuPx++; return 'perde'; } return 'entrega'; });
+      ana.J.Coop.proxima();
+      var tPx = relogio.t;
+      ate(function () { return ses('bia').proximaLiberada; }, 200);
+      check('R6 · a `proxima` se perde: a líder repete da antessala e o "Seguir" da parceira acende (antes: esperava para sempre)',
+            perdeuPx === 1 && ses('bia').proximaLiberada && relogio.t - tPx <= 4500, Math.round((relogio.t - tPx) / 100) / 10 + ' s');
+      bia.J.Coop.seguir();
+      ate(function () { return ana.J.Coop.podeEntrar().ok; }, 60);
+      check('R6 · ...e a descida continua (a porta da líder acende com o `pronto`)', ana.J.Coop.podeEntrar().ok, JSON.stringify(ana.J.Coop.podeEntrar()));
+    } else check('R6 · a `proxima` perdida', true, 'a sala foi perdida (' + tela('ana') + ') — sem recompensa para testar');
+    var perdeuDt = 0;
+    dueloR('ana-r6', 6161, ['espadachim'], ['curandeiro'], {
+      filtro: function (env) { if (env.acao === 'dentro' && env.de === 'bia' && perdeuDt < 1) { perdeuDt++; return 'perde'; } return 'entrega'; }
+    });
+    ate(function () { return soltos(); }, 200);
+    check('R6 · o `dentro` da Bia se perde: a Ana repete o dela, a Bia responde, e o duelo começa nos dois (antes: um cancelava, o outro jogava sozinho)',
+          perdeuDt === 1 && soltos() && ses('ana').tipo === 'duelo' && ses('bia').tipo === 'duelo', 'perdidos ' + perdeuDt);
+
+    // ---- R7: a sala só acaba com a batalha em dia; no grupo, o `fim` é conferido com a autoridade
+    entraNaBatalha('cistern', null, null);
+    coloca(0);
+    vezDe('ana');
+    S_('bia').sincronizando = true; S_('bia').fotoPedidaEm = relogio.t;
+    bia.J.Engine.encerra(bia.J.Game.state, 'player', 'teste');
+    bia.J.Game.update(0.05);
+    check('R7 · a divergência acabou de ser acusada e a sala "acaba" no motor da parceira: sem recompensa enquanto sincroniza',
+          tela('bia') === 'battle');
+    ate(function () { return bia.J.Game.state && bia.J.Game.state.phase === 'playing' && !ses('bia').sincronizando; }, 200);
+    check('R7 · ...e a foto da líder traz a sala de volta (a batalha segue, o mesmo estado)',
+          bia.J.Game.state.phase === 'playing' && bia.J.Engine.hash(bia.J.Game.state) === ana.J.Engine.hash(ana.J.Game.state));
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    var mexeu7 = false;
+    escuta(function (env) {
+      if (!mexeu7 && env.de === 'ana' && env.acao === 'fim') {
+        mexeu7 = true;
+        var st7 = bia.J.Game.state, u7 = st7 && st7.units.filter(function (u) { return u.alive; })[0];
+        if (u7) u7.hp += 1;                    // uma diferença que o fim da sala não vê — só o hash
+      }
+      return 'entrega';
+    });
+    var nTb7 = bia.w.__telas.length;
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    ate(function () { return false; }, 10);
+    var fimB7 = S_('bia').fimGrupoDele;
+    check('R7 · no fim, a parceira confere com o `fim` da autoridade; com o hash diferente, paga pela foto do FIM: o mesmo estado nos dois',
+          mexeu7 && !!fimB7 && final('ana') === final('bia') && fimB7.h === final('ana') && !!telaFimDesde('bia', nTb7) &&
+          ses('bia').restauracoes >= 1,
+          JSON.stringify({ mexeu: mexeu7, fa: final('ana'), fb: final('bia'), dele: fimB7 && fimB7.h, rest: ses('bia').restauracoes, ult: S_('bia').ultimaDessinc }));
+
+    // ---- R8: o relógio do turno para enquanto a batalha trava, e a foto do MESMO turno não dá relógio novo
+    entraNaBatalha('cistern', null, null);
+    coloca(0);
+    vezDe('bia');
+    ate(function () { return false; }, 200, 50, ['bia']);
+    var g0 = bia.J.Game._gastoRede();
+    var segura8 = true;
+    escuta(function (env) { return (segura8 && env.de === 'ana' && env.acao === 'foto') ? 'perde' : 'entrega'; });
+    injeta('bia', { t: 'batalha', de: 'ana', cx: 'cxa', acao: 'dessinc', dados: { b: S_('bia').bid, T: bia.J.Game.state.turno } });
+    ate(function () { return false; }, 80);
+    var gBloq = bia.J.Game._gastoRede(), trav8 = ses('bia').sincronizando;
+    segura8 = false;
+    ate(function () { return ses('bia').restauracoes > 0 && !ses('bia').sincronizando; }, 200);
+    var g1 = bia.J.Game._gastoRede();
+    check('R8 · o relógio do turno PARA enquanto a batalha sincroniza (sem poder tocar em nada, o turno não corre)',
+          trav8 && Math.abs(gBloq - g0) < 1, 'antes ' + g0.toFixed(1) + ' s · travada ' + gBloq.toFixed(1) + ' s');
+    check('R8 · e a foto do MESMO turno não dá um relógio novo: segue de onde estava (antes: 30 s + banco de novo)',
+          ses('bia').restauracoes > 0 && g1 >= g0 - 0.1 && g1 < g0 + 3, 'antes ' + g0.toFixed(1) + ' s · depois ' + g1.toFixed(1) + ' s');
+
+    // ---- R9: o `f` forjado (sem o sim da dona do herói) não funde; a foto com essa fusão também não vale
+    entraNaBatalha('cistern', null, { joga: true, fica: true });
+    coloca(0);
+    var okV9 = vezDe('ana') && colaBia();
+    var hA9 = heroiDe('bia', 'ana'), hB9 = heroiDe('bia', 'bia'), T9 = bia.J.Game.state.turno;
+    injeta('bia', { t: 'batalha', de: 'ana', cx: 'cxa', acao: 'lance',
+                    dados: { b: S_('bia').bid, T: T9, k: (bia.J.Coop._log()[T9] || []).length, a: 'f', u: hA9.uid, alvo: hB9.uid, ok: true } });
+    ate(function () { return false; }, 6, 50, ['bia']);
+    var fundiu9 = (bia.J.Game.state.units || []).some(function (u) { return u.kind === 'fusion'; });
+    check('R9 · o `f` que chega sem o MEU fusao-ok (o lance escrevia o próprio consentimento) não funde o meu herói',
+          okV9 && !fundiu9 && !heroiDe('bia', 'bia').fusedInto && !heroiDe('bia', 'bia').fused, 'fundiu ' + fundiu9);
+    ate(function () { return !ses('bia').sincronizando; }, 200);
+    var fj9 = JSON.parse(ana.J.Engine.foto(ana.J.Game.state));
+    fj9.units.push({ uid: 'u99', kind: 'fusion', side: 'player', dono: 'ana', fusedFrom: [hA9.uid, hB9.uid], alive: true,
+                     x: 0, y: 0, hp: 10, hpMax: 10, pa: 6, pp: 3, effects: [], cooldowns: {} });
+    var rest9 = ses('bia').restauracoes;
+    S_('bia').sincronizando = true;
+    injeta('bia', { t: 'batalha', de: 'ana', cx: 'cxa', acao: 'foto', dados: { b: S_('bia').bid, T: fj9.turno, estado: JSON.stringify(fj9), lances: [] } });
+    check('R9 · a foto que traz uma fusão com o meu herói que eu não aceitei é recusada',
+          ses('bia').restauracoes === rest9 && !bia.J.Engine.findUnit(bia.J.Game.state, 'u99') && !ses('bia').sincronizando);
+
+    // ---- R10: a parceira não joga com o MEU herói nem pula a MINHA vez
+    entraNaBatalha('greenhouse', null, null);
+    coloca(0);
+    vezDe('ana');
+    var T10 = ana.J.Game.state.turno, bid10 = S_('ana').bid;
+    injeta('ana', { t: 'batalha', de: 'bia', cx: 'cxb', acao: 'lance', dados: { b: bid10, T: T10, k: 0, a: 'e', ok: true, T2: T10 + 1, h: 123 } });
+    ana.J.Coop._piloto({ joga: true });
+    passo(50, ['ana']);
+    ana.J.Coop._piloto(null);
+    var lg10 = ana.J.Coop._log()[T10] || [];
+    check('R10 · o `e` que a parceira pré-carrega para a MINHA vez é recusado: a vez é minha, e os lances dela são meus',
+          S_('ana').tortos === 1 && lg10.length > 0 && lg10[0].de === 'ana', JSON.stringify(lg10.slice(0, 2).map(function (l) { return l.de + ':' + l.a; })));
+    vezDe('bia');
+    var T10b = ana.J.Game.state.turno, hA10 = heroiDe('ana', 'ana'), x10 = hA10.x, y10 = hA10.y;
+    var viz10 = vizinhaLivre(ana.J, ana.J.Game.state, hA10);
+    injeta('ana', { t: 'batalha', de: 'bia', cx: 'cxb', acao: 'lance',
+                    dados: { b: bid10, T: T10b, k: 0, a: 'm', u: hA10.uid, x: viz10 ? viz10.x : 0, y: viz10 ? viz10.y : 0, ok: true } });
+    passo(50, ['ana']);
+    check('R10 · o `m` com o MEU herói na vez dela é recusado: o meu herói não anda', !!viz10 && heroiDe('ana', 'ana').x === x10 &&
+          heroiDe('ana', 'ana').y === y10 && S_('ana').tortos === 2, 'tortos ' + S_('ana').tortos);
+
+    // ---- R11: no duelo, quem desiste é quem manda; o W.O. forjado não dá vitória a quem forja
+    dueloR('ana-r11', 1111, ['espadachim'], ['curandeiro']);
+    ate(soltos, 100);
+    bia.vivo = false;                         // só a Bia ALTERADA fala (a de verdade contestaria o fim)
+    injeta('ana', { t: 'batalha', de: 'bia', cx: 'cxb', acao: 'desiste', dados: { b: 'ana-r11', lado: 'A' } });
+    ate(function () { return ana.w.__pvp.length > 0; }, 300, 100, ['ana']);
+    bia.vivo = true;
+    check('R11 · o `desiste` com o lado forjado ("quem desistiu foi a Ana"): quem desiste é SEMPRE quem mandou — a Ana vence',
+          tela('ana') === 'duelFim' && (ana.w.__pvp[0] || {}).resultado === 'vitoria-rede', (ana.w.__pvp[0] || {}).resultado);
+    dueloR('ana-r11b', 2222, ['arqueiro'], ['bruxo']);
+    ate(soltos, 100);
+    injeta('ana', { t: 'duelo', de: 'bia', cx: 'cxb', acao: 'fim', dados: { did: 'ana-r11b', venc: 'B', mot: 'wo' } });
+    ate(function () { return ana.w.__pvp.length > 0; }, 300, 100, ['ana']);
+    var df11 = ultimaTela('ana', 'duelFim') || {};
+    check('R11 · o `fim` com W.O. forjado (a Ana nunca caiu): a vitória não vai a quem forja — o duelo fica ANULADO',
+          (ana.w.__pvp[0] || {}).resultado === 'contestado-rede' && df11.contestado === true, (ana.w.__pvp[0] || {}).resultado);
+
+    // ---- R12: no duelo não há árbitro: o `ia` e a foto do outro não valem, e a divergência anula a partida
+    dueloR('ana-r12', 3333, ['espadachim'], ['curandeiro']);
+    ate(soltos, 100);
+    var hb12 = heroiDe('bia', 'bia');
+    injeta('bia', { t: 'batalha', de: 'ana', cx: 'cxa', acao: 'ia', dados: { b: 'ana-r12', u: hb12.uid, mot: 'prazo' } });
+    var fj12 = JSON.parse(ana.J.Engine.foto(ana.J.Game.state));
+    fj12.units.forEach(function (u) { if (u.dono === 'bia') u.hp = 1; });
+    injeta('bia', { t: 'batalha', de: 'ana', cx: 'cxa', acao: 'foto', dados: { b: 'ana-r12', T: fj12.turno, estado: JSON.stringify(fj12), lances: [] } });
+    check('R12 · no duelo, o `ia` e a foto de quem desafiou não valem: o herói da Bia segue dela, com a vida dela',
+          !heroiDe('bia', 'bia').ia && heroiDe('bia', 'bia').hp > 1 && ses('bia').restauracoes === 0);
+    bia.J.Coop._estraga(heroiDe('bia', 'ana').uid, 1);
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ate(function () { return tela('ana') === 'duelFim' && tela('bia') === 'duelFim'; }, 4000);
+    ate(function () { return ana.w.__pvp.length && bia.w.__pvp.length; }, 300, 100);
+    check('R12 · a divergência no duelo ANULA a partida nos dois (sem vencedor) — ninguém reescreve a do outro pela foto',
+          (ana.w.__pvp[0] || {}).resultado === 'contestado-rede' && (bia.w.__pvp[0] || {}).resultado === 'contestado-rede',
+          (ana.w.__pvp[0] || {}).resultado + ' × ' + (bia.w.__pvp[0] || {}).resultado);
+
+    // ---- R13: o herói inventado (o que dá para barrar sem o servidor)
+    var pOk = ana.J.Coop.payloadMeu('espadachim');
+    var com = function (mud) { var p = JSON.parse(JSON.stringify(pOk)); mud(p); return ana.J.Coop._validaPayload(p); };
+    var D13 = ana.J.DATA, monSp = Object.keys(D13.monsterSpells || {})[0], outra = ((D13.classes.curandeiro || {}).baseSpells || [])[0];
+    check('R13 · o payload de verdade passa', ana.J.Coop._validaPayload(pOk) === true);
+    check('R13 · nível em texto ("30") ou quebrado (12,5): recusado', com(function (p) { p.level = String(p.level); }) === false &&
+          com(function (p) { p.level = 12.5; }) === false);
+    check('R13 · feitiço de monstro, ou de outra classe: recusado (antes: qualquer registro valia)', !!monSp && !!outra &&
+          com(function (p) { p.spells.push(monSp); }) === false && com(function (p) { p.spells.push(outra); }) === false, monSp + ' / ' + outra);
+    check('R13 · stats que não são números sãos (PV infinito, PA 1e9): recusados', com(function (p) { p.stats.hp = Infinity; }) === false &&
+          com(function (p) { p.stats.pa = 1e9; }) === false);
+
+    // ---- R14: o `vivo` com turno velho não segura o prazo; o banco do outro tem teto
+    entraNaBatalha('cistern', { joga: true }, null);
+    ate(function () { return ana.J.Game.state && ana.J.Game.state.phase === 'playing'; }, 60);
+    vezDe('bia');
+    bia.parado = true;
+    var bid14 = S_('ana').bid, T14 = ana.J.Game.state.turno;
+    injeta('ana', { t: 'batalha', de: 'bia', cx: 'cxb', acao: 'lance', dados: { b: bid14, T: 1, k: 99, a: 'e', bk: 1e9, ok: true } });
+    check('R14 · o banco que o outro diz (bk) tem teto: 1e9 vira o bankMax', S_('ana').bkParceiro === ana.J.Game.bankMax, S_('ana').bkParceiro);
+    var t14 = relogio.t, n14 = 0;
+    ate(function () {
+      if (relogio.t - t14 >= n14 * 8000) { n14++; injeta('ana', { t: 'batalha', de: 'bia', cx: 'cxb', acao: 'vivo', dados: { b: bid14, T: 1 } }); }
+      return S_('ana').parceiroIA;
+    }, 2400, 100, ['ana']);
+    check('R14 · a Bia não joga a vez e manda `vivo` com turno VELHO a cada 8 s: o prazo corre pelo relógio da Ana e o herói dela vai para a IA',
+          S_('ana').parceiroIA && S_('ana').turnoDele >= T14, Math.round((relogio.t - t14) / 1000) + ' s · ' + n14 + ' vivos');
+    bia.parado = false;
+
+    // ---- R15: o `pede` e o `foto-pede` de fora têm freio; a foto que eu não pedi não vale
+    entraNaBatalha('greenhouse', { joga: true }, { joga: true });
+    ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 6 && bia.J.Game.state && bia.J.Game.state.turno >= 6; }, 400);
+    ana.J.Coop._piloto(null); bia.J.Coop._piloto(null);
+    vezDe('ana');
+    var bid15 = S_('ana').bid, c0 = correio.length;
+    for (i = 0; i < 10; i++) injeta('ana', { t: 'batalha', de: 'bia', cx: 'cxb', acao: 'pede', dados: { b: bid15, T: 0, k: 0 } });
+    var nL15 = noCorreio(function (e) { return e.de === 'ana' && e.acao === 'lance'; });
+    check('R15 · 10 `pede` de uma vez: a Ana reenvia UMA vez, e no máximo 24 lances (antes: tudo, a cada pedido — o relé a desligava)',
+          nL15 >= 1 && nL15 <= 24, nL15 + ' lances');
+    for (i = 0; i < 10; i++) injeta('ana', { t: 'batalha', de: 'bia', cx: 'cxb', acao: 'foto-pede', dados: { b: bid15, T: 1 } });
+    var nF15 = noCorreio(function (e) { return e.de === 'ana' && e.acao === 'foto'; });
+    check('R15 · 10 `foto-pede` de uma vez: a autoridade manda UMA foto', nF15 === 1, nF15 + ' fotos');
+    var r15 = ses('bia').restauracoes;
+    entrega();
+    check('R15 · e a foto que a Bia não pediu não vale (só a foto que EU pedi)', ses('bia').restauracoes === r15 && !ses('bia').sincronizando);
+
+    // ---- R16: a ata que falha depois de a parceira entrar não deixa ninguém preso
+    reseta();
+    desce('greenhouse');
+    ana.J.Coop._piloto(null); bia.J.Coop._piloto(null);
+    var bloqueia16 = true, perdidos16 = 0;
+    escuta(function (env) { if (bloqueia16 && env.de === 'bia' && env.acao === 'dentro') { perdidos16++; return 'perde'; } return 'entrega'; });
+    ana.J.Coop.entrar();
+    ate(function () { return ses('ana').ataFalhou; }, 600);
+    check('R16 · (a ata falhou do lado da líder: o `dentro` da parceira não chegou; ela já montou a batalha)',
+          ses('ana').ataFalhou && tela('bia') === 'battle' && tela('ana') === 'antessala', tela('ana') + '/' + tela('bia'));
+    bloqueia16 = false;
+    ate(function () { return tela('ana') === 'battle'; }, 200);
+    check('R16 · a parceira repete o `dentro`; chegando em até 30 s, a porta da líder ainda abre a MESMA batalha',
+          tela('ana') === 'battle' && S_('ana').bid === S_('bia').bid && perdidos16 >= 2, perdidos16 + ' perdidos');
+    reseta();
+    desce('cistern');
+    ana.J.Coop._piloto(null); bia.J.Coop._piloto(null);
+    bloqueia16 = true; perdidos16 = 0;
+    escuta(function (env) { if (bloqueia16 && env.de === 'bia' && env.acao === 'dentro') { perdidos16++; return 'perde'; } return 'entrega'; });
+    ana.J.Coop.entrar();
+    ate(function () { return ses('ana').ataFalhou; }, 600);
+    // 35 s: a líder segue na antessala — e na mesma sala da Rede, o pulso dela mantém a parceira sabendo que ela está viva
+    var t16 = relogio.t, np16 = 0;
+    ate(function () {
+      if (relogio.t - t16 >= np16 * 5000) { np16++; injeta('bia', { t: 'batalha', de: 'ana', cx: 'cxa', acao: 'pulso', dados: {} }); }
+      return relogio.t - t16 >= 35000;
+    }, 800);
+    bloqueia16 = false;
+    ate(function () { return tela('bia') === 'antessala'; }, 200);
+    check('R16 · passados os 30 s, o `dentro` atrasado recebe a `cancela`: a parceira volta à antessala (antes: presa na colocação)',
+          tela('bia') === 'antessala' && tela('ana') === 'antessala', tela('ana') + '/' + tela('bia'));
+    ate(function () { return ana.J.Coop.podeEntrar().ok; }, 200);
+    check('R16 · ...e a porta da líder acende de novo com o `pronto` dela', ana.J.Coop.podeEntrar().ok, JSON.stringify(ana.J.Coop.podeEntrar()));
+    ana.J.Coop.entrar();
+    ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
+    check('R16 · e a batalha nova abre nos dois', tela('ana') === 'battle' && tela('bia') === 'battle' && S_('ana').bid === S_('bia').bid);
+
+    filtro = null;
+    check('nenhum erro de script nos dois clientes (R)', !erros.length, erros.slice(0, 4).join(' | '));
+  }
+
+  // ------------------------------------------------------------------ a ordem
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    if (notas.length) { var li = document.createElement('li'); li.textContent = 'notas: ' + notas.join(' · '); lista.appendChild(li); }
+    window.__pronto = true;
+    window.__fail = falhas;
+  }
+  function etapa(fn) {
+    return function (prox) {
+      try { fn(); } catch (e) { check('a etapa quebrou', false, e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).join(' ')); }
+      setTimeout(prox, 0);
+    };
+  }
+  window.addEventListener('load', function () {
+    filho('motor', function (M1) {
+      filho('motor', function (M2) {
+        filho('cliente', function (A) {
+          filho('cliente', function (B) {
+            if (!M1 || !M2 || !A || !B) { check('os iframes carregaram', false, [!!M1, !!M2, !!A, !!B].join(',')); return fim(); }
+            // ?so=K,R roda só aquelas seções (as de dois clientes, sem as 18 batalhas do motor)
+            var so = (/[?&]so=([^&]+)/.exec(location.search) || [])[1];
+            var quer = function (s) { return !so || decodeURIComponent(so).split(',').indexOf(s) >= 0; };
+            var fila = [];
+            if (quer('A')) fila.push(etapa(secaoA));
+            if (quer('B')) fila.push(etapa(function () { secaoB(M1, M2); }));
+            if (quer('M')) fila.push(etapa(function () { secaoMotor(M1); }));
+            if (quer('K')) fila.push(etapa(function () { secaoK(A, B); }));
+            if (quer('R')) fila.push(etapa(function () { secaoRevisao(A, B); }));
+            (function roda(i) { if (i >= fila.length) return fim(); fila[i](function () { roda(i + 1); }); })(0);
+          });
+        });
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

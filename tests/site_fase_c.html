@@ -23,10 +23,15 @@
          e-mail novo precisa ser digitado igual duas vezes;
        - o idem muda a cada clique; os botões da loja desligam pelos motivos
          certos; o Mestre compra sem gastar;
+       - (10/09, loja 2) o catálogo é o v2: as seções na ordem do servidor
+         (personagens, bônus de XP, pedras, guilda, pergaminhos), `limite:
+         null` nas pedras, nos bônus e nas insígnias, o saldo com "A caminho";
+         os pacotes de vinténs e a volta do pagamento estão em
+         tests/site_loja2.html;
        - nenhum fetch leva e-mail, código ou senha na URL;
        - nenhum preço está escrito no HTML ou no JS do site;
        - o nome da conta nova passa pela lei dos nomes do jogo
-         (js/core/nomes.js, que o conta.js carrega sob demanda, sem marca):
+         (js/core/nomes.js, que o conta.js carrega sob demanda, pelo SITE_URL):
          'Admin' e 'GM Joao' não saem do navegador e o motivo aparece no
          aviso do cadastro; 'Joana Silva' sai; o Entrar não passa pela lei
          (a conta antiga "Administrator" segue entrando); sem a lei, o
@@ -112,39 +117,55 @@
   var SAUDE = [200, { ok: true, contas: 3, agora: AGORA, correio: true }];
   var SAUDE_SEM = [200, { ok: true, contas: 3, agora: AGORA, correio: false }];
 
-  function catalogo(precoXp) {
-    function pedra(sku, alvo, el, nome, preco) {
-      return { sku: sku, secao: 'pedras', tipo: 'pedras', alvo: alvo, qtd: 10, elemento: el, nome: nome,
-               descricao: 'Pedras de forja para a Forja do Acampamento.', preco: preco, limite: { grupo: 'pedras', max: 5, dias: 7 } };
+  /* o catálogo v2 da loja 2 (a tabela da seção 3 do plano de 10/09), com os
+   * pacotes de vinténs desligados ("em breve"): nada de /api/pagamento/* aqui */
+  function catalogo(precoBonus) {
+    function pedra(sku, alvo, el, nome, qtd, preco) {
+      return { sku: sku, secao: 'pedras', tipo: 'pedras', alvo: alvo, qtd: qtd, elemento: el, nome: nome,
+               descricao: 'Pedras de forja para a Forja do Acampamento.', preco: preco, limite: null };
     }
     function classe(id, nome, rar, cartas, preco) {
       return { sku: 'classe-' + id, secao: 'personagens', tipo: 'classe', alvo: id, qtd: 1, nome: nome, raridade: rar,
                cartas: cartas, descricao: 'Chega no nível 1.', preco: preco, limite: { grupo: 'classe-' + id, max: 1, dias: null } };
     }
-    return { ok: true, versao: 1, itens: [
-      { sku: 'pergaminho-xp', secao: 'pergaminhos', tipo: 'pergaminho', alvo: 'xp', qtd: 1, nome: 'Pergaminho da Sabedoria',
-        descricao: '+50% de experiência para o grupo nas próximas 9 salas vencidas. Com um evento de XP no ar, os dois juntos param em ×2.',
-        preco: precoXp || 1500, limite: { grupo: 'pergaminho-xp', max: 1, dias: 7 } },
-      { sku: 'pergaminho-elemento', secao: 'pergaminhos', tipo: 'pergaminho', alvo: 'elemento', qtd: 1, nome: 'Pergaminho da Reescrita',
-        descricao: 'Troca um caminho elemental de um herói por outro.', preco: 5000, limite: { grupo: 'pergaminho-elemento', max: 1, dias: 30 } },
-      pedra('pedras-agua', 'stone-tear', 'agua', '10 Lágrimas de Cisterna', 300),
-      pedra('pedras-terra', 'stone-root', 'terra', '10 Grãos de Rocha-Mãe', 300),
-      pedra('pedras-ar', 'stone-breath', 'ar', '10 Sopros Engarrafados', 450),
-      pedra('pedras-fogo', 'stone-ember', 'fogo', '10 Brasas Coaguladas', 450),
-      pedra('pedras-neutro', 'stone-slate', 'neutro', '10 Lascas da Lousa', 450),
-      classe('invocador', 'Xamã', 'raro', 10, 8000), classe('bruxo', 'Bruxo', 'raro', 10, 8000),
+    function bonus(dias, preco) {
+      return { sku: 'bonus-xp-' + dias, secao: 'bonus', tipo: 'bonus-xp', alvo: 'xp', qtd: dias, dias: dias,
+               nome: 'Bônus de XP — ' + dias + (dias === 1 ? ' dia' : ' dias'),
+               descricao: '+50% de experiência para o grupo por ' + dias + ' dia(s), a partir da entrega no jogo.', preco: preco, limite: null };
+    }
+    return { ok: true, versao: 2, itens: [
+      classe('invocador', 'Xamã', 'raro', 10, 10000), classe('bruxo', 'Bruxo', 'raro', 10, 10000),
       classe('espadachim', 'Ladino', 'epico', 20, 20000), classe('arqueiro', 'Caçador', 'epico', 25, 25000),
-      classe('minotauro', 'Minotauro', 'epico', 30, 30000)
-    ] };
+      classe('minotauro', 'Minotauro', 'epico', 30, 30000),
+      bonus(1, precoBonus || 1500), bonus(3, 3900), bonus(7, 7900),
+      pedra('pedras-agua', 'stone-tear', 'agua', '10 Lágrimas de Cisterna', 10, 500),
+      pedra('pedras-terra', 'stone-root', 'terra', '10 Grãos de Rocha-Mãe', 10, 500),
+      pedra('pedras-ar', 'stone-breath', 'ar', '10 Sopros Engarrafados', 10, 800),
+      pedra('pedras-fogo', 'stone-ember', 'fogo', '10 Brasas Coaguladas', 10, 800),
+      pedra('pedras-neutro', 'stone-slate', 'neutro', '10 Lascas da Lousa', 10, 800),
+      pedra('pedras-agua-50', 'stone-tear', 'agua', '50 Lágrimas de Cisterna', 50, 2250),
+      pedra('pedras-terra-50', 'stone-root', 'terra', '50 Grãos de Rocha-Mãe', 50, 2250),
+      pedra('pedras-ar-50', 'stone-breath', 'ar', '50 Sopros Engarrafados', 50, 3600),
+      pedra('pedras-fogo-50', 'stone-ember', 'fogo', '50 Brasas Coaguladas', 50, 3600),
+      pedra('pedras-neutro-50', 'stone-slate', 'neutro', '50 Lascas da Lousa', 50, 3600),
+      { sku: 'insignia-1', secao: 'guilda', tipo: 'insignias', alvo: 'fundacao', qtd: 1, nome: '1 Insígnia de Fundação',
+        descricao: 'Uma Insígnia de Fundação. Dez fundam uma guilda.', preco: 500, limite: null },
+      { sku: 'insignias-10', secao: 'guilda', tipo: 'insignias', alvo: 'fundacao', qtd: 10, nome: '10 Insígnias de Fundação',
+        descricao: 'Dez Insígnias de Fundação: o bastante para fundar uma guilda.', preco: 4500, limite: null },
+      { sku: 'pergaminho-elemento', secao: 'pergaminhos', tipo: 'pergaminho', alvo: 'elemento', qtd: 1, nome: 'Pergaminho da Reescrita',
+        descricao: 'Troca um caminho elemental de um herói por outro.', preco: 5000, limite: { grupo: 'pergaminho-elemento', max: 1, dias: 30 } }
+    ], pacotes: [
+      { id: 'pacote-1000', nome: 'Bolsa de 1.000 vinténs', vintens: 1000, centavos: 490, preco: 'R$ 4,90' },
+      { id: 'pacote-25000', nome: 'Tesouro de 25.000 vinténs', vintens: 25000, centavos: 7990, preco: 'R$ 79,90' }
+    ], pagamento: { ligado: false, teste: false } };
   }
+  var NCAT = catalogo().itens.length;
   function minha(extra) {
     return junta({
       ok: true,
-      saldo: { carteira: 12450, reservado: 300, disponivel: 12150, semFundo: false, saveVersao: 57, saveEm: AGORA - 3 * 3600 },
+      saldo: { carteira: 12450, aCaminho: 0, reservado: 300, disponivel: 12150, semFundo: false, saveVersao: 57, saveEm: AGORA - 3 * 3600 },
       limites: {
-        'pergaminho-xp': { usados: 0, max: 1, dias: 7, liberaEm: null },
         'pergaminho-elemento': { usados: 1, max: 1, dias: 30, liberaEm: AGORA + 3 * DIA },
-        'pedras': { usados: 5, max: 5, dias: 7, liberaEm: AGORA + 3 * DIA },
         'classe-invocador': { usados: 0, max: 1, dias: null, liberaEm: null },
         'classe-bruxo': { usados: 0, max: 1, dias: null, liberaEm: null },
         'classe-espadachim': { usados: 0, max: 1, dias: null, liberaEm: null },
@@ -155,13 +176,13 @@
                  espadachim: { liberada: false, cartas: 2 }, arqueiro: { liberada: false, cartas: 0 },
                  minotauro: { liberada: false, cartas: 3 } },
       pedidos: [
-        { id: 41, sku: 'pedras-agua', nome: '10 Lágrimas de Cisterna', preco: 300, estado: 'retirado', motivo: null, criadoEm: AGORA - 2 * 3600, fechadoEm: null },
-        { id: 40, sku: 'pedras-terra', nome: '10 Grãos de Rocha-Mãe', preco: 300, estado: 'retirado', motivo: null, criadoEm: AGORA - 30 * 3600, retiradoEm: AGORA - 26 * 3600, fechadoEm: null },
-        { id: 39, sku: 'pedras-ar', nome: '10 Sopros Engarrafados', preco: 450, estado: 'pendente', motivo: null, criadoEm: AGORA - 600, fechadoEm: null },
+        { id: 41, sku: 'pedras-agua', nome: '10 Lágrimas de Cisterna', preco: 500, estado: 'retirado', motivo: null, criadoEm: AGORA - 2 * 3600, fechadoEm: null },
+        { id: 40, sku: 'pedras-terra', nome: '10 Grãos de Rocha-Mãe', preco: 500, estado: 'retirado', motivo: null, criadoEm: AGORA - 30 * 3600, retiradoEm: AGORA - 26 * 3600, fechadoEm: null },
+        { id: 39, sku: 'pedras-ar', nome: '10 Sopros Engarrafados', preco: 800, estado: 'pendente', motivo: null, criadoEm: AGORA - 600, fechadoEm: null },
         { id: 35, sku: 'classe-minotauro', nome: 'Minotauro', preco: 30000, estado: 'pendente', motivo: null, criadoEm: AGORA - 900, fechadoEm: null },
         { id: 38, sku: 'pergaminho-xp', nome: 'Pergaminho da Sabedoria', preco: 1500, estado: 'entregue', motivo: null, criadoEm: AGORA - 9 * DIA, fechadoEm: AGORA - 9 * DIA + 60 },
         { id: 37, sku: 'classe-arqueiro', nome: 'Caçador', preco: 25000, estado: 'estornado', motivo: 'sem-saldo', criadoEm: AGORA - 12 * DIA, fechadoEm: AGORA - 12 * DIA + 60 },
-        { id: 36, sku: 'pedras-fogo', nome: '10 Brasas Coaguladas', preco: 450, estado: 'cancelado', motivo: null, criadoEm: AGORA - 15 * DIA, fechadoEm: AGORA - 15 * DIA + 60 }
+        { id: 36, sku: 'pedras-fogo', nome: '10 Brasas Coaguladas', preco: 800, estado: 'cancelado', motivo: null, criadoEm: AGORA - 15 * DIA, fechadoEm: AGORA - 15 * DIA + 60 }
       ]
     }, extra);
   }
@@ -575,8 +596,9 @@
     check('nomes: o conta.js carregou a lei do jogo (JOGO.Nomes.valida)', !!N && typeof N.valida === 'function');
     if (!N) return;
     var ss = scriptsDaLei(p);
-    check('nomes: um <script> só, posto pelo conta.js, para ../js/core/nomes.js SEM marca na URL',
-          ss.length === 1 && ss[0].src === LEI_URL && !/[?#]/.test(ss[0].getAttribute('src')),
+    check('nomes: um <script> só, posto pelo conta.js, para ../js/core/nomes.js (sem marca na URL; um ?t=/?v= também passa)',
+          ss.length === 1 && ss[0].src.split('?')[0] === LEI_URL &&
+          /^\.\.\/js\/core\/nomes\.js(\?(t=\d+|v=[0-9a-f]{6,64}))?$/.test(ss[0].getAttribute('src')),
           ss.map(function (s) { return s.getAttribute('src'); }).join(' | ') + ' (esperava ' + LEI_URL + ')');
     function recusado(nome) {
       var v = N.valida(nome, 3, 20);
@@ -642,7 +664,7 @@
     await ate(function () { return pedidos(c, 'POST', '/api/cadastro').length && avisoErro(p); }, 6000);
     var pc = pedidos(c, 'POST', '/api/cadastro');
     check('sem a lei: o conta.js tentou carregá-la (../js/core/nomes.js)',
-          pedidas.some(function (u) { return /nomes\.js$/.test(u); }), pedidas.join(' | '));
+          pedidas.some(function (u) { return /nomes\.js(\?(t=\d+|v=[0-9a-f]{6,64}))?$/.test(u); }), pedidas.join(' | '));
     check('sem a lei: JOGO.Nomes não existe na página', !(p.w.JOGO && p.w.JOGO.Nomes));
     check('sem a lei: o pedido sai como antes, e o servidor é quem manda', pc.length === 1 && pc[0].corpo.nome === 'Admin',
           pc.length + ' pedido(s)');
@@ -665,24 +687,28 @@
   async function cenaLojaFora() {
     var c = { rotas: { 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo()] } };
     var p = await abre('loja.html', c), L = lojaDe(p);
-    await ate(function () { return p.qq('.produto').length === 12; });
+    await ate(function () { return p.qq('.produto').length === NCAT; });
     var secoes = p.qq('.loja-secao').map(function (s) { return s.getAttribute('data-secao'); });
-    check('loja sem sessão: as três seções, na ordem', secoes.join() === 'pergaminhos,pedras,personagens', secoes.join());
-    check('loja: os 12 produtos do catálogo', p.qq('.produto').length === 12);
-    var xp = L.cartao('pergaminho-xp'), agua = L.cartao('pedras-agua'), xama = L.cartao('classe-invocador');
+    check('loja sem sessão: as cinco seções, na ordem do servidor', secoes.join() === 'personagens,bonus,pedras,guilda,pergaminhos', secoes.join());
+    check('loja: os ' + NCAT + ' produtos do catálogo', p.qq('.produto').length === NCAT);
+    var xp = L.cartao('bonus-xp-1'), agua = L.cartao('pedras-agua'), xama = L.cartao('classe-invocador');
     check('loja: o preço do servidor, com ponto de milhar', texto(xp.querySelector('.preco')) === '1.500 vinténs' &&
-          texto(agua.querySelector('.preco')) === '300 vinténs' && texto(xama.querySelector('.preco')) === '8.000 vinténs');
+          texto(agua.querySelector('.preco')) === '500 vinténs' && texto(xama.querySelector('.preco')) === '10.000 vinténs');
     check('personagem: o retrato pelo id da classe e o selo "Raro"', !!xama.querySelector('img[src="img/classe-invocador.webp"]') &&
           texto(xama.querySelector('.selo-raridade')) === 'Raro');
     check('épico com o selo certo', texto(p.q('.produto[data-sku="classe-minotauro"] .selo-raridade')) === 'Épico');
     check('pedra: a cor do elemento só por CSS, e a quantidade', !!agua.querySelector('.arte-produto.el-agua .pedra') && /×10/.test(texto(agua)) &&
-          !!p.q('.produto[data-sku="pedras-fogo"] .arte-produto.el-fogo'));
-    check('o limite em palavras', /Até 5 a cada 7 dias, somando os 5 desta seção/.test(texto(agua)) && /1 a cada 7 dias/.test(texto(xp)) &&
-          /Compra única/.test(texto(xama)) && /Libera com 10 cartas/.test(texto(xama)));
+          !!p.q('.produto[data-sku="pedras-fogo"] .arte-produto.el-fogo') && /×50/.test(texto(L.cartao('pedras-fogo-50'))));
+    check('o limite em palavras: a Reescrita "1 a cada 30 dias", o Xamã "Compra única"; sem limite, nada escrito',
+          /1 a cada 30 dias\./.test(texto(L.cartao('pergaminho-elemento'))) && /Compra única/.test(texto(xama)) &&
+          /Libera com 10 cartas/.test(texto(xama)) && !agua.querySelector('.limite') && !xp.querySelector('.limite'));
     check('sem sessão: "Entre para comprar" em todos, e nenhum botão de compra',
-          p.qq('.produto a[href="conta.html#entrar"]').length === 12 && !p.q('[data-comprar]'));
+          p.qq('.produto a[href="conta.html#entrar"]').length === NCAT && !p.q('[data-comprar]'));
     check('sem sessão: a caixa do saldo convida a entrar', /Entre para comprar/.test(texto(p.$('lj-saldo'))) && p.$('lj-pedidos-caixa').hidden);
-    check('sem sessão: nada de /api/loja/minha', !pedidos(c, 'GET', '/api/loja/minha').length);
+    check('sem sessão: nada de /api/loja/minha (nem de /api/pagamento/*)', !pedidos(c, 'GET', '/api/loja/minha').length &&
+          !c.pedidos.some(function (x) { return x.rota.indexOf('/api/pagamento/') === 0; }));
+    check('loja: os pacotes de vinténs aparecem "em breve"', !p.$('lj-pacotes').hidden && p.qq('.pacote').length === 2 &&
+          /em breve/.test(texto(p.$('lj-pacotes'))));
     check('loja: o menu tem a Loja marcada', !!p.q('nav a[href="loja.html"][aria-current="page"]'));
   }
 
@@ -699,22 +725,23 @@
       'POST /api/loja/cancelar': function (b) { return [200, { ok: true, saldo: minha().saldo, pedido: { id: b.id, estado: 'cancelado' } }]; }
     } };
     var p = await abre('loja.html', c), L = lojaDe(p);
-    await ate(function () { return p.qq('[data-comprar]').length === 12; });
+    await ate(function () { return p.qq('[data-comprar]').length === NCAT; });
     check('com sessão: /api/loja/minha com o token no cabeçalho', pedidos(c, 'GET', '/api/loja/minha').some(function (x) { return x.auth === 'Bearer tok-loja'; }));
-    check('saldo: carteira, reservado e disponível do servidor', texto(p.q('[data-saldo="carteira"]')) === '12.450' &&
-          texto(p.q('[data-saldo="reservado"]')) === '300' && texto(p.q('[data-saldo="disponivel"]')) === '12.150');
+    check('saldo: carteira, a caminho, reservado e disponível do servidor', texto(p.q('[data-saldo="carteira"]')) === '12.450' &&
+          texto(p.q('[data-saldo="aCaminho"]')) === '0' && texto(p.q('[data-saldo="reservado"]')) === '300' &&
+          texto(p.q('[data-saldo="disponivel"]')) === '12.150');
     var saldo = texto(p.$('lj-saldo'));
-    check('saldo: "do último save que subiu, há 3 h" e as duas explicações', /Do último save que subiu, há 3 h/.test(saldo) &&
+    check('saldo: "do último save que subiu, há 3 h" e as explicações', /Do último save que subiu, há 3 h/.test(saldo) &&
           /Só os vinténs do bolso contam; se estão no cofre, saque no jogo/.test(saldo) &&
-          /A entrega acontece quando o jogo abrir logado na conta Principal/.test(saldo), saldo.slice(0, 240));
-    check('ligados: Pergaminho da Sabedoria e Xamã', !L.bt('pergaminho-xp').disabled && !L.bt('classe-invocador').disabled &&
-          !L.motivo('pergaminho-xp') && !L.motivo('classe-invocador'));
+          /A caminho: pacotes pagos e presentes que o jogo ainda não recebeu/.test(saldo) &&
+          /A entrega acontece quando o jogo abrir logado na conta Principal/.test(saldo), saldo.slice(0, 300));
+    check('ligados: o bônus de 1 dia, o Xamã e as pedras (sem limite de janela)', !L.bt('bonus-xp-1').disabled && !L.bt('classe-invocador').disabled &&
+          !L.bt('pedras-agua').disabled && !L.bt('pedras-fogo-50').disabled && !L.motivo('bonus-xp-1') && !L.motivo('classe-invocador'));
     check('Xamã: "Você tem 6 de 10 cartas"', /Você tem 6 de 10 cartas/.test(texto(L.cartao('classe-invocador'))));
     check('desligado: classe já liberada (Bruxo)', L.bt('classe-bruxo').disabled && /já está liberada/.test(L.motivo('classe-bruxo')));
-    var comLimite = ['pedras-agua', 'pedras-terra', 'pedras-ar', 'pedras-fogo', 'pedras-neutro', 'pergaminho-elemento'];
-    check('desligado: limite com liberaEm ("de novo em 3 dias") nas 5 pedras e na Reescrita', comLimite.every(function (s) {
-      return L.bt(s).disabled && /Limite atingido: de novo em 3 dias/.test(L.motivo(s)); }), L.motivo('pedras-agua'));
-    check('o limite diz quanto já foi usado', /você usou 5/.test(texto(L.cartao('pedras-agua'))));
+    check('desligado: a Reescrita no limite, com liberaEm ("de novo em 3 dias")', L.bt('pergaminho-elemento').disabled &&
+          /Limite atingido: de novo em 3 dias/.test(L.motivo('pergaminho-elemento')), L.motivo('pergaminho-elemento'));
+    check('o limite diz quanto já foi usado', /você usou 1/.test(texto(L.cartao('pergaminho-elemento'))));
     check('desligado: saldo curto ("Faltam 7.850 vinténs" no Ladino)', L.bt('classe-espadachim').disabled &&
           /Faltam 7\.850 vinténs/.test(L.motivo('classe-espadachim')), L.motivo('classe-espadachim'));
     check('desligado: já há um pedido dessa classe a caminho (Minotauro)', L.bt('classe-minotauro').disabled &&
@@ -727,21 +754,21 @@
           !!L.linha(40).querySelector('[data-cancelar]') && !L.linha(41).querySelector('[data-cancelar]') &&
           !L.linha(38).querySelector('[data-cancelar]') && !L.linha(37).querySelector('[data-cancelar]') &&
           !L.linha(36).querySelector('[data-cancelar]'));
-    L.bt('pergaminho-xp').click();
+    L.bt('bonus-xp-1').click();
     await ate(function () { return !!p.q('.modal'); });
     var m = texto(p.q('.modal'));
-    check('comprar abre a confirmação: nome, preço e "sem devolução"', /Comprar Pergaminho da Sabedoria por 1\.500 vinténs\?/.test(m) &&
+    check('comprar abre a confirmação: nome, preço e "sem devolução"', /Comprar Bônus de XP — 1 dia por 1\.500 vinténs\?/.test(m) &&
           /Os vinténs saem da carteira do jogo quando ele receber o pedido\. Depois de entregue, não há devolução\./.test(m), m);
     check('a confirmação ainda não mandou nada', !pedidos(c, 'POST', '/api/loja/comprar').length);
     p.q('.modal [data-sim]').click();
     await ate(function () { return /Pedido feito/.test(texto(p.$('lj-aviso'))); });
     var c1 = pedidos(c, 'POST', '/api/loja/comprar')[0];
-    check('comprar: POST {sku, idem}, idem de 16 hex', !!c1 && c1.corpo.sku === 'pergaminho-xp' && /^[0-9a-f]{16}$/.test(c1.corpo.idem) &&
+    check('comprar: POST {sku, idem}, idem de 16 hex', !!c1 && c1.corpo.sku === 'bonus-xp-1' && /^[0-9a-f]{16}$/.test(c1.corpo.idem) &&
           Object.keys(c1.corpo).length === 2 && c1.auth === 'Bearer tok-loja', c1 && JSON.stringify(c1.corpo));
     check('comprar: avisa o jogo por BroadcastChannel("soterra-loja") {tipo:"comprou"}',
           c.canal.some(function (x) { return x.nome === 'soterra-loja' && x.msg && x.msg.tipo === 'comprou'; }), JSON.stringify(c.canal));
-    await ate(function () { return L.bt('pergaminho-xp') && !L.bt('pergaminho-xp').disabled && !p.q('.modal'); });
-    L.bt('pergaminho-xp').click();
+    await ate(function () { return L.bt('bonus-xp-1') && !L.bt('bonus-xp-1').disabled && !p.q('.modal'); });
+    L.bt('bonus-xp-1').click();
     await ate(function () { return !!p.q('.modal'); });
     p.q('.modal [data-sim]').click();
     await ate(function () { return pedidos(c, 'POST', '/api/loja/comprar').length === 2; });
@@ -757,7 +784,7 @@
     L.linha(39).querySelector('[data-cancelar]').click();
     await ate(function () { return !!p.q('.modal'); });
     check('cancelar pede confirmação, com a reserva que volta', /Cancelar o pedido de 10 Sopros Engarrafados\?/.test(texto(p.q('.modal'))) &&
-          /A reserva de 450 vinténs volta a ficar disponível/.test(texto(p.q('.modal'))));
+          /A reserva de 800 vinténs volta a ficar disponível/.test(texto(p.q('.modal'))));
     p.q('.modal [data-sim]').click();
     await ate(function () { return pedidos(c, 'POST', '/api/loja/cancelar').length === 1 && /Pedido cancelado/.test(texto(p.$('lj-aviso'))); });
     var pc = pedidos(c, 'POST', '/api/loja/cancelar')[0];
@@ -769,14 +796,14 @@
       'GET /api/saude': SAUDE,
       'GET /api/loja/catalogo': [200, catalogo()],
       'GET /api/loja/minha': [200, minha({
-        saldo: { carteira: 0, reservado: 0, disponivel: 0, semFundo: true, saveVersao: 0, saveEm: null },
+        saldo: { carteira: 0, aCaminho: 0, reservado: 0, disponivel: 0, semFundo: true, saveVersao: 0, saveEm: null },
         pedidos: [{ id: 5, sku: 'classe-bruxo', nome: 'Bruxo', preco: 0, estado: 'entregue', motivo: null, criadoEm: AGORA - DIA, fechadoEm: AGORA - DIA + 60 }]
       })]
     } };
     var p = await abre('loja.html', c), L = lojaDe(p);
-    await ate(function () { return p.qq('[data-comprar]').length === 12; });
+    await ate(function () { return p.qq('[data-comprar]').length === NCAT; });
     check('Mestre: o selo "Mestre: compra sem gastar"', /Mestre: compra sem gastar/.test(texto(p.$('lj-saldo'))));
-    check('Mestre: pula o saldo e os limites (pedras, Reescrita e Ladino ligados)',
+    check('Mestre: pula o saldo e os limites (pedras, Reescrita, Ladino e Minotauro ligados)',
           ['pedras-agua', 'pergaminho-elemento', 'classe-espadachim', 'classe-minotauro'].every(function (s) { return !L.bt(s).disabled; }));
     check('Mestre: a classe já liberada continua desligada', L.bt('classe-bruxo').disabled);
     check('Mestre: o pedido dele aparece sem custo', /sem custo \(Mestre\)/.test(texto(L.linha(5))));
@@ -789,12 +816,12 @@
   async function cenaLojaSemSave() {
     var c = { sessao: SESSAO_LOJA, rotas: {
       'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo()],
-      'GET /api/loja/minha': [200, minha({ saldo: { carteira: 0, reservado: 0, disponivel: 0, semFundo: false, saveVersao: 0, saveEm: null }, pedidos: [] })]
+      'GET /api/loja/minha': [200, minha({ saldo: { carteira: 0, aCaminho: 0, reservado: 0, disponivel: 0, semFundo: false, saveVersao: 0, saveEm: null }, pedidos: [] })]
     } };
     var p = await abre('loja.html', c);
-    await ate(function () { return p.qq('[data-comprar]').length === 12; });
-    check('sem save no servidor: todos desligados, com o motivo', p.qq('[data-comprar]').every(function (b) { return b.disabled; }) &&
-          p.qq('.motivo[data-motivo="sem-save"]').length === 12);
+    await ate(function () { return p.qq('[data-comprar]').length === NCAT; });
+    check('sem save no servidor (e nada a caminho): todos desligados, com o motivo', p.qq('[data-comprar]').every(function (b) { return b.disabled; }) &&
+          p.qq('.motivo[data-motivo="sem-save"]').length === NCAT);
     check('sem save: a caixa manda abrir o jogo logado na conta Principal',
           /O servidor ainda não viu seus vinténs: abra o jogo logado nesta conta \(na conta Principal\)/.test(texto(p.$('lj-saldo'))));
     check('sem pedidos: diz isso', /Nenhum pedido ainda/.test(texto(p.$('lj-pedidos'))));
@@ -806,39 +833,41 @@
       'GET /api/loja/minha': [401, { ok: false, erro: 'faça login (token ausente ou vencido)' }]
     } };
     var p = await abre('loja.html', c);
-    await ate(function () { return pedidos(c, 'GET', '/api/loja/minha').length && p.qq('.produto a[href="conta.html#entrar"]').length === 12; });
+    await ate(function () { return pedidos(c, 'GET', '/api/loja/minha').length && p.qq('.produto a[href="conta.html#entrar"]').length === NCAT; });
     check('401 no /api/loja/minha: a sessão some e volta o "Entre para comprar"', lsSessao() === null &&
-          p.qq('.produto a[href="conta.html#entrar"]').length === 12 && /vencido/.test(texto(p.$('lj-aviso'))));
+          p.qq('.produto a[href="conta.html#entrar"]').length === NCAT && /vencido/.test(texto(p.$('lj-aviso'))));
   }
 
   async function cenaPrecoDoServidor() {
     var c = { rotas: { 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo(1733)] } };
     var p = await abre('loja.html', c);
-    await ate(function () { return p.qq('.produto').length === 12; });
-    check('o preço é o do servidor: mudou lá, muda aqui (1.733)', texto(p.q('.produto[data-sku="pergaminho-xp"] .preco')) === '1.733 vinténs');
+    await ate(function () { return p.qq('.produto').length === NCAT; });
+    check('o preço é o do servidor: mudou lá, muda aqui (1.733)', texto(p.q('.produto[data-sku="bonus-xp-1"] .preco')) === '1.733 vinténs');
   }
 
   async function cenaLojaServidorFora() {
     var c = { rotas: { 'GET /api/saude': 'fora', 'GET /api/loja/catalogo': 'fora' } };
     var p = await abre('loja.html', c);
     await ate(function () { return /servidor está fora/.test(texto(p.$('lj-catalogo'))); });
-    check('servidor fora: a loja diz isso, sem quebrar', /O servidor está fora — a loja volta com ele\./.test(texto(p.$('lj-catalogo'))));
+    check('servidor fora: a loja diz isso, sem quebrar', /O servidor está fora — a loja volta com ele\./.test(texto(p.$('lj-catalogo'))) &&
+          p.$('lj-pacotes').hidden);
   }
 
   async function cenaEscapeLoja() {
     var MAU = '<img src=x onerror="window.__xss=3">';
     var cat = catalogo();
     cat.itens[0].nome = MAU; cat.itens[0].descricao = MAU; cat.itens[0].sku = '"><img src=x onerror="window.__xss=4">';
-    cat.itens[7].alvo = '"><b>'; cat.itens[7].raridade = MAU;
+    cat.itens[1].alvo = '"><b>'; cat.itens[1].raridade = MAU;
+    cat.pacotes[0].nome = MAU; cat.pacotes[0].preco = MAU; cat.pacotes[0].id = '"><img src=x onerror="window.__xss=5">';
     var c = { sessao: SESSAO_LOJA, rotas: {
       'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, cat],
       'GET /api/loja/minha': [200, minha({ pedidos: [{ id: '"><img src=x>', sku: MAU, nome: MAU, preco: 1, estado: MAU, motivo: MAU, criadoEm: AGORA }] })]
     } };
     var p = await abre('loja.html', c);
-    await ate(function () { return p.qq('.produto').length === 12 && !p.$('lj-pedidos-caixa').hidden; });
+    await ate(function () { return p.qq('.produto').length === NCAT && !p.$('lj-pedidos-caixa').hidden; });
     await espera(60);
-    check('loja: o que vem do servidor não vira HTML (catálogo e pedidos)', !p.q('img[src="x"]') && !p.w.__xss &&
-          /<img src=x/.test(texto(p.$('lj-catalogo'))) && /<img src=x/.test(texto(p.$('lj-pedidos'))));
+    check('loja: o que vem do servidor não vira HTML (catálogo, pacotes e pedidos)', !p.q('img[src="x"]') && !p.w.__xss &&
+          /<img src=x/.test(texto(p.$('lj-catalogo'))) && /<img src=x/.test(texto(p.$('lj-pedidos'))) && /<img src=x/.test(texto(p.$('lj-pacotes'))));
   }
 
   /* ======================================================================
@@ -860,8 +889,8 @@
     var arqs = ['loja.html', 'loja.js', 'conta.html', 'conta.js', 'site.js'], textos = {};
     for (var i = 0; i < arqs.length; i++) textos[arqs[i]] = await le(BASE_SITE + arqs[i]);
     check('li as fontes do site', arqs.every(function (a) { return !!textos[a]; }));
-    // os preços da tabela 2.1 do plano; com servidor/loja.py no disco, os de lá também
-    var precos = [1500, 5000, 300, 450, 8000, 20000, 25000, 30000];
+    // os preços das tabelas (a da Fase C e a da loja 2, de 10/09); com servidor/loja.py no disco, os de lá também
+    var precos = [1500, 5000, 300, 450, 8000, 20000, 25000, 30000, 10000, 3900, 7900, 500, 800, 2250, 3600, 4500];
     var loja = await le(new URL('../servidor/loja.py', location.href).href), doServidor = 0;
     (loja || '').replace(/['"]preco['"]\s*:\s*([\d_]+)/g, function (_, n) {
       n = Number(n.replace(/_/g, ''));

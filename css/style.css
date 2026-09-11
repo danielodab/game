@@ -2166,3 +2166,140 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .perg-mini .stone-nm { font-size: 11px; color: #cdbf9a; }
 .btn.btn-reescreve { border-style: dashed; }
 .rw-evento.rw-pergaminho { color: #ffe3a1; border-color: rgba(232,194,90,.6); background: rgba(232,194,90,.10); }
+
+/* ------------------------------ O GRUPO, O DUELO E A MENSAGEM PARTICULAR (11/09)
+   Pedido do dono (10/09): tocar noutro jogador abre o painel dele (mensagem
+   particular, grupo, guilda, duelo); o grupo de 2 mora no canto direito com o
+   retrato pequeno do herói de cada um. Camadas novas penduradas em .ui-root
+   decidem o próprio pointer-events (a lição do modal que não respondia). */
+.hub-painel { max-height: calc(100% - 150px); overflow-y: auto; }
+.pn-cab { display: flex; align-items: center; gap: 10px; }
+.pn-cab > canvas, .pn-cab > .art-missing { flex: none; border-radius: 8px; border: 1px solid rgba(240,234,216,.18); }
+.pn-cab-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.pn-cab-tx h3 { font-size: 16px; }
+.pn-cab-sub { font: 400 12px var(--ui-sans); color: var(--dim); }
+.pn-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pn-grade .btn { min-height: 44px; width: 100%; padding: 8px 10px; font-size: 13.5px; line-height: 1.15; text-align: center; }
+.pn-grade .pn-largo { grid-column: 1 / -1; }
+.btn.is-apagado { opacity: .45; filter: grayscale(.6); }
+.pn-duplo { display: flex; gap: 8px; }
+.pn-duplo .btn { flex: 1 1 0; min-height: 44px; }
+.conv-prazo { height: 6px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+.conv-prazo i { display: block; height: 100%; width: 100%; transform-origin: left center;
+  background: linear-gradient(90deg, var(--gold-dim, #8a6f2e), var(--gold, #ffc44d));
+  animation-name: convPrazo; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes convPrazo { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* o painel do grupo, no canto direito (praça, antessala, batalha, recompensa) */
+/* por cima das telas (.ui-screen, sem z-index) e por baixo das fichas
+   (.ui-sheet, z 60): o grupo aparece no Acampamento e na batalha, mas nunca
+   tapa uma ficha aberta. Na batalha o `bottom` vem da HUD (a altura medida da
+   barra de baixo), para não brigar com o "Encerrar turno". */
+.grupo-lado {
+  position: absolute; right: calc(10px + var(--sa-r, 0px)); top: calc(var(--sa-t, 0px) + 58px);
+  z-index: 50; display: none; flex-direction: column; gap: 6px; width: 176px;
+  pointer-events: auto;
+}
+.grupo-lado.is-on { display: flex; }
+.in-battle .grupo-lado { top: auto; bottom: calc(var(--sa-b, 0px) + 150px); }
+/* 11/09 (revisão): na batalha, na MINHA vez, o painel não segura o toque — ele
+   passa para a casa do tabuleiro de baixo (no celular o painel fica em cima da
+   borda direita da sala). Na vez do parceiro os cartões voltam a ser tocáveis. */
+.grupo-lado.is-passa, .grupo-lado.is-passa .gl-membro { pointer-events: none; }
+.grupo-lado.is-passa { opacity: .55; }
+.gl-membro {
+  position: relative; display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 48px; padding: 5px 8px 5px 6px; cursor: pointer; text-align: left;
+  color: var(--text); font: inherit;
+  background: rgba(12,16,14,.9); border: 1px solid rgba(240,234,216,.16); border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+.gl-membro.is-lider { border-color: rgba(255,196,77,.55); }
+.gl-membro.is-vez { box-shadow: 0 0 0 1px var(--gold, #ffc44d), 0 0 14px rgba(255,196,77,.35); }
+.gl-membro.is-fora { opacity: .72; }
+.gl-pic { position: relative; flex: none; width: 36px; height: 36px; }
+.gl-pic > canvas, .gl-pic > .art-missing { width: 36px; height: 36px; border-radius: 7px; display: block; }
+.gl-coroa { position: absolute; top: -9px; left: -5px; font-size: 14px; line-height: 1;
+  color: var(--gold, #ffc44d); text-shadow: 0 1px 3px #000, 0 0 6px rgba(0,0,0,.8); }
+.gl-on { position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; border-radius: 50%;
+  background: #5fd37a; border: 2px solid #0c100e; }
+.gl-on.is-off { background: #ff7a6a; }
+.gl-on.is-ia { background: #ffb15c; }
+.gl-tx { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.gl-nome { font: 600 12.5px/1.1 var(--ui-sans); color: #f0ead8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gl-nv { font: 400 11px/1.1 var(--ui-sans); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gl-vida { height: 4px; border-radius: 999px; background: #0a0d11; overflow: hidden; }
+.gl-vida i { display: block; height: 100%; background: var(--hp, #58c46b); transition: width .25s ease; }
+.gl-selos { display: flex; flex-wrap: wrap; gap: 3px; }
+.gl-selo { padding: 0 5px; border-radius: 999px; border: 1px solid; font: 700 9.5px/15px var(--ui-sans); }
+.gl-selo.s-vez { color: var(--gold, #ffc44d); border-color: rgba(255,196,77,.6); }
+.gl-selo.s-ia, .gl-selo.s-voltando { color: #ffb15c; border-color: rgba(255,177,92,.6); }
+.gl-selo.s-caiu { color: #ff7a6a; border-color: rgba(255,122,106,.6); }
+.gl-menu {
+  position: absolute; z-index: 55; display: none; flex-direction: column; gap: 6px;
+  width: 214px; padding: 10px; pointer-events: auto;
+  background: rgba(14,18,14,.97); border: 1px solid rgba(240,234,216,.2); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.55);
+}
+.gl-menu.is-on { display: flex; }
+.gl-menu h4 { margin: 0 0 2px; font: 600 14px var(--ui-serif, Georgia); color: #f0ead8; }
+.gl-menu .btn-mini { width: 100%; }
+.gl-menu .hub-nota { font-size: 12px; }
+
+/* a mensagem particular no chat do canto */
+.chat-chip {
+  display: none; align-items: center; gap: 6px; align-self: flex-start; max-width: 100%;
+  min-height: 34px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  background: rgba(120,70,170,.38); border: 1px solid rgba(215,166,255,.65);
+  color: #ead4ff; font: 600 12.5px var(--ui-sans);
+}
+.chat-chip.is-on { display: inline-flex; }
+.chat-chip-nm { max-width: 10ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-chip-x { opacity: .8; }
+.hub-chat-input.is-privado { border-color: #b98ae6; }
+.hub-chat-linha.chat-sussurro { color: #d7a6ff; cursor: pointer; }
+.hub-chat-linha.chat-sussurro b { color: #d7a6ff; }
+.hub-chat-linha.chat-sussurro.is-meu { color: #eedcff; cursor: default; }
+.hub-chat-linha.chat-sussurro.is-meu b { color: #eedcff; }
+.hub-chat-linha.chat-sussurro.is-falhou { color: #ff9a8a; }
+.su-hist { max-height: 180px; margin-bottom: 8px; }
+.su-hist:empty { display: none; }
+
+/* a batalha em dupla: a borda azul do herói do parceiro na linha de iniciativa */
+.tl-unit.s-parceiro { border-color: #3d6fb8; }
+
+/* o duelo pela Rede: a ficha da dupla e o fim */
+.du-rede .av-carta small { display: block; font: 400 11px var(--ui-sans); color: var(--dim); }
+.du-rede .du-espera { margin: 10px 0; text-align: center; color: var(--text); font-size: 14px; }
+.du-rede .du-espera b { color: var(--gold, #ffc44d); font-variant-numeric: tabular-nums; }
+.du-fim.du-rede .du-valeria { color: var(--dim); }
+
+@media (max-width: 480px) {
+  /* o painel do grupo compacto: retrato, coroa por cima, vida por baixo, um ponto */
+  .grupo-lado { width: 52px; gap: 10px; }
+  .gl-membro { flex-direction: column; align-items: center; width: 52px; min-height: 0;
+    padding: 6px 4px 5px; gap: 4px; }
+  .gl-tx { width: 100%; flex: none; }
+  .gl-nome, .gl-nv, .gl-selos { display: none; }
+  .gl-menu { position: fixed; left: 8px; right: 8px !important; top: auto !important;
+    bottom: calc(var(--sa-b, 0px) + 8px); width: auto; }
+  .pn-duplo .btn { padding: 10px 8px; }
+}
+@media (max-width: 360px) {
+  .pn-grade { grid-template-columns: 1fr; }
+}
+@media (max-height: 500px) {
+  .hub-painel { max-height: calc(100% - 110px); }
+  .grupo-lado { top: calc(var(--sa-t, 0px) + 48px); }
+  .in-battle .grupo-lado { bottom: calc(var(--sa-b, 0px) + 110px); }
+}
+
+/* ---- conserto da loja 2, 11/09: o topo do Acampamento no CELULAR. O chip do bônus de XP (o mais
+   largo, por causa do prazo) com os pergaminhos empurrava o Menu para fora da tela
+   a 390 px. Os chips descem para a linha de baixo e o Menu fica na tela. */
+@media (max-width: 480px) {
+  .hub-top { align-items: flex-start; }
+  .hub-quem { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; row-gap: 6px; }
+  .hub-perg { flex-wrap: wrap; }
+  .hub-acts { flex: none; }
+}

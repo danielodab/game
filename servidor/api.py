@@ -3,6 +3,7 @@
 """A API — o cartório do SOTERRA (fase 3 da vida online: a conta no servidor).
 
     python api.py [--host 127.0.0.1] [--porta 8300] [--banco dados/soterra.db] [--emails-prova ARQ]
+                  [--mp-api URL]   (só nas provas: o Mercado Pago de mentira)
 
 O QUE ELA É: guarda a conta (nome, e-mail, senha picada), o save (o Progress e
 o DB local do cliente, como JSON OPACO — o servidor não entende de feitiços) e,
@@ -24,6 +25,11 @@ NA FASE C entram a CONTA NO SITE (trocar a senha, trocar o e-mail com código,
 "esqueci a senha" e as sessões: conta.py, que manda e-mail pelo correio.py) e
 a LOJA DE VINTÉNS (loja.py), como mixins desta mesma Api. As primitivas que os
 três dividem moram em comum.py (ver lá a armadilha do __main__).
+
+NA LOJA 2 (10/09) entram o PAINEL DO MESTRE (mestre.py: buscar qualquer conta
+e dar presentes: classes, itens da loja e vinténs), os PACOTES DE VINTÉNS pagos
+no Mercado Pago (pagamento.py) e o RETRATO que o jogador escolhe no site para o
+ranking (conta.py, GET/POST /api/avatar).
 
 NO VPS ela fica atrás do Caddy (https://<dominio>/api/* → 127.0.0.1:8300; ver
 Caddyfile e soterra-api.service ao lado), irmã do Relé. Em casa, roda direto e
@@ -59,6 +65,9 @@ from conta import (CADASTRO_POR_IP, ESQUEMA_CONTA, FRASE_IP_CADASTRO, FRASE_IP_S
                    MUITAS_TENTATIVAS, ContaMixin, carrega_segredo)
 from correio import Correio
 from loja import ESQUEMA_LOJA, LojaMixin
+from mestre import FRASE_SO_MESTRE, MestreMixin
+from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova
+from comum import le_consulta   # a consulta da URL (?id=, ?data.id=): o painel do Mestre e o aviso do Mercado Pago
 import nomes                     # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
 log = logging.getLogger("api")
@@ -224,7 +233,7 @@ CREATE TABLE IF NOT EXISTS migracoes(
 );
 """
 
-# rota → (método da Api, precisa de conta?[, só do Mestre?])
+# rota → (método da Api, precisa de conta?[, só do Mestre?[, a frase do 403 de quem não é]])
 ROTAS = {
     ('POST', '/api/cadastro'): ('cadastro', False),
     ('POST', '/api/login'):    ('login', False),
@@ -257,6 +266,27 @@ ROTAS = {
     ('POST', '/api/loja/comprar'):           ('loja_comprar', True),
     ('POST', '/api/loja/cancelar'):          ('loja_cancelar', True),
     ('POST', '/api/loja/retirar'):           ('loja_retirar', True),
+    # o retrato no ranking (Loja 2, 10/09, conta.py): o jogador escolhe no site
+    ('GET',  '/api/avatar'):                 ('avatar_ler', True),
+    ('POST', '/api/avatar'):                 ('avatar_escolher', True),
+    # os pacotes de vinténs pagos no Mercado Pago (10/09, pagamento.py). O aviso é
+    # SEM conta (quem chama é o Mercado Pago): a assinatura dele é a porta
+    ('POST', '/api/pagamento/pacote'):       ('pagamento_pacote', True),
+    ('POST', '/api/pagamento/aviso'):        ('pagamento_aviso', False),
+    ('POST', '/api/pagamento/conferir'):     ('pagamento_conferir', True),
+    ('GET',  '/api/pagamento/meus'):         ('pagamento_meus', True),
+    # o painel do Mestre (10/09, mestre.py): buscar contas, dar presentes e ver os
+    # alertas de pagamento. A busca é POST: o e-mail não vai para a URL (nem para o
+    # log do proxy). A marca é contas.gm, lida do banco a cada pedido.
+    ('POST', '/api/mestre/contas'):            ('mestre_contas', True, True, FRASE_SO_MESTRE),
+    ('GET',  '/api/mestre/conta'):             ('mestre_conta', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/presentear'):        ('mestre_presentear', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/presente/cancelar'): ('mestre_presente_cancelar', True, True, FRASE_SO_MESTRE),
+    ('GET',  '/api/mestre/presentes'):         ('mestre_presentes', True, True, FRASE_SO_MESTRE),
+    ('GET',  '/api/mestre/alertas'):           ('mestre_alertas', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/alerta/visto'):      ('mestre_alerta_visto', True, True, FRASE_SO_MESTRE),
+    # o botão "conferir no Mercado Pago" da ficha (o aviso perdido, o servidor mal configurado, o teto de 24 h)
+    ('POST', '/api/mestre/pagamento/conferir'): ('mestre_pagamento_conferir', True, True, FRASE_SO_MESTRE),
 }
 
 
@@ -612,16 +642,17 @@ def versao_da_regra():
         return '0'
 
 
-class Api(ContaMixin, LojaMixin):
+class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
     versão que o primeiro gravou e leva 409.
 
-    A conta no site (conta.py) e a loja (loja.py) entram como mixins: as rotas
-    delas são métodos deste mesmo objeto, com a mesma conexão e a mesma tranca."""
+    A conta no site (conta.py), a loja (loja.py), o painel do Mestre (mestre.py)
+    e os pacotes pagos (pagamento.py) entram como mixins: as rotas deles são
+    métodos deste mesmo objeto, com a mesma conexão e a mesma tranca."""
 
-    def __init__(self, caminho_banco, correio=None):
+    def __init__(self, caminho_banco, correio=None, mp=None):
         pasta = os.path.dirname(os.path.abspath(caminho_banco))
         os.makedirs(pasta, exist_ok=True)
         self.con = sqlite3.connect(caminho_banco, check_same_thread=False)
@@ -630,13 +661,18 @@ class Api(ContaMixin, LojaMixin):
         self.con.execute("PRAGMA foreign_keys=ON")
         self.con.executescript(ESQUEMA)
         # Fase C: só tabelas novas (e um índice) — o rolling update segue seguro
-        self.con.executescript(ESQUEMA_CONTA + ESQUEMA_LOJA)
+        self.con.executescript(ESQUEMA_CONTA + ESQUEMA_LOJA + ESQUEMA_PAGAMENTO)   # a loja antes: o pagamento a cita
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
+        self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)
+        self._fila = {}          # chave do balde do IP → pedidos esperando uma dessas vagas voltar
         self.intencoes = {}      # (de, para) → {dou, recebo, em}            (idem: expira em 120 s)
         # o correio (correio.py). Sem nada, desligado: as rotas que mandam
         # e-mail respondem 503 com correio:false, e o resto funciona igual
         self.correio = correio if correio is not None else Correio()
+        # o Mercado Pago (pagamento.py). Sem nada, desligado: os pacotes aparecem
+        # "em breve", as rotas de pagamento respondem 503, e o resto funciona igual
+        self.mp = mp if mp is not None else MercadoPago()
         # o segredo do hmac dos códigos (SOTERRA_SEGREDO, ou o arquivo `segredo` na pasta do banco)
         self.segredo = carrega_segredo(pasta)
         self._ranking_guardado = None    # (vale_ate, data_version, resposta) — ver ranking
@@ -716,7 +752,7 @@ class Api(ContaMixin, LojaMixin):
             # a marca é do SERVIDOR (contas.gm, lida do banco a cada pedido): o
             # `gm` que o cliente guardou do login é só uma cópia (10/09)
             if so_mestre and not conta['gm']:
-                raise Recusa(403, 'só o Mestre do Fundo mexe nos eventos do mundo')
+                raise Recusa(403, rota[3] if len(rota) > 3 else 'só o Mestre do Fundo mexe nos eventos do mundo')
         return getattr(self, nome)(conta, corpo)
 
     # -- conta ------------------------------------------------------------------
@@ -786,14 +822,24 @@ class Api(ContaMixin, LojaMixin):
         t = agora()
         # o freio por IP (30 senhas ERRADAS por hora; conta.py) vem antes de
         # tudo: é o que segura o PBKDF2 de quem chuta, já que a senha é
-        # conferida mesmo com a conta trancada. A vaga fica reservada durante o
-        # PBKDF2 e VOLTA quando a senha bate: login certo não gasta o balde de
-        # quem divide o endereço (CGNAT de operadora, escola, a casa inteira)
-        vaga = self._freia_por_ip(corpo, 'login', LOGIN_POR_IP, t, FRASE_IP_SENHA)
+        # conferida mesmo com a conta trancada. A vaga fica reservada (em voo)
+        # durante o PBKDF2 e VOLTA quando a senha bate: login certo não gasta o
+        # balde de quem divide o endereço (CGNAT de operadora, escola, a casa
+        # inteira), e quem chega com o balde cheio de vagas em voo — logins
+        # certos juntos — espera uma voltar, em vez do 429
+        vaga = self._freia_por_ip(corpo, 'login', LOGIN_POR_IP, t, FRASE_IP_SENHA, so_erradas=True)
+        try:
+            return self._login_com_vaga(login, senha, corpo, vaga, t)
+        finally:
+            self._pousa_vaga(vaga)              # sai do voo depois de resolvida, bata a senha ou não (conta.py)
+
+    def _login_com_vaga(self, login, senha, corpo, vaga, t):
+        """O resto do login, com a vaga do freio por IP em voo (ver login)."""
         with self.tranca:
             c = self.con.execute("SELECT * FROM contas WHERE nome = ? OR email = ?", (login, login)).fetchone()
-            # e o acerto tem o balde dele, por conta (60 por hora; conta.py)
-            self._barra_logins_certos(c['id'] if c is not None else None, t)
+            # e o acerto tem o balde dele, por conta (60 por hora; conta.py); barrado
+            # aqui, antes do PBKDF2, a vaga do IP volta
+            self._barra_logins_certos(c['id'] if c is not None else None, t, vaga)
         # a senha ANTES da tranca de tentativas: quem sabe a senha nunca é
         # trancado (senão qualquer um trancava qualquer conta pelo nome, e o
         # ranking publica nomes); quem chuta continua parando na 11ª. O nome
@@ -1032,6 +1078,8 @@ class Api(ContaMixin, LojaMixin):
         nome = nome or conta['nome']
         por_classe = herois_por_classe(progress)
         avatar, principal = avatar_publico(db), classe_principal(por_classe)
+        # o retrato escolhido no site (conta.py, /api/avatar), se o save ainda o sustenta
+        avatar, principal = self._retrato_escolhido(cid, conta, progress, avatar, principal)
         self.con.execute(
             "INSERT OR REPLACE INTO resumos(conta_id, nome, xp_total, nivel_max, classes, brasa_pts, brasa_partidas, "
             "guilda_nome, guilda_emblema, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1177,11 +1225,17 @@ class Api(ContaMixin, LojaMixin):
     # -- público ------------------------------------------------------------------------
     def ranking(self, conta, corpo):
         """Público. Guardado RANKING_CACHE segundos neste processo: a resposta
-        custa 10 consultas sob a tranca, e a landing a pede a cada visita. A
+        custa 11 consultas sob a tranca, e a landing a pede a cada visita. A
         cópia vale enquanto (a) nenhum save deste processo mudou a foto pública
         de uma conta (_resumo compara) e (b) nenhuma OUTRA conexão gravou no
-        banco (PRAGMA data_version: o `admin banir` pelo sqlite3, o contêiner
-        vizinho no rolling update)."""
+        banco (PRAGMA data_version: o `admin banir`, o `admin mestre` e o
+        `admin tirar-mestre` pelo sqlite3, o contêiner vizinho no rolling update).
+
+        A EQUIPE (pedido do dono, 10/09): conta com contas.gm = 1 não entra em
+        lista nenhuma (jogadores, arena, por classe) nem soma na guilda (nem a
+        XP nem o membro). Ela sai à parte, em `equipe`, só com o nome público
+        (o do jogo, que o _resumo grava; sem save, o da conta) e o retrato do
+        Cavaleiro Negro (avatar 'gm'): nada de XP, nível, e-mail ou id."""
         with self.tranca:
             versao_banco = self.con.execute("PRAGMA data_version").fetchone()[0]
             guardado = self._ranking_guardado
@@ -1190,23 +1244,31 @@ class Api(ContaMixin, LojaMixin):
             jogadores = self.con.execute(
                 "SELECT r.nome, r.xp_total, r.nivel_max, r.classes, x.avatar, x.classe FROM resumos r "
                 "JOIN contas c ON c.id = r.conta_id LEFT JOIN resumos_extra x ON x.conta_id = r.conta_id "
-                "WHERE c.banido = 0 ORDER BY r.xp_total DESC, r.nivel_max DESC, r.nome COLLATE NOCASE LIMIT 50").fetchall()
+                "WHERE c.banido = 0 AND c.gm = 0 "
+                "ORDER BY r.xp_total DESC, r.nivel_max DESC, r.nome COLLATE NOCASE LIMIT 50").fetchall()
             pvp = self.con.execute(
                 "SELECT r.nome, r.brasa_pts, r.brasa_partidas FROM resumos r JOIN contas c ON c.id = r.conta_id "
-                "WHERE c.banido = 0 AND r.brasa_partidas > 0 ORDER BY r.brasa_pts DESC, r.nome COLLATE NOCASE LIMIT 50").fetchall()
+                "WHERE c.banido = 0 AND c.gm = 0 AND r.brasa_partidas > 0 "
+                "ORDER BY r.brasa_pts DESC, r.nome COLLATE NOCASE LIMIT 50").fetchall()
             guildas = self.con.execute(
                 "SELECT r.guilda_nome AS nome, MAX(r.guilda_emblema) AS emblema, COUNT(*) AS membros, "
                 "SUM(r.xp_total) AS xp FROM resumos r JOIN contas c ON c.id = r.conta_id "
-                "WHERE c.banido = 0 AND r.guilda_nome IS NOT NULL AND r.guilda_nome != '' "
+                "WHERE c.banido = 0 AND c.gm = 0 AND r.guilda_nome IS NOT NULL AND r.guilda_nome != '' "
                 "GROUP BY r.guilda_nome COLLATE NOCASE ORDER BY xp DESC, membros DESC LIMIT 50").fetchall()
             # o melhor de cada classe (10/09): uma linha por conta (a melhor ficha
-            # daquela classe, escolhida no _resumo), sem banidas; as 7 chaves sempre
+            # daquela classe, escolhida no _resumo), sem banidas nem a equipe; as 7 chaves sempre
             por_classe = {classe: self.con.execute(
                 "SELECT r.nome, rc.nivel, rc.xp, rc.elemento FROM resumos_classe rc "
                 "JOIN resumos r ON r.conta_id = rc.conta_id JOIN contas c ON c.id = rc.conta_id "
-                "WHERE c.banido = 0 AND rc.classe = ? "
+                "WHERE c.banido = 0 AND c.gm = 0 AND rc.classe = ? "
                 "ORDER BY rc.xp DESC, rc.nivel DESC, r.nome COLLATE NOCASE LIMIT 50", (classe,)).fetchall()
                 for classe in CLASSES_RANK}
+            # a equipe à parte: o nome que o ranking usaria (o do jogo, gravado
+            # pelo _resumo) ou, sem save, o da conta; conta banida não aparece
+            equipe = self.con.execute(
+                "SELECT COALESCE(NULLIF(r.nome, ''), c.nome) AS nome FROM contas c "
+                "LEFT JOIN resumos r ON r.conta_id = c.id WHERE c.gm = 1 AND c.banido = 0 "
+                "ORDER BY COALESCE(NULLIF(r.nome, ''), c.nome) COLLATE NOCASE, c.id LIMIT 50").fetchall()
             resposta = {
                 'ok': True,
                 'jogadores': [{'nome': r['nome'], 'xpTotal': r['xp_total'], 'nivelMax': r['nivel_max'],
@@ -1219,6 +1281,7 @@ class Api(ContaMixin, LojaMixin):
                 'porClasse': {classe: [{'nome': r['nome'], 'nivel': r['nivel'], 'xp': r['xp'],
                                         'elemento': r['elemento'] if r['elemento'] in ELEMENTOS else 'neutro'}
                                        for r in linhas] for classe, linhas in por_classe.items()},
+                'equipe': [{'nome': r['nome'], 'avatar': 'gm'} for r in equipe],
             }
             # guardada ainda dentro da tranca: um save que chegue agora a derruba depois, nunca antes
             self._ranking_guardado = (time.monotonic() + RANKING_CACHE, versao_banco, resposta)
@@ -1425,6 +1488,12 @@ class Atendente(BaseHTTPRequestHandler):
             corpo['_ip'] = ip_do_pedido(', '.join(self.headers.get_all('X-Forwarded-For') or []),
                                         self.client_address[0] if self.client_address else '')
             corpo['_agente'] = (self.headers.get('User-Agent') or '')[:160]
+            # a consulta da URL (o painel do Mestre: GET ?id=N; o aviso do Mercado
+            # Pago: ?data.id=…&type=…) e os dois cabeçalhos da assinatura dele,
+            # também postos DEPOIS do corpo lido
+            corpo['_query'] = le_consulta(urlsplit(self.path).query)
+            corpo['_cabecalhos'] = {'x-signature': self.headers.get('x-signature'),
+                                    'x-request-id': self.headers.get('x-request-id')}
             status, resposta = self.api.despacha(metodo, caminho, token, corpo)
         except Recusa as r:
             status, resposta = r.status, {'ok': False, 'erro': r.erro}
@@ -1443,11 +1512,20 @@ if __name__ == '__main__':
     ap.add_argument("--emails-prova", metavar="ARQ", default=None,
                     help="modo de prova do correio: cada e-mail vira uma linha JSON em ARQ e nada sai da "
                          "máquina (NUNCA em produção)")
+    ap.add_argument("--mp-api", metavar="URL", default=None,
+                    help="SÓ PARA AS PROVAS: a API do Mercado Pago de mentira (tests/mp_falso.py), "
+                         "http://127.0.0.1:PORTA; o token e a assinatura continuam vindo do ambiente")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     correio = Correio.do_ambiente(prova=args.emails_prova)
     log.info("correio: %s", correio.descricao())      # nunca a senha
-    Atendente.api = Api(args.banco, correio=correio)
+    try:
+        base_mp = base_de_prova(args.mp_api) if args.mp_api else None
+    except ValueError as e:
+        ap.error(str(e))
+    mp = MercadoPago.do_ambiente(base=base_mp)
+    log.info("pagamento: %s", mp.descricao())         # nunca o token nem a assinatura
+    Atendente.api = Api(args.banco, correio=correio, mp=mp)
     servidor = ThreadingHTTPServer((args.host, args.porta), Atendente)
     log.info("a API escuta em http://%s:%d — banco em %s", args.host, args.porta, os.path.abspath(args.banco))
     try:

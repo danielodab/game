@@ -25,11 +25,21 @@ de Brasília, o RANKING POR CLASSE e a migração de um banco de antes disso.
 Os eventos são do mundo, não de uma conta: quem conta o que está no ar chama
 `limpa_agenda()` antes, e a ordem dos testes continua não importando.
 
+Na LOJA 2 (10/09): a consulta da URL (`_query`, para o painel do Mestre e o aviso
+do Mercado Pago) e o RETRATO que o jogador escolhe no site para o ranking
+(/api/avatar: as opções, a gramática, o Cavaleiro Negro só do Mestre, o freio, e o
+ranking que muda na hora e continua certo depois de um save).
+
 E a LEI DOS NOMES (servidor/nomes.py, pedido do dono): o cadastro recusa nome
 reservado à equipe do jogo (GM, Admin, Mestre do Fundo…, disfarçado ou não), a
 conta antiga com nome assim continua entrando, um save forjado não veste a
 equipe na vitrine do ranking, e o `admin renomear` (o admin.sh de verdade, no
 sh) é a porta do dono para dar um nome desses.
+
+E A EQUIPE FORA DO RANKING (pedido do dono, 10/09): conta com a marca de
+Mestre (contas.gm = 1) não entra em lista nenhuma do ranking nem soma na
+guilda; aparece à parte, em `equipe`, só com o nome e o retrato do Cavaleiro
+Negro, e tirar a marca a devolve às listas.
 """
 import json
 import os
@@ -931,15 +941,20 @@ class ProvaDaApi(unittest.TestCase):
             jogadores = [j['nome'] for j in r['jogadores']]
             self.assertNotIn('GM Velho', jogadores)
             self.assertIn('Zeca Comum', jogadores)                 # o nome da conta no lugar
-            self.assertIn('Mestre do Fundo', jogadores)            # o Mestre veste o que quiser
+            # o Mestre veste o que quiser, mas fica fora das listas: sai só na equipe
+            self.assertNotIn('Mestre do Fundo', jogadores)
+            self.assertIn({'nome': 'Mestre do Fundo', 'avatar': 'gm'}, r['equipe'])
             self.assertIn('Lia, a Clara', jogadores)               # nome de gente fica
             guildas = {g['nome']: g['emblema'] for g in r['guildas']}
             self.assertNotIn('Staff', guildas)
-            self.assertEqual(guildas.get('Equipe Mestra'), 'GM')
+            self.assertNotIn('Equipe Mestra', guildas)             # só o Mestre nela: não soma, não aparece
             self.assertEqual(guildas.get('Lanterna'), '⚒')
             linha = depois.con.execute("SELECT nome, guilda_nome, guilda_emblema FROM resumos WHERE conta_id = ?",
                                        (ids['zeca'],)).fetchone()
             self.assertEqual(tuple(linha), ('Zeca Comum', None, None))
+            guia = depois.con.execute("SELECT nome, guilda_nome, guilda_emblema FROM resumos WHERE conta_id = ?",
+                                      (ids['guia'],)).fetchone()
+            self.assertEqual(tuple(guia), ('Mestre do Fundo', 'Equipe Mestra', 'GM'))   # a limpeza não toca o Mestre
             marca = 'resumos-nomes:' + cartorio.versao_da_regra()
             self.assertRegex(marca, r'^resumos-nomes:[0-9a-f]{12}$')
             self.assertEqual(depois.con.execute("SELECT COUNT(*) FROM migracoes WHERE nome = ?",
@@ -952,6 +967,76 @@ class ProvaDaApi(unittest.TestCase):
                 "SELECT COUNT(*) FROM migracoes WHERE nome LIKE 'resumos-nomes:%'").fetchone()[0], 1)
         finally:
             de_novo.con.close()
+
+    def test_ranking_sem_a_equipe(self):
+        """Pedido do dono (10/09): a conta da equipe (contas.gm = 1, o `admin
+        mestre`) não aparece em ranking nenhum (jogadores, arena, por classe)
+        nem soma na guilda (nem a XP nem o membro). Ela sai à parte, em
+        `equipe`, só com o nome público (o do jogo; sem save, o da conta) e o
+        avatar 'gm' (o retrato do Cavaleiro Negro): nada de XP, nível, e-mail
+        ou id. A marca é gravada por OUTRA conexão, como o admin.sh faz, com o
+        ranking já guardado: a cópia cai na hora (PRAGMA data_version). Tirar a
+        marca (`admin tirar-mestre`) devolve a conta a todas as listas."""
+        lia = self.novo('Lia Equipe')
+        oda = self.novo('Oda Equipe')
+        rui = self.novo('Rui Equipe')                        # da equipe, sem save nenhum
+        guilda = 'Vigias da Prova %d' % ProvaDaApi._n
+        status, r = lia.salva(0, *save_com([], {'sumo': {'classId': 'sumo', 'xp': 26000, 'level': 29, 'element': 'terra'}},
+                                           {'jogador': {'nome': 'Lia, a Firme', 'brasa': {'pts': 1850, 'partidas': 4},
+                                                        'guilda': {'nome': guilda, 'emblema': '⚒'}}}))
+        self.assertEqual(status, 200, r)
+        status, r = oda.salva(0, *save_com([], {'sumo': {'classId': 'sumo', 'xp': 28000, 'level': 30, 'element': 'fogo'},
+                                                'bruxo': {'classId': 'bruxo', 'xp': 27000, 'level': 30}},
+                                           {'jogador': {'nome': 'Oda, o Vigia', 'brasa': {'pts': 1990, 'partidas': 9},
+                                                        'guilda': {'nome': guilda, 'emblema': '⚒'}}}))
+        self.assertEqual(status, 200, r)
+
+        def onde(r, nome):
+            """as listas do ranking em que o nome aparece"""
+            listas = {'jogadores': r['jogadores'], 'pvp': r['pvp']}
+            listas.update(('classe:' + c, linhas) for c, linhas in r['porClasse'].items())
+            return sorted(k for k, linhas in listas.items() if nome in [x['nome'] for x in linhas])
+
+        def da_guilda(r):
+            g = [g for g in r['guildas'] if g['nome'] == guilda]
+            return (g[0]['membros'], g[0]['xpTotal']) if g else None
+
+        todas = ['classe:bruxo', 'classe:sumo', 'jogadores', 'pvp']
+        antes = self.ranking()                               # e a resposta fica guardada (30 s)
+        self.assertEqual(onde(antes, 'Oda, o Vigia'), todas)
+        self.assertEqual(da_guilda(antes), (2, 26000 + 55000))
+        self.assertNotIn('Oda, o Vigia', [m['nome'] for m in antes['equipe']])
+
+        # o `admin mestre`, por outra conexão: a cópia guardada cai na hora
+        self.marca(oda, 'gm')
+        self.marca(rui, 'gm')
+        r = self.ranking()
+        self.assertEqual(onde(r, 'Oda, o Vigia'), [])
+        self.assertEqual(onde(r, 'Lia, a Firme'), ['classe:sumo', 'jogadores', 'pvp'])
+        self.assertEqual(da_guilda(r), (1, 26000))           # nem a XP nem o membro do Mestre
+        self.assertTrue(r['equipe'], r)
+        for m in r['equipe']:                                # só o nome e o retrato: nada de xp, nível, e-mail, id
+            self.assertEqual(set(m), {'nome', 'avatar'}, m)
+            self.assertEqual(m['avatar'], 'gm', m)
+            self.assertNotIn('@', m['nome'], m)
+        nomes_eq = [m['nome'] for m in r['equipe']]
+        self.assertIn('Oda, o Vigia', nomes_eq)              # o nome do jogo, que o ranking usaria
+        self.assertIn(rui.conta['nome'], nomes_eq)           # sem save: o da conta
+        self.assertNotIn(oda.conta['nome'], nomes_eq)        # o nome da conta do Mestre não vaza
+        self.assertNotIn('Lia, a Firme', nomes_eq)
+        # conta banida não aparece nem na equipe
+        self.marca(rui, 'banido')
+        self.assertNotIn(rui.conta['nome'], [m['nome'] for m in self.ranking()['equipe']])
+
+        # o `admin tirar-mestre` (outra conexão) devolve a conta a todas as listas
+        b = self.banco()
+        b.execute("UPDATE contas SET gm = 0 WHERE id = ?", (oda.conta['id'],))
+        b.commit()
+        b.close()
+        r = self.ranking()
+        self.assertEqual(onde(r, 'Oda, o Vigia'), todas)
+        self.assertEqual(da_guilda(r), (2, 26000 + 55000))
+        self.assertNotIn('Oda, o Vigia', [m['nome'] for m in r['equipe']])
 
     # -- os eventos do mundo (10/09) --------------------------------------------------------
     def test_evento_distante_aparece(self):
@@ -1440,6 +1525,156 @@ class ProvaDaApi(unittest.TestCase):
         bloco = elem[elem.index('DATA.elementInfo = {'):]
         bloco = bloco[:bloco.index('\n  };')]
         self.assertEqual(tuple(re.findall(r'^    ([a-z]+): \{', bloco, re.M)), cartorio.ELEMENTOS)
+
+    # -- a consulta da URL e o retrato no ranking (Loja 2, 10/09) --------------------------------
+    def test_consulta_da_url(self):
+        """O atendente põe a consulta da URL em corpo['_query'] (o painel do Mestre
+        lê ?id=, o aviso do Mercado Pago ?data.id=), DEPOIS de ler o corpo; mais de
+        2000 caracteres ou 20 campos é 400, em qualquer rota."""
+        self.assertEqual(cartorio.le_consulta(''), {})
+        self.assertEqual(cartorio.le_consulta('id=7&x=&id=9'), {'id': '7', 'x': ''})
+        self.assertEqual(cartorio.le_consulta('data.id=123&type=payment'), {'data.id': '123', 'type': 'payment'})
+        with self.assertRaises(cartorio.Recusa) as e:
+            cartorio.le_consulta('a=' + 'x' * 2000)
+        self.assertEqual((e.exception.status, e.exception.erro), (400, 'consulta grande demais'))
+        with self.assertRaises(cartorio.Recusa) as e:
+            cartorio.le_consulta('&'.join('k%d=1' % i for i in range(25)))
+        self.assertEqual((e.exception.status, e.exception.erro), (400, 'consulta inválida'))
+        status, r = Cliente(self.base).pede('GET', '/api/ranking?pagina=1&x=')
+        self.assertEqual(status, 200, r)
+        status, r = Cliente(self.base).pede('GET', '/api/saude?a=' + 'b' * 2100)
+        self.assertEqual((status, r['erro']), (400, 'consulta grande demais'))
+        # um GET do Mestre com consulta chega à rota (e o 403 de quem não é vem antes de tudo)
+        c = self.novo('Query Comum')
+        status, r = c.pede('GET', '/api/mestre/conta?id=%d' % c.conta['id'])
+        self.assertEqual((status, r['erro']), (403, 'só o Mestre do Fundo abre o painel do Mestre'))
+        m = self.mestre('Guia Query')
+        status, r = m.pede('GET', '/api/mestre/conta?id=%d' % c.conta['id'])
+        self.assertEqual((status, r['conta']['id']), (200, c.conta['id']))
+        self.assertEqual(m.pede('GET', '/api/mestre/conta')[0], 400)       # sem ?id=
+
+    def test_iniciais_espelham_classes(self):
+        """INICIAIS (comum.py: os retratos de toda conta) = as classes com startsUnlocked em classes.js."""
+        import comum
+        with open(os.path.join(AQUI, '..', 'js/core/data/classes.js'), 'rb') as f:
+            classes_js = f.read().decode('utf-8', errors='replace')
+        blocos = re.split(r'^  ([a-z_]+): \{', classes_js, flags=re.M)
+        nascem = tuple(n for n, corpo in zip(blocos[1::2], blocos[2::2]) if re.search(r'startsUnlocked:\s*true', corpo))
+        self.assertEqual(nascem, comum.INICIAIS)
+
+    def test_avatar_opcoes_e_escolha(self):
+        c = self.novo('Ava Tar')
+        self.assertEqual(Cliente(self.base).pede('GET', '/api/avatar')[0], 401)
+        self.assertEqual(Cliente(self.base).pede('POST', '/api/avatar', {'avatar': None})[0], 401)
+        # sem save: as duas iniciais e a fusão delas
+        status, r = c.pede('GET', '/api/avatar')
+        self.assertEqual(status, 200, r)
+        self.assertEqual(r['opcoes'], [{'id': 'classe:sumo', 'tipo': 'classe', 'classe': 'sumo'},
+                                       {'id': 'classe:curandeiro', 'tipo': 'classe', 'classe': 'curandeiro'},
+                                       {'id': 'fus:curandeiro+sumo', 'tipo': 'fusao', 'par': ['curandeiro', 'sumo']}])
+        self.assertEqual((r['escolhido'], r['efetivo'], r['semSave'], r['gm']),
+                         (None, {'avatar': None, 'classe': None}, True, False))
+        # com save: as liberadas (a 'curandeira' antiga vira curandeiro), a ficha que existe (o arqueiro,
+        # sem estar na lista) e as iniciais; as classes na ordem de classes.js, as fusões pelo par
+        herois = {'sumo': {'classId': 'sumo', 'xp': 900, 'level': 6},
+                  'arqueiro': {'classId': 'arqueiro', 'xp': 10 ** 10, 'level': 12}}      # no alto do ranking
+        p, d = save_com([], herois)
+        p['unlockedClasses'] = ['sumo', 'curandeira', 'bruxo']
+        self.assertEqual(c.salva(0, p, d)[0], 200)
+        r = c.pede('GET', '/api/avatar')[1]
+        self.assertEqual([o['id'] for o in r['opcoes']],
+                         ['classe:sumo', 'classe:arqueiro', 'classe:bruxo', 'classe:curandeiro',
+                          'fus:arqueiro+bruxo', 'fus:arqueiro+curandeiro', 'fus:arqueiro+sumo',
+                          'fus:bruxo+curandeiro', 'fus:bruxo+sumo', 'fus:curandeiro+sumo'])
+        self.assertEqual((r['semSave'], r['efetivo']), (False, {'avatar': None, 'classe': 'arqueiro'}))
+
+        def no_ranking():
+            j = [j for j in self.ranking()['jogadores'] if j['nome'] == c.conta['nome']]
+            self.assertEqual(len(j), 1)
+            return j[0]['avatar'], j[0]['classe']
+        self.assertEqual(no_ranking(), (None, 'arqueiro'))         # o automático: a classe do melhor herói
+        # a classe escolhida: o ranking muda NA HORA (a cópia guardada cai)
+        status, r = c.pede('POST', '/api/avatar', {'avatar': 'classe:bruxo'})
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['escolhido'], r['efetivo']), ('classe:bruxo', {'avatar': None, 'classe': 'bruxo'}))
+        self.assertEqual(no_ranking(), (None, 'bruxo'))
+        # a fusão: o avatar é ela, a classe continua a do melhor herói
+        r = c.pede('POST', '/api/avatar', {'avatar': 'fus:arqueiro+sumo'})[1]
+        self.assertEqual(r['efetivo'], {'avatar': 'fus:arqueiro+sumo', 'classe': 'arqueiro'})
+        self.assertEqual(no_ranking(), ('fus:arqueiro+sumo', 'arqueiro'))
+        # e continua certo depois de um save (a escolha vale por cima do avatar do jogo)
+        d['jogador']['avatar'] = 'fus:bruxo+sumo'
+        self.assertEqual(c.salva(1, p, d)[0], 200)
+        self.assertEqual(no_ranking(), ('fus:arqueiro+sumo', 'arqueiro'))
+        self.assertEqual(c.pede('GET', '/api/avatar')[1]['escolhido'], 'fus:arqueiro+sumo')
+        # fora da gramática: 400 (e não gasta o freio)
+        for torto in ('fus:sumo+arqueiro', 'fus:sumo+sumo', 'classe:gm', 'classe:lua', 'fus:gm+sumo', 'Classe:sumo',
+                      'classe:curandeira', '', 7, True, ['classe:sumo'], {'id': 'gm'}, 'classe:' + 'x' * 50):
+            status, r = c.pede('POST', '/api/avatar', {'avatar': torto})
+            self.assertEqual((status, r.get('erro')), (400, 'avatar inválido'), torto)
+        self.assertEqual(c.pede('POST', '/api/avatar', {})[1]['erro'], 'avatar inválido')
+        # não é seu (409): classe e fusão que o save não tem, e o Cavaleiro Negro
+        for alheio in ('classe:minotauro', 'fus:bruxo+minotauro'):
+            status, r = c.pede('POST', '/api/avatar', {'avatar': alheio})
+            self.assertEqual((status, r['erro']), (409, 'esse retrato ainda não é seu: libere a classe no jogo'), alheio)
+        status, r = c.pede('POST', '/api/avatar', {'avatar': 'gm'})
+        self.assertEqual((status, r['erro']), (409, 'o Cavaleiro Negro é só do Mestre do Fundo'))
+        # a escolha que o save não sustenta mais cai no automático (a ficha do arqueiro sumiu)
+        p2, d2 = save_com([], {'sumo': {'classId': 'sumo', 'xp': 10 ** 10, 'level': 6}})
+        p2['unlockedClasses'] = ['sumo', 'curandeiro']
+        self.assertEqual(c.salva(2, p2, d2)[0], 200)
+        self.assertEqual(no_ranking(), (None, 'sumo'))
+        r = c.pede('GET', '/api/avatar')[1]
+        self.assertEqual((r['escolhido'], r['efetivo']), ('fus:arqueiro+sumo', {'avatar': None, 'classe': 'sumo'}))
+        # null = automático: a linha some
+        r = c.pede('POST', '/api/avatar', {'avatar': None})[1]
+        self.assertEqual((r['escolhido'], r['efetivo']), (None, {'avatar': None, 'classe': 'sumo'}))
+        b = self.banco()
+        try:
+            self.assertIsNone(b.execute("SELECT 1 FROM avatares WHERE conta_id = ?", (c.conta['id'],)).fetchone())
+            trilha = [json.loads(x[0]) for x in b.execute(
+                "SELECT dados FROM eventos WHERE conta_id = ? AND tipo = 'avatar' ORDER BY id", (c.conta['id'],))]
+        finally:
+            b.close()
+        self.assertEqual(trilha, [{'avatar': 'classe:bruxo'}, {'avatar': 'fus:arqueiro+sumo'}, {'avatar': None}])
+
+    def test_avatar_do_mestre_e_freio(self):
+        m = self.mestre('Guia Retrato')
+        r = m.pede('GET', '/api/avatar')[1]
+        self.assertEqual((r['opcoes'], r['gm']), ([{'id': 'gm', 'tipo': 'gm'}], True))
+        status, r = m.pede('POST', '/api/avatar', {'avatar': 'classe:sumo'})
+        self.assertEqual((status, r['erro']), (409, 'o Mestre do Fundo veste o Cavaleiro Negro'))
+        status, r = m.pede('POST', '/api/avatar', {'avatar': 'gm'})
+        self.assertEqual((status, r['escolhido']), (200, 'gm'))
+        # 30 trocas por hora por conta, contadas no banco (a 31ª: 429 com liberaEm)
+        c = self.novo('Troca Retrato')
+        t = int(time.time())
+        b = self.banco()
+        b.executemany("INSERT INTO limites(chave, em) VALUES (?, ?)", [('avatar:%d' % c.conta['id'], t - 60)] * 29)
+        b.commit()
+        b.close()
+        self.assertEqual(c.pede('POST', '/api/avatar', {'avatar': 'classe:sumo'})[0], 200)     # a 30ª
+        status, r = c.pede('POST', '/api/avatar', {'avatar': 'classe:curandeiro'})
+        self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'trocas de avatar demais nesta hora (30)', t - 60 + 3600))
+        self.assertEqual(c.pede('POST', '/api/avatar', {'avatar': 'fus:x+y'})[0], 400)      # a gramática vem antes
+
+    def test_retrato_funcoes_puras(self):
+        import conta as conta_mod
+        self.assertEqual(conta_mod.opcoes_de_avatar(None, True), ['gm'])
+        self.assertEqual(conta_mod.opcoes_de_avatar({'unlockedClasses': 'lixo', 'heroes': []}, False),
+                         ['classe:sumo', 'classe:curandeiro', 'fus:curandeiro+sumo'])
+        todas = conta_mod.opcoes_de_avatar({'unlockedClasses': list(cartorio.CLASSES_RANK) + ['gm', 'lua', 7]}, False)
+        self.assertEqual(len(todas), 7 + 21)                  # os 7 retratos de classe e as 21 fusões do site
+        self.assertNotIn('classe:gm', todas)
+        for o in todas[7:]:                                   # cada fusão tem o retrato dela em site/img
+            a, b = o[4:].split('+')
+            self.assertTrue(os.path.exists(os.path.join(AQUI, '..', 'site', 'img', 'fusao-%s-%s-busto.webp' % (a, b))), o)
+        auto = ('fus:bruxo+sumo', 'sumo')
+        self.assertEqual(conta_mod.retrato_do_ranking('classe:bruxo', ['classe:bruxo'], auto), (None, 'bruxo'))
+        self.assertEqual(conta_mod.retrato_do_ranking('fus:a+b', ['fus:a+b'], auto), ('fus:a+b', 'sumo'))
+        self.assertEqual(conta_mod.retrato_do_ranking('classe:bruxo', ['classe:sumo'], auto), auto)
+        self.assertEqual(conta_mod.retrato_do_ranking('gm', ['gm'], auto), auto)
+        self.assertEqual(conta_mod.retrato_do_ranking(None, [], auto), auto)
 
 
 # O sqlite3 de linha de comando de mentira da ProvaDoAdmin: um python que roda o

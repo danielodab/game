@@ -21,7 +21,9 @@ tests/agenda_funil.html (a vitória de verdade: matar, fase 'won', battleEnd; Ma
 agenda real com eventos injetados. Cobra: o sanitize guarda os dois campos novos e derruba o lixo; a leitura respeita o
 teto de 27 cargas; o pergaminho e o evento de XP não passam de ×2; a carga só se gasta quando ajudou; o grupo todo no
 nível 30 não gasta; os vinténs não mudam; e a Reescrita troca um caminho no mesmo lugar, recusando o que não pode —
-sem gastar o pergaminho na recusa.</div>
+sem gastar o pergaminho na recusa. LOJA 2 (10/09, seção 6): o bônus de XP por tempo no mesmo funil — ×1,5; com o
+Sabedoria junto, ×1,5 (o pergaminho pausa e não gasta carga); com evento de XP, ×2 no máximo; e o prazo pelo relógio do
+SERVIDOR (o desvio da agenda), não pelo desta máquina.</div>
 <div id="summary">rodando…</div>
 <ul id="lista"></ul>
 
@@ -314,7 +316,12 @@ sem gastar o pergaminho na recusa.</div>
     o = o || {};
     creditos = []; ultimoDado = null; ultimaTela = null;
     E.inimigos = o.inimigos || ['t-grunt', 't-grunt'];
-    AG._injeta({ ok: true, agora: AGORA, ativos: o.eventos || [], proximos: [], regras: [] });
+    // loja 2: `maquina` (s) troca o relógio DESTA máquina e `servidor` (s) o que o servidor diz — o desvio
+    // da agenda sai da diferença, e o relógio que vale no funil é o do servidor
+    var relogioReal = AG._agora;
+    if (typeof o.maquina === 'number') AG._agora = function () { return o.maquina * 1000; };
+    // `semResposta` (conserto 11/09): nenhuma resposta nova do servidor antes da sala
+    if (!o.semResposta) AG._injeta({ ok: true, agora: typeof o.servidor === 'number' ? o.servidor : AGORA, ativos: o.eventos || [], proximos: [], regras: [] });
     var gastos = -1;
     semeia(typeof o.seed === 'number' ? o.seed : 1);
     try {
@@ -335,6 +342,7 @@ sem gastar o pergaminho na recusa.</div>
       gastos = contagem - n0;
     } finally {
       Math.random = acasoReal;
+      AG._agora = relogioReal;
     }
     return { dado: ultimoDado || {}, randoms: gastos, credito: creditos.slice(), tela: ultimaTela,
              salas: P.pergaminhos().salasXp };
@@ -530,6 +538,138 @@ sem gastar o pergaminho na recusa.</div>
     check('o último pergaminho foi gasto e o campo some', P.pergaminhos().elemento === 0 && !(P.state.pergaminhos && P.state.pergaminhos.elemento));
     P.save(); P.load();
     check('a troca sobrevive ao load (ativo e lista)', P.hero(TANK).element === 'agua' && P.heroElements(TANK).join() === 'agua,terra');
+
+    // ================================================================ 6. o bônus por tempo (loja 2)
+    secao('6. o bônus de XP por tempo (loja 2, 10/09) — o relógio do servidor, sem somar com o pergaminho');
+    check('DATA.bonusXp: ×1,5 (o espelho do BONUS_XP do servidor)', !!JOGO.DATA.bonusXp && JOGO.DATA.bonusXp.fator === 1.5,
+          JSON.stringify(JOGO.DATA.bonusXp));
+    var b1 = recarregaCom(function (r) { r.bonusXpAte = AGORA + 86400; });
+    check('o sanitize guarda o bonusXpAte (segundos do servidor)', b1.bonusXpAte === AGORA + 86400 && P.bonusXpAte() === AGORA + 86400,
+          String(b1.bonusXpAte));
+    var b2 = recarregaCom(function (r) { r.bonusXpAte = AGORA + 0.75; });
+    check('... número quebrado vira inteiro (para baixo)', b2.bonusXpAte === AGORA, String(b2.bonusXpAte));
+    var lixos = ['amanhã', -5, 0, 4e9, 5e12, null, { ate: 1 }, [AGORA], true];
+    var sobrou = lixos.filter(function (v) {
+      var s = recarregaCom(function (r) { r.bonusXpAte = v; });
+      return ('bonusXpAte' in s) || P.bonusXpAte() !== 0;
+    });
+    check('... e derruba o lixo (texto, negativo, zero, no teto ou acima, null, objeto, lista, booleano)', sobrou.length === 0,
+          JSON.stringify(sobrou));
+    var b3 = recarregaCom(function (r) { r.bonusXpAte = AGORA - 86400; });
+    check('... o vencido FICA no save (quem decide é o relógio do servidor, na recompensa)', b3.bonusXpAte === AGORA - 86400 &&
+          P.fatorBonusXp(AGORA * 1000) === 1);
+
+    P.reset();
+    check('sem bônus: bonusXpAte 0, fator 1 e o campo nem existe', P.bonusXpAte() === 0 && P.fatorBonusXp(AGORA * 1000) === 1 &&
+          !('bonusXpAte' in P.state));
+    var a1 = P.addBonusXpDias(1, AGORA);
+    check('addBonusXpDias(1, agora): fim = agora + 86.400', a1.ok && a1.ate === AGORA + 86400 && P.bonusXpAte() === AGORA + 86400,
+          JSON.stringify(a1));
+    var a3 = P.addBonusXpDias(3, AGORA + 3600);
+    check('comprar de novo SOMA a partir do fim atual (+3 dias → agora + 4 dias)', a3.ok && a3.ate === AGORA + 4 * 86400, JSON.stringify(a3));
+    var ruins = [[0, AGORA], [367, AGORA], [1.5, AGORA], ['1', AGORA], [1, 0], [1, -1], [1, 'x'], [1, undefined], [1, 4e9], [1, NaN]];
+    var passaram = ruins.filter(function (a) { return P.addBonusXpDias(a[0], a[1]).ok; });
+    check('dias fora de 1..366 (ou não inteiros) e relógio torto: recusa, e nada muda',
+          passaram.length === 0 && P.bonusXpAte() === AGORA + 4 * 86400, JSON.stringify(passaram));
+    check('o fator no instante pedido (ms): dentro, 1,5; no segundo do fim e depois, 1',
+          P.fatorBonusXp(AGORA * 1000) === 1.5 && P.fatorBonusXp((AGORA + 4 * 86400 - 1) * 1000) === 1.5 &&
+          P.fatorBonusXp((AGORA + 4 * 86400) * 1000) === 1 && P.fatorBonusXp((AGORA + 9 * 86400) * 1000) === 1);
+    var venc = P.addBonusXpDias(7, AGORA + 30 * 86400);
+    check('depois de vencido, conta do agora da entrega (agora + 7 dias)', venc.ok && venc.ate === AGORA + 37 * 86400, JSON.stringify(venc));
+    P.save(); P.load();
+    check('o fim do bônus sobrevive ao load', P.bonusXpAte() === AGORA + 37 * 86400);
+
+    function comBonus() { P.addBonusXpDias(1, AGORA); }
+    function evBon(r) { return (r.dado.eventos || []).filter(function (e) { return e.origem === 'bonus-tempo'; }); }
+    var T1 = vence({ prepara: comBonus });
+    check('no funil: com o bônus, ×1,5 (60 → 90), e o herói recebe', T1.dado.xpGanho === 90 && T1.dado.xpPorHeroi &&
+          T1.dado.xpPorHeroi[TANK] === 90, String(T1.dado.xpGanho));
+    var eb = evBon(T1)[0] || {};
+    check('... o chip em eventos[]: {id null, "Bônus de XP", xp, fator 1,5, origem bonus-tempo, ate}',
+          eb.id === null && eb.titulo === 'Bônus de XP' && eb.tipo === 'xp' && eb.fator === 1.5 && eb.origem === 'bonus-tempo' &&
+          eb.ate === AGORA + 86400 && tipos(T1) === 'xp:bonus-tempo', JSON.stringify(T1.dado.eventos));
+    check('... o retorno traz bonusXp {fator 1,5, ate} e o pergaminho fica null',
+          !!T1.dado.bonusXp && T1.dado.bonusXp.fator === 1.5 && T1.dado.bonusXp.ate === AGORA + 86400 && T1.dado.pergaminho === null,
+          JSON.stringify(T1.dado.bonusXp));
+    check('sem bônus, o retorno diz bonusXp null (o funil de antes: 60)', BASE.dado.bonusXp === null && BASE.dado.xpGanho === 60,
+          JSON.stringify(BASE.dado.bonusXp));
+    var TP = vence({ prepara: function () { comBonus(); comPergaminho(); } });
+    check('bônus + Pergaminho da Sabedoria: ×1,5 (90), não ×2,25 (135)', TP.dado.xpGanho === 90, String(TP.dado.xpGanho));
+    check('... o pergaminho PAUSA: não gasta carga (9 fica 9) nem aparece — o chip é o do bônus',
+          TP.salas === 9 && TP.dado.pergaminho === null && evPerg(TP).length === 0 && tipos(TP) === 'xp:bonus-tempo',
+          TP.salas + ' ' + tipos(TP));
+    var TE15 = vence({ eventos: [ev('e1', 'xp', 1.5)], prepara: comBonus });
+    check('evento ×1,5 + bônus: os dois param em ×2 (120), e o chip do bônus diz 2/1,5',
+          TE15.dado.xpGanho === 120 && tipos(TE15) === 'xp,xp:bonus-tempo' && Math.abs((evBon(TE15)[0] || {}).fator - 2 / 1.5) < 1e-9,
+          TE15.dado.xpGanho + ' ' + tipos(TE15));
+    var TE2 = vence({ eventos: [ev('e2', 'xp', 2)], prepara: function () { comBonus(); comPergaminho(); } });
+    check('evento ×2 + bônus (+ pergaminho): segue ×2 (120), sem chip do bônus e sem gastar carga',
+          TE2.dado.xpGanho === 120 && tipos(TE2) === 'xp' && TE2.dado.bonusXp === null && TE2.salas === 9,
+          TE2.dado.xpGanho + ' ' + tipos(TE2) + ' ' + TE2.salas);
+    var TV = vence({ servidor: AGORA + 2 * 86400, prepara: comBonus });
+    check('o prazo acabou pelo relógio do SERVIDOR (a máquina ainda acha que vale): ×1 (60), sem chip',
+          TV.dado.xpGanho === 60 && TV.dado.bonusXp === null && evBon(TV).length === 0, TV.dado.xpGanho + ' ' + tipos(TV));
+    var TM = vence({ maquina: AGORA + 2 * 86400, servidor: AGORA, prepara: comBonus });
+    check('... e o contrário: a máquina adiantada 2 dias, o servidor dentro do prazo — vale (90)',
+          TM.dado.xpGanho === 90 && evBon(TM).length === 1, String(TM.dado.xpGanho));
+    var TF = vence({ servidor: AGORA + 86399, prepara: comBonus });
+    var TF2 = vence({ servidor: AGORA + 86400, prepara: comBonus });
+    check('o último segundo do prazo ainda vale; o segundo do fim, não', TF.dado.xpGanho === 90 && TF2.dado.xpGanho === 60,
+          TF.dado.xpGanho + ' / ' + TF2.dado.xpGanho);
+    check('os vinténs não veem o bônus: 18 com e sem, em todos os casos',
+          [T1, TP, TE15, TE2, TV, TM, TF, TF2].every(function (r) { return r.dado.moedas === 18 && r.credito[0] === 18; }));
+    check('fora do XP a sala sai idêntica com e sem bônus (saque, pedras, cartas, sorteios)',
+          foraDoXp(BASE) === foraDoXp(T1) && foraDoXp(E2) === foraDoXp(TE2), foraDoXp(BASE) + ' × ' + foraDoXp(T1));
+
+    // ================================================================ 7. a hora do aparelho que volta (conserto 11/09)
+    secao('7. a hora do aparelho que volta não estica o bônus — o relógio que só anda para a frente (conserto 11/09)');
+    var relReal = AG._agora, monoMs = 5000, relMaq = AGORA * 1000;
+    AG._agora = function () { return relMaq; };
+    AG._mono = function () { return monoMs; };
+    try {
+      AG._limpa(false);
+      check('com o relógio que só anda (Ag._mono) e sem resposta do servidor nesta página: não medido',
+            AG.medido() === false);
+      var S0 = vence({ semResposta: true, prepara: comBonus });
+      check('sem o relógio do servidor medido nesta página, o bônus pago não pesa (60, sem chip)',
+            S0.dado.xpGanho === 60 && evBon(S0).length === 0 && S0.dado.bonusXp === null, String(S0.dado.xpGanho));
+      AG._injeta({ ok: true, agora: AGORA, ativos: [], proximos: [], regras: [] });
+      check('uma resposta do servidor mede o relógio', AG.medido() === true && AG.agora() === AGORA * 1000, String(AG.agora()));
+      var S1 = vence({ semResposta: true, prepara: comBonus });
+      check('... e com ele medido o bônus pesa (90)', S1.dado.xpGanho === 90 && evBon(S1).length === 1, String(S1.dado.xpGanho));
+      // passam 25 h de verdade, e a hora do Windows é atrasada 2 dias — sem resposta nova do servidor
+      monoMs += 25 * 3600 * 1000;
+      relMaq = (AGORA - 2 * 86400 + 25 * 3600) * 1000;
+      check('a hora do aparelho voltou 2 dias: o relógio do servidor segue o que só anda (+25 h, não −23 h)',
+            AG.agora() === (AGORA + 25 * 3600) * 1000, String((AG.agora() / 1000 - AGORA) / 3600) + ' h');
+      check('... e a busca não trava (buscouHa com a hora para trás = vencida, não negativa)', AG.buscouHa() === Infinity,
+            String(AG.buscouHa()));
+      var S2 = vence({ semResposta: true, prepara: comBonus });
+      check('... o bônus de 1 dia acabou pelo relógio do servidor: ×1 (60), sem chip',
+            S2.dado.xpGanho === 60 && evBon(S2).length === 0, String(S2.dado.xpGanho));
+      // o contrário: o computador dormiu (o performance.now parou) e a hora da máquina andou — vale a da máquina
+      relMaq = AGORA * 1000;                                   // a máquina certa na hora da resposta
+      AG._injeta({ ok: true, agora: AGORA, ativos: [], proximos: [], regras: [] });
+      relMaq = (AGORA + 26 * 3600) * 1000;
+      check('o computador dormiu 26 h (o que só anda parou): vale a hora da máquina, que andou',
+            AG.agora() === (AGORA + 26 * 3600) * 1000, String((AG.agora() / 1000 - AGORA) / 3600) + ' h');
+      var S3 = vence({ semResposta: true, prepara: comBonus });
+      check('... e o bônus de 1 dia também acabou (60)', S3.dado.xpGanho === 60, String(S3.dado.xpGanho));
+      // dentro do prazo, as duas andando juntas: vale (1 h depois da resposta)
+      relMaq = AGORA * 1000;
+      AG._injeta({ ok: true, agora: AGORA, ativos: [], proximos: [], regras: [] });
+      monoMs += 3600 * 1000;
+      relMaq = (AGORA + 3600) * 1000;
+      var S4 = vence({ semResposta: true, prepara: comBonus });
+      check('1 h depois da resposta, no relógio da máquina e no que só anda: o bônus vale (90)',
+            AG.agora() === (AGORA + 3600) * 1000 && S4.dado.xpGanho === 90, String(S4.dado.xpGanho));
+    } finally {
+      AG._mono = null;
+      AG._agora = relReal;
+      AG._limpa(false);
+    }
+    check('sem Ag._mono, o relógio injetado volta à regra antiga (as provas da agenda seguem iguais)',
+          AG.medido() === true && AG.agora() === AGORA * 1000, String(AG.agora()));
   } catch (e) {
     check('a suíte não estoura', false, String(e && (e.stack || e.message) || e));
   }

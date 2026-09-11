@@ -42,6 +42,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 
 try:
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -148,6 +149,20 @@ def fora_de(ref):
     return ast.literal_eval(m.group(1)) if m else list(sobe_vps.FORA)
 
 
+def por_cima(raiz, specs):
+    """--por-cima CAMINHO=ARQUIVO (11/09): troca arquivos do pacote ja montado e roda
+    o versao.py de novo, como o build faria. Devolve (ok, saida do versao.py)."""
+    if not specs:
+        return True, ''
+    for spec in specs:
+        caminho, _, origem = spec.partition('=')
+        shutil.copyfile(origem, os.path.join(raiz, *caminho.split('/')))
+        print('  por cima: %s <- %s' % (caminho, origem))
+    r = subprocess.run([sys.executable, os.path.join(raiz, 'servidor', 'coolify', 'versao.py'), raiz],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+    return r.returncode == 0, (r.stdout + r.stderr).strip()
+
+
 def prepara(pasta, ref=None, arvore=True, nome='www'):
     """Monta o pacote (do disco, do último commit ou de REF), descompacta em
     pasta/<nome> e roda nele o versao.py do próprio pacote, como o build faz.
@@ -247,6 +262,13 @@ SONDA = r'''<!DOCTYPE html>
     if (pronto || Date.now() - t0 > LIMITE) {
       document.getElementById('sonda').textContent = JSON.stringify(info);
       document.getElementById('summary').textContent = pronto ? 'PRONTO' : 'NAO CHEGOU';
+      // 11/09: o jogo sai do quadro depois do resultado (como no tests/sob_demanda.py).
+      // No tempo virtual o orçamento anda POR QUADRO desenhado: com a cena de pé em
+      // GL por software (1280x800) os 90 s virtuais viravam meia hora de relógio.
+      // Sem nada para desenhar, o resto do orçamento passa na hora e o Chrome sai
+      // do jeito normal (fecha o cache em disco — a carga_prova reusa o perfil).
+      var fj = document.getElementById('jogo');
+      if (fj && fj.parentNode) fj.parentNode.removeChild(fj);
       return;
     }
     setTimeout(olha, 500);
@@ -335,12 +357,42 @@ def servidor(raiz, registro, cache=None):
     return srv, 'http://127.0.0.1:%d/' % porta
 
 
-def _chrome(chrome, perfil, url, budget):
-    r = subprocess.run([chrome, '--headless=new', '--disable-gpu', '--no-first-run',
-                        '--no-default-browser-check', '--window-size=1400,900',
-                        '--user-data-dir=' + perfil, '--virtual-time-budget=%d' % budget,
-                        '--dump-dom', url], capture_output=True, timeout=1800, creationflags=BAIXA)
-    return r.stdout.decode('utf-8', 'replace')
+def _chrome(chrome, perfil, url, budget, relogio=1800):
+    """O DOM do --dump-dom. A saida e lida por uma linha a parte (11/09): o
+    Chrome escreve o DOM e fecha a pagina, mas as vezes um processo filho fica
+    vivo segurando o stdout e o EOF nunca vem — o subprocess.run(capture_output)
+    esperava o relogio inteiro (30 min). DOM completo e 20 s sem sair: derruba a
+    arvore (taskkill /T) e devolve o que ja veio."""
+    p = subprocess.Popen([chrome, '--headless=new', '--disable-gpu', '--no-first-run',
+                          '--no-default-browser-check', '--window-size=1400,900',
+                          '--user-data-dir=' + perfil, '--virtual-time-budget=%d' % budget,
+                          '--dump-dom', url], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                         creationflags=BAIXA)
+    buf = []
+
+    def le():
+        for bloco in iter(lambda: p.stdout.read1(65536), b''):   # read1: o que ja chegou (read(n) esperava n bytes ou o EOF)
+            buf.append(bloco)
+    leitor = threading.Thread(target=le, daemon=True)
+    leitor.start()
+    t0, t_dump = time.time(), None
+    while leitor.is_alive() and time.time() - t0 < relogio:
+        leitor.join(timeout=2)
+        if t_dump is None and b'</html>' in b''.join(buf[-3:])[-8000:]:
+            t_dump = time.time()
+        if t_dump is not None and time.time() - t_dump > 20:
+            break
+    if leitor.is_alive():
+        if os.name == 'nt':
+            subprocess.run(['taskkill', '/PID', str(p.pid), '/T', '/F'], capture_output=True)
+        else:
+            p.kill()
+        leitor.join(30)
+    try:
+        p.wait(timeout=30)
+    except Exception:
+        pass
+    return b''.join(buf).decode('utf-8', 'replace')
 
 
 def dom(chrome, perfil, url, budget):
@@ -423,6 +475,9 @@ def main():
     ap.add_argument('--head', action='store_true', help='o pacote do último commit (não o do disco)')
     ap.add_argument('--antes', metavar='REF', help='mede também a 1ª visita do pacote de REF (ex.: df1f8dc)')
     ap.add_argument('--budget', type=int, default=90000, help='tempo virtual do Chrome em ms')
+    ap.add_argument('--por-cima', action='append', default=[], metavar='CAMINHO=ARQUIVO',
+                    help='troca um arquivo do pacote antes do build (com --head: o commit mais SO '
+                         'uma mudanca, sem as edicoes em andamento de outras rodadas); repetivel')
     a = ap.parse_args()
     chrome = acha_chrome()
     if not chrome:
@@ -433,6 +488,11 @@ def main():
         raiz, nomes, pacote, sv = prepara(pasta, arvore=not a.head)
         if sv:
             print('  ' + sv)
+        okc, svc = por_cima(raiz, a.por_cima)
+        if a.por_cima:
+            print('  ' + svc[:300])
+            if not okc:
+                return 1
         topo = sorted({n.split('/')[0] for n in nomes})
         check('o pacote não leva tests/, tools/, docs/', not ({'tests', 'tools', 'docs', '.claude'} & set(topo)), ' '.join(topo))
         embutidos = [n for n in nomes if re.match(r'^assets/embedded/(models-|env-kit|muro-|cenario-|coroas-pvp-3d)', n)]

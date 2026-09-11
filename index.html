@@ -12,6 +12,416 @@
      vermelho como a causa. Erro que nao e erro nao pode ficar gritando. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0d10'/%3E%3Ctext x='16' y='23' font-family='Georgia' font-size='19' font-weight='bold' text-anchor='middle' fill='%23c9a227'%3ES%3C/text%3E%3C/svg%3E">
 <title>SOTERRA 2.0</title>
+<script id="boot-seguro">
+  /* A MARCA DE ABERTURA (10/09) — uma proteção que não depende de saber a causa.
+   *
+   * A #carga do dono já ficou parada em "montando a sala…" com a barra cheia,
+   * e passou sozinha; a causa não foi isolada. Então a abertura deixa rastro
+   * na ABA (sessionStorage), e a próxima abertura desta aba sabe onde a
+   * anterior parou:
+   *
+   *   sessionStorage['soterra-boot'] = {t, etapa, arquivo, n, antes, trilha}
+   *     etapa    'o começo' · 'o download dos modelos' · 'a montagem da sala'
+   *              (servido) ou 'a leitura dos arquivos' (file://) · os passos
+   *              do js/main.js: Renderer.init, UI.init, Game.init,
+   *              Nuvem.iniciar, Agenda.iniciar, 'a primeira tela'
+   *     arquivo  o primeiro script da árvore que ainda não chegou (a contagem,
+   *              nos modelos; 'js/main.js', nos passos dele)
+   *     n        aberturas seguidas desta aba sem chegar ao fim (1 = esta)
+   *     antes    onde a anterior parou e quantas vezes seguidas naquela etapa
+   *     trilha   os últimos scripts que chegaram, com o instante
+   *
+   * Gravada no começo, a cada script que chega, ao terminar os modelos e em
+   * cada passo do js/main.js. APAGADA quando a abertura termina de verdade (o
+   * js/main.js avisou o fim E a #carga saiu da frente) e quando a página vai
+   * recarregar de propósito (o js/core/nuvem.js chama __boot.recarregando).
+   *
+   * Marca de menos de 10 min ao abrir = a anterior não terminou: a #carga diz
+   * onde, sem esconder o progresso desta, com três saídas — Tentar de novo;
+   * Abrir sem o save deste navegador (MOVE o save da conta local ativa e o
+   * registro da nuvem para cópias ':bak-<instante>'; a nuvem traz o do
+   * servidor); Abrir numa conta local vazia (?conta=seguro, que não usa a
+   * nuvem). E o VIGIA: 45 s sem nada andar, com a página respondendo, a
+   * #carga diz "Ainda abrindo — parado em …" com o Tentar de novo.
+   *
+   * Nada sai do navegador e a abertura não espera por nada daqui. Prova:
+   * tests/boot_seguro.html (roda ESTE bloco e o carregador lá de baixo, lidos
+   * deste arquivo). */
+  (function () {
+    'use strict';
+    var CHAVE = 'soterra-boot', CHAVE_ANTES = 'soterra-boot-antes';
+    var VALIDADE_MS = 10 * 60 * 1000;
+    var MODELOS = 'o download dos modelos';
+    var t0 = Date.now();
+    var tem = Object.prototype.hasOwnProperty;
+    var B = window.__boot = { VIGIA_MS: 45000, CHAVE: CHAVE, CHAVE_ANTES: CHAVE_ANTES };
+
+    // Os métodos ORIGINAIS do Storage, pegos antes de qualquer outro script: o
+    // tests/save_sandbox.js (?sandbox=1) embrulha o protótipo para as chaves
+    // 'soterra-*' e levaria esta marca, que é da aba, para a sombra do save.
+    var SP = null;
+    try { SP = window.Storage ? window.Storage.prototype : null; } catch (e0) {}
+    var puro = SP ? { get: SP.getItem, set: SP.setItem, rm: SP.removeItem } : null;
+    function sessao() { try { return window.sessionStorage || null; } catch (e) { return null; } }
+    function leS(k) {
+      var s = sessao();
+      if (!s || !puro) return null;
+      try {
+        var v = JSON.parse(puro.get.call(s, k) || 'null');
+        return (v && typeof v === 'object') ? v : null;
+      } catch (e) { return null; }
+    }
+    function gravaS(k, v) {
+      var s = sessao();
+      if (s && puro) { try { puro.set.call(s, k, JSON.stringify(v)); } catch (e) {} }
+    }
+    function tiraS(k) {
+      var s = sessao();
+      if (s && puro) { try { puro.rm.call(s, k); } catch (e) {} }
+    }
+    function avisaConsole(txt) {
+      try { if (window.console && console.warn) console.warn(txt); } catch (e) {}
+    }
+    function fresca(m) {
+      var d = (m && typeof m.t === 'number') ? Date.now() - m.t : NaN;
+      return d > -60000 && d < VALIDADE_MS;
+    }
+    // "parou em o começo" não é português: em + o = no, em + a = na
+    function onde(m) {
+      var e = String(m.etapa || ''), r = /^(os?|as?) /.exec(e);
+      return (r ? 'n' + r[1] + ' ' + e.slice(r[0].length) : 'em ' + e) +
+             (m.arquivo ? ' (' + m.arquivo + ')' : '');
+    }
+    function depoisDoDom(fn) {
+      function vai() { setTimeout(fn, 0); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', vai);
+      else vai();
+    }
+
+    // ---- a abertura anterior desta aba
+    var marca = { t: t0, etapa: 'o começo', arquivo: 'index.html', n: 1, antes: null, trilha: [] };
+    var anterior = leS(CHAVE), recarga = leS(CHAVE_ANTES), parada = null;
+    tiraS(CHAVE_ANTES);
+    if (fresca(anterior) && anterior.etapa) {
+      var etapaAnt = String(anterior.etapa);
+      var vezes = (anterior.antes && String(anterior.antes.etapa) === etapaAnt)
+        ? (Number(anterior.antes.vezes) || 1) + 1 : 1;
+      parada = { etapa: etapaAnt, arquivo: String(anterior.arquivo || ''), vezes: vezes, t: anterior.t };
+      marca.n = (Number(anterior.n) || 1) + 1;
+      marca.antes = parada;
+      avisaConsole('[abertura] a anterior não terminou; a marca: ' + JSON.stringify(anterior));
+    } else if (fresca(recarga)) {
+      // recarga por um dos botões: não se avisa de novo, mas a conta segue — se
+      // esta parar na mesma etapa, a próxima diz quantas vezes foram
+      marca.n = (Number(recarga.n) || 1) + 1;
+      marca.antes = recarga.antes || null;
+    }
+    B.parada = parada;
+
+    // ---- onde a abertura está
+    var ordem = {}, fila = [], faseDe = {}, chegou = {};
+    var etapa = marca.etapa, contagem = '', noMain = false;
+    var mainFim = false, cargaFora = false, acabou = false;
+    var movimento = t0, ultimoTique = t0, parado = false, historico = [];
+    var avisoEl = null, vigiaEl = null, vigiaTimer = null;
+
+    function primeiroQueFalta(soA) {
+      for (var i = 0; i < fila.length; i++) {
+        if (!chegou[fila[i]] && (!soA || faseDe[fila[i]] === 'A')) return fila[i];
+      }
+      return '';
+    }
+    function arquivoAgora() {
+      if (noMain) return 'js/main.js';
+      if (etapa === MODELOS) return primeiroQueFalta(true) || ('modelos ' + (contagem || '0/?'));
+      return primeiroQueFalta(false) || marca.arquivo;
+    }
+    function escreve() {
+      if (acabou) return;
+      marca.t = Date.now();
+      marca.etapa = etapa;
+      marca.arquivo = arquivoAgora();
+      if (contagem) marca.modelos = contagem;
+      var u = historico[historico.length - 1];
+      if (!u || u.etapa !== marca.etapa || u.arquivo !== marca.arquivo) {
+        historico.push({ etapa: marca.etapa, arquivo: marca.arquivo, ms: marca.t - t0 });
+        if (historico.length > 300) historico.shift();
+      }
+      gravaS(CHAVE, marca);
+      movimento = marca.t;
+      if (parado) tiraVigia();
+    }
+
+    // cada script que chega (ou falha): o load não sobe, mas desce pela captura
+    function chaveDe(el) {
+      var src = String((el.getAttribute && el.getAttribute('src')) || el.src || '');
+      var p = src.split('#')[0].split('?')[0];
+      if (tem.call(ordem, p)) return p;
+      for (var i = 0; i < fila.length; i++) {
+        var f = fila[i], c = p.length - f.length;
+        if (c > 0 && p.slice(c) === f && p.charAt(c - 1) === '/') return f;
+      }
+      return '';
+    }
+    function aoScript(ev) {
+      var el = ev && ev.target;
+      if (acabou || !el || el.tagName !== 'SCRIPT') return;
+      var f = chaveDe(el);
+      if (f) chegou[f] = true;
+      var nome = f || String(el.getAttribute('src') || '').split('?')[0].slice(-48);
+      marca.trilha.push(nome + (ev.type === 'error' ? ' (falhou)' : '') + ' ' + (Date.now() - t0) + 'ms');
+      if (marca.trilha.length > 8) marca.trilha.shift();
+      escreve();
+    }
+
+    // ---- o fim: a abertura terminou, ou a página vai embora de propósito
+    function larga() {
+      acabou = true;
+      pararVigia();
+      tiraVigia();
+      if (avisoEl && avisoEl.parentNode) avisoEl.parentNode.removeChild(avisoEl);
+      avisoEl = null;
+      try {
+        document.removeEventListener('load', aoScript, true);
+        document.removeEventListener('error', aoScript, true);
+      } catch (e) {}
+    }
+    function fecha() {
+      if (acabou) return;
+      larga();
+      tiraS(CHAVE);
+    }
+    // recarga de propósito: a marca sai (não houve travamento a contar), mas a
+    // conta das paradas anteriores segue para a próxima abertura
+    function vaiEmbora(contaEsta) {
+      var antes = marca.antes;
+      if (contaEsta && parado) {                // o vigia viu ESTA abertura parada: ela conta
+        var v = (antes && String(antes.etapa) === marca.etapa) ? (Number(antes.vezes) || 1) + 1 : 1;
+        antes = { etapa: marca.etapa, arquivo: marca.arquivo, vezes: v, t: Date.now() };
+      }
+      acabou = true;
+      pararVigia();
+      tiraS(CHAVE);
+      if (antes) gravaS(CHAVE_ANTES, { t: Date.now(), n: marca.n, antes: antes });
+    }
+
+    // ---- o que o carregador (lá embaixo), o js/main.js e o js/core/nuvem.js chamam
+    B.espera = function (lista, fase) {
+      for (var i = 0; lista && i < lista.length; i++) {
+        var f = String(lista[i]);
+        if (tem.call(ordem, f)) continue;
+        ordem[f] = true;
+        faseDe[f] = (fase === 'B') ? 'B' : 'A';
+        fila.push(f);
+      }
+      mostraAviso();
+      escreve();
+    };
+    B.etapa = function (nome) { etapa = String(nome); mostraAviso(); escreve(); };
+    B.modelos = function (feitos, total) { contagem = feitos + '/' + total; escreve(); };
+    B.passo = function (nome) { noMain = true; etapa = String(nome); escreve(); };
+    B.fim = function () { mainFim = true; if (cargaFora) fecha(); };
+    B.carga = function () {
+      cargaFora = true;
+      if (mainFim) { fecha(); return; }
+      // um js/main.js sem os ganchos (versão velha): o fim nunca viria, e a marca
+      // ficaria para a próxima abertura acusar uma parada que não houve
+      depoisDoDom(function () { if (!acabou && !noMain) fecha(); });
+    };
+    B.recarregando = function (quem) {
+      if (acabou) return;
+      B.porQue = String(quem || '');
+      vaiEmbora(false);
+      larga();
+    };
+    // para as provas e para quem abrir o console
+    B.le = function () { return leS(CHAVE); };
+    B.leAntes = function () { return leS(CHAVE_ANTES); };
+    B.marca = function () { return JSON.parse(JSON.stringify(marca)); };
+    B.historico = function () { return historico.slice(); };
+    B.estado = function () {
+      return { acabou: acabou, mainFim: mainFim, cargaFora: cargaFora, parado: parado,
+               etapa: etapa, n: marca.n };
+    };
+
+    // ---- o aviso na #carga
+    var ESTILO_TXT = 'max-width:min(520px,88vw);color:#ffcf5c;font-size:13px;line-height:1.5';
+    function caixa() { return document.getElementById('carga'); }
+    function botao(rotulo, cls, fn) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn ' + cls;
+      b.textContent = rotulo;
+      b.onclick = fn;
+      return b;
+    }
+    function bloco(cls) {
+      var d = document.createElement('div');
+      d.className = cls;
+      d.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:10px';
+      var p = document.createElement('div');
+      p.className = cls + '-txt';
+      p.style.cssText = ESTILO_TXT;
+      d.appendChild(p);
+      return d;
+    }
+    // o mesmo arranjo dos botões da carga sob demanda (js/assets_bundle.js)
+    function fileira() {
+      var a = document.createElement('div');
+      a.className = 'carga-boot-acoes';
+      a.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;justify-content:center';
+      return a;
+    }
+    function mostraAviso() {
+      if (!parada || avisoEl || acabou) return;
+      var c = caixa();
+      if (!c) return;
+      var txt = 'A última abertura parou ' + onde(parada) + '.';
+      if (parada.vezes === 2) txt += ' Parou nessa mesma etapa duas vezes seguidas.';
+      else if (parada.vezes > 2) txt += ' Parou nessa mesma etapa ' + parada.vezes + ' vezes seguidas.';
+      avisoEl = bloco('carga-boot');
+      avisoEl.firstChild.textContent = txt;
+      var a = fileira();
+      a.appendChild(botao('Tentar de novo', 'btn-primary boot-tentar', tentar));
+      a.appendChild(botao('Abrir sem o save deste navegador', 'btn-ghost boot-sem-save', semSave));
+      a.appendChild(botao('Abrir numa conta local vazia', 'btn-ghost boot-vazia', vazia));
+      avisoEl.appendChild(a);
+      c.appendChild(avisoEl);             // DEPOIS da barra e do texto: o progresso desta segue à vista
+    }
+
+    // ---- o vigia: 45 s sem nada andar, com a página respondendo
+    function emVoo() {
+      // modelos descendo: o download no ar tem o vigia do próprio Bundle (20 s
+      // sem um byte → novas tentativas → o aviso com os botões dele)
+      if (etapa !== MODELOS || primeiroQueFalta(true)) return false;
+      try {
+        var J = window.JOGO, d = (J && J.Bundle && J.Bundle.diag) ? J.Bundle.diag() : null;
+        return !!(d && d.vivosAlta > 0);
+      } catch (e) { return false; }
+    }
+    function mostraVigia() {
+      var c = caixa();
+      if (!c || acabou) return;
+      // a carga sob demanda já está perguntando algo (os botões dela): não empilha
+      if (c.querySelector('.carga-acoes button')) return;
+      // escondida por outro que não o carregador: volta; pelo carregador, a sala já está à vista
+      if (c.hidden) { if (cargaFora) return; c.hidden = false; }
+      if (!vigiaEl) {
+        vigiaEl = bloco('carga-vigia');
+        if (!c.querySelector('.boot-tentar')) {
+          var a = fileira();
+          a.appendChild(botao('Tentar de novo', 'btn-primary boot-tentar', tentar));
+          vigiaEl.appendChild(a);
+        }
+        c.appendChild(vigiaEl);
+        avisaConsole('[abertura] ainda abrindo, parada há ' + Math.round((Date.now() - movimento) / 1000) +
+                     ' s; a marca: ' + JSON.stringify(marca));
+      }
+      vigiaEl.firstChild.textContent = 'Ainda abrindo — parado ' + onde(marca);
+      parado = true;
+    }
+    function tiraVigia() {
+      parado = false;
+      if (vigiaEl && vigiaEl.parentNode) vigiaEl.parentNode.removeChild(vigiaEl);
+      vigiaEl = null;
+    }
+    function vigia() {
+      vigiaTimer = null;
+      if (acabou) return;
+      var agora = Date.now(), lim = Number(B.VIGIA_MS) || 45000;
+      var passo = Math.max(50, Math.min(1000, Math.round(lim / 4)));
+      // tique muito atrasado = a página esteve presa num script pesado: isso não é "parado"
+      var respondeu = agora - ultimoTique <= passo * 2 + 1000;
+      ultimoTique = agora;
+      if (respondeu && agora - movimento >= lim && !emVoo()) mostraVigia();
+      vigiaTimer = setTimeout(vigia, passo);
+    }
+    function pararVigia() {
+      if (vigiaTimer) { clearTimeout(vigiaTimer); vigiaTimer = null; }
+    }
+
+    // ---- as três saídas
+    function tentar() { vaiEmbora(true); B._recarrega(); }
+    function semSave() {
+      var r = B.moveSave();
+      if (!r.ok) {
+        var e = avisoEl && avisoEl.querySelector('.carga-boot-erro');
+        if (avisoEl && !e) {
+          e = document.createElement('div');
+          e.className = 'carga-boot-erro';
+          e.style.cssText = ESTILO_TXT + ';color:#ff9a8a';
+          avisoEl.appendChild(e);
+        }
+        if (e) e.textContent = 'Não consegui guardar a cópia do save (' + r.erro + ') — nada foi apagado.';
+        return;
+      }
+      vaiEmbora(true);
+      B._recarrega();
+    }
+    function vazia() { vaiEmbora(true); B._navega(B.enderecoSeguro()); }
+    B._recarrega = function () { try { window.location.reload(); } catch (e) {} };
+    B._navega = function (u) { try { window.location.assign(u); } catch (e) {} };
+    B.enderecoSeguro = function () { return window.location.pathname + '?conta=seguro'; };
+
+    /* As chaves do save da conta local ATIVA: as do JOGO.Contas, quando ele já
+     * chegou; antes dele, a mesma regra do js/core/contas.js (?conta= na URL,
+     * senão a ativa do registro, senão a principal, de chaves nuas). */
+    B.chavesDoSave = function () {
+      var C = window.JOGO && window.JOGO.Contas;
+      if (C && typeof C.chaveSave === 'function' && typeof C.chaveConta === 'function' &&
+          typeof C.sufixo === 'function') {
+        return [C.chaveSave(), C.chaveConta(), 'soterra-nuvem-v1' + C.sufixo()];
+      }
+      var id = null;
+      try {
+        var m = /[?&]conta=([A-Za-z0-9_-]{1,24})/.exec(String(window.location.search || ''));
+        if (m) id = m[1];
+      } catch (e) {}
+      if (!id) {
+        try {
+          var r = JSON.parse(window.localStorage.getItem('soterra-contas-v1') || '');
+          if (r && Array.isArray(r.lista) && r.lista.length && r.ativa) id = String(r.ativa);
+        } catch (e2) {}
+      }
+      var suf = (!id || id === 'principal') ? '' : ':' + id;
+      return ['soterra-save-v2' + suf, 'soterra-conta-v1' + suf, 'soterra-nuvem-v1' + suf];
+    };
+    /* MOVE, não apaga: copia cada uma para '<chave>:bak-<instante>', confere a
+     * cópia, e só então tira o original. Se uma cópia falhar (armazenamento
+     * cheio), desfaz as cópias e não toca em original nenhum. */
+    B.moveSave = function () {
+      var ls = null;
+      try { ls = window.localStorage; } catch (e) {}
+      if (!ls) return (B.ultimaMudanca = { ok: false, erro: 'sem acesso ao armazenamento do navegador', movidas: [] });
+      var chaves = B.chavesDoSave(), carimbo = Date.now(), copias = [], i;
+      try {
+        for (i = 0; i < chaves.length; i++) {
+          var v = ls.getItem(chaves[i]);
+          if (v === null) continue;
+          var bak = chaves[i] + ':bak-' + carimbo;
+          ls.setItem(bak, v);
+          copias.push({ de: chaves[i], para: bak });
+          if (ls.getItem(bak) !== v) throw new Error('a cópia de ' + chaves[i] + ' não conferiu');
+        }
+      } catch (e3) {
+        for (i = 0; i < copias.length; i++) { try { ls.removeItem(copias[i].para); } catch (e4) {} }
+        var erro = (e3 && e3.name === 'QuotaExceededError') ? 'o armazenamento deste navegador está cheio'
+                 : String((e3 && e3.message) || e3);
+        return (B.ultimaMudanca = { ok: false, erro: erro, movidas: [] });
+      }
+      for (i = 0; i < copias.length; i++) { try { ls.removeItem(copias[i].de); } catch (e5) {} }
+      return (B.ultimaMudanca = { ok: true, movidas: copias, carimbo: carimbo });
+    };
+
+    try {
+      document.addEventListener('load', aoScript, true);
+      document.addEventListener('error', aoScript, true);
+      document.addEventListener('DOMContentLoaded', function () { mostraAviso(); });
+    } catch (e7) {}
+    escreve();
+    vigiaTimer = setTimeout(vigia, 250);
+  })();
+</script>
 <script>
   // CACHE — uma regra para cada jeito de abrir.
   //
@@ -38,6 +448,7 @@
   window.__V = '?v=' + window.__T0;
   if (location.protocol !== 'file:') {
     document.write('<scr' + 'ipt src="js/versao.js?t=' + window.__T0 + '"><\/scr' + 'ipt>');
+    try { if (window.__boot) window.__boot.espera(['js/versao.js'], 'A'); } catch (eB) {}   // a marca de abertura
   }
 </script>
 <script>
@@ -90,6 +501,7 @@
 <script>
   // O carregador de modelos precisa existir antes da decisão abaixo.
   document.write('<scr' + 'ipt src="' + window.__url('js/assets_bundle.js') + '"><\/scr' + 'ipt>');
+  try { if (window.__boot) window.__boot.espera(['js/assets_bundle.js'], 'A'); } catch (eB) {}   // a marca de abertura
 </script>
 <script>
   (function () {
@@ -126,6 +538,8 @@
       'js/core/troca.js',              // a mesa de troca: ofertas, trancas, execucao
       'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
       'js/core/progress.js', 'js/core/game.js',
+      'js/core/coop.js',               // a batalha em dupla pela Rede: ata, lances, hash, foto
+      'js/core/grupo.js',              // grupo, duelo e mensagem particular (a camada social)
       'js/core/nuvem.js',              // o save no servidor: puxa ao abrir, sobe a cada gravacao
       'js/core/loja.js',               // a loja de vintens: retira o que foi comprado no site
 
@@ -199,6 +613,11 @@
     // precisa dos modelos carregados
     var ABRE_FASE_B = /^assets\/embedded\/(env-kit|models-)/;
     var B = window.JOGO && window.JOGO.Bundle;
+    // A MARCA DE ABERTURA (o <script id="boot-seguro"> do <head>): diz em que
+    // ponto a abertura está. Toda chamada vai embrulhada — nunca derruba a carga.
+    function boot(metodo, a, b) {
+      try { var g = window.__boot; if (g && g[metodo]) g[metodo](a, b); } catch (e) {}
+    }
 
     function escreve(lista) {
       for (var i = 0; i < lista.length; i++) {
@@ -220,6 +639,8 @@
     if (!B || !B.servido) {
       var cx1 = document.getElementById('carga');
       if (cx1) cx1.hidden = false;
+      boot('espera', arquivos, 'A');
+      boot('etapa', 'a leitura dos arquivos');
       var PESADO = /^assets\/embedded\//;
       var pesados = [], i1;
       for (i1 = 0; i1 < arquivos.length; i1++) {
@@ -243,7 +664,8 @@
         document.write('<scr' + 'ipt src="' + window.__url(f1) + '"><\/scr' + 'ipt>');
       }
       document.write('<scr' + 'ipt>(function(){var c=document.getElementById("carga");' +
-        'if(c)c.hidden=true;window.__BOOT_MS=Date.now()-window.__T0;})()<\/scr' + 'ipt>');
+        'if(c)c.hidden=true;window.__BOOT_MS=Date.now()-window.__T0;' +
+        'try{if(window.__boot)window.__boot.carga()}catch(e){}})()<\/scr' + 'ipt>');
       return;
     }
 
@@ -276,6 +698,8 @@
       console.warn('[carga] fora do pacote, nao pedi: ' + fora.join(', '));
     }
 
+    boot('espera', faseA, 'A');
+    boot('espera', faseB, 'B');
     escreve(faseA);
     B.aquece(faseB, '');
 
@@ -283,6 +707,7 @@
     var barra = document.getElementById('carga-barra');
     var texto = document.getElementById('carga-txt');
     if (caixa) caixa.hidden = false;
+    boot('etapa', 'o download dos modelos');
 
     B.busca({
       base: '',
@@ -290,6 +715,7 @@
         var p = Math.round(100 * feitos / total);
         if (barra) barra.style.width = p + '%';
         if (texto) texto.textContent = 'modelos ' + feitos + '/' + total;
+        boot('modelos', feitos, total);
       },
       pronto: function (err) {
         if (err) {
@@ -297,9 +723,11 @@
           if (console && console.error) console.error('[Bundle]', err);
         }
         if (texto) texto.textContent = 'montando a sala…';
+        boot('etapa', 'a montagem da sala');
         B.injeta(faseB, '', function () {
           if (caixa) caixa.hidden = true;
           window.__BOOT_MS = Date.now() - window.__T0;
+          boot('carga');
         });
       }
     });

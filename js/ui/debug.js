@@ -128,10 +128,22 @@ var JOGO = (typeof window !== 'undefined')
     return linha;
   }
 
+  // 11/09: numa batalha em grupo ou duelo pela Rede, mexer no estado daqui
+  // separaria as duas batalhas (o lockstep) — o painel fica desligado
+  function emRede() {
+    var g = JOGO.Game;
+    try { return !!(g && g.modoRede && g.modoRede()); } catch (e) { return false; }
+  }
+
   function desenha() {
     if (!painel) return;
     var corpo = painel.querySelector('.dbg-corpo');
     corpo.innerHTML = '';
+    if (emRede()) {
+      corpo.appendChild(el('div', 'dbg-info',
+        'Em grupo ou duelo pela Rede o painel de teste fica desligado: mexer no estado daqui separaria as duas batalhas.'));
+      return;
+    }
 
     var topo = el('div', 'dbg-acoes');
     var bTudo = el('button', 'dbg-b dbg-b-ok', 'Liberar as 6 classes');
@@ -357,7 +369,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!modoAtivo) return;
       try {
         var g = JOGO.Game;
-        if (g && g.state && g.state.phase === 'playing') aplicaModo(g.state);
+        if (g && g.state && g.state.phase === 'playing' && !emRede()) aplicaModo(g.state);
       } catch (e) {}
       setTimeout(laco, 400);
     };

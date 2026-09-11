@@ -58,12 +58,25 @@ var JOGO = (typeof window !== 'undefined')
   /* relógio injetável (as provas andam no tempo sem esperar) */
   Ag._agora = null;
   function relogio() { return typeof Ag._agora === 'function' ? Ag._agora() : Date.now(); }
+  /* O relógio que SÓ ANDA PARA A FRENTE (performance.now; as provas injetam
+   * Ag._mono) — conserto da loja 2, 11/09. Mexer na hora do aparelho não o move: é
+   * ele que segura o relógio do servidor entre uma resposta e a próxima. O
+   * bônus de XP pago corre no relógio do SERVIDOR; atrasar a hora do Windows
+   * com o jogo aberto não pode esticar o prazo. */
+  Ag._mono = null;
+  function mono() {
+    if (typeof Ag._mono === 'function') return Ag._mono();
+    try { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : NaN; }
+    catch (e) { return NaN; }
+  }
 
   var lista = [];        // ativos ∪ próximos, já normalizados (tempos em SEGUNDOS, como o servidor)
   var regras = [];
   var desvio = 0;        // ms: relógio do servidor − relógio daqui
   var buscaOk = 0;       // relógio daqui na última resposta boa
   var tentativa = 0;     // relógio daqui na última tentativa
+  var servEm = 0;        // ms: o relógio do SERVIDOR na última resposta boa DESTA página (0 = não mediu)
+  var monoEm = NaN;      // o mono() nesse instante
   var noAr = false;      // a última busca respondeu? (o painel do Mestre liga os botões por isto)
   var seq = 0;           // resposta atrasada de uma busca antiga não passa por cima da nova
   var ouvintes = [];
@@ -165,8 +178,27 @@ var JOGO = (typeof window !== 'undefined')
   function valeAqui(e, dungeonId) { return !e.calabouco || e.calabouco === dungeonId; }
 
   // ------------------------------------------------------------ a leitura (síncrona)
-  /* o relógio do SERVIDOR, em ms */
-  Ag.agora = function () { return relogio() + desvio; };
+  /* o relógio do SERVIDOR, em ms: o desta máquina mais o desvio medido — e
+   * nunca atrás do que o relógio que só anda para a frente diz desde a última
+   * resposta (a hora do aparelho que VOLTOU não volta o relógio do servidor).
+   * Vale o maior dos dois: o performance.now pode parar com o computador
+   * dormindo, e aí a hora da máquina, que andou, é a certa; a próxima resposta
+   * acerta o resto. As provas que injetam só Ag._agora ficam na regra antiga
+   * (o relógio delas manda sozinho). */
+  Ag.agora = function () {
+    var t = relogio() + desvio;
+    if (servEm && (typeof Ag._agora !== 'function' || typeof Ag._mono === 'function')) {
+      var m = mono();
+      if (isFinite(m) && isFinite(monoEm)) t = Math.max(t, servEm + (m - monoEm));
+    }
+    return t;
+  };
+  /* o relógio do servidor foi MEDIDO nesta página (uma resposta boa; o cache
+   * de outra sessão não conta). O bônus de XP pago só pesa com ele medido. As
+   * provas que injetam só Ag._agora contam como medidas (a regra antiga). */
+  Ag.medido = function () {
+    return !!servEm || (typeof Ag._agora === 'function' && typeof Ag._mono !== 'function');
+  };
 
   Ag.ativos = function (ts) {
     var t = tempo(ts);
@@ -219,7 +251,13 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   Ag.noAr = function () { return noAr; };
-  Ag.buscouHa = function () { return tentativa ? relogio() - tentativa : Infinity; };
+  /* a hora do aparelho que voltou deixava isto NEGATIVO, e o refresca pulava
+   * a busca para sempre (até recarregar): hora que andou para trás = busca vencida */
+  Ag.buscouHa = function () {
+    if (!tentativa) return Infinity;
+    var d = relogio() - tentativa;
+    return d < 0 ? Infinity : d;
+  };
   Ag.ultimaBoa = function () { return buscaOk; };
 
   // ------------------------------------------------------------ quem escuta
@@ -262,7 +300,11 @@ var JOGO = (typeof window !== 'undefined')
       vistos[n.id] = true;
       nova.push(n);
     }
-    if (typeof r.agora === 'number' && isFinite(r.agora)) desvio = r.agora * 1000 - relogio();
+    if (typeof r.agora === 'number' && isFinite(r.agora)) {
+      desvio = r.agora * 1000 - relogio();
+      servEm = r.agora * 1000;
+      monoEm = mono();
+    }
     var t = Ag.agora();
     lista = nova.filter(function (e) { return e.fim * 1000 > t; });   // o vencido sai com a resposta nova
     regras = (isArr(r.regras) ? r.regras : []).map(normalizaRegra).filter(Boolean);
@@ -558,6 +600,7 @@ var JOGO = (typeof window !== 'undefined')
   /* volta ao zero (memória e, se pedido, o cache) */
   Ag._limpa = function (apagaCache) {
     lista = []; regras = []; desvio = 0; buscaOk = 0; tentativa = 0; noAr = false; seq++;
+    servEm = 0; monoEm = NaN;
     assinatura = assina();
     if (apagaCache) { var s = armazem(); try { if (s) s.removeItem(Ag.CHAVE); } catch (e) {} }
   };

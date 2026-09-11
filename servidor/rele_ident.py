@@ -16,9 +16,10 @@ O APERTO DE MÃO (a segurança do token)
      (wss://.../ws?n=<marca>, 8 a 40 letras minúsculas e dígitos). Só o
      servidor a vê — ela vai no pedido de abertura, que nenhum par enxerga.
   2. O relé que sabe conferir se ANUNCIA ao aceitar a conexão, devolvendo a
-     marca:  {t:'rele', v:1, ident:true, n:<marca>}   (ident:false sem --banco;
-     sem marca no endereço, sem `n`). É uma mensagem sem `de`: o cliente de
-     antes de 10/09 a ignora.
+     marca:  {t:'rele', v:1, ident:true, n:<marca>, cx:<conexão>}   (ident:false
+     sem --banco; sem marca no endereço, sem `n`; o `cx`, desde 11/09, é o id
+     que o relé sorteou para ESTA conexão e carimba nos dirigidos dela). É uma
+     mensagem sem `de`: o cliente de antes de 10/09 a ignora.
   3. Só DEPOIS desse anúncio, com ident:true E a marca certa, o cliente manda
          {t:'ident', de, token}
      (o token da sessão do cartório, o mesmo do Authorization da API). O relé
@@ -55,9 +56,9 @@ recusadas assim, e o cliente não pergunta de novo).
 
 O CARIMBO (carimba), no envelope que sai do relé:
   - qualquer `mestre` que veio do cliente cai, em todo tipo de envelope;
-  - conexão do Mestre conferido: oi, eco e chat saem com mestre:true e o nome
-    que ele escolheu (e o corpo dele, a classe 'gm');
-  - dos outros: nome reservado (oi, eco, chat) vira 'Aventureiro-xxxx' (as
+  - conexão do Mestre conferido: oi, eco, chat e sussurro saem com
+    mestre:true e o nome que ele escolheu (e o corpo dele, a classe 'gm');
+  - dos outros: nome reservado (oi, eco, chat, sussurro) vira 'Aventureiro-xxxx' (as
     quatro últimas letras/dígitos do id da conexão, em minúsculas — e, se por
     azar isso também cair na regra, como 'xxgm', só 'Aventureiro');
     título reservado vira ''; guilda reservada (resumo.guilda no oi/eco e os
@@ -123,6 +124,7 @@ REVISTA_FALHA_S = 10.0        # o banco não respondeu: a conexão confere de no
 REVISTA_TENTATIVAS = 6        # ...tantas vezes seguidas; depois fica sem conta (fecha por padrão)
 RE_TOKEN = re.compile(r'[\x21-\x7e]{16,128}')   # o do cartório tem 64 hex; aqui, ASCII visível de 16 a 128
 RE_MARCA = re.compile(r'[0-9a-z]{8,40}')         # a marca que o cliente sorteia e põe no endereço (?n=)
+RE_CX = re.compile(r'[0-9a-f]{8,16}')            # o id da conexão (rele.py, Par.cx: 8 hex), que o anúncio conta a ela
 
 TEXTO_MAX = 24                # nome/título/guilda/emblema maior que isto nem passa pela regra: é trocado
 VEREDITOS_MAX = 8192          # textos já julgados (cheio, sai a metade que ninguém usa há mais tempo)
@@ -136,9 +138,9 @@ GUILDA_TROCA = 'Guilda'
 EMBLEMA_TROCA = '⚑'           # o emblema de sempre da guilda (o primeiro da ficha da HUD)
 CLASSE_MESTRE = 'gm'          # o corpo do Mestre do Fundo, o Cavaleiro Negro (js/core/gm.js)
 CLASSE_TROCA = 'sumo'         # o que veste quem não é o Mestre (o mesmo padrão do rede.js)
-COM_NOME = ('oi', 'eco', 'chat')      # os envelopes que levam o nome de quem manda
+COM_NOME = ('oi', 'eco', 'chat', 'sussurro')   # os envelopes que levam o nome de quem manda (o sussurro: 11/09)
 COM_PERFIL = ('oi', 'eco')            # os que levam título, classe, resumo (guilda) e nuvem
-JULGADOS = ('oi', 'eco', 'chat', 'guilda')   # os que levam texto para a regra (o relé só chama o prepara neles)
+JULGADOS = ('oi', 'eco', 'chat', 'guilda', 'sussurro')   # os que levam texto para a regra (o relé só chama o prepara neles)
 
 SQL = ("SELECT c.id, c.nome, c.gm, c.banido, s.ultimo_uso FROM sessoes s "
        "JOIN contas c ON c.id = s.conta_id WHERE s.token = ?")
@@ -158,13 +160,18 @@ def marca_do_caminho(caminho):
     return n[0] if n and RE_MARCA.fullmatch(n[0]) else None
 
 
-def anuncio(com_banco, marca=None):
+def anuncio(com_banco, marca=None, cx=None):
     """O que o relé manda ao aceitar a conexão (texto JSON, sem `de`), com a
     marca que o cliente pôs no endereço — é ela que prova ao cliente que o
-    anúncio veio do relé, e não de um par repassado por um relé antigo."""
+    anúncio veio do relé, e não de um par repassado por um relé antigo — e,
+    desde 11/09, o `cx`: o id DESTA conexão, que o relé sorteia e carimba nos
+    dirigidos que ela manda (o grupo, o duelo e a batalha conferem por ele que
+    o parceiro é a mesma conexão de antes; o `paraCx` entrega só a ela)."""
     a = {'t': 'rele', 'v': ANUNCIO_V, 'ident': bool(com_banco)}
     if isinstance(marca, str) and RE_MARCA.fullmatch(marca):
         a['n'] = marca
+    if isinstance(cx, str) and RE_CX.fullmatch(cx):
+        a['cx'] = cx
     return json.dumps(a, separators=(',', ':'))
 
 

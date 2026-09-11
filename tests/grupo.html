@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o grupo, o duelo e a mensagem particular (grupo.js)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>O grupo de dois, o duelo às cegas e a mensagem particular — js/core/grupo.js</h1>
+<div class="sub">Unitária, sem relé e sem BroadcastChannel: um dublê de Rede embutido guarda o que o
+grupo.js manda e entrega o que o "par roteirizado" responde. Game, Coop, Progress, DB e DATA são
+de mentira, só com o que o grupo.js lê. Cobra: convite, resposta, estado e liderança; recusas por
+ocupado, versão e silêncio; os prazos pelo relógio injetado; passar a liderança; sair; a descida
+junta (descer/desci, recusa e o prazo de 5 s); a volta com a chave certa e a errada; o impostor
+de cx trocado; a carência de quem caiu; o sussurro (silenciado, ausente, sem privado); o duelo com
+compromisso e revelação (a trapaça, a revelação adiantada, a arena só nos abertos) e os vetores do
+SHA-256.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script>
+/* ------------------------------------------------------------ OS DUBLÊS
+ * Tudo o que o grupo.js lê, e nada mais. Montados ANTES do grupo.js: ele liga
+ * os ouvintes na Rede ao carregar. */
+window.JOGO = {};
+window.SOTERRA_VERSAO = { versao: 'dev', arquivos: {} };
+var NOMES = { bia: 'Bia', cris: 'Cris', chato: 'Chato', ana: 'Ana' };
+var saidas = [], ouvintes = {}, vigias = [], soltas = [], sussurros = [];
+var calas = [];                               // 11/09 (achado 21): o R.cala que o Silenciar manda ao relé
+var sala = null, trocaEstado = null;
+JOGO.Rede = {
+  _id: 'ana', _cx: 'cxana01', _privado: true, _recusa: null, _falha: null,
+  meuId: function () { return this._id; },
+  meuCx: function () { return this._cx; },
+  minhaSala: function () { return sala; },
+  nomeDe: function (id) { return NOMES[id] || ('Aventureiro-' + String(id).slice(0, 4)); },
+  pares: function () { return [{ id: 'bia', nome: 'Bia' }, { id: 'cris', nome: 'Cris' }]; },
+  ouvir: function (tipo, fn) {
+    (ouvintes[tipo] = ouvintes[tipo] || []).push(fn);
+    return function () { ouvintes[tipo] = (ouvintes[tipo] || []).filter(function (f) { return f !== fn; }); };
+  },
+  dirige: function (tipo, para, acao, dados, opts) {
+    if (this._falha) { this._recusa = this._falha; return false; }
+    saidas.push({ tipo: tipo, para: para, acao: acao, dados: JSON.parse(JSON.stringify(dados || {})),
+                  cx: (opts && opts.cx) || null });
+    return true;
+  },
+  ultimaRecusa: function () { return this._recusa; },
+  privado: function () { return this._privado; },
+  sussurrar: function (para, texto, opts) {
+    if (!this._privado) { this._recusa = 'privado'; return false; }
+    sussurros.push({ para: para, texto: texto, cx: (opts && opts.cx) || null });
+    return true;
+  },
+  _transporte: null,                          // 'ws' = pelo relé (o `saiu` do par vigiado não conta); null = canal de abas
+  transporte: function () { return this._transporte; },
+  vigia: function (id, cx) { vigias.push(id + '@' + cx); },
+  solta: function (id, cx) { soltas.push(id + '@' + cx); },
+  filtra: function (t) { return String(t).replace(/porra/g, 'p****'); },
+  cala: function (id, solta) { calas.push(id + (solta ? ':solta' : ':cala')); return true; }
+};
+JOGO.Game = {
+  screen: 'hub', dificuldade: 'normal', dungeonId: null, state: null, runs: [],
+  startRun: function (ids, dg, opts) {
+    this.runs.push({ ids: ids.slice(), dg: dg, opts: opts || null });
+    this.screen = 'antessala';
+    this.dungeonId = dg;
+    return true;
+  }
+};
+JOGO.Coop = {
+  GRACA_MS: 15000, cfg: [], sumiu: [], voltou: [], duelos: [],
+  configura: function (i) { this.cfg.push(i ? JSON.parse(JSON.stringify(i)) : null); },
+  parceiroSumiu: function (id, t0) { this.sumiu.push(id + '@' + t0); },
+  parceiroVoltou: function (id, cx) { this.voltou.push(id + '@' + cx); },
+  assinatura: function () { return 'sig1'; },
+  payloadMeu: function (hid) {
+    var h = JOGO.Progress.hero(hid);
+    if (!h || h.classId === 'gm') return null;
+    return { heroId: hid, classId: h.classId, element: h.element, level: h.level, spells: ['s1', 's2'],
+             conta: 'principal', dono: JOGO.Rede.meuId() };
+  },
+  sorteiaArena: function (s) { return JOGO.Duelo._arena(s); },
+  iniciaDuelo: function (ata) { this.duelos.push(JSON.parse(JSON.stringify(ata))); return true; }
+};
+JOGO.Progress = {
+  _h: { sumo: { classId: 'sumo', element: 'fogo', level: 12 },
+        arqueiro: { classId: 'arqueiro', element: 'ar', level: 9 },
+        gm: { classId: 'gm', element: 'neutro', level: 30 } },
+  hero: function (id) { return this._h[id] || null; },
+  heroIds: function () { return Object.keys(this._h); }
+};
+JOGO.DB = {
+  mutados: function () { return Promise.resolve([{ id: 'chato', nome: 'Chato' }]); },
+  jogador: function () { return Promise.resolve({ id: 'ana', nome: 'Ana' }); }
+};
+JOGO.Troca = { estado: function () { return trocaEstado; } };
+JOGO.Engine = { spell: function (id) { return (id === 's1' || id === 's2') ? { id: id } : null; } };
+var marcas = [];
+JOGO.Hub = { marcaGrupo: function (id, papel) { marcas.push(id + ':' + papel); return true; } };
+JOGO.DATA = {
+  dungeons: [
+    { id: 'greenhouse', name: 'A Estufa Soterrada', rooms: [{}, {}, {}] },
+    { id: 'cistern', name: 'A Cisterna Afogada', rooms: [{}, {}, {}] },
+    { id: 'emberlock', name: 'O Fecho de Brasa', rooms: [{}, {}, {}] },
+    { id: 'poco', name: 'O Poço sem Fundo', rooms: [{}] }
+  ],
+  portalFechado: function (id) { return id === 'emberlock'; },
+  classes: { sumo: {}, arqueiro: {}, gm: {} },
+  leveling: { maxLevel: 30 },
+  // 11/09 (revisão, 26): a tabela de dificuldades (o aviso de quem segue diz o nome)
+  dificuldades: { facil: { nome: 'Fácil' }, normal: { nome: 'Normal' }, dificil: { nome: 'Difícil' } }
+};
+// o grupo.js: o de verdade, ou o que ?src= apontar (rascunho)
+(function () {
+  var m = /[?&]src=([^&]+)/.exec(location.search);
+  var src = m ? decodeURIComponent(m[1]) : '../js/core/grupo.js';
+  document.write('<scr' + 'ipt src="' + src + '?v=' + Date.now() + '"></scr' + 'ipt>');
+})();
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ') +
+      nome + (extra !== undefined && extra !== null && extra !== '' ? ' — <code>' + String(extra).replace(/</g, '&lt;') + '</code>' : '');
+    lista.appendChild(li);
+  }
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  if (!JOGO.Grupo || !JOGO.Duelo || !JOGO.Sussurros) {
+    check('o grupo.js carregou (JOGO.Grupo, JOGO.Duelo, JOGO.Sussurros)', false);
+    return fim();
+  }
+  var Gr = JOGO.Grupo, Du = JOGO.Duelo, Su = JOGO.Sussurros, R = JOGO.Rede, Gm = JOGO.Game, Co = JOGO.Coop;
+  var T = 1000000;
+  Gr._agora = function () { return T; };
+  Du._agora = function () { return T; };
+  var avisos = [], convites = [], desafios = [], subidas = [], linhasSu = [], mudancas = 0;
+  Gr.aoAviso = function (t, k) { avisos.push(t); };
+  Gr.aoConvite = function (c) { convites.push(c); };
+  Gr.aoSubiu = function (m) { subidas.push(m); Gm.screen = 'hub'; Gm.dungeonId = null; };
+  Gr.aoMudar = function () { mudancas++; };
+  Du.aoDesafio = function (c) { desafios.push(c); };
+  Su.aoChegar = function (l) { linhasSu.push(l); };
+
+  function chega(tipo, ev) {
+    ev.tipo = tipo;
+    (ouvintes[tipo] || []).forEach(function (f) { f(ev); });
+  }
+  function ult(tipo, acao) {
+    for (var i = saidas.length - 1; i >= 0; i--) if (saidas[i].tipo === tipo && saidas[i].acao === acao) return saidas[i];
+    return null;
+  }
+  function conta(tipo, acao) { return saidas.filter(function (s) { return s.tipo === tipo && s.acao === acao; }).length; }
+  function ultAviso() { return avisos[avisos.length - 1] || ''; }
+  function reset() {
+    Gr._reset(); Du._reset(); Su._reset();
+    saidas.length = 0; vigias.length = 0; soltas.length = 0; sussurros.length = 0; marcas.length = 0;
+    avisos.length = 0; convites.length = 0; desafios.length = 0; subidas.length = 0; linhasSu.length = 0;
+    Co.cfg.length = 0; Co.sumiu.length = 0; Co.voltou.length = 0; Co.duelos.length = 0;
+    Gm.screen = 'hub'; Gm.dungeonId = null; Gm.state = null; Gm.runs.length = 0;
+    R._id = 'ana'; R._cx = 'cxana01'; R._privado = true; R._falha = null; R._recusa = null; R._transporte = null;
+    sala = null; trocaEstado = null;
+    Gr.defineHeroi('sumo');
+  }
+  // o grupo formado comigo liderando (Ana convida a Bia)
+  function formaLiderando() {
+    Gr.convidar('bia');
+    var cv = ult('grupo', 'convite');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'resposta',
+                     dados: { gid: cv.dados.gid, ok: true, heroi: { classId: 'arqueiro', element: 'ar', level: 9 } } });
+    return cv.dados;
+  }
+  // o grupo formado com a Bia liderando (a Bia me convida)
+  function formaSeguindo() {
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite',
+                     dados: { gid: 'bia-q1w2', chave: 'chave123', heroi: { classId: 'arqueiro', element: 'ar', level: 9 },
+                              versao: 'dev:sig1' } });
+    Gr.responder(true);
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'estado',
+                     dados: { gid: 'bia-q1w2', v: 1, lider: 'bia', membros: [{ id: 'bia', heroi: { classId: 'arqueiro', element: 'ar', level: 9 } }, { id: 'ana' }] } });
+  }
+
+  setTimeout(function () {
+    // ============================================================ SHA-256 e semente
+    check('SHA-256 de "abc" (vetor da norma)', Du._sha256('abc') === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad', Du._sha256('abc'));
+    check('SHA-256 da string vazia', Du._sha256('') === 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', Du._sha256(''));
+    check('SHA-256 em UTF-8 ("ação|x")', Du._sha256('ação|x') === '747202e7b58115c7d2b6c356ab81877fa4f0b040bac412d996a3fce5c032d4a9');
+    var mil = new Array(1001).join('a');
+    check('SHA-256 de 1000 letras (vários blocos)', Du._sha256(mil) === '41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3');
+    check('_semente é o FNV-1a de did|salA|salB, estável', Du._semente('d1', 'aa', 'bb') === 1751572676 &&
+          Du._semente('d1', 'aa', 'bb') === Du._semente('d1', 'aa', 'bb'), Du._semente('d1', 'aa', 'bb'));
+    check('_semente muda com qualquer um dos sais', Du._semente('d1', 'aa', 'bc') !== Du._semente('d1', 'aa', 'bb') &&
+          Du._semente('d1', 'ab', 'bb') !== Du._semente('d1', 'aa', 'bb'));
+    // a arena só nos abertos, as 6 salas aparecem em 100 sementes
+    var vistas = {}, fora = [];
+    for (var s = 0; s < 100; s++) {
+      var ar = Du._arena(Du._semente('duelo-' + s, 'a', 'b'));
+      vistas[ar.dungeonId + ':' + ar.roomIndex] = true;
+      if (ar.dungeonId !== 'greenhouse' && ar.dungeonId !== 'cistern') fora.push(ar.dungeonId);
+    }
+    check('a arena sai só dos calabouços abertos (sem Poço, sem portal fechado)', fora.length === 0, fora.join(','));
+    check('em 100 sementes as 6 salas abertas aparecem', Object.keys(vistas).length === 6, Object.keys(vistas).sort().join(' '));
+
+    // ============================================================ o convite
+    reset();
+    var r1 = Gr.convidar('bia');
+    var cv = ult('grupo', 'convite');
+    check('convidar manda o convite com gid, chave, herói e versão', r1.ok && cv && cv.para === 'bia' &&
+          /^ana-[0-9a-z]{4}$/.test(cv.dados.gid) && cv.dados.chave.length === 8 &&
+          cv.dados.heroi.classId === 'sumo' && cv.dados.heroi.level === 12 && cv.dados.versao === 'dev:sig1',
+          JSON.stringify(cv && cv.dados));
+    check('estado: convidei, com o convite pendente', Gr.estado().fase === 'convidei' && Gr.estado().pendente.id === 'bia' &&
+          Gr.estado().pendente.meu === true);
+    check('um segundo convite com o primeiro em aberto é recusado', Gr.convidar('cris').motivo === 'ocupado');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'resposta',
+                     dados: { gid: cv.dados.gid, ok: true, heroi: { classId: 'arqueiro', element: 'ar', level: 9 } } });
+    check('a resposta SIM forma o grupo e quem convidou lidera', Gr.emGrupo() && Gr.souLider() && Gr.lider() === 'ana' &&
+          Gr.parceiro().id === 'bia' && Gr.parceiro().cx === 'cxbia1' && Gr.parceiro().heroi.classId === 'arqueiro');
+    var e1 = ult('grupo', 'estado');
+    check('quem lidera manda o estado v:1 com os dois membros, dirigido ao cx da Bia', e1 && e1.dados.v === 1 &&
+          e1.dados.lider === 'ana' && e1.dados.membros.length === 2 && e1.cx === 'cxbia1', JSON.stringify(e1 && e1.dados));
+    check('vigia a Bia pelo cx dela', vigias.indexOf('bia@cxbia1') >= 0, vigias.join(','));
+    var cf = Co.cfg[Co.cfg.length - 1];
+    check('o Coop é configurado com o grupo', cf && cf.gid === cv.dados.gid && cf.lider === 'ana' && cf.eu === 'ana' &&
+          cf.parceiro.id === 'bia' && cf.parceiro.cx === 'cxbia1', JSON.stringify(cf));
+    check('a placa da Bia na praça vira de membro', marcas[marcas.length - 1] === 'bia:membro', marcas.join(','));
+    check('o aviso diz que ela entrou', /Bia entrou no grupo/.test(ultAviso()), ultAviso());
+    var est = Gr.estado();
+    check('estado(): membros na ordem [quem lidera, o outro], com herói e nível', est.membros.length === 2 &&
+          est.membros[0].id === 'ana' && est.membros[1].id === 'bia' && est.membros[1].heroi.level === 9 && est.membros[0].eu === true);
+    check('convidar já em grupo diz "em-grupo"', Gr.convidar('cris').motivo === 'em-grupo');
+
+    // ---- receber o convite
+    reset();
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite',
+                     dados: { gid: 'bia-q1w2', chave: 'chave123', heroi: { classId: 'arqueiro', element: 'ar', level: 9 }, versao: 'dev:sig1' } });
+    check('o convite recebido chama aoConvite com o nome do REGISTRO e o herói', convites.length === 1 &&
+          convites[0].nome === 'Bia' && convites[0].heroi.classId === 'arqueiro' && convites[0].expira === T + 30000);
+    check('estado: convidado', Gr.estado().fase === 'convidado' && Gr.estado().pendente.meu === false);
+    var rr = Gr.responder(true);
+    var re = ult('grupo', 'resposta');
+    check('aceitar responde SIM com o meu herói, ao cx de quem chamou', rr.ok && re && re.dados.ok === true &&
+          re.dados.gid === 'bia-q1w2' && re.dados.heroi.classId === 'sumo' && re.cx === 'cxbia1');
+    check('aceitar forma o grupo com a Bia liderando', Gr.emGrupo() && !Gr.souLider() && Gr.lider() === 'bia');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'estado', dados: { gid: 'bia-q1w2', v: 1, lider: 'bia', membros: [{ id: 'bia', heroi: { classId: 'arqueiro', element: 'terra', level: 10 } }] } });
+    check('o estado da líder vale (v:1) e traz o herói dela', Gr.estado().v === 1 && Gr.parceiro().heroi.element === 'terra' &&
+          Gr.parceiro().heroi.level === 10);
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'estado', dados: { gid: 'bia-q1w2', v: 1, lider: 'bia', membros: [{ id: 'bia', heroi: { classId: 'sumo', element: 'fogo', level: 3 } }] } });
+    check('o mesmo v de novo não muda nada (idempotente)', Gr.parceiro().heroi.classId === 'arqueiro');
+    chega('grupo', { de: 'bia', cx: 'cxINTRUSO', acao: 'estado', dados: { gid: 'bia-q1w2', v: 9, lider: 'ana', membros: [] } });
+    check('estado com o cx trocado (impostor) é ignorado', Gr.estado().v === 1 && Gr.lider() === 'bia');
+
+    // ---- recusas
+    reset();
+    Gm.screen = 'battle';
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-1111', chave: 'k', versao: 'dev:sig1' } });
+    check('em batalha o convite nem aparece: recusa sozinho', convites.length === 0 && ult('grupo', 'resposta').dados.ok === false &&
+          ult('grupo', 'resposta').dados.motivo === 'em-batalha');
+    Gm.screen = 'hub'; sala = 'greenhouse:0';
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-2222', chave: 'k', versao: 'dev:sig1' } });
+    check('na antessala (sala da Rede) recusa como ocupado', convites.length === 0 && ult('grupo', 'resposta').dados.motivo === 'ocupado');
+    sala = null;
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-3333', chave: 'k', versao: 'outra:sig9' } });
+    check('versão diferente recusa com "versao"', convites.length === 0 && ult('grupo', 'resposta').dados.motivo === 'versao');
+    chega('grupo', { de: 'chato', cx: 'cxch', acao: 'convite', dados: { gid: 'chato-1', chave: 'k', versao: 'dev:sig1' } });
+    check('quem está silenciado é recusado calado (ocupado), sem aparecer', convites.length === 0 &&
+          ult('grupo', 'resposta').para === 'chato' && ult('grupo', 'resposta').dados.motivo === 'ocupado');
+    trocaEstado = { fase: 'aberta' };
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-4444', chave: 'k', versao: 'dev:sig1' } });
+    check('com uma troca aberta recusa com "troca"', ult('grupo', 'resposta').dados.motivo === 'troca');
+    trocaEstado = null;
+    Gr.defineHeroi('gm');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-5555', chave: 'k', versao: 'dev:sig1' } });
+    check('com o Mestre do Fundo recusa com "mestre"', ult('grupo', 'resposta').dados.motivo === 'mestre');
+    check('e o Mestre também não convida', Gr.convidar('bia').motivo === 'mestre');
+    Gr.defineHeroi('sumo');
+    reset();
+    Gr.convidar('bia');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { gid: ult('grupo', 'convite').dados.gid, ok: false, motivo: 'versao' } });
+    check('a recusa por versão vira o aviso das versões', /versões diferentes/.test(ultAviso()) && Gr.estado().fase === 'livre', ultAviso());
+    Gr.convidar('bia');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { gid: ult('grupo', 'convite').dados.gid, ok: false, motivo: 'recusou' } });
+    check('a recusa comum: "Bia recusou o convite."', ultAviso() === 'Bia recusou o convite.', ultAviso());
+    R._falha = 'rele-antigo';
+    var rf = Gr.convidar('bia');
+    check('com o relé antigo o convite volta "rele-antigo" e nada muda', !rf.ok && rf.motivo === 'rele-antigo' && Gr.estado().fase === 'livre');
+    R._falha = null;
+    Gm.screen = 'antessala';
+    check('só se convida da praça', Gr.convidar('bia').motivo === 'em-batalha');
+    // o Acampamento só existe na HUD (o Game.screen fica em menu/heroSelect/defeat…)
+    reset();
+    Gm.screen = 'heroSelect';
+    JOGO.UI = { telaAtual: function () { return 'menu'; } };
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-8888', chave: 'k', versao: 'dev:sig1' } });
+    check('com a HUD no menu principal (fora da praça) o convite é recusado', convites.length === 0 &&
+          ult('grupo', 'resposta').dados.motivo === 'ocupado');
+    JOGO.UI.telaAtual = function () { return 'hub'; };
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-9999', chave: 'k', versao: 'dev:sig1' } });
+    check('com a HUD no Acampamento vale a tela da HUD, não o Game.screen', convites.length === 1);
+    delete JOGO.UI;
+    Gm.screen = 'defeat';
+    Gr._reset();
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-aaaa', chave: 'k', versao: 'dev:sig1' } });
+    check('sem HUD (cliente de prova), fora da batalha e da antessala conta como praça', Gr.estado().fase === 'convidado');
+    Gm.screen = 'hub';
+
+    // ---- os prazos (relógio injetado)
+    reset();
+    Gr.convidar('bia');
+    var gidX = ult('grupo', 'convite').dados.gid;
+    T += 29999; Gr._tique();
+    check('29,9 s depois o convite ainda vale', Gr.estado().fase === 'convidei');
+    T += 2; Gr._tique();
+    check('passados 30 s o convite expira sozinho', Gr.estado().fase === 'livre' && ultAviso() === 'O convite expirou.', ultAviso());
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { gid: gidX, ok: true, heroi: { classId: 'arqueiro' } } });
+    check('o SIM atrasado não forma grupo e manda "sair" (o grupo fantasma do outro lado se desfaz)',
+          !Gr.emGrupo() && ult('grupo', 'sair') && ult('grupo', 'sair').dados.motivo === 'expirou');
+    reset();
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-7777', chave: 'k', versao: 'dev:sig1' } });
+    T += 30001;
+    var rx = Gr.responder(true);
+    check('aceitar depois do prazo não forma nada nem responde', !rx.ok && rx.motivo === 'expirou' && !Gr.emGrupo() && conta('grupo', 'resposta') === 0);
+
+    // ============================================================ a liderança
+    reset();
+    formaLiderando();
+    var v0 = Gr.estado().v;
+    var rl = Gr.passarLideranca();
+    var lm = ult('grupo', 'lider');
+    check('passar a liderança manda "lider" com o v maior', rl.ok && lm && lm.dados.novo === 'bia' && lm.dados.v === v0 + 1 && lm.cx === 'cxbia1');
+    check('e a Bia passa a liderar aqui na hora', Gr.lider() === 'bia' && !Gr.souLider() && marcas[marcas.length - 1] === 'bia:lider');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'estado', dados: { gid: Gr.estado().gid, v: v0 + 2, lider: 'bia', membros: [] } });
+    check('o estado da nova líder (v maior) vale', Gr.estado().v === v0 + 2 && Gr.lider() === 'bia');
+    check('passar a liderança sem liderar: "nao-lider"', Gr.passarLideranca().motivo === 'nao-lider');
+    reset();
+    formaLiderando();
+    var vAntes = Gr.estado().v;
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'estado', dados: { gid: Gr.estado().gid, v: 50, lider: 'bia', membros: [] } });
+    check('o estado de quem NÃO lidera é ignorado', Gr.estado().v === vAntes && Gr.souLider());
+    reset();
+    formaSeguindo();
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'lider', dados: { gid: 'bia-q1w2', novo: 'ana', v: 4 } });
+    var el2 = ult('grupo', 'estado');
+    check('receber a liderança: eu lidero e mando o estado com o v seguinte', Gr.souLider() && el2 && el2.dados.v === 5 && el2.dados.lider === 'ana');
+    reset();
+    formaSeguindo();
+    Gm.screen = 'battle';
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'lider', dados: { gid: 'bia-q1w2', novo: 'ana', v: 4 } });
+    check('no meio da batalha a liderança não passa por toque', !Gr.souLider());
+    Gm.screen = 'hub';
+    reset();
+    formaLiderando();
+    Gm.screen = 'battle';
+    check('passarLideranca na batalha é recusado', Gr.passarLideranca().motivo === 'em-batalha');
+    Gm.screen = 'antessala';
+    check('mas na antessala passa', Gr.passarLideranca().ok === true);
+
+    // ============================================================ sair
+    reset();
+    var dados1 = formaLiderando();
+    chega('grupo', { de: 'bia', cx: 'cxINTRUSO', acao: 'sair', dados: { gid: dados1.gid } });
+    check('"sair" de impostor (cx trocado, sem a chave) é ignorado', Gr.emGrupo());
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'sair', dados: { gid: dados1.gid, motivo: 'saiu' } });
+    check('o "sair" da Bia desfaz o grupo (grupo de 1 = sem grupo)', !Gr.emGrupo() && Gr.estado().fase === 'livre' &&
+          /Bia saiu do grupo/.test(ultAviso()));
+    check('...solta a vigia, desmarca a placa e zera o Coop', soltas.indexOf('bia@cxbia1') >= 0 &&
+          marcas[marcas.length - 1] === 'bia:null' && Co.cfg[Co.cfg.length - 1] === null, marcas.join(',') + ' / ' + soltas.join(','));
+    reset();
+    formaLiderando();
+    var chaveAntes = Gr._chaveAtual();
+    Gr.sair('saiu');
+    var sm = ult('grupo', 'sair');
+    check('sair eu mesmo manda "sair" com a PROVA da chave (presa ao meu cx), nunca a chave, e desfaz aqui',
+          sm && sm.dados.prova === Du._sha256(chaveAntes + '|cxana01') && sm.dados.chave === undefined &&
+          typeof chaveAntes === 'string' && chaveAntes.length >= 9 && !Gr.emGrupo(), JSON.stringify(sm && sm.dados));
+    reset();
+    formaLiderando();
+    Gm.screen = 'battle';
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'sair', dados: { gid: Gr.estado().gid, motivo: 'saiu' } });
+    check('o par que sai NA BATALHA: a sala continua (grupo segue até ela acabar)', Gr.emGrupo() &&
+          Gr.estado().membros[1].on === false && Gr.estado().descidaAcabou === true);
+    Gm.screen = 'roomClear';
+    Gr._tique();
+    check('...e o grupo se desfaz quando a sala acaba', !Gr.emGrupo());
+
+    // ============================================================ a descida junta
+    reset();
+    formaLiderando();
+    check('descer no Poço: "poco"', Gr.descer('poco').motivo === 'poco');
+    check('descer num portal fechado: "portal"', Gr.descer('emberlock').motivo === 'portal');
+    var rd = Gr.descer('greenhouse');
+    var dm = ult('grupo', 'descer');
+    check('quem lidera chama: "descer" com o calabouço e a dificuldade', rd.ok && dm && dm.dados.dungeonId === 'greenhouse' &&
+          dm.dados.dificuldade === 'normal' && Gr.estado().descendo.dungeonId === 'greenhouse');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'desci', dados: { gid: Gr.estado().gid, dungeonId: 'greenhouse', ok: true } });
+    check('com o "desci" SIM, desço com UM herói e a marca de grupo', Gm.runs.length === 1 && Gm.runs[0].ids.join() === 'sumo' &&
+          Gm.runs[0].dg === 'greenhouse' && Gm.runs[0].opts && Gm.runs[0].opts.grupo === true);
+    check('a descida de grupo fica marcada no estado', Gr.estado().descidaGrupo === 'greenhouse' && Gr.estado().descida === 'descida');
+    reset();
+    formaLiderando();
+    Gr.descer('cistern');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'desci', dados: { gid: Gr.estado().gid, dungeonId: 'cistern', ok: false, motivo: 'troca' } });
+    check('o "desci" NÃO vira aviso com o motivo e ninguém desce', Gm.runs.length === 0 && ultAviso() === 'Bia está numa troca.', ultAviso());
+    Gr.descer('cistern');
+    T += 5001; Gr._tique();
+    check('sem resposta em 5 s: "Bia não respondeu."', ultAviso() === 'Bia não respondeu.' && !Gr.estado().descendo, ultAviso());
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'desci', dados: { gid: Gr.estado().gid, dungeonId: 'cistern', ok: true } });
+    check('o SIM atrasado manda o outro subir e eu não desço', Gm.runs.length === 0 && ult('grupo', 'subir') &&
+          ult('grupo', 'subir').dados.motivo === 'expirou');
+    reset();
+    formaSeguindo();
+    check('quem não lidera não chama para descer', Gr.descer('greenhouse').motivo === 'nao-lider');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'greenhouse', dificuldade: 'dificil' } });
+    var dc = ult('grupo', 'desci');
+    check('quem segue: responde "desci" SIM e desce junto', dc && dc.dados.ok === true && Gm.runs.length === 1 &&
+          Gm.runs[0].opts.grupo === true && Gm.screen === 'antessala');
+    check('a dificuldade de quem lidera NÃO troca a minha preferência guardada', Gm.dificuldade === 'normal');
+    Gr.subir('saiu');
+    check('subir: avisa o par e me leva ao Acampamento', ult('grupo', 'subir') && subidas[subidas.length - 1] === 'saiu' && Gm.screen === 'hub');
+    reset();
+    formaSeguindo();
+    trocaEstado = { fase: 'aberta' };
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'greenhouse' } });
+    check('quem segue numa troca responde "desci" NÃO com "troca"', ult('grupo', 'desci').dados.ok === false &&
+          ult('grupo', 'desci').dados.motivo === 'troca' && Gm.runs.length === 0);
+    trocaEstado = null;
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'poco' } });
+    check('o Poço é recusado também do lado de quem segue', ult('grupo', 'desci').dados.motivo === 'poco' && Gm.runs.length === 0);
+    reset();
+    formaSeguindo();
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'greenhouse' } });
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'subir', dados: { gid: 'bia-q1w2', motivo: 'saiu' } });
+    check('o "subir" da líder me leva ao Acampamento (a descida é dos dois)', subidas.length === 1 && Gm.screen === 'hub' && Gr.emGrupo());
+
+    // ============================================================ a queda e a volta
+    reset();
+    var d2 = formaLiderando();
+    chega('caiu', { id: 'bia', cx: 'cxOUTRO' });
+    check('"caiu" de uma conexão velha (cx diferente) não conta', Gr.estado().membros[1].on === true);
+    chega('caiu', { id: 'bia', cx: 'cxbia1' });
+    check('"caiu" da conexão vigiada: a Bia fica sumida e o Coop sabe', Gr.estado().membros[1].on === false &&
+          Co.sumiu.indexOf('bia@' + T) >= 0 && /Bia caiu/.test(ultAviso()), Co.sumiu.join(','));
+    var chaveG = Gr._chaveAtual();
+    chega('grupo', { de: 'bia', cx: 'cxbia2', acao: 'volta', dados: { gid: d2.gid, chave: chaveG } });
+    check('"volta" com a chave EM ABERTO (sem prova) é ignorada', Gr.estado().membros[1].on === false && Co.voltou.length === 0);
+    chega('grupo', { de: 'bia', cx: 'cxbia2', acao: 'volta', dados: { gid: d2.gid, prova: Du._sha256('errada00|cxbia2') } });
+    check('"volta" com a prova ERRADA é ignorada', Gr.estado().membros[1].on === false && Co.voltou.length === 0);
+    chega('grupo', { de: 'bia', cx: 'cxbia3', acao: 'volta', dados: { gid: d2.gid, prova: Du._sha256(chaveG + '|cxbia2') } });
+    check('"volta" com a prova de OUTRO cx (quem ouviu a volta alheia) é ignorada', Gr.estado().membros[1].on === false && Co.voltou.length === 0);
+    chega('grupo', { de: 'bia', cx: 'cxbia2', acao: 'volta', dados: { gid: d2.gid, prova: Du._sha256(chaveG + '|cxbia2') } });
+    check('"volta" com a prova da chave presa ao cx novo: troca o cx, vigia de novo e avisa o Coop', Gr.estado().membros[1].on === true &&
+          Gr.parceiro().cx === 'cxbia2' && vigias.indexOf('bia@cxbia2') >= 0 && Co.voltou.indexOf('bia@cxbia2') >= 0);
+    check('...e quem lidera responde com o estado', ult('grupo', 'estado').cx === 'cxbia2');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'estado', dados: { gid: d2.gid, v: 99, lider: 'bia' } });
+    check('depois da volta o cx velho não fala mais pelo par', Gr.souLider());
+    saidas.length = 0;
+    R._cx = 'cxana02';
+    chega('religou', { cx: 'cxana02' });
+    var vt = ult('grupo', 'volta');
+    check('a MINHA conexão religou: mando "volta" com gid e a PROVA presa ao cx novo, sem a chave (sem cx: o dele pode ter mudado)',
+          vt && vt.dados.gid === d2.gid && vt.dados.prova === Du._sha256(chaveG + '|cxana02') && vt.dados.chave === undefined &&
+          vt.cx === null, JSON.stringify(vt && vt.dados));
+    // a carência na praça
+    chega('saiu', { id: 'bia' });
+    T += 14999; Gr._tique();
+    check('dentro da carência o grupo continua', Gr.emGrupo());
+    T += 2; Gr._tique();
+    check('passada a carência (15 s), na praça o grupo se desfaz', !Gr.emGrupo() && /Bia saiu — o grupo se desfez/.test(ultAviso()), ultAviso());
+    // na batalha: quem ficou lidera (D21), e o grupo segue
+    reset();
+    formaSeguindo();
+    Gm.screen = 'battle';
+    chega('caiu', { id: 'bia', cx: 'cxbia1' });
+    T += 15001; Gr._tique();
+    check('na batalha, a líder sumida além da carência: eu lidero (D21) e o grupo segue', Gr.emGrupo() && Gr.souLider());
+    // a antessala: a descida acaba e volto ao Acampamento
+    reset();
+    formaLiderando();
+    Gr.descer('greenhouse');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'desci', dados: { gid: Gr.estado().gid, dungeonId: 'greenhouse', ok: true } });
+    chega('ausente', { para: 'bia', paraCx: 'cxbia1', tipoMsg: 'batalha', ref: 'x' });
+    check('"ausente" de um envelope ao par também conta como sumiço', Gr.estado().membros[1].on === false);
+    T += 15001; Gr._tique();
+    check('sumida além da carência NA ANTESSALA: a descida acaba e volto ao Acampamento', !Gr.emGrupo() &&
+          subidas.length === 1 && /não voltou — a descida acabou/.test(avisos.join('|')), avisos.join(' | '));
+    // o convite a quem não está
+    reset();
+    Gr.convidar('cris');
+    chega('ausente', { para: 'cris', tipoMsg: 'grupo', ref: 'x' });
+    check('convite a quem não está conectado: cai na hora com o aviso', Gr.estado().fase === 'livre' && /Cris não está mais conectado/.test(ultAviso()), ultAviso());
+    // defineHeroi em grupo avisa o par
+    reset();
+    formaLiderando();
+    saidas.length = 0;
+    Gr.defineHeroi('arqueiro');
+    check('trocar o herói principal em grupo manda "heroi" ao par', ult('grupo', 'heroi') && ult('grupo', 'heroi').dados.heroi.classId === 'arqueiro');
+    Gr.defineHeroi('arqueiro');
+    check('...e o mesmo herói de novo não manda nada', conta('grupo', 'heroi') === 1);
+
+    // ============================================================ o sussurro
+    reset();
+    var rs = Su.manda('bia', '  oi, bora descer?  ');
+    check('sussurro sai pela Rede, sem espaços nas pontas, e vira linha minha', rs.ok && sussurros.length === 1 &&
+          sussurros[0].para === 'bia' && sussurros[0].texto === 'oi, bora descer?' &&
+          linhasSu.length === 1 && linhasSu[0].meu === true && linhasSu[0].nome === 'Bia');
+    check('sussurro vazio não sai', Su.manda('bia', '   ').motivo === 'vazio' && sussurros.length === 1);
+    var longo = new Array(400).join('x');
+    Su.manda('bia', longo);
+    check('o texto é cortado em 240', sussurros[1].texto.length === 240);
+    R._privado = false;
+    var rp = Su.manda('bia', 'oi');
+    check('sem R.privado() (canal de abas, relé antigo) o sussurro é recusado', !rp.ok && rp.motivo === 'privado' && sussurros.length === 2);
+    R._privado = true;
+    chega('sussurro', { de: 'bia', cx: 'cxbia1', nome: 'Bia', texto: 'que porra é essa', mestre: false });
+    var lin = linhasSu[linhasSu.length - 1];
+    check('o sussurro que chega vira linha com o filtro do chat', lin && !lin.meu && lin.nome === 'Bia' && lin.texto === 'que p**** é essa', lin && lin.texto);
+    var n0 = linhasSu.length;
+    chega('sussurro', { de: 'chato', cx: 'cxch', nome: 'Chato', texto: 'oi' });
+    check('de quem está silenciado: nem linha', linhasSu.length === n0);
+    Gr.mutado('chato', false);
+    chega('sussurro', { de: 'chato', cx: 'cxch', nome: 'Chato', texto: 'oi' });
+    check('devolver a voz (Grupo.mutado) volta a mostrar', linhasSu.length === n0 + 1);
+    Gr.mutado('chato', true);
+    chega('ausente', { para: 'bia', tipoMsg: 'sussurro', ref: '' });
+    var lf = linhasSu[linhasSu.length - 1];
+    check('"ausente" do sussurro: a linha de falha "não está mais conectado(a)"', lf && lf.falhou === true &&
+          /Bia não está mais conectado\(a\) — a mensagem não foi entregue/.test(lf.texto), lf && lf.texto);
+    for (var q = 0; q < 40; q++) chega('sussurro', { de: 'bia', cx: 'cxbia1', nome: 'Bia', texto: 'm' + q });
+    check('a lista guarda só as últimas 30 linhas', Su.lista().length === 30 && Su.lista()[29].texto === 'm39');
+
+    // ============================================================ o duelo às cegas
+    reset();
+    var rdz = Du.desafiar('bia');
+    var dz = ult('duelo', 'desafio');
+    check('desafiar manda o desafio com did, versão e chave', rdz.ok && dz && /^ana-[0-9a-z]{6}$/.test(dz.dados.did) &&
+          dz.dados.versao === 'dev:sig1' && Du.estado().fase === 'desafiei' && Du.estado().eu === 'A');
+    var did = dz.dados.did;
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: did, ok: true } });
+    check('o aceite leva os dois à escolha, com a vigia ligada', Du.estado().fase === 'escolhendo' && vigias.indexOf('bia@cxbia1') >= 0);
+    // a dupla dela (o par roteirizado)
+    var duplaB = JSON.stringify([{ heroId: 'minotauro', classId: 'sumo', level: 20, spells: ['s1'], dono: 'bia' }]);
+    var salB = '0123456789abcdef0123456789abcdef';
+    var hB = Du._sha256(duplaB + '|' + salB);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'revela', dados: { did: did, dupla: duplaB, sal: salB } });
+    check('a revelação ANTES dos dois compromissos é ignorada', Du.estado().fase === 'escolhendo' && conta('duelo', 'cancela') === 0);
+    check('escolher o Mestre é recusado', Du.escolher(['gm']).motivo === 'mestre');
+    check('escolher três é recusado', Du.escolher(['sumo', 'arqueiro', 'gm']).motivo === 'n');
+    var rc = Du.escolher(['sumo', 'arqueiro']);
+    var cp = ult('duelo', 'compromisso');
+    check('escolher manda só o compromisso (hash de 64 hex) e o tamanho', rc.ok && cp && /^[0-9a-f]{64}$/.test(cp.dados.h) &&
+          cp.dados.n === 2 && !cp.dados.dupla && conta('duelo', 'revela') === 0 && Du.estado().fase === 'comprometido');
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'compromisso', dados: { did: did, h: hB, n: 1 } });
+    var rv = ult('duelo', 'revela');
+    check('com os DOIS compromissos, a minha revelação sai (a dupla como STRING e o sal)', rv && typeof rv.dados.dupla === 'string' &&
+          /^[0-9a-f]{32}$/.test(rv.dados.sal) && Du.estado().fase === 'revelado');
+    check('a minha revelação bate com o meu compromisso', Du._sha256(rv.dados.dupla + '|' + rv.dados.sal) === cp.dados.h);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'revela', dados: { did: did, dupla: duplaB, sal: salB } });
+    var ata = Co.duelos[0];
+    check('a revelação dela confere: o Coop inicia o duelo', Co.duelos.length === 1 && Du.estado().fase === 'batalha');
+    check('a ata: semente dos dois sais, eu sou A, as duplas nos lados certos', ata && ata.did === did && ata.eu === 'A' &&
+          ata.semente === Du._semente(did, rv.dados.sal, salB) && ata.duplaA.length === 2 && ata.duplaA[0].heroId === 'sumo' &&
+          ata.duplaB.length === 1 && ata.duplaB[0].heroId === 'minotauro' && ata.oponente.id === 'bia' && ata.oponente.cx === 'cxbia1',
+          JSON.stringify(ata && { s: ata.semente, a: ata.duplaA.length, b: ata.duplaB.length }));
+    check('a arena da ata é a do sorteio, num calabouço aberto', ata && (ata.dungeonId === 'greenhouse' || ata.dungeonId === 'cistern') &&
+          ata.dungeonId === Du._arena(ata.semente).dungeonId && ata.roomIndex === Du._arena(ata.semente).roomIndex &&
+          /Arena sorteada: A (Estufa|Cisterna)/.test(avisos.join('|')));
+    Gm.screen = 'battle'; Gr._tique();
+    check('com a arena aberta, cancelar não vale (sair é desistir, pelo Coop)', Du.cancelar('x') === false && Du.estado().fase === 'batalha');
+    Gm.screen = 'duelFim'; Gr._tique();
+    check('a batalha acabou (tela saiu da luta): o duelo volta a livre e lembra o oponente', Du.estado().fase === 'livre' &&
+          Du.ultimo() && Du.ultimo().id === 'bia');
+    // o Coop cancela quando o "dentro" dos dois não vem (a arena nunca abriu)
+    reset();
+    Du.desafiar('bia');
+    var dd = ult('duelo', 'desafio').dados.did;
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: dd, ok: true } });
+    Du.escolher(['sumo']);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'compromisso', dados: { did: dd, h: hB, n: 1 } });
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'revela', dados: { did: dd, dupla: duplaB, sal: salB } });
+    check('(a revelação conferiu e o duelo está em "batalha", arena ainda fechada)', Du.estado().fase === 'batalha');
+    check('o Coop cancela antes da arena abrir: volta a livre e avisa o outro lado', Du.cancelar('dentro') === true &&
+          Du.estado().fase === 'livre' && ult('duelo', 'cancela').dados.motivo === 'dentro');
+    // a trapaça
+    reset();
+    Du.desafiar('bia');
+    var did2 = ult('duelo', 'desafio').dados.did;
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: did2, ok: true } });
+    Du.escolher(['sumo']);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'compromisso', dados: { did: did2, h: hB, n: 1 } });
+    var trocada = JSON.stringify([{ heroId: 'minotauro', classId: 'sumo', level: 30, spells: ['s1'], dono: 'bia' }]);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'revela', dados: { did: did2, dupla: trocada, sal: salB } });
+    check('a revelação que NÃO bate com o compromisso cancela com "trapaca"', ult('duelo', 'cancela') &&
+          ult('duelo', 'cancela').dados.motivo === 'trapaca' && Du.estado().fase === 'livre' && Co.duelos.length === 0);
+    // o Mestre escondido na dupla
+    reset();
+    Du.desafiar('bia');
+    var did3 = ult('duelo', 'desafio').dados.did;
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: did3, ok: true } });
+    Du.escolher(['sumo']);
+    var comGm = JSON.stringify([{ heroId: 'gm', classId: 'gm', level: 30, spells: ['s1'] }]);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'compromisso', dados: { did: did3, h: Du._sha256(comGm + '|' + salB), n: 1 } });
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'revela', dados: { did: did3, dupla: comGm, sal: salB } });
+    check('o Mestre do Fundo revelado na dupla cancela com "trapaca"', ult('duelo', 'cancela').dados.motivo === 'trapaca' && Co.duelos.length === 0);
+    // feitiço que o meu jogo não conhece
+    reset();
+    Du.desafiar('bia');
+    var did4 = ult('duelo', 'desafio').dados.did;
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: did4, ok: true } });
+    Du.escolher(['sumo']);
+    var semSp = JSON.stringify([{ heroId: 'x', classId: 'sumo', level: 5, spells: ['s1', 'feitico-do-futuro'] }]);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'compromisso', dados: { did: did4, h: Du._sha256(semSp + '|' + salB), n: 1 } });
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'revela', dados: { did: did4, dupla: semSp, sal: salB } });
+    check('feitiço desconhecido na dupla cancela com "versao"', ult('duelo', 'cancela').dados.motivo === 'versao');
+    // o lado B e as recusas
+    reset();
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'desafio', dados: { did: 'bia-zzzzzz', versao: 'dev:sig1', chave: 'c' } });
+    check('o desafio recebido chama aoDesafio com o nome do registro', desafios.length === 1 && desafios[0].nome === 'Bia' &&
+          Du.estado().fase === 'desafiado' && Du.estado().eu === 'B');
+    Du.responder(true);
+    check('aceitar responde SIM e vai à escolha', ult('duelo', 'resposta').dados.ok === true && Du.estado().fase === 'escolhendo');
+    T += 90001; Gr._tique();
+    check('sem escolher em 90 s o duelo cai ("expirou") e avisa o outro lado', Du.estado().fase === 'livre' &&
+          ult('duelo', 'cancela') && ult('duelo', 'cancela').dados.motivo === 'expirou');
+    reset();
+    Gm.screen = 'battle';
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'desafio', dados: { did: 'bia-yyyyyy', versao: 'dev:sig1' } });
+    check('em batalha o desafio é recusado sozinho', desafios.length === 0 && ult('duelo', 'resposta').dados.ok === false);
+    Gm.screen = 'hub';
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'desafio', dados: { did: 'bia-xxxxxx', versao: 'velha:0' } });
+    check('desafio de versão diferente: "versao"', ult('duelo', 'resposta').dados.motivo === 'versao');
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'desafio', dados: { did: 'bia-wwwwww', versao: 'dev:sig1' } });
+    chega('saiu', { id: 'bia' });
+    check('quem desafiou saiu: o desafio cai', Du.estado().fase === 'livre');
+    reset();
+    Du.desafiar('bia');
+    T += 30001; Gr._tique();
+    check('desafio sem resposta em 30 s expira', Du.estado().fase === 'livre' && ultAviso() === 'O desafio expirou.', ultAviso());
+    // a queda no meio do duelo: a volta com a chave do desafio
+    reset();
+    Du.desafiar('bia');
+    var dv = ult('duelo', 'desafio').dados;
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: dv.did, ok: true } });
+    saidas.length = 0;
+    chega('religou', { cx: 'cxana09' });
+    var vd = ult('duelo', 'volta');
+    var chaveD = Du._st().chave;
+    check('a chave do duelo é a minha metade (a do desafio) e a dela (a da resposta)', chaveD === dv.chave + ':', chaveD);
+    check('a minha conexão religou no duelo: "volta" com o did e a PROVA da chave (nunca a chave)', vd && vd.dados.did === dv.did &&
+          vd.dados.prova === Du._sha256(chaveD + '|cxana01') && vd.dados.chave === undefined && vd.cx === null);
+    chega('duelo', { de: 'bia', cx: 'cxbia7', acao: 'volta', dados: { did: dv.did, chave: dv.chave } });
+    check('"volta" do duelo com a chave em aberto (sem prova) não troca o cx', Du.estado().oponente.cx === 'cxbia1');
+    reset();
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'desafio', dados: { did: 'bia-vvvvvv', versao: 'dev:sig1', chave: 'chaveB12' } });
+    Du.responder(true);
+    var kbD = ult('duelo', 'resposta').dados.kb;
+    check('aceitar o desafio manda a MINHA metade da chave, dirigida à conexão de quem desafiou', /^[0-9a-z]{8}$/.test(kbD || '') &&
+          ult('duelo', 'resposta').cx === 'cxbia1' && Du._st().chave === 'chaveB12:' + kbD);
+    chega('duelo', { de: 'bia', cx: 'cxbia8', acao: 'volta', dados: { did: 'bia-vvvvvv', prova: Du._sha256('chaveB12|cxbia8') } });
+    check('"volta" com a prova só da metade do desafio (quem ouviu o desafio alheio) não troca o cx', Du.estado().oponente.cx === 'cxbia1');
+    chega('duelo', { de: 'bia', cx: 'cxbia8', acao: 'volta', dados: { did: 'bia-vvvvvv', prova: Du._sha256('chaveB12:' + kbD + '|cxbia8') } });
+    check('"volta" do duelo com a prova certa: o cx novo vale e a vigia é refeita', Du.estado().oponente.cx === 'cxbia8' &&
+          vigias.indexOf('bia@cxbia8') >= 0);
+    chega('caiu', { id: 'bia', cx: 'cxbia8' });
+    check('o oponente cai ANTES da arena: o duelo é cancelado com aviso', Du.estado().fase === 'livre' && /saiu — o duelo foi cancelado/.test(ultAviso()), ultAviso());
+    sala = 'greenhouse:1';
+    check('só se desafia da praça', Du.desafiar('bia').motivo === 'em-batalha');
+
+    // ============================================================ os consertos da revisão (11/09)
+    // a chave em duas metades: a do convite (que qualquer conexão com o id do
+    // convidado ouve) não basta; a do aceite vai só à conexão de quem chamou
+    reset();
+    formaSeguindo();
+    var rr2 = ult('grupo', 'resposta');
+    var kbG = rr2 && rr2.dados.kb;
+    check('aceitar o convite manda a MINHA metade da chave, dirigida ao cx de quem chamou', /^[0-9a-z]{8}$/.test(kbG || '') &&
+          rr2.cx === 'cxbia1' && Gr._chaveAtual() === 'chave123:' + kbG, JSON.stringify(rr2 && rr2.dados));
+    chega('caiu', { id: 'bia', cx: 'cxbia1' });
+    chega('grupo', { de: 'bia', cx: 'cxIMP', acao: 'volta', dados: { gid: 'bia-q1w2', prova: Du._sha256('chave123|cxIMP') } });
+    check('quem só ouviu o CONVITE (a metade da chave) não faz uma volta válida', Gr.parceiro().cx === 'cxbia1' && Co.voltou.length === 0);
+    chega('grupo', { de: 'bia', cx: 'cxbia5', acao: 'volta', dados: { gid: 'bia-q1w2', prova: Du._sha256('chave123:' + kbG + '|cxbia5') } });
+    check('com as duas metades, a volta vale', Gr.parceiro().cx === 'cxbia5' && Co.voltou.indexOf('bia@cxbia5') >= 0);
+
+    // o "sair expirou" de um impostor (outro cx, sem prova) não desfaz mais o grupo
+    reset();
+    var dS = formaLiderando();
+    chega('grupo', { de: 'bia', cx: 'cxIMP', acao: 'sair', dados: { gid: dS.gid, motivo: 'expirou' } });
+    check('"sair" com motivo "expirou" de outro cx, sem prova: ignorado (o impostor da praça)', Gr.emGrupo());
+    chega('grupo', { de: 'bia', cx: 'cxbia9', acao: 'sair', dados: { gid: dS.gid, motivo: 'saiu', prova: Du._sha256(Gr._chaveAtual() + '|cxbia9') } });
+    check('"sair" de um cx NOVO com a prova da chave presa a ele: vale', !Gr.emGrupo());
+    reset();
+    var dS2 = formaLiderando();
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'sair', dados: { gid: dS2.gid, motivo: 'expirou' } });
+    check('"sair expirou" pela conexão do par (o grupo fantasma do outro lado): vale', !Gr.emGrupo());
+
+    // a resposta automática sai uma vez por minuto por (quem, gid): ninguém faz a vítima estourar o relé
+    reset();
+    saidas.length = 0;
+    for (var qq = 0; qq < 10; qq++) chega('grupo', { de: 'cris', cx: 'cxcris', acao: 'volta', dados: { gid: 'cris-zzzz', prova: 'p' + qq } });
+    var sV = saidas.filter(function (s) { return s.acao === 'sair'; });
+    check('10 "volta" de um grupo que não existe aqui: UM "sair expirou", dirigido ao cx de quem mandou, com a prova dele de volta',
+          sV.length === 1 && sV[0].para === 'cris' && sV[0].cx === 'cxcris' && sV[0].dados.motivo === 'expirou' && sV[0].dados.prova === 'p0',
+          JSON.stringify(sV));
+    for (qq = 0; qq < 10; qq++) chega('grupo', { de: 'cris', cx: 'cxcris', acao: 'resposta', dados: { gid: 'cris-yyyy', ok: true } });
+    check('10 "sim" a um convite que não existe: UM "sair expirou"', saidas.filter(function (s) { return s.acao === 'sair'; }).length === 2);
+    T += 60001;
+    chega('grupo', { de: 'cris', cx: 'cxcris', acao: 'volta', dados: { gid: 'cris-zzzz', prova: 'pz' } });
+    check('...e passado o minuto, responde de novo', saidas.filter(function (s) { return s.acao === 'sair'; }).length === 3);
+    // a prova da MINHA volta, devolvida por quem já não me conhece, desfaz o meu grupo fantasma
+    reset();
+    var dF = formaLiderando();
+    chega('caiu', { id: 'bia', cx: 'cxbia1' });
+    R._cx = 'cxana07';
+    chega('religou', { cx: 'cxana07' });
+    var minhaVolta = ult('grupo', 'volta').dados.prova;
+    chega('grupo', { de: 'bia', cx: 'cxbiaNOVO', acao: 'sair', dados: { gid: dF.gid, motivo: 'expirou', prova: minhaVolta } });
+    check('o "sair expirou" que devolve a prova da minha volta (de um cx que eu não conheço) desfaz o grupo fantasma', !Gr.emGrupo());
+
+    // o `saiu` pelo relé: o par vigiado cai pelo `caiu` (o tchau de outra aba dele não o tira)
+    reset();
+    formaLiderando();
+    R._transporte = 'ws';
+    chega('saiu', { id: 'bia' });
+    check('pelo relé, o "saiu" (tchau de outra aba, varredura) NÃO derruba o par vigiado', Gr.estado().membros[1].on === true && Co.sumiu.length === 0);
+    chega('caiu', { id: 'bia', cx: 'cxbia1' });
+    check('...o "caiu" da conexão dele sim', Gr.estado().membros[1].on === false && Co.sumiu.length === 1);
+    reset();
+    formaLiderando();
+    chega('saiu', { id: 'bia', cx: 'cxOUTRAABA' });
+    check('no canal de abas, o tchau de OUTRA aba (outro cx) não derruba o par', Gr.estado().membros[1].on === true);
+    chega('saiu', { id: 'bia', cx: 'cxbia1' });
+    check('...o tchau da aba dele sim', Gr.estado().membros[1].on === false);
+
+    // o par fala pela conexão que conheço: não sumiu (o `ausente` cruzado com a volta, um `saiu` torto)
+    reset();
+    formaLiderando();
+    Gm.screen = 'battle';
+    chega('ausente', { para: 'bia', paraCx: 'cxbia1', tipoMsg: 'batalha', ref: 'x' });
+    check('(o "ausente" marcou a Bia como sumida)', Gr.estado().membros[1].on === false);
+    chega('batalha', { de: 'bia', cx: 'cxOUTRO', acao: 'vivo', dados: {} });
+    check('um envelope de outro cx não a traz de volta', Gr.estado().membros[1].on === false && Co.voltou.length === 0);
+    chega('batalha', { de: 'bia', cx: 'cxbia1', acao: 'vivo', dados: {} });
+    check('um envelope da batalha pela conexão dela: está viva (on, e o Coop sabe)', Gr.estado().membros[1].on === true &&
+          Co.voltou.indexOf('bia@cxbia1') >= 0);
+    Gm.screen = 'hub';
+
+    // o sussurro ao par sai dirigido à CONEXÃO dele
+    reset();
+    formaLiderando();
+    Su.manda('bia', 'oi, parceira');
+    Su.manda('cris', 'oi, Cris');
+    check('o sussurro ao par vai ao cx dele; a quem não é par, sem cx', sussurros.length === 2 && sussurros[0].cx === 'cxbia1' &&
+          sussurros[1].cx === null, JSON.stringify(sussurros));
+
+    // a dupla com o nível em TEXTO (ou quebrado) é trapaça
+    reset();
+    Du.desafiar('bia');
+    var dN = ult('duelo', 'desafio').dados.did;
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: dN, ok: true, kb: 'kbkbkbkb' } });
+    Du.escolher(['sumo']);
+    var nvTexto = JSON.stringify([{ heroId: 'minotauro', classId: 'sumo', level: '12', spells: ['s1'], dono: 'bia' }]);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'compromisso', dados: { did: dN, h: Du._sha256(nvTexto + '|' + salB), n: 1 } });
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'revela', dados: { did: dN, dupla: nvTexto, sal: salB } });
+    check('o nível "12" em texto na dupla revelada cancela com "trapaca"', ult('duelo', 'cancela') &&
+          ult('duelo', 'cancela').dados.motivo === 'trapaca' && Co.duelos.length === 0);
+
+    // ================================== 11/09 (revisão, 26): a dificuldade de quem lidera chega a quem segue
+    reset();
+    formaLiderando();
+    var eDif = ult('grupo', 'estado');
+    check('26: o estado de quem lidera leva a dificuldade dela (dif)', !!eDif && eDif.dados.dif === 'normal',
+          JSON.stringify(eDif && eDif.dados));
+    var vDif = eDif ? eDif.dados.v : -1;
+    Gm.dificuldade = 'dificil';
+    var rDif = Gr.avisaDificuldade();
+    check('26: avisaDificuldade (o seletor mudou): o estado sai de novo, com a dificuldade nova e o v seguinte',
+          rDif === true && ult('grupo', 'estado').dados.dif === 'dificil' && ult('grupo', 'estado').dados.v === vDif + 1 &&
+          ult('grupo', 'estado').cx === 'cxbia1', JSON.stringify(ult('grupo', 'estado')));
+    Gm.dificuldade = 'normal';
+    reset();
+    formaSeguindo();
+    check('26: quem segue não manda estado nenhum pelo seletor', Gr.avisaDificuldade() === false && conta('grupo', 'estado') === 0);
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'estado',
+                     dados: { gid: 'bia-q1w2', v: 2, lider: 'bia', dif: 'dificil', membros: [{ id: 'bia' }, { id: 'ana' }] } });
+    check('26: quem segue guarda a dificuldade que chega no estado de quem lidera', Gr.estado().descidaDif === 'dificil',
+          String(Gr.estado().descidaDif));
+    chega('grupo', { de: 'bia', cx: 'cxOUTRO', acao: 'estado',
+                     dados: { gid: 'bia-q1w2', v: 3, lider: 'bia', dif: 'facil', membros: [] } });
+    check('26: o estado de outro cx (impostor) não troca a dificuldade', Gr.estado().descidaDif === 'dificil');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'estado',
+                     dados: { gid: 'bia-q1w2', v: 4, lider: 'bia', dif: '<b>x</b>', membros: [] } });
+    check('26: dificuldade que não existe é ignorada (fica a última boa)', Gr.estado().descidaDif === 'dificil',
+          String(Gr.estado().descidaDif));
+    avisos.length = 0;
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'greenhouse', dificuldade: 'facil' } });
+    check('26: o "descer" AVISA quem segue — o calabouço, a dificuldade e que descem juntos',
+          avisos.indexOf('Bia escolheu A Estufa Soterrada (Fácil) — descendo juntos.') >= 0 && Gm.runs.length === 1 &&
+          Gm.screen === 'antessala', avisos.join(' | '));
+    check('26: ...e a dificuldade da descida fica no estado (a HUD a mostra na porta)', Gr.estado().descidaDif === 'facil');
+    check('26: ...sem trocar a minha preferência guardada', Gm.dificuldade === 'normal');
+    reset();
+    check('26: o grupo desfeito esquece a dificuldade', Gr.estado().descidaDif === null);
+
+    // ============================================================ achado 18: o "sair" (e o "cancela") sem prova
+    reset();
+    var g18 = formaLiderando();
+    chega('grupo', { de: 'bia', cx: 'cxINTRUSO', acao: 'sair', dados: { gid: g18.gid, motivo: 'expirou' } });
+    check('achado 18 · "sair" com motivo "expirou" vindo de OUTRA conexão com o id da Bia (sem o cx dela e sem prova) não desfaz o grupo',
+          Gr.emGrupo() && Gr.estado().membros[1].on === true);
+    chega('grupo', { de: 'bia', cx: 'cxINTRUSO', acao: 'sair', dados: { gid: g18.gid, motivo: 'expirou', prova: Du._sha256('chute|cxINTRUSO') } });
+    check('achado 18 · ...nem com uma prova inventada', Gr.emGrupo());
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'sair', dados: { gid: g18.gid, motivo: 'expirou' } });
+    check('achado 18 · o "sair expirou" de verdade (pela conexão do par) segue desfazendo, sem aviso de "saiu"',
+          !Gr.emGrupo() && !/saiu do grupo/.test(ultAviso()), ultAviso());
+    reset();
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'convite', dados: { gid: 'bia-r18a', chave: 'k18', versao: 'dev:sig1' } });
+    chega('grupo', { de: 'bia', cx: 'cxINTRUSO', acao: 'sair', dados: { gid: 'bia-r18a', motivo: 'retirou' } });
+    check('achado 18 · o convite recebido não se retira por um "sair" de outra conexão do mesmo id', Gr.estado().fase === 'convidado',
+          Gr.estado().fase);
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'sair', dados: { gid: 'bia-r18a', motivo: 'retirou' } });
+    check('achado 18 · ...e se retira pela conexão que convidou', Gr.estado().fase === 'livre');
+    reset();
+    Du.desafiar('bia');
+    var d18 = ult('duelo', 'desafio').dados.did;
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: d18, ok: true, kb: 'kbkbkbkb' } });
+    chega('duelo', { de: 'bia', cx: 'cxINTRUSO', acao: 'cancela', dados: { did: d18, motivo: 'desistiu' } });
+    check('achado 18 · no duelo, o "cancela" de outra conexão com o id da oponente não cancela', Du.estado().fase === 'escolhendo',
+          Du.estado().fase);
+    chega('duelo', { de: 'bia', cx: 'cxINTRUSO', acao: 'fim', dados: { did: d18, venc: 'B', h: 'x' } });
+    check('achado 18 · ...nem o "fim" forjado fica anotado', Du.fimDele() === null);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'cancela', dados: { did: d18, motivo: 'desistiu' } });
+    check('achado 18 · o "cancela" pela conexão da oponente cancela', Du.estado().fase === 'livre');
+
+    // ============================================================ achado 21: o Silenciar no relé e a conversa que fica
+    reset();
+    calas.length = 0;
+    Gr.mutado('chato2', true);
+    Gr.mutado('chato2', false);
+    check('achado 21 · Silenciar avisa o relé (R.cala: ele cala o ENDEREÇO, que segura id novo) e devolver a voz solta',
+          calas.join(',') === 'chato2:cala,chato2:solta', calas.join(','));
+    reset();
+    Su.manda('bia', 'oi, Bia');
+    chega('sussurro', { de: 'bia', cx: 'cxbia1', nome: 'Bia', texto: 'oi, Ana — resposta de verdade' });
+    for (var q21 = 0; q21 < 40; q21++) chega('sussurro', { de: 'enx' + q21, cx: 'cxe' + q21, nome: 'Enxurrada', texto: 'lixo ' + q21 });
+    var l21 = Su.lista();
+    check('achado 21 · a enxurrada de 40 ids novos não apaga a conversa: a minha linha e a resposta da Bia ficam entre as 30',
+          l21.length === 30 && l21.some(function (l) { return l.meu && l.texto === 'oi, Bia'; }) &&
+          l21.some(function (l) { return l.de === 'bia' && /resposta de verdade/.test(l.texto); }) && l21[29].texto === 'lixo 39',
+          l21.length + ' linhas; a primeira: ' + (l21[0] && l21[0].texto));
+    reset();
+    formaLiderando();
+    chega('sussurro', { de: 'bia', cx: 'cxbia1', nome: 'Bia', texto: 'desce comigo?' });
+    for (var r21 = 0; r21 < 40; r21++) chega('sussurro', { de: 'enx' + r21, cx: 'cxe' + r21, nome: 'Enxurrada', texto: 'lixo ' + r21 });
+    check('achado 21 · a linha do PAR do grupo também fica, mesmo sem eu ter respondido',
+          Su.lista().length === 30 && Su.lista().some(function (l) { return l.de === 'bia' && l.texto === 'desce comigo?'; }));
+
+    fim();
+  }, 80);
+})();
+</script>
+</body>
+</html>

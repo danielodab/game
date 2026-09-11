@@ -19,6 +19,8 @@
                                fus-curandeira, fus-bruxo-ladino, fus-xama e
                                obras (opcional). Aberta por file:// ou sem o
                                .py, só mostra as fotos, sem gravar nada.
+                               equipe (10/09, opcional): o Cavaleiro Negro
+                               (meshy_gm) da caixa da equipe no ranking.
     ?ver=1                     a FOLHA DE CONFERÊNCIA: tudo de site/img/ numa
                                grade, com o tamanho de cada arquivo e o alerta
                                do que falta. O dono aprova antes do commit (D12).
@@ -111,6 +113,8 @@
     for (var k in FUS) LOTES[k] = [FUS[k]];
     // as 6 obras moram nos arquivos do Bárbaro, do Minotauro, do Caçador e do Xamã
     LOTES.obras = [FUS['fus-sumo'], FUS['fus-minotauro'], FUS['fus-cacador'], FUS['fus-xama']];
+    // o corpo do Mestre (a classe gm só existe com a chave; o look do motor é fixo)
+    LOTES.equipe = ['assets/embedded/models-gm.js'];
     window.__LOTES = LOTES;
 
     var arqs = [];
@@ -200,6 +204,17 @@
         alvos.push({ nome: 'classe-' + id + '-busto', def: id, tam: TAM.busto, inteiro: false, modelo: modelo });
       });
       if (!alvos.length && !erros.length) erros.push('nenhuma classe em JOGO.DATA.classes');
+    } else if (lote === 'equipe') {
+      // o Cavaleiro Negro: o M.lookFor('gm') veste meshy_gm pelo CLASS_LOOK,
+      // sem precisar da classe injetada; o fundo sai do tint do look (vinho)
+      if (!MOD.meshy_gm) erros.push('o corpo meshy_gm não carregou (assets/embedded/models-gm.js)');
+      else {
+        alvos.push({ nome: 'equipe-cavaleiro', def: 'gm', tam: TAM.classe, inteiro: true, modelo: 'meshy_gm' });
+        // o elmo é pequeno perto das ombreiras: com a régua das classes (1,6
+        // cabeça) o busto saía só penacho e ombreira; 3,2 pega o peito e os punhos
+        alvos.push({ nome: 'equipe-cavaleiro-busto', def: 'gm', tam: TAM.busto, inteiro: false, modelo: 'meshy_gm',
+                     regua: { ar: 0.20, cabecas: 3.2, folga: 1.25 } });
+      }
     } else if (lote === 'obras') {
       obras().forEach(function (id) {
         var lk = M.lookFor(id), modelo = lk && lk.model;
@@ -238,7 +253,7 @@
     if (!a.inteiro) {
       M.portraitFraming = function (node, corpoInteiro) {
         if (corpoInteiro) return orig(node, true);
-        var r = quadroDeBusto(orig, node);
+        var r = quadroDeBusto(orig, node, a.regua);
         como = r.como;
         return r.f;
       };
@@ -276,16 +291,17 @@
    * sai do próprio quadro de corpo inteiro (half/dist), sem copiar a
    * constante. Quem passa no teste do motor fica com o busto do motor. */
   var BUSTO = { ar: 0.20, cabecas: 1.60, folga: 1.25 };
-  function quadroDeBusto(orig, node) {
+  function quadroDeBusto(orig, node, reg) {
+    reg = reg || BUSTO;          // um alvo pode trazer a régua dele (o Cavaleiro Negro, lote equipe)
     var f = orig(node, false);
     if (!f || f.upright) return { f: f, como: 'motor' };
     var cab = cabecaMedida(f, node);
     if (!cab) return { f: f, como: 'corpo' };
     var ref = orig(node, true);
     var tanH = (ref && ref.dist > 0) ? ref.half / ref.dist : Math.tan(Math.PI / 12);
-    var topo = cab.topo + cab.alt * BUSTO.ar;
-    var base = Math.max(f.box.min.y, topo - cab.alt * (BUSTO.cabecas + BUSTO.ar));
-    var meia = Math.max((topo - base) / 2, cab.larg * BUSTO.folga / 2);
+    var topo = cab.topo + cab.alt * reg.ar;
+    var base = Math.max(f.box.min.y, topo - cab.alt * (reg.cabecas + reg.ar));
+    var meia = Math.max((topo - base) / 2, cab.larg * reg.folga / 2);
     return { como: cab.como, f: {
       half: meia, cy: (topo + base) / 2, upright: true, headH: cab.alt,
       // a profundidade da cabeça afasta um pouco a câmera: o que fica mais
@@ -490,7 +506,11 @@
       }) },
       { titulo: 'Obras de fusão', nota: 'opcionais · 256 px', opcional: true, itens: obras().map(function (id) {
         return { arq: 'obra-' + id, tam: TAM.obra, nome: (S[id] && S[id].name) || id, sub: id, opcional: true };
-      }) }
+      }) },
+      { titulo: 'Equipe', nota: 'a caixa da equipe no ranking · 512 px · busto 128 px', opcional: true, itens: [
+        { arq: 'equipe-cavaleiro', busto: 'equipe-cavaleiro-busto', tam: TAM.classe, nome: 'Cavaleiro Negro',
+          sub: 'gm', opcional: true }
+      ] }
     ];
     var pega = servido ? fetch('/__lista').then(function (r) { return r.json(); }).catch(function () { return null; })
                        : Promise.resolve(null);
@@ -604,7 +624,7 @@
     try {
       if (Q.ver) return folha();
       if (!Q.lote) {
-        SUM.textContent = 'use ?lote=<nome> (classes, fus-sumo, fus-minotauro, fus-cacador, fus-curandeira, fus-bruxo-ladino, fus-xama, obras) ou ?ver=1';
+        SUM.textContent = 'use ?lote=<nome> (classes, fus-sumo, fus-minotauro, fus-cacador, fus-curandeira, fus-bruxo-ladino, fus-xama, obras, equipe) ou ?ver=1';
         return;
       }
       rodaLote(Q.lote);

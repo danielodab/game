@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o painel do Mestre no site</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+#palco{position:absolute;left:-4000px;top:0;width:1000px;height:900px}</style>
+</head>
+<body>
+<!-- A PROVA DO PAINEL DO MESTRE (site/mestre.html + mestre.js, 10/09), sem
+     servidor, no molde de tests/site_fase_c.html: a página real num iframe com
+     um window.fetch FALSO que responde as rotas /api/mestre/* do contrato
+     (admin_plano §2.2 e a seção 7 do plano da loja 2). O que se cobra:
+       - o portão: sem sessão, "entre" e nenhum pedido; a sessão local diz gm
+         mas /api/eu não: "só do Mestre", nenhum /api/mestre/* e a marca local
+         cai (o link some); qualquer 403 fecha o painel; 401 é sessão vencida;
+       - a busca: curta não chama o servidor; o termo vai no CORPO do POST, e
+         nenhuma URL leva '@'; a lista com o e-mail mascarado e a nota do "mais";
+         429 com "de novo em";
+       - a ficha: GET /api/mestre/conta?id=7 (e #conta=7 no endereço, que o F5
+         reabre), os dados, o nome da classe vindo do classes.js, "nunca subiu
+         save", o botão desligado com o motivo do servidor;
+       - dar de presente: janelinha → POST {conta, sku, idem} (16 hex, chave
+         nova a cada clique, a mesma só depois de um clique sem resposta); o
+         409 com a frase do servidor; dar vinténs → POST {conta, vintens, idem};
+       - cancelar só onde `cancelavel`, com {id}; os alertas e o "visto";
+       - o botão "conferir no Mercado Pago" de cada pagamento da ficha (POST
+         /api/mestre/pagamento/conferir {id}) e o alerta do teto de 24 h, com
+         os valores em reais (conserto 11/09);
+       - site.js: o link "Mestre" no menu só com gm; "sair" o tira;
+       - site/loja.js: o pedido com origem 'presente' diz "presente do Mestre"
+         e não tem "cancelar". -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<div id="palco"></div>
+<script src="../site/site.js"></script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log'), palco = document.getElementById('palco');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ate(cond, ms) {
+    ms = ms || 3000;
+    return new Promise(function (r) {
+      var t = 0;
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) { ok = false; }
+        if (ok) return r(true);
+        if ((t += 20) > ms) return r(false);
+        setTimeout(volta, 20);
+      })();
+    });
+  }
+
+  var AGORA = Math.floor(Date.now() / 1000), DIA = 86400, HORA = 3600;
+  var BASE_SITE = new URL('../site/', location.href).href;
+  var CHAVE = 'soterra-sessao';
+  var sessaoAntes = null;
+  try { sessaoAntes = localStorage.getItem(CHAVE); } catch (e) { /* sem storage */ }
+  function lsSessao() { try { return JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch (e) { return 'erro'; } }
+  function copia(o) { return JSON.parse(JSON.stringify(o)); }
+  function junta(a, b) { var r = copia(a); Object.keys(b || {}).forEach(function (k) { r[k] = b[k]; }); return r; }
+
+  /* valores sintéticos desta prova (nenhum é de ninguém) */
+  var MESTRE = { token: 'tok-mestre', conta: { id: 1, nome: 'Dono', gm: true } };
+  var COMUM = { token: 'tok-pia', conta: { id: 7, nome: 'Pia', gm: false } };
+  var SAUDE = [200, { ok: true, contas: 3, agora: AGORA, correio: false }];
+  var EU_MESTRE = [200, { ok: true, conta: { id: 1, nome: 'Dono', email: 'dono@exemplo.com', criadoEm: AGORA - 90 * DIA, gm: true } }];
+  var EU_COMUM = [200, { ok: true, conta: { id: 1, nome: 'Dono', email: 'dono@exemplo.com', criadoEm: AGORA - 90 * DIA, gm: false } }];
+  var CATALOGO_PUBLICO = [200, { ok: true, versao: 2, itens: [
+    { sku: 'classe-invocador', secao: 'personagens', tipo: 'classe', alvo: 'invocador', qtd: 1, nome: 'Xamã', raridade: 'raro', cartas: 10, preco: 10000, limite: null },
+    { sku: 'classe-bruxo', secao: 'personagens', tipo: 'classe', alvo: 'bruxo', qtd: 1, nome: 'Bruxo', raridade: 'raro', cartas: 10, preco: 10000, limite: null }
+  ], pacotes: [], pagamento: { ligado: false } }];
+
+  function presente(id, estado, extra) {
+    return junta({ id: id, conta: { id: 7, nome: 'Pia' }, sku: 'classe-invocador', nome: 'Xamã', tipo: 'classe', estado: estado, motivo: null,
+                   criadoEm: AGORA - 600, retiradoEm: null, fechadoEm: null, por: { id: 1, nome: 'Dono' }, canceladoPor: null,
+                   cancelavel: estado === 'pendente', vintens: null }, extra);
+  }
+  function alerta(id, tipo, visto, extra) {
+    return junta({ id: id, conta: { id: 7, nome: 'Pia' }, tipo: tipo, dados: { mp: '99887766', vintens: 5500, pedido: 90, estadoPedido: 'entregue' },
+                   criadoEm: AGORA - HORA, vistoEm: visto ? AGORA - 60 : null, vistoPor: visto ? { id: 1, nome: 'Dono' } : null }, extra);
+  }
+  function ficha(extra) {
+    return junta({
+      ok: true, agora: AGORA,
+      conta: { id: 7, nome: 'Pia', email: 'pia@exemplo.com', criadoEm: AGORA - 40 * DIA, gm: false, banido: false, ultimaSessao: AGORA - 2 * HORA },
+      save: { versao: 57, em: AGORA - 3 * HORA, vintens: 12450, nivelMax: 22, xpTotal: 9000 },
+      saldo: { carteira: 12450, reservado: 300, aCaminho: 5500, disponivel: 17650, semFundo: false, saveVersao: 57, saveEm: AGORA - 3 * HORA },
+      classes: [{ id: 'sumo', nivel: 22, elemento: 'fogo' }, { id: 'curandeiro', nivel: 8, elemento: null }, { id: 'bruxo', nivel: 12, elemento: 'agua' }],
+      cartas: { invocador: { liberada: false, cartas: 6 }, bruxo: { liberada: true, cartas: 10 } },
+      catalogo: [
+        { sku: 'classe-invocador', nome: 'Xamã', secao: 'personagens', tipo: 'classe', alvo: 'invocador', raridade: 'raro', pode: true, motivo: null },
+        { sku: 'classe-bruxo', nome: 'Bruxo', secao: 'personagens', tipo: 'classe', alvo: 'bruxo', raridade: 'raro', pode: false, motivo: 'essa classe já está liberada' },
+        { sku: 'bonus-xp-7', nome: 'Bônus de XP — 7 dias', secao: 'bonus', tipo: 'bonus-xp', alvo: 'xp', raridade: null, pode: true, motivo: null },
+        { sku: 'pedras-fogo-50', nome: '50 Brasas Coaguladas', secao: 'pedras', tipo: 'pedras', alvo: 'stone-ember', raridade: null, pode: true, motivo: null },
+        { sku: 'insignias-10', nome: '10 Insígnias de Fundação', secao: 'guilda', tipo: 'insignias', alvo: 'fundacao', raridade: null, pode: true, motivo: null },
+        { sku: 'pergaminho-elemento', nome: 'Pergaminho da Reescrita', secao: 'pergaminhos', tipo: 'pergaminho', alvo: 'elemento', raridade: null, pode: true, motivo: null }
+      ],
+      presentes: [presente(50, 'pendente'), presente(49, 'entregue', { sku: 'presente-vintens', nome: '1.000 vinténs', tipo: 'vintens', vintens: 1000 })],
+      pagamentos: [{ id: 17, pacote: 'pacote-5500', nome: 'Saco de 5.500 vinténs', vintens: 5500, centavos: 1990, preco: 'R$ 19,90',
+                     estado: 'aprovado', creditado: true, pedido: { id: 90, estado: 'pendente' }, criadoEm: AGORA - HORA, atualizadoEm: AGORA - HORA }],
+      alertas: [alerta(4, 'valor-diferente', false),
+                alerta(5, 'teto-diario', false, { dados: { pagamento: 18, mp: '99887767', vintens: 25000, centavos: 7990, pagoEm24h: 39950 } })]
+    }, extra);
+  }
+
+  /* ---- o palco ---- */
+  var TODOS = [];
+  function le(url) {
+    return new Promise(function (ok) {
+      var x = new XMLHttpRequest();
+      x.open('GET', url + (url.indexOf('?') < 0 ? '?v=' : '&v=') + Date.now());
+      x.onload = function () { ok((x.status === 200 || x.status === 0) && x.responseText ? x.responseText : null); };
+      x.onerror = function () { ok(null); };
+      try { x.send(); } catch (e) { ok(null); }
+    });
+  }
+  function fetchFalso(pagina, cena) {
+    return function (url, op) {
+      op = op || {};
+      var u = String(url), m = /\/api\/[^?#]*/.exec(u), corpo = null;
+      try { corpo = op.body ? JSON.parse(op.body) : null; } catch (e) { corpo = op.body; }
+      var reg = { pagina: pagina, url: u, metodo: op.method || 'GET', rota: m ? m[0] : u, corpo: corpo,
+                  auth: (op.headers && op.headers.Authorization) || null };
+      TODOS.push(reg);
+      cena.pedidos.push(reg);
+      var h = cena.rotas[reg.metodo + ' ' + reg.rota];
+      var resp = typeof h === 'function' ? h(corpo || {}, reg) : h;
+      if (resp === 'fora') return Promise.reject(new TypeError('Failed to fetch'));
+      if (!resp) resp = [404, { ok: false, erro: 'rota desconhecida' }];
+      var status = resp[0], json = copia(resp[1]);
+      return new Promise(function (ok) {
+        setTimeout(function () {
+          ok({ status: status, ok: status >= 200 && status < 300, json: function () { return Promise.resolve(json); } });
+        }, 4);
+      });
+    };
+  }
+  function abre(pagina, cena) {
+    cena.pedidos = [];
+    return le(BASE_SITE + pagina).then(function (html) {
+      if (!html) throw new Error('não deu para ler site/' + pagina);
+      palco.innerHTML = '';
+      var fr = document.createElement('iframe');
+      fr.style.width = '1000px';
+      fr.style.height = '900px';
+      palco.appendChild(fr);
+      try {
+        if (cena.sessao) localStorage.setItem(CHAVE, JSON.stringify(cena.sessao));
+        else localStorage.removeItem(CHAVE);
+      } catch (e) { /* sem storage */ }
+      var d = fr.contentDocument;
+      d.open();
+      var w = fr.contentWindow;
+      w.fetch = fetchFalso(pagina, cena);
+      w.BroadcastChannel = function () { this.postMessage = function () {}; this.close = function () {}; };
+      try { w.history.replaceState(null, '', w.location.href.split('#')[0].split('?')[0] + (cena.hash ? '#' + cena.hash : '')); } catch (e) { /* segue */ }
+      d.write(html.replace(/<head>/i, '<head><base href="' + BASE_SITE + '">'));
+      d.close();
+      return {
+        w: w, d: d,
+        $: function (id) { return d.getElementById(id); },
+        q: function (s) { return d.querySelector(s); },
+        qq: function (s) { return [].slice.call(d.querySelectorAll(s)); }
+      };
+    });
+  }
+  function visivel(el) {
+    if (!el || !el.ownerDocument) return false;
+    var w = el.ownerDocument.defaultView;
+    for (var e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (e.hidden) return false;
+      var cs = w.getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    }
+    return true;
+  }
+  function digita(el, v) { el.value = v; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); }
+  function envia(form) { form.querySelector('[type=submit]').click(); }
+  function texto(el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  function pedidos(cena, metodo, rota) { return cena.pedidos.filter(function (p) { return p.metodo === metodo && p.rota === rota; }); }
+  function doMestre(cena) { return cena.pedidos.filter(function (p) { return p.rota.indexOf('/api/mestre/') === 0; }); }
+  async function modal(p, sim) {
+    await ate(function () { return !!p.q('.modal'); });
+    var m = texto(p.q('.modal'));
+    var bt = p.q(sim ? '.modal [data-sim]' : '.modal [data-nao]');
+    if (bt) bt.click();
+    return m;
+  }
+
+  /* ======================================================================
+   * o portão
+   * ==================================================================== */
+  async function cenaFora() {
+    var c = { rotas: {} };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return p.$('ms-portao').getAttribute('data-portao') === 'fora'; });
+    await espera(60);
+    check('sem sessão: o portão pede para entrar com a conta do Mestre, com o link', /Entre com a conta do Mestre/.test(texto(p.$('ms-portao'))) &&
+          !!p.q('#ms-portao a[href="conta.html#entrar"]') && !visivel(p.$('ms-painel')));
+    check('sem sessão: nenhum pedido a /api/* (nem /api/eu, nem /api/mestre/*)', !c.pedidos.length, c.pedidos.map(function (x) { return x.rota; }).join(', '));
+    check('sem sessão: o link "Mestre" escrito no HTML sai do menu', !p.q('nav a[data-mestre]'));
+    check('a página não entra nos buscadores (noindex)', /noindex/.test((p.q('meta[name="robots"]') || {}).content || ''));
+  }
+
+  async function cenaNaoMestre() {
+    var c = { sessao: { token: 'tok-pia', conta: { id: 7, nome: 'Pia', gm: true } }, rotas: {
+      'GET /api/eu': [200, { ok: true, conta: { id: 7, nome: 'Pia', email: 'pia@exemplo.com', criadoEm: AGORA, gm: false } }]
+    } };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return p.$('ms-portao').getAttribute('data-portao') === 'nao-mestre'; });
+    await espera(60);
+    check('a sessão local diz gm, /api/eu diz que não: "Esta página é só do Mestre do Fundo."',
+          /Esta página é só do Mestre do Fundo\./.test(texto(p.$('ms-portao'))) && !visivel(p.$('ms-painel')));
+    check('... e nenhum /api/mestre/*', !doMestre(c).length);
+    var s = lsSessao();
+    check('... a marca local cai (gm:false) e o link some do menu', !!s && s.conta && s.conta.gm === false && !p.q('nav a[data-mestre]'));
+  }
+
+  async function cena401() {
+    var c = { sessao: MESTRE, rotas: { 'GET /api/eu': [401, { ok: false, erro: 'faça login (token ausente ou vencido)' }] } };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return p.$('ms-portao').getAttribute('data-portao') === 'fora' && lsSessao() === null; });
+    check('401 no /api/eu: a sessão some e o portão pede para entrar de novo', lsSessao() === null && /vencido/.test(texto(p.$('ms-portao'))) &&
+          !doMestre(c).length);
+  }
+
+  /* ======================================================================
+   * o painel
+   * ==================================================================== */
+  async function cenaMestre() {
+    var respostas = [
+      function (b) { return [201, { ok: true, presente: presente(51, 'pendente'), semSave: false }]; },
+      'fora',
+      function (b) { return [201, { ok: true, presente: presente(52, 'pendente'), semSave: false }]; },
+      function (b) { return [409, { ok: false, erro: 'já há um pedido dessa classe a caminho' }]; },
+      function (b) { return [201, { ok: true, presente: presente(53, 'pendente', { sku: 'presente-vintens', nome: '1.000 vinténs', vintens: 1000 }), semSave: false }]; }
+    ];
+    var alertasLidos = 0, fichasLidas = 0;
+    var c = { sessao: MESTRE, rotas: {
+      'GET /api/eu': EU_MESTRE, 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': CATALOGO_PUBLICO,
+      'GET /api/mestre/presentes': [200, { ok: true, agora: AGORA, conta: null, presentes: [presente(50, 'pendente'), presente(48, 'estornado', { motivo: 'classe-ja-liberada', conta: { id: 9, nome: 'Rui' } })] }],
+      'GET /api/mestre/alertas': function () {
+        alertasLidos++;
+        return [200, { ok: true, alertas: [alerta(3, 'estorno', alertasLidos > 1), alerta(2, 'contestacao', true)] }];
+      },
+      'POST /api/mestre/contas': function (b) {
+        return [200, { ok: true, modo: b.q.indexOf('@') >= 0 ? 'email' : 'nome', mais: true, contas: [
+          { id: 7, nome: 'Pia', email: 'pi***@exemplo.com', criadoEm: AGORA - 40 * DIA, gm: false, banido: false },
+          { id: 9, nome: 'Rui', email: 'ru***@exemplo.com', criadoEm: AGORA - 10 * DIA, gm: false, banido: true },
+          { id: 1, nome: 'Dono', email: 'do***@exemplo.com', criadoEm: AGORA - 90 * DIA, gm: true, banido: false }
+        ] }];
+      },
+      'GET /api/mestre/conta': function (b, reg) {
+        fichasLidas++;
+        if (/[?&]id=9$/.test(reg.url)) {
+          return [200, ficha({ conta: { id: 9, nome: 'Rui', email: 'rui@exemplo.com', criadoEm: AGORA - 10 * DIA, gm: false, banido: false, ultimaSessao: null },
+                               save: null, saldo: { carteira: 0, reservado: 0, aCaminho: 0, disponivel: 0 }, classes: [], cartas: {},
+                               presentes: [], pagamentos: [], alertas: [] })];
+        }
+        if (/[?&]id=404$/.test(reg.url)) return [404, { ok: false, erro: 'conta não encontrada' }];
+        return [200, ficha()];
+      },
+      'POST /api/mestre/presentear': function (b) { var r = respostas.shift(); return typeof r === 'function' ? r(b) : r; },
+      'POST /api/mestre/presente/cancelar': function (b) { return [200, { ok: true, presente: presente(b.id, 'cancelado', { cancelavel: false }) }]; },
+      'POST /api/mestre/alerta/visto': function (b) { return [200, { ok: true, alerta: alerta(b.id, 'estorno', true) }]; },
+      'POST /api/mestre/pagamento/conferir': function (b) {
+        return [200, { ok: true, achados: 1, ignorados: [], pagamento: { id: b.id, pacote: 'pacote-5500', nome: 'Saco de 5.500 vinténs',
+          vintens: 5500, centavos: 1990, preco: 'R$ 19,90', estado: 'aprovado', creditado: true, pedido: { id: 90, estado: 'pendente' },
+          criadoEm: AGORA - HORA, atualizadoEm: AGORA } }];
+      }
+    } };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return visivel(p.$('ms-painel')) && p.qq('#ms-presentes [data-presente]').length === 2 && p.qq('#ms-alertas [data-alerta]').length === 2; });
+    check('Mestre: o painel abre (o /api/eu diz gm) e o portão some', visivel(p.$('ms-painel')) && !visivel(p.$('ms-portao')));
+    check('Mestre: o menu mantém "Mestre", marcado', !!p.q('nav a[href="mestre.html"][data-mestre][aria-current="page"]'));
+    check('Mestre: as rotas do painel com o token no cabeçalho', doMestre(c).every(function (x) { return x.auth === 'Bearer tok-mestre'; }) &&
+          pedidos(c, 'GET', '/api/mestre/presentes').length === 1 && pedidos(c, 'GET', '/api/mestre/alertas').length === 1);
+    // os últimos presentes
+    var l50 = p.q('#ms-presentes [data-presente="50"]'), l48 = p.q('#ms-presentes [data-presente="48"]');
+    check('últimos presentes: estado em português, quem deu, para quem (botão que abre a ficha)',
+          /esperando o jogo abrir/.test(texto(l50)) && /dado por Dono/.test(texto(l50)) && !!l50.querySelector('[data-abrir="7"]') &&
+          /devolvido: a classe já estava liberada no jogo/.test(texto(l48)));
+    check('cancelar só onde o servidor diz cancelavel', !!l50.querySelector('[data-cancelar="50"]') && !l48.querySelector('[data-cancelar]'));
+    // os alertas
+    var a3 = p.q('#ms-alertas [data-alerta="3"]'), a2 = p.q('#ms-alertas [data-alerta="2"]');
+    check('alertas: o tipo em português, a conta e os dados; "marcar como visto" só no aberto',
+          /Estorno: o dinheiro voltou ao comprador/.test(texto(a3)) && /vinténs: 5\.500/.test(texto(a3)) && !!a3.querySelector('[data-alerta-visto="3"]') &&
+          /Contestação no cartão/.test(texto(a2)) && !a2.querySelector('[data-alerta-visto]') && /visto .* por Dono/.test(texto(a2)), texto(a3));
+    check('alertas: a contagem dos abertos', /1 aberto/.test(texto(p.$('ms-alertas-total'))), texto(p.$('ms-alertas-total')));
+    a3.querySelector('[data-alerta-visto="3"]').click();
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/alerta/visto').length === 1 && alertasLidos === 2; });
+    var pv = pedidos(c, 'POST', '/api/mestre/alerta/visto')[0];
+    check('"visto": POST /api/mestre/alerta/visto {id}, e a lista relida', !!pv && pv.corpo.id === 3 && Object.keys(pv.corpo).length === 1 &&
+          alertasLidos === 2);
+    await ate(function () { return !p.q('#ms-alertas [data-alerta-visto]'); });
+    check('depois do "visto", nenhum alerta aberto na lista', !p.q('#ms-alertas [data-alerta-visto]') && /nenhum aberto/.test(texto(p.$('ms-alertas-total'))));
+
+    // a busca
+    digita(p.$('ms-q'), 'ab');
+    envia(p.$('ms-busca'));
+    await espera(40);
+    check('busca curta ("ab") não chama o servidor e diz como buscar', !pedidos(c, 'POST', '/api/mestre/contas').length &&
+          /3 letras ou mais do nome, pelo e-mail inteiro ou pelo #número da conta/.test(texto(p.$('ms-aviso'))));
+    digita(p.$('ms-q'), 'ana');
+    envia(p.$('ms-busca'));
+    await ate(function () { return p.qq('#ms-resultados [data-conta]').length === 3; });
+    var b1 = pedidos(c, 'POST', '/api/mestre/contas')[0];
+    check('busca: POST /api/mestre/contas com {q} só no corpo', !!b1 && b1.corpo.q === 'ana' && Object.keys(b1.corpo).length === 1 &&
+          !/[?#]/.test(b1.url.replace(/^[a-z]+:\/\/[^/]*/i, '')));
+    digita(p.$('ms-q'), 'pia@exemplo.com');
+    envia(p.$('ms-busca'));
+    // uma busca por vez: o botão volta quando a resposta chega
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/contas').length === 2 && !p.$('ms-buscar').disabled; });
+    var b2 = pedidos(c, 'POST', '/api/mestre/contas')[1];
+    check('busca por e-mail: o e-mail vai no corpo, e nenhuma URL de nenhum pedido tem "@"', !!b2 && b2.corpo.q === 'pia@exemplo.com' &&
+          !TODOS.some(function (x) { return /@|%40/.test(x.url); }));
+    digita(p.$('ms-q'), '#7');
+    envia(p.$('ms-busca'));
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/contas').length === 3; });
+    check('busca por #número sai (mesmo curta)', pedidos(c, 'POST', '/api/mestre/contas')[2].corpo.q === '#7');
+    var lista = texto(p.$('ms-resultados'));
+    check('a lista: nome, #id, e-mail MASCARADO, "banida" e "Mestre"', /Pia #7/.test(lista) && /pi\*\*\*@exemplo\.com/.test(lista) &&
+          !/pia@exemplo\.com/.test(lista) && !!p.q('#ms-resultados [data-conta="9"] .banida') && !!p.q('#ms-resultados [data-conta="1"] .marca-gm'), lista.slice(0, 200));
+    check('"mais": "Há mais contas: refine a busca."', visivel(p.$('ms-mais')) && texto(p.$('ms-mais')) === 'Há mais contas: refine a busca.');
+
+    // a ficha
+    p.q('#ms-resultados [data-abrir="7"]').click();
+    await ate(function () { return visivel(p.$('ms-ficha-corpo')) && /Pia/.test(texto(p.$('ms-dados'))); });
+    var gf = pedidos(c, 'GET', '/api/mestre/conta');
+    check('ficha: GET /api/mestre/conta?id=7 (só o número na URL)', gf.length === 1 && /\/api\/mestre\/conta\?id=7$/.test(gf[0].url), gf[0] && gf[0].url);
+    check('ficha: o endereço guarda #conta=7', p.w.location.hash === '#conta=7', p.w.location.hash);
+    // cada <dt>/<dd> vira uma palavra separada (o textContent do <dl> cola os dois)
+    var dd = p.qq('#ms-dados dt, #ms-dados dd').map(texto).join(' ');
+    check('ficha: nome, #id, e-mail inteiro, save (versão), bolso, nível, saldo do site e "não" banida',
+          /Pia/.test(dd) && /#7/.test(dd) && /pia@exemplo\.com/.test(dd) && /há 3 h · versão 57/.test(dd) && /Vinténs no bolso 12\.450/.test(dd) &&
+          /Nível 22 \(o maior\)/.test(dd) && /17\.650 disponível · 5\.500 a caminho · 300 reservado/.test(dd) && /Banida não/.test(dd), dd.slice(0, 400));
+    var cls = texto(p.$('ms-classes'));
+    check('ficha: as classes com o nome do jogo (classes.js) e o nível', /Bárbaro · nível 22 · Fogo/.test(cls) && /Bruxo · nível 12 · Água/.test(cls) &&
+          /Curandeiro · nível 8/.test(cls), cls);
+    var inv = p.q('#ms-liberar [data-item="classe-invocador"]'), bru = p.q('#ms-liberar [data-item="classe-bruxo"]');
+    check('liberar: o Xamã pode ("Raro · tem 6 de 10 cartas"); o Bruxo desligado com o motivo do servidor',
+          !!inv && !inv.querySelector('[data-presentear]').disabled && /Raro · tem 6 de 10 cartas/.test(texto(inv)) &&
+          !!bru && bru.querySelector('[data-presentear]').disabled && /essa classe já está liberada/.test(texto(bru)), texto(inv) + ' / ' + texto(bru));
+    var grupos = p.qq('#ms-liberar h5').map(texto);
+    check('liberar: "Classes" e "Itens da loja" pelas seções do servidor', /Classes/.test(texto(p.$('ms-liberar'))) &&
+          grupos.join() === 'Bônus de XP,Pedras de forja,Guilda,Pergaminhos', grupos.join());
+    check('ficha: os pacotes pagos e os alertas da conta', /aprovado · a caminho do jogo/.test(texto(p.$('ms-pagamentos'))) &&
+          /R\$ 19,90/.test(texto(p.$('ms-pagamentos'))) && /valor diferente do pacote/.test(texto(p.$('ms-alertas-conta'))));
+    check('ficha: os presentes desta conta, com o cancelar no pendente', !!p.q('#ms-presentes-conta [data-cancelar="50"]') &&
+          /1\.000 vinténs/.test(texto(p.$('ms-presentes-conta'))));
+    // conserto 11/09: o alerta do teto de 24 h e o "conferir no Mercado Pago"
+    var alc = texto(p.$('ms-alertas-conta'));
+    check('ficha: o alerta do teto de 24 h em português, com os valores em reais',
+          /acima do teto de 24 h/.test(alc) && /valor: R\$ 79,90/.test(alc) && /pago em 24 h: R\$ 399,50/.test(alc), alc);
+    var bc = p.q('#ms-pagamentos [data-pagamento="17"] [data-conferir-pag="17"]');
+    check('ficha: cada pagamento com o botão "conferir no Mercado Pago"', !!bc && /conferir no Mercado Pago/.test(texto(bc)));
+    var fl0 = pedidos(c, 'GET', '/api/mestre/conta').length;
+    bc.click();
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/pagamento/conferir').length === 1 && /conferido/.test(texto(p.$('ms-aviso'))); });
+    var pcf = pedidos(c, 'POST', '/api/mestre/pagamento/conferir')[0];
+    check('"conferir no Mercado Pago": POST /api/mestre/pagamento/conferir com só {id:17} e o token, e o aviso com o estado',
+          !!pcf && pcf.corpo.id === 17 && Object.keys(pcf.corpo).length === 1 && pcf.auth === 'Bearer tok-mestre' &&
+          /Pagamento #17 conferido: aprovado · creditado \(1 no Mercado Pago\)\./.test(texto(p.$('ms-aviso'))), texto(p.$('ms-aviso')));
+    await ate(function () { return pedidos(c, 'GET', '/api/mestre/conta').length > fl0 && visivel(p.$('ms-ficha-corpo')) &&
+                               !!p.q('#ms-liberar [data-item="classe-invocador"]'); });
+    check('... e a ficha relida', pedidos(c, 'GET', '/api/mestre/conta').length > fl0);
+    inv = p.q('#ms-liberar [data-item="classe-invocador"]');       // a ficha foi redesenhada
+
+    // dar de presente
+    inv.querySelector('[data-presentear]').click();
+    var m1 = await modal(p, false);
+    check('dar de presente: a janelinha "Dar Xamã de presente a Pia?" com a nota do Mestre', /Dar Xamã de presente a Pia\?/.test(m1) &&
+          /não gasta vinténs nem conta nos limites da loja/.test(m1), m1);
+    await espera(30);
+    check('"Voltar" não manda nada', !pedidos(c, 'POST', '/api/mestre/presentear').length);
+    p.q('#ms-liberar [data-item="classe-invocador"] [data-presentear]').click();
+    await modal(p, true);
+    await ate(function () { return /Presente enviado/.test(texto(p.$('ms-aviso'))); });
+    var d1 = pedidos(c, 'POST', '/api/mestre/presentear')[0];
+    check('dar: POST /api/mestre/presentear {conta:7, sku, idem (16 hex)}', !!d1 && d1.corpo.conta === 7 && d1.corpo.sku === 'classe-invocador' &&
+          /^[0-9a-f]{16}$/.test(d1.corpo.idem) && Object.keys(d1.corpo).length === 3, d1 && JSON.stringify(d1.corpo));
+    check('dar: "Presente enviado: Xamã para Pia." e a ficha e a lista relidas', /Presente enviado: Xamã para Pia\./.test(texto(p.$('ms-aviso'))));
+    await ate(function () { return pedidos(c, 'GET', '/api/mestre/conta').length >= 2 && pedidos(c, 'GET', '/api/mestre/presentes').length >= 2; });
+    check('... releu a ficha e os presentes', pedidos(c, 'GET', '/api/mestre/conta').length >= 2 && pedidos(c, 'GET', '/api/mestre/presentes').length >= 2);
+    await ate(function () { var b = p.q('#ms-liberar [data-item="classe-invocador"] [data-presentear]'); return b && !b.disabled; });
+    p.q('#ms-liberar [data-item="classe-invocador"] [data-presentear]').click();
+    await modal(p, true);
+    await ate(function () { return /não respondeu/.test(texto(p.$('ms-aviso'))); });
+    var d2 = pedidos(c, 'POST', '/api/mestre/presentear')[1];
+    check('um clique novo, chave nova; sem resposta, o aviso da mesma chave', !!d2 && d2.corpo.idem !== d1.corpo.idem &&
+          /repete a mesma chave/.test(texto(p.$('ms-aviso'))));
+    await ate(function () { var b = p.q('#ms-liberar [data-item="classe-invocador"] [data-presentear]'); return b && !b.disabled; });
+    p.q('#ms-liberar [data-item="classe-invocador"] [data-presentear]').click();
+    await modal(p, true);
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/presentear').length === 3; });
+    var d3 = pedidos(c, 'POST', '/api/mestre/presentear')[2];
+    check('depois do clique sem resposta, o mesmo presente repete a MESMA chave', !!d3 && d3.corpo.idem === d2.corpo.idem);
+    await ate(function () { var b = p.q('#ms-liberar [data-item="classe-invocador"] [data-presentear]'); return b && !b.disabled && /Presente enviado/.test(texto(p.$('ms-aviso'))); });
+    p.q('#ms-liberar [data-item="classe-invocador"] [data-presentear]').click();
+    await modal(p, true);
+    await ate(function () { return /já há um pedido/.test(texto(p.$('ms-aviso'))); });
+    check('409: o aviso com a frase do servidor', texto(p.$('ms-aviso')) === 'já há um pedido dessa classe a caminho', texto(p.$('ms-aviso')));
+
+    // dar vinténs
+    digita(p.$('ms-vintens'), '0');
+    envia(p.$('ms-vintens-form'));
+    await espera(30);
+    check('vinténs: 0 não sai da página', pedidos(c, 'POST', '/api/mestre/presentear').length === 4 && /número inteiro, 1 ou mais/.test(texto(p.$('ms-aviso'))));
+    digita(p.$('ms-vintens'), '2.5');
+    envia(p.$('ms-vintens-form'));
+    await espera(30);
+    check('vinténs: número quebrado não sai da página', pedidos(c, 'POST', '/api/mestre/presentear').length === 4);
+    digita(p.$('ms-vintens'), '1000');
+    envia(p.$('ms-vintens-form'));
+    var m2 = await modal(p, true);
+    check('vinténs: "Dar 1.000 vinténs de presente a Pia?"', /Dar 1\.000 vinténs de presente a Pia\?/.test(m2) && /contam na hora no saldo do site/.test(m2), m2);
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/presentear').length === 5 && /Presente enviado: 1\.000 vinténs/.test(texto(p.$('ms-aviso'))); });
+    var d5 = pedidos(c, 'POST', '/api/mestre/presentear')[4];
+    check('vinténs: POST {conta:7, vintens:1000, idem} e "Presente enviado: 1.000 vinténs para Pia."', !!d5 && d5.corpo.conta === 7 &&
+          d5.corpo.vintens === 1000 && /^[0-9a-f]{16}$/.test(d5.corpo.idem) && Object.keys(d5.corpo).length === 3 && !('sku' in d5.corpo) &&
+          /Presente enviado: 1\.000 vinténs para Pia\./.test(texto(p.$('ms-aviso'))), d5 && JSON.stringify(d5.corpo));
+
+    // cancelar
+    await ate(function () { var b = p.q('#ms-presentes [data-cancelar="50"]'); return b && !b.disabled; });
+    p.q('#ms-presentes [data-cancelar="50"]').click();
+    var m3 = await modal(p, true);
+    check('cancelar: a janelinha "Cancelar Xamã para Pia?"', /Cancelar Xamã para Pia\?/.test(m3), m3);
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/presente/cancelar').length === 1; });
+    var pc = pedidos(c, 'POST', '/api/mestre/presente/cancelar')[0];
+    check('cancelar: POST /api/mestre/presente/cancelar com só {id}', pc.corpo.id === 50 && Object.keys(pc.corpo).length === 1);
+
+    // uma ficha sem save, e uma que não existe
+    p.q('#ms-resultados [data-abrir="9"]').click();
+    await ate(function () { return /Rui/.test(texto(p.$('ms-dados'))); });
+    check('ficha sem save: "nunca subiu save — o presente espera o jogo abrir logado nesta conta"',
+          /nunca subiu save — o presente espera o jogo abrir logado nesta conta/.test(texto(p.$('ms-dados'))) &&
+          /Sem save ainda/.test(texto(p.$('ms-classes'))) && p.w.location.hash === '#conta=9');
+    p.w.history.replaceState(null, '', p.w.location.href.split('#')[0] + '#conta=404');
+    p.w.dispatchEvent(new p.w.HashChangeEvent('hashchange'));
+    await ate(function () { return /conta não encontrada/.test(texto(p.$('ms-ficha-estado'))); });
+    check('ficha que não existe: "conta não encontrada", sem quebrar', visivel(p.$('ms-ficha-estado')) && !visivel(p.$('ms-ficha-corpo')));
+    check('nenhum preço de loja e nenhum e-mail em URL', !TODOS.some(function (x) { return /@|%40/.test(x.url); }));
+  }
+
+  async function cenaEndereco() {
+    var c = { sessao: MESTRE, hash: 'conta=7', rotas: {
+      'GET /api/eu': EU_MESTRE, 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': CATALOGO_PUBLICO,
+      'GET /api/mestre/presentes': [200, { ok: true, agora: AGORA, conta: null, presentes: [] }],
+      'GET /api/mestre/alertas': [200, { ok: true, alertas: [] }],
+      'GET /api/mestre/conta': [200, ficha()]
+    } };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return /Pia/.test(texto(p.$('ms-dados'))); });
+    check('F5 com #conta=7 no endereço: a ficha reabre sozinha', pedidos(c, 'GET', '/api/mestre/conta').length === 1 && /Pia/.test(texto(p.$('ms-dados'))));
+    check('listas vazias dizem isso', /Nenhum presente dado ainda/.test(texto(p.$('ms-presentes'))) && /Nenhum alerta de pagamento/.test(texto(p.$('ms-alertas'))));
+    // sair pelo topo: o painel fecha e o link some
+    p.q('#bt-sair').click();
+    await ate(function () { return p.$('ms-portao').getAttribute('data-portao') === 'fora'; });
+    check('"sair" no topo: o painel fecha, o portão pede para entrar e o link "Mestre" some',
+          !visivel(p.$('ms-painel')) && /Entre com a conta do Mestre/.test(texto(p.$('ms-portao'))) && !p.q('nav a[data-mestre]'));
+  }
+
+  async function cena403() {
+    var c = { sessao: MESTRE, rotas: {
+      'GET /api/eu': EU_MESTRE, 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': CATALOGO_PUBLICO,
+      'GET /api/mestre/presentes': [403, { ok: false, erro: 'só o Mestre do Fundo abre o painel do Mestre' }],
+      'GET /api/mestre/alertas': [403, { ok: false, erro: 'só o Mestre do Fundo abre o painel do Mestre' }]
+    } };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return p.$('ms-portao').getAttribute('data-portao') === 'nao-mestre'; });
+    await espera(40);
+    var s = lsSessao();
+    check('403 numa rota do Mestre: o painel fecha no portão "só do Mestre", e a marca local cai',
+          !visivel(p.$('ms-painel')) && /Esta página é só do Mestre do Fundo/.test(texto(p.$('ms-portao'))) && !!s && s.conta.gm === false &&
+          !p.q('nav a[data-mestre]'));
+  }
+
+  async function cena429() {
+    var c = { sessao: MESTRE, rotas: {
+      'GET /api/eu': EU_MESTRE, 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': CATALOGO_PUBLICO,
+      'GET /api/mestre/presentes': [200, { ok: true, agora: AGORA, conta: null, presentes: [] }],
+      'GET /api/mestre/alertas': [200, { ok: true, alertas: [] }],
+      'POST /api/mestre/contas': [429, { ok: false, erro: 'buscas demais nesta hora; espere um pouco', liberaEm: AGORA + 1200 }]
+    } };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return visivel(p.$('ms-painel')); });
+    digita(p.$('ms-q'), 'joana');
+    envia(p.$('ms-busca'));
+    await ate(function () { return /de novo em/.test(texto(p.$('ms-aviso'))); });
+    check('429 na busca: a frase do servidor com "de novo em 20 min"', texto(p.$('ms-aviso')) === 'buscas demais nesta hora; espere um pouco (de novo em 20 min)',
+          texto(p.$('ms-aviso')));
+  }
+
+  async function cenaEscape() {
+    var MAU = '<img src=x onerror="window.__xss=9">';
+    var c = { sessao: MESTRE, hash: 'conta=7', rotas: {
+      'GET /api/eu': EU_MESTRE, 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': CATALOGO_PUBLICO,
+      'GET /api/mestre/presentes': [200, { ok: true, presentes: [presente(50, 'pendente', { nome: MAU, conta: { id: 7, nome: MAU }, por: { id: 1, nome: MAU } })] }],
+      'GET /api/mestre/alertas': [200, { ok: true, alertas: [alerta(3, MAU, false, { dados: { mp: MAU }, conta: { id: 7, nome: MAU } })] }],
+      'GET /api/mestre/conta': [200, ficha({ conta: { id: 7, nome: MAU, email: MAU, criadoEm: AGORA, gm: false, banido: false },
+                                             classes: [{ id: MAU, nivel: MAU }], catalogo: [{ sku: MAU, nome: MAU, secao: MAU, tipo: 'x', pode: false, motivo: MAU }] })]
+    } };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return /<img src=x/.test(texto(p.$('ms-dados'))); });
+    await espera(60);
+    check('o que vem do servidor não vira HTML (lista, alertas, ficha, catálogo)', !p.q('img[src="x"]') && !p.w.__xss &&
+          /<img src=x/.test(texto(p.$('ms-presentes'))) && /<img src=x/.test(texto(p.$('ms-alertas'))) && /<img src=x/.test(texto(p.$('ms-liberar'))));
+  }
+
+  /* ======================================================================
+   * o menu do site.js e o presente na loja.js
+   * ==================================================================== */
+  async function cenaMenu() {
+    var cat = [200, { ok: true, versao: 2, itens: [], pacotes: [], pagamento: { ligado: false } }];
+    var c = { sessao: MESTRE, rotas: { 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': cat,
+      'GET /api/loja/minha': [200, { ok: true, saldo: { carteira: 0, aCaminho: 0, reservado: 0, disponivel: 0, semFundo: true, saveVersao: 0 }, limites: {}, classes: {},
+                                     pedidos: [{ id: 5, sku: 'classe-bruxo', nome: 'Bruxo', preco: 0, estado: 'pendente', motivo: null, criadoEm: AGORA - 60, cancelavel: false, origem: 'presente' }] }] } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return !!p.q('nav a[data-mestre]') && !!p.q('#lj-pedidos [data-pedido="5"]'); });
+    check('loja.html com sessão gm: o menu tem a[href="mestre.html"]', !!p.q('nav a[href="mestre.html"]'));
+    check('loja.js: o pedido de presente diz "presente do Mestre" e não tem "cancelar"',
+          /presente do Mestre/.test(texto(p.q('#lj-pedidos [data-pedido="5"]'))) && !p.q('#lj-pedidos [data-pedido="5"] [data-cancelar]'));
+    p.q('#bt-sair').click();
+    await ate(function () { return !p.q('nav a[data-mestre]'); });
+    check('"sair": o link "Mestre" some', !p.q('nav a[href="mestre.html"]'));
+    var c2 = { sessao: COMUM, rotas: { 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': cat,
+      'GET /api/loja/minha': [200, { ok: true, saldo: { carteira: 0, aCaminho: 0, reservado: 0, disponivel: 0, saveVersao: 1 }, limites: {}, classes: {}, pedidos: [] }] } };
+    var p2 = await abre('ranking.html', c2);
+    await ate(function () { return /Pia/.test(texto(p2.$('sessao'))); });
+    check('ranking.html sem gm: nenhum link "Mestre"', !p2.q('nav a[href="mestre.html"]'));
+  }
+
+  async function roda(nome, fn) {
+    try { await fn(); } catch (e) { check(nome + ': o roteiro não estoura', false, String(e && (e.stack || e.message) || e).slice(0, 300)); }
+  }
+
+  (async function () {
+    try {
+      await roda('fora', cenaFora);
+      await roda('não é o Mestre', cenaNaoMestre);
+      await roda('401', cena401);
+      await roda('o painel', cenaMestre);
+      await roda('o endereço', cenaEndereco);
+      await roda('403', cena403);
+      await roda('429', cena429);
+      await roda('escape', cenaEscape);
+      await roda('menu', cenaMenu);
+    } finally {
+      palco.innerHTML = '';
+      try {
+        if (sessaoAntes === null) localStorage.removeItem(CHAVE); else localStorage.setItem(CHAVE, sessaoAntes);
+      } catch (e) { /* sem storage */ }
+      fecha();
+    }
+  })();
+})();
+</script>
+</body>
+</html>

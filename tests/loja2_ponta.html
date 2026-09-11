@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a Loja 2 de ponta a ponta</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+.linha{color:#8fc79b} .linha.ruim{color:#f88} h3{margin:10px 0 4px;color:#9cc3ff;font-size:12px}</style>
+</head>
+<body>
+<!-- A PROVA DE PONTA A PONTA DA LOJA 2 (10/09). Quem sobe tudo é
+     tests/loja2_ponta.py: a API de verdade (banco descartável, com o token e a
+     assinatura do Mercado Pago INVENTADOS para a corrida), o Mercado Pago de
+     mentira (tests/mp_falso.py) e o MAESTRO (a conta do Mestre e o controle do
+     falso). Esta página recebe `?api=http://127.0.0.1:P&maestro=http://127.0.0.1:Q`,
+     cria a própria conta descartável e usa os módulos de verdade do jogo:
+     nuvem.js + loja.js + progress.js + db.js, e o hud.js por ÚLTIMO, sem
+     UI.init, só pelo texto do aviso (UI.avisoLojaTexto).
+     As cenas: 1 pacote pago (um crédito; aviso forjado, repetido, em paralelo,
+     de valor trocado e de modo trocado não creditam) · 2 comprar personagem no
+     site com vintém pago que o jogo ainda não recebeu · 3 o jogo recebendo o
+     pacote, o Xamã, o bônus de XP de 1, 3 e 7 dias (somando), as insígnias e as
+     pedras · 4 os presentes do Mestre (classe e vinténs) · 5 o avatar no
+     ranking · 6 estorno e contestação. A cena 7 ("em breve") é do .py. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<pre id="ids" hidden></pre>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/db.js','js/core/mercado.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js','js/core/nuvem.js','js/core/loja.js',
+    'js/ui/hud.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function cena(t) { var h = document.createElement('h3'); h.textContent = t; log.appendChild(h); }
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.className = ok ? 'linha' : 'linha ruim';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra && !ok ? ' — ' + String(extra).slice(0, 900) : '');
+    log.appendChild(d);
+    return !!ok;
+  }
+  function js(o) { try { return JSON.stringify(o); } catch (e) { return String(o); } }
+  function ate(cond, ms) {
+    ms = ms || 6000;
+    return new Promise(function (r) {
+      var t0 = 0;
+      (function volta() {
+        var ok = false;
+        try { ok = cond(); } catch (e) { ok = false; }
+        if (ok) return r(true);
+        if ((t0 += 20) > ms) return r(false);
+        setTimeout(volta, 20);
+      })();
+    });
+  }
+  var Q = {};
+  String(location.search || '').replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var MAESTRO = String(Q.maestro || '').replace(/\/+$/, '');
+  var P = JOGO.Progress, DB = JOGO.DB, S = JOGO.Sessao, N = JOGO.Nuvem, L = JOGO.Loja, UI = JOGO.UI || {};
+  var DIA = 86400;
+  var nuvemEv = [], avisos = [], retiradas = [];
+  window.addEventListener('soterra:nuvem', function (ev) { nuvemEv.push(ev.detail.tipo + (ev.detail.erro ? ':' + ev.detail.erro : '')); });
+  window.addEventListener('soterra:loja', function (ev) { avisos.push(JSON.parse(JSON.stringify(ev.detail))); });
+  N.semRecarga = true;
+  N.ESPERA_MS = 30;
+  L.INTERVALO_MS = 1e9;
+  L._semTrava = true;            // a trava entre abas não sai a tempo no Chrome sem cabeça (ver loja.js)
+  L._reinicia();
+  // o que o jogo recebeu de /api/loja/retirar, cópia fiel (o `agora` do bônus mora lá)
+  var apiDeVerdade = S.api;
+  S.api = function (rota, op) {
+    return apiDeVerdade.call(S, rota, op).then(function (r) {
+      if (rota === '/api/loja/retirar') retiradas.push(JSON.parse(JSON.stringify(r)));
+      return r;
+    });
+  };
+
+  function idem() {
+    var b = new Uint8Array(8);
+    crypto.getRandomValues(b);
+    return Array.prototype.map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+  }
+  function maestro(rota, corpo) {
+    var op = corpo === undefined ? { method: 'GET' }
+      : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) };
+    return fetch(MAESTRO + rota, op).then(function (r) {
+      return r.json().then(function (j) { j = j || {}; j._http = r.status; return j; });
+    }).catch(function (e) { return { ok: false, _http: 0, erro: String(e) }; });
+  }
+  function api(rota, corpo, metodo) {
+    return S.api(rota, corpo === undefined ? { method: metodo || 'GET' } : { method: metodo || 'POST', body: corpo });
+  }
+  function compra(sku) { return api('/api/loja/comprar', { sku: sku, idem: idem() }); }
+  function minha() { return api('/api/loja/minha'); }
+  function pacote(id, chave) { return api('/api/pagamento/pacote', { pacote: id, idem: chave || idem() }); }
+  function pagaEAvisa(pagId, extra) {
+    var corpo = { pagamento: pagId, status: 'approved' };
+    for (var k in (extra || {})) corpo[k] = extra[k];
+    return maestro('/pagar', corpo).then(function (p) {
+      return maestro('/avisar', { mp_id: p.mp_id, assinatura: 'boa' }).then(function (a) { return { pago: p, aviso: a }; });
+    });
+  }
+  function estorna(mp, status) {
+    return maestro('/status', { mp_id: mp, status: status }).then(function () {
+      return maestro('/avisar', { mp_id: mp, assinatura: 'boa' });
+    });
+  }
+  function moedas() { return DB.exportar().carteira.moedas; }
+  function pedidoEm(m, id) { return ((m && m.pedidos) || []).filter(function (p) { return p.id === id; })[0] || {}; }
+  function creditos(m, origem) { return ((m && m.pedidos) || []).filter(function (p) { return p.origem === origem; }); }
+  function estavel(v0) { return function () { var e = N.estado(); return e.versao > v0 && !e.pendente && !e.subindo; }; }
+  function busca() {          // o jogo busca, aplica e sobe; devolve {r, subiu, ret (o que o retirar trouxe)}
+    var v0 = N.estado().versao, n0 = retiradas.length;
+    return L.buscar().then(function (r) {
+      return ate(estavel(v0)).then(function (ok) { return { r: r, subiu: ok, ret: retiradas[n0] || {} }; });
+    });
+  }
+  function aviso(pid) { return avisos.filter(function (a) { return a.pedido && a.pedido.id === pid; })[0] || null; }
+  function texto(d) {
+    try { var t = UI.avisoLojaTexto(d); return t || {}; } catch (e) { return { erro: String(e) }; }
+  }
+  function mil(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+  var nome = 'lp' + (function (n) { var a = 'hjkqxz', s = ''; for (var i = 0; i < 9; i++) { s = a.charAt(n % 6) + s; n = Math.floor(n / 6); } return s; })(Date.now());
+  var senha = 'p-' + Math.random().toString(36).slice(2, 14);
+  var X = { conta: null, nome: nome, mp: {}, pag: {}, ped: {} };   // os ids da corrida (o .py confere no banco)
+  var CAT = {}, agoraB = 0, ateB = 0, i0 = 0, b0 = 0, m0 = 0;
+
+  S.esquece();
+  cena('0 · a montagem');
+  check('a API está apontada (' + S.base() + ') e o maestro também (' + MAESTRO + ')',
+        /^https?:\/\//.test(S.base()) && /^https?:\/\//.test(MAESTRO));
+  maestro('/saude').then(function (m) {
+    check('o maestro responde (a conta do Mestre existe)', m.ok && m.mestre > 0, js(m));
+    X.mestre = m.mestre;
+    return S.api('/api/loja/catalogo', { semToken: true });
+  }).then(function (c) {
+    (c.itens || []).forEach(function (i) { CAT[i.sku] = i; });
+    var pac = {};
+    (c.pacotes || []).forEach(function (p) { pac[p.id] = [p.vintens, p.centavos, p.preco]; });
+    check('catálogo v2 com o pagamento ligado', c.ok && c.versao === 2 && c.pagamento && c.pagamento.ligado === true, js(c.pagamento));
+    check('os 4 pacotes com a tabela do plano (vinténs, centavos e o preço formatado pelo servidor)',
+          js(pac) === js({ 'pacote-1000': [1000, 490, 'R$ 4,90'], 'pacote-5500': [5500, 1990, 'R$ 19,90'],
+                           'pacote-12000': [12000, 3990, 'R$ 39,90'], 'pacote-25000': [25000, 7990, 'R$ 79,90'] }), js(pac));
+    var precos = {}, quer = { 'classe-invocador': 10000, 'classe-bruxo': 10000, 'bonus-xp-1': 1500, 'bonus-xp-3': 3900,
+                              'bonus-xp-7': 7900, 'insignias-10': 4500, 'pedras-fogo-50': 3600 };
+    for (var k in quer) precos[k] = CAT[k] ? CAT[k].preco : null;
+    check('os preços do que esta prova compra', js(precos) === js(quer), js(precos));
+    check('bônus de 1/3/7 dias sem limite de janela, entrega bonus-xp com os dias; o Sabedoria fora da venda',
+          [1, 3, 7].every(function (d) { var i = CAT['bonus-xp-' + d] || {}; return i.tipo === 'bonus-xp' && i.qtd === d && i.limite === null; }) &&
+          !CAT['pergaminho-xp'], js([CAT['bonus-xp-1'], CAT['pergaminho-xp']]));
+    check('o jogo espelha o fator do bônus (DATA.bonusXp.fator = 1,5)', JOGO.DATA.bonusXp && JOGO.DATA.bonusXp.fator === 1.5);
+    return S.cadastrar(nome, nome + '@prova.local', senha);
+  }).then(function (r) {
+    X.conta = S.contaId();
+    check('cadastro de conta descartável (' + nome + ', #' + X.conta + ')', r.ok && r.token && S.ativa() && X.conta > 0, r.erro);
+
+    // ------------------------------------------------------------------------------ cena 1
+    cena('1 · o pacote pago no Mercado Pago de mentira');
+    X.chaveArca = idem();
+    return pacote('pacote-12000', X.chaveArca);
+  }).then(function (r) {
+    var pg = r.pagamento || {};
+    X.pag.arca = pg.id;
+    X.endArca = r.endereco;
+    check('POST /api/pagamento/pacote (Arca): 201, 12.000 vinténs por R$ 39,90, estado aberto, com endereço',
+          r.status === 201 && pg.vintens === 12000 && pg.centavos === 3990 && pg.preco === 'R$ 39,90' &&
+          pg.estado === 'aberto' && pg.creditado === false && typeof r.endereco === 'string' && r.endereco.length > 8, js(r));
+    return pacote('pacote-12000', X.chaveArca);
+  }).then(function (r) {
+    check('o mesmo idem devolve o MESMO pagamento (200, repetido)', r.status === 200 && r.repetido === true &&
+          r.pagamento && r.pagamento.id === X.pag.arca && r.endereco === X.endArca, js(r));
+    return maestro('/falso');
+  }).then(function (f) {
+    var prefs = (f.estado && f.estado.preferencias) || [], p = prefs[prefs.length - 1] || {};
+    var it = (p.items || [])[0] || {}, volta = (p.back_urls || {}).success || '';
+    var excl = ((p.payment_methods || {}).excluded_payment_types || []).map(function (x) { return x.id; }).sort();
+    check('o Mercado Pago recebeu UMA preferência (o idem repetido não criou outra)', prefs.length === 1, prefs.length);
+    check('a preferência: R$ 39,90 em reais, BRL, referência sot-…, volta no SOTERRA_ENDERECO, sem payer, sem notification_url, sem boleto nem lotérica',
+          it.unit_price === 39.9 && it.currency_id === 'BRL' && it.quantity === 1 &&
+          /^sot-\d+-[0-9a-f]{16}$/.test(p.external_reference || '') &&
+          volta.indexOf(S.base() + '/site/loja.html?pagamento=' + X.pag.arca) === 0 &&
+          !('payer' in p) && !('notification_url' in p) && js(excl) === js(['atm', 'ticket']), js(p));
+    return minha();
+  }).then(function (m) {
+    check('antes de pagar: nada a caminho (a caminho 0, disponível 0)', m.saldo && m.saldo.aCaminho === 0 && m.saldo.disponivel === 0, js(m.saldo));
+    return maestro('/pagar', { pagamento: X.pag.arca, status: 'approved' });
+  }).then(function (p) {
+    X.mp.arca = p.mp_id;
+    check('o comprador pagou a Arca no Mercado Pago (aprovado)', p.ok && !!p.mp_id, js(p));
+    return maestro('/falso');
+  }).then(function (f) {
+    X.consultas0 = (f.estado || {}).consultas;
+    return maestro('/avisar', { mp_id: X.mp.arca, assinatura: 'ruim' });
+  }).then(function (a) {
+    check('aviso FORJADO (assinatura ruim) → 401', a.http === 401, js(a));
+    return maestro('/avisar', { mp_id: X.mp.arca, assinatura: 'sem' });
+  }).then(function (a) {
+    check('aviso sem assinatura → 401', a.http === 401, js(a));
+    return maestro('/falso');
+  }).then(function (f) {
+    check('... e o servidor NÃO consultou o Mercado Pago por causa deles', (f.estado || {}).consultas === X.consultas0,
+          X.consultas0 + ' → ' + (f.estado || {}).consultas);
+    return minha();
+  }).then(function (m) {
+    check('... e nenhum vintém a caminho', m.saldo.aCaminho === 0 && creditos(m, 'pagamento').length === 0, js(m.saldo));
+    return maestro('/avisar', { mp_id: X.mp.arca, assinatura: 'boa' });
+  }).then(function (a) {
+    check('aviso assinado → 200', a.http === 200 && a.corpo && a.corpo.ok, js(a));
+    return minha();
+  }).then(function (m) {
+    var cr = creditos(m, 'pagamento');
+    X.ped.arca = cr[0] && cr[0].id;
+    check('UM crédito: a caminho 12.000, disponível 12.000 (a carteira do save ainda é 0)',
+          m.saldo.aCaminho === 12000 && m.saldo.disponivel === 12000 && m.saldo.carteira === 0 && cr.length === 1, js(m.saldo));
+    check('o crédito na lista: origem pagamento, 12.000 vinténs, pendente, sem cancelar', cr.length === 1 &&
+          cr[0].vintens === 12000 && cr[0].estado === 'pendente' && cr[0].cancelavel === false && cr[0].preco === 0, js(cr));
+    return maestro('/avisar', { mp_id: X.mp.arca, assinatura: 'boa' });
+  }).then(function (a) {
+    check('o MESMO aviso de novo → 200', a.http === 200, js(a));
+    return maestro('/avisar', { mp_id: X.mp.arca, assinatura: 'boa', vezes: 10 });
+  }).then(function (a) {
+    check('dez avisos iguais em paralelo → todos 200', (a.https || []).length === 10 &&
+          a.https.every(function (s) { return s === 200; }), js(a.https));
+    return maestro('/falso');
+  }).then(function (f) {
+    X.buscas0 = (f.estado || {}).buscas;
+    // a volta do navegador: a página do site chama a conferência (nunca credita pela URL de volta)
+    return api('/api/pagamento/conferir', { id: X.pag.arca });
+  }).then(function (r) {
+    var pg = r.pagamento || {};
+    check('a volta do navegador (POST /api/pagamento/conferir) → 200, a Arca aprovada com 12.000',
+          r.status === 200 && pg.id === X.pag.arca && pg.estado === 'aprovado' && pg.vintens === 12000, js(r));
+    return maestro('/falso');
+  }).then(function (f) {
+    check('... a conferência BUSCOU o pagamento no Mercado Pago (não confiou na volta)', (f.estado || {}).buscas === X.buscas0 + 1,
+          X.buscas0 + ' → ' + (f.estado || {}).buscas);
+    return minha();
+  }).then(function (m) {
+    check('... e continua UM crédito (a conferência e o aviso não somam)', m.saldo.aCaminho === 12000 &&
+          creditos(m, 'pagamento').length === 1, js(m.saldo));
+    return maestro('/pagar', { pagamento: X.pag.arca, status: 'approved', centavos: 390 });
+  }).then(function (p) {
+    X.mp.errado = p.mp_id;
+    return maestro('/avisar', { mp_id: X.mp.errado, assinatura: 'boa' });
+  }).then(function (a) {
+    check('um 2º pagamento na mesma referência com o VALOR TROCADO (R$ 3,90): aviso assinado → 200', a.http === 200, js(a));
+    return maestro('/pagar', { pagamento: X.pag.arca, status: 'approved', live: false });
+  }).then(function (p) {
+    X.mp.teste = p.mp_id;
+    return maestro('/avisar', { mp_id: X.mp.teste, assinatura: 'boa' });
+  }).then(function (a) {
+    check('um 3º pagamento com o MODO trocado (live_mode false em produção): aviso assinado → 503 (o Mercado Pago reenvia)',
+          a.http === 503, js(a));
+    return minha();
+  }).then(function (m) {
+    check('... e continua UM crédito só: a caminho 12.000', m.saldo.aCaminho === 12000 && creditos(m, 'pagamento').length === 1,
+          js(m.saldo) + ' ' + js(creditos(m, 'pagamento')));
+    return api('/api/loja/cancelar', { id: X.ped.arca });
+  }).then(function (r) {
+    check('o jogador não cancela vintém de pacote (409)', r.status === 409 && /pacote não se cancelam/.test(r.erro || ''), js(r));
+    return api('/api/pagamento/meus');
+  }).then(function (r) {
+    var p = ((r.pagamentos || []).filter(function (x) { return x.id === X.pag.arca; })[0]) || {};
+    check('/api/pagamento/meus: a Arca aprovada, creditada, 12.000, pedido pendente', r.status === 200 && r.ligado === true &&
+          p.estado === 'aprovado' && p.creditado === true && p.vintens === 12000 && p.pedido && p.pedido.estado === 'pendente', js(p));
+
+    // ------------------------------------------------------------------------------ cena 2
+    cena('2 · comprar personagem no site com vintém pago que o jogo ainda não recebeu');
+    return compra('classe-invocador');
+  }).then(function (r) {
+    X.ped.xama = r.pedido && r.pedido.id;
+    check('sem save no servidor, com 12.000 a caminho: o Xamã (10.000) → 201, disponível 2.000',
+          r.status === 201 && r.saldo && r.saldo.carteira === 0 && r.saldo.aCaminho === 12000 && r.saldo.reservado === 10000 &&
+          r.saldo.disponivel === 2000 && X.ped.xama > X.ped.arca, js(r));
+    return compra('classe-bruxo');
+  }).then(function (r) {
+    check('o Bruxo (10.000) com 2.000 disponíveis → 409 vinténs insuficientes', r.status === 409 && /insuficientes/.test(r.erro || ''), js(r));
+    return compra('pergaminho-elemento');
+  }).then(function (r) {
+    check('a Reescrita sem save → 409 (nenhum herói escolheu caminho)', r.status === 409 && /nenhum herói/.test(r.erro || ''), js(r));
+
+    // ------------------------------------------------------------------------------ cena 3
+    cena('3 · o jogo recebe: o pacote e o Xamã');
+    P.reset();
+    DB._zerar();
+    return N.iniciar();
+  }).then(function () {
+    return ate(function () {
+      var e = N.estado(), l = L.estado();
+      return e.versao >= 2 && !e.pendente && !e.subindo && l.liberada && !l.buscando && l.ultimaBusca > 0 && avisos.length >= 2;
+    }, 15000);
+  }).then(function (ok) {
+    check('o jogo abre, sobe o 1º save, retira, aplica e sobe de novo', ok && N.estado().erro === null, js(N.estado()) + ' ' + js(L.estado().historico));
+    var ret = retiradas[0] || {}, ps = ret.pedidos || [];
+    var cr = ps[0] || {}, xa = ps[1] || {};
+    check('a retirada vem em ordem de id: o crédito ANTES da compra feita com ele', ps.length === 2 && cr.id === X.ped.arca && xa.id === X.ped.xama, js(ret));
+    check('o crédito: entrega {vintens, carteira, 12.000}, origem pagamento, sem agora', js(cr.entrega) === js({ tipo: 'vintens', alvo: 'carteira', qtd: 12000 }) &&
+          cr.origem === 'pagamento' && cr.preco === 0, js(cr));
+    check('o Xamã: entrega {classe, invocador, 1}, preço 10.000, sem origem e sem agora', js(xa.entrega) === js({ tipo: 'classe', alvo: 'invocador', qtd: 1 }) &&
+          xa.preco === 10000 && !('origem' in xa), js(xa));
+    var info = P.cardInfo('invocador') || {};
+    check('no jogo: carteira 0 → 12.000 → 2.000; o Xamã liberado com as cartas no custo',
+          moedas() === 2000 && P.isClassUnlocked('invocador') && info.cards === info.unlockCost && info.unlockCost === 10,
+          moedas() + ' / ' + js(info));
+    var a0 = aviso(X.ped.arca) || {}, a1 = aviso(X.ped.xama) || {};
+    check('os avisos: o crédito com origem pagamento, o Xamã com origem loja', a0.tipo === 'entregue' && a0.origem === 'pagamento' &&
+          a1.tipo === 'entregue' && a1.origem === 'loja', js([a0, a1]));
+    var t0 = texto(a0), t1 = texto(a1);
+    check('o texto: "Chegaram 12.000 vinténs do seu pacote" (good) e "Chegou da loja: Xamã"',
+          t0.texto === 'Chegaram 12.000 vinténs do seu pacote' && t0.tipo === 'good' && t1.texto === 'Chegou da loja: Xamã', js([t0, t1]));
+    return DB.lojaVer();
+  }).then(function (anot) {
+    check('os dois ids anotados em db.loja.aplicadas', anot.aplicadas.indexOf(X.ped.arca) >= 0 && anot.aplicadas.indexOf(X.ped.xama) >= 0, js(anot));
+    return minha();
+  }).then(function (m) {
+    check('/api/loja/minha: os dois ENTREGUES; a caminho 0; carteira 2.000; nada reservado',
+          pedidoEm(m, X.ped.arca).estado === 'entregue' && pedidoEm(m, X.ped.xama).estado === 'entregue' &&
+          m.saldo.aCaminho === 0 && m.saldo.carteira === 2000 && m.saldo.reservado === 0 && m.saldo.disponivel === 2000, js(m.saldo) + js(m.pedidos));
+
+    cena('3 · o jogo recebe: o Tesouro e o bônus de 1 dia');
+    return pacote('pacote-25000');
+  }).then(function (r) {
+    X.pag.tesouro = r.pagamento && r.pagamento.id;
+    check('o Tesouro (25.000 por R$ 79,90): 201', r.status === 201 && r.pagamento.vintens === 25000 && r.pagamento.preco === 'R$ 79,90', js(r));
+    return pagaEAvisa(X.pag.tesouro);
+  }).then(function (x) {
+    X.mp.tesouro = x.pago.mp_id;
+    check('pago e avisado → 200', x.aviso.http === 200, js(x));
+    return compra('bonus-xp-1');
+  }).then(function (r) {
+    X.ped.b1 = r.pedido && r.pedido.id;
+    check('o bônus de 1 dia (1.500) com o Tesouro a caminho → 201, disponível 25.500',
+          r.status === 201 && r.saldo.aCaminho === 25000 && r.saldo.disponivel === 25500, js(r));
+    return busca();
+  }).then(function (x) {
+    var ps = x.ret.pedidos || [], b1 = ps.filter(function (p) { return p.id === X.ped.b1; })[0] || {};
+    agoraB = (b1.entrega || {}).agora;
+    check('a retirada: o crédito do Tesouro (origem pagamento) e o bônus com entrega.agora do servidor',
+          ps.length === 2 && ps[0].origem === 'pagamento' && ps[0].entrega.qtd === 25000 &&
+          b1.entrega && b1.entrega.tipo === 'bonus-xp' && b1.entrega.alvo === 'xp' && b1.entrega.qtd === 1 &&
+          typeof agoraB === 'number' && agoraB > 1.7e9 && !('agora' in ps[0].entrega), js(x.ret));
+    ateB = P.bonusXpAte ? P.bonusXpAte() : null;
+    check('no jogo: o bônus vale até agora + 1 dia (relógio do servidor); carteira 25.500', ateB === agoraB + DIA && moedas() === 25500,
+          ateB + ' vs ' + (agoraB + DIA) + ' / ' + moedas());
+    check('o fator: ×1,5 dentro do prazo, ×1 depois dele', P.fatorBonusXp((agoraB + 60) * 1000) === 1.5 &&
+          P.fatorBonusXp((ateB + 1) * 1000) === 1, P.fatorBonusXp((agoraB + 60) * 1000) + ' / ' + P.fatorBonusXp((ateB + 1) * 1000));
+    var t = texto(aviso(X.ped.b1) || {});
+    check('o texto do bônus: "Chegou da loja: Bônus de XP — 1 dia — vale até …"', /^Chegou da loja: Bônus de XP — 1 dia — vale até \d\d\/\d\d às \d\d:\d\d$/.test(t.texto || ''), js(t));
+    check('o save subiu', x.subiu, js(N.estado()));
+    return api('/api/saude');
+  }).then(function (s) {
+    check('o agora da entrega é o do servidor (±5 min do /api/saude)', typeof s.agora === 'number' && Math.abs(s.agora - agoraB) < 300, s.agora + ' vs ' + agoraB);
+    return minha();
+  }).then(function (m) {
+    check('/api/loja/minha: crédito e bônus entregues, a caminho 0, carteira 25.500', m.saldo.aCaminho === 0 && m.saldo.carteira === 25500 &&
+          pedidoEm(m, X.ped.b1).estado === 'entregue' && creditos(m, 'pagamento').every(function (p) { return p.estado === 'entregue'; }), js(m.saldo));
+
+    cena('3 · o jogo recebe: o bônus de 3 e de 7 dias (somam), 10 insígnias e 50 brasas');
+    i0 = P.insigniasVer(); b0 = P.stoneCount('stone-ember');
+    return compra('bonus-xp-3');
+  }).then(function (r) {
+    X.ped.b3 = r.pedido && r.pedido.id;
+    check('bônus de 3 dias (3.900) → 201', r.status === 201, js(r));
+    return compra('bonus-xp-7');
+  }).then(function (r) {
+    X.ped.b7 = r.pedido && r.pedido.id;
+    check('bônus de 7 dias (7.900) → 201 (sem janela: dá para comprar de novo)', r.status === 201, js(r));
+    return compra('insignias-10');
+  }).then(function (r) {
+    X.ped.ins = r.pedido && r.pedido.id;
+    check('10 Insígnias de Fundação (4.500) → 201', r.status === 201, js(r));
+    return compra('pedras-fogo-50');
+  }).then(function (r) {
+    X.ped.fogo = r.pedido && r.pedido.id;
+    check('50 Brasas Coaguladas (3.600) → 201, disponível 5.600', r.status === 201 && r.saldo.disponivel === 5600, js(r));
+    return busca();
+  }).then(function (x) {
+    var ps = x.ret.pedidos || [], por = {};
+    ps.forEach(function (p) { por[p.id] = p; });
+    var e3 = (por[X.ped.b3] || {}).entrega || {}, e7 = (por[X.ped.b7] || {}).entrega || {};
+    var ei = (por[X.ped.ins] || {}).entrega || {}, ef = (por[X.ped.fogo] || {}).entrega || {};
+    check('a retirada: 3 e 7 dias com agora; insígnias {fundacao, 10} e brasas {stone-ember, 50} sem agora',
+          ps.length === 4 && e3.tipo === 'bonus-xp' && e3.qtd === 3 && typeof e3.agora === 'number' && e7.qtd === 7 && typeof e7.agora === 'number' &&
+          ei.tipo === 'insignias' && ei.alvo === 'fundacao' && ei.qtd === 10 && !('agora' in ei) &&
+          ef.tipo === 'pedras' && ef.alvo === 'stone-ember' && ef.qtd === 50 && !('agora' in ef), js(x.ret));
+    var ate = P.bonusXpAte();
+    check('comprar de novo SOMA: vale até (o prazo anterior) + 3 + 7 dias', ate === ateB + 10 * DIA, ate + ' vs ' + (ateB + 10 * DIA));
+    ateB = ate;
+    check('no jogo: +10 insígnias, +50 brasas, carteira 5.600', P.insigniasVer() === i0 + 10 && P.stoneCount('stone-ember') === b0 + 50 && moedas() === 5600,
+          P.insigniasVer() + ' / ' + P.stoneCount('stone-ember') + ' / ' + moedas());
+    check('os quatro avisos "entregue" com origem loja', [X.ped.b3, X.ped.b7, X.ped.ins, X.ped.fogo].every(function (id) {
+      var a = aviso(id); return a && a.tipo === 'entregue' && a.origem === 'loja'; }), js(avisos.slice(-4)));
+    check('o save subiu', x.subiu, js(N.estado()));
+    if (typeof P.load === 'function') {
+      P.load();
+      check('o bônus sobrevive a um load (o sanitize guarda bonusXpAte)', P.bonusXpAte() === ateB, P.bonusXpAte() + ' vs ' + ateB);
+    }
+    return minha();
+  }).then(function (m) {
+    check('/api/loja/minha: os quatro entregues, a caminho 0, carteira 5.600, nada reservado',
+          [X.ped.b3, X.ped.b7, X.ped.ins, X.ped.fogo].every(function (id) { return pedidoEm(m, id).estado === 'entregue'; }) &&
+          m.saldo.aCaminho === 0 && m.saldo.carteira === 5600 && m.saldo.reservado === 0, js(m.saldo));
+    return api('/api/save');
+  }).then(function (s) {
+    var pr = s.progress || {}, db = s.db || {};
+    check('o save NO SERVIDOR: carteira 5.600, bonusXpAte certo, +10 insígnias, +50 brasas, Xamã liberado',
+          (db.carteira || {}).moedas === 5600 && pr.bonusXpAte === ateB && pr.insignias === i0 + 10 &&
+          (pr.stones || {})['stone-ember'] === b0 + 50 && (pr.unlockedClasses || []).indexOf('invocador') >= 0,
+          js({ carteira: db.carteira, ate: pr.bonusXpAte, ins: pr.insignias, pedras: pr.stones, classes: pr.unlockedClasses }));
+    return api('/api/saude');
+  }).then(function (s) {
+    check('o bônus termina ~11 dias depois do agora do servidor', Math.abs(ateB - (s.agora + 11 * DIA)) < 600, ateB - s.agora);
+
+    // ------------------------------------------------------------------------------ cena 4
+    cena('4 · os presentes do Mestre');
+    return maestro('/presentear', { conta: X.conta, sku: 'classe-bruxo' });
+  }).then(function (r) {
+    X.pres = { bruxo: r.corpo && r.corpo.presente && r.corpo.presente.id };
+    check('o Mestre dá o Bruxo → 201', r.http === 201 && X.pres.bruxo > 0, js(r));
+    return maestro('/presentear', { conta: X.conta, vintens: 1000 });
+  }).then(function (r) {
+    var pr = (r.corpo || {}).presente || {};
+    X.pres.vintens = pr.id;
+    check('o Mestre dá 1.000 vinténs → 201, presente.vintens 1.000', r.http === 201 && pr.vintens === 1000, js(r));
+    return minha();
+  }).then(function (m) {
+    var pr = creditos(m, 'presente');
+    check('/api/loja/minha: os dois presentes pendentes, sem cancelar; a caminho 1.000',
+          pr.length === 2 && pr.every(function (p) { return p.cancelavel === false && p.estado === 'pendente'; }) && m.saldo.aCaminho === 1000 &&
+          pr.filter(function (p) { return p.vintens === 1000; }).length === 1, js(pr) + js(m.saldo));
+    return busca();
+  }).then(function (x) {
+    var ps = x.ret.pedidos || [], por = {};
+    ps.forEach(function (p) { por[p.id] = p; });
+    var pb = por[X.pres.bruxo] || {}, pv = por[X.pres.vintens] || {};
+    check('a retirada: os dois com origem presente; o de vinténs {vintens, carteira, 1.000}, preço 0',
+          pb.origem === 'presente' && pv.origem === 'presente' && js(pv.entrega) === js({ tipo: 'vintens', alvo: 'carteira', qtd: 1000 }) &&
+          pb.preco === 0 && pv.preco === 0 && js(pb.entrega) === js({ tipo: 'classe', alvo: 'bruxo', qtd: 1 }), js(x.ret));
+    check('no jogo: o Bruxo liberado; carteira 6.600', P.isClassUnlocked('bruxo') && moedas() === 6600, moedas());
+    var ab = aviso(X.pres.bruxo) || {}, av = aviso(X.pres.vintens) || {};
+    check('os avisos com detail.origem presente', ab.origem === 'presente' && av.origem === 'presente' && ab.tipo === 'entregue' && av.tipo === 'entregue', js([ab, av]));
+    var tb = texto(ab), tv = texto(av);
+    check('o texto: "Presente do Mestre: 1.000 vinténs" e "Presente do Mestre: Bruxo"', tv.texto === 'Presente do Mestre: 1.000 vinténs' &&
+          tb.texto === 'Presente do Mestre: Bruxo', js([tv, tb]));
+    check('o save subiu', x.subiu, js(N.estado()));
+    return minha();
+  }).then(function (m) {
+    check('/api/loja/minha: os presentes entregues, a caminho 0, carteira 6.600', pedidoEm(m, X.pres.bruxo).estado === 'entregue' &&
+          pedidoEm(m, X.pres.vintens).estado === 'entregue' && m.saldo.aCaminho === 0 && m.saldo.carteira === 6600, js(m.saldo));
+    return maestro('/trilha?conta=' + X.conta);
+  }).then(function (t) {
+    var pa = (t.eventos || []).filter(function (e) { return e.tipo === 'presente-admin'; }).map(function (e) { return e.dados || {}; });
+    check('a trilha presente-admin: o Bruxo e os 1.000 vinténs, por este Mestre, para esta conta',
+          pa.length === 2 && pa.some(function (d) { return d.sku === 'classe-bruxo' && d.id === X.pres.bruxo; }) &&
+          pa.some(function (d) { return d.vintens === 1000 && d.id === X.pres.vintens; }) &&
+          pa.every(function (d) { return d.por === X.mestre && d.para === X.conta; }), js(pa));
+
+    // ------------------------------------------------------------------------------ cena 5
+    cena('5 · o avatar no ranking');
+    return api('/api/avatar');
+  }).then(function (a) {
+    var ids = (a.opcoes || []).map(function (o) { return o.id; });
+    var quer = ['classe:sumo', 'classe:bruxo', 'classe:curandeiro', 'classe:invocador', 'fus:bruxo+curandeiro', 'fus:bruxo+invocador',
+                'fus:bruxo+sumo', 'fus:curandeiro+invocador', 'fus:curandeiro+sumo', 'fus:invocador+sumo'];
+    check('GET /api/avatar: as 4 classes que a conta tem (ordem do ranking) e as 6 fusões delas; sem gm', a.status === 200 &&
+          js(ids) === js(quer) && a.gm === false && a.escolhido === null, js(ids) + ' ' + js({ gm: a.gm, esc: a.escolhido }));
+    return api('/api/avatar', { avatar: 'classe:invocador' });
+  }).then(function (r) {
+    check('POST classe:invocador → 200, efetivo {avatar null, classe invocador}', r.status === 200 && r.escolhido === 'classe:invocador' &&
+          r.efetivo && r.efetivo.avatar === null && r.efetivo.classe === 'invocador', js(r));
+    return api('/api/ranking');
+  }).then(function (rk) {
+    var eu = ((rk.jogadores || []).filter(function (j) { return j.nome === nome; })[0]) || null;
+    check('o ranking mostra o Xamã na hora (classe invocador, avatar null)', eu && eu.classe === 'invocador' && eu.avatar === null, js(eu));
+    return api('/api/avatar', { avatar: 'fus:bruxo+invocador' });
+  }).then(function (r) {
+    check('POST fus:bruxo+invocador → 200', r.status === 200 && r.escolhido === 'fus:bruxo+invocador', js(r));
+    return api('/api/ranking');
+  }).then(function (rk) {
+    var eu = ((rk.jogadores || []).filter(function (j) { return j.nome === nome; })[0]) || null;
+    check('o ranking mostra a fusão (avatar fus:bruxo+invocador)', eu && eu.avatar === 'fus:bruxo+invocador', js(eu));
+    var v0 = N.estado().versao;
+    P.save();
+    return ate(estavel(v0));
+  }).then(function (ok) {
+    check('um save depois da escolha sobe', ok);
+    return api('/api/ranking');
+  }).then(function (rk) {
+    var eu = ((rk.jogadores || []).filter(function (j) { return j.nome === nome; })[0]) || null;
+    check('... e o ranking continua com a fusão escolhida', eu && eu.avatar === 'fus:bruxo+invocador', js(eu));
+    return api('/api/avatar', { avatar: 'fus:invocador+bruxo' });
+  }).then(function (r) {
+    check('fusão fora da ordem alfabética → 400 avatar inválido', r.status === 400 && r.erro === 'avatar inválido', js(r));
+    return api('/api/avatar', { avatar: 'classe:minotauro' });
+  }).then(function (r) {
+    check('classe:minotauro (não liberado) → 409 com a frase', r.status === 409 && r.erro === 'esse retrato ainda não é seu: libere a classe no jogo', js(r));
+    return api('/api/avatar', { avatar: 'gm' });
+  }).then(function (r) {
+    check('gm numa conta comum → 409 com a frase', r.status === 409 && r.erro === 'o Cavaleiro Negro é só do Mestre do Fundo', js(r));
+    return maestro('/mestre/avatar');
+  }).then(function (r) {
+    var c = r.corpo || {}, ids = (c.opcoes || []).map(function (o) { return o.id; });
+    check('a conta do Mestre: só o Cavaleiro Negro nas opções', r.http === 200 && js(ids) === js(['gm']) && c.gm === true, js(c));
+    return maestro('/mestre/avatar', { avatar: 'classe:sumo' });
+  }).then(function (r) {
+    check('o Mestre tentando outro retrato → 409 com a frase', r.http === 409 && (r.corpo || {}).erro === 'o Mestre do Fundo veste o Cavaleiro Negro', js(r));
+    return maestro('/mestre/avatar', { avatar: 'gm' });
+  }).then(function (r) {
+    check('o Mestre veste gm → 200', r.http === 200, js(r));
+
+    // ------------------------------------------------------------------------------ cena 6
+    cena('6 · estorno e contestação');
+    m0 = moedas();
+    return estorna(X.mp.arca, 'refunded');
+  }).then(function (a) {
+    check('a Arca (já entregue) estornada no Mercado Pago: aviso assinado → 200', a.http === 200, js(a));
+    return estorna(X.mp.tesouro, 'charged_back');
+  }).then(function (a) {
+    check('o Tesouro (já entregue) contestado: aviso assinado → 200', a.http === 200, js(a));
+    return minha();
+  }).then(function (m) {
+    check('os créditos entregues continuam entregues (o servidor não mexe no save); o jogo não perdeu vintém',
+          pedidoEm(m, X.ped.arca).estado === 'entregue' && moedas() === m0, js(pedidoEm(m, X.ped.arca)));
+    return pacote('pacote-1000');
+  }).then(function (r) {
+    X.pag.bolsa = r.pagamento && r.pagamento.id;
+    check('a Bolsa (1.000 por R$ 4,90): 201', r.status === 201 && r.pagamento.preco === 'R$ 4,90', js(r));
+    return pagaEAvisa(X.pag.bolsa);
+  }).then(function (x) {
+    X.mp.bolsa = x.pago.mp_id;
+    return minha();
+  }).then(function (m) {
+    var cr = creditos(m, 'pagamento').filter(function (p) { return p.vintens === 1000; });
+    X.ped.bolsa = cr[0] && cr[0].id;
+    check('a Bolsa paga: 1.000 a caminho, crédito pendente', m.saldo.aCaminho === 1000 && cr.length === 1 && cr[0].estado === 'pendente', js(m.saldo));
+    return estorna(X.mp.bolsa, 'refunded');
+  }).then(function (a) {
+    check('a Bolsa estornada ANTES de o jogo buscar: aviso → 200', a.http === 200, js(a));
+    return minha();
+  }).then(function (m) {
+    check('o crédito da Bolsa virou cancelado; a caminho 0', pedidoEm(m, X.ped.bolsa).estado === 'cancelado' && m.saldo.aCaminho === 0, js(pedidoEm(m, X.ped.bolsa)) + js(m.saldo));
+    m0 = moedas();
+    return L.buscar();
+  }).then(function (r) {
+    check('o jogo busca: nada chega (a Bolsa não entra), carteira igual', r.ok && r.pedidos === 0 && moedas() === m0, js(r) + ' ' + moedas());
+    return api('/api/pagamento/meus');
+  }).then(function (r) {
+    var por = {};
+    (r.pagamentos || []).forEach(function (p) { por[p.id] = p; });
+    // a Arca tem três pagamentos do Mercado Pago (o estornado, o de valor trocado e o de modo trocado): o estado
+    // público dela depende da regra de derivação; a Bolsa tem um só e é a que cobra
+    check('/api/pagamento/meus: a Bolsa estornada; a Arca segue creditada (12.000)', (por[X.pag.bolsa] || {}).estado === 'estornado' &&
+          (por[X.pag.arca] || {}).vintens === 12000, js([por[X.pag.arca], por[X.pag.bolsa], por[X.pag.tesouro]]));
+    return maestro('/ficha?conta=' + X.conta);
+  }).then(function (r) {
+    var f = r.corpo || {}, tipos = (f.alertas || []).map(function (a) { return a.tipo; });
+    var est = (f.alertas || []).filter(function (a) { return a.tipo === 'estorno'; })[0] || {};
+    check('a ficha do Mestre: saldo, pagamentos e os alertas (estorno, contestação, estorno antes da entrega, valor diferente)',
+          r.http === 200 && f.saldo && Array.isArray(f.pagamentos) && f.pagamentos.length === 3 &&
+          ['estorno', 'contestacao', 'estorno-antes-da-entrega', 'valor-diferente'].every(function (t) { return tipos.indexOf(t) >= 0; }), js(tipos) + ' ' + js(f.saldo));
+    check('o alerta de estorno leva o pagamento, os 12.000 vinténs e o pedido entregue',
+          est.dados && String(est.dados.mp) === String(X.mp.arca) && est.dados.vintens === 12000 && est.dados.estadoPedido === 'entregue', js(est));
+    return N.sair ? N.sair() : null;
+  }).then(function () {
+    check('nenhum evento de erro da Nuvem', !nuvemEv.some(function (e) { return /^(erro|recusado)/.test(e); }), nuvemEv.join(' | '));
+    check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+    fim();
+  }).catch(function (e) {
+    check('o fluxo não estoura', false, String(e && (e.stack || e.message) || e));
+    fim();
+  });
+
+  function fim() {
+    document.getElementById('ids').textContent = js(X);
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+})();
+</script>
+</body>
+</html>

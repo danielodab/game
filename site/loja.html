@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Loja — SOTERRA</title>
-<meta name="description" content="A loja do SOTERRA: troque os vinténs que você juntou no jogo por pergaminhos, pedras de forja e personagens.">
+<meta name="description" content="A loja do SOTERRA: personagens, bônus de XP, pedras de forja, insígnias de guilda e pergaminhos por vinténs, e os pacotes de vinténs pelo Mercado Pago.">
 <script>
   // a folha e os scripts com o hash do build (o mapa de js/versao.js); sem
   // mapa (em casa), o carimbo ?t= do instante: ver o comentário em site/index.html
@@ -23,18 +23,25 @@
 </script>
 <noscript><link rel="stylesheet" href="site.css"></noscript>
 <!--
-  A loja de vinténs (Fase C). O script mora em loja.js.
+  A loja (Fase C; a loja 2 em 10/09). O script mora em loja.js.
   NENHUM PREÇO mora no site: o catálogo inteiro (nome, descrição, preço e
-  limite) vem de GET /api/loja/catalogo, e quem muda um preço é o servidor
-  (servidor/loja.py, CATALOGO). Com sessão, GET /api/loja/minha traz o saldo
-  do último save que subiu, os limites, as classes e os pedidos.
+  limite) e os pacotes de vinténs (com o preço em reais já escrito) vêm de
+  GET /api/loja/catalogo, e quem muda um preço é o servidor (servidor/loja.py,
+  CATALOGO e PACOTES). Com sessão, GET /api/loja/minha traz o saldo do último
+  save que subiu, o que está a caminho (pacotes pagos e presentes), os limites,
+  as classes e os pedidos.
   A compra é um PEDIDO: o servidor reserva os vinténs e o jogo entrega (e
   desconta da carteira) quando abrir logado na conta Principal. Depois de
   comprar, a página avisa o jogo aberto no mesmo navegador por
   BroadcastChannel('soterra-loja').
+  Os pacotes de vinténs são pagos no Mercado Pago (Pix ou cartão): a página
+  só segue o endereço que o servidor devolve se ele for do Mercado Pago, e na
+  volta (?pagamento=ID) lê só o número, limpa o endereço e pede ao servidor
+  que confira; quem credita é o servidor. Sem os pagamentos ligados no
+  servidor, os pacotes aparecem "em breve".
   Os personagens usam os retratos de site/img/ (classe-<id>.webp, com a
-  moldura da inicial na cor da classe quando falta o arquivo); a pedra é só
-  CSS, na cor do elemento.
+  moldura da inicial na cor da classe quando falta o arquivo); a pedra, o
+  bônus e a insígnia são só CSS e glifo.
 -->
 </head>
 <body>
@@ -58,9 +65,13 @@
 <section class="secao loja">
   <div class="miolo">
     <h2>Loja</h2>
-    <p class="sub">Troque os vinténs que você juntou descendo pelos calabouços por pergaminhos, pedras de forja e personagens. Só vinténs do jogo, nada de dinheiro de verdade. Os preços são pensados para não atropelar o jogo: o que é bom continua sendo conquistado lá embaixo.</p>
+    <p class="sub">Personagens, bônus de XP, pedras de forja, insígnias de guilda e pergaminhos, por vinténs. Os vinténs vêm das descidas ou dos pacotes (Pix ou cartão, pelo Mercado Pago). Os preços são pensados para não atropelar o jogo: quem desce, conquista; quem tem pressa, adianta.</p>
+
+    <div class="volta-pagamento" id="lj-volta" role="status" hidden></div>
 
     <div class="saldo-caixa" id="lj-saldo"><div class="estado">carregando…</div></div>
+
+    <section class="pacotes-caixa" id="lj-pacotes" hidden></section>
 
     <div id="lj-catalogo"><div class="estado">carregando o catálogo…</div></div>
 
@@ -68,6 +79,12 @@
       <div class="pedidos-cab"><h3>Seus pedidos</h3><button type="button" class="btn btn-mini" id="lj-atualizar">atualizar</button></div>
       <p class="apoio">Um pedido espera o jogo abrir logado na conta Principal; aí ele vai a caminho, e o jogo entrega e desconta da carteira. Dá para cancelar enquanto espera.</p>
       <ul class="lista-pedidos" id="lj-pedidos"></ul>
+    </div>
+
+    <div id="lj-pagamentos-caixa" hidden>
+      <div class="pedidos-cab"><h3>Seus pacotes</h3></div>
+      <p class="apoio">Os pacotes de vinténs pagos no Mercado Pago. Aprovado o pagamento, os vinténs entram na sua conta na hora e chegam ao jogo na próxima abertura.</p>
+      <ul class="lista-pedidos" id="lj-pagamentos"></ul>
     </div>
 
     <div class="aviso flutua" id="lj-aviso" role="status"></div>

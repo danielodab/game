@@ -127,6 +127,7 @@
       try { if (DB() && DB().importar && r.db) DB().importar(r.db); } catch (e3) {}
       return true;
     }
+    try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('nuvem'); } catch (eB) {}   // a marca de abertura (index.html) sai antes: é recarga de propósito
     try { location.reload(); } catch (e4) {}
     return true;
   }
@@ -209,6 +210,7 @@
       if ((atual.gm === true) === gm && atual.nome === r.conta.nome && atual.id === r.conta.id) return false;
       s.guarda({ token: s.token(), conta: { id: r.conta.id, nome: r.conta.nome, gm: gm } });
       avisa('conta', { gm: gm });
+      if (!N.semRecarga) try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('nuvem'); } catch (eB) {}   // a marca de abertura sai antes
       if (!N.semRecarga) { try { location.reload(); } catch (e) {} }
       return true;
     });
@@ -266,6 +268,7 @@
         versao = 0;
         gravaRegistro(0, cid, true);
         avisa('limpou', { conta: cid });
+        if (!N.semRecarga) try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('nuvem'); } catch (eB) {}   // a marca de abertura sai antes
         if (!N.semRecarga) { try { location.reload(); } catch (e5) {} return r; }
         return N.empurrar();
       }

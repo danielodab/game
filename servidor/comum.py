@@ -16,6 +16,7 @@ import hashlib
 import ipaddress
 import math
 import time
+from urllib.parse import parse_qs
 
 import nomes                     # a lei dos nomes (servidor/nomes.py), gêmea de js/core/nomes.js
 
@@ -188,3 +189,34 @@ def ip_do_pedido(xff, endereco_socket):
                 return str(ip)
     ip = le_ip(endereco_socket)
     return str(ip) if ip is not None else ''
+
+
+# ---- a Loja 2 (10/09) -----------------------------------------------------------------
+# as classes que já nascem liberadas (startsUnlocked em classes.js; tests/servidor_api.py
+# confere): o retrato delas é de toda conta (conta.py, o retrato do ranking)
+INICIAIS = ('sumo', 'curandeiro')
+CONSULTA_MAX = 2000              # caracteres da consulta da URL (?id=, ?data.id=…)
+
+
+def liberadas(progress):
+    """As classes liberadas no progress do save (`unlockedClasses`), com o nome antigo corrigido."""
+    lista = progress.get('unlockedClasses') if isinstance(progress, dict) else None
+    if not isinstance(lista, list):
+        return set()
+    return {CLASSE_RENOMEADA.get(c, c) for c in lista if isinstance(c, str)}
+
+
+def le_consulta(q):
+    """A consulta da URL (o que vem depois do '?') como {chave: primeiro valor}. O
+    painel do Mestre (GET ?id=N) e o aviso do Mercado Pago (?data.id=…&type=…) a
+    usam; o atendente a põe em corpo['_query'] DEPOIS de ler o corpo (o cliente
+    não a escolhe pelo JSON). Mais de 2000 caracteres ou 20 campos: 400."""
+    if not q:
+        return {}
+    if len(q) > CONSULTA_MAX:
+        raise Recusa(400, 'consulta grande demais')
+    try:
+        pares = parse_qs(q, keep_blank_values=True, max_num_fields=20)
+    except ValueError:
+        raise Recusa(400, 'consulta inválida')
+    return {k: v[0] for k, v in pares.items()}

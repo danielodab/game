@@ -482,7 +482,8 @@ var JOGO = (typeof window !== 'undefined')
    * jogo retira os pedidos no cartório e os aplica (js/core/loja.js). Aqui
    * mora a ANOTAÇÃO do que este save já tratou:
    *   aplicadas  [id]            entregues aqui: os vinténs saíram do bolso
-   *                              e o item entrou no Progress
+   *                              e o item entrou no Progress (num CRÉDITO de
+   *                              vinténs — loja 2, `lojaCredita` —, entraram)
    *   recusadas  [{id, motivo}]  devolvidos (o servidor estorna)
    * A foto sobe no PUT /api/save de sempre, e o SERVIDOR fecha os pedidos no
    * mesmo BEGIN IMMEDIATE que grava o save — a entrega nunca se separa da
@@ -577,6 +578,32 @@ var JOGO = (typeof window !== 'undefined')
     lojaAnota(l.recusadas, { id: id, motivo: motivoLoja(motivo || 'erro-local') });
     grava();
     return responde({ ok: true, moedas: d.carteira.moedas });
+  };
+  /* O CRÉDITO DE VINTÉNS (loja 2, 10/09): um pacote pago no site (Mercado
+   * Pago) ou um presente de vinténs do Mestre chega como pedido de preço 0 com
+   * a entrega {tipo:'vintens', alvo:'carteira', qtd}. Como `lojaAplica`, DECIDE
+   * E GRAVA de uma vez por dentro: o id já tratado recebe {ja:true}; senão os
+   * vinténs entram no BOLSO e o id vai para `aplicadas` no MESMO grava() — um
+   * crédito nunca entra duas vezes, nem pela metade. Quantia torta (fora de
+   * 1..10.000.000, não inteira) volta {ok:false, erro} sem anotar. O cofre sem
+   * fundo do Mestre só anota (o bolso dele já responde 999999). */
+  DB.lojaCredita = function (id, qtd) {
+    var d = carrega(), l = lojaDe(d);
+    id = idLoja(id);
+    if (!id) return responde({ ok: false, erro: 'pedido inválido' });
+    if (lojaTratou(l, id)) return responde({ ok: false, ja: true });
+    if (!(typeof qtd === 'number' && isFinite(qtd) && Math.floor(qtd) === qtd && qtd >= 1 && qtd <= 10000000)) {
+      return responde({ ok: false, erro: 'quantia inválida' });
+    }
+    if (bolsoSemFundo()) {
+      lojaAnota(l.aplicadas, id);
+      grava();
+      return responde({ ok: true, moedas: 999999, semFundo: true });
+    }
+    d.carteira.moedas += qtd;
+    lojaAnota(l.aplicadas, id);
+    grava();
+    return responde({ ok: true, moedas: d.carteira.moedas, creditou: qtd });
   };
 
   // --------------------------------------------------------------- históricos

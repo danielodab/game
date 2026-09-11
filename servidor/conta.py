@@ -27,17 +27,29 @@ As regras que seguram o resto:
     (_freia_por_ip), que conta só as senhas ERRADAS: LOGIN_POR_IP no login e
     SENHA_POR_IP em cada rota com senha, cada uma no seu balde; o acerto
     devolve a vaga, e quem divide o endereço (CGNAT, escola) não se tranca
-    entrando. CADASTRO_POR_IP no cadastro conta todos, e fecha o oráculo "esse
-    e-mail já tem conta". O acerto tem o balde dele, POR CONTA
+    entrando — nem entrando JUNTO: com o balde cheio de vagas ainda no
+    PBKDF2, o pedido espera uma voltar, em vez do 429. CADASTRO_POR_IP no
+    cadastro conta todos, e fecha o oráculo "esse e-mail já tem conta". O
+    acerto tem o balde dele, POR CONTA
     (LOGIN_OK_POR_CONTA, SENHA_OK_POR_CONTA), que só quem sabe a senha enche.
     No IPv6, todo freio conta pelo /64 (comum.chave_do_ip).
   - O login não conta quem tem conta: o nome que não existe paga o MESMO
     PBKDF2 (SAL_DE_FACHADA) e recebe a mesma resposta, no mesmo tempo, com a
     mesma 11ª (a contagem das erradas vale também para ele).
+
+O RETRATO NO RANKING (Loja 2, 10/09): na página da conta o jogador escolhe o
+retrato que o ranking mostra (GET/POST /api/avatar), entre as classes que tem
+no último save (as liberadas, as das fichas e as duas iniciais) e as fusões de
+qualquer dupla delas; o Cavaleiro Negro ('gm') é só da conta com a marca de
+Mestre, e ela só veste ele. Fica na tabela `avatares` (nova: sem ALTER). O
+_resumo do api.py passa por `_retrato_escolhido`: a escolha que o save não
+sustenta mais cai no automático (a fusão do avatar do jogo, senão a classe do
+melhor herói). O avatar do JOGO (o corpo na praça) não muda por causa disto.
 """
 import hashlib
 import hmac
 import ipaddress
+import itertools
 import logging
 import os
 import re
@@ -49,6 +61,7 @@ import time
 
 from comum import (LOGIN_JANELA, SESSAO_DIAS, Recusa, agora, chave_do_ip, email_novo_valido, email_valido,
                    ip_e_publico, le_ip, pica_senha, senha_valida)
+from comum import CLASSES_RANK, INICIAIS, classe_do_heroi, liberadas
 
 log = logging.getLogger('api')
 
@@ -66,6 +79,9 @@ LOGIN_OK_POR_CONTA = 60          # logins CERTOS por conta por hora (cada um é 
 SENHA_OK_POR_CONTA = 10          # trocas de senha por conta por hora (dois PBKDF2 e um e-mail de aviso cada)
 CADASTRO_POR_IP = 10             # cadastros por IP por hora (fecha o oráculo do 409 e o PBKDF2 de graça)
 TENTATIVAS_CHAVES = 5000         # teto de chaves na contagem em memória das senhas erradas (os nomes que não existem)
+VAGA_ESPERA = 5.0                # s que um pedido de senha espera uma vaga do balde do IP presa num PBKDF2 em curso
+VAGA_PASSO = 0.05                # s entre uma olhada e outra no balde, enquanto espera
+VAGA_DE_NOVO = 60                # o liberaEm (agora + isto) de quem não pôde esperar: as vagas em voo voltam logo
 # O login de um nome que não existe paga o MESMO PBKDF2 contra este sal (o formato do sal de uma conta):
 # sem ele, o relógio contava quem tem conta — 15 ms sem PBKDF2 contra 138 ms com.
 SAL_DE_FACHADA = 'e80dbac5ca63f28ad6f97ce5851376ab'
@@ -84,6 +100,8 @@ FRASE_IP_SENHA = 'tentativas demais deste endereço; tente de novo mais tarde'
 FRASE_IP_CADASTRO = 'cadastros demais deste endereço; tente de novo mais tarde'
 FRASE_LOGINS_CONTA = 'logins demais nesta conta; tente de novo mais tarde'
 FRASE_TROCAS_SENHA = 'trocas de senha demais nesta hora; tente de novo mais tarde'
+AVATAR_TROCAS_POR_HORA = 30      # trocas de retrato por conta por hora (cada uma refaz a foto do ranking)
+AVATAR_TAM = 40
 
 # Só tabelas novas (e um índice): o contêiner velho e o novo sobem juntos no
 # mesmo banco no rolling update do Coolify, e uma coluna nova quebraria o velho.
@@ -115,6 +133,12 @@ CREATE TABLE IF NOT EXISTS sessoes_extra(
 );
 -- a atividade da conta (GET /api/conta) lê os 10 últimos eventos dela
 CREATE INDEX IF NOT EXISTS eventos_conta ON eventos(conta_id, id);
+-- o retrato que o jogador escolheu no site (10/09): o ranking usa; sem linha = automático
+CREATE TABLE IF NOT EXISTS avatares(
+  conta_id     INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
+  avatar       TEXT NOT NULL,
+  escolhido_em INTEGER NOT NULL
+);
 """
 
 
@@ -176,9 +200,71 @@ def id_sessao(token):
     return hashlib.sha256(token.encode('utf-8')).hexdigest()[:12]
 
 
+def _desconta(contagem, chave):
+    """Um a menos em contagem[chave]; no zero, a chave sai (o voo e a fila do
+    freio por IP não crescem sem fim)."""
+    n = contagem.get(chave, 0) - 1
+    if n > 0:
+        contagem[chave] = n
+    else:
+        contagem.pop(chave, None)
+
+
 def _descreve(erro):
     # CorreioFalhou já vem limpo (sem endereço, sem senha); qualquer outra coisa, só o tipo
     return str(erro) if erro.__class__.__name__ == 'CorreioFalhou' else erro.__class__.__name__
+
+
+# ---- o retrato no ranking (Loja 2, 10/09) --------------------------------------------------
+def opcoes_de_avatar(progress, gm):
+    """Os retratos que a conta pode escolher, na ordem da página: a conta do
+    Mestre, só o Cavaleiro Negro; as outras, as classes que têm no save (as
+    liberadas, as das fichas e as duas iniciais), na ordem de classes.js, e
+    depois as fusões de qualquer dupla delas (o par em ordem alfabética, como
+    os retratos do site). Sem save: as duas iniciais e a fusão delas."""
+    if gm:
+        return ['gm']
+    tem = set(liberadas(progress)) | set(INICIAIS)
+    herois = progress.get('heroes') if isinstance(progress, dict) else None
+    if isinstance(herois, dict):
+        tem |= {classe_do_heroi(hid, h) for hid, h in herois.items() if isinstance(h, dict)}
+    tem = [c for c in CLASSES_RANK if c in tem]
+    return ['classe:' + c for c in tem] + ['fus:%s+%s' % par for par in itertools.combinations(sorted(tem), 2)]
+
+
+def avatar_valido(v):
+    """A gramática do id: 'classe:<id>', 'fus:<a>+<b>' (a < b, as duas do jogo) ou 'gm'."""
+    if not isinstance(v, str) or len(v) > AVATAR_TAM:
+        return False
+    if v == 'gm':
+        return True
+    if v.startswith('classe:'):
+        return v[7:] in CLASSES_RANK
+    if v.startswith('fus:'):
+        par = v[4:].split('+')
+        return len(par) == 2 and par[0] in CLASSES_RANK and par[1] in CLASSES_RANK and par[0] < par[1]
+    return False
+
+
+def opcao_publica(o):
+    if o == 'gm':
+        return {'id': 'gm', 'tipo': 'gm'}
+    if o.startswith('classe:'):
+        return {'id': o, 'tipo': 'classe', 'classe': o[7:]}
+    return {'id': o, 'tipo': 'fusao', 'par': o[4:].split('+')}
+
+
+def retrato_do_ranking(escolha, opcoes, automatico):
+    """(avatar, classe) que o ranking mostra: a fusão escolhida (com a classe do
+    melhor herói, como hoje), a classe escolhida (sem fusão) ou, sem escolha ou
+    com uma que o save não sustenta mais, o automático. O 'gm' não muda nada
+    aqui: a conta do Mestre no ranking é assunto da caixa da Equipe."""
+    if isinstance(escolha, str) and escolha in opcoes:
+        if escolha.startswith('fus:'):
+            return escolha, automatico[1]
+        if escolha.startswith('classe:'):
+            return None, escolha[7:]
+    return automatico
 
 
 # ---- o mixin --------------------------------------------------------------------------
@@ -254,42 +340,89 @@ class ContaMixin:
             if self._tentativas_estouradas(cid):
                 raise Recusa(429, MUITAS_TENTATIVAS, liberaEm=self._libera_tentativas(cid))
 
-    def _freia_por_ip(self, corpo, rotulo, maximo, t, frase):
+    def _freia_por_ip(self, corpo, rotulo, maximo, t, frase, so_erradas=False):
         """O freio por IP das rotas que gastam um PBKDF2 (login, cadastro,
         senha): `maximo` por hora por endereço público (o /64, no IPv6),
         contado no banco (vale entre os dois processos do rolling update). A
         vaga é reservada ANTES do PBKDF2, na mesma transação que conta — uma
-        rajada paralela não passa do teto — e o id dela volta para quem chama:
-        as rotas de senha só contam as ERRADAS e devolvem a vaga
-        (_solta_vaga) quando a senha bate; o cadastro conta todos. IP privado
-        ou loopback: sem freio (None), como no esqueci (senão valeria para todo
-        mundo junto)."""
+        rajada paralela não passa do teto — e volta para quem chama. O
+        cadastro conta todos. As rotas de senha (so_erradas) só contam as
+        ERRADAS: enquanto o PBKDF2 corre, a vaga fica EM VOO (self._em_voo,
+        deste processo); a senha bateu, ela volta (_solta_vaga); errou, a
+        linha fica. Quem chama sempre a pousa (_pousa_vaga, num finally).
+        Balde cheio, mas cheio também de vagas em voo — logins CERTOS juntos
+        do mesmo endereço, que vão devolvê-las —: o pedido ESPERA uma delas
+        resolver, em vez do 429, até VAGA_ESPERA e com no máximo `maximo` na
+        fila (self._fila). Quem espera não gasta PBKDF2, então a rajada de
+        erradas continua parando no teto; e o vizinho de CGNAT não se tranca
+        entrando junto. IP privado ou loopback: sem freio (None), como no
+        esqueci (senão valeria para todo mundo junto)."""
         chave_ip = self._chave_ip(corpo)
         if not chave_ip:
             return None
         chave = '%s-ip:%s' % (rotulo, chave_ip)
-        with self._escrita():
-            libera = self._conta_limite(chave, maximo, HORA, t)
-            if libera is not None:
-                raise Recusa(429, frase, liberaEm=libera)
-            return self._anota_limite(chave, t)
+        fim, na_fila = time.monotonic() + VAGA_ESPERA, False
+        try:
+            while True:
+                with self._escrita():
+                    em = [r[0] for r in self.con.execute(
+                        "SELECT em FROM limites WHERE chave = ? AND em > ? ORDER BY em", (chave, t - HORA))]
+                    if len(em) < maximo:
+                        vaga = {'chave': chave, 'id': self._anota_limite(chave, t), 'voo': so_erradas}
+                        if so_erradas:
+                            self._em_voo[chave] = self._em_voo.get(chave, 0) + 1
+                        return vaga
+                    # cheio. Das linhas, as EM VOO (deste processo) ainda podem voltar; o resto é
+                    # senha errada (ou vaga do outro processo, no rolling update): o 429 de sempre
+                    if len(em) - (self._em_voo.get(chave, 0) if so_erradas else 0) >= maximo:
+                        raise Recusa(429, frase, liberaEm=em[len(em) - maximo] + HORA)
+                    if not na_fila:
+                        if self._fila.get(chave, 0) >= maximo:
+                            raise Recusa(429, frase, liberaEm=agora() + VAGA_DE_NOVO)
+                        self._fila[chave] = self._fila.get(chave, 0) + 1
+                        na_fila = True
+                if time.monotonic() >= fim:         # os PBKDF2 em curso não acabaram a tempo (servidor atolado)
+                    raise Recusa(429, frase, liberaEm=agora() + VAGA_DE_NOVO)
+                time.sleep(VAGA_PASSO)
+                t = agora()
+        finally:
+            if na_fila:
+                with self.tranca:
+                    _desconta(self._fila, chave)
 
     def _solta_vaga(self, vaga):
         """Dentro de uma transação: a vaga que _freia_por_ip reservou volta (a
-        senha bateu; o balde do IP das rotas de senha conta só as erradas)."""
+        senha bateu, ou o pedido parou antes do PBKDF2: o balde do IP das rotas
+        de senha conta só as erradas). A linha some; do voo, sai no _pousa_vaga."""
         if vaga is not None:
-            self.con.execute("DELETE FROM limites WHERE id = ?", (vaga,))
+            self.con.execute("DELETE FROM limites WHERE id = ?", (vaga['id'],))
 
-    def _barra_logins_certos(self, cid, t):
+    def _pousa_vaga(self, vaga):
+        """Num finally, DEPOIS da transação que resolveu a vaga (apagou a linha,
+        ou a deixou como senha errada): ela sai do voo, uma vez só, e quem
+        espera na fila volta a olhar o balde. Nessa ordem, quem espera nunca vê
+        a vaga fora do voo com a linha ainda lá — o que seria um 429 à toa."""
+        if vaga is None or not vaga['voo']:
+            return
+        with self.tranca:
+            vaga['voo'] = False
+            _desconta(self._em_voo, vaga['chave'])
+
+    def _barra_logins_certos(self, cid, t, vaga=None):
         """Dentro da tranca, antes do PBKDF2: 429 se a conta já teve
         LOGIN_OK_POR_CONTA logins certos na última hora. O balde do IP não
         conta mais o acerto; sem este, quem tem uma conta faria login certo em
         laço (um PBKDF2 e uma sessão nova cada), o que o freio antigo segurava.
         Só quem sabe a senha o enche, e ele não é de mais ninguém: não tranca o
         vizinho de CGNAT. Nome que não existe (cid None) consulta o balde 0,
-        que nunca enche: a mesma consulta nos dois caminhos."""
+        que nunca enche: a mesma consulta nos dois caminhos. Barrado aqui,
+        nenhum PBKDF2 foi gasto: a vaga do IP volta (senão quem insiste na
+        conta que estourou enchia o balde do vizinho de CGNAT)."""
         libera = self._conta_limite('login-ok:%d' % (cid or 0), LOGIN_OK_POR_CONTA, HORA, t)
         if libera is not None:
+            if vaga is not None:
+                self._solta_vaga(vaga)
+                self.con.commit()
             raise Recusa(429, FRASE_LOGINS_CONTA, liberaEm=libera)
 
     def _login_certo(self, cid, vaga, t):
@@ -337,16 +470,19 @@ class ContaMixin:
         pelo freio por IP da rota (`rotulo`: 'senha' ou 'email', cada uma no
         seu balde de SENHA_POR_IP), que só fica com a vaga de quem ERRA."""
         cid = conta['id']
-        vaga = self._freia_por_ip(corpo, rotulo, SENHA_POR_IP, agora(), FRASE_IP_SENHA)
-        if hmac.compare_digest(pica_senha(senha, conta['sal']), conta['senha_hash']):
-            if vaga is not None:
-                with self._escrita():
-                    self._solta_vaga(vaga)
-            return
-        self._barra_tentativas(cid)
-        with self._escrita():
-            self.tentativas.setdefault(cid, []).append(agora())
-            self._evento(cid, 'senha-recusada', None)
+        vaga = self._freia_por_ip(corpo, rotulo, SENHA_POR_IP, agora(), FRASE_IP_SENHA, so_erradas=True)
+        try:
+            if hmac.compare_digest(pica_senha(senha, conta['sal']), conta['senha_hash']):
+                if vaga is not None:
+                    with self._escrita():
+                        self._solta_vaga(vaga)
+                return
+            self._barra_tentativas(cid)
+            with self._escrita():
+                self.tentativas.setdefault(cid, []).append(agora())
+                self._evento(cid, 'senha-recusada', None)
+        finally:
+            self._pousa_vaga(vaga)              # sai do voo depois de resolvida, bata a senha ou não
         raise Recusa(400, frase)
 
     def _envia_depois(self, para, assunto, texto, rotulo, ao_falhar=None):
@@ -679,3 +815,66 @@ class ContaMixin:
             if n:
                 self._evento(cid, 'sessoes-encerradas', {'modo': modo, 'quantas': n})
         return 200, {'ok': True, 'encerradas': n, 'estaEncerrada': esta}
+
+    # -- o retrato no ranking (Loja 2, 10/09) ------------------------------------------------
+    def _retrato_escolhido(self, cid, conta, progress, avatar, principal):
+        """Dentro da transação do _resumo (api.py): (avatar, classe) do ranking
+        com a escolha do site, se o save ainda a sustenta; senão o automático."""
+        r = self.con.execute("SELECT avatar FROM avatares WHERE conta_id = ?", (cid,)).fetchone()
+        if r is None:
+            return avatar, principal
+        return retrato_do_ranking(r['avatar'], opcoes_de_avatar(progress, bool(conta['gm'])), (avatar, principal))
+
+    def _retrato_atual(self, cid):
+        """O que o ranking mostra agora (a linha de resumos_extra)."""
+        r = self.con.execute("SELECT avatar, classe FROM resumos_extra WHERE conta_id = ?", (cid,)).fetchone()
+        return {'avatar': r['avatar'], 'classe': r['classe']} if r is not None else {'avatar': None, 'classe': None}
+
+    # -- GET /api/avatar -------------------------------------------------------------------
+    def avatar_ler(self, conta, corpo):
+        cid, gm = conta['id'], bool(conta['gm'])
+        with self.tranca:
+            save = self._loja_save(cid)
+            r = self.con.execute("SELECT avatar FROM avatares WHERE conta_id = ?", (cid,)).fetchone()
+            efetivo = self._retrato_atual(cid)
+        opcoes = opcoes_de_avatar(save['progress'] if save else None, gm)
+        return 200, {'ok': True, 'escolhido': r['avatar'] if r is not None else None, 'efetivo': efetivo,
+                     'opcoes': [opcao_publica(o) for o in opcoes], 'semSave': save is None, 'gm': gm}
+
+    # -- POST /api/avatar {avatar} ----------------------------------------------------------
+    def avatar_escolher(self, conta, corpo):
+        if 'avatar' not in corpo:
+            raise Recusa(400, 'avatar inválido')
+        avatar = corpo.get('avatar')                    # null = automático
+        if avatar is not None and not avatar_valido(avatar):
+            raise Recusa(400, 'avatar inválido')
+        cid, gm, t = conta['id'], bool(conta['gm']), agora()
+        with self._escrita():
+            save = self._loja_save(cid)
+            progress = save['progress'] if save else None
+            if avatar is not None:
+                if gm and avatar != 'gm':
+                    raise Recusa(409, 'o Mestre do Fundo veste o Cavaleiro Negro')
+                if not gm and avatar == 'gm':
+                    raise Recusa(409, 'o Cavaleiro Negro é só do Mestre do Fundo')
+                if avatar not in opcoes_de_avatar(progress, gm):
+                    raise Recusa(409, 'esse retrato ainda não é seu: libere a classe no jogo')
+            chave = 'avatar:%d' % cid
+            libera = self._conta_limite(chave, AVATAR_TROCAS_POR_HORA, HORA, t)
+            if libera is not None:
+                raise Recusa(429, 'trocas de avatar demais nesta hora (%d)' % AVATAR_TROCAS_POR_HORA, liberaEm=libera)
+            self._anota_limite(chave, t)
+            if avatar is None:
+                self.con.execute("DELETE FROM avatares WHERE conta_id = ?", (cid,))
+            else:
+                self.con.execute("INSERT OR REPLACE INTO avatares(conta_id, avatar, escolhido_em) VALUES (?, ?, ?)",
+                                 (cid, avatar, t))
+            # o ranking já mostra: a foto pública desta conta refeita a partir do
+            # último save (o mesmo _resumo do salvar, com a data do save)
+            if save is not None:
+                self._resumo(cid, conta, progress, save['db'], save['em'])
+            self._ranking_guardado = None
+            self._evento(cid, 'avatar', {'avatar': avatar})
+            efetivo = self._retrato_atual(cid)
+        log.info("conta: #%d escolheu o retrato %s", cid, avatar or 'automático')
+        return 200, {'ok': True, 'escolhido': avatar, 'efetivo': efetivo}

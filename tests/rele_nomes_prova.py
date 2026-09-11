@@ -631,6 +631,18 @@ def primeiro(lista, t, quem):
     return achados[0] if achados else {}
 
 
+def sem_cx(an):
+    """O anúncio sem o `cx` (11/09: o id da conexão, sorteado pelo relé — 8
+    hex), para comparar com o texto fixo de antes; None se o cx faltou ou veio torto."""
+    try:
+        a = json.loads(an)
+    except Exception:
+        return None
+    if not isinstance(a, dict) or not re.fullmatch(r'[0-9a-f]{8}', str(a.pop('cx', ''))):
+        return None
+    return json.dumps(a, separators=(',', ':'))
+
+
 def _prova_com_banco(R, banco, contas):
     rl = Rele(['--banco', banco])
     texto_log = ''
@@ -644,11 +656,11 @@ def _prova_com_banco(R, banco, contas):
 
         obs, an = rl.liga()
         check(R + 'com --banco o relé se anuncia com ident:true, antes de qualquer outra coisa',
-              an == '{"t":"rele","v":1,"ident":true}', repr(an))
+              sem_cx(an) == '{"t":"rele","v":1,"ident":true}', repr(an))
         manda(obs, t='pulso', de='obs', x=0, z=0, sala=None)
         jw, an = rl.liga('marcajoana01')
         check(R + 'e devolve em `n` a marca que o cliente pôs no endereço',
-              an == '{"t":"rele","v":1,"ident":true,"n":"marcajoana01"}', repr(an))
+              sem_cx(an) == '{"t":"rele","v":1,"ident":true,"n":"marcajoana01"}', repr(an))
         time.sleep(0.2)
         junta(obs, 0.1)
 
@@ -819,7 +831,7 @@ def _prova_sem_banco(R):
         obs, an = rl.liga()
         w, an2 = rl.liga('marcasemb01')
         check(R + 'sem --banco o anúncio diz ident:false (o cliente novo nem manda o token)',
-              an == '{"t":"rele","v":1,"ident":false}' and an2 == '{"t":"rele","v":1,"ident":false,"n":"marcasemb01"}',
+              sem_cx(an) == '{"t":"rele","v":1,"ident":false}' and sem_cx(an2) == '{"t":"rele","v":1,"ident":false,"n":"marcasemb01"}',
               '%r %r' % (an, an2))
         manda(obs, t='pulso', de='obs', x=0, z=0, sala=None)
         time.sleep(0.2)
@@ -861,7 +873,7 @@ def _prova_banco_ausente(R, pasta, contas):
     finally:
         texto_log = rl.fecha()
     check(R + 'banco ausente: o anúncio diz ident:true (há --banco), o ident ouve ident-nao',
-          an == '{"t":"rele","v":1,"ident":true}' and r == '{"t":"ident-nao"}', '%r %r' % (an, r))
+          sem_cx(an) == '{"t":"rele","v":1,"ident":true}' and r == '{"t":"ident-nao"}', '%r %r' % (an, r))
     check(R + 'e nada cai: o relé segue de pé e repassando', chegou and vivo)
     check(R + 'o arquivo ausente não é criado, e o log avisa que ele ainda não existe',
           not os.path.exists(ausente) and 'ainda não existe' in texto_log)

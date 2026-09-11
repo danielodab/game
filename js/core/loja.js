@@ -25,14 +25,35 @@
  *   1. id já anotado: pula;
  *   2. tipo desconhecido: pula SEM anotar (uma versão nova do jogo aplica);
  *   3. checagem de leitura: pedra fora de DATA.stones ou a Âncora, classe
- *      inexistente/que nasce liberada/gm → 'item-invalido'; classe já
- *      liberada → 'classe-ja-liberada' (estorno; nunca vira carta de estrela);
- *   4. DB.lojaAplica decide e grava por dentro (sem saldo → 'sem-saldo');
+ *      inexistente/que nasce liberada/gm, quantidade torta, bônus sem o
+ *      `agora` do servidor → 'item-invalido'; classe já liberada →
+ *      'classe-ja-liberada' (estorno; nunca vira carta de estrela);
+ *   4. DB.lojaAplica decide e grava por dentro (sem saldo → 'sem-saldo') —
+ *      ou, no CRÉDITO de vinténs, DB.lojaCredita (soma e anota; nada a entregar);
  *   5. no .then IMEDIATO, sem rede no meio, a entrega pelo Progress; se ela
  *      lançar, DB.lojaDesfaz devolve os vinténs ('erro-local');
- *   6. window 'soterra:loja' {tipo:'entregue'|'recusado', pedido, motivo}.
+ *   6. window 'soterra:loja' {tipo:'entregue'|'recusado', pedido, motivo,
+ *      origem[, ate]}.
  *
- * JOGO.Loja: buscar(), aplicar(pedido) → Promise<{ok, motivo}>, estado().
+ * AS ENTREGAS DA LOJA 2 (10/09) — a mesma fila, três tipos a mais:
+ *   bonus-xp  {alvo:'xp', qtd: dias 1..366, agora}: o bônus de XP por TEMPO.
+ *             `agora` é o relógio do SERVIDOR (epoch em segundos) no instante
+ *             da retirada: o prazo corre a partir da ENTREGA, e comprar de novo
+ *             SOMA dias (Progress.addBonusXpDias). Sem `agora`, 'item-invalido'.
+ *   insignias {alvo:'fundacao', qtd 1..999}: Progress.addInsignia.
+ *   vintens   {alvo:'carteira', qtd 1..10.000.000}: um CRÉDITO de preço 0 (um
+ *             pacote pago no site, ou um presente do Mestre). Não passa pelo
+ *             lojaAplica: DB.lojaCredita decide, soma no bolso e anota num
+ *             gravar só. O retirar vem em ORDEM DE ID e o crédito nasce antes
+ *             de qualquer compra feita com ele: na mesma busca ele entra antes.
+ * AS ORIGENS: o pedido pode trazer `origem` — 'presente' (o Mestre deu, pelo
+ * painel dele: preço 0, o MESMO caminho, nenhuma regra à parte) ou 'pagamento'
+ * (os vinténs de um pacote pago). Sem ela, ou com outra coisa, é compra da
+ * loja. O aviso leva `detail.origem` ('loja' | 'presente' | 'pagamento') — a
+ * HUD escreve "Presente do Mestre: …" ou "Chegaram N vinténs do seu pacote" —
+ * e, no bônus entregue, `detail.ate` (o fim do prazo, em segundos do servidor).
+ *
+ * JOGO.Loja: buscar(), aplicar(pedido) → Promise<{ok, motivo, origem}>, estado().
  * Ganchos de teste: `_semRede` (uma função (rota, op) → resposta, no lugar do
  * cartório), `_semTrava` (sem a trava entre abas) e `_reinicia()` (o módulo
  * volta ao estado de página nova). */
@@ -50,7 +71,11 @@
    * na hora. */
   L._semTrava = false;
 
-  var TIPOS = { pedras: 1, classe: 1, pergaminho: 1 };
+  // as entregas que esta versão sabe aplicar (a tabela 4.6 do plano da loja 2)
+  var TIPOS = { pedras: 1, classe: 1, pergaminho: 1, 'bonus-xp': 1, insignias: 1, vintens: 1 };
+  var TETO_DIAS = 366;            // bônus de XP: dias numa entrega
+  var TETO_VINTENS = 10000000;    // crédito de vinténs: por pedido
+  var TETO_EPOCH_S = 4e9;         // o `agora` do servidor, em segundos (o mesmo teto do Progress)
   var liberada = false, congelada = false, buscando = null, ultima = 0, erro = null;
   var compraPendente = false, timer = null, historico = [];
 
@@ -148,15 +173,26 @@
     }, Promise.resolve()).then(function () { return res; });
   }
 
+  /* de onde veio o pedido: 'presente' (o Mestre deu), 'pagamento' (os vinténs
+   * de um pacote pago) ou 'loja' (a compra de sempre — e qualquer outra coisa) */
+  function origemDe(p) {
+    var o = (p && typeof p === 'object') ? p.origem : null;
+    return (o === 'presente' || o === 'pagamento') ? o : 'loja';
+  }
   function registra(p, tipo, motivo) {
     historico.push({ id: p && p.id, sku: (p && p.sku) || null, nome: (p && p.nome) || null,
-                     tipo: tipo, motivo: motivo || null, em: Date.now() });
+                     tipo: tipo, motivo: motivo || null, origem: origemDe(p), em: Date.now() });
     if (historico.length > 50) historico.shift();
   }
-  function avisa(tipo, p, motivo) {
+  // `extra` (opcional) entra no detail: o bônus de XP entregue leva `ate`
+  function avisa(tipo, p, motivo, extra) {
     registra(p, tipo, motivo);
+    var det = { tipo: tipo, pedido: copia(p), motivo: motivo || null, origem: origemDe(p) };
+    if (extra && typeof extra === 'object') {
+      for (var k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) det[k] = extra[k];
+    }
     try {
-      window.dispatchEvent(new CustomEvent('soterra:loja', { detail: { tipo: tipo, pedido: copia(p), motivo: motivo || null } }));
+      window.dispatchEvent(new CustomEvent('soterra:loja', { detail: det }));
     } catch (e) {}
   }
 
@@ -184,9 +220,26 @@
       if (!inteiroPos(ent.qtd, 99)) return 'item-invalido';
       return null;
     }
+    // loja 2: o bônus de XP por tempo só entra com o relógio do SERVIDOR
+    if (ent.tipo === 'bonus-xp') {
+      if (ent.alvo !== 'xp' || !inteiroPos(ent.qtd, TETO_DIAS)) return 'item-invalido';
+      if (!(typeof ent.agora === 'number' && isFinite(ent.agora) && ent.agora > 0 && ent.agora < TETO_EPOCH_S)) {
+        return 'item-invalido';
+      }
+      return null;
+    }
+    if (ent.tipo === 'insignias') {
+      if (ent.alvo !== 'fundacao' || !inteiroPos(ent.qtd, 999)) return 'item-invalido';
+      return null;
+    }
+    if (ent.tipo === 'vintens') {
+      if (ent.alvo !== 'carteira' || !inteiroPos(ent.qtd, TETO_VINTENS)) return 'item-invalido';
+      return null;
+    }
     return 'item-invalido';
   }
-  /* 5. a entrega — lança se o Progress não aceitar (o chamador desfaz) */
+  /* 5. a entrega — lança se o Progress não aceitar (o chamador desfaz); o
+   * bônus de XP devolve {ate}, para o aviso dizer até quando ele vale */
   function entrega(ent) {
     var prog = P();
     if (ent.tipo === 'pedras') {
@@ -207,6 +260,15 @@
       if (!prog.addPergaminho || !prog.addPergaminho(ent.alvo, ent.qtd)) throw new Error('o pergaminho não entrou');
       return;
     }
+    if (ent.tipo === 'bonus-xp') {
+      var rb = prog.addBonusXpDias ? prog.addBonusXpDias(ent.qtd, ent.agora) : null;
+      if (!rb || !rb.ok) throw new Error('o bônus de XP não entrou');
+      return { ate: rb.ate };
+    }
+    if (ent.tipo === 'insignias') {
+      if (!prog.addInsignia || !prog.addInsignia(ent.qtd)) throw new Error('as insígnias não entraram');
+      return;
+    }
     throw new Error('tipo sem entrega');
   }
   function recusa(p, id, motivo) {
@@ -218,11 +280,11 @@
     });
   }
 
-  /* o resultado de cada pedido leva o id dele (a busca devolve a lista) */
+  /* o resultado de cada pedido leva o id e a origem dele (a busca devolve a lista) */
   L.aplicar = function (p) {
     var id = (p && typeof p === 'object') ? p.id : null;
     return aplicaUm(p).then(function (r) {
-      if (r && typeof r === 'object') r.id = id;
+      if (r && typeof r === 'object') { r.id = id; r.origem = origemDe(p); }
       return r;
     });
   };
@@ -240,13 +302,25 @@
         return { ok: false, motivo: 'ja' };
       }
       // 2. tipo que esta versão não conhece: fica para uma versão nova
-      if (TIPOS[ent.tipo] !== 1) {
+      if (TIPOS[ent.tipo] !== 1 || (ent.tipo === 'vintens' && !db.lojaCredita)) {
         registra(p, 'ignorado', 'tipo-desconhecido');
         return { ok: false, motivo: 'tipo-desconhecido' };
       }
       // 3. a checagem de leitura
       var ruim = confere(ent);
       if (ruim) return recusa(p, id, ruim);
+      // 4b. o CRÉDITO de vinténs (pacote pago, presente do Mestre) não passa
+      // pelo lojaAplica: o DB decide, soma no bolso e anota num gravar só. Com
+      // a página recarregando nada se escreve (o crédito volta na próxima)
+      if (ent.tipo === 'vintens') {
+        if (congelada) return { ok: false, motivo: 'recarregando' };
+        return db.lojaCredita(id, ent.qtd).then(function (rc) {
+          if (rc && rc.ja) return { ok: false, motivo: 'ja' };
+          if (!rc || !rc.ok) return { ok: false, motivo: 'erro-local' };
+          avisa('entregue', p, null);
+          return { ok: true, motivo: null, moedas: rc.moedas };
+        });
+      }
       // 4. decide e grava por dentro
       return db.lojaAplica(id, preco).then(function (r) {
         if (r && r.ja) return { ok: false, motivo: 'ja' };
@@ -256,16 +330,20 @@
         // no meio (outra máquina mandou o save dela), não se escreve mais
         // nada: o save de lá já está no disco, e este débito morre com a página
         if (congelada) return { ok: false, motivo: 'recarregando' };
+        var fim = null;
         try {
-          entrega(ent);
+          fim = entrega(ent);
         } catch (e) {
           return db.lojaDesfaz(id, preco, 'erro-local').then(function () {
             avisa('recusado', p, 'erro-local');
             return { ok: false, motivo: 'erro-local', erro: String(e && e.message || e) };
           });
         }
-        avisa('entregue', p, null);
-        return { ok: true, motivo: null, moedas: r.moedas };
+        var extra = (fim && typeof fim.ate === 'number') ? { ate: fim.ate } : null;
+        avisa('entregue', p, null, extra);
+        var feito = { ok: true, motivo: null, moedas: r.moedas };
+        if (extra) feito.ate = extra.ate;
+        return feito;
       });
     });
   }

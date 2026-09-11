@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a HUD do multijogador no celular (390x844)</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:390px;height:844px;border:0;background:#000}
+  #saida{position:fixed;left:390px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- A HUD DO MULTIJOGADOR (11/09, revisão adversarial, achados 22 a 28). O
+     index.html de verdade num quadro de 390x844 (o retrato do celular, como em
+     tests/celular.html), com o save na memória (?sandbox=1). A Rede é um dublê
+     pendurado por cima da de verdade (em file:// ela é no-op): a Bia e a Cris
+     "estão" na praça, e o que o grupo.js manda fica anotado. Cobra, na tela:
+       22  a mensagem particular na batalha e na derrota: o toast com o texto e a
+           ficha que abre pelo cartão do grupo (antes: linha num chat escondido);
+       24  a linha nova entra na ficha aberta sem redesenhar — o campo é o mesmo,
+           o texto digitado fica, o foco não sai;
+       25  o convite (grupo e troca) não some por um toque noutra pessoa, e a
+           troca que chega com um convite na tela é recusada;
+       23  a ficha da escolha do duelo fechada sem querer volta no tique;
+       26  quem segue é avisado do "descer" e vê a dificuldade no portal e na porta;
+       27  quem lidera lê onde a outra pessoa está, não "chegar à porta";
+       28  na minha vez o painel do grupo deixa o toque passar para o tabuleiro. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('  · ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  function passo(ms) { return new Promise(function (r) { setTimeout(r, ms || 50); }); }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+
+  var quadro = document.getElementById('tela');
+  // ?index=<url>: outro index (a prova do "antes", montada fora da árvore, com a HUD de antes)
+  var mIdx = /[?&]index=([^&]+)/.exec(location.search);
+  quadro.src = (mIdx ? decodeURIComponent(mIdx[1]) : '../index.html') + '?mobile=1&sandbox=1&snap=1&grupo-hud';
+  var w, doc, J, R, G, E, U, toastEl;
+  var saidas = [], trocas = [], sussurros = [];
+  var perfilBia = { id: 'bia', nome: 'Bia', titulo: '', classe: 'arqueiro', sala: null, x: 1.2, z: 6.4 };
+  var perfilCris = { id: 'cris', nome: 'Cris', titulo: '', classe: 'sumo', sala: null, x: -2.0, z: 5.0 };
+
+  function visivel(e) {
+    if (!e) return false;
+    var r = e.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return false;
+    var cs = w.getComputedStyle(e);
+    if (cs.visibility === 'hidden' || +cs.opacity === 0 || cs.display === 'none') return false;
+    return !!e.offsetParent || cs.position === 'fixed';
+  }
+  function telaAberta() { return doc.querySelector('#ui-root .ui-screen.is-on'); }
+  function painelAberto() { var s = telaAberta(); return s ? s.querySelector('.hub-painel') : null; }
+  function fichaAberta() { return doc.querySelector('.ui-sheet.is-on'); }
+  function tituloFicha() { var f = fichaAberta(); var h = f && f.querySelector('h2'); return h ? h.textContent : ''; }
+  function toastTxt() { return (toastEl && toastEl.classList.contains('is-on')) ? toastEl.textContent : ''; }
+  function botao(caixa, re) {
+    var b = null;
+    [].forEach.call(caixa ? caixa.querySelectorAll('button') : [], function (x) { if (!b && re.test(x.textContent || '')) b = x; });
+    return b;
+  }
+  function cartao(nome) {
+    var c = null;
+    [].forEach.call(doc.querySelectorAll('.grupo-lado .gl-membro'), function (x) { if (!c && (x.title || '').indexOf(nome) === 0) c = x; });
+    return c;
+  }
+  /* o dublê da Rede: por cima da de verdade (em file:// ela é no-op e o chat nem nasce) */
+  function dubleRede() {
+    R = J.Rede;
+    R.entrar = function () { return true; };
+    R.meuId = function () { return 'ana'; };
+    R.meuCx = function () { return 'cxana'; };
+    R.minhaSala = function () { return null; };
+    R.pares = function () { return [perfilBia, perfilCris]; };
+    R.nomeDe = function (id) { return id === 'bia' ? 'Bia' : (id === 'cris' ? 'Cris' : 'Aventureiro'); };
+    R.privado = function () { return true; };
+    R.dirige = function (tipo, para, acao, dados) { saidas.push({ tipo: tipo, para: para, acao: acao, dados: dados }); return true; };
+    R.sussurrar = function (para, texto, opts) { sussurros.push({ para: para, texto: texto, cx: (opts && opts.cx) || null }); return true; };
+    R.ultimaRecusa = function () { return null; };
+    R.vigia = function () {}; R.solta = function () {};
+    R.trocaManda = function (par, acao, dados) { trocas.push({ par: par, acao: acao, dados: dados || {} }); };
+    R.falar = function () { return true; };
+    R.mover = function () {};
+    R.guildaManda = function () {};
+    R.estadoConexao = function () { return 'ligado'; };
+    R.transporte = function () { return 'ws'; };
+  }
+  /* o grupo formado direto no estado (fora da praça o convite seria recusado) */
+  function injetaGrupo(lider) {
+    var s = J.Grupo._st();
+    s.fase = 'formado'; s.gid = 'bia-hud1'; s.chave = 'chavehud:kbkbkbkb'; s.v = 1;
+    s.lider = lider; s.pendente = null;
+    s.par = { id: 'bia', cx: 'cxbia', nome: 'Bia', heroi: { classId: 'arqueiro', element: 'ar', level: 14 }, on: true, sumidoDesde: null };
+    try { J.Grupo.aoMudar(J.Grupo.estado()); } catch (e) { diz('aoMudar: ' + e); }
+  }
+  function sussurroDaBia(texto) { J.Grupo._ev({ tipo: 'sussurro', de: 'bia', cx: 'cxbia', nome: 'Bia', texto: texto }); }
+
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Models3D && J.Models3D.isReady() &&
+                  J.Renderer && J.Renderer.isReady() && J.UI && J.Game && J.Grupo && J.Duelo && J.Hub && J.Troca && J.DB);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s');
+      return setTimeout(espera, 250);
+    }
+    w = quadro.contentWindow; doc = quadro.contentDocument;
+    G = J.Game; E = J.Engine; U = J.UI;
+    toastEl = doc.querySelector('.ui-toast');
+    diz('o jogo abriu em ' + Math.round((Date.now() - t0) / 1000) + ' s · viewport ' + w.innerWidth + 'x' + w.innerHeight);
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    while (ids.length < 2) { P.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    U.selection(ids.slice(0, 2));
+    dubleRede();
+    J.DB.batizar('Ana').then(function () { return batalha(); })
+      .then(function () { return praca(); })
+      .then(function () { return quemSegue(); })
+      .then(function () { return quemLidera(); })
+      .then(function () { fim(); })
+      .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
+  })();
+
+  // ====================================================== 28, 22 e 24: a batalha
+  function batalha() {
+    check('o quadro é o retrato de 390x844 e o save está blindado', w.innerWidth === 390 && w.innerHeight === 844 &&
+          !!(J.SaveSandbox && J.SaveSandbox.check().ok), w.innerWidth + 'x' + w.innerHeight);
+    var ok = G.startRun(U.selection().slice(), 'greenhouse');
+    return ate(function () { return U.telaAtual() === 'antessala'; }, 30000).then(function (naAnt) {
+      if (!ok || !naAnt) throw new Error('a descida solo não chegou à antessala (' + U.telaAtual() + ')');
+      G.entrarNaSala();
+      return ate(function () { return U.telaAtual() === 'battle' && G.state && !!doc.querySelector('.screen-battle .bt-bottom'); }, 30000);
+    }).then(function (naLuta) {
+      if (!naLuta) throw new Error('a batalha não abriu');
+      var st = G.state;
+      var opc = (E.placementOptions ? E.placementOptions(st) : (st.placement && st.placement.options)) || [];
+      if (opc[0]) G.onTileClicked(opc[0].x, opc[0].y);
+      return ate(function () { return G.state.phase === 'playing'; }, 15000);
+    }).then(function () {
+      injetaGrupo('bia');
+      var st = G.state;
+      var heroi = st.units.filter(function (u) { return u.side === 'player' && u.kind === 'hero' && u.alive; })[0];
+      var bicho = st.units.filter(function (u) { return u.side === 'enemy' && u.alive; })[0];
+      var gl = doc.querySelector('.grupo-lado');
+      // ---- 28: a minha vez
+      st.activeIdx = st.order.indexOf(heroi.uid);
+      U.update(1.1);
+      var rg = gl.getBoundingClientRect();
+      var cx = (rg.left + rg.right) / 2, cy = (rg.top + rg.bottom) / 2;
+      var noPonto = doc.elementFromPoint(cx, cy);
+      var card0 = gl.querySelector('.gl-membro');
+      diz('painel do grupo na batalha em ' + Math.round(rg.left) + '..' + Math.round(rg.right) + ' x ' + Math.round(rg.top) + '..' +
+          Math.round(rg.bottom) + ' · no centro dele: ' + (noPonto ? noPonto.tagName + '.' + String(noPonto.className || '').split(' ')[0] : '(nada)'));
+      check('28: na MINHA vez o painel do grupo deixa o toque passar para o tabuleiro (o ponto do meio dele não é dele)',
+            G.isPlayerTurn() && gl.classList.contains('is-on') && gl.classList.contains('is-passa') &&
+            !!card0 && w.getComputedStyle(card0).pointerEvents === 'none' && !!noPonto && !gl.contains(noPonto),
+            'isPlayerTurn=' + G.isPlayerTurn() + ' classes=' + gl.className);
+      check('28: ...e fica esmaecido (dá para ver a casa de baixo)', +w.getComputedStyle(gl).opacity < 0.7, w.getComputedStyle(gl).opacity);
+      // ---- 28: a vez de outro (um monstro; na dupla, o parceiro)
+      st.activeIdx = st.order.indexOf(bicho.uid);
+      U.update(1.1);
+      var noPonto2 = doc.elementFromPoint(cx, cy);
+      check('28: na vez de outro os cartões voltam a ser tocáveis', !G.isPlayerTurn() && !gl.classList.contains('is-passa') &&
+            !!noPonto2 && gl.contains(noPonto2), gl.className);
+      // ---- 22: a particular no meio da batalha
+      sussurroDaBia('Cuidado com o chefe!');
+      var tx = toastTxt();
+      check('22: na batalha a particular vira toast COM o texto (antes: linha num chat escondido, sem toast)',
+            tx === 'Bia (particular): Cuidado com o chefe!', tx || '(sem toast)');
+      var cb = cartao('Bia');
+      if (cb) cb.click();
+      var bm = botao(doc.querySelector('.gl-menu'), /Mensagem particular/);
+      if (bm) bm.click();
+      var inp = doc.querySelector('.ui-sheet.is-on .su-input');
+      check('22: na batalha, "Mensagem particular" no cartão da Bia abre a ficha, com o foco no campo',
+            !!cb && !!bm && tituloFicha() === 'Mensagem particular' && !!inp && doc.activeElement === inp,
+            'ficha=' + (tituloFicha() || '(nenhuma)') + ' foco=' + (doc.activeElement ? doc.activeElement.tagName + '.' + doc.activeElement.className : '?'));
+      if (!inp) return;
+      var hist = doc.querySelector('.ui-sheet.is-on .su-hist');
+      check('22: a ficha traz a particular que chegou', !!hist && /Cuidado com o chefe!/.test(hist.textContent));
+      // ---- 24: a linha nova com a ficha aberta e um texto pela metade
+      inp.value = 'meio escri';
+      var n0 = hist.querySelectorAll('.hub-chat-linha').length;
+      sussurroDaBia('e a porta?');
+      var inp2 = doc.querySelector('.ui-sheet.is-on .su-input');
+      var n1 = doc.querySelector('.ui-sheet.is-on .su-hist').querySelectorAll('.hub-chat-linha').length;
+      check('24: a linha que chega entra no histórico SEM redesenhar: o campo é o mesmo e o texto digitado fica',
+            inp2 === inp && inp.isConnected && inp.value === 'meio escri' && n1 === n0 + 1 && doc.activeElement === inp,
+            'mesmo campo=' + (inp2 === inp) + ' valor="' + (inp2 ? inp2.value : '') + '" linhas ' + n0 + '→' + n1);
+      check('24: ...e não vira toast (a conversa está na tela)', toastTxt().indexOf('e a porta?') < 0, toastTxt());
+      inp.value = 'vou já';
+      inp.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      var hist2 = doc.querySelector('.ui-sheet.is-on .su-hist');
+      var ult = hist2 ? hist2.lastElementChild : null;
+      check('24: mandar pelo Enter: o MESMO campo esvazia, o foco fica nele e a minha linha entra no histórico',
+            doc.querySelector('.ui-sheet.is-on .su-input') === inp && inp.value === '' && doc.activeElement === inp &&
+            !!ult && /vou já/.test(ult.textContent) && sussurros.length === 1 && sussurros[0].para === 'bia' && sussurros[0].cx === 'cxbia',
+            JSON.stringify(sussurros));
+      // o rascunho sobrevive a um redesenho da ficha (UI.repaint)
+      inp.value = 'rascunho';
+      U.openSheet('sussurro', { id: 'bia', nome: 'Bia' });
+      var inp3 = doc.querySelector('.ui-sheet.is-on .su-input');
+      check('24: um redesenho da ficha (o UI.repaint) guarda o rascunho', !!inp3 && inp3.value === 'rascunho', inp3 ? inp3.value : '');
+      U.closeSheet();
+      // ---- 22: a derrota (fora da praça, como a recompensa)
+      U.showScreen('defeat');
+      return passo(200);
+    }).then(function () {
+      sussurroDaBia('e agora?');
+      var tx = toastTxt();
+      check('22: na derrota a particular também vira toast com o texto', tx === 'Bia (particular): e agora?', tx || '(sem toast)');
+      var cb = cartao('Bia');
+      if (cb) cb.click();
+      var bm = botao(doc.querySelector('.gl-menu'), /Mensagem particular/);
+      if (bm) bm.click();
+      check('22: na derrota, "Mensagem particular" no cartão abre a ficha', !!cb && !!bm && tituloFicha() === 'Mensagem particular' &&
+            !!doc.querySelector('.ui-sheet.is-on .su-input'), tituloFicha() || '(nenhuma)');
+      U.closeSheet();
+      try { G.restart(); } catch (e) {}
+      J.Grupo._reset();
+      U.showScreen('hub');
+      return ate(function () { return !!doc.querySelector('.screen-hub.is-on .hub-chat-input') && !!J.Hub.aoTocarFantasma; }, 30000);
+    });
+  }
+
+  // ====================================================== 22, 25 e 23: a praça
+  function praca() {
+    var chatOk = !!doc.querySelector('.screen-hub.is-on .hub-chat-input');
+    check('(a praça abriu com o chat do canto)', chatOk);
+    // ---- 22: na praça, sem ficha: o chat do canto
+    J.Grupo._ev({ tipo: 'sussurro', de: 'cris', cx: 'cxcris', nome: 'Cris', texto: 'oi na praça' });
+    var vis = [].filter.call(doc.querySelectorAll('.screen-hub .hub-chat-log .chat-sussurro'), visivel)
+      .some(function (l) { return /oi na praça/.test(l.textContent); });
+    check('22: na praça a particular entra no chat do canto, visível', vis);
+    U.openSheet('missoes');
+    J.Grupo._ev({ tipo: 'sussurro', de: 'cris', cx: 'cxcris', nome: 'Cris', texto: 'com a ficha aberta' });
+    check('22: com uma ficha por cima do chat, a particular vira toast também', toastTxt() === 'Cris (particular): com a ficha aberta', toastTxt());
+    U.closeSheet();
+    // ---- 25: o convite de grupo e o toque noutra pessoa
+    J.Grupo._ev({ tipo: 'grupo', de: 'cris', cx: 'cxcris', acao: 'convite',
+                  dados: { gid: 'cris-ab12', chave: 'k1234567', heroi: { classId: 'sumo', element: 'fogo', level: 5 }, versao: J.Grupo.versao() } });
+    var p = painelAberto();
+    var conv = !!p && !p.classList.contains('is-off') && /te chama para o grupo/.test(p.textContent);
+    check('(o convite de grupo da Cris aparece no painel)', conv, p ? p.textContent.slice(0, 80) : '');
+    J.Hub.aoTocarFantasma('bia');
+    check('25: tocar noutra pessoa com o convite aberto NÃO o apaga — e avisa',
+          !p.classList.contains('is-off') && /te chama para o grupo/.test(p.textContent) && toastTxt() === 'Responda o convite antes.',
+          p.textContent.slice(0, 60) + ' · toast: ' + toastTxt());
+    J.Troca.aoEvento({ tipo: 'troca', acao: 'convite', de: 'bia', nome: 'Bia' });
+    check('25: a troca que chega com o convite na tela é recusada (um pedido de cada vez) e o convite fica',
+          /te chama para o grupo/.test(p.textContent) && J.Troca.estado() === null &&
+          trocas.some(function (t) { return t.par === 'bia' && t.acao === 'recusa'; }) && /quis trocar com você/.test(toastTxt()),
+          JSON.stringify(trocas) + ' · toast: ' + toastTxt());
+    var nao = botao(p, /Agora não/);
+    if (nao) nao.click();
+    check('(Agora não: o convite de grupo sai e a resposta vai à Cris)', p.classList.contains('is-off') &&
+          saidas.some(function (s) { return s.tipo === 'grupo' && s.acao === 'resposta' && s.para === 'cris' && s.dados.ok === false; }));
+    // ---- 25: o convite de TROCA também é convite
+    trocas.length = 0;
+    J.Troca.aoEvento({ tipo: 'troca', acao: 'convite', de: 'bia', nome: 'Bia' });
+    check('(sem convite na tela, a troca da Bia aparece no painel)', !p.classList.contains('is-off') && /quer trocar com você/.test(p.textContent));
+    J.Hub.aoTocarFantasma('cris');
+    check('25: o convite de troca também não some por um toque noutra pessoa', /quer trocar com você/.test(p.textContent), p.textContent.slice(0, 60));
+    J.Hub.aoAproximar({ tipo: 'banco' });
+    check('25: ...nem por um passo perto de um lugar', /quer trocar com você/.test(p.textContent));
+    J.Troca.aoEvento({ tipo: 'troca', acao: 'cancela', de: 'bia', dados: {} });
+    check('25: a mesa acabou do outro lado: o convite de troca sai da tela', p.classList.contains('is-off') && J.Troca.estado() === null);
+    // ---- 23: a ficha da escolha do duelo fechada sem querer
+    var d = J.Duelo._st();
+    d.fase = 'escolhendo'; d.did = 'ana-hudd1'; d.eu = 'A'; d.chave = 'kkkkkkkk:kbkbkbkb';
+    d.op = { id: 'bia', cx: 'cxbia', nome: 'Bia' }; d.prazo = J.Duelo._agora() + 90000; d.minha = null;
+    U.openSheet('dueloRede');
+    check('(a ficha da escolha do duelo abre)', /duelo com Bia/.test(tituloFicha()), tituloFicha());
+    var x = doc.querySelector('.ui-sheet.is-on .btn-close');
+    if (x) x.click(); else U.closeSheet();
+    check('(o ✕ fechou a ficha)', !fichaAberta());
+    U.update(1.1);
+    check('23: com a minha dupla por escolher, a ficha do duelo VOLTA sozinha no tique', /duelo com Bia/.test(tituloFicha()), tituloFicha() || '(fechada)');
+    U.closeSheet();
+    J.Hub.aoAproximar({ tipo: 'arena', nome: 'Arena de Duelos' });
+    check('23: o painel da Arena oferece "Voltar à escolha do duelo"', !!botao(painelAberto(), /Voltar à escolha do duelo/));
+    d.minha = { ids: [U.selection()[0]], n: 1, str: '', sal: '', h: '' };
+    U.closeSheet();
+    U.update(1.1);
+    check('23: com a dupla já escolhida, fechar a ficha não a traz de volta (o duelo segue sozinho)', !fichaAberta(), tituloFicha());
+    J.Duelo._reset();
+    U.closeSheet();
+    return passo(100);
+  }
+
+  // ====================================================== 26: quem segue
+  function quemSegue() {
+    injetaGrupo('bia');
+    J.Grupo._st().descidaDif = 'dificil';
+    J.Grupo.aoMudar(J.Grupo.estado());
+    J.Hub.aoAproximar({ tipo: 'portal', id: 'greenhouse', nome: 'A Estufa Soterrada' });
+    var p = painelAberto();
+    check('26: no portal, quem segue VÊ a dificuldade escolhida por quem lidera, antes de descer',
+          !!p && /Dificuldade escolhida por quem lidera: Difícil — \+40% de vida, \+60% de xp/.test(p.textContent), p ? p.textContent.slice(0, 160) : '');
+    var avisosG = [], orig = J.Grupo.aoAviso;
+    J.Grupo.aoAviso = function (t, k) { avisosG.push(t); if (orig) orig(t, k); };
+    J.Grupo._ev({ tipo: 'grupo', de: 'bia', cx: 'cxbia', acao: 'descer',
+                  dados: { gid: J.Grupo._st().gid, dungeonId: 'greenhouse', dificuldade: 'dificil' } });
+    J.Grupo.aoAviso = orig;
+    var esperado = 'Bia escolheu A Estufa Soterrada (Difícil) — descendo juntos.';
+    check('26: o "descer" de quem lidera AVISA quem segue (toast), com o calabouço e a dificuldade',
+          avisosG.indexOf(esperado) >= 0, avisosG.join(' | ') + ' · toast: ' + toastTxt());
+    check('26: ...e o "desci" SIM saiu', saidas.some(function (s) { return s.acao === 'desci' && s.dados.ok === true; }));
+    return ate(function () { return U.telaAtual() === 'antessala' && !!painelAberto(); }, 30000).then(function (ok) {
+      check('(quem segue chegou à antessala)', ok, U.telaAtual());
+      J.Hub.aoAproximar({ tipo: 'porta' });
+      var p2 = painelAberto();
+      check('26: na porta da antessala, quem segue vê a dificuldade que vale', !!p2 &&
+            /Dificuldade escolhida por quem lidera: Difícil/.test(p2.textContent) && /Quem abre a porta é quem lidera/.test(p2.textContent),
+            p2 ? p2.textContent.slice(0, 160) : '');
+    });
+  }
+
+  // ====================================================== 27: quem lidera, na porta
+  function quemLidera() {
+    J.Grupo._st().lider = 'ana';
+    J.Grupo.aoMudar(J.Grupo.estado());
+    perfilBia.sala = null;
+    J.Hub.aoAproximar({ tipo: 'porta' });
+    var p = painelAberto();
+    var esp = p && p.querySelector('.hub-espera-par');
+    check('27: a outra pessoa fora da antessala: "ainda não entrou na antessala (na recompensa, é o botão…)"',
+          !!esp && esp.textContent === 'Bia ainda não entrou na antessala (na recompensa, é o botão "Seguir para a próxima sala").' &&
+          !/chegar à porta/.test(p.textContent), esp ? esp.textContent : (p ? p.textContent.slice(0, 120) : ''));
+    perfilBia.sala = G.dungeonId + ':' + G.roomIndex;
+    J.Hub.aoAproximar({ tipo: 'porta' });
+    p = painelAberto();
+    esp = p && p.querySelector('.hub-espera-par');
+    check('27: com ela na mesma sala: "Esperando Bia ficar pronto(a)…"', !!esp && esp.textContent === 'Esperando Bia ficar pronto(a)…',
+          esp ? esp.textContent : '');
+    var b = botao(p, /Entrar na batalha com/);
+    if (b) b.click();
+    check('27: o toque no botão apagado diz a mesma coisa', toastTxt() === 'Esperando Bia ficar pronto(a)…', toastTxt());
+    return passo(50);
+  }
+})();
+</script>
+</body>
+</html>

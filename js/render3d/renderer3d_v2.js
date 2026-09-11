@@ -136,6 +136,15 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------------ acesso
   function game() { return JOGO.Game || null; }
+  /* 11/09 — A PERSPECTIVA DE TELA (multijogador): 'meu' | 'aliado' | 'inimigo'.
+   * No duelo pela Rede quem aceitou é o lado 'enemy' do estado (igual nos dois
+   * motores); é o Game que diz de quem é cada unidade. Sem Game.ladoDaTela, a
+   * regra de sempre (o lado 'player' é o meu). */
+  function ladoTela(u) {
+    var g = game();
+    try { if (g && g.ladoDaTela) return g.ladoDaTela(u); } catch (e) {}
+    return (u && u.side === 'player') ? 'meu' : 'inimigo';
+  }
   function engine() { return JOGO.Engine || null; }
   function state() { var g = game(); return (g && g.state) || null; }
   function DATA() { return JOGO.DATA || {}; }
@@ -1380,7 +1389,7 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < st.units.length; i++) {
       var u = st.units[i];
       if (!u.alive || u.offBoard) continue;
-      (u.side === 'player' ? mine : foes).push(u);
+      (ladoTela(u) !== 'inimigo' ? mine : foes).push(u);
     }
     if (!mine.length) mine = foes;
     if (!mine.length) return null;
@@ -1762,7 +1771,7 @@ var JOGO = (typeof window !== 'undefined')
       var d = Math.abs(o.x - u.x) + Math.abs(o.y - u.y);
       if (d < bd) { bd = d; best = o; }
     }
-    v.faceTo = best ? Math.atan2(wx(best.x) - wx(u.x), wz(best.y) - wz(u.y)) : (u.side === 'player' ? 0 : Math.PI);
+    v.faceTo = best ? Math.atan2(wx(best.x) - wx(u.x), wz(best.y) - wz(u.y)) : (ladoTela(u) !== 'inimigo' ? 0 : Math.PI);
     v.face = v.faceTo;
   }
   function faceTowards(v, gx, gy) {
@@ -1844,9 +1853,11 @@ var JOGO = (typeof window !== 'undefined')
     node.add(bar);
     node.userData.bar = bar;
 
-    // anel de lado (aliado/inimigo) — leitura instantânea do tabuleiro
+    // anel de lado (aliado/inimigo) — leitura instantânea do tabuleiro; o
+    // herói do PARCEIRO (11/09) ganha um anel verde-água, o meu segue azul
+    var ladoU = ladoTela(u);
     var ringMat = new THREE.MeshBasicMaterial({
-      color: u.side === 'player' ? 0x6fd8ff : 0xff7a5a,
+      color: ladoU === 'meu' ? 0x6fd8ff : (ladoU === 'aliado' ? 0x5cf2c0 : 0xff7a5a),
       transparent: true, opacity: 0.55, depthWrite: false
     });
     var ring = new THREE.Mesh(M.geo('sideRing', function () {
@@ -1907,7 +1918,7 @@ var JOGO = (typeof window !== 'undefined')
     c.fillStyle = 'rgba(10,13,18,0.80)';
     roundRect(c, bx - 3, by - 3, bw + 6, bh + 6, 7); c.fill();
     var frac = Math.max(0, Math.min(1, u.hp / Math.max(1, u.hpMax)));
-    var col = u.side === 'player' ? '#57d977' : '#e8574a';
+    var col = ladoTela(u) !== 'inimigo' ? '#57d977' : '#e8574a';
     if (frac < 0.34) col = '#ffae3a';
     c.fillStyle = col;
     roundRect(c, bx, by, Math.max(2, bw * frac), bh, 5); c.fill();
@@ -2177,6 +2188,8 @@ var JOGO = (typeof window !== 'undefined')
     // ANTES da guarda de fase/turno — em placing não é turno de ninguém, e a
     // guarda apagava as casas (o dono clicava às cegas e nada nascia).
     if (st && st.phase === 'placing' && st.placement && st.placement.options) {
+      // 11/09: em grupo só o líder escolhe a casa — o parceiro não vê as douradas
+      if (g && g.podeColocar && !g.podeColocar()) { hideRestOverlay(); return; }
       var hv0 = g && g.hoverTile;
       var opc = st.placement.options;
       for (var oi = 0; oi < opc.length; oi++) {
@@ -2307,7 +2320,7 @@ var JOGO = (typeof window !== 'undefined')
     var v = vis[active.uid] || { x: active.x, y: active.y };
     activeRing.visible = true;
     activeRing.position.set(wx(v.x), 0.11, wz(v.y));
-    activeRing.material.color.setHex(active.side === 'player' ? 0xffd98a : 0xff6a4a);
+    activeRing.material.color.setHex(ladoTela(active) !== 'inimigo' ? 0xffd98a : 0xff6a4a);
     activeRing.material.opacity = 0.55 + 0.35 * (0.5 + 0.5 * Math.sin(nowT * 4.2));
     activeRing.scale.setScalar(1 + 0.05 * Math.sin(nowT * 4.2));
   }

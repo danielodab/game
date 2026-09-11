@@ -252,8 +252,21 @@ JOGO.DATA.stars = {
  * Com um evento de XP no ar os dois juntos param no teto da agenda (×2,0):
  * fXp = max(fEvento, min(2,0, fEvento × fator)). Derrota e abandono não gastam
  * carga, e os vinténs nunca veem o pergaminho (saem de xpTotal). O Pergaminho
- * da REESCRITA troca um caminho elemental por outro e não tem número aqui. */
+ * da REESCRITA troca um caminho elemental por outro e não tem número aqui.
+ * O da SABEDORIA saiu da venda em 10/09 (o bônus de XP por tempo, logo abaixo,
+ * o substitui); o jogo segue lendo e usando o que já foi comprado. */
 JOGO.DATA.pergaminhos = {
   xp: { fator: 1.5, salas: 9, tetoSalas: 27 },
   tetoInventario: 99
 };
+
+/* O BÔNUS DE XP POR TEMPO (loja 2, 10/09): 1, 3 ou 7 dias de +50% de XP para
+ * o grupo, vendidos na loja do site. O PREÇO mora só no servidor
+ * (servidor/loja.py, CATALOGO); este `fator` espelha BONUS_XP de lá, e
+ * tests/loja_api.py confere. O prazo corre no relógio do SERVIDOR a partir da
+ * ENTREGA no jogo (o /api/loja/retirar manda `entrega.agora`), e comprar de
+ * novo SOMA dias (Progress.addBonusXpDias). Ele e o Pergaminho da Sabedoria
+ * NÃO se multiplicam — com o bônus no ar o pergaminho pausa e não gasta
+ * carga —, e com um evento de XP os dois param no teto da agenda (×2,0):
+ * fXp = max(fEvento, min(2,0, fEvento × fator)). Os vinténs nunca o veem. */
+JOGO.DATA.bonusXp = { fator: 1.5 };

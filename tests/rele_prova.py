@@ -19,7 +19,9 @@ websockets e com o de casa (`--broadcast-caseiro`, o caminho que o Ubuntu
 22.04 usa: a 9.1 de lá não tem `broadcast`).
 
 Da revisão da fase C (10/09): o `para` que não acha ninguém cai na difusão
-mas PAGA o balde dela (12 de uma vez: passam 4) — e as outras portas do
+mas PAGA o balde dela (12 de uma vez: passam 4; desde 11/09 a troca e a
+guilda nem caem — são dirigidas sem recuo, e quem mandou ouve `ausente`: as
+provas dos dirigidos moram em tests/rede_dois_prova.py) — e as outras portas do
 mesmo quarto também: o `t` que o relé não conhece e a sala trocada a cada
 envelope (até pelo eco isento, que nem o leque pagava); o `alvo` numa praça cheia
 só chega aos 40 mais próximos, como o pulso; um inteiro JSON gigante não
@@ -56,6 +58,7 @@ import io
 import json
 import logging
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -283,9 +286,14 @@ def roda(extra, rotulo):
               and not de(ro, 'troca', 'p'))
         manda(p, t='guilda', de='p', para='ninguem-aqui', acao='convite', dados=None)
         time.sleep(0.4)
-        rq, rg2, ro = junta(q, 0.2), junta(g2, 0.2), junta(obs, 0.2)
-        check(R + 'destino desconhecido: como antes (todos ouvem)',
-              len(de(rq, 'guilda', 'p')) == 1 and len(de(rg2, 'guilda', 'p')) == 1 and len(de(ro, 'guilda', 'p')) == 1)
+        rq, rg2, ro, rp = junta(q, 0.2), junta(g2, 0.2), junta(obs, 0.2), junta(p, 0.2)
+        # (11/09) a troca e a guilda são DIRIGIDAS sem recuo: antes, o destino
+        # desconhecido ia ao servidor inteiro — o vazamento que a mensagem
+        # particular não pode ter. Agora ninguém ouve, e quem mandou ouve `ausente`
+        aus = [m for m in rp if isinstance(m, dict) and m.get('t') == 'ausente' and 'de' not in m]
+        check(R + 'destino desconhecido: ninguém ouve (antes, todos), e quem mandou ouve `ausente`',
+              not de(rq, 'guilda', 'p') and not de(rg2, 'guilda', 'p') and not de(ro, 'guilda', 'p')
+              and len(aus) == 1 and aus[0].get('para') == 'ninguem-aqui' and aus[0].get('tipo') == 'guilda', repr(aus))
 
         # ---------------------------------------------------------- o eco
         e2, e3 = liga(), liga()
@@ -339,6 +347,28 @@ def roda(extra, rotulo):
         ro2 = junta(obs, 0.3)
         check(R + 'a mesma conta em duas abas: o tchau só quando a última cai',
               not de(ro1, 'tchau', 'z7') and len(de(ro2, 'tchau', 'z7')) == 1)
+        # 11/09 (revisão): o tchau que o CLIENTE diz ao fechar UMA aba, com a
+        # outra do mesmo id viva, não se espalha — a pessoa segue ali pela outra
+        # (antes, fechar a aba extra tirava o jogador vivo do grupo e da batalha)
+        z6a, z6b = liga(), liga()
+        manda(z6a, t='oi', de='z6', nome='Z6', x=0, z=0, sala=None, v=2)
+        manda(z6b, t='oi', de='z6', nome='Z6', x=0, z=0, sala=None, v=2)
+        time.sleep(0.3)
+        junta(obs, 0.1)
+        manda(z6a, t='tchau', de='z6')
+        time.sleep(0.3)
+        z6a.close()
+        time.sleep(0.4)
+        ro3 = junta(obs, 0.3)
+        manda(z6b, t='tchau', de='z6')
+        time.sleep(0.3)
+        ro4 = junta(obs, 0.3)
+        z6b.close()
+        time.sleep(0.3)
+        ro5 = junta(obs, 0.3)
+        check(R + 'o tchau de UMA aba com a outra viva não se espalha; o da última, sim — e uma vez só',
+              not de(ro3, 'tchau', 'z6') and len(de(ro4, 'tchau', 'z6')) == 1 and not de(ro5, 'tchau', 'z6'),
+              '%d / %d / %d' % (len(de(ro3, 'tchau', 'z6')), len(de(ro4, 'tchau', 'z6')), len(de(ro5, 'tchau', 'z6'))))
 
         # -------------------------------------------------------- os limites
         r, w = liga(), liga()
@@ -363,11 +393,10 @@ def roda(extra, rotulo):
         check(R + 'o chat tem limite próprio, mais baixo (rajada de 10, e 1 por segundo)', 10 <= n <= 11, '%d passaram' % n)
 
         # (3.1) o `para` que não acha ninguém cai na difusão (oi e eco: a
-        # sala; troca/guilda: o servidor inteiro) — e paga o balde do fan-out
+        # sala; troca/guilda, até 11/09: o servidor inteiro) — e paga o balde do fan-out
         # (1 a cada 5 s, rajada de 4), não só o geral de 20/s. Antes era a
         # amplificação de graça: 12 de uma vez passavam os 12
         for tipo, campos in (('oi', dict(nome='X', x=0, z=0, sala='lim:1', v=2)),
-                             ('troca', dict(acao='convite', dados=None)),
                              ('eco', dict(nome='X', x=0, z=0, sala='lim:1', v=2))):
             wx = liga()
             manda(wx, t='pulso', de='x-' + tipo, x=0, z=0, sala='lim:1')
@@ -379,6 +408,19 @@ def roda(extra, rotulo):
             n = len(de(junta(r, 0.3), tipo, 'x-' + tipo))
             check(R + '`%s` com `para` que não existe cai na difusão, mas paga o balde dela (12 de uma vez: passam 4)' % tipo,
                   4 <= n <= 5, '%d passaram' % n)
+        # (11/09) a troca com `para` que não existe nem cai na difusão: não
+        # passa nenhuma, e cada uma volta como a voz `ausente` a quem mandou
+        wx = liga()
+        manda(wx, t='pulso', de='x-troca', x=0, z=0, sala='lim:1')
+        time.sleep(0.2)
+        junta(r, 0.1)
+        for i in range(12):
+            manda(wx, t='troca', de='x-troca', para='ninguem-%d' % i, acao='convite', dados=None)
+        time.sleep(0.5)
+        n = len(de(junta(r, 0.3), 'troca', 'x-troca'))
+        aus = [m for m in junta(wx, 0.3) if isinstance(m, dict) and m.get('t') == 'ausente' and 'de' not in m]
+        check(R + '`troca` com `para` que não existe não cai mais na difusão: de 12, nenhuma passa, e as 12 voltam como `ausente`',
+              n == 0 and len(aus) == 12, '%d passaram, %d ausentes' % (n, len(aus)))
 
         # (3.1, as outras portas do mesmo quarto) o `t` que o relé não
         # conhece, sem `para`, ia à sala inteira; trocar de sala a cada pulso
@@ -469,10 +511,20 @@ def roda(extra, rotulo):
         check(R + 'praça cheia: o alvo (o clique de andar) também só chega aos 40 mais próximos',
               all(v == 1 for v in ca[:40]) and all(v == 0 for v in ca[40:]),
               '%d dos 40 perto, %d dos 10 longe' % (sum(ca[:40]), sum(ca[40:])))
-        esperado = '{"t":"rele","v":1,"ident":false}'
-        check(R + 'toda conexão ouviu primeiro o anúncio do relé (sem --banco: ident false)',
-              len(anuncios) > 50 and all(x == esperado for x in anuncios),
-              '%d conexões, %d sem o anúncio' % (len(anuncios), sum(1 for x in anuncios if x != esperado)))
+        # (11/09) o anúncio conta à conexão o id dela: o `cx`, 8 hex sorteados pelo relé
+        def cx_do(x):
+            try:
+                a_ = json.loads(x)
+            except Exception:
+                return None
+            cx_ = a_.pop('cx', None) if isinstance(a_, dict) else None
+            ok_ = a_ == {'t': 'rele', 'v': 1, 'ident': False} and isinstance(cx_, str) and re.fullmatch('[0-9a-f]{8}', cx_)
+            return cx_ if ok_ else None
+        cxs = [cx_do(x) for x in anuncios]
+        check(R + 'toda conexão ouviu primeiro o anúncio do relé (sem --banco: ident false), com o cx dela — um por conexão',
+              len(anuncios) > 50 and all(cxs) and len(set(cxs)) == len(cxs),
+              '%d conexões, %d sem o anúncio certo, %d cx repetidos'
+              % (len(anuncios), cxs.count(None), len(cxs) - len(set(cxs))))
     finally:
         fecha_todos()
         proc.terminate()

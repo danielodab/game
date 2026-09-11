@@ -8,15 +8,19 @@
 .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
 </head>
 <body>
-<!-- A PROVA VIVA DA LOJA (Fase C, 10/09): js/core/nuvem.js + js/core/loja.js
-     falando com servidor/api.py DE VERDADE (quem sobe a API é
+<!-- A PROVA VIVA DA LOJA (Fase C, 10/09; catálogo v2 da loja 2): js/core/nuvem.js
+     + js/core/loja.js falando com servidor/api.py DE VERDADE (quem sobe a API é
      tests/loja_viva.py, numa porta livre e num banco descartável; esta página
      recebe `?api=http://127.0.0.1:PORTA`). Conta descartável criada pela
      própria página — nome e senha aleatórios, que morrem com o banco
-     temporário. O caminho inteiro: cadastro → o save sobe com a carteira → a
-     compra pela rota (como o site faria) → o jogo retira, aplica e sobe →
-     /api/loja/minha mostra entregue e a carteira do servidor debitada; e o
-     pedido que chega sem saldo no jogo volta estornado. -->
+     temporário. O caminho inteiro: cadastro → o save sobe com a carteira → as
+     compras pela rota (como o site faria: pedras, o bônus de XP de 1 dia, a
+     insígnia e o pacote de 50 pedras) → o jogo retira, aplica e sobe →
+     /api/loja/minha mostra entregue e a carteira do servidor debitada; o bônus
+     vale a partir da ENTREGA, no relógio do servidor; e o pedido que chega sem
+     saldo no jogo volta estornado. Os PREÇOS vêm do catálogo (moram só no
+     servidor). O crédito de pacote e o presente do Mestre são da prova de
+     ponta a ponta (tests/loja2_ponta.py). -->
 <div id="summary">rodando…</div>
 <div id="log"></div>
 <script src="save_sandbox.js"></script>
@@ -86,93 +90,135 @@
   var AGUA = 'stone-tear', FOGO = 'stone-ember';
   var nome = 'loja' + (function (n) { var a = 'hjkqxz', s = ''; for (var i = 0; i < 9; i++) { s = a.charAt(n % 6) + s; n = Math.floor(n / 6); } return s; })(Date.now()); // 10/09: só letras que nenhuma palavra reservada usa (base 36 caía em 'gm'/'cm' 1 vez em mil)
   var senha = 'p-' + Math.random().toString(36).slice(2, 14);
-  var idemAgua = idem(), pAgua = null, pXp = null, pFogo = null, v0 = 0;
+  var idemAgua = idem(), cat = {}, pAgua = null, pBonus = null, pIns = null, pAgua50 = null, pFogo = null, v0 = 0;
+  var agoraRet = 0, carteira0 = 0, SOBRA = 1250;
+  function preco(sku) { return Number((cat[sku] || {}).preco) || 0; }
+  var QUATRO = function () { return [pAgua, pBonus, pIns, pAgua50]; };
 
   S.esquece();
   check('a API está apontada (' + S.base() + ')', /^https?:\/\//.test(S.base()));
   S.api('/api/loja/catalogo', { semToken: true }).then(function (r) {
-    var skus = (r.itens || []).map(function (i) { return i.sku; });
-    check('o catálogo é público e traz os produtos da loja', r.ok && skus.indexOf('pedras-agua') >= 0 &&
-          skus.indexOf('pergaminho-xp') >= 0 && skus.indexOf('classe-invocador') >= 0, skus.join(','));
-    var agua = (r.itens || []).filter(function (i) { return i.sku === 'pedras-agua'; })[0] || {};
-    check('o que o catálogo entrega existe no jogo (pedra da água = ' + agua.alvo + ')', !!JOGO.DATA.stones[agua.alvo] &&
-          JOGO.DATA.stones[agua.alvo].element === 'agua');
-    AGUA = agua.alvo || AGUA;
-    var fogo = (r.itens || []).filter(function (i) { return i.sku === 'pedras-fogo'; })[0] || {};
-    FOGO = fogo.alvo || FOGO;
+    (r.itens || []).forEach(function (i) { cat[i.sku] = i; });
+    var skus = Object.keys(cat);
+    check('o catálogo v2 é público e traz o bônus de XP, a insígnia e o pacote de 50 pedras', r.ok && r.versao === 2 &&
+          ['bonus-xp-1', 'insignia-1', 'pedras-agua-50', 'pedras-agua', 'pedras-fogo', 'classe-invocador'].every(function (s) { return !!cat[s]; }),
+          skus.join(','));
+    check('o Pergaminho da Sabedoria saiu da venda; bônus, insígnia e pedras sem janela (limite null)', !cat['pergaminho-xp'] &&
+          !!cat['bonus-xp-1'] && cat['bonus-xp-1'].limite === null && !!cat['insignia-1'] && cat['insignia-1'].limite === null &&
+          !!cat['pedras-agua-50'] && cat['pedras-agua-50'].limite === null,
+          JSON.stringify([cat['bonus-xp-1'] && cat['bonus-xp-1'].limite, cat['pedras-agua-50'] && cat['pedras-agua-50'].limite]));
+    var b = cat['bonus-xp-1'] || {}, ins = cat['insignia-1'] || {}, a50 = cat['pedras-agua-50'] || {};
+    check('o que o catálogo entrega o jogo sabe aplicar (bônus xp de 1 dia, insígnia de fundação, 50 pedras da água)',
+          b.tipo === 'bonus-xp' && b.alvo === 'xp' && b.qtd === 1 && ins.tipo === 'insignias' && ins.alvo === 'fundacao' &&
+          ins.qtd === 1 && a50.qtd === 50 && !!JOGO.DATA.stones[a50.alvo] && JOGO.DATA.stones[a50.alvo].element === 'agua',
+          JSON.stringify([b, ins, a50]));
+    AGUA = (cat['pedras-agua'] || {}).alvo || AGUA;
+    FOGO = (cat['pedras-fogo'] || {}).alvo || FOGO;
+    carteira0 = preco('pedras-agua') + preco('bonus-xp-1') + preco('insignia-1') + preco('pedras-agua-50') + SOBRA;
     return S.cadastrar(nome, nome + '@prova.local', senha);
   }).then(function (r) {
     check('cadastro de conta descartável (' + nome + ')', r.ok && r.token && S.ativa(), r.erro);
     return compra('pedras-agua');
   }).then(function (r) {
-    check('sem save no servidor, comprar é recusado (409: abra o jogo)', r.status === 409 && /abra o jogo/.test(r.erro || ''), r.erro);
+    check('sem save no servidor (e nada a caminho), comprar é recusado (409: abra o jogo)', r.status === 409 && /abra o jogo/.test(r.erro || ''), r.erro);
     P.reset();
     DB._zerar();
-    DB.ganharMoedas(3000);
+    DB.ganharMoedas(carteira0);
     return N.iniciar();
   }).then(function () {
     return ate(function () { return N.estado().versao === 1 && L.estado().liberada && !L.estado().buscando; });
   }).then(function (ok) {
-    check('primeira subida: o save com 3.000 vinténs chega (versão 1) e a loja faz a 1ª busca', ok &&
+    check('primeira subida: o save com ' + carteira0 + ' vinténs chega (versão 1) e a loja faz a 1ª busca', ok &&
           N.estado().erro === null && L.estado().ultimaBusca > 0, JSON.stringify(N.estado()));
     return compra('pedras-agua', idemAgua);
   }).then(function (r) {
     pAgua = r.pedido || {};
-    check('comprar pela rota (como o site): 201, pendente, reserva 300', r.status === 201 && pAgua.estado === 'pendente' &&
-          r.saldo && r.saldo.carteira === 3000 && r.saldo.reservado === 300 && r.saldo.disponivel === 2700, JSON.stringify(r));
+    check('comprar pela rota (como o site): 201, pendente, reserva o preço', r.status === 201 && pAgua.estado === 'pendente' &&
+          r.saldo && r.saldo.carteira === carteira0 && r.saldo.reservado === preco('pedras-agua'), JSON.stringify(r));
     return compra('pedras-agua', idemAgua);
   }).then(function (r) {
     check('o mesmo idem devolve o MESMO pedido (200)', r.status === 200 && r.pedido && r.pedido.id === pAgua.id);
-    return compra('pergaminho-xp');
+    return compra('bonus-xp-1');
   }).then(function (r) {
-    pXp = r.pedido || {};
-    check('o Pergaminho da Sabedoria: 201, disponível 1.200', r.status === 201 && r.saldo.disponivel === 1200, JSON.stringify(r.saldo));
+    pBonus = r.pedido || {};
+    check('o bônus de XP de 1 dia: 201', r.status === 201, JSON.stringify(r));
+    return compra('insignia-1');
+  }).then(function (r) {
+    pIns = r.pedido || {};
+    check('a insígnia de fundação: 201', r.status === 201, JSON.stringify(r));
+    return compra('pedras-agua-50');
+  }).then(function (r) {
+    pAgua50 = r.pedido || {};
+    check('as 50 Lágrimas: 201, e o disponível é o que sobra (' + SOBRA + ')', r.status === 201 && r.saldo && r.saldo.disponivel === SOBRA,
+          JSON.stringify(r.saldo));
+    // o contrato do retirar, olhado de fora ANTES do jogo (pedido retirado volta na retirada seguinte)
+    return S.api('/api/loja/retirar', { method: 'POST', body: {} });
+  }).then(function (r) {
+    var ps = (r && r.pedidos) || [];
+    var bon = ps.filter(function (p) { return p.id === pBonus.id; })[0] || {};
+    var outros = ps.filter(function (p) { return p.id !== pBonus.id; });
+    agoraRet = (bon.entrega && bon.entrega.agora) || 0;
+    check('o retirar: os quatro em ordem de id; SÓ o bônus leva entrega.agora (epoch do servidor); compra não leva origem',
+          r.ok && ps.length === 4 && ps.every(function (p, i) { return i === 0 || p.id > ps[i - 1].id; }) &&
+          typeof agoraRet === 'number' && agoraRet > 1.7e9 && bon.entrega.tipo === 'bonus-xp' && bon.entrega.qtd === 1 &&
+          outros.every(function (p) { return p.entrega && !('agora' in p.entrega); }) &&
+          ps.every(function (p) { return !('origem' in p); }), JSON.stringify(ps));
     v0 = N.estado().versao;
     return L.buscar();
   }).then(function (r) {
-    check('o jogo retira e aplica os dois pedidos', r.ok && de(r, pAgua.id).ok === true && de(r, pXp.id).ok === true, JSON.stringify(r));
-    check('no jogo: +10 Lágrimas, 1 Pergaminho da Sabedoria, carteira 1.200',
-          P.stoneCount(AGUA) === 10 && P.pergaminhos().xp === 1 && moedasReais() === 1200,
-          P.stoneCount(AGUA) + ' / ' + P.pergaminhos().xp + ' / ' + moedasReais());
-    check('os avisos "soterra:loja" saíram (entregue ×2)', avisos.filter(function (a) { return a.tipo === 'entregue'; }).length === 2);
+    check('o jogo retira de novo e aplica os quatro', r.ok && QUATRO().every(function (p) { return de(r, p.id).ok === true; }),
+          JSON.stringify(r));
+    var fim = P.bonusXpAte();
+    check('no jogo: +60 Lágrimas, 1 insígnia, carteira ' + SOBRA, P.stoneCount(AGUA) === 60 && P.insigniasVer() === 1 &&
+          moedasReais() === SOBRA, P.stoneCount(AGUA) + ' / ' + P.insigniasVer() + ' / ' + moedasReais());
+    check('... e o bônus vale 1 dia a partir da ENTREGA, no relógio do servidor (fim − agora da retirada ≈ 86.400 s)',
+          fim - agoraRet >= 86400 && fim - agoraRet <= 86400 + 600, 'fim − agora = ' + (fim - agoraRet));
+    var entregues = avisos.filter(function (a) { return a.tipo === 'entregue'; });
+    var avB = entregues.filter(function (a) { return a.pedido && a.pedido.id === pBonus.id; })[0] || {};
+    check('os avisos "soterra:loja": entregue ×4, origem "loja", o do bônus com o fim do prazo', entregues.length === 4 &&
+          entregues.every(function (a) { return a.origem === 'loja'; }) && avB.ate === fim,
+          JSON.stringify(entregues.map(function (a) { return a.origem + (a.ate ? ':' + a.ate : ''); })));
     return ate(versaoMudou(v0));
   }).then(function (ok) {
     check('o save sobe sozinho com a anotação', ok, JSON.stringify(N.estado()));
     return S.api('/api/loja/minha');
   }).then(function (m) {
-    check('/api/loja/minha: os dois ENTREGUES', pedidoEm(m, pAgua.id).estado === 'entregue' && pedidoEm(m, pXp.id).estado === 'entregue',
+    check('/api/loja/minha: os quatro ENTREGUES', QUATRO().every(function (p) { return pedidoEm(m, p.id).estado === 'entregue'; }),
           JSON.stringify(m.pedidos));
-    check('... e a carteira do servidor debitada (1.200), sem reserva', m.saldo && m.saldo.carteira === 1200 &&
-          m.saldo.reservado === 0 && m.saldo.disponivel === 1200, JSON.stringify(m.saldo));
-    // o pedido que chega ao jogo SEM SALDO: compra com 1.200 no servidor, e o
-    // bolso do jogo gasta antes da entrega (o servidor fica sabendo no PUT)
+    check('... e a carteira do servidor debitada (' + SOBRA + '), sem reserva e nada a caminho', !!m.saldo && m.saldo.carteira === SOBRA &&
+          m.saldo.reservado === 0 && m.saldo.disponivel === SOBRA && m.saldo.aCaminho === 0, JSON.stringify(m.saldo));
+    return S.api('/api/save');
+  }).then(function (s) {
+    var pr = (s && s.progress) || {};
+    check('... e o save no servidor guarda o fim do bônus e a insígnia', pr.bonusXpAte === P.bonusXpAte() && pr.insignias === 1,
+          JSON.stringify({ bonusXpAte: pr.bonusXpAte, insignias: pr.insignias }));
     return compra('pedras-fogo');
   }).then(function (r) {
     pFogo = r.pedido || {};
-    check('as Brasas (450) compradas com 1.200 disponíveis', r.status === 201, JSON.stringify(r));
+    check('as Brasas (' + preco('pedras-fogo') + ') compradas com ' + SOBRA + ' disponíveis', r.status === 201, JSON.stringify(r));
     v0 = N.estado().versao;
     DB.gastarMoedas(1000);                       // o mercador levou 1.000 no jogo
     return ate(versaoMudou(v0));
   }).then(function (ok) {
-    check('o gasto no jogo subiu (carteira 200)', ok && moedasReais() === 200);
+    check('o gasto no jogo subiu (carteira ' + (SOBRA - 1000) + ')', ok && moedasReais() === SOBRA - 1000);
     v0 = N.estado().versao;
     return L.buscar();
   }).then(function (r) {
     check('no jogo, sem saldo para as Brasas: recusa "sem-saldo", sem entrega e sem débito',
-          r.ok && de(r, pFogo.id).motivo === 'sem-saldo' && P.stoneCount(FOGO) === 0 && moedasReais() === 200, JSON.stringify(r));
+          r.ok && de(r, pFogo.id).motivo === 'sem-saldo' && P.stoneCount(FOGO) === 0 && moedasReais() === SOBRA - 1000, JSON.stringify(r));
     return ate(versaoMudou(v0));
   }).then(function (ok) {
     check('a recusa sobe no save', ok);
     return S.api('/api/loja/minha');
   }).then(function (m) {
     var pf = pedidoEm(m, pFogo.id);
-    check('/api/loja/minha: as Brasas ESTORNADAS (sem-saldo), carteira 200 e sem reserva',
-          pf.estado === 'estornado' && pf.motivo === 'sem-saldo' && m.saldo.carteira === 200 && m.saldo.reservado === 0,
+    check('/api/loja/minha: as Brasas ESTORNADAS (sem-saldo), carteira ' + (SOBRA - 1000) + ' e sem reserva',
+          pf.estado === 'estornado' && pf.motivo === 'sem-saldo' && m.saldo.carteira === SOBRA - 1000 && m.saldo.reservado === 0,
           JSON.stringify(pf) + ' ' + JSON.stringify(m.saldo));
     return L.buscar();
   }).then(function (r) {
-    check('buscar de novo: nada a retirar, nada aplicado duas vezes', r.ok && r.pedidos === 0 && P.stoneCount(AGUA) === 10 &&
-          P.pergaminhos().xp === 1 && moedasReais() === 200, JSON.stringify(r));
+    check('buscar de novo: nada a retirar, nada aplicado duas vezes', r.ok && r.pedidos === 0 && P.stoneCount(AGUA) === 60 &&
+          P.insigniasVer() === 1 && moedasReais() === SOBRA - 1000, JSON.stringify(r));
     return N.sair();
   }).then(function () {
     check('nenhum evento de erro da Nuvem', !nuvemEv.some(function (e) { return /^(erro|recusado)/.test(e); }), nuvemEv.join(' | '));

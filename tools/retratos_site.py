@@ -5,6 +5,7 @@
     python tools/retratos_site.py                     # os 7 lotes
     python tools/retratos_site.py --lote classes      # só um lote (pode repetir)
     python tools/retratos_site.py --obras             # soma o lote das 6 obras de fusão
+    python tools/retratos_site.py --lote equipe       # o Cavaleiro Negro da caixa da equipe (ranking)
     python tools/retratos_site.py --motor gpu         # headless com a placa de vídeo
     python tools/retratos_site.py --folha folha.png   # no fim, a foto da folha de conferência
     python tools/retratos_site.py --so-confere        # não fotografa: só confere site/img/
@@ -44,6 +45,11 @@ vazia é a da página, que recusa miolo liso antes de gravar. A folha
 (tools/retratos_site.html?ver=1) passa pelo olho do dono antes do commit
 (decisão D12).
 
+O lote `equipe` (10/09) fotografa o corpo do Mestre (meshy_gm, de
+assets/embedded/models-gm.js) para a caixa "Equipe do SOTERRA" do ranking:
+equipe-cavaleiro.webp (512 px) e equipe-cavaleiro-busto.webp (128 px), no
+mesmo estilo das classes. Só roda quando pedido; a conferência dele também.
+
 tools/ não vai para o contêiner (.dockerignore); site/img/ vai.
 """
 import argparse
@@ -69,9 +75,10 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.normpath(os.path.join(AQUI, '..'))
 IMG = os.path.join(RAIZ, 'site', 'img')
 PAGINA = 'tools/retratos_site.html'
-NOME_OK = re.compile(r'^(classe|fusao|obra)-[a-z0-9-]+(-busto)?\.(webp|png)$')
+NOME_OK = re.compile(r'^(classe|fusao|obra|equipe)-[a-z0-9-]+(-busto)?\.(webp|png)$')
 LOTES = ['classes', 'fus-sumo', 'fus-minotauro', 'fus-cacador', 'fus-curandeira', 'fus-bruxo-ladino', 'fus-xama']
 LOTE_OBRAS = 'obras'
+LOTE_EQUIPE = 'equipe'           # o Cavaleiro Negro (meshy_gm): a caixa da equipe no ranking
 TEMPO_LOTE = 600                 # segundos por lote, com folga: o maior lote decodifica ~30 MB de GLB
 KB = 1024
 PISO_KB = {128: 2, 256: 3, 384: 5, 512: 8}   # o mesmo da página (PISO_KB); ver o docstring
@@ -116,7 +123,7 @@ def pares(ids):
     return [(o[i], o[j]) for i in range(len(o)) for j in range(i + 1, len(o))]
 
 
-def esperados(com_obras):
+def esperados(com_obras, com_equipe=False):
     """[(nome sem extensão, lado em px)] — o contrato da seção 1.8 do plano."""
     ids = ids_das_classes()
     out = []
@@ -126,6 +133,8 @@ def esperados(com_obras):
         out += [('fusao-%s-%s' % (a, b), TAM['fusao']), ('fusao-%s-%s-busto' % (a, b), TAM['busto'])]
     if com_obras:
         out += [('obra-%s' % o, TAM['obra']) for o in ids_das_obras()]
+    if com_equipe:
+        out += [('equipe-cavaleiro', TAM['classe']), ('equipe-cavaleiro-busto', TAM['busto'])]
     return out
 
 
@@ -349,9 +358,9 @@ def foto_folha(chrome, base, destino):
 
 
 # ----------------------------------------------------------------- a conferência
-def confere(com_obras):
+def confere(com_obras, com_equipe=False):
     faltas, fora, duplas, total, n = [], [], [], 0, 0
-    for base, lado in esperados(com_obras):
+    for base, lado in esperados(com_obras, com_equipe):
         achados = [base + e for e in ('.webp', '.png') if os.path.exists(os.path.join(IMG, base + e))]
         if not achados:
             faltas.append(base)
@@ -373,7 +382,7 @@ def confere(com_obras):
             fora.append('%s (não é %s de verdade)' % (arq, ext.upper()))
         elif dim != (lado, lado):
             fora.append('%s (%s, esperado %d×%d)' % (arq, '%d×%d' % dim if dim else 'sem medida', lado, lado))
-    esp = len(esperados(com_obras))
+    esp = len(esperados(com_obras, com_equipe))
     print('== conferência de site/img/: %d de %d arquivos, %.2f MB no total' % (n, esp, total / KB / KB))
     if faltas:
         print('   FALTAM %d: %s' % (len(faltas), ', '.join(faltas)))
@@ -386,7 +395,8 @@ def confere(com_obras):
 
 def main():
     ap = argparse.ArgumentParser(description='Fotografa as classes e as fusões para o site (site/img/).')
-    ap.add_argument('--lote', action='append', choices=LOTES + [LOTE_OBRAS], help='só este lote (pode repetir)')
+    ap.add_argument('--lote', action='append', choices=LOTES + [LOTE_OBRAS, LOTE_EQUIPE],
+                    help='só este lote (pode repetir); "equipe" é o Cavaleiro Negro do ranking')
     ap.add_argument('--obras', action='store_true', help='soma o lote das 6 obras de fusão (256 px)')
     ap.add_argument('--motor', choices=sorted(MOTORES), default='swiftshader')
     ap.add_argument('--ss', type=int, default=2, help='supersampling da foto (1 a 3; padrão 2)')
@@ -402,6 +412,7 @@ def main():
     if args.obras and LOTE_OBRAS not in lotes and not args.so_confere:
         lotes.append(LOTE_OBRAS)
     com_obras = args.obras or LOTE_OBRAS in lotes
+    com_equipe = LOTE_EQUIPE in lotes
 
     srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(Atendente, directory=RAIZ))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -411,7 +422,7 @@ def main():
         for lote in lotes:
             if not roda_lote(chrome, args.motor, base, lote, max(1, min(3, args.ss))):
                 falhas.append(lote)
-        ok = confere(com_obras)
+        ok = confere(com_obras, com_equipe)
         if args.folha and not foto_folha(chrome, base, args.folha):
             falhas.append('folha')
     finally:

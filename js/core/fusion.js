@@ -309,7 +309,19 @@ var JOGO = (typeof window !== 'undefined')
     // funde, e duas unidades de CONTAS diferentes (co-op, um dia) tampouco.
     // A conta viaja do grupo (Progress.battleParty) para a unidade.
     if (a.classId === 'gm' || b.classId === 'gm') return false;
-    if ((a.conta || null) !== (b.conta || null)) return false;
+    // 11/09 (multijogador): com DONO na unidade (o jogador da Rede que a
+    // controla), quem decide é ele — e entre donos DIFERENTES a fusão só sai
+    // com os DOIS aceitando, o que o lance `f` registra em
+    // `state.consentimento` {a, b, T} no turno em que é declarada. A trava da
+    // CONTA vale entre unidades sem dono (fora de rede, como sempre): a conta
+    // é 'principal' para quase todo mundo e não separa jogadores.
+    var dA = a.dono || null, dB = b.dono || null;
+    if (dA || dB) {
+      if (dA !== dB) {
+        var cs = state.consentimento;
+        if (!cs || cs.a !== uidA || cs.b !== uidB || cs.T !== (state.turno || 0)) return false;
+      }
+    } else if ((a.conta || null) !== (b.conta || null)) return false;
     if (manhattan(a.x, a.y, b.x, b.y) !== 1) return false;
     if (state.pendingFusion) return false;
     if (a.fusionIntent || b.fusionIntent) return false;
@@ -418,6 +430,8 @@ var JOGO = (typeof window !== 'undefined')
     a.lock = Math.round(((a.lock || 0) + (b.lock || 0)) / 2);
     a.resists = avgResists(a, b);
     a.level = level;
+    // o `dono` e o `ia` de A ficam: a fusão é de quem a pediu e pagou os 2 PA
+    // (11/09 — em grupo, até o fim da sala)
     a.kind = 'fusion';
     // `defId = 'fus:'+classA+'+'+classB` (contrato §4) com o MESMO critério
     // alfabético da chave de DATA.fusionForms: assim a aparência da fusão é
