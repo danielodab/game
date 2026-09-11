@@ -1522,17 +1522,22 @@ var JOGO = (typeof window !== 'undefined')
     var my = -((ev.clientY - r.top) / r.height) * 2 + 1;
     raycaster.setFromCamera({ x: mx, y: my }, camera);
 
-    // antes de tudo, os FANTASMAS: tocar num jogador é o gesto social —
-    // convida para a TROCA (a HUD decide o que fazer com o toque)
+    // antes de tudo, os FANTASMAS: tocar num jogador é o gesto social (a HUD
+    // abre o painel dele). 11/09: o toque vale no ALVO DE TOQUE do corpo
+    // (poeAlvoToque), nas plaquinhas e na coroa — e, com dois na mesma linha,
+    // ganha o mais perto da câmera
     if (Hub.aoTocarFantasma) {
+      var melhorF = null, distF = Infinity;
       for (var fk3 in fantasmas) {
         if (!fantasmas.hasOwnProperty(fk3)) continue;
-        if (!fantasmas[fk3].corpo) continue;     // sem corpo, sem toque
-        var hitsF = raycaster.intersectObject(fantasmas[fk3].corpo.node, true);
-        if (hitsF && hitsF.length) {
-          try { Hub.aoTocarFantasma(fk3); } catch (e) {}
-          return;
-        }
+        var cF = fantasmas[fk3].corpo;
+        if (!cF) continue;                       // sem corpo, sem toque
+        var hitsF = raycaster.intersectObjects(alvosDeToque(cF), true);
+        if (hitsF && hitsF.length && hitsF[0].distance < distF) { distF = hitsF[0].distance; melhorF = fk3; }
+      }
+      if (melhorF !== null) {
+        try { Hub.aoTocarFantasma(melhorF); } catch (e) {}
+        return;
       }
     }
 
@@ -1785,7 +1790,33 @@ var JOGO = (typeof window !== 'undefined')
               marcasGrupo[reg.id] || null);
     if (perfil && perfil.aura) acendeAura(corpo, true);   // a vaidade é pública
     esperaCorpo(corpo, classe);           // fusão: o corpo próprio vem vindo
+    poeAlvoToque(corpo);                  // 11/09: o corpo inteiro recebe o toque, não só o nome
     return true;
+  }
+
+  /* O ALVO DE TOQUE (11/09, "clico em cima e não aparece esse menu" — só o
+   * NOME abria). O corpo é um SkinnedMesh do Meshy: o three r147 descarta o
+   * raio pela esfera da pose de REPOUSO da malha, que não fica onde o corpo
+   * em pé aparece, e o clique no corpo passava direto. Um cilindro invisível
+   * da altura do corpo recebe o toque — e poupa o teste triângulo a triângulo
+   * da malha animada. Geometria e material são UM só para todos os corpos. */
+  var geoToque = null, matToque = null;
+  function poeAlvoToque(corpo) {
+    if (!corpo || !THREE) return;
+    if (!geoToque) {
+      geoToque = new THREE.CylinderGeometry(0.55, 0.55, 1, 10);
+      matToque = new THREE.MeshBasicMaterial({ visible: false });
+    }
+    var alto = corpo.node.userData.height || 2.1;
+    var m = new THREE.Mesh(geoToque, matToque);
+    m.scale.y = alto;
+    m.position.y = alto / 2;
+    corpo.node.add(m);
+    corpo.alvoToque = m;
+  }
+  function alvosDeToque(corpo) {
+    return [corpo.alvoToque, corpo.plaquinha, corpo.plaquinhaTitulo, corpo.plaquinhaGuilda, corpo.coroaPvp]
+      .filter(Boolean);
   }
   function desmaterializa(reg) {
     if (!reg || !reg.corpo) return;
@@ -1882,6 +1913,19 @@ var JOGO = (typeof window !== 'undefined')
   Hub._corpoFantasma = function (id) {
     var r = fantasmas[id], u = r && r.corpo && r.corpo.node.userData;
     return (u && u.look && u.look.model) || null;
+  };
+
+  /* onde o CORPO (a meia altura) ou o NOME de um fantasma aparece na tela, em
+   * coordenadas da página — para a prova tocar nele de verdade (provas) */
+  Hub._naTela = function (id, parte) {
+    var reg = fantasmas[id], c = reg && reg.corpo;
+    if (!c || !camera || !canvas || !THREE) return null;
+    var v = new THREE.Vector3();
+    if (parte === 'nome' && c.plaquinha) c.plaquinha.getWorldPosition(v);
+    else { c.node.getWorldPosition(v); v.y += (c.node.userData.height || 2.1) * 0.45; }
+    v.project(camera);
+    var r = canvas.getBoundingClientRect();
+    return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
   };
 
   Hub.irPara = function (x, z) {

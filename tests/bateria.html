@@ -46,11 +46,12 @@
     'grupo_hud',  // 11/09: a HUD do multijogador no celular (achados 22 a 28), no index de verdade a 390x844
     'tempo_turno',  // 11/09: a barra do tempo do turno na lateral (index de verdade a 390x844, relógio de mentira)
     'tela_cheia',  // 11/09: o ⛶/✕ do canto (API de tela cheia de mentira), retrato, paisagem e o aparelho virando
-    'coroa_praca'  // 11/09: a coroa 3D da praça no jogo SERVIDO (pedida na hora, o bilhete vira 3D e gira)
+    'coroa_praca',  // 11/09: a coroa 3D da praça no jogo SERVIDO (pedida na hora, o bilhete vira 3D e gira)
+    'toque_jogador'  // 11/09: tocar no CORPO de outro jogador (clique de verdade no canvas) abre o painel dele
   ];
   /* o prazo por suíte: 120 s, e mais para quem abre o index inteiro
    * (essas se dão 110 s só para o jogo abrir) */
-  var PRAZO = { grupo_hud: 300000, tempo_turno: 300000, tela_cheia: 300000, coroa_praca: 300000 };
+  var PRAZO = { grupo_hud: 300000, tempo_turno: 300000, tela_cheia: 300000, coroa_praca: 300000, toque_jogador: 300000 };
   var tab = document.getElementById('tab');
   var linhas = {};
   SUITES.forEach(function (s) {
