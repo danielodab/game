@@ -1092,7 +1092,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
         # SAVE (o batismo do jogo; um save forjado passa ao largo dele) não põem
         # "GM" nem "Staff" no ranking público de quem não é o Mestre — o nome cai
         # para o da conta e a guilda sai da vitrine
-        emblema = texto_ou_nulo(guilda.get('emblema'), 16)
+        emblema = texto_ou_nulo(guilda.get('emblema'), 64)
         if not conta['gm']:
             if nome and nomes.reservado(nome):
                 nome = None

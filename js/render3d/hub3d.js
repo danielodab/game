@@ -170,25 +170,55 @@ var JOGO = (typeof window !== 'undefined')
    * retângulo"). O desenho é o da bandeira da Sede: fundo escuro, filete
    * dourado. A largura da placa abraça o texto, não o canvas inteiro —
    * placa de nome curto não pode parecer um outdoor. */
-  function drawShieldCanvas(g, x, y, size, bg, fg, sym) {
+  var SHIELD_PATHS = {
+    'sword': "M45 10 L55 10 L55 70 L65 70 L65 80 L55 80 L55 95 L45 95 L45 80 L35 80 L35 70 L45 70 Z",
+    'crown': "M15 80 L85 80 L95 30 L70 50 L50 15 L30 50 L5 30 Z",
+    'cross': "M35 15 L65 15 L65 35 L85 35 L85 65 L65 65 L65 95 L35 95 L35 65 L15 65 L15 35 L35 35 Z",
+    'star': "M50 10 L61 39 L92 39 L66 57 L76 88 L50 69 L24 88 L34 57 L8 39 L39 39 Z",
+    'tower': "M25 90 L75 90 L75 40 L85 40 L85 20 L75 20 L75 30 L65 30 L65 20 L55 20 L55 30 L45 30 L45 20 L35 20 L35 30 L25 30 L25 20 L15 20 L15 40 L25 40 Z",
+    'tree': "M50 10 L80 45 L65 45 L90 80 L60 80 L60 95 L40 95 L40 80 L10 80 L35 45 L20 45 Z",
+    'anvil': "M20 35 L80 35 L80 45 L60 45 L70 80 L30 80 L40 45 L20 45 Z"
+  };
+
+  function drawShieldCanvas(g, x, y, size, shape, bg, border, fg, sym) {
     var h = size, w = size;
     g.save();
     g.translate(x, y);
-    g.fillStyle = bg;
+    g.fillStyle = bg || '#b40426';
     g.beginPath();
-    g.moveTo(w*0.1, h*0.1);
-    g.lineTo(w*0.9, h*0.1);
-    g.lineTo(w*0.9, h*0.5);
-    g.bezierCurveTo(w*0.9, h*0.8, w*0.5, h*0.95, w*0.5, h*0.95);
-    g.bezierCurveTo(w*0.5, h*0.95, w*0.1, h*0.8, w*0.1, h*0.5);
+    if (shape === '2') { // Spanish
+      g.moveTo(w*0.1, h*0.1);
+      g.lineTo(w*0.9, h*0.1);
+      g.lineTo(w*0.9, h*0.6);
+      g.arc(w*0.5, h*0.6, w*0.4, 0, Math.PI);
+    } else if (shape === '3') { // Round
+      g.arc(w*0.5, h*0.5, w*0.45, 0, Math.PI*2);
+    } else { // 1 = Heater
+      g.moveTo(w*0.1, h*0.1);
+      g.lineTo(w*0.9, h*0.1);
+      g.lineTo(w*0.9, h*0.5);
+      g.bezierCurveTo(w*0.9, h*0.8, w*0.5, h*0.95, w*0.5, h*0.95);
+      g.bezierCurveTo(w*0.5, h*0.95, w*0.1, h*0.8, w*0.1, h*0.5);
+    }
     g.closePath();
     g.fill();
-    g.lineWidth = w*0.06; g.strokeStyle = '#1d1a14'; g.stroke();
-    g.fillStyle = fg;
-    g.shadowColor = 'transparent'; g.shadowBlur = 0;
-    g.font = Math.floor(h*0.5) + 'px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(sym, w*0.5, h*0.48);
+    g.lineWidth = w*0.06; g.strokeStyle = border || '#1d1a14'; g.stroke();
+    
+    var pathStr = SHIELD_PATHS[sym];
+    if (pathStr) {
+      var p = new Path2D(pathStr);
+      g.fillStyle = fg || '#ffffff';
+      g.save();
+      g.scale(w/100, h/100);
+      g.fill(p);
+      g.restore();
+    } else if (sym) {
+      g.fillStyle = fg || '#ffffff';
+      g.shadowColor = 'transparent'; g.shadowBlur = 0;
+      g.font = Math.floor(h*0.5) + 'px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(sym, w*0.5, h*0.48);
+    }
     g.restore();
   }
 
@@ -212,8 +242,12 @@ var JOGO = (typeof window !== 'undefined')
       g.strokeRect(x0 + 2.5, 20.5, larg - 5, 87);
     }
     
-    if (escudoParts && escudoParts.length >= 4) {
-      drawShieldCanvas(g, x0 + 16, 32, 64, escudoParts[1], escudoParts[2], escudoParts[3]);
+    if (escudoParts && escudoParts.length >= 6) {
+      // novo formato: shield | shape | bg | border | fg | sym
+      drawShieldCanvas(g, x0 + 16, 32, 64, escudoParts[1], escudoParts[2], escudoParts[3], escudoParts[4], escudoParts[5]);
+    } else if (escudoParts && escudoParts.length >= 4) {
+      // retrocompatibilidade
+      drawShieldCanvas(g, x0 + 16, 32, 64, '1', escudoParts[1], '#1d1a14', escudoParts[2], escudoParts[3]);
     }
 
     g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 10;

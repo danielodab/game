@@ -126,7 +126,7 @@ RE_TOKEN = re.compile(r'[\x21-\x7e]{16,128}')   # o do cartório tem 64 hex; aqu
 RE_MARCA = re.compile(r'[0-9a-z]{8,40}')         # a marca que o cliente sorteia e põe no endereço (?n=)
 RE_CX = re.compile(r'[0-9a-f]{8,16}')            # o id da conexão (rele.py, Par.cx: 8 hex), que o anúncio conta a ela
 
-TEXTO_MAX = 24                # nome/título/guilda/emblema maior que isto nem passa pela regra: é trocado
+TEXTO_MAX = 64                # nome/título/guilda/emblema maior que isto nem passa pela regra: é trocado
 VEREDITOS_MAX = 8192          # textos já julgados (cheio, sai a metade que ninguém usa há mais tempo)
 FREIO_TAXA, FREIO_RAJADA = 0.2, 6.0   # textos NOVOS julgados por conexão: 6 de uma vez, 1 a cada 5 s
 ORC_TAXA_MS, ORC_RAJADA_MS = 200.0, 500.0   # ms de regra por segundo somando TODAS as conexões (20% do laço), e de uma vez

@@ -51,7 +51,7 @@ from comum import Recusa, agora, limita
 log = logging.getLogger('api')
 
 NOME_MAX = 24
-EMBLEMA_MAX = 4
+EMBLEMA_MAX = 64
 DIZIMO_MAX = 25                   # espelha JOGO.Guilda.DIZIMO_MAX
 CUSTO_BONUS = 25                  # espelha JOGO.Guilda.CUSTO_BONUS
 BONUS_S = 24 * 3600               # espelha JOGO.Guilda.BONUS_MS (em segundos)

@@ -6394,32 +6394,66 @@ var JOGO = (typeof window !== 'undefined')
     }
     return fora;
   }
-  function drawShieldCanvas(cv, bg, fg, sym) {
+  var SHIELD_PATHS = {
+    'sword': "M45 10 L55 10 L55 70 L65 70 L65 80 L55 80 L55 95 L45 95 L45 80 L35 80 L35 70 L45 70 Z",
+    'crown': "M15 80 L85 80 L95 30 L70 50 L50 15 L30 50 L5 30 Z",
+    'cross': "M35 15 L65 15 L65 35 L85 35 L85 65 L65 65 L65 95 L35 95 L35 65 L15 65 L15 35 L35 35 Z",
+    'star': "M50 10 L61 39 L92 39 L66 57 L76 88 L50 69 L24 88 L34 57 L8 39 L39 39 Z",
+    'tower': "M25 90 L75 90 L75 40 L85 40 L85 20 L75 20 L75 30 L65 30 L65 20 L55 20 L55 30 L45 30 L45 20 L35 20 L35 30 L25 30 L25 20 L15 20 L15 40 L25 40 Z",
+    'tree': "M50 10 L80 45 L65 45 L90 80 L60 80 L60 95 L40 95 L40 80 L10 80 L35 45 L20 45 Z",
+    'anvil': "M20 35 L80 35 L80 45 L60 45 L70 80 L30 80 L40 45 L20 45 Z"
+  };
+
+  function drawShieldCanvas(cv, shape, bg, border, fg, sym) {
     var g = cv.getContext('2d');
     var w = cv.width, h = cv.height;
     g.clearRect(0, 0, w, h);
-    g.fillStyle = bg;
+    g.fillStyle = bg || '#b40426';
     g.beginPath();
-    g.moveTo(w*0.1, h*0.1);
-    g.lineTo(w*0.9, h*0.1);
-    g.lineTo(w*0.9, h*0.5);
-    g.bezierCurveTo(w*0.9, h*0.8, w*0.5, h*0.95, w*0.5, h*0.95);
-    g.bezierCurveTo(w*0.5, h*0.95, w*0.1, h*0.8, w*0.1, h*0.5);
+    if (shape === '2') { // Spanish
+      g.moveTo(w*0.1, h*0.1);
+      g.lineTo(w*0.9, h*0.1);
+      g.lineTo(w*0.9, h*0.6);
+      g.arc(w*0.5, h*0.6, w*0.4, 0, Math.PI);
+    } else if (shape === '3') { // Round
+      g.arc(w*0.5, h*0.5, w*0.45, 0, Math.PI*2);
+    } else { // 1 = Heater
+      g.moveTo(w*0.1, h*0.1);
+      g.lineTo(w*0.9, h*0.1);
+      g.lineTo(w*0.9, h*0.5);
+      g.bezierCurveTo(w*0.9, h*0.8, w*0.5, h*0.95, w*0.5, h*0.95);
+      g.bezierCurveTo(w*0.5, h*0.95, w*0.1, h*0.8, w*0.1, h*0.5);
+    }
     g.closePath();
     g.fill();
-    g.lineWidth = w*0.06; g.strokeStyle = '#1d1a14'; g.stroke();
-    g.fillStyle = fg;
-    g.font = Math.floor(h*0.5) + 'px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(sym, w*0.5, h*0.48);
+    g.lineWidth = w*0.06; g.strokeStyle = border || '#1d1a14'; g.stroke();
+    
+    var pathStr = SHIELD_PATHS[sym];
+    if (pathStr) {
+      var p = new Path2D(pathStr);
+      g.fillStyle = fg || '#ffffff';
+      g.save();
+      g.scale(w/100, h/100);
+      g.fill(p);
+      g.restore();
+    } else if (sym) {
+      g.fillStyle = fg || '#ffffff';
+      g.shadowColor = 'transparent'; g.shadowBlur = 0;
+      g.font = Math.floor(h*0.5) + 'px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(sym, w*0.5, h*0.48);
+    }
   }
 
   function elShield(code, size) {
     var cv = document.createElement('canvas');
     cv.width = size; cv.height = size;
     var parts = String(code || '').split('|');
-    if (parts[0] === 'shield' && parts.length >= 4) {
-      drawShieldCanvas(cv, parts[1], parts[2], parts[3]);
+    if (parts[0] === 'shield' && parts.length >= 6) {
+      drawShieldCanvas(cv, parts[1], parts[2], parts[3], parts[4], parts[5]);
+      return cv;
+    } else if (parts[0] === 'shield' && parts.length >= 4) {
+      drawShieldCanvas(cv, '1', parts[1], '#1d1a14', parts[2], parts[3]);
       return cv;
     }
     // fallback emoji antigo
@@ -6485,38 +6519,73 @@ var JOGO = (typeof window !== 'undefined')
         caixa.appendChild(linhaIns);
 
         if (guildaEmblemaEscolhido === '?' || guildaEmblemaEscolhido.indexOf('shield|') !== 0) {
-          guildaEmblemaEscolhido = 'shield|#b40426|#ffffff|⚔️';
+          guildaEmblemaEscolhido = 'shield|1|#b40426|#1d1a14|#ffffff|sword'; // padrao
         }
         var curParts = guildaEmblemaEscolhido.split('|');
+        // fallback old shield migration on UI
+        if (curParts.length === 4) {
+          curParts = ['shield', '1', curParts[1], '#1d1a14', curParts[2], curParts[3]];
+          guildaEmblemaEscolhido = curParts.join('|');
+        }
 
         var fila = el('div', 'guilda-emblemas');
         fila.style.cssText = 'display:flex; flex-direction:column; gap:8px; align-items:center; margin-bottom:12px;';
         
-        var preview = elShield(guildaEmblemaEscolhido, 64);
+        var preview = elShield(guildaEmblemaEscolhido, 80);
         fila.appendChild(preview);
 
-        function pickRow(arr, idxToSet) {
+        var cRow = el('div', 'guilda-emblemas-row');
+        cRow.style.cssText = 'display:flex; gap:12px; flex-wrap:wrap; justify-content:center; align-items:center;';
+
+        function mkColor(label, idx) {
+          var wrap = el('label', 'inv-dica', label);
+          wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; font-size:10px; cursor:pointer;';
+          var inp = document.createElement('input');
+          inp.type = 'color';
+          inp.value = curParts[idx] || '#000000';
+          inp.style.cssText = 'border:none; padding:0; width:28px; height:28px; cursor:pointer; background:transparent;';
+          inp.oninput = function () {
+            curParts[idx] = inp.value;
+            guildaEmblemaEscolhido = curParts.join('|');
+            var newP = elShield(guildaEmblemaEscolhido, 80);
+            fila.replaceChild(newP, preview);
+            preview = newP;
+          };
+          wrap.appendChild(inp);
+          return wrap;
+        }
+
+        cRow.appendChild(mkColor('Fundo', 2));
+        cRow.appendChild(mkColor('Símbolo', 4));
+        cRow.appendChild(mkColor('Borda', 3));
+        fila.appendChild(cRow);
+
+        function pickRow(arr, idxToSet, isPath) {
           var row = el('div', 'guilda-emblemas-row');
-          row.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; justify-content:center;';
+          row.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-top:4px;';
           arr.forEach(function (v) {
-            var b = btn(idxToSet < 3 ? '' : v, 'btn-mini' + (curParts[idxToSet] === v ? ' btn-gold' : ' btn-ghost'), function () {
+            var label = '';
+            if (idxToSet === 1) { // shapes
+              if (v === '1') label = 'Clássico';
+              if (v === '2') label = 'Espanhol';
+              if (v === '3') label = 'Redondo';
+            }
+            var b = btn(label, 'btn-mini' + (curParts[idxToSet] === v ? ' btn-gold' : ' btn-ghost'), function () {
               curParts[idxToSet] = v;
               guildaEmblemaEscolhido = curParts.join('|');
-              sheetGuilda();
+              sheetGuilda(); // needs full repaint for selected state
             });
-            if (idxToSet < 3) {
-              b.style.background = v;
-              b.style.width = '24px'; b.style.height = '24px';
-              b.style.border = (curParts[idxToSet] === v ? '2px solid var(--gold)' : '2px solid transparent');
+            if (isPath) {
+              b.innerHTML = '';
+              b.appendChild(elShield('shield|1|transparent|transparent|#ffffff|' + v, 24));
             }
             row.appendChild(b);
           });
           return row;
         }
 
-        fila.appendChild(pickRow(['#b40426', '#3b4cc0', '#3a8040', '#e8a825', '#333333', '#ffffff', '#8a2be2'], 1));
-        fila.appendChild(pickRow(['#ffffff', '#000000', '#e8a825'], 2));
-        fila.appendChild(pickRow(['⚔️', '👑', '★', '🐉', '🦅', '🦁', '☠', '⚜', '⚓', '🌲'], 3));
+        fila.appendChild(pickRow(['1', '2', '3'], 1, false)); // Shapes
+        fila.appendChild(pickRow(Object.keys(SHIELD_PATHS), 5, true)); // Symbols
 
         caixa.appendChild(fila);
         var inp = document.createElement('input');
