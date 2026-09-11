@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — os Pergaminhos da loja do site</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  h2{font-size:13px;margin:12px 0 2px;color:#c9d4e2}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>Os Pergaminhos da loja do site — Sabedoria (XP) e Reescrita (caminho elemental)</h1>
+<div class="sub">Fase C. O progress.js e o game.js reais, com as fixtures e o dublê de Engine de
+tests/agenda_funil.html (a vitória de verdade: matar, fase 'won', battleEnd; Math.random semeado com contador) e a
+agenda real com eventos injetados. Cobra: o sanitize guarda os dois campos novos e derruba o lixo; a leitura respeita o
+teto de 27 cargas; o pergaminho e o evento de XP não passam de ×2; a carga só se gasta quando ajudou; o grupo todo no
+nível 30 não gasta; os vinténs não mudam; e a Reescrita troca um caminho no mesmo lugar, recusando o que não pode —
+sem gastar o pergaminho na recusa.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  // sem cache de agenda nem sessão de verdade (a sombra do sandbox começa pelo disco)
+  try { localStorage.removeItem('soterra-agenda-v1'); localStorage.removeItem('soterra-sessao'); } catch (e) {}
+  // o progression.js REAL primeiro: DATA.pergaminhos vem dele (o resto as fixtures sobrescrevem)
+  document.write('<scr' + 'ipt src="../js/core/data/progression.js?v=' + Date.now() + '"></scr' + 'ipt>');
+</script>
+
+<!-- ============================ 1) FIXTURES E DUBLÊS (de agenda_funil) ===== -->
+<script>
+(function () {
+  'use strict';
+  var JOGO = window.JOGO = window.JOGO || {};
+  var DATA = JOGO.DATA = JOGO.DATA || {};
+
+  DATA.elements = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
+  DATA.rivals = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
+  DATA.unlockTiers = [5, 10, 12, 15, 20, 30];
+  DATA.leveling = {
+    maxLevel: 30,
+    xpTable: [
+      0, 60, 145, 270, 440,
+      670, 980, 1390, 1925, 2620,
+      3505, 4620, 6010, 7720, 9800,
+      12305, 15290, 18810, 22915, 27655,
+      33065, 39175, 46010, 53570, 61850,
+      70830, 80465, 90695, 101450, 112640
+    ],
+    perLevel: { hp: 5, power: 3 },
+    perLevelElement: { hp: 5, elemPower: 3 },
+    xpFalloff: { graceLevels: 4, factorPerLevel: 0.75, floor: 0.10 },
+    defenseByRole: {
+      tanque:    { dodge: 15, lock: 70 },
+      atirador:  { dodge: 54, lock: 39 },
+      assassino: { dodge: 40, lock: 10 },
+      mago:      { dodge: 10, lock: 1 },
+      suporte:   { dodge: 49, lock: 5 },
+      invocador: { dodge: 12, lock: 44 }
+    },
+    elementChoiceLevel: 5
+  };
+  // dificuldade neutra: a das fixtures (o progression.js real trouxe a dele; aqui tudo ×1)
+  DATA.dificuldades = { normal: { id: 'normal', nome: 'Normal', vida: 1, dano: 1, clima: 1, xp: 1, drop: 1 } };
+  DATA.dificuldadePadrao = 'normal';
+
+  var STAR_COSTS = [5, 15, 30, 55, 90];
+  DATA.stars = {
+    max: 5,
+    bonuses: { 1: { hp: 15 }, 2: { power: 8 }, 3: { pp: 1 }, 4: { hp: 25, dodge: 10 }, 5: { pa: 1 } },
+    elementSlots: { 0: 1, 1: 1, 2: 1, 3: 2, 4: 3, 5: 4 }
+  };
+  DATA.stones = {
+    'st-neutro': { id: 'st-neutro', name: 'Seixo Cinzento', element: 'neutro', description: '—', iconKey: 'stone' },
+    'st-fogo':   { id: 'st-fogo',   name: 'Brasa Dura',     element: 'fogo',   description: '—', iconKey: 'stone' },
+    'st-agua':   { id: 'st-agua',   name: 'Lágrima Densa',  element: 'agua',   description: '—', iconKey: 'stone' },
+    'st-terra':  { id: 'st-terra',  name: 'Núcleo de Raiz', element: 'terra',  description: '—', iconKey: 'stone' },
+    'st-ar':     { id: 'st-ar',     name: 'Sopro Preso',    element: 'ar',     description: '—', iconKey: 'stone' },
+    'stone-anchor': { id: 'stone-anchor', name: 'Âncora de Forja', element: 'forja', description: '—', iconKey: 'stone-anchor' }
+  };
+  DATA.upgrade = {
+    maxLevel: 10,
+    tiers: [{ from: 0, to: 2, name: 'Comum' }, { from: 3, to: 5, name: 'Raro' },
+            { from: 6, to: 9, name: 'Supremo' }, { from: 10, to: 10, name: 'Magnífico' }],
+    bonusPerLevel: 0.12,
+    stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25],
+    nonScalingKeys: ['pa', 'pp'],
+    guardStone: 'stone-anchor',
+    guardDropByDungeon: { 't-dung-0': 1, 't-dung-1': 1 }
+  };
+
+  var PATH_ELEMENTS = ['fogo', 'agua', 'terra', 'ar'];
+  var TIERS = DATA.unlockTiers;
+  var SPEC = [
+    { id: 't-tanque', name: 'Tanque de Teste', role: 'tanque', startsUnlocked: true,
+      cardRarity: 'comum', unlockCost: 0, dropWeight: 6, minDungeon: 0,
+      stats: { hp: 150, pa: 6, pp: 3, initiative: 15, power: 0, dodge: 5, lock: 40 } },
+    { id: 't-cura', name: 'Curandeira de Teste', role: 'suporte', startsUnlocked: true,
+      cardRarity: 'raro', unlockCost: 0, dropWeight: 18, minDungeon: 0,
+      stats: { hp: 110, pa: 6, pp: 3, initiative: 55, power: 0, dodge: 20, lock: 5 } },
+    { id: 't-arco', name: 'Arqueiro de Teste', role: 'atirador', startsUnlocked: false,
+      cardRarity: 'comum', unlockCost: 25, dropWeight: 10, minDungeon: 0,
+      stats: { hp: 100, pa: 6, pp: 3, initiative: 70, power: 0, dodge: 25, lock: 10 } },
+    // Fase C: uma classe com SÓ dois caminhos — a Reescrita não pode trazer o que ela não tem
+    { id: 't-parcial', name: 'Parcial de Teste', role: 'mago', startsUnlocked: true,
+      cardRarity: 'comum', unlockCost: 0, dropWeight: 0, minDungeon: 0, paths: ['fogo', 'agua'],
+      stats: { hp: 90, pa: 6, pp: 3, initiative: 30, power: 0, dodge: 10, lock: 1 } }
+  ];
+  DATA.classes = {};
+  DATA.spells = {};
+  DATA.cards = {};
+  function zeroResists() { return { fogo: 0, agua: 0, terra: 0, ar: 0, neutro: 0 }; }
+  function makeSpell(id, element, unlockLevel, classId) {
+    DATA.spells[id] = {
+      id: id, name: id, element: element, classId: classId, unlockLevel: unlockLevel,
+      paCost: 3, cooldown: 0, castsPerTurn: 0,
+      range: { min: 1, max: 6, line: false, los: true, movable: false },
+      aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'enemy',
+      effects: [{ type: 'damage', element: element, min: 10, max: 14 }],
+      description: 'feitiço de teste', flavor: '—', fxKey: 'test'
+    };
+    return id;
+  }
+  for (var s = 0; s < SPEC.length; s++) {
+    var c = SPEC[s];
+    var base = [];
+    for (var b = 1; b <= 3; b++) base.push(makeSpell(c.id + '-neutro-' + b, 'neutro', 0, c.id));
+    var paths = {};
+    var caminhos = c.paths || PATH_ELEMENTS;
+    for (var e = 0; e < caminhos.length; e++) {
+      var el = caminhos[e];
+      paths[el] = [];
+      for (var t = 0; t < TIERS.length; t++) paths[el].push(makeSpell(c.id + '-' + el + '-' + TIERS[t], el, TIERS[t], c.id));
+    }
+    var stats = c.stats;
+    stats.resists = zeroResists();
+    DATA.classes[c.id] = {
+      id: c.id, name: c.name, role: c.role, description: 'classe de teste', lore: '—',
+      palette: { primary: '#888', secondary: '#444', accent: '#fff' },
+      stats: stats, baseSpells: base, paths: paths,
+      startsUnlocked: c.startsUnlocked, cardRarity: c.cardRarity
+    };
+    DATA.cards[c.id] = { unlockCost: c.unlockCost, dropWeight: c.dropWeight, minDungeon: c.minDungeon, starCosts: STAR_COSTS.slice() };
+  }
+  // Fase C: o gm — SEM `paths` (é assim que ele tem os 4); a Reescrita o deixa de fora
+  DATA.classes.gm = {
+    id: 'gm', name: 'Mestre de Teste', role: 'tanque', description: 'classe de teste', lore: '—',
+    palette: { primary: '#000', secondary: '#222', accent: '#fff' },
+    stats: { hp: 999, pa: 12, pp: 6, initiative: 99, power: 0, dodge: 0, lock: 0, resists: zeroResists() },
+    baseSpells: [], startsUnlocked: true, cardRarity: 'comum'
+  };
+  makeSpell('t-feitico-item', 'neutro', 0, null);
+
+  DATA.sets = {};
+  DATA.lootWeights = {
+    comum: 1000,
+    luckExponent: { comum: 0, raro: 1, epico: 2, lendario: 2 },
+    noDrop: { 't-dung-0': 3000, 't-dung-1': 3000 }
+  };
+  DATA.items = {};
+  function item(o) {
+    var minRoom = (o.rarity === 'epico' || o.rarity === 'lendario') ? 2 : (o.rarity === 'raro' ? 1 : 0);
+    DATA.items[o.id] = {
+      id: o.id, name: o.name, slot: o.slot, rarity: o.rarity, dungeonId: o.dungeonId || 't-dung-0',
+      element: o.element || 'neutro', setId: o.setId || null,
+      dropWeight: (o.dropWeight === undefined) ? 0 : o.dropWeight,
+      minRoom: (o.minRoom === undefined) ? minRoom : o.minRoom,
+      bonuses: o.bonuses || {}, grantsSpell: o.grantsSpell || null,
+      description: o.description || '—', flavor: '—', iconKey: 'test'
+    };
+  }
+  item({ id: 't-peito-vida', name: 'Peitoral de Casca', slot: 'casca', rarity: 'comum', element: 'terra',
+    dropWeight: 1000, bonuses: { hp: 40, resists: { fogo: 10 } } });
+  item({ id: 't-bota-pp', name: 'Botas Ligeiras', slot: 'passo', rarity: 'raro', element: 'agua',
+    dropWeight: 100, minRoom: 0, bonuses: { pp: 1, dodge: 5 } });
+
+  DATA.pets = {};
+  DATA.monsters = {
+    't-grunt': { id: 't-grunt', name: 'Capanga', family: 'Teste', element: 'fogo', description: '—',
+      stats: { hp: 50, pa: 6, pp: 3, initiative: 10, power: 0, dodge: 0, lock: 0, resists: zeroResists() },
+      spells: [], ai: 'melee', traits: [], boss: false, summonOnly: false, xp: 30,
+      stoneDrop: { chance: 1, min: 2, max: 2 } },
+    't-chefe': { id: 't-chefe', name: 'Chefe de Teste', family: 'Teste', element: 'terra', description: '—',
+      stats: { hp: 200, pa: 8, pp: 3, initiative: 20, power: 10, dodge: 0, lock: 20, resists: zeroResists() },
+      spells: [], ai: 'melee', traits: [], boss: true, summonOnly: false, xp: 90,
+      stoneDrop: { chance: 1, min: 5, max: 5 } }
+  };
+
+  function room(n) { return { name: n, weather: 'calmo', layout: ['#####', '#P.a#', '#####'],
+    monsters: { a: 't-grunt' }, sceneryTheme: 'teste' }; }
+  var CARD_DROPS = [{ classId: 't-cura', weight: 1 }, { classId: 't-arco', weight: 1 }];
+  function dung(id, name, idx) {
+    return { id: id, name: name, theme: 'teste', description: '—', difficulty: idx + 1,
+      order: idx + 1, recommendedLevel: [3, 7][idx], palette: {}, defaultWeather: 'calmo',
+      weatherShiftEveryRounds: 0, tileEventRate: 0, lootTable: [{ itemId: 't-peito-vida', weight: 30, minRoom: 0 }],
+      cardDrops: CARD_DROPS, rooms: [room('s1'), room('s2'), room('chefe')] };
+  }
+  DATA.dungeons = [dung('t-dung-0', 'Cova Rasa', 0), dung('t-dung-1', 'Segundo Fecho', 1)];
+
+  // ====================================================== DUBLÊ DE ENGINE ====
+  var Engine = { events: [] };
+  Engine.calls = { createBattle: 0 };
+  Engine.inimigos = ['t-grunt', 't-grunt'];
+  Engine.DESAFIO_BONUS = 0.25;
+  Engine.reset = function () { Engine.events.length = 0; Engine.calls = { createBattle: 0 }; };
+  Engine.dif = function (state) {
+    var dd = (JOGO.DATA && JOGO.DATA.dificuldades) || {};
+    var id = (state && state.dificuldade) || 'normal';
+    return dd[id] || dd.normal || { id: 'normal', vida: 1, dano: 1, clima: 1, xp: 1, drop: 1 };
+  };
+  Engine.createBattle = function (dungeonId, roomIndex, party) {
+    Engine.calls.createBattle++;
+    var st = { phase: 'playing', dungeonId: dungeonId, roomIndex: roomIndex,
+               grid: { w: 12, h: 12 }, units: [], turnIdx: 0, round: 1, weather: 'calmo' };
+    for (var i = 0; i < party.length; i++) {
+      var p = party[i];
+      st.units.push({ uid: 'H' + i, kind: 'hero', side: 'player', heroId: p.heroId || p, defId: p.classId || p,
+        alive: true, hp: 100, hpMax: 100, x: 1 + i, y: 1, pa: 6, pp: 3, spells: p.spells || [], fused: false });
+    }
+    for (var k = 0; k < Engine.inimigos.length; k++) {
+      st.units.push({ uid: 'E' + k, kind: 'monster', side: 'enemy', defId: Engine.inimigos[k],
+        alive: true, hp: 50, hpMax: 50, x: 8 + k, y: 8, pa: 6, pp: 3, spells: [] });
+    }
+    return st;
+  };
+  Engine.activeUnit = function (st) { return (st && st.units[st.turnIdx]) || null; };
+  Engine.byUid = function (st, uid) {
+    for (var i = 0; i < st.units.length; i++) if (st.units[i].uid === uid) return st.units[i];
+    return null;
+  };
+  Engine.endTurn = function (st) {
+    var n = st.units.length, guard = 0;
+    do { st.turnIdx = (st.turnIdx + 1) % n; guard++; } while (!st.units[st.turnIdx].alive && guard <= n);
+    return true;
+  };
+  Engine.unitAt = function () { return null; };
+  Engine.move = function () { return true; };
+  Engine.castTargets = function () { return []; };
+  Engine.cast = function () { return true; };
+  JOGO.Engine = Engine;
+  JOGO.Fusion = { canFuse: function () { return false; }, declare: function () { return false; } };
+  JOGO.AI = { planTurn: function () { return [{ action: 'end' }]; } };
+})();
+</script>
+
+<!-- ================ 2) CÓDIGO SOB TESTE ==================================== -->
+<script>
+(function () {
+  var v = '?v=' + Date.now();
+  ['js/core/progress.js', 'js/core/game.js', 'js/core/sessao.js', 'js/core/agenda.js'].forEach(function (a) {
+    document.write('<scr' + 'ipt src="../' + a + v + '"></scr' + 'ipt>');
+  });
+})();
+</script>
+
+<!-- ============================== 3) SUÍTE ================================= -->
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+  function secao(t) { var h = document.createElement('h2'); h.textContent = t; lista.appendChild(h); }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+
+  var P = JOGO.Progress, G = JOGO.Game, E = JOGO.Engine, AG = JOGO.Agenda;
+  var TANK = 't-tanque';
+  var AGORA = 1789041600;
+  AG._agora = function () { return AGORA * 1000; };
+  AG._limpa(true);
+
+  var creditos = [], ultimoDado = null, ultimaTela = null;
+  JOGO.DB = { ganharMoedas: function (n) { creditos.push(n); return Promise.resolve({ ok: true, moedas: n }); } };
+  JOGO.UI = { showScreen: function (name, data) { ultimaTela = name; if (data && data.xpGanho !== undefined) ultimoDado = data; } };
+
+  var acasoReal = Math.random, contagem = 0;
+  function semeia(seed) {
+    var a = seed >>> 0;
+    contagem = 0;
+    Math.random = function () {
+      contagem++;
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function ev(id, tipo, m) {
+    return { id: id, origem: 'pontual', regra: null, tipo: tipo, multiplicador: m, calabouco: null,
+             titulo: 'Evento ' + id, texto: '', inicio: AGORA - 600, fim: AGORA + 3600 };
+  }
+  /* uma sala vencida (ou perdida) de ponta a ponta; `prepara` roda depois do
+   * reset (é onde entram o pergaminho e os níveis) */
+  function vence(o) {
+    o = o || {};
+    creditos = []; ultimoDado = null; ultimaTela = null;
+    E.inimigos = o.inimigos || ['t-grunt', 't-grunt'];
+    AG._injeta({ ok: true, agora: AGORA, ativos: o.eventos || [], proximos: [], regras: [] });
+    var gastos = -1;
+    semeia(typeof o.seed === 'number' ? o.seed : 1);
+    try {
+      P.reset(); E.reset(); G.init();
+      if (o.prepara) o.prepara();
+      if (!G.startRun(o.grupo || [TANK], o.dungeon || 't-dung-0', { direto: true })) throw new Error('startRun recusou');
+      for (var i = 0; i < G.state.units.length; i++) {
+        if (G.state.units[i].side === 'enemy') { G.state.units[i].alive = false; G.state.units[i].hp = 0; }
+      }
+      if (o.perde) {
+        for (var j = 0; j < G.state.units.length; j++) {
+          if (G.state.units[j].side === 'player') { G.state.units[j].alive = false; G.state.units[j].hp = 0; }
+        }
+      }
+      G.state.phase = o.perde ? 'lost' : 'won';
+      var n0 = contagem;
+      G.handleEvent({ type: 'battleEnd' });
+      gastos = contagem - n0;
+    } finally {
+      Math.random = acasoReal;
+    }
+    return { dado: ultimoDado || {}, randoms: gastos, credito: creditos.slice(), tela: ultimaTela,
+             salas: P.pergaminhos().salasXp };
+  }
+  function comPergaminho() { P.addPergaminho('xp', 1); P.lePergaminhoXp(); }
+  function evPerg(r) { return (r.dado.eventos || []).filter(function (e) { return e.origem === 'pergaminho'; }); }
+  function tipos(r) { return (r.dado.eventos || []).map(function (e) { return e.tipo + (e.origem ? ':' + e.origem : ''); }).join(','); }
+  function foraDoXp(r) {
+    var d = r.dado;
+    return JSON.stringify({ moedas: d.moedas, stones: d.stones, credito: r.credito,
+      drops: (d.drops || []).map(function (x) { return typeof x === 'string' ? x : (x.itemId || x.id); }),
+      cards: (d.cards || []).map(function (c) { return c.classId + ':' + c.amount; }), randoms: r.randoms });
+  }
+
+  try {
+    // ================================================================ 1. os dados
+    secao('1. os dados (js/core/data/progression.js)');
+    var CFG = JOGO.DATA.pergaminhos;
+    check('DATA.pergaminhos: ×1,5 por 9 salas, teto de 27 cargas e 99 de cada',
+          !!CFG && CFG.xp.fator === 1.5 && CFG.xp.salas === 9 && CFG.xp.tetoSalas === 27 && CFG.tetoInventario === 99,
+          JSON.stringify(CFG));
+
+    // ================================================================ 2. o sanitize
+    secao('2. o sanitize (a armadilha: campo novo some calado no reload)');
+    function recarregaCom(mexe) {
+      P.reset();
+      var raw = JSON.parse(JSON.stringify(P.state));
+      mexe(raw);
+      localStorage.setItem(P.SAVE_KEY, JSON.stringify(raw));
+      P.load();
+      return P.state;
+    }
+    var s1 = recarregaCom(function (r) { r.pergaminhos = { xp: 3, elemento: 2.9, lixo: 7 }; r.bonusXp = { salas: 12, extra: 1 }; });
+    check('guarda os pergaminhos (só xp e elemento, inteiros) e as cargas {salas}',
+          JSON.stringify(s1.pergaminhos) === '{"xp":3,"elemento":2}' && JSON.stringify(s1.bonusXp) === '{"salas":12}',
+          JSON.stringify(s1.pergaminhos) + ' ' + JSON.stringify(s1.bonusXp));
+    var s2 = recarregaCom(function (r) { r.pergaminhos = { xp: -2, elemento: 'muitos' }; r.bonusXp = { salas: 0 }; });
+    check('saldo negativo, texto e carga zero caem — o campo nem aparece', !('pergaminhos' in s2) && !('bonusXp' in s2),
+          JSON.stringify([s2.pergaminhos, s2.bonusXp]));
+    var s3 = recarregaCom(function (r) { r.pergaminhos = { xp: 500, elemento: 1 }; r.bonusXp = { salas: 100 }; });
+    check('acima do teto: 99 pergaminhos e 27 cargas', !!s3.pergaminhos && s3.pergaminhos.xp === 99 &&
+          s3.pergaminhos.elemento === 1 && !!s3.bonusXp && s3.bonusXp.salas === 27);
+    var s4 = recarregaCom(function (r) { r.pergaminhos = [1, 2]; r.bonusXp = 5; });
+    check('formato torto (lista, número solto) cai', !('pergaminhos' in s4) && !('bonusXp' in s4));
+    recarregaCom(function (r) { r.pergaminhos = { xp: 4 }; r.bonusXp = { salas: 7 }; });
+    var pg = P.pergaminhos();
+    check('Progress.pergaminhos() lê {xp, elemento, salasXp}', pg.xp === 4 && pg.elemento === 0 && pg.salasXp === 7, JSON.stringify(pg));
+
+    // ================================================================ 3. guardar
+    secao('3. guardar e ler o da Sabedoria');
+    P.reset();
+    check('addPergaminho soma; recusa tipo desconhecido, zero e negativo',
+          P.addPergaminho('xp', 2) && P.addPergaminho('elemento') && !P.addPergaminho('saque', 1) &&
+          !P.addPergaminho('xp', 0) && !P.addPergaminho('xp', -3) &&
+          P.pergaminhos().xp === 2 && P.pergaminhos().elemento === 1, JSON.stringify(P.pergaminhos()));
+    check('o teto de 99 de cada: 97 entram, o 100º não (e não entra pela metade)',
+          P.addPergaminho('xp', 97) && P.pergaminhos().xp === 99 && !P.addPergaminho('xp', 1) && P.pergaminhos().xp === 99);
+    P.reset();
+    var r0 = P.lePergaminhoXp();
+    check('sem pergaminho, ler recusa com motivo "sem"', !r0.ok && r0.motivo === 'sem' && r0.salas === 0, JSON.stringify(r0));
+    check('sem carga, o fator é 1', P.fatorPergaminhoXp() === 1);
+    P.addPergaminho('xp', 5);
+    var l1 = P.lePergaminhoXp(), l2 = P.lePergaminhoXp(), l3 = P.lePergaminhoXp(), l4 = P.lePergaminhoXp();
+    check('cada leitura soma 9 cargas: 9, 18, 27', l1.ok && l1.salas === 9 && l2.ok && l2.salas === 18 && l3.ok && l3.salas === 27,
+          [l1.salas, l2.salas, l3.salas].join(','));
+    check('a 4ª passaria de 27: recusa "cheio" e NÃO gasta o pergaminho',
+          !l4.ok && l4.motivo === 'cheio' && P.pergaminhos().xp === 2 && P.pergaminhos().salasXp === 27, JSON.stringify(l4));
+    check('com carga, o fator é 1,5', P.fatorPergaminhoXp() === 1.5);
+    check('gastaCargaXp tira uma e devolve as que restam (27 → 26)', P.gastaCargaXp() === 26 && P.pergaminhos().salasXp === 26);
+    P.state.bonusXp = { salas: 19 };
+    check('com 19 ativas, ler (19 + 9 = 28) é "cheio"; com 18 cabe', P.lePergaminhoXp().motivo === 'cheio' &&
+          (P.state.bonusXp = { salas: 18 }, P.lePergaminhoXp().salas === 27));
+    P.state.bonusXp = { salas: 1 };
+    check('a última carga some com o campo (e gastar sem carga não faz nada)',
+          P.gastaCargaXp() === 0 && !('bonusXp' in P.state) && P.fatorPergaminhoXp() === 1 && P.gastaCargaXp() === 0);
+    P.state.bonusXp = { salas: 4 };
+    P.save(); P.load();
+    check('cargas e saldo sobrevivem ao load', P.pergaminhos().salasXp === 4 && P.pergaminhos().xp === 1, JSON.stringify(P.pergaminhos()));
+
+    // ================================================================ 4. no funil
+    secao('4. no funil de recompensa (computeRewards de verdade)');
+    var BASE = vence({});
+    check('linha de base: 2 capangas de 30, solo → 60 XP, 18 vinténs, sem pergaminho no retorno',
+          BASE.dado.xpGanho === 60 && BASE.dado.moedas === 18 && BASE.dado.pergaminho === null && evPerg(BASE).length === 0,
+          'xp ' + BASE.dado.xpGanho + ' moedas ' + BASE.dado.moedas + ' perg ' + JSON.stringify(BASE.dado.pergaminho));
+    var X1 = vence({ prepara: comPergaminho });
+    check('agenda ×1 + pergaminho: ×1,5 (60 → 90)', X1.dado.xpGanho === 90, String(X1.dado.xpGanho));
+    check('... e o herói recebe de verdade (xpPorHeroi 90)', X1.dado.xpPorHeroi && X1.dado.xpPorHeroi[TANK] === 90);
+    check('... gasta UMA carga (9 → 8)', X1.salas === 8, String(X1.salas));
+    check('... o retorno traz pergaminho {fator 1,5, restam 8}', !!X1.dado.pergaminho && X1.dado.pergaminho.fator === 1.5 &&
+          X1.dado.pergaminho.restam === 8, JSON.stringify(X1.dado.pergaminho));
+    var ep = evPerg(X1)[0] || {};
+    check('... e o chip em eventos[]: {id null, "Pergaminho da Sabedoria", xp, origem pergaminho, restam}',
+          ep.id === null && ep.titulo === 'Pergaminho da Sabedoria' && ep.tipo === 'xp' && ep.fator === 1.5 &&
+          ep.origem === 'pergaminho' && ep.restam === 8, JSON.stringify(ep));
+    var E15 = vence({ eventos: [ev('e1', 'xp', 1.5)] });
+    var X15 = vence({ eventos: [ev('e1', 'xp', 1.5)], prepara: comPergaminho });
+    check('agenda ×1,5 sozinha: 90; com o pergaminho, os dois param em ×2 (120), não em ×2,25',
+          E15.dado.xpGanho === 90 && X15.dado.xpGanho === 120, E15.dado.xpGanho + ' / ' + X15.dado.xpGanho);
+    check('... o pergaminho ajudou (×2 > ×1,5): gasta carga e diz fator 2/1,5',
+          X15.salas === 8 && !!X15.dado.pergaminho && Math.abs(X15.dado.pergaminho.fator - 2 / 1.5) < 1e-9,
+          JSON.stringify(X15.dado.pergaminho));
+    check('... o retorno cita o evento e o pergaminho', tipos(X15) === 'xp,xp:pergaminho' && X15.dado.eventos[0].id === 'e1', tipos(X15));
+    var E2 = vence({ eventos: [ev('e2', 'xp', 2)] });
+    var X2 = vence({ eventos: [ev('e2', 'xp', 2)], prepara: comPergaminho });
+    check('agenda ×2 + pergaminho: segue ×2 (120) — o pergaminho pausa sozinho', E2.dado.xpGanho === 120 && X2.dado.xpGanho === 120);
+    check('... e NÃO gasta carga (9 fica 9), nem aparece no retorno', X2.salas === 9 && X2.dado.pergaminho === null &&
+          evPerg(X2).length === 0 && tipos(X2) === 'xp', X2.salas + ' ' + tipos(X2));
+    check('os vinténs não veem o pergaminho: 18 com e sem, em todos os casos',
+          [BASE, X1, E15, X15, E2, X2].every(function (r) { return r.dado.moedas === 18 && r.credito[0] === 18; }));
+    check('fora do XP a sala sai idêntica com e sem pergaminho (saque, pedras, cartas, sorteios)',
+          foraDoXp(BASE) === foraDoXp(X1) && foraDoXp(E2) === foraDoXp(X2), foraDoXp(BASE) + ' × ' + foraDoXp(X1));
+    var N30 = vence({ prepara: function () { comPergaminho(); P.addXp(TANK, 1e9); } });
+    check('grupo todo no nível 30: nada multiplica (60) e a carga fica (9)',
+          P.hero(TANK).level === 30 && N30.dado.xpGanho === 60 && N30.salas === 9 && N30.dado.pergaminho === null,
+          'nível ' + P.hero(TANK).level + ' xp ' + N30.dado.xpGanho + ' salas ' + N30.salas);
+    var DUO = vence({ grupo: [TANK, 't-cura'], prepara: function () { comPergaminho(); P.addXp(TANK, 1e9); } });
+    check('dupla com um no 30 e o outro abaixo: vale e gasta (30 → 45; 9 → 8)', DUO.dado.xpGanho === 45 && DUO.salas === 8,
+          DUO.dado.xpGanho + ' / ' + DUO.salas);
+    var PERDE = vence({ perde: true, prepara: comPergaminho });
+    check('derrota não gasta carga', PERDE.tela === 'defeat' && PERDE.salas === 9, PERDE.tela + ' ' + PERDE.salas);
+    var FIM = vence({ prepara: function () { comPergaminho(); P.state.bonusXp = { salas: 1 }; } });
+    check('a última carga: vale nesta sala, e o campo some', FIM.dado.xpGanho === 90 && FIM.salas === 0 &&
+          FIM.dado.pergaminho.restam === 0 && !('bonusXp' in P.state));
+
+    // ================================================================ 5. a Reescrita
+    secao('5. o Pergaminho da Reescrita');
+    P.reset(); G.init();
+    P.addXp(TANK, 2620);
+    var h = P.hero(TANK);
+    check('fixture: o tanque no nível 10, ainda neutro', h.level === 10 && h.element === 'neutro');
+    check('sem pergaminho: recusa "sem", e nada muda', P.podeReescrever(TANK, 'agua', 'fogo').motivo === 'sem' &&
+          P.reescreveElemento(TANK, 'agua', 'fogo') === false);
+    P.addPergaminho('elemento', 5);
+    check('herói neutro: recusa "neutro" (a 1ª escolha é de graça) e o pergaminho fica',
+          P.podeReescrever(TANK, 'neutro', 'fogo').motivo === 'neutro' && !P.reescreveElemento(TANK, 'neutro', 'fogo') &&
+          P.pergaminhos().elemento === 5);
+    P.chooseElement(TANK, 'agua');
+    var sp0 = P.hero(TANK).spells.slice(), ep0 = P.effectiveStats(TANK).elemPower, xp0 = h.xp, nv0 = h.level;
+    check('(a) um caminho só (água → fogo): funciona', P.reescreveElemento(TANK, 'agua', 'fogo') === true);
+    check('... o novo vira o ativo e a lista continua com 1', h.element === 'fogo' && P.heroElements(TANK).join() === 'fogo',
+          h.element + ' [' + P.heroElements(TANK) + ']');
+    var sp1 = P.hero(TANK).spells;
+    check('... os feitiços do caminho trocaram (fogo no lugar de água)',
+          sp0.indexOf('t-tanque-agua-5') >= 0 && sp1.indexOf('t-tanque-fogo-5') >= 0 && sp1.indexOf('t-tanque-fogo-10') >= 0 &&
+          !sp1.some(function (x) { return /-agua-/.test(x); }), sp1.join(','));
+    check('... o elemPower, a XP e o nível ficam', P.effectiveStats(TANK).elemPower === ep0 && ep0 > 0 && h.xp === xp0 && h.level === nv0,
+          ep0 + ' → ' + P.effectiveStats(TANK).elemPower);
+    check('... e gastou 1 pergaminho (5 → 4)', P.pergaminhos().elemento === 4);
+    P.state.cards[TANK] = 30; P.save();           // ★3: a 2ª vaga
+    check('a ★3 abre a 2ª vaga — liberar continua de graça', P.elementSlots(TANK) === 2 && P.liberaElemento(TANK, 'terra') &&
+          P.pergaminhos().elemento === 4);
+    check('(b1) trocar o ATIVO entre os liberados continua grátis', P.trocaElemento(TANK, 'terra') && P.trocaElemento(TANK, 'fogo') &&
+          h.element === 'fogo' && P.pergaminhos().elemento === 4);
+    var spAtivo = P.hero(TANK).spells.join();
+    check('(b2) reescrever um NÃO ativo (terra → ar): o ativo fica e a lista mantém o tamanho',
+          P.reescreveElemento(TANK, 'terra', 'ar') && h.element === 'fogo' && P.heroElements(TANK).join() === 'fogo,ar',
+          h.element + ' [' + P.heroElements(TANK) + ']');
+    check('... os feitiços do ativo não mudaram, e gastou 1 (4 → 3)', P.hero(TANK).spells.join() === spAtivo && P.pergaminhos().elemento === 3);
+    check('(b2) reescrever o ATIVO com dois (fogo → água): água assume no mesmo lugar',
+          P.reescreveElemento(TANK, 'fogo', 'agua') && h.element === 'agua' && P.heroElements(TANK).join() === 'agua,ar' &&
+          P.hero(TANK).spells.indexOf('t-tanque-agua-10') >= 0 && P.pergaminhos().elemento === 2);
+    check('novo que o herói já tem: "ja-tem", nada gasto', P.podeReescrever(TANK, 'agua', 'ar').motivo === 'ja-tem' &&
+          !P.reescreveElemento(TANK, 'agua', 'ar') && P.pergaminhos().elemento === 2);
+    check('velho que ele não tem: "velho"', P.podeReescrever(TANK, 'terra', 'fogo').motivo === 'velho');
+    check('novo neutro ou inventado: "elemento"', P.podeReescrever(TANK, 'agua', 'neutro').motivo === 'elemento' &&
+          P.podeReescrever(TANK, 'agua', 'lava').motivo === 'elemento' && P.podeReescrever(TANK, 'agua', null).motivo === 'elemento');
+    P.addXp('t-parcial', 2620); P.chooseElement('t-parcial', 'fogo');
+    check('elemento que a classe NÃO tem: recusa "caminho" e NÃO gasta o pergaminho',
+          P.podeReescrever('t-parcial', 'fogo', 'terra').motivo === 'caminho' && !P.reescreveElemento('t-parcial', 'fogo', 'terra') &&
+          P.hero('t-parcial').element === 'fogo' && P.pergaminhos().elemento === 2);
+    check('... e o caminho que ela tem passa', P.reescreveElemento('t-parcial', 'fogo', 'agua') && P.hero('t-parcial').element === 'agua' &&
+          P.pergaminhos().elemento === 1);
+    P.addXp('gm', 2620);
+    check('o gm (classe sem paths) fica de fora: "classe"', P.chooseElement('gm', 'fogo') &&
+          P.podeReescrever('gm', 'fogo', 'agua').motivo === 'classe' && !P.reescreveElemento('gm', 'fogo', 'agua') &&
+          P.pergaminhos().elemento === 1);
+    P.state.heroes['t-cura'].element = 'fogo';   // save torto: elemento sem o nível
+    check('nível abaixo de 5 (save torto): "nivel"', P.hero('t-cura').level < 5 && P.podeReescrever('t-cura', 'fogo', 'agua').motivo === 'nivel');
+    P.state.heroes['t-cura'].element = 'neutro';
+    G.screen = 'battle';
+    var emBatalha = P.podeReescrever(TANK, 'ar', 'fogo').motivo;
+    G.screen = 'antessala';
+    var naAntessala = P.podeReescrever(TANK, 'ar', 'fogo').motivo;
+    G.screen = 'menu';
+    check('em descida (batalha, antessala) recusa "descida"; fora dela, pode',
+          emBatalha === 'descida' && naAntessala === 'descida' && P.podeReescrever(TANK, 'ar', 'fogo').ok === true,
+          emBatalha + ' / ' + naAntessala);
+    h.elements = ['ar']; h.element = 'agua';     // o defeito antigo do debug.js: o ativo fora da lista
+    check('lista torta (o ativo fora dela): o ativo entra na frente antes da troca',
+          P.reescreveElemento(TANK, 'ar', 'terra') && P.heroElements(TANK).join() === 'agua,terra' && h.element === 'agua',
+          '[' + P.heroElements(TANK) + ']');
+    check('o último pergaminho foi gasto e o campo some', P.pergaminhos().elemento === 0 && !(P.state.pergaminhos && P.state.pergaminhos.elemento));
+    P.save(); P.load();
+    check('a troca sobrevive ao load (ativo e lista)', P.hero(TANK).element === 'agua' && P.heroElements(TANK).join() === 'agua,terra');
+  } catch (e) {
+    check('a suíte não estoura', false, String(e && (e.stack || e.message) || e));
+  }
+  check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+  fecha();
+})();
+</script>
+</body>
+</html>

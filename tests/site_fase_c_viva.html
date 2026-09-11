@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a conta e a loja do site contra a API de verdade (Fase C)</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+#palco{position:absolute;left:-4000px;top:0;width:1000px;height:900px}</style>
+</head>
+<body>
+<!-- A PROVA VIVA DA FASE C NO SITE. Quem sobe a API (com o correio em modo de
+     prova) e o servidor estático é tests/site_fase_c_viva.py; esta página vem
+     da MESMA origem das páginas do site e recebe `?api=http://127.0.0.1:PORTA`
+     e, no #hash, a rodada (1, 2 ou 3), a semente dos nomes e o código lido do
+     arquivo de e-mails de prova. As páginas de verdade (/site/conta.html e
+     /site/loja.html) abrem num iframe e são usadas pelo DOM, como uma pessoa
+     usaria: digitar, clicar, confirmar. As senhas são sorteadas aqui, e os
+     valores ficam no localStorage do perfil (o mesmo nas três rodadas). -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<div id="palco"></div>
+<script src="../site/site.js"></script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log'), palco = document.getElementById('palco');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ate(cond, ms) {
+    ms = ms || 8000;
+    return new Promise(function (r) {
+      var t = 0;
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) { ok = false; }
+        if (ok) return r(true);
+        if ((t += 25) > ms) return r(false);
+        setTimeout(volta, 25);
+      })();
+    });
+  }
+
+  /* ---- o que a rodada recebeu ---- */
+  var H = {};
+  (location.hash || '').replace(/^#/, '').split('&').forEach(function (par) {
+    var i = par.indexOf('=');
+    if (i > 0) H[par.slice(0, i)] = decodeURIComponent(par.slice(i + 1));
+  });
+  var m = /[?&]api=([^&#]+)/.exec(location.search);
+  var API = m ? decodeURIComponent(m[1]).replace(/\/+$/, '') : '';
+  var RODADA = Number(H.rodada) || 0;
+  var CHAVE_VIVA = 'viva-fase-c', CHAVE = 'soterra-sessao';
+  function sorteia() { return 'v-' + SITE.idem() + SITE.idem().slice(0, 4); }
+  var viva = null;
+  try { viva = JSON.parse(localStorage.getItem(CHAVE_VIVA) || 'null'); } catch (e) { viva = null; }
+  if (RODADA === 1 && H.semente) {
+    var nome = 'viva' + H.semente;
+    viva = { nome: nome, email: nome + '@prova.local', novo: nome + '.novo@prova.local',
+             semConta: 'ninguem' + H.semente + '@prova.local', senha1: sorteia(), senha2: sorteia(), senha3: sorteia() };
+    localStorage.setItem(CHAVE_VIVA, JSON.stringify(viva));
+  }
+  function sessao() { try { return JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch (e) { return null; } }
+
+  /* ---- a API direto (o que o jogo e "a outra máquina" fazem) ---- */
+  function api(metodo, rota, corpo, token) {
+    var cab = { 'Content-Type': 'application/json' };
+    if (token) cab.Authorization = 'Bearer ' + token;
+    var op = { method: metodo, headers: cab };
+    if (corpo != null) op.body = JSON.stringify(corpo);
+    return fetch(API + rota, op).then(function (r) {
+      return r.json().then(function (j) { j.status = r.status; return j; }, function () { return { status: r.status }; });
+    }).catch(function () { return { status: 0 }; });
+  }
+
+  /* ---- a página do site num iframe (navegação de verdade, mesma origem) ---- */
+  var fr = null;
+  function abre(pagina, hash) {
+    return new Promise(function (ok) {
+      palco.innerHTML = '';
+      fr = document.createElement('iframe');
+      fr.style.width = '1000px';
+      fr.style.height = '900px';
+      var feito = false;
+      fr.onload = function () { if (!feito) { feito = true; ok(fr); } };
+      fr.src = '/site/' + pagina + '?api=' + API + (hash ? '#' + hash : '');
+      palco.appendChild(fr);
+    });
+  }
+  function d() { return fr.contentDocument; }
+  function $(id) { return d().getElementById(id); }
+  function q(s) { return d().querySelector(s); }
+  function qq(s) { return [].slice.call(d().querySelectorAll(s)); }
+  function visivel(el) {
+    if (!el || !el.ownerDocument) return false;
+    var w = el.ownerDocument.defaultView;
+    for (var e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (e.hidden) return false;
+      var cs = w.getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    }
+    return true;
+  }
+  function digita(id, v) { var el = $(id); el.value = v; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); }
+  function envia(id) { $(id).querySelector('[type=submit]').click(); }
+  function texto(el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  async function confirma() {
+    await ate(function () { return !!q('.modal [data-sim]'); }, 3000);
+    q('.modal [data-sim]').click();
+  }
+
+  /* ======================================================================
+   * RODADA 1
+   * ==================================================================== */
+  async function rodada1() {
+    var s = await api('GET', '/api/saude');
+    check('a API está no ar, com o correio em modo de prova', s.status === 200 && s.correio === true, JSON.stringify(s));
+
+    // 1. criar a conta pelo formulário do site
+    await abre('conta.html', 'criar');
+    await ate(function () { return visivel($('painel-criar')); });
+    digita('c-nome', viva.nome); digita('c-email', viva.email); digita('c-senha', viva.senha1); digita('c-senha2', viva.senha1);
+    envia('painel-criar');
+    await ate(function () { var x = sessao(); return x && x.token; });
+    var ses = sessao();
+    check('cadastro pelo formulário: a sessão fica guardada', !!ses && ses.conta && ses.conta.nome === viva.nome);
+    await ate(function () { return fr.contentDocument && fr.contentDocument.getElementById('jogo-da-prova'); });
+    check('e o cadastro leva ao jogo (../index.html)', !!(fr.contentDocument && fr.contentDocument.getElementById('jogo-da-prova')));
+    var tok = ses && ses.token;
+    if (!tok) return;
+
+    // 2. o save com carteira, pela rota do jogo (o site não sobe save)
+    var g = await api('GET', '/api/save', null, tok);
+    var put = await api('PUT', '/api/save', {
+      versao: Number(g.versao) || 0,
+      progress: { version: 22, unlockedClasses: ['sumo', 'curandeiro'], heroes: {}, inventory: [], pets: [], cards: { invocador: 6 }, stones: {} },
+      db: { versao: 1, carteira: { moedas: 20000 }, banco: { moedas: 0, itens: [] }, mercado: null },
+      nascimentos: []
+    }, tok);
+    check('o save com 20.000 vinténs na carteira sobe', put.status === 200, JSON.stringify(put).slice(0, 200));
+
+    // 3. a loja: o saldo, comprar e cancelar
+    var canal = [];
+    try { var bc = new BroadcastChannel('soterra-loja'); bc.onmessage = function (e) { canal.push(e.data); }; } catch (e) { /* sem canal */ }
+    await abre('loja.html');
+    await ate(function () { return qq('[data-comprar]').length > 0 && q('[data-saldo="carteira"]'); });
+    check('a loja mostra a carteira do save (20.000)', texto(q('[data-saldo="carteira"]')) === '20.000', texto($('lj-saldo')).slice(0, 120));
+    var cat = await api('GET', '/api/loja/catalogo');
+    var itens = (cat.itens || []).slice();
+    check('o catálogo tem as três seções', ['pergaminhos', 'pedras', 'personagens'].every(function (x) { return !!q('.loja-secao[data-secao="' + x + '"]'); }));
+    var ligados = itens.filter(function (it) {
+      var b = q('.produto[data-sku="' + it.sku + '"] [data-comprar]');
+      return b && !b.disabled;
+    }).sort(function (a, b) { return a.preco - b.preco; });
+    var it = ligados[0];
+    check('há produto ligado para comprar', !!it);
+    if (!it) return;
+    q('.produto[data-sku="' + it.sku + '"] [data-comprar]').click();
+    await confirma();
+    await ate(function () { return /esperando o jogo abrir/.test(texto($('lj-pedidos'))); });
+    var mi = await api('GET', '/api/loja/minha', null, tok);
+    var ped = (mi.pedidos || []).filter(function (p) { return p.sku === it.sku && p.estado === 'pendente'; })[0];
+    check('o pedido nasceu pendente no servidor, e a reserva é o preço', !!ped && mi.saldo && mi.saldo.reservado === it.preco &&
+          mi.saldo.disponivel === 20000 - it.preco, JSON.stringify(mi.saldo));
+    await ate(function () { return texto(q('[data-saldo="reservado"]')) === SITE.num(it.preco); });
+    check('a caixa do saldo da página mostra a reserva', texto(q('[data-saldo="reservado"]')) === SITE.num(it.preco));
+    await ate(function () { return canal.length > 0; }, 2000);
+    check('a página avisou o jogo pelo BroadcastChannel("soterra-loja")', canal.some(function (x) { return x && x.tipo === 'comprou'; }));
+    if (!ped) return;
+    await ate(function () { return !!q('#lj-pedidos [data-pedido="' + ped.id + '"] [data-cancelar]'); });
+    q('#lj-pedidos [data-pedido="' + ped.id + '"] [data-cancelar]').click();
+    await confirma();
+    await ate(function () { return /cancelado/.test(texto(q('#lj-pedidos [data-pedido="' + ped.id + '"]'))); });
+    var mi2 = await api('GET', '/api/loja/minha', null, tok);
+    var ped2 = (mi2.pedidos || []).filter(function (p) { return p.id === ped.id; })[0];
+    check('cancelar pelo site: o pedido fica cancelado e a reserva volta a zero', !!ped2 && ped2.estado === 'cancelado' &&
+          mi2.saldo.reservado === 0, JSON.stringify(mi2.saldo));
+
+    // um personagem: o Xamã, com 6 cartas no save
+    var xama = itens.filter(function (x) { return x.tipo === 'classe' && x.alvo === 'invocador'; })[0];
+    check('o catálogo vende o Xamã', !!xama);
+    if (xama) {
+      var cartao = q('.produto[data-sku="' + xama.sku + '"]');
+      check('a loja diz "Você tem 6 de ' + xama.cartas + ' cartas" (o servidor leu o save)',
+            new RegExp('Você tem 6 de ' + xama.cartas + ' cartas').test(texto(cartao)), texto(cartao).slice(0, 160));
+      var bx = q('.produto[data-sku="' + xama.sku + '"] [data-comprar]');
+      check('com 20.000 na carteira, o Xamã pode ser comprado', !!bx && !bx.disabled);
+      if (bx && !bx.disabled) {
+        bx.click();
+        await confirma();
+        await ate(function () { return /Já há um pedido dessa classe a caminho/.test(texto(q('.produto[data-sku="' + xama.sku + '"]'))); });
+        check('comprado: o botão do Xamã desliga com "Já há um pedido dessa classe a caminho"',
+              /Já há um pedido dessa classe a caminho/.test(texto(q('.produto[data-sku="' + xama.sku + '"]'))));
+      }
+    }
+
+    // 4. sessões: duas entradas a mais, encerrar uma, encerrar as outras
+    await api('POST', '/api/login', { login: viva.nome, senha: viva.senha1 });
+    await api('POST', '/api/login', { login: viva.nome, senha: viva.senha1 });
+    await abre('conta.html', 'conta');
+    await ate(function () { return qq('#mc-sessoes li[data-sessao]').length === 3; });
+    check('Minha conta: o nome e o e-mail da conta', new RegExp(viva.nome).test(texto($('mc-dados'))) && texto($('mc-dados')).indexOf(viva.email) >= 0);
+    check('3 sessões, uma marcada "esta"', qq('#mc-sessoes li[data-sessao]').length === 3 && qq('#mc-sessoes li.esta').length === 1);
+    q('#mc-sessoes [data-encerrar]').click();
+    await ate(function () { return qq('#mc-sessoes li[data-sessao]').length === 2; });
+    check('encerrar uma: sobram 2', qq('#mc-sessoes li[data-sessao]').length === 2);
+    await ate(function () { return !$('ss-outras').disabled; });
+    $('ss-outras').click();
+    await ate(function () { return qq('#mc-sessoes li[data-sessao]').length === 1; });
+    check('encerrar as outras: sobra só esta', qq('#mc-sessoes li[data-sessao]').length === 1 && qq('#mc-sessoes li.esta').length === 1);
+    var at = texto($('mc-atividade'));
+    check('a atividade mostra o cadastro e as entradas', /conta criada/.test(at) && /entrada na conta/.test(at), at.slice(0, 160));
+
+    // 5. trocar a senha, com uma "outra máquina" logada
+    var outra = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha1 });
+    digita('sn-atual', viva.senha1); digita('sn-nova', viva.senha2); digita('sn-nova2', viva.senha2);
+    envia('sn-form');
+    await ate(function () { return /Senha trocada|não deu|errada/.test(texto($('sn-aviso'))); });
+    check('trocar a senha: "1 outra sessão foi encerrada"', /Senha trocada\. 1 outra sessão foi encerrada/.test(texto($('sn-aviso'))), texto($('sn-aviso')));
+    var velha = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha1 });
+    var nova = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha2 });
+    check('a senha velha não entra mais; a nova entra', velha.status === 401 && nova.status === 200, velha.status + ' / ' + nova.status);
+    check('a sessão da outra máquina morreu (401), e esta continua', (await api('GET', '/api/eu', null, outra.token)).status === 401 &&
+          (await api('GET', '/api/eu', null, tok)).status === 200);
+
+    // 6. pedir a troca de e-mail: o código vai ao e-mail ATUAL
+    digita('em-senha', viva.senha2); digita('em-novo', viva.novo); digita('em-novo2', viva.novo);
+    envia('em-form1');
+    await ate(function () { return visivel($('em-form2')) || /não deu|inválido|conta/.test(texto($('em-aviso1'))); });
+    var masc = viva.email.slice(0, 2) + '***@prova.local';
+    check('pedido de troca: o passo 2 diz para onde foi o código (' + masc + ')', visivel($('em-form2')) &&
+          texto($('em-enviado')).indexOf(masc) >= 0, texto($('em-aviso1')) + ' | ' + texto($('em-enviado')));
+  }
+
+  /* ======================================================================
+   * RODADA 2: o código da troca chega pelo #hash desta página
+   * ==================================================================== */
+  async function rodada2() {
+    var ses = sessao(), tok = ses && ses.token;
+    check('a sessão da rodada 1 continua guardada no perfil', !!tok && !!viva);
+    if (!tok || !viva) return;
+    check('o código chegou pelo #hash da página de prova', /^\d{6}$/.test(H.codigo || ''));
+    await abre('conta.html', 'conta');
+    await ate(function () { return visivel($('em-form2')); });
+    check('a troca aberta no servidor: a página abre direto no passo 2', visivel($('em-form2')) && !visivel($('em-form1')));
+    digita('em-codigo', H.codigo);
+    envia('em-form2');
+    await ate(function () { return texto($('mc-dados')).indexOf(viva.novo) >= 0; });
+    check('código certo: o e-mail da conta agora é o novo', texto($('mc-dados')).indexOf(viva.novo) >= 0 && /E-mail trocado/.test(texto($('mc-aviso'))));
+    var eu = await api('GET', '/api/eu', null, tok);
+    check('o servidor concorda (/api/eu)', eu.status === 200 && eu.conta && eu.conta.email === viva.novo);
+
+    // sair de todas: a própria sessão cai junto
+    $('ss-todas').click();
+    await confirma();
+    await ate(function () { return visivel($('caixa-fora')); });
+    check('sair de todas: a sessão local some e as abas voltam', !sessao() && visivel($('painel-entrar')));
+    check('e o token morreu no servidor', (await api('GET', '/api/eu', null, tok)).status === 401);
+
+    // o esqueci: primeiro um e-mail sem conta, depois o da conta
+    await ate(function () { return !$('esqueci').classList.contains('desligado'); });
+    check('com o correio ligado, o "esqueci a senha" liga', !$('esqueci').classList.contains('desligado'));
+    $('esqueci').click();
+    await ate(function () { return visivel($('painel-esqueci')); });
+    digita('eq-email', viva.semConta);
+    envia('eq-form1');
+    await ate(function () { return visivel($('eq-form2')); });
+    var frase = texto($('eq-aviso1'));
+    check('esqueci de um e-mail sem conta: o passo 2 aparece do mesmo jeito', visivel($('eq-form2')) && frase.length > 10, frase);
+    digita('eq-email', viva.novo);
+    envia('eq-form1');
+    await ate(function () { return /certo/.test($('eq-aviso1').className) && !$('eq-bt1').disabled; });
+    check('esqueci do e-mail da conta: a MESMA frase', texto($('eq-aviso1')) === frase, texto($('eq-aviso1')));
+  }
+
+  /* ======================================================================
+   * RODADA 3: o código do esqueci, a senha nova, e a loja ainda de pé
+   * ==================================================================== */
+  async function rodada3() {
+    check('sem sessão guardada (a rodada 2 saiu de todas)', !sessao() && !!viva);
+    if (!viva) return;
+    await abre('conta.html', 'esqueci');
+    await ate(function () { return visivel($('painel-esqueci')); });
+    check('#esqueci abre o painel direto', visivel($('painel-esqueci')));
+    digita('eq-email', viva.novo);
+    $('eq-ja-tenho').click();
+    await ate(function () { return visivel($('eq-form2')); });
+    digita('eq-codigo', H.codigo); digita('eq-nova', viva.senha3); digita('eq-nova2', viva.senha3);
+    envia('eq-form2');
+    await ate(function () { return visivel($('minha-conta')) || /errado|vencido|inválid/.test(texto($('eq-aviso2'))); });
+    check('esqueci confirmado: entra, com "Senha redefinida; as outras sessões foram encerradas"', visivel($('minha-conta')) &&
+          /Senha redefinida; as outras sessões foram encerradas/.test(texto($('mc-aviso'))), texto($('eq-aviso2')));
+    var ses = sessao();
+    check('a sessão nova ficou guardada', !!ses && ses.conta && ses.conta.nome === viva.nome);
+    var l3 = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha3 });
+    var l2 = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha2 });
+    check('a senha redefinida entra; a anterior não', l3.status === 200 && l2.status === 401, l3.status + ' / ' + l2.status);
+    await abre('loja.html');
+    await ate(function () { return !!q('#lj-pedidos [data-pedido]'); });
+    check('a loja, depois de tudo, ainda mostra o pedido do personagem esperando o jogo',
+          /Xamã/.test(texto($('lj-pedidos'))) && /esperando o jogo abrir/.test(texto($('lj-pedidos'))), texto($('lj-pedidos')).slice(0, 200));
+    check('e o saldo reserva o preço dele', texto(q('[data-saldo="reservado"]')) !== '0');
+  }
+
+  (async function () {
+    try {
+      check('a rodada e a API vieram no endereço', RODADA >= 1 && RODADA <= 3 && /^https?:\/\//.test(API));
+      if (RODADA === 1) await rodada1();
+      else if (RODADA === 2) await rodada2();
+      else if (RODADA === 3) await rodada3();
+    } catch (e) {
+      check('o roteiro não estoura', false, String(e && (e.stack || e.message) || e).slice(0, 300));
+    } finally {
+      palco.innerHTML = '';
+      fecha();
+    }
+  })();
+})();
+</script>
+</body>
+</html>

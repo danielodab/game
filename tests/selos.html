@@ -125,6 +125,7 @@ re-chaveia resists e SOBREVIVE ao load); fechar as 4 vestidas concede o pet UMA 
   var extra = P.giraRoleta();
   check('com as 4 fechadas, o giro seguinte é repetida (matéria de estrela)',
         !!extra && extra.repetida === true && sd.pieces.indexOf(extra.itemId) >= 0);
+  P.addXp(hid, 28180);   // nível 30: o Traje do Colecionador pede o 30 (nível de uso, 10/09)
   sd.pieces.forEach(function (pid) { P.equip(hid, pid); });
   check('as 4 vestidas concedem o pet exclusivo',
         P.state.pets.indexOf('pet-colecionador') >= 0 && P.state.petSelosDado === true);

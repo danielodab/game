@@ -25,10 +25,15 @@ f.onload = function () {
       P.addItem('gh-vine-stirrups'); P.addItem('gh-trellis-guard'); P.addItem('gh-seed-pouch');
       P.addStones('stone-root', 30);
       var hid = P.heroIds()[0];
+      // Estribos de Hera pede o nível 5 e a Guarda de Treliça o 3 (nível de
+      // uso, 10/09): o herói do perfil novo sobe ao 7 antes de vestir. O
+      // equip recusado devolve false, não lança: a recusa vira ERRO no título.
+      P.addXp(hid, w.JOGO.DATA.leveling.xpTable[6]);
+      function recusou(id) { document.title = 'ERRO ' + id + ': ' + ((P.ultimaRecusa && P.ultimaRecusa.motivo) || 'não vestiu'); }
       var s2 = P.invStacks().filter(function (s) { return s.itemId === 'gh-vine-stirrups'; })[0];
-      P.equip(hid, 'gh-vine-stirrups', s2.index);
+      if (!P.equip(hid, 'gh-vine-stirrups', s2.index)) recusou('gh-vine-stirrups');
       var s3 = P.invStacks().filter(function (s) { return s.itemId === 'gh-trellis-guard'; })[0];
-      P.equip(hid, 'gh-trellis-guard', s3.index);
+      if (!P.equip(hid, 'gh-trellis-guard', s3.index)) recusou('gh-trellis-guard');
       w.JOGO.UI.openSheet('inventory');
     } catch (e) { document.title = 'ERRO ' + e.message; }
     setTimeout(function () {

@@ -20,9 +20,13 @@ f.onload = function () {
     try {
       var P = w.JOGO.Progress;
       var hid = P.heroIds()[0];
+      // o Traje do Colecionador pede o nível 30 (nível de uso, 10/09) e o
+      // perfil é novo: o herói sobe ao topo antes de vestir (o addXp prende
+      // no teto). Recusa vira ERRO no título — o equip devolve false, não lança.
+      P.addXp(hid, 1e9);
       ['sl-cetro', 'sl-botas', 'sl-cofre', 'sl-selo-primeiro'].forEach(function (id) {
         P.addItem(id);
-        P.equip(hid, id);
+        if (!P.equip(hid, id)) document.title = 'ERRO ' + id + ': ' + ((P.ultimaRecusa && P.ultimaRecusa.motivo) || 'não vestiu');
       });
       w.JOGO.DB.batizar('Colecionador').then(function () {
         w.JOGO.UI.showScreen('hub');

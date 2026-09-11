@@ -56,6 +56,8 @@
     return out;
   }
 
+  JOGO.DATA.nivelUso = null;   // esta suíte é sobre o número de série, não sobre o nível de uso (10/09): herói nível 1 veste tudo
+
   // ---- 1. o estado novo tem a fila; a cópia nova tem série e origem
   P.reset();
   check('o estado novo traz a fila de nascimentos vazia', Array.isArray(P.state.nascimentos) && P.state.nascimentos.length === 0);

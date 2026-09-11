@@ -67,7 +67,7 @@
   N.ESPERA_MS = 30;
 
   S.esquece();
-  var nome = 'prova' + Date.now().toString(36).slice(-7);
+  var nome = 'prova' + (function (n) { var a = 'hjkqxz', s = ''; for (var i = 0; i < 9; i++) { s = a.charAt(n % 6) + s; n = Math.floor(n / 6); } return s; })(Date.now()); // 10/09: só letras que nenhuma palavra reservada usa (base 36 caía em 'gm'/'cm' 1 vez em mil)
   var senha = 'p-' + Math.random().toString(36).slice(2, 14);
   check('a API está apontada (' + S.base() + ')', /^https?:\/\//.test(S.base()));
   S.api('/api/saude', { semToken: true }).then(function (r) {

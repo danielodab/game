@@ -238,3 +238,22 @@ JOGO.DATA.stars = {
    * pode ter por número de estrelas; quem cobra é Progress.elementSlots. */
   elementSlots: { 0: 1, 1: 1, 2: 1, 3: 2, 4: 3, 5: 4 }
 };
+
+/* OS PERGAMINHOS DA LOJA DO SITE (Fase C, 10/09) — o que cada um FAZ no jogo.
+ * O PREÇO mora só no servidor (servidor/loja.py, CATALOGO); o teste do
+ * servidor lê esta tabela e confere que o catálogo a espelha. Quem usa é o
+ * Progress (addPergaminho, lePergaminhoXp, reescreveElemento) e o game.js.
+ *
+ *  xp.fator        o Pergaminho da SABEDORIA multiplica o XP do grupo (×1,5)
+ *  xp.salas        cargas que UMA leitura soma: salas VENCIDAS (9 ≈ 3 descidas)
+ *  xp.tetoSalas    cargas ativas no máximo (27 = três leituras seguidas)
+ *  tetoInventario  quantos de CADA pergaminho o jogador guarda (99)
+ *
+ * Com um evento de XP no ar os dois juntos param no teto da agenda (×2,0):
+ * fXp = max(fEvento, min(2,0, fEvento × fator)). Derrota e abandono não gastam
+ * carga, e os vinténs nunca veem o pergaminho (saem de xpTotal). O Pergaminho
+ * da REESCRITA troca um caminho elemental por outro e não tem número aqui. */
+JOGO.DATA.pergaminhos = {
+  xp: { fator: 1.5, salas: 9, tetoSalas: 27 },
+  tetoInventario: 99
+};

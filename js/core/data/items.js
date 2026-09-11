@@ -846,7 +846,60 @@ JOGO.DATA = JOGO.DATA || {};
   };
 
   // =========================================================================
-  // RODAPÉ — deriva `element`, `setId` e `dropWeight` de cada item a partir do
+  // NÍVEL DE USO (10/09, pedido do dono: "esses itens de cada mapa precisam
+  // ter seu nível para uso… os itens mais fortes são níveis mais altos; o set
+  // especial da roleta é nível 30 em todas as peças; pets a partir do 10").
+  //
+  // A régua é POR CALABOUÇO E RARIDADE e mora aqui, para o dono calibrar com
+  // um número só. O degrau de cada mapa é o nível recomendado dele
+  // (dungeons.js: 3 · 7 · 11 · 16 · 22 · 28); dentro do mapa, a peça mais
+  // rara pede 2 níveis a mais — e no Coração Partido a escada desce um degrau
+  // (26/28/30) para as três raridades não colidirem no teto 30. Lendária é
+  // sempre 30 (o Traje do Coração e o do Colecionador); pet é sempre 10
+  // (Selinho inclusive — e ele só vem com o Colecionador fechado, no 30).
+  // Um `nivelUso` explícito na peça vence a régua.
+  //
+  // Quem cobra é o Progress (equip / equipPet; o Mestre não paga) e quem
+  // mostra é a ficha. Peça acima do nível ainda cai, fica no saco, é trocada
+  // e vendida — só não entra no herói. A régua vale também para as peças
+  // avulsas (a avulsa rara é a mais forte do mapa no bruto: paga o degrau).
+  // =========================================================================
+  DATA.nivelUso = {
+    porCalabouco: {
+      greenhouse:   { comum: 3,  raro: 5,  epico: 7 },
+      cistern:      { comum: 7,  raro: 9,  epico: 11 },
+      emberlock:    { comum: 11, raro: 13, epico: 15 },
+      windscaffold: { comum: 16, raro: 18, epico: 20 },
+      quakemine:    { comum: 22, raro: 24, epico: 26 },
+      brokenheart:  { comum: 26, raro: 28, epico: 30 }
+    },
+    lendario: 30,        // toda peça lendária, venha de onde vier
+    colecionador: 30,    // as 4 peças do Traje do Colecionador (roleta dos Selos)
+    pet: 10,             // todo pet
+    teto: 30             // o nível máximo do herói (progression.js maxLevel)
+  };
+  /* O nível que uma peça (ou um pet) pede. 0 = sem exigência: dado que a
+   * régua não conhece nunca tranca por engano. Aceita a definição (DATA.items
+   * / DATA.pets) — a ficha e o Progress chamam com ela. */
+  DATA.nivelUsoDe = function (def) {
+    var T = DATA.nivelUso;
+    if (!def || !T) return 0;
+    if (typeof def.nivelUso === 'number' && isFinite(def.nivelUso)) {
+      return Math.max(0, Math.round(def.nivelUso));
+    }
+    var n;
+    if (def.slot === undefined && def.behavior !== undefined) n = T.pet;          // é pet
+    else if (def.rarity === 'lendario') n = T.lendario;
+    else {
+      var faixa = T.porCalabouco && T.porCalabouco[def.dungeonId];
+      n = faixa ? faixa[def.rarity] : 0;
+    }
+    if (typeof n !== 'number' || !isFinite(n)) return 0;
+    return Math.min(T.teto || 30, Math.max(0, Math.round(n)));
+  };
+
+  // =========================================================================
+  // RODAPÉ — deriva `element`, `setId`, `dropWeight` e `nivelUso` de cada item a partir do
   // conjunto a que ele pertence e da raridade. Nenhum item pode ficar fora de
   // um conjunto: a validação acusa (element/setId nulos).
   // =========================================================================
@@ -873,6 +926,7 @@ JOGO.DATA = JOGO.DATA || {};
       it.keyPiece = !!(it.bonuses.pa || it.bonuses.pp || it.slot === 'lume');
       it.minRoom = (it.rarity === 'epico' || it.rarity === 'lendario') ? 2
                  : (it.rarity === 'raro' ? 1 : 0);
+      it.nivelUso = DATA.nivelUsoDe(it);                                  // 10/09
     });
 
     // 3. pesos de saque, normalizados por calabouço para bater as metas do modelo
@@ -902,6 +956,14 @@ JOGO.DATA = JOGO.DATA || {};
         it.dropWeight = Math.max(1, Math.round(w));
       });
       LW.noDrop[dg] = Math.round(totalComum * LW.emptyRatio);
+    });
+
+    // 4. nível de uso dos pets — pets.js carrega ANTES deste arquivo, por isso
+    //    o carimbo deles é daqui (o Selinho, que nasce em items_selos.js, se
+    //    carimba sozinho).
+    Object.keys(DATA.pets || {}).forEach(function (pid) {
+      var p = DATA.pets[pid];
+      if (p) p.nivelUso = DATA.nivelUsoDe(p);
     });
   })();
 

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>A troca e o cartório (prova)</title></head>
+<body>
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="../js/core/troca.js?v=p1"></script>
+<script>
+/* A TROCA E O CARTÓRIO (10/09, revisão dos ganchos de nomes). O relé passou a
+ * tirar o `nuvem` de quem não se identificou (ninguém se passa por outra
+ * conta), e a troca que então acontecia só no local quebrava os saves dos
+ * dois: a peça com número de série de outra conta levava 403 no cartório, a
+ * nuvem parava e o "retomar" desfazia tudo. Com a nuvem ligada, a troca de
+ * peça com série só acontece se os DOIS lados podem registrá-la; senão cai
+ * ANTES do confirma, com o porquê. Sem BroadcastChannel (roda no headless):
+ * Rede, Progress, DB e Nuvem de mentira. */
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var T = JOGO.Troca;
+  var cfg = null, enviados = [], estados = [], nuvemTrocas = [];
+  JOGO.Rede = {
+    pares: function () { return [{ id: 'par1', nome: 'Bia', nuvem: cfg.nuvemPar }]; },
+    trocaManda: function (para, acao, dados) { enviados.push({ para: para, acao: acao, dados: dados }); return true; },
+    meuId: function () { return 'eu'; },
+    identidade: function () { return cfg.ident; }
+  };
+  JOGO.Progress = { state: { inventory: [] }, save: function () {}, bagLimit: function () { return 99; },
+                    carimba: function (e) { e.iid = 'jnovo'; return e; } };
+  JOGO.Nuvem = {
+    estado: function () { return { ligada: cfg.ligada, sessao: cfg.ligada }; },
+    troca: function (c, dou, rec) {
+      nuvemTrocas.push({ com: c, dou: dou, recebo: rec });
+      return Promise.resolve({ ok: true });
+    }
+  };
+  JOGO.DB = { gastarMoedas: function () { return Promise.resolve({ ok: true }); },
+              ganharMoedas: function () { return Promise.resolve({ ok: true }); },
+              registrarTroca: function () {} };
+  T.aoMudar = function (est) { estados.push(est); };
+
+  /* uma mesa inteira: o convite dele, o meu aceite, as ofertas, as trancas;
+   * por padrão ele confirma primeiro e eu por último */
+  function mesa(c, op) {
+    op = op || {};
+    cfg = c; enviados = []; estados = []; nuvemTrocas = [];
+    JOGO.Progress.state.inventory = [{ itemId: 'x1', level: 0, stars: 0, iid: 'jminha1' }];
+    T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'convite' });
+    T.responder(true);
+    if (op.soMoedas) T.porMoedas(5);
+    else T.porItem({ itemId: 'x1', level: 0, stars: 0, iid: 'jminha1' });
+    T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'oferta',
+                 dados: op.soMoedas ? { itens: [], moedas: 3 }
+                                    : { itens: [{ itemId: 'y1', level: 0, stars: 0, iid: 'jdele1' }], moedas: 0 } });
+    T.travar();
+    T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'tranca', dados: { travado: true } });
+    if (op.euPrimeiro) {
+      T.confirmar();
+      if (op.depoisDoMeu) op.depoisDoMeu();
+      T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'confirma' });
+    } else {
+      T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'confirma' });
+      T.confirmar();
+    }
+    // o último estado de verdade: depois dele a mesa fecha e o avisa() sai com null
+    var comMesa = estados.filter(function (e) { return !!e; });
+    return { inv: JOGO.Progress.state.inventory.map(function (e) { return e.iid; }).join(),
+             fim: comMesa[comMesa.length - 1] || null, enviados: enviados.slice(),
+             nuvem: nuvemTrocas.slice(), aberta: T.estado() };
+  }
+  function acoes(r) { return r.enviados.map(function (e) { return e.acao; }).join(','); }
+  function cancelaDoCartorio(r) {
+    return r.enviados.some(function (e) { return e.acao === 'cancela' && e.dados && e.dados.motivo === 'cartorio'; });
+  }
+  function fase(r) { return r.fim ? r.fim.fase : null; }
+
+  try {
+    var r = mesa({ ligada: true, nuvemPar: null, ident: { mestre: false } });
+    check('nuvem ligada e o parceiro sem `nuvem` (o relé não o conferiu): a troca de peça com série cai, com o porquê',
+          fase(r) === 'cancelada' && /não conferiu a conta de Bia/.test(r.fim.motivo || ''), JSON.stringify(r.fim));
+    check('...ANTES do confirma: o meu confirma nem sai (o outro lado não executa), e o cancela leva o motivo',
+          acoes(r).indexOf('confirma') < 0 && cancelaDoCartorio(r), acoes(r));
+    check('...e nada se move: o saco fica como estava, o cartório não é chamado, a mesa fecha',
+          r.inv === 'jminha1' && r.nuvem.length === 0 && r.aberta === null, r.inv);
+
+    r = mesa({ ligada: true, nuvemPar: 42, ident: false });
+    check('o relé não ME conferiu (Rede.identidade() === false): cai também, antes do confirma',
+          fase(r) === 'cancelada' && /sua conta/.test(r.fim.motivo || '') && r.inv === 'jminha1' &&
+          acoes(r).indexOf('confirma') < 0 && r.nuvem.length === 0, JSON.stringify(r.fim));
+
+    r = mesa({ ligada: true, nuvemPar: 42, ident: { mestre: false } });
+    check('os dois conferidos: a troca acontece e vai ao cartório com a conta que o relé conferiu do parceiro',
+          fase(r) === 'feita' && r.inv === 'jdele1' && r.nuvem.length === 1 && r.nuvem[0].com === 42 &&
+          r.nuvem[0].dou.join() === 'jminha1' && r.nuvem[0].recebo.join() === 'jdele1', JSON.stringify(r));
+
+    r = mesa({ ligada: true, nuvemPar: 42, ident: null });
+    check('relé que não confere ninguém (identidade null: o antigo, o canal de abas) e o parceiro com `nuvem`: segue como antes',
+          fase(r) === 'feita' && r.nuvem.length === 1, JSON.stringify(r.fim));
+
+    r = mesa({ ligada: false, nuvemPar: null, ident: false });
+    check('sem a nuvem ligada (sem sessão, ou conta local): a troca segue só no local, como sempre',
+          fase(r) === 'feita' && r.inv === 'jdele1' && r.nuvem.length === 0, JSON.stringify(r.fim));
+
+    r = mesa({ ligada: true, nuvemPar: null, ident: { mestre: false } }, { soMoedas: true });
+    check('só vinténs (nenhuma peça com série): segue, mesmo com o parceiro sem `nuvem`',
+          fase(r) === 'feita' && !cancelaDoCartorio(r), JSON.stringify(r.fim));
+
+    r = mesa({ ligada: true, nuvemPar: 42, ident: { mestre: false } },
+             { euPrimeiro: true, depoisDoMeu: function () { cfg.nuvemPar = null; } });
+    check('o parceiro perdeu a conferência entre o meu confirma e o dele: a execução confere de novo e cai',
+          fase(r) === 'cancelada' && r.inv === 'jminha1' && r.nuvem.length === 0 && cancelaDoCartorio(r),
+          JSON.stringify(r.fim));
+
+    cfg = { ligada: true, nuvemPar: 42, ident: { mestre: false } };
+    estados = [];
+    T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'convite' });
+    T.responder(true);
+    T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'cancela', dados: { motivo: 'cartorio' } });
+    var deLa = estados.filter(function (e) { return e && e.fase === 'cancelada'; })[0] || null;
+    check('o lado de lá ouve o cancela do cartório e também mostra o porquê',
+          !!deLa && /cartório/.test(deLa.motivo || '') && T.estado() === null, JSON.stringify(deLa));
+    T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'convite' });
+    T.responder(true);
+    estados = [];
+    T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'cancela', dados: {} });
+    check('o cancela comum (sem motivo do cartório) fecha a mesa calado, como antes',
+          T.estado() === null && !estados.some(function (e) { return e && e.fase === 'cancelada'; }));
+  } catch (e) {
+    check('a prova não estoura', false, e && (e.stack || e.message || e));
+  }
+  document.getElementById('summary').textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                                                          : ('tudo passou (' + total + ')');
+  window.__done = true;
+})();
+</script>
+</body>
+</html>

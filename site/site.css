@@ -402,6 +402,195 @@ td .busto { margin-top: -6px; margin-bottom: -6px; }
 a.desligado { color: var(--texto-2); opacity: .7; cursor: not-allowed; text-decoration: line-through; }
 a.desligado:hover { color: var(--texto-2); }
 
+/* ---- Fase C: a conta por dentro, o "esqueci a senha" e a loja ----------------
+ * Os blocos da "Minha conta", os passos das trocas com código, as listas de
+ * sessões e de atividade; na loja, a caixa do saldo, a grade do catálogo, os
+ * estados dos pedidos e a janelinha de confirmação (SITE.confirma). Nenhuma
+ * arte nova: a pedra é só CSS, na cor do elemento do jogo (elements.js), e o
+ * personagem usa o retrato de site/img/. */
+/* o topo: o nome encolhe com "…" e "minha conta · sair" ficam sempre à vista */
+.sessao .ola { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sessao > a, .sessao > button, .sessao .marca-gm { flex: none; }
+.marca-gm { color: var(--ouro); }
+/* Com a Loja no menu e o "minha conta" na sessão, o topo não cabe mais numa
+ * linha em toda largura. Acima de 1000 px: uma linha, e o menu nunca é
+ * espremido (antes ele quebrava em várias linhas); se a sessão não couber, ela
+ * desce inteira para a linha de baixo, à direita. Até 1000 px: o mesmo topo do
+ * celular, em duas linhas (a marca com a sessão; o menu numa linha só, que rola
+ * de lado). */
+.topo .miolo { flex-wrap: wrap; justify-content: flex-end; }
+.topo nav { flex: 0 0 auto; flex-wrap: nowrap; }
+@media (max-width: 1000px) {
+  .topo .miolo { gap: 2px 12px; padding-top: 6px; padding-bottom: 4px; min-height: 0; }
+  .topo nav { order: 3; flex: 1 0 100%; margin-left: 0; overflow-x: auto; scrollbar-width: none; }
+  .topo nav a { flex: none; }
+  .sessao { flex: 1 1 0%; justify-content: flex-end; min-width: 0; overflow: hidden; }
+  html { scroll-padding-top: 104px; }
+}
+
+.conta-caixa .painel > h3 { margin: 18px 0 4px; }
+.passos { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; font-size: 12.5px; color: var(--texto-2); }
+.passos span { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--linha); }
+.passos span.ligado { color: var(--ouro); border-color: var(--ouro-esc); background: var(--ouro-a10); }
+input.codigo { font: 600 22px/1 var(--sans); letter-spacing: .45em; text-align: center; font-variant-numeric: tabular-nums; max-width: 240px; }
+.nota-botao { font-size: 13px; color: var(--texto-2); margin: 14px 0 0; padding-left: 10px; border-left: 2px solid var(--ouro-esc); }
+.reenviar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; margin-top: 14px; }
+.reenviar .btn-mini { margin-left: 0; }
+.reenvio { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; flex: 1 1 260px; }
+.reenvio label { margin: 0; flex: 1 0 100%; }
+.reenvio input { flex: 1 1 160px; width: auto; }
+.bloco form .reenvio .btn { margin-top: 0; }
+
+.minha-conta { margin: 40px auto 56px; }
+.minha-conta .cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 14px; }
+.minha-conta > .aviso { margin: 0 0 16px; }
+.blocos { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); align-items: start; }
+.bloco { background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 16px 20px 20px; min-width: 0; }
+.bloco.largo { grid-column: 1 / -1; }
+.bloco > h3 { margin-bottom: 6px; }
+.bloco > .apoio { font-size: 14px; }
+.bloco form .btn { margin-top: 16px; }
+.dados { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 8px 0 0; font-size: 15px; }
+.dados dt { color: var(--texto-2); }
+.dados dd { margin: 0; overflow-wrap: anywhere; }
+.dados .marca-gm { font-size: 13px; font-weight: 700; margin-left: 6px; white-space: nowrap; }
+.botoes-linha { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.botoes-linha .btn { margin-top: 0; }
+.btn-perigo { color: var(--erro); background: rgba(255, 122, 107, .08); border-color: rgba(255, 122, 107, .4); }
+.lista-sessoes, .lista-atividade, .lista-pedidos { list-style: none; margin: 8px 0 0; padding: 0; }
+.lista-sessoes li, .lista-pedidos li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 0; border-bottom: 1px solid var(--linha);
+}
+.lista-sessoes li:last-child, .lista-pedidos li:last-child, .lista-atividade li:last-child { border-bottom: 0; }
+.lista-sessoes li > div, .lista-pedidos li > div { min-width: 0; }
+.lista-sessoes small, .lista-pedidos small { display: block; color: var(--texto-2); font-size: 13px; overflow-wrap: anywhere; }
+.lista-sessoes li.esta b { color: var(--ouro); }
+.lista-sessoes .etiqueta { margin-left: 8px; font-size: 11px; padding: 1px 7px; }
+.lista-sessoes .btn-mini, .lista-pedidos .btn-mini { margin-left: 0; flex: none; }
+.lista-atividade li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--linha); font-size: 14.5px; }
+.lista-atividade li.alerta span { color: var(--erro); }
+.lista-atividade time { color: var(--texto-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* a loja */
+.saldo-caixa { background: var(--fundo-2); border: 1px solid var(--ouro-a18); border-radius: var(--raio); padding: 16px 20px 18px; }
+.saldo-caixa h3 { margin-bottom: 10px; }
+.saldo-caixa h3 small { color: var(--texto-2); font-weight: 400; font-family: var(--sans); font-size: 13px; margin-left: 6px; }
+.saldo-caixa .estado { padding: 8px 0; text-align: left; }
+.saldo-numeros { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.saldo-numeros > div { background: var(--fundo-3); border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.saldo-numeros span { display: block; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-2); }
+.saldo-numeros b { display: block; font: 600 24px/1.25 var(--serif); color: var(--texto); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.saldo-numeros .disponivel { border-color: var(--ouro-esc); }
+.saldo-numeros .disponivel b { color: var(--ouro); }
+.saldo-quando { margin: 10px 0 0; font-size: 14px; }
+.saldo-caixa ul { margin: 8px 0 0; padding-left: 18px; color: var(--texto-2); font-size: 14px; }
+.saldo-fora { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.saldo-fora p { margin: 0; flex: 1 1 280px; color: var(--texto-2); }
+.saldo-fora p b { color: var(--texto); }
+.selo-mestre {
+  display: inline-block; margin: 0 0 10px; padding: 3px 11px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  color: var(--ouro); background: var(--ouro-a10); border: 1px solid var(--ouro-esc);
+}
+.loja-secao { margin-top: 36px; }
+.loja-secao > h3 { font-size: 23px; color: var(--ouro); }
+.loja-secao > .sub { color: var(--texto-2); margin: 4px 0 14px; max-width: 760px; font-size: 14.5px; }
+.catalogo { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.produto {
+  background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio); overflow: hidden;
+  display: flex; flex-direction: column; min-width: 0;
+}
+.produto .corpo { padding: 12px 16px 16px; display: flex; flex-direction: column; flex: 1; }
+.produto h4 { font: 600 17px/1.3 var(--serif); color: var(--texto); margin: 0 0 6px; }
+.produto .corpo p { font-size: 13.5px; color: var(--texto-2); margin: 0 0 6px; }
+.produto .corpo p.cartas { color: var(--texto); }
+.produto .corpo p.limite { color: var(--ouro-2); font-size: 12.5px; }
+.produto-pe { margin-top: auto; padding-top: 10px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.preco { font: 600 21px/1.2 var(--serif); color: var(--ouro); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.preco small { font: 400 12.5px var(--sans); color: var(--texto-2); margin-left: 2px; }
+.produto .btn { padding: 8px 16px; font-size: 14.5px; }
+.produto .corpo p.motivo { margin: 10px 0 0; padding: 6px 9px; border-radius: 8px; background: var(--fundo-3); color: var(--texto-2); font-size: 12.5px; }
+.btn.trancado[disabled] { cursor: not-allowed; }
+.produto .foto.retrato { aspect-ratio: 4 / 3; }
+.produto .foto.retrato img { object-fit: contain; }
+.arte-produto {
+  position: relative; height: 128px; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 45%, rgba(255, 196, 77, .14), transparent 68%), linear-gradient(160deg, #1d232c, #0f1216);
+}
+.arte-produto[class*="el-"] {
+  background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--el) 26%, transparent), transparent 68%), linear-gradient(160deg, #1d232c, #0f1216);
+}
+.arte-produto .glifo { font: 600 54px/1 var(--serif); color: var(--ouro); text-shadow: 0 0 24px rgba(255, 196, 77, .35); }
+.arte-produto .qtd {
+  position: absolute; right: 12px; bottom: 10px; font: 700 14px var(--sans); color: var(--texto);
+  background: rgba(0, 0, 0, .5); border: 1px solid var(--linha); border-radius: 999px; padding: 1px 9px;
+}
+.pedra {
+  width: 60px; height: 60px; border-radius: 44% 56% 52% 48% / 56% 46% 54% 44%; transform: rotate(-12deg);
+  background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, .75), transparent 22%),
+              radial-gradient(circle at 62% 72%, color-mix(in srgb, var(--el) 55%, #000), var(--el) 78%);
+  box-shadow: 0 0 26px color-mix(in srgb, var(--el) 55%, transparent), inset 0 -7px 12px rgba(0, 0, 0, .45);
+}
+.el-fogo { --el: #ff8c3a; }
+.el-agua { --el: #57c8ec; }
+.el-terra { --el: #9bd06a; }
+.el-ar { --el: #c8b6ff; }
+.el-neutro { --el: #d8dee4; }
+.selo-raridade.r-comum { color: var(--texto-2); }
+.selo-raridade.r-raro { color: #7fb6ff; border-color: rgba(127, 182, 255, .45); }
+.selo-raridade.r-epico { color: #c8a2ff; border-color: rgba(200, 162, 255, .45); }
+.selo-raridade.r-lendario { color: #ffb45e; border-color: rgba(255, 180, 94, .45); }
+.pedidos-cab { display: flex; align-items: baseline; gap: 6px; margin-top: 44px; }
+.pedidos-cab + .apoio { font-size: 14px; margin: 4px 0 10px; }
+.lista-pedidos { background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 2px 16px; }
+.lista-pedidos .direita { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; justify-content: flex-end; }
+.estado-pedido { font-size: 13.5px; font-weight: 700; text-align: right; }
+.e-pendente .estado-pedido { color: var(--texto-2); }
+.e-retirado .estado-pedido { color: var(--ouro-2); }
+.e-entregue .estado-pedido { color: var(--certo); }
+.e-estornado .estado-pedido { color: var(--erro); }
+.e-cancelado .estado-pedido { color: var(--texto-2); opacity: .75; }
+.e-cancelado b { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, .35); }
+/* o aviso da loja flutua no pé da tela: a compra acontece longe do topo */
+.aviso.flutua { position: sticky; bottom: 14px; z-index: 5; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
+.aviso.flutua.erro { background: #2a1714; }
+.aviso.flutua.certo { background: #13231b; }
+
+/* a janelinha de confirmação */
+.modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(5, 7, 10, .72); }
+.modal-caixa {
+  width: 100%; max-width: 460px; background: var(--fundo-2); border: 1px solid var(--ouro-a30); border-radius: var(--raio);
+  padding: 20px 22px 18px; box-shadow: 0 24px 70px rgba(0, 0, 0, .6);
+}
+.modal-caixa h3 { color: var(--ouro); margin-bottom: 8px; }
+.modal-caixa p { margin: 0 0 8px; }
+.modal-caixa .apoio { font-size: 14px; }
+.modal-botoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+/* o botão desligado da loja não pode parecer um "Comprar" que funciona */
+.btn-ouro.trancado[disabled] { background: var(--fundo-3); color: var(--texto-2); border-color: var(--linha); opacity: .75; }
+.btn.trancado[disabled]:hover { border-color: var(--linha); }
+/* o preço à esquerda e o botão no resto da linha; quando não cabe, o botão
+ * desce inteiro, e todo cartão fica com a mesma cara */
+.produto-pe .preco { flex: 0 1 auto; }
+.produto-pe .btn { flex: 1 0 auto; text-align: center; }
+
+@media (max-width: 600px) {
+  /* com sessão, o topo continua em duas linhas (a marca com a sessão, e o menu
+   * que rola de lado): a caixa da sessão parte de largura zero e cresce no que
+   * sobra ao lado da marca; o "Olá," sai e o nome encolhe com "…" */
+  .sessao { flex: 1 1 0%; justify-content: flex-end; }
+  .sessao .ola-oi { display: none; }
+  .sessao > a, .sessao > button { padding: 6px 5px; }
+  .minha-conta { margin-top: 24px; }
+  .bloco { padding: 14px 14px 16px; }
+  .saldo-numeros { gap: 6px; }
+  .saldo-numeros > div { padding: 8px; }
+  .saldo-numeros b { font-size: 18px; }
+  .saldo-numeros span { font-size: 10.5px; letter-spacing: .03em; }
+  .lista-sessoes li, .lista-pedidos li { flex-wrap: wrap; }
+  .modal-botoes .btn { flex: 1 1 auto; }
+}
+
 /* ---- o rodapé ---------------------------------------------------------------- */
 .rodape { padding: 32px 0 40px; border-top: 1px solid var(--linha); color: var(--texto-2); font-size: 13.5px; text-align: center; }
 .rodape .marca { font-size: 16px; display: block; margin-bottom: 8px; }

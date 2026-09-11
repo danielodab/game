@@ -16,6 +16,10 @@ assets/packs
 assets/embedded/models-*
 assets/embedded/env-kit*
 assets/embedded/muro-*
+assets/embedded/coroas-pvp-3d.js
+# os cenario-*.js inteiros: o jogo servido lê só a tabela deles
+# (assets/models/bundle/tabelas/), e os modelos vêm do bundle
+assets/embedded/cenario-*
 assets/embedded/sprites-*
 **/__pycache__
 **/*.pyc

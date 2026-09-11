@@ -334,6 +334,47 @@ caminho previsível, estrelar é o caminho da sorte.
 Nem forja nem estrela mexem em **PA/PP** além do teto de +1. Esses dois recursos
 são o esqueleto do turno; inflar eles quebraria o jogo inteiro.
 
+### Nível de uso
+
+Toda peça e todo bicho pedem um **nível do herói** para entrar nele (pedido do
+dono, 10/09: "os itens mais fortes são níveis mais altos; o set especial da
+roleta é nível 30 em todas as peças; pets a partir do 10"). A régua mora em
+`DATA.nivelUso` (items.js) e é **por calabouço e raridade**: o degrau do mapa
+é o nível recomendado dele, a peça mais rara pede 2 a mais, e no Coração a
+escada desce um degrau para caber no teto 30.
+
+| calabouço | comum | raro | épico |
+|---|---|---|---|
+| Estufa Soterrada | 3 | 5 | 7 |
+| Corte Afogada (Cisterna) | 7 | 9 | 11 |
+| Fecho de Brasa | 11 | 13 | 15 |
+| Andaimes do Vento | 16 | 18 | 20 |
+| Mina que Treme | 22 | 24 | 26 |
+| Coração Partido | 26 | 28 | 30 |
+
+Fora da tabela: **lendária = 30** (venha de onde vier), as 4 peças do **Traje do
+Colecionador = 30**, todo **pet = 10**. Um `nivelUso` explícito na definição
+vence a régua; peça de que a régua não sabe pede 0 (nunca tranca por engano).
+
+Quem cobra é o Progress (`equip`/`equipPet`, e a transferência de bicho entre
+heróis cobra o destino); a recusa fica em `Progress.ultimaRecusa` e a ficha
+mostra o motivo ("Estribos de Hera pede o nível 5 — o Sumo está no 3"). A peça
+acima do nível **continua caindo, sendo comprada, trocada, guardada no banco e
+tirada na roleta** — só não entra no herói; a grade mostra o `Nv. N` de cada
+peça e apaga (com cadeado) o que o herói escolhido ainda não veste. O **Mestre**
+não paga. Ao carregar um save com peça vestida acima do nível do herói, ela
+**volta ao saco** (mesma série, mesmo nível de forja e estrelas — mesmo com o
+saco cheio, porque é migração única) e o bicho volta à lista; o Acampamento
+(ou a ficha do inventário) avisa uma vez. A carga só saneia na memória: é ao
+**entregar o aviso** que a migração vai ao disco (e à Nuvem), e daí a abertura
+seguinte não repete o toast. Gravar na própria carga seria perigoso: no ar, a
+conta do Mestre pode abrir antes de a Nuvem conferir a marca dele, e o que o
+saneamento tirou da memória (o herói do Mestre, a Panóplia) viraria perda
+permanente.
+
+A menor exigência do jogo é 3: o herói novo guarda no saco o primeiro saque até
+chegar ao nível 3 (40 XP).
+
 ---
 
 ## 9. Inventário

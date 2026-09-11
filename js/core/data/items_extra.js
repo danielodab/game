@@ -640,6 +640,7 @@ JOGO.DATA = JOGO.DATA || {};
       it.keyPiece = !!(it.bonuses.pa || it.bonuses.pp || it.slot === 'lume');
       it.minRoom = (it.rarity === 'epico' || it.rarity === 'lendario') ? 2
                  : (it.rarity === 'raro' ? 1 : 0);
+      if (DATA.nivelUsoDe) { it.nivelUso = DATA.nivelUsoDe(it); }        // 10/09
     });
 
     // 3. pesos de saque, normalizados por calabouço para bater as metas do modelo

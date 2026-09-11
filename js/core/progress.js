@@ -45,7 +45,10 @@ var JOGO = (typeof window !== 'undefined')
  *      existir e for > 0; senão cai em `DATA.unlockTiers[i]`.
  *
  * [D6] ELEMENTO. Todo herói nasce 'neutro'. `chooseElement` exige
- *      `level >= DATA.leveling.elementChoiceLevel` (5) e é IRREVERSÍVEL.
+ *      `level >= DATA.leveling.elementChoiceLevel` (5) e é irreversível DE
+ *      GRAÇA: só o Pergaminho da Reescrita (loja do site, Fase C) troca um
+ *      caminho depois — `reescreveElemento`, que gasta o pergaminho. Trocar
+ *      o ATIVO entre os caminhos liberados continua grátis (`trocaElemento`).
  *
  * [D7] INVENTÁRIO ÚNICO DE CÓPIAS (§9-B + pedido do usuário de 18/ago). Um saco
  *      só para todo o grupo, agora com uma entrada POR CÓPIA:
@@ -166,6 +169,27 @@ var JOGO = (typeof window !== 'undefined')
  *       por cima. Sem a tabela no dado, o ganho é 0 e nada muda (a v2.6 volta
  *       inteira). Um alvo ABAIXO da base nunca encolhe a classe: vale 0.
  *       `Progress.defenseAtLevel(classId, nível)` expõe a curva para a UI.
+ *
+ * [D19] NÍVEL DE USO (10/09, pedido do dono: "esses itens de cada mapa
+ *       precisam ter seu nível para uso… os mais fortes são níveis mais altos;
+ *       o set especial da roleta é level 30 todas as peças; pets a partir do
+ *       lv 10"). A RÉGUA mora no dado (items.js: `DATA.nivelUso` e
+ *       `DATA.nivelUsoDe(def)`); aqui só se COBRA, em `equip`/`equipPet` —
+ *       `podeUsar`/`podeUsarPet` dão o veredito com motivo pronto para a tela
+ *       e a recusa fica em `Progress.ultimaRecusa`. Sem o resolvedor no DATA
+ *       (páginas de teste que montam o dado à mão) nada tranca: 0 = sem
+ *       exigência. O Mestre (`JOGO.GM.ativo()`) nunca paga. Peça acima do
+ *       nível continua caindo, sendo comprada, trocada e guardada — só não
+ *       entra no herói. SANEAMENTO: ao carregar, peça vestida acima do nível
+ *       do herói volta ao saco (MESMA série, mesmo level/stars) e pet acima
+ *       volta à lista — mesmo com o saco cheio, porque é migração única e
+ *       perder a peça seria pior que um saco estufado; a lista do que voltou
+ *       sai por `devolvidasPorNivel()` para a HUD avisar uma vez, e é ao
+ *       ENTREGAR o aviso (`devolvidasPorNivel(true)`) que a migração vai ao
+ *       disco — a carga não grava (ver lá). O nível de
+ *       um herói só desce se a xpTable mudar (a fusão é de BATALHA — a unidade
+ *       fundida tem a média dos níveis, mas não veste nem guarda peça): é esse
+ *       o caso que o saneamento cobre.
  * ==========================================================================*/
 
 (function () {
@@ -808,6 +832,55 @@ var JOGO = (typeof window !== 'undefined')
     // linha o sanitize engoliria o saldo calado no primeiro reload
     var qi = Math.floor(num(raw.insignias, 0));
     if (qi > 0) st.insignias = qi;
+    // ---- os PERGAMINHOS da loja do site e as cargas ativas do da Sabedoria
+    // (Fase C, 10/09) — a mesma armadilha: sem estas linhas o saldo e as
+    // cargas somem calados no primeiro reload. Só as chaves conhecidas, só
+    // inteiros positivos, e cada um preso no seu teto.
+    if (isObj(raw.pergaminhos)) {
+      var cfgPg = pergCfg(), tiposPg = pergTipos(), pgs = {}, algumPg = false;
+      for (var ip = 0; ip < tiposPg.length; ip++) {
+        var qp = Math.floor(num(raw.pergaminhos[tiposPg[ip]], 0));
+        if (qp > 0) { pgs[tiposPg[ip]] = Math.min(cfgPg.teto, qp); algumPg = true; }
+      }
+      if (algumPg) st.pergaminhos = pgs;
+    }
+    if (isObj(raw.bonusXp)) {
+      var sx = Math.floor(num(raw.bonusXp.salas, 0));
+      if (sx > 0) st.bonusXp = { salas: Math.min(pergCfg().tetoSalas, sx) };
+    }
+
+    // ---- NÍVEL DE USO [D19]: peça vestida acima do nível do herói volta ao
+    // saco (MESMA série, mesmo level/stars) e pet acima volta à lista. É
+    // migração única, por isso ignora o fundo do saco: perder a peça seria
+    // pior que um saco estufado. O Mestre não paga. A lista fica para a HUD.
+    if (!ehMestre()) {
+      for (var hidN in st.heroes) {
+        if (!st.heroes.hasOwnProperty(hidN)) continue;
+        var hN = st.heroes[hidN];
+        var nivelN = Math.max(1, Math.floor(num(hN.level, 1)));
+        for (var sN = 0; sN < SLOTS.length; sN++) {
+          var slotN = SLOTS[sN], idN = hN.items[slotN];
+          if (!idN) continue;
+          var precisaN = nivelUsoDe(idN);
+          if (precisaN <= nivelN) continue;
+          var vN = isObj(hN.itemVar[slotN]) ? hN.itemVar[slotN] : null;
+          st.inventory.push({ itemId: idN, level: vN ? clampLevel(vN.level) : 0,
+                              stars: vN ? clampStars(vN.stars) : 0,
+                              iid: (vN && typeof vN.iid === 'string' && vN.iid) ? vN.iid : serieLegado(idN) });
+          hN.items[slotN] = null;
+          hN.itemVar[slotN] = null;
+          devolvidasNivel.push({ heroId: hidN, itemId: idN, precisa: precisaN, nivel: nivelN });
+        }
+        if (hN.pet) {
+          var precisaP = nivelUsoDe(hN.pet);
+          if (precisaP > nivelN) {
+            if (indexOf(st.pets, hN.pet) < 0) st.pets.push(hN.pet);
+            devolvidasNivel.push({ heroId: hidN, petId: hN.pet, precisa: precisaP, nivel: nivelN });
+            hN.pet = null;
+          }
+        }
+      }
+    }
     return st;
   }
 
@@ -858,6 +931,7 @@ var JOGO = (typeof window !== 'undefined')
 
   Progress.load = function () {
     var st = null;
+    devolvidasNivel = [];                  // [D19] só o que ESTA carga devolveu
     var s = getStorage();
     if (s) {
       try {
@@ -1558,6 +1632,72 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  // ================================================ NÍVEL DE USO [D19] (10/09)
+  /* A régua é do dado (items.js); aqui só se cobra. `nivelUsoDe` aceita o id
+   * de item ou de pet, ou a própria definição; 0 = sem exigência. Sem
+   * `DATA.nivelUsoDe` (dado montado à mão nas provas) nunca tranca. */
+  var devolvidasNivel = [];              // o que o saneamento devolveu nesta carga
+  function ehMestre() {
+    try { return !!(JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()); } catch (e) { return false; }
+  }
+  function nivelUsoDe(x) {
+    var def = isObj(x) ? x : (typeof x === 'string' ? (itemDef(x) || petDef(x)) : null);
+    if (!def) return 0;
+    var fn = D().nivelUsoDe;
+    if (typeof fn !== 'function') return 0;
+    var n;
+    try { n = fn(def); } catch (e) { n = 0; }
+    n = Math.floor(num(n, 0));
+    return n > 0 ? n : 0;
+  }
+  function nivelDoHeroi(heroId) {
+    var h = Progress.hero(heroId);
+    if (!h) return 1;
+    var lv = Math.floor(num(h.level, 0));
+    return lv >= 1 ? lv : levelForXp(num(h.xp, 0));
+  }
+  /* { ok, nivel (do herói), precisa, motivo } — motivo pronto para a tela. */
+  function veredito(heroId, precisa, motivo) {
+    var nivel = nivelDoHeroi(heroId);
+    var ok = precisa <= 0 || nivel >= precisa || ehMestre();
+    return { ok: ok, nivel: nivel, precisa: precisa, motivo: ok ? '' : motivo };
+  }
+  Progress.nivelUsoDe = nivelUsoDe;
+  Progress.podeUsar = function (heroId, itemId) {
+    var n = nivelUsoDe(itemId);
+    return veredito(heroId, n, 'precisa do nível ' + n);
+  };
+  Progress.podeUsarPet = function (heroId, petId) {
+    var n = nivelUsoDe(petId);
+    return veredito(heroId, n, 'pets a partir do nível ' + n);
+  };
+  /* A última recusa de equip/equipPet, para quem chamou mostrar o motivo
+   * ({heroId, itemId|petId, precisa, nivel, motivo}); sucesso limpa. */
+  Progress.ultimaRecusa = null;
+  function recusa(heroId, campo, id, r) {
+    var out = { heroId: heroId, precisa: r.precisa, nivel: r.nivel, motivo: r.motivo };
+    out[campo] = id;
+    Progress.ultimaRecusa = out;
+    return false;
+  }
+  /* O que o saneamento da última carga devolveu por nível
+   * ([{heroId, itemId|petId, precisa, nivel}]). `limpar` = o aviso foi
+   * ENTREGUE (a HUD mostrou o toast): esvazia a lista e GRAVA a migração, para
+   * a próxima abertura não achar a peça vestida de novo nem repetir o aviso.
+   * A carga em si não grava: no ar, a conta do Mestre pode carregar antes de
+   * a Nuvem conferir a marca dele (confereConta recarrega a página), e aí o
+   * sanitize já tirou o herói 'gm' e a Panóplia da memória — gravar na carga
+   * tornaria essa perda permanente. Até o aviso sair nada se perde: toda
+   * carga saneia de novo (mesma série, sem duplicar). */
+  Progress.devolvidasPorNivel = function (limpar) {
+    var out = devolvidasNivel.slice();
+    if (limpar) {
+      devolvidasNivel = [];
+      if (out.length) Progress.save();     // enganchado, o save da Nuvem sobe o saneado
+    }
+    return out;
+  };
+
   /* Equipar TIRA a cópia do saco [D7]. `invIndex` escolhe qual cópia (a grade
    * manda o índice do espaço tocado); sem ele vai a melhor livre. O que estava
    * no espaço volta para o saco na hora. */
@@ -1568,6 +1708,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!h) return false;
     if (h.items[it.slot] === itemId &&
         (typeof invIndex !== 'number' || invIndex < 0)) return true;   // já está nele
+    var pu = Progress.podeUsar(heroId, itemId);                        // [D19]
+    if (!pu.ok) return recusa(heroId, 'itemId', itemId, pu);
     var inv = Progress.state.inventory;
     var idx = (typeof invIndex === 'number' && inv[invIndex] && inv[invIndex].itemId === itemId)
             ? invIndex : bestFreeIndex(itemId);
@@ -1578,6 +1720,7 @@ var JOGO = (typeof window !== 'undefined')
     h.items[it.slot] = itemId;
     h.itemVar[it.slot] = { level: num(copia.level, 0), stars: num(copia.stars, 0), iid: serieDe(copia, itemId) };
     syncSpells(heroId);
+    Progress.ultimaRecusa = null;
     Progress.save();
     premioDoColecionador();              // o Traje fechado concede o pet (1x)
     return true;
@@ -1617,16 +1760,23 @@ var JOGO = (typeof window !== 'undefined')
     var h = ensureHero(heroId);
     var foto = h && isObj(h.trajes) ? h.trajes['t' + n] : null;
     if (!foto) return null;
-    var trocas = 0, faltas = 0;
+    var trocas = 0, faltas = 0, porNivel = 0, recusas = [];
     for (var i = 0; i < SLOTS.length; i++) {
       var slot = SLOTS[i];
       var alvo = foto[slot] || null;
       if ((h.items[slot] || null) === alvo) continue;
+      Progress.ultimaRecusa = null;
       var ok = alvo ? Progress.equip(heroId, alvo)     // melhor cópia livre
                     : Progress.unequip(heroId, slot);  // pede vaga no saco
-      if (ok) trocas++; else faltas++;
+      if (ok) trocas++;
+      else {
+        faltas++;                                      // por nível também é falta
+        if (alvo && Progress.ultimaRecusa && Progress.ultimaRecusa.itemId === alvo) {
+          porNivel++; recusas.push(Progress.ultimaRecusa);
+        }
+      }
     }
-    return { trocas: trocas, faltas: faltas };
+    return { trocas: trocas, faltas: faltas, porNivel: porNivel, recusas: recusas };
   };
 
   Progress.unequip = function (heroId, slot) {
@@ -1714,6 +1864,10 @@ var JOGO = (typeof window !== 'undefined')
     if (!petDef(petId)) return false;
     var h = ensureHero(heroId);
     if (!h) return false;
+    if (h.pet !== petId) {                                             // [D19]
+      var pp = Progress.podeUsarPet(heroId, petId);                    // vale também na transferência
+      if (!pp.ok) return recusa(heroId, 'petId', petId, pp);
+    }
     var pets = Progress.state.pets;
     var idx = indexOf(pets, petId);
     if (idx < 0) {
@@ -1731,6 +1885,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (h.pet) pets.push(h.pet);
     h.pet = petId;
+    Progress.ultimaRecusa = null;
     Progress.save();
     return true;
   };
@@ -1871,6 +2026,139 @@ var JOGO = (typeof window !== 'undefined')
     var tem = Math.max(0, Math.floor(num(st.insignias, 0)));
     if (tem < preco) return false;
     st.insignias = tem - preco;
+    Progress.save();
+    return true;
+  };
+
+  // ======================= os PERGAMINHOS da loja do site (Fase C, 10/09)
+  /* Dois pergaminhos chegam da loja de vinténs do site (js/core/loja.js
+   * entrega; o preço mora só no servidor):
+   *   xp        o da SABEDORIA — chega GUARDADO e o jogador LÊ quando quiser
+   *             (`lePergaminhoXp`): cada leitura soma DATA.pergaminhos.xp.salas
+   *             cargas, até tetoSalas. Cada sala VENCIDA em que ele acrescentou
+   *             XP gasta uma (game.js computeRewards, `gastaCargaXp`). Derrota e
+   *             abandono não gastam, e o relógio do cliente não entra.
+   *   elemento  o da REESCRITA — troca UM caminho elemental por outro que o
+   *             herói ainda não tem (`reescreveElemento`).
+   * `state.pergaminhos = {xp, elemento}` (só as chaves com saldo) e
+   * `state.bonusXp = {salas}` (só com carga): o sanitize conhece os dois. */
+  function pergTipos() { return ['xp', 'elemento']; }
+  function pergCfg() {
+    var c = isObj(D().pergaminhos) ? D().pergaminhos : {};
+    var x = isObj(c.xp) ? c.xp : {};
+    return {
+      fator: Math.max(1, num(x.fator, 1.5)),
+      salas: Math.max(1, Math.floor(num(x.salas, 9))),
+      tetoSalas: Math.max(1, Math.floor(num(x.tetoSalas, 27))),
+      teto: Math.max(1, Math.floor(num(c.tetoInventario, 99)))
+    };
+  }
+  function pergSaldo(tipo) {
+    var st = Progress.state;
+    return (st && isObj(st.pergaminhos)) ? Math.max(0, Math.floor(num(st.pergaminhos[tipo], 0))) : 0;
+  }
+  // grava o saldo de um tipo; a chave zerada sai (e o objeto vazio também)
+  function pergPoe(tipo, n) {
+    var st = Progress.state;
+    if (!isObj(st.pergaminhos)) st.pergaminhos = {};
+    if (n > 0) st.pergaminhos[tipo] = n;
+    else delete st.pergaminhos[tipo];
+    if (!keys(st.pergaminhos).length) delete st.pergaminhos;
+  }
+  function salasXp() {
+    var st = Progress.state;
+    return (st && isObj(st.bonusXp)) ? Math.max(0, Math.floor(num(st.bonusXp.salas, 0))) : 0;
+  }
+  Progress.addPergaminho = function (tipo, n) {
+    var st = Progress.state;
+    if (!st || indexOf(pergTipos(), tipo) < 0) return false;
+    var amount = Math.floor(num(n, 1));
+    if (amount <= 0) return false;
+    var tem = pergSaldo(tipo);
+    if (tem + amount > pergCfg().teto) return false;       // teto por tipo: não entra pela metade
+    pergPoe(tipo, tem + amount);
+    Progress.save();
+    return true;
+  };
+  Progress.pergaminhos = function () {
+    return { xp: pergSaldo('xp'), elemento: pergSaldo('elemento'), salasXp: salasXp() };
+  };
+  /* LER o da Sabedoria: gasta 1 e soma as salas. Recusa com motivo:
+   * 'sem' (nenhum guardado) ou 'cheio' (passaria do teto de cargas). */
+  Progress.lePergaminhoXp = function () {
+    var st = Progress.state;
+    var cfg = pergCfg(), salas = salasXp();
+    if (!st || pergSaldo('xp') < 1) return { ok: false, salas: salas, motivo: 'sem' };
+    if (salas + cfg.salas > cfg.tetoSalas) return { ok: false, salas: salas, motivo: 'cheio' };
+    pergPoe('xp', pergSaldo('xp') - 1);
+    st.bonusXp = { salas: salas + cfg.salas };
+    Progress.save();
+    return { ok: true, salas: st.bonusXp.salas, motivo: null };
+  };
+  Progress.fatorPergaminhoXp = function () {
+    return salasXp() > 0 ? pergCfg().fator : 1;
+  };
+  // tira UMA carga (a sala em que o pergaminho acrescentou XP); devolve as que restam
+  Progress.gastaCargaXp = function () {
+    var st = Progress.state;
+    var salas = salasXp();
+    if (!st || salas <= 0) return 0;
+    salas -= 1;
+    if (salas > 0) st.bonusXp = { salas: salas };
+    else delete st.bonusXp;
+    Progress.save();
+    return salas;
+  };
+
+  /* A REESCRITA: um caminho da lista sai e outro, que o herói não tem, entra
+   * NO MESMO LUGAR — o tamanho da lista não muda e as vagas continuam vindo
+   * das estrelas (elementSlots). Se o que sai era o ativo, o novo assume.
+   * Nada mais migra: XP, nível, elemPower (conta níveis, não elemento),
+   * itens, pet e estrelas ficam; os feitiços do caminho, a fusão e a
+   * aparência se ajustam sozinhos (derivam do ativo). O herói neutro escolhe
+   * de graça pelo chooseElement (o pergaminho fica guardado), e a classe sem
+   * `paths` (o gm, que já tem os 4) fica fora. Só fora de descida: a HUD só
+   * oferece no Acampamento, e aqui a batalha e a antessala recusam.
+   * `podeReescrever` é a checagem (para a interface); `reescreveElemento`
+   * gasta 1 pergaminho SÓ no sucesso, no mesmo save da troca. */
+  function emDescida() {
+    var G = JOGO.Game;
+    return !!(G && (G.screen === 'battle' || G.screen === 'antessala'));
+  }
+  // a lista como o sanitize a deixaria: o ativo sempre dentro (na frente, se faltava)
+  function listaDeCaminhos(h) {
+    var lista = isArray(h.elements) ? h.elements.slice() : [];
+    if (typeof h.element === 'string' && h.element !== DEFAULT_ELEMENT &&
+        indexOf(lista, h.element) < 0) lista.unshift(h.element);
+    return lista;
+  }
+  Progress.podeReescrever = function (heroId, velho, novo) {
+    var h = Progress.hero(heroId);
+    if (!h) return { ok: false, motivo: 'heroi' };
+    if (pergSaldo('elemento') < 1) return { ok: false, motivo: 'sem' };
+    if (emDescida()) return { ok: false, motivo: 'descida' };
+    if (typeof h.element !== 'string' || h.element === DEFAULT_ELEMENT) return { ok: false, motivo: 'neutro' };
+    if (num(h.level, 1) < leveling().elementChoiceLevel) return { ok: false, motivo: 'nivel' };
+    var def = classDef(h.classId);
+    if (!def || !isObj(def.paths)) return { ok: false, motivo: 'classe' };
+    if (typeof novo !== 'string' || novo === DEFAULT_ELEMENT || indexOf(elements(), novo) < 0) {
+      return { ok: false, motivo: 'elemento' };
+    }
+    if (!isArray(def.paths[novo])) return { ok: false, motivo: 'caminho' };
+    var lista = listaDeCaminhos(h);
+    if (indexOf(lista, novo) >= 0) return { ok: false, motivo: 'ja-tem' };
+    if (typeof velho !== 'string' || indexOf(lista, velho) < 0) return { ok: false, motivo: 'velho' };
+    return { ok: true, motivo: null };
+  };
+  Progress.reescreveElemento = function (heroId, velho, novo) {
+    if (!Progress.podeReescrever(heroId, velho, novo).ok) return false;
+    var h = Progress.hero(heroId);
+    var lista = listaDeCaminhos(h);
+    lista[indexOf(lista, velho)] = novo;
+    h.elements = lista;
+    if (h.element === velho) h.element = novo;
+    syncSpells(heroId);
+    pergPoe('elemento', pergSaldo('elemento') - 1);
     Progress.save();
     return true;
   };

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a lei dos nomes no batismo e na guilda</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+iframe{width:1000px;height:700px;border:0;display:block;margin-top:10px}</style>
+</head>
+<body>
+<!-- Pedido do dono (10/09): "ninguem conseguir colocar o nome com GM Gm Admin
+     Administrador etc..". A regra mora em js/core/nomes.js; aqui se cobra o
+     GANCHO dela no jogo, com os scripts reais: o batismo (DB.batizar) recusa
+     nome reservado com o motivo da régua (3 a 20 caracteres, os mesmos da conta
+     do site), aceita nome de gente, deixa o Mestre do Fundo passar e, sem
+     nomes.js na página (bancada antiga), não trava nada; a guilda idem.
+     Com ?hud=1 roda também a prova da HUD pelo index de verdade (lenta, fora
+     da bateria): o nome guardado reservado reabre o batismo com o aviso, o
+     toast mostra o motivo, e a guilda mostra o erro do core. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  try { localStorage.removeItem('soterra-guilda-v1'); localStorage.removeItem('soterra-conta-v1'); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/nomes.js', 'js/core/db.js', 'js/core/guilda.js'];
+  for (var i = 0; i < arqs.length; i++) document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra != null && extra !== '' ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fim() {
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  /* espera por TENTATIVAS, nunca por relógio: no headless o tempo é virtual
+   * e um prazo em Date.now estoura antes da hora */
+  function tentativas(teste, max, passo) {
+    return new Promise(function (ok) {
+      var n = 0;
+      (function volta() {
+        var v = null;
+        try { v = teste(); } catch (e) {}
+        if (v || ++n >= max) return ok(v);
+        setTimeout(volta, passo || 300);
+      })();
+    });
+  }
+
+  var Nm = JOGO.Nomes, DB = JOGO.DB, G = JOGO.Guilda;
+  check('os três scripts reais carregaram (nomes, db, guilda)', !!Nm && !!DB && !!G);
+  if (!Nm || !DB || !G) return fim();
+  var MOTIVO = Nm.MOTIVO_RESERVADO;
+  var FAIXA = 'de 3 a 20 caracteres';
+  check('a régua do batismo é a da conta do site: 3 a 20', DB.NOME_MIN === 3 && DB.NOME_MAX === 20,
+        DB.NOME_MIN + '..' + DB.NOME_MAX);
+  check('o motivo do reservado é o da lei', MOTIVO === 'esse nome é reservado à equipe do jogo', MOTIVO);
+
+  function recusa(nome, esperado, rotulo) {
+    return DB.batizar(nome).then(function (r) {
+      check(rotulo, !!r && r.ok === false && !!esperado && r.erro === esperado, r && (r.erro || JSON.stringify(r)));
+    });
+  }
+  function nomeGuardado() { return DB.jogador().then(function (j) { return j.nome; }); }
+
+  var cadeia = DB._zerar();
+
+  // ---- o pedido literal do dono, e o título do Mestre
+  ['GM', 'Gm', 'Admin', 'Administrador', 'Mestre do Fundo'].forEach(function (n) {
+    cadeia = cadeia.then(function () {
+      return recusa(n, MOTIVO, 'o batismo recusa "' + n + '" com o motivo');
+    });
+  });
+  // ---- disfarces: recusa pela régua inteira (JOGO.Nomes.valida); o motivo
+  // do reservado vence o do tamanho e o do caractere ("GM" tem 2 letras,
+  // "G.M" tem ponto — e o que ensina é "reservado à equipe")
+  ['GMJoao', 'xXadminXx', 'Àdmin', 'G.M', 'ＧＭ'].forEach(function (n) {
+    cadeia = cadeia.then(function () {
+      var esperado = Nm.valida(n, 3, 20).ok ? '' : (Nm.reservado(n) ? MOTIVO : Nm.valida(n, 3, 20).motivo);
+      return recusa(n, esperado, 'o disfarce "' + n + '" também cai (' + (esperado || 'a régua ACEITOU') + ')');
+    });
+  });
+
+  cadeia.then(nomeGuardado).then(function (n) {
+    check('nenhuma recusa gravou nome', n === null, String(n));
+    return DB.batizar('Joana');
+  }).then(function (r) {
+    check('aceita "Joana"', r.ok === true && r.nome === 'Joana', r.erro);
+    return nomeGuardado();
+  }).then(function (n) {
+    check('... e o nome ficou gravado', n === 'Joana', n);
+    return DB.batizar("  Joana Sant'Ana  ");
+  }).then(function (r) {
+    check('as pontas são aparadas ANTES da régua (e o apóstrofo passa)',
+          r.ok === true && r.nome === "Joana Sant'Ana", r.erro || r.nome);
+    return DB.batizar('Admin');
+  }).then(function (r) {
+    check('recusa depois de batizado', r.ok === false && r.erro === MOTIVO, r.erro);
+    return nomeGuardado();
+  }).then(function (n) {
+    check('... não apaga o nome de antes', n === "Joana Sant'Ana", n);
+    return DB.batizar('Jo');
+  }).then(function (r) {
+    check('curto demais (2 letras)', r.ok === false && r.erro === FAIXA, r.erro);
+    return DB.batizar('Joana Marias Silveira');     // 21
+  }).then(function (r) {
+    check('longo demais (21) — antes cortava calado em 24', r.ok === false && r.erro === FAIXA, r.erro);
+    return DB.batizar('Joana Maria Silveira');      // 20
+  }).then(function (r) {
+    check('20 caracteres cabem', r.ok === true && r.nome === 'Joana Maria Silveira', r.erro);
+    return DB.batizar('Ana!');
+  }).then(function (r) {
+    check('caractere fora do conjunto do nome novo', r.ok === false && r.erro === Nm.valida('Ana!', 3, 20).motivo &&
+          r.erro !== '', r.erro);
+    return DB.batizar('   ');
+  }).then(function (r) {
+    check('só espaços = vazio, com o motivo da régua', r.ok === false && r.erro === Nm.valida('', 3, 20).motivo, r.erro);
+
+    // ---- o Mestre do Fundo pode tudo: o título é dele
+    JOGO.GM = { ativo: function () { return true; } };
+    return DB.batizar('Mestre do Fundo');
+  }).then(function (r) {
+    check('o Mestre (GM.ativo) batiza com o próprio título', r.ok === true && r.nome === 'Mestre do Fundo', r.erro);
+    return DB.batizar('GM');
+  }).then(function (r) {
+    check('... e com "GM"', r.ok === true && r.nome === 'GM', r.erro);
+    return DB.batizar('Administrador do Fundo Soterrado');
+  }).then(function (r) {
+    check('... segue a regra de antes: corta em 24', r.ok === true && r.nome === 'Administrador do Fundo S', r.nome);
+    return DB.batizar('');
+  }).then(function (r) {
+    check('... e o vazio continua recusado', r.ok === false && r.erro === 'nome vazio', r.erro);
+    JOGO.GM = { ativo: function () { return false; } };
+    return DB.batizar('GM');
+  }).then(function (r) {
+    check('com o modo Mestre desligado, "GM" não passa', r.ok === false && r.erro === MOTIVO, r.erro);
+    JOGO.GM = { ativo: function () { throw new Error('quebrado'); } };
+    return DB.batizar('GM');
+  }).then(function (r) {
+    check('GM.ativo que lança não vira Mestre', r.ok === false && r.erro === MOTIVO, r.erro);
+    delete JOGO.GM;
+
+    // ---- a guilda: a recusa vem do core, com o mesmo motivo
+    G.contaAtiva('cJOANA', 'Joana');
+    return G.criar('GM', '⚑');
+  }).then(function (r) {
+    check('a guilda recusa "GM" com o erro do core', r.ok === false && r.erro === MOTIVO, r.erro);
+    return G.criar('Admin da Mina', '⚑');
+  }).then(function (r) {
+    check('... e "Admin da Mina"', r.ok === false && r.erro === MOTIVO, r.erro);
+    return G.criar('Filhos da Lousa', '💀');
+  }).then(function (r) {
+    check('guilda de nome limpo é fundada', r.ok === true, r.erro);
+    JOGO.GM = { ativo: function () { return true; } };
+    G.contaAtiva('cMESTRE', 'Mestre');
+    return G.criar('Mestre do Fundo', '👑');
+  }).then(function (r) {
+    check('o Mestre funda a guilda com o próprio título', r.ok === true, r.erro);
+    delete JOGO.GM;
+
+    // ---- bancada antiga, sem js/core/nomes.js: nada trava
+    var guardado = JOGO.Nomes;
+    delete JOGO.Nomes;
+    return DB.batizar('GM').then(function (r2) {
+      check('sem nomes.js o batismo é o de antes: "GM" passa', r2.ok === true && r2.nome === 'GM', r2.erro);
+      return DB.batizar('Administrador do Fundo Soterrado');
+    }).then(function (r2) {
+      check('... corta calado em 24', r2.ok === true && r2.nome === 'Administrador do Fundo S', r2.nome);
+      return DB.batizar('');
+    }).then(function (r2) {
+      check('... só o vazio é recusado ("nome vazio")', r2.ok === false && r2.erro === 'nome vazio', r2.erro);
+      G.contaAtiva('cSOZ', 'Sozinha');
+      return G.criar('GM Solto', '⚑');
+    }).then(function (r2) {
+      check('... e a guilda também não trava', r2.ok === true, r2.erro);
+      JOGO.Nomes = guardado;
+    }, function (e) { JOGO.Nomes = guardado; throw e; });
+  }).then(function () {
+    var sb = (JOGO.SaveSandbox && JOGO.SaveSandbox.check) ? JOGO.SaveSandbox.check() : { ok: false };
+    check('o disco de verdade continua intocado', sb.ok);
+    if (/[?&]hud=1/.test(location.search)) return provaHud();
+  }).then(fim, function (e) {
+    check('a suíte terminou sem exceção', false, String(e && e.message || e));
+    fim();
+  });
+
+  /* ------------------------------------------------ ?hud=1: a HUD de verdade
+   * O index inteiro num iframe (save na memória, ?sandbox=1). Um save de
+   * ANTES da trava com nome reservado: a entrada no Acampamento reabre o
+   * batismo com o aviso; o toast diz o motivo; nome limpo fecha o cartão; o
+   * Mestre não é incomodado; a guilda mostra o erro do core. */
+  function provaHud() {
+    var f = document.createElement('iframe');
+    document.body.appendChild(f);
+    var w, d, J;
+    function painel() { return d.querySelector('.screen-hub .hub-painel'); }
+    function toastTxt() { var t = d.querySelector('.ui-toast'); return t ? t.textContent : ''; }
+    function limpaToast() { var t = d.querySelector('.ui-toast'); if (t) t.textContent = ''; }
+    function tentaNome(nome) {
+      var p = painel();
+      var inp = p && p.querySelector('input.hub-input');
+      var b = p && p.querySelector('button.btn-primary');
+      if (!inp || !b) return Promise.resolve('(sem campo)');
+      limpaToast();
+      inp.value = nome;
+      b.click();
+      return tentativas(function () { return toastTxt(); }, 30, 100).then(function () { return toastTxt(); });
+    }
+    function reentra() {
+      J.UI.showScreen('menu');
+      J.UI.showScreen('hub');
+    }
+    return new Promise(function (ok) {
+      f.onload = function () { ok(); };
+      f.src = '../index.html?sandbox=1&prova-nomes-jogo&v=' + Date.now();
+    }).then(function () {
+      w = f.contentWindow; d = w.document;
+      return tentativas(function () { return d.querySelector('.screen-menu.is-on'); }, 400, 400);
+    }).then(function (menu) {
+      J = w.JOGO || {};
+      check('HUD: o index abriu no menu', !!menu);
+      check('HUD: o index carrega js/core/nomes.js', !!J.Nomes && typeof J.Nomes.valida === 'function');
+      check('HUD: sem a chave, o Mestre está desligado', !!J.GM && J.GM.ativo() === false);
+      return J.DB.batizar('GM');
+    }).then(function (r) {
+      check('HUD: no index, o batismo recusa "GM" com o motivo', r.ok === false && r.erro === MOTIVO, r.erro);
+      // o save de ANTES da trava: o nome gravado direto na conta
+      var foto = J.DB.exportar();
+      foto.jogador.nome = 'Admin';
+      J.DB.importar(foto);
+      reentra();
+      return tentativas(function () {
+        var p = painel();
+        return p && !p.classList.contains('is-off') && p.querySelector('.hub-nome-aviso');
+      }, 100, 300);
+    }).then(function (av) {
+      var p = painel();
+      check('HUD: nome guardado reservado reabre o batismo com o aviso',
+            !!av && av.textContent === 'esse nome é reservado à equipe do jogo — escolha outro' &&
+            /Como te chamam no fundo/.test(p.textContent), av ? av.textContent : '(sem aviso)');
+      var inp = p && p.querySelector('input.hub-input');
+      check('HUD: o campo do nome tem o teto da conta (20)', !!inp && inp.maxLength === 20, inp && inp.maxLength);
+      return tentaNome('Administrador');
+    }).then(function (t) {
+      check('HUD: o toast da recusa diz o motivo (não mais "Diz um nome.")', t === MOTIVO, t);
+      return tentaNome('Jo');
+    }).then(function (t) {
+      check('HUD: nome curto mostra a faixa', t === FAIXA, t);
+      return tentaNome('Joana');
+    }).then(function () {
+      return tentativas(function () {
+        var nm = d.querySelector('.screen-hub .hub-nome');
+        return nm && nm.textContent === 'Joana' && painel().classList.contains('is-off');
+      }, 60, 200);
+    }).then(function (ok) {
+      check('HUD: nome limpo fecha o cartão e vai para a plaquinha', !!ok,
+            (d.querySelector('.screen-hub .hub-nome') || {}).textContent);
+      return J.DB.jogador();
+    }).then(function (j) {
+      check('HUD: ... e ficou gravado', j.nome === 'Joana', j.nome);
+      // o Mestre com nome reservado: nada de cartão
+      var foto = J.DB.exportar();
+      foto.jogador.nome = 'GM';
+      J.DB.importar(foto);
+      var ativoReal = J.GM.ativo;
+      J.GM.ativo = function () { return true; };
+      reentra();
+      return tentativas(function () {
+        var nm = d.querySelector('.screen-hub .hub-nome');
+        return nm && nm.textContent === 'GM';
+      }, 60, 200).then(function (pintou) {
+        var av = d.querySelector('.hub-nome-aviso');
+        check('HUD: o Mestre com nome "GM" entra sem o cartão do aviso', !!pintou && !av,
+              av ? 'o aviso apareceu' : '');
+        J.GM.ativo = ativoReal;
+      }, function (e) { J.GM.ativo = ativoReal; throw e; });
+    }).then(function () {
+      // a guilda: o toast mostra o erro do core (antes de qualquer cobrança)
+      var foto = J.DB.exportar();
+      foto.jogador.nome = 'Joana';
+      J.DB.importar(foto);
+      try { w.localStorage.removeItem('soterra-guilda-v1'); } catch (e) {}
+      J.UI.openSheet('guilda');
+      return tentativas(function () { return d.querySelector('input.hub-input[placeholder="nome da guilda"]'); }, 40, 200);
+    }).then(function (inp) {
+      var b = null;
+      Array.prototype.forEach.call(d.querySelectorAll('button'), function (x) {
+        if (/^Fundar a guilda/.test(x.textContent)) b = x;
+      });
+      check('HUD: a ficha da guilda abriu com o campo e o botão de fundar', !!inp && !!b);
+      if (!inp || !b) return '';
+      limpaToast();
+      inp.value = 'Admin da Mina';
+      b.click();
+      return tentativas(function () { return toastTxt(); }, 30, 100).then(function () { return toastTxt(); });
+    }).then(function (t) {
+      check('HUD: a recusa da guilda mostra o erro do core no toast', t === MOTIVO, t);
+      try { J.UI.closeSheet(); } catch (e) {}
+    });
+  }
+})();
+</script>
+</body>
+</html>

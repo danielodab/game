@@ -24,6 +24,13 @@ var JOGO = (typeof window !== 'undefined')
  * e registra no histórico (DB.registrarTroca). Quando o servidor chegar, ele
  * vira o cartório e a execução muda de lado sem mexer na janela.
  *
+ * COM A NUVEM (10/09): peça com número de série só muda de mão se os DOIS
+ * lados podem registrar a troca no cartório (Nuvem.troca, com a conta que o
+ * relé conferiu — o `nuvem` da presença). Senão a troca cai ANTES do
+ * confirma, com o porquê (semCartorio): trocar só no local deixava o save de
+ * quem recebeu com uma série de outra conta — 403, a nuvem parada, e o
+ * "retomar" desfazia a troca e o que veio depois.
+ *
  * MESMA CONTA, DUAS ABAS: na máquina do autor as duas abas dividem o MESMO
  * save — executar os dois lados seria corrida de escrita (dupla ou perda de
  * item). A troca detecta o próprio id do outro lado, deixa o FLUXO inteiro
@@ -63,13 +70,50 @@ var JOGO = (typeof window !== 'undefined')
     if (!st) return null;
     return {
       fase: st.fase, par: st.par, nomePar: st.nomePar,
-      mesmaConta: st.mesmaConta,
+      mesmaConta: st.mesmaConta, motivo: st.motivo || null,
       minha: { itens: st.minha.itens.slice(), moedas: st.minha.moedas,
                travada: st.minha.travada, confirmada: st.minha.confirmada },
       dele: { itens: st.dele.itens.slice(), moedas: st.dele.moedas,
               travada: st.dele.travada, confirmada: st.dele.confirmada }
     };
   };
+
+  /* O CARTÓRIO (10/09): com a nuvem ligada (sessão, conta Principal), a peça
+   * com número de série só muda de mão se os DOIS lados registrarem a troca
+   * no cartório. O porquê de não dar (texto para o jogador), ou null:
+   *   - o parceiro chegou sem `nuvem` (sem sessão, ou o relé não o conferiu:
+   *     tira o `nuvem` de quem não se identificou);
+   *   - o relé não ME conferiu (Rede.identidade() === false): o meu `nuvem`
+   *     não chegou ao parceiro, e ele cai do lado de lá.
+   * Sem nuvem ligada, ou só com vinténs, segue tudo como antes. Os dois lados
+   * do cliente novo decidem igual, antes de mandar o `confirma`. */
+  function semCartorio(mesa) {
+    var N = JOGO.Nuvem, Rd = R(), est = null;
+    try { est = (N && N.estado) ? N.estado() : null; } catch (e) {}
+    if (!est || !est.ligada || !est.sessao) return null;
+    var comSerie = mesa.minha.itens.concat(mesa.dele.itens).some(function (o) { return !!(o && o.iid); });
+    if (!comSerie) return null;
+    var nuvemPar = null;
+    if (Rd && Rd.pares) Rd.pares().forEach(function (p) { if (p.id === mesa.par) nuvemPar = p.nuvem || null; });
+    if (!nuvemPar) {
+      return 'Troca cancelada: o servidor não conferiu a conta de ' + (mesa.nomePar || 'quem troca com você') +
+             ', e peça com número de série só muda de mão pelo cartório. Ela precisa entrar na conta e recarregar a página.';
+    }
+    if (Rd && Rd.identidade && Rd.identidade() === false) {
+      return 'Troca cancelada: o servidor não conferiu a sua conta nesta conexão. Recarregue a página (F5) e tente de novo.';
+    }
+    return null;
+  }
+  var MOTIVO_DE_LA = 'Troca cancelada: o cartório não conferiu uma das contas, e peça com número de série ' +
+                     'só muda de mão por lá. Recarreguem a página e tentem de novo.';
+  /* a troca cai com o porquê: a HUD mostra (fase 'cancelada'), o outro lado ouve o cancela */
+  function caiSemCartorio(motivo) {
+    manda('cancela', { motivo: 'cartorio' });
+    st.fase = 'cancelada';
+    st.motivo = motivo;
+    avisa();
+    st = null;
+  }
 
   function novaMesa(fase, parId) {
     var r = R();
@@ -146,6 +190,8 @@ var JOGO = (typeof window !== 'undefined')
   T.confirmar = function () {
     if (!st || st.fase !== 'aberta') return;
     if (!st.minha.travada || !st.dele.travada) return;
+    var semCart = semCartorio(st);                 // 10/09: antes do confirma, que o outro lado executaria
+    if (semCart) { caiSemCartorio(semCart); return; }
     st.minha.confirmada = true;
     manda('confirma', {});
     talvezExecuta();
@@ -194,6 +240,11 @@ var JOGO = (typeof window !== 'undefined')
       st.dele.confirmada = true;
       talvezExecuta();
     } else if (ev.acao === 'cancela') {
+      if (ev.dados && ev.dados.motivo === 'cartorio') {   // o lado de lá viu que o cartório não espelharia
+        st.fase = 'cancelada';
+        st.motivo = MOTIVO_DE_LA;
+        avisa();
+      }
       st = null;
     }
     avisa();
@@ -215,6 +266,10 @@ var JOGO = (typeof window !== 'undefined')
       st = null;
       return;
     }
+
+    // 0) o cartório de novo (o parceiro pode ter confirmado depois de algo mudar)
+    var semCart = semCartorio(st);
+    if (semCart) { caiSemCartorio(semCart); return; }
 
     var prog = P(), db = DB();
     var inv = prog && prog.state ? prog.state.inventory : null;

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o nível de uso das peças e dos pets</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+table{border-collapse:collapse;margin:8px 0} td,th{border:1px solid #333;padding:2px 8px;text-align:left}</style>
+</head>
+<body>
+<!-- Pedido do dono (10/09): "esses itens de cada mapa precisam ter seu nível
+     para uso… um set um item pode lv 3 outro 5 outro 7… os itens mais fortes
+     são níveis mais altos; o set especial da roleta é level 30 todas as peças;
+     pets a partir do lv 10". A régua mora em DATA.nivelUso (items.js) e cada
+     peça/pet sai carimbado com `nivelUso`. Esta prova confere a RÉGUA e o
+     CARIMBO; a cobrança (Progress.equip) tem prova própria. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var D = JOGO.DATA, T = D.nivelUso, de = D.nivelUsoDe;
+  var ORDEM = ['greenhouse', 'cistern', 'emberlock', 'windscaffold', 'quakemine', 'brokenheart'];
+  var RANK = ['comum', 'raro', 'epico', 'lendario'];
+  var TETO = (D.leveling && D.leveling.maxLevel) || 30;
+
+  check('a régua existe, com as 6 faixas, lendário, colecionador, pet e teto',
+        !!T && !!T.porCalabouco && ORDEM.every(function (d) { return !!T.porCalabouco[d]; }) &&
+        T.lendario === 30 && T.colecionador === 30 && T.pet === 10 && T.teto === TETO);
+  check('o resolvedor existe e não tranca por engano (dado desconhecido = 0)',
+        typeof de === 'function' && de(null) === 0 && de({}) === 0 &&
+        de({ rarity: 'comum', dungeonId: 'lugar-nenhum' }) === 0);
+  check('um nivelUso explícito vence a régua', de({ nivelUso: 12, rarity: 'lendario' }) === 12);
+  check('o explícito é arredondado e nunca negativo', de({ nivelUso: 4.6 }) === 5 && de({ nivelUso: -3 }) === 0);
+
+  // ---- a escada por mapa: sobe com a raridade e com a profundidade
+  var recs = {};
+  (D.dungeons || []).forEach(function (dg) { recs[dg.id] = dg.recommendedLevel; });
+  var anterior = null;
+  ORDEM.forEach(function (dg) {
+    var f = T.porCalabouco[dg];
+    check(dg + ': comum ≤ raro ≤ épico ≤ lendário', f.comum <= f.raro && f.raro <= f.epico && f.epico <= T.lendario,
+          f.comum + '/' + f.raro + '/' + f.epico);
+    check(dg + ': tudo entre 1 e o teto ' + TETO, f.comum >= 1 && f.epico <= TETO);
+    if (dg !== 'brokenheart') {
+      check(dg + ': o comum é o nível recomendado do mapa (' + recs[dg] + ')', f.comum === recs[dg], String(f.comum));
+    } else {
+      check(dg + ': a escada do Coração desce um degrau para caber no teto (26/28/30)',
+            f.comum === 26 && f.raro === 28 && f.epico === 30);
+    }
+    if (anterior) check(dg + ': não pede menos que o mapa anterior', f.comum >= anterior.comum && f.epico >= anterior.epico);
+    anterior = f;
+  });
+  check('Estufa: 3 · 5 · 7 — o exemplo literal do dono', T.porCalabouco.greenhouse.comum === 3 &&
+        T.porCalabouco.greenhouse.raro === 5 && T.porCalabouco.greenhouse.epico === 7);
+
+  // ---- o carimbo em TODA peça
+  var ids = Object.keys(D.items), semCarimbo = [], foraDaRegua = [], porMapa = {};
+  ids.forEach(function (id) {
+    var it = D.items[id];
+    if (typeof it.nivelUso !== 'number' || it.nivelUso !== Math.round(it.nivelUso) || it.nivelUso < 1 || it.nivelUso > TETO) {
+      semCarimbo.push(id + '=' + it.nivelUso); return;
+    }
+    if (it.nivelUso !== de(it)) foraDaRegua.push(id);
+    if (it.dungeonId) {
+      var m = porMapa[it.dungeonId] = porMapa[it.dungeonId] || {};
+      (m[it.rarity] = m[it.rarity] || []).push(it.nivelUso);
+    }
+  });
+  check('toda peça do acervo (' + ids.length + ') tem nivelUso inteiro entre 1 e ' + TETO, semCarimbo.length === 0, semCarimbo.join(' '));
+  check('o carimbo bate com a régua em toda peça', foraDaRegua.length === 0, foraDaRegua.join(' '));
+  check('o acervo tem as 90 peças dos mapas + 4 do Colecionador (ou mais)', ids.length >= 94, String(ids.length));
+  ORDEM.forEach(function (dg) {
+    var m = porMapa[dg] || {}, f = T.porCalabouco[dg];
+    ['comum', 'raro', 'epico'].forEach(function (r) {
+      var lista = m[r] || [];
+      check(dg + ' ' + r + ': todas as peças pedem ' + f[r], lista.length > 0 && lista.every(function (n) { return n === f[r]; }),
+            lista.length + ' peças: ' + lista.join(','));
+    });
+    if (m.lendario) check(dg + ' lendário: todas pedem 30', m.lendario.every(function (n) { return n === 30; }), m.lendario.join(','));
+  });
+  // as peças avulsas (setId null) também pagam a régua do mapa
+  var avulsas = ids.filter(function (id) { return D.items[id].dungeonId && !D.items[id].setId; });
+  check('as avulsas (' + avulsas.length + ') também pagam a régua do mapa',
+        avulsas.length >= 18 && avulsas.every(function (id) { return D.items[id].nivelUso === de(D.items[id]); }));
+  // a peça mais forte do mapa (a épica do chefe, a de +1 PA/PP) é a que mais pede
+  ORDEM.forEach(function (dg) {
+    var m = porMapa[dg];
+    if (!m || !m.epico || !m.comum) return;
+    check(dg + ': a épica do chefe pede mais que qualquer comum', Math.min.apply(null, m.epico) > Math.max.apply(null, m.comum));
+  });
+
+  // ---- o Traje do Colecionador: 30 em todas as 4
+  var selosSet = D.selos && D.sets[D.selos.setId];
+  check('o Traje do Colecionador existe com 4 peças', !!selosSet && selosSet.pieces.length === 4);
+  if (selosSet) {
+    check('as 4 peças do Colecionador pedem 30', selosSet.pieces.every(function (id) { return D.items[id] && D.items[id].nivelUso === 30; }),
+          selosSet.pieces.map(function (id) { return id + '=' + (D.items[id] || {}).nivelUso; }).join(' '));
+  }
+  // o Traje do Coração (4 lendárias do Coração Partido) também é 30
+  var coracao = ids.filter(function (id) { return D.items[id].dungeonId === 'brokenheart' && D.items[id].rarity === 'lendario'; });
+  check('as 4 lendárias do Coração Partido pedem 30', coracao.length === 4 && coracao.every(function (id) { return D.items[id].nivelUso === 30; }),
+        coracao.join(' '));
+
+  // ---- pets: todos a partir do 10, o Selinho inclusive
+  var pets = Object.keys(D.pets || {});
+  check('há pets no acervo (6 dos mapas + Selinho)', pets.length >= 7, String(pets.length));
+  check('todo pet pede 10', pets.every(function (id) { return D.pets[id].nivelUso === 10 && de(D.pets[id]) === 10; }),
+        pets.map(function (id) { return id + '=' + D.pets[id].nivelUso; }).join(' '));
+  check('um pet passado ao resolvedor sem carimbo também dá 10', de({ behavior: 'attack', spells: [] }) === 10);
+
+  // ---- a tabela, para o dono ler
+  var tb = document.createElement('table');
+  tb.innerHTML = '<tr><th>mapa</th><th>comum</th><th>raro</th><th>épico</th><th>lendário</th><th>peças</th></tr>' +
+    ORDEM.map(function (dg) {
+      var f = T.porCalabouco[dg], n = ids.filter(function (id) { return D.items[id].dungeonId === dg; }).length;
+      return '<tr><td>' + dg + '</td><td>' + f.comum + '</td><td>' + f.raro + '</td><td>' + f.epico + '</td><td>' +
+             (porMapa[dg] && porMapa[dg].lendario ? 30 : '—') + '</td><td>' + n + '</td></tr>';
+    }).join('') + '<tr><td>Colecionador (roleta)</td><td colspan="4">30 em todas</td><td>4</td></tr>' +
+    '<tr><td>pets</td><td colspan="4">10</td><td>' + pets.length + '</td></tr>';
+  log.appendChild(tb);
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+  window.__done = true; window.__fail = falhas;
+})();
+</script>
+</body>
+</html>

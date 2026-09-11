@@ -4,7 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ranking — SOTERRA</title>
-<script>document.write('<link rel="stylesheet" href="site.css?v=' + Date.now() + '">');</script>
+<script>
+  // a folha e os scripts com o hash do build (o mapa de js/versao.js); sem
+  // mapa (em casa), o carimbo ?t= do instante: ver o comentário em site/index.html
+  if (location.protocol !== 'file:') {
+    document.write('<script src="../js/versao.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+<script>
+  window.SITE_URL = function (s) {
+    var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
+    var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
+    var chave = s.indexOf('../') === 0 ? s.slice(3) : 'site/' + s;
+    return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
+  };
+  document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+</script>
 <noscript><link rel="stylesheet" href="site.css"></noscript>
 <!-- As três tabelas completas (até 50 linhas cada), lendo /api/ranking.
      10/09: o placar POR CLASSE (7 abas; uma linha por conta, com a melhor ficha
@@ -23,6 +38,7 @@
       <a href="eventos.html">Eventos</a>
       <a href="fusoes.html">Fusões</a>
       <a href="ranking.html" aria-current="page">Ranking</a>
+      <a href="loja.html">Loja</a>
       <a href="conta.html">Conta</a>
       <a class="jogar" href="../index.html">Jogar</a>
     </nav>
@@ -81,12 +97,12 @@
 
 <script>
 /* 10/09: os nomes das classes e dos elementos saem dos dados do próprio jogo
- * (mesma origem); a marca ?v= é a do jogo, o instante da carga. */
-(function (v) {
+ * (mesma origem), cada um com o hash do conteúdo (SITE_URL, no topo). */
+(function () {
   ['site.js', '../js/core/data/elements.js', '../js/core/data/classes.js'].forEach(function (s) {
-    document.write('<script src="' + s + v + '"><\/script>');
+    document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
-})('?v=' + Date.now());
+})();
 </script>
 <script>
 (function () {

@@ -13,23 +13,56 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0d10'/%3E%3Ctext x='16' y='23' font-family='Georgia' font-size='19' font-weight='bold' text-anchor='middle' fill='%23c9a227'%3ES%3C/text%3E%3C/svg%3E">
 <title>SOTERRA 2.0</title>
 <script>
-  // Cache: o jogo é local e roda com os arquivos do disco. Marcar a versão à mão
-  // (?v=6) falhou duas vezes — o número ficava parado enquanto os arquivos mudavam,
-  // e o navegador servia código velho enquanto os testes passavam com o novo.
-  // Agora a marca é o instante do carregamento: sempre pega o que está no disco.
+  // CACHE — uma regra para cada jeito de abrir.
   //
-  // Isto vale para o CÓDIGO. Os modelos (21 MB de .glb) NÃO levam esta marca:
-  // eles têm a marca do manifesto, senão cada F5 baixaria os 21 MB de novo.
-  window.__V = '?v=' + Date.now();
+  // EM CASA (file://) o jogo roda com os arquivos do disco. Marcar a versão à
+  // mão (?v=6) falhou duas vezes — o número ficava parado enquanto os arquivos
+  // mudavam, e o navegador servia código velho enquanto os testes passavam com
+  // o novo. Então a marca é o instante do carregamento: sempre o que está no
+  // disco. Isto não mudou.
+  //
+  // SERVIDO (o jogo no ar), a mesma marca fazia TODA visita baixar todos os
+  // scripts de novo. Agora o build (servidor/coolify/versao.py) grava em
+  // js/versao.js o hash do conteúdo de cada arquivo, e cada endereço leva o
+  // hash DAQUELE arquivo (js/main.js?v=3fa2b1c9d0e1): o que não mudou mantém
+  // o endereço de um deploy para o outro, e o Caddy manda o navegador guardar
+  // por um ano — só quando o hash pedido é o do arquivo que AQUELE servidor
+  // tem (as marcas do build; ver servidor/coolify/Caddyfile): no rolling
+  // update do Coolify, o contêiner velho que recebe um hash novo responde
+  // "revalide", e nada fica preso. O js/versao.js é o índice de tudo — ele
+  // sim desce sempre, com carimbo novo. O do git é o padrão 'dev', sem mapa:
+  // servido sem o build (em casa, no APK), tudo segue com o carimbo do instante.
+  //
+  // Os modelos (assets/models/bundle) têm o hash no manifesto: vão com ?h=.
   window.__T0 = Date.now();
-  document.write('<link rel="stylesheet" href="css/style.css' + window.__V + '">');
+  window.__V = '?v=' + window.__T0;
+  if (location.protocol !== 'file:') {
+    document.write('<scr' + 'ipt src="js/versao.js?t=' + window.__T0 + '"><\/scr' + 'ipt>');
+  }
+</script>
+<script>
+  (function () {
+    var V = window.SOTERRA_VERSAO;
+    var mapa = (location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos)
+      ? V.arquivos : null;
+    var tem = Object.prototype.hasOwnProperty;
+    // o endereço de um arquivo do jogo: com o hash dele, quando o build o
+    // gravou; sem mapa (ou arquivo novo que o build não viu), o carimbo do
+    // instante — nunca um endereço velho
+    window.__url = function (f) {
+      return f + (mapa && tem.call(mapa, f) ? '?v=' + mapa[f] : window.__V);
+    };
+    // no jogo servido, o mapa é também a lista do que EXISTE no pacote
+    window.__noPacote = function (f) { return !mapa || tem.call(mapa, f); };
+  })();
+  document.write('<link rel="stylesheet" href="' + window.__url('css/style.css') + '">');
 
   // `?sandbox=1` manda o save viver na MEMÓRIA, sem tocar o disco. Existe para
   // `tests/celular.html`, que abre este mesmo index.html dentro de um quadro de
   // 390x844 para medir a interface: sem isto, medir a tela apagaria o jogo de
   // quem estivesse jogando pelo servidor. Uma linha, e só liga quando pedido.
   if (/[?&]sandbox=1/.test(location.search)) {
-    document.write('<scr' + 'ipt src="tests/save_sandbox.js' + window.__V + '"><\/scr' + 'ipt>');
+    document.write('<scr' + 'ipt src="' + window.__url('tests/save_sandbox.js') + '"><\/scr' + 'ipt>');
   }
 </script>
 </head>
@@ -56,7 +89,7 @@
 -->
 <script>
   // O carregador de modelos precisa existir antes da decisão abaixo.
-  document.write('<scr' + 'ipt src="js/assets_bundle.js' + window.__V + '"><\/scr' + 'ipt>');
+  document.write('<scr' + 'ipt src="' + window.__url('js/assets_bundle.js') + '"><\/scr' + 'ipt>');
 </script>
 <script>
   (function () {
@@ -78,6 +111,7 @@
       'js/core/contas.js',             // o Banco de Contas: decide a conta DESTA janela (?conta=)
       'js/core/sessao.js',             // quem esta logado no cartorio (a chave que o site grava)
       'js/core/gm.js',                 // o GAME MASTER: so existe com a chave do dono (?gm=)
+      'js/core/nomes.js',              // a lei dos nomes (GM/Admin reservados): antes do db e da guilda
       'js/core/db.js',                 // conta local (moedas, cofre, historicos) — API assincrona
       'js/core/missoes.js',            // diarias + conquistas + titulos (le e escreve no DB)
       'js/core/diario.js',             // o Calabouco do Dia: +50% de saque num portal por dia
@@ -93,6 +127,7 @@
       'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
       'js/core/progress.js', 'js/core/game.js',
       'js/core/nuvem.js',              // o save no servidor: puxa ao abrir, sobe a cada gravacao
+      'js/core/loja.js',               // a loja de vintens: retira o que foi comprado no site
 
       // ---- daqui para baixo, precisa dos MODELOS carregados ----
 
@@ -141,23 +176,33 @@
       'js/audio.js', 'js/ui/hud.js', 'js/ui/tutor.js', 'js/ui/debug.js', 'js/main.js'
     ];
 
-    // Os embutidos que VIRARAM ARQUIVO (tools/extrai_assets.py). `fx-atlas.js` e
-    // `fx-placas.js` continuam embutidos de propósito: somam 0,8 MB e têm outro dono.
-    // `muro-escudo` nasceu DEPOIS da regra e ficou de fora: o caminho servido
-    // o lia em dobro (base64 parseado E binario baixado pelo bundle). Entra.
+    // O QUE O CAMINHO SERVIDO NÃO LÊ — os embutidos que tools/extrai_assets.py
+    // virou arquivo em assets/models/bundle/:
     //
-    // `cenario-jardim` TAMBEM e lido em dobro (16 MB), mas NAO pode entrar
-    // aqui: alem dos modelos, ele define as tabelas JOGO.CENARIO e
-    // CENARIO_NOME, que o bundle nao carrega — cortar o arquivo cortaria as
-    // tabelas e o cenario da Estufa sumiria no jogo servido. O conserto de
-    // verdade e o extrai_assets separar tabela de modelo num arquivo proprio;
-    // ate la, os 16 MB em dobro sao o preco de nao quebrar nada.
-    var EMBUTIDO = /^assets\/embedded\/(env-kit|models-|muro-)/;
+    // SO_MODELO: embutidos que só têm modelo. Os binários descem do bundle, e
+    // ler o .js também seria baixar tudo em dobro. `muro-escudo` e
+    // `coroas-pvp-3d` nasceram DEPOIS da regra e ficaram um tempo de fora
+    // dela, lidos em dobro (base64 parseado E binário baixado pelo bundle).
+    //
+    // COM_TABELA: embutidos com modelo E tabela. Os `cenario-*.js` definem
+    // JOGO.CENARIO e JOGO.CENARIO_NOME, que o bundle não carrega; o
+    // extrai_assets.py separa essa parte em assets/models/bundle/tabelas/, e o
+    // caminho servido lê só ela (3 KB no lugar de 16 MB) — os modelos vêm do
+    // bundle, sem dobra. Em casa (file://) segue o arquivo inteiro.
+    //
+    // `fx-atlas.js` e `fx-placas.js` continuam embutidos de propósito: somam
+    // 0,8 MB e têm outro dono.
+    var SO_MODELO = /^assets\/embedded\/(env-kit|models-|muro-|coroas-pvp-3d\.js$)/;
+    var COM_TABELA = /^assets\/embedded\/(cenario-[^\/]+\.js)$/;
+    var TABELAS = 'assets/models/bundle/tabelas/';
+    // o primeiro embutido de modelo abre a fase B: o que vem dali para baixo
+    // precisa dos modelos carregados
+    var ABRE_FASE_B = /^assets\/embedded\/(env-kit|models-)/;
     var B = window.JOGO && window.JOGO.Bundle;
 
     function escreve(lista) {
       for (var i = 0; i < lista.length; i++) {
-        document.write('<scr' + 'ipt src="' + lista[i] + window.__V + '"><\/scr' + 'ipt>');
+        document.write('<scr' + 'ipt src="' + window.__url(lista[i]) + '"><\/scr' + 'ipt>');
       }
     }
 
@@ -195,7 +240,7 @@
             JSON.stringify(f1.split('/').pop()) + ',' + visto + ',' + pesados.length +
             ')<\/scr' + 'ipt>');
         }
-        document.write('<scr' + 'ipt src="' + f1 + window.__V + '"><\/scr' + 'ipt>');
+        document.write('<scr' + 'ipt src="' + window.__url(f1) + '"><\/scr' + 'ipt>');
       }
       document.write('<scr' + 'ipt>(function(){var c=document.getElementById("carga");' +
         'if(c)c.hidden=true;window.__BOOT_MS=Date.now()-window.__T0;})()<\/scr' + 'ipt>');
@@ -203,13 +248,33 @@
     }
 
     // ---- CAMINHO 2: servido (http://, e o https://localhost do APK) ---------
-    // Fase A (vendor + regra de jogo) desce JÁ, enquanto os 21 MB de modelo
-    // vêm por XHR. Fase B (render + HUD) só entra quando os modelos chegaram,
-    // porque models3d.js lê JOGO.ASSETS no instante em que é avaliado.
+    // Fase A (vendor + regra de jogo) desce JÁ, enquanto os modelos vêm por
+    // XHR. Fase B (render + HUD) só entra quando os modelos chegaram, porque
+    // models3d.js lê JOGO.ASSETS no instante em que é avaliado.
+    var fora = [];
+    function servidos(lista) {
+      var saida = [];
+      for (var k = 0; k < lista.length; k++) {
+        var f = lista[k], t = COM_TABELA.exec(f);
+        if (t) f = TABELAS + t[1];
+        else if (SO_MODELO.test(f)) continue;
+        // com o mapa do build, o que não está nele não está no pacote (um
+        // arquivo da lista que ninguém commitou, por exemplo): pedir seria 404.
+        // O servidor/coolify/versao.py já PARA o build nesse caso — isto é só
+        // a rede de baixo, e o tests/pacote_servido.py cobra que fique vazia.
+        if (!window.__noPacote(f)) { fora.push(f); continue; }
+        saida.push(f);
+      }
+      return saida;
+    }
     var corte = 0;
-    while (corte < arquivos.length && !EMBUTIDO.test(arquivos[corte])) corte++;
-    var faseA = arquivos.slice(0, corte);
-    var faseB = arquivos.slice(corte).filter(function (f) { return !EMBUTIDO.test(f); });
+    while (corte < arquivos.length && !ABRE_FASE_B.test(arquivos[corte])) corte++;
+    var faseA = servidos(arquivos.slice(0, corte));
+    var faseB = servidos(arquivos.slice(corte));
+    window.__FORA_DO_PACOTE = fora;
+    if (fora.length && window.console && console.warn) {
+      console.warn('[carga] fora do pacote, nao pedi: ' + fora.join(', '));
+    }
 
     escreve(faseA);
     B.aquece(faseB, '');

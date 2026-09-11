@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA 3.0 — o nível de uso na ficha (HUD)</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  html, body { overflow: auto; height: auto; }
+  body { margin: 0; background: #0f1216; color: #e8eef6; font: 12px monospace; }
+  #topo { padding: 10px; }
+  #summary { padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .allpass { background: #16241b; color: #7fe08a; } .fail { background: #3d1414; color: #f77; }
+  #app { position: relative; width: 390px; height: 844px; }
+</style>
+</head>
+<body>
+<!-- A HUD do nível de uso (10/09, revisão): nivel_uso_equipar.html cobra o
+     Progress; esta cobra a FICHA num #app de celular (390 px), com a HUD de
+     verdade (hud.js + style.css):
+       · na ficha do herói o "Nv. N" do espaço vestido mora num elemento
+         próprio, porque colado ao nome as reticências o comiam;
+       · a barra da peça trancada não tem cadeado no canto — ele cobria o
+         "Levar à forja" e roubava o toque; a tranca segue em texto;
+       · a regra de "trancado" vale só para peças e bichos: a Árvore de
+         Feitiços tem o seu próprio is-trancado e não pode ficar apagada;
+       · o aviso das peças devolvidas sai UMA vez: entregar o toast grava a
+         migração, e a abertura seguinte (sem save no meio) não repete. -->
+<div id="topo"><div id="summary">rodando…</div><div id="log"></div></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'js/render2d/art.js','js/ui/hud.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var erros = [];
+  window.addEventListener('error', function (e) {
+    erros.push(e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno);
+  });
+  function qa(s, raiz) { return [].slice.call((raiz || document).querySelectorAll(s)); }
+  function cs(e, pseudo) { return getComputedStyle(e, pseudo || null); }
+  function perto(a, b) { return Math.abs(parseFloat(a) - b) < 0.01; }
+
+  try {
+    var D = JOGO.DATA, P = JOGO.Progress, UI = JOGO.UI;
+    var XP = D.leveling.xpTable;                       // XP acumulada: XP[n-1] = nível n
+    var EPICA = 'gh-widow-shears', RARA = 'gh-vine-stirrups', PET = 'pet-snapvine';
+    P.load(); P.reset();
+    var hid = P.heroIds()[0];
+    UI.init();
+    var toastEl = document.querySelector('.ui-toast');
+
+    // ---- 1) ficha do herói: o "Nv." do espaço vestido fora das reticências
+    P.addItem(EPICA); P.addItem(RARA);
+    P.addXp(hid, XP[6]);                               // nível 7: veste a épica (7) e a rara (5)
+    P.equip(hid, EPICA); P.equip(hid, RARA);
+    UI.selection([hid]);
+    UI.openSheet('heroSheet', hid);
+    var vestidos = qa('.hs-slot.has-item').filter(function (c) { return !c.classList.contains('hs-pet'); });
+    check('a ficha do herói mostra os dois espaços vestidos', vestidos.length === 2, vestidos.length + ' espaço(s)');
+    var nvs = vestidos.map(function (c) { var n = c.querySelector('.ig-nv'); return n ? n.textContent : null; });
+    check('cada espaço vestido traz o "Nv. N" num elemento próprio (.ig-nv)',
+          nvs.indexOf('Nv. 7') >= 0 && nvs.indexOf('Nv. 5') >= 0, JSON.stringify(nvs));
+    check('o nome (.hs-slot-it, que corta com reticências) não carrega o Nv.',
+          vestidos.length === 2 && vestidos.every(function (c) {
+            var t = c.querySelector('.hs-slot-it'); return !!t && t.textContent.indexOf('Nv.') < 0;
+          }));
+    var medidas = [];
+    check('o Nv. aparece inteiro, dentro do espaço e sem corte', vestidos.length === 2 && vestidos.every(function (c) {
+      var n = c.querySelector('.ig-nv'); if (!n) return false;
+      var rn = n.getBoundingClientRect(), rc = c.getBoundingClientRect();
+      medidas.push(Math.round(rn.left - rc.left) + '..' + Math.round(rc.right - rn.right) + ' sw' + n.scrollWidth + '/w' + Math.round(rn.width));
+      return rn.width > 0 && rn.left >= rc.left - 0.5 && rn.right <= rc.right + 0.5 &&
+             n.scrollWidth <= Math.ceil(rn.width) + 1;
+    }), medidas.join(' · '));
+
+    // ---- 2) a barra da peça trancada: a tranca em texto, sem cadeado sobre os botões
+    UI.closeSheet();
+    P.reset(); P.addItem(EPICA);
+    hid = P.heroIds()[0];
+    UI.selection([hid]);
+    UI.openSheet('inventory');
+    var cel = qa('.ig-cell').filter(function (c) {
+      var n = c.querySelector('.ig-nv'); return !!n && n.textContent === 'Nv. 7';
+    })[0];
+    check('na grade, a épica (Nv. 7) do herói nível 1 fica trancada: apagada e com cadeado na célula',
+          !!cel && cel.classList.contains('is-trancado') && perto(cs(cel).opacity, 0.55) &&
+          /🔒/.test(cs(cel, '::after').content), cel ? cs(cel).opacity + ' ' + cs(cel, '::after').content : 'sem célula');
+    if (cel) cel.click();
+    var bar = document.querySelector('.inv-pick.is-trancado');
+    var tr = bar && bar.querySelector('.inv-pick-tranca');
+    check('a barra da peça escolhida fica trancada e explica em texto',
+          !!tr && /pede o nível 7/.test(tr.textContent) && /está no 1/.test(tr.textContent), tr ? tr.textContent : 'sem barra');
+    var depois = bar ? cs(bar, '::after').content : '?';
+    check('a barra não tem cadeado no canto (::after)', depois === 'none' || depois === 'normal', depois);
+    check('a barra em si não fica apagada; só o ícone',
+          !!bar && cs(bar).opacity === '1' && parseFloat(cs(bar.querySelector('.inv-pick-ic')).opacity) < 0.6);
+    // a caixa do ::after da barra (se houver) contra os botões dela — pela
+    // geometria, sem depender da janela (elementFromPoint só vê o que está à
+    // vista, e a barra de 390 px desce além da janela da bateria)
+    function caixaAfter(e) {
+      var s = cs(e, '::after');
+      if (!s.content || s.content === 'none' || s.content === 'normal') return null;
+      var r = e.getBoundingClientRect();
+      var w = parseFloat(s.width) || 14, h = parseFloat(s.height) || 14;
+      var dr = parseFloat(s.right), db = parseFloat(s.bottom);
+      var x2 = r.right - (isNaN(dr) ? 0 : dr), y2 = r.bottom - (isNaN(db) ? 0 : db);
+      return [x2 - w, y2 - h, x2, y2];
+    }
+    var forja = bar ? qa('.btn', bar).filter(function (b) { return /Levar à forja/.test(b.textContent); })[0] : null;
+    var cx = bar ? caixaAfter(bar) : null;
+    var cobertos = !cx ? [] : qa('.btn', bar).filter(function (b) {
+      var r = b.getBoundingClientRect();
+      return !(r.right < cx[0] || r.left > cx[2] || r.bottom < cx[1] || r.top > cx[3]);
+    }).map(function (b) { return b.textContent; });
+    check('o "Levar à forja" está na barra e nenhum botão dela fica sob um cadeado',
+          !!forja && cobertos.length === 0, cobertos.length ? 'cobertos: ' + cobertos.join(', ') : '');
+
+    // ---- 3) a regra de "trancado" não vaza para a Árvore de Feitiços
+    var app = document.getElementById('app');
+    var dot = document.createElement('i'); dot.className = 'tl-dot is-trancado'; app.appendChild(dot);
+    var arv = document.createElement('div'); arv.className = 'arv-no is-trancado'; app.appendChild(arv);
+    var pc = document.createElement('button'); pc.className = 'pet-cell is-trancado'; app.appendChild(pc);
+    check('a legenda da Árvore (.tl-dot.is-trancado) não fica apagada nem dessaturada',
+          cs(dot).opacity === '1' && cs(dot).filter === 'none', cs(dot).opacity + ' ' + cs(dot).filter);
+    check('o nó trancado da Árvore (.arv-no.is-trancado) segue com a opacidade dele (.62) e sem dessaturar',
+          perto(cs(arv).opacity, 0.62) && cs(arv).filter === 'none', cs(arv).opacity + ' ' + cs(arv).filter);
+    check('a célula de bicho trancada segue apagada e com cadeado',
+          perto(cs(pc).opacity, 0.55) && /🔒/.test(cs(pc, '::after').content));
+    app.removeChild(dot); app.removeChild(arv); app.removeChild(pc);
+
+    // ---- 4) o aviso das peças devolvidas: UM toast, e a abertura seguinte não repete
+    UI.closeSheet();
+    P.reset();
+    var raw = JSON.parse(JSON.stringify(P.state));
+    raw.heroes[hid].items.punho = EPICA;
+    raw.heroes[hid].itemVar = { punho: { level: 2, stars: 1, iid: 'jficha-serie-1' } };
+    raw.heroes[hid].pet = PET;
+    raw.petCards = {}; raw.petCards[PET] = 5;
+    localStorage.setItem(P.SAVE_KEY, JSON.stringify(raw));
+    P.state = null; P.load();                          // a abertura do jogo: saneia na memória
+    var cru0 = JSON.parse(localStorage.getItem(P.SAVE_KEY));
+    check('antes do aviso, o disco ainda tem a peça vestida (a carga não grava)',
+          cru0.heroes[hid].items.punho === EPICA && !P.hero(hid).items.punho);
+    toastEl.innerHTML = ''; toastEl.className = 'ui-toast';
+    UI.openSheet('inventory');                         // a ficha avisa (a praça também)
+    var t1 = toastEl.textContent;
+    check('ao abrir a ficha, UM toast conta o que voltou',
+          /1 peça\(s\) voltaram ao saco/.test(t1) && /1 bicho\(s\) voltaram à lista/.test(t1) &&
+          toastEl.classList.contains('is-on'), t1);
+    var cru = JSON.parse(localStorage.getItem(P.SAVE_KEY));
+    check('o aviso entregue grava a migração: no disco a peça está no saco (mesma série) e o bicho fora do herói',
+          !cru.heroes[hid].items.punho && !cru.heroes[hid].pet &&
+          cru.inventory.some(function (e) { return e.iid === 'jficha-serie-1' && e.level === 2 && e.stars === 1; }));
+    UI.closeSheet();
+    P.state = null; P.load();                          // fechou e abriu de novo, sem nada gravar no meio
+    toastEl.innerHTML = ''; toastEl.className = 'ui-toast';
+    UI.openSheet('inventory');
+    check('a abertura seguinte não repete o toast e não tem nada a devolver',
+          toastEl.textContent === '' && P.devolvidasPorNivel().length === 0 &&
+          P.state.inventory.filter(function (e) { return e.iid === 'jficha-serie-1'; }).length === 1,
+          toastEl.textContent);
+    UI.closeSheet();
+
+    var sb = JOGO.SaveSandbox && JOGO.SaveSandbox.check ? JOGO.SaveSandbox.check() : null;
+    check('o disco de verdade não foi tocado (save_sandbox)', !!sb && sb.ok === true);
+  } catch (e) {
+    check('a página rodou sem exceção', false, String(e && e.stack || e));
+  }
+  check('nenhum erro de JS na página', erros.length === 0, erros.join(' | '));
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+  window.__done = true; window.__fail = falhas;
+})();
+</script>
+</body>
+</html>

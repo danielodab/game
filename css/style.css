@@ -1606,6 +1606,24 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 }
 .inv-busca-campo:focus { border-color: var(--gold-dim); }
 .ig-cell.is-fora-busca { display: none; }
+/* NÍVEL DE USO (10/09): o "Nv. N" que a peça pede e a TRANCA de quem ainda
+ * não chegou lá — célula apagada, número aceso e um cadeado no canto. */
+.ig-nv { font: 700 9.5px var(--ui-sans); color: var(--dim); letter-spacing: .04em; line-height: 1; }
+.rw-item .ig-nv { display: block; margin-top: 2px; }
+.pet-nv { font: 700 10px var(--ui-sans); color: var(--dim); }
+/* só nas peças e nos bichos: a Árvore de Feitiços tem o seu próprio
+ * is-trancado (.tl-dot, .arv-no) e não pode herdar esta apagada */
+.ig-cell.is-trancado, .pet-cell.is-trancado { opacity: .55; filter: saturate(.55); }
+.is-trancado .ig-nv, .is-trancado .pet-nv { color: #f2a05a; }
+.pet-cell.is-trancado { position: relative; }
+/* o cadeado fica na CÉLULA; a barra da peça escolhida já diz "🔒 pede o
+ * nível N" em texto, e um cadeado no canto dela cobria o "Levar à forja" */
+.ig-cell.is-trancado::after, .pet-cell.is-trancado::after {
+  content: '🔒'; position: absolute; right: 5px; bottom: 4px;
+  font-size: 12px; line-height: 1; opacity: .95;
+}
+.inv-pick.is-trancado .inv-pick-ic { opacity: .55; filter: saturate(.55); }
+.inv-pick-tranca { font: 600 11px var(--ui-sans); color: #f2a05a; }
 
 /* o FUNDO DO SACO (25/08): unidades / limite, com aviso de cor */
 .inv-lotacao {
@@ -2119,3 +2137,32 @@ html.celular .dbg-painel { inset: auto 6px 6px 6px; max-height: 62vh; }
 .nuvem-caixa a.btn { display: block; text-align: center; text-decoration: none; margin-top: 8px; }
 .conta-linha.is-on span { color: var(--gold); }
 .contas-nota { font-size: 12px; color: var(--dim); line-height: 1.5; }
+
+/* ------------------------------------------ OS PERGAMINHOS DA LOJA (Fase C)
+   Ainda sem arte (o dono paga os dois ícones depois): um glifo num disco — o
+   da Sabedoria dourado, o da Reescrita verde-água. Na tira de recursos são
+   chips como os das pedras; no topo do Acampamento, a versão compacta. */
+.perg-chip { cursor: pointer; }
+.perg-glifo {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 34px; height: 34px; border-radius: 50%;
+  font: 700 19px/1 var(--ui-serif, Georgia, serif); color: #2a1c06;
+  background: radial-gradient(circle at 35% 30%, #fff0c2, #e2b04e 62%, #8f6318);
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.25);
+}
+.perg-el .perg-glifo { color: #062521; background: radial-gradient(circle at 35% 30%, #d6fff7, #52c4b2 62%, #1d6b60); }
+.perg-chip.is-empty { opacity: .6; }
+.hub-perg { display: inline-flex; align-items: center; gap: 6px; align-self: center; }
+.hub-perg.is-off { display: none; }
+.perg-mini {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 30px;
+  padding: 2px 9px 2px 3px; border-radius: 999px;
+  border: 1px solid rgba(232,194,90,.5); background: rgba(20,16,8,.62);
+  color: #f0e6c8; font: 600 12px/1 var(--ui-sans, system-ui); cursor: pointer;
+}
+.perg-mini.perg-el { border-color: rgba(82,196,178,.55); }
+.perg-mini .perg-glifo { width: 24px; height: 24px; font-size: 14px; }
+.perg-mini .stone-n { font-size: 12.5px; }
+.perg-mini .stone-nm { font-size: 11px; color: #cdbf9a; }
+.btn.btn-reescreve { border-style: dashed; }
+.rw-evento.rw-pergaminho { color: #ffe3a1; border-color: rgba(232,194,90,.6); background: rgba(232,194,90,.10); }

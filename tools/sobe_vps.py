@@ -9,6 +9,7 @@
                   (sem HTTPS). OUTROS-NOMES levam ao principal (www.…).
     --usuario U   usuário do SSH (padrão root, como a Hostinger entrega)
     --so-pacote   só monta o pacote e diz o tamanho, sem mandar nada
+    --arvore      (com --so-pacote) o pacote do que está NO DISCO, não do commit
 
 Exemplos:
     python tools/sobe_vps.py 181.215.1.2 jogo.seudominio.com.br
@@ -17,10 +18,14 @@ Exemplos:
 
 O que faz:
   1. Monta o pacote com o que está COMMITADO (git archive do último commit),
-     com fim de linha Linux. Ficam de fora tests/, tools/, docs/ e os 144 MB
-     de embutidos que o jogo servido não carrega (ele busca os modelos em
-     assets/models/bundle/). Arte fora do git também não vai. Mudança não
-     commitada NÃO vai — o script avisa.
+     com fim de linha Linux. Ficam de fora tests/, tools/, docs/ e os
+     embutidos que o jogo servido não carrega: ele busca os modelos em
+     assets/models/bundle/ e as tabelas do cenário em
+     assets/models/bundle/tabelas/, então models-*, env-kit, muro-*,
+     coroas-pvp-3d.js e os cenario-*.js inteiros não vão. Arte fora do git
+     também não vai. Mudança não commitada NÃO vai — o script avisa.
+     (O .dockerignore do contêiner do Coolify tem de deixar de fora a MESMA
+     lista — tests/coolify_prova.py confere.)
   2. Manda por scp para /tmp do VPS (pede a senha do VPS).
   3. Descompacta e roda servidor/instala.sh lá (pede a senha de novo).
 
@@ -28,10 +33,12 @@ Com a sua chave SSH cadastrada no VPS, não pede senha nenhuma. Usa o ssh e o
 scp que já vêm no Windows 10/11.
 """
 import argparse
+import fnmatch
 import os
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 
 try:
@@ -41,7 +48,8 @@ except Exception:
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FORA = ['tests', 'tools', 'docs', '.claude', 'unity', 'servidor/dados',
-        'assets/embedded/models-*', 'assets/embedded/env-kit*', 'assets/embedded/muro-*']
+        'assets/embedded/models-*', 'assets/embedded/env-kit*', 'assets/embedded/muro-*',
+        'assets/embedded/coroas-pvp-3d.js', 'assets/embedded/cenario-*']
 RE_NOME = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$')
 RE_IP = re.compile(r'^[0-9]{1,3}(\.[0-9]{1,3}){3}$')
 RE_HOST = re.compile(r'^[A-Za-z0-9.:-]+$')
@@ -55,9 +63,48 @@ def git(*args, **kw):
                           capture_output=True, text=True, encoding='utf-8', errors='replace', **kw)
 
 
-def monta(destino):
+def fica_no_pacote(caminho):
+    """O filtro do `git archive ... :(exclude)` com a lista FORA: sem curinga,
+    a pasta leva tudo o que tem dentro; com curinga, o * atravessa pastas
+    (é como o git lê um pathspec sem mágica)."""
+    for p in FORA:
+        if '*' in p:
+            if fnmatch.fnmatchcase(caminho, p):
+                return False
+        elif caminho == p or caminho.startswith(p + '/'):
+            return False
+    return True
+
+
+def monta_da_arvore(destino):
+    """O pacote do que está NO DISCO agora: o versionado mais o arquivo novo
+    ainda não commitado (menos o que o .gitignore ignora), com a MESMA lista
+    FORA. Serve para provar uma mudança antes do commit (tests/pacote_servido.py,
+    tests/carga_prova.py); a subida de verdade usa o commit (monta)."""
+    r = git('ls-files', '-z', '--cached', '--others', '--exclude-standard')
+    if r.returncode != 0:
+        sys.exit('o git ls-files falhou: ' + r.stderr.strip())
+    nomes = sorted({n for n in r.stdout.split('\0')
+                    if n and fica_no_pacote(n) and os.path.isfile(os.path.join(RAIZ, n))})
+    with tarfile.open(destino, 'w:gz', compresslevel=6) as tf:
+        for n in nomes:
+            fis = os.path.join(RAIZ, n)
+            info = tf.gettarinfo(fis, arcname=n)
+            info.mode = 0o755 if n.endswith('.sh') else 0o644
+            info.uid = info.gid = 0
+            info.uname = info.gname = ''
+            with open(fis, 'rb') as f:
+                tf.addfile(info, f)
+    mb = os.path.getsize(destino) / 1024 / 1024
+    print('pacote (do disco, não do commit): %s (%.0f MB, %d arquivos)' % (destino, mb, len(nomes)))
+    return destino
+
+
+def monta(destino, arvore=False):
     if git('rev-parse', '--git-dir').returncode != 0:
         sys.exit('isto precisa rodar de dentro do repositório do jogo')
+    if arvore:
+        return monta_da_arvore(destino)
     if git('cat-file', '-e', 'HEAD:servidor/instala.sh').returncode != 0:
         sys.exit('servidor/instala.sh ainda não está commitado — commite antes de subir')
     sujo = [l for l in git('status', '--porcelain').stdout.splitlines() if l.strip()]
@@ -88,12 +135,16 @@ def main():
     ap.add_argument('--usuario', default='root', help='usuário do SSH (padrão: root, como a Hostinger entrega)')
     ap.add_argument('--porta-ssh', type=int, default=22)
     ap.add_argument('--so-pacote', action='store_true', help='só monta o pacote e diz o tamanho')
+    ap.add_argument('--arvore', action='store_true',
+                    help='com --so-pacote: o pacote do que está no disco (não do último commit)')
     a = ap.parse_args()
 
     pacote = os.path.join(tempfile.gettempdir(), 'soterra-pacote.tar.gz')
     if a.so_pacote:
-        monta(pacote)
+        monta(pacote, arvore=a.arvore)
         return
+    if a.arvore:
+        ap.error('--arvore só vale com --so-pacote: o que sobe para o VPS é sempre o último commit')
     if not a.host or not a.enderecos:
         ap.error('informe o IP do VPS e o endereço (ou --so-pacote)')
     if not RE_HOST.match(a.host) or not RE_USUARIO.match(a.usuario):

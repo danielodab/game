@@ -179,7 +179,9 @@ DATA.pets = { petId: { id, name, element, description,
     bonuses:{ hp?, pa?, pp?, power?, initiative?, dodge?, lock?, resists?:{…} },
     behavior:'attack'|'support'|'guard', range, spells:['id'…],
     followDistance,           // máximo de células do dono (padrão 2)
-    dropDungeon, dropWeight } };
+    dropDungeon, dropWeight,
+    nivelUso? } };            // nível do herói para chamá-lo; o rodapé de items.js
+                              // carimba pela régua (DATA.nivelUso.pet = 10) — ver §8
 ```
 Mínimo **5 pets** com temas distintos. O pet entra na batalha junto do dono como unidade
 `kind:'pet'`, `side` do dono, **não conta** para vitória/derrota, não recebe XP e **age
@@ -220,10 +222,32 @@ DATA.dungeons = [ { id, name, theme, description, difficulty, order,
 //  para ela — sem isso a peça mais rara do jogo aparece com a cor de comum).
 DATA.items = { itemId: { id, name, slot:'pa'|'pp'|'vida'|'especial', rarity:'comum'|'raro'|'epico'|'lendario',
     dungeonId, bonuses:{…}, grantsSpell:'spellId'|null,   // obrigatório no slot 'especial'
-    description, flavor, iconKey } };
+    description, flavor, iconKey,
+    nivelUso? } };            // nível do herói para vestir (10/09) — derivado da régua abaixo
 ```
 Sanidade: `slot:'pa'` concede **no máximo +1 PA** (só `epico`); `slot:'pp'` no máximo +1 PP;
 `vida` de +10 a +60 PV e resistências; `especial` concede feitiço e **nenhum** bônus de PA/PP.
+
+**Nível de uso (10/09).** A régua é do dado, por calabouço e raridade, e o rodapé
+de `items.js` carimba `nivelUso` em toda peça (e em todo pet):
+
+```js
+DATA.nivelUso = {
+  porCalabouco: { greenhouse: { comum: 3, raro: 5, epico: 7 }, cistern: { 7, 9, 11 },
+                  emberlock: { 11, 13, 15 }, windscaffold: { 16, 18, 20 },
+                  quakemine: { 22, 24, 26 }, brokenheart: { 26, 28, 30 } },
+  lendario: 30, colecionador: 30, pet: 10, teto: 30 };
+DATA.nivelUsoDe(def) -> número      // 0 = sem exigência; um `nivelUso` explícito na definição vence
+```
+Quem cobra é o Progress: `Progress.nivelUsoDe(idOuDef)`, `Progress.podeUsar(heroId, itemId)` e
+`Progress.podeUsarPet(heroId, petId)` devolvem `{ ok, nivel, precisa, motivo }`; `equip`/`equipPet`
+recusam (`false`) e guardam `Progress.ultimaRecusa = { heroId, itemId|petId, precisa, nivel, motivo }`
+(sucesso limpa). O Mestre (`JOGO.GM.ativo()`) nunca paga. A peça acima do nível continua caindo,
+sendo comprada, trocada e guardada — só não entra no herói. Sem `DATA.nivelUsoDe` (dado montado à mão
+nas provas) nada tranca; `JOGO.DATA.nivelUso = null` desliga a régua. Ao carregar, peça vestida acima
+do nível volta ao saco (mesma série, mesmo level/stars, mesmo com o saco cheio — migração única) e o
+bicho volta à lista; `Progress.devolvidasPorNivel(limpar)` entrega a lista para a HUD avisar uma vez —
+com `limpar` (o aviso saiu) ela esvazia e **grava** a migração (`Progress.save`); a carga em si não grava.
 
 ## 9. APIs
 

@@ -163,6 +163,61 @@ var JOGO = (typeof window !== 'undefined')
   function equippedBy(itemId) { return safe(function () { return P().equippedBy(itemId); }, null); }
   function ownedPets() { return safe(function () { return P().state.pets.slice(); }, []); }
 
+  /* NÍVEL DE USO (10/09, pedido do dono): a régua é do dado (items.js) e a
+   * cobrança é do Progress ([D19]); a ficha só MOSTRA o "Nv. N" de cada peça
+   * e bicho, apaga (is-trancado) o que o herói escolhido ainda não veste e,
+   * na tentativa, diz o motivo com nome e número. Sem régua nada aparece. */
+  function nivelUsoDe(id) { return safe(function () { return P().nivelUsoDe(id); }, 0) || 0; }
+  function nvBadge(id, cls) {
+    var n = nivelUsoDe(id);
+    return n > 0 ? el('span', cls || 'ig-nv', 'Nv. ' + n) : null;
+  }
+  function nvTxt(id) { var n = nivelUsoDe(id); return n > 0 ? ' · Nv. ' + n : ''; }
+  // o herói está abaixo da peça (ou do bicho)?
+  function trancado(hid, id, ehPet) {
+    if (!hid) return false;
+    var r = safe(function () {
+      return ehPet ? P().podeUsarPet(hid, id) : P().podeUsar(hid, id);
+    }, null);
+    return !!(r && !r.ok);
+  }
+  function marcaTranca(cell, hid, id, ehPet) {
+    if (cell && trancado(hid, id, ehPet)) cell.classList.add('is-trancado');
+    return cell;
+  }
+  // "Estribos de Hera pede o nível 5 — o Sumo está no 3" (texto cru: o toast escapa)
+  function textoRecusa(r) {
+    if (!r) return 'Não deu para equipar essa peça.';
+    var hh = hero(r.heroId);
+    var quem = className((hh && hh.classId) || r.heroId);
+    if (r.petId) {
+      var pd = petDef(r.petId);
+      return ((pd && pd.name) || r.petId) + ': pets a partir do nível ' + r.precisa +
+             ' — o ' + quem + ' está no ' + r.nivel;
+    }
+    var it = itemDef(r.itemId);
+    return ((it && it.name) || r.itemId) + ' pede o nível ' + r.precisa +
+           ' — o ' + quem + ' está no ' + r.nivel;
+  }
+  function recusaAtual() { return safe(function () { return P().ultimaRecusa; }, null); }
+  function limpaRecusa() { safe(function () { P().ultimaRecusa = null; return true; }, false); }
+  /* O saneamento devolveu peças/bichos ao carregar (herói abaixo do nível
+   * delas)? UM toast, consumindo a lista — o Acampamento avisa na entrada e a
+   * ficha do inventário cobre as páginas sem praça. Consumir GRAVA a migração
+   * (Progress.devolvidasPorNivel(true) salva): a abertura seguinte já não
+   * acha a peça vestida e o toast não se repete. */
+  function avisaDevolvidasPorNivel() {
+    var lista = safe(function () { return P().devolvidasPorNivel(true); }, []) || [];
+    if (!lista.length) return;
+    var pecas = 0, bichos = 0;
+    lista.forEach(function (d) { if (d.petId) bichos++; else pecas++; });
+    var partes = [];
+    if (pecas) partes.push(pecas + ' peça(s) voltaram ao saco');
+    if (bichos) partes.push(bichos + ' bicho(s) voltaram à lista');
+    toast(partes.join(' e ') + ': o herói ainda não tem o nível delas.');
+    toastT = 6;                                   // aviso de entrada fica mais
+  }
+
   // [U4] id de espaço realmente usado pelos dados (v2.2 ou o antigo)
   var _slotRaw = null;
   function slotRaw(canon) {
@@ -274,6 +329,25 @@ var JOGO = (typeof window !== 'undefined')
     toastEl.innerHTML = esc(msg);
     toastT = 2.4;
   }
+
+  /* A LOJA DO SITE (Fase C, 10/09): o aviso de que um pedido chegou ou voltou
+   * (js/core/loja.js dispara 'soterra:loja'). A tira de recursos da tela
+   * aberta se repinta no lugar — sem fechar a ficha que estiver aberta. */
+  var MOTIVO_LOJA = {
+    'sem-saldo': 'vinténs insuficientes neste jogo',
+    'classe-ja-liberada': 'a classe já estava liberada',
+    'item-invalido': 'o item não existe nesta versão do jogo',
+    'erro-local': 'a entrega falhou aqui; os vinténs voltaram'
+  };
+  function avisoLoja(ev) {
+    var d = ev && ev.detail;
+    if (!d || typeof d !== 'object') return;
+    var nome = (d.pedido && d.pedido.nome) ? String(d.pedido.nome) : 'um pedido';
+    if (d.tipo === 'entregue') toast('Chegou da loja: ' + nome, 'good');
+    else if (d.tipo === 'recusado') toast('Pedido devolvido: ' + (MOTIVO_LOJA[d.motivo] || 'recusado') + ' (' + nome + ')');
+    safe(function () { refrescaRecursos(); return true; }, false);
+  }
+  try { window.addEventListener('soterra:loja', avisoLoja); } catch (eLj) {}
 
   /* ------------------------------------------------------------ dica da MIRA
    * No toque não existe "passar por cima": o primeiro toque MIRA e o segundo
@@ -447,7 +521,104 @@ var JOGO = (typeof window !== 'undefined')
         '<br><i>Você tem ' + n + '.</i>', elemColor(defs[k].element));
       wrap.appendChild(chip);
     }
+    // os PERGAMINHOS da loja (Fase C) entram na mesma tira, depois das pedras
+    var pgs = pergaminhoChips(function () {
+      var nova = stonesStrip();
+      if (wrap.parentNode) wrap.parentNode.replaceChild(nova, wrap);
+    }, false);
+    for (var ip = 0; ip < pgs.length; ip++) { wrap.appendChild(pgs[ip]); any = true; }
     return any ? wrap : el('div', 'stones-strip is-hidden');
+  }
+
+  /* OS PERGAMINHOS DA LOJA DO SITE (Fase C, 10/09): chips na tira de recursos
+   * (menu) e, compactos, no topo do Acampamento. Ainda sem arte — o dono paga
+   * os ícones depois —, um glifo num disco. O da SABEDORIA se LÊ com um toque
+   * (confirmação antes); o da REESCRITA se usa na ficha do herói, no bloco
+   * "Caminhos elementais". Sem nenhum pergaminho e sem carga, nada aparece. */
+  function pergaminhoChips(aoMudar, compacto) {
+    var pg = safe(function () { return P().pergaminhos(); }, null);
+    if (!pg || (!pg.xp && !pg.elemento && !pg.salasXp)) return [];
+    var out = [];
+    function chip(cls) {
+      var c = el(compacto ? 'button' : 'div', (compacto ? 'perg-mini' : 'stone-chip') + ' perg-chip ' + cls);
+      if (compacto) c.type = 'button';
+      return c;
+    }
+    if (pg.xp || pg.salasXp) {
+      var c1 = chip('perg-xp' + (pg.xp ? '' : ' is-empty'));
+      c1.appendChild(el('span', 'perg-glifo', '❦'));
+      c1.appendChild(el('span', 'stone-n', '×' + pg.xp));
+      c1.appendChild(el('span', 'stone-nm', compacto
+        ? (pg.salasXp ? pg.salasXp + ' salas' : 'Sabedoria')
+        : 'Pergaminho da Sabedoria' + (pg.salasXp ? ' (' + pg.salasXp + ' salas ativas)' : '')));
+      c1.title = 'Pergaminho da Sabedoria ×' + pg.xp + (pg.salasXp ? ' (' + pg.salasXp + ' salas ativas)' : '');
+      tap(c1, function () { lerSabedoria(aoMudar); });
+      out.push(c1);
+    }
+    if (pg.elemento) {
+      var c2 = chip('perg-el');
+      c2.appendChild(el('span', 'perg-glifo', '↺'));
+      c2.appendChild(el('span', 'stone-n', '×' + pg.elemento));
+      c2.appendChild(el('span', 'stone-nm', compacto ? 'Reescrita' : 'Pergaminho da Reescrita'));
+      c2.title = 'Pergaminho da Reescrita ×' + pg.elemento;
+      tipOn(c2, 'Pergaminho da Reescrita ×' + pg.elemento,
+        'Troca UM caminho elemental de um herói por outro que ele ainda não tem, no mesmo lugar. ' +
+        'Use no Acampamento, na ficha do herói — bloco <b>Caminhos elementais</b>. ' +
+        'Trocar o caminho ativo entre os liberados continua de graça.', '#7fd6c8');
+      out.push(c2);
+    }
+    return out;
+  }
+  // a versão compacta, no topo do Acampamento (repinta a si mesma depois de ler)
+  function hubPergaminhos() {
+    var w = el('span', 'hub-perg');
+    function pinta() {
+      clear(w);
+      var cs = pergaminhoChips(pinta, true);
+      for (var i = 0; i < cs.length; i++) w.appendChild(cs[i]);
+      w.classList.toggle('is-off', !cs.length);
+    }
+    pinta();
+    return w;
+  }
+  function lerSabedoria(aoMudar) {
+    var pg = safe(function () { return P().pergaminhos(); }, null) || {};
+    var cfg = (D().pergaminhos || {}).xp || {};
+    var salas = cfg.salas || 9, teto = cfg.tetoSalas || 27;
+    var pct = Math.round(((cfg.fator || 1.5) - 1) * 100);
+    var ativas = pg.salasXp || 0;
+    if (!pg.xp) {
+      toast('Nenhum Pergaminho da Sabedoria guardado — ' + ativas + ' salas ainda com o bônus.');
+      return;
+    }
+    if (ativas + salas > teto) {
+      toast('Já há ' + ativas + ' salas com o bônus (o teto é ' + teto + '). Leia depois de vencer mais salas.');
+      return;
+    }
+    confirmSheet('Ler o Pergaminho da Sabedoria?',
+      '<b>+' + pct + '% de experiência</b>: vale para o grupo nas próximas ' + salas + ' salas vencidas' +
+      (ativas ? ' (somam às ' + ativas + ' que já estão ativas)' : '') + '; em calabouço raso para o nível, ' +
+      'o corte de XP come o bônus. Com um evento de XP no ar, os dois juntos param em ×2. ' +
+      'Derrota e abandono não gastam carga. Guardados: ' + pg.xp + '.',
+      function () {
+        var r = safe(function () { return P().lePergaminhoXp(); }, null);
+        if (r && r.ok) toast('Pergaminho lido: ' + r.salas + ' salas com +' + pct + '% de XP.', 'good');
+        else toast(r && r.motivo === 'cheio' ? 'O teto é ' + teto + ' salas ativas.' : 'Não há pergaminho para ler.');
+        if (aoMudar) safe(function () { aoMudar(); return true; }, false);
+      });
+  }
+  // depois de uma entrega da loja: as tiras da tela aberta mostram o saldo novo
+  function refrescaRecursos() {
+    var s = current ? screens[current] : null;
+    if (!s || !s.querySelectorAll) return;
+    var tiras = s.querySelectorAll('.stones-strip');
+    for (var i = 0; i < tiras.length; i++) {
+      if (tiras[i].parentNode) tiras[i].parentNode.replaceChild(stonesStrip(), tiras[i]);
+    }
+    var pgs = s.querySelectorAll('.hub-perg');
+    for (var j = 0; j < pgs.length; j++) {
+      if (pgs[j].parentNode) pgs[j].parentNode.replaceChild(hubPergaminhos(), pgs[j]);
+    }
   }
 
   // ==========================================================================
@@ -716,7 +887,7 @@ var JOGO = (typeof window !== 'undefined')
     var def = classDef(h.classId || hid) || {};
 
     s.appendChild(header('Escolha o caminho', esc(className(h.classId || hid)) +
-      ' chegou ao nível 5. <b>A escolha é para sempre.</b>'));
+      ' chegou ao nível 5. <b>A escolha é permanente — só o Pergaminho da Reescrita, da loja do site, troca um caminho depois.</b>'));
 
     var body = el('div', 'ui-body');
     if (pend.length > 1) {
@@ -813,6 +984,8 @@ var JOGO = (typeof window !== 'undefined')
     var moedasEl = el('span', 'hub-moedas', '');
     quem.appendChild(nomeEl);
     quem.appendChild(moedasEl);
+    // os pergaminhos da loja (Fase C): no Acampamento, onde se lê o da Sabedoria
+    if (!sala) quem.appendChild(hubPergaminhos());
     top.appendChild(quem);
     var acts = el('div', 'hub-acts');
     if (sala) {
@@ -909,7 +1082,15 @@ var JOGO = (typeof window !== 'undefined')
           }
         }
         if (!j.nome) { nomeEl.textContent = '—'; pedeNome(); }
-        else nomeEl.textContent = j.nome;
+        else {
+          nomeEl.textContent = j.nome;
+          // A LEI DOS NOMES (10/09): nome guardado de antes da trava que se
+          // passa pela equipe do jogo pede batismo novo a cada entrada no
+          // Acampamento. O Mestre do Fundo passa: o título é dele.
+          if (nomeGuardadoReservado(j.nome)) {
+            pedeNome('esse nome é reservado à equipe do jogo — escolha outro');
+          }
+        }
         // O AVATAR: a conta pode vestir uma fusão do guarda-roupa — o
         // re-entrar troca o corpo (e o guarda do laço segura o rAF único)
         if (j.avatar && JOGO.Hub && JOGO.Hub.entrar) {
@@ -944,18 +1125,30 @@ var JOGO = (typeof window !== 'undefined')
     /* O NOME, pedido UMA vez. É a primeira peça de identidade pública — chat,
      * troca e PvP vão usá-lo — e pedir na entrada do acampamento (e não num
      * formulário de opções) é o que dá o cheiro de jogo online. */
-    function pedeNome() {
+    /* A LEI DOS NOMES (10/09): o nome guardado se passa pela equipe do jogo?
+     * Sem js/core/nomes.js na página, nunca; o Mestre do Fundo, nunca. */
+    function nomeGuardadoReservado(nome) {
+      var Nm = JOGO.Nomes;
+      if (!nome || !Nm || typeof Nm.reservado !== 'function') return false;
+      try { if (JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()) return false; } catch (e) {}
+      return !!Nm.reservado(nome);
+    }
+    /* `aviso` (opcional) diz por que o nome voltou a ser pedido; a recusa do
+     * batismo mostra o MOTIVO que o core devolveu (reservado, caractere,
+     * tamanho) — antes dizia sempre "Diz um nome.". */
+    function pedeNome(aviso) {
       clear(painel);
       painel.classList.remove('is-off');
       painel.appendChild(el('h3', null, 'Como te chamam no fundo?'));
+      if (aviso) painel.appendChild(el('p', 'hub-nota hub-nome-aviso', esc(aviso)));
       var inp = document.createElement('input');
       inp.className = 'hub-input';
-      inp.maxLength = 24;
+      inp.maxLength = (JOGO.Nomes && JOGO.DB.NOME_MAX) || 24;   // a régua da conta: 3 a 20
       inp.placeholder = 'seu nome no acampamento';
       painel.appendChild(inp);
       painel.appendChild(btn('É assim que me chamam', 'btn-primary btn-block', function () {
         JOGO.DB.batizar(inp.value).then(function (r) {
-          if (!r.ok) { toast('Diz um nome.'); return; }
+          if (!r.ok) { toast(r.erro || 'Diz um nome.'); return; }
           painel.classList.add('is-off');
           pintaConta();
         });
@@ -1218,6 +1411,11 @@ var JOGO = (typeof window !== 'undefined')
           };
           JOGO.Troca.aoMudar = function (est) {
             if (sheetName === 'troca') sheetTroca();
+            if (est && est.fase === 'cancelada' && est.motivo) {   // 10/09: a troca que o cartório não espelharia
+              closeSheet();
+              toast(est.motivo);
+              return;
+            }
             if (est && est.fase === 'feita') {
               closeSheet();
               toast(est.resultado === 'mesma-conta'
@@ -1319,6 +1517,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (!entrou) mundo.appendChild(el('p', 'empty', 'O acampamento precisa do modo 3D.'));
     pintaConta();
+    avisaDevolvidasPorNivel();             // [D19] o que voltou ao saco na carga
   }
 
   /* ------------------------------------------------ OS EVENTOS DO MUNDO (10/09)
@@ -1402,7 +1601,13 @@ var JOGO = (typeof window !== 'undefined')
     evs.forEach(function (e) {
       var rot = safe(function () { return JOGO.Agenda.rotulo(e); }, null) ||
                 (String(e.tipo) + ' ×' + String(e.fator).replace('.', ','));
-      w.appendChild(el('span', 'rw-evento', '✦ ' + esc(e.titulo || 'Evento do mundo') + ' · ' + esc(rot)));
+      var txtEv = '✦ ' + esc(e.titulo || 'Evento do mundo') + ' · ' + esc(rot);
+      // o Pergaminho da Sabedoria (Fase C) vem no mesmo formato, com as cargas que restam
+      if (e.origem === 'pergaminho') {
+        txtEv = '❦ ' + esc(e.titulo || 'Pergaminho da Sabedoria') + ' · ' + esc(rot) +
+                ' · restam ' + Math.max(0, Math.floor(Number(e.restam) || 0)) + ' salas';
+      }
+      w.appendChild(el('span', 'rw-evento' + (e.origem === 'pergaminho' ? ' rw-pergaminho' : ''), txtEv));
     });
     return w;
   }
@@ -1561,6 +1766,8 @@ var JOGO = (typeof window !== 'undefined')
           var cell = el('div', 'rw-item');
           cell.appendChild(art('itemIcon', [id, 52], 52));
           cell.appendChild(el('span', null, esc((it && it.name) || id)));
+          var nvR = nvBadge(id);
+          if (nvR) cell.appendChild(nvR);
           if (it) {
             markRarity(cell, it.rarity);
             tipOn(cell, it.name, itemTipBody(id), rarColor(it.rarity));
@@ -2400,6 +2607,8 @@ var JOGO = (typeof window !== 'undefined')
     if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
     if (pilha.stars) cell.appendChild(starPips(pilha.stars));
     cell.appendChild(el('span', 'ig-nm', esc(it.name || pilha.itemId)));
+    var nvB = nvBadge(pilha.itemId);
+    if (nvB) cell.appendChild(nvB);
     tipOn(cell, it.name || pilha.itemId,
       itemTipBody(pilha.itemId, pilha.level, pilha.stars), rarColor(it.rarity));
 
@@ -2848,7 +3057,7 @@ var JOGO = (typeof window !== 'undefined')
         tx.appendChild(el('div', 'ms-nome', esc(it.name || itemId) +
           (level ? ' +' + level : '') + (stars ? ' ★' + stars : '')));
         tx.appendChild(el('div', 'ms-prog', esc(SLOT_PT[slotOf(itemId)] || '') + ' · ' +
-          esc(RAR_PT[it.rarity] || it.rarity || '') + (sub ? ' · ' + sub : '')));
+          esc(RAR_PT[it.rarity] || it.rarity || '') + nvTxt(itemId) + (sub ? ' · ' + sub : '')));
         row.appendChild(tx);
         return row;
       }
@@ -3016,7 +3225,7 @@ var JOGO = (typeof window !== 'undefined')
           '<b>' + sl.total + '</b> selos no bolso · <b>' + cfgSel.porGiro + '</b> por giro · ' +
           (sl.giros > 0 ? '<b>' + sl.giros + '</b> giro(s) prontos' : 'faltam <b>' + sl.faltam + '</b> para o próximo') +
           (faltamP.length ? ' · ainda faltam <b>' + faltamP.length + '</b> peça(s): ' +
-            esc(faltamP.map(function (pid) { return (itemDef(pid) || {}).name || pid; }).join(', '))
+            esc(faltamP.map(function (pid) { return ((itemDef(pid) || {}).name || pid) + nvTxt(pid); }).join(', '))
           : ' · <b>traje fechado</b> — a repetida vira matéria de estrela')));
         var saldo = safe(function () { return P().selosVer(); }, {});
         var fila = el('div', 'colec-selos');
@@ -3063,7 +3272,7 @@ var JOGO = (typeof window !== 'undefined')
             var cels = pecas.map(function (pid) {
               var c2 = el('div', 'colec-peca');
               c2.appendChild(art('itemIcon', [pid, 48], 48));
-              c2.appendChild(el('span', null, esc((itemDef(pid) || {}).name || pid)));
+              c2.appendChild(el('span', null, esc(((itemDef(pid) || {}).name || pid) + nvTxt(pid))));
               faixa.appendChild(c2);
               return c2;
             });
@@ -3125,7 +3334,7 @@ var JOGO = (typeof window !== 'undefined')
         chip.type = 'button';
         chip.appendChild(art('itemIcon', [of.itemId, 30], 30));
         chip.appendChild(el('span', null, esc(d2.name || of.itemId) +
-          (of.level ? ' +' + of.level : '') + (of.stars ? ' ★' + of.stars : '')));
+          (of.level ? ' +' + of.level : '') + (of.stars ? ' ★' + of.stars : '') + nvTxt(of.itemId)));
         if (editavel) {
           chip.title = 'tirar da mesa';
           tap(chip, function () { JOGO.Troca.tiraItem(idx); });
@@ -3169,7 +3378,7 @@ var JOGO = (typeof window !== 'undefined')
       chip.type = 'button';
       chip.appendChild(art('itemIcon', [pi.itemId, 30], 30));
       chip.appendChild(el('span', null, esc(it.name || pi.itemId) +
-        (pi.count > 1 ? ' ×' + pi.count : '')));
+        (pi.count > 1 ? ' ×' + pi.count : '') + nvTxt(pi.itemId)));
       tap(chip, function () {
         JOGO.Troca.porItem({ itemId: pi.itemId, level: pi.level, stars: pi.stars });
       });
@@ -3855,7 +4064,8 @@ var JOGO = (typeof window !== 'undefined')
     var mult = itemMult(lv, sr);
     var out = '<i>' + esc(SLOT_PT[slotOf(itemId)] || '') + ' · ' + esc(RAR_PT[it.rarity] || it.rarity) +
               (lv ? ' · <b>+' + lv + '</b> ' + esc(tierOf(lv)) : '') +
-              (sr ? ' · <b>★' + sr + '</b>' : '') + '</i>';
+              (sr ? ' · <b>★' + sr + '</b>' : '') +
+              (nivelUsoDe(itemId) ? ' · <b>Nv. ' + nivelUsoDe(itemId) + '</b>' : '') + '</i>';
     var b = it.bonuses || {}, lines = [];
     for (var k in b) {
       if (!b.hasOwnProperty(k)) continue;
@@ -3990,6 +4200,7 @@ var JOGO = (typeof window !== 'undefined')
 
   function inventoryBody(body, preselect) {
     var hid = ensurePartyHero();
+    avisaDevolvidasPorNivel();             // [D19] cobre a página sem praça
     if (typeof preselect === 'string' && preselect) {
       var pilha0 = pilhaDe(preselect);
       if (pilha0) invSel = { itemId: pilha0.itemId, level: pilha0.level, stars: pilha0.stars };
@@ -4014,9 +4225,13 @@ var JOGO = (typeof window !== 'undefined')
         var b = btn('Vestir ' + n, 'btn-mini' + (tem ? '' : ' is-off'), function () {
           var r = safe(function () { return P().wearTraje(hid, n); }, null);
           if (!r) return;
-          toast(r.faltas
-            ? 'Traje ' + n + ': ' + r.faltas + ' peça(s) não estavam no saco.'
-            : 'Traje ' + n + ' vestido.', r.faltas ? undefined : 'good');
+          var msgT;
+          if (!r.faltas) msgT = 'Traje ' + n + ' vestido.';
+          else if (r.porNivel && r.recusas && r.recusas.length) {
+            msgT = 'Traje ' + n + ': ' + textoRecusa(r.recusas[0]) +
+                   (r.faltas > 1 ? ' (+' + (r.faltas - 1) + ' peça(s) ficaram de fora)' : '');
+          } else msgT = 'Traje ' + n + ': ' + r.faltas + ' peça(s) não estavam no saco.';
+          toast(msgT, r.faltas ? undefined : 'good');
           sheetParty('inventario');
         });
         if (!tem) b.title = 'Guarde o traje ' + n + ' primeiro';
@@ -4362,7 +4577,7 @@ var JOGO = (typeof window !== 'undefined')
       if (it) { var bs2 = setBadge(itemId); if (bs2) ic.appendChild(bs2); }
       cell.appendChild(ic);
       cell.appendChild(el('span', 'pt-slot-nm', SLOT_PT[canon]));
-      cell.appendChild(el('span', 'pt-slot-it', it ? esc(it.name) : 'vazio'));
+      cell.appendChild(el('span', 'pt-slot-it', it ? esc(it.name) + nvTxt(itemId) : 'vazio'));
       if (sr) cell.appendChild(starPips(sr));
       if (it) {
         cell.appendChild(el('span', 'pt-slot-b', esc(itemBonusText(it, lv, sr))));
@@ -4425,6 +4640,7 @@ var JOGO = (typeof window !== 'undefined')
     var canon = slotOf(pilha.itemId);
     wrap.classList.add(starClass(pilha.stars));
     markRarity(wrap, it && it.rarity);
+    marcaTranca(wrap, hid, pilha.itemId);
 
     var ic = el('div', 'inv-pick-ic');
     ic.appendChild(art('itemIcon', [pilha.itemId, 52], 52));
@@ -4440,8 +4656,16 @@ var JOGO = (typeof window !== 'undefined')
     tx.appendChild(h3);
     tx.appendChild(el('div', 'inv-pick-sub',
       esc(SLOT_PT[canon] || '') + ' · ' + esc(RAR_PT[(it || {}).rarity] || (it || {}).rarity || '') +
+      (nivelUsoDe(pilha.itemId) ? ' · <b>Nv. ' + nivelUsoDe(pilha.itemId) + '</b>' : '') +
       (pilha.level ? ' · pedra <b>+' + pilha.level + '</b> ' + esc(tierOf(pilha.level)) : '') +
       (pilha.stars ? ' · estrela <b>★' + pilha.stars + '</b>' : '')));
+    if (hid && trancado(hid, pilha.itemId)) {
+      var puP = safe(function () { return P().podeUsar(hid, pilha.itemId); }, null);
+      if (puP) {
+        tx.appendChild(el('div', 'inv-pick-tranca', '🔒 pede o nível <b>' + puP.precisa + '</b> — o ' +
+          esc(className((hero(hid) || {}).classId || hid)) + ' está no ' + puP.nivel));
+      }
+    }
     tx.appendChild(el('div', 'inv-pick-b', esc(itemBonusText(it, pilha.level, pilha.stars))));
     var cmp = comparaComVestida(pilha.itemId, pilha.level, pilha.stars, hid);
     if (cmp) tx.appendChild(el('div', 'inv-pick-cmp', cmp));
@@ -4470,8 +4694,12 @@ var JOGO = (typeof window !== 'undefined')
     if (hid) {
       var nome = className((hero(hid) || {}).classId || hid).split(' ')[0];
       acts.appendChild(btn('Equipar em ' + esc(nome), 'btn-primary btn-mini', function () {
+        limpaRecusa();
         var ok = safe(function () { return P().equip(hid, pilha.itemId, pilha.index); }, false);
-        if (!ok) { toast('Não deu para equipar essa peça.'); }
+        if (!ok) {
+          var rc = recusaAtual();
+          toast(rc ? textoRecusa(rc) : 'Não deu para equipar essa peça.');
+        }
         else {
           toast(esc((it && it.name) || 'Peça') + ' no ' + (SLOT_PT[canon] || 'espaço') + '.', 'good');
           // o Traje do Colecionador FECHOU nesta peça? A aura acende agora
@@ -4642,6 +4870,7 @@ var JOGO = (typeof window !== 'undefined')
       var cell = el('button', 'ig-cell ' + starClass(pilha.stars) + (sel ? ' is-sel' : ''));
       cell.type = 'button';
       markRarity(cell, it.rarity);
+      marcaTranca(cell, hid, pilha.itemId);
       var plate = el('span', 'ig-plate');
       plate.appendChild(art('itemIcon', [pilha.itemId, 54], 54));
       var bs1 = setBadge(pilha.itemId);
@@ -4651,6 +4880,8 @@ var JOGO = (typeof window !== 'undefined')
       if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
       if (pilha.stars) cell.appendChild(starPips(pilha.stars));
       cell.appendChild(el('span', 'ig-nm', esc(it.name)));
+      var nvG = nvBadge(pilha.itemId);
+      if (nvG) cell.appendChild(nvG);
       tap(cell, function () {
         invSel = sel ? null : { itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
         sheetParty('inventario');
@@ -5008,6 +5239,8 @@ var JOGO = (typeof window !== 'undefined')
       if (alvo.count > 1) c.appendChild(el('span', 'ig-n', '×' + alvo.count));
       if (alvo.level) c.appendChild(el('span', 'ig-lv', '+' + alvo.level));
       if (alvo.stars) c.appendChild(starPips(alvo.stars));
+      var nvF = nvBadge(alvo.itemId);
+      if (nvF) c.appendChild(nvF);
       if (alvo.kind === 'worn') {
         c.appendChild(el('span', 'fg-worn',
           esc(className((hero(alvo.heroId) || {}).classId || alvo.heroId).slice(0, 3))));
@@ -5118,6 +5351,69 @@ var JOGO = (typeof window !== 'undefined')
     return out.length ? out.join('<br>') : '—';
   }
 
+  /* O PERGAMINHO DA REESCRITA (Fase C, 10/09): só fora de descida — a HUD só
+   * oferece no Acampamento (e o Progress ainda recusa na batalha e na
+   * antessala). Com mais de um caminho liberado, o jogador escolhe qual sai;
+   * a confirmação diz o que troca e o que fica. Trocar o ATIVO segue grátis. */
+  function foraDeDescida() { return current === 'hub'; }
+  var MOTIVO_REESCRITA = {
+    sem: 'Nenhum Pergaminho da Reescrita guardado.',
+    descida: 'A Reescrita só se usa fora de descida, no Acampamento.',
+    neutro: 'O herói ainda não tem caminho: a primeira escolha, no nível 5, é de graça.',
+    nivel: 'Só a partir do nível 5.',
+    classe: 'Esta classe não tem caminhos para reescrever.',
+    elemento: 'Elemento inválido.',
+    caminho: 'A classe não tem esse caminho.',
+    'ja-tem': 'O herói já tem esse caminho.',
+    velho: 'Esse caminho não está liberado.',
+    heroi: 'Herói desconhecido.'
+  };
+  function escolheReescrita(heroId, novo) {
+    var lista = safe(function () { return P().heroElements(heroId); }, []);
+    var h = hero(heroId) || {};
+    if (lista.length <= 1) { confirmaReescrita(heroId, lista[0] || h.element, novo); return; }
+    var nn = esc(ELEM_PT[novo] || novo);
+    var b = sheetShell('Qual caminho sai?', 'Pergaminho da Reescrita — o de ' + nn + ' entra no lugar dele');
+    sheetName = 'confirm';
+    b.appendChild(el('p', 'confirm-txt', 'O herói tem ' + lista.length + ' caminhos liberados. ' +
+      'Escolha qual deles dá a vaga ao de <b>' + nn + '</b>.'));
+    var fila = el('div', 'guilda-emblemas');
+    lista.forEach(function (v) {
+      var bv = btn(esc(ELEM_PT[v] || v) + (h.element === v ? ' · ATIVO' : ''), 'btn-mini btn-primary', function () {
+        confirmaReescrita(heroId, v, novo);
+      });
+      bv.style.setProperty('--ec', elemColor(v));
+      fila.appendChild(bv);
+    });
+    b.appendChild(fila);
+    var acts = el('div', 'confirm-acts');
+    acts.appendChild(btn('Voltar', 'btn-ghost', function () { openSheet('heroSheet', heroId); }));
+    b.appendChild(acts);
+  }
+  function confirmaReescrita(heroId, velho, novo) {
+    var pode = safe(function () { return P().podeReescrever(heroId, velho, novo); }, null);
+    if (!pode || !pode.ok) {
+      toast((pode && MOTIVO_REESCRITA[pode.motivo]) || 'Não dá para reescrever agora.');
+      return;
+    }
+    var h = hero(heroId) || {};
+    var eraAtivo = h.element === velho;
+    var tem = safe(function () { return P().pergaminhos().elemento; }, 1);
+    var nv = esc(ELEM_PT[velho] || velho), nn = esc(ELEM_PT[novo] || novo);
+    confirmSheet('Reescrever ' + (ELEM_PT[velho] || velho) + ' → ' + (ELEM_PT[novo] || novo) + '?',
+      'Sai o caminho de <b>' + nv + '</b> e entra o de <b>' + nn + '</b>, no mesmo lugar' +
+      (eraAtivo ? ' — e ele passa a ser o <b>ativo</b>: os feitiços do caminho trocam na hora'
+                : ' (o caminho ativo continua o mesmo)') + '. ' +
+      'Ficam: nível, XP, o dano elemental dos níveis, itens, bicho e estrelas. ' +
+      'Gasta 1 Pergaminho da Reescrita (restam ' + Math.max(0, tem - 1) + '). Para desfazer, só outro pergaminho.',
+      function () {
+        if (safe(function () { return P().reescreveElemento(heroId, velho, novo); }, false)) {
+          toast('Caminho reescrito: ' + (ELEM_PT[novo] || novo) + ' no lugar de ' + (ELEM_PT[velho] || velho) + '.', 'good');
+          openSheet('heroSheet', heroId);
+        } else toast('Não deu para reescrever.');
+      });
+  }
+
   // ------------------------------------------------------ FICHA DO HERÓI
   function sheetHero(heroId) {
     var h = hero(heroId);
@@ -5169,6 +5465,12 @@ var JOGO = (typeof window !== 'undefined')
       body.appendChild(el('h3', 'hs-sec', 'Caminhos elementais'));
       var liberados = safe(function () { return P().heroElements(heroId); }, [h.element]);
       var vagas = safe(function () { return P().elementSlots(heroId); }, 1);
+      // o PERGAMINHO DA REESCRITA (Fase C): com ele, e só no Acampamento, o
+      // caminho que o herói não tem (e a classe tem) ganha a ação "reescrever"
+      var pgRees = safe(function () { return P().pergaminhos().elemento; }, 0);
+      var defRees = classDef(cid);
+      var classeReescreve = !!(defRees && defRees.paths);
+      var comReescrita = pgRees > 0 && classeReescreve && foraDeDescida();
       var filaEl = el('div', 'guilda-emblemas');
       ['fogo', 'agua', 'terra', 'ar'].forEach(function (e3) {
         var def3 = classDef(cid);
@@ -5176,10 +5478,12 @@ var JOGO = (typeof window !== 'undefined')
         var tem = liberados.indexOf(e3) >= 0;
         var ativo = h.element === e3;
         var podeAbrir = !tem && liberados.length < vagas;
+        var reescreve = !tem && !podeAbrir && comReescrita;
         // a vaga N abre na estrela N+1 (2ª vaga → ★3, 3ª → ★4, 4ª → ★5)
         var rot = (ELEM_PT[e3] || e3) + (ativo ? ' · ATIVO' : tem ? '' :
-                  podeAbrir ? ' · liberar' : ' · ★' + Math.min(5, vagas + 2));
-        var b3 = btn(rot, 'btn-mini ' + (ativo ? 'btn-gold' : tem ? 'btn-primary' : 'btn-ghost'),
+                  podeAbrir ? ' · liberar' : reescreve ? ' · reescrever' : ' · ★' + Math.min(5, vagas + 2));
+        var b3 = btn(rot, 'btn-mini ' + (ativo ? 'btn-gold' : tem ? 'btn-primary' : 'btn-ghost') +
+                          (reescreve ? ' btn-reescreve' : ''),
           function () {
             if (ativo) return;
             if (tem) {
@@ -5190,6 +5494,7 @@ var JOGO = (typeof window !== 'undefined')
               return;
             }
             if (!podeAbrir) {
+              if (reescreve) { escolheReescrita(heroId, e3); return; }
               var alvoEstrela = { 2: 3, 3: 4, 4: 5 }[liberados.length + 1] || 3;
               toast('A ★' + alvoEstrela + ' da classe libera a próxima vaga — junte cartas.');
               return;
@@ -5208,7 +5513,12 @@ var JOGO = (typeof window !== 'undefined')
       body.appendChild(filaEl);
       body.appendChild(el('p', 'inv-dica',
         'Vagas de caminho: <b>' + liberados.length + ' / ' + vagas + '</b> — ' +
-        '★3 abre a 2ª, ★4 a 3ª, ★5 a 4ª. Trocar o ativo troca os feitiços do caminho.'));
+        '★3 abre a 2ª, ★4 a 3ª, ★5 a 4ª. Trocar o ativo troca os feitiços do caminho.' +
+        ((pgRees > 0 && classeReescreve)
+          ? (comReescrita
+            ? ' <b>Pergaminho da Reescrita ×' + pgRees + '</b>: toque num caminho que ele não tem para trocar um dos seus por ele.'
+            : ' O Pergaminho da Reescrita (×' + pgRees + ') se usa no Acampamento.')
+          : '')));
     }
 
     // ---- equipamento: 4 espaços + pet (adendo v2.2)
@@ -5230,6 +5540,9 @@ var JOGO = (typeof window !== 'undefined')
       cell.appendChild(el('span', 'hs-slot-nm', SLOT_PT[canon]));
       if (estrelas) cell.appendChild(starPips(estrelas));
       cell.appendChild(el('span', 'hs-slot-it', it ? esc(it.name) : 'vazio'));
+      // o "Nv." em linha própria: colado ao nome, as reticências o comiam
+      var nvH = it ? nvBadge(itemId) : null;
+      if (nvH) cell.appendChild(nvH);
       if (it) cell.appendChild(el('span', 'pt-slot-b', esc(itemBonusText(it, lv, estrelas))));
       tipOn(ic, SLOT_PT[canon] + (it ? ' — ' + it.name : ''),
         it ? itemTipBody(itemId, lv, estrelas) : esc(SLOT_HINT[canon]),
@@ -5358,19 +5671,30 @@ var JOGO = (typeof window !== 'undefined')
       if (origem === 'party') { partyHero = heroId; sheetParty('inventario'); }
       else sheetHero(heroId);
     }
-    var body = sheetShell('Chamar um bicho', 'Um bicho serve a um herói por vez.');
+    var nvBicho = safe(function () { return D().nivelUso.pet; }, 0) || 0;
+    var body = sheetShell('Chamar um bicho', 'Um bicho serve a um herói por vez.' +
+      (nvBicho ? ' Pets a partir do nível ' + nvBicho + '.' : ''));
     var pets = ownedPets();
     var g = el('div', 'pet-grid');
     pets.forEach(function (pid) {
       var pd = petDef(pid);
       var c = el('button', 'pet-cell');
       c.type = 'button';
+      marcaTranca(c, heroId, pid, true);
       c.appendChild(art('petIcon', [pid, 56], 56));
       c.appendChild(el('b', null, esc((pd && pd.name) || pid)));
       c.appendChild(el('span', null, petNivelTxt(pid)));
       c.appendChild(el('span', null, esc(bonusText(pd && pd.bonuses))));
+      var nvP = nvBadge(pid, 'pet-nv');
+      if (nvP) c.appendChild(nvP);
       tap(c, function () {
-        safe(function () { P().equipPet(heroId, pid); }, null);
+        limpaRecusa();
+        var okP = safe(function () { return P().equipPet(heroId, pid); }, false);
+        if (!okP) {
+          var rP = recusaAtual();
+          toast(rP ? textoRecusa(rP) : 'Não deu para chamar esse bicho.');
+          return;
+        }
         volta();
       });
       g.appendChild(c);

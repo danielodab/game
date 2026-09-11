@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a conta e a loja do site (Fase C)</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+#palco{position:absolute;left:-4000px;top:0;width:1000px;height:900px}</style>
+</head>
+<body>
+<!-- A PROVA DA FASE C NO SITE, sem servidor nenhum. As páginas de verdade
+     (site/conta.html e site/loja.html, com site.js, conta.js e loja.js) são
+     escritas num iframe com um window.fetch FALSO, que responde os JSON do
+     contrato da Fase C (seções 1.2 e 1.5 do plano) e anota cada pedido. A
+     página de prova põe um <base> apontando para site/, então os scripts e
+     a folha são os arquivos reais. O BroadcastChannel também é falso: a
+     prova vê o aviso que a loja manda ao jogo. O que se cobra:
+       - 401 no /api/conta limpa a sessão e volta às abas;
+       - sem `correio` o "esqueci a senha" fica desligado; com ele, os dois
+         passos, e o passo 2 aparece sempre;
+       - o passo 2 da troca de e-mail abre direto com `trocaEmail`, e o
+         e-mail novo precisa ser digitado igual duas vezes;
+       - o idem muda a cada clique; os botões da loja desligam pelos motivos
+         certos; o Mestre compra sem gastar;
+       - nenhum fetch leva e-mail, código ou senha na URL;
+       - nenhum preço está escrito no HTML ou no JS do site;
+       - o nome da conta nova passa pela lei dos nomes do jogo
+         (js/core/nomes.js, que o conta.js carrega sob demanda, sem marca):
+         'Admin' e 'GM Joao' não saem do navegador e o motivo aparece no
+         aviso do cadastro; 'Joana Silva' sai; o Entrar não passa pela lei
+         (a conta antiga "Administrator" segue entrando); sem a lei, o
+         pedido sai como antes e o servidor é quem manda.
+     A sessão do localStorage (a mesma chave do jogo) volta ao que era. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<div id="palco"></div>
+<script src="../site/site.js"></script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log'), palco = document.getElementById('palco');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ate(cond, ms) {
+    ms = ms || 3000;
+    return new Promise(function (r) {
+      var t = 0;
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) { ok = false; }
+        if (ok) return r(true);
+        if ((t += 20) > ms) return r(false);
+        setTimeout(volta, 20);
+      })();
+    });
+  }
+
+  var AGORA = Math.floor(Date.now() / 1000), DIA = 86400;
+  var BASE_SITE = new URL('../site/', location.href).href;
+  var CHAVE = 'soterra-sessao';
+  var sessaoAntes = null;
+  try { sessaoAntes = localStorage.getItem(CHAVE); } catch (e) { /* sem storage */ }
+  function lsSessao() { try { return JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch (e) { return 'erro'; } }
+
+  /* valores sintéticos desta prova (nenhum é de ninguém) */
+  var EMAIL = 'daniel@exemplo.com', SENHA_ATUAL = 'Senha-Atual-1', SENHA_NOVA = 'Senha-Nova-22';
+  var TOKEN_NOVO = 'f0'.repeat(32);
+  var SESSAO_BOA = { token: 'tok-bom', conta: { id: 7, nome: 'Daniel', gm: true } };
+  var SESSAO_LOJA = { token: 'tok-loja', conta: { id: 8, nome: 'Pia', gm: false } };
+  var SEGREDOS = [EMAIL, SENHA_ATUAL, SENHA_NOVA, TOKEN_NOVO, 'tok-bom', 'tok-loja', 'tok-morto', 'tok-mestre',
+                  '654321', '123456', '999999', '111111', 'novo@outro.com', 'sem@correio.com', 'muitos@exemplo.com'];
+  var UA_CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+  var UA_EDGE = UA_CHROME + ' Edg/140.0.0.0';
+  var UA_FIREFOX_ANDROID = 'Mozilla/5.0 (Android 14; Mobile; rv:130.0) Gecko/130.0 Firefox/130.0';
+  var UA_CHROME_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36';
+  var UA_SAFARI_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+  var UA_CHROME_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+  var UA_FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0';
+
+  /* ---- as respostas do contrato (seções 1.2 e 1.5) ---- */
+  var CONTA = { id: 7, nome: 'Daniel', email: EMAIL, criadoEm: AGORA - 40 * DIA, gm: true };
+  function copia(o) { return JSON.parse(JSON.stringify(o)); }
+  function junta(a, b) { var r = copia(a); Object.keys(b || {}).forEach(function (k) { r[k] = b[k]; }); return r; }
+  function respostaConta(extra) {
+    return junta({
+      ok: true, conta: copia(CONTA), correio: true,
+      sessoes: [
+        { id: '3f9a1c0b7e2d', criadoEm: AGORA - 5 * DIA, ultimoUso: AGORA - 120, agente: UA_CHROME, ip: '189.34.*.*', estaAqui: true },
+        { id: 'aa11bb22cc33', criadoEm: AGORA - 9 * DIA, ultimoUso: AGORA - 3 * 3600, agente: UA_FIREFOX_ANDROID, ip: '177.20.*.*', estaAqui: false },
+        { id: 'dd44ee55ff66', criadoEm: AGORA - 20 * DIA, ultimoUso: AGORA - 2 * DIA, agente: UA_SAFARI_IPHONE, ip: '200.1.*.*', estaAqui: false }
+      ],
+      atividade: [{ tipo: 'login', em: AGORA - 120 }, { tipo: 'login-recusado', em: AGORA - 3600 },
+                  { tipo: 'senha-trocada', em: AGORA - DIA }, { tipo: 'cadastro', em: AGORA - 40 * DIA }],
+      trocaEmail: null
+    }, extra);
+  }
+  var SAUDE = [200, { ok: true, contas: 3, agora: AGORA, correio: true }];
+  var SAUDE_SEM = [200, { ok: true, contas: 3, agora: AGORA, correio: false }];
+
+  function catalogo(precoXp) {
+    function pedra(sku, alvo, el, nome, preco) {
+      return { sku: sku, secao: 'pedras', tipo: 'pedras', alvo: alvo, qtd: 10, elemento: el, nome: nome,
+               descricao: 'Pedras de forja para a Forja do Acampamento.', preco: preco, limite: { grupo: 'pedras', max: 5, dias: 7 } };
+    }
+    function classe(id, nome, rar, cartas, preco) {
+      return { sku: 'classe-' + id, secao: 'personagens', tipo: 'classe', alvo: id, qtd: 1, nome: nome, raridade: rar,
+               cartas: cartas, descricao: 'Chega no nível 1.', preco: preco, limite: { grupo: 'classe-' + id, max: 1, dias: null } };
+    }
+    return { ok: true, versao: 1, itens: [
+      { sku: 'pergaminho-xp', secao: 'pergaminhos', tipo: 'pergaminho', alvo: 'xp', qtd: 1, nome: 'Pergaminho da Sabedoria',
+        descricao: '+50% de experiência para o grupo nas próximas 9 salas vencidas. Com um evento de XP no ar, os dois juntos param em ×2.',
+        preco: precoXp || 1500, limite: { grupo: 'pergaminho-xp', max: 1, dias: 7 } },
+      { sku: 'pergaminho-elemento', secao: 'pergaminhos', tipo: 'pergaminho', alvo: 'elemento', qtd: 1, nome: 'Pergaminho da Reescrita',
+        descricao: 'Troca um caminho elemental de um herói por outro.', preco: 5000, limite: { grupo: 'pergaminho-elemento', max: 1, dias: 30 } },
+      pedra('pedras-agua', 'stone-tear', 'agua', '10 Lágrimas de Cisterna', 300),
+      pedra('pedras-terra', 'stone-root', 'terra', '10 Grãos de Rocha-Mãe', 300),
+      pedra('pedras-ar', 'stone-breath', 'ar', '10 Sopros Engarrafados', 450),
+      pedra('pedras-fogo', 'stone-ember', 'fogo', '10 Brasas Coaguladas', 450),
+      pedra('pedras-neutro', 'stone-slate', 'neutro', '10 Lascas da Lousa', 450),
+      classe('invocador', 'Xamã', 'raro', 10, 8000), classe('bruxo', 'Bruxo', 'raro', 10, 8000),
+      classe('espadachim', 'Ladino', 'epico', 20, 20000), classe('arqueiro', 'Caçador', 'epico', 25, 25000),
+      classe('minotauro', 'Minotauro', 'epico', 30, 30000)
+    ] };
+  }
+  function minha(extra) {
+    return junta({
+      ok: true,
+      saldo: { carteira: 12450, reservado: 300, disponivel: 12150, semFundo: false, saveVersao: 57, saveEm: AGORA - 3 * 3600 },
+      limites: {
+        'pergaminho-xp': { usados: 0, max: 1, dias: 7, liberaEm: null },
+        'pergaminho-elemento': { usados: 1, max: 1, dias: 30, liberaEm: AGORA + 3 * DIA },
+        'pedras': { usados: 5, max: 5, dias: 7, liberaEm: AGORA + 3 * DIA },
+        'classe-invocador': { usados: 0, max: 1, dias: null, liberaEm: null },
+        'classe-bruxo': { usados: 0, max: 1, dias: null, liberaEm: null },
+        'classe-espadachim': { usados: 0, max: 1, dias: null, liberaEm: null },
+        'classe-arqueiro': { usados: 0, max: 1, dias: null, liberaEm: null },
+        'classe-minotauro': { usados: 1, max: 1, dias: null, liberaEm: null }
+      },
+      classes: { invocador: { liberada: false, cartas: 6 }, bruxo: { liberada: true, cartas: 10 },
+                 espadachim: { liberada: false, cartas: 2 }, arqueiro: { liberada: false, cartas: 0 },
+                 minotauro: { liberada: false, cartas: 3 } },
+      pedidos: [
+        { id: 41, sku: 'pedras-agua', nome: '10 Lágrimas de Cisterna', preco: 300, estado: 'retirado', motivo: null, criadoEm: AGORA - 2 * 3600, fechadoEm: null },
+        { id: 40, sku: 'pedras-terra', nome: '10 Grãos de Rocha-Mãe', preco: 300, estado: 'retirado', motivo: null, criadoEm: AGORA - 30 * 3600, retiradoEm: AGORA - 26 * 3600, fechadoEm: null },
+        { id: 39, sku: 'pedras-ar', nome: '10 Sopros Engarrafados', preco: 450, estado: 'pendente', motivo: null, criadoEm: AGORA - 600, fechadoEm: null },
+        { id: 35, sku: 'classe-minotauro', nome: 'Minotauro', preco: 30000, estado: 'pendente', motivo: null, criadoEm: AGORA - 900, fechadoEm: null },
+        { id: 38, sku: 'pergaminho-xp', nome: 'Pergaminho da Sabedoria', preco: 1500, estado: 'entregue', motivo: null, criadoEm: AGORA - 9 * DIA, fechadoEm: AGORA - 9 * DIA + 60 },
+        { id: 37, sku: 'classe-arqueiro', nome: 'Caçador', preco: 25000, estado: 'estornado', motivo: 'sem-saldo', criadoEm: AGORA - 12 * DIA, fechadoEm: AGORA - 12 * DIA + 60 },
+        { id: 36, sku: 'pedras-fogo', nome: '10 Brasas Coaguladas', preco: 450, estado: 'cancelado', motivo: null, criadoEm: AGORA - 15 * DIA, fechadoEm: AGORA - 15 * DIA + 60 }
+      ]
+    }, extra);
+  }
+
+  /* ---- o palco: a página real num iframe, com o fetch falso ---- */
+  var TODOS = [];     // todo pedido de todas as páginas (para a prova das URLs)
+  function le(url) {
+    return new Promise(function (ok) {
+      var x = new XMLHttpRequest();
+      x.open('GET', url + (url.indexOf('?') < 0 ? '?v=' : '&v=') + Date.now());
+      x.onload = function () { ok((x.status === 200 || x.status === 0) && x.responseText ? x.responseText : null); };
+      x.onerror = function () { ok(null); };
+      try { x.send(); } catch (e) { ok(null); }
+    });
+  }
+  function fetchFalso(pagina, cena) {
+    return function (url, op) {
+      op = op || {};
+      var u = String(url), m = /\/api\/[^?#]*/.exec(u), corpo = null;
+      try { corpo = op.body ? JSON.parse(op.body) : null; } catch (e) { corpo = op.body; }
+      var reg = { pagina: pagina, url: u, metodo: op.method || 'GET', rota: m ? m[0] : u, corpo: corpo,
+                  auth: (op.headers && op.headers.Authorization) || null };
+      TODOS.push(reg);
+      cena.pedidos.push(reg);
+      var h = cena.rotas[reg.metodo + ' ' + reg.rota];
+      var resp = typeof h === 'function' ? h(corpo || {}, reg) : h;
+      if (resp === 'fora') return Promise.reject(new TypeError('Failed to fetch'));
+      if (!resp) resp = [404, { ok: false, erro: 'rota desconhecida' }];
+      var status = resp[0], json = copia(resp[1]);
+      return new Promise(function (ok) {
+        setTimeout(function () {
+          ok({ status: status, ok: status >= 200 && status < 300, json: function () { return Promise.resolve(json); } });
+        }, 4);
+      });
+    };
+  }
+  function canalFalso(cena) {
+    function Canal(nome) { this.nome = String(nome); }
+    Canal.prototype.postMessage = function (msg) { cena.canal.push({ nome: this.nome, msg: copia(msg) }); };
+    Canal.prototype.close = function () {};
+    Canal.prototype.addEventListener = function () {};
+    return Canal;
+  }
+  function abre(pagina, cena) {
+    cena.pedidos = [];
+    cena.canal = [];
+    return le(BASE_SITE + pagina).then(function (html) {
+      if (!html) throw new Error('não deu para ler site/' + pagina);
+      palco.innerHTML = '';
+      var fr = document.createElement('iframe');
+      fr.style.width = '1000px';
+      fr.style.height = '900px';
+      palco.appendChild(fr);
+      try {
+        if (cena.sessao) localStorage.setItem(CHAVE, JSON.stringify(cena.sessao));
+        else localStorage.removeItem(CHAVE);
+      } catch (e) { /* sem storage */ }
+      var d = fr.contentDocument;
+      d.open();
+      var w = fr.contentWindow;
+      // o documento aberto é o mesmo global: o fetch e o canal ficam no lugar
+      // quando os scripts da página rodarem
+      w.fetch = fetchFalso(pagina, cena);
+      w.BroadcastChannel = canalFalso(cena);
+      try { w.history.replaceState(null, '', w.location.href.split('#')[0] + (cena.hash ? '#' + cena.hash : '')); } catch (e) { /* segue */ }
+      d.write(html.replace(/<head>/i, '<head><base href="' + BASE_SITE + '">'));
+      d.close();
+      return {
+        w: w, d: d,
+        $: function (id) { return d.getElementById(id); },
+        q: function (s) { return d.querySelector(s); },
+        qq: function (s) { return [].slice.call(d.querySelectorAll(s)); }
+      };
+    });
+  }
+  function visivel(el) {
+    if (!el || !el.ownerDocument) return false;
+    var w = el.ownerDocument.defaultView;
+    for (var e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (e.hidden) return false;
+      var cs = w.getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    }
+    return true;
+  }
+  function digita(el, v) { el.value = v; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); }
+  function envia(form) { form.querySelector('[type=submit]').click(); }
+  function texto(el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  function pedidos(cena, metodo, rota) { return cena.pedidos.filter(function (p) { return p.metodo === metodo && p.rota === rota; }); }
+
+  /* ======================================================================
+   * os ajudantes do site.js, direto
+   * ==================================================================== */
+  function unidades() {
+    var vistos = {}, bons = 0;
+    for (var i = 0; i < 200; i++) { var x = SITE.idem(); if (/^[0-9a-f]{16}$/.test(x)) bons++; vistos[x] = 1; }
+    check('SITE.idem(): 16 hex, e 200 chaves todas diferentes', bons === 200 && Object.keys(vistos).length === 200);
+    var casos = [[UA_CHROME, 'Chrome · Windows'], [UA_EDGE, 'Edge · Windows'], [UA_FIREFOX_ANDROID, 'Firefox · Android'],
+                 [UA_CHROME_ANDROID, 'Chrome · Android'], [UA_SAFARI_IPHONE, 'Safari · iOS'], [UA_CHROME_MAC, 'Chrome · macOS'],
+                 [UA_FIREFOX_LINUX, 'Firefox · Linux'], ['Mozilla/5.0 (Windows NT 10.0…) Chrome/…', 'Chrome · Windows'],
+                 ['python-urllib/3.13', 'programa'], ['', 'navegador desconhecido'], [null, 'navegador desconhecido']];
+    var errados = casos.filter(function (c) { return SITE.navegador(c[0]) !== c[1]; })
+                       .map(function (c) { return SITE.navegador(c[0]) + ' ≠ ' + c[1]; });
+    check('SITE.navegador(ua): "Chrome · Windows" e companhia', !errados.length, errados.join(' | '));
+    check('SITE.mascara(email)', SITE.mascara('daniel@exemplo.com') === 'da***@exemplo.com' && SITE.mascara('a@b.co') === 'a***@b.co' &&
+          SITE.mascara('lixo') === '' && SITE.mascara(null) === '');
+    SITE.acertaRelogio(AGORA);
+    check('SITE.erro: 503 com correio:false', SITE.erro({ status: 503, correio: false, erro: 'x' }) === 'o envio de e-mails ainda não foi ligado neste servidor');
+    check('SITE.erro: 503 com correio:true mostra a frase do servidor',
+          SITE.erro({ status: 503, correio: true, erro: 'o correio do servidor falhou agora; tente de novo em alguns minutos' }) ===
+          'o correio do servidor falhou agora; tente de novo em alguns minutos');
+    var e429 = SITE.erro({ status: 429, erro: 'muitas tentativas', liberaEm: AGORA + 600 });
+    check('SITE.erro: o 429 com liberaEm ganha "(de novo em 10 min)"', e429 === 'muitas tentativas (de novo em 10 min)', e429);
+    check('SITE.deNovo e SITE.ha', SITE.deNovo(AGORA + 3 * DIA) === 'de novo em 3 dias' && SITE.ha(AGORA - 3 * 3600) === 'há 3 h' &&
+          SITE.ha(AGORA - 10) === 'agora mesmo', SITE.deNovo(AGORA + 3 * DIA) + ' / ' + SITE.ha(AGORA - 3 * 3600));
+  }
+
+  /* ======================================================================
+   * a conta
+   * ==================================================================== */
+  async function cenaSemCorreio() {
+    var c = { hash: 'esqueci', rotas: { 'GET /api/saude': SAUDE_SEM } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return pedidos(c, 'GET', '/api/saude').length && texto(p.$('sessao')); });
+    await espera(40);
+    var link = p.$('esqueci');
+    check('sem correio: o "esqueci a senha" fica desligado', link.classList.contains('desligado') && link.getAttribute('aria-disabled') === 'true');
+    check('sem correio: #esqueci no endereço cai no Entrar', !visivel(p.$('painel-esqueci')) && visivel(p.$('painel-entrar')));
+    link.click();
+    await espera(30);
+    check('sem correio: o clique mostra o aviso de antes, e o painel continua fechado',
+          /em breve/.test(texto(p.$('esqueci-aviso'))) && visivel(p.$('esqueci-aviso')) && !visivel(p.$('painel-esqueci')));
+    check('sem sessão: a página não pede /api/conta', !pedidos(c, 'GET', '/api/conta').length);
+    check('sem sessão: o topo diz "Entrar"', texto(p.$('sessao')) === 'Entrar');
+    check('conta: o menu tem a Loja', !!p.q('nav a[href="loja.html"]'));
+    var ac = { 'c-nome': 'username', 'c-email': 'email', 'c-senha': 'new-password', 'c-senha2': 'new-password',
+               'e-login': 'username', 'e-senha': 'current-password', 'eq-email': 'email', 'eq-nova': 'new-password',
+               'eq-nova2': 'new-password', 'eq-codigo': 'one-time-code' };
+    var tortos = Object.keys(ac).filter(function (id) { return p.$(id).getAttribute('autocomplete') !== ac[id]; });
+    check('sem sessão: o autocomplete certo em todos os campos', !tortos.length, tortos.join(', '));
+  }
+
+  async function cenaEsqueci() {
+    var c = { hash: 'entrar', rotas: {
+      'GET /api/saude': SAUDE,
+      'POST /api/esqueci': function (b) {
+        return b.email === 'muitos@exemplo.com'
+          ? [429, { ok: false, erro: 'pedidos demais deste endereço; espere um pouco', liberaEm: AGORA + 600 }]
+          : [200, { ok: true, mensagem: 'Se houver conta com esse e-mail, o código chega em instantes. Ele vale por 15 minutos.' }];
+      },
+      'POST /api/esqueci/confirmar': function (b) {
+        return b.codigo === '654321' ? [200, { ok: true, token: TOKEN_NOVO, conta: { id: 7, nome: 'Daniel', gm: true } }]
+                                     : [400, { ok: false, erro: 'código errado ou vencido' }];
+      },
+      'GET /api/conta': function () { return [200, respostaConta()]; }
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return !p.$('esqueci').classList.contains('desligado'); });
+    check('com correio: o "esqueci a senha" liga', !p.$('esqueci').classList.contains('desligado') && p.$('esqueci').getAttribute('aria-disabled') === 'false');
+    p.$('esqueci').click();
+    await ate(function () { return visivel(p.$('painel-esqueci')); });
+    check('o painel do esqueci abre no passo 1 (o 2 ainda fechado)', visivel(p.$('eq-form1')) && !visivel(p.$('eq-form2')));
+    check('o endereço guarda só a tela (#esqueci)', p.w.location.hash === '#esqueci', p.w.location.hash);
+    digita(p.$('eq-email'), 'sem-arroba');
+    envia(p.$('eq-form1'));
+    await espera(30);
+    check('e-mail torto não sai da página', !pedidos(c, 'POST', '/api/esqueci').length && visivel(p.$('eq-aviso1')));
+    digita(p.$('eq-email'), 'muitos@exemplo.com');
+    envia(p.$('eq-form1'));
+    await ate(function () { return pedidos(c, 'POST', '/api/esqueci').length === 1 && /de novo em/.test(texto(p.$('eq-aviso1'))); });
+    check('429: a frase do servidor com "de novo em 10 min", e o passo 2 não abre',
+          /\(de novo em 10 min\)/.test(texto(p.$('eq-aviso1'))) && !visivel(p.$('eq-form2')), texto(p.$('eq-aviso1')));
+    digita(p.$('eq-email'), EMAIL);
+    envia(p.$('eq-form1'));
+    await ate(function () { return visivel(p.$('eq-form2')); });
+    var pe = pedidos(c, 'POST', '/api/esqueci')[1];
+    check('passo 1: POST /api/esqueci com o e-mail só no corpo, sem token', !!pe && pe.corpo.email === EMAIL && pe.url.indexOf('@') < 0 && !pe.auth);
+    check('passo 2 aparece sempre depois do 1, com a frase do servidor', visivel(p.$('eq-form2')) && /Se houver conta com esse e-mail/.test(texto(p.$('eq-aviso1'))));
+    digita(p.$('eq-codigo'), '654321'); digita(p.$('eq-nova'), SENHA_NOVA); digita(p.$('eq-nova2'), SENHA_NOVA + 'x');
+    envia(p.$('eq-form2'));
+    await espera(30);
+    check('passo 2: a senha nova digitada diferente não sai', !pedidos(c, 'POST', '/api/esqueci/confirmar').length && /não batem/.test(texto(p.$('eq-aviso2'))));
+    digita(p.$('eq-codigo'), '111111'); digita(p.$('eq-nova2'), SENHA_NOVA);
+    envia(p.$('eq-form2'));
+    await ate(function () { return /código errado ou vencido/.test(texto(p.$('eq-aviso2'))); });
+    check('código errado: a frase genérica do servidor, e nenhuma sessão guardada', /código errado ou vencido/.test(texto(p.$('eq-aviso2'))) && lsSessao() === null);
+    digita(p.$('eq-codigo'), '654 321');
+    envia(p.$('eq-form2'));
+    await ate(function () { return visivel(p.$('minha-conta')); });
+    var pc = pedidos(c, 'POST', '/api/esqueci/confirmar')[1];
+    check('passo 2: {email, codigo, nova} só no corpo (o espaço do código sai)',
+          !!pc && pc.corpo.email === EMAIL && pc.corpo.codigo === '654321' && pc.corpo.nova === SENHA_NOVA && !pc.auth);
+    var s = lsSessao();
+    check('sucesso: SITE.guarda com o token novo', !!s && s.token === TOKEN_NOVO && s.conta.nome === 'Daniel' && s.conta.gm === true);
+    check('sucesso: abre a Minha conta e diz que as outras sessões caíram',
+          visivel(p.$('minha-conta')) && /Senha redefinida; as outras sessões foram encerradas/.test(texto(p.$('mc-aviso'))), texto(p.$('mc-aviso')));
+    var pg = pedidos(c, 'GET', '/api/conta').pop();
+    check('a conta é lida com o token novo no cabeçalho', !!pg && pg.auth === 'Bearer ' + TOKEN_NOVO);
+    await ate(function () { return /minha conta/.test(texto(p.$('sessao'))); });
+    check('o topo: "Olá, Daniel ◆ · minha conta · sair"', /Olá, Daniel/.test(texto(p.$('sessao'))) && /◆/.test(texto(p.$('sessao'))) &&
+          !!p.q('#sessao a[href="conta.html#conta"]') && !!p.q('#sessao #bt-sair'), texto(p.$('sessao')));
+  }
+
+  async function cena401() {
+    var c = { sessao: { token: 'tok-morto', conta: { id: 7, nome: 'Daniel', gm: false } }, hash: 'conta', rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/conta': [401, { ok: false, erro: 'faça login (token ausente ou vencido)' }]
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return pedidos(c, 'GET', '/api/conta').length && visivel(p.$('caixa-fora')); });
+    check('401 no /api/conta: a sessão guardada some', lsSessao() === null);
+    check('401: as abas voltam, no Entrar, com o aviso', visivel(p.$('painel-entrar')) && !visivel(p.$('minha-conta')) &&
+          /Entre de novo/.test(texto(p.$('e-aviso'))));
+    await ate(function () { return texto(p.$('sessao')) === 'Entrar'; });
+    check('401: o topo volta a "Entrar"', texto(p.$('sessao')) === 'Entrar', texto(p.$('sessao')));
+    check('401: o token foi no cabeçalho, nunca na URL', c.pedidos.some(function (x) {
+      return x.rota === '/api/conta' && x.auth === 'Bearer tok-morto' && x.url.indexOf('tok-morto') < 0; }));
+  }
+
+  async function cenaTrocaAberta() {
+    var confirmada = false;
+    var NOVA = junta(CONTA, { email: 'novo@outro.com' });
+    var c = { sessao: SESSAO_BOA, rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/conta': function () {
+        return [200, confirmada ? respostaConta({ conta: NOVA }) : respostaConta({ trocaEmail:
+          { para: 'novo@outro.com', enviadoPara: 'da***@exemplo.com', expiraEm: AGORA + 900, reenviarEm: AGORA + 50 } })];
+      },
+      'POST /api/conta/email/confirmar': function (b) {
+        if (b.codigo === '123456') { confirmada = true; return [200, { ok: true, conta: NOVA }]; }
+        return [400, { ok: false, erro: 'código errado', restam: 3 }];
+      }
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return visivel(p.$('minha-conta')); });
+    check('com sessão: abre a Minha conta, e o endereço diz #conta', visivel(p.$('minha-conta')) && !visivel(p.$('caixa-fora')) && p.w.location.hash === '#conta');
+    var dados = texto(p.$('mc-dados'));
+    check('dados: nome, e-mail, criada em e a marca ◆ do Mestre',
+          /Daniel/.test(dados) && /daniel@exemplo\.com/.test(dados) && /\d{2}\/\d{2}\/\d{4}/.test(dados) && /◆ Mestre do Fundo/.test(dados), dados);
+    check('trocaEmail aberto: a página abre direto no passo 2', visivel(p.$('em-form2')) && !visivel(p.$('em-form1')) && p.$('em-passo2').classList.contains('ligado'));
+    var env = texto(p.$('em-enviado'));
+    check('passo 2: "o código foi para da***@…" e para qual e-mail troca', /O código foi para da\*\*\*@exemplo\.com/.test(env) && /novo@outro\.com/.test(env), env);
+    var cod = p.$('em-codigo');
+    check('o campo do código: inputmode numérico e one-time-code', cod.getAttribute('inputmode') === 'numeric' && cod.getAttribute('autocomplete') === 'one-time-code');
+    check('reenviar só depois de reenviarEm (desligado, contando)', p.$('em-reenviar').disabled && /reenviar em \d+ s/.test(texto(p.$('em-reenviar'))), texto(p.$('em-reenviar')));
+    digita(cod, '12a');
+    envia(p.$('em-form2'));
+    await espera(30);
+    check('código com letra não sai da página', !pedidos(c, 'POST', '/api/conta/email/confirmar').length && /6 dígitos/.test(texto(p.$('em-aviso2'))));
+    digita(cod, '999999');
+    envia(p.$('em-form2'));
+    await ate(function () { return /restam/.test(texto(p.$('em-aviso2'))); });
+    check('código errado: "código errado — restam 3 tentativas"', texto(p.$('em-aviso2')) === 'código errado — restam 3 tentativas', texto(p.$('em-aviso2')));
+    digita(cod, '123456');
+    envia(p.$('em-form2'));
+    await ate(function () { return /novo@outro\.com/.test(texto(p.$('mc-dados'))) && /E-mail trocado/.test(texto(p.$('mc-aviso'))); });
+    var pc = pedidos(c, 'POST', '/api/conta/email/confirmar').pop();
+    check('confirmar: só {codigo} no corpo, o token no cabeçalho', pc.corpo.codigo === '123456' && Object.keys(pc.corpo).length === 1 &&
+          pc.auth === 'Bearer tok-bom');
+    check('confirmado: o e-mail novo nos dados e o passo 1 de volta', /novo@outro\.com/.test(texto(p.$('mc-dados'))) && visivel(p.$('em-form1')) &&
+          /E-mail trocado para novo@outro\.com/.test(texto(p.$('mc-aviso'))));
+    var linhas = p.qq('#mc-sessoes li');
+    check('sessões: 3 linhas, "esta" primeiro e sem botão de encerrar', linhas.length === 3 && linhas[0].classList.contains('esta') &&
+          !linhas[0].querySelector('[data-encerrar]') && !!linhas[1].querySelector('[data-encerrar]') && /esta/.test(texto(linhas[0])));
+    var ts = texto(p.$('mc-sessoes'));
+    check('sessões: o navegador em palavras, o IP mascarado e o último uso',
+          /Chrome · Windows/.test(ts) && /Firefox · Android/.test(ts) && /Safari · iOS/.test(ts) && /IP 189\.34\.\*\.\*/.test(ts) && /último uso há 3 h/.test(ts), ts.slice(0, 220));
+    var ta = texto(p.$('mc-atividade'));
+    check('atividade: os tipos em português, com a hora, e o alerta na senha errada',
+          /entrada na conta/.test(ta) && /tentativa de entrar com a senha errada/.test(ta) && /senha trocada/.test(ta) && /conta criada/.test(ta) &&
+          p.qq('#mc-atividade li.alerta').length === 1 && p.qq('#mc-atividade time').length === 4, ta.slice(0, 200));
+  }
+
+  async function cenaAcoes() {
+    var c = { sessao: SESSAO_BOA, rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/conta': function () { return [200, respostaConta()]; },
+      'POST /api/conta/email/pedir': function (b) {
+        if (b.novoEmail === 'sem@correio.com') return [503, { ok: false, erro: 'o envio de e-mail não está configurado', correio: false }];
+        return [200, { ok: true, enviadoPara: 'da***@exemplo.com', expiraEm: AGORA + 900, reenviarEm: AGORA + 60 }];
+      },
+      'POST /api/conta/senha': function (b) {
+        return b.atual === SENHA_ATUAL ? [200, { ok: true, sessoesEncerradas: 2 }] : [400, { ok: false, erro: 'senha atual errada' }];
+      },
+      'POST /api/conta/sessoes/encerrar': function (b) {
+        if (b.todas) return [200, { ok: true, encerradas: 3, estaEncerrada: true }];
+        if (b.outras) return [200, { ok: true, encerradas: 2, estaEncerrada: false }];
+        if (b.id) return [200, { ok: true, encerradas: 1, estaEncerrada: false }];
+        return [400, { ok: false, erro: 'diga o que encerrar: outras, id ou todas' }];
+      }
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return visivel(p.$('minha-conta')); });
+    check('sem troca aberta: o e-mail começa no passo 1', visivel(p.$('em-form1')) && !visivel(p.$('em-form2')));
+    var ac = { 'em-senha': 'current-password', 'em-novo': 'email', 'sn-atual': 'current-password', 'sn-nova': 'new-password',
+               'sn-nova2': 'new-password', 'em-senha-re': 'current-password', 'em-codigo': 'one-time-code' };
+    var tortos = Object.keys(ac).filter(function (id) { return p.$(id).getAttribute('autocomplete') !== ac[id]; });
+    check('Minha conta: o autocomplete certo nos campos', !tortos.length, tortos.join(', '));
+    digita(p.$('em-senha'), SENHA_ATUAL); digita(p.$('em-novo'), 'novo@outro.com'); digita(p.$('em-novo2'), 'novo@outra.com');
+    envia(p.$('em-form1'));
+    await espera(30);
+    check('o e-mail novo digitado diferente nas duas vezes: nada sai, e a página diz',
+          !pedidos(c, 'POST', '/api/conta/email/pedir').length && /não batem/.test(texto(p.$('em-aviso1'))));
+    digita(p.$('em-novo2'), 'novo@outro.com');
+    envia(p.$('em-form1'));
+    await ate(function () { return visivel(p.$('em-form2')); });
+    var pp = pedidos(c, 'POST', '/api/conta/email/pedir')[0];
+    check('pedir: {senha, novoEmail} no corpo, com o token', !!pp && pp.corpo.senha === SENHA_ATUAL && pp.corpo.novoEmail === 'novo@outro.com' && pp.auth === 'Bearer tok-bom');
+    check('pedir: o passo 2 com "o código foi para da***@…" e o reenviar desligado',
+          /da\*\*\*@exemplo\.com/.test(texto(p.$('em-enviado'))) && p.$('em-reenviar').disabled);
+    check('a senha digitada não fica no campo depois do pedido', p.$('em-senha').value === '' && p.$('em-novo').value === '');
+    p.$('em-outro').click();
+    await espera(20);
+    check('"trocar para outro e-mail" volta ao passo 1', visivel(p.$('em-form1')) && !visivel(p.$('em-form2')));
+    digita(p.$('em-senha'), SENHA_ATUAL); digita(p.$('em-novo'), 'sem@correio.com'); digita(p.$('em-novo2'), 'sem@correio.com');
+    envia(p.$('em-form1'));
+    await ate(function () { return pedidos(c, 'POST', '/api/conta/email/pedir').length === 2 && /ligado/.test(texto(p.$('em-aviso1'))); });
+    check('503 com correio:false: "o envio de e-mails ainda não foi ligado neste servidor"',
+          texto(p.$('em-aviso1')) === 'o envio de e-mails ainda não foi ligado neste servidor', texto(p.$('em-aviso1')));
+    digita(p.$('sn-atual'), SENHA_ATUAL); digita(p.$('sn-nova'), SENHA_NOVA); digita(p.$('sn-nova2'), SENHA_NOVA + '!');
+    envia(p.$('sn-form'));
+    await espera(30);
+    check('trocar a senha: as duas novas precisam bater', !pedidos(c, 'POST', '/api/conta/senha').length && /não batem/.test(texto(p.$('sn-aviso'))));
+    check('o aviso das outras sessões mora junto do botão',
+          texto(p.q('#sn-form .nota-botao')) === 'As outras sessões serão encerradas; o jogo aberto em outra máquina para de salvar na nuvem até entrar de novo.');
+    digita(p.$('sn-nova2'), SENHA_NOVA);
+    envia(p.$('sn-form'));
+    await ate(function () { return /Senha trocada/.test(texto(p.$('sn-aviso'))); });
+    var ps = pedidos(c, 'POST', '/api/conta/senha')[0];
+    check('trocar a senha: {atual, nova} no corpo, e "2 outras sessões foram encerradas"',
+          !!ps && ps.corpo.atual === SENHA_ATUAL && ps.corpo.nova === SENHA_NOVA && /2 outras sessões foram encerradas/.test(texto(p.$('sn-aviso'))));
+    p.q('#mc-sessoes [data-encerrar]').click();
+    await ate(function () { return /1 sessão encerrada/.test(texto(p.$('ss-aviso'))); });
+    var e1 = pedidos(c, 'POST', '/api/conta/sessoes/encerrar')[0];
+    check('encerrar uma: {id} da linha', !!e1 && e1.corpo.id === 'aa11bb22cc33' && Object.keys(e1.corpo).length === 1, e1 && JSON.stringify(e1.corpo));
+    await ate(function () { return !p.$('ss-outras').disabled; });
+    p.$('ss-outras').click();
+    await ate(function () { return /2 sessões encerradas/.test(texto(p.$('ss-aviso'))); });
+    check('encerrar as outras: {outras:true}', pedidos(c, 'POST', '/api/conta/sessoes/encerrar')[1].corpo.outras === true);
+    p.$('ss-todas').click();
+    await ate(function () { return !!p.q('.modal'); });
+    check('sair de todas: pede confirmação na própria página', visivel(p.q('.modal')) && /Sair de todas as sessões\?/.test(texto(p.q('.modal'))));
+    p.q('.modal [data-nao]').click();
+    await espera(20);
+    check('"Voltar" na confirmação não encerra nada', !p.q('.modal') && pedidos(c, 'POST', '/api/conta/sessoes/encerrar').length === 2);
+    p.$('ss-todas').click();
+    await ate(function () { return !!p.q('.modal'); });
+    p.q('.modal [data-sim]').click();
+    await ate(function () { return visivel(p.$('caixa-fora')); });
+    var et = pedidos(c, 'POST', '/api/conta/sessoes/encerrar')[2];
+    check('sair de todas: {todas:true}, a sessão local some e as abas voltam',
+          !!et && et.corpo.todas === true && lsSessao() === null && visivel(p.$('painel-entrar')) && /saiu de todas/.test(texto(p.$('e-aviso'))));
+  }
+
+  async function cenaEscape() {
+    var MAU = '<img src=x onerror="window.__xss=1">';
+    var c = { sessao: { token: 'tok-bom', conta: { id: 7, nome: MAU, gm: false } }, rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/conta': [200, respostaConta({
+        conta: { id: 7, nome: MAU, email: MAU, criadoEm: AGORA, gm: false },
+        sessoes: [{ id: '"><img src=x onerror="window.__xss=2">', agente: MAU, ip: MAU, ultimoUso: AGORA, criadoEm: AGORA, estaAqui: false }],
+        atividade: [{ tipo: MAU, em: AGORA }],
+        trocaEmail: { para: MAU, enviadoPara: MAU, expiraEm: AGORA + 900, reenviarEm: AGORA }
+      })]
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return visivel(p.$('minha-conta')) && /<img/.test(texto(p.$('sessao'))); });
+    await espera(60);
+    check('conta: o que vem do servidor não vira HTML (dados, sessões, atividade, passo 2, topo)',
+          !p.q('img[src="x"]') && !p.w.__xss && /<img src=x/.test(texto(p.$('mc-dados'))) && /<img src=x/.test(texto(p.$('mc-atividade'))) &&
+          /<img src=x/.test(texto(p.$('em-enviado'))) && /<img src=x/.test(texto(p.$('sessao'))));
+  }
+
+  /* ======================================================================
+   * o nome da conta nova (PEDIDO DO DONO: ninguém cria conta com nome da
+   * equipe — GM, Admin, Administrador…). A lei é a do jogo, e o motivo é o
+   * dela: a prova pergunta à própria JOGO.Nomes da página o que esperar.
+   * ==================================================================== */
+  var LEI_URL = new URL('../js/core/nomes.js', BASE_SITE).href;
+  function scriptsDaLei(p) {
+    return p.qq('script').filter(function (s) { return /nomes\.js/.test(s.getAttribute('src') || ''); });
+  }
+  function preencheCriar(p, nome) {
+    // o aviso da tentativa anterior some: a prova espera o novo
+    p.$('c-aviso').textContent = '';
+    p.$('c-aviso').className = 'aviso';
+    digita(p.$('c-nome'), nome); digita(p.$('c-email'), 'joana@exemplo.com');
+    digita(p.$('c-senha'), SENHA_NOVA); digita(p.$('c-senha2'), SENHA_NOVA);
+    envia(p.$('painel-criar'));
+  }
+  function avisoErro(p) { return /\berro\b/.test(p.$('c-aviso').className) && !!texto(p.$('c-aviso')); }
+
+  async function cenaNomes() {
+    var c = { hash: 'criar', rotas: {
+      'GET /api/saude': SAUDE,
+      // o nome que sair do navegador bate num servidor que já o tem: a página
+      // fica onde está (é a frase do servidor de verdade)
+      'POST /api/cadastro': [409, { ok: false, erro: 'esse nome já tem dono' }],
+      'POST /api/login': [401, { ok: false, erro: 'login ou senha errados' }]
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return pedidos(c, 'GET', '/api/saude').length && visivel(p.$('painel-criar')); });
+    await espera(40);
+    check('nomes: a lei não desce antes de o formulário de criar ser usado (sob demanda)',
+          !scriptsDaLei(p).length && !(p.w.JOGO && p.w.JOGO.Nomes));
+
+    preencheCriar(p, 'Admin');
+    await ate(function () { return p.w.JOGO && p.w.JOGO.Nomes && avisoErro(p); }, 6000);
+    await espera(40);               // se um pedido fosse sair, ele já teria saído
+    var N = p.w.JOGO && p.w.JOGO.Nomes;
+    check('nomes: o conta.js carregou a lei do jogo (JOGO.Nomes.valida)', !!N && typeof N.valida === 'function');
+    if (!N) return;
+    var ss = scriptsDaLei(p);
+    check('nomes: um <script> só, posto pelo conta.js, para ../js/core/nomes.js SEM marca na URL',
+          ss.length === 1 && ss[0].src === LEI_URL && !/[?#]/.test(ss[0].getAttribute('src')),
+          ss.map(function (s) { return s.getAttribute('src'); }).join(' | ') + ' (esperava ' + LEI_URL + ')');
+    function recusado(nome) {
+      var v = N.valida(nome, 3, 20);
+      check('nomes: a lei recusa "' + nome + '" por ser reservado à equipe', !v.ok && !!N.reservado(nome) && N.caracteresOk(nome),
+            JSON.stringify(v));
+      check('nomes: "' + nome + '" não sai do navegador (nenhum POST /api/cadastro)', !pedidos(c, 'POST', '/api/cadastro').length);
+      check('nomes: "' + nome + '" mostra o motivo da lei no aviso do cadastro, com o campo marcado',
+            texto(p.$('c-aviso')) === String(v.motivo).replace(/\s+/g, ' ').trim() && avisoErro(p) && visivel(p.$('c-aviso')) &&
+            p.$('c-nome').classList.contains('invalido') && !p.$('c-bt').disabled,
+            '"' + texto(p.$('c-aviso')) + '" / motivo "' + v.motivo + '"');
+    }
+    recusado('Admin');
+
+    preencheCriar(p, 'GM Joao');
+    await ate(function () { return avisoErro(p); });
+    await espera(40);
+    recusado('GM Joao');
+    check('nomes: a lei desce uma vez só, por mais envios que haja', scriptsDaLei(p).length === 1);
+
+    preencheCriar(p, 'Joana Silva');
+    await ate(function () { return pedidos(c, 'POST', '/api/cadastro').length && avisoErro(p); });
+    var pj = pedidos(c, 'POST', '/api/cadastro');
+    check('nomes: a lei deixa "Joana Silva"', N.valida('Joana Silva', 3, 20).ok === true, JSON.stringify(N.valida('Joana Silva', 3, 20)));
+    check('nomes: "Joana Silva" sai: um POST /api/cadastro com {nome, email, senha} no corpo, sem token',
+          pj.length === 1 && pj[0].corpo.nome === 'Joana Silva' && pj[0].corpo.email === 'joana@exemplo.com' &&
+          pj[0].corpo.senha === SENHA_NOVA && !pj[0].auth, JSON.stringify(pj.map(function (x) { return x.corpo && x.corpo.nome; })));
+    check('nomes: a resposta do servidor aparece no mesmo aviso, e o nome não fica marcado',
+          texto(p.$('c-aviso')) === 'esse nome já tem dono' && !p.$('c-nome').classList.contains('invalido'), texto(p.$('c-aviso')));
+
+    p.$('aba-entrar').click();
+    await ate(function () { return visivel(p.$('painel-entrar')); });
+    digita(p.$('e-login'), 'Administrator'); digita(p.$('e-senha'), SENHA_ATUAL);
+    envia(p.$('painel-entrar'));
+    await ate(function () { return pedidos(c, 'POST', '/api/login').length && /errados/.test(texto(p.$('e-aviso'))); });
+    var pl = pedidos(c, 'POST', '/api/login');
+    check('nomes: o Entrar não passa pela lei — a conta antiga "Administrator" (reservado) segue pedindo para entrar',
+          !!N.reservado('Administrator') && pl.length === 1 && pl[0].corpo.login === 'Administrator',
+          pl.length + ' pedido(s) de login');
+  }
+
+  async function cenaNomesSemLei() {
+    var c = { hash: 'criar', rotas: {
+      'GET /api/saude': SAUDE,
+      'POST /api/cadastro': [400, { ok: false, erro: 'esse nome é reservado à equipe do jogo' }]
+    } };
+    var p = await abre('conta.html', c);
+    // a lei "não chega": o <script> que o conta.js criar para ela aponta
+    // para um arquivo que não existe (pelo .src ou pelo setAttribute)
+    var pedidas = [], cria = p.d.createElement;
+    p.d.createElement = function (tag) {
+      var el = cria.apply(this, arguments);
+      if (String(tag).toLowerCase() !== 'script') return el;
+      var poe = el.setAttribute;
+      function desvia(v) { v = String(v); pedidas.push(v); return /nomes\.js/.test(v) ? 'nao-existe/nomes.js' : v; }
+      el.setAttribute = function (k, v) { return poe.call(el, k, String(k).toLowerCase() === 'src' ? desvia(v) : v); };
+      Object.defineProperty(el, 'src', { configurable: true,
+        get: function () { return el.getAttribute('src') || ''; },
+        set: function (v) { poe.call(el, 'src', desvia(v)); } });
+      return el;
+    };
+    await ate(function () { return pedidos(c, 'GET', '/api/saude').length && visivel(p.$('painel-criar')); });
+    preencheCriar(p, 'Admin');
+    await ate(function () { return pedidos(c, 'POST', '/api/cadastro').length && avisoErro(p); }, 6000);
+    var pc = pedidos(c, 'POST', '/api/cadastro');
+    check('sem a lei: o conta.js tentou carregá-la (../js/core/nomes.js)',
+          pedidas.some(function (u) { return /nomes\.js$/.test(u); }), pedidas.join(' | '));
+    check('sem a lei: JOGO.Nomes não existe na página', !(p.w.JOGO && p.w.JOGO.Nomes));
+    check('sem a lei: o pedido sai como antes, e o servidor é quem manda', pc.length === 1 && pc[0].corpo.nome === 'Admin',
+          pc.length + ' pedido(s)');
+    check('sem a lei: a recusa do servidor aparece no aviso do cadastro',
+          texto(p.$('c-aviso')) === 'esse nome é reservado à equipe do jogo' && avisoErro(p), texto(p.$('c-aviso')));
+  }
+
+  /* ======================================================================
+   * a loja
+   * ==================================================================== */
+  function lojaDe(p) {
+    return {
+      bt: function (sku) { return p.q('.produto[data-sku="' + sku + '"] [data-comprar]'); },
+      motivo: function (sku) { return texto(p.q('.produto[data-sku="' + sku + '"] .motivo')); },
+      cartao: function (sku) { return p.q('.produto[data-sku="' + sku + '"]'); },
+      linha: function (id) { return p.q('#lj-pedidos [data-pedido="' + id + '"]'); }
+    };
+  }
+
+  async function cenaLojaFora() {
+    var c = { rotas: { 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo()] } };
+    var p = await abre('loja.html', c), L = lojaDe(p);
+    await ate(function () { return p.qq('.produto').length === 12; });
+    var secoes = p.qq('.loja-secao').map(function (s) { return s.getAttribute('data-secao'); });
+    check('loja sem sessão: as três seções, na ordem', secoes.join() === 'pergaminhos,pedras,personagens', secoes.join());
+    check('loja: os 12 produtos do catálogo', p.qq('.produto').length === 12);
+    var xp = L.cartao('pergaminho-xp'), agua = L.cartao('pedras-agua'), xama = L.cartao('classe-invocador');
+    check('loja: o preço do servidor, com ponto de milhar', texto(xp.querySelector('.preco')) === '1.500 vinténs' &&
+          texto(agua.querySelector('.preco')) === '300 vinténs' && texto(xama.querySelector('.preco')) === '8.000 vinténs');
+    check('personagem: o retrato pelo id da classe e o selo "Raro"', !!xama.querySelector('img[src="img/classe-invocador.webp"]') &&
+          texto(xama.querySelector('.selo-raridade')) === 'Raro');
+    check('épico com o selo certo', texto(p.q('.produto[data-sku="classe-minotauro"] .selo-raridade')) === 'Épico');
+    check('pedra: a cor do elemento só por CSS, e a quantidade', !!agua.querySelector('.arte-produto.el-agua .pedra') && /×10/.test(texto(agua)) &&
+          !!p.q('.produto[data-sku="pedras-fogo"] .arte-produto.el-fogo'));
+    check('o limite em palavras', /Até 5 a cada 7 dias, somando os 5 desta seção/.test(texto(agua)) && /1 a cada 7 dias/.test(texto(xp)) &&
+          /Compra única/.test(texto(xama)) && /Libera com 10 cartas/.test(texto(xama)));
+    check('sem sessão: "Entre para comprar" em todos, e nenhum botão de compra',
+          p.qq('.produto a[href="conta.html#entrar"]').length === 12 && !p.q('[data-comprar]'));
+    check('sem sessão: a caixa do saldo convida a entrar', /Entre para comprar/.test(texto(p.$('lj-saldo'))) && p.$('lj-pedidos-caixa').hidden);
+    check('sem sessão: nada de /api/loja/minha', !pedidos(c, 'GET', '/api/loja/minha').length);
+    check('loja: o menu tem a Loja marcada', !!p.q('nav a[href="loja.html"][aria-current="page"]'));
+  }
+
+  async function cenaLojaLogada() {
+    var c = { sessao: SESSAO_LOJA, rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/loja/catalogo': [200, catalogo()],
+      'GET /api/loja/minha': function () { return [200, minha()]; },
+      'POST /api/loja/comprar': function (b) {
+        var it = catalogo().itens.filter(function (i) { return i.sku === b.sku; })[0];
+        return [201, { ok: true, saldo: minha().saldo, pedido: { id: 90 + c.pedidos.length, sku: b.sku, nome: it ? it.nome : b.sku,
+                       preco: it ? it.preco : 0, estado: 'pendente', motivo: null, criadoEm: AGORA, fechadoEm: null } }];
+      },
+      'POST /api/loja/cancelar': function (b) { return [200, { ok: true, saldo: minha().saldo, pedido: { id: b.id, estado: 'cancelado' } }]; }
+    } };
+    var p = await abre('loja.html', c), L = lojaDe(p);
+    await ate(function () { return p.qq('[data-comprar]').length === 12; });
+    check('com sessão: /api/loja/minha com o token no cabeçalho', pedidos(c, 'GET', '/api/loja/minha').some(function (x) { return x.auth === 'Bearer tok-loja'; }));
+    check('saldo: carteira, reservado e disponível do servidor', texto(p.q('[data-saldo="carteira"]')) === '12.450' &&
+          texto(p.q('[data-saldo="reservado"]')) === '300' && texto(p.q('[data-saldo="disponivel"]')) === '12.150');
+    var saldo = texto(p.$('lj-saldo'));
+    check('saldo: "do último save que subiu, há 3 h" e as duas explicações', /Do último save que subiu, há 3 h/.test(saldo) &&
+          /Só os vinténs do bolso contam; se estão no cofre, saque no jogo/.test(saldo) &&
+          /A entrega acontece quando o jogo abrir logado na conta Principal/.test(saldo), saldo.slice(0, 240));
+    check('ligados: Pergaminho da Sabedoria e Xamã', !L.bt('pergaminho-xp').disabled && !L.bt('classe-invocador').disabled &&
+          !L.motivo('pergaminho-xp') && !L.motivo('classe-invocador'));
+    check('Xamã: "Você tem 6 de 10 cartas"', /Você tem 6 de 10 cartas/.test(texto(L.cartao('classe-invocador'))));
+    check('desligado: classe já liberada (Bruxo)', L.bt('classe-bruxo').disabled && /já está liberada/.test(L.motivo('classe-bruxo')));
+    var comLimite = ['pedras-agua', 'pedras-terra', 'pedras-ar', 'pedras-fogo', 'pedras-neutro', 'pergaminho-elemento'];
+    check('desligado: limite com liberaEm ("de novo em 3 dias") nas 5 pedras e na Reescrita', comLimite.every(function (s) {
+      return L.bt(s).disabled && /Limite atingido: de novo em 3 dias/.test(L.motivo(s)); }), L.motivo('pedras-agua'));
+    check('o limite diz quanto já foi usado', /você usou 5/.test(texto(L.cartao('pedras-agua'))));
+    check('desligado: saldo curto ("Faltam 7.850 vinténs" no Ladino)', L.bt('classe-espadachim').disabled &&
+          /Faltam 7\.850 vinténs/.test(L.motivo('classe-espadachim')), L.motivo('classe-espadachim'));
+    check('desligado: já há um pedido dessa classe a caminho (Minotauro)', L.bt('classe-minotauro').disabled &&
+          /Já há um pedido dessa classe a caminho/.test(L.motivo('classe-minotauro')));
+    check('pedidos: os estados em português', /a caminho do jogo/.test(texto(L.linha(41))) && /esperando o jogo abrir/.test(texto(L.linha(39))) &&
+          /entregue/.test(texto(L.linha(38))) && /devolvido: vinténs insuficientes no jogo/.test(texto(L.linha(37))) &&
+          /cancelado/.test(texto(L.linha(36))));
+    check('cancelar: no pendente e no retirado há mais de 24 h; nunca no retirado recente nem nos fechados',
+          !!L.linha(39).querySelector('[data-cancelar]') && !!L.linha(35).querySelector('[data-cancelar]') &&
+          !!L.linha(40).querySelector('[data-cancelar]') && !L.linha(41).querySelector('[data-cancelar]') &&
+          !L.linha(38).querySelector('[data-cancelar]') && !L.linha(37).querySelector('[data-cancelar]') &&
+          !L.linha(36).querySelector('[data-cancelar]'));
+    L.bt('pergaminho-xp').click();
+    await ate(function () { return !!p.q('.modal'); });
+    var m = texto(p.q('.modal'));
+    check('comprar abre a confirmação: nome, preço e "sem devolução"', /Comprar Pergaminho da Sabedoria por 1\.500 vinténs\?/.test(m) &&
+          /Os vinténs saem da carteira do jogo quando ele receber o pedido\. Depois de entregue, não há devolução\./.test(m), m);
+    check('a confirmação ainda não mandou nada', !pedidos(c, 'POST', '/api/loja/comprar').length);
+    p.q('.modal [data-sim]').click();
+    await ate(function () { return /Pedido feito/.test(texto(p.$('lj-aviso'))); });
+    var c1 = pedidos(c, 'POST', '/api/loja/comprar')[0];
+    check('comprar: POST {sku, idem}, idem de 16 hex', !!c1 && c1.corpo.sku === 'pergaminho-xp' && /^[0-9a-f]{16}$/.test(c1.corpo.idem) &&
+          Object.keys(c1.corpo).length === 2 && c1.auth === 'Bearer tok-loja', c1 && JSON.stringify(c1.corpo));
+    check('comprar: avisa o jogo por BroadcastChannel("soterra-loja") {tipo:"comprou"}',
+          c.canal.some(function (x) { return x.nome === 'soterra-loja' && x.msg && x.msg.tipo === 'comprou'; }), JSON.stringify(c.canal));
+    await ate(function () { return L.bt('pergaminho-xp') && !L.bt('pergaminho-xp').disabled && !p.q('.modal'); });
+    L.bt('pergaminho-xp').click();
+    await ate(function () { return !!p.q('.modal'); });
+    p.q('.modal [data-sim]').click();
+    await ate(function () { return pedidos(c, 'POST', '/api/loja/comprar').length === 2; });
+    var c2 = pedidos(c, 'POST', '/api/loja/comprar')[1];
+    check('o idem muda a cada clique', !!c2 && /^[0-9a-f]{16}$/.test(c2.corpo.idem) && c2.corpo.idem !== c1.corpo.idem);
+    await ate(function () { return L.bt('classe-invocador') && !L.bt('classe-invocador').disabled; });
+    L.bt('classe-invocador').click();
+    await ate(function () { return !!p.q('.modal'); });
+    p.q('.modal [data-nao]').click();
+    await espera(30);
+    check('"Voltar" na confirmação não compra', pedidos(c, 'POST', '/api/loja/comprar').length === 2 && !p.q('.modal'));
+    await ate(function () { return L.linha(39) && L.linha(39).querySelector('[data-cancelar]'); });
+    L.linha(39).querySelector('[data-cancelar]').click();
+    await ate(function () { return !!p.q('.modal'); });
+    check('cancelar pede confirmação, com a reserva que volta', /Cancelar o pedido de 10 Sopros Engarrafados\?/.test(texto(p.q('.modal'))) &&
+          /A reserva de 450 vinténs volta a ficar disponível/.test(texto(p.q('.modal'))));
+    p.q('.modal [data-sim]').click();
+    await ate(function () { return pedidos(c, 'POST', '/api/loja/cancelar').length === 1 && /Pedido cancelado/.test(texto(p.$('lj-aviso'))); });
+    var pc = pedidos(c, 'POST', '/api/loja/cancelar')[0];
+    check('cancelar: POST {id}', !!pc && pc.corpo.id === 39 && Object.keys(pc.corpo).length === 1);
+  }
+
+  async function cenaLojaMestre() {
+    var c = { sessao: { token: 'tok-mestre', conta: { id: 1, nome: 'Dono', gm: true } }, rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/loja/catalogo': [200, catalogo()],
+      'GET /api/loja/minha': [200, minha({
+        saldo: { carteira: 0, reservado: 0, disponivel: 0, semFundo: true, saveVersao: 0, saveEm: null },
+        pedidos: [{ id: 5, sku: 'classe-bruxo', nome: 'Bruxo', preco: 0, estado: 'entregue', motivo: null, criadoEm: AGORA - DIA, fechadoEm: AGORA - DIA + 60 }]
+      })]
+    } };
+    var p = await abre('loja.html', c), L = lojaDe(p);
+    await ate(function () { return p.qq('[data-comprar]').length === 12; });
+    check('Mestre: o selo "Mestre: compra sem gastar"', /Mestre: compra sem gastar/.test(texto(p.$('lj-saldo'))));
+    check('Mestre: pula o saldo e os limites (pedras, Reescrita e Ladino ligados)',
+          ['pedras-agua', 'pergaminho-elemento', 'classe-espadachim', 'classe-minotauro'].every(function (s) { return !L.bt(s).disabled; }));
+    check('Mestre: a classe já liberada continua desligada', L.bt('classe-bruxo').disabled);
+    check('Mestre: o pedido dele aparece sem custo', /sem custo \(Mestre\)/.test(texto(L.linha(5))));
+    L.bt('classe-espadachim').click();
+    await ate(function () { return !!p.q('.modal'); });
+    check('Mestre: a confirmação diz que não gasta', /Conta do Mestre: o pedido não gasta vinténs/.test(texto(p.q('.modal'))));
+    p.q('.modal [data-nao]').click();
+  }
+
+  async function cenaLojaSemSave() {
+    var c = { sessao: SESSAO_LOJA, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo()],
+      'GET /api/loja/minha': [200, minha({ saldo: { carteira: 0, reservado: 0, disponivel: 0, semFundo: false, saveVersao: 0, saveEm: null }, pedidos: [] })]
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return p.qq('[data-comprar]').length === 12; });
+    check('sem save no servidor: todos desligados, com o motivo', p.qq('[data-comprar]').every(function (b) { return b.disabled; }) &&
+          p.qq('.motivo[data-motivo="sem-save"]').length === 12);
+    check('sem save: a caixa manda abrir o jogo logado na conta Principal',
+          /O servidor ainda não viu seus vinténs: abra o jogo logado nesta conta \(na conta Principal\)/.test(texto(p.$('lj-saldo'))));
+    check('sem pedidos: diz isso', /Nenhum pedido ainda/.test(texto(p.$('lj-pedidos'))));
+  }
+
+  async function cenaLoja401() {
+    var c = { sessao: SESSAO_LOJA, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo()],
+      'GET /api/loja/minha': [401, { ok: false, erro: 'faça login (token ausente ou vencido)' }]
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return pedidos(c, 'GET', '/api/loja/minha').length && p.qq('.produto a[href="conta.html#entrar"]').length === 12; });
+    check('401 no /api/loja/minha: a sessão some e volta o "Entre para comprar"', lsSessao() === null &&
+          p.qq('.produto a[href="conta.html#entrar"]').length === 12 && /vencido/.test(texto(p.$('lj-aviso'))));
+  }
+
+  async function cenaPrecoDoServidor() {
+    var c = { rotas: { 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo(1733)] } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return p.qq('.produto').length === 12; });
+    check('o preço é o do servidor: mudou lá, muda aqui (1.733)', texto(p.q('.produto[data-sku="pergaminho-xp"] .preco')) === '1.733 vinténs');
+  }
+
+  async function cenaLojaServidorFora() {
+    var c = { rotas: { 'GET /api/saude': 'fora', 'GET /api/loja/catalogo': 'fora' } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return /servidor está fora/.test(texto(p.$('lj-catalogo'))); });
+    check('servidor fora: a loja diz isso, sem quebrar', /O servidor está fora — a loja volta com ele\./.test(texto(p.$('lj-catalogo'))));
+  }
+
+  async function cenaEscapeLoja() {
+    var MAU = '<img src=x onerror="window.__xss=3">';
+    var cat = catalogo();
+    cat.itens[0].nome = MAU; cat.itens[0].descricao = MAU; cat.itens[0].sku = '"><img src=x onerror="window.__xss=4">';
+    cat.itens[7].alvo = '"><b>'; cat.itens[7].raridade = MAU;
+    var c = { sessao: SESSAO_LOJA, rotas: {
+      'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, cat],
+      'GET /api/loja/minha': [200, minha({ pedidos: [{ id: '"><img src=x>', sku: MAU, nome: MAU, preco: 1, estado: MAU, motivo: MAU, criadoEm: AGORA }] })]
+    } };
+    var p = await abre('loja.html', c);
+    await ate(function () { return p.qq('.produto').length === 12 && !p.$('lj-pedidos-caixa').hidden; });
+    await espera(60);
+    check('loja: o que vem do servidor não vira HTML (catálogo e pedidos)', !p.q('img[src="x"]') && !p.w.__xss &&
+          /<img src=x/.test(texto(p.$('lj-catalogo'))) && /<img src=x/.test(texto(p.$('lj-pedidos'))));
+  }
+
+  /* ======================================================================
+   * as provas que olham tudo junto
+   * ==================================================================== */
+  function urlsLimpas() {
+    var ruins = TODOS.filter(function (x) {
+      var caminho = x.url.replace(/^[a-z]+:\/\/[^/]*/i, '');
+      return /[?#]/.test(caminho) || /@|%40/.test(x.url) || SEGREDOS.some(function (s) {
+        return x.url.indexOf(s) >= 0 || x.url.indexOf(encodeURIComponent(s)) >= 0; });
+    });
+    check('nenhum fetch leva e-mail, código ou senha na URL (' + TODOS.length + ' pedidos)', TODOS.length > 40 && !ruins.length,
+          ruins.slice(0, 3).map(function (r) { return r.url; }).join(' | '));
+    var get = TODOS.filter(function (x) { return x.metodo === 'GET' && x.corpo !== null; });
+    check('GET nenhum leva corpo', !get.length);
+  }
+
+  async function fontes() {
+    var arqs = ['loja.html', 'loja.js', 'conta.html', 'conta.js', 'site.js'], textos = {};
+    for (var i = 0; i < arqs.length; i++) textos[arqs[i]] = await le(BASE_SITE + arqs[i]);
+    check('li as fontes do site', arqs.every(function (a) { return !!textos[a]; }));
+    // os preços da tabela 2.1 do plano; com servidor/loja.py no disco, os de lá também
+    var precos = [1500, 5000, 300, 450, 8000, 20000, 25000, 30000];
+    var loja = await le(new URL('../servidor/loja.py', location.href).href), doServidor = 0;
+    (loja || '').replace(/['"]preco['"]\s*:\s*([\d_]+)/g, function (_, n) {
+      n = Number(n.replace(/_/g, ''));
+      if (n > 0 && precos.indexOf(n) < 0) precos.push(n);
+      doServidor++;
+    });
+    var achados = [];
+    arqs.forEach(function (a) {
+      precos.forEach(function (n) {
+        [String(n), SITE.num(n)].forEach(function (f) {
+          var re = new RegExp('(^|[^\\d.,])' + f.replace(/\./g, '\\.') + '(?![\\d.,])');
+          var m = re.exec(textos[a] || '');
+          if (m) achados.push(a + ': ' + f);
+        });
+      });
+    });
+    check('nenhum preço escrito no HTML ou no JS do site (' + precos.length + ' preços' +
+          (doServidor ? ', ' + doServidor + ' lidos de servidor/loja.py' : ', servidor/loja.py ainda não existe') + ')',
+          !achados.length, achados.join(', '));
+    check('o site não chama window.confirm (a confirmação é da página)', arqs.every(function (a) { return !/\bconfirm\s*\(/.test((textos[a] || '').replace(/SITE\.confirma\s*\(/g, '')); }));
+  }
+
+  async function roda(nome, fn) {
+    try { await fn(); } catch (e) { check(nome + ': o roteiro não estoura', false, String(e && (e.stack || e.message) || e).slice(0, 300)); }
+  }
+
+  (async function () {
+    try {
+      await roda('unidades', unidades);
+      await roda('sem correio', cenaSemCorreio);
+      await roda('esqueci', cenaEsqueci);
+      await roda('401', cena401);
+      await roda('troca aberta', cenaTrocaAberta);
+      await roda('ações', cenaAcoes);
+      await roda('escape da conta', cenaEscape);
+      await roda('nomes', cenaNomes);
+      await roda('nomes sem a lei', cenaNomesSemLei);
+      await roda('loja sem sessão', cenaLojaFora);
+      await roda('loja com sessão', cenaLojaLogada);
+      await roda('loja do Mestre', cenaLojaMestre);
+      await roda('loja sem save', cenaLojaSemSave);
+      await roda('loja 401', cenaLoja401);
+      await roda('preço do servidor', cenaPrecoDoServidor);
+      await roda('loja com o servidor fora', cenaLojaServidorFora);
+      await roda('escape da loja', cenaEscapeLoja);
+      await roda('urls', urlsLimpas);
+      await roda('fontes', fontes);
+    } finally {
+      palco.innerHTML = '';
+      try {
+        if (sessaoAntes === null) localStorage.removeItem(CHAVE); else localStorage.setItem(CHAVE, sessaoAntes);
+      } catch (e) { /* sem storage */ }
+      fecha();
+    }
+  })();
+})();
+</script>
+</body>
+</html>

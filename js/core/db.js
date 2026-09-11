@@ -34,6 +34,8 @@ var JOGO = (typeof window !== 'undefined')
  *   banco    { moedas, itens[{itemId,level,stars}] }  — o cofre
  *   pvp      [ { id, oponente, minhaDupla, duplaDele, resultado, clima, quando } ]
  *   trocas   [ { id, com, dei[], recebi[], quando } ]
+ *   loja     { aplicadas[id], recusadas[{id, motivo}] } — os pedidos da loja
+ *            do site que ESTE save já tratou (Fase C; ver "a loja" abaixo)
  */
 (function () {
   'use strict';
@@ -72,6 +74,7 @@ var JOGO = (typeof window !== 'undefined')
       mercado: null,                 // { dia, ofertas } — quem semeia é JOGO.Mercado
       placar: {},                    // id -> última foto de cada vizinho visto
       mutados: [],                   // [{id, nome}] — silenciados no chat (25/08)
+      loja: { aplicadas: [], recusadas: [] },   // Fase C: pedidos da loja do site já tratados
       pvp: [],
       trocas: []
     };
@@ -106,6 +109,9 @@ var JOGO = (typeof window !== 'undefined')
           if (d.mercado === undefined) d.mercado = null;
           if (!d.placar || typeof d.placar !== 'object') d.placar = {};
           if (!Array.isArray(d.mutados)) d.mutados = [];
+          // a anotação da LOJA (Fase C): contas de antes ganham as listas
+          // vazias, e lixo/duplicata/excesso sai (teto de 200 em cada)
+          d.loja = saneiaLoja(d.loja);
           if (d.jogador.titulo === undefined) d.jogador.titulo = null;
           if (d.jogador.avatar === undefined) d.jogador.avatar = null;
           if (!d.jogador.brasa || typeof d.jogador.brasa.pts !== 'number') {
@@ -169,10 +175,48 @@ var JOGO = (typeof window !== 'undefined')
                       avatar: d.jogador.avatar || null, criadoEm: d.jogador.criadoEm });
   };
 
+  /* O BATISMO E A LEI DOS NOMES (10/09 — pedido do dono: "ninguem conseguir
+   * colocar o nome com GM Gm Admin Administrador etc.."). Com js/core/nomes.js
+   * na página (o index carrega antes deste arquivo), o nome NOVO passa pela
+   * mesma régua da conta do site: JOGO.Nomes.valida(nome, 3, 20).
+   *   - 3 a 20 caracteres, os MESMOS do cadastro no servidor. Antes o batismo
+   *     cortava calado em 24: um nome que não cabe na conta não devia caber na
+   *     plaquinha, e cortar calado esconde do jogador o que foi gravado.
+   *   - as pontas são aparadas ANTES de validar ("  Ana  " é "Ana"; a régua
+   *     recusa espaço na ponta, e ninguém o digita de propósito).
+   *   - a recusa volta {ok:false, erro:<motivo da régua, em pt-BR>} e a HUD
+   *     mostra o motivo no toast.
+   * O Mestre do Fundo (GM.ativo) pode tudo — o título é dele: vale a regra de
+   * antes (apara, corta em 24, só o vazio é recusado). Sem JOGO.Nomes
+   * (bancada de teste que só carrega o db), idem: como sempre foi.
+   * O nome JÁ guardado não muda aqui; quem cobra o reservado antigo é a HUD
+   * (pede batismo novo ao entrar no Acampamento). */
+  var NOME_MIN = 3, NOME_MAX = 20;
+  DB.NOME_MIN = NOME_MIN;
+  DB.NOME_MAX = NOME_MAX;
+  function mestreAtivo() {
+    try { return !!(JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()); } catch (e) { return false; }
+  }
   DB.batizar = function (nome) {
     var d = carrega();
-    nome = String(nome == null ? '' : nome).trim().slice(0, 24);
-    if (!nome) return responde({ ok: false, erro: 'nome vazio' });
+    nome = String(nome == null ? '' : nome).trim();
+    var Nm = JOGO.Nomes;
+    if (Nm && typeof Nm.valida === 'function' && !mestreAtivo()) {
+      var v = Nm.valida(nome, NOME_MIN, NOME_MAX);
+      if (!v || !v.ok) {
+        // quem se passa pela equipe ouve ISSO, e não o tamanho ou o caractere:
+        // "GM" é curto demais E reservado, "G.M" tem ponto E é reservado — o
+        // motivo que ensina é o da equipe (senão o próximo palpite é "GM1")
+        var erro = (v && v.motivo) || 'nome recusado';
+        if (nome && typeof Nm.reservado === 'function' && Nm.reservado(nome)) {
+          erro = Nm.MOTIVO_RESERVADO || erro;
+        }
+        return responde({ ok: false, erro: erro });
+      }
+    } else {
+      nome = nome.slice(0, 24);
+      if (!nome) return responde({ ok: false, erro: 'nome vazio' });
+    }
     d.jogador.nome = nome;
     grava();
     return responde({ ok: true, nome: nome });
@@ -431,6 +475,108 @@ var JOGO = (typeof window !== 'undefined')
                   visto: e.visto });
     });
     return responde(fora);
+  };
+
+  // -------------------------------------------------------------------- a loja
+  /* A LOJA DE VINTÉNS DO SITE (Fase C, 10/09). O jogador compra no site; o
+   * jogo retira os pedidos no cartório e os aplica (js/core/loja.js). Aqui
+   * mora a ANOTAÇÃO do que este save já tratou:
+   *   aplicadas  [id]            entregues aqui: os vinténs saíram do bolso
+   *                              e o item entrou no Progress
+   *   recusadas  [{id, motivo}]  devolvidos (o servidor estorna)
+   * A foto sobe no PUT /api/save de sempre, e o SERVIDOR fecha os pedidos no
+   * mesmo BEGIN IMMEDIATE que grava o save — a entrega nunca se separa da
+   * versão do save que a contém. Por isso a anotação NÃO se poda pela
+   * resposta do PUT: o servidor ignora id já fechado, e com os limites de
+   * compra 200 ids levam anos. Passou de 200, sai o mais velho.
+   *
+   * `lojaAplica` DECIDE E GRAVA de forma síncrona por dentro, como
+   * `gastarMoedas`: quem chega segundo com o mesmo id recebe {ja:true},
+   * sem janela entre olhar e gravar. Só o bolso paga (o cofre não entra),
+   * e o cofre sem fundo do Mestre anota sem descontar. */
+  function lojaTeto() { return 200; }
+  function idLoja(v) {
+    return (typeof v === 'number' && isFinite(v) && v > 0 && Math.floor(v) === v) ? v : 0;
+  }
+  function motivoLoja(m) {
+    var aceitos = { 'sem-saldo': 1, 'classe-ja-liberada': 1, 'item-invalido': 1, 'erro-local': 1 };
+    return aceitos[m] === 1 ? m : 'erro-local';
+  }
+  function saneiaLoja(l) {
+    var fora = { aplicadas: [], recusadas: [] }, vistos = {}, i;
+    if (!l || typeof l !== 'object') return fora;
+    var ap = Array.isArray(l.aplicadas) ? l.aplicadas : [];
+    for (i = 0; i < ap.length; i++) {
+      var a = idLoja(ap[i]);
+      if (a && !vistos[a]) { vistos[a] = 1; fora.aplicadas.push(a); }
+    }
+    var re = Array.isArray(l.recusadas) ? l.recusadas : [];
+    for (i = 0; i < re.length; i++) {
+      var rid = (re[i] && typeof re[i] === 'object') ? idLoja(re[i].id) : 0;
+      if (rid && !vistos[rid]) { vistos[rid] = 1; fora.recusadas.push({ id: rid, motivo: motivoLoja(re[i].motivo) }); }
+    }
+    if (fora.aplicadas.length > lojaTeto()) fora.aplicadas = fora.aplicadas.slice(-lojaTeto());
+    if (fora.recusadas.length > lojaTeto()) fora.recusadas = fora.recusadas.slice(-lojaTeto());
+    return fora;
+  }
+  function lojaDe(d) {
+    if (!d.loja || !Array.isArray(d.loja.aplicadas) || !Array.isArray(d.loja.recusadas)) d.loja = saneiaLoja(d.loja);
+    return d.loja;
+  }
+  function lojaTratou(l, id) {
+    if (l.aplicadas.indexOf(id) >= 0) return true;
+    for (var i = 0; i < l.recusadas.length; i++) if (l.recusadas[i].id === id) return true;
+    return false;
+  }
+  function lojaAnota(lista, v) {
+    lista.push(v);
+    if (lista.length > lojaTeto()) lista.splice(0, lista.length - lojaTeto());
+  }
+  DB.lojaVer = function () {
+    var l = lojaDe(carrega());
+    return responde({ aplicadas: l.aplicadas.slice(),
+                      recusadas: l.recusadas.map(function (r) { return { id: r.id, motivo: r.motivo }; }) });
+  };
+  DB.lojaAplica = function (id, preco) {
+    var d = carrega(), l = lojaDe(d);
+    id = idLoja(id);
+    if (!id) return responde({ ok: false, erro: 'pedido inválido' });
+    if (lojaTratou(l, id)) return responde({ ok: false, ja: true });
+    preco = Math.max(0, Math.floor(Number(preco) || 0));
+    if (bolsoSemFundo()) {                       // o Mestre: anota sem descontar
+      lojaAnota(l.aplicadas, id);
+      grava();
+      return responde({ ok: true, moedas: 999999, semFundo: true });
+    }
+    if (d.carteira.moedas < preco) {
+      return responde({ ok: false, semSaldo: true, moedas: d.carteira.moedas });
+    }
+    d.carteira.moedas -= preco;
+    lojaAnota(l.aplicadas, id);
+    grava();
+    return responde({ ok: true, moedas: d.carteira.moedas });
+  };
+  DB.lojaRecusa = function (id, motivo) {
+    var d = carrega(), l = lojaDe(d);
+    id = idLoja(id);
+    if (!id) return responde({ ok: false, erro: 'pedido inválido' });
+    if (lojaTratou(l, id)) return responde({ ok: false, ja: true });
+    lojaAnota(l.recusadas, { id: id, motivo: motivoLoja(motivo) });
+    grava();
+    return responde({ ok: true });
+  };
+  /* A entrega LANÇOU depois do débito: os vinténs voltam e o id passa de
+   * aplicadas para recusadas (o servidor estorna no próximo PUT). */
+  DB.lojaDesfaz = function (id, preco, motivo) {
+    var d = carrega(), l = lojaDe(d);
+    id = idLoja(id);
+    var i = id ? l.aplicadas.indexOf(id) : -1;
+    if (i < 0) return responde({ ok: false, erro: 'pedido não aplicado aqui' });
+    l.aplicadas.splice(i, 1);
+    if (!bolsoSemFundo()) d.carteira.moedas += Math.max(0, Math.floor(Number(preco) || 0));
+    lojaAnota(l.recusadas, { id: id, motivo: motivoLoja(motivo || 'erro-local') });
+    grava();
+    return responde({ ok: true, moedas: d.carteira.moedas });
   };
 
   // --------------------------------------------------------------- históricos

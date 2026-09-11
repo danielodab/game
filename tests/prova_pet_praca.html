@@ -28,8 +28,12 @@ f.onload = function () {
     try {
       var P = w.JOGO.Progress;
       if (!P.petOwned(PET)) P.addPetCards(PET, 5);   // as 5 cartas: o bicho é seu
-      P.equipPet('sumo', PET);
-      w.JOGO.DB.batizar('Dono do Bicho').then(function () {
+      // pets a partir do nível 10 (nível de uso, 10/09): o Bárbaro do perfil
+      // novo sobe ao 10 antes de chamar o bicho. O equipPet recusado devolve
+      // false, não lança: a recusa vira ERRO no título.
+      P.addXp('sumo', w.JOGO.DATA.leveling.xpTable[9]);
+      if (!P.equipPet('sumo', PET)) document.title = 'ERRO ' + ((P.ultimaRecusa && P.ultimaRecusa.motivo) || 'o bicho não veio');
+      w.JOGO.DB.batizar('Tratador do Bicho').then(function () {
         w.JOGO.UI.selection(['sumo']);
         w.JOGO.UI.showScreen('hub');
         var v2 = 0;

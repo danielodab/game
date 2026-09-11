@@ -255,8 +255,19 @@ var JOGO = (typeof window !== 'undefined')
     return D[Game.dificuldade] || D.normal || { vida: 1, dano: 1, clima: 1, xp: 1, drop: 1 };
   };
 
+  /* CARGA SOB DEMANDA (10/09): no jogo servido, cada descida baixa os modelos
+   * dela na hora de descer, atrás da tela de carga (JOGO.Bundle.segura), e
+   * chama `deNovo` quando chegarem. Com tudo na mão — ou em casa, file:// —
+   * devolve false e a descida segue na hora, como sempre. */
+  function seguraParaModelos(pedido, deNovo) {
+    var B = JOGO.Bundle;
+    try { return !!(B && B.segura && B.segura(pedido, deNovo)); } catch (e) { return false; }
+  }
+
   Game.startRun = function (heroIds, dungeonId, opts) {
     if (!validParty(heroIds) || !validDungeon(dungeonId)) return false;
+    if (!(opts && opts.direto) && seguraParaModelos({ dungeonId: dungeonId, party: heroIds, sala: 0 },
+        function () { Game.startRun(heroIds, dungeonId, opts); })) return true;
     Game.party = heroIds.slice();
     Game.dungeonId = dungeonId;
     Game.roomIndex = 0;
@@ -299,6 +310,8 @@ var JOGO = (typeof window !== 'undefined')
    * escolhas às cegas são da ficha; aqui só se monta a arena. */
   Game.startDuel = function (duplaA, duplaB) {
     if (!duplaA || !duplaA.length || !duplaB || !duplaB.length) return false;
+    if (seguraParaModelos({ duplas: [duplaA, duplaB], duelo: true },
+        function () { Game.startDuel(duplaA, duplaB); })) return true;
     Game.party = duplaA.slice();
     Game.dungeonId = null;               // duelo não pertence a calabouço
     Game.roomIndex = 0;
@@ -327,6 +340,8 @@ var JOGO = (typeof window !== 'undefined')
 
   Game.nextRoom = function () {
     if (Game.screen !== 'roomClear' || !Game.dungeonId) return false;
+    if (seguraParaModelos({ dungeonId: Game.dungeonId, party: Game.party, sala: Game.roomIndex + 1 },
+        function () { Game.nextRoom(); })) return true;
     Game.roomIndex++;
     // O POÇO: a sala seguinte nasce ANTES de o pé chegar nela
     if (Game.dungeonId === 'poco' && JOGO.Poco) JOGO.Poco.preparar(Game.roomIndex + 2);
@@ -646,6 +661,32 @@ var JOGO = (typeof window !== 'undefined')
     return { id: v ? v.id : null, titulo: v ? v.titulo : '', tipo: tipo, fator: fator };
   }
 
+  /* O PERGAMINHO DA SABEDORIA (Fase C, 10/09): o fator dele NESTA sala — 1
+   * sem carga, e 1 também quando ninguém do grupo sobe mais de nível (XP
+   * para quem está no teto só engordaria o pet e o dízimo de graça, sem o
+   * pergaminho gastar nada). Defensivo como a agenda: sem o Progress novo,
+   * ou com erro, é 1 e o funil é exatamente o de antes. */
+  function pergaminhoXp(prog) {
+    try {
+      if (!prog || !prog.fatorPergaminhoXp) return 1;
+      var f = prog.fatorPergaminhoXp();
+      if (!(typeof f === 'number' && isFinite(f) && f > 1)) return 1;
+      var lv = (JOGO.DATA && JOGO.DATA.leveling) || {};
+      var teto = Math.min(num(lv.maxLevel, 30), (lv.xpTable && lv.xpTable.length) || 30);
+      for (var i = 0; i < Game.party.length; i++) {
+        var h = prog.hero ? prog.hero(Game.party[i]) : null;
+        if (h && num(h.level, 1) < teto) return f;
+      }
+      return 1;
+    } catch (e) { return 1; }
+  }
+  // o teto de XP da agenda (2,0): pergaminho e evento juntos não passam dele
+  function tetoXp() {
+    var t = null;
+    try { t = JOGO.Agenda && JOGO.Agenda.TETOS ? JOGO.Agenda.TETOS.xp : null; } catch (e) { t = null; }
+    return (typeof t === 'number' && isFinite(t) && t >= 1) ? t : 2.0;
+  }
+
   // pedras derrubadas pelos inimigos mortos desta sala [G5]
   // `fPedras` (10/09) é o fator do evento do mundo de pedras. Só as pedras
   // ELEMENTAIS multiplicam — a Âncora fica fora, é a pedra rara da forja — e
@@ -741,8 +782,28 @@ var JOGO = (typeof window !== 'undefined')
      * o fator é 1, e ×1 no fim do produto não mexe em bit nenhum. */
     var tAg = agendaAgora();
     var fEvXp = fAg('xp', tAg);
+    /* O PERGAMINHO DA SABEDORIA (Fase C) entra no MESMO lugar do evento,
+     * sem passar do teto dele: fXp = max(fEvXp, min(TETO_XP, fEvXp × fPerg)).
+     * Com evento ×2,0 no ar o pergaminho pausa sozinho; com ×1,5, os dois
+     * juntos dão ×2,0. Dificuldade, desafio, Poço e guilda seguem por fora,
+     * como sempre — o teto absoluto (4,6×) não sobe. Sem carga, fXp É fEvXp
+     * (o mesmo número): o funil sem pergaminho não muda um bit. */
+    var fPerg = pergaminhoXp(prog);
+    var fXp = (fPerg > 1) ? Math.max(fEvXp, Math.min(tetoXp(), fEvXp * fPerg)) : fEvXp;
     var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
-                             fatorPoco * fatorGuildaXp * fEvXp);
+                             fatorPoco * fatorGuildaXp * fXp);
+    /* a carga só se gasta quando o pergaminho ACRESCENTOU XP nesta sala
+     * (o grupo ganhou mais do que ganharia sem ele) */
+    var pergaminhoSala = null;
+    if (fXp > fEvXp) {
+      var xpSemPerg = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
+                                 fatorPoco * fatorGuildaXp * fEvXp);
+      if (xpGanho > xpSemPerg && xpGanho > 0) {
+        var restamPerg = 0;
+        try { restamPerg = prog.gastaCargaXp(); } catch (eP) { restamPerg = 0; }
+        pergaminhoSala = { fator: fXp / fEvXp, restam: restamPerg };
+      }
+    }
 
     /* VINTENS — a moeda, derivada do MESMO xpTotal.
      *
@@ -915,6 +976,11 @@ var JOGO = (typeof window !== 'undefined')
      * (10/09) — no saque, só quando o evento venceu o Dia */
     var eventos = [];
     if (fEvXp > 1 && xpGanho > 0) eventos.push(evAg('xp', fEvXp, tAg));
+    // o pergaminho que pesou, no mesmo formato: a chipsEvento('xp') da HUD mostra
+    if (pergaminhoSala) {
+      eventos.push({ id: null, titulo: 'Pergaminho da Sabedoria', tipo: 'xp',
+                     fator: pergaminhoSala.fator, origem: 'pergaminho', restam: pergaminhoSala.restam });
+    }
     if (fEvVintem > 1 && moedasGanhas > 0) eventos.push(evAg('vintem', fEvVintem, tAg));
     if (fEvPedras > 1 && pedrasComEvento) eventos.push(evAg('pedras', fEvPedras, tAg));
     if (saqueDoEvento) eventos.push(evAg('saque', fSaque, tAg));
@@ -943,6 +1009,7 @@ var JOGO = (typeof window !== 'undefined')
       insignias: insigniasGanhas,
       dizimo: dizimoSoma > 0 ? { pct: dizimoPct, doado: dizimoSoma } : null,
       eventos: eventos,          // 10/09: [{id, titulo, tipo, fator}] — os eventos do mundo que pesaram
+      pergaminho: pergaminhoSala, // Fase C: {fator, restam} quando o Pergaminho da Sabedoria gastou carga; senão null
       elementChoices: elementChoices
     };
   }

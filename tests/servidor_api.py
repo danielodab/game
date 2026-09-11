@@ -14,11 +14,22 @@ e sobretudo o ANTI-DUPLICAÇÃO — o mesmo iid duas vezes, iid de outra conta,
 iid consumido que volta, iid que nunca nasceu; e a troca espelhada que muda
 a posse de verdade.
 
+Na Fase C, o GET /api/ranking guardado por 30 s (sem nunca mostrar velho) e a
+saúde dizendo se o correio está ligado; a conta no site e a loja têm provas
+próprias (tests/conta_api.py e tests/loja_api.py), que reaproveitam o Cliente,
+porta_livre e espera_api daqui.
+
 Desde 10/09, também os EVENTOS DO MUNDO (/api/eventos: só o Mestre liga, todo
 mundo lê, os tetos e a regra "vale o maior"), o calendário semanal no relógio
 de Brasília, o RANKING POR CLASSE e a migração de um banco de antes disso.
 Os eventos são do mundo, não de uma conta: quem conta o que está no ar chama
 `limpa_agenda()` antes, e a ordem dos testes continua não importando.
+
+E a LEI DOS NOMES (servidor/nomes.py, pedido do dono): o cadastro recusa nome
+reservado à equipe do jogo (GM, Admin, Mestre do Fundo…, disfarçado ou não), a
+conta antiga com nome assim continua entrando, um save forjado não veste a
+equipe na vitrine do ranking, e o `admin renomear` (o admin.sh de verdade, no
+sh) é a porta do dono para dar um nome desses.
 """
 import json
 import os
@@ -43,6 +54,7 @@ API = os.path.join(AQUI, '..', 'servidor', 'api.py')
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(AQUI, '..', 'servidor'))
 import api as cartorio  # noqa: E402
+import nomes  # noqa: E402  (a lei dos nomes: o motivo que o cadastro devolve)
 
 # o formato de um item de ativos/proximos e de uma regra (seção 1.3 do plano)
 CHAVES_EVENTO = {'id', 'origem', 'regra', 'tipo', 'multiplicador', 'calabouco', 'titulo', 'texto', 'inicio', 'fim'}
@@ -275,6 +287,7 @@ class ProvaDaApi(unittest.TestCase):
         self.assertTrue(r['ok'])
         self.assertIn('contas', r)
         self.assertIn('agora', r)
+        self.assertIs(r['correio'], False)          # esta API sobe sem --emails-prova e sem SMTP
 
     def test_cadastro(self):
         c = Cliente(self.base)
@@ -302,6 +315,68 @@ class ProvaDaApi(unittest.TestCase):
         status, r = Cliente(self.base).cadastra('Ana Email', 'sem-arroba')
         self.assertEqual(status, 400)
 
+    def test_cadastro_nome_reservado(self):
+        """A lei dos nomes (servidor/nomes.py), pedido do dono: "ninguem
+        conseguir colocar o nome com GM Gm Admin Administrador etc..". O cadastro
+        recusa quem veste a equipe do jogo, disfarçado ou não, com o motivo da
+        regra (o mesmo texto de nomes.valida, que o site mostra)."""
+        self.assertEqual(cartorio.NOME_RESERVADO, nomes.valida('Admin')[1])
+        for i, nome in enumerate(['Admin', 'Administrador', 'Moderador', 'Mestre do Fundo', '4dm1n', 'ADMIN',
+                                  'Administrator', 'GM Joao', 'JoaoGM', 'Gm2']):
+            status, r = Cliente(self.base).cadastra(nome, 'reservado.%d@soterra.test' % i)
+            self.assertEqual((status, r.get('erro')), (400, cartorio.NOME_RESERVADO), nome)
+        # "GM" e "Gm" sozinhos nem chegam à palavra: têm dois caracteres, e o motivo
+        # é o tamanho (a mesma ordem de nomes.valida e da pré-checagem do site)
+        for nome in ('GM', 'Gm'):
+            status, r = Cliente(self.base).cadastra(nome, 'curto.%s@soterra.test' % nome.lower())
+            self.assertEqual((status, r.get('erro')), (400, 'nome inválido: ' + nomes.valida(nome, 3, 20)[1]), nome)
+            self.assertIn('3 a 20', r['erro'])
+        # ADMIN com o A cirílico (U+0410): o conjunto de caracteres fecha a porta
+        # pela raiz, antes mesmo da palavra (o isalnum de antes deixava passar)
+        cirilico = '\u0410DMIN'
+        status, r = Cliente(self.base).cadastra(cirilico, 'cirilico@soterra.test')
+        self.assertEqual((status, r.get('erro')), (400, 'nome inválido: ' + nomes.valida(cirilico, 3, 20)[1]))
+        # o nome comprido: o motivo sai dos 21 primeiros, sem passar a regra no texto todo
+        status, r = Cliente(self.base).cadastra('a' * 5000, 'comprido@soterra.test')
+        self.assertEqual((status, r.get('erro')), (400, 'nome inválido: ' + nomes.valida('a' * 21, 3, 20)[1]))
+        # nome de gente passa, com acento e tudo
+        for nome, email in (('Joana Silva', 'joana.silva@soterra.test'), ('João Ávila', 'joao.avila@soterra.test')):
+            status, r = Cliente(self.base).cadastra(nome, email)
+            self.assertEqual(status, 201, (nome, r))
+            self.assertEqual(r['conta']['nome'], nome)
+        # e nenhum recusado virou conta
+        b = self.banco()
+        try:
+            n = b.execute("SELECT COUNT(*) FROM contas WHERE email LIKE 'reservado.%' OR email LIKE 'curto.%' "
+                          "OR email IN ('cirilico@soterra.test', 'comprido@soterra.test')").fetchone()[0]
+        finally:
+            b.close()
+        self.assertEqual(n, 0)
+
+    def test_conta_antiga_com_nome_reservado_entra(self):
+        """A trava é só para nome NOVO: a conta que já existe com nome assim (a do
+        dono se chama "Administrator") entra, anda e continua com o nome — e o
+        nome segue sendo dela (ninguém se cadastra com ele, nem trocando a caixa)."""
+        sal = 'sal-da-conta-antiga-0123456789ab'
+        b = self.banco()
+        b.execute("INSERT INTO contas(nome, email, senha_hash, sal, criado_em) VALUES (?, ?, ?, ?, ?)",
+                  ('Administrator', 'administrator.antigo@soterra.test', cartorio.pica_senha('segredo-bom-8', sal),
+                   sal, int(time.time()) - 400 * 86400))
+        b.commit()
+        b.close()
+        c = Cliente(self.base)
+        status, r = c.pede('POST', '/api/login', {'login': 'Administrator', 'senha': 'segredo-bom-8'})
+        self.assertEqual(status, 200, r)
+        self.assertEqual(r['conta']['nome'], 'Administrator')
+        c.token = r['token']
+        status, r = c.pede('GET', '/api/eu')
+        self.assertEqual((status, r['conta']['nome']), (200, 'Administrator'), r)
+        status, r = Cliente(self.base).pede('POST', '/api/login', {'login': 'administrator.antigo@soterra.test',
+                                                                    'senha': 'segredo-bom-8'})
+        self.assertEqual(status, 200, r)
+        status, r = Cliente(self.base).cadastra('ADMINISTRATOR', 'outro.administrator@soterra.test')
+        self.assertEqual((status, r.get('erro')), (400, cartorio.NOME_RESERVADO))
+
     def test_login(self):
         c = self.novo('Beto Login')
         nome = c.conta['nome']
@@ -325,16 +400,31 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(r['erro'], r2['erro'])
 
     def test_limite_de_tentativas(self):
+        """10 senhas erradas em 10 minutos trancam QUEM ERRA — e só. Quem sabe a
+        senha entra mesmo com a conta sob ataque: a senha é conferida antes do
+        429 (senão qualquer um trancava qualquer conta pelo nome, que o ranking
+        publica, e não havia saída sem o correio)."""
         c = self.novo('Cida Teimosa')
         nome = c.conta['nome']
+        email = nome.replace(' ', '') + '@soterra.test'
         for _ in range(10):
             status, r = Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': 'errada-errada'})
             self.assertEqual(status, 401)
         status, r = Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': 'errada-errada'})
         self.assertEqual(status, 429)
-        # até a senha certa espera
-        status, r = Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': 'segredo-bom-8'})
+        self.assertTrue(isinstance(r.get('liberaEm'), int) and r['liberaEm'] > time.time(), r)
+        # pelo e-mail é a mesma conta e a mesma contagem: quem chuta continua parando
+        status, r = Cliente(self.base).pede('POST', '/api/login', {'login': email, 'senha': 'errada-errada'})
         self.assertEqual(status, 429)
+        # a senha certa ENTRA, trancada ou não (pelo e-mail e pelo nome)...
+        status, r = Cliente(self.base).pede('POST', '/api/login', {'login': email, 'senha': 'segredo-bom-8'})
+        self.assertEqual(status, 200, r)
+        self.assertEqual(r['conta']['id'], c.conta['id'])
+        status, r = Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': 'segredo-bom-8'})
+        self.assertEqual(status, 200, r)
+        # ...e zera a contagem: o chute seguinte volta a ser 401, não 429
+        status, r = Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': 'errada-errada'})
+        self.assertEqual(status, 401)
 
     def test_eu(self):
         c = self.novo('Dora Eu')
@@ -436,7 +526,7 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(status, 409)
 
     def test_dup_iid_de_outra_conta(self):
-        a = self.novo('Juca Dono')
+        a = self.novo('Juca Primeiro')
         b = self.novo('Kiko Ladrao')
         progress, db = save_com(['j-1'])
         status, r = a.salva(0, progress, db, nasce('j-1'))
@@ -621,6 +711,49 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(g[0]['xpTotal'], 7300)
         self.assertEqual(g[0]['emblema'], '⚒')
 
+    def test_ranking_guardado(self):
+        """O GET /api/ranking fica guardado 30 s por processo (é público e custa
+        10 consultas sob a tranca), mas nunca mostra velho: um save que muda a
+        foto pública de uma conta derruba a cópia, um save que só mexe no saco
+        não, e uma gravação de OUTRA conexão (o `admin banir` pelo sqlite3, o
+        contêiner vizinho) também derruba. Api criada dentro do processo."""
+        pasta = tempfile.mkdtemp(prefix='guardado-', dir=self.pasta)
+        caminho = os.path.join(pasta, 'soterra.db')
+        api = cartorio.Api(caminho)
+        try:
+            self.assertFalse(api.correio.ligado)                 # sem correio: desligado
+            status, r = api.cadastro(None, {'nome': 'Guarda Um', 'email': 'guarda.um@soterra.test',
+                                            'senha': 'segredo-bom-8'})
+            self.assertEqual(status, 201, r)
+            conta = api.conta_do_token(r['token'])
+            primeira = api.ranking(None, {})[1]
+            self.assertIs(api.ranking(None, {})[1], primeira)     # a mesma cópia
+            herois = {'sumo': {'classId': 'sumo', 'xp': 500, 'level': 4}}
+            p, d = save_com([], herois)
+            self.assertEqual(api.salvar(conta, {'versao': 0, 'progress': p, 'db': d})[0], 200)
+            depois = api.ranking(None, {})[1]
+            self.assertIsNot(depois, primeira)
+            self.assertIn('Guarda Um', [j['nome'] for j in depois['jogadores']])
+            # um save que só mexeu no saco não derruba
+            p, d = save_com(['gd-1'], herois)
+            self.assertEqual(api.salvar(conta, {'versao': 1, 'progress': p, 'db': d, 'nascimentos': nasce('gd-1')})[0], 200)
+            self.assertIs(api.ranking(None, {})[1], depois)
+            # outra conexão bane a conta (como o admin faz): a cópia cai na hora
+            b = sqlite3.connect(caminho)
+            b.execute("UPDATE contas SET banido = 1")
+            b.commit()
+            b.close()
+            banido = api.ranking(None, {})[1]
+            self.assertIsNot(banido, depois)
+            self.assertNotIn('Guarda Um', [j['nome'] for j in banido['jogadores']])
+            # e passados os 30 s, recalcula
+            vale, versao, resposta = api._ranking_guardado
+            self.assertLessEqual(vale - time.monotonic(), cartorio.RANKING_CACHE)
+            api._ranking_guardado = (time.monotonic() - 1, versao, resposta)
+            self.assertIsNot(api.ranking(None, {})[1], banido)
+        finally:
+            api.con.close()
+
     def test_ranking_por_classe(self):
         """O melhor de cada classe: uma linha por conta (a melhor ficha), sem o
         Mestre do Fundo, com os números presos nas réguas do jogo."""
@@ -703,11 +836,128 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(cartorio.herois_por_classe(None), {})
         self.assertEqual(cartorio.herois_por_classe({'heroes': []}), {})
 
+    def test_ranking_nao_veste_a_equipe(self):
+        """A vitrine pública também segue a lei dos nomes: o nome e a guilda que
+        vêm no SAVE (o batismo do jogo; um save forjado passa ao largo dele) não
+        põem "GM" nem "Staff" no ranking de quem não é o Mestre — o nome cai para
+        o da conta e a guilda sai da vitrine. O Mestre (contas.gm) veste o que
+        quiser, e nome de gente continua indo."""
+        c = self.novo('Nina Vitrine')
+        status, r = c.salva(0, *save_com([], None, {'jogador': {'nome': 'GM Supremo',
+                                                                'guilda': {'nome': 'Staff do Jogo', 'emblema': '⚒'}}}))
+        self.assertEqual(status, 200, r)
+        versao = r['versao']
+        m = self.mestre('Guia Vitrine')
+        status, r = m.salva(0, *save_com([], None, {'jogador': {'nome': 'Mestre do Fundo',
+                                                                'guilda': {'nome': 'Equipe Mestra', 'emblema': '⚒'}}}))
+        self.assertEqual(status, 200, r)
+        versao_m = r['versao']
+
+        def vitrine(cid):
+            b = self.banco()
+            try:
+                return tuple(b.execute("SELECT nome, guilda_nome FROM resumos WHERE conta_id = ?", (cid,)).fetchone())
+            finally:
+                b.close()
+        self.assertEqual(vitrine(c.conta['id']), (c.conta['nome'], None))
+        self.assertEqual(vitrine(m.conta['id']), ('Mestre do Fundo', 'Equipe Mestra'))
+        r = self.ranking()
+        self.assertNotIn('GM Supremo', [j['nome'] for j in r['jogadores']])
+        self.assertNotIn('staff do jogo', [g['nome'].lower() for g in r['guildas']])
+        # nome de gente no save continua indo para a vitrine
+        status, r = c.salva(versao, *save_com([], None, {'jogador': {'nome': 'Nina, a Clara',
+                                                                     'guilda': {'nome': 'Lanterna Clara',
+                                                                                'emblema': '⚒'}}}))
+        self.assertEqual(status, 200, r)
+        self.assertEqual(vitrine(c.conta['id']), ('Nina, a Clara', 'Lanterna Clara'))
+        # a placa é emblema + nome: o emblema reservado também sai da vitrine (o
+        # nome limpo da guilda fica); o do Mestre fica como ele quis
+        status, r = c.salva(r['versao'], *save_com([], None, {'jogador': {'nome': 'Nina, a Clara',
+                                                                          'guilda': {'nome': 'Lanterna Clara',
+                                                                                     'emblema': 'STAFF'}}}))
+        self.assertEqual(status, 200, r)
+        status, r = m.salva(versao_m, *save_com([], None, {'jogador': {'nome': 'Mestre do Fundo',
+                                                                       'guilda': {'nome': 'Equipe Mestra',
+                                                                                  'emblema': 'GM'}}}))
+        self.assertEqual(status, 200, r)
+
+        def placa(cid):
+            b = self.banco()
+            try:
+                return tuple(b.execute("SELECT guilda_nome, guilda_emblema FROM resumos WHERE conta_id = ?",
+                                       (cid,)).fetchone())
+            finally:
+                b.close()
+        self.assertEqual(placa(c.conta['id']), ('Lanterna Clara', None))
+        self.assertEqual(placa(m.conta['id']), ('Equipe Mestra', 'GM'))
+        g = [g for g in self.ranking()['guildas'] if g['nome'] == 'Lanterna Clara']
+        self.assertTrue(g and g[0]['emblema'] is None, g)
+
+    def test_vitrine_de_antes_da_lei(self):
+        """A vitrine que JÁ estava gravada antes da lei dos nomes (a API de antes
+        punha no ranking o nome, a guilda e o emblema do save, sem regra) é
+        passada a limpo no boot, uma vez por versão da regra: 'GM Velho' da
+        guilda 'Staff' volta a ser o nome da conta e a placa sai; o Mestre e
+        quem tem nome de gente ficam como estavam. Api criada dentro do processo."""
+        pasta = tempfile.mkdtemp(prefix='vitrine-', dir=self.pasta)
+        caminho = os.path.join(pasta, 'soterra.db')
+        api = cartorio.Api(caminho)
+        try:
+            ids = {}
+            for rotulo, nome in (('zeca', 'Zeca Comum'), ('guia', 'Guia Velho'), ('lia', 'Lia Limpa')):
+                status, r = api.cadastro(None, {'nome': nome, 'email': '%s.vitrine@soterra.test' % rotulo,
+                                                'senha': 'segredo-bom-8'})
+                self.assertEqual(status, 201, r)
+                ids[rotulo] = r['conta']['id']
+            t = int(time.time())
+            with api.tranca:
+                api.con.execute("UPDATE contas SET gm = 1 WHERE id = ?", (ids['guia'],))
+                # o que a API de antes gravava a cada save: o que viesse nele, sem regra
+                for rotulo, nome, gn, ge, xp in (('zeca', 'GM Velho', 'Staff', 'ADM', 9000),
+                                                 ('guia', 'Mestre do Fundo', 'Equipe Mestra', 'GM', 8000),
+                                                 ('lia', 'Lia, a Clara', 'Lanterna', '⚒', 7000)):
+                    api.con.execute(
+                        "INSERT OR REPLACE INTO resumos(conta_id, nome, xp_total, nivel_max, classes, brasa_pts, "
+                        "brasa_partidas, guilda_nome, guilda_emblema, atualizado_em) "
+                        "VALUES (?, ?, ?, 10, 1, 1000, 0, ?, ?, ?)", (ids[rotulo], nome, xp, gn, ge, t))
+                # o banco como estava no ar antes do deploy: sem o marcador desta regra
+                api.con.execute("DELETE FROM migracoes WHERE nome LIKE 'resumos-nomes:%'")
+                api.con.commit()
+        finally:
+            api.con.close()
+        depois = cartorio.Api(caminho)            # o deploy: a API nova sobe no mesmo banco
+        try:
+            r = depois.ranking(None, {})[1]
+            jogadores = [j['nome'] for j in r['jogadores']]
+            self.assertNotIn('GM Velho', jogadores)
+            self.assertIn('Zeca Comum', jogadores)                 # o nome da conta no lugar
+            self.assertIn('Mestre do Fundo', jogadores)            # o Mestre veste o que quiser
+            self.assertIn('Lia, a Clara', jogadores)               # nome de gente fica
+            guildas = {g['nome']: g['emblema'] for g in r['guildas']}
+            self.assertNotIn('Staff', guildas)
+            self.assertEqual(guildas.get('Equipe Mestra'), 'GM')
+            self.assertEqual(guildas.get('Lanterna'), '⚒')
+            linha = depois.con.execute("SELECT nome, guilda_nome, guilda_emblema FROM resumos WHERE conta_id = ?",
+                                       (ids['zeca'],)).fetchone()
+            self.assertEqual(tuple(linha), ('Zeca Comum', None, None))
+            marca = 'resumos-nomes:' + cartorio.versao_da_regra()
+            self.assertRegex(marca, r'^resumos-nomes:[0-9a-f]{12}$')
+            self.assertEqual(depois.con.execute("SELECT COUNT(*) FROM migracoes WHERE nome = ?",
+                                                (marca,)).fetchone()[0], 1)
+        finally:
+            depois.con.close()
+        de_novo = cartorio.Api(caminho)           # o próximo boot, com a mesma regra: não roda de novo
+        try:
+            self.assertEqual(de_novo.con.execute(
+                "SELECT COUNT(*) FROM migracoes WHERE nome LIKE 'resumos-nomes:%'").fetchone()[0], 1)
+        finally:
+            de_novo.con.close()
+
     # -- os eventos do mundo (10/09) --------------------------------------------------------
     def test_evento_distante_aparece(self):
         """Um evento marcado para daqui a 30 dias (o limite é 180) aparece no GET:
         é por lá que o painel do Mestre o lista e o cancela."""
-        m = self.mestre('Mestre Longe')
+        m = self.mestre('Guia Longe')
         ini = int(time.time()) + 30 * 86400
         status, r = m.pede('POST', '/api/eventos', {'tipo': 'xp', 'multiplicador': 1.5, 'calabouco': None,
                                                      'titulo': 'Festa distante', 'texto': '',
@@ -750,7 +1000,7 @@ class ProvaDaApi(unittest.TestCase):
             self.assertEqual(status, 403, (rota, r))
             self.assertEqual(r['erro'], 'só o Mestre do Fundo mexe nos eventos do mundo')
 
-        m = self.mestre('Mestre Evento')
+        m = self.mestre('Guia Evento')
         status, r = m.pede('POST', '/api/eventos', corpo)
         self.assertEqual(status, 201, r)
         ev = r['evento']
@@ -783,7 +1033,7 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual((status, r['erro']), (403, 'conta banida'))
 
     def test_eventos_validacao(self):
-        m = self.mestre('Mestre Exigente')
+        m = self.mestre('Guia Exigente')
         t = int(time.time())
         base = {'tipo': 'xp', 'multiplicador': 2, 'calabouco': None, 'titulo': 'Evento de prova', 'texto': '',
                 'inicio': t + 60, 'fim': t + 3600}
@@ -901,7 +1151,7 @@ class ProvaDaApi(unittest.TestCase):
 
     def test_regra_http(self):
         self.limpa_agenda()
-        m = self.mestre('Mestre Calendario')
+        m = self.mestre('Guia Calendario')
         hora = self.hora_brasilia(120)             # todo dia, daqui a 2 h, por 1 h: tudo em proximos
         corpo = {'tipo': 'saque', 'multiplicador': 1.5, 'calabouco': 'cistern', 'titulo': 'Maré da Cisterna',
                  'texto': '', 'dias': TODOS_OS_DIAS, 'hora': hora, 'duracaoMin': 60, 'vigenteDe': None,
@@ -958,7 +1208,7 @@ class ProvaDaApi(unittest.TestCase):
 
     def test_cancelar(self):
         self.limpa_agenda()
-        m = self.mestre('Mestre Cancela')
+        m = self.mestre('Guia Cancela')
         comum = self.novo('Comum Cancela')
         t = int(time.time())
         status, r = m.pede('POST', '/api/eventos', {'tipo': 'xp', 'multiplicador': 1.5, 'titulo': 'Hora do XP',
@@ -1008,7 +1258,7 @@ class ProvaDaApi(unittest.TestCase):
 
     def test_fatores(self):
         self.limpa_agenda()
-        m = self.mestre('Mestre Fatores')
+        m = self.mestre('Guia Fatores')
         t = int(time.time())
 
         def liga(**muda):
@@ -1062,7 +1312,7 @@ class ProvaDaApi(unittest.TestCase):
 
     def test_auditoria_agenda(self):
         """Quem ligou, marcou e cancelou fica na trilha (a do `admin eventos`)."""
-        m = self.mestre('Mestre Trilha')
+        m = self.mestre('Guia Trilha')
         t = int(time.time())
         status, r = m.pede('POST', '/api/eventos', {'tipo': 'pedras', 'multiplicador': 2, 'titulo': 'Chuva de Pedras',
                                                     'inicio': t + 600, 'fim': t + 4200})
@@ -1149,7 +1399,11 @@ class ProvaDaApi(unittest.TestCase):
                 self.assertEqual((antiga['avatar'], antiga['classe'], antiga['xpTotal']), ('fus:bruxo+sumo', 'sumo', 4060))
                 self.assertNotIn('Antiga Torta', [j['nome'] for j in r['jogadores']])
             b = sqlite3.connect(caminho)
-            self.assertEqual(b.execute("SELECT nome FROM migracoes").fetchall(), [('resumos-v2',)])
+            marcas = sorted(n for (n,) in b.execute("SELECT nome FROM migracoes").fetchall())
+            # os dois processos migram UMA vez: resumos-v2, e (10/09) a lei dos nomes passando a
+            # vitrine a limpo, com a marca da versão da regra — cada uma aparece uma vez só
+            self.assertEqual([m for m in marcas if not m.startswith('resumos-nomes:')], ['resumos-v2'], marcas)
+            self.assertEqual(len([m for m in marcas if m.startswith('resumos-nomes:')]), 1, marcas)
             b.close()
         finally:
             for proc, log, _ in procs:
@@ -1186,6 +1440,167 @@ class ProvaDaApi(unittest.TestCase):
         bloco = elem[elem.index('DATA.elementInfo = {'):]
         bloco = bloco[:bloco.index('\n  };')]
         self.assertEqual(tuple(re.findall(r'^    ([a-z]+): \{', bloco, re.M)), cartorio.ELEMENTOS)
+
+
+# O sqlite3 de linha de comando de mentira da ProvaDoAdmin: um python que roda o
+# SQL que o admin.sh manda (esta máquina não tem o de verdade), separando as
+# instruções no ';' fora de aspas, como o sqlite3 faz.
+FALSO_SQLITE3 = r'''import sqlite3, sys
+args = sys.argv[1:]
+header = '-header' in args
+coluna = '-column' in args
+resto = [x for x in args if not x.startswith('-')]
+banco, texto = resto[0], resto[1]
+partes, atual, aspas = [], '', False
+for ch in texto:
+    if ch == "'":
+        aspas = not aspas
+    if ch == ';' and not aspas:
+        partes.append(atual)
+        atual = ''
+    else:
+        atual += ch
+partes.append(atual)
+con = sqlite3.connect(banco, isolation_level=None)
+for p in partes:
+    if not p.strip():
+        continue
+    cur = con.execute(p)
+    linhas = cur.fetchall()
+    if cur.description and (linhas or header):
+        if header:
+            print(('  ' if coluna else '|').join(d[0] for d in cur.description))
+        for r in linhas:
+            print(('  ' if coluna else '|').join('' if v is None else str(v) for v in r))
+'''
+
+
+@unittest.skipUnless(shutil.which('sh'), 'sem sh nesta máquina: o admin.sh é sh')
+class ProvaDoAdmin(unittest.TestCase):
+    """O servidor/coolify/admin.sh DE VERDADE (sh), contra um banco criado pela
+    Api, com su-exec e sqlite3 de mentira. Aqui, a porta do dono para os nomes:
+    `admin renomear "VELHO" "NOVO"` dá qualquer nome, até um reservado à equipe
+    (o cadastro pelo site recusa), conferindo só o tamanho e se está livre."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pasta = tempfile.mkdtemp(prefix='soterra-admin-')
+        fx = lambda p: p.replace('\\', '/')  # noqa: E731
+        cls.banco_arq = os.path.join(cls.pasta, 'soterra.db')
+        api = cartorio.Api(cls.banco_arq)
+        try:
+            r = api.cadastro(None, {'nome': 'Ana Clara', 'email': 'ana.clara@soterra.test', 'senha': 'segredo-bom-8'})[1]
+            cls.ana, cls.token_ana = r['conta']['id'], r['token']
+            r = api.cadastro(None, {'nome': 'Beto Firme', 'email': 'beto.firme@soterra.test', 'senha': 'segredo-bom-8'})[1]
+            cls.beto = r['conta']['id']
+            # a vitrine de quem salvou sem nome de batismo: o nome da conta
+            api.con.execute("INSERT INTO resumos(conta_id, nome, atualizado_em) VALUES (?, 'Ana Clara', ?)",
+                            (cls.ana, int(time.time())))
+            api.con.commit()
+        finally:
+            api.con.close()
+        bin_ = os.path.join(cls.pasta, 'bin')
+        os.makedirs(bin_)
+        falso = os.path.join(cls.pasta, 'falso_sqlite3.py')
+        with open(falso, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(FALSO_SQLITE3)
+        for nome, corpo in (('su-exec', '#!/bin/sh\nshift\nexec "$@"\n'),
+                            ('sqlite3', '#!/bin/sh\nexec "%s" "%s" "$@"\n' % (fx(sys.executable), fx(falso)))):
+            caminho = os.path.join(bin_, nome)
+            with open(caminho, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(corpo)
+            os.chmod(caminho, 0o755)
+        with open(os.path.join(AQUI, '..', 'servidor', 'coolify', 'admin.sh'), encoding='utf-8', newline='') as f:
+            admin = f.read()
+        cls.copia = os.path.join(cls.pasta, 'admin.sh')
+        with open(cls.copia, 'w', encoding='utf-8', newline='') as f:
+            f.write(admin.replace('BANCO=/dados/soterra.db', 'BANCO="%s"' % fx(cls.banco_arq)))
+        cls.bin = fx(bin_)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.pasta, ignore_errors=True)
+
+    def roda(self, *args):
+        """A cópia do admin.sh no sh. Os argumentos vão por variáveis de ambiente e
+        o sh os remonta: a linha de comando do Windows até o sh.exe come aspas."""
+        env = {k: v for k, v in os.environ.items() if not k.startswith('SOTERRA_')}
+        env['PATH'] = self.bin + os.pathsep + env.get('PATH', '')
+        env['PYTHONIOENCODING'] = 'utf-8'
+        env['ADMIN_COPIA'] = self.copia.replace('\\', '/')
+        for i, v in enumerate(args):
+            env['ARG_%d' % i] = v
+        cmd = 'exec sh "$ADMIN_COPIA"' + ''.join(' "$ARG_%d"' % i for i in range(len(args)))
+        r = subprocess.run(['sh', '-c', cmd], capture_output=True, env=env, timeout=120)
+        return r.returncode, (r.stdout + r.stderr).decode('utf-8', errors='replace')
+
+    def db(self):
+        c = sqlite3.connect(self.banco_arq)
+        c.row_factory = sqlite3.Row
+        return c
+
+    def nome_de(self, cid):
+        c = self.db()
+        try:
+            return c.execute("SELECT nome FROM contas WHERE id = ?", (cid,)).fetchone()[0]
+        finally:
+            c.close()
+
+    def test_ajuda_mostra_renomear(self):
+        st, out = self.roda()
+        self.assertEqual(st, 0, out)
+        self.assertIn('admin renomear "VELHO" "NOVO"', out)
+        self.assertIn('Depois de marcar', out)
+        self.assertNotIn('====', out)
+
+    def test_renomear(self):
+        # os dois nomes inteiros, cada um num argumento: [ $# -eq 3 ]
+        for args in (('renomear', 'Ana Clara'), ('renomear', 'Ana', 'Clara', 'Nova Ana')):
+            st, out = self.roda(*args)
+            self.assertEqual(st, 1, out)
+            self.assertIn('uso: admin renomear', out)
+        st, out = self.roda('renomear', 'Ninguem Aqui', 'Nome Livre')
+        self.assertEqual(st, 1, out)
+        self.assertIn('não achei a conta', out)
+        # o tamanho conta letras, não bytes (o length do sqlite)
+        for torto in ('Ab', 'a' * 21, '\u00c3' * 21):
+            st, out = self.roda('renomear', 'Ana Clara', torto)
+            self.assertEqual(st, 1, (torto, out))
+            self.assertIn('de 3 a 20 caracteres', out)
+        # nome de outra conta, até com outra caixa
+        st, out = self.roda('renomear', 'Ana Clara', 'BETO FIRME')
+        self.assertEqual(st, 1, out)
+        self.assertIn('já tem dono', out)
+        self.assertEqual(self.nome_de(self.ana), 'Ana Clara')            # nada mudou até aqui
+        # a porta do dono: um nome reservado à equipe, que o cadastro recusa
+        self.assertTrue(nomes.reservado('Mestre do Fundo'))
+        st, out = self.roda('renomear', 'ana clara', 'Mestre do Fundo')     # acha a conta sem olhar a caixa
+        self.assertEqual(st, 0, out)
+        self.assertIn('agora se chama', out)
+        self.assertEqual(self.nome_de(self.ana), 'Mestre do Fundo')
+        c = self.db()
+        try:
+            evs = [json.loads(x['dados']) for x in c.execute(
+                "SELECT dados FROM eventos WHERE tipo = 'renomeado-admin' AND conta_id = ?", (self.ana,))]
+            vitrine = c.execute("SELECT nome FROM resumos WHERE conta_id = ?", (self.ana,)).fetchone()[0]
+        finally:
+            c.close()
+        self.assertEqual(evs, [{'de': 'Ana Clara', 'para': 'Mestre do Fundo'}])
+        self.assertEqual(vitrine, 'Mestre do Fundo')
+        # entra com o nome novo; o velho não entra mais; a sessão aberta continua
+        api = cartorio.Api(self.banco_arq)
+        try:
+            st, r = api.login(None, {'login': 'Mestre do Fundo', 'senha': 'segredo-bom-8'})
+            self.assertEqual((st, r['conta']['id'], r['conta']['nome']), (200, self.ana, 'Mestre do Fundo'))
+            with self.assertRaises(cartorio.Recusa):
+                api.login(None, {'login': 'Ana Clara', 'senha': 'segredo-bom-8'})
+            self.assertEqual(api.conta_do_token(self.token_ana)['nome'], 'Mestre do Fundo')
+        finally:
+            api.con.close()
+        # 20 letras com acento (40 bytes) cabem
+        st, out = self.roda('renomear', 'Beto Firme', '\u00c3' * 20)
+        self.assertEqual(st, 0, out)
+        self.assertEqual(self.nome_de(self.beto), '\u00c3' * 20)
 
 
 if __name__ == '__main__':

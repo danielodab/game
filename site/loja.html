@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loja — SOTERRA</title>
+<meta name="description" content="A loja do SOTERRA: troque os vinténs que você juntou no jogo por pergaminhos, pedras de forja e personagens.">
+<script>
+  // a folha e os scripts com o hash do build (o mapa de js/versao.js); sem
+  // mapa (em casa), o carimbo ?t= do instante: ver o comentário em site/index.html
+  if (location.protocol !== 'file:') {
+    document.write('<script src="../js/versao.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+<script>
+  window.SITE_URL = function (s) {
+    var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
+    var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
+    var chave = s.indexOf('../') === 0 ? s.slice(3) : 'site/' + s;
+    return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
+  };
+  document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
+<!--
+  A loja de vinténs (Fase C). O script mora em loja.js.
+  NENHUM PREÇO mora no site: o catálogo inteiro (nome, descrição, preço e
+  limite) vem de GET /api/loja/catalogo, e quem muda um preço é o servidor
+  (servidor/loja.py, CATALOGO). Com sessão, GET /api/loja/minha traz o saldo
+  do último save que subiu, os limites, as classes e os pedidos.
+  A compra é um PEDIDO: o servidor reserva os vinténs e o jogo entrega (e
+  desconta da carteira) quando abrir logado na conta Principal. Depois de
+  comprar, a página avisa o jogo aberto no mesmo navegador por
+  BroadcastChannel('soterra-loja').
+  Os personagens usam os retratos de site/img/ (classe-<id>.webp, com a
+  moldura da inicial na cor da classe quando falta o arquivo); a pedra é só
+  CSS, na cor do elemento.
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="eventos.html">Eventos</a>
+      <a href="fusoes.html">Fusões</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="loja.html" aria-current="page">Loja</a>
+      <a href="conta.html">Conta</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<section class="secao loja">
+  <div class="miolo">
+    <h2>Loja</h2>
+    <p class="sub">Troque os vinténs que você juntou descendo pelos calabouços por pergaminhos, pedras de forja e personagens. Só vinténs do jogo, nada de dinheiro de verdade. Os preços são pensados para não atropelar o jogo: o que é bom continua sendo conquistado lá embaixo.</p>
+
+    <div class="saldo-caixa" id="lj-saldo"><div class="estado">carregando…</div></div>
+
+    <div id="lj-catalogo"><div class="estado">carregando o catálogo…</div></div>
+
+    <div id="lj-pedidos-caixa" hidden>
+      <div class="pedidos-cab"><h3>Seus pedidos</h3><button type="button" class="btn btn-mini" id="lj-atualizar">atualizar</button></div>
+      <p class="apoio">Um pedido espera o jogo abrir logado na conta Principal; aí ele vai a caminho, e o jogo entrega e desconta da carteira. Dá para cancelar enquanto espera.</p>
+      <ul class="lista-pedidos" id="lj-pedidos"></ul>
+    </div>
+
+    <div class="aviso flutua" id="lj-aviso" role="status"></div>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
+</footer>
+
+<script>
+/* a cor da moldura de cada personagem vem do próprio jogo (classes.js, mesma
+ * origem); cada arquivo com o hash do conteúdo (SITE_URL, no topo) */
+(function () {
+  ['site.js', '../js/core/data/classes.js', 'loja.js'].forEach(function (s) {
+    document.write('<script src="' + SITE_URL(s) + '"><\/script>');
+  });
+})();
+</script>
+</body>
+</html>

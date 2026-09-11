@@ -26,6 +26,21 @@
  *   SITE.agenda(r)         ativos e próximos recalculados pelo relógio.
  *   SITE.busto(op)         a miniatura redonda com a inicial de reserva.
  *
+ * Fase C — a conta por dentro e a loja de vinténs:
+ *   SITE.idem()            16 hex aleatórios (crypto): a chave de um clique de
+ *                          compra, para o servidor nunca dobrar o pedido.
+ *   SITE.navegador(ua)     "Chrome · Windows", a partir do User-Agent.
+ *   SITE.mascara(email)    "da***@exemplo.com".
+ *   SITE.ha(ts)            "há 3 h" (o passado, pelo relógio do servidor).
+ *   SITE.deNovo(ts)        "de novo em 3 dias" (um limite que volta).
+ *   SITE.erro(r, padrao)   a frase de erro de uma resposta: o 503 do correio
+ *                          desligado, o "de novo em" do 429 e o "restam N
+ *                          tentativas" do código.
+ *   SITE.confirma(op)      a janelinha de confirmação da própria página (nada
+ *                          de window.confirm): Promise de sim ou não.
+ *   SITE.sair() avisa a página com o evento 'site:sessao', para a conta e a
+ *   loja se redesenharem sem sessão; o topo ganhou "minha conta".
+ *
  * Sem framework e sem CDN, no espírito do jogo (globais JOGO.*). */
 (function () {
   'use strict';
@@ -93,6 +108,8 @@
     // o token vai explícito: a sessão local já foi apagada e o servidor
     // precisa dele para saber QUAL sessão matar
     if (s) SITE.api('/api/logout', { method: 'POST', body: {}, token: s.token });
+    // Fase C: a conta e a loja se redesenham sem sessão (o "sair" do topo vale em toda página)
+    try { window.dispatchEvent(new CustomEvent('site:sessao', { detail: { tipo: 'saiu' } })); } catch (e) { /* navegador antigo */ }
   };
 
   SITE.esc = function (t) {
@@ -109,8 +126,11 @@
       caixa.innerHTML = '<a href="conta.html#entrar">Entrar</a>';
       return;
     }
-    caixa.innerHTML = 'Olá, <b>' + SITE.esc(s.conta.nome) + '</b>' + (s.conta.gm ? ' <span title="Mestre do Fundo">◆</span>' : '') +
-      ' · <button type="button" id="bt-sair">sair</button>';
+    // Fase C: "Olá, Daniel · minha conta · sair". No celular o nome encolhe
+    // com "…" (site.css) e os dois links ficam sempre à vista.
+    caixa.innerHTML = '<span class="ola"><span class="ola-oi">Olá, </span><b>' + SITE.esc(s.conta.nome) + '</b></span>' +
+      (s.conta.gm ? ' <span class="marca-gm" title="Mestre do Fundo">◆</span>' : '') +
+      ' · <a href="conta.html#conta">minha conta</a> · <button type="button" id="bt-sair">sair</button>';
     document.getElementById('bt-sair').addEventListener('click', SITE.sair);
   };
 
@@ -118,6 +138,117 @@
   SITE.num = function (n) {
     n = Math.round(Number(n) || 0);
     return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  /* ==========================================================================
+   * FASE C — A CONTA POR DENTRO E A LOJA
+   * ======================================================================== */
+
+  /* A chave de um clique de compra: 16 hex do gerador do navegador. O servidor
+   * guarda a chave com o pedido; a mesma chave de novo devolve o mesmo pedido,
+   * então um clique que ficou sem resposta nunca vira compra dobrada. */
+  SITE.idem = function () {
+    var b = new Uint8Array(8);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(b);
+    else for (var i = 0; i < b.length; i++) b[i] = Math.floor(Math.random() * 256);
+    return Array.prototype.map.call(b, function (x) { return (x < 16 ? '0' : '') + x.toString(16); }).join('');
+  };
+
+  /* O User-Agent de uma sessão em palavras: "Chrome · Windows". A ordem conta:
+   * o Edge e o Opera dizem "Chrome" também, e o Android diz "Linux". */
+  SITE.navegador = function (ua) {
+    ua = String(ua == null ? '' : ua);
+    if (!ua.trim()) return 'navegador desconhecido';
+    var nav = /Edg(e|A|iOS)?\//.test(ua) ? 'Edge'
+      : /OPR\/|Opera/.test(ua) ? 'Opera'
+      : /SamsungBrowser\//.test(ua) ? 'Samsung Internet'
+      : /Firefox\/|FxiOS\//.test(ua) ? 'Firefox'
+      : /Chrome\/|CriOS\/|Chromium\//.test(ua) ? 'Chrome'
+      : /Safari\//.test(ua) && /Version\//.test(ua) ? 'Safari'
+      : /python|curl|wget|okhttp|Go-http/i.test(ua) ? 'programa'
+      : 'navegador';
+    var so = /Windows/.test(ua) ? 'Windows'
+      : /Android/.test(ua) ? 'Android'
+      : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+      : /CrOS/.test(ua) ? 'ChromeOS'
+      : /Mac OS X|Macintosh/.test(ua) ? 'macOS'
+      : /Linux/.test(ua) ? 'Linux' : '';
+    return so ? nav + ' · ' + so : nav;
+  };
+
+  /* "daniel@exemplo.com" → "da***@exemplo.com" (e "a@b.co" → "a***@b.co") */
+  SITE.mascara = function (email) {
+    var m = /^([^@\s]+)@([^@\s]+)$/.exec(String(email == null ? '' : email).trim());
+    if (!m) return '';
+    var nome = Array.from(m[1]);
+    return nome.slice(0, nome.length > 2 ? 2 : 1).join('') + '***@' + m[2];
+  };
+
+  /* "há 3 h": o passado pelo relógio do servidor. O minuto arredonda para
+   * BAIXO (o SITE.duracao, das contagens, arredonda para cima). */
+  SITE.ha = function (ts) {
+    var s = SITE.agora() - Number(ts);
+    if (!isFinite(s)) return '';
+    if (s < 60) return 'agora mesmo';
+    return 'há ' + SITE.duracao(Math.floor(s / 60) * 60);
+  };
+  /* "de novo em 3 dias": quando um limite volta */
+  SITE.deNovo = function (ts) {
+    var s = Number(ts) - SITE.agora();
+    return s > 0 ? 'de novo em ' + SITE.duracao(s) : 'já liberado';
+  };
+
+  /* A frase de erro de uma resposta do SITE.api. O 503 com `correio:false` é o
+   * servidor sem envio de e-mail (contrato 1.1); com `correio:true` foi o SMTP
+   * que falhou agora, e a frase dele diz isso. */
+  SITE.erro = function (r, padrao) {
+    r = r || {};
+    if (r.status === 503 && r.correio === false) return 'o envio de e-mails ainda não foi ligado neste servidor';
+    var t = String(r.erro || padrao || 'algo deu errado');
+    if (r.status === 429 && Number(r.liberaEm) > SITE.agora()) t += ' (' + SITE.deNovo(r.liberaEm) + ')';
+    if (typeof r.restam === 'number' && r.restam >= 0) {
+      t += ' — ' + (r.restam === 1 ? 'resta 1 tentativa' : 'restam ' + r.restam + ' tentativas');
+    }
+    return t;
+  };
+
+  /* A janelinha de confirmação: {titulo, texto, nota, sim, nao} → Promise que
+   * resolve true (sim) ou false (voltar, Esc ou clique fora). É da própria
+   * página, e não o window.confirm: tem a cara do site e a prova consegue
+   * clicar nela. Os textos entram escapados. */
+  var fechaModal = null;
+  SITE.confirma = function (op) {
+    op = op || {};
+    if (fechaModal) fechaModal(false);
+    return new Promise(function (resolve) {
+      var E = SITE.esc;
+      var fundo = document.createElement('div');
+      fundo.className = 'modal';
+      fundo.setAttribute('role', 'dialog');
+      fundo.setAttribute('aria-modal', 'true');
+      fundo.innerHTML = '<div class="modal-caixa">' + (op.titulo ? '<h3>' + E(op.titulo) + '</h3>' : '') +
+        '<p>' + E(op.texto) + '</p>' + (op.nota ? '<p class="apoio">' + E(op.nota) + '</p>' : '') +
+        '<div class="modal-botoes"><button type="button" class="btn" data-nao>' + E(op.nao || 'Voltar') + '</button>' +
+        '<button type="button" class="btn btn-ouro" data-sim>' + E(op.sim || 'Confirmar') + '</button></div></div>';
+      function tecla(ev) { if (ev.key === 'Escape') fecha(false); }
+      function fecha(v) {
+        if (fechaModal !== fecha) return;
+        fechaModal = null;
+        document.removeEventListener('keydown', tecla);
+        if (fundo.parentNode) fundo.parentNode.removeChild(fundo);
+        resolve(v);
+      }
+      fundo.addEventListener('click', function (ev) {
+        var alvo = ev.target;
+        if (alvo === fundo || (alvo.closest && alvo.closest('[data-nao]'))) fecha(false);
+        else if (alvo.closest && alvo.closest('[data-sim]')) fecha(true);
+      });
+      fechaModal = fecha;
+      document.addEventListener('keydown', tecla);
+      document.body.appendChild(fundo);
+      var bt = fundo.querySelector('[data-sim]');
+      if (bt && bt.focus) bt.focus();
+    });
   };
 
   /* ==========================================================================

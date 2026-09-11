@@ -5,11 +5,55 @@
 {
 	admin off
 	auto_https off
+	# O proxy do Coolify (Traefik) fala com este Caddy por uma rede privada do
+	# Docker. Confiar nele deixa o X-Forwarded-For do jogador seguir até a API
+	# (o IP de verdade), em vez de todo pedido parecer vir do Traefik.
+	servers {
+		trusted_proxies static private_ranges
+	}
 }
 
 :80 {
 	root * /srv/soterra
 	encode zstd gzip
+
+	# CACHE. O index.html (e o site) pede cada script e folha com o hash do
+	# conteúdo dele (?v=, do js/versao.js que servidor/coolify/versao.py grava
+	# no build) e cada modelo com o hash do manifesto (?h=): se o conteúdo
+	# muda, o endereço muda. Então endereço marcado fica um ano no navegador,
+	# sem perguntar — MAS SÓ quando o hash é o do arquivo que ESTE contêiner
+	# tem: o versao.py grava, fora da pasta servida, uma marca vazia por
+	# arquivo (/srv/soterra-marcas/js/main.js.3fa2b1c9d0e1), e o matcher file
+	# procura a marca do caminho pedido com o hash pedido. No rolling update o
+	# contêiner velho e o novo respondem juntos por uns segundos: um pedido com
+	# o hash NOVO que caísse no velho levava o conteúdo ANTIGO carimbado "um
+	# ano, sem perguntar", e o jogador ficava preso a um main.js incompatível
+	# até limpar o cache. Sem a marca, responde no-cache e a visita seguinte se
+	# cura; e o que não mudou mantém o endereço (e o cache) entre deploys.
+	# O índice de tudo (as páginas, o js/versao.js e o manifesto) sempre
+	# pergunta — no-cache é "revalide antes de usar" —, e o resto também.
+	# Dentro do route a ordem é a escrita: vale o último header que casar.
+	@marcado_v {
+		query v=*
+		file {
+			root /srv/soterra-marcas
+			try_files {path}.{query.v}
+		}
+	}
+	@marcado_h {
+		query h=*
+		file {
+			root /srv/soterra-marcas
+			try_files {path}.{query.h}
+		}
+	}
+	@indice path / *.html /js/versao.js /assets/models/bundle/manifest.json
+	route {
+		header Cache-Control "no-cache"
+		header @marcado_v Cache-Control "public, max-age=31536000, immutable"
+		header @marcado_h Cache-Control "public, max-age=31536000, immutable"
+		header @indice Cache-Control "no-cache"
+	}
 
 	# a raiz cai na landing; o jogo continua em /index.html
 	redir / /site/ 302

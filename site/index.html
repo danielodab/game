@@ -6,10 +6,27 @@
 <title>SOTERRA — Ecos do Mundo Enterrado</title>
 <meta name="description" content="SOTERRA é um jogo tático por turnos, só de calabouços: dupla com fusão de classes, Acampamento online, arena PvP com as dez Coroas, pets e guildas. Jogue no navegador.">
 <script>
-  // 10/09: a folha leva a marca do instante da carga, como o código do jogo
-  // (index.html da raiz). Com as seções novas, um site.css velho no cache
-  // deixaria o calendário e as fusões sem roupa até o navegador revalidar.
-  document.write('<link rel="stylesheet" href="site.css?v=' + Date.now() + '">');
+  // A folha e os scripts vão com o hash do CONTEÚDO de cada um, do mapa que o
+  // build grava em js/versao.js (como o index.html do jogo): o que não mudou
+  // mantém o endereço e fica no cache entre deploys; o que mudou ganha
+  // endereço novo e desce na hora. O carimbo do instante (?v=Date.now()) que
+  // estava aqui fazia cada visita baixar tudo de novo — e o Caddy ainda
+  // guardava cada cópia por um ano. Sem mapa (em casa, sem o build, ou aberto
+  // do disco), o carimbo do instante, como o jogo: o servidor de casa (o
+  // http.server) não manda revalidar, e sem carimbo o navegador rodaria o
+  // site.js velho. Vai como ?t=, e não ?v=: nenhuma regra do Caddy guarda ?t=.
+  if (location.protocol !== 'file:') {
+    document.write('<script src="../js/versao.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+<script>
+  window.SITE_URL = function (s) {
+    var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
+    var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
+    var chave = s.indexOf('../') === 0 ? s.slice(3) : 'site/' + s;
+    return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
+  };
+  document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
 </script>
 <noscript><link rel="stylesheet" href="site.css"></noscript>
 <!--
@@ -51,6 +68,7 @@
       <a href="#guildas">Guildas</a>
       <a href="#arena">Arena</a>
       <a href="ranking.html">Ranking</a>
+      <a href="loja.html">Loja</a>
       <a class="jogar" href="../index.html">Jogar</a>
     </nav>
     <div class="sessao" id="sessao"></div>
@@ -277,20 +295,20 @@
   <div class="miolo">
     <span class="marca">SOTERRA</span>
     Ecos do Mundo Enterrado · um jogo tático de calabouços, jogado no navegador.
-    <br><a href="conta.html">Criar conta</a> · <a href="conta.html#entrar">Entrar</a> · <a href="eventos.html">Eventos</a> · <a href="fusoes.html">Fusões</a> · <a href="ranking.html">Ranking</a> · <a href="../index.html">Jogar</a>
+    <br><a href="conta.html">Criar conta</a> · <a href="conta.html#entrar">Entrar</a> · <a href="eventos.html">Eventos</a> · <a href="fusoes.html">Fusões</a> · <a href="ranking.html">Ranking</a> · <a href="loja.html">Loja</a> · <a href="../index.html">Jogar</a>
   </div>
 </footer>
 
 <script>
 /* 10/09: o site lê os dados do PRÓPRIO jogo, da mesma origem, em vez de uma
- * cópia que envelhece. A marca ?v= é a mesma do jogo: o instante da carga,
- * para o navegador nunca servir um dado velho depois de uma mudança. */
-(function (v) {
+ * cópia que envelhece. Cada arquivo vai com o hash do conteúdo dele
+ * (SITE_URL, no topo): um dado que mudou tem endereço novo e desce na hora. */
+(function () {
   ['site.js', '../js/core/data/classes.js', '../js/core/data/dungeons.js', '../js/core/diario.js',
    '../js/core/data/fusions.js', '../js/core/fusion.js'].forEach(function (s) {
-    document.write('<script src="' + s + v + '"><\/script>');
+    document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
-})('?v=' + Date.now());
+})();
 </script>
 <script>
 (function () {

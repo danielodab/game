@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o nível de uso cobrado ao equipar</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- Pedido do dono (10/09): "esses itens de cada mapa precisam ter seu nível
+     para uso… os mais fortes são níveis mais altos; o set especial da roleta é
+     level 30 todas as peças; pets a partir do lv 10". A RÉGUA (DATA.nivelUso)
+     tem prova própria em nivel_uso.html; esta cobra o PROGRESS: equip/equipPet
+     recusam com motivo, o Mestre não paga, o saneamento devolve ao saco (mesma
+     série) o que o herói ainda não veste — e só grava quando o aviso é
+     entregue, nunca na carga —, o traje conta a falta, e a página sem
+     DATA.nivelUsoDe não tranca nada. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var D = JOGO.DATA, P = JOGO.Progress;
+  var XP = D.leveling.xpTable;                       // XP acumulada: XP[n-1] = nível n
+  var COMUM = 'gh-firefly-crown', RARA = 'gh-vine-stirrups', EPICA = 'gh-widow-shears';
+  var COLEC = 'sl-cetro', PET = 'pet-snapvine';
+  function xpAte(hid, nivel) { P.addXp(hid, XP[nivel - 1] - P.hero(hid).xp); return P.hero(hid).level; }
+
+  P.load();
+  P.reset();
+  var ids = P.heroIds();
+  var A = ids.indexOf('sumo') >= 0 ? 'sumo' : ids[0];
+  var B = ids.filter(function (x) { return x !== A; })[0];
+  if (!B) { P.createHero('arqueiro', 'arqueiro'); B = 'arqueiro'; }
+
+  // ---- a régua chega ao Progress
+  check('Progress.nivelUsoDe aceita id de peça, id de pet e a definição; desconhecido = 0',
+        P.nivelUsoDe(COMUM) === 3 && P.nivelUsoDe(RARA) === 5 && P.nivelUsoDe(EPICA) === 7 &&
+        P.nivelUsoDe(COLEC) === 30 && P.nivelUsoDe(PET) === 10 &&
+        P.nivelUsoDe(D.items[EPICA]) === 7 && P.nivelUsoDe('coisa-nenhuma') === 0 && P.nivelUsoDe(null) === 0,
+        [P.nivelUsoDe(COMUM), P.nivelUsoDe(RARA), P.nivelUsoDe(EPICA), P.nivelUsoDe(COLEC), P.nivelUsoDe(PET)].join('/'));
+
+  // ---- nível 1 não veste nem a comum da Estufa
+  P.addItem(COMUM); P.addItem(RARA); P.addItem(EPICA); P.addItem(COLEC);
+  var pu = P.podeUsar(A, COMUM);
+  check('podeUsar no nível 1 diz não, com nível, exigência e motivo pronto',
+        pu && pu.ok === false && pu.nivel === 1 && pu.precisa === 3 && pu.motivo === 'precisa do nível 3',
+        JSON.stringify(pu));
+  P.ultimaRecusa = null;
+  var ok1 = P.equip(A, COMUM);
+  var ur = P.ultimaRecusa;
+  check('equip da comum (Nv. 3) no herói nível 1 devolve false', ok1 === false);
+  check('ultimaRecusa fica preenchida: herói, peça, exigência, nível e motivo',
+        !!ur && ur.heroId === A && ur.itemId === COMUM && ur.precisa === 3 && ur.nivel === 1 &&
+        ur.motivo === 'precisa do nível 3', JSON.stringify(ur));
+  check('a peça recusada continua no saco e o espaço segue vazio',
+        P.invCount(COMUM) === 1 && !P.hero(A).items.punho);
+
+  // ---- com XP até o 3 veste; a rara pede 5 e a épica 7
+  check('XP até o nível 3', xpAte(A, 3) === 3);
+  check('no 3 a comum entra e a recusa é limpa', P.equip(A, COMUM) === true && P.ultimaRecusa === null &&
+        P.hero(A).items.punho === COMUM);
+  check('no 3 a rara (Nv. 5) ainda não', P.equip(A, RARA) === false && P.ultimaRecusa && P.ultimaRecusa.precisa === 5);
+  check('podeUsar da rara no 3: precisa 5', (function () { var r = P.podeUsar(A, RARA); return !r.ok && r.precisa === 5 && r.nivel === 3; })());
+  check('no 5 a rara entra', xpAte(A, 5) === 5 && P.equip(A, RARA) === true && P.hero(A).items.passo === RARA);
+  check('no 5 a épica (Nv. 7) ainda não', P.equip(A, EPICA) === false && P.ultimaRecusa && P.ultimaRecusa.precisa === 7);
+  check('no 7 a épica entra e a comum do punho volta ao saco',
+        xpAte(A, 7) === 7 && P.equip(A, EPICA) === true && P.hero(A).items.punho === EPICA && P.invCount(COMUM) === 1);
+
+  // ---- a peça do Colecionador só no 30
+  check('a peça do Colecionador (Nv. 30) é recusada no 7 e no 29',
+        P.equip(A, COLEC) === false && xpAte(A, 29) === 29 && P.equip(A, COLEC) === false &&
+        P.ultimaRecusa && P.ultimaRecusa.precisa === 30 && P.ultimaRecusa.nivel === 29);
+  check('no 30 a peça do Colecionador entra', xpAte(A, 30) === 30 && P.equip(A, COLEC) === true);
+
+  // ---- pets: recusado no 9, aceito no 10; transferência respeita o destino
+  P.addPet(PET);
+  var pp = P.podeUsarPet(B, PET);
+  check('podeUsarPet no nível 1: "pets a partir do nível 10"',
+        pp && !pp.ok && pp.precisa === 10 && pp.motivo === 'pets a partir do nível 10', JSON.stringify(pp));
+  check('XP até o 9 no segundo herói', xpAte(B, 9) === 9);
+  P.ultimaRecusa = null;
+  check('equipPet no 9 é recusado, com ultimaRecusa.petId', P.equipPet(B, PET) === false &&
+        P.ultimaRecusa && P.ultimaRecusa.petId === PET && P.ultimaRecusa.heroId === B &&
+        P.ultimaRecusa.nivel === 9 && P.ultimaRecusa.precisa === 10, JSON.stringify(P.ultimaRecusa));
+  check('o bicho recusado continua na lista', P.state.pets.indexOf(PET) >= 0 && !P.hero(B).pet);
+  check('no 10 o bicho entra', xpAte(B, 10) === 10 && P.equipPet(B, PET) === true && P.hero(B).pet === PET &&
+        P.ultimaRecusa === null);
+  // transferência: um terceiro herói de nível 9 não recebe o bicho
+  var C = P.createHero(P.hero(A).classId, 'terceiro-nv9');    // segunda ficha da classe do A (já liberada)
+  if (C) {
+    xpAte(C, 9);
+    P.ultimaRecusa = null;
+    check('transferir o bicho para um herói de nível 9 é recusado e o dono continua com ele',
+          P.equipPet(C, PET) === false && P.hero(B).pet === PET && !P.hero(C).pet &&
+          P.ultimaRecusa && P.ultimaRecusa.petId === PET && P.ultimaRecusa.heroId === C);
+    check('no 10 a transferência acontece', xpAte(C, 10) === 10 && P.equipPet(C, PET) === true &&
+          P.hero(C).pet === PET && !P.hero(B).pet);
+  } else check('criar o terceiro herói para a transferência', false);
+
+  // ---- o Mestre veste tudo
+  var GMantes = JOGO.GM;
+  JOGO.GM = { ativo: function () { return true; } };
+  P.reset();
+  P.addItem(EPICA); P.addItem(COLEC); P.addPet(PET);
+  check('Mestre: herói nível 1 veste a épica, a peça do Colecionador e chama o bicho',
+        P.hero(A).level === 1 && P.equip(A, EPICA) === true && P.equip(A, COLEC) === true &&
+        P.equipPet(A, PET) === true && P.podeUsar(A, COLEC).ok === true && P.podeUsarPet(A, PET).ok === true);
+  JOGO.GM = GMantes;
+
+  // ---- o saneamento ao carregar
+  function rawComPecaAcima() {
+    P.reset();
+    var raw = JSON.parse(JSON.stringify(P.state));
+    raw.heroes[A].items.punho = EPICA;
+    raw.heroes[A].itemVar = { punho: { level: 4, stars: 1, iid: 'jteste-serie-1' } };
+    raw.heroes[A].pet = PET;
+    raw.petCards = {}; raw.petCards[PET] = 5;
+    return raw;
+  }
+  function carrega(raw) {
+    localStorage.setItem(P.SAVE_KEY, JSON.stringify(raw));
+    P.state = null;
+    P.load();
+  }
+  carrega(rawComPecaAcima());
+  var hA = P.hero(A);
+  var noSaco = P.state.inventory.filter(function (e) { return e.itemId === EPICA; });
+  check('saneamento: a épica vestida no herói nível 1 volta ao saco', !hA.items.punho && !hA.itemVar.punho && noSaco.length === 1);
+  check('…com a MESMA série e o mesmo level/stars',
+        noSaco.length === 1 && noSaco[0].iid === 'jteste-serie-1' && noSaco[0].level === 4 && noSaco[0].stars === 1,
+        JSON.stringify(noSaco[0] || null));
+  check('saneamento: o bicho volta à lista', !hA.pet && P.state.pets.indexOf(PET) >= 0 &&
+        P.state.pets.filter(function (p) { return p === PET; }).length === 1);
+  var dev = P.devolvidasPorNivel();
+  check('o aviso fica registrado (peça e bicho, com herói, exigência e nível)',
+        dev.length === 2 && dev.some(function (d) { return d.itemId === EPICA && d.heroId === A && d.precisa === 7 && d.nivel === 1; }) &&
+        dev.some(function (d) { return d.petId === PET && d.heroId === A && d.precisa === 10; }), JSON.stringify(dev));
+  check('devolvidasPorNivel(true) entrega e esvazia', P.devolvidasPorNivel(true).length === 2 && P.devolvidasPorNivel().length === 0);
+  check('a série devolvida não vira nascimento novo', !P.state.nascimentos.some(function (n) { return n.iid === 'jteste-serie-1'; }));
+  // saco cheio: volta mesmo assim (migração única)
+  var rawCheio = rawComPecaAcima();
+  rawCheio.inventory = [{ itemId: 'gh-moss-treads', count: 99 }, { itemId: 'gh-moss-treads', count: 99 }, { itemId: 'gh-moss-treads', count: 99 }];
+  carrega(rawCheio);
+  check('com o saco acima do teto a peça volta MESMO ASSIM',
+        P.state.inventory.length === 298 && P.bagFree(1) === false &&
+        P.state.inventory.some(function (e) { return e.iid === 'jteste-serie-1'; }) && !P.hero(A).items.punho,
+        P.state.inventory.length + ' no saco, teto ' + P.bagLimit());
+  // herói com nível: a peça FICA
+  var rawOk = rawComPecaAcima();
+  rawOk.heroes[A].xp = XP[9];                      // nível 10
+  carrega(rawOk);
+  check('herói no nível 10 mantém a épica vestida e o bicho', P.hero(A).level === 10 && P.hero(A).items.punho === EPICA &&
+        P.hero(A).itemVar.punho.iid === 'jteste-serie-1' && P.hero(A).pet === PET && P.devolvidasPorNivel().length === 0);
+  // o Mestre não passa pelo saneamento
+  JOGO.GM = { ativo: function () { return true; } };
+  carrega(rawComPecaAcima());
+  check('Mestre: a peça acima do nível fica vestida ao carregar', P.hero(A).items.punho === EPICA && P.hero(A).pet === PET &&
+        P.devolvidasPorNivel().length === 0);
+  JOGO.GM = GMantes;
+  // A CARGA NÃO GRAVA; ENTREGAR O AVISO GRAVA (revisão 10/09). O boot do jogo
+  // não salva sozinho: sem isto, quem abria e fechava levava o mesmo toast a
+  // cada abertura, e a Nuvem seguia com a peça vestida. Nada de P.save() aqui.
+  function discoHeroi() { return JSON.parse(localStorage.getItem(P.SAVE_KEY)).heroes[A]; }
+  carrega(rawComPecaAcima());
+  check('a carga saneia só na memória: o disco segue com a peça e o bicho até o aviso sair',
+        !P.hero(A).items.punho && discoHeroi().items.punho === EPICA && discoHeroi().pet === PET);
+  P.state = null; P.load();                         // fechou sem ver o aviso e abriu de novo
+  check('sem o aviso entregue, a carga seguinte devolve de novo — nada se perde nem duplica',
+        P.devolvidasPorNivel().length === 2 &&
+        P.state.inventory.filter(function (e) { return e.iid === 'jteste-serie-1'; }).length === 1);
+  var entregue = P.devolvidasPorNivel(true);        // a HUD mostrou o toast
+  var cruDepois = JSON.parse(localStorage.getItem(P.SAVE_KEY));
+  check('entregar o aviso (devolvidasPorNivel(true)) grava a migração: peça no saco do disco, bicho fora do herói',
+        entregue.length === 2 && !discoHeroi().items.punho && !discoHeroi().pet &&
+        cruDepois.inventory.some(function (e) { return e.iid === 'jteste-serie-1' && e.level === 4 && e.stars === 1; }));
+  P.state = null; P.load();                         // SEM P.save() no meio
+  check('a carga seguinte, sem save no meio, não tem nada a devolver e a série segue única',
+        P.devolvidasPorNivel().length === 0 && !P.hero(A).items.punho &&
+        P.state.inventory.filter(function (e) { return e.iid === 'jteste-serie-1'; }).length === 1);
+  localStorage.setItem(P.SAVE_KEY, '{"marca":"intocado"}');
+  P.devolvidasPorNivel(true);                       // lista vazia: nada a gravar
+  check('com a lista vazia, devolvidasPorNivel(true) não grava', localStorage.getItem(P.SAVE_KEY) === '{"marca":"intocado"}');
+
+  // ---- o traje conta a falta por nível
+  P.reset();
+  P.addItem(EPICA); P.addItem(COMUM);
+  P.hero(A).trajes = { t1: { punho: EPICA } };
+  var rt = P.wearTraje(A, 1);
+  check('wearTraje com peça acima do nível conta falta (e diz que foi por nível)',
+        !!rt && rt.faltas === 1 && rt.trocas === 0 && rt.porNivel === 1 &&
+        rt.recusas.length === 1 && rt.recusas[0].itemId === EPICA && rt.recusas[0].precisa === 7 &&
+        !P.hero(A).items.punho, JSON.stringify(rt));
+  xpAte(A, 7);
+  var rt2 = P.wearTraje(A, 1);
+  check('no 7 o mesmo traje veste sem falta', !!rt2 && rt2.faltas === 0 && rt2.porNivel === 0 && P.hero(A).items.punho === EPICA);
+
+  // ---- página sem DATA.nivelUsoDe não tranca (dado montado à mão nas provas)
+  var guardaFn = D.nivelUsoDe;
+  delete D.nivelUsoDe;
+  P.reset();
+  P.addItem(EPICA); P.addPet(PET);
+  check('sem DATA.nivelUsoDe: nivelUsoDe = 0, podeUsar ok e o herói nível 1 veste a épica e chama o bicho',
+        P.nivelUsoDe(EPICA) === 0 && P.podeUsar(A, EPICA).ok === true && P.podeUsarPet(A, PET).ok === true &&
+        P.equip(A, EPICA) === true && P.equipPet(A, PET) === true);
+  D.nivelUsoDe = guardaFn;
+  // e a régua desligada (JOGO.DATA.nivelUso = null) também não tranca
+  var guardaT = D.nivelUso;
+  D.nivelUso = null;
+  P.reset(); P.addItem(COLEC);
+  check('com DATA.nivelUso = null a régua está desligada: nível 1 veste a peça do Colecionador',
+        P.nivelUsoDe(COLEC) === 0 && P.equip(A, COLEC) === true);
+  D.nivelUso = guardaT;
+  check('a régua religada volta a cobrar', P.nivelUsoDe(COLEC) === 30 && P.podeUsar(A, COLEC).ok === false);
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+  window.__done = true; window.__fail = falhas;
+})();
+</script>
+</body>
+</html>

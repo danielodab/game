@@ -6,3 +6,7 @@
 Caddyfile   text eol=lf
 Dockerfile     text eol=lf
 .dockerignore  text eol=lf
+# As tabelas que tools/extrai_assets.py gera nascem em LF. O --conferir já as
+# compara sem o fim de linha; isto as deixa iguais ao que o gerador escreve
+# também num clone novo com core.autocrlf=true.
+assets/models/bundle/tabelas/*.js  text eol=lf

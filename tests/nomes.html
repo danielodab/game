@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a lei dos nomes (lado JavaScript)</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  #dados{position:absolute;left:-9999px;top:-9999px;white-space:pre}
+  .fonte{font:11px monospace;color:#8895a6;margin-bottom:8px}
+</style>
+</head>
+<body>
+<h1>A lei dos nomes — o corpus rodando no JavaScript</h1>
+<div class="sub">Esta página existe para a prova em Python comparar os DOIS lados no MESMO corpus
+(<code>python tests/nomes_prova.py</code>). Ela lê <code>nomes_casos.json</code> (ou o arquivo de
+<code>?casos=</code>, que precisa estar nesta pasta), roda também os nomes sorteados do
+<code>_sorteio</code> e, com <code>?varre=1</code>, o esqueleto de TODOS os pontos de código, e despeja
+tudo num bloco escondido que a prova lê do DOM. Aberta na mão, ela mesma julga o corpus e mostra o
+placar.</div>
+<div class="fonte" id="fonte">…</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+<pre id="dados"></pre>
+
+<script>
+  window.__V = '?v=' + Date.now();
+  document.write('<scr' + 'ipt src="../js/core/nomes.js' + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0, mostrados = 0;
+
+  function param(nome) {
+    var m = new RegExp('[?&]' + nome + '=([^&]*)').exec(window.location.search);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  /* o corpus: por XHR síncrono. Em file:// isso só funciona com
+   * --allow-file-access-from-files (é como a prova chama o Chrome); aberta na
+   * mão sem o sinalizador, a página cai no corpus de bolso e AVISA — a prova
+   * confere a contagem e reprova se vier o de bolso. */
+  var BOLSO = {
+    bloquear: ['GM', 'Admin', 'GMJoao', '4dm1n', '[GM]', 'Aaadmin', 'Mestre do Fundo', 'Soterra'],
+    liberar: ['Sigmund', 'Modesto', 'Badminton', 'Sistemático', 'Semestre', 'Ana Clara']
+  };
+  var arquivo = param('casos') || 'nomes_casos.json';
+  var casos = null, deOndeVeio = arquivo;
+  try {
+    var x = new XMLHttpRequest();
+    x.open('GET', arquivo + '?v=' + Date.now(), false);
+    if (x.overrideMimeType) x.overrideMimeType('application/json; charset=utf-8');
+    x.send(null);
+    if (x.responseText) casos = JSON.parse(x.responseText);
+  } catch (e) { casos = null; }
+  if (!casos || !casos.bloquear || !casos.liberar) {
+    casos = BOLSO;
+    deOndeVeio = 'corpus de bolso (o arquivo não abriu — falta --allow-file-access-from-files?)';
+  }
+
+  function caso(c) {
+    if (typeof c === 'string') return { nome: c };
+    return c;
+  }
+  function num(c, chave, padrao) {
+    return (typeof c[chave] === 'number') ? c[chave] : padrao;
+  }
+
+  var N = window.JOGO && window.JOGO.Nomes;
+  var TAB = N._tabelas();
+  var MOTIVO_CARACTERES = TAB.motivos[2];
+  var registros = [];
+
+  function roda(c, esperado) {
+    c = caso(c);
+    var minimo = num(c, 'minimo', 3), maximo = num(c, 'maximo', 20);
+    var v = N.valida(c.nome, minimo, maximo);
+    var r = {
+      nome: c.nome,
+      esperado: esperado,
+      regra: c.regra || (esperado === 'bloquear' ? 'reservado' : 'livre'),
+      minimo: minimo, maximo: maximo,
+      norm: N.normaliza(c.nome),
+      res: N.reservado(c.nome),
+      car: N.caracteresOk(c.nome),
+      ok: v.ok,
+      motivo: v.motivo
+    };
+    registros.push(r);
+
+    /* o julgamento da própria página (a prova em Python julga de novo, e
+     * ainda compara os dois lados caso a caso) */
+    var bom = true, nota = '';
+    if (esperado === 'liberar') {
+      bom = (r.ok === true && r.res === null);
+      nota = r.ok ? (r.res ? ('reservado sobrando: ' + r.res) : '') : ('caiu: ' + r.motivo);
+    } else {
+      if (r.ok !== false) { bom = false; nota = 'passou e devia cair'; }
+      else if (r.regra === 'reservado' && !r.res) { bom = false; nota = 'caiu, mas não pela reserva (' + r.motivo + ')'; }
+      else if (r.regra === 'caracteres' && r.motivo !== MOTIVO_CARACTERES) {
+        bom = false; nota = 'motivo ' + r.motivo;
+      }
+    }
+    total++;
+    if (!bom) falhas++;
+    if (!bom || mostrados < 12) {
+      mostrados++;
+      var li = document.createElement('li');
+      li.className = bom ? 'pass' : 'fail';
+      li.textContent = (bom ? 'PASSOU · ' : 'FALHOU · ') + esperado + ' · ' + c.nome +
+                       (r.res ? (' [' + r.res + ']') : '') + (nota ? (' — ' + nota) : '');
+      lista.appendChild(li);
+    }
+  }
+
+  var i;
+  for (i = 0; i < casos.bloquear.length; i++) roda(casos.bloquear[i], 'bloquear');
+  for (i = 0; i < casos.liberar.length; i++) roda(casos.liberar[i], 'liberar');
+
+  /* SORTEIO: nomes montados com as peças do corpus pelo MESMO gerador que a
+   * prova usa em Python (MINSTD, 48271 mod 2^31-1: cabe inteiro num double).
+   * Aqui não tem veredito — só a paridade dos dois lados. */
+  var sorteados = [];
+  if (casos._sorteio && casos._sorteio.pecas && casos._sorteio.pecas.length) {
+    var cfg = casos._sorteio;
+    var xs = cfg.semente % 2147483647;
+    if (xs <= 0) xs += 2147483646;
+    var prox = function () { xs = (xs * 48271) % 2147483647; return xs; };
+    for (i = 0; i < cfg.quantos; i++) {
+      var k = 1 + prox() % 5, s = '';
+      for (var j = 0; j < k; j++) s += cfg.pecas[prox() % cfg.pecas.length];
+      var vv = N.valida(s);
+      sorteados.push([s, N.normaliza(s), N.reservado(s), N.caracteresOk(s), vv.ok, vv.motivo]);
+    }
+  }
+
+  /* VARREDURA: o esqueleto (JOGO.Nomes._cru) de cada ponto de código, de
+   * U+0000 a U+10FFFF, resumido num FNV-1a de 32 bits por faixa de 256. A
+   * prova faz a mesma conta em Python e aponta a faixa que discordar — é
+   * assim que um NFKD novo do navegador (Unicode 18, 19…) aparece antes de
+   * virar brecha. */
+  var varre = null;
+  function imul(a, b) {
+    if (Math.imul) return Math.imul(a, b);
+    var ah = (a >>> 16) & 0xffff, al = a & 0xffff, bh = (b >>> 16) & 0xffff, bl = b & 0xffff;
+    return ((al * bl) + (((ah * bl + al * bh) << 16) >>> 0)) | 0;
+  }
+  if (param('varre') === '1') {
+    varre = [];
+    for (var bl = 0; bl < (0x110000 >> 8); bl++) {
+      var h = 2166136261;
+      for (var cp = bl << 8; cp < (bl << 8) + 256; cp++) {
+        if (cp >= 0xD800 && cp <= 0xDFFF) continue;
+        var ch = cp < 0x10000 ? String.fromCharCode(cp)
+          : String.fromCharCode(0xD800 + ((cp - 0x10000) >> 10), 0xDC00 + ((cp - 0x10000) & 0x3FF));
+        var kk = N._cru(ch);
+        for (var q = 0; q < kk.length; q++) {
+          var u = kk.charCodeAt(q);
+          if (u >= 0xD800 && u <= 0xDBFF && q + 1 < kk.length) {
+            var w = kk.charCodeAt(q + 1);
+            if (w >= 0xDC00 && w <= 0xDFFF) { u = (u - 0xD800) * 0x400 + (w - 0xDC00) + 0x10000; q++; }
+          }
+          h = imul(h ^ u, 16777619) >>> 0;
+        }
+        h = imul(h ^ 0x110000, 16777619) >>> 0;
+      }
+      varre.push(h.toString(16));
+    }
+  }
+
+  /* Despejo em ASCII PURO: o --dump-dom volta como texto para o Python, e
+   * caractere invisível no meio do caminho é exatamente o que a lei destes
+   * nomes trata — não dá para ele ir viajando cru. */
+  function asc(s) {
+    if (s === null || s === undefined) return 'null';
+    var fora = '"', i2, c, hx;
+    for (i2 = 0; i2 < s.length; i2++) {
+      c = s.charCodeAt(i2);
+      if (c === 34) fora += '\\"';
+      else if (c === 92) fora += '\\\\';
+      else if (c >= 32 && c <= 126) fora += s.charAt(i2);
+      else {
+        hx = c.toString(16);
+        while (hx.length < 4) hx = '0' + hx;
+        fora += '\\u' + hx;
+      }
+    }
+    return fora + '"';
+  }
+  /* JSON em ASCII puro, à mão (o JSON.stringify deixa o acento passar cru) */
+  function jsonAsc(v) {
+    var i2, partes2, k2;
+    if (v === null || v === undefined) return 'null';
+    if (typeof v === 'string') return asc(v);
+    if (typeof v === 'number') return String(v);
+    if (typeof v === 'boolean') return v ? 'true' : 'false';
+    if (Object.prototype.toString.call(v) === '[object Array]') {
+      partes2 = [];
+      for (i2 = 0; i2 < v.length; i2++) partes2.push(jsonAsc(v[i2]));
+      return '[' + partes2.join(',') + ']';
+    }
+    partes2 = [];
+    for (k2 in v) {
+      if (Object.prototype.hasOwnProperty.call(v, k2)) {
+        partes2.push(asc(k2) + ':' + jsonAsc(v[k2]));
+      }
+    }
+    return '{' + partes2.join(',') + '}';
+  }
+  var partes = [];
+  for (i = 0; i < registros.length; i++) {
+    var r2 = registros[i];
+    partes.push('{"nome":' + asc(r2.nome) + ',"esperado":' + asc(r2.esperado) +
+                ',"regra":' + asc(r2.regra) + ',"minimo":' + r2.minimo +
+                ',"maximo":' + r2.maximo + ',"norm":' + asc(r2.norm) +
+                ',"res":' + asc(r2.res) + ',"car":' + (r2.car ? 'true' : 'false') +
+                ',"ok":' + (r2.ok ? 'true' : 'false') + ',"motivo":' + asc(r2.motivo) + '}');
+  }
+  document.getElementById('dados').textContent =
+    '{"fonte":' + asc(deOndeVeio) + ',"quantos":' + registros.length +
+    ',"tabelas":' + jsonAsc(TAB) +
+    ',"casos":[' + partes.join(',') + ']' +
+    ',"sorteio":' + jsonAsc(sorteados) +
+    ',"varre":' + jsonAsc(varre) + '}';
+
+  document.getElementById('fonte').textContent =
+    'corpus: ' + deOndeVeio + ' — ' + casos.bloquear.length + ' para bloquear, ' +
+    casos.liberar.length + ' para liberar, ' + sorteados.length + ' sorteados' +
+    (varre ? ', varredura de ' + varre.length + ' faixas' : '');
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>

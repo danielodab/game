@@ -23,12 +23,29 @@ perfil NOVO e `?api=` apontando para a variante; o DOM final é conferido:
 Os números esperados que dependem do jogo (portais fechados, BONUS_PA) são
 LIDOS dos arquivos do jogo, não copiados aqui.
 
+Fase C (a conta por dentro e a loja): conta.html pergunta /api/saude (o
+"esqueci a senha" só liga com o correio do servidor, e aqui ele vem desligado)
+e loja.html lê /api/loja/catalogo, com os exemplos da seção 1.5 do plano da
+Fase C; o menu de toda página tem a Loja. As provas próprias da Fase C estão
+em tests/site_fase_c.html (fetch falso) e tests/site_fase_c_viva.py (ao vivo).
+O Chrome roda em prioridade baixa: o dono usa a máquina enquanto a prova roda.
+
+O cache (o que o SITE_URL pede): sem mapa (o js/versao.js 'dev', o de casa), a
+folha e os scripts vão com o carimbo ?t= do instante, e duas visitas no MESMO
+perfil, com o site.js editado entre elas, rodam o novo na segunda (o
+http.server de casa não manda Cache-Control); no ar, esse ?t= sai no-cache
+pelas regras dos dois Caddyfiles (a imitação de tests/carga_prova.py). Com o
+mapa, o ?v=<hash> é conferido por tests/pacote_servido.py. E o SUBIR.md tem de
+explicar o primeiro deploy com o cache por hash (o contêiner de antes não
+manda Cache-Control).
+
 `--api-real` sobe a API de verdade com banco temporário, semeia por HTTP (conta,
 save com heróis, gm=1 gravado no sqlite como no teste da caixa, um evento e uma
 regra) e abre as páginas contra ela. Precisa das rotas /api/eventos do servidor.
 """
 import argparse
 import functools
+import hashlib
 import html as html_lib
 import http.server
 import json
@@ -58,7 +75,9 @@ CHROMES = [r'C:\Program Files\Google\Chrome\Application\chrome.exe',
            '/usr/bin/google-chrome', '/usr/bin/chromium']
 RESULTADOS = []
 PEDIDOS = []          # (caminho, código) do servidor de arquivos
+CONSULTAS = []        # (caminho, query) de cada pedido ao servidor de arquivos
 PEDIDOS_API = []      # (variante, método, caminho, código) das APIs falsas
+PAGINAS = ['index.html', 'conta.html', 'eventos.html', 'fusoes.html', 'loja.html', 'ranking.html']
 
 
 def check(nome, ok, extra=''):
@@ -109,6 +128,23 @@ EVENTOS_VAZIA = dict(EVENTOS_CHEIA, ativos=[], proximos=[], regras=[], fatores={
 RANKING_VAZIA = dict(RANKING_CHEIA, jogadores=[], pvp=[], guildas=[],
                      porClasse={c: [] for c in RANKING_CHEIA['classes']})
 CLASSES = RANKING_CHEIA['classes']
+# Fase C: a saúde (sem correio: o "esqueci a senha" fica como antes) e o catálogo
+# da loja com os três exemplos da seção 1.5 do plano, sem tirar nem pôr
+SAUDE = {'ok': True, 'contas': 1, 'agora': EVENTOS_CHEIA['agora'], 'correio': False}
+CATALOGO_CHEIA = json.loads(r'''
+{"ok": true, "versao": 1, "itens": [
+ {"sku": "pergaminho-xp", "secao": "pergaminhos", "tipo": "pergaminho", "alvo": "xp", "qtd": 1,
+  "nome": "Pergaminho da Sabedoria",
+  "descricao": "+50% de experiência para o grupo nas próximas 9 salas vencidas. Com um evento de XP no ar, os dois juntos param em ×2.",
+  "preco": 1500, "limite": {"grupo": "pergaminho-xp", "max": 1, "dias": 7}},
+ {"sku": "pedras-agua", "secao": "pedras", "tipo": "pedras", "alvo": "stone-tear", "qtd": 10, "elemento": "agua",
+  "nome": "10 Lágrimas de Cisterna", "descricao": "…", "preco": 300, "limite": {"grupo": "pedras", "max": 5, "dias": 7}},
+ {"sku": "classe-invocador", "secao": "personagens", "tipo": "classe", "alvo": "invocador", "qtd": 1,
+  "nome": "Xamã", "raridade": "raro", "cartas": 10, "descricao": "Chega no nível 1.", "preco": 8000,
+  "limite": {"grupo": "classe-invocador", "max": 1, "dias": null}}
+]}
+''')
+CATALOGO_VAZIA = {'ok': True, 'versao': 1, 'itens': []}
 
 
 # ---- o que o jogo diz (lido dos arquivos dele, nunca copiado) -------------------
@@ -131,7 +167,9 @@ class Arquivos(http.server.SimpleHTTPRequestHandler):
                              '.webp': 'image/webp', '.json': 'application/json'})
 
     def log_request(self, code='-', size='-'):
-        PEDIDOS.append((self.path.split('?')[0].split('#')[0], str(getattr(code, 'value', code))))
+        caminho, _, query = self.path.split('#')[0].partition('?')
+        PEDIDOS.append((caminho, str(getattr(code, 'value', code))))
+        CONSULTAS.append((caminho, query))
 
     def log_message(self, *a):
         pass
@@ -192,11 +230,12 @@ def sobe(handler):
     return srv, p
 
 
-def dom(chrome, pasta, url, budget=60000):
-    perfil = tempfile.mkdtemp(prefix='perfil-', dir=pasta)       # perfil NOVO a cada página
+def dom(chrome, pasta, url, budget=60000, perfil=None):
+    perfil = perfil or tempfile.mkdtemp(prefix='perfil-', dir=pasta)   # perfil NOVO a cada página (menos em casa)
     r = subprocess.run([chrome, '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
                         '--user-data-dir=' + perfil, '--virtual-time-budget=%d' % budget,
-                        '--dump-dom', url], capture_output=True, timeout=240)
+                        '--dump-dom', url], capture_output=True, timeout=240,
+                       creationflags=getattr(subprocess, 'BELOW_NORMAL_PRIORITY_CLASS', 0))   # o dono usa a máquina
     return r.stdout.decode('utf-8', 'replace')
 
 
@@ -232,7 +271,7 @@ def limpo(nome, h):
 def menu_ok(nome, h):
     m = re.search(r'(?s)<nav>(.*?)</nav>', h)
     nav = m.group(1) if m else ''
-    check(nome + ': o menu tem Eventos e Fusões', 'eventos.html' in nav and 'fusoes.html' in nav)
+    check(nome + ': o menu tem Eventos, Fusões e Loja', 'eventos.html' in nav and 'fusoes.html' in nav and 'loja.html' in nav)
 
 
 def img_no_contrato(p):
@@ -395,6 +434,8 @@ def prova_index(abre):
           len(re.findall(r'<tr', melhores)) == 7 and 'Pia, a Forte' in texto(melhores))
     limpo('landing (cheia)', h)
     menu_ok('landing', h)
+    rodape = re.search(r'(?s)<footer\b.*?</footer>', h)
+    check('landing (cheia): o rodapé tem a Loja', bool(rodape) and 'href="loja.html"' in rodape.group(0))
 
     h = abre('index.html', 'vazia')
     te = texto(secao(h, 'eventos'))
@@ -411,6 +452,29 @@ def prova_index(abre):
     h = abre('conta.html', 'cheia')
     menu_ok('conta', h)
     limpo('conta', h)
+    esq = re.search(r'<a\b[^>]*\bid="esqueci"[^>]*>', h)
+    check('conta (sem correio): o "esqueci a senha" continua desligado', bool(esq) and 'desligado' in esq.group(0))
+
+
+def prova_loja(abre):
+    """Fase C: a loja pública (sem sessão) com o catálogo do contrato"""
+    h = abre('loja.html', 'cheia')
+    t = texto(h)
+    secoes = re.findall(r'<section class="loja-secao" data-secao="([a-z]+)"', sem_codigo(h))
+    check('loja (cheia): as três seções, na ordem', secoes == ['pergaminhos', 'pedras', 'personagens'], ' '.join(secoes))
+    check('loja (cheia): os preços do servidor, com ponto de milhar', '1.500 vinténs' in t and '300 vinténs' in t and '8.000 vinténs' in t)
+    check('loja (cheia): sem sessão, "Entre para comprar"', t.count('Entre para comprar') >= 4)
+    check('loja (cheia): o retrato do personagem pelo id da classe', 'src="img/classe-invocador.webp"' in h)
+    limpo('loja (cheia)', h)
+    menu_ok('loja', h)
+
+    h = abre('loja.html', 'vazia')
+    check('loja (vazia): diz que está vazia', 'A loja está vazia por enquanto.' in texto(h))
+    limpo('loja (vazia)', h)
+
+    h = abre('loja.html', 'fora')
+    check('loja (fora): diz que o servidor está fora', 'servidor está fora' in texto(h))
+    limpo('loja (fora)', h)
 
 
 # ---- a integração com a API de verdade (--api-real) --------------------------------
@@ -508,6 +572,139 @@ def prova_api_real(chrome, pasta, site):
         log.close()
 
 
+def prova_do_carimbo():
+    """As seis páginas pedem a folha e os scripts pelo mapa do build (SITE_URL,
+    com o hash de cada arquivo) e, sem mapa (em casa), pelo carimbo ?t= do
+    instante — nunca o ?v= do instante, que o Caddy de antes das marcas guardava
+    por um ano."""
+    ruins = []
+    for p in PAGINAS:
+        t = le('site/' + p)
+        if re.search(r"\?v='\s*\+\s*Date\.now\(\)", t):
+            ruins.append(p + ": ainda carimba ?v=' + Date.now()")
+        if '../js/versao.js?t=' not in t or "SITE_URL('site.css')" not in t or 'SITE_URL(s)' not in t:
+            ruins.append(p + ': não pede pelo mapa (../js/versao.js e SITE_URL)')
+        if len(re.findall(r"'\?v='\s*\+\s*mapa\[chave\]\s*:\s*'\?t='\s*\+\s*Date\.now\(\)", t)) != 1:
+            ruins.append(p + ": sem mapa, o SITE_URL não cai no carimbo '?t=' + Date.now()")
+    check("as seis páginas pedem a folha e os scripts pelo mapa do build (SITE_URL) e, sem mapa, pelo carimbo ?t= "
+          "(nunca ?v=' + Date.now())", not ruins, '; '.join(ruins[:4]))
+
+
+# ---- o cache: sem mapa (em casa), no ar (o Caddy novo) e o primeiro deploy ---------
+SONDA_NOVA = b"document.documentElement.setAttribute('data-sonda','nova');\n"
+
+
+def prova_sem_mapa():
+    """O que as seis páginas pediram de fato ao servidor desta prova (o 'dev' do
+    repositório, sem mapa, como em casa): a folha e cada script do site com o
+    carimbo ?t= do instante — nunca ?v=, nunca sem carimbo. E esses mesmos
+    endereços, no ar, pelas regras dos dois Caddyfiles (prova_no_ar)."""
+    lidos = {c for c, q in CONSULTAS}
+    folhas = [(c, q) for c, q in CONSULTAS if c.endswith(('.css', '.js')) and c != '/js/versao.js']
+    sem_t = sorted({c + ('?' + q if q else '') for c, q in folhas if not re.fullmatch(r't=\d+', q or '')})
+    check('as páginas leem o ../js/versao.js (o mapa do build, como o jogo)', '/js/versao.js' in lidos)
+    check("sem mapa (o js/versao.js 'dev', o de casa), a folha e cada script do site vão com o carimbo ?t= do "
+          'instante — nunca ?v=, nunca sem carimbo (%d pedidos)' % len(folhas),
+          bool(folhas) and not sem_t, ', '.join(sem_t[:4]))
+    prova_no_ar(CONSULTAS)
+
+
+def prova_no_ar(consultas):
+    """NO AR o mapa existe e o SITE_URL dá ?v=<hash>; o ?t= só sairia se um
+    arquivo faltasse no mapa. Pelas regras dos DOIS Caddyfiles (a imitação de
+    tests/carga_prova.py), cada ?t= que as páginas pediram sai no-cache — nunca
+    "um ano" —, mesmo com a marca do hash de verdade do arquivo na pasta de
+    marcas; e o mesmo arquivo com ?v=<hash> sai por um ano (a pasta de marcas
+    da prova funciona: o no-cache não é de graça)."""
+    if AQUI not in sys.path:
+        sys.path.insert(0, AQUI)
+    import carga_prova as cp
+    carimbados = sorted({(c, q) for c, q in consultas
+                         if c.endswith(('.css', '.js')) and c != '/js/versao.js' and re.fullmatch(r't=\d+', q or '')
+                         and os.path.isfile(os.path.join(RAIZ, *c.strip('/').split('/')))})
+    ruins, hashes = [], {}
+    with tempfile.TemporaryDirectory(prefix='soterra-marcas-') as marcas:
+        for c, q in carimbados:
+            with open(os.path.join(RAIZ, *c.strip('/').split('/')), 'rb') as f:
+                hashes[c] = hashlib.sha256(f.read()).hexdigest()[:12]      # o hash do versao.py
+            fis = os.path.join(marcas, *(c.strip('/') + '.' + hashes[c]).split('/'))
+            os.makedirs(os.path.dirname(fis), exist_ok=True)
+            open(fis, 'wb').close()
+        for rel in ('servidor/coolify/Caddyfile', 'servidor/Caddyfile'):
+            regra = cp.regras_do_caddy(le(rel), marcas=marcas)
+            for c, q in carimbados:
+                if regra(c + '?' + q) != cp.NO_CACHE:
+                    ruins.append('%s: %s?%s dá %r' % (rel, c, q, regra(c + '?' + q)))
+                if regra(c + '?v=' + hashes[c]) != cp.IMUTAVEL:
+                    ruins.append('%s: %s?v=%s (com a marca) dá %r' % (rel, c, hashes[c], regra(c + '?v=' + hashes[c])))
+    pedidos = {c for c, q in carimbados}
+    base = {'/site/site.css', '/site/site.js'}
+    check('no ar (os dois Caddyfiles): cada ?t= que as páginas pediram sai no-cache, nunca "um ano", mesmo com a '
+          'marca do arquivo; e o mesmo arquivo com ?v=<hash> sai um ano (%d endereços)' % len(carimbados),
+          base <= pedidos and not ruins,
+          '; '.join(ruins[:3]) or ('' if base <= pedidos else 'nenhum ?t= da folha e do site.js'))
+
+
+def prova_em_casa(chrome, pasta, api):
+    """EM CASA (o http.server do .claude/launch.json manda Last-Modified e nenhum
+    Cache-Control), o site.js editado entre duas visitas no MESMO perfil roda na
+    segunda. Sem carimbo, o Chrome dava ao site.js de 10 dias um dia de frescor
+    heurístico (10% da idade) e rodava o velho sem nem perguntar ao servidor."""
+    casa = tempfile.mkdtemp(prefix='casa-', dir=pasta)
+    sitejs = os.path.join(casa, 'site.js')
+    shutil.copyfile(os.path.join(RAIZ, 'site', 'site.js'), sitejs)
+    dez_dias = time.time() - 10 * 86400
+    os.utime(sitejs, (dez_dias, dez_dias))
+    fase, pedidos = ['1'], []
+
+    class Casa(Arquivos):
+        def translate_path(self, path):
+            if path.split('?', 1)[0].split('#', 1)[0] == '/site/site.js':
+                return sitejs
+            return Arquivos.translate_path(self, path)
+
+        def log_request(self, code='-', size='-'):
+            caminho, _, query = self.path.split('#')[0].partition('?')
+            pedidos.append((fase[0], caminho, query))
+
+    srv, porta = sobe(functools.partial(Casa, directory=RAIZ))
+    perfil = os.path.join(casa, 'perfil')                  # o MESMO perfil nas duas visitas
+    url = 'http://127.0.0.1:%d/site/index.html?api=%s' % (porta, api)
+    try:
+        dom(chrome, pasta, url, 15000, perfil=perfil)
+        with open(sitejs, 'rb') as f:
+            velho = f.read()
+        with open(sitejs, 'wb') as f:
+            f.write(SONDA_NOVA + velho)                     # a edição entre as visitas
+        fase[0] = '2'
+        h2 = dom(chrome, pasta, url, 15000, perfil=perfil)
+    finally:
+        srv.shutdown()
+    q1 = ['site.js' + ('?' + q if q else '') for f, c, q in pedidos if f == '1' and c == '/site/site.js']
+    q2 = ['site.js' + ('?' + q if q else '') for f, c, q in pedidos if f == '2' and c == '/site/site.js']
+    check('em casa (sem Cache-Control): o site.js editado entre duas visitas no mesmo perfil roda na 2ª',
+          'data-sonda="nova"' in h2,
+          'visita 1 pediu %s; visita 2 pediu %s' % (q1 or 'nada', q2 or 'NADA (rodou o do cache)'))
+    check('em casa: cada visita pede o site.js com um carimbo ?t= novo',
+          len(q1) == 1 and len(q2) == 1 and all(re.fullmatch(r'site\.js\?t=\d+', q) for q in q1 + q2) and q1 != q2,
+          'visita 1: %s · visita 2: %s' % (q1, q2))
+
+
+def prova_primeiro_deploy():
+    """O PRIMEIRO deploy com o cache por hash não é coberto pela regra das
+    marcas: o contêiner que está no ar antes dele não manda Cache-Control, e o
+    Chrome usa sem perguntar, por um décimo da idade do arquivo, o que ele
+    responder. O SUBIR.md tem de dizer o que acontece, quanto dura, como
+    conferir e o que fazer."""
+    t = le('servidor/SUBIR.md')
+    m = re.search(r'(?m)^- \*\*Uma vez só, no primeiro deploy com o cache por hash.*(?:\n[ \t]+\S.*)*', t)
+    nota = m.group(0) if m else ''
+    faltam = [k for k in ('Cache-Control', 'um décimo', 'se cura sozinh', 'F5', 'Ctrl+Shift+R', 'curl.exe -sI')
+              if k not in nota]
+    check('o SUBIR.md explica o primeiro deploy com o cache por hash: o que acontece, quanto dura, como conferir e '
+          'o que fazer', bool(nota) and not faltam, ('falta: ' + ', '.join(faltam) if faltam else '') if nota else 'sem a nota no SUBIR.md')
+
+
 def main():
     ap = argparse.ArgumentParser(description='Prova do site público do SOTERRA')
     ap.add_argument('--api-real', action='store_true', help='no fim, sobe servidor/api.py e prova contra ela')
@@ -523,8 +720,10 @@ def main():
         servidores.append(srv)
         site = 'http://127.0.0.1:%d/site/' % porta
         apis = {}
-        for nome, respostas in (('cheia', {'/api/eventos': EVENTOS_CHEIA, '/api/ranking': RANKING_CHEIA}),
-                                ('vazia', {'/api/eventos': EVENTOS_VAZIA, '/api/ranking': RANKING_VAZIA})):
+        for nome, respostas in (('cheia', {'/api/eventos': EVENTOS_CHEIA, '/api/ranking': RANKING_CHEIA,
+                                           '/api/saude': SAUDE, '/api/loja/catalogo': CATALOGO_CHEIA}),
+                                ('vazia', {'/api/eventos': EVENTOS_VAZIA, '/api/ranking': RANKING_VAZIA,
+                                           '/api/saude': SAUDE, '/api/loja/catalogo': CATALOGO_VAZIA})):
             s, p = sobe(fabrica_api(nome, respostas))
             servidores.append(s)
             apis[nome] = 'http://127.0.0.1:%d' % p
@@ -534,10 +733,13 @@ def main():
             return dom(chrome, pasta, site + pagina + '?api=' + apis[variante] + ancora)
 
         print('portais fechados (dungeons.js): %s · BONUS_PA (fusion.js): %d' % (' '.join(FECHADOS), BONUS_PA))
+        prova_do_carimbo()
+        prova_primeiro_deploy()
         prova_eventos(abre)
         prova_ranking(abre)
         prova_fusoes(abre)
         prova_index(abre)
+        prova_loja(abre)
 
         faltas = sorted({p for p, c in PEDIDOS if c == '404' and not p.startswith('/site/img/') and p != '/favicon.ico'})
         check('nenhum arquivo pedido pelas páginas falta (0 × 404 fora de /site/img/)', not faltas, ', '.join(faltas[:6]))
@@ -548,7 +750,14 @@ def main():
             print('  (%d fotos pedidas em site/img/, %d ainda sem arquivo: a moldura mostra a inicial)'
                   % (len(imgs), len({p for p, c in PEDIDOS if c == '404' and p.startswith('/site/img/')})))
         rotas = sorted({(m, c) for v, m, c, cod in PEDIDOS_API if cod != 200})
-        check('as páginas só pedem /api/eventos e /api/ranking à API', not rotas, repr(rotas[:4]))
+        check('as páginas só pedem à API rotas que ela conhece (eventos, ranking, saude, loja/catalogo)', not rotas, repr(rotas[:4]))
+        # o site lê o mapa do build (../js/versao.js) como o jogo; sem mapa (o
+        # 'dev' do repositório, que é o servido aqui, como em casa), a folha e
+        # os scripts vão com o carimbo ?t= do instante, e no ar esse ?t= sai
+        # no-cache pelos dois Caddyfiles (prova_sem_mapa); e em casa, com o
+        # site.js editado entre duas visitas, a segunda roda o novo
+        prova_sem_mapa()
+        prova_em_casa(chrome, pasta, apis['fora'])
 
         if args.api_real:
             prova_api_real(chrome, pasta, site)

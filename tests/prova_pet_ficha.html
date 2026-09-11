@@ -23,7 +23,11 @@ f.onload = function () {
       P.addPet('pet-emberling');
       P.addPet('pet-heartshard');
       P.addPet('pet-lodestone');
-      P.equipPet('sumo', 'pet-emberling');
+      // pets a partir do nível 10 (nível de uso, 10/09): o Bárbaro do perfil
+      // novo sobe ao 10 antes de chamar o bicho. O equipPet recusado devolve
+      // false, não lança: a recusa vira ERRO no título.
+      P.addXp('sumo', w.JOGO.DATA.leveling.xpTable[9]);
+      if (!P.equipPet('sumo', 'pet-emberling')) document.title = 'ERRO ' + ((P.ultimaRecusa && P.ultimaRecusa.motivo) || 'o bicho não veio');
       w.JOGO.DB.batizar('Domadora').then(function () {
         w.JOGO.UI.selection(['sumo']);
         w.JOGO.UI.showScreen('hub');

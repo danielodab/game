@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a loja do site entregando no jogo</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+h2{font:700 12px monospace;color:#c9d4e2;margin:10px 0 2px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- A LOJA (Fase C, 10/09): js/core/loja.js contra um cartório de mentira no
+     molde de tests/nuvem.html (Sessao._fetch, N.semRecarga) que conhece também
+     POST /api/loja/retirar e fecha os pedidos no PUT /api/save pela anotação
+     db.loja — as MESMAS regras do contrato 1.5/1.6. O servidor de verdade é
+     provado por tests/loja_api.py; a ponta a ponta, por tests/loja_viva.py.
+     Aqui se cobra o CLIENTE: quando busca (e quando não), o que aplica, o que
+     recusa, que nada entra duas vezes e que a anotação sobe e sobrevive. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/db.js','js/core/mercado.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js','js/core/nuvem.js','js/core/loja.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function secao(t) { var h = document.createElement('h2'); h.textContent = t; log.appendChild(h); }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ate(cond, ms) {
+    ms = ms || 1500;
+    return new Promise(function (r) {
+      var t0 = 0;
+      (function volta() {
+        if (cond()) return r(true);
+        if ((t0 += 10) > ms) return r(false);
+        setTimeout(volta, 10);
+      })();
+    });
+  }
+
+  var D = JOGO.DATA, P = JOGO.Progress, DB = JOGO.DB, S = JOGO.Sessao, N = JOGO.Nuvem, L = JOGO.Loja, C = JOGO.Contas;
+  function pedraDe(el) {
+    for (var k in D.stones) if (D.stones.hasOwnProperty(k) && D.stones[k].element === el) return k;
+    return null;
+  }
+  var AGUA = pedraDe('agua'), FOGO = pedraDe('fogo'), TERRA = pedraDe('terra');
+  var ANCORA = (D.upgrade && D.upgrade.guardStone) || 'stone-anchor';
+
+  // ---------------------------------------------------------- o cartório de mentira
+  var srv = { contas: { 7: { versao: 0, progress: null, db: null }, 8: { versao: 0, progress: null, db: null } },
+              tokens: { 'tok-1': 7, 'tok-2': 8 }, pedidos: [], chamadas: [], respostasPut: [],
+              fora: false, putFora: false, recusaPut: false };
+  function resp(status, obj) {
+    return Promise.resolve({ status: status, json: function () { return Promise.resolve(obj); } });
+  }
+  function poePedido(conta, p, estado) {
+    var x = { conta: conta, estado: estado || 'pendente', p: p, motivo: null };
+    srv.pedidos.push(x);
+    return x;
+  }
+  function pedido(id) { for (var i = 0; i < srv.pedidos.length; i++) if (srv.pedidos[i].p.id === id) return srv.pedidos[i]; return null; }
+  // a confirmação que o servidor faz DENTRO do PUT (contrato 1.5, _loja_confirma)
+  function confirma(quem, db) {
+    var out = { entregues: [], estornados: [] };
+    var ap = (db && db.loja && Array.isArray(db.loja.aplicadas)) ? db.loja.aplicadas : [];
+    var re = (db && db.loja && Array.isArray(db.loja.recusadas)) ? db.loja.recusadas : [];
+    srv.pedidos.forEach(function (x) {
+      if (x.conta !== quem) return;
+      if (ap.indexOf(x.p.id) >= 0 && /^(pendente|retirado|cancelado)$/.test(x.estado)) {
+        x.estado = 'entregue'; out.entregues.push(x.p.id); return;
+      }
+      for (var i = 0; i < re.length; i++) {
+        if (re[i] && re[i].id === x.p.id && /^(pendente|retirado)$/.test(x.estado)) {
+          x.estado = 'estornado'; x.motivo = re[i].motivo; out.estornados.push(x.p.id);
+        }
+      }
+    });
+    return out;
+  }
+  S._fetch = function (url, pedidoHttp) {
+    var body = pedidoHttp.body ? JSON.parse(pedidoHttp.body) : null;
+    var tok = String(pedidoHttp.headers.Authorization || '').replace('Bearer ', '');
+    srv.chamadas.push({ url: url, method: pedidoHttp.method, body: body, auth: pedidoHttp.headers.Authorization });
+    if (srv.fora) return Promise.reject(new Error('fora'));
+    var quem = srv.tokens[tok] || null;
+    if (/\/api\/(save|loja|eu|logout)/.test(url) && !quem) return resp(401, { ok: false, erro: 'sem sessão' });
+    var sv = srv.contas[quem];
+    if (/\/api\/save$/.test(url) && pedidoHttp.method === 'GET') {
+      return resp(200, { ok: true, versao: sv.versao, progress: sv.progress, db: sv.db });
+    }
+    if (/\/api\/save$/.test(url) && pedidoHttp.method === 'PUT') {
+      if (srv.putFora) return Promise.reject(new Error('fora'));
+      if (srv.recusaPut) { srv.recusaPut = false; return resp(409, { ok: false, erro: 'instância duplicada no save: jx' }); }
+      if (body.versao !== sv.versao) {
+        return resp(409, { ok: false, erro: 'save desatualizado', versao: sv.versao, progress: sv.progress, db: sv.db });
+      }
+      sv.versao++;
+      sv.progress = body.progress; sv.db = body.db;
+      var loja = confirma(quem, body.db);
+      srv.respostasPut.push(loja);
+      return resp(200, { ok: true, versao: sv.versao, registrados: 0, loja: loja });
+    }
+    if (/\/api\/eu$/.test(url)) return resp(200, { ok: true, conta: { id: quem, nome: ({ 7: 'Dan', 8: 'Bia' })[quem], gm: false } });
+    if (/\/api\/logout$/.test(url)) return resp(200, { ok: true });
+    if (/\/api\/loja\/retirar$/.test(url) && pedidoHttp.method === 'POST') {
+      var saem = srv.pedidos.filter(function (x) { return x.conta === quem && (x.estado === 'pendente' || x.estado === 'retirado'); });
+      saem.forEach(function (x) { x.estado = 'retirado'; });
+      return resp(200, { ok: true, pedidos: saem.map(function (x) { return JSON.parse(JSON.stringify(x.p)); }) });
+    }
+    return resp(404, { ok: false, erro: 'rota?' });
+  };
+  function retiradas() { return srv.chamadas.filter(function (c) { return /\/api\/loja\/retirar$/.test(c.url); }); }
+  function puts() { return srv.chamadas.filter(function (c) { return c.method === 'PUT'; }); }
+  function moedasReais() { return DB.exportar().carteira.moedas; }
+  // o resultado de UM pedido dentro da busca (o retirar devolve todos os abertos)
+  function de(r, id) { return ((r && r.resultados) || []).filter(function (x) { return x.id === id; })[0] || {}; }
+
+  // os pedidos como o servidor os congela (contrato 1.6)
+  var PED = {
+    agua: function (id) { return { id: id, sku: 'pedras-agua', nome: '10 Lágrimas de Cisterna', preco: 300, entrega: { tipo: 'pedras', alvo: AGUA, qtd: 10 } }; },
+    terra: function (id) { return { id: id, sku: 'pedras-terra', nome: '10 Grãos de Rocha-Mãe', preco: 300, entrega: { tipo: 'pedras', alvo: TERRA, qtd: 10 } }; },
+    fogo: function (id) { return { id: id, sku: 'pedras-fogo', nome: '10 Brasas Coaguladas', preco: 450, entrega: { tipo: 'pedras', alvo: FOGO, qtd: 10 } }; },
+    xp: function (id) { return { id: id, sku: 'pergaminho-xp', nome: 'Pergaminho da Sabedoria', preco: 1500, entrega: { tipo: 'pergaminho', alvo: 'xp', qtd: 1 } }; },
+    invocador: function (id) { return { id: id, sku: 'classe-invocador', nome: 'Xamã', preco: 8000, entrega: { tipo: 'classe', alvo: 'invocador', qtd: 1 } }; },
+    bruxo: function (id) { return { id: id, sku: 'classe-bruxo', nome: 'Bruxo', preco: 50000, entrega: { tipo: 'classe', alvo: 'bruxo', qtd: 1 } }; }
+  };
+
+  var avisos = [], nuvemEv = [];
+  window.addEventListener('soterra:loja', function (ev) { avisos.push(ev.detail); });
+  window.addEventListener('soterra:nuvem', function (ev) { nuvemEv.push(ev.detail.tipo); });
+  function ultimoAviso() { return avisos[avisos.length - 1] || {}; }
+
+  N.semRecarga = true;
+  N.ESPERA_MS = 30;
+  N.RETENTA_MS = 80;
+  L.INTERVALO_MS = 1e9;
+  // a trava entre abas (navigator.locks) fica de fora: no Chrome sem cabeça com
+  // tempo virtual ela só é concedida muito depois, e a prova travava esperando
+  L._semTrava = true;
+  L._reinicia();
+  S.esquece();
+  P.reset();
+  DB._zerar();
+
+  var aguaAntes = 0, v0 = 0;
+  Promise.resolve().then(function () {
+    // ================================================================ quando NÃO busca
+    secao('1. quando não busca');
+    check('as pedras e classes da loja existem nos dados reais', !!AGUA && !!FOGO && !!TERRA && !!D.classes.invocador && D.cards.invocador.unlockCost === 10);
+    return L.buscar();
+  }).then(function (r) {
+    check('sem sessão: buscar não fala com o cartório', r.ok === false && r.erro === 'sem sessão' && retiradas().length === 0, JSON.stringify(r));
+    // fora da conta Principal, até com um aviso "em dia" solto
+    var ativaReal = C.ativa;
+    C.ativa = function () { return '2'; };
+    S.guarda({ token: 'tok-1', conta: { id: 7, nome: 'Dan', gm: false } });
+    return N.iniciar().then(function (r0) {
+      window.dispatchEvent(new CustomEvent('soterra:nuvem', { detail: { tipo: 'emdia' } }));
+      return L.buscar().then(function (r1) {
+        check('fora da conta Principal: nem a Nuvem liga, nem a loja busca (mesmo com um "emdia" solto)',
+              r0.erro === 'conta local' && r1.ok === false && r1.erro === 'conta local' && retiradas().length === 0, r1.erro);
+        C.ativa = ativaReal;
+        L._reinicia();
+      });
+    });
+  }).then(function () {
+    // antes do 1º emdia/subiu — e com o servidor fora no boot
+    srv.fora = true;
+    N.iniciar();
+    return L.buscar();
+  }).then(function (r) {
+    check('antes do 1º "emdia"/"subiu" (a Nuvem ligada, ainda sem ouvir o servidor): não busca',
+          N.estado().ligada === true && r.ok === false && r.erro === 'esperando a nuvem' && retiradas().length === 0, r.erro);
+    return espera(250);
+  }).then(function () {
+    check('servidor fora no boot: a Nuvem avisa "fora" e a loja continua quieta',
+          nuvemEv.indexOf('fora') >= 0 && L.estado().liberada === false && retiradas().length === 0);
+    srv.fora = false;
+    return ate(function () { return retiradas().length >= 1; }, 3000);
+  }).then(function (ok) {
+    var idxSave = -1, idxRet = -1;
+    srv.chamadas.forEach(function (c, i) {
+      if (idxSave < 0 && /\/api\/save$/.test(c.url) && c.method === 'PUT') idxSave = i;
+      if (idxRet < 0 && /\/api\/loja\/retirar$/.test(c.url)) idxRet = i;
+    });
+    check('o servidor voltou: a 1ª busca vem logo DEPOIS do 1º "subiu" (o save já sincronizado)',
+          ok && L.estado().liberada === true && idxSave >= 0 && idxRet > idxSave, 'PUT #' + idxSave + ' · retirar #' + idxRet);
+    var c = retiradas()[0];
+    check('a busca é POST /api/loja/retirar com corpo {} e o token', !!c && c.method === 'POST' && JSON.stringify(c.body) === '{}' &&
+          c.auth === 'Bearer tok-1');
+    // a Nuvem PARADA (409 de instância): a loja para junto
+    srv.recusaPut = true;
+    DB.ganharMoedas(20000);
+    return ate(function () { return N.estado().parada; });
+  }).then(function (ok) {
+    var n0 = retiradas().length;
+    return L.buscar().then(function (r) {
+      check('com a Nuvem parada, não busca', ok && r.ok === false && r.erro === 'a nuvem está parada' && retiradas().length === n0, r.erro);
+      return N.retomar();
+    }).then(function () { return ate(function () { return !N.estado().parada && !N.estado().pendente; }); });
+  }).then(function (ok) {
+    check('retomada a Nuvem, a carteira de 20.000 subiu', ok && srv.contas[7].db && srv.contas[7].db.carteira.moedas === 20000);
+
+    // ================================================================ pedras
+    secao('2. pedras, e nada duas vezes');
+    aguaAntes = P.stoneCount(AGUA);
+    poePedido(7, PED.agua(41));
+    return L.buscar();
+  }).then(function (r) {
+    check('buscar retira e aplica o pedido', r.ok === true && r.pedidos === 1 && de(r, 41).ok === true, JSON.stringify(r));
+    check('a contagem de Lágrimas sobe 10', P.stoneCount(AGUA) === aguaAntes + 10, aguaAntes + ' → ' + P.stoneCount(AGUA));
+    check('a carteira desce 300 (20.000 → 19.700)', moedasReais() === 19700, String(moedasReais()));
+    check('o aviso "soterra:loja" sai com tipo entregue e o pedido', ultimoAviso().tipo === 'entregue' && ultimoAviso().pedido.id === 41);
+    return DB.lojaVer();
+  }).then(function (a) {
+    check('a anotação guarda o id', a.aplicadas.indexOf(41) >= 0 && a.recusadas.length === 0, JSON.stringify(a));
+    return ate(function () { return pedido(41).estado === 'entregue'; });
+  }).then(function (ok) {
+    var comAnot = puts().filter(function (p) { return p.body.db && p.body.db.loja && p.body.db.loja.aplicadas.indexOf(41) >= 0; });
+    check('a anotação vai no PUT /api/save e o cartório fecha o pedido (entregue)', ok && comAnot.length >= 1 &&
+          srv.respostasPut.some(function (l) { return l.entregues.indexOf(41) >= 0; }));
+    // o servidor manda o MESMO pedido de novo (um PUT que não chegou, digamos)
+    pedido(41).estado = 'retirado';
+    var pedras = P.stoneCount(AGUA), m = moedasReais();
+    return L.buscar().then(function (r) {
+      check('o mesmo pedido chegando outra vez: pula ("ja") — sem entrega nem débito',
+            r.ok && de(r, 41).motivo === 'ja' && P.stoneCount(AGUA) === pedras && moedasReais() === m, JSON.stringify(r.resultados));
+      return ate(function () { return pedido(41).estado === 'entregue'; });
+    });
+  }).then(function () {
+    // dois aplicar do mesmo pedido AO MESMO TEMPO: a decisão é síncrona por dentro
+    var pedras = P.stoneCount(AGUA), m = moedasReais();
+    return Promise.all([L.aplicar(PED.agua(43)), L.aplicar(PED.agua(43))]).then(function (rs) {
+      var oks = rs.filter(function (r) { return r.ok; }).length;
+      check('dois aplicar simultâneos do mesmo id: um entrega, o outro pula',
+            oks === 1 && rs.some(function (r) { return r.motivo === 'ja'; }) &&
+            P.stoneCount(AGUA) === pedras + 10 && moedasReais() === m - 300, JSON.stringify(rs));
+    });
+  }).then(function () {
+    // ================================================================ reload
+    secao('3. a anotação e os pergaminhos sobrevivem ao reload');
+    poePedido(7, PED.xp(44));
+    return L.buscar();
+  }).then(function (r) {
+    check('o Pergaminho da Sabedoria chega guardado', r.ok && P.pergaminhos().xp === 1 && moedasReais() === 19400 - 1500,
+          JSON.stringify(P.pergaminhos()) + ' ' + moedasReais());
+    DB._recarregar();
+    P.load();
+    return DB.lojaVer();
+  }).then(function (a) {
+    check('depois do reload: a anotação (41, 43, 44) e o pergaminho seguem lá',
+          [41, 43, 44].every(function (id) { return a.aplicadas.indexOf(id) >= 0; }) && P.pergaminhos().xp === 1 &&
+          moedasReais() === 17900, JSON.stringify(a.aplicadas) + ' xp ' + P.pergaminhos().xp);
+
+    // ================================================================ recusas
+    secao('4. o que o jogo recusa (e o estorno)');
+    poePedido(7, PED.bruxo(45));
+    return L.buscar();
+  }).then(function (r) {
+    check('sem saldo (Bruxo por 50.000 com 17.900): recusa "sem-saldo"', r.ok && de(r, 45).motivo === 'sem-saldo', JSON.stringify(r.resultados));
+    check('... sem entrega e sem débito', !P.isClassUnlocked('bruxo') && P.cardInfo('bruxo').cards === 0 && moedasReais() === 17900);
+    check('... e o aviso diz "recusado" com o motivo', ultimoAviso().tipo === 'recusado' && ultimoAviso().motivo === 'sem-saldo');
+    return DB.lojaVer().then(function (a) {
+      check('... a recusa fica anotada', a.recusadas.some(function (x) { return x.id === 45 && x.motivo === 'sem-saldo'; }) &&
+            a.aplicadas.indexOf(45) < 0, JSON.stringify(a.recusadas));
+      return ate(function () { return pedido(45).estado === 'estornado'; });
+    });
+  }).then(function (ok) {
+    check('... e o PUT estorna o pedido no cartório', ok && pedido(45).motivo === 'sem-saldo');
+    // a classe: 6 cartas já na mão (o site mostra "você tem 6 de 10")
+    P.state.cards.invocador = 6; P.save();
+    poePedido(7, PED.invocador(46));
+    return L.buscar();
+  }).then(function (r) {
+    var ci = P.cardInfo('invocador');
+    check('classe: o Xamã libera com cartas = custo (10) e 0 estrelas', r.ok && de(r, 46).ok === true &&
+          P.isClassUnlocked('invocador') && ci.cards === ci.unlockCost && ci.unlockCost === 10 && ci.stars === 0, JSON.stringify(ci));
+    check('... o herói chega no nível 1, e a carteira paga 8.000', !!P.hero('invocador') && P.hero('invocador').level === 1 &&
+          moedasReais() === 9900, String(moedasReais()));
+    poePedido(7, PED.invocador(47));
+    return L.buscar();
+  }).then(function (r) {
+    var ci = P.cardInfo('invocador');
+    check('classe já liberada: recusa "classe-ja-liberada" — nunca vira carta de estrela',
+          r.ok && de(r, 47).motivo === 'classe-ja-liberada' && ci.cards === 10 && ci.stars === 0 && moedasReais() === 9900,
+          JSON.stringify(r.resultados) + ' ' + JSON.stringify(ci));
+    poePedido(7, { id: 48, sku: 'montaria-dragao', nome: 'Montaria', preco: 100, entrega: { tipo: 'montaria', alvo: 'dragao', qtd: 1 } });
+    return L.buscar();
+  }).then(function (r) {
+    var res48 = [de(r, 48)].filter(function (x) { return x.motivo === 'tipo-desconhecido'; });
+    return DB.lojaVer().then(function (a) {
+      check('tipo desconhecido: pula SEM anotar (uma versão nova aplica) e sem débito',
+            res48.length === 1 && a.aplicadas.indexOf(48) < 0 && !a.recusadas.some(function (x) { return x.id === 48; }) &&
+            moedasReais() === 9900 && L.estado().historico.some(function (h) { return h.id === 48 && h.tipo === 'ignorado'; }),
+            JSON.stringify(r.resultados));
+      poePedido(7, { id: 49, sku: 'pedras-ancora', nome: '10 Âncoras', preco: 300, entrega: { tipo: 'pedras', alvo: ANCORA, qtd: 10 } });
+      return L.buscar();
+    });
+  }).then(function (r) {
+    var r49 = [de(r, 49)].filter(function (x) { return x.motivo === 'item-invalido'; });
+    check('a Âncora de Forja (fora da loja): recusa "item-invalido", nenhuma entra',
+          r49.length === 1 && P.stoneCount(ANCORA) === 0 && moedasReais() === 9900, JSON.stringify(r.resultados));
+    // a entrega LANÇA depois do débito: os vinténs voltam
+    var addReal = P.addStones;
+    P.addStones = function () { throw new Error('disco cheio (prova)'); };
+    poePedido(7, PED.agua(51));
+    return L.buscar().then(function (r2) {
+      P.addStones = addReal;
+      return DB.lojaVer().then(function (a) {
+        var r51 = [de(r2, 51)].filter(function (x) { return x.motivo === 'erro-local'; });
+        check('a entrega lança: lojaDesfaz devolve os vinténs e passa o id para recusadas ("erro-local")',
+              r51.length === 1 && moedasReais() === 9900 && a.aplicadas.indexOf(51) < 0 &&
+              a.recusadas.some(function (x) { return x.id === 51 && x.motivo === 'erro-local'; }), JSON.stringify(r2.resultados));
+      });
+    });
+  }).then(function () {
+    // ================================================================ o Mestre
+    secao('5. o Mestre, a página que recarrega e a busca de fundo');
+    var gmReal = JOGO.GM, fogo0 = P.stoneCount(FOGO), m0 = moedasReais();
+    JOGO.GM = { ativo: function () { return true; } };
+    poePedido(7, PED.fogo(50));
+    return L.buscar().then(function (r) {
+      JOGO.GM = gmReal;
+      var r50 = [de(r, 50)].filter(function (x) { return x.ok; });
+      check('o Mestre (cofre sem fundo) recebe sem débito', r50.length === 1 && P.stoneCount(FOGO) === fogo0 + 10 && moedasReais() === m0,
+            m0 + ' → ' + moedasReais());
+    });
+  }).then(function () {
+    // a Nuvem avisou que a página vai recarregar (o save de outra máquina entrou): nada se aplica
+    N.semRecarga = false;
+    window.dispatchEvent(new CustomEvent('soterra:nuvem', { detail: { tipo: 'desatualizado', versao: 99 } }));
+    N.semRecarga = true;
+    var n0 = retiradas().length, pedras = P.stoneCount(AGUA);
+    return Promise.all([L.buscar(), L.aplicar(PED.agua(52))]).then(function (rs) {
+      check('aviso de recarga (desatualizado): congela — não busca e não aplica',
+            rs[0].erro === 'a página vai recarregar' && rs[1].motivo === 'recarregando' && retiradas().length === n0 &&
+            P.stoneCount(AGUA) === pedras, JSON.stringify(rs));
+      L._reinicia();
+      L.INTERVALO_MS = 40;
+      return N.puxar();                              // "emdia" de novo: libera e liga a busca de fundo
+    });
+  }).then(function () {
+    var n0 = retiradas().length;
+    return ate(function () { return retiradas().length >= n0 + 3; }, 2500).then(function (ok) {
+      check('a busca de fundo (a cada INTERVALO_MS) roda sozinha', ok, (retiradas().length - n0) + ' buscas');
+      L._reinicia();
+      L.INTERVALO_MS = 1e9;
+      return ate(function () { return !L.estado().buscando; });
+    });
+  }).then(function () {
+    // ================================================================ duas máquinas
+    secao('6. duas máquinas na mesma conta');
+    return N.puxar().then(function () { return ate(function () { return !L.estado().buscando && !N.estado().pendente; }); });
+  }).then(function () {
+    v0 = srv.contas[7].versao;
+    // A: retira e aplica o 61, mas o PUT não chega (a máquina fecha antes)
+    srv.putFora = true;
+    poePedido(7, PED.agua(61));
+    return L.buscar();
+  }).then(function (r) {
+    check('máquina A: aplica o 61 localmente, com o PUT sem chegar', r.ok && de(r, 61).ok === true &&
+          pedido(61).estado === 'retirado');
+    return espera(120);
+  }).then(function () {
+    // a armadilha conhecida: N.sair() ANTES de apagar o registro local
+    return N.sair();
+  }).then(function () {
+    srv.putFora = false;
+    localStorage.removeItem('soterra-nuvem-v1');
+    localStorage.removeItem(C.chaveSave());
+    localStorage.removeItem(C.chaveConta());
+    P.reset();
+    DB.recarregar();
+    L._reinicia();
+    check('a máquina B começa vazia', P.stoneCount(AGUA) === 0 && moedasReais() === 0);
+    poePedido(7, PED.terra(62));                      // e uma compra nova, feita no site
+    S.guarda({ token: 'tok-1', conta: { id: 7, nome: 'Dan', gm: false } });
+    return N.iniciar();
+  }).then(function () {
+    var sv = srv.contas[7];
+    var aguaServ = (sv.progress.stones || {})[AGUA] || 0;
+    check('B puxa o save do cartório (anotação e entregas de A que subiram)', P.stoneCount(AGUA) === aguaServ &&
+          moedasReais() === sv.db.carteira.moedas && L.estado().liberada === false, 'água ' + P.stoneCount(AGUA));
+    window.__aguaServ = aguaServ; window.__moedasServ = sv.db.carteira.moedas;
+    return N.puxar();                                  // a página "recarregada": emdia → a loja busca
+  }).then(function () {
+    return ate(function () { return pedido(61).estado === 'entregue' && pedido(62).estado === 'entregue'; }, 3000);
+  }).then(function (ok) {
+    check('B retira o 61 (retirado por A, que nunca confirmou) e o 62, aplica os dois e o PUT fecha ambos', ok,
+          pedido(61).estado + ' / ' + pedido(62).estado);
+    check('... cada um uma vez só: +10 água, +10 terra, −600 vinténs sobre o save do cartório',
+          P.stoneCount(AGUA) === window.__aguaServ + 10 && P.stoneCount(TERRA) === 10 && moedasReais() === window.__moedasServ - 600,
+          P.stoneCount(AGUA) + ' / ' + P.stoneCount(TERRA) + ' / ' + moedasReais());
+    return DB.lojaVer();
+  }).then(function (a) {
+    check('... e a anotação de B traz as de A (vieram no save) mais as suas', [41, 43, 44, 61, 62].every(function (id) {
+      return a.aplicadas.indexOf(id) >= 0; }), JSON.stringify(a.aplicadas));
+    return N.sair();
+  }).then(function () {
+    check('sem sessão de novo, a loja fica quieta', !S.ativa() && L.estado().pode === false);
+    check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+    fecha();
+  }).catch(function (e) {
+    check('o fluxo não estoura', false, String(e && (e.stack || e.message) || e));
+    fecha();
+  });
+})();
+</script>
+</body>
+</html>

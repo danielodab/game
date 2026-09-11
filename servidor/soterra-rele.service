@@ -1,15 +1,22 @@
 # systemd: o Relé sempre de pé, renascendo sozinho se cair.
 #   sudo cp soterra-rele.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now soterra-rele
+#
+# --banco (10/09): o relé LÊ o banco da API, só para ler, para conferir quem é
+# o Mestre e trocar o nome reservado de quem não é (rele_ident.py). Roda como
+# `soterra`, o dono do banco, igual à API (no Coolify os dois já rodam assim):
+# o SQLite em WAL quer abrir o arquivo -shm, e o www-data não o abre para
+# escrita. Sem o banco (ainda não criado, API parada), ninguém é conferido e
+# o resto segue igual.
 [Unit]
 Description=SOTERRA - o Rele da Rede (WebSocket)
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /opt/soterra/rele.py --host 127.0.0.1 --porta 8791
+ExecStart=/usr/bin/python3 /opt/soterra/rele.py --host 127.0.0.1 --porta 8791 --banco /var/lib/soterra/soterra.db
 Restart=always
 RestartSec=3
-User=www-data
+User=soterra
 NoNewPrivileges=true
 
 [Install]

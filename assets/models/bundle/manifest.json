@@ -1,5 +1,5 @@
 {
- "gerado": "2026-09-04T08:08:17",
+ "gerado": "2026-09-10T21:33:11",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -7,1273 +7,1697 @@
    "alvo": "MODELS",
    "chave": "cs_muro_inteiro",
    "arquivo": "cenario-cisterna/cs_muro_inteiro.glb",
-   "bytes": 950468
+   "bytes": 950468,
+   "hash": "19cf1405f8ee",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_muro_brecha",
    "arquivo": "cenario-cisterna/cs_muro_brecha.glb",
-   "bytes": 887296
+   "bytes": 887296,
+   "hash": "b2725d30de78",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_pilar_a",
    "arquivo": "cenario-cisterna/cs_pilar_a.glb",
-   "bytes": 593948
+   "bytes": 593948,
+   "hash": "63d0aed0db26",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_pilar_b",
    "arquivo": "cenario-cisterna/cs_pilar_b.glb",
-   "bytes": 587188
+   "bytes": 587188,
+   "hash": "c8d43c27818d",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_aquario",
    "arquivo": "cenario-cisterna/cs_aquario.glb",
-   "bytes": 1140664
+   "bytes": 1140664,
+   "hash": "8b1e11f2437b",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_estandarte",
    "arquivo": "cenario-cisterna/cs_estandarte.glb",
-   "bytes": 405644
+   "bytes": 405644,
+   "hash": "6826bbc34802",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_luminaria",
    "arquivo": "cenario-cisterna/cs_luminaria.glb",
-   "bytes": 520612
+   "bytes": 520612,
+   "hash": "b52ff2b24eb1",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_espelho",
    "arquivo": "cenario-cisterna/cs_espelho.glb",
-   "bytes": 455684
+   "bytes": 455684,
+   "hash": "407b2e5200f0",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_trono",
    "arquivo": "cenario-cisterna/cs_trono.glb",
-   "bytes": 601844
+   "bytes": 601844,
+   "hash": "425e1debaf55",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_sal",
    "arquivo": "cenario-cisterna/cs_sal.glb",
-   "bytes": 564068
+   "bytes": 564068,
+   "hash": "48ea1be66cab",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_poco_lirio",
    "arquivo": "cenario-cisterna/cs_poco_lirio.glb",
-   "bytes": 618484
+   "bytes": 618484,
+   "hash": "25e2137a7f2a",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_fonte",
    "arquivo": "cenario-cisterna/cs_fonte.glb",
-   "bytes": 625544
+   "bytes": 625544,
+   "hash": "115f1a36eb17",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_lustre",
    "arquivo": "cenario-cisterna/cs_lustre.glb",
-   "bytes": 680028
+   "bytes": 680028,
+   "hash": "58dc842fd47c",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_barril",
    "arquivo": "cenario-cisterna/cs_barril.glb",
-   "bytes": 547356
+   "bytes": 547356,
+   "hash": "c1b32d167c1e",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_regador",
    "arquivo": "cenario-jardim/jd_regador.glb",
-   "bytes": 739640
+   "bytes": 739640,
+   "hash": "f9f63cc59141",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_carrinho",
    "arquivo": "cenario-jardim/jd_carrinho.glb",
-   "bytes": 526420
+   "bytes": 526420,
+   "hash": "0f479841d2ee",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_tronco",
    "arquivo": "cenario-jardim/jd_tronco.glb",
-   "bytes": 632872
+   "bytes": 632872,
+   "hash": "f18853ab2ca0",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_redoma",
    "arquivo": "cenario-jardim/jd_redoma.glb",
-   "bytes": 653652
+   "bytes": 653652,
+   "hash": "e6daef6c19dc",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_canteiro",
    "arquivo": "cenario-jardim/jd_canteiro.glb",
-   "bytes": 411132
+   "bytes": 411132,
+   "hash": "4c6c018bf734",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_vaso",
    "arquivo": "cenario-jardim/jd_vaso.glb",
-   "bytes": 586964
+   "bytes": 586964,
+   "hash": "60d161574f87",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_muro_pilastra",
    "arquivo": "cenario-jardim/jd_muro_pilastra.glb",
-   "bytes": 708232
+   "bytes": 708232,
+   "hash": "670239d89a77",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_muro_brecha",
    "arquivo": "cenario-jardim/jd_muro_brecha.glb",
-   "bytes": 696208
+   "bytes": 696208,
+   "hash": "118d64223dba",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_muro_ruina",
    "arquivo": "cenario-jardim/jd_muro_ruina.glb",
-   "bytes": 756988
+   "bytes": 756988,
+   "hash": "42931a181892",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_muro_mato",
    "arquivo": "cenario-jardim/jd_muro_mato.glb",
-   "bytes": 953804
+   "bytes": 953804,
+   "hash": "f1a557e124da",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_coluna_vidro",
    "arquivo": "cenario-jardim/jd_coluna_vidro.glb",
-   "bytes": 479288
+   "bytes": 479288,
+   "hash": "b7608f755026",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_cipo",
    "arquivo": "cenario-jardim/jd_cipo.glb",
-   "bytes": 534168
+   "bytes": 534168,
+   "hash": "8d418a1ea13b",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_estatua",
    "arquivo": "cenario-jardim/jd_estatua.glb",
-   "bytes": 514956
+   "bytes": 514956,
+   "hash": "085671e6c40d",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_pilar",
    "arquivo": "cenario-jardim/jd_pilar.glb",
-   "bytes": 627264
+   "bytes": 627264,
+   "hash": "53322a9eced8",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_cristal_p",
    "arquivo": "cenario-jardim/jd_cristal_p.glb",
-   "bytes": 528896
+   "bytes": 528896,
+   "hash": "463599262d55",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_cristal_g",
    "arquivo": "cenario-jardim/jd_cristal_g.glb",
-   "bytes": 632860
+   "bytes": 632860,
+   "hash": "10a4ce956ae4",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_raiz",
    "arquivo": "cenario-jardim/jd_raiz.glb",
-   "bytes": 547812
+   "bytes": 547812,
+   "hash": "409b28aad8ed",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_poca",
    "arquivo": "cenario-jardim/jd_poca.glb",
-   "bytes": 464888
+   "bytes": 464888,
+   "hash": "e303ff4c8ee5",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_escada",
    "arquivo": "cenario-jardim/jd_escada.glb",
-   "bytes": 480200
+   "bytes": 480200,
+   "hash": "799421a227e9",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_estufa_arvore",
    "arquivo": "cenario-jardim/jd_estufa_arvore.glb",
-   "bytes": 900304
+   "bytes": 900304,
+   "hash": "83be8d3d0687",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n1",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n1.glb",
-   "bytes": 503840
+   "bytes": 503840,
+   "hash": "5f2b9053ad9b",
+   "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n2",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n2.glb",
-   "bytes": 504332
+   "bytes": 504332,
+   "hash": "dda9ad36fdc8",
+   "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n3",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n3.glb",
-   "bytes": 504184
+   "bytes": 504184,
+   "hash": "c3140a98687c",
+   "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n4",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n4.glb",
-   "bytes": 501704
+   "bytes": 501704,
+   "hash": "6d99cd1e6e46",
+   "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n5",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n5.glb",
-   "bytes": 507056
+   "bytes": 507056,
+   "hash": "7a8d179c015d",
+   "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n6",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n6.glb",
-   "bytes": 565808
+   "bytes": 565808,
+   "hash": "929ba6159c56",
+   "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n7",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n7.glb",
-   "bytes": 571220
+   "bytes": 571220,
+   "hash": "988b5da41506",
+   "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n8",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n8.glb",
-   "bytes": 579300
+   "bytes": 579300,
+   "hash": "37a8e029e22a",
+   "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n9",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n9.glb",
-   "bytes": 592400
+   "bytes": 592400,
+   "hash": "986b21d8893f",
+   "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n10",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n10.glb",
-   "bytes": 666640
+   "bytes": 666640,
+   "hash": "0458560c01ea",
+   "grupo": "coroas"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_blue",
    "arquivo": "env-kit/banner_blue.glb",
-   "bytes": 24216
+   "bytes": 24216,
+   "hash": "219995a647a1",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_green",
    "arquivo": "env-kit/banner_green.glb",
-   "bytes": 24216
+   "bytes": 24216,
+   "hash": "afe5f8742a78",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_pat_b",
    "arquivo": "env-kit/banner_pat_b.glb",
-   "bytes": 24224
+   "bytes": 24224,
+   "hash": "a86be2d4bc01",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_pat_g",
    "arquivo": "env-kit/banner_pat_g.glb",
-   "bytes": 25168
+   "bytes": 25168,
+   "hash": "cad4bf2a5f99",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_pat_r",
    "arquivo": "env-kit/banner_pat_r.glb",
-   "bytes": 24224
+   "bytes": 24224,
+   "hash": "ee729f974b6c",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_red",
    "arquivo": "env-kit/banner_red.glb",
-   "bytes": 24216
+   "bytes": 24216,
+   "hash": "c69c6eaffc83",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "barrel",
    "arquivo": "env-kit/barrel.glb",
-   "bytes": 32060
+   "bytes": 32060,
+   "hash": "f46d0c421e46",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "barrel_big",
    "arquivo": "env-kit/barrel_big.glb",
-   "bytes": 44292
+   "bytes": 44292,
+   "hash": "9fae6a790562",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "barrier",
    "arquivo": "env-kit/barrier.glb",
-   "bytes": 19948
+   "bytes": 19948,
+   "hash": "cc4c5641e641",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "barrier_col",
    "arquivo": "env-kit/barrier_col.glb",
-   "bytes": 24856
+   "bytes": 24856,
+   "hash": "aa65dd217a0a",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "bottle",
    "arquivo": "env-kit/bottle.glb",
-   "bytes": 26460
+   "bytes": 26460,
+   "hash": "32759c64c6e8",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "box",
    "arquivo": "env-kit/box.glb",
-   "bytes": 28692
+   "bytes": 28692,
+   "hash": "3052015d7cd6",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "box_big",
    "arquivo": "env-kit/box_big.glb",
-   "bytes": 28740
+   "bytes": 28740,
+   "hash": "6dacda267f04",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "candle",
    "arquivo": "env-kit/candle.glb",
-   "bytes": 28240
+   "bytes": 28240,
+   "hash": "3536f0a55df5",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "chair",
    "arquivo": "env-kit/chair.glb",
-   "bytes": 36252
+   "bytes": 36252,
+   "hash": "5f133281686d",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "chest",
    "arquivo": "env-kit/chest.glb",
-   "bytes": 81412
+   "bytes": 81412,
+   "hash": "f72fd2201cd4",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "chest_gold",
    "arquivo": "env-kit/chest_gold.glb",
-   "bytes": 140140
+   "bytes": 140140,
+   "hash": "04708d5f88ed",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "coins",
    "arquivo": "env-kit/coins.glb",
-   "bytes": 101076
+   "bytes": 101076,
+   "hash": "1a64011dc0d6",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "column",
    "arquivo": "env-kit/column.glb",
-   "bytes": 20260
+   "bytes": 20260,
+   "hash": "761adf0fcc1a",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "crates",
    "arquivo": "env-kit/crates.glb",
-   "bytes": 103704
+   "bytes": 103704,
+   "hash": "43182b077ead",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_a",
    "arquivo": "env-kit/floor_a.glb",
-   "bytes": 20740
+   "bytes": 20740,
+   "hash": "645f02c82d1f",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_b",
    "arquivo": "env-kit/floor_b.glb",
-   "bytes": 22132
+   "bytes": 22132,
+   "hash": "d1acc3407f94",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_c",
    "arquivo": "env-kit/floor_c.glb",
-   "bytes": 21608
+   "bytes": 21608,
+   "hash": "0ef8ee472371",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_deco",
    "arquivo": "env-kit/floor_deco.glb",
-   "bytes": 40812
+   "bytes": 40812,
+   "hash": "4dd8a74dc00c",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_dirt",
    "arquivo": "env-kit/floor_dirt.glb",
-   "bytes": 20460
+   "bytes": 20460,
+   "hash": "b5be9118f0b6",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_grate",
    "arquivo": "env-kit/floor_grate.glb",
-   "bytes": 26700
+   "bytes": 26700,
+   "hash": "d39a8c32aa99",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_weeds",
    "arquivo": "env-kit/floor_weeds.glb",
-   "bytes": 44020
+   "bytes": 44020,
+   "hash": "95fcb7701819",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_weeds2",
    "arquivo": "env-kit/floor_weeds2.glb",
-   "bytes": 42368
+   "bytes": 42368,
+   "hash": "cfbe329aeea2",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "keg",
    "arquivo": "env-kit/keg.glb",
-   "bytes": 59912
+   "bytes": 59912,
+   "hash": "cc620e27439a",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "pillar",
    "arquivo": "env-kit/pillar.glb",
-   "bytes": 25552
+   "bytes": 25552,
+   "hash": "e31da4964619",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "pillar_deco",
    "arquivo": "env-kit/pillar_deco.glb",
-   "bytes": 62460
+   "bytes": 62460,
+   "hash": "eecf7d454a1b",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "rubble",
    "arquivo": "env-kit/rubble.glb",
-   "bytes": 38836
+   "bytes": 38836,
+   "hash": "7514ccbda643",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "rubble_big",
    "arquivo": "env-kit/rubble_big.glb",
-   "bytes": 60196
+   "bytes": 60196,
+   "hash": "0292da1b5788",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "stool",
    "arquivo": "env-kit/stool.glb",
-   "bytes": 28528
+   "bytes": 28528,
+   "hash": "f9170499ea59",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "sword_shield",
    "arquivo": "env-kit/sword_shield.glb",
-   "bytes": 47764
+   "bytes": 47764,
+   "hash": "4dc33b156a16",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "table",
    "arquivo": "env-kit/table.glb",
-   "bytes": 33832
+   "bytes": 33832,
+   "hash": "9686a202ea2f",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "torch",
    "arquivo": "env-kit/torch.glb",
-   "bytes": 31244
+   "bytes": 31244,
+   "hash": "45fcfeb3b129",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "torch_wall",
    "arquivo": "env-kit/torch_wall.glb",
-   "bytes": 33220
+   "bytes": 33220,
+   "hash": "a617c159e029",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "trunk",
    "arquivo": "env-kit/trunk.glb",
-   "bytes": 30184
+   "bytes": 30184,
+   "hash": "de40320413c5",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_broken",
    "arquivo": "env-kit/wall_broken.glb",
-   "bytes": 69276
+   "bytes": 69276,
+   "hash": "ee7598ef2b88",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_corner",
    "arquivo": "env-kit/wall_corner.glb",
-   "bytes": 49212
+   "bytes": 49212,
+   "hash": "3c8cbcbf3abf",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_cross",
    "arquivo": "env-kit/wall_cross.glb",
-   "bytes": 66856
+   "bytes": 66856,
+   "hash": "ec4d4efc6dcc",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_half",
    "arquivo": "env-kit/wall_half.glb",
-   "bytes": 36840
+   "bytes": 36840,
+   "hash": "9e65c438f55d",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_pil",
    "arquivo": "env-kit/wall_pil.glb",
-   "bytes": 55156
+   "bytes": 55156,
+   "hash": "f85030386f9f",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_str",
    "arquivo": "env-kit/wall_str.glb",
-   "bytes": 53132
+   "bytes": 53132,
+   "hash": "f2f343a7bdf2",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_str2",
    "arquivo": "env-kit/wall_str2.glb",
-   "bytes": 138396
+   "bytes": 138396,
+   "hash": "344fb9a709a5",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_str3",
    "arquivo": "env-kit/wall_str3.glb",
-   "bytes": 69276
+   "bytes": 69276,
+   "hash": "ee7598ef2b88",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_tsplit",
    "arquivo": "env-kit/wall_tsplit.glb",
-   "bytes": 60080
+   "bytes": 60080,
+   "hash": "a93b661ce2eb",
+   "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_win",
    "arquivo": "env-kit/wall_win.glb",
-   "bytes": 57256
+   "bytes": 57256,
+   "hash": "7cb4804e55bd",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "_anims",
    "arquivo": "models-anims/_anims.glb",
-   "bytes": 1427872
+   "bytes": 1427872,
+   "hash": "c5ee225f816f",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "q_mushnub",
    "arquivo": "models-bosses/q_mushnub.glb",
-   "bytes": 163392
+   "bytes": 163392,
+   "hash": "6c6755ed26ae",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_glub",
    "arquivo": "models-bosses/q_glub.glb",
-   "bytes": 236380
+   "bytes": 236380,
+   "hash": "e7b66cace0ac",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_bluedemon",
    "arquivo": "models-bosses/q_bluedemon.glb",
-   "bytes": 644208
+   "bytes": 644208,
+   "hash": "228acfbd03e0",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_alpaking",
    "arquivo": "models-bosses/q_alpaking.glb",
-   "bytes": 273764
+   "bytes": 273764,
+   "hash": "2da1f1fae288",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_goleling",
    "arquivo": "models-bosses/q_goleling.glb",
-   "bytes": 311000
+   "bytes": 311000,
+   "hash": "90824ae2026a",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_ghostskull",
    "arquivo": "models-bosses/q_ghostskull.glb",
-   "bytes": 349616
+   "bytes": 349616,
+   "hash": "e0c39f768735",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_yeti",
    "arquivo": "models-bosses/q_yeti.glb",
-   "bytes": 651656
+   "bytes": 651656,
+   "hash": "62fc689e514c",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_espadachim",
    "arquivo": "models-fusao-bruxo-ladino/fus_bruxo_espadachim.glb",
-   "bytes": 1143132
+   "bytes": 1143132,
+   "hash": "3aaa9ef487bb",
+   "grupo": "fusao:bruxo+espadachim"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_bruxo",
    "arquivo": "models-fusoes-cacador/fus_arqueiro_bruxo.glb",
-   "bytes": 1200144
+   "bytes": 1200144,
+   "hash": "a03983a9cc85",
+   "grupo": "fusao:arqueiro+bruxo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_curandeiro",
    "arquivo": "models-fusoes-cacador/fus_arqueiro_curandeiro.glb",
-   "bytes": 1473596
+   "bytes": 1473596,
+   "hash": "d4e76621a1c0",
+   "grupo": "fusao:arqueiro+curandeiro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_espadachim",
    "arquivo": "models-fusoes-cacador/fus_arqueiro_espadachim.glb",
-   "bytes": 1204572
+   "bytes": 1204572,
+   "hash": "00a64a9bde52",
+   "grupo": "fusao:arqueiro+espadachim"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_invocador",
    "arquivo": "models-fusoes-cacador/fus_arqueiro_invocador.glb",
-   "bytes": 1212424
+   "bytes": 1212424,
+   "hash": "9e64f622b0e6",
+   "grupo": "fusao:arqueiro+invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_totem_espoleta",
    "arquivo": "models-fusoes-cacador/fus_totem_espoleta.glb",
-   "bytes": 1129392
+   "bytes": 1129392,
+   "hash": "5af4fdf47abc",
+   "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_curandeiro",
    "arquivo": "models-fusoes-curandeira/fus_bruxo_curandeiro.glb",
-   "bytes": 1258472
+   "bytes": 1258472,
+   "hash": "cf53c97eeec8",
+   "grupo": "fusao:bruxo+curandeiro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_curandeiro_espadachim",
    "arquivo": "models-fusoes-curandeira/fus_curandeiro_espadachim.glb",
-   "bytes": 1318012
+   "bytes": 1318012,
+   "hash": "fbc502197186",
+   "grupo": "fusao:curandeiro+espadachim"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_arqueiro_minotauro.glb",
-   "bytes": 1381512
+   "bytes": 1381512,
+   "hash": "f483231b11e1",
+   "grupo": "fusao:arqueiro+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_bruxo_minotauro.glb",
-   "bytes": 1282520
+   "bytes": 1282520,
+   "hash": "1c084bf72f75",
+   "grupo": "fusao:bruxo+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_curandeiro_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_curandeiro_minotauro.glb",
-   "bytes": 1253724
+   "bytes": 1253724,
+   "hash": "70e7374119ee",
+   "grupo": "fusao:curandeiro+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_espadachim_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_espadachim_minotauro.glb",
-   "bytes": 1168212
+   "bytes": 1168212,
+   "hash": "e975ff2690f4",
+   "grupo": "fusao:espadachim+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_invocador_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_invocador_minotauro.glb",
-   "bytes": 1445664
+   "bytes": 1445664,
+   "hash": "c14742665160",
+   "grupo": "fusao:invocador+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_minotauro_sumo",
    "arquivo": "models-fusoes-minotauro/fus_minotauro_sumo.glb",
-   "bytes": 1193444
+   "bytes": 1193444,
+   "hash": "3961e9410787",
+   "grupo": "fusao:minotauro+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_muro_vigia",
    "arquivo": "models-fusoes-minotauro/fus_muro_vigia.glb",
-   "bytes": 1050524
+   "bytes": 1050524,
+   "hash": "82f35ecc5888",
+   "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_arqueiro_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_arqueiro_minotauro.glb",
-   "bytes": 713060
+   "bytes": 713060,
+   "hash": "a31ffcf11238",
+   "grupo": "fusao:arqueiro+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_bruxo_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_bruxo_minotauro.glb",
-   "bytes": 827020
+   "bytes": 827020,
+   "hash": "850d4b1d3e42",
+   "grupo": "fusao:bruxo+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_curandeiro_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_curandeiro_minotauro.glb",
-   "bytes": 766632
+   "bytes": 766632,
+   "hash": "09e736a089f8",
+   "grupo": "fusao:curandeiro+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_espadachim_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_espadachim_minotauro.glb",
-   "bytes": 758816
+   "bytes": 758816,
+   "hash": "fe40bde39d69",
+   "grupo": "fusao:espadachim+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_invocador_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_invocador_minotauro.glb",
-   "bytes": 721276
+   "bytes": 721276,
+   "hash": "ad123e2a6f89",
+   "grupo": "fusao:invocador+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_minotauro_sumo",
    "arquivo": "models-fusoes-minotauro/muro_minotauro_sumo.glb",
-   "bytes": 694844
+   "bytes": 694844,
+   "hash": "94c110b5d93c",
+   "grupo": "fusao:minotauro+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_sumo",
    "arquivo": "models-fusoes-sumo/fus_arqueiro_sumo.glb",
-   "bytes": 1408788
+   "bytes": 1408788,
+   "hash": "8eb953924ee0",
+   "grupo": "fusao:arqueiro+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_sumo",
    "arquivo": "models-fusoes-sumo/fus_bruxo_sumo.glb",
-   "bytes": 1137564
+   "bytes": 1137564,
+   "hash": "5273fb2aea85",
+   "grupo": "fusao:bruxo+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_curandeiro_sumo",
    "arquivo": "models-fusoes-sumo/fus_curandeiro_sumo.glb",
-   "bytes": 1366924
+   "bytes": 1366924,
+   "hash": "f712cca4082b",
+   "grupo": "fusao:curandeiro+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_espadachim_sumo",
    "arquivo": "models-fusoes-sumo/fus_espadachim_sumo.glb",
-   "bytes": 1107604
+   "bytes": 1107604,
+   "hash": "298ffbcacbef",
+   "grupo": "fusao:espadachim+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_invocador_sumo",
    "arquivo": "models-fusoes-sumo/fus_invocador_sumo.glb",
-   "bytes": 1202732
+   "bytes": 1202732,
+   "hash": "93684380384e",
+   "grupo": "fusao:invocador+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_idolo_escora",
    "arquivo": "models-fusoes-sumo/fus_idolo_escora.glb",
-   "bytes": 1129352
+   "bytes": 1129352,
+   "hash": "072cf532d1cf",
+   "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_invocador",
    "arquivo": "models-fusoes-xama/fus_bruxo_invocador.glb",
-   "bytes": 1217372
+   "bytes": 1217372,
+   "hash": "5e20207a7ac2",
+   "grupo": "fusao:bruxo+invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_efigie_runica",
    "arquivo": "models-fusoes-xama/fus_efigie_runica.glb",
-   "bytes": 1106728
+   "bytes": 1106728,
+   "hash": "4b7354735838",
+   "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_curandeiro_invocador",
    "arquivo": "models-fusoes-xama/fus_curandeiro_invocador.glb",
-   "bytes": 1261420
+   "bytes": 1261420,
+   "hash": "afc14a36ae18",
+   "grupo": "fusao:curandeiro+invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_guarda_flor",
    "arquivo": "models-fusoes-xama/fus_guarda_flor.glb",
-   "bytes": 1039884
+   "bytes": 1039884,
+   "hash": "918b2013d967",
+   "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_espadachim_invocador",
    "arquivo": "models-fusoes-xama/fus_espadachim_invocador.glb",
-   "bytes": 1447772
+   "bytes": 1447772,
+   "hash": "846933a9d353",
+   "grupo": "fusao:espadachim+invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_gemeo_breu",
    "arquivo": "models-fusoes-xama/fus_gemeo_breu.glb",
-   "bytes": 1118416
+   "bytes": 1118416,
+   "hash": "16bf74b0e7b4",
+   "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_gm",
    "arquivo": "models-gm/meshy_gm.glb",
-   "bytes": 1146332
+   "bytes": 1146332,
+   "hash": "10559f92412d",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "barbarian",
    "arquivo": "models-heroes/barbarian.glb",
-   "bytes": 334384
+   "bytes": 334384,
+   "hash": "932eb04f9f55",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "knight",
    "arquivo": "models-heroes/knight.glb",
-   "bytes": 380284
+   "bytes": 380284,
+   "hash": "f26a3ba72293",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "mage",
    "arquivo": "models-heroes/mage.glb",
-   "bytes": 310832
+   "bytes": 310832,
+   "hash": "69bf61ac869d",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "rogue",
    "arquivo": "models-heroes/rogue.glb",
-   "bytes": 337388
+   "bytes": 337388,
+   "hash": "bd74b1b75b97",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "rogue_hooded",
    "arquivo": "models-heroes/rogue_hooded.glb",
-   "bytes": 318960
+   "bytes": 318960,
+   "hash": "fea22b3983f9",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "skeleton_warrior",
    "arquivo": "models-heroes/skeleton_warrior.glb",
-   "bytes": 372648
+   "bytes": 372648,
+   "hash": "33140696c3ff",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "skeleton_minion",
    "arquivo": "models-heroes/skeleton_minion.glb",
-   "bytes": 323684
+   "bytes": 323684,
+   "hash": "c902f288ce10",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "skeleton_mage",
    "arquivo": "models-heroes/skeleton_mage.glb",
-   "bytes": 270840
+   "bytes": 270840,
+   "hash": "d14f7b4f2140",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "skeleton_rogue",
    "arquivo": "models-heroes/skeleton_rogue.glb",
-   "bytes": 336340
+   "bytes": 336340,
+   "hash": "3eeebb1b3f0c",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "drowned-porter",
    "arquivo": "models-meshy-cisterna/drowned-porter.glb",
-   "bytes": 1360600
+   "bytes": 1360600,
+   "hash": "5d035c12b0db",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "moray-piper",
    "arquivo": "models-meshy-cisterna/moray-piper.glb",
-   "bytes": 1129800
+   "bytes": 1129800,
+   "hash": "a2b4898f3597",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "lantern-jelly",
    "arquivo": "models-meshy-cisterna/lantern-jelly.glb",
-   "bytes": 1173168
+   "bytes": 1173168,
+   "hash": "9addca5b875f",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "brine-golem",
    "arquivo": "models-meshy-cisterna/brine-golem.glb",
-   "bytes": 1043144
+   "bytes": 1043144,
+   "hash": "bc2ff9f611a4",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "fat-drop",
    "arquivo": "models-meshy-cisterna/fat-drop.glb",
-   "bytes": 1054240
+   "bytes": 1054240,
+   "hash": "3b70e9985670",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "droplet",
    "arquivo": "models-meshy-cisterna/droplet.glb",
-   "bytes": 1028100
+   "bytes": 1028100,
+   "hash": "f5ca3e4b56c1",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "sump-crab",
    "arquivo": "models-meshy-cisterna/sump-crab.glb",
-   "bytes": 1219904
+   "bytes": 1219904,
+   "hash": "544df177da7e",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "mist-warbler",
    "arquivo": "models-meshy-cisterna/mist-warbler.glb",
-   "bytes": 1099004
+   "bytes": 1099004,
+   "hash": "af7c76900ad0",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "boss-baroness",
    "arquivo": "models-meshy-cisterna/boss-baroness.glb",
-   "bytes": 1131048
+   "bytes": 1131048,
+   "hash": "3c6a27b26847",
+   "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "boss-gardener",
    "arquivo": "models-meshy-jardim/boss-gardener.glb",
-   "bytes": 1297004
+   "bytes": 1297004,
+   "hash": "5c8eb3e387e5",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "dew-strider",
    "arquivo": "models-meshy-jardim/dew-strider.glb",
-   "bytes": 1097692
+   "bytes": 1097692,
+   "hash": "a30f7963880b",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "sprout-feral",
    "arquivo": "models-meshy-jardim/sprout-feral.glb",
-   "bytes": 1112924
+   "bytes": 1112924,
+   "hash": "e5339ab6dcb5",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "pollen-puff",
    "arquivo": "models-meshy-jardim/pollen-puff.glb",
-   "bytes": 1334440
+   "bytes": 1334440,
+   "hash": "c6f09399f2a9",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "burrlet",
    "arquivo": "models-meshy-jardim/burrlet.glb",
-   "bytes": 1483100
+   "bytes": 1483100,
+   "hash": "0ab8e0984016",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "burr-mother",
    "arquivo": "models-meshy-jardim/burr-mother.glb",
-   "bytes": 1675840
+   "bytes": 1675840,
+   "hash": "fe7a972d353a",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "sap-shaman",
    "arquivo": "models-meshy-jardim/sap-shaman.glb",
-   "bytes": 952140
+   "bytes": 952140,
+   "hash": "b83288a2ad76",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "thorn-lasher",
    "arquivo": "models-meshy-jardim/thorn-lasher.glb",
-   "bytes": 1154360
+   "bytes": 1154360,
+   "hash": "e6debd02847c",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "lantern-wasp",
    "arquivo": "models-meshy-jardim/lantern-wasp.glb",
-   "bytes": 1325248
+   "bytes": 1325248,
+   "hash": "292824fe5930",
+   "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_familiar",
    "arquivo": "models-meshy-sum/sum_familiar.glb",
-   "bytes": 1135152
+   "bytes": 1135152,
+   "hash": "09dae3ad30dc",
+   "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_ember_hound",
    "arquivo": "models-meshy-sum/sum_ember_hound.glb",
-   "bytes": 1217308
+   "bytes": 1217308,
+   "hash": "664a0577089c",
+   "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_magma_colossus",
    "arquivo": "models-meshy-sum/sum_magma_colossus.glb",
-   "bytes": 1188880
+   "bytes": 1188880,
+   "hash": "86d78b578b84",
+   "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_tide_nymph",
    "arquivo": "models-meshy-sum/sum_tide_nymph.glb",
-   "bytes": 1069532
+   "bytes": 1069532,
+   "hash": "6acd0109095f",
+   "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_stone_sentinel",
    "arquivo": "models-meshy-sum/sum_stone_sentinel.glb",
-   "bytes": 1120444
+   "bytes": 1120444,
+   "hash": "d58597e78077",
+   "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_mountain_golem",
    "arquivo": "models-meshy-sum/sum_mountain_golem.glb",
-   "bytes": 1091920
+   "bytes": 1091920,
+   "hash": "9cb0fd55ab2d",
+   "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_storm_falcon",
    "arquivo": "models-meshy-sum/sum_storm_falcon.glb",
-   "bytes": 1263740
+   "bytes": 1263740,
+   "hash": "a46e6b9cd6d5",
+   "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_drowned_cistern",
    "arquivo": "models-meshy-sum/sum_drowned_cistern.glb",
-   "bytes": 994008
+   "bytes": 994008,
+   "hash": "88e40d366721",
+   "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_storm_eye",
    "arquivo": "models-meshy-sum/sum_storm_eye.glb",
-   "bytes": 1196328
+   "bytes": 1196328,
+   "hash": "696a58e2ad77",
+   "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_sumo",
    "arquivo": "models-meshy/meshy_sumo.glb",
-   "bytes": 1091988
+   "bytes": 1091988,
+   "hash": "65d0ecaaa258",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_invocador",
    "arquivo": "models-meshy/meshy_invocador.glb",
-   "bytes": 1421332
+   "bytes": 1421332,
+   "hash": "7e6ddd3f9aad",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_espadachim",
    "arquivo": "models-meshy/meshy_espadachim.glb",
-   "bytes": 1130948
+   "bytes": 1130948,
+   "hash": "042ec65736a4",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_minotauro",
    "arquivo": "models-meshy/meshy_minotauro.glb",
-   "bytes": 1131236
+   "bytes": 1131236,
+   "hash": "c1fff1b091f2",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_curandeiro",
    "arquivo": "models-meshy/meshy_curandeiro.glb",
-   "bytes": 1405560
+   "bytes": 1405560,
+   "hash": "044a8ac0fde7",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_arqueiro",
    "arquivo": "models-meshy/meshy_arqueiro.glb",
-   "bytes": 1214292
+   "bytes": 1214292,
+   "hash": "0f5bb4ebe710",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_bruxo",
    "arquivo": "models-meshy/meshy_bruxo.glb",
-   "bytes": 1107700
+   "bytes": 1107700,
+   "hash": "71d892491a47",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "q_frog",
    "arquivo": "models-monsters/q_frog.glb",
-   "bytes": 581708
+   "bytes": 581708,
+   "hash": "9dfc5585d810",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_spider",
    "arquivo": "models-monsters/q_spider.glb",
-   "bytes": 439716
+   "bytes": 439716,
+   "hash": "0ad5a1dd4969",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_wasp",
    "arquivo": "models-monsters/q_wasp.glb",
-   "bytes": 436820
+   "bytes": 436820,
+   "hash": "7d8954376281",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_snake",
    "arquivo": "models-monsters/q_snake.glb",
-   "bytes": 212804
+   "bytes": 212804,
+   "hash": "ea3f2b621743",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_rat",
    "arquivo": "models-monsters/q_rat.glb",
-   "bytes": 541640
+   "bytes": 541640,
+   "hash": "28f75b5611aa",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_wolf",
    "arquivo": "models-monsters/q_wolf.glb",
-   "bytes": 588768
+   "bytes": 588768,
+   "hash": "ce2b0b21b343",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_fox",
    "arquivo": "models-monsters/q_fox.glb",
-   "bytes": 570360
+   "bytes": 570360,
+   "hash": "e47c6818498a",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_stag",
    "arquivo": "models-monsters/q_stag.glb",
-   "bytes": 668632
+   "bytes": 668632,
+   "hash": "67b67534af0b",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_bull",
    "arquivo": "models-monsters/q_bull.glb",
-   "bytes": 629372
+   "bytes": 629372,
+   "hash": "b770822da077",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_velociraptor",
    "arquivo": "models-monsters/q_velociraptor.glb",
-   "bytes": 277244
+   "bytes": 277244,
+   "hash": "3d5ff54d7322",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_trex",
    "arquivo": "models-monsters/q_trex.glb",
-   "bytes": 327680
+   "bytes": 327680,
+   "hash": "eb1a7f185381",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_triceratops",
    "arquivo": "models-monsters/q_triceratops.glb",
-   "bytes": 301168
+   "bytes": 301168,
+   "hash": "6b5075d81553",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-emberling",
    "arquivo": "models-pets/pet-emberling.glb",
-   "bytes": 1253272
+   "bytes": 1253272,
+   "hash": "ba20ab48bbe3",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-snapvine",
    "arquivo": "models-pets/pet-snapvine.glb",
-   "bytes": 1094764
+   "bytes": 1094764,
+   "hash": "f5958cf9e144",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-galehawk",
    "arquivo": "models-pets/pet-galehawk.glb",
-   "bytes": 1102752
+   "bytes": 1102752,
+   "hash": "1a3642c35930",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-dewling",
    "arquivo": "models-pets/pet-dewling.glb",
-   "bytes": 1097916
+   "bytes": 1097916,
+   "hash": "981b26d718a1",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-lodestone",
    "arquivo": "models-pets/pet-lodestone.glb",
-   "bytes": 1163636
+   "bytes": 1163636,
+   "hash": "8ba3366917a5",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-heartshard",
    "arquivo": "models-pets/pet-heartshard.glb",
-   "bytes": 1255384
+   "bytes": 1255384,
+   "hash": "4af098ff2a4d",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-colecionador",
    "arquivo": "models-pets/pet-colecionador.glb",
-   "bytes": 1135996
+   "bytes": 1135996,
+   "hash": "184c2328a11e",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_arvore",
    "arquivo": "models-praca/praca_arvore.glb",
-   "bytes": 1094116
+   "bytes": 1094116,
+   "hash": "4f2799cab7e5",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_arena",
    "arquivo": "models-praca/praca_arena.glb",
-   "bytes": 1130532
+   "bytes": 1130532,
+   "hash": "9848d7a4d6b9",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_banco",
    "arquivo": "models-praca/praca_banco.glb",
-   "bytes": 1070220
+   "bytes": 1070220,
+   "hash": "e43bea71baee",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_mercado",
    "arquivo": "models-praca/praca_mercado.glb",
-   "bytes": 946764
+   "bytes": 946764,
+   "hash": "b50bed5d8fcf",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_sede",
    "arquivo": "models-praca/praca_sede.glb",
-   "bytes": 958380
+   "bytes": 958380,
+   "hash": "d4480121bdd7",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_forja",
    "arquivo": "models-praca/praca_forja.glb",
-   "bytes": 825436
+   "bytes": 825436,
+   "hash": "2b462f0af81b",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_loteria",
    "arquivo": "models-praca/praca_loteria.glb",
-   "bytes": 929892
+   "bytes": 929892,
+   "hash": "565fdf55ada0",
+   "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "q_hywirl",
    "arquivo": "models-summons/q_hywirl.glb",
-   "bytes": 317228
+   "bytes": 317228,
+   "hash": "ebd5f0a31e08",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_demon",
    "arquivo": "models-summons/q_demon.glb",
-   "bytes": 700840
+   "bytes": 700840,
+   "hash": "fd7bb98d76d1",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_dragon_ev",
    "arquivo": "models-summons/q_dragon_ev.glb",
-   "bytes": 533556
+   "bytes": 533556,
+   "hash": "fa32aa36dafe",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_squidle",
    "arquivo": "models-summons/q_squidle.glb",
-   "bytes": 418132
+   "bytes": 418132,
+   "hash": "1a068c02822b",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_cactoro",
    "arquivo": "models-summons/q_cactoro.glb",
-   "bytes": 676764
+   "bytes": 676764,
+   "hash": "e4063c57b912",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_spikyblob",
    "arquivo": "models-summons/q_spikyblob.glb",
-   "bytes": 214664
+   "bytes": 214664,
+   "hash": "05743146f0ed",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_birb",
    "arquivo": "models-summons/q_birb.glb",
-   "bytes": 648736
+   "bytes": 648736,
+   "hash": "90c552bc07e2",
+   "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "muro-escudo",
    "arquivo": "muro-escudo/muro-escudo.glb",
-   "bytes": 758816
+   "bytes": 758816,
+   "hash": "fe40bde39d69",
+   "grupo": "base"
   }
  ],
  "meshyClips": {
@@ -1809,6 +2233,124 @@
    "walk"
   ]
  },
+ "tabelas": {
+  "cenario-cisterna.js": "tabelas/cenario-cisterna.js",
+  "cenario-jardim.js": "tabelas/cenario-jardim.js"
+ },
  "totalBytes": 140547264,
- "totalBase64": 187396640
+ "totalBase64": 187396640,
+ "grupos": {
+  "base": {
+   "itens": 90,
+   "bytes": 37020124
+  },
+  "calabouco:cistern": {
+   "itens": 23,
+   "bytes": 19417836
+  },
+  "calabouco:greenhouse": {
+   "itens": 21,
+   "bytes": 18878112
+  },
+  "classe:invocador": {
+   "itens": 9,
+   "bytes": 10277312
+  },
+  "coroas": {
+   "itens": 10,
+   "bytes": 5496484
+  },
+  "fechados": {
+   "itens": 26,
+   "bytes": 11715848
+  },
+  "fusao:arqueiro+bruxo": {
+   "itens": 1,
+   "bytes": 1200144
+  },
+  "fusao:arqueiro+curandeiro": {
+   "itens": 1,
+   "bytes": 1473596
+  },
+  "fusao:arqueiro+espadachim": {
+   "itens": 1,
+   "bytes": 1204572
+  },
+  "fusao:arqueiro+invocador": {
+   "itens": 1,
+   "bytes": 1212424
+  },
+  "fusao:arqueiro+minotauro": {
+   "itens": 2,
+   "bytes": 2094572
+  },
+  "fusao:arqueiro+sumo": {
+   "itens": 1,
+   "bytes": 1408788
+  },
+  "fusao:bruxo+curandeiro": {
+   "itens": 1,
+   "bytes": 1258472
+  },
+  "fusao:bruxo+espadachim": {
+   "itens": 1,
+   "bytes": 1143132
+  },
+  "fusao:bruxo+invocador": {
+   "itens": 1,
+   "bytes": 1217372
+  },
+  "fusao:bruxo+minotauro": {
+   "itens": 2,
+   "bytes": 2109540
+  },
+  "fusao:bruxo+sumo": {
+   "itens": 1,
+   "bytes": 1137564
+  },
+  "fusao:curandeiro+espadachim": {
+   "itens": 1,
+   "bytes": 1318012
+  },
+  "fusao:curandeiro+invocador": {
+   "itens": 1,
+   "bytes": 1261420
+  },
+  "fusao:curandeiro+minotauro": {
+   "itens": 2,
+   "bytes": 2020356
+  },
+  "fusao:curandeiro+sumo": {
+   "itens": 1,
+   "bytes": 1366924
+  },
+  "fusao:espadachim+invocador": {
+   "itens": 1,
+   "bytes": 1447772
+  },
+  "fusao:espadachim+minotauro": {
+   "itens": 2,
+   "bytes": 1927028
+  },
+  "fusao:espadachim+sumo": {
+   "itens": 1,
+   "bytes": 1107604
+  },
+  "fusao:invocacoes": {
+   "itens": 6,
+   "bytes": 6574296
+  },
+  "fusao:invocador+minotauro": {
+   "itens": 2,
+   "bytes": 2166940
+  },
+  "fusao:invocador+sumo": {
+   "itens": 1,
+   "bytes": 1202732
+  },
+  "fusao:minotauro+sumo": {
+   "itens": 2,
+   "bytes": 1888288
+  }
+ }
 }

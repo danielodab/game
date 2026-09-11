@@ -27,7 +27,11 @@ f.onload = function () {
       P.addPetXp('pet-snapvine', 120);             // nível 6 (117)
       P.addPetCards('pet-emberling', 3);           // Brasinha a caminho
       P.addPetCards('pet-colecionador', 5);        // Selinho no saco
-      P.equipPet('sumo', 'pet-snapvine');
+      // pets a partir do nível 10 (nível de uso, 10/09): o Bárbaro do perfil
+      // novo sobe ao 10 antes de chamar o bicho. O equipPet recusado devolve
+      // false, não lança: a recusa vira ERRO no título.
+      P.addXp('sumo', w.JOGO.DATA.leveling.xpTable[9]);
+      if (!P.equipPet('sumo', 'pet-snapvine')) document.title = 'ERRO ' + ((P.ultimaRecusa && P.ultimaRecusa.motivo) || 'o bicho não veio');
       w.JOGO.UI.selection(['sumo']);
       w.JOGO.UI.openSheet('collection');
       setTimeout(function () {

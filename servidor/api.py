@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """A API — o cartório do SOTERRA (fase 3 da vida online: a conta no servidor).
 
-    python api.py [--host 127.0.0.1] [--porta 8300] [--banco dados/soterra.db]
+    python api.py [--host 127.0.0.1] [--porta 8300] [--banco dados/soterra.db] [--emails-prova ARQ]
 
 O QUE ELA É: guarda a conta (nome, e-mail, senha picada), o save (o Progress e
 o DB local do cliente, como JSON OPACO — o servidor não entende de feitiços) e,
@@ -19,6 +19,11 @@ dois. Regras de sorteio no servidor são a fase seguinte.
 DESDE 10/09 ela também guarda os EVENTOS DO MUNDO (a "agenda": XP em dobro,
 Maré da Cisterna…, ligados pelo Mestre e lidos por todos em /api/eventos) e o
 RANKING POR CLASSE (a melhor ficha de cada classe de cada conta, com o avatar).
+
+NA FASE C entram a CONTA NO SITE (trocar a senha, trocar o e-mail com código,
+"esqueci a senha" e as sessões: conta.py, que manda e-mail pelo correio.py) e
+a LOJA DE VINTÉNS (loja.py), como mixins desta mesma Api. As primitivas que os
+três dividem moram em comum.py (ver lá a armadilha do __main__).
 
 NO VPS ela fica atrás do Caddy (https://<dominio>/api/* → 127.0.0.1:8300; ver
 Caddyfile e soterra-api.service ao lado), irmã do Relé. Em casa, roda direto e
@@ -44,18 +49,31 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
+# As primitivas moram em comum.py (a armadilha do __main__: ver o topo de lá).
+# Importadas aqui, continuam valendo como api.Recusa, api.email_valido, api.XP_MAX…
+from comum import (CLASSE_RENOMEADA, CLASSES_RANK, ELEMENTOS, LOGIN_JANELA, LOGIN_TENTATIVAS,  # noqa: F401
+                   NIVEL_MAX, PBKDF2_VOLTAS, SESSAO_DIAS, XP_MAX, Recusa, agora, classe_do_heroi,
+                   email_novo_valido, email_valido, inteiro, ip_do_pedido, limita, nome_valido, pica_senha,
+                   senha_valida)
+from conta import (CADASTRO_POR_IP, ESQUEMA_CONTA, FRASE_IP_CADASTRO, FRASE_IP_SENHA, LOGIN_POR_IP,
+                   MUITAS_TENTATIVAS, ContaMixin, carrega_segredo)
+from correio import Correio
+from loja import ESQUEMA_LOJA, LojaMixin
+import nomes                     # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
+
 log = logging.getLogger("api")
 
 # ---- as réguas -------------------------------------------------------------
 LIMITE_CORPO = 2 * 1024 * 1024   # um save tem dezenas de KB; 2 MB é folga, acima é abuso
-SESSAO_DIAS = 30                 # token sem uso por 30 dias morre
-LOGIN_TENTATIVAS = 10            # erros de senha por conta...
-LOGIN_JANELA = 10 * 60           # ...dentro de 10 minutos, e a conta espera
+# o motivo da lei dos nomes para o nome NOVO que veste a equipe do jogo: o mesmo
+# texto de nomes.valida (a prova confere, para os dois não se separarem)
+NOME_RESERVADO = 'esse nome é reservado à equipe do jogo'
+# SESSAO_DIAS, LOGIN_TENTATIVAS, LOGIN_JANELA e PBKDF2_VOLTAS moram em comum.py (a conta.py usa também)
 NASC_POR_PUT = 200               # instâncias novas num save só
 NASC_POR_HORA = 2000             # e por hora, por conta (ninguém saqueia tanto)
 TROCA_VALIDADE = 120             # a intenção de troca espera o parceiro por 2 min
 TROCA_GRACA = 10 * 60            # item recém-recebido não é varrido por 10 min (ver salvar)
-PBKDF2_VOLTAS = 200_000
+RANKING_CACHE = 30               # segundos que o GET /api/ranking fica guardado por processo (ver ranking)
 ORIGENS = {'saque', 'roleta', 'mercador', 'caixa', 'forja', 'troca', 'banco', 'legado'}
 RE_IID = re.compile(r'^[\x21-\x7e]{1,64}$')    # ASCII visível, sem espaço — o cliente gera 'j' + base36
 
@@ -73,11 +91,8 @@ AGENDA_TETOS = {'xp': 2.0, 'vintem': 1.5, 'pedras': 2.0, 'saque': 1.5, 'aviso': 
 # quais portais estão fechados — isso mora em dungeons.js, e uma terceira cópia
 # ficaria velha. Evento num portal fechado só não tem efeito: ninguém desce lá.
 CALABOUCOS = ('greenhouse', 'cistern', 'emberlock', 'windscaffold', 'quakemine', 'brokenheart', 'poco')
-CLASSES_RANK = ('sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro', 'invocador', 'minotauro')  # ordem de classes.js
-CLASSE_RENOMEADA = {'curandeira': 'curandeiro'}   # como no progress.js: save antigo ainda chama assim
-XP_MAX = 28180                   # o último degrau da xpTable (progression.js); o teste pega a deriva
-NIVEL_MAX = 30
-ELEMENTOS = ('neutro', 'fogo', 'agua', 'terra', 'ar')
+# CLASSES_RANK, CLASSE_RENOMEADA, XP_MAX, NIVEL_MAX e ELEMENTOS (as réguas do jogo
+# que o servidor copia; o teste pega a deriva) moram em comum.py: a loja.py usa também
 # O relógio de parede é o de Brasília com deslocamento FIXO: o contêiner não
 # instala tzdata (zoneinfo falharia) e o Brasil não tem horário de verão desde 2019.
 FUSO_MIN = -180
@@ -227,61 +242,31 @@ ROTAS = {
     ('POST', '/api/eventos'):          ('evento_criar', True, True),
     ('POST', '/api/eventos/regras'):   ('regra_criar', True, True),
     ('POST', '/api/eventos/cancelar'): ('evento_cancelar', True, True),
+    # a conta no site (Fase C, conta.py): 401 só quer dizer token morto; senha
+    # ou código errado é 400. O "esqueci" é sem conta (quem esqueceu não tem token).
+    ('GET',  '/api/conta'):                  ('conta_dados', True),
+    ('POST', '/api/conta/senha'):            ('conta_senha', True),
+    ('POST', '/api/conta/email/pedir'):      ('conta_email_pedir', True),
+    ('POST', '/api/conta/email/confirmar'):  ('conta_email_confirmar', True),
+    ('POST', '/api/conta/sessoes/encerrar'): ('conta_sessoes_encerrar', True),
+    ('POST', '/api/esqueci'):                ('esqueci', False),
+    ('POST', '/api/esqueci/confirmar'):      ('esqueci_confirmar', False),
+    # a loja de vinténs (Fase C, loja.py): o catálogo é público; retirar é o jogo
+    ('GET',  '/api/loja/catalogo'):          ('loja_catalogo', False),
+    ('GET',  '/api/loja/minha'):             ('loja_minha', True),
+    ('POST', '/api/loja/comprar'):           ('loja_comprar', True),
+    ('POST', '/api/loja/cancelar'):          ('loja_cancelar', True),
+    ('POST', '/api/loja/retirar'):           ('loja_retirar', True),
 }
 
 
-def agora():
-    return int(time.time())
-
-
-class Recusa(Exception):
-    """Uma resposta de erro com status e texto em português. `extra` entra no
-    JSON ao lado de ok/erro (o 409 de versão devolve o save atual por aqui)."""
-
-    def __init__(self, status, erro, **extra):
-        super().__init__(erro)
-        self.status = status
-        self.erro = erro
-        self.extra = extra
-
-
-# ---- validações miúdas ------------------------------------------------------
-def nome_valido(nome):
-    if not isinstance(nome, str) or nome != nome.strip():
-        return False
-    if not 3 <= len(nome) <= 20:
-        return False
-    return all(c.isalnum() or c in ' _-' for c in nome)
-
-
-def email_valido(email):
-    return (isinstance(email, str) and 3 <= len(email) <= 120 and '@' in email
-            and email == email.strip() and not any(c.isspace() for c in email))
-
-
-def senha_valida(senha):
-    return isinstance(senha, str) and 8 <= len(senha) <= 200
-
-
+# ---- validações miúdas (as da conta, com agora e Recusa, moram em comum.py) ------
 def iid_valido(iid):
     return isinstance(iid, str) and RE_IID.match(iid) is not None
 
 
-def inteiro(v):
-    """Número do save vira inteiro; qualquer outra coisa (bool, texto, nulo) é 0."""
-    if isinstance(v, bool) or not isinstance(v, (int, float)):
-        return 0
-    return int(v)
-
-
 def texto_ou_nulo(v, tam=40):
     return v.strip()[:tam] if isinstance(v, str) and v.strip() else None
-
-
-def pica_senha(senha, sal):
-    # pbkdf2 com 200 mil voltas: ~0,1 s por tentativa — barato para quem entra,
-    # caro para quem chuta. O sal é por conta, então tabelas prontas não servem.
-    return hashlib.pbkdf2_hmac('sha256', senha.encode('utf-8'), sal.encode('utf-8'), PBKDF2_VOLTAS).hex()
 
 
 def colhe_iids(progress, db):
@@ -339,28 +324,7 @@ def lista_de_iids(v, campo):
     return saida
 
 
-# ---- o ranking por classe (10/09) ---------------------------------------------
-def limita(v, lo, hi):
-    """Número do save preso em [lo, hi]; bool, texto, nulo, NaN e infinito
-    viram `lo` (o json do Python aceita Infinity, e o int() dele estouraria)."""
-    if isinstance(v, bool) or not isinstance(v, (int, float)):
-        return lo
-    if isinstance(v, float) and not math.isfinite(v):
-        return lo
-    return int(max(lo, min(hi, v)))
-
-
-def classe_do_heroi(hid, h):
-    """A classe de uma ficha: `classId`; sem ele, a chave antes do '#' ('sumo#2'
-    é a segunda ficha do Bárbaro), renomeada como no progress.js. None para
-    'gm' (o Mestre do Fundo não disputa ranking) e para classe que o jogo não tem."""
-    c = h.get('classId')
-    if not isinstance(c, str) or not c:
-        c = hid.split('#', 1)[0] if isinstance(hid, str) else ''
-    c = CLASSE_RENOMEADA.get(c, c)
-    return c if c in CLASSES_RANK else None
-
-
+# ---- o ranking por classe (10/09; limita e classe_do_heroi moram em comum.py) ----
 def herois_por_classe(progress):
     """{classe: (heroi_id, nivel, xp, elemento)} com a MELHOR ficha de cada
     classe da conta (maior xp, depois maior nível): uma linha por conta no
@@ -637,13 +601,27 @@ def resolve_fatores(lista, t):
 
 
 # ---- o cartório -------------------------------------------------------------
-class Api:
+def versao_da_regra():
+    """A marca da lei dos nomes (servidor/nomes.py, o arquivo inteiro): muda
+    quando a regra muda, e a vitrine gravada é passada a limpo de novo, uma
+    vez (Api._migra_resumos_nomes)."""
+    try:
+        with open(nomes.__file__, 'rb') as f:
+            return hashlib.sha256(f.read()).hexdigest()[:12]
+    except (OSError, TypeError):
+        return '0'
+
+
+class Api(ContaMixin, LojaMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
-    versão que o primeiro gravou e leva 409."""
+    versão que o primeiro gravou e leva 409.
 
-    def __init__(self, caminho_banco):
+    A conta no site (conta.py) e a loja (loja.py) entram como mixins: as rotas
+    delas são métodos deste mesmo objeto, com a mesma conexão e a mesma tranca."""
+
+    def __init__(self, caminho_banco, correio=None):
         pasta = os.path.dirname(os.path.abspath(caminho_banco))
         os.makedirs(pasta, exist_ok=True)
         self.con = sqlite3.connect(caminho_banco, check_same_thread=False)
@@ -651,10 +629,20 @@ class Api:
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("PRAGMA foreign_keys=ON")
         self.con.executescript(ESQUEMA)
+        # Fase C: só tabelas novas (e um índice) — o rolling update segue seguro
+        self.con.executescript(ESQUEMA_CONTA + ESQUEMA_LOJA)
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self.intencoes = {}      # (de, para) → {dou, recebo, em}            (idem: expira em 120 s)
+        # o correio (correio.py). Sem nada, desligado: as rotas que mandam
+        # e-mail respondem 503 com correio:false, e o resto funciona igual
+        self.correio = correio if correio is not None else Correio()
+        # o segredo do hmac dos códigos (SOTERRA_SEGREDO, ou o arquivo `segredo` na pasta do banco)
+        self.segredo = carrega_segredo(pasta)
+        self._ranking_guardado = None    # (vale_ate, data_version, resposta) — ver ranking
+        self._resumos_vistos = {}        # conta_id → a última foto pública — ver _resumo
         self._migra_resumos_v2()
+        self._migra_resumos_nomes()
 
     # -- miudezas -------------------------------------------------------------
     def _evento(self, conta_id, tipo, dados):
@@ -680,11 +668,17 @@ class Api:
                     self.con.rollback()
                 raise
 
-    def _abre_sessao(self, conta_id):
+    def _abre_sessao(self, conta_id, corpo=None):
+        """Uma sessão nova. Com o corpo do pedido, guarda também o IP e o
+        navegador (sessoes_extra, que morre junto com a sessão): a página da
+        conta mostra a lista, com o IP mascarado."""
         token = secrets.token_hex(32)
         t = agora()
         self.con.execute("INSERT INTO sessoes(token, conta_id, criado_em, ultimo_uso) VALUES (?, ?, ?, ?)",
                          (token, conta_id, t, t))
+        if isinstance(corpo, dict):
+            self.con.execute("INSERT INTO sessoes_extra(token, ip, agente, criado_em) VALUES (?, ?, ?, ?)",
+                             (token, corpo.get('_ip') or None, (corpo.get('_agente') or '')[:160] or None, t))
         return token
 
     def conta_do_token(self, token):
@@ -729,11 +723,27 @@ class Api:
     def cadastro(self, conta, corpo):
         nome, email, senha = corpo.get('nome'), corpo.get('email'), corpo.get('senha')
         if not nome_valido(nome):
-            raise Recusa(400, 'nome inválido: 3 a 20 caracteres (letras, dígitos, espaço, _ ou -), sem espaço nas pontas')
-        if not email_valido(email):
+            # o motivo exato vem da lei dos nomes (curto, comprido, espaço na ponta,
+            # caractere fora do conjunto), na mesma ordem do site. Só os 21 primeiros
+            # caracteres: já dizem "comprido", e a regra num texto de 2 MB custaria
+            # caro antes do freio por IP.
+            amostra = nome[:21] if isinstance(nome, str) else nome
+            raise Recusa(400, 'nome inválido: ' + (nomes.valida(amostra, 3, 20)[1] or 'de 3 a 20 caracteres'))
+        # a lei dos nomes (pedido do dono, 10/09): ninguém se cadastra vestido de
+        # equipe do jogo — GM, Admin, Moderador, Mestre do Fundo… e os disfarces
+        # (4dm1n, JoaoGM, Gm2). Só o nome NOVO: login, esqueci e sessões não
+        # conferem, e a conta antiga com nome assim continua entrando. Um nome
+        # desses só o dono dá, no Terminal: admin renomear "VELHO" "NOVO".
+        if nomes.reservado(nome):
+            raise Recusa(400, NOME_RESERVADO)
+        if not email_novo_valido(email):
             raise Recusa(400, 'e-mail inválido')
         if not senha_valida(senha):
             raise Recusa(400, 'a senha precisa ter pelo menos 8 caracteres')
+        # o freio por IP (10 por hora; conta.py) antes do PBKDF2 e do 409: sem
+        # ele, "esse e-mail já tem conta" era um oráculo de graça de quem tem
+        # conta, e cada pedido queimava 0,1 s de processador
+        self._freia_por_ip(corpo, 'cadastro', CADASTRO_POR_IP, agora(), FRASE_IP_CADASTRO)
         sal = secrets.token_hex(16)
         picada = pica_senha(senha, sal)          # fora da tranca: leva ~0,1 s
         with self.tranca:
@@ -749,7 +759,7 @@ class Api:
                 self.con.rollback()
                 raise Recusa(409, 'nome ou e-mail já usado')
             cid = cur.lastrowid
-            token = self._abre_sessao(cid)
+            token = self._abre_sessao(cid, corpo)
             self._evento(cid, 'cadastro', {'nome': nome})
             self.con.commit()
         log.info("cadastro: %s (#%d)", nome, cid)
@@ -761,32 +771,59 @@ class Api:
         self.tentativas[conta_id] = lista
         return len(lista) >= LOGIN_TENTATIVAS
 
+    def _libera_tentativas(self, conta_id):
+        """Quando a conta volta a poder errar a senha (epoch), para o liberaEm do 429."""
+        lista = sorted(self.tentativas.get(conta_id, []))
+        if len(lista) < LOGIN_TENTATIVAS:
+            return None
+        return lista[len(lista) - LOGIN_TENTATIVAS] + LOGIN_JANELA
+
     def login(self, conta, corpo):
         login, senha = corpo.get('login'), corpo.get('senha')
         if not isinstance(login, str) or not isinstance(senha, str):
             raise Recusa(400, 'informe login (nome ou e-mail) e senha')
         login = login.strip()
+        t = agora()
+        # o freio por IP (30 senhas ERRADAS por hora; conta.py) vem antes de
+        # tudo: é o que segura o PBKDF2 de quem chuta, já que a senha é
+        # conferida mesmo com a conta trancada. A vaga fica reservada durante o
+        # PBKDF2 e VOLTA quando a senha bate: login certo não gasta o balde de
+        # quem divide o endereço (CGNAT de operadora, escola, a casa inteira)
+        vaga = self._freia_por_ip(corpo, 'login', LOGIN_POR_IP, t, FRASE_IP_SENHA)
         with self.tranca:
             c = self.con.execute("SELECT * FROM contas WHERE nome = ? OR email = ?", (login, login)).fetchone()
-            if c is None:
-                raise Recusa(401, 'login ou senha errados')      # mesma frase: não entrega quem existe
-            if self._tentativas_estouradas(c['id']):
-                raise Recusa(429, 'muitas tentativas; espere 10 minutos')
-        bateu = hmac.compare_digest(pica_senha(senha, c['sal']), c['senha_hash'])
+            # e o acerto tem o balde dele, por conta (60 por hora; conta.py)
+            self._barra_logins_certos(c['id'] if c is not None else None, t)
+        # a senha ANTES da tranca de tentativas: quem sabe a senha nunca é
+        # trancado (senão qualquer um trancava qualquer conta pelo nome, e o
+        # ranking publica nomes); quem chuta continua parando na 11ª. O nome
+        # que não existe segue o MESMO caminho: o mesmo PBKDF2 (contra o sal de
+        # fachada), a mesma contagem, o mesmo evento gravado e a mesma resposta
+        # — nem a frase, nem o relógio, nem a 11ª contam quem tem conta
+        if c is None:
+            self._pica_de_fachada(senha)
+            bateu = False
+        else:
+            bateu = hmac.compare_digest(pica_senha(senha, c['sal']), c['senha_hash'])
+        chave = self._chave_tentativas(c, login)
         with self.tranca:
             if not bateu:
-                self.tentativas.setdefault(c['id'], []).append(agora())
-                self._evento(c['id'], 'login-recusado', None)
+                if self._tentativas_estouradas(chave):
+                    raise Recusa(429, MUITAS_TENTATIVAS, liberaEm=self._libera_tentativas(chave))
+                self._anota_tentativa(chave, agora())
+                self._evento(c['id'] if c is not None else None, 'login-recusado', None)
                 self.con.commit()
                 raise Recusa(401, 'login ou senha errados')
             if c['banido']:
                 raise Recusa(403, 'conta banida')
             self.tentativas.pop(c['id'], None)
-            token = self._abre_sessao(c['id'])
+            token = self._abre_sessao(c['id'], corpo)
             # faxina de passagem: sessões desta conta vencidas há mais de 30 dias
             self.con.execute("DELETE FROM sessoes WHERE conta_id = ? AND ultimo_uso < ?",
                              (c['id'], agora() - SESSAO_DIAS * 86400))
             self._evento(c['id'], 'login', None)
+            # a senha bateu: a vaga do IP volta, e o login entra no balde da conta
+            self._login_certo(c['id'], vaga, t)
             self.con.commit()
         return 200, {'ok': True, 'token': token,
                      'conta': {'id': c['id'], 'nome': c['nome'], 'gm': bool(c['gm'])}}
@@ -949,6 +986,9 @@ class Api:
                     (cid, json.dumps(progress, ensure_ascii=False) if progress is not None else None,
                      json.dumps(db, ensure_ascii=False) if db is not None else None, nova, t))
                 self._resumo(cid, conta, progress, db, t)
+                # a loja (Fase C): o que este save diz ter entregue ou recusado
+                # fecha junto com ele, na mesma transação; nunca recusa o save
+                loja = self._loja_confirma(cid, db, nova, t)
                 if registrar:
                     self._evento(cid, 'nascimentos', {'versao': nova, 'iids': [r[0] for r in registrar]})
                 self.con.commit()
@@ -956,7 +996,7 @@ class Api:
                 if self.con.in_transaction:
                     self.con.rollback()
                 raise
-        return 200, {'ok': True, 'versao': nova, 'registrados': len(registrar)}
+        return 200, {'ok': True, 'versao': nova, 'registrados': len(registrar), 'loja': loja}
 
     def _resumo(self, cid, conta, progress, db, t):
         """(d) a foto pública da conta, para o ranking — recalculada a cada save.
@@ -975,14 +1015,28 @@ class Api:
         jog = jog if isinstance(jog, dict) else {}
         brasa = jog.get('brasa') if isinstance(jog.get('brasa'), dict) else {}
         guilda = jog.get('guilda') if isinstance(jog.get('guilda'), dict) else {}
-        nome = texto_ou_nulo(jog.get('nome')) or conta['nome']
+        nome = texto_ou_nulo(jog.get('nome'))
+        guilda_nome = texto_ou_nulo(guilda.get('nome'))
+        # a lei dos nomes vale também para a vitrine: o nome e a guilda que vêm no
+        # SAVE (o batismo do jogo; um save forjado passa ao largo dele) não põem
+        # "GM" nem "Staff" no ranking público de quem não é o Mestre — o nome cai
+        # para o da conta e a guilda sai da vitrine
+        emblema = texto_ou_nulo(guilda.get('emblema'), 16)
+        if not conta['gm']:
+            if nome and nomes.reservado(nome):
+                nome = None
+            if guilda_nome and nomes.reservado(guilda_nome):
+                guilda_nome = None
+            if emblema and nomes.reservado(emblema):
+                emblema = None                       # a placa é emblema + nome: 'GM' e 'STAFF' também vestem a equipe
+        nome = nome or conta['nome']
         por_classe = herois_por_classe(progress)
         avatar, principal = avatar_publico(db), classe_principal(por_classe)
         self.con.execute(
             "INSERT OR REPLACE INTO resumos(conta_id, nome, xp_total, nivel_max, classes, brasa_pts, brasa_partidas, "
             "guilda_nome, guilda_emblema, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (cid, nome, xp_total, nivel_max, classes, inteiro(brasa.get('pts')), inteiro(brasa.get('partidas')),
-             texto_ou_nulo(guilda.get('nome')), texto_ou_nulo(guilda.get('emblema'), 16), t))
+             guilda_nome, emblema, t))
         # (e) o ranking por classe (10/09): a melhor ficha de cada classe. Apagar e
         # regravar: um save sem a classe (a ficha foi apagada) tira a linha dela.
         self.con.execute("DELETE FROM resumos_classe WHERE conta_id = ?", (cid,))
@@ -994,6 +1048,14 @@ class Api:
         self.con.execute(
             "INSERT OR REPLACE INTO resumos_extra(conta_id, avatar, classe, atualizado_em) VALUES (?, ?, ?, ?)",
             (cid, avatar, principal, t))
+        # (g) o ranking guardado (ver ranking) cai quando a foto pública desta
+        # conta mudou de verdade; um save que só mexeu no saco não o derruba
+        publico = (nome, xp_total, nivel_max, classes, inteiro(brasa.get('pts')), inteiro(brasa.get('partidas')),
+                   guilda_nome, emblema, avatar, principal,
+                   tuple(sorted(por_classe.items())))
+        if self._resumos_vistos.get(cid) != publico:
+            self._resumos_vistos[cid] = publico
+            self._ranking_guardado = None
 
     def _migra_resumos_v2(self):
         """Preenche resumos_classe e resumos_extra das contas que já existiam
@@ -1021,6 +1083,50 @@ class Api:
                              r['id'])
             self.con.execute("INSERT INTO migracoes(nome, feita_em) VALUES ('resumos-v2', ?)", (agora(),))
         log.info("migração resumos-v2: %d contas no ranking por classe, %d saves tortos", feitas, tortas)
+
+    def _migra_resumos_nomes(self):
+        """A lei dos nomes (10/09) também na vitrine que JÁ estava gravada: até
+        então o _resumo punha no ranking o nome, a guilda e o emblema do save sem
+        regra nenhuma, e essas linhas só mudariam no próximo save — quem não volta
+        ficava para sempre como 'GM Velho' da guilda 'Staff'. Passa a limpo as
+        contas que não são o Mestre: nome reservado volta a ser o da conta,
+        guilda e emblema reservados saem. O marcador leva a marca da regra
+        (versao_da_regra): quando servidor/nomes.py muda, roda de novo, uma vez.
+        A regra roda FORA da transação (ela custa); a gravação só troca a linha
+        que ainda está como foi lida (um save no meio-tempo já passou pela lei)."""
+        marca = 'resumos-nomes:' + versao_da_regra()
+        with self.tranca:
+            if self.con.execute("SELECT 1 FROM migracoes WHERE nome = ?", (marca,)).fetchone():
+                return
+            linhas = self.con.execute(
+                "SELECT r.conta_id, r.nome, r.guilda_nome, r.guilda_emblema, c.nome AS conta_nome "
+                "FROM resumos r JOIN contas c ON c.id = r.conta_id WHERE c.gm = 0").fetchall()
+        vistos = {}
+
+        def cai(s):
+            if not s:
+                return False
+            if s not in vistos:
+                vistos[s] = bool(nomes.reservado(s))
+            return vistos[s]
+        trocas = []
+        for r in linhas:
+            velho = (r['nome'], r['guilda_nome'], r['guilda_emblema'])
+            novo = (r['conta_nome'] if cai(r['nome']) else r['nome'],
+                    None if cai(r['guilda_nome']) else r['guilda_nome'],
+                    None if cai(r['guilda_emblema']) else r['guilda_emblema'])
+            if novo != velho:
+                trocas.append(novo + (r['conta_id'],) + velho)
+        with self._escrita():
+            if self.con.execute("SELECT 1 FROM migracoes WHERE nome = ?", (marca,)).fetchone():
+                return
+            for tr in trocas:
+                self.con.execute("UPDATE resumos SET nome = ?, guilda_nome = ?, guilda_emblema = ? "
+                                 "WHERE conta_id = ? AND nome IS ? AND guilda_nome IS ? AND guilda_emblema IS ?", tr)
+            self.con.execute("INSERT INTO migracoes(nome, feita_em) VALUES (?, ?)", (marca, agora()))
+        self._ranking_guardado = None
+        if trocas:
+            log.info("migração %s: %d fotos do ranking passadas a limpo pela lei dos nomes", marca, len(trocas))
 
     # -- troca entre contas ----------------------------------------------------------
     def troca(self, conta, corpo):
@@ -1070,7 +1176,17 @@ class Api:
 
     # -- público ------------------------------------------------------------------------
     def ranking(self, conta, corpo):
+        """Público. Guardado RANKING_CACHE segundos neste processo: a resposta
+        custa 10 consultas sob a tranca, e a landing a pede a cada visita. A
+        cópia vale enquanto (a) nenhum save deste processo mudou a foto pública
+        de uma conta (_resumo compara) e (b) nenhuma OUTRA conexão gravou no
+        banco (PRAGMA data_version: o `admin banir` pelo sqlite3, o contêiner
+        vizinho no rolling update)."""
         with self.tranca:
+            versao_banco = self.con.execute("PRAGMA data_version").fetchone()[0]
+            guardado = self._ranking_guardado
+            if guardado is not None and guardado[1] == versao_banco and time.monotonic() < guardado[0]:
+                return 200, guardado[2]
             jogadores = self.con.execute(
                 "SELECT r.nome, r.xp_total, r.nivel_max, r.classes, x.avatar, x.classe FROM resumos r "
                 "JOIN contas c ON c.id = r.conta_id LEFT JOIN resumos_extra x ON x.conta_id = r.conta_id "
@@ -1091,24 +1207,27 @@ class Api:
                 "WHERE c.banido = 0 AND rc.classe = ? "
                 "ORDER BY rc.xp DESC, rc.nivel DESC, r.nome COLLATE NOCASE LIMIT 50", (classe,)).fetchall()
                 for classe in CLASSES_RANK}
-        return 200, {
-            'ok': True,
-            'jogadores': [{'nome': r['nome'], 'xpTotal': r['xp_total'], 'nivelMax': r['nivel_max'],
-                           'classes': r['classes'], 'avatar': r['avatar'], 'classe': r['classe']}
-                          for r in jogadores],
-            'pvp': [{'nome': r['nome'], 'brasa': r['brasa_pts'], 'partidas': r['brasa_partidas']} for r in pvp],
-            'guildas': [{'nome': r['nome'], 'emblema': r['emblema'], 'membros': r['membros'],
-                         'xpTotal': r['xp']} for r in guildas],
-            'classes': list(CLASSES_RANK),
-            'porClasse': {classe: [{'nome': r['nome'], 'nivel': r['nivel'], 'xp': r['xp'],
-                                    'elemento': r['elemento'] if r['elemento'] in ELEMENTOS else 'neutro'}
-                                   for r in linhas] for classe, linhas in por_classe.items()},
-        }
+            resposta = {
+                'ok': True,
+                'jogadores': [{'nome': r['nome'], 'xpTotal': r['xp_total'], 'nivelMax': r['nivel_max'],
+                               'classes': r['classes'], 'avatar': r['avatar'], 'classe': r['classe']}
+                              for r in jogadores],
+                'pvp': [{'nome': r['nome'], 'brasa': r['brasa_pts'], 'partidas': r['brasa_partidas']} for r in pvp],
+                'guildas': [{'nome': r['nome'], 'emblema': r['emblema'], 'membros': r['membros'],
+                             'xpTotal': r['xp']} for r in guildas],
+                'classes': list(CLASSES_RANK),
+                'porClasse': {classe: [{'nome': r['nome'], 'nivel': r['nivel'], 'xp': r['xp'],
+                                        'elemento': r['elemento'] if r['elemento'] in ELEMENTOS else 'neutro'}
+                                       for r in linhas] for classe, linhas in por_classe.items()},
+            }
+            # guardada ainda dentro da tranca: um save que chegue agora a derruba depois, nunca antes
+            self._ranking_guardado = (time.monotonic() + RANKING_CACHE, versao_banco, resposta)
+        return 200, resposta
 
     def saude(self, conta, corpo):
         with self.tranca:
             n = self.con.execute("SELECT COUNT(*) FROM contas").fetchone()[0]
-        return 200, {'ok': True, 'contas': n, 'agora': agora()}
+        return 200, {'ok': True, 'contas': n, 'agora': agora(), 'correio': self.correio.ligado}
 
     # -- os eventos do mundo (10/09) ------------------------------------------------------
     def eventos_ler(self, conta, corpo):
@@ -1297,6 +1416,15 @@ class Atendente(BaseHTTPRequestHandler):
             corpo = self._le_corpo(metodo)
             token = self._token()
             corpo['_token'] = token                 # o logout precisa saber qual sessão apagar
+            # o IP (limites por IP, lista de sessões; lido do X-Forwarded-For
+            # da direita para a esquerda, ver comum.ip_do_pedido) e o navegador.
+            # Postos DEPOIS do corpo lido: o cliente não os escolhe. TODOS os
+            # cabeçalhos X-Forwarded-For, juntados por vírgula (RFC 7230): o
+            # .get() devolvia só o primeiro — o que o cliente forjou — e jogava
+            # fora o que o proxy escreveu.
+            corpo['_ip'] = ip_do_pedido(', '.join(self.headers.get_all('X-Forwarded-For') or []),
+                                        self.client_address[0] if self.client_address else '')
+            corpo['_agente'] = (self.headers.get('User-Agent') or '')[:160]
             status, resposta = self.api.despacha(metodo, caminho, token, corpo)
         except Recusa as r:
             status, resposta = r.status, {'ok': False, 'erro': r.erro}
@@ -1312,9 +1440,14 @@ if __name__ == '__main__':
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--porta", type=int, default=8300)
     ap.add_argument("--banco", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados", "soterra.db"))
+    ap.add_argument("--emails-prova", metavar="ARQ", default=None,
+                    help="modo de prova do correio: cada e-mail vira uma linha JSON em ARQ e nada sai da "
+                         "máquina (NUNCA em produção)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    Atendente.api = Api(args.banco)
+    correio = Correio.do_ambiente(prova=args.emails_prova)
+    log.info("correio: %s", correio.descricao())      # nunca a senha
+    Atendente.api = Api(args.banco, correio=correio)
     servidor = ThreadingHTTPServer((args.host, args.porta), Atendente)
     log.info("a API escuta em http://%s:%d — banco em %s", args.host, args.porta, os.path.abspath(args.banco))
     try:

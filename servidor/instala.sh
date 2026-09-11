@@ -110,21 +110,38 @@ fi
 
 passo "2/6 o jogo e o site em $WEB"
 mkdir -p "$WEB"
+# As marcas do cache (o versao.py, logo abaixo) saem ANTES de o jogo mudar: o
+# Caddy só manda guardar por um ano o endereço cuja marca existe, e com as
+# marcas velhas de pé um endereço com o hash antigo ganharia "um ano, sem
+# perguntar" servindo o arquivo novo que o rsync acabou de pôr. Sem marca,
+# tudo revalida até o versao.py gravar as novas.
+rm -rf "$WEB-marcas"
 if [ "$PACOTE" != "$WEB" ]; then
   # o que não é para a web fica de fora (vale também para um clone do git)
   rsync -a --delete \
     --exclude '/servidor/' --exclude '/.git/' --exclude '/tests/' --exclude '/tools/' \
     --exclude '/docs/' --exclude '/.claude/' --exclude '/unity/' \
     --exclude '/assets/embedded/models-*' --exclude '/assets/embedded/env-kit*' \
-    --exclude '/assets/embedded/muro-*' \
+    --exclude '/assets/embedded/muro-*' --exclude '/assets/embedded/coroas-pvp-3d.js' \
+    --exclude '/assets/embedded/cenario-*' \
     "$PACOTE"/ "$WEB"/
 fi
-chmod -R u=rwX,go=rX "$WEB"
+# o hash do conteúdo de cada .js/.css em js/versao.js (e o bundle conferido
+# contra o manifesto): o index.html pede cada arquivo com o hash dele, e o
+# que não mudou fica no cache do navegador de uma atualização para a outra;
+# e as marcas em $WEB-marcas, que o Caddyfile consulta: só o endereço com o
+# hash do arquivo que ESTE servidor tem fica um ano no navegador
+python3 "$PACOTE/servidor/coolify/versao.py" "$WEB" --forca
+chmod -R u=rwX,go=rX "$WEB" "$WEB-marcas"
 
 passo "3/6 o Relé e a API (systemd)"
 id soterra >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin soterra
 mkdir -p "$OPT"
-install -m 0644 "$PACOTE/servidor/rele.py" "$PACOTE/servidor/api.py" "$OPT/"
+# TODOS os módulos do servidor: o api.py importa comum, conta, correio e loja,
+# e o systemd põe só /opt/soterra no caminho do Python. Copiar só api.py e
+# rele.py deixava a API morrendo no boot (ModuleNotFoundError: comum), num
+# laço de restart; com o glob, o próximo módulo novo entra sozinho.
+install -m 0644 "$PACOTE"/servidor/*.py "$OPT/"
 install -m 0644 "$PACOTE/servidor/soterra-rele.service" "$PACOTE/servidor/soterra-api.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable soterra-rele soterra-api >/dev/null 2>&1

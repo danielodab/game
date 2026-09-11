@@ -818,6 +818,9 @@ var JOGO = (typeof window !== 'undefined')
     // é o marco que amarra os seis climas; o tronco é sólido (TRONCO_RAIO).
     var arv = montaObra('praca_arvore', ARVORE_ALT, 30, 2.4);
     if (arv) scene.add(arv.no);
+    // CARGA SOB DEMANDA (10/09): com a praça de pé — construções E enfeites —
+    // os calabouços ABERTOS começam a descer em segundo plano, devagar
+    talvezPreBusca();
   }
 
   /* Vida em volta: meia dúzia das peças de cenário do usuário, espalhadas com
@@ -954,10 +957,25 @@ var JOGO = (typeof window !== 'undefined')
      * dois pilares flanqueando a boca, duas peças altas nas pontas, dois
      * enfeites e uma peça de chão na frente. Portal fechado fica pelado: o
      * X vermelho já diz tudo. */
+    cantinhoFeito = {};
+    cantinhoCena = scene;
+    plantaCantinhos = function () {
+    if (!scene || scene !== cantinhoCena) return;
     lugares.forEach(function (lg, li) {
       if (lg.tipo !== 'portal' || !lg.tema || lg.fechado) return;
+      if (cantinhoFeito[lg.id]) return;
       var catT = JOGO.CENARIO && JOGO.CENARIO[lg.tema];
       if (!catT) return;
+      // SOB DEMANDA: no jogo servido as peças do calabouço descem DEPOIS da
+      // praça (pré-busca). Planta só com todas na mão — meio cantinho não —
+      // e o aviso do Models3D2 (aoChegar) chama de novo quando chegarem.
+      var precisa = [catT.alto, catT.pilar, catT.sotaque_alto, catT.sotaque, catT.chao];
+      var falta = false;
+      precisa.forEach(function (lista) {
+        (lista || []).forEach(function (ch) { if (!m2.rawScene(ch)) falta = true; });
+      });
+      if (falta) return;
+      cantinhoFeito[lg.id] = true;
       var px2 = lg.pos.x, pz2 = lg.pos.z;
       var r0 = Math.max(0.01, Math.hypot(px2, pz2));
       var ux = px2 / r0, uz = pz2 / r0;      // radial: para FORA do centro
@@ -985,6 +1003,23 @@ var JOGO = (typeof window !== 'undefined')
       if (enf2) plantaTema(enf2, 1.6, 2.6, px2 - tx * 4.6 - ux * 2.6, pz2 - tz * 4.6 - uz * 2.6, li * 1.7);
       if (chaoP) plantaTema(chaoP, 0.7, 2.4, px2 + tx * 1.2 - ux * 4.4, pz2 + tz * 1.2 - uz * 4.4, li * 0.5);
     });
+    };
+    plantaCantinhos();
+    if (!ouveModelos && m2.aoChegar) {
+      ouveModelos = true;
+      m2.aoChegar(function () { try { plantaCantinhos(); } catch (eC) {} });
+    }
+    talvezPreBusca();
+  }
+  // os cantinhos que esperam peça (SOB DEMANDA): a cena da praça em que
+  // nasceram, os portais já plantados e quem replanta quando modelo chega
+  var cantinhoFeito = {}, cantinhoCena = null, ouveModelos = false;
+  var plantaCantinhos = function () {};
+  /* A pré-busca dos calabouços abertos (JOGO.Bundle.preBusca) só liga com o
+   * Acampamento PRONTO: construções e enfeites plantados. Liga uma vez só. */
+  function talvezPreBusca() {
+    if (!construcoesPlantadas || !enfeitesPlantados) return;
+    try { if (JOGO.Bundle && JOGO.Bundle.preBusca) JOGO.Bundle.preBusca(); } catch (eB) {}
   }
 
   // ------------------------------------------------------------------ o herói

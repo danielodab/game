@@ -494,6 +494,44 @@ var JOGO = (typeof window !== 'undefined')
   M.isReady = function () { return ready; };
   M.failed = function () { return failed; };
 
+  /* CARGA SOB DEMANDA (10/09). No jogo SERVIDO so a base desce antes do menu;
+   * o resto chega depois — cada calabouco na hora de descer, os abertos em
+   * pre-busca. `load` decodifica o que ja esta em JOGO.MODELS e marca
+   * `ready`, como sempre; `novos` decodifica o que chegou DEPOIS. Em casa
+   * (file://) tudo esta embutido e `novos` nao tem o que fazer. */
+  var tentado = {};          // chave -> true: ja passou pelo parse (deu certo ou nao)
+  var ouvintes = [];         // aoChegar(fn): quem precisa saber que modelo novo abriu
+
+  function parseUm(loader, key, feito) {
+    var src = JOGO.MODELS || {};
+    tentado[key] = true;
+    var ab;
+    try { ab = b64ToArrayBuffer(src[key]); }
+    catch (e) { feito(e); return; }
+    try {
+      loader.parse(ab, '', function (gltf) {
+        if (key === '_anims') {
+          for (var i = 0; i < gltf.animations.length; i++) bankClips[gltf.animations[i].name] = gltf.animations[i];
+        } else {
+          prepScene(gltf.scene);
+          var clips = {}, names = [];
+          for (var j = 0; j < (gltf.animations || []).length; j++) {
+            clips[gltf.animations[j].name] = gltf.animations[j];
+            names.push(gltf.animations[j].name);
+          }
+          raw[key] = {
+            scene: gltf.scene, clips: clips,
+            actions: names.length ? autoActions(names) : null,   // null = usa o banco KayKit
+            own: names.length > 0,
+            natural: naturalHeight(gltf.scene),
+            yaw: measureYaw(gltf.scene)
+          };
+        }
+        feito(null);
+      }, function (err) { feito(err || new Error('parse falhou: ' + key)); });
+    } catch (e2) { feito(e2); }
+  }
+
   M.load = function (cb) {
     if (ready) { if (cb) cb(null); return; }
     if (cb) waiters.push(cb);
@@ -508,31 +546,7 @@ var JOGO = (typeof window !== 'undefined')
     var loader = new THREE.GLTFLoader();
     var pending = keys.length, firstErr = null;
     keys.forEach(function (key) {
-      var ab;
-      try { ab = b64ToArrayBuffer(src[key]); }
-      catch (e) { firstErr = firstErr || e; step(); return; }
-      try {
-        loader.parse(ab, '', function (gltf) {
-          if (key === '_anims') {
-            for (var i = 0; i < gltf.animations.length; i++) bankClips[gltf.animations[i].name] = gltf.animations[i];
-          } else {
-            prepScene(gltf.scene);
-            var clips = {}, names = [];
-            for (var j = 0; j < (gltf.animations || []).length; j++) {
-              clips[gltf.animations[j].name] = gltf.animations[j];
-              names.push(gltf.animations[j].name);
-            }
-            raw[key] = {
-              scene: gltf.scene, clips: clips,
-              actions: names.length ? autoActions(names) : null,   // null = usa o banco KayKit
-              own: names.length > 0,
-              natural: naturalHeight(gltf.scene),
-              yaw: measureYaw(gltf.scene)
-            };
-          }
-          step();
-        }, function (err) { firstErr = firstErr || err; step(); });
-      } catch (e2) { firstErr = firstErr || e2; step(); }
+      parseUm(loader, key, function (err) { if (err) firstErr = firstErr || err; step(); });
     });
 
     function step() { if (--pending <= 0) finish(firstErr); }
@@ -541,7 +555,80 @@ var JOGO = (typeof window !== 'undefined')
       failed = !!err && !Object.keys(raw).length;
       var q = waiters.slice(); waiters.length = 0;
       for (var i = 0; i < q.length; i++) { try { q[i](err); } catch (e) {} }
+      // o que chegou DURANTE o primeiro parse fica para o `novos`
+      if (pendentes().length) M.novos();
     }
+  };
+
+  function pendentes() {
+    var src = JOGO.MODELS || {}, fora = [];
+    for (var k in src) if (Object.prototype.hasOwnProperty.call(src, k) && !tentado[k]) fora.push(k);
+    return fora;
+  }
+  M.pendentes = function () { return pendentes().length; };
+
+  /* Decodifica o que chegou depois do `load`. `soEstas` (opcional) limita a
+   * lista — a pre-busca decodifica um por vez, sem travar o quadro; o gancho
+   * de descer decodifica tudo o que falta. cb(err, chavesNovas). */
+  var novosFila = [];
+  var novosRodando = false;
+  M.novos = function (cb, soEstas) {
+    if (!ready) { M.load(function (err) { if (cb) cb(err, []); }); return; }
+    novosFila.push({ cb: cb, so: soEstas || null });
+    if (!novosRodando) proximoNovos();
+  };
+  function proximoNovos() {
+    var pedido = novosFila.shift();
+    if (!pedido) { novosRodando = false; return; }
+    novosRodando = true;
+    var lista = pendentes();
+    if (pedido.so) {
+      var quer = {};
+      for (var q = 0; q < pedido.so.length; q++) quer[pedido.so[q]] = true;
+      lista = lista.filter(function (k) { return quer[k]; });
+    }
+    if (!lista.length || typeof THREE.GLTFLoader !== 'function') {
+      if (pedido.cb) { try { pedido.cb(null, []); } catch (e) {} }
+      proximoNovos();
+      return;
+    }
+    var loader = new THREE.GLTFLoader();
+    var pending = lista.length, firstErr = null;
+    lista.forEach(function (key) {
+      // cada chave conta UMA vez: o GLTFLoader pode chamar onLoad e depois
+      // onError (se algo estourar dentro do onLoad), e contar duas vezes
+      // fechava a leva antes da hora
+      var contou = false;
+      parseUm(loader, key, function (err) {
+        if (contou) return;
+        contou = true;
+        if (err) firstErr = firstErr || err;
+        if (--pending > 0) return;
+        // o retrato cacheado com o substituto (esqueleto) tem de ser refeito
+        portCache = {};
+        failed = false;
+        for (var o = 0; o < ouvintes.length; o++) {
+          try { ouvintes[o](lista); } catch (e1) { if (console && console.error) console.error('[Models3D2] aoChegar:', e1); }
+        }
+        if (pedido.cb) {
+          try { pedido.cb(firstErr, lista); } catch (e2) { if (console && console.error) console.error('[Models3D2] novos:', e2); }
+        }
+        // a leva seguinte num giro novo: um erro nela não pode voltar para
+        // dentro da promessa do modelo que acabou de abrir
+        setTimeout(proximoNovos, 0);
+      });
+    });
+  }
+  /* aoChegar(fn(chaves)): chamado depois de cada leva decodificada por `novos`. */
+  M.aoChegar = function (fn) { if (typeof fn === 'function') ouvintes.push(fn); };
+  /* o estado do `novos`, para as provas */
+  M._novosEstado = function () {
+    return { rodando: novosRodando, fila: novosFila.length, pendentes: pendentes().length, ready: ready };
+  };
+  /* Ja decodificado? (o banco de animacoes conta pelos clipes) */
+  M.decodificado = function (k) {
+    if (k === '_anims') return Object.keys(bankClips).length > 0;
+    return !!raw[k];
   };
 
   // ------------------------------------------------ ORIENTAÇÃO DE NASCENÇA
@@ -975,7 +1062,10 @@ var JOGO = (typeof window !== 'undefined')
      * corpo de heroi ate parecer fusao; um corpo modelado como fusao nao precisa.
      */
     var proprio = FUSION_MODEL[a + '+' + b];
-    if (proprio && (JOGO.MODELS || {})[proprio]) {
+    // SOB DEMANDA: no jogo servido o corpo proprio pode ainda estar descendo.
+    // Enquanto nao abrir, a fusao COMPOSTA (visivel) segura o lugar — nunca o
+    // esqueleto generico. Antes do primeiro `load` vale o embutido, como antes.
+    if (proprio && (raw[proprio] || (!ready && (JOGO.MODELS || {})[proprio]))) {
       var lpa = classLook(a), lpb = classLook(b);
       return {
         model: proprio, scale: 1.00, fusion: true,
@@ -1015,6 +1105,14 @@ var JOGO = (typeof window !== 'undefined')
       concept: lg ? (lh.concept + ' + marcas de ' + guest) : lh.concept
     };
   }
+
+  /* A chave do corpo PROPRIO da fusao do par (ou null) — para quem precisa
+   * saber o que baixar antes de a fusao acontecer (JOGO.Bundle). */
+  M.modeloDaFusao = function (a, b) {
+    a = String(a || ''); b = String(b || '');
+    if (a > b) { var t = a; a = b; b = t; }
+    return FUSION_MODEL[a + '+' + b] || null;
+  };
 
   function monsterLook(defId) {
     var D = DATA();

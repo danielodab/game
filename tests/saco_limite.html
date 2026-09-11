@@ -64,6 +64,7 @@ saco cheio fica para trás e viaja em <code>drops.perdidos</code> para a tela de
 
   // 3. equipar NÃO precisa de vaga (tira do saco; a devolvida entra no lugar)
   var hid = P.heroIds()[0];
+  P.addXp(hid, 300);   // nível 7: a Tesoura da Viúva pede o 7 (nível de uso, 10/09) — a suíte é sobre o fundo do saco
   var pilha = P.invStacks().filter(function (s) { return s.itemId === 'gh-widow-shears'; })[0];
   var okEq = P.equip(hid, 'gh-widow-shears', pilha.index);
   check('equipar com o saco cheio funciona (libera 1 vaga)',

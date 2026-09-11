@@ -61,6 +61,7 @@
   }
 
   var D = JOGO.DATA, P = JOGO.Progress, DB = JOGO.DB, S = JOGO.Sessao, N = JOGO.Nuvem;
+  D.nivelUso = null;   // esta suíte é sobre o save no cartório, não sobre o nível de uso (10/09): dar XP aqui subiria mais uma versão
   var espada = null;
   Object.keys(D.items).forEach(function (id) { if (!espada && D.items[id].slot === 'punho') espada = id; });
 

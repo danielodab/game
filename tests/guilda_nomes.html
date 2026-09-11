@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a guilda e a lei dos nomes</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+</style>
+</head>
+<body>
+<h1>A guilda não vira equipe do jogo</h1>
+<div class="sub">G.criar recusa nome reservado ANTES de cobrar as insígnias (recusa não pode comer
+moeda), com a mensagem da regra; o Mestre do Fundo passa; e uma bancada que carregue a guilda
+SEM js/core/nomes.js continua funcionando como antes.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  try { localStorage.removeItem('soterra-guilda-v1'); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/nomes.js', 'js/core/guilda.js'];
+  for (var i = 0; i < arqs.length; i++) {
+    document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+  }
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    lista.appendChild(li);
+  }
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  }
+
+  var G = JOGO.Guilda, Nm = JOGO.Nomes;
+  var MOTIVO = Nm.MOTIVO_RESERVADO;
+
+  /* o cofre de insígnias de mentira: o que interessa é ele NÃO ser tocado
+   * quando o nome é recusado */
+  var saldo = 10;
+  JOGO.Progress = {
+    insigniasVer: function () { return saldo; },
+    gastaInsignias: function (n) { if (saldo < n) return false; saldo -= n; return true; }
+  };
+
+  G.contaAtiva('cRES', 'Rês');
+  G.criar('GM dos Sonhos', '⚑').then(function (r1) {
+    check('guilda com "GM" no nome é recusada',
+          r1.ok === false && r1.erro === MOTIVO, r1.erro);
+    check('a recusa NÃO comeu insígnia', saldo === 10, 'saldo ' + saldo);
+    return G.criar('Suporte da Brasa', '🔥');
+  }).then(function (r2) {
+    check('"Suporte" no nome da guilda também cai', r2.ok === false && r2.erro === MOTIVO, r2.erro);
+    return G.criar('Аdmin da Mina', '⚑');       // A cirílico
+  }).then(function (r3) {
+    check('homóglifo cirílico não passa pela guilda', r3.ok === false && r3.erro === MOTIVO, r3.erro);
+    return G.criar('Filhos da Lousa', '💀');
+  }).then(function (r4) {
+    check('nome limpo funda a guilda e cobra o preço',
+          r4.ok === true && saldo === 0, 'saldo ' + saldo);
+
+    /* A ORDEM importa: sem insígnia nenhuma, a recusa que aparece é a do
+     * NOME — a regra vem antes da cobrança. */
+    G.contaAtiva('cZERO', 'Zero');
+    saldo = 0;
+    return G.criar('Admin da Mina', '⚑');
+  }).then(function (r5) {
+    check('sem saldo, quem fala primeiro é a lei dos nomes',
+          r5.ok === false && r5.erro === MOTIVO, r5.erro);
+
+    // o Mestre do Fundo pode: o título é dele
+    JOGO.GM = { ativo: function () { return true; } };
+    saldo = 10;
+    G.contaAtiva('cMESTRE', 'Mestre');
+    return G.criar('Mestre do Fundo', '👑');
+  }).then(function (r6) {
+    check('o Mestre do Fundo funda a guilda com o próprio título', r6.ok === true, r6.erro);
+    delete JOGO.GM;
+
+    /* Bancada que carrega a guilda SOZINHA (sem nomes.js): nada muda —
+     * é o ambiente das outras páginas de teste. */
+    var guardado = JOGO.Nomes;
+    delete JOGO.Nomes;
+    saldo = 10;
+    G.contaAtiva('cSOZ', 'Sozinha');
+    return G.criar('GM Solto', '⚑').then(function (r7) {
+      JOGO.Nomes = guardado;
+      check('sem o módulo dos nomes, a guilda funciona como antes', r7.ok === true, r7.erro);
+    });
+  }).then(function () {
+    delete JOGO.Progress;
+    var sb = JOGO.SaveSandbox.check();
+    check('o disco de verdade continua intocado', sb.ok);
+    fim();
+  })['catch'](function (e) {
+    check('a suíte terminou sem exceção', false, String(e && e.message || e));
+    fim();
+  });
+})();
+</script>
+</body>
+</html>

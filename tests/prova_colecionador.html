@@ -36,7 +36,15 @@ f.onload = function () {
         var noSaco = P.state.inventory.some(function (e) { return e.itemId === id; });
         if (!vestida && !noSaco) P.state.inventory.push({ itemId: id, level: 0, stars: 0 });
       });
-      PECAS.forEach(function (id) { try { P.equip('sumo', id); } catch (e) {} });
+      // o traje pede o nível 30 (nível de uso, 10/09): o Bárbaro do perfil
+      // novo sobe ao topo antes de vestir (o addXp prende no teto). O equip
+      // recusado devolve false, não lança: a recusa vira ERRO no título.
+      P.addXp('sumo', 1e9);
+      PECAS.forEach(function (id) {
+        var vestiu = false;
+        try { vestiu = P.equip('sumo', id); } catch (e) {}
+        if (!vestiu) document.title = 'ERRO ' + id + ': ' + ((P.ultimaRecusa && P.ultimaRecusa.motivo) || 'não vestiu');
+      });
       if (P.save) P.save();
       w.JOGO.DB.batizar('Colecionador').then(function () {
         w.JOGO.UI.selection(['sumo']);

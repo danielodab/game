@@ -78,7 +78,11 @@ mudam alguns rótulos.
   Nuvem confere a marca com o servidor a cada abertura: a sua conta vira o
   Mestre (Cavaleiro Negro, Panóplia, Caixa) sem chave no endereço.
 - **Outros comandos** no Terminal: `admin` (a ajuda), `admin banir "NOME"`,
-  `admin eventos 50`, `admin agenda`, `admin backup`.
+  `admin eventos 50`, `admin agenda`, `admin backup`, `admin email-teste
+  SEU@gmail.com`, `admin trocar-email "NOME" certo@exemplo.com`, `admin loja`
+  e `admin loja-cancelar ID` (ver as partes 5 e 6, logo abaixo).
+- **Nome reservado à equipe** (GM, Admin, Moderador, Mestre do Fundo…): o site
+  recusa no cadastro; quem dá é você, no Terminal: `admin renomear "VELHO" "NOVO"`.
 - **Eventos do mundo** (XP em dobro, Maré da Cisterna…): quem liga é o
   Mestre, no jogo, em Painel do Mestre → **Eventos do mundo**: ligar agora,
   agendar, ou uma regra semanal do calendário automático, sempre em hora de
@@ -95,12 +99,138 @@ mudam alguns rótulos.
 - **Atualizar**: todo push no `main` refaz o deploy sozinho (Advanced → Auto
   deploy = Deploy on push). O contêiner velho só sai quando o novo está
   saudável; se o novo falhar, o velho continua no ar.
+- **Uma vez só, no primeiro deploy com o cache por hash** (o que leva o
+  `js/versao.js`, as marcas e as regras de cache do `servidor/coolify/Caddyfile`):
+  o contêiner que está no ar antes dele não manda `Cache-Control` (confira no
+  PowerShell: `curl.exe -sI https://soterra.viidoo.io/index.html` não tem essa
+  linha, e o `Last-Modified` é a hora do deploy anterior). Sem ela, o Chrome
+  usa o que guardou, sem perguntar, por um décimo da idade do arquivo. Então,
+  só nesse deploy, um navegador pode misturar o velho e o novo de dois jeitos:
+  quem abriu o jogo ou o site pouco antes do push pode receber do cache a
+  página velha, rodando com os scripts novos (um F5 resolve); e quem abrir o
+  jogo nos segundos em que os dois contêineres dividem o tráfego pode guardar o
+  arquivo velho no endereço novo (o F5 não resolve; o Ctrl+Shift+R resolve).
+  Dura no máximo um décimo do tempo desde o deploy anterior (10 horas depois
+  dele, 1 hora; 5 dias depois, 12 horas) e se cura sozinho: passado o prazo, o
+  navegador pergunta de novo e desce o arquivo novo. O jogo no ar tem uma conta
+  só: basta subir num horário em que ninguém está jogando (feche o jogo e o
+  site antes do push e espere o deploy terminar) e, depois dele, apertar
+  Ctrl+Shift+R uma vez no jogo e uma vez no site, o que resolve os dois casos.
+  Limpar o cache do Chrome também resolve, mas só "Imagens e arquivos
+  armazenados em cache": "Cookies e outros dados do site" levam junto o save do
+  jogo. Desligar o Rolling Update nesse deploy tira o segundo caso, ao custo de
+  uns segundos fora do ar, mas não é preciso. Do segundo deploy em diante nada
+  disso vale: as páginas saem com `no-cache`, e só fica um ano o endereço com o
+  hash do arquivo que o próprio contêiner tem.
 - **Não perca o banco**: nunca apague a aplicação com "delete volumes"
   marcado (o banco e as cópias vão juntos). Em Servers → Docker Cleanup,
   deixe **Keep unused volumes**. Baixe uma cópia de `/dados/backups` de vez em
   quando, ou ligue Automation → Backups com destino S3.
 - **Logs**: Runtime Logs (o jogo, a API, o Relé), Deployment Logs (o build),
   Servers → Proxy → Logs (o certificado).
+
+### 5. O e-mail do servidor (a conta no site)
+
+Sem isto o jogo funciona igual: a API responde 503 nas rotas que mandam
+e-mail (trocar o e-mail e "esqueci a senha") e o site esconde o "esqueci".
+Trocar a senha, ver e encerrar sessões e a loja não precisam de e-mail.
+
+O remetente é `system@viidoo.io`, pelo SMTP do Google (o Google Workspace já
+recebe o e-mail do `viidoo.io`), com uma **senha de app**. A senha nasce e
+fica com você: é gerada no Google e colada no Coolify, e em nenhum outro
+lugar. Se aparecer por engano num chat, revogue essa senha de app no Google
+e gere outra.
+
+1. **A senha de app**, na Conta do Google de `system@viidoo.io` →
+   Segurança: com a verificação em duas etapas ligada, aparece "Senhas de
+   app". Gere uma (são 16 letras) e guarde só até colar no Coolify. Se a
+   opção não aparecer, o administrador do Workspace precisa permitir. Os
+   nomes dos menus mudam de vez em quando: na dúvida, a ajuda do Google.
+2. **O DNS do `viidoo.io`** (na IONOS, Domains → DNS):
+   - **SPF**: um ÚNICO TXT no `@`: `v=spf1 include:_spf.google.com ~all`. Se
+     já existir um TXT começando com `v=spf1`, edite esse: dois registros
+     SPF invalidam os dois.
+   - **DKIM**: o `google._domainkey` já está publicado; confira no Admin do
+     Google (Gmail → Autenticar e-mail) que ele está autenticando.
+   - **DMARC**: um TXT com nome `_dmarc`:
+     `v=DMARC1; p=none; rua=mailto:<uma caixa que você lê>`. Depois de umas
+     semanas passando, suba para `p=quarantine`.
+   - Confira no PowerShell: `nslookup -type=txt viidoo.io 1.1.1.1`,
+     `nslookup -type=txt _dmarc.viidoo.io 1.1.1.1`, e que o MX continua o do
+     Google: `nslookup -type=mx viidoo.io 1.1.1.1`.
+3. **O VPS alcança o Google?** No Terminal da aplicação:
+   `python3 -c "import smtplib,ssl;s=smtplib.SMTP('smtp.gmail.com',587,timeout=10);s.starttls(context=ssl.create_default_context());print('587 ok')"`.
+   Se não passar, teste a 465:
+   `python3 -c "import smtplib,ssl;smtplib.SMTP_SSL('smtp.gmail.com',465,timeout=10,context=ssl.create_default_context());print('465 ok')"`,
+   e use `PORTA` 465 e `SEGURANCA` ssl no passo 4.
+4. **As variáveis no Coolify**: Application → **Environment Variables**, uma por vez:
+
+   | Nome | Valor |
+   |---|---|
+   | `SOTERRA_SMTP_HOST` | `smtp.gmail.com` |
+   | `SOTERRA_SMTP_PORTA` | `587` |
+   | `SOTERRA_SMTP_SEGURANCA` | `starttls` |
+   | `SOTERRA_SMTP_USUARIO` | `system@viidoo.io` |
+   | `SOTERRA_SMTP_REMETENTE` | `system@viidoo.io` |
+   | `SOTERRA_SMTP_SENHA` | a senha de app, colada por você |
+   | `SOTERRA_ENDERECO` (opcional) | `https://soterra.viidoo.io` |
+
+   - Em **todas**: a opção de build DESMARCADA ("Build Variable" ou
+     "Available at Buildtime", conforme a versão) e a de Runtime ligada.
+     Num deploy por Dockerfile a variável de build vira ARG, e a senha iria
+     para a imagem.
+   - Na `SOTERRA_SMTP_SENHA`: marque **Is Literal** (o Coolify expande `$`
+     dentro dos valores).
+   - **Nunca** crie `SOTERRA_EMAIL_PROVA` no Coolify: é o modo de prova dos
+     testes, e os e-mails iriam para um arquivo em vez de sair.
+   - Salve e faça **Redeploy**: as variáveis só valem num contêiner novo (e
+     o Redeploy fecha o Terminal aberto).
+5. **Depois do deploy**:
+   - Runtime Logs: tem de aparecer
+     `correio: smtp.gmail.com:587 starttls como system@viidoo.io`, sem senha.
+     `correio: DESLIGADO (falta …)` diz qual variável faltou.
+   - Terminal: `admin email-teste SEU@gmail.com` e confira a caixa de entrada
+     e o spam; em "Mostrar original", SPF, DKIM e DMARC têm de dizer PASS.
+   - Em `/site/conta.html`, o "esqueci a senha" aparece ligado.
+   - Quem se cadastrou com o e-mail errado não recebe código nenhum:
+     `admin trocar-email "NOME" certo@exemplo.com`, só depois de você
+     confirmar por conta própria quem é a pessoa.
+
+Como a API usa o e-mail: o código tem 6 dígitos, vale 15 minutos e 5
+tentativas; cada conta pede no máximo 3 por hora, com 1 minuto entre um e
+outro. O "esqueci" responde sempre a mesma frase (não conta quem tem conta),
+aceita 10 pedidos por IP por hora e manda no máximo 60 e-mails por hora no
+servidor todo (o Gmail também tem um teto diário). O código nunca vai para o
+log; no banco fica só um hmac dele, com o segredo de `/dados/segredo` (criado
+sozinho na primeira subida) ou de `SOTERRA_SEGREDO`. O limite por IP lê o
+X-Forwarded-For da direita para a esquerda, e só vale se o Caddy de dentro
+confiar no proxy do Coolify (`trusted_proxies` no `servidor/coolify/Caddyfile`);
+sem isso a API só vê IP privado e o limite por IP fica desligado (valem o da
+conta e o global).
+
+### 6. A loja de vinténs
+
+Em `/site/loja.html` o jogador troca vinténs do jogo por pergaminhos,
+pedras de forja e personagens. O servidor confere o saldo que o último save
+mostrou (só o bolso; o cofre não conta), reserva os vinténs e guarda o
+pedido. O jogo busca o pedido quando abre logado na conta Principal,
+desconta e entrega, e o save seguinte confirma ("entregue"). Se na hora da
+entrega faltarem vinténs no jogo, o pedido volta ("devolvido"). O Mestre
+compra sem gastar.
+
+- **Preços e limites** moram só em `servidor/loja.py` (`CATALOGO`): o site e
+  o jogo leem do servidor, sem repetir número. Para mudar, edite ali, commit
+  e push (o deploy leva). Reveja a cada portal aberto: a renda por hora pode
+  dobrar.
+- **Fora da loja, de propósito**: a Âncora de Forja, equipamento, cartas
+  avulsas, estrelas, selos, giros, pets, sorte de saque, bônus de guilda,
+  XP direto e multiplicador de vinténs.
+- **No Terminal**: `admin loja` (os 30 últimos pedidos; `admin loja 100`
+  para mais), `admin loja-cancelar ID` (só pedido pendente ou retirado: a
+  reserva sai e ele não vai mais para o jogo) e `admin eventos` (a trilha:
+  `loja-compra`, `loja-cancela`, `loja-entregue`, `loja-estorno`).
+- **Pedido preso** (o jogo retirou e não confirmou em 24 h): o próprio
+  jogador pode cancelar no site.
 
 ---
 
@@ -303,6 +433,9 @@ curl -s https://SEU-ENDERECO/api/saude
 python servidor/rele.py              # ws://127.0.0.1:8791
 python servidor/api.py               # http://127.0.0.1:8300, banco em servidor/dados/
 python tests/servidor_api.py         # a API por dentro
+python tests/conta_api.py            # a conta no site: senha, e-mail com código, esqueci, sessões
+python tests/loja_api.py             # a loja: catálogo, reserva, retirada, confirmação no save
+python servidor/api.py --emails-prova emails.jsonl   # o correio de prova: os e-mails vão para o arquivo
 python tests/nuvem_viva.py           # o jogo contra a API de verdade (conta descartável)
 python tests/rele_prova.py           # o relé, nos dois caminhos do websockets
 python tests/pacote_servido.py       # o pacote do VPS, servido sozinho, abre o jogo e o site
@@ -323,12 +456,16 @@ Em duas janelas com `?rede=ws://127.0.0.1:8791` (contas diferentes), prova o rel
   jogar entre amigos. A API é a autoridade das contas e das instâncias de
   item. O que ainda **não** é validado no servidor é o sorteio do saque: o
   cliente diz o que nasceu, e o servidor só garante que nasceu uma vez.
-- O que a revisão de 10/09 separou como endurecimento (não impede a subida):
-  o cadastro não tem freio por IP (atrás do Caddy a API só vê 127.0.0.1, então
-  um robô pode criar contas em série); o log de acesso do Caddy vem desligado
-  (não fica o IP de quem entrou); o relé roda sem a jaula do systemd que a API tem.
-- A subida não passa pelo GitHub. O remoto `origin` está bem atrás desta
-  máquina (o último push foi em 18/08); atualizá-lo é outra decisão.
+- Freios por endereço (10/09, noite): o cadastro aceita 10 por hora por IP; o login
+  conta só as senhas ERRADAS por IP (quem acerta nunca é trancado) e tem teto por
+  conta (60 logins certos e 10 trocas de senha por hora); o "esqueci" tem o seu; o
+  relé aceita 10 conexões novas de uma vez por IP e depois 1 a cada 2 s. O IPv6
+  conta pela faixa /64. IP privado (em casa) não tem freio. Tudo depende do
+  trusted_proxies do Caddy de dentro, que lê o IP real pelo X-Forwarded-For.
+- Ainda de fora: o log de acesso do Caddy vem desligado (não fica o IP de quem
+  entrou) e o relé roda sem a jaula do systemd que a API tem.
+- No Coolify, a subida É o push: cada push no `main` do GitHub monta e troca
+  o contêiner sozinho (e fecha o Terminal que estiver aberto no painel).
 - A landing do site tem 16 molduras esperando fotos em `site/img/` (a lista de
   nomes está no começo de `site/index.html`). Enquanto não existirem, aparece
   a inicial num fundo dourado.

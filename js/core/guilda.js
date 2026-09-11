@@ -145,10 +145,30 @@ var JOGO = (typeof window !== 'undefined')
     return (P && typeof P.insigniasVer === 'function' &&
             typeof P.gastaInsignias === 'function') ? P : null;
   }
+  /* A LEI DOS NOMES (js/core/nomes.js, pedido do dono: "ninguem conseguir
+   * colocar o nome com GM Gm Admin Administrador etc.."). Guilda nenhuma se
+   * passa pela equipe do jogo — e a recusa vem ANTES de qualquer cobrança.
+   * O módulo pode não estar na página: guilda.js roda sozinha nas bancadas de
+   * teste, e ali nada muda. O Mestre do Fundo passa: o título é dele. */
+  function ehMestre() {
+    try {
+      return !!(JOGO.GM && typeof JOGO.GM.ativo === 'function' && JOGO.GM.ativo());
+    } catch (e) { return false; }
+  }
+  function nomeDeEquipe(nome) {
+    var Nm = (typeof JOGO !== 'undefined') ? JOGO.Nomes : null;
+    if (!Nm || typeof Nm.reservado !== 'function') return null;
+    if (ehMestre()) return null;
+    if (!Nm.reservado(nome)) return null;
+    return Nm.MOTIVO_RESERVADO || 'esse nome é reservado à equipe do jogo';
+  }
+
   G.criar = function (nome, emblema) {
     if (!conta) return responde({ ok: false, erro: 'sem conta' });
     nome = String(nome || '').trim().slice(0, 24);
     if (!nome) return responde({ ok: false, erro: 'diga um nome' });
+    var recusa = nomeDeEquipe(nome);
+    if (recusa) return responde({ ok: false, erro: recusa });
     var d = le();
     if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
     var P = cofreInsignias();

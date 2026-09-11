@@ -89,6 +89,8 @@ var JOGO = (typeof window !== 'undefined')
     DATA.items[o.id] = {
       id: o.id, name: o.name, slot: o.slot, rarity: 'lendario', dungeonId: null,
       element: null, setId: null, dropWeight: 0,
+      // 10/09, pedido do dono: "o set especial da roleta é level 30 todas as peças"
+      nivelUso: (DATA.nivelUso && DATA.nivelUso.colecionador) || 30,
       bonuses: o.bonuses, grantsSpell: o.grantsSpell || null,
       description: o.description, flavor: o.flavor, iconKey: o.id
     };
@@ -159,6 +161,7 @@ var JOGO = (typeof window !== 'undefined')
     bonuses: { power: 6, hp: 15, initiative: 6, resists: { neutro: 8 } },
     behavior: 'attack', range: 3, followDistance: 2,
     spells: ['pet-selo-clarao'],
+    nivelUso: (DATA.nivelUso && DATA.nivelUso.pet) || 10,   // pet: a partir do 10
     dropDungeon: null, dropWeight: 0     // EXCLUSIVO: só o Traje fechado concede
   };
 

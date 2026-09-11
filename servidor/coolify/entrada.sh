@@ -37,6 +37,6 @@ vigia() {
 }
 
 vigia api  python3 /app/servidor/api.py  --host 127.0.0.1 --porta 8300 --banco "$DADOS/soterra.db" &
-vigia rele python3 /app/servidor/rele.py --host 127.0.0.1 --porta 8791 &
+vigia rele python3 /app/servidor/rele.py --host 127.0.0.1 --porta 8791 --banco "$DADOS/soterra.db" &
 
 exec caddy run --config /app/servidor/coolify/Caddyfile --adapter caddyfile

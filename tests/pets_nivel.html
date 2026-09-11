@@ -89,6 +89,7 @@
   // ---- a fatia do dono
   P.reset();
   P.addPetCards(PLANTA, 5);
+  P.addXp('sumo', 845);   // nível 10: pets a partir do 10 (nível de uso, 10/09) — a suíte é sobre o nível do PET
   check('o Bárbaro veste a Bocarra', P.equipPet('sumo', PLANTA) === true);
   var r = P.addPetXpFromOwner('sumo', 100);
   check('o pet leva 60% do XP do dono (100 → 60) e chega ao nível 4 (degrau 45)',

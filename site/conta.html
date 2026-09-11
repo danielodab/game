@@ -4,13 +4,36 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Conta — SOTERRA</title>
-<link rel="stylesheet" href="site.css">
+<script>
+  // a folha e os scripts com o hash do build (o mapa de js/versao.js); sem
+  // mapa (em casa), o carimbo ?t= do instante: ver o comentário em site/index.html
+  if (location.protocol !== 'file:') {
+    document.write('<script src="../js/versao.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+<script>
+  window.SITE_URL = function (s) {
+    var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
+    var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
+    var chave = s.indexOf('../') === 0 ? s.slice(3) : 'site/' + s;
+    return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
+  };
+  document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
 <!--
-  Cadastro e login em duas abas (#entrar abre a segunda). A validação do
-  cliente espelha a do servidor (servidor/api.py) só para dar resposta na
-  hora — quem manda é o servidor, e o erro dele aparece na tela como veio.
-  Sucesso guarda 'soterra-sessao' = {token, conta:{id, nome, gm}} e leva ao
-  jogo (../index.html = /index.html em produção).
+  A conta do jogador (Fase C). O script mora em conta.js.
+  Sem sessão: Criar conta e Entrar em duas abas, e o "esqueci a senha", que só
+  liga quando o servidor manda e-mail (GET /api/saude → correio: true). A
+  validação do cliente espelha a do servidor (servidor/api.py) só para dar
+  resposta na hora — quem manda é o servidor, e o erro dele aparece como veio.
+  Cadastro e login guardam 'soterra-sessao' = {token, conta:{id, nome, gm}} e
+  levam ao jogo (../index.html = /index.html em produção).
+  Com sessão: "Minha conta" (GET /api/conta) — os dados, trocar a senha,
+  trocar o e-mail com um código mandado ao e-mail ATUAL, as sessões abertas e
+  a atividade recente.
+  Endereços: conta.html#criar, #entrar, #esqueci e #conta. Só o estado da tela
+  vai no endereço; e-mail, código e senha vão só no corpo do POST.
 -->
 </head>
 <body>
@@ -23,6 +46,7 @@
       <a href="eventos.html">Eventos</a>
       <a href="fusoes.html">Fusões</a>
       <a href="ranking.html">Ranking</a>
+      <a href="loja.html">Loja</a>
       <a href="conta.html" aria-current="page">Conta</a>
       <a class="jogar" href="../index.html">Jogar</a>
     </nav>
@@ -31,24 +55,29 @@
 </header>
 
 <div class="miolo">
-  <div class="conta-caixa">
+
+  <!-- com sessão, enquanto GET /api/conta não responde (ou com o servidor fora) -->
+  <div class="conta-caixa" id="conta-carregando" hidden>
+    <div class="painel ligado">
+      <p class="estado" id="cc-texto">carregando a sua conta…</p>
+      <div class="botoes-linha" id="cc-botoes" hidden>
+        <button type="button" class="btn" id="cc-tentar">Tentar de novo</button>
+        <button type="button" class="btn" id="cc-sair">Sair desta conta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- sem sessão: as abas, o cadastro, o login e o "esqueci a senha" -->
+  <div class="conta-caixa" id="caixa-fora">
     <div class="abas">
       <button type="button" id="aba-criar" class="ligada">Criar conta</button>
       <button type="button" id="aba-entrar">Entrar</button>
     </div>
 
-    <!-- já logado: em vez dos formulários -->
-    <div class="painel" id="painel-logado">
-      <h3 style="margin-top:18px">Você já está dentro</h3>
-      <p class="apoio" id="logado-texto"></p>
-      <a class="btn btn-ouro" href="../index.html">Jogar</a>
-      <button type="button" class="btn" id="bt-sair-aqui">Sair desta conta</button>
-    </div>
-
     <form class="painel ligado" id="painel-criar" novalidate>
       <label for="c-nome">Nome de jogador</label>
       <input type="text" id="c-nome" autocomplete="username" maxlength="20" required>
-      <p class="dica">3 a 20 caracteres: letras, dígitos, espaço, _ ou -. É o nome que aparece na praça e no ranking.</p>
+      <p class="dica">3 a 20 caracteres: letras, números, espaço, apóstrofo, _ ou -. Nomes da equipe do jogo (GM, Admin, Moderador…) não valem. É o nome que aparece na praça e no ranking.</p>
       <label for="c-email">E-mail</label>
       <input type="email" id="c-email" autocomplete="email" required>
       <label for="c-senha">Senha</label>
@@ -69,11 +98,121 @@
       <div class="aviso" id="e-aviso"></div>
       <button type="submit" class="btn btn-ouro" id="e-bt">Entrar</button>
       <div class="rodape-conta">
-        <a href="#" class="desligado" id="esqueci" aria-disabled="true" title="em breve">esqueci a senha</a>
+        <a href="#esqueci" class="desligado" id="esqueci" aria-disabled="true" title="em breve">esqueci a senha</a>
         <a href="#criar" id="ir-criar">Criar conta</a>
       </div>
       <div class="aviso" id="esqueci-aviso"></div>
     </form>
+
+    <div class="painel" id="painel-esqueci">
+      <h3>Esqueci a senha</h3>
+      <p class="dica">Mandamos um código de 6 dígitos para o e-mail da conta. Com ele você escolhe uma senha nova, e todas as sessões abertas são encerradas.</p>
+      <div class="passos"><span id="eq-passo1" class="ligado">1 · o e-mail</span><span id="eq-passo2">2 · o código e a senha nova</span></div>
+      <form id="eq-form1" novalidate>
+        <label for="eq-email">E-mail da conta</label>
+        <input type="email" id="eq-email" autocomplete="email" required>
+        <div class="aviso" id="eq-aviso1"></div>
+        <button type="submit" class="btn btn-ouro" id="eq-bt1">Mandar o código</button>
+        <div class="rodape-conta"><a href="#entrar" id="eq-voltar">voltar para Entrar</a><a href="#esqueci" id="eq-ja-tenho">já tenho um código</a></div>
+      </form>
+      <form id="eq-form2" novalidate hidden>
+        <p class="dica">O código foi pedido para <b id="eq-para"></b>. Se não chegar em alguns minutos, confira o spam ou peça de novo acima.</p>
+        <label for="eq-codigo">Código de 6 dígitos</label>
+        <input type="text" id="eq-codigo" class="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+        <label for="eq-nova">Senha nova</label>
+        <input type="password" id="eq-nova" autocomplete="new-password" minlength="8" required>
+        <p class="dica">Pelo menos 8 caracteres.</p>
+        <label for="eq-nova2">Repita a senha nova</label>
+        <input type="password" id="eq-nova2" autocomplete="new-password" required>
+        <div class="aviso" id="eq-aviso2"></div>
+        <button type="submit" class="btn btn-ouro" id="eq-bt2">Redefinir a senha e entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- com sessão: a Minha conta -->
+  <div class="minha-conta" id="minha-conta" hidden>
+    <div class="cab"><h2>Minha conta</h2><span class="apoio">A mesma conta vale no jogo, em qualquer máquina.</span></div>
+    <div class="aviso" id="mc-aviso"></div>
+    <div class="blocos">
+
+      <section class="bloco" id="bl-dados">
+        <h3>Dados</h3>
+        <dl class="dados" id="mc-dados"></dl>
+        <div class="botoes-linha">
+          <a class="btn btn-ouro" href="../index.html">Jogar</a>
+          <a class="btn btn-borda" href="loja.html">Loja</a>
+          <button type="button" class="btn" id="mc-sair">Sair</button>
+        </div>
+      </section>
+
+      <section class="bloco" id="bl-senha">
+        <h3>Trocar a senha</h3>
+        <form id="sn-form" novalidate>
+          <label for="sn-atual">Senha atual</label>
+          <input type="password" id="sn-atual" autocomplete="current-password" required>
+          <label for="sn-nova">Senha nova</label>
+          <input type="password" id="sn-nova" autocomplete="new-password" minlength="8" required>
+          <p class="dica">Pelo menos 8 caracteres.</p>
+          <label for="sn-nova2">Repita a senha nova</label>
+          <input type="password" id="sn-nova2" autocomplete="new-password" required>
+          <p class="nota-botao">As outras sessões serão encerradas; o jogo aberto em outra máquina para de salvar na nuvem até entrar de novo.</p>
+          <div class="aviso" id="sn-aviso"></div>
+          <button type="submit" class="btn btn-ouro" id="sn-bt">Trocar a senha</button>
+        </form>
+      </section>
+
+      <section class="bloco" id="bl-email">
+        <h3>Trocar o e-mail</h3>
+        <div class="passos"><span id="em-passo1" class="ligado">1 · a senha e o e-mail novo</span><span id="em-passo2">2 · o código</span></div>
+        <p class="apoio" id="em-sem-correio" hidden>O envio de e-mails ainda não foi ligado neste servidor: por enquanto, o e-mail não pode ser trocado por aqui.</p>
+        <form id="em-form1" novalidate>
+          <label for="em-senha">Senha atual</label>
+          <input type="password" id="em-senha" autocomplete="current-password" required>
+          <label for="em-novo">E-mail novo</label>
+          <input type="email" id="em-novo" autocomplete="email" required>
+          <label for="em-novo2">Repita o e-mail novo</label>
+          <input type="email" id="em-novo2" autocomplete="off" required>
+          <p class="dica">O código vai para o e-mail ATUAL da conta: é ele que confirma a troca.</p>
+          <div class="aviso" id="em-aviso1"></div>
+          <button type="submit" class="btn btn-ouro" id="em-bt1">Mandar o código</button>
+        </form>
+        <form id="em-form2" novalidate hidden>
+          <p id="em-enviado"></p>
+          <label for="em-codigo">Código de 6 dígitos</label>
+          <input type="text" id="em-codigo" class="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+          <div class="aviso" id="em-aviso2"></div>
+          <button type="submit" class="btn btn-ouro" id="em-bt2">Confirmar a troca</button>
+          <div class="reenviar">
+            <button type="button" class="btn btn-mini" id="em-reenviar" disabled>reenviar o código</button>
+            <div class="reenvio" id="em-reenvio" hidden>
+              <label for="em-senha-re">Senha atual, para reenviar</label>
+              <input type="password" id="em-senha-re" autocomplete="current-password">
+              <button type="button" class="btn" id="em-bt-re">Reenviar</button>
+            </div>
+          </div>
+          <div class="rodape-conta"><a href="#conta" id="em-outro">trocar para outro e-mail</a></div>
+        </form>
+      </section>
+
+      <section class="bloco largo" id="bl-sessoes">
+        <h3>Sessões</h3>
+        <p class="apoio">Cada navegador ou máquina em que você entrou. Encerrar uma sessão tira aquele lugar da conta: o jogo aberto lá para de salvar na nuvem até entrar de novo.</p>
+        <ul class="lista-sessoes" id="mc-sessoes"></ul>
+        <div class="aviso" id="ss-aviso"></div>
+        <div class="botoes-linha">
+          <button type="button" class="btn" id="ss-outras">Encerrar as outras</button>
+          <button type="button" class="btn btn-perigo" id="ss-todas">Sair de todas</button>
+        </div>
+      </section>
+
+      <section class="bloco largo" id="bl-atividade">
+        <h3>Atividade</h3>
+        <p class="apoio">Os últimos acontecimentos da conta. Se aparecer algo que não foi você, troque a senha.</p>
+        <ul class="lista-atividade" id="mc-atividade"></ul>
+      </section>
+
+    </div>
   </div>
 </div>
 
@@ -81,111 +220,12 @@
   <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
 </footer>
 
-<script src="site.js"></script>
 <script>
+/* cada arquivo com o hash do conteúdo (SITE_URL, no topo): um conta.js velho
+ * no cache não pode falar com o servidor novo — mudou, muda o endereço */
 (function () {
-  var $ = function (id) { return document.getElementById(id); };
-
-  /* ---- abas ---- */
-  function aba(qual) {
-    var criar = qual === 'criar';
-    $('aba-criar').classList.toggle('ligada', criar);
-    $('aba-entrar').classList.toggle('ligada', !criar);
-    $('painel-criar').classList.toggle('ligado', criar);
-    $('painel-entrar').classList.toggle('ligado', !criar);
-    if (history.replaceState) history.replaceState(null, '', '#' + (criar ? 'criar' : 'entrar'));
-  }
-  $('aba-criar').addEventListener('click', function () { aba('criar'); });
-  $('aba-entrar').addEventListener('click', function () { aba('entrar'); });
-  $('ir-entrar').addEventListener('click', function (ev) { ev.preventDefault(); aba('entrar'); });
-  $('ir-criar').addEventListener('click', function (ev) { ev.preventDefault(); aba('criar'); });
-  function abaDoHash() { return /^#entrar/.test(location.hash) ? 'entrar' : 'criar'; }
-  window.addEventListener('hashchange', function () { aba(abaDoHash()); });
-  if (abaDoHash() === 'entrar') aba('entrar');
-
-  /* ---- já logado? ---- */
-  function mostraLogado() {
-    var s = SITE.sessao();
-    var logado = !!s;
-    $('painel-logado').classList.toggle('ligado', logado);
-    document.querySelector('.abas').style.display = logado ? 'none' : '';
-    if (logado) {
-      $('painel-criar').classList.remove('ligado');
-      $('painel-entrar').classList.remove('ligado');
-      $('logado-texto').textContent = 'Sessão de ' + s.conta.nome + '. O jogo usa esta conta em qualquer máquina.';
-    } else {
-      aba(abaDoHash());
-    }
-  }
-  $('bt-sair-aqui').addEventListener('click', function () { SITE.sair(); mostraLogado(); });
-  mostraLogado();
-
-  /* ---- avisos e validação ---- */
-  function aviso(id, texto, tipo) {
-    var el = $(id);
-    el.className = 'aviso' + (texto ? ' ' + (tipo || 'erro') : '');
-    el.textContent = texto || '';
-  }
-  function marca(input, ruim) { input.classList.toggle('invalido', !!ruim); }
-  function nomeValido(n) {
-    return n === n.trim() && n.length >= 3 && n.length <= 20 && /^[\p{L}\p{N} _-]+$/u.test(n);
-  }
-
-  function entrou(r) {
-    // o que o jogo vai ler: token + a conta enxuta
-    SITE.guarda({ token: r.token, conta: { id: r.conta.id, nome: r.conta.nome, gm: !!r.conta.gm } });
-    location.href = '../index.html';
-  }
-
-  /* ---- criar conta ---- */
-  $('painel-criar').addEventListener('submit', function (ev) {
-    ev.preventDefault();
-    var nome = $('c-nome').value, email = $('c-email').value.trim(),
-        senha = $('c-senha').value, senha2 = $('c-senha2').value;
-    var erro = null;
-    marca($('c-nome'), !nomeValido(nome));
-    marca($('c-email'), email.indexOf('@') < 1);
-    marca($('c-senha'), senha.length < 8);
-    marca($('c-senha2'), senha2 !== senha);
-    if (!nomeValido(nome)) erro = 'Nome: 3 a 20 caracteres (letras, dígitos, espaço, _ ou -), sem espaço nas pontas.';
-    else if (email.indexOf('@') < 1) erro = 'Esse e-mail não parece um e-mail.';
-    else if (senha.length < 8) erro = 'A senha precisa ter pelo menos 8 caracteres.';
-    else if (senha2 !== senha) erro = 'As duas senhas não batem.';
-    if (erro) { aviso('c-aviso', erro); return; }
-
-    aviso('c-aviso', 'Criando a conta…', 'neutro');
-    $('c-bt').disabled = true;
-    SITE.api('/api/cadastro', { method: 'POST', semToken: true, body: { nome: nome, email: email, senha: senha } })
-      .then(function (r) {
-        $('c-bt').disabled = false;
-        if (!r.ok) { aviso('c-aviso', r.erro || 'não deu para criar a conta'); return; }
-        aviso('c-aviso', 'Conta criada! Entrando no jogo…', 'certo');
-        entrou(r);
-      });
-  });
-
-  /* ---- entrar ---- */
-  $('painel-entrar').addEventListener('submit', function (ev) {
-    ev.preventDefault();
-    var login = $('e-login').value.trim(), senha = $('e-senha').value;
-    marca($('e-login'), !login);
-    marca($('e-senha'), !senha);
-    if (!login || !senha) { aviso('e-aviso', 'Informe o nome (ou e-mail) e a senha.'); return; }
-    aviso('e-aviso', 'Entrando…', 'neutro');
-    $('e-bt').disabled = true;
-    SITE.api('/api/login', { method: 'POST', semToken: true, body: { login: login, senha: senha } })
-      .then(function (r) {
-        $('e-bt').disabled = false;
-        if (!r.ok) { aviso('e-aviso', r.erro || 'não deu para entrar'); return; }
-        aviso('e-aviso', 'Bem-vindo de volta, ' + r.conta.nome + '.', 'certo');
-        entrou(r);
-      });
-  });
-
-  /* ---- esqueci a senha: ainda não existe ---- */
-  $('esqueci').addEventListener('click', function (ev) {
-    ev.preventDefault();
-    aviso('esqueci-aviso', 'Recuperação de senha: em breve. Por enquanto, fale com o dono do servidor.', 'neutro');
+  ['site.js', 'conta.js'].forEach(function (s) {
+    document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();
 </script>

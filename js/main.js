@@ -54,9 +54,23 @@ var JOGO = (typeof window !== 'undefined')
     else fn();
   }
 
+  // A MARCA DE ABERTURA (10/09): o index.html guarda em sessionStorage onde a
+  // abertura está (window.__boot, no <script id="boot-seguro">). Cada passo
+  // daqui se anota ANTES de rodar — se um deles travar a página, a próxima
+  // abertura da aba diz qual foi —, e o fim avisa que os passos acabaram (a
+  // marca some quando a #carga também já saiu da frente). Sem o index.html
+  // (páginas de teste que carregam este arquivo), __boot não existe e nada muda.
+  function marca(nome) {
+    try { if (window.__boot && window.__boot.passo) window.__boot.passo(nome); } catch (e) {}
+  }
+  function terminou() {
+    try { if (window.__boot && window.__boot.fim) window.__boot.fim(); } catch (e) {}
+  }
+
   quandoPronto(function () {
     var canvas = document.getElementById('game-canvas');
     var rendererOk = true;
+    marca('Renderer.init');
     try {
       if (JOGO.Renderer && JOGO.Renderer.init) JOGO.Renderer.init(canvas);
     } catch (e) {
@@ -66,13 +80,20 @@ var JOGO = (typeof window !== 'undefined')
         'Tente atualizar o navegador, habilitar aceleração de hardware nas configurações, ou usar Chrome/Edge/Firefox recentes.</div>');
     }
     if (rendererOk) {
+      marca('UI.init');
       try { if (JOGO.UI && JOGO.UI.init) JOGO.UI.init(); } catch (e) { console.error('UI.init falhou:', e); }
+      marca('Game.init');
       try { if (JOGO.Game && JOGO.Game.init) JOGO.Game.init(); } catch (e) { console.error('Game.init falhou:', e); }
       // A NUVEM (10/09): com sessão do site, o save do cartório entra (e sobe) daqui
+      marca('Nuvem.iniciar');
       try { if (JOGO.Nuvem && JOGO.Nuvem.iniciar) JOGO.Nuvem.iniciar(); } catch (e) { console.error('Nuvem.iniciar falhou:', e); }
       // OS EVENTOS DO MUNDO (10/09): a agenda lê o cache, busca o que o Mestre ligou e repete a cada 10 min
+      marca('Agenda.iniciar');
       try { if (JOGO.Agenda && JOGO.Agenda.iniciar) JOGO.Agenda.iniciar(); } catch (e) { console.error('Agenda.iniciar falhou:', e); }
       requestAnimationFrame(frame);
     }
+    // os passos acabaram (com ou sem WebGL: a tela do erro também é o fim)
+    marca('a primeira tela');
+    terminou();
   });
 })();

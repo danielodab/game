@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a loja contra a API de verdade</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- A PROVA VIVA DA LOJA (Fase C, 10/09): js/core/nuvem.js + js/core/loja.js
+     falando com servidor/api.py DE VERDADE (quem sobe a API é
+     tests/loja_viva.py, numa porta livre e num banco descartável; esta página
+     recebe `?api=http://127.0.0.1:PORTA`). Conta descartável criada pela
+     própria página — nome e senha aleatórios, que morrem com o banco
+     temporário. O caminho inteiro: cadastro → o save sobe com a carteira → a
+     compra pela rota (como o site faria) → o jogo retira, aplica e sobe →
+     /api/loja/minha mostra entregue e a carteira do servidor debitada; e o
+     pedido que chega sem saldo no jogo volta estornado. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/db.js','js/core/mercado.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js','js/core/nuvem.js','js/core/loja.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function ate(cond, ms) {
+    ms = ms || 4000;
+    return new Promise(function (r) {
+      var t0 = 0;
+      (function volta() {
+        if (cond()) return r(true);
+        if ((t0 += 20) > ms) return r(false);
+        setTimeout(volta, 20);
+      })();
+    });
+  }
+  var P = JOGO.Progress, DB = JOGO.DB, S = JOGO.Sessao, N = JOGO.Nuvem, L = JOGO.Loja;
+  var nuvemEv = [], avisos = [];
+  window.addEventListener('soterra:nuvem', function (ev) { nuvemEv.push(ev.detail.tipo + (ev.detail.erro ? ':' + ev.detail.erro : '')); });
+  window.addEventListener('soterra:loja', function (ev) { avisos.push(ev.detail); });
+  N.semRecarga = true;
+  N.ESPERA_MS = 30;
+  L.INTERVALO_MS = 1e9;
+  L._semTrava = true;            // a trava entre abas não sai a tempo no Chrome sem cabeça (ver loja.js)
+  L._reinicia();
+
+  function idem() {
+    var b = new Uint8Array(8);
+    crypto.getRandomValues(b);
+    return Array.prototype.map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+  }
+  function compra(sku, id) {
+    return S.api('/api/loja/comprar', { method: 'POST', body: { sku: sku, idem: id || idem() } });
+  }
+  function moedasReais() { return DB.exportar().carteira.moedas; }
+  function versaoMudou(v0) { return function () { return N.estado().versao > v0 && !N.estado().pendente && !N.estado().subindo; }; }
+  function pedidoEm(minha, id) { return ((minha && minha.pedidos) || []).filter(function (p) { return p.id === id; })[0] || {}; }
+  function de(r, id) { return ((r && r.resultados) || []).filter(function (x) { return x.id === id; })[0] || {}; }
+
+  var AGUA = 'stone-tear', FOGO = 'stone-ember';
+  var nome = 'loja' + (function (n) { var a = 'hjkqxz', s = ''; for (var i = 0; i < 9; i++) { s = a.charAt(n % 6) + s; n = Math.floor(n / 6); } return s; })(Date.now()); // 10/09: só letras que nenhuma palavra reservada usa (base 36 caía em 'gm'/'cm' 1 vez em mil)
+  var senha = 'p-' + Math.random().toString(36).slice(2, 14);
+  var idemAgua = idem(), pAgua = null, pXp = null, pFogo = null, v0 = 0;
+
+  S.esquece();
+  check('a API está apontada (' + S.base() + ')', /^https?:\/\//.test(S.base()));
+  S.api('/api/loja/catalogo', { semToken: true }).then(function (r) {
+    var skus = (r.itens || []).map(function (i) { return i.sku; });
+    check('o catálogo é público e traz os produtos da loja', r.ok && skus.indexOf('pedras-agua') >= 0 &&
+          skus.indexOf('pergaminho-xp') >= 0 && skus.indexOf('classe-invocador') >= 0, skus.join(','));
+    var agua = (r.itens || []).filter(function (i) { return i.sku === 'pedras-agua'; })[0] || {};
+    check('o que o catálogo entrega existe no jogo (pedra da água = ' + agua.alvo + ')', !!JOGO.DATA.stones[agua.alvo] &&
+          JOGO.DATA.stones[agua.alvo].element === 'agua');
+    AGUA = agua.alvo || AGUA;
+    var fogo = (r.itens || []).filter(function (i) { return i.sku === 'pedras-fogo'; })[0] || {};
+    FOGO = fogo.alvo || FOGO;
+    return S.cadastrar(nome, nome + '@prova.local', senha);
+  }).then(function (r) {
+    check('cadastro de conta descartável (' + nome + ')', r.ok && r.token && S.ativa(), r.erro);
+    return compra('pedras-agua');
+  }).then(function (r) {
+    check('sem save no servidor, comprar é recusado (409: abra o jogo)', r.status === 409 && /abra o jogo/.test(r.erro || ''), r.erro);
+    P.reset();
+    DB._zerar();
+    DB.ganharMoedas(3000);
+    return N.iniciar();
+  }).then(function () {
+    return ate(function () { return N.estado().versao === 1 && L.estado().liberada && !L.estado().buscando; });
+  }).then(function (ok) {
+    check('primeira subida: o save com 3.000 vinténs chega (versão 1) e a loja faz a 1ª busca', ok &&
+          N.estado().erro === null && L.estado().ultimaBusca > 0, JSON.stringify(N.estado()));
+    return compra('pedras-agua', idemAgua);
+  }).then(function (r) {
+    pAgua = r.pedido || {};
+    check('comprar pela rota (como o site): 201, pendente, reserva 300', r.status === 201 && pAgua.estado === 'pendente' &&
+          r.saldo && r.saldo.carteira === 3000 && r.saldo.reservado === 300 && r.saldo.disponivel === 2700, JSON.stringify(r));
+    return compra('pedras-agua', idemAgua);
+  }).then(function (r) {
+    check('o mesmo idem devolve o MESMO pedido (200)', r.status === 200 && r.pedido && r.pedido.id === pAgua.id);
+    return compra('pergaminho-xp');
+  }).then(function (r) {
+    pXp = r.pedido || {};
+    check('o Pergaminho da Sabedoria: 201, disponível 1.200', r.status === 201 && r.saldo.disponivel === 1200, JSON.stringify(r.saldo));
+    v0 = N.estado().versao;
+    return L.buscar();
+  }).then(function (r) {
+    check('o jogo retira e aplica os dois pedidos', r.ok && de(r, pAgua.id).ok === true && de(r, pXp.id).ok === true, JSON.stringify(r));
+    check('no jogo: +10 Lágrimas, 1 Pergaminho da Sabedoria, carteira 1.200',
+          P.stoneCount(AGUA) === 10 && P.pergaminhos().xp === 1 && moedasReais() === 1200,
+          P.stoneCount(AGUA) + ' / ' + P.pergaminhos().xp + ' / ' + moedasReais());
+    check('os avisos "soterra:loja" saíram (entregue ×2)', avisos.filter(function (a) { return a.tipo === 'entregue'; }).length === 2);
+    return ate(versaoMudou(v0));
+  }).then(function (ok) {
+    check('o save sobe sozinho com a anotação', ok, JSON.stringify(N.estado()));
+    return S.api('/api/loja/minha');
+  }).then(function (m) {
+    check('/api/loja/minha: os dois ENTREGUES', pedidoEm(m, pAgua.id).estado === 'entregue' && pedidoEm(m, pXp.id).estado === 'entregue',
+          JSON.stringify(m.pedidos));
+    check('... e a carteira do servidor debitada (1.200), sem reserva', m.saldo && m.saldo.carteira === 1200 &&
+          m.saldo.reservado === 0 && m.saldo.disponivel === 1200, JSON.stringify(m.saldo));
+    // o pedido que chega ao jogo SEM SALDO: compra com 1.200 no servidor, e o
+    // bolso do jogo gasta antes da entrega (o servidor fica sabendo no PUT)
+    return compra('pedras-fogo');
+  }).then(function (r) {
+    pFogo = r.pedido || {};
+    check('as Brasas (450) compradas com 1.200 disponíveis', r.status === 201, JSON.stringify(r));
+    v0 = N.estado().versao;
+    DB.gastarMoedas(1000);                       // o mercador levou 1.000 no jogo
+    return ate(versaoMudou(v0));
+  }).then(function (ok) {
+    check('o gasto no jogo subiu (carteira 200)', ok && moedasReais() === 200);
+    v0 = N.estado().versao;
+    return L.buscar();
+  }).then(function (r) {
+    check('no jogo, sem saldo para as Brasas: recusa "sem-saldo", sem entrega e sem débito',
+          r.ok && de(r, pFogo.id).motivo === 'sem-saldo' && P.stoneCount(FOGO) === 0 && moedasReais() === 200, JSON.stringify(r));
+    return ate(versaoMudou(v0));
+  }).then(function (ok) {
+    check('a recusa sobe no save', ok);
+    return S.api('/api/loja/minha');
+  }).then(function (m) {
+    var pf = pedidoEm(m, pFogo.id);
+    check('/api/loja/minha: as Brasas ESTORNADAS (sem-saldo), carteira 200 e sem reserva',
+          pf.estado === 'estornado' && pf.motivo === 'sem-saldo' && m.saldo.carteira === 200 && m.saldo.reservado === 0,
+          JSON.stringify(pf) + ' ' + JSON.stringify(m.saldo));
+    return L.buscar();
+  }).then(function (r) {
+    check('buscar de novo: nada a retirar, nada aplicado duas vezes', r.ok && r.pedidos === 0 && P.stoneCount(AGUA) === 10 &&
+          P.pergaminhos().xp === 1 && moedasReais() === 200, JSON.stringify(r));
+    return N.sair();
+  }).then(function () {
+    check('nenhum evento de erro da Nuvem', !nuvemEv.some(function (e) { return /^(erro|recusado)/.test(e); }), nuvemEv.join(' | '));
+    check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+    fecha();
+  }).catch(function (e) {
+    check('o fluxo não estoura', false, String(e && (e.stack || e.message) || e));
+    fecha();
+  });
+})();
+</script>
+</body>
+</html>
