@@ -129,6 +129,14 @@
     s.par = { id: 'bia', cx: 'cxbia', nome: 'Bia', heroi: { classId: 'arqueiro', element: 'ar', level: 14 }, on: true, sumidoDesde: null };
     try { J.Grupo.aoMudar(J.Grupo.estado()); } catch (e) { diz('aoMudar: ' + e); }
   }
+  /* o Coop fica sabendo do grupo pelo muda() interno do grupo.js (configuraCoop),
+   * que o grupo injetado direto no estado não chama: sem isto o startRun de quem
+   * segue recusa a descida em grupo ("Não deu para começar a descida.") */
+  function ligaCoop() {
+    var s = J.Grupo._st();
+    J.Coop.configura({ gid: s.gid, lider: s.lider, eu: 'ana',
+                       parceiro: { id: s.par.id, cx: s.par.cx, heroi: s.par.heroi, nome: s.par.nome } });
+  }
   function sussurroDaBia(texto) { J.Grupo._ev({ tipo: 'sussurro', de: 'bia', cx: 'cxbia', nome: 'Bia', texto: texto }); }
 
   var t0 = Date.now();
@@ -334,6 +342,7 @@
   // ====================================================== 26: quem segue
   function quemSegue() {
     injetaGrupo('bia');
+    ligaCoop();
     J.Grupo._st().descidaDif = 'dificil';
     J.Grupo.aoMudar(J.Grupo.estado());
     J.Hub.aoAproximar({ tipo: 'portal', id: 'greenhouse', nome: 'A Estufa Soterrada' });

@@ -42,8 +42,12 @@
     'nomes_jogo',  // 10/09: a lei dos nomes no batismo e na guilda (GM/Admin recusados; o Mestre pode)
     'troca_cartorio',  // 10/09: peça com série só muda de mão se o cartório espelha (o relé tira o nuvem de quem não conferiu)
     'boot_seguro',  // 10/09: a marca de abertura — onde a última parou, as três saídas e o vigia
-    'grupo', 'coop_motor'  // 11/09: o multijogador — o grupo/duelo/sussurro (dublê de Rede) e o motor da batalha em dupla
+    'grupo', 'coop_motor',  // 11/09: o multijogador — o grupo/duelo/sussurro (dublê de Rede) e o motor da batalha em dupla
+    'grupo_hud'  // 11/09: a HUD do multijogador no celular (achados 22 a 28), no index de verdade a 390x844
   ];
+  /* o prazo por suíte: 120 s, e mais para quem abre o index inteiro e desce
+   * (a grupo_hud se dá 110 s só para o jogo abrir) */
+  var PRAZO = { grupo_hud: 300000 };
   var tab = document.getElementById('tab');
   var linhas = {};
   SUITES.forEach(function (s) {
@@ -89,7 +93,7 @@
         pronto = (w.__pronto === true) || (w.__done === true) ||
                  /passou|FALHOU|falharam|PASS/i.test(resumo);
       }
-      if (!pronto && Date.now() - t0 < 120000) return setTimeout(espera, 700);
+      if (!pronto && Date.now() - t0 < (PRAZO[nome] || 120000)) return setTimeout(espera, 700);
       var mau = !pronto || /FALHOU|falharam|✘/i.test(resumo) ||
                 (typeof fr.contentWindow.__fail === 'number' && fr.contentWindow.__fail > 0);
       linhas[nome].textContent = pronto ? (resumo || 'sem resumo').slice(0, 90)
