@@ -312,6 +312,77 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  /* O RESTO DO INVENTÁRIO (11/09, pedido do dono: "quero liberar pedras e as
+   * outras coisas também para o inventário da minha conta GM"). As MESMAS
+   * portas do Progress que o saque, a roleta e a loja usam — e só com a chave
+   * virada. Quantidade inteira a partir de 1; o resto é recusado. */
+  function inteiro(n) { var q = Math.floor(Number(n)); return (isFinite(q) && q >= 1) ? q : 0; }
+  function progresso() { var P = JOGO.Progress; return (GM.ativo() && P) ? P : null; }
+  // as pedras de forja: as cinco dos elementos e a Âncora
+  GM.pegaPedras = function (stoneId, n) {
+    var P = progresso(), q = inteiro(n);
+    var def = JOGO.DATA && JOGO.DATA.stones && JOGO.DATA.stones[stoneId];
+    if (!P || !P.addStones || !def || !q) return false;
+    return P.addStones(stoneId, q) === true;
+  };
+  // os selos do Colecionador, um por elemento (o addSelo recusa elemento que não existe)
+  GM.pegaSelos = function (elemento, n) {
+    var P = progresso(), q = inteiro(n);
+    if (!P || !P.addSelo || !q) return false;
+    return P.addSelo(elemento, q) === true;
+  };
+  // as insígnias de fundação (as que fundam guilda)
+  GM.pegaInsignias = function (n) {
+    var P = progresso(), q = inteiro(n);
+    if (!P || !P.addInsignia || !q) return false;
+    return P.addInsignia(q) === true;
+  };
+  /* as cartas de classe: `n` cartas, ou 'topo' — a classe liberada e no ★5 (o
+   * desbloqueio mais os excedentes da última estrela, de DATA.cards). A classe
+   * do Mestre não tem carta. */
+  GM.pegaCartas = function (classId, n) {
+    var P = progresso();
+    var cls = JOGO.DATA && JOGO.DATA.classes && JOGO.DATA.classes[classId];
+    if (!P || !P.addCards || !P.cardInfo || !cls || classId === 'gm') return false;
+    var q;
+    if (n === 'topo') {
+      var k = (JOGO.DATA.cards || {})[classId] || {};
+      var custos = k.starCosts || [];
+      var alvo = (Number(k.unlockCost) || 0) + (Number(custos[custos.length - 1]) || 0);
+      q = Math.max(0, alvo - (P.cardInfo(classId).cards || 0));
+      if (!q) return true;                      // já estava no topo
+    } else {
+      q = inteiro(n);
+      if (!q) return false;
+    }
+    return !!P.addCards(classId, q);
+  };
+  /* os pergaminhos da loja — 'xp' (Sabedoria) e 'elemento' (Reescrita) — até o
+   * teto de cada um (DATA.pergaminhos.tetoInventario): entra só o que cabe.
+   * Devolve QUANTOS entraram (0 = nenhum). */
+  GM.pegaPergaminho = function (tipo, n) {
+    var P = progresso(), q = inteiro(n);
+    if (!P || !P.addPergaminho || !P.pergaminhos || !q) return 0;
+    var tem = (P.pergaminhos() || {})[tipo];
+    if (typeof tem !== 'number') return 0;      // tipo que não existe
+    var teto = Math.floor(Number(((JOGO.DATA || {}).pergaminhos || {}).tetoInventario)) || 99;
+    var cabe = Math.min(q, teto - tem);
+    if (cabe <= 0) return 0;
+    return P.addPergaminho(tipo, cabe) ? cabe : 0;
+  };
+  /* os dias de BÔNUS DE XP (os da loja), contados no relógio da Agenda — o do
+   * servidor quando medido. Como na loja, o fator só pesa na sala com esse
+   * relógio medido. */
+  GM.pegaBonusXp = function (dias) {
+    var P = progresso(), q = inteiro(dias);
+    if (!P || !P.addBonusXpDias || !q) return false;
+    var Ag = JOGO.Agenda, t = Date.now();
+    try { if (Ag && Ag.agora) t = Ag.agora(); } catch (e) { t = Date.now(); }
+    var agoraS = Math.floor(t > 1e11 ? t / 1000 : t);      // a Agenda anda em milissegundos
+    var r = P.addBonusXpDias(q, agoraS);
+    return !!(r && r.ok);
+  };
+
   if (GM.ativo()) {
     injetaClasse();
     injetaJulgamento();

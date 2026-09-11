@@ -8,7 +8,9 @@
 <body>
 <!-- PÁGINA DE PROVA (foto): a Caixa do Mestre (03/09) — a ficha exclusiva
      do GM com todos os itens, conjuntos e bichos do jogo para pegar.
-     ?aba=sets ou ?aba=bichos muda a aba. Só existe com a chave. -->
+     ?aba=sets ou ?aba=bichos muda a aba; desde 11/09 também ?aba=pedras,
+     ?aba=moedas (selos e insígnias), ?aba=cartas e ?aba=pergaminhos. Só existe
+     com a chave. -->
 <iframe id="f" src="../index.html?prova-gm-caixa&gm=mestre-do-fundo"></iframe>
 <script>
 var f = document.getElementById('f');
@@ -28,7 +30,8 @@ f.onload = function () {
       w.JOGO.UI.openSheet('gmcaixa');
       if (Q.aba) {
         setTimeout(function () {
-          var rot = { sets: 'Conjuntos', bichos: 'Bichos', itens: 'Itens' }[Q.aba] || 'Itens';
+          var rot = { sets: 'Conjuntos', bichos: 'Bichos', itens: 'Itens', pedras: 'Pedras', moedas: 'Selos e insígnias',
+                      cartas: 'Cartas', pergaminhos: 'Pergaminhos' }[Q.aba] || 'Itens';
           [].slice.call(d.querySelectorAll('.sheet-panel button')).filter(function (b) { return b.textContent.trim() === rot; })[0].click();
         }, 800);
       }

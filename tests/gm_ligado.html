@@ -84,6 +84,30 @@
         P.petCardInfo('pet-dewling').stars === 3 && P.petLevel('pet-dewling') === 10);
   check('bicho inexistente é recusado', GM.pegaPet('pet-nada', true) === false);
 
+  // ---- 11/09: as pedras, os selos, as insígnias, as cartas e os pergaminhos
+  var pedra = Object.keys(JOGO.DATA.stones)[0], p0 = P.stoneCount(pedra);
+  check('a Caixa entrega pedras de forja (' + pedra + ')', GM.pegaPedras(pedra, 100) === true && P.stoneCount(pedra) === p0 + 100,
+        p0 + ' → ' + P.stoneCount(pedra));
+  check('pedra inexistente e quantidade torta são recusadas', GM.pegaPedras('pedra-nada', 10) === false &&
+        GM.pegaPedras(pedra, 0) === false && GM.pegaPedras(pedra, 'dez') === false);
+  var s0 = P.selosVer().fogo;
+  check('a Caixa entrega selos do Colecionador', GM.pegaSelos('fogo', 10) === true && P.selosVer().fogo === s0 + 10);
+  check('selo de elemento que não existe é recusado', GM.pegaSelos('lava', 10) === false);
+  var i0 = P.insigniasVer();
+  check('a Caixa entrega insígnias de fundação', GM.pegaInsignias(10) === true && P.insigniasVer() === i0 + 10);
+  check('cartas no topo: a classe liberada e no ★' + JOGO.DATA.stars.max, GM.pegaCartas('minotauro', 'topo') === true &&
+        P.cardInfo('minotauro').unlocked === true && P.cardInfo('minotauro').stars === JOGO.DATA.stars.max,
+        JSON.stringify(P.cardInfo('minotauro')));
+  var c0 = P.cardInfo('bruxo').cards;
+  check('e cartas avulsas somam', GM.pegaCartas('bruxo', 10) === true && P.cardInfo('bruxo').cards === c0 + 10);
+  check('a classe do Mestre não tem carta', GM.pegaCartas('gm', 10) === false);
+  var pg0 = P.pergaminhos().xp;
+  check('a Caixa entrega Pergaminhos da Sabedoria', GM.pegaPergaminho('xp', 10) === 10 && P.pergaminhos().xp === pg0 + 10);
+  var tetoP = JOGO.DATA.pergaminhos.tetoInventario, e0 = P.pergaminhos().elemento;
+  check('os da Reescrita entram até o teto (' + tetoP + '), e não além', GM.pegaPergaminho('elemento', tetoP + 50) === tetoP - e0 &&
+        P.pergaminhos().elemento === tetoP && GM.pegaPergaminho('elemento', 1) === 0);
+  check('a Caixa entrega dias de bônus de XP', GM.pegaBonusXp(3) === true && P.bonusXpAte() > Date.now() / 1000 + 2 * 86400);
+
   JOGO.DB.moedas().then(function (m) {
     check('o cofre não tem fundo', m === 999999, String(m));
     return JOGO.DB.gastarMoedas(888888);

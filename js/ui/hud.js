@@ -6633,18 +6633,22 @@ var JOGO = (typeof window !== 'undefined')
   /* A CAIXA DO MESTRE (03/09, pedido do dono): "o GM pode abrir uma caixa
    * para pegar qualquer item do jogo pra ele equipar; terá um menu exclusivo
    * para pegar pet ou set para seu inventário". Três abas — Itens, Conjuntos,
-   * Bichos — com busca; tudo entra direto no saco. Só com a chave virada. */
+   * Bichos — com busca; tudo entra direto no saco. Só com a chave virada.
+   * 11/09 ("quero liberar pedras e as outras coisas também"): mais quatro —
+   * Pedras, Selos e insígnias, Cartas (de classe) e Pergaminhos (com os dias
+   * de bônus de XP) —, cada linha com o que a conta já tem. */
   var gmCaixaAba = 'itens', gmCaixaBusca = '';
   function sheetGMCaixa() {
     var GMod = JOGO.GM;
     if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
     var body = sheetShell('A Caixa do Mestre',
-      'Qualquer item, conjunto ou bicho do jogo — direto para o saco, sem sorteio.');
+      'Qualquer item, conjunto, bicho, pedra, selo, carta ou pergaminho do jogo — direto para o saco, sem sorteio.');
     sheetName = 'gmcaixa';
 
     var abas = el('div', 'inv-filtros');
     abas.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
-    [['itens', 'Itens'], ['sets', 'Conjuntos'], ['bichos', 'Bichos']].forEach(function (par) {
+    [['itens', 'Itens'], ['sets', 'Conjuntos'], ['bichos', 'Bichos'], ['pedras', 'Pedras'],
+     ['moedas', 'Selos e insígnias'], ['cartas', 'Cartas'], ['pergaminhos', 'Pergaminhos']].forEach(function (par) {
       var b = btn(par[1], 'btn-mini' + (gmCaixaAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
         gmCaixaAba = par[0]; sheetGMCaixa();
       });
@@ -6671,6 +6675,15 @@ var JOGO = (typeof window !== 'undefined')
       row.appendChild(txt);
       row.appendChild(btn(rotuloBtn, 'btn-mini btn-gold', aoPegar));
       return row;
+    }
+    // entregou: avisa e repinta, para a linha mostrar o que a conta tem agora
+    function dar(ok, msg) {
+      if (ok) { toast(msg, 'good'); pinta(); } else toast('não deu');
+    }
+    function glifo(txt) {
+      var g = el('span', null, txt);
+      g.style.cssText = 'width:40px;flex:none;text-align:center;font-size:26px;line-height:40px';
+      return g;
     }
     function pinta() {
       clear(listaEl);
@@ -6718,6 +6731,95 @@ var JOGO = (typeof window !== 'undefined')
                 toast(n ? (sd2.name + ': ' + n + ' peças no saco.') : 'não deu', n ? 'good' : undefined);
               }));
           })(sids[s], sd);
+        }
+      } else if (gmCaixaAba === 'pedras') {
+        // as pedras de forja: as cinco dos elementos e a Âncora
+        var pedras = D0.stones || {};
+        Object.keys(pedras).forEach(function (sid) {
+          var pd3 = pedras[sid];
+          if (!pd3 || !passa(pd3.name, sid) || corta()) return;
+          var tem = safe(function () { return JOGO.Progress.stoneCount(sid); }, 0) || 0;
+          var qual = pd3.element === 'forja' ? 'segura o nível quando a batida da forja falha'
+                   : 'forja as peças de ' + (ELEM_PT[pd3.element] || pd3.element);
+          var row = linha(art('stoneIcon', [sid, 40], 40), pd3.name || sid, 'você tem <b>' + tem + '</b> · ' + esc(qual),
+            '+10', function () { dar(GMod.pegaPedras(sid, 10), '+10 ' + pd3.name + '.'); });
+          row.appendChild(btn('+100', 'btn-mini btn-primary', function () { dar(GMod.pegaPedras(sid, 100), '+100 ' + pd3.name + '.'); }));
+          listaEl.appendChild(row);
+        });
+        if (vistas) {
+          listaEl.appendChild(btn('+100 de cada pedra', 'btn-gold btn-block', function () {
+            var n = 0;
+            Object.keys(pedras).forEach(function (sid) { if (GMod.pegaPedras(sid, 100)) n++; });
+            dar(n > 0, '+100 de cada uma das ' + n + ' pedras.');
+          }));
+        }
+      } else if (gmCaixaAba === 'moedas') {
+        // os selos do Colecionador (um por elemento) e as insígnias de fundação
+        var selos = safe(function () { return JOGO.Progress.selosVer(); }, null) || {};
+        var porGiro = (D0.selos && D0.selos.porGiro) || 10;
+        (D0.elements || Object.keys(selos)).forEach(function (e4) {
+          var nomeS = 'Selo de ' + (ELEM_PT[e4] || e4);
+          if (!passa(nomeS, e4) || corta()) return;
+          var row = linha(art('seloIcon', [e4, 40], 40, 'selo-moeda-img'), nomeS,
+            'você tem <b>' + (selos[e4] || 0) + '</b> · ' + porGiro + ' selos somados pagam um giro na roleta do Colecionador',
+            '+10', function () { dar(GMod.pegaSelos(e4, 10), '+10 ' + nomeS + '.'); });
+          row.appendChild(btn('+100', 'btn-mini btn-primary', function () { dar(GMod.pegaSelos(e4, 100), '+100 ' + nomeS + '.'); }));
+          listaEl.appendChild(row);
+        });
+        if (passa('Insígnia de Fundação', 'insignia') && !corta()) {
+          var ins = safe(function () { return JOGO.Progress.insigniasVer(); }, 0) || 0;
+          var porGuilda = (D0.insignias && D0.insignias.porGuilda) || 10;
+          var rowI = linha(art('insigniaIcon', [40], 40, 'selo-moeda-img'), 'Insígnia de Fundação',
+            'você tem <b>' + ins + '</b> · ' + porGuilda + ' fundam uma guilda',
+            '+10', function () { dar(GMod.pegaInsignias(10), '+10 Insígnias de Fundação.'); });
+          rowI.appendChild(btn('+100', 'btn-mini btn-primary', function () { dar(GMod.pegaInsignias(100), '+100 Insígnias de Fundação.'); }));
+          listaEl.appendChild(rowI);
+        }
+      } else if (gmCaixaAba === 'cartas') {
+        // as cartas de classe: liberam a classe e compram as estrelas
+        Object.keys(D0.classes || {}).forEach(function (cid) {
+          var cd = D0.classes[cid];
+          if (!cd || cid === 'gm' || !passa(cd.name, cid) || corta()) return;
+          var ci = safe(function () { return JOGO.Progress.cardInfo(cid); }, null) || {};
+          var sub = (ci.unlocked ? 'liberada' : 'trancada (' + (ci.unlockCost || 0) + ' cartas liberam)') +
+                    ' · <b>' + (ci.cards || 0) + '</b> cartas · ' + (ci.stars ? '★' + ci.stars : 'sem estrela');
+          var row = linha(art('portrait', [cid, { element: 'neutro', size: 80 }], 40), cd.name || cid, sub,
+            '+10', function () { dar(GMod.pegaCartas(cid, 10), '+10 cartas de ' + cd.name + '.'); });
+          row.appendChild(btn('Liberar e ★5', 'btn-mini btn-primary', function () {
+            dar(GMod.pegaCartas(cid, 'topo'), cd.name + ': liberada e no ★5.');
+          }));
+          listaEl.appendChild(row);
+        });
+      } else if (gmCaixaAba === 'pergaminhos') {
+        // os pergaminhos da loja (até o teto de cada um) e os dias de bônus de XP
+        var pg = safe(function () { return JOGO.Progress.pergaminhos(); }, null) || {};
+        var cfgP = D0.pergaminhos || {}, xpP = cfgP.xp || {};
+        var tetoP = cfgP.tetoInventario || 99;
+        [['xp', 'Pergaminho da Sabedoria', '×' + String(xpP.fator || 1.5).replace('.', ',') + ' de XP por ' +
+          (xpP.salas || 9) + ' salas vencidas'],
+         ['elemento', 'Pergaminho da Reescrita', 'troca um caminho de elemento do herói por outro']].forEach(function (pp) {
+          if (!passa(pp[1], pp[0]) || corta()) return;
+          var row = linha(glifo('📜'), pp[1], 'você tem <b>' + (pg[pp[0]] || 0) + '</b> de ' + tetoP + ' · ' + esc(pp[2]),
+            '+1', function () { var n = GMod.pegaPergaminho(pp[0], 1); if (n) dar(true, '+1 ' + pp[1] + '.'); else toast('Já está no teto de ' + tetoP + '.'); });
+          row.appendChild(btn('Encher', 'btn-mini btn-primary', function () {
+            var n = GMod.pegaPergaminho(pp[0], tetoP);
+            if (n) dar(true, '+' + n + ' ' + pp[1] + '.'); else toast('Já está no teto de ' + tetoP + '.');
+          }));
+          listaEl.appendChild(row);
+        });
+        if (passa('Bônus de XP', 'bonus') && !corta()) {
+          var ate = safe(function () { return JOGO.Progress.bonusXpAte(); }, 0) || 0;
+          var agoraB = safe(function () { return JOGO.Agenda.agora(); }, null) || Date.now();
+          var agoraSB = agoraB > 1e11 ? agoraB / 1000 : agoraB;
+          var fatorB = String((D0.bonusXp && D0.bonusXp.fator) || 1.5).replace('.', ',');
+          var estadoB = ate > agoraSB
+            ? 'ligado até ' + new Date(ate * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+            : 'desligado';
+          var rowB = linha(glifo('⏳'), 'Bônus de XP (×' + fatorB + ')',
+            estadoB + ' · o mesmo da loja; conta no relógio do servidor',
+            '+1 dia', function () { dar(GMod.pegaBonusXp(1), '+1 dia de bônus de XP.'); });
+          rowB.appendChild(btn('+7 dias', 'btn-mini btn-primary', function () { dar(GMod.pegaBonusXp(7), '+7 dias de bônus de XP.'); }));
+          listaEl.appendChild(rowB);
         }
       } else {
         var pids = Object.keys(D0.pets || {}).sort(function (a, b) {
@@ -7096,7 +7198,7 @@ var JOGO = (typeof window !== 'undefined')
     }));
     body.appendChild(linhaP);
     // A CAIXA DO MESTRE (03/09): qualquer item, conjunto ou bicho do jogo
-    body.appendChild(btn('📦 Abrir a Caixa do Mestre — itens, conjuntos e bichos', 'btn-gold btn-block', function () {
+    body.appendChild(btn('📦 Abrir a Caixa do Mestre — itens, bichos, pedras, selos, cartas e pergaminhos', 'btn-gold btn-block', function () {
       openSheet('gmcaixa');
     }));
     // OS EVENTOS DO MUNDO (10/09): XP, vinténs, pedras, saque ou aviso para todos os jogadores
