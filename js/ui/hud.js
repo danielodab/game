@@ -6538,13 +6538,17 @@ var JOGO = (typeof window !== 'undefined')
         var cRow = el('div', 'guilda-emblemas-row');
         cRow.style.cssText = 'display:flex; gap:12px; flex-wrap:wrap; justify-content:center; align-items:center;';
 
-        function mkColor(label, idx) {
-          var wrap = el('label', 'inv-dica', label);
+        function mkColor(labelTxt, idx) {
+          var wrap = el('div', 'inv-dica');
           wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; font-size:10px; cursor:pointer;';
+          var span = el('span', null, labelTxt);
+          wrap.appendChild(span);
+          
           var inp = document.createElement('input');
           inp.type = 'color';
           inp.value = curParts[idx] || '#000000';
-          inp.style.cssText = 'border:none; padding:0; width:28px; height:28px; cursor:pointer; background:transparent;';
+          inp.style.cssText = 'border:none; padding:0; width:28px; height:28px; cursor:pointer; background:transparent; margin-top:2px;';
+          
           inp.oninput = function () {
             curParts[idx] = inp.value;
             guildaEmblemaEscolhido = curParts.join('|');
@@ -6553,6 +6557,13 @@ var JOGO = (typeof window !== 'undefined')
             preview = newP;
           };
           wrap.appendChild(inp);
+          
+          tap(wrap, function(e) {
+            if (e.target !== inp) {
+              inp.click();
+            }
+          });
+          
           return wrap;
         }
 
