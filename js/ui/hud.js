@@ -1290,7 +1290,10 @@ var JOGO = (typeof window !== 'undefined')
           // `resumoGuilda` pode ainda não ter carregado (corrida com o
           // carregamento da guilda) — aí vai null e o refresco de quem
           // funda/entra chama nomeia de novo só com a guilda.
-          JOGO.Hub.nomeia(j.nome || '', j.titulo || '', tier, resumoGuilda);
+          // o título passa pela régua: o de ranking cai com a posição
+          estadoDosTitulos().then(function () {
+            JOGO.Hub.nomeia(j.nome || '', tituloPendurado(j.titulo), tier, resumoGuilda);
+          });
         }
         // O PÓDIO POR CLASSE: quem é 1º, 2º ou 3º de alguma classe tem o nome
         // aceso na praça. Recalculado a cada pintura da conta — é quando o
@@ -1540,7 +1543,7 @@ var JOGO = (typeof window !== 'undefined')
         // `classe` no protocolo sempre foi APARÊNCIA — agora pode ser uma
         // fusão do guarda-roupa; o fantasma do outro lado veste igual
         var ligou = R.entrar({ id: j.id, nome: j.nome || 'Sem Nome',
-                               titulo: j.titulo || '',
+                               titulo: tituloPendurado(j.titulo),
                                classe: selHeroes[0] || 'sumo',
                                resumo: safe(resumoDaConta, null),
                                aura: safe(temAuraSelos, false),
@@ -3243,18 +3246,17 @@ var JOGO = (typeof window !== 'undefined')
     var caixa = el('div', 'ms-caixa');
     body.appendChild(caixa);
 
-    Promise.all([Ms.carregar(), Ms.titulos(),
+    Promise.all([Ms.carregar(),
                  JOGO.DB ? JOGO.DB.jogador() : Promise.resolve({})])
       .then(function (r) {
-        var quadro = r[0], titulos = r[1] || [], jog = r[2] || {};
+        var quadro = r[0], jog = r[1] || {};
         clear(caixa);
         if (!quadro) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
 
         function linha(id, def, st2) {
           var row = el('div', 'ms-linha' + (st2.prog >= def.alvo ? ' is-feita' : ''));
           var tx = el('div', 'ms-tx');
-          tx.appendChild(el('div', 'ms-nome', esc(def.texto) +
-            (def.titulo ? ' <span class="ms-titulo">título: ' + esc(def.titulo) + '</span>' : '')));
+          tx.appendChild(el('div', 'ms-nome', esc(def.texto)));
           var barra = el('div', 'ms-barra');
           var cheio = el('i', null, '');
           cheio.style.width = Math.min(100, Math.round(100 * st2.prog / def.alvo)) + '%';
@@ -3267,11 +3269,8 @@ var JOGO = (typeof window !== 'undefined')
           } else if (st2.prog >= def.alvo) {
             row.appendChild(btn('Receber ' + def.premio + 'v', 'btn-mini btn-gold', function () {
               Ms.reivindicar(id).then(function (res) {
-                if (!res.ok) { toast(res.erro || 'não deu'); }
-                else {
-                  toast('+' + res.premio + ' vinténs' +
-                        (res.titulo ? ' · título novo: ' + res.titulo : ''), 'good');
-                }
+                if (!res.ok) toast(res.erro || 'não deu');
+                else toast('+' + res.premio + ' vinténs', 'good');
                 sheetMissoes();
               });
             }));
@@ -3294,27 +3293,10 @@ var JOGO = (typeof window !== 'undefined')
           caixa.appendChild(linha(id, def, st2));
         });
 
-        // ---- o seletor de título: só os ganhos aparecem
-        caixa.appendChild(el('h3', 'bk-tit', 'Título na plaquinha'));
-        if (!titulos.length) {
-          caixa.appendChild(el('p', 'inv-dica',
-            'Nenhum título ainda — as conquistas com "título:" dão um.'));
-        } else {
-          var fila = el('div', 'ms-titulos');
-          ['— sem título —'].concat(titulos).forEach(function (t, ti) {
-            var valor = ti === 0 ? null : t;
-            var ativo = (jog.titulo || null) === valor;
-            fila.appendChild(btn(esc(t), 'btn-mini' + (ativo ? ' is-on' : ''), function () {
-              JOGO.DB.definirTitulo(valor).then(function (res) {
-                if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(jog.nome || '', res.titulo || '');
-                toast(res.titulo ? 'Agora você é ' + jog.nome + ', ' + res.titulo + '.'
-                                 : 'Sem título — só o nome.', 'good');
-                sheetMissoes();
-              });
-            }));
-          });
-          caixa.appendChild(fila);
-        }
+        /* 11/09: o seletor de TÍTULO saiu daqui. Título deixou de ser prêmio
+         * de missão (decisão do dono) e passou a ser posição no ranking ou
+         * dez quedas do mesmo chefe no difícil, sozinho — escolhe-se na
+         * ficha do Personagem, que é onde a conta se lê inteira. */
       });
   }
 
@@ -3857,9 +3839,10 @@ var JOGO = (typeof window !== 'undefined')
 
     Promise.all([JOGO.DB.jogador(),
                  JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null),
-                 JOGO.DB.placarLista ? JOGO.DB.placarLista() : Promise.resolve([])])
+                 JOGO.DB.placarLista ? JOGO.DB.placarLista() : Promise.resolve([]),
+                 estadoDosTitulos()])
     .then(function (r) {
-      var j = r[0], bz = r[1], fotos = r[2] || [];
+      var j = r[0], bz = r[1], fotos = r[2] || [], estT = r[3];
       clear(caixa);
 
       // ---- QUEM SOU EU
@@ -3872,7 +3855,8 @@ var JOGO = (typeof window !== 'undefined')
       var colT = el('div', 'char-col');
       colT.appendChild(el('div', 'char-nome' + (brilho ? ' pl-brilho is-' + brilho : ''),
         esc(j.nome || 'Sem Nome')));
-      if (j.titulo) colT.appendChild(el('div', 'char-titulo', esc(j.titulo)));
+      var tituloVivo = tituloPendurado(j.titulo);
+      if (tituloVivo) colT.appendChild(el('div', 'char-titulo', esc(tituloVivo)));
       if (souMestre3) colT.appendChild(el('span', 'chip chip-ok', 'Mestre do Fundo'));
       else if (brilho) {
         colT.appendChild(el('span', 'char-medalha is-' + brilho,
@@ -3942,6 +3926,66 @@ var JOGO = (typeof window !== 'undefined')
       caixa.appendChild(el('p', 'inv-dica', oculta
         ? 'Escondida: nem você nem os outros veem o troféu na praça. Os pontos continuam no placar.'
         : 'Aparecendo para todo mundo na praça. Os pontos do placar não mudam com isto.'));
+
+      /* ---- O TÍTULO DA PLAQUINHA (11/09, dono: "o título é editado na aba
+       * do personagem"). Aqui se escolhe qual pendurar, e aqui se vê o que
+       * falta para os outros. Três fontes, e nenhuma delas é missão:
+       * pódio de níveis, pódio da arena e dez quedas do mesmo chefe no
+       * difícil e sozinho. Os dois primeiros são emprestados — some o
+       * título no dia em que a posição some, sem apagar a escolha. */
+      caixa.appendChild(el('h3', 'bk-tit', 'Título na plaquinha'));
+      var Tt = JOGO.Titulos;
+      if (!Tt) {
+        caixa.appendChild(el('p', 'inv-dica', 'Os títulos não carregaram.'));
+      } else {
+        var catal = Tt.catalogo(estT);
+        var ganhos = catal.filter(function (t) { return t.ganho; });
+        var fila = el('div', 'ms-titulos');
+        fila.appendChild(btn('— sem título —', 'btn-mini' + (!tituloVivo ? ' is-on' : ''), function () {
+          JOGO.DB.definirTitulo(null).then(function () {
+            if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, '');
+            toast('Sem título — só o nome.', 'good');
+            sheetChar();
+          });
+        }));
+        ganhos.forEach(function (t) {
+          fila.appendChild(btn(esc(t.titulo),
+            'btn-mini' + (tituloVivo === t.titulo ? ' is-on' : ''), function () {
+              JOGO.DB.definirTitulo(t.titulo).then(function (res) {
+                if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, res.titulo || '');
+                toast('Agora você é ' + (j.nome || 'você') + ', ' + res.titulo + '.', 'good');
+                sheetChar();
+              });
+            }));
+        });
+        caixa.appendChild(fila);
+        if (!ganhos.length) {
+          caixa.appendChild(el('p', 'inv-dica',
+            'Nenhum título ainda. Eles não vêm de missão: são pódio de ranking ou ' +
+            'teimosia contra um chefe.'));
+        }
+
+        // o que falta — a lista inteira, para o título ser uma META e não
+        // uma surpresa que aparece um dia
+        var porFonte = { pvm: 'Pódio de níveis', pvp: 'Pódio da arena', chefe: 'Chefes, no difícil e sozinho' };
+        ['pvm', 'pvp', 'chefe'].forEach(function (f) {
+          caixa.appendChild(el('div', 'char-fonte',
+            '<span class="char-fonte-nm">' + esc(porFonte[f]) + '</span>'));
+          catal.filter(function (t) { return t.fonte === f; }).forEach(function (t) {
+            var linha = el('div', 'tit-linha' + (t.ganho ? ' is-ganho' : ''));
+            linha.appendChild(el('span', 'tit-nm', esc(t.titulo)));
+            if (t.ganho) {
+              linha.appendChild(el('span', 'tit-ok', t.emprestado ? 'seu enquanto durar' : 'seu para sempre'));
+            } else if (t.alvo) {
+              linha.appendChild(el('span', 'tit-falta',
+                esc(t.de) + ' · <b>' + t.prog + '</b>/' + t.alvo + ' quedas'));
+            } else {
+              linha.appendChild(el('span', 'tit-falta', esc(t.de)));
+            }
+            caixa.appendChild(linha);
+          });
+        });
+      }
 
       /* ---- OS NÚMEROS, herói por herói. Só os que DESCERAM (11/09, pedido
        * do dono: "ao abrir a aba personagem deve trazer somente dos
@@ -5046,6 +5090,53 @@ var JOGO = (typeof window !== 'undefined')
       linhas.push({ id: e2.id, nome: e2.nome, resumo: e2.resumo });
     });
     return linhas;
+  }
+
+  /* O ESTADO DOS TÍTULOS (11/09): o que a régua de js/core/titulos.js precisa
+   * saber para dizer o que esta conta pode pendurar — as quedas de chefe (o
+   * DB conta) e as posições nos dois pódios do placar (níveis e arena). Sai
+   * por Promise porque o DB é assíncrono; as três leituras são locais e
+   * baratas. Pódio de arena só conta quem JÁ duelou: a mesma regra do novato
+   * que vale para a coroa. */
+  var tituloEstado = null;            // a última leitura, para a plaquinha
+  function estadoDosTitulos() {
+    var vazio = { chefes: {}, pvm: null, pvp: null };
+    if (!JOGO.DB) return Promise.resolve(vazio);
+    return Promise.all([JOGO.DB.jogador(),
+                        JOGO.DB.placarLista ? JOGO.DB.placarLista() : Promise.resolve([]),
+                        JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null),
+                        JOGO.DB.chefesVer ? JOGO.DB.chefesVer() : Promise.resolve({})])
+      .then(function (r) {
+        var eu = r[0], fotos = r[1] || [], bz = r[2], chefes = r[3] || {};
+        var T = JOGO.Titulos;
+        if (!T) return vazio;
+        var niveis = contasDoPlacar(fotos, eu.id, eu.nome).sort(function (a, b) {
+          return ((b.resumo && b.resumo.total) || 0) - ((a.resumo && a.resumo.total) || 0);
+        });
+        var arena = [{ id: eu.id, pts: bz ? bz.pts : 1000, partidas: (bz && bz.partidas) || 0 }];
+        fotos.forEach(function (f) {
+          if (f.id === eu.id || !f.resumo || typeof f.resumo.brasa !== 'number') return;
+          arena.push({ id: f.id, pts: f.resumo.brasa, partidas: f.resumo.partidas || 0 });
+        });
+        arena = arena.filter(function (a) { return a.partidas > 0; })
+                     .sort(function (a, b) { return b.pts - a.pts; });
+        tituloEstado = {
+          chefes: chefes,
+          pvm: T.posicaoDe(niveis.map(function (l) { return l.id; }), eu.id),
+          pvp: T.posicaoDe(arena.map(function (a) { return a.id; }), eu.id)
+        };
+        return tituloEstado;
+      });
+  }
+  /* O título que a plaquinha pode mostrar. Os de ranking são EMPRESTADOS:
+   * perdida a posição, some sozinho — sem apagar a escolha da conta, que
+   * volta a valer no dia em que a posição voltar. Sem estado lido ainda,
+   * não se apaga nada: corrige-se no primeiro `pintaConta`. */
+  function tituloPendurado(t) {
+    if (!t) return '';
+    var T = JOGO.Titulos;
+    if (!T || !tituloEstado) return t;
+    return T.valido(t, tituloEstado) ? t : '';
   }
 
   function resumoDaConta() {

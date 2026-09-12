@@ -48,14 +48,18 @@ var JOGO = (typeof window !== 'undefined')
       conta: function (ev) { return ev.tipo === 'deposito' ? (ev.valor || 0) : 0; } }
   };
 
+  /* 11/09: as conquistas PAGAM (vinténs) e não dão mais TÍTULO. A decisão é
+   * do dono: "os títulos da plaquinha podem existir, mas não por cumprir
+   * missão". Título agora é posição no ranking ou dez quedas do mesmo chefe
+   * no difícil, sozinho — a régua toda mora em js/core/titulos.js. */
   var CONQUISTAS = {
-    'c-fusao': { texto: 'Vença uma sala fundido', alvo: 1, premio: 30, titulo: 'o Fundido',
+    'c-fusao': { texto: 'Vença uma sala fundido', alvo: 1, premio: 30,
       conta: function (ev) { return (ev.tipo === 'vitoria' && ev.fundido) ? 1 : 0; } },
-    'c-dificil5': { texto: 'Vença 5 salas no difícil', alvo: 5, premio: 60, titulo: 'o Temerário',
+    'c-dificil5': { texto: 'Vença 5 salas no difícil', alvo: 5, premio: 60,
       conta: function (ev) { return (ev.tipo === 'vitoria' && ev.dificuldade === 'dificil') ? 1 : 0; } },
-    'c-desafios10': { texto: 'Cumpra 10 desafios de sala', alvo: 10, premio: 60, titulo: 'o Contratado',
+    'c-desafios10': { texto: 'Cumpra 10 desafios de sala', alvo: 10, premio: 60,
       conta: function (ev) { return (ev.tipo === 'vitoria' && ev.desafioCumprido) ? 1 : 0; } },
-    'c-cofre100': { texto: 'Tenha 100 vinténs no cofre de uma vez', alvo: 1, premio: 50, titulo: 'o Poupador',
+    'c-cofre100': { texto: 'Tenha 100 vinténs no cofre de uma vez', alvo: 1, premio: 50,
       atinge: function (ev) { return ev.tipo === 'deposito' && (ev.cofreTotal || 0) >= 100; } }
   };
 
@@ -194,20 +198,6 @@ var JOGO = (typeof window !== 'undefined')
     });
   };
 
-  // ------------------------------------------------------------- títulos
-  /* Os títulos GANHOS: toda conquista terminada com `titulo` oferece o dela.
-   * Quem escolhe qual pendurar é o jogador (DB.definirTitulo). */
-  M.titulos = function () {
-    var db = DB();
-    if (!db) return Promise.resolve([]);
-    return db.conquistas().then(function (cq) {
-      cq = cq || {};
-      var fora = [];
-      Object.keys(CONQUISTAS).forEach(function (id) {
-        var def = CONQUISTAS[id];
-        if (def.titulo && cq[id] && cq[id].prog >= def.alvo) fora.push(def.titulo);
-      });
-      return fora;
-    });
-  };
+  /* 11/09: `M.titulos` saiu junto com os títulos de conquista. Quem responde
+   * "que títulos esta conta pode pendurar" é JOGO.Titulos.ganhos(). */
 })();

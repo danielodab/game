@@ -1668,6 +1668,22 @@ var JOGO = (typeof window !== 'undefined')
       for (i = 0; i < petCards.length; i++) if (petCards[i].novoPet) pets.push(petCards[i].petId);
     }
 
+    /* OS TÍTULOS DE CHEFE (11/09): dez quedas do mesmo chefe, no DIFÍCIL e
+     * SOZINHO, valem um título (js/core/titulos.js). A conta é anotada aqui
+     * porque é aqui que se sabe, ao mesmo tempo, QUAL chefe caiu, em que
+     * dificuldade e com quanta gente — `partySize` já cobre o grupo da Rede.
+     * Fire-and-forget, como as missões: troféu não segura recompensa. */
+    if (JOGO.DB && JOGO.DB.chefeAbatido && partySize === 1 &&
+        (difSala.id || 'normal') === 'dificil') {
+      for (i = 0; i < st.units.length; i++) {
+        var uc = st.units[i];
+        if (uc.side !== 'enemy' || uc.alive) continue;
+        var dc = monsters[uc.defId];
+        if (!dc || !dc.boss) continue;
+        try { JOGO.DB.chefeAbatido(uc.defId); } catch (eT) {}
+      }
+    }
+
     /* O QUADRO DE MISSÕES ouve a vitória por evento explícito — este é o único
      * lugar que sabe, ao mesmo tempo, a dificuldade, o desafio e se havia
      * fusão viva. Fire-and-forget: recompensa não espera missão. */

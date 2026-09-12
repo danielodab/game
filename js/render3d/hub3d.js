@@ -193,8 +193,14 @@ var JOGO = (typeof window !== 'undefined')
      * tela do rótulo vai a 512×176 quando há brasão (sem brasão continua
      * 512×128, do tamanho de sempre). A escala do sprite acompanha a altura
      * da tela, senão a placa sairia esticada. */
+    /* O TÍTULO DENTRO DA PLACA (11/09, dono: "esse título deve ficar dentro
+     * e abaixo do nome do jogador"). Ele vinha numa placa própria, solta
+     * embaixo — duas molduras para uma pessoa só, e a de baixo boiando. Vira
+     * a segunda linha desta, em corpo menor e dourado, e a tela cresce o
+     * tanto que a linha pede. */
     var temEscudo = !!(op && op.escudo);
-    var ALT = temEscudo ? 176 : 128;
+    var subtexto = (op && op.subtexto) ? String(op.subtexto) : '';
+    var ALT = temEscudo ? 176 : (subtexto ? 168 : 128);
     var ESCUDO_PX = temEscudo ? 132 : 0;
     var cv = document.createElement('canvas');
     cv.width = 512; cv.height = ALT;
@@ -203,6 +209,11 @@ var JOGO = (typeof window !== 'undefined')
     
     var paddingShield = temEscudo ? ESCUDO_PX + 6 : 0;
     var textW = Math.ceil(g.measureText(texto).width);
+    if (subtexto) {
+      g.font = 'italic 600 32px Georgia, serif';
+      textW = Math.max(textW, Math.ceil(g.measureText(subtexto).width));
+      g.font = '600 44px Georgia, serif';
+    }
     var larg = Math.min(492, textW + 56 + paddingShield);
     var x0 = (512 - larg) / 2;
     var mY = temEscudo ? 12 : 18;                 // margem de cima e de baixo
@@ -239,10 +250,17 @@ var JOGO = (typeof window !== 'undefined')
     }
     
     var tx = temEscudo ? (x0 + 10 + paddingShield) : 256;
-    var ty = ALT / 2 + 16;                        // a linha de base do texto
+    // com título, o nome sobe para abrir espaço à linha de baixo
+    var ty = ALT / 2 + (subtexto ? -2 : 16);
     g.textAlign = temEscudo ? 'left' : 'center';
     g.fillText(texto, tx, ty);
     if (bri) { g.fillText(texto, tx, ty); g.fillText(texto, tx, ty); }
+    if (subtexto) {
+      g.font = 'italic 600 32px Georgia, serif';
+      g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 8;
+      g.fillStyle = bri ? bri.cor : '#e8c25a';
+      g.fillText(subtexto, tx, ty + 42);
+    }
 
     var tex = new THREE.Texture(cv);
     tex.needsUpdate = true;
@@ -1401,23 +1419,21 @@ var JOGO = (typeof window !== 'undefined')
     var sp = grupo
       ? rotulo((grupo === 'lider' ? '♛ ' : '◆ ') + nome, '#ffe7a6', 0.42,
                { placa: true, borda: '#ffcf3f', traco: 9, fundo: 'rgba(44,32,8,0.92)',
-                 brilho: brilho || null })
-      : rotulo(nome, '#f0ead8', 0.42, { placa: true, brilho: brilho || null });
-    sp.position.y = alto + (titulo ? 0.66 : 0.5);
+                 brilho: brilho || null, subtexto: titulo || '' })
+      : rotulo(nome, '#f0ead8', 0.42,
+               { placa: true, brilho: brilho || null, subtexto: titulo || '' });
+    sp.position.y = alto + 0.5;
     corpo.node.add(sp);
     corpo.plaquinha = sp;
-    // o TÍTULO de conquista: linha menor e dourada, abaixo do nome — é a
-    // recompensa social do quadro de missões, visível de longe
-    if (titulo) {
-      var st2 = rotulo(titulo, '#e8c25a', 0.30);
-      st2.position.y = alto + 0.38;
-      corpo.node.add(st2);
-      corpo.plaquinhaTitulo = st2;
-    }
+    /* A PILHA (11/09). As alturas eram números soltos (0.5, 0.52, 0.34) que
+     * batiam quando a placa do nome tinha uma altura só. Agora ela cresce
+     * com o título dentro, e a da guilda cresce com o brasão: cada peça é
+     * empilhada sobre o TOPO da anterior, medido de verdade (`scale.y` de um
+     * sprite É a altura dele no mundo). Nada de constante para desacertar. */
+    var topoPilha = sp.position.y + sp.scale.y / 2;
     // A PLACA DA GUILDA: emblema + nome, acima do nome do personagem — a
     // bandeira que o corpo carrega ("com seu logo da guild e nome da guild
     // em cima"). Placa própria, um degrau menor que a do nome.
-    var altoGuilda = 0;
     if (temGuilda) {
       var gtx = guilda.nome;
       var codEscudo = null;
@@ -1439,10 +1455,10 @@ var JOGO = (typeof window !== 'undefined')
       var sg = rotulo(gtx, cp.texto, escG,
                       { placa: true, fundo: cp.fundo, borda: cp.borda,
                         traco: codEscudo ? 6 : 5, escudo: codEscudo });
-      sg.position.y = alto + (titulo ? 0.66 : 0.5) + (codEscudo ? 0.64 : 0.52);
+      sg.position.y = topoPilha + sg.scale.y / 2 + 0.05;
+      topoPilha = sg.position.y + sg.scale.y / 2;
       corpo.node.add(sg);
       corpo.plaquinhaGuilda = sg;
-      altoGuilda = codEscudo ? 0.64 : 0.52;
     }
     // A COROA DO RANKING — a arte do usuário, no lugar das chamas ("essa
     // coroa ficará acima da cabeça ao invés das chamas"). AGORA EM 3D
@@ -1456,7 +1472,7 @@ var JOGO = (typeof window !== 'undefined')
       if (coroa) {
         // a coroa sobe um degrau quando há placa de guilda no caminho
         // a folga cresce com a coroa: uma Coroa X não pode sentar na placa
-        var baseK3 = alto + (titulo ? 0.66 : 0.5) + 0.30 + altoGuilda + tamK * 0.22;
+        var baseK3 = topoPilha + 0.10 + tamK * 0.22;
         coroa.position.y = baseK3;
         coroa.userData.baseY = baseK3;
         coroa.userData.fase = Math.random() * 9;
@@ -1473,7 +1489,7 @@ var JOGO = (typeof window !== 'undefined')
               side: THREE.DoubleSide
             }));
           bilhete.scale.set(tamK, tamK, 1);
-          var baseK = alto + (titulo ? 0.66 : 0.5) + 0.30 + altoGuilda + tamK * 0.55;
+          var baseK = topoPilha + 0.10 + tamK * 0.55;
           bilhete.position.y = baseK;
           bilhete.userData.baseY = baseK;
           bilhete.userData.fase = Math.random() * 9;
@@ -1484,7 +1500,7 @@ var JOGO = (typeof window !== 'undefined')
         // 11/09: no jogo servido a coroa 3D pode não ter descido ainda — o
         // bilhete segura o lugar e vira a 3D quando ela abrir (esperaCoroa)
         corpo.coroaEspera = { nivel: brasaTier.nivel, tam: tamK, tier: brasaTier,
-                              base3d: alto + (titulo ? 0.66 : 0.5) + 0.30 + altoGuilda + tamK * 0.22 };
+                              base3d: topoPilha + 0.10 + tamK * 0.22 };
         esperaCoroa(brasaTier.nivel);
       }
     }

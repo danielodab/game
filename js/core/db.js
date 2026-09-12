@@ -74,6 +74,7 @@ var JOGO = (typeof window !== 'undefined')
       conquistas: {},                // { id: { prog, pago } }
       mercado: null,                 // { dia, ofertas } — quem semeia é JOGO.Mercado
       placar: {},                    // id -> última foto de cada vizinho visto
+      chefes: {},                    // 11/09: quedas de cada chefe no DIFÍCIL e SOZINHO (títulos)
       mutados: [],                   // [{id, nome}] — silenciados no chat (25/08)
       loja: { aplicadas: [], recusadas: [] },   // Fase C: pedidos da loja do site já tratados
       pvp: [],
@@ -109,6 +110,7 @@ var JOGO = (typeof window !== 'undefined')
           if (d.mercado !== null && typeof d.mercado !== 'object') d.mercado = null;
           if (d.mercado === undefined) d.mercado = null;
           if (!d.placar || typeof d.placar !== 'object') d.placar = {};
+          if (!d.chefes || typeof d.chefes !== 'object') d.chefes = {};   // 11/09: os títulos de chefe
           if (!Array.isArray(d.mutados)) d.mutados = [];
           // a anotação da LOJA (Fase C): contas de antes ganham as listas
           // vazias, e lixo/duplicata/excesso sai (teto de 200 em cada)
@@ -490,6 +492,23 @@ var JOGO = (typeof window !== 'undefined')
                   visto: e.visto });
     });
     return responde(fora);
+  };
+
+  /* OS CHEFES DERRUBADOS no difícil e sozinho (11/09). Só isto: a conta de
+   * quedas. Quem diz que dez viram título é js/core/titulos.js, e quem sabe
+   * que a sala era de chefe, no difícil, sem parceiro, é o js/core/game.js —
+   * o único lugar onde as três coisas se sabem ao mesmo tempo. */
+  DB.chefesVer = function () {
+    var d = carrega(), fora = {};
+    for (var k in d.chefes) if (d.chefes.hasOwnProperty(k)) fora[k] = d.chefes[k];
+    return responde(fora);
+  };
+  DB.chefeAbatido = function (bossId) {
+    if (typeof bossId !== 'string' || !bossId) return responde({ ok: false });
+    var d = carrega();
+    d.chefes[bossId] = Math.max(0, Math.floor(d.chefes[bossId] || 0)) + 1;
+    grava();
+    return responde({ ok: true, quedas: d.chefes[bossId] });
   };
 
   // -------------------------------------------------------------------- a loja

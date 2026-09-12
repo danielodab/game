@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA — os títulos da plaquinha</title>
+<style>
+  body { margin: 0; padding: 18px; background: #0f1216; color: #ece4d4;
+         font: 14px/1.55 system-ui, sans-serif; }
+  h1 { font-size: 17px; color: #ffc44d; margin: 0 0 4px; }
+  p.sub { color: #8b93a0; font-size: 12.5px; margin: 0 0 14px; max-width: 70ch; }
+  #placar { font-size: 13px; padding: 8px 10px; border: 1px solid #3a4553; border-radius: 8px;
+            margin-bottom: 10px; }
+  .ok { color: #5fd08a; } .ruim { color: #ff6b5a; }
+  li { margin: 2px 0; } li.f { color: #ff6b5a; } li.p { color: #7fe08a; }
+  ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+<!-- A RÉGUA DOS TÍTULOS (11/09). Título deixou de vir de missão: vem de
+     pódio (níveis e arena) ou de dez quedas do mesmo chefe no difícil e
+     sozinho. Esta prova cobra a régua inteira sem 3D e sem HUD. -->
+<h1>Os títulos da plaquinha</h1>
+<p class="sub">Pódio de níveis, pódio da arena e as dez quedas de chefe. Os de ranking são
+emprestados (a posição foi, o título vai); os de chefe são para sempre.</p>
+<div id="placar">medindo…</div>
+<ul id="lista"></ul>
+<script src="../js/core/titulos.js"></script>
+<script>
+(function () {
+  var T = JOGO.Titulos;
+  var falhas = [], linhas = [];
+  function check(nome, ok, extra) {
+    linhas.push('<li class="' + (ok ? 'p' : 'f') + '">' + (ok ? 'PASSOU' : 'FALHOU') +
+                ' · ' + nome + (extra ? ' <i>(' + extra + ')</i>' : '') + '</li>');
+    if (!ok) falhas.push(nome);
+  }
+
+  check('o módulo subiu', !!T && typeof T.catalogo === 'function');
+
+  // ---- conta nova: nada ganho
+  var zerado = T.catalogo({ chefes: {}, pvm: null, pvp: null });
+  check('o catálogo tem 3 + 3 + 6 títulos', zerado.length === 12, zerado.length);
+  check('conta nova não tem título nenhum', T.ganhos({}).length === 0);
+  check('nenhum título repete', (function () {
+    var vistos = {}, dup = false;
+    zerado.forEach(function (t) { if (vistos[t.titulo]) dup = true; vistos[t.titulo] = 1; });
+    return !dup;
+  })());
+  check('nenhum título se passa pela equipe do jogo', zerado.every(function (t) {
+    return !/\b(gm|admin|mestre|staff)\b/i.test(t.titulo);
+  }), zerado.map(function (t) { return t.titulo; }).join(' · '));
+
+  // ---- os pódios
+  check('1º do ranking de níveis ganha a Primeira Lanterna',
+        T.ganhos({ pvm: 1 }).indexOf('Primeira Lanterna') >= 0);
+  check('3º da arena ganha o Escudo da Arena',
+        T.ganhos({ pvp: 3 }).indexOf('Escudo da Arena') >= 0);
+  check('4º lugar não ganha nada', T.ganhos({ pvm: 4, pvp: 9 }).length === 0);
+  check('o pódio dá UM título por lista, não três',
+        T.ganhos({ pvm: 2, pvp: 2 }).length === 2, T.ganhos({ pvm: 2, pvp: 2 }).join(' · '));
+
+  // ---- os chefes
+  var noveQuedas = { chefes: { 'boss-gardener': 9 } };
+  check('nove quedas não bastam', T.ganhos(noveQuedas).length === 0);
+  check('a décima queda entrega o título',
+        T.ganhos({ chefes: { 'boss-gardener': 10 } }).indexOf('o Podador da Viúva') >= 0);
+  check('o progresso aparece antes do prêmio', (function () {
+    var l = T.catalogo(noveQuedas).filter(function (t) { return t.chefe === 'boss-gardener'; })[0];
+    return l && l.prog === 9 && l.alvo === 10 && !l.ganho;
+  })());
+  check('cada um dos SEIS chefes tem título próprio', (function () {
+    var todos = {};
+    T.CHEFES.forEach(function (c) { todos[c.titulo] = 1; });
+    return T.CHEFES.length === 6 && Object.keys(todos).length === 6;
+  })());
+  check('queda a mais não quebra nem duplica',
+        T.ganhos({ chefes: { 'boss-baroness': 99 } }).length === 1);
+
+  // ---- o empréstimo
+  check('título de chefe é PARA SEMPRE',
+        T.catalogo({ chefes: { 'boss-deepknock': 10 } })
+          .filter(function (t) { return t.ganho; })[0].emprestado === false);
+  check('título de pódio é EMPRESTADO',
+        T.catalogo({ pvm: 1 }).filter(function (t) { return t.ganho; })[0].emprestado === true);
+  check('perder a posição invalida o título de pódio',
+        T.valido('Primeira Lanterna', { pvm: 1 }) === true &&
+        T.valido('Primeira Lanterna', { pvm: 2 }) === false);
+  check('perder a posição NÃO invalida o de chefe',
+        T.valido('o Cala-Batida', { chefes: { 'boss-deepknock': 10 }, pvm: null }) === true);
+  check('título inventado nunca é válido', T.valido('o Rei de Tudo', { pvm: 1 }) === false);
+  check('sem título é sem título', T.valido(null, { pvm: 1 }) === false);
+
+  // ---- a posição numa lista ordenada
+  check('posicaoDe acha o 1º, o 3º e ignora o 4º',
+        T.posicaoDe(['a', 'b', 'c', 'd'], 'a') === 1 &&
+        T.posicaoDe(['a', 'b', 'c', 'd'], 'c') === 3 &&
+        T.posicaoDe(['a', 'b', 'c', 'd'], 'd') === null);
+  check('posicaoDe aguenta lista vazia e id vazio',
+        T.posicaoDe([], 'a') === null && T.posicaoDe(['a'], null) === null);
+
+  // ---- tudo junto
+  var cheio = { chefes: { 'boss-gardener': 10, 'boss-riftheart': 12 }, pvm: 1, pvp: 3 };
+  check('uma conta pode acumular vários títulos ganhos',
+        T.ganhos(cheio).length === 4, T.ganhos(cheio).join(' · '));
+
+  document.getElementById('lista').innerHTML = linhas.join('');
+  var pl = document.getElementById('placar');
+  pl.className = falhas.length ? 'ruim' : 'ok';
+  pl.textContent = falhas.length ? ('FALHOU: ' + falhas.join(' · '))
+                                 : ('tudo passou (' + linhas.length + ')');
+})();
+</script>
+</body>
+</html>

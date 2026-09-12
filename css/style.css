@@ -1682,6 +1682,17 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .char-fonte { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .char-fonte-nm { font: 700 11px var(--ui-sans); letter-spacing: .06em; text-transform: uppercase;
                  color: var(--gold); }
+/* a lista de títulos: o ganho acende, o que falta diz o que falta */
+.tit-linha {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 6px 10px; border-radius: 9px; font-size: 12.5px;
+  background: rgba(255,255,255,.03); border: 1px solid var(--line2);
+}
+.tit-linha.is-ganho { border-color: var(--gold-dim); }
+.tit-nm { font: 700 13px var(--ui-serif); color: var(--dim); }
+.tit-linha.is-ganho .tit-nm { color: var(--gold); text-shadow: 0 0 8px rgba(255,196,77,.35); }
+.tit-ok { font-size: 11px; color: #7fe08a; }
+.tit-falta { font-size: 11px; color: var(--dim); text-align: right; }
 
 /* O COLECIONADOR DE SELOS (25/08): a moeda dos chefes e a roleta */
 .colec-caixa {

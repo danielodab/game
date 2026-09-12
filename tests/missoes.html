@@ -82,13 +82,15 @@ prêmio que só sai uma vez, e o título que a conquista destrava.</div>
     .then(function (q) {
       check('o limiar "100 no cofre" fecha com um depósito grande',
             q.conquistas['c-cofre100'] && q.conquistas['c-cofre100'].prog >= 1);
-      // reivindicar a conquista da fusao: paga 30 e da o titulo
+      // reivindicar a conquista da fusao: paga 30 (o titulo saiu em 11/09)
       return DB.moedas().then(function (antes) {
         return Ms.reivindicar('c-fusao', DIA1).then(function (r) {
           check('reivindicar paga o prêmio em vinténs',
                 r.ok && r.premio === 30 && r.moedas === antes + 30,
                 JSON.stringify(r));
-          check('a conquista entrega o título', r.titulo === 'o Fundido', r.titulo);
+          // 11/09: conquista PAGA e não dá mais título (a régua dos títulos
+          // mudou de dono — ver tests/titulos.html)
+          check('a conquista não entrega mais título', !r.titulo, r.titulo);
           return Ms.reivindicar('c-fusao', DIA1);
         });
       });
@@ -99,20 +101,15 @@ prêmio que só sai uma vez, e o título que a conquista destrava.</div>
     })
     .then(function (r3) {
       check('missão inacabada não paga', !r3.ok, r3.erro);
-      return Ms.titulos();
-    })
-    .then(function (ts) {
-      check('a lista de títulos ganhos tem os das conquistas feitas',
-            ts.indexOf('o Fundido') >= 0 && ts.indexOf('o Poupador') >= 0 &&
-            ts.indexOf('o Temerário') < 0, ts.join(' · '));
-      return DB.definirTitulo('o Fundido');
+      check('o quadro não oferece mais títulos', typeof Ms.titulos !== 'function');
+      return DB.definirTitulo('o Podador da Viúva');
     })
     .then(function (rt) {
-      check('o título escolhido fica na conta', rt.ok && rt.titulo === 'o Fundido');
+      check('o título escolhido fica na conta', rt.ok && rt.titulo === 'o Podador da Viúva');
       return DB.jogador();
     })
     .then(function (j) {
-      check('jogador() devolve o título junto do nome', j.titulo === 'o Fundido');
+      check('jogador() devolve o título junto do nome', j.titulo === 'o Podador da Viúva');
       // A VIRADA DO DIA: trio novo, progresso zerado, conquistas INTACTAS
       return Ms.carregar(DIA2);
     })
