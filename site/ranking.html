@@ -108,7 +108,8 @@
 /* 10/09: os nomes das classes e dos elementos saem dos dados do próprio jogo
  * (mesma origem), cada um com o hash do conteúdo (SITE_URL, no topo). */
 (function () {
-  ['site.js', '../js/core/data/elements.js', '../js/core/data/classes.js'].forEach(function (s) {
+  ['site.js', '../js/ui/brasao.js',
+   '../js/core/data/elements.js', '../js/core/data/classes.js'].forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();
@@ -232,7 +233,7 @@
         return '<td class="nome">' + E(p.nome) + '</td><td class="num">' + N(p.brasa) + '</td><td class="num">' + N(p.partidas) + '</td>';
       });
       tabela('guildas', r.guildas || [], function (g) {
-        return '<td class="nome"><span class="emblema">' + E(g.emblema || '') + '</span>' + E(g.nome) + '</td><td class="num">' + N(g.membros) + '</td><td class="num">' + N(g.xpTotal) + '</td>';
+        return '<td class="nome">' + SITE.emblema(g.emblema) + E(g.nome) + '</td><td class="num">' + N(g.membros) + '</td><td class="num">' + N(g.xpTotal) + '</td>';
       });
       desenhaClasse();
     });

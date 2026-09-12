@@ -187,22 +187,26 @@ var JOGO = (typeof window !== 'undefined')
     admin:  { cor: '#ffffff', texto: '#ffffff', borrao: 26, fundo: 'rgba(18,20,26,0.94)' }
   };
   function rotulo(texto, cor, escala, op) {
+    /* O BRASÃO na placa da guilda (11/09, dono: "logo tem que ser maior; o
+     * retângulo do logo e nome da guilda deve ser maior, onde caiba o logo").
+     * O escudo passou a 132 px e a placa CRESCEU para caber nele inteiro: a
+     * tela do rótulo vai a 512×176 quando há brasão (sem brasão continua
+     * 512×128, do tamanho de sempre). A escala do sprite acompanha a altura
+     * da tela, senão a placa sairia esticada. */
+    var temEscudo = !!(op && op.escudo);
+    var ALT = temEscudo ? 176 : 128;
+    var ESCUDO_PX = temEscudo ? 132 : 0;
     var cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 128;
+    cv.width = 512; cv.height = ALT;
     var g = cv.getContext('2d');
     g.font = '600 44px Georgia, serif';
     
-    /* O BRASÃO na placa da guilda (11/09, pedido do dono: "precisa ser maior
-     * para destacar ao lado do nome do clã"). Ele agora tem 104 px numa placa
-     * de 92 — TRANSBORDA a moldura de propósito, em cima e embaixo, como um
-     * escudo pendurado na bandeira: é o que faz o clã ser reconhecido de
-     * longe, antes de dar para ler o nome. */
-    var temEscudo = !!(op && op.escudo);
-    var ESCUDO_PX = 104;
-    var paddingShield = temEscudo ? ESCUDO_PX - 6 : 0;
+    var paddingShield = temEscudo ? ESCUDO_PX + 6 : 0;
     var textW = Math.ceil(g.measureText(texto).width);
     var larg = Math.min(492, textW + 56 + paddingShield);
     var x0 = (512 - larg) / 2;
+    var mY = temEscudo ? 12 : 18;                 // margem de cima e de baixo
+    var altPlaca = ALT - mY * 2;
 
     /* O NOME QUE BRILHA (11/09, pedido do dono): o pódio do ranking POR
      * CLASSE e o admin do sistema não se anunciam com um texto ao lado —
@@ -213,14 +217,16 @@ var JOGO = (typeof window !== 'undefined')
     var bri = op && op.brilho ? BRILHOS[op.brilho] : null;
 
     if (op && op.placa) {
+      var traco = op.traco || (bri ? 7 : 5);
       g.fillStyle = op.fundo || (bri ? bri.fundo : 'rgba(24,18,10,0.88)');
-      g.fillRect(x0, 18, larg, 92);
+      g.fillRect(x0, mY, larg, altPlaca);
       g.strokeStyle = op.borda || (bri ? bri.cor : '#c9a227');
-      g.lineWidth = op.traco || (bri ? 7 : 5);
-      g.strokeRect(x0 + 2.5, 20.5, larg - 5, 87);
+      g.lineWidth = traco;
+      g.strokeRect(x0 + traco / 2, mY + traco / 2, larg - traco, altPlaca - traco);
     }
     
-    if (temEscudo) desenhaBrasao(g, x0 + 8, (128 - ESCUDO_PX) / 2, ESCUDO_PX, op.escudo);
+    // o escudo mora DENTRO da moldura agora, encostado na borda esquerda
+    if (temEscudo) desenhaBrasao(g, x0 + 10, (ALT - ESCUDO_PX) / 2, ESCUDO_PX, op.escudo);
 
     g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 10;
     g.fillStyle = cor || '#f0ead8';
@@ -232,17 +238,20 @@ var JOGO = (typeof window !== 'undefined')
       g.fillStyle = bri.texto;
     }
     
-    var tx = temEscudo ? (x0 + 16 + paddingShield) : 256;
+    var tx = temEscudo ? (x0 + 10 + paddingShield) : 256;
+    var ty = ALT / 2 + 16;                        // a linha de base do texto
     g.textAlign = temEscudo ? 'left' : 'center';
-    g.fillText(texto, tx, 78);
-    if (bri) { g.fillText(texto, tx, 78); g.fillText(texto, tx, 78); }
+    g.fillText(texto, tx, ty);
+    if (bri) { g.fillText(texto, tx, ty); g.fillText(texto, tx, ty); }
 
     var tex = new THREE.Texture(cv);
     tex.needsUpdate = true;
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
     var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
     var e = escala || 1;
-    sp.scale.set(6.4 * e, 1.6 * e, 1);
+    // a altura do sprite segue a da tela (512 px = 6.4 de mundo): tela mais
+    // alta, placa mais alta — nunca esticada
+    sp.scale.set(6.4 * e, (ALT / 80) * e, 1);
     return sp;
   }
 
@@ -1417,14 +1426,23 @@ var JOGO = (typeof window !== 'undefined')
       } else {
         gtx = (guilda.emblema || '⚑') + ' ' + guilda.nome;
       }
-      // com brasão a placa vem maior (0.36): o escudo de 104 px pede espaço,
-      // e é ele que tem de ser visto de longe
-      var escG = codEscudo ? 0.36 : 0.30;
-      var sg = rotulo(gtx, '#ffd98a', escG, { placa: true, borda: '#8a6f2e', escudo: codEscudo });
-      sg.position.y = alto + (titulo ? 0.66 : 0.5) + (codEscudo ? 0.60 : 0.52);
+      /* A PLACA VESTE O BRASÃO (11/09): fundo e filete saem das cores do
+       * escudo (JOGO.Brasao.coresDaPlaca), que espreme a luz do fundo numa
+       * faixa escura e força contraste na borda — é o que impede que um
+       * brasão todo preto vire uma placa preta sem nome legível. Sem o
+       * módulo do brasão, a placa marrom-dourada de sempre. */
+      var Bp = (typeof JOGO !== 'undefined') ? JOGO.Brasao : null;
+      var cp = (Bp && Bp.coresDaPlaca && codEscudo) ? Bp.coresDaPlaca(codEscudo)
+                                 : { fundo: null, borda: '#8a6f2e', texto: '#ffd98a' };
+      // com brasão a placa vem maior: o escudo de 132 px mora dentro dela
+      var escG = codEscudo ? 0.34 : 0.30;
+      var sg = rotulo(gtx, cp.texto, escG,
+                      { placa: true, fundo: cp.fundo, borda: cp.borda,
+                        traco: codEscudo ? 6 : 5, escudo: codEscudo });
+      sg.position.y = alto + (titulo ? 0.66 : 0.5) + (codEscudo ? 0.64 : 0.52);
       corpo.node.add(sg);
       corpo.plaquinhaGuilda = sg;
-      altoGuilda = codEscudo ? 0.60 : 0.52;
+      altoGuilda = codEscudo ? 0.64 : 0.52;
     }
     // A COROA DO RANKING — a arte do usuário, no lugar das chamas ("essa
     // coroa ficará acima da cabeça ao invés das chamas"). AGORA EM 3D

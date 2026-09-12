@@ -357,6 +357,7 @@ tr.top2 td.pos, tr.top3 td.pos { color: var(--ouro-2); }
 .tres.quatro { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
 .tres h3 { margin-bottom: 10px; }
 .tres h3 small { color: var(--texto-2); font-weight: 400; font-family: var(--sans); font-size: 13px; margin-left: 6px; }
+.emblema-brasao { vertical-align: -5px; margin-right: 7px; image-rendering: auto; }
 .emblema { display: inline-block; min-width: 1.4em; text-align: center; margin-right: 6px; }
 
 /* ---- o busto (ranking, 10/09) -------------------------------------------------

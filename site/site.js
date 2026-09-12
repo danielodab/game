@@ -144,6 +144,27 @@
     for (var i = 0; i < ja.length; i++) ja[i].parentNode.removeChild(ja[i]);
   }
 
+  /* O EMBLEMA DA GUILDA (11/09). Desde que o brasão virou vetor, o campo
+   * `emblema` guarda um CÓDIGO ("shield|1|#b40426|..."), e as tabelas do site
+   * o imprimiam cru — uma linha de ranking com o código no lugar do escudo.
+   * Aqui ele vira imagem: js/ui/brasao.js (o mesmo do jogo) desenha num
+   * canvas e o canvas vira data: URL, que é o que cabe numa tabela montada
+   * por string. Guilda antiga (um emoji) segue como texto; sem o brasao.js
+   * na página, o código NÃO aparece — melhor sem escudo que com lixo. */
+  SITE.emblema = function (emblema, tam) {
+    tam = tam || 22;
+    var B = window.JOGO && JOGO.Brasao;
+    if (B && B.ehCodigo && B.ehCodigo(emblema)) {
+      try {
+        return '<img class="emblema-brasao" alt="" width="' + tam + '" height="' + tam +
+               '" src="' + B.canvas(emblema, tam).toDataURL() + '">';
+      } catch (e) { return ''; }
+    }
+    // sem o brasao.js na página: some, nunca vira texto
+    if (typeof emblema === 'string' && emblema.indexOf('shield|') === 0) return '';
+    return '<span class="emblema">' + SITE.esc(emblema || '') + '</span>';
+  };
+
   SITE.cabecalho = function () {
     menuDoMestre(SITE.sessao());
     var caixa = document.getElementById('sessao');

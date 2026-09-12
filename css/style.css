@@ -374,6 +374,13 @@ i, em { font-style: normal; color: var(--dim); }
 .game-sub { color: var(--dim); font-size: 14px; margin-top: -8px; }
 .menu-acts { display: flex; flex-direction: column; gap: var(--gap); }
 .menu-foot { font-size: 12px; color: var(--dim); }
+/* a porta de saída (11/09): discreta, no pé do menu — é uma saída, não
+   uma ação que se queira convidar a apertar */
+.menu-sair {
+  align-self: center; margin-top: 2px; padding: 9px 18px; min-height: 40px;
+  font-size: 13px; color: var(--dim); text-decoration: none;
+}
+.menu-sair:hover { color: var(--text); }
 .defeat-title { color: var(--bad); text-shadow: 0 3px 0 #5a1a16, 0 0 28px rgba(255,107,90,.3); }
 
 .stones-strip { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }

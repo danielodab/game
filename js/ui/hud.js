@@ -779,30 +779,31 @@ var JOGO = (typeof window !== 'undefined')
     box.appendChild(el('h1', 'game-title', 'SOTERRA'));
     box.appendChild(el('p', 'game-sub', 'Desça. O fundo tem dono.'));
 
+    /* O MENU É UMA PORTA DE ENTRADA (11/09, pedido do dono: "precisa ser um
+     * menu de login, mais simples e mais para troca de personagem"). Ele
+     * tinha virado um painel de gestão — inventário, forja, feitiços, avatar
+     * e a prateleira de pedras — que só fazem sentido COM um grupo escolhido,
+     * e todos já têm porta no cais do Acampamento. Aqui ficam três coisas:
+     * DESCER (que é escolher quem desce), a COLEÇÃO (as cartas, que é o que
+     * se olha antes de escolher) e a CONTA. Mais o resumo embaixo. */
     var acts = el('div', 'menu-acts');
     acts.appendChild(btn('Descer', 'btn-primary btn-big', function () { navTo('heroSelect'); }));
-    // O GAME MASTER (31/08): o botão só EXISTE com a chave do dono virada
+    // O GAME MASTER (31/08): o botão só EXISTE com a chave do dono virada —
+    // é a porta do Mestre e não entra na conta do "menu enxuto"
     if (JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()) {
       acts.appendChild(btn('⚔ Painel do Mestre', 'btn-gold btn-big', function () {
         openSheet('gm');
       }));
     }
-    // [25/08] o menu único "Personagens" foi dividido a pedido: cada ficha
-    // tem porta própria — aqui numa fileira compacta, no Acampamento o cais.
     var fichas = el('div', 'menu-fichas');
-    PARTY_TABS.forEach(function (t) {
-      fichas.appendChild(btn(t.nome, 'btn-mini btn-ghost', function () { sheetParty(t.id); }));
-    });
-    acts.appendChild(fichas);
+    fichas.appendChild(btn('Coleção', 'btn-mini btn-ghost', function () { sheetParty('colecao'); }));
     // o Banco de Contas (25/08): qual conta ESTA janela é, e a porta para
     // trocar/criar — duas janelas com contas diferentes = dois jogadores
     var rotuloConta = safe(function () { return JOGO.Contas.rotulo(); }, null);
-    if (rotuloConta) {
-      acts.appendChild(btn('Conta: <b>' + esc(rotuloConta) + '</b>', 'btn-mini btn-ghost',
-        function () { openSheet('contas'); }));
-    }
+    fichas.appendChild(btn(rotuloConta ? 'Conta: <b>' + esc(rotuloConta) + '</b>' : 'Conta',
+      'btn-mini btn-ghost', function () { openSheet('contas'); }));
+    acts.appendChild(fichas);
     box.appendChild(acts);
-    box.appendChild(stonesStrip());
 
     // resumo do cofre: quantas classes liberadas, quantas estrelas somadas
     var ids = Object.keys(classes());
@@ -812,7 +813,21 @@ var JOGO = (typeof window !== 'undefined')
       box.appendChild(el('p', 'menu-foot',
         libs + ' de ' + ids.length + ' classes liberadas · ' + stars + ' estrelas'));
     }
+    box.appendChild(botaoSair());
     s.appendChild(box);
+  }
+
+  /* SAIR DO JOGO (11/09, pedido do dono: "precisa ter um botão de sair do
+   * jogo também, que vai para a página do site do sistema"). Fecha a aba do
+   * jogo? Não: navegador nenhum deixa uma página se fechar sozinha, e um
+   * botão que às vezes não faz nada é pior que botão nenhum. Ele LEVA para o
+   * site — que é onde se cuida da conta, da loja e do ranking — e o save já
+   * está gravado a cada passo, então sair é só sair. */
+  function botaoSair() {
+    var a = el('a', 'btn btn-ghost menu-sair', 'Sair do jogo');
+    a.href = safe(function () { return JOGO.Sessao.paginaSite(); }, 'site/index.html');
+    a.title = 'Volta para o site — o seu progresso já está guardado';
+    return a;
   }
 
   // ==========================================================================
@@ -1183,7 +1198,6 @@ var JOGO = (typeof window !== 'undefined')
      { ic: '🎒', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
      { ic: '📖', rot: 'Feitiços', abre: 'spells' },
      { ic: '🃏', rot: 'Coleção', abre: 'collection' },
-     { ic: '🎭', rot: 'Avatar', abre: 'avatar' },
      { ic: '📜', rot: 'Missões', abre: 'missoes' },
      { ic: '🛡️', rot: 'Guilda', abre: 'guilda_remoto' } // Adicionado para acesso remoto
     ].forEach(function (d) {
@@ -1256,8 +1270,10 @@ var JOGO = (typeof window !== 'undefined')
         }
         // O AVATAR: a conta pode vestir uma fusão do guarda-roupa — o
         // re-entrar troca o corpo (e o guarda do laço segura o rAF único)
-        if (j.avatar && JOGO.Hub && JOGO.Hub.entrar) {
-          JOGO.Hub.entrar(mundo, j.avatar, { sala: sala });
+        // 11/09: o corpo da praça é o PRIMEIRO herói escolhido em "Quem
+        // desce" — o guarda-roupa saiu, e com ele a escolha separada
+        if (selHeroes[0] && JOGO.Hub && JOGO.Hub.entrar) {
+          JOGO.Hub.entrar(mundo, selHeroes[0], { sala: sala });
         }
         // a plaquinha: nome, título — e a CHAMA DA BRASA. A Fagulha é uma
         // faísca de vagalume, mas SÓ para quem já pisou na arena: quem nunca
@@ -1529,7 +1545,7 @@ var JOGO = (typeof window !== 'undefined')
         // fusão do guarda-roupa; o fantasma do outro lado veste igual
         var ligou = R.entrar({ id: j.id, nome: j.nome || 'Sem Nome',
                                titulo: j.titulo || '',
-                               classe: j.avatar || selHeroes[0] || 'sumo',
+                               classe: selHeroes[0] || 'sumo',
                                resumo: safe(resumoDaConta, null),
                                aura: safe(temAuraSelos, false),
                                sala: chaveSala,          // 03/09: a antessala (null = praça)
@@ -3854,7 +3870,7 @@ var JOGO = (typeof window !== 'undefined')
       var souMestre3 = safe(function () { return !!(JOGO.GM && JOGO.GM.ativo()); }, false);
       var brilho = souMestre3 ? 'admin' : (medalhas[j.id] || null);
       var topo = el('div', 'char-topo');
-      var corpoAv = j.avatar || charHeroi || heroIds().filter(isUnlocked)[0] || 'sumo';
+      var corpoAv = charHeroi || selHeroes[0] || heroIds().filter(isUnlocked)[0] || 'sumo';
       topo.appendChild(art('unit', [corpoAv, { element: 'neutro', dir: 0, scale: 0.7 }], 96));
       var colT = el('div', 'char-col');
       colT.appendChild(el('div', 'char-nome' + (brilho ? ' pl-brilho is-' + brilho : ''),
@@ -3930,8 +3946,12 @@ var JOGO = (typeof window !== 'undefined')
         ? 'Escondida: nem você nem os outros veem o troféu na praça. Os pontos continuam no placar.'
         : 'Aparecendo para todo mundo na praça. Os pontos do placar não mudam com isto.'));
 
-      // ---- OS NÚMEROS, herói por herói
-      var libs = heroIds().filter(isUnlocked);
+      /* ---- OS NÚMEROS, herói por herói. Só os que DESCERAM (11/09, pedido
+       * do dono: "ao abrir a aba personagem deve trazer somente dos
+       * personagens selecionados") — a ficha é do grupo que está em jogo,
+       * não do acervo. Fora de uma descida (no menu), mostra os liberados,
+       * senão a aba abriria vazia. */
+      var libs = selHeroes.length ? selHeroes.slice() : heroIds().filter(isUnlocked);
       if (!libs.length) {
         caixa.appendChild(el('p', 'inv-dica', 'Nenhuma classe liberada ainda.'));
         return;
@@ -4313,7 +4333,11 @@ var JOGO = (typeof window !== 'undefined')
       sub: 'A árvore inteira da classe: o tronco que todos têm e os quatro galhos elementais.' },
     { id: 'colecao', nome: 'Coleção',
       sub: 'Cartas de chefe liberam classes e, depois, viram estrelas permanentes.' },
-    { id: 'avatar', nome: 'Avatar',
+    /* 11/09: a aba do AVATAR saiu — o avatar deixou de ser escolha. Quem
+     * anda no Acampamento é o PRIMEIRO herói de "Quem desce", e ponto. A
+     * entrada 'avatar' fica aqui fora da lista para não quebrar quem ainda
+     * chamar sheetParty('avatar') (o guarda-roupa segue no código, mudo). */
+    { id: 'avatar', nome: 'Avatar', oculta: true,
       sub: 'O corpo com que você anda no Acampamento. Cada dupla de classes liberadas põe a fusão no guarda-roupa.' }
   ];
 

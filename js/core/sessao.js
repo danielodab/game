@@ -127,9 +127,13 @@
     return p;
   };
 
+  /* A raiz do site, relativa ao jogo. As duas páginas abaixo saem daqui. */
+  function raizDoSite() {
+    return String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');
+  }
   /* A página de conta do site, relativa ao jogo (raiz/site/conta.html). */
-  S.paginaConta = function () {
-    var raiz = String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');
-    return raiz + 'site/conta.html';
-  };
+  S.paginaConta = function () { return raizDoSite() + 'site/conta.html'; };
+  /* A porta de SAÍDA do jogo (11/09): a capa do site, onde se cuida da conta,
+   * da loja e do ranking. O save já está gravado a cada passo — sair é sair. */
+  S.paginaSite = function () { return raizDoSite() + 'site/index.html'; };
 })();

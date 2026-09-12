@@ -24,6 +24,8 @@
 <h2>Formas</h2><div class="fila" id="formas"></div>
 <h2>Campos (a 2ª cor)</h2><div class="fila" id="campos"></div>
 <h2>Símbolos</h2><div class="fila" id="simbolos"></div>
+<h2>A placa da praça (fundo e borda saem do brasão)</h2>
+<div class="fila" id="placas"></div>
 <h2>Tamanhos (o da placa da praça é 64; o da ficha, 48)</h2><div class="fila" id="tamanhos"></div>
 <script src="../js/ui/brasao.js"></script>
 <script>
@@ -52,6 +54,49 @@
     peca('tamanhos', cod({ 1: '4', 5: 'lily', 6: '3', 7: '#122557' }), t + 'px', t);
   });
 
+  /* A PLACA: o mesmo retângulo que o hub3d pendura na praça, desenhado aqui
+   * com as cores que `coresDaPlaca` devolve. O caso que interessa é o do
+   * BRASÃO TODO PRETO (o pedido do dono): a moldura tem de aparecer e o nome
+   * tem de ler. Os quatro últimos são propositalmente hostis. */
+  var CASOS = [
+    { cod: cod({}), nome: 'Presas do Poço' },
+    { cod: cod({ 1: '3', 2: '#1d3f8a', 3: '#c9a227', 4: '#f5d76e', 5: 'lily' }), nome: 'Coro da Maré' },
+    { cod: cod({ 2: '#2d7a3a', 3: '#0c3320', 4: '#8fe08a', 5: 'tree' }), nome: 'Raízes da Estufa' },
+    { cod: cod({ 2: '#000000', 3: '#000000', 4: '#000000', 5: 'skull' }), nome: 'Tudo Preto' },
+    { cod: cod({ 2: '#0b0d10', 3: '#1d1a14', 4: '#2b2f36', 5: 'moon' }), nome: 'Quase Preto' },
+    { cod: cod({ 2: '#ffffff', 3: '#ffffff', 4: '#ffffff', 5: 'sun' }), nome: 'Tudo Branco' },
+    { cod: cod({ 2: '#f5d76e', 3: '#ffffff', 4: '#ffffff', 5: 'crown' }), nome: 'Ouro Lavado' }
+  ];
+  function placa(caso) {
+    var c = B.coresDaPlaca(caso.cod);
+    var ALT = 176, LARG = 512, ESC = 132, mY = 12, traco = 6;
+    var cv = document.createElement('canvas');
+    cv.width = LARG; cv.height = ALT;
+    cv.style.width = '256px'; cv.style.height = '88px';
+    var g = cv.getContext('2d');
+    g.font = '600 44px Georgia, serif';
+    var larg = Math.min(492, Math.ceil(g.measureText(caso.nome).width) + 56 + ESC + 6);
+    var x0 = (LARG - larg) / 2;
+    g.fillStyle = c.fundo;
+    g.fillRect(x0, mY, larg, ALT - mY * 2);
+    g.strokeStyle = c.borda; g.lineWidth = traco;
+    g.strokeRect(x0 + traco / 2, mY + traco / 2, larg - traco, ALT - mY * 2 - traco);
+    B.desenha(g, x0 + 10, (ALT - ESC) / 2, ESC, caso.cod);
+    g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 10;
+    g.fillStyle = c.texto;
+    g.textAlign = 'left';
+    g.fillText(caso.nome, x0 + 10 + ESC + 6, ALT / 2 + 16);
+    var d = document.createElement('div');
+    d.className = 'peca';
+    d.style.width = '270px';
+    d.appendChild(cv);
+    var sp = document.createElement('span');
+    sp.textContent = caso.nome + ' · ' + c.borda + ' / ' + c.texto;
+    d.appendChild(sp);
+    document.getElementById('placas').appendChild(d);
+    return c;
+  }
+
   // as contas que dão para conferir sem olhar
   var maior = 0;
   B.FORMAS.forEach(function (f) {
@@ -67,6 +112,31 @@
   if (B.hslParaHex(0, 1, 0.5) !== '#ff0000') falhas.push('hsl→hex errou o vermelho');
   var v = B.hexParaHsl('#00ff00');
   if (Math.round(v.h) !== 120 || v.s < 0.99) falhas.push('hex→hsl errou o verde');
+
+  /* CONTRASTE: a placa não pode engolir o nome. Mede-se pela razão de
+   * luminância da WCAG — 4.5 é o piso de texto normal; aqui se cobra 4.0,
+   * que já é muito acima do que um nome de guilda em 44 px precisa. */
+  function lumin(hex) {
+    var s2 = String(hex).replace('#', '');
+    var c = [0, 1, 2].map(function (i) {
+      var v = parseInt(s2.substr(i * 2, 2), 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function razao(a4, b4) {
+    var x = lumin(a4), y = lumin(b4);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  }
+  CASOS.forEach(function (caso) {
+    var c = placa(caso);
+    var fundoSolido = '#' + c.fundo.replace(/rgba?\(|\)/g, '').split(',').slice(0, 3)
+      .map(function (n) { var h = (+n).toString(16); return h.length < 2 ? '0' + h : h; }).join('');
+    if (razao(c.texto, fundoSolido) < 4)
+      falhas.push(caso.nome + ': nome ilegível na placa (' + razao(c.texto, fundoSolido).toFixed(1) + ':1)');
+    if (razao(c.borda, fundoSolido) < 1.6)
+      falhas.push(caso.nome + ': a moldura some no fundo (' + razao(c.borda, fundoSolido).toFixed(1) + ':1)');
+  });
 
   var pl = document.getElementById('placar');
   pl.className = falhas.length ? 'ruim' : 'ok';

@@ -316,11 +316,54 @@ var JOGO = (typeof window !== 'undefined')
     return { h: ((hh % 360) + 360) % 360, s: ss, l: l };
   }
 
+  /* AS CORES DA PLACA (11/09, pedido do dono: "as cores do retângulo — fundo
+   * e borda — pegam as cores do logo; só tem que tomar cuidado para guilda
+   * com logo todo preto, para aparecer o nome").
+   *
+   * A placa da praça deixa de ser sempre marrom-dourada e veste o brasão:
+   * o FUNDO é o campo do escudo e a BORDA é o filete dele. Mas a placa
+   * também tem de deixar LER um nome, e um jogador pode escolher preto no
+   * preto — então nada é copiado cru:
+   *
+   *   FUNDO   mantém matiz e saturação, mas a luminosidade é espremida numa
+   *           faixa escura (12% a 24%). Campo branco não vira placa branca,
+   *           campo preto não vira buraco: fica um tom escuro do brasão.
+   *   BORDA   nunca abaixo de 45% de luz, e nunca perto demais do fundo (se
+   *           a diferença cair abaixo de 25 pontos, ela clareia até abrir).
+   *           É o que salva o brasão todo preto: a moldura aparece.
+   *   TEXTO   claro sobre placa escura, escuro sobre placa clara — decidido
+   *           pela luminosidade que a placa REALMENTE ficou, não pela que o
+   *           jogador escolheu.
+   *
+   * Devolve { fundo, borda, texto } — o `fundo` já vem com alfa, que é como
+   * a placa sempre foi desenhada. */
+  var PLACA_FUNDO_MIN = 0.12, PLACA_FUNDO_MAX = 0.24;
+  var PLACA_BORDA_MIN = 0.45, PLACA_DIF_MIN = 0.25;
+  function coresDaPlaca(cod) {
+    var p = partes(cod);
+    var f = hexParaHsl(p[2]), b = hexParaHsl(p[3]);
+    var lf = Math.max(PLACA_FUNDO_MIN, Math.min(PLACA_FUNDO_MAX, f.l));
+    // campo muito lavado (branco, prata) perde saturação ao escurecer: um
+    // pouco de cor a mais devolve a identidade do brasão à placa
+    var sf = f.s < 0.12 ? f.s : Math.min(1, f.s * 1.15);
+    var lb = Math.max(PLACA_BORDA_MIN, b.l);
+    if (lb - lf < PLACA_DIF_MIN) lb = Math.min(0.82, lf + PLACA_DIF_MIN);
+    return {
+      fundo: 'rgba(' + rgbDe(hslParaHex(f.h, sf, lf)).join(',') + ',0.92)',
+      borda: hslParaHex(b.h, b.s, lb),
+      texto: lf > 0.45 ? '#1a1409' : '#fff3d6'
+    };
+  }
+  function rgbDe(hex7) {
+    var s = String(hex7).replace('#', '');
+    return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+  }
+
   JOGO.Brasao = {
     FORMAS: FORMAS, DIVISOES: DIVISOES, SIMBOLOS: SIMBOLOS, PALETA: PALETA, PADRAO: PADRAO,
     ehCodigo: ehCodigo, partes: partes, normaliza: normaliza, nomeComEmblema: nomeComEmblema,
     forma: forma, divisao: divisao, simbolo: simbolo,
     desenha: desenha, canvas: canvas, iconeSimbolo: iconeSimbolo,
-    hslParaHex: hslParaHex, hexParaHsl: hexParaHsl
+    hslParaHex: hslParaHex, hexParaHsl: hexParaHsl, coresDaPlaca: coresDaPlaca
   };
 })();

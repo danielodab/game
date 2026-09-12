@@ -170,10 +170,17 @@
     mostra('entrar');
     aviso('e-aviso', texto, tipo || 'neutro');
   }
-  function entrou(r) {
+  /* 11/09 (pedido do dono: "ao logar na conta o jogo não pode entrar sozinho,
+   * às vezes o jogador só quer fazer algo na gestão da conta mesmo"). Entrar
+   * agora PÁRA na conta: o painel "Minha conta" abre, com o botão Jogar à
+   * mão. Só o CADASTRO segue direto para o jogo — o botão dele promete isso
+   * na letra ("Criar conta e jogar") e quem acabou de nascer quer jogar. */
+  function entrou(r, direto) {
     // o que o jogo vai ler: token + a conta enxuta
     SITE.guarda({ token: r.token, conta: { id: r.conta.id, nome: r.conta.nome, gm: !!r.conta.gm } });
-    location.href = '../index.html';
+    if (direto) { location.href = '../index.html'; return; }
+    SITE.cabecalho();
+    carregaConta();
   }
 
   /* depois: {geral, tipo} vai no aviso do topo; {email} no aviso do passo em
@@ -531,7 +538,7 @@
           $('c-bt').disabled = false;
           if (!r.ok) { aviso('c-aviso', SITE.erro(r, 'não deu para criar a conta')); return; }
           aviso('c-aviso', 'Conta criada! Entrando no jogo…', 'certo');
-          entrou(r);
+          entrou(r, true);
         });
     }
 
@@ -549,7 +556,7 @@
           $('e-bt').disabled = false;
           if (!r.ok) { aviso('e-aviso', SITE.erro(r, 'não deu para entrar')); return; }
           aviso('e-aviso', 'Bem-vindo de volta, ' + r.conta.nome + '.', 'certo');
-          entrou(r);
+          entrou(r);                 // fica na conta: quem quer jogar aperta Jogar
         });
     });
 
