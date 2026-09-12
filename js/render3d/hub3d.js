@@ -66,7 +66,13 @@ var JOGO = (typeof window !== 'undefined')
    * O passo subiu junto — atravessar 80 m no passo antigo levava 13 s e
    * parecia um menu com chão. */
   var VEL_ANDA = 3.8, VEL_CORRE = 7.5, DIST_CORRIDA = 4.0;
-  var RAIO_MAPA = 40;
+  /* 12/09 (dono: "precisa afastar mais a arena... e organizar mais as
+   * barracas; se for preciso aumente esse mapa"). A praça foi de 40 para 50:
+   * com os corredores dos portais ocupando 15 m para dentro do arco, a arena
+   * de 24 m de vão não tinha como ficar no oeste sem invadir um deles. Com
+   * 50, o arco dos portais, a arena, a Sede e a rua das barracas ficam em
+   * quatro faixas que não se encostam. */
+  var RAIO_MAPA = 50;
   /* o tronco da Árvore-Mundo é SÓLIDO: quem anda desliza por fora dele */
   var TRONCO_RAIO = 4.6;
 
@@ -712,7 +718,7 @@ var JOGO = (typeof window !== 'undefined')
   function montaMercado() {
     // a tenda saiu do meio-sul: ali ela nascia DENTRO da câmera inicial
     // (que fica às costas do herói) e o toldo tomava a primeira tela
-    var px = -RAIO_MAPA * 0.60, pz = RAIO_MAPA * 0.50;   // a rua das barracas (10/09)
+    var px = -RAIO_MAPA * 0.14, pz = RAIO_MAPA * 0.72;   // a RUA DAS BARRACAS (12/09)
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -742,7 +748,7 @@ var JOGO = (typeof window !== 'undefined')
     // o cofre foi para o CANTO sudeste: em (0.60, 0.25) ele nascia a 4,8 m
     // da Sede — dois prédios de 12-14 m de largura, um DENTRO do outro
     // (a foto do dono pegou a fortaleza engolindo a cúpula)
-    var px = RAIO_MAPA * 0.70, pz = RAIO_MAPA * 0.40;
+    var px = RAIO_MAPA * 0.42, pz = RAIO_MAPA * 0.72;    // a rua das barracas, ponta leste
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -771,7 +777,7 @@ var JOGO = (typeof window !== 'undefined')
   function montaArena() {
     // subiu um degrau ao norte quando o coliseu cresceu (teto 24 m):
     // na posição antiga a arquibancada engolia a tenda do Mercadinho
-    var px = -RAIO_MAPA * 0.64, pz = RAIO_MAPA * 0.04;
+    var px = -RAIO_MAPA * 0.66, pz = RAIO_MAPA * 0.14;   // 12/09: desceu para largar o corredor da Estufa
     var g = new THREE.Group();
     var anel = new THREE.Mesh(
       new THREE.RingGeometry(2.4, 3.1, 40),
@@ -803,7 +809,7 @@ var JOGO = (typeof window !== 'undefined')
    * da barraca não chega, mesa + tocha + barril seguram o lugar (o mesmo
    * contrato dos outros: a sonda veste com `praca_forja` quando existir). */
   function montaForja() {
-    var px = RAIO_MAPA * 0.30, pz = RAIO_MAPA * 0.68;    // a rua das barracas (10/09)
+    var px = -RAIO_MAPA * 0.42, pz = RAIO_MAPA * 0.72;   // a rua das barracas, ponta oeste
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -832,7 +838,7 @@ var JOGO = (typeof window !== 'undefined')
    * entre o Mercadinho e o herói. Corpo de primitivas até a arte dele
    * chegar (o prompt foi dado); o lugar e a ficha já são os definitivos. */
   function montaLoteria() {
-    var px = -RAIO_MAPA * 0.26, pz = RAIO_MAPA * 0.70;   // a rua das barracas (10/09)
+    var px = RAIO_MAPA * 0.14, pz = RAIO_MAPA * 0.72;    // a rua das barracas (12/09)
     var g = new THREE.Group();
     // o balcão
     var balcao = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 1.2),
@@ -880,7 +886,7 @@ var JOGO = (typeof window !== 'undefined')
   function montaSede() {
     // afastada do extremo leste do arco: a fortaleza tapava o portal do
     // Coração Partido na câmera padrão (mesma coluna de visada)
-    var px = RAIO_MAPA * 0.62, pz = RAIO_MAPA * 0.06;
+    var px = RAIO_MAPA * 0.66, pz = RAIO_MAPA * 0.14;    // 12/09: espelha a Arena, do lado leste
     var g = new THREE.Group();
     var mastro = new THREE.Mesh(
       new THREE.CylinderGeometry(0.09, 0.13, 4.4, 8),
@@ -1101,6 +1107,29 @@ var JOGO = (typeof window !== 'undefined')
     var pF = aoLadoDe('forja', 5.4, 0.6);
     if (pF) { planta('jd_tronco', 1, pF.x, pF.z, 0.9); planta('jd_regador', 1, pF.x + 1.2, pF.z - 1.4, 2.2); }
 
+    /* O SENTIDO DO MURO (12/09, dono: "os muros devem ser na outra posição,
+     * dando continuidade, igual se fosse parede"). As peças de muro vinham
+     * ATRAVESSADAS no corredor, como dentes de pente, porque a rotação era
+     * escolhida no escuro: cada peça tem o comprimento num eixo diferente
+     * (umas em X, outras em Z) e um ângulo fixo acerta metade e erra a outra.
+     * Agora se MEDE a peça e se calcula o ângulo que põe o lado COMPRIDO na
+     * direção pedida — aí um muro encosta no outro e a parede corre. */
+    function eixoLongoEmX(chave) {
+      var cena = null;
+      try { cena = m2.rawScene(chave); } catch (e) { return true; }
+      if (!cena) return true;
+      var no = cena.clone(true);
+      no.updateMatrixWorld(true);
+      var b = new THREE.Box3().setFromObject(no);
+      return (b.max.x - b.min.x) >= (b.max.z - b.min.z);
+    }
+    /* O ângulo que deita a peça na direção (wx, wz). Rotação em Y leva o +X
+     * local para (cos, -sen) e o +Z local para (sen, cos) — daí os dois
+     * casos. */
+    function anguloDoMuro(chave, wx, wz) {
+      return eixoLongoEmX(chave) ? Math.atan2(-wz, wx) : Math.atan2(wx, wz);
+    }
+
     /* Planta UMA peça de cenário no chão da praça: escala pela altura
      * (com teto de largura), assenta pelo pé e centra no ponto pedido. */
     function plantaTema(chave, altAlvo, teto, x, z, rot) {
@@ -1157,6 +1186,7 @@ var JOGO = (typeof window !== 'undefined')
     var COR_ALT = 3.4;        // altura do muro, o porte da batalha
 
     cantinhoFeito = {};
+    chefeFeito = {};
     cantinhoCena = scene;
     plantaCantinhos = function () {
     if (!scene || scene !== cantinhoCena) return;
@@ -1180,8 +1210,8 @@ var JOGO = (typeof window !== 'undefined')
       var r0 = Math.max(0.01, Math.hypot(px2, pz2));
       var ux = px2 / r0, uz = pz2 / r0;      // radial: da praça para o portal
       var tx = -uz, tz = ux;                 // de través
-      var rotLado = Math.atan2(ux, uz);      // muro de lado corre com `u`
-      var rotFundo = Math.atan2(tx, tz);     // muro de fundo corre com `t`
+      // o sentido de cada muro sai MEDIDO da peça (anguloDoMuro), peça por
+      // peça: o catálogo mistura muros compridos em X e em Z
       // ponto do corredor → ponto do mundo
       function pt(d, lado) {
         return { x: px2 + ux * d + tx * lado, z: pz2 + uz * d + tz * lado };
@@ -1193,9 +1223,10 @@ var JOGO = (typeof window !== 'undefined')
       for (var d = -COR_COMP; d <= COR_FUNDO + 0.01; d += COR_PASSO, k++) {
         var chave = pega(catT.alto, k);
         if (!chave) continue;
+        var angLado = anguloDoMuro(chave, ux, uz);
         [COR_LARG, -COR_LARG].forEach(function (lado) {
           var q = pt(d, lado);
-          var no = plantaTema(chave, COR_ALT, 4.6, q.x, q.z, rotLado);
+          var no = plantaTema(chave, COR_ALT, 4.6, q.x, q.z, angLado);
           if (no) marcaSolido(q.x, q.z, 1.9);
         });
       }
@@ -1204,14 +1235,16 @@ var JOGO = (typeof window !== 'undefined')
         var chaveF = pega(catT.alto, kf + 1);
         if (!chaveF) return;
         var q = pt(COR_FUNDO, lado);
-        if (plantaTema(chaveF, COR_ALT, 4.6, q.x, q.z, rotFundo)) marcaSolido(q.x, q.z, 1.9);
+        var angF = anguloDoMuro(chaveF, tx, tz);
+        if (plantaTema(chaveF, COR_ALT, 4.6, q.x, q.z, angF)) marcaSolido(q.x, q.z, 1.9);
       });
       // ---- OS PILARES na boca do corredor: a entrada tem de se ler de longe
       var pilar = pega(catT.pilar, 0);
       if (pilar) {
+        var angP = anguloDoMuro(pilar, ux, uz);
         [COR_LARG, -COR_LARG].forEach(function (lado) {
           var q = pt(-COR_COMP - 0.6, lado);
-          if (plantaTema(pilar, 3.8, 2.2, q.x, q.z, rotLado)) marcaSolido(q.x, q.z, 1.2);
+          if (plantaTema(pilar, 3.8, 2.2, q.x, q.z, angP)) marcaSolido(q.x, q.z, 1.2);
         });
       }
       // ---- AS PEÇAS DENTRO: encostadas nos muros, nunca no meio da pista
@@ -1232,8 +1265,19 @@ var JOGO = (typeof window !== 'undefined')
         plantaTema(chaoP, 0.55, 2.2, q.x, q.z, kc * 0.9);
       });
 
-      // ---- O CHEFE, parado ao lado do portal
-      poeChefeDoPortal(lg, pt(-1.2, 2.7), Math.atan2(-ux, -uz));
+    });
+    /* O CHEFE tem guarda PRÓPRIA (12/09): o modelo dele desce depois das
+     * peças de cenário, e o `M.unit` não devolve null quando falta — devolve
+     * o esqueletinho genérico. Era esse esqueleto que aparecia no lugar da
+     * Jardineira. Agora se confere o modelo ANTES, e o portal que ainda não
+     * tem o seu chefe fica sem chefe até a próxima leva. */
+    lugares.forEach(function (lg) {
+      if (lg.tipo !== 'portal' || lg.fechado || chefeFeito[lg.id]) return;
+      var r0 = Math.max(0.01, Math.hypot(lg.pos.x, lg.pos.z));
+      var ux = lg.pos.x / r0, uz = lg.pos.z / r0;
+      var tx = -uz, tz = ux;
+      var q = { x: lg.pos.x + ux * -1.6 + tx * 2.8, z: lg.pos.z + uz * -1.6 + tz * 2.8 };
+      if (poeChefeDoPortal(lg, q, Math.atan2(-ux, -uz))) chefeFeito[lg.id] = true;
     });
     };
     plantaCantinhos();
@@ -1245,7 +1289,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   // os cantinhos que esperam peça (SOB DEMANDA): a cena da praça em que
   // nasceram, os portais já plantados e quem replanta quando modelo chega
-  var cantinhoFeito = {}, cantinhoCena = null, ouveModelos = false;
+  var cantinhoFeito = {}, chefeFeito = {}, cantinhoCena = null, ouveModelos = false;
   var plantaCantinhos = function () {};
   /* A pré-busca dos calabouços abertos (JOGO.Bundle.preBusca) só liga com o
    * Acampamento PRONTO: construções e enfeites plantados. Liga uma vez só. */
@@ -1743,15 +1787,23 @@ var JOGO = (typeof window !== 'undefined')
     if (!m2 || !scene) return null;
     var bossId = chefeDoCalabouco(lg.id);
     if (!bossId) return null;
+    /* O MODELO DE VERDADE OU NENHUM. `M.unit` cai no esqueletinho genérico
+     * (MONSTER_FALLBACK) quando o GLB do chefe ainda não desceu — e um
+     * esqueleto no lugar da Jardineira é pior que portal pelado. Confere-se
+     * o modelo aqui: sem ele, pede ao Bundle e volta null, que a próxima
+     * leva (Models3D2.aoChegar) tenta de novo. */
+    var pronto = false;
+    try { pronto = !!(m2.rawScene && m2.rawScene(bossId)); } catch (e0) { pronto = false; }
+    if (!pronto) {
+      try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede([bossId]); } catch (eB) {}
+      return null;
+    }
     var def = JOGO.DATA.monsters[bossId];
     var no = null;
     try {
       no = m2.unit(bossId, { boss: true, kind: 'monster', element: (def && def.element) || 'neutro' });
     } catch (e) { no = null; }
-    if (!no) {                       // modelo ainda descendo: tenta na próxima leva
-      try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede([bossId]); } catch (eB) {}
-      return null;
-    }
+    if (!no) return null;
     no.position.set(ponto.x, 0, ponto.z);
     no.rotation.y = rotY || 0;
     scene.add(no);
