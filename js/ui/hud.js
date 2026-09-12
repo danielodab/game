@@ -1197,7 +1197,6 @@ var JOGO = (typeof window !== 'undefined')
     [{ ic: '🧍', rot: 'Personagem', abre: 'char' },
      { ic: '🎒', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
      { ic: '📖', rot: 'Feitiços', abre: 'spells' },
-     { ic: '🃏', rot: 'Coleção', abre: 'collection' },
      { ic: '📜', rot: 'Missões', abre: 'missoes' },
      // 11/09: a Guilda é uma aba como as outras — SEMPRE no cais. Ela nascia
      // escondida e só aparecia se `resumoGuilda` já tivesse chegado quando a
@@ -3817,7 +3816,8 @@ var JOGO = (typeof window !== 'undefined')
     { id: 'itens', rot: 'Equipamento', dica: 'as peças que você está vestindo' },
     { id: 'conjuntos', rot: 'Conjuntos', dica: 'peças da mesma série vestidas juntas' },
     { id: 'pet', rot: 'Pet', dica: 'o bicho vestido, com o nível e as estrelas dele' },
-    { id: 'estrelas', rot: 'Estrelas da classe', dica: 'as cartas que você já fundiu' }
+    { id: 'estrelas', rot: 'Estrelas da classe',
+      dica: 'as cartas de chefe que passaram do custo de liberar a classe' }
   ];
   /* Uma fileira de números; devolve false quando não havia nada a mostrar
    * (é assim que a ficha sabe escrever "nada ainda" no lugar). */
@@ -4550,11 +4550,32 @@ var JOGO = (typeof window !== 'undefined')
   // primeiro; as trancadas em seguida, da que menos falta para a que mais falta.
   function collectionBody(body, focusId) {
     var cfg = starsCfg();
+    /* COMO FUNCIONA (11/09, dono: "de alguma forma o jogador precisa entender
+     * sobre as estrelas da conta e liberação de outros personagens"). A regra
+     * inteira em quatro linhas, no alto da ficha onde ela acontece — porque
+     * até aqui ela só existia no código e na barra de progresso, e barra sem
+     * frase não ensina ninguém: o jogador via "3 / 15 cartas" e não sabia de
+     * onde vinham, nem que o excedente vira estrela sozinho. */
+    var comoP = el('div', 'col-como');
+    comoP.appendChild(el('h4', null, 'Como se libera um personagem'));
+    comoP.appendChild(el('p', null,
+      '<b>1.</b> Só <b>chefe</b> derruba carta — e nem sempre. Calabouço mais fundo ' +
+      'derruba mais cartas de uma vez.<br>' +
+      '<b>2.</b> A carta entra na coleção <b>sozinha</b>, na hora: não há nada para ' +
+      'usar nem para juntar à mão.<br>' +
+      '<b>3.</b> Ao completar o custo da classe, ela <b>libera na hora</b> e entra em ' +
+      '"Quem desce".<br>' +
+      '<b>4.</b> Carta repetida não se perde: tudo o que passa do custo vira ' +
+      '<b>estrela</b> — bônus permanente daquela classe, que já conta nos números ' +
+      'da ficha do Personagem.'));
+    body.appendChild(comoP);
+
     var legend = el('div', 'col-legend');
     for (var s = 1; s <= (cfg.max || 5); s++) {
       var bn = cfg.bonuses && (cfg.bonuses[s] || cfg.bonuses[String(s)]);
       legend.appendChild(el('span', 'chip', '★' + s + ' ' + esc(bonusText(bn))));
     }
+    body.appendChild(el('p', 'inv-dica', 'O que cada estrela dá, em qualquer classe:'));
     body.appendChild(legend);
 
     var ids = Object.keys(classes());
