@@ -97,38 +97,102 @@
           return Math.abs(q.x - p.x) < 0.001 && Math.abs(q.z - p.z) < 0.001;
         }
 
+        var M = H._corredorMedidas();
+        check('as medidas do corredor estão expostas para a prova',
+              M && M.larg > 0 && M.camLarg > M.larg && M.fundo > 0,
+              JSON.stringify(M));
+
         abertos.forEach(function (l) {
           var nome = l.id;
-          // 1) a PISTA livre da boca até o portal: é por ela que se anda
+          // 1) a PISTA livre da boca até o fundo: é por ela que se anda, e
+          //    agora ela segue livre DENTRO da câmara, atrás do portal
           var presos = [];
-          for (var dd = -15; dd <= 0; dd += 1) {
-            var p = ponto(l, dd, 0);
-            if (!livre(p)) presos.push(dd);
+          for (var dd = -M.comp; dd <= M.fundo - 1.5; dd += 1) {
+            if (!livre(ponto(l, dd, 0))) presos.push(Math.round(dd));
           }
-          check(nome + ': a pista está livre da boca ao portal',
+          check(nome + ': a pista está livre da boca ao fundo',
                 presos.length === 0, 'travou em d=' + presos.join(','));
-          // 2) os LADOS barram: é isso que faz dele corredor
+          // 2) os MUROS barram — no corredor em |t| = larg, na câmara em
+          //    |t| = camLarg. É o que faz dele corredor e não desenho.
           var vazados = [];
-          [-12, -8, -4, 0].forEach(function (dd) {
-            [4.2, -4.2].forEach(function (lado) {
-              if (livre(ponto(l, dd, lado))) vazados.push(dd + '/' + lado);
+          [-12, -8, -5].forEach(function (dd) {
+            [M.larg, -M.larg].forEach(function (lado) {
+              if (livre(ponto(l, dd, lado))) vazados.push('corredor d=' + dd + '/' + lado);
             });
           });
-          check(nome + ': os dois muros barram o passo',
+          [-1, 2].forEach(function (dd) {
+            [M.camLarg, -M.camLarg].forEach(function (lado) {
+              if (livre(ponto(l, dd, lado))) vazados.push('câmara d=' + dd + '/' + lado);
+            });
+          });
+          check(nome + ': os muros barram no corredor E na câmara',
                 vazados.length === 0, 'vazou em ' + vazados.join(' '));
-          // 3) a BOCA aberta: entra-se por ela
-          check(nome + ': a boca do corredor está aberta', livre(ponto(l, -17.5, 0)));
-          // 4) o FUNDO fechado: atrás do portal não se sai
-          check(nome + ': o fundo atrás do portal está fechado', !livre(ponto(l, 3.6, 0)));
-          // 5) o portal continua ALCANÇÁVEL: o painel dele abre por proximidade
-          check(nome + ': dá para chegar a falar com o portal (pista dentro do raio)',
+          // 3) o DEGRAU do alargamento fecha: sem ele a câmara abriria um
+          //    vão de cada lado por onde se escapava do corredor
+          var meio = (M.larg + M.camLarg) / 2;
+          check(nome + ': o degrau da câmara está fechado',
+                !livre(ponto(l, M.camDe, meio)) && !livre(ponto(l, M.camDe, -meio)));
+          // 4) a BOCA aberta e o FUNDO fechado
+          check(nome + ': a boca do corredor está aberta', livre(ponto(l, -M.comp - 2.5, 0)));
+          check(nome + ': o fundo atrás do portal está fechado', !livre(ponto(l, M.fundo, 0)));
+          // 5) o portal continua alcançável
+          check(nome + ': dá para chegar a falar com o portal',
                 livre(ponto(l, -1, 0)) && l.raio >= 4);
         });
+
+        /* 5b) AS DUAS CÂMARAS NÃO SE ENCOSTAM. Os portais vizinhos do arco
+         *     estão a 16,4 m um do outro, e uma câmara larga demais fazia as
+         *     saletas virarem uma parede corrida (medido: 2,87 m entre muros
+         *     com meia-largura 6,6). Cobra-se a folga entre o muro de um e o
+         *     do vizinho na profundidade da câmara. */
+        if (abertos.length >= 2) {
+          function muroDe(l, dd, lado) { return ponto(l, dd, lado); }
+          var pior = 99;
+          abertos.forEach(function (a2, i2) {
+            abertos.forEach(function (b2, j2) {
+              if (j2 <= i2) return;
+              [-1.4, 2, M.fundo].forEach(function (dd) {
+                [M.camLarg, -M.camLarg].forEach(function (la) {
+                  [M.camLarg, -M.camLarg].forEach(function (lb) {
+                    var p1 = muroDe(a2, dd, la), p2 = muroDe(b2, dd, lb);
+                    pior = Math.min(pior, Math.hypot(p1.x - p2.x, p1.z - p2.z));
+                  });
+                });
+              });
+            });
+          });
+          check('as câmaras de dois portais vizinhos não se encostam',
+                pior > 3.4, 'muro mais próximo do vizinho: ' + pior.toFixed(2) + ' m');
+        }
+
+        /* 6) O CHEFE NÃO ENTRA NO MURO — o defeito que o dono fotografou.
+         *    A conta é a do corpo medido: |t| + meia-largura de través tem de
+         *    caber dentro da face interna do muro da câmara. */
+        var fichas = H._chefesFicha ? H._chefesFicha() : [];
+        check('a ficha de cada chefe plantado está exposta',
+              fichas.length === abertos.length, fichas.length + ' de ' + abertos.length);
+        var invasores = fichas.filter(function (f) {
+          return Math.abs(f.t) + f.meiaT > M.camLarg - 0.35 + 0.001;
+        });
+        check('nenhum chefe atravessa o muro da câmara',
+              invasores.length === 0,
+              invasores.map(function (f) {
+                return f.chefe + ' |t|=' + f.t.toFixed(2) + ' + meia=' + f.meiaT.toFixed(2) +
+                       ' > ' + (M.camLarg - 0.35).toFixed(2);
+              }).join(' · '));
+        var noAro = fichas.filter(function (f) {
+          return Math.hypot(f.d, f.t) < 2.6;      // o aro do portal tem ~2,2 de raio
+        });
+        check('nenhum chefe planta dentro do aro do portal', noAro.length === 0,
+              noAro.map(function (f) { return f.chefe; }).join(','));
+        check('todo chefe fica ATRÁS do portal (não tapa a entrada)',
+              fichas.every(function (f) { return f.d > 0; }),
+              fichas.map(function (f) { return f.chefe + ' d=' + f.d; }).join(' · '));
 
         fechados.forEach(function (l) {
           var temMuro = false;
           for (var dd = -12; dd <= 0; dd += 3) {
-            if (!livre(ponto(l, dd, 4.2))) temMuro = true;
+            if (!livre(ponto(l, dd, 4.2)) || !livre(ponto(l, dd, 6.6))) temMuro = true;
           }
           check('portal fechado (' + l.id + ') segue pelado', !temMuro);
         });

@@ -75,6 +75,34 @@ var JOGO = (typeof window !== 'undefined')
   var RAIO_MAPA = 50;
   /* o tronco da Árvore-Mundo é SÓLIDO: quem anda desliza por fora dele */
   var TRONCO_RAIO = 4.6;
+  /* AS MEDIDAS DO CORREDOR DO PORTAL, num lugar só — a prova
+   * (tests/corredores.html) as lê por Hub._corredorMedidas() em vez de
+   * repetir número, que era como a prova passava a mentir depois de um
+   * ajuste de cenário. */
+  var CORREDOR = {
+    comp: 12.5,        // da boca até o portal
+    fundo: 6.2,        // o quanto o fundo passa atrás do portal
+    larg: 4.2,         // meia-largura do corredor
+    camDe: -3.2,       // onde o corredor abre na câmara do portal
+    camLarg: 5.2,      // meia-largura da câmara
+    bocaLarg: 3.6,     // os pilares da boca entram um pouco (vizinho perto)
+    chefeD: 2.8,       // o chefe, atrás do portal
+    chefeFolga: 0.45,  // entre o corpo do chefe e a face do muro
+    muroR: 1.9,        // o raio sólido de uma peça de muro
+    alt: 3.4           // a altura do muro
+  };
+  /* AS CONTAS QUE FIXARAM ESSES NÚMEROS (12/09) — medidas, não gosto:
+   *   · os portais vizinhos do arco estão a 2·37,5·sen(0,22) = 16,37 m um do
+   *     outro (e NÃO os ~13 m que um comentário antigo dizia: aquilo era com
+   *     RAIO_MAPA 40). A corda cresce com a profundidade: 15,05 m em d=-3,2.
+   *   · uma câmara de 6,6 de meia-largura punha os muros de duas saletas
+   *     vizinhas a 2,87 m entre centros — sólidos de 1,9 sobrepostos em
+   *     0,93 m, a cunha entre os corredores desaparecendo e o arco virando
+   *     parede corrida. Com 5,2 sobra ~1,2 m de folga real.
+   *   · o corredor encurtou de 15 para 12,5 porque na boca a corda é menor
+   *     (10,9 m em d=-12,5): com 15 as duas bocas se interpenetravam — os
+   *     pilares ficavam a 1,4 m entre centros. Com 12,5 e a boca fechando
+   *     para 3,6 sobram 3,7 m entre pilares vizinhos. */
 
   /* A câmera 3D: a MESMA gramática da batalha — arrastar orbita e inclina,
    * roda dá zoom, toque curto age. Orbita em volta DO HERÓI: no mapa aberto o
@@ -568,6 +596,7 @@ var JOGO = (typeof window !== 'undefined')
     lugares.length = 0;
     solidos.length = 0;
     chefesParados.length = 0;
+    chefesFicha.length = 0;
     ultimoPerto = null;
     heroi = null;
     bicho = null;
@@ -705,9 +734,17 @@ var JOGO = (typeof window !== 'undefined')
       // inteiro sobe 1,3× — aro, base e rótulo juntos, proporção preservada
       g.scale.setScalar(1.3);
       scene.add(g);
+      /* O RAIO DE CONVERSA (12/09): 4,2 cobria o portal pelado, mas a câmara
+       * do corredor tem quase 10 m de fundo — 41% do piso dela ficava fora
+       * do painel, então o jogador chegava ao lado do chefe e o portal ficava
+       * mudo. Portal ABERTO (que tem câmara) passa a 6,4; o fechado, que é
+       * só o disco com o X, fica nos 4,2. O teto é 8,18 (metade dos 16,37 m
+       * entre vizinhos do arco): com 6,4 não há como dois portais disputarem
+       * o mesmo passo. */
       lugares.push({ id: dg.id, tipo: 'portal', nome: dg.name || dg.id,
                      tema: dg.theme || null, fechado: fechado,
-                     pos: new THREE.Vector3(px, 0, pz), raio: 4.2, node: g, miolo: miolo });
+                     pos: new THREE.Vector3(px, 0, pz), raio: fechado ? 4.2 : 6.4,
+                     node: g, miolo: miolo });
     }
   }
 
@@ -1179,11 +1216,23 @@ var JOGO = (typeof window !== 'undefined')
      * Só portal ABERTO ganha corredor, e só com o catálogo do tema na mão
      * ("no caso atual somente os dois liberados... conforme for liberado
      * vamos fazendo nos outros"). */
-    var COR_COMP = 15.0;      // da boca até o portal
-    var COR_FUNDO = 3.6;      // o quanto o fundo passa atrás do portal
-    var COR_LARG = 4.2;       // meia-largura: a pista tem 8,4 m
+    var COR_COMP = CORREDOR.comp;   // da boca até o portal
+    var COR_FUNDO = CORREDOR.fundo; // o quanto o fundo passa atrás do portal
+    var COR_LARG = CORREDOR.larg;   // meia-largura do corredor: a pista tem 8,4 m
     var COR_PASSO = 3.4;      // de muro em muro (peças de ~4,4 m: sobram sobrepostas)
     var COR_ALT = 3.4;        // altura do muro, o porte da batalha
+    /* A CÂMARA DO PORTAL (12/09, dono: "esse boss está sobrepondo o muro").
+     * O chefe não cabia ao lado do portal num corredor de 8,4 m: os dois
+     * chefes abertos medem 2,64 m de largura (meia-largura 1,32) e os que
+     * vêm depois chegam a 4,9 m — MEDIDOS, não estimados; o `userData.radius`
+     * do models3d_v2 é limitado a 1,2 e não descreve o corpo visual de um
+     * chefe. Então o fim do corredor ABRE numa saleta: do `CAM_DE` para
+     * dentro os muros vão para `CAM_LARG`, o fundo recuou para 6,2 e o chefe
+     * fica atrás do portal, num canto que sobra. */
+    var CAM_DE = CORREDOR.camDe;    // onde o corredor começa a abrir
+    var CAM_LARG = CORREDOR.camLarg; // meia-largura da câmara
+    var CHEFE_D = CORREDOR.chefeD;  // o chefe atrás do portal (d positivo = fundo)
+    var CHEFE_FOLGA = CORREDOR.chefeFolga;
 
     cantinhoFeito = {};
     chefeFeito = {};
@@ -1219,37 +1268,56 @@ var JOGO = (typeof window !== 'undefined')
       function pega(lista, k) { return (lista && lista.length) ? lista[(li + k) % lista.length] : null; }
 
       // ---- OS DOIS MUROS, da boca até o fundo
+      // a meia-largura do muro naquele ponto: corredor até CAM_DE, câmara
+      // depois dele — e uma peça DIAGONAL fecha o degrau entre as duas
+      function largEm(d) { return d < CAM_DE ? COR_LARG : CAM_LARG; }
       var k = 0;
       for (var d = -COR_COMP; d <= COR_FUNDO + 0.01; d += COR_PASSO, k++) {
         var chave = pega(catT.alto, k);
         if (!chave) continue;
         var angLado = anguloDoMuro(chave, ux, uz);
-        [COR_LARG, -COR_LARG].forEach(function (lado) {
+        var lg2 = largEm(d);
+        [lg2, -lg2].forEach(function (lado) {
           var q = pt(d, lado);
           var no = plantaTema(chave, COR_ALT, 4.6, q.x, q.z, angLado);
-          if (no) marcaSolido(q.x, q.z, 1.9);
+          if (no) marcaSolido(q.x, q.z, CORREDOR.muroR);
+        });
+      }
+      // O DEGRAU: sem ele a câmara abriria com um vão aberto de cada lado,
+      // que é por onde o jogador escaparia do corredor. Uma peça atravessada
+      // em cada lado fecha os 2,4 m do alargamento.
+      var chaveDeg = pega(catT.alto, 1);
+      if (chaveDeg) {
+        var angDeg = anguloDoMuro(chaveDeg, tx, tz);
+        [1, -1].forEach(function (sinal) {
+          var meio = sinal * (COR_LARG + CAM_LARG) / 2;
+          var q = pt(CAM_DE, meio);
+          // o teto de largura é o mesmo das fileiras (4,6): com 3,0 a peça
+          // cedia a escala e saía 1 m mais baixa que os muros ao lado dela
+          if (plantaTema(chaveDeg, COR_ALT, 4.6, q.x, q.z, angDeg)) marcaSolido(q.x, q.z, 1.5);
         });
       }
       // ---- O FUNDO, atrás do portal: três peças fechando a saída
-      [-2.8, 0, 2.8].forEach(function (lado, kf) {
+      [-4.4, -1.5, 1.5, 4.4].forEach(function (lado, kf) {
         var chaveF = pega(catT.alto, kf + 1);
         if (!chaveF) return;
         var q = pt(COR_FUNDO, lado);
         var angF = anguloDoMuro(chaveF, tx, tz);
-        if (plantaTema(chaveF, COR_ALT, 4.6, q.x, q.z, angF)) marcaSolido(q.x, q.z, 1.9);
+        if (plantaTema(chaveF, COR_ALT, 4.6, q.x, q.z, angF)) marcaSolido(q.x, q.z, CORREDOR.muroR);
       });
       // ---- OS PILARES na boca do corredor: a entrada tem de se ler de longe
       var pilar = pega(catT.pilar, 0);
       if (pilar) {
         var angP = anguloDoMuro(pilar, ux, uz);
-        [COR_LARG, -COR_LARG].forEach(function (lado) {
+        var lb = CORREDOR.bocaLarg;
+        [lb, -lb].forEach(function (lado) {
           var q = pt(-COR_COMP - 0.6, lado);
           if (plantaTema(pilar, 3.8, 2.2, q.x, q.z, angP)) marcaSolido(q.x, q.z, 1.2);
         });
       }
       // ---- AS PEÇAS DENTRO: encostadas nos muros, nunca no meio da pista
       var dentro = [[-11.5, 3.0, 'sotaque'], [-7.0, -3.0, 'sotaque_alto'],
-                    [-3.4, 3.1, 'sotaque'], [-12.5, -3.1, 'sotaque_alto']];
+                    [-4.6, 3.1, 'sotaque'], [-12.5, -3.1, 'sotaque_alto']];
       dentro.forEach(function (it, ki) {
         var chaveI = pega(catT[it[2]], ki);
         if (!chaveI) return;
@@ -1273,11 +1341,7 @@ var JOGO = (typeof window !== 'undefined')
      * tem o seu chefe fica sem chefe até a próxima leva. */
     lugares.forEach(function (lg) {
       if (lg.tipo !== 'portal' || lg.fechado || chefeFeito[lg.id]) return;
-      var r0 = Math.max(0.01, Math.hypot(lg.pos.x, lg.pos.z));
-      var ux = lg.pos.x / r0, uz = lg.pos.z / r0;
-      var tx = -uz, tz = ux;
-      var q = { x: lg.pos.x + ux * -1.6 + tx * 2.8, z: lg.pos.z + uz * -1.6 + tz * 2.8 };
-      if (poeChefeDoPortal(lg, q, Math.atan2(-ux, -uz))) chefeFeito[lg.id] = true;
+      if (poeChefeDoPortal(lg, CHEFE_D, CAM_LARG, CHEFE_FOLGA)) chefeFeito[lg.id] = true;
     });
     };
     plantaCantinhos();
@@ -1773,6 +1837,9 @@ var JOGO = (typeof window !== 'undefined')
    * mixer dele entra no laço junto com o do herói; sem isso o chefe seria
    * uma estátua de verdade, congelada no primeiro quadro. */
   var chefesParados = [];
+  /* a ficha de cada chefe plantado, para a prova conferir que o corpo dele
+   * NÃO entra no muro (o defeito de 12/09) sem precisar de olho */
+  var chefesFicha = [];
   function chefeDoCalabouco(dungeonId) {
     var D = JOGO.DATA && JOGO.DATA.monsters;
     if (!D) return null;
@@ -1782,7 +1849,16 @@ var JOGO = (typeof window !== 'undefined')
     }
     return null;
   }
-  function poeChefeDoPortal(lg, ponto, rotY) {
+  /* Onde o chefe cabe. `d` é a distância atrás do portal, `largCamara` a
+   * meia-largura da saleta e `folga` o que se deixa entre o corpo dele e a
+   * face do muro. A largura do corpo é MEDIDA depois de o modelo nascer e
+   * girar — a caixa do three já vem alinhada ao mundo, então a extensão dele
+   * na direção de través sai da projeção da caixa nesse eixo (|tx|·sx +
+   * |tz|·sz)/2, que é o teto certo para um AABB. A posição em `t` é a que
+   * deixa o corpo ENCOSTADO no muro por dentro, sem atravessar; se nem assim
+   * couber, ele vai para o eixo, atrás do portal — feio, mas nunca dentro
+   * da parede. */
+  function poeChefeDoPortal(lg, d, largCamara, folga) {
     var m2 = M2();
     if (!m2 || !scene) return null;
     var bossId = chefeDoCalabouco(lg.id);
@@ -1804,13 +1880,49 @@ var JOGO = (typeof window !== 'undefined')
       no = m2.unit(bossId, { boss: true, kind: 'monster', element: (def && def.element) || 'neutro' });
     } catch (e) { no = null; }
     if (!no) return null;
-    no.position.set(ponto.x, 0, ponto.z);
-    no.rotation.y = rotY || 0;
+    var r0 = Math.max(0.01, Math.hypot(lg.pos.x, lg.pos.z));
+    var ux = lg.pos.x / r0, uz = lg.pos.z / r0;
+    var tx = -uz, tz = ux;
+    no.rotation.y = Math.atan2(-ux, -uz);      // de frente para quem chega
+
+    /* A LARGURA DO CORPO, MEDIDA (12/09). Duas armadilhas atravessadas aqui:
+     *   · `Box3.setFromObject` num SkinnedMesh devolve a caixa da pose de
+     *     BIND — nestes corpos do Meshy dá 3 cm, e foi o que fez a primeira
+     *     versão plantar o chefe dentro do muro;
+     *   · `userData.radius` não serve nem como teto: sai de uma caixa de
+     *     T-pose e vem limitado a 1,2 (models3d_v2), então devolve o mesmo
+     *     número para um chefe de 2,6 m e um de 4,9 m de largura.
+     * O jeito certo é o que o próprio módulo usa para enquadrar retrato:
+     * `portraitFraming(no, true).box`, por trás do qual está `measurePose`
+     * com `boneTransform` — medida DEPOIS do skinning. E o corpo tem de
+     * estar POSADO antes: idle + um passo de mixer, senão mede-se o repouso.
+     * Sem a API (módulo antigo), cai-se num valor largo o bastante para não
+     * raspar. */
+    try { no.userData.play('idle', { fade: 0 }); } catch (ep) {}
+    try { if (no.userData.mixer) no.userData.mixer.update(0.42); } catch (ep2) {}
+    no.updateMatrixWorld(true);
+    var meiaT = 1.9;
+    try {
+      var enq = m2.portraitFraming ? m2.portraitFraming(no, true) : null;
+      if (enq && enq.box && !enq.box.isEmpty()) {
+        var sz = enq.box.max.clone().sub(enq.box.min);
+        // a caixa vem em MUNDO e o corpo ainda não girou para o corredor:
+        // o lado maior no chão é o que pode raspar o muro
+        meiaT = Math.max(0.8, Math.max(sz.x, sz.z) / 2);
+      }
+    } catch (eM) {}
+    var limite = largCamara - 0.35 - (folga || 0.4);           // a face interna do muro
+    var t = limite - meiaT;
+    if (t < meiaT * 0.5) t = 0;                // corpo largo demais: vai para o eixo
+    var px = lg.pos.x + ux * d + tx * t;
+    var pz = lg.pos.z + uz * d + tz * t;
+    no.position.set(px, 0, pz);
     scene.add(no);
-    try { no.userData.play('idle', { fade: 0 }); } catch (e2) {}
     chefesParados.push(no);
-    // o corpo do chefe é grande: barra o passo como o muro barra
-    marcaSolido(ponto.x, ponto.z, Math.max(1.2, (no.userData.radius || 1) * 1.1));
+    // o corpo do chefe barra o passo como o muro barra
+    marcaSolido(px, pz, Math.max(1.0, meiaT * 0.75));
+    chefesFicha.push({ portal: lg.id, chefe: bossId, x: px, z: pz,
+                       d: d, t: t, meiaT: meiaT, limite: limite });
     return no;
   }
 
@@ -2296,6 +2408,14 @@ var JOGO = (typeof window !== 'undefined')
   /* os sólidos avulsos (muros do corredor, pilares, chefes), para a prova */
   Hub._solidos = function () { return solidos.map(function (c) { return { x: c.x, z: c.z, r: c.r }; }); };
   Hub._chefesParados = function () { return chefesParados.length; };
+  /* a ficha dos chefes plantados: onde estão e quanto medem de través */
+  Hub._chefesFicha = function () { return chefesFicha.slice(); };
+  /* as medidas do corredor, para a prova não repetir número */
+  Hub._corredorMedidas = function () {
+    var f = {};
+    for (var k in CORREDOR) if (CORREDOR.hasOwnProperty(k)) f[k] = CORREDOR[k];
+    return f;
+  };
   /* quais portais já ganharam corredor (a prova e a depuração perguntam) */
   Hub._corredores = function () { return Object.keys(cantinhoFeito); };
   /* os lugares da praça, para as provas medirem parede e raio de conversa */
