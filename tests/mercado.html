@@ -15,7 +15,7 @@
 </style>
 </head>
 <body>
-<h1>O Mercadinho — o balcão, o mercador-fantasma e a taxa</h1>
+<h1>O Mercadinho — o balcão vazio, a oferta do jogador e a taxa</h1>
 <div class="sub">Cobra a banca do dia semeada pela data (mesmo dia = mesma banca; dia novo troca
 as ofertas do MERCADOR e preserva as do JOGADOR), o anúncio, a compra que debita e repassa menos a
 taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça.</div>
@@ -53,15 +53,13 @@ taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça.</di
   DB._zerar()
     .then(function () { return Mc.abrir(DIA1); })
     .then(function (m1) {
-      check('a banca do dia abre com as ofertas do mercador',
-            m1 && m1.ofertas.length === Mc.POR_DIA,
+      // 12/09 (dono): o balcão nasce VAZIO e só enche com anúncio de jogador
+      check('o balcão abre VAZIO — nenhuma oferta de mentira',
+            m1 && m1.ofertas.length === 0,
             m1 && m1.ofertas.length + ' ofertas');
-      var precosOk = m1.ofertas.every(function (o) { return o.preco >= 1 && o.vendedor === 'mercador'; });
-      check('toda oferta do mercador tem preço e dono certos', precosOk);
+      check('o mercador-fantasma não pendura mais nada', Mc.POR_DIA === 0);
       return Mc.abrir(DIA1).then(function (m2) {
-        check('reabrir o MESMO dia não troca a banca',
-              JSON.stringify(m2.ofertas.map(function (o) { return o.id; })) ===
-              JSON.stringify(m1.ofertas.map(function (o) { return o.id; })));
+        check('reabrir o mesmo dia não inventa oferta', m2.ofertas.length === 0);
         return m1;
       });
     })
@@ -112,28 +110,47 @@ taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça.</di
       return Mc.retirar(of.id, DIA1).then(function (r) {
         check('retirar devolve a peça sem mexer no bolso',
               r.ok && r.item.itemId === 'gh-widow-shears', JSON.stringify(r));
-        return Mc.retirar(m.ofertas[0].id, DIA1);
+        // retirar a MESMA oferta de novo não pode dar peça de graça
+        return Mc.retirar(of.id, DIA1);
       });
     })
     .then(function (r) {
-      check('a banca do mercador não se retira', !r.ok, r.erro);
-      // a virada do dia: mercador troca, jogador fica
+      check('oferta já retirada não se retira duas vezes', !r.ok, r.erro);
+      // a virada do dia não pode mexer em nada do jogador
       return Mc.anunciar({ itemId: 'gh-firefly-crown' }, 77, DIA1);
     })
     .then(function () { return Mc.abrir(DIA1); })
     .then(function (m1) {
-      var idsMercador1 = m1.ofertas.filter(function (o) { return o.vendedor === 'mercador'; })
-                                   .map(function (o) { return o.id; });
+      var antes = m1.ofertas.map(function (o) { return o.id + '@' + o.preco; });
       return Mc.abrir(DIA2).then(function (m2) {
-        var idsMercador2 = m2.ofertas.filter(function (o) { return o.vendedor === 'mercador'; })
-                                     .map(function (o) { return o.id; });
-        var minhas = m2.ofertas.filter(function (o) { return o.vendedor === 'jogador'; });
-        check('o dia novo troca a banca do mercador',
-              JSON.stringify(idsMercador1) !== JSON.stringify(idsMercador2));
-        check('as ofertas do jogador atravessam a virada do dia',
-              minhas.length === 1 && minhas[0].preco === 77,
-              minhas.map(function (o) { return o.itemId + '@' + o.preco; }).join(','));
+        var depois = m2.ofertas.map(function (o) { return o.id + '@' + o.preco; });
+        check('a virada do dia NÃO reconstrói o balcão',
+              JSON.stringify(antes) === JSON.stringify(depois), depois.join(','));
+        check('toda oferta no balcão é de jogador',
+              m2.ofertas.every(function (o) { return o.vendedor === 'jogador'; }));
+        check('a data nova fica carimbada', m2.dia === DIA2, m2.dia);
       });
+    })
+    /* A BANCA VELHA DO FANTASMA (save de antes de 12/09): sai inteira, e a
+     * oferta do jogador que estava no mesmo balcão NÃO vai com ela. É o
+     * medo que o dono nomeou — "cuidado para nos novos deploys não
+     * sumirem". */
+    .then(function () { return DB.mercadoLer(); })
+    .then(function (mc) {
+      var sujo = { dia: DIA2, ofertas: [
+        { id: 'mf-velha-1', vendedor: 'mercador', itemId: 'gh-wasp-sting', level: 0, stars: 0, preco: 9 },
+        { id: 'mf-velha-2', vendedor: 'mercador', itemId: 'gh-firefly-crown', level: 1, stars: 0, preco: 12 }
+      ].concat(mc.ofertas) };
+      return DB.mercadoGravar(sujo);
+    })
+    .then(function () { return Mc.abrir(DIA2); })
+    .then(function (m) {
+      check('a banca velha do mercador é limpa do save',
+            m.ofertas.every(function (o) { return o.vendedor !== 'mercador'; }),
+            m.ofertas.map(function (o) { return o.vendedor; }).join(','));
+      check('a limpeza não levou a oferta do jogador',
+            m.ofertas.length === 1 && m.ofertas[0].preco === 77,
+            m.ofertas.map(function (o) { return o.itemId + '@' + o.preco; }).join(','));
     })
     .then(function () { return DB._recarregar ? DB._recarregar() : null; })
     .then(function () { return Mc.abrir(DIA2); })
@@ -143,6 +160,19 @@ taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça.</di
       var regua = Mc.precoSugerido('gh-wasp-sting', 2, 1);
       check('a régua de preço cresce com forja e estrela',
             regua > Mc.precoSugerido('gh-wasp-sting', 0, 0), regua);
+    })
+    /* O SANEAMENTO DO SAVE (db.js): mercado com forma torta não pode ser
+     * jogado fora — era o outro jeito de as ofertas sumirem. */
+    .then(function () {
+      var foto = DB.exportar();
+      foto.mercado = { dia: DIA2, ofertas: 'isto não é lista' };
+      return DB.importar(foto);
+    })
+    .then(function () { return DB.mercadoLer(); })
+    .then(function (mc) {
+      check('mercado com ofertas tortas vira balcão vazio, não null',
+            mc && Array.isArray(mc.ofertas) && mc.ofertas.length === 0,
+            JSON.stringify(mc));
     })
     .catch(function (e) {
       check('a corrente de promessas não estoura', false, e && (e.message || e));

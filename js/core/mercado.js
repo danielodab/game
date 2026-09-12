@@ -10,11 +10,21 @@ var JOGO = (typeof window !== 'undefined')
  * preço, outro COMPRA. As ofertas moram no JOGO.DB; quando o servidor chegar,
  * anunciar/comprar viram endpoints e a validação muda de lado.
  *
- * O MERCADOR-FANTASMA: um mercado local nasceria vazio e morto. Um vendedor
- * de mentira semeia meia dúzia de ofertas POR DIA (semeadas pela data, como
- * as missões: mesmo dia, mesma banca) com preço derivado da raridade. As
- * ofertas DELE trocam no dia seguinte; as do JOGADOR ficam até vender ou
- * retirar.
+ * O MERCADOR-FANTASMA FOI EMBORA (12/09, pedido do dono: "tem uns itens
+ * aleatórios que sempre aparecem no mercadinho; não pode — o mercadinho
+ * precisa estar sem nada e só aparecer itens quando jogadores publicarem").
+ * Ele existia porque um mercado local nasceria vazio e morto; com gente no
+ * servidor, banca de mentira só suja o balcão e confunde o preço de verdade.
+ * O balcão agora nasce VAZIO e só enche com o que jogador anuncia — e a
+ * oferta de jogador NÃO tem prazo: fica até vender ou ser retirada.
+ *
+ * AS OFERTAS ATRAVESSAM DEPLOY. Elas moram no save (JOGO.DB.mercado), que
+ * vive no localStorage e sobe para a nuvem junto com o resto da conta — um
+ * deploy novo troca os .js, não o save. Duas defesas explícitas, porque o
+ * dono pediu cuidado nisso: a virada do dia NUNCA reconstrói a lista (só
+ * carimba a data), e a limpeza da banca velha remove apenas o que é do
+ * 'mercador', peça por peça. O saneamento do db.js também deixou de jogar
+ * o mercado inteiro fora quando acha um campo torto.
  *
  * A TAXA É O RALO: toda venda de jogador paga 5% (mínimo 1). Economia sem
  * ralo incha até o vintém não valer nada — a taxa é pequena o bastante para
@@ -27,7 +37,7 @@ var JOGO = (typeof window !== 'undefined')
   JOGO.Mercado = M;
 
   M.TAXA = 0.05;               // 5% sobre a venda do jogador, mínimo 1
-  M.POR_DIA = 6;               // quantas ofertas o mercador-fantasma pendura
+  M.POR_DIA = 0;               // 12/09: o mercador-fantasma não pendura mais nada
   M.PRECO_MAX = 9999;
 
   // 08/09: "o drop de itens bons seja MUITO difícil" — o preço acompanha:
@@ -35,6 +45,7 @@ var JOGO = (typeof window !== 'undefined')
   var BASE_RARIDADE = { comum: 18, raro: 120, epico: 400, lendario: 900 };
 
   function DB() { return JOGO.DB || null; }
+  function isArray(v) { return Object.prototype.toString.call(v) === '[object Array]'; }
   function DATA() { return JOGO.DATA || {}; }
 
   function hoje() {
@@ -70,53 +81,27 @@ var JOGO = (typeof window !== 'undefined')
     return Math.max(1, Math.round(preco));
   };
 
-  /* A banca do dia do mercador-fantasma, semeada pela data. */
-  function bancaDoDia(dia) {
-    // 08/09: o mercador vende só o que CAI — peça de calabouço com peso de
-    // saque — e nunca épico nem lendário (isso se conquista); raro é 1 em 8.
-    // Antes ele tirava qualquer id da tabela, à toa: épico a 85 vinténs.
-    var todos = DATA().items || {};
-    var comuns = [], raros = [];
-    Object.keys(todos).forEach(function (id) {
-      var it = todos[id];
-      if (!it || !it.dungeonId || !(it.dropWeight > 0)) return;
-      if (it.rarity === 'raro') raros.push(id);
-      else if (!it.rarity || it.rarity === 'comum') comuns.push(id);
-    });
-    if (!comuns.length && !raros.length) return [];
-    var rnd = rngDe('mercado:' + dia);
-    var fora = [];
-    for (var i = 0; i < M.POR_DIA; i++) {
-      var deRaro = raros.length && (rnd() < 0.125 || !comuns.length);
-      var lista = deRaro ? raros : comuns;
-      var itemId = lista[Math.floor(rnd() * lista.length)];
-      var level = rnd() < 0.35 ? 1 + Math.floor(rnd() * 3) : 0;
-      var stars = rnd() < 0.15 ? 1 : 0;
-      var jitter = 0.85 + rnd() * 0.35;        // ±~20% da régua
-      fora.push({
-        id: 'mf-' + dia + '-' + i,
-        vendedor: 'mercador',
-        itemId: itemId, level: level, stars: stars,
-        preco: Math.max(1, Math.round(M.precoSugerido(itemId, level, stars) * jitter))
-      });
-    }
-    return fora;
-  }
-
-  /* Abre o mercado do dia: troca a banca do mercador se o dia virou; as
-   * ofertas do JOGADOR atravessam os dias intactas. */
+  /* Abre o balcão. Ele NÃO se reconstrói: a data é só um carimbo (o resto do
+   * jogo ainda a lê), e a lista de ofertas é preservada como está. A única
+   * coisa que sai é a banca VELHA do mercador-fantasma, que ficou nos saves
+   * de antes de 12/09 — e sai peça por peça, pelo dono da oferta, nunca
+   * limpando a lista inteira. Save com forma estranha vira balcão vazio em
+   * vez de derrubar o jogo, mas nenhuma oferta de jogador se perde por
+   * causa de virada de dia ou de deploy. */
   M.abrir = function (dataForcada) {
     var db = DB();
     if (!db) return Promise.resolve(null);
     return db.mercadoLer().then(function (mc) {
       var dia = dataForcada || hoje();
-      mc = mc || { dia: null, ofertas: [] };
-      if (mc.dia !== dia) {
-        var doJogador = mc.ofertas.filter(function (o) { return o.vendedor === 'jogador'; });
-        mc = { dia: dia, ofertas: bancaDoDia(dia).concat(doJogador) };
-        return db.mercadoGravar(mc).then(function () { return mc; });
-      }
-      return mc;
+      if (!mc || typeof mc !== 'object' || !isArray(mc.ofertas)) mc = { dia: null, ofertas: [] };
+      var antes = mc.ofertas.length;
+      var limpas = mc.ofertas.filter(function (o) {
+        return o && o.itemId && o.vendedor !== 'mercador';
+      });
+      var mudou = (limpas.length !== antes) || (mc.dia !== dia);
+      mc = { dia: dia, ofertas: limpas };
+      if (!mudou) return mc;
+      return db.mercadoGravar(mc).then(function () { return mc; });
     });
   };
 

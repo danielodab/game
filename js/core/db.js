@@ -107,8 +107,14 @@ var JOGO = (typeof window !== 'undefined')
           if (d.missoes !== null && typeof d.missoes !== 'object') d.missoes = null;
           if (d.missoes === undefined) d.missoes = null;
           if (!d.conquistas || typeof d.conquistas !== 'object') d.conquistas = {};
-          if (d.mercado !== null && typeof d.mercado !== 'object') d.mercado = null;
+          /* 12/09: o mercado NÃO se joga fora por causa de um campo torto —
+           * as ofertas dos jogadores moram aqui e um deploy não pode comê-las.
+           * Salva-se o que é salvável: a lista de ofertas, se for lista. */
           if (d.mercado === undefined) d.mercado = null;
+          if (d.mercado !== null && typeof d.mercado !== 'object') d.mercado = null;
+          if (d.mercado && !Array.isArray(d.mercado.ofertas)) {
+            d.mercado = { dia: (typeof d.mercado.dia === 'string') ? d.mercado.dia : null, ofertas: [] };
+          }
           if (!d.placar || typeof d.placar !== 'object') d.placar = {};
           if (!d.chefes || typeof d.chefes !== 'object') d.chefes = {};   // 11/09: os títulos de chefe
           if (!Array.isArray(d.mutados)) d.mutados = [];
