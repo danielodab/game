@@ -968,7 +968,9 @@ var JOGO = (typeof window !== 'undefined')
       no.position.y -= cx.min.y;                        // assenta pelo pé
       no.position.x -= (cx.min.x + cx.max.x) / 2;       // e centra na casa
       no.position.z -= (cx.min.z + cx.max.z) / 2;
-      return { no: no, alt: cx.max.y - cx.min.y };
+      // o RAIO no chão sai da caixa já escalada: é ele que vira parede
+      var meia = Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z) / 2;
+      return { no: no, alt: cx.max.y - cx.min.y, raio: meia };
     }
 
     for (var i = 0; i < lugares.length; i++) {
@@ -988,6 +990,15 @@ var JOGO = (typeof window !== 'undefined')
       }
       lg.node.add(feito.no);
       if (rot) rot.position.y = feito.alt + 1.4;
+      /* A PAREDE (11/09, dono: "tirando a árvore central, o personagem passa
+       * pelas barracas, arena, banco — isso não pode acontecer"). Só o
+       * tronco da Árvore-Mundo era sólido; o resto era cenário atravessável.
+       * Agora cada construção ganha um raio sólido MEDIDO do modelo: 72% da
+       * meia-caixa, porque a caixa abraça telhado e toldo, que ficam por
+       * cima da cabeça e não são parede. E nunca maior que o raio de
+       * conversa menos uma folga — o painel do lugar abre por proximidade, e
+       * uma parede além dele deixaria o prédio mudo. */
+      lg.solido = Math.max(1.0, Math.min(feito.raio * 0.72, (lg.raio || 3) - 1.2));
     }
 
     // A ÁRVORE-MUNDO: o coração do mapa. Não é `lugar` (não abre painel) —
@@ -1642,6 +1653,26 @@ var JOGO = (typeof window !== 'undefined')
   /* UM passo de caminhada para QUALQUER corpo (herói ou fantasma): mesmo
    * limiar de chegada, mesma velocidade, mesma virada. Devolve true no
    * quadro em que o corpo chega. */
+  /* Empurra um ponto para FORA das construções sólidas. É o mesmo gesto do
+   * tronco: o corpo desliza contornando a parede em vez de travar nela, e o
+   * alvo segue o mesmo — o próximo passo tenta um pouco mais adiante na
+   * tangente. Vale para o herói E para os fantasmas: o passo é um só. */
+  function empurraDosSolidos(p, folga) {
+    for (var i = 0; i < lugares.length; i++) {
+      var lg = lugares[i];
+      if (!lg.solido) continue;
+      var r = lg.solido + (folga || 0);
+      var ex = p.x - lg.pos.x, ez = p.z - lg.pos.z;
+      var d = Math.hypot(ex, ez);
+      if (d >= r) continue;
+      if (d < 0.001) { p.x = lg.pos.x + r; p.z = lg.pos.z; continue; }   // no miolo: sai por leste
+      var k = r / d;
+      p.x = lg.pos.x + ex * k;
+      p.z = lg.pos.z + ez * k;
+    }
+    return p;
+  }
+
   function andaCorpo(corpo, dt) {
     if (!corpo.alvo) return false;
     var p = corpo.node.position;
@@ -1666,6 +1697,7 @@ var JOGO = (typeof window !== 'undefined')
       var kTr = TRONCO_RAIO / dTr;
       p.x *= kTr; p.z *= kTr;
     }
+    empurraDosSolidos(p, 0);
     corpo.node.rotation.y = Math.atan2(dx, dz);
     return false;
   }
@@ -1683,6 +1715,20 @@ var JOGO = (typeof window !== 'undefined')
       corpo.clipe = clipe;
       try { corpo.node.userData.play(clipe, { fade: 0.15 }); } catch (e) {}
     }
+  }
+
+  /* ONDE SE PARA ao clicar num lugar: no centro, se ele não tem parede
+   * (portal, porta); na calçada, se tem — o lado de cá do prédio, medido a
+   * partir de onde o corpo está agora. O painel abre por PROXIMIDADE (o
+   * `raio`, sempre maior que a parede), então parar fora basta. */
+  function paradaDo(l) {
+    if (!l.solido || !heroi) return l.pos;
+    var hp = heroi.node.position;
+    var ex = hp.x - l.pos.x, ez = hp.z - l.pos.z;
+    var d = Math.hypot(ex, ez);
+    if (d < 0.001) return new THREE.Vector3(l.pos.x + l.solido + 0.6, 0, l.pos.z);
+    var k = (l.solido + 0.6) / d;
+    return new THREE.Vector3(l.pos.x + ex * k, 0, l.pos.z + ez * k);
   }
 
   function andarAte(destino, chegada) {
@@ -1878,7 +1924,7 @@ var JOGO = (typeof window !== 'undefined')
       var hits = raycaster.intersectObject(lugares[i].node, true);
       if (hits && hits.length) {
         var l = lugares[i];
-        andarAte(l.pos, function () { if (Hub.aoAproximar) Hub.aoAproximar(l); });
+        andarAte(paradaDo(l), function () { if (Hub.aoAproximar) Hub.aoAproximar(l); });
         return;
       }
     }
@@ -1897,6 +1943,9 @@ var JOGO = (typeof window !== 'undefined')
         var kT = (TRONCO_RAIO + 0.4) / Math.max(0.01, dT);
         p.x *= kT; p.z *= kT;
       }
+      // clicar EM CIMA de um prédio: o destino vem para a calçada dele,
+      // senão o corpo ficaria dando voltas na parede sem nunca chegar
+      empurraDosSolidos(p, 0.4);
       andarAte(p, null);
     }
   }
@@ -2089,6 +2138,20 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
   Hub._marcaGrupo = function (id) { return marcasGrupo[id] || null; };   // provas
+  /* a parede aplicada a um ponto, para a prova medir sem depender de quadro
+   * (rAF não roda em aba escondida, e a parede tem de ser testável assim) */
+  Hub._empurra = function (x, z, folga) {
+    var p = { x: x, z: z };
+    empurraDosSolidos(p, folga || 0);
+    return p;
+  };
+  /* os lugares da praça, para as provas medirem parede e raio de conversa */
+  Hub._lugares = function () {
+    return lugares.map(function (l) {
+      return { id: l.id, tipo: l.tipo, x: l.pos.x, z: l.pos.z,
+               raio: l.raio || 0, solido: l.solido || 0 };
+    });
+  };
   Hub.TETO_FANTASMAS = 20;
   var MARGEM_TROCA = 2.0;           // só larga o corpo quem ficou 2m atrás do corte
 

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — as paredes da praça</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:1000px;height:720px;border:0;background:#000}
+  #saida{position:fixed;left:1000px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+  .p{color:#7fe08a}.f{color:#ff8a7a}
+</style>
+</head>
+<body>
+<!-- AS PAREDES DA PRAÇA (11/09, dono: "tirando a árvore central, o personagem
+     passa pelas barracas, arena, banco — isso não pode acontecer"). Só o
+     tronco da Árvore-Mundo era sólido. Esta prova abre o jogo de verdade,
+     espera as construções vestirem o GLB (é delas que sai a medida da parede)
+     e cobra: toda construção tem parede, nenhuma parede engole o raio de
+     conversa (senão o painel do lugar nunca abriria), portal não tem parede
+     (entra-se nele), e um ponto dentro da construção sai EXATAMENTE na parede. -->
+<iframe id="tela" src="../index.html?sandbox=1"></iframe>
+<div id="saida"><div id="summary">abrindo a praça…</div><div id="linhas"></div></div>
+<script>
+(function () {
+  var f = document.getElementById('tela');
+  var linhas = [], falhas = [];
+  function check(nome, ok, extra) {
+    linhas.push('<div class="' + (ok ? 'p' : 'f') + '">' + (ok ? 'PASSOU' : 'FALHOU') + ' · ' +
+                nome + (extra ? ' (' + extra + ')' : '') + '</div>');
+    if (!ok) falhas.push(nome);
+  }
+  function fecha() {
+    document.getElementById('linhas').innerHTML = linhas.join('');
+    var s = document.getElementById('summary');
+    s.className = falhas.length ? 'fail' : 'allpass';
+    s.textContent = falhas.length ? ('FALHOU: ' + falhas.join(' · '))
+                                  : ('tudo passou (' + linhas.length + ')');
+  }
+  function espera(w, cond, ms, passo) {
+    return new Promise(function (ok, nao) {
+      var t0 = Date.now();
+      (function tenta() {
+        var r = false;
+        try { r = cond(w); } catch (e) {}
+        if (r) return ok(r);
+        if (Date.now() - t0 > ms) return nao(new Error('esperou demais'));
+        setTimeout(tenta, passo || 400);
+      })();
+    });
+  }
+
+  f.onload = function () {
+    var w = f.contentWindow, d = w.document;
+    espera(w, function (w2) { return !!d.querySelector('.screen-menu.is-on'); }, 60000)
+      .then(function () {
+        return w.JOGO.DB.batizar('Prova Parede');
+      })
+      .then(function () {
+        // Descer → escolher 1 herói → confirmar
+        function botao(re) {
+          var bs = [].filter.call(d.querySelectorAll('button'), function (b) { return re.test(b.textContent); });
+          return bs[0] || null;
+        }
+        botao(/^Descer$/).click();
+        return espera(w, function () { return !!botao(/^Escolher$/); }, 20000);
+      })
+      .then(function () {
+        [].filter.call(d.querySelectorAll('button'), function (b) { return /^Escolher$/.test(b.textContent); })[0].click();
+        return new Promise(function (r) { setTimeout(r, 400); });
+      })
+      .then(function () {
+        [].filter.call(d.querySelectorAll('button'), function (b) { return /Confirmar/.test(b.textContent); })[0].click();
+        // as construções vestem o GLB uns segundos depois de a praça abrir —
+        // é de lá que sai a medida da parede
+        return espera(w, function () {
+          var L = w.JOGO.Hub._lugares ? w.JOGO.Hub._lugares() : [];
+          return L.length && L.some(function (l) { return l.solido > 0; }) ? L : false;
+        }, 90000, 700);
+      })
+      .then(function (L) {
+        var predios = L.filter(function (l) {
+          return ['banco', 'mercado', 'arena', 'sede', 'forja', 'loteria'].indexOf(l.tipo) >= 0;
+        });
+        var portais = L.filter(function (l) { return l.tipo === 'portal'; });
+
+        check('a praça montou as seis construções', predios.length === 6, predios.length);
+        check('TODA construção tem parede',
+              predios.every(function (l) { return l.solido > 0.9; }),
+              predios.map(function (l) { return l.id + ':' + l.solido.toFixed(1); }).join(' '));
+        check('nenhuma parede engole o raio de conversa',
+              predios.every(function (l) { return l.solido <= l.raio - 1.1; }),
+              predios.map(function (l) { return l.id + ' ' + l.solido.toFixed(1) + '<' + l.raio; }).join(' · '));
+        check('portal NÃO tem parede (entra-se nele)',
+              portais.length > 0 && portais.every(function (l) { return !l.solido; }));
+
+        // o empurrão: ponto dentro sai na parede, ponto fora não se mexe
+        var b = predios.filter(function (l) { return l.id === 'banco'; })[0] || predios[0];
+        var dentro = w.JOGO.Hub._empurra(b.x + 0.5, b.z + 0.5);
+        var dd = Math.hypot(dentro.x - b.x, dentro.z - b.z);
+        check('ponto DENTRO da construção sai exatamente na parede',
+              Math.abs(dd - b.solido) < 0.01, dd.toFixed(2) + ' / ' + b.solido.toFixed(2));
+        var meio = w.JOGO.Hub._empurra(b.x, b.z);
+        check('ponto no MIOLO (sem direção) também sai',
+              Math.abs(Math.hypot(meio.x - b.x, meio.z - b.z) - b.solido) < 0.01);
+        var fora = w.JOGO.Hub._empurra(b.x + b.solido + 3, b.z);
+        check('ponto FORA não se mexe',
+              Math.abs(fora.x - (b.x + b.solido + 3)) < 0.001 && Math.abs(fora.z - b.z) < 0.001);
+        var folga = w.JOGO.Hub._empurra(b.x + 0.2, b.z, 0.4);
+        check('a folga do clique afasta um pouco mais',
+              Math.abs(Math.hypot(folga.x - b.x, folga.z - b.z) - (b.solido + 0.4)) < 0.01);
+        var longe = w.JOGO.Hub._empurra(0, 0);
+        check('o miolo da praça (a Árvore) não é lugar e não empurra aqui',
+              longe.x === 0 && longe.z === 0);
+        fecha();
+      })
+      .catch(function (e) {
+        check('a prova rodou até o fim', false, e.message);
+        fecha();
+      });
+  };
+})();
+</script>
+</body>
+</html>
