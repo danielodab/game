@@ -162,7 +162,11 @@ var JOGO = (typeof window !== 'undefined')
     if (clockFn) { try { lastClock = num(clockFn(), 0); } catch (e) { lastClock = 0; } }
   }
 
-  Game.init = function () {
+  /* `tela` (12/09): para onde ir depois de zerar a partida. O padrão é o
+   * menu (é o boot do jogo); abandonar uma descida passa 'hub', porque o
+   * dono pediu que abandonar leve à PRAÇA e não ao menu — quem desistiu de
+   * uma sala quer o Acampamento, não a tela de título. */
+  Game.init = function (tela) {
     Game.screen = 'menu';
     Game.state = null;
     Game.selectedSpellId = null;
@@ -177,7 +181,8 @@ var JOGO = (typeof window !== 'undefined')
     resetTimer(true);
     returnScreen = 'menu';
     rede = null; ultimoTurno = null; timerTurno = null;
-    setScreen('menu');
+    returnScreen = (tela === 'hub') ? 'hub' : 'menu';
+    setScreen(tela === 'hub' ? 'hub' : 'menu');
     // [G11] a batalha em rede acaba com a volta ao menu/Acampamento
     var c = C();
     if (c && c._gameInit) { try { c._gameInit(); } catch (e) {} }
@@ -442,11 +447,14 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
-  /* SAIR DO CALABOUÇO pela antessala: "depois terá que começar do zero" —
-   * a descida se perde e o jogo volta ao menu (a HUD leva ao Acampamento). */
+  /* SAIR DO CALABOUÇO: "depois terá que começar do zero" — a descida se
+   * perde e o jogo volta à PRAÇA (12/09: era o menu, e o dono corrigiu —
+   * "quando eu abandonar partida deve ir para a praça e não para o menu").
+   * Vale da antessala E da batalha: desistir no meio da sala é a mesma
+   * desistência. */
   Game.abandonar = function () {
-    if (Game.screen !== 'antessala') return false;
-    Game.init();
+    if (Game.screen !== 'antessala' && Game.screen !== 'battle') return false;
+    Game.init('hub');
     return true;
   };
 
@@ -491,7 +499,7 @@ var JOGO = (typeof window !== 'undefined')
              monstros: Game.monstrosDaSala(Game.dungeonId, Game.roomIndex) };
   };
 
-  Game.restart = function () { Game.init(); };
+  Game.restart = function (tela) { Game.init(tela); };
 
   // =====================================================================
   // [G11] A BATALHA EM REDE (11/09) — grupo de 2 jogadores e duelo.

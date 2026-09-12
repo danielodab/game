@@ -1419,7 +1419,7 @@ var JOGO = (typeof window !== 'undefined')
       } else if (lugar.tipo === 'mercado') {
         painel.appendChild(el('h3', null, 'Mercadinho do Acampamento'));
         painel.appendChild(el('p', 'hub-nota',
-          'Peças à venda — as suas e as do mercador. Toda venda sua paga 5% de taxa.'));
+          'Peças à venda — só o que jogador anunciou. Toda venda sua paga 5% de taxa.'));
         painel.appendChild(btn('Abrir o balcão', 'btn-primary btn-block', function () {
           openSheet('mercado');
         }));
@@ -3322,7 +3322,7 @@ var JOGO = (typeof window !== 'undefined')
   function sheetMercado() {
     sheetName = 'mercado';
     var body = sheetShell('Mercadinho do Acampamento',
-      'As ofertas do mercador trocam a cada dia; as suas ficam até vender. Toda venda paga 5% de taxa.');
+      'O balcão só tem o que jogador anunciou. A sua oferta fica até vender ou você retirar. Toda venda paga 5% de taxa.');
     var Mc = JOGO.Mercado;
     if (!Mc) { body.appendChild(el('p', 'inv-dica', 'O mercado não carregou.')); return; }
 
@@ -3374,7 +3374,9 @@ var JOGO = (typeof window !== 'undefined')
         caixa.appendChild(chips('Espaço', 'slot', [['todos', 'Tudo'], ['punho', 'Punho'], ['passo', 'Passo'], ['casca', 'Casca'], ['lume', 'Lume']]));
         caixa.appendChild(chips('Raridade', 'rar', [['todas', 'Todas'], ['comum', 'Comum'], ['raro', 'Raro'], ['epico', 'Épico'], ['lendario', 'Lendário']]));
         if (comOrigem) {
-          caixa.appendChild(chips('Vendedor', 'origem', [['todos', 'Todos'], ['mercador', 'Mercador'], ['jogadores', 'Jogadores']]));
+          // 12/09: o mercador-fantasma saiu — com um vendedor só, filtrar por
+          // vendedor não separava nada
+
           caixa.appendChild(chips('Ordem', 'ordem', [['preco', 'Preço ↑'], ['precoDesc', 'Preço ↓'], ['nome', 'Nome'], ['raridade', 'Raridade']]));
         }
       }
@@ -3415,8 +3417,7 @@ var JOGO = (typeof window !== 'undefined')
       function pintaComprar() {
         var lista = deOutros.filter(function (of) {
           if (!passaFiltro(of.itemId)) return false;
-          if (mcFiltro.origem === 'mercador' && of.vendedor !== 'mercador') return false;
-          if (mcFiltro.origem === 'jogadores' && of.vendedor === 'mercador') return false;
+
           return true;
         });
         lista.sort(function (a, b) {
@@ -3427,12 +3428,18 @@ var JOGO = (typeof window !== 'undefined')
           return a.preco - b.preco;
         });
         listaEl.appendChild(el('p', 'mc-resumo', '<b>' + lista.length + '</b> à venda' +
-          (lista.length !== deOutros.length ? ' (de ' + deOutros.length + ')' : '') +
-          ' · ' + deOutros.filter(function (o) { return o.vendedor === 'mercador'; }).length + ' do mercador'));
-        if (!lista.length) listaEl.appendChild(el('p', 'inv-dica', 'Nada com esses filtros.'));
+          (lista.length !== deOutros.length ? ' (de ' + deOutros.length + ')' : '')));
+        if (!lista.length) {
+          // 12/09: balcão vazio é o estado NORMAL do mercadinho agora — a
+          // frase tem de explicar isso, e não parecer filtro mal posto
+          listaEl.appendChild(el('p', 'inv-dica', deOutros.length
+            ? 'Nada com esses filtros.'
+            : 'O balcão está vazio. Ele só enche quando alguém anuncia uma peça — ' +
+              'e a sua oferta fica aqui até vender.'));
+        }
         lista.forEach(function (of) {
           var row = linhaItem(of.itemId, of.level, of.stars,
-            of.vendedor === 'mercador' ? 'do mercador' : 'de ' + esc(of.vendedorNome || 'jogador'));
+            'de ' + esc(of.vendedorNome || 'jogador'));
           row.appendChild(el('span', 'mc-preco', of.preco + 'v'));
           var bC = btn('Comprar', 'btn-mini btn-gold', function () {
             if (!safe(function () { return P().bagFree(1); }, true)) {
@@ -3441,7 +3448,10 @@ var JOGO = (typeof window !== 'undefined')
             }
             Mc.comprar(of.id).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
-              // a banca do fantasma cunha (origem mercador); a oferta do jogador traz a série
+              /* A ORIGEM continua 'mercador' — é o nome que o servidor aceita
+               * (ORIGENS em servidor/api.py) e trocá-lo faria o save novo ser
+               * recusado na subida. O mercador-fantasma saiu do balcão; o
+               * carimbo de procedência "veio do mercado" fica. */
               P().state.inventory.push(P().carimba ? P().carimba(res.item, 'mercador') : res.item);
               safe(function () { P().save(); }, null);
               toast('−' + res.pagou + ' vinténs — a peça é sua.', 'good');
@@ -8147,10 +8157,13 @@ var JOGO = (typeof window !== 'undefined')
       }));
     } else {
       acts.appendChild(btn('Abandonar a descida', 'btn-warn', function () {
-        confirmSheet('Abandonar?', 'O que você já ganhou fica. A sala em curso se perde.', function () {
-          safe(function () { G().restart(); }, null);
-          UI.showScreen('menu');
-        });
+        confirmSheet('Abandonar?',
+          'O que você já ganhou fica. A sala em curso se perde e você volta ao Acampamento.',
+          function () {
+            // 12/09 (dono): abandonar leva à PRAÇA, não ao menu
+            safe(function () { G().restart('hub'); }, null);
+            navTo('hub');
+          });
       }));
     }
     acts.appendChild(btn('Voltar à luta', 'btn-primary', closeSheet));
@@ -9030,7 +9043,7 @@ var JOGO = (typeof window !== 'undefined')
         closeSheet();
         var t = safe(function () { return G().screen; }, '');
         if (t === 'antessala') safe(function () { return G().abandonar(); }, false);
-        else if (t !== 'hub' && t !== 'menu' && t !== 'heroSelect') safe(function () { G().restart(); return true; }, null);
+        else if (t !== 'hub' && t !== 'menu' && t !== 'heroSelect') safe(function () { G().restart('hub'); return true; }, null);
         navTo('hub');
       };
     }
