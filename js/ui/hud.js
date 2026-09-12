@@ -1199,19 +1199,21 @@ var JOGO = (typeof window !== 'undefined')
      { ic: '📖', rot: 'Feitiços', abre: 'spells' },
      { ic: '🃏', rot: 'Coleção', abre: 'collection' },
      { ic: '📜', rot: 'Missões', abre: 'missoes' },
-     { ic: '🛡️', rot: 'Guilda', abre: 'guilda_remoto' } // Adicionado para acesso remoto
+     // 11/09: a Guilda é uma aba como as outras — SEMPRE no cais. Ela nascia
+     // escondida e só aparecia se `resumoGuilda` já tivesse chegado quando a
+     // conta foi pintada; como a guilda carrega por promessa, quase nunca
+     // tinha. Resultado: quem ESTAVA numa guilda não via o botão dela. E
+     // quem não está precisa da porta ainda mais — é por ela que se funda.
+     // `remoto` avisa a ficha de que se está longe da Sede (cofre e banco
+     // continuam só lá).
+     { ic: '🛡️', rot: 'Guilda', abre: 'guilda', remoto: true }
     ].forEach(function (d) {
       var b = el('button', 'hub-dock-b');
       b.type = 'button';
       b.appendChild(el('span', 'hd-ic', d.ic));
       b.appendChild(el('span', 'hd-rot', d.rot +
         (d.tecla ? ' <span class="tecla">' + d.tecla + '</span>' : '')));
-      if (d.abre === 'guilda_remoto') {
-        tap(b, function () { openSheet('guilda', true); });
-        b.style.display = 'none'; // Escondido até carregar a conta
-      } else {
-        tap(b, function () { openSheet(d.abre); });
-      }
+      tap(b, function () { openSheet(d.abre, d.remoto || undefined); });
       dock.appendChild(b);
       dockBotoes[d.abre] = b;
     });
@@ -1295,12 +1297,7 @@ var JOGO = (typeof window !== 'undefined')
         // aceso na praça. Recalculado a cada pintura da conta — é quando o
         // placar acabou de chegar.
         if (JOGO.Hub && JOGO.Hub.medalhas) {
-          JOGO.Hub.medalhas(medalhasPorClasse(contasDoPlacar(fotos, j.id)), j.id);
-        }
-        
-        // Exibe o botão da guilda no dock se o jogador estiver em uma guilda
-        if (dockBotoes['guilda_remoto']) {
-          dockBotoes['guilda_remoto'].style.display = (resumoGuilda && resumoGuilda.nome) ? '' : 'none';
+          JOGO.Hub.medalhas(medalhasPorClasse(contasDoPlacar(fotos, j.id, j.nome)), j.id);
         }
 
         // A AURA do Traje do Colecionador fechado (25/08)
@@ -3866,7 +3863,7 @@ var JOGO = (typeof window !== 'undefined')
       clear(caixa);
 
       // ---- QUEM SOU EU
-      var medalhas = medalhasPorClasse(contasDoPlacar(fotos, j.id));
+      var medalhas = medalhasPorClasse(contasDoPlacar(fotos, j.id, j.nome));
       var souMestre3 = safe(function () { return !!(JOGO.GM && JOGO.GM.ativo()); }, false);
       var brilho = souMestre3 ? 'admin' : (medalhas[j.id] || null);
       var topo = el('div', 'char-topo');
@@ -4049,7 +4046,7 @@ var JOGO = (typeof window !== 'undefined')
        * a mesma conta, a mesma cor. O branco do Mestre do Fundo só aparece
        * na MINHA linha: a foto do placar não guarda quem é da equipe, e
        * quem confere isso é o relé (a praça mostra o dos outros). */
-      var medalhas = medalhasPorClasse(contasDoPlacar(lista, eu2.id));
+      var medalhas = medalhasPorClasse(contasDoPlacar(lista, eu2.id, eu2.nome));
       var souMestre2 = safe(function () { return !!(JOGO.GM && JOGO.GM.ativo()); }, false);
       function classeDoNome(id, sou) {
         if (sou && souMestre2) return ' pl-brilho is-admin';
@@ -4082,16 +4079,11 @@ var JOGO = (typeof window !== 'undefined')
       /* O RANKING POR CLASSE: três degraus por classe, o nome de cada um já
        * na cor da medalha. É a tabela que explica de onde vem o brilho que
        * se vê na praça — sem ela, o jogador só veria nomes acesos. */
+      var contasP = contasDoPlacar(lista, eu2.id, eu2.nome || 'Você');
       var porClasse = {};
-      contasDoPlacar(lista, eu2.id).forEach(function (c) {
+      contasP.forEach(function (c) {
         var cls = (c.resumo && c.resumo.classes) || {};
-        Object.keys(cls).forEach(function (cid) {
-          if (!(cls[cid] > 0)) return;
-          (porClasse[cid] = porClasse[cid] || []).push({
-            id: c.id, nome: c.id === eu2.id ? (eu2.nome || 'Você') : (c.nome || '?'),
-            sou: c.id === eu2.id, nv: cls[cid]
-          });
-        });
+        Object.keys(cls).forEach(function (cid) { if (cls[cid] > 0) porClasse[cid] = true; });
       });
       var cids = Object.keys(porClasse).sort(function (a3, b3) {
         return className(a3).localeCompare(className(b3));
@@ -4101,15 +4093,13 @@ var JOGO = (typeof window !== 'undefined')
         caixa.appendChild(el('p', 'inv-dica',
           'O 1º de cada classe anda com o nome dourado na praça; o 2º, prateado; o 3º, bronze.'));
         cids.forEach(function (cid) {
-          var fila = porClasse[cid].sort(function (a3, b3) {
-            return (b3.nv - a3.nv) || String(a3.id).localeCompare(String(b3.id));
-          }).slice(0, 3);
+          var fila = filaDaClasse(contasP, cid).slice(0, 3);
           var linha = el('div', 'pl-classe');
           linha.appendChild(el('span', 'pl-classe-nm', esc(className(cid))));
           var pod = el('span', 'pl-podio');
           fila.forEach(function (q, qi) {
             pod.appendChild(el('span', 'pl-nm pl-brilho is-' + MEDALHAS[qi],
-              esc(q.nome) + ' <i>' + q.nv + '</i>'));
+              esc(q.nome || '?') + ' <i>' + q.nv + '</i>'));
           });
           linha.appendChild(pod);
           caixa.appendChild(linha);
@@ -4119,11 +4109,12 @@ var JOGO = (typeof window !== 'undefined')
       caixa.appendChild(el('h3', 'bk-tit', 'Arena — a Brasa'));
       JOGO.DB.brasaVer().then(function (bz) {
         var arena = [{ id: eu2.id, nome: (eu2.nome || 'Você'), sou: true,
-                       pts: bz ? bz.pts : 1000 }];
+                       pts: bz ? bz.pts : 1000, partidas: (bz && bz.partidas) || 0 }];
         lista.forEach(function (e2) {
           if (e2.id === eu2.id) return;
           if (e2.resumo && typeof e2.resumo.brasa === 'number') {
-            arena.push({ id: e2.id, nome: e2.nome, pts: e2.resumo.brasa });
+            arena.push({ id: e2.id, nome: e2.nome, pts: e2.resumo.brasa,
+                         partidas: e2.resumo.partidas || 0 });
           }
         });
         arena.sort(function (a, b) { return b.pts - a.pts; });
@@ -4131,8 +4122,14 @@ var JOGO = (typeof window !== 'undefined')
           return { id: a.id, resumo: { brasa: a.pts } };
         }), eu2.id);
         arena.forEach(function (a, i) {
-          var tier = JOGO.Brasa
-            ? JOGO.Brasa.tierDe(a.pts, i === 0) : null;
+          /* A COROA I NÃO É DE GRAÇA (11/09, dono: "todos começam com a coroa
+           * 1 liberada"). É a mesma regra do novato que a plaquinha da praça,
+           * o perfil e a ficha do personagem já aplicavam — só esta lista
+           * tinha ficado de fora e dava Coroa I a quem nunca duelou. Quem tem
+           * zero partidas aparece no placar (os pontos são reais), mas sem
+           * degrau: a coroa é de quem pisou na arena. */
+          var tier = JOGO.Brasa ? JOGO.Brasa.tierDe(a.pts, i === 0) : null;
+          if (tier && tier.min === 0 && !(a.partidas > 0)) tier = null;
           var row = el('div', 'pl-linha' + (a.sou ? ' is-eu' : ''));
           row.appendChild(el('span', 'pl-pos', '#' + (i + 1)));
           var tx = el('div', 'ms-tx');
@@ -4142,7 +4139,8 @@ var JOGO = (typeof window !== 'undefined')
             (a.sou ? ' <span class="pl-eu">você</span>' : '')));
           // a coroa acende do 5º degrau para cima — o mesmo halo da praça,
           // aqui como sombra colorida atrás do nome do degrau
-          var degrau = el('div', 'ms-prog', tier ? esc(tier.nome) : '—');
+          var degrau = el('div', 'ms-prog',
+            tier ? esc(tier.nome) : 'ainda não pisou na arena');
           if (tier && tier.brilho > 0) {
             degrau.className = 'ms-prog pl-coroa-acesa';
             degrau.style.color = tier.cor || '#ffd36a';
@@ -4977,21 +4975,38 @@ var JOGO = (typeof window !== 'undefined')
    * mesma conta que o ranking da ficha mostra, e nada disso viaja pela Rede
    * (um cliente mexido não se dá medalha na tela dos outros). */
   var MEDALHAS = ['ouro', 'prata', 'bronze'];
+  /* A ORDEM DO PÓDIO é a MESMA do ranking do site (servidor/api.py: ORDER BY
+   * rc.xp DESC, rc.nivel DESC, r.nome): primeiro a XP, depois o nível, depois
+   * o nome — e o id no fim, só para o pódio não dançar entre dois redesenhos.
+   * 11/09: antes daqui o critério era só o nível, e dois heróis de nível 1 na
+   * mesma classe empatavam; o desempate caía no id e dava prata a quem o site
+   * mostrava em primeiro. Ranking que diverge de si mesmo não é ranking. */
+  function comparaPorClasse(a2, b2) {
+    return (b2.xp - a2.xp) || (b2.nv - a2.nv) ||
+           String(a2.nome || '').localeCompare(String(b2.nome || '')) ||
+           String(a2.id).localeCompare(String(b2.id));
+  }
+  /* As fichas de uma classe, a partir das contas do placar. */
+  function filaDaClasse(contas, cid) {
+    var fora = [];
+    (contas || []).forEach(function (c) {
+      var cls = (c && c.resumo && c.resumo.classes) || {};
+      if (!(cls[cid] > 0)) return;                // classe não liberada não disputa
+      var xps = (c.resumo && c.resumo.classesXp) || {};
+      fora.push({ id: c.id, nome: c.nome || '', nv: cls[cid], xp: xps[cid] || 0 });
+    });
+    return fora.sort(comparaPorClasse);
+  }
   function medalhasPorClasse(contas) {
     var porClasse = {}, fora = {};
     (contas || []).forEach(function (c) {
       var cls = (c && c.resumo && c.resumo.classes) || {};
       Object.keys(cls).forEach(function (cid) {
-        var nv = cls[cid];
-        if (!(nv > 0)) return;                    // classe não liberada não disputa
-        (porClasse[cid] = porClasse[cid] || []).push({ id: c.id, nv: nv });
+        if (cls[cid] > 0) porClasse[cid] = true;
       });
     });
     Object.keys(porClasse).forEach(function (cid) {
-      var fila = porClasse[cid].sort(function (a2, b2) {
-        // empate: o id decide, para o pódio não dançar a cada redesenho
-        return (b2.nv - a2.nv) || String(a2.id).localeCompare(String(b2.id));
-      });
+      var fila = filaDaClasse(contas, cid);
       for (var i = 0; i < MEDALHAS.length && i < fila.length; i++) {
         var ja = fora[fila[i].id];
         // a melhor medalha manda (ouro < prata < bronze na ordem do vetor)
@@ -5002,8 +5017,9 @@ var JOGO = (typeof window !== 'undefined')
   }
   /* A lista de contas que o pódio enxerga: as fotos do placar mais EU (a
    * minha linha é viva, não foto). */
-  function contasDoPlacar(fotos, meuId) {
-    var linhas = [{ id: meuId, resumo: safe(resumoDaConta, { classes: {}, total: 0 }) }];
+  function contasDoPlacar(fotos, meuId, meuNome) {
+    var linhas = [{ id: meuId, nome: meuNome || '',
+                    resumo: safe(resumoDaConta, { classes: {}, total: 0 }) }];
     (fotos || []).forEach(function (e2) {
       if (e2.id === meuId) return;
       linhas.push({ id: e2.id, nome: e2.nome, resumo: e2.resumo });
@@ -5012,15 +5028,23 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function resumoDaConta() {
-    var classes2 = {}, total = 0;
+    var classes2 = {}, xps = {}, total = 0;
     heroIds().forEach(function (hid) {
       var hh = hero(hid);
       if (!hh || !isUnlocked(hh.classId || hid)) return;
+      var cid = hh.classId || hid;
       var lv = hh.level || 1;
-      classes2[hh.classId || hid] = lv;
+      // a MELHOR ficha da classe, como o servidor conta (herois_por_classe):
+      // maior XP, depois maior nível. No jogo há uma ficha por classe, mas a
+      // regra fica escrita — e é ela que o pódio usa para desempatar.
+      var xp = Math.max(0, Math.floor(hh.xp || 0));
+      if (classes2[cid] === undefined || xp > (xps[cid] || 0)) {
+        classes2[cid] = lv;
+        xps[cid] = xp;
+      }
       total += lv;
     });
-    return { classes: classes2, total: total,
+    return { classes: classes2, classesXp: xps, total: total,
              brasa: resumoBrasaPts, partidas: resumoBrasaPartidas,
              // a coroa escondida viaja: o fantasma desta conta também não a usa
              coroaOculta: resumoCoroaOculta,
