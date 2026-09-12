@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — os corredores dos portais</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:1000px;height:720px;border:0;background:#000}
+  #saida{position:fixed;left:1000px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+  .p{color:#7fe08a}.f{color:#ff8a7a}
+</style>
+</head>
+<body>
+<!-- OS CORREDORES DOS PORTAIS (12/09, dono: "coloque muros e faça um corredor,
+     e nesse corredor ter alguns itens do mapa, e no fim de cada corredor o
+     portal, e ao lado dele o Boss parado"). Esta prova abre o jogo de verdade
+     e mede o corredor por NÚMERO, não por olho: a pista tem de estar livre de
+     ponta a ponta (senão ninguém chega ao portal), os lados têm de barrar, a
+     boca tem de estar aberta e o fundo fechado. Só os portais ABERTOS. -->
+<iframe id="tela" src="../index.html?sandbox=1"></iframe>
+<div id="saida"><div id="summary">abrindo a praça…</div><div id="linhas"></div></div>
+<script>
+(function () {
+  var f = document.getElementById('tela');
+  var linhas = [], falhas = [];
+  function check(nome, ok, extra) {
+    linhas.push('<div class="' + (ok ? 'p' : 'f') + '">' + (ok ? 'PASSOU' : 'FALHOU') + ' · ' +
+                nome + (extra ? ' (' + extra + ')' : '') + '</div>');
+    if (!ok) falhas.push(nome);
+  }
+  function fecha() {
+    document.getElementById('linhas').innerHTML = linhas.join('');
+    var s = document.getElementById('summary');
+    s.className = falhas.length ? 'fail' : 'allpass';
+    s.textContent = falhas.length ? ('FALHOU: ' + falhas.join(' · '))
+                                  : ('tudo passou (' + linhas.length + ')');
+  }
+  function espera(cond, ms, passo) {
+    return new Promise(function (ok, nao) {
+      var t0 = Date.now();
+      (function tenta() {
+        var r = false;
+        try { r = cond(); } catch (e) {}
+        if (r) return ok(r);
+        if (Date.now() - t0 > ms) return nao(new Error('esperou demais'));
+        setTimeout(tenta, passo || 400);
+      })();
+    });
+  }
+
+  f.onload = function () {
+    var w = f.contentWindow, d = w.document;
+    function botao(re) {
+      return [].filter.call(d.querySelectorAll('button'), function (b) { return re.test(b.textContent); })[0] || null;
+    }
+    espera(function () { return !!d.querySelector('.screen-menu.is-on'); }, 60000)
+      .then(function () { return w.JOGO.DB.batizar('Prova Corredor'); })
+      .then(function () {
+        botao(/^Descer$/).click();
+        return espera(function () { return !!botao(/^Escolher$/); }, 20000);
+      })
+      .then(function () {
+        botao(/^Escolher$/).click();
+        return new Promise(function (r) { setTimeout(r, 400); });
+      })
+      .then(function () {
+        botao(/Confirmar/).click();
+        // o corredor só nasce com as peças do calabouço na mão (sob demanda)
+        return espera(function () {
+          var H = w.JOGO.Hub;
+          return (H._corredores && H._corredores().length >= 2) ? H : false;
+        }, 120000, 800);
+      })
+      .then(function (H) {
+        var L = H._lugares().filter(function (l) { return l.tipo === 'portal'; });
+        var abertos = L.filter(function (l) { return !l.fechado; });
+        var fechados = L.filter(function (l) { return l.fechado; });
+        var S = H._solidos();
+
+        check('os DOIS portais abertos ganharam corredor',
+              H._corredores().length === abertos.length && abertos.length === 2,
+              H._corredores().join(','));
+        check('cada portal aberto tem o chefe dele parado ao lado',
+              H._chefesParados() === abertos.length, H._chefesParados() + ' chefes');
+        check('a praça ganhou muros de verdade (sólidos avulsos)', S.length > 20, S.length);
+
+        // um ponto do MUNDO a partir de coordenadas do corredor
+        function ponto(l, dd, lado) {
+          var r = Math.hypot(l.x, l.z), ux = l.x / r, uz = l.z / r;
+          return { x: l.x + ux * dd + (-uz) * lado, z: l.z + uz * dd + ux * lado };
+        }
+        function livre(p) {
+          var q = H._empurra(p.x, p.z);
+          return Math.abs(q.x - p.x) < 0.001 && Math.abs(q.z - p.z) < 0.001;
+        }
+
+        abertos.forEach(function (l) {
+          var nome = l.id;
+          // 1) a PISTA livre da boca até o portal: é por ela que se anda
+          var presos = [];
+          for (var dd = -15; dd <= 0; dd += 1) {
+            var p = ponto(l, dd, 0);
+            if (!livre(p)) presos.push(dd);
+          }
+          check(nome + ': a pista está livre da boca ao portal',
+                presos.length === 0, 'travou em d=' + presos.join(','));
+          // 2) os LADOS barram: é isso que faz dele corredor
+          var vazados = [];
+          [-12, -8, -4, 0].forEach(function (dd) {
+            [4.2, -4.2].forEach(function (lado) {
+              if (livre(ponto(l, dd, lado))) vazados.push(dd + '/' + lado);
+            });
+          });
+          check(nome + ': os dois muros barram o passo',
+                vazados.length === 0, 'vazou em ' + vazados.join(' '));
+          // 3) a BOCA aberta: entra-se por ela
+          check(nome + ': a boca do corredor está aberta', livre(ponto(l, -17.5, 0)));
+          // 4) o FUNDO fechado: atrás do portal não se sai
+          check(nome + ': o fundo atrás do portal está fechado', !livre(ponto(l, 3.6, 0)));
+          // 5) o portal continua ALCANÇÁVEL: o painel dele abre por proximidade
+          check(nome + ': dá para chegar a falar com o portal (pista dentro do raio)',
+                livre(ponto(l, -1, 0)) && l.raio >= 4);
+        });
+
+        fechados.forEach(function (l) {
+          var temMuro = false;
+          for (var dd = -12; dd <= 0; dd += 3) {
+            if (!livre(ponto(l, dd, 4.2))) temMuro = true;
+          }
+          check('portal fechado (' + l.id + ') segue pelado', !temMuro);
+        });
+        fecha();
+      })
+      .catch(function (e) {
+        check('a prova rodou até o fim', false, e.message);
+        fecha();
+      });
+  };
+})();
+</script>
+</body>
+</html>

@@ -37,6 +37,12 @@ var JOGO = (typeof window !== 'undefined')
   var nomeJogador = null;           // o nome batizado no DB, para a plaquinha
   var tituloJogador = null;         // o título de conquista, pendurado abaixo do nome
   var lugares = [];                 // { id, tipo, pos, raio, node, rotulo }
+  /* SÓLIDOS AVULSOS (12/09): o que barra o passo sem ser um `lugar` — os
+   * muros do corredor de cada portal, os pilares da boca e o chefe parado
+   * ao lado dela. Círculos {x, z, r}, a mesma conta da parede das
+   * construções: barato de testar e suficiente para uma peça de cenário. */
+  var solidos = [];
+  function marcaSolido(x, z, r) { solidos.push({ x: x, z: z, r: r }); }
   // A ANTESSALA (03/09): a mesma máquina da praça monta o PÁTIO de uma sala
   // do calabouço — null = praça; 'garden:1' = antessala da sala 2 da Estufa
   var RAIO_SALA = 15;
@@ -554,6 +560,8 @@ var JOGO = (typeof window !== 'undefined')
     }
     fantasmas = {};
     lugares.length = 0;
+    solidos.length = 0;
+    chefesParados.length = 0;
     ultimoPerto = null;
     heroi = null;
     bicho = null;
@@ -1069,31 +1077,17 @@ var JOGO = (typeof window !== 'undefined')
       scene.add(no);
       return no;
     }
-    function longeDosLugares(x, z) {
-      for (var j = 0; j < lugares.length; j++) {
-        var dx = x - lugares[j].pos.x, dz = z - lugares[j].pos.z;
-        if (Math.hypot(dx, dz) < (lugares[j].raio || 3) + 3) return false;
-      }
-      return true;
-    }
-
-    /* OS ENFEITES COM ENDEREÇO (10/09, pedido do dono: "tem uns itens
-     * aleatórios no mapa, preciso que organize eles"). Nada de anel
-     * sorteado: cada peça tem um lugar com sentido —
-     *   · seis ÁRVORES: os quatro cantos redondos da praça e as duas que
-     *     ladeiam a chegada do herói ao sul, cada uma com um vaso ao pé;
-     *   · a BANCADA DO MERCADO: carrinho e canteiro encostados no
-     *     Mercadinho; a ESCADA apoiada na Sede; TRONCO e REGADOR na Forja;
-     *   · duas REDOMAS simétricas ao pé da Árvore-Mundo.
-     * Tudo fora do raio de conversa dos lugares (longeDosLugares). */
-    var R = RAIO_MAPA;
-    var ARVORES = [[-0.74, -0.74], [0.74, -0.74], [-0.74, 0.74], [0.74, 0.74], [-0.16, 0.92], [0.16, 0.92]];
-    ARVORES.forEach(function (a, i) {
-      var x = a[0] * R, z = a[1] * R;
-      if (!longeDosLugares(x, z)) return;
-      planta('jd_estufa_arvore', 1 + (i % 3) * 0.12, x, z, i * 1.1);
-      planta('jd_vaso', 1.1, x + Math.sin(i * 1.3) * 1.6, z + Math.cos(i * 1.3) * 1.6, i * 0.7);
-    });
+    /* OS ENFEITES COM ENDEREÇO (10/09): a BANCADA DO MERCADO (carrinho e
+     * canteiro encostados no Mercadinho), a ESCADA apoiada na Sede, o TRONCO
+     * e o REGADOR na Forja. Cada peça veste o prédio ao lado dela.
+     *
+     * 11/09 (dono: "nesse outro lado do mapa tem uns itens aleatórios, tire
+     * eles — futuramente vou fazer itens para enfeitar a praça principal").
+     * Saíram as seis árvores-estufa do anel e os vasos ao pé delas, e as duas
+     * redomas da Árvore-Mundo: eram enfeite de preencher, do catálogo do
+     * JARDIM, espalhados por uma praça que não é jardim. Ficam só as peças
+     * ENCOSTADAS nas construções, que existem para vestir o prédio ao lado —
+     * essas têm endereço e motivo. */
     function aoLadoDe(id, dx, dz) {
       for (var j = 0; j < lugares.length; j++) if (lugares[j].id === id) {
         return { x: lugares[j].pos.x + dx, z: lugares[j].pos.z + dz };
@@ -1106,15 +1100,9 @@ var JOGO = (typeof window !== 'undefined')
     if (pS) planta('jd_escada', 1, pS.x, pS.z, 2.4);
     var pF = aoLadoDe('forja', 5.4, 0.6);
     if (pF) { planta('jd_tronco', 1, pF.x, pF.z, 0.9); planta('jd_regador', 1, pF.x + 1.2, pF.z - 1.4, 2.2); }
-    planta('jd_redoma', 1, -TRONCO_RAIO - 1.4, 1.2, 0.4);
-    planta('jd_redoma', 1, TRONCO_RAIO + 1.4, -1.2, 2.0);
 
-    /* OS CANTINHOS TEMÁTICOS DOS PORTAIS (30/08, pedido: "perto de cada um
-     * deles coloque elementos daquele mapa"). Cada portal com catálogo de
-     * cenário próprio ganha um pedaço do SEU calabouço ao pé: duas muretas
-     * flanqueando, uma peça alta e um enfeite atrás. Hoje só o Jardim
-     * (garden) e a Água (cistern) têm catálogo — "os outros deixa sem até
-     * eu criar". Determinístico, como tudo na praça. */
+    /* Planta UMA peça de cenário no chão da praça: escala pela altura
+     * (com teto de largura), assenta pelo pé e centra no ponto pedido. */
     function plantaTema(chave, altAlvo, teto, x, z, rot) {
       var cena = null;
       try { cena = m2.rawScene(chave); } catch (e) {}
@@ -1136,14 +1124,38 @@ var JOGO = (typeof window !== 'undefined')
       scene.add(no);
       return no;
     }
-    /* 10/09, pedido do dono: "os itens ao lado dos portais liberados,
-     * principalmente os muros, estão muito pequenos; esse cenário ao redor
-     * desses portais deve estar mais dentro do tema". Só os portais ABERTOS
-     * ganham cantinho — e ele virou um pedaço de verdade do calabouço: três
-     * muros altos (3,1 m, o mesmo porte da batalha) num arco atrás do portal,
-     * dois pilares flanqueando a boca, duas peças altas nas pontas, dois
-     * enfeites e uma peça de chão na frente. Portal fechado fica pelado: o
-     * X vermelho já diz tudo. */
+
+    /* O CORREDOR DO PORTAL (12/09, pedido do dono: "os portais estão muito
+     * feios e mal organizados; coloque muros e faça um corredor, e nesse
+     * corredor ter alguns itens do mapa, e no fim de cada corredor o portal,
+     * e ao lado dele o Boss parado como se fosse um NPC, só com o idle
+     * dele").
+     *
+     * O que havia antes era um ARCO de peças atrás do portal — enfeite
+     * espalhado, sem leitura. Agora cada portal aberto é o FIM de um
+     * corredor: dois muros correndo na direção do centro da praça, o fundo
+     * fechado atrás do portal, peças do próprio calabouço dentro, e o chefe
+     * daquele Fecho parado ao lado da boca, respirando o idle.
+     *
+     * A geometria é toda em coordenadas do corredor: `u` aponta do centro da
+     * praça para o portal (o eixo do corredor) e `t` corre de través. `d` é
+     * a distância ao longo de `u` a partir do PORTAL — negativo é em direção
+     * à praça, positivo é atrás dele. Assim o mesmo código serve a qualquer
+     * portal do arco sem nenhuma conta de ângulo espalhada.
+     *
+     * Os muros são SÓLIDOS (a parede das construções, 11/09): entram em
+     * `solidos` com o raio medido, e é isso que faz o corredor ser corredor
+     * e não desenho no chão. A boca fica aberta — por ela se entra.
+     *
+     * Só portal ABERTO ganha corredor, e só com o catálogo do tema na mão
+     * ("no caso atual somente os dois liberados... conforme for liberado
+     * vamos fazendo nos outros"). */
+    var COR_COMP = 15.0;      // da boca até o portal
+    var COR_FUNDO = 3.6;      // o quanto o fundo passa atrás do portal
+    var COR_LARG = 4.2;       // meia-largura: a pista tem 8,4 m
+    var COR_PASSO = 3.4;      // de muro em muro (peças de ~4,4 m: sobram sobrepostas)
+    var COR_ALT = 3.4;        // altura do muro, o porte da batalha
+
     cantinhoFeito = {};
     cantinhoCena = scene;
     plantaCantinhos = function () {
@@ -1154,7 +1166,7 @@ var JOGO = (typeof window !== 'undefined')
       var catT = JOGO.CENARIO && JOGO.CENARIO[lg.tema];
       if (!catT) return;
       // SOB DEMANDA: no jogo servido as peças do calabouço descem DEPOIS da
-      // praça (pré-busca). Planta só com todas na mão — meio cantinho não —
+      // praça (pré-busca). Planta só com todas na mão — meio corredor não —
       // e o aviso do Models3D2 (aoChegar) chama de novo quando chegarem.
       var precisa = [catT.alto, catT.pilar, catT.sotaque_alto, catT.sotaque, catT.chao];
       var falta = false;
@@ -1163,32 +1175,65 @@ var JOGO = (typeof window !== 'undefined')
       });
       if (falta) return;
       cantinhoFeito[lg.id] = true;
+
       var px2 = lg.pos.x, pz2 = lg.pos.z;
       var r0 = Math.max(0.01, Math.hypot(px2, pz2));
-      var ux = px2 / r0, uz = pz2 / r0;      // radial: para FORA do centro
-      var tx = -uz, tz = ux;                 // tangencial: ao longo do arco
-      var rotT = Math.atan2(tx, tz);         // o muro corre com o arco
+      var ux = px2 / r0, uz = pz2 / r0;      // radial: da praça para o portal
+      var tx = -uz, tz = ux;                 // de través
+      var rotLado = Math.atan2(ux, uz);      // muro de lado corre com `u`
+      var rotFundo = Math.atan2(tx, tz);     // muro de fundo corre com `t`
+      // ponto do corredor → ponto do mundo
+      function pt(d, lado) {
+        return { x: px2 + ux * d + tx * lado, z: pz2 + uz * d + tz * lado };
+      }
       function pega(lista, k) { return (lista && lista.length) ? lista[(li + k) % lista.length] : null; }
-      // os três muros do fundo, num arco de 5 m atrás do portal
-      [[-5.2, 2.2, rotT + 0.35], [0, 3.4, rotT], [5.2, 2.2, rotT - 0.35]].forEach(function (m, k) {
-        var muro = pega(catT.alto, k);
-        if (muro) plantaTema(muro, 3.1, 7.0, px2 + tx * m[0] + ux * m[1], pz2 + tz * m[0] + uz * m[1], m[2]);
+
+      // ---- OS DOIS MUROS, da boca até o fundo
+      var k = 0;
+      for (var d = -COR_COMP; d <= COR_FUNDO + 0.01; d += COR_PASSO, k++) {
+        var chave = pega(catT.alto, k);
+        if (!chave) continue;
+        [COR_LARG, -COR_LARG].forEach(function (lado) {
+          var q = pt(d, lado);
+          var no = plantaTema(chave, COR_ALT, 4.6, q.x, q.z, rotLado);
+          if (no) marcaSolido(q.x, q.z, 1.9);
+        });
+      }
+      // ---- O FUNDO, atrás do portal: três peças fechando a saída
+      [-2.8, 0, 2.8].forEach(function (lado, kf) {
+        var chaveF = pega(catT.alto, kf + 1);
+        if (!chaveF) return;
+        var q = pt(COR_FUNDO, lado);
+        if (plantaTema(chaveF, COR_ALT, 4.6, q.x, q.z, rotFundo)) marcaSolido(q.x, q.z, 1.9);
       });
-      // os pilares na boca do portal
+      // ---- OS PILARES na boca do corredor: a entrada tem de se ler de longe
       var pilar = pega(catT.pilar, 0);
       if (pilar) {
-        plantaTema(pilar, 3.4, 2.0, px2 + tx * 3.0 - ux * 0.6, pz2 + tz * 3.0 - uz * 0.6, rotT);
-        plantaTema(pilar, 3.4, 2.0, px2 - tx * 3.0 - ux * 0.6, pz2 - tz * 3.0 - uz * 0.6, rotT);
+        [COR_LARG, -COR_LARG].forEach(function (lado) {
+          var q = pt(-COR_COMP - 0.6, lado);
+          if (plantaTema(pilar, 3.8, 2.2, q.x, q.z, rotLado)) marcaSolido(q.x, q.z, 1.2);
+        });
       }
-      // as peças altas nas pontas do arco
-      var alto1 = pega(catT.sotaque_alto, 0), alto2 = pega(catT.sotaque_alto, 1);
-      if (alto1) plantaTema(alto1, 3.2, 3.0, px2 + tx * 7.6 + ux * 0.4, pz2 + tz * 7.6 + uz * 0.4, li * 1.3);
-      if (alto2) plantaTema(alto2, 3.2, 3.0, px2 - tx * 7.6 + ux * 0.4, pz2 - tz * 7.6 + uz * 0.4, li * 2.1);
-      // dois enfeites e a peça de chão na frente, fora da pista do portal
-      var enf1 = pega(catT.sotaque, 0), enf2 = pega(catT.sotaque, 2), chaoP = pega(catT.chao, 0);
-      if (enf1) plantaTema(enf1, 1.6, 2.6, px2 + tx * 4.6 - ux * 2.6, pz2 + tz * 4.6 - uz * 2.6, li * 0.8);
-      if (enf2) plantaTema(enf2, 1.6, 2.6, px2 - tx * 4.6 - ux * 2.6, pz2 - tz * 4.6 - uz * 2.6, li * 1.7);
-      if (chaoP) plantaTema(chaoP, 0.7, 2.4, px2 + tx * 1.2 - ux * 4.4, pz2 + tz * 1.2 - uz * 4.4, li * 0.5);
+      // ---- AS PEÇAS DENTRO: encostadas nos muros, nunca no meio da pista
+      var dentro = [[-11.5, 3.0, 'sotaque'], [-7.0, -3.0, 'sotaque_alto'],
+                    [-3.4, 3.1, 'sotaque'], [-12.5, -3.1, 'sotaque_alto']];
+      dentro.forEach(function (it, ki) {
+        var chaveI = pega(catT[it[2]], ki);
+        if (!chaveI) return;
+        var q = pt(it[0], it[1]);
+        var altI = it[2] === 'sotaque_alto' ? 2.6 : 1.5;
+        if (plantaTema(chaveI, altI, 2.4, q.x, q.z, ki * 1.4)) marcaSolido(q.x, q.z, 0.8);
+      });
+      // o CHÃO do corredor: peças rasas na pista, que não empurram ninguém
+      [[-9.0, 0], [-5.0, 1.4], [-1.6, -1.6]].forEach(function (c, kc) {
+        var chaoP = pega(catT.chao, kc);
+        if (!chaoP) return;
+        var q = pt(c[0], c[1]);
+        plantaTema(chaoP, 0.55, 2.2, q.x, q.z, kc * 0.9);
+      });
+
+      // ---- O CHEFE, parado ao lado do portal
+      poeChefeDoPortal(lg, pt(-1.2, 2.7), Math.atan2(-ux, -uz));
     });
     };
     plantaCantinhos();
@@ -1658,19 +1703,63 @@ var JOGO = (typeof window !== 'undefined')
    * alvo segue o mesmo — o próximo passo tenta um pouco mais adiante na
    * tangente. Vale para o herói E para os fantasmas: o passo é um só. */
   function empurraDosSolidos(p, folga) {
+    function fora(cx, cz, r) {
+      var ex = p.x - cx, ez = p.z - cz;
+      var d = Math.hypot(ex, ez);
+      if (d >= r) return;
+      if (d < 0.001) { p.x = cx + r; p.z = cz; return; }   // no miolo: sai por leste
+      var k = r / d;
+      p.x = cx + ex * k;
+      p.z = cz + ez * k;
+    }
     for (var i = 0; i < lugares.length; i++) {
       var lg = lugares[i];
-      if (!lg.solido) continue;
-      var r = lg.solido + (folga || 0);
-      var ex = p.x - lg.pos.x, ez = p.z - lg.pos.z;
-      var d = Math.hypot(ex, ez);
-      if (d >= r) continue;
-      if (d < 0.001) { p.x = lg.pos.x + r; p.z = lg.pos.z; continue; }   // no miolo: sai por leste
-      var k = r / d;
-      p.x = lg.pos.x + ex * k;
-      p.z = lg.pos.z + ez * k;
+      if (lg.solido) fora(lg.pos.x, lg.pos.z, lg.solido + (folga || 0));
+    }
+    for (var j = 0; j < solidos.length; j++) {
+      fora(solidos[j].x, solidos[j].z, solidos[j].r + (folga || 0));
     }
     return p;
+  }
+
+  /* O CHEFE PARADO (12/09, dono: "ao lado dele o Boss parado como se fosse
+   * um NPC, mas sem ação, só com o idle dele parado para enfeitar"). É o
+   * corpo de batalha do chefe daquele Fecho, no porte de chefe, plantado no
+   * fim do corredor e tocando `idle` — sem alvo, sem toque, sem painel. O
+   * mixer dele entra no laço junto com o do herói; sem isso o chefe seria
+   * uma estátua de verdade, congelada no primeiro quadro. */
+  var chefesParados = [];
+  function chefeDoCalabouco(dungeonId) {
+    var D = JOGO.DATA && JOGO.DATA.monsters;
+    if (!D) return null;
+    for (var id in D) {
+      if (!D.hasOwnProperty(id)) continue;
+      if (D[id] && D[id].boss && D[id].dungeonId === dungeonId) return id;
+    }
+    return null;
+  }
+  function poeChefeDoPortal(lg, ponto, rotY) {
+    var m2 = M2();
+    if (!m2 || !scene) return null;
+    var bossId = chefeDoCalabouco(lg.id);
+    if (!bossId) return null;
+    var def = JOGO.DATA.monsters[bossId];
+    var no = null;
+    try {
+      no = m2.unit(bossId, { boss: true, kind: 'monster', element: (def && def.element) || 'neutro' });
+    } catch (e) { no = null; }
+    if (!no) {                       // modelo ainda descendo: tenta na próxima leva
+      try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede([bossId]); } catch (eB) {}
+      return null;
+    }
+    no.position.set(ponto.x, 0, ponto.z);
+    no.rotation.y = rotY || 0;
+    scene.add(no);
+    try { no.userData.play('idle', { fade: 0 }); } catch (e2) {}
+    chefesParados.push(no);
+    // o corpo do chefe é grande: barra o passo como o muro barra
+    marcaSolido(ponto.x, ponto.z, Math.max(1.2, (no.userData.radius || 1) * 1.1));
+    return no;
   }
 
   function andaCorpo(corpo, dt) {
@@ -1822,6 +1911,13 @@ var JOGO = (typeof window !== 'undefined')
       if (chegou && aoChegar) { var f = aoChegar; aoChegar = null; f(); }
       try { if (heroi.node.userData.mixer) heroi.node.userData.mixer.update(dt); } catch (e) {}
       segueDono(dt);                 // o bicho atrás do ombro do dono
+      // os chefes parados no fim dos corredores respiram (só o idle)
+      for (var ci = 0; ci < chefesParados.length; ci++) {
+        try {
+          var mx = chefesParados[ci].userData.mixer;
+          if (mx) mx.update(dt);
+        } catch (eC) {}
+      }
 
       // os FANTASMAS COM CORPO andam pelo mesmo verbo do herói; os sem corpo
       // são só dado e não custam nada aqui
@@ -2145,10 +2241,16 @@ var JOGO = (typeof window !== 'undefined')
     empurraDosSolidos(p, folga || 0);
     return p;
   };
+  /* os sólidos avulsos (muros do corredor, pilares, chefes), para a prova */
+  Hub._solidos = function () { return solidos.map(function (c) { return { x: c.x, z: c.z, r: c.r }; }); };
+  Hub._chefesParados = function () { return chefesParados.length; };
+  /* quais portais já ganharam corredor (a prova e a depuração perguntam) */
+  Hub._corredores = function () { return Object.keys(cantinhoFeito); };
   /* os lugares da praça, para as provas medirem parede e raio de conversa */
   Hub._lugares = function () {
     return lugares.map(function (l) {
       return { id: l.id, tipo: l.tipo, x: l.pos.x, z: l.pos.z,
+               tema: l.tema || null, fechado: !!l.fechado,
                raio: l.raio || 0, solido: l.solido || 0 };
     });
   };
