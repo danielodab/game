@@ -182,7 +182,7 @@ var JOGO = (typeof window !== 'undefined')
         return responde({ ok: false, erro: 'as insígnias escaparam da mão' });
       }
     }
-    var g = { id: novoId(), nome: nome, emblema: String(emblema || '⚑').slice(0, 4),
+    var g = { id: novoId(), nome: nome, emblema: String(emblema || '⚑').slice(0, 64),
               liderId: conta.id, membros: [{ id: conta.id, nome: conta.nome }],
               xp: 0, moedas: 0, bonus: {}, banco: [], treinos: 0, criadaEm: agora(),
               porta: 'aberta', dizimo: 0, pedidos: [] };
@@ -566,7 +566,7 @@ var JOGO = (typeof window !== 'undefined')
     if (P && P.insigniasVer() < preco) {
       return responde({ ok: false, erro: 'faltam insígnias: ' + P.insigniasVer() + '/' + preco + ' — só chefe derruba' });
     }
-    return pede('/api/guilda/criar', { nome: nome, emblema: String(emblema || '⚑').slice(0, 4) }).then(function (r) {
+    return pede('/api/guilda/criar', { nome: nome, emblema: String(emblema || '⚑').slice(0, 64) }).then(function (r) {
       if (r.ok && P) P.gastaInsignias(preco);       // a cobrança vem DEPOIS do sim: fundação recusada não come insígnia
       return r;
     });

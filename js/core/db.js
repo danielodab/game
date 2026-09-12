@@ -64,6 +64,7 @@ var JOGO = (typeof window !== 'undefined')
     return {
       versao: 1,
       jogador: { id: novoId(), nome: null, titulo: null, avatar: null,
+                 coroaOculta: false,     // 11/09: o troféu acima da cabeça é opcional
                  brasa: { pts: 1000, partidas: 0, temporada: null, galeria: {} },
                  poco: { recorde: 0, semanaId: null, semanaMelhor: 0 },
                  criadoEm: agora() },
@@ -172,7 +173,9 @@ var JOGO = (typeof window !== 'undefined')
     // o `titulo` ficou de fora um dia e sumiu sem erro nenhum (o teste pegou)
     return responde({ id: d.jogador.id, nome: d.jogador.nome,
                       titulo: d.jogador.titulo || null,
-                      avatar: d.jogador.avatar || null, criadoEm: d.jogador.criadoEm });
+                      avatar: d.jogador.avatar || null,
+                      coroaOculta: d.jogador.coroaOculta === true,
+                      criadoEm: d.jogador.criadoEm });
   };
 
   /* O BATISMO E A LEI DOS NOMES (10/09 — pedido do dono: "ninguem conseguir
@@ -380,6 +383,18 @@ var JOGO = (typeof window !== 'undefined')
       ? avatar : null;
     grava();
     return responde({ ok: true, avatar: d.jogador.avatar });
+  };
+
+  /* A COROA ESCONDIDA (11/09 — a ficha do personagem: "se ele quer esconder
+   * a coroa ou mostrar"). Guarda só a vontade; quem deixa de pendurar o
+   * troféu é a praça, e o resumo que viaja pela Rede leva o recado para que
+   * ela suma também na tela dos outros. Os PONTOS continuam no placar: o que
+   * se esconde é o enfeite, não o resultado. */
+  DB.definirCoroaOculta = function (oculta) {
+    var d = carrega();
+    d.jogador.coroaOculta = !!oculta;
+    grava();
+    return responde({ ok: true, coroaOculta: d.jogador.coroaOculta });
   };
 
   DB.definirTitulo = function (titulo) {

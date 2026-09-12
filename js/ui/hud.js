@@ -1179,7 +1179,8 @@ var JOGO = (typeof window !== 'undefined')
     // o cais agora ACENDE a aba aberta (30/08): sem isso, no celular o menu
     // principal não dizia onde o jogador estava
     dockBotoes = {};
-    [{ ic: '🎒', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
+    [{ ic: '🧍', rot: 'Personagem', abre: 'char' },
+     { ic: '🎒', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
      { ic: '📖', rot: 'Feitiços', abre: 'spells' },
      { ic: '🃏', rot: 'Coleção', abre: 'collection' },
      { ic: '🎭', rot: 'Avatar', abre: 'avatar' },
@@ -1262,7 +1263,8 @@ var JOGO = (typeof window !== 'undefined')
         // faísca de vagalume, mas SÓ para quem já pisou na arena: quem nunca
         // lutou segue sem fogo nenhum — a ausência também diz algo.
         var tier = null;
-        if (brasa && JOGO.Brasa) {
+        resumoCoroaOculta = j.coroaOculta === true;
+        if (brasa && JOGO.Brasa && !resumoCoroaOculta) {
           tier = JOGO.Brasa.tierDe(brasa.pts, souTopoDaArena());
           if (tier && tier.min === 0 && !(brasa.partidas > 0)) tier = null;
         }
@@ -1272,6 +1274,12 @@ var JOGO = (typeof window !== 'undefined')
           // carregamento da guilda) — aí vai null e o refresco de quem
           // funda/entra chama nomeia de novo só com a guilda.
           JOGO.Hub.nomeia(j.nome || '', j.titulo || '', tier, resumoGuilda);
+        }
+        // O PÓDIO POR CLASSE: quem é 1º, 2º ou 3º de alguma classe tem o nome
+        // aceso na praça. Recalculado a cada pintura da conta — é quando o
+        // placar acabou de chegar.
+        if (JOGO.Hub && JOGO.Hub.medalhas) {
+          JOGO.Hub.medalhas(medalhasPorClasse(contasDoPlacar(fotos, j.id)), j.id);
         }
         
         // Exibe o botão da guilda no dock se o jogador estiver em uma guilda
@@ -1623,7 +1631,7 @@ var JOGO = (typeof window !== 'undefined')
             JOGO.Guilda.minha().then(function (mg) {
               // 11/09: líder e oficiais convidam (os mesmos que aceitam pedidos)
               if (!mg || !(mg.souLider || mg.meuCargo === 'oficial') || painel.classList.contains('is-off') || !grade.isConnected) return;
-              grade.insertBefore(btn('Convidar para a ' + mg.emblema + ' ' + esc(mg.nome),
+              grade.insertBefore(btn('Convidar para a ' + esc(txtGuilda(mg.emblema, mg.nome)),
                 'btn-ghost pn-largo', function () {
                   fecha();
                   // 11/09: com a guilda no servidor, o convite é da CONTA dela (a que o relé
@@ -1699,7 +1707,7 @@ var JOGO = (typeof window !== 'undefined')
               painel.classList.remove('is-off');
               painel.appendChild(el('h3', null, 'Convite de guilda'));
               painel.appendChild(el('p', 'hub-nota', esc(ev.nome) + ' te chama para a <b>' +
-                esc(ev.dados.emblema || '⚑') + ' ' + esc(ev.dados.nome || '?') + '</b>.'));
+                esc(txtGuilda(ev.dados.emblema, ev.dados.nome || '?')) + '</b>.'));
               painel.appendChild(btn('Aceitar', 'btn-primary btn-block', function () {
                 // 11/09: é o CONVITE que abre a porta (antes o entrar batia na porta fechada)
                 JOGO.Guilda.entrar(ev.dados.gid, { convite: true }).then(function (res) {
@@ -3767,6 +3775,209 @@ var JOGO = (typeof window !== 'undefined')
   /* O PLACAR — os níveis de todo mundo que já cruzou a sua praça, você
    * incluído. A aba Arena espera a Brasa (os duelos): promessa dita, não
    * escondida. */
+  /* ==========================================================  PERSONAGEM
+   * A FICHA DA CONTA (11/09, pedido do dono: "no menu inferior deve ter uma
+   * opção de char — ali o usuário vê sua conta, o que seu equipamento dá de
+   * vantagens, total de vida, PA, PP etc., e o ranking PvP, e se ele quer
+   * esconder a coroa ou mostrar").
+   *
+   * O que ela responde, nesta ordem: QUEM eu sou (nome, título, medalha),
+   * COMO eu estou na arena (coroa, pontos e o interruptor do troféu) e DE
+   * ONDE vêm os meus números — corpo nu, equipamento, conjuntos, pet e
+   * estrelas, cada fonte com o que ela soma. A ficha do herói (sheetHero)
+   * mostra UM herói por dentro; esta mostra a CONTA e o extrato.
+   *
+   * Um herói por vez, escolhido nos chips da seção — no celular, oito
+   * colunas de números lado a lado não se leem. */
+  var charHeroi = null;              // qual herói a ficha está mostrando
+  var CHAR_STATS = [
+    { k: 'hp', rot: 'PV', cls: 's-hp' },
+    { k: 'pa', rot: 'PA', cls: 's-pa' },
+    { k: 'pp', rot: 'PP', cls: 's-pp' },
+    { k: 'power', rot: 'poder' },
+    { k: 'elemPower', rot: 'poder elem.', cls: 's-el' },
+    { k: 'initiative', rot: 'iniciativa' },
+    { k: 'dodge', rot: 'esquiva' },
+    { k: 'lock', rot: 'fixação' }
+  ];
+  var CHAR_FONTES = [
+    { id: 'itens', rot: 'Equipamento', dica: 'as peças que você está vestindo' },
+    { id: 'conjuntos', rot: 'Conjuntos', dica: 'peças da mesma série vestidas juntas' },
+    { id: 'pet', rot: 'Pet', dica: 'o bicho vestido, com o nível e as estrelas dele' },
+    { id: 'estrelas', rot: 'Estrelas da classe', dica: 'as cartas que você já fundiu' }
+  ];
+  /* Uma fileira de números; devolve false quando não havia nada a mostrar
+   * (é assim que a ficha sabe escrever "nada ainda" no lugar). */
+  function charLinhaStats(caixa, obj, cls) {
+    var g = el('div', 'char-stats' + (cls ? ' ' + cls : ''));
+    var algum = false;
+    CHAR_STATS.forEach(function (d) {
+      var v = obj ? obj[d.k] : 0;
+      if (!v) return;
+      algum = true;
+      g.appendChild(el('span', d.cls || null,
+        (v > 0 && cls === 'is-ganho' ? '+' : '') + v + ' ' + d.rot));
+    });
+    // as RESISTÊNCIAS entram na mesma fileira: item e pet dão (e tiram) delas,
+    // e uma resistência negativa escondida é a que mata sem explicar por quê
+    var res = obj && obj.resists;
+    if (res) {
+      Object.keys(res).forEach(function (e2) {
+        if (!res[e2]) return;
+        algum = true;
+        g.appendChild(el('span', 'is-res',
+          (res[e2] > 0 ? '+' : '') + res[e2] + '% ' + esc(ELEM_PT[e2] || e2)));
+      });
+    }
+    if (!algum) return false;
+    caixa.appendChild(g);
+    return true;
+  }
+
+  function sheetChar() {
+    sheetName = 'char';
+    var body = sheetShell('Personagem',
+      'A sua conta: o que você é, o que o equipamento está te dando e a sua coroa na arena.');
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+    if (!JOGO.DB) { caixa.appendChild(el('p', 'inv-dica', 'A conta local não carregou.')); return; }
+
+    Promise.all([JOGO.DB.jogador(),
+                 JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null),
+                 JOGO.DB.placarLista ? JOGO.DB.placarLista() : Promise.resolve([])])
+    .then(function (r) {
+      var j = r[0], bz = r[1], fotos = r[2] || [];
+      clear(caixa);
+
+      // ---- QUEM SOU EU
+      var medalhas = medalhasPorClasse(contasDoPlacar(fotos, j.id));
+      var souMestre3 = safe(function () { return !!(JOGO.GM && JOGO.GM.ativo()); }, false);
+      var brilho = souMestre3 ? 'admin' : (medalhas[j.id] || null);
+      var topo = el('div', 'char-topo');
+      var corpoAv = j.avatar || charHeroi || heroIds().filter(isUnlocked)[0] || 'sumo';
+      topo.appendChild(art('unit', [corpoAv, { element: 'neutro', dir: 0, scale: 0.7 }], 96));
+      var colT = el('div', 'char-col');
+      colT.appendChild(el('div', 'char-nome' + (brilho ? ' pl-brilho is-' + brilho : ''),
+        esc(j.nome || 'Sem Nome')));
+      if (j.titulo) colT.appendChild(el('div', 'char-titulo', esc(j.titulo)));
+      if (souMestre3) colT.appendChild(el('span', 'chip chip-ok', 'Mestre do Fundo'));
+      else if (brilho) {
+        colT.appendChild(el('span', 'char-medalha is-' + brilho,
+          brilho === 'ouro' ? '1º lugar de classe' :
+          brilho === 'prata' ? '2º lugar de classe' : '3º lugar de classe'));
+      }
+      if (resumoGuilda && resumoGuilda.nome) {
+        var lg = el('div', 'char-guilda');
+        if (BR() && BR().ehCodigo(resumoGuilda.emblema)) lg.appendChild(elShield(resumoGuilda.emblema, 28));
+        lg.appendChild(el('span', null, esc(txtGuilda(resumoGuilda.emblema, resumoGuilda.nome))));
+        colT.appendChild(lg);
+      }
+      var somaN = safe(function () { return resumoDaConta().total; }, 0);
+      colT.appendChild(el('div', 'char-sub', 'nível somado da conta: <b>' + somaN + '</b>'));
+      topo.appendChild(colT);
+      caixa.appendChild(topo);
+
+      // ---- A ARENA e o interruptor da coroa
+      caixa.appendChild(el('h3', 'bk-tit', 'Arena'));
+      var pts = bz ? bz.pts : 1000, partidas = (bz && bz.partidas) || 0;
+      var tierC = null;
+      if (JOGO.Brasa) {
+        tierC = JOGO.Brasa.tierDe(pts, souTopoDaArena());
+        if (tierC && tierC.min === 0 && !(partidas > 0)) tierC = null;
+      }
+      var cx = el('div', 'char-arena');
+      if (tierC && JOGO.COROAS_PVP && JOGO.COROAS_PVP[tierC.id]) {
+        var imgC = document.createElement('img');
+        imgC.src = 'data:image/png;base64,' + JOGO.COROAS_PVP[tierC.id];
+        imgC.alt = tierC.nome;
+        imgC.className = 'char-coroa';
+        // do 5º degrau para cima a coroa ACENDE — aqui como halo de CSS, na
+        // mesma cor e na mesma força do halo que a praça pendura
+        if (tierC.brilho > 0) {
+          imgC.style.filter = 'drop-shadow(0 0 ' + Math.round(4 + 16 * tierC.brilho) + 'px ' +
+            (tierC.cor || '#ffd36a') + ')';
+        }
+        cx.appendChild(imgC);
+      }
+      var colA = el('div', 'char-col');
+      colA.appendChild(el('div', 'char-coroa-nm',
+        tierC ? esc(tierC.nome) : 'sem coroa — a arena ainda não te viu'));
+      colA.appendChild(el('div', 'char-sub', '<b>' + pts + '</b> pontos · ' +
+        partidas + ' partida' + (partidas === 1 ? '' : 's') +
+        (JOGO.Brasa ? ' · temporada <b>' + JOGO.Brasa.temporadaDe(Date.now()) + '</b>' : '')));
+      if (tierC && tierC.brilho > 0) {
+        colA.appendChild(el('div', 'char-sub',
+          'a coroa brilha — e o brilho cresce at\u00e9 a <b>Coroa X</b>'));
+      } else if (tierC) {
+        colA.appendChild(el('div', 'char-sub',
+          'da <b>Coroa V</b> em diante ela come\u00e7a a brilhar'));
+      }
+      cx.appendChild(colA);
+      caixa.appendChild(cx);
+
+      var oculta = j.coroaOculta === true;
+      caixa.appendChild(btn(oculta ? 'Mostrar a coroa acima da cabeça'
+                                   : 'Esconder a coroa acima da cabeça',
+        'btn-mini btn-block ' + (oculta ? 'btn-gold' : 'btn-ghost'), function () {
+          JOGO.DB.definirCoroaOculta(!oculta).then(function () {
+            toast(!oculta ? 'A coroa saiu da sua cabeça — os pontos ficam.'
+                          : 'A coroa voltou para cima da sua cabeça.', 'good');
+            if (JOGO.UI && JOGO.UI.repaint) JOGO.UI.repaint();
+            sheetChar();
+          });
+        }));
+      caixa.appendChild(el('p', 'inv-dica', oculta
+        ? 'Escondida: nem você nem os outros veem o troféu na praça. Os pontos continuam no placar.'
+        : 'Aparecendo para todo mundo na praça. Os pontos do placar não mudam com isto.'));
+
+      // ---- OS NÚMEROS, herói por herói
+      var libs = heroIds().filter(isUnlocked);
+      if (!libs.length) {
+        caixa.appendChild(el('p', 'inv-dica', 'Nenhuma classe liberada ainda.'));
+        return;
+      }
+      if (libs.indexOf(charHeroi) < 0) charHeroi = libs[0];
+      caixa.appendChild(el('h3', 'bk-tit', 'Características'));
+      var chips = el('div', 'guilda-emblemas');
+      libs.forEach(function (hid) {
+        chips.appendChild(btn(className(hero(hid).classId || hid),
+          'btn-mini ' + (hid === charHeroi ? 'btn-gold' : 'btn-ghost'), function () {
+            charHeroi = hid;
+            sheetChar();
+          }));
+      });
+      caixa.appendChild(chips);
+
+      var h = hero(charHeroi);
+      var ext = safe(function () { return P().statsBreakdown(charHeroi); }, null);
+      var tot = (ext && ext.total) || effStats(charHeroi) || {};
+      var cab = el('div', 'char-heroi');
+      cab.appendChild(el('span', 'char-heroi-nm', esc(className(h.classId || charHeroi))));
+      cab.appendChild(el('span', 'char-sub', 'nível <b>' + (h.level || 1) + '</b> · ' +
+        esc(ELEM_PT[h.element] || 'Neutro')));
+      caixa.appendChild(cab);
+      charLinhaStats(caixa, tot, 'is-total');
+
+      if (ext) {
+        caixa.appendChild(el('p', 'inv-dica', 'De onde vem cada número:'));
+        var nu = el('div', 'char-fonte');
+        nu.appendChild(el('span', 'char-fonte-nm', 'Corpo no nível ' + (h.level || 1)));
+        caixa.appendChild(nu);
+        charLinhaStats(caixa, ext.base, 'is-base');
+        CHAR_FONTES.forEach(function (f) {
+          var d = ext.fontes[f.id];
+          var cab2 = el('div', 'char-fonte');
+          cab2.appendChild(el('span', 'char-fonte-nm', f.rot));
+          cab2.appendChild(el('span', 'char-sub', esc(f.dica)));
+          caixa.appendChild(cab2);
+          if (!d || !charLinhaStats(caixa, d, 'is-ganho')) {
+            caixa.appendChild(el('div', 'char-stats is-zero', 'nada ainda'));
+          }
+        });
+      }
+    });
+  }
+
   function sheetPlacar() {
     sheetName = 'placar';
     var body = sheetShell('Placar do Acampamento',
@@ -3814,13 +4025,27 @@ var JOGO = (typeof window !== 'undefined')
         return ((b.resumo && b.resumo.total) || 0) - ((a.resumo && a.resumo.total) || 0);
       });
 
+      /* O PÓDIO POR CLASSE acende o nome aqui também — na ficha e na praça
+       * a mesma conta, a mesma cor. O branco do Mestre do Fundo só aparece
+       * na MINHA linha: a foto do placar não guarda quem é da equipe, e
+       * quem confere isso é o relé (a praça mostra o dos outros). */
+      var medalhas = medalhasPorClasse(contasDoPlacar(lista, eu2.id));
+      var souMestre2 = safe(function () { return !!(JOGO.GM && JOGO.GM.ativo()); }, false);
+      function classeDoNome(id, sou) {
+        if (sou && souMestre2) return ' pl-brilho is-admin';
+        var m = medalhas[id];
+        return m ? ' pl-brilho is-' + m : '';
+      }
+
       caixa.appendChild(el('h3', 'bk-tit', 'Níveis (' + linhas.length +
         (linhas.length === 1 ? ' conta' : ' contas') + ')'));
       linhas.forEach(function (e2, i) {
         var row = el('div', 'pl-linha' + (e2.sou ? ' is-eu' : ''));
         row.appendChild(el('span', 'pl-pos', '#' + (i + 1)));
         var tx = el('div', 'ms-tx');
-        tx.appendChild(el('div', 'ms-nome', esc(e2.nome) +
+        tx.appendChild(el('div', 'ms-nome',
+          '<span class="' + ('pl-nm' + classeDoNome(e2.id, e2.sou)).trim() + '">' +
+          esc(e2.nome) + '</span>' +
           (e2.titulo ? ' <span class="ms-titulo">' + esc(e2.titulo) + '</span>' : '') +
           (e2.sou ? ' <span class="pl-eu">você</span>' : '')));
         var det = [];
@@ -3833,6 +4058,43 @@ var JOGO = (typeof window !== 'undefined')
         row.appendChild(el('span', 'pl-total', String((e2.resumo && e2.resumo.total) || 0)));
         caixa.appendChild(row);
       });
+
+      /* O RANKING POR CLASSE: três degraus por classe, o nome de cada um já
+       * na cor da medalha. É a tabela que explica de onde vem o brilho que
+       * se vê na praça — sem ela, o jogador só veria nomes acesos. */
+      var porClasse = {};
+      contasDoPlacar(lista, eu2.id).forEach(function (c) {
+        var cls = (c.resumo && c.resumo.classes) || {};
+        Object.keys(cls).forEach(function (cid) {
+          if (!(cls[cid] > 0)) return;
+          (porClasse[cid] = porClasse[cid] || []).push({
+            id: c.id, nome: c.id === eu2.id ? (eu2.nome || 'Você') : (c.nome || '?'),
+            sou: c.id === eu2.id, nv: cls[cid]
+          });
+        });
+      });
+      var cids = Object.keys(porClasse).sort(function (a3, b3) {
+        return className(a3).localeCompare(className(b3));
+      });
+      if (cids.length) {
+        caixa.appendChild(el('h3', 'bk-tit', 'Pódio por classe'));
+        caixa.appendChild(el('p', 'inv-dica',
+          'O 1º de cada classe anda com o nome dourado na praça; o 2º, prateado; o 3º, bronze.'));
+        cids.forEach(function (cid) {
+          var fila = porClasse[cid].sort(function (a3, b3) {
+            return (b3.nv - a3.nv) || String(a3.id).localeCompare(String(b3.id));
+          }).slice(0, 3);
+          var linha = el('div', 'pl-classe');
+          linha.appendChild(el('span', 'pl-classe-nm', esc(className(cid))));
+          var pod = el('span', 'pl-podio');
+          fila.forEach(function (q, qi) {
+            pod.appendChild(el('span', 'pl-nm pl-brilho is-' + MEDALHAS[qi],
+              esc(q.nome) + ' <i>' + q.nv + '</i>'));
+          });
+          linha.appendChild(pod);
+          caixa.appendChild(linha);
+        });
+      }
 
       caixa.appendChild(el('h3', 'bk-tit', 'Arena — a Brasa'));
       JOGO.DB.brasaVer().then(function (bz) {
@@ -3854,9 +4116,20 @@ var JOGO = (typeof window !== 'undefined')
           var row = el('div', 'pl-linha' + (a.sou ? ' is-eu' : ''));
           row.appendChild(el('span', 'pl-pos', '#' + (i + 1)));
           var tx = el('div', 'ms-tx');
-          tx.appendChild(el('div', 'ms-nome', esc(a.nome) +
+          tx.appendChild(el('div', 'ms-nome',
+            '<span class="' + ('pl-nm' + classeDoNome(a.id, a.sou)).trim() + '">' +
+            esc(a.nome) + '</span>' +
             (a.sou ? ' <span class="pl-eu">você</span>' : '')));
-          tx.appendChild(el('div', 'ms-prog', tier ? tier.nome : '—'));
+          // a coroa acende do 5º degrau para cima — o mesmo halo da praça,
+          // aqui como sombra colorida atrás do nome do degrau
+          var degrau = el('div', 'ms-prog', tier ? esc(tier.nome) : '—');
+          if (tier && tier.brilho > 0) {
+            degrau.className = 'ms-prog pl-coroa-acesa';
+            degrau.style.color = tier.cor || '#ffd36a';
+            degrau.style.textShadow = '0 0 ' + Math.round(4 + 12 * tier.brilho) + 'px ' +
+              (tier.cor || '#ffd36a');
+          }
+          tx.appendChild(degrau);
           row.appendChild(tx);
           row.appendChild(el('span', 'pl-total', String(a.pts)));
           caixa.appendChild(row);
@@ -3994,6 +4267,7 @@ var JOGO = (typeof window !== 'undefined')
     // SEPARADOS — "tudo centralizado em um menu só" ficou ruim de usar. Os
     // nomes antigos continuam valendo ('party' abre a última ficha visitada);
     // o cais do Acampamento e o menu inicial chamam cada porta pelo nome.
+    if (name === 'char') { sheetChar(); return; }   // 11/09: a ficha da conta
     if (name === 'gm') { sheetGM(); return; }
     if (name === 'gmcaixa') { sheetGMCaixa(); return; }
     if (name === 'gmagenda') { sheetGMAgenda(); return; }   // 10/09: os eventos do mundo
@@ -4665,6 +4939,54 @@ var JOGO = (typeof window !== 'undefined')
     topoArenaCache = { souEu: !!(melhor && melhor.id === meuId) };
   }
 
+  /* O PÓDIO POR CLASSE (11/09, pedido do dono: "os usuários top 1, 2 e 3 do
+   * ranking por classe terão o nome brilhante — o 1º dourado, o 2º prateado,
+   * o 3º bronze").
+   *
+   * A régua é o NÍVEL daquela classe, classe por classe: quem é o Bárbaro
+   * mais alto da praça leva ouro, mesmo que a conta dele some menos que a de
+   * outro. Uma conta só usa a MELHOR medalha que tiver — ouro numa classe
+   * vale mais que prata em três, e um nome só tem uma cor.
+   *
+   * Função PURA: entra [{id, resumo:{classes}}], sai { id: 'ouro'|'prata'|
+   * 'bronze' }. Cada jogador calcula com o placar que ele mesmo viu — é a
+   * mesma conta que o ranking da ficha mostra, e nada disso viaja pela Rede
+   * (um cliente mexido não se dá medalha na tela dos outros). */
+  var MEDALHAS = ['ouro', 'prata', 'bronze'];
+  function medalhasPorClasse(contas) {
+    var porClasse = {}, fora = {};
+    (contas || []).forEach(function (c) {
+      var cls = (c && c.resumo && c.resumo.classes) || {};
+      Object.keys(cls).forEach(function (cid) {
+        var nv = cls[cid];
+        if (!(nv > 0)) return;                    // classe não liberada não disputa
+        (porClasse[cid] = porClasse[cid] || []).push({ id: c.id, nv: nv });
+      });
+    });
+    Object.keys(porClasse).forEach(function (cid) {
+      var fila = porClasse[cid].sort(function (a2, b2) {
+        // empate: o id decide, para o pódio não dançar a cada redesenho
+        return (b2.nv - a2.nv) || String(a2.id).localeCompare(String(b2.id));
+      });
+      for (var i = 0; i < MEDALHAS.length && i < fila.length; i++) {
+        var ja = fora[fila[i].id];
+        // a melhor medalha manda (ouro < prata < bronze na ordem do vetor)
+        if (!ja || MEDALHAS.indexOf(ja) > i) fora[fila[i].id] = MEDALHAS[i];
+      }
+    });
+    return fora;
+  }
+  /* A lista de contas que o pódio enxerga: as fotos do placar mais EU (a
+   * minha linha é viva, não foto). */
+  function contasDoPlacar(fotos, meuId) {
+    var linhas = [{ id: meuId, resumo: safe(resumoDaConta, { classes: {}, total: 0 }) }];
+    (fotos || []).forEach(function (e2) {
+      if (e2.id === meuId) return;
+      linhas.push({ id: e2.id, nome: e2.nome, resumo: e2.resumo });
+    });
+    return linhas;
+  }
+
   function resumoDaConta() {
     var classes2 = {}, total = 0;
     heroIds().forEach(function (hid) {
@@ -4676,12 +4998,14 @@ var JOGO = (typeof window !== 'undefined')
     });
     return { classes: classes2, total: total,
              brasa: resumoBrasaPts, partidas: resumoBrasaPartidas,
+             // a coroa escondida viaja: o fantasma desta conta também não a usa
+             coroaOculta: resumoCoroaOculta,
              galeria: resumoGaleria, poco: resumoPoco, guilda: resumoGuilda };
   }
   /* os pontos de brasa entram no resumo por fora (são assíncronos no DB);
    * buildHub os carrega antes de ligar a Rede */
   var resumoBrasaPts = 1000, resumoBrasaPartidas = 0, resumoGaleria = null,
-      resumoPoco = null, resumoGuilda = null;
+      resumoPoco = null, resumoGuilda = null, resumoCoroaOculta = false;
 
   function paresDeAvatar() {
     var ids = Object.keys(classes()).filter(isUnlocked).sort();
@@ -6332,8 +6656,11 @@ var JOGO = (typeof window !== 'undefined')
     }
     // a guilda (25/08): o clã com que essa pessoa anda
     if (r.guilda && r.guilda.nome) {
-      col.appendChild(el('div', 'perfil-guilda',
-        esc(r.guilda.emblema || '⚑') + ' <b>' + esc(r.guilda.nome) + '</b>'));
+      var lnG = el('div', 'perfil-guilda');
+      var B0 = BR();
+      if (B0 && B0.ehCodigo(r.guilda.emblema)) lnG.appendChild(elShield(r.guilda.emblema, 20));
+      lnG.appendChild(el('b', null, esc(txtGuilda(r.guilda.emblema, r.guilda.nome))));
+      col.appendChild(lnG);
     }
     // o Poço sem Fundo (25/08): o quão fundo essa pessoa já foi
     if (r.poco && (r.poco.recorde > 0 || r.poco.semanaMelhor > 0)) {
@@ -6394,73 +6721,165 @@ var JOGO = (typeof window !== 'undefined')
     }
     return fora;
   }
-  var SHIELD_PATHS = {
-    'sword': "M45 10 L55 10 L55 70 L65 70 L65 80 L55 80 L55 95 L45 95 L45 80 L35 80 L35 70 L45 70 Z",
-    'crown': "M15 80 L85 80 L95 30 L70 50 L50 15 L30 50 L5 30 Z",
-    'cross': "M35 15 L65 15 L65 35 L85 35 L85 65 L65 65 L65 95 L35 95 L35 65 L15 65 L15 35 L35 35 Z",
-    'star': "M50 10 L61 39 L92 39 L66 57 L76 88 L50 69 L24 88 L34 57 L8 39 L39 39 Z",
-    'tower': "M25 90 L75 90 L75 40 L85 40 L85 20 L75 20 L75 30 L65 30 L65 20 L55 20 L55 30 L45 30 L45 20 L35 20 L35 30 L25 30 L25 20 L15 20 L15 40 L25 40 Z",
-    'tree': "M50 10 L80 45 L65 45 L90 80 L60 80 L60 95 L40 95 L40 80 L10 80 L35 45 L20 45 Z",
-    'anvil': "M20 35 L80 35 L80 45 L60 45 L70 80 L30 80 L40 45 L20 45 Z"
-  };
-
-  function drawShieldCanvas(cv, shape, bg, border, fg, sym) {
-    var g = cv.getContext('2d');
-    var w = cv.width, h = cv.height;
-    g.clearRect(0, 0, w, h);
-    g.fillStyle = bg || '#b40426';
-    g.beginPath();
-    if (shape === '2') { // Spanish
-      g.moveTo(w*0.1, h*0.1);
-      g.lineTo(w*0.9, h*0.1);
-      g.lineTo(w*0.9, h*0.6);
-      g.arc(w*0.5, h*0.6, w*0.4, 0, Math.PI);
-    } else if (shape === '3') { // Round
-      g.arc(w*0.5, h*0.5, w*0.45, 0, Math.PI*2);
-    } else { // 1 = Heater
-      g.moveTo(w*0.1, h*0.1);
-      g.lineTo(w*0.9, h*0.1);
-      g.lineTo(w*0.9, h*0.5);
-      g.bezierCurveTo(w*0.9, h*0.8, w*0.5, h*0.95, w*0.5, h*0.95);
-      g.bezierCurveTo(w*0.5, h*0.95, w*0.1, h*0.8, w*0.1, h*0.5);
-    }
-    g.closePath();
-    g.fill();
-    g.lineWidth = w*0.06; g.strokeStyle = border || '#1d1a14'; g.stroke();
-    
-    var pathStr = SHIELD_PATHS[sym];
-    if (pathStr) {
-      var p = new Path2D(pathStr);
-      g.fillStyle = fg || '#ffffff';
-      g.save();
-      g.translate(w*0.2, h*0.2);
-      g.scale(w*0.6/100, h*0.6/100);
-      g.fill(p);
-      g.restore();
-    } else if (sym) {
-      g.fillStyle = fg || '#ffffff';
-      g.shadowColor = 'transparent'; g.shadowBlur = 0;
-      g.font = Math.floor(h*0.5) + 'px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-      g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(sym, w*0.5, h*0.48);
-    }
+  /* O BRASÃO: o desenho mora em js/ui/brasao.js — a ficha, a plaquinha da
+   * praça e o ranking pintam o MESMO escudo. Sem o arquivo (páginas velhas
+   * que carregam só a HUD), sobra o texto do emblema. */
+  function BR() { return JOGO.Brasao || null; }
+  function elShield(code, size) {
+    var B = BR();
+    if (B && B.ehCodigo(code)) return B.canvas(code, size);
+    // guilda de antes dos vetores (um emoji) — ou página sem o brasao.js
+    var sp = el('span', null, esc(code == null ? '' : code));
+    sp.style.cssText = 'display:inline-block;width:' + size + 'px;text-align:center;font-size:' +
+      Math.round(size * 0.7) + 'px;';
+    return sp;
+  }
+  /* Emblema + nome numa LINHA DE TEXTO (toast, convite, ranking): o código do
+   * brasão não é para ser lido — some da frase, e quem pode desenhar desenha. */
+  function txtGuilda(emblema, nome) {
+    var B = BR();
+    if (B) return B.nomeComEmblema(emblema, nome);
+    return (emblema ? emblema + ' ' : '') + (nome == null ? '' : nome);
   }
 
-  function elShield(code, size) {
-    var cv = document.createElement('canvas');
-    cv.width = size; cv.height = size;
-    var parts = String(code || '').split('|');
-    if (parts[0] === 'shield' && parts.length >= 6) {
-      drawShieldCanvas(cv, parts[1], parts[2], parts[3], parts[4], parts[5]);
-      return cv;
-    } else if (parts[0] === 'shield' && parts.length >= 4) {
-      drawShieldCanvas(cv, '1', parts[1], '#1d1a14', parts[2], parts[3]);
-      return cv;
+  /* A OFICINA DO BRASÃO (11/09) — "não consigo mudar a cor da borda, símbolo
+   * e fundo".
+   *
+   * O <input type="color"> foi tentado duas vezes e não abre em todo lugar
+   * que o jogo roda (a janela nativa de cor simplesmente não sobe dentro do
+   * APK e de algumas janelas embutidas), então o jogador ficava preso nas
+   * cores de fábrica. A escolha de cor agora é NOSSA: uma fileira de campos
+   * (fundo, símbolo, borda, 2ª cor), a paleta de 40 toques e três cursores
+   * de matiz/saturação/brilho para qualquer cor que a paleta não tenha.
+   * Nada de janela do sistema, nada de plataforma para dar errado.
+   *
+   * A grade repinta só a si mesma; os cursores nem isso — mexem o desenho
+   * sem refazer a página, senão o dedo perde o cursor no meio do arrasto. */
+  var guildaCorAtiva = 2;          // qual campo do código as cores mexem (2 = fundo)
+  function pintaBrasaoEditor(box) {
+    var B = BR();
+    if (!B) return;
+    guildaEmblemaEscolhido = B.ehCodigo(guildaEmblemaEscolhido)
+      ? B.normaliza(guildaEmblemaEscolhido) : B.PADRAO;
+    var p = B.partes(guildaEmblemaEscolhido);
+    function salva() { guildaEmblemaEscolhido = p.join('|'); }
+    function cod(troca) {          // uma variação do brasão atual, para as amostras
+      var q = p.slice();
+      for (var k in troca) if (Object.prototype.hasOwnProperty.call(troca, k)) q[k] = troca[k];
+      return q.join('|');
     }
-    // fallback emoji antigo
-    var sp = el('span', null, code);
-    sp.style.cssText = 'display:inline-block;width:'+size+'px;text-align:center;font-size:'+(size*0.7)+'px;';
-    return sp;
+    clear(box);
+
+    var previa = B.canvas(guildaEmblemaEscolhido, 96);
+    previa.className = 'brasao-previa';
+    box.appendChild(previa);
+    function repinta() {
+      var nova = B.canvas(guildaEmblemaEscolhido, 96);
+      nova.className = 'brasao-previa';
+      box.replaceChild(nova, previa);
+      previa = nova;
+    }
+
+    // ---- as CORES: o campo escolhido, a paleta e os três cursores
+    var CAMPOS = [{ i: 2, nome: 'Fundo' }, { i: 4, nome: 'Símbolo' }, { i: 3, nome: 'Borda' }];
+    if (p[6] !== '0') CAMPOS.push({ i: 7, nome: '2ª cor' });   // só há 2ª cor com campo partido
+    var vivo = false;
+    CAMPOS.forEach(function (c) { if (c.i === guildaCorAtiva) vivo = true; });
+    if (!vivo) guildaCorAtiva = 2;
+
+    var linhaC = el('div', 'brasao-campos');
+    var amostras = {};
+    CAMPOS.forEach(function (c) {
+      var b = btn('', 'brasao-campo' + (c.i === guildaCorAtiva ? ' is-on' : ''), function () {
+        guildaCorAtiva = c.i;
+        pintaBrasaoEditor(box);
+      });
+      var quad = el('span', 'brasao-quad');
+      quad.style.background = p[c.i];
+      b.appendChild(quad);
+      b.appendChild(el('span', 'brasao-campo-nm', c.nome));
+      amostras[c.i] = quad;
+      linhaC.appendChild(b);
+    });
+    box.appendChild(linhaC);
+
+    var hexTxt = el('span', 'brasao-hex', esc(p[guildaCorAtiva]));
+    function poeCor(cor) {
+      p[guildaCorAtiva] = cor;
+      salva();
+      if (amostras[guildaCorAtiva]) amostras[guildaCorAtiva].style.background = cor;
+      hexTxt.innerHTML = esc(cor);
+      repinta();
+    }
+
+    var grade = el('div', 'brasao-paleta');
+    B.PALETA.forEach(function (cor) {
+      // repinta inteiro: as amostras de forma, campo e símbolo também usam a
+      // cor nova — se só a prévia mudasse, a grade ficaria mentindo
+      var b = btn('', 'brasao-cor', function () { poeCor(cor); pintaBrasaoEditor(box); });
+      b.style.background = cor;
+      b.title = cor;
+      grade.appendChild(b);
+    });
+    box.appendChild(grade);
+
+    var hsl0 = B.hexParaHsl(p[guildaCorAtiva]);
+    function cursor(cls, max, val) {
+      var r = document.createElement('input');
+      r.type = 'range'; r.min = '0'; r.max = String(max); r.value = String(Math.round(val));
+      r.className = 'brasao-cursor ' + cls;
+      // no ARRASTO, só a prévia muda (refazer a grade no meio do gesto tira o
+      // cursor de baixo do dedo); ao SOLTAR, as amostras se acertam
+      r.addEventListener('input', function () {
+        poeCor(B.hslParaHex(+curH.value, curS.value / 100, curL.value / 100));
+      });
+      r.addEventListener('change', function () { pintaBrasaoEditor(box); });
+      return r;
+    }
+    var curH = cursor('is-matiz', 360, hsl0.h);
+    var curS = cursor('is-sat', 100, hsl0.s * 100);
+    var curL = cursor('is-luz', 100, hsl0.l * 100);
+    var caixaCur = el('div', 'brasao-cursores');
+    caixaCur.appendChild(curH); caixaCur.appendChild(curS); caixaCur.appendChild(curL);
+    caixaCur.appendChild(hexTxt);
+    box.appendChild(caixaCur);
+
+    // ---- FORMA, DIVISÃO e SÍMBOLO: cada botão é o brasão de verdade com
+    // aquela peça trocada — escolhe-se vendo, não lendo
+    function secao(titulo, escolhido, itens, monta) {
+      // o nome do que está escolhido ao lado do título: no toque não existe
+      // passar o mouse por cima para descobrir como a peça se chama
+      box.appendChild(el('div', 'brasao-tit',
+        esc(titulo) + ' <span class="brasao-tit-nm">' + esc(escolhido) + '</span>'));
+      var linha = el('div', 'brasao-linha');
+      itens.forEach(function (it) { linha.appendChild(monta(it)); });
+      box.appendChild(linha);
+    }
+    function opcao(ligado, titulo, amostra, aoTocar) {
+      var b = btn('', 'brasao-op' + (ligado ? ' is-on' : ''), aoTocar);
+      b.title = titulo;
+      b.appendChild(amostra);
+      return b;
+    }
+
+    secao('Forma', B.forma(p[1]).nome, B.FORMAS, function (fm) {
+      return opcao(p[1] === fm.id, fm.nome, B.canvas(cod({ 1: fm.id }), 34), function () {
+        p[1] = fm.id; salva(); pintaBrasaoEditor(box);
+      });
+    });
+    secao('Campo', B.divisao(p[6]).nome, B.DIVISOES, function (dv) {
+      // sem símbolo na amostra: o que se escolhe aqui é o corte do campo
+      return opcao(p[6] === dv.id, dv.nome, B.canvas(cod({ 5: '-', 6: dv.id }), 34), function () {
+        p[6] = dv.id; salva(); pintaBrasaoEditor(box);
+      });
+    });
+    var comVazio = [{ id: '-', nome: 'Sem símbolo' }].concat(B.SIMBOLOS);
+    var sbAtual = B.simbolo(p[5]);
+    secao('Símbolo', sbAtual ? sbAtual.nome : 'Sem símbolo', comVazio, function (sb) {
+      return opcao(p[5] === sb.id, sb.nome, B.canvas(cod({ 5: sb.id }), 34), function () {
+        p[5] = sb.id; salva(); pintaBrasaoEditor(box);
+      });
+    });
   }
 
   function sheetGuilda() {
@@ -6490,7 +6909,7 @@ var JOGO = (typeof window !== 'undefined')
         // 11/09: a guilda de antes (a do navegador) sobe para o servidor sem pagar de novo
         var antiga = Gd.guildaLocalLiderada ? Gd.guildaLocalLiderada() : null;
         if (antiga) {
-          caixa.appendChild(btn('Trazer a ' + antiga.emblema + ' ' + antiga.nome + ' para o servidor (sem pagar de novo)',
+          caixa.appendChild(btn('Trazer a ' + txtGuilda(antiga.emblema, antiga.nome) + ' para o servidor (sem pagar de novo)',
             'btn-gold btn-block', function () {
               Gd.migrarLocal().then(function (res) {
                 if (!res.ok) { toast(res.erro || 'não deu'); return; }
@@ -6498,7 +6917,7 @@ var JOGO = (typeof window !== 'undefined')
                 if (JOGO.Hub && JOGO.Hub.nomeia) {
                   try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
                 }
-                toast('A ' + res.guilda.emblema + ' ' + res.guilda.nome + ' agora mora no servidor — chame os membros de novo.', 'good');
+                toast('A ' + txtGuilda(res.guilda.emblema, res.guilda.nome) + ' agora mora no servidor — chame os membros de novo.', 'good');
                 sheetGuilda();
               });
             }));
@@ -6519,85 +6938,13 @@ var JOGO = (typeof window !== 'undefined')
         linhaIns.style.color = podePagar ? '#7fe08a' : '#c9a227';
         caixa.appendChild(linhaIns);
 
-        if (guildaEmblemaEscolhido === '?' || guildaEmblemaEscolhido.indexOf('shield|') !== 0) {
-          guildaEmblemaEscolhido = 'shield|1|#b40426|#1d1a14|#ffffff|sword'; // padrao
-        }
-        var curParts = guildaEmblemaEscolhido.split('|');
-        // fallback old shield migration on UI
-        if (curParts.length === 4) {
-          curParts = ['shield', '1', curParts[1], '#1d1a14', curParts[2], curParts[3]];
-          guildaEmblemaEscolhido = curParts.join('|');
-        }
+        // O BRASÃO: a oficina inteira num só lugar (forma, campo partido,
+        // símbolo e as cores). Ela se repinta sozinha — chamar sheetGuilda()
+        // a cada toque refazia a consulta ao banco e apagava o nome digitado.
+        var oficina = el('div', 'brasao-ed');
+        caixa.appendChild(oficina);
+        pintaBrasaoEditor(oficina);
 
-        var fila = el('div', 'guilda-emblemas');
-        fila.style.cssText = 'display:flex; flex-direction:column; gap:8px; align-items:center; margin-bottom:12px;';
-        
-        var preview = elShield(guildaEmblemaEscolhido, 80);
-        fila.appendChild(preview);
-
-        var cRow = el('div', 'guilda-emblemas-row');
-        cRow.style.cssText = 'display:flex; gap:12px; flex-wrap:wrap; justify-content:center; align-items:center;';
-
-        function mkColor(labelTxt, idx) {
-          var wrap = el('label', 'inv-dica');
-          wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; font-size:10px; cursor:pointer;';
-          var span = el('span', null, labelTxt);
-          wrap.appendChild(span);
-          
-          var inp = document.createElement('input');
-          inp.type = 'color';
-          inp.value = curParts[idx] || '#000000';
-          inp.style.cssText = 'border:none; padding:0; width:28px; height:28px; cursor:pointer; background:transparent; margin-top:2px;';
-          
-          function update() {
-            if (curParts[idx] !== inp.value) {
-              curParts[idx] = inp.value;
-              guildaEmblemaEscolhido = curParts.join('|');
-              var newP = elShield(guildaEmblemaEscolhido, 80);
-              fila.replaceChild(newP, preview);
-              preview = newP;
-            }
-          }
-          inp.addEventListener('input', update);
-          inp.addEventListener('change', update);
-          
-          wrap.appendChild(inp);
-          return wrap;
-        }
-
-        cRow.appendChild(mkColor('Fundo', 2));
-        cRow.appendChild(mkColor('Símbolo', 4));
-        cRow.appendChild(mkColor('Borda', 3));
-        fila.appendChild(cRow);
-
-        function pickRow(arr, idxToSet, isPath) {
-          var row = el('div', 'guilda-emblemas-row');
-          row.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-top:4px;';
-          arr.forEach(function (v) {
-            var label = '';
-            if (idxToSet === 1) { // shapes
-              if (v === '1') label = 'Clássico';
-              if (v === '2') label = 'Espanhol';
-              if (v === '3') label = 'Redondo';
-            }
-            var b = btn(label, 'btn-mini' + (curParts[idxToSet] === v ? ' btn-gold' : ' btn-ghost'), function () {
-              curParts[idxToSet] = v;
-              guildaEmblemaEscolhido = curParts.join('|');
-              sheetGuilda(); // needs full repaint for selected state
-            });
-            if (isPath) {
-              b.innerHTML = '';
-              b.appendChild(elShield('shield|1|transparent|transparent|#ffffff|' + v, 24));
-            }
-            row.appendChild(b);
-          });
-          return row;
-        }
-
-        fila.appendChild(pickRow(['1', '2', '3'], 1, false)); // Shapes
-        fila.appendChild(pickRow(Object.keys(SHIELD_PATHS), 5, true)); // Symbols
-
-        caixa.appendChild(fila);
         var inp = document.createElement('input');
         inp.className = 'hub-input';
         inp.maxLength = 24;
@@ -6625,7 +6972,7 @@ var JOGO = (typeof window !== 'undefined')
           Gd.criar(inp.value, guildaEmblemaEscolhido).then(function (res) {
             if (!res.ok) { toast(res.erro || 'não deu'); return; }
             guildaNomeRascunho = '';
-            toast('A ' + res.guilda.emblema + ' ' + res.guilda.nome + ' existe — e você a lidera.', 'good');
+            toast('A ' + txtGuilda(res.guilda.emblema, res.guilda.nome) + ' existe — e você a lidera.', 'good');
             // a plaquinha da praça ganha a placa da guilda na hora — os
             // undefined preservam nome/título/coroa que já estão pendurados
             resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
@@ -6925,9 +7272,12 @@ var JOGO = (typeof window !== 'undefined')
           if (ranking.length) {
             caixa.appendChild(el('h3', 'bk-tit', 'Ranking das guildas'));
             ranking.forEach(function (rg, ri) {
-              caixa.appendChild(el('div', 'guilda-rank' + (g && rg.id === g.id ? ' is-minha' : ''),
-                '<b>' + (ri + 1) + 'º</b> ' + esc(rg.emblema) + ' ' + esc(rg.nome) +
+              var linhaR = el('div', 'guilda-rank' + (g && rg.id === g.id ? ' is-minha' : ''));
+              if (BR() && BR().ehCodigo(rg.emblema)) linhaR.appendChild(elShield(rg.emblema, 20));
+              linhaR.appendChild(el('span', null,
+                '<b>' + (ri + 1) + 'º</b> ' + esc(txtGuilda(rg.emblema, rg.nome)) +
                 ' · nível ' + rg.nivel + ' · ' + rg.xp + ' XP · ' + rg.membros + ' membro(s)'));
+              caixa.appendChild(linhaR);
             });
           }
         });
@@ -6942,8 +7292,9 @@ var JOGO = (typeof window !== 'undefined')
         caixa.appendChild(el('h3', 'bk-tit', 'Guildas do acampamento'));
         ranking.forEach(function (rg, ri) {
           var linha = el('div', 'guilda-rank');
+          if (BR() && BR().ehCodigo(rg.emblema)) linha.appendChild(elShield(rg.emblema, 20));
           linha.appendChild(el('span', null,
-            '<b>' + (ri + 1) + 'º</b> ' + esc(rg.emblema) + ' ' + esc(rg.nome) +
+            '<b>' + (ri + 1) + 'º</b> ' + esc(txtGuilda(rg.emblema, rg.nome)) +
             ' · nível ' + rg.nivel + ' · ' + rg.membros + ' membro(s) · porta ' +
             (rg.porta === 'convite' ? 'por convite' : 'aberta')));
           linha.appendChild(btn(rg.porta === 'convite' ? 'Pedir para entrar' : 'Entrar',

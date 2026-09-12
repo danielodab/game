@@ -1826,7 +1826,11 @@ var JOGO = (typeof window !== 'undefined')
     var els = unitElements(u);
     var node = M.unit(u.defId, {
       element: els[0], elements: els, boss: !!u.boss, kind: u.kind,
-      classId: u.classId || null
+      classId: u.classId || null,
+      // 11/09: o pet cresce 12% por estrela — o mesmo porte que ele tem na
+      // praça (hub3d). Entra como escala da unidade, então barra de vida,
+      // sombra e anel de lado saem no tamanho do corpo que apareceu.
+      scale: (u.kind === 'pet' && u.petStars) ? 1 + 0.12 * u.petStars : 1
     });
     if (!node) return null;
     node.userData.uid = u.uid;

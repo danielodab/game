@@ -170,97 +170,72 @@ var JOGO = (typeof window !== 'undefined')
    * retângulo"). O desenho é o da bandeira da Sede: fundo escuro, filete
    * dourado. A largura da placa abraça o texto, não o canvas inteiro —
    * placa de nome curto não pode parecer um outdoor. */
-  var SHIELD_PATHS = {
-    'sword': "M45 10 L55 10 L55 70 L65 70 L65 80 L55 80 L55 95 L45 95 L45 80 L35 80 L35 70 L45 70 Z",
-    'crown': "M15 80 L85 80 L95 30 L70 50 L50 15 L30 50 L5 30 Z",
-    'cross': "M35 15 L65 15 L65 35 L85 35 L85 65 L65 65 L65 95 L35 95 L35 65 L15 65 L15 35 L35 35 Z",
-    'star': "M50 10 L61 39 L92 39 L66 57 L76 88 L50 69 L24 88 L34 57 L8 39 L39 39 Z",
-    'tower': "M25 90 L75 90 L75 40 L85 40 L85 20 L75 20 L75 30 L65 30 L65 20 L55 20 L55 30 L45 30 L45 20 L35 20 L35 30 L25 30 L25 20 L15 20 L15 40 L25 40 Z",
-    'tree': "M50 10 L80 45 L65 45 L90 80 L60 80 L60 95 L40 95 L40 80 L10 80 L35 45 L20 45 Z",
-    'anvil': "M20 35 L80 35 L80 45 L60 45 L70 80 L30 80 L40 45 L20 45 Z"
-  };
-
-  function drawShieldCanvas(g, x, y, size, shape, bg, border, fg, sym) {
-    var h = size, w = size;
-    g.save();
-    g.translate(x, y);
-    g.fillStyle = bg || '#b40426';
-    g.beginPath();
-    if (shape === '2') { // Spanish
-      g.moveTo(w*0.1, h*0.1);
-      g.lineTo(w*0.9, h*0.1);
-      g.lineTo(w*0.9, h*0.6);
-      g.arc(w*0.5, h*0.6, w*0.4, 0, Math.PI);
-    } else if (shape === '3') { // Round
-      g.arc(w*0.5, h*0.5, w*0.45, 0, Math.PI*2);
-    } else { // 1 = Heater
-      g.moveTo(w*0.1, h*0.1);
-      g.lineTo(w*0.9, h*0.1);
-      g.lineTo(w*0.9, h*0.5);
-      g.bezierCurveTo(w*0.9, h*0.8, w*0.5, h*0.95, w*0.5, h*0.95);
-      g.bezierCurveTo(w*0.5, h*0.95, w*0.1, h*0.8, w*0.1, h*0.5);
-    }
-    g.closePath();
-    g.fill();
-    g.lineWidth = w*0.06; g.strokeStyle = border || '#1d1a14'; g.stroke();
-    
-    var pathStr = SHIELD_PATHS[sym];
-    if (pathStr) {
-      var p = new Path2D(pathStr);
-      g.fillStyle = fg || '#ffffff';
-      g.save();
-      g.translate(w*0.2, h*0.2);
-      g.scale(w*0.6/100, h*0.6/100);
-      g.fill(p);
-      g.restore();
-    } else if (sym) {
-      g.fillStyle = fg || '#ffffff';
-      g.shadowColor = 'transparent'; g.shadowBlur = 0;
-      g.font = Math.floor(h*0.5) + 'px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-      g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(sym, w*0.5, h*0.48);
-    }
-    g.restore();
+  /* O BRASÃO da placa é o MESMO da ficha: o desenho mora em js/ui/brasao.js
+   * (antes havia uma cópia aqui, e as duas já divergiam). Sem o arquivo, a
+   * placa fica só com o nome — nunca quebra a praça por causa de um escudo. */
+  function desenhaBrasao(g, x, y, tam, cod) {
+    var B = (typeof JOGO !== 'undefined') ? JOGO.Brasao : null;
+    if (B) B.desenha(g, x, y, tam, cod);
   }
 
+  /* As quatro luzes que um nome pode ter. `borrao` é o raio da sombra
+   * colorida; o branco do Mestre é o mais largo de todos de propósito. */
+  var BRILHOS = {
+    ouro:   { cor: '#ffc83a', texto: '#fff0c0', borrao: 20, fundo: 'rgba(42,30,6,0.92)' },
+    prata:  { cor: '#cfd8e3', texto: '#ffffff', borrao: 17, fundo: 'rgba(26,30,36,0.92)' },
+    bronze: { cor: '#c9793a', texto: '#ffd9b8', borrao: 15, fundo: 'rgba(38,24,12,0.92)' },
+    admin:  { cor: '#ffffff', texto: '#ffffff', borrao: 26, fundo: 'rgba(18,20,26,0.94)' }
+  };
   function rotulo(texto, cor, escala, op) {
     var cv = document.createElement('canvas');
     cv.width = 512; cv.height = 128;
     var g = cv.getContext('2d');
     g.font = '600 44px Georgia, serif';
     
-    var escudoParts = (op && op.escudo) ? op.escudo.split('|') : null;
-    var paddingShield = escudoParts ? 56 : 0;
+    /* O BRASÃO na placa da guilda (11/09, pedido do dono: "precisa ser maior
+     * para destacar ao lado do nome do clã"). Ele agora tem 104 px numa placa
+     * de 92 — TRANSBORDA a moldura de propósito, em cima e embaixo, como um
+     * escudo pendurado na bandeira: é o que faz o clã ser reconhecido de
+     * longe, antes de dar para ler o nome. */
+    var temEscudo = !!(op && op.escudo);
+    var ESCUDO_PX = 104;
+    var paddingShield = temEscudo ? ESCUDO_PX - 6 : 0;
     var textW = Math.ceil(g.measureText(texto).width);
     var larg = Math.min(492, textW + 56 + paddingShield);
     var x0 = (512 - larg) / 2;
 
+    /* O NOME QUE BRILHA (11/09, pedido do dono): o pódio do ranking POR
+     * CLASSE e o admin do sistema não se anunciam com um texto ao lado —
+     * o nome deles ACENDE. Ouro, prata e bronze para o 1º, 2º e 3º de
+     * qualquer classe; branco, mais forte que os três, para o Mestre do
+     * Fundo. O filete da placa vai na mesma cor (a placa de GRUPO tem
+     * dourado próprio e fica com o dela — só o texto acende). */
+    var bri = op && op.brilho ? BRILHOS[op.brilho] : null;
+
     if (op && op.placa) {
-      g.fillStyle = op.fundo || 'rgba(24,18,10,0.88)';
+      g.fillStyle = op.fundo || (bri ? bri.fundo : 'rgba(24,18,10,0.88)');
       g.fillRect(x0, 18, larg, 92);
-      g.strokeStyle = op.borda || '#c9a227';
-      g.lineWidth = op.traco || 5;
+      g.strokeStyle = op.borda || (bri ? bri.cor : '#c9a227');
+      g.lineWidth = op.traco || (bri ? 7 : 5);
       g.strokeRect(x0 + 2.5, 20.5, larg - 5, 87);
     }
     
-    if (escudoParts && escudoParts.length >= 6) {
-      // novo formato: shield | shape | bg | border | fg | sym
-      drawShieldCanvas(g, x0 + 16, 32, 64, escudoParts[1], escudoParts[2], escudoParts[3], escudoParts[4], escudoParts[5]);
-    } else if (escudoParts && escudoParts.length >= 4) {
-      // retrocompatibilidade
-      drawShieldCanvas(g, x0 + 16, 32, 64, '1', escudoParts[1], '#1d1a14', escudoParts[2], escudoParts[3]);
-    }
+    if (temEscudo) desenhaBrasao(g, x0 + 8, (128 - ESCUDO_PX) / 2, ESCUDO_PX, op.escudo);
 
     g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 10;
     g.fillStyle = cor || '#f0ead8';
-    
-    if (escudoParts) {
-      g.textAlign = 'left';
-      g.fillText(texto, x0 + 20 + paddingShield, 78);
-    } else {
-      g.textAlign = 'center';
-      g.fillText(texto, 256, 78);
+    if (bri) {
+      // o brilho é o MESMO texto escrito três vezes com sombra colorida: é
+      // assim que um canvas acende sem passe de pós-processamento
+      g.shadowColor = bri.cor;
+      g.shadowBlur = bri.borrao;
+      g.fillStyle = bri.texto;
     }
+    
+    var tx = temEscudo ? (x0 + 16 + paddingShield) : 256;
+    g.textAlign = temEscudo ? 'left' : 'center';
+    g.fillText(texto, tx, 78);
+    if (bri) { g.fillText(texto, tx, 78); g.fillText(texto, tx, 78); }
 
     var tex = new THREE.Texture(cv);
     tex.needsUpdate = true;
@@ -1269,6 +1244,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!coroa) return;                   // ainda não abriu: a próxima leva tenta de novo
     if (corpo.coroaPvp) {
       corpo.node.remove(corpo.coroaPvp);
+      apagaHalo(corpo.coroaPvp);
       // a textura do bilhete é do cache (texturaCoroa): só a geometria e o material saem
       try { corpo.coroaPvp.geometry.dispose(); corpo.coroaPvp.material.dispose(); } catch (e2) {}
     }
@@ -1276,6 +1252,7 @@ var JOGO = (typeof window !== 'undefined')
     coroa.userData.baseY = e.base3d;
     coroa.userData.fase = Math.random() * 9;
     coroa.userData.gira3d = true;
+    acendeCoroa(coroa, e.tier, e.tam);
     corpo.node.add(coroa);
     corpo.coroaPvp = coroa;
     corpo.coroaEspera = null;
@@ -1325,13 +1302,25 @@ var JOGO = (typeof window !== 'undefined')
     var hp = heroi.node.position, a = heroi.node.rotation.y + BICHO_ANG;
     return { x: hp.x + Math.sin(a) * BICHO_LADO, z: hp.z + Math.cos(a) * BICHO_LADO };
   }
+  /* O PORTE DO BICHO (11/09, pedido do dono: "os pets vão ficando um pouco
+   * maior de acordo com o nível de estrela"). Cada estrela engorda o corpo
+   * em 12% — ★3 é um terço maior que o filhote recém-adotado. É a mesma
+   * escala que a batalha usa (renderer3d_v2), e ela entra pelo `opts.scale`
+   * do models3d_v2, ANTES de medir a caixa: altura e raio saem certos. */
+  var PET_ESC_ESTRELA = 0.12;
+  function escalaDoPet(petId) {
+    var P = JOGO.Progress;
+    var est = 0;
+    try { est = (P && P.petStars) ? P.petStars(petId) : 0; } catch (e) {}
+    return 1 + PET_ESC_ESTRELA * est;
+  }
   function montaBicho(petId) {
     if (bicho) { scene.remove(bicho.node); bicho = null; }
     if (!petId || !heroi) return;
     var m2 = M2();
     if (!m2) return;
     var node = null;
-    try { node = m2.unit(petId, { kind: 'pet' }); } catch (e) {}
+    try { node = m2.unit(petId, { kind: 'pet', scale: escalaDoPet(petId) }); } catch (e) {}
     if (!node) return;
     var alvo = ombroDoDono();
     node.position.set(alvo.x, 0, alvo.z);
@@ -1342,7 +1331,8 @@ var JOGO = (typeof window !== 'undefined')
       var cr = node.userData.clipFor('run'), ci = node.userData.clipFor('idle');
       semCorrida = !cr || cr === ci;
     } catch (e) {}
-    bicho = { node: node, alvo: null, andando: false, petId: petId, semCorrida: semCorrida };
+    bicho = { node: node, alvo: null, andando: false, petId: petId, semCorrida: semCorrida,
+              esc: escalaDoPet(petId) };
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
   }
   /* O bicho segue o que a ficha diz: vestiu/soltou pet no inventário, o corpo
@@ -1350,7 +1340,9 @@ var JOGO = (typeof window !== 'undefined')
   function sincronizaBicho() {
     if (!heroi) return;
     var pid = petDoAvatar(heroi.classId);
-    if ((bicho ? bicho.petId : null) !== pid) montaBicho(pid);
+    // a ESTRELA também remonta: ganhou carta, o bicho cresce sem sair da praça
+    var esc = pid ? escalaDoPet(pid) : 0;
+    if ((bicho ? bicho.petId : null) !== pid || (bicho && bicho.esc !== esc)) montaBicho(pid);
   }
   function segueDono(dt) {
     if (!bicho || !heroi) return;
@@ -1374,7 +1366,7 @@ var JOGO = (typeof window !== 'undefined')
    * ACIMA dele. A coroa do ranking flutua acima de tudo. */
   /* 11/09: `grupo` ('membro' | 'lider' | null) — o parceiro do meu grupo leva
    * a placa de borda dourada grossa, com ◆ (ou ♛ se lidera) antes do nome. */
-  function penduraEm(corpo, nome, titulo, brasaTier, guilda, grupo) {
+  function penduraEm(corpo, nome, titulo, brasaTier, guilda, grupo, brilho) {
     if (!corpo || !THREE) return;
     ['plaquinha', 'plaquinhaTitulo', 'plaquinhaGuilda'].forEach(function (campo) {
       if (!corpo[campo]) return;
@@ -1387,6 +1379,7 @@ var JOGO = (typeof window !== 'undefined')
     });
     if (corpo.coroaPvp) {
       corpo.node.remove(corpo.coroaPvp);
+      apagaHalo(corpo.coroaPvp);
       try { corpo.coroaPvp.material.dispose(); } catch (e) {}
       corpo.coroaPvp = null;
     }
@@ -1394,10 +1387,13 @@ var JOGO = (typeof window !== 'undefined')
     if (!nome) return;
     var alto = (corpo.node.userData.height || 2.1);
     var temGuilda = !!(guilda && guilda.nome);
+    // o pódio e o Mestre acendem o nome; a placa de GRUPO mantém a moldura
+    // dourada dela (o grupo é informação de agora, e não pode sumir)
     var sp = grupo
       ? rotulo((grupo === 'lider' ? '♛ ' : '◆ ') + nome, '#ffe7a6', 0.42,
-               { placa: true, borda: '#ffcf3f', traco: 9, fundo: 'rgba(44,32,8,0.92)' })
-      : rotulo(nome, '#f0ead8', 0.42, { placa: true });
+               { placa: true, borda: '#ffcf3f', traco: 9, fundo: 'rgba(44,32,8,0.92)',
+                 brilho: brilho || null })
+      : rotulo(nome, '#f0ead8', 0.42, { placa: true, brilho: brilho || null });
     sp.position.y = alto + (titulo ? 0.66 : 0.5);
     corpo.node.add(sp);
     corpo.plaquinha = sp;
@@ -1421,11 +1417,14 @@ var JOGO = (typeof window !== 'undefined')
       } else {
         gtx = (guilda.emblema || '⚑') + ' ' + guilda.nome;
       }
-      var sg = rotulo(gtx, '#ffd98a', 0.30, { placa: true, borda: '#8a6f2e', escudo: codEscudo });
-      sg.position.y = alto + (titulo ? 0.66 : 0.5) + 0.52;
+      // com brasão a placa vem maior (0.36): o escudo de 104 px pede espaço,
+      // e é ele que tem de ser visto de longe
+      var escG = codEscudo ? 0.36 : 0.30;
+      var sg = rotulo(gtx, '#ffd98a', escG, { placa: true, borda: '#8a6f2e', escudo: codEscudo });
+      sg.position.y = alto + (titulo ? 0.66 : 0.5) + (codEscudo ? 0.60 : 0.52);
       corpo.node.add(sg);
       corpo.plaquinhaGuilda = sg;
-      altoGuilda = 0.52;
+      altoGuilda = codEscudo ? 0.60 : 0.52;
     }
     // A COROA DO RANKING — a arte do usuário, no lugar das chamas ("essa
     // coroa ficará acima da cabeça ao invés das chamas"). AGORA EM 3D
@@ -1438,11 +1437,13 @@ var JOGO = (typeof window !== 'undefined')
       var coroa = modeloCoroa(brasaTier.nivel, tamK);
       if (coroa) {
         // a coroa sobe um degrau quando há placa de guilda no caminho
-        var baseK3 = alto + (titulo ? 0.66 : 0.5) + 0.34 + altoGuilda;
+        // a folga cresce com a coroa: uma Coroa X não pode sentar na placa
+        var baseK3 = alto + (titulo ? 0.66 : 0.5) + 0.30 + altoGuilda + tamK * 0.22;
         coroa.position.y = baseK3;
         coroa.userData.baseY = baseK3;
         coroa.userData.fase = Math.random() * 9;
         coroa.userData.gira3d = true;
+        acendeCoroa(coroa, brasaTier, tamK);
         corpo.node.add(coroa);
         corpo.coroaPvp = coroa;
       } else {
@@ -1454,20 +1455,83 @@ var JOGO = (typeof window !== 'undefined')
               side: THREE.DoubleSide
             }));
           bilhete.scale.set(tamK, tamK, 1);
-          var baseK = alto + (titulo ? 0.66 : 0.5) + 0.34 + altoGuilda + tamK * 0.45;
+          var baseK = alto + (titulo ? 0.66 : 0.5) + 0.30 + altoGuilda + tamK * 0.55;
           bilhete.position.y = baseK;
           bilhete.userData.baseY = baseK;
           bilhete.userData.fase = Math.random() * 9;
+          acendeCoroa(bilhete, brasaTier, tamK);
           corpo.node.add(bilhete);
           corpo.coroaPvp = bilhete;
         }
         // 11/09: no jogo servido a coroa 3D pode não ter descido ainda — o
         // bilhete segura o lugar e vira a 3D quando ela abrir (esperaCoroa)
-        corpo.coroaEspera = { nivel: brasaTier.nivel, tam: tamK,
-                              base3d: alto + (titulo ? 0.66 : 0.5) + 0.34 + altoGuilda };
+        corpo.coroaEspera = { nivel: brasaTier.nivel, tam: tamK, tier: brasaTier,
+                              base3d: alto + (titulo ? 0.66 : 0.5) + 0.30 + altoGuilda + tamK * 0.22 };
         esperaCoroa(brasaTier.nivel);
       }
     }
+  }
+
+  /* O BRILHO DA COROA (11/09, pedido do dono: "ranking 5 pra cima começa a
+   * ter um brilho crescente até o nível máximo"). Um halo ADITIVO atrás da
+   * coroa — dois sprites, um miolo e uma auréola larga — com força e cor
+   * vindas do degrau (JOGO.Brasa.TIERS: `brilho` 0→1, `cor`). Fica dentro do
+   * berço da coroa, então sobe, desce e gira junto sem contabilidade extra;
+   * sprite sempre encara a câmera, o giro do modelo não o afeta.
+   * Abaixo da Coroa V não existe halo nenhum — o degrau baixo tem de ser
+   * apagado para o alto significar alguma coisa. */
+  var texHalo = null;
+  function haloDaCoroa(tier, tam) {
+    if (!THREE || !tier) return null;
+    var forca = tier.brilho || 0;
+    if (forca <= 0) return null;
+    if (!texHalo) {
+      texHalo = fazTexRadial([[0, 'rgba(255,255,255,0.95)'], [0.30, 'rgba(255,255,255,0.42)'],
+                              [0.62, 'rgba(255,255,255,0.12)'], [1, 'rgba(255,255,255,0)']]);
+    }
+    var cor = new THREE.Color(tier.cor || '#ffd36a');
+    var g = new THREE.Group();
+    // a AURÉOLA: larga e fraca, é ela que se vê de longe
+    var largo = new THREE.Sprite(new THREE.SpriteMaterial({ map: texHalo, color: cor,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      opacity: 0.16 + 0.30 * forca }));
+    var rLargo = tam * (1.9 + 1.5 * forca);
+    largo.scale.set(rLargo, rLargo, 1);
+    g.add(largo);
+    // o MIOLO: pequeno e forte, dá o ponto de luz que o bloom pega
+    var miolo = new THREE.Sprite(new THREE.SpriteMaterial({ map: texHalo, color: cor,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      opacity: 0.22 + 0.45 * forca }));
+    var rMiolo = tam * (0.9 + 0.5 * forca);
+    miolo.scale.set(rMiolo, rMiolo, 1);
+    g.add(miolo);
+    g.position.y = tam * 0.45;
+    g.userData.forca = forca;
+    g.userData.baseOp = [largo.material.opacity, miolo.material.opacity];
+    return g;
+  }
+  /* Pendura o halo no berço de uma coroa já montada (3D ou bilhete). */
+  function acendeCoroa(coroa, tier, tam) {
+    if (!coroa || !tier) return;
+    var halo = haloDaCoroa(tier, tam);
+    if (!halo) return;
+    // o bilhete PNG já vem com scale = tam; sem desfazer isso o halo levaria
+    // o tamanho ao quadrado (a coroa 3D é um berço em escala 1 e não mexe)
+    var k = (coroa.scale && coroa.scale.x) ? 1 / coroa.scale.x : 1;
+    if (k !== 1) { halo.scale.setScalar(k); halo.position.y *= k; }
+    coroa.add(halo);
+    coroa.userData.halo = halo;
+  }
+  /* O halo é o único material NOVO por corpo (a coroa 3D compartilha os do
+   * template e o bilhete usa textura de cache): quem tira a coroa o descarta. */
+  function apagaHalo(coroa) {
+    var hl = coroa && coroa.userData && coroa.userData.halo;
+    if (!hl) return;
+    for (var i = 0; i < hl.children.length; i++) {
+      try { hl.children[i].material.dispose(); } catch (e) {}
+    }
+    coroa.remove(hl);
+    coroa.userData.halo = null;
   }
 
   /* A COROA EM 3D: clone do modelo da patente, normalizado pela LARGURA —
@@ -1490,7 +1554,11 @@ var JOGO = (typeof window !== 'undefined')
     var bb = new T.Box3().setFromObject(no);
     var larg = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
     if (!isFinite(larg) || larg < 0.001) return null;
-    no.scale.multiplyScalar((tam * 0.72) / larg);
+    // 11/09: o fator era 0.72 e a coroa lia como um ponto a três passos de
+    // distância — agora o `tam` do degrau É o diâmetro dela (e o `tam` de
+    // brasa.js subiu um terço junto). Aro, não torre: a normalização segue
+    // pela LARGURA.
+    no.scale.multiplyScalar(tam / larg);
     var berco = new T.Group();
     berco.add(no);
     no.updateMatrixWorld(true);
@@ -1502,8 +1570,39 @@ var JOGO = (typeof window !== 'undefined')
     return berco;
   }
   function pendura(nome, titulo, brasaTier, guilda) {
-    penduraEm(heroi, nome, titulo, brasaTier, guilda);
+    // o herói nunca leva marca de grupo (ela é do PARCEIRO); leva o brilho
+    penduraEm(heroi, nome, titulo, brasaTier, guilda, null,
+              brilhoDoNome(meuIdNoPlacar, souOMestre()));
   }
+  /* O BRILHO DE UM NOME: o Mestre do Fundo primeiro (branco, e ele não
+   * disputa pódio com ninguém), depois a medalha da classe. O mapa vem da
+   * HUD, que é quem tem o placar; aqui só se consulta. */
+  var medalhasNome = {};            // id da conta -> 'ouro' | 'prata' | 'bronze'
+  var meuIdNoPlacar = null;
+  function souOMestre() {
+    try { return !!(JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()); } catch (e) { return false; }
+  }
+  function brilhoDoNome(id, ehMestre) {
+    if (ehMestre) return 'admin';
+    return (id && medalhasNome[id]) || null;
+  }
+  /* A HUD avisa quando o pódio muda (entrou gente na praça, subiu de nível):
+   * as placas de todo mundo se repintam com a medalha nova. */
+  Hub.medalhas = function (mapa, meuId) {
+    medalhasNome = mapa || {};
+    if (meuId !== undefined) meuIdNoPlacar = meuId || null;
+    if (!scene) return false;
+    pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
+    for (var id in fantasmas) {
+      if (!fantasmas.hasOwnProperty(id)) continue;
+      var reg = fantasmas[id];
+      if (!reg.corpo) continue;
+      var pf = reg.perfil || {};
+      penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
+                marcasGrupo[id] || null, brilhoDoNome(id, pf.mestre === true));
+    }
+    return true;
+  };
 
   // -------------------------------------------------------------- a caminhada
   /* UM passo de caminhada para QUALQUER corpo (herói ou fantasma): mesmo
@@ -1595,6 +1694,14 @@ var JOGO = (typeof window !== 'undefined')
         }
         m.position.y = m.userData.baseY +
                        Math.sin(relogio * 1.6 + (m.userData.fase || 0)) * 0.05;
+        // o halo respira: quanto mais alto o degrau, mais fundo o pulso
+        var hl = m.userData.halo;
+        if (hl) {
+          var pulso = 1 + Math.sin(relogio * 2.3 + (m.userData.fase || 0)) * (0.10 + 0.16 * hl.userData.forca);
+          for (var hi = 0; hi < hl.children.length; hi++) {
+            hl.children[hi].material.opacity = hl.userData.baseOp[hi] * pulso;
+          }
+        }
       };
       viraCoroa(heroi);
       for (var fk2 in fantasmas) {
@@ -1943,7 +2050,7 @@ var JOGO = (typeof window !== 'undefined')
     if (reg && reg.corpo) {
       var pf = reg.perfil || {};
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null);
+                marcasGrupo[id] || null, brilhoDoNome(id, pf.mestre === true));
     }
     return true;
   };
@@ -1966,7 +2073,9 @@ var JOGO = (typeof window !== 'undefined')
     reg.corpo = corpo;
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
     var tierF = null;
-    if (perfil && perfil.resumo && typeof perfil.resumo.brasa === 'number' &&
+    // quem escondeu a coroa na ficha não a usa aqui: a vontade viaja no resumo
+    if (perfil && perfil.resumo && !perfil.resumo.coroaOculta &&
+        typeof perfil.resumo.brasa === 'number' &&
         JOGO.Brasa && JOGO.Brasa.tierDe) {
       tierF = JOGO.Brasa.tierDe(perfil.resumo.brasa, false);
       // a mesma regra do herói: a faísca da Fagulha é de quem JÁ lutou
@@ -1978,7 +2087,8 @@ var JOGO = (typeof window !== 'undefined')
     reg.tierF = tierF;
     reg.guildaF = guildaF;
     penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF, guildaF,
-              marcasGrupo[reg.id] || null);
+              marcasGrupo[reg.id] || null,
+              brilhoDoNome(reg.id, perfil && perfil.mestre === true));
     if (perfil && perfil.aura) acendeAura(corpo, true);   // a vaidade é pública
     esperaCorpo(corpo, classe);           // fusão: o corpo próprio vem vindo
     poeAlvoToque(corpo);                  // 11/09: o corpo inteiro recebe o toque, não só o nome

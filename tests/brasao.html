@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>prova: o brasão da guilda</title>
+<style>
+  body { margin: 0; padding: 18px; background: #0f1216; color: #ece4d4;
+         font: 14px/1.45 system-ui, sans-serif; }
+  h2 { font-size: 15px; color: #ffc44d; margin: 22px 0 8px; }
+  .fila { display: flex; flex-wrap: wrap; gap: 10px; }
+  .peca { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 92px; }
+  .peca span { font-size: 10.5px; color: #8b93a0; text-align: center; }
+  #placar { font-size: 13px; padding: 8px 10px; border: 1px solid #3a4553; border-radius: 8px; }
+  .ok { color: #5fd08a; } .ruim { color: #ff6b5a; }
+</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (olho): todas as formas, todos os campos partidos e todos
+     os símbolos do brasão, desenhados pelo mesmo js/ui/brasao.js que a ficha
+     da guilda e a placa da praça usam. Serve para ver caminho torto e buraco
+     que não fechou — coisa que só o olho pega. -->
+<div id="placar">medindo…</div>
+<h2>Formas</h2><div class="fila" id="formas"></div>
+<h2>Campos (a 2ª cor)</h2><div class="fila" id="campos"></div>
+<h2>Símbolos</h2><div class="fila" id="simbolos"></div>
+<h2>Tamanhos (o da placa da praça é 64; o da ficha, 48)</h2><div class="fila" id="tamanhos"></div>
+<script src="../js/ui/brasao.js"></script>
+<script>
+(function () {
+  var B = JOGO.Brasao;
+  var falhas = [];
+  function peca(alvo, cod, nome, tam) {
+    var d = document.createElement('div');
+    d.className = 'peca';
+    try { d.appendChild(B.canvas(cod, tam || 72)); }
+    catch (e) { falhas.push(nome + ': ' + e.message); }
+    var s = document.createElement('span');
+    s.textContent = nome;
+    d.appendChild(s);
+    document.getElementById(alvo).appendChild(d);
+  }
+  function cod(o) {
+    var p = B.PADRAO.split('|');
+    for (var k in o) p[k] = o[k];
+    return p.join('|');
+  }
+  B.FORMAS.forEach(function (f) { peca('formas', cod({ 1: f.id }), f.nome + ' (' + f.id + ')'); });
+  B.DIVISOES.forEach(function (d) { peca('campos', cod({ 5: '-', 6: d.id }), d.nome); });
+  B.SIMBOLOS.forEach(function (s) { peca('simbolos', cod({ 5: s.id }), s.nome + ' · ' + s.id); });
+  [24, 34, 48, 64, 96].forEach(function (t) {
+    peca('tamanhos', cod({ 1: '4', 5: 'lily', 6: '3', 7: '#122557' }), t + 'px', t);
+  });
+
+  // as contas que dão para conferir sem olhar
+  var maior = 0;
+  B.FORMAS.forEach(function (f) {
+    B.SIMBOLOS.forEach(function (s) {
+      B.DIVISOES.forEach(function (d) {
+        maior = Math.max(maior, ['shield', f.id, '#b40426', '#1d1a14', '#ffffff', s.id, d.id, '#1d3f8a'].join('|').length);
+      });
+    });
+  });
+  if (maior > 64) falhas.push('código de ' + maior + ' letras: o servidor corta em 64');
+  if (B.partes('⚑').join('|') !== B.PADRAO) falhas.push('emblema de emoji não caiu no padrão');
+  if (B.partes('shield|#b40426|#ffffff|crown')[5] !== 'crown') falhas.push('brasão de 4 campos não migrou');
+  if (B.hslParaHex(0, 1, 0.5) !== '#ff0000') falhas.push('hsl→hex errou o vermelho');
+  var v = B.hexParaHsl('#00ff00');
+  if (Math.round(v.h) !== 120 || v.s < 0.99) falhas.push('hex→hsl errou o verde');
+
+  var pl = document.getElementById('placar');
+  pl.className = falhas.length ? 'ruim' : 'ok';
+  pl.textContent = falhas.length
+    ? 'FALHOU: ' + falhas.join(' · ')
+    : 'passou — ' + B.FORMAS.length + ' formas, ' + B.DIVISOES.length + ' campos, ' +
+      B.SIMBOLOS.length + ' símbolos; o código mais longo tem ' + maior + '/64 letras';
+})();
+</script>
+</body>
+</html>

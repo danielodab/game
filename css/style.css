@@ -1550,12 +1550,122 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .guilda-bonus.is-vivo b { color: #7fe08a; }
 .guilda-emblemas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .guilda-emblemas .btn { font-size: 18px; min-width: 46px; }
+
+/* A OFICINA DO BRASÃO (11/09): forma, campo, símbolo e as cores. A escolha de
+ * cor é desenhada por nós — o <input type="color"> não abre a janela do
+ * sistema em tudo que o jogo roda, e o jogador ficava preso no vermelho de
+ * fábrica. Cada amostra é o brasão de verdade com uma peça trocada. */
+.brasao-ed { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.brasao-previa { filter: drop-shadow(0 3px 10px rgba(0,0,0,.65)); }
+.brasao-campos { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.brasao-campo {
+  min-height: 44px; padding: 5px 10px; border-radius: var(--rad-p);
+  border: 1px solid var(--line2); background: rgba(255,255,255,.04);
+  display: inline-flex; flex-direction: column; align-items: center; gap: 3px;
+  color: var(--dim); cursor: pointer; user-select: none;
+}
+.brasao-campo.is-on { border-color: var(--gold); background: rgba(255,196,77,.12); color: var(--gold); }
+.brasao-campo-nm { font: 600 10.5px var(--ui-sans); }
+.brasao-quad { width: 30px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,.55); }
+.brasao-paleta {
+  width: 100%; display: grid; gap: 4px;
+  grid-template-columns: repeat(8, 1fr);
+}
+.brasao-cor {
+  min-height: 34px; padding: 0; border-radius: 6px;
+  border: 1px solid rgba(0,0,0,.5); cursor: pointer;
+}
+.brasao-cor:active { transform: scale(.92); }
+.brasao-cursores {
+  width: 100%; display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 10px; border-radius: var(--rad-m);
+  border: 1px solid var(--line2); background: rgba(255,255,255,.03);
+}
+.brasao-cursor { width: 100%; height: 22px; margin: 0; accent-color: var(--gold); }
+.brasao-cursor.is-matiz {
+  /* o arco-íris no trilho: a matiz se escolhe olhando, não adivinhando */
+  -webkit-appearance: none; appearance: none; border-radius: 999px;
+  background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+}
+.brasao-cursor.is-matiz::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; border: 2px solid #1d1a14; cursor: pointer;
+}
+.brasao-hex { font: 600 11px var(--ui-mono, monospace); color: var(--dim); text-align: center; }
+.brasao-tit {
+  align-self: flex-start; font: 700 10.5px var(--ui-sans); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--gold); margin-top: 2px;
+}
+.brasao-tit-nm { text-transform: none; letter-spacing: 0; color: var(--dim); margin-left: 6px; }
+.brasao-linha { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+.brasao-op {
+  min-height: 44px; min-width: 44px; padding: 4px; border-radius: var(--rad-p);
+  border: 1px solid var(--line2); background: rgba(255,255,255,.04);
+}
+.brasao-op.is-on { border-color: var(--gold); background: rgba(255,196,77,.14); }
 .guilda-rank {
   padding: 6px 10px; border-radius: 9px; font-size: 12.5px;
   background: rgba(255,255,255,.03); border: 1px solid var(--line2); margin-top: 4px;
 }
 .guilda-rank.is-minha { border-color: var(--gold-dim); }
 .perfil-guilda { font-size: 12.5px; color: #e8d9b0; }
+
+/* O NOME QUE BRILHA (11/09): o pódio POR CLASSE e o admin do sistema. A
+ * mesma escada de cores da praça (hub3d BRILHOS) — ouro, prata, bronze e o
+ * branco do Mestre do Fundo, o mais forte dos quatro. */
+.pl-nm { font-weight: 700; }
+.pl-brilho.is-ouro   { color: #ffe9a8; text-shadow: 0 0 10px #ffc83a, 0 0 20px rgba(255,200,58,.55); }
+.pl-brilho.is-prata  { color: #ffffff; text-shadow: 0 0 9px #cfd8e3, 0 0 18px rgba(207,216,227,.5); }
+.pl-brilho.is-bronze { color: #ffd9b8; text-shadow: 0 0 8px #c9793a, 0 0 16px rgba(201,121,58,.45); }
+.pl-brilho.is-admin  { color: #ffffff; text-shadow: 0 0 12px #ffffff, 0 0 26px rgba(255,255,255,.65); }
+.pl-classe {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 6px 10px; border-radius: 9px; margin-top: 4px;
+  background: rgba(255,255,255,.03); border: 1px solid var(--line2);
+}
+.pl-classe-nm { font: 700 12.5px var(--ui-serif); color: var(--gold); min-width: 88px; }
+.pl-podio { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12.5px; }
+.pl-podio i { font-style: normal; opacity: .7; font-size: 11px; }
+
+/* A FICHA DO PERSONAGEM (11/09): a conta, a arena e o extrato dos números */
+.char-topo { display: flex; gap: 12px; align-items: center; }
+.char-col { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.char-nome { font: 700 18px var(--ui-serif); color: #f0ead8; }
+.char-titulo { font-size: 12px; color: var(--gold); }
+.char-sub { font-size: 11.5px; color: var(--dim); }
+.char-medalha {
+  align-self: flex-start; padding: 2px 8px; border-radius: 999px; font-size: 10.5px;
+  border: 1px solid currentColor;
+}
+.char-medalha.is-ouro   { color: #ffc83a; }
+.char-medalha.is-prata  { color: #cfd8e3; }
+.char-medalha.is-bronze { color: #c9793a; }
+.char-guilda { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #e8d9b0; }
+.char-arena {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: var(--rad-m);
+  border: 1px solid var(--line2);
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+}
+.char-coroa { width: 62px; height: 62px; object-fit: contain; }
+.char-coroa-nm { font: 700 14px var(--ui-serif); color: var(--gold); }
+.char-heroi { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }
+.char-heroi-nm { font: 700 15px var(--ui-serif); color: #f0ead8; }
+/* a grade dos números: chips que quebram linha — oito colunas não cabem num
+   telefone, e ninguém lê uma tabela rolando de lado */
+.char-stats { display: flex; flex-wrap: wrap; gap: 5px; }
+.char-stats span {
+  padding: 4px 9px; border-radius: 999px; font-size: 12px;
+  background: rgba(255,255,255,.05); border: 1px solid var(--line2);
+}
+.char-stats.is-total span { font-weight: 700; font-size: 13px; }
+.char-stats.is-ganho span { color: #7fe08a; border-color: rgba(127,224,138,.4); }
+.char-stats.is-base span { color: var(--dim); }
+.char-stats.is-zero { font-size: 11.5px; color: var(--dim); font-style: italic; }
+.char-stats .is-res { color: #c8b6ff; border-color: rgba(200,182,255,.35); }
+.char-fonte { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.char-fonte-nm { font: 700 11px var(--ui-sans); letter-spacing: .06em; text-transform: uppercase;
+                 color: var(--gold); }
 
 /* O COLECIONADOR DE SELOS (25/08): a moeda dos chefes e a roleta */
 .colec-caixa {

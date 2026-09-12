@@ -90,7 +90,7 @@ senão houve troca de ordem no recorte (que não dá erro nenhum, só a coroa er
         var bb = new THREE.Box3().setFromObject(g);
         var larg = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
         var alt = bb.max.y - bb.min.y;
-        var alvo = tam * 0.72;
+        var alvo = tam;            // 11/09: o `tam` do degrau É o diâmetro
         if (Math.abs(larg - alvo) > alvo * 0.05)
           foraMedida.push('n' + n + ' ' + larg.toFixed(2) + '/' + alvo.toFixed(2));
         if (Math.abs(bb.min.y) > 0.02 ||
@@ -101,7 +101,7 @@ senão houve troca de ordem no recorte (que não dá erro nenhum, só a coroa er
       }
       check('as DEZ patentes têm coroa 3D', linhas.length === 10,
             semModelo.length ? ('faltou ' + semModelo.join(',')) : '');
-      check('cada coroa sai no diâmetro do seu tier (tam × 0,72 ± 5%)',
+      check('cada coroa sai no diâmetro do seu tier (tam ± 5%)',
             foraMedida.length === 0, foraMedida.join(' · '));
       check('toda coroa assenta no zero e fica centrada', tortas.length === 0, tortas.join(','));
 

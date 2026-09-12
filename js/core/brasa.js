@@ -59,18 +59,32 @@ var JOGO = (typeof window !== 'undefined')
    * cabeça NO LUGAR das chamas. O Elo continua o mesmo; o degrau de cima
    * continua REINADO: os pontos E o 1º do placar. `nivel` é a chave da arte
    * (COROAS_PVP['n'+nivel]); `tam` é a escala do bilhete na praça. */
+  /* 11/09 — a coroa CRESCEU (um terço a mais: de longe ela era um ponto) e,
+   * do quinto degrau para cima, ACENDE. `brilho` (0 a 1) é a força do halo
+   * que a praça pendura atrás dela: nasce fraco na Coroa V e chega inteiro
+   * na X. `cor` é a cor desse halo — ouro até a VIII, brasa branca na IX e o
+   * violeta arcano do reinado na X. Quem desenha é o hub3d; aqui só a régua. */
+  B.BRILHO_DESDE = 5;                    // o degrau em que a coroa começa a acender
   B.TIERS = [
-    { id: 'n1',  nivel: 1,  nome: 'Coroa I',    min: 0,    tam: 0.52 },
-    { id: 'n2',  nivel: 2,  nome: 'Coroa II',   min: 1100, tam: 0.56 },
-    { id: 'n3',  nivel: 3,  nome: 'Coroa III',  min: 1200, tam: 0.60 },
-    { id: 'n4',  nivel: 4,  nome: 'Coroa IV',   min: 1300, tam: 0.64 },
-    { id: 'n5',  nivel: 5,  nome: 'Coroa V',    min: 1400, tam: 0.68 },
-    { id: 'n6',  nivel: 6,  nome: 'Coroa VI',   min: 1500, tam: 0.74 },
-    { id: 'n7',  nivel: 7,  nome: 'Coroa VII',  min: 1600, tam: 0.80 },
-    { id: 'n8',  nivel: 8,  nome: 'Coroa VIII', min: 1700, tam: 0.86 },
-    { id: 'n9',  nivel: 9,  nome: 'Coroa IX',   min: 1800, tam: 0.94 },
-    { id: 'n10', nivel: 10, nome: 'Coroa X',    min: 1900, tam: 1.05, exigeTopo: true }
+    { id: 'n1',  nivel: 1,  nome: 'Coroa I',    min: 0,    tam: 0.70, brilho: 0 },
+    { id: 'n2',  nivel: 2,  nome: 'Coroa II',   min: 1100, tam: 0.76, brilho: 0 },
+    { id: 'n3',  nivel: 3,  nome: 'Coroa III',  min: 1200, tam: 0.81, brilho: 0 },
+    { id: 'n4',  nivel: 4,  nome: 'Coroa IV',   min: 1300, tam: 0.86, brilho: 0 },
+    { id: 'n5',  nivel: 5,  nome: 'Coroa V',    min: 1400, tam: 0.92, brilho: 0.17, cor: '#ffd36a' },
+    { id: 'n6',  nivel: 6,  nome: 'Coroa VI',   min: 1500, tam: 1.00, brilho: 0.33, cor: '#ffd36a' },
+    { id: 'n7',  nivel: 7,  nome: 'Coroa VII',  min: 1600, tam: 1.08, brilho: 0.50, cor: '#ffca4d' },
+    { id: 'n8',  nivel: 8,  nome: 'Coroa VIII', min: 1700, tam: 1.16, brilho: 0.67, cor: '#ffc23a' },
+    { id: 'n9',  nivel: 9,  nome: 'Coroa IX',   min: 1800, tam: 1.27, brilho: 0.83, cor: '#fff0c0' },
+    { id: 'n10', nivel: 10, nome: 'Coroa X',    min: 1900, tam: 1.42, brilho: 1.00, cor: '#c8a6ff',
+      exigeTopo: true }
   ];
+  /* O brilho de um degrau, para quem tem só o número na mão (a ficha 2D). */
+  B.brilhoDe = function (nivel) {
+    for (var i = 0; i < B.TIERS.length; i++) {
+      if (B.TIERS[i].nivel === nivel) return B.TIERS[i].brilho || 0;
+    }
+    return 0;
+  };
 
   /* O degrau dos pontos. `ehTopo` = este jogador é o 1º do placar da arena;
    * sem o topo, quem tem pontos de Coroa X fica na IX — o topo não é um

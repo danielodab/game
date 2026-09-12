@@ -2449,7 +2449,21 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
-  Progress.effectiveStats = function (heroId) {
+  /* A FOTO de um estado de stats (só os números; `resists` copiado à parte). */
+  function fotoStats(o) {
+    var f = {}, i;
+    for (i = 0; i < STAT_KEYS.length; i++) f[STAT_KEYS[i]] = num(o[STAT_KEYS[i]], 0);
+    f.resists = {};
+    for (var e in o.resists) if (o.resists.hasOwnProperty(e)) f.resists[e] = num(o.resists[e], 0);
+    return f;
+  }
+
+  /* `_etapas` (11/09) é um vetor opcional em que esta função deixa uma FOTO
+   * depois de cada fonte de bônus — base+nível, itens, conjuntos, pet,
+   * estrelas. É como `Progress.statsBreakdown` responde "o que o equipamento
+   * está me dando" sem duplicar a conta aqui embaixo. Quem não passa o vetor
+   * não paga nada: nenhuma foto é tirada. */
+  Progress.effectiveStats = function (heroId, _etapas) {
     var h = Progress.hero(heroId);
     if (!h) return null;
     var def = classDef(h.classId);
@@ -2487,6 +2501,8 @@ var JOGO = (typeof window !== 'undefined')
       out.power += num(per.power, 0) * elementalUps;
     }
 
+    if (_etapas) _etapas.push({ fonte: 'base', stats: fotoStats(out) });
+
     // ---- itens equipados (com o multiplicador da forja) e contagem de conjuntos
     var setCount = equippedSetCounts(h);
     for (i = 0; i < SLOTS.length; i++) {
@@ -2500,6 +2516,8 @@ var JOGO = (typeof window !== 'undefined')
       applyBonuses(out, it.bonuses, true, mult);
     }
 
+    if (_etapas) _etapas.push({ fonte: 'itens', stats: fotoStats(out) });
+
     // ---- conjuntos: progressivo e cumulativo (4 peças valem 2+3+4) [D10]
     var sets = setDefs();
     for (var sid2 in setCount) {
@@ -2512,6 +2530,8 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
 
+    if (_etapas) _etapas.push({ fonte: 'conjuntos', stats: fotoStats(out) });
+
     // ---- pet
     if (h.pet) {
       var pd = petDef(h.pet);
@@ -2519,8 +2539,11 @@ var JOGO = (typeof window !== 'undefined')
       if (pd) applyBonuses(out, pd.bonuses, true, Progress.petMult(h.pet));
     }
 
+    if (_etapas) _etapas.push({ fonte: 'pet', stats: fotoStats(out) });
+
     // ---- estrelas da classe (fixas e permanentes) [D9]
     applyBonuses(out, starBonuses(h.classId), false, 1);
+    if (_etapas) _etapas.push({ fonte: 'estrelas', stats: fotoStats(out) });
 
     out.hp = Math.max(1, Math.round(out.hp));
     out.pa = Math.max(0, Math.round(out.pa));
@@ -2529,6 +2552,44 @@ var JOGO = (typeof window !== 'undefined')
     out.dodge = Math.max(0, Math.round(out.dodge));
     out.lock = Math.max(0, Math.round(out.lock));
     return out;
+  };
+
+  /* O EXTRATO DOS STATS (11/09 — a ficha do personagem: "o que seu
+   * equipamento dá de vantagens"). Roda a MESMA conta de `effectiveStats`
+   * e devolve, por fonte, quanto cada uma somou:
+   *
+   *   { total, base, fontes: { itens, conjuntos, pet, estrelas } }
+   *
+   * `base` é o corpo nu no nível atual; cada fonte é a DIFERENÇA que ela
+   * trouxe. Somar base + todas as fontes dá o total (o arredondamento final
+   * do effectiveStats pode mexer uma unidade no PV — a conta interna é
+   * fracionária de propósito). */
+  Progress.statsBreakdown = function (heroId) {
+    var etapas = [];
+    var total = Progress.effectiveStats(heroId, etapas);
+    if (!total || !etapas.length) return null;
+    var fontes = {}, i, k;
+    for (i = 1; i < etapas.length; i++) {
+      var de = etapas[i - 1].stats, para = etapas[i].stats, d = { resists: {} };
+      var algo = false;
+      for (var si = 0; si < STAT_KEYS.length; si++) {
+        k = STAT_KEYS[si];
+        var v = Math.round(num(para[k], 0) - num(de[k], 0));
+        if (v) { d[k] = v; algo = true; }
+      }
+      for (var e in para.resists) {
+        if (!para.resists.hasOwnProperty(e)) continue;
+        var vr = Math.round(num(para.resists[e], 0) - num(de.resists[e], 0));
+        if (vr) { d.resists[e] = vr; algo = true; }
+      }
+      if (algo) fontes[etapas[i].fonte] = d;
+    }
+    var base = {};
+    for (i = 0; i < STAT_KEYS.length; i++) {
+      base[STAT_KEYS[i]] = Math.round(num(etapas[0].stats[STAT_KEYS[i]], 0));
+    }
+    base.resists = etapas[0].stats.resists;
+    return { total: total, base: base, fontes: fontes };
   };
 
   // ============================================================ saque [D12]
@@ -2725,6 +2786,13 @@ var JOGO = (typeof window !== 'undefined')
   Progress.petLevel = function (petId) {
     return petDef(petId) ? petLevelForXp(petXpOf(petId)) : 1;
   };
+  /* As estrelas do pet (0 a 3). Já eram a conta de `petCardInfo`; viraram
+   * função própria porque o CORPO passou a crescer com elas (11/09): o
+   * desenho não tem por que montar a ficha inteira das cartas só para saber
+   * de quantas estrelas é o bicho. */
+  Progress.petStars = function (petId) {
+    return petDef(petId) ? petStarsOf(petId) : 0;
+  };
   Progress.petXpInfo = function (petId) {
     if (!petDef(petId)) return null;
     var xp = petXpOf(petId), level = petLevelForXp(xp);
@@ -2848,6 +2916,7 @@ var JOGO = (typeof window !== 'undefined')
         conta: (JOGO.Contas && JOGO.Contas.ativa) ? JOGO.Contas.ativa() : 'principal',
         pet: h.pet || null,
         petLevel: h.pet ? Progress.petLevel(h.pet) : 0,   // 03/09: o corpo do pet escala
+        petStars: h.pet ? Progress.petStars(h.pet) : 0,   // 11/09: e cresce por estrela
         petMult: h.pet ? Progress.petMult(h.pet) : 1,
         petPower: h.pet ? Progress.petPower(h.pet) : 0,
         items: clone(h.items),

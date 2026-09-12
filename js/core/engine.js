@@ -759,6 +759,7 @@ var JOGO = (typeof window !== 'undefined')
       state.units.push(unit);
       // 03/09: nível, multiplicador e poder do pet viajam com o grupo
       if (p.pet) pets.push({ ownerUnit: unit, petId: p.pet, level: p.petLevel || 1,
+                             stars: p.petStars || 0,
                              mult: p.petMult || 1, power: p.petPower || 0 });
     }
     for (i = 0; i < monsterSpawns.length; i++) {
@@ -943,6 +944,7 @@ var JOGO = (typeof window !== 'undefined')
         followDistance: pd.followDistance || Engine.PET_FOLLOW_DEFAULT
       });
     u.petMult = mult;
+    u.petStars = ex.stars || 0;        // 11/09: o corpo do pet cresce por estrela
     state.units.push(u);
     emit({ type: 'petSpawn', unit: u, ownerUid: owner.uid });
     return u;
