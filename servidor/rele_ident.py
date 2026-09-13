@@ -56,9 +56,10 @@ recusadas assim, e o cliente não pergunta de novo).
 
 O CARIMBO (carimba), no envelope que sai do relé:
   - qualquer `mestre` que veio do cliente cai, em todo tipo de envelope;
-  - conexão do Mestre conferido: oi, eco, chat e sussurro saem com
-    mestre:true e o nome que ele escolheu (e o corpo dele, a classe 'gm');
-  - dos outros: nome reservado (oi, eco, chat, sussurro) vira 'Aventureiro-xxxx' (as
+  - conexão do Mestre conferido: oi, eco, chat, sussurro e gchat (o chat da
+    guilda, 13/09) saem com mestre:true e o nome que ele escolheu (e o corpo
+    dele, a classe 'gm');
+  - dos outros: nome reservado (oi, eco, chat, sussurro, gchat) vira 'Aventureiro-xxxx' (as
     quatro últimas letras/dígitos do id da conexão, em minúsculas — e, se por
     azar isso também cair na regra, como 'xxgm', só 'Aventureiro');
     título reservado vira ''; guilda reservada (resumo.guilda no oi/eco e os
@@ -138,9 +139,9 @@ GUILDA_TROCA = 'Guilda'
 EMBLEMA_TROCA = '⚑'           # o emblema de sempre da guilda (o primeiro da ficha da HUD)
 CLASSE_MESTRE = 'gm'          # o corpo do Mestre do Fundo, o Cavaleiro Negro (js/core/gm.js)
 CLASSE_TROCA = 'sumo'         # o que veste quem não é o Mestre (o mesmo padrão do rede.js)
-COM_NOME = ('oi', 'eco', 'chat', 'sussurro')   # os envelopes que levam o nome de quem manda (o sussurro: 11/09)
+COM_NOME = ('oi', 'eco', 'chat', 'sussurro', 'gchat')   # os envelopes que levam o nome de quem manda (o sussurro: 11/09; o chat da guilda: 13/09)
 COM_PERFIL = ('oi', 'eco')            # os que levam título, classe, resumo (guilda) e nuvem
-JULGADOS = ('oi', 'eco', 'chat', 'guilda', 'sussurro')   # os que levam texto para a regra (o relé só chama o prepara neles)
+JULGADOS = ('oi', 'eco', 'chat', 'guilda', 'sussurro', 'gchat')   # os que levam texto para a regra (o relé só chama o prepara neles)
 
 SQL = ("SELECT c.id, c.nome, c.gm, c.banido, s.ultimo_uso FROM sessoes s "
        "JOIN contas c ON c.id = s.conta_id WHERE s.token = ?")

@@ -91,6 +91,31 @@ que chegou; cliente antigo em cache continua falando com ele):
     o que for) é descartado com rastro no log — nunca derruba a conexão em
     silêncio.
 
+OS AMIGOS, OS INIMIGOS E O CHAT DA GUILDA (13/09, pedido do dono: "/g manda
+mensagem pra guild", a lista de amigos com quem está online e em batalha, e
+"os inimigos não podem mandar mensagem nem troca, mas pode desafiar pvp"). A
+guilda (guilda_membros) e as relações (relacoes, servidor/amigos.py) são do
+banco do cartório — só com --banco, lidas SÓ PARA LER numa thread (nunca no
+laço), e tudo isto só vale para conexão com conta CONFERIDA:
+  - `luta` no oi, eco e pulso (true = está numa batalha): o relé guarda o da
+    última presença; o envelope segue como veio;
+  - o GCHAT {t:'gchat', de, nome, texto} (sem `para`): a todas as conexões das
+    contas da guilda de quem manda, menos a que mandou; sai só com t, de, nome
+    (carimbado como o do chat), texto aparado (1 a 240) e `guilda` (o nome, do
+    banco). Paga o balde do chat, o geral e o leque; o texto nunca vai ao log.
+    A guilda da conta fica guardada 20 s (a falha do banco não fica: conta como
+    sem guilda). Sem conta ou sem guilda, só quem mandou ouve {t:'gchat-nao',
+    motivo:'sem-conta'|'sem-guilda'};
+  - o {t:'amigos', de} (nunca repassado; paga o balde do oi, 1 a cada 5 s) é
+    respondido só a quem pediu, como voz: {t:'amigos', lista:[{conta, tipo,
+    online, id, sala, luta}]} — id, sala e luta da conexão mais recente da
+    conta; sem conta, lista vazia e motivo:'sem-conta'. O {t:'amigos-muda', de}
+    (idem) diz que a lista mudou: o relé esquece os inimigos guardados dela;
+  - o INIMIGO (um dos dois marcou o outro) não recebe sussurro nem troca, em
+    silêncio, como o calado (sem `ausente`); duelo, grupo, batalha e guilda
+    passam. Os inimigos de cada conta, nos dois sentidos, ficam guardados 15 s
+    e são lidos antes do _processa; banco que não responde não bloqueia nada.
+
 A IDENTIDADE (10/09, servidor/rele_ident.py, AO LADO deste arquivo): com
 --banco (o mesmo da api.py, aberto só para ler) ele se anuncia a quem conecta
 ({t:'rele'}, com a marca que o cliente pôs no endereço), confere o token da
@@ -126,6 +151,7 @@ import logging
 import math
 import os
 import secrets
+import sqlite3
 import time
 
 import rele_ident                               # a identidade na praça (10/09): o token, o Mestre e os nomes
@@ -211,6 +237,21 @@ CALA_S = 3600.0                          # o silêncio por endereço dura 1 h (o
 CALA_MAX = 64                            # ids calados por pessoa (o 65º tira o que vence primeiro)
 CALADOS_MAX = 8192                       # pessoas com silêncio guardado no relé
 
+# ------------------- os amigos, os inimigos e o chat da guilda (13/09)
+GCHAT_MAX = 240                          # o texto do chat da guilda, depois de aparado
+GUILDA_S = 20.0                          # a guilda (e os membros) lida de uma conta vale tanto
+INIMIGOS_S = 15.0                        # os inimigos de uma conta (nos dois sentidos) são lidos de novo depois de tanto...
+INIMIGOS_VELHO_S = 300.0                 # ...mas, se o banco não responde, os de antes ainda valem até tanto (o zelador tira)
+AMIGOS_MAX = 200                         # relações lidas por {t:'amigos'} (a API guarda até 100 de cada lista)
+MEMBROS_MAX = 2000                       # membros lidos de uma guilda
+INIMIGOS_LIDOS_MAX = 4096                # ids lidos em cada sentido (quem é marcado por muitos)
+CONTAS_CACHE_MAX = 8192                  # contas com guilda ou inimigos guardados (cheio: saem os vencidos; se ainda cheio, todos)
+LEITURAS_MAX = 16                        # leituras do banco ao mesmo tempo; as outras esperam a vez...
+LEITURA_VEZ_S = 3.0                      # ...até tanto: depois, "o banco não respondeu"
+LEITURA_PRAZO_S = 3.0                    # a thread que passa disso não é esperada (o SQLite espera o trancado 1 s)
+SEM_INIMIGOS = ('sussurro', 'troca')     # os dirigidos que o inimigo não entrega (o desafio de duelo passa: é o PvP)
+AMIGOS_TIPOS = ('amigos', 'amigos-muda') # nunca repassados: quem responde é o próprio relé
+
 log = logging.getLogger("rele")
 PARES = {}                   # ws -> Par (todas as conexões vivas)
 POR_ID = {}                  # id -> set(Par) (a mesma conta em duas abas = dois Par)
@@ -220,6 +261,10 @@ NOVAS = {}                   # chave do endereço (_chave_ip) -> Balde das conex
 PROVA = {}                   # 11/09 (achado 17): id sem conta -> sha256 da prova do aparelho que o prendeu
 SOLTOS = {}                  # id preso sem conexão viva -> quando a última saiu (a memória de PROVA_MEMORIA_S)
 CALADOS = {}                 # 11/09 (achado 21): id de quem silenciou -> {id calado: (até quando, endereços)}
+POR_CONTA = {}               # 13/09: id da conta conferida -> set(Par) (as abas da mesma conta)
+GUILDA = {}                  # 13/09: id da conta -> (lida em, (gid, nome, frozenset dos membros) ou None = sem guilda)
+INIMIGOS = {}                # 13/09: id da conta -> (lida em, frozenset das contas inimigas, nos dois sentidos)
+_LEITURAS = 0                # 13/09: leituras do banco em voo (_le_banco)
 _NADA = object()
 VERIFICADOR = rele_ident.Verificador(None)   # liga_banco(--banco); sem banco ninguém é conferido
 
@@ -256,7 +301,7 @@ class Par:
                  'n_pulsos', 'ult_novos', 'ult_antigos', 'despediu', 'descartes', 'descartes_t0',
                  'conta', 'idents', 'freio_nome', 'apresentou', 'token', 'revista_em', 'falhas',
                  'cx', 'vigias', 'vigio', 'balde_convite',
-                 'prova_h', 'ipk', 'entrada', 'remetentes')
+                 'prova_h', 'ipk', 'entrada', 'remetentes', 'luta', 'visto')
 
     def __init__(self, ws, agora):
         self.ws = ws
@@ -292,6 +337,8 @@ class Par:
         self.ipk = None              # 11/09 (achado 21): o endereço de quem conectou (_chave_ip), para a caixa de entrada
         self.entrada = {}            # (classe, remetente) -> Balde: a caixa de ENTRADA desta conexão
         self.remetentes = {}         # id -> remetente de quem mandou sussurro/convite a ela (o `cala` acha por aqui)
+        self.luta = False            # 13/09: a última presença disse `luta: true` (está numa batalha) — o {t:'amigos'} conta
+        self.visto = agora           # 13/09: o último envelope que chegou dela (o {t:'amigos'} mostra a conexão mais recente)
 
 
 # ------------------------------------------------------------------ envelope
@@ -542,6 +589,14 @@ def _dirigido(par, m, t, agora):
     if not alvos:
         _ausente(par, m, t, para, para_cx)
         return []
+    if t in SEM_INIMIGOS and par.conta is not None:
+        # 13/09: o inimigo não manda mensagem nem troca (o desafio de duelo
+        # passa: é o PvP que o dono quer). Não chega e não volta `ausente`,
+        # como o calado — e antes da caixa de entrada, que ele nem gasta. Só lê
+        # o que o trata já trouxe do banco (_busca): aqui o laço não espera nada
+        alvos = [p for p in alvos if not _inimigos(par, p)]
+        if not alvos:
+            return []
     classe = _classe_entrada(t, acao)
     if classe is not None:
         # 11/09 (achado 21): o que chega sem ser pedido paga também a caixa de
@@ -748,6 +803,276 @@ def _poda_calados(agora):
             del CALADOS[v]
 
 
+# ------------------------- os amigos, os inimigos e o chat da guilda (13/09)
+def _abre_banco(caminho):
+    """O banco do cartório SÓ PARA LER — a mesma abertura da conferência de
+    identidade (rele_ident.uri_so_leitura: nunca cria nem escreve o arquivo)."""
+    return sqlite3.connect(rele_ident.uri_so_leitura(caminho), uri=True, timeout=rele_ident.ESPERA_BANCO)
+
+
+def le_guilda(caminho, conta_id):
+    """(guilda, definitivo): (gid, nome, frozenset das contas membro) da guilda
+    da conta, ou None se ela não tem guilda. Síncrona: roda numa thread
+    (_le_banco). definitivo False = o banco não respondeu (ausente, trancado,
+    sem as tabelas da guilda) — essa resposta não vai para o cache."""
+    try:
+        con = _abre_banco(caminho)
+    except (sqlite3.Error, ValueError, OSError):
+        return None, False
+    try:
+        g = con.execute("SELECT g.id, g.nome FROM guilda_membros m JOIN guildas g ON g.id = m.guilda_id "
+                        "WHERE m.conta_id = ?", (conta_id,)).fetchone()
+        if g is None:
+            return None, True
+        ms = con.execute("SELECT conta_id FROM guilda_membros WHERE guilda_id = ? LIMIT ?",
+                         (g[0], MEMBROS_MAX)).fetchall()
+    except sqlite3.Error:
+        return None, False
+    finally:
+        con.close()
+    return (int(g[0]), str(g[1]), frozenset(r[0] for r in ms if isinstance(r[0], int))), True
+
+
+def le_relacoes(caminho, conta_id):
+    """(lista, definitivo): as relações que a conta marcou, [(conta, 'amigo' |
+    'inimigo')], até AMIGOS_MAX. Sem a tabela (a API de antes de 13/09), vazia."""
+    try:
+        con = _abre_banco(caminho)
+    except (sqlite3.Error, ValueError, OSError):
+        return [], False
+    try:
+        rs = con.execute("SELECT alvo_id, tipo FROM relacoes WHERE conta_id = ? LIMIT ?",
+                         (conta_id, AMIGOS_MAX)).fetchall()
+    except sqlite3.Error:
+        return [], False
+    finally:
+        con.close()
+    return [(a, t) for a, t in rs if isinstance(a, int) and t in ('amigo', 'inimigo')], True
+
+
+def le_inimigos(caminho, contas):
+    """({conta: frozenset}, definitivo): para cada conta, quem ela marcou inimigo
+    E quem a marcou — basta um dos dois lados para o sussurro e a troca não
+    chegarem (quem foi marcado também não fala com quem o marcou)."""
+    try:
+        con = _abre_banco(caminho)
+    except (sqlite3.Error, ValueError, OSError):
+        return {}, False
+    fora = {}
+    try:
+        for c in contas:
+            ids = {r[0] for r in con.execute("SELECT alvo_id FROM relacoes WHERE conta_id = ? AND tipo = 'inimigo' "
+                                             "LIMIT ?", (c, INIMIGOS_LIDOS_MAX))}
+            ids.update(r[0] for r in con.execute("SELECT conta_id FROM relacoes WHERE alvo_id = ? AND tipo = 'inimigo' "
+                                                 "LIMIT ?", (c, INIMIGOS_LIDOS_MAX)))
+            fora[c] = frozenset(ids)
+    except sqlite3.Error:
+        return {}, False
+    finally:
+        con.close()
+    return fora, True
+
+
+async def _le_banco(fn, *args):
+    """Uma leitura do banco (le_guilda, le_relacoes, le_inimigos) numa thread,
+    FORA do laço — o _processa é síncrono, e um banco trancado não pode
+    congelar a praça. Como a conferência de identidade (rele_ident.Verificador):
+    LEITURAS_MAX ao mesmo tempo, as outras esperam a vez até LEITURA_VEZ_S, e
+    a thread que passa de LEITURA_PRAZO_S não é esperada. Sem --banco, sem vez
+    ou sem resposta: (None, False)."""
+    global _LEITURAS
+    caminho = VERIFICADOR.caminho
+    if caminho is None:
+        return None, False
+    fim = time.monotonic() + LEITURA_VEZ_S
+    while _LEITURAS >= LEITURAS_MAX:
+        if time.monotonic() >= fim:
+            return None, False
+        await asyncio.sleep(0.05)
+    _LEITURAS += 1
+    try:
+        loop = asyncio.get_running_loop()
+        return await asyncio.wait_for(loop.run_in_executor(None, fn, caminho, *args), LEITURA_PRAZO_S)
+    except Exception as e:                           # o prazo, a thread que morreu...
+        log.warning("a leitura do banco (%s) falhou (%s): segue como se ele não respondesse", fn.__name__,
+                    type(e).__name__)
+        return None, False
+    finally:
+        _LEITURAS -= 1
+
+
+def _guarda_da_conta(cache, conta_id, valor, agora, validade):
+    """Guarda (agora, valor) da conta; cheio, saem os que passaram da validade
+    e, se ainda cheio, todos (a próxima leitura enche de novo)."""
+    if conta_id not in cache and len(cache) >= CONTAS_CACHE_MAX:
+        for k in [k for k, (t0, _) in cache.items() if agora - t0 >= validade]:
+            del cache[k]
+        if len(cache) >= CONTAS_CACHE_MAX:
+            cache.clear()
+    cache[conta_id] = (agora, valor)
+
+
+def _poda_contas(agora):
+    for k in [k for k, (t0, _) in GUILDA.items() if agora - t0 >= GUILDA_S]:
+        del GUILDA[k]
+    for k in [k for k, (t0, _) in INIMIGOS.items() if agora - t0 >= INIMIGOS_VELHO_S]:
+        del INIMIGOS[k]
+
+
+def _indexa_conta(par, antes, depois):
+    """POR_CONTA: as conexões de cada conta conferida — o chat da guilda entrega
+    por conta, e o {t:'amigos'} acha por aqui quem está online. A conexão que
+    caiu enquanto o banco conferia (o ident espera) não volta ao índice."""
+    if antes == depois:
+        return
+    if antes is not None:
+        s = POR_CONTA.get(antes)
+        if s is not None:
+            s.discard(par)
+            if not s:
+                del POR_CONTA[antes]
+    if depois is not None and par.vivo:
+        POR_CONTA.setdefault(depois, set()).add(par)
+
+
+def _tem_ficha(b, agora):
+    """O balde tem uma ficha agora? Sem tirar: o relé só vai ao banco pelo
+    envelope que ainda pode passar (quem estoura não o faz ler nada)."""
+    return b.saldo + (agora - b.t) * b.taxa >= 1.0
+
+
+async def _busca(par, m, agora):
+    """ANTES do _processa (que é síncrono e não espera banco nenhum), traz para
+    o cache o que o envelope vai consultar: a guilda de quem manda o gchat, e os
+    inimigos de quem manda e de quem recebe um sussurro ou uma troca. Só com
+    conta conferida (a do destino também), só se o balde do envelope tem ficha
+    e só o que venceu: a conversa normal vai ao banco uma vez a cada 15-20 s."""
+    if par.conta is None or VERIFICADOR.caminho is None:
+        return
+    t, cid = m['t'], par.conta['id']
+    if t == 'gchat':
+        achado = GUILDA.get(cid)
+        if not _tem_ficha(par.balde_chat, agora) or (achado is not None and agora - achado[0] < GUILDA_S):
+            return
+        g, definitivo = await _le_banco(le_guilda, cid)
+        if definitivo:
+            _guarda_da_conta(GUILDA, cid, g, time.monotonic(), GUILDA_S)
+        else:
+            GUILDA.pop(cid, None)                    # sem resposta não fica guardado: sai como sem guilda, e o próximo tenta de novo
+    elif t in SEM_INIMIGOS:
+        if not _tem_ficha(par.balde_chat if t == 'sussurro' else par.balde, agora):
+            return
+        para = _para(m)
+        contas = {cid}
+        for p in POR_ID.get(para, ()) if para is not None else ():
+            if p.conta is not None:
+                contas.add(p.conta['id'])
+        if len(contas) < 2:
+            return                                   # destino sem conta conferida (ou a mesma conta): nada a bloquear
+        faltam = [c for c in contas if c not in INIMIGOS or agora - INIMIGOS[c][0] >= INIMIGOS_S]
+        if not faltam:
+            return
+        lidos, definitivo = await _le_banco(le_inimigos, faltam)
+        if definitivo:                               # sem resposta, fica o de antes (até INIMIGOS_VELHO_S)
+            agora = time.monotonic()
+            for c, s in lidos.items():
+                _guarda_da_conta(INIMIGOS, c, s, agora, INIMIGOS_VELHO_S)
+
+
+def _inimigos(a, b):
+    """As conexões `a` e `b` são de contas em que uma marcou a outra inimiga?
+    Só lê o cache (_busca): o que não está nele não bloqueia."""
+    ca, cb = _conta_id(a), _conta_id(b)
+    if ca is None or cb is None or ca == cb:
+        return False
+    agora = time.monotonic()
+    for c, outra in ((ca, cb), (cb, ca)):
+        achado = INIMIGOS.get(c)
+        if achado is not None and agora - achado[0] < INIMIGOS_VELHO_S and outra in achado[1]:
+            return True
+    return False
+
+
+def _gchat(par, m, agora):
+    """O CHAT DA GUILDA: {t:'gchat', de, nome, texto}, o /g do cliente. Sem
+    `para`: vai a TODAS as conexões das contas da guilda de quem manda (lida do
+    banco pelo _busca), menos a que mandou — e só a elas; nunca recua para a
+    sala. Precisa de conta conferida: a guilda é de contas, e o id do herói não
+    diz de quem é. Sem conta ou sem guilda, só quem mandou ouve a voz
+    `gchat-nao` e ninguém recebe (não é descarte). Paga o balde do chat, o
+    geral e o leque. Sai só com os campos do protocolo, o texto aparado e
+    `guilda` (o nome do banco); o nome de quem manda passa pelo carimbo no
+    trata, como o do chat. O texto nunca vai ao log."""
+    if par.conta is None:
+        if not par.balde.tira(agora):
+            return None
+        _voz(par, {'t': 'gchat-nao', 'motivo': 'sem-conta'})
+        return []
+    if not par.balde_chat.tira(agora) or not par.balde.tira(agora):
+        return None
+    texto = m.get('texto')
+    if not isinstance(texto, str):
+        return None
+    texto = texto.strip()
+    if not texto or len(texto) > GCHAT_MAX:
+        return None
+    achado = GUILDA.get(par.conta['id'])
+    g = achado[1] if achado is not None else None
+    if g is None:
+        _voz(par, {'t': 'gchat-nao', 'motivo': 'sem-guilda'})
+        return []
+    _, nome_guilda, membros = g
+    dest = [p for c in membros for p in POR_CONTA.get(c, ()) if p is not par and p.vivo]
+    if dest and not par.leque.tira(agora, len(dest)):
+        return None
+    de, nome = m['de'], m.get('nome')
+    m.clear()                                        # o que o cliente pôs a mais (e o `mestre`) não sai
+    m.update({'t': 'gchat', 'de': de, 'nome': nome, 'texto': texto, 'guilda': nome_guilda})
+    return dest
+
+
+def _mais_recente(conta_id):
+    """A conexão viva mais recente da conta, que já disse o id do herói (ou None)."""
+    melhor = None
+    for p in POR_CONTA.get(conta_id, ()):
+        if p.vivo and p.id is not None and (melhor is None or p.visto > melhor.visto):
+            melhor = p
+    return melhor
+
+
+async def _amigos(par, m, agora):
+    """O {t:'amigos', de} e o {t:'amigos-muda', de} — NUNCA repassados; pagam o
+    balde do oi (1 a cada 5 s, rajada de 4) e o geral. O `amigos` responde SÓ a
+    quem pediu, como voz do relé: as relações da conta (lidas do banco numa
+    thread) com quem está online — a conexão mais recente da conta: o id do
+    herói, a sala e se está em batalha (`luta` da última presença). Só o relé
+    sabe quem está ligado; a lista com os nomes é da API. O `amigos-muda` diz
+    que o cliente mexeu nas listas: os inimigos guardados desta conta saem, e
+    o próximo sussurro ou troca já lê o banco (basta um dos lados estar
+    fresco). False = descartado."""
+    if par.id is not None and m['de'] != par.id:
+        return False                                 # outro `de` na mesma conexão
+    if not par.balde_oi.tira(agora) or not par.balde.tira(agora):
+        return False
+    if m['t'] == 'amigos-muda':
+        if par.conta is not None:
+            INIMIGOS.pop(par.conta['id'], None)
+        return True
+    if par.conta is None:
+        _voz(par, {'t': 'amigos', 'lista': [], 'motivo': 'sem-conta'})
+        return True
+    rels, _ = await _le_banco(le_relacoes, par.conta['id'])
+    lista = []
+    for alvo, tipo in rels or ():
+        p = _mais_recente(alvo)
+        lista.append({'conta': alvo, 'tipo': tipo, 'online': p is not None,
+                      'id': p.id if p is not None else None, 'sala': p.sala if p is not None else None,
+                      'luta': bool(p.luta) if p is not None else False})
+    if par.vivo:
+        _voz(par, {'t': 'amigos', 'lista': lista})
+    return True
+
+
 def _processa(par, m, agora):
     """Quem recebe o envelope `m` que `par` mandou: lista de Par (vazia =
     ninguém, sem culpa) ou None (descartado: falso, sem balde)."""
@@ -767,6 +1092,8 @@ def _processa(par, m, agora):
         return None                                  # outro `de` na mesma conexão
     if t == 'cala':
         return _cala(par, m, agora)                  # 11/09 (achado 21): o silêncio por endereço; nunca é repassado
+    if t == 'gchat':
+        return _gchat(par, m, agora)                 # 13/09: só às contas da guilda, sem recuo nenhum
     if t in DIRIGIDOS or t == 'vigia':
         return _dirigido(par, m, t, agora)           # 11/09: só ao destino, sem recuo nenhum
     para = _para(m)
@@ -799,6 +1126,8 @@ def _processa(par, m, agora):
     if t == 'oi' or t == 'eco':
         v = _num(m.get('v'))
         par.versao = int(v) if v is not None else 0
+    if t in PRESENCA:
+        par.luta = m.get('luta') is True             # 13/09: está numa batalha? (só o true vale; o cliente antigo nunca está)
     mudou_de = _NADA
     if t in PRESENCA:
         sala = _sala_de(m)
@@ -970,6 +1299,7 @@ def _solta_vigias(par):
 def _sai(par, agora=None):
     par.vivo = False
     PARES.pop(par.ws, None)
+    _indexa_conta(par, _conta_id(par), None)         # 13/09: a guilda e os amigos não a acham mais
     s = SALAS.get(par.sala)
     if s is not None:
         s.discard(par)
@@ -1086,6 +1416,7 @@ def _poe_conta(par, conta, agora):
     nada reservado no registro dos outros."""
     antes = par.conta
     par.conta = conta
+    _indexa_conta(par, None if antes is None else antes['id'], None if conta is None else conta['id'])   # 13/09
     if conta is None:
         par.token = None
     else:
@@ -1180,6 +1511,8 @@ async def trata(ws, path=None):                 # path: assinatura antiga
             agora = time.monotonic()
             CONTA['entrada'] += 1
             m = _abre(msg)
+            if m is not None:
+                par.visto = agora                    # 13/09: a conexão mais recente da conta é a que o {t:'amigos'} mostra
             ident = m is not None and m['t'] == 'ident'
             prova = m is not None and m['t'] == 'prova'
             try:
@@ -1195,7 +1528,19 @@ async def trata(ws, path=None):                 # path: assinatura antiga
                     if m is not None and par.token is not None and agora >= par.revista_em:
                         await _revista(par)              # a sessão de novo: a revogada cai (rele_ident.CACHE_S)
                         agora = time.monotonic()
-                    dest = _processa(par, m, agora) if m is not None else None
+                    if m is None:
+                        dest = None
+                    elif m['t'] in AMIGOS_TIPOS:
+                        # 13/09: quem está online, respondido só a quem pediu —
+                        # nunca repassado (dest é [] ou None: nada a entregar)
+                        dest = [] if await _amigos(par, m, agora) else None
+                    else:
+                        if par.conta is not None and (m['t'] == 'gchat' or m['t'] in SEM_INIMIGOS):
+                            # 13/09: a guilda e os inimigos vêm do banco numa thread
+                            # ANTES do _processa, que só lê o cache (o laço não espera)
+                            await _busca(par, m, agora)
+                            agora = time.monotonic()
+                        dest = _processa(par, m, agora)
                     if dest:
                         # o carimbo da identidade (rele_ident.py): o nome
                         # reservado de quem não é o Mestre conferido, o
@@ -1209,7 +1554,7 @@ async def trata(ws, path=None):                 # path: assinatura antiga
                         if dirigido:
                             m['cx'] = par.cx             # 11/09: a conexão que mandou, por cima do que o cliente pôs
                         novo = rele_ident.carimba(m, par.conta, par.freio_nome, time.monotonic(), so_cache=True)
-                        if novo is not None or dirigido:
+                        if novo is not None or dirigido or m['t'] == 'gchat':   # o gchat sempre sai refeito (_gchat)
                             msg = json.dumps(m, separators=(',', ':'))
             except Exception as e:
                 # envelope torto que o _abre deixou passar: descarte com
@@ -1219,9 +1564,9 @@ async def trata(ws, path=None):                 # path: assinatura antiga
                     log.warning("o ident falhou (%s)", type(e).__name__)   # sem o envelope: ele leva o token
                 elif prova:
                     log.warning("a prova do aparelho falhou (%s)", type(e).__name__)   # sem o envelope: ele leva o segredo
-                elif m is not None and m['t'] == 'sussurro':
-                    # a mensagem particular nunca vai ao log: nem o texto, nem o nome, nem o erro (que pode citá-los)
-                    log.warning("envelope derrubou o _processa (%s): t=sussurro", type(e).__name__)
+                elif m is not None and m['t'] in ('sussurro', 'gchat'):
+                    # a mensagem particular (e a da guilda, 13/09) nunca vai ao log: nem o texto, nem o nome, nem o erro
+                    log.warning("envelope derrubou o _processa (%s): t=%s", type(e).__name__, m['t'])
                 elif m is not None and m['t'] in DIRIGIDOS:
                     log.warning("envelope derrubou o _processa (%s): t=%s acao=%r, %d caracteres",
                                 type(e).__name__, m['t'], str(m.get('acao'))[:REF_MAX], len(msg))
@@ -1268,6 +1613,7 @@ async def zelador(relatorio):
                 del NOVAS[k]                         # endereço que parou de conectar: o balde já encheu
             _poda_provas(agora)                      # 11/09: o aparelho do id solto há mais de 10 min
             _poda_calados(agora)                     # 11/09: e o silêncio que venceu
+            _poda_contas(agora)                      # 13/09: a guilda e os inimigos guardados que venceram
         if relatorio > 0 and agora - ult_log >= relatorio:
             dt = agora - ult_log
             ent = CONTA['entrada'] - antes['entrada']
