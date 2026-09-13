@@ -269,10 +269,32 @@ var JOGO = (typeof window !== 'undefined')
     var s = S();
     if (!s || !s.api) return Promise.resolve(null);
     return s.api('/api/save').then(function (r) {
-      if (r && r.ok && (r.progress || r.db)) { anotaResposta(r); A.adota(r.progress, r.db); }
+      if (r && r.ok && (r.progress || r.db)) {
+        anotaResposta(r);
+        A.adota(r.progress, r.db);
+        // o estado agora É o do servidor: o hash conhecido parte daqui
+        if (typeof r.hash !== 'string') ultimo.hash = A.hashLocal();
+      }
       return r;
     });
   };
+
+  /* NA ABERTURA (13/09): quando a Nuvem fala com o servidor pela primeira vez
+   * nesta página, a economia daqui é trocada pela do servidor. Um save mexido
+   * no localStorage não sobe (o servidor ignora) e não fica na tela esperando
+   * a próxima op para ser desfeito. */
+  var puxouNaAbertura = false;
+  function ouveNuvem(det) {
+    if (puxouNaAbertura || !det || (det.tipo !== 'emdia' && det.tipo !== 'subiu')) return;
+    if (!A.ligada()) return;
+    puxouNaAbertura = true;
+    A.puxaEstado();
+  }
+  try { window.addEventListener('soterra:nuvem', function (ev) { ouveNuvem(ev && ev.detail); }); } catch (e) {}
+  try {
+    var hN = (N() && N().historico) ? N().historico() : [];
+    for (var iN = 0; iN < hN.length; iN++) ouveNuvem(hN[iN]);
+  } catch (e) {}
 
   /* ------------------------------------------------------------ os embrulhos */
   /* As funções do jogo que mudam a economia sem sorteio: rodam aqui na hora e

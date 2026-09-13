@@ -178,4 +178,17 @@ tudo ou nada).
 - [x] Cliente: autoridade, bilhete, lances, fechar, ops, forja e roleta pelo servidor
       (`js/core/autoridade.js`, `tests/autoridade_cliente.js`)
 - [ ] Cliente: troca e cofre da guilda pelas rotas novas
-- [ ] Poço semeado, grupo com semente do servidor, duelo ranqueado
+- [x] Poço semeado (`poco.js` salaSemeada; `tests/juiz_poco.js`)
+- [x] Juiz: sala em grupo (`/grupo/fecha`, registro com marcas de queda/volta/saída) e duelo
+      ranqueado (`/duelo/fecha`, Brasa nos dois estados) — `tests/juiz_grupo.js`
+- [x] Cliente: semente do grupo pelo servidor, fechar grupo e duelo (`coop.js`, `game.js`)
+- [ ] API: rotas de grupo e duelo (`/api/grupo/abrir|fechar`, `/api/duelo/fechar`, tetos anti-farm)
+
+### Limites conhecidos
+
+- Sala em grupo que precisou de **foto de resgate** (divergência entre os motores) não pode
+  ser refeita pelo registro de quem recebeu a foto: vale o registro limpo do outro membro; se
+  nenhum dos dois tiver registro limpo, a sala fica **não conferida** e não paga.
+- Duelo que acaba por W.O., desistência ou contestação não ranqueia.
+- A configuração de PA/PP do Mestre (`soterra-gm-v1`) mora no navegador: batalha da conta do
+  Mestre com PA/PP mudado pode divergir no servidor.
