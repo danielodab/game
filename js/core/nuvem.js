@@ -35,6 +35,11 @@
    * respondia 409 com o save DELE, e o jogo local (feito com a API fora do
    * ar no boot) era apagado pelo save velho. */
   var puxou = false, timerPuxa = null, enganchado = false;
+  /* `encerrada` (13/09, um aparelho só): a conta entrou em outro aparelho e o
+   * jogo caiu aqui (Sessao.derrubada → N.parar). Nada mais sobe nem desce até
+   * a página recarregar — o save desta aba não pode cair por cima do novo. */
+  var encerrada = false;
+  function outroAparelho(r) { return !!r && r.status === 401 && r.motivo === 'outro-aparelho'; }
 
   function S() { return JOGO.Sessao || null; }
   function P() { return JOGO.Progress || null; }
@@ -184,7 +189,11 @@
 
   N.iniciar = function () {
     var s = S();
+    if (encerrada) return Promise.resolve({ ok: false, erro: 'encerrada' });
     if (!s || !s.ativa() || !s.disponivel() || !P()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
+    // 13/09 (um aparelho só): com sessão, a olhada em /api/eu a cada 30 s — é
+    // ela que derruba o jogo quando a conta entra em outro aparelho sem relé no meio
+    if (s.vigiaOutroAparelho) { try { s.vigiaOutroAparelho(); } catch (eV) {} }
     // A Nuvem vale só na conta Principal desta máquina. As outras contas locais
     // (Criar conta nova, ?conta=2, a do Mestre local) servem para testar dois
     // jogadores num PC; a sessão do site é do navegador inteiro, e subi-las na
@@ -233,9 +242,13 @@
 
   N.puxar = function () {
     var s = S();
+    if (encerrada) return Promise.resolve({ ok: false, erro: 'encerrada' });
     if (!s || !s.ativa()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
     return s.api('/api/save').then(function (r) {
       if (!r.ok) {
+        // a conta entrou em outro aparelho: quem cuida é a Sessao (a queda, ou o
+        // token novo adotado). Esquecer a sessão aqui apagaria o token NOVO
+        if (outroAparelho(r) || encerrada) return r;
         if (r.status === 401 || r.status === 403) {
           s.esquece(); ligada = false;
           erro = r.erro || ('HTTP ' + r.status);
@@ -311,6 +324,7 @@
         if (sujo) N.agendar();
         return r;
       }
+      if (outroAparelho(r) || encerrada) return r;             // 13/09: a Sessao já cuidou (ver o puxar)
       if (r.status === 409 && typeof r.versao === 'number') {   // outra máquina gravou antes: ela manda
         avisa('desatualizado', { versao: r.versao });
         aplica(r);
@@ -354,6 +368,7 @@
 
   /* Volta a tentar depois de uma recusa (a Ficha de Contas tem o botão). */
   N.retomar = function () {
+    if (encerrada) return Promise.resolve({ ok: false, erro: 'encerrada' });
     parada = false;
     erro = null;
     return N.puxar();
@@ -365,6 +380,22 @@
     return s.api('/api/troca', { method: 'POST', body: { com: comContaId, dou: dou || [], recebo: recebo || [] } })
       .then(function (r) { avisa('troca', { ok: !!r.ok, feita: !!r.feita, erro: r.erro || null }); return r; });
   };
+
+  /* PARAR DE VEZ (13/09, um aparelho só): a conta entrou em outro aparelho.
+   * Diferente do sair, não avisa o /api/logout (o token já morreu) e não
+   * esquece a sessão local (a Sessao decide); só nada mais sobe nem desce,
+   * nem a descarga do pagehide. */
+  N.parar = function () {
+    encerrada = true;
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (timerPuxa) { clearTimeout(timerPuxa); timerPuxa = null; }
+    ligada = false;
+    parada = true;
+    sujo = false;
+    if (DB()) DB().aoGravar = null;
+    avisa('encerrada', null);
+  };
+  N.encerrada = function () { return encerrada; };
 
   /* Sair da nuvem: a sessão some, a subida para; o local fica como está. */
   N.sair = function () {

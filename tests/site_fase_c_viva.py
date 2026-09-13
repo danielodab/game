@@ -39,6 +39,7 @@ import re
 import secrets
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -94,8 +95,47 @@ class Estatico(http.server.SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    banco = None                       # o banco descartável da API desta prova (--banco-prova)
 
-def servir(porta):
+    def do_POST(self):
+        """SÓ DESTA PROVA (13/09, um aparelho só): POST /__prova/sessoes-antigas
+        {token, n} põe no banco `n` sessões a mais da conta desse token, como as
+        abertas antes da regra (quando a conta ficava aberta em vários aparelhos).
+        Desde 13/09 o login derruba as outras sessões, e a lista de sessões do site
+        (encerrar uma, as outras) precisa de várias vivas. Devolve os tokens."""
+        if self.path.split('?')[0] != '/__prova/sessoes-antigas' or not self.banco:
+            self.send_error(404)
+            return
+        try:
+            pedido = json.loads(self.rfile.read(int(self.headers.get('Content-Length') or 0)).decode('utf-8'))
+            con = sqlite3.connect(self.banco, timeout=5)
+            try:
+                linha = con.execute("SELECT conta_id FROM sessoes WHERE token = ?", (pedido['token'],)).fetchone()
+                tokens = []
+                if linha:
+                    t = int(time.time())
+                    for _ in range(max(0, min(5, int(pedido.get('n') or 1)))):
+                        tk = secrets.token_hex(32)
+                        con.execute("INSERT INTO sessoes(token, conta_id, criado_em, ultimo_uso) VALUES (?, ?, ?, ?)",
+                                    (tk, linha[0], t, t))
+                        con.execute("INSERT INTO sessoes_extra(token, ip, agente, criado_em) VALUES (?, ?, ?, ?)",
+                                    (tk, None, 'Aparelho antigo da prova', t))
+                        tokens.append(tk)
+                    con.commit()
+            finally:
+                con.close()
+            corpo, status = json.dumps({'tokens': tokens}).encode('utf-8'), 200
+        except Exception as e:
+            corpo, status = json.dumps({'erro': type(e).__name__}).encode('utf-8'), 500
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(corpo)))
+        self.end_headers()
+        self.wfile.write(corpo)
+
+
+def servir(porta, banco=None):
+    Estatico.banco = banco
     srv = http.server.ThreadingHTTPServer(('127.0.0.1', porta), functools.partial(Estatico, directory=RAIZ))
     srv.serve_forever()
 
@@ -183,11 +223,12 @@ def mostra(n, resumo, linhas):
 def main():
     ap = argparse.ArgumentParser(description='A prova viva da Fase C no site')
     ap.add_argument('--servir', type=int, help=argparse.SUPPRESS)
+    ap.add_argument('--banco-prova', default=None, help=argparse.SUPPRESS)   # 13/09: o banco da API, para as sessões antigas
     ap.add_argument('--api', default=os.path.join(RAIZ, 'servidor', 'api.py'),
                     help='o script da API (padrão: servidor/api.py)')
     args = ap.parse_args()
     if args.servir:
-        servir(args.servir)
+        servir(args.servir, args.banco_prova)
         return 0
     chrome = next((c for c in CHROMES if os.path.exists(c)), None)
     if not chrome:
@@ -206,7 +247,8 @@ def main():
             procs.append(subprocess.Popen([sys.executable, args.api, '--porta', str(papi),
                                            '--banco', os.path.join(pasta, 'dados', 'soterra.db'), '--emails-prova', emails],
                                           stdout=log, stderr=subprocess.STDOUT, creationflags=BAIXA))
-        procs.append(subprocess.Popen([sys.executable, os.path.abspath(__file__), '--servir', str(pest)],
+        procs.append(subprocess.Popen([sys.executable, os.path.abspath(__file__), '--servir', str(pest),
+                                       '--banco-prova', os.path.join(pasta, 'dados', 'soterra.db')],
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=BAIXA))
         subiu = espera_http(base + '/api/saude')
         if not subiu:

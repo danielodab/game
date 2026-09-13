@@ -179,6 +179,36 @@ class ProvaDaConta(unittest.TestCase):
         outro.token, outro.conta, outro.email, outro.senha = r['token'], r['conta'], c.email, senha or c.senha
         return outro
 
+    def entra_sem_derrubar(self, c, senha=None, **kw):
+        """Uma sessão nova da mesma conta SEM derrubar as outras — como as sessões
+        abertas antes de 13/09, quando a conta ficava aberta em vários aparelhos
+        (o servidor ainda as lista e aceita até o próximo login). Desde o "um
+        aparelho só" o login derruba as outras; para as provas que precisam de
+        várias sessões vivas (a lista, encerrar uma/outras/todas, a troca de
+        senha que encerra as outras), as de antes voltam ao banco depois do
+        login, com o IP e o navegador que tinham, e saem da lista das derrubadas."""
+        cid = c.conta['id']
+        b = self.banco()
+        try:
+            sessoes = b.execute("SELECT token, conta_id, criado_em, ultimo_uso FROM sessoes WHERE conta_id = ?", (cid,)).fetchall()
+            extras = b.execute("SELECT x.token, x.ip, x.agente, x.criado_em FROM sessoes_extra x JOIN sessoes s "
+                               "ON s.token = x.token WHERE s.conta_id = ?", (cid,)).fetchall()
+        finally:
+            b.close()
+        outro = self.entra(c, senha, **kw)
+        b = self.banco()
+        try:
+            b.executemany("INSERT OR IGNORE INTO sessoes(token, conta_id, criado_em, ultimo_uso) VALUES (?, ?, ?, ?)",
+                          [tuple(r) for r in sessoes])
+            b.executemany("INSERT OR IGNORE INTO sessoes_extra(token, ip, agente, criado_em) VALUES (?, ?, ?, ?)",
+                          [tuple(r) for r in extras])
+            b.executemany("DELETE FROM sessoes_derrubadas WHERE token_hash = ?",
+                          [(conta_mod.hash_do_token(r[0]),) for r in sessoes])
+            b.commit()
+        finally:
+            b.close()
+        return outro
+
     def banco(self, pasta=None):
         b = sqlite3.connect(os.path.join(pasta or self.pasta, 'api', 'soterra.db'))
         b.row_factory = sqlite3.Row
@@ -290,9 +320,10 @@ class ProvaDaConta(unittest.TestCase):
         chrome = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36'
         iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1'
         c = self.novo('Sofia Sessao', agente=chrome, xff='45.160.3.7')
-        c2 = self.entra(c, agente=iphone, xff='10.0.0.9, 187.20.30.40')      # o público mais à direita
-        c3 = self.entra(c, agente='Firefox/131.0 ' + 'x' * 300)
-        c4 = self.entra(c)
+        # 13/09: sessões de vários aparelhos vivas juntas, como antes do "um aparelho só"
+        c2 = self.entra_sem_derrubar(c, agente=iphone, xff='10.0.0.9, 187.20.30.40')      # o público mais à direita
+        c3 = self.entra_sem_derrubar(c, agente='Firefox/131.0 ' + 'x' * 300)
+        c4 = self.entra_sem_derrubar(c)
         status, r = c.pede('GET', '/api/conta')
         self.assertEqual(status, 200, r)
         s = r['sessoes']
@@ -334,7 +365,7 @@ class ProvaDaConta(unittest.TestCase):
         self.assertEqual((c2.pede('GET', '/api/eu')[0], c4.pede('GET', '/api/eu')[0], c.pede('GET', '/api/eu')[0]),
                          (401, 401, 200))
         # todas, inclusive esta
-        c5 = self.entra(c)
+        c5 = self.entra_sem_derrubar(c)
         status, r = c5.pede('POST', '/api/conta/sessoes/encerrar', {'todas': True})
         self.assertEqual((status, r), (200, {'ok': True, 'encerradas': 2, 'estaEncerrada': True}))
         self.assertEqual((c.pede('GET', '/api/eu')[0], c5.pede('GET', '/api/eu')[0]), (401, 401))
@@ -346,10 +377,71 @@ class ProvaDaConta(unittest.TestCase):
                          "WHERE s.token IS NULL")[0][0]
         self.assertEqual(orfas, 0)
 
+    # -- um aparelho só (13/09) -----------------------------------------------------------
+    def test_um_aparelho_so(self):
+        """Pedido do dono: "uma conta só pode estar logada em um dispositivo.. se
+        outro tentar logar, no que estava logado cai o jogo". O login certo derruba
+        as outras sessões da conta; o token derrubado ouve 401 com o motivo
+        'outro-aparelho' (o jogo cai por ele) — e só ele: token inventado, logout
+        e "encerrar sessões" seguem com o 401 de sempre. O mesmo token em vários
+        pedidos (duas abas do mesmo navegador) segue valendo."""
+        c = self.novo('Uma Por Vez')
+        # o mesmo token em pedidos seguidos: segue vivo
+        self.assertEqual([c.pede('GET', '/api/eu')[0] for _ in range(3)], [200, 200, 200])
+        c2 = self.entra(c)                                             # outro aparelho entra
+        status, r = c.pede('GET', '/api/eu')
+        self.assertEqual((status, r), (401, {'ok': False, 'erro': 'sua conta entrou em outro aparelho',
+                                             'motivo': 'outro-aparelho'}))
+        self.assertEqual(c.pede('PUT', '/api/save', {'versao': 0, 'progress': None, 'db': None, 'nascimentos': []})[1]
+                         .get('motivo'), 'outro-aparelho')             # em qualquer rota com conta
+        self.assertEqual([c2.pede('GET', '/api/eu')[0] for _ in range(2)], [200, 200])
+        self.assertEqual(len(c2.pede('GET', '/api/conta')[1]['sessoes']), 1)
+        # no banco só o sha256 do token derrubado, nunca o token
+        linhas = self.sql("SELECT token_hash, conta_id FROM sessoes_derrubadas WHERE conta_id = ?", c.conta['id'])
+        self.assertEqual([tuple(x) for x in linhas], [(conta_mod.hash_do_token(c.token), c.conta['id'])])
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM sessoes_derrubadas WHERE token_hash = ?", c.token)[0][0], 0)
+        self.assertNotIn(c.token, le(self.log_arq))
+        # o 3º aparelho derruba o 2º; o 1º segue com o motivo
+        c3 = self.entra(c)
+        self.assertEqual((c2.pede('GET', '/api/eu')[1].get('motivo'), c.pede('GET', '/api/eu')[1].get('motivo'),
+                          c3.pede('GET', '/api/eu')[0]), ('outro-aparelho', 'outro-aparelho', 200))
+        # token inventado: o 401 de sempre, sem motivo
+        status, r = Cliente(self.base).pede('GET', '/api/eu', token='f' * 64)
+        self.assertEqual((status, 'motivo' in r), (401, False))
+        # logout NÃO vira "outro aparelho"
+        self.assertEqual(c3.pede('POST', '/api/logout', {})[0], 200)
+        status, r = c3.pede('GET', '/api/eu')
+        self.assertEqual((status, r.get('motivo')), (401, None))
+        # nem o "encerrar sessões": quem sai por vontade própria leva o 401 de sempre
+        c4 = self.entra(c)
+        c5 = self.entra_sem_derrubar(c)
+        self.assertEqual(c5.pede('POST', '/api/conta/sessoes/encerrar', {'outras': True})[1]['encerradas'], 1)
+        status, r = c4.pede('GET', '/api/eu')
+        self.assertEqual((status, r.get('motivo')), (401, None))
+        # a faxina: anotação mais velha que a validade de uma sessão some no próximo login
+        velho = 'v' * 64
+        self.sql("INSERT INTO sessoes_derrubadas(token_hash, conta_id, em) VALUES (?, ?, ?)",
+                 conta_mod.hash_do_token(velho), c.conta['id'], int(time.time()) - comum.SESSAO_DIAS * 86400 - 10)
+        self.entra(c)
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM sessoes_derrubadas WHERE token_hash = ?",
+                                  conta_mod.hash_do_token(velho))[0][0], 0)
+
+    def test_esqueci_confirmar_derruba_com_motivo(self):
+        """O "esqueci a senha" confirmado abre sessão nova num aparelho: as outras
+        caem com o motivo, como no login (13/09)."""
+        c = self.novo('Esqueceu Aparelho')
+        self.assertEqual(Cliente(self.base).pede('POST', '/api/esqueci', {'email': c.email})[0], 200)
+        codigo = self.codigo(self.espera_email(c.email, ESQUECI))
+        status, r = Cliente(self.base).pede('POST', '/api/esqueci/confirmar',
+                                            {'email': c.email, 'codigo': codigo, 'nova': 'aparelho-novo-9'})
+        self.assertEqual(status, 200, r)
+        self.assertEqual(c.pede('GET', '/api/eu')[1].get('motivo'), 'outro-aparelho')
+        self.assertEqual(Cliente(self.base).pede('GET', '/api/eu', token=r['token'])[0], 200)
+
     # -- trocar a senha ----------------------------------------------------------------
     def test_trocar_senha(self):
         c = self.novo('Tito Senha')
-        c2, c3 = self.entra(c), self.entra(c)
+        c2, c3 = self.entra_sem_derrubar(c), self.entra_sem_derrubar(c)     # 13/09: outras sessões vivas (ver o ajudante)
         casos = [({}, 'informe a senha atual e a nova'), ({'atual': SENHA}, 'informe a senha atual e a nova'),
                  ({'atual': SENHA, 'nova': 'curta'}, 'a senha nova precisa ter pelo menos 8 caracteres'),
                  ({'atual': SENHA, 'nova': SENHA}, 'a senha nova é igual à atual'),
@@ -362,7 +454,9 @@ class ProvaDaConta(unittest.TestCase):
         self.assertEqual((c.pede('GET', '/api/eu')[0], c2.pede('GET', '/api/eu')[0], c3.pede('GET', '/api/eu')[0]),
                          (200, 401, 401))
         nome = c.conta['nome']
-        self.assertEqual(Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': 'outra-senha-9'})[0], 200)
+        status, l = Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': 'outra-senha-9'})
+        self.assertEqual(status, 200, l)
+        c.token = l['token']                        # 13/09: o login derrubou a sessão de antes (um aparelho só)
         self.assertEqual(Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': SENHA})[0], 401)
         aviso = self.espera_email(c.email, SENHA_TROCADA)
         self.assertIn('esqueci a senha', aviso['texto'])
@@ -486,7 +580,9 @@ class ProvaDaConta(unittest.TestCase):
         self.assertEqual(r['conta'], {'id': c.conta['id'], 'nome': c.conta['nome'], 'email': novo,
                                       'criadoEm': r['conta']['criadoEm'], 'gm': False})
         self.assertEqual(c.pede('GET', '/api/eu')[1]['conta']['email'], novo)
-        self.assertEqual(Cliente(self.base).pede('POST', '/api/login', {'login': novo, 'senha': SENHA})[0], 200)
+        status, l = Cliente(self.base).pede('POST', '/api/login', {'login': novo, 'senha': SENHA})
+        self.assertEqual(status, 200, l)
+        c.token = l['token']                        # 13/09: o login derrubou a sessão de antes (um aparelho só)
         # o aviso vai ao ANTIGO, com o novo mascarado
         aviso = self.espera_email(velho, EMAIL_TROCADO)
         self.assertIn(conta_mod.mascara_email(novo), aviso['texto'])
@@ -635,11 +731,13 @@ class ProvaDaConta(unittest.TestCase):
         self.assertEqual((c.pede('GET', '/api/eu')[0], c2.pede('GET', '/api/eu')[0]), (401, 401))
         self.assertEqual(Cliente(self.base).pede('GET', '/api/eu', token=r['token'])[0], 200)
         # as tentativas de senha da conta foram limpas: a senha nova entra na hora
-        self.assertEqual(Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': 'redefinida-9'})[0], 200)
+        status, l = Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': 'redefinida-9'})
+        self.assertEqual(status, 200, l)
         self.assertEqual(Cliente(self.base).pede('POST', '/api/login', {'login': nome, 'senha': SENHA})[0], 401)
         self.assertEqual(confirma()[1]['erro'], 'código errado ou vencido')          # não vale duas vezes
         self.espera_email(c.email, SENHA_TROCADA)
-        tipos = [a['tipo'] for a in Cliente(self.base).pede('GET', '/api/conta', token=r['token'])[1]['atividade']]
+        # 13/09: o login acima derrubou a sessão do esqueci (um aparelho só): a atividade vem pela do login
+        tipos = [a['tipo'] for a in Cliente(self.base).pede('GET', '/api/conta', token=l['token'])[1]['atividade']]
         self.assertIn('senha-redefinida', tipos)
         self.assertIn('esqueci-pedido', tipos)
 
@@ -770,8 +868,11 @@ class ProvaDaConta(unittest.TestCase):
         c.token, c.conta, c.email = r['token'], r['conta'], email
         status, r = pede_cru(self.base, 'POST', '/api/login', {'login': nome, 'senha': SENHA}, dobrado)
         self.assertEqual(status, 200, r)
+        # 13/09 (um aparelho só): o login derrubou a sessão do cadastro — segue com a nova, a única da lista
+        self.assertEqual(c.pede('GET', '/api/eu')[0], 401)
+        c.token = r['token']
         ips = [s['ip'] for s in c.pede('GET', '/api/conta')[1]['sessoes']]
-        self.assertEqual(ips, ['189.34.*.*', '189.34.*.*'])
+        self.assertEqual(ips, ['189.34.*.*'])
         # e os limites por IP contam no endereço do proxy, não no forjado: o
         # cadastro conta sempre; o login, só a senha errada (a certa devolve a vaga)
         def chaves():
@@ -785,7 +886,8 @@ class ProvaDaConta(unittest.TestCase):
         status, r = pede_cru(self.base, 'POST', '/api/login', {'login': nome, 'senha': SENHA},
                              [('X-Forwarded-For', '8.8.8.8, 189.34.12.7, 172.18.0.5')])
         self.assertEqual(status, 200, r)
-        self.assertEqual([s['ip'] for s in c.pede('GET', '/api/conta')[1]['sessoes']], ['189.34.*.*'] * 3)
+        c.token = r['token']                        # 13/09: de novo, só a sessão nova fica
+        self.assertEqual([s['ip'] for s in c.pede('GET', '/api/conta')[1]['sessoes']], ['189.34.*.*'])
 
     # -- o login não conta quem tem conta; os freios contam só as erradas --------------------------
     def test_login_inexistente_igual_a_senha_errada(self):
@@ -842,6 +944,7 @@ class ProvaDaConta(unittest.TestCase):
         for i in range(40):
             status, r = Jogador(self.base, xff=ip).pede('POST', '/api/login', {'login': c.conta['nome'], 'senha': SENHA})
             self.assertEqual(status, 200, (i + 1, r))
+            c.token = r['token']                    # 13/09: cada login derruba o anterior; fica a sessão do último
 
         def no_balde():
             return self.sql("SELECT COUNT(*) FROM limites WHERE chave IN (?, ?, ?)",
@@ -879,12 +982,16 @@ class ProvaDaConta(unittest.TestCase):
             return Jogador(self.base, xff=ip).pede('POST', '/api/login', {'login': quem.conta['nome'], 'senha': senha})
 
         self.enche('login-ok:%d' % c.conta['id'], 59)
-        self.assertEqual(login(c)[0], 200)                              # o 60º da hora
+        status, r = login(c)
+        self.assertEqual(status, 200, r)                                # o 60º da hora
+        c.token = r['token']                                            # 13/09: o login derrubou a sessão do cadastro
         for senha in (SENHA, 'chute-errado'):
             status, r = login(c, senha)                                 # o 61º: 429 antes do PBKDF2, certo ou errado
             self.assertEqual((status, r['erro']), (429, 'logins demais nesta conta; tente de novo mais tarde'), senha)
             self.assertTrue(r['liberaEm'] > time.time(), r)
-        self.assertEqual(login(vizinho)[0], 200)                        # do mesmo endereço, a outra conta entra
+        status, r = login(vizinho)
+        self.assertEqual(status, 200, r)                                # do mesmo endereço, a outra conta entra
+        vizinho.token = r['token']                                      # 13/09: idem
         # barrados pela conta antes do PBKDF2, os dois do 61º não ficaram no balde do IP (o vizinho não paga)
         self.assertEqual(self.sql("SELECT COUNT(*) FROM limites WHERE chave = ?", 'login-ip:' + ip)[0][0], 0)
         # trocas de senha

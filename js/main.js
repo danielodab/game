@@ -25,6 +25,9 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function frame(time) {
+    // 13/09 (um aparelho só): a conta entrou em outro aparelho — o jogo desta
+    // aba para aqui, parado embaixo da capa da Sessao (js/core/sessao.js)
+    if (JOGO.Sessao && JOGO.Sessao.derrubadaJa && JOGO.Sessao.derrubadaJa()) return;
     var dt = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
     pumpEvents();

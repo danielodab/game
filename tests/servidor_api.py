@@ -1825,11 +1825,14 @@ class ProvaDoAdmin(unittest.TestCase):
         # entra com o nome novo; o velho não entra mais; a sessão aberta continua
         api = cartorio.Api(self.banco_arq)
         try:
+            # a sessão aberta continua depois do renomear (conferida ANTES do login: desde 13/09, o
+            # "um aparelho só", o login abaixo derruba as outras sessões da conta)
+            self.assertEqual(api.conta_do_token(self.token_ana)['nome'], 'Mestre do Fundo')
             st, r = api.login(None, {'login': 'Mestre do Fundo', 'senha': 'segredo-bom-8'})
             self.assertEqual((st, r['conta']['id'], r['conta']['nome']), (200, self.ana, 'Mestre do Fundo'))
             with self.assertRaises(cartorio.Recusa):
                 api.login(None, {'login': 'Ana Clara', 'senha': 'segredo-bom-8'})
-            self.assertEqual(api.conta_do_token(self.token_ana)['nome'], 'Mestre do Fundo')
+            self.assertEqual(api.conta_do_token(r['token'])['nome'], 'Mestre do Fundo')
         finally:
             api.con.close()
         # 20 letras com acento (40 bytes) cabem

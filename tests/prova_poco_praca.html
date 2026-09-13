@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o Poço sem Fundo na praça</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (foto), 13/09: o poço da arte do dono na praça, com o
+     painel de aproximação aberto. ?dist=&tilt=&ang= enquadram a câmera;
+     ?painel=0 fotografa sem o painel. window.__pronto avisa a foto e
+     window.__poco guarda o lugar medido (posição, raio, parede). -->
+<iframe id="f" src="../index.html?prova-poco"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 100) return setTimeout(espera, 800);
+    try {
+      w.JOGO.DB.batizar('Poceiro').then(function () {
+        w.JOGO.UI.selection(['sumo']);
+        w.JOGO.UI.showScreen('hub');
+        var v2 = 0;
+        (function aguarda() {
+          var e2 = null;
+          try { e2 = w.JOGO.Hub._estado(); } catch (err) {}
+          if ((e2 && e2.construcoes && e2.enfeites) || ++v2 > 200) {
+            try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e3) {}
+            var L = w.JOGO.Hub._lugares ? w.JOGO.Hub._lugares() : [];
+            var p = L.filter(function (l) { return l.id === 'poco'; })[0] || null;
+            window.__poco = p;
+            if (!p) { document.title = 'ERRO sem poço'; window.__pronto = true; return; }
+            // para do lado da praça (o poço encara o centro) e abre o painel
+            var k = (Math.hypot(p.x, p.z) - (p.solido || 3) - 2.5) / Math.max(0.01, Math.hypot(p.x, p.z));
+            if (w.JOGO.Hub.irPara) w.JOGO.Hub.irPara(p.x * k, p.z * k);
+            setTimeout(function () {
+              if (Q.painel !== '0') {
+                try { w.JOGO.Hub.aoAproximar({ id: 'poco', tipo: 'poco', nome: 'Poço sem Fundo' }); } catch (e5) {}
+              }
+              if (w.JOGO.Hub._cam) w.JOGO.Hub._cam({ dist: Q.dist || 13, tilt: Q.tilt || 9, ang: Q.ang != null ? Q.ang : 4.4 });
+              setTimeout(function () { window.__pronto = true; }, 1500);
+            }, 3500);
+            return;
+          }
+          setTimeout(aguarda, 400);
+        })();
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; window.__pronto = true; }
+  })();
+};
+</script>
+</body>
+</html>

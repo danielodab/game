@@ -24,6 +24,8 @@ PECAS = [
     # arquivo não existe, sai como FALTANDO e o lugar segue nos provisórios
     ("forja.glb",          "praca_forja",    "A Forja (barraca do ferreiro)"),
     ("tenda_sorte.glb",    "praca_loteria",  "A Barraquinha da Sorte (a roleta dos selos)"),
+    # o Poço sem Fundo ganhou corpo (13/09): antes a torre infinita morava na Arena
+    ("poco.glb",           "praca_poco",     "O Poço sem Fundo"),
 ]
 
 

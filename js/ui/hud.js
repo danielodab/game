@@ -1488,7 +1488,18 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(btn('Duelo de treino (mesmo teclado)', 'btn-primary btn-block', function () {
           openSheet('duelo');
         }));
-        // O POÇO SEM FUNDO (25/08): a torre infinita mora na arena
+        // o Poço sem Fundo morou aqui até 13/09 — agora tem corpo na praça
+        painel.appendChild(btn('Ver o Placar', 'btn-ghost btn-block', function () {
+          openSheet('placar');
+        }));
+        if (JOGO.DB) JOGO.DB.historicoPvp().then(function (h) {
+          painel.appendChild(el('p', 'hub-nota', h.length + ' duelo(s) na conta.'));
+        });
+      } else if (lugar.tipo === 'poco') {
+        // O POÇO SEM FUNDO (25/08; 13/09 saiu da Arena e ganhou a arte do dono)
+        painel.appendChild(el('h3', null, 'Poço sem Fundo'));
+        painel.appendChild(el('p', 'hub-nota',
+          'A torre infinita: cada andar é uma sala emprestada dos calabouços, e cada andar a mais deixa os monstros mais duros.'));
         if (emGrupo()) {
           // 11/09 (D10): o Poço sorteia fora da semente — em grupo, só sozinho
           painel.appendChild(btn('Descer ao Poço sem Fundo', 'btn-warn btn-block is-apagado', function () {
@@ -1501,17 +1512,11 @@ var JOGO = (typeof window !== 'undefined')
             toast('O Poço não abriu.');
           }
         }));
-        painel.appendChild(btn('Ver o Placar', 'btn-ghost btn-block', function () {
-          openSheet('placar');
-        }));
         if (JOGO.DB.pocoVer) JOGO.DB.pocoVer().then(function (pv) {
           if (pv && (pv.recorde > 0 || pv.semanaMelhor > 0)) {
             painel.appendChild(el('p', 'hub-nota', 'Poço: andar <b>' + pv.semanaMelhor +
               '</b> na semana · recorde <b>' + pv.recorde + '</b>.'));
           }
-        });
-        if (JOGO.DB) JOGO.DB.historicoPvp().then(function (h) {
-          painel.appendChild(el('p', 'hub-nota', h.length + ' duelo(s) na conta.'));
         });
       } else if (lugar.tipo === 'sede') {
         painel.appendChild(el('h3', null, 'Sede das Guildas'));
@@ -3405,13 +3410,17 @@ var JOGO = (typeof window !== 'undefined')
   var mcFiltro = { q: '', slot: 'todos', rar: 'todas', origem: 'todos', ordem: 'preco' };
   function mcTaxa(preco) {
     var Mc = JOGO.Mercado;
-    return Math.max(1, Math.ceil(preco * ((Mc && Mc.TAXA) || 0.05)));
+    // 13/09: a conta inteira do módulo (a mesma do servidor); o ponto flutuante cobrava 4 de 60
+    if (Mc && Mc.taxaDe) return Mc.taxaDe(preco);
+    return Math.max(1, Math.ceil(preco * 5 / 100));
   }
   function sheetMercado() {
     sheetName = 'mercado';
+    var Mc = JOGO.Mercado;
+    // 13/09: com sessão e a autoridade ligada, o balcão é ENTRE CONTAS (servidor/mercado.py)
+    if (Mc && Mc.servidor && Mc.servidor.ligado()) { sheetMercadoServidor(); return; }
     var body = sheetShell('Mercadinho do Acampamento',
       'O balcão só tem o que jogador anunciou. A sua oferta fica até vender ou você retirar. Toda venda paga 5% de taxa.');
-    var Mc = JOGO.Mercado;
     if (!Mc) { body.appendChild(el('p', 'inv-dica', 'O mercado não carregou.')); return; }
 
     var caixa = el('div', 'ms-caixa');
@@ -3642,6 +3651,460 @@ var JOGO = (typeof window !== 'undefined')
       caixa.appendChild(el('p', 'inv-dica', 'A roleta dos selos mudou de endereço: fica na <b>Barraquinha da Sorte</b>, na praça.'));
     });
   }
+
+  /* O MERCADINHO ENTRE CONTAS (13/09, pedido do dono): "o mercadinho deve classificar
+   * por tipo de item, podendo ser pesquisado pelo nome e mostrar por item também, pois
+   * pode ter mais de um mesmo item à venda pelos outros jogadores, aí precisa mostrar
+   * todos e quem está vendendo" — e a proposta: "outro usuário pode dar a proposta de
+   * comprar pelo valor Y".
+   * Quatro abas: COMPRAR (tipo = o espaço da peça, raridade, busca ao vivo, a lista por
+   * ITEM com quantos e o menor preço; tocar abre TODOS os anúncios dele, com quem vende,
+   * "Comprar por X" e "Fazer oferta"), VENDER (o saco, como antes), MEUS ANÚNCIOS (as
+   * propostas recebidas com Aceitar/Recusar) e MINHAS OFERTAS (o estado de cada uma).
+   * Cada ação vai ao servidor (JOGO.Mercado.servidor) e o estado novo é ADOTADO — a
+   * repintura reabre esta ficha na mesma aba, com os filtros guardados aqui. */
+  var mcSrv = { q: '', slot: 'todos', rar: 'todas', item: null, oferta: null };
+  var MC_ESTADO_PT = { aberta: 'esperando o vendedor', aceita: 'aceita — confirme', recusada: 'recusada',
+                       concluida: 'negócio fechado', desistiu: 'desistiu', perdida: 'perdida', cancelada: 'cancelada' };
+  function mcBolsoReal() {
+    // os números de verdade (DB.moedas responde alto para o bolso sem fundo do Mestre)
+    var d = safe(function () { return JOGO.DB.exportar(); }, null) || {};
+    return { saco: Math.floor(Number((d.carteira || {}).moedas) || 0), banco: Math.floor(Number((d.banco || {}).moedas) || 0) };
+  }
+  function mcPeca(itemId, lv, st) {
+    var it = itemDef(itemId) || {};
+    return esc(it.name || itemId) + (lv ? ' +' + lv : '') + (st ? ' ★' + st : '');
+  }
+  /* a linha de uma peça com a cor da raridade, o que ela dá (com forja e estrela) e a
+   * comparação com a vestida do herói da ficha */
+  function mcLinhaSrv(itemId, lv, st, sub, comBonus) {
+    var it = itemDef(itemId) || {};
+    var row = el('div', 'mc-linha');
+    markRarity(row, it.rarity);
+    var ic = el('span', 'mc-ic');
+    ic.appendChild(art('itemIcon', [itemId, 34], 34));
+    row.appendChild(ic);
+    var tx = el('div', 'ms-tx');
+    tx.appendChild(el('div', 'ms-nome', mcPeca(itemId, lv, st)));
+    tx.appendChild(el('div', 'ms-prog', esc(SLOT_PT[slotOf(itemId)] || '') + ' · ' +
+      esc(RAR_PT[it.rarity] || it.rarity || '') + nvTxt(itemId) + (sub ? ' · ' + sub : '')));
+    if (comBonus) {
+      tx.appendChild(el('div', 'mc-cmp', esc(itemBonusText(it, lv, st))));
+      var cmp = safe(function () { return comparaComVestida(itemId, lv, st, ensurePartyHero()); }, null);
+      if (cmp) tx.appendChild(el('div', 'mc-cmp', cmp));
+    }
+    row.appendChild(tx);
+    return row;
+  }
+  function mcEstadoChip(estado) {
+    return el('span', 'mc-estado e-' + estado, esc(MC_ESTADO_PT[estado] || estado));
+  }
+
+  function sheetMercadoServidor() {
+    sheetName = 'mercado';
+    var Srv = JOGO.Mercado.servidor;
+    var body = sheetShell('Mercadinho do Acampamento',
+      'O balcão de todos os jogadores. Compre pelo preço ou faça uma oferta; a taxa de 5% sai do preço final da venda.');
+    var bolso = mcBolsoReal();
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+    var pBolso = el('p', 'mc-bolso', 'No saco: <b>' + bolso.saco + '</b> · no banco: <b>' + bolso.banco + '</b> vinténs');
+    pBolso.insertBefore(art('vintemIcon', [18], 18, 'moeda-inline'), pBolso.firstChild);
+    caixa.appendChild(pBolso);
+    if (['comprar', 'vender', 'meus', 'ofertas'].indexOf(mcAba) < 0) mcAba = 'comprar';
+    var abas = el('div', 'mc-abas');
+    [['comprar', 'Comprar'], ['vender', 'Vender'], ['meus', 'Meus anúncios'], ['ofertas', 'Minhas ofertas']].forEach(function (par) {
+      abas.appendChild(btn(par[1], 'btn-mini' + (mcAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
+        mcAba = par[0]; mcSrv.item = null; mcSrv.oferta = null; sheetMercado();
+      }));
+    });
+    caixa.appendChild(abas);
+    var area = el('div', 'mc-lista');
+    caixa.appendChild(area);
+
+    function ainda() { return sheetName === 'mercado' && document.body.contains(area); }
+    function carregando() { clear(area); area.appendChild(el('p', 'inv-dica', 'Consultando o balcão…')); }
+    function falhou(r) {
+      clear(area);
+      area.appendChild(el('p', 'inv-dica', esc((r && r.erro) || 'O servidor não respondeu — tente de novo em instantes.')));
+    }
+    /* depois de uma ação: com estado adotado a repintura já refez a ficha; sem, refaz aqui */
+    function depois(r, textoOk) {
+      if (r && r.ok) { if (textoOk) toast(textoOk, 'good'); }
+      else toast((r && r.erro) || 'não deu');
+      if (!(r && (r.progress || r.db)) && sheetName === 'mercado') sheetMercado();
+    }
+    function chipsSrv(rotulo, chave, opcoes, aoMudar) {
+      var linha = el('div', 'mc-filtros');
+      linha.appendChild(el('span', 'mc-filtro-rot', rotulo));
+      var botoes = [];
+      opcoes.forEach(function (op) {
+        var b = btn(op[1], 'btn-mini mc-chip' + (mcSrv[chave] === op[0] ? ' is-on' : ''), function () {
+          mcSrv[chave] = op[0];
+          botoes.forEach(function (x) { x.classList.toggle('is-on', x === b); });
+          aoMudar();
+        });
+        botoes.push(b);
+        linha.appendChild(b);
+      });
+      return linha;
+    }
+    function filtros(aoMudar) {
+      var busca = document.createElement('input');
+      busca.className = 'hub-input';
+      busca.placeholder = 'buscar por nome...';
+      busca.value = mcSrv.q;
+      busca.addEventListener('input', function () { mcSrv.q = busca.value; aoMudar(); });
+      area.appendChild(busca);
+      area.appendChild(chipsSrv('Tipo', 'slot', [['todos', 'Tudo'], ['punho', 'Punho'], ['passo', 'Passo'], ['casca', 'Casca'], ['lume', 'Lume']], aoMudar));
+      area.appendChild(chipsSrv('Raridade', 'rar', [['todas', 'Todas'], ['comum', 'Comum'], ['raro', 'Raro'], ['epico', 'Épico'], ['lendario', 'Lendário']], aoMudar));
+    }
+    function passa(itemId) {
+      var it = itemDef(itemId);
+      if (!it) return false;
+      var tq = normaliza(mcSrv.q);
+      if (tq && normaliza(it.name || itemId).indexOf(tq) < 0) return false;
+      if (mcSrv.slot !== 'todos' && slotOf(itemId) !== mcSrv.slot) return false;
+      if (mcSrv.rar !== 'todas' && (it.rarity || 'comum') !== mcSrv.rar) return false;
+      return true;
+    }
+
+    // ---- COMPRAR: a lista por item
+    function pintaComprar() {
+      if (mcSrv.item) { pintaItem(mcSrv.item); return; }
+      carregando();
+      Srv.resumo().then(function (r) {
+        if (!ainda()) return;
+        if (!r || !r.ok) { falhou(r); return; }
+        clear(area);
+        var lista = el('div', 'mc-lista');
+        function pintaLista() {
+          clear(lista);
+          var todos = r.itens || [];
+          var itens = todos.filter(function (x) { return passa(x.itemId); });
+          itens.sort(function (a, b) {
+            return ((itemDef(a.itemId) || {}).name || '').localeCompare((itemDef(b.itemId) || {}).name || '');
+          });
+          var qtd = 0;
+          itens.forEach(function (x) { qtd += x.qtd; });
+          lista.appendChild(el('p', 'mc-resumo', '<b>' + itens.length + '</b> ' + (itens.length === 1 ? 'item' : 'itens') +
+            ' · ' + qtd + ' à venda' + (itens.length !== todos.length ? ' (de ' + todos.length + ' itens)' : '')));
+          if (!itens.length) {
+            lista.appendChild(el('p', 'inv-dica', todos.length ? 'Nada com esses filtros.'
+              : 'O balcão está vazio. Ele só enche quando alguém anuncia uma peça — e a sua oferta fica aqui até vender.'));
+          }
+          itens.forEach(function (x) {
+            var row = mcLinhaSrv(x.itemId, 0, 0, '<b>' + x.qtd + '</b> à venda' +
+              (x.meus ? ' (' + x.meus + (x.meus === 1 ? ' seu' : ' seus') + ')' : ''));
+            row.appendChild(el('span', 'mc-preco', 'desde ' + x.menor + 'v'));
+            row.appendChild(btn('Ver todos', 'btn-mini btn-gold', function () {
+              mcSrv.item = x.itemId; mcSrv.oferta = null; pintaComprar();
+            }));
+            lista.appendChild(row);
+          });
+        }
+        filtros(pintaLista);
+        area.appendChild(lista);
+        pintaLista();
+      });
+    }
+
+    // ---- COMPRAR: todos os anúncios de um item, com quem vende
+    function pintaItem(itemId) {
+      carregando();
+      Srv.item(itemId).then(function (r) {
+        if (!ainda()) return;
+        if (!r || !r.ok) { falhou(r); return; }
+        clear(area);
+        area.appendChild(btn('← Todos os itens', 'btn-mini btn-ghost mc-voltar', function () {
+          mcSrv.item = null; mcSrv.oferta = null; pintaComprar();
+        }));
+        var ans = r.anuncios || [];
+        area.appendChild(el('p', 'mc-resumo', '<b>' + ans.length + '</b> ' + (ans.length === 1 ? 'anúncio' : 'anúncios') +
+          ' de <b>' + mcPeca(itemId, 0, 0) + '</b> — do mais barato ao mais caro'));
+        if (!ans.length) area.appendChild(el('p', 'inv-dica', 'Esse item acabou de sair do balcão.'));
+        var tenho = bolso.saco + bolso.banco;
+        ans.forEach(function (an) {
+          var row = mcLinhaSrv(itemId, an.level, an.stars,
+            an.meu ? 'seu anúncio' : 'vende <b>' + esc(an.vendedor || 'jogador') + '</b>', true);
+          if (an.meu) row.classList.add('is-minha');
+          row.appendChild(el('span', 'mc-preco', an.preco + 'v'));
+          var form = null;
+          if (!an.meu) {
+            var bC = btn('Comprar por ' + an.preco, 'btn-mini btn-gold', function () {
+              if (!safe(function () { return P().bagFree(1); }, true)) { toast('O saco está cheio — não cabe mais nada.'); return; }
+              bC.classList.add('is-off');
+              Srv.comprar(an.id).then(function (res) {
+                depois(res, res && res.ok ? 'Comprado: ' + (itemDef(itemId) || {}).name + ' por ' + res.valor + ' vinténs' +
+                  (res.deBanco ? ' (' + res.deBanco + ' saíram do banco)' : '') + '.' : null);
+              });
+            });
+            if (tenho < an.preco) { bC.classList.add('is-off'); bC.title = 'faltam ' + (an.preco - tenho) + ' vinténs (saco + banco)'; }
+            row.appendChild(bC);
+            if (an.preco > 1) {
+              row.appendChild(btn(an.minhaProposta ? 'Nova oferta' : 'Fazer oferta', 'btn-mini', function () {
+                if (form) form.hidden = !form.hidden;
+                if (form && !form.hidden) { var c0 = form.querySelector('input'); if (c0) c0.focus(); }
+              }));
+            }
+          }
+          area.appendChild(row);
+          if (an.minhaProposta) {
+            var sub = el('div', 'mc-sub');
+            var mp = an.minhaProposta;
+            var lp = el('div', 'mc-prop' + (mp.estado === 'aceita' ? ' is-aceita' : ''));
+            lp.appendChild(el('span', 'mc-prop-tx', 'Sua oferta: <b>' + mp.valor + 'v</b>'));
+            lp.appendChild(mcEstadoChip(mp.estado));
+            lp.appendChild(btn('Cancelar', 'btn-mini btn-ghost', function () {
+              Srv.cancelar(mp.id).then(function (res) { depois(res, 'Oferta cancelada.'); });
+            }));
+            sub.appendChild(lp);
+            area.appendChild(sub);
+          }
+          if (!an.meu && an.preco > 1) {
+            form = el('div', 'mc-oferta');
+            form.hidden = mcSrv.oferta !== an.id;
+            var campo = document.createElement('input');
+            campo.type = 'number'; campo.min = '1'; campo.max = String(an.preco - 1); campo.step = '1';
+            campo.className = 'bk2-qtd mc-qtd';
+            campo.placeholder = String(Math.max(1, Math.floor(an.preco * 0.8)));
+            form.appendChild(el('span', 'mc-cmp', 'Quanto você oferece (menos de ' + an.preco + '):'));
+            form.appendChild(campo);
+            form.appendChild(btn('Enviar oferta', 'btn-mini btn-gold', function () {
+              var v = Math.floor(Number(campo.value || campo.placeholder));
+              if (!(v >= 1 && v < an.preco)) { toast('A oferta vai de 1 a ' + (an.preco - 1) + ' vinténs.'); return; }
+              if (v > tenho) { toast('Você não tem ' + v + ' vinténs (somando saco e banco).'); return; }
+              mcSrv.oferta = null;
+              Srv.propor(an.id, v).then(function (res) {
+                depois(res, 'Oferta de ' + v + ' vinténs enviada a ' + (an.vendedor || 'o vendedor') +
+                  '. Se ele aceitar, você confirma aqui na praça.');
+              });
+            }));
+            area.appendChild(form);
+          }
+        });
+      });
+    }
+
+    // ---- VENDER: o saco, com a régua e a taxa antes de anunciar
+    function pintaVender() {
+      clear(area);
+      var lista = el('div', 'mc-lista');
+      function pintaLista() {
+        clear(lista);
+        var pilhas = safe(function () { return P().invStacks(); }, [])
+          .filter(function (s2) { return passa(s2.itemId); });
+        lista.appendChild(el('p', 'mc-resumo', '<b>' + pilhas.length + '</b> no saco · a taxa de 5% sai do preço final da venda'));
+        if (!pilhas.length) lista.appendChild(el('p', 'inv-dica', 'Nada no saco com esses filtros.'));
+        pilhas.forEach(function (pi) {
+          var sugerido = JOGO.Mercado.precoSugerido(pi.itemId, pi.level, pi.stars);
+          var row = mcLinhaSrv(pi.itemId, pi.level, pi.stars,
+            (pi.count > 1 ? '×' + pi.count + ' · ' : '') + 'a régua sugere ' + sugerido + 'v');
+          var campo = document.createElement('input');
+          campo.type = 'number'; campo.min = '1'; campo.max = String(JOGO.Mercado.PRECO_MAX); campo.step = '1';
+          campo.className = 'bk2-qtd mc-qtd';
+          campo.placeholder = String(sugerido);
+          var taxaEl = el('span', 'mc-taxa', '');
+          function mostraTaxa() {
+            var preco = Math.floor(Number(campo.value || sugerido)) || 0;
+            if (preco <= 0) { taxaEl.textContent = ''; return; }
+            taxaEl.innerHTML = 'recebe <b>' + (preco - mcTaxa(preco)) + 'v</b><small>taxa ' + mcTaxa(preco) + 'v</small>';
+          }
+          campo.addEventListener('input', mostraTaxa);
+          mostraTaxa();
+          row.appendChild(campo);
+          row.appendChild(taxaEl);
+          var bA = btn('Anunciar', 'btn-mini btn-gold', function () {
+            var preco = Math.floor(Number(campo.value || sugerido));
+            if (!(preco >= 1 && preco <= JOGO.Mercado.PRECO_MAX)) { toast('Preço entre 1 e ' + JOGO.Mercado.PRECO_MAX + '.'); return; }
+            var entrada = P().state.inventory[pi.indices[0]];
+            if (!entrada) { toast('essa peça já saiu'); sheetMercado(); return; }
+            bA.classList.add('is-off');
+            Srv.anunciar(entrada, preco, pi.indices[0]).then(function (res) {
+              depois(res, 'No balcão por ' + preco + 'v — você recebe ' + (preco - mcTaxa(preco)) + 'v se vender por esse preço.');
+            });
+          });
+          row.appendChild(bA);
+          lista.appendChild(row);
+        });
+      }
+      filtros(pintaLista);
+      area.appendChild(lista);
+      pintaLista();
+    }
+
+    // ---- MEUS ANÚNCIOS: cada um com as propostas recebidas, e as vendas recentes
+    function pintaMeus() {
+      carregando();
+      Srv.meus().then(function (r) {
+        if (!ainda()) return;
+        if (!r || !r.ok) { falhou(r); return; }
+        clear(area);
+        var ans = r.anuncios || [];
+        area.appendChild(el('p', 'mc-resumo', ans.length
+          ? '<b>' + ans.length + '</b> de ' + r.max + ' anúncios abertos · as propostas aparecem embaixo de cada um'
+          : 'Você não tem nada anunciado. Vá em <b>Vender</b> para pôr uma peça no balcão.'));
+        var novas = [];
+        ans.forEach(function (an) {
+          var row = mcLinhaSrv(an.itemId, an.level, an.stars, 'sua oferta');
+          row.classList.add('is-minha');
+          row.appendChild(el('span', 'mc-preco', an.preco + 'v'));
+          row.appendChild(el('span', 'mc-taxa', 'recebe <b>' + (an.preco - an.taxa) + 'v</b><small>taxa ' + an.taxa + 'v</small>'));
+          row.appendChild(btn('Retirar', 'btn-mini', function () {
+            if (!safe(function () { return P().bagFree(1); }, true)) { toast('O saco está cheio — não cabe mais nada.'); return; }
+            Srv.retirar(an.id).then(function (res) { depois(res, 'A peça voltou para o saco.'); });
+          }));
+          area.appendChild(row);
+          if (!an.propostas.length) return;
+          var sub = el('div', 'mc-sub');
+          an.propostas.forEach(function (p) {
+            if (p.estado === 'aberta' && !p.vistoVendedor) novas.push(p.id);
+            var lp = el('div', 'mc-prop' + (p.estado === 'aceita' ? ' is-aceita' : ''));
+            lp.appendChild(el('span', 'mc-prop-tx', '<b>' + esc(p.comprador || 'jogador') + '</b> oferece <b>' + p.valor +
+              'v</b> (você recebe ' + (p.valor - p.taxa) + 'v)'));
+            lp.appendChild(mcEstadoChip(p.estado === 'aceita' ? 'aceita' : p.estado));
+            if (p.estado === 'aberta') {
+              lp.appendChild(btn('Aceitar', 'btn-mini btn-gold', function () {
+                Srv.responder(p.id, true).then(function (res) {
+                  depois(res, 'Proposta aceita. Quando ' + (p.comprador || 'o comprador') +
+                    ' confirmar, a venda sai por ' + p.valor + 'v — se ninguém comprar antes.');
+                });
+              }));
+              lp.appendChild(btn('Recusar', 'btn-mini btn-ghost', function () {
+                Srv.responder(p.id, false).then(function (res) { depois(res, 'Proposta recusada.'); });
+              }));
+            }
+            sub.appendChild(lp);
+          });
+          area.appendChild(sub);
+        });
+        if (novas.length) Srv.visto({ recebidas: novas });
+        var vendas = r.vendas || [];
+        if (vendas.length) {
+          area.appendChild(el('h3', 'bk-tit', 'Vendas recentes'));
+          vendas.forEach(function (v) {
+            var row = mcLinhaSrv(v.itemId, v.level, v.stars, 'para <b>' + esc(v.comprador || 'jogador') + '</b>' +
+              (v.viaProposta ? ' · por proposta' : ''));
+            row.appendChild(el('span', 'mc-preco', v.valor + 'v'));
+            row.appendChild(el('span', 'mc-taxa', 'recebeu <b>' + v.recebeu + 'v</b><small>taxa ' + v.taxa + 'v</small>'));
+            area.appendChild(row);
+          });
+        }
+      });
+    }
+
+    // ---- MINHAS OFERTAS: o estado de cada proposta
+    function pintaOfertas() {
+      carregando();
+      Srv.propostas().then(function (r) {
+        if (!ainda()) return;
+        if (!r || !r.ok) { falhou(r); return; }
+        clear(area);
+        var ps = r.propostas || [];
+        area.appendChild(el('p', 'mc-resumo', ps.length ? '<b>' + ps.length + '</b> ofertas recentes'
+          : 'Você não fez nenhuma oferta. Em <b>Comprar</b>, abra um item e toque em <b>Fazer oferta</b>.'));
+        ps.forEach(function (p) {
+          var row = mcLinhaSrv(p.itemId, p.level, p.stars, 'de <b>' + esc(p.vendedor || 'jogador') + '</b> · à venda por ' + p.preco + 'v');
+          row.appendChild(el('span', 'mc-preco', p.valor + 'v'));
+          row.appendChild(mcEstadoChip(p.estado));
+          if (p.estado === 'aceita' && p.anuncioAberto) {
+            row.appendChild(btn('Conferir', 'btn-mini btn-gold', function () { openSheet('mercadoConfirma', p); }));
+          }
+          if (p.estado === 'aberta' || p.estado === 'aceita') {
+            row.appendChild(btn('Cancelar', 'btn-mini btn-ghost', function () {
+              Srv.cancelar(p.id).then(function (res) { depois(res, 'Oferta cancelada.'); });
+            }));
+          }
+          area.appendChild(row);
+        });
+      });
+    }
+
+    if (mcAba === 'vender') pintaVender();
+    else if (mcAba === 'meus') pintaMeus();
+    else if (mcAba === 'ofertas') pintaOfertas();
+    else pintaComprar();
+  }
+
+  /* A CONFIRMAÇÃO DO COMPRADOR (13/09, o texto do dono): "O vendedor Fulano aceitou sua
+   * oferta de Y valor pelo item que estava a venda pelo valor X." + o item para conferir +
+   * "deseja aceitar essa negociação?". Uma por vez, só na praça (o vigia do
+   * js/core/mercado.js decide quando); fechar no ✕ adia, e ela volta depois. */
+  function sheetMercadoConfirma(p) {
+    var Srv = JOGO.Mercado && JOGO.Mercado.servidor;
+    if (!p || !Srv) { closeSheet(); return; }
+    var b = sheetShell('Proposta aceita no Mercadinho');
+    sheetName = 'mercadoConfirma';
+    b.appendChild(el('p', 'confirm-txt', 'O vendedor <b>' + esc(p.vendedor || 'jogador') + '</b> aceitou sua oferta de <b>' +
+      p.valor + '</b> vinténs pelo item que estava à venda por <b>' + p.preco + '</b>.'));
+    var card = mcLinhaSrv(p.itemId, p.level, p.stars, null, true);
+    card.classList.add('mc-card');
+    card.appendChild(el('span', 'mc-preco', p.valor + 'v'));
+    b.appendChild(card);
+    var bolso = mcBolsoReal(), tem = bolso.saco + bolso.banco;
+    b.appendChild(el('p', 'mc-saldo', 'Você tem <b>' + bolso.saco + '</b> no saco e <b>' + bolso.banco + '</b> no banco. ' +
+      (tem < p.valor ? '<span class="is-falta">Faltam ' + (p.valor - tem) + ' vinténs.</span>'
+                     : 'O valor sai primeiro do saco; o que faltar, do banco.')));
+    b.appendChild(el('p', 'confirm-txt', '<b>Deseja aceitar essa negociação?</b>'));
+    var acts = el('div', 'confirm-acts');
+    function fim(desfecho) {
+      if (sheetName === 'mercadoConfirma') closeSheet();
+      Srv.respondeuConfirmacao(p, desfecho);
+    }
+    var bNeg = btn('Negar', 'btn-ghost', function () {
+      bNeg.classList.add('is-off'); bSim.classList.add('is-off');
+      Srv.confirmar(p.id, false).then(function (r) {
+        if (r && r.ok) { toast('Você recusou a negociação. O item segue à venda.'); fim('feito'); return; }
+        toast((r && r.erro) || 'não deu');
+        fim(r && r.status === 0 ? 'adiado' : 'feito');
+      });
+    });
+    var bSim = btn('Aceitar', 'btn-primary', function () {
+      bNeg.classList.add('is-off'); bSim.classList.add('is-off');
+      Srv.confirmar(p.id, true).then(function (r) {
+        if (r && r.ok) {
+          toast('Negócio fechado: ' + ((itemDef(p.itemId) || {}).name || p.itemId) + ' por ' + p.valor + ' vinténs' +
+            (r.deBanco ? ' (' + r.deBanco + ' saíram do banco)' : '') + '.', 'good');
+          fim('feito');
+        } else if (r && r.motivo === 'perdeu') {
+          toast('Esse item já foi vendido — você perdeu essa negociação.');
+          fim('feito');
+        } else if (r && r.motivo === 'saldo') {
+          toast('Saldo insuficiente: ' + (r.erro || 'faltam vinténs') + '.');
+          fim('adiado');
+        } else {
+          toast((r && r.erro) || 'não deu');
+          fim((r && (r.status === 0 || r.status >= 500 || r.motivo === 'saco')) ? 'adiado' : 'feito');
+        }
+      });
+    });
+    acts.appendChild(bNeg);
+    acts.appendChild(bSim);
+    b.appendChild(acts);
+  }
+
+  /* O VIGIA DO MERCADINHO: a HUD diz ao js/core/mercado.js como mostrar. A confirmação
+   * só aparece na praça e com a tela livre (ou o Mercadinho aberto); as notícias entram
+   * na mesma fila de avisos da loja (um de cada vez, 3 s cada). */
+  safe(function () {
+    var Srv = JOGO.Mercado && JOGO.Mercado.servidor;
+    if (!Srv || !Srv.vigia) return false;
+    Srv.vigia({
+      confirma: function (p) { openSheet('mercadoConfirma', p); },
+      estaMostrando: function () { return sheetName === 'mercadoConfirma'; },
+      podeMostrar: function () {
+        return !!toastEl && UI.telaAtual() === 'hub' && (!sheetName || sheetName === 'mercado');
+      },
+      avisa: function (textos) {
+        (textos || []).forEach(function (t) { filaLoja.push({ texto: t.texto, tipo: t.tipo }); });
+        if (!lojaVez) proximoLoja();
+      },
+      mudou: function () {
+        if (sheetName === 'mercado' && (mcAba === 'meus' || mcAba === 'ofertas')) sheetMercado();
+      }
+    });
+    return true;
+  }, false);
 
   /* A BARRAQUINHA DA SORTE (03/09): a roleta do Traje do Colecionador saiu
    * do Mercadinho e ganhou tenda própria na praça. A regra nova (aprovada
@@ -4560,6 +5023,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'banco') sheetBanco();
     else if (name === 'missoes') sheetMissoes();
     else if (name === 'mercado') sheetMercado();
+    else if (name === 'mercadoConfirma') sheetMercadoConfirma(arg);   // 13/09: a proposta aceita, para o comprador conferir
     else if (name === 'loteria') sheetLoteria();
     else if (name === 'placar') sheetPlacar();
     else if (name === 'troca') sheetTroca();

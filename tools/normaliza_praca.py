@@ -10,8 +10,9 @@ que mede a caixa e corrige — a regra da casa.
 Rodar:
   "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe" --background \\
       --factory-startup --python tools/normaliza_praca.py
+  (acrescente `-- poco.glb` para normalizar só esse arquivo)
 """
-import bpy, os
+import bpy, os, sys
 
 ORIG = r"C:\Users\danie\Downloads\assets_ok\mapa principal"
 DEST = os.path.join(ORIG, "_separado")
@@ -26,7 +27,15 @@ ARQUIVOS = {
     # a barraca do ferreiro: quando o dono puser o arquivo, entra sozinha
     "forja.glb": "forja.glb",
     "tenda sorte.glb": "tenda_sorte.glb",     # a Barraquinha da Sorte (03/09)
+    "poco.glb": "poco.glb",                   # o Poço sem Fundo ganhou corpo (13/09)
 }
+
+# 13/09: `-- poco.glb` normaliza SÓ os nomes dados. Reexportar a praça inteira
+# muda os bytes de peça que não mudou (o exportador não é determinístico), e
+# cada byte novo troca o hash do manifesto — todo jogador baixaria de novo.
+if "--" in sys.argv:
+    SO = set(sys.argv[sys.argv.index("--") + 1:])
+    ARQUIVOS = {k: v for k, v in ARQUIVOS.items() if k in SO}
 
 if not os.path.isdir(DEST):
     os.makedirs(DEST)

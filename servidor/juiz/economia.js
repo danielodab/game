@@ -117,40 +117,14 @@ const OPS = {
   // ---- missões
   reivindicarMissao: (J, a) => J.Missoes.reivindicar(txt(a, 'id')),
 
-  // ---- o mercado (o mesmo passo a passo da HUD: hud.js, sheetMercado)
-  anunciarMercado: (J, a) => {
-    const i = int(a, 'invIndex', 0, 9999);
-    const preco = int(a, 'preco', 1, 9999);
-    const st = J.Progress.state;
-    const entrada = st.inventory[i];
-    if (!entrada) return { ok: false, erro: 'essa peça já saiu' };
-    return J.Mercado.anunciar(entrada, preco).then((r) => {
-      if (!r || !r.ok) return r;
-      st.inventory.splice(i, 1);
-      J.Progress.save();
-      return r;
-    });
-  },
-  comprarMercado: (J, a) => {
-    const id = txt(a, 'ofertaId');
-    if (!J.Progress.bagFree(1)) return { ok: false, erro: 'O saco está cheio — não cabe mais nada.' };
-    return J.Mercado.comprar(id).then((r) => {
-      if (!r || !r.ok) return r;
-      J.Progress.state.inventory.push(J.Progress.carimba(r.item, 'mercador'));
-      J.Progress.save();
-      return r;
-    });
-  },
-  retirarMercado: (J, a) => {
-    const id = txt(a, 'ofertaId');
-    if (!J.Progress.bagFree(1)) return { ok: false, erro: 'O saco está cheio — não cabe mais nada.' };
-    return J.Mercado.retirar(id).then((r) => {
-      if (!r || !r.ok) return r;
-      J.Progress.state.inventory.push(J.Progress.carimba(r.item, 'legado'));
-      J.Progress.save();
-      return r;
-    });
-  },
+  // ---- o mercado de antes (a oferta no db da própria conta). 13/09: o mercadinho é ENTRE
+  // CONTAS e mora no servidor (servidor/mercado.py, /api/mercado/*): anunciar aqui punha a
+  // oferta num balcão que ninguém mais via. A aba velha que ainda mande estas ops leva 422
+  // e adota o estado do servidor; as ofertas antigas viram anúncios pela migração da API
+  // (mercadoLegadoTira), com a série — nada precisa ser retirado por aqui.
+  anunciarMercado: () => { throw recusa('o mercadinho agora é entre contas, pelo servidor: abra o Mercadinho de novo', 'mercado'); },
+  comprarMercado: () => { throw recusa('o mercadinho agora é entre contas, pelo servidor: abra o Mercadinho de novo', 'mercado'); },
+  retirarMercado: () => { throw recusa('o mercadinho agora é entre contas, pelo servidor: abra o Mercadinho de novo', 'mercado'); },
 
   // ---- o título: só o que a régua dá (o pódio vem do ranking do servidor)
   definirTitulo: (J, a, x) => {
@@ -261,7 +235,64 @@ const INTERNAS = {
     J.Progress.state.inventory.push(entrada);
     J.Progress.save();
     return { ok: true, iid: entrada.iid };
-  }
+  },
+
+  /* O MERCADINHO ENTRE CONTAS (13/09, servidor/mercado.py). A peça anunciada fica em
+   * custódia no servidor, fora do estado de qualquer conta; a API pede estas ops e
+   * grava os estados numa transação. */
+  // anunciar: a peça sai do saco do vendedor pela série
+  mercadoTira: (J, a) => {
+    const iid = txt(a, 'iid');
+    const st = J.Progress.state;
+    const i = st.inventory.findIndex((e) => e && e.iid === iid);
+    if (i < 0) throw recusa('a peça não está no saco', 'falta');
+    const item = st.inventory.splice(i, 1)[0];
+    J.Progress.save();
+    return { item };
+  },
+  // comprar e retirar: a peça entra no saco (a própria série; o anúncio antigo sem série
+  // ganha uma cópia nova cunhada aqui, origem 'mercador')
+  mercadoPoe: (J, a) => {
+    const it = a.item;
+    if (!it || typeof it.itemId !== 'string' || !(J.DATA.items || {})[it.itemId]) throw falha('peça inválida');
+    if (!J.Progress.bagFree(1)) throw recusa('o saco está cheio', 'saco');
+    const lv = Math.max(0, Math.floor(Number(it.level) || 0)), stars = Math.max(0, Math.floor(Number(it.stars) || 0));
+    const iid = (typeof it.iid === 'string' && it.iid) ? it.iid : null;
+    if (iid && J.Progress.state.inventory.some((e) => e && e.iid === iid)) throw recusa('a série já está no saco', 'duplicada');
+    const entrada = iid ? { itemId: it.itemId, level: lv, stars, iid }
+                        : J.Progress.novaCopia(it.itemId, 'mercador', lv, stars);
+    J.Progress.state.inventory.push(entrada);
+    J.Progress.save();
+    return { ok: true, iid: entrada.iid };
+  },
+  /* o comprador paga: PRIMEIRO do saco, o que faltar do banco (o pedido do dono: "saldo
+   * no saco ou no banco, ou saco+banco"). Direto nos números do db, e não pelo
+   * DB.gastarMoedas: o bolso sem fundo do Mestre não pode virar vintém de graça no saco
+   * do vendedor. */
+  mercadoPaga: (J, a) => {
+    const valor = int(a, 'valor', 1, 1e12);
+    const d = J.DB.exportar();
+    const saco = Math.max(0, Math.floor(Number(d.carteira && d.carteira.moedas) || 0));
+    const banco = Math.max(0, Math.floor(Number(d.banco && d.banco.moedas) || 0));
+    if (saco + banco < valor) throw recusa('vinténs insuficientes (saco + banco)', 'moedas');
+    const deCarteira = Math.min(saco, valor), deBanco = valor - deCarteira;
+    d.carteira.moedas = saco - deCarteira;
+    d.banco.moedas = banco - deBanco;
+    J.DB.importar(d);
+    return { ok: true, deCarteira, deBanco };
+  },
+  // o vendedor recebe o valor menos a taxa, no saco
+  mercadoRecebe: (J, a) => J.DB.ganharMoedas(int(a, 'valor', 1, 1e12)).then((r) => ({ ok: !!(r && r.ok) })),
+  // a migração: as ofertas do jogador que ainda moram no db saem (viram anúncios na API)
+  mercadoLegadoTira: (J) => J.DB.mercadoLer().then((mc) => {
+    const ofertas = (mc && Array.isArray(mc.ofertas)) ? mc.ofertas : [];
+    const saem = ofertas.filter((o) => o && o.vendedor === 'jogador').map((o) => ({
+      itemId: o.itemId, level: o.level || 0, stars: o.stars || 0,
+      iid: (typeof o.iid === 'string' && o.iid) ? o.iid : null, preco: o.preco
+    }));
+    // a banca velha do mercador-fantasma sai junto (o JOGO.Mercado.abrir já a limpava)
+    return J.DB.mercadoGravar({ dia: (mc && mc.dia) || null, ofertas: [] }).then(() => ({ ofertas: saem }));
+  })
 };
 
 /* As do MESTRE: a Caixa, só com a marca da conta vinda do banco. */

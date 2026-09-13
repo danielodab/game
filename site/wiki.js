@@ -650,7 +650,7 @@
     var h = '<h1>Calabouços</h1><p class="wk-sub">Os portais do Acampamento levam aos calabouços. Cada descida é uma fila de salas; a última tem o chefe. O nível recomendado é onde a experiência rende inteira.</p>' +
       '<div class="wk-grade">' + DGS.map(function (d) { return cartaoDg(d, dia); }).join('');
     if (Po) {
-      h += '<a class="wk-cartao grande" href="#/sistemas/poco"><b>O Poço sem Fundo</b><span class="wk-chips"><span class="wk-selo">pela Arena</span></span>' +
+      h += '<a class="wk-cartao grande" href="#/sistemas/poco"><b>O Poço sem Fundo</b><span class="wk-chips"><span class="wk-selo">na praça</span></span>' +
         '<span class="apoio">A torre infinita: salas emprestadas dos calabouços, andar após andar, cada vez mais duras.</span></a>';
     }
     h += '</div>';
@@ -1159,7 +1159,7 @@
     var Po = JG.Poco;
     if (Po) {
       sec('poco', 'O Poço sem Fundo',
-        '<p>A torre infinita, com entrada pela Arena, para quem desce sozinho. Cada andar é uma sala emprestada dos calabouços, e cada andar a mais deixa os monstros ' +
+        '<p>A torre infinita, com entrada pelo poço da praça, a leste da Árvore-Mundo, para quem desce sozinho. Cada andar é uma sala emprestada dos calabouços, e cada andar a mais deixa os monstros ' +
         pct(Po.FATOR_POR_ANDAR) + ' mais duros. A cada ' + num(Po.CHEFE_A_CADA) + ' andares, um chefe. O recorde da semana fica anotado.</p>', 'poco torre infinita andar');
     }
 

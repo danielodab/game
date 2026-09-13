@@ -82,11 +82,12 @@
       })
       .then(function (L) {
         var predios = L.filter(function (l) {
-          return ['banco', 'mercado', 'arena', 'sede', 'forja', 'loteria'].indexOf(l.tipo) >= 0;
+          return ['banco', 'mercado', 'arena', 'sede', 'forja', 'loteria', 'poco'].indexOf(l.tipo) >= 0;
         });
         var portais = L.filter(function (l) { return l.tipo === 'portal'; });
 
-        check('a praça montou as seis construções', predios.length === 6, predios.length);
+        // 13/09: o Poço sem Fundo virou a sétima
+        check('a praça montou as sete construções', predios.length === 7, predios.length);
         check('TODA construção tem parede',
               predios.every(function (l) { return l.solido > 0.9; }),
               predios.map(function (l) { return l.id + ':' + l.solido.toFixed(1); }).join(' '));

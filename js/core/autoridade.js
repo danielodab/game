@@ -38,6 +38,17 @@ var JOGO = (typeof window !== 'undefined')
   var adotando = false;
   var fechamentos = [];        // fechar pendentes (sem rede): tentam de novo
   var ultimo = { versao: null, hash: null, erro: null };
+  /* `parado` (13/09, um aparelho só): a conta entrou em outro aparelho e o jogo
+   * caiu aqui (Sessao.derrubada → A.parar). As filas morrem e nada mais sobe. */
+  var parado = false;
+  function outroAparelho(r) { return !!r && r.status === 401 && r.motivo === 'outro-aparelho'; }
+  A.parar = function () {
+    parado = true;
+    fila = [];
+    hashAntesDaFila = null;
+    if (timerFila) { clearTimeout(timerFila); timerFila = null; }
+    bilhetes = {};
+  };
 
   function S() { return JOGO.Sessao || null; }
   function N() { return JOGO.Nuvem || null; }
@@ -48,6 +59,7 @@ var JOGO = (typeof window !== 'undefined')
 
   /* ------------------------------------------------------------ ligada? */
   A.ligada = function () {
+    if (parado) return false;
     var s = S(), n = N();
     if (!s || !s.ativa || !s.ativa()) return false;
     if (!n || !n.estado) return false;
@@ -106,6 +118,15 @@ var JOGO = (typeof window !== 'undefined')
     if (typeof r.hash === 'string') ultimo.hash = r.hash;
   }
 
+  /* A resposta de uma rota que mudou o estado FORA do /api/op (13/09: o mercadinho entre
+   * contas, js/core/mercado.js): anota versão e hash e adota o estado que veio junto. */
+  A.adotaResposta = function (r) {
+    if (!r || typeof r !== 'object') return false;
+    anotaResposta(r);
+    if (r.progress || r.db) { A.adota(r.progress, r.db); return true; }
+    return false;
+  };
+
   /* ------------------------------------------------------------ o bilhete */
   function chaveSala(p) {
     return [p.dungeonId, p.roomIndex, p.dificuldade || 'normal', (p.herois || []).join('+')].join('|');
@@ -133,6 +154,7 @@ var JOGO = (typeof window !== 'undefined')
         b.estado = 'falhou';
         b.espera = [];
         delete bilhetes[k];
+        if (parado || outroAparelho(r)) return;         // 13/09: o jogo caiu aqui; a capa já diz por quê
         aviso(foraDoAr(r) ? 'O servidor não respondeu para abrir a sala — tente de novo em instantes.'
                           : ((r && r.erro) || 'O servidor não abriu a sala.'));
       });
@@ -169,6 +191,14 @@ var JOGO = (typeof window !== 'undefined')
         descarregaFila().then(function () {
           return api(rota, corpo);
         }).then(function (r) {
+          if (parado || outroAparelho(r)) {
+            // 13/09: a conta entrou em outro aparelho — sem tentar de novo (nem sem rede)
+            var i = fechamentos.indexOf(pend);
+            if (i >= 0) fechamentos.splice(i, 1);
+            resolve({ ok: false, recusada: true, derrubada: true, erro: 'sua conta entrou em outro aparelho',
+                      motivo: 'outro-aparelho' });
+            return;
+          }
           if (foraDoAr(r)) {
             if (!avisou) aviso('Conferindo a sala com o servidor… (sem resposta, tentando de novo)');
             setTimeout(function () { tenta(true); }, A.RETENTA_MS);
@@ -226,6 +256,7 @@ var JOGO = (typeof window !== 'undefined')
     descarregando = api('/api/op', corpo).then(function (r) {
       subindo = false;
       descarregando = null;
+      if (parado || outroAparelho(r)) return r;        // 13/09: o jogo caiu aqui; o lote não volta para a fila
       if (foraDoAr(r)) {
         // sem rede: o lote volta para a frente da fila e tenta depois
         fila = lote.concat(fila);

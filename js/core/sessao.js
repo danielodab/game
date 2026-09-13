@@ -14,6 +14,9 @@
  *                              {status, ok, ...} — rede fora vira status 0
  *   Sessao.entrar(login, senha) / cadastrar(nome, email, senha) / sair()
  *   Sessao.vigiaInatividade()  o relogio de 15 min sem jogar (desloga)
+ *   Sessao.derrubada(motivo, token)  13/09, UM APARELHO SÓ: a conta entrou em
+ *                              outro aparelho — o jogo cai aqui (ver o bloco)
+ *   Sessao.vigiaOutroAparelho()  a olhada leve em /api/eu a cada 30 s
  *   Sessao.paginaConta()       o endereço da página de conta do site
  *
  * Só biblioteca do navegador. Sem sessão o jogo é o de sempre (local). */
@@ -74,7 +77,7 @@
     var c = S.conta();
     return (c && typeof c.id === 'number') ? c.id : null;
   };
-  S.guarda = function (s) { gravaLocal(S.CHAVE, JSON.stringify(s)); };
+  S.guarda = function (s) { gravaLocal(S.CHAVE, JSON.stringify(s)); anotaDaPagina(s); };
   S.esquece = function () { gravaLocal(S.CHAVE, null); };
 
   /* Há como falar com o cartório daqui? (`fetch` existe e a origem é http[s]
@@ -90,7 +93,8 @@
     }
     var cab = { 'Content-Type': 'application/json' };
     var s = S.ler();
-    if (s && op.semToken !== true) cab.Authorization = 'Bearer ' + s.token;
+    var tokenUsado = (s && op.semToken !== true) ? s.token : null;
+    if (tokenUsado) cab.Authorization = 'Bearer ' + tokenUsado;
     var pedido = { method: op.method || 'GET', headers: cab };
     if (op.body !== undefined) pedido.body = JSON.stringify(op.body);
     if (op.keepalive) pedido.keepalive = true;
@@ -98,7 +102,24 @@
     try {
       return fetchFn(S.base() + rota, pedido).then(function (r) {
         return r.json().catch(function () { return { ok: false, erro: 'resposta que não é JSON' }; })
-          .then(function (j) { if (!j || typeof j !== 'object') j = { ok: false }; j.status = r.status; return j; });
+          .then(function (j) {
+            if (!j || typeof j !== 'object') j = { ok: false };
+            j.status = r.status;
+            // 13/09, UM APARELHO SÓ: o token desta página caiu por um login em
+            // outro aparelho. Se a MESMA conta entrou de novo neste navegador
+            // (outra aba, o site), a página adota o token novo e o pedido sai
+            // de novo uma vez com ele; senão o jogo cai aqui (S.derrubada)
+            if (j.status === 401 && j.motivo === S.MOTIVO_OUTRO_APARELHO && tokenUsado) {
+              if (S.derrubada(j.motivo, tokenUsado) === false && !op._deNovo) {
+                var op2 = {};
+                for (var k in op) if (Object.prototype.hasOwnProperty.call(op, k)) op2[k] = op[k];
+                op2._deNovo = true;
+                return S.api(rota, op2);
+              }
+              j.derrubada = derrubadaJa;
+            }
+            return j;
+          });
       }).catch(function () {
         return { ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' };
       });
@@ -177,6 +198,178 @@
     vigiaId = setInterval(function () {
       if (S.ociosoMs() >= S.INATIVO_MS) desligaPorInatividade();
     }, 30000);
+    return true;
+  };
+
+  /* ====================================================================
+   * UM APARELHO SÓ (13/09, pedido do dono: "uma conta só pode estar logada em
+   * um dispositivo.. se outro tentar logar, no que estava logado cai o jogo").
+   *
+   * O servidor apaga as outras sessões da conta a cada login certo, e o token
+   * velho passa a ouvir 401 com motivo 'outro-aparelho' (servidor/conta.py).
+   * Aqui é o PONTO ÚNICO onde isso vira "cai o jogo", chamado por três
+   * caminhos: (a) qualquer pedido do S.api que volta esse 401; (b) o relé, que
+   * manda {t:'derrubado'} ou fecha com 4001 (js/core/rede.js); (c) a olhada em
+   * /api/eu a cada 30 s (vigiaOutroAparelho), que só corre com sessão e com a
+   * aba à vista — escondida, para; ao voltar, olha na hora.
+   *
+   * ANTES DE DERRUBAR: se o localStorage já tem OUTRO token da MESMA conta, o
+   * jogador entrou de novo neste navegador (outra aba, o site): a página adota
+   * o token novo e segue, sem cair (o S.api repete o pedido; o relé religa com
+   * o token novo). Token novo de OUTRA conta não é adotado: o jogo desta página
+   * nasceu com a conta de antes, e subir o save dela na outra seria pior.
+   *
+   * DERRUBAR é: a Nuvem para (nenhum PUT mais — o save velho não pode subir
+   * por cima do aparelho novo), as filas da Autoridade param, a Rede sai sem
+   * religar, a agenda e a praça param, o laço do jogo para (js/main.js olha
+   * derrubadaJa) e uma capa cobre tudo com o "Entrar de novo". Nada de alert().
+   * Sem sessão (file://, jogo local) nada disto roda: não há token para cair. */
+  S.MOTIVO_OUTRO_APARELHO = 'outro-aparelho';     // o de servidor/conta.py e servidor/rele_ident.py
+  S.FRASE_DERRUBADA = 'Sua conta entrou em outro aparelho. Este jogo foi encerrado aqui.';
+  S.CHAVE_AVISO = 'soterra-aviso-entrar';         // sessionStorage: a frase que a página de entrar mostra (site/conta.js)
+  S.VIGIA_MS = 30000;
+  S.semRecarga = false;                            // provas: o "Entrar de novo" não navega
+  var derrubadaJa = false, capaDerrubada = null, tiraTeclas = null;
+  var daPagina = null;                             // {token, contaId} com que esta página joga
+  function anotaDaPagina(s) {
+    daPagina = (s && typeof s.token === 'string') ? { token: s.token, contaId: (s.conta && typeof s.conta.id === 'number') ? s.conta.id : null } : null;
+  }
+  anotaDaPagina(S.ler());
+  function avisaPagina(nome, det) {
+    try { window.dispatchEvent(new CustomEvent(nome, { detail: det })); } catch (e) {}
+  }
+
+  S.derrubadaJa = function () { return derrubadaJa; };
+
+  /* true = o jogo caiu (ou já tinha caído); false = havia um token novo da
+   * mesma conta neste navegador e a página o adotou. */
+  S.derrubada = function (motivo, tokenUsado) {
+    if (derrubadaJa) return true;
+    var atual = S.ler();
+    var usado = tokenUsado || (daPagina && daPagina.token) || null;
+    var contaAntes = daPagina ? daPagina.contaId : null;
+    if (atual && usado && atual.token !== usado &&
+        (contaAntes === null || (atual.conta && atual.conta.id === contaAntes))) {
+      anotaDaPagina(atual);
+      avisaPagina('soterra:sessao', { tipo: 'adotou' });
+      return false;
+    }
+    derrubadaJa = true;
+    encerraTudo();
+    avisaPagina('soterra:sessao', { tipo: 'derrubada', motivo: motivo || S.MOTIVO_OUTRO_APARELHO });
+    S.mostraDerrubada();
+    return true;
+  };
+
+  function encerraTudo() {
+    paraVigia();
+    // o relógio da inatividade também para: ele avisaria o /api/logout e poria outra capa por cima desta
+    jaDeslogou = true;
+    if (vigiaId) { try { clearInterval(vigiaId); } catch (e0) {} vigiaId = null; }
+    var J = JOGO;
+    try { if (J.Nuvem && J.Nuvem.parar) J.Nuvem.parar(); } catch (e1) {}
+    try { if (J.Autoridade && J.Autoridade.parar) J.Autoridade.parar(); } catch (e2) {}
+    try { if (J.Rede && J.Rede.sair) J.Rede.sair(); } catch (e3) {}
+    try { if (J.Agenda && J.Agenda.parar) J.Agenda.parar(); } catch (e4) {}
+    try { if (J.Hub && J.Hub.sair) J.Hub.sair(); } catch (e5) {}
+  }
+
+  /* A capa: as classes da tela de inatividade (css/style.css, .inativo-capa),
+   * presa no #ui-root do jogo; numa página sem essa folha, o mínimo em linha. */
+  S.mostraDerrubada = function () {
+    if (typeof document === 'undefined' || !document.body) return null;
+    if (capaDerrubada && capaDerrubada.parentNode) return capaDerrubada;
+    var raiz = document.getElementById('ui-root') || document.body;
+    var capa = document.createElement('div');
+    capa.className = 'inativo-capa sessao-derrubada';
+    capa.setAttribute('role', 'alertdialog');
+    capa.setAttribute('aria-modal', 'true');
+    capa.setAttribute('aria-labelledby', 'sessao-derrubada-titulo');
+    var cx = document.createElement('div');
+    cx.className = 'inativo-cx';
+    var h = document.createElement('h2');
+    h.id = 'sessao-derrubada-titulo';
+    h.textContent = 'Sua conta entrou em outro aparelho.';
+    var p = document.createElement('p');
+    p.textContent = 'Este jogo foi encerrado aqui.';
+    var p2 = document.createElement('p');
+    p2.textContent = 'Uma conta fica aberta em um aparelho por vez. Se não foi você, entre e troque a senha na página da conta.';
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn-primary';
+    b.textContent = 'Entrar de novo';
+    b.addEventListener('click', function () { S.entrarDeNovo(); });
+    cx.appendChild(h); cx.appendChild(p); cx.appendChild(p2); cx.appendChild(b);
+    capa.appendChild(cx);
+    raiz.appendChild(capa);
+    capa.style.zIndex = '2147483000';               // por cima de qualquer ficha, dica ou aviso da HUD
+    try {
+      if (window.getComputedStyle(capa).position === 'static') {
+        capa.style.cssText += ';position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+          'padding:24px;background:rgba(6,8,10,.9);color:#e8e0d0;font:14px/1.5 sans-serif;text-align:center';
+      }
+      if (raiz === document.body) capa.style.position = 'fixed';
+    } catch (e) {}
+    // as teclas não chegam mais ao jogo (a HUD abre fichas com I, M, Esc…);
+    // no botão, Enter e espaço seguem valendo
+    tiraTeclas = function (ev) {
+      if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      ev.stopPropagation();
+      if (!capa.contains(ev.target)) ev.preventDefault();
+    };
+    ['keydown', 'keyup', 'keypress'].forEach(function (t) { window.addEventListener(t, tiraTeclas, true); });
+    try { b.focus(); } catch (e2) {}
+    capaDerrubada = capa;
+    return capa;
+  };
+
+  /* "Entrar de novo": com um token novo neste navegador (entrou por outra aba
+   * depois da queda), só recarrega; senão esquece a sessão morta e vai para a
+   * tela de entrar do site, que mostra a frase. */
+  S.entrarDeNovo = function () {
+    var atual = S.ler();
+    var novo = !!(atual && daPagina && atual.token !== daPagina.token);
+    if (!novo) {
+      S.esquece();
+      try { window.sessionStorage.setItem(S.CHAVE_AVISO, S.FRASE_DERRUBADA); } catch (e) {}
+    }
+    if (S.semRecarga) return novo ? 'recarrega' : 'entrar';
+    try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('sessao'); } catch (eB) {}
+    try {
+      if (novo) location.reload();
+      else location.href = S.paginaConta() + '#entrar';
+    } catch (e2) {}
+    return novo ? 'recarrega' : 'entrar';
+  };
+
+  /* A OLHADA LEVE: GET /api/eu a cada 30 s, só com sessão e com a aba à vista
+   * (o relé derruba na hora; isto é para quem está sem relé, ou no relé do
+   * outro contêiner). Uma de cada vez; o S.api cuida do 401 com motivo. */
+  var vigiaAparelho = null, vigiaLigada = false, olhando = false;
+  function paraVigia() {
+    if (vigiaAparelho) { try { clearInterval(vigiaAparelho); } catch (e) {} vigiaAparelho = null; }
+  }
+  S.confereAparelho = function () {
+    if (derrubadaJa || olhando || !S.ativa()) return Promise.resolve(null);
+    olhando = true;
+    return S.api('/api/eu').then(function (r) { olhando = false; return r; });
+  };
+  S.vigiaOutroAparelho = function () {
+    if (vigiaLigada || derrubadaJa || typeof document === 'undefined' || typeof setInterval !== 'function' || !S.ativa()) return false;
+    vigiaLigada = true;
+    function liga() {
+      if (vigiaAparelho || derrubadaJa) return;
+      vigiaAparelho = setInterval(function () { if (!document.hidden) S.confereAparelho(); }, S.VIGIA_MS);
+    }
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (derrubadaJa) return;
+        if (document.hidden) { paraVigia(); return; }
+        S.confereAparelho();
+        liga();
+      });
+    } catch (e) {}
+    if (!document.hidden) liga();
     return true;
   };
 

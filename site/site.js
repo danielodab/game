@@ -101,10 +101,67 @@
     if (op.body !== undefined) pedido.body = JSON.stringify(op.body);
     return fetch(SITE.base() + rota, pedido).then(function (r) {
       return r.json().catch(function () { return { ok: false, erro: 'resposta que não é JSON' }; })
-        .then(function (j) { j.status = r.status; return j; });
+        .then(function (j) {
+          j.status = r.status;
+          // 13/09, UM APARELHO SÓ: o token desta página caiu por um login em
+          // outro aparelho (o token explícito do sair não entra aqui)
+          if (r.status === 401 && j.motivo === SITE.MOTIVO_OUTRO_APARELHO && token && !op.token) {
+            var agora = SITE.sessao();
+            if (agora && agora.token !== token) {
+              // entrou de novo neste navegador (outra aba, o jogo): a mesma conta
+              // segue com o token novo; outra conta, a página recarrega com ela
+              var mesma = !!(s && s.conta && agora.conta && s.conta.id === agora.conta.id);
+              if (mesma && !op._deNovo) {
+                var op2 = {};
+                for (var k in op) if (Object.prototype.hasOwnProperty.call(op, k)) op2[k] = op[k];
+                op2._deNovo = true;
+                return SITE.api(rota, op2);
+              }
+              if (!mesma && !SITE.semNavegar) { try { location.reload(); } catch (e) { /* segue */ } return new Promise(function () {}); }
+              return j;
+            }
+            return SITE.derrubada(j);
+          }
+          return j;
+        });
     }).catch(function () {
       return { ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' };
     });
+  };
+
+  /* UM APARELHO SÓ (13/09, pedido do dono: "uma conta só pode estar logada em
+   * um dispositivo.. se outro tentar logar, no que estava logado cai o jogo").
+   * No site não há jogo para derrubar: a sessão desta página é esquecida, a
+   * frase fica guardada para a tela de entrar (site/conta.js a mostra; o jogo
+   * guarda a mesma chave) e a página vai para lá. A promessa nunca resolve: a
+   * página está indo embora, e o 401 de sempre de cada tela ("a sessão tinha
+   * vencido") não pode passar por cima da frase. SITE.semNavegar (provas)
+   * devolve a resposta em vez de navegar. */
+  SITE.MOTIVO_OUTRO_APARELHO = 'outro-aparelho';
+  SITE.FRASE_OUTRO_APARELHO = 'Sua conta entrou em outro aparelho. Entre de novo para continuar.';
+  SITE.CHAVE_AVISO = 'soterra-aviso-entrar';     // a mesma do js/core/sessao.js (S.CHAVE_AVISO)
+  SITE.semNavegar = false;
+  SITE.derrubada = function (resposta) {
+    SITE.esquece();
+    try { sessionStorage.setItem(SITE.CHAVE_AVISO, SITE.FRASE_OUTRO_APARELHO); } catch (e) { /* sem storage: vai sem a frase */ }
+    if (SITE.semNavegar) { SITE.cabecalho(); return Promise.resolve(resposta); }
+    try {
+      if (/(^|\/)conta\.html$/.test(location.pathname)) {
+        if (history.replaceState) history.replaceState(null, '', location.href.split('#')[0] + '#entrar');
+        location.reload();
+      } else {
+        location.href = 'conta.html' + (location.search || '') + '#entrar';
+      }
+    } catch (e2) { /* segue */ }
+    return new Promise(function () {});
+  };
+  /* A frase guardada para a tela de entrar (lida uma vez só), ou ''. */
+  SITE.avisoDeEntrar = function () {
+    try {
+      var t = sessionStorage.getItem(SITE.CHAVE_AVISO) || '';
+      if (t) sessionStorage.removeItem(SITE.CHAVE_AVISO);
+      return t;
+    } catch (e) { return ''; }
   };
 
   SITE.sair = function () {

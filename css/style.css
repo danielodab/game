@@ -2330,6 +2330,27 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .mc-taxa b { color: #7fe08a; font-size: 12.5px; }
 .mc-taxa small { font-size: 10px; color: var(--dim); }
 .btn-mini.is-off { opacity: .4; pointer-events: none; }
+/* O MERCADINHO ENTRE CONTAS (13/09): o balcão por item, as propostas e a confirmação */
+.mc-linha .ms-tx { flex: 1 1 auto; min-width: 0; }
+.mc-linha[data-rar] .ms-nome { color: var(--rc, var(--text)); }
+.mc-cmp { font-size: 11px; margin-top: 2px; color: var(--dim); }
+.mc-voltar { align-self: flex-start; margin: 0 0 6px; }
+.mc-sub { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 10px 46px; }
+.mc-prop { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--dim);
+  padding: 4px 8px; border-left: 2px solid var(--line2); }
+.mc-prop b { color: var(--text); }
+.mc-prop.is-aceita { border-left-color: #7fe08a; }
+.mc-prop .mc-prop-tx { flex: 1 1 auto; min-width: 0; }
+.mc-estado { font: 700 10px var(--ui-sans, system-ui); text-transform: uppercase; letter-spacing: .04em;
+  padding: 1px 6px; border-radius: 6px; background: rgba(255,255,255,.06); color: var(--dim); white-space: nowrap; }
+.mc-estado.e-aceita, .mc-estado.e-concluida { color: #7fe08a; background: rgba(127,224,138,.1); }
+.mc-estado.e-perdida, .mc-estado.e-recusada, .mc-estado.e-cancelada, .mc-estado.e-desistiu {
+  color: #f0a08f; background: rgba(240,160,143,.08); }
+.mc-oferta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 2px 0 10px 46px; }
+.mc-card { margin: 10px 0; }
+.mc-saldo { font-size: 12px; color: var(--dim); margin: 4px 0; }
+.mc-saldo b { color: #e8c25a; }
+.mc-saldo .is-falta { color: #f0a08f; }
 
 /* ------------------------------------------------- O CHAT DO ACAMPAMENTO */
 .hub-chat {

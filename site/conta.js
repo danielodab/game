@@ -755,7 +755,16 @@
       ligaEsqueci(!!r.ok && r.correio === true);
     });
     if (SITE.sessao()) carregaConta();
-    else mostra(telaFora());
+    else {
+      mostra(telaFora());
+      // 13/09 (um aparelho só): chegou aqui porque a conta entrou em outro
+      // aparelho (o jogo ou outra página do site guardaram a frase)
+      var queda = SITE.avisoDeEntrar ? SITE.avisoDeEntrar() : '';
+      if (queda) {
+        mostra('entrar');
+        aviso('e-aviso', queda, 'neutro');
+      }
+    }
   }
 
   inicia();

@@ -137,6 +137,8 @@ var JOGO = (typeof window !== 'undefined')
   var identidade = null;            // o que o relé disse do ident: null (nada), false (não conferiu) ou { mestre }
   var identTarde = false;           // o anúncio chegou depois do oi (rede lenta): o ident-ok reapresenta
   var identMandado = false;         // esta conexão mandou o ident: só então a resposta do relé vale
+  var tokenIdent = null;            // 13/09: o token que foi no ident (a queda por outro aparelho compara)
+  R.FECHA_DERRUBADO = 4001;         // 13/09: o código com que o relé fecha a conta que entrou em outro aparelho (rele_ident.py)
   var cxRele = null;                // 11/09: o id DESTA conexão, do anúncio do relé novo (null: religando, canal, antigo)
   var releNovo = false;             // este transporte já ouviu um anúncio com cx (o relé que não espalha dirigidos)
   var cxLocal = null;               // no canal de abas não há relé: o cx é da página ('l' + 7)
@@ -231,7 +233,7 @@ var JOGO = (typeof window !== 'undefined')
     provaMem = s;
     return s;
   }
-  function transporteWs(url, aoFalhar, aoReligar, aoRele, aoCair, aoAnunciou) {
+  function transporteWs(url, aoFalhar, aoReligar, aoRele, aoCair, aoAnunciou, aoDerrubado) {
     var ws = null, abriu = false, fechado = false, fila = [];
     var pronto = false, anunciou = false, espera = null, liberou = false;
     /* 11/09 (revisão): O BALDE DE SAÍDA — o desenho do balde geral do relé
@@ -308,12 +310,19 @@ var JOGO = (typeof window !== 'undefined')
         }
         aoMensagem({ data: m });
       };
-      ws.onclose = ws.onerror = function () {
+      ws.onclose = ws.onerror = function (ev) {
         // 11/09: o erro e o fechamento da MESMA conexão chegam os dois — e
         // cada um religava: eram duas conexões vivas com o mesmo id
         if (caiu) return;
         caiu = true;
         if (fechado || ws !== este) return;
+        // 13/09 (um aparelho só): o relé fechou com o código da conta que entrou
+        // em outro aparelho. Se a Sessao derrubar o jogo, a Rede sai (fechado) e
+        // não religa; se ela adotou um token novo, religa como sempre, com ele
+        if (ev && ev.code === R.FECHA_DERRUBADO && aoDerrubado) {
+          aoDerrubado();
+          if (fechado) return;
+        }
         if (!abriu) { falha(); return; }
         pronto = false;
         clearTimeout(espera);
@@ -447,6 +456,7 @@ var JOGO = (typeof window !== 'undefined')
       var permitido = !!(eu && R._identPermitido(urlAtual));
       var tk = (m.ident === true && permitido) ? tokenDaSessao() : null;
       identMandado = !!tk;
+      tokenIdent = tk;                   // 13/09: o token desta conexão (a Sessao compara ao do localStorage)
       identTarde = !!(tk && tarde);
       var fora = tk ? [{ t: 'ident', de: eu.id, token: tk }] : [];
       // 11/09 (achado 17): a PROVA DO APARELHO, que prende o id sem conta a
@@ -458,6 +468,9 @@ var JOGO = (typeof window !== 'undefined')
       provaTarde = !!(cxRele && permitido && tarde);
       return fora.length ? fora : null;
     }
+    // 13/09 (um aparelho só): a conta desta conexão entrou em outro aparelho. Só
+    // vale para a conexão que mandou o token (o relé só o manda a ela)
+    if (m.t === 'derrubado') { if (identMandado) derrubadoPeloRele(m); return null; }
     if (m.t === 'ausente') { vozAusente(m); return null; }     // 11/09
     if (m.t === 'caiu') { vozCaiu(m); return null; }
     if (m.t !== 'ident-ok' && m.t !== 'ident-nao') return null;
@@ -474,6 +487,14 @@ var JOGO = (typeof window !== 'undefined')
     identTarde = false;
     if (reapresenta) apresenta();
     return null;
+  }
+  /* A queda vai ao ponto único (JOGO.Sessao.derrubada): ela confere se há um
+   * token novo da mesma conta neste navegador antes de derrubar, e derrubando
+   * chama o R.sair (sem religar). */
+  function derrubadoPeloRele(m) {
+    var S = JOGO.Sessao;
+    if (!S || typeof S.derrubada !== 'function') { R.sair(); return; }
+    S.derrubada((m && m.motivo) || 'outro-aparelho', tokenIdent);
   }
   function mesmaIdentidade(a, b) {
     return (a === false && b === false) || (!!a && !!b && a.mestre === b.mestre);
@@ -802,6 +823,8 @@ var JOGO = (typeof window !== 'undefined')
    * de abas porque o relé não respondeu (tenta o relé de novo, como antes). */
   R.entrar = function (perfil) {
     perfil = perfil || {};
+    // 13/09 (um aparelho só): o jogo desta aba caiu — a Rede não liga de novo
+    if (JOGO.Sessao && JOGO.Sessao.derrubadaJa && JOGO.Sessao.derrubadaJa()) return false;
     if (canal && eu && perfil.id && perfil.id === eu.id && !(urlDoRele() && canal.tipo !== 'ws')) {
       return atualiza(perfil);
     }
@@ -825,7 +848,8 @@ var JOGO = (typeof window !== 'undefined')
         function () { apresenta(); },    // religou (apresenta é no-op sem eu)
         vozDoRele,                       // 10/09: o anúncio do relé e a resposta do ident
         function () { cxRele = null; },  // 11/09: caiu — o cx velho morreu com a conexão
-        aoAnunciar);                     // 11/09: a conexão anunciada (o cx; depois de uma queda, o religou)
+        aoAnunciar,                      // 11/09: a conexão anunciada (o cx; depois de uma queda, o religou)
+        function () { if (identMandado) derrubadoPeloRele({ motivo: 'outro-aparelho' }); });   // 13/09: fechou com 4001
     }
     if (!canal) canal = transporteCanal();
     if (!canal) return false;                                    // file:// solo
@@ -854,6 +878,7 @@ var JOGO = (typeof window !== 'undefined')
     ultPulso = null;
     identidade = null;
     identMandado = false;
+    tokenIdent = null;                // 13/09
     cxRele = null;                    // 11/09 (os ouvintes do R.ouvir ficam)
     provaTarde = false;
     releNovo = false;

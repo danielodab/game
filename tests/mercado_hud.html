@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o Mercadinho entre contas na HUD</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:900px;height:760px;border:0;background:#000}
+  #saida{position:fixed;left:900px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- O MERCADINHO ENTRE CONTAS NA HUD (13/09). O index.html de verdade num quadro, com o
+     save na memória (?sandbox=1). A Sessão e a Autoridade são dublês por cima das de
+     verdade: cada pedido a /api/mercado/* fica anotado e responde o que a prova deixou
+     (o servidor de verdade é provado em tests/mercado_api.py). Cobra, na tela:
+       - Comprar: a lista POR ITEM (quantos e o menor preço), a busca por nome ao vivo, o
+         filtro por tipo, e o item aberto com TODOS os anúncios e quem vende;
+       - "Comprar por X" e "Fazer oferta" mandam a rota e o corpo certos;
+       - Meus anúncios: a proposta recebida com Aceitar (e marcada como vista);
+       - Minhas ofertas → Conferir: a tela de confirmação com o texto do dono, o item e
+         "Deseja aceitar essa negociação?"; o "perdeu essa negociação";
+       - o vigia na praça abre a confirmação sozinho, e Negar manda aceitar:false.
+     Roda por HTTP (o quadro precisa da mesma origem): python <runner> tests/mercado_hud.html -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    linhas.push(s.textContent);
+    pinta();
+    window.__fail = falhas;
+    window.__pronto = true;
+    try {
+      var xf = new XMLHttpRequest();
+      xf.open('POST', '/__fim', false);
+      xf.send(linhas.join(NL));
+    } catch (e) {}
+  }
+  function passo(ms) { return new Promise(function (r) { setTimeout(r, ms || 50); }); }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 80);
+      })();
+    });
+  }
+
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?sandbox=1&snap=1&mercado-hud';
+  var w, doc, J;
+  var pedidos = [], R = {};
+
+  function ficha() { return doc.querySelector('.ui-sheet.is-on'); }
+  function tituloFicha() { var f = ficha(); var h = f && f.querySelector('h2'); return h ? h.textContent : ''; }
+  function textoFicha() { var f = ficha(); return f ? f.textContent.replace(/\s+/g, ' ') : ''; }
+  function toastTxt() { var t = doc.querySelector('.ui-toast'); return (t && t.classList.contains('is-on')) ? t.textContent : ''; }
+  function botao(caixa, re) {
+    var b = null;
+    [].forEach.call(caixa ? caixa.querySelectorAll('button') : [], function (x) { if (!b && re.test(x.textContent || '')) b = x; });
+    return b;
+  }
+  function linhasItem() { var f = ficha(); return f ? [].slice.call(f.querySelectorAll('.mc-lista .mc-linha')) : []; }
+  function ultimo(rota) {
+    for (var i = pedidos.length - 1; i >= 0; i--) if (pedidos[i].rota.indexOf(rota) === 0) return pedidos[i];
+    return null;
+  }
+  function conta(rota) { return pedidos.filter(function (p) { return p.rota.indexOf(rota) === 0; }).length; }
+
+  function dubles() {
+    J.Sessao.api = function (rota, op) {
+      var corpo = op && op.body !== undefined ? JSON.parse(JSON.stringify(op.body)) : undefined;
+      pedidos.push({ rota: rota, metodo: (op && op.method) || 'GET', corpo: corpo });
+      var r = R[rota.split('?')[0]];
+      if (typeof r === 'function') r = r(corpo, rota);
+      return Promise.resolve(JSON.parse(JSON.stringify(r || { ok: true, status: 200 })));
+    };
+    J.Autoridade.ligada = function () { return true; };
+    J.Autoridade.descarrega = function () { return Promise.resolve(null); };
+    J.Autoridade.adotaResposta = function () { return false; };
+    R['/api/mercado/avisos'] = { ok: true, status: 200, confirmar: [], desfechos: [], vendas: [], recebidas: [] };
+  }
+
+  var ITEM = 'gh-wasp-sting', OUTRO = 'gh-firefly-crown';
+
+  quadro.onload = function () {
+    w = quadro.contentWindow; doc = w.document;
+    ate(function () {
+      J = w.JOGO;
+      return J && J.UI && J.UI.openSheet && J.Mercado && J.Mercado.servidor && J.Autoridade && J.Sessao &&
+             J.DATA && J.DATA.items && J.DATA.items[ITEM] && doc.querySelector('.ui-toast') && doc.querySelector('.ui-sheet');
+    }, 90000).then(function (ok) {
+      if (!ok) return fim('o jogo não abriu no quadro');
+      return prova();
+    }).catch(function (e) { fim('a prova estourou: ' + (e && (e.stack || e.message) || e)); });
+  };
+
+  function prova() {
+    dubles();
+    var nome = J.DATA.items[ITEM].name, nomeOutro = J.DATA.items[OUTRO].name;
+    J.DB.ganharMoedas(500);
+    R['/api/mercado/resumo'] = { ok: true, status: 200, taxaPct: 5, precoMax: 9999, itens: [
+      { itemId: ITEM, qtd: 2, menor: 80, meus: 0 }, { itemId: OUTRO, qtd: 1, menor: 30, meus: 1 }] };
+    R['/api/mercado/item'] = { ok: true, status: 200, itemId: ITEM, anuncios: [
+      { id: 11, vendedor: 'Fulano', level: 2, stars: 1, preco: 80, meu: false, minhaProposta: null },
+      { id: 12, vendedor: 'Beltrano', level: 0, stars: 0, preco: 120, meu: false, minhaProposta: { id: 5, valor: 90, estado: 'aberta' } }] };
+
+    J.UI.closeSheet();
+    J.UI.openSheet('mercado');
+    return ate(function () { return linhasItem().length === 2; }, 15000).then(function (ok) {
+      check('o Mercadinho com sessão pede o resumo e lista POR ITEM', ok && conta('/api/mercado/resumo') === 1 &&
+            tituloFicha() === 'Mercadinho do Acampamento', linhasItem().length + ' linhas');
+      var t = textoFicha();
+      check('as quatro abas e o bolso com saco e banco', /Comprar/.test(t) && /Vender/.test(t) && /Meus anúncios/.test(t) &&
+            /Minhas ofertas/.test(t) && /no banco/.test(t));
+      check('a linha do item diz quantos e o menor preço', /2 à venda/.test(t) && /desde 80v/.test(t) && t.indexOf(nome) >= 0);
+      // a busca por nome, ao vivo
+      var busca = ficha().querySelector('input.hub-input');
+      busca.value = nomeOutro.slice(0, 5).toLowerCase();
+      busca.dispatchEvent(new w.Event('input'));
+      check('a busca por nome filtra ao vivo (sem pedir de novo)', linhasItem().length === 1 &&
+            linhasItem()[0].textContent.indexOf(nomeOutro) >= 0 && conta('/api/mercado/resumo') === 1);
+      busca.value = '';
+      busca.dispatchEvent(new w.Event('input'));
+      // o tipo (o espaço da peça)
+      var slotOutro = J.DATA.items[OUTRO].slot;
+      var chipsTipo = [].slice.call(ficha().querySelectorAll('.mc-filtros'))[0];
+      var rot = { punho: 'Punho', passo: 'Passo', casca: 'Casca', lume: 'Lume' };
+      var outroSlot = ['punho', 'passo', 'casca', 'lume'].filter(function (s) { return s !== slotOutro && s !== J.DATA.items[ITEM].slot; })[0];
+      botao(chipsTipo, new RegExp('^' + rot[outroSlot] + '$')).click();
+      check('o filtro por tipo esconde o que não é do tipo', linhasItem().length === 0 && /Nada com esses filtros/.test(textoFicha()));
+      botao(chipsTipo, /^Tudo$/).click();
+      var linhaItem = linhasItem().filter(function (l) { return l.textContent.indexOf(nome) >= 0; })[0];
+      botao(linhaItem, /Ver todos/).click();
+      return ate(function () { return /Beltrano/.test(textoFicha()); }, 10000);
+    }).then(function (ok) {
+      var p = ultimo('/api/mercado/item');
+      check('abrir o item pede TODOS os anúncios dele', ok && p && p.rota === '/api/mercado/item?id=' + ITEM, p && p.rota);
+      var t = textoFicha();
+      check('cada anúncio com quem vende, nível e estrelas e o preço', /vende Fulano/.test(t) && /vende Beltrano/.test(t) &&
+            /\+2 ★1/.test(t) && /Comprar por 80/.test(t) && /Comprar por 120/.test(t));
+      check('a minha proposta viva aparece no anúncio', /Sua oferta: 90v/.test(t) && /esperando o vendedor/.test(t));
+      var form = ficha().querySelector('.mc-oferta');
+      check('o campo da oferta começa escondido', form && form.hidden === true);
+      var linha11 = linhasItem().filter(function (l) { return /Fulano/.test(l.textContent); })[0];
+      botao(linha11, /Fazer oferta/).click();
+      check('Fazer oferta abre o campo de valor', form.hidden === false);
+      form.querySelector('input').value = '60';
+      R['/api/mercado/propor'] = { ok: true, status: 200, proposta: { id: 77, anuncioId: 11, valor: 60, estado: 'aberta' } };
+      botao(form, /Enviar oferta/).click();
+      return ate(function () { return ultimo('/api/mercado/propor') && /Oferta de 60/.test(toastTxt()); }, 8000);
+    }).then(function (ok) {
+      var p = ultimo('/api/mercado/propor');
+      check('Enviar oferta manda o anúncio e o valor', ok && p && p.corpo.anuncioId === 11 && p.corpo.valor === 60,
+            p && JSON.stringify(p.corpo));
+      return ate(function () { return /Comprar por 80/.test(textoFicha()); }, 8000);
+    }).then(function () {
+      R['/api/mercado/comprar'] = { ok: true, status: 200, comprou: true, valor: 80, deCarteira: 80, deBanco: 0, preco: 80 };
+      var linha11 = linhasItem().filter(function (l) { return /Fulano/.test(l.textContent); })[0];
+      botao(linha11, /Comprar por 80/).click();
+      return ate(function () { return ultimo('/api/mercado/comprar') && /Comprado/.test(toastTxt()); }, 8000);
+    }).then(function (ok) {
+      var p = ultimo('/api/mercado/comprar');
+      check('Comprar por X manda o anúncio e avisa', ok && p && p.corpo.anuncioId === 11, toastTxt());
+
+      // ---- Meus anúncios
+      R['/api/mercado/meus'] = { ok: true, status: 200, max: 30, anuncios: [
+        { id: 21, itemId: OUTRO, level: 0, stars: 0, preco: 30, taxa: 2, criadoEm: 1, propostas: [
+          { id: 31, comprador: 'Ciclano', valor: 25, estado: 'aberta', taxa: 2, vistoVendedor: false, criadoEm: 1 }] }],
+        vendas: [{ id: 3, itemId: ITEM, level: 0, stars: 0, preco: 100, valor: 100, taxa: 5, recebeu: 95, comprador: 'Beltrano',
+                   viaProposta: true, fechadoEm: 1 }] };
+      botao(ficha().querySelector('.mc-abas'), /Meus anúncios/).click();
+      return ate(function () { return /Ciclano/.test(textoFicha()); }, 8000);
+    }).then(function (ok) {
+      var t = textoFicha();
+      check('Meus anúncios mostra a proposta recebida e as vendas', ok && /Ciclano oferece 25v/.test(t) &&
+            /você recebe 23v/.test(t) && /Vendas recentes/.test(t) && /recebeu 95v/.test(t), t.slice(0, 300));
+      var v = ultimo('/api/mercado/visto');
+      check('a proposta nova fica marcada como vista', v && JSON.stringify(v.corpo) === JSON.stringify({ recebidas: [31] }),
+            v && JSON.stringify(v.corpo));
+      R['/api/mercado/responder'] = { ok: true, status: 200, estado: 'aceita' };
+      botao(ficha().querySelector('.mc-sub'), /^Aceitar$/).click();
+      return ate(function () { return ultimo('/api/mercado/responder'); }, 5000);
+    }).then(function () {
+      var p = ultimo('/api/mercado/responder');
+      check('Aceitar responde a proposta', p && p.corpo.propostaId === 31 && p.corpo.aceitar === true, p && JSON.stringify(p.corpo));
+
+      // ---- Minhas ofertas → Conferir → a confirmação
+      R['/api/mercado/propostas'] = { ok: true, status: 200, propostas: [
+        { id: 41, anuncioId: 9, itemId: ITEM, level: 1, stars: 0, preco: 200, valor: 150, estado: 'aceita', vendedor: 'Fulano',
+          anuncioAberto: true, criadoEm: 1 },
+        { id: 40, anuncioId: 8, itemId: OUTRO, level: 0, stars: 0, preco: 50, valor: 20, estado: 'recusada', vendedor: 'Sicrano',
+          anuncioAberto: true, criadoEm: 1 }] };
+      return ate(function () { return ficha() && ficha().querySelector('.mc-abas'); }, 8000);
+    }).then(function () {
+      botao(ficha().querySelector('.mc-abas'), /Minhas ofertas/).click();
+      return ate(function () { return /Sicrano/.test(textoFicha()); }, 8000);
+    }).then(function (ok) {
+      var t = textoFicha();
+      check('Minhas ofertas mostra o estado de cada uma', ok && /aceita — confirme/.test(t) && /recusada/.test(t));
+      var linha = linhasItem().filter(function (l) { return /Fulano/.test(l.textContent); })[0];
+      botao(linha, /Conferir/).click();
+      return ate(function () { return tituloFicha() === 'Proposta aceita no Mercadinho'; }, 5000);
+    }).then(function (ok) {
+      var t = textoFicha();
+      check('a confirmação diz o texto do dono', ok &&
+            t.indexOf('O vendedor Fulano aceitou sua oferta de 150 vinténs pelo item que estava à venda por 200.') >= 0, t.slice(0, 200));
+      check('o item para conferir e a pergunta', t.indexOf(nome + ' +1') >= 0 && /Deseja aceitar essa negociação\?/.test(t) &&
+            /no saco/.test(t) && ficha().querySelector('.mc-card'));
+      R['/api/mercado/confirmar'] = { ok: false, status: 409, motivo: 'perdeu',
+                                      erro: 'esse item já foi vendido — você perdeu essa negociação' };
+      botao(ficha().querySelector('.confirm-acts'), /^Aceitar$/).click();
+      return ate(function () { return /perdeu essa negociação/.test(toastTxt()); }, 5000);
+    }).then(function (ok) {
+      var p = ultimo('/api/mercado/confirmar');
+      check('Aceitar confirma, e o vendido antes vira "perdeu essa negociação"', ok && p && p.corpo.propostaId === 41 &&
+            p.corpo.aceitar === true && !ficha(), toastTxt());
+
+      // ---- o vigia: na praça, a confirmação abre sozinha; Negar manda aceitar:false
+      J.UI.closeSheet();
+      J.UI.telaAtual = function () { return 'hub'; };
+      R['/api/mercado/avisos'] = { ok: true, status: 200, desfechos: [], recebidas: [],
+        confirmar: [{ id: 42, anuncioId: 7, itemId: OUTRO, level: 0, stars: 2, preco: 90, valor: 70, estado: 'aceita',
+                      vendedor: 'Sicrano', anuncioAberto: true }],
+        vendas: [{ id: 4, itemId: ITEM, level: 0, stars: 0, preco: 60, valor: 60, taxa: 3, recebeu: 57, comprador: 'Beltrano' }] };
+      J.Mercado.servidor.buscaAvisos();
+      return ate(function () { return tituloFicha() === 'Proposta aceita no Mercadinho' && /Sicrano/.test(textoFicha()); }, 8000);
+    }).then(function (ok) {
+      check('na praça o vigia abre a confirmação sozinho', ok, tituloFicha());
+      check('a venda feita vira aviso', /Vendido/.test(toastTxt()) && /Beltrano/.test(toastTxt()), toastTxt());
+      R['/api/mercado/avisos'] = { ok: true, status: 200, confirmar: [], desfechos: [], vendas: [], recebidas: [] };
+      R['/api/mercado/confirmar'] = { ok: true, status: 200, estado: 'desistiu' };
+      botao(ficha().querySelector('.confirm-acts'), /^Negar$/).click();
+      return ate(function () { var p = ultimo('/api/mercado/confirmar'); return p && p.corpo.propostaId === 42 && !ficha(); }, 5000);
+    }).then(function (ok) {
+      var p = ultimo('/api/mercado/confirmar');
+      check('Negar manda aceitar:false e fecha', ok && p.corpo.aceitar === false);
+      return passo(100);
+    }).then(function () { fim(); });
+  }
+})();
+</script>
+</body>
+</html>

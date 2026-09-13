@@ -107,6 +107,23 @@ Corpo: `{versaoBase, ops: [{nome, args}], hashDepois}`.
 servidor numa transação: o juiz tira do estado de quem dá e põe no de quem recebe
 (ops `troca-tira`/`troca-poe`). Cada lado recebe `{versao, hash, progress, db}`.
 
+### 4.7 O mercadinho entre contas (13/09, `servidor/mercado.py`)
+O anúncio é do SERVIDOR (`mercado_anuncios`) e a peça fica **em custódia**: sai do estado do
+vendedor pela série (op interna `mercadoTira`) e a série segue `vivo` com ele no registro — o
+`salvar` e o `_estado_grava` não a varrem, como o banco da guilda. Rotas (todas com conta; sem
+juiz, 503): `GET /api/mercado/resumo|item?id=|meus|propostas|avisos`, `POST /api/mercado/
+anunciar|comprar|propor|cancelar|responder|confirmar|retirar|visto`.
+- **Comprar por X** e **confirmar a proposta aceita por Y** são a mesma venda: numa transação,
+  o juiz debita o comprador (saco primeiro, depois o banco: `mercadoPaga`) e põe a peça no saco
+  dele (`mercadoPoe`), credita o vendedor com valor − taxa (`mercadoRecebe`, mesmo offline), a
+  série muda de dono (origem `mercador`), o anúncio fica `vendido` e as outras propostas vivas,
+  `perdida`. Taxa = 5% do preço FINAL, para cima, mínimo 1.
+- **Propor** não reserva vintém (confere saco + banco na hora); o vendedor aceita (o anúncio
+  continua aberto) ou recusa; quem confirmar primeiro leva; anúncio que já saiu = `perdida`.
+- As ops antigas do jogador (`anunciarMercado`, `comprarMercado`, `retirarMercado`) são
+  recusadas pelo juiz; as ofertas que ainda moravam no `db.mercado.ofertas` viram anúncios na
+  primeira chamada de mercado da conta (`mercadoLegadoTira`), com a série.
+
 ## 5. O juiz (Node, só 127.0.0.1)
 
 ### 5.1 `GET /saude` → `{ok, versao}`; `GET /regras` → `{versao, calaboucos: {id: nSalas}}`

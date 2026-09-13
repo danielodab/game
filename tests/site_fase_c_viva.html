@@ -87,6 +87,20 @@
     }).catch(function () { return { status: 0 }; });
   }
 
+  /* 13/09 (um aparelho só): o login derruba as outras sessões da conta. As
+   * sessões de "outras máquinas" que a lista do site precisa vivas juntas vêm
+   * do servidor estático desta prova, como as abertas antes da regra. */
+  function sessoesAntigas(token, n) {
+    return fetch('/__prova/sessoes-antigas', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                               body: JSON.stringify({ token: token, n: n }) })
+      .then(function (r) { return r.json(); }).then(function (j) { return j.tokens || []; })
+      .catch(function () { return []; });
+  }
+  function adota(token) {             // "entrou de novo em outra aba deste navegador"
+    var s = sessao();
+    localStorage.setItem(CHAVE, JSON.stringify({ token: token, conta: s && s.conta }));
+  }
+
   /* ---- a página do site num iframe (navegação de verdade, mesma origem) ---- */
   var fr = null;
   function abre(pagina, hash) {
@@ -208,9 +222,8 @@
       }
     }
 
-    // 4. sessões: duas entradas a mais, encerrar uma, encerrar as outras
-    await api('POST', '/api/login', { login: viva.nome, senha: viva.senha1 });
-    await api('POST', '/api/login', { login: viva.nome, senha: viva.senha1 });
+    // 4. sessões: duas a mais (de antes do "um aparelho só", ver sessoesAntigas), encerrar uma, encerrar as outras
+    check('as duas sessões de outras máquinas entram no banco', (await sessoesAntigas(tok, 2)).length === 2);
     await abre('conta.html', 'conta');
     await ate(function () { return qq('#mc-sessoes li[data-sessao]').length === 3; });
     check('Minha conta: o nome e o e-mail da conta', new RegExp(viva.nome).test(texto($('mc-dados'))) && texto($('mc-dados')).indexOf(viva.email) >= 0);
@@ -223,19 +236,25 @@
     await ate(function () { return qq('#mc-sessoes li[data-sessao]').length === 1; });
     check('encerrar as outras: sobra só esta', qq('#mc-sessoes li[data-sessao]').length === 1 && qq('#mc-sessoes li.esta').length === 1);
     var at = texto($('mc-atividade'));
-    check('a atividade mostra o cadastro e as entradas', /conta criada/.test(at) && /entrada na conta/.test(at), at.slice(0, 160));
+    // 13/09: as outras sessões agora vêm do banco da prova (sem login), então a atividade não tem "entrada na conta" aqui
+    check('a atividade mostra o cadastro e as sessões encerradas', /conta criada/.test(at) && /sessões encerradas/.test(at), at.slice(0, 160));
 
     // 5. trocar a senha, com uma "outra máquina" logada
-    var outra = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha1 });
+    var outra = { token: (await sessoesAntigas(tok, 1))[0] };
     digita('sn-atual', viva.senha1); digita('sn-nova', viva.senha2); digita('sn-nova2', viva.senha2);
     envia('sn-form');
     await ate(function () { return /Senha trocada|não deu|errada/.test(texto($('sn-aviso'))); });
     check('trocar a senha: "1 outra sessão foi encerrada"', /Senha trocada\. 1 outra sessão foi encerrada/.test(texto($('sn-aviso'))), texto($('sn-aviso')));
     var velha = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha1 });
     var nova = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha2 });
+    if (nova.token) adota(nova.token);   // 13/09: o login derrubou a sessão da página; ela segue com a nova (mesma conta, outra aba)
     check('a senha velha não entra mais; a nova entra', velha.status === 401 && nova.status === 200, velha.status + ' / ' + nova.status);
-    check('a sessão da outra máquina morreu (401), e esta continua', (await api('GET', '/api/eu', null, outra.token)).status === 401 &&
-          (await api('GET', '/api/eu', null, tok)).status === 200);
+    var eOutra = await api('GET', '/api/eu', null, outra.token), eVelha = await api('GET', '/api/eu', null, tok);
+    check('a sessão da outra máquina morreu com a troca de senha (401 SEM o motivo de outro aparelho)', eOutra.status === 401 && !eOutra.motivo);
+    check('um aparelho só: o login derrubou a sessão desta página (401 com motivo), e a do login vale',
+          eVelha.status === 401 && eVelha.motivo === 'outro-aparelho' && (await api('GET', '/api/eu', null, nova.token)).status === 200,
+          JSON.stringify(eVelha));
+    tok = nova.token;
 
     // 6. pedir a troca de e-mail: o código vai ao e-mail ATUAL
     digita('em-senha', viva.senha2); digita('em-novo', viva.novo); digita('em-novo2', viva.novo);
@@ -309,6 +328,15 @@
     var l3 = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha3 });
     var l2 = await api('POST', '/api/login', { login: viva.nome, senha: viva.senha2 });
     check('a senha redefinida entra; a anterior não', l3.status === 200 && l2.status === 401, l3.status + ' / ' + l2.status);
+    // 13/09, um aparelho só: esse login foi "outro aparelho" — a loja aberta com a sessão desta página
+    // leva 401 com o motivo e manda para a tela de entrar, com a frase, sem sessão guardada
+    await abre('loja.html');
+    await ate(function () { return /conta\.html/.test(fr.contentWindow.location.pathname) && visivel($('painel-entrar')) &&
+                                   /outro aparelho/.test(texto($('e-aviso'))); });
+    check('um aparelho só no site: a página derrubada vai para Entrar com "Sua conta entrou em outro aparelho"',
+          /conta\.html/.test(fr.contentWindow.location.pathname) && visivel($('painel-entrar')) &&
+          /Sua conta entrou em outro aparelho/.test(texto($('e-aviso'))) && !sessao(), texto($('e-aviso')));
+    if (l3.token) localStorage.setItem(CHAVE, JSON.stringify({ token: l3.token, conta: ses && ses.conta }));
     await abre('loja.html');
     await ate(function () { return !!q('#lj-pedidos [data-pedido]'); });
     check('a loja, depois de tudo, ainda mostra o pedido do personagem esperando o jogo',

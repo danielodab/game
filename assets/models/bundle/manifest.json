@@ -1,5 +1,5 @@
 {
- "gerado": "2026-09-10T21:33:11",
+ "gerado": "2026-09-13T09:51:17",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -1637,6 +1637,14 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "praca_poco",
+   "arquivo": "models-praca/praca_poco.glb",
+   "bytes": 1068276,
+   "hash": "7c8a4a0a486e",
+   "grupo": "base"
+  },
+  {
+   "alvo": "MODELS",
    "chave": "q_hywirl",
    "arquivo": "models-summons/q_hywirl.glb",
    "bytes": 317228,
@@ -2237,12 +2245,12 @@
   "cenario-cisterna.js": "tabelas/cenario-cisterna.js",
   "cenario-jardim.js": "tabelas/cenario-jardim.js"
  },
- "totalBytes": 140547264,
- "totalBase64": 187396640,
+ "totalBytes": 141615540,
+ "totalBase64": 188821008,
  "grupos": {
   "base": {
-   "itens": 90,
-   "bytes": 37020124
+   "itens": 91,
+   "bytes": 38088400
   },
   "calabouco:cistern": {
    "itens": 23,

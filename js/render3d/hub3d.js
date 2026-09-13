@@ -512,6 +512,7 @@ var JOGO = (typeof window !== 'undefined')
     montaSede();
     montaForja();
     montaLoteria();
+    montaPoco();
     // as CONSTRUÇÕES do usuário (árvore, arena, banco, mercado, sede) vestem
     // os volumes acima quando os GLBs abrirem — a sonda de sempre
     construcoesPlantadas = false;
@@ -1005,6 +1006,34 @@ var JOGO = (typeof window !== 'undefined')
                    pos: new THREE.Vector3(px, 0, pz), raio: 4.0, node: g, roda: roda });
   }
 
+  /* O POÇO SEM FUNDO (13/09): a torre infinita saiu da Arena e ganhou corpo
+   * — a arte do dono (mapa principal/poco.glb → praca_poco). Mora a LESTE da
+   * Árvore-Mundo, no vão entre o portal da ponta leste e a Sede: os portais
+   * desse lado estão fechados e não têm corredor, e a oeste os corredores da
+   * Estufa e da Cisterna tomam o chão. Até o GLB abrir, uma boca de pedra
+   * com o fundo escuro segura o lugar e o clique, como as outras obras. */
+  function montaPoco() {
+    var ang = 1.45, dist = RAIO_MAPA * 0.40;
+    var px = Math.sin(ang) * dist, pz = -Math.cos(ang) * dist;
+    var g = new THREE.Group();
+    var borda = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.4, 0.9, 24, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0x6d655a, roughness: 1, side: THREE.DoubleSide }));
+    borda.position.y = 0.45;
+    g.add(borda);
+    var fundo = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24),
+                               new THREE.MeshBasicMaterial({ color: 0x07060c }));
+    fundo.rotation.x = -Math.PI / 2;
+    fundo.position.y = 0.3;
+    g.add(fundo);
+    var r = rotulo('Poço sem Fundo', '#b9a8ff');
+    r.position.y = 3.4;
+    g.add(r);
+    g.position.set(px, 0, pz);
+    scene.add(g);
+    lugares.push({ id: 'poco', tipo: 'poco', nome: 'Poço sem Fundo',
+                   pos: new THREE.Vector3(px, 0, pz), raio: 6.0, node: g });
+  }
+
   /* A SEDE DAS GUILDAS (25/08): o estandarte a leste. O lugar existe ANTES
    * da casa própria — a casa 3D de cada guilda vem com a fase do lobby;
    * hoje a porta abre a ficha da guilda. */
@@ -1084,7 +1113,10 @@ var JOGO = (typeof window !== 'undefined')
       // a barraca do ferreiro veste quando a arte chegar (embute_praca)
       forja:   { chave: 'praca_forja',   alvoAlt: 6.0, teto: 10 },
       // a tenda da sorte (03/09): a arte do dono veste as primitivas
-      loteria: { chave: 'praca_loteria', alvoAlt: 5.5, teto: 9 }
+      loteria: { chave: 'praca_loteria', alvoAlt: 5.5, teto: 9 },
+      // o Poço (13/09): a arte é baixa e larga (altura = 46% da largura) —
+      // a boca de 7,9 m se lê de longe sem virar prédio
+      poco:    { chave: 'praca_poco',    alvoAlt: 3.6, teto: 8 }
     };
     function montaObra(chave, alvoAlt, teto, rotY) {
       var cena = null;

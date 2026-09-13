@@ -145,6 +145,20 @@ JULGADOS = ('oi', 'eco', 'chat', 'guilda', 'sussurro')   # os que levam texto pa
 SQL = ("SELECT c.id, c.nome, c.gm, c.banido, s.ultimo_uso FROM sessoes s "
        "JOIN contas c ON c.id = s.conta_id WHERE s.token = ?")
 
+# UM APARELHO SÓ (13/09, pedido do dono: "uma conta só pode estar logada em um
+# dispositivo.. se outro tentar logar, no que estava logado cai o jogo"). O
+# login certo apaga as outras sessões da conta e anota o sha256 de cada token em
+# sessoes_derrubadas (servidor/conta.py, _derruba_outras). O relé lê essa tabela
+# para derrubar — {t:'derrubado'} e fechamento FECHA_DERRUBADO — a conexão do
+# token que caiu: na hora, quando o aparelho novo se identifica neste relé
+# (rele.py, _derruba_outros), e na conferência de novo (_revista), que é o que
+# vale no outro contêiner do rolling update (cada um tem o seu relé; os dois
+# leem o mesmo banco). Só derruba token que o BANCO diz derrubado: sessão velha
+# que ainda vale (aberta antes desta regra) não cai por um ident.
+MOTIVO_OUTRO_APARELHO = 'outro-aparelho'        # o mesmo de servidor/conta.py e de js/core/sessao.js
+FECHA_DERRUBADO = 4001                          # o código de fechamento da conexão derrubada (rede.js não religa)
+SQL_DERRUBADA = "SELECT 1 FROM sessoes_derrubadas WHERE token_hash = ?"
+
 
 # ------------------------------------------------------------------ o aperto de mão
 def marca_do_caminho(caminho):
@@ -186,6 +200,11 @@ def token_ok(token):
     return isinstance(token, str) and RE_TOKEN.fullmatch(token) is not None
 
 
+def derrubado():
+    """O aviso à conexão derrubada (só a ela, antes do fechamento). Nunca leva o token."""
+    return json.dumps({'t': 'derrubado', 'motivo': MOTIVO_OUTRO_APARELHO}, separators=(',', ':'))
+
+
 # ------------------------------------------------------------------ a conferência
 def uri_so_leitura(caminho):
     """O endereço do banco para abrir SÓ PARA LER: mode=ro nunca cria o arquivo
@@ -219,6 +238,33 @@ def confere(caminho, token, agora=None):
     if banido or isinstance(uso, bool) or not isinstance(uso, (int, float)) or uso < t - SESSAO_DIAS * 86400:
         return None, True
     return {'id': int(cid), 'nome': nome, 'gm': bool(gm)}, True
+
+
+def derrubadas(caminho, tokens):
+    """Quais destes tokens um login em outro aparelho derrubou (o set deles),
+    numa abertura só do banco SÓ PARA LER — ou None quando o banco não
+    respondeu (ausente, trancado). O banco de antes de 13/09, sem a tabela
+    sessoes_derrubadas, responde "nenhum": não havia regra, ninguém caiu por ela.
+    Síncrona, como o confere (o relé a chama numa thread)."""
+    tokens = [tk for tk in tokens if token_ok(tk)]
+    if not caminho or not tokens:
+        return set()
+    try:
+        con = sqlite3.connect(uri_so_leitura(caminho), uri=True, timeout=ESPERA_BANCO)
+    except (sqlite3.Error, ValueError, OSError):
+        return None
+    try:
+        fora = set()
+        for tk in tokens:
+            if con.execute(SQL_DERRUBADA, (Verificador.chave(tk),)).fetchone() is not None:
+                fora.add(tk)
+        return fora
+    except sqlite3.OperationalError as e:
+        return set() if 'no such table' in str(e) else None
+    except sqlite3.Error:
+        return None
+    finally:
+        con.close()
 
 
 class Verificador:
@@ -288,6 +334,25 @@ class Verificador:
     async def confere(self, token):
         """A conta conferida do token (dict só de leitura) ou None."""
         return (await self.consulta(token))[0]
+
+    async def derrubadas(self, tokens):
+        """13/09: o set dos `tokens` que um login em outro aparelho derrubou,
+        SEM cache (a resposta guardada de 60 s ainda diria "vale" para o token
+        que acabou de cair), ou None se o banco não respondeu. O que caiu sai do
+        cache de conferência também."""
+        tokens = [tk for tk in set(tokens) if token_ok(tk)]
+        if self.caminho is None or not tokens:
+            return set()
+        try:
+            loop = asyncio.get_running_loop()
+            fora = await asyncio.wait_for(loop.run_in_executor(None, derrubadas, self.caminho, tokens),
+                                          PRAZO_CONFERENCIA)
+        except Exception as e:                   # o prazo, a thread que morreu... (nunca o token no log)
+            log.warning("a conferência das sessões derrubadas falhou (%s)", type(e).__name__)
+            return None
+        for tk in fora or ():
+            self.cache.pop(self.chave(tk), None)
+        return fora
 
 
 # ------------------------------------------------------------------ o tempo da regra

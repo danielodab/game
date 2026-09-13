@@ -139,7 +139,25 @@ CREATE TABLE IF NOT EXISTS avatares(
   avatar       TEXT NOT NULL,
   escolhido_em INTEGER NOT NULL
 );
+-- UM APARELHO SÓ (13/09): as sessões que um login em outro aparelho derrubou.
+-- Só o sha256 do token (nunca o token): basta para o token velho, ao voltar,
+-- ouvir "sua conta entrou em outro aparelho" em vez do 401 de sempre — e o
+-- relé (só leitura) derruba a conexão dele pelo mesmo motivo. Tabela nova,
+-- sem ALTER: o rolling update segue seguro. Faxina a cada login.
+CREATE TABLE IF NOT EXISTS sessoes_derrubadas(
+  token_hash TEXT PRIMARY KEY,
+  conta_id   INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  em         INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessoes_derrubadas_em ON sessoes_derrubadas(em);
 """
+
+# UM APARELHO SÓ (13/09, pedido do dono: "uma conta só pode estar logada em um
+# dispositivo.. se outro tentar logar, no que estava logado cai o jogo"). O 401
+# do token derrubado leva este motivo, e o jogo (js/core/sessao.js), o site
+# (site/site.js) e o relé (rele_ident.py) o reconhecem por ele.
+MOTIVO_OUTRO_APARELHO = 'outro-aparelho'
+FRASE_OUTRO_APARELHO = 'sua conta entrou em outro aparelho'
 
 
 # ---- funções puras ------------------------------------------------------------------
@@ -198,6 +216,11 @@ def mascara_ip(texto):
 def id_sessao(token):
     """O id público de uma sessão: o token nunca sai do servidor."""
     return hashlib.sha256(token.encode('utf-8')).hexdigest()[:12]
+
+
+def hash_do_token(token):
+    """O sha256 inteiro do token: a chave de sessoes_derrubadas (e a do cache do relé)."""
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
 
 
 def _desconta(contagem, chave):
@@ -783,14 +806,45 @@ class ContaMixin:
         picada = pica_senha(nova, sal)                  # fora da tranca
         with self._escrita():
             self.con.execute("UPDATE contas SET senha_hash = ?, sal = ? WHERE id = ?", (picada, sal, cid))
-            self.con.execute("DELETE FROM sessoes WHERE conta_id = ?", (cid,))       # TODAS: quem roubou sai
             self.tentativas.pop(cid, None)
             token = self._abre_sessao(cid, corpo)
+            # TODAS as outras saem (quem roubou também) — e, como é uma sessão
+            # nova em outro aparelho, derrubadas: o jogo aberto lá cai (13/09)
+            self._derruba_outras(cid, token)
             self._evento(cid, 'senha-redefinida', None)
         log.info("conta: #%d redefiniu a senha pelo código", cid)
         assunto, texto = self._textos('senha-trocada', alvo['nome'])
         self._envia_depois(alvo['email'], assunto, texto, 'o aviso de senha redefinida')
         return 200, {'ok': True, 'token': token, 'conta': {'id': cid, 'nome': alvo['nome'], 'gm': bool(alvo['gm'])}}
+
+    # -- um aparelho só (13/09) ------------------------------------------------------------
+    def _derruba_outras(self, cid, token_novo, t=None):
+        """A sessão `token_novo` acabou de nascer (login, esqueci confirmado):
+        todas as OUTRAS da conta morrem, na mesma transação de quem chama, e
+        ficam anotadas em sessoes_derrubadas (só o sha256) — o token velho que
+        voltar ouve o 401 com motivo 'outro-aparelho' (Api.despacha), e o relé
+        derruba a conexão dele. A conta do Mestre segue a mesma regra. Logout,
+        "encerrar sessões" e trocar a senha NÃO passam por aqui: quem sai por
+        vontade própria leva o 401 de sempre. A faxina tira as anotações mais
+        velhas que a validade de uma sessão (depois disso o token já estaria
+        vencido de qualquer jeito). Devolve quantas caíram."""
+        t = agora() if t is None else t
+        velhas = [r[0] for r in self.con.execute("SELECT token FROM sessoes WHERE conta_id = ? AND token != ?",
+                                                 (cid, token_novo))]
+        if velhas:
+            self.con.executemany("INSERT OR REPLACE INTO sessoes_derrubadas(token_hash, conta_id, em) VALUES (?, ?, ?)",
+                                 [(hash_do_token(tk), cid, t) for tk in velhas])
+            self.con.execute("DELETE FROM sessoes WHERE conta_id = ? AND token != ?", (cid, token_novo))
+        self.con.execute("DELETE FROM sessoes_derrubadas WHERE em < ?", (t - SESSAO_DIAS * 86400,))
+        return len(velhas)
+
+    def _sessao_derrubada(self, token):
+        """Este token (que já não abre sessão) caiu por um login em outro aparelho?"""
+        if not isinstance(token, str) or not token:
+            return False
+        with self.tranca:
+            return self.con.execute("SELECT 1 FROM sessoes_derrubadas WHERE token_hash = ?",
+                                    (hash_do_token(token),)).fetchone() is not None
 
     # -- POST /api/conta/sessoes/encerrar -------------------------------------------------
     def conta_sessoes_encerrar(self, conta, corpo):

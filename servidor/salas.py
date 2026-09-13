@@ -70,7 +70,9 @@ LANCES_MAX = 6000                 # o LANCES_MAX do juiz (servidor/juiz/sala.js)
 TENTATIVAS = 3                    # quantas vezes refazer quando o estado muda no meio
 DIFICULDADES = ('facil', 'normal', 'dificil')
 # as ops que só o servidor pede (o juiz também exige contexto.interno): a loja, a troca e o banco da guilda
-OPS_INTERNAS = frozenset({'lojaEntregar', 'trocaTira', 'trocaPoe', 'bancoGuildaTira', 'bancoGuildaPoe'})
+OPS_INTERNAS = frozenset({'lojaEntregar', 'trocaTira', 'trocaPoe', 'bancoGuildaTira', 'bancoGuildaPoe',
+                          # 13/09: o mercadinho entre contas (mercado.py)
+                          'mercadoTira', 'mercadoPoe', 'mercadoPaga', 'mercadoRecebe', 'mercadoLegadoTira'})
 # os campos de dono CLIENTE do db (§3; a mesma lista de js/core/economia.js: DB_CLIENTE e JOGADOR_CLIENTE)
 DB_CLIENTE = ('mutados', 'placar', 'pvp', 'trocas')
 JOGADOR_CLIENTE = ('id', 'nome', 'avatar', 'dupla', 'coroaOculta', 'criadoEm')
@@ -381,6 +383,9 @@ class SalasMixin:
         if fora:
             guardadas = {r[0] for r in self.con.execute(
                 "SELECT iid FROM guilda_banco WHERE iid IS NOT NULL AND dono_id = ?", (cid,))}
+            # 13/09: a peça anunciada no mercadinho está em custódia (mercado.py): saiu do estado, não do jogo
+            guardadas |= {r[0] for r in self.con.execute(
+                "SELECT iid FROM mercado_anuncios WHERE iid IS NOT NULL AND vendedor_id = ? AND estado = 'aberto'", (cid,))}
             self.con.executemany("UPDATE itens SET estado = 'fora' WHERE iid = ? AND conta_id = ? AND estado = 'vivo'",
                                  [(iid, cid) for iid in fora if iid not in guardadas])
         nova = atual['versao'] + 1

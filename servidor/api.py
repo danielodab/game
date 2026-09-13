@@ -61,8 +61,8 @@ from comum import (CLASSE_RENOMEADA, CLASSES_RANK, ELEMENTOS, LOGIN_JANELA, LOGI
                    NIVEL_MAX, ORIGENS, PBKDF2_VOLTAS, RE_IID, SESSAO_DIAS, XP_MAX, Recusa, agora, classe_do_heroi,
                    email_novo_valido, email_valido, iid_valido, inteiro, ip_do_pedido, limita, nome_valido,
                    pica_senha, senha_valida)
-from conta import (CADASTRO_POR_IP, ESQUEMA_CONTA, FRASE_IP_CADASTRO, FRASE_IP_SENHA, LOGIN_POR_IP,
-                   MUITAS_TENTATIVAS, ContaMixin, carrega_segredo)
+from conta import (CADASTRO_POR_IP, ESQUEMA_CONTA, FRASE_IP_CADASTRO, FRASE_IP_SENHA, FRASE_OUTRO_APARELHO,
+                   LOGIN_POR_IP, MOTIVO_OUTRO_APARELHO, MUITAS_TENTATIVAS, ContaMixin, carrega_segredo)
 from correio import Correio
 from loja import ESQUEMA_LOJA, LojaMixin
 from mestre import FRASE_SO_MESTRE, MestreMixin
@@ -73,6 +73,7 @@ from juiz_ponte import Juiz   # 12/09: as regras do jogo em Node (servidor/juiz/
 # 13/09: a autoridade (salas.py): bilhete e fechamento de sala, ops de economia, o PUT cosmético
 from salas import ESQUEMA_SALAS, SalasMixin, chave_do_lado, lado_da_troca, lado_vazio
 from grupo import ESQUEMA_GRUPO, GrupoMixin   # 13/09: a sala em grupo e o duelo ranqueado conferidos no servidor
+from mercado import ESQUEMA_MERCADO, MercadoMixin   # 13/09: o mercadinho entre contas, com propostas
 import nomes                     # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
 log = logging.getLogger("api")
@@ -322,6 +323,21 @@ ROTAS = {
     ('POST', '/api/grupo/abrir'):             ('grupo_abrir', True),
     ('POST', '/api/grupo/fechar'):            ('grupo_fechar', True),
     ('POST', '/api/duelo/fechar'):            ('duelo_fechar', True),
+    # o mercadinho entre contas (13/09, mercado.py): o anúncio é do servidor e a peça fica em
+    # custódia; a proposta, o aceite do vendedor e a confirmação do comprador; sem juiz, 503
+    ('GET',  '/api/mercado/resumo'):          ('mercado_resumo', True),
+    ('GET',  '/api/mercado/item'):            ('mercado_item', True),
+    ('GET',  '/api/mercado/meus'):            ('mercado_meus', True),
+    ('GET',  '/api/mercado/propostas'):       ('mercado_propostas', True),
+    ('GET',  '/api/mercado/avisos'):          ('mercado_avisos', True),
+    ('POST', '/api/mercado/visto'):           ('mercado_visto', True),
+    ('POST', '/api/mercado/anunciar'):        ('mercado_anunciar', True),
+    ('POST', '/api/mercado/comprar'):         ('mercado_comprar', True),
+    ('POST', '/api/mercado/propor'):          ('mercado_propor', True),
+    ('POST', '/api/mercado/cancelar'):        ('mercado_cancelar', True),
+    ('POST', '/api/mercado/responder'):       ('mercado_responder', True),
+    ('POST', '/api/mercado/confirmar'):       ('mercado_confirmar', True),
+    ('POST', '/api/mercado/retirar'):         ('mercado_retirar', True),
 }
 
 
@@ -673,7 +689,7 @@ def versao_da_regra():
         return '0'
 
 
-class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin):
+class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -696,6 +712,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self.con.executescript(ESQUEMA_GUILDA)   # 11/09: a guilda (guilda.py) — só tabelas novas, como a Fase C
         self.con.executescript(ESQUEMA_SALAS)    # 13/09: a autoridade (salas.py) — só tabelas novas, nunca ALTER
         self.con.executescript(ESQUEMA_GRUPO)    # 13/09: sala em grupo e duelo ranqueado (grupo.py) — idem
+        self.con.executescript(ESQUEMA_MERCADO)  # 13/09: o mercadinho entre contas (mercado.py) — idem
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)
@@ -783,6 +800,11 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         if precisa_conta or so_mestre:
             conta = self.conta_do_token(token)
             if conta is None:
+                # UM APARELHO SÓ (13/09): o token que um login em outro aparelho
+                # derrubou ouve o motivo — é por ele que o jogo cai com a tela
+                # própria em vez de só esquecer a sessão (conta.py, _derruba_outras)
+                if token and self._sessao_derrubada(token):
+                    raise Recusa(401, FRASE_OUTRO_APARELHO, motivo=MOTIVO_OUTRO_APARELHO)
                 raise Recusa(401, 'faça login (token ausente ou vencido)')
             if conta['banido']:
                 raise Recusa(403, 'conta banida')
@@ -901,9 +923,10 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
                 raise Recusa(403, 'conta banida')
             self.tentativas.pop(c['id'], None)
             token = self._abre_sessao(c['id'], corpo)
-            # faxina de passagem: sessões desta conta vencidas há mais de 30 dias
-            self.con.execute("DELETE FROM sessoes WHERE conta_id = ? AND ultimo_uso < ?",
-                             (c['id'], agora() - SESSAO_DIAS * 86400))
+            # UM APARELHO SÓ (13/09, pedido do dono): o login certo derruba todas as
+            # outras sessões da conta, na mesma transação — o jogo aberto no outro
+            # aparelho cai (conta.py, _derruba_outras; a faxina das vencidas vem junto)
+            self._derruba_outras(c['id'], token)
             self._evento(c['id'], 'login', None)
             # a senha bateu: a vaga do IP volta, e o login entra no balde da conta
             self._login_certo(c['id'], vaga, t)
@@ -1027,8 +1050,19 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
                                               % ','.join('?' * len(lote)), lote):
                         conhecidos[r['iid']] = (r['conta_id'], r['estado'])
 
+                # 13/09: a série anunciada no mercadinho entre contas está em custódia no servidor
+                # (mercado.py); um save que a traga de volta ao saco a duplicaria
+                custodia = set()
+                for i in range(0, len(todos), 400):
+                    lote = todos[i:i + 400]
+                    custodia.update(r[0] for r in self.con.execute(
+                        "SELECT iid FROM mercado_anuncios WHERE estado = 'aberto' AND iid IN (%s)"
+                        % ','.join('?' * len(lote)), lote))
                 registrar = []
                 for iid, onde in no_save.items():
+                    if iid in custodia:
+                        self._recusa_save(cid, 409, 'instância anunciada no mercadinho: %s (%s) — retire o anúncio antes'
+                                          % (iid, onde))
                     dono = conhecidos.get(iid)
                     if dono is None:
                         if iid not in nascimentos:
@@ -1069,12 +1103,15 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
                 # troca há pouco — o cliente pode ainda não ter posto no save
                 # (um PUT que já estava a caminho), e marcar 'fora' o apagaria.
                 # 11/09: e o que está GUARDADO no banco da guilda (guilda.py): saiu
-                # do save do dono, mas não do jogo
+                # do save do dono, mas não do jogo. 13/09: idem a peça anunciada no mercadinho
+                # entre contas (mercado.py), em custódia no servidor até vender ou voltar
                 vivos = self.con.execute(
                     "SELECT iid FROM itens WHERE conta_id = ? AND estado = 'vivo' "
                     "AND NOT (origem = 'troca' AND criado_em > ?) "
-                    "AND iid NOT IN (SELECT iid FROM guilda_banco WHERE iid IS NOT NULL AND dono_id = ?)",
-                    (cid, t - TROCA_GRACA, cid)).fetchall()
+                    "AND iid NOT IN (SELECT iid FROM guilda_banco WHERE iid IS NOT NULL AND dono_id = ?) "
+                    "AND iid NOT IN (SELECT iid FROM mercado_anuncios WHERE iid IS NOT NULL AND vendedor_id = ? "
+                    "AND estado = 'aberto')",
+                    (cid, t - TROCA_GRACA, cid, cid)).fetchall()
                 consumidos = [(r['iid'],) for r in vivos if r['iid'] not in no_save]
                 self.con.executemany("UPDATE itens SET estado = 'fora' WHERE iid = ?", consumidos)
 

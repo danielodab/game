@@ -256,7 +256,7 @@ class Par:
                  'n_pulsos', 'ult_novos', 'ult_antigos', 'despediu', 'descartes', 'descartes_t0',
                  'conta', 'idents', 'freio_nome', 'apresentou', 'token', 'revista_em', 'falhas',
                  'cx', 'vigias', 'vigio', 'balde_convite',
-                 'prova_h', 'ipk', 'entrada', 'remetentes')
+                 'prova_h', 'ipk', 'entrada', 'remetentes', 'derrubado')
 
     def __init__(self, ws, agora):
         self.ws = ws
@@ -292,6 +292,7 @@ class Par:
         self.ipk = None              # 11/09 (achado 21): o endereço de quem conectou (_chave_ip), para a caixa de entrada
         self.entrada = {}            # (classe, remetente) -> Balde: a caixa de ENTRADA desta conexão
         self.remetentes = {}         # id -> remetente de quem mandou sussurro/convite a ela (o `cala` acha por aqui)
+        self.derrubado = False       # 13/09: a conta entrou em outro aparelho — avisada e fechando (_derruba)
 
 
 # ------------------------------------------------------------------ envelope
@@ -1124,7 +1125,66 @@ async def _ident(par, m, agora):
         par.token, par.falhas = token, 1
         par.revista_em = agora + rele_ident.REVISTA_FALHA_S
     CONTA['envios'] += manda_a_todos([par.ws], rele_ident.resposta(par.conta))
+    if conta is not None:
+        # 13/09 (um aparelho só): depois da resposta, as OUTRAS conexões desta
+        # conta com outro token — o aparelho de antes — caem, se o banco diz que
+        # o login deste as derrubou. Numa tarefa: o ident não espera por elas
+        _em_tarefa(_derruba_outros(par))
     return True
+
+
+def _em_tarefa(coro):
+    tarefa = asyncio.ensure_future(coro)
+    PENDENTES.add(tarefa)                        # a referência segura a tarefa viva
+    tarefa.add_done_callback(PENDENTES.discard)
+    return tarefa
+
+
+async def _derruba_outros(par):
+    """UM APARELHO SÓ (13/09, pedido do dono: "uma conta só pode estar logada
+    em um dispositivo.. se outro tentar logar, no que estava logado cai o
+    jogo"). A conexão `par` acabou de se identificar: as outras conexões
+    identificadas com a MESMA conta e token DIFERENTE são o aparelho de antes.
+    O banco decide quem cai (rele_ident.derrubadas, sem cache, uma ida só por
+    ident): só o token que um login derrubou — a mesma conta em duas abas do
+    mesmo navegador tem o mesmo token e não cai, e a sessão que ainda vale
+    (aberta antes desta regra) também não. Banco que não responde não derruba
+    ninguém: a conferência de novo (_revista) decide depois."""
+    conta, token = par.conta, par.token
+    if conta is None or token is None:
+        return
+    alvos = [p for p in PARES.values()
+             if p is not par and p.vivo and not p.derrubado and p.conta is not None
+             and p.conta['id'] == conta['id'] and p.token is not None and p.token != token]
+    if not alvos:
+        return
+    fora = await VERIFICADOR.derrubadas([p.token for p in alvos])
+    if not fora:
+        return
+    for p in alvos:
+        if p.vivo and not p.derrubado and p.token in fora:
+            _derruba(p)
+
+
+def _derruba(par):
+    """A conexão cuja sessão um login em outro aparelho derrubou: perde a
+    identidade na hora (nada mais sai com o carimbo da conta), ouve
+    {t:'derrubado', motivo:'outro-aparelho'} e fecha com
+    rele_ident.FECHA_DERRUBADO — o rede.js não religa depois disso. O que ela
+    ainda mandar até fechar é ignorado (trata)."""
+    cid = par.conta['id'] if par.conta is not None else None
+    par.derrubado = True
+    _poe_conta(par, None, time.monotonic())
+    log.info("sessão derrubada por um login em outro aparelho: conta #%s", cid)
+    _em_tarefa(_despede_derrubado(par.ws))
+
+
+async def _despede_derrubado(ws):
+    await _manda(ws, rele_ident.derrubado())
+    try:
+        await ws.close(rele_ident.FECHA_DERRUBADO, 'sua conta entrou em outro aparelho')
+    except Exception:
+        pass
 
 
 async def _revista(par):
@@ -1144,6 +1204,14 @@ async def _revista(par):
             return
         conta = None
     par.falhas = 0
+    if conta is None and definitivo and par.conta is not None and par.token is not None:
+        # 13/09: a sessão sumiu do banco. Se foi um login em outro aparelho —
+        # inclusive o que se identificou no relé do OUTRO contêiner, que este
+        # não vê —, a conexão cai com o aviso, em vez de só perder a conta
+        fora = await VERIFICADOR.derrubadas([par.token])
+        if fora and par.token in fora and par.vivo and not par.derrubado:
+            _derruba(par)
+            return
     if _poe_conta(par, conta, agora):
         if conta is not None:
             log.info("identidade conferida de novo: conta #%d%s", conta['id'], " (Mestre)" if conta['gm'] else "")
@@ -1175,8 +1243,8 @@ async def trata(ws, path=None):                 # path: assinatura antiga
     fechando = None
     try:
         async for msg in ws:
-            if fechando is not None:
-                continue                         # já está sendo desligado: só esvazia a fila
+            if fechando is not None or par.derrubado:
+                continue                         # já está sendo desligado (ou foi derrubado, 13/09): só esvazia a fila
             agora = time.monotonic()
             CONTA['entrada'] += 1
             m = _abre(msg)
@@ -1195,7 +1263,10 @@ async def trata(ws, path=None):                 # path: assinatura antiga
                     if m is not None and par.token is not None and agora >= par.revista_em:
                         await _revista(par)              # a sessão de novo: a revogada cai (rele_ident.CACHE_S)
                         agora = time.monotonic()
-                    dest = _processa(par, m, agora) if m is not None else None
+                    if par.derrubado:
+                        dest = []                        # 13/09: derrubada na revista — nada mais sai dela
+                    else:
+                        dest = _processa(par, m, agora) if m is not None else None
                     if dest:
                         # o carimbo da identidade (rele_ident.py): o nome
                         # reservado de quem não é o Mestre conferido, o
