@@ -151,14 +151,23 @@ var JOGO = (typeof window !== 'undefined')
   /* Resolve SEMPRE: {ok, fase, recompensa} ou {ok:false, erro, recusada}. Sem
    * rede, tenta de novo sozinho até o servidor responder (a tela diz). */
   A.fecha = function (bilhete, lances, hashFinal) {
+    return fechaEm('/api/sala/fechar', { bilhete: bilhete, lances: lances, hashFinal: hashFinal });
+  };
+  /* A SALA EM GRUPO (coop.js): o líder pede a semente ao servidor antes da ata */
+  A.abreGrupo = function (corpo) { return api('/api/grupo/abrir', corpo); };
+  /* e cada membro fecha com o registro do motor dele (os lances dos dois e as marcas) */
+  A.fechaGrupo = function (corpo) { return fechaEm('/api/grupo/fechar', corpo); };
+  /* O DUELO RANQUEADO: o servidor refaz a arena e muda a Brasa dos dois */
+  A.fechaDuelo = function (corpo) { return fechaEm('/api/duelo/fechar', corpo); };
+
+  function fechaEm(rota, corpo) {
     return new Promise(function (resolve) {
-      var corpo = { bilhete: bilhete, lances: lances, hashFinal: hashFinal };
       var pend = { corpo: corpo, resolve: resolve };
       fechamentos.push(pend);
       function tenta(avisou) {
         // as ops na fila sobem ANTES: o servidor paga a sala sobre o estado com elas
         descarregaFila().then(function () {
-          return api('/api/sala/fechar', corpo);
+          return api(rota, corpo);
         }).then(function (r) {
           if (foraDoAr(r)) {
             if (!avisou) aviso('Conferindo a sala com o servidor… (sem resposta, tentando de novo)');
@@ -179,7 +188,7 @@ var JOGO = (typeof window !== 'undefined')
       }
       tenta(false);
     });
-  };
+  }
 
   /* ------------------------------------------------------------ as operações */
   /* A op já rodou aqui (a função do jogo); entra na fila para o servidor. */

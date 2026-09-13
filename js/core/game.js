@@ -1958,6 +1958,48 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
 
+  /* A SALA EM GRUPO NO SERVIDOR (13/09): a ata tem `gid` quando a semente veio
+   * do servidor. Cada membro fecha com o registro do motor dele (Coop.logServidor:
+   * os lances dos dois e as marcas de queda/volta/saída); o servidor refaz uma
+   * vez e paga os dois. A tela de recompensa segue a do grupo (marcaRecompensaRede). */
+  function grupoNoServidor() {
+    if (!rede || rede.tipo !== 'grupo') return false;
+    var c = C(), reg = null;
+    try { reg = (c && c.logServidor) ? c.logServidor() : null; } catch (e) { reg = null; }
+    return !!(reg && reg.ata && reg.ata.gid && JOGO.Autoridade && JOGO.Autoridade.ligada && JOGO.Autoridade.ligada());
+  }
+  function fechaGrupoNoServidor(fase) {
+    var c = C(), reg = null;
+    try { reg = c.logServidor(); } catch (e) { reg = null; }
+    if (!reg || !reg.ata || !reg.ata.gid) return;
+    var hashFinal = 0;
+    try { hashFinal = E().hash(Game.state); } catch (e2) { hashFinal = 0; }
+    var promessa = JOGO.Autoridade.fechaGrupo({ gid: reg.ata.gid, lances: reg.lances, hashFinal: hashFinal,
+                                                fotografada: reg.fotografada, autoridade: reg.autoridade });
+    if (fase !== 'won') return;
+    conferindoSala = true;
+    var lastRoom = 2, ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
+    for (var k = 0; k < ds.length; k++) {
+      if (ds[k] && ds[k].id === Game.dungeonId && ds[k].rooms && ds[k].rooms.length) lastRoom = ds[k].rooms.length - 1;
+    }
+    var tela = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
+    try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('Conferindo a vitória do grupo com o servidor…'); } catch (eT) {}
+    promessa.then(function (r) {
+      conferindoSala = false;
+      if (Game.screen !== 'battle') return;
+      returnScreen = tela;
+      var rw;
+      if (r && r.ok && r.fase === 'won' && r.recompensa) rw = r.recompensa;
+      else {
+        var motivo = (r && r.erro) || 'o servidor não confirmou a vitória do grupo';
+        try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('A sala não rendeu recompensa: ' + motivo); } catch (eT2) {}
+        rw = recompensaVazia(motivo);
+      }
+      marcaRecompensaRede(rw);
+      setScreen(tela, rw);
+    });
+  }
+
   function handleBattleOver() {
     if (!Game.state || Game.screen !== 'battle') return;
     if (conferindoSala) return;          // o recibo da vitória ainda está vindo do servidor
@@ -2019,6 +2061,7 @@ var JOGO = (typeof window !== 'undefined')
       Game.mustEndTurn = false;
       Game.pendingFusion = null;
       if (ataSolo) { fechaNoServidor('won'); return; }   // 13/09: com bilhete, quem paga é o servidor
+      if (grupoNoServidor()) { fechaGrupoNoServidor('won'); return; }
       var rewards = computeRewards();
       var lastRoom = 2;
       var d = null, ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
@@ -2029,6 +2072,7 @@ var JOGO = (typeof window !== 'undefined')
       setScreen(returnScreen, rewards);
     } else if (Game.state.phase === 'lost') {
       if (ataSolo) fechaNoServidor('lost');                 // a sala perdida fecha no servidor também
+      else if (grupoNoServidor()) fechaGrupoNoServidor('lost');
       resetAiState();
       resetTimer(true);
       Game.selectedSpellId = null;

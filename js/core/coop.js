@@ -969,6 +969,12 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < hsP.length; i++) if (!validaPayload(hsP[i])) return { ok: false, motivo: 'versao' };
     return { ok: true, motivo: null };
   };
+  /* a conta do servidor de quem está na Rede (o `nuvem` que o relé conferiu), ou null */
+  function nuvemDe(id) {
+    var r = R(), achou = null;
+    try { if (r && r.pares) r.pares().forEach(function (p2) { if (p2.id === id) achou = p2.nuvem || null; }); } catch (e) {}
+    return achou;
+  }
   /* O líder, no "Entrar na batalha": manda a ata e só cria a batalha dele no `dentro`. */
   Coop.entrar = function () {
     var pe = Coop.podeEntrar();
@@ -987,6 +993,39 @@ var JOGO = (typeof window !== 'undefined')
       return c;
     });
     if (!pars.length) return false;
+    /* A SEGURANÇA (13/09): com sessão do site a SEMENTE da sala em grupo vem do
+     * servidor — ele refaz a batalha e paga os dois no fim. O líder pede, e a
+     * ata sai quando a semente chega (com o PV que o servidor anotou). */
+    var Aut = JOGO.Autoridade;
+    if (Aut && Aut.ligada && Aut.ligada() && Coop._sementeFixa == null) {
+      if (S.pedindoGrupo) return true;
+      var contaPar = nuvemDe(p.id);
+      if (!contaPar) {
+        avisa('O servidor não conferiu a conta de ' + nomeParceiro() + ' — ela precisa entrar na conta e recarregar a página.', 'aviso');
+        return false;
+      }
+      S.pedindoGrupo = true;
+      var idsDe = function (lista) { return lista.map(function (h) { return h.heroId || h.classId; }); };
+      Aut.abreGrupo({ dungeonId: g.dungeonId, roomIndex: g.roomIndex, dificuldade: g.dificuldade || 'normal',
+                      herois: idsDe(meus), dono: meuId(),
+                      parceiro: { conta: contaPar, dono: p.id, herois: idsDe(pars) } }).then(function (r) {
+        S.pedindoGrupo = false;
+        if (!r || !r.ok || typeof r.semente !== 'number' || typeof r.gid !== 'string') {
+          avisa('O servidor não abriu a sala do grupo: ' + ((r && r.erro) || 'sem resposta') + '.', 'aviso');
+          muda();
+          return;
+        }
+        mandaAta(g, p, meus, pars, r.semente >>> 0, r.carry || null, r.gid);
+      });
+      muda();
+      return true;
+    }
+    mandaAta(g, p, meus, pars,
+             (Coop._sementeFixa != null) ? (Coop._sementeFixa >>> 0) : novaSemente(),
+             (g._carry && g._carry()) || null, null);
+    return true;
+  };
+  function mandaAta(g, p, meus, pars, semente, carry, gid) {
     lembraParceiro(p.id, pars);
     S.n++;
     // a ata passa pelo JSON também do lado do líder: os dois motores montam a
@@ -995,17 +1034,17 @@ var JOGO = (typeof window !== 'undefined')
       bid: (cfg.gid || 'g') + ':' + g.dungeonId + ':' + g.roomIndex + ':' + S.n,
       dungeonId: g.dungeonId, roomIndex: g.roomIndex,
       dificuldade: g.dificuldade || 'normal',
-      semente: (Coop._sementeFixa != null) ? (Coop._sementeFixa >>> 0) : novaSemente(),
+      semente: semente,
       versao: Coop.versao(),
       party: meus.concat(pars),
-      carry: (g._carry && g._carry()) || null
+      carry: carry,
+      gid: gid                        // 13/09: a sala do grupo no servidor (null sem sessão)
     });
     S.chamando = true; S.ataFalhou = false;
     S.ataEnvios = 1; S.ataProx = agora() + Coop.ATA_MS;
     envia('ata', S.ata);
     muda();
-    return true;
-  };
+  }
   function iniciaBatalha(bid) {
     S.bid = bid;
     S.fila = {}; S.log = {}; S.hashes = {}; S.foto = null;
@@ -1700,6 +1739,8 @@ var JOGO = (typeof window !== 'undefined')
     // o "se valesse" (amistoso): os pontos da Brasa dos dois — o dele vem no
     // resumo da presença na Rede, o meu do DB (assíncrono: chega antes do fim)
     S.duelo.ptsDele = null; S.duelo.ptsMeus = null;
+    // 13/09: o que o servidor precisa para refazer a arena e ranquear
+    S.duelo.arenaSrv = { dungeonId: dg, roomIndex: ri, semente: s, duplaA: clone(A), duplaB: clone(B), eu: lado };
     try {
       var r0 = R(), ps = (r0 && r0.pares) ? r0.pares() : [];
       for (var q = 0; q < ps.length; q++) {
@@ -1752,6 +1793,30 @@ var JOGO = (typeof window !== 'undefined')
                                minhaDupla: minha, duplaDele: dele, resultado: res, clima: f.clima });
       }
     } catch (e) {}
+    /* O DUELO RANQUEADO (13/09, a segurança): com sessão do site, o servidor
+     * refaz a arena com as duplas das DUAS contas e o registro de lances, e só
+     * o resultado de lá muda a Brasa — nos dois. W.O., desistência e partida
+     * contestada não ranqueiam. Os tetos por par e por dia são do servidor. */
+    try {
+      var Aut = JOGO.Autoridade, arena = S.duelo.arenaSrv, Se = JOGO.Sessao;
+      if (Aut && Aut.ligada && Aut.ligada() && Aut.fechaDuelo && arena && !wo && !contestado && S.parceiro) {
+        var souA = arena.eu === 'A';
+        var eu = { conta: Se && Se.contaId ? Se.contaId() : null, dono: meuId(),
+                   herois: ids(souA ? arena.duplaA : arena.duplaB) };
+        var ele = { conta: nuvemDe(S.parceiro.id), dono: S.parceiro.id, herois: ids(souA ? arena.duplaB : arena.duplaA) };
+        if (eu.conta && ele.conta) {
+          Aut.fechaDuelo({ did: S.duelo.did, dungeonId: arena.dungeonId, roomIndex: arena.roomIndex, semente: arena.semente,
+                           A: souA ? eu : ele, B: souA ? ele : eu, lances: (S.logSrv || []).slice(),
+                           hashFinal: f.h, fotografada: !!S.fotografada }).then(function (r) {
+            if (r && r.ok && r.ranqueado && typeof r.delta === 'number') {
+              avisa('Duelo ranqueado: ' + (r.delta >= 0 ? '+' : '') + r.delta + ' pontos de Brasa.', r.delta >= 0 ? 'ok' : 'info');
+            } else if (r && r.ok && r.motivo === 'teto') {
+              avisa('Este duelo não contou para o ranking (o teto de duelos ranqueados de hoje).', 'info');
+            }
+          });
+        }
+      }
+    } catch (eR) {}
     // 11/09 (achado 20): o duelo pela Rede é AMISTOSO e não rende nada que
     // vire moeda ou bônus — nem o treino da guilda (XP_TREINO e MOEDA_TREINO
     // no cofre). Antes todo duelo anotado pagava aos DOIS lados, fosse qual
