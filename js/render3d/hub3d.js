@@ -551,7 +551,7 @@ var JOGO = (typeof window !== 'undefined')
     base.position.y = 0.25;
     g.add(base);
     var r = rotulo('Para a batalha', '#f0ead8');
-    r.position.y = 4.4;
+    r.position.y = 5.0;              // 13/09: acima do topo do aro (4,06), não em cima dele
     g.add(r);
     g.position.set(0, 0, -R * 0.72);
     g.lookAt(0, 0, 0);
@@ -564,14 +564,18 @@ var JOGO = (typeof window !== 'undefined')
      * Eram dois degraus de pedra — e degrau é um enfeite, não uma porta: numa
      * sala murada, no fundo de um calabouço, o jogador não lia aquilo como o
      * caminho de volta. Agora é o mesmo arco da porta da batalha, na metade do
-     * tamanho e em BRANCO-AZULADO em vez da cor do tema: lado a lado, a porta
-     * quente leva para dentro e a fria leva para fora — a diferença de cor
-     * diz para onde vai sem precisar ler o rótulo. */
+     * tamanho e na cor da SAÍDA em vez da cor do tema: lado a lado, a porta do
+     * tema leva para dentro e a outra leva para fora — a diferença de cor diz
+     * para onde vai sem precisar ler o rótulo.
+     * 13/09, dono: "o portal deve ser VERMELHO para identificar a saída, e o
+     * nome em cima". O branco-azulado sumia contra os muros e o chão claros;
+     * vermelho é a cor de "sair" que todo mundo já lê. O aro também fica
+     * vermelho (com brilho próprio, para não virar marrom na sombra). */
     var s = new THREE.Group();
-    var corSaida = new THREE.Color(0xbcd4e6);
+    var corSaida = new THREE.Color(0xe0352b);
     var aroS = new THREE.Mesh(
       new THREE.TorusGeometry(1.7, 0.26, 12, 40),
-      new THREE.MeshStandardMaterial({ color: 0x5a5348, roughness: 0.9 })
+      new THREE.MeshStandardMaterial({ color: 0x9a2320, emissive: 0x4a0a08, roughness: 0.7 })
     );
     aroS.position.y = 2.1;
     s.add(aroS);
@@ -590,9 +594,10 @@ var JOGO = (typeof window !== 'undefined')
     s.add(baseS);
     // o rótulo é um sprite de tamanho fixo: perto da câmera (a saída fica
     // do lado do herói) ele enchia a tela — menor, e a saída vai para o LESTE,
-    // fora da linha câmera→herói→porta
-    var r2 = rotulo('Sair do calabouço', '#d8cfb8');
-    r2.position.y = 3.6;
+    // fora da linha câmera→herói→porta. 13/09: EM CIMA do aro — a 3,6 o
+    // sprite (~1 de altura) ficava atrás do arco, cujo topo está em 4,06
+    var r2 = rotulo('Sair do calabouço', '#ffd2cb');
+    r2.position.y = 4.9;
     r2.scale.multiplyScalar(0.62);
     s.add(r2);
     s.position.set(R * 0.82, 0, R * 0.30);
