@@ -68,11 +68,17 @@ var JOGO = (typeof window !== 'undefined')
   M.POR_DIA = 3;
 
   // ------------------------------------------------------------- utilidades
+  /* O DIA DE BRASÍLIA (13/09, a segurança): o servidor confere a missão e
+   * paga o prêmio, e ele não sabe o fuso do jogador — então o dia é o de
+   * Brasília (UTC−3 fixo, sem horário de verão desde 2019) para os dois lados.
+   * Antes era o dia LOCAL do aparelho: às 22 h de Brasília o servidor (em UTC)
+   * já estaria no dia seguinte, com outra lista. */
   function hoje() {
-    var d = new Date();
-    var m = d.getMonth() + 1, dia = d.getDate();
-    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dia < 10 ? '0' : '') + dia;
+    var d = new Date(Date.now() - 3 * 3600 * 1000);
+    var m = d.getUTCMonth() + 1, dia = d.getUTCDate();
+    return d.getUTCFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dia < 10 ? '0' : '') + dia;
   }
+  M.hoje = hoje;
   /* O sorteio do dia: mulberry32 semeado pela DATA — determinístico e
    * verificável. A mesma família de rng do motor, cópia local de propósito:
    * este módulo não pode depender do Engine para abrir o quadro no hub. */

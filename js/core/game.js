@@ -1478,6 +1478,31 @@ var JOGO = (typeof window !== 'undefined')
     return { minha: Math.random() < 0.5, pela: 'sorte' };
   }
 
+  /* O PV que atravessa para a próxima sala na descida SOZINHO (a do grupo é o
+   * carryRede): herói vivo leva o que tem, caído leva 0, e a unidade FUNDIDA
+   * divide o PV dela entre os heróis que a formaram. Função pura desde 13/09:
+   * o juiz do servidor (servidor/juiz/recompensa.js) usa a mesma, e a próxima
+   * sala só se refaz igual se o PV de entrada for o mesmo dos dois lados. */
+  function carrySolo(st) {
+    var out = {};
+    for (var i = 0; i < st.units.length; i++) {
+      var u = st.units[i];
+      if (u.kind === 'hero') {
+        out[u.heroId || u.defId] = u.alive ? u.hp : 0;
+      } else if (u.kind === 'fusion' && u.side === 'player') {
+        var donos = fusionHeroIds(u);
+        if (!donos.length) continue;
+        var parte = u.alive ? Math.max(1, Math.floor(u.hp / donos.length)) : 0;
+        for (var f = 0; f < donos.length; f++) out[donos[f]] = parte;
+      }
+    }
+    return out;
+  }
+  /* A SEGURANÇA (13/09): o juiz roda ESTE game.js no servidor e pede a
+   * recompensa da sala refeita pelo mesmo funil — sem segunda cópia das regras. */
+  Game._carrySolo = function (st) { return carrySolo(st || Game.state); };
+  Game._computeRewards = function () { return computeRewards(); };
+
   function computeRewards() {
     var st = Game.state;
     var prog = P();
@@ -1870,20 +1895,9 @@ var JOGO = (typeof window !== 'undefined')
       // vida cheia de graça. O PV da fusão é dividido entre os heróis que a
       // formaram (ela é a soma dos dois), lendo defensivamente os campos que o
       // Engine expuser — sem eles, cai no comportamento antigo.
-      carryHp = {};
       // [G11] em grupo a chave é `dono:heroId` (o heroId é a classe e colide)
       if (rede && rede.tipo === 'grupo') carryHp = carryRede(Game.state);
-      else for (var i = 0; i < Game.state.units.length; i++) {
-        var u = Game.state.units[i];
-        if (u.kind === 'hero') {
-          carryHp[u.heroId || u.defId] = u.alive ? u.hp : 0;
-        } else if (u.kind === 'fusion' && u.side === 'player') {
-          var donos = fusionHeroIds(u);
-          if (!donos.length) continue;
-          var parte = u.alive ? Math.max(1, Math.floor(u.hp / donos.length)) : 0;
-          for (var f = 0; f < donos.length; f++) carryHp[donos[f]] = parte;
-        }
-      }
+      else carryHp = carrySolo(Game.state);
       resetAiState();
       resetTimer(true);
       Game.selectedSpellId = null;

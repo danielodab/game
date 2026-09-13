@@ -41,10 +41,14 @@ var JOGO = (typeof window !== 'undefined')
     return fora;
   }
 
-  /* AAAAMMDD do dia LOCAL vira a semente — um hash pequeno e estável. */
+  /* AAAAMMDD do dia DE BRASÍLIA vira a semente — um hash pequeno e estável.
+   * 13/09 (a segurança): era o dia LOCAL do aparelho; o servidor, que agora
+   * paga o saque, não sabe o fuso do jogador, então os dois usam Brasília
+   * (UTC−3 fixo, sem horário de verão desde 2019). */
   function chaveDoDia(ts) {
-    var d = new Date(typeof ts === 'number' && isFinite(ts) ? ts : Date.now());
-    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    var t = (typeof ts === 'number' && isFinite(ts)) ? ts : Date.now();
+    var d = new Date(t - 3 * 3600 * 1000);
+    return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
   }
 
   Dd.hoje = function (ts) {

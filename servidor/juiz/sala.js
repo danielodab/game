@@ -69,8 +69,19 @@ function executa(J, st, l) {
 }
 
 /* entrada = { dungeonId, roomIndex, dificuldade, semente, party, carry,
- *             escolhePosicao (padrão true), lances, hashFinal } */
+ *             escolhePosicao (padrão true), lances, hashFinal }
+ * Num mundo NOVO, só do combate. Quem precisa da economia no mesmo mundo (a
+ * recompensa) chama refazEm com o mundo já montado. */
 function refaz(entrada) {
+  const r = refazEm(mundo((entrada && entrada.extras) || []).JOGO, entrada);
+  delete r.estado;
+  return r;
+}
+
+/* O mesmo refazer num mundo pronto (`J` = o JOGO dele). Devolve também
+ * `estado` (a batalha no fim) e `turnosJogador` (quantas vezes o jogador
+ * encerrou a vez: a régua do tempo mínimo da sala). */
+function refazEm(J, entrada) {
   const c = entrada || {};
   if (typeof c.dungeonId !== 'string' || !inteiro(c.roomIndex) || c.roomIndex < 0) {
     throw recusa('sala inválida', 'entrada');
@@ -80,9 +91,8 @@ function refaz(entrada) {
   const lances = Array.isArray(c.lances) ? c.lances : [];
   if (lances.length > LANCES_MAX) throw recusa('lances demais', 'entrada');
 
-  const w = mundo(c.extras || []);
-  const J = w.JOGO;
   const E = J.Engine;
+  let turnosJogador = 0;
   if (typeof c.preparar === 'function') c.preparar(J);    // provas: ganchos no mundo antes da sala
 
   let st;
@@ -138,7 +148,7 @@ function refaz(entrada) {
       if ((l.a === 'm' || l.a === 'c' || l.a === 'f') && l.u !== ativo.uid) {
         throw recusa('lance com uma unidade que não é a da vez', 'unidade');
       }
-      if (l.a === 'e') conta();
+      if (l.a === 'e') { conta(); turnosJogador++; }
     }
     let ok;
     try { ok = executa(J, st, l); } catch (e) { if (e && e.juiz) throw e; ok = false; }
@@ -167,7 +177,9 @@ function refaz(entrada) {
     mortos: mortos,
     desafio: st.desafio ? { id: st.desafio.id || null, cumprido: !!st.desafio.cumprido } : null,
     herois: herois,
-    passos: passos
+    passos: passos,
+    turnosJogador: turnosJogador,
+    estado: st
   };
 }
 
@@ -175,4 +187,4 @@ function rotas(registra) {
   registra('POST', '/refaz', (corpo) => refaz(corpo));
 }
 
-module.exports = { refaz, rotas, ehDoJogador, aplicaCarry };
+module.exports = { refaz, refazEm, rotas, ehDoJogador, aplicaCarry, recusa };

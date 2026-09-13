@@ -40,8 +40,9 @@ function script(rel) {
   if (s) return s;
   const arq = path.join(RAIZ, rel);
   const buf = fs.readFileSync(arq);
-  // progress.js tem um byte fora de UTF-8 num comentário: latin1 preserva cada
-  // byte e o JS só usa ASCII nos identificadores, então nada muda no código
+  // os arquivos são UTF-8 (o progress.js tem um NUL DENTRO de uma string — o
+  // marcador '\0nada' do saque — e ele tem de chegar intacto). O latin1 fica só
+  // de rede para um arquivo que um dia venha em outra codificação
   const txt = buf.toString(ehUtf8(buf) ? 'utf8' : 'latin1');
   s = new vm.Script(txt, { filename: rel });
   cache.set(rel, s);
@@ -66,8 +67,10 @@ function armazem() {
 }
 
 /* Um mundo: um contexto com `globalThis.JOGO` e os arquivos pedidos já
- * carregados. `extra` são arquivos a mais (progress.js, db.js…), na ordem. */
-function mundo(extra) {
+ * carregados. `extra` são arquivos a mais (progress.js, db.js…), na ordem.
+ * `prepara(ctx)` roda com o contexto criado e ANTES de qualquer arquivo: é
+ * onde entram os dublês (window, crypto, o sorteio semeado, JOGO.GM…). */
+function mundo(extra, prepara) {
   const ctx = {
     console: { log() {}, info() {}, warn() {}, error() {} },
     localStorage: armazem(),
@@ -78,6 +81,7 @@ function mundo(extra) {
   ctx.globalThis = ctx;
   ctx.self = ctx;
   vm.createContext(ctx);
+  if (typeof prepara === 'function') prepara(ctx);
   const lista = DADOS.concat(COMBATE, extra || []);
   for (const rel of lista) script(rel).runInContext(ctx);
   return ctx;

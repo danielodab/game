@@ -34,6 +34,23 @@ function registra(metodo, caminho, fn) { rotas[metodo + ' ' + caminho] = fn; }
 
 registra('GET', '/saude', () => ({ ok: true, versao: versaoDosDados() }));
 
+/* AS REGRAS que a API precisa para abrir um bilhete sem carregar o jogo: os
+ * calabouços abertos e quantas salas cada um tem, e as classes. */
+let regrasCache = null;
+registra('GET', '/regras', () => {
+  if (regrasCache) return regrasCache;
+  const J = motor.mundo().JOGO;
+  const ds = Array.isArray(J.DATA.dungeons) ? J.DATA.dungeons : Object.values(J.DATA.dungeons);
+  const calaboucos = {};
+  ds.forEach((d) => {
+    if (!d || !d.id || !d.rooms || !d.rooms.length) return;
+    if (J.DATA.portalFechado && J.DATA.portalFechado(d.id)) return;
+    calaboucos[d.id] = d.rooms.length;
+  });
+  regrasCache = { ok: true, versao: versaoDosDados(), calaboucos, classes: Object.keys(J.DATA.classes || {}) };
+  return regrasCache;
+});
+
 /* A VERSÃO DAS REGRAS: um hash dos arquivos que o juiz carrega. O cliente manda
  * a dele (o mesmo cálculo não cabe no navegador, então a API compara com o
  * js/versao.js do build); aqui ela serve para a API saber se o juiz subiu com
@@ -51,7 +68,7 @@ function versaoDosDados() {
 }
 
 // os módulos das rotas grandes se registram sozinhos (existem a partir das fases seguintes)
-for (const mod of ['./sala', './economia']) {
+for (const mod of ['./sala', './recompensa', './economia']) {
   try {
     const m = require(mod);
     if (m && typeof m.rotas === 'function') m.rotas(registra);
@@ -85,15 +102,22 @@ const servidor = http.createServer((req, res) => {
       try { corpo = JSON.parse(Buffer.concat(pedacos).toString('utf8')); }
       catch (e) { return responde(res, 400, { ok: false, erro: 'JSON inválido' }); }
     }
-    try {
-      const saida = fn(corpo || {});
-      responde(res, saida && saida.status ? saida.status : 200, saida);
-    } catch (e) {
-      // erro de regra é 422 com o porquê; erro de programa é 500 e vai para o log
-      if (e && e.juiz) return responde(res, 422, { ok: false, erro: e.message, motivo: e.motivo || null });
+    // erro de regra é 422 com o porquê; erro de programa é 500 e vai para o log
+    const falhou = (e) => {
+      if (res.writableEnded) return;
+      if (e && e.juiz) {
+        return responde(res, 422, { ok: false, erro: e.message, motivo: e.motivo || null,
+                                    indice: (typeof e.indice === 'number') ? e.indice : null });
+      }
       console.error('[juiz] erro:', e && e.stack || e);
       responde(res, 500, { ok: false, erro: 'o juiz falhou' });
-    }
+    };
+    // a rota pode devolver um valor ou uma Promise (o DB do jogo responde por Promise)
+    let saida;
+    try { saida = fn(corpo || {}); } catch (e) { return falhou(e); }
+    Promise.resolve(saida).then((s) => {
+      if (!res.writableEnded) responde(res, s && s.status ? s.status : 200, s);
+    }, falhou);
   });
 });
 
