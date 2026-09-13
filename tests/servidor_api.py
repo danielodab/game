@@ -699,6 +699,11 @@ class ProvaDaApi(unittest.TestCase):
                                                       'guilda': {'nome': 'os soterrados', 'emblema': '⚒'}}})
         self.assertEqual(a.salva(0, pa, da)[0], 200)
         self.assertEqual(b.salva(0, pb, dbb)[0], 200)
+        # 13/09: a guilda do ranking é a do servidor (criada ANTES da leitura: o ranking fica guardado 30 s)
+        status, rg = a.pede('POST', '/api/guilda/criar', {'nome': 'Soterrados %d' % ProvaDaApi._n, 'emblema': '⚒'})
+        self.assertEqual(status, 200, rg)
+        status, re_ = b.pede('POST', '/api/guilda/entrar', {'gid': rg['guilda']['id']})
+        self.assertEqual(status, 200, re_)
 
         status, r = Cliente(self.base).pede('GET', '/api/ranking')       # sem autenticação
         self.assertEqual(status, 200)
@@ -714,8 +719,10 @@ class ProvaDaApi(unittest.TestCase):
         pvp = [p['nome'] for p in r['pvp']]
         self.assertIn('Pia, a Forte', pvp)
         self.assertNotIn(b.conta['nome'], pvp)
-        # guildas: agrupa sem diferenciar maiúsculas
-        g = [g for g in r['guildas'] if g['nome'].lower() == 'os soterrados']
+        # 13/09: a guilda que só existe no SAVE não entra no ranking (ela não existe no jogo)
+        self.assertNotIn('os soterrados', [g['nome'].lower() for g in r['guildas']])
+        # a guilda do servidor, sim: os membros e a XP somada
+        g = [g for g in r['guildas'] if g['nome'] == rg['guilda']['nome']]
         self.assertEqual(len(g), 1)
         self.assertEqual(g[0]['membros'], 2)
         self.assertEqual(g[0]['xpTotal'], 7300)
@@ -900,8 +907,8 @@ class ProvaDaApi(unittest.TestCase):
                 b.close()
         self.assertEqual(placa(c.conta['id']), ('Lanterna Clara', None))
         self.assertEqual(placa(m.conta['id']), ('Equipe Mestra', 'GM'))
-        g = [g for g in self.ranking()['guildas'] if g['nome'] == 'Lanterna Clara']
-        self.assertTrue(g and g[0]['emblema'] is None, g)
+        # 13/09: guilda que só existe no save não vai mais à vitrine (a placa limpa fica no resumo)
+        self.assertNotIn('Lanterna Clara', [g['nome'] for g in self.ranking()['guildas']])
 
     def test_vitrine_de_antes_da_lei(self):
         """A vitrine que JÁ estava gravada antes da lei dos nomes (a API de antes
@@ -948,7 +955,7 @@ class ProvaDaApi(unittest.TestCase):
             guildas = {g['nome']: g['emblema'] for g in r['guildas']}
             self.assertNotIn('Staff', guildas)
             self.assertNotIn('Equipe Mestra', guildas)             # só o Mestre nela: não soma, não aparece
-            self.assertEqual(guildas.get('Lanterna'), '⚒')
+            self.assertNotIn('Lanterna', guildas)                  # 13/09: só do save — não existe no jogo
             linha = depois.con.execute("SELECT nome, guilda_nome, guilda_emblema FROM resumos WHERE conta_id = ?",
                                        (ids['zeca'],)).fetchone()
             self.assertEqual(tuple(linha), ('Zeca Comum', None, None))
@@ -990,6 +997,12 @@ class ProvaDaApi(unittest.TestCase):
                                            {'jogador': {'nome': 'Oda, o Vigia', 'brasa': {'pts': 1990, 'partidas': 9},
                                                         'guilda': {'nome': guilda, 'emblema': '⚒'}}}))
         self.assertEqual(status, 200, r)
+
+        # 13/09: o ranking de guildas lê as guildas do servidor (antes, o nome do save)
+        status, rg = lia.pede('POST', '/api/guilda/criar', {'nome': guilda, 'emblema': '⚒'})
+        self.assertEqual(status, 200, rg)
+        status, re_ = oda.pede('POST', '/api/guilda/entrar', {'gid': rg['guilda']['id']})
+        self.assertEqual(status, 200, re_)
 
         def onde(r, nome):
             """as listas do ranking em que o nome aparece"""
@@ -1487,7 +1500,9 @@ class ProvaDaApi(unittest.TestCase):
             marcas = sorted(n for (n,) in b.execute("SELECT nome FROM migracoes").fetchall())
             # os dois processos migram UMA vez: resumos-v2, e (10/09) a lei dos nomes passando a
             # vitrine a limpo, com a marca da versão da regra — cada uma aparece uma vez só
-            self.assertEqual([m for m in marcas if not m.startswith('resumos-nomes:')], ['resumos-v2'], marcas)
+            # (13/09) e a foto das guildas de antes do servidor
+            self.assertEqual([m for m in marcas if not m.startswith('resumos-nomes:')],
+                             ['guildas-antigas', 'resumos-v2'], marcas)
             self.assertEqual(len([m for m in marcas if m.startswith('resumos-nomes:')]), 1, marcas)
             b.close()
         finally:

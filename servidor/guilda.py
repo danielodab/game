@@ -146,6 +146,17 @@ CREATE TABLE IF NOT EXISTS guilda_mural(
   autor_id    INTEGER REFERENCES contas(id) ON DELETE SET NULL,
   em          INTEGER NOT NULL
 );
+-- 13/09 (dono: "no site só aparece a guild Game Over, no jogo só a STAFF"): as guildas de
+-- ANTES do servidor, que só existiam no navegador e ficaram no save como nome e emblema.
+-- Uma FOTO tirada uma vez (migração 'guildas-antigas'): quem aparece aqui pode trazer a
+-- guilda para o servidor sem pagar as insígnias — o primeiro vira líder e os outros da
+-- mesma foto voltam para ela. Congelada no deploy: um save forjado depois não entra
+CREATE TABLE IF NOT EXISTS guildas_antigas(
+  conta_id    INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
+  nome        TEXT NOT NULL COLLATE NOCASE,
+  emblema     TEXT,
+  trazida_em  INTEGER
+);
 """
 ORDEM_CARGO = {'lider': 0, 'oficial': 1, 'membro': 2}
 RE_CONTROLE = re.compile(r'[\x00-\x09\x0b-\x1f\x7f]')
@@ -265,11 +276,78 @@ class GuildaMixin:
         self.con.commit()
         return self._g_foto(gid, cid)
 
+    # -- as guildas de antes (13/09) ---------------------------------------------------
+    def _migra_guildas_antigas(self):
+        """A foto das guildas de antes do servidor, uma vez por banco (o marcador
+        sai na mesma transação; no rolling update o segundo processo espera a
+        trava e acha o marcador). Entra quem tem nome de guilda no resumo do
+        save, não está em guilda do servidor e cuja guilda NÃO existe no
+        servidor com esse nome; conta banida fica de fora."""
+        with self._escrita():
+            if self.con.execute("SELECT 1 FROM migracoes WHERE nome = 'guildas-antigas'").fetchone():
+                return
+            n = self.con.execute(
+                "INSERT OR IGNORE INTO guildas_antigas(conta_id, nome, emblema) "
+                "SELECT r.conta_id, TRIM(r.guilda_nome), r.guilda_emblema FROM resumos r "
+                "JOIN contas c ON c.id = r.conta_id "
+                "WHERE c.banido = 0 AND r.guilda_nome IS NOT NULL AND TRIM(r.guilda_nome) != '' "
+                "  AND r.conta_id NOT IN (SELECT conta_id FROM guilda_membros) "
+                "  AND TRIM(r.guilda_nome) NOT IN (SELECT nome FROM guildas)").rowcount
+            self.con.execute("INSERT INTO migracoes(nome, feita_em) VALUES ('guildas-antigas', ?)", (agora(),))
+        log.info("migração guildas-antigas: %d conta(s) com guilda de antes para trazer", max(0, n))
+
+    def _g_antiga(self, cid):
+        """A guilda de antes que esta conta ainda pode trazer: {nome, emblema,
+        existe} (existe = alguém da mesma foto já a trouxe: é só voltar), ou None."""
+        a = self.con.execute("SELECT nome, emblema FROM guildas_antigas WHERE conta_id = ? AND trazida_em IS NULL",
+                             (cid,)).fetchone()
+        if a is None:
+            return None
+        g = self.con.execute("SELECT id FROM guildas WHERE nome = ?", (a['nome'],)).fetchone()
+        veio = g is not None and self.con.execute(
+            "SELECT 1 FROM guildas_antigas WHERE nome = ? AND trazida_em IS NOT NULL", (a['nome'],)).fetchone()
+        if g is not None and not veio:
+            return None                       # o nome foi fundado por outra gente: não há o que trazer
+        return {'nome': a['nome'], 'emblema': a['emblema'] or '⚑', 'existe': g is not None}
+
     # -- ler ------------------------------------------------------------------------
     def guilda_minha(self, conta, corpo):
         with self.tranca:
             g, _ = self._g_membro(conta['id'])
-            return 200, {'ok': True, 'guilda': self._g_foto(g['id'], conta['id']) if g is not None else None}
+            if g is not None:
+                return 200, {'ok': True, 'guilda': self._g_foto(g['id'], conta['id'])}
+            return 200, {'ok': True, 'guilda': None, 'antiga': self._g_antiga(conta['id'])}
+
+    def guilda_trazer(self, conta, corpo):
+        """Traz a guilda de antes (13/09): a primeira conta da foto a funda sem
+        insígnias e vira líder; as outras voltam direto para ela, sem convite e
+        sem olhar a porta — já eram da guilda."""
+        cid, t = conta['id'], agora()
+        with self.tranca:
+            if self._g_membro(cid)[0] is not None:
+                raise Recusa(409, 'você já tem guilda')
+            a = self._g_antiga(cid)
+            if a is None:
+                raise Recusa(404, 'não há guilda de antes para trazer')
+            if not conta['gm'] and nomes.reservado(a['nome']):
+                raise Recusa(400, NOME_RESERVADO)
+            if a['existe']:
+                gid = self.con.execute("SELECT id FROM guildas WHERE nome = ?", (a['nome'],)).fetchone()['id']
+                self._g_entra(cid, gid, t)
+                como = 'voltou'
+            else:
+                try:
+                    gid = self.con.execute(
+                        "INSERT INTO guildas(nome, emblema, lider_id, criada_em) VALUES (?, ?, ?, ?)",
+                        (a['nome'][:NOME_MAX], a['emblema'][:EMBLEMA_MAX], cid, t)).lastrowid
+                except sqlite3.IntegrityError:
+                    self.con.rollback()
+                    raise Recusa(409, 'já existe uma guilda com esse nome')
+                self._g_entra(cid, gid, t)
+                como = 'fundou'
+            self.con.execute("UPDATE guildas_antigas SET trazida_em = ? WHERE conta_id = ?", (t, cid))
+            self._evento(cid, 'guilda-trazida', {'guilda': gid, 'nome': a['nome'], 'como': como})
+            return 200, {'ok': True, 'como': como, 'guilda': self._g_ficha(gid, cid)}
 
     def guilda_lista(self, conta, corpo):
         with self.tranca:

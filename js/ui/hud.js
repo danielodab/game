@@ -8023,7 +8023,9 @@ var JOGO = (typeof window !== 'undefined')
         // 11/09: a guilda de antes (a do navegador) sobe para o servidor sem pagar de novo
         var antiga = Gd.guildaLocalLiderada ? Gd.guildaLocalLiderada() : null;
         if (antiga) {
-          caixa.appendChild(btn('Trazer a ' + txtGuilda(antiga.emblema, antiga.nome) + ' para o servidor (sem pagar de novo)',
+          // 13/09: quem era da mesma guilda de antes e chega depois do líder VOLTA para ela
+          caixa.appendChild(btn((antiga.existe ? 'Voltar para a ' : 'Trazer a ') + txtGuilda(antiga.emblema, antiga.nome) +
+            (antiga.existe ? ' (você já era dela)' : ' para o servidor (sem pagar de novo)'),
             'btn-gold btn-block', function () {
               Gd.migrarLocal().then(function (res) {
                 if (!res.ok) { toast(res.erro || 'não deu'); return; }
@@ -8032,7 +8034,9 @@ var JOGO = (typeof window !== 'undefined')
                 if (JOGO.Hub && JOGO.Hub.nomeia) {
                   try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
                 }
-                toast('A ' + txtGuilda(res.guilda.emblema, res.guilda.nome) + ' agora mora no servidor — chame os membros de novo.', 'good');
+                toast(res.como === 'voltou'
+                  ? 'Você voltou para a ' + txtGuilda(res.guilda.emblema, res.guilda.nome) + '.'
+                  : 'A ' + txtGuilda(res.guilda.emblema, res.guilda.nome) + ' agora mora no servidor — quem era dela volta pela ficha da guilda.', 'good');
                 sheetGuilda();
               });
             }));

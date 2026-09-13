@@ -602,8 +602,13 @@ var JOGO = (typeof window !== 'undefined')
     };
   }
 
+  // 13/09: a guilda de antes do servidor que ESTA conta pode trazer (do /minha)
+  var antigaSrv = null;
   peloServidor('minha', function () {
-    return pede('/api/guilda/minha').then(function (r) { return r.ok ? (r.guilda || null) : ficha; });
+    return pede('/api/guilda/minha').then(function (r) {
+      if (r.ok) antigaSrv = r.guilda ? null : (r.antiga || null);
+      return r.ok ? (r.guilda || null) : ficha;
+    });
   });
   peloServidor('lista', function () {
     return pede('/api/guilda/lista').then(function (r) { return r.ok ? (r.guildas || []) : []; });
@@ -700,6 +705,9 @@ var JOGO = (typeof window !== 'undefined')
    * Só o líder, só uma vez. */
   G.guildaLocalLiderada = function () {
     if (!G.noServidor() || !conta) return null;
+    // 13/09: a foto do servidor vale em qualquer navegador (a de baixo, só no
+    // navegador onde a guilda foi fundada — e só para o líder)
+    if (antigaSrv) return { nome: antigaSrv.nome, emblema: antigaSrv.emblema, existe: !!antigaSrv.existe, servidor: true };
     var g = minhaG(le());
     if (!g || g.liderId !== conta.id || g.migrada) return null;
     return { nome: g.nome, emblema: g.emblema };
@@ -707,6 +715,9 @@ var JOGO = (typeof window !== 'undefined')
   G.migrarLocal = function () {
     var a = G.guildaLocalLiderada();
     if (!a) return responde({ ok: false, erro: 'nada para trazer' });
+    if (a.servidor) {
+      return pede('/api/guilda/trazer', {}).then(function (r) { if (r.ok) antigaSrv = null; return r; });
+    }
     return pede('/api/guilda/criar', { nome: a.nome, emblema: a.emblema }).then(function (r) {
       if (r.ok) { var d = le(), g = minhaG(d); if (g) { g.migrada = true; grava(d); } }
       return r;
