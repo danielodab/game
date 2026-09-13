@@ -733,7 +733,7 @@
     var saldo = texto(p.$('lj-saldo'));
     check('saldo: "do último save que subiu, há 3 h" e as explicações', /Do último save que subiu, há 3 h/.test(saldo) &&
           /Só os vinténs do bolso contam; se estão no cofre, saque no jogo/.test(saldo) &&
-          /A caminho: pacotes pagos e presentes que o jogo ainda não recebeu/.test(saldo) &&
+          /A caminho: vinténs de presentes e de trocas que o jogo ainda não recebeu/.test(saldo) &&
           /A entrega acontece quando o jogo abrir logado na conta Principal/.test(saldo), saldo.slice(0, 300));
     check('ligados: o bônus de 1 dia, o Xamã e as pedras (sem limite de janela)', !L.bt('bonus-xp-1').disabled && !L.bt('classe-invocador').disabled &&
           !L.bt('pedras-agua').disabled && !L.bt('pedras-fogo-50').disabled && !L.motivo('bonus-xp-1') && !L.motivo('classe-invocador'));
@@ -809,7 +809,7 @@
     check('Mestre: o pedido dele aparece sem custo', /sem custo \(Mestre\)/.test(texto(L.linha(5))));
     L.bt('classe-espadachim').click();
     await ate(function () { return !!p.q('.modal'); });
-    check('Mestre: a confirmação diz que não gasta', /Conta do Mestre: o pedido não gasta vinténs/.test(texto(p.q('.modal'))));
+    check('Mestre: a confirmação diz que não gasta', /Conta do Mestre: o pedido não gasta barras de ouro nem vinténs/.test(texto(p.q('.modal'))));
     p.q('.modal [data-nao]').click();
   }
 

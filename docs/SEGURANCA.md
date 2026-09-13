@@ -101,6 +101,16 @@ Corpo: `{versaoBase, ops: [{nome, args}], hashDepois}`.
   juiz roda `Loja.entrega` no estado) e marca `entregue` na mesma transação.
   Resposta inclui `{versao, hash, progress, db}`.
 - A carteira da loja é a do estado do servidor (já era `saves.db`; agora é confiável).
+- 13/09, as **barras de ouro** (`servidor/loja.py`): a moeda da loja do site mora SÓ no
+  servidor (`barras_saldo` + o extrato `barras_movimentos`, mudados juntos em
+  `barras_move`, na mesma `_escrita`; `CHECK (saldo >= 0)`; idem único por conta). O
+  save do jogo nunca as carrega, então um save forjado não cria barra. A compra em
+  barras debita na transação que cria o pedido; cancelar ou estornar devolve uma vez
+  (idem `pedido:ID:estorno`). Na troca de vinténs por barras, as barras só entram
+  quando o pedido vira `entregue` — no `_loja_retirar_no_servidor`, depois de o juiz
+  tirar os vinténs do estado (idem `pedido:ID:ganho`). No caminho antigo (sem juiz) o
+  PUT que confirma a entrega credita: ali o save ainda é do cliente, o mesmo risco já
+  aceito para os vinténs.
 
 ### 4.6 A troca
 `POST /api/troca` move itens (por iid), bichos e vinténs entre os DOIS estados do

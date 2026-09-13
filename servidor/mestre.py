@@ -30,6 +30,12 @@ As regras que seguram o resto:
     nunca leva o termo buscado.
   - Os alertas de pagamento (estorno, contestação, valor estranho…) moram em
     `contas_alertas` (pagamento.py); aqui o Mestre os lê e marca como vistos.
+  - 13/09: o PRESENTE DE BARRAS DE OURO (POST /api/mestre/barras) entra NA HORA
+    no saldo da conta (as barras moram no servidor, loja.py) — sem pedido, sem
+    esperar o jogo, e por isso sem cancelar. Divide o teto de 30 presentes por
+    hora com os outros, tem teto próprio por presente e por Mestre em 24 h, e
+    deixa a mesma trilha ('presente-admin') e o mesmo log. As trocas entre
+    moedas (vinténs ↔ barras) não são presente: o Mestre dá a moeda direto.
 """
 import json
 import logging
@@ -38,7 +44,7 @@ import re
 from comum import CLASSES_RANK, Recusa, agora, liberadas, limita
 from conta import mascara_email
 from loja import (CARTEIRA_TETO, CATALOGO, COLUNAS_PEDIDO, DE_PEDIDOS, POR_SKU, RE_IDEM, SKU_PRESENTE_VINTENS,
-                  entrega_de, id_valido, le_json, milhar, nome_do_pedido)
+                  TIPOS_TROCA, entrega_de, id_valido, le_json, milhar, nome_do_pedido)
 from pagamento import FRASE_EM_BREVE, PAGAMENTOS_LISTA
 
 log = logging.getLogger('api')
@@ -53,6 +59,8 @@ PRESENTES_LISTA = 50        # GET /api/mestre/presentes
 PRESENTES_DA_CONTA = 30     # na ficha
 PRESENTE_VINTENS_MAX = 100000        # por presente
 PRESENTE_VINTENS_DIA = 500000        # por Mestre em 24 h (todos os estados: é um teto contra token roubado)
+PRESENTE_BARRAS_MAX = 5000           # 13/09: por presente de barras de ouro (o mesmo valor do teto de vinténs)
+PRESENTE_BARRAS_DIA = 25000          # por Mestre em 24 h
 CONFERE_POR_HORA = 60       # "conferir no Mercado Pago" por Mestre ('mestre-pag-conferir:<id>'); conta o id que não existe
 RE_ID_BUSCA = re.compile(r'^#?(\d{1,15})$')
 FECHADOS = ('entregue', 'estornado', 'cancelado')
@@ -131,6 +139,15 @@ class MestreMixin:
     def _presente_por_id(self, pid):
         return self.con.execute(CONSULTA_PRESENTE + " WHERE p.id = ?", (pid,)).fetchone()
 
+    def _presentes_na_hora(self, mestre, t):
+        """Dentro da _escrita: os instantes dos presentes deste Mestre na última hora — os
+        pedidos (classe, item, vinténs) e, desde 13/09, as barras de ouro: um teto só."""
+        return sorted([r[0] for r in self.con.execute(
+            "SELECT criado_em FROM loja_presentes WHERE por = ? AND criado_em > ?", (mestre, t - 3600))] + [
+            r[0] for r in self.con.execute(
+                "SELECT criado_em FROM barras_movimentos WHERE por = ? AND motivo = 'presente' AND criado_em > ?",
+                (mestre, t - 3600))])
+
     # -- POST /api/mestre/contas {q} ----------------------------------------------------------
     def mestre_contas(self, conta, corpo):
         modo, num, q = modo_da_busca(corpo.get('q'))
@@ -175,6 +192,8 @@ class MestreMixin:
             progress = save['progress'] if save else None
             catalogo = []
             for item in CATALOGO:
+                if item['tipo'] in TIPOS_TROCA:         # 13/09: a troca de moedas não é presente
+                    continue
                 pode, motivo = True, None
                 if alvo['banido']:
                     pode, motivo = False, 'conta banida'
@@ -189,6 +208,7 @@ class MestreMixin:
             pagamentos = self._pagamentos_da_conta(alvo_id, PAGAMENTOS_LISTA)
             alertas = self._alertas_da_conta(alvo_id)
             presentes = [self._presente_json(r, t) for r in presentes]
+            barras = self._barras_publico(alvo_id)     # 13/09: o saldo de barras de ouro e o extrato
         db = save['db'] if save else None
         cart = db.get('carteira') if isinstance(db, dict) else None
         lib = liberadas(progress)
@@ -208,6 +228,7 @@ class MestreMixin:
             'catalogo': catalogo,
             'presentes': presentes,
             'saldo': saldo,
+            'barras': barras,
             'pagamentos': pagamentos,
             'alertas': alertas,
         }
@@ -226,7 +247,7 @@ class MestreMixin:
             sku = SKU_PRESENTE_VINTENS
         else:
             item = POR_SKU.get(sku) if isinstance(sku, str) else None
-            if item is None:
+            if item is None or item['tipo'] in TIPOS_TROCA:     # a troca de moedas não é presente (13/09)
                 raise Recusa(400, 'produto desconhecido')
         if not isinstance(idem, str) or not RE_IDEM.match(idem):
             raise Recusa(400, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')
@@ -244,9 +265,7 @@ class MestreMixin:
                     return 200, {'ok': True, 'presente': self._presente_json(self._presente_por_id(ja['id']), t),
                                  'repetido': True}
                 raise Recusa(409, 'idem já usado em outro pedido')
-            criados = [r[0] for r in self.con.execute(
-                "SELECT criado_em FROM loja_presentes WHERE por = ? AND criado_em > ? ORDER BY criado_em",
-                (mestre, t - 3600))]
+            criados = self._presentes_na_hora(mestre, t)
             if len(criados) >= PRESENTES_POR_HORA:
                 raise Recusa(429, 'presentes demais na última hora (%d)' % PRESENTES_POR_HORA,
                              liberaEm=criados[len(criados) - PRESENTES_POR_HORA] + 3600)
@@ -284,6 +303,62 @@ class MestreMixin:
         log.info("mestre: #%d deu %s a #%d (pedido %d)", mestre, sku if vintens is None else '%d vinténs' % vintens,
                  alvo_id, pid)
         return 201, {'ok': True, 'presente': presente, 'semSave': save is None}
+
+    # -- POST /api/mestre/barras {conta, barras, idem} (13/09) -------------------------------------------
+    def mestre_barras(self, conta, corpo):
+        """O presente de barras de ouro: um movimento 'presente' no extrato da conta,
+        NA HORA (as barras não passam pelo jogo). O idem é o de sempre (o mesmo
+        clique chegando de novo devolve o mesmo presente, `repetido`)."""
+        alvo_id, barras, idem = corpo.get('conta'), corpo.get('barras'), corpo.get('idem')
+        if not id_valido(alvo_id):
+            raise Recusa(400, 'conta precisa ser o número da conta')
+        if not id_valido(barras) or barras > PRESENTE_BARRAS_MAX:
+            raise Recusa(400, 'barras precisa ser um inteiro de 1 a %s' % milhar(PRESENTE_BARRAS_MAX))
+        if not isinstance(idem, str) or not RE_IDEM.match(idem):
+            raise Recusa(400, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')
+        mestre, t = conta['id'], agora()
+        chave = 'presente:%s' % idem
+        with self._escrita():
+            alvo = self.con.execute("SELECT id, nome, banido FROM contas WHERE id = ?", (alvo_id,)).fetchone()
+            if alvo is None:
+                raise Recusa(404, 'conta não encontrada')
+            if alvo['banido']:
+                raise Recusa(409, 'essa conta está banida: o presente não entra')
+            ja = self.con.execute("SELECT * FROM barras_movimentos WHERE conta_id = ? AND idem = ?",
+                                  (alvo_id, chave)).fetchone()
+            if ja is not None:                          # o mesmo clique chegando de novo
+                if ja['delta'] == barras and ja['por'] == mestre:
+                    return 200, {'ok': True, 'repetido': True, 'barras': {'saldo': self._barras_saldo(alvo_id)},
+                                 'presente': {'id': ja['id'], 'conta': {'id': alvo['id'], 'nome': alvo['nome']},
+                                              'barras': barras, 'criadoEm': ja['criado_em'],
+                                              'por': {'id': mestre, 'nome': conta['nome']}}}
+                raise Recusa(409, 'idem já usado em outro presente')
+            criados = self._presentes_na_hora(mestre, t)
+            if len(criados) >= PRESENTES_POR_HORA:
+                raise Recusa(429, 'presentes demais na última hora (%d)' % PRESENTES_POR_HORA,
+                             liberaEm=criados[len(criados) - PRESENTES_POR_HORA] + 3600)
+            dados_dia = self.con.execute(
+                "SELECT delta, criado_em FROM barras_movimentos WHERE por = ? AND motivo = 'presente' AND criado_em > ? "
+                "ORDER BY criado_em", (mestre, t - 86400)).fetchall()
+            soma = sum(r['delta'] for r in dados_dia)
+            if soma + barras > PRESENTE_BARRAS_DIA:
+                libera, resto = None, soma
+                for r in dados_dia:
+                    resto -= r['delta']
+                    if resto + barras <= PRESENTE_BARRAS_DIA:
+                        libera = r['criado_em'] + 86400
+                        break
+                raise Recusa(429, 'barras de presente demais nas últimas 24 h (%s)' % milhar(PRESENTE_BARRAS_DIA),
+                             liberaEm=libera)
+            self.barras_move(alvo_id, barras, 'presente', 'mestre:%d' % mestre, chave, t, por=mestre)
+            mov = self.con.execute("SELECT id FROM barras_movimentos WHERE conta_id = ? AND idem = ?",
+                                   (alvo_id, chave)).fetchone()['id']
+            self._evento(alvo_id, 'presente-admin', {'movimento': mov, 'para': alvo_id, 'por': mestre, 'barras': barras})
+            saldo = self._barras_saldo(alvo_id)
+        log.info("mestre: #%d deu %d barras de ouro a #%d (movimento %d)", mestre, barras, alvo_id, mov)
+        return 201, {'ok': True, 'barras': {'saldo': saldo},
+                     'presente': {'id': mov, 'conta': {'id': alvo['id'], 'nome': alvo['nome']}, 'barras': barras,
+                                  'criadoEm': t, 'por': {'id': mestre, 'nome': conta['nome']}}}
 
     # -- POST /api/mestre/presente/cancelar {id} -------------------------------------------------------
     def mestre_presente_cancelar(self, conta, corpo):

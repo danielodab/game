@@ -28,6 +28,12 @@ cancela; a disputa aberta (in_mediation) só alerta; a leitura velha não faz o
 estado voltar; o teto de 24 h vale no que credita (o link pago N vezes) e na
 intenção nova; o modo trocado responde 503 (o Mercado Pago reenvia); e o botão
 "conferir no Mercado Pago" do Mestre.
+13/09, as barras de ouro: os pacotes À VENDA são de barras (a preferência, o idem,
+os freios e o "em breve" provam com eles); os pacotes de vinténs saíram da venda,
+e as provas do crédito de vinténs usam a intenção ANTIGA semeada no banco (criada
+antes do deploy, aprovada depois: ainda credita os vinténs que vendeu). As provas
+próprias das barras (o crédito na hora, o estorno que tira barras) moram em
+tests/barras_api.py.
 """
 import hashlib
 import hmac
@@ -50,6 +56,7 @@ sys.path.insert(0, AQUI)
 from servidor_api import API, Cliente, espera_api, porta_livre  # noqa: E402  (põe servidor/ no sys.path)
 from mp_falso import MercadoPagoFalso  # noqa: E402
 import pagamento as pag_mod  # noqa: E402
+import loja as loja_mod  # noqa: E402
 
 try:
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -140,6 +147,22 @@ class ProvaDoPagamento(unittest.TestCase):
             b.close()
 
     def pede_pacote(self, c, pacote='pacote-5500', chave=None):
+        """13/09: o pacote de barras vai pela API; o de VINTÉNS saiu da venda (a API responde 'pacote
+        desconhecido'), e a intenção antiga — criada antes do deploy — nasce no banco como o servidor de
+        antes a gravaria (aberta, com a referência)."""
+        if pacote.startswith('pacote-'):
+            p = loja_mod.POR_PACOTE[pacote]
+            t = int(time.time())
+            b = sqlite3.connect(self.banco_arq)
+            try:
+                pid = b.execute("INSERT INTO pagamentos(conta_id, pacote, vintens, centavos, estado, idem, criado_em, "
+                                "atualizado_em) VALUES (?, ?, ?, ?, 'aberto', ?, ?, ?)",
+                                (c.conta['id'], pacote, p['vintens'], p['centavos'], chave or idem(), t, t)).lastrowid
+                b.execute("UPDATE pagamentos SET referencia = ? WHERE id = ?", ('sot-%d-%s' % (pid, secrets.token_hex(8)), pid))
+                b.commit()
+            finally:
+                b.close()
+            return {'pagamento': {'id': pid}}
         status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': pacote, 'idem': chave or idem()})
         self.assertEqual(status, 201, r)
         return r
@@ -147,11 +170,18 @@ class ProvaDoPagamento(unittest.TestCase):
     def referencia(self, pid):
         return self.sql("SELECT referencia FROM pagamentos WHERE id = ?", pid)[0][0]
 
+    def paga(self, pid_ou_ref, **kw):
+        """Paga no falso. A intenção semeada não tem preferência no falso: o valor vem do banco."""
+        campo = 'id' if isinstance(pid_ou_ref, int) else 'referencia'
+        linha = self.sql("SELECT referencia, centavos FROM pagamentos WHERE %s = ?" % campo, pid_ou_ref)[0]
+        kw.setdefault('centavos', linha['centavos'])
+        return self.mp.pagar(linha['referencia'], **kw)
+
     def pago(self, c, pacote='pacote-5500', status='approved', **kw):
         """Pede o pacote, paga no falso e manda o aviso assinado: (id do pagamento, mp_id, resposta do aviso)."""
         r = self.pede_pacote(c, pacote)
         pid = r['pagamento']['id']
-        mp_id = self.mp.pagar(self.referencia(pid), status=status, **kw)
+        mp_id = self.paga(pid, status=status, **kw)
         st, corpo = self.mp.avisar(mp_id, self.base)
         self.assertEqual(st, 200, corpo)
         return pid, mp_id, corpo
@@ -191,11 +221,11 @@ class ProvaDoPagamento(unittest.TestCase):
         self.assertEqual(r['pagamento'], {'ligado': False, 'teste': False})
         self.assertEqual([p['preco'] for p in r['pacotes']], ['R$ 4,90', 'R$ 19,90', 'R$ 39,90', 'R$ 79,90'])
         c = self.novo('Off Line', self.base_off)
-        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-1000', 'idem': idem()})
-        self.assertEqual((status, r), (503, {'ok': False, 'erro': 'os pacotes de vinténs chegam em breve',
+        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-50', 'idem': idem()})
+        self.assertEqual((status, r), (503, {'ok': False, 'erro': 'os pacotes de barras de ouro chegam em breve',
                                              'pagamento': False}))
         status, r = c.pede('POST', '/api/pagamento/conferir', {'id': 1})
-        self.assertEqual((status, r['erro'], r['pagamento']), (503, 'os pacotes de vinténs chegam em breve', False))
+        self.assertEqual((status, r['erro'], r['pagamento']), (503, 'os pacotes de barras de ouro chegam em breve', False))
         status, r = Cliente(self.base_off).pede('POST', '/api/pagamento/aviso?data.id=1&type=payment', {})
         self.assertEqual((status, r['erro']), (503, 'pagamentos desligados'))
         self.assertEqual(c.pede('GET', '/api/pagamento/meus'), (200, {'ok': True, 'ligado': False, 'pagamentos': []}))
@@ -223,27 +253,30 @@ class ProvaDoPagamento(unittest.TestCase):
 
     def test_preferencia(self):
         c = self.novo('Pref Erencia')
-        self.assertEqual(Cliente(self.base).pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-5500', 'idem': idem()})[0], 401)
+        self.assertEqual(Cliente(self.base).pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-280', 'idem': idem()})[0], 401)
         for corpo, erro in (({'pacote': 'pacote-9', 'idem': idem()}, 'pacote desconhecido'),
                             ({'pacote': None, 'idem': idem()}, 'pacote desconhecido'),
-                            ({'pacote': 'pacote-5500'}, 'idem inválido (8 a 64 letras, dígitos, _ ou -)'),
-                            ({'pacote': 'pacote-5500', 'idem': 'x y z w v'}, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')):
+                            ({'pacote': 'pacote-5500', 'idem': idem()}, 'pacote desconhecido'),     # 13/09: fora da venda
+                            ({'pacote': 'barras-280'}, 'idem inválido (8 a 64 letras, dígitos, _ ou -)'),
+                            ({'pacote': 'barras-280', 'idem': 'x y z w v'}, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')):
             status, r = c.pede('POST', '/api/pagamento/pacote', corpo)
             self.assertEqual((status, r['erro']), (400, erro), corpo)
         antes = len(self.mp.estado()['preferencias'])
         chave = idem()
         t0 = int(time.time())
-        r = self.pede_pacote(c, 'pacote-5500', chave)
+        r = self.pede_pacote(c, 'barras-280', chave)
         pg = r['pagamento']
         self.assertTrue(r['endereco'].startswith('https://www.mercadopago.com.br/checkout/'), r['endereco'])
-        self.assertEqual({k: pg[k] for k in ('pacote', 'nome', 'vintens', 'centavos', 'preco', 'estado', 'creditado',
-                                              'pedido')},
-                         {'pacote': 'pacote-5500', 'nome': 'Saco de 5.500 vinténs', 'vintens': 5500, 'centavos': 1990,
-                          'preco': 'R$ 19,90', 'estado': 'aberto', 'creditado': False, 'pedido': None})
+        self.assertEqual({k: pg[k] for k in ('pacote', 'nome', 'moeda', 'barras', 'vintens', 'centavos', 'preco', 'estado',
+                                              'creditado', 'pedido')},
+                         {'pacote': 'barras-280', 'nome': 'Saco de 280 barras de ouro', 'moeda': 'barras', 'barras': 280,
+                          'vintens': 0, 'centavos': 1990, 'preco': 'R$ 19,90', 'estado': 'aberto', 'creditado': False,
+                          'pedido': None})
+        self.assertEqual(self.sql("SELECT vintens FROM pagamentos WHERE id = ?", pg['id'])[0][0], 280)   # a quantidade
         est = self.mp.estado()
         self.assertEqual(len(est['preferencias']), antes + 1)
         corpo = est['preferencias'][-1]
-        self.assertEqual(corpo['items'], [{'id': 'pacote-5500', 'title': 'SOTERRA: Saco de 5.500 vinténs', 'quantity': 1,
+        self.assertEqual(corpo['items'], [{'id': 'barras-280', 'title': 'SOTERRA: Saco de 280 barras de ouro', 'quantity': 1,
                                            'currency_id': 'BRL', 'unit_price': 19.9}])
         casou = RE_REF.match(corpo['external_reference'])
         self.assertTrue(casou, corpo['external_reference'])
@@ -269,16 +302,16 @@ class ProvaDoPagamento(unittest.TestCase):
         self.assertEqual(pag_mod.datetime.fromisoformat(corpo['expiration_date_to']).timestamp()
                          - pag_mod.datetime.fromisoformat(corpo['expiration_date_from']).timestamp(), 2 * 3600)
         # o mesmo clique de novo: o mesmo pagamento, o mesmo endereço, nenhuma preferência nova
-        status, r2 = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-5500', 'idem': chave})
+        status, r2 = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-280', 'idem': chave})
         self.assertEqual((status, r2['repetido'], r2['endereco'], r2['pagamento']['id']), (200, True, r['endereco'], pg['id']))
         self.assertEqual(len(self.mp.estado()['preferencias']), antes + 1)
-        status, r3 = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-1000', 'idem': chave})
+        status, r3 = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-50', 'idem': chave})
         self.assertEqual((status, r3['erro']), (409, 'idem já usado em outro pacote'))
         # os meus: o pagamento aberto; o evento na trilha
         self.assertEqual([p['id'] for p in self.meus(c)['pagamentos']], [pg['id']])
         self.assertTrue(self.meus(c)['ligado'])
         ev = self.sql("SELECT dados FROM eventos WHERE conta_id = ? AND tipo = 'pagamento-criado'", c.conta['id'])
-        self.assertEqual([json.loads(e[0]) for e in ev], [{'id': pg['id'], 'pacote': 'pacote-5500', 'centavos': 1990}])
+        self.assertEqual([json.loads(e[0]) for e in ev], [{'id': pg['id'], 'pacote': 'barras-280', 'centavos': 1990}])
 
     def test_freios(self):
         c = self.novo('Fre Ios')
@@ -287,7 +320,7 @@ class ProvaDoPagamento(unittest.TestCase):
         b.executemany("INSERT INTO limites(chave, em) VALUES (?, ?)", [('pagamento:%d' % c.conta['id'], t - 30)] * 10)
         b.commit()
         b.close()
-        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-1000', 'idem': idem()})
+        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-50', 'idem': idem()})
         self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'pedidos de pacote demais nesta hora (10)', t - 30 + 3600))
         # R$ 400,00 em 24 h (as intenções que falharam não contam)
         d = self.novo('Teto Dia')
@@ -300,20 +333,20 @@ class ProvaDoPagamento(unittest.TestCase):
                   "VALUES (?, 'pacote-25000', 25000, 7990, 'aberto', ?, ?)", (d.conta['id'], t - 90000, t - 90000))
         b.commit()
         b.close()
-        self.pede_pacote(d, 'pacote-1000')                           # 39.500 + 490 = 39.990: cabe
-        status, r = d.pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-1000', 'idem': idem()})
+        self.pede_pacote(d, 'barras-50')                             # 39.500 + 490 = 39.990: cabe
+        status, r = d.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-50', 'idem': idem()})
         self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'o teto de pacotes é R$ 400,00 por dia', t - 500 + 86400))
 
     def test_mercado_pago_fora(self):
         c = self.novo('Fora Do Ar')
         self.mp.falhar('preferencias', 1)
         chave = idem()
-        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-1000', 'idem': chave})
+        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-50', 'idem': chave})
         self.assertEqual((status, r['erro']), (502, 'o Mercado Pago não respondeu; tente de novo em instantes'))
         self.assertEqual([p['estado'] for p in self.meus(c)['pagamentos']], ['falhou'])
-        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-1000', 'idem': chave})
+        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-50', 'idem': chave})
         self.assertEqual((status, r['erro']), (409, 'esse pedido falhou; tente de novo'))
-        self.pede_pacote(c, 'pacote-1000')                            # chave nova: passa
+        self.pede_pacote(c, 'barras-50')                              # chave nova: passa
 
     # -- o aviso ----------------------------------------------------------------------------
     def test_aviso_credita_uma_vez(self):
@@ -352,7 +385,7 @@ class ProvaDoPagamento(unittest.TestCase):
             for rodada in range(4):
                 c = self.novo('Dois Proc')
                 r = self.pede_pacote(c, 'pacote-1000')
-                mp_id = self.mp.pagar(self.referencia(r['pagamento']['id']))
+                mp_id = self.paga((r['pagamento']['id']))
                 res = []
                 fios = [threading.Thread(target=lambda b=b: res.append(self.mp.avisar(mp_id, b)))
                         for b in (self.base, base2, self.base, base2)]
@@ -369,7 +402,7 @@ class ProvaDoPagamento(unittest.TestCase):
     def test_assinatura_ruim_ou_ausente(self):
         c = self.novo('Forja Aviso')
         r = self.pede_pacote(c, 'pacote-12000')
-        mp_id = self.mp.pagar(self.referencia(r['pagamento']['id']))
+        mp_id = self.paga((r['pagamento']['id']))
         antes = self.mp.estado()['consultas']
         for modo in ('ruim', 'sem'):
             status, corpo = self.mp.avisar(mp_id, self.base, assinatura=modo)
@@ -444,7 +477,7 @@ class ProvaDoPagamento(unittest.TestCase):
         c = self.novo('Modo Teste')
         r = self.pede_pacote(c, 'pacote-1000')
         pid = r['pagamento']['id']
-        mp_id = self.mp.pagar(self.referencia(pid), live=False)             # o servidor está em produção
+        mp_id = self.paga((pid), live=False)             # o servidor está em produção
         st, corpo = self.mp.avisar(mp_id, self.base)
         self.assertEqual((st, corpo.get('erro')), (503, pag_mod.FRASE_MODO_TROCADO), corpo)
         self.assertEqual((self.creditos(mp_id), self.meu(c, pid)['estado']), ([], 'aberto'))
@@ -458,7 +491,7 @@ class ProvaDoPagamento(unittest.TestCase):
         try:
             d = self.novo('Esqueceu Teste')
             pid2 = self.pede_pacote(d, 'pacote-5500')['pagamento']['id']
-            real = self.mp.pagar(self.referencia(pid2))                     # live_mode=true
+            real = self.paga((pid2))                     # live_mode=true
             st, corpo = self.mp.avisar(real, base_t)
             self.assertEqual((st, corpo.get('erro')), (503, pag_mod.FRASE_MODO_TROCADO), corpo)
             self.assertEqual(self.creditos(real), [])
@@ -484,7 +517,7 @@ class ProvaDoPagamento(unittest.TestCase):
         c = self.novo('Pagou Duas')
         r = self.pede_pacote(c, 'pacote-1000')
         pid, ref = r['pagamento']['id'], self.referencia(r['pagamento']['id'])
-        m1, m2 = self.mp.pagar(ref), self.mp.pagar(ref)
+        m1, m2 = self.paga(ref), self.paga(ref)
         for m in (m1, m2, m1):
             self.assertEqual(self.mp.avisar(m, self.base)[0], 200)
         self.assertEqual((len(self.creditos(m1)), len(self.creditos(m2))), (1, 1))
@@ -586,7 +619,7 @@ class ProvaDoPagamento(unittest.TestCase):
         c = self.novo('Leitura Velha')
         # o estorno grava antes do 'approved' que ainda estava em voo: nada credita, nada de alerta
         pid = self.pede_pacote(c, 'pacote-1000')['pagamento']['id']
-        mp_id = self.mp.pagar(self.referencia(pid), status='refunded')
+        mp_id = self.paga((pid), status='refunded')
         self.assertEqual(self.mp.avisar(mp_id, self.base), (200, {'ok': True, 'estado': 'estornado'}))
         self.mp.status(mp_id, 'approved')                                    # a leitura velha, gravada depois
         self.assertEqual(self.mp.avisar(mp_id, self.base), (200, {'ok': True, 'estado': 'estornado'}))
@@ -607,7 +640,7 @@ class ProvaDoPagamento(unittest.TestCase):
         c = self.novo('Link Repetido')
         pid = self.pede_pacote(c, 'pacote-25000')['pagamento']['id']
         ref = self.referencia(pid)
-        ids = [self.mp.pagar(ref) for _ in range(6)]
+        ids = [self.paga(ref) for _ in range(6)]
         for m in ids:
             self.assertEqual(self.mp.avisar(m, self.base)[0], 200)
         self.assertEqual([len(self.creditos(m)) for m in ids], [1, 1, 1, 1, 1, 0])      # 5 × R$ 79,90 = R$ 399,50
@@ -619,7 +652,7 @@ class ProvaDoPagamento(unittest.TestCase):
         p = self.meu(c, pid)
         self.assertEqual((p['estado'], p['vintens']), ('aprovado', 125000))
         # a conta não abre intenção nova que o teto não deixaria creditar (o creditado conta na intenção)
-        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-1000', 'idem': idem()})
+        status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-50', 'idem': idem()})
         self.assertEqual((status, r['erro']), (429, 'o teto de pacotes é R$ 400,00 por dia'), r)
         primeiro = self.sql("SELECT MIN(creditado_em) FROM pagamentos_mp WHERE pagamento_id = ?", pid)[0][0]
         self.assertEqual(r['liberaEm'], primeiro + 86400)
@@ -652,7 +685,7 @@ class ProvaDoPagamento(unittest.TestCase):
         # voltou antes de pagar: aberto
         status, r = c.pede('POST', '/api/pagamento/conferir', {'id': pid})
         self.assertEqual((status, r['pagamento']['estado']), (200, 'aberto'))
-        mp_id = self.mp.pagar(self.referencia(pid))                          # pagou; o aviso "se perdeu"
+        mp_id = self.paga((pid))                          # pagou; o aviso "se perdeu"
         buscas = self.mp.estado()['buscas']
         status, r = c.pede('POST', '/api/pagamento/conferir', {'id': pid})
         self.assertEqual(status, 200, r)
@@ -698,7 +731,7 @@ class ProvaDoPagamento(unittest.TestCase):
         try:
             self.assertEqual(Cliente(base).pede('GET', '/api/loja/catalogo')[1]['pagamento'], {'ligado': True, 'teste': True})
             c = self.novo('Sand Box', base)
-            status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'pacote-1000', 'idem': idem()})
+            status, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-50', 'idem': idem()})
             self.assertEqual(status, 201, r)
             self.assertTrue(r['endereco'].startswith('https://sandbox.mercadopago.com.br/'), r['endereco'])
             b = sqlite3.connect(os.path.join(self.pasta, 'teste', 'soterra.db'))
@@ -709,7 +742,7 @@ class ProvaDoPagamento(unittest.TestCase):
             self.assertEqual((st, corpo.get('erro')), (503, pag_mod.FRASE_MODO_TROCADO), corpo)
             de_teste = self.mp.pagar(ref, live=False)
             self.assertEqual(self.mp.avisar(de_teste, base), (200, {'ok': True, 'estado': 'aprovado'}))
-            self.assertEqual(c.pede('GET', '/api/loja/minha')[1]['saldo']['aCaminho'], 1000)
+            self.assertEqual(c.pede('GET', '/api/loja/minha')[1]['barras']['saldo'], 50)     # 13/09: barras, na hora
             with open(log_arq, encoding='utf-8', errors='replace') as f:
                 self.assertIn('pagamento: Mercado Pago (teste), volta em ' + ENDERECO, f.read())
         finally:

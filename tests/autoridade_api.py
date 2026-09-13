@@ -524,9 +524,10 @@ class ProvaDaAutoridade(unittest.TestCase):
     def test_21_loja_entrega_no_servidor(self):
         self.precisa_op()
         c = self.novo('Freguesa')
-        p, d = self.estado_de_partida(carteira=1000)
+        p, d = self.estado_de_partida(carteira=1300)
         self.poe_estado(c, p, d)
-        status, r = c.pede('POST', '/api/loja/comprar', {'sku': 'pedras-agua', 'idem': secrets.token_hex(8)})
+        # 13/09: o que custa VINTÉNS na loja é a troca por barras de ouro (800 vinténs → 10 barras)
+        status, r = c.pede('POST', '/api/loja/comprar', {'sku': 'barras-por-vintens-10', 'idem': secrets.token_hex(8)})
         self.assertEqual(status, 201, r)
         pid = r['pedido']['id']
         # e um pedido com uma entrega que o jogo não conhece: o juiz recusa, o servidor estorna
@@ -544,6 +545,8 @@ class ProvaDaAutoridade(unittest.TestCase):
         self.assertEqual(r['versao'], 2)
         s = self.save(c)
         self.assertEqual(s['db']['carteira']['moedas'], 500, 'o preço sai da carteira do servidor')
+        self.assertEqual(self.sql("SELECT saldo FROM barras_saldo WHERE conta_id = ?", c.conta['id']),
+                         [{'saldo': 10}], 'as barras entram junto com a entrega')
         self.assertEqual((s['progress'], s['db'], s['hash']), (r['progress'], r['db'], r['hash']))
         estados = {x['id']: x['estado'] for x in self.sql("SELECT id, estado FROM loja_pedidos WHERE conta_id = ?",
                                                           c.conta['id'])}

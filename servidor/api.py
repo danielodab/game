@@ -290,6 +290,7 @@ ROTAS = {
     ('GET',  '/api/mestre/conta'):             ('mestre_conta', True, True, FRASE_SO_MESTRE),
     ('POST', '/api/mestre/presentear'):        ('mestre_presentear', True, True, FRASE_SO_MESTRE),
     ('POST', '/api/mestre/presente/cancelar'): ('mestre_presente_cancelar', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/barras'):            ('mestre_barras', True, True, FRASE_SO_MESTRE),   # 13/09: barras de ouro
     ('GET',  '/api/mestre/presentes'):         ('mestre_presentes', True, True, FRASE_SO_MESTRE),
     ('GET',  '/api/mestre/alertas'):           ('mestre_alertas', True, True, FRASE_SO_MESTRE),
     ('POST', '/api/mestre/alerta/visto'):      ('mestre_alerta_visto', True, True, FRASE_SO_MESTRE),

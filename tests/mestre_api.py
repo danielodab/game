@@ -111,6 +111,15 @@ class ProvaDoMestre(unittest.TestCase):
         self.sql("UPDATE contas SET gm = 1 WHERE id = ?", m.conta['id'])
         return m
 
+    def da_barras(self, c, n):
+        """13/09: a loja custa barras de ouro; o jogador das provas ganha as dele como um 'ajuste' do dono."""
+        t = int(time.time())
+        self.sql("INSERT INTO barras_saldo(conta_id, saldo, atualizado_em) VALUES (?, ?, ?) "
+                 "ON CONFLICT(conta_id) DO UPDATE SET saldo = saldo + excluded.saldo", c.conta['id'], n, t)
+        self.sql("INSERT INTO barras_movimentos(conta_id, delta, motivo, ref, saldo_depois, criado_em) "
+                 "VALUES (?, ?, 'ajuste', 'prova', (SELECT saldo FROM barras_saldo WHERE conta_id = ?), ?)",
+                 c.conta['id'], n, c.conta['id'], t)
+
     def enche(self, chave, quantas, em=None):
         b = sqlite3.connect(self.banco_arq)
         b.executemany("INSERT INTO limites(chave, em) VALUES (?, ?)", [(chave, em or int(time.time()))] * quantas)
@@ -242,14 +251,16 @@ class ProvaDoMestre(unittest.TestCase):
         c = self.novo('Fica Ficha')
         r = self.ficha(m, c.conta['id'])
         self.assertEqual(set(r), {'ok', 'agora', 'conta', 'save', 'classes', 'cartas', 'catalogo', 'presentes', 'saldo',
-                                  'pagamentos', 'alertas'})
+                                  'barras', 'pagamentos', 'alertas'})
+        self.assertEqual(r['barras'], {'saldo': 0, 'movimentos': []})           # 13/09: as barras de ouro da conta
         self.assertEqual(r['conta']['email'], c.conta['nome'].replace(' ', '') + '@soterra.test')   # inteiro, na ficha
         self.assertEqual((r['conta']['gm'], r['conta']['banido']), (False, False))
         self.assertTrue(r['conta']['ultimaSessao'])
         self.assertEqual((r['save'], r['classes'], r['presentes'], r['pagamentos'], r['alertas']), (None, [], [], [], []))
         self.assertEqual(r['saldo']['aCaminho'], 0)
         cat = {i['sku']: i for i in r['catalogo']}
-        self.assertEqual(set(cat), set(loja_mod.POR_SKU))
+        # a troca de moedas (vinténs ↔ barras, 13/09) não é presente: fica fora do catálogo da ficha
+        self.assertEqual(set(cat), {k for k, v in loja_mod.POR_SKU.items() if v['tipo'] not in loja_mod.TIPOS_TROCA})
         self.assertEqual(len(cat), 21)
         self.assertEqual((cat['pergaminho-elemento']['pode'], cat['pergaminho-elemento']['motivo']),
                          (False, 'nenhum herói escolheu caminho elemental ainda'))       # sem save
@@ -302,6 +313,7 @@ class ProvaDoMestre(unittest.TestCase):
         linha = [x for x in self.minha(c)['pedidos'] if x['id'] == p['id']][0]
         self.assertEqual((linha['origem'], linha['cancelavel'], linha['preco']), ('presente', False, 0))
         self.sobe(c, carteira=50000)
+        self.da_barras(c, 5000)
         status, r = c.pede('POST', '/api/loja/comprar', {'sku': 'classe-bruxo', 'idem': idem()})
         self.assertEqual((status, r['erro']), (409, 'já há um pedido dessa classe a caminho'))
         # o retirar: origem SÓ no presente; a compra comum sai igual a antes
@@ -310,7 +322,7 @@ class ProvaDoMestre(unittest.TestCase):
         self.assertEqual(r['pedidos'], [{'id': p['id'], 'sku': 'classe-bruxo', 'nome': 'Bruxo', 'preco': 0,
                                          'entrega': {'tipo': 'classe', 'alvo': 'bruxo', 'qtd': 1}, 'origem': 'presente'},
                                         {'id': q['id'], 'sku': 'pedras-agua', 'nome': '10 Lágrimas de Cisterna',
-                                         'preco': 500, 'entrega': {'tipo': 'pedras', 'alvo': 'stone-tear', 'qtd': 10}}])
+                                         'preco': 0, 'entrega': {'tipo': 'pedras', 'alvo': 'stone-tear', 'qtd': 10}}])
         # a classe a caminho (presente ou compra) barra o presente dela
         self.assertEqual(self.presenteia(m, c, 'classe-bruxo'), (409, {'ok': False, 'erro': 'já há um pedido dessa classe a caminho'}))
         c.pede('POST', '/api/loja/comprar', {'sku': 'classe-minotauro', 'idem': idem()})
@@ -329,13 +341,15 @@ class ProvaDoMestre(unittest.TestCase):
         self.assertEqual(self.presenteia(m, d, 'insignia-1', chave=chave)[1]['erro'], 'idem já usado em outro pedido')
         compra_idem = idem()
         self.sobe(d, carteira=5000, classes=('sumo', 'curandeiro', 'invocador'))
+        self.da_barras(d, 100)
         self.assertEqual(d.pede('POST', '/api/loja/comprar', {'sku': 'insignia-1', 'idem': compra_idem})[0], 201)
         self.assertEqual(self.presenteia(m, d, 'insignia-1', chave=compra_idem)[1]['erro'], 'idem já usado em outro pedido')
         # banida, inexistente, sku e idem tortos
         self.sql("UPDATE contas SET banido = 1 WHERE id = ?", d.conta['id'])
         self.assertEqual(self.presenteia(m, d, 'insignia-1'), (409, {'ok': False, 'erro': 'essa conta está banida: o presente não entra'}))
         self.assertEqual(self.presenteia(m, 987654321, 'insignia-1'), (404, {'ok': False, 'erro': 'conta não encontrada'}))
-        for sku in ('ancora', 'classe-sumo', 'classe-gm', 'pergaminho-xp', 'pacote-1000', 'presente-vintens', None, 7):
+        for sku in ('ancora', 'classe-sumo', 'classe-gm', 'pergaminho-xp', 'pacote-1000', 'presente-vintens', None, 7,
+                    'vintens-1000', 'barras-por-vintens-10', 'barras-50'):
             self.assertEqual(self.presenteia(m, c, sku)[1]['erro'], 'produto desconhecido', sku)
         self.assertEqual(m.pede('POST', '/api/mestre/presentear', {'conta': c.conta['id'], 'sku': 'insignia-1',
                                                                    'idem': 'curto'})[1]['erro'],
@@ -350,12 +364,14 @@ class ProvaDoMestre(unittest.TestCase):
         m = self.mestre('Guia Limite')
         c = self.novo('Limite Livre')
         self.sobe(c, carteira=100000)
+        self.da_barras(c, 5000)
         # a Reescrita (1 a cada 30 dias): o jogador comprou a dele; o presente sai mesmo assim
         self.assertEqual(c.pede('POST', '/api/loja/comprar', {'sku': 'pergaminho-elemento', 'idem': idem()})[0], 201)
         self.assertEqual(self.presenteia(m, c, 'pergaminho-elemento')[0], 201)
         # e o presente não gasta a janela: noutra conta, o presente primeiro e o jogador ainda compra
         d = self.novo('Janela Livre')
         self.sobe(d, carteira=100000)
+        self.da_barras(d, 5000)
         self.assertEqual(self.presenteia(m, d, 'pergaminho-elemento')[0], 201)
         self.assertEqual(d.pede('POST', '/api/loja/comprar', {'sku': 'pergaminho-elemento', 'idem': idem()})[0], 201)
         # 6 presentes pendentes não travam os 5 abertos do jogador, nem as compras e linhas por hora
@@ -392,8 +408,8 @@ class ProvaDoMestre(unittest.TestCase):
                           'estado': 'pendente', 'cancelavel': True})
         saldo = self.minha(c)['saldo']
         self.assertEqual((saldo['aCaminho'], saldo['disponivel']), (12345, 12345))
-        # o jogador já gasta no site, sem save
-        self.assertEqual(c.pede('POST', '/api/loja/comprar', {'sku': 'classe-invocador', 'idem': idem()})[0], 201)
+        # o jogador já gasta no site, sem save (13/09: o que custa vinténs é a troca por barras de ouro)
+        self.assertEqual(c.pede('POST', '/api/loja/comprar', {'sku': 'barras-por-vintens-100', 'idem': idem()})[0], 201)
         r = c.pede('POST', '/api/loja/retirar', {})[1]
         self.assertEqual(r['pedidos'][0], {'id': p['id'], 'sku': 'presente-vintens', 'nome': '12.345 vinténs', 'preco': 0,
                                            'entrega': {'tipo': 'vintens', 'alvo': 'carteira', 'qtd': 12345},
@@ -478,6 +494,7 @@ class ProvaDoMestre(unittest.TestCase):
         self.assertEqual(self.minha(c)['saldo']['aCaminho'], 0)
         # compra comum não é presente; torto
         self.sobe(c, carteira=5000)
+        self.da_barras(c, 100)
         compra = c.pede('POST', '/api/loja/comprar', {'sku': 'insignia-1', 'idem': idem()})[1]['pedido']
         self.assertEqual(m.pede('POST', '/api/mestre/presente/cancelar', {'id': compra['id']}),
                          (404, {'ok': False, 'erro': 'presente não encontrado'}))

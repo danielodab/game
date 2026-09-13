@@ -46,6 +46,11 @@
  *             lojaAplica: DB.lojaCredita decide, soma no bolso e anota num
  *             gravar só. O retirar vem em ORDEM DE ID e o crédito nasce antes
  *             de qualquer compra feita com ele: na mesma busca ele entra antes.
+ *   barras    {alvo:'conta', qtd 1..1.000.000} (13/09): a troca de VINTÉNS por
+ *             barras de ouro. As barras moram na conta do SITE (o jogo não as
+ *             conhece): aqui só se pagam os vinténs do `preco` pelo lojaAplica,
+ *             e a entrega não mexe em mais nada. O servidor credita as barras
+ *             quando o pedido fecha 'entregue'.
  * AS ORIGENS: o pedido pode trazer `origem` — 'presente' (o Mestre deu, pelo
  * painel dele: preço 0, o MESMO caminho, nenhuma regra à parte) ou 'pagamento'
  * (os vinténs de um pacote pago). Sem ela, ou com outra coisa, é compra da
@@ -72,9 +77,10 @@
   L._semTrava = false;
 
   // as entregas que esta versão sabe aplicar (a tabela 4.6 do plano da loja 2)
-  var TIPOS = { pedras: 1, classe: 1, pergaminho: 1, 'bonus-xp': 1, insignias: 1, vintens: 1 };
+  var TIPOS = { pedras: 1, classe: 1, pergaminho: 1, 'bonus-xp': 1, insignias: 1, vintens: 1, barras: 1 };
   var TETO_DIAS = 366;            // bônus de XP: dias numa entrega
   var TETO_VINTENS = 10000000;    // crédito de vinténs: por pedido
+  var TETO_BARRAS = 1000000;      // 13/09: barras de ouro compradas com vinténs, por pedido
   var TETO_EPOCH_S = 4e9;         // o `agora` do servidor, em segundos (o mesmo teto do Progress)
   var liberada = false, congelada = false, buscando = null, ultima = 0, erro = null;
   var compraPendente = false, timer = null, historico = [];
@@ -245,6 +251,11 @@
       if (ent.alvo !== 'carteira' || !inteiroPos(ent.qtd, TETO_VINTENS)) return 'item-invalido';
       return null;
     }
+    // 13/09: vinténs → barras de ouro (as barras entram na conta do site; aqui só se pagam os vinténs)
+    if (ent.tipo === 'barras') {
+      if (ent.alvo !== 'conta' || !inteiroPos(ent.qtd, TETO_BARRAS)) return 'item-invalido';
+      return null;
+    }
     return 'item-invalido';
   }
   /* 5. a entrega — lança se o Progress não aceitar (o chamador desfaz); o
@@ -278,6 +289,7 @@
       if (!prog.addInsignia || !prog.addInsignia(ent.qtd)) throw new Error('as insígnias não entraram');
       return;
     }
+    if (ent.tipo === 'barras') return;   // os vinténs já saíram no lojaAplica; as barras, o servidor credita
     throw new Error('tipo sem entrega');
   }
   function recusa(p, id, motivo) {

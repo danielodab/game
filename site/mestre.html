@@ -105,6 +105,17 @@
             </form>
             <p class="dica" id="ms-vintens-nota"></p>
 
+            <!-- 13/09: as barras de ouro entram na hora na conta do site (não passam pelo jogo) -->
+            <h4>Dar barras de ouro</h4>
+            <p class="dica" id="ms-barras-saldo"></p>
+            <form id="ms-barras-form" class="ms-linha" novalidate autocomplete="off">
+              <label for="ms-barras" class="ms-escondido">Barras de ouro de presente</label>
+              <input type="number" id="ms-barras" min="1" step="1" inputmode="numeric" placeholder="quantas barras">
+              <button type="submit" class="btn btn-ouro" id="ms-dar-barras">Dar barras de ouro</button>
+            </form>
+            <p class="dica" id="ms-barras-nota"></p>
+            <ul class="lista-pedidos" id="ms-barras-extrato"></ul>
+
             <h4>Liberar</h4>
             <div id="ms-liberar"></div>
 

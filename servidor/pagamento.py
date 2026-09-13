@@ -45,6 +45,15 @@ AS REGRAS QUE SEGURAM O DINHEIRO:
   - Estorno e contestação NÃO tiram vinténs do save: marcam a conta
     (`contas_alertas`, que o painel do Mestre mostra) e logam; o dono decide.
 
+AS BARRAS DE OURO (13/09, loja.py): os pacotes à venda são de BARRAS. Aprovado o
+pagamento, as barras entram NA HORA no saldo da conta (`barras_move`, motivo
+'pacote', idem 'mp:<id>' — a terceira camada, no lugar do índice de
+loja_pedidos), sem pedido nem jogo no meio. No estorno ou na contestação, as
+barras que ainda houver saem ('estorno-pagamento'); o que já foi gasto não tem de
+onde sair e vai no alerta ('faltou'). A coluna `pagamentos.vintens` guarda a
+QUANTIDADE do pacote na moeda dele (sem ALTER: o rolling update); o pagamento
+de um pacote de vinténs criado antes do deploy ainda credita vinténs.
+
 A configuração vem SÓ de variáveis de ambiente (no Coolify: Runtime ligado,
 Build DESLIGADO; no token e na assinatura, "Is Literal"; ver SUBIR.md, seção 7):
 
@@ -72,7 +81,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 from comum import Recusa, agora
-from loja import POR_PACOTE, RE_IDEM, id_valido, le_json, reais
+from loja import PACOTES_A_VENDA, POR_PACOTE, RE_IDEM, id_valido, le_json, moeda_do_pacote, reais
 
 log = logging.getLogger('api')
 
@@ -105,9 +114,9 @@ EM_DISPUTA = ('in_mediation',)                       # reclamação ABERTA: pode
 ETAPA = {'pending': 1, 'in_process': 1, 'authorized': 1, 'approved': 2, 'in_mediation': 3,
          'rejected': 4, 'cancelled': 4, 'refunded': 4, 'charged_back': 4}
 TIPOS_ALERTA = ('estorno', 'contestacao', 'estorno-antes-da-entrega', 'valor-diferente', 'conta-banida',
-                'credito-recusado', 'teto-diario')
+                'credito-recusado', 'teto-diario', 'barras-faltaram')
 HOSTS_MP = ('mercadopago.com.br', 'mercadopago.com')
-FRASE_EM_BREVE = 'os pacotes de vinténs chegam em breve'
+FRASE_EM_BREVE = 'os pacotes de barras de ouro chegam em breve'
 FRASE_DESLIGADO = 'pagamentos desligados'
 FRASE_MP_FORA = 'o Mercado Pago não respondeu; tente de novo em instantes'
 FRASE_MP_FORA_AVISO = 'o Mercado Pago não respondeu'
@@ -245,6 +254,19 @@ def _centavos(v):
     return int(round(v * 100))
 
 
+def moeda_do_pagamento(pg):
+    """13/09: 'barras' (os pacotes de hoje) ou 'vintens' (o pacote antigo, fora da venda)."""
+    pacote = POR_PACOTE.get(pg['pacote'])
+    if pacote is not None:
+        return moeda_do_pacote(pacote)
+    return 'barras' if str(pg['pacote']).startswith('barras-') else 'vintens'
+
+
+def qtd_dados(pg):
+    """O pedaço dos dados de alerta e de evento que diz quanto o pacote vale: {'barras': N} ou {'vintens': N}."""
+    return {moeda_do_pagamento(pg): pg['vintens']}
+
+
 def estado_publico(pg, mps):
     """O estado que o site mostra, derivado da intenção e dos pagamentos do Mercado Pago dela."""
     if pg['estado'] == 'falhou':
@@ -265,14 +287,19 @@ def estado_publico(pg, mps):
 
 
 def pag_publico(pg, mps):
-    """<pag> (o contrato do site): {id, pacote, nome, vintens, centavos, preco, estado, creditado, pedido, criadoEm,
-    atualizadoEm}. `vintens` soma os créditos válidos quando a pessoa pagou mais de uma vez na mesma preferência."""
+    """<pag> (o contrato do site): {id, pacote, nome, moeda, barras, vintens, centavos, preco, estado, creditado,
+    pedido, criadoEm, atualizadoEm}. A quantidade soma os créditos válidos quando a pessoa pagou mais de uma vez na
+    mesma preferência; ela vai em `barras` ou em `vintens` conforme a `moeda` do pacote (a outra fica 0). O pacote
+    de barras não tem `pedido` (as barras entram direto no saldo)."""
     pacote = POR_PACOTE.get(pg['pacote'])
     validos = [m for m in mps if m['creditado_em'] is not None and m['estornado_em'] is None]
     creditados = [m for m in mps if m['creditado_em'] is not None]
     ultimo = max(creditados, key=lambda m: (m['creditado_em'], m['mp_id'])) if creditados else None
-    return {'id': pg['id'], 'pacote': pg['pacote'], 'nome': pacote['nome'] if pacote else pg['pacote'],
-            'vintens': pg['vintens'] * max(1, len(validos)), 'centavos': pg['centavos'], 'preco': reais(pg['centavos']),
+    moeda = moeda_do_pagamento(pg)
+    qtd = pg['vintens'] * max(1, len(validos))
+    return {'id': pg['id'], 'pacote': pg['pacote'], 'nome': pacote['nome'] if pacote else pg['pacote'], 'moeda': moeda,
+            'barras': qtd if moeda == 'barras' else 0, 'vintens': qtd if moeda == 'vintens' else 0,
+            'centavos': pg['centavos'], 'preco': reais(pg['centavos']),
             'estado': estado_publico(pg, mps), 'creditado': bool(validos),
             'pedido': ({'id': ultimo['pedido_id'], 'estado': ultimo['pedido_estado']}
                        if ultimo is not None and ultimo['pedido_id'] is not None else None),
@@ -468,7 +495,8 @@ class PagamentoMixin:
         if not mp.ligado:
             raise Recusa(503, FRASE_EM_BREVE, pagamento=False)
         pacote_id, idem = corpo.get('pacote'), corpo.get('idem')
-        pacote = POR_PACOTE.get(pacote_id) if isinstance(pacote_id, str) else None
+        # só os pacotes à venda (13/09: os de barras); o de vinténs, fora da venda, é "desconhecido" para pedir
+        pacote = POR_PACOTE.get(pacote_id) if isinstance(pacote_id, str) and pacote_id in PACOTES_A_VENDA else None
         if pacote is None:
             raise Recusa(400, 'pacote desconhecido')
         if not isinstance(idem, str) or not RE_IDEM.match(idem):
@@ -516,8 +544,8 @@ class PagamentoMixin:
                     raise Recusa(429, 'o teto de pacotes é %s por dia' % reais(TETO_CENTAVOS_DIA), liberaEm=libera)
                 cur = self.con.execute(
                     "INSERT INTO pagamentos(conta_id, pacote, vintens, centavos, estado, idem, criado_em, atualizado_em) "
-                    "VALUES (?, ?, ?, ?, 'criado', ?, ?, ?)",
-                    (cid, pacote_id, pacote['vintens'], pacote['centavos'], idem, t, t))
+                    "VALUES (?, ?, ?, ?, 'criado', ?, ?, ?)",       # `vintens` = a quantidade na moeda do pacote
+                    (cid, pacote_id, pacote['barras'], pacote['centavos'], idem, t, t))
                 pid = cur.lastrowid
                 referencia = 'sot-%d-%s' % (pid, secrets.token_hex(8))
                 self.con.execute("UPDATE pagamentos SET referencia = ? WHERE id = ?", (referencia, pid))
@@ -645,7 +673,7 @@ class PagamentoMixin:
                     ped = (self.con.execute("SELECT estado FROM loja_pedidos WHERE id = ?", (linha['pedido_id'],)).fetchone()
                            if linha['pedido_id'] is not None else None)
                     self._alerta(pg['conta_id'], 'contestacao',
-                                 {'pagamento': pg['id'], 'mp': mp_id, 'vintens': pg['vintens'], 'pedido': linha['pedido_id'],
+                                 {'pagamento': pg['id'], 'mp': mp_id, **qtd_dados(pg), 'pedido': linha['pedido_id'],
                                   'estadoPedido': ped['estado'] if ped is not None else None, 'status': status,
                                   'aberta': True}, t)
             elif status in ESTORNOS:
@@ -671,18 +699,30 @@ class PagamentoMixin:
             "WHERE g.conta_id = ? AND m.creditado_em > ? AND m.estornado_em IS NULL", (cid, t - 86400)).fetchone()[0]
         if pago + pg['centavos'] > TETO_CENTAVOS_DIA:
             if mudou:
-                self._alerta(cid, 'teto-diario', {'pagamento': pg['id'], 'mp': mp_id, 'vintens': pg['vintens'],
+                self._alerta(cid, 'teto-diario', {'pagamento': pg['id'], 'mp': mp_id, **qtd_dados(pg),
                                                   'centavos': pg['centavos'], 'pagoEm24h': pago}, t)
             log.warning("pagamento %d (mp %s): passa do teto de %s em 24 h (já creditado: %s); não credita agora",
                         pg['id'], mp_id, reais(TETO_CENTAVOS_DIA), reais(pago))
             return
         idem = 'mp:%s' % mp_id
+        banida = self.con.execute("SELECT banido FROM contas WHERE id = ?", (cid,)).fetchone()
+        if moeda_do_pagamento(pg) == 'barras':
+            # 13/09: as barras entram NA HORA no saldo; o idem 'mp:<id>' no extrato é a terceira camada
+            self.barras_move(cid, pg['vintens'], 'pacote', 'pagamento:%d' % pg['id'], idem, t)
+            self.con.execute("UPDATE pagamentos_mp SET creditado_em = ? WHERE mp_id = ?", (t, mp_id))
+            self._evento(cid, 'pagamento-credito', {'pagamento': pg['id'], 'mp': mp_id, 'barras': pg['vintens'],
+                                                    'pedido': None})
+            if banida is not None and banida['banido']:
+                self._alerta(cid, 'conta-banida', {'pagamento': pg['id'], 'mp': mp_id, 'barras': pg['vintens'],
+                                                   'pedido': None}, t)
+            log.info("pagamento %d (mp %s): %d barras de ouro creditadas à conta #%d", pg['id'], mp_id,
+                     pg['vintens'], cid)
+            return
         ja = self.con.execute("SELECT id FROM loja_pedidos WHERE conta_id = ? AND idem = ?", (cid, idem)).fetchone()
         pid = ja['id'] if ja is not None else self.credita(cid, pg['pacote'], pg['vintens'], 'pagamento', idem, mp_id, t)
         self.con.execute("UPDATE pagamentos_mp SET pedido_id = ?, creditado_em = ? WHERE mp_id = ?", (pid, t, mp_id))
         self._evento(cid, 'pagamento-credito', {'pagamento': pg['id'], 'mp': mp_id, 'vintens': pg['vintens'],
                                                 'pedido': pid})
-        banida = self.con.execute("SELECT banido FROM contas WHERE id = ?", (cid,)).fetchone()
         if banida is not None and banida['banido']:
             # o dinheiro entrou: credita do mesmo jeito (o pedido espera) e o dono decide
             self._alerta(cid, 'conta-banida', {'pagamento': pg['id'], 'mp': mp_id, 'vintens': pg['vintens'],
@@ -696,8 +736,25 @@ class PagamentoMixin:
         retirado sem o save que fecha) é cancelado: sai do "a caminho" e não
         volta na próxima retirada — se o jogo já o tinha aplicado, o PUT
         seguinte o fecha 'entregue' e _pagamento_entregue_tardio alerta. O que
-        já chegou vira alerta. Nunca tira vinténs do save."""
+        já chegou vira alerta. Nunca tira vinténs do save.
+        13/09: o pacote de BARRAS tira as barras que ainda houver no saldo; o que já
+        foi gasto vai no alerta (`faltou`)."""
         cid, mp_id = pg['conta_id'], linha['mp_id']
+        if moeda_do_pagamento(pg) == 'barras':
+            qtd = pg['vintens']
+            tirado = 0
+            if cid is not None:
+                tirado = -(self.barras_move(cid, -qtd, 'estorno-pagamento', 'pagamento:%d' % pg['id'],
+                                            'mp:%s:estorno' % mp_id, t, parcial=True) or 0)
+            dados = {'pagamento': pg['id'], 'mp': mp_id, 'barras': qtd, 'tirado': tirado, 'faltou': qtd - tirado,
+                     'status': status}
+            tipo = 'contestacao' if status in CONTESTACOES else 'estorno'
+            self.con.execute("UPDATE pagamentos_mp SET estornado_em = ? WHERE mp_id = ?", (t, mp_id))
+            self._alerta(cid, tipo, dados, t)
+            self._evento(cid, 'pagamento-estorno', dados)
+            log.warning("pagamento %d (mp %s): %s — %d barras tiradas, %d já gastas — alerta '%s' para o Mestre",
+                        pg['id'], mp_id, status, tirado, qtd - tirado, tipo)
+            return
         ped = self.con.execute("SELECT id, estado FROM loja_pedidos WHERE id = ?", (linha['pedido_id'],)).fetchone() \
             if linha['pedido_id'] is not None else None
         estado = ped['estado'] if ped is not None else None

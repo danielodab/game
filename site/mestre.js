@@ -59,9 +59,11 @@
     'valor-diferente': 'Pagamento com valor diferente do pacote: não creditado',
     'conta-banida': 'Pagamento aprovado numa conta banida: creditado',
     'credito-recusado': 'O jogo recusou o crédito de um pacote várias vezes',
-    'teto-diario': 'Pagamento acima do teto de 24 h: não creditado (confira depois das 24 h, ou estorne)'
+    'teto-diario': 'Pagamento acima do teto de 24 h: não creditado (confira depois das 24 h, ou estorne)',
+    'barras-faltaram': 'Barras de ouro que já tinham sido gastas: faltou tirar'
   };
-  var DADO = { vintens: 'vinténs', mp: 'pagamento no Mercado Pago', pedido: 'pedido', estadoPedido: 'estado do pedido',
+  // 13/09: as barras de ouro nos dados do alerta (quanto o pacote valia, quanto saiu, quanto faltou)
+  var DADO = { barras: 'barras de ouro', tirado: 'barras tiradas', faltou: 'barras que faltaram', vintens: 'vinténs',mp: 'pagamento no Mercado Pago', pedido: 'pedido', estadoPedido: 'estado do pedido',
                pagamento: 'pagamento', pacote: 'pacote', status: 'estado no Mercado Pago', aberta: 'disputa aberta',
                cancelado: 'crédito cancelado', tardio: 'chegou depois do estorno', centavos: 'valor',
                pagoEm24h: 'pago em 24 h', esperado: 'esperado', recebido: 'recebido', moeda: 'moeda', motivo: 'motivo',
@@ -69,7 +71,7 @@
   var DADO_REAIS = { centavos: true, pagoEm24h: true, esperado: true, recebido: true };   // vêm em centavos
   function valorDoDado(k, v) {
     if (typeof v === 'boolean') return v ? 'sim' : 'não';
-    if (k === 'vintens' && isFinite(Number(v))) return N(v);
+    if ((k === 'vintens' || k === 'barras' || k === 'tirado' || k === 'faltou') && isFinite(Number(v))) return N(v);
     if (proprio(DADO_REAIS, k) && isFinite(Number(v))) return 'R$ ' + (Number(v) / 100).toFixed(2).replace('.', ',');
     return String(v);
   }
@@ -264,10 +266,32 @@
     $('ms-dar-vintens').disabled = ocupado || !!c.banido;
     $('ms-vintens-nota').textContent = c.banido ? 'Conta banida: o presente não entra.'
       : 'Os vinténs contam na hora no saldo do site dessa conta e chegam à carteira do jogo quando ele abrir logado.';
+    desenhaBarras(c);
     lista('ms-presentes-conta', ficha.presentes, function (p) { return linhaPresente(p, false); }, 'Nenhum presente para esta conta.');
     lista('ms-pagamentos', ficha.pagamentos, linhaPagamento, Array.isArray(ficha.pagamentos) ? 'Nenhum pacote comprado.' : '');
     lista('ms-alertas-conta', ficha.alertas, function (a) { return linhaAlerta(a, false); },
           Array.isArray(ficha.alertas) ? 'Nenhum alerta desta conta.' : '');
+  }
+  /* 13/09: as barras de ouro da conta — o saldo, o formulário do presente e os últimos movimentos */
+  var MOTIVO_BARRAS = { pacote: 'pacote pago', loja: 'compra na loja', 'estorno-loja': 'devolvidas (pedido cancelado ou recusado)',
+                        'troca-vintens': 'troca com vinténs', presente: 'presente do Mestre',
+                        'estorno-pagamento': 'pagamento estornado', ajuste: 'ajuste do dono' };
+  function desenhaBarras(c) {
+    var b = (ficha.barras && typeof ficha.barras === 'object') ? ficha.barras : null;
+    $('ms-barras').disabled = ocupado || !!c.banido || !b;
+    $('ms-dar-barras').disabled = ocupado || !!c.banido || !b;
+    $('ms-barras-saldo').textContent = b ? 'Saldo: ' + N(b.saldo) + ' barras de ouro.' : 'Este servidor ainda não tem as barras de ouro.';
+    $('ms-barras-nota').textContent = c.banido ? 'Conta banida: o presente não entra.'
+      : 'As barras entram na hora na conta do site dessa conta, e não se cancelam.';
+    var ms = b && Array.isArray(b.movimentos) ? b.movimentos.filter(function (m) { return m && m.id != null; }) : [];
+    lista('ms-barras-extrato', ms, function (m) {
+      var d = Math.floor(Number(m.delta) || 0);
+      var motivo = proprio(MOTIVO_BARRAS, m.motivo) ? MOTIVO_BARRAS[m.motivo] : String(m.motivo == null ? '' : m.motivo);
+      var miudo = [m.nome ? motivo : '', m.por && m.por.nome ? 'por ' + m.por.nome : '',
+                   Number(m.criadoEm) > 0 ? SITE.quando(m.criadoEm) : '', m.saldo != null ? 'saldo ' + N(m.saldo) : ''].filter(Boolean);
+      return '<li data-movimento="' + E(m.id) + '"><div><b>' + E(m.nome || motivo) + '</b><small>' + miudo.map(E).join(' · ') +
+        '</small></div><div class="direita"><span class="estado-pedido">' + (d > 0 ? '+' : '−') + E(N(Math.abs(d))) + '</span></div></li>';
+    }, b ? 'Nenhum movimento de barras nesta conta.' : '');
   }
   function desenhaDados(c, s) {
     var sd = ficha.saldo;
@@ -488,6 +512,42 @@
       sim: 'Dar os vinténs', nao: 'Voltar'
     });
   }
+  /* 13/09: o presente de barras de ouro (POST /api/mestre/barras): entra na hora, com a mesma chave
+   * por clique (a que ficou sem resposta se repete) */
+  function presenteBarras() {
+    if (!ficha || ocupado) return;
+    var bruto = String($('ms-barras').value == null ? '' : $('ms-barras').value).trim();
+    var v = /^\d{1,9}$/.test(bruto) ? Number(bruto) : NaN;
+    if (!(v >= 1)) { aviso('Diga quantas barras de ouro dar: um número inteiro, 1 ou mais.'); return; }
+    var conta = ficha.conta, chave = 'barras:' + v;
+    SITE.confirma({
+      titulo: 'Dar barras de ouro de presente',
+      texto: 'Dar ' + N(v) + ' barras de ouro de presente a ' + conta.nome + '?',
+      nota: 'Presente do Mestre: as barras entram na hora na conta do site dessa conta e não se cancelam.',
+      sim: 'Dar as barras', nao: 'Voltar'
+    }).then(function (sim) {
+      if (!sim || ocupado || !ficha || ficha.conta.id !== conta.id) return;
+      var idem = semResposta && semResposta.chave === chave && semResposta.conta === conta.id ? semResposta.idem : SITE.idem();
+      semResposta = null;
+      ocupado = true;
+      desenhaFicha();
+      aviso('Mandando as barras…', 'neutro');
+      return SITE.api('/api/mestre/barras', { method: 'POST', body: { conta: conta.id, barras: v, idem: idem } }).then(function (r) {
+        ocupado = false;
+        if (portaoDe(r)) return;
+        if (r.status === 0) {
+          semResposta = { chave: chave, conta: conta.id, idem: idem };
+          aviso('O servidor não respondeu. Tente de novo: a página repete a mesma chave, e o presente não sai dobrado.');
+          desenhaFicha();
+          return;
+        }
+        if (!r.ok) { aviso(SITE.erro(r, 'não deu para dar as barras')); desenhaFicha(); return; }
+        aviso('Presente enviado: ' + N(v) + ' barras de ouro para ' + conta.nome + '.', 'certo');
+        $('ms-barras').value = '';
+        abreFicha(conta.id);
+      });
+    });
+  }
   function achaPresente(id) {
     var todos = [].concat(presentes || [], (ficha && Array.isArray(ficha.presentes)) ? ficha.presentes : []);
     for (var i = 0; i < todos.length; i++) if (todos[i] && Number(todos[i].id) === id) return todos[i];
@@ -559,6 +619,7 @@
     });
     $('ms-busca').addEventListener('submit', function (ev) { ev.preventDefault(); busca(); });
     $('ms-vintens-form').addEventListener('submit', function (ev) { ev.preventDefault(); presenteVintens(); });
+    $('ms-barras-form').addEventListener('submit', function (ev) { ev.preventDefault(); presenteBarras(); });
     $('ms-atualizar').addEventListener('click', recarrega);
     $('ms-fechar').addEventListener('click', fechaFicha);
     // um clique só para a página inteira: abrir ficha, dar, cancelar, visto

@@ -49,6 +49,32 @@ dobrar a hora de referência.
 Os preços moram SÓ aqui (CATALOGO e PACOTES): o site e o jogo nunca repetem um
 número (o jogo espelha só o que precisa para agir: DATA.bonusXp.fator e
 DATA.insignias.porGuilda; tests/loja_api.py confere).
+
+AS BARRAS DE OURO (13/09, pedido do dono: "outro tipo de moeda... sendo
+possível comprar pela loja do site... pelos vinténs será possível também
+comprar barras de ouro, mas será muito mais caro... assim fica possível para
+todos sem ser um jogo pay to win"). A loja do site passa a vender em BARRAS:
+  - o saldo é POR CONTA e mora só aqui no servidor (`barras_saldo`), fora do
+    save do jogo — as barras só se gastam no site. Cada mudança é uma linha do
+    extrato (`barras_movimentos`) gravada na MESMA transação que mexe no saldo
+    (`barras_move`), com `idem` único por conta quando há (o crédito de um
+    pagamento, o estorno de um pedido): nada entra duas vezes, e o CHECK
+    (saldo >= 0) segura o que escapar;
+  - os pacotes em reais (PACOTES) creditam barras NA HORA, sem esperar o jogo;
+  - o catálogo inteiro custa barras, debitadas na mesma transação que cria o
+    pedido (`loja_barras.custo`); o pedido anda pelo caminho de sempre com
+    preço 0 em vinténs, e cancelar ou a recusa do jogo devolvem as barras;
+  - BARRAS → VINTÉNS (seção 'vintens'): a entrega é o crédito de vinténs de
+    sempre ({tipo:'vintens'}), pago em barras na compra;
+  - VINTÉNS → BARRAS (seção 'barras-por-vintens', o caminho de quem farma): o
+    pedido tem PREÇO em vinténs (reservado como qualquer pedido antigo, pago
+    pelo juiz na entrega) e a entrega {tipo:'barras'} não mexe em nada no jogo;
+    as barras (`loja_barras.ganho`) só entram quando o pedido vira 'entregue',
+    na mesma transação que o marca — nunca antes de os vinténs saírem.
+  A barra vale VINTENS_POR_BARRA na ida e custa VINTENS_POR_BARRA_FARMADA na
+  volta (4× mais): não há como girar vinténs e barras e sair com mais.
+  O pacote antigo de vinténs (PACOTES_RETIRADOS) saiu da venda, mas o pagamento
+  criado antes do deploy e aprovado depois ainda credita os vinténs que vendeu.
 """
 import json
 import logging
@@ -59,7 +85,7 @@ from comum import (CLASSE_RENOMEADA, XP_MAX, EstadoMudou, Recusa, agora, classe_
 
 log = logging.getLogger('api')
 
-LOJA_VERSAO = 2
+LOJA_VERSAO = 3                  # 13/09: o catálogo em barras de ouro (cada item leva `moeda`)
 # espelha JOGO.DATA.pergaminhos.xp (progression.js). O Pergaminho da Sabedoria
 # saiu da venda em 10/09 (o bônus por tempo o substitui); o jogo segue lendo o
 # que já foi comprado, e pedido antigo ainda aberto é entregue normalmente
@@ -80,6 +106,14 @@ RE_IDEM = re.compile(r'^[A-Za-z0-9_-]{8,64}$')
 CARTEIRA_TETO = 10 ** 12
 ELEMENTAIS = ('fogo', 'agua', 'terra', 'ar')
 SKU_PRESENTE_VINTENS = 'presente-vintens'    # o presente de vinténs do Mestre (mestre.py)
+# 13/09: as barras de ouro. 1 barra vira 20 vinténs (seção 'vintens'); 80 vinténs viram 1 barra (seção
+# 'barras-por-vintens'): o caminho de volta custa 4× o de ida, então girar as duas moedas só perde
+VINTENS_POR_BARRA = 20
+VINTENS_POR_BARRA_FARMADA = 80
+BARRAS_TETO = 10 ** 9            # saldo de uma conta (o CHECK do banco só segura o piso)
+MOVIMENTOS_LISTA = 20            # o extrato que o site e a ficha do Mestre mostram
+MOTIVOS_BARRAS = ('pacote', 'loja', 'estorno-loja', 'troca-vintens', 'presente', 'estorno-pagamento', 'ajuste')
+TIPOS_TROCA = ('vintens', 'barras')          # as trocas entre moedas: fora dos presentes do Mestre
 
 ESQUEMA_LOJA = """
 CREATE TABLE IF NOT EXISTS loja_pedidos(
@@ -118,6 +152,36 @@ CREATE TABLE IF NOT EXISTS loja_creditos(
   criado_em INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS loja_creditos_mp ON loja_creditos(mp_id);
+-- 13/09: as barras de ouro. O saldo por conta (nunca negativo) e o extrato, sempre juntos na mesma transação
+-- (barras_move). O movimento sobrevive à conta (dinheiro é trilha, como em pagamentos)
+CREATE TABLE IF NOT EXISTS barras_saldo(
+  conta_id      INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
+  saldo         INTEGER NOT NULL DEFAULT 0 CHECK (saldo >= 0),
+  atualizado_em INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS barras_movimentos(
+  id           INTEGER PRIMARY KEY,
+  conta_id     INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+  delta        INTEGER NOT NULL CHECK (delta != 0),
+  motivo       TEXT NOT NULL CHECK (motivo IN ('pacote', 'loja', 'estorno-loja', 'troca-vintens', 'presente',
+                                               'estorno-pagamento', 'ajuste')),
+  ref          TEXT,
+  saldo_depois INTEGER,
+  por          INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+  idem         TEXT,
+  criado_em    INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS barras_movimentos_idem ON barras_movimentos(conta_id, idem) WHERE idem IS NOT NULL;
+CREATE INDEX IF NOT EXISTS barras_movimentos_conta ON barras_movimentos(conta_id, id);
+CREATE INDEX IF NOT EXISTS barras_movimentos_por ON barras_movimentos(por, criado_em);
+-- 13/09: as barras de um pedido da loja: `custo` saiu na compra (volta se o pedido cancela ou é estornado);
+-- `ganho` entra quando o pedido vira 'entregue' (vinténs → barras). Tabela nova, não coluna (o rolling update)
+CREATE TABLE IF NOT EXISTS loja_barras(
+  pedido_id INTEGER PRIMARY KEY REFERENCES loja_pedidos(id) ON DELETE CASCADE,
+  custo     INTEGER NOT NULL DEFAULT 0 CHECK (custo >= 0),
+  ganho     INTEGER NOT NULL DEFAULT 0 CHECK (ganho >= 0),
+  criado_em INTEGER NOT NULL
+);
 """
 
 # os filtros dos limites do JOGADOR: créditos (pacote pago, presente de vinténs)
@@ -127,9 +191,9 @@ SEM_EXTRA = ("id NOT IN (SELECT pedido_id FROM loja_presentes) "
              "AND id NOT IN (SELECT pedido_id FROM loja_creditos)")
 # um pedido com as marcas de presente e de crédito (para _loja_pedido e o retirar)
 COLUNAS_PEDIDO = ("p.*, (pr.pedido_id IS NOT NULL) AS presente, cr.vintens AS credito_vintens, "
-                  "cr.origem AS credito_origem")
+                  "cr.origem AS credito_origem, lb.custo AS barras_custo, lb.ganho AS barras_ganho")
 DE_PEDIDOS = ("loja_pedidos p LEFT JOIN loja_presentes pr ON pr.pedido_id = p.id "
-              "LEFT JOIN loja_creditos cr ON cr.pedido_id = p.id")
+              "LEFT JOIN loja_creditos cr ON cr.pedido_id = p.id LEFT JOIN loja_barras lb ON lb.pedido_id = p.id")
 
 
 # ---- números para gente ---------------------------------------------------------------
@@ -150,7 +214,7 @@ def _classe(cid, nome, raridade, cartas, preco):
             'nome': nome, 'raridade': raridade, 'cartas': cartas,
             'descricao': ('Libera o %s na hora: chegam as cartas que faltam para as %d do desbloqueio (as que '
                           'você já tem contam). Chega no nível 1.' % (nome, cartas)),
-            'preco': preco, 'limite': {'grupo': 'classe-' + cid, 'max': 1, 'dias': None}}
+            'preco': preco, 'moeda': 'barras', 'limite': {'grupo': 'classe-' + cid, 'max': 1, 'dias': None}}
 
 
 def _bonus(dias, preco):
@@ -161,7 +225,7 @@ def _bonus(dias, preco):
                           'da entrega no jogo. Comprar de novo soma os dias. Não se multiplica com outro bônus de XP '
                           '(nem com o Pergaminho da Sabedoria), e com um evento de XP no ar os dois juntos param em ×2.'
                           % (round((BONUS_XP['fator'] - 1) * 100), dias, plural)),
-            'preco': preco, 'limite': None}
+            'preco': preco, 'moeda': 'barras', 'limite': None}
 
 
 def _pedras(elemento, alvo, nome, de, preco, qtd):
@@ -175,50 +239,76 @@ def _pedras(elemento, alvo, nome, de, preco, qtd):
                      % (palavra, de[0], de[1]))
     return {'sku': 'pedras-' + elemento + ('' if qtd == 10 else '-%d' % qtd), 'secao': 'pedras', 'tipo': 'pedras',
             'alvo': alvo, 'qtd': qtd, 'elemento': elemento, 'nome': nome, 'descricao': descricao, 'preco': preco,
-            'limite': None}
+            'moeda': 'barras', 'limite': None}
 
 
-# (elemento, pedra, nome, (da/de), preço de 10, preço de 50: 10% de desconto). Água e terra caem na Cisterna;
-# ar, fogo e a neutra valem mais (fogo e neutra não caem em portal aberto: só a loja as dá)
-_PEDRAS = (('agua', 'stone-tear', 'Lágrimas de Cisterna', ('da água', 'de água'), 500, 2250),
-           ('terra', 'stone-root', 'Grãos de Rocha-Mãe', ('da terra', 'de terra'), 500, 2250),
-           ('ar', 'stone-breath', 'Sopros Engarrafados', ('do ar', 'de ar'), 800, 3600),
-           ('fogo', 'stone-ember', 'Brasas Coaguladas', ('do fogo', 'de fogo'), 800, 3600),
-           ('neutro', 'stone-slate', 'Lascas da Lousa', None, 800, 3600))
+def _vintens(qtd):
+    """13/09: barras → vinténs. A entrega é o crédito de vinténs de sempre; o preço, barras."""
+    barras = qtd // VINTENS_POR_BARRA
+    return {'sku': 'vintens-%d' % qtd, 'secao': 'vintens', 'tipo': 'vintens', 'alvo': 'carteira', 'qtd': qtd,
+            'nome': '%s vinténs' % milhar(qtd),
+            'descricao': ('%s vinténs para a carteira do jogo, pagos com %s barras de ouro. Chegam quando o jogo '
+                          'abrir logado nesta conta.' % (milhar(qtd), milhar(barras))),
+            'preco': barras, 'moeda': 'barras', 'limite': None}
+
+
+def _barras_por_vintens(barras):
+    """13/09: vinténs → barras, o caminho de quem farma. O preço é em vinténs (pagos na entrega, como todo
+    pedido antigo); a entrega {tipo:'barras'} não mexe em nada no jogo, e as barras entram quando o pedido
+    vira 'entregue'."""
+    vintens = barras * VINTENS_POR_BARRA_FARMADA
+    return {'sku': 'barras-por-vintens-%d' % barras, 'secao': 'barras-por-vintens', 'tipo': 'barras',
+            'alvo': 'conta', 'qtd': barras, 'nome': '%s barras de ouro' % milhar(barras),
+            'descricao': ('%s barras de ouro para a sua conta do site, pagas com %s vinténs da carteira do jogo. '
+                          'Os vinténs saem quando o jogo receber o pedido, e as barras entram nessa hora.'
+                          % (milhar(barras), milhar(vintens))),
+            'preco': vintens, 'moeda': 'vintens', 'limite': None}
+
+
+# (elemento, pedra, nome, (da/de), preço de 10, preço de 50), em barras de ouro (13/09). Água e terra caem na
+# Cisterna; ar, fogo e a neutra valem mais (fogo e neutra não caem em portal aberto: só a loja as dá)
+_PEDRAS = (('agua', 'stone-tear', 'Lágrimas de Cisterna', ('da água', 'de água'), 25, 110),
+           ('terra', 'stone-root', 'Grãos de Rocha-Mãe', ('da terra', 'de terra'), 25, 110),
+           ('ar', 'stone-breath', 'Sopros Engarrafados', ('do ar', 'de ar'), 40, 180),
+           ('fogo', 'stone-ember', 'Brasas Coaguladas', ('do fogo', 'de fogo'), 40, 180),
+           ('neutro', 'stone-slate', 'Lascas da Lousa', None, 40, 180))
 
 # Fora, de propósito: a Âncora de Forja (é o +10, o "item bom" que tem de ser
 # MUITO difícil), equipamento, cartas avulsas, estrelas, selos, giros, pets,
 # sorte de saque, bônus de guilda, XP direto e multiplicador de vinténs. As
 # classes que já nascem liberadas (sumo, curandeiro) e o gm nunca entram.
-# Seções na ordem da página: personagens · bonus · pedras · guilda · pergaminhos.
-CATALOGO = (
-    _classe('invocador', 'Xamã', 'raro', 10, 10000),
-    _classe('bruxo', 'Bruxo', 'raro', 10, 10000),
-    _classe('espadachim', 'Ladino', 'epico', 20, 20000),
-    _classe('arqueiro', 'Caçador', 'epico', 25, 25000),
-    _classe('minotauro', 'Minotauro', 'epico', 30, 30000),
-    _bonus(1, 1500),
-    _bonus(3, 3900),
-    _bonus(7, 7900),
+# Seções na ordem da página (13/09): vintens · barras-por-vintens · personagens · bonus · pedras · guilda ·
+# pergaminhos. Os preços em barras de ouro (1 barra = 20 vinténs de pacote: a régua de antes, ÷ 20).
+CATALOGO = tuple(_vintens(q) for q in (1000, 5000, 12000, 25000)) + tuple(
+    _barras_por_vintens(b) for b in (10, 50, 100, 250)) + (
+    _classe('invocador', 'Xamã', 'raro', 10, 500),
+    _classe('bruxo', 'Bruxo', 'raro', 10, 500),
+    _classe('espadachim', 'Ladino', 'epico', 20, 1000),
+    _classe('arqueiro', 'Caçador', 'epico', 25, 1250),
+    _classe('minotauro', 'Minotauro', 'epico', 30, 1500),
+    _bonus(1, 75),
+    _bonus(3, 195),
+    _bonus(7, 395),
 ) + tuple(_pedras(e, a, n, d, p10, 10) for e, a, n, d, p10, _ in _PEDRAS) + tuple(
     _pedras(e, a, n, d, p50, 50) for e, a, n, d, _, p50 in _PEDRAS) + (
     # "pedras de guilda" = as Insígnias de Fundação (10 fundam uma guilda; só chefe derruba, 50%)
     {'sku': 'insignia-1', 'secao': 'guilda', 'tipo': 'insignias', 'alvo': 'fundacao', 'qtd': 1,
      'nome': '1 Insígnia de Fundação',
      'descricao': 'Uma Insígnia de Fundação, a que só os chefes derrubam. Dez fundam uma guilda.',
-     'preco': 500, 'limite': None},
+     'preco': 25, 'moeda': 'barras', 'limite': None},
     {'sku': 'insignias-10', 'secao': 'guilda', 'tipo': 'insignias', 'alvo': 'fundacao', 'qtd': INSIGNIAS_POR_GUILDA,
      'nome': '10 Insígnias de Fundação',
      'descricao': 'Dez Insígnias de Fundação, as que só os chefes derrubam: o bastante para fundar uma guilda.',
-     'preco': 4500, 'limite': None},
+     'preco': 225, 'moeda': 'barras', 'limite': None},
     # a janela da Reescrita é regra de desenho (um caminho por mês), não freio de preço: fica
     {'sku': 'pergaminho-elemento', 'secao': 'pergaminhos', 'tipo': 'pergaminho', 'alvo': 'elemento', 'qtd': 1,
      'nome': 'Pergaminho da Reescrita',
      'descricao': ('Troca um caminho elemental de um herói por outro que a classe tenha, sem mexer em nível, '
                    'itens e estrelas. Alternar entre os caminhos que ele já tem continua grátis.'),
-     'preco': 5000, 'limite': {'grupo': 'pergaminho-elemento', 'max': 1, 'dias': 30}},
+     'preco': 250, 'moeda': 'barras', 'limite': {'grupo': 'pergaminho-elemento', 'max': 1, 'dias': 30}},
 )
 POR_SKU = {i['sku']: i for i in CATALOGO}
+SKUS_VINTENS = tuple(i['sku'] for i in CATALOGO if i['tipo'] == 'vintens')   # os vinténs comprados com barras
 # fora da venda: só o nome, para o pedido antigo ainda aberto sair com o nome certo
 RETIRADOS = {'pergaminho-xp': {'sku': 'pergaminho-xp', 'nome': 'Pergaminho da Sabedoria', 'tipo': 'pergaminho',
                                'alvo': 'xp', 'qtd': 1}}
@@ -231,21 +321,42 @@ for _i in CATALOGO:
     _g['skus'].add(_i['sku'])
 del _i, _g
 
-# Os PACOTES DE VINTÉNS (dinheiro de verdade, pagamento.py): a tabela em reais mora SÓ aqui.
-# R$ por mil: 4,90 · 3,62 · 3,33 · 3,20. O Caçador é exatamente o Tesouro; um raro sai por uma Arca
-# com 2.000 de troco. A taxa do Mercado Pago sai do bruto (Pix ~1%, cartão ~5%).
+# Os PACOTES DE BARRAS DE OURO (dinheiro de verdade, pagamento.py; 13/09): a tabela em reais mora SÓ aqui.
+# São os pacotes de vinténs de antes ÷ 20 (R$ por 50 barras: 4,90 · 3,55 · 3,33 · 3,20). O Caçador é
+# exatamente o Tesouro; um raro sai por uma Arca com 100 de troco. A taxa do Mercado Pago sai do bruto.
 PACOTES = (
+    {'id': 'barras-50', 'nome': 'Bolsa de 50 barras de ouro', 'barras': 50, 'centavos': 490},
+    {'id': 'barras-280', 'nome': 'Saco de 280 barras de ouro', 'barras': 280, 'centavos': 1990},
+    {'id': 'barras-600', 'nome': 'Arca de 600 barras de ouro', 'barras': 600, 'centavos': 3990},
+    {'id': 'barras-1250', 'nome': 'Tesouro de 1.250 barras de ouro', 'barras': 1250, 'centavos': 7990},
+)
+# os pacotes de VINTÉNS saíram da venda em 13/09; ficam para o pagamento criado antes do deploy e aprovado
+# depois (ele credita os vinténs que vendeu) e para o nome dos pedidos e pagamentos antigos
+PACOTES_RETIRADOS = (
     {'id': 'pacote-1000', 'nome': 'Bolsa de 1.000 vinténs', 'vintens': 1000, 'centavos': 490},
     {'id': 'pacote-5500', 'nome': 'Saco de 5.500 vinténs', 'vintens': 5500, 'centavos': 1990},
     {'id': 'pacote-12000', 'nome': 'Arca de 12.000 vinténs', 'vintens': 12000, 'centavos': 3990},
     {'id': 'pacote-25000', 'nome': 'Tesouro de 25.000 vinténs', 'vintens': 25000, 'centavos': 7990},
 )
-POR_PACOTE = {p['id']: p for p in PACOTES}
+POR_PACOTE = {p['id']: p for p in PACOTES + PACOTES_RETIRADOS}
+PACOTES_A_VENDA = frozenset(p['id'] for p in PACOTES)
+
+
+def moeda_do_pacote(p):
+    """'barras' (os de hoje) ou 'vintens' (os retirados)."""
+    return 'barras' if 'barras' in p else 'vintens'
+
+
+def qtd_do_pacote(p):
+    return p['barras'] if 'barras' in p else p['vintens']
 
 
 def pacote_publico(p):
-    return {'id': p['id'], 'nome': p['nome'], 'vintens': p['vintens'], 'centavos': p['centavos'],
-            'preco': reais(p['centavos'])}
+    """{id, nome, moeda, barras|vintens, centavos, preco} — o preço em reais já escrito."""
+    saida = {'id': p['id'], 'nome': p['nome'], 'moeda': moeda_do_pacote(p), 'centavos': p['centavos'],
+             'preco': reais(p['centavos'])}
+    saida[saida['moeda']] = qtd_do_pacote(p)
+    return saida
 
 
 def entrega_de(item):
@@ -348,10 +459,113 @@ class LojaMixin:
                 'em': r['atualizado_em']}
 
     def _loja_a_caminho(self, cid):
-        """Os vinténs dos créditos (pacote pago, presente de vinténs) que o jogo ainda não recebeu."""
-        return self.con.execute(
+        """Os vinténs dos créditos (pacote pago, presente de vinténs) que o jogo ainda não recebeu — e, desde
+        13/09, os vinténs comprados com barras (seção 'vintens'), que ainda não chegaram."""
+        creditos = self.con.execute(
             "SELECT COALESCE(SUM(cr.vintens), 0) FROM loja_creditos cr JOIN loja_pedidos p ON p.id = cr.pedido_id "
             "WHERE p.conta_id = ? AND p.estado IN ('pendente', 'retirado')", (cid,)).fetchone()[0]
+        trocas = self.con.execute(
+            "SELECT entrega FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado') AND sku IN (%s) "
+            "AND id NOT IN (SELECT pedido_id FROM loja_creditos)" % ','.join('?' * len(SKUS_VINTENS)),
+            [cid] + list(SKUS_VINTENS)).fetchall()
+        for r in trocas:
+            ent = _json(r['entrega']) or {}
+            if ent.get('tipo') == 'vintens' and _id_valido(ent.get('qtd')):
+                creditos += ent['qtd']
+        return creditos
+
+    # -- as barras de ouro (13/09) ------------------------------------------------------------
+    def _barras_saldo(self, cid):
+        r = self.con.execute("SELECT saldo FROM barras_saldo WHERE conta_id = ?", (cid,)).fetchone()
+        return r[0] if r is not None else 0
+
+    def barras_move(self, cid, delta, motivo, ref, idem, t, por=None, parcial=False):
+        """Dentro da _escrita de quem chama: um movimento no extrato e o saldo, JUNTOS.
+        `idem` já usado nesta conta: nada muda e devolve None (o crédito ou o estorno
+        que chega de novo). Débito maior que o saldo: 409 'barras de ouro
+        insuficientes' — ou, com `parcial` (o estorno de um pacote cujas barras já
+        foram gastas), tira só o que houver. Devolve o delta aplicado (0: nada a tirar)."""
+        if motivo not in MOTIVOS_BARRAS or not isinstance(delta, int) or isinstance(delta, bool) or delta == 0:
+            raise ValueError('movimento de barras torto: %r %r' % (motivo, delta))
+        if idem is not None and self.con.execute(
+                "SELECT 1 FROM barras_movimentos WHERE conta_id = ? AND idem = ?", (cid, idem)).fetchone():
+            return None
+        saldo = self._barras_saldo(cid)
+        if delta < 0 and saldo + delta < 0:
+            if not parcial:
+                raise Recusa(409, 'barras de ouro insuficientes', barras={'saldo': saldo})
+            delta = -saldo
+            if delta == 0:
+                return 0
+        if saldo + delta > BARRAS_TETO:
+            raise Recusa(409, 'o saldo de barras de ouro passaria do teto')
+        self.con.execute("INSERT OR IGNORE INTO barras_saldo(conta_id, saldo, atualizado_em) VALUES (?, 0, ?)", (cid, t))
+        self.con.execute("UPDATE barras_saldo SET saldo = saldo + ?, atualizado_em = ? WHERE conta_id = ?", (delta, t, cid))
+        self.con.execute("INSERT INTO barras_movimentos(conta_id, delta, motivo, ref, saldo_depois, por, idem, criado_em) "
+                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (cid, delta, motivo, ref, saldo + delta, por, idem, t))
+        return delta
+
+    def _barras_do_pedido(self, cid, pid, estado, t):
+        """Dentro da _escrita, logo depois de o pedido `pid` virar `estado`:
+          - 'cancelado' ou 'estornado': as barras do custo voltam ('estorno-loja'), uma vez;
+          - 'entregue': as barras do ganho entram ('troca-vintens'), uma vez — o juiz (ou o
+            save antigo) já tirou os vinténs. E o pedido que tinha sido cancelado (as barras
+            devolvidas) e o jogo aplicou mesmo assim: o custo sai de novo, até o que houver;
+            o que faltar vira alerta para o Mestre."""
+        lb = self.con.execute("SELECT custo, ganho FROM loja_barras WHERE pedido_id = ?", (pid,)).fetchone()
+        if lb is None:
+            return
+        ref = 'pedido:%d' % pid
+        if estado in ('cancelado', 'estornado'):
+            if lb['custo'] > 0:
+                self.barras_move(cid, lb['custo'], 'estorno-loja', ref, ref + ':estorno', t)
+            return
+        if estado != 'entregue':
+            return
+        if lb['ganho'] > 0:
+            self.barras_move(cid, lb['ganho'], 'troca-vintens', ref, ref + ':ganho', t)
+        if lb['custo'] > 0 and self.con.execute("SELECT 1 FROM barras_movimentos WHERE conta_id = ? AND idem = ?",
+                                                (cid, ref + ':estorno')).fetchone():
+            tirado = self.barras_move(cid, -lb['custo'], 'loja', ref, ref + ':recobra', t, parcial=True)
+            faltou = lb['custo'] + (tirado or 0) if tirado is not None else 0
+            alerta = getattr(self, '_alerta', None)
+            if faltou > 0 and alerta is not None:
+                alerta(cid, 'barras-faltaram', {'pedido': pid, 'barras': lb['custo'], 'tirado': -(tirado or 0),
+                                                'faltou': faltou, 'tardio': True}, t)
+
+    def _barras_movimentos(self, cid, limite=MOVIMENTOS_LISTA):
+        """Dentro da tranca: os últimos movimentos da conta, como o site e a ficha do Mestre veem."""
+        linhas = self.con.execute(
+            "SELECT m.*, c.nome AS por_nome FROM barras_movimentos m LEFT JOIN contas c ON c.id = m.por "
+            "WHERE m.conta_id = ? ORDER BY m.id DESC LIMIT ?", (cid, limite)).fetchall()
+        pedidos = [int(r['ref'][7:]) for r in linhas if (r['ref'] or '').startswith('pedido:') and r['ref'][7:].isdigit()]
+        nomes = {}
+        if pedidos:
+            for p in self.con.execute("SELECT id, sku, entrega FROM loja_pedidos WHERE id IN (%s)"
+                                      % ','.join('?' * len(pedidos)), pedidos):
+                nomes['pedido:%d' % p['id']] = nome_do_pedido(p['sku'], _json(p['entrega']))
+        pags = [int(r['ref'][10:]) for r in linhas
+                if (r['ref'] or '').startswith('pagamento:') and r['ref'][10:].isdigit()]
+        if pags:
+            for g in self.con.execute("SELECT id, pacote FROM pagamentos WHERE id IN (%s)" % ','.join('?' * len(pags)),
+                                      pags):
+                nomes['pagamento:%d' % g['id']] = nome_do_pedido(g['pacote'])
+        saida = []
+        for r in linhas:
+            m = {'id': r['id'], 'delta': r['delta'], 'motivo': r['motivo'], 'saldo': r['saldo_depois'],
+                 'criadoEm': r['criado_em'], 'nome': nomes.get(r['ref'])}
+            if r['ref'] and r['ref'].startswith('pedido:'):
+                m['pedido'] = int(r['ref'][7:]) if r['ref'][7:].isdigit() else None
+            if r['por'] is not None:
+                m['por'] = {'id': r['por'], 'nome': r['por_nome']}
+            saida.append(m)
+        return saida
+
+    def _barras_publico(self, cid, movimentos=True):
+        saida = {'saldo': self._barras_saldo(cid)}
+        if movimentos:
+            saida['movimentos'] = self._barras_movimentos(cid)
+        return saida
 
     def _loja_saldo(self, cid, conta, save):
         """Carteira do último save (só o bolso), o que está a caminho, a reserva e o disponível."""
@@ -414,6 +628,15 @@ class LojaMixin:
             saida['cancelavel'] = False
         if vintens:
             saida['vintens'] = vintens
+        # 13/09: em que moeda o pedido foi pago — 'barras' (o custo saiu na compra), 'vintens' (o preço sai na
+        # entrega) ou None (crédito, presente, Mestre); `ganhaBarras` na troca de vinténs por barras
+        custo = r['barras_custo'] if 'barras_custo' in r.keys() else None
+        ganho = r['barras_ganho'] if 'barras_ganho' in r.keys() else None
+        saida['moeda'] = 'barras' if custo else ('vintens' if r['preco'] > 0 else None)
+        if custo:
+            saida['barras'] = custo
+        if ganho:
+            saida['ganhaBarras'] = ganho
         return saida
 
     def _loja_pedido_por_id(self, pid):
@@ -423,9 +646,12 @@ class LojaMixin:
     def loja_catalogo(self, conta, corpo):
         mp = getattr(self, 'mp', None)
         ligado = bool(mp is not None and mp.ligado)
+        # 13/09: `barras` diz o câmbio para o site explicar as trocas sem repetir número nenhum
         return 200, {'ok': True, 'versao': LOJA_VERSAO,
                      'itens': [dict(i, limite=dict(i['limite']) if i['limite'] else None) for i in CATALOGO],
                      'pacotes': [pacote_publico(p) for p in PACOTES],
+                     'barras': {'nome': 'Barras de Ouro', 'vintensPorBarra': VINTENS_POR_BARRA,
+                                'vintensPorBarraFarmada': VINTENS_POR_BARRA_FARMADA},
                      'pagamento': {'ligado': ligado, 'teste': bool(ligado and mp.teste)}}
 
     # -- GET /api/loja/minha ------------------------------------------------------------------
@@ -438,7 +664,8 @@ class LojaMixin:
             pedidos = self.con.execute("SELECT %s FROM %s WHERE p.conta_id = ? ORDER BY p.id DESC LIMIT ?"
                                        % (COLUNAS_PEDIDO, DE_PEDIDOS), (cid, PEDIDOS_LISTA)).fetchall()
             pedidos = [self._loja_pedido(r, t) for r in pedidos]
-        return 200, {'ok': True, 'saldo': saldo, 'limites': limites,
+            barras = self._barras_publico(cid)          # 13/09: o saldo de barras da conta e o extrato
+        return 200, {'ok': True, 'saldo': saldo, 'barras': barras, 'limites': limites,
                      'classes': self._loja_classes(save['progress'] if save else None),
                      'pedidos': pedidos}
 
@@ -513,9 +740,10 @@ class LojaMixin:
         if not isinstance(idem, str) or not RE_IDEM.match(idem):
             raise Recusa(400, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')
         cid, t, mestre = conta['id'], agora(), bool(conta['gm'])
-        # tudo numa transação de escrita: saldo, reserva e limites lidos com a
-        # trava entre processos pega — duas compras (até em dois contêineres)
-        # não gastam o mesmo vintém
+        em_barras = item['moeda'] == 'barras'
+        # tudo numa transação de escrita: saldo, reserva, barras e limites lidos
+        # com a trava entre processos pega — duas compras (até em dois
+        # contêineres) não gastam o mesmo vintém nem a mesma barra
         with self._escrita():
             save = self._loja_save(cid)
             ja = self.con.execute("SELECT %s FROM %s WHERE p.conta_id = ? AND p.idem = ?" % (COLUNAS_PEDIDO, DE_PEDIDOS),
@@ -523,29 +751,50 @@ class LojaMixin:
             if ja is not None:                          # o mesmo clique chegando de novo
                 if ja['sku'] != sku or origem_do_pedido(ja) is not None:
                     raise Recusa(409, 'idem já usado em outro produto')
-                return 200, {'ok': True, 'pedido': self._loja_pedido(ja, t), 'saldo': self._loja_saldo(cid, conta, save)}
+                return 200, {'ok': True, 'pedido': self._loja_pedido(ja, t), 'saldo': self._loja_saldo(cid, conta, save),
+                             'barras': self._barras_publico(cid, False)}
             # sem save o servidor não sabe da carteira; com um crédito a caminho
-            # (pacote pago, presente de vinténs), sabe de pelo menos isso
-            if save is None and not mestre and self._loja_a_caminho(cid) == 0:
+            # (pacote pago, presente de vinténs), sabe de pelo menos isso. As
+            # barras (13/09) moram aqui: o item pago em barras não precisa do save
+            if save is None and not mestre and not em_barras and self._loja_a_caminho(cid) == 0:
                 raise Recusa(409, 'o servidor ainda não viu seus vinténs: abra o jogo logado nesta conta '
                                   '(na conta Principal)')
             self._loja_confere_teto(cid, t)             # o teto de linhas vale para todo mundo, Mestre inclusive
             self._loja_confere_item(cid, item, save['progress'] if save else None)
             if not mestre:                              # o Mestre pula o saldo e os limites (bolsoSemFundo)
                 self._loja_confere_limites(cid, item, t)
-                saldo = self._loja_saldo(cid, conta, save)
-                if saldo['disponivel'] < item['preco']:
-                    raise Recusa(409, 'vinténs insuficientes', saldo=saldo)
-            preco = 0 if mestre else item['preco']
+                if em_barras:
+                    if self._barras_saldo(cid) < item['preco']:
+                        raise Recusa(409, 'barras de ouro insuficientes', barras=self._barras_publico(cid, False))
+                else:
+                    saldo = self._loja_saldo(cid, conta, save)
+                    if saldo['disponivel'] < item['preco']:
+                        raise Recusa(409, 'vinténs insuficientes', saldo=saldo)
+            # o pedido anda com preço em VINTÉNS (0 se pago em barras); as barras moram em loja_barras
+            preco = 0 if mestre or em_barras else item['preco']
+            custo = 0 if mestre or not em_barras else item['preco']
+            ganho = item['qtd'] if item['tipo'] == 'barras' else 0
             cur = self.con.execute(
                 "INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, idem, criado_em) "
                 "VALUES (?, ?, ?, ?, 'pendente', ?, ?)",
                 (cid, sku, json.dumps(entrega_de(item), ensure_ascii=False), preco, idem, t))
-            r = self._loja_pedido_por_id(cur.lastrowid)
-            self._evento(cid, 'loja-compra', {'id': r['id'], 'sku': sku, 'preco': preco})
+            pid = cur.lastrowid
+            if custo or ganho:
+                self.con.execute("INSERT INTO loja_barras(pedido_id, custo, ganho, criado_em) VALUES (?, ?, ?, ?)",
+                                 (pid, custo, ganho, t))
+            if custo:                                   # as barras saem AGORA, na transação que cria o pedido
+                self.barras_move(cid, -custo, 'troca-vintens' if item['tipo'] == 'vintens' else 'loja',
+                                 'pedido:%d' % pid, 'pedido:%d:custo' % pid, t)
+            r = self._loja_pedido_por_id(pid)
+            evento = {'id': pid, 'sku': sku, 'preco': preco}
+            if custo:
+                evento['barras'] = custo
+            self._evento(cid, 'loja-compra', evento)
             saldo = self._loja_saldo(cid, conta, save)
-        log.info("loja: #%d comprou %s por %d (pedido %d)", cid, sku, preco, r['id'])
-        return 201, {'ok': True, 'pedido': self._loja_pedido(r, t), 'saldo': saldo}
+            barras = self._barras_publico(cid, False)
+        log.info("loja: #%d comprou %s por %s (pedido %d)", cid, sku,
+                 '%d barras' % custo if custo else '%d vinténs' % preco, pid)
+        return 201, {'ok': True, 'pedido': self._loja_pedido(r, t), 'saldo': saldo, 'barras': barras}
 
     # -- POST /api/loja/cancelar ------------------------------------------------------------------
     def loja_cancelar(self, conta, corpo):
@@ -568,10 +817,12 @@ class LojaMixin:
             if not self._loja_cancelavel(r, t):
                 raise Recusa(409, 'já está a caminho do jogo; espere a entrega ou 24 h')
             self.con.execute("UPDATE loja_pedidos SET estado = 'cancelado', fechado_em = ? WHERE id = ?", (t, pid))
+            self._barras_do_pedido(cid, pid, 'cancelado', t)     # 13/09: as barras do custo voltam
             self._evento(cid, 'loja-cancela', {'id': pid, 'sku': r['sku'], 'de': r['estado']})
             r = self._loja_pedido_por_id(pid)
             saldo = self._loja_saldo(cid, conta, self._loja_save(cid))
-        return 200, {'ok': True, 'pedido': self._loja_pedido(r, t), 'saldo': saldo}
+            barras = self._barras_publico(cid, False)
+        return 200, {'ok': True, 'pedido': self._loja_pedido(r, t), 'saldo': saldo, 'barras': barras}
 
     # -- POST /api/loja/retirar (o jogo) -------------------------------------------------------------
     def loja_retirar(self, conta, corpo):
@@ -615,6 +866,7 @@ class LojaMixin:
             "WHERE conta_id = ? AND id = ? AND estado IN ('pendente', 'retirado')", (motivo, t, versao, cid, pid)).rowcount
         if not n:
             return False, None
+        self._barras_do_pedido(cid, pid, 'estornado', t)         # 13/09: as barras do custo voltam
         self._evento(cid, 'loja-estorno', {'ids': [pid], 'versao': versao, 'motivo': motivo})
         reemite = getattr(self, '_pagamento_credito_recusado', None)
         return True, (reemite(cid, pid, motivo, versao, t) if reemite is not None else None)
@@ -699,6 +951,8 @@ class LojaMixin:
                             "UPDATE loja_pedidos SET estado = 'entregue', retirado_em = COALESCE(retirado_em, ?), "
                             "fechado_em = ?, versao_save = ? WHERE conta_id = ? AND id IN (%s)"
                             % ','.join('?' * len(feitos)), [t, t, nova, cid] + feitos)
+                        for pid in feitos:              # 13/09: vinténs → barras: as barras entram só agora
+                            self._barras_do_pedido(cid, pid, 'entregue', t)
                         self._evento(cid, 'loja-entregue', {'ids': feitos, 'versao': nova, 'servidor': True})
                     for r, motivo in recusados:
                         feito, novo = self._loja_estorna(cid, r['id'], motivo, nova, t)
@@ -755,6 +1009,8 @@ class LojaMixin:
                     "UPDATE loja_pedidos SET estado = 'entregue', fechado_em = ?, versao_save = ? "
                     "WHERE conta_id = ? AND id IN (%s)" % ','.join('?' * len(entregues)), [t, nova, cid] + entregues)
                 self._evento(cid, 'loja-entregue', {'ids': entregues, 'versao': nova})
+                for pid in entregues:                   # 13/09: as barras do ganho (e a recobra do cancelado tardio)
+                    self._barras_do_pedido(cid, pid, 'entregue', t)
                 for r in achados:
                     if r['estado'] == 'cancelado':      # o jogo aplicou antes de saber do cancelamento
                         self._evento(cid, 'loja-cancelamento-tardio', {'id': r['id'], 'versao': nova})
@@ -772,6 +1028,7 @@ class LojaMixin:
                 (motivo, t, nova, cid, pid)).rowcount
             if n:
                 estornados.append(pid)
+                self._barras_do_pedido(cid, pid, 'estornado', t)
                 if reemite is not None:
                     novo = reemite(cid, pid, motivo, nova, t)
                     if novo is not None:

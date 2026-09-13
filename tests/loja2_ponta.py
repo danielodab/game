@@ -445,6 +445,13 @@ def main():
             print('a API não subiu:\n' + cauda(log_arq))
             return 1
         st, cat = pede_json(base + '/api/loja/catalogo')
+        if isinstance(cat, dict) and cat.get('versao') == 3:
+            # 13/09: a loja virou BARRAS DE OURO (catálogo v3): o pacote de vinténs saiu da venda e o roteiro
+            # desta página (pacote de vinténs → compra em vinténs) não existe mais. As barras de ponta a ponta
+            # (pacote, estorno, juiz, trocas, Mestre) estão em tests/barras_api.py; esta página espera o roteiro novo
+            print('PENDENTE: o catálogo é o v3 (barras de ouro, 13/09); o roteiro de vinténs desta prova saiu da '
+                  'venda — as barras de ponta a ponta estão em tests/barras_api.py')
+            return 2
         if st != 200 or not isinstance(cat, dict) or cat.get('versao') != 2 or 'pagamento' not in cat:
             print('PENDENTE: o servidor ainda não tem o catálogo v2 da Loja 2 (versao=%r)' %
                   (cat.get('versao') if isinstance(cat, dict) else None))

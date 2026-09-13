@@ -12,15 +12,16 @@
 #   admin email-teste ENDERECO manda um e-mail de prova (confere o SMTP)
 #   admin eventos [N]          a trilha de auditoria, os N últimos (20 se omitir)
 #   admin agenda               os eventos do mundo marcados e as regras do calendário
-#   admin loja [N]             os N últimos pedidos da loja de vinténs (30 se omitir)
+#   admin loja [N]             os N últimos pedidos da loja (30 se omitir)
 #   admin loja-cancelar ID     cancela um pedido da loja que ainda não chegou ao jogo
+#   admin barras "NOME"        o saldo de barras de ouro da conta e os 20 últimos movimentos
 #   admin backup               faz um backup agora, em /dados/backups
 # Depois de marcar ou tirar a marca de Mestre, a pessoa sai e entra de novo no site.
 # =============================================================================
 set -eu
 BANCO=/dados/soterra.db
 
-ajuda() { sed -n '4,18p' "$0" | sed 's/^# \{0,1\}//'; }
+ajuda() { sed -n '4,19p' "$0" | sed 's/^# \{0,1\}//'; }
 sql() { su-exec soterra sqlite3 "$BANCO" "$@"; }
 texto() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 tem_tabela() { [ "$(sql "select count(*) from sqlite_master where type = 'table' and name = '$1'")" = "1" ]; }
@@ -47,6 +48,8 @@ case "$acao" in
     [ $# -eq 2 ] || { echo "uso: admin email-teste seu@endereco.com"; exit 1; } ;;
   loja-cancelar)
     [ $# -eq 2 ] || { echo "uso: admin loja-cancelar ID (o número do pedido: veja em admin loja)"; exit 1; } ;;
+  barras)
+    [ $# -eq 2 ] || { echo "o NOME vai inteiro, num argumento só; com espaço, entre aspas: admin barras \"Ana Clara\""; exit 1; } ;;
 esac
 if [ -z "$acao" ] || [ "$acao" = "ajuda" ]; then ajuda; exit 0; fi
 if [ "$acao" = "backup" ]; then exec /app/servidor/coolify/backup.sh; fi
@@ -119,8 +122,11 @@ case "$acao" in
     n="${2:-30}"
     case "$n" in ''|*[!0-9]*) echo "N tem de ser um número"; exit 1 ;; esac
     tem_tabela loja_pedidos || { echo "este banco ainda não tem a loja: a API nova cria as tabelas quando sobe"; exit 1; }
-    echo "Pedidos da loja, os mais novos primeiro (hora de Brasília; preço em vinténs; 0 = Mestre):"
-    sql -header -column "select p.id, datetime(p.criado_em, 'unixepoch', '-3 hours') as quando, coalesce(c.nome, '-') as conta, p.sku, p.preco, p.estado, coalesce(p.motivo, '') as motivo, coalesce(datetime(p.retirado_em, 'unixepoch', '-3 hours'), '-') as retirado, coalesce(datetime(p.fechado_em, 'unixepoch', '-3 hours'), '-') as fechado from loja_pedidos p left join contas c on c.id = p.conta_id order by p.id desc limit $n" ;;
+    # 13/09: a coluna "barras" (o que o pedido custou em barras de ouro) só com a tabela nova no banco
+    barras="0"
+    if tem_tabela loja_barras; then barras="coalesce((select custo from loja_barras where pedido_id = p.id), 0)"; fi
+    echo "Pedidos da loja, os mais novos primeiro (hora de Brasília; preço em vinténs, barras em barras de ouro; 0 e 0 = Mestre, presente ou crédito):"
+    sql -header -column "select p.id, datetime(p.criado_em, 'unixepoch', '-3 hours') as quando, coalesce(c.nome, '-') as conta, p.sku, p.preco, $barras as barras, p.estado, coalesce(p.motivo, '') as motivo, coalesce(datetime(p.retirado_em, 'unixepoch', '-3 hours'), '-') as retirado, coalesce(datetime(p.fechado_em, 'unixepoch', '-3 hours'), '-') as fechado from loja_pedidos p left join contas c on c.id = p.conta_id order by p.id desc limit $n" ;;
   loja-cancelar)
     # só de pendente ou retirado. Se o jogo já tinha retirado o pedido e o
     # aplicar mesmo assim, o save seguinte o marca entregue (fica o evento
@@ -134,8 +140,24 @@ case "$acao" in
       pendente|retirado) ;;
       *) echo "o pedido $id já está $estado: só cancela pendente ou retirado"; exit 1 ;;
     esac
-    n="$(sql "begin immediate; update loja_pedidos set estado = 'cancelado', motivo = 'admin', fechado_em = cast(strftime('%s', 'now') as integer) where id = $id and estado in ('pendente', 'retirado'); select changes(); insert into eventos(conta_id, tipo, dados, criado_em) select conta_id, 'loja-cancela-admin', json_object('id', id, 'sku', sku), cast(strftime('%s', 'now') as integer) from loja_pedidos where id = $id and estado = 'cancelado' and motivo = 'admin'; commit;")"
-    if [ "$n" = "1" ]; then echo "pedido $id cancelado: a reserva de vinténs saiu e ele não vai mais para o jogo."; else echo "o pedido $id mudou de estado agora há pouco; confira com: admin loja"; exit 1; fi ;;
+    # 13/09: o pedido pago em barras de ouro devolve as barras NA MESMA transação, uma vez só (o idem
+    # 'pedido:ID:estorno' é o mesmo que a API usa: loja.py, _barras_do_pedido)
+    devolve=""
+    if tem_tabela loja_barras && tem_tabela barras_movimentos; then
+      agora="cast(strftime('%s', 'now') as integer)"
+      alvo="from loja_pedidos p join loja_barras lb on lb.pedido_id = p.id where p.id = $id and p.estado = 'cancelado' and p.motivo = 'admin' and lb.custo > 0 and not exists (select 1 from barras_movimentos m where m.conta_id = p.conta_id and m.idem = 'pedido:' || p.id || ':estorno')"
+      devolve="insert or ignore into barras_saldo(conta_id, saldo, atualizado_em) select p.conta_id, 0, $agora $alvo; update barras_saldo set saldo = saldo + (select lb.custo $alvo), atualizado_em = $agora where conta_id = (select p.conta_id $alvo); insert into barras_movimentos(conta_id, delta, motivo, ref, saldo_depois, idem, criado_em) select p.conta_id, lb.custo, 'estorno-loja', 'pedido:' || p.id, (select saldo from barras_saldo where conta_id = p.conta_id), 'pedido:' || p.id || ':estorno', $agora $alvo;"
+    fi
+    n="$(sql "begin immediate; update loja_pedidos set estado = 'cancelado', motivo = 'admin', fechado_em = cast(strftime('%s', 'now') as integer) where id = $id and estado in ('pendente', 'retirado'); select changes(); insert into eventos(conta_id, tipo, dados, criado_em) select conta_id, 'loja-cancela-admin', json_object('id', id, 'sku', sku), cast(strftime('%s', 'now') as integer) from loja_pedidos where id = $id and estado = 'cancelado' and motivo = 'admin'; $devolve commit;")"
+    if [ "$n" = "1" ]; then echo "pedido $id cancelado: a reserva de vinténs (ou as barras de ouro) voltou e ele não vai mais para o jogo."; else echo "o pedido $id mudou de estado agora há pouco; confira com: admin loja"; exit 1; fi ;;
+  barras)
+    # só leitura (13/09): o saldo de barras de ouro mora no servidor; quem dá é o Mestre, pelo painel do site
+    tem_tabela barras_saldo || { echo "este banco ainda não tem as barras de ouro: a API nova cria as tabelas quando sobe"; exit 1; }
+    id="$(sql "select id from contas where nome = $(texto "$nome")")"
+    [ -n "$id" ] || { echo "não achei a conta \"$nome\" (confira com: admin contas)"; exit 1; }
+    echo "Barras de ouro de \"$nome\": $(sql "select coalesce((select saldo from barras_saldo where conta_id = $id), 0)")"
+    echo "Os 20 últimos movimentos (hora de Brasília):"
+    sql -header -column "select m.id, datetime(m.criado_em, 'unixepoch', '-3 hours') as quando, m.delta, m.motivo, coalesce(m.ref, '') as ref, m.saldo_depois as saldo, coalesce(c.nome, '') as por from barras_movimentos m left join contas c on c.id = m.por where m.conta_id = $id order by m.id desc limit 20" ;;
   *)
     echo "não conheço \"$acao\""; ajuda; exit 1 ;;
 esac

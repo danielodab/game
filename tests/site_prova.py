@@ -143,31 +143,39 @@ CLASSES = RANKING_CHEIA['classes']
 # Fase C: a saúde (sem correio: o "esqueci a senha" fica como antes) e o catálogo
 # da loja com os três exemplos da seção 1.5 do plano, sem tirar nem pôr
 SAUDE = {'ok': True, 'contas': 1, 'agora': EVENTOS_CHEIA['agora'], 'correio': False}
+# 13/09: o catálogo v3, em barras de ouro (cada item com `moeda`), com as duas trocas no começo e os pacotes de barras
 CATALOGO_CHEIA = json.loads(r'''
-{"ok": true, "versao": 2, "itens": [
+{"ok": true, "versao": 3, "itens": [
+ {"sku": "vintens-1000", "secao": "vintens", "tipo": "vintens", "alvo": "carteira", "qtd": 1000,
+  "nome": "1.000 vinténs", "descricao": "Vinténs para a carteira do jogo, pagos com barras de ouro.", "preco": 50,
+  "moeda": "barras", "limite": null},
+ {"sku": "barras-por-vintens-10", "secao": "barras-por-vintens", "tipo": "barras", "alvo": "conta", "qtd": 10,
+  "nome": "10 barras de ouro", "descricao": "Barras de ouro pagas com os vinténs do jogo.", "preco": 800,
+  "moeda": "vintens", "limite": null},
  {"sku": "classe-invocador", "secao": "personagens", "tipo": "classe", "alvo": "invocador", "qtd": 1,
-  "nome": "Xamã", "raridade": "raro", "cartas": 10, "descricao": "Libera o Xamã na hora. Chega no nível 1.", "preco": 10000,
-  "limite": {"grupo": "classe-invocador", "max": 1, "dias": null}},
+  "nome": "Xamã", "raridade": "raro", "cartas": 10, "descricao": "Libera o Xamã na hora. Chega no nível 1.", "preco": 500,
+  "moeda": "barras", "limite": {"grupo": "classe-invocador", "max": 1, "dias": null}},
  {"sku": "bonus-xp-1", "secao": "bonus", "tipo": "bonus-xp", "alvo": "xp", "qtd": 1, "dias": 1,
   "nome": "Bônus de XP — 1 dia",
   "descricao": "+50% de experiência para o grupo por 1 dia, contado no relógio do servidor a partir da entrega no jogo.",
-  "preco": 1500, "limite": null},
+  "preco": 75, "moeda": "barras", "limite": null},
  {"sku": "pedras-agua", "secao": "pedras", "tipo": "pedras", "alvo": "stone-tear", "qtd": 10, "elemento": "agua",
-  "nome": "10 Lágrimas de Cisterna", "descricao": "…", "preco": 500, "limite": null},
+  "nome": "10 Lágrimas de Cisterna", "descricao": "…", "preco": 25, "moeda": "barras", "limite": null},
  {"sku": "insignias-10", "secao": "guilda", "tipo": "insignias", "alvo": "fundacao", "qtd": 10,
   "nome": "10 Insígnias de Fundação", "descricao": "Dez Insígnias de Fundação: o bastante para fundar uma guilda.",
-  "preco": 4500, "limite": null},
+  "preco": 225, "moeda": "barras", "limite": null},
  {"sku": "pergaminho-elemento", "secao": "pergaminhos", "tipo": "pergaminho", "alvo": "elemento", "qtd": 1,
-  "nome": "Pergaminho da Reescrita", "descricao": "Troca um caminho elemental de um herói por outro.", "preco": 5000,
-  "limite": {"grupo": "pergaminho-elemento", "max": 1, "dias": 30}}
+  "nome": "Pergaminho da Reescrita", "descricao": "Troca um caminho elemental de um herói por outro.", "preco": 250,
+  "moeda": "barras", "limite": {"grupo": "pergaminho-elemento", "max": 1, "dias": 30}}
 ],
  "pacotes": [
-  {"id": "pacote-1000", "nome": "Bolsa de 1.000 vinténs", "vintens": 1000, "centavos": 490, "preco": "R$ 4,90"},
-  {"id": "pacote-5500", "nome": "Saco de 5.500 vinténs", "vintens": 5500, "centavos": 1990, "preco": "R$ 19,90"}
+  {"id": "barras-50", "nome": "Bolsa de 50 barras de ouro", "moeda": "barras", "barras": 50, "centavos": 490, "preco": "R$ 4,90"},
+  {"id": "barras-280", "nome": "Saco de 280 barras de ouro", "moeda": "barras", "barras": 280, "centavos": 1990, "preco": "R$ 19,90"}
  ],
+ "barras": {"nome": "Barras de Ouro", "vintensPorBarra": 20, "vintensPorBarraFarmada": 80},
  "pagamento": {"ligado": false, "teste": false}}
 ''')
-CATALOGO_VAZIA = {'ok': True, 'versao': 2, 'itens': [], 'pacotes': [], 'pagamento': {'ligado': False, 'teste': False}}
+CATALOGO_VAZIA = {'ok': True, 'versao': 3, 'itens': [], 'pacotes': [], 'pagamento': {'ligado': False, 'teste': False}}
 
 
 # ---- o que o jogo diz (lido dos arquivos dele, nunca copiado) -------------------
@@ -665,15 +673,22 @@ def prova_loja(abre):
     """Fase C e loja 2: a loja pública (sem sessão) com o catálogo v2 do contrato"""
     h = abre('loja.html', 'cheia')
     t = texto(h)
-    secoes = re.findall(r'<section class="loja-secao" data-secao="([a-z]+)"', sem_codigo(h))
-    check('loja (cheia): as cinco seções, na ordem do servidor', secoes == ['personagens', 'bonus', 'pedras', 'guilda', 'pergaminhos'],
+    secoes = re.findall(r'<section class="loja-secao[^"]*" data-secao="([a-z-]+)"', sem_codigo(h))
+    check('loja (cheia): as sete seções, na ordem do servidor (13/09: as duas trocas antes)',
+          secoes == ['vintens', 'barras-por-vintens', 'personagens', 'bonus', 'pedras', 'guilda', 'pergaminhos'],
           ' '.join(secoes))
-    check('loja (cheia): os preços do servidor, com ponto de milhar',
-          '10.000 vinténs' in t and '1.500 vinténs' in t and '500 vinténs' in t and '4.500 vinténs' in t and '5.000 vinténs' in t)
-    check('loja (cheia): sem sessão, "Entre para comprar"', t.count('Entre para comprar') >= 5)
+    check('loja (cheia): os preços do servidor, cada um na sua moeda (barras de ouro; a troca por barras em vinténs)',
+          '500 barras' in t and '75 barras' in t and '25 barras' in t and '225 barras' in t and '250 barras' in t
+          and '800 vinténs' in t and '50 barras' in t)
+    check('loja (cheia): sem sessão, "Entre para comprar"', t.count('Entre para comprar') >= 7)
+    check('loja (cheia): a barra de ouro é um SVG da página, sem imagem de fora',
+          h.count('class="ico-barra') >= 6 and 'barra' not in ' '.join(re.findall(r'<img[^>]+src="([^"]+)"', h)))
+    check('loja (cheia): "Barras por vinténs" explica o caminho de quem farma com o câmbio do servidor',
+          'para quem farma' in t and 'cada barra de ouro custa 80 vinténs' in t)
     pac = bloco(h, 'section', 'lj-pacotes')
-    check('loja (cheia): os pacotes de vinténs "em breve", com o preço em reais do servidor',
-          'em breve' in texto(pac) and 'R$ 4,90' in texto(pac) and 'Bolsa de 1.000 vinténs' in texto(pac))
+    check('loja (cheia): os pacotes de barras de ouro "em breve", com o preço em reais do servidor',
+          'em breve' in texto(pac) and 'R$ 4,90' in texto(pac) and 'Bolsa de 50 barras de ouro' in texto(pac)
+          and 'Barras de Ouro' in texto(pac))
     check('loja (cheia): com os pagamentos desligados, nenhum pedido a /api/pagamento/*',
           not [c for v, m, c, cod in PEDIDOS_API if c.startswith('/api/pagamento/')])
     check('loja (cheia): o retrato do personagem pelo id da classe', 'src="img/classe-invocador.webp"' in h)

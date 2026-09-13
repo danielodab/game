@@ -365,7 +365,9 @@ var JOGO = (typeof window !== 'undefined')
     var origem = (d.origem === 'presente' || ped.origem === 'presente') ? 'presente'
       : ((d.origem === 'pagamento' || ped.origem === 'pagamento') ? 'pagamento' : 'loja');
     if (d.tipo === 'entregue') {
+      // 13/09: a troca de vinténs por barras de ouro não traz nada para o jogo — as barras vão para a conta do site
       var txt = (origem === 'pagamento') ? 'Chegaram ' + lojaMilhar(ent.qtd) + ' vinténs do seu pacote'
+        : (ent.tipo === 'barras' && origem === 'loja') ? 'Troca feita: ' + nome + ' na sua conta do site'
         : (origem === 'presente' ? 'Presente do Mestre: ' : 'Chegou da loja: ') + nome;
       if (ent.tipo === 'bonus-xp') {
         var ate = (typeof d.ate === 'number' && d.ate > 0) ? d.ate : safe(function () { return P().bonusXpAte(); }, 0);
