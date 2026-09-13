@@ -1343,11 +1343,15 @@ var JOGO = (typeof window !== 'undefined')
             JOGO.Hub.nomeia(j.nome || '', tituloPendurado(j.titulo), tier, resumoGuilda);
           });
         }
-        // O PÓDIO POR CLASSE: quem é 1º, 2º ou 3º de alguma classe tem o nome
-        // aceso na praça. Recalculado a cada pintura da conta — é quando o
-        // placar acabou de chegar.
+        // O NOME ACESO (12/09): o top 1, 2 e 3 do ranking de XP anda com o nome
+        // em ouro, prata e bronze. Pinta já com o que se sabe, e de novo quando
+        // o ranking do servidor responder.
         if (JOGO.Hub && JOGO.Hub.medalhas) {
-          JOGO.Hub.medalhas(medalhasPorClasse(contasDoPlacar(fotos, j.id, j.nome)), j.id);
+          var contasM = contasDoPlacar(fotos, j.id, j.nome);
+          JOGO.Hub.medalhas(mapaDeMedalhas(contasM));
+          rankingDoServidor().then(function (rk) {
+            if (rk && JOGO.Hub && JOGO.Hub.medalhas) JOGO.Hub.medalhas(mapaDeMedalhas(contasM));
+          });
         }
 
         // A AURA do Traje do Colecionador fechado (25/08)
@@ -3989,9 +3993,8 @@ var JOGO = (typeof window !== 'undefined')
       clear(caixa);
 
       // ---- QUEM SOU EU
-      var medalhas = medalhasPorClasse(contasDoPlacar(fotos, j.id, j.nome));
       var souMestre3 = safe(function () { return !!(JOGO.GM && JOGO.GM.ativo()); }, false);
-      var brilho = souMestre3 ? 'admin' : (medalhas[j.id] || null);
+      var brilho = souMestre3 ? 'admin' : medalhaDaPosicao(estT && estT.pvm);
       var topo = el('div', 'char-topo');
       var corpoAv = charHeroi || selHeroes[0] || heroIds().filter(isUnlocked)[0] || 'sumo';
       topo.appendChild(art('unit', [corpoAv, { element: 'neutro', dir: 0, scale: 0.7 }], 96));
@@ -4003,8 +4006,7 @@ var JOGO = (typeof window !== 'undefined')
       if (souMestre3) colT.appendChild(el('span', 'chip chip-ok', 'Mestre do Fundo'));
       else if (brilho) {
         colT.appendChild(el('span', 'char-medalha is-' + brilho,
-          brilho === 'ouro' ? '1º lugar de classe' :
-          brilho === 'prata' ? '2º lugar de classe' : '3º lugar de classe'));
+          'Top ' + estT.pvm + ' do ranking de XP'));
       }
       if (resumoGuilda && resumoGuilda.nome) {
         var lg = el('div', 'char-guilda');
@@ -4073,11 +4075,12 @@ var JOGO = (typeof window !== 'undefined')
         : 'Aparecendo para todo mundo na praça. Os pontos do placar não mudam com isto.'));
 
       /* ---- O TÍTULO DA PLAQUINHA (11/09, dono: "o título é editado na aba
-       * do personagem"). Aqui se escolhe qual pendurar, e aqui se vê o que
-       * falta para os outros. Três fontes, e nenhuma delas é missão:
-       * pódio de níveis, pódio da arena e dez quedas do mesmo chefe no
-       * difícil e sozinho. Os dois primeiros são emprestados — some o
-       * título no dia em que a posição some, sem apagar a escolha. */
+       * do personagem"). 12/09: um MENU SUSPENSO dividido por fonte — ranking
+       * de XP (Top 1, 2 e 3 PVM), ranking PvP (Top 1, 2 e 3 Pvp) e os chefes
+       * (dez quedas no difícil e sozinho). O que ainda não é seu aparece
+       * apagado no próprio menu; o "como ganhar" fica recolhido embaixo. Os de
+       * ranking são emprestados: some o título no dia em que a posição some,
+       * sem apagar a escolha. */
       caixa.appendChild(el('h3', 'bk-tit', 'Título na plaquinha'));
       var Tt = JOGO.Titulos;
       if (!Tt) {
@@ -4085,38 +4088,51 @@ var JOGO = (typeof window !== 'undefined')
       } else {
         var catal = Tt.catalogo(estT);
         var ganhos = catal.filter(function (t) { return t.ganho; });
-        var fila = el('div', 'ms-titulos');
-        fila.appendChild(btn('— sem título —', 'btn-mini' + (!tituloVivo ? ' is-on' : ''), function () {
-          JOGO.DB.definirTitulo(null).then(function () {
-            if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, '');
-            reanunciaPerfil();
-            toast('Sem título — só o nome.', 'good');
+        var porFonte = { pvm: 'Ranking de XP (PvM)', pvp: 'Ranking PvP', chefe: 'Chefes, no difícil e sozinho' };
+        var selT = document.createElement('select');
+        selT.className = 'hub-input tit-escolha';
+        var opSem = document.createElement('option');
+        opSem.value = '';
+        opSem.textContent = '— sem título —';
+        opSem.selected = !tituloVivo;
+        selT.appendChild(opSem);
+        ['pvm', 'pvp', 'chefe'].forEach(function (f) {
+          var grupoT = document.createElement('optgroup');
+          grupoT.label = porFonte[f];
+          catal.filter(function (t) { return t.fonte === f; }).forEach(function (t) {
+            var op = document.createElement('option');
+            op.value = t.titulo;
+            op.disabled = !t.ganho;
+            op.selected = tituloVivo === t.titulo;
+            op.textContent = t.titulo + (t.ganho ? '' :
+              (t.alvo ? ' — ' + t.prog + '/' + t.alvo + ' quedas' : ' — ainda não é seu'));
+            grupoT.appendChild(op);
+          });
+          selT.appendChild(grupoT);
+        });
+        selT.addEventListener('keydown', function (ev) { ev.stopPropagation(); });   // a letra não abre atalho
+        selT.addEventListener('change', function () {
+          JOGO.DB.definirTitulo(selT.value || null).then(function (res) {
+            var tt = (res && res.titulo) || '';
+            if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, tt);
+            reanunciaPerfil();        // o título aparece para todos, não só aqui
+            toast(tt ? 'Agora você é ' + (j.nome || 'você') + ', ' + tt + '.' : 'Sem título — só o nome.', 'good');
             sheetChar();
           });
-        }));
-        ganhos.forEach(function (t) {
-          fila.appendChild(btn(esc(t.titulo),
-            'btn-mini' + (tituloVivo === t.titulo ? ' is-on' : ''), function () {
-              JOGO.DB.definirTitulo(t.titulo).then(function (res) {
-                if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, res.titulo || '');
-                reanunciaPerfil();        // o título aparece para todos, não só aqui
-                toast('Agora você é ' + (j.nome || 'você') + ', ' + res.titulo + '.', 'good');
-                sheetChar();
-              });
-            }));
         });
-        caixa.appendChild(fila);
+        caixa.appendChild(selT);
         if (!ganhos.length) {
           caixa.appendChild(el('p', 'inv-dica',
             'Nenhum título ainda. Eles não vêm de missão: são pódio de ranking ou ' +
             'teimosia contra um chefe.'));
         }
 
-        // o que falta — a lista inteira, para o título ser uma META e não
-        // uma surpresa que aparece um dia
-        var porFonte = { pvm: 'Pódio de níveis', pvp: 'Pódio da arena', chefe: 'Chefes, no difícil e sozinho' };
+        // como ganhar cada um — recolhido, para a aba não virar uma lista comprida
+        var comoT = document.createElement('details');
+        comoT.className = 'tit-como';
+        comoT.appendChild(el('summary', null, 'Como ganhar cada título'));
         ['pvm', 'pvp', 'chefe'].forEach(function (f) {
-          caixa.appendChild(el('div', 'char-fonte',
+          comoT.appendChild(el('div', 'char-fonte',
             '<span class="char-fonte-nm">' + esc(porFonte[f]) + '</span>'));
           catal.filter(function (t) { return t.fonte === f; }).forEach(function (t) {
             var linha = el('div', 'tit-linha' + (t.ganho ? ' is-ganho' : ''));
@@ -4127,11 +4143,12 @@ var JOGO = (typeof window !== 'undefined')
               linha.appendChild(el('span', 'tit-falta',
                 esc(t.de) + ' · <b>' + t.prog + '</b>/' + t.alvo + ' quedas'));
             } else {
-              linha.appendChild(el('span', 'tit-falta', esc(t.de)));
+              linha.appendChild(el('span', 'tit-falta', esc(t.comoGanhar)));
             }
-            caixa.appendChild(linha);
+            comoT.appendChild(linha);
           });
         });
+        caixa.appendChild(comoT);
       }
 
       /* ---- OS NÚMEROS, herói por herói. Só os que DESCERAM (11/09, pedido
@@ -4237,11 +4254,11 @@ var JOGO = (typeof window !== 'undefined')
        * a mesma conta, a mesma cor. O branco do Mestre do Fundo só aparece
        * na MINHA linha: a foto do placar não guarda quem é da equipe, e
        * quem confere isso é o relé (a praça mostra o dos outros). */
-      var medalhas = medalhasPorClasse(contasDoPlacar(lista, eu2.id, eu2.nome));
+      var medalhas = mapaDeMedalhas(contasDoPlacar(lista, eu2.id, eu2.nome));
       var souMestre2 = safe(function () { return !!(JOGO.GM && JOGO.GM.ativo()); }, false);
-      function classeDoNome(id, sou) {
+      function classeDoNome(nome, sou) {
         if (sou && souMestre2) return ' pl-brilho is-admin';
-        var m = medalhas[id];
+        var m = medalhas[chaveNome(nome)];
         return m ? ' pl-brilho is-' + m : '';
       }
 
@@ -4252,7 +4269,7 @@ var JOGO = (typeof window !== 'undefined')
         row.appendChild(el('span', 'pl-pos', '#' + (i + 1)));
         var tx = el('div', 'ms-tx');
         tx.appendChild(el('div', 'ms-nome',
-          '<span class="' + ('pl-nm' + classeDoNome(e2.id, e2.sou)).trim() + '">' +
+          '<span class="' + ('pl-nm' + classeDoNome(e2.nome, e2.sou)).trim() + '">' +
           esc(e2.nome) + '</span>' +
           (e2.titulo ? ' <span class="ms-titulo">' + esc(e2.titulo) + '</span>' : '') +
           (e2.sou ? ' <span class="pl-eu">você</span>' : '')));
@@ -4282,15 +4299,16 @@ var JOGO = (typeof window !== 'undefined')
       if (cids.length) {
         caixa.appendChild(el('h3', 'bk-tit', 'Pódio por classe'));
         caixa.appendChild(el('p', 'inv-dica',
-          'O 1º de cada classe anda com o nome dourado na praça; o 2º, prateado; o 3º, bronze.'));
+          'Os três primeiros de cada classe entre as contas que já cruzaram a sua praça. ' +
+          'O nome aceso vem do ranking de XP do site: ouro, prata e bronze para o top 1, 2 e 3.'));
         cids.forEach(function (cid) {
           var fila = filaDaClasse(contasP, cid).slice(0, 3);
           var linha = el('div', 'pl-classe');
           linha.appendChild(el('span', 'pl-classe-nm', esc(className(cid))));
           var pod = el('span', 'pl-podio');
           fila.forEach(function (q, qi) {
-            pod.appendChild(el('span', 'pl-nm pl-brilho is-' + MEDALHAS[qi],
-              esc(q.nome || '?') + ' <i>' + q.nv + '</i>'));
+            pod.appendChild(el('span', 'pl-nm',
+              (qi + 1) + 'º ' + esc(q.nome || '?') + ' <i>' + q.nv + '</i>'));
           });
           linha.appendChild(pod);
           caixa.appendChild(linha);
@@ -5206,21 +5224,30 @@ var JOGO = (typeof window !== 'undefined')
     });
     return fora.sort(comparaPorClasse);
   }
-  function medalhasPorClasse(contas) {
-    var porClasse = {}, fora = {};
-    (contas || []).forEach(function (c) {
-      var cls = (c && c.resumo && c.resumo.classes) || {};
-      Object.keys(cls).forEach(function (cid) {
-        if (cls[cid] > 0) porClasse[cid] = true;
+  function chaveNome(n) { return String(n == null ? '' : n).trim().toLowerCase(); }
+  function medalhaDaPosicao(pos) {
+    var T = JOGO.Titulos;
+    return (T && T.medalhaDe) ? T.medalhaDe(pos) : null;
+  }
+  /* O NOME ACESO (12/09, pedido do dono): ouro, prata e bronze para o top 1, 2
+   * e 3 do RANKING DE XP — o do site, igual para todo mundo, casado pelo nome
+   * (é só o nome que ele publica). Sem servidor (em casa), o placar da praça
+   * ordenado pelo nível somado, a mesma régua do "Top N PVM" dali. Sai
+   * { nome em minúsculas: 'ouro'|'prata'|'bronze' }. */
+  function mapaDeMedalhas(contas) {
+    var fora = {};
+    if (rankingSrv && rankingSrv.pvm) {
+      Object.keys(rankingSrv.pvm).forEach(function (k) {
+        var m = medalhaDaPosicao(rankingSrv.pvm[k]);
+        if (m) fora[k] = m;
       });
-    });
-    Object.keys(porClasse).forEach(function (cid) {
-      var fila = filaDaClasse(contas, cid);
-      for (var i = 0; i < MEDALHAS.length && i < fila.length; i++) {
-        var ja = fora[fila[i].id];
-        // a melhor medalha manda (ouro < prata < bronze na ordem do vetor)
-        if (!ja || MEDALHAS.indexOf(ja) > i) fora[fila[i].id] = MEDALHAS[i];
-      }
+      return fora;
+    }
+    (contas || []).slice().sort(function (a, b) {
+      return ((b.resumo && b.resumo.total) || 0) - ((a.resumo && a.resumo.total) || 0);
+    }).slice(0, 3).forEach(function (c, i) {
+      var k = chaveNome(c && c.nome);
+      if (k && !fora[k]) fora[k] = MEDALHAS[i];
     });
     return fora;
   }
@@ -5242,6 +5269,34 @@ var JOGO = (typeof window !== 'undefined')
    * por Promise porque o DB é assíncrono; as três leituras são locais e
    * baratas. Pódio de arena só conta quem JÁ duelou: a mesma regra do novato
    * que vale para a coroa. */
+  /* O RANKING DO SERVIDOR (12/09, pedido do dono: o top 1, 2 e 3 do ranking de
+   * XP ganham "Top N PVM" e o nome em ouro, prata e bronze; o do PvP, só o
+   * título "Top N Pvp"). A régua é o ranking do SITE (GET /api/ranking,
+   * público e guardado 30 s no servidor), casado pelo nome. Pedido no máximo a
+   * cada 2 min. Em casa sem conta (file://) não pede: vale o placar da praça. */
+  var rankingSrv = null, rankingEm = 0, rankingPromessa = null;
+  var RANKING_MS = 120000;
+  function rankingDoServidor() {
+    var S = JOGO.Sessao, T = JOGO.Titulos;
+    if (!S || typeof S.api !== 'function' || !T || !T.posicoesPorNome) return Promise.resolve(null);
+    var emCasa = safe(function () { return location.protocol === 'file:'; }, true);
+    if (emCasa && !safe(function () { return S.ativa && S.ativa(); }, false)) return Promise.resolve(null);
+    if (rankingSrv && Date.now() - rankingEm < RANKING_MS) return Promise.resolve(rankingSrv);
+    if (rankingPromessa) return rankingPromessa;
+    var p = null;
+    try { p = S.api('/api/ranking', { semToken: true }); } catch (e) { p = null; }
+    if (!p || typeof p.then !== 'function') return Promise.resolve(rankingSrv);
+    rankingPromessa = p.then(function (r) {
+      rankingPromessa = null;
+      if (r && r.ok === true && Object.prototype.toString.call(r.jogadores) === '[object Array]') {
+        rankingSrv = { pvm: T.posicoesPorNome(r.jogadores), pvp: T.posicoesPorNome(r.pvp || []) };
+        rankingEm = Date.now();
+      }
+      return rankingSrv;
+    }, function () { rankingPromessa = null; return rankingSrv; });
+    return rankingPromessa;
+  }
+
   var tituloEstado = null;            // a última leitura, para a plaquinha
   function estadoDosTitulos() {
     var vazio = { chefes: {}, pvm: null, pvp: null };
@@ -5249,9 +5304,10 @@ var JOGO = (typeof window !== 'undefined')
     return Promise.all([JOGO.DB.jogador(),
                         JOGO.DB.placarLista ? JOGO.DB.placarLista() : Promise.resolve([]),
                         JOGO.DB.brasaVer ? JOGO.DB.brasaVer() : Promise.resolve(null),
-                        JOGO.DB.chefesVer ? JOGO.DB.chefesVer() : Promise.resolve({})])
+                        JOGO.DB.chefesVer ? JOGO.DB.chefesVer() : Promise.resolve({}),
+                        rankingDoServidor()])
       .then(function (r) {
-        var eu = r[0], fotos = r[1] || [], bz = r[2], chefes = r[3] || {};
+        var eu = r[0], fotos = r[1] || [], bz = r[2], chefes = r[3] || {}, rk = r[4];
         var T = JOGO.Titulos;
         if (!T) return vazio;
         var niveis = contasDoPlacar(fotos, eu.id, eu.nome).sort(function (a, b) {
@@ -5264,10 +5320,14 @@ var JOGO = (typeof window !== 'undefined')
         });
         arena = arena.filter(function (a) { return a.partidas > 0; })
                      .sort(function (a, b) { return b.pts - a.pts; });
+        var chaveEu = chaveNome(eu.nome);
         tituloEstado = {
           chefes: chefes,
-          pvm: T.posicaoDe(niveis.map(function (l) { return l.id; }), eu.id),
-          pvp: T.posicaoDe(arena.map(function (a) { return a.id; }), eu.id)
+          // com o ranking do servidor é ELE que manda (o do site); sem, o placar da praça
+          pvm: rk ? ((chaveEu && rk.pvm[chaveEu]) || null)
+                  : T.posicaoDe(niveis.map(function (l) { return l.id; }), eu.id),
+          pvp: rk ? ((chaveEu && rk.pvp[chaveEu]) || null)
+                  : T.posicaoDe(arena.map(function (a) { return a.id; }), eu.id)
         };
         return tituloEstado;
       });

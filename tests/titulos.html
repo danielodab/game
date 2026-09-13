@@ -52,10 +52,21 @@ emprestados (a posição foi, o título vai); os de chefe são para sempre.</p>
   }), zerado.map(function (t) { return t.titulo; }).join(' · '));
 
   // ---- os pódios
-  check('1º do ranking de níveis ganha a Primeira Lanterna',
-        T.ganhos({ pvm: 1 }).indexOf('Primeira Lanterna') >= 0);
-  check('3º da arena ganha o Escudo da Arena',
-        T.ganhos({ pvp: 3 }).indexOf('Escudo da Arena') >= 0);
+  check('1º do ranking de XP ganha o Top 1 PVM',
+        T.ganhos({ pvm: 1 }).indexOf('Top 1 PVM') >= 0);
+  check('3º do ranking PvP ganha o Top 3 Pvp',
+        T.ganhos({ pvp: 3 }).indexOf('Top 3 Pvp') >= 0);
+  check('os seis títulos de pódio têm os nomes pedidos',
+        T.PVM.map(function (d) { return d.titulo; }).join('|') === 'Top 1 PVM|Top 2 PVM|Top 3 PVM' &&
+        T.PVP.map(function (d) { return d.titulo; }).join('|') === 'Top 1 Pvp|Top 2 Pvp|Top 3 Pvp');
+  check('o nome do top 1, 2 e 3 do ranking de XP acende em ouro, prata e bronze',
+        T.medalhaDe(1) === 'ouro' && T.medalhaDe(2) === 'prata' && T.medalhaDe(3) === 'bronze' &&
+        T.medalhaDe(4) === null && T.medalhaDe(null) === null);
+  check('as posições saem do ranking pelo nome, sem caixa nem espaço, só os três primeiros',
+        (function () {
+          var p = T.posicoesPorNome([{ nome: 'Ana' }, { nome: ' bia ' }, { nome: 'Caio' }, { nome: 'Duda' }]);
+          return p.ana === 1 && p.bia === 2 && p.caio === 3 && !p.duda && T.chaveNome(' ANA ') === 'ana';
+        })());
   check('4º lugar não ganha nada', T.ganhos({ pvm: 4, pvp: 9 }).length === 0);
   check('o pódio dá UM título por lista, não três',
         T.ganhos({ pvm: 2, pvp: 2 }).length === 2, T.ganhos({ pvm: 2, pvp: 2 }).join(' · '));
@@ -84,8 +95,8 @@ emprestados (a posição foi, o título vai); os de chefe são para sempre.</p>
   check('título de pódio é EMPRESTADO',
         T.catalogo({ pvm: 1 }).filter(function (t) { return t.ganho; })[0].emprestado === true);
   check('perder a posição invalida o título de pódio',
-        T.valido('Primeira Lanterna', { pvm: 1 }) === true &&
-        T.valido('Primeira Lanterna', { pvm: 2 }) === false);
+        T.valido('Top 1 PVM', { pvm: 1 }) === true &&
+        T.valido('Top 1 PVM', { pvm: 2 }) === false);
   check('perder a posição NÃO invalida o de chefe',
         T.valido('o Cala-Batida', { chefes: { 'boss-deepknock': 10 }, pvm: null }) === true);
   check('título inventado nunca é válido', T.valido('o Rei de Tudo', { pvm: 1 }) === false);

@@ -10,8 +10,9 @@ var JOGO = (typeof window !== 'undefined')
  * caía. O dono cortou essa fonte: título de missão é tarefa cumprida, e
  * tarefa qualquer um cumpre. Título agora é POSIÇÃO ou TEIMOSIA, e só:
  *
- *   PVM     top 1, 2 e 3 do ranking de níveis do Acampamento
- *   PVP     top 1, 2 e 3 da arena (a Brasa)
+ *   PVM     top 1, 2 e 3 do ranking de XP do site ("Top 1 PVM"; e o nome em
+ *           ouro, prata e bronze)
+ *   PVP     top 1, 2 e 3 do ranking da arena, a Brasa ("Top 1 Pvp")
  *   CHEFE   dez quedas do MESMO chefe, no DIFÍCIL e SOZINHO — um título por
  *           chefe, seis ao todo
  *
@@ -55,19 +56,40 @@ var JOGO = (typeof window !== 'undefined')
    * mais fundo); a ARENA é punho, lâmina e escudo. Nenhum deles fala "Fundo":
    * Mestre do Fundo é a equipe, e título de jogador não pode se passar por
    * ela — o relé recusaria, e com razão. */
+  /* 12/09, pedido do dono: os pódios com o nome da POSIÇÃO — "Top 1 PVM" para
+   * o ranking de XP e "Top 1 Pvp" para o da arena. Quem é o top 1, 2 e 3 do
+   * ranking de XP ainda anda com o nome em ouro, prata e bronze (MEDALHA_PVM);
+   * o do PvP ganha só o título. */
   T.PVM = [
-    { pos: 1, titulo: 'Primeira Lanterna' },
-    { pos: 2, titulo: 'Segunda Lanterna' },
-    { pos: 3, titulo: 'Terceira Lanterna' }
+    { pos: 1, titulo: 'Top 1 PVM' },
+    { pos: 2, titulo: 'Top 2 PVM' },
+    { pos: 3, titulo: 'Top 3 PVM' }
   ];
   T.PVP = [
-    { pos: 1, titulo: 'Punho da Arena' },
-    { pos: 2, titulo: 'Lâmina da Arena' },
-    { pos: 3, titulo: 'Escudo da Arena' }
+    { pos: 1, titulo: 'Top 1 Pvp' },
+    { pos: 2, titulo: 'Top 2 Pvp' },
+    { pos: 3, titulo: 'Top 3 Pvp' }
   ];
+  T.MEDALHA_PVM = { 1: 'ouro', 2: 'prata', 3: 'bronze' };
 
   function num(v) { return (typeof v === 'number' && isFinite(v)) ? Math.floor(v) : 0; }
   function posValida(p) { return p === 1 || p === 2 || p === 3; }
+
+  /* a cor do nome de quem está na posição `pos` do ranking de XP, ou null */
+  T.medalhaDe = function (pos) { return posValida(pos) ? T.MEDALHA_PVM[pos] : null; };
+  /* o nome como chave: o ranking do site só publica o nome, sem id */
+  T.chaveNome = function (n) { return String(n == null ? '' : n).trim().toLowerCase(); };
+  /* { nome em minúsculas: 1|2|3 } a partir de uma lista JÁ ORDENADA do
+   * ranking ([{nome}]) — só os três primeiros, e um nome repetido fica com a
+   * primeira posição que teve. */
+  T.posicoesPorNome = function (lista) {
+    var fora = {};
+    (lista || []).slice(0, 3).forEach(function (l, i) {
+      var k = T.chaveNome(l && l.nome);
+      if (k && !fora[k]) fora[k] = i + 1;
+    });
+    return fora;
+  };
 
   /* O CATÁLOGO INTEIRO com o estado de cada título, na ordem em que a ficha
    * o mostra. `estado` = { chefes: {bossId: quedas}, pvm: posição|null,
@@ -82,14 +104,15 @@ var JOGO = (typeof window !== 'undefined')
     var chefes = estado.chefes || {};
     var fora = [];
     T.PVM.forEach(function (d) {
-      fora.push({ titulo: d.titulo, fonte: 'pvm', de: d.pos + 'º do ranking de níveis',
+      fora.push({ titulo: d.titulo, fonte: 'pvm', de: d.pos + 'º do ranking de XP',
                   ganho: estado.pvm === d.pos, emprestado: true,
-                  comoGanhar: 'Seja o ' + d.pos + 'º em nível somado no placar do Acampamento.' });
+                  comoGanhar: 'Seja o ' + d.pos + 'º do ranking de XP (e ande com o nome em ' +
+                              T.MEDALHA_PVM[d.pos] + ').' });
     });
     T.PVP.forEach(function (d) {
-      fora.push({ titulo: d.titulo, fonte: 'pvp', de: d.pos + 'º da arena',
+      fora.push({ titulo: d.titulo, fonte: 'pvp', de: d.pos + 'º do ranking PvP',
                   ganho: estado.pvp === d.pos, emprestado: true,
-                  comoGanhar: 'Seja o ' + d.pos + 'º em pontos de Brasa no placar.' });
+                  comoGanhar: 'Seja o ' + d.pos + 'º do ranking PvP (pontos de Brasa).' });
     });
     T.CHEFES.forEach(function (c) {
       var n = Math.max(0, num(chefes[c.chefe]));

@@ -2168,6 +2168,13 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .ms-pago { font: 700 11px var(--ui-sans, system-ui); color: #7fe08a; }
 .ms-titulos { display: flex; flex-wrap: wrap; gap: 6px; }
 .ms-titulos .is-on { outline: 2px solid var(--gold); }
+/* 12/09: o título escolhido num menu suspenso dividido por fonte, e o "como ganhar" recolhido */
+.tit-escolha { width: 100%; box-sizing: border-box; margin: 4px 0 6px; }
+.tit-escolha optgroup { font-weight: 700; color: var(--gold); }
+.tit-escolha option { color: #dbe3ee; }
+.tit-escolha option:disabled { color: #6b7483; }
+.tit-como { margin: 4px 0 10px; }
+.tit-como > summary { cursor: pointer; font-size: 12px; color: var(--dim); padding: 4px 0; }
 
 /* ------------------------------------------------- O GUARDA-ROUPA (avatar) */
 .av-fila { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }

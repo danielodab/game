@@ -1853,25 +1853,25 @@ var JOGO = (typeof window !== 'undefined')
   function pendura(nome, titulo, brasaTier, guilda) {
     // o herói nunca leva marca de grupo (ela é do PARCEIRO); leva o brilho
     penduraEm(heroi, nome, titulo, brasaTier, guilda, null,
-              brilhoDoNome(meuIdNoPlacar, souOMestre()));
+              brilhoDoNome(nome, souOMestre()));
   }
   /* O BRILHO DE UM NOME: o Mestre do Fundo primeiro (branco, e ele não
-   * disputa pódio com ninguém), depois a medalha da classe. O mapa vem da
-   * HUD, que é quem tem o placar; aqui só se consulta. */
-  var medalhasNome = {};            // id da conta -> 'ouro' | 'prata' | 'bronze'
-  var meuIdNoPlacar = null;
+   * disputa pódio com ninguém), depois a medalha do RANKING DE XP (12/09: o
+   * top 1, 2 e 3 do site, casado pelo NOME — o ranking não publica id). O
+   * mapa vem da HUD, que é quem lê o ranking; aqui só se consulta. */
+  var medalhasNome = {};            // nome em minúsculas -> 'ouro' | 'prata' | 'bronze'
   function souOMestre() {
     try { return !!(JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()); } catch (e) { return false; }
   }
-  function brilhoDoNome(id, ehMestre) {
+  function brilhoDoNome(nome, ehMestre) {
     if (ehMestre) return 'admin';
-    return (id && medalhasNome[id]) || null;
+    var k = String(nome == null ? '' : nome).trim().toLowerCase();
+    return (k && medalhasNome[k]) || null;
   }
-  /* A HUD avisa quando o pódio muda (entrou gente na praça, subiu de nível):
-   * as placas de todo mundo se repintam com a medalha nova. */
-  Hub.medalhas = function (mapa, meuId) {
+  /* A HUD avisa quando o pódio muda (o ranking respondeu, entrou gente na
+   * praça): as placas de todo mundo se repintam com a medalha nova. */
+  Hub.medalhas = function (mapa) {
     medalhasNome = mapa || {};
-    if (meuId !== undefined) meuIdNoPlacar = meuId || null;
     if (!scene) return false;
     pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
     for (var id in fantasmas) {
@@ -1880,7 +1880,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!reg.corpo) continue;
       var pf = reg.perfil || {};
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null, brilhoDoNome(id, pf.mestre === true));
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true));
       anelDoGrupo(reg.corpo, !!marcasGrupo[id]);
     }
     return true;
@@ -2510,7 +2510,7 @@ var JOGO = (typeof window !== 'undefined')
     if (reg && reg.corpo) {
       var pf = reg.perfil || {};
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null, brilhoDoNome(id, pf.mestre === true));
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true));
       anelDoGrupo(reg.corpo, !!marcasGrupo[id]);
     }
     return true;
@@ -2577,7 +2577,7 @@ var JOGO = (typeof window !== 'undefined')
     reg.guildaF = guildaF;
     penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF, guildaF,
               marcasGrupo[reg.id] || null,
-              brilhoDoNome(reg.id, perfil && perfil.mestre === true));
+              brilhoDoNome(perfil && perfil.nome, perfil && perfil.mestre === true));
     if (perfil && perfil.aura) acendeAura(corpo, true);   // a vaidade é pública
     anelDoGrupo(corpo, !!marcasGrupo[reg.id]);           // 12/09: quem é do meu grupo, no chão
     esperaCorpo(corpo, classe);           // fusão: o corpo próprio vem vindo
