@@ -915,6 +915,11 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
   // o PV que o líder põe na próxima ata
+  /* A SEGURANÇA (13/09): o juiz do servidor paga a sala em GRUPO pelo mesmo
+   * computeRewards — e ele lê o `rede` (partySize e a vez do saque vêm do Coop).
+   * No juiz não há Rede: o gancho põe o `rede` do membro que está sendo pago. */
+  Game._defineRede = function (r) { rede = r || null; };
+  Game._carryRede = function (st) { return carryRede(st || Game.state); };
   Game._carry = function () { return (rede && carryHp) ? JSON.parse(JSON.stringify(carryHp)) : null; };
 
   /* A BATALHA DA ATA (o Coop chama): a mesma semente, a mesma dificuldade, o

@@ -36,6 +36,12 @@ function ehDoJogador(st, u) {
   if (u.side === 'player') return true;
   return !!(st.pvp && u.side === 'enemy');
 }
+/* NA SALA EM GRUPO (e no duelo pela Rede) o herói é de GENTE quando tem dono;
+ * com `ia` marcada o dono caiu, e o turno dele PASSA (game.js, updateRede) —
+ * ninguém joga por ele. Mascote e invocação seguem com a IA. */
+function ehDeGente(u) {
+  return !!(u && (u.kind === 'hero' || u.kind === 'fusion') && u.dono);
+}
 
 /* O HP que atravessa de uma sala para a outra, com a regra do Game.entrarNaSala:
  * vivo recupera metade do que falta; caído volta com 30%. */
@@ -44,6 +50,19 @@ function aplicaCarry(st, carry) {
   for (const u of st.units) {
     if (u.kind !== 'hero') continue;
     const prev = carry[u.heroId || u.defId];
+    if (typeof prev !== 'number' || !isFinite(prev)) continue;
+    if (prev > 0) u.hp = Math.min(u.hpMax, prev + Math.round((u.hpMax - prev) * 0.5));
+    else u.hp = Math.max(1, Math.round(u.hpMax * 0.3));
+  }
+}
+
+/* O PV da sala em GRUPO: a mesma regra, com a chave `dono:heroId` (o heroId é a
+ * classe e colide entre os dois jogadores) — game.js, aplicaCarry. */
+function aplicaCarryRede(st, carry) {
+  if (!carry || typeof carry !== 'object') return;
+  for (const u of st.units) {
+    if (u.kind !== 'hero') continue;
+    const prev = carry[(u.dono || '') + ':' + (u.heroId || u.defId)];
     if (typeof prev !== 'number' || !isFinite(prev)) continue;
     if (prev > 0) u.hp = Math.min(u.hpMax, prev + Math.round((u.hpMax - prev) * 0.5));
     else u.hp = Math.max(1, Math.round(u.hpMax * 0.3));
@@ -87,7 +106,12 @@ function refazEm(J, entrada) {
     throw recusa('sala inválida', 'entrada');
   }
   if (!inteiro(c.semente)) throw recusa('semente inválida', 'entrada');
-  if (!Array.isArray(c.party) || !c.party.length || c.party.length > 4) throw recusa('grupo inválido', 'entrada');
+  if (c.modo === 'duelo') {
+    const dupla = (d) => Array.isArray(d) && d.length >= 1 && d.length <= 2;
+    if (!dupla(c.duplaA) || !dupla(c.duplaB)) throw recusa('duplas inválidas', 'entrada');
+  } else if (!Array.isArray(c.party) || !c.party.length || c.party.length > 4) {
+    throw recusa('grupo inválido', 'entrada');
+  }
   const lances = Array.isArray(c.lances) ? c.lances : [];
   if (lances.length > LANCES_MAX) throw recusa('lances demais', 'entrada');
 
@@ -104,25 +128,40 @@ function refazEm(J, entrada) {
   }
   let st;
   try {
-    st = E.createBattle(c.dungeonId, c.roomIndex, c.party,
-      { seed: c.semente, dificuldade: c.dificuldade || 'normal', escolhePosicao: c.escolhePosicao !== false });
+    if (c.modo === 'duelo') {
+      // o duelo pela Rede: a arena sorteada, as duas duplas e a semente dos dois (game.js, _iniciaDueloRede)
+      st = E.createDuelSala(c.dungeonId, c.roomIndex, c.duplaA, c.duplaB, { seed: c.semente });
+    } else {
+      st = E.createBattle(c.dungeonId, c.roomIndex, c.party,
+        { seed: c.semente, dificuldade: c.dificuldade || 'normal', escolhePosicao: c.escolhePosicao !== false });
+    }
   } catch (e) {
     throw recusa('a sala não existe nestas regras', 'entrada');
   }
   if (!st || !st.units) throw recusa('a sala não existe nestas regras', 'entrada');
   if (andarPoco) J.Poco.escalaEstado(st, andarPoco);        // a escalada antes do PV, como no Game
-  aplicaCarry(st, c.carry);
+  if (c.carryRede) aplicaCarryRede(st, c.carry);
+  else if (c.modo !== 'duelo') aplicaCarry(st, c.carry);
   E.events.length = 0;
 
   let passos = 0;
   function conta() {
     if (++passos > PASSOS_MAX) throw recusa('a sala não termina', 'passos');
   }
+  const emRede = c.modo === 'grupo' || c.modo === 'duelo';
   // os turnos da IA até a vez voltar ao jogador (ou a sala acabar): o Game sem tela
   function rodaIA() {
     while (st.phase === 'playing') {
       const u = E.activeUnit(st);
-      if (!u || ehDoJogador(st, u)) return;
+      if (!u) return;
+      if (emRede && ehDeGente(u)) {
+        if (!u.ia) return;                       // a vez é de gente conectada: espera o lance
+        E.endTurn(st);                            // o dono caiu: o turno dele passa
+        E.events.length = 0;
+        conta();
+        continue;
+      }
+      if (!emRede && ehDoJogador(st, u)) return;
       let plano = null;
       try { plano = J.AI.planTurn(st, u.uid); } catch (e) { plano = null; }
       if (!plano || !plano.length) plano = [{ action: 'end' }];
@@ -145,13 +184,28 @@ function refazEm(J, entrada) {
     const l = lances[i];
     if (!l || typeof l !== 'object' || typeof l.a !== 'string') throw recusa('lance torto', 'lance');
     if (FIM[st.phase]) throw recusa('lance depois do fim da sala', 'depois-do-fim');
+    // AS MARCAS DA REDE (13/09): o que muda a batalha fora dos lances, anotado no
+    // ponto em que aconteceu no motor de quem manda — o dono que caiu (ia), que
+    // voltou, e o herói de quem saiu da batalha, que morre
+    if (l.a === 'x') {
+      if (!emRede) throw recusa('marca de rede numa sala solo', 'lance');
+      const alvo = E.findUnit(st, l.u);
+      if (!alvo || !ehDeGente(alvo)) throw recusa('marca numa unidade que não é de gente', 'lance');
+      if (l.ev === 'ia') alvo.ia = !!l.v;
+      else if (l.ev === 'morte') { if (alvo.alive && !alvo.offBoard && E.processDeath) E.processDeath(st, alvo); }
+      else throw recusa('marca desconhecida: ' + String(l.ev), 'lance');
+      E.events.length = 0;
+      continue;
+    }
     if (l.a === 'p') {
       if (st.phase !== 'placing') throw recusa('colocação fora da hora', 'vez');
+      if (emRede && c.colocador && l.de !== c.colocador) throw recusa('a colocação é de quem lidera', 'vez');
     } else {
       rodaIA();
       if (FIM[st.phase]) throw recusa('lance depois do fim da sala', 'depois-do-fim');
       const ativo = E.activeUnit(st);
-      if (st.phase !== 'playing' || !ehDoJogador(st, ativo)) throw recusa('lance fora da vez', 'vez');
+      const daVez = emRede ? (ehDeGente(ativo) && !ativo.ia && ativo.dono === l.de) : ehDoJogador(st, ativo);
+      if (st.phase !== 'playing' || !daVez) throw recusa('lance fora da vez', 'vez');
       // move, feitiço e fusão só com a unidade da vez; o 'e' encerra a vez dela
       if ((l.a === 'm' || l.a === 'c' || l.a === 'f') && l.u !== ativo.uid) {
         throw recusa('lance com uma unidade que não é a da vez', 'unidade');
@@ -195,4 +249,4 @@ function rotas(registra) {
   registra('POST', '/refaz', (corpo) => refaz(corpo));
 }
 
-module.exports = { refaz, refazEm, rotas, ehDoJogador, aplicaCarry, recusa };
+module.exports = { refaz, refazEm, rotas, ehDoJogador, ehDeGente, aplicaCarry, aplicaCarryRede, recusa };

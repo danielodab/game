@@ -89,8 +89,110 @@ function fecha(corpo) {
   };
 }
 
-function rotas(registra) {
-  registra('POST', '/sala/fecha', (corpo) => fecha(corpo));
+/* A VEZ DO SAQUE NA SALA EM GRUPO — a regra de js/core/coop.js (Coop.vezDoSaque):
+ * a semente da ata sorteia um DONO (não uma cadeira) entre os donos distintos da
+ * lista, na ordem em que aparecem. A prova juiz_grupo.js confere contra o coop.js. */
+function donosDe(party) {
+  const fora = [];
+  (party || []).forEach((p) => { if (p && p.dono && fora.indexOf(p.dono) < 0) fora.push(p.dono); });
+  return fora;
+}
+function vezDoSaque(semente, party, dono) {
+  const donos = donosDe(party);
+  if (donos.length < 2) return null;
+  const s = semente >>> 0;
+  return donos[((s ^ (s >>> 11) ^ (s >>> 23)) >>> 0) % donos.length] === dono;
 }
 
-module.exports = { fecha, rotas };
+/* POST /grupo/fecha — a sala em GRUPO (docs/SEGURANCA.md §Fase 3).
+ * corpo = { membros: [{ conta: {id, gm}, dono, herois, progress, db, guilda }],   (quem lidera primeiro)
+ *           ata: { dungeonId, roomIndex, dificuldade, semente, carry },
+ *           lances, hashFinal, contexto: { agoraMs, fatores } }
+ * O grupo sai do estado de CADA conta no servidor, com o dono de cada herói; a
+ * sala é refeita UMA vez com o registro de quem mandava na batalha (lances dos
+ * dois e as marcas de queda/volta/saída); com vitória, cada membro é pago no
+ * mundo dele pelo computeRewards do jogo, com o `rede` de grupo (a vez do saque
+ * e a divisão de vinténs da dupla). */
+function fechaGrupo(corpo) {
+  const c = corpo || {};
+  const ata = c.ata || {};
+  const membros = Array.isArray(c.membros) ? c.membros : [];
+  if (membros.length < 2 || membros.length > 4) throw recusa('o grupo precisa de 2 a 4 membros', 'entrada');
+  if (typeof ata.dungeonId !== 'string' || !inteiro(ata.roomIndex) || !inteiro(ata.semente)) {
+    throw recusa('ata inválida', 'entrada');
+  }
+  const ctxo = c.contexto || {};
+  // os mundos de cada membro, com o estado dele; o grupo em ordem, com os donos
+  const mundos = membros.map((m, i) => {
+    if (!m || typeof m.dono !== 'string' || !m.dono || !Array.isArray(m.herois) || !m.herois.length || m.herois.length > 2) {
+      throw recusa('membro ' + i + ' inválido', 'entrada');
+    }
+    const w = mundoEconomico({
+      gm: !!(m.conta && m.conta.gm), contaId: m.conta && m.conta.id, agoraMs: ctxo.agoraMs,
+      semente: sementeDe(ata.semente + ':grupo:' + ata.dungeonId + ':' + ata.roomIndex + ':' + m.dono),
+      fatores: ctxo.fatores, guilda: m.guilda
+    });
+    poeEstado(w, m.progress, m.db);
+    for (const hid of m.herois) {
+      if (!w.J.Progress.hero(hid)) throw recusa('o herói ' + hid + ' não é da conta do membro ' + i, 'herois');
+    }
+    const party = w.J.Progress.battleParty(m.herois).map((p) => Object.assign(p, { dono: m.dono }));
+    return { m, w, party, antes: tiraEstado(w) };
+  });
+  const donosVistos = new Set();
+  mundos.forEach((x) => {
+    if (donosVistos.has(x.m.dono)) throw recusa('dois membros com o mesmo dono', 'entrada');
+    donosVistos.add(x.m.dono);
+  });
+  const party = [].concat(...mundos.map((x) => x.party));
+  if (party.length > 4) throw recusa('a sala em grupo tem no máximo 4 heróis', 'entrada');
+
+  // a sala refeita, no mundo de quem lidera (a economia dele não muda por refazer)
+  const lider = mundos[0];
+  const r = refazEm(lider.w.J, {
+    modo: 'grupo', colocador: lider.m.dono,
+    dungeonId: ata.dungeonId, roomIndex: ata.roomIndex, dificuldade: ata.dificuldade || 'normal',
+    semente: ata.semente, party: JSON.parse(JSON.stringify(party)), carry: ata.carry || null,
+    carryRede: true, escolhePosicao: true, lances: c.lances, hashFinal: c.hashFinal
+  });
+  const final = JSON.stringify(r.estado);
+  let carry = null;
+  const pagos = mundos.map((x) => {
+    let recompensa = null;
+    if (r.fase === 'won') {
+      const J = x.w.J, G = J.Game;
+      J.Coop = {
+        partySize: () => party.length,
+        vezDoSaque: () => vezDoSaque(ata.semente, party, x.m.dono)
+      };
+      G._defineRede({ tipo: 'grupo', eu: x.m.dono, lado: null, colocador: false });
+      G.state = JSON.parse(final);
+      G.party = x.m.herois.slice();
+      G.dungeonId = ata.dungeonId;
+      G.roomIndex = ata.roomIndex;
+      if (!carry) carry = G._carryRede(G.state);
+      const rw = G._computeRewards();
+      recompensa = JSON.parse(JSON.stringify(rw));
+      if (rw && rw.drops && rw.drops.perdidos) recompensa.dropsPerdidos = rw.drops.perdidos.slice();
+      G._defineRede(null);
+    }
+    const fila = (x.w.J.Progress.state && x.w.J.Progress.state.nascimentos) ? x.w.J.Progress.state.nascimentos.slice() : [];
+    const depois = tiraEstado(x.w);
+    return {
+      contaId: x.m.conta && x.m.conta.id, dono: x.m.dono, recompensa,
+      progress: depois.progress, db: depois.db, hash: depois.hash, hashAntes: x.antes.hash,
+      guildaXp: x.w.anotado.guildaXp,
+      iids: diferencaIids(iidsDe(x.antes.progress, x.antes.db), iidsDe(depois.progress, depois.db), fila)
+    };
+  });
+  const refeito = Object.assign({}, r);
+  delete refeito.estado;
+  return { ok: true, fase: r.fase, turnosJogador: r.turnosJogador, refeito, membros: pagos, carry };
+}
+
+function rotas(registra) {
+  registra('POST', '/sala/fecha', (corpo) => fecha(corpo));
+  registra('POST', '/grupo/fecha', (corpo) => fechaGrupo(corpo));
+}
+
+module.exports = { fecha, fechaGrupo, rotas, vezDoSaque };

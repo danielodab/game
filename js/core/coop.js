@@ -143,6 +143,7 @@ var JOGO = (typeof window !== 'undefined')
       ata: null, ataEnvios: 0, ataProx: 0, chamando: false, ataFalhou: false,
       prontoParceiro: null, prontoProx: 0,
       fila: {}, log: {}, hashes: {}, foto: null, antes: {}, buracoDesde: 0,
+      logSrv: [], fotografada: false,  // 13/09: o registro que o servidor refaz (lances + marcas, em ordem)
       sincronizando: false, fotoPedidaEm: 0, fotoPendente: false, fotoDepois: false, dessinc: 0, restauracoes: 0, ultimaDessinc: null,
       proximaLiberada: false, proximaEnviada: false,
       descidaAcabou: false, parceiroSaiu: false, parceiroVoltou: false,
@@ -779,6 +780,7 @@ var JOGO = (typeof window !== 'undefined')
       var u = st.units[i];
       if ((u.kind === 'hero' || u.kind === 'fusion') && u.dono === p.id && u.alive && !u.offBoard) {
         u.ia = true;
+        marcaSrv('ia', u.uid, true);
         uids.push(u.uid);
       }
     }
@@ -826,6 +828,7 @@ var JOGO = (typeof window !== 'undefined')
       var u = e.findUnit(st, uids[i]);
       delete S.mortePendente[uids[i]];
       if (!u || !u.alive || u.offBoard) continue;
+      marcaSrv('morte', u.uid);
       try { e.processDeath(st, u); fez = true; } catch (er) {}
     }
     if (fez) {
@@ -897,6 +900,7 @@ var JOGO = (typeof window !== 'undefined')
             var u = st.units[i];
             if ((u.kind === 'hero' || u.kind === 'fusion') && u.dono === p.id && u.ia) {
               u.ia = false;
+              marcaSrv('ia', u.uid, false);
               if (u.alive && !u.offBoard) envia('ia', { b: S.bid, u: u.uid, mot: 'volta' });
             }
           }
@@ -1005,6 +1009,7 @@ var JOGO = (typeof window !== 'undefined')
   function iniciaBatalha(bid) {
     S.bid = bid;
     S.fila = {}; S.log = {}; S.hashes = {}; S.foto = null;
+    S.logSrv = []; S.fotografada = false;
     S.buracoDesde = 0; S.sincronizando = false; S.fotoPendente = false; S.fotoDepois = false;
     S.ultimoSinal = agora(); S.turnoDele = 0; S.turnoDeleEm = 0; S.vivoEm = 0;
     S.esperando = null; S.fim = null; S.fimDele = null; S.anotado = false;
@@ -1107,6 +1112,34 @@ var JOGO = (typeof window !== 'undefined')
     muda();
   }
 
+  // ------------------------------------------------------------ o registro do servidor
+  /* A SEGURANÇA (13/09): o servidor paga a sala em grupo refazendo a batalha. O
+   * S.log é o do lockstep (indexado por turno, com os buracos e os pedidos) e
+   * não pode ganhar entrada nenhuma; este é outro: a sequência EXATA do que
+   * este motor aplicou — os lances dos dois, na ordem em que entraram, e as
+   * MARCAS que mudam a batalha fora dos lances (quem caiu, quem voltou, quem
+   * saiu e morreu). Uma foto de resgate troca o estado inteiro: depois dela
+   * este registro não refaz mais a sala, e a marca `fotografada` avisa. */
+  function anotaSrv(l) {
+    if (!S.bid || !S.logSrv) return;
+    var c = { a: l.a, ok: !!l.ok };
+    if (l.u != null) c.u = l.u;
+    if (l.x != null) c.x = l.x;
+    if (l.y != null) c.y = l.y;
+    if (l.s != null) c.s = l.s;
+    if (l.alvo != null) c.alvo = l.alvo;
+    if (l.de != null) c.de = l.de;
+    if (l.ev != null) c.ev = l.ev;
+    if (l.v != null) c.v = l.v;
+    if (S.logSrv.length < 6000) S.logSrv.push(c);
+  }
+  function marcaSrv(ev, uid, v) { anotaSrv({ a: 'x', ev: ev, u: uid, v: v, ok: true }); }
+  /* o registro para fechar a sala no servidor */
+  Coop.logServidor = function () {
+    return { bid: S.bid, lances: (S.logSrv || []).slice(), fotografada: !!S.fotografada,
+             autoridade: autoridadeId() === meuId(), ata: S.ata ? clone(S.ata) : null };
+  };
+
   // ------------------------------------------------------------ os lances
   /* O Game chama DEPOIS de aplicar um lance local no motor (l.T = o turno de
    * ANTES do lance). Carimba (T, k), o que o motor devolveu e, se o turno
@@ -1114,6 +1147,7 @@ var JOGO = (typeof window !== 'undefined')
   Coop.registra = function (l, ok) {
     var g = G(), st = g && g.state;
     if (!st || !S.bid || !l) return;
+    anotaSrv({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, alvo: l.alvo, ok: !!ok, de: meuId() });
     var T = (typeof l.T === 'number') ? l.T : 0;
     var lista = S.log[T] || (S.log[T] = []);
     l.T = T; l.k = lista.length; l.b = S.bid; l.ok = !!ok; l.de = meuId();
@@ -1214,6 +1248,7 @@ var JOGO = (typeof window !== 'undefined')
    * meu reaplicado depois da foto). Confere o que o motor devolveu e o hash. */
   Coop.aplicado = function (l, ok, semConferir) {
     if (!l) return;
+    anotaSrv({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, alvo: l.alvo, ok: !!ok, de: l.de });
     var T = l.T || 0;
     var lista = S.log[T] || (S.log[T] = []);
     lista.push(l);
@@ -1443,6 +1478,7 @@ var JOGO = (typeof window !== 'undefined')
     try { ok = !!g.restauraFoto({ T: T0, estado: pkt.estado, lances: lances, ia: ia }); } catch (e) { ok = false; }
     S.sincronizando = !ok;
     if (ok) {
+      S.fotografada = true;              // 13/09: o estado veio da foto — este registro não refaz mais a sala
       S.restauracoes++;
       S.restauradaEm = agora();
       S.meAssumiu = false;

@@ -23,6 +23,7 @@ const { mundo } = require('./motor');
 
 const ECONOMIA = ['js/core/economia.js', 'js/core/progress.js', 'js/core/db.js',
                   'js/core/missoes.js', 'js/core/diario.js', 'js/core/mercado.js', 'js/core/titulos.js',
+                  'js/core/brasa.js',
                   'js/core/gm.js', 'js/core/loja.js', 'js/core/game.js'];
 const CHAVE_SAVE = 'soterra-save-v2';
 const CHAVE_CONTA = 'soterra-conta-v1';
