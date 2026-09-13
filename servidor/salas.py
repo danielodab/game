@@ -36,6 +36,8 @@ import re
 import secrets
 import time
 
+from guilda import soma_contrib   # 13/09: o XP doado por membro (a grade da guilda)
+
 from comum import (ORIGENS, EstadoMudou, Recusa, agora, classe_do_heroi, iid_valido, inteiro, liberadas,
                    limita)
 
@@ -285,8 +287,11 @@ class SalasMixin:
 
     def _guilda_contexto(self, cid, t):
         """Dentro da tranca: o bônus e o dízimo da guilda da conta, lidos do banco."""
-        g = self.con.execute("SELECT g.bonus_xp, g.bonus_drop, g.dizimo FROM guilda_membros m "
-                             "JOIN guildas g ON g.id = m.guilda_id WHERE m.conta_id = ?", (cid,)).fetchone()
+        # 13/09: o dízimo PRÓPRIO do membro (guilda_dizimo_membro) vence o padrão da guilda
+        g = self.con.execute("SELECT g.bonus_xp, g.bonus_drop, COALESCE(d.pct, g.dizimo) AS dizimo FROM guilda_membros m "
+                             "JOIN guildas g ON g.id = m.guilda_id "
+                             "LEFT JOIN guilda_dizimo_membro d ON d.conta_id = m.conta_id AND d.guilda_id = m.guilda_id "
+                             "WHERE m.conta_id = ?", (cid,)).fetchone()
         if g is None:
             return {'bonusXp': False, 'bonusDrop': False, 'dizimo': 0}
         return {'bonusXp': g['bonus_xp'] > t, 'bonusDrop': g['bonus_drop'] > t, 'dizimo': limita(g['dizimo'], 0, 100)}
@@ -386,6 +391,7 @@ class SalasMixin:
             # em que a conta está AGORA; sem guilda, não vai a lugar nenhum
             self.con.execute("UPDATE guildas SET xp = xp + ? WHERE id = (SELECT guilda_id FROM guilda_membros "
                              "WHERE conta_id = ?)", (saida['guildaXp'], cid))
+            soma_contrib(self.con, cid, saida['guildaXp'])      # 13/09: a grade de membros ordena por isto
         self.con.execute("INSERT OR REPLACE INTO autoridade(conta_id, hash, atualizado_em) VALUES (?, ?, ?)",
                          (cid, saida['hash'], t))
         self._resumo(cid, conta, progress, db, t)

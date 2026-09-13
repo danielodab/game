@@ -305,6 +305,7 @@ ROTAS = {
     ('POST', '/api/guilda/porta'):            ('guilda_porta', True),
     ('POST', '/api/guilda/cargo'):            ('guilda_cargo', True),
     ('POST', '/api/guilda/dizimo'):           ('guilda_dizimo', True),
+    ('POST', '/api/guilda/mural'):            ('guilda_mural', True),     # 13/09: a mensagem da guilda
     ('POST', '/api/guilda/doar'):             ('guilda_doar', True),
     ('POST', '/api/guilda/bonus'):            ('guilda_bonus', True),
     ('POST', '/api/guilda/treino'):           ('guilda_treino', True),

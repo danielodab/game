@@ -1554,6 +1554,49 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .guilda-cab-t h3 { margin: 0; font: 700 17px var(--ui-serif); color: #f0ead8; }
 .guilda-cab-t h3 i { font-style: normal; font-size: 12px; color: var(--gold); }
 .guilda-sub { font-size: 11.5px; color: var(--dim); }
+/* 13/09: a MENSAGEM DA GUILDA (todo membro lê; líder e oficiais escrevem) */
+.guilda-mural { margin: 12px 0 6px; padding: 10px 12px; border: 1px solid var(--gold-dim);
+                border-radius: 10px; background: rgba(255,196,77,.05); }
+.guilda-mural-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.guilda-mural-cab .bk-tit { margin: 0; }
+.guilda-mural-txt { margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere;
+                    font-size: 13px; line-height: 1.5; color: #e6dfcf; }
+.guilda-mural-txt.is-vazio { color: var(--dim); font-style: italic; }
+.guilda-mural-autor { display: block; margin-top: 4px; font-size: 11px; color: var(--dim); text-align: right; }
+.guilda-mural-edit { display: block; width: 100%; box-sizing: border-box; min-height: 96px; margin-top: 6px;
+                     resize: vertical; font-size: 13px; line-height: 1.45; }
+.guilda-mural-acts { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.guilda-mural-conta { margin-right: auto; font-size: 11px; color: var(--dim); }
+/* 13/09: os MEMBROS EM GRADE — cargo, depois o XP doado; o dízimo de cada um na linha */
+.guilda-grade-rolo { overflow-x: auto; margin: 10px 0 4px; }
+.guilda-grade { min-width: 440px; border: 1px solid var(--line2); border-radius: 10px; overflow: hidden; }
+.gg-linha { display: grid; grid-template-columns: 26px minmax(110px, 1fr) 76px 76px 76px;
+            align-items: center; gap: 8px; min-height: 38px; padding: 4px 10px; font-size: 12.5px;
+            border-top: 1px solid rgba(255,255,255,.06); }
+.guilda-grade.com-acao .gg-linha { grid-template-columns: 26px minmax(110px, 1fr) 76px 76px 76px 32px; }
+.gg-linha.is-cab { min-height: 0; padding-top: 7px; padding-bottom: 7px; border-top: 0;
+                   background: rgba(255,255,255,.04); color: var(--dim);
+                   font: 700 10px var(--ui-sans, system-ui); letter-spacing: .07em; text-transform: uppercase; }
+.gg-linha:not(.is-cab):nth-child(odd) { background: rgba(255,255,255,.02); }
+.gg-linha.is-eu { background: rgba(255,196,77,.07); }
+.gg-pos { color: var(--dim); text-align: center; font-variant-numeric: tabular-nums; }
+.gg-membro { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.gg-marca { flex: none; font-style: normal; line-height: 1; color: var(--dim); }
+.gg-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e6dfcf; }
+.gg-eu { flex: none; font-size: 9.5px; color: var(--gold); border: 1px solid var(--gold-dim);
+         border-radius: 999px; padding: 0 5px; }
+.gg-cargo { display: inline-block; font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
+            padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line2); color: var(--dim); }
+.gg-cargo.is-lider { color: var(--gold); border-color: var(--gold-dim); }
+.gg-cargo.is-oficial { color: #f0ead8; border-color: rgba(240,234,216,.28); }
+.gg-linha:not(.is-cab) .gg-marca { color: inherit; }
+.gg-xp, .gg-dz { text-align: right; font-variant-numeric: tabular-nums; }
+.gg-dz { display: flex; align-items: center; justify-content: flex-end; gap: 3px; }
+.gg-dz-inp { width: 50px; margin: 0; padding: 4px 6px; text-align: right; color: var(--dim); }
+.gg-dz-inp.is-proprio { border-color: var(--gold-dim); color: var(--gold); }
+.gg-pct { font-size: 11px; color: var(--dim); }
+.gg-linha .btn-mini.gg-acao { width: 28px; height: 28px; min-height: 28px; padding: 0;
+                              border-radius: 50%; font-size: 12px; line-height: 1; }
 /* A LISTA DE MEMBROS DA GUILDA (arrumada em 12/09). A pilula era so padding e
    `border-radius: 999px`, e o botao de promover — um `.btn-mini`, 44 px de
    altura minima porque e alvo de dedo — esticava a pilula para uma BOLA com o

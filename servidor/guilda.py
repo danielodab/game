@@ -63,6 +63,7 @@ CONVITES_MAX = 50                 # convites em aberto por guilda (os mais velho
 CONVITE_VALIDADE = 7 * 86400
 BANCO_MAX = 200                   # peças no banco de uma guilda
 LISTA_MAX = 100
+MURAL_MAX = 500                   # espelha JOGO.Guilda.MURAL_MAX
 NOME_RESERVADO = 'esse nome é reservado à equipe do jogo'
 RE_ITEM = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 RE_IID = re.compile(r'^[\x21-\x7e]{1,64}$')     # o mesmo do api.py
@@ -125,7 +126,38 @@ CREATE TABLE IF NOT EXISTS guilda_emprestimos(
   em          INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS guilda_emprestimos_iid ON guilda_emprestimos(iid);
+-- 13/09 (pedido do dono: a grade de membros, o dízimo de cada um e a mensagem da guilda).
+-- Tabelas novas, nada de ALTER: o XP que cada membro já doou (dízimo, oferenda, treino),
+-- o dízimo PRÓPRIO de um membro (sem linha = o padrão guildas.dizimo) e o mural
+CREATE TABLE IF NOT EXISTS guilda_contrib(
+  guilda_id   INTEGER NOT NULL REFERENCES guildas(id) ON DELETE CASCADE,
+  conta_id    INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  xp          INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (guilda_id, conta_id)
+);
+CREATE TABLE IF NOT EXISTS guilda_dizimo_membro(
+  conta_id    INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
+  guilda_id   INTEGER NOT NULL REFERENCES guildas(id) ON DELETE CASCADE,
+  pct         INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS guilda_mural(
+  guilda_id   INTEGER PRIMARY KEY REFERENCES guildas(id) ON DELETE CASCADE,
+  texto       TEXT NOT NULL,
+  autor_id    INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+  em          INTEGER NOT NULL
+);
 """
+ORDEM_CARGO = {'lider': 0, 'oficial': 1, 'membro': 2}
+RE_CONTROLE = re.compile(r'[\x00-\x09\x0b-\x1f\x7f]')
+
+
+def soma_contrib(con, cid, xp):
+    """13/09: o XP que a conta doou à guilda em que está AGORA (a ordem da grade de membros).
+    Dentro da tranca de quem chama; sem guilda, nada."""
+    if isinstance(xp, int) and xp > 0:
+        con.execute("INSERT INTO guilda_contrib(guilda_id, conta_id, xp) "
+                    "SELECT guilda_id, conta_id, ? FROM guilda_membros WHERE conta_id = ? "
+                    "ON CONFLICT(guilda_id, conta_id) DO UPDATE SET xp = xp + excluded.xp", (xp, cid))
 
 
 def nivel_de(xp):
@@ -182,10 +214,22 @@ class GuildaMixin:
         ps = self.con.execute("SELECT conta_id, em FROM guilda_pedidos WHERE guilda_id = ? ORDER BY em, conta_id",
                               (gid,)).fetchall()
         bs = self.con.execute("SELECT * FROM guilda_banco WHERE guilda_id = ? ORDER BY id", (gid,)).fetchall()
+        # 13/09: o XP que cada um doou, o dízimo próprio de cada um e a mensagem da guilda
+        doado = {r['conta_id']: r['xp'] for r in self.con.execute(
+            "SELECT conta_id, xp FROM guilda_contrib WHERE guilda_id = ?", (gid,))}
+        proprio = {r['conta_id']: r['pct'] for r in self.con.execute(
+            "SELECT conta_id, pct FROM guilda_dizimo_membro WHERE guilda_id = ?", (gid,))}
+        mu = self.con.execute("SELECT texto, autor_id, em FROM guilda_mural WHERE guilda_id = ?", (gid,)).fetchone()
         nm = self._g_nomes([m['conta_id'] for m in ms] + [p['conta_id'] for p in ps] +
-                           [b['dono_id'] for b in bs] + [b['emprestado_para'] for b in bs])
+                           [b['dono_id'] for b in bs] + [b['emprestado_para'] for b in bs] +
+                           ([mu['autor_id']] if mu is not None else []))
         membros = [{'id': m['conta_id'], 'nome': nm.get(m['conta_id'], '?'),
-                    'cargo': 'lider' if m['conta_id'] == g['lider_id'] else m['cargo']} for m in ms]
+                    'cargo': 'lider' if m['conta_id'] == g['lider_id'] else m['cargo'],
+                    'xpDoado': doado.get(m['conta_id'], 0),
+                    'dizimo': proprio.get(m['conta_id'], g['dizimo']),
+                    'dizimoProprio': m['conta_id'] in proprio} for m in ms]
+        # a ordem da grade: o cargo, depois quem mais doou
+        membros.sort(key=lambda m: (ORDEM_CARGO.get(m['cargo'], 2), -m['xpDoado'], str(m['nome']).lower()))
         cargo = next((m['cargo'] for m in membros if m['id'] == eu), None)
         return {
             'id': g['id'], 'nome': g['nome'], 'emblema': g['emblema'], 'liderId': g['lider_id'],
@@ -198,6 +242,8 @@ class GuildaMixin:
                       for b in bs],
             'treinos': g['treinos'], 'criadaEm': g['criada_em'] * 1000, 'porta': g['porta'],
             'dizimo': g['dizimo'],
+            'mural': ({'texto': mu['texto'], 'autorNome': nm.get(mu['autor_id']) if mu['autor_id'] else None,
+                       'em': mu['em'] * 1000} if mu is not None else None),
             'pedidos': [{'id': p['conta_id'], 'nome': nm.get(p['conta_id'], '?'), 'em': p['em'] * 1000} for p in ps],
             'souLider': g['lider_id'] == eu, 'meuCargo': cargo, 'eu': eu,
         }
@@ -370,16 +416,56 @@ class GuildaMixin:
         return 200, {'ok': True, 'cargo': novo, 'guilda': foto}
 
     def guilda_dizimo(self, conta, corpo):
-        pct = corpo.get('pct')
-        if isinstance(pct, bool) or not isinstance(pct, int) or pct < 0 or pct > DIZIMO_MAX:
-            raise Recusa(400, 'o dízimo vai de 0 a %d%%' % DIZIMO_MAX)
+        """Sem `conta`: o dízimo PADRÃO (quem não tem um próprio); com `todos: true`, o padrão
+        passa a valer para todo mundo (os próprios somem). Com `conta`: o dízimo daquele
+        membro (13/09, "o líder define quantos % cada um vai doar"); `pct: null` o devolve
+        ao padrão."""
+        pct, alvo, todos = corpo.get('pct'), corpo.get('conta'), corpo.get('todos') is True
+        if alvo is not None:
+            alvo = _id_positivo(alvo, 'conta')
+        if not (alvo is not None and pct is None):
+            if isinstance(pct, bool) or not isinstance(pct, int) or pct < 0 or pct > DIZIMO_MAX:
+                raise Recusa(400, 'o dízimo vai de 0 a %d%%' % DIZIMO_MAX)
         with self.tranca:
             g, cargo = self._g_da_conta(conta)
             if cargo != 'lider':
                 raise Recusa(403, 'só o líder define o dízimo')
-            self.con.execute("UPDATE guildas SET dizimo = ? WHERE id = ?", (pct, g['id']))
+            if alvo is None:
+                self.con.execute("UPDATE guildas SET dizimo = ? WHERE id = ?", (pct, g['id']))
+                if todos:
+                    self.con.execute("DELETE FROM guilda_dizimo_membro WHERE guilda_id = ?", (g['id'],))
+            else:
+                if not self.con.execute("SELECT 1 FROM guilda_membros WHERE conta_id = ? AND guilda_id = ?",
+                                        (alvo, g['id'])).fetchone():
+                    raise Recusa(404, 'não é membro')
+                if pct is None:
+                    self.con.execute("DELETE FROM guilda_dizimo_membro WHERE conta_id = ?", (alvo,))
+                else:
+                    self.con.execute("INSERT OR REPLACE INTO guilda_dizimo_membro(conta_id, guilda_id, pct) "
+                                     "VALUES (?, ?, ?)", (alvo, g['id'], pct))
             foto = self._g_ficha(g['id'], conta['id'])
-        return 200, {'ok': True, 'dizimo': pct, 'guilda': foto}
+        return 200, {'ok': True, 'dizimo': pct, 'conta': alvo, 'guilda': foto}
+
+    def guilda_mural(self, conta, corpo):
+        """A mensagem da guilda (13/09): boas-vindas e orientações que todo membro lê na
+        ficha. Líder e oficiais escrevem; texto vazio apaga."""
+        texto = corpo.get('texto')
+        if not isinstance(texto, str):
+            raise Recusa(400, 'texto precisa ser uma string')
+        texto = RE_CONTROLE.sub('', texto.replace('\r\n', '\n').replace('\r', '\n')).strip()[:MURAL_MAX].strip()
+        cid = conta['id']
+        with self.tranca:
+            g, cargo = self._g_da_conta(conta)
+            if cargo not in ('lider', 'oficial'):
+                raise Recusa(403, 'só líder e oficiais escrevem a mensagem da guilda')
+            if texto:
+                self.con.execute("INSERT OR REPLACE INTO guilda_mural(guilda_id, texto, autor_id, em) VALUES (?, ?, ?, ?)",
+                                 (g['id'], texto, cid, agora()))
+            else:
+                self.con.execute("DELETE FROM guilda_mural WHERE guilda_id = ?", (g['id'],))
+            self._evento(cid, 'guilda', {'acao': 'mural', 'gid': g['id'], 'tamanho': len(texto)})
+            foto = self._g_ficha(g['id'], cid)
+        return 200, {'ok': True, 'guilda': foto}
 
     # -- o XP, o cofre e o treino ------------------------------------------------------
     def _g_autoridade(self):
@@ -397,6 +483,7 @@ class GuildaMixin:
         with self.tranca:
             g, _ = self._g_da_conta(conta)
             self.con.execute("UPDATE guildas SET xp = xp + ? WHERE id = ?", (xp, g['id']))
+            soma_contrib(self.con, conta['id'], xp)
             self.con.commit()
         return 200, {'ok': True, 'xp': g['xp'] + xp, 'nivel': nivel_de(g['xp'] + xp)}
 
@@ -428,6 +515,7 @@ class GuildaMixin:
             vistos[cid] = t
             self.con.execute("UPDATE guildas SET xp = xp + ?, moedas = moedas + ?, treinos = treinos + 1 WHERE id = ?",
                              (XP_TREINO, MOEDA_TREINO, g['id']))
+            soma_contrib(self.con, cid, XP_TREINO)
             self.con.commit()
         return 200, {'ok': True, 'pago': True, 'xp': g['xp'] + XP_TREINO, 'moedas': g['moedas'] + MOEDA_TREINO}
 
@@ -442,9 +530,12 @@ class GuildaMixin:
                                 (g['id'], cid)).fetchone():
                 raise Recusa(409, 'retire as suas peças do banco da guilda antes de sair')
             self.con.execute("DELETE FROM guilda_membros WHERE conta_id = ?", (cid,))
+            self.con.execute("DELETE FROM guilda_dizimo_membro WHERE conta_id = ?", (cid,))   # o dízimo próprio fica aqui
             resto = self.con.execute("SELECT conta_id FROM guilda_membros WHERE guilda_id = ? "
                                      "ORDER BY entrou_em, conta_id", (g['id'],)).fetchall()
             if not resto:
+                for tabela in ('guilda_contrib', 'guilda_dizimo_membro', 'guilda_mural'):
+                    self.con.execute("DELETE FROM %s WHERE guilda_id = ?" % tabela, (g['id'],))
                 self.con.execute("DELETE FROM guildas WHERE id = ?", (g['id'],))     # o último apaga a luz
             elif g['lider_id'] == cid:
                 self.con.execute("UPDATE guildas SET lider_id = ? WHERE id = ?", (resto[0]['conta_id'], g['id']))

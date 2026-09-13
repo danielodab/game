@@ -221,6 +221,50 @@ class ProvaDaGuilda(unittest.TestCase):
         self.assertEqual(self.g(b, 'minha')['guilda']['bonus']['xp'], r['ate'], 'o bônus vale para todo membro')
         self.g(a, 'bonus', {'tipo': 'ouro'}, 400)
 
+    def test_05b_grade_dizimo_de_cada_um_e_mensagem(self):
+        """13/09: a grade vem ordenada por cargo e XP doado; o líder define o dízimo de cada
+        membro (e o padrão, e o 'aplicar a todos'); líder e oficiais escrevem a mensagem."""
+        a, b, c = self.novo('Chefe'), self.novo('Doador'), self.novo('Calado')
+        gid = self.funda(a)
+        self.g(b, 'entrar', {'gid': gid})
+        self.g(c, 'entrar', {'gid': gid})
+        self.g(a, 'cargo', {'conta': c.conta['id'], 'cargo': 'oficial'})
+        self.g(b, 'doar', {'xp': 40})
+        self.g(a, 'dizimo', {'pct': 10})
+        r = self.g(a, 'dizimo', {'pct': 20, 'conta': b.conta['id']})
+        ms = {m['id']: m for m in r['guilda']['membros']}
+        self.assertEqual((ms[b.conta['id']]['dizimo'], ms[b.conta['id']]['dizimoProprio']), (20, True))
+        self.assertEqual((ms[c.conta['id']]['dizimo'], ms[c.conta['id']]['dizimoProprio']), (10, False))
+        self.assertEqual((ms[b.conta['id']]['xpDoado'], ms[c.conta['id']]['xpDoado']), (40, 0))
+        self.assertEqual([m['cargo'] for m in r['guilda']['membros']], ['lider', 'oficial', 'membro'],
+                         'o cargo vem antes do XP doado')
+        self.g(c, 'dizimo', {'pct': 5, 'conta': b.conta['id']}, 403)          # oficial não mexe no dízimo
+        self.g(a, 'dizimo', {'pct': 5, 'conta': self.novo('Fora').conta['id']}, 404)
+        self.g(a, 'dizimo', {'pct': guilda_mod.DIZIMO_MAX + 1, 'conta': b.conta['id']}, 400)
+        r = self.g(a, 'dizimo', {'pct': None, 'conta': b.conta['id']})       # volta ao padrão
+        ms = {m['id']: m for m in r['guilda']['membros']}
+        self.assertEqual((ms[b.conta['id']]['dizimo'], ms[b.conta['id']]['dizimoProprio']), (10, False))
+        self.g(a, 'dizimo', {'pct': 15, 'conta': b.conta['id']})
+        r = self.g(a, 'dizimo', {'pct': 8, 'todos': True})
+        self.assertTrue(all(m['dizimo'] == 8 and not m['dizimoProprio'] for m in r['guilda']['membros']))
+        # o contexto do juiz lê o dízimo próprio
+        self.g(a, 'dizimo', {'pct': 22, 'conta': b.conta['id']})
+        self.assertEqual(self.sql("SELECT pct FROM guilda_dizimo_membro WHERE conta_id = ?", b.conta['id'])[0]['pct'], 22)
+        # a mensagem
+        self.g(b, 'mural', {'texto': 'oi'}, 403)                                # membro raso só lê
+        self.g(c, 'mural', {'texto': '  Bem-vindos!\r\nDízimo de 8%.\x07  '})
+        mu = self.g(b, 'minha')['guilda']['mural']
+        self.assertEqual(mu['texto'], 'Bem-vindos!\nDízimo de 8%.')
+        self.assertTrue(mu['autorNome'])
+        self.g(a, 'mural', {'texto': 'x' * (guilda_mod.MURAL_MAX + 50)})
+        self.assertEqual(len(self.g(b, 'minha')['guilda']['mural']['texto']), guilda_mod.MURAL_MAX)
+        self.g(a, 'mural', {'texto': 5}, 400)
+        self.g(a, 'mural', {'texto': '   '})
+        self.assertIsNone(self.g(b, 'minha')['guilda']['mural'], 'texto vazio apaga')
+        # quem sai leva o dízimo próprio embora
+        self.g(b, 'sair', {})
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM guilda_dizimo_membro WHERE conta_id = ?", b.conta['id'])[0]['n'], 0)
+
     def test_06_o_banco_guarda_a_serie_sem_varrer(self):
         a, b = self.novo('Dona'), self.novo('Tomador')
         gid = self.funda(a)

@@ -200,10 +200,18 @@ var JOGO = (typeof window !== 'undefined')
     f.nivel = G.nivelDe(g.xp);
     f.souLider = !!(conta && g.liderId === conta.id);
     f.meuCargo = conta ? cargoDe(g, conta.id) : null;
-    // cada membro sai com o cargo RESOLVIDO (o líder pelo liderId)
+    // cada membro sai com o cargo RESOLVIDO (o líder pelo liderId); 13/09: e o XP
+    // que doou e o dízimo dele, como a ficha do servidor
     for (var mi = 0; mi < f.membros.length; mi++) {
-      f.membros[mi].cargo = cargoDe(g, f.membros[mi].id);
+      var mid = f.membros[mi].id;
+      f.membros[mi].cargo = cargoDe(g, mid);
+      f.membros[mi].xpDoado = (g.contrib && g.contrib[mid]) || 0;
+      f.membros[mi].dizimo = dizimoDe(g, mid);
+      f.membros[mi].dizimoProprio = !!(g.dizimoMembros && typeof g.dizimoMembros[mid] === 'number');
     }
+    f.mural = g.mural || null;
+    delete f.contrib;
+    delete f.dizimoMembros;
     return responde(f);
   };
 
@@ -323,25 +331,66 @@ var JOGO = (typeof window !== 'undefined')
    * taxa vale para todo membro, o desconto acontece no funil de XP do
    * game.js (que consulta `dizimoAtual` SÍNCRONO, como o bonusAtivo). */
   G.DIZIMO_MAX = 25;
-  G.definirDizimo = function (pct) {
+  /* 13/09, dono: "o líder define quantos % cada um vai doar". Sem `idAlvo`, o
+   * dízimo PADRÃO (quem não tem um próprio; `op.todos` passa a valer para
+   * todos); com `idAlvo`, o daquele membro — `pct` null o devolve ao padrão.
+   * O mesmo contrato do POST /api/guilda/dizimo. */
+  G.definirDizimo = function (pct, idAlvo, op) {
     if (!conta) return responde({ ok: false });
-    pct = Math.floor(pct);
-    if (!isFinite(pct) || pct < 0 || pct > G.DIZIMO_MAX) {
-      return responde({ ok: false, erro: 'o dízimo vai de 0 a ' + G.DIZIMO_MAX + '%' });
+    var voltaAoPadrao = idAlvo != null && pct === null;
+    if (!voltaAoPadrao) {
+      pct = Math.floor(pct);
+      if (!isFinite(pct) || pct < 0 || pct > G.DIZIMO_MAX) {
+        return responde({ ok: false, erro: 'o dízimo vai de 0 a ' + G.DIZIMO_MAX + '%' });
+      }
     }
     var d = le();
     var g = minhaG(d);
     if (!g) return responde({ ok: false, erro: 'sem guilda' });
     if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder define o dízimo' });
-    g.dizimo = pct;
+    if (!g.dizimoMembros || typeof g.dizimoMembros !== 'object') g.dizimoMembros = {};
+    if (idAlvo == null) {
+      g.dizimo = pct;
+      if (op && op.todos === true) g.dizimoMembros = {};
+    } else {
+      if (!cargoDe(g, idAlvo)) return responde({ ok: false, erro: 'não é membro' });
+      if (voltaAoPadrao) delete g.dizimoMembros[idAlvo];
+      else g.dizimoMembros[idAlvo] = pct;
+    }
     grava(d);
-    return responde({ ok: true, dizimo: pct });
+    return responde({ ok: true, dizimo: pct, conta: idAlvo == null ? null : idAlvo });
   };
+  function dizimoDe(g, id) {
+    var dm = g && g.dizimoMembros;
+    return (dm && typeof dm[id] === 'number') ? dm[id] : Math.floor((g && g.dizimo) || 0);
+  }
   G.dizimoAtual = function () {
     var d = le();
     var g = minhaG(d);
-    var p = g ? Math.floor(g.dizimo || 0) : 0;
+    var p = g ? Math.floor(dizimoDe(g, conta.id)) : 0;
     return (isFinite(p) && p > 0) ? Math.min(p, G.DIZIMO_MAX) : 0;
+  };
+
+  /* A MENSAGEM DA GUILDA (13/09): boas-vindas e orientações que todo membro lê
+   * na ficha. Líder e oficiais escrevem; texto vazio apaga. */
+  G.MURAL_MAX = 500;
+  function limpaMural(texto) {
+    return String(texto == null ? '' : texto).replace(/\r\n?/g, '\n')
+      .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, '').trim().slice(0, G.MURAL_MAX).trim();
+  }
+  G.definirMural = function (texto) {
+    if (!conta) return responde({ ok: false });
+    var d = le();
+    var g = minhaG(d);
+    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!podeGastarCofre(g, conta.id)) {
+      return responde({ ok: false, erro: 'só líder e oficiais escrevem a mensagem da guilda' });
+    }
+    texto = limpaMural(texto);
+    if (texto) g.mural = { texto: texto, autorNome: conta.nome, em: agora() };
+    else delete g.mural;
+    grava(d);
+    return responde({ ok: true });
   };
 
   /* A OFERENDA (30/08): "a guild upa conforme os usuários doam xp" — o core
@@ -355,6 +404,8 @@ var JOGO = (typeof window !== 'undefined')
     var g = minhaG(d);
     if (!g) return responde({ ok: false, erro: 'sem guilda' });
     g.xp += n;
+    if (!g.contrib || typeof g.contrib !== 'object') g.contrib = {};
+    g.contrib[conta.id] = (g.contrib[conta.id] || 0) + n;      // 13/09: a ordem da grade de membros
     grava(d);
     return responde({ ok: true, xp: g.xp, nivel: G.nivelDe(g.xp) });
   };
@@ -542,7 +593,7 @@ var JOGO = (typeof window !== 'undefined')
   G._ficha = function () { return ficha; };               // provas
   var local = {};
   ['criar', 'minha', 'promover', 'rebaixar', 'definirPorta', 'pedirEntrada', 'aceitarPedido', 'recusarPedido',
-   'definirDizimo', 'dizimoAtual', 'doarXp', 'lista', 'entrar', 'sair', 'registraTreino', 'compraBonus',
+   'definirDizimo', 'dizimoAtual', 'definirMural', 'doarXp', 'lista', 'entrar', 'sair', 'registraTreino', 'compraBonus',
    'bonusAtivo', 'bancoDepositar', 'bancoLista', 'bancoPegar', 'bancoDevolver'].forEach(function (k) { local[k] = G[k]; });
   G._local = local;
   function peloServidor(nome, fn) {
@@ -578,7 +629,15 @@ var JOGO = (typeof window !== 'undefined')
   peloServidor('promover', function (id) { return pede('/api/guilda/cargo', { conta: id, cargo: 'oficial' }); });
   peloServidor('rebaixar', function (id) { return pede('/api/guilda/cargo', { conta: id, cargo: 'membro' }); });
   peloServidor('definirPorta', function (modo) { return pede('/api/guilda/porta', { modo: modo }); });
-  peloServidor('definirDizimo', function (pct) { return pede('/api/guilda/dizimo', { pct: Math.floor(Number(pct)) }); });
+  peloServidor('definirDizimo', function (pct, idAlvo, op) {
+    var corpo = { pct: (idAlvo != null && pct === null) ? null : Math.floor(Number(pct)) };
+    if (idAlvo != null) corpo.conta = idAlvo;
+    if (op && op.todos === true) corpo.todos = true;
+    return pede('/api/guilda/dizimo', corpo);
+  });
+  peloServidor('definirMural', function (texto) {
+    return pede('/api/guilda/mural', { texto: String(texto == null ? '' : texto).slice(0, G.MURAL_MAX * 2) });
+  });
   peloServidor('doarXp', function (n) {
     n = Math.floor(n);
     if (!isFinite(n) || n <= 0) return responde({ ok: false, erro: 'quantia inválida' });
@@ -615,7 +674,12 @@ var JOGO = (typeof window !== 'undefined')
   });
   peloServidor('dizimoAtual', function () {
     if (Date.now() - fichaEm > FICHA_MS) renova();
-    var p = ficha ? Math.floor(ficha.dizimo || 0) : 0;
+    // 13/09: o dízimo do MEU membro (o próprio, se o líder deu um), senão o padrão
+    var p = 0;
+    if (ficha) {
+      var eu = (ficha.membros || []).filter(function (m) { return m && m.id === ficha.eu; })[0];
+      p = Math.floor((eu && typeof eu.dizimo === 'number') ? eu.dizimo : (ficha.dizimo || 0));
+    }
     return (isFinite(p) && p > 0) ? Math.min(p, G.DIZIMO_MAX) : 0;
   });
 
