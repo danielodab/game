@@ -36,7 +36,9 @@ vigia() {
   done
 }
 
-vigia api  python3 /app/servidor/api.py  --host 127.0.0.1 --porta 8300 --banco "$DADOS/soterra.db" &
+# o JUIZ (12/09): as regras do jogo em Node, só no 127.0.0.1; a API fala com ele
+vigia juiz node    /app/servidor/juiz/juiz.js --host 127.0.0.1 --porta 8792 --raiz /srv/soterra &
+vigia api  python3 /app/servidor/api.py  --host 127.0.0.1 --porta 8300 --banco "$DADOS/soterra.db" --juiz http://127.0.0.1:8792 &
 vigia rele python3 /app/servidor/rele.py --host 127.0.0.1 --porta 8791 --banco "$DADOS/soterra.db" &
 
 exec caddy run --config /app/servidor/coolify/Caddyfile --adapter caddyfile

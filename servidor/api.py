@@ -69,6 +69,7 @@ from mestre import FRASE_SO_MESTRE, MestreMixin
 from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova
 from comum import le_consulta   # a consulta da URL (?id=, ?data.id=): o painel do Mestre e o aviso do Mercado Pago
 from guilda import ESQUEMA_GUILDA, GuildaMixin   # 11/09: a guilda no servidor (antes morava em cada navegador)
+from juiz_ponte import Juiz   # 12/09: as regras do jogo em Node (servidor/juiz/) — a segurança
 import nomes                     # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
 log = logging.getLogger("api")
@@ -674,7 +675,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
     e os pacotes pagos (pagamento.py) entram como mixins: as rotas deles são
     métodos deste mesmo objeto, com a mesma conexão e a mesma tranca."""
 
-    def __init__(self, caminho_banco, correio=None, mp=None):
+    def __init__(self, caminho_banco, correio=None, mp=None, juiz=None):
         pasta = os.path.dirname(os.path.abspath(caminho_banco))
         os.makedirs(pasta, exist_ok=True)
         self.con = sqlite3.connect(caminho_banco, check_same_thread=False)
@@ -696,6 +697,9 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
         # o Mercado Pago (pagamento.py). Sem nada, desligado: os pacotes aparecem
         # "em breve", as rotas de pagamento respondem 503, e o resto funciona igual
         self.mp = mp if mp is not None else MercadoPago()
+        # o JUIZ (12/09, juiz_ponte.py): as regras do jogo em Node. Sem ele, as rotas
+        # que precisam conferir respondem 503 — nada é pago sem conferir
+        self.juiz = juiz if juiz is not None else Juiz(None)
         # o segredo do hmac dos códigos (SOTERRA_SEGREDO, ou o arquivo `segredo` na pasta do banco)
         self.segredo = carrega_segredo(pasta)
         self._ranking_guardado = None    # (vale_ate, data_version, resposta) — ver ranking
@@ -1560,6 +1564,9 @@ if __name__ == '__main__':
     ap.add_argument("--mp-api", metavar="URL", default=None,
                     help="SÓ PARA AS PROVAS: a API do Mercado Pago de mentira (tests/mp_falso.py), "
                          "http://127.0.0.1:PORTA; o token e a assinatura continuam vindo do ambiente")
+    ap.add_argument("--juiz", metavar="URL", default=None,
+                    help="o juiz (servidor/juiz/juiz.js), http://127.0.0.1:PORTA — as regras do jogo que "
+                         "conferem salas e economia; sem ele, essas rotas respondem 503")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     correio = Correio.do_ambiente(prova=args.emails_prova)
@@ -1570,7 +1577,9 @@ if __name__ == '__main__':
         ap.error(str(e))
     mp = MercadoPago.do_ambiente(base=base_mp)
     log.info("pagamento: %s", mp.descricao())         # nunca o token nem a assinatura
-    Atendente.api = Api(args.banco, correio=correio, mp=mp)
+    juiz = Juiz(args.juiz)
+    log.info("juiz: %s", args.juiz or "desligado (as rotas conferidas respondem 503)")
+    Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz)
     servidor = ThreadingHTTPServer((args.host, args.porta), Atendente)
     log.info("a API escuta em http://%s:%d — banco em %s", args.host, args.porta, os.path.abspath(args.banco))
     try:
