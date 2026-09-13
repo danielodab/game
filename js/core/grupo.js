@@ -156,6 +156,11 @@ var JOGO = (typeof window !== 'undefined')
     } catch (e) {}
   }
   function mutado(id) { return !!mutados[id]; }
+  // 13/09 (dono): o INIMIGO (JOGO.Amigos) não manda mensagem particular — o relé já
+  // não entrega; isto larga o que um relé antigo deixasse passar
+  function inimigo(id) {
+    return !!safe(function () { return JOGO.Amigos && JOGO.Amigos.inimigoPorHeroi(id); }, false);
+  }
   /* a HUD avisa quando silencia ou devolve a voz (o DB grava; aqui é o espelho) */
   Grupo.mutado = function (id, sim) {
     if (!id) return false;
@@ -1429,7 +1434,7 @@ var JOGO = (typeof window !== 'undefined')
   };
   function aoSussurro(ev) {
     if (!ev || !ev.de || ev.de === eu()) return;
-    if (mutado(ev.de)) return;                         // silenciado: nem linha, nem aviso
+    if (mutado(ev.de) || inimigo(ev.de)) return;       // silenciado ou inimigo: nem linha, nem aviso
     var texto = String(ev.texto || '').slice(0, Sussurros.TEXTO_MAX);
     var r = R();
     if (r && typeof r.filtra === 'function') texto = safe(function () { return r.filtra(texto); }, texto);

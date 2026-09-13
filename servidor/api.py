@@ -69,6 +69,7 @@ from mestre import FRASE_SO_MESTRE, MestreMixin
 from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova
 from comum import le_consulta   # a consulta da URL (?id=, ?data.id=): o painel do Mestre e o aviso do Mercado Pago
 from guilda import ESQUEMA_GUILDA, GuildaMixin   # 11/09: a guilda no servidor (antes morava em cada navegador)
+from amigos import ESQUEMA_AMIGOS, AmigosMixin   # 13/09: amigos e inimigos da conta
 from juiz_ponte import Juiz   # 12/09: as regras do jogo em Node (servidor/juiz/) — a segurança
 # 13/09: a autoridade (salas.py): bilhete e fechamento de sala, ops de economia, o PUT cosmético
 from salas import ESQUEMA_SALAS, SalasMixin, chave_do_lado, lado_da_troca, lado_vazio
@@ -307,6 +308,9 @@ ROTAS = {
     ('POST', '/api/guilda/cargo'):            ('guilda_cargo', True),
     ('POST', '/api/guilda/dizimo'):           ('guilda_dizimo', True),
     ('POST', '/api/guilda/mural'):            ('guilda_mural', True),     # 13/09: a mensagem da guilda
+    # 13/09: amigos e inimigos (amigos.py); o online e a batalha vêm do relé
+    ('GET',  '/api/amigos'):                  ('amigos_lista', True),
+    ('POST', '/api/amigos/definir'):          ('amigos_definir', True),
     ('POST', '/api/guilda/doar'):             ('guilda_doar', True),
     ('POST', '/api/guilda/bonus'):            ('guilda_bonus', True),
     ('POST', '/api/guilda/treino'):           ('guilda_treino', True),
@@ -689,7 +693,8 @@ def versao_da_regra():
         return '0'
 
 
-class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin):
+class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
+          AmigosMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -713,6 +718,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self.con.executescript(ESQUEMA_SALAS)    # 13/09: a autoridade (salas.py) — só tabelas novas, nunca ALTER
         self.con.executescript(ESQUEMA_GRUPO)    # 13/09: sala em grupo e duelo ranqueado (grupo.py) — idem
         self.con.executescript(ESQUEMA_MERCADO)  # 13/09: o mercadinho entre contas (mercado.py) — idem
+        self.con.executescript(ESQUEMA_AMIGOS)   # 13/09: amigos e inimigos (amigos.py) — idem; o relé lê só para ler
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)

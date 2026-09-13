@@ -1597,6 +1597,25 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .gg-pct { font-size: 11px; color: var(--dim); }
 .gg-linha .btn-mini.gg-acao { width: 28px; height: 28px; min-height: 28px; padding: 0;
                               border-radius: 50%; font-size: 12px; line-height: 1; }
+/* 13/09: AMIGOS E INIMIGOS (a ficha do cais) */
+.am-abas { display: flex; gap: 6px; margin: 4px 0 10px; }
+.am-add { display: flex; gap: 8px; align-items: center; }
+.am-add .hub-input { flex: 1; min-width: 0; margin: 0; }
+.am-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.am-linha { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+            padding: 7px 10px; border: 1px solid var(--line2); border-radius: 10px; background: rgba(255,255,255,.02); }
+.am-linha.is-on { border-color: rgba(127,224,138,.35); }
+.am-nome { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.am-bola { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #5a616c; }
+.am-bola.is-on { background: #7fe08a; box-shadow: 0 0 6px rgba(127,224,138,.7); }
+.am-bola.is-luta { background: #ff8a5a; box-shadow: 0 0 6px rgba(255,138,90,.7); }
+.am-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e6dfcf; }
+.am-nv { flex: none; font-size: 10.5px; color: var(--dim); }
+.am-estado { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+.am-estado.is-on { color: #7fe08a; }
+.am-estado.is-luta { color: #ff9a6a; }
+.am-acts { display: flex; gap: 6px; }
+.am-acts .btn-mini.am-tira { width: 30px; padding: 0; }
 /* A LISTA DE MEMBROS DA GUILDA (arrumada em 12/09). A pilula era so padding e
    `border-radius: 999px`, e o botao de promover — um `.btn-mini`, 44 px de
    altura minima porque e alvo de dedo — esticava a pilula para uma BOLA com o
