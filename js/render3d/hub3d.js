@@ -861,7 +861,9 @@ var JOGO = (typeof window !== 'undefined')
    * de pedra. */
   var PRACA = {
     arena:   { ang: -1.78, r: 36.0, frente: 9.8 },
-    poco:    { ang: -2.40, r: 34.0, frente: 3.3 },
+    // o poço: a caixa medida abraça a armação de madeira, a base de pedra
+    // tem só ~5 m — a 3,3 do centro a calçada parava na grama (foto do dono)
+    poco:    { ang: -2.40, r: 34.0, frente: 2.0 },
     forja:   { ang: -2.80, r: 38.0, frente: 2.0 },
     loteria: { ang: Math.PI, r: 40.0, frente: 1.2 },
     mercado: { ang: 2.80, r: 38.0, frente: 2.0 },
