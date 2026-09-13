@@ -174,7 +174,11 @@ tudo ou nada).
 - [x] Node no contêiner e o juiz no `entrada.sh`; API aceita `--juiz`
 - [x] Juiz: recompensa (`recompensa.js`, `tests/juiz_recompensa.js`), economia (`economia.js`,
       `tests/juiz_economia.js`), hash (`js/core/economia.js`)
-- [ ] API: salas, op, PUT cosmético, loja e troca no servidor (em andamento)
+- [x] API: salas, op, PUT cosmético, loja, troca e banco da guilda no servidor (`servidor/salas.py`,
+      `tests/autoridade_api.py`) — **a autoridade só liga com `--juiz`** (o `entrada.sh` passa)
+- [x] API: grupo e duelo ranqueado com tetos anti-farm (`servidor/grupo.py`, `tests/grupo_duelo_api.py`)
+- [x] Cliente: troca e banco da guilda adotam o estado do servidor; cópia emprestada não sai do saco
+- [x] Prova de ponta a ponta: jogo + API + juiz de verdade (`tests/autoridade_ponta.js`, 11)
 - [x] Cliente: autoridade, bilhete, lances, fechar, ops, forja e roleta pelo servidor
       (`js/core/autoridade.js`, `tests/autoridade_cliente.js`)
 - [ ] Cliente: troca e cofre da guilda pelas rotas novas

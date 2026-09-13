@@ -43,7 +43,10 @@ class Juiz:
                 corpo_erro = {'ok': False, 'erro': 'o juiz respondeu %d' % e.code}
             if e.code == 422:
                 # regra do jogo recusou (lance impossível, sala que não fecha): o porquê vai ao cliente
-                raise Recusa(422, corpo_erro.get('erro') or 'o juiz recusou', motivo=corpo_erro.get('motivo'))
+                extra = {'motivo': corpo_erro.get('motivo')}
+                if isinstance(corpo_erro.get('indice'), int):
+                    extra['indice'] = corpo_erro['indice']      # POST /op: qual op do pedido o juiz recusou
+                raise Recusa(422, corpo_erro.get('erro') or 'o juiz recusou', **extra)
             raise Recusa(503, 'o juiz falhou (%d)' % e.code)
         except (urllib.error.URLError, OSError, ValueError):
             raise Recusa(503, 'o juiz do servidor não respondeu — tente de novo em instantes')

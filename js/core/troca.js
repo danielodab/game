@@ -422,6 +422,48 @@ var JOGO = (typeof window !== 'undefined')
       return;
     }
 
+    /* A SEGURANÇA (13/09, docs/SEGURANCA.md §4.6): com a autoridade ligada quem
+     * move é o SERVIDOR — as peças por série, os bichos e os vinténs saem do
+     * estado de um e entram no do outro numa transação. Aqui nada se mexe na
+     * mão: vai a intenção espelhada, e o estado que volta é adotado. Quem
+     * registra primeiro recebe "aguardando" e busca o estado logo depois. */
+    var Aut = JOGO.Autoridade, Nv = JOGO.Nuvem;
+    if (Aut && Aut.ligada && Aut.ligada() && Nv && Nv.troca) {
+      var parNv = null, RdA = R();
+      if (RdA && RdA.pares) RdA.pares().forEach(function (p) { if (p.id === st.par) parNv = p.nuvem || null; });
+      if (!parNv) { caiComMotivo('cartorio', MOTIVO_DE_LA); return; }
+      var seriesDe = function (lista) { return lista.map(function (o) { return o.iid; }).filter(Boolean); };
+      var dou = { iids: seriesDe(st.minha.itens), pets: st.minha.pets.map(function (p) { return p.petId; }),
+                  moedas: st.minha.moedas };
+      var recebo = { iids: seriesDe(st.dele.itens), pets: st.dele.pets.map(function (p) { return p.petId; }),
+                     moedas: st.dele.moedas };
+      var paraHistorico = { com: st.nomePar, comId: st.par,
+                            dei: { itens: st.minha.itens.slice(), moedas: st.minha.moedas, pets: st.minha.pets.slice() },
+                            recebi: { itens: st.dele.itens.slice(), moedas: st.dele.moedas, pets: st.dele.pets.slice() } };
+      st.fase = 'feita';
+      st.resultado = 'no-servidor';
+      avisa();
+      st = null;
+      Nv.troca(parNv, dou, recebo).then(function (r) {
+        var ui = JOGO.UI;
+        if (r && r.ok && r.feita && (r.progress || r.db)) {
+          Aut.adota(r.progress, r.db);
+          try { if (DB() && DB().registrarTroca) DB().registrarTroca(paraHistorico); } catch (eH) {}
+          return;
+        }
+        if (r && r.ok && r.aguardando) {
+          // o outro lado ainda vai registrar: o estado dele e o meu mudam juntos lá
+          setTimeout(function () { Aut.puxaEstado(); }, 2500);
+          setTimeout(function () { Aut.puxaEstado(); }, 7000);
+          try { if (DB() && DB().registrarTroca) DB().registrarTroca(paraHistorico); } catch (eH2) {}
+          return;
+        }
+        try { if (ui && ui.toast) ui.toast('A troca não foi registrada no servidor: ' + ((r && r.erro) || 'sem resposta')); } catch (eT) {}
+        Aut.puxaEstado();
+      });
+      return;
+    }
+
     var meusItens = st.minha.itens.slice();
     var moedasVao = st.minha.moedas;
     var itensVem = st.dele.itens.slice();

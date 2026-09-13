@@ -46,7 +46,7 @@ import re
 import sqlite3
 
 import nomes
-from comum import Recusa, agora, limita
+from comum import EstadoMudou, Recusa, agora, iid_valido, limita
 
 log = logging.getLogger('api')
 
@@ -115,6 +115,16 @@ CREATE TABLE IF NOT EXISTS guilda_banco(
 );
 CREATE INDEX IF NOT EXISTS guilda_banco_g ON guilda_banco(guilda_id, id);
 CREATE INDEX IF NOT EXISTS guilda_banco_iid ON guilda_banco(iid);
+-- 13/09 (a autoridade): a série da CÓPIA que o empréstimo pôs no estado de quem pegou.
+-- Devolver tira do estado dele essa série; sem isto, pegar e devolver cunhava peças.
+-- Tabela nova, e não coluna em guilda_banco: nada de ALTER no rolling update
+CREATE TABLE IF NOT EXISTS guilda_emprestimos(
+  banco_id    INTEGER PRIMARY KEY REFERENCES guilda_banco(id) ON DELETE CASCADE,
+  conta_id    INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  iid         TEXT NOT NULL,
+  em          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS guilda_emprestimos_iid ON guilda_emprestimos(iid);
 """
 
 
@@ -372,7 +382,15 @@ class GuildaMixin:
         return 200, {'ok': True, 'dizimo': pct, 'guilda': foto}
 
     # -- o XP, o cofre e o treino ------------------------------------------------------
+    def _g_autoridade(self):
+        return getattr(self, '_autoridade_ligada', lambda: False)()
+
     def guilda_doar(self, conta, corpo):
+        # 13/09: com a autoridade ligada o XP do dízimo chega pelo POST /api/sala/fechar
+        # (salas.py: o juiz anota o que o jogo doa e o servidor credita); a oferenda
+        # do cliente seria XP inventado
+        if self._g_autoridade():
+            raise Recusa(403, 'o dízimo é creditado pelo servidor ao fechar a sala')
         xp = corpo.get('xp')
         if isinstance(xp, bool) or not isinstance(xp, int) or xp < 1 or xp > DOAR_MAX:
             raise Recusa(400, 'quantia inválida')
@@ -446,6 +464,12 @@ class GuildaMixin:
         iid = it.get('iid')
         if iid is not None and (not isinstance(iid, str) or not RE_IID.match(iid)):
             raise Recusa(400, 'iid inválido')
+        if self._g_autoridade():
+            # peça sem série não sai do estado do servidor por série nenhuma: guardá-la
+            # seria criar cópia. Com a autoridade, só peça com série vai ao banco
+            if not iid:
+                raise Recusa(400, 'só peça com número de série vai ao banco da guilda')
+            return self._g_depositar_no_servidor(conta, iid)
         cid, t = conta['id'], agora()
         with self.tranca:
             g, _ = self._g_da_conta(conta)
@@ -465,6 +489,153 @@ class GuildaMixin:
             foto = self._g_ficha(g['id'], cid)
         return 200, {'ok': True, 'total': n + 1, 'guilda': foto}
 
+    # -- o banco com a autoridade ligada (13/09): a peça sai e entra no estado do servidor ---------
+    def _g_pode_depositar(self, g, cid, iid):
+        n = self.con.execute("SELECT COUNT(*) FROM guilda_banco WHERE guilda_id = ?", (g['id'],)).fetchone()[0]
+        if n >= BANCO_MAX:
+            raise Recusa(409, 'o banco da guilda está cheio')
+        r = self.con.execute("SELECT conta_id, estado FROM itens WHERE iid = ?", (iid,)).fetchone()
+        if r is None:
+            raise Recusa(409, 'essa peça ainda não chegou ao servidor — espere o jogo salvar e tente de novo')
+        if r['conta_id'] != cid or r['estado'] != 'vivo':
+            raise Recusa(409, 'você não tem a instância %s' % iid)
+        if self.con.execute("SELECT 1 FROM guilda_banco WHERE iid = ?", (iid,)).fetchone():
+            raise Recusa(409, 'essa peça já está no banco da guilda')
+        if self.con.execute("SELECT 1 FROM guilda_emprestimos WHERE iid = ?", (iid,)).fetchone():
+            raise Recusa(409, 'peça emprestada não vai ao banco: devolva')
+        return n
+
+    def _g_resposta_estado(self, resposta, nova, saida, db):
+        resposta.update(versao=nova, hash=saida['hash'], progress=saida['progress'], db=db)
+        return 200, resposta
+
+    def _g_depositar_no_servidor(self, conta, iid):
+        """O juiz tira a peça do saco do estado do servidor (op interna 'bancoGuildaTira')
+        e ela entra no banco na MESMA transação que grava o estado; o nível e as
+        estrelas guardados são os do estado, não os que o cliente mandou."""
+        cid = conta['id']
+        for _ in range(3):
+            t = agora()
+            with self.tranca:
+                g, _ = self._g_da_conta(conta)
+                self._g_pode_depositar(g, cid, iid)
+                estado = self._estado_exige(cid)
+            saida = self._juiz_op(conta, estado, [{'nome': 'bancoGuildaTira', 'args': {'iid': iid}}], interno=True)
+            res = (saida.get('resultados') or [None])[0]
+            item = res.get('item') if isinstance(res, dict) else None
+            if (not isinstance(item, dict) or item.get('iid') != iid or not isinstance(item.get('itemId'), str)
+                    or not RE_ITEM.match(item['itemId'])):
+                raise Recusa(503, 'o juiz respondeu torto — nada foi guardado')
+            try:
+                with self._escrita():
+                    g2, _ = self._g_da_conta(conta)
+                    if g2['id'] != g['id']:
+                        raise Recusa(409, 'a sua guilda mudou no meio')
+                    n = self._g_pode_depositar(g2, cid, iid)
+                    nova, db = self._estado_grava(conta, estado, saida, t, poupar=[iid])   # a série segue viva, guardada
+                    self.con.execute("INSERT INTO guilda_banco(guilda_id, item_id, nivel, estrelas, iid, dono_id, em) "
+                                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                     (g['id'], item['itemId'], limita(item.get('level'), 0, 99),
+                                      limita(item.get('stars'), 0, 9), iid, cid, t))
+                    self._evento(cid, 'guilda', {'acao': 'depositar', 'gid': g['id'], 'iid': iid, 'versao': nova})
+            except EstadoMudou:
+                continue
+            with self.tranca:
+                foto = self._g_foto(g['id'], cid)
+            return self._g_resposta_estado({'ok': True, 'total': n + 1, 'guilda': foto}, nova, saida, db)
+        raise Recusa(409, 'o estado da conta mudou no meio — tente de novo')
+
+    def _g_pode_pegar(self, g, b, cid):
+        if b['emprestado_para'] is not None:
+            raise Recusa(409, 'já está emprestada')
+        if b['dono_id'] != cid and self.con.execute(
+                "SELECT 1 FROM guilda_banco WHERE guilda_id = ? AND emprestado_para = ?", (g['id'], cid)).fetchone():
+            raise Recusa(409, 'devolva o empréstimo atual primeiro')
+
+    def _g_pegar_no_servidor(self, conta, corpo):
+        """O juiz põe a peça no saco do estado de quem pega ('bancoGuildaPoe'): o dono
+        recebe a MESMA série; quem pega emprestado, uma cópia com série nova cunhada no
+        servidor (origem 'banco'), anotada em guilda_emprestimos para a devolução."""
+        cid = conta['id']
+        for _ in range(3):
+            t = agora()
+            with self.tranca:
+                g, _ = self._g_da_conta(conta)
+                b = self._g_vaga(g, corpo)
+                self._g_pode_pegar(g, b, cid)
+                estado = self._estado_exige(cid)
+            proprio = b['dono_id'] == cid
+            args = {'item': {'itemId': b['item_id'], 'level': b['nivel'], 'stars': b['estrelas']}, 'origem': 'banco'}
+            if proprio and b['iid']:
+                args['iid'] = b['iid']
+            saida = self._juiz_op(conta, estado, [{'nome': 'bancoGuildaPoe', 'args': args}], interno=True)
+            res = (saida.get('resultados') or [None])[0]
+            serie = res.get('iid') if isinstance(res, dict) else None
+            if not iid_valido(serie) or ('iid' in args and serie != args['iid']):
+                raise Recusa(503, 'o juiz respondeu torto — nada saiu do banco')
+            try:
+                with self._escrita():
+                    g2, _ = self._g_da_conta(conta)
+                    b2 = self._g_vaga(g2, corpo)
+                    if dict(b2) != dict(b):
+                        raise EstadoMudou()
+                    self._g_pode_pegar(g2, b2, cid)
+                    nova, db = self._estado_grava(conta, estado, saida, t, poupar=[args['iid']] if 'iid' in args else [])
+                    if proprio:
+                        self.con.execute("DELETE FROM guilda_banco WHERE id = ?", (b['id'],))
+                    else:
+                        self.con.execute("UPDATE guilda_banco SET emprestado_para = ? WHERE id = ?", (cid, b['id']))
+                        self.con.execute("INSERT OR REPLACE INTO guilda_emprestimos(banco_id, conta_id, iid, em) "
+                                         "VALUES (?, ?, ?, ?)", (b['id'], cid, serie, t))
+                    self._evento(cid, 'guilda', {'acao': 'pegar' if proprio else 'emprestimo', 'gid': g['id'],
+                                                 'banco': b['id'], 'iid': serie, 'versao': nova})
+            except EstadoMudou:
+                continue
+            with self.tranca:
+                foto = self._g_foto(g['id'], cid)
+            item = {'itemId': b['item_id'], 'level': b['nivel'], 'stars': b['estrelas'], 'iid': serie}
+            return self._g_resposta_estado({'ok': True, 'item': item, 'definitivo': proprio, 'guilda': foto},
+                                           nova, saida, db)
+        raise Recusa(409, 'o estado da conta mudou no meio — tente de novo')
+
+    def _g_devolver_no_servidor(self, conta, corpo):
+        """A cópia emprestada sai do saco do estado de quem pegou ('bancoGuildaTira' pela
+        série anotada) e a série vira 'fora'. Empréstimo de antes da autoridade não tem
+        série anotada: só solta a vaga, como antes."""
+        cid = conta['id']
+        for _ in range(3):
+            t = agora()
+            with self.tranca:
+                g, _ = self._g_da_conta(conta)
+                b = self._g_vaga(g, corpo)
+                if b['emprestado_para'] != cid:
+                    raise Recusa(409, 'não foi você que pegou')
+                emp = self.con.execute("SELECT iid FROM guilda_emprestimos WHERE banco_id = ? AND conta_id = ?",
+                                       (b['id'], cid)).fetchone()
+                if emp is None:
+                    self.con.execute("UPDATE guilda_banco SET emprestado_para = NULL WHERE id = ?", (b['id'],))
+                    return 200, {'ok': True, 'guilda': self._g_ficha(g['id'], cid)}
+                estado = self._estado_exige(cid)
+            saida = self._juiz_op(conta, estado, [{'nome': 'bancoGuildaTira', 'args': {'iid': emp['iid']}}], interno=True)
+            try:
+                with self._escrita():
+                    b2 = self._g_vaga(g, corpo)
+                    emp2 = self.con.execute("SELECT iid FROM guilda_emprestimos WHERE banco_id = ? AND conta_id = ?",
+                                            (b['id'], cid)).fetchone()
+                    if b2['emprestado_para'] != cid or emp2 is None or emp2['iid'] != emp['iid']:
+                        raise EstadoMudou()
+                    nova, db = self._estado_grava(conta, estado, saida, t)       # a série da cópia vira 'fora'
+                    self.con.execute("UPDATE guilda_banco SET emprestado_para = NULL WHERE id = ?", (b['id'],))
+                    self.con.execute("DELETE FROM guilda_emprestimos WHERE banco_id = ?", (b['id'],))
+                    self._evento(cid, 'guilda', {'acao': 'devolver', 'gid': g['id'], 'banco': b['id'],
+                                                 'iid': emp['iid'], 'versao': nova})
+            except EstadoMudou:
+                continue
+            with self.tranca:
+                foto = self._g_foto(g['id'], cid)
+            return self._g_resposta_estado({'ok': True, 'guilda': foto}, nova, saida, db)
+        raise Recusa(409, 'o estado da conta mudou no meio — tente de novo')
+
     def _g_vaga(self, g, corpo):
         bid = _id_positivo(corpo.get('id'), 'id')
         b = self.con.execute("SELECT * FROM guilda_banco WHERE id = ? AND guilda_id = ?", (bid, g['id'])).fetchone()
@@ -473,6 +644,8 @@ class GuildaMixin:
         return b
 
     def guilda_banco_pegar(self, conta, corpo):
+        if self._g_autoridade():
+            return self._g_pegar_no_servidor(conta, corpo)
         cid = conta['id']
         with self.tranca:
             g, _ = self._g_da_conta(conta)
@@ -491,6 +664,8 @@ class GuildaMixin:
         return 200, {'ok': True, 'item': item, 'definitivo': False, 'guilda': foto}
 
     def guilda_banco_devolver(self, conta, corpo):
+        if self._g_autoridade():
+            return self._g_devolver_no_servidor(conta, corpo)
         cid = conta['id']
         with self.tranca:
             g, _ = self._g_da_conta(conta)

@@ -7659,8 +7659,13 @@ var JOGO = (typeof window !== 'undefined')
             var op = (devIdx >= 0) ? Gd.bancoDevolver(devIdx) : Gd.bancoDepositar(entrada);
             op.then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetGuilda(); return; }
-              st2.inventory.splice(pi.indices[0], 1);
-              safe(function () { P().save(); }, null);
+              // 13/09: com a autoridade, o servidor já tirou a peça do estado dele e mandou o estado novo
+              if ((res.progress || res.db) && JOGO.Autoridade && JOGO.Autoridade.adota) {
+                JOGO.Autoridade.adota(res.progress, res.db);
+              } else {
+                st2.inventory.splice(pi.indices[0], 1);
+                safe(function () { P().save(); }, null);
+              }
               toast(devIdx >= 0 ? 'Devolvida. Obrigado em nome da guilda.'
                                 : 'No banco da guilda.', 'good');
               sheetGuilda();
@@ -7689,12 +7694,17 @@ var JOGO = (typeof window !== 'undefined')
               // a emprestada é cópia NOVA no cartório (origem banco). 11/09: a SUA peça,
               // retirada de vez, volta com a série dela — no servidor ela ficou guardada
               // no banco da guilda, sem ser varrida do cartório
-              var volta = (res.definitivo && e2.iid)
-                ? { itemId: e2.itemId, level: e2.level || 0, stars: e2.stars || 0, iid: e2.iid }
-                : (P().novaCopia ? P().novaCopia(e2.itemId, 'banco', e2.level || 0, e2.stars || 0)
-                                 : { itemId: e2.itemId, level: e2.level || 0, stars: e2.stars || 0 });
-              P().state.inventory.push(volta);
-              safe(function () { P().save(); }, null);
+              if ((res.progress || res.db) && JOGO.Autoridade && JOGO.Autoridade.adota) {
+                // 13/09: com a autoridade, a peça (ou a cópia do empréstimo) já entrou no estado do servidor
+                JOGO.Autoridade.adota(res.progress, res.db);
+              } else {
+                var volta = (res.definitivo && e2.iid)
+                  ? { itemId: e2.itemId, level: e2.level || 0, stars: e2.stars || 0, iid: e2.iid }
+                  : (P().novaCopia ? P().novaCopia(e2.itemId, 'banco', e2.level || 0, e2.stars || 0)
+                                   : { itemId: e2.itemId, level: e2.level || 0, stars: e2.stars || 0 });
+                P().state.inventory.push(volta);
+                safe(function () { P().save(); }, null);
+              }
               toast(res.definitivo ? 'Sua peça voltou para o saco.' :
                     'Emprestada — devolva uma cópia igual quando puder.', 'good');
               sheetGuilda();

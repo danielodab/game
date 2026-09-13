@@ -54,7 +54,8 @@ import json
 import logging
 import re
 
-from comum import CLASSE_RENOMEADA, XP_MAX, Recusa, agora, classe_do_heroi, inteiro, liberadas, limita  # noqa: F401
+from comum import (CLASSE_RENOMEADA, XP_MAX, EstadoMudou, Recusa, agora, classe_do_heroi, inteiro,  # noqa: F401
+                   liberadas, limita)
 
 log = logging.getLogger('api')
 
@@ -73,6 +74,7 @@ PEDIDOS_POR_HORA = 30            # LINHAS criadas por hora, em qualquer estado, 
 RETIRADO_PRESO = 24 * 3600       # retirado há mais que isso e não entregue: o site deixa cancelar
 PEDIDOS_LISTA = 30
 ANOTACAO_MAX = 200               # ids em db.loja.aplicadas / recusadas que o save pode trazer
+OPS_LOJA = 40                    # pedidos por entrega no servidor (o OPS_MAX do juiz); o resto sai no retirar seguinte
 MOTIVOS = ('sem-saldo', 'classe-ja-liberada', 'item-invalido', 'erro-local')
 RE_IDEM = re.compile(r'^[A-Za-z0-9_-]{8,64}$')
 CARTEIRA_TETO = 10 ** 12
@@ -577,7 +579,12 @@ class LojaMixin:
         chega antes de qualquer compra feita com ele). `origem` só no presente e
         no crédito de pacote; `entrega.agora` (o relógio do SERVIDOR) só no bônus
         de XP: o prazo conta da entrega. Pedido retirado que volta numa retirada
-        seguinte leva o `agora` novo (o jogo aplica uma vez só: anota o id)."""
+        seguinte leva o `agora` novo (o jogo aplica uma vez só: anota o id).
+
+        13/09 (docs/SEGURANCA.md §4.5): com a autoridade ligada, o servidor ENTREGA
+        aqui mesmo (_loja_retirar_no_servidor) e o PUT não confirma mais nada."""
+        if getattr(self, '_autoridade_ligada', lambda: False)():
+            return self._loja_retirar_no_servidor(conta)
         cid, t = conta['id'], agora()
         with self._escrita():
             linhas = self.con.execute(
@@ -597,6 +604,124 @@ class LojaMixin:
                 p['origem'] = origem
             pedidos.append(p)
         return 200, {'ok': True, 'pedidos': pedidos}
+
+    # -- a entrega no servidor (13/09, a autoridade) ------------------------------------------------------
+    def _loja_estorna(self, cid, pid, motivo, versao, t):
+        """Dentro de _escrita: o pedido aberto que o juiz recusou vira 'estornado' (a vaga e
+        a reserva voltam); crédito de pacote pago é reemitido como antes (pagamento.py).
+        Devolve (estornou?, id do crédito reemitido ou None)."""
+        n = self.con.execute(
+            "UPDATE loja_pedidos SET estado = 'estornado', motivo = ?, fechado_em = ?, versao_save = ? "
+            "WHERE conta_id = ? AND id = ? AND estado IN ('pendente', 'retirado')", (motivo, t, versao, cid, pid)).rowcount
+        if not n:
+            return False, None
+        self._evento(cid, 'loja-estorno', {'ids': [pid], 'versao': versao, 'motivo': motivo})
+        reemite = getattr(self, '_pagamento_credito_recusado', None)
+        return True, (reemite(cid, pid, motivo, versao, t) if reemite is not None else None)
+
+    def _loja_retirar_no_servidor(self, conta):
+        """Os pedidos abertos, em ordem de id, entregues pelo juiz (op interna
+        'lojaEntregar', com a entrega e o preço CONGELADOS no banco — nada do
+        cliente) no estado que o servidor guarda; 'entregue' na mesma transação
+        que grava o estado. O que o juiz recusa vira 'estornado' com o motivo:
+        a recusa de regra (422) sai do lote e o resto é pedido de novo; a
+        recusa que volta como resultado ({ok:false, motivo}) fecha junto com as
+        entregas. Sem estado no servidor ainda, nada sai: os pedidos esperam o
+        primeiro save da conta."""
+        cid = conta['id']
+        estornados, reemitidos = [], []
+        for _ in range(OPS_LOJA + 3):       # cada volta entrega, estorna uma recusada ou refaz um estado que mudou
+            t = agora()
+            with self.tranca:
+                estado = self._estado_ler(cid)
+                if estado is None:
+                    return 200, {'ok': True, 'pedidos': [], 'entregues': [], 'estornados': estornados,
+                                 'semEstado': True, 'versao': 0, 'hash': None, 'progress': None, 'db': None}
+                linhas = self.con.execute(
+                    "SELECT %s FROM %s WHERE p.conta_id = ? AND p.estado IN ('pendente', 'retirado') ORDER BY p.id LIMIT ?"
+                    % (COLUNAS_PEDIDO, DE_PEDIDOS), (cid, OPS_LOJA)).fetchall()
+            if not linhas:
+                return 200, {'ok': True, 'pedidos': [], 'entregues': [], 'estornados': estornados,
+                             'reemitidos': reemitidos, 'versao': estado['versao'], 'hash': estado['hash'],
+                             'progress': estado['progress'], 'db': estado['db']}
+            entregas = []
+            for r in linhas:
+                entrega = _json(r['entrega']) or {}
+                if entrega.get('tipo') == 'bonus-xp':
+                    entrega['agora'] = t                # o prazo do bônus conta da entrega, no relógio do servidor
+                entregas.append(entrega)
+            ops = [{'nome': 'lojaEntregar', 'args': {'pedido': {'id': r['id'], 'entrega': e, 'preco': r['preco']}}}
+                   for r, e in zip(linhas, entregas)]
+            try:
+                saida = self._juiz_op(conta, estado, ops, interno=True)
+            except Recusa as e:
+                i = e.extra.get('indice')
+                if e.status != 422 or not isinstance(i, int) or not 0 <= i < len(linhas):
+                    raise
+                motivo = e.extra.get('motivo')
+                with self._escrita():
+                    feito, novo = self._loja_estorna(cid, linhas[i]['id'], motivo if motivo in MOTIVOS else 'recusado',
+                                                     estado['versao'], t)
+                if feito:
+                    estornados.append(linhas[i]['id'])
+                    if novo is not None:
+                        reemitidos.append(novo)
+                continue
+            aplicadas = set(le_anotacao(saida['db'])[0])
+            entregues, recusados = [], []
+            for r, e, res in zip(linhas, entregas, saida.get('resultados') or []):
+                motivo = res.get('motivo') if isinstance(res, dict) else None
+                if isinstance(res, dict) and res.get('ok') is True:
+                    entregues.append((r, e))
+                elif motivo == 'ja':                    # o estado já tinha aplicado (a anistia do corte)
+                    if r['id'] in aplicadas:
+                        entregues.append((r, e))
+                    else:
+                        recusados.append((r, 'recusado'))
+                elif motivo in ('sem-jogo', 'recarregando'):
+                    raise Recusa(503, 'o juiz não conseguiu entregar agora — tente de novo em instantes')
+                else:
+                    recusados.append((r, motivo if motivo in MOTIVOS else 'recusado'))
+            if len(entregues) + len(recusados) != len(linhas):
+                raise Recusa(503, 'o juiz respondeu torto na entrega — tente de novo em instantes')
+            ids = [r['id'] for r in linhas]
+            try:
+                with self._escrita():
+                    abertos = {x[0] for x in self.con.execute(
+                        "SELECT id FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado') AND id IN (%s)"
+                        % ','.join('?' * len(ids)), [cid] + ids)}
+                    if abertos != set(ids):             # um cancelamento (ou o estorno do pagamento) no meio
+                        raise EstadoMudou()
+                    nova, db = self._estado_grava(conta, estado, saida, t)
+                    if entregues:
+                        feitos = [r['id'] for r, _ in entregues]
+                        self.con.execute(
+                            "UPDATE loja_pedidos SET estado = 'entregue', retirado_em = COALESCE(retirado_em, ?), "
+                            "fechado_em = ?, versao_save = ? WHERE conta_id = ? AND id IN (%s)"
+                            % ','.join('?' * len(feitos)), [t, t, nova, cid] + feitos)
+                        self._evento(cid, 'loja-entregue', {'ids': feitos, 'versao': nova, 'servidor': True})
+                    for r, motivo in recusados:
+                        feito, novo = self._loja_estorna(cid, r['id'], motivo, nova, t)
+                        if feito:
+                            estornados.append(r['id'])
+                            if novo is not None:
+                                reemitidos.append(novo)
+            except EstadoMudou:
+                continue
+            pedidos = []
+            for r, e in entregues:
+                p = {'id': r['id'], 'sku': r['sku'], 'nome': nome_do_pedido(r['sku'], e, r['credito_vintens']),
+                     'preco': r['preco'], 'entrega': e}
+                origem = origem_do_pedido(r)
+                if origem is not None:
+                    p['origem'] = origem
+                pedidos.append(p)
+            log.info("loja: #%d — %d pedidos entregues no servidor, %d estornados", cid, len(pedidos), len(estornados))
+            # `pedidos` são os JÁ ENTREGUES (aplicado=true): o cliente adota progress/db, não aplica de novo
+            return 200, {'ok': True, 'aplicado': True, 'pedidos': pedidos, 'entregues': [p['id'] for p in pedidos],
+                         'estornados': estornados, 'reemitidos': reemitidos, 'versao': nova, 'hash': saida['hash'],
+                         'progress': saida['progress'], 'db': db}
+        raise Recusa(409, 'o estado da conta mudou no meio — tente de novo')
 
     # -- os créditos de vinténs (pagamento.py e mestre.py chamam) ----------------------------------------
     def credita(self, cid, sku, vintens, origem, idem, mp_id, t):

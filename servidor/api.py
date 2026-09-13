@@ -58,9 +58,9 @@ from urllib.parse import urlsplit
 # As primitivas moram em comum.py (a armadilha do __main__: ver o topo de lá).
 # Importadas aqui, continuam valendo como api.Recusa, api.email_valido, api.XP_MAX…
 from comum import (CLASSE_RENOMEADA, CLASSES_RANK, ELEMENTOS, LOGIN_JANELA, LOGIN_TENTATIVAS,  # noqa: F401
-                   NIVEL_MAX, PBKDF2_VOLTAS, SESSAO_DIAS, XP_MAX, Recusa, agora, classe_do_heroi,
-                   email_novo_valido, email_valido, inteiro, ip_do_pedido, limita, nome_valido, pica_senha,
-                   senha_valida)
+                   NIVEL_MAX, ORIGENS, PBKDF2_VOLTAS, RE_IID, SESSAO_DIAS, XP_MAX, Recusa, agora, classe_do_heroi,
+                   email_novo_valido, email_valido, iid_valido, inteiro, ip_do_pedido, limita, nome_valido,
+                   pica_senha, senha_valida)
 from conta import (CADASTRO_POR_IP, ESQUEMA_CONTA, FRASE_IP_CADASTRO, FRASE_IP_SENHA, LOGIN_POR_IP,
                    MUITAS_TENTATIVAS, ContaMixin, carrega_segredo)
 from correio import Correio
@@ -70,6 +70,9 @@ from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_pr
 from comum import le_consulta   # a consulta da URL (?id=, ?data.id=): o painel do Mestre e o aviso do Mercado Pago
 from guilda import ESQUEMA_GUILDA, GuildaMixin   # 11/09: a guilda no servidor (antes morava em cada navegador)
 from juiz_ponte import Juiz   # 12/09: as regras do jogo em Node (servidor/juiz/) — a segurança
+# 13/09: a autoridade (salas.py): bilhete e fechamento de sala, ops de economia, o PUT cosmético
+from salas import ESQUEMA_SALAS, SalasMixin, chave_do_lado, lado_da_troca, lado_vazio
+from grupo import ESQUEMA_GRUPO, GrupoMixin   # 13/09: a sala em grupo e o duelo ranqueado conferidos no servidor
 import nomes                     # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
 log = logging.getLogger("api")
@@ -85,8 +88,7 @@ NASC_POR_HORA = 2000             # e por hora, por conta (ninguém saqueia tanto
 TROCA_VALIDADE = 120             # a intenção de troca espera o parceiro por 2 min
 TROCA_GRACA = 10 * 60            # item recém-recebido não é varrido por 10 min (ver salvar)
 RANKING_CACHE = 30               # segundos que o GET /api/ranking fica guardado por processo (ver ranking)
-ORIGENS = {'saque', 'roleta', 'mercador', 'caixa', 'forja', 'troca', 'banco', 'legado'}
-RE_IID = re.compile(r'^[\x21-\x7e]{1,64}$')    # ASCII visível, sem espaço — o cliente gera 'j' + base36
+# ORIGENS, RE_IID e iid_valido moram em comum.py desde 13/09: a autoridade (salas.py) registra séries também
 
 # ---- os eventos do mundo e o ranking por classe (10/09) ---------------------
 # No código a palavra é "agenda": "evento" já tem dono aqui (a trilha de
@@ -310,14 +312,19 @@ ROTAS = {
     ('POST', '/api/guilda/banco/depositar'):  ('guilda_banco_depositar', True),
     ('POST', '/api/guilda/banco/pegar'):      ('guilda_banco_pegar', True),
     ('POST', '/api/guilda/banco/devolver'):   ('guilda_banco_devolver', True),
+    # a autoridade (13/09, salas.py; docs/SEGURANCA.md §4): o servidor dá a semente da
+    # sala, o juiz refaz e paga; as operações de economia rodam no estado do servidor
+    ('POST', '/api/sala/abrir'):              ('sala_abrir', True),
+    ('POST', '/api/sala/fechar'):             ('sala_fechar', True),
+    ('POST', '/api/op'):                      ('economia_op', True),
+    # a sala em grupo e o duelo ranqueado (13/09, grupo.py)
+    ('POST', '/api/grupo/abrir'):             ('grupo_abrir', True),
+    ('POST', '/api/grupo/fechar'):            ('grupo_fechar', True),
+    ('POST', '/api/duelo/fechar'):            ('duelo_fechar', True),
 }
 
 
 # ---- validações miúdas (as da conta, com agora e Recusa, moram em comum.py) ------
-def iid_valido(iid):
-    return isinstance(iid, str) and RE_IID.match(iid) is not None
-
-
 def texto_ou_nulo(v, tam=40):
     return v.strip()[:tam] if isinstance(v, str) and v.strip() else None
 
@@ -665,7 +672,7 @@ def versao_da_regra():
         return '0'
 
 
-class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
+class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -686,6 +693,8 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
         # Fase C: só tabelas novas (e um índice) — o rolling update segue seguro
         self.con.executescript(ESQUEMA_CONTA + ESQUEMA_LOJA + ESQUEMA_PAGAMENTO)   # a loja antes: o pagamento a cita
         self.con.executescript(ESQUEMA_GUILDA)   # 11/09: a guilda (guilda.py) — só tabelas novas, como a Fase C
+        self.con.executescript(ESQUEMA_SALAS)    # 13/09: a autoridade (salas.py) — só tabelas novas, nunca ALTER
+        self.con.executescript(ESQUEMA_GRUPO)    # 13/09: sala em grupo e duelo ranqueado (grupo.py) — idem
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)
@@ -916,11 +925,13 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
         with self.tranca:
             r = self.con.execute("SELECT versao, progress, db FROM saves WHERE conta_id = ?",
                                  (conta['id'],)).fetchone()
+            h = self.con.execute("SELECT hash FROM autoridade WHERE conta_id = ?", (conta['id'],)).fetchone()
+        # hash: o último da economia que o juiz devolveu (13/09, salas.py); null antes da primeira op/sala
         if r is None:
-            return 200, {'ok': True, 'versao': 0, 'progress': None, 'db': None}
+            return 200, {'ok': True, 'versao': 0, 'progress': None, 'db': None, 'hash': None}
         return 200, {'ok': True, 'versao': r['versao'],
                      'progress': json.loads(r['progress']) if r['progress'] else None,
-                     'db': json.loads(r['db']) if r['db'] else None}
+                     'db': json.loads(r['db']) if r['db'] else None, 'hash': h['hash'] if h else None}
 
     def _recusa_save(self, conta_id, status, erro, **extra):
         """Toda recusa de save vira evento — é a trilha para achar quem tenta
@@ -942,6 +953,15 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
             raise Recusa(400, 'progress precisa ser um objeto JSON ou null')
         if db is not None and not isinstance(db, dict):
             raise Recusa(400, 'db precisa ser um objeto JSON ou null')
+        # A AUTORIDADE (13/09, docs/SEGURANCA.md §4.4): com o juiz ligado e o estado da
+        # conta já no servidor, o PUT só grava o cosmético — o progress, os nascimentos,
+        # a carteira e a anotação da loja do corpo são ignorados, sem 409 por versão
+        # (salas.py, _salvar_cosmetico). Conta sem estado segue abaixo: o primeiro save
+        # é aceito inteiro e vira o estado inicial. Sem juiz, o cartório de antes.
+        if self._autoridade_ligada():
+            feito = self._salvar_cosmetico(conta, db)
+            if feito is not None:
+                return 200, feito
         brutos = corpo.get('nascimentos') or []
         if not isinstance(brutos, list):
             raise Recusa(400, 'nascimentos precisa ser uma lista')
@@ -1212,17 +1232,25 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
         """Cada lado registra a intenção; quando as duas se espelham (A dá X e
         recebe Y; B dá Y e recebe X) dentro de 120 s, a posse muda de mãos numa
         transação só. O item trocado ganha origem 'troca' e criado_em = agora —
-        é como `salvar` sabe não varrê-lo enquanto o cliente o encaixa no save."""
+        é como `salvar` sabe não varrê-lo enquanto o cliente o encaixa no save.
+
+        13/09 (docs/SEGURANCA.md §4.6): cada lado é {iids, pets, moedas} (a lista
+        de iids de antes ainda vale: só peças). Com a autoridade ligada, quando as
+        intenções se espelham, o juiz tira dos DOIS estados do servidor e põe no
+        do outro (salas.py, _troca_autoridade), e cada lado recebe o estado novo.
+        Sem autoridade, bichos e vinténs só entram no espelho (o cliente move)."""
         cid = conta['id']
         com = corpo.get('com')
         if isinstance(com, bool) or not isinstance(com, int) or com == cid:
             raise Recusa(400, 'com precisa ser o id de outra conta')
-        dou = lista_de_iids(corpo.get('dou'), 'dou')
-        recebo = lista_de_iids(corpo.get('recebo'), 'recebo')
-        if not dou and not recebo:
+        lado_dou = lado_da_troca(corpo.get('dou'), 'dou')
+        lado_recebo = lado_da_troca(corpo.get('recebo'), 'recebo')
+        dou, recebo = lado_dou['iids'], lado_recebo['iids']
+        if lado_vazio(lado_dou) and lado_vazio(lado_recebo):
             raise Recusa(400, 'troca vazia: informe dou e/ou recebo')
         if set(dou) & set(recebo):
             raise Recusa(400, 'o mesmo iid não pode estar em dou e em recebo')
+        autoridade = self._autoridade_ligada()
         with self.tranca:
             outro = self.con.execute("SELECT id, banido FROM contas WHERE id = ?", (com,)).fetchone()
             if outro is None or outro['banido']:
@@ -1238,10 +1266,26 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
             t = agora()
             for chave in [k for k, v in self.intencoes.items() if v['em'] < t - TROCA_VALIDADE]:
                 del self.intencoes[chave]
-            self.intencoes[(cid, com)] = {'dou': frozenset(dou), 'recebo': frozenset(recebo), 'em': t}
+            self.intencoes[(cid, com)] = {'dou': chave_do_lado(lado_dou), 'recebo': chave_do_lado(lado_recebo), 'em': t}
             espelho = self.intencoes.get((com, cid))
-            if not (espelho and espelho['dou'] == frozenset(recebo) and espelho['recebo'] == frozenset(dou)):
+            if not (espelho and espelho['dou'] == chave_do_lado(lado_recebo)
+                    and espelho['recebo'] == chave_do_lado(lado_dou)):
                 return 200, {'ok': True, 'feita': False, 'aguardando': True}
+            if not autoridade:
+                return self._troca_so_posse(cid, com, dou, recebo, t)
+            # a cópia de um empréstimo do banco da guilda não troca de dono: devolvida, ela some
+            # (guilda.py); trocada, ficaria no jogo para sempre
+            emprestadas = [r[0] for r in self.con.execute(
+                "SELECT iid FROM guilda_emprestimos WHERE iid IN (%s)" % ','.join('?' * len(dou + recebo)),
+                dou + recebo)] if dou or recebo else []
+            if emprestadas:
+                raise Recusa(409, 'peça emprestada do banco da guilda não se troca: %s' % emprestadas[0])
+        # com a autoridade, o juiz trabalha FORA da tranca (salas.py)
+        return self._troca_autoridade(conta, com, lado_dou, lado_recebo)
+
+    def _troca_so_posse(self, cid, com, dou, recebo, t):
+        """A troca sem autoridade (o cartório de antes): só a posse das séries muda."""
+        with self.tranca:
             self.con.executemany(
                 "UPDATE itens SET conta_id = ?, origem = 'troca', criado_em = ? WHERE iid = ? AND conta_id = ? AND estado = 'vivo'",
                 [(com, t, iid, cid) for iid in dou] + [(cid, t, iid, com) for iid in recebo])
@@ -1342,6 +1386,22 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin):
         return 200, {'ok': True, 'contas': n, 'agora': agora(), 'correio': self.correio.ligado}
 
     # -- os eventos do mundo (10/09) ------------------------------------------------------
+    def _fatores_no_ar(self, t):
+        """Os fatores dos eventos no ar no instante t, pela mesma resolução do GET
+        /api/eventos (resolve_fatores). A sala fechada no servidor (salas.py) paga com
+        estes números — nunca com os que o cliente leu."""
+        with self.tranca:
+            pontuais = self.con.execute(
+                "SELECT id, tipo, multiplicador, calabouco, titulo, texto, inicio, fim FROM agenda_eventos "
+                "WHERE cancelado_em IS NULL AND inicio <= ? AND fim > ?", (t, t)).fetchall()
+            linhas = self.con.execute(
+                "SELECT * FROM agenda_regras WHERE cancelado_em IS NULL "
+                "AND (vigente_ate IS NULL OR vigente_ate > ?) ORDER BY id", (t,)).fetchall()
+        lista = [evento_publico(r) for r in pontuais if _linha_valida(r)]
+        for rg in (regra_da_linha(r) for r in linhas if _linha_valida(r)):
+            lista.extend(expande_regra(rg, t, t + 1))
+        return resolve_fatores(lista, t)
+
     def eventos_ler(self, conta, corpo):
         """GET público: o que está no ar, os eventos pontuais marcados (todos: são
         no máximo EVENTOS_MARCADOS_MAX, até 180 dias à frente), as ocorrências do
@@ -1578,7 +1638,11 @@ if __name__ == '__main__':
     mp = MercadoPago.do_ambiente(base=base_mp)
     log.info("pagamento: %s", mp.descricao())         # nunca o token nem a assinatura
     juiz = Juiz(args.juiz)
-    log.info("juiz: %s", args.juiz or "desligado (as rotas conferidas respondem 503)")
+    if args.juiz:
+        log.info("juiz: %s — autoridade LIGADA (o servidor manda na economia; docs/SEGURANCA.md)", args.juiz)
+    else:
+        log.warning("juiz: desligado — autoridade DESLIGADA: o save do cliente vale inteiro e as rotas "
+                    "conferidas (sala, op) respondem 503. Em produção, suba com --juiz.")
     Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz)
     servidor = ThreadingHTTPServer((args.host, args.porta), Atendente)
     log.info("a API escuta em http://%s:%d — banco em %s", args.host, args.porta, os.path.abspath(args.banco))

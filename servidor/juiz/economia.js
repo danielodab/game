@@ -320,6 +320,16 @@ async function executa(corpo) {
     }
   }
   const depois = tiraEstado(w);
+  const iids = diferencaIids(iidsAntes, iidsDe(depois.progress, depois.db), fila);
+  /* A CÓPIA EMPRESTADA DO BANCO DA GUILDA (13/09): ela some na devolução, então
+   * nenhuma op do jogador pode fazê-la sair do estado antes (a fusão consome
+   * cópias e cunharia uma peça nova e SUA com ela). A API manda a lista em
+   * contexto.bloqueados; as internas (a própria devolução) passam. */
+  if (!contexto.interno && Array.isArray(contexto.bloqueados) && contexto.bloqueados.length) {
+    const presas = new Set(contexto.bloqueados.filter((x) => typeof x === 'string'));
+    const saiu = iids.fora.find((iid) => presas.has(iid));
+    if (saiu) throw recusa('peça emprestada do banco da guilda não sai do saco: devolva primeiro', 'emprestada');
+  }
   return {
     ok: true,
     progress: depois.progress,
@@ -327,7 +337,7 @@ async function executa(corpo) {
     hash: depois.hash,
     hashAntes: antes.hash,
     resultados,
-    iids: diferencaIids(iidsAntes, iidsDe(depois.progress, depois.db), fila),
+    iids,
     guildaXp: w.anotado.guildaXp
   };
 }

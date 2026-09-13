@@ -15,6 +15,7 @@ Só biblioteca padrão, como o resto do servidor.
 import hashlib
 import ipaddress
 import math
+import re
 import time
 from urllib.parse import parse_qs
 
@@ -32,6 +33,20 @@ CLASSE_RENOMEADA = {'curandeira': 'curandeiro'}   # como no progress.js: save an
 XP_MAX = 28180                   # o último degrau da xpTable (progression.js); o teste pega a deriva
 NIVEL_MAX = 30
 ELEMENTOS = ('neutro', 'fogo', 'agua', 'terra', 'ar')
+
+# ---- o registro de instâncias (o salvar do api.py e a autoridade do salas.py) ----------
+ORIGENS = {'saque', 'roleta', 'mercador', 'caixa', 'forja', 'troca', 'banco', 'legado'}
+RE_IID = re.compile(r'^[\x21-\x7e]{1,64}$')    # ASCII visível, sem espaço — o jogo gera 'j' + base36
+
+
+def iid_valido(iid):
+    return isinstance(iid, str) and RE_IID.match(iid) is not None
+
+
+class EstadoMudou(Exception):
+    """O estado econômico da conta mudou enquanto o juiz trabalhava (outra op, outra
+    sala fechada, a troca de outra aba). Quem pega refaz com o estado novo ou
+    devolve 409; levantada DENTRO de uma _escrita, desfaz tudo o que ela gravou."""
 
 
 def agora():
