@@ -853,16 +853,20 @@ var JOGO = (typeof window !== 'undefined')
    *     da Sorte, de frente para a Árvore.
    * Cada lugar mora num anel (ang: 0 = norte, + = leste; r em metros), e as
    * folgas entre as caixas MEDIDAS das obras ficam em 4 m ou mais — conferido
-   * numa conta à parte antes de plantar. `frente` é até onde o caminho de
-   * pedra chega (a meia-caixa da obra, um pouco menos). */
+   * numa conta à parte antes de plantar. `frente` é quanto antes do CENTRO
+   * da obra o caminho de pedra para: pequeno o bastante para a calçada entrar
+   * por baixo da base (13/09, dono: "a calçada deve ir até as lojinhas e
+   * portais, não terminar antes") — a obra cobre a ponta. Na Arena, só até
+   * debaixo da muralha (a arena de terra fica limpa); no Poço, até a borda
+   * de pedra. */
   var PRACA = {
-    arena:   { ang: -1.78, r: 36.0, frente: 11.0 },
-    poco:    { ang: -2.40, r: 34.0, frente: 4.2 },
-    forja:   { ang: -2.80, r: 38.0, frente: 4.6 },
-    loteria: { ang: Math.PI, r: 40.0, frente: 3.6 },
-    mercado: { ang: 2.80, r: 38.0, frente: 5.0 },
-    banco:   { ang: 2.30, r: 35.0, frente: 5.4 },
-    sede:    { ang: 1.78, r: 36.0, frente: 6.4 }
+    arena:   { ang: -1.78, r: 36.0, frente: 9.8 },
+    poco:    { ang: -2.40, r: 34.0, frente: 3.3 },
+    forja:   { ang: -2.80, r: 38.0, frente: 2.0 },
+    loteria: { ang: Math.PI, r: 40.0, frente: 1.2 },
+    mercado: { ang: 2.80, r: 38.0, frente: 2.0 },
+    banco:   { ang: 2.30, r: 35.0, frente: 2.5 },
+    sede:    { ang: 1.78, r: 36.0, frente: 3.0 }
   };
   function pontoDaPraca(id) {
     var p = PRACA[id];
@@ -1193,9 +1197,9 @@ var JOGO = (typeof window !== 'undefined')
       if (r < 1) return;
       var ang = Math.atan2(lg.pos.x, -lg.pos.z);
       if (lg.tipo === 'portal') {
-        // o aberto termina na boca do corredor (que tem chão e muro próprios);
-        // o fechado, na beira do disco de pedra
-        via(ang, ANEL_RAIO, lg.fechado ? r - 3.2 : r - CORREDOR.comp - 0.3);
+        // 13/09: até o pé do portal — no aberto a calçada corre o corredor
+        // inteiro pelo meio (a pista tem 8,4 m); no fechado entra sob o disco
+        via(ang, ANEL_RAIO, r - 1.0);
         return;
       }
       var cfg = PRACA[lg.id];
