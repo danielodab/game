@@ -2207,6 +2207,8 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
            background: rgba(255,255,255,.04); color: var(--text);
            font: 12px var(--ui-sans, system-ui); cursor: pointer; }
 .tr-item canvas { display: block; border-radius: 6px; }
+/* 12/09: o bicho da mesa do outro lado que você já tem — com ele a troca não fecha */
+.tr-pet.is-repete { border-color: #a34a4a; color: #f0a0a0; }
 .tr-moedas { margin: 8px 0 0; font: 700 13px var(--ui-sans, system-ui); color: #e8c25a; }
 
 /* ------------------------------------------------- PLACAR */

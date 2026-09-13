@@ -190,6 +190,85 @@ o histórico registrado; e a troca que CAI quando ofereci o que já não tenho.<
     .then(function () {
       check('oferecer o que já não tenho DERRUBA a troca (sem item fantasma)',
             T.estado() === null && doPar('cancela').length >= 1);
+      // ---- OS BICHOS NA MESA (12/09): vão com nível e estrelas, um de cada
+      P.state.pets.push('pet-emberling');
+      P.state.petCards['pet-emberling'] = 30;            // 25 de sobra: ★2
+      P.state.petXp['pet-emberling'] = 50;               // Nv 4
+      caixa.length = 0;
+      check('mesa nova abre (bichos)', T.convidar('bento'));
+      bentoManda('aceite');
+      return respiro();
+    })
+    .then(function () {
+      check('bicho solto vai à mesa', T.porPet('pet-emberling') === true);
+      check('o mesmo bicho não vai duas vezes', T.porPet('pet-emberling') === false);
+      check('bicho que não tenho não vai', T.porPet('pet-snapvine') === false);
+      var d = T.descrevePet(T.estado().minha.pets[0]);
+      check('a mesa diz o nível e as estrelas do bicho (Nv 4 ★2)', d.nivel === 4 && d.estrelas === 2, JSON.stringify(d));
+      return respiro();
+    })
+    .then(function () {
+      var ofertas = doPar('oferta'), ult = ofertas[ofertas.length - 1];
+      var p0 = ult && ult.dados && ult.dados.pets && ult.dados.pets[0];
+      check('a oferta leva o bicho com o XP e as cartas',
+            !!p0 && p0.petId === 'pet-emberling' && p0.xp === 50 && p0.cartas === 30, JSON.stringify(ult && ult.dados));
+      bentoManda('oferta', { itens: [], moedas: 0,
+        pets: [{ petId: 'pet-snapvine', xp: 24, cartas: 5 }, { petId: 'nao-existe', xp: 1, cartas: 5 }] });
+      return respiro();
+    })
+    .then(function () {
+      var dele = T.estado().dele.pets;
+      check('o bicho do outro chega, e o que não existe fica de fora',
+            dele.length === 1 && dele[0].petId === 'pet-snapvine', JSON.stringify(dele));
+      bentoManda('tranca', { travado: true });
+      return respiro();
+    })
+    .then(function () {
+      T.travar();
+      T.confirmar();
+      bentoManda('confirma');
+      return respiro();
+    })
+    .then(function () {
+      var s = P.state;
+      check('o meu bicho saiu com as cartas e o XP (a próxima carta não o devolve)',
+            s.pets.indexOf('pet-emberling') < 0 && !s.petCards['pet-emberling'] && !s.petXp['pet-emberling'] &&
+            !P.petOwned('pet-emberling'));
+      check('o dele entrou com o nível e as cartas (Nv 3)',
+            P.petOwned('pet-snapvine') && P.petLevel('pet-snapvine') === 3 && s.petCards['pet-snapvine'] === 5,
+            JSON.stringify({ xp: s.petXp['pet-snapvine'], cartas: s.petCards['pet-snapvine'] }));
+      check('a mesa fechou (bichos)', T.estado() === null);
+      return DB.historicoTrocas();
+    })
+    .then(function (h) {
+      var ult = h[h.length - 1];
+      check('o histórico lista os bichos',
+            !!ult && ult.dei.pets.length === 1 && ult.recebi.pets[0].petId === 'pet-snapvine', JSON.stringify(ult));
+      // ---- um de cada: o bento oferece um bicho que eu já tenho
+      caixa.length = 0;
+      T.convidar('bento');
+      bentoManda('aceite');
+      return respiro();
+    })
+    .then(function () {
+      bentoManda('oferta', { itens: [], moedas: 0, pets: [{ petId: 'pet-snapvine', xp: 0, cartas: 5 }] });
+      return respiro();
+    })
+    .then(function () {
+      bentoManda('tranca', { travado: true });
+      return respiro();
+    })
+    .then(function () {
+      T.travar();
+      T.confirmar();
+      return respiro();
+    })
+    .then(function () {
+      var canc = doPar('cancela'), uc = canc[canc.length - 1];
+      check('bicho que eu já tenho DERRUBA a troca antes do confirma',
+            T.estado() === null && doPar('confirma').length === 0 && !!uc && !!uc.dados && uc.dados.motivo === 'pet',
+            JSON.stringify(canc));
+      check('... e o meu bicho ficou comigo', P.petOwned('pet-snapvine'));
       R.sair();
       par.close();
     })

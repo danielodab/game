@@ -3758,7 +3758,7 @@ var JOGO = (typeof window !== 'undefined')
       cx.appendChild(el('h3', 'bk-tit', rotulo +
         (lado.travada ? ' 🔒' : '') + (lado.confirmada ? ' ✓' : '')));
       var linha = el('div', 'tr-itens');
-      if (!lado.itens.length) linha.appendChild(el('p', 'inv-dica', 'nada ainda'));
+      if (!lado.itens.length && !(lado.pets || []).length) linha.appendChild(el('p', 'inv-dica', 'nada ainda'));
       lado.itens.forEach(function (of, idx) {
         var d2 = (D().items || {})[of.itemId] || {};
         var chip = el('button', 'tr-item');
@@ -3769,6 +3769,24 @@ var JOGO = (typeof window !== 'undefined')
         if (editavel) {
           chip.title = 'tirar da mesa';
           tap(chip, function () { JOGO.Troca.tiraItem(idx); });
+        }
+        linha.appendChild(chip);
+      });
+      // os bichos da mesa (12/09): nível e estrelas vão junto
+      (lado.pets || []).forEach(function (of, idx) {
+        var dp = JOGO.Troca.descrevePet(of);
+        var repete = !editavel && JOGO.Troca.jaTenhoPet(of.petId);
+        var chip = el('button', 'tr-item tr-pet' + (repete ? ' is-repete' : ''));
+        chip.type = 'button';
+        chip.appendChild(art('petIcon', [of.petId, 30], 30));
+        chip.appendChild(el('span', null, esc(dp.nome) + ' · Nv ' + dp.nivel +
+          (dp.estrelas ? ' ' + new Array(dp.estrelas + 1).join('★') : '') +
+          (repete ? ' — você já tem' : '')));
+        if (editavel) {
+          chip.title = 'tirar da mesa';
+          tap(chip, function () { JOGO.Troca.tiraPet(idx); });
+        } else if (repete) {
+          chip.title = 'um bicho de cada: com este na mesa a troca não fecha';
         }
         linha.appendChild(chip);
       });
@@ -3835,6 +3853,40 @@ var JOGO = (typeof window !== 'undefined')
       linhaS.appendChild(chip);
     });
     caixa.appendChild(linhaS);
+
+    // ---- os bichos soltos, para por na mesa (12/09)
+    caixa.appendChild(el('h3', 'bk-tit', 'Seus bichos — toque para pôr na mesa'));
+    var naMesaP = {};
+    (est.minha.pets || []).forEach(function (o) { naMesaP[o.petId] = true; });
+    var todosSoltos = ownedPets().filter(function (pid) { return !!petDef(pid); });
+    var soltos = todosSoltos.filter(function (pid) { return !naMesaP[pid]; });
+    var linhaP = el('div', 'tr-itens');
+    if (!soltos.length) {
+      linhaP.appendChild(el('p', 'inv-dica', todosSoltos.length
+        ? 'Todos os bichos soltos já estão na mesa.' : 'Nenhum bicho solto.'));
+    }
+    soltos.forEach(function (pid) {
+      var pd = petDef(pid) || {};
+      var chip = el('button', 'tr-item tr-pet');
+      chip.type = 'button';
+      chip.appendChild(art('petIcon', [pid, 30], 30));
+      chip.appendChild(el('span', null, esc(pd.name || pid) + ' · ' + petNivelTxt(pid)));
+      tap(chip, function () {
+        if (!JOGO.Troca.porPet(pid)) toast('Esse bicho não pode ir à mesa agora (no máximo 6 por troca).');
+      });
+      linhaP.appendChild(chip);
+    });
+    caixa.appendChild(linhaP);
+    var vestidos = safe(function () {
+      var hs = P().state.heroes, n = 0;
+      for (var hk in hs) if (hs.hasOwnProperty(hk) && hs[hk] && hs[hk].pet) n++;
+      return n;
+    }, 0);
+    if (vestidos) {
+      caixa.appendChild(el('p', 'inv-dica',
+        'Bicho vestido num herói não vai à mesa: solte-o na ficha do herói primeiro. ' +
+        'O bicho vai com o nível e as estrelas; quem já tem aquele bicho não recebe outro.'));
+    }
 
     // ---- travar · confirmar · cancelar
     var acoes = el('div', 'bk2-botoes');

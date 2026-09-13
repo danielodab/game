@@ -13,7 +13,8 @@ var JOGO = (typeof window !== 'undefined')
  *
  * O PROTOCOLO viaja no envelope `troca` da Rede (só o destinatário processa):
  *   convite / aceite / recusa
- *   oferta  { itens: [{itemId, level, stars}], moedas }   (estado COMPLETO —
+ *   oferta  { itens: [{itemId, level, stars}], moedas,
+ *            pets: [{petId, xp, cartas}] }   (estado COMPLETO —
  *            idempotente; delta é convite a divergência)
  *   tranca  { travado }
  *   confirma
@@ -71,9 +72,9 @@ var JOGO = (typeof window !== 'undefined')
     return {
       fase: st.fase, par: st.par, nomePar: st.nomePar,
       mesmaConta: st.mesmaConta, motivo: st.motivo || null,
-      minha: { itens: st.minha.itens.slice(), moedas: st.minha.moedas,
+      minha: { itens: st.minha.itens.slice(), moedas: st.minha.moedas, pets: st.minha.pets.slice(),
                travada: st.minha.travada, confirmada: st.minha.confirmada },
-      dele: { itens: st.dele.itens.slice(), moedas: st.dele.moedas,
+      dele: { itens: st.dele.itens.slice(), moedas: st.dele.moedas, pets: st.dele.pets.slice(),
               travada: st.dele.travada, confirmada: st.dele.confirmada }
     };
   };
@@ -109,8 +110,9 @@ var JOGO = (typeof window !== 'undefined')
   /* 11/09: o porquê que o OUTRO lado lê quando a troca cai no fim */
   var MOTIVOS_DE_LA = {
     cartorio: MOTIVO_DE_LA,
-    falta: 'Troca cancelada: uma peça da mesa do outro lado não estava mais no saco dele.',
-    saco: 'Troca cancelada: o saco do outro lado não tinha espaço para o que ia.'
+    falta: 'Troca cancelada: uma peça ou bicho da mesa do outro lado não estava mais com ele.',
+    saco: 'Troca cancelada: o saco do outro lado não tinha espaço para o que ia.',
+    pet: 'Troca cancelada: o outro lado já tem um dos bichos da mesa — é um de cada.'
   };
   function caiComMotivo(codigo, motivo) {
     manda('cancela', { motivo: codigo });
@@ -133,9 +135,58 @@ var JOGO = (typeof window !== 'undefined')
     st = {
       fase: fase, par: parId, nomePar: nomeDoPar(parId),
       mesmaConta: !!(r && r.meuId() === parId),
-      minha: { itens: [], moedas: 0, travada: false, confirmada: false },
-      dele: { itens: [], moedas: 0, travada: false, confirmada: false }
+      minha: { itens: [], moedas: 0, pets: [], travada: false, confirmada: false },
+      dele: { itens: [], moedas: 0, pets: [], travada: false, confirmada: false }
     };
+  }
+
+  /* OS BICHOS NA MESA (12/09, pedido do dono: "preciso conseguir trocar pets
+   * nas trocas também"). O pet vai INTEIRO: o nível (XP) e as estrelas (as
+   * cartas). Quem dá perde o bicho E as cartas dele — senão a próxima carta que
+   * caísse devolvia o pet de graça (addPetCards religa com 5). Quem recebe fica
+   * com o XP e as cartas que vieram. Só vai o bicho SOLTO: o vestido num herói
+   * é solto antes, na ficha. É um de cada: quem já tem aquele bicho não recebe
+   * outro, e a troca cai com o porquê. O servidor não registra pets (não há
+   * cartório para eles): a execução é a local, como a dos vinténs. */
+  var TETO_PETS_MESA = 6;
+  function petsDefs() { return (JOGO.DATA && JOGO.DATA.pets) || {}; }
+  function inteiro(v) { var n = Math.floor(Number(v)); return (isFinite(n) && n > 0) ? n : 0; }
+  // o bicho como viaja na mesa, com os números presos nas réguas do jogo
+  function petDaMesa(o) {
+    if (!o || typeof o.petId !== 'string' || !petsDefs()[o.petId]) return null;
+    var prog = P(), tab = (prog && prog.PET_XP_TABLE) || [0];
+    var custo = (prog && prog.PET_UNLOCK_COST) || 5;
+    return { petId: o.petId, xp: Math.min(inteiro(o.xp), tab[tab.length - 1] || 0),
+             cartas: Math.min(10000, Math.max(custo, inteiro(o.cartas))) };
+  }
+  // {nome, nivel, estrelas} de um bicho da mesa — a mesma conta do Progress
+  T.descrevePet = function (o) {
+    var prog = P(), d = petsDefs()[o && o.petId] || {};
+    var tab = (prog && prog.PET_XP_TABLE) || [0], custos = (prog && prog.PET_STAR_COSTS) || [];
+    var custo = (prog && prog.PET_UNLOCK_COST) || 5, maxEst = (prog && prog.PET_MAX_STARS) || 3;
+    var nivel = 1, estrelas = 0, i;
+    for (i = 0; i < tab.length; i++) if (((o && o.xp) || 0) >= tab[i]) nivel = i + 1;
+    var sobra = Math.max(0, ((o && o.cartas) || 0) - custo);
+    for (i = 0; i < custos.length && i < maxEst; i++) if (sobra >= custos[i]) estrelas = i + 1;
+    return { nome: d.name || (o && o.petId) || '?', nivel: nivel, estrelas: estrelas };
+  };
+  function petSolto(petId) {
+    var prog = P(), pets = (prog && prog.state && prog.state.pets) || [];
+    return pets.indexOf(petId) >= 0;
+  }
+  // já tenho esse bicho (solto ou vestido)? então não cabe outro
+  T.jaTenhoPet = function (petId) {
+    var prog = P();
+    try { return !!(prog && prog.petOwned && prog.petOwned(petId)); } catch (e) { return false; }
+  };
+  function petRepetido(mesa) {
+    for (var i = 0; i < mesa.dele.pets.length; i++) {
+      if (T.jaTenhoPet(mesa.dele.pets[i].petId)) return mesa.dele.pets[i];
+    }
+    return null;
+  }
+  function motivoRepetido(o) {
+    return 'Troca cancelada: você já tem o ' + T.descrevePet(o).nome + ' — é um bicho de cada.';
   }
 
   // ------------------------------------------------------------- o fluxo meu
@@ -165,7 +216,7 @@ var JOGO = (typeof window !== 'undefined')
     st.minha.confirmada = false;
     st.dele.travada = false;
     st.dele.confirmada = false;
-    manda('oferta', { itens: st.minha.itens, moedas: st.minha.moedas });
+    manda('oferta', { itens: st.minha.itens, moedas: st.minha.moedas, pets: st.minha.pets });
     avisa();
   }
 
@@ -201,6 +252,25 @@ var JOGO = (typeof window !== 'undefined')
     ofertaMudou();
     return true;
   };
+  /* um bicho SOLTO vai à mesa com o XP e as cartas de agora */
+  T.porPet = function (petId) {
+    if (!st || st.fase !== 'aberta' || !petSolto(petId)) return false;
+    if (st.minha.pets.some(function (o) { return o.petId === petId; })) return false;
+    if (st.minha.pets.length >= TETO_PETS_MESA) return false;
+    var s = P().state;
+    var o = petDaMesa({ petId: petId, xp: (s.petXp || {})[petId], cartas: (s.petCards || {})[petId] });
+    if (!o) return false;
+    st.minha.pets.push(o);
+    ofertaMudou();
+    return true;
+  };
+  T.tiraPet = function (indice) {
+    if (!st || st.fase !== 'aberta') return false;
+    if (indice < 0 || indice >= st.minha.pets.length) return false;
+    st.minha.pets.splice(indice, 1);
+    ofertaMudou();
+    return true;
+  };
   T.porMoedas = function (n) {
     if (!st || st.fase !== 'aberta') return false;
     n = Math.floor(Number(n));
@@ -222,6 +292,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!st.minha.travada || !st.dele.travada) return;
     var semCart = semCartorio(st);                 // 10/09: antes do confirma, que o outro lado executaria
     if (semCart) { caiSemCartorio(semCart); return; }
+    var rep = petRepetido(st);                     // 12/09: um bicho de cada
+    if (rep) { caiComMotivo('pet', motivoRepetido(rep)); return; }
     st.minha.confirmada = true;
     manda('confirma', {});
     talvezExecuta();
@@ -261,6 +333,14 @@ var JOGO = (typeof window !== 'undefined')
     } else if (ev.acao === 'oferta' && st.fase === 'aberta') {
       st.dele.itens = (ev.dados && ev.dados.itens || []).slice(0, 24);
       st.dele.moedas = Math.max(0, Math.floor((ev.dados && ev.dados.moedas) || 0));
+      // os bichos (12/09): cliente antigo não manda `pets` — vale lista vazia
+      var vistos = {};
+      st.dele.pets = ((ev.dados && Object.prototype.toString.call(ev.dados.pets) === '[object Array]')
+        ? ev.dados.pets : []).map(petDaMesa).filter(function (o) {
+          if (!o || vistos[o.petId]) return false;
+          vistos[o.petId] = true;
+          return true;
+        }).slice(0, TETO_PETS_MESA);
       // oferta nova destrava os DOIS — ninguém troca o que não viu
       st.minha.travada = false; st.minha.confirmada = false;
       st.dele.travada = false; st.dele.confirmada = false;
@@ -325,6 +405,13 @@ var JOGO = (typeof window !== 'undefined')
       caiComMotivo('falta', 'Troca cancelada: uma peça que você pôs na mesa não está mais no seu saco.');
       return;
     }
+    // 1a) os bichos (12/09): o meu segue solto? o dele não é um que já tenho?
+    if (st.minha.pets.some(function (o) { return !petSolto(o.petId); })) {
+      caiComMotivo('falta', 'Troca cancelada: um bicho que você pôs na mesa não está mais solto (foi vestido ou já saiu).');
+      return;
+    }
+    var rep2 = petRepetido(st);
+    if (rep2) { caiComMotivo('pet', motivoRepetido(rep2)); return; }
 
     // 1b) O SACO TEM FUNDO (25/08): o que vem tem de caber no lugar do que
     // vai. Sem vaga, a troca cai como no caso do item sumido — melhor cair
@@ -339,6 +426,8 @@ var JOGO = (typeof window !== 'undefined')
     var moedasVao = st.minha.moedas;
     var itensVem = st.dele.itens.slice();
     var moedasVem = st.dele.moedas;
+    var meusPets = st.minha.pets.slice();
+    var petsVem = st.dele.pets.slice();
     var par = st.par, nomePar = st.nomePar;
 
     // 2) tira os meus (índices de trás para frente), põe os dele
@@ -349,6 +438,22 @@ var JOGO = (typeof window !== 'undefined')
       var e3 = { itemId: of.itemId, level: of.level || 0, stars: of.stars || 0 };
       if (of.iid) e3.iid = of.iid; else if (prog.carimba) e3 = prog.carimba(e3, 'troca');
       inv.push(e3);
+    });
+    // 2b) os bichos: o meu sai com as cartas e o XP; o dele entra com os dele
+    var sp = prog.state;
+    if (!sp.petCards || typeof sp.petCards !== 'object') sp.petCards = {};
+    if (!sp.petXp || typeof sp.petXp !== 'object') sp.petXp = {};
+    if (Object.prototype.toString.call(sp.pets) !== '[object Array]') sp.pets = [];
+    meusPets.forEach(function (o) {
+      var ip = sp.pets.indexOf(o.petId);
+      if (ip >= 0) sp.pets.splice(ip, 1);
+      delete sp.petCards[o.petId];         // sem isto, a próxima carta devolvia o bicho
+      delete sp.petXp[o.petId];
+    });
+    petsVem.forEach(function (o) {
+      sp.petCards[o.petId] = Math.max(Math.floor(Number(sp.petCards[o.petId]) || 0), o.cartas);
+      sp.petXp[o.petId] = o.xp;
+      if (sp.pets.indexOf(o.petId) < 0) sp.pets.push(o.petId);
     });
     try { prog.save(); } catch (e) {}
     // A NUVEM (10/09): os dois lados registram a intenção espelhada no cartório;
@@ -372,8 +477,8 @@ var JOGO = (typeof window !== 'undefined')
       if (db.registrarTroca) {
         try {
           db.registrarTroca({ com: nomePar, comId: par,
-                              dei: { itens: meusItens, moedas: moedasVao },
-                              recebi: { itens: itensVem, moedas: moedasVem } });
+                              dei: { itens: meusItens, moedas: moedasVao, pets: meusPets },
+                              recebi: { itens: itensVem, moedas: moedasVem, pets: petsVem } });
         } catch (e) {}
       }
     });
