@@ -23,6 +23,7 @@ var JOGO = (typeof window !== 'undefined')
 //   Art.slotIcon(slot, s)        -> canvas   espaço VAZIO (punho/passo/casca/lume)
 //   Art.slotKey/slotName/slotColor(slot)     ids v2.2 (aceita os antigos)
 //   Art.stoneIcon(stoneId, s)    -> canvas   pedra de forja (ADENDO v2.1)
+//   Art.pocaoIcon(pocaoId, s)    -> canvas   poção de vida da banca do mercador (13/09)
 //   Art.cardIcon(classId, w, h)  -> canvas   carta de classe (= Art.classCard)
 //   Art.starIcon(filled, s)      -> canvas   estrela cheia/vazia da coleção
 //   Art.rarityColor(rarity)      -> '#hex'
@@ -4603,6 +4604,58 @@ var JOGO = (typeof window !== 'undefined')
     return c;
   }
 
+  // ------------------------------------------------- POÇÕES DE VIDA (13/09)
+  // A banca do mercador (DATA.consumiveis): um frasco de vidro com o líquido vermelho,
+  // e o TAMANHO do frasco diz a poção de relance — pequena = frasquinho redondo, média =
+  // frasco com gargalo, grande = garrafa bojuda —, com 1, 2 ou 3 pontinhos no pé para
+  // quem não distingue o tamanho no celular. A mesma moldura das pedras (iconFrame).
+  function pocaoIconCanvas(pocaoId, size) {
+    var c = mkCanvas(size, size), g = c.getContext('2d');
+    var d = (JOGO.DATA && JOGO.DATA.consumiveis && JOGO.DATA.consumiveis[pocaoId]) || null;
+    var t = (d && d.tamanho) || (/grande/.test(pocaoId) ? 3 : /media/.test(pocaoId) ? 2 : 1);
+    t = Math.max(1, Math.min(3, t));
+    var s = size, cx = s / 2;
+    var k = [0, 0.74, 0.88, 1][t];
+    var by = s * 0.25 * k, bx = by * (t === 3 ? 1.12 : 1);
+    var cy = s * 0.77 - by;
+    var neckW = by * (t === 3 ? 0.62 : 0.5), neckH = by * (t === 1 ? 0.55 : 0.8);
+    var neckTop = cy - by - neckH + by * 0.18;
+    setScale(RES); g.save(); g.scale(RES, RES);
+    iconFrame(g, size, '#b8322c', null);
+    glow(g, cx, cy, by * 1.9, '#ff5a4a', 0.38);
+    // gargalo e bojo de vidro
+    part(g, Prr(cx, neckTop + neckH / 2, neckW, neckH, Math.max(1, neckW * 0.2)), '#d9e8ec', { k: 0.12, lw: 1, line: '#2c3a40' });
+    part(g, Pel(cx, cy, bx, by), '#d9e8ec', { k: 0.1, lw: 1.1, line: '#2c3a40' });
+    // o líquido, cortado pelo bojo, com a superfície clara
+    g.save();
+    Pel(cx, cy, bx * 0.88, by * 0.88)(g);
+    g.clip();
+    var nivel = cy - by * 0.2;
+    var lg = g.createLinearGradient(0, nivel, 0, cy + by);
+    lg.addColorStop(0, '#ff5b4a'); lg.addColorStop(1, '#8e1414');
+    g.fillStyle = lg;
+    g.fillRect(cx - bx, nivel, bx * 2, by * 2);
+    g.fillStyle = 'rgba(255,190,170,0.6)';
+    g.fillRect(cx - bx, nivel, bx * 2, Math.max(1, by * 0.1));
+    g.restore();
+    // o brilho do vidro
+    g.save();
+    g.fillStyle = 'rgba(255,255,255,0.72)';
+    Pel(cx - bx * 0.42, cy - by * 0.4, bx * 0.15, by * 0.27, -0.5)(g);
+    g.fill();
+    g.restore();
+    // a rolha
+    var corkH = Math.max(3, neckH * 0.45);
+    part(g, Prr(cx, neckTop - corkH * 0.3, neckW * 1.22, corkH, 1.5), '#a8733f', { k: 0.25, lw: 1, line: '#4a2c14' });
+    // os pontinhos do tamanho
+    for (var i = 0; i < t; i++) {
+      part(g, Pel(cx + (i - (t - 1) / 2) * s * 0.1, s * 0.86, s * 0.028, s * 0.028), '#ffd08a', { flat: true, noline: true });
+    }
+    g.restore();
+    c.__anchor = [0.5, 0.5];
+    return c;
+  }
+
   // -------------------------------------------------- ESTRELAS DE CLASSE (§9-B)
   // filled = conquistada (dourada e brilhando) · vazia = contorno apagado.
   function starIconCanvas(filled, size, col) {
@@ -4770,6 +4823,10 @@ var JOGO = (typeof window !== 'undefined')
     size = size || 56;
     return cached('stone:' + stoneId + ':' + size, function () { return stoneIconCanvas(stoneId, size); });
   };
+  A.pocaoIcon = function (pocaoId, size) {
+    size = size || 56;
+    return cached('pocao:' + pocaoId + ':' + size, function () { return pocaoIconCanvas(pocaoId, size); });
+  };
   A.starIcon = function (filled, size, col) {
     size = size || 28;
     return cached('star:' + (filled ? 1 : 0) + ':' + size + ':' + (col || '-'), function () {
@@ -4857,6 +4914,7 @@ var JOGO = (typeof window !== 'undefined')
       case 'event': return A.tileEventIcon(p[1], p[2] ? +p[2] : 48);
       case 'card': return A.classCard(p[1]);
       case 'stone': return A.stoneIcon(p[1], p[2] ? +p[2] : 56);
+      case 'pocao': return A.pocaoIcon(p[1], p[2] ? +p[2] : 56);
       case 'star': return A.starIcon(p[1] === '1' || p[1] === 'on', p[2] ? +p[2] : 28);
       default: return A.unit(key, {});
     }

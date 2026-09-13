@@ -836,6 +836,11 @@ var JOGO = (typeof window !== 'undefined')
     // linha o sanitize engoliria o saldo calado no primeiro reload
     var qi = Math.floor(num(raw.insignias, 0));
     if (qi > 0) st.insignias = qi;
+    // ---- as POÇÕES DE VIDA da banca do mercador (13/09) — a mesma armadilha: sem estas
+    // linhas o saldo sumiria calado no primeiro reload. Só existe com alguma poção: a conta
+    // sem nenhuma guarda o mesmo estado (e o mesmo hash) de antes das poções.
+    var consSan = saneiaConsumiveis(raw.consumiveis);
+    if (consSan) st.consumiveis = consSan;
     // ---- os PERGAMINHOS da loja do site e as cargas ativas do da Sabedoria
     // (Fase C, 10/09) — a mesma armadilha: sem estas linhas o saldo e as
     // cargas somem calados no primeiro reload. Só as chaves conhecidas, só
@@ -2026,6 +2031,71 @@ var JOGO = (typeof window !== 'undefined')
     Progress.save();
     return true;
   };
+  /* ---- AS POÇÕES DE VIDA (13/09, a banca do mercador; DATA.consumiveis)
+   * Contadores por tipo, como as pedras: `state.consumiveis = {pocaoId: n}`, só com n > 0,
+   * e o objeto some quando esvazia. Cada tipo preso no teto (consumiveisRegras.teto). Sem
+   * os dados carregados (uma página velha que não lê consumiveis.js), o saldo passa como
+   * está em vez de ser jogado fora. Comprar é da banca (JOGO.Mercado.comprarPocao, que
+   * paga e chama poeConsumivel); gastar é do Game ao beber e do juiz ao fechar a sala.
+   * Nenhuma das duas é op do jogador por si: a compra sobe pela op comprarPocao, o gasto
+   * sobe nos lances da sala. */
+  function consumivelDefs() { return D().consumiveis || null; }
+  function consumivelTeto() {
+    var t = (D().consumiveisRegras || {}).teto;
+    return (typeof t === 'number' && isFinite(t) && t > 0) ? Math.floor(t) : 20;
+  }
+  function saneiaConsumiveis(raw) {
+    if (!isObj(raw)) return null;
+    var defs = consumivelDefs(), teto = consumivelTeto(), out = {}, algum = false, id;
+    for (id in raw) {
+      if (!raw.hasOwnProperty(id)) continue;
+      if (defs && !defs.hasOwnProperty(id)) continue;
+      var n = Math.min(teto, Math.floor(num(raw[id], 0)));
+      if (n > 0) { out[id] = n; algum = true; }
+    }
+    return algum ? out : null;
+  }
+  Progress.consumivelTeto = consumivelTeto;
+  Progress.consumiveisVer = function () {
+    var st = Progress.state, out = {}, id;
+    if (!st || !isObj(st.consumiveis)) return out;
+    for (id in st.consumiveis) {
+      if (st.consumiveis.hasOwnProperty(id)) out[id] = Math.max(0, Math.floor(num(st.consumiveis[id], 0)));
+    }
+    return out;
+  };
+  Progress.consumivelVer = function (id) {
+    var st = Progress.state;
+    if (!st || !isObj(st.consumiveis) || typeof id !== 'string' || !st.consumiveis.hasOwnProperty(id)) return 0;
+    return Math.max(0, Math.floor(num(st.consumiveis[id], 0)));
+  };
+  // põe n de uma poção; recusa (false) a desconhecida e o que passaria do teto
+  Progress.poeConsumivel = function (id, n) {
+    var st = Progress.state, defs = consumivelDefs();
+    n = Math.floor(num(n, 0));
+    if (!st || n <= 0 || typeof id !== 'string' || !defs || !defs.hasOwnProperty(id)) return false;
+    var tem = Progress.consumivelVer(id);
+    if (tem + n > consumivelTeto()) return false;
+    if (!isObj(st.consumiveis)) st.consumiveis = {};
+    st.consumiveis[id] = tem + n;
+    Progress.save();
+    return true;
+  };
+  // tira n de uma poção; recusa (false) se não tem todas
+  Progress.gastaConsumivel = function (id, n) {
+    var st = Progress.state;
+    n = Math.floor(num(n, 0));
+    var tem = Progress.consumivelVer(id);
+    if (!st || n <= 0 || tem < n) return false;
+    if (tem - n > 0) st.consumiveis[id] = tem - n;
+    else {
+      delete st.consumiveis[id];
+      if (!keys(st.consumiveis).length) delete st.consumiveis;
+    }
+    Progress.save();
+    return true;
+  };
+
   Progress.insigniasVer = function () {
     var st = Progress.state;
     return st ? Math.max(0, Math.floor(num(st.insignias, 0))) : 0;

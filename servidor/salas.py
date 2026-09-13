@@ -578,12 +578,22 @@ class SalasMixin:
                                   '%d vezes em %.1f s (mínimo %.1f s)' % (turnos, instante - s['aberta_em'], minimo))
                 raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
             if saida['fase'] != 'won':
-                # derrota ou sala largada no meio: nada muda no estado
-                with self._escrita():
-                    n = self.con.execute("UPDATE salas SET estado = 'perdida', fechada_em = ?, turnos = ? "
-                                         "WHERE bilhete = ? AND estado = 'aberta'", (t, turnos, bilhete)).rowcount
-                if not n:
-                    raise Recusa(409, 'esse bilhete já foi fechado')
+                # derrota ou sala largada no meio: nada de recompensa. 13/09: as POÇÕES que a sala
+                # bebeu saem do estado mesmo assim (o juiz já as descontou); sem poção o hash não
+                # muda e nada é gravado
+                gastou = isinstance(saida.get('hash'), str) and saida.get('hash') != saida.get('hashAntes')
+                if gastou:
+                    self._confere_saida(saida)
+                try:
+                    with self._escrita():
+                        n = self.con.execute("UPDATE salas SET estado = 'perdida', fechada_em = ?, turnos = ? "
+                                             "WHERE bilhete = ? AND estado = 'aberta'", (t, turnos, bilhete)).rowcount
+                        if not n:
+                            raise Recusa(409, 'esse bilhete já foi fechado')
+                        if gastou:
+                            self._estado_grava(conta, estado, saida, t)
+                except EstadoMudou:
+                    continue                                    # a mesma semente refaz a sala no estado novo
                 pub = self._estado_publico(cid)
                 return 200, {'ok': True, 'fase': saida['fase'], 'recompensa': None, 'versao': pub['versao'],
                              'hash': pub['hash'], 'progress': pub['progress'], 'db': pub['db'], 'carry': None}

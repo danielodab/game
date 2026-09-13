@@ -89,6 +89,49 @@ var JOGO = (typeof window !== 'undefined')
     return Math.max(1, Math.round(preco));
   };
 
+  /* A BANCA DO MERCADOR (13/09, pedido do dono: "no mercadinho do jogo deve ter poções
+   * à venda por vinténs. poções que carregam a vida vão para consumíveis no inventário").
+   * O mercador-fantasma saiu do balcão de PEÇAS (12/09) e continua fora: esta banca é
+   * outra coisa — só as poções de vida de DATA.consumiveis, estoque infinito, preço fixo e
+   * sem taxa (a taxa é o ralo da venda entre jogadores). Paga com os vinténs do SACO, como
+   * toda compra do jogo; o banco não conta. Tudo ou nada: sem vinténs não entra poção, e
+   * acima do teto por tipo não sai vintém. Com a autoridade ligada a MESMA função roda no
+   * juiz (op comprarPocao, servidor/juiz/economia.js) no estado do servidor, com ou sem o
+   * mercadinho entre contas. */
+  function consumiveis() { return DATA().consumiveis || {}; }
+  M.pocoesDaBanca = function () {
+    var c = consumiveis(), out = [], k;
+    for (k in c) if (c.hasOwnProperty(k) && c[k] && c[k].tipo === 'vida' && c[k].preco > 0) out.push(c[k]);
+    out.sort(function (a, b) { return a.preco - b.preco; });
+    return out;
+  };
+  M.comprarPocao = function (pocaoId, qtd) {
+    var db = DB(), P = JOGO.Progress;
+    if (!db || !P || !P.poeConsumivel) return Promise.resolve({ ok: false, erro: 'sem conta' });
+    var c = consumiveis();
+    var def = (typeof pocaoId === 'string' && c.hasOwnProperty(pocaoId)) ? c[pocaoId] : null;
+    if (!def || def.tipo !== 'vida' || !(def.preco > 0)) return Promise.resolve({ ok: false, erro: 'o mercador não vende isso' });
+    var teto = P.consumivelTeto ? P.consumivelTeto() : 20;
+    qtd = Math.floor(Number(qtd));
+    if (!isFinite(qtd) || qtd < 1) return Promise.resolve({ ok: false, erro: 'quantidade de 1 a ' + teto });
+    function cabe() { return P.consumivelVer(pocaoId) + qtd <= teto; }
+    function cheio() {
+      return { ok: false, cheio: true, erro: 'Cabem ' + teto + ' de cada poção — você já tem ' + P.consumivelVer(pocaoId) + '.' };
+    }
+    if (!cabe()) return Promise.resolve(cheio());
+    var preco = def.preco * qtd;
+    return db.gastarMoedas(preco).then(function (pg) {
+      if (!pg || !pg.ok) {
+        return { ok: false, semVintem: true, erro: 'Faltam vinténs no saco: ' + qtd + '× ' + def.name + ' custa ' + preco + '.' };
+      }
+      // duas compras juntas: a outra pode ter enchido o frasco enquanto esta pagava — devolve
+      if (!cabe() || !P.poeConsumivel(pocaoId, qtd)) {
+        return db.ganharMoedas(preco).then(cheio);
+      }
+      return { ok: true, pocaoId: pocaoId, qtd: qtd, pagou: preco, total: P.consumivelVer(pocaoId) };
+    });
+  };
+
   /* Abre o balcão. Ele NÃO se reconstrói: a data é só um carimbo (o resto do
    * jogo ainda a lê), e a lista de ofertas é preservada como está. A única
    * coisa que sai é a banca VELHA do mercador-fantasma, que ficou nos saves

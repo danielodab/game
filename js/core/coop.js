@@ -302,7 +302,9 @@ var JOGO = (typeof window !== 'undefined')
       dungeons: dgs, portaisFechados: d.portaisFechados || null,
       dificuldades: d.dificuldades || null, roomFury: (d.leveling || {}).roomFury || null,
       summonCap: d.summonCap || null, tileEvents: d.tileEvents || null,
-      weathers: d.weathers || null, rivals: d.rivals || null
+      weathers: d.weathers || null, rivals: d.rivals || null,
+      // 13/09: a cura e o custo da poção decidem a batalha em grupo
+      consumiveis: d.consumiveis || null, consumiveisRegras: d.consumiveisRegras || null
     };
     assinaturaGuardada = ('00000000' + fnv(canon(pedaco)).toString(16)).slice(-8);
     return assinaturaGuardada;

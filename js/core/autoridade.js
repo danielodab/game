@@ -362,6 +362,11 @@ var JOGO = (typeof window !== 'undefined')
     em(db, 'sacarMoedas', 'sacarMoedas', function (n) { return { n: Math.floor(Number(n) || 0) }; });
     em(db, 'definirTitulo', 'definirTitulo', function (t) { return { titulo: t || null }; });
     em(M, 'reivindicar', 'reivindicarMissao', function (id) { return { id: id }; });
+    // 13/09: a banca do mercador — a compra roda aqui na hora e a MESMA sobe como op
+    em(JOGO.Mercado, 'comprarPocao', 'comprarPocao', function (id, qtd) {
+      var q = Math.floor(Number(qtd));
+      return (typeof id === 'string' && q >= 1 && q <= 1000) ? { id: id, qtd: q } : null;
+    });
     if (G) {
       em(G, 'aparelha', 'gmAparelha', function () { return {}; });
       em(G, 'pegaItem', 'gmPegaItem', function (itemId) { return { itemId: itemId }; });

@@ -78,6 +78,12 @@ function executa(J, st, l) {
   if (l.a === 'm') return !!E.move(st, l.u, l.x, l.y);
   if (l.a === 'c') return !!E.cast(st, l.u, l.s, l.x, l.y);
   if (l.a === 'e') { if (st.phase === 'playing') E.endTurn(st); return true; }
+  if (l.a === 'po') {
+    // 13/09: a poção de vida (Engine.usePotion). No duelo não existe: a sala cai inteira
+    if (st.pvp) throw recusa('poção no duelo', 'duelo');
+    if (typeof l.s !== 'string') throw recusa('poção sem nome', 'lance');
+    return !!E.usePotion(st, l.u, l.s);
+  }
   if (l.a === 'f') {
     const fa = E.findUnit(st, l.u), fb = E.findUnit(st, l.alvo);
     const donoA = fa ? (fa.dono || null) : null, donoB = fb ? (fb.dono || null) : null;
@@ -144,6 +150,10 @@ function refazEm(J, entrada) {
   else if (c.modo !== 'duelo') aplicaCarry(st, c.carry);
   E.events.length = 0;
 
+  /* AS POÇÕES BEBIDAS (13/09): quantas de cada, por dono ('' na sala solo). O motor não
+   * conta o estoque — quem desconta do estado e recusa quem bebeu além do que tinha é o
+   * fechamento (recompensa.js). Só o gole que deu certo conta. */
+  const pocoesPorDono = {};
   let passos = 0;
   function conta() {
     if (++passos > PASSOS_MAX) throw recusa('a sala não termina', 'passos');
@@ -207,7 +217,7 @@ function refazEm(J, entrada) {
       const daVez = emRede ? (ehDeGente(ativo) && !ativo.ia && ativo.dono === l.de) : ehDoJogador(st, ativo);
       if (st.phase !== 'playing' || !daVez) throw recusa('lance fora da vez', 'vez');
       // move, feitiço e fusão só com a unidade da vez; o 'e' encerra a vez dela
-      if ((l.a === 'm' || l.a === 'c' || l.a === 'f') && l.u !== ativo.uid) {
+      if ((l.a === 'm' || l.a === 'c' || l.a === 'f' || l.a === 'po') && l.u !== ativo.uid) {
         throw recusa('lance com uma unidade que não é a da vez', 'unidade');
       }
       if (l.a === 'e') { conta(); turnosJogador++; }
@@ -217,6 +227,11 @@ function refazEm(J, entrada) {
     E.events.length = 0;
     if (typeof l.ok === 'boolean' && l.ok !== ok) throw recusa('o lance ' + i + ' deu diferente aqui', 'divergiu');
     if (inteiro(l.h) && E.hash(st) !== l.h) throw recusa('o estado divergiu no lance ' + i, 'divergiu');
+    if (l.a === 'po' && ok) {
+      const quem = emRede ? String(l.de || '') : '';
+      const dele = pocoesPorDono[quem] || (pocoesPorDono[quem] = {});
+      dele[l.s] = (dele[l.s] || 0) + 1;
+    }
   }
   rodaIA();
 
@@ -241,6 +256,8 @@ function refazEm(J, entrada) {
     herois: herois,
     passos: passos,
     turnosJogador: turnosJogador,
+    pocoes: pocoesPorDono[''] || {},
+    pocoesPorDono: pocoesPorDono,
     estado: st
   };
 }

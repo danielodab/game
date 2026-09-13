@@ -15,6 +15,24 @@ const { refazEm, recusa } = require('./sala');
 
 function inteiro(v) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v; }
 
+/* AS POÇÕES QUE A SALA BEBEU (13/09, a banca do mercador). O motor não conta o estoque:
+ * aqui, no estado DO SERVIDOR, cada gole que a sala refeita confirmou sai do saco da
+ * conta — na vitória, na derrota e na sala largada (a poção foi bebida de todo jeito). A
+ * conta que bebeu mais do que tinha derruba a sala inteira (422 'pocoes'): o cliente
+ * honesto nunca chega aqui, porque a barra só oferece o que ele tem. */
+function descontaPocoes(J, usadas, quem) {
+  const P = J.Progress;
+  const ids = Object.keys(usadas || {});
+  for (const id of ids) {
+    const n = usadas[id], tem = (P.consumivelVer ? P.consumivelVer(id) : 0);
+    if (!inteiro(n) || n < 1 || n > tem) {
+      const d = (J.DATA.consumiveis || {})[id];
+      throw recusa(quem + ' bebeu ' + n + '× ' + ((d && d.name) || id) + ' e tinha ' + tem, 'pocoes');
+    }
+  }
+  for (const id of ids) P.gastaConsumivel(id, usadas[id]);
+}
+
 function fecha(corpo) {
   const c = corpo || {};
   const b = c.bilhete || {};
@@ -53,6 +71,7 @@ function fecha(corpo) {
     escolhePosicao: b.escolhePosicao !== false,
     lances: c.lances, hashFinal: c.hashFinal
   });
+  descontaPocoes(J, r.pocoes, 'a conta');
 
   // 3. a recompensa pelo funil do jogo
   let recompensa = null, carry = null;
@@ -156,6 +175,8 @@ function fechaGrupo(corpo) {
     carryRede: true, escolhePosicao: true, lances: c.lances, hashFinal: c.hashFinal
   });
   const final = JSON.stringify(r.estado);
+  // cada membro gasta as PRÓPRIAS poções, no estado dele (os goles vêm marcados com o dono)
+  mundos.forEach((x, i) => descontaPocoes(x.w.J, r.pocoesPorDono[x.m.dono], 'o membro ' + i));
   let carry = null;
   const pagos = mundos.map((x) => {
     let recompensa = null;
@@ -195,4 +216,4 @@ function rotas(registra) {
   registra('POST', '/grupo/fecha', (corpo) => fechaGrupo(corpo));
 }
 
-module.exports = { fecha, fechaGrupo, rotas, vezDoSaque };
+module.exports = { fecha, fechaGrupo, rotas, vezDoSaque, descontaPocoes };

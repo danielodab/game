@@ -291,7 +291,24 @@ class GrupoMixin:
                 self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada')
                 raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
             if saida['fase'] != 'won':
-                self._grupo_marca(gid, 'perdida', None, t)
+                # 13/09: as POÇÕES bebidas saem do estado de cada membro mesmo na derrota (o juiz já
+                # as descontou); quem não bebeu fica igual e nada é gravado para ele. Na MESMA
+                # transação da marca: o outro membro fechando junto não desconta duas vezes
+                por_conta = {m.get('contaId'): m for m in saida['membros'] if isinstance(m, dict)}
+                gastos = []
+                for m in membros:
+                    s = por_conta.get(m['conta']['id'])
+                    if isinstance(s, dict) and isinstance(s.get('hash'), str) and s.get('hash') != s.get('hashAntes'):
+                        gastos.append((m, self._confere_saida(dict(s, ok=True))))
+                try:
+                    with self._escrita():
+                        n = self.con.execute("UPDATE salas_grupo SET estado = 'perdida', motivo = NULL, fechada_em = ? "
+                                             "WHERE gid = ? AND estado = 'aberta'", (t, gid)).rowcount
+                        if n:
+                            for m, s in gastos:
+                                self._estado_grava(m['conta'], m['estado'], s, t)
+                except EstadoMudou:
+                    continue
                 return self._grupo_fechada(cid, gid)
             por_conta = {m.get('contaId'): m for m in saida['membros'] if isinstance(m, dict)}
             pagos = []

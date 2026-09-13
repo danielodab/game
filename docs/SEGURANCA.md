@@ -154,6 +154,16 @@ Entrada:
 - Saída: `{ok, fase, turnosJogador, refeito, recompensa, progress, db, guildaXp,
   iids: {novos: [{iid, itemId, origem}], fora: [iid]}, carry, hash}`.
 
+### 5.2.1 As poções de vida (13/09)
+A poção é um lance da sala (`{a:'po', u, s: pocaoId, ok}`, `Engine.usePotion`): 2 PA, uma por
+turno por herói, cura o próprio herói; no duelo o juiz recusa a sala (`duelo`). O motor NÃO
+conta o estoque: `sala.js` conta os goles certos por dono e o fechamento (`recompensa.js`,
+`descontaPocoes`) tira do `progress.consumiveis` DO SERVIDOR o que foi bebido — na vitória, na
+derrota e na sala largada (a API grava o estado da sala não vencida só quando o hash mudou, na
+mesma transação que a marca `perdida`). Quem bebeu mais do que a conta tem derruba a sala
+(422 `pocoes`). Em grupo cada membro gasta as próprias. A compra é a op `comprarPocao {id, qtd}`
+(`JOGO.Mercado.comprarPocao`: vinténs do saco, teto por tipo, tudo ou nada).
+
 ### 5.3 `POST /op`
 Entrada: `{conta: {id, gm}, progress, db, ops: [{nome, args}], semente, contexto: {agoraMs}}`.
 Cada `nome` é uma operação da tabela `OPS` de `economia.js`, que valida os

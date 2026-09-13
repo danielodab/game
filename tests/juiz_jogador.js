@@ -10,8 +10,11 @@
  * As provas da API (Python) usam isto para fechar salas de verdade.
  *
  * Entrada (JSON): { progress, db, dungeonId, roomIndex, semente, dificuldade, herois,
- *                   carry?, cortaEm? }   (cortaEm: para depois de N lances)
- * Saída (JSON):   { lances, fase, hash } */
+ *                   carry?, cortaEm?, pocoes? }   (cortaEm: para depois de N lances)
+ * `pocoes` (13/09): {pocaoId: quantas} — no começo de cada vez do herói, ferido, ele
+ * bebe a primeira que o motor deixa (sem olhar o saco: a prova do "bebeu mais do que
+ * tinha" usa isto).
+ * Saída (JSON):   { lances, fase, hash, bebidas } */
 const path = require('path');
 const est = require(path.join(__dirname, '..', 'servidor', 'juiz', 'estado.js'));
 const { ehDoJogador, aplicaCarry } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'sala.js'));
@@ -34,10 +37,20 @@ function joga(p) {
   lances.push({ a: 'p', x: op.x, y: op.y, ok: !!E.place(st, op.x, op.y) });
   E.events.length = 0;
   let voltas = 0;
+  const resta = Object.assign({}, p.pocoes || {}), bebidas = {};
   fora: while (st.phase === 'playing' && voltas++ < 3000) {
     const u = E.activeUnit(st);
     if (!u) break;
     const meu = ehDoJogador(st, u);
+    if (meu && lances.length < corta) {
+      const id = Object.keys(resta).find((k) => resta[k] > 0 && !E.podePocao(st, u.uid, k));
+      if (id) {
+        const ok = !!E.usePotion(st, u.uid, id);
+        lances.push({ a: 'po', u: u.uid, s: id, ok });
+        if (ok) { resta[id]--; bebidas[id] = (bebidas[id] || 0) + 1; }
+        E.events.length = 0;
+      }
+    }
     const plano = J.AI.planTurn(st, u.uid) || [];
     let acabou = false;
     for (const a of (plano.length ? plano : [{ action: 'end' }])) {
@@ -64,7 +77,7 @@ function joga(p) {
     }
     E.events.length = 0;
   }
-  return { lances, fase: st.phase, hash: E.hash(st) };
+  return { lances, fase: st.phase, hash: E.hash(st), bebidas };
 }
 
 if (require.main === module) {

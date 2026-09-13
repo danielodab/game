@@ -1134,6 +1134,22 @@
         SITE.num(M.PRECO_MAX) + ' vinténs. Um mercador-fantasma pendura ' + num(M.POR_DIA) + ' ofertas por dia.</p>', 'mercado mercadinho vender comprar taxa vintem');
     }
 
+    // 13/09: as poções da banca do mercador, lidas dos dados do jogo (nenhum número copiado)
+    var CONS = D.consumiveis, CR = D.consumiveisRegras || {};
+    if (CONS) {
+      var linhasCons = Object.keys(CONS).map(function (k) { return CONS[k]; })
+        .sort(function (a, b) { return num(a.preco) - num(b.preco); })
+        .map(function (c) {
+          return '<li><b>' + SITE.esc(c.name || c.id) + '</b>: cura ' + num(c.cura) + ' PV · ' + SITE.num(num(c.preco)) + ' vinténs</li>';
+        }).join('');
+      sec('consumiveis', 'Consumíveis: as poções de vida',
+        '<p>No Mercadinho mora a banca do mercador: poções de vida com estoque sem fim, preço fixo e sem taxa, pagas com os vinténs do saco. ' +
+        'Elas ficam em Consumíveis no inventário, até ' + num(CR.teto) + ' de cada.</p><ul class="wk-defs">' + linhasCons + '</ul>' +
+        '<p>Na batalha, beber é uma ação do herói na vez dele: custa ' + num(CR.pa) + ' PA, uma por turno, e cura só quem bebe, ' +
+        'sem passar do PV máximo e sem levantar quem caiu. No duelo não vale.</p>',
+        'pocao pocoes consumivel consumiveis vida cura mercador banca');
+    }
+
     var Mi = JG.Missoes;
     if (Mi) {
       sec('missoes', 'Missões e conquistas',

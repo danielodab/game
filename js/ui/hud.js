@@ -2648,7 +2648,8 @@ var JOGO = (typeof window !== 'undefined')
     var u = activeUnit();
     var parts = [s.round, s.activeIdx, s.weather, s.phase,
                  safe(function () { return G().selectedSpellId; }, ''),
-                 safe(function () { return G().canFuse().length; }, 0), coopSig()];
+                 safe(function () { return G().canFuse().length; }, 0), coopSig(),
+                 safe(function () { return JSON.stringify(JOGO.Progress.consumiveisVer()); }, '')];   // 13/09: a contagem das poções
     for (var i = 0; i < s.units.length; i++) {
       var x = s.units[i];
       parts.push(x.uid + ':' + x.hp + ':' + x.pa + ':' + x.pp + ':' + (x.alive ? 1 : 0) +
@@ -2980,7 +2981,39 @@ var JOGO = (typeof window !== 'undefined')
       cell.appendChild(q);
       bt.spells.appendChild(cell);
     });
+    /* 13/09: as POÇÕES DE VIDA que o jogador tem, depois dos feitiços — um botão por poção,
+     * com a contagem. Game.pocoesNaBarra já tira o duelo e a vez dos outros; a que não
+     * pode agora (PV cheio, já bebeu nesta vez, PA curto) fica apagada e diz por quê. */
+    var pocoes = safe(function () { return G().pocoesNaBarra ? G().pocoesNaBarra() : []; }, []) || [];
+    pocoes.forEach(function (po) {
+      var cellP = el('button', 'spell is-pocao' + (po.motivo ? ' is-dim' : ''));
+      cellP.type = 'button';
+      cellP.setAttribute('data-pocao', po.id);
+      cellP.appendChild(art('pocaoIcon', [po.id, 52], 48));
+      cellP.appendChild(el('span', 'sp-cost', String(pocaoPa())));
+      cellP.appendChild(el('span', 'sp-qtd', '×' + po.n));
+      cellP.appendChild(el('span', 'sp-name', esc(String(po.def.name || po.id).replace(/^Poção de Vida /, 'Poção '))));
+      tap(cellP, function () {
+        var motivo = safe(function () { return G().podePocao(po.id); }, 'fase');
+        if (motivo) { toast(POCAO_MOTIVO_PT[motivo] || 'Agora não dá para beber.'); return; }
+        safe(function () { return G().usaPocao(po.id); }, false);
+        battleSig = '';
+        paintBattle(true);
+      });
+      var qP = el('span', 'sp-info', 'i');
+      tipOn(qP, po.def.name || po.id, '<i>' + pocaoPa() + ' PA · uma por turno · só em quem bebe</i><br>Cura ' +
+        po.def.cura + ' PV, sem passar do máximo e sem levantar quem caiu. Você tem ' + po.n + '.', '#ff7a6a');
+      cellP.appendChild(qP);
+      bt.spells.appendChild(cellP);
+    });
   }
+  var POCAO_MOTIVO_PT = {
+    cheio: 'A vida já está cheia.', usada: 'Uma poção por turno — beba na próxima vez.',
+    pa: 'PA insuficiente para beber.', duelo: 'Poção não entra no duelo.', vez: 'Não é a sua vez.',
+    acabou: 'Essa poção acabou.', unidade: 'Só o herói bebe poção.', pocao: 'Poção desconhecida.',
+    fase: 'Agora não dá para beber.'
+  };
+  function pocaoPa() { return safe(function () { return JOGO.Engine.pocaoPa(); }, 2); }
 
   function spellTipBody(d2, sid) {
     if (!d2) return 'Este feitiço não pôde ser carregado.';
@@ -3484,7 +3517,7 @@ var JOGO = (typeof window !== 'undefined')
       // ---- as abas
       var abas = el('div', 'mc-abas');
       [['comprar', 'Comprar (' + deOutros.length + ')'], ['vender', 'Vender'],
-       ['meus', 'Meus anúncios (' + minhas.length + ')']].forEach(function (par) {
+       ['meus', 'Meus anúncios (' + minhas.length + ')'], ['pocoes', 'Poções']].forEach(function (par) {
         abas.appendChild(btn(par[1], 'btn-mini' + (mcAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
           mcAba = par[0]; sheetMercado();
         }));
@@ -3679,7 +3712,9 @@ var JOGO = (typeof window !== 'undefined')
         });
       }
 
-      if (mcAba === 'comprar' || mcAba === 'vender') {
+      if (mcAba === 'pocoes') {
+        mcBancaPocoes(caixa, function () { return bolso; });
+      } else if (mcAba === 'comprar' || mcAba === 'vender') {
         barraFiltros(mcAba === 'comprar');
         listaEl = el('div', 'mc-lista');
         caixa.appendChild(listaEl);
@@ -3706,6 +3741,83 @@ var JOGO = (typeof window !== 'undefined')
    * Cada ação vai ao servidor (JOGO.Mercado.servidor) e o estado novo é ADOTADO — a
    * repintura reabre esta ficha na mesma aba, com os filtros guardados aqui. */
   var mcSrv = { q: '', slot: 'todos', rar: 'todas', item: null, oferta: null };
+
+  /* A BANCA DO MERCADOR (13/09, pedido do dono: "no mercadinho do jogo deve ter poções à
+   * venda por vinténs. poções que carregam a vida vão para consumíveis no inventário").
+   * A mesma aba nos dois mercadinhos (o local e o entre contas): cada poção com o ícone, a
+   * cura, o preço, a quantidade (campo e atalhos 1/5/10) e Comprar. O vintém é o do SACO;
+   * a regra (teto por tipo, vintém que falta) é a de JOGO.Mercado.comprarPocao, que com a
+   * autoridade ligada sobe como a op comprarPocao. `sacoDe()` = os vinténs no saco agora. */
+  var mcPocaoQtd = {};
+  function mcBancaPocoes(caixa, sacoDe) {
+    var Mc = JOGO.Mercado;
+    var lista = el('div', 'mc-lista mc-banca');
+    caixa.appendChild(lista);
+    var pocoes = safe(function () { return Mc.pocoesDaBanca(); }, []) || [];
+    var teto = safe(function () { return P().consumivelTeto(); }, 20) || 20;
+    lista.appendChild(el('p', 'mc-resumo', 'A banca do mercador: estoque sem fim, preço fixo e sem taxa. Paga com os vinténs do <b>saco</b>; cabem <b>' +
+      teto + '</b> de cada poção.'));
+    if (!pocoes.length) { lista.appendChild(el('p', 'inv-dica', 'O mercador não trouxe poções.')); return; }
+    pocoes.forEach(function (d) {
+      var tem = safe(function () { return P().consumivelVer(d.id); }, 0) || 0;
+      var row = el('div', 'mc-linha mc-pocao');
+      row.setAttribute('data-pocao', d.id);
+      var ic = el('span', 'mc-ic');
+      ic.appendChild(art('pocaoIcon', [d.id, 34], 34));
+      row.appendChild(ic);
+      var tx = el('div', 'ms-tx');
+      tx.appendChild(el('div', 'ms-nome', esc(d.name)));
+      tx.appendChild(el('div', 'ms-prog', 'cura <b>' + d.cura + ' PV</b> · ' + pocaoPa() + ' PA na batalha · você tem <b class="mc-tem">' +
+        tem + '</b>/' + teto));
+      row.appendChild(tx);
+      row.appendChild(el('span', 'mc-preco', d.preco + 'v'));
+      var campo = document.createElement('input');
+      campo.type = 'number'; campo.min = '1'; campo.max = String(teto); campo.step = '1';
+      campo.className = 'bk2-qtd mc-qtd';
+      campo.value = String(mcPocaoQtd[d.id] || 1);
+      var totalEl = el('span', 'mc-taxa', '');
+      var bC = btn('Comprar', 'btn-mini btn-gold', function () { compra(); });
+      function qtd() { return Math.max(0, Math.floor(Number(campo.value) || 0)); }
+      function porque(q) {
+        if (q < 1) return 'Escolha quantas poções.';
+        if (tem + q > teto) return 'Cabem ' + teto + ' de cada poção — você já tem ' + tem + '.';
+        if (sacoDe() < q * d.preco) return 'Faltam vinténs no saco: ' + q + '× ' + d.name + ' custa ' + (q * d.preco) + '.';
+        return '';
+      }
+      function mostra() {
+        var q = qtd();
+        if (q > 0) mcPocaoQtd[d.id] = q;
+        totalEl.innerHTML = 'total <b>' + (q * d.preco) + 'v</b>';
+        var motivo = porque(q);
+        // apagado mas TOCÁVEL: o is-off engole o toque (tap), e no celular não há title — o
+        // toque no botão apagado diz por que não compra
+        bC.classList.toggle('mc-falta', !!motivo);
+        bC.title = motivo;
+      }
+      campo.addEventListener('input', mostra);
+      var atalhos = el('span', 'mc-atalhos');
+      [1, 5, 10].forEach(function (n) {
+        atalhos.appendChild(btn(String(n), 'btn-mini mc-chip', function () { campo.value = String(n); mostra(); }));
+      });
+      function compra() {
+        var q = qtd(), motivo = porque(q);
+        if (motivo) { toast(motivo); return; }
+        bC.classList.add('is-off');
+        Mc.comprarPocao(d.id, q).then(function (res) {
+          if (!res || !res.ok) toast((res && res.erro) || 'não deu');
+          else toast('−' + res.pagou + ' vinténs — ' + q + '× ' + d.name + ' em Consumíveis (' + res.total + '/' + teto + ').', 'good');
+          if (sheetName === 'mercado') sheetMercado();
+        });
+      }
+      row.appendChild(atalhos);
+      row.appendChild(campo);
+      row.appendChild(totalEl);
+      row.appendChild(bC);
+      mostra();
+      lista.appendChild(row);
+    });
+    lista.appendChild(el('p', 'inv-dica', 'As poções vão para <b>Consumíveis</b> no inventário e são bebidas na batalha, na vez do herói (no duelo, não).'));
+  }
   var MC_ESTADO_PT = { aberta: 'esperando o vendedor', aceita: 'aceita — confirme', recusada: 'recusada',
                        concluida: 'negócio fechado', desistiu: 'desistiu', perdida: 'perdida', cancelada: 'cancelada' };
   function mcBolsoReal() {
@@ -3753,9 +3865,10 @@ var JOGO = (typeof window !== 'undefined')
     var pBolso = el('p', 'mc-bolso', 'No saco: <b>' + bolso.saco + '</b> · no banco: <b>' + bolso.banco + '</b> vinténs');
     pBolso.insertBefore(art('vintemIcon', [18], 18, 'moeda-inline'), pBolso.firstChild);
     caixa.appendChild(pBolso);
-    if (['comprar', 'vender', 'meus', 'ofertas'].indexOf(mcAba) < 0) mcAba = 'comprar';
+    if (['comprar', 'vender', 'meus', 'ofertas', 'pocoes'].indexOf(mcAba) < 0) mcAba = 'comprar';
     var abas = el('div', 'mc-abas');
-    [['comprar', 'Comprar'], ['vender', 'Vender'], ['meus', 'Meus anúncios'], ['ofertas', 'Minhas ofertas']].forEach(function (par) {
+    [['comprar', 'Comprar'], ['vender', 'Vender'], ['meus', 'Meus anúncios'], ['ofertas', 'Minhas ofertas'],
+     ['pocoes', 'Poções']].forEach(function (par) {
       abas.appendChild(btn(par[1], 'btn-mini' + (mcAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
         mcAba = par[0]; mcSrv.item = null; mcSrv.oferta = null; sheetMercado();
       }));
@@ -4062,7 +4175,8 @@ var JOGO = (typeof window !== 'undefined')
       });
     }
 
-    if (mcAba === 'vender') pintaVender();
+    if (mcAba === 'pocoes') mcBancaPocoes(area, function () { return mcBolsoReal().saco; });
+    else if (mcAba === 'vender') pintaVender();
     else if (mcAba === 'meus') pintaMeus();
     else if (mcAba === 'ofertas') pintaOfertas();
     else pintaComprar();
@@ -6571,6 +6685,28 @@ var JOGO = (typeof window !== 'undefined')
         grid.appendChild(cell);
       });
     } else if (invMainTab === 'cons') {
+      // 13/09: as POÇÕES DE VIDA da banca do mercador — contador por tipo, bebidas na batalha
+      var consD = D().consumiveis || {};
+      Object.keys(consD).sort(function (a, b) { return (consD[a].cura || 0) - (consD[b].cura || 0); }).forEach(function (pid) {
+        var nP = safe(function () { return P().consumivelVer(pid); }, 0) || 0;
+        if (nP <= 0) return;
+        var dP = consD[pid];
+        mostrou++;
+        var cP = el('button', 'ig-cell is-cons is-pocao');
+        cP.type = 'button';
+        cP.setAttribute('data-pocao', pid);
+        var plP = el('span', 'ig-plate');
+        plP.appendChild(art('pocaoIcon', [pid, 54], 54));
+        cP.appendChild(plP);
+        cP.appendChild(el('span', 'ig-n', '×' + nP));
+        cP.appendChild(el('span', 'ig-nm', esc(dP.name)));
+        cP.appendChild(el('span', 'ig-cura', 'cura ' + dP.cura + ' PV'));
+        tap(cP, function () {
+          toast(dP.name + ': cura ' + dP.cura + ' PV de quem bebe, sem passar do máximo. Na batalha custa ' + pocaoPa() +
+                ' PA, uma por turno — o botão fica na barra dos feitiços.');
+        });
+        grid.appendChild(cP);
+      });
       var pg = safe(function () { return P().pergaminhos(); }, null) || {};
       if (pg.xp) {
         mostrou++;

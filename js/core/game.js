@@ -689,6 +689,8 @@ var JOGO = (typeof window !== 'undefined')
       else if (l.a === 'm') ok = !!E().move(st, l.u, l.x, l.y);
       else if (l.a === 'c') ok = !!E().cast(st, l.u, l.s, l.x, l.y);
       else if (l.a === 'e') { if (st.phase === 'playing') E().endTurn(st); ok = true; }
+      // 13/09: a poção de vida (o motor recusa no duelo; o estoque é de quem bebeu)
+      else if (l.a === 'po') ok = !!(E().usePotion && E().usePotion(st, l.u, l.s));
       else if (l.a === 'f') {
         /* O `f` DE FORA (12/09). Fundir é só com os personagens do MESMO
          * jogador, então um lance que junte heróis de donos diferentes não
@@ -1327,6 +1329,54 @@ var JOGO = (typeof window !== 'undefined')
     timerUid = null;
     E().endTurn(Game.state);
     anotaSolo({ a: 'e', ok: true });
+  };
+
+  /* A POÇÃO DE VIDA NA BATALHA (13/09, pedido do dono; o motor em Engine.usePotion).
+   * Beber é um lance como o feitiço: no solo vai anotado para o servidor refazer
+   * ({a:'po', u, s}); em grupo viaja pela porta única (aplicaLocal) e o motor do
+   * parceiro cura o meu herói igual. A poção sai do MEU saco na hora (a barra conta
+   * certo); com a autoridade ligada o servidor desconta as mesmas ao fechar a sala e
+   * recusa a sala que bebeu mais do que a conta tinha. No duelo não existe: o botão não
+   * aparece e o motor recusa. A IA (herói caído, invocação) não bebe: o plano dela só
+   * anda e conjura. */
+  function emDuelo() { return !!((Game.state && Game.state.pvp) || (rede && rede.tipo === 'duelo')); }
+  /* null = pode; senão o porquê (os do Engine.podePocao, mais 'duelo', 'vez' e 'acabou') */
+  Game.podePocao = function (pocaoId) {
+    var st = Game.state;
+    if (Game.screen !== 'battle' || !st) return 'fase';
+    if (emDuelo()) return 'duelo';
+    if (!Game.isPlayerTurn()) return 'vez';
+    var P = JOGO.Progress;
+    if (!P || !P.consumivelVer || P.consumivelVer(pocaoId) <= 0) return 'acabou';
+    var u = E().activeUnit(st);
+    if (!u || !E().podePocao) return 'vez';
+    return E().podePocao(st, u.uid, pocaoId);
+  };
+  /* [{id, def, n, motivo}] das poções que tenho, da menor cura para a maior; vazio no
+   * duelo e fora da minha vez */
+  Game.pocoesNaBarra = function () {
+    var out = [], P = JOGO.Progress, c = (JOGO.DATA && JOGO.DATA.consumiveis) || {};
+    if (Game.screen !== 'battle' || !Game.state || emDuelo() || !P || !P.consumivelVer) return out;
+    if (!Game.isPlayerTurn()) return out;
+    Object.keys(c).forEach(function (id) {
+      var d = c[id];
+      if (!d || d.tipo !== 'vida') return;
+      var n = P.consumivelVer(id);
+      if (n > 0) out.push({ id: id, def: d, n: n, motivo: Game.podePocao(id) });
+    });
+    out.sort(function (a, b) { return (a.def.cura || 0) - (b.def.cura || 0); });
+    return out;
+  };
+  Game.usaPocao = function (pocaoId) {
+    if (Game.podePocao(pocaoId)) return false;
+    var st = Game.state, u = E().activeUnit(st), ok;
+    if (rede) ok = aplicaLocal({ a: 'po', u: u.uid, s: pocaoId });
+    else {
+      ok = !!E().usePotion(st, u.uid, pocaoId);
+      anotaSolo({ a: 'po', u: u.uid, s: pocaoId, ok: ok });
+    }
+    if (ok) JOGO.Progress.gastaConsumivel(pocaoId, 1);
+    return ok;
   };
 
   // ------------------------------------------------------------- fusão [G4]

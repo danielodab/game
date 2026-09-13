@@ -126,6 +126,10 @@ const OPS = {
   comprarMercado: () => { throw recusa('o mercadinho agora é entre contas, pelo servidor: abra o Mercadinho de novo', 'mercado'); },
   retirarMercado: () => { throw recusa('o mercadinho agora é entre contas, pelo servidor: abra o Mercadinho de novo', 'mercado'); },
 
+  // ---- a banca do mercador (13/09): as poções de vida pelo preço de DATA.consumiveis, com os
+  // vinténs do saco. A regra (teto por tipo, vintém que falta) é a do jogo: recusa sem erro
+  comprarPocao: (J, a) => J.Mercado.comprarPocao(txt(a, 'id'), int(a, 'qtd', 1, 1000)),
+
   // ---- o título: só o que a régua dá (o pódio vem do ranking do servidor)
   definirTitulo: (J, a, x) => {
     const t = txt(a, 'titulo', true);

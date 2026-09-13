@@ -817,6 +817,16 @@ html.celular.retrato .bt-top .bt-trava { min-height: 28px; height: 28px; top: 5p
   background: rgba(10,13,17,.92); border: 1px solid #7a4a12;
   font: 700 11px var(--ui-sans); color: var(--pa); text-align: center;
 }
+/* 13/09: a POÇÃO DE VIDA na barra: a contagem embaixo do custo, o vidro avermelhado */
+.spell.is-pocao { border-color: rgba(224,82,74,.55); background: linear-gradient(180deg, rgba(58,18,18,.92), rgba(16,21,27,.92)); }
+.sp-qtd {
+  position: absolute; top: 21px; left: 4px;
+  font: 700 10.5px var(--ui-sans); color: #ffd9d2; text-shadow: 0 1px 2px #000;
+}
+.ig-cura { font-size: 10px; line-height: 1.1; color: #f0a79c; }
+.mc-pocao .mc-atalhos { display: inline-flex; gap: 3px; flex: 0 0 auto; }
+.mc-pocao .mc-qtd { width: 54px; }
+.mc-pocao .btn.mc-falta { opacity: .45; filter: grayscale(.5); }
 .sp-cd {
   position: absolute; inset: 3px 3px 20px; border-radius: 9px;
   background: rgba(6,9,13,.78);
