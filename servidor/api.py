@@ -95,8 +95,10 @@ RE_IID = re.compile(r'^[\x21-\x7e]{1,64}$')    # ASCII visível, sem espaço —
 # insígnias nem nas cartas: "o drop de itens bons deve ser MUITO difícil".
 # Quem calcula a recompensa é o cliente (a mesma confiança do saque, ver o
 # topo): o teto segura erro de digitação do Mestre, não trapaça.
+# 12/09, pedido do dono: "devo conseguir colocar o rate que eu quiser" — o
+# Mestre escolhe o número (mais de 1 até ×10); o ×10 só segura o zero a mais.
 # js/core/agenda.js tem a cópia destes números.
-AGENDA_TETOS = {'xp': 2.0, 'vintem': 1.5, 'pedras': 2.0, 'saque': 1.5, 'aviso': 1.0}
+AGENDA_TETOS = {'xp': 10.0, 'vintem': 10.0, 'pedras': 10.0, 'saque': 10.0, 'aviso': 1.0}
 # os calabouços que um evento pode mirar (null = todos). O servidor não sabe
 # quais portais estão fechados — isso mora em dungeons.js, e uma terceira cópia
 # ficaria velha. Evento num portal fechado só não tem efeito: ninguém desce lá.

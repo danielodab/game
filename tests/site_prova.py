@@ -101,7 +101,7 @@ EVENTOS_CHEIA = json.loads(r'''
   "agora": 1789041600,
   "fusoMin": -180,
   "janelaDias": 14,
-  "tetos": {"xp": 2.0, "vintem": 1.5, "pedras": 2.0, "saque": 1.5, "aviso": 1.0},
+  "tetos": {"xp": 10.0, "vintem": 10.0, "pedras": 10.0, "saque": 10.0, "aviso": 1.0},
   "ativos": [
     {"id": "e12", "origem": "pontual", "regra": null, "tipo": "xp", "multiplicador": 2.0,
      "calabouco": null, "titulo": "Quinta do XP", "texto": "Toda sala paga o dobro de experiência.",
@@ -368,7 +368,7 @@ def prova_eventos(abre):
     check('eventos (cheia): o Calabouço do Dia nunca é portal fechado',
           len(ids) >= 14 and not (set(ids) & set(FECHADOS)), ' '.join(sorted(set(ids))) + ' | fechados: ' + ' '.join(FECHADOS))
     check('eventos (cheia): a frase da raridade', 'nenhum evento mexe na raridade das peças' in t.lower())
-    check('eventos (cheia): os tetos vêm do servidor', re.search(r'data-teto="saque"[^>]*>×1,5<', h) is not None)
+    check('eventos (cheia): os tetos vêm do servidor', re.search(r'data-teto="saque"[^>]*>×10<', h) is not None)
     limpo('eventos (cheia)', h)
     menu_ok('eventos', h)
 

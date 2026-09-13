@@ -1063,7 +1063,7 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(status, 200, r)
         self.assertTrue(r['ok'])
         self.assertEqual((r['ativos'], r['proximos'], r['regras']), ([], [], []))
-        self.assertEqual(r['tetos'], {'xp': 2.0, 'vintem': 1.5, 'pedras': 2.0, 'saque': 1.5, 'aviso': 1.0})
+        self.assertEqual(r['tetos'], {'xp': 10.0, 'vintem': 10.0, 'pedras': 10.0, 'saque': 10.0, 'aviso': 1.0})
         self.assertEqual(r['fatores'], {'geral': {}, 'porCalabouco': {}})
         self.assertEqual((r['fusoMin'], r['janelaDias']), (-180, 14))
         self.assertLessEqual(abs(r['agora'] - time.time()), 5)
@@ -1134,10 +1134,10 @@ class ProvaDaApi(unittest.TestCase):
             ('multiplicador 1', {'multiplicador': 1}),
             ('multiplicador True', {'multiplicador': True}),
             ('multiplicador "2"', {'multiplicador': '2'}),
-            ('multiplicador acima do teto do xp', {'multiplicador': 2.5}),
+            ('multiplicador acima do teto do xp', {'multiplicador': 10.5}),
             ('multiplicador gigante', {'multiplicador': 10 ** 400}),
-            ('vintém acima do teto', {'tipo': 'vintem', 'multiplicador': 1.6}),
-            ('saque acima do teto', {'tipo': 'saque', 'multiplicador': 2}),
+            ('vintém acima do teto', {'tipo': 'vintem', 'multiplicador': 10.01}),
+            ('saque acima do teto', {'tipo': 'saque', 'multiplicador': 11}),
             ('sem multiplicador', {'multiplicador': None}),
             ('aviso com multiplicador 2', {'tipo': 'aviso', 'multiplicador': 2}),
             ('tipo drop', {'tipo': 'drop'}),
@@ -1275,7 +1275,7 @@ class ProvaDaApi(unittest.TestCase):
                   {'dias': 6}, {'hora': '24:00'}, {'hora': '10:60'}, {'hora': '10h'}, {'hora': 600}, {'hora': None},
                   {'duracaoMin': 14}, {'duracaoMin': 1441}, {'duracaoMin': True}, {'duracaoMin': 90.5},
                   {'duracaoMin': '60'}, {'vigenteDe': 2000, 'vigenteAte': 1000}, {'vigenteAte': 'amanhã'},
-                  {'tipo': 'drop'}, {'multiplicador': 1.6}, {'calabouco': 'lua'}, {'titulo': 'ab'}]
+                  {'tipo': 'drop'}, {'multiplicador': 10.5}, {'calabouco': 'lua'}, {'titulo': 'ab'}]
         for muda in tortos:
             status, r = m.pede('POST', '/api/eventos/regras', dict(corpo, **muda))
             self.assertEqual(status, 400, (muda, r))
@@ -1366,18 +1366,18 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(f['porCalabouco']['cistern'], {'xp': 2.0, 'saque': 1.5})
         self.assertEqual(f['porCalabouco']['greenhouse'], {'xp': 1.5})         # o geral vence o 1,25 próprio
         self.assertEqual(set(f['porCalabouco']), {'cistern', 'greenhouse'})    # nada vaza para os outros
-        # o teto vale também na leitura: uma linha mexida à mão no sqlite (xp ×9,
-        # tipo que não existe) não vira "XP ×9" no site nem quebra o GET
+        # o teto vale também na leitura: uma linha mexida à mão no sqlite (xp ×90,
+        # tipo que não existe) não vira "XP ×90" no site nem quebra o GET
         b = self.banco()
         b.execute("INSERT INTO agenda_eventos(tipo, multiplicador, titulo, inicio, fim, criado_em) "
-                  "VALUES ('xp', 9, 'Digitado errado', ?, ?, ?)", (t - 10, t + 3600, t))
+                  "VALUES ('xp', 90, 'Digitado errado', ?, ?, ?)", (t - 10, t + 3600, t))
         b.execute("INSERT INTO agenda_eventos(tipo, multiplicador, titulo, inicio, fim, criado_em) "
                   "VALUES ('drop', 5, 'Tipo que não existe', ?, ?, ?)", (t - 10, t + 3600, t))
         b.commit()
         b.close()
         g = self.agenda()
-        self.assertEqual(g['fatores']['geral'], {'xp': 2.0})
-        self.assertEqual(g['fatores']['porCalabouco']['cistern'], {'xp': 2.0, 'saque': 1.5})
+        self.assertEqual(g['fatores']['geral'], {'xp': 10.0})
+        self.assertEqual(g['fatores']['porCalabouco']['cistern'], {'xp': 10.0, 'saque': 1.5})
         self.assertTrue(all(1 <= e['multiplicador'] <= g['tetos'][e['tipo']] for e in g['ativos'] + g['proximos']))
         self.assertNotIn('drop', [e['tipo'] for e in g['ativos']])
         # a função pura: abaixo de 1 some, tipo desconhecido é ignorado, [inicio, fim)
@@ -1389,8 +1389,8 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(resolve([ev(tipo='drop', multiplicador=5), ev(tipo=None)], 150)['geral'], {})
         self.assertEqual(resolve([ev()], 100)['geral'], {'xp': 1.5})         # o início entra
         self.assertEqual(resolve([ev()], 200)['geral'], {})                   # o fim não
-        self.assertEqual(resolve([ev(multiplicador=9), ev(tipo='saque', multiplicador=9)], 150)['geral'],
-                         {'xp': 2.0, 'saque': 1.5})
+        self.assertEqual(resolve([ev(multiplicador=90), ev(tipo='saque', multiplicador=90)], 150)['geral'],
+                         {'xp': 10.0, 'saque': 10.0})
         self.assertEqual(resolve([ev(calabouco='cistern', multiplicador=2), ev(multiplicador=1.5)], 150),
                          {'geral': {'xp': 1.5}, 'porCalabouco': {'cistern': {'xp': 2.0}}})
         self.limpa_agenda()

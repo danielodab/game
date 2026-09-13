@@ -548,6 +548,11 @@ var JOGO = (typeof window !== 'undefined')
         if (sheetName === 'party' && partyTab === 'inventario') closeSheet();
         else openSheet('inventory');
       }
+      // M: o Painel do Mestre de qualquer tela (12/09) — só para o Mestre
+      if (k === 'm' && mestreAtivo()) {
+        ev.preventDefault();
+        alternaPainelMestre();
+      }
     });
 
     UI.showScreen(safe(function () { return G().screen; }, 'menu'));
@@ -818,7 +823,11 @@ var JOGO = (typeof window !== 'undefined')
      * DESCER (que é escolher quem desce), a COLEÇÃO (as cartas, que é o que
      * se olha antes de escolher) e a CONTA. Mais o resumo embaixo. */
     var acts = el('div', 'menu-acts');
-    acts.appendChild(btn('Descer', 'btn-primary btn-big', function () { navTo('heroSelect'); }));
+    // 12/09: a conta do Mestre só tem o Mestre do Fundo — não há quem escolher
+    acts.appendChild(btn('Descer', 'btn-primary btn-big', function () {
+      if (soMestreDoFundo()) { selHeroes = ['gm']; navTo('hub'); return; }
+      navTo('heroSelect');
+    }));
     // O GAME MASTER (31/08): o botão só EXISTE com a chave do dono virada —
     // é a porta do Mestre e não entra na conta do "menu enxuto"
     if (JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()) {
@@ -867,9 +876,10 @@ var JOGO = (typeof window !== 'undefined')
   function buildHeroSelect() {
     var s = screens.heroSelect;
     clear(s);
-    // A CONTA DO MESTRE já vem com o Mestre escolhido como avatar (03/09)
-    if (!selHeroes.length && JOGO.GM && JOGO.GM.contaMestre &&
-        safe(function () { return JOGO.GM.contaMestre(); }, false) && hero('gm')) selHeroes = ['gm'];
+    // A CONTA DO MESTRE só tem o Mestre do Fundo (12/09: "conta de gm só terá o
+    // personagem GM") — já escolhido, e o único cartão da tela
+    var soMestre = soMestreDoFundo();
+    if (soMestre) selHeroes = ['gm'];
     s.appendChild(header('Quem desce',
       'Escolha 1 ou 2 heróis — o PRIMEIRO é o seu avatar e anda no Acampamento. ' +
       'Sozinho, a sorte de saque é máxima.', 'menu'));
@@ -902,7 +912,7 @@ var JOGO = (typeof window !== 'undefined')
       paintLuck(luck, n);
     }
 
-    var ids = Object.keys(classes());
+    var ids = soMestre ? ['gm'] : Object.keys(classes());
     if (!ids.length) ids = heroIds();
     ids.forEach(function (cid) { grid.appendChild(heroCard(cid, paintFoot)); });
     paintFoot();
@@ -1198,6 +1208,12 @@ var JOGO = (typeof window !== 'undefined')
       acts.appendChild(btn('Sair do calabouço', 'btn-mini btn-ghost', perguntaSair));
     } else {
       acts.appendChild(btn('Menu', 'btn-mini btn-ghost', function () { navTo('menu'); }));
+    }
+    // 12/09: o Painel do Mestre abre daqui, sem voltar ao Menu (também na batalha e na tecla M)
+    if (mestreAtivo()) {
+      var bGm = btn('⚔ Mestre', 'btn-mini btn-gold hub-gm', function () { alternaPainelMestre(); });
+      bGm.title = 'Painel do Mestre (M)';
+      acts.insertBefore(bGm, acts.firstChild);
     }
     top.appendChild(acts);
     s.appendChild(top);
@@ -2333,9 +2349,10 @@ var JOGO = (typeof window !== 'undefined')
     var foot = el('footer', 'ui-foot');
     var pend = lastRewards.elementChoices || [];
     if (pend.length) {
+      // 12/09: a escolha é na ficha de Feitiços, por cima desta tela — sem sair dela
       foot.appendChild(btn('Escolher caminho (' + pend.length + ')', 'btn-gold', function () {
-        elemChoiceHero = pend[0];
-        navTo('elementChoice');
+        partyHero = pend[0];
+        openSheet('spells');
       }));
     }
     foot.appendChild(btn('Inventário', 'btn-ghost', function () { openSheet('inventory'); }));
@@ -2470,6 +2487,13 @@ var JOGO = (typeof window !== 'undefined')
     var top = el('div', 'bt-top');
     bt.room = el('div', 'bt-room');
     top.appendChild(bt.room);
+
+    // O PAINEL DO MESTRE no meio da luta (12/09): só existe para o Mestre
+    if (mestreAtivo()) {
+      bt.gm = btn('⚔', 'bt-gm', function () { alternaPainelMestre(); });
+      bt.gm.title = 'Painel do Mestre (M)';
+      top.appendChild(bt.gm);
+    }
 
     // INTERRUPTOR DE SOM. Fica no topo, junto do nome da sala, porque vale para
     // a partida inteira e nao para o turno. Nao guarda estado proprio: quem
@@ -4564,11 +4588,8 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(el('h3', 'hs-sec', escolhido
       ? 'Galho de ' + (ELEM_PT[escolhido] || escolhido)
       : 'Quatro galhos · a escolha é no nível ' + lvEscolha));
-    if (!escolhido) {
-      body.appendChild(el('p', 'hs-hint',
-        'Enquanto o elemento não é escolhido os quatro caminhos seguem abertos. ' +
-        'Depois da escolha, ela é permanente.'));
-    }
+    // 12/09: escolher, trocar, liberar e reescrever o caminho é AQUI, sem tela à parte
+    body.appendChild(painelCaminhos(hid, function () { openSheet('spells'); }));
 
     /* A ÁRVORE de verdade: quatro COLUNAS verticais, uma por elemento, cada
      * uma tingida pela cor dele — cabeçalho colorido, nós encadeados por um
@@ -6408,10 +6429,12 @@ var JOGO = (typeof window !== 'undefined')
     velho: 'Esse caminho não está liberado.',
     heroi: 'Herói desconhecido.'
   };
-  function escolheReescrita(heroId, novo) {
+  // `refaz` (12/09): a ficha de onde veio — a de Feitiços ou a do herói
+  function escolheReescrita(heroId, novo, refaz) {
+    refaz = refaz || function () { openSheet('heroSheet', heroId); };
     var lista = safe(function () { return P().heroElements(heroId); }, []);
     var h = hero(heroId) || {};
-    if (lista.length <= 1) { confirmaReescrita(heroId, lista[0] || h.element, novo); return; }
+    if (lista.length <= 1) { confirmaReescrita(heroId, lista[0] || h.element, novo, refaz); return; }
     var nn = esc(ELEM_PT[novo] || novo);
     var b = sheetShell('Qual caminho sai?', 'Pergaminho da Reescrita — o de ' + nn + ' entra no lugar dele');
     sheetName = 'confirm';
@@ -6420,17 +6443,18 @@ var JOGO = (typeof window !== 'undefined')
     var fila = el('div', 'guilda-emblemas');
     lista.forEach(function (v) {
       var bv = btn(esc(ELEM_PT[v] || v) + (h.element === v ? ' · ATIVO' : ''), 'btn-mini btn-primary', function () {
-        confirmaReescrita(heroId, v, novo);
+        confirmaReescrita(heroId, v, novo, refaz);
       });
       bv.style.setProperty('--ec', elemColor(v));
       fila.appendChild(bv);
     });
     b.appendChild(fila);
     var acts = el('div', 'confirm-acts');
-    acts.appendChild(btn('Voltar', 'btn-ghost', function () { openSheet('heroSheet', heroId); }));
+    acts.appendChild(btn('Voltar', 'btn-ghost', function () { refaz(); }));
     b.appendChild(acts);
   }
-  function confirmaReescrita(heroId, velho, novo) {
+  function confirmaReescrita(heroId, velho, novo, refaz) {
+    refaz = refaz || function () { openSheet('heroSheet', heroId); };
     var pode = safe(function () { return P().podeReescrever(heroId, velho, novo); }, null);
     if (!pode || !pode.ok) {
       toast((pode && MOTIVO_REESCRITA[pode.motivo]) || 'Não dá para reescrever agora.');
@@ -6449,7 +6473,7 @@ var JOGO = (typeof window !== 'undefined')
       function () {
         if (safe(function () { return P().reescreveElemento(heroId, velho, novo); }, false)) {
           toast('Caminho reescrito: ' + (ELEM_PT[novo] || novo) + ' no lugar de ' + (ELEM_PT[velho] || velho) + '.', 'good');
-          openSheet('heroSheet', heroId);
+          refaz();
         } else toast('Não deu para reescrever.');
       });
   }
@@ -6488,12 +6512,57 @@ var JOGO = (typeof window !== 'undefined')
     top.appendChild(col);
     body.appendChild(top);
 
-    if (h.element === 'neutro' && (h.level || 1) >= ((D().leveling || {}).elementChoiceLevel || 5)) {
-      body.appendChild(btn('Escolher caminho elemental', 'btn-gold btn-block', function () {
-        closeSheet();
-        elemChoiceHero = heroId;
-        navTo('elementChoice');
-      }));
+    // ---- os caminhos elementais: o mesmo painel da ficha de Feitiços (12/09)
+    body.appendChild(el('h3', 'hs-sec', 'Caminhos elementais'));
+    body.appendChild(painelCaminhos(heroId, function () { sheetHero(heroId); }));
+    corpoDoHeroi(body, heroId, h, cid);
+  }
+
+  /* OS CAMINHOS ELEMENTAIS NUM LUGAR SÓ (12/09, pedido do dono: "a escolha
+   * elementar, mudança, quando for liberando deve ser por aqui e não ter que
+   * ir no menu"). Escolher o primeiro no nível 5, trocar o ativo, liberar a
+   * vaga que a estrela abriu e reescrever com o pergaminho — o mesmo painel na
+   * ficha de Feitiços e na do herói. `refaz` redesenha a ficha de onde veio. */
+  function painelCaminhos(heroId, refaz) {
+    var h = hero(heroId) || {};
+    var cid = h.classId || heroId;
+    var caixa = el('div', 'caminhos');
+    var lvEscolha = (D().leveling || {}).elementChoiceLevel || 5;
+    var defC = classDef(cid);
+    var elemsC = ['fogo', 'agua', 'terra', 'ar'].filter(function (e) {
+      return !(defC && defC.paths && !defC.paths[e]);          // classe sem esse caminho
+    });
+
+    if (!h.element || h.element === 'neutro') {
+      if ((h.level || 1) < lvEscolha) {
+        caixa.appendChild(el('p', 'hs-hint', 'No nível ' + lvEscolha + ' você escolhe o primeiro caminho aqui ' +
+          'mesmo, de graça. Até lá os quatro galhos seguem abertos para você comparar.'));
+        return caixa;
+      }
+      caixa.classList.add('is-escolha');
+      caixa.appendChild(el('p', 'caminhos-tx', '<b>Escolha o caminho elemental.</b> ' +
+        esc(className(cid)) + ' já chegou ao nível ' + lvEscolha + ': compare os galhos e toque no elemento. ' +
+        'O primeiro é de graça; depois, só o Pergaminho da Reescrita troca.'));
+      var fila0 = el('div', 'guilda-emblemas');
+      elemsC.forEach(function (e) {
+        var nome = ELEM_PT[e] || e;
+        var b0 = btn('Seguir ' + nome, 'btn-mini btn-primary', function () {
+          confirmSheet('Seguir o caminho de ' + nome + '?',
+            'É <b>permanente</b> — só o Pergaminho da Reescrita troca depois. A partir daqui, cada nível dá ' +
+            '+5 PV e +3 de dano de ' + nome + ', e os feitiços do galho vão abrindo com o nível.',
+            function () {
+              var ok = safe(function () { return G().chooseElement(heroId, e); }, false);
+              if (!ok) ok = safe(function () { return P().chooseElement(heroId, e); }, false);
+              if (ok) toast('Caminho de ' + nome + ' escolhido — os feitiços do galho já estão na mão.', 'good');
+              else toast('Não deu para escolher agora.');
+              refaz();
+            });
+        });
+        b0.style.setProperty('--ec', elemColor(e));
+        fila0.appendChild(b0);
+      });
+      caixa.appendChild(fila0);
+      return caixa;
     }
 
     // ---- OS CAMINHOS ELEMENTAIS POR ESTRELA (30/08): "da terceira estrela
@@ -6501,8 +6570,7 @@ var JOGO = (typeof window !== 'undefined')
     // vaga, ★4 a 3ª, ★5 a 4ª. O ativo acende; liberado troca com um toque
     // (os feitiços do caminho trocam juntos); vaga aberta escolhe; o resto
     // mostra a estrela que falta.
-    if (h.element !== 'neutro') {
-      body.appendChild(el('h3', 'hs-sec', 'Caminhos elementais'));
+    {
       var liberados = safe(function () { return P().heroElements(heroId); }, [h.element]);
       var vagas = safe(function () { return P().elementSlots(heroId); }, 1);
       // o PERGAMINHO DA REESCRITA (Fase C): com ele, e só no Acampamento, o
@@ -6512,9 +6580,7 @@ var JOGO = (typeof window !== 'undefined')
       var classeReescreve = !!(defRees && defRees.paths);
       var comReescrita = pgRees > 0 && classeReescreve && foraDeDescida();
       var filaEl = el('div', 'guilda-emblemas');
-      ['fogo', 'agua', 'terra', 'ar'].forEach(function (e3) {
-        var def3 = classDef(cid);
-        if (def3 && def3.paths && !def3.paths[e3]) return;   // classe sem esse caminho
+      elemsC.forEach(function (e3) {
         var tem = liberados.indexOf(e3) >= 0;
         var ativo = h.element === e3;
         var podeAbrir = !tem && liberados.length < vagas;
@@ -6529,12 +6595,12 @@ var JOGO = (typeof window !== 'undefined')
             if (tem) {
               if (safe(function () { return P().trocaElemento(heroId, e3); }, false)) {
                 toast('O caminho de ' + (ELEM_PT[e3] || e3) + ' assumiu — feitiços trocados.', 'good');
-                sheetHero(heroId);
+                refaz();
               }
               return;
             }
             if (!podeAbrir) {
-              if (reescreve) { escolheReescrita(heroId, e3); return; }
+              if (reescreve) { escolheReescrita(heroId, e3, refaz); return; }
               var alvoEstrela = { 2: 3, 3: 4, 4: 5 }[liberados.length + 1] || 3;
               toast('A ★' + alvoEstrela + ' da classe libera a próxima vaga — junte cartas.');
               return;
@@ -6543,15 +6609,15 @@ var JOGO = (typeof window !== 'undefined')
               'A escolha é permanente — a vaga veio das estrelas da classe.', function () {
                 if (safe(function () { return P().liberaElemento(heroId, e3); }, false)) {
                   toast('Caminho de ' + (ELEM_PT[e3] || e3) + ' liberado!', 'good');
-                  sheetHero(heroId);
+                  refaz();
                 } else toast('não deu');
               });
           });
         b3.style.setProperty('--ec', elemColor(e3));
         filaEl.appendChild(b3);
       });
-      body.appendChild(filaEl);
-      body.appendChild(el('p', 'inv-dica',
+      caixa.appendChild(filaEl);
+      caixa.appendChild(el('p', 'inv-dica',
         'Vagas de caminho: <b>' + liberados.length + ' / ' + vagas + '</b> — ' +
         '★3 abre a 2ª, ★4 a 3ª, ★5 a 4ª. Trocar o ativo troca os feitiços do caminho.' +
         ((pgRees > 0 && classeReescreve)
@@ -6560,7 +6626,11 @@ var JOGO = (typeof window !== 'undefined')
             : ' O Pergaminho da Reescrita (×' + pgRees + ') se usa no Acampamento.')
           : '')));
     }
+    return caixa;
+  }
 
+  // o resto da ficha do herói: equipamento, feitiços e o que ainda vem
+  function corpoDoHeroi(body, heroId, h, cid) {
     // ---- equipamento: 4 espaços + pet (adendo v2.2)
     body.appendChild(el('h3', 'hs-sec', 'Equipamento'));
     var slots = el('div', 'hs-slots');
@@ -7800,7 +7870,8 @@ var JOGO = (typeof window !== 'undefined')
   var gmAgendaAba = 'agora';
   var gmAgendaRasc = { tipo: 'xp', mult: 2, cal: '', titulo: '', texto: '', horas: 2,
                        ini: '', fim: '', dias: [6], hora: '10:00', durH: 12 };
-  var AG_MULTS = [1.1, 1.25, 1.5, 2];
+  // 12/09: o multiplicador é livre (mais de 1 até o teto do tipo); estes são só os atalhos
+  var AG_MULTS = [1.5, 2, 3, 5, 10];
   var AG_DICA = {
     xp: 'Toda sala paga mais experiência (o corte por herói, o dízimo e o pet herdam).',
     vintem: 'Toda sala paga mais vinténs.',
@@ -7895,11 +7966,22 @@ var JOGO = (typeof window !== 'undefined')
         R.tipo = v;
         sheetGMAgenda();
       })));
-      var ms = multsDe(R.tipo);
-      if (ms.length) {
-        if (ms.indexOf(Number(R.mult)) < 0) R.mult = ms[ms.length - 1];
-        form.appendChild(campo('Multiplicador', seletor(ms.map(function (m) { return [m, Ag.fmtFator(m)]; }),
-          R.mult, function (v) { R.mult = Number(v); })));
+      var teto = Ag.TETOS[R.tipo] || 1;
+      if (teto > 1) {
+        var mR = multLido(R.mult);
+        if (!(mR > 1 && mR <= teto)) R.mult = Math.min(2, teto);
+        // div, não label: o toque num atalho não pode cair no campo
+        var wMult = el('div', 'ag-campo');
+        wMult.appendChild(el('span', 'inv-dica', esc('Multiplicador (de ×1,01 até ' + Ag.fmtFator(teto) + ')')));
+        wMult.appendChild(entrada('number', R.mult, function (v) { R.mult = v; },
+          { min: '1.01', max: String(teto), step: '0.01', inputmode: 'decimal' }));
+        var atalhos = el('div', 'ag-dias ag-atalhos');
+        multsDe(R.tipo).forEach(function (m) {
+          atalhos.appendChild(btn(Ag.fmtFator(m), 'btn-mini ag-mult-b' + (multLido(R.mult) === m ? ' btn-gold' : ' btn-ghost'),
+            function () { R.mult = m; sheetGMAgenda(); }));
+        });
+        wMult.appendChild(atalhos);
+        form.appendChild(wMult);
       }
       form.appendChild(el('p', 'inv-dica ag-dica', esc(AG_DICA[R.tipo] || '')));
       form.appendChild(campo('Calabouço', seletor([['', 'Todos os calabouços']].concat(
@@ -7920,6 +8002,22 @@ var JOGO = (typeof window !== 'undefined')
     function tituloOk() {
       var t = String(gmAgendaRasc.titulo || '').trim();
       if (t.length < 3 || t.length > 60) { toast('O título precisa de 3 a 60 letras.'); return false; }
+      return multOk();
+    }
+    // "1,5" ou "1.5" → 1.5, em 2 casas (o servidor arredonda igual); lixo → NaN
+    function multLido(v) {
+      var n = Number(String(v == null ? '' : v).trim().replace(',', '.'));
+      return isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+    }
+    function multOk() {
+      var R = gmAgendaRasc;
+      if (R.tipo === 'aviso') return true;
+      var teto = Ag.TETOS[R.tipo] || 1, m = multLido(R.mult);
+      if (!(m > 1 && m <= teto)) {
+        toast('O multiplicador vai de ×1,01 até ' + Ag.fmtFator(teto) + '.');
+        return false;
+      }
+      R.mult = m;
       return true;
     }
     // uma lista de eventos; o pontual ganha "encerrar" (no ar) ou "cancelar" (futuro)
@@ -8144,7 +8242,8 @@ var JOGO = (typeof window !== 'undefined')
     }));
     body.appendChild(el('p', 'inv-dica',
       'O cofre não tem fundo: todo preço se paga sozinho enquanto a chave estiver virada. ' +
-      'Escolha o <b>Mestre do Fundo</b> na tela Quem Desce para levá-lo à batalha.'));
+      'A conta do Mestre entra direto com o <b>Mestre do Fundo</b>; este painel abre de qualquer tela ' +
+      '(o botão ⚔ ou a tecla <b>M</b>).'));
 
     // ---- o GRIMÓRIO
     body.appendChild(el('h3', 'hs-sec', 'Grimório — qualquer feitiço do jogo'));
@@ -9189,6 +9288,22 @@ var JOGO = (typeof window !== 'undefined')
    * Só age se o jogador ainda não saiu do menu por conta própria — um clique
    * durante a leitura do save (que é uma promessa) manda mais que isto. */
   var tentouEntrarDireto = false;
+  /* O MESTRE (12/09, pedido do dono): o modo ligado, e a CONTA do Mestre com o
+   * herói dele no save — essa conta só tem o Mestre do Fundo, então entra
+   * direto na praça com ele e nunca vê a tela de escolha. */
+  function mestreAtivo() {
+    return !!(JOGO.GM && JOGO.GM.ativo && safe(function () { return JOGO.GM.ativo(); }, false));
+  }
+  function soMestreDoFundo() {
+    return mestreAtivo() && !!(JOGO.GM.contaMestre && safe(function () { return JOGO.GM.contaMestre(); }, false)) &&
+      !!hero('gm');
+  }
+  // abre o Painel do Mestre por cima da tela em que está; aberto (ou numa das fichas dele), fecha
+  function alternaPainelMestre() {
+    if (!mestreAtivo()) return;
+    if (sheetName === 'gm') closeSheet();
+    else openSheet('gm');
+  }
   /* Quem NÃO entra direto: as provas (tests/*.html abrem o jogo num iframe e
    * esperam o menu para dirigir a partir dele — com a dupla lembrada no save
    * da origem de testes, o jogo pulava o menu e as provas esperavam para
@@ -9202,6 +9317,12 @@ var JOGO = (typeof window !== 'undefined')
     tentouEntrarDireto = true;
     if (pulaEntradaDireta()) return;
     JOGO.DB.jogador().then(function (j) {
+      // a conta do Mestre não precisa de dupla lembrada: é sempre o Mestre do Fundo.
+      // Aqui dentro, e não antes da promessa: síncrono, o boot ainda repunha o menu depois
+      if (soMestreDoFundo()) {
+        if (current === 'menu') { selHeroes = ['gm']; duplaGuardada = 'gm'; navTo('hub'); }
+        return;
+      }
       var lista = (j && j.dupla) || [];
       if (!lista.length || current !== 'menu' || selHeroes.length) return;
       var boa = [];

@@ -1374,10 +1374,12 @@ var JOGO = (typeof window !== 'undefined')
       return 1;
     } catch (e) { return 1; }
   }
-  // o teto de XP da agenda (2,0): pergaminho e evento juntos não passam dele
+  // o teto do XP comprado (2,0): pergaminho/bônus e evento juntos não passam
+  // dele. 12/09: não é mais o teto do evento (que o Mestre sobe até ×10) —
+  // um evento acima de ×2 vale sozinho e o comprado pausa
   function tetoXp() {
     var t = null;
-    try { t = JOGO.Agenda && JOGO.Agenda.TETOS ? JOGO.Agenda.TETOS.xp : null; } catch (e) { t = null; }
+    try { t = JOGO.Agenda ? JOGO.Agenda.TETO_XP_COMPRADO : null; } catch (e) { t = null; }
     return (typeof t === 'number' && isFinite(t) && t >= 1) ? t : 2.0;
   }
   /* O BÔNUS DE XP POR TEMPO (loja 2, 10/09): o fator dele NESTA sala. `ts` é

@@ -43,7 +43,12 @@ var JOGO = (typeof window !== 'undefined')
 
   // sem sufixo de conta: o evento é do MUNDO, não de quem está jogando
   Ag.CHAVE = 'soterra-agenda-v1';
-  Ag.TETOS = { xp: 2.0, vintem: 1.5, pedras: 2.0, saque: 1.5, aviso: 1.0 };
+  // 12/09: o Mestre escolhe o multiplicador ("o rate que eu quiser"); o ×10 só segura o zero a mais
+  Ag.TETOS = { xp: 10.0, vintem: 10.0, pedras: 10.0, saque: 10.0, aviso: 1.0 };
+  /* o teto do XP COMPRADO (Pergaminho da Sabedoria e bônus por tempo) somado
+   * ao evento: os dois juntos não passam de ×2, a promessa da loja. Um evento
+   * maior que isso vale sozinho — o comprado pausa, sem gastar carga. */
+  Ag.TETO_XP_COMPRADO = 2.0;
   Ag.TIPOS = ['xp', 'vintem', 'pedras', 'saque', 'aviso'];
   Ag.NOMES = { xp: 'XP', vintem: 'Vinténs', pedras: 'Pedras de forja', saque: 'Saque', aviso: 'Aviso' };
   // os 7 que o servidor aceita; quem está fechado quem sabe é DATA.portalFechado

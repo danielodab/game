@@ -196,6 +196,64 @@ var JOGO = (typeof window !== 'undefined')
     return tex;
   }
 
+  /* A GRAMA DA PRAÇA (12/09, pedido do dono: "troque o chão da praça por
+   * grama"). Mesmo truque das lajotas: um tile de 256px em canvas, 4×4 m, que
+   * se repete. Fundo verde, manchas mais claras e mais escuras e tufos de
+   * folhinhas — tudo de um gerador SEMEADO, para a praça ser a mesma em toda
+   * visita. As bordas do tile dão a volta (cada traço é desenhado também do
+   * outro lado), senão a emenda aparece a cada 4 m. */
+  var texGrama = null;
+  function texturaGrama() {
+    if (texGrama) return texGrama;
+    var cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 256;
+    var g = cv.getContext('2d');
+    var semente = 1234567;
+    function sorte() { semente = (semente * 1103515245 + 12345) % 2147483648; return semente / 2147483648; }
+    function emVolta(desenha) {
+      for (var ox = -256; ox <= 256; ox += 256) {
+        for (var oy = -256; oy <= 256; oy += 256) desenha(ox, oy);
+      }
+    }
+    g.fillStyle = '#4c7a34';
+    g.fillRect(0, 0, 256, 256);
+    // manchas grandes e suaves: o gramado não é uma cor chapada
+    for (var m = 0; m < 26; m++) {
+      var mx = sorte() * 256, my = sorte() * 256, mr = 18 + sorte() * 34;
+      var clara = sorte() < 0.5;
+      var cor = clara ? 'rgba(120,170,72,0.22)' : 'rgba(34,66,26,0.26)';
+      emVolta(function (ox, oy) {
+        var gr = g.createRadialGradient(mx + ox, my + oy, 0, mx + ox, my + oy, mr);
+        gr.addColorStop(0, cor);
+        gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr;
+        g.fillRect(mx + ox - mr, my + oy - mr, mr * 2, mr * 2);
+      });
+    }
+    // as folhinhas: traços curtos em tons de verde
+    g.lineCap = 'round';
+    for (var f = 0; f < 1400; f++) {
+      var fx = sorte() * 256, fy = sorte() * 256;
+      var ang = -Math.PI / 2 + (sorte() - 0.5) * 1.3, len = 3 + sorte() * 5;
+      var tom = sorte();
+      g.strokeStyle = tom < 0.33 ? 'rgba(98,148,60,0.9)' : tom < 0.66 ? 'rgba(62,104,40,0.9)' : 'rgba(140,186,86,0.7)';
+      g.lineWidth = 1 + sorte() * 0.8;
+      var dx = Math.cos(ang) * len, dy = Math.sin(ang) * len;
+      emVolta(function (ox, oy) {
+        g.beginPath();
+        g.moveTo(fx + ox, fy + oy);
+        g.lineTo(fx + ox + dx, fy + oy + dy);
+        g.stroke();
+      });
+    }
+    var tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texGrama = tex;
+    return tex;
+  }
+
   function corDoTema(tema) {
     // a cor de cada Fecho no portal: aproveita as cores de elemento do jogo
     var mapa = { garden: '#6fae53', cistern: '#4a7d96', forge: '#d4553f',
@@ -653,12 +711,14 @@ var JOGO = (typeof window !== 'undefined')
     return p;
   }
   function montaChao() {
-    var mat = new THREE.MeshStandardMaterial({ map: texturaLajotas(), roughness: 1 });
     if (salaAtual) {
-      var quad = new THREE.Mesh(new THREE.PlaneGeometry(raioAtual() * 2, raioAtual() * 2), mat);
+      var matSala = new THREE.MeshStandardMaterial({ map: texturaLajotas(), roughness: 1 });
+      var quad = new THREE.Mesh(new THREE.PlaneGeometry(raioAtual() * 2, raioAtual() * 2), matSala);
       quad.rotation.x = -Math.PI / 2;
       return quad;
     }
+    // 12/09, pedido do dono: "troque o chão da praça por grama" — a antessala segue de lajotas
+    var mat = new THREE.MeshStandardMaterial({ map: texturaGrama(), roughness: 1 });
     var forma = new THREE.Shape(), N = 128, pontos = [];
     for (var i = 0; i < N; i++) {
       var a = (i / N) * Math.PI * 2, rr = raioNaDirecao(a);
@@ -668,7 +728,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     forma.closePath();
     var geo = new THREE.ShapeGeometry(forma, 1);
-    // a lajota se repete a cada 4 m, como no quadrado de antes (uv = mundo/4)
+    // o tile de grama se repete a cada 4 m (uv = mundo/4)
     var uv = geo.attributes.uv, pos = geo.attributes.position;
     for (var k = 0; k < uv.count; k++) uv.setXY(k, pos.getX(k) / 4, pos.getY(k) / 4);
     uv.needsUpdate = true;

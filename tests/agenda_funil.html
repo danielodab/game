@@ -407,8 +407,11 @@ módulo ausente, presente e vazio, ou presente com eventos que não valem ali.</
     check('... sem sorteio a mais nem a menos', XP2.randoms === BASE.randoms, XP2.randoms + ' × ' + BASE.randoms);
     check('... e o retorno cita o evento que pesou', tipos(XP2) === 'xp' && XP2.dado.eventos[0].fator === 2 &&
           XP2.dado.eventos[0].id === 'e1' && XP2.dado.eventos[0].titulo === 'Evento e1', JSON.stringify(XP2.dado.eventos));
-    var XP9 = vence({ seed: 1, eventos: [ev('e1', 'xp', 9, null)] });
-    check('XP ×9 vindo do servidor: o funil paga ×2 (o teto)', XP9.dado.xpGanho === 120);
+    var XP9 = vence({ seed: 1, eventos: [ev('e1', 'xp', 90, null)] });
+    check('XP ×90 vindo do servidor: o funil paga ×10 (o teto)', XP9.dado.xpGanho === 600);
+    var XP5 = vence({ seed: 1, eventos: [ev('e1', 'xp', 5, null)] });
+    check('XP ×5 (12/09: o Mestre escolhe o número): o funil paga ×5 (60 → 300)', XP5.dado.xpGanho === 300,
+          String(XP5.dado.xpGanho));
     var XPfora = vence({ seed: 1, eventos: [ev('e1', 'xp', 2, 'cistern')] });
     check('XP ×2 da Cisterna não pesa na Cova Rasa', XPfora.dado.xpGanho === 60 && tipos(XPfora) === '');
 
@@ -418,6 +421,9 @@ módulo ausente, presente e vazio, ou presente com eventos que não valem ali.</
           V15.credito.length === 1 && V15.credito[0] === Math.floor(60 * 0.30 * 1 * 1 * 1.5) && V15.credito[0] === 27 &&
           V15.dado.moedas === 27, JSON.stringify(V15.credito));
     check('... o XP fica como estava, e o retorno cita o evento', V15.dado.xpGanho === 60 && tipos(V15) === 'vintem');
+    var V3 = vence({ seed: 1, eventos: [ev('e2', 'vintem', 3, null)] });
+    check('com vintém ×3, DB.ganharMoedas recebe 54 (18 × 3)', V3.credito.length === 1 && V3.credito[0] === 54,
+          JSON.stringify(V3.credito));
 
     // ---------------------------------------------------------------- 4. saque
     var SD = vence({ seed: 2, dia: 't-dung-0', eventos: [] });
@@ -429,8 +435,10 @@ módulo ausente, presente e vazio, ou presente com eventos que não valem ali.</
     check('saque 1,25 com o Dia 1,5: vale o maior (1,5, e não 1,875)', SD125.mult === 1.5);
     var Sfora = vence({ seed: 2, eventos: [ev('e3', 'saque', 1.5, null)] });
     check('saque 1,5 fora do Dia: o multDrop vai a 1,5 e o retorno cita o evento', Sfora.mult === 1.5 && tipos(Sfora) === 'saque');
-    var S9 = vence({ seed: 2, eventos: [ev('e3', 'saque', 9, null)] });
-    check('saque ×9 vindo do servidor: preso em 1,5', S9.mult === 1.5);
+    var S9 = vence({ seed: 2, eventos: [ev('e3', 'saque', 90, null)] });
+    check('saque ×90 vindo do servidor: preso em 10', S9.mult === 10);
+    var S4 = vence({ seed: 2, eventos: [ev('e3', 'saque', 4, null)] });
+    check('saque ×4: o multDrop vai a 4', S4.mult === 4, String(S4.mult));
     var SB = vence({ seed: 2, eventos: [] });
     check('... e o saque não gasta sorteio a mais (mesma contagem com e sem evento)', Sfora.randoms === SB.randoms,
           Sfora.randoms + ' × ' + SB.randoms);

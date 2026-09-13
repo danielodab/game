@@ -89,8 +89,8 @@ mudam alguns rótulos.
   Brasília. O servidor confere a marca de Mestre da conta a cada pedido
   (`POST /api/eventos…`); nenhuma outra conta cria nada. Todo mundo vê em
   `/site/eventos.html`, na faixa do Acampamento e no painel do portal (a
-  leitura, `GET /api/eventos`, é pública). Cada tipo tem teto (XP ×2, vinténs
-  ×1,5, pedras ×2, saque ×1,5, aviso sem multiplicar), dois eventos do mesmo
+  leitura, `GET /api/eventos`, é pública). O multiplicador é o que você quiser, de
+  ×1,01 até ×10 (XP, vinténs, pedras e saque; o aviso não multiplica), dois eventos do mesmo
   tipo não se somam (vale o maior) e nenhum mexe na raridade das peças; o
   saque do evento também não soma com o Calabouço do Dia. Cancelar não apaga
   (fica a trilha). No Terminal, `admin agenda` lista o que está marcado e as
