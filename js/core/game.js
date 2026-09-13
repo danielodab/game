@@ -125,6 +125,9 @@ var JOGO = (typeof window !== 'undefined')
   var aiPlan = null, aiIdx = 0, aiUid = null, aiTimer = 0;
   // PV dos heróis ao fim da sala vencida: { heroId: hp } (0 = morto)
   var carryHp = null;
+  // A SEGURANÇA (13/09): a sala solo com bilhete do servidor — o bilhete e os lances anotados
+  var ataSolo = null;          // { bilhete, lances: [] }
+  var conferindoSala = false;  // a vitória está no servidor: a tela espera o recibo
   // internos do cronômetro
   var turnElapsed = 0, timerUid = null, lastTickSec = -1;
   var clockFn = null, lastClock = 0;
@@ -177,6 +180,8 @@ var JOGO = (typeof window !== 'undefined')
     Game.pendingFusion = null;
     Game.mustEndTurn = false;
     carryHp = null;
+    ataSolo = null;
+    conferindoSala = false;
     resetAiState();
     resetTimer(true);
     returnScreen = 'menu';
@@ -327,10 +332,28 @@ var JOGO = (typeof window !== 'undefined')
      * encontram naquele mapa — podem fazer trocas, seguir para a batalha ou
      * sair". A descida começa nela; a batalha só nasce em entrarNaSala. */
     Game.state = null;
+    ataSolo = null;
     setScreen('antessala', Game.salaInfo());
     if (emGrupo) avisaAntessala();       // [G11] o parceiro manda o `pronto`
+    preparaBilhete();                    // a semente da sala vem do servidor (13/09), já pedida
     return true;
   };
+
+  /* O BILHETE DA SALA (13/09, docs/SEGURANCA.md). Com sessão do site, o
+   * servidor manda na economia: a sala nasce da semente que ELE sorteou e,
+   * no fim, ele refaz a batalha com os lances e paga. Vale na descida solo
+   * dos calabouços; o Poço e a descida em grupo ficam de fora por enquanto. */
+  function autoridadeNaSala() {
+    var A = JOGO.Autoridade;
+    return !rede && Game.dungeonId && Game.dungeonId !== 'poco' && !!(A && A.ligada && A.ligada());
+  }
+  function pedidoDaSala() {
+    return { dungeonId: Game.dungeonId, roomIndex: Game.roomIndex,
+             dificuldade: Game.dificuldade || 'normal', herois: Game.party.slice() };
+  }
+  function preparaBilhete() {
+    try { if (autoridadeNaSala()) JOGO.Autoridade.prepara(pedidoDaSala()); } catch (e) {}
+  }
 
   /* O POÇO SEM FUNDO (25/08): a torre infinita. JOGO.Poco monta o calabouço
    * sintético e as salas (sempre uma à frente); daqui é um startRun normal
@@ -405,8 +428,10 @@ var JOGO = (typeof window !== 'undefined')
     resetTimer(true);
     // 03/09: a sala seguinte abre na ANTESSALA; o PV carregado espera lá
     Game.state = null;
+    ataSolo = null;
     setScreen('antessala', Game.salaInfo());
     if (emGrupo) avisaAntessala();
+    preparaBilhete();
     return true;
   };
 
@@ -427,8 +452,25 @@ var JOGO = (typeof window !== 'undefined')
     Game.mustEndTurn = false;
     resetAiState();
     resetTimer(true);
+    // A SEGURANÇA (13/09): com sessão do site a sala nasce da SEMENTE do servidor.
+    // Sem o bilhete pronto (a dificuldade mudou na porta, ou a rede demorou), pede
+    // e entra sozinha quando ele chegar — 'esperando' é verdadeiro: a HUD não reclama
+    var bil = null;
+    if (autoridadeNaSala()) {
+      var pedido = pedidoDaSala();
+      bil = JOGO.Autoridade.tomaBilhete(pedido);
+      if (!bil) {
+        JOGO.Autoridade.prepara(pedido, function () { if (Game.screen === 'antessala') Game.entrarNaSala(); });
+        return 'esperando';
+      }
+      // o PV que o servidor anotou ao fechar a sala anterior: a página pode ter
+      // recarregado no meio da descida, e a sala só se refaz igual com o mesmo PV
+      carryHp = bil.carry || null;
+    }
+    ataSolo = bil ? { bilhete: bil.bilhete, lances: [] } : null;
     Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload(),
-                                  { dificuldade: Game.dificuldade, escolhePosicao: true });
+      bil ? { seed: bil.semente, dificuldade: Game.dificuldade, escolhePosicao: true }
+          : { dificuldade: Game.dificuldade, escolhePosicao: true });
     if (Game.dungeonId === 'poco' && JOGO.Poco) {
       JOGO.Poco.escalaEstado(Game.state, Game.roomIndex + 1);
     }
@@ -1189,11 +1231,27 @@ var JOGO = (typeof window !== 'undefined')
     else Game.selectedSpellId = spellId;
   };
 
+  /* OS LANCES DA SALA SOLO (13/09): cada lance do jogador fica anotado no
+   * formato da batalha em dupla, com o resultado — o que falha também, porque
+   * a esquiva que falha gasta sorteio. O servidor refaz a sala com eles. */
+  function anotaSolo(l) {
+    if (ataSolo && !rede) ataSolo.lances.push(l);
+  }
+  function castSolo(uid, spellId, x, y) {
+    var ok = !!E().cast(Game.state, uid, spellId, x, y);
+    anotaSolo({ a: 'c', u: uid, s: spellId, x: x, y: y, ok: ok });
+    return ok;
+  }
+
   Game.onTileClicked = function (x, y) {
     if (Game.screen !== 'battle' || !Game.state) return;
     // 03/09: na escolha da posição, o toque numa casa dourada nasce ali
     if (Game.state.phase === 'placing') {
-      if (!rede) { E().place(Game.state, x, y); return; }
+      if (!rede) {
+        var okp = !!E().place(Game.state, x, y);
+        anotaSolo({ a: 'p', x: x, y: y, ok: okp });
+        return;
+      }
       // [G11] em grupo só o líder escolhe (o herói do parceiro nasce pela semente)
       if (!rede.colocador || travadoRede()) return;
       aplicaLocal({ a: 'p', x: x, y: y });
@@ -1211,7 +1269,7 @@ var JOGO = (typeof window !== 'undefined')
         if (targets[i].x === x && targets[i].y === y) {
           var lancou = rede
             ? aplicaLocal({ a: 'c', u: u.uid, s: Game.selectedSpellId, x: x, y: y })
-            : E().cast(Game.state, u.uid, Game.selectedSpellId, x, y);
+            : castSolo(u.uid, Game.selectedSpellId, x, y);
           if (lancou) Game.selectedSpellId = null;
           return;
         }
@@ -1225,7 +1283,10 @@ var JOGO = (typeof window !== 'undefined')
     // [G11] em rede a tentativa viaja mesmo quando falha (a esquiva que falha
     // gasta sorteio e zera o PP: o outro motor precisa fazer o mesmo)
     if (rede) aplicaLocal({ a: 'm', u: u.uid, x: x, y: y });
-    else E().move(Game.state, u.uid, x, y);
+    else {
+      var okm = !!E().move(Game.state, u.uid, x, y);
+      anotaSolo({ a: 'm', u: u.uid, x: x, y: y, ok: okm });
+    }
   };
 
   Game.onTileHover = function (x, y) {
@@ -1255,6 +1316,7 @@ var JOGO = (typeof window !== 'undefined')
     closeTurnTimer();
     timerUid = null;
     E().endTurn(Game.state);
+    anotaSolo({ a: 'e', ok: true });
   };
 
   // ------------------------------------------------------------- fusão [G4]
@@ -1308,6 +1370,7 @@ var JOGO = (typeof window !== 'undefined')
       ok = aplicaLocal({ a: 'f', u: uidA, alvo: uidB });
     } else {
       try { ok = !!F.declare(Game.state, uidA, uidB); } catch (e) { ok = false; }
+      anotaSolo({ a: 'f', u: uidA, alvo: uidB, ok: ok });
     }
     if (!ok) return false;
     Game.pendingFusion = { uidA: uidA, uidB: uidB };
@@ -1844,8 +1907,50 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   }
 
+  /* A SALA FECHADA NO SERVIDOR (13/09, a segurança): quem paga é o servidor.
+   * Vão o bilhete, os lances e o hash do fim; volta a recompensa (o MESMO
+   * objeto do computeRewards, calculado lá com o estado do servidor) e o
+   * estado novo, que a Autoridade já adotou. A derrota também vai (a sala
+   * fecha lá), sem esperar. */
+  function recompensaVazia(motivo) {
+    return { xpGanho: 0, xpMult: {}, xpPorHeroi: {}, levelUps: [], moedas: 0, saqueDupla: null,
+             dificuldade: Game.dificuldade || 'normal', difNome: '', desafio: null, drops: [], pets: [],
+             petCards: [], petXp: {}, petLevelUps: [], cards: [], stones: {}, selos: {}, insignias: 0,
+             dizimo: null, eventos: [], pergaminho: null, bonusXp: null,
+             elementChoices: Game.elementChoices(), recusada: motivo || null };
+  }
+  function fechaNoServidor(fase) {
+    var ata = ataSolo;
+    ataSolo = null;
+    if (!ata || !JOGO.Autoridade) return;
+    var hashFinal = 0;
+    try { hashFinal = E().hash(Game.state); } catch (e) { hashFinal = 0; }
+    var promessa = JOGO.Autoridade.fecha(ata.bilhete, ata.lances, hashFinal);
+    if (fase !== 'won') return;
+    conferindoSala = true;
+    var lastRoom = 2, ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
+    for (var k = 0; k < ds.length; k++) {
+      if (ds[k] && ds[k].id === Game.dungeonId && ds[k].rooms && ds[k].rooms.length) lastRoom = ds[k].rooms.length - 1;
+    }
+    var tela = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
+    try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('Conferindo a vitória com o servidor…'); } catch (eT) {}
+    promessa.then(function (r) {
+      conferindoSala = false;
+      if (Game.screen !== 'battle') return;            // saiu no meio (abandonou)
+      returnScreen = tela;
+      if (r && r.ok && r.fase === 'won') {
+        setScreen(tela, r.recompensa || recompensaVazia());
+        return;
+      }
+      var motivo = (r && r.erro) || 'o servidor não confirmou a vitória';
+      try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('A sala não rendeu recompensa: ' + motivo); } catch (eT2) {}
+      setScreen(tela, recompensaVazia(motivo));
+    });
+  }
+
   function handleBattleOver() {
     if (!Game.state || Game.screen !== 'battle') return;
+    if (conferindoSala) return;          // o recibo da vitória ainda está vindo do servidor
     // [G11] no grupo, quem não é a autoridade confere o FIM da sala com ela (o
     // hash do estado final) antes da recompensa; enquanto isso, segue na tela
     // da batalha — o update chama de novo a cada quadro
@@ -1903,6 +2008,7 @@ var JOGO = (typeof window !== 'undefined')
       Game.selectedSpellId = null;
       Game.mustEndTurn = false;
       Game.pendingFusion = null;
+      if (ataSolo) { fechaNoServidor('won'); return; }   // 13/09: com bilhete, quem paga é o servidor
       var rewards = computeRewards();
       var lastRoom = 2;
       var d = null, ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
@@ -1912,6 +2018,7 @@ var JOGO = (typeof window !== 'undefined')
       if (rede && rede.tipo === 'grupo') marcaRecompensaRede(rewards);
       setScreen(returnScreen, rewards);
     } else if (Game.state.phase === 'lost') {
+      if (ataSolo) fechaNoServidor('lost');                 // a sala perdida fecha no servidor também
       resetAiState();
       resetTimer(true);
       Game.selectedSpellId = null;

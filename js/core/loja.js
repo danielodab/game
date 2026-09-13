@@ -155,6 +155,15 @@
         }
         erro = null;
         var lista = Array.isArray(r.pedidos) ? r.pedidos : [];
+        /* A SEGURANÇA (13/09): com a autoridade ligada o servidor JÁ entregou
+         * (o juiz rodou a entrega no estado da conta) e mandou o estado novo.
+         * Aqui só se adota e se avisa a tela — aplicar de novo daria em dobro. */
+        var Aut = JOGO.Autoridade;
+        if ((r.progress || r.db) && Aut && Aut.adota) {
+          Aut.adota(r.progress, r.db);
+          lista.forEach(function (ped) { avisa('entregue', ped, null); });
+          return { ok: true, pedidos: lista.length, peloServidor: true };
+        }
         return emFila(lista).then(function (res) { return { ok: true, pedidos: lista.length, resultados: res }; });
       });
     }).then(function (x) { buscando = null; return x; }, function (e) {

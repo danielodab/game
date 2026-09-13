@@ -341,6 +341,17 @@
     });
   };
 
+  /* A AUTORIDADE (13/09, js/core/autoridade.js): a sala fechada e as operações
+   * de economia também gravam no servidor e sobem a versão. A resposta delas
+   * traz a versão nova, e a próxima subida deste save parte dela. */
+  N.defineVersao = function (v) {
+    var n = Math.max(0, Math.floor(Number(v) || 0));
+    if (n <= versao) return;
+    versao = n;
+    var s = S();
+    try { gravaRegistro(versao, s ? s.contaId() : null, sujo); } catch (e) {}
+  };
+
   /* Volta a tentar depois de uma recusa (a Ficha de Contas tem o botão). */
   N.retomar = function () {
     parada = false;

@@ -3288,6 +3288,8 @@ var JOGO = (typeof window !== 'undefined')
         var st2 = P().state;
         var entrada = st2.inventory[pi.indices[0]];
         if (!entrada) { toast('essa peça já saiu'); sheetBanco(); return; }
+        // 13/09: com sessão, a mesma guarda roda no servidor (antes de o índice mudar aqui)
+        if (JOGO.Autoridade) JOGO.Autoridade.op('depositarItem', { invIndex: pi.indices[0] });
         st2.inventory.splice(pi.indices[0], 1);
         safe(function () { P().save(); }, null);
         DBc.depositarItem(entrada).then(function () { sheetBanco(); });
@@ -3302,6 +3304,7 @@ var JOGO = (typeof window !== 'undefined')
           toast('O saco está cheio — não cabe mais nada.');
           return;
         }
+        if (JOGO.Autoridade) JOGO.Autoridade.op('sacarItem', { indice: pi.indices[0] });
         DBc.sacarItem(pi.indices[0]).then(function (res) {
           if (!res.ok) { toast(res.erro || 'não deu'); sheetBanco(); return; }
           var st3 = P().state;
@@ -3531,6 +3534,7 @@ var JOGO = (typeof window !== 'undefined')
               toast('O saco está cheio — não cabe mais nada.');
               return;
             }
+            if (JOGO.Autoridade) JOGO.Autoridade.op('comprarMercado', { ofertaId: of.id });
             Mc.comprar(of.id).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
               /* A ORIGEM continua 'mercador' — é o nome que o servidor aceita
@@ -3579,6 +3583,7 @@ var JOGO = (typeof window !== 'undefined')
             var st2 = P().state;
             var entrada = st2.inventory[pi.indices[0]];
             if (!entrada) { toast('essa peça já saiu'); sheetMercado(); return; }
+            if (JOGO.Autoridade) JOGO.Autoridade.op('anunciarMercado', { invIndex: pi.indices[0], preco: preco });
             Mc.anunciar(entrada, preco).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); return; }
               st2.inventory.splice(pi.indices[0], 1);
@@ -3610,6 +3615,7 @@ var JOGO = (typeof window !== 'undefined')
               toast('O saco está cheio — não cabe mais nada.');
               return;
             }
+            if (JOGO.Autoridade) JOGO.Autoridade.op('retirarMercado', { ofertaId: of.id });
             Mc.retirar(of.id).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
               P().state.inventory.push(P().carimba ? P().carimba(res.item, 'legado') : res.item);
@@ -3693,7 +3699,17 @@ var JOGO = (typeof window !== 'undefined')
         var pronta = safe(function () { return P().roletaPronta(); }, false);
         colec.appendChild(btn('Girar a roleta', 'btn-gold btn-block' + (pronta ? '' : ' is-off'),
           function () {
-            var r2 = safe(function () { return P().giraRoleta(); }, null);
+            // 13/09 (a segurança): com sessão do site o giro é sorteado NO SERVIDOR
+            var Aut = JOGO.Autoridade;
+            if (Aut && Aut.ligada && Aut.ligada()) {
+              Aut.opAgora('girarRoleta', {}).then(function (res) {
+                if (!res.ok) { toast(res.erro || 'O servidor não girou a roleta.'); return; }
+                giro(res.resultado || null);
+              });
+              return;
+            }
+            giro(safe(function () { return P().giraRoleta(); }, null));
+            function giro(r2) {
             if (!r2) {
               toast(!safe(function () { return P().bagFree(1); }, true)
                 ? 'O saco está cheio — abra espaço para o prêmio.'
@@ -3726,6 +3742,7 @@ var JOGO = (typeof window !== 'undefined')
               passo++;
               setTimeout(roda, 60 + passo * 16);        // desacelera até parar
             })();
+            }
           }));
         caixa.appendChild(colec);
     })();
@@ -6352,7 +6369,20 @@ var JOGO = (typeof window !== 'undefined')
     if (atual && info && !info.maxed) {
       var go = btn('🔨 Bater o martelo — vira +' + (lv2 + 1), 'btn-primary btn-block' + (pronto ? '' : ' is-off'), function () {
         if (!pronto) { toast(!forjaPedra ? 'Escolha a pedra primeiro.' : (errada ? 'Essa não é a pedra desta peça.' : 'Pedras insuficientes.')); return; }
-        var fim = forjar(atual, usarG);
+        // 13/09 (a segurança): com sessão do site a batida é sorteada NO SERVIDOR
+        var AutF = JOGO.Autoridade;
+        if (AutF && AutF.ligada && AutF.ligada()) {
+          var opF = atual.kind === 'worn'
+            ? AutF.opAgora('forjarVestida', { heroId: atual.heroId, slot: slotRaw(atual.slot), usarGuarda: !!usarG })
+            : AutF.opAgora('forjarPeca', { invIndex: atual.index, usarGuarda: !!usarG });
+          opF.then(function (res) {
+            if (!res.ok) { toast(res.erro || 'O servidor não forjou agora.'); return; }
+            mostraForja(res.resultado);
+          });
+          return;
+        }
+        mostraForja(forjar(atual, usarG));
+        function mostraForja(fim) {
         if (fim) {
           var nivelNovo = (typeof fim === 'object') ? fim.nivel : lv2 + 1;
           var como = (typeof fim === 'object') ? fim.resultado : 'subiu';
@@ -6367,6 +6397,7 @@ var JOGO = (typeof window !== 'undefined')
           }
           sheetParty('forja');
         } else toast('Pedras insuficientes.');
+        }
       });
       body.appendChild(go);
     }
