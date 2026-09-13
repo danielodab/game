@@ -29,7 +29,8 @@ const DADOS = [
   'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js',
   'js/core/data/items_extra.js', 'js/core/data/items_selos.js'
 ];
-const COMBATE = ['js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js'];
+// o poco.js entra com o combate: o andar do Poço é montado da semente antes da batalha
+const COMBATE = ['js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js', 'js/core/poco.js'];
 
 const cache = new Map();
 /* O texto de cada arquivo é lido UMA vez por processo e compilado uma vez: o

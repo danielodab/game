@@ -95,6 +95,13 @@ function refazEm(J, entrada) {
   let turnosJogador = 0;
   if (typeof c.preparar === 'function') c.preparar(J);    // provas: ganchos no mundo antes da sala
 
+  // o Poço: o andar é montado da semente (poco.js), como o cliente faz ao entrar
+  const andarPoco = (c.dungeonId === 'poco') ? c.roomIndex + 1 : 0;
+  if (andarPoco) {
+    if (!J.Poco || !J.Poco.salaSemeada || !J.Poco.poeSala(andarPoco, J.Poco.salaSemeada(andarPoco, c.semente))) {
+      throw recusa('o Poço não montou o andar', 'entrada');
+    }
+  }
   let st;
   try {
     st = E.createBattle(c.dungeonId, c.roomIndex, c.party,
@@ -103,6 +110,7 @@ function refazEm(J, entrada) {
     throw recusa('a sala não existe nestas regras', 'entrada');
   }
   if (!st || !st.units) throw recusa('a sala não existe nestas regras', 'entrada');
+  if (andarPoco) J.Poco.escalaEstado(st, andarPoco);        // a escalada antes do PV, como no Game
   aplicaCarry(st, c.carry);
   E.events.length = 0;
 

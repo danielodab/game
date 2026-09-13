@@ -47,6 +47,8 @@ registra('GET', '/regras', () => {
     if (J.DATA.portalFechado && J.DATA.portalFechado(d.id)) return;
     calaboucos[d.id] = d.rooms.length;
   });
+  // o Poço não tem fim: cada andar nasce da semente do bilhete
+  if (J.Poco && J.Poco.salaSemeada) calaboucos.poco = 9999;
   regrasCache = { ok: true, versao: versaoDosDados(), calaboucos, classes: Object.keys(J.DATA.classes || {}) };
   return regrasCache;
 });

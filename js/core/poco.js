@@ -87,20 +87,38 @@ var JOGO = (typeof window !== 'undefined')
     return fora;
   }
 
-  function sorteia(lista) { return lista[Math.floor(Math.random() * lista.length)]; }
+  function sorteia(lista, rnd) { return lista[Math.floor(rnd() * lista.length)]; }
 
-  function geraSala(andar) {
+  /* O ANDAR SEMEADO (13/09, a segurança): com sessão do site o servidor refaz a
+   * sala para pagar — então o andar do Poço sai de um gerador semeado pela
+   * semente do BILHETE, e o mesmo andar com a mesma semente é a mesma sala nos
+   * dois lados. O mulberry32 é o mesmo das missões; a semente é FNV do texto. */
+  function gerador(txt) {
+    var h = 2166136261 >>> 0, s = String(txt);
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    var a = h >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function geraSala(andar, rnd) {
+    rnd = rnd || Math.random;
     var palcos = salasReais();
     var comuns = elenco(false);
     var chefes = elenco(true);
     if (!palcos.length || !comuns.length) return null;
-    var palco = palcos[Math.floor(Math.random() * palcos.length)];
+    var palco = palcos[Math.floor(rnd() * palcos.length)];
     var letras = Object.keys(palco.monsters || {});
     var mistura = {};
     var vagaChefe = (andar % Po.CHEFE_A_CADA === 0) && chefes.length
-                  ? letras[Math.floor(Math.random() * letras.length)] : null;
+                  ? letras[Math.floor(rnd() * letras.length)] : null;
     letras.forEach(function (le) {
-      mistura[le] = (le === vagaChefe) ? sorteia(chefes) : sorteia(comuns);
+      mistura[le] = (le === vagaChefe) ? sorteia(chefes, rnd) : sorteia(comuns, rnd);
     });
     return {
       name: 'Andar ' + andar + ' — ' + (palco.name || 'o fundo'),
@@ -120,6 +138,18 @@ var JOGO = (typeof window !== 'undefined')
       if (!sala) return false;
       dg.rooms.push(sala);
     }
+    return true;
+  };
+
+  /* o andar `andar` feito da semente do bilhete (a mesma sala nos dois lados) */
+  Po.salaSemeada = function (andar, semente) {
+    return geraSala(andar, gerador('poco:' + andar + ':' + (semente >>> 0)));
+  };
+  /* põe a sala no lugar do andar (o poço cresce até ele, se precisar) */
+  Po.poeSala = function (andar, sala) {
+    if (!sala || !(andar >= 1)) return false;
+    if (!Po.preparar(andar)) return false;
+    dungeonPoco().rooms[andar - 1] = sala;
     return true;
   };
 

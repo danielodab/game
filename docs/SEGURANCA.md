@@ -172,7 +172,10 @@ tudo ou nada).
 - [x] Juiz carrega o jogo no Node (`servidor/juiz/motor.js`)
 - [x] Sala refeita da semente e dos lances (`servidor/juiz/sala.js`, `tests/juiz_sala.js`)
 - [x] Node no contêiner e o juiz no `entrada.sh`; API aceita `--juiz`
-- [ ] Juiz: recompensa (`recompensa.js`), economia (`economia.js`), hash
-- [ ] API: salas, op, PUT cosmético, loja e troca no servidor
-- [ ] Cliente: autoridade, bilhete, lances, fechar, ops
-- [ ] Grupo, Poço semeado, duelo ranqueado
+- [x] Juiz: recompensa (`recompensa.js`, `tests/juiz_recompensa.js`), economia (`economia.js`,
+      `tests/juiz_economia.js`), hash (`js/core/economia.js`)
+- [ ] API: salas, op, PUT cosmético, loja e troca no servidor (em andamento)
+- [x] Cliente: autoridade, bilhete, lances, fechar, ops, forja e roleta pelo servidor
+      (`js/core/autoridade.js`, `tests/autoridade_cliente.js`)
+- [ ] Cliente: troca e cofre da guilda pelas rotas novas
+- [ ] Poço semeado, grupo com semente do servidor, duelo ranqueado

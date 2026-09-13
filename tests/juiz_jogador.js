@@ -21,8 +21,11 @@ function joga(p) {
   est.poeEstado(w, p.progress, p.db);
   const J = w.J, E = J.Engine;
   const party = J.Progress.battleParty(p.herois);
+  const andarPoco = p.dungeonId === 'poco' ? p.roomIndex + 1 : 0;
+  if (andarPoco) J.Poco.poeSala(andarPoco, J.Poco.salaSemeada(andarPoco, p.semente));
   const st = E.createBattle(p.dungeonId, p.roomIndex, party,
     { seed: p.semente, dificuldade: p.dificuldade || 'normal', escolhePosicao: true });
+  if (andarPoco) J.Poco.escalaEstado(st, andarPoco);
   aplicaCarry(st, p.carry || null);
   E.events.length = 0;
   const lances = [];

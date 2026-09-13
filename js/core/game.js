@@ -342,10 +342,11 @@ var JOGO = (typeof window !== 'undefined')
   /* O BILHETE DA SALA (13/09, docs/SEGURANCA.md). Com sessão do site, o
    * servidor manda na economia: a sala nasce da semente que ELE sorteou e,
    * no fim, ele refaz a batalha com os lances e paga. Vale na descida solo
-   * dos calabouços; o Poço e a descida em grupo ficam de fora por enquanto. */
+   * dos calabouços e do Poço (o andar sai da semente); a descida em grupo tem
+   * a semente da ata (coop.js). */
   function autoridadeNaSala() {
     var A = JOGO.Autoridade;
-    return !rede && Game.dungeonId && Game.dungeonId !== 'poco' && !!(A && A.ligada && A.ligada());
+    return !rede && !!Game.dungeonId && !!(A && A.ligada && A.ligada());
   }
   function pedidoDaSala() {
     return { dungeonId: Game.dungeonId, roomIndex: Game.roomIndex,
@@ -466,6 +467,10 @@ var JOGO = (typeof window !== 'undefined')
       // o PV que o servidor anotou ao fechar a sala anterior: a página pode ter
       // recarregado no meio da descida, e a sala só se refaz igual com o mesmo PV
       carryHp = bil.carry || null;
+      // o andar do Poço sai da semente do bilhete: a mesma sala que o servidor refaz
+      if (Game.dungeonId === 'poco' && JOGO.Poco && JOGO.Poco.salaSemeada) {
+        JOGO.Poco.poeSala(Game.roomIndex + 1, JOGO.Poco.salaSemeada(Game.roomIndex + 1, bil.semente));
+      }
     }
     ataSolo = bil ? { bilhete: bil.bilhete, lances: [] } : null;
     Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload(),
