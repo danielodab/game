@@ -413,9 +413,14 @@ var JOGO = (typeof window !== 'undefined')
   }
   /* O `oi` de apresentação — sai na entrada, na queda para o canal e na
    * reconexão do ws (para os pares, um `oi` repetido é só um re-conhece). */
+  /* 13/09: está numa tela de batalha? (solo, grupo ou duelo — a mesma tela) */
+  function emLuta() {
+    try { return !!(JOGO.Game && JOGO.Game.screen === 'battle'); } catch (e) { return false; }
+  }
   function cartao(para) {
     var c = { v: R.VERSAO, nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
-              resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z, sala: eu.sala, nuvem: eu.nuvem };
+              resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z, sala: eu.sala, nuvem: eu.nuvem,
+              luta: emLuta() };
     if (para) c.para = para;
     return c;
   }
@@ -459,6 +464,12 @@ var JOGO = (typeof window !== 'undefined')
       return fora.length ? fora : null;
     }
     if (m.t === 'ausente') { vozAusente(m); return null; }     // 11/09
+    // 13/09: o online dos amigos e inimigos (JOGO.Amigos) e a recusa do chat da guilda
+    if (m.t === 'amigos') {
+      avisa({ tipo: 'amigos', lista: Array.isArray(m.lista) ? m.lista.slice(0, 200) : [], motivo: txt(m.motivo) });
+      return null;
+    }
+    if (m.t === 'gchat-nao') { avisa({ tipo: 'gchat-nao', motivo: txt(m.motivo) }); return null; }
     if (m.t === 'caiu') { vozCaiu(m); return null; }
     if (m.t !== 'ident-ok' && m.t !== 'ident-nao') return null;
     // resposta a um ident que esta conexão não mandou não vale: o relé de um
@@ -700,6 +711,17 @@ var JOGO = (typeof window !== 'undefined')
       if (!(m.mestre === true && confiaMestre()) && reservadoAqui(nomeChat)) nomeChat = nomeDeTroca(m.de);
       avisa({ tipo: 'chat', id: m.de, nome: nomeChat,
               texto: String(m.texto || '').slice(0, 240) });
+    } else if (m.t === 'gchat') {
+      // 13/09 (dono: "/g manda mensagem pra guild"): o relé novo entrega só aos
+      // membros, conferidos pela CONTA no banco — no canal de abas qualquer aba ouviria
+      if (!R.privado()) return;
+      var textoG = String(m.texto === undefined || m.texto === null ? '' : m.texto).trim().slice(0, 240);
+      if (!textoG) return;
+      if (pares[m.de]) pares[m.de].visto = agora();
+      var nomeG = m.nome || (pares[m.de] || {}).nome || '?';
+      if (!(m.mestre === true && confiaMestre()) && reservadoAqui(nomeG)) nomeG = nomeDeTroca(m.de);
+      avisa({ tipo: 'gchat', id: m.de, nome: nomeG, texto: textoG,
+              guilda: (typeof m.guilda === 'string') ? m.guilda.slice(0, 24) : '' });
     } else if (m.t === 'troca') {
       // só o destinatário processa — a praça inteira ouve, um responde
       if (paraMim(m)) {
@@ -780,11 +802,12 @@ var JOGO = (typeof window !== 'undefined')
     var t = tAgora || agora();
     var u = ultPulso;
     var sala = eu.sala || null;
+    var luta = emLuta();           // 13/09: os amigos veem "em batalha" (o relé guarda o último)
     var saiu = false;
-    if (!u || u.x !== eu.x || u.z !== eu.z || u.sala !== sala ||
+    if (!u || u.x !== eu.x || u.z !== eu.z || u.sala !== sala || u.luta !== luta ||
         t - u.t >= R.VIDA_MS - R.PULSO_MS / 2) {
-      manda('pulso', { x: eu.x, z: eu.z, sala: eu.sala });
-      ultPulso = { x: eu.x, z: eu.z, sala: sala, t: t };
+      manda('pulso', { x: eu.x, z: eu.z, sala: eu.sala, luta: luta });
+      ultPulso = { x: eu.x, z: eu.z, sala: sala, luta: luta, t: t };
       saiu = true;
     }
     R._varre(t);
@@ -1200,6 +1223,23 @@ var JOGO = (typeof window !== 'undefined')
     texto = String(texto || '').trim().slice(0, 240);
     if (!texto) return false;
     manda('chat', { nome: eu.nome, texto: texto });
+    return true;
+  };
+  /* 13/09 (dono): o chat da GUILDA ("/g texto"). Só pelo relé novo: ele acha a
+   * guilda pela conta conferida e entrega só aos membros (a recusa volta como
+   * a voz gchat-nao). Nunca pelo canal de abas, onde todas ouviriam. */
+  R.falarGuilda = function (texto) {
+    if (!eu || !R.privado()) return false;
+    texto = String(texto || '').trim().slice(0, 240);
+    if (!texto) return false;
+    return manda('gchat', { nome: eu.nome, texto: texto });
+  };
+  /* 13/09: o online dos amigos e inimigos (a voz {t:'amigos'} volta só a mim) e
+   * o aviso de que a lista mudou (o relé esquece o que guardou dos inimigos) */
+  R.pedeAmigos = function () { return !!(eu && R.privado() && manda('amigos', {})); };
+  R.amigosMudou = function () {
+    if (!eu || !R.privado()) return false;
+    manda('amigos-muda', {});
     return true;
   };
 

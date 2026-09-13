@@ -1253,7 +1253,9 @@ var JOGO = (typeof window !== 'undefined')
      // quem não está precisa da porta ainda mais — é por ela que se funda.
      // `remoto` avisa a ficha de que se está longe da Sede (cofre e banco
      // continuam só lá).
-     { ic: '🛡️', rot: 'Guilda', abre: 'guilda', remoto: true }
+     { ic: '🛡️', rot: 'Guilda', abre: 'guilda', remoto: true },
+     // 13/09 (dono): "no menu inferior deve ter uma lista de amigos e inimigos"
+     { ic: '👥', rot: 'Amigos', abre: 'amigos' }
     ].forEach(function (d) {
       var b = el('button', 'hub-dock-b');
       b.type = 'button';
@@ -1704,6 +1706,26 @@ var JOGO = (typeof window !== 'undefined')
               } else toast('já há uma troca aberta');
             }));
           }
+          // 13/09 (dono): amigos e inimigos — pela CONTA conferida na praça (o `nuvem`)
+          var Am = JOGO.Amigos;
+          if (Am && Am.pode() && typeof par.nuvem === 'number') {
+            var ehAm = Am.ehAmigo(par.nuvem), ehIn = Am.ehInimigo(par.nuvem);
+            grade.appendChild(btn(ehAm ? 'Tirar dos amigos' : 'Adicionar amigo', 'btn-ghost', function () {
+              fecha();
+              Am.definir({ conta: par.nuvem }, ehAm ? null : 'amigo').then(function (r) {
+                toast(r.ok ? (ehAm ? par.nome + ' saiu dos amigos.' : par.nome + ' agora é seu amigo.')
+                           : (r.erro || 'não deu'), r.ok ? 'good' : undefined);
+              });
+            }));
+            grade.appendChild(btn(ehIn ? 'Tirar dos inimigos' : 'Marcar inimigo', 'btn-ghost', function () {
+              fecha();
+              Am.definir({ conta: par.nuvem }, ehIn ? null : 'inimigo').then(function (r) {
+                toast(r.ok ? (ehIn ? par.nome + ' saiu dos inimigos.'
+                                   : par.nome + ' é seu inimigo: sem mensagem particular nem troca.')
+                           : (r.erro || 'não deu'), r.ok ? 'good' : undefined);
+              });
+            }));
+          }
           var mudo = !!mutados[id];
           var bSil = btn(mudo ? 'Devolver a voz' : 'Silenciar', 'btn-ghost', function () {
             mutados[id] = !mudo;
@@ -1737,6 +1759,11 @@ var JOGO = (typeof window !== 'undefined')
         painelJogadorFn = painelJogador;
         if (JOGO.Troca) {
           JOGO.Troca.aoConvite = function (c) {
+            // 13/09 (dono): inimigo não propõe troca — recusa calada (o relé novo nem entrega)
+            if (safe(function () { return JOGO.Amigos && JOGO.Amigos.inimigoPorHeroi(c.de); }, false)) {
+              safe(function () { JOGO.Troca.responder(false); return true; }, null);
+              return;
+            }
             // 11/09 (revisão): um pedido de cada vez. Com um convite de grupo ou de
             // duelo na tela, a troca é recusada (o grupo e o duelo já recusam quem
             // está numa troca) — antes ela tomava o painel e o convite de 30 s sumia
@@ -1847,6 +1874,13 @@ var JOGO = (typeof window !== 'undefined')
             JOGO.Hub.fantasmaAlvo(ev.id, ev.x, ev.z);
           } else if (ev.tipo === 'pulso') {
             JOGO.Hub.fantasmaPulso(ev.id, ev.x, ev.z);
+          } else if (ev.tipo === 'gchat') {
+            // 13/09: o chat da guilda (/g) — só os membros recebem (o relé confere)
+            if (mutados[ev.id]) return;
+            chatLinha('[' + (ev.guilda || 'Guilda') + '] ' + ev.nome, R.filtra ? R.filtra(ev.texto) : ev.texto, '#7fc8ff');
+          } else if (ev.tipo === 'gchat-nao') {
+            toast(ev.motivo === 'sem-guilda' ? 'Você não está numa guilda: o /g não tem para quem ir.'
+                                             : 'O chat da guilda precisa que você esteja na sua conta.');
           } else if (ev.tipo === 'chat') {
             if (mutados[ev.id]) return;               // silenciado: nem uma linha
             var textoC = R.filtra ? R.filtra(ev.texto) : ev.texto;
@@ -1878,10 +1912,16 @@ var JOGO = (typeof window !== 'undefined')
         var ci = document.createElement('input');
         ci.className = 'hub-chat-input';
         ci.maxLength = 240;
-        ci.placeholder = 'diga algo… (Enter)';
+        ci.placeholder = 'diga algo…  /g guilda · /Nome particular';
         ci.addEventListener('keydown', function (evk) {
           if (evk.key === 'Enter') {
             var t = ci.value.trim();
+            // 13/09 (dono): "/Nome texto" é particular e "/g texto" vai à guilda; sem barra, a praça
+            if (t && t.charAt(0) === '/') {
+              if (comandoDoChat(t, j, chatLinha)) ci.value = '';
+              evk.stopPropagation();
+              return;
+            }
             if (t && chatAlvo) {
               var rs = safe(function () { return Su().manda(chatAlvo.id, t); }, null);
               if (rs && rs.ok) ci.value = '';
@@ -4543,6 +4583,7 @@ var JOGO = (typeof window !== 'undefined')
     // nomes antigos continuam valendo ('party' abre a última ficha visitada);
     // o cais do Acampamento e o menu inicial chamam cada porta pelo nome.
     if (name === 'char') { sheetChar(); return; }   // 11/09: a ficha da conta
+    if (name === 'amigos') { sheetAmigos(); return; }   // 13/09: amigos e inimigos
     if (name === 'gm') { sheetGM(); return; }
     if (name === 'gmcaixa') { sheetGMCaixa(); return; }
     if (name === 'gmagenda') { sheetGMAgenda(); return; }   // 10/09: os eventos do mundo
@@ -7381,6 +7422,116 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
 
+  /* ---- AMIGOS E INIMIGOS (13/09, dono: "no menu inferior deve ter uma lista
+   * de amigos e inimigos; os amigos mostram quando estão online e se estão em
+   * batalha; os inimigos não podem mandar mensagem nem troca, mas podem
+   * desafiar pvp"). A lista vem do cartório (JOGO.Amigos); o online, do relé
+   * (R.pedeAmigos), pedido de novo a cada 10 s enquanto a ficha está aberta. */
+  var amigosAba = 'amigos', amigosTimer = null;
+  function sheetAmigos() {
+    var body = sheetShell('Amigos', 'Quem está online e em batalha — e quem você não quer por perto.');
+    sheetName = 'amigos';
+    var Am = JOGO.Amigos, R = JOGO.Rede;
+    if (!Am || !Am.pode()) {
+      body.appendChild(el('p', 'empty', 'Entre na sua conta para ter amigos e inimigos.'));
+      return;
+    }
+    var abas = el('div', 'am-abas');
+    [['amigos', 'Amigos'], ['inimigos', 'Inimigos']].forEach(function (a) {
+      abas.appendChild(btn(a[1], 'btn-mini ' + (amigosAba === a[0] ? 'btn-gold' : 'btn-ghost'), function () {
+        amigosAba = a[0];
+        sheetAmigos();
+      }));
+    });
+    body.appendChild(abas);
+
+    var add = el('div', 'am-add');
+    var inp = document.createElement('input');
+    inp.className = 'hub-input';
+    inp.maxLength = 40;
+    inp.placeholder = amigosAba === 'amigos' ? 'nome de quem adicionar' : 'nome do inimigo';
+    function adiciona() {
+      var n = inp.value.trim();
+      if (!n) return;
+      Am.definir({ nome: n }, amigosAba === 'amigos' ? 'amigo' : 'inimigo').then(function (r) {
+        toast(r.ok ? n + (amigosAba === 'amigos' ? ' entrou nos amigos.' : ' entrou nos inimigos.')
+                   : (r.erro || 'não deu'), r.ok ? 'good' : undefined);
+        if (r.ok) inp.value = '';
+      });
+    }
+    inp.addEventListener('keydown', function (ev) {
+      ev.stopPropagation();                             // a letra não abre atalho
+      if (ev.key === 'Enter') adiciona();
+    });
+    add.appendChild(inp);
+    add.appendChild(btn('Adicionar', 'btn-mini btn-gold', adiciona));
+    body.appendChild(add);
+    body.appendChild(el('p', 'inv-dica', amigosAba === 'amigos'
+      ? 'Também dá para adicionar tocando na pessoa na praça. No chat: <b>/Nome mensagem</b> manda particular.'
+      : 'Inimigo não manda mensagem particular nem propõe troca a você (nem você a ele) — mas duelo vale.'));
+
+    var caixa = el('div', 'am-lista');
+    body.appendChild(caixa);
+    function pinta() {
+      if (sheetName !== 'amigos' || !caixa.isConnected) return;
+      clear(caixa);
+      var L = Am.lista();
+      var itens = (amigosAba === 'amigos' ? L.amigos : L.inimigos).slice();
+      if (!itens.length) {
+        caixa.appendChild(el('p', 'empty', amigosAba === 'amigos' ? 'Nenhum amigo ainda.' : 'Nenhum inimigo.'));
+        return;
+      }
+      itens.sort(function (a, b) {                       // quem está online primeiro
+        var sa = Am.status(a.conta), sb = Am.status(b.conta);
+        return (sb && sb.online ? 1 : 0) - (sa && sa.online ? 1 : 0);
+      });
+      itens.forEach(function (a) {
+        var st = Am.status(a.conta);
+        var on = !!(st && st.online);
+        var luta = on && st.luta;
+        var linha = el('div', 'am-linha' + (on ? ' is-on' : ''));
+        var nm = el('div', 'am-nome');
+        nm.appendChild(el('i', 'am-bola' + (luta ? ' is-luta' : on ? ' is-on' : ''), ''));
+        nm.appendChild(el('span', 'am-nm', esc(a.nome || '?')));
+        if (a.nivel) nm.appendChild(el('span', 'am-nv', 'nv ' + a.nivel));
+        linha.appendChild(nm);
+        linha.appendChild(el('span', 'am-estado' + (luta ? ' is-luta' : on ? ' is-on' : ''),
+          !on ? 'offline' : luta ? '⚔ em batalha' : st.sala ? 'num calabouço' : 'na praça'));
+        var acts = el('div', 'am-acts');
+        if (amigosAba === 'amigos') {
+          acts.appendChild(btn('Mensagem', 'btn-mini btn-ghost' + (on && st.id ? '' : ' is-apagado'), function () {
+            if (!on || !st.id) { toast(a.nome + ' está offline.'); return; }
+            closeSheet();
+            armaSussurro(st.id, a.nome);
+          }));
+        } else {
+          acts.appendChild(btn('Desafiar', 'btn-mini btn-ghost' + (on && st.id ? '' : ' is-apagado'), function () {
+            if (!on || !st.id) { toast(a.nome + ' está offline.'); return; }
+            var r = safe(function () { return Dl().desafiar(st.id); }, null);
+            if (r && r.ok) toast('Desafio enviado a ' + a.nome + '. Esperando a resposta…');
+            else toast(textoMotivo(r ? r.motivo : 'ocupado', null));
+          }));
+        }
+        acts.appendChild(btn('✕', 'btn-mini btn-ghost am-tira', function () {
+          Am.definir({ conta: a.conta }, null).then(function (r) {
+            toast(r.ok ? a.nome + ' saiu da lista.' : (r.erro || 'não deu'), r.ok ? 'good' : undefined);
+          });
+        }));
+        linha.appendChild(acts);
+        caixa.appendChild(linha);
+      });
+    }
+    Am.aoMudar = pinta;
+    Am.liga();
+    Am.carrega().then(function (r) { if (!r.ok) toast(r.erro || 'não deu'); pinta(); });
+    if (amigosTimer) clearInterval(amigosTimer);
+    amigosTimer = setInterval(function () {
+      if (sheetName !== 'amigos') { clearInterval(amigosTimer); amigosTimer = null; Am.aoMudar = null; return; }
+      if (R && R.pedeAmigos) R.pedeAmigos();
+    }, 10000);
+    pinta();
+  }
+
   function sheetGuilda() {
     var remoto = !!lastSheetArg;
     var body = sheetShell('Guilda', remoto 
@@ -9179,12 +9330,71 @@ var JOGO = (typeof window !== 'undefined')
     clear(c.chip);
     c.chip.classList.toggle('is-on', !!chatAlvo);
     c.input.classList.toggle('is-privado', !!chatAlvo);
-    c.input.placeholder = chatAlvo ? 'para ' + chatAlvo.nome + '… (Enter)' : 'diga algo… (Enter)';
+    c.input.placeholder = chatAlvo ? 'para ' + chatAlvo.nome + '… (Enter)' : 'diga algo…  /g guilda · /Nome particular';
     if (!chatAlvo) return;
     c.chip.appendChild(el('span', null, 'para'));
     c.chip.appendChild(el('span', 'chat-chip-nm', esc(chatAlvo.nome)));
     c.chip.appendChild(el('span', 'chat-chip-x', '✕'));
   }
+  /* OS COMANDOS DO CHAT (13/09, dono: "o chat precisa ser normal — /Nome_usuario
+   * manda mensagem particular, /g manda mensagem pra guild"). Sem barra é a
+   * praça, como sempre. O nome pode ter espaço ("Sem Nome"): vale o MAIS LONGO
+   * que casa com alguém que se pode achar — quem está na praça ou na sala, e
+   * os amigos online (o relé deu o herói deles). "/Nome" sem texto arma o chip
+   * da conversa. `linha` é o chatLinha da tela aberta. Devolve se saiu. */
+  function comandoDoChat(t, j, linha) {
+    var R = JOGO.Rede;
+    var corpo = t.slice(1);
+    var mG = /^g(?:\s+([\s\S]*))?$/i.exec(corpo);
+    if (mG) {
+      var txtG = (mG[1] || '').trim();
+      if (!txtG) { toast('Escreva a mensagem depois do /g — por exemplo: /g bora descer?'); return false; }
+      if (!R || !R.falarGuilda || !R.falarGuilda(txtG)) { toast(textoMotivo('privado', null)); return false; }
+      if (linha) linha('[Guilda] ' + (j.nome || 'você'), txtG, '#7fc8ff');
+      return true;
+    }
+    var baixo = corpo.toLowerCase(), achado = null;
+    conhecidosDoChat().forEach(function (a) {
+      var n = String(a.nome || '').toLowerCase();
+      if (!n || !(baixo === n || baixo.indexOf(n + ' ') === 0)) return;
+      if (!achado || n.length > achado.nome.length) achado = a;
+    });
+    if (!achado) {
+      var pedaco = corpo.split(/\s+/)[0] || '';
+      toast(pedaco ? 'Ninguém chamado ' + pedaco + ' por perto nem entre os amigos online.'
+                   : 'Use /Nome mensagem (particular) ou /g mensagem (guilda).');
+      return false;
+    }
+    if (achado.conta && JOGO.Amigos && JOGO.Amigos.ehInimigo(achado.conta)) {
+      toast(achado.nome + ' está na sua lista de inimigos: sem mensagem particular.');
+      return false;
+    }
+    var txtP = corpo.slice(achado.nome.length).trim();
+    if (!txtP) { armaSussurro(achado.id, achado.nome); return true; }
+    var rs = safe(function () { return Su().manda(achado.id, txtP); }, null);
+    if (rs && rs.ok) return true;
+    toast(textoMotivo(rs ? rs.motivo : 'privado', null));
+    return false;
+  }
+  function conhecidosDoChat() {
+    var fora = [], vistos = {};
+    (safe(function () { return JOGO.Rede.pares(); }, []) || []).forEach(function (p) {
+      if (!p || !p.id || !p.nome || vistos[p.id]) return;
+      vistos[p.id] = 1;
+      fora.push({ id: p.id, nome: p.nome, conta: (typeof p.nuvem === 'number') ? p.nuvem : null });
+    });
+    var Am = JOGO.Amigos;
+    if (Am) {
+      (Am.lista().amigos || []).forEach(function (a) {
+        var st = Am.status(a.conta);
+        if (!st || !st.online || !st.id || vistos[st.id]) return;
+        vistos[st.id] = 1;
+        fora.push({ id: st.id, nome: a.nome, conta: a.conta });
+      });
+    }
+    return fora;
+  }
+
   /* "Mensagem particular": no chat do canto com o chip; sem chat (batalha,
    * recompensa), numa ficha pequena */
   function armaSussurro(id, nome) {
