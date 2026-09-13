@@ -2168,11 +2168,36 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .ms-pago { font: 700 11px var(--ui-sans, system-ui); color: #7fe08a; }
 .ms-titulos { display: flex; flex-wrap: wrap; gap: 6px; }
 .ms-titulos .is-on { outline: 2px solid var(--gold); }
-/* 12/09: o título escolhido num menu suspenso dividido por fonte, e o "como ganhar" recolhido */
-.tit-escolha { width: 100%; box-sizing: border-box; margin: 4px 0 6px; }
-.tit-escolha optgroup { font-weight: 700; color: var(--gold); }
-.tit-escolha option { color: #dbe3ee; }
-.tit-escolha option:disabled { color: #6b7483; }
+/* 12/09: o título escolhido num menu suspenso dividido por fonte, e o "como ganhar" recolhido.
+   13/09: o menu é nosso e escuro (o <select> nativo abria a lista branca do sistema) */
+.tit-drop { margin: 4px 0 6px; }
+.tit-botao {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; box-sizing: border-box; padding: 9px 12px; cursor: pointer; text-align: left;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.18); border-radius: 8px;
+  color: var(--text); font: inherit;
+}
+.tit-botao:hover, .tit-botao[aria-expanded="true"] { border-color: #c9a227; }
+.tit-atual.is-vazio { color: var(--dim); }
+.tit-seta { color: var(--gold); transition: transform .15s; }
+.tit-botao[aria-expanded="true"] .tit-seta { transform: rotate(180deg); }
+.tit-lista {
+  margin-top: 4px; padding: 4px; max-height: 320px; overflow-y: auto;
+  background: #151a21; border: 1px solid rgba(201,162,39,.45); border-radius: 8px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.45);
+}
+.tit-grupo { font: 700 10.5px var(--ui-sans, system-ui); letter-spacing: .08em; text-transform: uppercase;
+             color: var(--gold); padding: 10px 10px 4px; }
+.tit-item {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  width: 100%; box-sizing: border-box; padding: 7px 10px; cursor: pointer; text-align: left;
+  background: none; border: 0; border-radius: 6px; color: #dbe3ee; font: inherit; font-size: 13px;
+}
+.tit-item:hover:not(:disabled), .tit-item:focus-visible { background: rgba(255,196,77,.12); outline: none; }
+.tit-item:disabled { color: #6b7483; cursor: default; }
+.tit-item.is-on { background: rgba(255,196,77,.18); color: var(--gold); }
+.tit-item.is-on .tit-item-nm::before { content: '✓ '; }
+.tit-item-dica { font-size: 11px; color: #6b7483; white-space: nowrap; }
 .tit-como { margin: 4px 0 10px; }
 .tit-como > summary { cursor: pointer; font-size: 12px; color: var(--dim); padding: 4px 0; }
 

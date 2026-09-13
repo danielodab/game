@@ -4107,46 +4107,63 @@ var JOGO = (typeof window !== 'undefined')
         var ganhos = catal.filter(function (t) { return t.ganho; });
         var porFonte = { pvm: 'Ranking de XP (PvM)', pvp: 'Ranking PvP', classe: 'Ranking por classe',
                          chefe: 'Chefes, no difícil e sozinho' };
-        var selT = document.createElement('select');
-        selT.className = 'hub-input tit-escolha';
-        var opSem = document.createElement('option');
-        opSem.value = '';
-        opSem.textContent = '— sem título —';
-        opSem.selected = !tituloVivo;
-        selT.appendChild(opSem);
-        ['pvm', 'pvp', 'classe', 'chefe'].forEach(function (f) {
-          var grupoT = document.createElement('optgroup');
-          grupoT.label = porFonte[f];
-          // os pódios de classe são 21 (três por classe): no menu entram só os que já são seus
-          var doGrupo = catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); });
-          if (!doGrupo.length) {
-            var opVazia = document.createElement('option');
-            opVazia.disabled = true;
-            opVazia.textContent = '— nenhum pódio de classe ainda —';
-            grupoT.appendChild(opVazia);
-          }
-          doGrupo.forEach(function (t) {
-            var op = document.createElement('option');
-            op.value = t.titulo;
-            op.disabled = !t.ganho;
-            op.selected = tituloVivo === t.titulo;
-            op.textContent = t.titulo + (t.ganho ? '' :
-              (t.alvo ? ' — ' + t.prog + '/' + t.alvo + ' quedas' : ' — ainda não é seu'));
-            grupoT.appendChild(op);
-          });
-          selT.appendChild(grupoT);
-        });
-        selT.addEventListener('keydown', function (ev) { ev.stopPropagation(); });   // a letra não abre atalho
-        selT.addEventListener('change', function () {
-          JOGO.DB.definirTitulo(selT.value || null).then(function (res) {
+        /* 13/09, dono: "esse menu branco está ruim". O <select> nativo abria a
+         * lista BRANCA do sistema; agora é um menu nosso, escuro, que abre
+         * embaixo do botão (dentro da ficha, sem ser cortado pela rolagem). */
+        var escolhidoT = tituloVivo || '';
+        var dropT = el('div', 'tit-drop');
+        var botaoT = document.createElement('button');
+        botaoT.type = 'button';
+        botaoT.className = 'tit-botao';
+        botaoT.setAttribute('aria-expanded', 'false');
+        botaoT.innerHTML = '<span class="tit-atual' + (escolhidoT ? '' : ' is-vazio') + '">' +
+          esc(escolhidoT || '— sem título —') + '</span><span class="tit-seta">▾</span>';
+        var listaT = el('div', 'tit-lista');
+        listaT.hidden = true;
+        function abreListaT(abre) {
+          listaT.hidden = !abre;
+          botaoT.setAttribute('aria-expanded', abre ? 'true' : 'false');
+        }
+        function escolheT(valor) {
+          abreListaT(false);
+          if (valor === escolhidoT) return;
+          JOGO.DB.definirTitulo(valor || null).then(function (res) {
             var tt = (res && res.titulo) || '';
             if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, tt);
             reanunciaPerfil();        // o título aparece para todos, não só aqui
             toast(tt ? 'Agora você é ' + (j.nome || 'você') + ', ' + tt + '.' : 'Sem título — só o nome.', 'good');
             sheetChar();
           });
+        }
+        function itemT(valor, rotulo, dica, livre) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'tit-item' + (valor === escolhidoT ? ' is-on' : '');
+          b.disabled = !livre;
+          b.innerHTML = '<span class="tit-item-nm">' + esc(rotulo) + '</span>' +
+            (dica ? '<span class="tit-item-dica">' + esc(dica) + '</span>' : '');
+          if (livre) b.addEventListener('click', function () { escolheT(valor); });
+          return b;
+        }
+        listaT.appendChild(itemT('', '— sem título —', '', true));
+        ['pvm', 'pvp', 'classe', 'chefe'].forEach(function (f) {
+          listaT.appendChild(el('div', 'tit-grupo', esc(porFonte[f])));
+          // os pódios de classe são 21 (três por classe): no menu entram só os que já são seus
+          var doGrupo = catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); });
+          if (!doGrupo.length) listaT.appendChild(itemT(null, 'nenhum pódio de classe ainda', '', false));
+          doGrupo.forEach(function (t) {
+            listaT.appendChild(itemT(t.titulo, t.titulo,
+              t.ganho ? '' : (t.alvo ? t.prog + '/' + t.alvo + ' quedas' : 'ainda não é seu'), t.ganho));
+          });
         });
-        caixa.appendChild(selT);
+        botaoT.addEventListener('click', function () { abreListaT(listaT.hidden); });
+        dropT.addEventListener('keydown', function (ev) {
+          ev.stopPropagation();                               // a letra não abre atalho
+          if (ev.key === 'Escape' && !listaT.hidden) { ev.preventDefault(); abreListaT(false); botaoT.focus(); }
+        });
+        dropT.appendChild(botaoT);
+        dropT.appendChild(listaT);
+        caixa.appendChild(dropT);
         if (!ganhos.length) {
           caixa.appendChild(el('p', 'inv-dica',
             'Nenhum título ainda. Eles não vêm de missão: são pódio de ranking ou ' +
