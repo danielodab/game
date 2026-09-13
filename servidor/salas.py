@@ -267,6 +267,22 @@ class SalasMixin:
             "ORDER BY r.brasa_pts DESC, r.nome COLLATE NOCASE LIMIT 3")]
         return (pvm.index(cid) + 1 if cid in pvm else None, pvp.index(cid) + 1 if cid in pvp else None)
 
+    def _posicoes_classe(self, cid):
+        """Dentro da tranca: {classe: 1|2|3} — a posição da conta no pódio de cada classe do
+        ranking público (a mesma ordem do GET /api/ranking: xp, nível, nome; sem banidas nem a
+        equipe). 13/09: os títulos "Top N <classe>" (definirTitulo no juiz) conferem por aqui,
+        casados pelo id da conta."""
+        from comum import CLASSES_RANK
+        fora = {}
+        for classe in CLASSES_RANK:
+            topo = [r[0] for r in self.con.execute(
+                "SELECT rc.conta_id FROM resumos_classe rc JOIN resumos r ON r.conta_id = rc.conta_id "
+                "JOIN contas c ON c.id = rc.conta_id WHERE c.banido = 0 AND c.gm = 0 AND rc.classe = ? "
+                "ORDER BY rc.xp DESC, rc.nivel DESC, r.nome COLLATE NOCASE LIMIT 3", (classe,))]
+            if cid in topo:
+                fora[classe] = topo.index(cid) + 1
+        return fora
+
     def _guilda_contexto(self, cid, t):
         """Dentro da tranca: o bônus e o dízimo da guilda da conta, lidos do banco."""
         g = self.con.execute("SELECT g.bonus_xp, g.bonus_drop, g.dizimo FROM guilda_membros m "
@@ -309,6 +325,7 @@ class SalasMixin:
         pedido (secrets): quem repete o pedido não escolhe o sorteio."""
         with self.tranca:
             pvm, pvp = self._posicoes(conta['id'])
+            por_classe = self._posicoes_classe(conta['id'])
             # 13/09: as cópias emprestadas do banco da guilda que estão com esta conta — o juiz
             # recusa op do jogador que as faça sumir do estado (a fusão consumiria a cópia)
             try:
@@ -320,7 +337,7 @@ class SalasMixin:
                  'progress': estado['progress'], 'db': estado['db'], 'ops': ops,
                  'semente': secrets.randbits(31),
                  'contexto': {'agoraMs': int(time.time() * 1000), 'pvm': pvm, 'pvp': pvp, 'interno': bool(interno),
-                              'bloqueados': bloqueados}}
+                              'bloqueados': bloqueados, 'porClasse': por_classe}}
         return self._confere_saida(self.juiz.pede('POST', '/op', corpo))
 
     def _estado_grava(self, conta, lido, saida, t, poupar=()):

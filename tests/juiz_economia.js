@@ -161,6 +161,15 @@ async function tenta(base, ops, extra) {
   check('com a posição 1 vinda do ranking do servidor, entra', t2.ok && t2.db.jogador.titulo === 'Top 1 PVM',
         JSON.stringify(t2.ok ? t2.db.jogador.titulo : t2));
 
+  // ---- o título do pódio de classe (13/09): só com a posição que a API mandou
+  const t3 = await tenta(base, [{ nome: 'definirTitulo', args: { titulo: 'Top 1 Xamã' } }]);
+  check('título de pódio de classe sem a posição não entra', t3.ok && t3.resultados[0].ok === false,
+        JSON.stringify(t3.resultados || t3));
+  const t4 = await tenta(base, [{ nome: 'definirTitulo', args: { titulo: 'Top 1 Xamã' } }],
+                         { contexto: { agoraMs: AGORA, porClasse: { invocador: 1 } } });
+  check('com o 1º lugar de Xamã vindo do servidor, "Top 1 Xamã" entra', t4.ok && t4.db.jogador.titulo === 'Top 1 Xamã',
+        JSON.stringify(t4.ok ? t4.db.jogador.titulo : t4));
+
   console.log('\nRESUMO: ' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
   process.exit(falhas ? 1 : 0);
 })().catch((e) => { console.log('a prova estourou:', e && e.stack); process.exit(1); });

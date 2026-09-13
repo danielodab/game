@@ -157,7 +157,15 @@ const OPS = {
     const t = txt(a, 'titulo', true);
     if (!t) return J.DB.definirTitulo(null);
     return J.DB.chefesVer().then((chefes) => {
-      const estado = { chefes: chefes || {}, pvm: x.contexto.pvm || null, pvp: x.contexto.pvp || null };
+      // 13/09: o pódio de cada classe ("Top N <classe>") — a posição vem da API, os nomes do DATA
+      const nomesClasse = {};
+      Object.keys(J.DATA.classes || {}).forEach((cid) => {
+        const d = J.DATA.classes[cid];
+        if (cid !== 'gm' && d && d.name) nomesClasse[cid] = d.name;
+      });
+      const pc = (x.contexto.porClasse && typeof x.contexto.porClasse === 'object') ? x.contexto.porClasse : {};
+      const estado = { chefes: chefes || {}, pvm: x.contexto.pvm || null, pvp: x.contexto.pvp || null,
+                       porClasse: pc, classeNomes: nomesClasse };
       if (!J.Titulos || !J.Titulos.valido(t, estado)) return { ok: false, erro: 'título não conquistado' };
       return J.DB.definirTitulo(t);
     });

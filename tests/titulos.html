@@ -110,6 +110,18 @@ emprestados (a posição foi, o título vai); os de chefe são para sempre.</p>
   check('posicaoDe aguenta lista vazia e id vazio',
         T.posicaoDe([], 'a') === null && T.posicaoDe(['a'], null) === null);
 
+  // ---- o pódio de cada classe (13/09): título sem brilho
+  var nomesC = { sumo: 'Bárbaro', invocador: 'Xamã', minotauro: 'Minotauro' };
+  var estC = { classeNomes: nomesC, porClasse: { invocador: 1, sumo: 2 } };
+  check('o pódio de classe dá "Top 1 Xamã" e "Top 2 Bárbaro"',
+        T.ganhos(estC).indexOf('Top 1 Xamã') >= 0 && T.ganhos(estC).indexOf('Top 2 Bárbaro') >= 0 &&
+        T.ganhos(estC).length === 2, T.ganhos(estC).join(' · '));
+  check('o catálogo tem 3 títulos por classe', T.catalogo(estC).filter(function (t) { return t.fonte === 'classe'; }).length === 9);
+  check('perder a posição na classe invalida o título dela',
+        T.valido('Top 1 Xamã', estC) === true && T.valido('Top 1 Xamã', { classeNomes: nomesC, porClasse: {} }) === false);
+  check('o pódio de classe não acende o nome (o brilho é só do ranking de XP)',
+        T.medalhaDe(null) === null && !T.catalogo(estC).some(function (t) { return t.fonte === 'classe' && t.brilho; }));
+
   // ---- tudo junto
   var cheio = { chefes: { 'boss-gardener': 10, 'boss-riftheart': 12 }, pvm: 1, pvp: 3 };
   check('uma conta pode acumular vários títulos ganhos',

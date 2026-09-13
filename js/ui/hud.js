@@ -4105,7 +4105,8 @@ var JOGO = (typeof window !== 'undefined')
       } else {
         var catal = Tt.catalogo(estT);
         var ganhos = catal.filter(function (t) { return t.ganho; });
-        var porFonte = { pvm: 'Ranking de XP (PvM)', pvp: 'Ranking PvP', chefe: 'Chefes, no difícil e sozinho' };
+        var porFonte = { pvm: 'Ranking de XP (PvM)', pvp: 'Ranking PvP', classe: 'Ranking por classe',
+                         chefe: 'Chefes, no difícil e sozinho' };
         var selT = document.createElement('select');
         selT.className = 'hub-input tit-escolha';
         var opSem = document.createElement('option');
@@ -4113,10 +4114,18 @@ var JOGO = (typeof window !== 'undefined')
         opSem.textContent = '— sem título —';
         opSem.selected = !tituloVivo;
         selT.appendChild(opSem);
-        ['pvm', 'pvp', 'chefe'].forEach(function (f) {
+        ['pvm', 'pvp', 'classe', 'chefe'].forEach(function (f) {
           var grupoT = document.createElement('optgroup');
           grupoT.label = porFonte[f];
-          catal.filter(function (t) { return t.fonte === f; }).forEach(function (t) {
+          // os pódios de classe são 21 (três por classe): no menu entram só os que já são seus
+          var doGrupo = catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); });
+          if (!doGrupo.length) {
+            var opVazia = document.createElement('option');
+            opVazia.disabled = true;
+            opVazia.textContent = '— nenhum pódio de classe ainda —';
+            grupoT.appendChild(opVazia);
+          }
+          doGrupo.forEach(function (t) {
             var op = document.createElement('option');
             op.value = t.titulo;
             op.disabled = !t.ganho;
@@ -4148,10 +4157,15 @@ var JOGO = (typeof window !== 'undefined')
         var comoT = document.createElement('details');
         comoT.className = 'tit-como';
         comoT.appendChild(el('summary', null, 'Como ganhar cada título'));
-        ['pvm', 'pvp', 'chefe'].forEach(function (f) {
+        ['pvm', 'pvp', 'classe', 'chefe'].forEach(function (f) {
           comoT.appendChild(el('div', 'char-fonte',
             '<span class="char-fonte-nm">' + esc(porFonte[f]) + '</span>'));
-          catal.filter(function (t) { return t.fonte === f; }).forEach(function (t) {
+          if (f === 'classe') {
+            comoT.appendChild(el('p', 'inv-dica', 'Seja o 1º, 2º ou 3º de uma classe no ranking do site ' +
+              '(a XP daquela classe): "Top 1 Xamã", "Top 2 Bárbaro"… Vale para cada classe e não acende o nome — ' +
+              'o nome brilhante é só do ranking geral de XP, que soma a conta inteira.'));
+          }
+          catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); }).forEach(function (t) {
             var linha = el('div', 'tit-linha' + (t.ganho ? ' is-ganho' : ''));
             linha.appendChild(el('span', 'tit-nm', esc(t.titulo)));
             if (t.ganho) {
@@ -5306,7 +5320,12 @@ var JOGO = (typeof window !== 'undefined')
     rankingPromessa = p.then(function (r) {
       rankingPromessa = null;
       if (r && r.ok === true && Object.prototype.toString.call(r.jogadores) === '[object Array]') {
-        rankingSrv = { pvm: T.posicoesPorNome(r.jogadores), pvp: T.posicoesPorNome(r.pvp || []) };
+        // 13/09: o pódio de cada classe também (os títulos "Top N <classe>", sem brilho)
+        var pc = {}, lc = (r.porClasse && typeof r.porClasse === 'object') ? r.porClasse : {};
+        Object.keys(lc).forEach(function (cid) {
+          if (Object.prototype.toString.call(lc[cid]) === '[object Array]') pc[cid] = T.posicoesPorNome(lc[cid]);
+        });
+        rankingSrv = { pvm: T.posicoesPorNome(r.jogadores), pvp: T.posicoesPorNome(r.pvp || []), porClasse: pc };
         rankingEm = Date.now();
       }
       return rankingSrv;
@@ -5338,8 +5357,23 @@ var JOGO = (typeof window !== 'undefined')
         arena = arena.filter(function (a) { return a.partidas > 0; })
                      .sort(function (a, b) { return b.pts - a.pts; });
         var chaveEu = chaveNome(eu.nome);
+        // 13/09: o pódio de cada classe (os nomes do DATA.classes, sem o Mestre)
+        var nomesClasse = {}, porClasseEu = {};
+        var defsC = (JOGO.DATA && JOGO.DATA.classes) || {};
+        Object.keys(defsC).forEach(function (cid) {
+          if (cid !== 'gm' && defsC[cid] && defsC[cid].name) nomesClasse[cid] = defsC[cid].name;
+        });
+        var contasPC = rk ? null : contasDoPlacar(fotos, eu.id, eu.nome);
+        Object.keys(nomesClasse).forEach(function (cid) {
+          var posC = rk
+            ? ((rk.porClasse && rk.porClasse[cid] && chaveEu) ? (rk.porClasse[cid][chaveEu] || null) : null)
+            : T.posicaoDe(filaDaClasse(contasPC, cid).map(function (q) { return q.id; }), eu.id);
+          if (posC) porClasseEu[cid] = posC;
+        });
         tituloEstado = {
           chefes: chefes,
+          porClasse: porClasseEu,
+          classeNomes: nomesClasse,
           // com o ranking do servidor é ELE que manda (o do site); sem, o placar da praça
           pvm: rk ? ((chaveEu && rk.pvm[chaveEu]) || null)
                   : T.posicaoDe(niveis.map(function (l) { return l.id; }), eu.id),

@@ -75,6 +75,13 @@ var JOGO = (typeof window !== 'undefined')
   function num(v) { return (typeof v === 'number' && isFinite(v)) ? Math.floor(v) : 0; }
   function posValida(p) { return p === 1 || p === 2 || p === 3; }
 
+  /* O PÓDIO DE CADA CLASSE (13/09, pedido do dono: "título também de Top 3 de
+   * classes — top 1 Xamã, top 1 Bárbaro — mas sem refletir no nome brilhante").
+   * O título é "Top N <nome da classe>", com o nome do DATA.classes (o mesmo no
+   * jogo e no juiz do servidor). NÃO acende o nome: o brilho é só do ranking
+   * geral de XP, que soma a conta inteira. */
+  T.tituloDeClasse = function (pos, nomeClasse) { return 'Top ' + pos + ' ' + nomeClasse; };
+
   /* a cor do nome de quem está na posição `pos` do ranking de XP, ou null */
   T.medalhaDe = function (pos) { return posValida(pos) ? T.MEDALHA_PVM[pos] : null; };
   /* o nome como chave: o ranking do site só publica o nome, sem id */
@@ -113,6 +120,16 @@ var JOGO = (typeof window !== 'undefined')
       fora.push({ titulo: d.titulo, fonte: 'pvp', de: d.pos + 'º do ranking PvP',
                   ganho: estado.pvp === d.pos, emprestado: true,
                   comoGanhar: 'Seja o ' + d.pos + 'º do ranking PvP (pontos de Brasa).' });
+    });
+    // os pódios de classe: `estado.classeNomes` = {classId: nome}, `estado.porClasse` = {classId: posição}
+    var nomesClasse = estado.classeNomes || {}, porClasse = estado.porClasse || {};
+    Object.keys(nomesClasse).forEach(function (cid) {
+      [1, 2, 3].forEach(function (pos) {
+        fora.push({ titulo: T.tituloDeClasse(pos, nomesClasse[cid]), fonte: 'classe', classe: cid, pos: pos,
+                    de: pos + 'º do ranking de ' + nomesClasse[cid],
+                    ganho: porClasse[cid] === pos, emprestado: true,
+                    comoGanhar: 'Seja o ' + pos + 'º do ranking de ' + nomesClasse[cid] + ' (a XP dessa classe).' });
+      });
     });
     T.CHEFES.forEach(function (c) {
       var n = Math.max(0, num(chefes[c.chefe]));
