@@ -64,6 +64,7 @@ var JOGO = (typeof window !== 'undefined')
     return {
       versao: 1,
       jogador: { id: novoId(), nome: null, titulo: null, avatar: null,
+                 dupla: [],              // 12/09: os últimos personagens escolhidos (entra direto na praça)
                  coroaOculta: false,     // 11/09: o troféu acima da cabeça é opcional
                  brasa: { pts: 1000, partidas: 0, temporada: null, galeria: {} },
                  poco: { recorde: 0, semanaId: null, semanaMelhor: 0 },
@@ -123,6 +124,8 @@ var JOGO = (typeof window !== 'undefined')
           d.loja = saneiaLoja(d.loja);
           if (d.jogador.titulo === undefined) d.jogador.titulo = null;
           if (d.jogador.avatar === undefined) d.jogador.avatar = null;
+          // 12/09: a dupla lembrada (contas de antes entram sem ela e caem no menu uma vez)
+          if (!Array.isArray(d.jogador.dupla)) d.jogador.dupla = [];
           if (!d.jogador.brasa || typeof d.jogador.brasa.pts !== 'number') {
             d.jogador.brasa = { pts: 1000, partidas: 0, temporada: null, galeria: {} };
           }
@@ -182,6 +185,7 @@ var JOGO = (typeof window !== 'undefined')
     return responde({ id: d.jogador.id, nome: d.jogador.nome,
                       titulo: d.jogador.titulo || null,
                       avatar: d.jogador.avatar || null,
+                      dupla: (d.jogador.dupla || []).slice(),   // 12/09: entra direto na praça
                       coroaOculta: d.jogador.coroaOculta === true,
                       criadoEm: d.jogador.criadoEm });
   };
@@ -391,6 +395,23 @@ var JOGO = (typeof window !== 'undefined')
       ? avatar : null;
     grava();
     return responde({ ok: true, avatar: d.jogador.avatar });
+  };
+
+  /* A ÚLTIMA DUPLA (12/09, pedido do dono: "sempre que um jogador logar
+   * novamente deve vir automaticamente para a praça com os últimos personagens
+   * selecionados — login mais rápido; se ele quiser trocar, ele vai no menu").
+   * O DB só GUARDA a escolha, sem saber de liberação: quem confere se a classe
+   * está liberada é a ficha, na hora de entrar (do mesmo jeito que o avatar).
+   * Até dois ids, sem repetição, cada um curto. */
+  DB.definirDupla = function (ids) {
+    var d = carrega(), lista = [];
+    (Array.isArray(ids) ? ids : []).forEach(function (h) {
+      if (typeof h !== 'string' || !h || h.length > 40) return;
+      if (lista.indexOf(h) < 0 && lista.length < 2) lista.push(h);
+    });
+    d.jogador.dupla = lista;
+    grava();
+    return responde({ ok: true, dupla: lista.slice() });
   };
 
   /* A COROA ESCONDIDA (11/09 — a ficha do personagem: "se ele quer esconder

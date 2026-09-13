@@ -577,7 +577,7 @@ var JOGO = (typeof window !== 'undefined')
       followDistance: opts.followDistance || 0, // v2
       conta: opts.conta || null,       // 03/09: a conta dona — fusão só entre os seus
       dono: opts.dono || null,         // 11/09: o jogador (id da Rede) que controla — lockstep
-      ia: false,                       // 11/09: herói de gente entregue à IA (quem caiu)
+      ia: false,                       // 12/09: o dono não está aqui (caiu) — o turno desta unidade PASSA (game.js)
       fusionIntent: null,              // v2
       _birth: state._uidCounter
     };
@@ -1399,7 +1399,7 @@ var JOGO = (typeof window !== 'undefined')
   /* O HASH DO ESTADO (FNV-1a de 32 bits, o mesmo `hashStr` da semente): tudo
    * o que decide a batalha dali para a frente — rng, rodada, turno, vez, fase,
    * clima, cada unidade (posição, PV, PA, PP, efeitos, recargas, `ia`, `dono`),
-   * armadilhas, muros, eventos do chão, fusão pendente, consentimento e o
+   * armadilhas, muros, eventos do chão, fusão pendente e o
    * desafio. Número que não é finito entra vazio: a foto passa por JSON, e o
    * JSON devolveria null — o hash de quem restaurou não pode mudar por isso. */
   function nh(v) { return (typeof v === 'number' && isFinite(v)) ? v : ''; }
@@ -1426,7 +1426,6 @@ var JOGO = (typeof window !== 'undefined')
       t = st.tileEventsActive[i]; p.push('E', nh(t.x), nh(t.y), t.eventId, nh(t.remaining));
     }
     if (st.pendingFusion) p.push('F', st.pendingFusion.a, st.pendingFusion.b);
-    if (st.consentimento) p.push('C', st.consentimento.a, st.consentimento.b, nh(st.consentimento.T));
     if (st.desafio) {
       p.push('D', st.desafio.vivo ? 1 : 0, nh(st.desafio.passos), st.desafio.executado ? 1 : 0,
              st.desafio.cumprido ? 1 : 0);

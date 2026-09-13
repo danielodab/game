@@ -1543,12 +1543,33 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .guilda-cab-t h3 { margin: 0; font: 700 17px var(--ui-serif); color: #f0ead8; }
 .guilda-cab-t h3 i { font-style: normal; font-size: 12px; color: var(--gold); }
 .guilda-sub { font-size: 11.5px; color: var(--dim); }
+/* A LISTA DE MEMBROS DA GUILDA (arrumada em 12/09). A pilula era so padding e
+   `border-radius: 999px`, e o botao de promover — um `.btn-mini`, 44 px de
+   altura minima porque e alvo de dedo — esticava a pilula para uma BOLA com o
+   nome cortado. Agora ela e uma linha com altura propria, o botao tem tamanho
+   de icone aqui dentro (o alvo de toque continua em 28 px, o suficiente para
+   um botao secundario dentro de uma ficha) e o nome corta com reticencias. */
 .guilda-membros { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .guilda-membro {
-  padding: 4px 10px; border-radius: 999px; font-size: 12px;
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  min-height: 32px; padding: 3px 6px 3px 10px; border-radius: 999px; font-size: 12px;
   background: rgba(255,255,255,.05); border: 1px solid var(--line2);
 }
 .guilda-membro.is-lider { border-color: var(--gold-dim); color: var(--gold); }
+.guilda-membro.is-oficial { border-color: rgba(240,234,216,.28); }
+.guilda-membro .gm-marca { flex: none; font-style: normal; line-height: 1; opacity: .95; }
+.guilda-membro .gm-nome {
+  min-width: 0; max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.guilda-membro .gm-cargo {
+  flex: none; font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--dim); padding: 1px 5px; border-radius: 999px; border: 1px solid var(--line2);
+}
+.guilda-membro.is-lider .gm-cargo { color: var(--gold); border-color: var(--gold-dim); }
+.guilda-membro .btn-mini.gm-acao {
+  flex: none; width: 26px; height: 26px; min-height: 26px; padding: 0;
+  border-radius: 50%; font-size: 12px; line-height: 1;
+}
 .guilda-cofre, .guilda-banco {
   margin-top: 10px; padding: 10px 12px; border-radius: var(--rad-m);
   border: 1px solid var(--line2);
@@ -2444,6 +2465,15 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .gl-membro.is-fora { opacity: .72; }
 .gl-pic { position: relative; flex: none; width: 36px; height: 36px; }
 .gl-pic > canvas, .gl-pic > .art-missing { width: 36px; height: 36px; border-radius: 7px; display: block; }
+/* 12/09: o membro desce com ATE DOIS herois — o segundo aparece num retrato
+   menor encostado no canto de baixo, e o cartao ganha espaco para as duas
+   linhas de classe/vida sem crescer de largura. */
+.gl-pic.tem-dois { width: 44px; height: 44px; }
+.gl-pic2 { position: absolute; right: -4px; bottom: -4px; display: block; width: 20px; height: 20px;
+  border-radius: 5px; overflow: hidden; border: 1px solid rgba(12,16,14,.95);
+  box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.gl-pic2 > canvas, .gl-pic2 > .art-missing { width: 20px; height: 20px; display: block; }
+.gl-nv.is-vez { color: var(--gold, #ffc44d); }
 .gl-coroa { position: absolute; top: -9px; left: -5px; font-size: 14px; line-height: 1;
   color: var(--gold, #ffc44d); text-shadow: 0 1px 3px #000, 0 0 6px rgba(0,0,0,.8); }
 .gl-on { position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; border-radius: 50%;
@@ -2528,3 +2558,24 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
   .hub-perg { flex-wrap: wrap; }
   .hub-acts { flex: none; }
 }
+
+/* ==========================================================================
+   15 MINUTOS SEM JOGAR (12/09). A capa cobre o jogo inteiro quando a sessao
+   cai por inatividade — ela vive fora das telas (o .ui-root a recebe), para
+   nao depender de qual tela estava aberta.
+   ========================================================================== */
+.inativo-capa {
+  /* o .ui-root tem pointer-events: none — sem isto o "Entrar de novo" nao clicava */
+  pointer-events: auto;
+  position: absolute; inset: 0; z-index: 200; display: flex;
+  align-items: center; justify-content: center; padding: 24px;
+  background: rgba(6,8,10,.88); backdrop-filter: blur(3px);
+}
+.inativo-cx {
+  display: flex; flex-direction: column; gap: 10px; max-width: 420px; width: 100%;
+  padding: 18px 20px; border-radius: var(--rad-m); text-align: center;
+  border: 1px solid var(--line2); background: linear-gradient(180deg, var(--panel3), var(--panel2));
+  box-shadow: 0 18px 50px rgba(0,0,0,.6);
+}
+.inativo-cx h2 { margin: 0; font: 700 19px var(--ui-serif); color: var(--gold); }
+.inativo-cx p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--dim); }

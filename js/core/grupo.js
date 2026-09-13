@@ -167,13 +167,34 @@ var JOGO = (typeof window !== 'undefined')
     return !!sim;
   };
 
-  // ------------------------------------------------------------ o meu herói
-  var meuHeroiId = null, meuNome = null;
+  /* ---------------------------------------------------------- OS MEUS HEROIS
+   * DOIS, NAO UM (12/09, pedido do dono: "quando forem para um calabouco podem
+   * ir com os dois personagens selecionados... no caso 4 personagens no
+   * maximo"). Ate aqui o grupo levava UM heroi de cada lado; agora leva os
+   * selecionados de cada um, e a sala nasce com ate quatro.
+   *
+   * O FIO CONTINUA SENDO UM SO: as vozes do grupo passaram a carregar
+   * `herois` (a lista), e o `heroi` de sempre segue indo como o PRINCIPAL --
+   * e o que o convite mostra e o que a placa do parceiro na praca desenha.
+   * Ninguem precisa de rede de compatibilidade: o convite ja reprova quem
+   * esta em outra versao do jogo ("recarreguem a pagina"), e a versao muda a
+   * cada deploy porque sai do hash dos arquivos servidos. */
+  var meusHerois = [], meuNome = null;
+  var MAX_HEROIS = 2;
+  function principal() { return meusHerois.length ? meusHerois[0] : null; }
   function heroiResumo(hid) {
     if (!hid) return null;
     var h = safe(function () { return JOGO.Progress.hero(hid); }, null);
     if (!h) return { classId: hid, element: 'neutro', level: 1 };
     return { classId: h.classId || hid, element: h.element || 'neutro', level: h.level || 1 };
+  }
+  function heroisResumo(ids) {
+    var out = [];
+    (ids || []).forEach(function (hid) {
+      var r = hid ? heroiResumo(hid) : null;
+      if (r && out.length < MAX_HEROIS) out.push(r);
+    });
+    return out;
   }
   function limpaHeroi(h) {
     if (!h || typeof h !== 'object') return null;
@@ -184,12 +205,34 @@ var JOGO = (typeof window !== 'undefined')
     var lv = Math.max(1, Math.min(99, Math.floor(Number(h.level) || 1)));
     return { classId: cid, element: el, level: lv };
   }
+  /* a lista que chega do outro lado: ate dois, cada um limpo pela regua de
+   * sempre; um objeto solto (o `heroi` do fio) tambem serve */
+  function limpaHerois(v, umSo) {
+    var bruta = (Object.prototype.toString.call(v) === '[object Array]') ? v : [];
+    var out = [];
+    for (var i = 0; i < bruta.length && out.length < MAX_HEROIS; i++) {
+      var h = limpaHeroi(bruta[i]);
+      if (h) out.push(h);
+    }
+    if (!out.length) { var u = limpaHeroi(umSo); if (u) out.push(u); }
+    return out;
+  }
   function ehMestre(hid) {
     if (!hid) return false;
     if (hid === 'gm') return true;
     return safe(function () { return JOGO.Progress.hero(hid).classId === 'gm'; }, false);
   }
   function temHeroi(hid) { return !!(hid && safe(function () { return JOGO.Progress.hero(hid); }, null)); }
+  function temHerois() {
+    if (!meusHerois.length) return false;
+    for (var i = 0; i < meusHerois.length; i++) if (!temHeroi(meusHerois[i])) return false;
+    return true;
+  }
+  /* o Mestre entra em grupo mas e ele quem chama: basta UM dos meus ser ele */
+  function algumMestre() {
+    for (var i = 0; i < meusHerois.length; i++) if (ehMestre(meusHerois[i])) return true;
+    return false;
+  }
   /* 11/09 (pedido do dono): o Mestre ENTRA em grupo com o Cavaleiro Negro, mas
    * só ele chama. "É o Mestre" = o mestre:true da presença, que a Rede só põe
    * quando confia no relé — nunca o que veio escrito no convite. */
@@ -223,8 +266,8 @@ var JOGO = (typeof window !== 'undefined')
     if (trocaAberta()) return 'troca';
     if (tela() !== 'hub' || minhaSala()) return 'ocupado';
     if (paraGrupo) {
-      if (!temHeroi(meuHeroiId)) return 'sem-heroi';
-      if (ehMestre(meuHeroiId)) return 'so-mestre-chama';   // 11/09: o Mestre entra em grupo, mas é ele quem chama
+      if (!temHerois()) return 'sem-heroi';
+      if (algumMestre()) return 'so-mestre-chama';   // 11/09: o Mestre entra em grupo, mas é ele quem chama
     } else if (!heroisDeDuelo().length) return 'sem-heroi';
     return null;
   }
@@ -235,7 +278,7 @@ var JOGO = (typeof window !== 'undefined')
     if (['hub', 'menu', 'defeat', 'dungeonComplete', 'duelFim'].indexOf(t) < 0) return 'ocupado';
     if (trocaAberta()) return 'troca';
     if (dst.fase !== 'livre') return 'ocupado';
-    if (!temHeroi(meuHeroiId)) return 'sem-heroi';
+    if (!temHerois()) return 'sem-heroi';
     return null;                     // 11/09: o Mestre no grupo segue (e desce) como qualquer um
   }
   Grupo.podeSeguir = function () {
@@ -323,8 +366,8 @@ var JOGO = (typeof window !== 'undefined')
   var ultimoPar = null;             // { id, nome }: quem estava no grupo que se desfez
   function zera() {
     st = { fase: 'livre', gid: null, chave: null, v: 0, lider: null,
-           par: null,               // { id, cx, nome, heroi, on, sumidoDesde, saiu }
-           pendente: null,          // { tipo:'convite', id, gid, chave, cx, heroi, expira, meu }
+           par: null,               // { id, cx, nome, heroi, herois[], on, sumidoDesde, saiu }
+           pendente: null,          // { tipo:'convite', id, gid, chave, cx, heroi, herois[], expira, meu }
            descer: null,            // { dungeonId, expira } — quem lidera esperando o "desci"
            aguardaEstado: false,    // mandei 'volta': o próximo estado do par vale
            voltaProva: null,        // a prova da minha última 'volta' (o "sair expirou" de quem já não me conhece a devolve)
@@ -355,15 +398,18 @@ var JOGO = (typeof window !== 'undefined')
   Grupo.lider = function () { return Grupo.emGrupo() ? st.lider : null; };
   Grupo.parceiro = function () {
     if (!Grupo.emGrupo()) return null;
-    return { id: st.par.id, cx: st.par.cx, nome: st.par.nome, heroi: st.par.heroi };
+    return { id: st.par.id, cx: st.par.cx, nome: st.par.nome, heroi: st.par.heroi,
+             herois: (st.par.herois || []).slice() };
   };
   Grupo.estado = function () {
     var e = eu();
     var membros = [];
     if (Grupo.emGrupo()) {
-      var mim = { id: e, cx: meuCx(), nome: meuNome || 'Você', heroi: heroiResumo(meuHeroiId),
+      var meus = heroisResumo(meusHerois);
+      var mim = { id: e, cx: meuCx(), nome: meuNome || 'Você', heroi: meus[0] || null, herois: meus,
                   on: true, sumidoDesde: null, eu: true };
-      var ele = { id: st.par.id, cx: st.par.cx, nome: st.par.nome, heroi: st.par.heroi,
+      var ele = { id: st.par.id, cx: st.par.cx, nome: st.par.nome,
+                  heroi: st.par.heroi, herois: (st.par.herois || []).slice(),
                   on: st.par.on, sumidoDesde: st.par.sumidoDesde, saiu: !!st.par.saiu, eu: false };
       if (st.lider === e) membros.push(mim, ele); else membros.push(ele, mim);
     }
@@ -372,7 +418,8 @@ var JOGO = (typeof window !== 'undefined')
       gid: st.gid, v: st.v, lider: Grupo.emGrupo() ? st.lider : null, eu: e, fase: st.fase,
       membros: membros,
       pendente: p ? { tipo: 'convite', id: p.id, gid: p.gid, expira: p.expira, meu: !!p.meu,
-                      nome: nomeDe(p.id), heroi: p.heroi || null } : null,
+                      nome: nomeDe(p.id), heroi: p.heroi || null,
+                      herois: (p.herois || []).slice() } : null,
       descida: descidaAtual(),
       descendo: st.descer ? { dungeonId: st.descer.dungeonId, expira: st.descer.expira } : null,
       descidaGrupo: descidaG ? descidaG.dungeonId : null,
@@ -392,7 +439,8 @@ var JOGO = (typeof window !== 'undefined')
     var info = null;
     if (Grupo.emGrupo()) {
       info = { gid: st.gid, lider: st.lider, eu: eu(),
-               parceiro: { id: st.par.id, cx: st.par.cx, heroi: st.par.heroi, nome: st.par.nome } };
+               parceiro: { id: st.par.id, cx: st.par.cx, heroi: st.par.heroi,
+                           herois: (st.par.herois || []).slice(), nome: st.par.nome } };
     }
     var sig = info ? JSON.stringify(info) : 'null';
     if (sig === assinaturaCoop) return;
@@ -420,8 +468,10 @@ var JOGO = (typeof window !== 'undefined')
     return manda('grupo', st.par.id, 'estado', {
       gid: st.gid, v: st.v, lider: st.lider, fase: descidaAtual(),
       dif: safe(function () { return G().dificuldade; }, null) || 'normal',   // 11/09 (revisão): quem segue vê a dificuldade
-      membros: [{ id: eu(), cx: meuCx(), heroi: heroiResumo(meuHeroiId) },
-                { id: st.par.id, cx: st.par.cx, heroi: st.par.heroi }]
+      membros: [{ id: eu(), cx: meuCx(), heroi: heroiResumo(principal()),
+                  herois: heroisResumo(meusHerois) },
+                { id: st.par.id, cx: st.par.cx, heroi: st.par.heroi,
+                  herois: (st.par.herois || []).slice() }]
     }, semCx ? null : st.par.cx);
   }
   // envelope do par já pareado: o id e o cx carimbado batem
@@ -429,8 +479,8 @@ var JOGO = (typeof window !== 'undefined')
     return !!(st.par && ev.de === st.par.id && (st.par.cx == null || ev.cx === st.par.cx));
   }
 
-  /* desfaz o grupo. Se o PAR saiu no meio da batalha, a sala continua (o herói
-   * dele segue com a IA, no Coop) e o grupo só se desfaz quando ela acabar. */
+  /* desfaz o grupo. Se o PAR saiu no meio da batalha, a sala continua (os
+   * heróis dele CAEM, no Coop — 12/09) e o grupo só se desfaz quando ela acabar. */
   function desfaz(texto, kind, porMim) {
     if (st.fase !== 'formado') return;
     if (!porMim && tela() === 'battle') {
@@ -460,7 +510,8 @@ var JOGO = (typeof window !== 'undefined')
   function comecaDescida(dg) {
     descidaG = { dungeonId: dg };
     st.descidaAcabou = false;
-    var ok = safe(function () { return G().startRun([meuHeroiId], dg, { grupo: true }); }, false);
+    // 12/09: a descida em grupo leva os MEUS selecionados (ate dois)
+    var ok = safe(function () { return G().startRun(meusHerois.slice(), dg, { grupo: true }); }, false);
     if (!ok) {
       descidaG = null;
       aviso('Não deu para começar a descida.');
@@ -471,16 +522,24 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ---- a superfície
-  Grupo.defineHeroi = function (heroId) {
-    var antes = JSON.stringify(heroiResumo(meuHeroiId));
-    meuHeroiId = heroId || null;
+  Grupo.defineHerois = function (ids) {
+    var lista = [];
+    (Object.prototype.toString.call(ids) === '[object Array]' ? ids : [ids]).forEach(function (h) {
+      if (typeof h === 'string' && h && lista.indexOf(h) < 0 && lista.length < MAX_HEROIS) lista.push(h);
+    });
+    var antes = JSON.stringify(heroisResumo(meusHerois));
+    meusHerois = lista;
     lerMeuNome();
-    var depois = JSON.stringify(heroiResumo(meuHeroiId));
+    var depois = JSON.stringify(heroisResumo(meusHerois));
     if (antes === depois || !Grupo.emGrupo()) return;
-    manda('grupo', st.par.id, 'heroi', { gid: st.gid, heroi: heroiResumo(meuHeroiId) }, st.par.cx);
+    manda('grupo', st.par.id, 'heroi',
+          { gid: st.gid, heroi: heroiResumo(principal()), herois: heroisResumo(meusHerois) }, st.par.cx);
     muda();
   };
-  Grupo.meuHeroi = function () { return meuHeroiId; };
+  // o de sempre, com um so: quem chama com um id continua funcionando
+  Grupo.defineHeroi = function (heroId) { return Grupo.defineHerois(heroId ? [heroId] : []); };
+  Grupo.meuHeroi = function () { return principal(); };
+  Grupo.meusHerois = function () { return meusHerois.slice(); };
 
   Grupo.convidar = function (id) {
     if (!id || id === eu()) return { ok: false, motivo: 'ocupado' };
@@ -488,13 +547,13 @@ var JOGO = (typeof window !== 'undefined')
     if (st.fase !== 'livre' || dst.fase !== 'livre') return { ok: false, motivo: 'ocupado' };
     if (trocaAberta()) return { ok: false, motivo: 'troca' };
     if (tela() !== 'hub' || minhaSala()) return { ok: false, motivo: 'em-batalha' };
-    if (!temHeroi(meuHeroiId)) return { ok: false, motivo: 'sem-heroi' };
+    if (!temHerois()) return { ok: false, motivo: 'sem-heroi' };
     // 11/09 (pedido do dono): o Mestre chama para o grupo; chamar o Mestre
     // conferido nem sai daqui — só ele pede grupo
-    if (mestreConferido(id) && !ehMestre(meuHeroiId)) return { ok: false, motivo: 'so-mestre-chama' };
+    if (mestreConferido(id) && !algumMestre()) return { ok: false, motivo: 'so-mestre-chama' };
     var gid = eu() + '-' + aleat(4), chave = aleat(8);
-    if (!manda('grupo', id, 'convite', { gid: gid, chave: chave, heroi: heroiResumo(meuHeroiId),
-                                          versao: versao() })) {
+    if (!manda('grupo', id, 'convite', { gid: gid, chave: chave, heroi: heroiResumo(principal()),
+                                          herois: heroisResumo(meusHerois), versao: versao() })) {
       return { ok: false, motivo: ultimaRecusa };
     }
     st.fase = 'convidei';
@@ -522,13 +581,15 @@ var JOGO = (typeof window !== 'undefined')
       return { ok: false, motivo: mot };
     }
     var kb = aleat(8);                      // a minha metade da chave: só à conexão de quem chamou
-    if (!manda('grupo', p.id, 'resposta', { gid: p.gid, ok: true, heroi: heroiResumo(meuHeroiId), kb: kb }, p.cx)) {
+    if (!manda('grupo', p.id, 'resposta', { gid: p.gid, ok: true, heroi: heroiResumo(principal()),
+                                            herois: heroisResumo(meusHerois), kb: kb }, p.cx)) {
       muda();
       return { ok: false, motivo: ultimaRecusa };
     }
     st.fase = 'formado';
     st.gid = p.gid; st.chave = p.chave + ':' + kb; st.v = 0; st.lider = p.id;
-    st.par = { id: p.id, cx: p.cx || null, nome: nomeDe(p.id), heroi: p.heroi, on: true, sumidoDesde: null };
+    st.par = { id: p.id, cx: p.cx || null, nome: nomeDe(p.id), heroi: p.heroi,
+               herois: (p.herois || []).slice(), on: true, sumidoDesde: null };
     st.descidaAcabou = false;
     vigia(p.id, st.par.cx);
     muda();
@@ -621,18 +682,24 @@ var JOGO = (typeof window !== 'undefined')
       if (st.pendente && st.pendente.gid === d.gid) return;          // reenvio
       if (st.fase === 'formado' && st.gid === d.gid) return;
       var mot = mutado(de) ? 'ocupado' : (String(d.versao || '') !== versao() ? 'versao' : motivoOcupado(true));
-      // 11/09: convite com o herói do Mestre só do Mestre que o relé conferiu
-      if (!mot && d.heroi && String(d.heroi.classId || '') === 'gm' && !mestreConferido(de)) mot = 'mestre-falso';
+      // 11/09: convite com o herói do Mestre só do Mestre que o relé conferiu —
+      // 12/09: conferido na LISTA inteira, não só no principal
+      var hsC = limpaHerois(d.herois, d.heroi);
+      var temGm = hsC.some(function (h) { return h.classId === 'gm'; }) ||
+                  !!(d.heroi && String(d.heroi.classId || '') === 'gm');
+      if (!mot && temGm && !mestreConferido(de)) mot = 'mestre-falso';
       if (mot) {
         manda('grupo', de, 'resposta', { gid: String(d.gid).slice(0, 48), ok: false, motivo: mot }, ev.cx);
         return;
       }
       st.fase = 'convidado';
       st.pendente = { tipo: 'convite', id: de, gid: String(d.gid).slice(0, 48), chave: String(d.chave).slice(0, 24),
-                      cx: ev.cx || null, heroi: limpaHeroi(d.heroi), expira: agora() + Grupo.PRAZO_MS, meu: false };
+                      cx: ev.cx || null, heroi: hsC[0] || null, herois: hsC,
+                      expira: agora() + Grupo.PRAZO_MS, meu: false };
       if (Grupo.aoConvite) {
         try {
           Grupo.aoConvite({ id: de, nome: nomeDe(de), heroi: st.pendente.heroi,
+                            herois: st.pendente.herois.slice(),
                             expira: st.pendente.expira, gid: st.pendente.gid });
         } catch (e) {}
       }
@@ -664,7 +731,9 @@ var JOGO = (typeof window !== 'undefined')
       st.fase = 'formado';
       // a chave: a minha metade (a do convite) e a dele (a da resposta, que só a minha conexão ouviu)
       st.gid = p.gid; st.chave = p.chave + ':' + String(d.kb || '').slice(0, 24); st.v = 0; st.lider = eu();
-      st.par = { id: de, cx: ev.cx || null, nome: nomeDe(de), heroi: limpaHeroi(d.heroi), on: true, sumidoDesde: null };
+      var hsR = limpaHerois(d.herois, d.heroi);
+      st.par = { id: de, cx: ev.cx || null, nome: nomeDe(de), heroi: hsR[0] || null, herois: hsR,
+                 on: true, sumidoDesde: null };
       st.descidaAcabou = false;
       vigia(de, st.par.cx);
       mandaEstado();
@@ -682,7 +751,10 @@ var JOGO = (typeof window !== 'undefined')
       // 11/09 (revisão): a dificuldade que quem lidera escolheu (quem segue a vê no portal e na porta)
       if (st.lider === de && d.dif) st.descidaDif = difValida(d.dif) || st.descidaDif;
       (Array.isArray(d.membros) ? d.membros : []).forEach(function (m) {
-        if (m && m.id === de) { var hh = limpaHeroi(m.heroi); if (hh) st.par.heroi = hh; }
+        if (m && m.id === de) {
+          var hh = limpaHerois(m.herois, m.heroi);
+          if (hh.length) { st.par.herois = hh; st.par.heroi = hh[0]; }
+        }
       });
       muda();
     } else if (a === 'lider') {
@@ -695,8 +767,8 @@ var JOGO = (typeof window !== 'undefined')
       muda();
     } else if (a === 'heroi') {
       if (!Grupo.emGrupo() || d.gid !== st.gid || !doPar(ev)) return;
-      var h2 = limpaHeroi(d.heroi);
-      if (h2) st.par.heroi = h2;
+      var h2 = limpaHerois(d.herois, d.heroi);
+      if (h2.length) { st.par.herois = h2; st.par.heroi = h2[0]; }
       if (Grupo.souLider()) mandaEstado();
       muda();
     } else if (a === 'sair') {
@@ -856,12 +928,21 @@ var JOGO = (typeof window !== 'undefined')
     if (Grupo.emGrupo() && !st.par.on && st.par.sumidoDesde && !st.dissolver &&
         t - st.par.sumidoDesde >= graca()) {
       var nome = st.par.nome;
-      if (tela() === 'battle') {
+      /* QUEM CAIU NAO PERDE A DESCIDA (12/09, pedido do dono: "caso ele cair
+       * do jogo/internet deve continuar na luta se ela nao tiver acabado, ou
+       * nascer na proxima sala caso tenha acabado"). Antes o grupo se desfazia
+       * assim que a SALA acabava com ele fora ("nao voltou — a descida
+       * acabou"), e a descida morria na tela de recompensa. Agora, em qualquer
+       * ponto da descida (batalha, antessala, recompensa), quem ficou apenas
+       * LIDERA: a sala seguinte nasce com os herois de quem caiu, o turno
+       * deles passa, e ele reassume os corpos quando a conexao voltar. Na
+       * praca, onde nao ha nada em curso, a queda desfaz o grupo como sempre. */
+      var naDescida = descidaAtual() !== 'praca' || !!descidaG;
+      if (naDescida) {
         // D21: quem ficou lidera (a autoridade da batalha é do Coop)
         if (st.lider !== eu()) { st.lider = eu(); st.v++; muda(); }
       } else {
-        var naDescida = descidaAtual() !== 'praca' || !!descidaG;
-        desfaz(naDescida ? nome + ' não voltou — a descida acabou.' : nome + ' saiu — o grupo se desfez.');
+        desfaz(nome + ' saiu — o grupo se desfez.');
       }
     }
     if (st.dissolver && tela() !== 'battle') {

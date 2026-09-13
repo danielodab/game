@@ -117,6 +117,7 @@ var JOGO = (typeof window !== 'undefined')
   R.FATIAS_MAX = 16;                // pedaços por mensagem (~88 KB); cabem na rajada do balde geral do relé (40)
   R.FATIA_PRAZO_MS = 20000;         // a remontagem espera tanto; pedaço solto depois disto é jogado fora
   R.TEXTO_MAX = 240;                // o chat e o sussurro
+  R.EMBLEMA_MAX = 64;               // 12/09: o brasão da guilda é um CÓDIGO (o TEXTO_MAX do relé, e o EMBLEMA_MAX do servidor)
   R.TAXA_SAIDA = 18;                // 11/09 (revisão): o balde de SAÍDA do ws — por segundo (o geral do relé é 20/s)
   R.RAJADA_SAIDA = 36;              //   e a rajada (a do relé é 40): o que passa espera na fila, nunca estoura lá
   R.FILA_SAIDA_MAX = 400;           //   a fila do balde, com o ws no ar (fora do ar, a fila de sempre: 50)
@@ -511,8 +512,28 @@ var JOGO = (typeof window !== 'undefined')
    * comprido); os veredictos ficam guardados. Sem JOGO.Nomes carregado, só
    * o relé protege. */
   var vereditos = {}, nVereditos = 0;
+  /* O BRASÃO DA GUILDA NÃO É NOME (12/09). Desde que o escudo virou vetor, o
+   * campo `emblema` guarda um CÓDIGO — "shield|2|#2d7a3a|#c9a227|#f5d76e|
+   * tree|0|#1d3f8a", 45 letras. Esta régua reprova qualquer texto com mais de
+   * R.NOME_MAX (24) sem nem olhar, e está certa nisso; o efeito colateral era
+   * que o brasão de todo mundo chegava ao vizinho trocado pela bandeirinha ⚑
+   * — a guilda aparecia com o nome certo e o escudo errado. Foi o defeito que
+   * o dono viu com duas janelas abertas. (O relé não tinha esse problema: o
+   * TEXTO_MAX dele é 64 e a regra de nomes do servidor não reprova o código.)
+   *
+   * A exceção é ESTREITA de propósito: passa só o que casa com a GRAMÁTICA do
+   * brasão — shield, um dígito de forma, três cores em hexadecimal, um símbolo
+   * de [a-z-] e, opcionalmente, a divisão e a 2ª cor. Texto livre não entra
+   * por aqui, então ninguém escreve 'GM' no campo do emblema e passa; o que
+   * não casar volta para a régua de nome de sempre. E a palavra final continua
+   * sendo do servidor, que julga o mesmo campo com a régua dele. */
+  var RE_BRASAO = /^shield\|[0-9]\|#[0-9a-fA-F]{3,8}\|#[0-9a-fA-F]{3,8}\|#[0-9a-fA-F]{3,8}\|[a-z-]{1,12}(\|[0-9]\|#[0-9a-fA-F]{3,8})?$/;
+  R.ehBrasao = function (v) {
+    return typeof v === 'string' && v.length <= R.EMBLEMA_MAX && RE_BRASAO.test(v);
+  };
   function reservadoAqui(s) {
     if (s === null || s === undefined || s === '') return false;
+    if (R.ehBrasao(s)) return false;          // brasão vetorial: passa inteiro
     if (typeof s !== 'string' || s.length > R.NOME_MAX) return true;
     var N = JOGO.Nomes;
     if (!N || typeof N.reservado !== 'function') return false;

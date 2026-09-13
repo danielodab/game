@@ -551,8 +551,39 @@ var JOGO = (typeof window !== 'undefined')
     });
 
     UI.showScreen(safe(function () { return G().screen; }, 'menu'));
+    // 12/09: com uma dupla lembrada, o jogo abre no Acampamento (login rápido)
+    entraDiretoNaPraca();
+    ligaInatividade();
     return UI;
   };
+
+  /* 15 MINUTOS SEM JOGAR (12/09, pedido do dono: "15 min de inatividade a
+   * conta desloga para não consumir servidor"). O relógio e o desligamento
+   * moram na Sessao; aqui fica só o aviso na tela, porque a aba NÃO se manda
+   * embora sozinha: quem estava com a ficha aberta perderia o que fazia. O
+   * botão recarrega a página, que é o caminho de sempre para entrar de novo. */
+  function ligaInatividade() {
+    var Se = JOGO.Sessao;
+    if (!Se || !Se.vigiaInatividade) return;
+    Se.aoInativo = function (info) {
+      var caixa = el('div', 'inativo-capa');
+      var cx = el('div', 'inativo-cx');
+      cx.appendChild(el('h2', null, 'Você saiu por inatividade'));
+      cx.appendChild(el('p', null, 'Ficou ' + Math.round((Se.INATIVO_MS || 900000) / 60000) +
+        ' minutos sem jogar, então ' + (info && info.tinhaConta ? 'a sua conta saiu e ' : '') +
+        'a conexão fechou para não ocupar o servidor. O seu progresso já está guardado.'));
+      var b = el('button', 'btn btn-primary', 'Entrar de novo');
+      b.type = 'button';
+      tap(b, function () { try { location.reload(); } catch (e) {} });
+      cx.appendChild(b);
+      var a = el('a', 'btn btn-ghost', 'Ir para o site');
+      a.href = safe(function () { return Se.paginaSite(); }, 'site/index.html');
+      cx.appendChild(a);
+      caixa.appendChild(cx);
+      if (root) root.appendChild(caixa);
+    };
+    safe(function () { return Se.vigiaInatividade(); }, null);
+  }
 
   UI.showScreen = function (name, data) {
     if (!screens[name]) name = 'menu';
@@ -855,6 +886,7 @@ var JOGO = (typeof window !== 'undefined')
     var cnt = el('span', 'foot-count', '');
     var go = btn('Confirmar', 'btn-primary', function () {
       if (!selHeroes.length) { toast('Escolha ao menos um herói.'); return; }
+      guardaDupla();          // 12/09: o próximo login já abre na praça com esta
       navTo('hub');
     });
     foot.appendChild(cnt);
@@ -1535,20 +1567,42 @@ var JOGO = (typeof window !== 'undefined')
           if (resumoGuilda && JOGO.Hub && JOGO.Hub.nomeia) {
             try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
           }
+          // e a Rede também: sem isto o meu clã só existia na MINHA tela
+          reanunciaPerfil();
         });
       }
-      JOGO.DB.jogador().then(function (j) {
+      /* O CARTÃO QUE VIAJA (12/09). Era montado inline, uma vez, no `R.entrar`
+       * — e aí estava o defeito que o dono viu com duas janelas abertas: "a
+       * guild de um não aparece para o outro". A guilda carrega por promessa
+       * e quase sempre chega DEPOIS do `entrar`, então o resumo que os outros
+       * recebiam ia sem ela: a minha plaquinha mostrava o clã (Hub.nomeia é
+       * local) e o meu fantasma na tela do vizinho, não. O mesmo valia para
+       * título e coroa.
+       * Agora o cartão é uma função e `reanunciaPerfil()` o manda de novo —
+       * `R.entrar` com o MESMO id cai em `atualiza` na rede.js, que é
+       * exatamente o "mudei de roupa, avisa todo mundo". Quem funda, entra
+       * ou sai de guilda, e quem troca de título, chama. */
+      function cartaoDaRede(j) {
         var e0 = (JOGO.Hub._estado && JOGO.Hub._estado()) || {};
         var pos = e0.pos || { x: 0, z: 9 };
-        // `classe` no protocolo sempre foi APARÊNCIA — agora pode ser uma
-        // fusão do guarda-roupa; o fantasma do outro lado veste igual
-        var ligou = R.entrar({ id: j.id, nome: j.nome || 'Sem Nome',
-                               titulo: tituloPendurado(j.titulo),
-                               classe: selHeroes[0] || 'sumo',
-                               resumo: safe(resumoDaConta, null),
-                               aura: safe(temAuraSelos, false),
-                               sala: chaveSala,          // 03/09: a antessala (null = praça)
-                               x: pos.x, z: pos.z });
+        return { id: j.id, nome: j.nome || 'Sem Nome',
+                 titulo: tituloPendurado(j.titulo),
+                 // `classe` no protocolo sempre foi APARÊNCIA — agora pode ser
+                 // uma fusão do guarda-roupa; o fantasma do outro lado veste igual
+                 classe: selHeroes[0] || 'sumo',
+                 resumo: safe(resumoDaConta, null),
+                 aura: safe(temAuraSelos, false),
+                 sala: chaveSala,          // 03/09: a antessala (null = praça)
+                 x: pos.x, z: pos.z };
+      }
+      reanunciaPerfil = function () {
+        if (!JOGO.DB || !R || !R.entrar) return;
+        JOGO.DB.jogador().then(function (j) {
+          try { R.entrar(cartaoDaRede(j)); } catch (e) {}
+        });
+      };
+      JOGO.DB.jogador().then(function (j) {
+        var ligou = R.entrar(cartaoDaRede(j));
         if (!ligou) return;                    // file://: o jogo segue solo
 
         JOGO.Hub.aoAndar = function (x, z) { R.mover(x, z); };
@@ -1731,6 +1785,7 @@ var JOGO = (typeof window !== 'undefined')
                         res.ok ? 'good' : undefined);
                   if (res.ok && res.guilda) {               // a placa da guilda sobe na hora
                     resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+                    reanunciaPerfil();          // o clã novo aparece para todos
                     if (JOGO.Hub && JOGO.Hub.nomeia) {
                       try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
                     }
@@ -2888,8 +2943,10 @@ var JOGO = (typeof window !== 'undefined')
     var cell = el('button', 'fusion-btn');
     cell.type = 'button';
     cell.appendChild(art('unit', [defId, { elements: [a.element, b.element], dir: 0, scale: 0.4 }], 60));
-    // 11/09: com o herói do PARCEIRO, a fusão é um pedido (os dois aceitam, D6)
-    if (pr.pedido) { celulaFusaoPedida(cell, pr, a, b, ca, cb); bt.fusion.appendChild(cell); return; }
+    /* 12/09: o botão só aparece para heróis do MESMO jogador. A fusão com o
+     * herói do parceiro — que de 11/09 até aqui era um pedido com os dois
+     * aceitando — não existe mais, então o `Game.canFuse` nem devolve o par e
+     * não há mais nada a desenhar aqui. */
     var t = el('div', 'fu-txt');
     t.appendChild(el('b', null, 'FUNDIR'));
     t.appendChild(el('span', null, esc(className(ca)) + ' + ' + esc(className(cb))));
@@ -3929,6 +3986,8 @@ var JOGO = (typeof window !== 'undefined')
           JOGO.DB.definirCoroaOculta(!oculta).then(function () {
             toast(!oculta ? 'A coroa saiu da sua cabeça — os pontos ficam.'
                           : 'A coroa voltou para cima da sua cabeça.', 'good');
+            resumoCoroaOculta = !oculta;      // o fantasma dos outros obedece o resumo
+            reanunciaPerfil();
             if (JOGO.UI && JOGO.UI.repaint) JOGO.UI.repaint();
             sheetChar();
           });
@@ -3954,6 +4013,7 @@ var JOGO = (typeof window !== 'undefined')
         fila.appendChild(btn('— sem título —', 'btn-mini' + (!tituloVivo ? ' is-on' : ''), function () {
           JOGO.DB.definirTitulo(null).then(function () {
             if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, '');
+            reanunciaPerfil();
             toast('Sem título — só o nome.', 'good');
             sheetChar();
           });
@@ -3963,6 +4023,7 @@ var JOGO = (typeof window !== 'undefined')
             'btn-mini' + (tituloVivo === t.titulo ? ' is-on' : ''), function () {
               JOGO.DB.definirTitulo(t.titulo).then(function (res) {
                 if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, res.titulo || '');
+                reanunciaPerfil();        // o título aparece para todos, não só aqui
                 toast('Agora você é ' + (j.nome || 'você') + ', ' + res.titulo + '.', 'good');
                 sheetChar();
               });
@@ -5176,6 +5237,10 @@ var JOGO = (typeof window !== 'undefined')
    * buildHub os carrega antes de ligar a Rede */
   var resumoBrasaPts = 1000, resumoBrasaPartidas = 0, resumoGaleria = null,
       resumoPoco = null, resumoGuilda = null, resumoCoroaOculta = false;
+  /* Reanuncia o meu cartão para a Rede (guilda nova, título novo, coroa
+   * escondida). Só existe de verdade dentro do Acampamento — fora dele é
+   * no-op, e é isso que o `function () {}` diz. */
+  var reanunciaPerfil = function () {};
 
   function paresDeAvatar() {
     var ids = Object.keys(classes()).filter(isUnlocked).sort();
@@ -7084,6 +7149,7 @@ var JOGO = (typeof window !== 'undefined')
               Gd.migrarLocal().then(function (res) {
                 if (!res.ok) { toast(res.erro || 'não deu'); return; }
                 resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+                    reanunciaPerfil();          // o clã novo aparece para todos
                 if (JOGO.Hub && JOGO.Hub.nomeia) {
                   try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
                 }
@@ -7146,6 +7212,7 @@ var JOGO = (typeof window !== 'undefined')
             // a plaquinha da praça ganha a placa da guilda na hora — os
             // undefined preservam nome/título/coroa que já estão pendurados
             resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+                    reanunciaPerfil();          // o clã novo aparece para todos
             if (JOGO.Hub && JOGO.Hub.nomeia) {
               try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
             }
@@ -7173,15 +7240,27 @@ var JOGO = (typeof window !== 'undefined')
 
         // ---- MEMBROS E CARGOS (30/08): líder ⚑, oficiais ★, membros. O
         // líder promove e rebaixa daqui; oficial ganha a chave do cofre.
+        /* A LISTA DE MEMBROS (12/09, o dono: "menu da guild esta desorganizado
+         * tambem, olha os membros"). Cada membro era um texto solto dentro de
+         * uma pilula, com o botao de promover enfiado no meio: o `.btn-mini`
+         * tem 44 px de altura minima (o alvo de dedo), a pilula esticava para
+         * cabe-lo e o `border-radius: 999px` virava uma BOLA com o nome
+         * cortado — era o que a foto mostrava. Agora a pilula e uma linha de
+         * verdade (marca, nome, cargo, acao), com altura propria e o nome
+         * cortando com reticencias quando for longo. */
         var lm = el('div', 'guilda-membros');
         g.membros.forEach(function (m) {
           var ehLider = m.cargo === 'lider';
           var ehOficial = m.cargo === 'oficial';
-          var chip = el('span', 'guilda-membro' + (ehLider ? ' is-lider' : ''),
-            (ehLider ? '⚑ ' : ehOficial ? '★ ' : '') + esc(m.nome) +
-            (ehOficial ? ' <i>oficial</i>' : ''));
+          var chip = el('span', 'guilda-membro' + (ehLider ? ' is-lider' : '') +
+                                (ehOficial ? ' is-oficial' : ''));
+          chip.appendChild(el('i', 'gm-marca', ehLider ? '⚑' : ehOficial ? '★' : '·'));
+          chip.appendChild(el('span', 'gm-nome', esc(m.nome)));
+          if (ehLider) chip.appendChild(el('span', 'gm-cargo', 'líder'));
+          else if (ehOficial) chip.appendChild(el('span', 'gm-cargo', 'oficial'));
+          chip.title = m.nome + (ehLider ? ' — líder' : ehOficial ? ' — oficial' : '');
           if (g.souLider && !ehLider) {
-            var bAcao = btn(ehOficial ? '▾' : '▴', 'btn-mini btn-ghost', function () {
+            var bAcao = btn(ehOficial ? '▾' : '▴', 'btn-mini btn-ghost gm-acao', function () {
               var op = ehOficial ? Gd.rebaixar(m.id) : Gd.promover(m.id);
               op.then(function (res) {
                 toast(res.ok
@@ -8142,11 +8221,14 @@ var JOGO = (typeof window !== 'undefined')
       // 11/09: em grupo, sair da batalha é sair do grupo e da descida (D16)
       acts.appendChild(btn('Sair do grupo e da descida', 'btn-warn', function () {
         confirmSheet('Sair do grupo e da descida?',
-          'Seu herói segue com a IA até o fim desta sala, e você não recebe nada dela.', function () {
+          // 12/09 (dono): "sair da batalha/desistir, ele deve morrer" — o
+          // aviso tem de dizer isso antes, e não depois
+          'Seus heróis <b>morrem</b> nesta sala e você não recebe nada dela. ' +
+          'Cair da internet é diferente: ali eles ficam de pé e o turno passa até você voltar.', function () {
             safe(function () { Cp().sairDaBatalha(); return true; }, null);
             safe(function () { Gp().sair('saiu'); return true; }, null);
-            safe(function () { G().restart(); }, null);
-            UI.showScreen('menu');
+            // 12/09 (dono): abandonar leva à PRAÇA, não ao menu
+            safe(function () { return G().abandonar(); }, false);
           });
       }));
     } else if (mr === 'duelo') {
@@ -8233,6 +8315,17 @@ var JOGO = (typeof window !== 'undefined')
     var hid = safe(function () { return Gp().meuHeroi(); }, null) || selHeroes[0] || null;
     return hid ? (hero(hid) || { classId: hid, level: 1 }) : null;
   }
+  /* OS MEUS, para o texto do convite (12/09): a descida em grupo leva os dois
+   * selecionados de cada lado. */
+  function meusHeroisG() {
+    var ids = safe(function () { return Gp().meusHerois(); }, null);
+    if (!ids || !ids.length) ids = selHeroes.slice();
+    var out = [];
+    ids.forEach(function (hid) {
+      if (hid) out.push(hero(hid) || { classId: hid, level: 1 });
+    });
+    return out;
+  }
   function relogioTxt(ms) {
     var s = Math.max(0, Math.ceil(ms / 1000));
     return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
@@ -8304,9 +8397,12 @@ var JOGO = (typeof window !== 'undefined')
     var h = c.heroi || {};
     cabecalhoPainel(p, h.classId, h.element, '<b>' + esc(c.nome) + '</b> te chama para o grupo.',
       h.classId ? esc(className(h.classId)) + ' · nv ' + (h.level || 1) : '');
-    var meu = meuHeroiG() || {};
+    var meus = meusHeroisG();
+    var lista = meus.map(function (x) {
+      return esc(className(x.classId || '')) + ' nv ' + (x.level || 1);
+    }).join(' e ');
     p.appendChild(el('p', 'hub-nota', esc(c.nome) + ' lidera: escolhe o calabouço e abre as portas. ' +
-      'Você leva o seu herói principal: <b>' + esc(className(meu.classId || '')) + ' nv ' + (meu.level || 1) + '</b>.'));
+      (meus.length > 1 ? 'Você leva os seus dois: <b>' : 'Você leva o seu herói: <b>') + lista + '</b>.'));
     p.appendChild(barraPrazo(c.expira, function () { return Gp()._agora(); }));
     var duo = el('div', 'pn-duplo');
     duo.appendChild(btn('Aceitar', 'btn-primary', function () {
@@ -8352,9 +8448,11 @@ var JOGO = (typeof window !== 'undefined')
     if (souLider()) {
       var sd = seletorDif();
       if (sd) p.appendChild(sd);
-      var meu = meuHeroiG() || {};
-      p.appendChild(el('p', 'hub-nota', 'Em grupo, cada um leva o seu herói principal: <b>' +
-        esc(className(meu.classId || '')) + ' nv ' + (meu.level || 1) + '</b>.'));
+      var meusP = meusHeroisG();
+      p.appendChild(el('p', 'hub-nota', (meusP.length > 1 ? 'Em grupo, cada um leva os seus dois: <b>'
+                                                          : 'Em grupo, cada um leva o seu herói: <b>') +
+        meusP.map(function (x) { return esc(className(x.classId || '')) + ' nv ' + (x.level || 1); }).join(' e ') +
+        '</b>.'));
       if (est.descendo && est.descendo.dungeonId === lugar.id) {
         p.appendChild(btn('Chamando ' + esc(nome) + '…', 'btn-primary btn-block is-apagado', function () {}));
         return;
@@ -8388,7 +8486,8 @@ var JOGO = (typeof window !== 'undefined')
       var lnDif = linhaDifGrupo();
       if (lnDif) p.appendChild(lnDif);
       p.appendChild(el('p', 'hub-nota', 'Quem abre a porta é quem lidera (<b>' + esc(nome) + '</b>). ' +
-        'Seu herói está pronto. <b style="color:#7fe08a">✓</b>'));
+        (meusHeroisG().length > 1 ? 'Seus dois heróis estão prontos. ' : 'Seu herói está pronto. ') +
+        '<b style="color:#7fe08a">✓</b>'));
       return;
     }
     var sd = seletorDif();
@@ -8439,22 +8538,36 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------ o painel do grupo (P4)
   var grupoLadoEl = null, glMenuEl = null, glSig = '', tickSocial = 0, ultConexao = null;
   var GL_TELAS = ['hub', 'antessala', 'battle', 'roomClear', 'dungeonComplete', 'defeat'];
-  function unidadeDoMembro(m, s) {
-    if (!s || !s.units) return null;
-    var achada = null, i, u;
+  /* AS UNIDADES DE UM MEMBRO (12/09): agora sao ATE DUAS, porque cada lado
+   * desce com os dois selecionados. Vem na ordem da lista do motor, as de pe
+   * antes das que sairam do tabuleiro (a fusao entra como uma so). */
+  function unidadesDoMembro(m, s) {
+    if (!s || !s.units) return [];
+    var achadas = [], i, u;
     for (i = 0; i < s.units.length; i++) {
       u = s.units[i];
       if ((u.kind !== 'hero' && u.kind !== 'fusion') || !u.dono || u.dono !== m.id) continue;
-      if (!achada || (u.alive && !u.offBoard && !(achada.alive && !achada.offBoard))) achada = u;
+      if (u.fusedInto) continue;               // a metade que virou fusao nao conta duas vezes
+      achadas.push(u);
     }
-    if (achada || !m.eu) return achada;
-    // motor sem `dono` (fora de rede): o meu herói pelo heroId
-    var hid = safe(function () { return Gp().meuHeroi(); }, null);
+    if (achadas.length || !m.eu) {
+      achadas.sort(function (a, b) {
+        var va = (a.alive && !a.offBoard) ? 0 : 1, vb = (b.alive && !b.offBoard) ? 0 : 1;
+        return va - vb;
+      });
+      return achadas;
+    }
+    // motor sem `dono` (fora de rede): os MEUS herois pelo heroId
+    var ids = safe(function () { return Gp().meusHerois(); }, null);
+    if (!ids || !ids.length) {
+      var um = safe(function () { return Gp().meuHeroi(); }, null);
+      ids = um ? [um] : [];
+    }
     for (i = 0; i < s.units.length; i++) {
       u = s.units[i];
-      if (u.kind === 'hero' && hid && u.heroId === hid) return u;
+      if (u.kind === 'hero' && u.heroId && ids.indexOf(u.heroId) >= 0) achadas.push(u);
     }
-    return null;
+    return achadas;
   }
   function pintaGrupoLado() {
     if (!grupoLadoEl) return;
@@ -8492,20 +8605,29 @@ var JOGO = (typeof window !== 'undefined')
     var agoraG = safe(function () { return Gp()._agora(); }, Date.now());
     var conexao = safe(function () { return JOGO.Rede.estadoConexao(); }, null);
     var cartas = est.membros.map(function (m) {
-      var u = naLuta ? unidadeDoMembro(m, s) : null;
+      var us = naLuta ? unidadesDoMembro(m, s) : [];
       var fora = !m.eu && !m.on;
       var voltando = fora && !m.saiu && m.sumidoDesde && (agoraG - m.sumidoDesde) < (est.graca || 15000);
+      // os dois herois do membro, cada um com o corpo dele (quando ha corpo)
+      var hs = (m.herois && m.herois.length) ? m.herois : (m.heroi ? [m.heroi] : []);
+      var linhas = (us.length ? us : hs).map(function (x, i) {
+        var u = us[i] || null, h = hs[i] || (u ? { classId: u.classId || u.defId, element: u.element, level: u.level } : {});
+        return { u: u, h: h || {},
+                 pv: u ? Math.round(100 * Math.max(0, u.hp) / Math.max(1, u.hpMax)) : null,
+                 vez: !!(u && ativa && ativa.uid === u.uid) };
+      });
       return {
-        m: m, u: u, fora: fora, voltando: !!voltando, lider: m.id === est.lider,
-        ia: !!(u && u.ia) || (!m.eu && !!(ses && ses.parceiroIA)),
-        vez: !!(u && ativa && ativa.uid === u.uid),
-        semRede: !!m.eu && conexao === 'religando',
-        pv: u ? Math.round(100 * Math.max(0, u.hp) / Math.max(1, u.hpMax)) : null
+        m: m, linhas: linhas, fora: fora, voltando: !!voltando, lider: m.id === est.lider,
+        ia: us.some(function (u) { return !!u.ia; }) || (!m.eu && !!(ses && ses.parceiroIA)),
+        vez: linhas.some(function (l) { return l.vez; }),
+        semRede: !!m.eu && conexao === 'religando'
       };
     });
     var sig = current + '#' + cartas.map(function (c) {
-      var h = c.m.heroi || {};
-      return [c.m.id, c.m.nome, h.classId, h.element, h.level, c.fora, c.voltando, c.lider, c.ia, c.vez, c.semRede, c.pv].join(',');
+      return [c.m.id, c.m.nome, c.fora, c.voltando, c.lider, c.ia, c.vez, c.semRede,
+              c.linhas.map(function (l) {
+                return [l.h.classId, l.h.element, l.h.level, l.pv, l.vez ? 1 : 0].join('.');
+              }).join('+')].join(',');
     }).join('|');
     if (sig === glSig) return;
     glSig = sig;
@@ -8513,28 +8635,40 @@ var JOGO = (typeof window !== 'undefined')
     cartas.forEach(function (c) { grupoLadoEl.appendChild(cartaoMembro(c)); });
   }
   function cartaoMembro(c) {
-    var m = c.m, h = m.heroi || {};
+    var m = c.m;
+    var linhas = c.linhas.length ? c.linhas : [{ h: m.heroi || {}, u: null, pv: null, vez: false }];
+    var h = linhas[0].h || {};
     var card = el('button', 'gl-membro' + (c.lider ? ' is-lider' : '') + (c.vez ? ' is-vez' : '') + (c.fora ? ' is-fora' : ''));
     card.type = 'button';
-    var pic = el('div', 'gl-pic');
+    var pic = el('div', 'gl-pic' + (linhas.length > 1 ? ' tem-dois' : ''));
     pic.appendChild(art('portrait', [h.classId || 'sumo', { element: h.element || 'neutro', size: 40 }], 36));
+    // 12/09: o SEGUNDO heroi do membro, num retrato menor encostado no canto
+    if (linhas.length > 1) {
+      var h2 = linhas[1].h || {};
+      var p2 = el('span', 'gl-pic2');
+      p2.appendChild(art('portrait', [h2.classId || 'sumo', { element: h2.element || 'neutro', size: 28 }], 20));
+      pic.appendChild(p2);
+    }
     if (c.lider) pic.appendChild(el('span', 'gl-coroa', '♛'));
     pic.appendChild(el('i', 'gl-on' + ((c.fora || c.semRede) ? ' is-off' : (c.ia ? ' is-ia' : ''))));
     card.appendChild(pic);
     var tx = el('div', 'gl-tx');
     var nome = String(m.nome || (m.eu ? 'Você' : '?'));
     tx.appendChild(el('span', 'gl-nome', esc(nome.length > 12 ? nome.slice(0, 11) + '…' : nome)));
-    tx.appendChild(el('span', 'gl-nv', esc(className(h.classId || '')) + ' · nv ' + (h.level || 1)));
-    if (c.pv !== null) {
+    linhas.forEach(function (l) {
+      var hh = l.h || {};
+      tx.appendChild(el('span', 'gl-nv' + (l.vez ? ' is-vez' : ''),
+                        esc(className(hh.classId || '')) + ' · nv ' + (hh.level || 1)));
+      if (l.pv === null) return;
       var vb = el('div', 'gl-vida');
       var vi = el('i');
-      vi.style.width = Math.max(0, Math.min(100, c.pv)) + '%';
+      vi.style.width = Math.max(0, Math.min(100, l.pv)) + '%';
       vb.appendChild(vi);
       tx.appendChild(vb);
-    }
+    });
     var selos = el('div', 'gl-selos');
     if (c.vez) selos.appendChild(el('span', 'gl-selo s-vez', 'vez'));
-    if (c.ia) selos.appendChild(el('span', 'gl-selo s-ia', 'IA'));
+    if (c.ia) selos.appendChild(el('span', 'gl-selo s-ia', 'fora'));
     if (c.voltando) selos.appendChild(el('span', 'gl-selo s-voltando', 'voltando…'));
     else if (c.fora) selos.appendChild(el('span', 'gl-selo s-caiu', m.saiu ? 'saiu' : 'caiu'));
     if (c.semRede) selos.appendChild(el('span', 'gl-selo s-caiu', 'sem conexão'));
@@ -8723,8 +8857,8 @@ var JOGO = (typeof window !== 'undefined')
            'O segundo herói nasce ao acaso perto de você.';
   }
   /* o que a barra de feitiços diz quando não é a minha vez: "Vez de Bia —
-   * esperando o lance… 0:23" (o relógio estimado do Coop), o herói que foi
-   * para a IA, ou o turno de sempre */
+   * esperando o lance… 0:23" (o relógio estimado do Coop), o herói de quem
+   * está fora (o turno dele passa), ou o turno de sempre */
   function esperaNaBarra(u) {
     bt.espera = null;
     if (!u) return el('div', 'bt-wait', 'Aguarde…');
@@ -8734,29 +8868,17 @@ var JOGO = (typeof window !== 'undefined')
         pintaEspera();
         return bt.espera;
       }
+      // 12/09: quem caiu nao e jogado pela IA — o turno dele PASSA
       if (u.ia && u.dono && u.dono !== meuIdRede()) {
-        return el('div', 'bt-wait', 'O herói de ' + esc(nomeDoDono(u.dono)) + ' segue com a IA até o fim da sala.');
+        return el('div', 'bt-wait', esc(nomeDoDono(u.dono)) + ' está fora — o turno passa.');
+      }
+      // o outro lado me deu por fora (um engasgo de conexão): o MEU turno passa
+      // até a conexão se acertar — dizer isso em vez de congelar calado
+      if (u.ia && u.dono && u.dono === meuIdRede()) {
+        return el('div', 'bt-wait', 'Sua conexão engasgou — o turno passa até ela se acertar.');
       }
     }
     return el('div', 'bt-wait', 'Turno de ' + esc(u.name || '') + '…');
-  }
-  /* a fusão com o herói do PARCEIRO (3.9): pede, e o dono do outro aceita */
-  function celulaFusaoPedida(cell, pr, a, b, ca, cb) {
-    var nomeB = nomeDoDono(b.dono);
-    var ses = coopSessao();
-    var fp = ses && ses.fusaoPedida;
-    var esperando = !!(fp && fp.uidA === pr.uidA && fp.uidB === pr.uidB);
-    var t = el('div', 'fu-txt');
-    t.appendChild(el('b', null, esperando ? 'Esperando ' + esc(nomeB) + ' aceitar…' : 'Pedir fusão a ' + esc(nomeB)));
-    t.appendChild(el('span', null, esc(className(ca)) + ' + ' + esc(className(cb))));
-    cell.appendChild(t);
-    tap(cell, function () {
-      if (esperando) { toast('Esperando ' + nomeB + ' aceitar…'); return; }
-      var ok = safe(function () { return Cp().pedeFusao(pr.uidA, pr.uidB); }, false);
-      var seg = Math.round((safe(function () { return Cp().FUSAO_MS; }, 20000) || 20000) / 1000);
-      toast(ok ? 'Esperando ' + nomeB + ' aceitar… (' + seg + ' s)' : 'Não deu para pedir a fusão agora.');
-      battleSig = '';
-    });
   }
   /* a derrota numa descida de grupo (4.8) */
   function derrotaGrupo(acts) {
@@ -8794,43 +8916,22 @@ var JOGO = (typeof window !== 'undefined')
   function coopSig() {
     var ses = coopSessao();
     if (!ses) return '';
-    var e = ses.esperando, f = ses.fusaoPedida;
-    return [ses.parceiroOn ? 1 : 0, ses.parceiroIA ? 1 : 0, ses.sincronizando ? 1 : 0, e ? e.uid : '',
-            f ? (f.uidA + '>' + f.uidB + '@' + f.de) : ''].join(':');
-  }
-  /* o pedido de fusão que chega (3.9): a ficha de confirmação, 20 s */
-  function sheetFusaoPedida(p) {
-    if (!p) return;
-    var body = sheetShell('Fusão com ' + esc(p.nome || nomeParceiro()));
-    sheetName = 'fusaoPedida';
-    var nome = esc(p.nome || nomeParceiro());
-    body.appendChild(el('p', 'confirm-txt', nome + ' quer fundir os heróis de vocês dois. A fusão fica com ' + nome +
-      ' até o fim da sala; você assiste. Aceitar?'));
-    if (p.expira) body.appendChild(barraPrazo(p.expira, function () { return Cp()._agora ? Cp()._agora() : Date.now(); }));
-    var acts = el('div', 'confirm-acts');
-    acts.appendChild(btn('Agora não', 'btn-ghost', function () {
-      safe(function () { Cp().respondeFusao(false); return true; }, null);
-      closeSheet();
-    }));
-    acts.appendChild(btn('Aceitar', 'btn-primary', function () {
-      safe(function () { Cp().respondeFusao(true); return true; }, null);
-      closeSheet();
-    }));
-    body.appendChild(acts);
+    var e = ses.esperando;
+    return [ses.parceiroOn ? 1 : 0, ses.parceiroIA ? 1 : 0, ses.sincronizando ? 1 : 0,
+            e ? e.uid : ''].join(':');
   }
   var ultSes = null;
   function aoCoopMudou(ses) {
     var a = ultSes || {};
     ultSes = ses ? { parceiroIA: !!ses.parceiroIA, sincronizando: !!ses.sincronizando,
                      proximaLiberada: !!ses.proximaLiberada, prontoParceiro: !!ses.prontoParceiro,
-                     fase: ses.fase || null, fusaoPedida: !!ses.fusaoPedida } : null;
+                     fase: ses.fase || null } : null;
     if (ses) {
       var nome = (ses.parceiro && ses.parceiro.nome) || nomeParceiro();
-      if (!a.parceiroIA && ses.parceiroIA) toast('O herói de ' + nome + ' segue com a IA até o fim da sala.');
+      if (!a.parceiroIA && ses.parceiroIA) toast(nome + ' caiu — o turno dele passa até voltar.');
       if (!a.sincronizando && ses.sincronizando) {
         toast(ses.tipo === 'duelo' ? 'Sincronizando com ' + nome + '…' : 'Sincronizando com quem lidera…');
       }
-      if (a.fusaoPedida && !ses.fusaoPedida && sheetName === 'fusaoPedida') closeSheet();
     }
     if (current === 'battle') battleSig = '';
     pintaGrupoLado();
@@ -9024,7 +9125,8 @@ var JOGO = (typeof window !== 'undefined')
         !(est && est.pendente && !est.pendente.meu && est.pendente.gid === painelConv.gid)) fechaPainel();
     pintaGrupoLado();
     var sig = est ? [est.fase, est.lider, (est.membros || []).map(function (m) {
-      return m.id + (m.on ? 1 : 0) + ((m.heroi && m.heroi.classId) || '') + ((m.heroi && m.heroi.level) || '');
+      var hsS = (m.herois && m.herois.length) ? m.herois : (m.heroi ? [m.heroi] : []);
+      return m.id + (m.on ? 1 : 0) + hsS.map(function (h) { return (h.classId || '') + (h.level || ''); }).join('+');
     }).join(','), est.descendo ? 1 : 0, est.descidaGrupo, est.descidaAcabou, est.descidaDif || ''].join('|') : '';
     if (sig === grupoSigTela) return;
     grupoSigTela = sig;
@@ -9051,15 +9153,66 @@ var JOGO = (typeof window !== 'undefined')
     if (S) S.aoChegar = aoSussurroChegou;
     if (C) {
       C.aoMudar = aoCoopMudou;
-      C.aoFusaoPedida = sheetFusaoPedida;
       // os avisos da batalha em dupla ("Bia caiu…", "Bia não respondeu"): toast,
       // com a cor pelo tipo que o Coop manda ('ok' | 'aviso' | 'info')
       C.aoAviso = function (t, k) { toast(t, k === 'ok' ? 'good' : (k === 'aviso' ? 'bad' : undefined)); };
     }
   }
+  /* OS DOIS SELECIONADOS VAO AO GRUPO (12/09, pedido do dono: "quando forem
+   * para um calabouco podem ir com os dois personagens selecionados... no caso
+   * 4 personagens no maximo"). Antes ia so o principal, e a descida em grupo
+   * nascia com um heroi de cada lado. */
   function avisaHeroiAoGrupo() {
     var Gr = Gp();
-    if (Gr && Gr.defineHeroi && selHeroes[0]) safe(function () { Gr.defineHeroi(selHeroes[0]); return true; }, null);
+    if (!Gr || !selHeroes[0]) return;
+    if (Gr.defineHerois) safe(function () { Gr.defineHerois(selHeroes.slice()); return true; }, null);
+    else if (Gr.defineHeroi) safe(function () { Gr.defineHeroi(selHeroes[0]); return true; }, null);
+    guardaDupla();
+  }
+  /* A DUPLA LEMBRADA (12/09, pedido do dono: "sempre que um jogador logar
+   * novamente deve vir automaticamente para a praça com os últimos personagens
+   * selecionados"). Guardada a cada troca de tela — junto do aviso ao grupo,
+   * que é o outro lugar onde a escolha importa fora desta tela —, e nunca
+   * quando está vazia (senão uma tela de boot apagaria a escolha de ontem). */
+  var duplaGuardada = '';
+  function guardaDupla() {
+    if (!selHeroes.length || !JOGO.DB || !JOGO.DB.definirDupla) return;
+    var chave = selHeroes.join(',');
+    if (chave === duplaGuardada) return;
+    duplaGuardada = chave;
+    safe(function () { JOGO.DB.definirDupla(selHeroes.slice()); return true; }, null);
+  }
+  /* ENTRAR DIRETO NA PRAÇA (12/09). Uma vez por carregamento da página: se a
+   * conta já tem uma dupla lembrada e ela ainda serve (as classes existem e
+   * seguem liberadas), a tela de escolha é pulada e o jogo abre no
+   * Acampamento. Quem quiser trocar vai no Menu, que é o que o dono pediu.
+   * Só age se o jogador ainda não saiu do menu por conta própria — um clique
+   * durante a leitura do save (que é uma promessa) manda mais que isto. */
+  var tentouEntrarDireto = false;
+  /* Quem NÃO entra direto: as provas (tests/*.html abrem o jogo num iframe e
+   * esperam o menu para dirigir a partir dele — com a dupla lembrada no save
+   * da origem de testes, o jogo pulava o menu e as provas esperavam para
+   * sempre) e quem pede o menu pelo endereço (`?menu`). */
+  function pulaEntradaDireta() {
+    try { if (window.top !== window) return true; } catch (e) { return true; }
+    try { return /[?&](menu|sandbox|prova)/.test(String(location.search || '')); } catch (e2) { return false; }
+  }
+  function entraDiretoNaPraca() {
+    if (tentouEntrarDireto || !JOGO.DB || !JOGO.DB.jogador) return;
+    tentouEntrarDireto = true;
+    if (pulaEntradaDireta()) return;
+    JOGO.DB.jogador().then(function (j) {
+      var lista = (j && j.dupla) || [];
+      if (!lista.length || current !== 'menu' || selHeroes.length) return;
+      var boa = [];
+      lista.forEach(function (hid) {
+        if (hid && hero(hid) && isUnlocked(hid) && boa.length < 2) boa.push(hid);
+      });
+      if (!boa.length) return;
+      selHeroes = boa;
+      duplaGuardada = boa.join(',');
+      navTo('hub');
+    }).catch(function () {});
   }
   /* a cada tela: o herói principal ao grupo, o painel do canto, o menu fechado */
   function socialNaTela(name) {

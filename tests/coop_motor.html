@@ -149,7 +149,9 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     if (l.a === 'm') return E.move(st, l.u, l.x, l.y);
     if (l.a === 'c') return E.cast(st, l.u, l.s, l.x, l.y);
     if (l.a === 'e') { if (st.phase === 'playing') E.endTurn(st); return true; }
-    if (l.a === 'f') { st.consentimento = { a: l.u, b: l.alvo, T: st.turno || 0 }; return J.Fusion.declare(st, l.u, l.alvo); }
+    // 12/09: o `f` não carrega mais consentimento — fundir é só entre os herois
+    // do MESMO jogador, e a regra mora em Fusion.canFuse
+    if (l.a === 'f') return J.Fusion.declare(st, l.u, l.alvo);
     return false;
   }
   function deGente(u) { return !!u && (u.kind === 'hero' || u.kind === 'fusion') && !!u.dono && !u.ia; }
@@ -319,10 +321,19 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
   function secaoB(M1, M2) {
     secao('B · DUAS instâncias do motor (iframes): mesma semente, mesmos lances → mesmo hash em todo turno');
     var J1 = M1.JOGO, J2 = M2.JOGO;
+    /* O GRUPO DE QUATRO (12/09, pedido do dono: "quando forem para um calabouco
+       podem ir com os dois personagens selecionados... no caso 4 personagens no
+       maximo"). Cada lado desce com DOIS, na ordem da ata: os de quem lidera
+       primeiro. Os herois de 'ana' vem na frente de proposito — e entre os DOIS
+       DELA que a fusao acontece agora, porque fundir com o heroi do OUTRO
+       jogador deixou de existir na mesma data. */
     var duplas = [
-      [heroi('espadachim', 'espadachim', 'fogo', 'ana', 20), heroi('curandeiro', 'curandeiro', 'agua', 'bia', 20)],
-      [heroi('sumo', 'sumo', 'terra', 'ana', 25), heroi('arqueiro', 'arqueiro', 'ar', 'bia', 25)],
-      [heroi('bruxo', 'bruxo', 'agua', 'ana', 30), heroi('invocador', 'invocador', 'fogo', 'bia', 30)]
+      [heroi('espadachim', 'espadachim', 'fogo', 'ana', 20), heroi('minotauro', 'minotauro', 'terra', 'ana', 20),
+       heroi('curandeiro', 'curandeiro', 'agua', 'bia', 20), heroi('arqueiro', 'arqueiro', 'ar', 'bia', 20)],
+      [heroi('sumo', 'sumo', 'terra', 'ana', 25), heroi('arqueiro', 'arqueiro', 'ar', 'ana', 25),
+       heroi('bruxo', 'bruxo', 'fogo', 'bia', 25), heroi('espadachim', 'espadachim', 'agua', 'bia', 25)],
+      [heroi('bruxo', 'bruxo', 'agua', 'ana', 30), heroi('invocador', 'invocador', 'fogo', 'ana', 30),
+       heroi('curandeiro', 'curandeiro', 'ar', 'bia', 30), heroi('sumo', 'sumo', 'terra', 'bia', 30)]
     ];
     var n = 0, ok = 0, comp = 0, erros = [];
     var fundiu = 0, fusoesTentadas = 0, fotoFusaoOk = false, fotoFusaoSemRegistro = null;
@@ -338,13 +349,15 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
             var st1 = J1.Engine.createBattle(dg, r, clone(dupla), { seed: seed, escolhePosicao: true });
             var st2 = J2.Engine.createBattle(dg, r, clone(dupla), { seed: seed, escolhePosicao: true });
             if (J1.Engine.hash(st1) !== J2.Engine.hash(st2)) { erros.push(dg + '/' + r + '/' + di + ' nasceram diferentes'); return; }
-            // a fusão entre DONOS diferentes: o herói de Bia é posto ao lado do de Ana nos DOIS motores
-            // (a mesma mutação nos dois, logo depois da colocação), e Ana pede no primeiro turno dela
+            // a fusão entre os DOIS herois de Ana: o segundo dela é posto ao lado do
+            // primeiro nos DOIS motores (a mesma mutação nos dois, logo depois da
+            // colocação), e ela declara no primeiro turno dela
             var pedido = { feito: false };
             function cola(J) {
               return function (st) {
                 if (!comFusao) return;
-                var hs = st.units.filter(function (u) { return u.kind === 'hero'; });
+                var hs = st.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'ana'; });
+                if (hs.length < 2) return;
                 var c = vizinhaLivre(J, st, hs[0]);
                 if (c) { hs[1].x = c.x; hs[1].y = c.y; }
               };
@@ -355,7 +368,10 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
               antesDoHeroi: function (st, u) {
                 if (!comFusao || pedido.feito || u.dono !== 'ana' || u.kind !== 'hero') return null;
                 pedido.feito = true;
-                var b = st.units.filter(function (x) { return x.kind === 'hero' && x.dono === 'bia'; })[0];
+                // o OUTRO heroi da MESMA dona (12/09: fundir e so entre os meus)
+                var b = st.units.filter(function (x) {
+                  return x.kind === 'hero' && x.dono === 'ana' && x.uid !== u.uid && x.alive && !x.offBoard;
+                })[0];
                 if (!b || Math.abs(b.x - u.x) + Math.abs(b.y - u.y) !== 1) return null;
                 fusoesTentadas++;
                 return { a: 'f', u: u.uid, alvo: b.uid };
@@ -402,10 +418,11 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
         });
       }
     });
-    check('18 batalhas em DUAS instâncias do motor: o mesmo hash em todo turno e no fim', ok === n && n === 18,
+    check('18 batalhas de QUATRO heróis em DUAS instâncias do motor: o mesmo hash em todo turno e no fim',
+          ok === n && n === 18,
           ok + '/' + n + ' · ' + comp + ' turnos comparados · ' + erros.slice(0, 3).join(' | '));
-    check('a fusão entre DONOS diferentes, com consentimento, aconteceu e as duas instâncias fundiram igual',
-          fundiu >= 3 && fusoesTentadas >= 3, 'fundiu ' + fundiu + ' de ' + fusoesTentadas + ' pedidas');
+    check('a fusão entre os DOIS heróis do MESMO jogador aconteceu e as duas instâncias fundiram igual',
+          fundiu >= 3 && fusoesTentadas >= 3, 'fundiu ' + fundiu + ' de ' + fusoesTentadas + ' declaradas');
     check('a foto de depois da fusão, num motor que nunca a viu, retoma igual (os feitiços são re-registrados)',
           fotoFusaoOk, 'sem re-registrar: ' + fotoFusaoSemRegistro);
 
@@ -543,18 +560,23 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
       check('as invocações vivas saem da mais antiga para a mais nova', E.summonsOf(sg, dono).map(function (u) { return u.uid; }).join(',') === 'u3,u7,u12');
     } catch (e) { check('summonsOf', false, e.message); }
 
-    secao('H · fusão entre donos só com consentimento; I · Engine.encerra');
+    secao('H · fundir é só com os personagens do MESMO jogador (12/09); I · Engine.encerra');
     try {
       var sf = E.createBattle('greenhouse', 0, [heroi('espadachim', 'espadachim', 'fogo', 'ana'), heroi('curandeiro', 'curandeiro', 'agua', 'bia')], { seed: 5 });
       var ha = sf.units[0], hb = sf.units[1];
       var cv = vizinhaLivre({ Engine: E }, sf, ha); hb.x = cv.x; hb.y = cv.y;
-      check('donos diferentes, sem consentimento: não funde', F.canFuse(sf, ha.uid, hb.uid) === false);
+      /* A REGRA DE 12/09 (pedido do dono: "dois personagens diferentes jamais
+         podem se fundir... o jogador so pode fundir com seus personagens e nao
+         com os do outro jogador"). De 11/09 ate aqui a fusao entre JOGADORES
+         existia com os dois aceitando, e o sim vivia em `state.consentimento`;
+         agora nem o sim abre a porta — e e isso que os dois primeiros checks
+         cobram, para ninguem reabrir a excecao sem derrubar uma prova. */
+      check('donos diferentes: NÃO funde', F.canFuse(sf, ha.uid, hb.uid) === false);
       sf.consentimento = { a: ha.uid, b: hb.uid, T: sf.turno };
-      check('com o consentimento {a, b, T} do turno: funde', F.canFuse(sf, ha.uid, hb.uid) === true);
-      sf.consentimento = { a: ha.uid, b: hb.uid, T: sf.turno - 1 };
-      check('consentimento de outro turno não vale', F.canFuse(sf, ha.uid, hb.uid) === false);
+      check('e nem com o consentimento escrito no estado (a exceção de 11/09 acabou)',
+            F.canFuse(sf, ha.uid, hb.uid) === false);
       sf.consentimento = null; hb.dono = 'ana';
-      check('o mesmo dono (a dupla do duelo) funde sem pedir', F.canFuse(sf, ha.uid, hb.uid) === true);
+      check('os DOIS heróis do MESMO jogador fundem', F.canFuse(sf, ha.uid, hb.uid) === true);
       ha.dono = null; hb.dono = null; ha.conta = 'principal'; hb.conta = 'outra';
       check('sem dono (fora de rede): a trava da conta de sempre', F.canFuse(sf, ha.uid, hb.uid) === false);
       var sd2 = E.createDuelSala('cistern', 1, [heroi('sumo', 'sumo', 'terra', 'ana')], [heroi('bruxo', 'bruxo', 'fogo', 'bia')], { seed: 8 });
@@ -667,7 +689,10 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
       var orig = P[f];
       P[f] = function (dg, ri, ps) { sp[['drops', 'cards', 'pets'][i]].push(ps); return orig.apply(P, arguments); };
     });
-    cli[id] = { w: w, J: J, id: id, cx: cx, vivo: true, parado: false, soTique: false, sp: sp, avisos: [], heroi: herois[0][0] };
+    cli[id] = { w: w, J: J, id: id, cx: cx, vivo: true, parado: false, soTique: false, sp: sp, avisos: [],
+                heroi: herois[0][0],
+                // 12/09: a descida em grupo leva os DOIS selecionados de cada lado
+                herois: herois.map(function (h) { return h[0]; }).slice(0, 2) };
     J.Coop.aoAviso = function (t) { cli[id].avisos.push(t); };
     return cli[id];
   }
@@ -675,8 +700,14 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     [lider, par].forEach(function (id) {
       var outro = id === lider ? par : lider;
       var h = cli[outro].J.Progress.hero(cli[outro].heroi);
+      var hs = cli[outro].herois.map(function (hid) {
+        var x = cli[outro].J.Progress.hero(hid);
+        return x ? { classId: x.classId, element: x.element, level: x.level } : null;
+      }).filter(Boolean);
       cli[id].J.Coop.configura({ gid: lider + '-g1', lider: lider, eu: id,
-        parceiro: { id: outro, cx: cli[outro].cx, heroi: { classId: h.classId, element: h.element, level: h.level } } });
+        parceiro: { id: outro, cx: cli[outro].cx,
+                    heroi: { classId: h.classId, element: h.element, level: h.level },
+                    herois: hs } });
     });
   }
   function hashesIguais(a, b, desde) {
@@ -694,8 +725,8 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     cli.ana.J.Coop._sementeFixa = (semente != null) ? semente : (proxSemente += 7919);
     ['ana', 'bia'].forEach(function (id) { cli[id].J.Game.init(); });
     configuraGrupo('ana', 'bia');
-    var okA = cli.ana.J.Game.startRun([cli.ana.heroi], dg, { grupo: true });
-    var okB = cli.bia.J.Game.startRun([cli.bia.heroi], dg, { grupo: true });
+    var okA = cli.ana.J.Game.startRun(cli.ana.herois.slice(), dg, { grupo: true });
+    var okB = cli.bia.J.Game.startRun(cli.bia.herois.slice(), dg, { grupo: true });
     ate(function () { return cli.ana.J.Coop.podeEntrar().ok; }, 40);
     return okA && okB;
   }
@@ -728,22 +759,43 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     });
     return !!feito;
   }
-  function paraFusao(respostaBia) {
+  /* OS DOIS DE ANA, LADO A LADO (12/09). A MESMA mutação nos dois motores, com
+     eles parados no mesmo ponto — é como o `colaBia` já fazia, mas agora entre
+     os herois da MESMA dona: fundir com o heroi do OUTRO jogador deixou de
+     existir, e é entre os meus dois que a fusão acontece. */
+  function colaOsMeus(id) {
+    var feito = null;
+    [cli.ana, cli.bia].forEach(function (c) {
+      var st = c.J.Game.state;
+      var meus = st.units.filter(function (u) { return u.kind === 'hero' && u.dono === id && u.alive; });
+      if (meus.length < 2) return;
+      if (!feito) feito = vizinhaLivre(c.J, st, meus[0]);
+      if (feito) { meus[1].x = feito.x; meus[1].y = feito.y; }
+    });
+    return !!feito;
+  }
+  /* Põe a batalha em dupla no ponto exato da fusão: a vez de Ana, com os DOIS
+     herois dela colados. Devolve o par que a HUD ofereceria. */
+  function paraFusao() {
     desce('cistern');
     cli.ana.J.Coop._piloto(null);
-    var pb = { joga: true, fica: true };
-    if (respostaBia) pb.fusao = respostaBia;
-    cli.bia.J.Coop._piloto(pb);
+    cli.bia.J.Coop._piloto({ joga: true, fica: true });
     cli.ana.J.Coop.entrar();
     ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
     var ops = cli.ana.J.Engine.placementOptions(cli.ana.J.Game.state);
     cli.ana.J.Game.onTileClicked(ops[0].x, ops[0].y);
-    var ok = vezDe('ana') && colaBia();
-    var hA = cli.ana.J.Game.state.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'ana'; })[0];
-    var hB = cli.ana.J.Game.state.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'bia'; })[0];
-    var par = cli.ana.J.Game.canFuse().filter(function (p) { return p.pedido; })[0];
-    var pediu = ok && !!par && cli.ana.J.Coop.pedeFusao(par.uidA, par.uidB);
-    return { pediu: pediu, par: par, hA: hA && hA.uid, hB: hB && hB.uid };
+    var ok = vezDe('ana') && colaOsMeus('ana');
+    var us = cli.ana.J.Game.state.units;
+    var meus = us.filter(function (u) { return u.kind === 'hero' && u.dono === 'ana'; });
+    var dele = us.filter(function (u) { return u.kind === 'hero' && u.dono === 'bia'; });
+    var pares = cli.ana.J.Game.canFuse();
+    var ativa = cli.ana.J.Engine.activeUnit(cli.ana.J.Game.state);
+    var par = pares.filter(function (x) {
+      return x.uidA === ativa.uid && meus.some(function (m) { return m.uid === x.uidB; });
+    })[0];
+    return { ok: ok, par: par, pares: pares, ativa: ativa && ativa.uid,
+             meus: meus.map(function (u) { return u.uid; }),
+             dele: dele.map(function (u) { return u.uid; }) };
   }
 
   function secaoK(A, B) {
@@ -827,8 +879,14 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
           iguais && turnosComp > 20 && dessinc === 0, salas + ' salas · ' + turnosComp + ' turnos comparados · ' + fases.join(' ') + ' · dessinc ' + dessinc);
     check('K1 · o PV que passa de sala (chave dono:heroId) é o mesmo nos dois clientes', carryIgual);
     var sps = ana.sp.drops.concat(ana.sp.cards, ana.sp.pets, bia.sp.drops, bia.sp.cards, bia.sp.pets);
-    check('K1 · recompensa por jogador: rollDrops/rollCards/rollPetCards SEMPRE com partySize 2 (as chances do solo com dupla)',
-          sps.length >= 3 && sps.every(function (x) { return x === 2; }), sps.join(','));   // 19: um sorteio por sala (a vez)
+    /* 12/09: o grupo da sala tem QUATRO herois (dois de cada lado), e é esse o
+       número que entra no saque e no XP. A conta fecha igual à de antes: cada um
+       dos meus dois recebe xpTotal/4, ou seja xpTotal/2 para mim — a mesma
+       metade que eu levava quando a dupla era de um heroi cada. E a Sorte de
+       Saque não muda: luckFor() só separa "sozinho" (2,4) de "acompanhado"
+       (1,6), então 2 e 4 dão a mesma sorte. */
+    check('K1 · recompensa por jogador: rollDrops/rollCards/rollPetCards SEMPRE com o grupo da ata (4)',
+          sps.length >= 3 && sps.every(function (x) { return x === 4; }), sps.join(','));   // 19: um sorteio por sala (a vez)
     // achado 19: a dupla rende o que UMA dupla solo rende — nem uma pessoa com dois navegadores tira dois saques
     var ok19 = saque19.length > 0 && saque19.every(function (r) {
       return (r.vezA === true && r.vezB === false && r.rolA === '111' && r.rolB === '000') ||
@@ -851,16 +909,25 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     var rwB = ultimaTela('bia', 'roomClear') || ultimaTela('bia', 'dungeonComplete');
     check('K1 · os heróis de gente jogam de verdade (lançam feitiços que acertam) nos dois clientes',
           contaLances('ana').cOk + contaLances('bia').cOk >= 0 && feitos.length > 0, feitos.join(' || '));
-    check('K1 · XP só no MEU herói, em cada cliente (a tela de recompensa lista só o meu; Game.party = [o meu])',
-          !!rwA && !!rwB && Object.keys(rwA.xpPorHeroi || {}).join() === 'espadachim' &&
-          Object.keys(rwB.xpPorHeroi || {}).join() === 'curandeiro' &&
-          ana.J.Game.party.length === 1 && bia.J.Game.party.length === 1 &&
+    check('K1 · XP só nos MEUS heróis, em cada cliente (a tela lista só os meus; Game.party = os meus dois)',
+          !!rwA && !!rwB && Object.keys(rwA.xpPorHeroi || {}).sort().join() === 'arqueiro,espadachim' &&
+          Object.keys(rwB.xpPorHeroi || {}).sort().join() === 'bruxo,curandeiro' &&
+          ana.J.Game.party.length === 2 && bia.J.Game.party.length === 2 &&
           ana.J.Progress.hero('espadachim').xp - xpA0 === (rwA.xpPorHeroi.espadachim || 0),
           rwA ? ('ana ' + JSON.stringify(rwA.xpPorHeroi) + ' bia ' + JSON.stringify(rwB && rwB.xpPorHeroi) + ' xpGanho ' + rwA.xpGanho) : 'sem tela de recompensa');
     check('K1 · a tela de recompensa em rede traz rede/lider/descidaAcabou', !!rwA && rwA.rede === true && rwA.lider === true &&
           rwB.lider === false && rwA.descidaAcabou === false);
 
-    // ---- K2: a fusão pedida e aceita (a unidade fica com quem pediu)
+    /* ---- K2: A FUSÃO DOS MEUS DOIS, EM DUPLA (12/09)
+       Antes daqui havia três provas (K2, K2b, K2c) do protocolo de PEDIDO de
+       fusão entre jogadores: Ana pedia, Bia aceitava, recusava ou deixava
+       expirar em 20 s. O dono cortou isso pela raiz — "dois personagens
+       diferentes jamais podem se fundir... o jogador só pode fundir com seus
+       personagens e não com os do outro jogador" — e com ele saíram as vozes
+       `fusao-pede`/`fusao-ok` e o consentimento no estado.
+       O que fica de pé, e é o que importa agora: cada um desce com DOIS, funde
+       os DELE, e a fusão atravessa a rede como qualquer lance (o `f`), com os
+       dois motores fundindo igual. */
     desce('cistern');
     ana.J.Coop._piloto(null); bia.J.Coop._piloto(null);
     ana.J.Coop.entrar();
@@ -875,41 +942,44 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     var sa = ana.J.Game.state, sb = bia.J.Game.state;
     check('K2 · o `p` da líder chegou: os dois em playing no turno 1 com o mesmo hash', sa.phase === 'playing' && sb.phase === 'playing' &&
           sa.turno === 1 && ana.J.Engine.hash(sa) === bia.J.Engine.hash(sb));
-    var pf = paraFusao('aceita');
-    check('K2 · na vez de Ana, com Bia ao lado, o par vem com pedido:true e o pedido sai', pf.pediu, JSON.stringify(pf.par));
-    ate(function () { return (ana.J.Game.state.units || []).some(function (u) { return u.kind === 'fusion'; }); }, 40);
-    ana.J.Coop._piloto({ joga: true });
-    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    check('K2 · a sala em dupla nasce com QUATRO heróis de gente, dois de cada dono',
+          sa.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'ana'; }).length === 2 &&
+          sa.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'bia'; }).length === 2 &&
+          ana.J.Coop.partySize() === 4,
+          sa.units.filter(function (u) { return u.kind === 'hero'; }).map(function (u) { return u.dono; }).join(','));
+
+    var pf = paraFusao();
+    check('K2 · na vez de Ana, com os DOIS dela colados, a fusão é oferecida', pf.ok && !!pf.par,
+          JSON.stringify({ ativa: pf.ativa, pares: pf.pares, meus: pf.meus }));
+    /* e o heroi do PARCEIRO nunca entra na lista, esteja ele onde estiver: a
+       porta é o Fusion.canFuse, a mesma por onde passa o lance que vem da rede */
+    var cruzado = pf.pares.filter(function (x) { return pf.dele.indexOf(x.uidB) >= 0; });
+    check('K2 · o herói do PARCEIRO não é oferecido para fundir, nem com pedido',
+          cruzado.length === 0 && pf.pares.every(function (x) { return !x.pedido; }),
+          JSON.stringify(cruzado));
+    var fez = pf.par && ana.J.Game.declareFusion(pf.par.uidA, pf.par.uidB);
+    ate(function () { return (bia.J.Game.state.units || []).some(function (u) { return u.kind === 'fusion'; }); }, 40);
     var fA = (ana.J.Game.state.units || []).filter(function (u) { return u.kind === 'fusion'; })[0];
     var fB = (bia.J.Game.state.units || []).filter(function (u) { return u.kind === 'fusion'; })[0];
-    var hk = hashesIguais('ana', 'bia');
-    check('K2 · a fusão pedida por Ana e aceita por Bia aconteceu NOS DOIS motores, com o uid e o dono de A',
-          !!fA && !!fB && fA.uid === fB.uid && fA.uid === pf.hA && fA.dono === 'ana' && fB.dono === 'ana' &&
+    check('K2 · a fusão dos dois heróis de Ana aconteceu NOS DOIS motores, com o uid e o dono dela',
+          !!fez && !!fA && !!fB && fA.uid === fB.uid && fA.uid === pf.par.uidA && fA.dono === 'ana' && fB.dono === 'ana' &&
           bia.J.Game.donoDe(fB) === 'parceiro' && ana.J.Game.donoDe(fA) === 'eu',
           fA ? (fA.uid + ' dono ' + fA.dono) : 'sem fusão · avisos ' + ana.avisos.slice(-3).join(' | '));
+    ana.J.Coop._piloto({ joga: true });
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    var hk = hashesIguais('ana', 'bia');
     check('K2 · depois da fusão os hashes seguem iguais até o fim', !hk.dif.length && hk.n > 3 && final('ana') === final('bia'), hk.n + ' turnos · ' + hk.dif.slice(0, 4));
 
-    // ---- K2b: recusada
-    ana.avisos.length = 0;
-    var pr = paraFusao('recusa');
-    ate(function () { return ana.avisos.some(function (t) { return /não quis fundir/.test(t); }); }, 40);
-    var avisouRecusa = ana.avisos.some(function (t) { return /não quis fundir/.test(t); });
+    /* ---- K2b: o `f` CRUZADO não funde nem vindo de mim (a segunda tranca) */
+    var pc = paraFusao();
+    var dele0 = pc.dele[0];
+    var tentou = false;
+    try { tentou = !!ana.J.Game.declareFusion(pc.ativa, dele0); } catch (e2b) { tentou = false; }
+    var semFusao = !(ana.J.Game.state.units || []).some(function (u) { return u.kind === 'fusion'; });
+    check('K2b · declarar fusão com o herói do parceiro é recusado e nada funde', !tentou && semFusao);
     ana.J.Coop._piloto({ joga: true });
     ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
-    var semF = !(ana.J.Game.state.units || []).some(function (u) { return u.kind === 'fusion'; });
-    check('K2b · fusão recusada: ninguém funde, Ana ouve "não quis fundir agora" e a sala segue igual nos dois',
-          pr.pediu && avisouRecusa && semF && final('ana') === final('bia'), ana.avisos.slice(0, 3).join(' | '));
-
-    // ---- K2c: expirada (Bia não responde em 20 s)
-    ana.avisos.length = 0;
-    var pe = paraFusao(null);
-    var t0e = relogio.t;
-    ate(function () { return ana.avisos.some(function (t) { return /não respondeu ao pedido/.test(t); }); }, 400, 100);
-    var expirou = ana.avisos.some(function (t) { return /não respondeu ao pedido/.test(t); });
-    ana.J.Coop._piloto({ joga: true });
-    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
-    check('K2c · fusão sem resposta expira em 20 s e a sala segue igual nos dois', pe.pediu && expirou &&
-          relogio.t - t0e >= 20000 && final('ana') === final('bia'), Math.round((relogio.t - t0e) / 1000) + ' s');
+    check('K2b · e a sala segue igual nos dois depois da recusa', final('ana') === final('bia'));
 
     // ---- K3: dessincronia injetada → foto → volta a bater
     desce('greenhouse');
@@ -923,8 +993,13 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     var ds = ana.J.Coop.sessao().dessinc + bia.J.Coop.sessao().dessinc;
     var rest = bia.J.Coop.sessao().restauracoes;
     var h3 = hashesIguais('ana', 'bia', tEstrago + 8);
+    /* 12/09: `ds` era 1 em ponto quando a sala tinha dois herois; com QUATRO a
+       mesma corrupcao pode ser acusada mais de uma vez antes de a foto chegar
+       (ha mais turnos entre o estrago e o resgate). O que a prova cobra segue
+       sendo o mesmo: acusou, restaurou UMA vez, e dai em diante os hashes
+       batem — sem virar tempestade de acusacoes (teto 3). */
     check('K3 · 1 PV estragado na parceira: o hash acusa, a autoridade manda a foto, a parceira restaura e os hashes voltam a bater',
-          estragou && ds === 1 && rest >= 1 && !h3.dif.length && final('ana') === final('bia'),
+          estragou && ds >= 1 && ds <= 3 && rest >= 1 && !h3.dif.length && final('ana') === final('bia'),
           'dessinc ' + ds + ' · restaurações ' + rest + ' · depois: ' + h3.n + ' turnos, ' + h3.dif.length + ' diferentes');
 
     // ---- K4: lances atrasados, reordenados e duplicados dão o mesmo resultado
@@ -965,7 +1040,7 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     var caiuEm = relogio.t;
     ate(function () { return ana.J.Coop.sessao().parceiroIA; }, 400, 100, ['ana']);
     var heroiB = ana.J.Game.state.units.filter(function (u) { return u.dono === 'bia'; })[0];
-    check('K5 · 15 s depois do `caiu`, o herói da parceira passa para a IA (u.ia) e Ana vira a autoridade',
+    check('K5 · 15 s depois do `caiu`, o herói da parceira fica marcado fora (u.ia: o turno passa) e Ana vira a autoridade',
           ana.J.Coop.sessao().parceiroIA && heroiB && heroiB.ia === true && ana.J.Coop.sessao().autoridade === 'ana' &&
           relogio.t - caiuEm >= 15000, 'depois de ' + Math.round((relogio.t - caiuEm) / 1000) + ' s');
     ate(function () { return tela('ana') !== 'battle'; }, 6000, 50, ['ana']);
@@ -973,17 +1048,29 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
           ana.J.Coop.sessao().descidaAcabou === true && ana.J.Game.nextRoom() === false, tela('ana'));
     bia.vivo = true;
 
-    // ---- K6: a parceira cai e VOLTA: foto; o herói dela segue na IA até o fim da sala
+    /* ---- K6: a parceira CAI e VOLTA. A foto a recoloca no lockstep, e o heroi
+       dela fica de pe no tabuleiro com o turno PASSANDO ate ela voltar (12/09:
+       "caso ele cair do jogo/internet deve continuar na luta... e enquanto ele
+       ta off seu turno passara" — antes a IA jogava com o heroi dele).
+       A CARENCIA CURTA e de proposito: com os 15 s de verdade, a Ana jogava
+       sozinha por vinte turnos e a sala acabava antes de a Bia voltar, entao
+       nao sobrava turno nenhum DEPOIS da volta para comparar hash — a prova
+       media o vazio. Com 1 s ela volta com sala de sobra, que e o caso que
+       interessa. */
     ['ana', 'bia'].forEach(function (id) { cli[id].J.Coop._reset(); cli[id].J.Coop._semIntervalo = true; cli[id].J.Coop._agora = function () { return relogio.t; }; });
     ana.J.Coop.aoAviso = function (t) { ana.avisos.push(t); };
     desce('cistern');
     ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
     ana.J.Coop.entrar();
     ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 3 && bia.J.Game.state && bia.J.Game.state.turno >= 3; }, 400);
+    var gracaAntes = ana.J.Coop.GRACA_MS;
+    ana.J.Coop.GRACA_MS = 1000;
     bia.vivo = false;
     ana.J.Rede._sinal({ tipo: 'caiu', id: 'bia', cx: 'cxb' });
     ate(function () { return ana.J.Coop.sessao().parceiroIA; }, 400, 100, ['ana']);
-    ate(function () { return false; }, 20, 50, ['ana']);                 // Ana anda mais um pouco sozinha
+    var tFora = ana.J.Game.state ? ana.J.Game.state.turno : 0;
+    var hbFora = ana.J.Game.state.units.filter(function (u) { return u.dono === 'bia' && u.kind === 'hero'; })[0];
+    var foraOk = !!hbFora && hbFora.ia === true && hbFora.alive === true && !hbFora.offBoard;
     bia.vivo = true; bia.cx = 'cxb2';
     bia.J.Rede._ident('bia', 'cxb2');
     ana.J.Coop.parceiroVoltou('bia', 'cxb2');
@@ -991,8 +1078,13 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     ate(function () { return bia.J.Coop.sessao().restauracoes > 0; }, 200);
     var tVolta = bia.J.Game.state ? bia.J.Game.state.turno : 0;
     var hbia = bia.J.Game.state.units.filter(function (u) { return u.dono === 'bia'; })[0];
-    check('K6 · a parceira volta: pede a foto, restaura e assiste — o herói dela segue na IA', bia.J.Coop.sessao().restauracoes > 0 &&
-          hbia && hbia.ia === true && bia.J.Game.donoDe(hbia) === 'ia', 'turno ' + tVolta);
+    ana.J.Coop.GRACA_MS = gracaAntes;
+    check('K6 · enquanto ela estava fora, o herói dela ficou de pé com o turno passando (u.ia)', foraOk,
+          'fora no turno ' + tFora);
+    check('K6 · a parceira volta: pede a foto, restaura — e os heróis são DELA de novo (voltou a jogar)',
+          bia.J.Coop.sessao().restauracoes > 0 && hbia && hbia.ia !== true && bia.J.Game.donoDe(hbia) === 'eu' &&
+          hbia.alive === true && !hbia.offBoard,
+          'voltou no turno ' + tVolta + ' · ia ' + (hbia && hbia.ia) + ' · dono ' + (hbia && bia.J.Game.donoDe(hbia)));
     ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
     var h6 = hashesIguais('ana', 'bia', tVolta + 1);
     var diag6 = { tv: tVolta, fa: final('ana'), fb: final('bia'), ra: bia.J.Coop.sessao().restauracoes,
@@ -1068,7 +1160,13 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     configuraGrupo('ana', 'bia');
     check('K9 · o Poço não desce em grupo (startRun e startPoco)', gA.startRun(['espadachim'], 'poco', { grupo: true }) === false &&
           gA.startPoco(['espadachim']) === false);
-    check('K9 · em grupo desce 1 herói só', gA.startRun(['espadachim', 'arqueiro'], 'greenhouse', { grupo: true }) === false);
+    /* 12/09: em grupo desce com UM ou DOIS (o grupo da sala vai a quatro); três
+       continua fora, como no solo. */
+    check('K9 · em grupo descem os DOIS selecionados', gA.startRun(['espadachim', 'arqueiro'], 'greenhouse', { grupo: true }) === true);
+    gA.init(); cli.bia.J.Game.init();
+    configuraGrupo('ana', 'bia');
+    check('K9 · três heróis não descem nem em grupo',
+          gA.startRun(['espadachim', 'arqueiro', 'sumo'], 'greenhouse', { grupo: true }) === false);
     var Vb = bia.w.SOTERRA_VERSAO;
     bia.w.SOTERRA_VERSAO = { versao: 'outra-versao' };
     gA.startRun(['espadachim'], 'greenhouse', { grupo: true });
@@ -1403,7 +1501,7 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     check('R8 · e a foto do MESMO turno não dá um relógio novo: segue de onde estava (antes: 30 s + banco de novo)',
           ses('bia').restauracoes > 0 && g1 >= g0 - 0.1 && g1 < g0 + 3, 'antes ' + g0.toFixed(1) + ' s · depois ' + g1.toFixed(1) + ' s');
 
-    // ---- R9: o `f` forjado (sem o sim da dona do herói) não funde; a foto com essa fusão também não vale
+    // ---- R9: o `f` forjado que CRUZA donos não funde; a foto com essa fusão também não vale
     entraNaBatalha('cistern', null, { joga: true, fica: true });
     coloca(0);
     var okV9 = vezDe('ana') && colaBia();
@@ -1412,7 +1510,7 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
                     dados: { b: S_('bia').bid, T: T9, k: (bia.J.Coop._log()[T9] || []).length, a: 'f', u: hA9.uid, alvo: hB9.uid, ok: true } });
     ate(function () { return false; }, 6, 50, ['bia']);
     var fundiu9 = (bia.J.Game.state.units || []).some(function (u) { return u.kind === 'fusion'; });
-    check('R9 · o `f` que chega sem o MEU fusao-ok (o lance escrevia o próprio consentimento) não funde o meu herói',
+    check('R9 · o `f` forjado que junta herois de DONOS diferentes não funde (12/09: fundir é só com os meus)',
           okV9 && !fundiu9 && !heroiDe('bia', 'bia').fusedInto && !heroiDe('bia', 'bia').fused, 'fundiu ' + fundiu9);
     ate(function () { return !ses('bia').sincronizando; }, 200);
     var fj9 = JSON.parse(ana.J.Engine.foto(ana.J.Game.state));
@@ -1421,7 +1519,7 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     var rest9 = ses('bia').restauracoes;
     S_('bia').sincronizando = true;
     injeta('bia', { t: 'batalha', de: 'ana', cx: 'cxa', acao: 'foto', dados: { b: S_('bia').bid, T: fj9.turno, estado: JSON.stringify(fj9), lances: [] } });
-    check('R9 · a foto que traz uma fusão com o meu herói que eu não aceitei é recusada',
+    check('R9 · a foto que traz uma fusão entre herois de donos diferentes é recusada',
           ses('bia').restauracoes === rest9 && !bia.J.Engine.findUnit(bia.J.Game.state, 'u99') && !ses('bia').sincronizando);
 
     // ---- R10: a parceira não joga com o MEU herói nem pula a MINHA vez
@@ -1608,10 +1706,29 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
       check('G2 · o Mestre desce em grupo com o Cavaleiro Negro, e a porta dele acende com o `pronto` da parceira',
             okD && tela('ana') === 'antessala' && tela('bia') === 'antessala' && ana.J.Coop.podeEntrar().ok,
             JSON.stringify(ana.J.Coop.podeEntrar()));
-      ana.J.Coop.entrar();
-      ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
-      var meio = { tela: tela('bia'), classe: !!bia.J.DATA.classes.gm, julg: !!bia.J.DATA.spells['gm-julgamento'],
+      /* A FOTO DO MEIO, TIRADA NO INSTANTE CERTO. Olhar a ficha emprestada
+         DEPOIS de bombear os dois clientes e uma corrida perdida: o Julgamento
+         do Mestre tira 99999 num raio de 99, entao a parceira pode atravessar
+         'placing' -> 'playing' -> fim DENTRO de um unico passo do dubl e de
+         rede (ele entrega os lances na hora), e a prova via 'roomClear' e
+         acusava um defeito que nao existia. Agora a medida e pendurada no
+         showScreen dela: quando a tela da batalha aparece, anota-se a ficha.
+         E o que a prova quer saber — a ficha do Mestre existiu no DATA dela
+         durante a batalha e nao antes nem depois. */
+      var meio = null;
+      var uiBia = bia.w.JOGO.UI, mostraAntes = uiBia.showScreen;
+      uiBia.showScreen = function (n) {
+        if (n === 'battle' && !meio) {
+          meio = { tela: n, classe: !!bia.J.DATA.classes.gm, julg: !!bia.J.DATA.spells['gm-julgamento'],
                    emprestada: !!(bia.J.GM && bia.J.GM.fichaEmprestada()) };
+        }
+        return mostraAntes.apply(uiBia, arguments);
+      };
+      ana.J.Coop.entrar();
+      ate(function () { return !!meio && tela('ana') === 'battle'; }, 60);
+      uiBia.showScreen = mostraAntes;
+      meio = meio || { tela: tela('bia'), classe: !!bia.J.DATA.classes.gm, julg: !!bia.J.DATA.spells['gm-julgamento'],
+                       emprestada: !!(bia.J.GM && bia.J.GM.fichaEmprestada()) };
       check('G3 · a parceira aceita a ata (o relé conferiu o Mestre) e empresta a ficha só para a batalha',
             meio.tela === 'battle' && meio.classe && meio.julg && meio.emprestada, JSON.stringify(meio));
       ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);

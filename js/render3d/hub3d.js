@@ -501,28 +501,51 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(g);
     lugares.push({ id: 'porta', tipo: 'porta', nome: 'Para a batalha',
                    pos: new THREE.Vector3(0, 0, -R * 0.72), raio: 4.2, node: g, miolo: miolo });
-    // a saída: dois degraus de pedra ao sul
+    /* A SAÍDA: UM PORTAL, NÃO UMA ESCADA (12/09, pedido do dono: "as salas de
+     * espera, ao invés de ter uma escada, deve ter um portal de saída").
+     * Eram dois degraus de pedra — e degrau é um enfeite, não uma porta: numa
+     * sala murada, no fundo de um calabouço, o jogador não lia aquilo como o
+     * caminho de volta. Agora é o mesmo arco da porta da batalha, na metade do
+     * tamanho e em BRANCO-AZULADO em vez da cor do tema: lado a lado, a porta
+     * quente leva para dentro e a fria leva para fora — a diferença de cor
+     * diz para onde vai sem precisar ler o rótulo. */
     var s = new THREE.Group();
-    var degrau = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 1.6),
-                                new THREE.MeshStandardMaterial({ color: 0x4a443c, roughness: 1 }));
-    degrau.position.y = 0.25;
-    s.add(degrau);
-    var degrau2 = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 1.0),
-                                 new THREE.MeshStandardMaterial({ color: 0x3e3931, roughness: 1 }));
-    degrau2.position.set(0, 0.75, 0.6);
-    s.add(degrau2);
+    var corSaida = new THREE.Color(0xbcd4e6);
+    var aroS = new THREE.Mesh(
+      new THREE.TorusGeometry(1.7, 0.26, 12, 40),
+      new THREE.MeshStandardMaterial({ color: 0x5a5348, roughness: 0.9 })
+    );
+    aroS.position.y = 2.1;
+    s.add(aroS);
+    var mioloS = new THREE.Mesh(
+      new THREE.CircleGeometry(1.5, 32),
+      new THREE.MeshBasicMaterial({ color: corSaida, transparent: true, opacity: 0.42,
+                                    side: THREE.DoubleSide, depthWrite: false })
+    );
+    mioloS.position.y = 2.1;
+    s.add(mioloS);
+    var baseS = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.9, 2.2, 0.5, 24),
+      new THREE.MeshStandardMaterial({ color: 0x4a443c, roughness: 1 })
+    );
+    baseS.position.y = 0.25;
+    s.add(baseS);
     // o rótulo é um sprite de tamanho fixo: perto da câmera (a saída fica
     // do lado do herói) ele enchia a tela — menor, e a saída vai para o LESTE,
     // fora da linha câmera→herói→porta
     var r2 = rotulo('Sair do calabouço', '#d8cfb8');
-    r2.position.y = 2.6;
-    r2.scale.multiplyScalar(0.55);
+    r2.position.y = 3.6;
+    r2.scale.multiplyScalar(0.62);
     s.add(r2);
     s.position.set(R * 0.82, 0, R * 0.30);
-    s.rotation.y = -Math.PI / 2;
+    // o portal encara o meio do pátio, como o da batalha — e não o eixo fixo
+    // que os degraus usavam (uma caixa não tem frente, um arco tem)
+    s.lookAt(0, 0, 0);
+    s.scale.setScalar(0.78);
     scene.add(s);
     lugares.push({ id: 'saida', tipo: 'saida', nome: 'Sair do calabouço',
-                   pos: new THREE.Vector3(R * 0.82, 0, R * 0.30), raio: 3.6, node: s });
+                   pos: new THREE.Vector3(R * 0.82, 0, R * 0.30), raio: 3.6,
+                   node: s, miolo: mioloS });
     salaPlantada = false;
     salaTentativas = 0;
     plantaSala();
@@ -1798,6 +1821,7 @@ var JOGO = (typeof window !== 'undefined')
       var pf = reg.perfil || {};
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
                 marcasGrupo[id] || null, brilhoDoNome(id, pf.mestre === true));
+      anelDoGrupo(reg.corpo, !!marcasGrupo[id]);
     }
     return true;
   };
@@ -2385,6 +2409,39 @@ var JOGO = (typeof window !== 'undefined')
    * a liderança e ao desfazer (papel null). Fantasma sem corpo (acima do teto
    * de 20) guarda a marca para quando materializar. */
   var marcasGrupo = {};
+  /* O CÍRCULO VERMELHO DO GRUPO (12/09, pedido do dono: "quando estiver na
+   * praça, o jogador que estiver no grupo deve ter um círculo vermelho
+   * embaixo dos pés, para destacar que aquele está no seu grupo"). Um anel
+   * chato no chão, preso ao corpo (anda com ele), vermelho e meio
+   * transparente para não esconder o chão. A placa já dizia "grupo" no nome;
+   * de longe, no meio de vinte corpos, o que se enxerga é o chão aceso.
+   * A geometria e o material são UM só para todos os corpos. */
+  var geoAnelGrupo = null, matAnelGrupo = null;
+  function anelDoGrupo(corpo, ligado) {
+    if (!corpo || !corpo.node || !THREE) return;
+    if (!ligado) {
+      if (corpo.anelGrupo) { corpo.node.remove(corpo.anelGrupo); corpo.anelGrupo = null; }
+      return;
+    }
+    if (corpo.anelGrupo) return;
+    if (!geoAnelGrupo) {
+      geoAnelGrupo = new THREE.RingGeometry(0.78, 1.02, 48);
+      matAnelGrupo = new THREE.MeshBasicMaterial({ color: 0xe23b35, transparent: true, opacity: 0.78,
+                                                   side: THREE.DoubleSide, depthWrite: false });
+    }
+    var anel = new THREE.Mesh(geoAnelGrupo, matAnelGrupo);
+    anel.rotation.x = -Math.PI / 2;
+    anel.position.y = 0.04;
+    anel.renderOrder = 2;
+    anel.name = 'anel-grupo';
+    corpo.node.add(anel);
+    corpo.anelGrupo = anel;
+  }
+  Hub._anelDoGrupo = function (id) {
+    var reg = fantasmas[id];
+    return !!(reg && reg.corpo && reg.corpo.anelGrupo);
+  };
+
   Hub.marcaGrupo = function (id, papel) {
     if (!id) return false;
     if (papel === 'lider' || papel === 'membro') marcasGrupo[id] = papel;
@@ -2394,6 +2451,7 @@ var JOGO = (typeof window !== 'undefined')
       var pf = reg.perfil || {};
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
                 marcasGrupo[id] || null, brilhoDoNome(id, pf.mestre === true));
+      anelDoGrupo(reg.corpo, !!marcasGrupo[id]);
     }
     return true;
   };
@@ -2461,6 +2519,7 @@ var JOGO = (typeof window !== 'undefined')
               marcasGrupo[reg.id] || null,
               brilhoDoNome(reg.id, perfil && perfil.mestre === true));
     if (perfil && perfil.aura) acendeAura(corpo, true);   // a vaidade é pública
+    anelDoGrupo(corpo, !!marcasGrupo[reg.id]);           // 12/09: quem é do meu grupo, no chão
     esperaCorpo(corpo, classe);           // fusão: o corpo próprio vem vindo
     poeAlvoToque(corpo);                  // 11/09: o corpo inteiro recebe o toque, não só o nome
     return true;

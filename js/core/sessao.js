@@ -13,6 +13,7 @@
  *   Sessao.api(rota, op)       fetch JSON com o token; resolve SEMPRE com
  *                              {status, ok, ...} — rede fora vira status 0
  *   Sessao.entrar(login, senha) / cadastrar(nome, email, senha) / sair()
+ *   Sessao.vigiaInatividade()  o relogio de 15 min sem jogar (desloga)
  *   Sessao.paginaConta()       o endereço da página de conta do site
  *
  * Só biblioteca do navegador. Sem sessão o jogo é o de sempre (local). */
@@ -125,6 +126,58 @@
     var p = s ? S.api('/api/logout', { method: 'POST', body: {} }) : Promise.resolve({ ok: true, status: 0 });
     S.esquece();                       // o local sai mesmo com o servidor fora
     return p;
+  };
+
+  /* ====================================================================
+   * O RELÓGIO DA INATIVIDADE (12/09, pedido do dono: "15 min de inatividade a
+   * conta desloga para não consumir servidor").
+   *
+   * O que custa servidor numa aba parada são DUAS coisas: o token vivo no
+   * cartório e a conexão do relé (um WebSocket aberto por aba). Então o prazo
+   * fecha as duas: `Sessao.sair()` (que avisa o /api/logout e apaga a chave
+   * local) e `Rede.sair()`.
+   *
+   * NÃO navega para fora sozinho. Uma página que se manda embora enquanto
+   * alguém lê a ficha do personagem perde o que a pessoa estava fazendo sem
+   * ela ter pedido; quem pendura `aoInativo` (a HUD) mostra o aviso e deixa o
+   * "entrar de novo" na mão do jogador. Sem ninguém pendurado, o relógio
+   * ainda desliga o que custa — é o pedido.
+   *
+   * O QUE CONTA COMO JOGAR: toque, tecla, roda do mouse e a aba voltando para
+   * a frente. O relógio corre com a aba escondida (é exatamente a aba
+   * esquecida em segundo plano que o dono quer desligar), e um `tique` de 30 s
+   * basta — não há nada a mostrar antes do fim. */
+  S.INATIVO_MS = 15 * 60 * 1000;
+  S.aoInativo = null;             // a HUD pendura o aviso aqui
+  var ultimoToque = 0, vigiaId = null, jaDeslogou = false;
+  S.tocou = function () { ultimoToque = Date.now(); };
+  S.ociosoMs = function () { return ultimoToque ? (Date.now() - ultimoToque) : 0; };
+  function desligaPorInatividade() {
+    if (jaDeslogou) return;
+    jaDeslogou = true;
+    if (vigiaId) { try { clearInterval(vigiaId); } catch (e) {} vigiaId = null; }
+    var tinha = S.ativa();
+    try { if (tinha) S.sair(); } catch (e1) {}
+    try { if (JOGO.Rede && JOGO.Rede.sair) JOGO.Rede.sair(); } catch (e2) {}
+    if (typeof S.aoInativo === 'function') { try { S.aoInativo({ tinhaConta: tinha }); } catch (e3) {} }
+  }
+  S._desligaPorInatividade = desligaPorInatividade;   // as provas chamam direto
+  S.vigiaInatividade = function () {
+    if (vigiaId || typeof document === 'undefined' || typeof setInterval !== 'function') return false;
+    S.tocou();
+    var marca = function () { S.tocou(); };
+    ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (ev) {
+      try { document.addEventListener(ev, marca, true); } catch (e) {}
+    });
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) S.tocou();
+      });
+    } catch (e4) {}
+    vigiaId = setInterval(function () {
+      if (S.ociosoMs() >= S.INATIVO_MS) desligaPorInatividade();
+    }, 30000);
+    return true;
   };
 
   /* A raiz do site, relativa ao jogo. As duas páginas abaixo saem daqui. */

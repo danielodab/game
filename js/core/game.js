@@ -299,7 +299,8 @@ var JOGO = (typeof window !== 'undefined')
     var emGrupo = !!(opts && opts.grupo);
     if (emGrupo && !podeDescerEmGrupo(heroIds, dungeonId)) return false;
     if (!validParty(heroIds) || !validDungeon(dungeonId)) return false;
-    var pedidoModelos = { dungeonId: dungeonId, party: emGrupo ? comParceiro(heroIds) : heroIds, sala: 0 };
+    var pedidoModelos = { dungeonId: dungeonId, party: emGrupo ? comParceiro(heroIds) : heroIds,
+                          duplas: emGrupo ? duplasDaDescida(heroIds) : null, sala: 0 };
     if (!(opts && opts.direto && !emGrupo) && seguraParaModelos(pedidoModelos,
         function () { Game.startRun(heroIds, dungeonId, opts); })) return true;
     Game.party = heroIds.slice();
@@ -390,6 +391,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!cg || !cg._liberaNextRoom || !cg._liberaNextRoom()) return false;
     }
     if (seguraParaModelos({ dungeonId: Game.dungeonId, party: emGrupo ? comParceiro(Game.party) : Game.party,
+                           duplas: emGrupo ? duplasDaDescida(Game.party) : null,
                            sala: Game.roomIndex + 1 },
         function () { Game.nextRoom(); })) return true;
     Game.roomIndex++;
@@ -537,18 +539,47 @@ var JOGO = (typeof window !== 'undefined')
   function podeDescerEmGrupo(heroIds, dungeonId) {
     var c = C();
     try { if (!c || !c.emGrupo || !c.emGrupo()) return false; } catch (e0) { return false; }
-    if (!heroIds || heroIds.length !== 1 || dungeonId === 'poco') return false;
-    var prog = P(), h = null;
-    try { h = prog && prog.hero ? prog.hero(heroIds[0]) : null; } catch (e) { h = null; }
+    /* 12/09 (pedido do dono): "quando forem para um calabouco podem ir com os
+     * dois personagens selecionados... no caso 4 personagens no maximo". Antes
+     * a descida em grupo exigia UM heroi; agora aceita os selecionados (um ou
+     * dois), e a sala nasce com ate quatro. O Poco segue sendo de quem desce
+     * sozinho. */
+    if (!heroIds || heroIds.length < 1 || heroIds.length > 2 || dungeonId === 'poco') return false;
+    var prog = P(), temGm = false;
+    for (var i = 0; i < heroIds.length; i++) {
+      var h = null;
+      try { h = prog && prog.hero ? prog.hero(heroIds[i]) : null; } catch (e) { h = null; }
+      if (!h) return false;
+      if (h.classId === 'gm') temGm = true;
+    }
     // 11/09 (pedido do dono): o Mestre desce em grupo — só com o modo ligado aqui
-    if (!h) return false;
-    if (h.classId !== 'gm') return true;
+    if (!temGm) return true;
     try { return !!(JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()); } catch (e2) { return false; }
   }
+  /* OS MODELOS QUE A DESCIDA EM GRUPO PRECISA (12/09): os meus herois mais os
+   * do parceiro — ate quatro corpos, porque cada lado desce com os dois
+   * selecionados. Sem a lista dele (versao antiga do grupo), cai no principal. */
   function comParceiro(ids) {
-    var c = C(), cp = null;
-    try { cp = c && c.classeParceiro ? c.classeParceiro() : null; } catch (e) { cp = null; }
-    return (cp && ids && ids.length) ? [ids[0], cp] : ids;
+    var c = C(), cps = [];
+    try { cps = (c && c.classesParceiro) ? (c.classesParceiro() || []) : []; } catch (e) { cps = []; }
+    if (!cps.length) {
+      var um = null;
+      try { um = c && c.classeParceiro ? c.classeParceiro() : null; } catch (e2) { um = null; }
+      if (um) cps = [um];
+    }
+    if (!cps.length || !ids || !ids.length) return ids;
+    return ids.concat(cps);
+  }
+  /* AS DUAS DUPLAS DA DESCIDA (12/09): o plano de modelos (JOGO.Bundle) só
+   * reconhece o corpo da FUSÃO quando recebe um par; com a lista achatada de
+   * quatro ele não planejava fusão nenhuma. Cada lado vai como o seu par. */
+  function duplasDaDescida(ids) {
+    var c = C(), cps = [];
+    try { cps = (c && c.classesParceiro) ? (c.classesParceiro() || []) : []; } catch (e) { cps = []; }
+    var out = [];
+    if (ids && ids.length) out.push(ids.slice());
+    if (cps.length) out.push(cps.slice());
+    return out.length ? out : null;
   }
   function avisaAntessala() {
     var c = C();
@@ -612,17 +643,19 @@ var JOGO = (typeof window !== 'undefined')
       else if (l.a === 'c') ok = !!E().cast(st, l.u, l.s, l.x, l.y);
       else if (l.a === 'e') { if (st.phase === 'playing') E().endTurn(st); ok = true; }
       else if (l.a === 'f') {
-        // o `f` que vem do OUTRO com o MEU herói de alvo só funde com o MEU sim
-        // (o Coop guarda o fusao-ok que eu dei): antes o lance escrevia o
-        // próprio consentimento, e um cliente alterado fundia o meu herói
-        var fa = E().findUnit(st, l.u), fb = E().findUnit(st, l.alvo), cf = C();
-        var deFora = !!(l.de && rede && l.de !== rede.eu);
-        var comOMeu = !!(fa && fb && rede && fb.dono === rede.eu && (fa.dono || null) !== (fb.dono || null));
-        if (deFora && comOMeu && !(cf && cf._eleConsentiu && cf._eleConsentiu(l.u, l.alvo))) ok = false;
-        else {
-          st.consentimento = { a: l.u, b: l.alvo, T: st.turno || 0 };
-          ok = !!(JOGO.Fusion && JOGO.Fusion.declare && JOGO.Fusion.declare(st, l.u, l.alvo));
-        }
+        /* O `f` DE FORA (12/09). Fundir é só com os personagens do MESMO
+         * jogador, então um lance que junte heróis de donos diferentes não
+         * funde — venha de onde vier. `Fusion.declare` já recusaria (a regra
+         * mora lá), e a conferência aqui é a segunda tranca: assim um cliente
+         * alterado nem chega a mexer no estado, e o lance falho entra no log
+         * dos dois motores como falho, que é o que mantém o lockstep.
+         * Também cai por aqui o `f` de fora que mexe num herói MEU: o dono da
+         * unidade é o único que a declara. */
+        var fa = E().findUnit(st, l.u), fb = E().findUnit(st, l.alvo);
+        var donoA = fa ? (fa.dono || null) : null, donoB = fb ? (fb.dono || null) : null;
+        if (!fa || !fb || donoA !== donoB) ok = false;
+        else if (rede && l.de && donoA && l.de !== donoA) ok = false;
+        else ok = !!(JOGO.Fusion && JOGO.Fusion.declare && JOGO.Fusion.declare(st, l.u, l.alvo));
       }
     } catch (e) { ok = false; }
     return ok;
@@ -725,6 +758,19 @@ var JOGO = (typeof window !== 'undefined')
     }
     timerUid = null;
     if (dono === 'parceiro') { resetAiState(); aplicaFila(semTela); return; }
+    /* O TURNO DE QUEM CAIU PASSA (12/09, pedido do dono: "enquanto ele ta off
+     * seu turno passara"). A marca `ia` num heroi de GENTE quer dizer "o dono
+     * nao esta aqui" — e nao "a IA joga por ele", que era o que acontecia
+     * antes: a IA movia e lancava com o heroi do parceiro caido, jogando o
+     * personagem de alguem que nao pediu isso. O corpo fica de pe na sala (e
+     * pode ser atingido), o turno dele so nao acontece. Monstro, pet e
+     * invocacao seguem na IA: `u.dono` so existe em heroi de gente. */
+    if (u.dono && (u.kind === 'hero' || u.kind === 'fusion')) {
+      resetAiState();
+      if (st.phase === 'playing') { E().endTurn(st); posMotor(); }
+      if (Game.state && Game.state.phase !== 'playing' && !travadoRede()) handleBattleOver();
+      return;
+    }
     iaPasso(u, d, semTela);
   }
   // os lances do parceiro: um por quadro livre com o desenho; todos sem ele
@@ -1230,28 +1276,21 @@ var JOGO = (typeof window !== 'undefined')
       if (b === a || b.uid === a.uid) continue;
       if (b.kind !== 'hero' || !b.alive || b.side !== a.side || b.fused) continue;
       if (!adjacent(a, b)) continue;
-      // [G11] o herói do PARCEIRO ao lado: a fusão só com os dois aceitando —
-      // o par vem com `pedido:true` (a HUD mostra "Pedir fusão a Bia")
-      var pedido = !!(rede && (a.dono || null) !== (b.dono || null));
-      if (pedido && b.ia) continue;
+      /* SÓ COM OS MEUS (12/09, pedido do dono): a fusão entre heróis de
+       * JOGADORES diferentes não existe mais — nem com os dois aceitando, que
+       * era a regra de 11/09. Quem decide é `Fusion.canFuse` (a mesma porta do
+       * lance que vem pela Rede); aqui só não se oferece o que ele recusaria.
+       * Em grupo, o herói do parceiro fica ao lado sem oferecer nada. */
+      if (rede && (a.dono || null) !== (b.dono || null)) continue;
       if (F && F.canFuse) {
         var ok = false;
-        try { ok = pedido ? canFuseComConsentimento(a.uid, b.uid) : !!F.canFuse(Game.state, a.uid, b.uid); }
-        catch (e) { ok = false; }
+        try { ok = !!F.canFuse(Game.state, a.uid, b.uid); } catch (e) { ok = false; }
         if (!ok) continue;
       }
-      out.push(pedido ? { uidA: a.uid, uidB: b.uid, pedido: true } : { uidA: a.uid, uidB: b.uid });
+      out.push({ uidA: a.uid, uidB: b.uid });
     }
     return out;
   };
-  // pergunta ao Fusion "e se o outro aceitasse?" sem deixar rastro no estado
-  function canFuseComConsentimento(uidA, uidB) {
-    var st = Game.state;
-    var tinha = Object.prototype.hasOwnProperty.call(st, 'consentimento'), antes = st.consentimento;
-    st.consentimento = { a: uidA, b: uidB, T: st.turno || 0 };
-    try { return !!JOGO.Fusion.canFuse(st, uidA, uidB); }
-    finally { if (tinha) st.consentimento = antes; else delete st.consentimento; }
-  }
 
   Game.declareFusion = function (uidA, uidB) {
     var pairs = Game.canFuse();
@@ -1264,12 +1303,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!F || !F.declare) return false;
     var ok = false;
     if (rede) {
-      // [G11] com o parceiro, só depois do `fusao-ok` dele (o Coop guarda o sim);
-      // a declaração é um lance `f`, e o consentimento entra no estado dos dois
-      if (found.pedido) {
-        var cf = C();
-        if (!(cf && cf._consentido && cf._consentido(uidA, uidB))) return false;
-      }
+      // [G11] a declaração viaja como o lance `f` (os dois motores fundem
+      // igual). Sem consentimento nenhum: 12/09, fundir é só com os MEUS.
       ok = aplicaLocal({ a: 'f', u: uidA, alvo: uidB });
     } else {
       try { ok = !!F.declare(Game.state, uidA, uidB); } catch (e) { ok = false; }

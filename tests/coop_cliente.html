@@ -67,7 +67,7 @@
     pronto: false, falhou: null,
     id: null, nome: Q.nome || 'Ana', heroi: Q.heroi || 'sumo', nivel: Number(Q.nivel || 15),
     tela: null, telas: [], dadosTela: {},
-    eventos: [], avisos: [], convites: [], desafios: [], sussurros: [], fusoes: [], subidas: [],
+    eventos: [], avisos: [], convites: [], desafios: [], sussurros: [], subidas: [],
     grupoMudou: 0, dueloMudou: 0, coopMudou: 0, entradas: [],
     erros: window.__erros, piloto: null, casa: 0, salaRede: undefined, passos: 0
   };
@@ -150,7 +150,6 @@
     if (Co) {
       Co.aoMudar = function () { C.coopMudou++; };
       Co.aoAviso = function (texto, kind) { C.avisos.push({ texto: String(texto), kind: kind || null, t: agora(), coop: true }); };
-      Co.aoFusaoPedida = function (f) { C.fusoes.push(copia(f) || {}); };
     }
   }
 

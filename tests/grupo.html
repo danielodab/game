@@ -516,7 +516,15 @@ JOGO.DATA = {
     chega('caiu', { id: 'bia', cx: 'cxbia1' });
     T += 15001; Gr._tique();
     check('na batalha, a líder sumida além da carência: eu lidero (D21) e o grupo segue', Gr.emGrupo() && Gr.souLider());
-    // a antessala: a descida acaba e volto ao Acampamento
+    /* A ANTESSALA (regra nova de 12/09, pedido do dono: "caso ele cair do
+       jogo/internet deve continuar na luta se ela nao tiver acabado ou nascer
+       na proxima sala caso tenha acabado"). Antes, uma queda fora da BATALHA
+       acabava a descida dos dois — bastava a sala terminar com ele fora para a
+       descida morrer na tela de recompensa. Agora, em qualquer ponto da
+       descida, quem ficou apenas LIDERA e o grupo segue: a sala seguinte nasce
+       com os herois de quem caiu (o payload guardado no Coop). Na praca, onde
+       nao ha nada em curso, a queda desfaz o grupo como sempre — e e o teste
+       logo acima que cobra isso. */
     reset();
     formaLiderando();
     Gr.descer('greenhouse');
@@ -524,8 +532,17 @@ JOGO.DATA = {
     chega('ausente', { para: 'bia', paraCx: 'cxbia1', tipoMsg: 'batalha', ref: 'x' });
     check('"ausente" de um envelope ao par também conta como sumiço', Gr.estado().membros[1].on === false);
     T += 15001; Gr._tique();
-    check('sumida além da carência NA ANTESSALA: a descida acaba e volto ao Acampamento', !Gr.emGrupo() &&
-          subidas.length === 1 && /não voltou — a descida acabou/.test(avisos.join('|')), avisos.join(' | '));
+    check('sumida além da carência NA DESCIDA: o grupo SEGUE e ninguém volta ao Acampamento',
+          Gr.emGrupo() && subidas.length === 0, avisos.join(' | '));
+    // e quem SEGUIA vira líder pela queda de quem liderava, na antessala
+    reset();
+    formaSeguindo();
+    Gm.screen = 'antessala';
+    chega('caiu', { id: 'bia', cx: 'cxbia1' });
+    T += 15001; Gr._tique();
+    check('a líder caída na antessala: eu passo a liderar e o grupo segue',
+          Gr.emGrupo() && Gr.souLider() && subidas.length === 0, avisos.join(' | '));
+    Gm.screen = 'hub';
     // o convite a quem não está
     reset();
     Gr.convidar('cris');

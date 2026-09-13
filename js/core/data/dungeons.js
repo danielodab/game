@@ -14,8 +14,9 @@ var JOGO = (typeof window !== 'undefined')
 //   '~'  vazio/buraco (empurre alguém para cá)
 //   'P'  spawn de herói   ·   a–z  spawn de monstro (ver `monsters`)
 //
-// GRUPO DE 1 OU 2 (adendo v2.1): o time desceu de 3 para 2 heróis, então cada
-// sala precisa de ≥ 2 spawns 'P'. Os layouts trazem de 6 a 10 de propósito —
+// GRUPO DE 1 OU 2 (adendo v2.1) — e, desde 12/09, a DESCIDA EM GRUPO leva os
+// dois de cada jogador: QUATRO heróis. Cada sala precisa de ≥ 4 spawns 'P'
+// (senão Engine.createBattle recusa). Os layouts trazem de 4 a 10 —
 // spawn sobrando é ignorado pela engine e dá margem para o pet e para a
 // unidade fundida, que ocupa uma célula só.
 //

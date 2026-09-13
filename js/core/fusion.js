@@ -305,22 +305,27 @@ var JOGO = (typeof window !== 'undefined')
     if (!isFusable(a) || !isFusable(b)) return false;
     if (a.side !== b.side) return false;
     // 03/09, pedido do dono: "com o GM jamais pode dar a possibilidade de
-    // fusão" e "usuário só pode fundir com seus personagens" — o Mestre não
-    // funde, e duas unidades de CONTAS diferentes (co-op, um dia) tampouco.
-    // A conta viaja do grupo (Progress.battleParty) para a unidade.
+    // fusão" — o Mestre não funde.
     if (a.classId === 'gm' || b.classId === 'gm') return false;
-    // 11/09 (multijogador): com DONO na unidade (o jogador da Rede que a
-    // controla), quem decide é ele — e entre donos DIFERENTES a fusão só sai
-    // com os DOIS aceitando, o que o lance `f` registra em
-    // `state.consentimento` {a, b, T} no turno em que é declarada. A trava da
-    // CONTA vale entre unidades sem dono (fora de rede, como sempre): a conta
-    // é 'principal' para quase todo mundo e não separa jogadores.
+    /* FUNDIR É COISA DE UM JOGADOR SÓ (12/09, pedido do dono: "dois
+     * personagens diferentes jamais podem se fundir… o jogador só pode fundir
+     * com seus personagens e não com os do outro jogador").
+     *
+     * De 11/09 até aqui a fusão ENTRE JOGADORES existia, com os dois
+     * aceitando: um pedido viajava pela Rede, o outro dizia sim e o lance `f`
+     * carregava esse sim em `state.consentimento`. Isso acabou — a regra agora
+     * é absoluta, e por isso ela mora NESTA função e não na UI: o caminho de
+     * rede (o lance `f` que chega do outro cliente) passa pela mesma porta, e
+     * um cliente alterado que mande `f` com o herói de outro dono não funde
+     * nada. `state.consentimento` deixou de existir: ninguém o escreve nem o
+     * lê (o `Engine.hash` também não o cita mais).
+     *
+     * `dono` é o jogador da Rede que controla a unidade; `conta` é a trava de
+     * fora da rede, que continua valendo para quem desce sozinho (é
+     * 'principal' para quase todo mundo e não separa jogadores). */
     var dA = a.dono || null, dB = b.dono || null;
     if (dA || dB) {
-      if (dA !== dB) {
-        var cs = state.consentimento;
-        if (!cs || cs.a !== uidA || cs.b !== uidB || cs.T !== (state.turno || 0)) return false;
-      }
+      if (dA !== dB) return false;
     } else if ((a.conta || null) !== (b.conta || null)) return false;
     if (manhattan(a.x, a.y, b.x, b.y) !== 1) return false;
     if (state.pendingFusion) return false;

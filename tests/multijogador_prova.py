@@ -810,7 +810,7 @@ PAGINA = r"""<!DOCTYPE html>
         return espera(function () { var u = unidade(A, uB); if (u && u.ia === true) { tIA = A.w.Date.now(); return true; } return false; }, 40000);
       }).then(function (ok2) {
         var dt = tIA ? (tIA - (tCaiu || t0)) : null;
-        check(rot + 'passada a carência, o herói da Bia vai para a IA no motor da Ana', ok2, dt === null ? 'não foi' : (dt / 1000).toFixed(1) + ' s depois do caiu');
+        check(rot + 'passada a carência, o herói da Bia fica marcado fora (o turno passa) no motor da Ana', ok2, dt === null ? 'não foi' : (dt / 1000).toFixed(1) + ' s depois do caiu');
         check(rot + '...e não antes dos 15 s de carência', ok2 && dt >= 14000, dt === null ? '-' : (dt / 1000).toFixed(1) + ' s');
         check(rot + 'a Ana segue líder e é a autoridade', est(A).lider === A.C.id && ses(A).autoridade === A.C.id,
               curto([est(A).lider === A.C.id, ses(A).autoridade === A.C.id]));
@@ -829,12 +829,12 @@ PAGINA = r"""<!DOCTYPE html>
           dados.volta2 = turno(B) + 1;
           return espera(function () {
           var u = unidade(B, uB);
-          return u && u.ia === true && A.G.state && B.G.state && turno(A) === turno(B) && hashDe(A) === hashDe(B);
+          return u && !u.ia && A.G.state && B.G.state && turno(A) === turno(B) && hashDe(A) === hashDe(B);
         }, 25000);
         });
       }).then(function (ok5) {
         A.C.pilota({ joga: true, casa: 0 });
-        check(rot + 'a Bia retoma pela foto: o mesmo estado da Ana, com o herói dela na IA até o fim da sala', ok5,
+        check(rot + 'a Bia retoma pela foto: o mesmo estado da Ana, com o herói DELA de volta (voltou a jogar)', ok5,
               curto([turno(A), turno(B), hashDe(A), hashDe(B), s(function () { return unidade(B, uB).ia; }, '?')]));
         return true;
       });
@@ -853,7 +853,7 @@ PAGINA = r"""<!DOCTYPE html>
         if (!r[1]) return false;
         confereFim(rot, false, dados.volta2 || 999);
         var ua = unidade(A, uB), ub = unidade(B, uB);
-        check(rot + 'no fim da sala o herói da Bia ainda está na IA, nos dois', !!(ua && ub && ua.ia && ub.ia), curto([ua && ua.ia, ub && ub.ia]));
+        check(rot + 'no fim da sala o herói da Bia é dela de novo, nos dois', !!(ua && ub && !ua.ia && !ub.ia), curto([ua && ua.ia, ub && ub.ia]));
         return true;
       });
     });
@@ -920,7 +920,7 @@ PAGINA = r"""<!DOCTYPE html>
     }).then(function (ok) {
       if (!ok) return false;
       // a Bia NÃO joga o primeiro turno dela: o relógio de parede do cliente dela encerra
-      return entraNaSala(rot, { a: { joga: true, casa: 1, fusao: 'pede' }, b: { joga: false, fusao: 'aceita' } });
+      return entraNaSala(rot, { a: { joga: true, casa: 1 }, b: { joga: false } });
     }).then(function (ok) {
       if (!ok) return false;
       uA = uidDe(A.C.id); uB = uidDe(B.C.id);
@@ -946,7 +946,7 @@ PAGINA = r"""<!DOCTYPE html>
               ok3 && tl0 !== null && Math.abs(dt - tl0) <= 3, dt.toFixed(1) + ' s');
         check(rot + '...e a Ana, esperando, mostra "vez da Bia" com o prazo estimado (sessao.esperando)',
               !!viuEspera && viuEspera.uid === uB && viuEspera.prazo > 0, curto(viuEspera));
-        B.C.pilota({ joga: true, casa: 0, fusao: 'aceita' });
+        B.C.pilota({ joga: true, casa: 0 });
         return true;
       });
       var foto = relogio.then(function () {
@@ -971,15 +971,15 @@ PAGINA = r"""<!DOCTYPE html>
       return Promise.all([foto, lutaAteOFim(rot)]).then(function (r) {
         if (!r[1]) return false;
         confereFim(rot, false, dados.volta4 || 999);
-        var pediu = !!s(function () { return A.Co._S().pediuFusao; }, false);
-        var fA = lances(A).filter(function (l) { return l.a === 'f'; }), fB = lances(B).filter(function (l) { return l.a === 'f'; });
-        if (!pediu && !fA.length) nota(rot + 'os heróis não ficaram lado a lado na vez da Ana: nenhum pedido de fusão');
-        else {
-          check(rot + 'fusão entre jogadores: pedida pela Ana, aceita pela Bia, o lance "f" aplicado nos dois',
-                fA.length > 0 && fA.length === fB.length, 'pedido: ' + pediu + '; lances f: Ana ' + fA.length + ' · Bia ' + fB.length);
-          var fu = (A.G.state.units || []).filter(function (u) { return u.kind === 'fusion'; })[0];
-          if (fu) check(rot + 'fusão entre jogadores: a unidade fundida é da Ana (quem pediu)', fu.dono === A.C.id, curto([fu.uid, fu.dono]));
-        }
+        /* 12/09: a fusão ENTRE JOGADORES não existe mais ("o jogador só pode
+           fundir com seus personagens"). O que se cobra aqui é o avesso: nenhuma
+           unidade fundida nesta sala junta heróis de donos diferentes. */
+        var cruzadas = (A.G.state.units || []).filter(function (u) {
+          if (u.kind !== 'fusion' || !u.fusedFrom || u.fusedFrom.length < 2) return false;
+          var b = (A.G.state.units || []).filter(function (x) { return x.uid === u.fusedFrom[1]; })[0];
+          return !!b && (b.dono || null) !== (u.dono || null);
+        });
+        check(rot + 'nenhuma fusão juntou heróis de jogadores diferentes', cruzadas.length === 0, curto(cruzadas.map(function (u) { return u.uid; })));
         return true;
       });
     });
@@ -1002,7 +1002,7 @@ PAGINA = r"""<!DOCTYPE html>
         s(function () { B.R._derruba(); });
         return espera(function () { var u = unidade(A, uB); return u && u.ia === true; }, 40000);
       }).then(function (ok3) {
-        check(rot + 'o herói da Bia vai para a IA no motor da Ana', ok3);
+        check(rot + 'o herói da Bia fica marcado fora (o turno passa) no motor da Ana', ok3);
         return espera(function () { return fimDeSala(A); }, 300000);
       }).then(function (ok4) {
         var pa = A.C.dadosTela[A.G.screen] || {};

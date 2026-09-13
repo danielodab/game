@@ -23,7 +23,6 @@ var JOGO = (typeof window !== 'undefined')
  *   - a foto de resgate da autoridade e a restauração de quem divergiu;
  *   - o sumiço (a voz `caiu`, o silêncio, o turno estourado), a carência, a
  *     IA no lugar de quem caiu, o W.O. do duelo e a volta;
- *   - o pedido de fusão entre jogadores (os dois aceitando);
  *   - a passagem de sala (`proxima`/`seguir`) e o fim do duelo (`fim`);
  *   - `assinatura`, `versao`, `sorteiaArena`, `payloadMeu`;
  *   - o relógio de parede (setInterval de 500 ms: o turno do DONO acaba pelo
@@ -53,9 +52,8 @@ var JOGO = (typeof window !== 'undefined')
  *     (sem foto e sem `ia` vindos do outro: lá não há árbitro);
  *   - a `proxima` repete até o `pronto`; o `dentro` do grupo repete até a
  *     líder responder, e a ata que falhou solta a parceira (`cancela`);
- *   - o lance só vale do DONO da vez e com a unidade da vez; a fusão com o
- *     meu herói só com o MEU sim; a desistência e o W.O. forjados não dão
- *     vitória a quem os forja;
+ *   - o lance só vale do DONO da vez e com a unidade da vez; a desistência e
+ *     o W.O. forjados não dão vitória a quem os forja;
  *   - o prazo do turno do outro corre pelo MEU relógio (com folga fixa para
  *     a animação dele); o banco dele tem teto;
  *   - `pede` e `foto-pede` de fora têm freio; no grupo, quem não é a
@@ -72,7 +70,6 @@ var JOGO = (typeof window !== 'undefined')
   Coop.GRACA_MS = 15000;        // grupo: carência depois do sumiço, antes da IA
   Coop.SILENCIO_MS = 30000;     // sem sinal nenhum: conta como sumiço
   Coop.WO_MS = 60000;           // duelo: sumido por 60 s perde
-  Coop.FUSAO_MS = 20000;        // o pedido de fusão expira
   Coop.ATA_MS = 3000;           // reenvio da ata
   Coop.ATA_TENTATIVAS = 5;
   Coop.BURACO_MS = 3000;        // buraco na fila antes do `pede`
@@ -132,8 +129,13 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------ estado
   var cfg = null;       // o grupo que o grupo.js configurou: { gid, lider, eu, parceiro:{ id, cx, heroi, nome } }
+  /* OS HEROIS DO PARCEIRO, GUARDADOS (12/09). Quem cai da internet nao perde a
+   * descida: a sala seguinte nasce com os corpos dele mesmo sem o `pronto`
+   * (que ele nao tem como mandar off), com o PV carregado de sempre. Guardado
+   * por id: um parceiro NOVO nao herda a lista do anterior. */
+  var parceiroUltimo = null;   // { id, herois: [payload...] }
   var S = nova(null);   // a sessão de batalha
-  var piloto = null;    // provas: { joga, casa, fusao:'pede'|'aceita'|'recusa', fica }
+  var piloto = null;    // provas: { joga, casa, fica, segue }
 
   function nova(tipo) {
     return {
@@ -142,17 +144,16 @@ var JOGO = (typeof window !== 'undefined')
       prontoParceiro: null, prontoProx: 0,
       fila: {}, log: {}, hashes: {}, foto: null, antes: {}, buracoDesde: 0,
       sincronizando: false, fotoPedidaEm: 0, fotoPendente: false, fotoDepois: false, dessinc: 0, restauracoes: 0, ultimaDessinc: null,
-      fusaoPedida: null, consentido: null, pediuFusao: false,
       proximaLiberada: false, proximaEnviada: false,
       descidaAcabou: false, parceiroSaiu: false, parceiroVoltou: false,
-      sumidoDesde: 0, parceiroIA: false, tomouAutoridade: false, iaPendente: {}, meAssumiu: false,
+      sumidoDesde: 0, parceiroIA: false, tomouAutoridade: false, meAssumiu: false,
+      mortePendente: {},            // 12/09: quem SAIU da batalha — os herois dele morrem
       esperando: null, bkParceiro: 0, vivoEm: 0, ultimoSinal: 0, turnoDele: 0, turnoDeleEm: 0,
       duelo: null, parceiro: null, dentroEu: false, dentroEle: false, dentroPrazo: 0,
       fim: null, fimDele: null, fimPrazo: 0, anotado: false, fimMotivo: null,
       rodouSemTela: false, aviso: null,
       // os consertos da revisão (11/09)
       cedeu: false,                 // o outro me pôs na IA sem eu ter caído: a autoridade é dele até o fim da sala
-      consenti: null, consentimentos: [],   // o MEU sim à fusão com o meu herói
       pedeEm: 0, fotoEm: 0,         // o freio do `pede` e do `foto-pede` que chegam
       religouPendente: false, religouEm: 0,
       proximaSala: null, proximaProx: 0, proximaVezes: 0,
@@ -358,6 +359,33 @@ var JOGO = (typeof window !== 'undefined')
     }
     return p;
   };
+  /* OS MEUS, ATE DOIS (12/09, pedido do dono: "podem ir com os dois
+   * personagens selecionados... no caso 4 personagens no maximo"). A sala em
+   * grupo passa a nascer com os selecionados de cada lado; a ata leva primeiro
+   * os de quem lidera e depois os de quem segue. Quem nao tiver o segundo
+   * (conta nova, ou o Mestre sem o modo ligado) desce com um, e a sala nasce
+   * com tres — o motor nunca supos dois. */
+  Coop.MAX_HEROIS = 2;
+  Coop.payloadMeus = function (ids) {
+    var out = [], vistos = {};
+    (Object.prototype.toString.call(ids) === '[object Array]' ? ids : [ids]).forEach(function (hid) {
+      if (typeof hid !== 'string' || !hid || vistos[hid] || out.length >= Coop.MAX_HEROIS) return;
+      var p = Coop.payloadMeu(hid);
+      if (!p) return;
+      vistos[hid] = true;
+      out.push(p);
+    });
+    return out;
+  };
+  /* os DONOS de uma lista de payloads, na ordem em que aparecem */
+  function donosDe(lista) {
+    var out = [];
+    (lista || []).forEach(function (p) {
+      var d = (p && p.dono) || null;
+      if (d && out.indexOf(d) < 0) out.push(d);
+    });
+    return out;
+  }
 
   /* Os feitiços que um herói desta classe PODE ter: os de base, os de todos
    * os caminhos, e os que um item (o espaço lume) ou um conjunto concedem.
@@ -446,19 +474,68 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < x.length; i++) if (!validaPayload(x[i], { semMestre: true })) return false;
     return true;
   }
+  /* O GRUPO DA ATA (12/09): de dois a QUATRO herois, de exatamente DOIS donos
+   * — os de quem lidera primeiro, na ordem, e os de quem segue depois. E a
+   * unica forma valida: uma lista com tres donos, ou com os donos misturados,
+   * ou com o mesmo heroi duas vezes, nao abre a sala. */
+  function okGrupoDaAta(lista, donoA, donoB) {
+    if (!lista || Object.prototype.toString.call(lista) !== '[object Array]') return false;
+    if (lista.length < 2 || lista.length > 2 * Coop.MAX_HEROIS) return false;
+    var vistos = {}, i, p;
+    for (i = 0; i < lista.length; i++) {
+      p = lista[i];
+      if (!p || typeof p !== 'object' || !validaPayload(p)) return false;
+      var ch = String(p.dono) + '/' + String(p.heroId || p.classId);
+      if (vistos[ch]) return false;                 // o mesmo heroi duas vezes
+      vistos[ch] = true;
+    }
+    var ds = donosDe(lista);
+    if (ds.length !== 2 || ds[0] !== donoA || ds[1] !== donoB) return false;
+    // agrupados: todos os de A antes de todos os de B (a ordem que a ata monta)
+    var virou = false;
+    for (i = 0; i < lista.length; i++) {
+      if (lista[i].dono === donoB) virou = true;
+      else if (virou) return false;
+    }
+    var nA = 0;
+    for (i = 0; i < lista.length; i++) if (lista[i].dono === donoA) nA++;
+    return nA >= 1 && nA <= Coop.MAX_HEROIS && (lista.length - nA) <= Coop.MAX_HEROIS;
+  }
   function novaSemente() { return Math.floor(Math.random() * 4294967296) >>> 0; }
 
   // ------------------------------------------------------------ o grupo (vem do grupo.js)
+  function lembraParceiro(id, herois) {
+    if (!id || !herois || !herois.length) return;
+    parceiroUltimo = { id: id, herois: clone(herois) };
+  }
+  /* os herois do parceiro para a ata: o `pronto` desta sala, e se ele nao veio
+   * (ele esta off) o que ficou guardado da sala passada */
+  function heroisDoParceiro() {
+    var p = parceiro();
+    if (!p) return [];
+    if (prontoValido() && S.prontoParceiro) {
+      return (S.prontoParceiro.herois || [S.prontoParceiro.heroi]).slice();
+    }
+    // o guardado so vale para quem esta FORA: com ele aqui, espera-se o `pronto`
+    // desta sala (ele pode ter trocado de heroi na praca)
+    if (!S.sumidoDesde && !S.parceiroIA) return [];
+    if (parceiroUltimo && parceiroUltimo.id === p.id) return clone(parceiroUltimo.herois);
+    return [];
+  }
+  Coop._heroisDoParceiro = heroisDoParceiro;
+
   Coop.configura = function (info) {
     if (!info || !info.parceiro || !info.parceiro.id) {
       var tinha = cfg;
       cfg = null;
       // 11/09: o grupo desfeito fora da batalha devolve a ficha do Mestre; na
-      // batalha ela fica (o herói dele segue com a IA até o fim da sala)
+      // batalha ela fica até o fim da sala
       if (!emBatalha()) devolveFichas();
       if (S.tipo === 'grupo') {
         if (emBatalha()) {
-          // o grupo se desfez com a batalha em curso: o herói do outro fica com a IA
+          // o grupo se desfez com a batalha em curso: é saída deliberada — os
+          // heróis dele CAEM (12/09, marcaSaida). Quem só caiu da internet não
+          // passa por aqui: o grupo.js não desfaz o grupo dentro da descida.
           if (tinha && tinha.parceiro) marcaSaida(tinha.parceiro.id);
           S.descidaAcabou = true;
         } else {
@@ -475,9 +552,14 @@ var JOGO = (typeof window !== 'undefined')
     var p = info.parceiro;
     var novo = {
       gid: info.gid || (cfg && cfg.gid) || null, lider: info.lider || null, eu: info.eu || meuId(),
-      parceiro: { id: String(p.id), cx: p.cx || null, heroi: p.heroi || null, nome: p.nome || nomeDe(p.id) }
+      parceiro: { id: String(p.id), cx: p.cx || null, heroi: p.heroi || null, nome: p.nome || nomeDe(p.id),
+                  // 12/09: a lista dos dois herois dele (sem ela classesParceiro caia num so)
+                  herois: (Object.prototype.toString.call(p.herois) === '[object Array]')
+                    ? p.herois.slice(0, Coop.MAX_HEROIS) : [] }
     };
     var outro = !cfg || !cfg.parceiro || cfg.parceiro.id !== novo.parceiro.id;
+    // parceiro novo: a lista guardada do anterior nao vale mais
+    if (outro && parceiroUltimo && parceiroUltimo.id !== novo.parceiro.id) parceiroUltimo = null;
     var eraLider = souLider();
     cfg = novo;
     if (S.tipo !== 'duelo') {
@@ -499,6 +581,19 @@ var JOGO = (typeof window !== 'undefined')
     var p = cfg && cfg.parceiro;
     return (p && p.heroi && p.heroi.classId) || null;
   };
+  /* AS CLASSES do parceiro (12/09): ate duas, para o game.js pedir os modelos
+   * dos dois herois dele antes de descer. O `heroi` solto segue valendo como o
+   * principal (o grupo.js manda os dois em `herois`). */
+  Coop.classesParceiro = function () {
+    var p = cfg && cfg.parceiro, out = [];
+    var lista = (p && Object.prototype.toString.call(p.herois) === '[object Array]') ? p.herois : [];
+    lista.forEach(function (h) {
+      var c = h && h.classId;
+      if (c && out.indexOf(c) < 0 && out.length < Coop.MAX_HEROIS) out.push(c);
+    });
+    if (!out.length) { var c0 = Coop.classeParceiro(); if (c0) out.push(c0); }
+    return out;
+  };
   Coop.partySize = function () {
     var a = S.ata;
     return (a && a.party && a.party.length) ? a.party.length : 2;
@@ -516,11 +611,17 @@ var JOGO = (typeof window !== 'undefined')
   Coop.vezDoSaque = function () {
     var a = S.ata;
     if (!a || !a.party || a.party.length < 2) return null;
+    /* A SEMENTE SORTEIA UM DONO, NAO UMA CADEIRA (12/09). Com um heroi de cada
+     * lado dava no mesmo, mas desde que cada um desce com dois a lista tem
+     * quatro cadeiras: sortear cadeira daria a vez a quem levou mais herois
+     * (e, com 3 cadeiras, 2 chances contra 1). O sorteio e entre os DONOS. */
+    var donos = donosDe(a.party);
+    if (donos.length < 2) return null;
     var s = (+a.semente) >>> 0;
-    var i = ((s ^ (s >>> 11) ^ (s >>> 23)) >>> 0) % 2;
-    var p = a.party[i], me = meuId();
-    if (!p || !p.dono || !me) return null;
-    return p.dono === me;
+    var i = ((s ^ (s >>> 11) ^ (s >>> 23)) >>> 0) % donos.length;
+    var me = meuId();
+    if (!me) return null;
+    return donos[i] === me;
   };
 
   Coop.sessao = function () {
@@ -538,8 +639,6 @@ var JOGO = (typeof window !== 'undefined')
       sumidoDesde: S.sumidoDesde || 0,
       sincronizando: S.sincronizando,
       dessinc: S.dessinc, restauracoes: S.restauracoes,
-      fusaoPedida: S.fusaoPedida ? { uidA: S.fusaoPedida.uidA, uidB: S.fusaoPedida.uidB,
-                                     de: S.fusaoPedida.de, expira: S.fusaoPedida.expira } : null,
       prontoParceiro: prontoValido(),
       chamando: S.chamando, ataFalhou: S.ataFalhou,
       proximaLiberada: S.proximaLiberada,
@@ -616,12 +715,6 @@ var JOGO = (typeof window !== 'undefined')
     }
     var viva = emBatalha() && !S.fim;
     if (viva) confereSumico(ag);
-    if (S.fusaoPedida && ag > S.fusaoPedida.expira) {
-      var fp = S.fusaoPedida;
-      S.fusaoPedida = null;
-      if (fp.de === meuId()) avisa(nomeParceiro() + ' não respondeu ao pedido de fusão.', 'aviso');
-      muda();
-    }
     var stV = g && g.state, tV = stV ? (stV.turno || 0) : 0;
     // o sinal de vida a cada 8 s — e antes, se o meu turno passou do que eu disse
     // por último (quem espera um lance que se perdeu pede logo, não 8 s depois)
@@ -660,9 +753,20 @@ var JOGO = (typeof window !== 'undefined')
     if (ag - t0 >= Coop.GRACA_MS) assumeParceiro(mot);
   }
 
-  /* O parceiro sumiu além da carência: quem ficou vira autoridade e líder, e
-   * o herói dele passa para a IA NA HORA (mesmo no meio do turno dele) até o
-   * fim da sala. Só a minha simulação continua importando. */
+  /* O PARCEIRO CAIU (12/09, pedido do dono: "caso ele cair do jogo/internet
+   * deve continuar na luta se ela nao tiver acabado ou nascer na proxima sala
+   * caso tenha acabado — e enquanto ele ta off seu turno passara").
+   *
+   * Passada a carencia, quem ficou vira autoridade e os herois dele ganham a
+   * marca `ia`. A marca NAO significa mais "a IA joga por ele": o game.js
+   * PASSA o turno de um heroi de gente marcado assim (a IA continua jogando
+   * monstro, pet e invocacao). Foi o que o dono pediu, e e a diferenca com
+   * quem SAI da batalha, que morre.
+   *
+   * Ele tambem nao perde a descida: o payload dos herois dele fica guardado
+   * (`parceiroUltimo`) e a sala seguinte nasce com eles em pe, com o PV
+   * carregado, mesmo sem o `pronto` — e quando a conexao voltar ele reassume
+   * os corpos onde estiverem. */
   function assumeParceiro(mot) {
     var p = parceiro(), g = G(), st = g && g.state;
     if (!p || !st) return;
@@ -680,9 +784,23 @@ var JOGO = (typeof window !== 'undefined')
     }
     for (var j = 0; j < uids.length; j++) envia('ia', { b: S.bid, u: uids[j], mot: mot });
     if (st.phase === 'placing' && g._assumeColocacao) g._assumeColocacao();
-    avisa('O herói de ' + nomeParceiro() + ' segue com a IA até o fim da sala.', 'aviso');
+    avisa(nomeParceiro() + ' caiu — o turno dele passa até voltar.', 'aviso');
     muda();
   }
+  /* QUEM SAI DA BATALHA MORRE (12/09, pedido do dono: "um jogador quando
+   * estiver em grupo e sair da batalha/desistir, ele deve morrer").
+   *
+   * Antes o heroi de quem saia ficava no tabuleiro com a IA ate o fim da sala:
+   * abandonar era de graca, e ate ajudava (um corpo a mais lutando sem risco
+   * para o dono). Agora o corpo CAI. A diferenca com quem apenas CAIU da
+   * internet e proposital e e a metade de tras deste pedido: cair nao mata —
+   * o heroi fica de pe, o turno dele passa, e ele volta quando a conexao
+   * voltar (ver `assumeParceiro`).
+   *
+   * A morte cai assim que a voz chega (entre dois quadros, nunca no meio de
+   * um lance: o JavaScript nao interrompe um lance em curso), e de novo no
+   * `proximoLance` se chegou sem batalha. Quem SAIU nao simula mais nada,
+   * entao so o motor de quem ficou importa — nao ha dois lados a igualar. */
   function marcaSaida(id) {
     var g = G(), st = g && g.state;
     S.parceiroSaiu = true;
@@ -691,8 +809,30 @@ var JOGO = (typeof window !== 'undefined')
     if (!st) return;
     for (var i = 0; i < st.units.length; i++) {
       var u = st.units[i];
-      if ((u.kind === 'hero' || u.kind === 'fusion') && u.dono === id && u.alive && !u.offBoard) S.iaPendente[u.uid] = true;
+      if ((u.kind === 'hero' || u.kind === 'fusion') && u.dono === id && u.alive && !u.offBoard) {
+        S.mortePendente[u.uid] = true;
+      }
     }
+    mataQuemSaiu();
+  }
+  /* mata os herois de quem saiu, se der agora: fora de um lance em curso */
+  function mataQuemSaiu() {
+    var g = G(), st = g && g.state, e = E();
+    if (!st || !e || !e.processDeath) return false;
+    // sala ja decidida: nada a derrubar (e processDeath rechecaria o fim)
+    if (st.phase !== 'playing' && st.phase !== 'placing') { S.mortePendente = {}; return false; }
+    var uids = Object.keys(S.mortePendente), fez = false;
+    for (var i = 0; i < uids.length; i++) {
+      var u = e.findUnit(st, uids[i]);
+      delete S.mortePendente[uids[i]];
+      if (!u || !u.alive || u.offBoard) continue;
+      try { e.processDeath(st, u); fez = true; } catch (er) {}
+    }
+    if (fez) {
+      avisa(nomeParceiro() + ' saiu da batalha — o heroi dele cai.', 'aviso');
+      muda();
+    }
+    return fez;
   }
   function venceWO() {
     var g = G();
@@ -743,17 +883,24 @@ var JOGO = (typeof window !== 'undefined')
     if (estava) {
       S.parceiroVoltou = true;
       if (emBatalha()) {
-        avisa(nomeParceiro() + ' voltou' + (S.parceiroIA ? ' — assiste até o fim da sala.' : '.'), 'ok');
+        avisa(nomeParceiro() + ' voltou' + (S.parceiroIA ? ' — e volta a jogar.' : '.'), 'ok');
         var g = G(), st = g && g.state;
-        // o `ia` que mandei enquanto ele estava fora voltou `ausente`: de novo,
-        // senão ele (se liderava) se acha autoridade e descarta a minha foto
+        /* ELE VOLTA A JOGAR (12/09). Enquanto estava fora o turno dele passava
+         * (a marca `ia`); de volta, os corpos sao dele de novo. A marca sai
+         * AQUI, no motor de quem ficou (a autoridade), e chega ao dele pela
+         * foto de resgate que ele pede ao religar — `u.ia` entra no hash, entao
+         * nunca se limpa so de um lado sem a foto atras. A voz `ia` com
+         * mot 'volta' faz o outro lado CEDER a autoridade (senao, se liderava,
+         * ele descartaria a minha foto) sem marcar nada. */
         if (st && S.tipo === 'grupo' && S.parceiroIA) {
           for (var i = 0; i < st.units.length; i++) {
             var u = st.units[i];
-            if ((u.kind === 'hero' || u.kind === 'fusion') && u.dono === p.id && u.ia && u.alive && !u.offBoard) {
-              envia('ia', { b: S.bid, u: u.uid, mot: 'prazo' });
+            if ((u.kind === 'hero' || u.kind === 'fusion') && u.dono === p.id && u.ia) {
+              u.ia = false;
+              if (u.alive && !u.offBoard) envia('ia', { b: S.bid, u: u.uid, mot: 'volta' });
             }
           }
+          S.parceiroIA = false;
         }
         // e o que ele mandou ao cx velho se perdeu: peço daqui em diante
         if (st) envia('pede', { b: S.bid, T: st.turno || 0, k: (S.log[st.turno || 0] || []).length });
@@ -768,10 +915,11 @@ var JOGO = (typeof window !== 'undefined')
   function mandaPronto() {
     var g = G();
     if (!g || !g.party || !g.party.length || !Coop.emGrupo()) return false;
-    var p = Coop.payloadMeu(g.party[0]);
-    if (!p) return false;
+    // 12/09: os MEUS selecionados (ate dois) — a sala nasce com os dois lados
+    var ps = Coop.payloadMeus(g.party);
+    if (!ps.length) return false;
     S.prontoProx = agora() + Coop.PRONTO_MS;
-    return envia('pronto', { sala: salaAtual(), heroi: p, versao: Coop.versao() });
+    return envia('pronto', { sala: salaAtual(), heroi: ps[0], herois: ps, versao: Coop.versao() });
   }
   /* O Game chama ao chegar na antessala de uma descida em grupo. */
   Coop.naAntessala = function () {
@@ -785,8 +933,14 @@ var JOGO = (typeof window !== 'undefined')
     // a `proxima` que eu (líder) mandei ao sair da recompensa segue repetindo até o `pronto`
     var g0 = G();
     if (!S.proximaSala || !g0 || S.proximaSala.roomIndex !== g0.roomIndex) S.proximaSala = null;
-    S.fusaoPedida = null; S.consentido = null; S.pediuFusao = false; S.consenti = null; S.consentimentos = [];
-    S.parceiroIA = false; S.tomouAutoridade = false; S.iaPendente = {}; S.meAssumiu = false; S.cedeu = false;
+    S.parceiroIA = false; S.mortePendente = {};
+    S.meAssumiu = false; S.cedeu = false;
+    /* 12/09: a autoridade que eu tomei por uma QUEDA do parceiro atravessa a
+     * sala. Sem isto a descida travava aqui: quem ficou abria a recompensa
+     * como lider (por `tomouAutoridade`), pedia a sala seguinte — e chegando
+     * na antessala deixava de ser lider, sem ninguem para abrir a porta. Quem
+     * SAIU e outra coisa: ali a descida acabou mesmo (`descidaAcabou`). */
+    S.tomouAutoridade = !!S.sumidoDesde && !S.parceiroSaiu;
     S.esperando = null; S.sincronizando = false; S.fotoPendente = false; S.fimFotoPedidaEm = 0;
     S.fimGrupo = null; S.fimGrupoDele = null; S.fimGrupoMeu = null; S.dentroConfirmado = false;
     ligaTique();
@@ -799,9 +953,16 @@ var JOGO = (typeof window !== 'undefined')
     if (!souLider()) return { ok: false, motivo: 'nao-lider' };
     if (!g || g.screen !== 'antessala' || !g.modoRede || g.modoRede() !== 'grupo') return { ok: false, motivo: 'sala' };
     if (S.chamando) return { ok: false, motivo: 'ocupado' };
-    if (!prontoValido()) return { ok: false, motivo: 'sem-pronto' };
-    if (S.prontoParceiro.versao && S.prontoParceiro.versao !== Coop.versao()) return { ok: false, motivo: 'versao' };
-    if (!validaPayload(S.prontoParceiro.heroi)) return { ok: false, motivo: 'versao' };
+    /* 12/09: o `pronto` do parceiro e o caminho normal; sem ele — ele CAIU da
+     * internet — a sala seguinte nasce com os herois guardados da sala
+     * passada, para ele nao perder a descida por uma queda. */
+    if (prontoValido() && S.prontoParceiro.versao && S.prontoParceiro.versao !== Coop.versao()) {
+      return { ok: false, motivo: 'versao' };
+    }
+    var hsP = heroisDoParceiro();
+    if (!hsP.length) return { ok: false, motivo: 'sem-pronto' };
+    if (hsP.length > Coop.MAX_HEROIS) return { ok: false, motivo: 'versao' };
+    for (var i = 0; i < hsP.length; i++) if (!validaPayload(hsP[i])) return { ok: false, motivo: 'versao' };
     return { ok: true, motivo: null };
   };
   /* O líder, no "Entrar na batalha": manda a ata e só cria a batalha dele no `dentro`. */
@@ -812,10 +973,17 @@ var JOGO = (typeof window !== 'undefined')
       return false;
     }
     var g = G(), p = parceiro();
-    var meu = Coop.payloadMeu(g.party[0]);
-    if (!meu) return false;
-    var par = clone(S.prontoParceiro.heroi);
-    par.dono = p.id;
+    var meus = Coop.payloadMeus(g.party);
+    if (!meus.length) return false;
+    // 12/09: a ata leva os MEUS na frente e os do parceiro atras (o `rAta` do
+    // outro lado confere essa ordem, e o `dono` e sempre quem mandou)
+    var pars = heroisDoParceiro().map(function (h) {
+      var c = clone(h);
+      c.dono = p.id;                  // o dono e sempre quem mandou, nunca o escrito
+      return c;
+    });
+    if (!pars.length) return false;
+    lembraParceiro(p.id, pars);
     S.n++;
     // a ata passa pelo JSON também do lado do líder: os dois motores montam a
     // batalha do MESMO texto (undefined some, NaN vira null — nos dois)
@@ -825,7 +993,7 @@ var JOGO = (typeof window !== 'undefined')
       dificuldade: g.dificuldade || 'normal',
       semente: (Coop._sementeFixa != null) ? (Coop._sementeFixa >>> 0) : novaSemente(),
       versao: Coop.versao(),
-      party: [meu, par],
+      party: meus.concat(pars),
       carry: (g._carry && g._carry()) || null
     });
     S.chamando = true; S.ataFalhou = false;
@@ -840,7 +1008,7 @@ var JOGO = (typeof window !== 'undefined')
     S.buracoDesde = 0; S.sincronizando = false; S.fotoPendente = false; S.fotoDepois = false;
     S.ultimoSinal = agora(); S.turnoDele = 0; S.turnoDeleEm = 0; S.vivoEm = 0;
     S.esperando = null; S.fim = null; S.fimDele = null; S.anotado = false;
-    S.cedeu = false; S.consenti = null; S.consentimentos = []; S.pedeEm = 0; S.fotoEm = 0;
+    S.cedeu = false; S.pedeEm = 0; S.fotoEm = 0;
     S.fimGrupo = null; S.fimGrupoDele = null; S.fimGrupoMeu = null; S.fimFotoPedidaEm = 0;
     S.dentroConfirmado = false; S.dentroRepProx = 0; S.proximaSala = null;
     var antes = S.antes[bid] || [];
@@ -851,10 +1019,18 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
   function rPronto(d) {
-    if (!d || !d.sala || !d.heroi || typeof d.heroi !== 'object') return;
-    var h = clone(d.heroi);
-    h.dono = parceiro().id;              // o dono do herói é quem mandou, nunca o que veio escrito
-    S.prontoParceiro = { sala: String(d.sala), heroi: h, versao: d.versao || null };
+    if (!d || !d.sala) return;
+    var bruta = (Object.prototype.toString.call(d.herois) === '[object Array]')
+      ? d.herois : ((d.heroi && typeof d.heroi === 'object') ? [d.heroi] : []);
+    var quem = parceiro().id, hs = [];
+    for (var i = 0; i < bruta.length && hs.length < Coop.MAX_HEROIS; i++) {
+      if (!bruta[i] || typeof bruta[i] !== 'object') continue;
+      var h = clone(bruta[i]);
+      h.dono = quem;                     // o dono do heroi e quem mandou, nunca o que veio escrito
+      hs.push(h);
+    }
+    if (!hs.length) return;
+    S.prontoParceiro = { sala: String(d.sala), heroi: hs[0], herois: hs, versao: d.versao || null };
     muda();
   }
   function rAta(d) {
@@ -874,15 +1050,18 @@ var JOGO = (typeof window !== 'undefined')
       return;
     }
     var p = parceiro();
-    if (!d.party || d.party.length !== 2 || !d.party[0] || !d.party[1] ||
-        d.party[0].dono !== p.id || d.party[1].dono !== meuId()) return;
-    if (!validaPayload(d.party[0]) || !validaPayload(d.party[1])) {
+    // 12/09: de dois a quatro herois, os de quem lidera na frente e os MEUS
+    // atras — nada mais abre a sala (ver okGrupoDaAta)
+    if (!okGrupoDaAta(d.party, p.id, meuId())) {
       avisa('Vocês estão em versões diferentes do jogo — recarreguem a página.', 'aviso');
       return;
     }
     iniciaBatalha(d.bid);
     S.ata = d;
     S.chamando = false;
+    // 12/09: guardo os herois de quem lidera, para uma queda dele nao acabar
+    // a descida na sala seguinte
+    lembraParceiro(p.id, d.party.filter(function (x) { return x && x.dono === p.id; }));
     emprestaFichas(d.party);                    // 11/09: o Mestre no grupo (a ficha, só para a batalha)
     if (!g._criaDaAta || !g._criaDaAta(d)) { S.bid = null; S.ata = null; return; }
     S.fase = 'placing';
@@ -1014,13 +1193,8 @@ var JOGO = (typeof window !== 'undefined')
       if (!donoCerto(l, st)) { lanceTorto(l); return null; }
       return l;
     }
-    if (uid && S.iaPendente[uid]) {
-      // quem saiu: a fila dele acabou, a IA joga o resto
-      delete S.iaPendente[uid];
-      var u = E().findUnit(st, uid);
-      if (u) { u.ia = true; S.parceiroIA = true; muda(); }
-      return null;
-    }
+    // 12/09: quem saiu da batalha morre — na fila, no mesmo ponto dos dois lados
+    if (mataQuemSaiu()) return null;
     // falta lance: há um lance DELE mais adiante na fila, ou ele já disse (no
     // `vivo`) que passou deste turno — o último lance do turno (o `e`, o `p`)
     // não tem "posterior" que o denuncie, e se perdia numa queda curta
@@ -1203,33 +1377,35 @@ var JOGO = (typeof window !== 'undefined')
   }
   /* A RESTAURAÇÃO: o estado vira o da foto; os lances que eu tinha aplicado
    * a partir dela voltam para a fila (os meus são reaplicados sem reenviar). */
-  /* a foto não pode trazer uma fusão com o MEU herói que eu não aceitei */
-  function fotoRespeitaMeuSim(estado) {
-    var st = null, eu = meuId();
+  /* A FOTO NÃO PODE TRAZER UMA FUSÃO CRUZADA (12/09). Fundir é só entre
+   * personagens do MESMO jogador, então uma foto de resgate em que os dois
+   * lados de uma fusão têm donos diferentes só pode vir de um cliente
+   * alterado — e é recusada inteira. Antes desta data a fusão entre jogadores
+   * existia com os dois aceitando, e aqui se conferia o MEU sim; com a regra
+   * absoluta a conferência ficou mais simples E mais forte: nem o meu sim
+   * abriria a porta. */
+  function fotoSemFusaoCruzada(estado) {
+    var st = null;
     try { st = (typeof estado === 'string') ? JSON.parse(estado) : estado; } catch (e) { return false; }
     if (!st || !st.units) return false;
     var porUid = {}, i;
     for (i = 0; i < st.units.length; i++) porUid[st.units[i].uid] = st.units[i];
     for (i = 0; i < st.units.length; i++) {
       var f = st.units[i];
-      if (f.kind !== 'fusion' || !f.fusedFrom || f.dono === eu) continue;
-      var a = f.fusedFrom[0], b = f.fusedFrom[1];
-      var ub = porUid[b];
-      if (!ub || ub.dono !== eu) continue;
-      var aceitei = false;
-      for (var k = 0; k < S.consentimentos.length; k++) {
-        if (S.consentimentos[k].a === a && S.consentimentos[k].b === b) aceitei = true;
-      }
-      if (!aceitei) return false;
+      if (f.kind !== 'fusion' || !f.fusedFrom || f.fusedFrom.length < 2) continue;
+      var ua = porUid[f.fusedFrom[0]], ub = porUid[f.fusedFrom[1]];
+      // o lado A da fusão É a própria unidade fundida (o uid se preserva)
+      var donoA = (ua ? ua.dono : f.dono) || null, donoB = (ub ? ub.dono : null) || null;
+      if (ub && donoA !== donoB) return false;
     }
     return true;
   }
   function restaura(pkt) {
     var g = G();
     if (!g || !g.restauraFoto) return false;
-    if (!fotoRespeitaMeuSim(pkt.estado)) {
+    if (!fotoSemFusaoCruzada(pkt.estado)) {
       S.sincronizando = false;
-      avisa('A foto de ' + nomeParceiro() + ' trazia uma fusão que você não aceitou — ignorada.', 'aviso');
+      avisa('A foto de ' + nomeParceiro() + ' trazia uma fusão entre heróis de jogadores diferentes — ignorada.', 'aviso');
       muda();
       return false;
     }
@@ -1286,17 +1462,18 @@ var JOGO = (typeof window !== 'undefined')
     if (!st || !p) return;
     var u = E().findUnit(st, d.u);
     if (!u || (u.kind !== 'hero' && u.kind !== 'fusion')) return;
-    if (d.mot === 'saiu') {
-      if (u.dono !== p.id) return;                 // quem sai entrega só o PRÓPRIO herói
-      S.parceiroSaiu = true;
-      S.descidaAcabou = true;
-      S.tomouAutoridade = true;
-      S.cedeu = false;
-      S.iaPendente[d.u] = true;
-      avisa(nomeParceiro() + ' saiu — o herói segue com a IA até o fim da sala.', 'aviso');
+    if (u.dono === meuId() && d.mot === 'volta') {
+      // 12/09: eu voltei — o outro devolveu os meus corpos. Cedo a autoridade
+      // (ate o fim da sala) e me acerto pela foto dele, que ja vem sem a marca
+      u.ia = false;
+      S.meAssumiu = false;
+      S.cedeu = true;
+      S.tomouAutoridade = false;
+      S.fotoPendente = false;
+      pedeFoto();
     } else if (u.dono === meuId()) {
-      // o outro me deu por sumido e pôs o MEU herói na IA: CEDO a autoridade
-      // (até o fim da sala), assisto e sincronizo pela foto dele
+      // o outro me deu por sumido: o turno dos MEUS herois passa (12/09). CEDO a
+      // autoridade (até o fim da sala) e sincronizo pela foto dele
       u.ia = true;
       S.meAssumiu = true;
       S.cedeu = true;
@@ -1306,69 +1483,32 @@ var JOGO = (typeof window !== 'undefined')
     }
     muda();
   }
-  Coop.pedeFusao = function (uidA, uidB) {
-    var g = G(), st = g && g.state;
-    if (!st || !S.bid || st.phase !== 'playing' || S.fusaoPedida) return false;
-    var pares = (g.canFuse && g.canFuse()) || [], achou = false;
-    for (var i = 0; i < pares.length; i++) {
-      if (pares[i].uidA === uidA && pares[i].uidB === uidB && pares[i].pedido) achou = true;
-    }
-    if (!achou) return false;
-    S.fusaoPedida = { uidA: uidA, uidB: uidB, de: meuId(), expira: agora() + Coop.FUSAO_MS, T: st.turno || 0 };
-    envia('fusao-pede', { b: S.bid, uidA: uidA, uidB: uidB });
-    muda();
-    return true;
-  };
-  function rFusaoPede(d) {
+  /* O PARCEIRO SAIU DA BATALHA (12/09): o heroi dele MORRE. So vale para o
+   * proprio heroi de quem falou — ninguem derruba o heroi do outro por aqui —
+   * e a morte cai na fila, no mesmo ponto dos dois motores (marcaSaida). */
+  function rSai(d) {
+    if (!d || d.b !== S.bid || S.tipo === 'duelo') return;
     var g = G(), st = g && g.state, p = parceiro();
-    if (!st || !d || d.b !== S.bid || !p) return;
-    var a = E().findUnit(st, d.uidA), b = E().findUnit(st, d.uidB);
-    if (!a || !b || b.dono !== meuId() || a.dono !== p.id) return;
-    S.fusaoPedida = { uidA: d.uidA, uidB: d.uidB, de: p.id, expira: agora() + Coop.FUSAO_MS };
-    if (piloto && (piloto.fusao === 'aceita' || piloto.fusao === 'recusa')) {
-      Coop.respondeFusao(piloto.fusao === 'aceita');
-      return;
-    }
-    chama('aoFusaoPedida', { uidA: d.uidA, uidB: d.uidB, de: p.id, nome: nomeParceiro(), expira: S.fusaoPedida.expira });
+    if (!st || !p) return;
+    var u = E().findUnit(st, d.u);
+    if (!u || (u.kind !== 'hero' && u.kind !== 'fusion')) return;
+    if (u.dono !== p.id) return;
+    S.parceiroSaiu = true;
+    S.descidaAcabou = true;
+    S.tomouAutoridade = true;
+    S.cedeu = false;
+    S.mortePendente[d.u] = true;
+    mataQuemSaiu();
     muda();
   }
-  Coop.respondeFusao = function (ok) {
-    var f = S.fusaoPedida;
-    if (!f || f.de === meuId()) return false;
-    S.fusaoPedida = null;
-    if (ok) {
-      // o MEU sim fica guardado aqui: o lance `f` do outro só funde o meu herói com ele
-      var g0 = G(), T0 = (g0 && g0.state && g0.state.turno) || 0;
-      S.consenti = { a: f.uidA, b: f.uidB, T: T0 };
-      S.consentimentos.push({ a: f.uidA, b: f.uidB, T: T0 });
-    }
-    envia('fusao-ok', { b: S.bid, uidA: f.uidA, uidB: f.uidB, ok: !!ok });
-    muda();
-    return true;
-  };
-  /* o game.js pergunta antes de aplicar um `f` do outro com o MEU herói */
-  Coop._eleConsentiu = function (a, b) {
-    var c = S.consenti, g = G(), st = g && g.state;
-    return !!(c && st && c.a === a && c.b === b && c.T === (st.turno || 0));
-  };
-  function rFusaoOk(d) {
-    var f = S.fusaoPedida;
-    if (!d || !f || f.de !== meuId() || d.uidA !== f.uidA || d.uidB !== f.uidB) return;
-    S.fusaoPedida = null;
-    if (!d.ok) { avisa(nomeParceiro() + ' não quis fundir agora.', 'aviso'); muda(); return; }
-    var g = G(), st = g && g.state;
-    if (!st) return;
-    S.consentido = { a: f.uidA, b: f.uidB, T: st.turno || 0 };
-    var feito = false;
-    try { feito = !!g.declareFusion(f.uidA, f.uidB); } catch (e) { feito = false; }
-    S.consentido = null;
-    if (!feito) avisa('A fusão não deu certo agora (é preciso estar lado a lado e ter 2 PA).', 'aviso');
-    muda();
-  }
-  Coop._consentido = function (uidA, uidB) {
-    var c = S.consentido, g = G(), st = g && g.state;
-    return !!(c && st && c.a === uidA && c.b === uidB && c.T === (st.turno || 0));
-  };
+  /* FUNDIR ENTRE JOGADORES NÃO EXISTE MAIS (12/09, pedido do dono: "o jogador
+   * só pode fundir com seus personagens e não com os do outro jogador"). Com
+   * isso saíram daqui as vozes `fusao-pede` e `fusao-ok`, o pedido que
+   * expirava em 20 s, o meu sim guardado (`consenti`) e as duas perguntas que
+   * o game.js fazia (`_consentido`, `_eleConsentiu`). A fusão de um jogador
+   * com os HERÓIS DELE segue viajando como sempre: o lance `f`, que os dois
+   * motores aplicam igual. A trava mora em Fusion.canFuse, que é a porta por
+   * onde o lance passa nos dois lados. */
   /* A passagem de sala: o líder libera (manda `proxima`), o parceiro segue. O
    * Game.nextRoom pergunta aqui antes de sair da tela de recompensa. */
   Coop._liberaNextRoom = function () {
@@ -1415,10 +1555,12 @@ var JOGO = (typeof window !== 'undefined')
     if (st && S.bid && g.screen === 'battle' && S.tipo === 'grupo') {
       var u = (st.phase === 'playing') ? E().activeUnit(st) : null;
       if (u && g.donoDe && g.donoDe(u) === 'eu') { try { g.endTurn(); } catch (e) {} }
+      // 12/09: sair da batalha em grupo MATA os meus herois — o outro lado
+      // recebe `sai` e derruba os corpos (ver marcaSaida)
       for (var i = 0; i < st.units.length; i++) {
         var x = st.units[i];
         if ((x.kind === 'hero' || x.kind === 'fusion') && x.dono === eu && x.alive && !x.offBoard) {
-          envia('ia', { b: S.bid, u: x.uid, mot: 'saiu' });
+          envia('sai', { b: S.bid, u: x.uid });
         }
       }
     }
@@ -1619,7 +1761,6 @@ var JOGO = (typeof window !== 'undefined')
     res = res || {};
     S.fase = 'fim';
     S.esperando = null;
-    S.fusaoPedida = null;
     if (S.tipo === 'duelo' && S.duelo) {
       if (!S.fim) {
         S.fim = { venc: res.venc, h: res.h, venci: !!res.venci, empate: !!res.empate, clima: res.clima, t: agora() };
@@ -1722,13 +1863,6 @@ var JOGO = (typeof window !== 'undefined')
     if (st.phase !== 'playing') return;
     var u = e.activeUnit(st);
     if (!u || g.donoDe(u) !== 'eu' || !g.isPlayerTurn()) return;
-    if (S.fusaoPedida && S.fusaoPedida.de === meuId()) return;          // esperando a resposta
-    if (piloto.fusao === 'pede' && !S.pediuFusao) {
-      var prs = g.canFuse();
-      for (var i = 0; i < prs.length; i++) {
-        if (prs[i].pedido && Coop.pedeFusao(prs[i].uidA, prs[i].uidB)) { S.pediuFusao = true; return; }
-      }
-    }
     if (piloto.fica) { g.endTurn(); return; }
     var plan = [];
     try { plan = (JOGO.AI && JOGO.AI.planTurn) ? JOGO.AI.planTurn(st, u.uid) : []; } catch (e1) { plan = []; }
@@ -1792,8 +1926,7 @@ var JOGO = (typeof window !== 'undefined')
       case 'foto-pede': rFotoPede(d); break;
       case 'foto': rFoto(d); break;
       case 'ia': rIa(d); break;
-      case 'fusao-pede': rFusaoPede(d); break;
-      case 'fusao-ok': rFusaoOk(d); break;
+      case 'sai': rSai(d); break;
       case 'proxima': rProxima(d); break;
       case 'desiste': rDesiste(d); break;
       case 'vivo': rVivo(d); break;
