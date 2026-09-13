@@ -513,6 +513,7 @@ var JOGO = (typeof window !== 'undefined')
     montaForja();
     montaLoteria();
     montaPoco();
+    montaCaminhos();
     // as CONSTRUÇÕES do usuário (árvore, arena, banco, mercado, sede) vestem
     // os volumes acima quando os GLBs abrirem — a sonda de sempre
     construcoesPlantadas = false;
@@ -837,6 +838,37 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  /* O MAPA DA PRAÇA EM QUARTEIRÕES (13/09, dono: "o poço ficou bem no meio,
+   * deve ficar ao lado da arena, entre a arena e a forja; organize forja,
+   * mercadinho, barraquinha, banco e sede — pode sugerir um layout melhor").
+   *
+   * Antes a Arena e a Sede ficavam nas pontas e o resto se espremia numa rua
+   * de barracas colada no sul, com o Banco no meio dela e o Poço solto no
+   * gramado. Agora a praça lê como uma bússola em volta da Árvore-Mundo:
+   *   · NORTE — os portais (o arco de sempre);
+   *   · OESTE, o quarteirão da BATALHA — Arena, o Poço ao lado dela e a Forja
+   *     (lutar, descer, forjar);
+   *   · LESTE, o quarteirão do OURO E DA GUILDA — Sede, Banco e Mercadinho;
+   *   · SUL — a entrada: a avenida onde o herói nasce termina na Barraquinha
+   *     da Sorte, de frente para a Árvore.
+   * Cada lugar mora num anel (ang: 0 = norte, + = leste; r em metros), e as
+   * folgas entre as caixas MEDIDAS das obras ficam em 4 m ou mais — conferido
+   * numa conta à parte antes de plantar. `frente` é até onde o caminho de
+   * pedra chega (a meia-caixa da obra, um pouco menos). */
+  var PRACA = {
+    arena:   { ang: -1.78, r: 36.0, frente: 11.0 },
+    poco:    { ang: -2.40, r: 34.0, frente: 4.2 },
+    forja:   { ang: -2.80, r: 38.0, frente: 4.6 },
+    loteria: { ang: Math.PI, r: 40.0, frente: 3.6 },
+    mercado: { ang: 2.80, r: 38.0, frente: 5.0 },
+    banco:   { ang: 2.30, r: 35.0, frente: 5.4 },
+    sede:    { ang: 1.78, r: 36.0, frente: 6.4 }
+  };
+  function pontoDaPraca(id) {
+    var p = PRACA[id];
+    return { x: Math.sin(p.ang) * p.r, z: -Math.cos(p.ang) * p.r };
+  }
+
   /* O MERCADINHO: a barraca fecha o triângulo do sul — Banco a sudeste,
    * Arena a sudoeste, Mercadinho no MEIO-SUL, atrás de onde o herói nasce.
    * (A primeira posição escolhida espelhava o banco... em cima da ARENA, e
@@ -844,7 +876,7 @@ var JOGO = (typeof window !== 'undefined')
   function montaMercado() {
     // a tenda saiu do meio-sul: ali ela nascia DENTRO da câmera inicial
     // (que fica às costas do herói) e o toldo tomava a primeira tela
-    var px = -RAIO_MAPA * 0.14, pz = RAIO_MAPA * 0.72;   // a RUA DAS BARRACAS (12/09)
+    var pp = pontoDaPraca('mercado'), px = pp.x, pz = pp.z;   // o quarteirão (13/09, PRACA)
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -874,7 +906,7 @@ var JOGO = (typeof window !== 'undefined')
     // o cofre foi para o CANTO sudeste: em (0.60, 0.25) ele nascia a 4,8 m
     // da Sede — dois prédios de 12-14 m de largura, um DENTRO do outro
     // (a foto do dono pegou a fortaleza engolindo a cúpula)
-    var px = RAIO_MAPA * 0.42, pz = RAIO_MAPA * 0.72;    // a rua das barracas, ponta leste
+    var pp = pontoDaPraca('banco'), px = pp.x, pz = pp.z;   // o quarteirão (13/09, PRACA)
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -903,7 +935,7 @@ var JOGO = (typeof window !== 'undefined')
   function montaArena() {
     // subiu um degrau ao norte quando o coliseu cresceu (teto 24 m):
     // na posição antiga a arquibancada engolia a tenda do Mercadinho
-    var px = -RAIO_MAPA * 0.66, pz = RAIO_MAPA * 0.14;   // 12/09: desceu para largar o corredor da Estufa
+    var pp = pontoDaPraca('arena'), px = pp.x, pz = pp.z;   // o quarteirão (13/09, PRACA)
     var g = new THREE.Group();
     var anel = new THREE.Mesh(
       new THREE.RingGeometry(2.4, 3.1, 40),
@@ -935,7 +967,7 @@ var JOGO = (typeof window !== 'undefined')
    * da barraca não chega, mesa + tocha + barril seguram o lugar (o mesmo
    * contrato dos outros: a sonda veste com `praca_forja` quando existir). */
   function montaForja() {
-    var px = -RAIO_MAPA * 0.42, pz = RAIO_MAPA * 0.72;   // a rua das barracas, ponta oeste
+    var pp = pontoDaPraca('forja'), px = pp.x, pz = pp.z;   // o quarteirão (13/09, PRACA)
     var g = new THREE.Group();
     var kit = K();
     if (kit && kit.buildProp) {
@@ -964,7 +996,7 @@ var JOGO = (typeof window !== 'undefined')
    * entre o Mercadinho e o herói. Corpo de primitivas até a arte dele
    * chegar (o prompt foi dado); o lugar e a ficha já são os definitivos. */
   function montaLoteria() {
-    var px = RAIO_MAPA * 0.14, pz = RAIO_MAPA * 0.72;    // a rua das barracas (12/09)
+    var pp = pontoDaPraca('loteria'), px = pp.x, pz = pp.z;   // o quarteirão (13/09, PRACA)
     var g = new THREE.Group();
     // o balcão
     var balcao = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 1.2),
@@ -1007,14 +1039,12 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   /* O POÇO SEM FUNDO (13/09): a torre infinita saiu da Arena e ganhou corpo
-   * — a arte do dono (mapa principal/poco.glb → praca_poco). Mora a LESTE da
-   * Árvore-Mundo, no vão entre o portal da ponta leste e a Sede: os portais
-   * desse lado estão fechados e não têm corredor, e a oeste os corredores da
-   * Estufa e da Cisterna tomam o chão. Até o GLB abrir, uma boca de pedra
+   * — a arte do dono (mapa principal/poco.glb → praca_poco). Mora no
+   * quarteirão da batalha, entre a Arena e a Forja (a primeira casa, a leste
+   * da Árvore, ficou "bem no meio" na foto do dono). Até o GLB abrir, uma boca de pedra
    * com o fundo escuro segura o lugar e o clique, como as outras obras. */
   function montaPoco() {
-    var ang = 1.45, dist = RAIO_MAPA * 0.40;
-    var px = Math.sin(ang) * dist, pz = -Math.cos(ang) * dist;
+    var pp = pontoDaPraca('poco'), px = pp.x, pz = pp.z;   // ao lado da Arena (13/09, PRACA)
     var g = new THREE.Group();
     var borda = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.4, 0.9, 24, 1, true),
       new THREE.MeshStandardMaterial({ color: 0x6d655a, roughness: 1, side: THREE.DoubleSide }));
@@ -1034,13 +1064,160 @@ var JOGO = (typeof window !== 'undefined')
                    pos: new THREE.Vector3(px, 0, pz), raio: 6.0, node: g });
   }
 
+  /* OS CAMINHOS DE PEDRA (13/09, "capriche" do dono no mapa novo): a praça
+   * redonda em volta da Árvore-Mundo, um ANEL de avenida (r 22) que passa
+   * na frente de todos os quarteirões, quatro avenidas ligando a praça ao
+   * anel — norte (os portais), a Arena, a Sede e a do sul, onde o herói
+   * nasce e que segue até a Barraquinha — e um RAMAL curto do anel até cada
+   * construção e cada portal. A primeira versão (uma avenida por lugar, 13
+   * raios saindo da Árvore) virou uma estrela mecânica na foto aérea; o anel
+   * lê como cidade. Sem caminho, o gramado era um tapete com prédios soltos.
+   *
+   * A malha é montada JÁ no chão do mundo (nada de girar plano), com uv =
+   * mundo/4: todas as peças mostram a MESMA pedra no mesmo ponto, então onde
+   * duas avenidas se cruzam (e no encontro com o círculo) não há costura nem
+   * briga de profundidade — o pixel é idêntico. Duas malhas só: a pedra e o
+   * meio-fio escuro por baixo, um pouco mais largo, que desenha a borda.
+   * O clique no chão testa só `chao`, e o raio atravessa os caminhos. */
+  var MIOLO_RAIO = 12, ANEL_RAIO = 22, CAMINHO_MEIA = 1.35, MEIO_FIO = 0.28;
+  /* A PEDRA DOS CAMINHOS: lajota clara e quente (arenito), própria — a
+   * cinza da antessala, no meio da grama, virou uma estrela quase preta na
+   * primeira foto aérea. Mesmo gerador determinístico, tile de 4 m. */
+  var texCaminho = null;
+  function texturaCaminho() {
+    if (texCaminho) return texCaminho;
+    var cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 256;
+    var g = cv.getContext('2d');
+    g.fillStyle = '#8a7a63';                       // a junta, terra batida
+    g.fillRect(0, 0, 256, 256);
+    var NL = 5, lado = 256 / NL, junta = 4;
+    for (var jj = 0; jj < NL; jj++) {
+      var desloca = (jj % 2) * (lado / 2);
+      for (var ii = -1; ii <= NL; ii++) {
+        var h = ((ii * 11 + jj * 17 + 3) * 2654435761) % 100;
+        var t = h % 22;
+        var r = 196 + t - 11, gg = 180 + t - 11, b = 150 + t - 11;   // arenito 185..207
+        g.fillStyle = 'rgb(' + r + ',' + gg + ',' + b + ')';
+        var x = ii * lado + desloca + junta / 2, y = jj * lado + junta / 2;
+        g.fillRect(x, y, lado - junta, lado - junta);
+        g.fillStyle = 'rgba(255,255,255,0.10)';      // luz na borda de cima
+        g.fillRect(x, y, lado - junta, 3);
+        g.fillStyle = 'rgba(60,40,20,0.10)';         // sombra na de baixo
+        g.fillRect(x, y + lado - junta - 3, lado - junta, 3);
+      }
+    }
+    var tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texCaminho = tex;
+    return tex;
+  }
+  function montaCaminhos() {
+    if (!scene || salaAtual) return;
+    function acumulador() { return { pos: [], uv: [], idx: [] }; }
+    var pedra = acumulador(), junta = acumulador();
+    function vertice(acc, x, y, z) {
+      acc.pos.push(x, y, z);
+      acc.uv.push(x / 4, -z / 4);
+      return acc.pos.length / 3 - 1;
+    }
+    function faixa(acc, ax, az, bx, bz, meia, y) {
+      var L = Math.hypot(bx - ax, bz - az);
+      if (L < 0.01) return;
+      var dx = (bx - ax) / L, dz = (bz - az) / L, nx = -dz * meia, nz = dx * meia;
+      var a = vertice(acc, ax + nx, y, az + nz), b = vertice(acc, ax - nx, y, az - nz);
+      var c = vertice(acc, bx - nx, y, bz - nz), d = vertice(acc, bx + nx, y, bz + nz);
+      acc.idx.push(a, b, c, a, c, d);
+    }
+    function disco(acc, raio, y) {
+      var N = 64, meio = vertice(acc, 0, y, 0), primeiro = acc.pos.length / 3;
+      for (var i = 0; i < N; i++) {
+        var a = (i / N) * Math.PI * 2;
+        vertice(acc, Math.cos(a) * raio, y, Math.sin(a) * raio);
+      }
+      for (var k = 0; k < N; k++) acc.idx.push(meio, primeiro + k, primeiro + (k + 1) % N);
+    }
+    function anel(acc, raio, meia, y) {
+      var N = 128, primeiro = acc.pos.length / 3;
+      for (var i = 0; i < N; i++) {
+        var a = (i / N) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a);
+        vertice(acc, c * (raio - meia), y, sn * (raio - meia));
+        vertice(acc, c * (raio + meia), y, sn * (raio + meia));
+      }
+      for (var k = 0; k < N; k++) {
+        var a0 = primeiro + 2 * k, a1 = primeiro + 2 * ((k + 1) % N);
+        acc.idx.push(a0, a0 + 1, a1 + 1, a0, a1 + 1, a1);
+      }
+    }
+    // uma via radial (do raio `de` ao `ate`, no ângulo do mapa) nas duas malhas
+    function via(ang, de, ate) {
+      if (ate <= de + 0.5) return;
+      var ux = Math.sin(ang), uz = -Math.cos(ang);
+      faixa(junta, ux * de, uz * de, ux * ate, uz * ate, CAMINHO_MEIA + MEIO_FIO, 0.03);
+      faixa(pedra, ux * de, uz * de, ux * ate, uz * ate, CAMINHO_MEIA, 0.05);
+      n++;
+    }
+    function malha(acc, mat) {
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(acc.pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(acc.uv, 2));
+      var n = [];
+      for (var i = 0; i < acc.pos.length / 3; i++) n.push(0, 1, 0);
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3));
+      /* a ordem dos vértices montada acima deixa a face virada para BAIXO; com
+       * DoubleSide o three inverte a normal e a pedra acendia pela cor de chão
+       * da HemisphereLight — quase preta (a 2ª foto aérea pegou). Inverte cada
+       * triângulo e fica só a face de cima. */
+      for (var t = 0; t < acc.idx.length; t += 3) {
+        var tmp = acc.idx[t + 1]; acc.idx[t + 1] = acc.idx[t + 2]; acc.idx[t + 2] = tmp;
+      }
+      geo.setIndex(acc.idx);
+      var m = new THREE.Mesh(geo, mat);
+      m.userData.caminho = true;
+      scene.add(m);
+      return m;
+    }
+    // o meio-fio embaixo (0,03) e a pedra em cima (0,05): o polygonOffset
+    // segura as duas acima da grama mesmo com a câmera longe
+    var n = 0;
+    disco(junta, MIOLO_RAIO + MEIO_FIO, 0.03);
+    disco(pedra, MIOLO_RAIO, 0.05);
+    anel(junta, ANEL_RAIO, CAMINHO_MEIA + MEIO_FIO, 0.03);
+    anel(pedra, ANEL_RAIO, CAMINHO_MEIA, 0.05);
+    // as quatro avenidas da praça ao anel (a do sul segue até a Barraquinha)
+    via(0, MIOLO_RAIO - 1, ANEL_RAIO);
+    lugares.forEach(function (lg) {
+      var r = Math.hypot(lg.pos.x, lg.pos.z);
+      if (r < 1) return;
+      var ang = Math.atan2(lg.pos.x, -lg.pos.z);
+      if (lg.tipo === 'portal') {
+        // o aberto termina na boca do corredor (que tem chão e muro próprios);
+        // o fechado, na beira do disco de pedra
+        via(ang, ANEL_RAIO, lg.fechado ? r - 3.2 : r - CORREDOR.comp - 0.3);
+        return;
+      }
+      var cfg = PRACA[lg.id];
+      if (!cfg) return;
+      var avenida = lg.id === 'arena' || lg.id === 'sede' || lg.id === 'loteria';
+      via(ang, avenida ? MIOLO_RAIO - 1 : ANEL_RAIO, r - cfg.frente);
+    });
+    malha(junta, new THREE.MeshStandardMaterial({ color: 0x5c5040, roughness: 1,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    malha(pedra, new THREE.MeshStandardMaterial({ map: texturaCaminho(), roughness: 1,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    caminhosFeitos = n;
+  }
+  var caminhosFeitos = 0;
+
   /* A SEDE DAS GUILDAS (25/08): o estandarte a leste. O lugar existe ANTES
    * da casa própria — a casa 3D de cada guilda vem com a fase do lobby;
    * hoje a porta abre a ficha da guilda. */
   function montaSede() {
     // afastada do extremo leste do arco: a fortaleza tapava o portal do
     // Coração Partido na câmera padrão (mesma coluna de visada)
-    var px = RAIO_MAPA * 0.66, pz = RAIO_MAPA * 0.14;    // 12/09: espelha a Arena, do lado leste
+    var pp = pontoDaPraca('sede'), px = pp.x, pz = pp.z;   // o quarteirão (13/09, PRACA)
     var g = new THREE.Group();
     var mastro = new THREE.Mesh(
       new THREE.CylinderGeometry(0.09, 0.13, 4.4, 8),
@@ -1144,14 +1321,17 @@ var JOGO = (typeof window !== 'undefined')
       return { no: no, alt: cx.max.y - cx.min.y, raio: meia };
     }
 
-    for (var i = 0; i < lugares.length; i++) {
-      var lg = lugares[i];
+    /* 13/09: a sonda só espera a ÁRVORE abrir; uma obra cujo GLB ainda não
+     * decodificou (no jogo servido o pacote base desce seis de cada vez)
+     * ficava nas primitivas PARA SEMPRE — a foto aérea do mapa novo pegou a
+     * Barraquinha e o Poço assim. Agora ela pede o modelo e tenta de novo. */
+    var cenaDasObras = scene, pendentes = [];
+    function veste(lg) {
       var obra = OBRAS[lg.tipo];
-      if (!obra) continue;
       // o prédio ENCARA o centro da praça, como os portais
       var feito = montaObra(obra.chave, obra.alvoAlt, obra.teto,
                             Math.atan2(-lg.pos.x, -lg.pos.z));
-      if (!feito) continue;
+      if (!feito) return false;
       // fora os volumes provisórios; o RÓTULO fica e sobe para o teto
       var rot = null;
       for (var c = lg.node.children.length - 1; c >= 0; c--) {
@@ -1170,6 +1350,27 @@ var JOGO = (typeof window !== 'undefined')
        * conversa menos uma folga — o painel do lugar abre por proximidade, e
        * uma parede além dele deixaria o prédio mudo. */
       lg.solido = Math.max(1.0, Math.min(feito.raio * 0.72, (lg.raio || 3) - 1.2));
+      return true;
+    }
+    for (var i = 0; i < lugares.length; i++) {
+      if (OBRAS[lugares[i].tipo] && !veste(lugares[i])) pendentes.push(lugares[i]);
+    }
+    if (pendentes.length) {
+      try {
+        if (JOGO.Bundle && JOGO.Bundle.pede) {
+          JOGO.Bundle.pede(pendentes.map(function (lg) { return OBRAS[lg.tipo].chave; }));
+        }
+      } catch (eP) {}
+      var voltasObras = 0;
+      (function deNovo() {
+        // 400 voltas pelo mesmo motivo das sondas: o relógio virtual do headless
+        if (!pendentes.length || ++voltasObras > 400) return;
+        setTimeout(function () {
+          if (scene !== cenaDasObras) return;      // a cena mudou: a nova monta as dela
+          pendentes = pendentes.filter(function (lg) { return !veste(lg); });
+          deNovo();
+        }, 500);
+      })();
     }
 
     // A ÁRVORE-MUNDO: o coração do mapa. Não é `lugar` (não abre painel) —
@@ -1251,18 +1452,31 @@ var JOGO = (typeof window !== 'undefined')
      * JARDIM, espalhados por uma praça que não é jardim. Ficam só as peças
      * ENCOSTADAS nas construções, que existem para vestir o prédio ao lado —
      * essas têm endereço e motivo. */
-    function aoLadoDe(id, dx, dz) {
+    /* 13/09: o endereço é NO REFERENCIAL DO PRÉDIO — `lado` corre de través
+     * (positivo = à direita de quem olha o prédio do centro da praça) e
+     * `fundo` vai para trás dele (negativo = para a frente, rumo à Árvore).
+     * Com o mapa em quarteirões os prédios encaram o centro por ângulos
+     * diferentes; um deslocamento fixo em x/z jogava o carrinho no vizinho. */
+    function aoLadoDe(id, lado, fundo) {
       for (var j = 0; j < lugares.length; j++) if (lugares[j].id === id) {
-        return { x: lugares[j].pos.x + dx, z: lugares[j].pos.z + dz };
+        var p = lugares[j].pos, r = Math.hypot(p.x, p.z) || 1;
+        var ux = p.x / r, uz = p.z / r;             // do centro para o prédio
+        return { x: p.x + ux * fundo - uz * lado, z: p.z + uz * fundo + ux * lado };
       }
       return null;
     }
-    var pM = aoLadoDe('mercado', -5.6, 1.2);
-    if (pM) { planta('jd_carrinho', 1, pM.x, pM.z, 0.6); planta('jd_canteiro', 1, pM.x + 1.6, pM.z + 1.3, 1.9); }
-    var pS = aoLadoDe('sede', 0.8, 6.2);
+    // a bancada do Mercadinho fica na frente, do lado do Banco (o lado da
+    // Barraquinha é o mais apertado), fora do caminho de pedra
+    var pM = aoLadoDe('mercado', -4.4, -6.6);
+    if (pM) { planta('jd_carrinho', 1, pM.x, pM.z, 0.6); }
+    var pM2 = aoLadoDe('mercado', -6.2, -5.2);
+    if (pM2) planta('jd_canteiro', 1, pM2.x, pM2.z, 1.9);
+    var pS = aoLadoDe('sede', 5.9, 2.1);
     if (pS) planta('jd_escada', 1, pS.x, pS.z, 2.4);
-    var pF = aoLadoDe('forja', 5.4, 0.6);
-    if (pF) { planta('jd_tronco', 1, pF.x, pF.z, 0.9); planta('jd_regador', 1, pF.x + 1.2, pF.z - 1.4, 2.2); }
+    var pF = aoLadoDe('forja', 4.2, -6.0);
+    if (pF) planta('jd_tronco', 1, pF.x, pF.z, 0.9);
+    var pF2 = aoLadoDe('forja', 5.6, -4.6);
+    if (pF2) planta('jd_regador', 1, pF2.x, pF2.z, 2.2);
 
     /* O SENTIDO DO MURO (12/09, dono: "os muros devem ser na outra posição,
      * dando continuidade, igual se fosse parede"). As peças de muro vinham
@@ -2777,8 +2991,15 @@ var JOGO = (typeof window !== 'undefined')
    * jogador continua com a órbita de arrastar/roda de sempre */
   Hub._cam = function (o) {
     if (!o) return;
-    if (o.dist != null) cam.dist = Math.max(cam.minDist, Math.min(cam.maxDist, o.dist));
-    if (o.tilt != null) cam.tilt = Math.max(cam.minTilt, Math.min(cam.maxTilt, o.tilt));
+    // 13/09: `livre` só para a foto aérea do mapa (prova_praca ?livre=1) — o
+    // jogador segue preso aos limites da órbita
+    if (o.livre) {
+      if (o.dist != null) cam.dist = o.dist;
+      if (o.tilt != null) cam.tilt = o.tilt;
+    } else {
+      if (o.dist != null) cam.dist = Math.max(cam.minDist, Math.min(cam.maxDist, o.dist));
+      if (o.tilt != null) cam.tilt = Math.max(cam.minTilt, Math.min(cam.maxTilt, o.tilt));
+    }
     if (o.ang != null) cam.ang = o.ang;
   };
 
@@ -2791,6 +3012,7 @@ var JOGO = (typeof window !== 'undefined')
                        z: +bicho.node.position.z.toFixed(2), andando: !!bicho.andando,
                        clipe: bicho.clipe || 'idle' } : null,
       sala: salaAtual,                    // 03/09: null = praça
+      caminhos: caminhosFeitos,           // 13/09: avenidas de pedra plantadas
       nome: nomeJogador,
       titulo: tituloJogador,
       coroaVisivel: !!(heroi && heroi.coroaPvp),

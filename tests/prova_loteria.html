@@ -40,8 +40,15 @@ f.onload = function () {
               setTimeout(function () { window.__pronto = true; }, 1800);
               return;
             }
-            // anda até a barraquinha (sudoeste) e abre o painel pela porta da proximidade
-            if (w.JOGO.Hub.irPara) w.JOGO.Hub.irPara(-8.8 + 3.2, 26.4 - 1.5);
+            // anda até a barraquinha e abre o painel pela porta da proximidade.
+            // 13/09: a posição vem do lugar medido (o mapa virou quarteirões e
+            // a coordenada fixa de antes caía no gramado vazio)
+            var Lt = w.JOGO.Hub._lugares ? w.JOGO.Hub._lugares() : [];
+            var lt = Lt.filter(function (l) { return l.id === 'loteria'; })[0];
+            if (w.JOGO.Hub.irPara && lt) {
+              var rt = Math.hypot(lt.x, lt.z) || 1, kt = (rt - (lt.solido || 3) - 2.5) / rt;
+              w.JOGO.Hub.irPara(lt.x * kt, lt.z * kt);
+            }
             setTimeout(function () {
               try { w.JOGO.Hub.aoAproximar({ id: 'loteria', tipo: 'loteria', nome: 'Barraquinha da Sorte' }); } catch (e5) {}
               if (w.JOGO.Hub._cam) w.JOGO.Hub._cam({ dist: 11, tilt: 9, ang: 3.3 });
