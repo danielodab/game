@@ -13,8 +13,9 @@
  *     dungeonId, roomIndex, semente, dificuldade?, carry? }
  *   { modo: 'procura-grupo', membros, candidatos: [[dungeonId, roomIndex, semente], …] }
  *        → a primeira candidata que o grupo vence, com o jogo dela
- *   { modo: 'duelo', A: {progress, db, dono, herois}, B: {…}, dungeonId, roomIndex, semente }
- * Saída (JSON): { lances, fase, hash } (e dungeonId, roomIndex, semente na procura). */
+ *   { modo: 'duelo', A: {progress, db, dono, herois}, B: {…}, dungeonId, roomIndex, semente, vidaA?, vidaB? }
+ * Saída (JSON): { lances, fase, hash } (e dungeonId, roomIndex, semente na procura; no duelo também
+ *               vidaFimA / vidaFimB = {heroId: PV do fim} de cada lado). */
 const path = require('path');
 const est = require(path.join(__dirname, '..', 'servidor', 'juiz', 'estado.js'));
 const { ehDeGente } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'sala.js'));
@@ -74,7 +75,9 @@ function jogaDuelo(p) {
   const w = est.mundoEconomico({ semente: 5 });
   est.poeEstado(w, p.A.progress, p.A.db);
   const J = w.J, E = J.Engine;
-  const st = E.createDuelSala(p.dungeonId, p.roomIndex, partyDe(p.A), partyDe(p.B), { seed: p.semente });
+  // 14/09: a vida única — cada lado com a vida que o servidor guardou no duelo/abrir (vidaA / vidaB)
+  const st = E.createDuelSala(p.dungeonId, p.roomIndex, partyDe(p.A), partyDe(p.B),
+    { seed: p.semente, vidaA: p.vidaA || null, vidaB: p.vidaB || null });
   E.events.length = 0;
   const log = [];
   let voltas = 0;
@@ -94,7 +97,9 @@ function jogaDuelo(p) {
     if (!acabou && st.phase === 'playing') { E.endTurn(st); if (gente) log.push({ a: 'e', ok: true, de: u.dono }); }
     E.events.length = 0;
   }
-  return { lances: log, fase: st.phase, hash: E.hash(st) };
+  // 14/09: a vida com que cada lado sai (a mesma conta do juiz: Engine.vidaDoLado), para a prova da API conferir
+  return { lances: log, fase: st.phase, hash: E.hash(st),
+           vidaFimA: E.vidaDoLado(st, 'player'), vidaFimB: E.vidaDoLado(st, 'enemy') };
 }
 
 function executa(p) {

@@ -46,7 +46,7 @@ function ehDeGente(u) {
 /* O HP que atravessa de uma sala para a outra (13/09, a vida entre as salas; a mesma
  * regra do Game.entrarNaSala). O número do carry JÁ É o da porta: o servidor somou ao PV
  * do fim da sala anterior a vida que voltou na sala de espera (1 PV a cada 2 s) e as
- * poções bebidas lá, ao abrir o bilhete (servidor/salas.py, _vida_na_porta). Aqui ele
+ * poções bebidas lá, ao abrir o bilhete (servidor/salas.py, vida_heroi — 14/09, a vida única). Aqui ele
  * só se prende ao PV máximo da sala nova. Herói a 0 não chega (o servidor não abre a
  * sala); o piso de 1 é só para a sala nunca nascer com um herói vivo sem vida. Era
  * "vivo recupera metade do que falta; caído volta com 30%" até o dono pedir a espera. */
@@ -73,6 +73,18 @@ function aplicaCarryRede(st, carry) {
 }
 
 function inteiro(v) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v; }
+function objetoOuNull(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : null; }
+
+/* {heroId: PV máximo} dos heróis de UM lado da batalha (14/09, o duelo e a vida única): a API
+ * guarda com o PV do fim (Engine.vidaDoLado) para saber quando a vida do herói enche. */
+function vidaMaxDoLado(st, side) {
+  const out = {};
+  for (const u of (st && st.units) || []) {
+    if (u.kind !== 'hero' || u.side !== side) continue;
+    if (typeof u.hpMax === 'number' && isFinite(u.hpMax) && u.hpMax > 0) out[u.heroId || u.defId] = Math.floor(u.hpMax);
+  }
+  return out;
+}
 
 /* Um lance como o Game.executa aplica (sem rede). */
 function executa(J, st, l) {
@@ -132,8 +144,13 @@ function refazEm(J, entrada) {
   let st;
   try {
     if (c.modo === 'duelo') {
-      // o duelo pela Rede: a arena sorteada, as duas duplas e a semente dos dois (game.js, _iniciaDueloRede)
-      st = E.createDuelSala(c.dungeonId, c.roomIndex, c.duplaA, c.duplaB, { seed: c.semente });
+      // o duelo pela Rede: a arena sorteada, as duas duplas e a semente dos dois (game.js, _iniciaDueloRede).
+      // 14/09, a vida única (o dono: "se o jogador estiver com a vida na metade e começar uma batalha sendo
+      // pvp… a vida vai começar onde estava"): vidaA / vidaB = {heroId: PV} que a API guardou no
+      // POST /api/duelo/abrir de cada lado; o motor aplica ANTES do primeiro turno (o aplicaCarry não
+      // serve aqui: a chave heroId colide entre os dois lados). Sem a vida, o lado entra cheio
+      st = E.createDuelSala(c.dungeonId, c.roomIndex, c.duplaA, c.duplaB,
+        { seed: c.semente, vidaA: objetoOuNull(c.vidaA), vidaB: objetoOuNull(c.vidaB) });
     } else {
       st = E.createBattle(c.dungeonId, c.roomIndex, c.party,
         { seed: c.semente, dificuldade: c.dificuldade || 'normal', escolhePosicao: c.escolhePosicao !== false });
@@ -256,4 +273,4 @@ function rotas(registra) {
   registra('POST', '/refaz', (corpo) => refaz(corpo));
 }
 
-module.exports = { refaz, refazEm, rotas, ehDoJogador, ehDeGente, aplicaCarry, aplicaCarryRede, recusa };
+module.exports = { refaz, refazEm, rotas, ehDoJogador, ehDeGente, aplicaCarry, aplicaCarryRede, recusa, vidaMaxDoLado };

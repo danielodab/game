@@ -1344,13 +1344,17 @@ var JOGO = (typeof window !== 'undefined')
     completa(casasA, nA, casasA[0] || ps[0] || null);
     completa(casasB, nB, casasB[0] || null);
 
-    function poe(dupla, side, casas) {
+    /* A VIDA ÚNICA (14/09, o dono: "se o jogador estiver com a vida na metade e começar uma
+     * batalha sendo pvp… a vida vai começar onde estava"). `opts.vidaA` / `opts.vidaB` =
+     * {heroId: PV} de cada lado; herói fora do mapa entra cheio. Entra ANTES do primeiro
+     * turno, para o jogo e o juiz (servidor/juiz/sala.js) nascerem com o mesmo hash. */
+    function poe(dupla, side, casas, vida) {
       for (var q = 0; q < dupla.length && q < 2 && q < casas.length; q++) {
         var pd = dupla[q];
         var cls = (DATA().classes && DATA().classes[pd.classId]) || null;
         if (!cls) throw new Error('Engine.createDuelSala: classe desconhecida: ' + pd.classId);
         var st = heroStats(pd, cls);
-        state.units.push(makeUnit(state, cls, 'hero', side, casas[q].x, casas[q].y, {
+        var un = makeUnit(state, cls, 'hero', side, casas[q].x, casas[q].y, {
           stats: st,
           spells: pd.spells || cls.baseSpells || cls.spells || [],
           element: pd.element || 'neutro',
@@ -1360,11 +1364,14 @@ var JOGO = (typeof window !== 'undefined')
           conta: pd.conta || null,
           dono: pd.dono || null,
           name: pd.name || cls.name
-        }));
+        });
+        var pv = (vida && typeof vida === 'object') ? vida[un.heroId] : undefined;
+        if (typeof pv === 'number' && isFinite(pv)) un.hp = Math.max(1, Math.min(un.hpMax, Math.floor(pv)));
+        state.units.push(un);
       }
     }
-    poe(duplaA, 'player', casasA);
-    poe(duplaB, 'enemy', casasB);
+    poe(duplaA, 'player', casasA, opts.vidaA);
+    poe(duplaB, 'enemy', casasB, opts.vidaB);
 
     var sorted = state.units.slice().sort(function (a, b) {
       if (b.initiative !== a.initiative) return b.initiative - a.initiative;
@@ -1380,6 +1387,30 @@ var JOGO = (typeof window !== 'undefined')
     emit({ type: 'roundStart', round: 1 });
     startTurn(state, 0);
     return state;
+  };
+
+  /* A VIDA COM QUE CADA HERÓI DE UM LADO SAI DA LUTA (14/09, a vida única): {heroId: PV} —
+   * caído = 0; a unidade fundida divide o PV dela entre os heróis que a formaram (a regra do
+   * carry da descida, game.js carrySolo/carryRede). O duelo usa por lado ('player' = A,
+   * 'enemy' = B); o juiz (servidor/juiz/duelo.js) usa a mesma. */
+  Engine.vidaDoLado = function (state, side) {
+    var out = {};
+    if (!state || !state.units) return out;
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.side !== side) continue;
+      if (u.kind === 'hero') {
+        if (u.fusedInto) continue;                 // conta pela fusão
+        out[u.heroId || u.defId] = u.alive ? Math.max(0, Math.floor(u.hp)) : 0;
+      } else if (u.kind === 'fusion') {
+        var from = u.fusedFrom || [], srcs = [];
+        for (var k = 0; k < from.length; k++) { var s0 = Engine.findUnit(state, from[k]); if (s0 && s0.kind === 'hero') srcs.push(s0); }
+        if (!srcs.length) continue;
+        var parte = u.alive ? Math.max(1, Math.floor(u.hp / srcs.length)) : 0;
+        for (k = 0; k < srcs.length; k++) out[srcs[k].heroId || srcs[k].defId] = parte;
+      }
+    }
+    return out;
   };
 
   /* O FIM FORA DO FLUXO DO MOTOR: desistência e W.O. do duelo. `vencedor` é

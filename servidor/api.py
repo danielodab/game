@@ -330,7 +330,11 @@ ROTAS = {
     ('POST', '/api/grupo/abrir'):             ('grupo_abrir', True),
     ('POST', '/api/grupo/fechar'):            ('grupo_fechar', True),
     ('POST', '/api/grupo/pocao'):             ('grupo_pocao', True),      # 13/09: cada um cura os próprios
+    ('POST', '/api/duelo/abrir'):             ('duelo_abrir', True),      # 14/09: a vida com que cada lado entra
     ('POST', '/api/duelo/fechar'):            ('duelo_fechar', True),
+    # 14/09, a vida única do herói (salas.py): a vida de agora e a poção fora da batalha, em qualquer lugar
+    ('GET',  '/api/vida'):                    ('vida_lista', True),
+    ('POST', '/api/vida/pocao'):              ('vida_pocao', True),
     # o mercadinho entre contas (13/09, mercado.py): o anúncio é do servidor e a peça fica em
     # custódia; a proposta, o aceite do vendedor e a confirmação do comprador; sem juiz, 503
     ('GET',  '/api/mercado/resumo'):          ('mercado_resumo', True),

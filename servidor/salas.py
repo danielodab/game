@@ -10,6 +10,8 @@ O QUE MORA AQUI:
   POST /api/sala/abrir   o bilhete de uma sala: a semente é do servidor
   POST /api/sala/fechar  o juiz refaz a sala dos lances e, se venceu, paga no
                          estado que o SERVIDOR guarda (saves), numa transação só
+  GET  /api/vida         14/09, a vida única: a vida de agora dos heróis feridos da conta
+  POST /api/vida/pocao   a poção fora da batalha, em qualquer lugar (as rotas de antes caem aqui)
   POST /api/op           as operações de economia (equipar, forjar, roleta…)
                          rodadas pelo juiz no estado do servidor
   o PUT /api/save cosmético (o salvar do api.py chama _salvar_cosmetico) e as
@@ -34,6 +36,7 @@ import logging
 import os
 import re
 import secrets
+import sqlite3                    # 14/09: o _juiz_op pega sqlite3.Error e o nome não estava importado
 import time
 
 from guilda import soma_contrib   # 13/09: o XP doado por membro (a grade da guilda)
@@ -62,10 +65,9 @@ SALAS_POR_HORA = _do_ambiente('SOTERRA_SALAS_POR_HORA', 240, int)     # bilhetes
 SALA_MIN_S = _do_ambiente('SOTERRA_SALA_MIN_S', 4.0, float)           # nenhuma sala fecha em menos que isto...
 SALA_S_POR_TURNO = _do_ambiente('SOTERRA_SALA_S_POR_TURNO', 0.35, float)   # ...nem em menos que isto por vez do jogador
 SALA_VALIDADE = 6 * 3600          # o bilhete aberto vale 6 h
-CARRY_JANELA = 2 * 3600           # o PV atravessa para a sala seguinte da descida por 2 h
-# 13/09 (dono): "carrega 1 pv a cada 2 segundos" — na sala de espera, contado de quando a sala fechou.
-# O MESMO número de js/core/data/consumiveis.js (DATA.vidaEntreSalas.msPorPv); a janela de 2 h enche
-# qualquer herói bem antes de acabar
+# 13/09 (dono): "carrega 1 pv a cada 2 segundos" — contado de quando a luta fechou. O MESMO número de
+# js/core/data/consumiveis.js (DATA.vidaEntreSalas.msPorPv). 14/09: a vida é única por herói da conta
+# (vida_heroi) e a janela de 2 h da descida (CARRY_JANELA) saiu — a vida enche sozinha, sem prazo
 VIDA_MS_POR_PV = 2000
 REGRAS_CACHE = 300                # segundos que o GET /regras do juiz fica guardado (muda só no deploy)
 OPS_POR_PEDIDO = 40               # o OPS_MAX do juiz (servidor/juiz/economia.js)
@@ -77,7 +79,7 @@ DIFICULDADES = ('facil', 'normal', 'dificil')
 OPS_INTERNAS = frozenset({'lojaEntregar', 'trocaTira', 'trocaPoe', 'bancoGuildaTira', 'bancoGuildaPoe',
                           # 13/09: o mercadinho entre contas (mercado.py)
                           'mercadoTira', 'mercadoPoe', 'mercadoPaga', 'mercadoRecebe', 'mercadoLegadoTira',
-                          # 13/09: a poção bebida na sala de espera (sala_pocao / grupo_pocao)
+                          # 13/09: a poção bebida fora da batalha (14/09: vida_pocao, em qualquer lugar)
                           'beberPocao'})
 # os campos de dono CLIENTE do db (§3; a mesma lista de js/core/economia.js: DB_CLIENTE e JOGADOR_CLIENTE)
 DB_CLIENTE = ('mutados', 'placar', 'pvp', 'trocas')
@@ -128,6 +130,20 @@ CREATE TABLE IF NOT EXISTS vida_espera(
   PRIMARY KEY (ref, chave)
 );
 CREATE INDEX IF NOT EXISTS vida_espera_conta ON vida_espera(conta_id, fechou_ms);
+-- 14/09: vida_espera fica criada (o contêiner velho do rolling update ainda escreve nela) e deixou de ser lida.
+-- A VIDA ÚNICA DO HERÓI (14/09, o dono: "isso vale para quando terminar calabouço (na praça), depois de um
+-- pvp e assim por diante"): UMA linha por herói da conta, gravada no fim de QUALQUER luta refeita pelo juiz
+-- (sala solo, em grupo, duelo; vitória, derrota ou largada). PV agora = min(hp_max, hp_fim + cura +
+-- floor((agora − desde_ms) / 2000)). Sem linha, ou já no máximo = cheio (o motor dá o PV máximo de hoje)
+CREATE TABLE IF NOT EXISTS vida_heroi(
+  conta_id   INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  heroi      TEXT NOT NULL,
+  hp_fim     INTEGER NOT NULL,
+  hp_max     INTEGER NOT NULL,
+  desde_ms   INTEGER NOT NULL,
+  cura       INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (conta_id, heroi)
+);
 -- o último hash da economia que o juiz devolveu para a conta (o cliente compara com o dele)
 CREATE TABLE IF NOT EXISTS autoridade(
   conta_id      INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
@@ -181,6 +197,19 @@ def junta_cosmetico(db_servidor, db_cliente):
 
 def _inteiro_puro(v):
     return isinstance(v, int) and not isinstance(v, bool)
+
+
+def vida_da_linha(r, agora_ms):
+    """A vida de AGORA de uma linha de vida_heroi (14/09): {hp, max, cheioEmMs, ate1Ms}.
+    hp = min(máximo, PV do fim + curas + floor((agora − desde) / VIDA_MS_POR_PV)); cheioEmMs e ate1Ms
+    são quanto falta, em ms a partir de agora, para encher e para ter 1 PV (0 = já chegou)."""
+    mx = max(1, int(r['hp_max']))
+    base = max(0, int(r['hp_fim'])) + max(0, int(r['cura']))
+    desde = int(r['desde_ms'])
+    hp = min(mx, base + max(0, agora_ms - desde) // VIDA_MS_POR_PV)
+    return {'hp': hp, 'max': mx,
+            'cheioEmMs': max(0, desde + max(0, mx - base) * VIDA_MS_POR_PV - agora_ms),
+            'ate1Ms': 0 if base >= 1 else max(0, desde + VIDA_MS_POR_PV - agora_ms)}
 
 
 def lado_da_troca(v, campo):
@@ -443,77 +472,98 @@ class SalasMixin:
             self._resumo(cid, conta, estado['progress'], db, t)
         return {'ok': True, 'versao': nova, 'hash': estado['hash'], 'autoridade': True}
 
-    # -- A VIDA ENTRE AS SALAS (13/09) ------------------------------------------------------------
-    # O dono: "quando acaba a luta o jogador fica com a vida que terminou a última luta.. carrega 1 pv
-    # a cada 2 segundos. se um personagem morre ele vem com a vida zerada aumentando 1 pv a cada 2 s
-    # também. aí a poção seria para curar a vida e não precisar esperar para ir para a próxima sala".
-    # O relógio é o do SERVIDOR: a sala de espera começa no instante em que a sala vencida fechou.
-    def _vida_grava(self, ref, carry, vida_max, fechou_ms, conta_de):
-        """Dentro de _escrita: o registro da sala de espera — uma linha por herói do carry.
-        `conta_de` = {chave: conta_id}. Sem o máximo (um juiz de antes de 13/09) vale o próprio
-        PV do fim: a vida não sobe além do que o herói tinha, e a poção diz 'cheio'."""
-        maximos = vida_max if isinstance(vida_max, dict) else {}
-        for chave, hp in carry.items():
-            conta_id = conta_de.get(chave)
-            if not isinstance(chave, str) or conta_id is None or not _inteiro_puro(hp):
-                continue
-            mx = maximos.get(chave)
-            mx = mx if _inteiro_puro(mx) and mx >= 1 else max(1, hp)
-            self.con.execute("INSERT OR REPLACE INTO vida_espera(ref, chave, conta_id, hp_fim, hp_max, fechou_ms, cura) "
-                             "VALUES (?, ?, ?, ?, ?, ?, 0)", (ref, chave, conta_id, max(0, min(hp, mx)), mx, fechou_ms))
+    # -- A VIDA ÚNICA DO HERÓI (14/09) ----------------------------------------------------------------
+    # O dono, 13/09: "quando acaba a luta o jogador fica com a vida que terminou a última luta.. carrega 1 pv
+    # a cada 2 segundos"; e 14/09: "hoje nas salas de espera a vida vai recuperando aos poucos até encher ou
+    # o jogador usa pote; isso vale para quando terminar calabouço (na praça), depois de um pvp e assim por
+    # diante; e se o jogador estiver com a vida na metade e começar uma batalha sendo pvp, poço, desafio ou
+    # outro calabouço, a vida vai começar onde estava, na metade". Era uma vida por DESCIDA (vida_espera, por
+    # bilhete/gid, que zerava na praça); virou uma vida por HERÓI DA CONTA (vida_heroi), contínua entre
+    # qualquer luta. O relógio é o do SERVIDOR: a espera começa no instante em que a luta fechou.
+    def _vida_de(self, cid, herois, agora_ms):
+        """Dentro da tranca: {heroId: vida_da_linha} dos heróis da lista que TÊM linha (os cheios inclusive)."""
+        herois = [h for h in herois if isinstance(h, str)]
+        if not herois:
+            return {}
+        linhas = self.con.execute("SELECT * FROM vida_heroi WHERE conta_id = ? AND heroi IN (%s)"
+                                  % ','.join('?' * len(herois)), [cid] + herois).fetchall()
+        return {r['heroi']: vida_da_linha(r, agora_ms) for r in linhas}
 
-    def _vida_na_porta(self, ref, carry_saida, fechada_em, agora_ms):
-        """Dentro da tranca: {chave: {hp, max, conta, fechou_ms}} — a vida de cada herói AGORA:
-        min(máximo, PV do fim + tempo desde o fechamento / VIDA_MS_POR_PV + poções bebidas).
-        A sala paga de antes do registro (sem linha) sobe só pelo tempo, sem teto (o juiz prende
-        no PV máximo da sala nova)."""
-        linhas = {r['chave']: r for r in self.con.execute("SELECT * FROM vida_espera WHERE ref = ?", (ref,))}
-        vida = {}
-        for chave, hp_fim in (carry_saida or {}).items():
-            if not isinstance(chave, str) or not isinstance(hp_fim, (int, float)) or isinstance(hp_fim, bool):
-                continue
-            r = linhas.get(chave)
-            fechou = r['fechou_ms'] if r is not None else int(fechada_em or 0) * 1000
-            base = (r['hp_fim'] + r['cura']) if r is not None else max(0, int(hp_fim))
-            mx = r['hp_max'] if r is not None else None
-            hp = base + max(0, agora_ms - fechou) // VIDA_MS_POR_PV
-            if mx is not None:
-                hp = min(mx, hp)
-            vida[chave] = {'hp': int(hp), 'max': mx, 'conta': r['conta_id'] if r is not None else None,
-                           'fechou_ms': fechou}
-        return vida
+    def _vida_ferida(self, cid, herois, agora_ms):
+        """Dentro da tranca: só os heróis NÃO cheios. Sem linha, ou com o PV de agora no máximo da linha, o
+        herói está cheio e fica FORA do carry: o motor dá o PV máximo de hoje — o nível que subiu e a peça
+        trocada depois da luta entram sozinhos."""
+        return {h: v for h, v in self._vida_de(cid, herois, agora_ms).items() if v['hp'] < v['max']}
 
     @staticmethod
-    def _vida_zerada(vida, agora_ms):
-        """(chave, segundos até 1 PV) do primeiro herói ainda a 0, ou None. A 0 só fica quem terminou
-        caído, não bebeu e ainda não passou o primeiro intervalo."""
-        for chave in sorted(vida):
-            v = vida[chave]
+    def _vida_recusa_zero(vidas):
+        """`vidas` = {chave: vida}: o primeiro herói ainda a 0 PV derruba a abertura (409 vida-zero, com os
+        segundos até 1 PV). A 0 só fica quem terminou caído, não bebeu e ainda não passou o primeiro intervalo."""
+        for chave in sorted(vidas):
+            v = vidas[chave]
             if v['hp'] < 1:
-                falta = VIDA_MS_POR_PV - (max(0, agora_ms - v['fechou_ms']) % VIDA_MS_POR_PV)
-                return chave, max(1, -(-falta // 1000))
-        return None
+                espera = max(1, -(-v['ate1Ms'] // 1000))
+                raise Recusa(409, 'o herói %s ainda está sem vida: %d s até recuperar 1 PV (ou beba uma poção)'
+                             % (chave[:64], espera), motivo='vida-zero', heroi=chave, esperaS=espera)
 
-    def _pocao_na_espera(self, conta, pocao, chave, ler):
-        """A POÇÃO NA SALA DE ESPERA (sala_pocao e grupo_pocao). `ler(agora_ms)` roda dentro da
-        tranca, confere a descida viva e o herói e devolve {ref, carry, fechada_em} (ou levanta
-        Recusa). O juiz tira UMA poção do estado (op interna beberPocao, tudo ou nada) e a cura
-        entra no registro da vida do herói na MESMA transação que grava o estado. Recusa: a vida
-        já cheia (antes de gastar), sem a poção (o juiz), a descida que acabou (ler)."""
+    def _vida_grava_fim(self, cid, fim, maximos, agora_ms):
+        """Dentro de _escrita: o fim de uma luta — uma linha por herói da conta, com o PV do fim, o máximo, o
+        instante e as curas zeradas. `fim` e `maximos` = {heroId: PV}. Sem o máximo (um juiz de antes de 13/09)
+        vale o próprio PV do fim: a linha nasce cheia e não prende ninguém."""
+        maximos = maximos if isinstance(maximos, dict) else {}
+        for heroi, hp in (fim if isinstance(fim, dict) else {}).items():
+            if (not isinstance(heroi, str) or not 0 < len(heroi) <= 64 or isinstance(hp, bool)
+                    or not isinstance(hp, (int, float))):
+                continue
+            hp = max(0, int(hp))
+            mx = maximos.get(heroi)
+            mx = int(mx) if isinstance(mx, (int, float)) and not isinstance(mx, bool) and mx >= 1 else max(1, hp)
+            self.con.execute("INSERT OR REPLACE INTO vida_heroi(conta_id, heroi, hp_fim, hp_max, desde_ms, cura) "
+                             "VALUES (?, ?, ?, ?, ?, 0)", (cid, heroi, min(hp, mx), mx, agora_ms))
+
+    def _vida_confere_ferido(self, cid, heroi):
+        """Dentro da tranca: a vida de agora do herói, ou 409 'cheio' (sem linha, ou já no máximo)."""
+        v = self._vida_de(cid, [heroi], int(time.time() * 1000)).get(heroi)
+        if v is None or v['hp'] >= v['max']:
+            extra = {'hp': v['hp'], 'hpMax': v['max']} if v is not None else {}
+            raise Recusa(409, 'a vida desse herói já está cheia', motivo='cheio', **extra)
+        return v
+
+    # -- GET /api/vida (14/09) ---------------------------------------------------------------------------
+    def vida_lista(self, conta, corpo):
+        """A vida dos heróis FERIDOS da conta, no relógio do servidor; os cheios não vêm (o cliente usa o PV
+        máximo que ele mesmo calcula). {heroId: {hp, max, cheioEmMs, ate1Ms}}: os dois últimos são quanto
+        falta, em ms a partir de agoraMs, para encher e para ter 1 PV (0 = já chegou)."""
+        with self.tranca:
+            agora_ms = int(time.time() * 1000)
+            linhas = self.con.execute("SELECT * FROM vida_heroi WHERE conta_id = ?", (conta['id'],)).fetchall()
+        herois = {}
+        for r in linhas:
+            v = vida_da_linha(r, agora_ms)
+            if v['hp'] < v['max']:
+                herois[r['heroi']] = v
+        return 200, {'ok': True, 'agoraMs': agora_ms, 'msPorPv': VIDA_MS_POR_PV, 'herois': herois}
+
+    # -- POST /api/vida/pocao (14/09; as rotas de antes, /api/sala/pocao e /api/grupo/pocao, caem aqui) ----------
+    def vida_pocao(self, conta, corpo):
+        """Corpo {heroId, pocaoId}. A poção FORA da batalha, em qualquer lugar (a praça, a antessala, depois do
+        duelo): o juiz tira UMA poção do estado (op interna beberPocao, tudo ou nada) e a cura entra na linha do
+        herói na MESMA transação que grava o estado. Recusa: herói que não é da conta (400 heroi), vida cheia
+        (409 cheio, ANTES de gastar), sem a poção (o juiz: 422 sem-pocao). A poção nunca passa do máximo: a
+        cura soma na linha, e a vida de agora é presa no máximo dela."""
         cid = conta['id']
+        heroi, pocao = corpo.get('heroId'), corpo.get('pocaoId')
+        if not isinstance(heroi, str) or not 0 < len(heroi) <= 64:
+            raise Recusa(400, 'heroId precisa ser o id de um herói')
         if not isinstance(pocao, str) or not RE_NOME_OP.match(pocao.replace('-', '_')):
             raise Recusa(400, 'pocaoId precisa ser o id de uma poção')
         for _ in range(TENTATIVAS):
             with self.tranca:
-                agora_ms = int(time.time() * 1000)
-                d = ler(agora_ms)
-                v = self._vida_na_porta(d['ref'], d['carry'], d['fechada_em'], agora_ms).get(chave)
-                if v is None or v['max'] is None:
-                    raise Recusa(409, 'essa sala é de antes da vida entre as salas: entre na próxima para beber',
-                                 motivo='sem-registro')
-                if v['hp'] >= v['max']:
-                    raise Recusa(409, 'a vida desse herói já está cheia', motivo='cheio', hp=v['hp'], hpMax=v['max'])
                 estado = self._estado_exige(cid)
+                fichas = estado['progress'].get('heroes')
+                if not isinstance(fichas, dict) or not isinstance(fichas.get(heroi), dict):
+                    raise Recusa(400, 'o herói %s não é desta conta' % heroi[:64], motivo='heroi')
+                self._vida_confere_ferido(cid, heroi)
             saida = self._juiz_op(conta, estado, [{'nome': 'beberPocao', 'args': {'id': pocao}}], interno=True)
             res = (saida.get('resultados') or [None])[0]
             cura = res.get('cura') if isinstance(res, dict) else None
@@ -522,19 +572,15 @@ class SalasMixin:
             t = agora()
             try:
                 with self._escrita():
-                    agora_ms = int(time.time() * 1000)
-                    d = ler(agora_ms)                        # a descida ainda viva na hora de gravar
-                    v = self._vida_na_porta(d['ref'], d['carry'], d['fechada_em'], agora_ms).get(chave)
-                    if v is None or v['max'] is None or v['hp'] >= v['max']:
-                        raise Recusa(409, 'a vida desse herói já está cheia', motivo='cheio')
+                    v = self._vida_confere_ferido(cid, heroi)          # ainda ferido na hora de gravar
                     nova, db = self._estado_grava(conta, estado, saida, t)
-                    self.con.execute("UPDATE vida_espera SET cura = cura + ? WHERE ref = ? AND chave = ?",
-                                     (cura, d['ref'], chave))
-                    self._evento(cid, 'pocao-espera', {'ref': d['ref'], 'heroi': chave, 'pocao': pocao, 'cura': cura,
-                                                       'versao': nova})
+                    self.con.execute("UPDATE vida_heroi SET cura = cura + ? WHERE conta_id = ? AND heroi = ?",
+                                     (cura, cid, heroi))
+                    self._evento(cid, 'pocao-vida', {'heroi': heroi, 'pocao': pocao, 'cura': cura, 'hp': v['hp'],
+                                                     'versao': nova})
             except EstadoMudou:
                 continue
-            return 200, {'ok': True, 'heroi': chave, 'pocaoId': pocao, 'cura': cura,
+            return 200, {'ok': True, 'heroi': heroi, 'pocaoId': pocao, 'cura': cura,
                          'hp': min(v['max'], v['hp'] + cura), 'hpMax': v['max'],
                          'versao': nova, 'hash': saida['hash'], 'progress': saida['progress'], 'db': db}
         raise Recusa(409, MUDOU_NO_MEIO, **self._estado_publico(cid))
@@ -608,22 +654,11 @@ class SalasMixin:
             estado = self._estado_exige(cid)
             self._confere_herois(conta, estado['progress'], herois)
             self._confere_teto_salas(cid, t)
-            carry = None
-            if sala > 0:
-                r = self.con.execute(
-                    "SELECT bilhete, carry_saida, fechada_em FROM salas WHERE conta_id = ? AND dungeon = ? AND sala = ? "
-                    "AND estado = 'paga' AND fechada_em > ? ORDER BY fechada_em DESC LIMIT 1",
-                    (cid, dungeon, sala - 1, t - CARRY_JANELA)).fetchone()
-                anterior = _objeto(r['carry_saida']) if r is not None else None
-                if anterior is not None:
-                    # 13/09: a vida da PORTA — o PV do fim, o tempo na sala de espera e as poções bebidas
-                    agora_ms = int(time.time() * 1000)
-                    vida = self._vida_na_porta(r['bilhete'], anterior, r['fechada_em'], agora_ms)
-                    zerado = self._vida_zerada(vida, agora_ms)
-                    if zerado:
-                        raise Recusa(409, 'o herói %s ainda está sem vida: %d s até recuperar 1 PV (ou beba uma poção)'
-                                     % (zerado[0][:64], zerado[1]), motivo='vida-zero', heroi=zerado[0], esperaS=zerado[1])
-                    carry = {k: v['hp'] for k, v in vida.items()}
+            # 14/09, a vida única: em QUALQUER sala (a 0 da descida e o Poço inclusive) o herói entra com a vida
+            # de agora — o fim da última luta, a espera e as poções. Os cheios ficam fora; todos cheios, sem carry
+            vidas = self._vida_ferida(cid, herois, int(time.time() * 1000))
+            self._vida_recusa_zero(vidas)
+            carry = {h: v['hp'] for h, v in vidas.items()} or None
             # um bilhete aberto por conta: abrir outro vence o anterior
             self.con.execute("UPDATE salas SET estado = 'vencida', fechada_em = ? WHERE conta_id = ? AND estado = 'aberta'",
                              (t, cid))
@@ -705,12 +740,17 @@ class SalasMixin:
                 self._sala_recusa(cid, bilhete, 'rapido-demais',
                                   '%d vezes em %.1f s (mínimo %.1f s)' % (turnos, instante - s['aberta_em'], minimo))
                 raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
+            # 14/09, a vida única: o PV do fim de cada herói do bilhete, em qualquer fim refeito
+            fim = saida.get('carry') if isinstance(saida.get('carry'), dict) else {}
+            fim = {h: fim[h] for h in json.loads(s['herois']) if h in fim}
             if saida['fase'] != 'won':
-                # derrota ou sala largada no meio: nada muda no estado (13/09: a poção saiu da batalha,
-                # e com ela o desconto das poções bebidas na sala que não venceu)
+                # derrota ou sala largada no meio: nada muda no estado da economia (13/09: a poção saiu da
+                # batalha, e com ela o desconto). 14/09: mas a vida do fim fica — quem caiu sai a 0 e espera
                 with self._escrita():
                     n = self.con.execute("UPDATE salas SET estado = 'perdida', fechada_em = ?, turnos = ? "
                                          "WHERE bilhete = ? AND estado = 'aberta'", (t, turnos, bilhete)).rowcount
+                    if n:
+                        self._vida_grava_fim(cid, fim, saida.get('vidaMax'), int(time.time() * 1000))
                 if not n:
                     raise Recusa(409, 'esse bilhete já foi fechado')
                 pub = self._estado_publico(cid)
@@ -727,9 +767,8 @@ class SalasMixin:
                     self.con.execute("UPDATE salas SET estado = 'paga', fechada_em = ?, turnos = ?, carry_saida = ? "
                                      "WHERE bilhete = ?", (t, turnos, json.dumps(carry) if carry is not None else None,
                                                            bilhete))
-                    # 13/09: a sala de espera começa AGORA — o PV do fim e o máximo de cada herói
-                    if carry is not None:
-                        self._vida_grava(bilhete, carry, saida.get('vidaMax'), int(time.time() * 1000), {k: cid for k in carry})
+                    # a espera começa AGORA — o PV do fim e o máximo de cada herói (14/09: na linha do herói)
+                    self._vida_grava_fim(cid, fim, saida.get('vidaMax'), int(time.time() * 1000))
                     self._evento(cid, 'sala-paga', {'bilhete': bilhete, 'dungeon': s['dungeon'], 'sala': s['sala'],
                                                     'versao': nova, 'turnos': turnos,
                                                     'novos': [n['iid'] for n in saida['iids']['novos']],
@@ -740,37 +779,14 @@ class SalasMixin:
                          'hash': saida['hash'], 'progress': saida['progress'], 'db': db, 'carry': carry}
         raise Recusa(409, MUDOU_NO_MEIO, **self._estado_publico(cid))
 
-    # -- POST /api/sala/pocao (13/09, a poção na sala de espera) -------------------------------------
+    # -- POST /api/sala/pocao (13/09; 14/09: a rota de antes da vida única) -----------------------------------
     def sala_pocao(self, conta, corpo):
-        """Corpo {bilhete, heroId, pocaoId}. O bilhete é o da sala VENCIDA que abriu a sala de espera
-        (a descida solo). A descida está viva enquanto essa sala é a última que a conta abriu, a
-        janela do carry não passou e o calabouço tem sala seguinte."""
-        cid = conta['id']
-        bilhete, heroi, pocao = corpo.get('bilhete'), corpo.get('heroId'), corpo.get('pocaoId')
+        """Corpo {bilhete, heroId, pocaoId}. A página velha aberta durante o deploy continua bebendo: do
+        bilhete só se confere o formato, e o resto é o POST /api/vida/pocao com o heroId do corpo."""
+        bilhete = corpo.get('bilhete')
         if not isinstance(bilhete, str) or not RE_BILHETE.match(bilhete):
             raise Recusa(400, 'bilhete inválido')
-        if not isinstance(heroi, str) or not 0 < len(heroi) <= 64:
-            raise Recusa(400, 'heroId precisa ser o id de um herói')
-        calaboucos = self._regras()['calaboucos']               # sem juiz: 503 (e nunca dentro da tranca)
-
-        def ler(agora_ms):
-            s = self.con.execute("SELECT * FROM salas WHERE bilhete = ?", (bilhete,)).fetchone()
-            if s is None or s['conta_id'] != cid:                # o de outra conta: a mesma resposta
-                raise Recusa(404, 'sala não encontrada')
-            if s['estado'] != 'paga' or s['fechada_em'] is None:
-                raise Recusa(409, 'essa sala não abriu uma sala de espera', motivo='sem-descida')
-            n = calaboucos.get(s['dungeon'])
-            if (agora_ms // 1000 - s['fechada_em'] > CARRY_JANELA or not _inteiro_puro(n) or s['sala'] + 1 >= n
-                    or self.con.execute("SELECT 1 FROM salas WHERE conta_id = ? AND bilhete != ? AND aberta_em >= ? LIMIT 1",
-                                        (cid, bilhete, s['fechada_em'])).fetchone() is not None):
-                raise Recusa(409, 'a descida acabou: a poção só se bebe na sala de espera entre as salas',
-                             motivo='sem-descida')
-            carry = _objeto(s['carry_saida']) or {}
-            if heroi not in carry:
-                raise Recusa(400, 'o herói %s não desceu nessa sala' % heroi[:64], motivo='heroi')
-            return {'ref': bilhete, 'carry': carry, 'fechada_em': s['fechada_em']}
-
-        return self._pocao_na_espera(conta, pocao, heroi, ler)
+        return self.vida_pocao(conta, corpo)
 
     # -- POST /api/op (§4.3) ------------------------------------------------------------------------
     def economia_op(self, conta, corpo):

@@ -339,12 +339,16 @@ class ProvaDaAutoridade(unittest.TestCase):
         status, r2 = self.fecha(c, b['bilhete'], jogo)
         self.assertEqual(status, 409, r2)
         self.assertEqual(self.save(c)['versao'], 2)
-        # a sala seguinte da descida leva o PV que o servidor anotou — 13/09: mais a vida que voltou na
-        # sala de espera (1 PV a cada 2 s; a prova da regeneração com o relógio é tests/pocoes_api.py)
+        # 14/09, a vida única: o fim da sala fica na linha do herói (vida_heroi) e a sala seguinte — ou qualquer
+        # outra — nasce com a vida de agora; o herói cheio fica fora do carry (o relógio: tests/pocoes_api.py)
+        linha = self.sql("SELECT hp_fim, hp_max, cura FROM vida_heroi WHERE conta_id = ? AND heroi = 'sumo'", c.conta['id'])
+        self.assertEqual(len(linha), 1)
+        self.assertEqual((linha[0]['hp_fim'], linha[0]['cura']), (r['carry']['sumo'], 0))
         b2 = self.abre(c, sala=1, semente=None)
-        self.assertEqual(set(b2['carry']), set(r['carry']))
-        for chave, hp in r['carry'].items():
-            self.assertGreaterEqual(b2['carry'][chave], hp, chave)
+        if linha[0]['hp_fim'] >= linha[0]['hp_max']:
+            self.assertIsNone(b2['carry'])
+        else:
+            self.assertGreaterEqual(b2['carry']['sumo'], linha[0]['hp_fim'])
 
     def test_04_dizimo_chega_pela_sala(self):
         c = self.novo('Dizimista')

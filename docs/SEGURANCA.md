@@ -63,9 +63,9 @@ Corpo: `{dungeonId, roomIndex, dificuldade, herois: [heroId, heroId?], versaoReg
 - Sorteia `semente` (31 bits, `secrets`) e `bilhete` (token). Guarda
   `salas(bilhete, conta_id, dungeon, sala, dificuldade, semente, herois, carry,
   aberta_em, estado='aberta')`.
-- O `carry` (HP que atravessa) é o que o servidor anotou ao fechar a sala anterior
-  **da mesma descida** (sala = anterior + 1, mesmo calabouço, fechada há menos de
-  2 h); senão nenhum.
+- O `carry` (HP com que cada herói entra) é a **vida de agora** do herói (§5.2.1, 14/09: a vida
+  única), em QUALQUER sala — a 0 da descida, o Poço, outro calabouço. Só entram os heróis que
+  não estão cheios; todos cheios, `carry = null`. Herói a 0 PV: 409 `vida-zero`.
 - Resposta: `{ok, bilhete, semente, carry}`.
 
 ### 4.2 `POST /api/sala/fechar`
@@ -76,7 +76,8 @@ Corpo: `{bilhete, lances: [...], hashFinal}`.
   422 `rapido-demais` (a sala não paga e fica `recusada`).
 - Vitória: grava o estado novo (versao+1), registra `iids.novos` (origem do juiz),
   marca `iids.fora`, soma o XP do dízimo na guilda do servidor, anota o carry, marca
-  a sala `paga`. Derrota: `perdida`, estado sem mudança de recompensa.
+  a sala `paga`. Derrota (ou sala largada): `perdida`, estado sem mudança de recompensa.
+  Nos dois casos a vida do fim de cada herói do bilhete é gravada em `vida_heroi` (§5.2.1).
 - Resposta: `{ok, fase, recompensa, versao, hash, progress, db}` — o cliente adota
   `progress`/`db` (campos do servidor) e mostra `recompensa` na tela.
 
@@ -152,30 +153,59 @@ Entrada:
   `Game._computeRewards()` com `Math.random` do mundo semeado por
   `hash(semente, 'recompensa')`.
 - Saída: `{ok, fase, turnosJogador, refeito, recompensa, progress, db, guildaXp,
-  iids: {novos: [{iid, itemId, origem}], fora: [iid]}, carry, hash}`.
+  iids: {novos: [{iid, itemId, origem}], fora: [iid]}, carry, vidaMax, hash}`. `carry` (o PV do fim,
+  caído = 0, a fusão divide) e `vidaMax` (o PV máximo) saem em qualquer fim refeito, não só na vitória.
 
 ### 5.2.1 As poções de vida e a vida entre as salas (13/09)
 A poção NÃO é da batalha (o dono: "a poção não é para usar na batalha.. e sim para curar a vida
 após uma batalha na sala de espera entre as salas"). O lance `{a:'po'}` derruba a sala no juiz
 (422 `pocao-na-batalha`, solo, grupo ou duelo) e nenhum fechamento mexe em `progress.consumiveis`.
 
-A vida atravessa as salas assim: o fechamento PAGO (`sala/fechar`, `grupo/fechar`) grava em
-`vida_espera` uma linha por herói (`ref` = o bilhete ou o gid; a chave do carry, `heroId` ou
-`dono:heroId`; a conta dona), com o PV do fim (`carry`), o máximo (`vidaMax` do juiz) e o instante
-do fechamento em ms. Ao abrir a sala seguinte (`sala/abrir`, `grupo/abrir`) o servidor calcula
-`min(máximo, fim + floor((agora − fechou) / VIDA_MS_POR_PV) + curas)` (2000 ms, o
-`DATA.vidaEntreSalas.msPorPv`) e põe no carry do bilhete; herói a 0 PV é recusado (409 `vida-zero`,
-com `heroi` e `esperaS`). O juiz (`aplicaCarry`) só prende no PV máximo da sala nova. A primeira
-sala da descida não tem carry (vida cheia). O cliente não pede o bilhete de antemão enquanto a vida
-sobe: o carry é o do instante em que o bilhete abre.
+**A VIDA ÚNICA DO HERÓI (14/09).** O dono: "hoje nas salas de espera a vida vai recuperando aos
+poucos até encher ou o jogador usa pote; isso vale para quando terminar calabouço (na praça), depois
+de um pvp e assim por diante; e se o jogador estiver com a vida na metade e começar uma batalha sendo
+pvp, poço, desafio ou outro calabouço, a vida vai começar onde estava". Até 13/09 a vida só
+atravessava DENTRO de uma descida (`vida_espera`, por bilhete/gid; a praça zerava). Agora é UMA vida
+por herói da conta, contínua entre qualquer luta.
 
-Beber é na sala de espera: `POST /api/sala/pocao {bilhete, heroId, pocaoId}` (o bilhete da sala
-vencida) e `POST /api/grupo/pocao {gid, heroId, pocaoId}` (só os heróis da própria conta). A API
-confere a descida viva (a sala paga é a última que a conta abriu, dentro de `CARRY_JANELA` e com
-sala seguinte), o herói e o PV cheio (409 `cheio`); o juiz roda a op INTERNA `beberPocao {id}` (tira
-uma do contador, tudo ou nada: sem ela, 422 `sem-pocao`) e a `cura` devolvida entra em
-`vida_espera.cura` na MESMA transação que grava o estado. A compra segue a op `comprarPocao {id,
-qtd}` (`JOGO.Mercado.comprarPocao`: vinténs do saco, teto por tipo, tudo ou nada).
+- **Tabela** (nova, nunca ALTER): `vida_heroi(conta_id, heroi, hp_fim, hp_max, desde_ms, cura)`,
+  chave `(conta_id, heroi)`. `vida_espera` segue criada (o contêiner velho do rolling update ainda
+  escreve nela) e não é mais lida.
+- **A regra**: PV agora = `min(hp_max, hp_fim + cura + floor((agora_ms − desde_ms) / 2000))`
+  (`VIDA_MS_POR_PV`, o `DATA.vidaEntreSalas.msPorPv`). Herói sem linha, ou com o PV de agora no
+  máximo da linha, está **cheio** e fica fora de todo carry: o motor dá o PV máximo de hoje (subir
+  de nível ou trocar peça depois da luta entra sozinho). O relógio é o do servidor.
+- **Quem grava** (hp_fim, hp_max, desde_ms = agora, cura = 0), uma linha por herói na conta DELE,
+  sempre que o juiz refez a luta: `sala/fechar` (vitória, derrota e sala largada), `grupo/fechar`
+  (idem; a conta de cada herói sai da party guardada), `duelo/fechar` (ranqueado, empate,
+  desistência/W.O. — o PV em que o replay parou — e acima do teto). NÃO grava: sala recusada
+  (422), grupo `nao-conferida`, duelo fotografado, duelo cujo replay diverge.
+- **Quem lê** (a vida de agora, só os feridos): `sala/abrir` (qualquer sala, o Poço inclusive),
+  `grupo/abrir` (cada herói pela linha da própria conta, chave `dono:heroId`) e `duelo/abrir`.
+  Qualquer herói a 0 PV → 409 `vida-zero` `{heroi, esperaS}`. O juiz (`aplicaCarry` /
+  `aplicaCarryRede`) só prende no PV máximo da sala nova, com piso 1.
+- `GET /api/vida` → `{ok, agoraMs, msPorPv: 2000, herois: {heroId: {hp, max, cheioEmMs, ate1Ms}}}`,
+  só os feridos; `cheioEmMs`/`ate1Ms` = quanto falta (ms, a partir de `agoraMs`) para encher / para 1 PV.
+
+**O duelo.** `POST /api/duelo/abrir {did, herois}` (cada lado, antes da arena): confere os heróis na
+conta, recusa herói a 0 (409 `vida-zero`), guarda `duelo_vida(did, conta_id, herois, carry,
+criado_em)` e responde `{ok, carry: {heroId: PV} | null}`. Idempotente por `(did, conta)`: a segunda
+chamada devolve o guardado, não a vida de agora. Teto de 60 aberturas novas por conta por hora (429
+`liberaEm`). O `duelo/fechar` manda ao juiz `A.vida`/`B.vida` = o carry guardado de cada lado (sem
+linha = null = cheio); o juiz aplica em `Engine.createDuelSala(…, {seed, vidaA, vidaB})` antes do
+primeiro turno e devolve por lado `vidaFim` (`Engine.vidaDoLado`) e `vidaMax`. Um registro jogado com
+outra vida diverge (422). A resposta ganha `vida: {heroId: PV agora}` dos heróis de quem pede.
+Risco aceito: a página de antes (sem `duelo/abrir`) entra cheia — o mesmo que era antes de 14/09.
+
+**A poção** se bebe FORA da batalha, em qualquer lugar (praça, antessala, depois do duelo): `POST
+/api/vida/pocao {heroId, pocaoId}`. A API confere o herói na conta (400 `heroi`) e a vida ferida (409
+`cheio`, com `hp`/`hpMax` quando há linha — antes de gastar); o juiz roda a op INTERNA `beberPocao
+{id}` (tira uma do contador, tudo ou nada: sem ela, 422 `sem-pocao`) e a `cura` soma em
+`vida_heroi.cura` na MESMA transação que grava o estado. Resposta `{ok, heroi, pocaoId, cura, hp,
+hpMax, versao, hash, progress, db}`. As rotas de antes, `POST /api/sala/pocao {bilhete, …}` e `POST
+/api/grupo/pocao {gid, …}`, fazem o mesmo (do bilhete/gid só se confere o formato): a página velha
+aberta no deploy continua bebendo. A compra segue a op `comprarPocao {id, qtd}`
+(`JOGO.Mercado.comprarPocao`: vinténs do saco, teto por tipo, tudo ou nada).
 
 ### 5.3 `POST /op`
 Entrada: `{conta: {id, gm}, progress, db, ops: [{nome, args}], semente, contexto: {agoraMs}}`.

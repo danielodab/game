@@ -155,6 +155,12 @@ var JOGO = (typeof window !== 'undefined')
         b.espera = [];
         delete bilhetes[k];
         if (parado || outroAparelho(r)) return;         // 13/09: o jogo caiu aqui; a capa já diz por quê
+        // 14/09: o herói está a 0 no relógio do servidor — a vida daqui se acerta com a de lá
+        if (r && r.motivo === 'vida-zero') {
+          aviso(A.textoVidaZero(r));
+          try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
+          return;
+        }
         aviso(foraDoAr(r) ? 'O servidor não respondeu para abrir a sala — tente de novo em instantes.'
                           : ((r && r.erro) || 'O servidor não abriu a sala.'));
       });
@@ -190,6 +196,53 @@ var JOGO = (typeof window !== 'undefined')
    * corpo solo {bilhete, heroId, pocaoId}; em grupo {gid, heroId, pocaoId}. */
   A.bebeNaSala = function (corpo) { return bebeEm('/api/sala/pocao', corpo); };
   A.bebeNoGrupo = function (corpo) { return bebeEm('/api/grupo/pocao', corpo); };
+  /* A VIDA ÚNICA (14/09, o dono: "a vida vai recuperando aos poucos até encher ou o jogador usa
+   * pote; isso vale para quando terminar calabouço (na praça), depois de um pvp e assim por
+   * diante"). A poção agora se bebe FORA DA BATALHA em qualquer lugar: corpo {heroId, pocaoId};
+   * resolve {ok, cura, hp, hpMax} ou {ok:false, motivo: 'cheio'|'acabou'|'sem-pocao'|'heroi'…}.
+   * As duas rotas de cima seguem aceitas pelo servidor, mas o jogo novo só usa esta. */
+  A.bebeVida = function (corpo) { return bebeEm('/api/vida/pocao', corpo); };
+  /* a vida de cada herói não cheio, no relógio do servidor (GET /api/vida; JOGO.Vida adota) */
+  A.puxaVida = function () {
+    if (!A.ligada()) return Promise.resolve(null);
+    var pedido;
+    if (typeof A._fetch === 'function') pedido = A._fetch('/api/vida', { method: 'GET' });
+    else {
+      var s = S();
+      if (!s || !s.api) return Promise.resolve(null);
+      pedido = s.api('/api/vida');
+    }
+    return Promise.resolve(pedido).then(function (r) {
+      if (parado || outroAparelho(r) || foraDoAr(r) || !r || !r.ok) return null;
+      return r;
+    }, function () { return null; });
+  };
+  /* O DUELO EM REDE ABRE NO SERVIDOR (14/09): antes do compromisso, o servidor guarda com que
+   * vida cada herói meu entra (é com ela que ele refaz o duelo no fechar). corpo {did, herois};
+   * resolve {ok, carry: {heroId: PV}|null} ou {ok:false, motivo: 'vida-zero', heroi, esperaS}. */
+  A.abreDuelo = function (corpo) {
+    return descarregaFila().then(function () { return api('/api/duelo/abrir', corpo); }).then(function (r) {
+      if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
+      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
+      if (!r.ok) {
+        return { ok: false, erro: r.erro || 'o servidor não abriu o duelo', motivo: r.motivo || null,
+                 heroi: r.heroi || null, esperaS: r.esperaS };
+      }
+      return { ok: true, carry: (r.carry && typeof r.carry === 'object') ? r.carry : null };
+    }, function () { return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' }; });
+  };
+  /* o texto de um 409 'vida-zero' (sala, grupo ou duelo): quem espera e quanto */
+  A.textoVidaZero = function (r) {
+    var hid = (r && r.heroi) || '', classe = String(hid).split('#')[0], nome = hid || 'um herói';
+    try {
+      var h = P() && P().hero ? P().hero(hid) : null;
+      if (h && h.classId) classe = h.classId;
+      var d = JOGO.DATA && JOGO.DATA.classes && JOGO.DATA.classes[classe];
+      if (d && d.name) nome = d.name;
+    } catch (e) {}
+    var s = Math.max(1, Math.ceil(Number(r && r.esperaS) || 0));
+    return nome + ' está sem vida: espere ' + s + ' s (a vida volta sozinha) ou beba uma poção.';
+  };
   function bebeEm(rota, corpo) {
     return descarregaFila().then(function () { return api(rota, corpo); }).then(function (r) {
       if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
@@ -338,6 +391,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!A.ligada()) return;
     puxouNaAbertura = true;
     A.puxaEstado();
+    // 14/09: e a vida dos heróis, que o servidor guarda (a praça já está na tela)
+    try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
   }
   try { window.addEventListener('soterra:nuvem', function (ev) { ouveNuvem(ev && ev.detail); }); } catch (e) {}
   try {

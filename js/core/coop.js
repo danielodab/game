@@ -928,15 +928,47 @@ var JOGO = (typeof window !== 'undefined')
     var ps = Coop.payloadMeus(g.party);
     if (!ps.length) return false;
     S.prontoProx = agora() + Coop.PRONTO_MS;
-    // 13/09: `vida` = as curas de poção dos meus heróis na sala de espera (quem lidera soma na ata e espera todos de pé)
+    /* 14/09 (a vida única): `vida` = {meuDono:heroId: PV agora} dos MEUS heróis que não estão
+     * cheios (antes, 13/09, eram as curas de poção). Quem lidera põe na ata e segura a porta
+     * enquanto algum estiver a 0. O formato é o mesmo que o rPronto já conferia. */
     var vida = null;
-    try { vida = g.vidaCurasMinhas ? g.vidaCurasMinhas() : null; } catch (e) { vida = null; }
+    try { vida = g.vidaMinhaNoGrupo ? g.vidaMinhaNoGrupo() : null; } catch (e) { vida = null; }
     return envia('pronto', { sala: salaAtual(), heroi: ps[0], herois: ps, versao: Coop.versao(), vida: vida });
   }
-  /* A VIDA DO PARCEIRO NA SALA DE ESPERA (13/09): {dono:heroId: cura} do último `pronto`, só
-   * das chaves dele e só números — é o que ele bebeu; a regeneração cada lado conta sozinho */
+  /* A VIDA DO PARCEIRO (14/09): a do último `pronto`, andando no relógio daqui desde que ele
+   * chegou (+1 PV a cada DATA.vidaEntreSalas.msPorPv), sem passar do PV máximo do payload dele
+   * (stats.hp, o hpMax do motor). Herói que não veio no `vida` está cheio.
+   * [{chave, heroId, hp, max, cheioEmMs, ate1Ms}] — os cheios também (a HUD mostra a linha). */
+  function msPorPv() {
+    var v = D().vidaEntreSalas || {};
+    return (typeof v.msPorPv === 'number' && isFinite(v.msPorPv) && v.msPorPv > 0) ? v.msPorPv : 2000;
+  }
+  Coop.vidaParceiroDetalhe = function () {
+    if (!prontoValido()) return [];
+    var pr = S.prontoParceiro, vida = pr.vida || {}, ms = msPorPv();
+    var passou = Math.max(0, agora() - num(pr.vidaEm, agora())), out = [];
+    var quem = (S.parceiro && S.parceiro.id) || ((pr.herois && pr.herois[0] && pr.herois[0].dono) || '');
+    (pr.herois || []).forEach(function (h) {
+      if (!h || typeof h !== 'object') return;
+      var hid = h.heroId || h.classId, k = (h.dono || quem) + ':' + hid;
+      var mx = Math.floor(num(h.stats && h.stats.hp, 0));
+      var hp0 = vida[k];
+      if (typeof hp0 !== 'number') {
+        if (mx >= 1) out.push({ chave: k, heroId: hid, hp: mx, max: mx, cheioEmMs: 0, ate1Ms: 0 });
+        return;
+      }
+      if (mx < 1) mx = Math.max(1, hp0 + 1);
+      var hp = Math.min(mx, hp0 + Math.floor(passou / ms)), resto = ms - (passou % ms);
+      out.push({ chave: k, heroId: hid, hp: hp, max: mx,
+                 cheioEmMs: hp < mx ? (mx - hp - 1) * ms + resto : 0, ate1Ms: hp < 1 ? resto : 0 });
+    });
+    return out;
+  };
+  /* {dono:heroId: PV agora} dos heróis do parceiro que não estão cheios */
   Coop.vidaParceiro = function () {
-    return (prontoValido() && S.prontoParceiro.vida) ? S.prontoParceiro.vida : {};
+    var out = {};
+    Coop.vidaParceiroDetalhe().forEach(function (p) { if (p.hp < p.max) out[p.chave] = p.hp; });
+    return out;
   };
   /* o Game avisa que eu bebi: quem segue manda o `pronto` na hora (não espera os 5 s) */
   Coop.vidaMudou = function () {
@@ -985,7 +1017,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!hsP.length) return { ok: false, motivo: 'sem-pronto' };
     if (hsP.length > Coop.MAX_HEROIS) return { ok: false, motivo: 'versao' };
     for (var i = 0; i < hsP.length; i++) if (!validaPayload(hsP[i])) return { ok: false, motivo: 'versao' };
-    // 13/09: herói a 0 PV (meu ou do parceiro) segura a porta até a vida voltar — o servidor recusa igual
+    // 13/09: herói a 0 PV (meu ou do parceiro) segura a porta até a vida voltar — o servidor recusa igual.
+    // 14/09: é a vida única (Game.esperaVida lê a minha em JOGO.Vida e a do parceiro no `pronto`)
     var ev = null;
     try { ev = g.esperaVida ? g.esperaVida() : null; } catch (e) { ev = null; }
     if (ev) return { ok: false, motivo: 'vida', vida: ev };
@@ -1032,6 +1065,13 @@ var JOGO = (typeof window !== 'undefined')
                       herois: idsDe(meus), dono: meuId(),
                       parceiro: { conta: contaPar, dono: p.id, herois: idsDe(pars) } }).then(function (r) {
         S.pedindoGrupo = false;
+        // 14/09: um herói (meu ou do parceiro) está a 0 no relógio do servidor — a porta espera
+        if (r && !r.ok && r.motivo === 'vida-zero') {
+          avisa(Aut.textoVidaZero ? Aut.textoVidaZero(r) : 'Um herói está sem vida: espere ele recuperar.', 'aviso');
+          try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
+          muda();
+          return;
+        }
         if (!r || !r.ok || typeof r.semente !== 'number' || typeof r.gid !== 'string') {
           avisa('O servidor não abriu a sala do grupo: ' + ((r && r.erro) || 'sem resposta') + '.', 'aviso');
           muda();
@@ -1042,7 +1082,7 @@ var JOGO = (typeof window !== 'undefined')
       muda();
       return true;
     }
-    // 13/09: sem servidor, o PV da PORTA de quem lidera (a espera e as poções dos dois) vai na ata
+    // 13/09: sem servidor, o PV da PORTA de quem lidera vai na ata (14/09: a vida única dos dois)
     mandaAta(g, p, meus, pars,
              (Coop._sementeFixa != null) ? (Coop._sementeFixa >>> 0) : novaSemente(),
              (g._carryPorta ? g._carryPorta() : (g._carry && g._carry())) || null, null);
@@ -1097,7 +1137,8 @@ var JOGO = (typeof window !== 'undefined')
       hs.push(h);
     }
     if (!hs.length) return;
-    // 13/09: as curas de poção dele — só as chaves DELE (quem:heroId), só inteiros de 0 a 100000
+    // 13/09: a vida dele — só as chaves DELE (quem:heroId), só inteiros de 0 a 100000. 14/09: é o
+    // PV de agora dos heróis dele que não estão cheios; `vidaEm` = quando chegou (a barra anda daqui)
     var vida = {};
     if (d.vida && typeof d.vida === 'object') {
       Object.keys(d.vida).forEach(function (k) {
@@ -1105,7 +1146,7 @@ var JOGO = (typeof window !== 'undefined')
         if (k.indexOf(quem + ':') === 0 && typeof n === 'number' && isFinite(n) && n >= 0 && n <= 100000) vida[k] = Math.floor(n);
       });
     }
-    S.prontoParceiro = { sala: String(d.sala), heroi: hs[0], herois: hs, versao: d.versao || null, vida: vida };
+    S.prontoParceiro = { sala: String(d.sala), heroi: hs[0], herois: hs, versao: d.versao || null, vida: vida, vidaEm: agora() };
     muda();
   }
   function rAta(d) {
@@ -1829,6 +1870,7 @@ var JOGO = (typeof window !== 'undefined')
      * refaz a arena com as duplas das DUAS contas e o registro de lances, e só
      * o resultado de lá muda a Brasa — nos dois. W.O., desistência e partida
      * contestada não ranqueiam. Os tetos por par e por dia são do servidor. */
+    var vidaNoFechar = false;
     try {
       var Aut = JOGO.Autoridade, arena = S.duelo.arenaSrv, Se = JOGO.Sessao;
       if (Aut && Aut.ligada && Aut.ligada() && Aut.fechaDuelo && arena && !wo && !contestado && S.parceiro) {
@@ -1840,14 +1882,19 @@ var JOGO = (typeof window !== 'undefined')
           Aut.fechaDuelo({ did: S.duelo.did, dungeonId: arena.dungeonId, roomIndex: arena.roomIndex, semente: arena.semente,
                            A: souA ? eu : ele, B: souA ? ele : eu, lances: (S.logSrv || []).slice(),
                            hashFinal: f.h, fotografada: !!S.fotografada }).then(function (r) {
+            // 14/09: o servidor refez o duelo com a vida que ELE guardou no abrir e gravou a do fim
+            try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
             if (r && r.ok && r.ranqueado && typeof r.delta === 'number') {
               avisa('Duelo ranqueado: ' + (r.delta >= 0 ? '+' : '') + r.delta + ' pontos de Brasa.', r.delta >= 0 ? 'ok' : 'info');
             } else if (r && r.ok && r.motivo === 'teto') {
               avisa('Este duelo não contou para o ranking (o teto de duelos ranqueados de hoje).', 'info');
             }
           });
+          vidaNoFechar = true;
         }
       }
+      // 14/09: sem o fechar ranqueado (W.O., contestado), a vida de lá é a que ele guardou
+      if (!vidaNoFechar && Aut && Aut.ligada && Aut.ligada() && JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza();
     } catch (eR) {}
     // 11/09 (achado 20): o duelo pela Rede é AMISTOSO e não rende nada que
     // vire moeda ou bônus — nem o treino da guilda (XP_TREINO e MOEDA_TREINO

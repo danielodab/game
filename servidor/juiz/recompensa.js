@@ -61,15 +61,19 @@ function fecha(corpo) {
   });
 
   // 3. a recompensa pelo funil do jogo
-  let recompensa = null, carry = null, vidaMax = null;
+  /* 14/09, A VIDA ÚNICA DO HERÓI (o dono: "isso vale para quando terminar calabouço, depois de um
+   * pvp e assim por diante"): o PV do fim e o máximo saem em QUALQUER fim refeito — vitória,
+   * derrota ou sala largada — e a API grava em vida_heroi. Quem cai não foge da vida zerada
+   * largando a sala */
+  let recompensa = null;
+  const G = J.Game;
+  const carry = G._carrySolo(r.estado);
+  const vidaMax = G._vidaMax(r.estado, false);
   if (r.fase === 'won') {
-    const G = J.Game;
     G.state = r.estado;
     G.party = b.herois.slice();
     G.dungeonId = b.dungeonId;
     G.roomIndex = b.roomIndex;
-    carry = G._carrySolo(r.estado);
-    vidaMax = G._vidaMax(r.estado, false);        // 13/09: a sala de espera enche até aqui
     const rw = G._computeRewards();
     recompensa = JSON.parse(JSON.stringify(rw));
     if (rw && rw.drops && rw.drops.perdidos) recompensa.dropsPerdidos = rw.drops.perdidos.slice();
@@ -164,7 +168,9 @@ function fechaGrupo(corpo) {
     carryRede: true, escolhePosicao: true, lances: c.lances, hashFinal: c.hashFinal
   });
   const final = JSON.stringify(r.estado);
-  let carry = null, vidaMax = null;
+  // 14/09, a vida única: o PV do fim (dono:heroId) e o máximo em qualquer fim refeito, não só na vitória
+  const carry = lider.w.J.Game._carryRede(r.estado);
+  const vidaMax = lider.w.J.Game._vidaMax(r.estado, true);
   const pagos = mundos.map((x) => {
     let recompensa = null;
     if (r.fase === 'won') {
@@ -178,8 +184,6 @@ function fechaGrupo(corpo) {
       G.party = x.m.herois.slice();
       G.dungeonId = ata.dungeonId;
       G.roomIndex = ata.roomIndex;
-      if (!carry) carry = G._carryRede(G.state);
-      if (!vidaMax) vidaMax = G._vidaMax(G.state, true);   // 13/09: a chave dono:heroId, como o carry
       const rw = G._computeRewards();
       recompensa = JSON.parse(JSON.stringify(rw));
       if (rw && rw.drops && rw.drops.perdidos) recompensa.dropsPerdidos = rw.drops.perdidos.slice();

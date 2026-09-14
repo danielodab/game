@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>SOTERRA — as poções de vida e a vida entre as salas na HUD</title>
+<title>SOTERRA — as poções de vida e a vida única na HUD</title>
 <style>
   html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
   #tela{position:fixed;left:0;top:0;width:900px;height:760px;border:0;background:#000}
@@ -13,21 +13,23 @@
 </style>
 </head>
 <body>
-<!-- AS POÇÕES DE VIDA E A VIDA ENTRE AS SALAS NA HUD (13/09). Pedidos do dono: "no mercadinho
-     do jogo deve ter poções à venda por vinténs. poções que carregam a vida vão para consumíveis
-     no inventário" e "a poção não é para usar na batalha.. e sim para curar a vida após uma
-     batalha na sala de espera entre as salas.. carrega 1 pv a cada 2 segundos. se um personagem
-     morre ele vem com a vida zerada aumentando 1 pv a cada 2 s também".
-     O index.html de verdade num quadro, com o save na memória (?sandbox=1), sem sessão (a vida e o
-     gole com a autoridade são provados em tests/pocoes_api.py). Cobra:
+<!-- AS POÇÕES DE VIDA E A VIDA ÚNICA NA HUD. Pedidos do dono: 13/09 "no mercadinho do jogo deve ter
+     poções à venda por vinténs. poções que carregam a vida vão para consumíveis no inventário" e "a
+     poção não é para usar na batalha"; 14/09 "hoje nas salas de espera a vida vai recuperando aos
+     poucos até encher ou o jogador usa pote; isso vale para quando terminar calabouço (na praça),
+     depois de um pvp e assim por diante; e se o jogador estiver com a vida na metade e começar uma
+     batalha sendo pvp, poço, desafio ou outro calabouço, a vida vai começar onde estava, na metade".
+     O index.html de verdade num quadro, com o save na memória (?sandbox=1), sem sessão (a vida com o
+     servidor é provada em tests/pocoes_api.py; o módulo em tests/vida.html). Cobra:
        - a aba Poções da banca do mercador e a aba Consumíveis do inventário;
-       - a batalha SEM poção na barra;
-       - a sala vencida (o fim forçado pela prova) abre a sala de espera: o quadro da vida com a
-         barra de cada herói subindo 1 PV a cada 2 s (o relógio da espera é controlado pela prova,
-         e uma volta com o relógio de verdade), os botões das poções, o gole que cura e desconta,
-         a vida cheia que recusa;
-       - o herói caído (0 PV): o "Entrar na batalha" apagado dizendo quanto falta, que acende com
-         1 PV — pelo tempo ou pela poção — e a batalha seguinte nasce com a vida da porta.
+       - a PRAÇA: o quadro da vida escondido com todos cheios; o herói ferido aparece no canto (sem tapar
+         o cais nem o chat), sobe 1 PV a cada 2 s (relógio da prova, e uma volta com o de verdade) e
+         bebe a poção ali mesmo;
+       - a primeira sala da descida nasce com a vida guardada (não mais cheia) e a batalha não tem poção;
+       - a derrota deixa todos a 0 (o quadro na tela de fim) e a porta da antessala espera 1 PV — pelo
+         tempo ou pela poção —, e a batalha seguinte nasce com a vida da porta;
+       - o herói que enche some do quadro e do registro, e entra na batalha com o PV máximo de agora
+         (o que subiu de nível entra com o máximo novo).
      Pontos de foto: a página põe window.__foto = 'nome' e espera window.__fotoFeita (um
      condutor com DevTools fotografa; sem ele, segue depois de um instante).
      Roda por HTTP (o quadro precisa da mesma origem). -->
@@ -82,7 +84,7 @@
 
   var quadro = document.getElementById('tela');
   quadro.src = '../index.html?sandbox=1&snap=1&pocoes-hud';
-  var w, doc, J, G, E, U, P;
+  var w, doc, J, G, E, U, P, V;
   var MED = 'pocao-media', PEQ = 'pocao-pequena', GRA = 'pocao-grande';
 
   function ficha() { return doc.querySelector('.ui-sheet.is-on'); }
@@ -100,17 +102,17 @@
     w = quadro.contentWindow; doc = w.document;
     ate(function () {
       J = w.JOGO;
-      return J && J.UI && J.UI.openSheet && J.Game && J.Engine && J.Mercado && J.Progress && J.DB && J.DATA &&
+      return J && J.UI && J.UI.openSheet && J.Game && J.Engine && J.Mercado && J.Progress && J.DB && J.DATA && J.Vida &&
              J.DATA.consumiveis && doc.querySelector('.ui-toast') && doc.querySelector('.ui-sheet');
     }, 110000).then(function (ok) {
-      if (!ok) return fim('o jogo não abriu no quadro');
-      G = J.Game; E = J.Engine; U = J.UI; P = J.Progress;
+      if (!ok) return fim('o jogo não abriu no quadro (com o JOGO.Vida)');
+      G = J.Game; E = J.Engine; U = J.UI; P = J.Progress; V = J.Vida;
       diz('o jogo abriu em ' + Math.round((Date.now() - T0) / 1000) + ' s');
       try {
         var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
         w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
       } catch (e) {}
-      return banca().then(inventario).then(batalha).then(espera).then(caido).then(function () { fim(); });
+      return banca().then(inventario).then(praca).then(descida).then(derrota).then(porta).then(cheio).then(function () { fim(); });
     }).catch(function (e) { fim('a prova estourou: ' + (e && (e.stack || e.message) || e)); });
   };
 
@@ -131,8 +133,8 @@
         check('a banca mostra as três poções com a cura e o preço (dos dados)', ok && !!linhaPocao(PEQ) && !!linhaPocao(MED) &&
               /Poção de Vida Pequena/.test(t) && /cura 30 PV/.test(t) && /40v/.test(t) && /cura 70 PV/.test(t) && /110v/.test(t) &&
               /cura 150 PV/.test(t) && /260v/.test(t) && /sem taxa/.test(t), t.slice(0, 240));
-        check('a banca diz que a poção é da sala de espera entre as salas (nada de PA na batalha)',
-              /sala de espera entre as salas/.test(t) && !/PA na batalha/.test(t), t.slice(0, 400));
+        check('a banca diz que a poção se bebe fora da batalha (nada de "só na sala de espera")',
+              /fora da batalha/.test(t) && !/sala de espera entre as salas/.test(t) && !/PA na batalha/.test(t), t.slice(0, 400));
         var row = linhaPocao(MED);
         botao(row.querySelector('.mc-atalhos'), /^5$/).click();
         check('o atalho 5 põe 5 no campo e o total vira 550v', row.querySelector('input').value === '5' && /total 550v/.test(row.textContent));
@@ -143,12 +145,12 @@
         return ate(function () { return !!linhaPocao(PEQ); }, 5000);
       }).then(function () {
         var rp = linhaPocao(PEQ);
-        rp.querySelector('input').value = '2';
+        rp.querySelector('input').value = '3';
         rp.querySelector('input').dispatchEvent(new w.Event('input'));
         botao(rp, /^Comprar$/).click();
-        return ate(function () { return P.consumivelVer(PEQ) === 2; }, 8000);
+        return ate(function () { return P.consumivelVer(PEQ) === 3; }, 8000);
       }).then(function (ok) {
-        check('Comprar 2 Pequenas', ok && moedas() === m0 - 630);
+        check('Comprar 3 Pequenas', ok && moedas() === m0 - 670);
         return ate(function () { return !!linhaPocao(GRA); }, 5000);
       }).then(function () {
         var rm = linhaPocao(MED);
@@ -157,11 +159,8 @@
         botao(rm, /^Comprar$/).click();
         return ate(function () { return /Cabem 20/.test(toastTxt()); }, 8000);
       }).then(function (viu) {
-        check('acima do teto de 20 por poção (5 + 16) a banca recusa sem cobrar', viu && P.consumivelVer(MED) === 5 && moedas() === m0 - 630,
+        check('acima do teto de 20 por poção (5 + 16) a banca recusa sem cobrar', viu && P.consumivelVer(MED) === 5 && moedas() === m0 - 670,
               toastTxt());
-        var rm = linhaPocao(MED);
-        rm.querySelector('input').value = '5';
-        rm.querySelector('input').dispatchEvent(new w.Event('input'));
         return foto('banca');
       });
     });
@@ -181,30 +180,115 @@
       check('Consumíveis mostra as poções compradas com ícone, nome, quantidade e cura',
             ok && med && /×5/.test(med.textContent) && /Poção de Vida Média/.test(med.textContent) && /cura 70 PV/.test(med.textContent) &&
             !!med.querySelector('canvas'), cels.map(function (c) { return c.textContent; }).join(' | '));
+      U.closeSheet();
       return foto('consumiveis');
     });
   }
 
-  // ====================================================== a batalha: sem poção
-  var heroisIds, relogio = 0;
-  function relogioParado(ms) { relogio = ms; G._relogioVida = function () { return relogio; }; }
-  function batalha() {
-    U.closeSheet();
-    heroisIds = P.heroIds().filter(function (h) { return h !== 'gm'; }).slice(0, 2);
-    U.selection(heroisIds.slice());
-    var ok = G.startRun(U.selection().slice(), 'greenhouse');
-    return ate(function () { return U.telaAtual() === 'antessala'; }, 90000).then(function (naAnt) {
+  // ====================================================== a praça
+  var herois, relogio = 0, maxDe = {};
+  function relogioParado(ms) { relogio = ms; V._relogio = function () { return relogio; }; }
+  function caixaPraca() { return doc.querySelector('.screen-hub.is-on .vida-bloco.is-praca'); }
+  function linhaVida(caixa, hid) { return caixa ? caixa.querySelector('.vida-heroi[data-chave="' + hid + '"]') : null; }
+  function numVida(caixa, hid) { var r = linhaVida(caixa, hid); var n = r && r.querySelector('.vh-num'); return n ? n.textContent : ''; }
+  function toca(el) { el.dispatchEvent(new w.MouseEvent('click', { bubbles: true })); if (el.onclick) {} }
+  function clica(el) { el.click(); }
+  function praca() {
+    herois = P.heroIds().filter(function (h) { return h !== 'gm'; }).slice(0, 2);
+    herois.forEach(function (h) { maxDe[h] = P.battleParty([h])[0].stats.hp; });
+    relogioParado(10000000);
+    V._zera();
+    U.selection(herois.slice());
+    // a conta da prova ganha um nome antes da praça: sem ele o painel de baixo pede o nome e segura o da porta
+    return J.DB.batizar('Provador').then(function () {
+      U.showScreen('hub');
+      return ate(function () { return U.telaAtual() === 'hub' && !!caixaPraca(); }, 60000);
+    }).then(function (ok) {
+      check('a praça monta o quadro da vida, ESCONDIDO com todos cheios', ok && caixaPraca().hidden === true &&
+            G.vidaNaEspera(herois).every(function (v) { return v.hp === v.max; }));
+      // o fim de uma luta: o primeiro herói com 120 PV a menos
+      V.fim(obj(herois[0], maxDe[herois[0]] - 120), obj(herois[0], maxDe[herois[0]]));
+      return ate(function () { return !caixaPraca().hidden && !!linhaVida(caixaPraca(), herois[0]); }, 4000);
+    }).then(function (ok) {
+      var cx = caixaPraca(), h0 = herois[0], mx = maxDe[h0];
+      check('o herói ferido aparece no quadro da praça com a barra e o PV (sem esperar tique: a Vida avisa)',
+            ok && numVida(cx, h0) === (mx - 120) + '/' + mx + ' PV' && cx.querySelectorAll('.vida-heroi').length === herois.length,
+            numVida(cx, h0));
+      check('... e diz quanto falta: "+1 PV a cada 2 s · cheio em 4:00"; o outro herói, "vida cheia"',
+            /\+1 PV a cada 2 s · cheio em 4:00/.test(linhaVida(cx, h0).textContent) &&
+            (herois.length < 2 || /vida cheia/.test(linhaVida(cx, herois[1]).textContent)), linhaVida(cx, h0).textContent);
+      // o canto não tapa o cais nem o chat
+      var rb = cx.getBoundingClientRect(), dock = doc.querySelector('.screen-hub.is-on .hub-dock'), chat = doc.querySelector('.hub-chat');
+      var rd = dock ? dock.getBoundingClientRect() : null, rc = (chat && chat.offsetParent) ? chat.getBoundingClientRect() : null;
+      function cruza(a, b) { return !!b && b.width > 0 && !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top); }
+      check('o quadro fica no canto de cima, sem tapar o cais nem o chat', rb.top < 200 && rb.left < 60 && !cruza(rb, rd) && !cruza(rb, rc),
+            [Math.round(rb.left), Math.round(rb.top), Math.round(rb.right), Math.round(rb.bottom)].join(',') +
+            (rd ? ' cais ' + Math.round(rd.top) : '') + (rc ? ' chat ' + Math.round(rc.top) : ''));
+      relogio += 10000;
+      return ate(function () { return numVida(caixaPraca(), h0) === (mx - 115) + '/' + mx + ' PV'; }, 3000);
+    }).then(function (ok) {
+      var h0 = herois[0], mx = maxDe[h0];
+      check('10 s na praça: +5 PV na barra, sem recarregar a tela', ok, numVida(caixaPraca(), h0));
+      var larg = linhaVida(caixaPraca(), h0).querySelector('.vh-enche').style.width;
+      check('a largura da barra acompanha o PV', larg === Math.round(100 * (mx - 115) / mx) + '%', larg);
+      // uma volta com o relógio DE VERDADE
+      V._relogio = null;
+      V.fim(obj(h0, mx - 115), obj(h0, mx));
+      var antes = mx - 115;
+      return passo(4600).then(function () {
+        var hp = parseInt(numVida(caixaPraca(), h0), 10);
+        check('com o relógio de verdade a barra sobe AO VIVO (4,6 s = +2 PV)', hp >= antes + 2 && hp <= antes + 3, antes + ' → ' + hp);
+        relogioParado(Date.now());
+        V.fim(obj(h0, mx - 115), obj(h0, mx));
+        return foto('praca');
+      });
+    }).then(function () {
+      var h0 = herois[0], mx = maxDe[h0];
+      var bs = linhaVida(caixaPraca(), h0).querySelectorAll('.vh-pocao');
+      check('na praça, os botões das poções que a conta tem, com a cura e a contagem', bs.length === 2 &&
+            /\+30/.test(bs[0].textContent) && /×3/.test(bs[0].textContent) && /\+70/.test(bs[1].textContent) && /×5/.test(bs[1].textContent) &&
+            !!bs[0].querySelector('canvas'), [].map.call(bs, function (b) { return b.textContent; }).join(' | '));
+      check('o Game diz que se bebe aqui (fora da batalha)', G.podeBeberEspera(h0, MED) === null, G.podeBeberEspera(h0, MED));
+      clica(linhaVida(caixaPraca(), h0).querySelector('.vh-pocao[data-pocao="' + MED + '"]'));
+      return ate(function () { return P.consumivelVer(MED) === 4 && numVida(caixaPraca(), h0) === (mx - 45) + '/' + mx + ' PV'; }, 5000);
+    }).then(function (ok) {
+      var h0 = herois[0];
+      check('tocar a Média na praça cura 70 PV naquele herói e gasta uma', ok && V.agora(h0).hp === maxDe[h0] - 45,
+            numVida(caixaPraca(), h0) + ' · ' + P.consumivelVer(MED));
+      return ate(function () {
+        var b = linhaVida(caixaPraca(), h0).querySelector('.vh-pocao[data-pocao="' + MED + '"]');
+        return b && /×4/.test(b.textContent);
+      }, 3000);
+    }).then(function (ok) {
+      check('o botão conta 4', ok);
+      return foto('praca-bebeu');
+    });
+  }
+  function obj(k, v) { var o = {}; o[k] = v; return o; }
+
+  // ====================================================== a descida nasce com a vida guardada
+  function descida() {
+    var h0 = herois[0], guardado = V.agora(h0).hp;
+    var ok = G.startRun(herois.slice(), 'greenhouse');
+    return ate(function () { return U.telaAtual() === 'antessala' && !!doc.querySelector('.vida-bloco.is-antessala'); }, 90000).then(function (naAnt) {
       if (!ok || !naAnt) throw new Error('a descida não chegou à antessala (' + U.telaAtual() + ')');
-      check('a primeira sala da descida: sem sala de espera (vida cheia, sem quadro da vida)',
-            G.vidaNaEspera().length === 0 && !doc.querySelector('.vida-bloco') && G.esperaVida() === null);
+      var cx = doc.querySelector('.vida-bloco.is-antessala');
+      check('a antessala da PRIMEIRA sala já mostra o quadro da vida (a vida é única)', !cx.hidden && !!linhaVida(cx, h0) &&
+            numVida(cx, h0) === guardado + '/' + maxDe[h0] + ' PV', numVida(cx, h0));
+      check('o quadro da praça saiu junto com a praça', !caixaPraca());
       G.entrarNaSala();
       return ate(function () { return U.telaAtual() === 'battle' && G.state && !!doc.querySelector('.bt-bottom'); }, 60000);
     }).then(function (naLuta) {
       if (!naLuta) throw new Error('a batalha não abriu');
       var st = G.state;
       var hs = st.units.filter(function (u) { return u.kind === 'hero' && u.side === 'player'; });
-      check('a batalha da primeira sala nasce de vida cheia', hs.length > 0 && hs.every(function (u) { return u.hp === u.hpMax; }),
-            hs.map(function (u) { return u.hp + '/' + u.hpMax; }).join(' '));
+      var u0 = hs.filter(function (u) { return (u.heroId || u.defId) === h0; })[0];
+      var outros = hs.filter(function (u) { return (u.heroId || u.defId) !== h0; });
+      check('a batalha da primeira sala nasce com a vida GUARDADA (e o outro herói, cheio)',
+            u0 && u0.hp === guardado && outros.every(function (u) { return u.hp === u.hpMax; }),
+            hs.map(function (u) { return (u.heroId || u.defId) + ' ' + u.hp + '/' + u.hpMax; }).join(' ') + ' · guardado ' + guardado);
+      check('na batalha não se bebe e o quadro não aparece', G.podeBeberEspera(h0, PEQ) === 'batalha' &&
+            !doc.querySelector('.screen-battle .vida-bloco'));
       var opc = (E.placementOptions ? E.placementOptions(st) : []) || [];
       if (opc[0]) G.onTileClicked(opc[0].x, opc[0].y);
       return ate(function () { return G.state.phase === 'playing'; }, 15000);
@@ -215,108 +299,55 @@
       check('a barra da batalha não tem poção e o Game não bebe na batalha',
             doc.querySelectorAll('.bt-spells .spell.is-pocao').length === 0 && typeof G.usaPocao === 'undefined' &&
             typeof E.usePotion === 'undefined');
-      // o FIM FORÇADO: o primeiro herói ferido, os inimigos no chão, a sala vencida
-      var st = G.state;
-      var hs = st.units.filter(function (u) { return u.kind === 'hero' && u.side === 'player'; });
-      hs[0].hp = Math.max(1, hs[0].hpMax - 120);
-      st.units.forEach(function (u) { if (u.side === 'enemy') { u.hp = 0; u.alive = false; } });
-      st.phase = 'won';
-      relogioParado(1000000);
-      G.update(1 / 60);
-      return ate(function () { return U.telaAtual() === 'roomClear'; }, 15000);
     });
   }
 
-  // ====================================================== a sala de espera
-  function linhaVida(chave) { return doc.querySelector('.vida-bloco.is-fixo .vida-heroi[data-chave="' + chave + '"]'); }
-  function numVida(chave) { var r = linhaVida(chave); var n = r && r.querySelector('.vh-num'); return n ? n.textContent : ''; }
-  var principal;
-  function espera() {
-    return Promise.resolve().then(function (okRec) {
-      var lista = G.vidaNaEspera();
-      principal = lista[0];
-      check('a sala vencida abre o registro da espera: cada herói com a vida com que terminou', lista.length === heroisIds.length &&
-            principal && principal.hp === principal.max - 120 && principal.cheioEmS === 240,
-            JSON.stringify(lista.map(function (v) { return [v.chave, v.hp, v.max, v.cheioEmS]; })));
-      G.nextRoom();
-      return ate(function () { return U.telaAtual() === 'antessala' && !!linhaVida(principal.chave); }, 90000);
+  // ====================================================== a derrota deixa todos a 0
+  function derrota() {
+    var st = G.state;
+    st.units.forEach(function (u) { if (u.side === 'player' && (u.kind === 'hero' || u.kind === 'fusion')) { u.hp = 0; u.alive = false; } });
+    st.phase = 'lost';
+    G.update(1 / 60);
+    return ate(function () { return U.telaAtual() === 'defeat'; }, 15000).then(function (ok) {
+      check('a derrota abre a tela de fim', ok);
+      check('a derrota GRAVA a vida: todos a 0, com 1 PV em 2 s (não zera o registro)',
+            herois.every(function (h) { var a = V.agora(h); return a && a.hp === 0 && a.ate1Ms === 2000; }),
+            JSON.stringify(V._registro()));
+      return ate(function () { var c = doc.querySelector('.screen-defeat .vida-bloco.is-fim'); return c && !c.hidden; }, 3000);
     }).then(function (ok) {
-      check('a antessala da sala 2 mostra o quadro da vida no canto, com a barra e o PV de cada herói',
-            ok && numVida(principal.chave) === (principal.max - 120) + '/' + principal.max + ' PV' &&
-            doc.querySelectorAll('.vida-bloco.is-fixo .vida-heroi').length === heroisIds.length, numVida(principal.chave));
-      check('... e diz quanto falta: "+1 PV a cada 2 s · cheio em 4:00"',
-            /\+1 PV a cada 2 s · cheio em 4:00/.test(linhaVida(principal.chave).textContent), linhaVida(principal.chave).textContent);
-      check('o bilhete não é pedido de antemão enquanto a vida sobe (sem autoridade aqui, a regra é do Game)', G.esperaVida() === null);
-      relogio += 10000;                                    // 10 s de espera
-      return ate(function () { return numVida(principal.chave) === (principal.max - 115) + '/' + principal.max + ' PV'; }, 3000);
-    }).then(function (ok) {
-      check('10 s de espera: +5 PV na barra, sem recarregar a tela (o relógio da prova)', ok, numVida(principal.chave));
-      var larg = linhaVida(principal.chave).querySelector('.vh-enche').style.width;
-      check('a largura da barra acompanha o PV', larg === Math.round(100 * (principal.max - 115) / principal.max) + '%', larg);
-      // uma volta com o relógio DE VERDADE: a barra sobe sozinha
-      var reg = G._esperaRegistro();
-      reg.herois[principal.chave].hp = principal.max - 115;
-      reg.desde = Date.now();
-      G._relogioVida = null;
-      var antes = principal.max - 115;
-      return passo(4600).then(function () {
-        var hp = parseInt(numVida(principal.chave), 10);
-        check('com o relógio de verdade a barra sobe AO VIVO (4,6 s = +2 PV)', hp >= antes + 2 && hp <= antes + 3, antes + ' → ' + hp);
-        relogioParado(reg.desde + 4000);
-        return foto('espera');
-      });
-    }).then(function () {
-      var bs = doc.querySelectorAll('.vida-bloco.is-fixo .vida-heroi[data-chave="' + principal.chave + '"] .vh-pocao');
-      check('os botões das poções que a conta tem, com a cura e a contagem', bs.length === 2 &&
-            /\+30/.test(bs[0].textContent) && /×2/.test(bs[0].textContent) && /\+70/.test(bs[1].textContent) && /×5/.test(bs[1].textContent) &&
-            !!bs[0].querySelector('canvas'), [].map.call(bs, function (b) { return b.textContent; }).join(' | '));
-      var hp0 = G.vidaNaEspera()[0].hp;
-      linhaVida(principal.chave).querySelector('.vh-pocao[data-pocao="' + MED + '"]').click();
-      return ate(function () { return P.consumivelVer(MED) === 4; }, 5000).then(function (ok) {
-        return ate(function () { return numVida(principal.chave) === (hp0 + 70) + '/' + principal.max + ' PV'; }, 3000).then(function (ok2) {
-          check('tocar a Média cura 70 PV naquele herói na hora e gasta uma', ok && ok2 && G.vidaNaEspera()[0].hp === hp0 + 70,
-                hp0 + ' → ' + numVida(principal.chave) + ' · ' + P.consumivelVer(MED));
-          return ate(function () {
-            var b = linhaVida(principal.chave).querySelector('.vh-pocao[data-pocao="' + MED + '"]');
-            return b && /×4/.test(b.textContent);
-          }, 3000);
-        });
-      });
-    }).then(function (ok) {
-      check('o botão conta 4', ok);
-      linhaVida(principal.chave).querySelector('.vh-pocao[data-pocao="' + MED + '"]').click();
-      return ate(function () { return P.consumivelVer(MED) === 3; }, 5000);
-    }).then(function (ok) {
-      var v = G.vidaNaEspera()[0];
-      check('pode beber de novo (sem limite por turno fora da batalha), sem passar do máximo', ok && v.hp === v.max, v.hp + '/' + v.max);
-      return ate(function () { return /vida cheia/.test(linhaVida(principal.chave).textContent); }, 3000);
-    }).then(function (ok) {
-      var b = linhaVida(principal.chave).querySelector('.vh-pocao[data-pocao="' + PEQ + '"]');
-      check('cheio: a barra diz "vida cheia" e a poção fica apagada', ok && b.classList.contains('is-dim'));
-      b.click();
-      return passo(400).then(function () {
-        check('... e tocar nela não gasta, e diz por quê', P.consumivelVer(PEQ) === 2 && /já está cheia/.test(toastTxt()), toastTxt());
-        return foto('espera-bebeu');
-      });
+      var c = doc.querySelector('.screen-defeat .vida-bloco.is-fim');
+      check('a tela da derrota mostra o quadro da vida com os heróis a 0 e as poções',
+            ok && c.querySelectorAll('.vida-heroi.is-zero').length === herois.length && c.querySelectorAll('.vh-pocao').length > 0 &&
+            /sem vida — 1 PV em 2 s/.test(c.textContent), c && c.textContent.slice(0, 160));
+      return foto('derrota');
     });
   }
 
-  // ====================================================== o herói caído espera 1 PV
-  function portaBotao() { return doc.querySelector('.hub-painel .vida-porta'); }
-  function caido() {
-    var reg = G._esperaRegistro();
-    reg.herois[principal.chave].hp = 0;
-    reg.cura = {};
-    relogioParado(reg.desde);
-    J.Hub.aoAproximar({ tipo: 'porta', nome: 'A porta' });
-    return ate(function () { return !!portaBotao() && /recuperar/.test(portaBotao().textContent); }, 3000).then(function (ok) {
+  // ====================================================== a porta espera 1 PV
+  // o painel VISÍVEL (a praça já montou o dela, escondido, antes da antessala no DOM)
+  function painelVivo() { return [].filter.call(doc.querySelectorAll('.hub-painel'), function (p) { return p.offsetParent !== null; })[0] || null; }
+  function portaBotao() { var p = painelVivo(); return p ? p.querySelector('.vida-porta') : null; }
+  function porta() {
+    var ok = G.startRun(herois.slice(), 'greenhouse');
+    return ate(function () { return U.telaAtual() === 'antessala' && !!doc.querySelector('.vida-bloco.is-antessala'); }, 90000).then(function (naAnt) {
+      if (!ok || !naAnt) throw new Error('"tentar de novo" não chegou à antessala');
+      J.Hub.aoAproximar({ tipo: 'porta', nome: 'A porta' });
+      return ate(function () { return !!portaBotao() && /recuperar/.test(portaBotao().textContent); }, 3000);
+    }).then(function (ok) {
       var b = portaBotao();
+      if (!b) {
+        var ps = [].map.call(doc.querySelectorAll('.hub-painel'), function (p) {
+          return (p.offsetParent !== null ? 'VIS ' : 'esc ') + p.className + ' «' + p.textContent.slice(0, 80) + '»';
+        });
+        throw new Error('a porta não montou o botão: tela=' + U.telaAtual() + ' Hub=' + !!J.Hub + ' aoAproximar=' +
+          !!(J.Hub && J.Hub.aoAproximar) + ' painéis=' + JSON.stringify(ps) + ' espera=' + JSON.stringify(G.esperaVida()));
+      }
       check('herói a 0 PV: o "Entrar na batalha" fica apagado e diz "Esperando … recuperar… 2 s"',
             ok && b.classList.contains('is-apagado') && /^Esperando .+ recuperar… 2 s$/.test(b.textContent), b && b.textContent);
       check('... o painel da porta também mostra a vida (compacta: as poções ficam no quadro do canto)',
-            !!doc.querySelector('.hub-painel .vida-bloco.is-compacto .vida-heroi.is-zero') &&
-            !doc.querySelector('.hub-painel .vida-bloco .vh-pocao'));
-      var rb = b.getBoundingClientRect(), rp = doc.querySelector('.hub-painel').getBoundingClientRect();
+            !!painelVivo().querySelector('.vida-bloco.is-compacto .vida-heroi.is-zero') &&
+            !painelVivo().querySelector('.vida-bloco .vh-pocao'));
+      var rb = b.getBoundingClientRect(), rp = painelVivo().getBoundingClientRect();
       check('... e o botão cabe no painel, sem rolar', rb.bottom <= rp.bottom + 1 && rb.top >= rp.top,
             Math.round(rb.top) + '-' + Math.round(rb.bottom) + ' em ' + Math.round(rp.top) + '-' + Math.round(rp.bottom));
       check('... e o Game não deixa entrar', G.entrarNaSala() === false && U.telaAtual() === 'antessala' && !!G.esperaVida());
@@ -329,32 +360,71 @@
       relogio += 1000;
       return ate(function () { return !portaBotao().classList.contains('is-apagado'); }, 3000);
     }).then(function (ok) {
-      check('2 s depois o herói tem 1 PV e a porta acende ("Entrar na batalha")', ok && portaBotao().textContent === 'Entrar na batalha' &&
-            G.vidaNaEspera()[0].hp === 1, portaBotao().textContent);
-      // de novo a 0, e a poção em vez do tempo
+      check('2 s depois os heróis têm 1 PV e a porta acende ("Entrar na batalha")', ok && portaBotao().textContent === 'Entrar na batalha' &&
+            G.vidaNaEspera().every(function (v) { return v.hp === 1; }), portaBotao().textContent);
       relogio -= 2000;
       return ate(function () { return portaBotao().classList.contains('is-apagado'); }, 3000);
     }).then(function (ok) {
       check('de volta ao instante do fim: apagada de novo', ok);
-      linhaVida(principal.chave).querySelector('.vh-pocao[data-pocao="' + PEQ + '"]').click();
+      var cx = doc.querySelector('.vida-bloco.is-antessala');
+      clica(linhaVida(cx, herois[0]).querySelector('.vh-pocao[data-pocao="' + PEQ + '"]'));
+      return ate(function () { return P.consumivelVer(PEQ) === 2; }, 4000);
+    }).then(function (ok) {
+      var b = portaBotao();
+      var outro = herois[1];
+      check('a Pequena levanta um herói (30 PV); com o outro ainda a 0 a porta segue esperando (e diz quem)',
+            ok && V.agora(herois[0]).hp === 30 && (!outro || (b.classList.contains('is-apagado') &&
+            b.textContent.indexOf(G.esperaVida().nome) >= 0 && G.esperaVida().heroId === outro)), b.textContent);
+      if (!outro) return true;
+      clica(linhaVida(doc.querySelector('.vida-bloco.is-antessala'), outro).querySelector('.vh-pocao[data-pocao="' + PEQ + '"]'));
       return ate(function () { return !portaBotao().classList.contains('is-apagado'); }, 4000);
     }).then(function (ok) {
-      check('a Pequena bebida no quadro levanta o herói (30 PV) e acende a porta sem esperar',
-            ok && P.consumivelVer(PEQ) === 1 && G.vidaNaEspera()[0].hp === 30, G.vidaNaEspera()[0].hp + ' · ' + P.consumivelVer(PEQ));
+      check('a Pequena no segundo acende a porta sem esperar', ok && P.consumivelVer(PEQ) === (herois[1] ? 1 : 2), P.consumivelVer(PEQ));
       return foto('porta-bebeu');
     }).then(function () {
       var esperado = {};
       G.vidaNaEspera().forEach(function (v) { esperado[v.heroId] = v.hp; });
-      portaBotao().click();
+      clica(portaBotao());
       return ate(function () { return U.telaAtual() === 'battle' && G.state && G.state.phase === 'placing'; }, 60000).then(function (ok) {
         var hs = ok ? G.state.units.filter(function (u) { return u.kind === 'hero' && u.side === 'player'; }) : [];
-        check('a batalha da sala 2 nasce com a vida da porta de cada herói', ok && hs.length === heroisIds.length &&
-              hs.every(function (u) { return u.hp === Math.min(u.hpMax, esperado[u.heroId || u.defId]); }),
+        check('a batalha nasce com a vida da porta de cada herói (30 PV)', ok && hs.length === herois.length &&
+              hs.every(function (u) { return u.hp === 30 && esperado[u.heroId || u.defId] === 30; }),
               hs.map(function (u) { return (u.heroId || u.defId) + ' ' + u.hp + '/' + u.hpMax; }).join(' ') + ' · ' + JSON.stringify(esperado));
-        G._relogioVida = null;
         var fora = G.abandonar();
-        check('abandonar leva à praça e a descida acaba (sem sala de espera)', fora && G.vidaNaEspera().length === 0);
+        check('abandonar no meio da sala leva à praça sem gravar nada (a vida segue a da porta)', fora &&
+              V.agora(herois[0]) && V.agora(herois[0]).hp === 30);
       });
+    });
+  }
+
+  // ====================================================== quem enche some
+  function cheio() {
+    U.showScreen('hub');
+    return ate(function () { return U.telaAtual() === 'hub' && caixaPraca() && !caixaPraca().hidden; }, 30000).then(function (ok) {
+      check('de volta à praça, os heróis a 30 PV aparecem no quadro', ok);
+      // um herói que "subiu de nível": o registro tem o máximo velho (60), o de agora é maior
+      var h0 = herois[0];
+      V.fim(obj(h0, 50), obj(h0, 60));
+      relogio += 10 * 60 * 1000;                    // dez minutos: todos enchem
+      return ate(function () { return caixaPraca().hidden; }, 4000);
+    }).then(function (ok) {
+      check('quem enche some: o quadro da praça se esconde e o registro fica vazio', ok &&
+            herois.every(function (h) { return V.agora(h) === null; }) && Object.keys(V._registro()).length === 0,
+            JSON.stringify(V._registro()));
+      var ok2 = G.startRun(herois.slice(), 'greenhouse');
+      return ate(function () { return ok2 && U.telaAtual() === 'antessala'; }, 90000);
+    }).then(function (ok) {
+      check('a antessala com todos cheios: o quadro fica escondido e a porta não espera',
+            ok && doc.querySelector('.vida-bloco.is-antessala').hidden && G.esperaVida() === null);
+      G.entrarNaSala();
+      return ate(function () { return U.telaAtual() === 'battle' && G.state; }, 60000);
+    }).then(function (ok) {
+      var hs = ok ? G.state.units.filter(function (u) { return u.kind === 'hero' && u.side === 'player'; }) : [];
+      check('cheio entra com o PV máximo de AGORA (o que subiu de nível não fica preso ao máximo velho de 60)',
+            ok && hs.length && hs.every(function (u) { return u.hp === u.hpMax && u.hpMax > 60; }),
+            hs.map(function (u) { return u.hp + '/' + u.hpMax; }).join(' '));
+      V._relogio = null;
+      G.abandonar();
     });
   }
 })();

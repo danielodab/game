@@ -9,11 +9,11 @@
  * tetos contra combinar resultado entre duas contas (por par e por dia) são da
  * API, que sabe o histórico.
  *
- * corpo = { A: { conta, dono, herois, progress, db }, B: { ... },
+ * corpo = { A: { conta, dono, herois, progress, db, vida? }, B: { ... },
  *           dungeonId, roomIndex, semente, lances, hashFinal, contexto: { agoraMs } }
  * O lado A é o 'player' do motor e o B o 'enemy' (game.js, _iniciaDueloRede). */
 const { mundoEconomico, poeEstado, tiraEstado } = require('./estado');
-const { refazEm, recusa } = require('./sala');
+const { refazEm, recusa, vidaMaxDoLado } = require('./sala');
 
 const FIM = { won: 'A', lost: 'B', empate: 'empate' };
 
@@ -38,16 +38,28 @@ function fechaDuelo(corpo) {
     throw recusa('duelo contra a própria conta não vale', 'mesma-conta');
   }
 
+  /* 14/09, A VIDA ÚNICA: cada lado entra com a vida que a API guardou no POST /api/duelo/abrir
+   * (`A.vida` / `B.vida` = {heroId: PV}; null = cheio, a página de antes) e sai com a vida do fim
+   * (`vidaFim`, Engine.vidaDoLado) e o máximo (`vidaMax`) — em QUALQUER fim refeito, ranqueado ou
+   * não: a API grava os dois lados em vida_heroi */
   const r = refazEm(lados[0].w.J, {
     modo: 'duelo', dungeonId: c.dungeonId, roomIndex: c.roomIndex, semente: c.semente,
     duplaA: JSON.parse(JSON.stringify(lados[0].dupla)), duplaB: JSON.parse(JSON.stringify(lados[1].dupla)),
+    vidaA: lados[0].m.vida || null, vidaB: lados[1].m.vida || null,
     escolhePosicao: false, lances: c.lances, hashFinal: c.hashFinal
   });
+  const E = lados[0].w.J.Engine;
+  const vida = {
+    A: { vidaFim: E.vidaDoLado(r.estado, 'player'), vidaMax: vidaMaxDoLado(r.estado, 'player') },
+    B: { vidaFim: E.vidaDoLado(r.estado, 'enemy'), vidaMax: vidaMaxDoLado(r.estado, 'enemy') }
+  };
   const venc = FIM[r.fase] || null;
   const saida = { ok: true, fase: r.fase, venc, ranqueado: !!venc, turnosJogador: r.turnosJogador };
   if (!venc) {
-    // não terminou (desistência, W.O., queda): não é resultado de arena — nada muda
-    lados.forEach((x) => { saida[x.k] = { progress: x.antes.progress, db: x.antes.db, hash: x.antes.hash, delta: 0 }; });
+    // não terminou (desistência, W.O., queda): não é resultado de arena — a Brasa não muda (a vida sim)
+    lados.forEach((x) => {
+      saida[x.k] = Object.assign({ progress: x.antes.progress, db: x.antes.db, hash: x.antes.hash, delta: 0 }, vida[x.k]);
+    });
     return saida;
   }
   const B = lados[0].w.J.Brasa;
@@ -65,8 +77,8 @@ function fechaDuelo(corpo) {
     }
     x.w.J.DB.definirBrasa(novo, eu.partidas + 1);
     const depois = tiraEstado(x.w);
-    saida[x.k] = { progress: depois.progress, db: depois.db, hash: depois.hash, hashAntes: x.antes.hash, delta,
-                   pts: novo, partidas: eu.partidas + 1 };
+    saida[x.k] = Object.assign({ progress: depois.progress, db: depois.db, hash: depois.hash, hashAntes: x.antes.hash, delta,
+                                 pts: novo, partidas: eu.partidas + 1 }, vida[x.k]);
   });
   return saida;
 }

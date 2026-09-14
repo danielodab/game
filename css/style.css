@@ -844,6 +844,22 @@ html.celular.retrato .bt-top .bt-trava { min-height: 28px; height: 28px; top: 5p
 .vh-pocao.is-dim { opacity: .45; filter: grayscale(.5); }
 .vh-qtd { color: var(--dim); font-weight: 400; }
 .vh-sem { font: 400 11px var(--ui-sans); color: var(--dim); margin: 0; }
+/* 14/09: A VIDA ÚNICA (hud.js vidaBloco) — o quadro some enquanto todos estão cheios, e mora
+   também na PRAÇA (compacto, no canto de cima à esquerda: longe do cais e do chat de baixo e do
+   painel do grupo da direita; desce um degrau quando a faixa dos eventos está no ar), nas telas
+   de fim e na ficha do duelo em rede */
+.vida-bloco[hidden] { display: none; }
+.vida-bloco.is-praca { width: min(236px, calc(100% - 214px)); min-width: 168px; box-sizing: border-box;
+  max-height: max(120px, calc(100% - var(--sa-t, 0px) - 330px)); }
+.hub-evento:not(.is-off) ~ .vida-bloco.is-praca { top: calc(var(--sa-t, 0px) + 104px); }
+.vida-bloco.is-praca .vida-tit { font-size: 11px; }
+.vida-bloco.is-praca .vh-pocao { padding: 1px 6px 1px 2px; font-size: 10.5px; }
+.vida-bloco.is-fim { width: min(420px, 100%); margin: 0 auto 10px; box-sizing: border-box; text-align: left; }
+.vida-bloco.is-duelo { margin: 8px 0; }
+.av-carta.is-zero { opacity: .6; }
+.av-carta .av-vida { display: block; width: 100%; height: 5px; margin-top: 3px; border-radius: 3px; overflow: hidden;
+  background: rgba(255,255,255,.1); }
+.av-carta .av-vida i { display: block; height: 100%; background: linear-gradient(90deg, #b8322b, #e0524a); }
 .ig-cura { font-size: 10px; line-height: 1.1; color: #f0a79c; }
 .mc-pocao .mc-atalhos { display: inline-flex; gap: 3px; flex: 0 0 auto; }
 .mc-pocao .mc-qtd { width: 54px; }

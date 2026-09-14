@@ -136,9 +136,20 @@ function pedido(c, dg, ri, s, carry, jogo) {
         !!vm && wv.J.Game._vidaMax(stv, false).sumo === vm.sumo, JSON.stringify([vm, wv.J.Game._vidaMax(stv, false)]));
 
   const r4 = pega(() => fecha(pedido(c, 'cistern', 0, 11, null, { lances: j.lances.slice(0, 1), hash: undefined })));
-  check('a sala largada não paga e não muda nada (hash igual, sem carry nem vidaMax)',
-        r4.ok && r4.r.fase !== 'won' && r4.r.recompensa === null && r4.r.hash === r4.r.hashAntes && r4.r.carry === null &&
-        r4.r.vidaMax === null, JSON.stringify(r4.ok ? { f: r4.r.fase, c: r4.r.carry } : r4));
+  check('a sala largada não paga e não muda a economia (hash igual, sem recompensa)',
+        r4.ok && r4.r.fase !== 'won' && r4.r.recompensa === null && r4.r.hash === r4.r.hashAntes,
+        JSON.stringify(r4.ok ? { f: r4.r.fase, c: r4.r.carry } : r4));
+  // 14/09, a vida única: o PV do fim e o máximo saem também de quem não venceu (a API grava em vida_heroi)
+  check('... mas devolve a vida do fim e o máximo (14/09, a vida única: qualquer fim refeito)',
+        r4.ok && !!r4.r.carry && typeof r4.r.carry.sumo === 'number' && !!r4.r.vidaMax && r4.r.vidaMax.sumo >= r4.r.carry.sumo,
+        JSON.stringify(r4.ok ? { c: r4.r.carry, m: r4.r.vidaMax } : r4));
+  // a derrota de verdade: o Bárbaro no nível 1 cai na Cisterna e sai com 0
+  const fraco = conta(1, {});
+  const jd = joga({ progress: fraco.progress, db: fraco.db, dungeonId: 'cistern', roomIndex: 0, semente: 11, dificuldade: 'normal', herois: ['sumo'] });
+  const rd = pega(() => fecha(pedido(fraco, 'cistern', 0, 11, null, jd)));
+  check('a derrota (' + jd.fase + ') devolve o herói caído com 0 e o máximo dele',
+        jd.fase === 'lost' && rd.ok && rd.r.fase === 'lost' && rd.r.carry && rd.r.carry.sumo === 0 && rd.r.vidaMax.sumo > 0,
+        JSON.stringify(rd.ok ? { f: rd.r.fase, c: rd.r.carry, m: rd.r.vidaMax } : rd));
 
   // o PV da porta que o servidor pôs no bilhete é o que o juiz refaz
   if (!vm) return;
@@ -156,6 +167,44 @@ function pedido(c, dg, ri, s, carry, jogo) {
   const r7 = pega(() => refaz({ modo: 'duelo', dungeonId: 'cistern', roomIndex: 0, semente: 9, duplaA: dA, duplaB: dB,
                                 lances: [{ a: 'po', u: 1, s: PEQ, ok: false, de: 'a' }] }));
   check('no duelo o lance de poção também derruba a sala', !r7.ok && r7.motivo === 'pocao-na-batalha', JSON.stringify(r7));
+})();
+
+// ================================================================ 14/09, a vida única no duelo
+(function () {
+  const { fechaDuelo } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'duelo.js'));
+  const { jogaDuelo } = require(path.join(__dirname, 'juiz_grupo_jogador.js'));
+  const a = conta(20, {});
+  const wb = est.mundoEconomico({ agoraMs: AGORA, semente: 1 });
+  est.poeEstado(wb, null, null);
+  const hb = wb.J.Progress.state.heroes.curandeiro;
+  hb.level = 20; hb.xp = wb.J.DATA.leveling.xpTable[19];
+  wb.J.Progress.save();
+  const b = est.tiraEstado(wb);
+  const lado = (c, id, dono, heroi, vida) => ({ conta: { id }, dono, herois: [heroi], progress: c.progress, db: c.db, vida });
+  const base = { dungeonId: 'cistern', roomIndex: 0, semente: 999, contexto: { agoraMs: AGORA } };
+  const duelo = (vidaA, vidaB, extra) => pega(() => fechaDuelo(Object.assign({}, base,
+    { A: lado(a, 1, 'ana', 'sumo', vidaA), B: lado(b, 2, 'bia', 'curandeiro', vidaB), lances: [] }, extra || {})));
+
+  // sem lance nenhum o replay para na primeira vez de gente: a vida de entrada é a do fim
+  const r0 = duelo({ sumo: 7 }, null);
+  check('o duelo refeito aplica a vida guardada de cada lado (A com 7, B cheio) e devolve vidaFim/vidaMax por lado',
+        r0.ok && r0.r.venc === null && r0.r.A.vidaFim.sumo === 7 && r0.r.A.vidaMax.sumo > 7 &&
+        r0.r.B.vidaFim.curandeiro === r0.r.B.vidaMax.curandeiro && r0.r.B.vidaMax.curandeiro > 0,
+        JSON.stringify(r0.ok ? { A: [r0.r.A.vidaFim, r0.r.A.vidaMax], B: [r0.r.B.vidaFim, r0.r.B.vidaMax] } : r0));
+  const r1 = duelo({ sumo: 99999 }, { curandeiro: 0 });
+  check('... presa no máximo e com piso 1 (herói a 0 não chega: a API recusa no duelo/abrir)',
+        r1.ok && r1.r.A.vidaFim.sumo === r1.r.A.vidaMax.sumo && r1.r.B.vidaFim.curandeiro === 1,
+        JSON.stringify(r1.ok ? { A: r1.r.A.vidaFim, B: r1.r.B.vidaFim } : r1));
+
+  const jv = jogaDuelo(Object.assign({}, base, { A: lado(a, 1, 'ana', 'sumo'), B: lado(b, 2, 'bia', 'curandeiro'), vidaA: { sumo: 40 } }));
+  const r2 = duelo({ sumo: 40 }, null, { lances: jv.lances, hashFinal: jv.hash });
+  check('o duelo jogado com a vida guardada (40) se refaz igual e sai com a mesma vida do fim (' + jv.fase + ')',
+        r2.ok && r2.r.fase === jv.fase && ['won', 'lost', 'empate'].indexOf(jv.fase) >= 0 &&
+        JSON.stringify(r2.r.A.vidaFim) === JSON.stringify(jv.vidaFimA) && JSON.stringify(r2.r.B.vidaFim) === JSON.stringify(jv.vidaFimB),
+        JSON.stringify(r2.ok ? { f: r2.r.fase, A: r2.r.A.vidaFim, simA: jv.vidaFimA } : r2));
+  const r3 = duelo(null, null, { lances: jv.lances, hashFinal: jv.hash });
+  check('... e o mesmo registro refeito de vida cheia diverge: o cliente não escolhe com quanto entra', !r3.ok && !!r3.motivo,
+        JSON.stringify(r3));
 })();
 
 // ================================================================ em grupo
@@ -225,10 +274,14 @@ function pedido(c, dg, ri, s, carry, jogo) {
   check('o fechamento em grupo não mexe nas poções de ninguém (' + (r.ok ? r.r.fase : '?') + ')',
         r.ok && pa && pa[PEQ] === 2 && pb && pb[MED] === 2, JSON.stringify(r.ok ? { pa, pb } : r));
   const vm = r.ok ? r.r.vidaMax : undefined;
-  check('... e o PV máximo sai com a chave dono:heroId (null se não venceu)',
-        r.ok && (r.r.fase === 'won'
-          ? (!!vm && vm['ana:sumo'] > 0 && vm['bia:curandeiro'] > 0 && Object.keys(vm).sort().join() === Object.keys(r.r.carry).sort().join())
-          : vm === null), JSON.stringify(r.ok ? { carry: r.r.carry, vm } : r));
+  // 14/09, a vida única: o carry e o máximo saem em QUALQUER fim refeito, não só na vitória
+  check('... e o PV máximo sai com a chave dono:heroId, junto do carry, em qualquer fim (14/09)',
+        r.ok && !!vm && !!r.r.carry && vm['ana:sumo'] > 0 && vm['bia:curandeiro'] > 0 &&
+        Object.keys(vm).sort().join() === Object.keys(r.r.carry).sort().join(), JSON.stringify(r.ok ? { carry: r.r.carry, vm } : r));
+  const rl = pega(() => fechaGrupo({ membros: membros(), ata, lances: log.slice(0, 3), contexto }));
+  check('a sala em grupo largada no meio também devolve o carry e o máximo (a API grava a vida de cada um)',
+        rl.ok && rl.r.fase !== 'won' && !!rl.r.carry && typeof rl.r.carry['ana:sumo'] === 'number' && !!rl.r.vidaMax &&
+        rl.r.vidaMax['bia:curandeiro'] > 0, JSON.stringify(rl.ok ? { f: rl.r.fase, c: rl.r.carry } : rl));
 })();
 
 // ================================================================ as ops: beber (interna), comprar e o load

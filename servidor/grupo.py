@@ -17,7 +17,10 @@ A SALA EM GRUPO (POST /api/grupo/abrir e /api/grupo/fechar)
   GRUPO_ESPERA segundos desde o primeiro fechamento, a sala fica 'nao-conferida' e
   não paga ninguém.
 
-O DUELO RANQUEADO (POST /api/duelo/fechar)
+A VIDA ÚNICA (14/09): as duas portas (grupo/abrir e duelo/abrir) leem a vida de agora de cada herói na linha
+  da conta dele (vida_heroi, salas.py), e todo fim refeito pelo juiz grava a vida do fim de volta.
+
+O DUELO RANQUEADO (POST /api/duelo/abrir e /api/duelo/fechar)
   Qualquer um dos dois fecha; o `did` torna o fechamento idempotente (o segundo recebe
   o resultado guardado). Antes do juiz, os tetos contra combinar resultado entre contas
   (DUELOS_POR_PAR e DUELOS_POR_CONTA em 24 h); acima, o duelo vale como amistoso e
@@ -31,8 +34,8 @@ import secrets
 import time
 
 from comum import EstadoMudou, Recusa, agora, inteiro
-from salas import (CARRY_JANELA, DIFICULDADES, LANCES_MAX, RE_BILHETE, RE_CALABOUCO, SALA_MIN_S, SALA_S_POR_TURNO,
-                   SALA_VALIDADE, TENTATIVAS, _inteiro_puro, _objeto)
+from salas import (DIFICULDADES, LANCES_MAX, RE_BILHETE, RE_CALABOUCO, SALA_MIN_S, SALA_S_POR_TURNO, SALA_VALIDADE,
+                   SEM_ESTADO, TENTATIVAS, _inteiro_puro, _objeto)
 
 log = logging.getLogger('api')
 
@@ -40,6 +43,10 @@ GRUPO_ESPERA = 120                # segundos que um fechamento fotografado esper
 DUELOS_POR_PAR = 3                # duelos ranqueados entre as mesmas duas contas, em 24 h
 DUELOS_POR_CONTA = 20             # duelos ranqueados de uma conta, em 24 h
 DUELO_JANELA = 24 * 3600
+# 14/09: aberturas NOVAS de duelo (POST /api/duelo/abrir) por conta, por hora — no espírito do SALAS_POR_HORA:
+# guardar a vida é barato, mas não é porta para encher o banco
+DUELO_ABERTURAS_POR_HORA = 60
+TETO = {'fase': 'teto', 'venc': None, 'ranqueado': False, 'motivo': 'teto'}
 RE_DONO = re.compile(r'^[\x21-\x7e]{1,64}$')
 RE_DID = re.compile(r'^[A-Za-z0-9_:-]{8,64}$')
 NAO_CONFERIDA = 'a sala em grupo teve uma sincronização por foto e não pôde ser conferida'
@@ -87,6 +94,16 @@ CREATE TABLE IF NOT EXISTS duelos(
 );
 CREATE INDEX IF NOT EXISTS duelos_a ON duelos(a_id, criado_em);
 CREATE INDEX IF NOT EXISTS duelos_b ON duelos(b_id, criado_em);
+-- 14/09, a vida única: a vida com que cada lado entra no duelo, guardada no POST /api/duelo/abrir (carry
+-- {heroId: PV} dos heróis feridos, ou NULL = cheio). O fechamento refaz o duelo com ela
+CREATE TABLE IF NOT EXISTS duelo_vida(
+  did        TEXT NOT NULL,
+  conta_id   INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  herois     TEXT NOT NULL,
+  carry      TEXT,
+  criado_em  INTEGER NOT NULL,
+  PRIMARY KEY (did, conta_id)
+);
 """
 
 
@@ -114,62 +131,35 @@ def _lances(corpo):
     return lances, hash_final
 
 
-def _conta_da_chave(party):
-    """{dono:heroId: conta} da party guardada da sala em grupo — a chave do carry de cada herói
-    com a conta que o levou. Montada da party (e não cortando a chave no ':'), porque o id de
-    rede do dono pode ter ':'."""
-    fora = {}
-    for p in party if isinstance(party, list) else []:
-        if isinstance(p, dict) and isinstance(p.get('dono'), str) and isinstance(p.get('herois'), list):
-            for h in p['herois']:
-                if isinstance(h, str):
-                    fora[p['dono'] + ':' + h] = p.get('conta')
-    return fora
-
-
 class GrupoMixin:
 
-    # -- POST /api/grupo/pocao (13/09, a poção na sala de espera do grupo) ---------------------------
+    # -- POST /api/grupo/pocao (13/09; 14/09: a rota de antes da vida única) ---------------------------
     def grupo_pocao(self, conta, corpo):
-        """Corpo {gid, heroId, pocaoId}. O gid é o da sala em grupo VENCIDA que abriu a sala de espera.
-        Cada jogador cura só os PRÓPRIOS heróis, com as próprias poções: a chave é dono:heroId do
-        membro que pede, e a poção sai do estado dele."""
-        cid = conta['id']
-        gid, heroi, pocao = corpo.get('gid'), corpo.get('heroId'), corpo.get('pocaoId')
+        """Corpo {gid, heroId, pocaoId}. A página velha aberta durante o deploy continua bebendo: do gid só se
+        confere o formato, e o resto é o POST /api/vida/pocao com o heroId do corpo. Cada jogador segue curando
+        só os PRÓPRIOS heróis, com as próprias poções: a linha e o estado são os da conta que pede."""
+        gid = corpo.get('gid')
         if not isinstance(gid, str) or not RE_BILHETE.match(gid):
             raise Recusa(400, 'gid inválido')
-        if not isinstance(heroi, str) or not 0 < len(heroi) <= 64:
-            raise Recusa(400, 'heroId precisa ser o id de um herói')
-        calaboucos = self._regras()['calaboucos']               # sem juiz: 503 (e nunca dentro da tranca)
-        achada = {}
+        return self.vida_pocao(conta, corpo)
 
-        def ler(agora_ms):
-            g = self.con.execute("SELECT * FROM salas_grupo WHERE gid = ?", (gid,)).fetchone()
-            if g is None or cid not in (g['lider_id'], g['membro_id']):
-                raise Recusa(404, 'sala em grupo não encontrada')
-            if g['estado'] != 'paga' or g['fechada_em'] is None:
-                raise Recusa(409, 'essa sala não abriu uma sala de espera', motivo='sem-descida')
-            n = calaboucos.get(g['dungeon'])
-            depois = (self.con.execute("SELECT 1 FROM salas_grupo WHERE gid != ? AND aberta_em >= ? "
-                                       "AND (lider_id = ? OR membro_id = ?) LIMIT 1",
-                                       (gid, g['fechada_em'], cid, cid)).fetchone() is not None
-                      or self.con.execute("SELECT 1 FROM salas WHERE conta_id = ? AND aberta_em >= ? LIMIT 1",
-                                          (cid, g['fechada_em'])).fetchone() is not None)
-            if agora_ms // 1000 - g['fechada_em'] > CARRY_JANELA or not _inteiro_puro(n) or g['sala'] + 1 >= n or depois:
-                raise Recusa(409, 'a descida acabou: a poção só se bebe na sala de espera entre as salas',
-                             motivo='sem-descida')
-            dono = next((p.get('dono') for p in json.loads(g['party']) if isinstance(p, dict) and p.get('conta') == cid
-                         and heroi in (p.get('herois') or [])), None)
-            carry = _objeto(g['carry_saida']) or {}
-            if not isinstance(dono, str) or (dono + ':' + heroi) not in carry:
-                raise Recusa(400, 'o herói %s não é seu nessa sala: cada um cura os próprios' % heroi[:64], motivo='heroi')
-            achada['chave'] = dono + ':' + heroi
-            return {'ref': gid, 'carry': carry, 'fechada_em': g['fechada_em']}
-
-        # a chave (dono:heroId) só se sabe lendo a sala: uma leitura antes, dentro da tranca
-        with self.tranca:
-            ler(int(time.time() * 1000))
-        return self._pocao_na_espera(conta, pocao, achada['chave'], ler)
+    def _grupo_vida_grava(self, party, carry, vida_max):
+        """Dentro de _escrita (14/09, a vida única): a vida do fim de cada herói da sala em grupo, na linha da
+        conta que o levou. A chave do juiz é dono:heroId; a conta e o heroId saem da party guardada (e não
+        cortando a chave no ':', porque o id de rede do dono pode ter ':')."""
+        carry = carry if isinstance(carry, dict) else {}
+        maximos = vida_max if isinstance(vida_max, dict) else {}
+        agora_ms = int(time.time() * 1000)
+        for p in party if isinstance(party, list) else []:
+            if (not isinstance(p, dict) or not _inteiro_puro(p.get('conta')) or not isinstance(p.get('dono'), str)
+                    or not isinstance(p.get('herois'), list)):
+                continue
+            fim, mx = {}, {}
+            for h in p['herois']:
+                chave = p['dono'] + ':' + h if isinstance(h, str) else None
+                if chave in carry:
+                    fim[h], mx[h] = carry[chave], maximos.get(chave)
+            self._vida_grava_fim(p['conta'], fim, mx, agora_ms)
 
     def _conta_viva(self, cid):
         """Dentro da tranca: a linha da conta (dict), ou None se não existe ou foi banida."""
@@ -217,23 +207,16 @@ class GrupoMixin:
             self._confere_herois(conta, meu['progress'], herois)
             self._confere_herois(parceiro, dele['progress'], herois_p, 'da conta do parceiro')
             self._confere_teto_salas(cid, t)
-            carry = None
-            if sala > 0:
-                r = self.con.execute(
-                    "SELECT gid, carry_saida, fechada_em FROM salas_grupo WHERE estado = 'paga' AND dungeon = ? AND sala = ? "
-                    "AND fechada_em > ? AND ((lider_id = ? AND membro_id = ?) OR (lider_id = ? AND membro_id = ?)) "
-                    "ORDER BY fechada_em DESC LIMIT 1", (dungeon, sala - 1, t - CARRY_JANELA, cid, pid, pid, cid)).fetchone()
-                anterior = _objeto(r['carry_saida']) if r is not None else None
-                if anterior is not None:
-                    # 13/09: a vida da porta de CADA herói do grupo (as poções de cada um entram na dele);
-                    # a sala só abre com todos de pé — o botão de quem lidera espera o mesmo
-                    agora_ms = int(time.time() * 1000)
-                    vida = self._vida_na_porta(r['gid'], anterior, r['fechada_em'], agora_ms)
-                    zerado = self._vida_zerada(vida, agora_ms)
-                    if zerado:
-                        raise Recusa(409, 'o herói %s ainda está sem vida: %d s até recuperar 1 PV (ou beba uma poção)'
-                                     % (zerado[0][:64], zerado[1]), motivo='vida-zero', heroi=zerado[0], esperaS=zerado[1])
-                    carry = {k: v['hp'] for k, v in vida.items()}
+            # 14/09, a vida única: em QUALQUER sala, cada herói com a vida de agora pela linha da conta DELE
+            # (as poções de cada um entram na dele); os cheios ficam fora. A sala só abre com todos de pé — o
+            # botão de quem lidera espera o mesmo
+            agora_ms = int(time.time() * 1000)
+            vidas = {}
+            for conta_id, d, hs in ((cid, dono, herois), (pid, dono_p, herois_p)):
+                for h, v in self._vida_ferida(conta_id, hs, agora_ms).items():
+                    vidas[d + ':' + h] = v
+            self._vida_recusa_zero(vidas)
+            carry = {k: v['hp'] for k, v in vidas.items()} or None
             # uma sala em grupo aberta por dupla: abrir outra vence a anterior
             self.con.execute("UPDATE salas_grupo SET estado = 'vencida', fechada_em = ? WHERE estado = 'aberta' "
                              "AND ((lider_id = ? AND membro_id = ?) OR (lider_id = ? AND membro_id = ?))",
@@ -356,8 +339,13 @@ class GrupoMixin:
                 self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada')
                 raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
             if saida['fase'] != 'won':
-                # derrota: nada muda nos estados (13/09: a poção saiu da batalha, e com ela o desconto)
-                self._grupo_marca(gid, 'perdida', None, t)
+                # derrota: nada muda nos estados da economia (13/09: a poção saiu da batalha, e com ela o
+                # desconto). 14/09, a vida única: a vida do fim de cada herói fica, na conta dele
+                with self._escrita():
+                    n = self.con.execute("UPDATE salas_grupo SET estado = 'perdida', motivo = NULL, fechada_em = ? "
+                                         "WHERE gid = ? AND estado = 'aberta'", (t, gid)).rowcount
+                    if n:
+                        self._grupo_vida_grava(json.loads(g['party']), saida.get('carry'), saida.get('vidaMax'))
                 return self._grupo_fechada(cid, gid)
             por_conta = {m.get('contaId'): m for m in saida['membros'] if isinstance(m, dict)}
             pagos = []
@@ -382,15 +370,59 @@ class GrupoMixin:
                             'por': cid})
                     self.con.execute("UPDATE salas_grupo SET estado = 'paga', fechada_em = ?, carry_saida = ? WHERE gid = ?",
                                      (t, json.dumps(carry) if carry is not None else None, gid))
-                    # 13/09: a sala de espera do grupo começa agora; cada herói com a conta do dono dele
-                    if carry is not None:
-                        self._vida_grava(gid, carry, saida.get('vidaMax'), int(time.time() * 1000),
-                                         _conta_da_chave(json.loads(g['party'])))
+                    # a espera começa agora; cada herói na linha da conta dele (14/09, a vida única)
+                    self._grupo_vida_grava(json.loads(g['party']), carry, saida.get('vidaMax'))
             except EstadoMudou:
                 continue
             log.info("sala em grupo paga: %s (#%d e #%d)", gid, g['lider_id'], g['membro_id'])
             return self._grupo_fechada(cid, gid)
         raise Recusa(409, 'o estado de uma das contas mudou no meio — tente de novo')
+
+    # -- POST /api/duelo/abrir (14/09, a vida única) ----------------------------------------------------
+    def duelo_abrir(self, conta, corpo):
+        """Corpo {did, herois: [1 ou 2 ids]}. Cada lado chama antes da arena (o dono: "se o jogador estiver com
+        a vida na metade e começar uma batalha sendo pvp… a vida vai começar onde estava"): o servidor guarda
+        a vida de agora dos heróis em duelo_vida e o fechamento refaz o duelo com ELA — o cliente não escolhe
+        com quanto entra. Idempotente pelo (did, conta): a segunda chamada devolve o guardado. Herói a 0 PV:
+        409 vida-zero. Teto de DUELO_ABERTURAS_POR_HORA aberturas novas por conta (429)."""
+        cid = conta['id']
+        did = corpo.get('did')
+        if not isinstance(did, str) or not RE_DID.match(did):
+            raise Recusa(400, 'did inválido')
+        herois = _herois(corpo.get('herois'), 'herois')
+        if not self._autoridade_ligada():
+            raise Recusa(503, 'o juiz do servidor não está configurado')
+        t = agora()
+        chave = 'duelo-abrir:%d' % cid
+        with self._escrita():
+            r = self.con.execute("SELECT carry FROM duelo_vida WHERE did = ? AND conta_id = ?", (did, cid)).fetchone()
+            if r is not None:
+                return 200, {'ok': True, 'carry': _objeto(r['carry'])}
+            estado = self._estado_exige(cid)
+            self._confere_herois(conta, estado['progress'], herois)
+            em = [x[0] for x in self.con.execute("SELECT em FROM limites WHERE chave = ? AND em > ? ORDER BY em",
+                                                 (chave, t - 3600))]
+            if len(em) >= DUELO_ABERTURAS_POR_HORA:
+                raise Recusa(429, 'duelos demais na última hora (máximo %d)' % DUELO_ABERTURAS_POR_HORA,
+                             liberaEm=em[len(em) - DUELO_ABERTURAS_POR_HORA] + 3600)
+            vidas = self._vida_ferida(cid, herois, int(time.time() * 1000))
+            self._vida_recusa_zero(vidas)
+            carry = {h: v['hp'] for h, v in vidas.items()} or None
+            self.con.execute("INSERT INTO limites(chave, em) VALUES (?, ?)", (chave, t))
+            self.con.execute("DELETE FROM limites WHERE chave = ? AND em < ?", (chave, t - 3600))
+            self.con.execute("INSERT INTO duelo_vida(did, conta_id, herois, carry, criado_em) VALUES (?, ?, ?, ?, ?)",
+                             (did, cid, json.dumps(herois), json.dumps(carry) if carry is not None else None, t))
+        return 200, {'ok': True, 'carry': carry}
+
+    def _duelo_vida_guardada(self, did, lado):
+        """Dentro da tranca: {heroId: PV} que o lado guardou no duelo/abrir, só dos heróis dele. Sem linha (a
+        página de antes, ou todos cheios) = None = o lado entra cheio."""
+        r = self.con.execute("SELECT carry FROM duelo_vida WHERE did = ? AND conta_id = ?",
+                             (did, lado['conta'])).fetchone()
+        carry = _objeto(r['carry']) if r is not None else None
+        if not carry:
+            return None
+        return {h: carry[h] for h in lado['herois'] if _inteiro_puro(carry.get(h))} or None
 
     # -- POST /api/duelo/fechar ---------------------------------------------------------------------
     def _duelo_resposta(self, cid, linha_ou_resultado):
@@ -402,6 +434,13 @@ class GrupoMixin:
         if res.get('motivo'):
             resposta['motivo'] = res['motivo']
         resposta.update(pub)
+        # 14/09, a vida única: a vida de AGORA dos heróis de quem pede ({heroId: PV}; sem linha = cheio, fora)
+        herois = (res.get('herois') or {}).get(str(cid)) if isinstance(res.get('herois'), dict) else None
+        vida = {}
+        if isinstance(herois, list):
+            with self.tranca:
+                vida = {h: v['hp'] for h, v in self._vida_de(cid, herois, int(time.time() * 1000)).items()}
+        resposta['vida'] = vida
         return 200, resposta
 
     def _duelo_guardado(self, cid, did):
@@ -413,8 +452,11 @@ class GrupoMixin:
             raise Recusa(404, 'duelo não encontrado')
         return self._duelo_resposta(cid, _objeto(r['resultado']) or {'fase': r['fase'], 'venc': r['venc']})
 
-    def _duelo_guarda(self, did, a_id, b_id, resultado, t):
-        """Dentro de _escrita: a linha do duelo (falha de chave = o outro lado guardou antes)."""
+    def _duelo_guarda(self, did, a_id, b_id, resultado, t, herois=None):
+        """Dentro de _escrita: a linha do duelo (falha de chave = o outro lado guardou antes). `herois` =
+        {conta: [heroId]} vai junto no resultado (14/09: a resposta devolve a vida deles)."""
+        if herois:
+            resultado = dict(resultado, herois=herois)
         self.con.execute("INSERT INTO duelos(did, a_id, b_id, fase, venc, criado_em, resultado) VALUES (?, ?, ?, ?, ?, ?, ?)",
                          (did, a_id, b_id, resultado['fase'], resultado.get('venc'), t,
                           json.dumps(resultado, ensure_ascii=False)))
@@ -434,9 +476,19 @@ class GrupoMixin:
                 return 'teto'
         return None
 
+    def _duelo_guarda_teto(self, did, a_id, b_id, t, herois):
+        """Dentro de _escrita: o duelo acima dos tetos vale como amistoso, e isso fica guardado."""
+        self._duelo_guarda(did, a_id, b_id, dict(TETO), t, herois)
+        for quem in (a_id, b_id):
+            self._evento(quem, 'duelo-teto', {'did': did, 'a': a_id, 'b': b_id})
+
     def duelo_fechar(self, conta, corpo):
         """Corpo {did, dungeonId, roomIndex, semente, A:{conta, dono, herois}, B:{…}, lances, hashFinal,
-        fotografada}. Ranqueado = o juiz viu um fim (venc não nulo); só esse conta nos tetos."""
+        fotografada}. Ranqueado = o juiz viu um fim (venc não nulo); só esse conta nos tetos.
+        14/09, a vida única: o juiz refaz com a vida que cada lado guardou no duelo/abrir e devolve a vida do
+        fim; a API grava os DOIS lados sempre que o juiz refez — ranqueado, empate, desistência/W.O. e também
+        acima do teto (o teto passou a chamar o juiz, sem mudar a Brasa). Fotografado não refaz e não grava;
+        o replay que diverge (422) também não."""
         cid = conta['id']
         did = corpo.get('did')
         if not isinstance(did, str) or not RE_DID.match(did):
@@ -464,8 +516,10 @@ class GrupoMixin:
         if cid not in (a_id, b_id):
             raise Recusa(403, 'só quem duelou fecha o duelo')
         lances, hash_final = _lances(corpo)
+        herois_de = {str(lados[k]['conta']): lados[k]['herois'] for k in lados}
         for _ in range(TENTATIVAS):
             t = agora()
+            teto = None
             with self._escrita():
                 if self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
                     acao = 'guardado'
@@ -474,27 +528,29 @@ class GrupoMixin:
                     if any(c is None for c in contas.values()):
                         raise Recusa(404, 'conta do duelo não encontrada')
                     if corpo.get('fotografada') is True:
-                        # sincronizado por foto: o registro não refaz o duelo; vale como amistoso
+                        # sincronizado por foto: o registro não refaz o duelo; vale como amistoso (e a vida não muda)
                         self._duelo_guarda(did, a_id, b_id, {'fase': 'nao-conferido', 'venc': None, 'ranqueado': False,
-                                                             'motivo': 'fotografada'}, t)
-                        acao = 'guardado'
-                    elif self._duelo_teto(a_id, b_id, t):
-                        self._duelo_guarda(did, a_id, b_id, {'fase': 'teto', 'venc': None, 'ranqueado': False,
-                                                             'motivo': 'teto'}, t)
-                        for quem in (a_id, b_id):
-                            self._evento(quem, 'duelo-teto', {'did': did, 'a': a_id, 'b': b_id})
+                                                             'motivo': 'fotografada'}, t, herois_de)
                         acao = 'guardado'
                     else:
-                        estados = {'A': self._estado_exige(a_id), 'B': self._estado_ler(b_id)}
-                        if estados['B'] is None:
-                            raise Recusa(409, 'a outra conta ainda não tem o estado no servidor')
-                        if cid == b_id:
-                            estados['A'] = self._estado_ler(a_id)
-                        acao = 'juiz'
+                        teto = self._duelo_teto(a_id, b_id, t)
+                        estados = {k: self._estado_ler(lados[k]['conta']) for k in lados}
+                        faltando = [k for k in lados if estados[k] is None]
+                        if faltando and teto:
+                            # sem o estado de um lado o juiz não refaz: o teto vale como antes, sem a vida
+                            self._duelo_guarda_teto(did, a_id, b_id, t, herois_de)
+                            acao = 'guardado'
+                        elif faltando:
+                            raise Recusa(409, SEM_ESTADO if lados[faltando[0]]['conta'] == cid
+                                         else 'a outra conta ainda não tem o estado no servidor')
+                        else:
+                            vidas = {k: self._duelo_vida_guardada(did, lados[k]) for k in lados}
+                            acao = 'juiz'
             if acao == 'guardado':
                 return self._duelo_guardado(cid, did)
             pedido = {k: {'conta': {'id': lados[k]['conta'], 'gm': bool(contas[k]['gm'])}, 'dono': lados[k]['dono'],
-                          'herois': lados[k]['herois'], 'progress': estados[k]['progress'], 'db': estados[k]['db']}
+                          'herois': lados[k]['herois'], 'progress': estados[k]['progress'], 'db': estados[k]['db'],
+                          'vida': vidas[k]}
                       for k in lados}
             pedido.update(dungeonId=dungeon, roomIndex=sala, semente=semente, lances=lances, hashFinal=hash_final,
                           contexto={'agoraMs': int(time.time() * 1000)})
@@ -504,23 +560,32 @@ class GrupoMixin:
                 if e.status == 422:
                     with self._escrita():
                         if not self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
-                            self._duelo_guarda(did, a_id, b_id, {'fase': 'recusado', 'venc': None, 'ranqueado': False,
-                                                                 'motivo': e.extra.get('motivo') or 'juiz'}, t)
-                            for quem in (a_id, b_id):
-                                self._evento(quem, 'duelo-recusado', {'did': did, 'motivo': e.extra.get('motivo'),
-                                                                      'erro': e.erro})
+                            if teto:
+                                # acima do teto o duelo já não ranqueava: segue 'teto', como antes de o teto chamar
+                                # o juiz (a vida não é gravada: o replay divergiu)
+                                self._duelo_guarda_teto(did, a_id, b_id, t, herois_de)
+                            else:
+                                self._duelo_guarda(did, a_id, b_id, {'fase': 'recusado', 'venc': None, 'ranqueado': False,
+                                                                     'motivo': e.extra.get('motivo') or 'juiz'}, t, herois_de)
+                                for quem in (a_id, b_id):
+                                    self._evento(quem, 'duelo-recusado', {'did': did, 'motivo': e.extra.get('motivo'),
+                                                                          'erro': e.erro})
+                    if teto:
+                        return self._duelo_guardado(cid, did)
                 raise
             if not isinstance(saida, dict) or saida.get('ok') is not True or not isinstance(saida.get('fase'), str):
                 raise Recusa(503, 'o juiz respondeu torto — tente de novo em instantes')
             venc = saida.get('venc') if saida.get('venc') in ('A', 'B', 'empate') else None
-            ranqueado = bool(saida.get('ranqueado')) and venc is not None
-            resultado = {'fase': saida['fase'], 'venc': venc, 'ranqueado': ranqueado, 'delta': {}}
-            if ranqueado:
-                lado_saida = {}
-                for k in lados:
-                    s = saida.get(k)
-                    if not isinstance(s, dict):
-                        raise Recusa(503, 'o juiz respondeu torto — tente de novo em instantes')
+            ranqueado = bool(saida.get('ranqueado')) and venc is not None and not teto
+            resultado = dict(TETO) if teto else {'fase': saida['fase'], 'venc': venc, 'ranqueado': ranqueado, 'delta': {}}
+            fins, lado_saida = {}, {}
+            for k in lados:
+                s = saida.get(k)
+                if ranqueado and not isinstance(s, dict):
+                    raise Recusa(503, 'o juiz respondeu torto — tente de novo em instantes')
+                s = s if isinstance(s, dict) else {}
+                fins[k] = (s.get('vidaFim') if isinstance(s.get('vidaFim'), dict) else {}, s.get('vidaMax'))
+                if ranqueado:
                     lado_saida[k] = self._confere_saida({'ok': True, 'progress': s.get('progress'), 'db': s.get('db'),
                                                          'hash': s.get('hash'), 'iids': {'novos': [], 'fora': []},
                                                          'guildaXp': 0})
@@ -530,7 +595,7 @@ class GrupoMixin:
                     if self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
                         raise EstadoMudou()                 # o outro lado fechou junto: a volta seguinte lê o guardado
                     if ranqueado and self._duelo_teto(a_id, b_id, t):
-                        resultado = {'fase': 'teto', 'venc': None, 'ranqueado': False, 'motivo': 'teto'}
+                        resultado = dict(TETO)
                     elif ranqueado:
                         for k in lados:
                             nova, _ = self._estado_grava(contas[k], estados[k], lado_saida[k], t)
@@ -538,8 +603,19 @@ class GrupoMixin:
                                 'did': did, 'venc': venc, 'lado': k, 'versao': nova,
                                 'delta': resultado['delta'][str(lados[k]['conta'])],
                                 'contra': lados['B' if k == 'A' else 'A']['conta']})
-                    self._duelo_guarda(did, a_id, b_id, resultado, t)
+                    if teto:
+                        for quem in (a_id, b_id):
+                            self._evento(quem, 'duelo-teto', {'did': did, 'a': a_id, 'b': b_id})
+                    # 14/09, a vida única: os dois lados saem com a vida do fim do replay (desistência e W.O.: o PV
+                    # em que o replay parou), cada um na linha da própria conta
+                    agora_ms = int(time.time() * 1000)
+                    for k in lados:
+                        vida_fim, maximos = fins[k]
+                        self._vida_grava_fim(lados[k]['conta'], {h: vida_fim[h] for h in lados[k]['herois'] if h in vida_fim},
+                                             maximos, agora_ms)
+                    self._duelo_guarda(did, a_id, b_id, resultado, t, herois_de)
             except EstadoMudou:
                 continue
-            return self._duelo_resposta(cid, resultado)
+            # os heróis de cada conta vão junto, como no guardado: a resposta traz a vida de quem pede
+            return self._duelo_resposta(cid, dict(resultado, herois=herois_de))
         raise Recusa(409, 'o estado de uma das contas mudou no meio — tente de novo')

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a vida única de cada herói (JOGO.Vida) e o duelo com vida</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>A vida única — o registro, o relógio, o servidor e o duelo que nasce com a vida de cada lado</h1>
+<!-- 14/09, o pedido do dono: "hoje nas salas de espera a vida vai recuperando aos poucos até encher
+     ou o jogador usa pote; isso vale para quando terminar calabouço (na praça), depois de um pvp e
+     assim por diante; e se o jogador estiver com a vida na metade e começar uma batalha sendo pvp,
+     poço, desafio ou outro calabouço, a vida vai começar onde estava, na metade". -->
+<div class="sub">Cobra o js/core/vida.js com o relógio de mentira (o fim de luta, a subida de 1 PV a cada 2 s, o cheio que some,
+a poção, o que fica gravado e volta ao reabrir, a resposta do GET /api/vida e o gole respondido pelo servidor), o
+Engine.createDuelSala com vidaA/vidaB (os dois lados nascem com o PV e o hash bate), o Game._iniciaDueloRede lendo o
+`vida` das duplas, o fim do duelo em rede gravando só o MEU lado, o treino que não grava nada e o `vida` torto da dupla
+revelada, que é trapaça.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  // dublês mínimos do que o game.js e o grupo.js tocam ao carregar
+  window.JOGO = window.JOGO || {};
+  JOGO.Rede = { meuId: function () { return 'ana'; }, meuCx: function () { return 'cxana'; }, minhaSala: function () { return null; },
+    nomeDe: function (id) { return id; }, pares: function () { return []; },
+    ouvir: function () { return function () {}; }, dirige: function () { return true; }, ultimaRecusa: function () { return null; },
+    privado: function () { return false; }, transporte: function () { return null; }, vigia: function () {}, solta: function () {} };
+  JOGO.Progress = {
+    _h: { sumo: { classId: 'sumo', level: 10 }, bruxo: { classId: 'bruxo', level: 10 },
+          arqueiro: { classId: 'arqueiro', level: 10 }, curandeiro: { classId: 'curandeiro', level: 10 } },
+    hero: function (id) { return this._h[id] || null; },
+    heroIds: function () { return Object.keys(this._h); },
+    battleParty: function (ids) { return ids.map(function (id) { return { heroId: id, classId: id, level: 10, element: 'neutro' }; }); }
+  };
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/consumiveis.js','js/core/vida.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/game.js','js/core/grupo.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra !== undefined && extra !== '' ? ' — <code>' + String(extra).replace(/</g, '&lt;') + '</code>' : '');
+    lista.appendChild(li);
+  }
+  function fim(motivo) {
+    if (motivo) check(motivo, false);
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  var V = JOGO.Vida, E = JOGO.Engine, G = JOGO.Game;
+  if (!V || !E || !G || !JOGO.Duelo) return fim('os módulos carregaram (Vida, Engine, Game, Duelo)');
+  var T = 5000000;
+  V._relogio = function () { return T; };
+  V._zera();
+
+  // ============================================================ A · o registro e o relógio
+  check('sem registro, o herói está cheio: agora null, carry null, zerado null',
+        V.agora('sumo') === null && V.carry(['sumo']) === null && V.zerado(['sumo']) === null);
+  var mudou = 0;
+  var solta = V.aoMudar(function () { mudou++; });
+  V.fim({ sumo: 40, arqueiro: 0, bruxo: 100 }, { sumo: 100, arqueiro: 80, bruxo: 100 });
+  var s0 = V.agora('sumo'), a0 = V.agora('arqueiro');
+  check('o fim da luta grava a vida do fim: 40/100 cheio em 2:00, o caído a 0 com 1 PV em 2 s, o cheio fora',
+        s0 && s0.hp === 40 && s0.max === 100 && s0.cheioEmMs === 120000 && a0 && a0.hp === 0 && a0.ate1Ms === 2000 &&
+        V.agora('bruxo') === null && mudou === 1, JSON.stringify([s0, a0]));
+  T += 1000;
+  check('1 s depois: ainda 40 e 0; o caído espera 1 s', V.agora('sumo').hp === 40 &&
+        JSON.stringify(V.zerado(['sumo', 'arqueiro'])) === JSON.stringify({ heroId: 'arqueiro', esperaS: 1 }));
+  T += 4000;
+  check('5 s depois: +2 PV nos dois (1 PV a cada 2 s)', V.agora('sumo').hp === 42 && V.agora('arqueiro').hp === 2);
+  check('o carry leva só os não cheios, na vida de agora', JSON.stringify(V.carry(['sumo', 'arqueiro', 'bruxo'])) === '{"sumo":42,"arqueiro":2}',
+        JSON.stringify(V.carry(['sumo', 'arqueiro', 'bruxo'])));
+  check('a lista traz os não cheios na ordem pedida', V.lista(['arqueiro', 'bruxo', 'sumo']).map(function (x) { return x.heroId; }).join() === 'arqueiro,sumo');
+  var c1 = V.cura('sumo', 30);
+  check('a poção soma na hora (42 + 30 = 72) e avisa', c1 && c1.hp === 72 && V.agora('sumo').hp === 72 && mudou >= 2);
+  V.cura('sumo', 70);
+  check('a poção que passa do máximo enche — e o herói cheio sai do registro', V.agora('sumo') === null && !V._registro().sumo);
+  var gravado = null;
+  try { gravado = JSON.parse(localStorage.getItem('soterra-vida-v1')); } catch (e) {}
+  check('o registro fica no localStorage da conta (soterra-vida-v1), fora do save', gravado && gravado.herois && gravado.herois.arqueiro &&
+        gravado.herois.arqueiro.hp === 0 && !gravado.herois.sumo, JSON.stringify(gravado));
+  // reabrir a página: um JOGO.Vida novo lê o que ficou gravado
+  var velho = V, txt = null;
+  try {
+    var xr = new XMLHttpRequest();
+    xr.open('GET', '../js/core/vida.js' + window.__V, false);
+    xr.send();
+    txt = xr.responseText;
+    (0, eval)(txt);
+  } catch (e) { txt = null; }
+  V = JOGO.Vida;
+  V._relogio = function () { return T; };
+  check('reaberta, a vida continua de onde o relógio está (o arqueiro com 2 PV)', txt && V !== velho && V.agora('arqueiro') &&
+        V.agora('arqueiro').hp === 2, V.agora('arqueiro') && V.agora('arqueiro').hp);
+  T += 200000;
+  check('muito tempo depois o caído enche e some', V.agora('arqueiro') === null && V.carry(['arqueiro']) === null);
+
+  // ============================================================ B · o servidor manda
+  V.fim({ bruxo: 70 }, { bruxo: 100 });
+  var ok = V.adotaServidor({ ok: true, agoraMs: 123, msPorPv: 2000,
+                             herois: { sumo: { hp: 10, max: 100, cheioEmMs: 89 * 2000 + 500, ate1Ms: 0 },
+                                       arqueiro: { hp: 0, max: 80, cheioEmMs: 79 * 2000 + 1500, ate1Ms: 1500 },
+                                       lixo: { hp: 50, max: 40 } } });
+  check('o GET /api/vida substitui o registro: quem não veio (bruxo) está cheio; o torto (hp ≥ max) fica fora',
+        ok && V.agora('bruxo') === null && V.agora('sumo').hp === 10 && V.agora('arqueiro').hp === 0 && V.agora('lixo') === null);
+  check('... e o passo do relógio de lá vem junto (500 ms para o próximo PV do sumo, 1,5 s para o 1º do arqueiro)',
+        V.agora('sumo').cheioEmMs === 89 * 2000 + 500 && V.agora('arqueiro').ate1Ms === 1500,
+        V.agora('sumo').cheioEmMs + ' · ' + V.agora('arqueiro').ate1Ms);
+  T += 500;
+  check('500 ms depois: sumo 11 PV; arqueiro ainda 0', V.agora('sumo').hp === 11 && V.agora('arqueiro').hp === 0);
+  T += 100;
+  V.poe('sumo', 50, 100);
+  check('o gole respondido pelo servidor põe o PV dele (50) mantendo o passo', V.agora('sumo').hp === 50 && V.agora('sumo').cheioEmMs === 49 * 2000 + 1900,
+        V.agora('sumo').cheioEmMs);
+  T += 1900;
+  check('... e o próximo PV chega no mesmo passo de antes', V.agora('sumo').hp === 51);
+  check('adotaServidor recusa resposta sem ok', V.adotaServidor({ ok: false }) === false && V.agora('sumo').hp === 51);
+  solta();
+
+  // ============================================================ C · o duelo nasce com a vida de cada lado
+  var dupA = [{ heroId: 'sumo', classId: 'sumo', level: 10, element: 'neutro' }, { heroId: 'curandeiro', classId: 'curandeiro', level: 10, element: 'neutro' }];
+  var dupB = [{ heroId: 'bruxo', classId: 'bruxo', level: 10, element: 'neutro' }];
+  function sala(vA, vB) {
+    return E.createDuelSala('greenhouse', 0, JSON.parse(JSON.stringify(dupA)), JSON.parse(JSON.stringify(dupB)),
+                            { seed: 4242, vidaA: vA, vidaB: vB });
+  }
+  function uni(st, hid) { return st.units.filter(function (u) { return u.kind === 'hero' && u.heroId === hid; })[0]; }
+  var d1 = sala({ sumo: 37 }, { bruxo: 12 }), d2 = sala({ sumo: 37 }, { bruxo: 12 }), d0 = sala(null, null);
+  check('createDuelSala com vidaA/vidaB: o sumo nasce com 37, o bruxo com 12, o curandeiro (fora do mapa) cheio',
+        uni(d1, 'sumo').hp === 37 && uni(d1, 'bruxo').hp === 12 && uni(d1, 'curandeiro').hp === uni(d1, 'curandeiro').hpMax,
+        [uni(d1, 'sumo').hp, uni(d1, 'bruxo').hp, uni(d1, 'curandeiro').hp + '/' + uni(d1, 'curandeiro').hpMax].join(' '));
+  check('as duas pontas montando com a mesma vida têm o MESMO hash', E.hash(d1) === E.hash(d2), E.hash(d1) + ' × ' + E.hash(d2));
+  check('a vida entra no hash (sem ela o hash é outro: o replay de outra vida diverge)', E.hash(d0) !== E.hash(d1));
+  var dPiso = sala({ sumo: 0 }, { bruxo: 99999 });
+  check('o motor prende a vida: piso 1 e teto no PV máximo', uni(dPiso, 'sumo').hp === 1 && uni(dPiso, 'bruxo').hp === uni(dPiso, 'bruxo').hpMax);
+
+  // o Game lê o `vida` das duplas (o que foi comprometido por hash)
+  function ata(eu) {
+    var A = JSON.parse(JSON.stringify(dupA)), B = JSON.parse(JSON.stringify(dupB));
+    A[0].vida = 37; A[0].dono = 'ana'; A[1].dono = 'ana'; B[0].vida = 12; B[0].dono = 'bia';
+    return { did: 'ana-x1', dungeonId: 'greenhouse', roomIndex: 0, semente: 4242, duplaA: A, duplaB: B, eu: eu,
+             meuId: eu === 'A' ? 'ana' : 'bia', oponente: 'Bia', arena: { dungeonId: 'greenhouse', roomIndex: 0, nome: 'x' } };
+  }
+  var ataA = ata('A');
+  // a montagem direta com as MESMAS duplas (com o `dono`, que entra no hash) e a vida passada à mão
+  var dDireto = E.createDuelSala('greenhouse', 0, JSON.parse(JSON.stringify(ataA.duplaA)), JSON.parse(JSON.stringify(ataA.duplaB)),
+                                 { seed: 4242, vidaA: { sumo: 37 }, vidaB: { bruxo: 12 } });
+  var okA = G._iniciaDueloRede(ataA);
+  check('Game._iniciaDueloRede passa o `vida` das duplas ao motor: o mesmo PV e o mesmo hash da montagem direta',
+        okA && G.state && uni(G.state, 'sumo').hp === 37 && uni(G.state, 'bruxo').hp === 12 && E.hash(G.state) === E.hash(dDireto),
+        okA && G.state ? E.hash(G.state) + ' × ' + E.hash(dDireto) : 'não abriu');
+  // o fim do duelo em rede grava a vida do MEU lado
+  V._zera();
+  uni(G.state, 'sumo').hp = 21;
+  var b = uni(G.state, 'bruxo'); b.hp = 0; b.alive = false;
+  G.state.phase = 'won';
+  G.handleEvent({ type: 'battleEnd' });
+  check('o fim do duelo em rede (sou A) grava a vida do meu lado: sumo 21; o curandeiro que terminou cheio fica fora; o bruxo (dele) não',
+        G.screen === 'duelFim' && V.agora('sumo') && V.agora('sumo').hp === 21 && V.agora('curandeiro') === null && V.agora('bruxo') === null,
+        G.screen + ' · ' + JSON.stringify(V._registro()));
+  V._zera();
+  G._saiDaRede();
+  var okB = G._iniciaDueloRede(ata('B'));
+  uni(G.state, 'bruxo').hp = 5;
+  uni(G.state, 'sumo').alive = false; uni(G.state, 'sumo').hp = 0;
+  uni(G.state, 'curandeiro').alive = false; uni(G.state, 'curandeiro').hp = 0;
+  G.state.phase = 'lost';
+  G.handleEvent({ type: 'battleEnd' });
+  check('... e quem é B grava o lado B (bruxo 5), nada do lado A', okB && V.agora('bruxo') && V.agora('bruxo').hp === 5 &&
+        V.agora('sumo') === null && V.agora('curandeiro') === null, JSON.stringify(V._registro()));
+  G._saiDaRede();
+
+  // o treino hotseat não usa nem gasta vida
+  V._zera();
+  V.fim({ sumo: 30 }, { sumo: 100 });
+  var okT = G.startDuel(['sumo'], ['bruxo']);
+  var su = okT && G.state ? uni(G.state, 'sumo') : null;
+  check('o duelo de treino nasce CHEIO mesmo com a vida do sumo a 30 (é treino)', su && su.hp === su.hpMax, su && su.hp + '/' + su.hpMax);
+  if (su) { su.hp = 3; var br = uni(G.state, 'bruxo'); br.hp = 0; br.alive = false; G.state.phase = 'won'; G.handleEvent({ type: 'battleEnd' }); }
+  var vs = V.agora('sumo');
+  check('... e o fim do treino não grava nada (o sumo segue com a vida de antes, 30)', G.screen === 'duelFim' && vs && vs.hp === 30 && V.agora('bruxo') === null,
+        G.screen + ' · ' + JSON.stringify(V._registro()));
+  G.init();
+
+  // ============================================================ D · o `vida` da dupla revelada
+  var vd = JOGO.Duelo._validaDupla;
+  function um(extra) { var p = { heroId: 'sumo', classId: 'sumo', level: 10, spells: [] }; for (var k in extra) p[k] = extra[k]; return [p]; }
+  check('a dupla sem `vida` (cheio) vale', vd(um({}), 1) === null);
+  check('a dupla com vida inteira de 1 a 100000 vale', vd(um({ vida: 1 }), 1) === null && vd(um({ vida: 37 }), 1) === null && vd(um({ vida: 100000 }), 1) === null);
+  check('vida 0, negativa, quebrada, em texto, acima de 100000 ou null é trapaça',
+        ['trapaca', 'trapaca', 'trapaca', 'trapaca', 'trapaca', 'trapaca'].join() ===
+        [vd(um({ vida: 0 }), 1), vd(um({ vida: -5 }), 1), vd(um({ vida: 37.5 }), 1), vd(um({ vida: '37' }), 1), vd(um({ vida: 100001 }), 1),
+         vd(um({ vida: null }), 1)].join(),
+        [vd(um({ vida: 0 }), 1), vd(um({ vida: -5 }), 1), vd(um({ vida: 37.5 }), 1), vd(um({ vida: '37' }), 1), vd(um({ vida: 100001 }), 1),
+         vd(um({ vida: null }), 1)].join());
+
+  // ============================================================ E · o sincroniza pelo servidor
+  var pedidos = 0;
+  JOGO.Autoridade = { ligada: function () { return true; },
+    puxaVida: function () { pedidos++; return Promise.resolve({ ok: true, agoraMs: 1, msPorPv: 2000, herois: { arqueiro: { hp: 7, max: 80, cheioEmMs: 72 * 2000 + 2000 } } }); } };
+  V.sincroniza();
+  var p2 = V.sincroniza();
+  p2.then(function () {
+    check('sincroniza: um pedido de cada vez (quem chama no meio ganha mais um no fim) e adota a resposta',
+          pedidos === 2 && V.agora('arqueiro') && V.agora('arqueiro').hp === 7 && V.agora('sumo') === null, pedidos + ' · ' + JSON.stringify(V._registro()));
+    JOGO.Autoridade = null;
+    return V.sincroniza();
+  }).then(function (r) {
+    check('sem autoridade, sincroniza não pede nada e resolve null', r === null);
+    V._zera();
+    fim();
+  }).catch(function (e) { fim('a prova estourou: ' + (e && (e.stack || e.message) || e)); });
+})();
+</script>
+</body>
+</html>

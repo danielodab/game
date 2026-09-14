@@ -913,7 +913,85 @@ JOGO.DATA = {
     check('achado 21 · a linha do PAR do grupo também fica, mesmo sem eu ter respondido',
           Su.lista().length === 30 && Su.lista().some(function (l) { return l.de === 'bia' && l.texto === 'desce comigo?'; }));
 
-    fim();
+    // ============================================================ 14/09: a vida única no duelo
+    // o dublê da JOGO.Vida (a de verdade é provada em tests/vida.html)
+    var sincronizou = 0;
+    JOGO.Vida = { _z: null, _c: null, zerado: function () { return this._z; }, carry: function () { return this._c; },
+                  sincroniza: function () { sincronizou++; return Promise.resolve(null); } };
+    function escolhendo() {
+      reset();
+      Du.desafiar('bia');
+      var dv = ult('duelo', 'desafio').dados.did;
+      chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: dv, ok: true } });
+      return dv;
+    }
+    function revelaDela(dv, dupla) {
+      var str = JSON.stringify(dupla);
+      chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'compromisso', dados: { did: dv, h: Du._sha256(str + '|' + salB), n: dupla.length } });
+      chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'revela', dados: { did: dv, dupla: str, sal: salB } });
+    }
+    var dv1 = escolhendo();
+    JOGO.Vida._z = { heroId: 'sumo', esperaS: 3 };
+    var rz = Du.escolher(['sumo']);
+    check('vida · herói a 0 PV não entra no duelo: "vida-zero" com a espera, e nenhum compromisso sai',
+          !rz.ok && rz.motivo === 'vida-zero' && rz.heroi === 'sumo' && rz.esperaS === 3 && conta('duelo', 'compromisso') === 0 &&
+          Du.estado().fase === 'escolhendo', JSON.stringify(rz));
+    check('vida · o texto do motivo "vida-zero"', /sem vida/.test(Gr.textoMotivo('vida-zero', null)));
+    JOGO.Vida._z = null;
+    JOGO.Vida._c = { sumo: 37 };
+    var rv1 = Du.escolher(['sumo', 'arqueiro']);
+    revelaDela(dv1, [{ heroId: 'minotauro', classId: 'sumo', level: 20, spells: ['s1'], dono: 'bia', vida: 25 }]);
+    var minhaRev = ult('duelo', 'revela'), minhaDupla = null;
+    try { minhaDupla = JSON.parse(minhaRev.dados.dupla); } catch (e) {}
+    check('vida · o `vida` de cada herói vai DENTRO da dupla comprometida (sumo 37; o arqueiro cheio vai sem)',
+          rv1.ok && minhaDupla && minhaDupla[0].vida === 37 && !('vida' in minhaDupla[1]) &&
+          Du._sha256(minhaRev.dados.dupla + '|' + minhaRev.dados.sal) === ult('duelo', 'compromisso').dados.h, minhaRev && minhaRev.dados.dupla);
+    var ataV = Co.duelos[0];
+    check('vida · a ata leva a vida dos dois lados (a minha 37 e a dela 25)', ataV && ataV.duplaA[0].vida === 37 && ataV.duplaB[0].vida === 25,
+          JSON.stringify(ataV && [ataV.duplaA[0].vida, ataV.duplaB[0].vida]));
+    var dv2 = escolhendo();
+    JOGO.Vida._c = null;
+    Du.escolher(['sumo']);
+    revelaDela(dv2, [{ heroId: 'minotauro', classId: 'sumo', level: 20, spells: ['s1'], dono: 'bia', vida: 0 }]);
+    check('vida · a dupla revelada com vida 0 é trapaça', ult('duelo', 'cancela') && ult('duelo', 'cancela').dados.motivo === 'trapaca' &&
+          Co.duelos.length === 0);
+    var dv3 = escolhendo();
+    Du.escolher(['sumo']);
+    revelaDela(dv3, [{ heroId: 'minotauro', classId: 'sumo', level: 20, spells: ['s1'], dono: 'bia', vida: '50' }]);
+    check('vida · a vida em texto também é trapaça', ult('duelo', 'cancela') && ult('duelo', 'cancela').dados.motivo === 'trapaca');
+
+    // com a sessão do site: o duelo abre no servidor ANTES do compromisso, e o carry dele vale
+    var dv4 = escolhendo();
+    var abertos = [], respostaAbre = { ok: true, carry: { arqueiro: 20 } };
+    JOGO.Autoridade = { ligada: function () { return true; },
+      abreDuelo: function (corpo) { abertos.push(JSON.parse(JSON.stringify(corpo))); return Promise.resolve(respostaAbre); },
+      textoVidaZero: function (r) { return r.heroi + ' está sem vida: espere ' + r.esperaS + ' s'; } };
+    JOGO.Vida._c = { sumo: 99 };                          // a daqui não vale: quem manda é o servidor
+    var r4 = Du.escolher(['sumo', 'arqueiro']);
+    check('vida · com o servidor, escolher espera o duelo abrir (nada de compromisso ainda)',
+          r4.ok && r4.esperando && conta('duelo', 'compromisso') === 0 && Du.estado().abrindo === true &&
+          abertos.length === 1 && abertos[0].did === dv4 && abertos[0].herois.join() === 'sumo,arqueiro', JSON.stringify(abertos));
+    check('vida · um segundo "Pronto" no meio não pede de novo', Du.escolher(['sumo']).esperando === true && abertos.length === 1);
+    setTimeout(function () {
+      var cp4 = ult('duelo', 'compromisso');
+      revelaDela(dv4, [{ heroId: 'minotauro', classId: 'sumo', level: 20, spells: ['s1'], dono: 'bia' }]);
+      var rev4 = ult('duelo', 'revela'), dup4 = null;
+      try { dup4 = JSON.parse(rev4.dados.dupla); } catch (e) {}
+      check('vida · o servidor respondeu: o compromisso sai com a vida DELE (arqueiro 20; o sumo, cheio lá, vai sem)',
+            cp4 && Du.estado().abrindo === false && dup4 && !('vida' in dup4[0]) && dup4[1].vida === 20, rev4 && rev4.dados.dupla);
+      var dv5 = escolhendo();
+      respostaAbre = { ok: false, motivo: 'vida-zero', heroi: 'sumo', esperaS: 4 };
+      var s0 = sincronizou;
+      Du.escolher(['sumo']);
+      setTimeout(function () {
+        check('vida · o 409 "vida-zero" do servidor: sem compromisso, segue escolhendo, avisa quanto falta e acerta a vida',
+              conta('duelo', 'compromisso') === 0 && Du.estado().fase === 'escolhendo' && !Du.estado().abrindo &&
+              /sumo está sem vida: espere 4 s/.test(ultAviso()) && sincronizou === s0 + 1 && dv5, ultAviso());
+        JOGO.Autoridade = null;
+        JOGO.Vida = null;
+        fim();
+      }, 30);
+    }, 30);
   }, 80);
 })();
 </script>

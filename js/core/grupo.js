@@ -349,7 +349,10 @@ var JOGO = (typeof window !== 'undefined')
     'sem-grupo': 'Você não está num grupo.',
     'privado': 'Mensagem particular precisa do servidor da Rede.',
     'vazio': 'Escreva alguma coisa.',
-    'n': 'Escolha um ou dois heróis.'
+    'n': 'Escolha um ou dois heróis.',
+    // 14/09: a vida única — herói a 0 PV não entra em duelo até recuperar (ou beber uma poção)
+    'vida-zero': 'Esse herói está sem vida: espere ele recuperar ou beba uma poção.',
+    'servidor': 'O servidor não respondeu — tente de novo em instantes.'
   };
   Grupo.textoMotivo = function (motivo, nome) {
     var m = String(motivo || 'ocupado');
@@ -982,7 +985,8 @@ var JOGO = (typeof window !== 'undefined')
     dst = { fase: 'livre', did: null, eu: null, op: null, chave: null, prazo: 0,
             minha: null,     // { str, sal, h, n, ids }
             dele: null,      // { h, n, str, sal, dupla }
-            revelei: false, ata: null, inicio: 0, viuBatalha: false, fimDele: null };
+            revelei: false, ata: null, inicio: 0, viuBatalha: false, fimDele: null,
+            abrindo: false };  // 14/09: o duelo_abrir no servidor (a vida de cada herói) ainda não respondeu
   }
   zeraDuelo();
   ultimoOp = null;
@@ -1006,7 +1010,7 @@ var JOGO = (typeof window !== 'undefined')
       did: dst.did, fase: dst.fase, eu: dst.eu, prazo: dst.prazo,
       oponente: dst.op ? { id: dst.op.id, cx: dst.op.cx, nome: dst.op.nome } : null,
       escolhi: !!dst.minha, minhaDupla: dst.minha ? dst.minha.ids.slice() : null,
-      eleEscolheu: !!(dst.dele && dst.dele.h), n: dst.minha ? dst.minha.n : 0,
+      eleEscolheu: !!(dst.dele && dst.dele.h), n: dst.minha ? dst.minha.n : 0, abrindo: !!dst.abrindo,
       arena: dst.ata ? { dungeonId: dst.ata.dungeonId, roomIndex: dst.ata.roomIndex,
                          nome: nomeArena(dst.ata) } : null
     };
@@ -1073,8 +1077,16 @@ var JOGO = (typeof window !== 'undefined')
     pl.dono = eu();
     return pl;
   }
+  /* A VIDA ÚNICA NO DUELO (14/09, o dono: "se o jogador estiver com a vida na metade e começar
+   * uma batalha sendo pvp… a vida vai começar onde estava"). Herói a 0 não entra
+   * ('vida-zero'). Cada payload leva `vida` (o PV de agora, inteiro ≥ 1; sem ele = cheio)
+   * DENTRO da dupla que vai para o compromisso: o outro lado confere no hash e os dois motores
+   * nascem com o mesmo PV. Com a sessão do site, o servidor guarda essa vida ANTES do
+   * compromisso (POST /api/duelo/abrir) e devolve o carry — é com ele que o duelo é refeito
+   * no fechar; então escolher espera a resposta ({ok, esperando}) e o compromisso sai depois. */
   Duelo.escolher = function (heroIds) {
     if (dst.fase !== 'escolhendo') return { ok: false, motivo: 'ocupado' };
+    if (dst.abrindo) return { ok: true, esperando: true };
     var ids = [];
     (heroIds || []).forEach(function (h) { if (h && ids.indexOf(h) < 0) ids.push(h); });
     if (ids.length < 1 || ids.length > 2) return { ok: false, motivo: 'n' };
@@ -1084,6 +1096,45 @@ var JOGO = (typeof window !== 'undefined')
       if (!pl) return { ok: false, motivo: ehMestre(ids[i]) ? 'mestre' : 'sem-heroi' };
       pls.push(pl);
     }
+    var Vd = JOGO.Vida;
+    var z = safe(function () { return (Vd && Vd.zerado) ? Vd.zerado(ids) : null; }, null);
+    if (z) return { ok: false, motivo: 'vida-zero', heroi: z.heroId, esperaS: z.esperaS };
+    var A = JOGO.Autoridade;
+    if (A && A.abreDuelo && safe(function () { return A.ligada(); }, false)) {
+      var eraDst = dst, did = dst.did;
+      dst.abrindo = true;
+      A.abreDuelo({ did: did, herois: ids.slice() }).then(function (r) {
+        if (dst !== eraDst) return;                          // o duelo acabou (ou outro começou) no meio
+        dst.abrindo = false;
+        if (dst.fase !== 'escolhendo' || dst.did !== did) { mudaD(); return; }
+        if (!r || !r.ok) {
+          if (r && r.motivo === 'vida-zero') {
+            aviso(A.textoVidaZero ? A.textoVidaZero(r) : Grupo.textoMotivo('vida-zero', null));
+            safe(function () { return Vd.sincroniza(); }, null);
+          } else aviso('O servidor não abriu o duelo: ' + ((r && r.erro) || 'sem resposta') + '.');
+          mudaD();
+          return;
+        }
+        var res = comprometeDupla(ids, pls, r.carry);
+        if (!res.ok) aviso(Grupo.textoMotivo(res.motivo, null));
+        mudaD();
+      }, function () {
+        if (dst !== eraDst) return;
+        dst.abrindo = false;
+        aviso(Grupo.textoMotivo('servidor', null));
+        mudaD();
+      });
+      mudaD();
+      return { ok: true, esperando: true };
+    }
+    return comprometeDupla(ids, pls, safe(function () { return (Vd && Vd.carry) ? Vd.carry(ids) : null; }, null));
+  };
+  function comprometeDupla(ids, pls, carry) {
+    pls.forEach(function (pl) {
+      var pv = (carry && typeof carry === 'object') ? carry[pl.heroId] : undefined;
+      if (typeof pv === 'number' && isFinite(pv) && pv >= 1) pl.vida = Math.min(100000, Math.floor(pv));
+      else delete pl.vida;
+    });
     var str = JSON.stringify(pls);
     var sal = hex(32);
     var h = sha256(str + '|' + sal);
@@ -1141,6 +1192,10 @@ var JOGO = (typeof window !== 'undefined')
       // o nível é um inteiro de verdade, no teto: o '99' em texto passava
       if (typeof p.level !== 'number' || p.level !== Math.floor(p.level) || p.level < 1 || p.level > teto) return 'trapaca';
       if (p.classId && !classes[p.classId]) return 'versao';
+      // 14/09: a vida com que entra — inteiro de 1 a 100000, ou ausente (cheio); torta é trapaça
+      if (p.vida !== undefined && (typeof p.vida !== 'number' || p.vida !== Math.floor(p.vida) || p.vida < 1 || p.vida > 100000)) {
+        return 'trapaca';
+      }
       var sp = Array.isArray(p.spells) ? p.spells : [];
       for (var k = 0; k < sp.length; k++) {
         var sid = (sp[k] && typeof sp[k] === 'object') ? sp[k].id : sp[k];
@@ -1170,6 +1225,7 @@ var JOGO = (typeof window !== 'undefined')
     return { dungeonId: dg, roomIndex: (s >>> 8) % def.rooms.length };
   }
   Duelo._arena = sorteiaArenaLocal;
+  Duelo._validaDupla = validaDupla;       // provas (14/09: o `vida` da dupla)
 
   function confereFim() {
     if (!dst.revelei || !dst.dele || !dst.dele.dupla || dst.fase === 'batalha') return;

@@ -212,6 +212,12 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
             self.assertGreater(json.loads(p['recompensa'])['xpGanho'], 0, p['conta_id'])
         self.assertEqual(sb['hash'], self.sql("SELECT hash FROM autoridade WHERE conta_id = ?", bia.conta['id'])[0]['hash'])
         self.assertEqual(self.sql("SELECT estado FROM salas_grupo WHERE gid = ?", gid)[0]['estado'], 'paga')
+        # 14/09, a vida única: o fim de cada herói fica na linha da conta DELE
+        carry = json.loads(self.sql("SELECT carry_saida FROM salas_grupo WHERE gid = ?", gid)[0]['carry_saida'])
+        for c, heroi, dono in ((ana, 'sumo', 'ana'), (bia, 'curandeiro', 'bia')):
+            linha = self.sql("SELECT hp_fim, hp_max FROM vida_heroi WHERE conta_id = ? AND heroi = ?", c.conta['id'], heroi)
+            self.assertEqual(len(linha), 1, heroi)
+            self.assertEqual(linha[0]['hp_fim'], min(carry[dono + ':' + heroi], linha[0]['hp_max']), heroi)
         for c in (ana, bia):
             self.assertEqual(len(self.sql("SELECT 1 FROM eventos WHERE conta_id = ? AND tipo = 'grupo-paga'", c.conta['id'])), 1)
             self.assertEqual(self.sql("SELECT hash FROM autoridade WHERE conta_id = ?", c.conta['id'])[0]['hash'],
@@ -266,12 +272,15 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         status, r = self.fecha_grupo(ana, gid, jogo)
         self.assertEqual((status, r['fase'], r['motivo']), (200, 'recusada', 'vez'), r)
         self.assertEqual((self.save(ana)['versao'], self.save(bia)['versao']), (1, 1))
-        # sala largada no meio: perdida, nada muda
+        vidas = "SELECT COUNT(*) AS n FROM vida_heroi WHERE conta_id IN (?, ?)"
+        self.assertEqual(self.sql(vidas, ana.conta['id'], bia.conta['id'])[0]['n'], 0, 'a sala recusada não grava vida')
+        # sala largada no meio: perdida, a economia não muda — 14/09: a vida de cada um é gravada
         gid2, jogo2 = self.abre_vencivel(ana, bia)
         status, r = self.fecha_grupo(ana, gid2, {'lances': jogo2['lances'][:3], 'hash': None})
         self.assertEqual(status, 200, r)
         self.assertEqual((r['fase'], r['recompensa']), ('perdida', None))
         self.assertEqual((self.save(ana)['versao'], self.save(bia)['versao']), (1, 1))
+        self.assertEqual(self.sql(vidas, ana.conta['id'], bia.conta['id'])[0]['n'], 2)
 
     # -- o duelo ranqueado ----------------------------------------------------------------------------
     def joga_duelo(self, a, b, semente=999):
@@ -311,6 +320,7 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         self.assertEqual(status, 200, r)
         self.assertTrue(r['ranqueado'])
         self.assertEqual((r['fase'], r['versao']), (jogo['fase'], 2))
+        self.assertIn('sumo', r['vida'], '14/09: a resposta traz a vida de quem pede (a prova inteira: tests/pocoes_api.py)')
         sa, sb = self.save(a), self.save(b)
         self.assertEqual((sa['versao'], sb['versao']), (2, 2))
         ba, bb = sa['db']['jogador']['brasa'], sb['db']['jogador']['brasa']

@@ -1145,12 +1145,15 @@
       sec('consumiveis', 'Consumíveis: as poções de vida',
         '<p>No Mercadinho mora a banca do mercador: poções de vida com estoque sem fim, preço fixo e sem taxa, pagas com os vinténs do saco. ' +
         'Elas ficam em Consumíveis no inventário, até ' + num(CR.teto) + ' de cada.</p><ul class="wk-defs">' + linhasCons + '</ul>' +
-        // 13/09: a poção saiu da batalha e foi para a sala de espera entre as salas (pedido do dono)
-        '<p>A poção não se bebe na batalha: é da <b>sala de espera entre as salas</b>. Ao fim de uma sala vencida cada herói ' +
-        'leva a vida com que terminou (quem caiu, leva zero), e ela volta sozinha, 1 PV a cada ' + num((VES.msPorPv || 2000) / 1000) +
-        ' s. A poção cura na hora, sem passar do PV máximo, para não esperar — e herói sem vida só entra na batalha seguinte ' +
-        'quando recuperar pelo menos 1 PV. Ao voltar à praça a descida acaba, e a próxima começa de vida cheia.</p>',
-        'pocao pocoes consumivel consumiveis vida cura mercador banca espera antessala regenera');
+        // 13/09: a poção saiu da batalha (pedido do dono). 14/09: a vida é uma só por herói, e vale em toda parte
+        '<p>Cada herói tem <b>uma vida só</b>, que vale em toda parte: na praça, nas salas do calabouço, no Poço, no grupo e no duelo. ' +
+        'Quando uma luta acaba — vitória ou derrota — o herói fica com a vida com que terminou (quem caiu fica com zero), e ela ' +
+        'volta sozinha, 1 PV a cada ' + num((VES.msPorPv || 2000) / 1000) + ' s, até encher. A próxima batalha começa com a vida ' +
+        'que ele tiver: quem entra no duelo com a vida na metade luta com a metade.</p>' +
+        '<p>A poção não se bebe na batalha: bebe-se <b>fora da luta</b> — na praça, na sala de espera entre as salas e nas telas de fim. ' +
+        'Ela cura na hora, sem passar do PV máximo, para não esperar. Herói sem vida só entra numa batalha quando recuperar pelo ' +
+        'menos 1 PV.</p>',
+        'pocao pocoes consumivel consumiveis vida cura mercador banca espera antessala praca regenera duelo');
     }
 
     var Mi = JG.Missoes;

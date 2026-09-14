@@ -1230,11 +1230,11 @@ var JOGO = (typeof window !== 'undefined')
     var mundo = el('div', 'hub-mundo');
     s.appendChild(mundo);
 
-    // 13/09: na antessala, o quadro da vida no canto — a barra de cada herói subindo e as poções
-    if (sala) {
-      var quadroVida = vidaBloco(true);
-      if (quadroVida) s.appendChild(quadroVida);
-    }
+    /* 13/09: na antessala, o quadro da vida no canto — a barra de cada herói subindo e as poções.
+     * 14/09 (a vida única): na PRAÇA também, compacto, com os heróis escolhidos — só enquanto
+     * algum não está cheio — e a vida se acerta com o servidor a cada chegada à praça */
+    s.appendChild(vidaBloco(sala ? 'antessala' : 'praca'));
+    if (!sala) safe(function () { return JOGO.Vida.sincroniza(); }, null);
 
     var painel = el('div', 'hub-painel is-off');
     s.appendChild(painel);
@@ -1462,9 +1462,8 @@ var JOGO = (typeof window !== 'undefined')
         else {
           var sd2 = seletorDif();
           if (sd2) painel.appendChild(sd2);
-          // 13/09: a vida da descida na porta; herói a 0 PV apaga o botão e diz quanto falta (vidaTique)
-          var vidaNaPorta = vidaBloco(false);
-          if (vidaNaPorta) painel.appendChild(vidaNaPorta);
+          // 13/09: a vida na porta; herói a 0 PV apaga o botão e diz quanto falta (vidaTique)
+          painel.appendChild(vidaBloco('porta'));
           var bEntrar = btn('Entrar na batalha', 'btn-primary btn-block vida-porta', function () {
             var ev = safe(function () { return G().esperaVida(); }, null);
             if (ev) { toast(textoEsperaVida(ev) + ' — ou beba uma poção.'); return; }
@@ -2081,6 +2080,7 @@ var JOGO = (typeof window !== 'undefined')
              : (fim ? 'O fundo desta descida está seu.' : 'Respire. A próxima é pior.')));
 
     var body = el('div', 'ui-body');
+    body.appendChild(vidaBloco('fim'));      // 14/09: a vida com que cada herói saiu da sala, subindo
     var box = el('div', 'rw-box');
 
     box.appendChild(rwBlock('Experiência', (function () {
@@ -2506,6 +2506,7 @@ var JOGO = (typeof window !== 'undefined')
     var box = el('div', 'menu-box defeat-box');
     box.appendChild(el('h1', 'game-title defeat-title', 'Soterrados'));
     box.appendChild(el('p', 'game-sub', 'O calabouço ficou com o grupo. O que vocês já ganharam é seu — cartas, pedras e itens não se perdem.'));
+    box.appendChild(vidaBloco('fim'));       // 14/09: quem caiu está a 0 e volta a subir — ou beba uma poção
     var acts = el('div', 'menu-acts');
     var estD = grupoEstado();
     if (emGrupo() || (estD && estD.descidaGrupo)) {     // 11/09: a derrota de grupo (4.8)
@@ -2994,7 +2995,7 @@ var JOGO = (typeof window !== 'undefined')
       cell.appendChild(q);
       bt.spells.appendChild(cell);
     });
-    // 13/09: a barra da batalha não tem mais poção — ela se bebe na sala de espera (vidaBloco)
+    // 13/09: a barra da batalha não tem mais poção — ela se bebe fora da luta (vidaBloco, 14/09)
   }
 
   function spellTipBody(d2, sid) {
@@ -3749,7 +3750,7 @@ var JOGO = (typeof window !== 'undefined')
       row.appendChild(ic);
       var tx = el('div', 'ms-tx');
       tx.appendChild(el('div', 'ms-nome', esc(d.name)));
-      tx.appendChild(el('div', 'ms-prog', 'cura <b>' + d.cura + ' PV</b> · na sala de espera entre as salas · você tem <b class="mc-tem">' +
+      tx.appendChild(el('div', 'ms-prog', 'cura <b>' + d.cura + ' PV</b> · fora da batalha · você tem <b class="mc-tem">' +
         tem + '</b>/' + teto));
       row.appendChild(tx);
       row.appendChild(el('span', 'mc-preco', d.preco + 'v'));
@@ -3798,8 +3799,9 @@ var JOGO = (typeof window !== 'undefined')
       mostra();
       lista.appendChild(row);
     });
-    lista.appendChild(el('p', 'inv-dica', 'As poções vão para <b>Consumíveis</b> no inventário e se bebem na <b>sala de espera entre as salas</b>: ' +
-      'curam a vida na hora, para não esperar ela voltar sozinha (na batalha, não).'));
+    // 14/09: a vida é única e a poção se bebe fora da luta em qualquer lugar
+    lista.appendChild(el('p', 'inv-dica', 'As poções vão para <b>Consumíveis</b> no inventário e se bebem <b>fora da batalha</b> ' +
+      '(na praça, na sala de espera): curam a vida na hora, para não esperar ela voltar sozinha.'));
   }
   var MC_ESTADO_PT = { aberta: 'esperando o vendedor', aceita: 'aceita — confirme', recusada: 'recusada',
                        concluida: 'negócio fechado', desistiu: 'desistiu', perdida: 'perdida', cancelada: 'cancelada' };
@@ -5104,6 +5106,7 @@ var JOGO = (typeof window !== 'undefined')
         'Se valesse a Brasa, o vencedor levaria +' + data.seValesse +
         ' pontos. O fogo de verdade acende em duelo contra outra conta.'));
     }
+    box.appendChild(vidaBloco('fim'));       // 14/09: o treino não gasta vida, mas a da conta segue à vista
     box.appendChild(btn('Voltar ao Acampamento', 'btn-primary btn-block', function () {
       navTo('hub');
     }));
@@ -6668,7 +6671,7 @@ var JOGO = (typeof window !== 'undefined')
         grid.appendChild(cell);
       });
     } else if (invMainTab === 'cons') {
-      // 13/09: as POÇÕES DE VIDA da banca do mercador — contador por tipo, bebidas na batalha
+      // 13/09: as POÇÕES DE VIDA da banca do mercador — contador por tipo, bebidas fora da batalha (14/09)
       var consD = D().consumiveis || {};
       Object.keys(consD).sort(function (a, b) { return (consD[a].cura || 0) - (consD[b].cura || 0); }).forEach(function (pid) {
         var nP = safe(function () { return P().consumivelVer(pid); }, 0) || 0;
@@ -6685,8 +6688,8 @@ var JOGO = (typeof window !== 'undefined')
         cP.appendChild(el('span', 'ig-nm', esc(dP.name)));
         cP.appendChild(el('span', 'ig-cura', 'cura ' + dP.cura + ' PV'));
         tap(cP, function () {
-          toast(dP.name + ': cura ' + dP.cura + ' PV, sem passar do máximo. Beba na sala de espera entre as salas — ' +
-                'o quadro da vida mostra um botão por poção.');
+          toast(dP.name + ': cura ' + dP.cura + ' PV, sem passar do máximo. Beba fora da batalha (na praça, na sala de espera) — ' +
+                'o quadro da vida mostra um botão por poção quando um herói está ferido.');
         });
         grid.appendChild(cP);
       });
@@ -9640,26 +9643,36 @@ var JOGO = (typeof window !== 'undefined')
       });
     }));
   }
-  /* ================================================ A VIDA NA SALA DE ESPERA (13/09)
-   * O dono: "a poção não é para usar na batalha.. e sim para curar a vida após uma batalha
-   * na sala de espera entre as salas.. carrega 1 pv a cada 2 segundos... aí a poção seria
-   * para curar a vida e não precisar esperar para ir para a próxima sala".
-   * O QUADRO DA VIDA: cada herói da descida com a barra de PV subindo AO VIVO
-   * (Game.vidaNaEspera: "+1 PV a cada 2 s · cheio em m:ss") e, nos MEUS heróis, um botão por
-   * poção que a conta tem (ícone, cura, contagem) — tocar cura aquele herói na hora
-   * (Game.bebeNaEspera), quantas quiser, sem passar do máximo. O do parceiro aparece sem
-   * botões (cada um cura os próprios). Mora fixo no canto da antessala e no painel da porta,
-   * onde o "Entrar na batalha" espera o herói a 0 PV (Game.esperaVida). UM relógio só
-   * (vidaTique, 250 ms) repinta os quadros vivos no lugar: nada é remontado a cada tique (o
-   * toque não se perde), e os botões só se refazem quando a contagem das poções muda. */
+  /* ================================================ A VIDA NA TELA (13/09 e 14/09)
+   * 13/09, o dono: "a poção não é para usar na batalha.. e sim para curar a vida após uma batalha
+   * na sala de espera entre as salas.. carrega 1 pv a cada 2 segundos" — nasceu o quadro da
+   * vida na antessala.
+   * 14/09, o dono: "hoje nas salas de espera a vida vai recuperando aos poucos até encher ou o
+   * jogador usa pote; isso vale para quando terminar calabouço (na praça), depois de um pvp e
+   * assim por diante". A vida virou UMA por herói (js/core/vida.js) e o quadro mora onde se
+   * está fora da luta — nunca na batalha:
+   *   'antessala' — fixo no canto, com as poções (os heróis da descida e os do parceiro);
+   *   'porta'     — no painel da porta, compacto (as poções ficam no quadro do canto);
+   *   'praca'     — fixo e compacto no canto de cima da praça, com os heróis escolhidos: longe do
+   *                 cais, do chat de baixo e do painel do grupo da direita;
+   *   'fim'       — nas telas de fim (sala limpa, calabouço vencido, derrota, fim do duelo);
+   *   'duelo'     — na ficha da escolha do duelo em rede, com os heróis que podem duelar.
+   * Todo quadro só aparece enquanto algum herói dele não está cheio (some quando todos enchem).
+   * Cada linha tem a barra de PV subindo AO VIVO ("+1 PV a cada 2 s · cheio em m:ss") e, nos
+   * MEUS heróis, um botão por poção que a conta tem — tocar cura aquele herói na hora
+   * (Game.bebeNaEspera), quantas quiser, sem passar do máximo. UM relógio só (vidaTique)
+   * repinta os quadros no lugar: a 250 ms com algum à vista, a 1 s com todos escondidos
+   * (esperando a escolha mudar ou o servidor responder), parado sem quadro na tela; e a
+   * JOGO.Vida avisa quando muda (poção, fim de luta, resposta do servidor). */
   var vidaQuadros = [], vidaTimer = null, vidaPortaChave = '';
+  var VIDA_TELAS = { hub: 1, antessala: 1, roomClear: 1, dungeonComplete: 1, defeat: 1, duelFim: 1 };
   var BEBER_MOTIVO_PT = {
     cheio: 'A vida desse herói já está cheia.', acabou: 'Essa poção acabou.', 'sem-pocao': 'Essa poção acabou.',
     pocao: 'Poção desconhecida.', heroi: 'Cada um cura os próprios heróis.',
-    fase: 'A poção se bebe na sala de espera entre as salas.',
-    'sem-descida': 'A descida acabou: a poção se bebe na sala de espera entre as salas.',
-    servidor: 'Conferindo a sala com o servidor… tente num instante.', bebendo: 'Bebendo…',
-    'sem-registro': 'Esta sala é de antes da vida entre as salas: beba na próxima.'
+    batalha: 'Na batalha não se bebe: a poção é para fora da luta (na praça ou na sala de espera).',
+    fase: 'Na batalha não se bebe: a poção é para fora da luta (na praça ou na sala de espera).',
+    servidor: 'O servidor não respondeu — tente num instante.', bebendo: 'Bebendo…',
+    'outro-aparelho': 'Sua conta entrou em outro aparelho.'
   };
   function textoEsperaVida(ev) { return 'Esperando ' + ev.nome + ' recuperar… ' + ev.esperaS + ' s'; }
   function segPorPv() {
@@ -9670,27 +9683,44 @@ var JOGO = (typeof window !== 'undefined')
     s = Math.max(0, Math.ceil(s));
     return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
-  /* o quadro (null sem sala de espera — a primeira sala da descida nasce de vida cheia);
-   * `fixo` = o do canto da antessala. O do painel da porta sai COMPACTO quando o do canto
-   * existe (só nome, barra e a linha do tempo): com as poções e o título ele empurrava o
-   * "Entrar na batalha" para fora do painel — as poções ficam à mão no canto. */
-  function vidaBloco(fixo) {
-    var lista = safe(function () { return G().vidaNaEspera(); }, []) || [];
-    if (!lista.length) return null;
-    var compacto = !fixo && !!document.querySelector('.vida-bloco.is-fixo');
-    var box = el('div', 'vida-bloco' + (fixo ? ' is-fixo' : '') + (compacto ? ' is-compacto' : ''));
-    if (!compacto) box.appendChild(el('div', 'vida-tit', 'A vida volta sozinha: <b>+1 PV a cada ' + segPorPv() + ' s</b> — ou beba uma poção'));
+  // os heróis de cada quadro; null = os da descida (e os do parceiro), que o Game conhece
+  function heroisDaVida(modo) {
+    if (modo === 'praca') return selHeroes.slice();
+    if (modo === 'duelo') return safe(function () { return Dl().herois(); }, []) || [];
+    if (modo === 'fim') {
+      var pt = safe(function () { return G().party; }, null);
+      return (pt && pt.length) ? pt.slice() : selHeroes.slice();
+    }
+    return null;
+  }
+  function listaVida(modo) {
+    var ids = heroisDaVida(modo);
+    return safe(function () { return ids ? G().vidaNaEspera(ids) : G().vidaNaEspera(); }, []) || [];
+  }
+  /* o quadro (escondido enquanto todos estão cheios) */
+  function vidaBloco(modo) {
+    var fixo = modo === 'antessala' || modo === 'praca';
+    var box = el('div', 'vida-bloco is-' + modo + (fixo ? ' is-fixo' : '') +
+                        ((modo === 'porta' || modo === 'praca') ? ' is-compacto' : ''));
+    if (modo === 'praca') box.appendChild(el('div', 'vida-tit', 'Vida: <b>+1 PV a cada ' + segPorPv() + ' s</b> — ou beba uma poção'));
+    else if (modo !== 'porta') {
+      box.appendChild(el('div', 'vida-tit', 'A vida volta sozinha: <b>+1 PV a cada ' + segPorPv() + ' s</b> — ou beba uma poção'));
+    }
     var linhas = el('div', 'vida-lista');
     box.appendChild(linhas);
-    var q = { box: box, linhas: linhas, sig: '', rows: {}, compacto: compacto };
+    box.hidden = true;
+    var q = { box: box, linhas: linhas, sig: '', rows: {}, modo: modo, comPocoes: modo !== 'porta' };
     vidaQuadros.push(q);
     pintaVida(q);
     ligaVidaTique();
     return box;
   }
   function pintaVida(q) {
-    var lista = safe(function () { return G().vidaNaEspera(); }, []) || [];
-    var pocoes = safe(function () { return G().pocoesNaEspera(); }, []) || [];
+    var lista = listaVida(q.modo);
+    var ferido = lista.some(function (v) { return v.hp < v.max; });
+    q.box.hidden = !ferido;
+    if (!ferido) return;
+    var pocoes = q.comPocoes ? (safe(function () { return G().pocoesNaEspera(); }, []) || []) : [];
     var sig = lista.map(function (v) { return v.chave; }).join('|') + '#' +
               pocoes.map(function (po) { return po.id + 'x' + po.n; }).join(',');
     if (sig !== q.sig) {
@@ -9711,7 +9741,7 @@ var JOGO = (typeof window !== 'undefined')
         row.appendChild(barra);
         var nota = el('div', 'vh-nota', '');
         row.appendChild(nota);
-        if (v.meu && pocoes.length && !q.compacto) {
+        if (v.meu && pocoes.length) {
           var pp = el('div', 'vh-pocoes');
           pocoes.forEach(function (po) {
             var b = el('button', 'vh-pocao');
@@ -9729,7 +9759,7 @@ var JOGO = (typeof window !== 'undefined')
         q.rows[v.chave] = { row: row, num: numEl, enche: enche, nota: nota };
         q.linhas.appendChild(row);
       });
-      if (!pocoes.length && !q.compacto) {
+      if (q.comPocoes && !pocoes.length) {
         q.linhas.appendChild(el('p', 'vh-sem', 'Sem poções: a banca do mercador vende no Mercadinho da praça.'));
       }
     }
@@ -9740,18 +9770,17 @@ var JOGO = (typeof window !== 'undefined')
       r.enche.style.width = (v.max > 0 ? Math.round(100 * v.hp / v.max) : 0) + '%';
       r.row.classList.toggle('is-zero', v.hp < 1);
       r.row.classList.toggle('is-cheio', v.hp >= v.max);
-      r.nota.textContent = v.conferindo ? 'conferindo a sala com o servidor…'
-        : (v.hp >= v.max ? 'vida cheia'
-          : (v.hp < 1 ? 'sem vida — 1 PV em ' + v.ate1S + ' s'
-            : '+1 PV a cada ' + segPorPv() + ' s · cheio em ' + mmss(v.cheioEmS)));
+      r.nota.textContent = v.hp >= v.max ? 'vida cheia'
+        : (v.hp < 1 ? 'sem vida — 1 PV em ' + v.ate1S + ' s'
+          : '+1 PV a cada ' + segPorPv() + ' s · cheio em ' + mmss(v.cheioEmS));
       [].forEach.call(r.row.querySelectorAll('.vh-pocao'), function (b) {
-        var m = safe(function () { return G().podeBeberEspera(v.chave, b.getAttribute('data-pocao')); }, 'fase');
+        var m = safe(function () { return G().podeBeberEspera(v.chave, b.getAttribute('data-pocao')); }, 'batalha');
         b.classList.toggle('is-dim', !!m);
       });
     });
   }
   function bebeVida(chave, pocaoId) {
-    var motivo = safe(function () { return G().podeBeberEspera(chave, pocaoId); }, 'fase');
+    var motivo = safe(function () { return G().podeBeberEspera(chave, pocaoId); }, 'batalha');
     if (motivo) { toast(BEBER_MOTIVO_PT[motivo] || 'Agora não dá para beber.'); return; }
     var pr = safe(function () { return G().bebeNaEspera(chave, pocaoId); }, null);
     if (!pr || typeof pr.then !== 'function') return;
@@ -9762,39 +9791,58 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
   function ligaVidaTique() {
-    if (!vidaTimer) vidaTimer = setInterval(vidaTique, 250);
+    if (!vidaTimer) vidaTimer = setTimeout(vidaTique, 250);
   }
   function vidaTique() {
+    if (vidaTimer) { clearTimeout(vidaTimer); vidaTimer = null; }
     vidaQuadros = vidaQuadros.filter(function (q) { return document.body.contains(q.box); });
-    if (current !== 'antessala') {
-      if (vidaTimer) { clearInterval(vidaTimer); vidaTimer = null; }
-      return;
-    }
+    if (!VIDA_TELAS[current]) return;
     vidaQuadros.forEach(pintaVida);
     // o botão da porta (solo): apagado enquanto houver herói a 0 PV, com os segundos que faltam
-    var ev = safe(function () { return G().esperaVida(); }, null);
-    [].forEach.call(document.querySelectorAll('.vida-porta'), function (b) {
+    var portas = document.querySelectorAll('.vida-porta');
+    var ev = portas.length ? safe(function () { return G().esperaVida(); }, null) : null;
+    [].forEach.call(portas, function (b) {
       b.classList.toggle('is-apagado', !!ev);
       b.textContent = ev ? textoEsperaVida(ev) : (b.getAttribute('data-rotulo') || b.textContent);
     });
+    // 14/09: o "Pronto" do duelo em rede espera o herói escolhido a 0 (e o servidor abrir o duelo)
+    var prontos = document.querySelectorAll('.du-pronto');
+    if (prontos.length) {
+      var evD = dueloEscolha.length ? safe(function () { return G().esperaVida(dueloEscolha.slice()); }, null) : null;
+      var abrindo = !!safe(function () { return Dl().estado().abrindo; }, false);
+      [].forEach.call(prontos, function (b) {
+        b.classList.toggle('is-apagado', !!evD || abrindo);
+        b.textContent = abrindo ? 'Conferindo a vida com o servidor…'
+          : (evD ? textoEsperaVida(evD) : (b.getAttribute('data-rotulo') || b.textContent));
+      });
+    }
     // em grupo o botão de quem lidera é do Coop (podeEntrar): quando a espera muda, o painel repinta
-    var chave = ev ? ev.chave : '';
-    if (chave !== vidaPortaChave) {
-      vidaPortaChave = chave;
-      if (painelModo === 'lugar' && painelLugar && painelLugar.tipo === 'porta' && emGrupo()) repintaLugar();
+    if (current === 'antessala') {
+      var chave = ev ? ev.chave : '';
+      if (!portas.length) {
+        var evG = safe(function () { return G().esperaVida(); }, null);
+        chave = evG ? evG.chave : '';
+      }
+      if (chave !== vidaPortaChave) {
+        vidaPortaChave = chave;
+        if (painelModo === 'lugar' && painelLugar && painelLugar.tipo === 'porta' && emGrupo()) repintaLugar();
+      }
     }
-    if (!vidaQuadros.length && !document.querySelector('.vida-porta') && vidaTimer) {
-      clearInterval(vidaTimer);
-      vidaTimer = null;
-    }
+    if (!vidaQuadros.length && !portas.length && !prontos.length) return;
+    var aVista = portas.length || prontos.length || vidaQuadros.some(function (q) { return !q.box.hidden; });
+    vidaTimer = setTimeout(vidaTique, aVista ? 250 : 1000);
   }
+  // a vida mudou fora da tela (poção, fim de luta, a resposta do servidor, outra aba): repinta já
+  safe(function () {
+    return JOGO.Vida && JOGO.Vida.aoMudar(function () { if (VIDA_TELAS[current] && vidaQuadros.length) vidaTique(); });
+  }, null);
 
   /* A PORTA DA ANTESSALA em grupo (4.6): quem lidera abre quando o outro está
    * pronto na porta; quem segue só espera */
   function painelPortaGrupo(p) {
     var nome = nomeParceiro();
     // 13/09: a vida dos heróis do grupo (os meus com as poções; os do parceiro, sem)
-    var vidaG = vidaBloco(false);
+    var vidaG = vidaBloco('porta');
     if (!souLider()) {
       // 11/09 (revisão): quem segue vê a dificuldade que vale (a da ata é a de quem lidera)
       var lnDif = linhaDifGrupo();
@@ -10387,10 +10435,19 @@ var JOGO = (typeof window !== 'undefined')
     function carta(hid, marcada, clicavel) {
       var h = hero(hid) || {};
       var cid = h.classId || hid;
-      var card = el('button', 'av-carta' + (marcada ? ' is-on' : ''));
+      // 14/09: a vida única — o herói ferido mostra a barra, e o que está a 0 fica apagado
+      var vd = safe(function () { return G().vidaNaEspera([hid])[0]; }, null);
+      var card = el('button', 'av-carta' + (marcada ? ' is-on' : '') + (vd && vd.hp < 1 ? ' is-zero' : ''));
       card.type = 'button';
       card.appendChild(art('portrait', [cid, { element: h.element || 'neutro', size: 168 }], 84, 'av-pic'));
       card.appendChild(el('span', 'av-nome', esc(className(cid)) + '<small>nv ' + (h.level || 1) + '</small>'));
+      if (vd && vd.hp < vd.max) {
+        var vbar = el('span', 'av-vida'), vfill = el('i');
+        vfill.style.width = Math.round(100 * vd.hp / vd.max) + '%';
+        vbar.appendChild(vfill);
+        vbar.title = vd.hp + '/' + vd.max + ' PV';
+        card.appendChild(vbar);
+      }
       if (clicavel) {
         tap(card, function () {
           var i = dueloEscolha.indexOf(hid);
@@ -10416,10 +10473,23 @@ var JOGO = (typeof window !== 'undefined')
       caixa.appendChild(fila);
       caixa.appendChild(el('p', 'du-espera', 'Tempo para escolher: <b class="du-relogio"></b>'));
       var pronto = dueloEscolha.length >= 1;
-      caixa.appendChild(btn('Pronto' + (pronto ? ' (' + dueloEscolha.length + ')' : ''), 'btn-primary btn-block' + (pronto ? '' : ' is-off'), function () {
+      var rotuloPronto = 'Pronto' + (pronto ? ' (' + dueloEscolha.length + ')' : '');
+      var bPronto = btn(rotuloPronto, 'btn-primary btn-block du-pronto' + (pronto ? '' : ' is-off'), function () {
+        // 14/09: herói a 0 PV não entra no duelo — o botão espera como a porta da sala
+        var evD = dueloEscolha.length ? safe(function () { return G().esperaVida(dueloEscolha.slice()); }, null) : null;
+        if (evD) { toast(textoEsperaVida(evD) + ' — ou beba uma poção.'); return; }
         var r = safe(function () { return Dl().escolher(dueloEscolha.slice()); }, null);
+        if (r && r.ok && r.esperando) { vidaTique(); return; }
+        if (r && !r.ok && r.motivo === 'vida-zero') {
+          toast('Esse herói está sem vida: espere ' + (r.esperaS || 1) + ' s ou beba uma poção.');
+          return;
+        }
         if (!r || !r.ok) toast(textoMotivo(r ? r.motivo : 'ocupado', null));
-      }));
+      });
+      bPronto.setAttribute('data-rotulo', rotuloPronto);
+      caixa.appendChild(bPronto);
+      caixa.appendChild(vidaBloco('duelo'));   // 14/09: a vida dos heróis que podem duelar, com as poções
+      vidaTique();
     }
     caixa.appendChild(btn('Desistir do duelo', 'btn-ghost btn-block', function () {
       safe(function () { return Dl().cancelar('desistiu'); }, null);
@@ -10476,6 +10546,7 @@ var JOGO = (typeof window !== 'undefined')
     box.appendChild(el('p', 'game-sub', (ar.nome ? 'Arena: ' + esc(ar.nome) + ' · ' : '') + 'clima: ' + esc(nomeClima(data.clima))));
     box.appendChild(el('p', 'du-valeria', 'Amistoso — a Brasa de verdade acende quando o servidor apitar o duelo.' +
       (data.seValesse != null ? ' Se valesse: +' + esc(data.seValesse) + '.' : '')));
+    box.appendChild(vidaBloco('fim'));       // 14/09: o meu lado sai do duelo com a vida com que terminou
     var ult = safe(function () { return Dl().ultimo(); }, null);
     var opId = (op && op.id) || (ult && ult.id) || null;
     var naPraca = !!opId && !!safe(function () {
