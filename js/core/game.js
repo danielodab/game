@@ -123,8 +123,11 @@ var JOGO = (typeof window !== 'undefined')
 
   // internos da condução de IA
   var aiPlan = null, aiIdx = 0, aiUid = null, aiTimer = 0;
-  // PV dos heróis ao fim da sala vencida: { heroId: hp } (0 = morto)
-  var carryHp = null;
+  /* A SALA DE ESPERA (13/09, ver "A VIDA ENTRE AS SALAS" mais abaixo): o registro da sala
+   * vencida — { ref, desde, herois: {chave: {hp, max}}, cura: {chave: n}, rede, aguardando }.
+   * null = sem descida em andamento (a sala nasce de vida cheia). */
+  var vidaEspera = null;
+  var bebendo = false;         // a poção que está no servidor: não sai outra até a resposta
   // A SEGURANÇA (13/09): a sala solo com bilhete do servidor — o bilhete e os lances anotados
   var ataSolo = null;          // { bilhete, lances: [] }
   var conferindoSala = false;  // a vitória está no servidor: a tela espera o recibo
@@ -179,7 +182,7 @@ var JOGO = (typeof window !== 'undefined')
     Game.roomIndex = 0;
     Game.pendingFusion = null;
     Game.mustEndTurn = false;
-    carryHp = null;
+    vidaEspera = null;           // 13/09: a descida acabou — a próxima começa de vida cheia
     ataSolo = null;
     conferindoSala = false;
     resetAiState();
@@ -315,7 +318,7 @@ var JOGO = (typeof window !== 'undefined')
     Game.hoverTile = null;
     Game.pendingFusion = null;
     Game.mustEndTurn = false;
-    carryHp = null;
+    vidaEspera = null;
     resetAiState();
     resetTimer(true);
     rede = emGrupo ? { tipo: 'grupo', eu: meuIdRede(), lado: null, colocador: false } : null;
@@ -353,7 +356,11 @@ var JOGO = (typeof window !== 'undefined')
              dificuldade: Game.dificuldade || 'normal', herois: Game.party.slice() };
   }
   function preparaBilhete() {
-    try { if (autoridadeNaSala()) JOGO.Autoridade.prepara(pedidoDaSala()); } catch (e) {}
+    /* 13/09: com a sala de espera no meio o bilhete NÃO é pedido de antemão — o servidor
+     * soma a vida que voltou até o instante em que o bilhete abre, e um bilhete pedido na
+     * chegada à antessala levaria a vida de quando se chegou. Só a primeira sala da
+     * descida (vida cheia) é pedida já; as outras, no "Entrar na batalha". */
+    try { if (autoridadeNaSala() && !vidaEspera) JOGO.Autoridade.prepara(pedidoDaSala()); } catch (e) {}
   }
 
   /* O POÇO SEM FUNDO (25/08): a torre infinita. JOGO.Poco monta o calabouço
@@ -386,7 +393,7 @@ var JOGO = (typeof window !== 'undefined')
     Game.hoverTile = null;
     Game.pendingFusion = null;
     Game.mustEndTurn = false;
-    carryHp = null;
+    vidaEspera = null;
     resetAiState();
     resetTimer(true);
     var prog = P();
@@ -441,6 +448,8 @@ var JOGO = (typeof window !== 'undefined')
    * nasce. O PV carregado da sala anterior entra aqui. */
   Game.entrarNaSala = function () {
     if (Game.screen !== 'antessala' || !Game.dungeonId) return false;
+    // 13/09: herói a 0 PV não entra — espera a vida voltar ou bebe uma poção (a HUD diz quanto falta)
+    if (Game.esperaVida()) return false;
     // [G11] em grupo quem abre a porta é o líder, pela ata (Coop.entrar): a
     // batalha dele nasce no `dentro` do parceiro, com a mesma semente
     if (rede && rede.tipo === 'grupo') {
@@ -457,6 +466,8 @@ var JOGO = (typeof window !== 'undefined')
     // Sem o bilhete pronto (a dificuldade mudou na porta, ou a rede demorou), pede
     // e entra sozinha quando ele chegar — 'esperando' é verdadeiro: a HUD não reclama
     var bil = null;
+    // 13/09: a vida da PORTA (a do fim da sala anterior, mais a espera e as poções); sem descida, null
+    var carryPorta = vidaCarryPorta();
     if (autoridadeNaSala()) {
       var pedido = pedidoDaSala();
       bil = JOGO.Autoridade.tomaBilhete(pedido);
@@ -464,9 +475,9 @@ var JOGO = (typeof window !== 'undefined')
         JOGO.Autoridade.prepara(pedido, function () { if (Game.screen === 'antessala') Game.entrarNaSala(); });
         return 'esperando';
       }
-      // o PV que o servidor anotou ao fechar a sala anterior: a página pode ter
-      // recarregado no meio da descida, e a sala só se refaz igual com o mesmo PV
-      carryHp = bil.carry || null;
+      // o PV que o SERVIDOR somou ao abrir o bilhete: é com ele que a sala se refaz igual
+      // lá (a vida daqui só mostra; o relógio que conta é o dele)
+      carryPorta = bil.carry || null;
       // o andar do Poço sai da semente do bilhete: a mesma sala que o servidor refaz
       if (Game.dungeonId === 'poco' && JOGO.Poco && JOGO.Poco.salaSemeada) {
         JOGO.Poco.poeSala(Game.roomIndex + 1, JOGO.Poco.salaSemeada(Game.roomIndex + 1, bil.semente));
@@ -479,19 +490,8 @@ var JOGO = (typeof window !== 'undefined')
     if (Game.dungeonId === 'poco' && JOGO.Poco) {
       JOGO.Poco.escalaEstado(Game.state, Game.roomIndex + 1);
     }
-    // [G1] vivos curam 50% do PV perdido; mortos revivem com 30% do hpMax
-    if (carryHp && Game.state && Game.state.units) {
-      for (var i = 0; i < Game.state.units.length; i++) {
-        var u = Game.state.units[i];
-        if (u.kind !== 'hero') continue;
-        var key = u.heroId || u.defId;
-        var prev = carryHp[key];
-        if (prev === undefined) continue;
-        if (prev > 0) u.hp = Math.min(u.hpMax, prev + Math.round((u.hpMax - prev) * 0.5));
-        else u.hp = Math.max(1, Math.round(u.hpMax * 0.3));
-      }
-    }
-    carryHp = null;
+    // 13/09: a vida da porta entra como está (era "vivos curam 50%, mortos voltam com 30%")
+    aplicaCarry(Game.state, carryPorta, false);
     setScreen('battle');
     return true;
   };
@@ -689,8 +689,8 @@ var JOGO = (typeof window !== 'undefined')
       else if (l.a === 'm') ok = !!E().move(st, l.u, l.x, l.y);
       else if (l.a === 'c') ok = !!E().cast(st, l.u, l.s, l.x, l.y);
       else if (l.a === 'e') { if (st.phase === 'playing') E().endTurn(st); ok = true; }
-      // 13/09: a poção de vida (o motor recusa no duelo; o estoque é de quem bebeu)
-      else if (l.a === 'po') ok = !!(E().usePotion && E().usePotion(st, l.u, l.s));
+      // 13/09: a poção saiu da batalha (é da sala de espera): o gole de uma página velha não cura
+      else if (l.a === 'po') ok = false;
       else if (l.a === 'f') {
         /* O `f` DE FORA (12/09). Fundir é só com os personagens do MESMO
          * jogador, então um lance que junte heróis de donos diferentes não
@@ -904,16 +904,18 @@ var JOGO = (typeof window !== 'undefined')
     }
     return out;
   }
-  function aplicaCarry(st, carry) {
+  /* O PV DA PORTA na batalha nova (13/09, a regra do juiz: servidor/juiz/sala.js,
+   * aplicaCarry). O número já traz a espera e as poções; aqui só se prende ao PV máximo
+   * da sala nova, com o piso de 1 (herói a 0 não chega: a porta não abre). Chave `heroId`
+   * sozinho, `dono:heroId` em grupo. */
+  function aplicaCarry(st, carry, emRede) {
     if (!carry || !st || !st.units) return;
     for (var i = 0; i < st.units.length; i++) {
       var u = st.units[i];
       if (u.kind !== 'hero') continue;
-      var prev = carry[(u.dono || '') + ':' + (u.heroId || u.defId)];
-      if (typeof prev !== 'number') continue;
-      // [G1] vivos curam 50% do PV perdido; mortos revivem com 30% do hpMax
-      if (prev > 0) u.hp = Math.min(u.hpMax, prev + Math.round((u.hpMax - prev) * 0.5));
-      else u.hp = Math.max(1, Math.round(u.hpMax * 0.3));
+      var prev = carry[emRede ? (u.dono || '') + ':' + (u.heroId || u.defId) : (u.heroId || u.defId)];
+      if (typeof prev !== 'number' || !isFinite(prev)) continue;
+      u.hp = Math.max(1, Math.min(u.hpMax, Math.floor(prev)));
     }
   }
   // o PV que o líder põe na próxima ata
@@ -922,7 +924,10 @@ var JOGO = (typeof window !== 'undefined')
    * No juiz não há Rede: o gancho põe o `rede` do membro que está sendo pago. */
   Game._defineRede = function (r) { rede = r || null; };
   Game._carryRede = function (st) { return carryRede(st || Game.state); };
-  Game._carry = function () { return (rede && carryHp) ? JSON.parse(JSON.stringify(carryHp)) : null; };
+  // o PV com que cada herói TERMINOU a sala (igual nos dois clientes do grupo)
+  Game._carry = function () { return (rede && vidaEspera) ? carryDoFim() : null; };
+  // 13/09: o PV da PORTA agora (a espera e as poções, as do parceiro pelo `pronto`): o da ata sem servidor
+  Game._carryPorta = function () { return (rede && vidaEspera) ? vidaCarryPorta() : null; };
 
   /* A BATALHA DA ATA (o Coop chama): a mesma semente, a mesma dificuldade, o
    * mesmo grupo ao pé da letra e o mesmo PV carregado nos dois clientes. */
@@ -941,8 +946,7 @@ var JOGO = (typeof window !== 'undefined')
     resetAiState();
     resetTimer(true);
     timerTurno = null;
-    aplicaCarry(st, ata.carry);
-    carryHp = null;
+    aplicaCarry(st, ata.carry, true);
     Game.state = st;
     rede.colocador = !!(ata.party && ata.party[0] && ata.party[0].dono === rede.eu);
     ultimoTurno = st.turno || 0;
@@ -978,7 +982,7 @@ var JOGO = (typeof window !== 'undefined')
     Game.hoverTile = null;
     Game.pendingFusion = null;
     Game.mustEndTurn = false;
-    carryHp = null;
+    vidaEspera = null;
     resetAiState();
     resetTimer(true);
     timerTurno = null;
@@ -1061,7 +1065,7 @@ var JOGO = (typeof window !== 'undefined')
   Game._saiDaRede = function () {
     rede = null; ultimoTurno = null; timerTurno = null;
     Game.state = null;
-    carryHp = null;
+    vidaEspera = null;
     resetAiState();
     resetTimer(true);
     Game.selectedSpellId = null;
@@ -1331,52 +1335,225 @@ var JOGO = (typeof window !== 'undefined')
     anotaSolo({ a: 'e', ok: true });
   };
 
-  /* A POÇÃO DE VIDA NA BATALHA (13/09, pedido do dono; o motor em Engine.usePotion).
-   * Beber é um lance como o feitiço: no solo vai anotado para o servidor refazer
-   * ({a:'po', u, s}); em grupo viaja pela porta única (aplicaLocal) e o motor do
-   * parceiro cura o meu herói igual. A poção sai do MEU saco na hora (a barra conta
-   * certo); com a autoridade ligada o servidor desconta as mesmas ao fechar a sala e
-   * recusa a sala que bebeu mais do que a conta tinha. No duelo não existe: o botão não
-   * aparece e o motor recusa. A IA (herói caído, invocação) não bebe: o plano dela só
-   * anda e conjura. */
-  function emDuelo() { return !!((Game.state && Game.state.pvp) || (rede && rede.tipo === 'duelo')); }
-  /* null = pode; senão o porquê (os do Engine.podePocao, mais 'duelo', 'vez' e 'acabou') */
-  Game.podePocao = function (pocaoId) {
-    var st = Game.state;
-    if (Game.screen !== 'battle' || !st) return 'fase';
-    if (emDuelo()) return 'duelo';
-    if (!Game.isPlayerTurn()) return 'vez';
-    var P = JOGO.Progress;
-    if (!P || !P.consumivelVer || P.consumivelVer(pocaoId) <= 0) return 'acabou';
-    var u = E().activeUnit(st);
-    if (!u || !E().podePocao) return 'vez';
-    return E().podePocao(st, u.uid, pocaoId);
-  };
-  /* [{id, def, n, motivo}] das poções que tenho, da menor cura para a maior; vazio no
-   * duelo e fora da minha vez */
-  Game.pocoesNaBarra = function () {
-    var out = [], P = JOGO.Progress, c = (JOGO.DATA && JOGO.DATA.consumiveis) || {};
-    if (Game.screen !== 'battle' || !Game.state || emDuelo() || !P || !P.consumivelVer) return out;
-    if (!Game.isPlayerTurn()) return out;
-    Object.keys(c).forEach(function (id) {
-      var d = c[id];
-      if (!d || d.tipo !== 'vida') return;
-      var n = P.consumivelVer(id);
-      if (n > 0) out.push({ id: id, def: d, n: n, motivo: Game.podePocao(id) });
+  /* ============================================ A VIDA ENTRE AS SALAS (13/09)
+   * O pedido do dono: "a poção não é para usar na batalha.. e sim para curar a vida após
+   * uma batalha na sala de espera entre as salas.. quando acaba a luta o jogador fica com
+   * a vida que terminou a última luta.. carrega 1 pv a cada 2 segundos. se um personagem
+   * morre ele vem com a vida zerada aumentando 1 pv a cada 2 s também. aí a poção seria
+   * para curar a vida e não precisar esperar para ir para a próxima sala".
+   *
+   * Ao VENCER uma sala nasce o registro `vidaEspera`: o PV com que cada herói terminou
+   * (caído = 0; a fusão divide, como sempre — carrySolo/carryRede), o PV máximo dele, o
+   * instante em que a sala acabou e as curas de poção. A vida de agora é
+   *     min(máximo, PV do fim + floor(tempo / DATA.vidaEntreSalas.msPorPv) + curas)
+   * — a mesma conta que o servidor faz ao abrir o bilhete da sala seguinte
+   * (servidor/salas.py, _vida_na_porta). Com a autoridade ligada quem manda é ELE: o
+   * relógio daqui só começa quando a resposta do fechamento chega (nunca adianta o de
+   * lá), e a batalha nasce com o carry do bilhete. Sem servidor, o daqui vale.
+   *
+   * Herói a 0 PV não entra (Game.esperaVida; o servidor recusa também). A poção se bebe
+   * aqui, quantas quiser, sem passar do máximo (Game.bebeNaEspera). A descida acaba —
+   * praça, abandono, derrota, duelo, descida nova — e o registro some: a primeira sala da
+   * descida seguinte nasce de vida cheia. Em grupo cada jogador cura os PRÓPRIOS heróis;
+   * as curas do parceiro chegam no `pronto` dele (Coop.vidaParceiro). */
+  function msPorPv() {
+    var v = (JOGO.DATA && JOGO.DATA.vidaEntreSalas) || {};
+    return (typeof v.msPorPv === 'number' && isFinite(v.msPorPv) && v.msPorPv > 0) ? v.msPorPv : 2000;
+  }
+  Game._relogioVida = null;          // provas: () => ms (o relógio da sala de espera)
+  function agoraVida() {
+    if (typeof Game._relogioVida === 'function') {
+      try { var t = Game._relogioVida(); if (typeof t === 'number' && isFinite(t)) return t; } catch (e) {}
+    }
+    // em grupo, o relógio de parede do Coop (o mesmo que conta a vez e a carência)
+    var c = C();
+    if (rede && c && typeof c._agora === 'function') {
+      try { var tc = +c._agora(); if (isFinite(tc)) return tc; } catch (e2) {}
+    }
+    return Date.now();
+  }
+  /* {chave: PV máximo} dos heróis do jogador no fim da sala — a chave do carry. O juiz usa
+   * a mesma (servidor/juiz/recompensa.js) para a API guardar o teto da sala de espera. */
+  function vidaMaxDe(st, emRede) {
+    var out = {};
+    for (var i = 0; st && st.units && i < st.units.length; i++) {
+      var u = st.units[i];
+      if (u.kind !== 'hero' || u.side !== 'player') continue;
+      var k = emRede ? (u.dono || '') + ':' + (u.heroId || u.defId) : (u.heroId || u.defId);
+      if (typeof u.hpMax === 'number' && isFinite(u.hpMax) && u.hpMax > 0) out[k] = Math.floor(u.hpMax);
+    }
+    return out;
+  }
+  Game._vidaMax = function (st, emRede) { return vidaMaxDe(st || Game.state, !!emRede); };
+
+  // a sala conferida no servidor (o bilhete solo ou o gid do grupo), ou null sem autoridade
+  function refDaSala() {
+    if (ataSolo) return ataSolo.bilhete;
+    if (!grupoNoServidor()) return null;
+    try { var reg = C().logServidor(); return (reg && reg.ata && reg.ata.gid) || null; } catch (e) { return null; }
+  }
+  function comecaEspera(st) {
+    var emRede = !!(rede && rede.tipo === 'grupo');
+    var fim = emRede ? carryRede(st) : carrySolo(st), maximos = vidaMaxDe(st, emRede), herois = {};
+    Object.keys(fim).forEach(function (k) {
+      var hp = Math.max(0, Math.floor(num(fim[k], 0)));
+      var mx = (typeof maximos[k] === 'number' && maximos[k] >= 1) ? maximos[k] : Math.max(1, hp);
+      herois[k] = { hp: Math.min(mx, hp), max: mx };
     });
-    out.sort(function (a, b) { return (a.def.cura || 0) - (b.def.cura || 0); });
+    var ref = refDaSala();
+    // `aguardando`: a sala está no servidor — o relógio só anda quando ele responder
+    vidaEspera = { ref: ref, desde: agoraVida(), herois: herois, cura: {}, rede: emRede, aguardando: !!ref };
+  }
+  // o fechamento respondeu: vitória paga = a espera começa agora; recusada = o servidor não
+  // tem a sala, e a seguinte nasce de vida cheia lá — aqui também
+  function esperaConferida(ref, r) {
+    if (!vidaEspera || !ref || vidaEspera.ref !== ref) return;
+    if (r && r.ok && r.fase === 'won') { vidaEspera.desde = agoraVida(); vidaEspera.aguardando = false; }
+    else vidaEspera = null;
+  }
+
+  function chaveEhMinha(k) {
+    if (!vidaEspera || !vidaEspera.rede) return true;
+    return !!rede && typeof rede.eu === 'string' && k.indexOf(rede.eu + ':') === 0;
+  }
+  function heroiDaChave(k) {
+    if (!vidaEspera || !vidaEspera.rede) return k;
+    var i = k.lastIndexOf(':');
+    return i >= 0 ? k.slice(i + 1) : k;
+  }
+  function curasDoParceiro() {
+    var c = C(), v = null;
+    try { v = (c && c.vidaParceiro) ? c.vidaParceiro() : null; } catch (e) { v = null; }
+    return (v && typeof v === 'object') ? v : {};
+  }
+  function vidaDe(k, agora) {
+    var h = vidaEspera && vidaEspera.herois[k];
+    if (!h) return null;
+    var cura = Math.max(0, num(vidaEspera.cura[k], 0)) + (chaveEhMinha(k) ? 0 : Math.max(0, num(curasDoParceiro()[k], 0)));
+    var ms = msPorPv();
+    var passou = vidaEspera.aguardando ? 0 : Math.max(0, agora - vidaEspera.desde);
+    var hp = Math.min(h.max, h.hp + cura + Math.floor(passou / ms));
+    var resto = ms - (passou % ms);
+    return { hp: hp, max: h.max, cheioEmMs: hp < h.max ? (h.max - hp - 1) * ms + resto : 0, ate1Ms: hp < 1 ? resto : 0 };
+  }
+  function nomeDoHeroi(heroId) {
+    var hid = String(heroId || ''), classe = hid.split('#')[0];
+    try { var h = P() && P().hero ? P().hero(hid) : null; if (h && h.classId) classe = h.classId; } catch (e) {}
+    var d = JOGO.DATA && JOGO.DATA.classes && JOGO.DATA.classes[classe];
+    return (d && d.name) || hid;
+  }
+  function carryDoFim() {
+    var out = {};
+    if (vidaEspera) Object.keys(vidaEspera.herois).forEach(function (k) { out[k] = vidaEspera.herois[k].hp; });
+    return out;
+  }
+  function vidaCarryPorta() {
+    if (!vidaEspera) return null;
+    var out = {}, agora = agoraVida();
+    Object.keys(vidaEspera.herois).forEach(function (k) { out[k] = vidaDe(k, agora).hp; });
+    return out;
+  }
+  function vidaMudou() {
+    var c = C();
+    if (rede && c && c.vidaMudou) { try { c.vidaMudou(); } catch (e) {} }
+  }
+
+  /* [{chave, heroId, nome, meu, hp, max, cheioEmS, ate1S, conferindo}] — a vida de cada herói
+   * da descida AGORA, os meus primeiro; vazio sem sala de espera (a primeira sala da descida) */
+  Game.vidaNaEspera = function () {
+    if (!vidaEspera) return [];
+    var agora = agoraVida(), meus = [], deles = [];
+    Object.keys(vidaEspera.herois).forEach(function (k) {
+      var v = vidaDe(k, agora), hid = heroiDaChave(k), meu = chaveEhMinha(k);
+      (meu ? meus : deles).push({ chave: k, heroId: hid, nome: nomeDoHeroi(hid), meu: meu, hp: v.hp, max: v.max,
+        cheioEmS: Math.ceil(v.cheioEmMs / 1000), ate1S: Math.ceil(v.ate1Ms / 1000), conferindo: !!vidaEspera.aguardando });
+    });
+    return meus.concat(deles);
+  };
+  /* null = todos de pé; senão {chave, heroId, nome, meu, esperaS} do primeiro herói a 0 PV */
+  Game.esperaVida = function () {
+    var lista = Game.vidaNaEspera();
+    for (var i = 0; i < lista.length; i++) {
+      var v = lista[i];
+      if (v.hp < 1) return { chave: v.chave, heroId: v.heroId, nome: v.nome, meu: v.meu, esperaS: Math.max(1, v.ate1S) };
+    }
+    return null;
+  };
+  function pocaoDef(id) {
+    var c = (JOGO.DATA && JOGO.DATA.consumiveis) || {};
+    var d = (typeof id === 'string' && Object.prototype.hasOwnProperty.call(c, id)) ? c[id] : null;
+    return (d && d.tipo === 'vida' && typeof d.cura === 'number' && d.cura > 0) ? d : null;
+  }
+  /* [{id, def, n}] as poções de vida que a conta tem, da menor cura para a maior */
+  Game.pocoesNaEspera = function () {
+    var out = [], prog = P(), c = (JOGO.DATA && JOGO.DATA.consumiveis) || {};
+    if (!prog || !prog.consumivelVer) return out;
+    Object.keys(c).forEach(function (id) {
+      var d = pocaoDef(id), n = d ? prog.consumivelVer(id) : 0;
+      if (n > 0) out.push({ id: id, def: d, n: n });
+    });
+    out.sort(function (a, b) { return a.def.cura - b.def.cura; });
     return out;
   };
-  Game.usaPocao = function (pocaoId) {
-    if (Game.podePocao(pocaoId)) return false;
-    var st = Game.state, u = E().activeUnit(st), ok;
-    if (rede) ok = aplicaLocal({ a: 'po', u: u.uid, s: pocaoId });
-    else {
-      ok = !!E().usePotion(st, u.uid, pocaoId);
-      anotaSolo({ a: 'po', u: u.uid, s: pocaoId, ok: ok });
+  /* null = pode beber; senão o porquê: 'fase' (fora da sala de espera), 'heroi' (fora da
+   * descida, ou do parceiro), 'pocao', 'acabou', 'cheio', 'servidor' (a sala ainda está
+   * sendo conferida), 'bebendo' (a anterior ainda está no servidor) */
+  Game.podeBeberEspera = function (chave, pocaoId) {
+    if (Game.screen !== 'antessala' || !vidaEspera) return 'fase';
+    if (typeof chave !== 'string' || !Object.prototype.hasOwnProperty.call(vidaEspera.herois, chave) || !chaveEhMinha(chave)) {
+      return 'heroi';
     }
-    if (ok) JOGO.Progress.gastaConsumivel(pocaoId, 1);
-    return ok;
+    if (!pocaoDef(pocaoId)) return 'pocao';
+    var prog = P();
+    if (!prog || !prog.consumivelVer || prog.consumivelVer(pocaoId) < 1) return 'acabou';
+    var v = vidaDe(chave, agoraVida());
+    if (v.hp >= v.max) return 'cheio';
+    if (vidaEspera.aguardando) return 'servidor';
+    if (bebendo) return 'bebendo';
+    return null;
+  };
+  /* BEBER NA SALA DE ESPERA. Sem servidor, a poção sai do contador daqui e a cura entra no
+   * registro na hora. Com a autoridade ligada e a sala conferida (`ref`), o servidor faz as
+   * duas coisas numa transação (POST /api/sala/pocao ou /api/grupo/pocao), a página adota o
+   * estado dele e soma a cura que ELE devolveu. Resolve {ok, cura, hp, max} ou
+   * {ok:false, motivo, erro}. */
+  Game.bebeNaEspera = function (chave, pocaoId) {
+    var motivo = Game.podeBeberEspera(chave, pocaoId);
+    if (motivo) return Promise.resolve({ ok: false, motivo: motivo });
+    var esp = vidaEspera, def = pocaoDef(pocaoId), A = JOGO.Autoridade;
+    function curou(n) {
+      if (vidaEspera === esp) esp.cura[chave] = Math.max(0, num(esp.cura[chave], 0)) + n;
+      vidaMudou();
+      var v = (vidaEspera === esp) ? vidaDe(chave, agoraVida()) : null;
+      return { ok: true, cura: n, hp: v ? v.hp : null, max: v ? v.max : null };
+    }
+    if (!(esp.ref && A && A.ligada && A.ligada())) {
+      if (!P().gastaConsumivel(pocaoId, 1)) return Promise.resolve({ ok: false, motivo: 'acabou' });
+      return Promise.resolve(curou(def.cura));
+    }
+    bebendo = true;
+    var corpo = { heroId: heroiDaChave(chave), pocaoId: pocaoId };
+    if (esp.rede) corpo.gid = esp.ref; else corpo.bilhete = esp.ref;
+    var pedido = esp.rede ? A.bebeNoGrupo(corpo) : A.bebeNaSala(corpo);
+    return pedido.then(function (r) {
+      bebendo = false;
+      if (r && r.ok) return curou((typeof r.cura === 'number' && r.cura > 0) ? r.cura : def.cura);
+      return { ok: false, motivo: (r && r.motivo) || 'servidor', erro: (r && r.erro) || null };
+    }, function () {
+      bebendo = false;
+      return { ok: false, motivo: 'servidor', erro: 'o servidor não respondeu' };
+    });
+  };
+  // provas: o registro vivo da sala de espera (tests/pocoes_hud.html põe um herói caído por aqui)
+  Game._esperaRegistro = function () { return vidaEspera; };
+  /* {chave: soma} das curas de poção dos MEUS heróis — o `pronto` leva ao parceiro */
+  Game.vidaCurasMinhas = function () {
+    var out = {};
+    if (!vidaEspera) return out;
+    Object.keys(vidaEspera.cura).forEach(function (k) {
+      if (chaveEhMinha(k) && vidaEspera.cura[k] > 0) out[k] = vidaEspera.cura[k];
+    });
+    return out;
   };
 
   // ------------------------------------------------------------- fusão [G4]
@@ -1996,6 +2173,7 @@ var JOGO = (typeof window !== 'undefined')
     try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('Conferindo a vitória com o servidor…'); } catch (eT) {}
     promessa.then(function (r) {
       conferindoSala = false;
+      esperaConferida(ata.bilhete, r);                 // 13/09: o relógio da sala de espera é o do servidor
       if (Game.screen !== 'battle') return;            // saiu no meio (abandonou)
       returnScreen = tela;
       if (r && r.ok && r.fase === 'won') {
@@ -2036,6 +2214,7 @@ var JOGO = (typeof window !== 'undefined')
     try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('Conferindo a vitória do grupo com o servidor…'); } catch (eT) {}
     promessa.then(function (r) {
       conferindoSala = false;
+      esperaConferida(reg.ata.gid, r);                 // 13/09: o relógio da sala de espera é o do servidor
       if (Game.screen !== 'battle') return;
       returnScreen = tela;
       var rw;
@@ -2103,8 +2282,8 @@ var JOGO = (typeof window !== 'undefined')
       // formaram (ela é a soma dos dois), lendo defensivamente os campos que o
       // Engine expuser — sem eles, cai no comportamento antigo.
       // [G11] em grupo a chave é `dono:heroId` (o heroId é a classe e colide)
-      if (rede && rede.tipo === 'grupo') carryHp = carryRede(Game.state);
-      else carryHp = carrySolo(Game.state);
+      // 13/09: é daqui que nasce a sala de espera (a vida que sobe e as poções)
+      comecaEspera(Game.state);
       resetAiState();
       resetTimer(true);
       Game.selectedSpellId = null;
@@ -2121,6 +2300,7 @@ var JOGO = (typeof window !== 'undefined')
       if (rede && rede.tipo === 'grupo') marcaRecompensaRede(rewards);
       setScreen(returnScreen, rewards);
     } else if (Game.state.phase === 'lost') {
+      vidaEspera = null;                                    // 13/09: a descida acabou na derrota
       if (ataSolo) fechaNoServidor('lost');                 // a sala perdida fecha no servidor também
       else if (grupoNoServidor()) fechaGrupoNoServidor('lost');
       resetAiState();

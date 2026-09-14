@@ -15,24 +15,12 @@ const { refazEm, recusa } = require('./sala');
 
 function inteiro(v) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v; }
 
-/* AS POÇÕES QUE A SALA BEBEU (13/09, a banca do mercador). O motor não conta o estoque:
- * aqui, no estado DO SERVIDOR, cada gole que a sala refeita confirmou sai do saco da
- * conta — na vitória, na derrota e na sala largada (a poção foi bebida de todo jeito). A
- * conta que bebeu mais do que tinha derruba a sala inteira (422 'pocoes'): o cliente
- * honesto nunca chega aqui, porque a barra só oferece o que ele tem. */
-function descontaPocoes(J, usadas, quem) {
-  const P = J.Progress;
-  const ids = Object.keys(usadas || {});
-  for (const id of ids) {
-    const n = usadas[id], tem = (P.consumivelVer ? P.consumivelVer(id) : 0);
-    if (!inteiro(n) || n < 1 || n > tem) {
-      const d = (J.DATA.consumiveis || {})[id];
-      throw recusa(quem + ' bebeu ' + n + '× ' + ((d && d.name) || id) + ' e tinha ' + tem, 'pocoes');
-    }
-  }
-  for (const id of ids) P.gastaConsumivel(id, usadas[id]);
-}
-
+/* A poção saiu da batalha (13/09, o dono: "a poção não é para usar na batalha.. e sim
+ * para curar a vida após uma batalha na sala de espera entre as salas"): o fechamento
+ * não desconta mais poção nenhuma — o gole é a op interna beberPocao (economia.js),
+ * pedida pela API na sala de espera. Daqui sai, com o PV do fim (carry), o PV MÁXIMO de
+ * cada herói (vidaMax, a mesma chave do carry): a API guarda os dois para a sala de
+ * espera saber quando a vida enche e recusar a poção de quem já está cheio. */
 function fecha(corpo) {
   const c = corpo || {};
   const b = c.bilhete || {};
@@ -71,10 +59,9 @@ function fecha(corpo) {
     escolhePosicao: b.escolhePosicao !== false,
     lances: c.lances, hashFinal: c.hashFinal
   });
-  descontaPocoes(J, r.pocoes, 'a conta');
 
   // 3. a recompensa pelo funil do jogo
-  let recompensa = null, carry = null;
+  let recompensa = null, carry = null, vidaMax = null;
   if (r.fase === 'won') {
     const G = J.Game;
     G.state = r.estado;
@@ -82,6 +69,7 @@ function fecha(corpo) {
     G.dungeonId = b.dungeonId;
     G.roomIndex = b.roomIndex;
     carry = G._carrySolo(r.estado);
+    vidaMax = G._vidaMax(r.estado, false);        // 13/09: a sala de espera enche até aqui
     const rw = G._computeRewards();
     recompensa = JSON.parse(JSON.stringify(rw));
     if (rw && rw.drops && rw.drops.perdidos) recompensa.dropsPerdidos = rw.drops.perdidos.slice();
@@ -104,7 +92,8 @@ function fecha(corpo) {
     hashAntes: antes.hash,
     guildaXp: w.anotado.guildaXp,
     iids,
-    carry
+    carry,
+    vidaMax
   };
 }
 
@@ -175,9 +164,7 @@ function fechaGrupo(corpo) {
     carryRede: true, escolhePosicao: true, lances: c.lances, hashFinal: c.hashFinal
   });
   const final = JSON.stringify(r.estado);
-  // cada membro gasta as PRÓPRIAS poções, no estado dele (os goles vêm marcados com o dono)
-  mundos.forEach((x, i) => descontaPocoes(x.w.J, r.pocoesPorDono[x.m.dono], 'o membro ' + i));
-  let carry = null;
+  let carry = null, vidaMax = null;
   const pagos = mundos.map((x) => {
     let recompensa = null;
     if (r.fase === 'won') {
@@ -192,6 +179,7 @@ function fechaGrupo(corpo) {
       G.dungeonId = ata.dungeonId;
       G.roomIndex = ata.roomIndex;
       if (!carry) carry = G._carryRede(G.state);
+      if (!vidaMax) vidaMax = G._vidaMax(G.state, true);   // 13/09: a chave dono:heroId, como o carry
       const rw = G._computeRewards();
       recompensa = JSON.parse(JSON.stringify(rw));
       if (rw && rw.drops && rw.drops.perdidos) recompensa.dropsPerdidos = rw.drops.perdidos.slice();
@@ -208,7 +196,7 @@ function fechaGrupo(corpo) {
   });
   const refeito = Object.assign({}, r);
   delete refeito.estado;
-  return { ok: true, fase: r.fase, turnosJogador: r.turnosJogador, refeito, membros: pagos, carry };
+  return { ok: true, fase: r.fase, turnosJogador: r.turnosJogador, refeito, membros: pagos, carry, vidaMax };
 }
 
 function rotas(registra) {
@@ -216,4 +204,4 @@ function rotas(registra) {
   registra('POST', '/grupo/fecha', (corpo) => fechaGrupo(corpo));
 }
 
-module.exports = { fecha, fechaGrupo, rotas, vezDoSaque, descontaPocoes };
+module.exports = { fecha, fechaGrupo, rotas, vezDoSaque };

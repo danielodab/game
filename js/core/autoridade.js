@@ -182,6 +182,24 @@ var JOGO = (typeof window !== 'undefined')
   /* O DUELO RANQUEADO: o servidor refaz a arena e muda a Brasa dos dois */
   A.fechaDuelo = function (corpo) { return fechaEm('/api/duelo/fechar', corpo); };
 
+  /* A POÇÃO NA SALA DE ESPERA (13/09, o dono: "a poção seria para curar a vida e não precisar
+   * esperar para ir para a próxima sala"). O servidor tira a poção do estado dele e soma a cura
+   * no registro da vida do herói, numa transação; a página adota o estado que volta (a
+   * contagem das poções) — também no 409 de quem estava com o estado velho. As ops na fila
+   * sobem antes. Resolve a resposta ({ok, cura, hp, hpMax}) ou {ok:false, erro, motivo}.
+   * corpo solo {bilhete, heroId, pocaoId}; em grupo {gid, heroId, pocaoId}. */
+  A.bebeNaSala = function (corpo) { return bebeEm('/api/sala/pocao', corpo); };
+  A.bebeNoGrupo = function (corpo) { return bebeEm('/api/grupo/pocao', corpo); };
+  function bebeEm(rota, corpo) {
+    return descarregaFila().then(function () { return api(rota, corpo); }).then(function (r) {
+      if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
+      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
+      A.adotaResposta(r);
+      if (!r.ok) return { ok: false, erro: r.erro || 'o servidor recusou a poção', motivo: r.motivo || null };
+      return r;
+    });
+  }
+
   function fechaEm(rota, corpo) {
     return new Promise(function (resolve) {
       var pend = { corpo: corpo, resolve: resolve };

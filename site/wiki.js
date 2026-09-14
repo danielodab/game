@@ -1135,7 +1135,7 @@
     }
 
     // 13/09: as poções da banca do mercador, lidas dos dados do jogo (nenhum número copiado)
-    var CONS = D.consumiveis, CR = D.consumiveisRegras || {};
+    var CONS = D.consumiveis, CR = D.consumiveisRegras || {}, VES = D.vidaEntreSalas || {};
     if (CONS) {
       var linhasCons = Object.keys(CONS).map(function (k) { return CONS[k]; })
         .sort(function (a, b) { return num(a.preco) - num(b.preco); })
@@ -1145,9 +1145,12 @@
       sec('consumiveis', 'Consumíveis: as poções de vida',
         '<p>No Mercadinho mora a banca do mercador: poções de vida com estoque sem fim, preço fixo e sem taxa, pagas com os vinténs do saco. ' +
         'Elas ficam em Consumíveis no inventário, até ' + num(CR.teto) + ' de cada.</p><ul class="wk-defs">' + linhasCons + '</ul>' +
-        '<p>Na batalha, beber é uma ação do herói na vez dele: custa ' + num(CR.pa) + ' PA, uma por turno, e cura só quem bebe, ' +
-        'sem passar do PV máximo e sem levantar quem caiu. No duelo não vale.</p>',
-        'pocao pocoes consumivel consumiveis vida cura mercador banca');
+        // 13/09: a poção saiu da batalha e foi para a sala de espera entre as salas (pedido do dono)
+        '<p>A poção não se bebe na batalha: é da <b>sala de espera entre as salas</b>. Ao fim de uma sala vencida cada herói ' +
+        'leva a vida com que terminou (quem caiu, leva zero), e ela volta sozinha, 1 PV a cada ' + num((VES.msPorPv || 2000) / 1000) +
+        ' s. A poção cura na hora, sem passar do PV máximo, para não esperar — e herói sem vida só entra na batalha seguinte ' +
+        'quando recuperar pelo menos 1 PV. Ao voltar à praça a descida acaba, e a próxima começa de vida cheia.</p>',
+        'pocao pocoes consumivel consumiveis vida cura mercador banca espera antessala regenera');
     }
 
     var Mi = JG.Missoes;

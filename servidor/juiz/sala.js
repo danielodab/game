@@ -43,16 +43,22 @@ function ehDeGente(u) {
   return !!(u && (u.kind === 'hero' || u.kind === 'fusion') && u.dono);
 }
 
-/* O HP que atravessa de uma sala para a outra, com a regra do Game.entrarNaSala:
- * vivo recupera metade do que falta; caído volta com 30%. */
+/* O HP que atravessa de uma sala para a outra (13/09, a vida entre as salas; a mesma
+ * regra do Game.entrarNaSala). O número do carry JÁ É o da porta: o servidor somou ao PV
+ * do fim da sala anterior a vida que voltou na sala de espera (1 PV a cada 2 s) e as
+ * poções bebidas lá, ao abrir o bilhete (servidor/salas.py, _vida_na_porta). Aqui ele
+ * só se prende ao PV máximo da sala nova. Herói a 0 não chega (o servidor não abre a
+ * sala); o piso de 1 é só para a sala nunca nascer com um herói vivo sem vida. Era
+ * "vivo recupera metade do que falta; caído volta com 30%" até o dono pedir a espera. */
+function vidaDaPorta(u, prev) {
+  if (typeof prev !== 'number' || !isFinite(prev)) return;
+  u.hp = Math.max(1, Math.min(u.hpMax, Math.floor(prev)));
+}
 function aplicaCarry(st, carry) {
   if (!carry || typeof carry !== 'object') return;
   for (const u of st.units) {
     if (u.kind !== 'hero') continue;
-    const prev = carry[u.heroId || u.defId];
-    if (typeof prev !== 'number' || !isFinite(prev)) continue;
-    if (prev > 0) u.hp = Math.min(u.hpMax, prev + Math.round((u.hpMax - prev) * 0.5));
-    else u.hp = Math.max(1, Math.round(u.hpMax * 0.3));
+    vidaDaPorta(u, carry[u.heroId || u.defId]);
   }
 }
 
@@ -62,10 +68,7 @@ function aplicaCarryRede(st, carry) {
   if (!carry || typeof carry !== 'object') return;
   for (const u of st.units) {
     if (u.kind !== 'hero') continue;
-    const prev = carry[(u.dono || '') + ':' + (u.heroId || u.defId)];
-    if (typeof prev !== 'number' || !isFinite(prev)) continue;
-    if (prev > 0) u.hp = Math.min(u.hpMax, prev + Math.round((u.hpMax - prev) * 0.5));
-    else u.hp = Math.max(1, Math.round(u.hpMax * 0.3));
+    vidaDaPorta(u, carry[(u.dono || '') + ':' + (u.heroId || u.defId)]);
   }
 }
 
@@ -78,12 +81,6 @@ function executa(J, st, l) {
   if (l.a === 'm') return !!E.move(st, l.u, l.x, l.y);
   if (l.a === 'c') return !!E.cast(st, l.u, l.s, l.x, l.y);
   if (l.a === 'e') { if (st.phase === 'playing') E.endTurn(st); return true; }
-  if (l.a === 'po') {
-    // 13/09: a poção de vida (Engine.usePotion). No duelo não existe: a sala cai inteira
-    if (st.pvp) throw recusa('poção no duelo', 'duelo');
-    if (typeof l.s !== 'string') throw recusa('poção sem nome', 'lance');
-    return !!E.usePotion(st, l.u, l.s);
-  }
   if (l.a === 'f') {
     const fa = E.findUnit(st, l.u), fb = E.findUnit(st, l.alvo);
     const donoA = fa ? (fa.dono || null) : null, donoB = fb ? (fb.dono || null) : null;
@@ -150,10 +147,6 @@ function refazEm(J, entrada) {
   else if (c.modo !== 'duelo') aplicaCarry(st, c.carry);
   E.events.length = 0;
 
-  /* AS POÇÕES BEBIDAS (13/09): quantas de cada, por dono ('' na sala solo). O motor não
-   * conta o estoque — quem desconta do estado e recusa quem bebeu além do que tinha é o
-   * fechamento (recompensa.js). Só o gole que deu certo conta. */
-  const pocoesPorDono = {};
   let passos = 0;
   function conta() {
     if (++passos > PASSOS_MAX) throw recusa('a sala não termina', 'passos');
@@ -194,6 +187,10 @@ function refazEm(J, entrada) {
     const l = lances[i];
     if (!l || typeof l !== 'object' || typeof l.a !== 'string') throw recusa('lance torto', 'lance');
     if (FIM[st.phase]) throw recusa('lance depois do fim da sala', 'depois-do-fim');
+    /* O GOLE NA BATALHA (13/09): a poção saiu da batalha e foi para a sala de espera entre
+     * as salas (pedido do dono). O lance {a:'po'} de uma página velha ou forjada derruba a
+     * sala inteira — solo, grupo ou duelo —, com um motivo que diz o que houve */
+    if (l.a === 'po') throw recusa('poção não se bebe na batalha: é na sala de espera entre as salas', 'pocao-na-batalha');
     // AS MARCAS DA REDE (13/09): o que muda a batalha fora dos lances, anotado no
     // ponto em que aconteceu no motor de quem manda — o dono que caiu (ia), que
     // voltou, e o herói de quem saiu da batalha, que morre
@@ -217,7 +214,7 @@ function refazEm(J, entrada) {
       const daVez = emRede ? (ehDeGente(ativo) && !ativo.ia && ativo.dono === l.de) : ehDoJogador(st, ativo);
       if (st.phase !== 'playing' || !daVez) throw recusa('lance fora da vez', 'vez');
       // move, feitiço e fusão só com a unidade da vez; o 'e' encerra a vez dela
-      if ((l.a === 'm' || l.a === 'c' || l.a === 'f' || l.a === 'po') && l.u !== ativo.uid) {
+      if ((l.a === 'm' || l.a === 'c' || l.a === 'f') && l.u !== ativo.uid) {
         throw recusa('lance com uma unidade que não é a da vez', 'unidade');
       }
       if (l.a === 'e') { conta(); turnosJogador++; }
@@ -227,11 +224,6 @@ function refazEm(J, entrada) {
     E.events.length = 0;
     if (typeof l.ok === 'boolean' && l.ok !== ok) throw recusa('o lance ' + i + ' deu diferente aqui', 'divergiu');
     if (inteiro(l.h) && E.hash(st) !== l.h) throw recusa('o estado divergiu no lance ' + i, 'divergiu');
-    if (l.a === 'po' && ok) {
-      const quem = emRede ? String(l.de || '') : '';
-      const dele = pocoesPorDono[quem] || (pocoesPorDono[quem] = {});
-      dele[l.s] = (dele[l.s] || 0) + 1;
-    }
   }
   rodaIA();
 
@@ -256,8 +248,6 @@ function refazEm(J, entrada) {
     herois: herois,
     passos: passos,
     turnosJogador: turnosJogador,
-    pocoes: pocoesPorDono[''] || {},
-    pocoesPorDono: pocoesPorDono,
     estado: st
   };
 }

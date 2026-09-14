@@ -925,8 +925,21 @@ var JOGO = (typeof window !== 'undefined')
     var ps = Coop.payloadMeus(g.party);
     if (!ps.length) return false;
     S.prontoProx = agora() + Coop.PRONTO_MS;
-    return envia('pronto', { sala: salaAtual(), heroi: ps[0], herois: ps, versao: Coop.versao() });
+    // 13/09: `vida` = as curas de poção dos meus heróis na sala de espera (quem lidera soma na ata e espera todos de pé)
+    var vida = null;
+    try { vida = g.vidaCurasMinhas ? g.vidaCurasMinhas() : null; } catch (e) { vida = null; }
+    return envia('pronto', { sala: salaAtual(), heroi: ps[0], herois: ps, versao: Coop.versao(), vida: vida });
   }
+  /* A VIDA DO PARCEIRO NA SALA DE ESPERA (13/09): {dono:heroId: cura} do último `pronto`, só
+   * das chaves dele e só números — é o que ele bebeu; a regeneração cada lado conta sozinho */
+  Coop.vidaParceiro = function () {
+    return (prontoValido() && S.prontoParceiro.vida) ? S.prontoParceiro.vida : {};
+  };
+  /* o Game avisa que eu bebi: quem segue manda o `pronto` na hora (não espera os 5 s) */
+  Coop.vidaMudou = function () {
+    if (Coop.emGrupo() && !souLider()) mandaPronto();
+    muda();
+  };
   /* O Game chama ao chegar na antessala de uma descida em grupo. */
   Coop.naAntessala = function () {
     if (!Coop.emGrupo()) return;
@@ -969,6 +982,10 @@ var JOGO = (typeof window !== 'undefined')
     if (!hsP.length) return { ok: false, motivo: 'sem-pronto' };
     if (hsP.length > Coop.MAX_HEROIS) return { ok: false, motivo: 'versao' };
     for (var i = 0; i < hsP.length; i++) if (!validaPayload(hsP[i])) return { ok: false, motivo: 'versao' };
+    // 13/09: herói a 0 PV (meu ou do parceiro) segura a porta até a vida voltar — o servidor recusa igual
+    var ev = null;
+    try { ev = g.esperaVida ? g.esperaVida() : null; } catch (e) { ev = null; }
+    if (ev) return { ok: false, motivo: 'vida', vida: ev };
     return { ok: true, motivo: null };
   };
   /* a conta do servidor de quem está na Rede (o `nuvem` que o relé conferiu), ou null */
@@ -1022,9 +1039,10 @@ var JOGO = (typeof window !== 'undefined')
       muda();
       return true;
     }
+    // 13/09: sem servidor, o PV da PORTA de quem lidera (a espera e as poções dos dois) vai na ata
     mandaAta(g, p, meus, pars,
              (Coop._sementeFixa != null) ? (Coop._sementeFixa >>> 0) : novaSemente(),
-             (g._carry && g._carry()) || null, null);
+             (g._carryPorta ? g._carryPorta() : (g._carry && g._carry())) || null, null);
     return true;
   };
   function mandaAta(g, p, meus, pars, semente, carry, gid) {
@@ -1076,7 +1094,15 @@ var JOGO = (typeof window !== 'undefined')
       hs.push(h);
     }
     if (!hs.length) return;
-    S.prontoParceiro = { sala: String(d.sala), heroi: hs[0], herois: hs, versao: d.versao || null };
+    // 13/09: as curas de poção dele — só as chaves DELE (quem:heroId), só inteiros de 0 a 100000
+    var vida = {};
+    if (d.vida && typeof d.vida === 'object') {
+      Object.keys(d.vida).forEach(function (k) {
+        var n = d.vida[k];
+        if (k.indexOf(quem + ':') === 0 && typeof n === 'number' && isFinite(n) && n >= 0 && n <= 100000) vida[k] = Math.floor(n);
+      });
+    }
+    S.prontoParceiro = { sala: String(d.sala), heroi: hs[0], herois: hs, versao: d.versao || null, vida: vida };
     muda();
   }
   function rAta(d) {

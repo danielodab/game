@@ -339,9 +339,12 @@ class ProvaDaAutoridade(unittest.TestCase):
         status, r2 = self.fecha(c, b['bilhete'], jogo)
         self.assertEqual(status, 409, r2)
         self.assertEqual(self.save(c)['versao'], 2)
-        # a sala seguinte da descida leva o PV que o servidor anotou
+        # a sala seguinte da descida leva o PV que o servidor anotou — 13/09: mais a vida que voltou na
+        # sala de espera (1 PV a cada 2 s; a prova da regeneração com o relógio é tests/pocoes_api.py)
         b2 = self.abre(c, sala=1, semente=None)
-        self.assertEqual(b2['carry'], r['carry'])
+        self.assertEqual(set(b2['carry']), set(r['carry']))
+        for chave, hp in r['carry'].items():
+            self.assertGreaterEqual(b2['carry'][chave], hp, chave)
 
     def test_04_dizimo_chega_pela_sala(self):
         c = self.novo('Dizimista')

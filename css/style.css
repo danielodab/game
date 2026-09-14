@@ -817,12 +817,33 @@ html.celular.retrato .bt-top .bt-trava { min-height: 28px; height: 28px; top: 5p
   background: rgba(10,13,17,.92); border: 1px solid #7a4a12;
   font: 700 11px var(--ui-sans); color: var(--pa); text-align: center;
 }
-/* 13/09: a POÇÃO DE VIDA na barra: a contagem embaixo do custo, o vidro avermelhado */
-.spell.is-pocao { border-color: rgba(224,82,74,.55); background: linear-gradient(180deg, rgba(58,18,18,.92), rgba(16,21,27,.92)); }
-.sp-qtd {
-  position: absolute; top: 21px; left: 4px;
-  font: 700 10.5px var(--ui-sans); color: #ffd9d2; text-shadow: 0 1px 2px #000;
-}
+/* 13/09: A VIDA NA SALA DE ESPERA (hud.js vidaBloco) — a barra de PV que sobe sozinha e os
+   botões das poções. A poção saiu da barra da batalha: o vidro avermelhado mora aqui agora */
+.vida-bloco { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 8px; padding: 8px 10px;
+  border: 1px solid rgba(224,82,74,.35); border-radius: 10px; background: rgba(20,12,12,.72); }
+.vida-bloco.is-fixo { position: absolute; left: calc(var(--sa-l, 0px) + 12px); top: calc(var(--sa-t, 0px) + 58px);
+  width: min(280px, calc(100% - 24px)); margin: 0; z-index: 5; max-height: calc(100% - 240px); overflow-y: auto; }
+.vida-bloco.is-compacto { padding: 6px 9px; gap: 4px; }
+.vida-bloco.is-compacto .vida-lista { gap: 4px; }
+.vida-tit { font: 400 11.5px var(--ui-sans); color: var(--dim); }
+.vida-tit b { color: #ffd9d2; font-weight: 700; }
+.vida-lista { display: flex; flex-direction: column; gap: 7px; }
+.vida-heroi { display: flex; flex-direction: column; gap: 3px; }
+.vh-cab { display: flex; justify-content: space-between; gap: 8px; font: 700 12.5px var(--ui-sans); color: var(--text); }
+.vh-cab i { font-style: normal; font-weight: 400; color: var(--dim); }
+.vh-num { font-variant-numeric: tabular-nums; color: #ffd9d2; }
+.vh-barra { height: 9px; border-radius: 5px; background: rgba(255,255,255,.08); overflow: hidden; border: 1px solid rgba(0,0,0,.4); }
+.vh-enche { height: 100%; width: 0; background: linear-gradient(90deg, #b8322b, #e0524a); transition: width .25s linear; }
+.vida-heroi.is-cheio .vh-enche { background: linear-gradient(90deg, #3f9a4a, #7fe08a); }
+.vida-heroi.is-zero .vh-num { color: #ff8a8a; }
+.vh-nota { font: 400 11px var(--ui-sans); color: var(--dim); }
+.vh-pocoes { display: flex; flex-wrap: wrap; gap: 4px; }
+.vh-pocao { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px 2px 3px; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(224,82,74,.55); background: linear-gradient(180deg, rgba(58,18,18,.92), rgba(16,21,27,.92));
+  font: 700 11px var(--ui-sans); color: #ffd9d2; }
+.vh-pocao.is-dim { opacity: .45; filter: grayscale(.5); }
+.vh-qtd { color: var(--dim); font-weight: 400; }
+.vh-sem { font: 400 11px var(--ui-sans); color: var(--dim); margin: 0; }
 .ig-cura { font-size: 10px; line-height: 1.1; color: #f0a79c; }
 .mc-pocao .mc-atalhos { display: inline-flex; gap: 3px; flex: 0 0 auto; }
 .mc-pocao .mc-qtd { width: 54px; }

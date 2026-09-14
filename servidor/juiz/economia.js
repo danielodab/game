@@ -152,6 +152,20 @@ const OPS = {
 
 /* As INTERNAS: só a API pede, com contexto.interno. */
 const INTERNAS = {
+  /* A POÇÃO NA SALA DE ESPERA (13/09, o dono: "a poção seria para curar a vida e não
+   * precisar esperar para ir para a próxima sala"). A API (POST /api/sala/pocao e
+   * /api/grupo/pocao) confere a descida viva, o herói e o PV cheio, pede esta op e soma
+   * a `cura` devolvida no registro da vida daquele herói, na mesma transação que grava o
+   * estado. Aqui só sai UMA poção do contador; sem ela a op cai inteira (nada é gravado). */
+  beberPocao: (J, a) => {
+    const id = txt(a, 'id');
+    const c = J.DATA.consumiveis || {};
+    const d = Object.prototype.hasOwnProperty.call(c, id) ? c[id] : null;
+    if (!d || d.tipo !== 'vida' || !(typeof d.cura === 'number' && d.cura > 0)) throw recusa('poção desconhecida', 'pocao');
+    if (J.Progress.consumivelVer(id) < 1) throw recusa('você não tem ' + d.name, 'sem-pocao');
+    if (!J.Progress.gastaConsumivel(id, 1)) throw recusa('você não tem ' + d.name, 'sem-pocao');
+    return { ok: true, id, cura: d.cura, resta: J.Progress.consumivelVer(id) };
+  },
   // a entrega de um pedido da loja, com a entrega congelada no banco
   lojaEntregar: (J, a) => {
     const p = a.pedido;

@@ -114,7 +114,62 @@ def _lances(corpo):
     return lances, hash_final
 
 
+def _conta_da_chave(party):
+    """{dono:heroId: conta} da party guardada da sala em grupo — a chave do carry de cada herói
+    com a conta que o levou. Montada da party (e não cortando a chave no ':'), porque o id de
+    rede do dono pode ter ':'."""
+    fora = {}
+    for p in party if isinstance(party, list) else []:
+        if isinstance(p, dict) and isinstance(p.get('dono'), str) and isinstance(p.get('herois'), list):
+            for h in p['herois']:
+                if isinstance(h, str):
+                    fora[p['dono'] + ':' + h] = p.get('conta')
+    return fora
+
+
 class GrupoMixin:
+
+    # -- POST /api/grupo/pocao (13/09, a poção na sala de espera do grupo) ---------------------------
+    def grupo_pocao(self, conta, corpo):
+        """Corpo {gid, heroId, pocaoId}. O gid é o da sala em grupo VENCIDA que abriu a sala de espera.
+        Cada jogador cura só os PRÓPRIOS heróis, com as próprias poções: a chave é dono:heroId do
+        membro que pede, e a poção sai do estado dele."""
+        cid = conta['id']
+        gid, heroi, pocao = corpo.get('gid'), corpo.get('heroId'), corpo.get('pocaoId')
+        if not isinstance(gid, str) or not RE_BILHETE.match(gid):
+            raise Recusa(400, 'gid inválido')
+        if not isinstance(heroi, str) or not 0 < len(heroi) <= 64:
+            raise Recusa(400, 'heroId precisa ser o id de um herói')
+        calaboucos = self._regras()['calaboucos']               # sem juiz: 503 (e nunca dentro da tranca)
+        achada = {}
+
+        def ler(agora_ms):
+            g = self.con.execute("SELECT * FROM salas_grupo WHERE gid = ?", (gid,)).fetchone()
+            if g is None or cid not in (g['lider_id'], g['membro_id']):
+                raise Recusa(404, 'sala em grupo não encontrada')
+            if g['estado'] != 'paga' or g['fechada_em'] is None:
+                raise Recusa(409, 'essa sala não abriu uma sala de espera', motivo='sem-descida')
+            n = calaboucos.get(g['dungeon'])
+            depois = (self.con.execute("SELECT 1 FROM salas_grupo WHERE gid != ? AND aberta_em >= ? "
+                                       "AND (lider_id = ? OR membro_id = ?) LIMIT 1",
+                                       (gid, g['fechada_em'], cid, cid)).fetchone() is not None
+                      or self.con.execute("SELECT 1 FROM salas WHERE conta_id = ? AND aberta_em >= ? LIMIT 1",
+                                          (cid, g['fechada_em'])).fetchone() is not None)
+            if agora_ms // 1000 - g['fechada_em'] > CARRY_JANELA or not _inteiro_puro(n) or g['sala'] + 1 >= n or depois:
+                raise Recusa(409, 'a descida acabou: a poção só se bebe na sala de espera entre as salas',
+                             motivo='sem-descida')
+            dono = next((p.get('dono') for p in json.loads(g['party']) if isinstance(p, dict) and p.get('conta') == cid
+                         and heroi in (p.get('herois') or [])), None)
+            carry = _objeto(g['carry_saida']) or {}
+            if not isinstance(dono, str) or (dono + ':' + heroi) not in carry:
+                raise Recusa(400, 'o herói %s não é seu nessa sala: cada um cura os próprios' % heroi[:64], motivo='heroi')
+            achada['chave'] = dono + ':' + heroi
+            return {'ref': gid, 'carry': carry, 'fechada_em': g['fechada_em']}
+
+        # a chave (dono:heroId) só se sabe lendo a sala: uma leitura antes, dentro da tranca
+        with self.tranca:
+            ler(int(time.time() * 1000))
+        return self._pocao_na_espera(conta, pocao, achada['chave'], ler)
 
     def _conta_viva(self, cid):
         """Dentro da tranca: a linha da conta (dict), ou None se não existe ou foi banida."""
@@ -162,17 +217,27 @@ class GrupoMixin:
             self._confere_herois(conta, meu['progress'], herois)
             self._confere_herois(parceiro, dele['progress'], herois_p, 'da conta do parceiro')
             self._confere_teto_salas(cid, t)
+            carry = None
+            if sala > 0:
+                r = self.con.execute(
+                    "SELECT gid, carry_saida, fechada_em FROM salas_grupo WHERE estado = 'paga' AND dungeon = ? AND sala = ? "
+                    "AND fechada_em > ? AND ((lider_id = ? AND membro_id = ?) OR (lider_id = ? AND membro_id = ?)) "
+                    "ORDER BY fechada_em DESC LIMIT 1", (dungeon, sala - 1, t - CARRY_JANELA, cid, pid, pid, cid)).fetchone()
+                anterior = _objeto(r['carry_saida']) if r is not None else None
+                if anterior is not None:
+                    # 13/09: a vida da porta de CADA herói do grupo (as poções de cada um entram na dele);
+                    # a sala só abre com todos de pé — o botão de quem lidera espera o mesmo
+                    agora_ms = int(time.time() * 1000)
+                    vida = self._vida_na_porta(r['gid'], anterior, r['fechada_em'], agora_ms)
+                    zerado = self._vida_zerada(vida, agora_ms)
+                    if zerado:
+                        raise Recusa(409, 'o herói %s ainda está sem vida: %d s até recuperar 1 PV (ou beba uma poção)'
+                                     % (zerado[0][:64], zerado[1]), motivo='vida-zero', heroi=zerado[0], esperaS=zerado[1])
+                    carry = {k: v['hp'] for k, v in vida.items()}
             # uma sala em grupo aberta por dupla: abrir outra vence a anterior
             self.con.execute("UPDATE salas_grupo SET estado = 'vencida', fechada_em = ? WHERE estado = 'aberta' "
                              "AND ((lider_id = ? AND membro_id = ?) OR (lider_id = ? AND membro_id = ?))",
                              (t, cid, pid, pid, cid))
-            carry = None
-            if sala > 0:
-                r = self.con.execute(
-                    "SELECT carry_saida FROM salas_grupo WHERE estado = 'paga' AND dungeon = ? AND sala = ? "
-                    "AND fechada_em > ? AND ((lider_id = ? AND membro_id = ?) OR (lider_id = ? AND membro_id = ?)) "
-                    "ORDER BY fechada_em DESC LIMIT 1", (dungeon, sala - 1, t - CARRY_JANELA, cid, pid, pid, cid)).fetchone()
-                carry = _objeto(r['carry_saida']) if r is not None else None
             gid, semente = secrets.token_urlsafe(18), secrets.randbits(31)
             party = [{'conta': cid, 'dono': dono, 'herois': herois}, {'conta': pid, 'dono': dono_p, 'herois': herois_p}]
             self.con.execute(
@@ -291,24 +356,8 @@ class GrupoMixin:
                 self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada')
                 raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
             if saida['fase'] != 'won':
-                # 13/09: as POÇÕES bebidas saem do estado de cada membro mesmo na derrota (o juiz já
-                # as descontou); quem não bebeu fica igual e nada é gravado para ele. Na MESMA
-                # transação da marca: o outro membro fechando junto não desconta duas vezes
-                por_conta = {m.get('contaId'): m for m in saida['membros'] if isinstance(m, dict)}
-                gastos = []
-                for m in membros:
-                    s = por_conta.get(m['conta']['id'])
-                    if isinstance(s, dict) and isinstance(s.get('hash'), str) and s.get('hash') != s.get('hashAntes'):
-                        gastos.append((m, self._confere_saida(dict(s, ok=True))))
-                try:
-                    with self._escrita():
-                        n = self.con.execute("UPDATE salas_grupo SET estado = 'perdida', motivo = NULL, fechada_em = ? "
-                                             "WHERE gid = ? AND estado = 'aberta'", (t, gid)).rowcount
-                        if n:
-                            for m, s in gastos:
-                                self._estado_grava(m['conta'], m['estado'], s, t)
-                except EstadoMudou:
-                    continue
+                # derrota: nada muda nos estados (13/09: a poção saiu da batalha, e com ela o desconto)
+                self._grupo_marca(gid, 'perdida', None, t)
                 return self._grupo_fechada(cid, gid)
             por_conta = {m.get('contaId'): m for m in saida['membros'] if isinstance(m, dict)}
             pagos = []
@@ -333,6 +382,10 @@ class GrupoMixin:
                             'por': cid})
                     self.con.execute("UPDATE salas_grupo SET estado = 'paga', fechada_em = ?, carry_saida = ? WHERE gid = ?",
                                      (t, json.dumps(carry) if carry is not None else None, gid))
+                    # 13/09: a sala de espera do grupo começa agora; cada herói com a conta do dono dele
+                    if carry is not None:
+                        self._vida_grava(gid, carry, saida.get('vidaMax'), int(time.time() * 1000),
+                                         _conta_da_chave(json.loads(g['party'])))
             except EstadoMudou:
                 continue
             log.info("sala em grupo paga: %s (#%d e #%d)", gid, g['lider_id'], g['membro_id'])

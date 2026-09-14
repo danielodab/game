@@ -154,15 +154,28 @@ Entrada:
 - Saída: `{ok, fase, turnosJogador, refeito, recompensa, progress, db, guildaXp,
   iids: {novos: [{iid, itemId, origem}], fora: [iid]}, carry, hash}`.
 
-### 5.2.1 As poções de vida (13/09)
-A poção é um lance da sala (`{a:'po', u, s: pocaoId, ok}`, `Engine.usePotion`): 2 PA, uma por
-turno por herói, cura o próprio herói; no duelo o juiz recusa a sala (`duelo`). O motor NÃO
-conta o estoque: `sala.js` conta os goles certos por dono e o fechamento (`recompensa.js`,
-`descontaPocoes`) tira do `progress.consumiveis` DO SERVIDOR o que foi bebido — na vitória, na
-derrota e na sala largada (a API grava o estado da sala não vencida só quando o hash mudou, na
-mesma transação que a marca `perdida`). Quem bebeu mais do que a conta tem derruba a sala
-(422 `pocoes`). Em grupo cada membro gasta as próprias. A compra é a op `comprarPocao {id, qtd}`
-(`JOGO.Mercado.comprarPocao`: vinténs do saco, teto por tipo, tudo ou nada).
+### 5.2.1 As poções de vida e a vida entre as salas (13/09)
+A poção NÃO é da batalha (o dono: "a poção não é para usar na batalha.. e sim para curar a vida
+após uma batalha na sala de espera entre as salas"). O lance `{a:'po'}` derruba a sala no juiz
+(422 `pocao-na-batalha`, solo, grupo ou duelo) e nenhum fechamento mexe em `progress.consumiveis`.
+
+A vida atravessa as salas assim: o fechamento PAGO (`sala/fechar`, `grupo/fechar`) grava em
+`vida_espera` uma linha por herói (`ref` = o bilhete ou o gid; a chave do carry, `heroId` ou
+`dono:heroId`; a conta dona), com o PV do fim (`carry`), o máximo (`vidaMax` do juiz) e o instante
+do fechamento em ms. Ao abrir a sala seguinte (`sala/abrir`, `grupo/abrir`) o servidor calcula
+`min(máximo, fim + floor((agora − fechou) / VIDA_MS_POR_PV) + curas)` (2000 ms, o
+`DATA.vidaEntreSalas.msPorPv`) e põe no carry do bilhete; herói a 0 PV é recusado (409 `vida-zero`,
+com `heroi` e `esperaS`). O juiz (`aplicaCarry`) só prende no PV máximo da sala nova. A primeira
+sala da descida não tem carry (vida cheia). O cliente não pede o bilhete de antemão enquanto a vida
+sobe: o carry é o do instante em que o bilhete abre.
+
+Beber é na sala de espera: `POST /api/sala/pocao {bilhete, heroId, pocaoId}` (o bilhete da sala
+vencida) e `POST /api/grupo/pocao {gid, heroId, pocaoId}` (só os heróis da própria conta). A API
+confere a descida viva (a sala paga é a última que a conta abriu, dentro de `CARRY_JANELA` e com
+sala seguinte), o herói e o PV cheio (409 `cheio`); o juiz roda a op INTERNA `beberPocao {id}` (tira
+uma do contador, tudo ou nada: sem ela, 422 `sem-pocao`) e a `cura` devolvida entra em
+`vida_espera.cura` na MESMA transação que grava o estado. A compra segue a op `comprarPocao {id,
+qtd}` (`JOGO.Mercado.comprarPocao`: vinténs do saco, teto por tipo, tudo ou nada).
 
 ### 5.3 `POST /op`
 Entrada: `{conta: {id, gm}, progress, db, ops: [{nome, args}], semente, contexto: {agoraMs}}`.

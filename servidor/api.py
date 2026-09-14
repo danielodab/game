@@ -324,10 +324,12 @@ ROTAS = {
     # sala, o juiz refaz e paga; as operações de economia rodam no estado do servidor
     ('POST', '/api/sala/abrir'):              ('sala_abrir', True),
     ('POST', '/api/sala/fechar'):             ('sala_fechar', True),
+    ('POST', '/api/sala/pocao'):              ('sala_pocao', True),       # 13/09: a poção na sala de espera
     ('POST', '/api/op'):                      ('economia_op', True),
     # a sala em grupo e o duelo ranqueado (13/09, grupo.py)
     ('POST', '/api/grupo/abrir'):             ('grupo_abrir', True),
     ('POST', '/api/grupo/fechar'):            ('grupo_fechar', True),
+    ('POST', '/api/grupo/pocao'):             ('grupo_pocao', True),      # 13/09: cada um cura os próprios
     ('POST', '/api/duelo/fechar'):            ('duelo_fechar', True),
     # o mercadinho entre contas (13/09, mercado.py): o anúncio é do servidor e a peça fica em
     # custódia; a proposta, o aceite do vendedor e a confirmação do comprador; sem juiz, 503

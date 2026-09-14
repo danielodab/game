@@ -2211,63 +2211,11 @@ var JOGO = (typeof window !== 'undefined')
   }
   Engine.castCore = castCore;
 
-  /* ------------------------------------------------------- a POÇÃO DE VIDA (13/09)
-   * O pedido do dono: "no mercadinho do jogo deve ter poções à venda por vinténs.
-   * poções que carregam a vida vão para consumíveis no inventário". Beber é uma
-   * AÇÃO do herói na vez dele, como um feitiço sem alvo: custa PA
-   * (DATA.consumiveisRegras.pa, 2), uma por turno por herói, e cura o próprio
-   * herói — sem casa e sem linha de visão. Vira um LANCE ({a:'po', u, s: pocaoId})
-   * para o juiz refazer a cura e o fechamento descontar as poções do estado do servidor.
-   *
-   * O MOTOR NÃO CONTA O ESTOQUE. Quantas poções o jogador tem é da conta (Progress),
-   * não da batalha: em grupo o motor do parceiro aplica o meu gole sem saber do meu
-   * saco. Quem confere "bebeu mais do que tinha" é o fechamento da sala no servidor
-   * (servidor/juiz/recompensa.js).
-   *
-   * A marca "já bebeu nesta vez" mora em castsThisTurn (zera no startTurn e já entra
-   * no hash): nenhum campo novo para dessincronizar os dois motores. A cura passa por
-   * applyHeal, como toda cura — a fúria da sala corta a poção como corta o feitiço.
-   * Recusa: fora da vez, quem não é herói (ou fusão) vivo, o DUELO (state.pvp), poção
-   * desconhecida, a segunda na mesma vez, PA curto e PV cheio (o gole iria embora sem
-   * curar nada). */
-  Engine.POCAO_PA = 2;
-  Engine.POCAO_MARCA = '@pocao';
-  function regrasPocao() { return DATA().consumiveisRegras || {}; }
-  Engine.pocaoPa = function () {
-    var pa = regrasPocao().pa;
-    return (typeof pa === 'number' && isFinite(pa) && pa >= 0) ? pa : Engine.POCAO_PA;
-  };
-  Engine.pocaoDef = function (pocaoId) {
-    var c = DATA().consumiveis;
-    var d = (c && typeof pocaoId === 'string' && Object.prototype.hasOwnProperty.call(c, pocaoId)) ? c[pocaoId] : null;
-    return (d && d.tipo === 'vida' && typeof d.cura === 'number' && d.cura > 0) ? d : null;
-  };
-  /* null = pode beber; senão o porquê: 'fase' 'vez' 'unidade' 'duelo' 'pocao' 'usada' 'pa' 'cheio' */
-  Engine.podePocao = function (state, uid, pocaoId) {
-    if (!state || state.phase !== 'playing') return 'fase';
-    var u = Engine.findUnit(state, uid);
-    var ativo = Engine.activeUnit(state);
-    if (!u || !ativo || ativo.uid !== u.uid) return 'vez';
-    if ((u.kind !== 'hero' && u.kind !== 'fusion') || !u.alive || u.offBoard) return 'unidade';
-    if (state.pvp) return 'duelo';
-    if (!Engine.pocaoDef(pocaoId)) return 'pocao';
-    var porTurno = regrasPocao().porTurno || 1;
-    if (((u.castsThisTurn || {})[Engine.POCAO_MARCA] || 0) >= porTurno) return 'usada';
-    if (u.pa < Engine.pocaoPa()) return 'pa';
-    if (u.hp >= u.hpMax) return 'cheio';
-    return null;
-  };
-  Engine.usePotion = function (state, uid, pocaoId) {
-    if (Engine.podePocao(state, uid, pocaoId)) return false;
-    var u = Engine.findUnit(state, uid), d = Engine.pocaoDef(pocaoId);
-    u.pa -= Engine.pocaoPa();
-    if (!u.castsThisTurn) u.castsThisTurn = {};
-    u.castsThisTurn[Engine.POCAO_MARCA] = (u.castsThisTurn[Engine.POCAO_MARCA] || 0) + 1;
-    emit({ type: 'pocao', uid: u.uid, pocaoId: pocaoId });
-    log(u.name + ' bebe ' + (d.name || 'uma poção') + '.');
-    applyHeal(state, u, d.cura);
-    return true;
-  };
+  /* A POÇÃO DE VIDA NÃO É DA BATALHA (13/09, o dono: "a poção não é para usar na
+   * batalha.. e sim para curar a vida após uma batalha na sala de espera entre as
+   * salas"). O motor não tem ação de beber: o gole mora na antessala (Game.bebeNaEspera)
+   * e o lance {a:'po'} que chegar de uma página velha ou forjada é recusado pelo Game
+   * (executa) e derruba a sala no juiz (servidor/juiz/sala.js). */
 
   function applyEffects(state, caster, spell, x, y, opts) {
     opts = opts || {};
