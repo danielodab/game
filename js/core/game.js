@@ -781,6 +781,25 @@ var JOGO = (typeof window !== 'undefined')
     if (Game.timeLeft() <= 0) Game.endTurn();
   }
   Game._gastoRede = function () { return turnElapsed; };      // provas: o quanto do meu turno já correu
+  /* QUEM CAIU E VOLTOU JOGA COM 30 S LIMPOS (14/09, pedido do dono: "quando um
+   * usuário desconecta no meio da partida sua vez passa, e quando ele entra
+   * novamente e chega seu turno o tempo começa sem acúmulo, em 30 segundos").
+   * O banco era a sobra dos turnos de ANTES da queda e ficava de pé: quem volta
+   * tinha 30 s + banco, e o parceiro que ficou esperava por esse prazo inteiro.
+   * Agora o banco zera na volta. O relógio só zera se a vez não é minha agora —
+   * uma queda curta no meio do MEU turno não ganha 30 s novos; o turno segue de
+   * onde estava, sem o banco. */
+  Game._voltouDaQueda = function () {
+    Game.banked = 0;
+    var st = Game.state;
+    var u = (st && st.phase === 'playing') ? E().activeUnit(st) : null;
+    if (!u || Game.donoDe(u) !== 'eu') {
+      timerUid = null; timerTurno = null;
+      turnElapsed = 0;
+    }
+    lastTickSec = -1;
+    emitTimerTick();
+  };
 
   function updateRede(d, semTela) {
     var st = Game.state, c = C();

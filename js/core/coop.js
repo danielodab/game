@@ -887,6 +887,9 @@ var JOGO = (typeof window !== 'undefined')
     S.ultimoSinal = agora();
     if (estava) {
       S.parceiroVoltou = true;
+      // 14/09: ele volta sem o banco de antes da queda — o prazo de espera do
+      // turno dele é 30 s (+ a folga da animação), não 30 + o banco velho
+      S.bkParceiro = 0;
       if (emBatalha()) {
         avisa(nomeParceiro() + ' voltou' + (S.parceiroIA ? ' — e volta a jogar.' : '.'), 'ok');
         var g = G(), st = g && g.state;
@@ -1573,6 +1576,7 @@ var JOGO = (typeof window !== 'undefined')
       S.cedeu = true;
       S.tomouAutoridade = false;
       S.fotoPendente = false;
+      if (g._voltouDaQueda) { try { g._voltouDaQueda(); } catch (eV) {} }   // 14/09: 30 s limpos
       pedeFoto();
     } else if (u.dono === meuId()) {
       // o outro me deu por sumido: o turno dos MEUS herois passa (12/09). CEDO a
@@ -2102,6 +2106,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!S.bid || S.fim) return;
     var g = G(), st = g && g.state;
     if (!st) return;
+    // 14/09: quem volta da queda joga o próximo turno com 30 s, sem o banco de antes
+    if (emBatalha() && g._voltouDaQueda) { try { g._voltouDaQueda(); } catch (eV) {} }
     // (se a foto já veio depois da volta — o `ia` do outro chegou antes —, não pede outra)
     var jaRestaurou = !!(S.restauradaEm && S.restauradaEm >= S.religouEm);
     if (S.tipo === 'grupo' && emBatalha() && !souAutoridade() && !jaRestaurou) pedeFoto();

@@ -1065,6 +1065,8 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 3 && bia.J.Game.state && bia.J.Game.state.turno >= 3; }, 400);
     var gracaAntes = ana.J.Coop.GRACA_MS;
     ana.J.Coop.GRACA_MS = 1000;
+    bia.J.Game.banked = 25;                // 14/09: o banco de antes da queda
+    ana.J.Coop._S().bkParceiro = 25;
     bia.vivo = false;
     ana.J.Rede._sinal({ tipo: 'caiu', id: 'bia', cx: 'cxb' });
     ate(function () { return ana.J.Coop.sessao().parceiroIA; }, 400, 100, ['ana']);
@@ -1074,11 +1076,18 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     bia.vivo = true; bia.cx = 'cxb2';
     bia.J.Rede._ident('bia', 'cxb2');
     ana.J.Coop.parceiroVoltou('bia', 'cxb2');
+    // medido NA volta: depois ela joga turnos e o banco novo dela (legítimo) volta a crescer
+    var bkNaAna = ana.J.Coop._S().bkParceiro;
     bia.J.Rede._sinal({ tipo: 'religou', cx: 'cxb2' });
     ate(function () { return bia.J.Coop.sessao().restauracoes > 0; }, 200);
     var tVolta = bia.J.Game.state ? bia.J.Game.state.turno : 0;
     var hbia = bia.J.Game.state.units.filter(function (u) { return u.dono === 'bia'; })[0];
+    var bancoVolta = bia.J.Game.banked, tempoVolta = bia.J.Game.timeLeft();
     ana.J.Coop.GRACA_MS = gracaAntes;
+    check('K6 · 14/09: quem volta da queda fica SEM o banco de antes — o turno dela começa em 30 s',
+          bancoVolta === 0 && tempoVolta <= 30.001, 'banco ' + bancoVolta + ' · tempo ' + tempoVolta.toFixed(1) + ' s');
+    check('K6 · 14/09: e quem ficou espera o turno dela pelos 30 s, sem o banco velho', bkNaAna === 0,
+          'bkParceiro ' + bkNaAna);
     check('K6 · enquanto ela estava fora, o herói dela ficou de pé com o turno passando (u.ia)', foraOk,
           'fora no turno ' + tFora);
     check('K6 · a parceira volta: pede a foto, restaura — e os heróis são DELA de novo (voltou a jogar)',
