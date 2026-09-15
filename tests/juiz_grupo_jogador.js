@@ -13,7 +13,9 @@
  *     dungeonId, roomIndex, semente, dificuldade?, carry? }
  *   { modo: 'procura-grupo', membros, candidatos: [[dungeonId, roomIndex, semente], …] }
  *        → a primeira candidata que o grupo vence, com o jogo dela
- *   { modo: 'duelo', A: {progress, db, dono, herois}, B: {…}, dungeonId, roomIndex, semente, vidaA?, vidaB? }
+ *   { modo: 'duelo', A: {progress, db, dono, herois}, B: {…}, dungeonId, roomIndex, semente, vidaA?, vidaB?, cortaEm? }
+ *        (15/09: `cortaEm` = pára o duelo no começo da primeira vez de gente depois de tantos lances — o ponto
+ *        em que o juiz também pára, então o hash devolvido é o do fim que ele confere: a desistência e o W.O.)
  * Saída (JSON): { lances, fase, hash } (e dungeonId, roomIndex, semente na procura; no duelo também
  *               vidaFimA / vidaFimB = {heroId: PV do fim} de cada lado). */
 const path = require('path');
@@ -84,6 +86,7 @@ function jogaDuelo(p) {
   while (st.phase === 'playing' && voltas++ < 3000) {
     const u = E.activeUnit(st);
     if (!u) break;
+    if (typeof p.cortaEm === 'number' && log.length >= p.cortaEm && ehDeGente(u)) break;   // 15/09: o duelo cortado
     const plano = J.AI.planTurn(st, u.uid) || [];
     const gente = ehDeGente(u);
     let acabou = false;

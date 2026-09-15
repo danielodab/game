@@ -8,6 +8,9 @@
 # o SQLite em WAL quer abrir o arquivo -shm, e o www-data não o abre para
 # escrita. Sem o banco (ainda não criado, API parada), ninguém é conferido e
 # o resto segue igual.
+# 15/09: e GRAVA uma coisa só, a presença das contas (servidor/presenca.py,
+# tabela rele_presenca: 'caiu'/'voltou', a prova do W.O. do duelo) — por isso
+# ele TEM de rodar como `soterra`, sem ProtectSystem que tranque o banco.
 [Unit]
 Description=SOTERRA - o Rele da Rede (WebSocket)
 After=network.target

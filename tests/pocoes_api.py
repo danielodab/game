@@ -196,15 +196,18 @@ class ProvaDasPocoes(A.ProvaDaAutoridade):
         self.assertEqual(json.loads(self.sala(b0['bilhete'])['carry']), b0['carry'], 'o carry do bilhete é o que o juiz refaz')
         for corpo in ({'dungeonId': 'poco', 'roomIndex': 0}, {'dungeonId': 'greenhouse', 'roomIndex': 0},
                       {'roomIndex': 2}):
+            self.fecha_lutas(c)                                       # 15/09: o jogo honesto fecha a de antes
             status, bx = self.abre_corpo(c, corpo)
             self.assertEqual(status, 200, (corpo, bx))
             self.assertIn(bx['carry']['sumo'], (35, 36, 37), ('o Poço, outro calabouço e a sala do meio: a mesma vida', corpo))
         # uma hora de espera enche: o cheio sai do carry (o motor dá o PV máximo de hoje)
         self.mexe_linha(c, desde_ms=agora_ms() - 3600 * 1000)
+        self.fecha_lutas(c)
         b1 = self.abre(c, sala=1, semente=None)
         self.assertIsNone(b1['carry'])
         # a sala jogada com a vida da linha se refaz igual no juiz, e o fim volta para a linha
         self.mexe_linha(c, hp_fim=mx - 20, desde_ms=agora_ms() + PARADO)
+        self.fecha_lutas(c)
         b2 = self.abre(c)
         self.assertEqual(b2['carry'], {'sumo': mx - 20})
         jogo = self.joga(c, b2['bilhete'])
@@ -359,6 +362,7 @@ class ProvaDasPocoes(A.ProvaDaAutoridade):
         self.assertEqual(json.loads(self.sql("SELECT carry FROM salas_grupo WHERE gid = ?", r['gid'])[0]['carry']), r['carry'])
         # a vida da Ana encheu: só a Bia no carry
         self.mexe_linha(ana, desde_ms=agora_ms() - 3600 * 1000)
+        self.fecha_lutas(ana)                                         # 15/09: a sala em grupo de antes, fechada
         status, r = ana.pede('POST', '/api/grupo/abrir', abrir)
         self.assertEqual((status, r.get('carry')), (200, {'bia:sumo': 70}), r)
 

@@ -67,11 +67,16 @@ var JOGO = (typeof window !== 'undefined')
     return !!(e.ligada && e.principal);
   };
 
-  function api(rota, corpo) {
-    if (typeof A._fetch === 'function') return A._fetch(rota, { method: 'POST', body: corpo });
+  function api(rota, corpo, extra) {
+    var vivo = !!(extra && extra.keepalive);
+    if (typeof A._fetch === 'function') return A._fetch(rota, { method: 'POST', body: corpo, keepalive: vivo });
     var s = S();
     if (!s || !s.api) return Promise.resolve({ ok: false, status: 0, erro: 'sem sessão' });
-    return s.api(rota, { method: 'POST', body: corpo });
+    var op = { method: 'POST', body: corpo };
+    // 15/09: o pedido que tem de sair mesmo com a página indo embora (a desistência declarada). O navegador limita o
+    // corpo do keepalive a 64 KB: acima disso vai o pedido comum, e a fila de retentativa segue valendo
+    if (vivo) { try { if (JSON.stringify(corpo).length < 60000) op.keepalive = true; } catch (e) {} }
+    return s.api(rota, op);
   }
   function foraDoAr(r) { return !r || r.status === 0 || r.status >= 500; }
 
@@ -139,10 +144,15 @@ var JOGO = (typeof window !== 'undefined')
     if (b && b.estado === 'pronto') { if (quandoPronto) quandoPronto(b); return; }
     if (b && b.estado === 'pedindo') { if (quandoPronto) b.espera.push(quandoPronto); return; }
     b = bilhetes[k] = { estado: 'pedindo', espera: quandoPronto ? [quandoPronto] : [] };
-    api('/api/sala/abrir', { dungeonId: pedido.dungeonId, roomIndex: pedido.roomIndex,
-                             dificuldade: pedido.dificuldade || 'normal', herois: pedido.herois })
+    // 15/09: a luta que ficou aberta (a aba fechada no meio) fecha ANTES de o bilhete novo abrir
+    A.fechaPendente().then(function () {
+      return api('/api/sala/abrir', { dungeonId: pedido.dungeonId, roomIndex: pedido.roomIndex,
+                                      dificuldade: pedido.dificuldade || 'normal', herois: pedido.herois });
+    })
       .then(function (r) {
+        A.notaLargada(r);                               // 15/09: o servidor largou uma luta de antes
         if (r && r.ok && typeof r.bilhete === 'string' && typeof r.semente === 'number') {
+          A.abreLuta('sala', r.bilhete);                // 15/09: o registro da luta aberta, desde o bilhete
           b.estado = 'pronto';
           b.bilhete = r.bilhete;
           b.semente = r.semente;
@@ -175,18 +185,113 @@ var JOGO = (typeof window !== 'undefined')
   };
   A.esqueceBilhetes = function () { bilhetes = {}; };
 
+  /* ------------------------------------------------------------ a luta aberta (15/09) */
+  /* AS FALHAS CONHECIDAS (15/09, o dono: "arrume as falhas conhecidas"). Fechar a aba no meio de uma derrota fugia
+   * da vida zerada: o servidor nunca recebia o fechar e a vida do herói ficava a de antes da luta. Agora a luta com
+   * bilhete (sala solo, Poço) ou gid (sala em grupo) mora num registro no localStorage DA CONTA
+   * ('soterra-luta-aberta-v1' + o sufixo), com os lances a cada lance. Ao abrir o jogo e ANTES de pedir qualquer luta
+   * nova (bilhete, sala em grupo, duelo, Arena, guerra) a luta pendente fecha no servidor com os lances guardados: a
+   * sala para no meio e o servidor grava a vida do ponto em que o replay parou (na sala em grupo, só a parte desta
+   * conta: `largou`). O fechar que resolve apaga o registro. Quem não fecha — outro aparelho, a memória limpa, o
+   * cliente mexido — o servidor LARGA na abertura seguinte: os heróis daquela luta a 0 (servidor/salas.py) e a
+   * resposta traz `largada`, que vira o aviso da HUD.
+   * O pagehide NÃO fecha: o sendBeacon não leva o cabeçalho Authorization da sessão, e o fetch keepalive levaria, mas
+   * o pagehide também dispara na ida ao cache de voltar/avançar — fechar ali estragaria a luta que volta. */
+  A.LUTA_CHAVE = 'soterra-luta-aberta-v1';
+  A.TEXTO_LARGADA = 'Você saiu da última luta sem terminar: os heróis dela voltam do zero';
+  function chaveLuta() {
+    var C = JOGO.Contas;
+    return A.LUTA_CHAVE + ((C && C.sufixo) ? C.sufixo() : '');
+  }
+  function armario() { try { return window.localStorage || null; } catch (e) { return null; } }
+  A.lutaAberta = function () {
+    var ls = armario();
+    if (!ls) return null;
+    try {
+      var v = JSON.parse(ls.getItem(chaveLuta()) || 'null');
+      return (v && (v.tipo === 'sala' || v.tipo === 'grupo') && typeof v.ref === 'string') ? v : null;
+    } catch (e) { return null; }
+  };
+  function gravaLuta(v) {
+    var ls = armario();
+    if (!ls) return;
+    try { if (v) ls.setItem(chaveLuta(), JSON.stringify(v)); else ls.removeItem(chaveLuta()); } catch (e) {}
+  }
+  /* a luta nasceu: 'sala' com o bilhete, 'grupo' com o gid */
+  A.abreLuta = function (tipo, ref) {
+    if ((tipo !== 'sala' && tipo !== 'grupo') || typeof ref !== 'string' || !ref || !A.ligada()) return;
+    var v = A.lutaAberta();
+    if (v && v.ref === ref) return;
+    gravaLuta({ tipo: tipo, ref: ref, lances: [], fim: false });
+  };
+  /* os lances de agora (a lista inteira: o registro é o que o servidor refaz); `fim` = a luta acabou e o fechar de
+   * sempre já saiu (na sala em grupo o registro que sobrar fecha como fim, e não como `largou`) */
+  A.anotaLuta = function (ref, lances, fim) {
+    var v = A.lutaAberta();
+    if (!v || v.ref !== ref) return;
+    v.lances = Object.prototype.toString.call(lances) === '[object Array]' ? lances.slice() : [];
+    if (fim) v.fim = true;
+    gravaLuta(v);
+  };
+  A.esqueceLuta = function (ref) {
+    var v = A.lutaAberta();
+    if (v && (!ref || v.ref === ref)) gravaLuta(null);
+  };
+  var fechandoLuta = {};       // ref → a promessa do fechar em curso (o de sempre ou o do registro)
+  /* Fecha a luta pendente e resolve quando o servidor respondeu de vez (sem rede, tenta de novo como todo fechar).
+   * Resolve null sem luta pendente. Um fechar da MESMA luta que já está a caminho é esperado, não repetido. */
+  A.fechaPendente = function () {
+    if (!A.ligada()) return Promise.resolve(null);
+    var v = A.lutaAberta();
+    if (!v) return Promise.resolve(null);
+    if (fechandoLuta[v.ref]) return fechandoLuta[v.ref].then(function () { return A.lutaAberta() ? A.fechaPendente() : null; });
+    var p = v.tipo === 'sala'
+      ? A.fecha(v.ref, v.lances || [], null)
+      : A.fechaGrupo({ gid: v.ref, lances: v.lances || [], hashFinal: null, fotografada: false, largou: !v.fim });
+    return p.then(function (r) {
+      A.esqueceLuta(v.ref);
+      try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
+      return r;
+    });
+  };
+  /* a resposta de uma abertura diz que o servidor largou uma luta de antes: o aviso curto e a vida de lá */
+  A.notaLargada = function (r) {
+    var l = r && r.largada;
+    if (!l || Object.prototype.toString.call(l.herois) !== '[object Array]' || !l.herois.length) return false;
+    aviso(A.TEXTO_LARGADA + '.', 'aviso');
+    try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
+    return true;
+  };
+
   /* ------------------------------------------------------------ o fechar */
   /* Resolve SEMPRE: {ok, fase, recompensa} ou {ok:false, erro, recusada}. Sem
    * rede, tenta de novo sozinho até o servidor responder (a tela diz). */
   A.fecha = function (bilhete, lances, hashFinal) {
     return fechaEm('/api/sala/fechar', { bilhete: bilhete, lances: lances, hashFinal: hashFinal });
   };
-  /* A SALA EM GRUPO (coop.js): o líder pede a semente ao servidor antes da ata */
-  A.abreGrupo = function (corpo) { return api('/api/grupo/abrir', corpo); };
+  /* A SALA EM GRUPO (coop.js): o líder pede a semente ao servidor antes da ata (15/09: depois de fechar a luta pendente) */
+  A.abreGrupo = function (corpo) {
+    return A.fechaPendente().then(function () { return api('/api/grupo/abrir', corpo); })
+      .then(function (r) { A.notaLargada(r); return r; });
+  };
   /* e cada membro fecha com o registro do motor dele (os lances dos dois e as marcas) */
   A.fechaGrupo = function (corpo) { return fechaEm('/api/grupo/fechar', corpo); };
-  /* O DUELO RANQUEADO: o servidor refaz a arena e muda a Brasa dos dois */
-  A.fechaDuelo = function (corpo) { return fechaEm('/api/duelo/fechar', corpo); };
+  /* O DUELO RANQUEADO: o servidor refaz a arena e muda a Brasa dos dois. 15/09: `extra.keepalive` (a desistência, que
+   * sai mesmo com a página indo embora); e a resposta 'aguardando' (o lado que recebeu a desistência espera a
+   * declaração do desistente; o W.O. espera a prova de queda do relé) pergunta de novo sozinha, depois de `esperaMs`,
+   * até a resposta de vez — a promessa resolve com ela. */
+  A.ESPERA_DUELO_VEZES = 40;
+  A._espera = function (ms, fn) { return setTimeout(fn, ms); };     // provas: o relógio
+  A.fechaDuelo = function (corpo, extra) {
+    return fechaEm('/api/duelo/fechar', corpo, extra).then(function (r) { return esperaDuelo(corpo, r, 0); });
+  };
+  function esperaDuelo(corpo, r, n) {
+    if (!r || !r.ok || r.fase !== 'aguardando' || parado || n >= A.ESPERA_DUELO_VEZES) return r;
+    var ms = Math.max(1000, Math.min(30000, (typeof r.esperaMs === 'number' && isFinite(r.esperaMs) ? r.esperaMs : 5000) + 500));
+    return new Promise(function (volta) { A._espera(ms, volta); })
+      .then(function () { return fechaEm('/api/duelo/fechar', corpo); })
+      .then(function (r2) { return esperaDuelo(corpo, r2, n + 1); });
+  }
 
   /* A POÇÃO NA SALA DE ESPERA (13/09, o dono: "a poção seria para curar a vida e não precisar
    * esperar para ir para a próxima sala"). O servidor tira a poção do estado dele e soma a cura
@@ -221,7 +326,10 @@ var JOGO = (typeof window !== 'undefined')
    * vida cada herói meu entra (é com ela que ele refaz o duelo no fechar). corpo {did, herois};
    * resolve {ok, carry: {heroId: PV}|null} ou {ok:false, motivo: 'vida-zero', heroi, esperaS}. */
   A.abreDuelo = function (corpo) {
-    return descarregaFila().then(function () { return api('/api/duelo/abrir', corpo); }).then(function (r) {
+    return descarregaFila().then(function () { return A.fechaPendente(); }).then(function () {
+      return api('/api/duelo/abrir', corpo);
+    }).then(function (r) {
+      A.notaLargada(r);                                 // 15/09: o servidor largou uma luta de antes
       if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
       if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
       if (!r.ok) {
@@ -253,14 +361,28 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
 
-  function fechaEm(rota, corpo) {
+  /* 15/09: o fechar da sala e da sala em grupo é também o da luta aberta — enquanto ele está a caminho, a luta
+   * pendente espera por ele (fechandoLuta), e a resposta de vez apaga o registro */
+  function fechaEm(rota, corpo, extra) {
+    var ref = (rota === '/api/sala/fechar' && corpo && corpo.bilhete) || (rota === '/api/grupo/fechar' && corpo && corpo.gid) || null;
+    var p = fechaEmBruto(rota, corpo, extra).then(function (r) {
+      if (ref) {
+        if (fechandoLuta[ref] === p) delete fechandoLuta[ref];
+        A.esqueceLuta(ref);
+      }
+      return r;
+    });
+    if (ref) fechandoLuta[ref] = p;
+    return p;
+  }
+  function fechaEmBruto(rota, corpo, extra) {
     return new Promise(function (resolve) {
       var pend = { corpo: corpo, resolve: resolve };
       fechamentos.push(pend);
       function tenta(avisou) {
         // as ops na fila sobem ANTES: o servidor paga a sala sobre o estado com elas
         descarregaFila().then(function () {
-          return api(rota, corpo);
+          return api(rota, corpo, avisou ? null : extra);   // o keepalive só na primeira: a página ainda estava ali
         }).then(function (r) {
           if (parado || outroAparelho(r)) {
             // 13/09: a conta entrou em outro aparelho — sem tentar de novo (nem sem rede)
@@ -391,6 +513,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!A.ligada()) return;
     puxouNaAbertura = true;
     A.puxaEstado();
+    // 15/09: a luta que ficou aberta da última vez (a aba fechada no meio) fecha já, com os lances guardados
+    try { A.fechaPendente(); } catch (eL) {}
     // 14/09: e a vida dos heróis, que o servidor guarda (a praça já está na tela)
     try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
   }

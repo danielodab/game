@@ -215,6 +215,10 @@ class ArenaMixin:
 
     # -- POST /api/arena/inscrever ------------------------------------------------------------------------
     def arena_inscrever(self, conta, corpo):
+        # 15/09: a luta que a conta deixou aberta no servidor fica largada antes (salas.py, _com_largada)
+        return self._com_largada(conta, lambda: self._arena_inscrever(conta, corpo))
+
+    def _arena_inscrever(self, conta, corpo):
         cid = conta['id']
         if not self._autoridade_ligada():
             raise Recusa(503, 'o juiz do servidor não está configurado: a Arena ranqueada não abre')
@@ -247,6 +251,9 @@ class ArenaMixin:
 
     # -- POST /api/arena/desafiar ------------------------------------------------------------------------------
     def arena_desafiar(self, conta, corpo):
+        return self._com_largada(conta, lambda: self._arena_desafiar(conta, corpo))   # 15/09: a largada antes
+
+    def _arena_desafiar(self, conta, corpo):
         cid = conta['id']
         alvo = corpo.get('alvo')
         if not isinstance(alvo, int) or isinstance(alvo, bool) or alvo < 1:

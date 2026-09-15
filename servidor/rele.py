@@ -133,6 +133,12 @@ congela a praça. Sem --banco ninguém é conferido e o resto segue igual. No
 mais ele não valida jogo nenhum: a autoridade de jogo (troca, Elo) é do
 cartório (api.py).
 
+A PRESENÇA (15/09, servidor/presenca.py): a ÚNICA escrita do relé no banco. Com
+--banco, quando a última conexão identificada de uma conta fecha ele anota
+'caiu', e quando a conta ganha a primeira de novo, 'voltou' (tabela
+rele_presenca, numa thread, mode=rw — nunca cria o arquivo). É a prova de queda
+com que a API confirma o W.O. do duelo (grupo.py, duelo_fechar).
+
 NO VPS ele fica atrás do Caddy (wss://<dominio>/ws → 127.0.0.1:8791; ver
 Caddyfile e soterra-rele.service ao lado). Em casa, roda direto e o jogo
 aponta com `?rede=ws://127.0.0.1:8791`.
@@ -154,6 +160,7 @@ import secrets
 import sqlite3
 import time
 
+import presenca                                 # 15/09: a queda e a volta de cada conta, a prova do W.O. do duelo
 import rele_ident                               # a identidade na praça (10/09): o token, o Mestre e os nomes
 from comum import ip_do_pedido, ip_e_publico, le_ip   # o IP de quem conectou, lido como no cartório (api.py)
 
@@ -928,12 +935,46 @@ def _indexa_conta(par, antes, depois):
         return
     if antes is not None:
         s = POR_CONTA.get(antes)
-        if s is not None:
+        if s is not None and par in s:
             s.discard(par)
             if not s:
                 del POR_CONTA[antes]
+                _presenca(antes, 'caiu')             # 15/09: a última conexão identificada da conta se foi
     if depois is not None and par.vivo:
-        POR_CONTA.setdefault(depois, set()).add(par)
+        s = POR_CONTA.setdefault(depois, set())
+        if not s:
+            _presenca(depois, 'voltou')              # 15/09: a primeira conexão identificada da conta
+        s.add(par)
+
+
+PRESENCA_PRAZO_S = 5.0                   # quanto a anotação da presença pode demorar na thread
+
+
+def _presenca(conta_id, evento):
+    """15/09, AS FALHAS CONHECIDAS (o W.O. do duelo não custava nada a quem sumia): anota no banco da API
+    (servidor/presenca.py, tabela rele_presenca) que a conta caiu ou voltou, com o instante de AGORA — numa
+    tarefa, com a escrita numa thread fora do laço. Só com --banco; banco trancado ou ausente = a anotação se
+    perde (o W.O. daquela queda fica sem prova: vale a vida do replay, sem coroa)."""
+    caminho = VERIFICADOR.caminho
+    if caminho is None or isinstance(conta_id, bool) or not isinstance(conta_id, int):
+        return
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return                                   # fora do laço (as provas puras do módulo): nada a anotar
+    _em_tarefa(_anota_presenca(caminho, conta_id, evento, int(time.time() * 1000)))
+
+
+async def _anota_presenca(caminho, conta_id, evento, em_ms):
+    try:
+        loop = asyncio.get_running_loop()
+        ok = await asyncio.wait_for(loop.run_in_executor(None, presenca.anota, caminho, conta_id, evento, em_ms),
+                                    PRESENCA_PRAZO_S)
+    except Exception as e:                       # o prazo, a thread que morreu
+        log.warning("a presença da conta #%d (%s) não foi anotada (%s)", conta_id, evento, type(e).__name__)
+        return
+    if not ok:
+        log.warning("a presença da conta #%d (%s) não foi anotada: o banco não aceitou", conta_id, evento)
 
 
 def _tem_ficha(b, agora):
@@ -1724,15 +1765,16 @@ if __name__ == "__main__":
     ap.add_argument("--relatorio", type=float, default=60.0,
                     help="segundos entre as linhas de números no log (0 = nenhuma)")
     ap.add_argument("--banco", default=None,
-                    help="o banco do cartório (o --banco da api.py), aberto SÓ PARA LER: confere a sessão de "
-                         "quem se identifica e quem é o Mestre (rele_ident.py). Sem ele ninguém é conferido")
+                    help="o banco do cartório (o --banco da api.py): LÊ a sessão de quem se identifica e quem é o "
+                         "Mestre (rele_ident.py) e GRAVA só a presença das contas, a prova do W.O. (presenca.py). "
+                         "Sem ele ninguém é conferido")
     args = ap.parse_args()
     if args.broadcast_caseiro:
         broadcast = None
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     liga_banco(args.banco)
     if args.banco:
-        log.info("identidade: conferida no banco %s (só leitura)%s", args.banco,
+        log.info("identidade: conferida no banco %s (e a presença anotada nele)%s", args.banco,
                  "" if os.path.exists(args.banco) else " — ainda não existe: ninguém é conferido até ele aparecer")
     else:
         log.info("identidade: sem --banco, ninguém é conferido (nome reservado sempre sai trocado)")

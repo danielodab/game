@@ -361,7 +361,10 @@ var JOGO = (typeof window !== 'undefined')
      * antessala levaria a vida de quando se chegou. 14/09: a vida é única, então a regra
      * vale em TODA sala: só com os heróis todos cheios o bilhete sai já; senão, no "Entrar
      * na batalha". */
-    try { if (autoridadeNaSala() && !vidaCarrySolo()) JOGO.Autoridade.prepara(pedidoDaSala()); } catch (e) {}
+    /* 15/09, A LUTA LARGADA: nem com os heróis cheios o bilhete sai mais de antemão. O servidor LARGA a luta que
+     * a conta deixou aberta quando ela abre outra (os heróis dela a 0: servidor/salas.py); um bilhete pedido na
+     * chegada à antessala e nunca usado — a aba fechada ali, o jogo aberto depois em outro aparelho — seria uma
+     * luta "largada" sem ter começado. Agora bilhete aberto é "Entrar na batalha" apertado (entrarNaSala). */
   }
 
   /* O POÇO SEM FUNDO (25/08): a torre infinita. JOGO.Poco monta o calabouço
@@ -508,6 +511,11 @@ var JOGO = (typeof window !== 'undefined')
   Game.abandonar = function () {
     if (Game.screen !== 'antessala' && Game.screen !== 'battle') return false;
     Game.init('hub');
+    // 15/09: a luta largada no meio fecha já no servidor, com os lances até aqui (a vida do ponto em que parou)
+    try {
+      var A = JOGO.Autoridade;
+      if (A && A.fechaPendente && A.ligada && A.ligada()) A.fechaPendente();
+    } catch (e) {}
     return true;
   };
 
@@ -1391,7 +1399,11 @@ var JOGO = (typeof window !== 'undefined')
    * formato da batalha em dupla, com o resultado — o que falha também, porque
    * a esquiva que falha gasta sorteio. O servidor refaz a sala com eles. */
   function anotaSolo(l) {
-    if (ataSolo && !rede) ataSolo.lances.push(l);
+    if (ataSolo && !rede) {
+      ataSolo.lances.push(l);
+      // 15/09: o registro da luta aberta (autoridade.js) — a aba que fechar no meio fecha a sala daqui na volta
+      try { if (JOGO.Autoridade && JOGO.Autoridade.anotaLuta) JOGO.Autoridade.anotaLuta(ataSolo.bilhete, ataSolo.lances); } catch (e) {}
+    }
   }
   function castSolo(uid, spellId, x, y) {
     var ok = !!E().cast(Game.state, uid, spellId, x, y);
@@ -2384,6 +2396,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!reg || !reg.ata || !reg.ata.gid) return;
     var hashFinal = 0;
     try { hashFinal = E().hash(Game.state); } catch (e2) { hashFinal = 0; }
+    // 15/09: a sala acabou — se a página for embora antes do recibo, o registro fecha como fim (e não como `largou`)
+    try { if (JOGO.Autoridade.anotaLuta) JOGO.Autoridade.anotaLuta(reg.ata.gid, reg.lances, true); } catch (e3) {}
     var promessa = JOGO.Autoridade.fechaGrupo({ gid: reg.ata.gid, lances: reg.lances, hashFinal: hashFinal,
                                                 fotografada: reg.fotografada, autoridade: reg.autoridade });
     promessa.then(sincronizaVida);                     // 14/09: o servidor gravou a vida do fim dos dois

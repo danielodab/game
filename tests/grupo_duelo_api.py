@@ -184,6 +184,8 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         status, r1 = ana.pede('POST', '/api/grupo/abrir', self.corpo_abrir(bia))
         self.assertEqual(status, 200, r1)
         self.assertTrue(isinstance(r1['semente'], int) and r1['carry'] is None, r1)
+        # 15/09: o jogo honesto fecha a sala de antes (o registro, js/core/autoridade.js); aqui a prova só confere a abertura
+        self.sql("UPDATE luta_aberta SET estado = 'fechada' WHERE conta_id = ? AND estado = 'aberta'", ana.conta['id'])
         status, r2 = ana.pede('POST', '/api/grupo/abrir', self.corpo_abrir(bia))
         self.assertEqual(status, 200, r2)
         self.assertEqual(self.sql("SELECT estado FROM salas_grupo WHERE gid = ?", r1['gid'])[0]['estado'], 'vencida')
@@ -478,6 +480,194 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         status, r = c.pede('POST', '/api/duelo/fechar', self.corpo_duelo(c, d, self.did(), jogo3, modo='campo'))
         self.assertEqual(status, 200, r)
         self.assertEqual(r['ranqueado'], jogo3['fase'] in ('won', 'lost', 'empate'), r)
+
+    # -- 15/09: as falhas conhecidas — a desistência declarada e o W.O. com a prova de queda do relé ------------------
+    def joga_cortado(self, a, b, corta=6, semente=999, dungeon='cistern'):
+        """O duelo parado no meio (a IA joga os dois lados até `corta` lances e pára na vez de gente)."""
+        sa, sb = self.save(a), self.save(b)
+        jogo = roda_node([JOGADORES], {'modo': 'duelo', 'dungeonId': dungeon, 'roomIndex': 0, 'semente': semente,
+                                       'cortaEm': corta,
+                                       'A': {'progress': sa['progress'], 'db': sa['db'], 'dono': 'ana', 'herois': ['sumo']},
+                                       'B': {'progress': sb['progress'], 'db': sb['db'], 'dono': 'bia',
+                                             'herois': ['curandeiro']}})
+        self.assertEqual(jogo['fase'], 'playing', 'o duelo cortado no meio não acabou')
+        return jogo
+
+    def abre_os_dois(self, a, b, did):
+        for c, hs in ((a, ['sumo']), (b, ['curandeiro'])):
+            status, r = c.pede('POST', '/api/duelo/abrir', {'did': did, 'herois': hs})
+            self.assertEqual(status, 200, r)
+
+    def vida_de(self, c, heroi):
+        linhas = self.sql("SELECT * FROM vida_heroi WHERE conta_id = ? AND heroi = ?", c.conta['id'], heroi)
+        return linhas[0] if linhas else None
+
+    def brasa_de(self, c):
+        return self.save(c)['db']['jogador'].get('brasa') or {}
+
+    def test_17_desistencia_declarada_zera_e_conta_derrota(self):
+        self.precisa('duelo')
+        a, b = self.duplas_de_duelo()
+        did = self.did()
+        self.abre_os_dois(a, b, did)
+        jogo = self.joga_cortado(a, b)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, desistiu=True, lado='A'))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['fase'], r['venc'], r['ranqueado'], r.get('fim')), ('lost', 'B', True, 'desistencia'), r)
+        self.assertLess(r['delta'], 0, 'quem desiste perde pontos de Brasa, como numa derrota')
+        inicial = self.inicial['db']['jogador']['brasa']['pts']
+        ba, bb = self.brasa_de(a), self.brasa_de(b)
+        self.assertEqual((ba['partidas'], bb['partidas']), (1, 1), 'a coroa muda nos DOIS estados')
+        self.assertEqual((ba['pts'] < inicial, bb['pts'] > inicial), (True, True), (ba, bb))
+        la, lb = self.vida_de(a, 'sumo'), self.vida_de(b, 'curandeiro')
+        self.assertEqual(la['hp_fim'], 0, 'quem desiste sai com os heróis a 0')
+        self.assertGreater(la['hp_max'], 1, 'com o máximo de verdade: a vida volta aos poucos')
+        self.assertEqual(lb['hp_fim'], min(jogo['vidaFimB']['curandeiro'], lb['hp_max']), 'o outro lado: a vida do replay')
+        self.assertEqual(len(self.sql("SELECT 1 FROM eventos WHERE tipo = 'duelo-desistencia' AND conta_id = ?",
+                                      a.conta['id'])), 1)
+        status, r2 = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo))
+        self.assertEqual((status, r2['venc'], r2.get('fim'), r2['versao']), (200, 'B', 'desistencia', 2), r2)
+        # o juiz confere o fim: a declaração com o hash errado diverge
+        c, d = self.duplas_de_duelo()
+        did2 = self.did()
+        self.abre_os_dois(c, d, did2)
+        jogo2 = self.joga_cortado(c, d)
+        status, r = c.pede('POST', '/api/duelo/fechar', self.corpo_duelo(c, d, did2, jogo2, desistiu=True,
+                                                                          hashFinal=(jogo2['hash'] + 1) % (2 ** 32)))
+        self.assertEqual((status, r.get('motivo')), (422, 'divergiu'), r)
+        # o desafio amistoso: a vida a 0, a coroa não muda
+        e, f = self.duplas_de_duelo()
+        did3 = self.did()
+        self.abre_os_dois(e, f, did3)
+        jogo3 = self.joga_cortado(e, f, dungeon='praca')
+        status, r = f.pede('POST', '/api/duelo/fechar', self.corpo_duelo(e, f, did3, jogo3, desistiu=True, modo='desafio',
+                                                                          dungeonId='praca'))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['venc'], r['ranqueado'], r.get('motivo'), r.get('fim')), ('A', False, 'amistoso', 'desistencia'), r)
+        self.assertEqual((self.save(e)['versao'], self.save(f)['versao']), (1, 1))
+        self.assertEqual(self.vida_de(f, 'curandeiro')['hp_fim'], 0)
+        self.assertEqual(self.vida_de(e, 'sumo')['hp_fim'], min(jogo3['vidaFimA']['sumo'], self.vida_de(e, 'sumo')['hp_max']))
+
+    def test_18_desistencia_alheia_nao_vale_e_quem_recebe_espera(self):
+        self.precisa('duelo')
+        a, b = self.duplas_de_duelo()
+        did = self.did()
+        self.abre_os_dois(a, b, did)
+        jogo = self.joga_cortado(a, b)
+        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, desistiu=True, lado='A'))
+        self.assertEqual((status, r.get('motivo')), (403, 'desistencia-alheia'), r)
+        self.assertIsNone(self.vida_de(a, 'sumo'), 'a conta de B não zera os heróis de A')
+        # B recebeu a desistência de A pela Rede: fecha sem declarar nada — a vida do replay dos dois e a espera
+        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo))
+        self.assertEqual((status, r['fase'], r.get('motivo'), r['ranqueado']), (200, 'aguardando', 'desistencia', False), r)
+        self.assertTrue(0 < r['esperaMs'] <= 120000, r)
+        la, lb = self.vida_de(a, 'sumo'), self.vida_de(b, 'curandeiro')
+        self.assertEqual(la['hp_fim'], min(jogo['vidaFimA']['sumo'], la['hp_max']), 'quem recebe nunca zera ninguém')
+        self.assertEqual(lb['hp_fim'], min(jogo['vidaFimB']['curandeiro'], lb['hp_max']))
+        self.assertEqual((self.save(a)['versao'], self.save(b)['versao']), (1, 1))
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM duelos WHERE did = ?", did)[0]['n'], 0)
+        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo))
+        self.assertEqual((status, r['fase']), (200, 'aguardando'), r)
+        self.assertEqual(self.vida_de(b, 'curandeiro')['desde_ms'], lb['desde_ms'], 'esperando, nada é regravado')
+        # a declaração do desistente dentro da espera: vale a dele — só o lado dele é regravado (a 0) e a coroa muda
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, desistiu=True))
+        self.assertEqual((status, r['venc'], r['ranqueado'], r.get('fim')), (200, 'B', True, 'desistencia'), r)
+        self.assertEqual(self.vida_de(a, 'sumo')['hp_fim'], 0)
+        self.assertEqual(self.vida_de(b, 'curandeiro')['desde_ms'], lb['desde_ms'], 'o lado de quem recebeu não é regravado')
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM duelo_espera WHERE did = ?", did)[0]['n'], 0)
+        # sem a declaração: passada a espera, fica a vida do replay, sem coroa — e a declaração tardia não muda nada
+        c, d = self.duplas_de_duelo()
+        did2 = self.did()
+        self.abre_os_dois(c, d, did2)
+        jogo2 = self.joga_cortado(c, d)
+        status, r = d.pede('POST', '/api/duelo/fechar', self.corpo_duelo(c, d, did2, jogo2))
+        self.assertEqual((status, r['fase']), (200, 'aguardando'), r)
+        self.sql("UPDATE duelo_espera SET primeiro_ms = primeiro_ms - 121000 WHERE did = ?", did2)
+        status, r = d.pede('POST', '/api/duelo/fechar', self.corpo_duelo(c, d, did2, jogo2))
+        self.assertEqual((status, r['venc'], r['ranqueado'], r.get('motivo'), r.get('fim')),
+                         (200, None, False, 'sem-confirmacao', 'sem-confirmacao'), r)
+        status, r = c.pede('POST', '/api/duelo/fechar', self.corpo_duelo(c, d, did2, jogo2, desistiu=True))
+        self.assertEqual((status, r.get('fim'), r['ranqueado']), (200, 'sem-confirmacao', False), r)
+        lc = self.vida_de(c, 'sumo')
+        self.assertEqual(lc['hp_fim'], min(jogo2['vidaFimA']['sumo'], lc['hp_max']), 'a declaração tardia não zera')
+        self.assertEqual((self.save(c)['versao'], self.save(d)['versao']), (1, 1))
+
+    def poe_presenca(self, c, evento, em_ms):
+        self.sql("INSERT INTO rele_presenca(conta_id, evento, em_ms) VALUES (?, ?, ?)", c.conta['id'], evento, em_ms)
+
+    def duelo_antigo(self, a, b, did, segundos=300):
+        """O duelo aberto há `segundos` (as quedas anotadas depois disso contam)."""
+        self.abre_os_dois(a, b, did)
+        self.sql("UPDATE duelo_vida SET criado_em = criado_em - ? WHERE did = ?", segundos, did)
+
+    def test_19_wo_com_a_queda_provada_pelo_rele(self):
+        self.precisa('duelo')
+        a, b = self.duplas_de_duelo()
+        did = self.did()
+        self.duelo_antigo(a, b, did)
+        jogo = self.joga_cortado(a, b)
+        agora_ms = int(time.time() * 1000)
+        self.poe_presenca(b, 'caiu', agora_ms - 1000 * 1000)            # antes do duelo: não conta
+        self.poe_presenca(b, 'caiu', agora_ms - 90000)                   # a queda de verdade, sem volta
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, wo=True))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['fase'], r['venc'], r['ranqueado'], r.get('fim')), ('won', 'A', True, 'wo'), r)
+        self.assertGreater(r['delta'], 0)
+        self.assertEqual((self.brasa_de(a)['partidas'], self.brasa_de(b)['partidas']), (1, 1))
+        self.assertEqual(self.vida_de(b, 'curandeiro')['hp_fim'], 0, 'quem sumiu sai com os heróis a 0')
+        la = self.vida_de(a, 'sumo')
+        self.assertEqual(la['hp_fim'], min(jogo['vidaFimA']['sumo'], la['hp_max']))
+        # o W.O. declarado pela conta que SUMIU contra quem ficou não tem prova nenhuma (quem ficou não caiu)
+        c, d = self.duplas_de_duelo()
+        did2 = self.did()
+        self.duelo_antigo(c, d, did2)
+        self.poe_presenca(c, 'caiu', agora_ms - 90000)
+        self.poe_presenca(c, 'voltou', agora_ms - 89000)
+        jogo2 = self.joga_cortado(c, d)
+        status, r = c.pede('POST', '/api/duelo/fechar', self.corpo_duelo(c, d, did2, jogo2, wo=True))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['fase'], r['ranqueado'], r.get('motivo')), ('aguardando', False, 'wo'), r)
+
+    def test_20_wo_sem_prova_so_a_vida_do_replay(self):
+        self.precisa('duelo')
+        a, b = self.duplas_de_duelo()
+        did = self.did()
+        self.duelo_antigo(a, b, did)
+        jogo = self.joga_cortado(a, b)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, wo=True))
+        self.assertEqual((status, r['fase'], r.get('motivo')), (200, 'aguardando', 'wo'), 'nenhuma queda anotada ainda: espera')
+        self.assertTrue(0 < r['esperaMs'] <= 60000, r)
+        self.assertIsNone(self.vida_de(b, 'curandeiro'), 'enquanto espera a prova, ninguém grava')
+        self.sql("UPDATE duelo_espera SET primeiro_ms = primeiro_ms - 61000 WHERE did = ?", did)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, wo=True))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['venc'], r['ranqueado'], r.get('motivo'), r.get('fim')), (None, False, 'wo-sem-prova', 'wo-sem-prova'), r)
+        self.assertEqual((self.save(a)['versao'], self.save(b)['versao']), (1, 1), 'sem prova, a coroa não muda')
+        lb = self.vida_de(b, 'curandeiro')
+        self.assertEqual(lb['hp_fim'], min(jogo['vidaFimB']['curandeiro'], lb['hp_max']), 'só a vida do replay')
+
+    def test_21_wo_com_a_volta_em_60s_nao_prova(self):
+        self.precisa('duelo')
+        a, b = self.duplas_de_duelo()
+        did = self.did()
+        self.duelo_antigo(a, b, did)
+        jogo = self.joga_cortado(a, b)
+        agora_ms = int(time.time() * 1000)
+        self.poe_presenca(b, 'caiu', agora_ms - 100000)
+        self.poe_presenca(b, 'voltou', agora_ms - 55000)                 # voltou 45 s depois
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, wo=True))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['venc'], r['ranqueado'], r.get('motivo')), (None, False, 'wo-sem-prova'), r)
+        self.assertGreater(self.vida_de(b, 'curandeiro')['hp_fim'], 0)
+        # a queda de agora há pouco (sem volta, mas a janela de 60 s ainda aberta): espera o fim da janela
+        c, d = self.duplas_de_duelo()
+        did2 = self.did()
+        self.duelo_antigo(c, d, did2)
+        self.poe_presenca(d, 'caiu', agora_ms - 10000)
+        jogo2 = self.joga_cortado(c, d)
+        status, r = c.pede('POST', '/api/duelo/fechar', self.corpo_duelo(c, d, did2, jogo2, wo=True))
+        self.assertEqual((status, r['fase'], r.get('motivo')), (200, 'aguardando', 'wo'), r)
+        self.assertTrue(40000 <= r['esperaMs'] <= 51000, r)
 
 
 if __name__ == '__main__':

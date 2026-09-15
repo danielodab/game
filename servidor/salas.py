@@ -65,6 +65,10 @@ SALAS_POR_HORA = _do_ambiente('SOTERRA_SALAS_POR_HORA', 240, int)     # bilhetes
 SALA_MIN_S = _do_ambiente('SOTERRA_SALA_MIN_S', 4.0, float)           # nenhuma sala fecha em menos que isto...
 SALA_S_POR_TURNO = _do_ambiente('SOTERRA_SALA_S_POR_TURNO', 0.35, float)   # ...nem em menos que isto por vez do jogador
 SALA_VALIDADE = 6 * 3600          # o bilhete aberto vale 6 h
+# 15/09, A LUTA LARGADA: a luta que a conta deixou aberta no servidor e abandonou há mais que isto não zera ninguém
+# (a vida já teria voltado inteira pela espera; e a sala em grupo cuja ata falhou com a aba de quem lidera fechada não
+# pune o parceiro para sempre) — só fica 'fechada'
+LARGADA_JANELA_MS = 2 * 3600 * 1000
 # 13/09 (dono): "carrega 1 pv a cada 2 segundos" — contado de quando a luta fechou. O MESMO número de
 # js/core/data/consumiveis.js (DATA.vidaEntreSalas.msPorPv). 14/09: a vida é única por herói da conta
 # (vida_heroi) e a janela de 2 h da descida (CARRY_JANELA) saiu — a vida enche sozinha, sem prazo
@@ -150,6 +154,22 @@ CREATE TABLE IF NOT EXISTS autoridade(
   hash          TEXT,
   atualizado_em INTEGER NOT NULL
 );
+-- 15/09, AS FALHAS CONHECIDAS (o dono: "arrume as falhas conhecidas" — fechar a aba no meio de uma derrota fugia da vida
+-- zerada): a LUTA ABERTA de cada conta, uma linha por conta (a sala solo pelo bilhete, a em grupo pelo gid, com os
+-- heróis DELA). 'aberta' até a luta fechar; quem abre outra luta com uma dela ainda aberta no servidor LARGOU a de
+-- antes ('largada': os heróis dela a 0 desde agora); 'registro' = a conta fechou a parte dela na sala em grupo pelo
+-- registro que o jogo guardou (a vida do ponto em que o replay parou). O bilhete de antes do deploy não tem linha:
+-- nunca é largado. Tabela NOVA, nunca ALTER (a coluna estado de salas tem CHECK e não aceitaria 'largada')
+CREATE TABLE IF NOT EXISTS luta_aberta(
+  tipo       TEXT NOT NULL CHECK (tipo IN ('sala', 'grupo')),
+  ref        TEXT NOT NULL,
+  conta_id   INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  herois     TEXT NOT NULL,
+  aberta_ms  INTEGER NOT NULL,
+  estado     TEXT NOT NULL DEFAULT 'aberta' CHECK (estado IN ('aberta', 'fechada', 'registro', 'largada')),
+  PRIMARY KEY (tipo, ref, conta_id)
+);
+CREATE INDEX IF NOT EXISTS luta_aberta_conta ON luta_aberta(conta_id, estado);
 """
 
 
@@ -160,6 +180,14 @@ def _objeto(texto):
     except (TypeError, ValueError):
         return None
     return v if isinstance(v, dict) else None
+
+
+def _lista(texto):
+    try:
+        v = json.loads(texto) if texto else None
+    except (TypeError, ValueError):
+        return []
+    return v if isinstance(v, list) else []
 
 
 def _copia(v):
@@ -628,7 +656,140 @@ class SalasMixin:
             raise Recusa(429, 'salas demais na última hora (máximo %d)' % SALAS_POR_HORA,
                          liberaEm=na_hora[len(na_hora) - SALAS_POR_HORA] + 3600)
 
+    # -- A LUTA LARGADA (15/09) ----------------------------------------------------------------------------------
+    # O dono: "arrume as falhas conhecidas". Fechar a aba no meio de uma derrota (sala solo, Poço, sala em grupo)
+    # fugia da vida zerada: o servidor nunca recebia o fechar e a vida_heroi ficava a de antes da luta. O jogo agora
+    # guarda o registro da luta aberta e a fecha antes de abrir qualquer outra (js/core/autoridade.js); o servidor
+    # cobre quem não fecha — outro aparelho, a memória do navegador limpa, o cliente mexido: a conta que ABRE uma
+    # luta nova (sala, grupo, duelo, Arena, guerra) com uma luta dela ainda aberta no servidor largou a de antes, e os
+    # heróis DELA naquela luta ficam a 0 desde agora (luta_aberta).
+    def _com_largada(self, conta, abre):
+        """A abertura `abre()` (que devolve (status, resposta)) depois de largar as lutas pendentes da conta. A
+        resposta — e também a recusa, como o 409 vida-zero que a própria largada provoca — leva `largada: {herois}`."""
+        largada = self._larga_pendentes(conta) if self._autoridade_ligada() else None
+        try:
+            status, resposta = abre()
+        except Recusa as e:
+            if largada:
+                e.extra['largada'] = largada
+            raise
+        if largada and isinstance(resposta, dict):
+            resposta['largada'] = largada
+        return status, resposta
+
+    def _larga_pendentes(self, conta):
+        """As lutas da conta que seguem abertas no servidor: a que já fechou (ou abandonada há mais de
+        LARGADA_JANELA_MS) só fica 'fechada'; a que segue aberta é LARGADA — os heróis da conta nela a 0 (com o
+        máximo que o juiz dá), a sala solo 'perdida' (a em grupo segue aberta: o parceiro ainda fecha a dele).
+        Devolve {'herois': [...]} ou None."""
+        cid = conta['id']
+        agora_ms = int(time.time() * 1000)
+        largar, velhas = [], []
+        with self.tranca:
+            try:
+                linhas = [dict(r) for r in self.con.execute(
+                    "SELECT * FROM luta_aberta WHERE conta_id = ? AND estado = 'aberta'", (cid,))]
+            except sqlite3.Error:
+                return None
+            for r in linhas:
+                if r['tipo'] == 'sala':
+                    s = self.con.execute("SELECT * FROM salas WHERE bilhete = ?", (r['ref'],)).fetchone()
+                else:
+                    s = self.con.execute("SELECT * FROM salas_grupo WHERE gid = ?", (r['ref'],)).fetchone()
+                if s is None or s['estado'] != 'aberta' or agora_ms - r['aberta_ms'] > LARGADA_JANELA_MS:
+                    velhas.append(r)
+                else:
+                    largar.append((r, dict(s)))
+        if not largar and not velhas:
+            return None
+        maximos = {(r['tipo'], r['ref']): self._larga_maximos(conta, r, s) for r, s in largar}   # o juiz, fora da tranca
+        herois = []
+        with self._escrita():
+            for r in velhas:
+                self.con.execute("UPDATE luta_aberta SET estado = 'fechada' WHERE tipo = ? AND ref = ? AND conta_id = ? "
+                                 "AND estado = 'aberta'", (r['tipo'], r['ref'], cid))
+            t = agora()
+            for r, _ in largar:
+                tabela, chave = ('salas', 'bilhete') if r['tipo'] == 'sala' else ('salas_grupo', 'gid')
+                ainda = self.con.execute("SELECT estado FROM %s WHERE %s = ?" % (tabela, chave), (r['ref'],)).fetchone()
+                aberta = ainda is not None and ainda['estado'] == 'aberta'
+                n = self.con.execute("UPDATE luta_aberta SET estado = ? WHERE tipo = ? AND ref = ? AND conta_id = ? "
+                                     "AND estado = 'aberta'", ('largada' if aberta else 'fechada', r['tipo'], r['ref'],
+                                                               cid)).rowcount
+                if not n or not aberta:
+                    continue                                    # fechou no meio (o outro membro, outra aba)
+                hs = [h for h in _lista(r['herois']) if isinstance(h, str)]
+                self._vida_grava_fim(cid, {h: 0 for h in hs}, maximos.get((r['tipo'], r['ref'])) or {}, agora_ms)
+                if r['tipo'] == 'sala':
+                    self.con.execute("UPDATE salas SET estado = 'perdida', fechada_em = ? WHERE bilhete = ? "
+                                     "AND estado = 'aberta'", (t, r['ref']))
+                self._evento(cid, 'luta-largada', {'tipo': r['tipo'], 'ref': r['ref'], 'herois': hs})
+                herois.extend(h for h in hs if h not in herois)
+        if herois:
+            log.info("luta largada: conta #%d, heróis %s a 0", cid, ', '.join(herois))
+        return {'herois': herois} if herois else None
+
+    def _larga_maximos(self, conta, r, s):
+        """FORA da tranca: {heroId: PV máximo} dos heróis da conta naquela luta. O juiz refaz a luta SEM lance nenhum
+        (a sala nasce e para) e devolve o máximo de cada herói — o mesmo do fechar. Juiz fora do ar: 503 (a abertura
+        espera). Juiz que recusa (o herói saiu da conta, a regra mudou): o máximo da linha que o herói já tem; sem
+        linha, a vida volta cheia em 2 s (a falha não pune)."""
+        cid = conta['id']
+        hs = [h for h in _lista(r['herois']) if isinstance(h, str)]
+        agora_ms = int(time.time() * 1000)
+        pedido, dono = None, None
+        with self.tranca:
+            reserva = {h: v['max'] for h, v in self._vida_de(cid, hs, agora_ms).items()}
+            if r['tipo'] == 'sala':
+                estado = self._estado_ler(cid)
+                if estado is not None:
+                    pedido = {'conta': {'id': cid, 'gm': bool(conta['gm'])},
+                              'bilhete': {'dungeonId': s['dungeon'], 'roomIndex': s['sala'], 'dificuldade': s['dificuldade'],
+                                          'semente': s['semente'], 'herois': _lista(s['herois']),
+                                          'carry': _objeto(s['carry'])},
+                              'lances': [], 'hashFinal': None, 'progress': estado['progress'], 'db': estado['db'],
+                              'contexto': {'agoraMs': agora_ms, 'fatores': {},
+                                           'guilda': {'bonusXp': False, 'bonusDrop': False, 'dizimo': 0}}}
+            else:
+                membros = []
+                for p in _lista(s['party']):
+                    c = self.con.execute("SELECT * FROM contas WHERE id = ?", (p.get('conta'),)).fetchone() \
+                        if isinstance(p, dict) else None
+                    e = self._estado_ler(c['id']) if c is not None else None
+                    if c is None or e is None:
+                        membros = None
+                        break
+                    if c['id'] == cid:
+                        dono = p.get('dono')
+                    membros.append({'conta': {'id': c['id'], 'gm': bool(c['gm'])}, 'dono': p.get('dono'),
+                                    'herois': p.get('herois'), 'progress': e['progress'], 'db': e['db'],
+                                    'guilda': {'bonusXp': False, 'bonusDrop': False, 'dizimo': 0}})
+                if membros and dono:
+                    pedido = {'membros': membros,
+                              'ata': {'dungeonId': s['dungeon'], 'roomIndex': s['sala'], 'dificuldade': s['dificuldade'],
+                                      'semente': s['semente'], 'carry': _objeto(s['carry'])},
+                              'lances': [], 'hashFinal': None, 'contexto': {'agoraMs': agora_ms, 'fatores': {}}}
+        if pedido is None:
+            return reserva
+        try:
+            saida = self.juiz.pede('POST', '/sala/fecha' if r['tipo'] == 'sala' else '/grupo/fecha', pedido)
+        except Recusa as e:
+            if e.status == 422:
+                return reserva
+            raise
+        mx = saida.get('vidaMax') if isinstance(saida, dict) and isinstance(saida.get('vidaMax'), dict) else {}
+        fora = dict(reserva)
+        for h in hs:
+            v = mx.get(h if r['tipo'] == 'sala' else '%s:%s' % (dono, h))
+            if _inteiro_puro(v) and v >= 1:
+                fora[h] = v
+        return fora
+
     def sala_abrir(self, conta, corpo):
+        # 15/09: a luta que a conta deixou aberta no servidor fica largada antes (_com_largada)
+        return self._com_largada(conta, lambda: self._sala_abrir(conta, corpo))
+
+    def _sala_abrir(self, conta, corpo):
         cid = conta['id']
         dungeon, sala = corpo.get('dungeonId'), corpo.get('roomIndex')
         dificuldade, herois = corpo.get('dificuldade'), corpo.get('herois')
@@ -669,6 +830,10 @@ class SalasMixin:
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aberta')",
                 (bilhete, cid, dungeon, sala, dificuldade, semente, json.dumps(herois),
                  json.dumps(carry) if carry is not None else None, t))
+            # 15/09: a luta aberta da conta — quem abrir outra sem fechar esta a larga (_larga_pendentes)
+            self.con.execute("INSERT OR REPLACE INTO luta_aberta(tipo, ref, conta_id, herois, aberta_ms, estado) "
+                             "VALUES ('sala', ?, ?, ?, ?, 'aberta')",
+                             (bilhete, cid, json.dumps(herois), int(time.time() * 1000)))
         return 200, {'ok': True, 'bilhete': bilhete, 'semente': semente, 'carry': carry}
 
     # -- POST /api/sala/fechar (§4.2) -----------------------------------------------------------

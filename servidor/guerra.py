@@ -308,6 +308,10 @@ class GuerraMixin:
 
     # -- POST /api/guerra/inscrever ------------------------------------------------------------------------
     def guerra_inscrever(self, conta, corpo):
+        # 15/09: a luta que a conta deixou aberta no servidor fica largada antes (salas.py, _com_largada)
+        return self._com_largada(conta, lambda: self._guerra_inscrever(conta, corpo))
+
+    def _guerra_inscrever(self, conta, corpo):
         cid = conta['id']
         pid = corpo.get('parceiro')
         if not _inteiro_puro(pid) or pid < 1:
@@ -343,6 +347,9 @@ class GuerraMixin:
 
     # -- POST /api/guerra/juntar ----------------------------------------------------------------------------
     def guerra_juntar(self, conta, corpo):
+        return self._com_largada(conta, lambda: self._guerra_juntar(conta, corpo))   # 15/09: a largada antes
+
+    def _guerra_juntar(self, conta, corpo):
         cid = conta['id']
         dono = _dono(corpo.get('dono'), 'dono')
         if not self._autoridade_ligada():
@@ -372,6 +379,9 @@ class GuerraMixin:
 
     # -- POST /api/guerra/confirmar ---------------------------------------------------------------------------
     def guerra_confirmar(self, conta, corpo):
+        return self._com_largada(conta, lambda: self._guerra_confirmar(conta, corpo))   # 15/09: a largada antes
+
+    def _guerra_confirmar(self, conta, corpo):
         cid, agora_ms = conta['id'], _ms()
         pronta = None
         with self._escrita():

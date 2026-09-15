@@ -53,8 +53,22 @@ function fechaDuelo(corpo) {
     A: { vidaFim: E.vidaDoLado(r.estado, 'player'), vidaMax: vidaMaxDoLado(r.estado, 'player') },
     B: { vidaFim: E.vidaDoLado(r.estado, 'enemy'), vidaMax: vidaMaxDoLado(r.estado, 'enemy') }
   };
-  const venc = FIM[r.fase] || null;
-  const saida = { ok: true, fase: r.fase, venc, ranqueado: !!venc, turnosJogador: r.turnosJogador };
+  let venc = FIM[r.fase] || null;
+  let fase = r.fase;
+  /* 15/09, AS FALHAS CONHECIDAS (o dono: "arrume as falhas conhecidas" — sair do duelo antes do fim fugia da
+   * consequência). `perdeu` ('A' | 'B') é o lado que a API decidiu que perde um duelo SEM fim no replay: o que
+   * DESISTIU (declarado pela conta dele mesma) ou o que SUMIU com a queda provada pelo relé (servidor/presenca.py).
+   * O replay segue sendo o juiz dos lances até ali (os mesmos hashes); quem perde assim sai com TODOS os heróis a
+   * 0 e o outro com a vida em que o replay parou. Duelo que acabou de verdade no replay ignora o `perdeu`. */
+  const perdeu = (c.perdeu === 'A' || c.perdeu === 'B') ? c.perdeu : null;
+  if (!venc && perdeu) {
+    venc = perdeu === 'A' ? 'B' : 'A';
+    fase = venc === 'A' ? 'won' : 'lost';
+    const v = vida[perdeu], zerada = {};
+    Object.keys(v.vidaFim || {}).concat(Object.keys(v.vidaMax || {})).forEach((h) => { zerada[h] = 0; });
+    v.vidaFim = zerada;
+  }
+  const saida = { ok: true, fase, venc, ranqueado: !!venc, turnosJogador: r.turnosJogador, forcado: !!(perdeu && venc && !FIM[r.fase]) };
   if (!venc) {
     // não terminou (desistência, W.O., queda): não é resultado de arena — a Brasa não muda (a vida sim)
     lados.forEach((x) => {

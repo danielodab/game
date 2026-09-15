@@ -1787,9 +1787,22 @@ var JOGO = (typeof window !== 'undefined')
     if (!s || typeof s.api !== 'function') return Promise.resolve({ ok: false, status: 0, erro: 'sem sessão' });
     var op = { method: metodo };
     if (corpo !== undefined) op.body = corpo;
+    // 15/09, a luta largada: a ABERTURA na Arena ou na guerra espera a luta que ficou aberta fechar (autoridade.js) —
+    // só quando há uma pendente (sem ela o pedido sai na hora, como antes) — e o servidor que largou uma luta de antes
+    // vira o aviso curto
+    var A = JOGO.Autoridade;
+    var abre = /\/(inscrever|desafiar|juntar|confirmar)$/.test(rota);
+    var pendente = false;
+    try { pendente = !!(abre && A && A.fechaPendente && A.lutaAberta && A.ligada && A.ligada() && A.lutaAberta()); } catch (eP) {}
     try {
-      return Promise.resolve(s.api(rota, op)).then(function (r) { return r || { ok: false, status: 0 }; },
-                                                   function () { return { ok: false, status: 0, erro: 'o servidor não respondeu' }; });
+      var ida = pendente
+        ? Promise.resolve(A.fechaPendente()).then(null, function () { return null; }).then(function () { return s.api(rota, op); })
+        : Promise.resolve(s.api(rota, op));
+      return ida
+        .then(function (r) {
+          try { if (A && A.notaLargada) A.notaLargada(r); } catch (eL) {}
+          return r || { ok: false, status: 0 };
+        }, function () { return { ok: false, status: 0, erro: 'o servidor não respondeu' }; });
     } catch (e) { return Promise.resolve({ ok: false, status: 0, erro: 'o servidor não respondeu' }); }
   }
   function adota(r, era) {

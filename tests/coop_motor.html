@@ -1237,6 +1237,21 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
           ra.oponente && ra.minhaDupla.join(',') === 'espadachim,arqueiro' && ra.duplaDele.join(',') === 'curandeiro,bruxo' && !!ra.clima,
           JSON.stringify(ra));
 
+    // 15/09 (as falhas conhecidas): o W.O. e a desistência fecham no servidor — uma Autoridade espiã em cada cliente
+    function espiaAutoridade(id, conta, contaDele) {
+      var c = cli[id], chamadas = [];
+      c.J.Autoridade = {
+        ligada: function () { return true; },
+        fechaDuelo: function (corpo, op) {
+          chamadas.push({ corpo: JSON.parse(JSON.stringify(corpo)), op: op ? JSON.parse(JSON.stringify(op)) : null });
+          return Promise.resolve({ ok: true, fase: 'lost', venc: null, ranqueado: false });
+        }
+      };
+      c.J.Sessao = { contaId: function () { return conta; } };
+      c.J.Rede.pares = function () { return [{ id: id === 'ana' ? 'bia' : 'ana', nuvem: contaDele }]; };
+      return chamadas;
+    }
+    var fechaA = espiaAutoridade('ana', 11, 22), fechaB = espiaAutoridade('bia', 22, 11);
     duelo('ana-d2', 5555, ['espadachim'], ['curandeiro']);
     ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
     ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 3; }, 400);
@@ -1248,6 +1263,14 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
           tela('ana') === 'duelFim' && (ana.w.__pvp[0] || {}).resultado === 'vitoria-wo' && relogio.t - tWo >= 55000,
           ((ana.w.__pvp[0] || {}).resultado || 'nada') + ' em ' + Math.round((relogio.t - tWo) / 1000) + ' s');
     bia.vivo = true;
+    var woA = fechaA.filter(function (x) { return x.corpo.did === 'ana-d2'; });
+    check('K11 · 15/09: quem venceu por W.O. declara ao servidor (wo: true), com os lances e as duas contas',
+          woA.length === 1 && woA[0].corpo.wo === true && !woA[0].corpo.desistiu && woA[0].corpo.lances.length > 0 &&
+          woA[0].corpo.A.conta === 11 && woA[0].corpo.B.conta === 22 &&
+          (woA[0].corpo.hashFinal === null || typeof woA[0].corpo.hashFinal === 'number'),
+          JSON.stringify(woA.map(function (x) { return { wo: x.corpo.wo, d: x.corpo.desistiu, n: x.corpo.lances.length, h: x.corpo.hashFinal }; })));
+    check('K11 · quem sumiu não fecha o W.O. contra ninguém', !fechaB.some(function (x) { return x.corpo.did === 'ana-d2'; }),
+          JSON.stringify(fechaB.map(function (x) { return x.corpo.did; })));
 
     duelo('ana-d3', 777, ['arqueiro'], ['bruxo']);
     ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
@@ -1258,12 +1281,24 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     check('K10 · desistir é derrota: quem desiste perde, a outra vence',
           (bia.w.__pvp[0] || {}).resultado === 'derrota-rede' && (ana.w.__pvp[0] || {}).resultado === 'vitoria-rede',
           (ana.w.__pvp[0] || {}).resultado + ' × ' + (bia.w.__pvp[0] || {}).resultado);
+    var dsB = fechaB.filter(function (x) { return x.corpo.did === 'ana-d3'; });
+    var dsA = fechaA.filter(function (x) { return x.corpo.did === 'ana-d3'; });
+    var hashDepois = null;
+    try { hashDepois = ana.J.Engine.hash(ana.J.Game.state); } catch (eH) {}
+    check('K11 · quem desiste declara ao servidor UMA vez (desistiu: true, o lado dele, keepalive): o fim não fecha de novo',
+          dsB.length === 1 && dsB[0].corpo.desistiu === true && dsB[0].corpo.lado === 'B' && !dsB[0].corpo.wo &&
+          !!(dsB[0].op && dsB[0].op.keepalive) && dsB[0].corpo.lances.length > 0,
+          JSON.stringify(dsB.map(function (x) { return { d: x.corpo.desistiu, l: x.corpo.lado, op: x.op }; })));
+    check('K11 · quem recebe a desistência fecha sem declarar nada (nem desistiu, nem wo), com o hash de ANTES do encerra',
+          dsA.length === 1 && !dsA[0].corpo.desistiu && !dsA[0].corpo.wo && dsA[0].corpo.hashFinal !== hashDepois,
+          JSON.stringify(dsA.map(function (x) { return { d: x.corpo.desistiu, w: x.corpo.wo, h: x.corpo.hashFinal, depois: hashDepois }; })));
     check('achado 20 · duelo pela Rede não rende nada que vire moeda: nenhum treino de guilda pago, nos dois lados, em 3 duelos (inteiro, W.O. e desistência no 2º turno)',
           treinos20 === 0 && ana.w.__pvp.length > 0 && bia.w.__pvp.length > 0, treinos20 + ' treino(s) pago(s)');
     ['ana', 'bia'].forEach(function (id) { delete cli[id].J.Guilda; });
     check('K10 · dupla com o Mestre ou feitiço desconhecido não abre duelo',
           ana.J.Coop.iniciaDuelo({ did: 'x', semente: 1, duplaA: [{ classId: 'gm', level: 1, spells: [] }], duplaB: [ana.J.Coop.payloadMeu('espadachim')], eu: 'A', oponente: { id: 'bia' } }) === false);
 
+    ['ana', 'bia'].forEach(function (id) { delete cli[id].J.Autoridade; delete cli[id].J.Sessao; delete cli[id].J.Rede.pares; });
     check('nenhum erro de script nos dois clientes', !erros.length, erros.slice(0, 4).join(' | '));
   }
 

@@ -697,6 +697,15 @@ var JOGO = (typeof window !== 'undefined')
         envia('ata', S.ata);
       }
     }
+    // 15/09, a luta largada: a ata que falhou e não virou batalha nem com o `dentro` atrasado deixa a sala em grupo
+    // aberta no servidor sem luta nenhuma — quem lidera a fecha (sem lance: a vida de ninguém muda), senão a próxima
+    // luta do parceiro a largaria
+    if (S.ataFalhou && S.ata && S.ata.gid && !S.gidSemLuta && souLider() && !emBatalha() &&
+        ag - (S.ataFalhouEm || 0) > Coop.ATA_TARDE_MS) {
+      S.gidSemLuta = true;
+      var Afl = autoridadeLigada();
+      if (Afl && Afl.fechaGrupo) Afl.fechaGrupo({ gid: S.ata.gid, lances: [], hashFinal: null, fotografada: false });
+    }
     // o parceiro na antessala repete o `pronto` até a ata chegar
     if (S.tipo === 'grupo' && !souLider() && g && g.screen === 'antessala' && !S.bid && ag >= S.prontoProx) mandaPronto();
     // a parceira que já montou a batalha da ata repete o `dentro` até ouvir a líder
@@ -857,6 +866,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!g || !g.state || S.fim) return;
     S.fimMotivo = 'wo';
     S.tomouAutoridade = true;
+    S.hashAntesDoFim = hashDeRepouso(g.state);   // 15/09: o W.O. declarado refaz os lances até aqui
     avisa(nomeParceiro() + ' saiu da arena — vitória por W.O.', 'ok');
     if (g._encerra) g._encerra(g.meuLado(), 'wo');
   }
@@ -1092,6 +1102,7 @@ var JOGO = (typeof window !== 'undefined')
           muda();
           return;
         }
+        if (Aut.abreLuta) Aut.abreLuta('grupo', r.gid);      // 15/09: a luta aberta de quem lidera, desde o gid
         mandaAta(g, p, meus, pars, r.semente >>> 0, r.carry || null, r.gid);
       });
       muda();
@@ -1127,6 +1138,8 @@ var JOGO = (typeof window !== 'undefined')
     S.bid = bid;
     S.fila = {}; S.log = {}; S.hashes = {}; S.foto = null;
     S.logSrv = []; S.fotografada = false;
+    // 15/09: a sala em grupo com gid do servidor é a luta aberta desta conta até fechar (autoridade.js)
+    anotaLutaGrupo();
     S.buracoDesde = 0; S.sincronizando = false; S.fotoPendente = false; S.fotoDepois = false;
     S.ultimoSinal = agora(); S.turnoDele = 0; S.turnoDeleEm = 0; S.vivoEm = 0;
     S.esperando = null; S.fim = null; S.fimDele = null; S.anotado = false;
@@ -1259,6 +1272,19 @@ var JOGO = (typeof window !== 'undefined')
     if (l.ev != null) c.ev = l.ev;
     if (l.v != null) c.v = l.v;
     if (S.logSrv.length < 6000) S.logSrv.push(c);
+    anotaLutaGrupo();                    // 15/09: o registro da luta aberta acompanha o que o servidor refaz
+  }
+  /* 15/09, A LUTA LARGADA (o dono: "arrume as falhas conhecidas"): o registro da sala em grupo com gid do servidor
+   * (js/core/autoridade.js) — a página que for embora no meio fecha a parte desta conta na volta (`largou`) */
+  function autoridadeLigada() {
+    var A = JOGO.Autoridade;
+    try { return (A && A.ligada && A.ligada()) ? A : null; } catch (e) { return null; }
+  }
+  function anotaLutaGrupo() {
+    if (S.tipo !== 'grupo' || !S.ata || !S.ata.gid || !S.bid) return;
+    var A = autoridadeLigada();
+    if (!A || !A.abreLuta || !A.anotaLuta) return;
+    try { A.abreLuta('grupo', S.ata.gid); A.anotaLuta(S.ata.gid, S.logSrv || []); } catch (e) {}
   }
   function marcaSrv(ev, uid, v) { anotaSrv({ a: 'x', ev: ev, u: uid, v: v, ok: true }); }
   /* o registro para fechar a sala no servidor */
@@ -1736,6 +1762,8 @@ var JOGO = (typeof window !== 'undefined')
       for (var i = 0; i < st.units.length; i++) {
         var x = st.units[i];
         if ((x.kind === 'hero' || x.kind === 'fusion') && x.dono === eu && x.alive && !x.offBoard) {
+          // 15/09: a marca da morte no MEU registro também — é com ele que a minha parte fecha no servidor (`largou`)
+          marcaSrv('morte', x.uid);
           envia('sai', { b: S.bid, u: x.uid });
         }
       }
@@ -1757,6 +1785,12 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (!g || !g.state || S.fim) return false;
     S.fimMotivo = 'desistencia';
+    /* 15/09, AS FALHAS CONHECIDAS (o dono: "arrume as falhas conhecidas"): desistir conta como DERROTA. Quem desiste
+     * declara ao servidor — é contra ele mesmo, então vale — com os lances até aqui e o hash de ANTES do encerra; o
+     * servidor refaz, põe os meus heróis a 0 e, na Arena e no Campo, conta a derrota na Brasa. Com keepalive e a fila de
+     * retentativa da Autoridade: sai mesmo que a página vá embora logo depois. */
+    S.hashAntesDoFim = hashDeRepouso(g.state);
+    fechaDueloNoServidor({ desistiu: true, lado: S.duelo.eu }, S.hashAntesDoFim, { keepalive: true });
     envia('desiste', { b: S.bid, lado: S.duelo.eu });
     if (g._encerra) g._encerra(S.duelo.eu === 'A' ? 'enemy' : 'player', 'desistencia');
     return true;
@@ -1778,6 +1812,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (!g || !g.state) { cancelaDuelo('dentro', true); return; }   // desistiu antes de a minha arena abrir
     S.fimMotivo = 'desistencia';
+    S.hashAntesDoFim = hashDeRepouso(g.state);   // 15/09: o fechar de quem recebeu a desistência refaz até aqui
     avisa(nomeParceiro() + ' desistiu do duelo.', 'ok');
     if (g._encerra) g._encerra(g.meuLado(), 'desistencia');
   }
@@ -1891,6 +1926,65 @@ var JOGO = (typeof window !== 'undefined')
     muda();
     return true;
   };
+  /* 15/09, AS FALHAS CONHECIDAS (o dono: "arrume as falhas conhecidas" — desistir ou sumir do duelo não custava nada).
+   * O hash do estado ANTES do Engine.encerra, para o servidor refazer os lances até ali (a desistência e o W.O.). Só
+   * num ponto de repouso — a vez de gente conectada, ou a colocação —, que é onde o juiz também para depois dos turnos
+   * da IA; no meio de um turno da IA (o mascote, a invocação) vai null e o servidor não confere o fim (os lances
+   * seguem conferidos um a um). */
+  function hashDeRepouso(st) {
+    var e = E();
+    if (!st || !e || !e.hash) return null;
+    if (st.phase === 'playing') {
+      var u = e.activeUnit ? e.activeUnit(st) : null;
+      if (!u || (u.kind !== 'hero' && u.kind !== 'fusion') || !u.dono || u.ia) return null;
+    } else if (st.phase !== 'placing') return null;
+    try { return e.hash(st); } catch (er) { return null; }
+  }
+  Coop._hashDeRepouso = hashDeRepouso;
+  /* o corpo do POST /api/duelo/fechar (sem sessão, ou sem as duas contas conferidas: null) */
+  function corpoDoDuelo(hashFinal, extra) {
+    var Aut = JOGO.Autoridade, arena = S.duelo && S.duelo.arenaSrv, Se = JOGO.Sessao;
+    if (!Aut || !Aut.ligada || !Aut.ligada() || !Aut.fechaDuelo || !arena || !S.parceiro) return null;
+    var ids = function (dp) { return dp.map(function (p) { return p.heroId || p.classId; }); };
+    var souA = arena.eu === 'A';
+    var eu = { conta: Se && Se.contaId ? Se.contaId() : null, dono: meuId(), herois: ids(souA ? arena.duplaA : arena.duplaB) };
+    var ele = { conta: nuvemDe(S.parceiro.id), dono: S.parceiro.id, herois: ids(souA ? arena.duplaB : arena.duplaA) };
+    if (!eu.conta || !ele.conta) return null;
+    // 14/09: o `modo` vai junto — o servidor nunca ranqueia o desafio, e confere a arena e a paridade
+    var c = { did: S.duelo.did, modo: arena.modo || undefined, dungeonId: arena.dungeonId, roomIndex: arena.roomIndex,
+              semente: arena.semente, A: souA ? eu : ele, B: souA ? ele : eu, lances: (S.logSrv || []).slice(),
+              hashFinal: (typeof hashFinal === 'number') ? hashFinal : null, fotografada: !!S.fotografada };
+    for (var k in (extra || {})) if (Object.prototype.hasOwnProperty.call(extra, k)) c[k] = extra[k];
+    return c;
+  }
+  /* Fecha o duelo no servidor UMA vez por sessão (S.fechouSrv): `extra` = {desistiu, lado} | {wo} | {}. A resposta
+   * 'aguardando' pergunta de novo sozinha (Autoridade.fechaDuelo); a de vez traz a vida e a coroa. */
+  function fechaDueloNoServidor(extra, hashFinal, op) {
+    if (S.fechouSrv) return true;
+    var corpo = corpoDoDuelo(hashFinal, extra);
+    if (!corpo) return false;
+    S.fechouSrv = true;
+    var desistiu = !!(extra && extra.desistiu), wo = !!(extra && extra.wo);
+    JOGO.Autoridade.fechaDuelo(corpo, op).then(function (r) {
+      // 14/09: o servidor refez o duelo com a vida que ELE guardou no abrir e gravou a do fim
+      try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
+      if (r && r.ok && r.ranqueado && typeof r.delta === 'number') {
+        avisa('Duelo ranqueado: ' + (r.delta >= 0 ? '+' : '') + r.delta + ' pontos de Brasa.', r.delta >= 0 ? 'ok' : 'info');
+      } else if (r && r.ok && r.motivo === 'teto') {
+        avisa('Este duelo não contou para o ranking (o teto de duelos ranqueados de hoje).', 'info');
+      } else if (r && r.ok && r.motivo === 'paridade') {
+        avisa('Este duelo não valeu coroa: a diferença de nível passou do limite.', 'info');
+      } else if (r && r.ok && (r.motivo === 'sem-partida' || r.motivo === 'dupla' || r.motivo === 'mapa')) {
+        avisa('Este duelo não valeu coroa: o servidor não reconheceu a partida.', 'info');
+      } else if (r && r.ok && wo && r.motivo === 'wo-sem-prova') {
+        avisa('O servidor não viu a queda do outro lado: o W.O. não valeu coroa.', 'info');
+      }
+      if (r && r.ok && desistiu && r.fim === 'desistencia') {
+        avisa('Desistência registrada: os seus heróis saem com a vida a 0.', 'aviso');
+      }
+    });
+    return true;
+  }
   function anotaDuelo() {
     if (S.anotado || !S.fim || !S.duelo) return;
     S.anotado = true;
@@ -1914,38 +2008,22 @@ var JOGO = (typeof window !== 'undefined')
     } catch (e) {}
     /* O DUELO RANQUEADO (13/09, a segurança): com sessão do site, o servidor
      * refaz a arena com as duplas das DUAS contas e o registro de lances, e só
-     * o resultado de lá muda a Brasa — nos dois. W.O., desistência e partida
-     * contestada não ranqueiam. Os tetos por par e por dia são do servidor. */
+     * o resultado de lá muda a Brasa — nos dois. Os tetos por par e por dia são do servidor.
+     * 15/09, AS FALHAS CONHECIDAS: a desistência e o W.O. também fecham, e custam a quem saiu —
+     *   - quem DESISTIU já fechou no Coop.desistir, declarando (desistiu: true);
+     *   - quem RECEBEU a desistência fecha sem declarar nada, com o hash de antes do encerra: o servidor grava a vida
+     *     do replay dos dois e espera a declaração do desistente (a Autoridade pergunta de novo sozinha);
+     *   - quem VENCEU por W.O. declara (wo: true); o servidor só acredita com a queda que o relé anotou;
+     *   - quem PERDEU por W.O. não fecha (quem ficou fecha); a partida contestada segue sem fechar. */
     var vidaNoFechar = false;
     try {
-      var Aut = JOGO.Autoridade, arena = S.duelo.arenaSrv, Se = JOGO.Sessao;
-      if (Aut && Aut.ligada && Aut.ligada() && Aut.fechaDuelo && arena && !wo && !contestado && S.parceiro) {
-        var souA = arena.eu === 'A';
-        var eu = { conta: Se && Se.contaId ? Se.contaId() : null, dono: meuId(),
-                   herois: ids(souA ? arena.duplaA : arena.duplaB) };
-        var ele = { conta: nuvemDe(S.parceiro.id), dono: S.parceiro.id, herois: ids(souA ? arena.duplaB : arena.duplaA) };
-        if (eu.conta && ele.conta) {
-          // 14/09: o `modo` vai junto — o servidor nunca ranqueia o desafio, e confere a arena e a paridade
-          Aut.fechaDuelo({ did: S.duelo.did, modo: arena.modo || undefined, dungeonId: arena.dungeonId,
-                           roomIndex: arena.roomIndex, semente: arena.semente,
-                           A: souA ? eu : ele, B: souA ? ele : eu, lances: (S.logSrv || []).slice(),
-                           hashFinal: f.h, fotografada: !!S.fotografada }).then(function (r) {
-            // 14/09: o servidor refez o duelo com a vida que ELE guardou no abrir e gravou a do fim
-            try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
-            if (r && r.ok && r.ranqueado && typeof r.delta === 'number') {
-              avisa('Duelo ranqueado: ' + (r.delta >= 0 ? '+' : '') + r.delta + ' pontos de Brasa.', r.delta >= 0 ? 'ok' : 'info');
-            } else if (r && r.ok && r.motivo === 'teto') {
-              avisa('Este duelo não contou para o ranking (o teto de duelos ranqueados de hoje).', 'info');
-            } else if (r && r.ok && r.motivo === 'paridade') {
-              avisa('Este duelo não valeu coroa: a diferença de nível passou do limite.', 'info');
-            } else if (r && r.ok && (r.motivo === 'sem-partida' || r.motivo === 'dupla' || r.motivo === 'mapa')) {
-              avisa('Este duelo não valeu coroa: o servidor não reconheceu a partida.', 'info');
-            }
-          });
-          vidaNoFechar = true;
-        }
+      var Aut = JOGO.Autoridade, desist = S.fimMotivo === 'desistencia';
+      if (!contestado) {
+        if (wo) { if (f.venci) vidaNoFechar = fechaDueloNoServidor({ wo: true }, S.hashAntesDoFim); }
+        else if (desist) { vidaNoFechar = f.venci ? fechaDueloNoServidor({}, S.hashAntesDoFim) : !!S.fechouSrv; }
+        else vidaNoFechar = fechaDueloNoServidor({}, f.h);
       }
-      // 14/09: sem o fechar ranqueado (W.O., contestado), a vida de lá é a que ele guardou
+      // 14/09: sem o fechar (contestado, o W.O. contra mim), a vida de lá é a que ele guardou
       if (!vidaNoFechar && Aut && Aut.ligada && Aut.ligada() && JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza();
     } catch (eR) {}
     // 11/09 (achado 20): o duelo pela Rede é AMISTOSO e não rende nada que
@@ -1971,6 +2049,7 @@ var JOGO = (typeof window !== 'undefined')
       var ladoDe = function (x) { return x === 'A' ? 'player' : 'enemy'; };
       if (d.mot === 'desistencia' && d.venc === S.duelo.eu) {
         S.fimMotivo = 'desistencia';
+        S.hashAntesDoFim = hashDeRepouso(g.state);   // 15/09: antes do encerra
         if (g._encerra) g._encerra(g.meuLado(), 'desistencia');
       } else if (d.mot === 'wo' && d.venc === ele && S.religouEm && agora() - S.religouEm <= Coop.WO_MS + Coop.SILENCIO_MS) {
         S.fimMotivo = 'wo';

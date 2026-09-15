@@ -1157,8 +1157,13 @@
         'que ele tiver: quem entra no duelo com a vida na metade luta com a metade.</p>' +
         '<p>A poção não se bebe na batalha: bebe-se <b>fora da luta</b> — na praça, na sala de espera entre as salas e nas telas de fim. ' +
         'Ela cura na hora, sem passar do PV máximo, para não esperar. Herói sem vida só entra numa batalha quando recuperar pelo ' +
-        'menos 1 PV.</p>',
-        'pocao pocoes consumivel consumiveis vida cura mercador banca espera antessala praca regenera duelo');
+        'menos 1 PV.</p>' +
+        // 15/09 (as falhas conhecidas): sair antes do fim não foge da conta
+        '<p>Sair da luta antes do fim não salva a vida. Quem <b>desiste do duelo</b> sai com os heróis a zero (e, na Arena e no ' +
+        'Campo de PvP, perde a coroa como numa derrota); quem some do duelo e não volta em 60 s também — o servidor confere a queda. ' +
+        'Quem fecha o jogo no meio de uma sala continua a luta dali quando voltar: o jogo fecha a sala no ponto em que parou. ' +
+        'Abrir outra luta em outro lugar com a de antes ainda aberta faz os heróis dela voltarem do zero.</p>',
+        'pocao pocoes consumivel consumiveis vida cura mercador banca espera antessala praca regenera duelo desistir abandonar');
     }
 
     var Mi = JG.Missoes;

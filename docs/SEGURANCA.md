@@ -59,7 +59,9 @@ Corpo: `{dungeonId, roomIndex, dificuldade, herois: [heroId, heroId?], versaoReg
 - Confere: calabouço e sala existem (o juiz sabe: `/regras`), `dificuldade ∈
   {facil, normal, dificil}`, heróis são da conta e liberados, teto de bilhetes por
   hora (`SALAS_POR_HORA = 240`).
-- Uma conta tem **um** bilhete aberto: abrir outro vence o anterior.
+- Uma conta tem **um** bilhete aberto: abrir outro vence o anterior. 15/09: antes, a luta que a conta
+  deixou aberta no servidor é LARGADA (os heróis dela a 0; ver §5.2.1, "As falhas conhecidas") — o jogo
+  honesto fecha a dele antes de abrir outra — e a resposta leva `largada: {herois}`.
 - Sorteia `semente` (31 bits, `secrets`) e `bilhete` (token). Guarda
   `salas(bilhete, conta_id, dungeon, sala, dificuldade, semente, herois, carry,
   aberta_em, estado='aberta')`.
@@ -177,9 +179,11 @@ por herói da conta, contínua entre qualquer luta.
   de nível ou trocar peça depois da luta entra sozinho). O relógio é o do servidor.
 - **Quem grava** (hp_fim, hp_max, desde_ms = agora, cura = 0), uma linha por herói na conta DELE,
   sempre que o juiz refez a luta: `sala/fechar` (vitória, derrota e sala largada), `grupo/fechar`
-  (idem; a conta de cada herói sai da party guardada), `duelo/fechar` (ranqueado, empate,
-  desistência/W.O. — o PV em que o replay parou — e acima do teto). NÃO grava: sala recusada
-  (422), grupo `nao-conferida`, duelo fotografado, duelo cujo replay diverge.
+  (idem; a conta de cada herói sai da party guardada; 15/09: `largou` grava só a parte de quem saiu),
+  `duelo/fechar` (ranqueado, empate, acima do teto; 15/09: a desistência declarada e o W.O. provado
+  põem o lado de quem saiu a 0 — ver "As falhas conhecidas") e, 15/09, a **largada** (a abertura de
+  uma luta nova com outra ainda aberta: os heróis dela a 0). NÃO grava: sala recusada (422), grupo
+  `nao-conferida`, duelo fotografado, duelo cujo replay diverge, W.O. esperando a prova.
 - **Quem lê** (a vida de agora, só os feridos): `sala/abrir` (qualquer sala, o Poço inclusive),
   `grupo/abrir` (cada herói pela linha da própria conta, chave `dono:heroId`) e `duelo/abrir`.
   Qualquer herói a 0 PV → 409 `vida-zero` `{heroi, esperaS}`. O juiz (`aplicaCarry` /
@@ -196,6 +200,69 @@ linha = null = cheio); o juiz aplica em `Engine.createDuelSala(…, {seed, vidaA
 primeiro turno e devolve por lado `vidaFim` (`Engine.vidaDoLado`) e `vidaMax`. Um registro jogado com
 outra vida diverge (422). A resposta ganha `vida: {heroId: PV agora}` dos heróis de quem pede.
 Risco aceito: a página de antes (sem `duelo/abrir`) entra cheia — o mesmo que era antes de 14/09.
+
+**AS FALHAS CONHECIDAS (15/09): sair antes do fim não foge mais da consequência.** O dono: "arrume as
+falhas conhecidas". As três eram da mesma família: (1) no duelo em rede quem desistia ou tomava W.O. não
+perdia a vida da luta — o cliente só fechava o duelo sem W.O. nem contestação, e a sincronização trazia a
+vida guardada no `duelo/abrir` por cima do fim; (2) fechar a aba no meio de uma derrota (sala solo, Poço,
+sala em grupo) escapava da vida zerada — o servidor nunca recebia o fechar; (3) no duelo ranqueado a
+desistência e o W.O. não mudavam a Brasa (o juiz, sem `venc`, não mudava nada).
+
+- **A. A desistência é DECLARADA por quem desiste** (é contra ele: vale). `Coop.desistir` chama o
+  `POST /api/duelo/fechar` com `{…, lances até ali, hashFinal, desistiu: true, lado}` antes do
+  `Engine.encerra` (o `hashFinal` é o do estado de antes, num ponto de repouso — a vez de gente ou a
+  colocação, onde o juiz também para; no meio de um turno da IA vai `null`), com `keepalive` e a fila de
+  retentativa da Autoridade. O lado de quem desiste sai da CONTA que pede; `lado` diferente dela = 403
+  `desistencia-alheia`. O juiz (`duelo.js`, `perdeu`) refaz os lances; o replay sem fim com `perdeu`
+  vira a derrota desse lado: TODOS os heróis dele a 0, o outro com a vida do replay, e onde o modo
+  ranqueia (a partida pronta, a paridade e os tetos de sempre) o Elo normal — `fim: 'desistencia'` no
+  resultado. O desafio amistoso: a vida a 0, sem Brasa. Quem RECEBEU a desistência pela Rede fecha sem
+  declarar nada e nunca zera ninguém: o replay sem fim grava a vida do replay dos dois e o duelo fica
+  `aguardando` (`duelo_espera`, motivo `sem-fim`, tabela nova) até `DUELO_ESPERA_MS` = 120 s. A
+  declaração do desistente dentro disso vale e só regrava o lado dele (a 0) e a Brasa; passado o prazo,
+  fica a vida do replay, sem coroa (`sem-confirmacao`). A resposta `aguardando` traz `esperaMs`, e a
+  `Autoridade.fechaDuelo` pergunta de novo sozinha. Desenho: o desistente honesto fecha na hora (mesmo
+  saindo da tela); o receptor honesto não precisa confiar em ninguém; o prazo impede um duelo pendurado
+  para sempre.
+- **B. O W.O. precisa da prova de queda do RELÉ.** O relé (`rele.py`, com `--banco`) grava na tabela nova
+  `rele_presenca(conta_id, evento 'caiu'|'voltou', em_ms)` (`servidor/presenca.py`) quando a ÚLTIMA
+  conexão identificada de uma conta fecha e quando a conta ganha a primeira de novo; a escrita é numa
+  thread, com `mode=rw` (nunca cria o banco), a tabela criada se faltar e a faxina das linhas de mais de
+  24 h. **É o mesmo banco da API**: no Coolify os dois sobem com `--banco /dados/soterra.db`
+  (`entrada.sh`); no VPS, `/var/lib/soterra/soterra.db` nos dois `.service`, os dois como `soterra`. O
+  cliente que ficou, depois do W.O. de 60 s, fecha com `{…, wo: true, lances, hashFinal}`. O servidor
+  procura um `caiu` da conta ausente depois do `duelo_vida.criado_em` daquele did sem `voltou` nos 60 s
+  seguintes: **W.O. confirmado** = `perdeu` = a ausente (os heróis a 0 e, se o modo ranqueia, a derrota),
+  `fim: 'wo'`. Queda anotada há menos de 60 s, ou nenhuma ainda (o relé vê a conexão morta com atraso;
+  espera `WO_ESPERA_MS` = 60 s desde o primeiro pedido) = `aguardando`. Sem prova (a volta dentro dos
+  60 s, ou nada anotado) = só a vida do replay dos dois, sem Brasa, motivo `wo-sem-prova`.
+- **C. A sala abandonada.** O jogo guarda a luta com bilhete (sala solo, Poço) ou gid (sala em grupo) no
+  localStorage da conta (`soterra-luta-aberta-v1` + o sufixo), com os lances a cada lance
+  (`Autoridade.abreLuta/anotaLuta`). Ao abrir o jogo e ANTES de pedir qualquer luta (bilhete, grupo,
+  duelo, Arena, guerra: `Autoridade.fechaPendente`), a luta pendente fecha no servidor com os lances
+  guardados e `hashFinal: null` — a sala para no meio e o servidor grava a vida do ponto em que o replay
+  parou; na sala em grupo, `POST /api/grupo/fechar {…, largou: true}` fecha só a parte desta conta (a sala
+  segue aberta para o parceiro). O abandonar da tela fecha na hora. O bilhete não é mais pedido de
+  antemão na antessala (só no "Entrar na batalha"): bilhete aberto = luta começada. O servidor cobre quem
+  não fecha (outro aparelho, a memória limpa, o cliente mexido): tabela nova `luta_aberta(tipo, ref,
+  conta_id, herois, aberta_ms, estado)`, gravada no `sala/abrir` e no `grupo/abrir` (uma linha por conta).
+  Quando a conta abre uma luta nova (`sala/abrir`, `grupo/abrir`, `duelo/abrir`, `arena/inscrever|desafiar`,
+  `guerra/inscrever|juntar|confirmar`) e uma luta DELA segue aberta no servidor, ela é **largada**: os
+  heróis da conta naquela luta a 0 desde agora (o máximo vem do juiz refazendo a luta sem lance), a sala
+  solo `perdida`, a em grupo segue aberta — e o fechamento do parceiro não regrava os heróis de quem
+  largou (nem de quem fechou pelo registro). A resposta da abertura (e a recusa, como o 409 `vida-zero`
+  que a própria largada provoca) leva `largada: {herois}`, e a HUD avisa "Você saiu da última luta sem
+  terminar: os heróis dela voltam do zero". Luta aberta há mais de 2 h (`LARGADA_JANELA_MS`) só fica
+  fechada: a vida já teria voltado.
+- **Riscos que continuam aceitos:** o cliente MEXIDO que desiste e não declara (o outro lado espera 120 s e
+  fica a vida do replay, sem coroa); o registro truncado de propósito (fechar a sala com os lances até um
+  ponto bom — a vida daquele ponto, nunca acima da de entrada: o mesmo que fechar a aba naquele ponto e
+  voltar); quem fica conectado e parado (sem queda anotada o W.O. não se prova); a queda anotada perdida
+  por banco trancado (falha a favor de quem caiu); o primeiro fechamento com replay torto ou fotografado
+  anula o duelo para os dois (já era assim); o relé do contêiner velho no rolling update não anota; a ata
+  do grupo que falhou com a aba de quem lidera fechada no mesmo instante ainda pode largar o parceiro que
+  abrir outra luta nas 2 h seguintes; o `sendBeacon` não serve (a API autentica pelo cabeçalho
+  `Authorization`) e o `pagehide` não fecha a luta (ele também dispara na ida ao cache de voltar/avançar).
 
 **As três formas de duelo (14/09).** O `modo` viaja no desafio/ataque da Rede, na ata, no Coop e no
 corpo do `POST /api/duelo/fechar` (`desafio | arena | campo`; outro valor = 400). O juiz refaz TODOS
@@ -345,12 +412,19 @@ tudo ou nada).
       e o replay de quatro donos no juiz (`servidor/juiz/guerra.js`, `tests/juiz_guerra.js`), o lockstep de quatro no
       cliente (`tests/guerra_motor.html`), a HUD (`tests/guerra_hud.html`) e o tráfego pelo relé de verdade
       (`tests/guerra_rele_prova.py`)
+- [x] As falhas conhecidas (15/09): a desistência declarada e o W.O. com a prova do relé no duelo
+      (`servidor/grupo.py`, `servidor/juiz/duelo.js`, `servidor/presenca.py`; `tests/grupo_duelo_api.py`,
+      `tests/rele_presenca_prova.py`, K11 de `tests/coop_motor.html`) e a luta largada
+      (`servidor/salas.py`, `js/core/autoridade.js`; `tests/luta_largada_api.py`, `tests/luta_aberta_cliente.js`)
 
 ### Limites conhecidos
 
 - Sala em grupo que precisou de **foto de resgate** (divergência entre os motores) não pode
   ser refeita pelo registro de quem recebeu a foto: vale o registro limpo do outro membro; se
   nenhum dos dois tiver registro limpo, a sala fica **não conferida** e não paga.
-- Duelo que acaba por W.O., desistência ou contestação não ranqueia.
+- Duelo contestado não ranqueia nem fecha. 15/09: a desistência (declarada por quem desiste) e o W.O.
+  (com a queda provada pelo relé) contam como derrota de quem saiu — a vida a 0 e, onde vale coroa, a
+  Brasa; o W.O. sem prova vale só a vida do replay. Os riscos que sobram estão em §5.2.1, "As falhas
+  conhecidas".
 - A configuração de PA/PP do Mestre (`soterra-gm-v1`) mora no navegador: batalha da conta do
   Mestre com PA/PP mudado pode divergir no servidor.

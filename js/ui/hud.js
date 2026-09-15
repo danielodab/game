@@ -9444,7 +9444,9 @@ var JOGO = (typeof window !== 'undefined')
       }));
     } else if (mr === 'duelo') {
       acts.appendChild(btn('Desistir do duelo', 'btn-warn', function () {
-        confirmSheet('Desistir do duelo?', 'Conta como derrota.', function () {
+        // 15/09 (as falhas conhecidas): desistir não foge da consequência — o aviso diz antes
+        confirmSheet('Desistir do duelo?', 'Conta como <b>derrota</b>: os seus heróis saem da luta com a vida a 0 ' +
+          'e, na Arena e no Campo de PvP, a coroa conta a derrota.', function () {
           safe(function () { Cp().desistir(); return true; }, null);
         });
       }));
@@ -11315,10 +11317,14 @@ var JOGO = (typeof window !== 'undefined')
       // 11/09 (revisão): as duas batalhas não bateram (ou chegou um lance/fim que não valia): sem vencedor
       box.appendChild(el('p', 'game-sub', 'As duas batalhas não bateram — o duelo ficou sem vencedor.'));
     } else if (data.wo) {
-      box.appendChild(el('p', 'game-sub', data.venci ? esc(nomeOp) + ' saiu da arena — vitória por W.O.'
-                                                     : 'Você ficou fora da arena — derrota por W.O.'));
+      // 15/09: o W.O. só vale com a queda que o servidor confirma — e aí custa como a desistência
+      box.appendChild(el('p', 'game-sub', data.venci ? esc(nomeOp) + ' saiu da arena — vitória por W.O. (o servidor confere a queda).'
+                                                     : 'Você ficou fora da arena — derrota por W.O.: com a queda confirmada, os seus heróis saem com a vida a 0.'));
     } else if (data.desistencia) {
-      box.appendChild(el('p', 'game-sub', data.venci ? esc(nomeOp) + ' desistiu do duelo.' : 'Você desistiu do duelo.'));
+      // 15/09: desistir conta como derrota — a vida a 0 e, onde vale coroa, a derrota na Brasa
+      var coroa = (data.modo === 'arena' || data.modo === 'campo') ? ' e a coroa conta a derrota' : '';
+      box.appendChild(el('p', 'game-sub', data.venci ? esc(nomeOp) + ' desistiu do duelo — conta como derrota dele.'
+                                                     : 'Você desistiu do duelo — conta como derrota: os seus heróis saem com a vida a 0' + coroa + '.'));
     }
     var nomes = function (lista) {
       return (lista || []).map(function (c) {

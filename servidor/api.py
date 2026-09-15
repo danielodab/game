@@ -77,7 +77,8 @@ from grupo import ESQUEMA_GRUPO, GrupoMixin   # 13/09: a sala em grupo e o duelo
 from arena import ESQUEMA_ARENA, ArenaMixin   # 14/09: a fila da Arena (o PvP ranqueado por inscrição)
 from guerra import ESQUEMA_GUERRA, GuerraMixin   # 15/09: a guerra de guilda 2x2 na Sede (a fila e o XP da guilda)
 from mercado import ESQUEMA_MERCADO, MercadoMixin   # 13/09: o mercadinho entre contas, com propostas
-import nomes                     # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
+from presenca import ESQUEMA_PRESENCA   # 15/09: a queda e a volta de cada conta, contadas pelo Relé (a prova do W.O.)
+import nomes                    # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
 log = logging.getLogger("api")
 
@@ -747,6 +748,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self.con.executescript(ESQUEMA_AMIGOS)   # 13/09: amigos e inimigos (amigos.py) — idem; o relé lê só para ler
         self.con.executescript(ESQUEMA_ARENA)    # 14/09: a fila da Arena (arena.py) — idem
         self.con.executescript(ESQUEMA_GUERRA)   # 15/09: a guerra de guilda 2x2 (guerra.py) — idem
+        self.con.executescript(ESQUEMA_PRESENCA)  # 15/09: a presença que o Relé grava (presenca.py) — idem
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)

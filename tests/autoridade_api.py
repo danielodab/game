@@ -256,6 +256,12 @@ class ProvaDaAutoridade(unittest.TestCase):
     def sala(self, bilhete):
         return self.sql("SELECT * FROM salas WHERE bilhete = ?", bilhete)[0]
 
+    def fecha_lutas(self, c):
+        """15/09, a luta largada: o jogo honesto fecha a luta aberta antes de abrir outra (o registro, js/core/autoridade.js).
+        As provas que só conferem a ABERTURA soltam à mão a luta de antes — senão o servidor a largaria (os heróis a 0;
+        a prova da largada é tests/luta_largada_api.py)."""
+        self.sql("UPDATE luta_aberta SET estado = 'fechada' WHERE conta_id = ? AND estado = 'aberta'", c.conta['id'])
+
     def eventos(self, c, tipo):
         return self.sql("SELECT dados FROM eventos WHERE conta_id = ? AND tipo = ?", c.conta['id'], tipo)
 
@@ -283,6 +289,7 @@ class ProvaDaAutoridade(unittest.TestCase):
         self.assertTrue(isinstance(r1['semente'], int) and 0 <= r1['semente'] < 2 ** 31, r1)
         self.assertIsNone(r1['carry'])
         self.assertEqual(self.sala(r1['bilhete'])['estado'], 'aberta')
+        self.fecha_lutas(c)
         r2 = self.abre(c, semente=None, herois=['sumo', 'curandeiro'], dificuldade='dificil')
         self.assertNotEqual(r1['bilhete'], r2['bilhete'])
         self.assertEqual(self.sala(r1['bilhete'])['estado'], 'vencida', 'um bilhete aberto por conta')
@@ -299,6 +306,7 @@ class ProvaDaAutoridade(unittest.TestCase):
         self.poe_estado(c)
         for _ in range(3):
             self.abre(c, semente=None)
+            self.fecha_lutas(c)
         status, r = c.pede('POST', '/api/sala/abrir', {'dungeonId': 'cistern', 'roomIndex': 0, 'herois': ['sumo']})
         self.assertEqual(status, 429, r)
         self.assertGreater(r['liberaEm'], time.time())

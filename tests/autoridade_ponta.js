@@ -134,12 +134,23 @@ async function pede(base, metodo, rota, corpo, token) {
     check('o jogo adota o estado do servidor (mesmo hash)', A.hashLocal() === hashSrv0,
           A.hashLocal() + ' × ' + hashSrv0);
 
+    /* 15/09, a vida única: a sala perdida deixa o herói a 0 no servidor, e a próxima tentativa esbarrava no 409
+     * vida-zero (e com 1 PV perdia de novo). A prova é da economia, não da espera: o banco descartável dela
+     * devolve a vida cheia, depois que o fechar da sala perdida (assíncrono, chega depois do restart) assentou */
+    const vidaCheia = async () => {
+      await espera(400);
+      cp.execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); '
+        + 'c.execute("DELETE FROM vida_heroi"); c.execute("DELETE FROM luta_aberta"); c.commit()',
+        path.join(pasta, 'dados', 'soterra.db')]);
+      if (J.Vida && J.Vida._zera) J.Vida._zera();
+    };
     // ---- uma sala pela tela
     let venceu = false;
     for (let tentativa = 0; tentativa < 8 && !venceu; tentativa++) {
       G.dificuldade = 'normal';
       G.startRun(['sumo'], 'cistern', {});
       for (let i = 0; i < 50 && G.screen === 'antessala'; i++) {
+        if (G.esperaVida()) { await vidaCheia(); continue; }
         const r = G.entrarNaSala();
         if (G.screen === 'battle') break;
         await espera(r === 'esperando' ? 100 : 50);
@@ -162,7 +173,13 @@ async function pede(base, metodo, rota, corpo, token) {
       }
       for (let i = 0; i < 200 && G.screen === 'battle'; i++) { G.update(0.016); await espera(25); }
       venceu = G.screen === 'roomClear' || G.screen === 'dungeonComplete';
-      if (!venceu) G.restart('hub');
+      if (!venceu) {
+        G.restart('hub');
+        /* 15/09, a vida única: a sala perdida deixa o herói a 0 no servidor, e a próxima tentativa esbarrava no
+         * 409 vida-zero (e com 1 PV perdia de novo). A prova é da economia, não da espera: o banco descartável
+         * dela devolve a vida cheia entre as tentativas, e a Vida local esquece o registro */
+        await vidaCheia();
+      }
     }
     check('o jogo vence uma sala com bilhete e o servidor paga', venceu, G.screen + ' ' + JSON.stringify(J.UI.toasts.slice(-3)));
     const srv1 = await pede(base, 'GET', '/api/save', undefined, token);
