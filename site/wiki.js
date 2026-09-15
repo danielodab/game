@@ -1124,8 +1124,13 @@
         Math.round(num(G.BONUS_MS) / 3600000) + ' h de +' + Math.round((num(G.BONUS_FATOR) - 1) * 100) + '% de saque ou de experiência para todos os membros.</li>' +
         '<li>Doar vinténs à guilda (a oferenda) dá experiência a ela; quem lidera pode cobrar um dízimo da experiência dos membros, de até ' + num(G.DIZIMO_MAX) + '%.</li>' +
         '<li>O banco da guilda empresta peças entre os membros: um empréstimo por vez, devolve quem pegou, e o dono retira quando quiser.</li>' +
-        '<li>O duelo de treino paga ' + num(G.XP_TREINO) + ' de experiência e ' + num(G.MOEDA_TREINO) + ' moeda à guilda.</li></ul>' : ''),
-      'guilda insignia cofre banco oferenda dizimo');
+        '<li>O duelo de treino paga ' + num(G.XP_TREINO) + ' de experiência e ' + num(G.MOEDA_TREINO) + ' moeda à guilda.</li>' +
+        // 15/09: a guerra de guilda 2×2 na Sede (os números espelham servidor/guerra.py e JOGO.Guerra)
+        '<li><b>Guerra de Guilda 2×2</b>, na Sede: dois jogadores da mesma guilda, em grupo, cada um com os seus dois heróis, entram na fila; ' +
+        'o jogo acha dois de outra guilda (até ' + num((JG.Guerra && JG.Guerra.PARIDADE) || 10) + ' níveis de diferença entre os heróis mais fortes) e os quatro confirmam em 30 s. ' +
+        'As duplas dos adversários só aparecem na luta, no Salão da Sede. A guilda que vence ganha ' + num((JG.Guerra && JG.Guerra.XP) || 40) +
+        ' de experiência; quem perde não perde nada, e a coroa não muda. Empate e W.O. não rendem, e o servidor segura quantas guerras valem por dia entre as mesmas guildas.</li></ul>' : ''),
+      'guilda insignia cofre banco oferenda dizimo guerra sede 2x2');
 
     var M = JG.Mercado;
     if (M) {

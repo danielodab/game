@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a guerra de guilda 2×2 na HUD (390x844)</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:390px;height:844px;border:0;background:#000}
+  #saida{position:fixed;left:390px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- A GUERRA DE GUILDA 2×2 NA TELA (15/09, o dono: "a guerra de guild que é 2x2 de cada guild é na sede de guild, isso dá
+     pontos de experiência para guild"). O index.html de verdade num quadro de 390x844 com o save na memória. A Rede é um
+     dublê (a Bia é a parceira de grupo, com a conta 22), a Sessão do site e o servidor da guerra são de mentira (as rotas
+     /api/guerra/* respondem daqui). Cobra, na tela:
+       - o bloco da guerra no painel da Sede: sem a conta do site (o porquê), sem grupo ("forme um grupo de 2");
+       - quem SEGUE o grupo: "quem lidera inscreve"; o convite chega (o aviso) e "Escolher a minha dupla" abre a ficha
+         dos dois heróis em ordem e manda o juntar;
+       - quem LIDERA: "Inscrever o grupo na guerra" → a mesma ficha → o POST com o parceiro (a conta que o relé conferiu),
+         os dois em ordem e o dono; o aviso à Bia pelo trilho do grupo; "esperando Bia escolher a dupla dele"; a fila com
+         o relógio;
+       - "Adversários encontrados: <guilda> — Confirmar (30 s)" com os NOMES dos dois (e nenhuma dupla deles);
+       - confirmado: a ata vai ao Coop, a batalha abre com as duas guildas e os quatro nomes no topo (dentro da tela do
+         celular), o menu tem "Sair da guerra";
+       - o fim: "A guilda <nome> venceu!", "conferindo…" e, com a resposta do servidor, "+40 XP para a guilda" — ou o
+         porquê de não render (o teto). -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('  · ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 8000)) return r(false);
+        setTimeout(volta, 60);
+      })();
+    });
+  }
+
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?mobile=1&sandbox=1&snap=1&guerra-hud';
+  var w, doc, J, R, U, toastEl, ids = [];
+  var saidas = [], pedidos = [], respostas = {};
+  var perfilBia = { id: 'bia', nome: 'Bia', titulo: '', classe: 'arqueiro', sala: null, x: 1.2, z: 6.4, nuvem: 22, zona: 'praca', luta: false, resumo: { forte: 10 } };
+
+  function telaAberta() { return doc.querySelector('#ui-root .ui-screen.is-on'); }
+  function painelAberto() { var s = telaAberta(); return s ? s.querySelector('.hub-painel') : null; }
+  function painelTxt() { var p = painelAberto(); return (p && !p.classList.contains('is-off')) ? p.textContent : ''; }
+  function fichaAberta() { return doc.querySelector('.ui-sheet.is-on'); }
+  function tituloFicha() { var f = fichaAberta(); var h = f && f.querySelector('h2'); return h ? h.textContent : ''; }
+  function toastTxt() { return (toastEl && toastEl.classList.contains('is-on')) ? toastEl.textContent : ''; }
+  function botao(caixa, re) {
+    var b = null;
+    [].forEach.call(caixa ? caixa.querySelectorAll('button') : [], function (x) { if (!b && re.test(x.textContent || '')) b = x; });
+    return b;
+  }
+  function ultPedido(rota) { for (var i = pedidos.length - 1; i >= 0; i--) if (pedidos[i].rota === rota) return pedidos[i]; return null; }
+  function ultSaida(tipo, acao) { for (var i = saidas.length - 1; i >= 0; i--) if (saidas[i].tipo === tipo && saidas[i].acao === acao) return saidas[i]; return null; }
+  var SEDE = { tipo: 'sede', id: 'sede', nome: 'Sede das Guildas' };
+  var GUILDAS = { A: { id: 1, nome: 'Lanças do Norte', emblema: '⚔' }, B: { id: 2, nome: 'Raízes Fundas', emblema: '☘' } };
+  function agora() { return Date.now(); }
+
+  function dubles() {
+    R = J.Rede;
+    R.entrar = function () { return true; };
+    R.meuId = function () { return 'ana'; };
+    R.meuCx = function () { return 'cxana'; };
+    R.minhaSala = function () { return null; };
+    R.pares = function () { return [perfilBia]; };
+    R.nomeDe = function (id) { return { bia: 'Bia', cris: 'Cris', duda: 'Duda' }[id] || 'Aventureiro'; };
+    R.privado = function () { return true; };
+    R.dirige = function (tipo, para, acao, dados) { saidas.push({ tipo: tipo, para: para, acao: acao, dados: dados }); return true; };
+    R.sussurrar = function () { return true; };
+    R.ultimaRecusa = function () { return null; };
+    R.vigia = function () {}; R.solta = function () {};
+    R.falar = function () { return true; };
+    R.mover = function () {};
+    R.guildaManda = function () {};
+    R.estadoConexao = function () { return 'ligado'; };
+    R.transporte = function () { return 'ws'; };
+    R._tique = function () { return false; };
+    J.Sessao.ativa = function () { return true; };
+    J.Sessao.api = function (rota, op) {
+      pedidos.push({ rota: rota, metodo: op && op.method, corpo: op && op.body ? JSON.parse(JSON.stringify(op.body)) : null });
+      var r = respostas[rota];
+      return Promise.resolve(typeof r === 'function' ? r(op) : (r || { ok: false, status: 404, erro: 'rota de mentira' }));
+    };
+    if (J.Autoridade) J.Autoridade.ligada = function () { return true; };
+    J.Guerra.CONSULTA_MS = 300;
+    J.Guerra.CONSULTA_GRUPO_MS = 300;
+    respostas['/api/guerra/estado'] = function () { return { ok: true, status: 200, agoraMs: agora(), fase: 'livre' }; };
+  }
+  function injetaGrupo(lider) {
+    var s = J.Grupo._st();
+    s.fase = 'formado'; s.gid = 'ana-guerra1'; s.chave = 'chaveguerra:kbkbkbkb'; s.v = 1;
+    s.lider = lider; s.pendente = null;
+    s.par = { id: 'bia', cx: 'cxbia', nome: 'Bia', heroi: { classId: 'arqueiro', element: 'ar', level: 14 }, herois: [], on: true, sumidoDesde: null };
+    try { J.Grupo.aoMudar(J.Grupo.estado()); } catch (e) { diz('aoMudar: ' + e); }
+  }
+  function escolheNaFicha(ordem, rotulo) {
+    var f = fichaAberta();
+    [].forEach.call(f.querySelectorAll('.av-carta.is-on'), function (c) { c.click(); });
+    ordem.forEach(function (h) { fichaAberta().querySelector('.av-carta[data-heroi="' + h + '"]').click(); });
+    botao(fichaAberta(), rotulo).click();
+  }
+
+  var t0 = Date.now();
+  (function aguarda() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Models3D && J.Models3D.isReady() &&
+                  J.Renderer && J.Renderer.isReady() && J.UI && J.Game && J.Grupo && J.Guerra && J.Coop && J.Hub && J.DB && J.Sessao);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s (ou falta JOGO.Guerra)');
+      return setTimeout(aguarda, 250);
+    }
+    w = quadro.contentWindow; doc = quadro.contentDocument;
+    U = J.UI;
+    toastEl = doc.querySelector('.ui-toast');
+    diz('o jogo abriu em ' + Math.round((Date.now() - t0) / 1000) + ' s');
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    while (ids.length < 2) { P.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    ids = ids.slice(0, 2);
+    U.selection(ids.slice());
+    dubles();
+    J.DB.batizar('Ana').then(function () {
+      U.showScreen('hub');
+      return ate(function () { return !!painelAberto() && typeof J.Hub.aoAproximar === 'function'; }, 20000);
+    }).then(function (ok) {
+      check('(a praça abriu)', ok);
+      return semSessaoESemGrupo();
+    }).then(quemSegue).then(quemLidera).then(casada).then(batalha).then(fimDaGuerra)
+      .then(function () { fim(); }, function (e) { fim('erro: ' + (e && e.stack || e)); });
+  })();
+
+  // ---------------------------------------------------------------- sem conta, sem grupo
+  function semSessaoESemGrupo() {
+    var ses = J.Sessao.ativa;
+    J.Sessao.ativa = function () { return false; };
+    J.Hub.aoAproximar(SEDE);
+    var t = painelTxt();
+    check('sede · o bloco "Guerra de Guilda 2×2" explica (2 contra 2, oito heróis, +40 XP, a coroa não muda)',
+          /Guerra de Guilda 2×2/.test(t) && /oito heróis/.test(t) && /\+40 XP/.test(t) && /coroa não muda/.test(t), t.slice(0, 260));
+    check('sede · sem a conta do site a guerra aparece desligada com o porquê (e sem botão de inscrever)',
+          /precisa da sua conta do site/.test(t) && !botao(painelAberto(), /Inscrever o grupo/), t.slice(0, 260));
+    J.Sessao.ativa = ses;
+    J.Hub.aoAproximar(SEDE);
+    t = painelTxt();
+    check('sede · com a conta e sem grupo: "Forme um grupo de 2 com alguém da sua guilda"',
+          /Forme um grupo de 2/.test(t) && !botao(painelAberto(), /Inscrever o grupo/) && !!botao(painelAberto(), /ficha da guilda/), t.slice(0, 260));
+    return Promise.resolve();
+  }
+
+  // ---------------------------------------------------------------- quem segue o grupo
+  function quemSegue() {
+    injetaGrupo('bia');
+    J.Hub.aoAproximar(SEDE);
+    check('segue · quem não lidera vê "Quem lidera o grupo (Bia) inscreve"', /Quem lidera o grupo \(Bia\) inscreve/.test(painelTxt()), painelTxt().slice(0, 260));
+    respostas['/api/guerra/estado'] = function () {
+      return { ok: true, status: 200, agoraMs: agora(), fase: 'convite', lider: { conta: 22, nome: 'Bia' }, prazoMs: agora() + 60000, nivel: 10 };
+    };
+    // a Bia inscreveu e avisou pelo trilho do grupo: a consulta sai na hora
+    J.Grupo._ev({ tipo: 'grupo', de: 'bia', cx: 'cxbia', acao: 'guerra', dados: { gid: 'ana-guerra1' } });
+    return ate(function () { return /Escolher a minha dupla/.test(painelTxt()); }, 5000).then(function (ok) {
+      check('segue · o convite chega: o aviso "Bia inscreveu o grupo na guerra de guilda" e o painel pede a dupla',
+            ok && /inscreveu o grupo na guerra/.test(painelTxt()) && /Bia inscreveu o grupo na guerra de guilda/.test(toastTxt() + ' ' + painelTxt()),
+            toastTxt() + ' | ' + painelTxt().slice(0, 200));
+      botao(painelAberto(), /Escolher a minha dupla/).click();
+      check('segue · "Escolher a minha dupla" abre a ficha dos DOIS heróis em ordem', /Guerra de Guilda — a sua dupla/.test(tituloFicha()) &&
+            fichaAberta().querySelectorAll('.av-carta[data-heroi]').length >= 2, tituloFicha());
+      respostas['/api/guerra/juntar'] = function (op) {
+        return { ok: true, status: 200, agoraMs: agora(), fase: 'inscrito', lider: { conta: 22, nome: 'Bia' }, herois: op.body.herois,
+                 desdeMs: agora() - 3000, nivel: 10 };
+      };
+      respostas['/api/guerra/estado'] = respostas['/api/guerra/juntar'];
+      escolheNaFicha([ids[1], ids[0]], /Entrar na fila/);
+      return ate(function () { return !!ultPedido('/api/guerra/juntar'); }, 4000);
+    }).then(function (ok) {
+      var p = ultPedido('/api/guerra/juntar');
+      check('segue · o juntar leva os dois na ordem escolhida e o meu dono da Rede', ok && p.corpo.herois.join() === [ids[1], ids[0]].join() &&
+            p.corpo.dono === 'ana', JSON.stringify(p && p.corpo));
+      return ate(function () { return /Na fila com/.test(painelTxt()); }, 4000);
+    }).then(function (ok) {
+      check('segue · na fila: o painel diz com quem e há quanto tempo, e "Sair da fila"', ok && !!botao(painelAberto(), /Sair da fila/), painelTxt().slice(0, 200));
+      respostas['/api/guerra/sair'] = { ok: true, status: 200, agoraMs: agora(), fase: 'livre' };
+      respostas['/api/guerra/estado'] = function () { return { ok: true, status: 200, agoraMs: agora(), fase: 'livre' }; };
+      botao(painelAberto(), /Sair da fila/).click();
+      return ate(function () { return J.Guerra.estado().fase === 'livre' && !!ultPedido('/api/guerra/sair'); }, 3000);
+    }).then(function (ok) {
+      check('segue · sair da fila volta a livre', ok);
+    });
+  }
+
+  // ---------------------------------------------------------------- quem lidera
+  function quemLidera() {
+    J.Guerra._reset();
+    injetaGrupo('ana');
+    J.Hub.aoAproximar(SEDE);
+    var b = botao(painelAberto(), /Inscrever o grupo na guerra/);
+    check('lidera · quem lidera tem "Inscrever o grupo na guerra"', !!b, painelTxt().slice(0, 260));
+    b.click();
+    check('lidera · a mesma ficha dos dois heróis', /Guerra de Guilda — a sua dupla/.test(tituloFicha()) && /Bia escolhe a dupla dela|Bia escolhe a dupla dele/.test(fichaAberta().textContent),
+          tituloFicha());
+    var hs = [ids[0], ids[1]];
+    respostas['/api/guerra/inscrever'] = function (op) {
+      return { ok: true, status: 200, agoraMs: agora(), fase: 'aguardando', parceiro: { conta: 22, nome: 'Bia' }, herois: op.body.herois,
+               prazoMs: agora() + 60000, nivel: 10 };
+    };
+    respostas['/api/guerra/estado'] = respostas['/api/guerra/inscrever'];
+    saidas.length = 0;
+    escolheNaFicha(hs, /Entrar na fila/);
+    return ate(function () { return !!ultPedido('/api/guerra/inscrever'); }, 4000).then(function (ok) {
+      var p = ultPedido('/api/guerra/inscrever');
+      check('lidera · o POST leva o parceiro (a conta 22 que o relé conferiu), os dois em ordem e o dono',
+            ok && p.corpo.parceiro === 22 && p.corpo.herois.join() === hs.join() && p.corpo.dono === 'ana', JSON.stringify(p && p.corpo));
+      return ate(function () { return /esperando Bia escolher/.test(painelTxt()); }, 4000);
+    }).then(function (ok) {
+      var av = ultSaida('grupo', 'guerra');
+      check('lidera · a Bia é avisada pelo trilho do grupo e o painel espera a dupla dela', ok && av && av.para === 'bia', painelTxt().slice(0, 200));
+      respostas['/api/guerra/estado'] = function () {
+        return { ok: true, status: 200, agoraMs: agora(), fase: 'inscrito', parceiro: { conta: 22, nome: 'Bia' }, herois: hs,
+                 desdeMs: agora() - 42000, nivel: 10 };
+      };
+      return ate(function () { return /Na fila com/.test(painelTxt()); }, 4000);
+    }).then(function (ok) {
+      check('lidera · a fila com o relógio ("há 0:4x") e a paridade de 10', ok && /há 0:4/.test(painelTxt()) && /até 10 níveis/.test(painelTxt()),
+            painelTxt().slice(0, 260));
+    });
+  }
+
+  // ---------------------------------------------------------------- os adversários encontrados
+  function casada() {
+    J.Hub.aoAproximar(null);
+    respostas['/api/guerra/estado'] = function () {
+      return { ok: true, status: 200, agoraMs: agora(), fase: 'casada', lado: 'A', prazoMs: agora() + 30000, confirmei: false,
+               herois: [ids[0], ids[1]], guildas: GUILDAS,
+               aliados: [{ conta: 1, nome: 'Ana', confirmou: false, eu: true }, { conta: 22, nome: 'Bia', confirmou: true, eu: false }],
+               adversarios: [{ conta: 33, nome: 'Cris', confirmou: false }, { conta: 44, nome: 'Duda', confirmou: true }] };
+    };
+    return ate(function () { return /Adversários encontrados/.test(painelTxt()); }, 5000).then(function (ok) {
+      var t = painelTxt();
+      check('casada · mesmo fora da Sede: "Adversários encontrados: ☘ Raízes Fundas" e "Confirmar (30 s)"',
+            ok && /Adversários encontrados: ☘ Raízes Fundas/.test(t) && /Confirmar \((29|30) s\)/.test(t) && !!botao(painelAberto(), /Recusar/), t.slice(0, 260));
+      check('casada · os NOMES dos dois (quem já confirmou marcado) e nenhuma dupla deles',
+            /Cris e Duda ✓/.test(t) && /as duplas deles só aparecem na batalha/.test(t) && /Do seu lado: Ana e Bia ✓/.test(t), t.slice(0, 260));
+      var P = J.Progress;
+      var meus = J.Coop.payloadMeus([ids[0], ids[1]]);
+      var copia = function (dono) { return meus.map(function (p) { var c = JSON.parse(JSON.stringify(p)); c.dono = dono; return c; }); };
+      var ata = { mapa: 'sede', sala: 0, semente: 4242, A: meus.map(function (p) { return JSON.parse(JSON.stringify(p)); }).concat(copia('bia')),
+                  B: copia('cris').concat(copia('duda')), carry: null };
+      var pronta = { ok: true, status: 200, agoraMs: agora(), fase: 'pronta', lado: 'A', herois: [ids[0], ids[1]], guildas: GUILDAS,
+                     gid: 'guerra-0000000000000000abcd', semente: 4242, ata: ata,
+                     aliados: [], adversarios: [],
+                     jogadores: [{ conta: 1, nome: 'Ana', dono: 'ana', lado: 'A', ordem: 0 }, { conta: 22, nome: 'Bia', dono: 'bia', lado: 'A', ordem: 1 },
+                                 { conta: 33, nome: 'Cris', dono: 'cris', lado: 'B', ordem: 0 }, { conta: 44, nome: 'Duda', dono: 'duda', lado: 'B', ordem: 1 }] };
+      respostas['/api/guerra/confirmar'] = pronta;
+      respostas['/api/guerra/estado'] = pronta;
+      botao(painelAberto(), /Confirmar/).click();
+      return ate(function () { return !!ultPedido('/api/guerra/confirmar'); }, 3000);
+    }).then(function (ok) {
+      check('casada · "Confirmar" manda o confirmar', ok);
+    });
+  }
+
+  // ---------------------------------------------------------------- a batalha dos quatro
+  function batalha() {
+    return ate(function () { return J.Game.screen === 'battle' && J.Game.modoRede() === 'guerra'; }, 30000).then(function (ok) {
+      var ses = J.Coop.sessao();
+      check('batalha · a partida pronta vai ao Coop: a guerra abre no Salão da Sede com os oito heróis',
+            ok && ses.tipo === 'guerra' && ses.bid === 'guerra-0000000000000000abcd' && J.Game.state.dungeonId === 'sede' &&
+            J.Game.state.units.filter(function (u) { return u.kind === 'hero'; }).length === 8, J.Game.screen + ' · ' + ses.tipo);
+      return ate(function () { var g = doc.querySelector('.bt-guerra'); return g && /Raízes Fundas/.test(g.textContent); }, 5000);
+    }).then(function (ok) {
+      var g = doc.querySelector('.bt-guerra');
+      var tx = g ? g.textContent : '';
+      check('batalha · o topo mostra as duas guildas (emblema e nome) e os quatro nomes, a minha guilda primeiro',
+            ok && /⚔\s*Lanças do Norte/.test(tx) && /☘\s*Raízes Fundas/.test(tx) && ['Ana', 'Bia', 'Cris', 'Duda'].every(function (n) { return tx.indexOf(n) >= 0; }) &&
+            tx.indexOf('Lanças do Norte') < tx.indexOf('Raízes Fundas'), tx);
+      var r = g ? g.getBoundingClientRect() : { left: -1, right: 999 };
+      check('batalha · compacto no celular: o topo cabe nos 390 px', r.left >= 0 && r.right <= 390 && r.width > 40, JSON.stringify({ l: Math.round(r.left), r: Math.round(r.right) }));
+      check('batalha · o meu nome em destaque', !!(g && g.querySelector('.bg-nome.is-eu')) && g.querySelector('.bg-nome.is-eu').textContent === 'Ana');
+      U.openSheet('battleMenu');
+      check('batalha · o menu tem "Sair da guerra" (e não "Desistir do duelo")', !!botao(fichaAberta(), /Sair da guerra/) && !botao(fichaAberta(), /Desistir do duelo/),
+            (fichaAberta() || {}).textContent);
+      U.closeSheet();
+    });
+  }
+
+  // ---------------------------------------------------------------- o fim
+  function fimDaGuerra() {
+    var resolve;
+    var espera = new Promise(function (r) { resolve = r; });
+    respostas['/api/guerra/fechar'] = function (op) {
+      return espera.then(function () {
+        return { ok: true, status: 200, gid: op.body.gid, fase: 'won', venc: 'A', lado: 'A', venceu: true, xp: 40,
+                 guilda: GUILDAS.A, guildas: GUILDAS, vida: {} };
+      });
+    };
+    J.Game._encerra('player', 'prova');
+    return ate(function () { return J.Game.screen === 'duelFim'; }, 5000).then(function (ok) {
+      var s = telaAberta(), t = s ? s.textContent : '';
+      check('fim · "A guilda Lanças do Norte venceu!" e, antes da resposta, "O servidor está conferindo a guerra…"',
+            ok && /A guilda Lanças do Norte venceu!/.test(t) && /conferindo a guerra/.test(t), t.slice(0, 260));
+      var p = ultPedido('/api/guerra/fechar');
+      check('fim · quem manda fecha no servidor na hora, com o gid, o registro e o hash do fim',
+            p && p.corpo.gid === 'guerra-0000000000000000abcd' && Array.isArray(p.corpo.lances) && typeof p.corpo.hashFinal === 'number', JSON.stringify(p && { g: p.corpo.gid, h: p.corpo.hashFinal }));
+      resolve();
+      return ate(function () { var s2 = telaAberta(); return s2 && /\+40 XP para a guilda/.test(s2.textContent); }, 4000);
+    }).then(function (ok) {
+      var t = (telaAberta() || {}).textContent || '';
+      check('fim · com a resposta: "A guilda Lanças do Norte venceu — +40 XP para a guilda" e as duas guildas com os nomes',
+            ok && /A guilda Lanças do Norte venceu — \+40 XP para a guilda/.test(t) && /Raízes Fundas/.test(t) && /Cris e Duda/.test(t) &&
+            /a coroa não muda/.test(t) && !!botao(telaAberta(), /Voltar à Sede/), t.slice(0, 400));
+      respostas['/api/guerra/fechar'] = function (op) {
+        return { ok: true, status: 200, gid: op.body.gid, fase: 'won', venc: 'A', lado: 'A', venceu: true, xp: 0, motivo: 'teto',
+                 guilda: GUILDAS.A, guildas: GUILDAS, vida: {} };
+      };
+      J.Guerra.fechar({ gid: 'guerra-0000000000000000abcd', lances: [], hashFinal: null });
+      return ate(function () { var s2 = telaAberta(); return s2 && /teto de guerras/.test(s2.textContent); }, 4000);
+    }).then(function (ok) {
+      check('fim · sem XP, a tela diz o porquê (o teto de guerras de hoje)', ok, ((telaAberta() || {}).textContent || '').slice(0, 300));
+    });
+  }
+})();
+</script>
+</body>
+</html>

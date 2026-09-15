@@ -70,7 +70,7 @@ function versaoDosDados() {
 }
 
 // os módulos das rotas grandes se registram sozinhos (existem a partir das fases seguintes)
-for (const mod of ['./sala', './recompensa', './economia', './duelo']) {
+for (const mod of ['./sala', './recompensa', './economia', './duelo', './guerra']) {   // 15/09: a guerra de guilda
   try {
     const m = require(mod);
     if (m && typeof m.rotas === 'function') m.rotas(registra);

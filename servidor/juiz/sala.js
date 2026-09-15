@@ -122,7 +122,9 @@ function refazEm(J, entrada) {
   }
   if (!inteiro(c.semente)) throw recusa('semente inválida', 'entrada');
   if (c.modo === 'duelo') {
-    const dupla = (d) => Array.isArray(d) && d.length >= 1 && d.length <= 2;
+    // 15/09: até 4 por lado — a guerra de guilda 2×2 (guerra.js) leva as duas duplas de cada guilda; o duelo
+    // (duelo.js) segue conferindo 1 ou 2 antes de chegar aqui
+    const dupla = (d) => Array.isArray(d) && d.length >= 1 && d.length <= 4;
     if (!dupla(c.duplaA) || !dupla(c.duplaB)) throw recusa('duplas inválidas', 'entrada');
   } else if (!Array.isArray(c.party) || !c.party.length || c.party.length > 4) {
     throw recusa('grupo inválido', 'entrada');

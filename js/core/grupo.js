@@ -738,6 +738,9 @@ var JOGO = (typeof window !== 'undefined')
         } catch (e) {}
       }
       muda();
+    } else if (a === 'guerra') {
+      // 15/09: quem lidera inscreveu o grupo na guerra de guilda — consulto já (a vez de pôr a minha dupla)
+      if (doPar(ev)) Guerra.consulta();
     } else if (a === 'resposta') {
       var p = st.pendente;
       if (!p || !p.meu || p.id !== de || p.gid !== d.gid) {
@@ -989,6 +992,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     tiqueDuelo(agoraD());
     tiqueArena();                                             // 14/09: a fila da Arena
+    tiqueGuerraFila();                                        // 15/09: a fila da guerra de guilda
   };
 
   Grupo._reset = function () {
@@ -1938,6 +1942,230 @@ var JOGO = (typeof window !== 'undefined')
   Arena._tique = tiqueArena;
   Arena._reset = function () { zeraArena(); };
   Arena._st = function () { return ast; };
+
+  // ==========================================================================
+  // A GUERRA DE GUILDA 2×2 NA SEDE (15/09)
+  // ==========================================================================
+  /* O dono: "a guerra de guild que é 2x2 de cada guild é na sede de guild, isso dá pontos de experiência para
+   * guild"; e "quando for pras arenas, pvp, guerra de guild etc.. pede para ele selecionar os dois que ele quer ir
+   * para a batalha". A FILA mora no servidor (servidor/guerra.py): quem LIDERA o grupo de 2 (os dois da mesma
+   * guilda) inscreve a dupla dele com o parceiro; o parceiro põe a dele (juntar) e a inscrição vale; o servidor
+   * casa com a dupla de jogadores de OUTRA guilda e os QUATRO confirmam em 30 s. A partida pronta traz a ATA (os
+   * oito heróis, a semente, a vida) e vai ao Coop.iniciaGuerra; o fim volta por Guerra.fechar. A consulta do estado
+   * corre a cada CONSULTA_MS com a inscrição viva, e a cada CONSULTA_GRUPO_MS com o grupo formado na praça (é assim
+   * que o parceiro fica sabendo; quem lidera ainda avisa pelo trilho do grupo, a acao 'guerra'). Sem o jogo servido,
+   * sem a conta do site ou sem o relé novo, fica desligada e Guerra.disponivel() diz o porquê. */
+  var Guerra = {};
+  JOGO.Guerra = Guerra;
+  Guerra.CONSULTA_MS = 2500;
+  Guerra.CONSULTA_GRUPO_MS = 8000;
+  Guerra.XP = 40;                    // espelha GUERRA_XP (servidor/guerra.py): só para a tela explicar
+  Guerra.PARIDADE = 10;              // espelha GUERRA_PARIDADE
+  Guerra.FECHA_REPETE_MS = 20000;    // o fechamento fotografado pergunta de novo (o registro limpo de outro chega)
+  Guerra._agora = function () { return Date.now(); };
+  var gst = null, ultimaGuerra = null;
+  function zeraGuerra() {
+    gst = { fase: 'livre', dados: null, ultima: 0, pedindo: false, offset: 0, entregue: null, entregueEm: 0, erro: null };
+  }
+  zeraGuerra();
+  function mudaG() { if (Guerra.aoMudar) { try { Guerra.aoMudar(Guerra.estado()); } catch (e) {} } }
+  function copiaG(v) { return v == null ? null : JSON.parse(JSON.stringify(v)); }
+
+  Guerra.disponivel = function () {
+    var proto = safe(function () { return window.location.protocol; }, '');
+    if (proto === 'file:') {
+      return { ok: false, motivo: 'arquivo', texto: 'A guerra de guilda precisa do jogo aberto pelo site — do arquivo ele não fala com o servidor.' };
+    }
+    var s = JOGO.Sessao;
+    if (!s || typeof s.api !== 'function' || !safe(function () { return s.ativa(); }, false)) {
+      return { ok: false, motivo: 'sem-sessao', texto: 'A guerra de guilda precisa da sua conta do site: entre para jogar.' };
+    }
+    var A = JOGO.Autoridade;
+    if (A && typeof A.ligada === 'function' && !safe(function () { return A.ligada(); }, false)) {
+      return { ok: false, motivo: 'servidor', texto: 'O servidor da guerra de guilda não está ligado agora.' };
+    }
+    if (!safe(function () { return R().privado(); }, false)) {
+      return { ok: false, motivo: 'rede', texto: 'A guerra de guilda precisa do servidor da Rede (a batalha dos quatro sai por ele).' };
+    }
+    return { ok: true };
+  };
+  Guerra.estado = function () {
+    var d = gst.dados || {}, disp = Guerra.disponivel();
+    var e = { fase: gst.fase, pedindo: !!gst.pedindo, erro: gst.erro, desligada: disp.ok ? null : disp.texto,
+              herois: copiaLista(d.herois), nivel: d.nivel || null, resultado: copiaG(ultimaGuerra) };
+    if (d.parceiro) e.parceiro = { conta: d.parceiro.conta, nome: String(d.parceiro.nome || '?') };
+    if (d.lider) e.lider = { conta: d.lider.conta, nome: String(d.lider.nome || '?') };
+    if (typeof d.desdeMs === 'number') e.desdeMs = d.desdeMs - gst.offset;
+    if (typeof d.prazoMs === 'number') e.prazoMs = d.prazoMs - gst.offset;
+    if (gst.fase === 'casada' || gst.fase === 'pronta') {
+      e.lado = d.lado;
+      e.guildas = copiaG(d.guildas);
+      e.aliados = copiaLista(d.aliados) || [];
+      e.adversarios = copiaLista(d.adversarios) || [];     // só a guilda e os nomes: as duplas ficam ocultas
+      e.confirmei = !!d.confirmei;
+    }
+    if (gst.fase === 'pronta') { e.gid = d.gid; e.ataPronta = !!d.ata; e.entregue = gst.entregue === d.gid; }
+    return e;
+  };
+  /* a conta do servidor do meu parceiro de grupo: o `nuvem` que o relé conferiu na presença */
+  function contaDoPar() {
+    if (!Grupo.emGrupo()) return null;
+    var id = st.par.id, achou = null;
+    safe(function () {
+      R().pares().forEach(function (p) { if (p && p.id === id && typeof p.nuvem === 'number') achou = p.nuvem; });
+      return true;
+    }, null);
+    return achou;
+  }
+  function motivoDaGuerra(lista, lider) {
+    if (!lista.length) return 'n';
+    for (var i = 0; i < lista.length; i++) {
+      if (ehMestre(lista[i])) return 'mestre';
+      if (!temHeroi(lista[i])) return 'sem-heroi';
+    }
+    if (lista.length < 2 && heroisDeDuelo().length >= 2) return 'dois';
+    if (!Grupo.emGrupo()) return 'sem-grupo';
+    if (lider && !Grupo.souLider()) return 'nao-lider';
+    if (emBatalhaOuDescida() || minhaSala() || descidaG) return 'em-batalha';
+    if (dst.fase !== 'livre') return 'ocupado';
+    if (Arena.inscrita()) return 'arena';
+    return null;
+  }
+  function adotaGuerra(r, era) {
+    if (era && gst !== era) return;                     // saiu no meio: a resposta velha não reinscreve
+    if (!r || !r.ok || typeof r.fase !== 'string') return;
+    var antes = gst.fase;
+    gst.offset = (typeof r.agoraMs === 'number') ? r.agoraMs - Guerra._agora() : 0;
+    gst.dados = r;
+    gst.erro = null;
+    gst.fase = r.fase;
+    if (r.fase === 'convite' && antes !== 'convite' && Guerra.aoConvite) { try { Guerra.aoConvite(Guerra.estado()); } catch (e) {} }
+    if (r.fase === 'casada' && antes !== 'casada' && Guerra.aoCasou) { try { Guerra.aoCasou(Guerra.estado()); } catch (e2) {} }
+    // a partida pronta COM a ata: vai ao Coop (só da praça — de outra tela, a consulta seguinte tenta de novo)
+    if (r.fase === 'pronta' && r.ata && gst.entregue !== r.gid && tela() === 'hub' && !minhaSala()) {
+      gst.entregue = r.gid;
+      gst.entregueEm = Guerra._agora();
+      var c = C();
+      var ok = !!(c && typeof c.iniciaGuerra === 'function' && safe(function () {
+        return c.iniciaGuerra({ gid: r.gid, ata: r.ata, jogadores: r.jogadores, guildas: r.guildas, eu: eu() });
+      }, false));
+      if (!ok) aviso('A guerra de guilda não abriu aqui — a ata não bateu com este jogo (recarregue a página).');
+    }
+    mudaG();
+  }
+  function pedeGuerraComDupla(rota, corpo, lista, lider) {
+    var disp = Guerra.disponivel();
+    if (!disp.ok) return Promise.resolve({ ok: false, motivo: disp.motivo, erro: disp.texto });
+    var mot = motivoDaGuerra(lista, lider);
+    if (mot) return Promise.resolve({ ok: false, motivo: mot });
+    var z = zeradoNa(lista);
+    if (z) return Promise.resolve({ ok: false, motivo: 'vida-zero', esperaS: z.esperaS });
+    var era = gst;
+    gst.pedindo = true;
+    mudaG();
+    return pedeArena(rota, 'POST', corpo).then(function (r) {
+      if (gst !== era) return { ok: false, motivo: 'ocupado' };
+      gst.pedindo = false;
+      gst.ultima = Guerra._agora();
+      if (r.ok) { adotaGuerra(r, era); return { ok: true, fase: r.fase }; }
+      gst.erro = r.erro || null;
+      mudaG();
+      return falhaArena(r);
+    });
+  }
+  /* quem LIDERA o grupo: a dupla dele e o parceiro (a conta que o relé conferiu) */
+  Guerra.inscrever = function (ids) {
+    var lista = listaDe(ids);
+    if (!Grupo.emGrupo()) return Promise.resolve({ ok: false, motivo: 'sem-grupo' });
+    var conta = contaDoPar();
+    if (typeof conta !== 'number') return Promise.resolve({ ok: false, motivo: 'sem-conta-par' });
+    return pedeGuerraComDupla('/api/guerra/inscrever', { parceiro: conta, herois: lista, dono: eu() }, lista, true)
+      .then(function (r) {
+        if (r.ok && Grupo.emGrupo()) manda('grupo', st.par.id, 'guerra', { gid: st.gid }, st.par.cx);
+        return r;
+      });
+  };
+  /* o parceiro: a dupla dele — a inscrição passa a valer */
+  Guerra.juntar = function (ids) {
+    var lista = listaDe(ids);
+    return pedeGuerraComDupla('/api/guerra/juntar', { herois: lista, dono: eu() }, lista, false);
+  };
+  function pedeGuerraSimples(rota) {
+    var era = gst;
+    gst.pedindo = true;
+    mudaG();
+    return pedeArena(rota, 'POST', {}).then(function (r) {
+      if (gst !== era) return { ok: false, motivo: 'ocupado' };
+      gst.pedindo = false;
+      if (r.ok) { adotaGuerra(r, era); return { ok: true }; }
+      mudaG();
+      if (r.motivo === 'sem-partida') Guerra.consulta();
+      return falhaArena(r);
+    });
+  }
+  Guerra.confirmar = function () {
+    if (gst.fase !== 'casada') return Promise.resolve({ ok: false, motivo: 'sem-partida' });
+    return pedeGuerraSimples('/api/guerra/confirmar');
+  };
+  Guerra.recusar = function () {
+    if (gst.fase !== 'casada') return Promise.resolve({ ok: false, motivo: 'sem-partida' });
+    return pedeGuerraSimples('/api/guerra/recusar');
+  };
+  Guerra.sair = function () {
+    var era = gst.fase;
+    zeraGuerra();
+    mudaG();
+    if (era === 'livre') return Promise.resolve({ ok: true });
+    return pedeArena('/api/guerra/sair', 'POST', {}).then(function (r) { return { ok: !!(r && r.ok) }; });
+  };
+  Guerra.consulta = function () {
+    var era = gst;
+    gst.ultima = Guerra._agora();
+    return pedeArena('/api/guerra/estado', 'GET').then(function (r) {
+      if (r && r.ok) adotaGuerra(r, era);
+      return r;
+    });
+  };
+  /* o fim da guerra (o Coop chama): o servidor refaz e diz se a guilda ganhou o XP. Fotografado espera o registro
+   * limpo de outro dos quatro: pergunta de novo algumas vezes */
+  Guerra.fechar = function (corpo, vez) {
+    vez = vez || 0;
+    return pedeArena('/api/guerra/fechar', 'POST', corpo).then(function (r) {
+      if (r && r.ok && r.fase === 'aguardando' && vez < 7 && typeof setTimeout === 'function') {
+        setTimeout(function () { Guerra.fechar(corpo, vez + 1); }, Guerra.FECHA_REPETE_MS);
+      }
+      ultimaGuerra = (r && r.ok) ? r : { ok: false, gid: corpo && corpo.gid, motivo: (r && r.motivo) || null,
+                                         erro: (r && r.erro) || 'o servidor não respondeu' };
+      safe(function () { JOGO.Vida.sincroniza(); return true; }, null);
+      if (Guerra.aoFechou) { try { Guerra.aoFechou(copiaG(ultimaGuerra)); } catch (e) {} }
+      mudaG();
+      return copiaG(ultimaGuerra);
+    });
+  };
+  Guerra.resultado = function () { return copiaG(ultimaGuerra); };
+  function tiqueGuerraFila() {
+    var t = Guerra._agora();
+    if (gst.fase === 'pronta' && gst.entregue) {
+      // a partida foi entregue ao Coop: acabou (ou caiu antes do salão) — aqui volta a livre
+      var ses = safe(function () { return C().sessao(); }, null);
+      if ((!ses || ses.tipo !== 'guerra' || ses.bid !== gst.entregue) && t - gst.entregueEm > 3000) { zeraGuerra(); mudaG(); }
+      return;
+    }
+    if (gst.pedindo) return;
+    if (gst.fase === 'livre') {
+      if (Grupo.emGrupo() && tela() === 'hub' && t - gst.ultima >= Guerra.CONSULTA_GRUPO_MS && Guerra.disponivel().ok) Guerra.consulta();
+      return;
+    }
+    if (gst.fase !== 'pronta' && (emBatalhaOuDescida() || minhaSala() || descidaG || !Grupo.emGrupo())) {
+      aviso('Você saiu da fila da guerra de guilda.');
+      Guerra.sair();
+      return;
+    }
+    if (t - gst.ultima >= Guerra.CONSULTA_MS) Guerra.consulta();
+  }
+  Guerra._tique = tiqueGuerraFila;
+  Guerra._reset = function () { zeraGuerra(); ultimaGuerra = null; };
+  Guerra._st = function () { return gst; };
 
   // ==========================================================================
   // A MENSAGEM PARTICULAR

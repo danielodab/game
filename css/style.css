@@ -2831,3 +2831,42 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .aq-desde { color: var(--dim); font-size: 11px; }
 .aq-tag { font-size: 11px; color: var(--gold, #e8c25a); white-space: nowrap; }
 .coroa-trava { cursor: not-allowed; }
+
+/* ==========================================================================
+   A GUERRA DE GUILDA 2×2 (15/09): o bloco da Sede (a fila, os adversários
+   encontrados), o topo da batalha com as duas guildas e os quatro nomes, e o
+   fim. Compacto no celular: o topo é uma faixa de uma linha por guilda.
+   ========================================================================== */
+.guerra-bloco {
+  display: flex; flex-direction: column; gap: 6px; margin: 10px 0 4px; padding: 8px 10px;
+  border-radius: var(--rad-s, 8px); border: 1px solid rgba(232,194,90,.35); background: rgba(232,194,90,.05);
+}
+.guerra-tit { margin: 0; font: 700 13px var(--ui-sans, system-ui); color: var(--gold, #e8c25a); letter-spacing: .02em; }
+.guerra-off { color: #e8b86a; }
+.guerra-casada { display: flex; flex-direction: column; gap: 5px; }
+.guerra-achados { margin: 0; font-size: 13px; color: #ffe2a0; }
+.guerra-nomes, .guerra-aliados { margin: 0; }
+.bt-guerra {
+  position: absolute; top: calc(var(--sa-t, 0px) + 74px); left: 50%; transform: translateX(-50%); z-index: 4;
+  display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 24px); padding: 3px 10px;
+  border-radius: 999px; background: rgba(10,12,16,.72); border: 1px solid rgba(255,255,255,.08);
+  font: 600 11px/1.3 var(--ui-sans, system-ui); color: #e8eef6; pointer-events: none; white-space: nowrap;
+}
+.bt-guerra .bg-lado { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.bt-guerra .bg-lado.is-meu .bg-guilda { color: #9fe0a8; }
+.bt-guerra .bg-lado.is-inimigo .bg-guilda { color: #f2a0a0; }
+.bt-guerra .bg-emblema { font-size: 13px; }
+.bt-guerra .bg-guilda { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+.bt-guerra .bg-nomes { color: #cdd6e2; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.bt-guerra .bg-nomes i { font-style: normal; opacity: .5; margin: 0 3px; }
+.bt-guerra .bg-nome.is-eu { color: #fff; font-weight: 700; }
+.bt-guerra .bg-nome.is-fora { opacity: .45; }
+.bt-guerra .bg-nome.is-saiu { opacity: .35; text-decoration: line-through; }
+.bt-guerra .bg-vs { font-style: normal; color: var(--gold, #e8c25a); }
+@media (max-width: 520px) {
+  .bt-guerra { flex-direction: column; gap: 0; border-radius: 10px; padding: 3px 8px; }
+  .bt-guerra .bg-vs { display: none; }
+  .bt-guerra .bg-guilda { max-width: 90px; }
+}
+.guerra-fim .guerra-xp { font-weight: 600; }
+.guerra-fim .guerra-lado-fim b { color: var(--gold, #e8c25a); }

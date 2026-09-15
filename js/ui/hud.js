@@ -1547,6 +1547,7 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(btn('Abrir a ficha da guilda', 'btn-primary btn-block', function () {
           openSheet('guilda');
         }));
+        painelGuerra(painel);         // 15/09: a guerra de guilda 2×2 (a fila, os quatro confirmando)
       } else if (lugar.tipo === 'loteria') {
         // A BARRAQUINHA DA SORTE (03/09): a roleta dos selos mora aqui
         painel.appendChild(el('h3', null, 'Barraquinha da Sorte'));
@@ -2619,6 +2620,12 @@ var JOGO = (typeof window !== 'undefined')
     bt.timeline = el('div', 'bt-timeline');
     top.appendChild(bt.timeline);
     s.appendChild(top);
+    // 15/09: a guerra de guilda — as duas guildas (emblema e nome) e os quatro nomes, logo abaixo do topo
+    if (modoRede() === 'guerra') {
+      bt.guerra = el('div', 'bt-guerra');
+      s.appendChild(bt.guerra);
+      pintaGuerraTopo();
+    }
 
     // ---- coluna esquerda: unidade ativa
     var left = el('div', 'bt-left');
@@ -2716,6 +2723,7 @@ var JOGO = (typeof window !== 'undefined')
     paintPlacement(s);
     avisaMoldura();
     pintaGrupoLado();                     // 11/09: a vida no painel do grupo
+    pintaGuerraTopo();                    // 15/09: quem está fora na guerra de guilda
   }
 
   /* A ESCOLHA DA POSIÇÃO (03/09): em `placing` a batalha mostra a faixa e
@@ -9424,6 +9432,16 @@ var JOGO = (typeof window !== 'undefined')
             safe(function () { return G().abandonar(); }, false);
           });
       }));
+    } else if (mr === 'guerra') {
+      // 15/09: sair da guerra de guilda é o mesmo de sair do grupo na batalha — os heróis caem
+      acts.appendChild(btn('Sair da guerra', 'btn-warn', function () {
+        confirmSheet('Sair da guerra de guilda?',
+          'Os seus dois heróis <b>caem</b> nesta batalha e o seu parceiro segue sozinho pela guilda. ' +
+          'Cair da internet é diferente: ali eles ficam de pé e o turno passa até você voltar.', function () {
+            safe(function () { Cp().sairDaGuerra('saiu'); return true; }, null);
+            navTo('hub');
+          });
+      }));
     } else if (mr === 'duelo') {
       acts.appendChild(btn('Desistir do duelo', 'btn-warn', function () {
         confirmSheet('Desistir do duelo?', 'Conta como derrota.', function () {
@@ -9497,6 +9515,8 @@ var JOGO = (typeof window !== 'undefined')
     if (p && p.id === id) return p.nome;
     var ses = coopSessao();
     if (ses && ses.parceiro && ses.parceiro.id === id && ses.parceiro.nome) return ses.parceiro.nome;
+    var gq = ses && ses.guerra;                    // 15/09: os quatro da guerra de guilda
+    for (var i = 0; gq && i < gq.jogadores.length; i++) if (gq.jogadores[i].id === id) return gq.jogadores[i].nome;
     return safe(function () { return JOGO.Rede.nomeDe(id); }, null) || nomeParceiro();
   }
   function classeDoPar(id) {
@@ -10984,6 +11004,217 @@ var JOGO = (typeof window !== 'undefined')
     if (sheetName === 'arenaQuadro' && Date.now() - quadroArena.t > 4000) atualizaQuadro();
   }
 
+  // ---- a guerra de guilda 2×2 (15/09): o bloco da Sede, a escolha das duplas, os adversários, o topo e o fim
+  /* O dono: "a guerra de guild que é 2x2 de cada guild é na sede de guild, isso dá pontos de experiência para guild".
+   * Quem decide é o JOGO.Guerra (grupo.js: a fila no servidor) e a batalha é do Coop; aqui só se desenha. */
+  function Gu() { return JOGO.Guerra || null; }
+  function agoraGuerra() { return safe(function () { return Gu()._agora(); }, Date.now()); }
+  function nomesIds(ids) { return (ids || []).map(nomeHeroiNv).join(' e '); }
+  function textoGuerra(r) {
+    if (!r) return 'A guerra de guilda não respondeu.';
+    var m = r.motivo;
+    var T = {
+      'sem-grupo': 'Forme um grupo de 2 com alguém da sua guilda.',
+      'nao-lider': 'Quem inscreve o grupo na guerra é quem lidera.',
+      'sem-conta-par': 'O servidor ainda não conferiu a conta do seu parceiro — ele precisa entrar na conta e recarregar a página.',
+      'sem-guilda': 'A guerra é de guilda: vocês dois precisam estar numa guilda.',
+      'outra-guilda': 'Os dois do grupo precisam ser da mesma guilda.',
+      'sem-convite': 'O prazo para pôr a sua dupla passou — peça para quem lidera inscrever de novo.',
+      'arena': 'Saia do quadro da Arena antes de entrar na guerra.',
+      'casada': 'Já há uma guerra em andamento para vocês.',
+      'inscrito': 'Um de vocês já está noutra inscrição da guerra.',
+      'sem-partida': 'O prazo da guerra passou.',
+      'vida-zero': 'Um herói da dupla está sem vida' + (r.esperaS ? ': espere ' + r.esperaS + ' s' : '') + ' ou beba uma poção.'
+    };
+    if (T[m]) return T[m];
+    if (r.erro && ['sem-sessao', 'arquivo', 'servidor', 'rede'].indexOf(m) >= 0) return r.erro;
+    return r.erro || textoMotivo(m, null);
+  }
+  function painelGuerra(p) {
+    var W = Gu();
+    if (!W) return;
+    var e = W.estado();
+    var caixa = el('div', 'guerra-bloco');
+    p.appendChild(caixa);
+    caixa.appendChild(el('h4', 'guerra-tit', '⚔ Guerra de Guilda 2×2'));
+    caixa.appendChild(el('p', 'hub-nota guerra-explica', 'Dois da mesma guilda, cada um com a sua dupla, contra dois de outra guilda — ' +
+      'oito heróis no Salão da Sede. A guilda que vence ganha <b>+' + W.XP + ' XP</b>; a coroa não muda.'));
+    if (e.desligada) { caixa.appendChild(el('p', 'hub-nota guerra-off', '⚔ ' + esc(e.desligada))); return; }
+    var nomePar = esc(nomeParceiro());
+    if (e.fase === 'livre') {
+      if (!emGrupo()) caixa.appendChild(el('p', 'hub-nota guerra-sem-grupo', 'Forme um grupo de 2 com alguém da sua guilda para entrar na fila.'));
+      else if (souLider()) caixa.appendChild(btn('Inscrever o grupo na guerra', 'btn-gold btn-block guerra-inscrever', pedeGuerraInscricao));
+      else caixa.appendChild(el('p', 'hub-nota guerra-espera-lider', 'Quem lidera o grupo (<b>' + nomePar + '</b>) inscreve; aí você escolhe a sua dupla.'));
+    } else if (e.fase === 'aguardando') {
+      caixa.appendChild(el('p', 'hub-nota guerra-aguardando', 'Inscrito com <b>' + esc(nomesIds(e.herois)) + '</b> · esperando <b>' +
+        esc((e.parceiro || {}).nome || nomeParceiro()) + '</b> escolher a dupla dele…'));
+      caixa.appendChild(btn('Sair da fila', 'btn-warn btn-block guerra-sair', function () { W.sair(); toast('Vocês saíram da fila da guerra.'); }));
+    } else if (e.fase === 'convite') {
+      caixa.appendChild(el('p', 'hub-nota guerra-convite', '<b>' + esc((e.lider || {}).nome || nomeParceiro()) +
+        '</b> inscreveu o grupo na guerra de guilda. Escolha os dois heróis que você leva.'));
+      caixa.appendChild(btn('Escolher a minha dupla', 'btn-gold btn-block guerra-juntar', pedeGuerraJuntar));
+      caixa.appendChild(btn('Não vou', 'btn-ghost btn-block guerra-sair', function () { W.sair(); }));
+    } else if (e.fase === 'inscrito') {
+      caixa.appendChild(el('p', 'hub-nota guerra-inscrito', 'Na fila com <b>' + esc(nomesIds(e.herois)) + '</b> · há <b class="arena-relogio" data-desde="' +
+        e.desdeMs + '">' + relogioTxt(agoraGuerra() - e.desdeMs) + '</b>. Procurando uma dupla de outra guilda (até ' + W.PARIDADE +
+        ' níveis de diferença)…'));
+      caixa.appendChild(btn('Sair da fila', 'btn-warn btn-block guerra-sair', function () { W.sair(); toast('Vocês saíram da fila da guerra.'); }));
+    } else if (e.fase === 'casada') {
+      pintaGuerraCasada(caixa, e);
+    } else if (e.fase === 'pronta') {
+      caixa.appendChild(el('p', 'hub-nota guerra-pronta', 'Os quatro confirmaram — a guerra abre em instantes…'));
+    }
+  }
+  function nomesConfirma(lista) {
+    return (lista || []).map(function (x) { return esc(x.nome) + (x.confirmou ? ' ✓' : ''); }).join(' e ');
+  }
+  function pintaGuerraCasada(p, e) {
+    var W = Gu(), gAd = (e.guildas || {})[e.lado === 'A' ? 'B' : 'A'] || {};
+    var box = el('div', 'guerra-casada');
+    box.appendChild(el('p', 'guerra-achados', 'Adversários encontrados: <b>' + esc(gAd.emblema || '⚑') + ' ' + esc(gAd.nome || '?') + '</b>'));
+    box.appendChild(el('p', 'hub-nota guerra-nomes', nomesConfirma(e.adversarios) + ' — as duplas deles só aparecem na batalha.'));
+    box.appendChild(el('p', 'hub-nota guerra-aliados', 'Do seu lado: ' + nomesConfirma(e.aliados) + '.'));
+    box.appendChild(barraPrazo(e.prazoMs, agoraGuerra));
+    var resta = Math.max(0, Math.ceil((e.prazoMs - agoraGuerra()) / 1000));
+    if (e.confirmei) {
+      box.appendChild(el('p', 'du-espera', 'Você confirmou. Esperando os outros… <b class="arena-relogio" data-prazo="' + e.prazoMs + '">' +
+        resta + ' s</b>'));
+      box.appendChild(btn('Desistir', 'btn-ghost btn-block guerra-recusa', function () { W.recusar(); fechaPainelGuerra(); }));
+    } else {
+      var duo = el('div', 'pn-duplo');
+      var bOk = btn('Confirmar (' + resta + ' s)', 'btn-primary arena-confirma guerra-confirma', function () {
+        W.confirmar().then(function (r) { if (!r.ok) toast(textoGuerra(r)); });
+      });
+      bOk.setAttribute('data-prazo', String(e.prazoMs));
+      duo.appendChild(bOk);
+      duo.appendChild(btn('Recusar', 'btn-ghost guerra-recusa', function () { W.recusar(); fechaPainelGuerra(); }));
+      box.appendChild(duo);
+    }
+    p.appendChild(box);
+  }
+  function fechaPainelGuerra() {
+    if (painelModo === 'convite' && painelConv && painelConv.tipo === 'guerra') fechaPainel();
+  }
+  function mostraGuerraCasada(e) {
+    e = e || (Gu() && Gu().estado());
+    if (!e || e.fase !== 'casada') return;
+    if (painelModo === 'lugar' && painelLugar && painelLugar.tipo === 'sede' && painelVivo()) { repintaLugar(); return; }
+    var p = abrePainel('convite');
+    if (!p) { toast('Guerra de guilda: adversários encontrados — confirme em 30 s!'); return; }
+    painelConv = { tipo: 'guerra' };
+    clear(p);
+    p.appendChild(el('h3', null, 'Guerra de Guilda'));
+    pintaGuerraCasada(p, e);
+    if (sheetName) toast('Adversários encontrados na guerra de guilda — veja o painel');
+  }
+  var guerraSig = '';
+  function aoGuerraMudou(e) {
+    e = e || {};
+    var conf = function (l) { return (l || []).map(function (x) { return x.confirmou ? 1 : 0; }).join(''); };
+    var r = e.resultado;
+    var sig = [e.fase, e.confirmei, conf(e.aliados), conf(e.adversarios), e.gid, !!e.desligada, (e.herois || []).join('+'),
+               r ? [r.gid, r.fase, r.xp, r.motivo].join(':') : ''].join('|');
+    if (sig === guerraSig) return;
+    guerraSig = sig;
+    if (painelModo === 'convite' && painelConv && painelConv.tipo === 'guerra') {
+      var pv = painelVivo();
+      if (e.fase === 'casada' && pv) { clear(pv); pv.appendChild(el('h3', null, 'Guerra de Guilda')); pintaGuerraCasada(pv, e); }
+      else fechaPainel();
+    }
+    if (painelModo === 'lugar' && painelLugar && painelLugar.tipo === 'sede') repintaLugar();
+    if (current === 'duelFim' && lastDuelFim && lastDuelFim.guerra) buildDuelFim(lastDuelFim);
+  }
+  function pedeGuerraInscricao() {
+    openSheet('escolheDupla', { titulo: 'Guerra de Guilda — a sua dupla', rotulo: 'Entrar na fila',
+      sub: 'Escolha os dois heróis que vão à guerra, em ordem. ' + nomeParceiro() + ' escolhe a dupla dele em seguida. ' +
+           'As duplas dos adversários só aparecem na batalha.',
+      inicial: selHeroes.slice(),
+      aoEscolher: function (ids) {
+        return Gu().inscrever(ids).then(function (r) {
+          if (r.ok) { closeSheet(); toast('Grupo inscrito. Esperando ' + nomeParceiro() + ' escolher a dupla dele.', 'good'); repintaLugar(); }
+          else toast(textoGuerra(r));
+          return r;
+        });
+      } });
+  }
+  function pedeGuerraJuntar() {
+    openSheet('escolheDupla', { titulo: 'Guerra de Guilda — a sua dupla', rotulo: 'Entrar na fila',
+      sub: 'Escolha os dois heróis que vão à guerra, em ordem. As duplas dos adversários só aparecem na batalha.',
+      inicial: selHeroes.slice(),
+      aoEscolher: function (ids) {
+        return Gu().juntar(ids).then(function (r) {
+          if (r.ok) { closeSheet(); toast(r.fase === 'casada' ? 'Adversários encontrados — confirme!' : 'A sua dupla está na fila da guerra.', 'good'); repintaLugar(); }
+          else toast(textoGuerra(r));
+          return r;
+        });
+      } });
+  }
+  /* o topo da batalha: as duas guildas (a minha primeiro) com os dois nomes de cada — quem caiu fica apagado */
+  function pintaGuerraTopo() {
+    if (!bt || !bt.guerra) return;
+    var ses = coopSessao(), gq = ses && ses.guerra;
+    var info = gq || safe(function () { return G().guerraInfo(); }, null);
+    if (!info) return;
+    var guildas = info.guildas || {};
+    var jog = gq ? gq.jogadores : (info.jogadores || []).map(function (j) {
+      return { id: j.dono, nome: j.nome, lado: j.lado, eu: j.dono === info.eu, on: true };
+    });
+    var meu = info.lado === 'B' ? 'B' : 'A';
+    function lado(L) {
+      var g = guildas[L] || {};
+      var nomes = jog.filter(function (j) { return j.lado === L; }).map(function (j) {
+        var cls = 'bg-nome' + (j.eu ? ' is-eu' : '') + (j.saiu ? ' is-saiu' : ((j.on === false || j.fora) ? ' is-fora' : ''));
+        return '<span class="' + cls + '">' + esc(j.nome) + '</span>';
+      }).join('<i>·</i>');
+      return '<div class="bg-lado ' + (L === meu ? 'is-meu' : 'is-inimigo') + '"><b class="bg-emblema">' + esc(g.emblema || '⚑') +
+        '</b><span class="bg-guilda">' + esc(g.nome || ('Guilda ' + L)) + '</span><span class="bg-nomes">' + nomes + '</span></div>';
+    }
+    var html = lado(meu) + '<i class="bg-vs">×</i>' + lado(meu === 'A' ? 'B' : 'A');
+    if (bt.guerra.__html !== html) { bt.guerra.innerHTML = html; bt.guerra.__html = html; }
+  }
+  function porqueSemXp(res) {
+    var m = res.motivo;
+    if (res.fase === 'recusada') return 'A luta não bateu com a conferência do servidor — a guerra não rendeu XP.';
+    if (res.fase === 'nao-conferida') return 'A batalha sincronizou por foto e ninguém mandou um registro limpo — a guerra não rendeu XP.';
+    if (m === 'empate') return 'Empate — nenhuma guilda ganha XP.';
+    if (m === 'sem-fim') return 'W.O. ou desistência não rende XP para a guilda.';
+    if (m === 'teto') return 'A guerra valeu, mas sem XP: o teto de guerras de hoje (entre essas guildas, ou da guilda) já foi.';
+    if (m === 'sem-guilda') return 'A guilda vencedora não existe mais — sem XP.';
+    return 'Sem XP desta vez.';
+  }
+  function guerraFim(s, data) {
+    var box = el('div', 'game-over du-fim du-rede guerra-fim');
+    var gs = data.guildas || {}, meu = data.lado === 'B' ? 'B' : 'A', outro = meu === 'A' ? 'B' : 'A';
+    var res = data.resultado;
+    var W = Gu(), ult = W ? W.resultado() : null;
+    if (ult && ult.gid === data.gid) res = ult;
+    if (res && res.gid && data.gid && res.gid !== data.gid) res = null;
+    var gV = data.empate ? null : (data.venci ? gs[meu] : gs[outro]);
+    box.appendChild(el('h1', null, data.empate ? 'Empate na guerra.' : 'A guilda ' + esc((gV && gV.nome) || '?') + ' venceu!'));
+    if (data.wo) {
+      box.appendChild(el('p', 'game-sub', data.venci ? 'Os dois adversários saíram do salão — vitória por W.O.' : 'O seu lado ficou fora — derrota por W.O.'));
+    }
+    var linha;
+    if (!res) linha = 'O servidor está conferindo a guerra…';
+    else if (!res.ok) linha = 'O servidor não conferiu a guerra: ' + (res.erro || 'sem resposta') + '.';
+    else if (res.fase === 'aguardando') linha = 'A sua batalha sincronizou por foto: esperando o registro de outro jogador para conferir…';
+    else if (res.xp > 0 && res.guilda) linha = 'A guilda ' + res.guilda.nome + ' venceu — +' + res.xp + ' XP para a guilda.';
+    else linha = porqueSemXp(res);
+    box.appendChild(el('p', 'du-valeria guerra-xp', esc(linha)));
+    var jog = data.jogadores || [];
+    [meu, outro].forEach(function (L) {
+      var g = gs[L] || {};
+      var nomes = jog.filter(function (j) { return j.lado === L; }).map(function (j) { return esc(j.nome); }).join(' e ');
+      var classes = (L === 'A' ? data.duplaA : data.duplaB) || [];
+      box.appendChild(el('p', 'game-sub guerra-lado-fim', '<b>' + esc(g.emblema || '⚑') + ' ' + esc(g.nome || ('Guilda ' + L)) + '</b>: ' + nomes +
+        (classes.length ? ' · ' + esc(classes.map(function (c) { return className(c); }).join(', ')) : '')));
+    });
+    box.appendChild(el('p', 'game-sub', 'Salão da Sede · clima: ' + esc(nomeClima(data.clima)) + ' · a coroa não muda na guerra de guilda.'));
+    box.appendChild(vidaBloco('fim'));
+    box.appendChild(btn('Voltar à Sede', 'btn-primary btn-block', function () { navTo('hub'); }));
+    s.appendChild(box);
+  }
+
   // ---- o Campo de PvP: a entrada, a saída, a dupla do Campo e o toque que ataca
   function painelCampo(p) {
     p.appendChild(el('h3', null, 'Campo de PvP'));
@@ -11073,6 +11304,7 @@ var JOGO = (typeof window !== 'undefined')
     return (w && w.name) || id || 'calmo';
   }
   function duelFimRede(s, data) {
+    if (data.guerra) { guerraFim(s, data); return; }        // 15/09: a guerra de guilda
     var box = el('div', 'game-over du-fim du-rede');
     var op = data.oponente || {};
     var nomeOp = (typeof op === 'string' ? op : op.nome) || 'O outro lado';
@@ -11161,6 +11393,16 @@ var JOGO = (typeof window !== 'undefined')
     if (Aq) {
       Aq.aoMudar = aoArenaMudou;
       Aq.aoCasou = mostraArenaCasada;
+      if (!arenaRelogio) arenaRelogio = setInterval(function () { safe(function () { tiqueArenaTela(); return true; }, null); }, 1000);
+    }
+    // 15/09: a guerra de guilda — o painel da Sede, os adversários encontrados e o fim que o servidor confere
+    var Wg = Gu();
+    if (Wg) {
+      Wg.aoMudar = aoGuerraMudou;
+      Wg.aoCasou = mostraGuerraCasada;
+      Wg.aoConvite = function (e) {
+        toast(esc(((e && e.lider) || {}).nome || 'Quem lidera') + ' inscreveu o grupo na guerra de guilda — vá à Sede escolher a sua dupla.', 'good');
+      };
       if (!arenaRelogio) arenaRelogio = setInterval(function () { safe(function () { tiqueArenaTela(); return true; }, null); }, 1000);
     }
     if (S) S.aoChegar = aoSussurroChegou;

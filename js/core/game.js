@@ -135,7 +135,7 @@ var JOGO = (typeof window !== 'undefined')
   var turnElapsed = 0, timerUid = null, lastTickSec = -1;
   var clockFn = null, lastClock = 0;
   // [G11] a batalha em rede: quem sou eu nela e o gancho de turno
-  var rede = null;          // { tipo:'grupo'|'duelo', eu, lado:'A'|'B'|null, colocador }
+  var rede = null;          // { tipo:'grupo'|'duelo'|'guerra', eu, lado:'A'|'B'|null, colocador }
   var ultimoTurno = null;   // o state.turno visto por último (o gancho chama Coop.aoTurno quando muda)
   var timerTurno = null, turnoIniMs = 0;   // o relógio de PAREDE do meu turno em rede
   // tela para onde voltar depois de 'elementChoice' [G6]
@@ -644,7 +644,10 @@ var JOGO = (typeof window !== 'undefined')
 
   Game.modoRede = function () { return rede ? rede.tipo : null; };
   // o lado do estado que é MEU: no duelo, quem aceitou (B) é o lado 'enemy'
-  Game.meuLado = function () { return (rede && rede.tipo === 'duelo' && rede.lado === 'B') ? 'enemy' : 'player'; };
+  Game.meuLado = function () {
+    // 15/09: na guerra de guilda, a guilda que entrou na fila depois (B) também é o lado 'enemy' do estado
+    return (rede && (rede.tipo === 'duelo' || rede.tipo === 'guerra') && rede.lado === 'B') ? 'enemy' : 'player';
+  };
   // na colocação em grupo só o líder toca (o herói do parceiro nasce pela semente)
   Game.podeColocar = function () { return !rede || !!rede.colocador; };
 
@@ -1030,6 +1033,56 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  /* A GUERRA DE GUILDA 2×2 (15/09, o Coop chama com a ata do SERVIDOR): o Salão da Sede, as duas duplas de cada
+   * guilda (até quatro por lado, cada payload com o `dono`) e a semente do servidor. A vida entra pela chave
+   * `dono:heroId` depois de montar o salão — a mesma ordem do juiz (servidor/juiz/guerra.js: createDuelSala e
+   * aplicaCarryRede), porque o heroId colide entre os dois jogadores do mesmo lado. */
+  Game._iniciaGuerraRede = function (d, pronto) {
+    if (!d || !d.A || !d.B || !d.gid) return false;
+    function porDono(lista) {
+      var ordem = [], m = {};
+      lista.forEach(function (p) { if (!m[p.dono]) { m[p.dono] = []; ordem.push(p.dono); } m[p.dono].push(p.classId); });
+      return ordem.map(function (k) { return m[k]; });
+    }
+    function ids(lista) { return lista.map(function (p) { return p.heroId || p.classId; }); }
+    if (seguraParaModelos({ dungeonId: d.mapa, sala: d.sala, duelo: true, duplas: porDono(d.A).concat(porDono(d.B)) },
+        function () {
+          var cd = C(), ses = null;
+          try { ses = (cd && cd.sessao) ? cd.sessao() : null; } catch (e0) { ses = null; }
+          if (ses && ses.tipo === 'guerra' && ses.bid === d.gid) Game._iniciaGuerraRede(d, pronto);
+        })) return true;
+    var st;
+    try {
+      st = E().createDuelSala(d.mapa, d.sala, JSON.parse(JSON.stringify(d.A)), JSON.parse(JSON.stringify(d.B)),
+                              { seed: d.semente });
+    } catch (e) { return false; }
+    aplicaCarry(st, d.carry, true);
+    var meuId = d.meuId || meuIdRede();
+    Game.party = ids(d.A.concat(d.B).filter(function (p) { return p.dono === meuId; }));
+    Game.dungeonId = null;
+    Game.roomIndex = 0;
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    resetAiState();
+    resetTimer(true);
+    timerTurno = null;
+    Game._duplas = { a: ids(d.A), b: ids(d.B) };
+    rede = { tipo: 'guerra', eu: meuId, lado: d.eu === 'B' ? 'B' : 'A', colocador: false, arena: d.arena || null,
+             gid: d.gid, guildas: d.guildas || null, jogadores: d.jogadores || [] };
+    Game.state = st;
+    ultimoTurno = null;
+    posMotor();
+    setScreen('battle');
+    if (typeof pronto === 'function') { try { pronto(); } catch (e2) {} }
+    return true;
+  };
+  Game.guerraInfo = function () {
+    return (rede && rede.tipo === 'guerra')
+      ? { gid: rede.gid, lado: rede.lado, guildas: rede.guildas, jogadores: rede.jogadores, eu: rede.eu } : null;
+  };
+
   // a porta do piloto automático das provas: um lance como se fosse um toque
   Game._local = function (l) {
     if (!rede || !Game.state || !l) return false;
@@ -1185,6 +1238,59 @@ var JOGO = (typeof window !== 'undefined')
       clima: st.weather, seValesse: seValesse,
       // os campos do duelo de treino: a tela de hoje continua de pé
       venceuA: fase === 'won', duplaA: duplas.a, duplaB: duplas.b
+    });
+  }
+
+  /* A VIDA DE UM DONO (15/09, a guerra): {heroId: PV do fim} (caído = 0; a fusão divide o PV dela) e o máximo —
+   * a mesma conta do juiz (servidor/juiz/guerra.js, vidaPorDono), por dono e não por lado */
+  function vidaDoDono(st, dono) {
+    var fim = {}, maximos = {};
+    for (var i = 0; st && st.units && i < st.units.length; i++) {
+      var u = st.units[i];
+      if (u.kind === 'hero' && u.dono === dono) {
+        var hid = u.heroId || u.defId;
+        if (typeof u.hpMax === 'number' && isFinite(u.hpMax) && u.hpMax > 0) maximos[hid] = Math.floor(u.hpMax);
+        if (u.fusedInto) continue;
+        fim[hid] = u.alive ? Math.max(0, Math.floor(u.hp)) : 0;
+      } else if (u.kind === 'fusion') {
+        var srcs = (u.fusedFrom || []).map(function (x) { return E().findUnit(st, x); })
+          .filter(function (s) { return s && s.kind === 'hero' && s.dono; });
+        if (!srcs.length) continue;
+        var parte = u.alive ? Math.max(1, Math.floor(u.hp / srcs.length)) : 0;
+        srcs.forEach(function (s) { if (s.dono === dono) fim[s.heroId || s.defId] = parte; });
+      }
+    }
+    return { fim: fim, maximos: maximos };
+  }
+  Game._vidaDoDono = vidaDoDono;
+  /* O FIM DA GUERRA DE GUILDA (15/09): a vitória é da GUILDA do meu lado. O Coop fecha no servidor (o XP da guilda
+   * é de lá) e a tela mostra o resultado quando ele chega. */
+  function fimGuerraRede() {
+    var st = Game.state;
+    registraFimVida(st);
+    resetAiState();
+    resetTimer(true);
+    Game.selectedSpellId = null;
+    Game.mustEndTurn = false;
+    Game.pendingFusion = null;
+    var lado = Game.meuLado(), fase = st.phase;
+    var empate = fase === 'empate';
+    var venci = !empate && ((fase === 'won' && lado === 'player') || (fase === 'lost' && lado === 'enemy'));
+    var venc = empate ? 'empate' : (fase === 'won' ? 'A' : 'B');
+    var h = 0;
+    try { h = E().hash(st); } catch (e) { h = 0; }
+    var c = C(), info = null;
+    try {
+      info = (c && c.aoFim) ? c.aoFim({ fase: fase, venc: venc, h: h, venci: venci, empate: empate, clima: st.weather }) : null;
+    } catch (e2) { info = null; }
+    info = info || {};
+    var duplas = Game._duplas || { a: [], b: [] };
+    setScreen('duelFim', {
+      rede: true, guerra: true, venci: venci, empate: empate, venc: venc, wo: !!info.wo, desistencia: !!info.desistencia,
+      gid: info.gid || (rede && rede.gid) || null, lado: rede ? rede.lado : 'A',
+      guildas: info.guildas || (rede && rede.guildas) || null, jogadores: info.jogadores || (rede && rede.jogadores) || [],
+      duplaA: duplas.a, duplaB: duplas.b, arena: (rede && rede.arena) || null, clima: st.weather,
+      resultado: info.resultado || null
     });
   }
 
@@ -1430,6 +1536,10 @@ var JOGO = (typeof window !== 'undefined')
         fim[hid] = cr[k];
         if (mr[k]) maximos[hid] = mr[k];
       });
+    } else if (rede && rede.tipo === 'guerra') {
+      // 15/09: os MEUS heróis são os do meu dono, e o meu parceiro de guilda está do mesmo lado
+      var vd = vidaDoDono(st, rede.eu);
+      fim = vd.fim; maximos = vd.maximos;
     } else if (rede && rede.tipo === 'duelo') {
       var lado = Game.meuLado();
       try { fim = E().vidaDoLado ? E().vidaDoLado(st, lado) : {}; } catch (e0) { fim = {}; }
@@ -2319,6 +2429,7 @@ var JOGO = (typeof window !== 'undefined')
      * rede grava, no fimDueloRede. */
     if (Game.state.pvp) {
       if (rede && rede.tipo === 'duelo') { fimDueloRede(); return; }   // [G11]
+      if (rede && rede.tipo === 'guerra') { fimGuerraRede(); return; } // 15/09: a guerra de guilda
       resetAiState();
       resetTimer(true);
       Game.selectedSpellId = null;

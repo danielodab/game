@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a guerra de guilda 2×2: o lockstep de QUATRO (motores de mentira na mesma página)</title>
+<style>
+  body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;padding:10px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px;background:#1b222c}
+  .allpass{background:#16241b !important;color:#7fe08a} .fail{background:#3d1414 !important;color:#f77}
+  li{margin:2px 0} .ok{color:#7fe08a} .no{color:#f77} code{color:#9ab}
+  h2{font-size:13px;margin:12px 0 4px;color:#e8c25a}
+  #palco iframe{width:10px;height:10px;border:0;opacity:0;position:absolute}
+</style>
+</head>
+<body>
+<!-- A GUERRA DE GUILDA 2×2 (15/09, o dono: "a guerra de guild que é 2x2 de cada guild é na sede de guild"). Quatro
+     clientes de verdade (os iframes-cliente do tests/coop_motor.html: dados, motor, Progress, Game e Coop, com a Rede
+     de mentira pelo correio desta página e o relógio daqui), cada um com a DUPLA dele, na mesma ata do servidor:
+       G1 os quatro abrem a guerra da ata (8 heróis no Salão da Sede), a vida entra por dono:heroId (dois Espadachins
+          do lado A, só o da Ana ferido) e os quatro nascem com o MESMO hash; enquanto alguém não entrou, ninguém joga;
+       G2 a guerra inteira pelo piloto: o hash bate nos quatro em todo turno e no fim; cada lance vai aos três; a
+          tela de fim é a da guerra, com a vitória de uma GUILDA; os quatro fecham no servidor com o mesmo gid;
+       G3 a Bia CAI: quem marca os heróis dela (o turno passa) é a Ana, o parceiro de guilda — nunca o Cris ou a Duda;
+          a Bia volta com outra conexão, a Ana a desmarca, a foto de quem manda a recoloca, e o hash volta a bater;
+       G4 a marca `ia` forjada por um adversário é ignorada;
+       G5 um motor estragado diverge: quem manda (a Ana) manda a foto, e só ela vale;
+       G6 a Duda sai da guerra: os heróis dela caem nos três motores, e o lockstep segue;
+       G7 os DOIS adversários caem: W.O. para a guilda que ficou, sem o hash do fim no fechamento (não rende XP). -->
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+<div id="palco"></div>
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var RAIZ = '../';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0, notas = [];
+  function secao(t) { var h = document.createElement('h2'); h.textContent = t; lista.appendChild(h); }
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ') + nome +
+      (extra !== undefined && extra !== null && extra !== '' ? ' — <code>' + String(extra).replace(/</g, '&lt;') + '</code>' : '');
+    lista.appendChild(li);
+  }
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    if (notas.length) { var li = document.createElement('li'); li.textContent = 'notas: ' + notas.join(' · '); lista.appendChild(li); }
+    window.__pronto = true;
+    window.__fail = falhas;
+  }
+
+  // ------------------------------------------------------------ o correio, o relógio e os quatro clientes
+  var relogio = window.__relogio = { t: 1757900000000 };
+  var correio = window.__correio = [];
+  var erros = window.__erros = [];
+  var cli = {}, registro = [];
+  var IDS = ['ana', 'bia', 'cris', 'duda'];
+  function entrega() {
+    var n = 0;
+    while (correio.length && n++ < 40000) {
+      var it = correio.shift();
+      var env = JSON.parse(it.s);
+      var alvo = cli[env.para], de = cli[env.de];
+      if (!alvo || !alvo.vivo || (de && !de.vivo)) continue;
+      if (env.paraCx && env.paraCx !== alvo.cx) continue;
+      if (env.t === 'batalha') registro.push({ de: env.de, para: env.para, acao: env.acao, cx: env.cx, dados: env.dados });
+      alvo.J.Rede._recebe(env);
+    }
+  }
+  function passo(ms, quem) {
+    relogio.t += (ms || 50);
+    entrega();
+    IDS.forEach(function (id) {
+      var c = cli[id];
+      if (!c || !c.vivo || (quem && quem.indexOf(id) < 0)) return;
+      try { c.J.Game.update(0.05); c.J.Coop._tique(); }
+      catch (e) { erros.push(id + ': ' + e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).join(' ')); }
+      c.J.Engine.events.length = 0;
+      entrega();
+    });
+  }
+  function ate(cond, max, ms, quem) {
+    for (var i = 0; i < (max || 4000); i++) { if (cond()) return true; passo(ms, quem); }
+    return cond();
+  }
+  function tela(id) { return cli[id].J.Game.screen; }
+  function final(id) { var J = cli[id].J; return J.Game.state ? J.Engine.hash(J.Game.state) : null; }
+  function hashesIguais(ids, desde) {
+    var base = cli[ids[0]].J.Coop._hashes(), n = 0, dif = [];
+    Object.keys(base).forEach(function (T) {
+      if (+T < (desde || 0)) return;
+      var todos = true;
+      for (var i = 1; i < ids.length; i++) {
+        var h = cli[ids[i]].J.Coop._hashes()[T];
+        if (h === undefined) { todos = false; break; }
+        if (h !== base[T]) dif.push(ids[i] + '@' + T);
+      }
+      if (todos) n++;
+    });
+    return { n: n, dif: dif };
+  }
+  function filho(cb) {
+    var fr = document.createElement('iframe');
+    fr.src = 'coop_motor.html?filho=cliente&raiz=' + encodeURIComponent(RAIZ) + '&base=' + encodeURIComponent(RAIZ + 'js/core/') + '&n=' + Math.random();
+    document.getElementById('palco').appendChild(fr);
+    var t0 = Date.now();
+    (function espera() {
+      var w = null;
+      try { w = fr.contentWindow; } catch (e) {}
+      if (w && w.__pronto && w.JOGO && w.JOGO.Engine && w.JOGO.Coop && w.JOGO.Game) return cb(w);
+      if (Date.now() - t0 > 90000) return cb(null);
+      setTimeout(espera, 60);
+    })();
+  }
+  var LADO = { ana: 'A', bia: 'A', cris: 'B', duda: 'B' };
+  var DUPLA = { ana: [['espadachim', 'fogo', 22], ['curandeiro', 'agua', 20]], bia: [['espadachim', 'terra', 21], ['arqueiro', 'ar', 21]],
+                cris: [['minotauro', 'terra', 22], ['bruxo', 'fogo', 20]], duda: [['invocador', 'agua', 21], ['curandeiro', 'ar', 21]] };
+  function prep(w, id) {
+    var J = w.JOGO, P = J.Progress;
+    P.reset();
+    DUPLA[id].forEach(function (h) {
+      P.unlockClass(h[0]);
+      var he = P.hero(h[0]) || P.hero(P.createHero(h[0]));
+      he.level = h[2]; he.element = h[1];
+      var tab = (J.DATA.leveling || {}).xpTable || [];
+      he.xp = tab[h[2] - 1] != null ? tab[h[2] - 1] : he.xp;
+      he.spells = P.spellsFor(h[0]);
+    });
+    P.save();
+    var cx = 'cx' + id;
+    J.Rede._ident(id, cx);
+    cli[id] = { w: w, J: J, id: id, cx: cx, vivo: true, fechou: [], avisos: [] };
+    J.Guerra = { fechar: function (corpo) { cli[id].fechou.push(JSON.parse(JSON.stringify(corpo))); return Promise.resolve({ ok: true, gid: corpo.gid, fase: 'won', xp: 40 }); } };
+  }
+  var nGuerra = 0;
+  function abreGuerra(op) {
+    op = op || {};
+    nGuerra++;
+    registro.length = 0;
+    correio.length = 0;
+    var gid = 'guerra-' + ('00000000000000000000' + (1234567 + nGuerra).toString(16)).slice(-20);
+    IDS.forEach(function (id) {
+      var c = cli[id];
+      c.vivo = true; c.cx = 'cx' + id; c.fechou = []; c.avisos = [];
+      c.J.Rede._ident(id, c.cx);
+      c.J.Coop._reset();
+      c.J.Coop._semIntervalo = true;
+      c.J.Coop._agora = function () { return relogio.t; };
+      ['GRACA_MS', 'WO_MS', 'SILENCIO_MS', 'DENTRO_MS'].forEach(function (k) { if (op[k]) c.J.Coop[k] = op[k]; });
+      c.J.Coop.aoAviso = function (t) { c.avisos.push(t); };
+      c.J.Game.init();
+    });
+    var A = [], B = [];
+    IDS.forEach(function (id) {
+      var ps = cli[id].J.Coop.payloadMeus(DUPLA[id].map(function (h) { return h[0]; }));
+      (LADO[id] === 'A' ? A : B).push.apply(LADO[id] === 'A' ? A : B, ps);
+    });
+    var ata = { mapa: 'sede', sala: 0, semente: 31337 + nGuerra * 7919, A: A, B: B, carry: { 'ana:espadachim': 40 } };
+    var jogadores = IDS.map(function (id, i) {
+      return { conta: 100 + i, nome: id.charAt(0).toUpperCase() + id.slice(1), dono: id, lado: LADO[id], ordem: (id === 'ana' || id === 'cris') ? 0 : 1 };
+    });
+    var guildas = { A: { id: 1, nome: 'Lanças do Norte', emblema: '⚔' }, B: { id: 2, nome: 'Raízes Fundas', emblema: '☘' } };
+    var oks = IDS.map(function (id) {
+      return cli[id].J.Coop.iniciaGuerra({ gid: gid, ata: JSON.parse(JSON.stringify(ata)), jogadores: jogadores, guildas: guildas, eu: id });
+    });
+    return { gid: gid, ata: ata, oks: oks };
+  }
+  function pilota(quem) { IDS.forEach(function (id) { cli[id].J.Coop._piloto((!quem || quem.indexOf(id) >= 0) ? { joga: true } : null); }); }
+  function unid(id, dono, heroId) {
+    var st = cli[id].J.Game.state;
+    return st ? st.units.filter(function (u) { return u.kind === 'hero' && u.dono === dono && (!heroId || u.heroId === heroId); }) : [];
+  }
+
+  // ------------------------------------------------------------ as seções
+  function G1e2() {
+    secao('G1 · os quatro abrem a guerra da ata do servidor');
+    var g = abreGuerra();
+    check('os quatro abrem a guerra (a ata com os oito heróis e o dono de cada um confere)', g.oks.every(Boolean), g.oks.join(','));
+    check('os quatro na tela da batalha, modo de rede "guerra", com o lado certo',
+          IDS.every(function (id) { return tela(id) === 'battle' && cli[id].J.Game.modoRede() === 'guerra'; }) &&
+          cli.bia.J.Game.meuLado() === 'player' && cli.cris.J.Game.meuLado() === 'enemy',
+          IDS.map(tela).join(','));
+    var ea = unid('ana', 'ana', 'espadachim')[0], eb = unid('ana', 'bia', 'espadachim')[0];
+    check('a vida entra por dono:heroId: o Espadachim da Ana a 40 PV, o da Bia (o mesmo heroId) cheio',
+          ea && ea.hp === 40 && eb && eb.hp === eb.hpMax, (ea && ea.hp) + ' / ' + (eb && eb.hp + '/' + eb.hpMax));
+    var h0 = IDS.map(final);
+    check('os quatro nascem com o MESMO hash (oito heróis, quatro de cada lado)',
+          h0.every(function (h) { return h === h0[0]; }) && cli.ana.J.Game.state.units.filter(function (u) { return u.kind === 'hero'; }).length === 8,
+          h0.join(','));
+    check('antes de os quatro entrarem ninguém joga (o Coop segura a batalha)', cli.ana.J.Coop.bloqueado() === true);
+    ate(function () { return IDS.every(function (id) { return !cli[id].J.Coop.bloqueado(); }); }, 200);
+    check('os `dentro` dos quatro chegam: a batalha solta nos quatro', IDS.every(function (id) { return !cli[id].J.Coop.bloqueado(); }));
+    var ses = cli.duda.J.Coop.sessao();
+    check('quem manda é a Ana (A1) na conta de todos', IDS.every(function (id) { return cli[id].J.Coop.sessao().autoridade === 'ana'; }) &&
+          ses.guerra && ses.guerra.jogadores.length === 4, JSON.stringify(ses.guerra && ses.guerra.autoridade));
+
+    secao('G2 · a guerra inteira pelo piloto: o hash bate nos quatro');
+    pilota();
+    var voltas = 0;
+    ate(function () { voltas++; return IDS.every(function (id) { return tela(id) !== 'battle'; }); }, 60000, 50);
+    var hs = hashesIguais(IDS, 0), fins = IDS.map(final);
+    check('a guerra termina nos quatro com o mesmo hash em todo turno guardado e no fim',
+          IDS.every(function (id) { return tela(id) === 'duelFim'; }) && !hs.dif.length && hs.n > 8 && fins.every(function (h) { return h === fins[0]; }),
+          IDS.map(tela).join(',') + ' · ' + hs.n + ' turnos · dif ' + hs.dif.slice(0, 4).join(' ') + ' · fase ' + (cli.ana.J.Game.state && cli.ana.J.Game.state.phase));
+    var lances = registro.filter(function (m) { return m.acao === 'lance'; });
+    var porLance = {};
+    lances.forEach(function (m) { var k = m.de + ':' + m.dados.T + ':' + m.dados.k; porLance[k] = (porLance[k] || 0) + 1; });
+    var ks = Object.keys(porLance);
+    check('cada lance vai aos TRÊS outros (um envelope dirigido por destino) e os quatro jogaram',
+          ks.length > 10 && ks.every(function (k) { return porLance[k] === 3; }) &&
+          IDS.every(function (id) { return lances.some(function (m) { return m.de === id; }); }),
+          ks.length + ' lances · ' + ks.filter(function (k) { return porLance[k] !== 3; }).slice(0, 3).join(' '));
+    var telaA = cli.ana.w.__telas.filter(function (t) { return t.n === 'duelFim'; }).pop(), telaC = cli.cris.w.__telas.filter(function (t) { return t.n === 'duelFim'; }).pop();
+    var dA = telaA && telaA.d || {}, dC = telaC && telaC.d || {};
+    check('a tela de fim é a da guerra: a vitória de uma GUILDA (a Ana e o Cris veem lados opostos), com as guildas e os quatro',
+          dA.guerra === true && dC.guerra === true && (dA.empate || dA.venci === !dC.venci) && dA.guildas && dA.guildas.B.nome === 'Raízes Fundas' &&
+          (dA.jogadores || []).length === 4 && dA.lado === 'A' && dC.lado === 'B',
+          JSON.stringify({ a: dA.venci, c: dC.venci, e: dA.empate }));
+    var fechou = IDS.map(function (id) { return cli[id].fechou[0]; });
+    check('os quatro fecham no servidor com o mesmo gid e o registro com os lances de todos (e o mesmo hash do fim)',
+          fechou.every(function (f) { return f && f.gid === g.gid && f.hashFinal === fins[0] && !f.fotografada; }) &&
+          IDS.every(function (id) { return fechou[0].lances.some(function (l) { return l.de === id; }); }),
+          fechou.map(function (f) { return f ? f.lances.length : 'x'; }).join(','));
+  }
+
+  function G3() {
+    secao('G3 · a Bia cai: quem marca é o parceiro de guilda, e ela volta');
+    abreGuerra({ GRACA_MS: 1500, SILENCIO_MS: 60000 });
+    pilota();
+    ate(function () { return IDS.every(function (id) { return cli[id].J.Game.state && cli[id].J.Game.state.turno >= 6; }); }, 3000);
+    registro.length = 0;
+    cli.bia.vivo = false;
+    ['ana', 'cris', 'duda'].forEach(function (id) { cli[id].J.Rede._sinal({ tipo: 'caiu', id: 'bia', cx: 'cxbia' }); });
+    ate(function () { return unid('ana', 'bia').every(function (u) { return u.ia || !u.alive; }) && unid('cris', 'bia').some(function (u) { return u.ia; }); }, 3000, 100, ['ana', 'cris', 'duda']);
+    var marcas = registro.filter(function (m) { return m.acao === 'ia'; });
+    check('passada a carência, os heróis da Bia ficam marcados fora (u.ia) nos três motores que ficaram',
+          ['ana', 'cris', 'duda'].every(function (id) { return unid(id, 'bia').some(function (u) { return u.ia; }); }),
+          ['ana', 'cris', 'duda'].map(function (id) { return unid(id, 'bia').map(function (u) { return u.ia ? 1 : 0; }).join(''); }).join(' '));
+    check('quem marcou foi a Ana (a parceira de guilda) — o Cris e a Duda nunca marcam',
+          marcas.length > 0 && marcas.every(function (m) { return m.de === 'ana'; }), marcas.map(function (m) { return m.de; }).join(','));
+    ate(function () { return false; }, 60, 100, ['ana', 'cris', 'duda']);
+    var tAntes = cli.ana.J.Game.state.turno;
+    check('com a Bia fora, a guerra anda (o turno dela passa)', tela('ana') !== 'battle' || tAntes > 6, tAntes);
+    if (tela('ana') !== 'battle') { notas.push('G3: a guerra acabou antes da volta'); return; }
+    // a volta, por outra conexão
+    cli.bia.vivo = true; cli.bia.cx = 'cxbia2';
+    cli.bia.J.Rede._ident('bia', 'cxbia2');
+    cli.bia.J.Rede._sinal({ tipo: 'religou', cx: 'cxbia2' });
+    var volta = ate(function () {
+      return cli.bia.J.Coop.sessao().restauracoes > 0 && IDS.every(function (id) { return unid(id, 'bia').every(function (u) { return !u.ia; }); });
+    }, 600);
+    var tVolta = cli.bia.J.Game.state ? cli.bia.J.Game.state.turno : 0;
+    check('a Bia volta: a Ana a desmarca, a foto de quem manda (a Ana) a recoloca, e os heróis são dela de novo nos quatro',
+          volta && cli.bia.J.Game.donoDe(unid('bia', 'bia')[0]) === 'eu',
+          'restaurações ' + cli.bia.J.Coop.sessao().restauracoes + ' · ia ' + IDS.map(function (id) { return unid(id, 'bia').map(function (u) { return u.ia ? 1 : 0; }).join(''); }).join(' '));
+    var fotos = registro.filter(function (m) { return m.acao === 'foto'; });
+    check('a foto veio de quem manda (a Ana)', fotos.length > 0 && fotos.every(function (m) { return m.de === 'ana'; }), fotos.map(function (m) { return m.de; }).join(','));
+    ate(function () { return IDS.every(function (id) { return tela(id) !== 'battle' || cli[id].J.Game.state.turno >= tVolta + 24; }); }, 20000);
+    var hs = hashesIguais(IDS, tVolta + 2);
+    check('da volta em diante o hash bate nos quatro', !hs.dif.length && hs.n > 0, hs.n + ' turnos · ' + hs.dif.slice(0, 4).join(' '));
+  }
+
+  function G4e5() {
+    secao('G4 · a marca forjada pelo adversário não vale');
+    var g = abreGuerra();
+    pilota();
+    ate(function () { return IDS.every(function (id) { return cli[id].J.Game.state && cli[id].J.Game.state.turno >= 4; }); }, 3000);
+    var alvo = unid('bia', 'ana')[0];
+    cli.bia.J.Rede._recebe({ t: 'batalha', de: 'cris', cx: 'cxcris', para: 'bia', acao: 'ia', dados: { b: g.gid, u: alvo.uid, mot: 'caiu' } });
+    cli.duda.J.Rede._recebe({ t: 'batalha', de: 'cris', cx: 'cxcris', para: 'duda', acao: 'ia', dados: { b: g.gid, u: alvo.uid, mot: 'caiu' } });
+    check('o Cris marcando a Ana fora: ignorado na Bia e na Duda', !unid('bia', 'ana')[0].ia && !unid('duda', 'ana')[0].ia);
+    cli.bia.J.Rede._recebe({ t: 'batalha', de: 'cris', cx: 'cxcris', para: 'bia', acao: 'foto', dados: { b: g.gid, T: 1, estado: '{}', lances: [] } });
+    check('a foto de quem não manda não é aceita (nem pedida)', cli.bia.J.Coop.sessao().restauracoes === 0);
+
+    secao('G5 · um motor diverge: a foto de quem manda conserta');
+    var au = cli.duda.J.Game.state.units.filter(function (u) { return u.kind === 'hero' && u.alive; })[0];
+    cli.duda.J.Coop._estraga(au.uid, 3);
+    var ok = ate(function () { return cli.duda.J.Coop.sessao().restauracoes > 0 || tela('duda') !== 'battle'; }, 4000);
+    var tR = cli.duda.J.Game.state ? cli.duda.J.Game.state.turno : 0;
+    check('a Duda percebe pelo hash, pede e restaura a foto', ok && cli.duda.J.Coop.sessao().restauracoes > 0 && cli.duda.J.Coop.sessao().dessinc > 0,
+          'dessinc ' + cli.duda.J.Coop.sessao().dessinc + ' · restaurações ' + cli.duda.J.Coop.sessao().restauracoes);
+    ate(function () { return IDS.every(function (id) { return tela(id) !== 'battle' || cli[id].J.Game.state.turno >= tR + 16; }); }, 20000);
+    var hs = hashesIguais(IDS, tR + 2);
+    check('e o hash volta a bater nos quatro', !hs.dif.length && hs.n > 0, hs.n + ' · ' + hs.dif.slice(0, 4).join(' '));
+    var fechou = [];
+    ate(function () { return tela('duda') !== 'battle'; }, 60000);
+    fechou = cli.duda.fechou[0];
+    check('o registro de quem restaurou vai ao servidor marcado como fotografado', !fechou || fechou.fotografada === true,
+          fechou ? String(fechou.fotografada) : 'a guerra não acabou');
+  }
+
+  function G6() {
+    secao('G6 · a Duda sai da guerra: os heróis dela caem nos três');
+    abreGuerra();
+    pilota();
+    ate(function () { return IDS.every(function (id) { return cli[id].J.Game.state && cli[id].J.Game.state.turno >= 4; }); }, 3000);
+    cli.duda.J.Coop.sairDaGuerra('saiu');
+    entrega();                             // os `sai` dela saem antes de a conexão fechar
+    cli.duda.vivo = false;
+    ate(function () { return ['ana', 'bia', 'cris'].every(function (id) { return unid(id, 'duda').every(function (u) { return !u.alive; }); }); }, 400, 50, ['ana', 'bia', 'cris']);
+    check('os dois heróis da Duda caem nos motores da Ana, da Bia e do Cris',
+          ['ana', 'bia', 'cris'].every(function (id) { return unid(id, 'duda').length === 2 && unid(id, 'duda').every(function (u) { return !u.alive; }); }),
+          ['ana', 'bia', 'cris'].map(function (id) { return unid(id, 'duda').map(function (u) { return u.alive ? 1 : 0; }).join(''); }).join(' '));
+    check('quem saiu volta à praça', tela('duda') === 'hub', tela('duda'));
+    var t0 = cli.ana.J.Game.state.turno;
+    ate(function () { return ['ana', 'bia', 'cris'].every(function (id) { return tela(id) !== 'battle' || cli[id].J.Game.state.turno >= t0 + 12; }); }, 20000, 50, ['ana', 'bia', 'cris']);
+    var hs = hashesIguais(['ana', 'bia', 'cris'], t0 + 1);
+    check('e o lockstep dos três segue batendo', !hs.dif.length && hs.n > 0, hs.n + ' · ' + hs.dif.slice(0, 4).join(' '));
+  }
+
+  function G7() {
+    secao('G7 · os dois adversários caem: W.O. do lado inteiro');
+    abreGuerra({ GRACA_MS: 1000, WO_MS: 4000, SILENCIO_MS: 60000 });
+    pilota();
+    ate(function () { return IDS.every(function (id) { return cli[id].J.Game.state && cli[id].J.Game.state.turno >= 4; }); }, 3000);
+    // daqui em diante ninguém joga (o piloto acabaria a guerra antes do W.O.): a vez de gente espera o relógio de 30 s
+    pilota([]);
+    cli.cris.vivo = false;
+    ['ana', 'bia', 'duda'].forEach(function (id) { cli[id].J.Rede._sinal({ tipo: 'caiu', id: 'cris', cx: 'cxcris' }); });
+    ate(function () { return false; }, 80, 100, ['ana', 'bia', 'duda']);
+    check('com UM adversário fora não há W.O. (a Duda marca o Cris e a guerra segue)',
+          tela('ana') === 'battle' && unid('ana', 'cris').some(function (u) { return u.ia; }), tela('ana'));
+    cli.duda.vivo = false;
+    ['ana', 'bia'].forEach(function (id) { cli[id].J.Rede._sinal({ tipo: 'caiu', id: 'duda', cx: 'cxduda' }); });
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 400, 100, ['ana', 'bia']);
+    var d = (cli.ana.w.__telas.filter(function (t) { return t.n === 'duelFim'; }).pop() || {}).d || {};
+    check('com os DOIS fora há 4 s, a guilda que ficou vence por W.O.', d.guerra === true && d.wo === true && d.venci === true, JSON.stringify({ wo: d.wo, venci: d.venci }));
+    var f = cli.ana.fechou[0];
+    check('o W.O. vai ao servidor sem o hash do fim (o replay não vê vencedor: não rende XP)', f && f.hashFinal === null, f && String(f.hashFinal));
+    check('a Ana nunca marcou os heróis dos adversários', !registro.some(function (m) { return m.acao === 'ia' && (m.de === 'ana' || m.de === 'bia') && m.dados.mot !== 'volta'; }));
+  }
+
+  function etapa(fn) {
+    return function (prox) {
+      try { fn(); } catch (e) { check('a etapa quebrou', false, e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).join(' ')); }
+      setTimeout(prox, 0);
+    };
+  }
+  window.addEventListener('load', function () {
+    var ws = [];
+    (function carrega(i) {
+      if (i >= IDS.length) {
+        if (ws.some(function (w) { return !w; })) { check('os quatro iframes carregaram', false, ws.map(Boolean).join(',')); return fim(); }
+        IDS.forEach(function (id, k) { prep(ws[k], id); });
+        var so = (/[?&]so=([^&]+)/.exec(location.search) || [])[1];
+        var quer = function (s) { return !so || decodeURIComponent(so).split(',').indexOf(s) >= 0; };
+        var fila = [];
+        if (quer('1')) fila.push(etapa(G1e2));
+        if (quer('3')) fila.push(etapa(G3));
+        if (quer('4')) fila.push(etapa(G4e5));
+        if (quer('6')) fila.push(etapa(G6));
+        if (quer('7')) fila.push(etapa(G7));
+        fila.push(etapa(function () { check('nenhum erro de script nos quatro clientes', !erros.length, erros.slice(0, 4).join(' | ')); }));
+        return (function roda(j) { if (j >= fila.length) return fim(); fila[j](function () { roda(j + 1); }); })(0);
+      }
+      filho(function (w) { ws.push(w); carrega(i + 1); });
+    })(0);
+  });
+})();
+</script>
+</body>
+</html>

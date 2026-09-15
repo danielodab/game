@@ -231,6 +231,46 @@ desafio); o atacado confere zona, ocupação, vida e paridade (pelo `resumo.fort
 envelope) e recusa com o motivo. Risco aceito: a zona e o `forte` são palavra do cliente — quem fecha
 decide a Brasa é a paridade lida no servidor, e os tetos seguram o combinado entre duas contas.
 
+**A guerra de guilda 2×2 na Sede (15/09, `servidor/guerra.py`, `servidor/juiz/guerra.js`).** O dono: "a guerra de
+guild que é 2x2 de cada guild é na sede de guild, isso dá pontos de experiência para guild". Cada jogador leva a DUPLA
+(oito heróis no mapa `sede`); a fila é na Sede e os QUATRO confirmam. Tabelas novas: `guerra_inscricoes`,
+`guerra_partidas`, `guerra_jogadores`, `guerra_resultados`. Rotas (com conta; sem juiz, 503):
+- `POST /api/guerra/inscrever {parceiro, herois:[2], dono}` — quem lidera o grupo de 2; o parceiro é da MESMA guilda
+  (409 `sem-guilda`/`outra-guilda`); os dois heróis em ordem (400 `dois`/`mestre`), nenhum a 0 PV (409 `vida-zero`); fica
+  `aguardando` até o parceiro juntar (60 s). `POST /api/guerra/juntar {herois:[2], dono}` (409 `sem-convite`): a
+  inscrição vale, com o nível do herói mais forte dos QUATRO lido nos estados do servidor.
+- O casamento: a inscrição completa mais antiga com a mais antiga de OUTRA guilda, diferença de nível ≤ 10 (decisão do
+  coordenador). `casada` mostra a guilda e os NOMES dos adversários, nunca as duplas (a surpresa: elas só aparecem na ata).
+- `POST /api/guerra/confirmar` (409 `vida-zero` do próprio herói; `sem-partida`): os quatro em 30 s = `pronta`, com a
+  semente do servidor e a vida de cada jogador guardada (`guerra_jogadores.carry`). A ATA (`guerra_partidas.ata`) sai do
+  juiz: `POST /guerra/ata` monta os oito payloads com `Progress.battleParty` no estado de cada conta, com o `dono` —
+  o cliente não escolhe com que números luta; `carry` = `{dono:heroId: PV}` (a chave heroId colide entre os dois do
+  mesmo lado). O prazo: quem não confirmou sai e o lado que confirmou inteiro volta à fila com o lugar;
+  `POST /api/guerra/recusar` devolve o outro lado; `POST /api/guerra/sair` desfaz a inscrição (a dupla de jogadores
+  inteira) ou recusa. `GET /api/guerra/estado` = `livre | aguardando | convite | inscrito | casada | pronta` (a consulta
+  é o "ainda estou aqui": 20 s sem ela, a inscrição sai). Teto de 120 pedidos (inscrever + juntar) por conta por hora.
+- `POST /api/guerra/fechar {gid, lances, hashFinal, fotografada}` (qualquer um dos quatro; idempotente por gid): o juiz
+  (`POST /guerra/fecha`) refaz com a ata GUARDADA (`createDuelSala` com até 4 por lado — o `refazEm` do sala.js aceita 4
+  no modo duelo desde 15/09 — e a vida pela chave `dono:heroId`) e devolve `fase`, `venc` e a vida do fim POR DONO. Vitória:
+  `guildas.xp += 40` para a guilda vencedora (decisão do coordenador), dividido em `guilda_contrib` entre os dois que
+  lutaram por ela (quem ainda é membro); a perdedora não perde; empate (`motivo: 'empate'`) e W.O./desistência (o replay
+  sem fim, `'sem-fim'`) não rendem. A COROA NÃO MUDA (a Brasa é do PvP individual). Tetos anti-combinação: 3 guerras com
+  XP por par de guildas e 10 por guilda (vencendo ou perdendo) em 24 h — acima vale sem XP (`'teto'`). A vida dos oito grava
+  na conta de cada um em todo fim refeito. Tempo mínimo de 0,35 s por turno de gente desde a pronta (422 `rapido-demais`,
+  guardado). Fotografado espera 120 s um registro limpo de outro dos quatro, senão `nao-conferida` (sem XP e sem vida).
+  Replay que não bate (422): `recusada`, guardado, sem XP e sem vida.
+  Resposta `{ok, gid, fase, venc, lado, venceu, xp, guilda, guildas, motivo?, vida}`.
+- **O lockstep de 4 (cliente, `js/core/coop.js`).** Os lances vão pelo dirigido `batalha` aos três outros (um envelope
+  por destino, com `para` e o limite de 6.000 bytes por fatia do `R.dirige` — o relé não mudou). Lance só do dono da vez;
+  hash no fim de cada turno. Quem MANDA (a foto de resgate) é o primeiro presente da ordem A1, A2, B1, B2 (A = a dupla de
+  jogadores que entrou na fila antes; 1 = quem inscreveu); cada cliente só aceita a foto que pediu, de quem ELE vê como
+  autoridade. Quem cai: passada a carência de 15 s, quem marca `u.ia` (o turno passa) é o PARCEIRO DE GUILDA — marca
+  vinda do adversário é ignorada; a volta desmarca (o parceiro, ou o próprio dono se o parceiro também está fora). Quem
+  sai morre (`sai`). W.O. do lado inteiro só com os DOIS adversários fora há 60 s — e o W.O. não rende XP.
+- **Risco aceito (o mesmo do duelo):** o primeiro registro limpo que o juiz refaz vale; um cliente mexido pode escrever
+  lances que o adversário não fez. O tempo mínimo e os tetos seguram o farm, e o XP é da guilda (não vira moeda). A
+  partida tem de estar `pronta` (os quatro confirmaram) e o gid é do servidor.
+
 **A poção** se bebe FORA da batalha, em qualquer lugar (praça, antessala, depois do duelo): `POST
 /api/vida/pocao {heroId, pocaoId}`. A API confere o herói na conta (400 `heroi`) e a vida ferida (409
 `cheio`, com `hp`/`hpMax` quando há linha — antes de gastar); o juiz roda a op INTERNA `beberPocao
@@ -301,6 +341,10 @@ tudo ou nada).
       ranqueado (`/duelo/fecha`, Brasa nos dois estados) — `tests/juiz_grupo.js`
 - [x] Cliente: semente do grupo pelo servidor, fechar grupo e duelo (`coop.js`, `game.js`)
 - [ ] API: rotas de grupo e duelo (`/api/grupo/abrir|fechar`, `/api/duelo/fechar`, tetos anti-farm)
+- [x] Guerra de guilda 2×2 (15/09): a fila e o XP da guilda na API (`servidor/guerra.py`, `tests/guerra_api.py`), a ata
+      e o replay de quatro donos no juiz (`servidor/juiz/guerra.js`, `tests/juiz_guerra.js`), o lockstep de quatro no
+      cliente (`tests/guerra_motor.html`), a HUD (`tests/guerra_hud.html`) e o tráfego pelo relé de verdade
+      (`tests/guerra_rele_prova.py`)
 
 ### Limites conhecidos
 

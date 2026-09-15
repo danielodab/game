@@ -161,16 +161,21 @@ var JOGO = (typeof window !== 'undefined')
       dentroConfirmado: false, dentroRepProx: 0, ataFalhouEm: 0,
       cargaTeto: 0, cargaProx: 0,
       fimGrupo: null, fimGrupoDele: null, fimGrupoMeu: null, fimFotoPedidaEm: 0,
-      tortos: 0
+      tortos: 0,
+      // 15/09: a guerra de guilda 2×2 — { gid, meuId, lado, ordem: [4 ids], js: {id: jogador}, guildas, nomes,
+      // euFora, resultado, fechou } (ver "a guerra de guilda", mais abaixo)
+      guerra: null, dentroLiberado: false, saiuNome: null
     };
   }
 
   function parceiro() {
     if (S.tipo === 'duelo') return S.parceiro;
+    if (S.tipo === 'guerra') return null;           // 15/09: na guerra são três (outrosGuerra)
     return (cfg && cfg.parceiro) || null;
   }
   function meuId() {
     if (S.tipo === 'duelo' && S.duelo && S.duelo.meuId) return S.duelo.meuId;
+    if (S.tipo === 'guerra' && S.guerra && S.guerra.meuId) return S.guerra.meuId;
     if (cfg && cfg.eu) return cfg.eu;
     var r = R();
     try { return r && r.meuId ? r.meuId() : null; } catch (e) { return null; }
@@ -191,18 +196,20 @@ var JOGO = (typeof window !== 'undefined')
    * são de quem ficou — senão os dois se achavam autoridade e um jogava fora
    * a foto do outro, com a tela presa em "Sincronizando…". */
   function souLider() {
-    if (S.tipo === 'duelo') return false;
+    if (S.tipo === 'duelo' || S.tipo === 'guerra') return false;
     if (S.cedeu) return false;
     if (S.tomouAutoridade) return true;
     return !!(cfg && cfg.lider && cfg.lider === meuId());
   }
   Coop.souLider = souLider;
   function souAutoridade() {
+    if (S.tipo === 'guerra') return !!S.guerra && autoridadeGuerra() === meuId();
     if (S.cedeu) return false;
     if (S.tipo === 'duelo') return S.tomouAutoridade || !!(S.duelo && S.duelo.eu === 'A');
     return souLider();
   }
   function autoridadeId() {
+    if (S.tipo === 'guerra') return autoridadeGuerra();
     if (souAutoridade()) return meuId();
     var p = parceiro();
     return p ? p.id : null;
@@ -226,6 +233,7 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------ envio
   function envia(acao, dados) {
+    if (S.tipo === 'guerra') return enviaGuerra(acao, dados);     // 15/09: aos três
     var r = R(), p = parceiro();
     if (!r || !r.dirige || !p || !p.id) return false;
     var ok = false;
@@ -565,7 +573,8 @@ var JOGO = (typeof window !== 'undefined')
     if (outro && parceiroUltimo && parceiroUltimo.id !== novo.parceiro.id) parceiroUltimo = null;
     var eraLider = souLider();
     cfg = novo;
-    if (S.tipo !== 'duelo') {
+    // 15/09: a guerra corre com o grupo formado (os dois da mesma guilda): o grupo não toma a sessão dela
+    if (S.tipo !== 'duelo' && S.tipo !== 'guerra') {
       if (outro && !emBatalha()) { var n1 = S.n; S = nova('grupo'); S.n = n1; }
       else S.tipo = 'grupo';
     }
@@ -578,7 +587,7 @@ var JOGO = (typeof window !== 'undefined')
     ligaTique();
     muda();
   };
-  Coop.ativo = function () { return !!((cfg && cfg.parceiro) || S.tipo === 'duelo'); };
+  Coop.ativo = function () { return !!((cfg && cfg.parceiro) || S.tipo === 'duelo' || S.tipo === 'guerra'); };
   Coop.emGrupo = function () { return !!(cfg && cfg.parceiro); };
   Coop.classeParceiro = function () {
     var p = cfg && cfg.parceiro;
@@ -651,6 +660,7 @@ var JOGO = (typeof window !== 'undefined')
       fim: S.fim ? { venc: S.fim.venc, venci: S.fim.venci, empate: S.fim.empate,
                      resultado: S.fim.resultado || null, contestado: !!S.fim.contestado } : null,
       fimMotivo: S.fimMotivo,
+      guerra: S.guerra ? sessaoGuerra() : null,      // 15/09: os quatro, quem manda, as guildas
       aviso: S.aviso
     };
   };
@@ -711,6 +721,8 @@ var JOGO = (typeof window !== 'undefined')
         if (ag >= S.dentroRepProx) { S.dentroRepProx = ag + Coop.DENTRO_REP_MS; envia('dentro', { bid: S.bid, viu: false }); }
       }
     }
+    // 15/09: a guerra — a carga, os `dentro` dos quatro e quem voltou sem o parceiro de guilda para o desmarcar
+    if (S.tipo === 'guerra' && S.bid && !S.fim && tiqueGuerra(ag) === false) return;
     // a foto FINAL que não veio (a autoridade saiu): segue com o que tem
     if (S.fimFotoPedidaEm && S.sincronizando && ag - S.fimFotoPedidaEm > 2 * Coop.FIM_GRUPO_MS) {
       S.sincronizando = false;
@@ -732,6 +744,7 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------ sumiço, IA, W.O.
   function confereSumico(ag) {
+    if (S.tipo === 'guerra') { confereSumicoGuerra(ag); return; }
     var p = parceiro(), g = G(), st = g && g.state;
     if (!p || !st || S.parceiroIA || S.fim) return;
     if (st.phase !== 'playing' && st.phase !== 'placing') return;
@@ -834,7 +847,7 @@ var JOGO = (typeof window !== 'undefined')
       try { e.processDeath(st, u); fez = true; } catch (er) {}
     }
     if (fez) {
-      avisa(nomeParceiro() + ' saiu da batalha — o heroi dele cai.', 'aviso');
+      avisa((S.tipo === 'guerra' ? (S.saiuNome || 'Alguém') : nomeParceiro()) + ' saiu da batalha — o heroi dele cai.', 'aviso');
       muda();
     }
     return fez;
@@ -864,6 +877,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   Coop.parceiroSumiu = function (id, t0) {
+    if (S.tipo === 'guerra') { sumiuGuerra(id, t0); return; }
     var p = parceiro();
     if (!p || id !== p.id) return;
     var t = num(+t0, 0) || agora();
@@ -876,6 +890,7 @@ var JOGO = (typeof window !== 'undefined')
     muda();
   };
   Coop.parceiroVoltou = function (id, cx) {
+    if (S.tipo === 'guerra') { voltouGuerra(id, cx); return; }
     var p = parceiro();
     if (!p || id !== p.id) return;
     if (cx) {
@@ -1185,8 +1200,9 @@ var JOGO = (typeof window !== 'undefined')
     envia('dentro', { bid: d.bid });
     muda();
   }
-  function rDentro(d) {
+  function rDentro(d, de) {
     if (!d || !d.bid) return;
+    if (S.tipo === 'guerra') { rDentroGuerra(d, de); return; }
     if (S.tipo === 'duelo') {
       if (d.bid !== S.bid) return;
       S.dentroEle = true;
@@ -1282,9 +1298,15 @@ var JOGO = (typeof window !== 'undefined')
   function rLance(d, de) {
     if (!d || typeof d.T !== 'number' || typeof d.k !== 'number' || !d.a) return;
     d.de = de;
-    if (d.T > (S.turnoDele || 0)) { S.turnoDele = d.T; S.turnoDeleEm = agora(); }
-    // o banco do outro tem teto: bk = 1e9 dava um prazo de anos
-    if (d.a === 'e' && d.bk != null) S.bkParceiro = Math.max(0, Math.min(num(+d.bk, 0), num((G() || {}).bankMax, 120)));
+    var jg = jogadorGuerra(de);                    // 15/09: na guerra, o turno e o banco de CADA um dos três
+    if (jg) {
+      if (d.T > jg.turnoDele) { jg.turnoDele = d.T; jg.turnoDeleEm = agora(); }
+      if (d.a === 'e' && d.bk != null) jg.bk = Math.max(0, Math.min(num(+d.bk, 0), num((G() || {}).bankMax, 120)));
+    } else {
+      if (d.T > (S.turnoDele || 0)) { S.turnoDele = d.T; S.turnoDeleEm = agora(); }
+      // o banco do outro tem teto: bk = 1e9 dava um prazo de anos
+      if (d.a === 'e' && d.bk != null) S.bkParceiro = Math.max(0, Math.min(num(+d.bk, 0), num((G() || {}).bankMax, 120)));
+    }
     if (S.bid && d.b === S.bid) S.dentroConfirmado = true;
     if (!S.bid || d.b !== S.bid) { if (d.b) guardaAntes(d); return; }
     if (jaVisto(d)) return;
@@ -1323,7 +1345,9 @@ var JOGO = (typeof window !== 'undefined')
       S.fimMotivo = 'contestado';
       var g = G();
       if (g && g._encerra && g.state && !S.fim) g._encerra(null, 'trapaca');
-    } else if (S.tortos === 1) avisa(nomeParceiro() + ' mandou um lance que não era dele — ignorado.', 'aviso');
+    } else if (S.tortos === 1) {
+      avisa((S.tipo === 'guerra' ? nomeGuerra(l && l.de) : nomeParceiro()) + ' mandou um lance que não era dele — ignorado.', 'aviso');
+    }
     muda();
   }
   /* O próximo lance da fila para o turno atual, ou null. */
@@ -1345,7 +1369,7 @@ var JOGO = (typeof window !== 'undefined')
     // não tem "posterior" que o denuncie, e se perdia numa queda curta
     var u0 = uid ? E().findUnit(st, uid) : null;
     var dele = !uid || (!!u0 && g.donoDe && g.donoDe(u0) === 'parceiro');
-    if (haAdiante(T, k) || (dele && S.turnoDele > T)) {
+    if (haAdiante(T, k) || (dele && turnoDeleDe(u0) > T)) {
       var ag = agora();
       if (!S.buracoDesde) S.buracoDesde = ag;
       else if (ag - S.buracoDesde >= Coop.BURACO_MS) {
@@ -1424,8 +1448,9 @@ var JOGO = (typeof window !== 'undefined')
     var u = (st.phase === 'playing') ? e.activeUnit(st) : null;
     var donoU = (u && g && g.donoDe) ? g.donoDe(u) : null;
     if (donoU === 'parceiro') {
-      S.esperando = { uid: u.uid, T: T, desde: agora(),
-                      prazo: Math.round((num(g.turnTime, 30) + S.bkParceiro) * 1000) };
+      var jgT = jogadorGuerra(u.dono), bkT = jgT ? jgT.bk : S.bkParceiro;
+      S.esperando = { uid: u.uid, T: T, desde: agora(), dono: u.dono || null,
+                      prazo: Math.round((num(g.turnTime, 30) + bkT) * 1000) };
     } else {
       S.esperando = null;
       // o MEU turno começou: o `vivo` sai na hora — quem espera mede o meu
@@ -1462,7 +1487,7 @@ var JOGO = (typeof window !== 'undefined')
     muda();
   }
   function rDessinc(d) {
-    if (!d || S.tipo !== 'grupo' || d.b !== S.bid || souAutoridade() || S.sincronizando) return;
+    if (!d || (S.tipo !== 'grupo' && S.tipo !== 'guerra') || d.b !== S.bid || souAutoridade() || S.sincronizando) return;
     S.dessinc++;
     S.ultimaDessinc = { mot: 'aviso', T: num(d.T, 0), t: agora() };
     pedeFoto();
@@ -1515,8 +1540,9 @@ var JOGO = (typeof window !== 'undefined')
     if (S.fotoEm && agora() - S.fotoEm < Coop.PEDE_MIN_MS) return;     // o freio (a foto são 2 ou 3 fatias)
     mandaFoto();
   }
-  function rFoto(d) {
+  function rFoto(d, de) {
     if (S.tipo === 'duelo') return;                          // no duelo, a foto do outro é só a palavra dele
+    if (S.tipo === 'guerra' && de !== autoridadeId()) return;   // 15/09: na guerra, só a de quem manda (na MINHA conta)
     if (!d || d.b !== S.bid || !d.estado || souAutoridade()) return;
     if (!S.sincronizando) return;                            // só a foto que EU pedi
     restaura(d);
@@ -1602,7 +1628,8 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ------------------------------------------------------------ controle: ia, fusão, próxima, desistência
-  function rIa(d) {
+  function rIa(d, de) {
+    if (S.tipo === 'guerra') { rIaGuerra(d, de); return; }
     // no duelo ninguém põe o herói do outro na IA (o sumiço lá é W.O.)
     if (!d || d.b !== S.bid || S.tipo === 'duelo') return;
     var g = G(), st = g && g.state, p = parceiro();
@@ -1634,7 +1661,8 @@ var JOGO = (typeof window !== 'undefined')
   /* O PARCEIRO SAIU DA BATALHA (12/09): o heroi dele MORRE. So vale para o
    * proprio heroi de quem falou — ninguem derruba o heroi do outro por aqui —
    * e a morte cai na fila, no mesmo ponto dos dois motores (marcaSaida). */
-  function rSai(d) {
+  function rSai(d, de) {
+    if (S.tipo === 'guerra') { rSaiGuerra(d, de); return; }
     if (!d || d.b !== S.bid || S.tipo === 'duelo') return;
     var g = G(), st = g && g.state, p = parceiro();
     if (!st || !p) return;
@@ -1720,6 +1748,7 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
   Coop.desistir = function () {
+    if (S.tipo === 'guerra') return Coop.sairDaGuerra('desistencia');   // 15/09: sair da guerra = os meus heróis caem
     var g = G();
     if (S.tipo !== 'duelo' || !S.duelo) {
       // a arena que nasceu depois de o duelo ser cancelado (sem sessão): sair é voltar ao Acampamento
@@ -1752,15 +1781,21 @@ var JOGO = (typeof window !== 'undefined')
     avisa(nomeParceiro() + ' desistiu do duelo.', 'ok');
     if (g._encerra) g._encerra(g.meuLado(), 'desistencia');
   }
-  function rVivo(d) {
+  function rVivo(d, de) {
     if (!d || d.b !== S.bid) return;
     S.dentroConfirmado = true;
     var T = num(+d.T, 0);
+    var jg = jogadorGuerra(de);
+    if (jg) { if (T > jg.turnoDele) { jg.turnoDele = T; jg.turnoDeleEm = agora(); } return; }
     // o turno que ele diz só CRESCE: um `vivo` com turno velho não segura o prazo dele
     if (T > S.turnoDele) { S.turnoDele = T; S.turnoDeleEm = agora(); }
   }
   /* duelo: ele ainda carrega a arena — espero mais (até o teto da carga) */
   function rCarga(d) {
+    if (S.tipo === 'guerra' && d && d.b === S.bid && S.dentroEu && !dentroGuerra()) {
+      S.dentroPrazo = Math.max(S.dentroPrazo || 0, Math.min((S.cargaTeto || agora()) + Coop.DENTRO_MS, agora() + Coop.DENTRO_MS));
+      return;
+    }
     if (!d || S.tipo !== 'duelo' || d.b !== S.bid || S.dentroEle || !S.dentroEu) return;
     var teto = (S.cargaTeto || agora()) + Coop.DENTRO_MS;
     S.dentroPrazo = Math.max(S.dentroPrazo || 0, Math.min(teto, agora() + Coop.DENTRO_MS));
@@ -1958,6 +1993,14 @@ var JOGO = (typeof window !== 'undefined')
     res = res || {};
     S.fase = 'fim';
     S.esperando = null;
+    if (S.tipo === 'guerra' && S.guerra) {
+      if (!S.fim) {
+        S.fim = { venc: res.venc, h: res.h, venci: !!res.venci, empate: !!res.empate, clima: res.clima, t: agora() };
+        fechaGuerraNoServidor();
+        muda();
+      }
+      return infoGuerra();
+    }
     if (S.tipo === 'duelo' && S.duelo) {
       if (!S.fim) {
         S.fim = { venc: res.venc, h: res.h, venci: !!res.venci, empate: !!res.empate, clima: res.clima, t: agora() };
@@ -2029,6 +2072,7 @@ var JOGO = (typeof window !== 'undefined')
   Coop.bloqueado = function () {
     if (S.sincronizando) return true;
     if (S.tipo === 'duelo' && S.bid && !(S.dentroEu && S.dentroEle)) return true;
+    if (S.tipo === 'guerra' && S.bid && !S.fim && !dentroGuerra()) return true;    // 15/09: os quatro entrando
     return false;
   };
   /* O Game chama no init (volta ao menu/Acampamento): a batalha em rede acaba. */
@@ -2040,6 +2084,386 @@ var JOGO = (typeof window !== 'undefined')
     if (!Coop.ativo()) paraTique();
     muda();
   };
+
+  // ------------------------------------------------------------ a guerra de guilda 2×2 (15/09)
+  /* A GUERRA DE GUILDA NA SEDE (15/09, o dono: "a guerra de guild que é 2x2 de cada guild é na sede de guild, isso
+   * dá pontos de experiência para guild"). Quatro jogadores, cada um com a DUPLA dele: o MESMO lockstep do grupo e
+   * do duelo, com três destinos em vez de um.
+   *   - A ATA É DO SERVIDOR (servidor/guerra.py): os oito payloads, a semente e a vida de cada herói chegam pelo
+   *     JOGO.Guerra (grupo.js) com a partida pronta. Não há compromisso nem revelação: os quatro confirmaram lá.
+   *   - QUEM MANDA (a foto de resgate): o primeiro da ordem A1, A2, B1, B2 (A = quem entrou na fila antes; 1 = quem
+   *     inscreveu) que está AQUI — sem queda, sem saída e sem os heróis marcados fora. Cada cliente calcula igual;
+   *     a foto só vale de quem ele vê como autoridade, e só a que ele pediu.
+   *   - LANCE só do dono da vez (donoCerto), com o hash no fim do turno, como sempre; cada lance vai aos três.
+   *   - QUEM CAI: passada a carência, quem MARCA os heróis dele (u.ia: o turno passa) é o PARCEIRO DE GUILDA —
+   *     nunca o adversário, que ganharia pulando a vez do outro. Quem volta é desmarcado pelo parceiro (ou por si
+   *     mesmo, se o parceiro também está fora). Quem SAI da guerra morre (a voz `sai`, como no grupo).
+   *   - W.O. DO LADO INTEIRO: só quando os DOIS adversários estão fora há WO_MS. O servidor refaz o W.O. e não vê
+   *     fim: não rende XP — forjar um não dá nada.
+   *   - O FIM: cada um dos quatro fecha no servidor (quem manda na hora; os outros GUERRA_FECHA_MS depois, e
+   *     recebem o guardado — o registro limpo de outro vale se o meu foi fotografado). */
+  Coop.MAPA_GUERRA = 'sede';
+  Coop.GUERRA_FECHA_MS = 2500;
+  var GUERRA_ACOES = ['dentro', 'lance', 'pede', 'foto-pede', 'foto', 'ia', 'sai', 'vivo', 'dessinc', 'carga'];
+  function jogadorGuerra(id) {
+    var g = S.guerra;
+    return (g && id && id !== g.meuId && Object.prototype.hasOwnProperty.call(g.js, id)) ? g.js[id] : null;
+  }
+  function outrosGuerra() {
+    var g = S.guerra, out = [];
+    if (!g) return out;
+    for (var i = 0; i < g.ordem.length; i++) if (g.ordem[i] !== g.meuId && g.js[g.ordem[i]]) out.push(g.js[g.ordem[i]]);
+    return out;
+  }
+  function nomeGuerra(id) {
+    var g = S.guerra;
+    return (g && g.nomes && g.nomes[id]) || nomeDe(id);
+  }
+  function foraGuerra(j) { return !!(j && (j.saiu || j.marcado || j.sumidoDesde)); }
+  function autoridadeGuerra() {
+    var g = S.guerra;
+    if (!g) return null;
+    for (var i = 0; i < g.ordem.length; i++) {
+      var id = g.ordem[i];
+      if (id === g.meuId) { if (!g.euFora) return id; continue; }
+      if (!foraGuerra(g.js[id])) return id;
+    }
+    return g.meuId;
+  }
+  function parceiroDeGuilda() {
+    var g = S.guerra;
+    var l = outrosGuerra().filter(function (j) { return j.lado === g.lado; });
+    return l[0] || null;
+  }
+  function turnoDeleDe(u) {
+    if (S.tipo !== 'guerra') return S.turnoDele || 0;
+    var j = u ? jogadorGuerra(u.dono) : null;
+    if (j) return j.turnoDele;
+    var m = 0;
+    outrosGuerra().forEach(function (x) { if (x.turnoDele > m) m = x.turnoDele; });
+    return m;
+  }
+  function enviaGuerra(acao, dados) {
+    var r = R(), ok = false;
+    if (!r || !r.dirige) return false;
+    if (acao === 'vivo' && dados) S.vivoT = num(+dados.T, 0);
+    outrosGuerra().forEach(function (j) {
+      if (j.saiu) return;
+      try { if (r.dirige('batalha', j.id, acao, dados, j.cx ? { cx: j.cx } : {})) ok = true; } catch (e) {}
+    });
+    if (!ok) {
+      try { S.ultimaRecusa = r.ultimaRecusa ? r.ultimaRecusa() : 'falhou'; } catch (e2) { S.ultimaRecusa = 'falhou'; }
+    }
+    return ok;
+  }
+  function enviaA(j, acao, dados) {
+    var r = R();
+    try { return !!(r && r.dirige && j && r.dirige('batalha', j.id, acao, dados, j.cx ? { cx: j.cx } : {})); }
+    catch (e) { return false; }
+  }
+  /* o cx carimbado barra quem copia o `de`; um cx NOVO só vale de quem eu dava por caído (voltou por outra conexão) */
+  function aceitaGuerra(ev) {
+    var j = jogadorGuerra(ev && ev.de);
+    if (!j) return false;
+    if (j.cx && ev.cx && ev.cx !== j.cx) {
+      if (!j.sumidoDesde) return false;
+      j.cx = ev.cx;
+    } else if (!j.cx && ev.cx) j.cx = ev.cx;
+    return true;
+  }
+  function dentroGuerra() {
+    if (!S.dentroEu) return false;
+    if (S.dentroLiberado) return true;
+    return outrosGuerra().every(function (j) { return j.dentro || j.saiu; });
+  }
+  function unidadesDe(st, dono, soVivas) {
+    var out = [];
+    for (var i = 0; st && st.units && i < st.units.length; i++) {
+      var u = st.units[i];
+      if ((u.kind === 'hero' || u.kind === 'fusion') && u.dono === dono && (!soVivas || (u.alive && !u.offBoard))) out.push(u);
+    }
+    return out;
+  }
+  Coop.arenaDaGuerra = function () {
+    var lista = D().arenas || [], m = null;
+    for (var i = 0; i < lista.length; i++) if (lista[i] && lista[i].id === Coop.MAPA_GUERRA) m = lista[i];
+    if (!m || !m.rooms || !m.rooms.length) return null;
+    return { dungeonId: Coop.MAPA_GUERRA, roomIndex: 0, nome: m.name || 'Salão da Sede' };
+  };
+
+  /* A partida pronta do servidor: d = { gid, ata: {mapa, sala, semente, A, B, carry}, jogadores: [{conta, nome,
+   * dono, lado, ordem}], guildas: {A, B}, eu: o meu id da Rede }. A ata é conferida como a do grupo (o payload de
+   * cada herói, o dono de cada um no lado certo): uma ata torta não abre a guerra. */
+  Coop.iniciaGuerra = function (d) {
+    if (!d || typeof d.gid !== 'string' || !d.gid || !d.ata || Object.prototype.toString.call(d.jogadores) !== '[object Array]' ||
+        d.jogadores.length !== 4) return false;
+    var ata = d.ata;
+    if (ata.mapa !== Coop.MAPA_GUERRA || ata.sala !== 0 || typeof ata.semente !== 'number' || !Coop.arenaDaGuerra()) return false;
+    var me = d.eu || (function () { var r = R(); try { return r && r.meuId ? r.meuId() : null; } catch (e) { return null; } })();
+    if (!me) return false;
+    var porDono = {}, nLado = { A: 0, B: 0 };
+    for (var i = 0; i < d.jogadores.length; i++) {
+      var j = d.jogadores[i];
+      if (!j || typeof j.dono !== 'string' || !j.dono || porDono[j.dono] || (j.lado !== 'A' && j.lado !== 'B')) return false;
+      porDono[j.dono] = j;
+      nLado[j.lado]++;
+    }
+    if (nLado.A !== 2 || nLado.B !== 2 || !porDono[me]) return false;
+    function okLado(lista, lado) {
+      if (Object.prototype.toString.call(lista) !== '[object Array]' || lista.length < 1 || lista.length > 4) return false;
+      for (var q = 0; q < lista.length; q++) {
+        var p = lista[q];
+        if (!p || !porDono[p.dono] || porDono[p.dono].lado !== lado || !validaPayload(p, { semMestre: true })) return false;
+      }
+      return true;
+    }
+    if (!okLado(ata.A, 'A') || !okLado(ata.B, 'B')) return false;
+    var ordenados = d.jogadores.slice().sort(function (a, b) {
+      return (a.lado === b.lado) ? (num(a.ordem, 0) - num(b.ordem, 0)) : (a.lado < b.lado ? -1 : 1);
+    });
+    var n0 = S.n;
+    S = nova('guerra');
+    S.n = n0;
+    S.bid = d.gid;
+    S.fase = 'batalha';
+    var g = S.guerra = { gid: d.gid, meuId: me, lado: porDono[me].lado, ordem: ordenados.map(function (x) { return x.dono; }),
+                         js: {}, nomes: {}, guildas: clone(d.guildas || null), euFora: false, resultado: null, fechou: false };
+    ordenados.forEach(function (x) {
+      g.nomes[x.dono] = String(x.nome || nomeDe(x.dono)).slice(0, 24);
+      if (x.dono === me) return;
+      g.js[x.dono] = { id: x.dono, cx: null, nome: g.nomes[x.dono], lado: x.lado, conta: x.conta, ordem: num(x.ordem, 0),
+                       sumidoDesde: 0, ultimoSinal: agora(), turnoDele: 0, turnoDeleEm: 0, bk: 0,
+                       marcado: false, saiu: false, saiuEm: 0, dentro: false };
+    });
+    S.cargaTeto = agora() + Coop.CARGA_MS;
+    S.cargaProx = 0;
+    S.dentroPrazo = 0;
+    S.ultimoSinal = agora();
+    ligaTique();
+    var r = R();
+    outrosGuerra().forEach(function (x) { try { if (r && r.vigia) r.vigia(x.id, null); } catch (e) {} });
+    var gm = G(), bid = S.bid, ar = Coop.arenaDaGuerra();
+    var ok = !!(gm && gm._iniciaGuerraRede && gm._iniciaGuerraRede({
+      gid: bid, mapa: ata.mapa, sala: ata.sala, semente: ata.semente, A: clone(ata.A), B: clone(ata.B),
+      carry: clone(ata.carry || null), eu: g.lado, meuId: me, guildas: clone(d.guildas || null),
+      jogadores: clone(ordenados), arena: ar
+    }, function () {
+      if (S.bid !== bid) return;
+      S.dentroEu = true;
+      S.dentroPrazo = agora() + Coop.DENTRO_MS;
+      S.dentroRepProx = agora() + Coop.DENTRO_REP_MS;
+      enviaGuerra('dentro', { bid: bid, viu: false });
+      muda();
+    }));
+    if (!ok) { S = nova(null); S.n = n0; muda(); return false; }
+    avisa('Guerra de Guilda no ' + ar.nome + '.', 'info');
+    muda();
+    return true;
+  };
+  function rDentroGuerra(d, de) {
+    var j = jogadorGuerra(de);
+    if (!j || d.bid !== S.bid) return;
+    j.dentro = true;
+    j.ultimoSinal = agora();
+    if (S.dentroEu && d.viu !== true) enviaA(j, 'dentro', { bid: S.bid, viu: true });
+    muda();
+  }
+  function tiqueGuerra(ag) {
+    var g = S.guerra;
+    if (!g) return true;
+    if (!S.dentroEu) {
+      if (S.cargaTeto && ag > S.cargaTeto) { Coop.sairDaGuerra('carga'); return false; }
+      if (ag >= S.cargaProx) { S.cargaProx = ag + Coop.DENTRO_REP_MS; enviaGuerra('carga', { b: S.bid }); }
+    } else if (!dentroGuerra()) {
+      if (S.dentroPrazo && ag > S.dentroPrazo) {
+        // quem não entrou a tempo conta como caído desde o começo: a carência e o W.O. correm — a guerra não espera
+        var ini = S.dentroPrazo - Coop.DENTRO_MS;
+        outrosGuerra().forEach(function (j) { if (!j.dentro && !j.sumidoDesde) j.sumidoDesde = ini; });
+        S.dentroLiberado = true;
+        muda();
+      } else if (ag >= S.dentroRepProx) {
+        S.dentroRepProx = ag + Coop.DENTRO_REP_MS;
+        outrosGuerra().forEach(function (j) { if (!j.dentro) enviaA(j, 'dentro', { bid: S.bid, viu: false }); });
+      }
+    }
+    // voltei com os heróis marcados fora e o meu parceiro de guilda também está fora: ninguém me desmarca
+    if (g.euFora && !S.sincronizando && emBatalha()) {
+      var par = parceiroDeGuilda();
+      if (!par || foraGuerra(par)) desmarcaGuerra(g.meuId);
+    }
+    return true;
+  }
+  function sumiuGuerra(id, t0) {
+    var j = jogadorGuerra(id);
+    if (!j) return;
+    var t = num(+t0, 0) || agora();
+    var novo = !j.sumidoDesde;
+    if (!j.sumidoDesde || t < j.sumidoDesde) j.sumidoDesde = t;
+    if (novo && emBatalha() && !S.fim) avisa(j.nome + ' caiu — esperando voltar…', 'aviso');
+    muda();
+  }
+  function voltouGuerra(id, cx) {
+    var j = jogadorGuerra(id);
+    if (!j) return;
+    if (cx) j.cx = cx;
+    var estava = !!j.sumidoDesde;
+    j.sumidoDesde = 0;
+    j.ultimoSinal = agora();
+    if (estava) {
+      j.bk = 0;                                    // 14/09: sem o banco de antes da queda
+      if (emBatalha()) {
+        avisa(j.nome + ' voltou' + (j.marcado ? ' — e volta a jogar.' : '.'), 'ok');
+        if (j.marcado && j.lado === S.guerra.lado) desmarcaGuerra(j.id);
+        var st = (G() || {}).state;
+        if (st) enviaA(j, 'pede', { b: S.bid, T: st.turno || 0, k: (S.log[st.turno || 0] || []).length });
+      }
+    }
+    muda();
+  }
+  function confereSumicoGuerra(ag) {
+    var g = S.guerra, gm = G(), st = gm && gm.state, r = R();
+    if (!g || !st || S.fim || st.phase !== 'playing' || !dentroGuerra()) return;
+    var t0s = {};
+    outrosGuerra().forEach(function (j) {
+      if (j.saiu) { t0s[j.id] = j.saiuEm || 1; return; }
+      var t0 = j.sumidoDesde || 0, mot = 'caiu', visto = 0;
+      try { visto = (r && r.visto) ? num(+r.visto(j.id), 0) : 0; } catch (e) { visto = 0; }
+      var ultimo = Math.max(visto, j.ultimoSinal || 0);
+      if (ultimo && ag - ultimo >= Coop.SILENCIO_MS && (!t0 || ultimo < t0)) t0 = ultimo;
+      // o turno dele estourou no MEU relógio (com a folga da animação dele)
+      var es = S.esperando;
+      if (es && es.dono === j.id && es.prazo > 0) {
+        var ini = es.desde;
+        if (j.turnoDele === es.T && j.turnoDeleEm > es.desde) ini = Math.min(j.turnoDeleEm, es.desde + Coop.FOLGA_MS);
+        var estouro = ini + es.prazo;
+        if (ag >= estouro && (!t0 || estouro < t0)) { t0 = estouro; mot = 'prazo'; }
+      }
+      t0s[j.id] = t0;
+      // só o PARCEIRO DE GUILDA marca quem caiu
+      if (t0 && j.lado === g.lado && !j.marcado && ag - t0 >= Coop.GRACA_MS) assumeGuerra(j, mot);
+    });
+    var inim = outrosGuerra().filter(function (j) { return j.lado !== g.lado; });
+    if (inim.length === 2 && t0s[inim[0].id] && t0s[inim[1].id] &&
+        ag - Math.max(t0s[inim[0].id], t0s[inim[1].id]) >= Coop.WO_MS) venceWOGuerra();
+  }
+  function assumeGuerra(j, mot) {
+    var st = (G() || {}).state;
+    if (!st) return;
+    j.marcado = true;
+    unidadesDe(st, j.id, true).forEach(function (u) {
+      if (u.ia) return;
+      u.ia = true;
+      marcaSrv('ia', u.uid, true);
+      enviaGuerra('ia', { b: S.bid, u: u.uid, mot: mot });
+    });
+    avisa(j.nome + ' caiu — o turno dele passa até voltar.', 'aviso');
+    muda();
+  }
+  function desmarcaGuerra(dono) {
+    var st = (G() || {}).state, g = S.guerra;
+    if (!st || !g) return;
+    unidadesDe(st, dono, false).forEach(function (u) {
+      if (!u.ia) return;
+      u.ia = false;
+      marcaSrv('ia', u.uid, false);
+      if (u.alive && !u.offBoard) enviaGuerra('ia', { b: S.bid, u: u.uid, mot: 'volta' });
+    });
+    if (dono === g.meuId) g.euFora = false;
+    else if (g.js[dono]) g.js[dono].marcado = false;
+    muda();
+  }
+  function venceWOGuerra() {
+    var gm = G();
+    if (!gm || !gm.state || S.fim) return;
+    S.fimMotivo = 'wo';
+    avisa('Os dois adversários saíram da guerra — vitória por W.O. (sem XP para a guilda).', 'ok');
+    if (gm._encerra) gm._encerra(gm.meuLado(), 'wo');
+  }
+  /* a marca `ia` só vale do PARCEIRO DE GUILDA do dono da unidade; desmarcar (a volta), também do próprio dono */
+  function rIaGuerra(d, de) {
+    var g = S.guerra, gm = G(), st = gm && gm.state, jd = jogadorGuerra(de);
+    if (!d || d.b !== S.bid || !st || !jd) return;
+    var u = E().findUnit(st, d.u);
+    if (!u || (u.kind !== 'hero' && u.kind !== 'fusion') || !u.dono) return;
+    var volta = d.mot === 'volta';
+    var ladoDono = u.dono === g.meuId ? g.lado : ((g.js[u.dono] || {}).lado || null);
+    if (!ladoDono || ladoDono !== jd.lado || (u.dono === de && !volta)) return;
+    if (!!u.ia === !volta) return;
+    u.ia = !volta;
+    marcaSrv('ia', u.uid, !volta);
+    if (u.dono === g.meuId) {
+      // o meu parceiro me deu por fora (ou me devolveu os heróis): o meu motor se acerta pela foto de quem manda
+      g.euFora = !volta;
+      S.meAssumiu = !volta;
+      if (volta && gm._voltouDaQueda) { try { gm._voltouDaQueda(); } catch (eV) {} }
+      S.fotoPendente = false;
+      pedeFoto();
+    } else if (g.js[u.dono]) g.js[u.dono].marcado = !volta;
+    muda();
+  }
+  function rSaiGuerra(d, de) {
+    var st = (G() || {}).state, j = jogadorGuerra(de);
+    if (!d || d.b !== S.bid || !st || !j) return;
+    var u = E().findUnit(st, d.u);
+    if (!u || (u.kind !== 'hero' && u.kind !== 'fusion') || u.dono !== de) return;
+    if (!j.saiu) { j.saiu = true; j.saiuEm = agora(); }
+    S.saiuNome = j.nome;
+    S.mortePendente[d.u] = true;
+    mataQuemSaiu();
+    muda();
+  }
+  /* sair da guerra (o menu, ou a arena que não carregou a tempo): os meus heróis caem nos motores dos outros */
+  Coop.sairDaGuerra = function (mot) {
+    if (S.tipo !== 'guerra') return false;
+    var gm = G(), st = gm && gm.state;
+    if (st && S.bid && st.phase === 'playing') {
+      unidadesDe(st, S.guerra.meuId, true).forEach(function (u) { enviaGuerra('sai', { b: S.bid, u: u.uid, mot: mot || 'saiu' }); });
+    }
+    if (mot === 'carga') avisa('A guerra não começou para você — o salão demorou demais para carregar.', 'aviso');
+    var n = S.n;
+    S = nova(null);
+    S.n = n;
+    if (gm && gm._saiDaRede) { try { gm._saiDaRede(); } catch (e) {} }
+    paraTique();
+    muda();
+    return true;
+  };
+  function infoGuerra() {
+    var g = S.guerra;
+    return { guerra: true, gid: g.gid, wo: S.fimMotivo === 'wo', desistencia: S.fimMotivo === 'desistencia',
+             lado: g.lado, guildas: clone(g.guildas), resultado: g.resultado,
+             jogadores: g.ordem.map(function (id) {
+               return { dono: id, nome: nomeGuerra(id), lado: id === g.meuId ? g.lado : g.js[id].lado, eu: id === g.meuId };
+             }) };
+  }
+  function sessaoGuerra() {
+    var g = S.guerra;
+    return { gid: g.gid, lado: g.lado, autoridade: autoridadeGuerra(), guildas: clone(g.guildas), resultado: g.resultado,
+             entrando: !!(S.bid && !S.fim && !dentroGuerra()),
+             jogadores: g.ordem.map(function (id) {
+               if (id === g.meuId) return { id: id, nome: nomeGuerra(id), lado: g.lado, eu: true, on: true, fora: g.euFora, saiu: false };
+               var j = g.js[id];
+               return { id: id, nome: j.nome, lado: j.lado, eu: false, on: !j.sumidoDesde && !j.saiu, fora: j.marcado, saiu: j.saiu };
+             }) };
+  }
+  /* o fechamento no servidor: o registro deste motor (lances dos quatro e as marcas); o W.O. vai sem o hash do fim
+   * (o encerra não é fim do motor: o servidor refaz até onde houve lance e não vê vencedor) */
+  function fechaGuerraNoServidor() {
+    var Gu = JOGO.Guerra, g = S.guerra;
+    if (!Gu || !Gu.fechar || !g || g.fechou) return;
+    g.fechou = true;
+    var corpo = { gid: g.gid, lances: (S.logSrv || []).slice(), hashFinal: (S.fim && S.fimMotivo !== 'wo') ? S.fim.h : null,
+                  fotografada: !!S.fotografada };
+    var vai = function () {
+      try {
+        Promise.resolve(Gu.fechar(corpo)).then(function (r) {
+          if (S.guerra === g) { g.resultado = r || null; muda(); }
+        }, function () {});
+      } catch (e) {}
+    };
+    if (souAutoridade() || Coop._semIntervalo || typeof setTimeout !== 'function') vai();
+    else setTimeout(vai, Coop.GUERRA_FECHA_MS);
+  }
 
   // ------------------------------------------------------------ o piloto automático (provas)
   Coop._piloto = function (o) { piloto = o ? clone(o) : null; return piloto; };
@@ -2101,6 +2525,7 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------ a escuta da Rede
   function aceita(ev) {
+    if (S.tipo === 'guerra') return aceitaGuerra(ev);
     var p = parceiro();
     if (!p || !ev || ev.de !== p.id) return false;
     if (p.cx && ev.cx && ev.cx !== p.cx) return false;     // o cx carimbado barra quem copia o `de`
@@ -2110,6 +2535,13 @@ var JOGO = (typeof window !== 'undefined')
     if (!ev || !aceita(ev)) return;
     var d = ev.dados || {};
     S.ultimoSinal = agora();
+    if (S.tipo === 'guerra') {
+      // 15/09: na guerra só o trilho da batalha (nada de ata, pronto, próxima: a ata veio do servidor)
+      if (GUERRA_ACOES.indexOf(ev.acao) < 0) return;
+      var jg = jogadorGuerra(ev.de);
+      jg.ultimoSinal = agora();
+      if (jg.sumidoDesde) Coop.parceiroVoltou(jg.id, ev.cx || null);
+    }
     // ele falou pela conexão que eu conheço: não sumiu (um `saiu` de outra aba
     // dele, ou um `ausente` que se cruzou com a volta, não o tira mais)
     var p = parceiro();
@@ -2117,16 +2549,16 @@ var JOGO = (typeof window !== 'undefined')
     switch (ev.acao) {
       case 'pronto': rPronto(d); break;
       case 'ata': rAta(d); break;
-      case 'dentro': rDentro(d); break;
+      case 'dentro': rDentro(d, ev.de); break;
       case 'lance': rLance(d, ev.de); break;
       case 'pede': rPede(d); break;
       case 'foto-pede': rFotoPede(d); break;
-      case 'foto': rFoto(d); break;
-      case 'ia': rIa(d); break;
-      case 'sai': rSai(d); break;
+      case 'foto': rFoto(d, ev.de); break;
+      case 'ia': rIa(d, ev.de); break;
+      case 'sai': rSai(d, ev.de); break;
       case 'proxima': rProxima(d); break;
       case 'desiste': rDesiste(d); break;
-      case 'vivo': rVivo(d); break;
+      case 'vivo': rVivo(d, ev.de); break;
       case 'dessinc': rDessinc(d); break;
       case 'cancela': rCancela(d); break;
       case 'carga': rCarga(d); break;
@@ -2152,6 +2584,13 @@ var JOGO = (typeof window !== 'undefined')
   }
   function recebeSinal(ev) {
     if (!ev) return;
+    if (S.tipo === 'guerra' && (ev.tipo === 'caiu' || ev.tipo === 'saiu')) {
+      var jq = jogadorGuerra(ev.id);
+      if (!jq || (jq.cx && ev.cx && ev.cx !== jq.cx)) return;
+      if (ev.tipo === 'saiu' && !saiuVale(jq, ev)) return;
+      Coop.parceiroSumiu(jq.id, agora());
+      return;
+    }
     var p = parceiro();
     if (ev.tipo === 'caiu' && p && ev.id === p.id) {
       if (p.cx && ev.cx && ev.cx !== p.cx) return;
@@ -2174,7 +2613,7 @@ var JOGO = (typeof window !== 'undefined')
     if (emBatalha() && g._voltouDaQueda) { try { g._voltouDaQueda(); } catch (eV) {} }
     // (se a foto já veio depois da volta — o `ia` do outro chegou antes —, não pede outra)
     var jaRestaurou = !!(S.restauradaEm && S.restauradaEm >= S.religouEm);
-    if (S.tipo === 'grupo' && emBatalha() && !souAutoridade() && !jaRestaurou) pedeFoto();
+    if ((S.tipo === 'grupo' || S.tipo === 'guerra') && emBatalha() && !souAutoridade() && !jaRestaurou) pedeFoto();
     if (emBatalha()) envia('pede', { b: S.bid, T: st.turno || 0, k: (S.log[st.turno || 0] || []).length });
   }
   var desligas = [];
