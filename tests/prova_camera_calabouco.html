@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a câmera padrão dos calabouços não mudou</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1216;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  /* o MESMO viewport das fotos de referência (1262×704) */
+  iframe{position:fixed;left:0;top:0;width:1262px;height:704px;border:0}
+  #saida{position:fixed;left:8px;bottom:8px;max-width:600px;max-height:46%;overflow:auto;
+         background:rgba(11,13,16,.88);border:1px solid #2b3542;border-radius:6px;padding:6px 8px;font:11px/1.45 monospace}
+  #summary{padding:4px 8px;border-radius:5px;background:#1b222c;margin-bottom:4px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+  .p{color:#7fe08a}.f{color:#ff8a7a}
+</style>
+</head>
+<body>
+<!-- A CÂMERA PADRÃO DOS CALABOUÇOS (15/09). O ajuste de enquadramento dos mapas de duelo
+     (praça, sede) NÃO pode vazar para as salas de calabouço: o dono comparou as fotos e a
+     sala espremida na área útil virava miniatura. Abre a primeira sala da Estufa e a da
+     Cisterna do jeito das fotos de referência (descida direta, Bárbaro + Curandeiro, tela de
+     1262×704) e cobra a distância, a inclinação e o azimute de antes, com 3% de folga.
+     Referência: antes_greenhouse_800_foto.png (dist 32,09) e antes_cistern_800_foto.png
+     (dist 36,68), tiradas com o enquadramento anterior a 15/09. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">abrindo o jogo…</div><div id="linhas"></div></div>
+<script>
+(function () {
+  var f = document.getElementById('tela');
+  var linhas = [], falhas = [];
+  var SALAS = [
+    { id: 'greenhouse', nome: 'Estufa', dist: 32.09 },
+    { id: 'cistern', nome: 'Cisterna', dist: 36.68 }
+  ];
+  function check(nome, ok, extra) {
+    linhas.push('<div class="' + (ok ? 'p' : 'f') + '">' + (ok ? 'PASSOU' : 'FALHOU') + ' · ' +
+                nome + (extra != null && extra !== '' ? ' (' + extra + ')' : '') + '</div>');
+    if (!ok) falhas.push(nome);
+  }
+  function fecha() {
+    document.getElementById('linhas').innerHTML = linhas.join('');
+    var s = document.getElementById('summary');
+    s.className = falhas.length ? 'fail' : 'allpass';
+    s.textContent = falhas.length ? ('FALHOU: ' + falhas.join(' · ')) : ('tudo passou (' + linhas.length + ')');
+    window.__fail = falhas.length;
+    window.__pronto = true;
+  }
+  // espera por TENTATIVAS, não por relógio: no headless o tempo é virtual
+  function espera(cond, voltas, passo) {
+    return new Promise(function (ok, nao) {
+      var n = 0;
+      (function tenta() {
+        var r = false;
+        try { r = cond(); } catch (e) {}
+        if (r) return ok(r);
+        if (++n > voltas) return nao(new Error('esperou demais'));
+        setTimeout(tenta, passo || 400);
+      })();
+    });
+  }
+  function abre(sala) {
+    return new Promise(function (ok) {
+      f.onload = function () { ok(); };
+      f.src = '../index.html?sandbox=1&t=' + sala.id;
+    }).then(function () {
+      var w = f.contentWindow, d = w.document;
+      return espera(function () { return !!d.querySelector('.screen-menu.is-on'); }, 400).then(function () {
+        try { w.localStorage.setItem('soterra-tutor-v1', JSON.stringify({ vistos: {}, off: true })); } catch (e) {}
+        return w.JOGO.DB.batizar('Prova Camera');
+      }).then(function () {
+        var J = w.JOGO, G = J.Game, R = J.Renderer;
+        J.UI.selection(['sumo', 'curandeiro']);
+        G.startRun(['sumo', 'curandeiro'], sala.id, { direto: true });
+        return espera(function () { return G.screen === 'battle' && G.state && G.state.dungeonId === sala.id && R.ultimaMontagem; }, 300);
+      }).then(function () {
+        var R = w.JOGO.Renderer, c = R.getCamera(), e = R._enquadro && R._enquadro();
+        var desvio = Math.abs(c.dist - sala.dist) / sala.dist;
+        check(sala.nome + ': a distância da câmera padrão é a de antes (±3%)', desvio <= 0.03,
+              c.dist.toFixed(2) + ' contra ' + sala.dist + ' · ' + (desvio * 100).toFixed(1) + '%');
+        check(sala.nome + ': inclinação e azimute de antes', Math.abs(c.tilt - 0.98) < 1e-6 && Math.abs(c.ang + Math.PI / 4) < 1e-6,
+              'tilt ' + c.tilt + ' ang ' + c.ang.toFixed(4));
+        check(sala.nome + ': o ajuste dos mapas de duelo não rodou aqui', !!e && e.tipo === 'calabouco', e && e.tipo);
+      }).catch(function (err) { check(sala.nome + ': a sala abriu', false, err && err.message); });
+    });
+  }
+  SALAS.reduce(function (p, sala) { return p.then(function () { return abre(sala); }); }, Promise.resolve())
+    .then(fecha, function (e) { check('a prova rodou até o fim', false, e && e.message); fecha(); });
+})();
+</script>
+</body>
+</html>

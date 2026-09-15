@@ -89,7 +89,17 @@ var JOGO = (typeof window !== 'undefined')
     /* 14/09 (dono: "o duelo deve ocorrer no mapa da praça"): a luz de DIA da praça 3D
      * (hub3d montaCena: céu 0xcfe8d8, sol 0xffe9c4). A névoa é o verde-acinzentado da
      * grama longe — a do jardim (#3d5c30) deixava a praça com cara de estufa. */
-    praca:    { fog: '#56684c', sky: '#cfe8d8', gnd: '#2e3a30', sun: '#ffe9c4', sunI: 1.10, hemiI: 0.88, rim: '#fff0c8' }
+    praca:    { fog: '#56684c', sky: '#cfe8d8', gnd: '#2e3a30', sun: '#ffe9c4', sunI: 1.10, hemiI: 0.88, rim: '#fff0c8' },
+    /* 15/09 (a guerra de guilda 2×2 "na sede de guild"): o SALÃO É DE DENTRO. Sem céu — a
+     * névoa e o fundo são o breu quente de um salão de pedra, e o que sobra de cena longe
+     * some nele. O "sol" vira a luz alta e amarelada dos lustres (ainda projeta a sombra
+     * que assenta as peças), o hemisférico tem o alto cor de chama e o baixo de madeira
+     * escura, e o contraluz é dourado: é ele que recorta o herói contra o chão de tábuas,
+     * que é da mesma família de cor das peles e das armaduras de couro.
+     * 15/09 (foto): com sol 1,0 e hemisfério 0,8 cor de chama o salão saía de DIA e laranja,
+     * a lareira não fazia poça de luz e o herói sumia no chão. Luz geral mais baixa e menos
+     * saturada; quem esquenta a cena é a lareira. */
+    sede:     { fog: '#1a120c', sky: '#cfb08e', gnd: '#2a1a10', sun: '#ffe4c4', sunI: 0.74, hemiI: 0.62, rim: '#ffc070' }
   };
   function envOf(theme) { return THEME_ENV[theme] || THEME_ENV.garden; }
 
@@ -510,7 +520,8 @@ var JOGO = (typeof window !== 'undefined')
     scaffold: ['crates', 'barrel', 'chest'],
     mine:     ['crates', 'barrel', 'rubble'],
     heart:    ['chest', 'crates', 'barrel'],
-    praca:    ['crates', 'barrel', 'chest']      // 14/09: só vale para casa baixa SEM peça
+    praca:    ['crates', 'barrel', 'chest'],     // 14/09: só vale para casa baixa SEM peça
+    sede:     ['chest', 'crates', 'barrel']      // 15/09: idem, no salão
   };
   function hashXY(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
   function lighten(hex, k) {
@@ -860,11 +871,14 @@ var JOGO = (typeof window !== 'undefined')
    * e deixava a casa alta invisível. */
   var PAPEIS_PRACA = { arvore: 1, arena: 1, sede: 1, banco: 1, poco: 1, portal: 1, portal_mureta: 1,
                        banco_praca: 1, raiz: 1, forja: 1, loteria: 1, mercado: 1 };
-  function pecasDaSala(st) {
+  /* 15/09: cada tema tem a SUA tabela de papéis (o Salão da Sede ganhou a dele, mais
+   * abaixo). Tema sem tabela cai na da praça, que era a regra de antes. */
+  function pecasDaSala(st, theme) {
     var dg = dungeonOf(st);
     var room = dg && dg.rooms && dg.rooms[st.roomIndex];
+    var papeis = PAPEIS_POR_TEMA[theme] || PAPEIS_PRACA;
     var lista = (room && Array.isArray(room.pecas))
-      ? room.pecas.filter(function (pc) { return pc && PAPEIS_PRACA[pc.papel] === 1; }) : [];
+      ? room.pecas.filter(function (pc) { return pc && papeis[pc.papel] === 1; }) : [];
     return lista.length ? lista : null;
   }
   // um material por chave dentro da montagem: o mergeStatic funde por material (uuid),
@@ -1211,22 +1225,757 @@ var JOGO = (typeof window !== 'undefined')
   }
   R._obrasDaPraca = OBRA_PRACA;       // a prova lê as alturas daqui, sem repetir número
 
+  // ================================================== O SALÃO DA SEDE (15/09)
+  //
+  // Dono: "a guerra de guild que é 2x2 de cada guild é na sede de guild". O mapa em grade é
+  // o 'sede' de js/core/data/arenas.js (25×19, fechado por parede, porta ao sul) e as
+  // `pecas` dizem o que cada bloco é. Aqui elas vestem como um SALÃO DE GUILDA por dentro:
+  // tábuas no chão com o tapete da porta ao trono, parede de pedra com esteio e frechal de
+  // madeira, pilares, armaduras, a mesa do conselho e duas lareiras acesas.
+  //
+  // A mesma lei da praça manda: '#' tem de PARECER alto (acima dos 2,05 m de um herói) e
+  // '=' tem de parecer baixo (até ~1,2 m, dá para ver por cima). A prova mede as duas.
+  //
+  // Tudo aqui é primitiva — não há arte do dono para o salão ainda. As peças são funções
+  // pequenas e separadas justamente para trocar uma a uma quando o modelo chegar
+  // (`rel.provisorias` lista quem ainda é primitiva).
+  var PAPEIS_SEDE = { parede_salao: 1, trono: 1, estandarte: 1, pilar: 1, armadura: 1, mesa: 1,
+                      banco_salao: 1, estatua: 1, bau: 1, lareira: 1 };
+  var PAPEIS_POR_TEMA = { praca: PAPEIS_PRACA, sede: PAPEIS_SEDE };
+  /* A PAREDE DO SALÃO: 30% acima do muro de calabouço (4,0 m). Salão é pé-direito alto, e a
+   * parede do fundo não esconde casa nenhuma — atrás dela não há tabuleiro. */
+  var SEDE_PAREDE_H = WALL_H * 1.3;
+  /* O RECORTE: a parede do lado da câmera desce a 1,05 m (como a maquete cortada de uma
+   * planta). Inteira, a parede sul de 4 m escondia da câmera padrão (tilt 0,98: a sombra de
+   * visada é ~1,5·h) as TRÊS fileiras de baixo — onde a porta e metade dos bancos estão. A
+   * 1,05 ela esconde meia casa, e o topo de pedra à mostra (com o rodapé e o esteio
+   * cortados junto) diz "isto é parede cortada", não mureta. */
+  var SEDE_CORTE_H = 1.05;
+
+  function sorteioSede(semente) {
+    var s = semente >>> 0;
+    return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  }
+  function rgbaSede(r, g, b, a) {
+    return 'rgba(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ',' + (a == null ? 1 : a) + ')';
+  }
+  // um retângulo que dá a volta na borda horizontal (a textura repete sem costura)
+  function retTorus(c, x, y, w, h, estilo) {
+    c.fillStyle = estilo;
+    c.fillRect(x, y, w, h);
+    if (x + w > 256) c.fillRect(x - 256, y, w, h);
+  }
+  /* AS TEXTURAS DO SALÃO, pintadas por semente fixa (a sala nasce igual toda vez, como as
+   * lajotas da praça). Todas no mesmo passo de 4 m por textura, uv = mundo/4. */
+  var texSedeCache = {};
+  function texturaSede(tipo) {
+    if (texSedeCache[tipo]) return texSedeCache[tipo];
+    var cv = document.createElement('canvas');
+    var r, i, k, acc, comp, tom, x0, y0;
+    if (tipo === 'tapete') { cv.width = 128; cv.height = 256; } else { cv.width = cv.height = 256; }
+    var c = cv.getContext('2d');
+    if (!c) return null;
+    if (tipo === 'tabuas') {
+      /* TÁBUAS CORRENDO NO EIXO LESTE–OESTE, atravessando o tapete (que corre norte–sul):
+       * 8 fileiras = tábua de 0,5 m, comprimentos de 1,4 a 3 m com a emenda desencontrada.
+       * A junta é o fundo escuro que sobra entre uma tábua e outra. Tom médio, e não o
+       * marrom-escuro da paleta: o herói precisa de chão que não engula a silhueta. */
+      r = sorteioSede(4101);
+      c.fillStyle = '#2b1d13'; c.fillRect(0, 0, 256, 256);
+      for (i = 0; i < 8; i++) {
+        y0 = i * 32; acc = 0;
+        var ini = Math.floor(r() * 256);
+        while (acc < 256) {
+          comp = Math.min(256 - acc, 90 + Math.floor(r() * 100));
+          if (256 - acc - comp < 40) comp = 256 - acc;          // sem toco de tábua na volta
+          tom = r();
+          // 15/09 (foto): o 150/104/64 de antes saía laranja sob a luz quente; puxado para o marrom
+          var R0 = 128 + tom * 30, G0 = 94 + tom * 22, B0 = 68 + tom * 16;
+          x0 = (ini + acc) % 256;
+          retTorus(c, x0 + 1, y0 + 1, comp - 2, 30, rgbaSede(R0, G0, B0));
+          for (k = 0; k < 6; k++) {                               // os veios
+            retTorus(c, x0 + 3 + Math.floor(r() * 20), y0 + 3 + Math.floor(r() * 25), comp - 30, 1,
+                     rgbaSede(R0 * 0.7, G0 * 0.66, B0 * 0.62, 0.30 + r() * 0.25));
+          }
+          retTorus(c, x0 + 1, y0 + 1, comp - 2, 2, 'rgba(255,230,190,0.10)');   // a quina gasta
+          retTorus(c, x0 + 5, y0 + 7, 2, 2, 'rgba(28,20,14,0.85)');             // os pregos
+          retTorus(c, x0 + 5, y0 + 23, 2, 2, 'rgba(28,20,14,0.85)');
+          acc += comp;
+        }
+      }
+    } else if (tipo === 'pedra') {
+      // SILHARIA: fiadas de 0,5 m, blocos de 0,75 a 1,4 m, argamassa escura
+      r = sorteioSede(733);
+      c.fillStyle = '#3a312a'; c.fillRect(0, 0, 256, 256);
+      for (i = 0; i < 8; i++) {
+        y0 = i * 32; acc = 0;
+        var ini2 = (i % 2 ? 36 : 0) + Math.floor(r() * 16);
+        while (acc < 256) {
+          comp = Math.min(256 - acc, 48 + Math.floor(r() * 42));
+          if (256 - acc - comp < 24) comp = 256 - acc;
+          tom = r();
+          x0 = (ini2 + acc) % 256;
+          retTorus(c, x0 + 2, y0 + 2, comp - 4, 28, rgbaSede(118 + tom * 30, 106 + tom * 26, 94 + tom * 22));
+          for (k = 0; k < 7; k++) {
+            retTorus(c, x0 + 3 + Math.floor(r() * (comp - 10)), y0 + 4 + Math.floor(r() * 22), 3, 2, 'rgba(0,0,0,0.13)');
+          }
+          retTorus(c, x0 + 2, y0 + 2, comp - 4, 2, 'rgba(255,236,210,0.09)');
+          acc += comp;
+        }
+      }
+    } else if (tipo === 'tapete') {
+      /* O TAPETE DA PORTA AO TRONO: vermelho de lã com barra de ouro dos dois lados e um
+       * losango a cada 6 m (a textura repete no comprimento; o losango é centrado para a
+       * emenda não aparecer). u = largura, v = comprimento. */
+      c.fillStyle = '#7c1a1f'; c.fillRect(0, 0, 128, 256);
+      r = sorteioSede(91);
+      for (k = 0; k < 500; k++) { c.fillStyle = r() < 0.5 ? 'rgba(0,0,0,0.07)' : 'rgba(255,200,160,0.05)'; c.fillRect(Math.floor(r() * 128), Math.floor(r() * 256), 2, 1); }
+      c.fillStyle = '#d6a443'; c.fillRect(5, 0, 7, 256); c.fillRect(116, 0, 7, 256);
+      c.fillStyle = '#4c0d12'; c.fillRect(12, 0, 4, 256); c.fillRect(112, 0, 4, 256);
+      c.fillStyle = '#d6a443'; c.fillRect(18, 0, 2, 256); c.fillRect(108, 0, 2, 256);
+      c.beginPath(); c.moveTo(64, 50); c.lineTo(98, 128); c.lineTo(64, 206); c.lineTo(30, 128); c.closePath();
+      c.fillStyle = '#a32a2f'; c.fill();
+      c.lineWidth = 4; c.strokeStyle = '#d6a443'; c.stroke();
+      c.beginPath(); c.moveTo(64, 96); c.lineTo(78, 128); c.lineTo(64, 160); c.lineTo(50, 128); c.closePath();
+      c.fillStyle = '#d6a443'; c.fill();
+      [0, 256].forEach(function (py) { c.beginPath(); c.arc(64, py, 7, 0, Math.PI * 2); c.fillStyle = '#d6a443'; c.fill(); });
+    }
+    var tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texSedeCache[tipo] = tex;
+    return tex;
+  }
+
+  /* A BANDEIRA DO ESTANDARTE, com o GANCHO DA GUILDA: `R.setGuildasSede({ oeste: {cor,
+   * emblema}, leste: {…} })` pinta a bandeira de cada lado (oeste = quem nasce no `P`,
+   * leste = no `a`) e remonta o salão. Sem gancho, os dois lados saem no vermelho e ouro
+   * neutros do salão. O emblema é um texto curto (uma letra, um símbolo); sem ele, o
+   * escudo com a cruz. Quem decide a cor é a regra da guerra, não o tabuleiro. */
+  var guildasSede = {};
+  var CORES_SEDE_NEUTRAS = { cor: '#8c1f24', ouro: '#d6a443' };
+  R.setGuildasSede = function (o) {
+    guildasSede = {};
+    if (o && typeof o === 'object') {
+      ['oeste', 'leste'].forEach(function (lado) {
+        var g = o[lado];
+        if (g && typeof g === 'object') {
+          guildasSede[lado] = {
+            cor: /^#[0-9a-f]{6}$/i.test(g.cor || '') ? g.cor : CORES_SEDE_NEUTRAS.cor,
+            emblema: g.emblema ? String(g.emblema).slice(0, 2) : ''
+          };
+        }
+      });
+    }
+    boardKey = null;                    // o próximo quadro remonta com as bandeiras novas
+    return guildasSede;
+  };
+  function texturaBandeira(cor, emblema) {
+    var chave = 'bandeira|' + cor + '|' + (emblema || '');
+    if (texSedeCache[chave]) return texSedeCache[chave];
+    var cv = document.createElement('canvas');
+    cv.width = 128; cv.height = 200;
+    var c = cv.getContext('2d');
+    if (!c) return null;
+    // o rabo de andorinha embaixo (alfa recortado pelo alphaTest do material)
+    c.beginPath(); c.moveTo(0, 0); c.lineTo(128, 0); c.lineTo(128, 200); c.lineTo(64, 164); c.lineTo(0, 200); c.closePath();
+    c.fillStyle = cor; c.fill();
+    c.save(); c.clip(); c.lineWidth = 16; c.strokeStyle = CORES_SEDE_NEUTRAS.ouro; c.stroke(); c.restore();
+    c.fillStyle = CORES_SEDE_NEUTRAS.ouro;
+    if (emblema) {
+      c.font = 'bold 64px Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(emblema, 64, 90);
+    } else {
+      c.beginPath(); c.moveTo(38, 46); c.lineTo(90, 46); c.lineTo(90, 88);
+      c.quadraticCurveTo(90, 118, 64, 134); c.quadraticCurveTo(38, 118, 38, 88); c.closePath(); c.fill();
+      c.fillStyle = cor;
+      c.beginPath(); c.moveTo(46, 54); c.lineTo(82, 54); c.lineTo(82, 88);
+      c.quadraticCurveTo(82, 110, 64, 123); c.quadraticCurveTo(46, 110, 46, 88); c.closePath(); c.fill();
+      c.fillStyle = CORES_SEDE_NEUTRAS.ouro;
+      c.fillRect(60, 60, 8, 56); c.fillRect(49, 78, 30, 8);
+    }
+    var tex = new THREE.CanvasTexture(cv);
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texSedeCache[chave] = tex;
+    return tex;
+  }
+
+  /* uv de MUNDO numa caixa já transladada: cada face pega as duas coordenadas do plano
+   * dela. A pedra da parede de 4 m sai com as mesmas fiadas da de 1 m, sem esticar. */
+  function uvMundo(geo, passo) {
+    var p = geo.attributes.position, n = geo.attributes.normal, uv = geo.attributes.uv;
+    for (var i = 0; i < p.count; i++) {
+      var u, v;
+      if (Math.abs(n.getY(i)) > 0.5) { u = p.getX(i); v = p.getZ(i); }
+      else if (Math.abs(n.getX(i)) > 0.5) { u = p.getZ(i); v = p.getY(i); }
+      else { u = p.getX(i); v = p.getY(i); }
+      uv.setXY(i, u / passo, v / passo);
+    }
+    uv.needsUpdate = true;
+    return geo;
+  }
+  function caixaSede(w, h, d, x, y, z) {
+    var g = new THREE.BoxGeometry(w, h, d);
+    g.translate(x || 0, y || 0, z || 0);
+    return uvMundo(g, 4);
+  }
+  function peca(g, geo, mat, x, y, z) {
+    var m = malha(geo, mat, x, y, z);
+    g.add(m);
+    return m;
+  }
+  function cilSede(rt, rb, h, seg) { return new THREE.CylinderGeometry(rt, rb, h, seg || 10); }
+  // os materiais do salão (um por chave: o merge funde por material)
+  function matsSede(cache) {
+    if (cache.__sede) return cache.__sede;
+    var texP = texturaSede('pedra');
+    var m = {
+      pedra: texP ? pracaMat(cache, 'sede-pedra', '#ece4da', { map: texP, roughness: 0.96 })
+                  : pracaMat(cache, 'sede-pedra', '#7a6e62'),
+      pedraClara: pracaMat(cache, 'sede-pedra-clara', '#948a7e', { roughness: 0.95 }),
+      pedraEsc: pracaMat(cache, 'sede-pedra-esc', '#4d443c', { roughness: 1 }),
+      madeira: pracaMat(cache, 'sede-madeira', '#7a5232', { roughness: 0.9 }),
+      madeiraEsc: pracaMat(cache, 'sede-madeira-esc', '#43291a', { roughness: 0.92 }),
+      pano: pracaMat(cache, 'sede-pano', '#8c1f24', { roughness: 1 }),
+      ouro: pracaMat(cache, 'sede-ouro', '#d0a044', { metalness: 0.5, roughness: 0.42 }),
+      ferro: pracaMat(cache, 'sede-ferro', '#3a3d42', { metalness: 0.35, roughness: 0.6 }),
+      metal: pracaMat(cache, 'sede-metal', '#aeb4bc', { metalness: 0.45, roughness: 0.42 }),
+      marmore: pracaMat(cache, 'sede-marmore', '#c9c1b4', { roughness: 0.7 }),
+      fuligem: pracaMat(cache, 'sede-fuligem', '#140d09', { roughness: 1, emissive: col3('#3a1206'), emissiveIntensity: 0.6 }),
+      pergaminho: pracaMat(cache, 'sede-pergaminho', '#d8c49a', { roughness: 1 }),
+      chama: pracaMat(cache, 'sede-chama', '#ffc06a', { emissive: col3('#ff9a3c'), emissiveIntensity: 2.0 })
+    };
+    cache.__sede = m;
+    return m;
+  }
+
+  /* O CHÃO DO SALÃO: breu por baixo de tudo (o mundo fora da parede não existe), as tábuas
+   * numa malha só sobre as casas da sala, a SOLEIRA de pedra nas casas '~' da borda (a
+   * porta) e o tapete comprido da frente do trono até a última fileira antes da porta. */
+  function chaoDaSede(st, w, h, cache, pecas, rel) {
+    var g = new THREE.Group();
+    var m = matsSede(cache);
+    var SIZE = CELL * 64;
+    var cx = (w - 1) / 2 * CELL, cz = (h - 1) / 2 * CELL;
+    var geoF = new THREE.PlaneGeometry(SIZE, SIZE);
+    geoF.rotateX(-Math.PI / 2);
+    var fora = malha(geoF, pracaMat(cache, 'sede-fora', '#120c08', { roughness: 1 }), cx, -0.06, cz);
+    fora.castShadow = false;
+    g.add(fora);
+    function eChao(x, y) {
+      if (x < 0 || y < 0 || x >= w || y >= h) return false;
+      return tileKind(gridTile(st, x, y)) !== 'hole';
+    }
+    var pos = [], uv = [], nor = [], idx = [];
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      if (!eChao(x, y)) continue;
+      var x0 = (x - 0.5) * CELL, x1 = (x + 0.5) * CELL, z0 = (y - 0.5) * CELL, z1 = (y + 0.5) * CELL;
+      var b = pos.length / 3;
+      pos.push(x0, 0, z0, x0, 0, z1, x1, 0, z1, x1, 0, z0);
+      uv.push(x0 / 4, -z0 / 4, x0 / 4, -z1 / 4, x1 / 4, -z1 / 4, x1 / 4, -z0 / 4);
+      nor.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
+      idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+    }
+    if (pos.length) {
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      var texT = texturaSede('tabuas');
+      var tab = malha(geo, texT ? pracaMat(cache, 'sede-tabuas', '#e2d8cc', { map: texT, roughness: 0.9 })
+                                : pracaMat(cache, 'sede-tabuas', '#8a633f'));
+      tab.castShadow = false;
+      g.add(tab);
+    }
+    // a soleira: casa vazia NA BORDA que encosta no salão é a porta
+    rel.soleira = 0;
+    for (var yy = 0; yy < h; yy++) for (var xx = 0; xx < w; xx++) {
+      var borda = (xx === 0 || yy === 0 || xx === w - 1 || yy === h - 1);
+      if (!borda || eChao(xx, yy) || !gridTile(st, xx, yy)) continue;
+      if (!(eChao(xx - 1, yy) || eChao(xx + 1, yy) || eChao(xx, yy - 1) || eChao(xx, yy + 1))) continue;
+      var sol = malha(caixaSede(CELL, 0.14, CELL, xx * CELL, -0.06, yy * CELL), m.pedra);
+      sol.castShadow = false;
+      g.add(sol);
+      rel.soleira++;
+    }
+    // o tapete, no eixo do trono
+    var tr = null;
+    for (var i = 0; i < pecas.length; i++) if (pecas[i].papel === 'trono') { tr = pecas[i]; break; }
+    var texTp = texturaSede('tapete');
+    if (tr && texTp) {
+      var tx = tr.x + ((tr.w || 1) - 1) / 2;
+      var zA = (tr.y + (tr.h || 1) - 0.5) * CELL, zB = (h - 1.5) * CELL;
+      /* 2,4 casas de largura: estreito (uma casa) ele sumia debaixo das armaduras e dos baús
+       * que o mapa põe no mesmo eixo; largo, eles ficam EM CIMA do tapete, como num salão */
+      var larg = CELL * 2.4, comp = zB - zA;
+      if (comp > CELL) {
+        var geoT = new THREE.PlaneGeometry(larg, comp);
+        geoT.rotateX(-Math.PI / 2);
+        var uvT = geoT.attributes.uv;
+        for (var q = 0; q < uvT.count; q++) uvT.setY(q, uvT.getY(q) * comp / 6);
+        var tap = malha(geoT, pracaMat(cache, 'sede-tapete', '#ffffff', { map: texTp, roughness: 1 }), tx * CELL, 0.014, (zA + zB) / 2);
+        tap.castShadow = false;
+        g.add(tap);
+        rel.tapete = { x: tx, de: tr.y + (tr.h || 1), ate: h - 2 };
+      }
+    }
+    return g;
+  }
+
+  /* AS PAREDES DO SALÃO: a pegada de `parede_salao` é o retângulo inteiro, mas só o
+   * CONTORNO dela é parede (o miolo é o salão, e as casas altas de lá têm peça própria).
+   *
+   * Cada lado sai em DUAS versões — inteira (4 m, pedra, rodapé, esteio e frechal de
+   * madeira, cornija, tochas) e cortada (1,05 m com o topo escuro de corte) — e o laço de
+   * render mostra a cortada nos lados que ficam ENTRE a câmera e o salão (`animaSede`).
+   * O canto só corta quando os dois lados dele cortam: com a câmera de quina, a parede do
+   * fundo segue inteira até o canto. Nenhuma das duas mente para a regra: a borda é '#',
+   * ninguém anda nem vê através dela, e do lado da câmera não há casa atrás. */
+  function paredesDoSalao(st, pc, ctx) {
+    var m = matsSede(ctx.cache), rel = ctx.rel, K = kit();
+    var xa = pc.x, ya = pc.y, xb = pc.x + (pc.w || 1) - 1, yb = pc.y + (pc.h || 1) - 1;
+    var H = SEDE_PAREDE_H, HC = SEDE_CORTE_H;
+    var grupos = {}, ordem = [];
+    function grupo(lados) {
+      var k = lados.join('|');
+      if (!grupos[k]) { grupos[k] = { lados: lados, alta: new THREE.Group(), baixa: new THREE.Group() }; ordem.push(k); }
+      return grupos[k];
+    }
+    function eAlto(x, y) { return tileKind(gridTile(st, x, y)) === 'high'; }
+    function ladosDe(x, y) {
+      var l = [];
+      if (y === ya) l.push('norte');
+      if (y === yb) l.push('sul');
+      if (x === xa) l.push('oeste');
+      if (x === xb) l.push('leste');
+      return l;
+    }
+    var NORMAL = { norte: [0, 1], sul: [0, -1], oeste: [1, 0], leste: [-1, 0] };   // para DENTRO
+    // uma tira ao longo da face de dentro (rodapé, frechal): `prof` para dentro do salão
+    function tira(g, lado, px, pz, hgt, yc, prof, mat, larg) {
+      var n = NORMAL[lado], L = larg || CELL;
+      if (n[1]) peca(g, caixaSede(L, hgt, prof, px, yc, pz + n[1] * (CELL / 2 + prof / 2)), mat);
+      else peca(g, caixaSede(prof, hgt, L, px + n[0] * (CELL / 2 + prof / 2), yc, pz), mat);
+    }
+    function tocha(g, lado, px, pz) {
+      var n = NORMAL[lado], fx = px + n[0] * CELL / 2, fz = pz + n[1] * CELL / 2, yT = 2.35;
+      var sup = n[1] ? caixaSede(0.1, 0.1, 0.46, fx, yT, fz + n[1] * 0.23) : caixaSede(0.46, 0.1, 0.1, fx + n[0] * 0.23, yT, fz);
+      peca(g, sup, m.ferro);
+      var cx2 = fx + n[0] * 0.46, cz2 = fz + n[1] * 0.46;
+      peca(g, cilSede(0.13, 0.07, 0.2, 8), m.ferro, cx2, yT + 0.1, cz2);
+      var fl = peca(g, new THREE.ConeGeometry(0.1, 0.32, 7), m.chama, cx2, yT + 0.36, cz2);
+      fl.castShadow = false;
+      if (K && K.makeHalo) {
+        try { var hl = K.makeHalo('#ff9a4a', 1.7, 0.5); hl.position.set(cx2, yT + 0.42, cz2); g.add(hl); } catch (eH) {}
+      }
+      rel.tochas++;
+    }
+    for (var y = ya; y <= yb; y++) for (var x = xa; x <= xb; x++) {
+      if (!(x === xa || x === xb || y === ya || y === yb)) continue;
+      if (!eAlto(x, y)) continue;
+      var lados = ladosDe(x, y), G = grupo(lados);
+      var px = x * CELL, pz = y * CELL;
+      rel.paredes++;
+      peca(G.alta, caixaSede(CELL, H, CELL, px, H / 2, pz), m.pedra);
+      peca(G.alta, caixaSede(CELL + 0.12, 0.22, CELL + 0.12, px, H + 0.11, pz), m.pedraEsc);   // a cornija
+      peca(G.baixa, caixaSede(CELL, HC, CELL, px, HC / 2, pz), m.pedra);
+      /* o topo do corte na MESMA pedra da parede: escuro (1ª foto) ele virava uma faixa preta
+       * de 2 m, e claro (2ª foto) uma faixa bege que roubava o olho do tabuleiro */
+      peca(G.baixa, caixaSede(CELL + 0.04, 0.07, CELL + 0.04, px, HC + 0.035, pz), m.pedra);
+      if (lados.length !== 1) continue;
+      var lado = lados[0], n = NORMAL[lado];
+      // a casa de dentro encostada é parede também (a lareira, o trono)? então sem enfeite
+      var encostada = eAlto(x + n[0], y + n[1]);
+      tira(G.alta, lado, px, pz, 0.46, 0.23, 0.14, m.pedraEsc);
+      tira(G.baixa, lado, px, pz, 0.46, 0.23, 0.14, m.pedraEsc);
+      if (!encostada) tira(G.alta, lado, px, pz, 0.34, H - 0.62, 0.24, m.madeiraEsc);   // o frechal
+      var ao = n[1] ? x : y;
+      if (!encostada && ao % 3 === 0) {
+        // o ESTEIO: a viga de pé a cada 6 m, do rodapé ao frechal
+        var hE = H - 0.46, hEc = HC - 0.46;
+        var ex = px + n[0] * (CELL / 2 + 0.1), ez = pz + n[1] * (CELL / 2 + 0.1);
+        peca(G.alta, n[1] ? caixaSede(0.38, hE, 0.2, ex, 0.46 + hE / 2, ez) : caixaSede(0.2, hE, 0.38, ex, 0.46 + hE / 2, ez), m.madeiraEsc);
+        peca(G.baixa, n[1] ? caixaSede(0.38, hEc, 0.2, ex, 0.46 + hEc / 2, ez) : caixaSede(0.2, hEc, 0.38, ex, 0.46 + hEc / 2, ez), m.madeiraEsc);
+      } else if (!encostada && ao % 6 === 3) {
+        tocha(G.alta, lado, px, pz);
+      }
+    }
+    // A PORTA: a corrida de casas vazias na borda ganha batente, verga de madeira e a pedra
+    // por cima da verga (na versão inteira); a cortada fica só com o batente baixo
+    [['norte', ya], ['sul', yb]].forEach(function (par) {
+      var lado = par[0], yy = par[1], x0 = null;
+      for (var xx = xa + 1; xx <= xb; xx++) {
+        var vazia = xx < xb && tileKind(gridTile(st, xx, yy)) === 'hole';
+        if (vazia && x0 === null) x0 = xx;
+        if (!vazia && x0 !== null) {
+          var x1 = xx - 1, G2 = grupo([lado]);
+          var larg = (x1 - x0 + 1) * CELL, cxp = (x0 + x1) / 2 * CELL, pz2 = yy * CELL;
+          var hV = 2.9;
+          peca(G2.alta, caixaSede(larg, H - hV, CELL, cxp, hV + (H - hV) / 2, pz2), m.pedra);
+          peca(G2.alta, caixaSede(larg + 0.7, 0.34, CELL * 1.08, cxp, hV - 0.17, pz2), m.madeiraEsc);
+          [x0 - 0.5, x1 + 0.5].forEach(function (bx) {
+            peca(G2.alta, caixaSede(0.34, hV - 0.34, CELL * 1.08, bx * CELL, (hV - 0.34) / 2, pz2), m.madeiraEsc);
+            peca(G2.baixa, caixaSede(0.34, HC + 0.06, CELL * 1.08, bx * CELL, (HC + 0.06) / 2, pz2), m.madeiraEsc);
+          });
+          rel.portas++;
+          x0 = null;
+        }
+      }
+    });
+    var funde = !!(K && K.mergeStatic && !window.__nomerge);
+    ordem.forEach(function (k) {
+      var G = grupos[k];
+      var alta = funde ? K.mergeStatic(G.alta) : G.alta;
+      var baixa = funde ? K.mergeStatic(G.baixa) : G.baixa;
+      baixa.visible = false;
+      ctx.vivos.push(alta, baixa);
+      ctx.cortes.push({ lados: G.lados, alta: alta, baixa: baixa });
+    });
+  }
+
+  /* O TRONO (3×1, alto): o estrado de pedra nas três casas, o painel de madeira escura com
+   * o pano vermelho atrás, dois postes com pomo de ouro nas casas dos lados (a casa
+   * inteira tem de parecer alta, não só a do meio) e a cadeira de espaldar alto. Frente =
+   * +z local. */
+  function tronoDaSede(L, m) {
+    var g = new THREE.Group();
+    peca(g, caixaSede(L, 0.3, CELL * 0.92, 0, 0.15, 0), m.pedraClara);
+    peca(g, caixaSede(L * 0.5, 0.15, 0.5, 0, 0.075, CELL * 0.46 + 0.2), m.pedraClara);          // o degrau
+    peca(g, caixaSede(L + 0.04, 0.06, 0.06, 0, 0.3, CELL * 0.46), m.ouro);
+    peca(g, caixaSede(L * 0.96, 3.9, 0.3, 0, 0.3 + 1.95, -0.78), m.madeiraEsc);                  // o painel
+    peca(g, caixaSede(2.3, 3.1, 0.05, 0, 0.3 + 1.95, -0.61), m.pano);
+    peca(g, caixaSede(2.5, 0.12, 0.08, 0, 0.3 + 3.55, -0.6), m.ouro);
+    [-1, 1].forEach(function (s) {
+      peca(g, caixaSede(0.46, 3.9, 0.46, s * (L / 2 - 0.55), 0.3 + 1.95, -0.3), m.madeira);
+      peca(g, new THREE.SphereGeometry(0.28, 12, 8), m.ouro, s * (L / 2 - 0.55), 0.3 + 3.9 + 0.22, -0.3);
+      peca(g, caixaSede(0.12, 3.1, 0.07, s * 1.2, 0.3 + 1.95, -0.6), m.ouro);
+    });
+    // a cadeira
+    peca(g, caixaSede(1.4, 0.5, 1.0, 0, 0.3 + 0.25, 0.05), m.madeira);
+    peca(g, caixaSede(1.2, 0.12, 0.86, 0, 0.3 + 0.56, 0.08), m.pano);
+    peca(g, caixaSede(1.4, 2.7, 0.26, 0, 0.3 + 0.5 + 1.35, -0.34), m.madeira);
+    peca(g, caixaSede(0.96, 2.0, 0.05, 0, 0.3 + 0.5 + 1.2, -0.2), m.pano);
+    peca(g, new THREE.ConeGeometry(0.3, 0.55, 4), m.ouro, 0, 0.3 + 3.2 + 0.27, -0.34);
+    [-1, 1].forEach(function (s) { peca(g, caixaSede(0.2, 0.5, 0.95, s * 0.7, 0.3 + 0.75, 0.05), m.madeiraEsc); });
+    return g;
+  }
+  // O ESTANDARTE (alto): base de pedra, mastro, travessa, pomo e a bandeira da guilda
+  function estandarteDaSede(lado, m, cache) {
+    var g = new THREE.Group();
+    var gd = guildasSede[lado] || {};
+    var cor = gd.cor || CORES_SEDE_NEUTRAS.cor;
+    peca(g, cilSede(0.5, 0.62, 0.36, 12), m.pedraClara, 0, 0.18, 0);
+    peca(g, cilSede(0.075, 0.09, 4.1, 8), m.madeiraEsc, 0, 0.36 + 2.05, 0);
+    peca(g, new THREE.SphereGeometry(0.16, 10, 8), m.ouro, 0, 4.58, 0);
+    peca(g, caixaSede(1.6, 0.09, 0.09, 0, 4.15, 0.08), m.madeiraEsc);
+    [-0.8, 0.8].forEach(function (px) { peca(g, new THREE.SphereGeometry(0.07, 8, 6), m.ouro, px, 4.15, 0.08); });
+    var tex = texturaBandeira(cor, gd.emblema || '');
+    var chave = 'sede-bandeira|' + cor + '|' + (gd.emblema || '');
+    var matB = tex ? pracaMat(cache, chave, '#ffffff', { map: tex, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.95 })
+                   : pracaMat(cache, chave, cor, { side: THREE.DoubleSide });
+    var band = peca(g, new THREE.PlaneGeometry(1.45, 2.26), matB, 0, 4.1 - 1.13, 0.13);
+    band.userData.bandeira = lado;
+    return g;
+  }
+  /* O PILAR (alto): base, plinto, fuste de pedra, capitel e ábaco — 2,64 m, fino (0,9 m).
+   * 15/09 (prova): a 3,76 m o ábaco do pilar (19,9) tapava da câmera padrão o herói que
+   * nasce em (21,8); a 2,9 também, depois que o ajuste da câmera dos mapas de duelo trouxe o
+   * pivô para a frente. A 2,64 ele ainda passa meio metro da cabeça de um herói (2,05) — lê
+   * como coluna — e para de esconder a casa de nascimento; o pé-direito é da parede de 4 m. */
+  function pilarDaSede(m) {
+    var g = new THREE.Group();
+    peca(g, caixaSede(1.2, 0.34, 1.2, 0, 0.17, 0), m.pedraEsc);
+    peca(g, caixaSede(0.96, 0.2, 0.96, 0, 0.44, 0), m.pedraClara);
+    var fuste = new THREE.CylinderGeometry(0.36, 0.42, 1.76, 14);
+    fuste.translate(0, 0.54 + 0.88, 0);
+    peca(g, uvMundo(fuste, 4), m.pedra);
+    peca(g, cilSede(0.48, 0.38, 0.2, 14), m.pedraClara, 0, 2.4, 0);
+    peca(g, caixaSede(1.08, 0.14, 1.08, 0, 2.57, 0), m.pedraEsc);
+    return g;
+  }
+  /* A ARMADURA NO SUPORTE (alta): pedestal de madeira, pernas, peitoral, ombreiras, elmo
+   * com penacho, o tabardo vermelho, o escudo no braço e a alabarda de pé ao lado. */
+  function armaduraDaSede(m) {
+    var g = new THREE.Group();
+    peca(g, caixaSede(1.05, 0.28, 1.05, 0, 0.14, 0), m.madeiraEsc);
+    [-0.19, 0.19].forEach(function (px) {
+      peca(g, cilSede(0.12, 0.14, 0.98, 8), m.metal, px, 0.28 + 0.49, 0);
+      peca(g, caixaSede(0.24, 0.12, 0.34, px, 0.34, 0.05), m.ferro);
+    });
+    var peito = peca(g, cilSede(0.44, 0.32, 0.86, 10), m.metal, 0, 1.26 + 0.43, 0);
+    peito.scale.z = 0.62;
+    peca(g, caixaSede(0.66, 0.1, 0.44, 0, 1.3, 0), m.ferro);
+    peca(g, caixaSede(0.44, 0.78, 0.04, 0, 1.3, 0.28), m.pano);
+    [-1, 1].forEach(function (s) {
+      peca(g, new THREE.SphereGeometry(0.21, 10, 8), m.metal, s * 0.5, 2.06, 0);
+      peca(g, cilSede(0.1, 0.09, 0.78, 8), m.metal, s * 0.54, 1.62, 0);
+    });
+    peca(g, cilSede(0.1, 0.12, 0.14, 8), m.ferro, 0, 2.18, 0);
+    peca(g, cilSede(0.21, 0.23, 0.38, 12), m.metal, 0, 2.44, 0);
+    peca(g, new THREE.SphereGeometry(0.21, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), m.metal, 0, 2.63, 0);
+    peca(g, caixaSede(0.3, 0.05, 0.05, 0, 2.47, 0.21), m.fuligem);
+    peca(g, caixaSede(0.07, 0.34, 0.46, 0, 2.94, -0.04), m.pano);
+    var escudo = peca(g, cilSede(0.38, 0.38, 0.07, 18), m.pano, -0.72, 1.55, 0.18);
+    escudo.rotation.z = Math.PI / 2; escudo.rotation.y = -0.35;
+    var boss = peca(g, new THREE.SphereGeometry(0.1, 8, 6), m.ouro, -0.76, 1.55, 0.18);
+    boss.scale.x = 0.5;
+    peca(g, cilSede(0.045, 0.045, 3.3, 6), m.madeiraEsc, 0.78, 0.28 + 1.65, 0.05);
+    peca(g, caixaSede(0.05, 0.52, 0.36, 0.78, 3.28, 0.22), m.metal);
+    peca(g, new THREE.ConeGeometry(0.06, 0.4, 6), m.metal, 0.78, 3.78, 0.05);
+    return g;
+  }
+  /* A MESA DO CONSELHO (5×3, BAIXA): um tampo só de 9×3,6 m a 0,85 m, com a toalha, o mapa,
+   * dois candelabros baixos, as taças e os dois bancos corridos dentro da pegada. O mais
+   * alto é a chama do candelabro, a 1,2 m: um herói vê por cima da mesa inteira. */
+  function mesaDaSede(L, P, m) {
+    var g = new THREE.Group();
+    var tl = L - 1.0, tp = Math.min(3.6, P - 2.2);
+    peca(g, caixaSede(tl, 0.14, tp, 0, 0.78, 0), m.madeira);
+    peca(g, caixaSede(tl - 0.3, 0.16, tp - 0.3, 0, 0.64, 0), m.madeiraEsc);
+    [-1, 0, 1].forEach(function (i) {
+      [-1, 1].forEach(function (s) { peca(g, caixaSede(0.24, 0.58, 0.24, i * (tl / 2 - 0.45), 0.29, s * (tp / 2 - 0.3)), m.madeiraEsc); });
+    });
+    peca(g, caixaSede(tl - 1.0, 0.02, 1.1, 0, 0.86, 0), m.pano);
+    [-0.55, 0.55].forEach(function (pz) { peca(g, caixaSede(tl - 1.0, 0.024, 0.07, 0, 0.862, pz), m.ouro); });
+    var mapa = peca(g, caixaSede(1.7, 0.012, 1.15, 0.3, 0.88, 0.1), m.pergaminho);
+    mapa.rotation.y = 0.12;
+    [-1, 1].forEach(function (s) {
+      var cx = s * tl * 0.3;
+      peca(g, cilSede(0.14, 0.2, 0.06, 10), m.ouro, cx, 0.88, 0);
+      // candelabro baixo (15/09: a 1,3 m ele encostava no teto da cobertura baixa; agora 1,19)
+      peca(g, cilSede(0.03, 0.03, 0.12, 6), m.ouro, cx, 0.96, 0);
+      peca(g, caixaSede(0.46, 0.04, 0.05, cx, 1.02, 0), m.ouro);
+      [-0.21, 0, 0.21].forEach(function (dx) {
+        peca(g, cilSede(0.035, 0.035, 0.08, 6), m.marmore, cx + dx, 1.08, 0);
+        var ch = peca(g, new THREE.ConeGeometry(0.03, 0.07, 6), m.chama, cx + dx, 1.155, 0);
+        ch.castShadow = false;
+      });
+      peca(g, cilSede(0.06, 0.04, 0.14, 8), m.ouro, s * tl * 0.12, 0.92, s * 0.9);
+      peca(g, cilSede(0.06, 0.04, 0.14, 8), m.ouro, -s * tl * 0.38, 0.92, s * 1.1);
+      // o banco corrido do lado comprido
+      var bz = s * (tp / 2 + 0.75);
+      peca(g, caixaSede(tl - 0.6, 0.1, 0.5, 0, 0.46, bz), m.madeira);
+      [-1, 0, 1].forEach(function (i) { peca(g, caixaSede(0.14, 0.41, 0.42, i * (tl / 2 - 0.8), 0.205, bz), m.madeiraEsc); });
+    });
+    return g;
+  }
+  // O BANCO DO SALÃO (baixo): assento de tábua, dois pés e a travessa — 0,51 m
+  function bancoDaSede(m) {
+    var g = new THREE.Group();
+    peca(g, caixaSede(1.75, 0.1, 0.56, 0, 0.46, 0), m.madeira);
+    [-0.7, 0.7].forEach(function (px) { peca(g, caixaSede(0.13, 0.41, 0.46, px, 0.205, 0), m.madeiraEsc); });
+    peca(g, caixaSede(1.3, 0.08, 0.08, 0, 0.16, 0), m.madeiraEsc);
+    return g;
+  }
+  // A ESTÁTUA (baixa): o busto do fundador num plinto — 1,2 m no topo da cabeça
+  function estatuaDaSede(m) {
+    var g = new THREE.Group();
+    peca(g, caixaSede(0.92, 0.5, 0.92, 0, 0.25, 0), m.pedraClara);
+    peca(g, caixaSede(1.02, 0.08, 1.02, 0, 0.54, 0), m.pedraEsc);
+    peca(g, caixaSede(0.66, 0.24, 0.34, 0, 0.7, 0), m.marmore);
+    peca(g, cilSede(0.26, 0.33, 0.12, 10), m.marmore, 0, 0.62, 0);
+    peca(g, cilSede(0.08, 0.09, 0.12, 8), m.marmore, 0, 0.88, 0);
+    var cab = peca(g, new THREE.SphereGeometry(0.17, 12, 10), m.marmore, 0, 1.03, 0.02);
+    cab.scale.y = 1.12;
+    return g;
+  }
+  // O BAÚ (baixo): corpo de madeira, tampa redonda, cintas de ferro e o fecho de ouro — 0,9 m
+  function bauDaSede(m) {
+    var g = new THREE.Group();
+    peca(g, caixaSede(1.2, 0.52, 0.76, 0, 0.26, 0), m.madeira);
+    var tampa = new THREE.CylinderGeometry(0.38, 0.38, 1.22, 14, 1, false, 0, Math.PI);
+    tampa.rotateZ(Math.PI / 2);                            // o eixo em x, a meia-cana para cima
+    peca(g, tampa, m.madeiraEsc, 0, 0.52, 0);
+    [-0.42, 0.42].forEach(function (px) {
+      peca(g, caixaSede(0.08, 0.54, 0.79, px, 0.27, 0), m.ferro);
+      var cinta = new THREE.CylinderGeometry(0.395, 0.395, 0.08, 14, 1, false, 0, Math.PI);
+      cinta.rotateZ(Math.PI / 2);
+      peca(g, cinta, m.ferro, px, 0.52, 0);
+    });
+    peca(g, caixaSede(0.16, 0.2, 0.05, 0, 0.5, 0.39), m.ouro);
+    return g;
+  }
+  /* A LAREIRA (1×3 na parede lateral, alta). Frente = +z local, parede em −z, comprimento em
+   * x (6 m). Três partes que vivem em lugares diferentes:
+   *   · `no` — o lastro, a moldura de pedra com a boca, o consolo de madeira e a lenha:
+   *     estático, fundido com o resto da sala;
+   *   · `chamine` — o peito da chaminé do consolo até o alto da parede: segue o RECORTE da
+   *     parede em que está encostada (sem isto a lareira do lado da câmera apagava duas casas
+   *     de nascimento);
+   *   · `vivo` — o fogo (cones que tremem) e a LUZ PONTUAL quente. É uma PointLight por
+   *     lareira: com as 6 do FX e a do evento de chão, o salão fica em 8 a 9 luzes, que é o
+   *     que os calabouços com evento já usam; e ela nasce UMA vez por montagem (o número de
+   *     luzes não muda no meio da luta, então o shader não recompila). */
+  var SEDE_LUZ = { cor: '#ff9448', intensidade: 3.2, alcance: 20 };
+  function lareiraDaSede(L, m, ctx) {
+    var g = new THREE.Group(), cham = new THREE.Group(), vivo = new THREE.Group();
+    var H = SEDE_PAREDE_H;
+    var boca = 2.4, lado = (L - 0.2 - boca) / 2;
+    peca(g, caixaSede(L - 0.1, 0.22, 1.9, 0, 0.11, -0.05), m.pedraClara);
+    [-1, 1].forEach(function (s) {
+      peca(g, caixaSede(lado, 1.95, 1.4, s * (boca / 2 + lado / 2), 0.975, -0.3), m.pedra);
+    });
+    peca(g, caixaSede(boca, 0.5, 1.4, 0, 1.95 - 0.25, -0.3), m.pedra);
+    peca(g, caixaSede(boca, 1.45, 0.3, 0, 0.72, -0.85), m.fuligem);
+    peca(g, caixaSede(L - 0.1, 0.24, 1.75, 0, 2.07, -0.15), m.madeiraEsc);                      // o consolo
+    [-0.35, 0.35].forEach(function (px) {
+      var lenha = peca(g, cilSede(0.13, 0.13, 1.5, 8), m.madeiraEsc, px * 0.4, 0.34, -0.35 + px * 0.2);
+      lenha.rotation.z = Math.PI / 2; lenha.rotation.y = px;
+    });
+    // a chaminé
+    peca(cham, caixaSede(L * 0.72, H - 2.19, 1.3, 0, 2.19 + (H - 2.19) / 2, -0.35), m.pedra);
+    peca(cham, caixaSede(L * 0.74, 0.14, 1.36, 0, 3.1, -0.33), m.pedraEsc);
+    // o fogo: cones laranja por fora e amarelos por dentro, aditivos (a luz vem do brilho)
+    var cache = ctx.cache;
+    if (!cache['sede-fogo-f']) {
+      cache['sede-fogo-f'] = new THREE.MeshBasicMaterial({ color: col3('#ff6a1a'), transparent: true, opacity: 0.85,
+        blending: THREE.AdditiveBlending, depthWrite: false });
+      cache['sede-fogo-d'] = new THREE.MeshBasicMaterial({ color: col3('#ffd070'), transparent: true, opacity: 0.9,
+        blending: THREE.AdditiveBlending, depthWrite: false });
+    }
+    var chamas = [[-0.5, 0.95, 0.34, 'f'], [0.05, 1.25, 0.4, 'f'], [0.55, 0.9, 0.3, 'f'],
+                  [-0.22, 0.7, 0.22, 'd'], [0.28, 0.8, 0.22, 'd']];
+    chamas.forEach(function (c2, i) {
+      var cone = new THREE.Mesh(new THREE.ConeGeometry(c2[2], c2[1], 8), cache['sede-fogo-' + c2[3]]);
+      cone.geometry.translate(0, c2[1] / 2, 0);             // cresce do pé: a escala sobe a chama
+      cone.position.set(c2[0], 0.4, -0.4);
+      cone.renderOrder = 4;
+      vivo.add(cone);
+      ctx.fogos.push({ no: cone, ph: i * 1.7 + ctx.fogos.length * 0.9 });
+    });
+    var K = kit();
+    if (K && K.makeHalo) {
+      try { var hl = K.makeHalo('#ff8a3c', 3.4, 0.55); hl.position.set(0, 1.0, -0.2); vivo.add(hl); } catch (eH) {}
+    }
+    var luz = new THREE.PointLight(col3(SEDE_LUZ.cor), SEDE_LUZ.intensidade, SEDE_LUZ.alcance, 2);
+    luz.position.set(0, 1.35, 1.1);
+    vivo.add(luz);
+    ctx.luzes.push({ l: luz, base: SEDE_LUZ.intensidade, ph: ctx.luzes.length * 2.3 });
+    return { no: g, chamine: cham, vivo: vivo };
+  }
+
+  /* Monta UMA peça do salão no centro da pegada, girada de 90 em 90° para o meio da sala (o
+   * comprimento sempre no maior lado da pegada) e anota no relatório: o papel, a ALTURA
+   * medida depois de montada (a prova confere a regra alto/baixo com ela) e que é primitiva. */
+  function montaPecaDaSede(st, pc, ctx) {
+    var rel = ctx.rel, m = matsSede(ctx.cache), papel = pc.papel;
+    if (papel === 'parede_salao') {
+      paredesDoSalao(st, pc, ctx);
+      rel.papeis[papel] = (rel.papeis[papel] || 0) + 1;
+      return null;
+    }
+    var wC = pc.w || 1, hC = pc.h || 1;
+    var cxC = pc.x + (wC - 1) / 2, cyC = pc.y + (hC - 1) / 2;
+    var mx = (gridW - 1) / 2, my = (gridH - 1) / 2;
+    var rot = Math.round(Math.atan2(mx - cxC, my - cyC) / (Math.PI / 2)) * (Math.PI / 2);
+    var deLado = Math.abs(Math.sin(rot)) > 0.5;
+    if (hC > wC && !deLado) rot = (cxC <= mx) ? Math.PI / 2 : -Math.PI / 2;
+    if (wC > hC && deLado) rot = (cyC <= my) ? 0 : Math.PI;
+    var L = Math.max(wC, hC) * CELL, P = Math.min(wC, hC) * CELL;
+    var no = null, extra = null;
+    if (papel === 'trono') no = tronoDaSede(L, m);
+    else if (papel === 'estandarte') no = estandarteDaSede(cxC < mx ? 'oeste' : 'leste', m, ctx.cache);
+    else if (papel === 'pilar') no = pilarDaSede(m);
+    else if (papel === 'armadura') no = armaduraDaSede(m);
+    else if (papel === 'mesa') no = mesaDaSede(L, P, m);
+    else if (papel === 'banco_salao') no = bancoDaSede(m);
+    else if (papel === 'estatua') no = estatuaDaSede(m);
+    else if (papel === 'bau') no = bauDaSede(m);
+    else if (papel === 'lareira') { extra = lareiraDaSede(L, m, ctx); no = extra.no; }
+    if (!no) return null;
+    var px = cxC * CELL, pz = cyC * CELL;
+    no.rotation.y = rot;
+    no.position.set(px, 0, pz);
+    no.updateMatrixWorld(true);
+    var alt = new THREE.Box3().setFromObject(no).max.y;
+    if (extra) {
+      [extra.chamine, extra.vivo].forEach(function (parte) { parte.rotation.y = rot; parte.position.set(px, 0, pz); });
+      extra.chamine.updateMatrixWorld(true);
+      alt = Math.max(alt, new THREE.Box3().setFromObject(extra.chamine).max.y);
+      // a parede atrás da lareira é a oposta à frente dela: é o recorte dessa parede que manda
+      var fx = Math.round(Math.sin(rot)), fz = Math.round(Math.cos(rot));
+      var ladoParede = fx > 0 ? 'oeste' : fx < 0 ? 'leste' : fz > 0 ? 'norte' : 'sul';
+      ctx.vivos.push(extra.chamine, extra.vivo);
+      ctx.cortes.push({ lados: [ladoParede], alta: extra.chamine, baixa: null });
+    }
+    rel.papeis[papel] = (rel.papeis[papel] || 0) + 1;
+    rel.alturas[papel] = Math.max(rel.alturas[papel] || 0, +alt.toFixed(2));
+    if (rel.provisorias.indexOf(papel) < 0) rel.provisorias.push(papel);
+    return no;
+  }
+
+  /* O QUE O SALÃO ANIMA A CADA QUADRO: o fogo e a luz das lareiras tremem (duas senoides
+   * fora de fase, sem sorteio — o quadro é determinístico), e cada parede escolhe a versão
+   * inteira ou a cortada pelo lado de onde a câmera olha. `sedeVivo` é trocado a cada
+   * montagem: sala sem salão tem as listas vazias e isto não custa nada. */
+  var sedeVivo = { fogos: [], luzes: [], cortes: [] };
+  var sedeLadoCam = { norte: false, sul: false, oeste: false, leste: false };
+  function animaSede(t) {
+    var sv = sedeVivo, i;
+    if (!sv.cortes.length && !sv.fogos.length) return;
+    var sx = Math.sin(cam.ang), cz = Math.cos(cam.ang);
+    // câmera em +z olha o salão por cima da parede SUL; em −x, por cima da OESTE
+    sedeLadoCam.sul = cz > 0.2; sedeLadoCam.norte = cz < -0.2;
+    sedeLadoCam.leste = sx > 0.2; sedeLadoCam.oeste = sx < -0.2;
+    for (i = 0; i < sv.cortes.length; i++) {
+      var c = sv.cortes[i], corta = true;
+      for (var j = 0; j < c.lados.length; j++) if (!sedeLadoCam[c.lados[j]]) { corta = false; break; }
+      c.alta.visible = !corta;
+      if (c.baixa) c.baixa.visible = corta;
+    }
+    for (i = 0; i < sv.fogos.length; i++) {
+      var f = sv.fogos[i];
+      var k = 0.84 + 0.12 * Math.sin(t * 8.3 + f.ph) + 0.07 * Math.sin(t * 19.1 + f.ph * 1.7);
+      f.no.scale.set(0.94 + 0.06 * Math.sin(t * 5.2 + f.ph), k, 0.94 + 0.06 * Math.cos(t * 6.1 + f.ph));
+    }
+    for (i = 0; i < sv.luzes.length; i++) {
+      var lz = sv.luzes[i];
+      lz.l.intensity = lz.base * (0.86 + 0.09 * Math.sin(t * 7.3 + lz.ph) + 0.05 * Math.sin(t * 17.9 + lz.ph));
+    }
+  }
+  // para a prova: o estado do recorte e do fogo, sem expor os nós
+  R._sedeVivo = function () {
+    return {
+      cortes: sedeVivo.cortes.map(function (c) { return { lados: c.lados.slice(), cortado: !c.alta.visible }; }),
+      fogo: sedeVivo.fogos.length ? +sedeVivo.fogos[0].no.scale.y.toFixed(4) : null,
+      luzes: sedeVivo.luzes.length
+    };
+  };
+  R.SEDE_PAREDE_H = SEDE_PAREDE_H;
+
   function buildBoardKit(st, pal, theme) {
     var K = kit();
     if (!K) return false;
     var w = gridW, h = gridH;
     // 14/09: a praça tática — o que cada bloco é (arenas.js `pecas`) e o chão da praça
-    var pecasSala = pecasDaSala(st);
+    var pecasSala = pecasDaSala(st, theme);
     var praca = theme === 'praca';
+    // 15/09: o Salão da Sede — mesmo caminho da praça, com as peças e o chão do salão
+    var sede = theme === 'sede' && !!pecasSala;
+    var temaProprio = praca || sede;
     var casaDaPeca = {};
     if (pecasSala) {
       pecasSala.forEach(function (pc) {
-        for (var py = 0; py < (pc.h || 1); py++) for (var px = 0; px < (pc.w || 1); px++) casaDaPeca[(pc.x + px) + ',' + (pc.y + py)] = pc;
+        var pw0 = pc.w || 1, ph0 = pc.h || 1;
+        for (var py = 0; py < ph0; py++) for (var px = 0; px < pw0; px++) {
+          // a parede do salão só VESTE o contorno da pegada; o miolo é o salão e tem peça própria
+          if (pc.papel === 'parede_salao' && px > 0 && py > 0 && px < pw0 - 1 && py < ph0 - 1) continue;
+          if (pc.papel === 'parede_salao' && casaDaPeca[(pc.x + px) + ',' + (pc.y + py)]) continue;
+          casaDaPeca[(pc.x + px) + ',' + (pc.y + py)] = pc;
+        }
       });
     }
     var matsPraca = {};
-    var relPraca = pecasSala ? { papeis: {}, obras: {}, pendentes: [], altoSemPeca: 0, baixoSemPeca: 0,
+    var relPraca = pecasSala ? { tema: sede ? 'sede' : 'praca', papeis: {}, obras: {}, pendentes: [], altoSemPeca: 0, baixoSemPeca: 0,
                                  casasCobertas: 0, arvore: null } : null;
+    var ctxSede = null;
+    sedeVivo = { fogos: [], luzes: [], cortes: [] };     // a animação da sala velha sai junto
+    if (sede) {
+      relPraca.alturas = {}; relPraca.provisorias = []; relPraca.paredes = 0; relPraca.tochas = 0;
+      relPraca.portas = 0; relPraca.tapete = null; relPraca.erros = [];
+      ctxSede = { cache: matsPraca, rel: relPraca, vivos: [], cortes: [], fogos: [], luzes: [] };
+    }
     pracaEspera++;                        // montagem nova: a espera da anterior para
     var envG = new THREE.Group();
     envG.name = 'envkit';
@@ -1240,6 +1989,9 @@ var JOGO = (typeof window !== 'undefined')
       if (praca) {
         // 14/09: lajotas da praça no jogável, grama baixa no '~' (chaoDaPraca)
         staticG.add(chaoDaPraca(st, w, h, matsPraca));
+      } else if (sede) {
+        // 15/09: tábuas, a soleira da porta e o tapete até o trono (chaoDaSede)
+        staticG.add(chaoDaSede(st, w, h, matsPraca, pecasSala, relPraca));
       } else {
       // O rodapé recebe a SILHUETA da sala: sem isso ele desenhava um retângulo
       // em volta da grade e re-quadrava o mapa inteiro, justamente depois de as
@@ -1303,7 +2055,7 @@ var JOGO = (typeof window !== 'undefined')
         if (casaDaPeca[x + ',' + y]) { relPraca.casasCobertas++; continue; }
         if (k === 'high') relPraca.altoSemPeca++; else relPraca.baixoSemPeca++;
       }
-      if (praca && k !== 'high' && k !== 'low') continue;
+      if (temaProprio && k !== 'high' && k !== 'low') continue;
       if (k === 'high') {
         // A BORDA TAMBÉM É DELE AGORA.
         //
@@ -1383,7 +2135,7 @@ var JOGO = (typeof window !== 'undefined')
       } else if (k === 'low') {
         // obstáculo BAIXO: chão normal + a peça da DIVISÓRIA. Bloqueia passagem,
         // NÃO bloqueia a visão — por isso é visivelmente mais baixo que a parede.
-        node = praca ? null : K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
+        node = temaProprio ? null : K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
         // A peça sai da FILEIRA, não da casa: cinco casas seguidas usam a mesma
         // e leem como uma barreira só. Sorteando por casa, uma corrida de cinco
         // virava cinco objetos diferentes — entulho, não divisória.
@@ -1441,13 +2193,21 @@ var JOGO = (typeof window !== 'undefined')
     if (pecasSala) {
       for (var pq = 0; pq < pecasSala.length; pq++) {
         var noPeca = null;
-        try { noPeca = montaPecaDaPraca(pecasSala[pq], pecasSala, matsPraca, relPraca); } catch (eP) { noPeca = null; }
-        if (noPeca) {
-          staticG.add(noPeca);
+        try {
+          noPeca = sede ? montaPecaDaSede(st, pecasSala[pq], ctxSede)
+                        : montaPecaDaPraca(pecasSala[pq], pecasSala, matsPraca, relPraca);
+        } catch (eP) {
+          noPeca = null;
+          if (sede) relPraca.erros.push(pecasSala[pq].papel + ': ' + (eP && eP.message));
+        }
+        if (noPeca) staticG.add(noPeca);
+        if (noPeca && !sede) {
           var chPeca = 'praca:' + pecasSala[pq].papel;
           usoPecas[chPeca] = (usoPecas[chPeca] || 0) + 1;
         }
       }
+      // 15/09: no salão a contagem vem do relatório (a parede monta fora do staticG)
+      if (sede) for (var ps in relPraca.papeis) if (relPraca.papeis.hasOwnProperty(ps)) usoPecas['sede:' + ps] = relPraca.papeis[ps];
     }
 
     // props de borda: o campo é um LUGAR, não um diorama solto no vazio
@@ -1455,8 +2215,9 @@ var JOGO = (typeof window !== 'undefined')
     // altura normalizada e um disco de contato que os assenta no chao.
     // 14/09: na praça NÃO — o mundo em volta é o gramado da própria praça, e os troncos
     // e colunas do jardim espalhados em volta davam cara de estufa ao mapa
+    // 15/09: no salão também não — fora da parede é breu
     var padPos = [];
-    if (!praca) try {
+    if (!temaProprio) try {
       var kinds = K.propKinds(theme);
       var rr = 0;
       var cxp = (w - 1) / 2 * CELL, czp = (h - 1) / 2 * CELL;
@@ -1513,9 +2274,19 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     envG.add((K.mergeStatic && !window.__nomerge) ? K.mergeStatic(staticG) : staticG);
+    // 15/09: o que o salão mexe fora do merge — as duas versões de cada parede, a chaminé
+    // e o fogo com a luz das lareiras — e a lista que o laço de render anima
+    if (ctxSede) {
+      for (var vv = 0; vv < ctxSede.vivos.length; vv++) envG.add(ctxSede.vivos[vv]);
+      sedeVivo = { fogos: ctxSede.fogos, luzes: ctxSede.luzes, cortes: ctxSede.cortes };
+      relPraca.luzes = ctxSede.luzes.length;
+      relPraca.fogos = ctxSede.fogos.length;
+      relPraca.cortes = ctxSede.cortes.length;
+      animaSede(nowT);                    // o primeiro quadro já sai com o recorte certo
+    }
     try {
       if (K.buildGridLines) envG.add(K.buildGridLines(theme, w, h));
-      if (K.buildBrazier && !praca) {      // 14/09: a praça é de dia, sem braseiro de canto
+      if (K.buildBrazier && !temaProprio) {  // 14/09: a praça é de dia; 15/09: o salão tem lareira
         var corners = [[-1.1, -1.1], [w + 0.1, -1.1], [-1.1, h + 0.1], [w + 0.1, h + 0.1]];
         for (var b2 = 0; b2 < 4; b2++) {
           var brz = K.buildBrazier(theme, b2);
@@ -1547,8 +2318,12 @@ var JOGO = (typeof window !== 'undefined')
     // teste que lesse um parcial acharia um aquário "faltando" que ainda vinha.
     R.ultimaMontagem = usoPecas;
     // 14/09: o relatório da praça tática (null sem `pecas`) — e a arte que faltou, pedida
-    R.ultimaMontagemPraca = relPraca;
-    if (relPraca && relPraca.pendentes.length) esperaObrasDaPraca(relPraca.pendentes);
+    // 15/09: UM RELATÓRIO POR TEMA — o da praça só na praça, o do salão só no salão, e
+    // `ultimaMontagemTema` o da sala atual (com `tema`), para quem não sabe qual pedir
+    R.ultimaMontagemPraca = (relPraca && !sede) ? relPraca : null;
+    R.ultimaMontagemSede = sede ? relPraca : null;
+    R.ultimaMontagemTema = relPraca;
+    if (relPraca && !sede && relPraca.pendentes.length) esperaObrasDaPraca(relPraca.pendentes);
     return true;
   }
 
@@ -1743,6 +2518,165 @@ var JOGO = (typeof window !== 'undefined')
   };
   R.moldura = function () { return { topo: moldura.topo, base: moldura.base, imgH: moldura.imgH }; };
 
+  /* ------------------------------------------- O AJUSTE DOS MAPAS DE DUELO (15/09)
+   * Os CALABOUÇOS ficam com o enquadramento de sempre (o de baixo, em fitCamera): o dono
+   * comparou as fotos e a sala inteira espremida na área útil virava miniatura — a borda de
+   * baixo sumir atrás da barra é um incômodo pequeno, o jogador gira e afasta.
+   *
+   * Nos MAPAS DE DUELO E GUERRA (DATA.arenas: a praça e o salão da sede) a luta começa com
+   * os dois lados nos nascimentos, perto das bordas, e o enquadramento de sempre deixava a
+   * dupla do oeste debaixo da barra de feitiços. Aqui se parte do MESMO enquadramento e se
+   * faz só um ajuste leve, nesta ordem de preferência:
+   *   1. deslizar o pivô (para cima da tela e de lado) até cada nascimento — pés, cabeça e os
+   *      lados do corpo — cair no canvas, acima da barra de baixo e fora do cartão da unidade;
+   *   2. se não couber, girar o azimute para o eixo comprido do mapa ficar na horizontal da
+   *      tela (tentando de novo o deslize);
+   *   3. só então afastar, de 1 em 1%, até no máximo 15% além da distância de sempre.
+   * Não coube nem assim: fica o que deixa MENOS pixel de fora, a 15%.
+   *
+   * A HUD é medida na página (a barra de baixo e o cartão da unidade; sem a tela de batalha,
+   * frações da HUD de mesa medida em 1262×704) e a medida guarda a MAIOR obstrução vista na
+   * sala: o vigia do laço só reajusta quando ela cresce (o botão de fundir aparece), e a
+   * câmera não muda a cada troca de turno. No celular (moldura ligada) nada disto roda. */
+  var hudMemo = null, hudSig = '', enquadro = null;
+  function ehMapaDeDuelo(st) {
+    var D = DATA();
+    if (!st || !D.arenas) return false;
+    for (var i = 0; i < D.arenas.length; i++) if (D.arenas[i] && D.arenas[i].id === st.dungeonId) return true;
+    return false;
+  }
+  function medeHudDuelo() {
+    var cr = (canvas && canvas.getBoundingClientRect) ? canvas.getBoundingClientRect() : null;
+    var tela = (typeof document !== 'undefined') ? document.querySelector('.screen-battle.is-on') : null;
+    var a;
+    if (cr && tela) {
+      var caixa = function (sel) {
+        var e = tela.querySelector(sel);
+        if (!e) return null;
+        var r = e.getBoundingClientRect();
+        if (!(r.width > 2 && r.height > 2)) return null;
+        return { x0: r.left - cr.left, y0: r.top - cr.top, x1: r.right - cr.left, y1: r.bottom - cr.top };
+      };
+      var bb = caixa('.bt-bottom');
+      a = { base: bb ? bb.y0 : H, cartao: caixa('.bt-left'), medida: true, W: W, H: H };
+      if (hudMemo && hudMemo.W === W && hudMemo.H === H) {
+        a.base = Math.min(a.base, hudMemo.base);
+        var c0 = hudMemo.cartao;
+        if (c0) a.cartao = a.cartao ? { x0: Math.min(a.cartao.x0, c0.x0), y0: Math.min(a.cartao.y0, c0.y0),
+                                        x1: Math.max(a.cartao.x1, c0.x1), y1: Math.max(a.cartao.y1, c0.y1) } : c0;
+      }
+      hudMemo = a;
+    } else {
+      a = { base: H * 0.79, cartao: { x0: W * 0.04, y0: H * 0.16, x1: W * 0.21, y1: H * 0.30 }, medida: false, W: W, H: H };
+    }
+    a.sig = [W, H, Math.round(a.base), a.cartao ? Math.round(a.cartao.x1) + 'x' + Math.round(a.cartao.y1) : '-'].join('|');
+    return a;
+  }
+  // os nascimentos: as letras de lado do mapa (P e a) e os heróis que estão de pé nele
+  function pontosDosNascimentos(st) {
+    var casas = {}, lista = [];
+    var dg = dungeonOf(st), room = dg && dg.rooms && dg.rooms[st.roomIndex];
+    if (room && room.layout) {
+      room.layout.forEach(function (linha, y) {
+        for (var x = 0; x < linha.length; x++) {
+          var ch = linha.charAt(x);
+          if (ch === 'P' || ch === 'a') casas[x + ',' + y] = [x, y];
+        }
+      });
+    }
+    (st.units || []).forEach(function (u) {
+      if (u && u.kind === 'hero' && u.alive && !u.offBoard) casas[u.x + ',' + u.y] = [u.x, u.y];
+    });
+    Object.keys(casas).forEach(function (k) {
+      var c = casas[k], cx = wx(c[0]), cz = wz(c[1]);
+      lista.push(new THREE.Vector3(cx, 0.05, cz), new THREE.Vector3(cx, 2.1, cz),
+                 new THREE.Vector3(cx - 0.55, 1.1, cz), new THREE.Vector3(cx + 0.55, 1.1, cz),
+                 new THREE.Vector3(cx, 1.1, cz - 0.55), new THREE.Vector3(cx, 1.1, cz + 0.55));
+    });
+    return lista;
+  }
+  // quantos pixels dos nascimentos ficam fora (canvas, barra de baixo, cartão) com esta câmera
+  var vDuelo = null;
+  function sobraDosNascimentos(pts, hud, d, ang, px, pz) {
+    var sT = Math.sin(cam.tilt), cT = Math.cos(cam.tilt), M0 = 8;
+    camera.position.set(cam.pivot.x + px + Math.sin(ang) * sT * d, cam.pivot.y + cT * d,
+                        cam.pivot.z + pz + Math.cos(ang) * sT * d);
+    camera.lookAt(cam.pivot.x + px, cam.pivot.y, cam.pivot.z + pz);
+    camera.updateMatrixWorld(true);
+    if (!vDuelo) vDuelo = new THREE.Vector3();
+    var fora = 0, ct = hud.cartao;
+    for (var i = 0; i < pts.length; i++) {
+      vDuelo.copy(pts[i]).project(camera);
+      var sx = (vDuelo.x + 1) / 2 * W, sy = (1 - vDuelo.y) / 2 * H;
+      if (sx < M0) fora += M0 - sx;
+      if (sx > W - M0) fora += sx - (W - M0);
+      if (sy < M0) fora += M0 - sy;
+      if (sy > hud.base - M0) fora += sy - (hud.base - M0);
+      if (ct && sx > ct.x0 - M0 && sx < ct.x1 + M0 && sy > ct.y0 - M0 && sy < ct.y1 + M0) {
+        fora += Math.min(sx - (ct.x0 - M0), (ct.x1 + M0) - sx, sy - (ct.y0 - M0), (ct.y1 + M0) - sy);
+      }
+    }
+    return fora;
+  }
+  var DESLIZES = null;                       // (a: de lado, b: para a câmera) em m, do menor ao maior
+  function deslizes() {
+    if (DESLIZES) return DESLIZES;
+    DESLIZES = [];
+    for (var b = -2; b <= 16; b += 0.5) for (var a = -8; a <= 8; a += 1) DESLIZES.push([a, b, Math.abs(a) + Math.abs(b)]);
+    DESLIZES.sort(function (p, q) { return p[2] - q[2]; });
+    return DESLIZES;
+  }
+  function ajustaMapaDeDuelo(st) {
+    if (!camera || !ehMapaDeDuelo(st)) return false;
+    var hud = medeHudDuelo();
+    hudSig = hud.sig;
+    var pts = pontosDosNascimentos(st);
+    if (!pts.length) return false;
+    var sala = String(st.dungeonId) + '|' + st.roomIndex;
+    // o azimute de PARTIDA é o de antes do ajuste (um giro feito por este ajuste não vira ponto de partida)
+    var ang0 = (cam.giroDoAjuste && cam.giroDoAjuste.sala === sala) ? cam.giroDoAjuste.antes : cam.ang;
+    var d0 = cam.dist, px0 = cam.panX, pz0 = cam.panZ;
+    var angH = gridW >= gridH ? 0 : -Math.PI / 2;           // câmera no eixo z: o x (comprido) fica na horizontal
+    var angs = [ang0];
+    if (Math.abs(Math.atan2(Math.sin(angH - ang0), Math.cos(angH - ang0))) > 0.01) angs.push(angH);
+    var ordem = [];
+    angs.forEach(function (ang) { ordem.push([ang, 1]); });
+    for (var kk = 1; kk <= 15; kk++) angs.forEach(function (ang) { ordem.push([ang, 1 + kk / 100]); });
+    var lista = deslizes(), achou = null, melhor = null;
+    for (var o = 0; o < ordem.length && !achou; o++) {
+      var ang = ordem[o][0], dk = clamp(d0 * ordem[o][1], cam.minDist, cam.maxDist);
+      var rX = Math.cos(ang), rZ = -Math.sin(ang), tX = Math.sin(ang), tZ = Math.cos(ang);
+      for (var s = 0; s < lista.length; s++) {
+        var px = px0 + rX * lista[s][0] + tX * lista[s][1], pz = pz0 + rZ * lista[s][0] + tZ * lista[s][1];
+        var fora = sobraDosNascimentos(pts, hud, dk, ang, px, pz);
+        var tenta = { ang: ang, k: ordem[o][1], d: dk, px: px, pz: pz, a: lista[s][0], b: lista[s][1], fora: fora };
+        if (fora === 0) { achou = tenta; break; }
+        if (ordem[o][1] >= 1.15 && (!melhor || fora < melhor.fora)) melhor = tenta;
+      }
+    }
+    var r = achou || melhor;
+    if (!r) return false;
+    if (Math.abs(r.ang - ang0) > 1e-4) cam.giroDoAjuste = { sala: sala, antes: ang0 };
+    else if (cam.giroDoAjuste && cam.giroDoAjuste.sala === sala) cam.giroDoAjuste = null;
+    cam.ang = r.ang; cam.dist = r.d; cam.panX = r.px; cam.panZ = r.pz;
+    enquadro = { tipo: 'duelo', distAntiga: +d0.toFixed(2), dist: +r.d.toFixed(2), k: r.k, ang: +r.ang.toFixed(4),
+                 angAntigo: +ang0.toFixed(4), girou: Math.abs(r.ang - ang0) > 1e-4, deslize: { lado: r.a, frente: r.b },
+                 cabe: !!achou, foraPx: Math.round(r.fora),
+                 hud: { base: Math.round(hud.base), cartao: hud.cartao, medida: hud.medida } };
+    return true;
+  }
+  R._enquadro = function () { return enquadro; };
+  /* o vigia (só nos mapas de duelo, só no desktop): a obstrução cresceu e ninguém tomou a
+   * câmera? reajusta. `cam.pedida` = alguém chamou setCamera com enquadramento explícito. */
+  var vigiaQuadro = 0;
+  function vigiaAreaUtil(st) {
+    if (++vigiaQuadro % 20 !== 0) return;
+    if (moldura.topo || moldura.base || cam.manual || cam.pedida || camFocus || rotAnim) return;
+    if (!ehMapaDeDuelo(st)) return;
+    if (medeHudDuelo().sig !== hudSig) fitCamera(st);
+  }
+  function noCelular2() { return !!(moldura.topo || moldura.base); }
+
   function fitCamera(st) {
     var fw = gridW * CELL, fh = gridH * CELL;
     var span = Math.max(fw, fh);
@@ -1763,10 +2697,11 @@ var JOGO = (typeof window !== 'undefined')
      * manual e devolvido ali, e so ali.
      */
     var salaAgora = String(st && st.dungeonId) + '|' + String(st && st.roomIndex);
-    if (salaAgora !== cam.ultimaSala) { cam.ultimaSala = salaAgora; cam.manual = false; }
+    if (salaAgora !== cam.ultimaSala) { cam.ultimaSala = salaAgora; cam.manual = false; hudMemo = null; }
     if (cam.manual) return;              // o jogador esta dirigindo: nao encoste
 
     cam.panX = 0; cam.panZ = 0;
+    cam.pedida = false;
 
     var focus = actionBounds(st);
     var needW = span, needH = span;
@@ -1828,6 +2763,11 @@ var JOGO = (typeof window !== 'undefined')
     var minCellPx = (moldura.topo || moldura.base) ? 30 : (Math.min(W, H) < 620 ? 40 : 26);
     var maxD = (CELL * imgH) / (2 * tanV * minCellPx);
     cam.dist = clamp(Math.min(d, maxD), cam.minDist, cam.maxDist);
+    // 15/09: calabouço fica EXATAMENTE assim; mapa de duelo (praça, sede) ganha o ajuste leve
+    // dos nascimentos (ajustaMapaDeDuelo), só no desktop
+    enquadro = { tipo: 'calabouco', dist: +cam.dist.toFixed(2), ang: +cam.ang.toFixed(4), tilt: cam.tilt };
+    if (!noCelular2() && ehMapaDeDuelo(st)) ajustaMapaDeDuelo(st);
+    else if (cam.giroDoAjuste) { cam.ang = cam.giroDoAjuste.antes; cam.giroDoAjuste = null; }
     updateCamera();
   }
   // caixa que contém o grupo do jogador e os inimigos mais próximos dele
@@ -1873,6 +2813,9 @@ var JOGO = (typeof window !== 'undefined')
 
   R.setCamera = function (o) {
     if (!o) return;
+    // 15/09: enquadramento pedido por fora — o vigia da área útil não desfaz (recentrar solta)
+    if (o.dist != null || o.zoom != null || o.tilt != null || o.ang != null || o.panX != null ||
+        o.panY != null || o.panZ != null || o.centerX != null || o.rot != null) cam.pedida = true;
     if (o.ang != null) cam.ang = o.ang;
     if (o.tilt != null) cam.tilt = clamp(o.tilt, cam.minTilt, cam.maxTilt);
     if (o.dist != null) cam.dist = clamp(o.dist, cam.minDist, cam.maxDist);
@@ -3846,6 +4789,7 @@ var JOGO = (typeof window !== 'undefined')
       rebuildTileEvents(st);
       rebuildTraps(st);
       rebuildWalls(st);
+      vigiaAreaUtil(st);                  // 15/09: a HUD cresceu? reenquadra (só no desktop)
       var en = engine();
       drawActiveRing(safe(function () { return en && en.activeUnit ? en.activeUnit(st) : null; }, null));
     }
@@ -3866,6 +4810,7 @@ var JOGO = (typeof window !== 'undefined')
     updateRot(dtv);
     updateFocus(dtv);
     updateCamera();
+    animaSede(nowT);                      // 15/09: fogo, luz e recorte das paredes do salão
 
     if (JOGO.FX && JOGO.FX.update) { try { JOGO.FX.update(dtv, dt); } catch (e3) {} }
 

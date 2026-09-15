@@ -45,6 +45,50 @@
     window.__fail = falhas.length;
     window.__pronto = true;
   }
+  /* 15/09: OS HERÓIS NOS NASCIMENTOS À VISTA na câmera padrão, com a tela num tamanho exato
+   * (o iframe redimensionado), medido aqui pelos blocos da HUD: cada herói (pés, cabeça e os
+   * lados) cai no canvas, acima da barra de baixo e fora do cartão da unidade; e a distância
+   * fica no máximo 15% acima da do enquadramento de sempre. (A mesma checagem do salão.) */
+  function heroisNaAreaUtil(tamW, tamH) {
+    var w = f.contentWindow, d = w.document, R = w.JOGO.Renderer, G = w.JOGO.Game, THREE = w.THREE;
+    f.style.width = tamW + 'px'; f.style.height = tamH + 'px';
+    var cv = R.threeRenderer().domElement;
+    return espera(function () { return w.innerWidth === tamW && w.innerHeight === tamH && Math.abs(cv.clientWidth - tamW) < 2 && Math.abs(cv.clientHeight - tamH) < 2; }, 60, 150)
+      .then(function () { R.recentrar(); return espera(function () { return false; }, 8, 150).catch(function () {}); })
+      .then(function () { R.recentrar(); return espera(function () { return false; }, 3, 150).catch(function () {}); })
+      .then(function () {
+        var cr = cv.getBoundingClientRect(), tela = d.querySelector('.screen-battle.is-on');
+        function caixa(sel) {
+          var e = tela && tela.querySelector(sel); if (!e) return null;
+          var r = e.getBoundingClientRect(); if (!(r.width > 2 && r.height > 2)) return null;
+          return { x0: r.left - cr.left, y0: r.top - cr.top, x1: r.right - cr.left, y1: r.bottom - cr.top };
+        }
+        var topo = null, base = caixa('.bt-bottom');
+        var tampas = [caixa('.bt-left')].filter(Boolean);
+        var cam = R.camera(), v = new THREE.Vector3(), fora = [];
+        var herois = G.state.units.filter(function (u) { return u.kind === 'hero' && u.alive && !u.offBoard; });
+        herois.forEach(function (u) {
+          var p = R.world(u.x, u.y, 0), ruim = '';
+          [[0, 0.05], [0, 2.1], [-0.55, 1.1], [0.55, 1.1]].forEach(function (o) {
+            v.set(p.x + o[0], o[1], p.z).project(cam);
+            var sx = (v.x + 1) / 2 * cr.width, sy = (1 - v.y) / 2 * cr.height;
+            if (sx < 0 || sy < 0 || sx > cr.width || sy > cr.height) ruim = ruim || 'fora do canvas';
+            else if (topo && sy < topo.y1) ruim = ruim || 'sob os retratos';
+            else if (base && sy > base.y0) ruim = ruim || 'sob a barra de baixo';
+            else tampas.forEach(function (t) { if (sx > t.x0 && sx < t.x1 && sy > t.y0 && sy < t.y1) ruim = ruim || 'sob o cartão/registro/tempo'; });
+          });
+          if (ruim) fora.push(u.classId + '@' + u.x + ',' + u.y + ' ' + ruim);
+        });
+        var enq = R._enquadro && R._enquadro();
+        check('em ' + tamW + '×' + tamH + ' os ' + herois.length + ' heróis nos nascimentos ficam fora da barra de baixo e do cartão',
+              herois.length > 0 && fora.length === 0 && !!base,
+              (fora.join(' | ') || 'ok') + (enq ? ' · k ' + enq.k + (enq.girou ? ' girou' : '') + ' desliza ' + JSON.stringify(enq.deslize) : ''));
+        check('em ' + tamW + '×' + tamH + ' a distância fica no máximo 15% acima da do enquadramento de sempre',
+              !!enq && enq.tipo === 'duelo' && enq.dist <= enq.distAntiga * 1.15 + 1e-6 && Math.abs(R.getCamera().dist - enq.dist) < 0.01,
+              enq ? enq.dist + ' / ' + enq.distAntiga : 'sem relatório');
+      })
+      .then(function () { f.style.width = ''; f.style.height = ''; }, function (e) { f.style.width = ''; f.style.height = ''; check('área útil em ' + tamW + '×' + tamH, false, e && e.message); });
+  }
   // espera por TENTATIVAS, não por relógio: no headless o tempo é virtual
   function espera(cond, voltas, passo) {
     return new Promise(function (ok, nao) {
@@ -145,24 +189,29 @@
                 escondidas + ' de ' + jogaveis + ' = ' + (frac * 100).toFixed(1) + '%, alt ' + arv.alt + ' larg ' + arv.larg);
           window.__arvore = { escondidas: escondidas, jogaveis: jogaveis, alt: arv.alt, larg: arv.larg };
         }
-        /* 15/09: um mapa com `pecas` que este tabuleiro NÃO sabe vestir (o Salão da Sede,
-         * arenas.js 'sede') segue com o muro de sempre — nenhuma casa alta some. Só fora da
-         * foto (troca o tabuleiro). */
-        if (/[?&]foto=1/.test(location.search) || !w.JOGO.DATA.arena || !w.JOGO.DATA.arena('sede')) { fecha(); return; }
+        /* 15/09: o Salão da Sede (arenas.js 'sede') tem tema próprio agora: ao trocar da praça
+         * para ele, o relatório da praça sai (null), o do salão entra e nenhuma peça da praça
+         * vai junto. A prova do salão em si é tests/prova_sede_tatica.html. Só fora da foto
+         * (troca o tabuleiro). */
+        if (/[?&]foto=1/.test(location.search)) { fecha(); return; }
+        // 15/09: os quatro na área útil, nas duas telas de mesa (antes de trocar para o salão)
+        heroisNaAreaUtil(1280, 720).then(function () { return heroisNaAreaUtil(1280, 800); }).then(function () {
+        if (!w.JOGO.DATA.arena || !w.JOGO.DATA.arena('sede')) { fecha(); return; }
         var E = w.JOGO.Engine, stP = G.state;
         var heroisP = stP.units.filter(function (u) { return u.side === 'player'; }).map(function (u) { return { classId: u.classId, heroId: u.heroId, level: 5 }; });
         var heroisE = stP.units.filter(function (u) { return u.side === 'enemy'; }).map(function (u) { return { classId: u.classId, heroId: u.heroId, level: 5 }; });
         try { G.state = E.createDuelSala('sede', 0, heroisP, heroisE, { seed: 3 }); } catch (eS) { check('o Salão da Sede monta', false, eS.message); fecha(); return; }
-        espera(function () { return R.ultimaMontagemPraca === null && G.state.dungeonId === 'sede' ? true : false; }, 60, 250)
+        espera(function () { return R.ultimaMontagemPraca === null && R.ultimaMontagemSede && G.state.dungeonId === 'sede' ? true : false; }, 60, 250)
           .then(function () {
             var usoS = R.ultimaMontagem || {};
             var pecasS = Object.keys(usoS).filter(function (k) { return /^praca:/.test(k); });
-            check('o Salão da Sede (peças desconhecidas) monta sem peça da praça e sem o relatório dela', pecasS.length === 0, pecasS.join(','));
-            check('... e o tabuleiro não quebrou (a montagem saiu)', Object.keys(usoS).length > 0 || R.isReady(), JSON.stringify(usoS).slice(0, 120));
+            check('o Salão da Sede monta no tema dele, sem peça da praça e sem o relatório dela', pecasS.length === 0 && R.ultimaMontagemSede.tema === 'sede', pecasS.join(','));
+            check('... e o tabuleiro não quebrou (o salão montou peças)', Object.keys(usoS).some(function (k) { return /^sede:/.test(k); }), JSON.stringify(usoS).slice(0, 120));
             G.state = stP;
             fecha();
           })
           .catch(function () { check('o Salão da Sede remonta o tabuleiro', false, 'ultimaMontagemPraca=' + JSON.stringify(R.ultimaMontagemPraca)); G.state = stP; fecha(); });
+        });
       })
       .catch(function (e) { check('a prova rodou até o fim', false, e && e.message); fecha(); });
   };

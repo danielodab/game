@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: o Salão da Sede tático (a guerra de guilda)</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1216;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  iframe{position:fixed;left:0;top:0;width:100%;height:100%;border:0}
+  #saida{position:fixed;left:8px;bottom:8px;max-width:600px;max-height:46%;overflow:auto;
+         background:rgba(11,13,16,.88);border:1px solid #2b3542;border-radius:6px;padding:6px 8px;font:11px/1.45 monospace}
+  #summary{padding:4px 8px;border-radius:5px;background:#1b222c;margin-bottom:4px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+  .p{color:#7fe08a}.f{color:#ff8a7a}
+  body.foto #saida{display:none}
+</style>
+</head>
+<body>
+<!-- O SALÃO DA SEDE TÁTICO (15/09, dono: "a guerra de guild que é 2x2 de cada guild é na
+     sede de guild"). Abre o jogo de verdade, monta Engine.createDuelSala('sede', 0, …) com
+     QUATRO heróis de cada lado (dois jogadores por guilda, cada um com a dupla — `dono`) no
+     renderizador de verdade e cobra pelo relatório da montagem (Renderer.ultimaMontagemSede):
+     cada papel das `pecas` entrou quantas vezes o mapa diz, nenhuma casa '#' ou '=' ficou sem
+     peça, o contorno inteiro virou parede, as peças altas são altas e as baixas são baixas, as
+     lareiras têm fogo e luz (e o fogo MEXE), a parede do lado da câmera corta e volta quando a
+     câmera gira, e da câmera padrão nenhum dos oito heróis fica atrás do cenário.
+       ?foto=1        esconde o painel e não gira a câmera (para a foto)
+     window.__vista('padrao' | 'cima' | 'lado') enquadra a foto. -->
+<iframe id="tela" src="../index.html?sandbox=1"></iframe>
+<div id="saida"><div id="summary">abrindo o jogo…</div><div id="linhas"></div></div>
+<script>
+(function () {
+  var FOTO = /[?&]foto=1/.test(location.search);
+  if (FOTO) document.body.className = 'foto';
+  var f = document.getElementById('tela');
+  var linhas = [], falhas = [];
+  function check(nome, ok, extra) {
+    linhas.push('<div class="' + (ok ? 'p' : 'f') + '">' + (ok ? 'PASSOU' : 'FALHOU') + ' · ' +
+                nome + (extra != null && extra !== '' ? ' (' + extra + ')' : '') + '</div>');
+    if (!ok) falhas.push(nome);
+  }
+  function fecha() {
+    document.getElementById('linhas').innerHTML = linhas.join('');
+    var s = document.getElementById('summary');
+    s.className = falhas.length ? 'fail' : 'allpass';
+    s.textContent = falhas.length ? ('FALHOU: ' + falhas.join(' · ')) : ('tudo passou (' + linhas.length + ')');
+    window.__fail = falhas.length;
+    window.__pronto = true;
+  }
+  /* OS HERÓIS NOS NASCIMENTOS À VISTA, na câmera padrão, com a tela num tamanho exato (o
+   * iframe é redimensionado: o jogo vê um viewport de W×H). Medido AQUI, pelos blocos da
+   * HUD na página — não pelo que o renderizador acha: cada herói, pés, cabeça e os dois
+   * lados do corpo projetados, cai no canvas, acima da barra de baixo (feitiços + Encerrar
+   * turno) e fora do cartão da unidade. E o ajuste é LEVE: a distância fica no máximo 15%
+   * acima da do enquadramento de sempre (o dono: o tabuleiro não pode virar miniatura). */
+  function heroisNaAreaUtil(tamW, tamH, check, fim) {
+    var w = f.contentWindow, d = w.document, R = w.JOGO.Renderer, G = w.JOGO.Game, THREE = w.THREE;
+    f.style.width = tamW + 'px'; f.style.height = tamH + 'px';
+    var cv = R.threeRenderer().domElement;
+    return espera(function () { return w.innerWidth === tamW && w.innerHeight === tamH && Math.abs(cv.clientWidth - tamW) < 2 && Math.abs(cv.clientHeight - tamH) < 2; }, 60, 150)
+      .then(function () { R.recentrar(); return espera(function () { return false; }, 8, 150).catch(function () {}); })
+      .then(function () {
+        R.recentrar();
+        return espera(function () { return false; }, 3, 150).catch(function () {});
+      })
+      .then(function () {
+        var cr = cv.getBoundingClientRect(), tela = d.querySelector('.screen-battle.is-on');
+        function caixa(sel) {
+          var e = tela && tela.querySelector(sel); if (!e) return null;
+          var r = e.getBoundingClientRect(); if (!(r.width > 2 && r.height > 2)) return null;
+          return { x0: r.left - cr.left, y0: r.top - cr.top, x1: r.right - cr.left, y1: r.bottom - cr.top };
+        }
+        var topo = null, base = caixa('.bt-bottom');
+        var tampas = [caixa('.bt-left')].filter(Boolean);
+        var cam = R.camera(), v = new THREE.Vector3(), fora = [];
+        var herois = G.state.units.filter(function (u) { return u.kind === 'hero' && u.alive && !u.offBoard; });
+        herois.forEach(function (u) {
+          var p = R.world(u.x, u.y, 0), ruim = '';
+          [[0, 0.05, 0], [0, 2.1, 0], [-0.55, 1.1, 0], [0.55, 1.1, 0]].forEach(function (o) {
+            v.set(p.x + o[0], o[1], p.z + o[2]).project(cam);
+            var sx = (v.x + 1) / 2 * cr.width, sy = (1 - v.y) / 2 * cr.height;
+            if (sx < 0 || sy < 0 || sx > cr.width || sy > cr.height) ruim = ruim || 'fora do canvas';
+            else if (topo && sy < topo.y1) ruim = ruim || 'sob os retratos';
+            else if (base && sy > base.y0) ruim = ruim || 'sob a barra de baixo';
+            else tampas.forEach(function (t) { if (sx > t.x0 && sx < t.x1 && sy > t.y0 && sy < t.y1) ruim = ruim || 'sob o cartão/registro/tempo'; });
+          });
+          if (ruim) fora.push(u.classId + '@' + u.x + ',' + u.y + ' ' + ruim);
+        });
+        var enq = R._enquadro && R._enquadro();
+        check('em ' + tamW + '×' + tamH + ' os ' + herois.length + ' heróis nos nascimentos ficam fora da barra de baixo e do cartão',
+              herois.length > 0 && fora.length === 0 && !!base,
+              (fora.join(' | ') || 'ok') + (enq ? ' · k ' + enq.k + (enq.girou ? ' girou' : '') + ' desliza ' + JSON.stringify(enq.deslize) : ''));
+        check('em ' + tamW + '×' + tamH + ' a distância fica no máximo 15% acima da do enquadramento de sempre',
+              !!enq && enq.tipo === 'duelo' && enq.dist <= enq.distAntiga * 1.15 + 1e-6 && Math.abs(R.getCamera().dist - enq.dist) < 0.01,
+              enq ? enq.dist + ' / ' + enq.distAntiga : 'sem relatório');
+      })
+      .then(function () { f.style.width = ''; f.style.height = ''; }, function (e) { f.style.width = ''; f.style.height = ''; check('área útil em ' + tamW + '×' + tamH, false, e && e.message); });
+  }
+  window.__heroisNaAreaUtil = heroisNaAreaUtil;
+  // espera por TENTATIVAS, não por relógio: no headless o tempo é virtual
+  function espera(cond, voltas, passo) {
+    return new Promise(function (ok, nao) {
+      var n = 0;
+      (function tenta() {
+        var r = false;
+        try { r = cond(); } catch (e) {}
+        if (r) return ok(r);
+        if (++n > voltas) return nao(new Error('esperou demais'));
+        setTimeout(tenta, passo || 500);
+      })();
+    });
+  }
+
+  f.onload = function () {
+    var w = f.contentWindow, d = w.document;
+    espera(function () { return !!d.querySelector('.screen-menu.is-on'); }, 400)
+      .then(function () { return w.JOGO.DB.batizar('Prova Sede'); })
+      .then(function () {
+        var G = w.JOGO.Game, E = w.JOGO.Engine;
+        // a descida direta abre a tela de batalha (a mesma bancada da prova da praça)
+        w.JOGO.UI.selection(['sumo', 'curandeiro']);
+        G.startRun(['sumo', 'curandeiro'], 'greenhouse', { direto: true });
+        return espera(function () { return G.screen === 'battle'; }, 400).then(function () {
+          // duas guildas, dois jogadores cada, e cada jogador com a dupla dele
+          function lado(classes, guilda) {
+            return classes.map(function (id, i) {
+              return { classId: id, heroId: id + '-' + guilda, level: 5, dono: guilda + '-jogador' + (i < 2 ? 1 : 2) };
+            });
+          }
+          var A = lado(['sumo', 'curandeiro', 'bruxo', 'arqueiro'], 'guildaA');
+          var B = lado(['minotauro', 'espadachim', 'invocador', 'arqueiro'], 'guildaB');
+          G.state = E.createDuelSala('sede', 0, A, B, { seed: 11 });
+          try { [].slice.call(d.querySelectorAll('button')).filter(function (b) { return /Entendi/.test(b.textContent); })[0].click(); } catch (e2) {}
+          var R = w.JOGO.Renderer;
+          return espera(function () {
+            var rel = R.ultimaMontagemSede;
+            return rel && G.state.dungeonId === 'sede' ? rel : false;
+          }, 400).catch(function () { return R.ultimaMontagemSede; });
+        });
+      })
+      .then(function (rel) {
+        var G = w.JOGO.Game, R = w.JOGO.Renderer, st = G.state, THREE = w.THREE;
+        var herois = st.units.filter(function (u) { return u.kind === 'hero'; });
+        check('o estado é a guerra no Salão da Sede', st && st.dungeonId === 'sede' && st.duelSala === true);
+        check('quatro heróis de cada lado, todos com dono',
+              herois.filter(function (u) { return u.side === 'player'; }).length === 4 &&
+              herois.filter(function (u) { return u.side === 'enemy'; }).length === 4 &&
+              herois.every(function (u) { return !!u.dono; }), herois.map(function (u) { return u.dono; }).join(','));
+        check('o tabuleiro montou o salão (relatório do tema exposto)', !!rel && rel.tema === 'sede' && R.ultimaMontagemTema === rel);
+        check('... e o relatório da praça não vale aqui', R.ultimaMontagemPraca === null);
+        if (!rel) { fecha(); return; }
+        check('nenhuma peça quebrou ao montar', !rel.erros.length, rel.erros.join(' | '));
+        // cada papel entrou quantas vezes o mapa pede (lido do mapa, não repetido aqui)
+        var pecas = w.JOGO.DATA.arena('sede').rooms[0].pecas, pede = {};
+        pecas.forEach(function (pc) { pede[pc.papel] = (pede[pc.papel] || 0) + 1; });
+        Object.keys(pede).forEach(function (papel) {
+          check('a peça "' + papel + '" entrou ' + pede[papel] + '×', rel.papeis[papel] === pede[papel], rel.papeis[papel]);
+        });
+        check('nenhuma casa ALTA (#) ficou sem peça', rel.altoSemPeca === 0, rel.altoSemPeca);
+        check('nenhuma casa BAIXA (=) ficou sem peça', rel.baixoSemPeca === 0, rel.baixoSemPeca);
+        var nAlto = 0, nBaixo = 0, nBorda = 0;
+        st.grid.tiles.forEach(function (row, y) {
+          row.forEach(function (t, x) {
+            if (t.type === 'wall') { nAlto++; if (x === 0 || y === 0 || x === st.grid.w - 1 || y === st.grid.h - 1) nBorda++; }
+            else if (t.type === 'cover') nBaixo++;
+          });
+        });
+        check('toda casa de obstáculo está debaixo de uma peça', rel.casasCobertas === nAlto + nBaixo, rel.casasCobertas + ' de ' + (nAlto + nBaixo));
+        check('o contorno inteiro virou parede do salão', rel.paredes === nBorda, rel.paredes + ' de ' + nBorda);
+        check('a porta ao sul tem soleira e batente', rel.soleira >= 1 && rel.portas >= 1, rel.soleira + ' / ' + rel.portas);
+        check('o tapete corre da frente do trono até a porta', !!rel.tapete && rel.tapete.ate - rel.tapete.de >= 10, JSON.stringify(rel.tapete));
+        var usos = R.ultimaMontagem || {};
+        check('nenhum muro de calabouço nem peça da praça foi plantado',
+              Object.keys(usos).length > 0 && Object.keys(usos).every(function (k) { return /^sede:/.test(k); }), Object.keys(usos).join(','));
+        // A REGRA NA ALTURA: alto acima do herói (2,05 m) com folga, baixo de ver por cima
+        var al = rel.alturas;
+        ['trono', 'estandarte', 'pilar', 'armadura', 'lareira'].forEach(function (p) {
+          check('"' + p + '" é ALTO (≥ 2,6 m)', al[p] >= 2.6, al[p]);
+        });
+        ['mesa', 'banco_salao', 'estatua', 'bau'].forEach(function (p) {
+          check('"' + p + '" é BAIXO (≤ 1,3 m)', al[p] > 0.3 && al[p] <= 1.3, al[p]);
+        });
+        // AS LAREIRAS: uma luz e fogo em cada, e o teto de luzes do salão
+        check('uma luz pontual por lareira, e só elas', rel.luzes === pede.lareira && R._sedeVivo().luzes === pede.lareira, rel.luzes);
+        check('as lareiras têm fogo', rel.fogos >= pede.lareira * 3, rel.fogos);
+        var luzesCena = 0;
+        R.scene().traverse(function (o) { if (o.isPointLight) luzesCena++; });
+        check('a cena inteira fica em até 9 luzes pontuais (6 do FX + as lareiras + folga)', luzesCena <= 9, luzesCena);
+
+        // O RECORTE NA CÂMERA PADRÃO: sul e oeste cortados, norte e leste inteiros
+        R.recentrar();
+        var fogo0 = null;
+        return espera(function () { var v = R._sedeVivo(); fogo0 = fogo0 == null ? v.fogo : fogo0; return v.cortes.length ? v : false; }, 40, 200)
+          .then(function (vivo) {
+            var paredes = vivo.cortes.filter(function (c) { return c.lados.length === 1; });
+            function cortados(v, lado) { return v.cortes.filter(function (c) { return c.lados.length === 1 && c.lados[0] === lado; }).every(function (c) { return c.cortado; }); }
+            function inteiros(v, lado) { return v.cortes.filter(function (c) { return c.lados.length === 1 && c.lados[0] === lado; }).every(function (c) { return !c.cortado; }); }
+            // o lado da câmera sai do azimute dela (o ajuste dos mapas de duelo pode girá-la)
+            var angP = R.getCamera().ang, sxP = Math.sin(angP), czP = Math.cos(angP);
+            var ladoCam = { sul: czP > 0.2, norte: czP < -0.2, leste: sxP > 0.2, oeste: sxP < -0.2 };
+            var errados = ['norte', 'sul', 'leste', 'oeste'].filter(function (l) { return ladoCam[l] ? !cortados(vivo, l) : !inteiros(vivo, l); });
+            check('câmera padrão: a parede do lado da câmera corta e a do fundo fica inteira',
+                  errados.length === 0 && paredes.length >= 4 && (ladoCam.sul || ladoCam.norte || ladoCam.leste || ladoCam.oeste),
+                  'ang ' + angP.toFixed(2) + (errados.length ? ' errados: ' + errados.join(',') : ''));
+
+            // OS OITO HERÓIS À VISTA: raio da câmera ao peito de cada um contra o cenário visível
+            var cam = R.camera(), board = null;
+            R.scene().traverse(function (o) { if (o.name === 'board') board = o; });
+            function visivel(o) { while (o) { if (!o.visible) return false; o = o.parent; } return true; }
+            var solidos = [];
+            if (board) board.traverse(function (o) {
+              if (o.isMesh && !o.isInstancedMesh && visivel(o) && o.material && !o.material.transparent && !(o.userData && o.userData.outline)) solidos.push(o);
+            });
+            var ray = new THREE.Raycaster(), escondidos = [];
+            herois.forEach(function (u) {
+              var alvo = R.world(u.x, u.y, 1.3);
+              var dir = alvo.clone().sub(cam.position);
+              var dist = dir.length();
+              ray.set(cam.position, dir.normalize());
+              ray.far = dist - 0.6;
+              var hits = ray.intersectObjects(solidos, false);
+              if (hits.length) {
+                // onde bateu, em casas e altura (diz QUAL peça tapa)
+                var pt = hits[0].point;
+                escondidos.push(u.classId + '@' + u.x + ',' + u.y + ' bate em ' +
+                  (pt.x / 2 + (st.grid.w - 1) / 2).toFixed(1) + ',' + (pt.z / 2 + (st.grid.h - 1) / 2).toFixed(1) + ' h' + pt.y.toFixed(2));
+              }
+            });
+            check('da câmera padrão nenhum dos oito heróis fica atrás do cenário', escondidos.length === 0,
+                  escondidos.join(' ') + ' (' + solidos.length + ' malhas)');
+            window.__escondidos = escondidos;
+
+            // O FOGO MEXE (o laço de render anima; espera uns quadros)
+            return espera(function () { var v = R._sedeVivo(); return v.fogo != null && Math.abs(v.fogo - fogo0) > 0.002; }, 40, 150)
+              .then(function () { check('o fogo da lareira tremula', true); }, function () { check('o fogo da lareira tremula', false, fogo0 + ' → ' + R._sedeVivo().fogo); })
+              .then(function () {
+                if (FOTO) return;
+                // os oito na área útil, nas duas telas de mesa que o dono usa
+                return heroisNaAreaUtil(1280, 720, check).then(function () { return heroisNaAreaUtil(1280, 800, check); });
+              })
+              .then(function () {
+                if (FOTO) return;
+                // girando a câmera para a quina oposta, o recorte troca de lado
+                R.setCamera({ rot: 2, animate: false });
+                return espera(function () { var v = R._sedeVivo(); return cortados(v, 'norte') && cortados(v, 'leste') ? v : false; }, 40, 150)
+                  .then(function (v2) {
+                    check('câmera girada 180°: agora NORTE e LESTE cortam e SUL e OESTE voltam', inteiros(v2, 'sul') && inteiros(v2, 'oeste'));
+                  }, function () { check('câmera girada 180°: o recorte troca de lado', false, JSON.stringify(R._sedeVivo().cortes)); })
+                  .then(function () {
+                    // o gancho da guilda: a cor de cada lado pinta a bandeira e remonta o salão
+                    R.setGuildasSede({ oeste: { cor: '#1f4f8c', emblema: 'A' }, leste: { cor: '#2f6b2a', emblema: 'B' } });
+                    var antes = rel;
+                    return espera(function () { return R.ultimaMontagemSede && R.ultimaMontagemSede !== antes ? true : false; }, 60, 200)
+                      .then(function () { check('o gancho das guildas remonta o salão com as bandeiras', R.ultimaMontagemSede.papeis.estandarte === pede.estandarte); },
+                            function () { check('o gancho das guildas remonta o salão com as bandeiras', false); })
+                      .then(function () { R.setGuildasSede(null); R.setCamera({ rot: 0, animate: false }); R.recentrar(); });
+                  });
+              });
+          });
+      })
+      .then(function () { fecha(); })
+      .catch(function (e) { check('a prova rodou até o fim', false, e && e.message); fecha(); });
+  };
+
+  // o enquadramento das fotos (a câmera do jogador não é tocada pela prova)
+  window.__vista = function (qual) {
+    var R = f.contentWindow.JOGO.Renderer;
+    // de cima e mais longe: a 50 a guilda do oeste ficava debaixo da barra de feitiços
+    if (qual === 'cima') R.setCamera({ tilt: 0.3, dist: 62, ang: -Math.PI / 4 + 0.0001, panX: 0, panZ: 0 });
+    else if (qual === 'lado') R.setCamera({ tilt: 1.15, dist: 26, ang: Math.PI * 0.75 });
+    else { R.setCamera({ rot: 0, animate: false }); R.recentrar(); }
+    return R.getCamera();
+  };
+})();
+</script>
+</body>
+</html>

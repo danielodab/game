@@ -923,7 +923,9 @@ var JOGO = (typeof window !== 'undefined')
     forge:   { color: '#ff9a4a', rate: 12, up: 1.5,  size: 0.22 },
     scaffold:{ color: '#e6efff', rate: 5,  up: 0.2,  size: 0.16 },
     mine:    { color: '#c9a227', rate: 6,  up: 0.25, size: 0.20 },
-    heart:   { color: '#ffd166', rate: 8,  up: 0.5,  size: 0.22 }
+    heart:   { color: '#ffd166', rate: 8,  up: 0.5,  size: 0.22 },
+    // 15/09: o Salão da Sede — poeira dourada devagar na luz das lareiras (poucas: é salão, não forja)
+    sede:    { color: '#ffc27a', rate: 3,  up: 0.28, size: 0.14 }
   };
   function updateAmbient(dt) {
     var a = AMB[ambientTheme];
